@@ -36,18 +36,18 @@ module tb;
   __fp32_fmac__fp32_fmac_0_next dut (
     .clk(clk),
     .reset(reset),
-    .fp32_fmac__input_a(fp32_fmac__input_a),
-    .fp32_fmac__input_a_vld(fp32_fmac__input_a_vld),
-    .fp32_fmac__input_b(fp32_fmac__input_b),
-    .fp32_fmac__input_b_vld(fp32_fmac__input_b_vld),
-    .fp32_fmac__output_rdy(fp32_fmac__output_rdy),
-    .fp32_fmac__reset(fp32_fmac__reset),
-    .fp32_fmac__reset_vld(fp32_fmac__reset_vld),
-    .fp32_fmac__input_a_rdy(fp32_fmac__input_a_rdy),
-    .fp32_fmac__input_b_rdy(fp32_fmac__input_b_rdy),
-    .fp32_fmac__output(fp32_fmac__output),
-    .fp32_fmac__output_vld(fp32_fmac__output_vld),
-    .fp32_fmac__reset_rdy(fp32_fmac__reset_rdy)
+    .fp32_fmac__wire_a(fp32_fmac__input_a),
+    .fp32_fmac__wire_a_vld(fp32_fmac__input_a_vld),
+    .fp32_fmac__wire_b(fp32_fmac__input_b),
+    .fp32_fmac__wire_b_vld(fp32_fmac__input_b_vld),
+    .fp32_fmac__wire_output_rdy(fp32_fmac__output_rdy),
+    .fp32_fmac__wire_reset(fp32_fmac__reset),
+    .fp32_fmac__wire_reset_vld(fp32_fmac__reset_vld),
+    .fp32_fmac__wire_a_rdy(fp32_fmac__input_a_rdy),
+    .fp32_fmac__wire_b_rdy(fp32_fmac__input_b_rdy),
+    .fp32_fmac__wire_output(fp32_fmac__output),
+    .fp32_fmac__wire_output_vld(fp32_fmac__output_vld),
+    .fp32_fmac__wire_reset_rdy(fp32_fmac__reset_rdy)
   );
 
   // Let it run forever (bridge drives transactions)

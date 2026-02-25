@@ -16,13 +16,14 @@ Simulate design:
 vvp -M. -m bridge sim.vvp  # to close: C-c finish RET
 ```
 
-Communicate with design (separate terminal):
+Communicate with design via Python (separate terminal):
 ```sh
 python3 python.py
+```
 
-# OR
-
-erl
-1> c(erl).
-2> erl:main().
+Communicate with design via Erlang (separate terminal):
+```sh
+erlc *.erl
+1> demo:main(fp32_fmac).  % Erlang-native fmac
+2> demo:main(erl).        % Icarus bridge
 ```
