@@ -8,6 +8,8 @@ Build:
 ./opt_main fp32_fmac.ir > fp32_fmac.opt.ir
 ./codegen_main --pipeline_stages=2 --delay_model=unit --use_system_verilog=false --reset=reset fp32_fmac.opt.ir > fp32_fmac.v
 
+iverilog -o sim.vvp -g2005-sv tb.v fp32_fmac.v
+
 iverilog-vpi bridge.c
 ```
 
