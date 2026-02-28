@@ -5,22 +5,22 @@ module tb;
   reg reset = 1;
 
   // DUT inputs (driven by VPI bridge except reset)
-  reg  [31:0] fp32_fmac__input_a = 0;
-  reg         fp32_fmac__input_a_vld = 0;
-  reg  [31:0] fp32_fmac__input_b = 0;
-  reg         fp32_fmac__input_b_vld = 0;
+  reg  [63:0] fp64_fmac__input_a = 0;
+  reg         fp64_fmac__input_a_vld = 0;
+  reg  [63:0] fp64_fmac__input_b = 0;
+  reg         fp64_fmac__input_b_vld = 0;
 
-  reg         fp32_fmac__output_rdy = 1;   // keep ready asserted (bridge can change if desired)
+  reg         fp64_fmac__output_rdy = 1;   // keep ready asserted (bridge can change if desired)
 
-  reg         fp32_fmac__reset = 0;
-  reg         fp32_fmac__reset_vld = 0;
+  reg         fp64_fmac__reset = 0;
+  reg         fp64_fmac__reset_vld = 0;
 
   // DUT outputs
-  wire        fp32_fmac__input_a_rdy;
-  wire        fp32_fmac__input_b_rdy;
-  wire [31:0] fp32_fmac__output;
-  wire        fp32_fmac__output_vld;
-  wire        fp32_fmac__reset_rdy;
+  wire        fp64_fmac__input_a_rdy;
+  wire        fp64_fmac__input_b_rdy;
+  wire [63:0] fp64_fmac__output;
+  wire        fp64_fmac__output_vld;
+  wire        fp64_fmac__reset_rdy;
 
   // Clock: 100 MHz
   always #5 clk = ~clk;
@@ -33,21 +33,21 @@ module tb;
   end
 
   // Instantiate DUT (your XLS module)
-  __fp32_fmac__fp32_fmac_0_next dut (
+  __fp64_fmac__fp64_fmac_0_next dut (
     .clk(clk),
     .reset(reset),
-    .fp32_fmac__wire_a(fp32_fmac__input_a),
-    .fp32_fmac__wire_a_vld(fp32_fmac__input_a_vld),
-    .fp32_fmac__wire_b(fp32_fmac__input_b),
-    .fp32_fmac__wire_b_vld(fp32_fmac__input_b_vld),
-    .fp32_fmac__wire_output_rdy(fp32_fmac__output_rdy),
-    .fp32_fmac__wire_reset(fp32_fmac__reset),
-    .fp32_fmac__wire_reset_vld(fp32_fmac__reset_vld),
-    .fp32_fmac__wire_a_rdy(fp32_fmac__input_a_rdy),
-    .fp32_fmac__wire_b_rdy(fp32_fmac__input_b_rdy),
-    .fp32_fmac__wire_output(fp32_fmac__output),
-    .fp32_fmac__wire_output_vld(fp32_fmac__output_vld),
-    .fp32_fmac__wire_reset_rdy(fp32_fmac__reset_rdy)
+    .fp64_fmac__wire_a(fp64_fmac__input_a),
+    .fp64_fmac__wire_a_vld(fp64_fmac__input_a_vld),
+    .fp64_fmac__wire_b(fp64_fmac__input_b),
+    .fp64_fmac__wire_b_vld(fp64_fmac__input_b_vld),
+    .fp64_fmac__wire_output_rdy(fp64_fmac__output_rdy),
+    .fp64_fmac__wire_reset(fp64_fmac__reset),
+    .fp64_fmac__wire_reset_vld(fp64_fmac__reset_vld),
+    .fp64_fmac__wire_a_rdy(fp64_fmac__input_a_rdy),
+    .fp64_fmac__wire_b_rdy(fp64_fmac__input_b_rdy),
+    .fp64_fmac__wire_output(fp64_fmac__output),
+    .fp64_fmac__wire_output_vld(fp64_fmac__output_vld),
+    .fp64_fmac__wire_reset_rdy(fp64_fmac__reset_rdy)
   );
 
   // Let it run forever (bridge drives transactions)

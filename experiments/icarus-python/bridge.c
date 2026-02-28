@@ -9,14 +9,17 @@
 #include "vpi_user.h"
 
 /* ===================== Shared memory ===================== */
-typedef struct {
+typedef struct __attribute__((packed)) {
   volatile uint32_t seq_in;
-  volatile uint32_t a;
-  volatile uint32_t b;
+  volatile uint64_t a;
+  volatile uint64_t b;
 
   volatile uint32_t seq_out;
-  volatile uint32_t out;
-  volatile uint32_t state;   // 0 idle, 1 send, 2 wait out, 3 cooldown, 9 init, 10 init done
+  volatile uint64_t out;
+
+  // NOTE: this describes the state of the bridge, not of anything in icarus
+  // 0 idle, 1 send, 2 wait out, 3 cooldown, 9 init, 10 init done
+  volatile uint32_t state;
 } shm_regs_t;
 
 static const char *SHM_NAME = "/xls_fmac_shm";
@@ -49,6 +52,22 @@ static int get_bit(vpiHandle sig) {
   return (v.value.integer & 1) ? 1 : 0;
 }
 
+static uint64_t get_u64(vpiHandle sig) {
+  // vpiHandle systf = vpi_handle(vpiSysTfCall, NULL);
+  // vpiHandle arg = vpi_iterate(vpiArgument, systf);
+  // vpiHandle sig = vpi_scan(arg);
+
+  s_vpi_value v;
+  v.format = vpiVectorVal;
+  vpi_get_value(sig, &v);
+
+  uint64_t high = v.value.vector[1].aval; // Bits 63:32
+  uint64_t low = v.value.vector[0].aval;  // Bits 31:0
+  uint64_t total_val = (high << 32) | (low & 0xFFFFFFFF);
+
+  return total_val;
+}
+
 static void put_u32(vpiHandle sig, uint32_t x) {
   s_vpi_value v;
   v.format = vpiIntVal;
@@ -60,6 +79,21 @@ static void put_bit(vpiHandle sig, int bit) {
   s_vpi_value v;
   v.format = vpiScalarVal;
   v.value.scalar = bit ? vpi1 : vpi0;
+  vpi_put_value(sig, &v, NULL, vpiNoDelay);
+}
+
+static void put_u64(vpiHandle sig, uint64_t x) {
+  s_vpi_value v;
+  s_vpi_vecval vec[2];
+
+  vec[0].aval = (uint32_t)(x & 0xFFFFFFFF); // Lower 32 bits
+  vec[0].bval = 0; // No X/Z
+  vec[1].aval = (uint32_t)((x >> 32) & 0xFFFFFFFF); // Upper 32 bits
+  vec[1].bval = 0; // No X/Z
+
+  v.format = vpiVectorVal;
+  v.value.vector = vec;
+
   vpi_put_value(sig, &v, NULL, vpiNoDelay);
 }
 
@@ -87,21 +121,21 @@ static void find_signals(void) {
   h_clk   = vpi_handle_by_name((PLI_BYTE8*)"tb.clk", NULL);
   h_reset = vpi_handle_by_name((PLI_BYTE8*)"tb.reset", NULL);
 
-  h_a     = vpi_handle_by_name((PLI_BYTE8*)"tb.fp32_fmac__input_a", NULL);
-  h_a_vld = vpi_handle_by_name((PLI_BYTE8*)"tb.fp32_fmac__input_a_vld", NULL);
-  h_a_rdy = vpi_handle_by_name((PLI_BYTE8*)"tb.fp32_fmac__input_a_rdy", NULL);
+  h_a     = vpi_handle_by_name((PLI_BYTE8*)"tb.fp64_fmac__input_a", NULL);
+  h_a_vld = vpi_handle_by_name((PLI_BYTE8*)"tb.fp64_fmac__input_a_vld", NULL);
+  h_a_rdy = vpi_handle_by_name((PLI_BYTE8*)"tb.fp64_fmac__input_a_rdy", NULL);
 
-  h_b     = vpi_handle_by_name((PLI_BYTE8*)"tb.fp32_fmac__input_b", NULL);
-  h_b_vld = vpi_handle_by_name((PLI_BYTE8*)"tb.fp32_fmac__input_b_vld", NULL);
-  h_b_rdy = vpi_handle_by_name((PLI_BYTE8*)"tb.fp32_fmac__input_b_rdy", NULL);
+  h_b     = vpi_handle_by_name((PLI_BYTE8*)"tb.fp64_fmac__input_b", NULL);
+  h_b_vld = vpi_handle_by_name((PLI_BYTE8*)"tb.fp64_fmac__input_b_vld", NULL);
+  h_b_rdy = vpi_handle_by_name((PLI_BYTE8*)"tb.fp64_fmac__input_b_rdy", NULL);
 
-  h_out     = vpi_handle_by_name((PLI_BYTE8*)"tb.fp32_fmac__output", NULL);
-  h_out_vld = vpi_handle_by_name((PLI_BYTE8*)"tb.fp32_fmac__output_vld", NULL);
-  h_out_rdy = vpi_handle_by_name((PLI_BYTE8*)"tb.fp32_fmac__output_rdy", NULL);
+  h_out     = vpi_handle_by_name((PLI_BYTE8*)"tb.fp64_fmac__output", NULL);
+  h_out_vld = vpi_handle_by_name((PLI_BYTE8*)"tb.fp64_fmac__output_vld", NULL);
+  h_out_rdy = vpi_handle_by_name((PLI_BYTE8*)"tb.fp64_fmac__output_rdy", NULL);
 
-  h_srst     = vpi_handle_by_name((PLI_BYTE8*)"tb.fp32_fmac__reset", NULL);
-  h_srst_vld = vpi_handle_by_name((PLI_BYTE8*)"tb.fp32_fmac__reset_vld", NULL);
-  h_srst_rdy = vpi_handle_by_name((PLI_BYTE8*)"tb.fp32_fmac__reset_rdy", NULL);
+  h_srst     = vpi_handle_by_name((PLI_BYTE8*)"tb.fp64_fmac__reset", NULL);
+  h_srst_vld = vpi_handle_by_name((PLI_BYTE8*)"tb.fp64_fmac__reset_vld", NULL);
+  h_srst_rdy = vpi_handle_by_name((PLI_BYTE8*)"tb.fp64_fmac__reset_rdy", NULL);
 
   if (!h_clk || !h_reset ||
       !h_a || !h_a_vld || !h_a_rdy ||
@@ -114,12 +148,12 @@ static void find_signals(void) {
 
 /* ===================== Drive bundle ===================== */
 typedef struct {
-  uint32_t a;
-  uint32_t b;
+  uint64_t a;
+  uint64_t b;
   int a_vld;
   int b_vld;
   int out_rdy;
-  uint32_t srst;
+  uint64_t srst;
   int srst_vld;
 } drives_t;
 
@@ -137,7 +171,7 @@ typedef enum {
 
 static st_t st = ST_INIT0;
 static uint32_t cur_seq = 0;
-static uint32_t pending_a = 0, pending_b = 0;
+static uint64_t pending_a = 0, pending_b = 0;
 static int cool_count = 0;
 
 /* ===================== Sync callback scheduler ===================== */
@@ -159,14 +193,14 @@ static void schedule_sync_cb(PLI_INT32 reason, PLI_INT32 (*fn)(p_cb_data)) {
 static PLI_INT32 cb_readwrite(p_cb_data cb) {
   (void)cb;
 
-  put_u32(h_a, drv.a);
-  put_u32(h_b, drv.b);
+  put_u64(h_a, drv.a);
+  put_u64(h_b, drv.b);
   put_bit(h_a_vld, drv.a_vld);
   put_bit(h_b_vld, drv.b_vld);
 
   put_bit(h_out_rdy, drv.out_rdy);
 
-  put_u32(h_srst, drv.srst);
+  put_bit(h_srst, drv.srst);
   put_bit(h_srst_vld, drv.srst_vld);
 
   return 0;
@@ -281,7 +315,7 @@ static PLI_INT32 cb_readonly(p_cb_data cb) {
       drv.b_vld = 0;
 
       if (get_bit(h_out_vld)) {
-        g_shm->out = get_u32(h_out);
+        g_shm->out = get_u64(h_out);
         g_shm->seq_out = cur_seq;
 
         /* Cooldown: keep valids low for 2 cycles to clear DUT’s internal valid_regs */

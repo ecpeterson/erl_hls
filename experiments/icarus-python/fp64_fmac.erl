@@ -1,4 +1,4 @@
--module(fp32_fmac).
+-module(fp64_fmac).
 -export([fmac/3, reset/1]).
 -export([start_link/0, stop/1]).
 -export([init/1, handle_call/3, handle_cast/2, terminate/2, code_change/3]).

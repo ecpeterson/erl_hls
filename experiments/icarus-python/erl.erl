@@ -58,10 +58,10 @@ code_change(_OldVsn, State, _Extra) ->
 
 read(FD) ->
     {ok, <<
-        SeqIn:32/unsigned-little-integer, A:32/little-float, B:32/little-float,
-        SeqOut:32/unsigned-little-integer, Out:32/little-float,
+        SeqIn:32/unsigned-little-integer, A:64/little-float, B:64/little-float,
+        SeqOut:32/unsigned-little-integer, Out:64/little-float,
         State:32/unsigned-little-integer
-    >>} = file:pread(FD, 0, 4*6),  % 6 fields, each double wide
+    >>} = file:pread(FD, 0, 3*4 + 3*8),  % 3 dwords, 3 quads. sizeof would be nice
     #bridge{
         seq_in = SeqIn, a = A, b = B,
         seq_out = SeqOut, out = Out,
@@ -70,10 +70,10 @@ read(FD) ->
 
 write(FD, Bridge) ->
     ok = file:pwrite(FD, 0, <<
-        %% only touch writeable registers
+        %% only touch writeable registers, which are in the first half
         (Bridge#bridge.seq_in):32/unsigned-little-integer,
-        (Bridge#bridge.a):32/little-float,
-        (Bridge#bridge.b):32/little-float
+        (Bridge#bridge.a):64/little-float,
+        (Bridge#bridge.b):64/little-float
     >>).
 
 write_req(FD, Seq, A, B) ->
@@ -90,3 +90,4 @@ wait_resp(FD, Seq, Timeout) ->
         Bridge = #bridge{seq_out = Seq} -> Bridge;
         _ -> wait_resp(FD, Seq, Timeout)
     end.
+

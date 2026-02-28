@@ -1,24 +1,24 @@
 #!python3
 
-import mmap, os, struct, time
+import os, struct, time
 
 SHM_PATH = "/dev/shm/xls_fmac_shm"     # Linux
-FMT = "<IffIfI"  # seq_in,a,b,seq_out,out,state
+FMT = "<IddIdI"  # seq_in,a,b,seq_out,out,state
 SIZE = struct.calcsize(FMT)
 
-fd = os.open(SHM_PATH, os.O_RDWR)
-mm = mmap.mmap(fd, SIZE, mmap.MAP_SHARED, mmap.PROT_READ | mmap.PROT_WRITE)
-os.close(fd)
+mm = open(SHM_PATH, "r+b")
 
 def read_regs():
     mm.seek(0)
-    return struct.unpack(FMT, mm.read(SIZE))
+    raw = mm.read(SIZE)
+    return struct.unpack(FMT, raw)
 
 def write_req(seq, a, b):
     # preserve seq_out/out/state fields; sim owns those
     _, _, _, seq_out, out, state = read_regs()
     mm.seek(0)
-    mm.write(struct.pack(FMT, seq, a, b, seq_out, out, state))
+    raw = struct.pack(FMT, seq, a, b, seq_out, out, state)
+    mm.write(raw)
     mm.flush()
 
 def wait_resp(seq, timeout_s=5.0):
@@ -42,4 +42,6 @@ for (a, b) in [
     write_req(seq, a, b)
     out, state = wait_resp(seq)
     print(f"{seq=} {a=} {b=} {out=} {state=}")
+
+mm.close()
 

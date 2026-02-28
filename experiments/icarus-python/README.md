@@ -4,18 +4,20 @@ Needs: Icarus Verilog, cc (eg: gcc), XLS (eg: https://github.com/google/xls?tab=
 
 Build:
 ```sh
-./ir_converter_main --top=fp32_fmac fp32_fmac.x > fp32_fmac.ir
-./opt_main fp32_fmac.ir > fp32_fmac.opt.ir
-./codegen_main --pipeline_stages=2 --delay_model=unit --use_system_verilog=false --reset=reset fp32_fmac.opt.ir > fp32_fmac.v
+export PATH=$PATH:/home/ecpeterson/xls-v0.0.0-9235-gb179d691e-linux-x64
 
-iverilog -o sim.vvp -g2005-sv tb.v fp32_fmac.v
+ir_converter_main --dslx_stdlib_path=/home/ecpeterson/xls-v0.0.0-9235-gb179d691e-linux-x64/xls/dslx/stdlib --top=fp64_fmac fp64_fmac.x > _build/fp64_fmac.ir
+opt_main _build/fp64_fmac.ir > _build/fp64_fmac.opt.ir
+codegen_main --pipeline_stages=2 --delay_model=unit --use_system_verilog=false --reset=reset _build/fp64_fmac.opt.ir > _build/fp64_fmac.v
 
-iverilog-vpi bridge.c
+iverilog -o _build/sim.vvp -g2005-sv tb.v _build/fp64_fmac.v
+
+iverilog-vpi bridge.c && mv bridge.o bridge.vpi _build
 ```
 
 Simulate design:
 ```sh
-vvp -M. -m bridge sim.vvp  # to close: C-c finish RET
+vvp -M _build -m bridge _build/sim.vvp  # to close: C-c finish RET
 ```
 
 Communicate with design via Python (separate terminal):
