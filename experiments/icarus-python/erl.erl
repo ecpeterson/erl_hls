@@ -7,13 +7,22 @@
 -define(TIMEOUT, 5000).  % milliseconds
 
 -record(bridge, {
-    seq_in :: integer,
-    a :: float,
-    b :: float,
-    seq_out :: integer,
-    out :: float,
-    state :: integer
+    seq_in :: integer(),
+    b :: float(),
+    a :: float(),
+    opcode :: opcode(),
+    seq_out :: integer(),
+    out :: float(),
+    state :: integer()
 }).
+
+%%% too bad EEP 13's -enum hasn't been realized
+-type opcode() :: fmac | reset.
+opcode_to_int(fmac) -> 0;
+opcode_to_int(reset) -> 1.
+
+int_to_opcode(0) -> fmac;
+int_to_opcode(1) -> reset.
 
 %%%
 %%% Server management
@@ -34,13 +43,17 @@ init([]) ->
     {ok, _FD} = file:open(?SHM_PATH, [read, write, raw, binary]).
 
 handle_call(reset, _From, FD) ->
-    %% TODO: implement me!!
+    Bridge = read(FD),
+    NewSeq = Bridge#bridge.seq_in + 1,
+    write_req(FD, NewSeq, reset),
+    _NewBridge = wait_resp(FD, NewSeq),
     {reply, ok, FD};
 %% do un/packing inline to get type info
 handle_call({fmac, <<A/float>>, <<B/float>>}, _From, FD) ->
     Bridge = read(FD),
-    write_req(FD, Bridge#bridge.seq_in + 1, A, B),
-    NewBridge = wait_resp(FD, Bridge#bridge.seq_in + 1),
+    NewSeq = Bridge#bridge.seq_in + 1,
+    write_req(FD, NewSeq, {fmac, A, B}),
+    NewBridge = wait_resp(FD, NewSeq),
     {reply, {ok, <<(NewBridge#bridge.out)/float>>}, FD}.
 
 handle_cast(_Message, _State) ->
@@ -58,12 +71,13 @@ code_change(_OldVsn, State, _Extra) ->
 
 read(FD) ->
     {ok, <<
-        SeqIn:32/unsigned-little-integer, A:64/little-float, B:64/little-float,
-        SeqOut:32/unsigned-little-integer, Out:64/little-float,
-        State:32/unsigned-little-integer
-    >>} = file:pread(FD, 0, 3*4 + 3*8),  % 3 dwords, 3 quads. sizeof would be nice
+        SeqIn:64/unsigned-little-integer,
+        B:64/little-float, A:64/little-float, Opcode:64/unsigned-little-integer,
+        SeqOut:64/unsigned-little-integer, Out:64/little-float,
+        State:64/unsigned-little-integer
+    >>} = file:pread(FD, 0, 0*4 + 7*8),  % sizeof would be nice
     #bridge{
-        seq_in = SeqIn, a = A, b = B,
+        seq_in = SeqIn, opcode = int_to_opcode(Opcode), a = A, b = B,
         seq_out = SeqOut, out = Out,
         state = State
     }.
@@ -71,13 +85,18 @@ read(FD) ->
 write(FD, Bridge) ->
     ok = file:pwrite(FD, 0, <<
         %% only touch writeable registers, which are in the first half
-        (Bridge#bridge.seq_in):32/unsigned-little-integer,
+        (Bridge#bridge.seq_in):64/unsigned-little-integer,
+        (Bridge#bridge.b):64/little-float,
         (Bridge#bridge.a):64/little-float,
-        (Bridge#bridge.b):64/little-float
+        (opcode_to_int(Bridge#bridge.opcode)):64/unsigned-little-integer
     >>).
 
-write_req(FD, Seq, A, B) ->
-    write(FD, #bridge{seq_in=Seq, a=A, b=B}).
+write_req(FD, Seq, Req) ->
+    Bridge = case Req of
+        reset -> #bridge{seq_in=Seq, opcode=reset, a=0, b=0};
+        {fmac, A, B} -> #bridge{seq_in=Seq, opcode=fmac, a=A, b=B}
+    end,
+    write(FD, Bridge).
 
 wait_resp(FD, Seq) ->
     Timeout = erlang:system_time(millisecond) + ?TIMEOUT,

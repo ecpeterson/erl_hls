@@ -20,34 +20,38 @@ type F64 = float64::F64;
 const F64_ZERO = float64::zero(false);
 const F64_ONE  = float64::one(false);
 
+pub enum Opcode : u1 {
+  FMAC = 0,
+  RESET = 1,
+}
+
+pub struct Req {
+  op: Opcode,
+  // inferred from handle_call branches
+  a: F64,
+  b: F64,
+}
+
 pub proc fp64_fmac {
-    wire_output: chan<F64>  out;
-    wire_reset:  chan<bool> in;  // message type selector
-    wire_a:      chan<F64>  in;  // first input operand
-    wire_b:      chan<F64>  in;  // second input operand
+  wire_req:    chan<Req> in;
+  wire_output: chan<F64> out;
 
-    config(  // inferred from handle_call branches
-      wire_output: chan<F64> out, wire_reset: chan<bool> in,
-      wire_a: chan<F64> in, wire_b: chan<F64> in
-  ) {
-        (wire_output, wire_reset, wire_a, wire_b)
-    }
+  config(wire_req: chan<Req> in, wire_output: chan<F64> out) {
+    (wire_req, wire_output)
+  }
 
-    init { F64_ZERO }  // init
+  init { F64_ZERO }  // init
 
-    next(acc: F64) {  // handle_call; acc is typed by gen_server state
-        let (tok0, a) = recv(join(), wire_a);  // catch inputs
-        let (tok1, b) = recv(join(), wire_b);
-        let (tok2, reset) = recv(join(), wire_reset);
+  next(acc: F64) {  // handle_call; acc is typed by gen_server state
+    let (tok_req, req) = recv(join(), wire_req);  // catch inputs
 
-        let acc = match reset {  // case out message type
-          1 => F64_ZERO,  // branch bodies
-          0 => float64::add(float64::mul(a, b), acc)  // fma optimization?
-      };
+    let acc = match req.op {  // case out message type
+      Opcode::RESET => F64_ZERO,  // branch bodies
+      Opcode::FMAC => float64::add(float64::mul(req.a, req.b), acc)  // fma optimization?
+    };
 
-        let tok3 = join(tok0, tok1, tok2);
-        send(tok3, wire_output, acc);  // emit result
+    send(tok_req, wire_output, acc);  // emit result
 
-        acc  // update internal state
-    }
+    acc  // update internal state
+  }
 }

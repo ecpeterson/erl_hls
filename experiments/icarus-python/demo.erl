@@ -3,6 +3,7 @@
 
 main(Module) ->
     {ok, PID} = Module:start_link(),
+    fp64_fmac:reset(PID),
     lists:foreach(
         fun({A, B}) ->
             Acc = fp64_fmac:fmac(PID, A, B),

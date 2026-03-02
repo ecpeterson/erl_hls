@@ -4,37 +4,38 @@
 #include <string.h>
 #include <fcntl.h>
 #include <sys/mman.h>
+#include <stdlib.h>
 #include <unistd.h>
 
 #include "vpi_user.h"
 
 /* ===================== Shared memory ===================== */
-typedef struct __attribute__((packed)) {
-  volatile uint32_t seq_in;
-  volatile uint64_t a;
-  volatile uint64_t b;
+// these probably ought to be __attribute__((packed)) but i didn't work to sort
+// out how to make it compatible with the copy op further down.
+typedef struct {
+  uint64_t b;
+  uint64_t a;
+  uint64_t op;  // only uses lowest bit, but may as well stay aligned
+} req_t;
 
-  volatile uint32_t seq_out;
+typedef struct {
+  // these are only ever read by the bridge
+  volatile uint64_t seq_in;
+  volatile req_t req;
+
+  // these are only ever written by the bridge
+  volatile uint64_t seq_out;
   volatile uint64_t out;
-
-  // NOTE: this describes the state of the bridge, not of anything in icarus
-  // 0 idle, 1 send, 2 wait out, 3 cooldown, 9 init, 10 init done
-  volatile uint32_t state;
+  volatile uint64_t state;  // cloned from the bridge's `st` variable
 } shm_regs_t;
 
 static const char *SHM_NAME = "/xls_fmac_shm";
 static shm_regs_t *g_shm = NULL;
 
 /* ===================== VPI handles ===================== */
-static vpiHandle h_clk = NULL;
-static vpiHandle h_reset = NULL;
-
-static vpiHandle h_a = NULL, h_a_vld = NULL, h_a_rdy = NULL;
-static vpiHandle h_b = NULL, h_b_vld = NULL, h_b_rdy = NULL;
-
+static vpiHandle h_clk = NULL, h_reset = NULL;
+static vpiHandle h_req = NULL, h_req_vld = NULL, h_req_rdy = NULL;
 static vpiHandle h_out = NULL, h_out_vld = NULL, h_out_rdy = NULL;
-
-static vpiHandle h_srst = NULL, h_srst_vld = NULL, h_srst_rdy = NULL; /* rdy not used */
 
 /* ===================== Helpers ===================== */
 static uint32_t get_u32(vpiHandle sig) {
@@ -97,6 +98,41 @@ static void put_u64(vpiHandle sig, uint64_t x) {
   vpi_put_value(sig, &v, NULL, vpiNoDelay);
 }
 
+static void put_req_t(vpiHandle sig, req_t* x) {
+  s_vpi_value v;
+  v.format = vpiVectorVal;
+
+  int bytes_upper_bound = sizeof(req_t) + sizeof(uint32_t) - 1;
+  int dwords_round_up = bytes_upper_bound / sizeof(uint32_t);
+  s_vpi_vecval *vec = malloc(dwords_round_up * sizeof(s_vpi_vecval));
+
+  volatile uint32_t *raw = (volatile uint32_t *)x;
+
+  for (int i = 0; i < dwords_round_up; i++) {
+    vec[i].aval = raw[i];
+    vec[i].bval = 0;
+  }
+
+  v.value.vector = vec;
+  vpi_put_value(sig, &v, NULL, vpiNoDelay);
+
+  free(vec);
+  return;
+}
+
+// Source - https://stackoverflow.com/a/54965696
+volatile void *memcpy_v(volatile void *restrict dest,
+            const volatile void *restrict src, size_t n) {
+    const volatile unsigned char *src_c = src;
+    volatile unsigned char *dest_c      = dest;
+
+    while (n > 0) {
+        n--;
+        dest_c[n] = src_c[n];
+    }
+    return  dest;
+}
+
 /* ===================== SHM init ===================== */
 static void init_shm(void) {
   int fd = shm_open(SHM_NAME, O_CREAT | O_RDWR, 0600);
@@ -109,8 +145,9 @@ static void init_shm(void) {
 
   g_shm = (shm_regs_t*)p;
   g_shm->seq_in = 0;
-  g_shm->a = 0;
-  g_shm->b = 0;
+  g_shm->req.op = 0;
+  g_shm->req.a = 0;
+  g_shm->req.b = 0;
   g_shm->seq_out = 0;
   g_shm->out = 0;
   g_shm->state = 0;
@@ -121,57 +158,40 @@ static void find_signals(void) {
   h_clk   = vpi_handle_by_name((PLI_BYTE8*)"tb.clk", NULL);
   h_reset = vpi_handle_by_name((PLI_BYTE8*)"tb.reset", NULL);
 
-  h_a     = vpi_handle_by_name((PLI_BYTE8*)"tb.fp64_fmac__input_a", NULL);
-  h_a_vld = vpi_handle_by_name((PLI_BYTE8*)"tb.fp64_fmac__input_a_vld", NULL);
-  h_a_rdy = vpi_handle_by_name((PLI_BYTE8*)"tb.fp64_fmac__input_a_rdy", NULL);
-
-  h_b     = vpi_handle_by_name((PLI_BYTE8*)"tb.fp64_fmac__input_b", NULL);
-  h_b_vld = vpi_handle_by_name((PLI_BYTE8*)"tb.fp64_fmac__input_b_vld", NULL);
-  h_b_rdy = vpi_handle_by_name((PLI_BYTE8*)"tb.fp64_fmac__input_b_rdy", NULL);
+  h_req     = vpi_handle_by_name((PLI_BYTE8*)"tb.fp64_fmac__wire_req", NULL);
+  h_req_vld = vpi_handle_by_name((PLI_BYTE8*)"tb.fp64_fmac__wire_req_vld", NULL);
+  h_req_rdy = vpi_handle_by_name((PLI_BYTE8*)"tb.fp64_fmac__wire_req_rdy", NULL);
 
   h_out     = vpi_handle_by_name((PLI_BYTE8*)"tb.fp64_fmac__output", NULL);
   h_out_vld = vpi_handle_by_name((PLI_BYTE8*)"tb.fp64_fmac__output_vld", NULL);
   h_out_rdy = vpi_handle_by_name((PLI_BYTE8*)"tb.fp64_fmac__output_rdy", NULL);
 
-  h_srst     = vpi_handle_by_name((PLI_BYTE8*)"tb.fp64_fmac__reset", NULL);
-  h_srst_vld = vpi_handle_by_name((PLI_BYTE8*)"tb.fp64_fmac__reset_vld", NULL);
-  h_srst_rdy = vpi_handle_by_name((PLI_BYTE8*)"tb.fp64_fmac__reset_rdy", NULL);
-
   if (!h_clk || !h_reset ||
-      !h_a || !h_a_vld || !h_a_rdy ||
-      !h_b || !h_b_vld || !h_b_rdy ||
-      !h_out || !h_out_vld || !h_out_rdy ||
-      !h_srst || !h_srst_vld || !h_srst_rdy) {
+      !h_req || !h_req_vld || !h_req_rdy ||
+      !h_out || !h_out_vld || !h_out_rdy) {
     vpi_printf("VPI bridge: ERROR: failed to find one or more signals. Check tb.* names.\n");
   }
 }
 
 /* ===================== Drive bundle ===================== */
 typedef struct {
-  uint64_t a;
-  uint64_t b;
-  int a_vld;
-  int b_vld;
+  req_t req;
+  int req_vld;
   int out_rdy;
-  uint64_t srst;
-  int srst_vld;
 } drives_t;
 
 static drives_t drv;
 
 /* ===================== Bridge FSM ===================== */
 typedef enum {
-  ST_INIT0 = 0,
-  ST_INIT1 = 1,
-  ST_IDLE  = 2,
-  ST_SEND  = 3,
-  ST_WAITO = 4,
-  ST_COOL  = 5
+  ST_IDLE = 2,
+  ST_SEND = 3,
+  ST_WAIT = 4,
+  ST_COOL = 5
 } st_t;
 
-static st_t st = ST_INIT0;
+static st_t st = ST_IDLE;
 static uint32_t cur_seq = 0;
-static uint64_t pending_a = 0, pending_b = 0;
 static int cool_count = 0;
 
 /* ===================== Sync callback scheduler ===================== */
@@ -193,15 +213,10 @@ static void schedule_sync_cb(PLI_INT32 reason, PLI_INT32 (*fn)(p_cb_data)) {
 static PLI_INT32 cb_readwrite(p_cb_data cb) {
   (void)cb;
 
-  put_u64(h_a, drv.a);
-  put_u64(h_b, drv.b);
-  put_bit(h_a_vld, drv.a_vld);
-  put_bit(h_b_vld, drv.b_vld);
+  put_req_t(h_req, &drv.req);
+  put_bit(h_req_vld, drv.req_vld);
 
   put_bit(h_out_rdy, drv.out_rdy);
-
-  put_bit(h_srst, drv.srst);
-  put_bit(h_srst_vld, drv.srst_vld);
 
   return 0;
 }
@@ -213,107 +228,62 @@ static PLI_INT32 cb_readonly(p_cb_data cb) {
   /* Only run on posedge */
   if (!get_bit(h_clk)) return 0;
 
+  /* Only run if we passed init */
+  if (!g_shm) return 0;
+
   /* Defaults every cycle */
   drv.out_rdy = 1;
-  drv.srst = 0;      /* IMPORTANT: 1 forces output masked to 0 in this RTL */
-  drv.srst_vld = 1;
 
   /* If global reset, reinitialize deterministically */
   if (get_bit(h_reset)) {
-    st = ST_INIT0;
+    st = ST_IDLE;
     cur_seq = 0;
-    pending_a = pending_b = 0;
     cool_count = 0;
 
-    drv.a = 0;
-    drv.b = 0;
-    drv.a_vld = 0;
-    drv.b_vld = 0;
-    drv.srst = 0;
-    drv.srst_vld = 1;
+    drv.req.a = 0;
+    drv.req.b = 0;
+    drv.req.op = 0;
+    drv.req_vld = 0;
 
-    if (g_shm) g_shm->state = 0;
+    g_shm->state = st;
     return 0;
   }
 
-  if (!g_shm) return 0;
-
   switch (st) {
-    case ST_INIT0:
-      /* Assert reset channel valid for a full cycle (don’t wait for rdy) */
-      /*
-      drv.srst = 0;
-      drv.srst_vld = 1;
-      drv.a_vld = 0;
-      drv.b_vld = 0;
-      g_shm->state = 9;
-      st = ST_INIT1;
-      break;
-      */
-
-    case ST_INIT1:
-      /* Drop reset_vld; now design should be enabled */
-      /*
-      drv.srst = 0;
-      drv.srst_vld = 1;
-      drv.a_vld = 0;
-      drv.b_vld = 0;
-      g_shm->state = 10;
-      st = ST_IDLE;
-      break;
-      */
-
     case ST_IDLE: {
-      g_shm->state = 0;
-      drv.a_vld = 0;
-      drv.b_vld = 0;
+      // not yet ready to transmit
+      drv.req_vld = 0;
 
+      // do we have a new message?
       uint32_t seq_in = g_shm->seq_in;
-      if (seq_in != g_shm->seq_out && seq_in != cur_seq) {
+      if (
+        seq_in != cur_seq  // input not yet ingested
+        && cur_seq == g_shm->seq_out  // previous request completed
+      ) {
+        // then get ready to send
         cur_seq = seq_in;
-        pending_a = g_shm->a;
-        pending_b = g_shm->b;
+        memcpy_v(&drv.req, &g_shm->req, sizeof(req_t));
+        drv.req_vld = 1;
 
-        drv.a = pending_a;
-        drv.b = pending_b;
-        drv.a_vld = 1;
-        drv.b_vld = 1;
-
-        g_shm->state = 1;
         st = ST_SEND;
       }
       break;
     }
 
     case ST_SEND: {
-      g_shm->state = 1;
-
       /* Keep valids asserted together until BOTH rdys are 1 at a posedge */
-      drv.a = pending_a;
-      drv.b = pending_b;
-      drv.a_vld = 1;
-      drv.b_vld = 1;
 
-      int a_rdy = get_bit(h_a_rdy);
-      int b_rdy = get_bit(h_b_rdy);
+      int req_rdy = get_bit(h_req_rdy);
 
-      if (a_rdy && b_rdy) {
-        /* Pair accepted this cycle; drop valids for next cycle */
-        drv.a_vld = 0;
-        drv.b_vld = 0;
-        st = ST_WAITO;
-        g_shm->state = 2;
+      if (req_rdy) {
+        /* Request accepted this cycle; drop valid for next cycle */
+        drv.req_vld = 0;
+        st = ST_WAIT;
       }
       break;
     }
 
-    case ST_WAITO: {
-      g_shm->state = 2;
-
-      /* Keep valids low while waiting for output */
-      drv.a_vld = 0;
-      drv.b_vld = 0;
-
+    case ST_WAIT: {
       if (get_bit(h_out_vld)) {
         g_shm->out = get_u64(h_out);
         g_shm->seq_out = cur_seq;
@@ -321,21 +291,13 @@ static PLI_INT32 cb_readonly(p_cb_data cb) {
         /* Cooldown: keep valids low for 2 cycles to clear DUT’s internal valid_regs */
         cool_count = 2;
         st = ST_COOL;
-        g_shm->state = 3;
       }
       break;
     }
 
     case ST_COOL: {
-      g_shm->state = 3;
-      drv.a_vld = 0;
-      drv.b_vld = 0;
-
-      if (cool_count > 0) cool_count--;
-      if (cool_count == 0) {
+      if (cool_count-- == 0)
         st = ST_IDLE;
-        g_shm->state = 0;
-      }
       break;
     }
 
@@ -344,6 +306,7 @@ static PLI_INT32 cb_readonly(p_cb_data cb) {
       break;
   }
 
+  g_shm->state = st;
   return 0;
 }
 
@@ -364,10 +327,6 @@ static PLI_INT32 cb_start_of_sim(p_cb_data cb) {
 
   memset(&drv, 0, sizeof(drv));
   drv.out_rdy = 1;
-  drv.a_vld = 0;
-  drv.b_vld = 0;
-  drv.srst = 0;
-  drv.srst_vld = 0;
 
   /* Apply initial drives once */
   schedule_sync_cb(cbReadWriteSynch, cb_readwrite);
@@ -400,4 +359,3 @@ void (*vlog_startup_routines[])(void) = {
   entry_point,
   0
 };
-
