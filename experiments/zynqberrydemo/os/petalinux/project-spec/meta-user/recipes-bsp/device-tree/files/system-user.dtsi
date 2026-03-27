@@ -1,0 +1,266 @@
+/include/ "system-conf.dtsi"
+/ {
+};
+    
+    
+/ {
+
+    /*-------------------- FRAMBUFFER --------------------*/  
+    #address-cells = <1>;
+    #size-cells = <1>;
+ 
+    reserved-memory {
+        #address-cells = <1>;
+        #size-cells = <1>;
+        ranges;
+        hdmi_fb_reserved_region@1FC00000 {
+            //compatible = "removed-dma-pool";
+            compatible = "shared-dma-pool";
+            no-map;
+            // 512M (M modules)
+            reg = <0x1FC00000 0x400000>;
+            // 128M (R modules)
+            //reg = <0x7C00000 0x400000>;
+        };
+          
+        // Second framebuffer for direct data streaming from camera to monitor is not needed.
+          
+        //camera_fb_reserved_region@1FC00000 {
+        //    //compatible = "removed-dma-pool";
+        //    compatible = "shared-dma-pool";
+        //    no-map;
+        //    // 512M (M modules)
+        //    reg = <0x1FC00000 0x400000>;
+        //    // 128M (R modules)
+        //    //reg = <0x7800000 0x400000>;
+        //};
+                  
+    };
+    
+    hdmi_fb: framebuffer@1FC00000 {           // HDMI out
+        compatible = "simple-framebuffer";
+        // 512M (M modules)
+        reg = <0x1FC00000 (1280 * 720 * 4)>;    // 720p
+        // 128M (R modules)
+        //reg = <0x7C00000 (1280 * 720 * 4)>;   // 720p
+        width = <1280>;                         // 720p
+        height = <720>;                         // 720p
+        stride = <(1280 * 4)>;                  // 720p
+        format = "a8b8g8r8";
+        status = "okay";
+    };
+      
+    
+    //camera_fb: framebuffer@0x1FC00000 {         // CAMERA in
+    //    compatible = "simple-framebuffer";
+    //    // 512M (M modules)
+    //    reg = <0x1FC00000 (1280 * 720 * 4)>;    // 720p
+    //    // 128M (R modules)
+    //    //reg = <0x7800000 (1280 * 720 * 4)>;   // 720p
+    //    width = <1280>;                         // 720p
+    //    height = <720>;                         // 720p
+    //    stride = <(1280 * 4)>;                  // 720p
+    //    format = "a8b8g8r8";
+    //};
+    
+    vcc_3V3: fixedregulator@0 {
+        compatible = "regulator-fixed";
+        regulator-name = "vccaux-supply";
+        regulator-min-microvolt = <3300000>;
+        regulator-max-microvolt = <3300000>;
+        regulator-always-on;
+    };
+};
+/*-------------------- QSPI --------------------*/     
+&qspi {
+    #address-cells = <1>;
+    #size-cells = <0>;
+    status = "okay";
+    flash0: flash@0 {
+        compatible = "jedec,spi-nor";
+        reg = <0x0>;
+        #address-cells = <1>;
+        #size-cells = <1>;
+         
+        spi-rx-bus-width = <4>;
+        spi-tx-bus-width = <4>;
+        spi-max-frequency = <40000000>;
+    };
+};
+
+/*-------------------- GPIO -------------------*/     
+&gpio0 {
+    interrupt-controller;
+    #interrupt-cells = <2>;
+};
+/*-------------------- I2C --------------------*/     
+&i2c1 {
+    #address-cells = <1>;
+    #size-cells = <0>;
+    
+    i2cmux0: i2cmux@70  {
+        compatible = "nxp,pca9544";
+        #address-cells = <1>;
+        #size-cells = <0>;
+        reg = <0x70>;
+    
+    
+        i2c1@0 {
+            #address-cells = <1>;
+            #size-cells = <0>;
+            reg = <0>;
+    
+            id_eeprom@50 {
+                compatible = "atmel,24c32";
+                reg = <0x50>;
+            };
+    
+        };
+        i2c1@1 {    // Display Interface Connector
+            #address-cells = <1>;
+            #size-cells = <0>;
+            reg = <1>;
+        };
+        i2c1@2 {    // HDMI Interface Connector
+            #address-cells = <1>;
+            #size-cells = <0>;
+            reg = <2>;
+        };
+        i2c1@3 {    // Camera Interface Connector
+            #address-cells = <1>;
+            #size-cells = <0>;
+            reg = <3>;
+        };
+    };
+    
+};
+
+/*-------------------- USB --------------------*/     
+/{
+    usb_phy0: usb_phy@0 {
+        compatible = "ulpi-phy";
+        #phy-cells = <0>;
+        reg = <0xe0002000 0x1000>;
+        view-port = <0x0170>;
+        drv-vbus;
+    };
+};
+    
+&usb0 {
+    usb-phy = <&usb_phy0>;
+} ;
+
+/*-------------------- AUDIO --------------------*/     
+/*
+* Sound configuration
+*/
+    
+/{
+  
+    /* Use S/PDIF transmitter as codec required by simple-audio-card */
+    playback_codec: playback-codec {
+        compatible = "linux,spdif-dit";
+        #sound-dai-cells = <0>;
+    };
+  
+    /* Use S/PDIF receiver as codec required by simple-audio-card */
+    record_codec: record-codec {
+        compatible = "linux,spdif-dir";
+        #sound-dai-cells = <0>;
+    };
+    sound {
+        #address-cells = <1>;
+        #size-cells = <0>;
+  
+        simple-audio-card,widgets =
+            "Microphone", "In Jack",
+            "Line", "Line In Jack",
+            "Line", "Line Out Jack",
+            "Headphone", "Out Jack";
+    
+        simple-audio-card,routing =
+            "Out Jack", "te-out",
+            "te-in", "In Jack";
+  
+        i2s_receiver_0:i2s_receiver@43C10000 {
+           compatible = "xlnx,i2s-receiver-1.0";
+           clock-names = "s_axi_ctrl_aclk", "aud_mclk", "m_axis_aud_aclk";
+           aud_mclk = <4081632>;
+           reg = <0x0 0x43C10000 0x0 0x10000>;
+           //xlnx,dwidth = <0x18>;                  //I2S Data Width 24 bit   
+           xlnx,dwidth = <0x10>;                    //I2S Data Width 16 bit
+           xlnx,num-channels = <2>;
+           xlnx,snd-pcm = <&audio_formatter_0>;
+        };
+          
+        i2s_transmitter_0:i2s_transmitter@43C20000 {
+             compatible = "xlnx,i2s-transmitter-1.0";
+             clock-names = "s_axi_ctrl_aclk", "aud_mclk", "s_axis_aud_aclk";
+             aud_mclk = <4081632>;
+             reg = <0x0 0x43C20000 0x0 0x10000>;
+             //xlnx,dwidth = <0x18>;                //I2S Data Width 24 bit
+             xlnx,dwidth = <0x10>;                  //I2S Data Width 16 bit
+             xlnx,num-channels = <2>;
+             xlnx,snd-pcm = <&audio_formatter_0>;
+        };
+          
+        audio_formatter_0:audio_formatter@43C00000 {
+            compatible = "xlnx,audio-formatter-1.0";
+            interrupt-names = "irq_mm2s", "irq_s2mm";
+            reg = <0x0 0x43C00000 0x0 0x1000>;
+            xlnx,tx = <&i2s_transmitter_0>;
+            xlnx,rx = <&i2s_receiver_0>;
+            clock-names = "s_axi_lite_aclk", "m_axis_mm2s_aclk", "aud_mclk", "s_axis_s2mm_aclk";
+            aud_mclk = <12307691>;
+        };
+        playback_link: simple-audio-card,dai-link@0 {
+            reg = <0>;
+            format = "i2s";
+  
+            bitclock-master = <&p_codec_dai>;
+            frame-master = <&p_codec_dai>;
+  
+            p_cpu_dai: cpu {
+                sound-dai = <&i2s_transmitter_0>;
+            };
+  
+            p_platform_dai: plat {
+                sound-dai = <&audio_formatter_0>;
+            };
+  
+            p_codec_dai: codec {
+                sound-dai = <&playback_codec>;
+            };
+        };
+        record_link: simple-audio-card,dai-link@1 {
+            reg = <1>;
+            format = "i2s";
+  
+            bitclock-master = <&r_codec_dai>;
+            frame-master = <&r_codec_dai>;
+  
+            r_cpu_dai: cpu {
+                sound-dai = <&i2s_receiver_0>;
+            };
+  
+            r_platform_dai: plat {
+                sound-dai = <&audio_formatter_0>;
+            };
+  
+            r_codec_dai: codec {
+                sound-dai = <&record_codec>;
+            };
+        };      
+    };  
+};
+  
+/*-------------------- ADC --------------------*/   
+    
+/*
+* We need to disable Linux XADC driver to use XADC for audio recording
+*/
+&adc {
+    status = "disabled";
+};
+  
+      

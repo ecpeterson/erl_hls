@@ -1,0 +1,13 @@
+#-----------------------------------------------#
+#--Automatically generated file. Do not modify--#
+#-----------------------------------------------#
+ZIPINFO_CSV=        1.0
+ExporterInitials=   GIT
+ZIPName=            TE0726-zynqberrydemo_noprebuilt-vivado_2024.2-build_1_20251216092038
+Destination=        PublicDoc
+Typ=                NA
+BoardTyp=           NA
+ProjectName=        zynqberrydemo
+ProjectToolName=    Vivado-2024.2
+ReleaseDate=        2025.12.16 09:20:38
+Revision=           NA

@@ -1,0 +1,26 @@
+From f3d982f01a0a7112b8d461f450082d502df1a23d Mon Sep 17 00:00:00 2001
+From: OpenEmbedded <oe.patch@oe>
+Date: Thu, 25 Apr 2024 10:43:18 +0000
+Subject: [PATCH] fix for s25fl127s
+
+---
+ drivers/mtd/spi-nor/spansion.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/mtd/spi-nor/spansion.c b/drivers/mtd/spi-nor/spansion.c
+index 104de1252b04..0ee9ff9627e1 100644
+--- a/drivers/mtd/spi-nor/spansion.c
++++ b/drivers/mtd/spi-nor/spansion.c
+@@ -383,10 +383,11 @@ static const struct flash_info spansion_nor_parts[] = {
+ 		NO_SFDP_FLAGS(SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ)
+ 		MFR_FLAGS(USE_CLSR)
+ 	},
+-	{ "s25fl128s1", INFO6(0x012018, 0x4d0180, 64 * 1024, 256)
++	{ "s25fl127s", INFO6(0x012018, 0x4d0180, 64 * 1024, 256) //fl127 need page size of 256
+ 		FLAGS(SPI_NOR_HAS_LOCK)
+ 		NO_SFDP_FLAGS(SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ)
+ 		MFR_FLAGS(USE_CLSR)
++		.fixups = &s25fs_s_nor_fixups,
+ 	},
+ 	{ "s25fl256s0", INFO6(0x010219, 0x4d0080, 256 * 1024, 128)
+ 		FLAGS(SPI_NOR_HAS_LOCK)

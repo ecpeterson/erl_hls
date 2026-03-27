@@ -1,0 +1,28 @@
+#default amd/xilinx
+*/*/config.old
+*/*/rootfs_config.old
+build/
+images/linux/
+pre-built/linux/
+.petalinux/*
+!.petalinux/metadata
+*.o
+*.jou
+*.log
+components/plnx_workspace
+components/yocto
+ 
+#trenz template 
+*.xsa
+project-spec/configs/.Xil
+project-spec/configs/.statistics
+project-spec/configs/flash_parts.txt
+project-spec/configs/gen-machineconf.log
+project-spec/configs/gen-machineconf.log.old
+project-spec/configs/plnx_syshw_data
+project-spec/hw-description/
+project-spec/configs/busybox/
+project-spec/configs/init-ifupdown/
+project-spec/configs/systemd-conf/
+project-spec/configs/configs/
+project-spec/configs/rootfsconfigs/
