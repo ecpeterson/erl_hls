@@ -5,6 +5,19 @@
 -behavior(gen_server).
 
 %%%
+%%% Common types
+%%% TODO: move to erl_xls.erl
+%%%
+
+-type from() :: {PID :: pid(), Tag :: any()}.
+
+%%%
+%%% Types for this module
+%%%
+
+-type message() :: reset | {fmac, A :: <<_:64>>, B :: <<_:64>>}.
+
+%%%
 %%% Communication with server
 %%%
 
@@ -31,9 +44,14 @@ stop(PID) ->
 %%% gen_server behavior
 %%%
 
+-type state() :: <<_:64>>.
+
+-spec init([]) -> {ok, state()}.
 init([]) ->
     {ok, <<0.0/float>>}.
 
+-spec handle_call(Message :: message(), From :: from(), State :: state()) ->
+    {reply, any(), state()}.
 handle_call(reset, _From, _State) ->
     {ok, NewState} = init([]),
     {reply, ok, NewState};
