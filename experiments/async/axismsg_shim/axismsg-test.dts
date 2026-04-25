@@ -1,0 +1,16 @@
+/dts-v1/;
+/plugin/;
+
+/ {
+    fragment@0 {
+        target-path = "/";
+        __overlay__ {
+            axismsg_test@0 {
+                compatible = "demo,axismsg-test";
+                dmas = <&axi_dma_0 0>, <&axi_dma_0 1>;
+                dma-names = "tx", "rx";
+                status = "okay";
+            };
+        };
+    };
+};

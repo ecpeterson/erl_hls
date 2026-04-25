@@ -11,6 +11,9 @@
 #define AXISDMA_IOC_MAGIC  'q'
 #define AXISDMA_IOC_GET_BUFSZ _IOR(AXISDMA_IOC_MAGIC, 1, uint32_t)
 #define AXISDMA_IOC_START     _IOW(AXISDMA_IOC_MAGIC, 2, uint32_t)
+// NOTE: AXISDMS_IOC_START triggers read and write on data buffers, but ioctl
+//       only writes the len to the driver + returns nothing to the caller, so
+//       the ioctl call gets designated _IOW.
 
 int main(void)
 {

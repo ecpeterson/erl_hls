@@ -1,0 +1,42 @@
+From 6a2068a3ca5b74b7231699ae35a36d4fbd3e3579 Mon Sep 17 00:00:00 2001
+From: OpenEmbedded <oe.patch@oe>
+Date: Sat, 25 Apr 2026 01:40:53 +0000
+Subject: [PATCH v2] respect coalesce setting
+
+---
+ drivers/dma/xilinx/xilinx_dma.c | 11 ++++++++---
+ 1 file changed, 8 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/dma/xilinx/xilinx_dma.c b/drivers/dma/xilinx/xilinx_dma.c
+index 0a3b2e22f23d..e724441af869 100644
+--- a/drivers/dma/xilinx/xilinx_dma.c
++++ b/drivers/dma/xilinx/xilinx_dma.c
+@@ -1536,6 +1536,7 @@ static void xilinx_dma_start_transfer(struct xilinx_dma_chan *chan)
+ 	struct xilinx_dma_tx_descriptor *head_desc, *tail_desc;
+ 	struct xilinx_axidma_tx_segment *tail_segment;
+ 	u32 reg;
++	u32 coalesc;
+ 
+ 	if (chan->err)
+ 		return;
+@@ -1555,10 +1556,14 @@ static void xilinx_dma_start_transfer(struct xilinx_dma_chan *chan)
+ 
+ 	reg = dma_ctrl_read(chan, XILINX_DMA_REG_DMACR);
+ 
+-	if (chan->desc_pendingcount <= XILINX_DMA_COALESCE_MAX) {
++	if (chan->config.coalesc)
++		coalesc = chan->config.coalesc;
++	else
++		coalesc = chan->desc_pendingcount;
++
++	if (coalesc <= XILINX_DMA_COALESCE_MAX) {
+ 		reg &= ~XILINX_DMA_CR_COALESCE_MAX;
+-		reg |= chan->desc_pendingcount <<
+-				  XILINX_DMA_CR_COALESCE_SHIFT;
++		reg |= coalesc << XILINX_DMA_CR_COALESCE_SHIFT;
+ 		dma_ctrl_write(chan, XILINX_DMA_REG_DMACR, reg);
+ 	}
+ 
+-- 
+2.44.1
+
