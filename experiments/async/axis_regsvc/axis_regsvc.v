@@ -169,20 +169,6 @@ module axis_regsvc (
         end
     endtask
 
-    task prepare_ack_response;
-        input [7:0] txid_in;
-        input [7:0] reg_in;
-        input [31:0] value_in;
-        begin
-            rsp_opcode        <= OP_ACK;
-            rsp_flags         <= 8'h00;
-            rsp_txid          <= txid_in;
-            rsp_payload_words <= 8'd2;
-            rsp_w1            <= {24'd0, reg_in};
-            rsp_w2            <= value_in;
-        end
-    endtask
-
     task prepare_ping_response;
         input [7:0] txid_in;
         input [31:0] cookie_in;
@@ -371,12 +357,6 @@ module axis_regsvc (
                                         tx_state <= TX_SEND_HDR;
                                     end else begin
                                         regs[req_w0[7:0]] <= (regs[req_w0[7:0]] & ~req_w2) | (req_w1 & req_w2);
-                                        if ((((regs[req_w0[7:0]] & ~req_w2) | (req_w1 & req_w2)) & reply_mask[req_w0[7:0]]) != 32'd0) begin
-                                            prepare_ack_response(req_txid,
-                                                                 req_w0[7:0],
-                                                                 (regs[req_w0[7:0]] & ~req_w2) | (req_w1 & req_w2));
-                                            tx_state <= TX_SEND_HDR;
-                                        end
                                     end
                                 end
 

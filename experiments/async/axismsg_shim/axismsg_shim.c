@@ -106,6 +106,13 @@ struct axismsg_dev {
     struct class *class;
 };
 
+struct axismsg_file {
+    struct axismsg_dev *d;
+    int pending_rx_slot;
+    u32 pending_rx_off;
+    u32 pending_rx_len;
+};
+
 static u32 logical_len_from_header(void *buf)
 {
     u32 hdr = ((u32 *)buf)[0];
@@ -121,21 +128,21 @@ static u32 logical_len_from_header(void *buf)
     return n;
 }
 
-static void log_words(struct device *dev, const char *tag, u32 len, void *buf)
-{
-    u32 *w = buf;
-
-    if (len >= 12)
-        dev_info(dev, "%s len=%u w0=%08x w1=%08x w2=%08x\n",
-             tag, len, w[0], w[1], w[2]);
-    else if (len >= 8)
-        dev_info(dev, "%s len=%u w0=%08x w1=%08x\n",
-             tag, len, w[0], w[1]);
-    else if (len >= 4)
-        dev_info(dev, "%s len=%u w0=%08x\n", tag, len, w[0]);
-    else
-        dev_info(dev, "%s len=%u\n", tag, len);
-}
+// static void log_words(struct device *dev, const char *tag, u32 len, void *buf)
+// {
+//     u32 *w = buf;
+//
+//     if (len >= 12)
+//         dev_info(dev, "%s len=%u w0=%08x w1=%08x w2=%08x\n",
+//              tag, len, w[0], w[1], w[2]);
+//     else if (len >= 8)
+//         dev_info(dev, "%s len=%u w0=%08x w1=%08x\n",
+//              tag, len, w[0], w[1]);
+//     else if (len >= 4)
+//         dev_info(dev, "%s len=%u w0=%08x\n", tag, len, w[0]);
+//     else
+//         dev_info(dev, "%s len=%u\n", tag, len);
+// }
 
 static void setup_sg_from_coherent(struct scatterlist *sg, void *virt,
                    dma_addr_t dma, u32 len)
@@ -234,11 +241,11 @@ static void rx_done_cb(void *arg)
 
     spin_unlock_irqrestore(&d->lock, flags);
 
-    dev_info(d->dev,
-         "RX-CB slot=%d status=%d residue=%u hw_len=%u msg_len=%u gen=%u queued=%d done_q=%u\n",
-         slot, status, st.residue, hw_len, msg_len, d->rx[slot].gen,
-         queued ? 1 : 0, d->rx_done_count);
-    log_words(d->dev, "RX-CB-DATA", BUF_BYTES, d->rx[slot].virt);
+    // dev_info(d->dev,
+    //      "RX-CB slot=%d status=%d residue=%u hw_len=%u msg_len=%u gen=%u queued=%d done_q=%u\n",
+    //      slot, status, st.residue, hw_len, msg_len, d->rx[slot].gen,
+    //      queued ? 1 : 0, d->rx_done_count);
+    // log_words(d->dev, "RX-CB-DATA", BUF_BYTES, d->rx[slot].virt);
 
     wake_up_interruptible(&d->rx_wq);
 }
@@ -286,8 +293,8 @@ static int post_rx_one_locked(struct axismsg_dev *d, int i)
 
     d->rx[i].cookie = cookie;
 
-    dev_info(d->dev, "RX-SUBMIT slot=%d dma=%pad len=%u cookie=%d\n",
-         i, &d->rx[i].dma, BUF_BYTES, d->rx[i].cookie);
+    // dev_info(d->dev, "RX-SUBMIT slot=%d dma=%pad len=%u cookie=%d\n",
+    //      i, &d->rx[i].dma, BUF_BYTES, d->rx[i].cookie);
 
     // if we batch the issue up in post_rx_locked, we only get the interrupt
     // after the whole batch completes
@@ -393,8 +400,8 @@ static void reap_tx_done_locked(struct axismsg_dev *d)
     int slot;
 
     while ((slot = dequeue_tx_done_locked(d)) >= 0) {
-        dev_info(d->dev, "TX-REAP slot=%d gen=%u\n",
-             slot, d->tx[slot].gen);
+        // dev_info(d->dev, "TX-REAP slot=%d gen=%u\n",
+        //      slot, d->tx[slot].gen);
         d->tx[slot].state = TX_FREE;
         d->tx[slot].len = 0;
     }
@@ -448,10 +455,10 @@ static bool kick_one_tx_locked(struct axismsg_dev *d)
     }
 
     d->tx[slot].cookie = cookie;
-    dev_info(d->dev, "TX-SUBMIT slot=%d dma=%pad len=%u cookie=%d gen=%u\n",
-         slot, &d->tx[slot].dma, d->tx[slot].len,
-         d->tx[slot].cookie, d->tx[slot].gen);
-    log_words(d->dev, "TX-DATA", d->tx[slot].len, d->tx[slot].virt);
+    // dev_info(d->dev, "TX-SUBMIT slot=%d dma=%pad len=%u cookie=%d gen=%u\n",
+    //      slot, &d->tx[slot].dma, d->tx[slot].len,
+    //      d->tx[slot].cookie, d->tx[slot].gen);
+    // log_words(d->dev, "TX-DATA", d->tx[slot].len, d->tx[slot].virt);
 
     dma_async_issue_pending(d->tx_chan);
     return true;
@@ -478,9 +485,9 @@ static void tx_done_cb(void *arg)
 
     spin_unlock_irqrestore(&d->lock, flags);
 
-    dev_info(d->dev, "TX-CB slot=%d cookie=%d len=%u gen=%u queued=%d done_q=%u\n",
-         slot, d->tx[slot].cookie, d->tx[slot].len,
-         d->tx[slot].gen, queued ? 1 : 0, d->tx_done_count);
+    // dev_info(d->dev, "TX-CB slot=%d cookie=%d len=%u gen=%u queued=%d done_q=%u\n",
+    //      slot, d->tx[slot].cookie, d->tx[slot].len,
+    //      d->tx[slot].gen, queued ? 1 : 0, d->tx_done_count);
 
     wake_up_interruptible(&d->tx_wq);
     schedule_work(&d->tx_work);
@@ -497,8 +504,8 @@ static void tx_workfn(struct work_struct *work)
     kicked = kick_one_tx_locked(d);
     spin_unlock_irqrestore(&d->lock, flags);
 
-    if (kicked)
-        dev_info(d->dev, "TX-WORK kicked one queued TX\n");
+    // if (kicked)
+    //     dev_info(d->dev, "TX-WORK kicked one queued TX\n");
 
     wake_up_interruptible(&d->tx_wq);
 }
@@ -510,14 +517,56 @@ static int axismsg_open(struct inode *inode, struct file *f)
     struct axismsg_dev *d = container_of(inode->i_cdev,
                         struct axismsg_dev,
                         cdev);
-    f->private_data = d;
+    struct axismsg_file *af;
+
+    af = kzalloc(sizeof(*af), GFP_KERNEL);
+    if (!af)
+        return -ENOMEM;
+
+    af->d = d;
+    af->pending_rx_slot = -1;
+    af->pending_rx_off = 0;
+    af->pending_rx_len = 0;
+
+    f->private_data = af;
+
+    return 0;
+}
+
+static int axismsg_release(struct inode *inode, struct file *f)
+{
+    struct axismsg_file *af = f->private_data;
+    struct axismsg_dev *d;
+    unsigned long flags;
+
+    if (!af)
+        return 0;
+
+    d = af->d;
+
+    if (af->pending_rx_slot >= 0) {
+        mutex_lock(&d->rx_mutex);
+
+        spin_lock_irqsave(&d->lock, flags);
+        d->rx[af->pending_rx_slot].state = RX_FREE;
+        d->rx[af->pending_rx_slot].msg_len = 0;
+        d->rx[af->pending_rx_slot].hw_len = 0;
+        spin_unlock_irqrestore(&d->lock, flags);
+
+        post_rx_locked(d);
+        mutex_unlock(&d->rx_mutex);
+    }
+
+    kfree(af);
+    f->private_data = NULL;
     return 0;
 }
 
 static ssize_t axismsg_write(struct file *f, const char __user *buf,
-                 size_t len, loff_t *ppos)
+                size_t len, loff_t *ppos)
 {
-    struct axismsg_dev *d = f->private_data;
+    struct axismsg_file *af = f->private_data;
+    struct axismsg_dev *d = af->d;
     unsigned long flags;
     int slot;
     int ret = 0;
@@ -569,8 +618,8 @@ static ssize_t axismsg_write(struct file *f, const char __user *buf,
     d->tx[slot].state = TX_QUEUED;
     spin_unlock_irqrestore(&d->lock, flags);
 
-    dev_info(d->dev, "TX-QUEUE slot=%d len=%zu gen=%u\n",
-         slot, len, d->tx[slot].gen);
+    // dev_info(d->dev, "TX-QUEUE slot=%d len=%zu gen=%u\n",
+    //      slot, len, d->tx[slot].gen);
 
     schedule_work(&d->tx_work);
 
@@ -584,15 +633,29 @@ out_unlock:
 static ssize_t axismsg_read(struct file *f, char __user *buf,
                 size_t len, loff_t *ppos)
 {
-    struct axismsg_dev *d = f->private_data;
+    struct axismsg_file *af = f->private_data;
+    struct axismsg_dev *d = af->d;
     unsigned long flags;
     u32 msg_len;
     u32 gen;
     int slot;
     int ret;
+    size_t avail;
+    size_t ncopy;
+
+    if (len == 0)
+        return 0;
 
     if (mutex_lock_interruptible(&d->rx_mutex))
         return -ERESTARTSYS;
+
+    // if this fd already owns a partially-read packet, continue from it.
+    if (af->pending_rx_slot >= 0) {
+        slot = af->pending_rx_slot;
+        msg_len = af->pending_rx_len;
+        gen = d->rx[slot].gen;
+        goto have_packet;
+    }
 
     for (;;) {
         spin_lock_irqsave(&d->lock, flags);
@@ -629,29 +692,43 @@ static ssize_t axismsg_read(struct file *f, char __user *buf,
             return -ERESTARTSYS;
     }
 
-    if (len < msg_len) {
-        ret = -EMSGSIZE;
-        goto out_unlock;
-    }
+    af->pending_rx_slot = slot;
+    af->pending_rx_off = 0;
+    af->pending_rx_len = msg_len;
 
-    if (copy_to_user(buf, d->rx[slot].virt, msg_len)) {
+have_packet:
+    avail = af->pending_rx_len - af->pending_rx_off;
+    ncopy = min_t(size_t, len, avail);
+
+    if (copy_to_user(buf,
+             ((u8 *)d->rx[slot].virt) + af->pending_rx_off,
+             ncopy)) {
         ret = -EFAULT;
         goto out_unlock;
     }
 
-    dev_info(d->dev, "RX-READ slot=%d gen=%u msg_len=%u done_q=%u\n",
-         slot, gen, msg_len, d->rx_done_count);
-    log_words(d->dev, "RX-READ-DATA", msg_len, d->rx[slot].virt);
+    // dev_info(d->dev,
+    //     "RX-READ slot=%d gen=%u off=%u ncopy=%zu msg_len=%u done_q=%u\n",
+    //     slot, gen, af->pending_rx_off, ncopy,
+    //     af->pending_rx_len, d->rx_done_count);
 
-    spin_lock_irqsave(&d->lock, flags);
-    d->rx[slot].state = RX_FREE;
-    d->rx[slot].msg_len = 0;
-    d->rx[slot].hw_len = 0;
-    spin_unlock_irqrestore(&d->lock, flags);
+    af->pending_rx_off += ncopy;
 
-    post_rx_locked(d);
+    if (af->pending_rx_off >= af->pending_rx_len) {
+        spin_lock_irqsave(&d->lock, flags);
+        d->rx[slot].state = RX_FREE;
+        d->rx[slot].msg_len = 0;
+        d->rx[slot].hw_len = 0;
+        spin_unlock_irqrestore(&d->lock, flags);
 
-    ret = msg_len;
+        af->pending_rx_slot = -1;
+        af->pending_rx_off = 0;
+        af->pending_rx_len = 0;
+
+        post_rx_locked(d);
+    }
+
+    ret = ncopy;
 
 out_unlock:
     mutex_unlock(&d->rx_mutex);
@@ -660,7 +737,8 @@ out_unlock:
 
 static __poll_t axismsg_poll(struct file *f, poll_table *wait)
 {
-    struct axismsg_dev *d = f->private_data;
+    struct axismsg_file *af = f->private_data;
+    struct axismsg_dev *d = af->d;
     __poll_t mask = 0;
     unsigned long flags;
     int rx_ready;
@@ -670,7 +748,7 @@ static __poll_t axismsg_poll(struct file *f, poll_table *wait)
     poll_wait(f, &d->tx_wq, wait);
 
     spin_lock_irqsave(&d->lock, flags);
-    rx_ready = any_done_rx_locked(d);
+    rx_ready = (af->pending_rx_slot >= 0) || any_done_rx_locked(d);
     tx_ready = any_free_tx_locked(d);
     spin_unlock_irqrestore(&d->lock, flags);
 
@@ -685,6 +763,7 @@ static __poll_t axismsg_poll(struct file *f, poll_table *wait)
 static const struct file_operations axismsg_fops = {
     .owner = THIS_MODULE,
     .open = axismsg_open,
+    .release = axismsg_release,
     .read = axismsg_read,
     .write = axismsg_write,
     .poll = axismsg_poll,
@@ -736,8 +815,8 @@ static int axismsg_probe(struct platform_device *pdev)
         return ret;
     }
 
-    dev_info(d->dev, "channels: tx=%s rx=%s\n",
-         dma_chan_name(d->tx_chan), dma_chan_name(d->rx_chan));
+    // dev_info(d->dev, "channels: tx=%s rx=%s\n",
+    //      dma_chan_name(d->tx_chan), dma_chan_name(d->rx_chan));
 
     txcfg.direction = DMA_MEM_TO_DEV;
     txcfg.src_addr_width = DMA_SLAVE_BUSWIDTH_4_BYTES;
@@ -818,9 +897,9 @@ static int axismsg_probe(struct platform_device *pdev)
     post_rx_locked(d);
     mutex_unlock(&d->rx_mutex);
 
-    dev_info(d->dev,
-         "axismsg SG RX/TX rings ready rx_depth=%d tx_depth=%d\n",
-         RX_RING_DEPTH, TX_RING_DEPTH);
+    // dev_info(d->dev,
+    //      "axismsg SG RX/TX rings ready rx_depth=%d tx_depth=%d\n",
+    //      RX_RING_DEPTH, TX_RING_DEPTH);
     return 0;
 
 err_cdev:
