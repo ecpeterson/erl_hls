@@ -12,6 +12,10 @@
 -define(DEVICE_NODE, "/dev/axismsg0").
 -define(RX_SIGIL, '$pl_message').
 
+-define(debug(Msg),
+    io:format("~s@~w: ~p~n", [?FILE, ?LINE, Msg])
+).
+
 %%%
 %%% Types
 %%%
@@ -160,6 +164,7 @@ transmit(FH, Header, Payload) ->
         (Header#header.flags):8/integer,
         (opcode(Header#header.op)):8/integer
     >>,
+    ?debug({PackedHeader, Payload}),
     file:write(FH, <<PackedHeader/binary, Payload/binary>>).
 
 opcode(get)      -> 16#01;
@@ -179,6 +184,7 @@ header(16#F0) -> event.
 
 listener(FH, Parent) ->
     {ok, Header} = file:read(FH, 4),
+    ?debug(Header),
     <<
         PayloadLength:8/integer,
         TxID:8/integer,
@@ -187,5 +193,6 @@ listener(FH, Parent) ->
     >> = Header,
     UnpackedHeader = #header{op = header(Op), tx_id = TxID, flags = Flags},
     {ok, Payload} = file:read(FH, 4*PayloadLength),
+    ?debug(Payload),
     gen_server:cast(Parent, {?RX_SIGIL, UnpackedHeader, Payload}),
     listener(FH, Parent).

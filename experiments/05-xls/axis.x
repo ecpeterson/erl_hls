@@ -1,0 +1,124 @@
+// axis.x
+//
+//  + make Beat parametric in width
+//  + parametrize over max message size
+
+const MAX_PAYLOAD = u32:3;
+const PAYLOAD_BITS = MAX_PAYLOAD * 32;
+const FRAME_BITS = PAYLOAD_BITS + 32;
+
+pub struct Beat {
+  tlast: u1,
+  word: u32,
+}
+
+pub struct Header {
+  payload_words: u8,
+  txid: u8,
+  flags: u8,
+  op: u8,
+}
+
+// bridge.erl@167: {<<1,10,0,4>>,<<210,4,0,0>>}
+fn header_from_bits(raw: bits[bit_count<Header>()]) -> Header {
+  Header {
+    payload_words: raw[0:8],
+    txid: raw[8:16],
+    flags: raw[16:24],
+    op: raw[24:32],
+  }
+}
+
+fn bits_from_header(header: Header) -> bits[bit_count<Header>()] {
+  header.op ++ header.flags ++ header.txid ++ header.payload_words
+}
+
+pub struct Frame {
+  header: Header,
+  payload: bits[PAYLOAD_BITS],
+}
+
+fn frame_from_bits(raw: bits[bit_count<Frame>()]) -> Frame {
+  Frame {
+    header: header_from_bits(raw[0:32]),
+    payload: raw[32:],
+  }
+}
+
+fn bits_from_frame(frame: Frame) -> bits[bit_count<Frame>()] {
+  frame.payload ++ bits_from_header(frame.header)
+}
+
+struct RxState {
+  payload: bits[FRAME_BITS],
+  words_seen: u8,
+}
+
+pub proc Rx {
+  axis_in: chan<Beat> in;
+  instr_out: chan<Frame> out;
+
+  config(axis_in: chan<Beat> in, instr_out: chan<Frame> out) {
+    (axis_in, instr_out)
+  }
+
+  init { zero!<RxState>() }
+
+  next(state: RxState) {
+    let (tok, beat) = recv(join(), axis_in);
+    let payload = bit_slice_update(state.payload, state.words_seen * 32, beat.word);
+    let words_seen = state.words_seen + u8:1;
+
+    if beat.tlast {
+      send(tok, instr_out, frame_from_bits(payload));
+      zero!<RxState>()
+    } else {
+      RxState { payload, words_seen }
+    }
+  }
+}
+
+struct TxState {
+  header: Header,
+  payload: bits[FRAME_BITS],
+  beats_sent: u8,
+}
+
+pub proc Tx {
+  resp_in: chan<Frame> in;
+  axis_out: chan<Beat> out;
+
+  config(resp_in: chan<Frame> in, axis_out: chan<Beat> out) {
+    (resp_in, axis_out)
+  }
+
+  init { zero!<TxState>() }
+
+  next(state: TxState) {
+    // maybe latch new payload
+    let (tok, state2) = if state.header.payload_words >= state.beats_sent {
+      (join(), state)
+    } else {
+      let (tok1, frame) = recv(join(), resp_in);
+      let payload = bits_from_frame(frame);
+      let header = frame.header;
+      (tok1, TxState { header, payload, ..zero!<TxState>() } )
+    };
+
+    send(tok, axis_out, Beat {
+      tlast: state2.beats_sent == state2.header.payload_words,
+      word: state2.payload[32 * state2.beats_sent +: u32],
+    });
+
+    let beats_sent = state2.beats_sent + u8:1;
+    TxState { beats_sent, ..state2 }
+  }
+}
+
+pub fn pack<N: u32>(op: u8, payload: bits[N]) -> Frame {
+  let payload_words = (N / 32) as u8;
+  Frame {
+    header: Header { op, payload_words, ..zero!<Header>() },
+    payload: payload as bits[PAYLOAD_BITS]
+  }
+}

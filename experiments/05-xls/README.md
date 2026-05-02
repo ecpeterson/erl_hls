@@ -5,9 +5,9 @@
 Build with these steps:
 
 ```sh
-./ir_converter_main --top=Top xls_regsvc.x > xls_regsvc.ir
-./opt_main xls_regsvc.ir > xls_regsvc.opt.ir
-./codegen_main --pipeline_stages=1 --delay_model=unit --use_system_verilog=false --reset=reset xls_regsvc.opt.ir --fifo_module= > xls_regsvc.v
+ir_converter_main --top=Top regsvc.x > regsvc.ir
+opt_main regsvc.ir > regsvc.opt.ir
+codegen_main --pipeline_stages=1 --delay_model=unit --use_system_verilog=false --reset=reset regsvc.opt.ir --fifo_module= > regsvc.v
 ```
 
 Then, import the generated `xls_regsvc.v` alongside the static `xls_regsvc_wrapper.v` (which segments the message bus into TDATA, TLAST, etc., and adds Vivado port annotations).

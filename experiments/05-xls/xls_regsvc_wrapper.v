@@ -39,17 +39,17 @@ module axis_regsvc_xls_axis_wrapper (
     assign m_axis_tdata  = xls_out[31:0];
     assign m_axis_tkeep  = 4'hF;
 
-    __axis_regsvc__Top_0_next xls_core (
+    __regsvc__Top_0_next xls_core (
         .clk(aclk),
         .reset(~aresetn),
 
-        .axis_regsvc__ext_recv(xls_in),
-        .axis_regsvc__ext_recv_vld(s_axis_tvalid),
-        .axis_regsvc__ext_recv_rdy(s_axis_tready),
+        ._ext_recv(xls_in),
+        ._ext_recv_vld(s_axis_tvalid),
+        ._ext_recv_rdy(s_axis_tready),
 
-        .axis_regsvc__ext_send(xls_out),
-        .axis_regsvc__ext_send_vld(m_axis_tvalid),
-        .axis_regsvc__ext_send_rdy(m_axis_tready)
+        ._ext_send(xls_out),
+        ._ext_send_vld(m_axis_tvalid),
+        ._ext_send_rdy(m_axis_tready)
     );
 
 endmodule
