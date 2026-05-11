@@ -3,6 +3,7 @@
 // XLS implementation of axis_regsvc.v .
 
 // TODO:
+//  + generate spontaneous messages, probably modeled in erlang as a timeout
 //  + parametrize over register file size
 //  + decouple in packet size from out packet size
 // desiderata:
