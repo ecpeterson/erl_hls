@@ -10,7 +10,7 @@
 
 -behavior(xls_gs).
 -xls_tags([set, get, ping, bulk_get, ack, read]).  % xls struct payloads
--compile({parse_transform, xls_parse}).  % auto-defines un/pack
+-compile({parse_transform, xls_pack}).  % auto-defines un/pack
 
 %%%
 %%% Types
