@@ -9,7 +9,9 @@ Transforms the Erlang source for an `xls_gs` instance into a corresponding XLS
 module.
 """.
 -export([to_xls/1]).
+-export([reference/2, reference/1, instr/2, anonymous_variable/1]).
 -export_type([ir/0, printable/0, static/0, phantom/0]).
+-export_type([clause_state/0]).
 -compile(export_all).  % TODO: remove me
 
 -define(debug(X), begin io:format("~w@~w: ~p~n", [?FUNCTION_NAME, ?LINE, X]), X end).
@@ -203,13 +205,13 @@ Main transpiler workhorse.  Recursively converts a complex `erl_parse`
 expression into a sequence of simple emitted XLS expressions.
 """.
 statement_from_statement(String, State) when is_list(String) ->
-    State#clause_state{reference = String};
+    reference(State, String);
 statement_from_statement({atom, _L, Atom}, State) ->
-    State#clause_state{reference = string:uppercase(atom_to_list(Atom))};
+    reference(State, string:uppercase(atom_to_list(Atom)));
 statement_from_statement({var, _L, Atom}, State) ->
-    State#clause_state{reference = get_name(State, Atom)};
+    reference(State, get_name(State, Atom));
 statement_from_statement({integer, _L, Integer}, State) ->
-    State#clause_state{reference = {static, integer, Integer}};
+    reference(State, {static, integer, Integer});
 statement_from_statement(X, State) when is_tuple(X) andalso op == element(1, X) ->
     [op, _L, Op | Args] = tuple_to_list(X),
     {BwdArgRefs, IntermediateState} = lists:foldl(
@@ -219,14 +221,7 @@ statement_from_statement(X, State) when is_tuple(X) andalso op == element(1, X) 
         end,
         {[], State}, Args
     ),
-    {FinalState, ResultName} = anonymous_variable(IntermediateState),
-    FinalState#clause_state{
-        reference = ResultName,
-        statements = [
-            ["let ", ResultName, " = ", op(Op, lists:reverse(BwdArgRefs)), ";\n"]
-            | FinalState#clause_state.statements
-        ]
-    };
+    instr(IntermediateState, op(Op, lists:reverse(BwdArgRefs)));
 statement_from_statement({tuple, _L, Slots}, State) ->
     {BwdReferences, IntermediateState} = lists:foldl(
         fun(Slot, {References, ThisState}) ->
@@ -235,14 +230,7 @@ statement_from_statement({tuple, _L, Slots}, State) ->
         end,
         {[], State}, Slots
     ),
-    {FinalState, TupleName} = anonymous_variable(IntermediateState),
-    FinalState#clause_state{
-        reference = TupleName,
-        statements = [
-            ["let ", TupleName, " = (", [[Ref, ", "] || Ref <- lists:reverse(BwdReferences)], ");\n"]
-            | FinalState#clause_state.statements
-        ]
-    };
+    instr(IntermediateState, ["(", [[Ref, ", "] || Ref <- lists:reverse(BwdReferences)], ")"]);
 statement_from_statement({record, _L, NameAtom, Fields}, State) ->
     {Assignments, IntermediateState} = lists:foldl(
         fun({record_field, _1, {atom, _2, FieldAtom}, RHS}, {Assignments, ThisState}) ->
@@ -251,24 +239,20 @@ statement_from_statement({record, _L, NameAtom, Fields}, State) ->
         end,
         {#{}, State}, Fields
     ),
-    {SecondState, InternalName} = anonymous_variable(IntermediateState),
-    {FinalState, StructName} = anonymous_variable(SecondState),
-    FinalState#clause_state{
-        reference = StructName,
-        statements = [
-            ["let ", StructName, " = (",  % tag, struct, bits
-            "Tag::", string:uppercase(atom_to_list(NameAtom)), ", ",
-            InternalName, ", ",
-            "bits_from_", atom_to_list(NameAtom), "(", InternalName, ")"
-            ");\n"],
-            ["let ", InternalName, " = ", string:titlecase(atom_to_list(NameAtom)), " {\n",
-                [["  ", atom_to_list(FieldAtom), ": ", Reference, ",\n"]
-                    || FieldAtom := Reference <- Assignments],
-            "  ..zero!<", string:titlecase(atom_to_list(NameAtom)), ">()\n",
-            "};\n"]
-            | FinalState#clause_state.statements
-        ]
-    };
+    SecondState = instr(IntermediateState, [
+        string:titlecase(atom_to_list(NameAtom)), " {\n",
+        [["  ", atom_to_list(FieldAtom), ": ", Reference, ",\n"]
+            || FieldAtom := Reference <- Assignments],
+        "  ..zero!<", string:titlecase(atom_to_list(NameAtom)), ">()\n",
+        "}"
+    ]),
+    instr(SecondState, [
+        "(",  % tag, struct, bits
+        "Tag::", string:uppercase(atom_to_list(NameAtom)), ", ",
+        reference(SecondState), ", ",
+        "bits_from_", atom_to_list(NameAtom), "(", reference(SecondState), ")"
+        ")"
+    ]);
 statement_from_statement({record, _L, ToUpdate, NameAtom, UpdateFields}, State) ->
     InputState = statement_from_statement(ToUpdate, State),
     {Assignments, IntermediateState} = lists:foldl(
@@ -278,50 +262,37 @@ statement_from_statement({record, _L, ToUpdate, NameAtom, UpdateFields}, State) 
         end,
         {#{}, InputState}, UpdateFields
     ),
-    {SecondState, InternalName} = anonymous_variable(IntermediateState),
-    {FinalState, StructName} = anonymous_variable(SecondState),
-    FinalState#clause_state{
-        reference = StructName,
-        statements = [
-            ["let ", StructName, " = (",  % tag, struct, bits
-            "Tag::", string:uppercase(atom_to_list(NameAtom)), ", ",
-            InternalName, ", ",
-            "bits_from_", atom_to_list(NameAtom), "(", InternalName, ")"
-            ");\n"],
-            ["let ", InternalName, " = ", string:titlecase(atom_to_list(NameAtom)), " {\n",
-                [["  ", atom_to_list(FieldAtom), ": ", Reference, ",\n"] || FieldAtom := Reference <- Assignments],
-            "  ..(", InputState#clause_state.reference, ").1\n",
-            "};\n"]
-            | FinalState#clause_state.statements
-        ]
-    };
+    SecondState = instr(IntermediateState, [
+        string:titlecase(atom_to_list(NameAtom)), " {\n",
+            [["  ", atom_to_list(FieldAtom), ": ", Reference, ",\n"] || FieldAtom := Reference <- Assignments],
+        "  ..(", InputState#clause_state.reference, ").1\n",
+        "}"
+    ]),
+    instr(SecondState, [
+        "(",  % tag, struct, bits
+        "Tag::", string:uppercase(atom_to_list(NameAtom)), ", ",
+        reference(SecondState), ", ",
+        "bits_from_", atom_to_list(NameAtom), "(", reference(SecondState), ")"
+        ")"
+    ]);
 statement_from_statement({call, _L, MF, Args}, State) ->
-    {BwdArgRefs, IntermediateState} = lists:foldl(
+    {remote, _1, {atom, _2, Module}, {atom, _3, FAtom}} = MF,
+
+    {BwdArgRefs, ArgState} = lists:foldl(
         fun(Arg, {ArgRefs, ThisState}) ->
             NewState = statement_from_statement(Arg, ThisState#clause_state{reference = none}),
             {[NewState#clause_state.reference | ArgRefs], NewState}
         end,
         {[], State}, Args
     ),
-    {FinalState, ResultName} = anonymous_variable(IntermediateState),
-    {remote, _1, {atom, _2, Module}, {atom, _3, FAtom}} = MF,
-    FinalState#clause_state{
-        reference = ResultName,
-        statements = [
-            ["let ", ResultName, " = ", Module:transpile(FAtom, lists:reverse(BwdArgRefs)), ";\n"]
-            | FinalState#clause_state.statements
-        ]
-    };
+    FinalState = case Module:transpile(FAtom, lists:reverse(BwdArgRefs), ArgState) of
+        X = #clause_state{} -> X;
+        X -> reference(ArgState, X)
+    end,
+    instr(FinalState, reference(FinalState));
 statement_from_statement({record_field, _L, Object, _RecordAtom, {atom, _LL, SlotAtom}}, State) ->
     IntermediateState = statement_from_statement(Object, State),
-    {FinalState, ResultName} = anonymous_variable(IntermediateState),
-    FinalState#clause_state{
-        reference = ResultName,
-        statements = [
-            ["let ", ResultName, " = ", FinalState#clause_state.reference, ".1.", atom_to_list(SlotAtom), ";\n"]
-            | FinalState#clause_state.statements
-        ]
-    };
+    instr(IntermediateState, [reference(IntermediateState), ".1.", atom_to_list(SlotAtom)]);
 statement_from_statement({match, _L, LHS, RHS}, State) ->
     RHSState = statement_from_statement(RHS, State),
     destructure_lhs(LHS, RHSState).
@@ -450,6 +421,30 @@ uniquify(State = #clause_state{named_counters = Counters}, NameAtom) ->
     NamedCounters = Counters#{Name => Counter},
     NewName = Name ++ [$_ | integer_to_list(Counter)],
     {NewName, State#clause_state{named_counters = NamedCounters}}.
+
+-spec reference(clause_state()) -> none | ir().
+reference(ClauseState) ->
+    ClauseState#clause_state.reference.
+
+-spec reference(clause_state(), ir()) -> clause_state().
+reference(ClauseState, Reference) ->
+    ClauseState#clause_state{reference = Reference}.
+
+-spec instr(clause_state(), ir()) -> clause_state().
+instr(#clause_state{anonymous_counter = Counter} = ClauseState, Expr) ->
+    instr(
+        ClauseState#clause_state{anonymous_counter = Counter + 1},
+        [$_, integer_to_list(Counter)],
+        Expr
+    ).
+
+-spec instr(clause_state(), ir(), ir()) -> clause_state().
+instr(ClauseState, Place, Expr) ->
+    % TODO: we should admit structured `Place`s in reference and print them in statements
+    ClauseState#clause_state{
+        reference = Place,
+        statements = [["let ", Place, " = ", Expr, ";\n"] | ClauseState#clause_state.statements]
+    }.
 
 %%%
 %%% Dictionaries for built-in calls
