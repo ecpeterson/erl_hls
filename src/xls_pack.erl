@@ -92,5 +92,5 @@ parse_transform(Forms, _Options) ->
     ]},
 
     EmittedForms = [FileAttr, ModuleAttr, ExportAttr] ++ BodyForms ++ [PackForm, UnpackForm, PackTagForm, UnpackTagForm, EOFForm],
-    io:format("~s~n", [[[erl_pp:form(Form), "\n"] || Form <- EmittedForms]]),
+    % io:format("~s~n", [[[erl_pp:form(Form), "\n"] || Form <- EmittedForms]]),
     EmittedForms.

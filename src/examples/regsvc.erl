@@ -9,7 +9,7 @@
 -export([init/1, handle_call/2, handle_cast/2]).  % xls_gs callbacks
 
 -behavior(xls_gs).
--xls_tags([set, get, ping, bulk_get, ack, read]).  % xls struct payloads
+-xls_tags([set, get, ping, bulk_get, ack, read, bulk_read]).  % xls struct payloads
 -compile({parse_transform, xls_pack}).  % auto-defines un/pack
 
 %%%
@@ -43,6 +43,11 @@
     value = 0 :: xls_nums:u32()
 }).
 
+-record(bulk_read, {
+    %% TODO: better initializer?
+    values = [] :: xls_lists:list(xls_nums:u32(), 3)  % ?MAX_PAYLOAD
+}).
+
 -record(state, {
     registers :: xls_lists:list(xls_nums:u32(), 16)  % TODO: put a real type here. can also transpile a constructor?
 }).
@@ -56,14 +61,15 @@ ping(PID, Value) ->
     Reply.
 
 get(PID, Register) ->
-    #read{value = Value} = gen_server:call(PID, {get, Register}),
+    #read{value = Value} = gen_server:call(PID, #get{register = Register}),
     Value.
 
 set(PID, Register, Value, Mask) ->
     gen_server:cast(PID, {set, Register, Value, Mask}).
 
 bulk_get(PID, Start, Count) ->
-    gen_server:call(PID, {bulk_get, Start, Count}).
+    #bulk_read{values = MaxPayload} = gen_server:call(PID, #bulk_get{start = Start, count = Count}),
+    lists:sublist(MaxPayload, 1, Count).
 
 %%%
 %%% Server management
@@ -95,12 +101,18 @@ handle_call(#ping{value = Value}, State) ->
     {reply, #ack{value = Value}, State};
 handle_call(#get{register = Register}, State) ->
     Value = xls_lists:nth(Register + 1, State#state.registers),
-    {reply, #read{value = Value}, State}.
-% handle_call(#bulk_get{start = Start, count = Count}, State) ->
-%     Whole = State#state.registers,
-%     {_Left, Right} = xls_lists:split(Start, Whole),
-%     {Result, _Right} = xls_lists:split(Count, Right),
-%     {reply, list_to_tuple(Result), State}.
+    {reply, #read{value = Value}, State};
+handle_call(#bulk_get{start = Start, count = Count}, State) ->
+    Sublist = xls_lists:sublist(
+        xls_lists:list(xls_nums:u32(), 16),
+        State#state.registers, Start + 1, Count
+    ),
+    Trim = xls_lists:array_slice(
+        xls_lists:list(xls_nums:u32(), 16),
+        Sublist,
+        1, 3
+    ),
+    {reply, #bulk_read{values = Trim}, State}.
 
 %
 %

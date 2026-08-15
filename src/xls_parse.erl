@@ -80,7 +80,7 @@ to_xls(Filename) ->
     """,
     [
         ["\nTag::", string:uppercase(Op), " => {\n",
-        "let request = ", Op, "_from_bits(frame.payload);\n",
+        "let request = ", lists:delete($_, Op), "_from_bits(frame.payload);\n",
         Body,
         % TODO: Op below is wrong, should be Tag, but how to extract it??
         ["(axis::pack(", RetVal, ".1.0 as u8, ", RetVal, ".1.2), ", RetVal, ".2)\n"],
@@ -96,7 +96,7 @@ to_xls(Filename) ->
         ["(zero!<axis::Frame>(), ", RetVal, ".1)\n"],
         "},\n"]
         ||  Clause <- handle_cast(Forms),
-            Op <- [atom_to_list(op_from_clause(Clause))],
+            Op <- [lists:delete($_, atom_to_list(op_from_clause(Clause)))],
             {Body, RetVal} <- [branch_from_clause(Clause, ["request", "state"])]
     ],
     """
@@ -240,17 +240,17 @@ statement_from_statement({record, _L, NameAtom, Fields}, State) ->
         {#{}, State}, Fields
     ),
     SecondState = instr(IntermediateState, [
-        string:titlecase(atom_to_list(NameAtom)), " {\n",
+        string:titlecase(lists:delete($_, atom_to_list(NameAtom))), " {\n",
         [["  ", atom_to_list(FieldAtom), ": ", Reference, ",\n"]
             || FieldAtom := Reference <- Assignments],
-        "  ..zero!<", string:titlecase(atom_to_list(NameAtom)), ">()\n",
+        "  ..zero!<", string:titlecase(lists:delete($_, atom_to_list(NameAtom))), ">()\n",
         "}"
     ]),
     instr(SecondState, [
         "(",  % tag, struct, bits
         "Tag::", string:uppercase(atom_to_list(NameAtom)), ", ",
         reference(SecondState), ", ",
-        "bits_from_", atom_to_list(NameAtom), "(", reference(SecondState), ")"
+        "bits_from_", lists:delete($_, atom_to_list(NameAtom)), "(", reference(SecondState), ")"
         ")"
     ]);
 statement_from_statement({record, _L, ToUpdate, NameAtom, UpdateFields}, State) ->
@@ -263,7 +263,7 @@ statement_from_statement({record, _L, ToUpdate, NameAtom, UpdateFields}, State) 
         {#{}, InputState}, UpdateFields
     ),
     SecondState = instr(IntermediateState, [
-        string:titlecase(atom_to_list(NameAtom)), " {\n",
+        string:titlecase(lists:delete($_, atom_to_list(NameAtom))), " {\n",
             [["  ", atom_to_list(FieldAtom), ": ", Reference, ",\n"] || FieldAtom := Reference <- Assignments],
         "  ..(", InputState#clause_state.reference, ").1\n",
         "}"
@@ -272,7 +272,7 @@ statement_from_statement({record, _L, ToUpdate, NameAtom, UpdateFields}, State) 
         "(",  % tag, struct, bits
         "Tag::", string:uppercase(atom_to_list(NameAtom)), ", ",
         reference(SecondState), ", ",
-        "bits_from_", atom_to_list(NameAtom), "(", reference(SecondState), ")"
+        "bits_from_", lists:delete($_, atom_to_list(NameAtom)), "(", reference(SecondState), ")"
         ")"
     ]);
 statement_from_statement({call, _L, MF, Args}, State) ->
@@ -285,11 +285,10 @@ statement_from_statement({call, _L, MF, Args}, State) ->
         end,
         {[], State}, Args
     ),
-    FinalState = case Module:transpile(FAtom, lists:reverse(BwdArgRefs), ArgState) of
+    case Module:transpile(FAtom, lists:reverse(BwdArgRefs), ArgState) of
         X = #clause_state{} -> X;
-        X -> reference(ArgState, X)
-    end,
-    instr(FinalState, reference(FinalState));
+        X -> instr(ArgState, X)
+    end;
 statement_from_statement({record_field, _L, Object, _RecordAtom, {atom, _LL, SlotAtom}}, State) ->
     IntermediateState = statement_from_statement(Object, State),
     instr(IntermediateState, [reference(IntermediateState), ".1.", atom_to_list(SlotAtom)]);
@@ -368,25 +367,17 @@ structfrombits_from_record(RecordForm) ->
 
 -spec bitsfromstruct_from_record(erl_parse:af_record_decl()) -> iolist().
 -doc "Builds an XLS-side packer for the Erlang record definition.".
-bitsfromstruct_from_record(RecordForm) ->
-    SlotFromField = fun({typed_record_field, {record_field, _1, {atom, _2, Slot}, _Default}, _Type}) -> Slot end,
-    {attribute, _L, record, {NameAtom, Fields}} = RecordForm,
+bitsfromstruct_from_record(_RecordForm = {attribute, _L, record, {NameAtom, Fields}}) ->
     Name = lists:delete($_, atom_to_list(NameAtom)),
     StructName = string:titlecase(Name),
     ["fn bits_from_", string:lowercase(StructName), "(s: ", StructName, ") -> bits[bit_count<", StructName, ">()] {\n",
-    case Fields of
-        [] -> "  u0:0\n";
-        [{typed_record_field, {record_field, _1, {atom, _2, Slot}, _Default}, _Type}] ->
-            io_lib:format("  s.~w~n", [Slot]);
-        [First | Rest] ->
-            ["  ", lists:foldl(
-                fun(Field, Body) ->
-                    Line = io_lib:format("s.~w ++ ", [SlotFromField(Field)]),
-                    [Line | Body]  % implicit lists:reverse with this join order
-                end,
-                [io_lib:format("s.~w~n", [SlotFromField(First)])], Rest
-            )]
-    end,
+        ["  ", lists:foldl(
+            fun({typed_record_field, {record_field, _1, {atom, _2, Slot}, _Default}, Type}, Body) ->
+                Line = io_lib:format("(s.~w as bits[~w]) ++ ", [Slot, xls_type:width(xls_type:descriptor(Type))]),
+                [Line | Body]  % implicit lists:reverse with this join order
+            end,
+            [" zero!<bits[0]>()\n"], Fields
+        )],
     "}\n"].
 
 -spec dummy_bitsfromstruct(erl_parse:af_record_decl()) -> iolist().
@@ -434,7 +425,7 @@ reference(ClauseState, Reference) ->
 instr(#clause_state{anonymous_counter = Counter} = ClauseState, Expr) ->
     instr(
         ClauseState#clause_state{anonymous_counter = Counter + 1},
-        [$_, integer_to_list(Counter)],
+        [$_ | integer_to_list(Counter)],
         Expr
     ).
 

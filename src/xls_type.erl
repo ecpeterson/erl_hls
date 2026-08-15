@@ -40,7 +40,7 @@ Converts an Erlang call with XLS embodiments of its arguments to an equivalent
 XLS expression.
 """.
 %% TODO: might need to supply clause state for anonymous variables
--callback transpile(FnName :: atom(), XLSArgs :: [xls_parse:ir()]) -> xls_parse:ir().
+-callback transpile(FnName :: atom(), XLSArgs :: [xls_parse:ir()], State :: xls_parse:clause_state()) -> xls_parse:ir().
 
 -doc "Builds an empty Erlang instance of this type.".
 -callback zero(TypeName :: atom(), Args :: [arg()]) -> any().

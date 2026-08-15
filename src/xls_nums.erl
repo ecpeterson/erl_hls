@@ -4,7 +4,7 @@
 """.
 
 -behavior(xls_type).
--export([width/2, zero/2, transpile/2, pack/3, unpack/3, print_type/2]).  % xls_type callbacks
+-export([width/2, zero/2, transpile/3, pack/3, unpack/3, print_type/2]).  % xls_type callbacks
 
 -export([u8/0, s8/0, u16/0, s16/0, u32/0, s32/0, u64/0, s64/0]).    % integers
 -export_type([u8/0, s8/0, u16/0, s16/0, u32/0, s32/0, u64/0, s64/0]).
@@ -65,7 +65,8 @@ zero(float16, []) -> 0.0;
 zero(float32, []) -> 0.0;
 zero(float64, []) -> 0.0 .
 
-transpile(Type, []) -> {phantom, type, ?MODULE:Type()}.
+transpile(Type, [], State) ->
+    xls_parse:reference(State, {phantom, type, ?MODULE:Type()}).
 
 pack(Value, u8,  []) -> <<Value:8/unsigned-little-integer>>;
 pack(Value, u16, []) -> <<Value:16/unsigned-little-integer>>;

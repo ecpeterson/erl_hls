@@ -19,6 +19,7 @@ pub enum Tag : u8 {
   BULK_GET = u8:5,
   ACK = u8:6,
   READ = u8:7,
+  BULK_READ = u8:8,
 }
 
 struct Set {
@@ -36,7 +37,7 @@ fn set_from_bits<N: u32>(raw: bits[N]) -> Set {
 }
 
 fn bits_from_set(s: Set) -> bits[bit_count<Set>()] {
-  s.mask ++ s.value ++ s.register
+  (s.mask as bits[32]) ++ (s.value as bits[32]) ++ (s.register as bits[32]) ++  zero!<bits[0]>()
 }
 
 struct Get {
@@ -50,7 +51,7 @@ fn get_from_bits<N: u32>(raw: bits[N]) -> Get {
 }
 
 fn bits_from_get(s: Get) -> bits[bit_count<Get>()] {
-  s.register
+  (s.register as bits[32]) ++  zero!<bits[0]>()
 }
 
 struct Ping {
@@ -64,7 +65,7 @@ fn ping_from_bits<N: u32>(raw: bits[N]) -> Ping {
 }
 
 fn bits_from_ping(s: Ping) -> bits[bit_count<Ping>()] {
-  s.value
+  (s.value as bits[32]) ++  zero!<bits[0]>()
 }
 
 struct Bulkget {
@@ -80,7 +81,7 @@ fn bulkget_from_bits<N: u32>(raw: bits[N]) -> Bulkget {
 }
 
 fn bits_from_bulkget(s: Bulkget) -> bits[bit_count<Bulkget>()] {
-  s.count ++ s.start
+  (s.count as bits[32]) ++ (s.start as bits[32]) ++  zero!<bits[0]>()
 }
 
 struct Ack {
@@ -94,7 +95,7 @@ fn ack_from_bits<N: u32>(raw: bits[N]) -> Ack {
 }
 
 fn bits_from_ack(s: Ack) -> bits[bit_count<Ack>()] {
-  s.value
+  (s.value as bits[32]) ++  zero!<bits[0]>()
 }
 
 struct Read {
@@ -108,7 +109,21 @@ fn read_from_bits<N: u32>(raw: bits[N]) -> Read {
 }
 
 fn bits_from_read(s: Read) -> bits[bit_count<Read>()] {
-  s.value
+  (s.value as bits[32]) ++  zero!<bits[0]>()
+}
+
+struct Bulkread {
+  values : u32[3],
+}
+
+fn bulkread_from_bits<N: u32>(raw: bits[N]) -> Bulkread {
+  Bulkread {
+    values: raw[0:96],
+  }
+}
+
+fn bits_from_bulkread(s: Bulkread) -> bits[bit_count<Bulkread>()] {
+  (s.values as bits[96]) ++  zero!<bits[0]>()
 }
 
 struct State {
@@ -164,6 +179,28 @@ let _3 = Read {
 let _4 = (Tag::READ, _3, bits_from_read(_3));
 let _5 = (REPLY, _4, state_1, );
 (axis::pack(_5.1.0 as u8, _5.1.2), _5.2)
+},
+
+Tag::BULK_GET => {
+let request = bulkget_from_bits(frame.payload);
+let start_1 = request.start;
+let count_1 = request.count;
+let state_1 = state;
+let _0 = state_1.1.registers;
+let _1 = _0 as bits[512];
+let _2 = _1 >> (start_1 * 32);
+let _3 = _2 & (all_ones!<bits[512]>() << (count_1 * 32));
+let _4 = _3 as u32[16];
+let sublist_1 = _4;
+let _5 = array_slice(sublist_1, 0, zero!<u32[3]>() );
+let trim_1 = _5;
+let _6 = Bulkread {
+  values: trim_1,
+  ..zero!<Bulkread>()
+};
+let _7 = (Tag::BULK_READ, _6, bits_from_bulkread(_6));
+let _8 = (REPLY, _7, state_1, );
+(axis::pack(_8.1.0 as u8, _8.1.2), _8.2)
 },
 
 Tag::SET => {

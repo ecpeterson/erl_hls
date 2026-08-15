@@ -5,7 +5,7 @@
 Build with these steps:
 
 ```sh
-ir_converter_main --top=Top regsvc.x > regsvc.ir
+ir_converter_main --warnings_as_errors=false --top=Top regsvc.x > regsvc.ir  # warnings_as_errors only relevant for erl_xls codegen
 opt_main regsvc.ir > regsvc.opt.ir
 codegen_main --pipeline_stages=1 --delay_model=unit --use_system_verilog=false --reset=reset regsvc.opt.ir --fifo_module= > regsvc.v
 ```
