@@ -168,17 +168,20 @@ Tag::GET => {
 let request = get_from_bits(frame.payload);
 let register_1 = request.register;
 let state_1 = state;
-let _0 = register_1 + 1;
-let _1 = state_1.1.registers;
-let _2 = _1[_0 - u32:1];
-let value_1 = _2;
-let _3 = Read {
+let _0 = register_1 < 16;
+let static_match_1_1 = bool:1 ;
+let static_match_1_2 = _0 ;
+let _1 = register_1 + 1;
+let _2 = state_1.1.registers;
+let _3 = _2[_1 - u32:1];
+let value_1 = _3;
+let _4 = Read {
   value: value_1,
   ..zero!<Read>()
 };
-let _4 = (Tag::READ, _3, bits_from_read(_3));
-let _5 = (REPLY, _4, state_1, );
-(axis::pack(_5.1.0 as u8, _5.1.2), _5.2)
+let _5 = (Tag::READ, _4, bits_from_read(_4));
+let _6 = (REPLY, _5, state_1, );
+(axis::pack(_6.1.0 as u8, _6.1.2), _6.2)
 },
 
 Tag::BULK_GET => {
@@ -187,20 +190,21 @@ let start_1 = request.start;
 let count_1 = request.count;
 let state_1 = state;
 let _0 = state_1.1.registers;
-let _1 = _0 as bits[512];
-let _2 = _1 >> (start_1 * 32);
-let _3 = _2 & (all_ones!<bits[512]>() << (count_1 * 32));
-let _4 = _3 as u32[16];
-let sublist_1 = _4;
-let _5 = array_slice(sublist_1, 0, zero!<u32[3]>() );
-let trim_1 = _5;
-let _6 = Bulkread {
+let _1 = start_1 + 1;
+let _2 = _0 as bits[512];
+let _3 = _2 >> ((_1 - u32:1) * 32);
+let _4 = _3 & (all_ones!<bits[512]>() << (count_1 * 32));
+let _5 = _4 as u32[16];
+let sublist_1 = _5;
+let _6 = array_slice(sublist_1, 0, zero!<u32[3]>() );
+let trim_1 = _6;
+let _7 = Bulkread {
   values: trim_1,
   ..zero!<Bulkread>()
 };
-let _7 = (Tag::BULK_READ, _6, bits_from_bulkread(_6));
-let _8 = (REPLY, _7, state_1, );
-(axis::pack(_8.1.0 as u8, _8.1.2), _8.2)
+let _8 = (Tag::BULK_READ, _7, bits_from_bulkread(_7));
+let _9 = (REPLY, _8, state_1, );
+(axis::pack(_9.1.0 as u8, _9.1.2), _9.2)
 },
 
 Tag::SET => {

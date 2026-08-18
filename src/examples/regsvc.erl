@@ -12,6 +12,9 @@
 -xls_tags([set, get, ping, bulk_get, ack, read, bulk_read]).  % xls struct payloads
 -compile({parse_transform, xls_pack}).  % auto-defines un/pack
 
+-define(REGISTER_COUNT, 16).
+-define(MAX_PAYLOAD, 3).
+
 %%%
 %%% Types
 %%%
@@ -45,11 +48,11 @@
 
 -record(bulk_read, {
     %% TODO: better initializer?
-    values = [] :: xls_lists:list(xls_nums:u32(), 3)  % ?MAX_PAYLOAD
+    values = [] :: xls_lists:list(xls_nums:u32(), ?MAX_PAYLOAD)  % ?MAX_PAYLOAD
 }).
 
 -record(state, {
-    registers :: xls_lists:list(xls_nums:u32(), 16)  % TODO: put a real type here. can also transpile a constructor?
+    registers :: xls_lists:list(xls_nums:u32(), ?REGISTER_COUNT)  % TODO: put a real type here. can also transpile a constructor?
 }).
 
 %%%
@@ -88,7 +91,7 @@ stop(PID) ->
 -spec init(any()) -> #state{}.  % obligatory type signature
 init([]) ->
     #state{
-        registers = xls_lists:new(xls_nums:u32(), 16)
+        registers = xls_lists:new(xls_nums:u32(), ?REGISTER_COUNT)
     }.
 
 handle_cast(#set{register = Register, value = Value, mask = Mask}, State) ->
@@ -100,17 +103,18 @@ handle_cast(#set{register = Register, value = Value, mask = Mask}, State) ->
 handle_call(#ping{value = Value}, State) ->
     {reply, #ack{value = Value}, State};
 handle_call(#get{register = Register}, State) ->
+    true = Register < ?REGISTER_COUNT,  %% example of input validation
     Value = xls_lists:nth(Register + 1, State#state.registers),
     {reply, #read{value = Value}, State};
 handle_call(#bulk_get{start = Start, count = Count}, State) ->
     Sublist = xls_lists:sublist(
-        xls_lists:list(xls_nums:u32(), 16),
+        xls_lists:list(xls_nums:u32(), ?REGISTER_COUNT),
         State#state.registers, Start + 1, Count
     ),
     Trim = xls_lists:array_slice(
-        xls_lists:list(xls_nums:u32(), 16),
+        xls_lists:list(xls_nums:u32(), ?REGISTER_COUNT),
         Sublist,
-        1, 3
+        1, ?MAX_PAYLOAD
     ),
     {reply, #bulk_read{values = Trim}, State}.
 

@@ -169,6 +169,7 @@ print({static, integer, Integer}) ->
 """.
 -record(clause_state, {
     anonymous_counter = 0 :: integer(),
+    match_counter = 0 :: integer(),
     named_counters = #{} :: #{atom() => integer()},
     statements = [] :: printable(),
     reference = none :: none | ir()
@@ -302,12 +303,20 @@ Converts an assignment from an opaque RHS to a structured LHS into a sequence of
 accessors into the RHS being assigned to slots inside of the LHS.
 """.
 destructure_lhs({var, _L, NameAtom}, State) ->
+    %% TODO: need to record time-order data to report correct error
     {Name, NewState} = uniquify(State, NameAtom),
+
+    %% TODO: make this more gensym-y, rather than just reserving a name class
+    case Name of
+        "static_match" ++ _Rest ->
+            error(illegal);
+        _ -> ok
+    end,
+
     RHS = NewState#clause_state.reference,
     Bind = ["let ", Name, " = ", RHS, ";\n"],
     NewState#clause_state{statements = [Bind | NewState#clause_state.statements]};
 destructure_lhs({record, _L, _Atom, Slots}, State) ->
-    % TODO: convert RHS to type _Atom? need RHS to be a bag of bits in that case, or else to know RHS's type
     RecordRef = State#clause_state.reference,
     IntermediateState = lists:foldl(
         fun({record_field, _1, {atom, _2, SlotAtom}, LHS}, ThisState) ->
@@ -317,8 +326,32 @@ destructure_lhs({record, _L, _Atom, Slots}, State) ->
         end,
         State, Slots
     ),
-    IntermediateState#clause_state{reference = RecordRef}.
+    IntermediateState#clause_state{reference = RecordRef};
+%% constant cases
+destructure_lhs({atom, _L, Atom}, State) when Atom == true orelse Atom == false ->
+    EncodedValue = case Atom of
+        true -> "bool:1";
+        false -> "bool:0"
+    end,
+    #clause_state{match_counter = OldMatchCounter} = State,
+    MatchCounter = OldMatchCounter + 1,
+    CounterState = State#clause_state{match_counter = MatchCounter},
+
+    BaseName = "static_match_" ++ integer_to_list(MatchCounter),
+    {StaticName, StaticState} = uniquify(CounterState, BaseName),
+    {RHSName, RHSState} = uniquify(StaticState, BaseName),
+
+    RHSValue = RHSState#clause_state.reference,
+
+    RHSState#clause_state{
+        reference = RHSName,
+        statements = [
+            ["let ", RHSName, " = ", RHSValue, " ;\n"],
+            ["let ", StaticName, " = ", EncodedValue, " ;\n"]
+            | CounterState#clause_state.statements
+    ]}.
 %% TODO: tuple
+%% TODO: badmatch on constant
 
 %%%
 %%% Erlang record / XLS struct munging.
@@ -404,10 +437,12 @@ get_name(_State, Name) ->
     string:lowercase(atom_to_list(Name)) ++ "_1".
 
 %% TODO: explain why this is needed
--spec uniquify(clause_state(), atom()) -> string().
+-spec uniquify(clause_state(), atom() | string()) -> string().
 -doc "Rewrites NameAtom in a way that guarantees no collision with previous uses.".
-uniquify(State = #clause_state{named_counters = Counters}, NameAtom) ->
+uniquify(State, NameAtom) when is_atom(NameAtom) ->
     Name = string:lowercase(atom_to_list(NameAtom)),
+    uniquify(State, Name);
+uniquify(State = #clause_state{named_counters = Counters}, Name) ->
     Counter = maps:get(Name, Counters, 0) + 1,
     NamedCounters = Counters#{Name => Counter},
     NewName = Name ++ [$_ | integer_to_list(Counter)],
@@ -446,7 +481,8 @@ instr(ClauseState, Place, Expr) ->
 op('+', [Left, Right]) -> [Left, " + ", Right];
 op('band', [Left, Right]) -> [Left, " & ", Right];
 op('bor', [Left, Right]) -> [Left, " | ", Right];
-op('bnot', [Operand]) -> ["!", Operand].
+op('bnot', [Operand]) -> ["!", Operand];
+op('<', [Left, Right]) -> [Left, " < ", Right].
 
 %%%
 %%% Search / selection tools
