@@ -12,14 +12,15 @@ const MAX_PAYLOAD = u32:3;
 
 pub enum Tag : u8 {
   NONE = u8:0,
-  STATE = u8:1,
-  SET = u8:2,
-  GET = u8:3,
-  PING = u8:4,
-  BULK_GET = u8:5,
-  ACK = u8:6,
-  READ = u8:7,
-  BULK_READ = u8:8,
+  ERROR = u8:1,
+  STATE = u8:2,
+  SET = u8:3,
+  GET = u8:4,
+  PING = u8:5,
+  BULK_GET = u8:6,
+  ACK = u8:7,
+  READ = u8:8,
+  BULK_READ = u8:9,
 }
 
 struct Set {
@@ -161,7 +162,13 @@ let _0 = Ack {
 };
 let _1 = (Tag::ACK, _0, bits_from_ack(_0));
 let _2 = (REPLY, _1, state_1, );
-(axis::pack(_2.1.0 as u8, _2.1.2), _2.2)
+let _3 = if (bool:false) {
+    let s = zero!<State>();
+    (axis::pack(Tag::ERROR as u8, zero!<bits[0]>()), (Tag::STATE, s, bits_from_state(s)))
+} else {
+    (axis::pack(_2.1.0 as u8, _2.1.2), _2.2)
+};
+_3
 },
 
 Tag::GET => {
@@ -181,7 +188,13 @@ let _4 = Read {
 };
 let _5 = (Tag::READ, _4, bits_from_read(_4));
 let _6 = (REPLY, _5, state_1, );
-(axis::pack(_6.1.0 as u8, _6.1.2), _6.2)
+let _7 = if ((static_match_1_1 != static_match_1_2) || bool:false) {
+    let s = zero!<State>();
+    (axis::pack(Tag::ERROR as u8, zero!<bits[0]>()), (Tag::STATE, s, bits_from_state(s)))
+} else {
+    (axis::pack(_6.1.0 as u8, _6.1.2), _6.2)
+};
+_7
 },
 
 Tag::BULK_GET => {
@@ -204,7 +217,13 @@ let _7 = Bulkread {
 };
 let _8 = (Tag::BULK_READ, _7, bits_from_bulkread(_7));
 let _9 = (REPLY, _8, state_1, );
-(axis::pack(_9.1.0 as u8, _9.1.2), _9.2)
+let _10 = if (bool:false) {
+    let s = zero!<State>();
+    (axis::pack(Tag::ERROR as u8, zero!<bits[0]>()), (Tag::STATE, s, bits_from_state(s)))
+} else {
+    (axis::pack(_9.1.0 as u8, _9.1.2), _9.2)
+};
+_10
 },
 
 Tag::SET => {
@@ -232,7 +251,13 @@ let _10 = State {
 };
 let _11 = (Tag::STATE, _10, bits_from_state(_10));
 let _12 = (NOREPLY, _11, );
-(zero!<axis::Frame>(), _12.1)
+let _13 = if (bool:false) {
+    let s = zero!<State>();
+    (axis::pack(Tag::ERROR as u8, zero!<bits[0]>()), (Tag::STATE, s, bits_from_state(s)))
+} else {
+    (zero!<axis::Frame>(), _12.1)
+};
+_13
 },
 
     _ => {

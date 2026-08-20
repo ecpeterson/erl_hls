@@ -14,6 +14,8 @@
 -type state() :: any().
 
 -callback init(init_arg()) -> state().
+%% TODO: we would like to support the whole breadth of gen_server results across
+%%       both handlers!
 -callback handle_call(in_record(), state()) -> {reply, out_record(), state()}.
 -callback handle_cast(in_record(), state()) -> {noreply, state()}.
 

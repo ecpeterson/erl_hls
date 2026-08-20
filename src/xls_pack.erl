@@ -58,7 +58,10 @@ parse_transform(Forms, _Options) ->
     ]},
 
     UnpackForm = {function, Line, unpack, 2, [
-        {clause, Line, [{atom, Line, Tag}, {var, Line, 'Binary'}], [], [
+        {clause, Line, [{atom, Line, Tag}, {var, Line, 'Binary'}], [],
+            %% TODO: add an unpacker for errors
+            %% TODO: send errors back as signals rather than messages
+            [
             {match, Line, {var, Line, 'Descriptors'},
                 lists:foldr(
                     fun(Call, Acc) -> {cons, Line, Call, Acc} end,
@@ -83,12 +86,12 @@ parse_transform(Forms, _Options) ->
 
     PackTagForm = {function, Line, pack_tag, 1, [
         {clause, Line, [{atom, Line, Tag}], [], [{integer, Line, Index}]}
-        ||  {Index, Tag} <- lists:enumerate([state | PublicStructNames])
+        ||  {Index, Tag} <- lists:enumerate([error, state | PublicStructNames])
     ]},
 
     UnpackTagForm = {function, Line, unpack_tag, 1, [
         {clause, Line, [{integer, Line, Index}], [], [{atom, Line, Tag}]}
-        ||  {Index, Tag} <- lists:enumerate([state | PublicStructNames])
+        ||  {Index, Tag} <- lists:enumerate([error, state | PublicStructNames])
     ]},
 
     EmittedForms = [FileAttr, ModuleAttr, ExportAttr] ++ BodyForms ++ [PackForm, UnpackForm, PackTagForm, UnpackTagForm, EOFForm],

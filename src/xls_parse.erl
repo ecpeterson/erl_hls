@@ -40,7 +40,7 @@ to_xls(Filename) ->
     "  NONE = u8:0,\n",
     [
         ["  ", string:uppercase(atom_to_list(Atom)), " = u8:", integer_to_list(Index), ",\n"]
-        ||  {Index, Atom} <- lists:enumerate([state(Forms) | PublicStructNames])
+        ||  {Index, Atom} <- lists:enumerate([error, state(Forms) | PublicStructNames])
     ],
     "}\n\n",
     [
@@ -82,22 +82,23 @@ to_xls(Filename) ->
         ["\nTag::", string:uppercase(Op), " => {\n",
         "let request = ", lists:delete($_, Op), "_from_bits(frame.payload);\n",
         Body,
-        % TODO: Op below is wrong, should be Tag, but how to extract it??
-        ["(axis::pack(", RetVal, ".1.0 as u8, ", RetVal, ".1.2), ", RetVal, ".2)\n"],
+        RetVal, "\n",
         "},\n"]
         ||  Clause <- handle_call(Forms),
             Op <- [atom_to_list(op_from_clause(Clause))],
-            {Body, RetVal} <- [branch_from_clause(Clause, ["request", "state"])]
+            {Body, RetVal} <- [branch_from_clause(Clause, ["request", "state"],
+                fun(R) -> ["(axis::pack(", R, ".1.0 as u8, ", R, ".1.2), ", R, ".2)"] end)]
     ],
     [
         ["\nTag::", string:uppercase(Op), " => {\n",
         "let request = ", Op, "_from_bits(frame.payload);\n",
         Body,
-        ["(zero!<axis::Frame>(), ", RetVal, ".1)\n"],
+        RetVal, "\n",
         "},\n"]
         ||  Clause <- handle_cast(Forms),
             Op <- [lists:delete($_, atom_to_list(op_from_clause(Clause)))],
-            {Body, RetVal} <- [branch_from_clause(Clause, ["request", "state"])]
+            {Body, RetVal} <- [branch_from_clause(Clause, ["request", "state"],
+                fun(R) -> ["(zero!<axis::Frame>(), ", R, ".1)"] end)]
     ],
     """
 
@@ -176,9 +177,9 @@ print({static, integer, Integer}) ->
 }).
 -type clause_state() :: #clause_state{}.
 
--spec branch_from_clause(erl_parse:af_clause(), [atom()]) -> {printable(), string()}.
+-spec branch_from_clause(erl_parse:af_clause(), [atom()], fun((printable()) -> printable())) -> {printable(), string()}.
 -doc "Processes an Erlang clause from handle_*/2 into XLS.".
-branch_from_clause(Clause, ArgVals) ->
+branch_from_clause(Clause, ArgVals, Postprocessor) ->
     {clause, _1, ArgPatterns, _2, Body} = Clause,
     InjectMatch = fun
         F({{match, LineNo, LHS, RHS}, Arg}) ->
@@ -190,14 +191,32 @@ branch_from_clause(Clause, ArgVals) ->
         [{nil, _L}] -> Body;
         _ -> lists:map(InjectMatch, lists:zip(ArgPatterns, ArgVals)) ++ Body
     end,
-    OutState = lists:foldl(
+    ComputeState = lists:foldl(
         fun(Statement, State) ->
             statement_from_statement(Statement, State#clause_state{reference = none})
         end,
         #clause_state{}, BigBody
     ),
-    % TODO: Finally, all the named vars are asserted equal, else `ERR_MATCH` is
-    % emitted; else `{reply, Reply, NewState}` is emitted from the match.
+
+    OutState = instr(ComputeState, [
+        "if (", [
+            ["(", Name, "_1 != ", Name, "_", integer_to_list(VV), ") || "]
+            ||  K := V <- ComputeState#clause_state.named_counters,
+                V > 1,
+                VV <- lists:seq(2, V),
+                Name <- [if is_atom(K) -> atom_to_list(K) ; true -> K end]
+        ], "bool:false) {\n",
+        %% TODO: actually call init here. probably have to write a toplevel state creation fn
+        "    let s = zero!<State>();\n",
+        "    (axis::pack(Tag::ERROR as u8, zero!<bits[0]>()), (Tag::STATE, s, bits_from_state(s)))\n",
+        "} else {\n",
+            %% TODO: it would be preferable to branch on the REPLY/NOREPLY tag,
+            %% but we have to wait for the XLS type system to allow tagged sums,
+            %% so that {reply, Reply, State} unifies with {noreply, State}.
+        "    ", Postprocessor(reference(ComputeState)), "\n",
+        "}"
+    ]),
+
     {lists:reverse(OutState#clause_state.statements), OutState#clause_state.reference}.
 
 -spec statement_from_statement(erl_parse:abstract_expression(), clause_state()) -> clause_state().
@@ -304,6 +323,7 @@ accessors into the RHS being assigned to slots inside of the LHS.
 """.
 destructure_lhs({var, _L, NameAtom}, State) ->
     %% TODO: need to record time-order data to report correct error
+    %% TODO: also want to report eg line number on error, other present state
     {Name, NewState} = uniquify(State, NameAtom),
 
     %% TODO: make this more gensym-y, rather than just reserving a name class
