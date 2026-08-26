@@ -35,7 +35,8 @@ Ubuntu using a checksum-pinned XLS release. `tools/prepare_xls_sim.sh` creates
 the portable simulation staging directory; `tools/remote_xls_sim.sh` executes
 that directory on any Linux host with XLS, Erlang, and Icarus installed.
 
-The shared EUnit scenario uses the application stream and queries the debug
-counters from Erlang. The SystemVerilog scenario additionally proves that a
-debug query completes while application output is backpressured. See the
-[debug protocol](docs/debug-protocol.md) for that interface.
+The shared EUnit scenario uses the application stream and queries debug
+counters and committed process state from Erlang. The SystemVerilog scenario
+additionally proves that both kinds of debug query complete while application
+output is backpressured. See the [debug protocol](docs/debug-protocol.md) for
+that interface.

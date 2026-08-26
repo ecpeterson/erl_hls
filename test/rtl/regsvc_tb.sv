@@ -94,7 +94,23 @@ module regsvc_tb;
         input [7:0] txid;
         begin
             @(negedge clk);
-            dbg_s_data = header(8'hd0, txid, 8'd0);
+            dbg_s_data = header(8'h01, txid, 8'd0);
+            dbg_s_last = 1'b1;
+            dbg_s_valid = 1'b1;
+            while (!dbg_s_ready)
+                @(posedge clk);
+            @(negedge clk);
+            dbg_s_data = 32'b0;
+            dbg_s_last = 1'b0;
+            dbg_s_valid = 1'b0;
+        end
+    endtask
+
+    task automatic send_debug_get_state;
+        input [7:0] txid;
+        begin
+            @(negedge clk);
+            dbg_s_data = header(8'h02, txid, 8'd0);
             dbg_s_last = 1'b1;
             dbg_s_valid = 1'b1;
             while (!dbg_s_ready)
@@ -181,6 +197,13 @@ module regsvc_tb;
             send_beat(header(8'd6, txid, 8'd2), 1'b0);
             send_beat(start, 1'b0);
             send_beat(count, 1'b1);
+        end
+    endtask
+
+    task automatic send_unknown;
+        input [7:0] txid;
+        begin
+            send_beat(header(8'hfe, txid, 8'd0), 1'b1);
         end
     endtask
 
@@ -280,8 +303,8 @@ module regsvc_tb;
         // output is blocked. The eight counter words are: version, cycles,
         // RX beats, RX frames, RX stalls, TX beats, TX frames, TX stalls.
         send_debug_get_counters(8'h55);
-        expect_debug_beat(header(8'hd1, 8'h55, 8'd8), 1'b0);
-        expect_debug_beat(32'd1, 1'b0);
+        expect_debug_beat(header(8'h81, 8'h55, 8'd8), 1'b0);
+        expect_debug_beat(32'd2, 1'b0);
         receive_debug_beat(debug_word, 1'b0); // cycles
         receive_debug_beat(debug_word, 1'b0); // RX beats
         receive_debug_beat(debug_word, 1'b0); // RX frames
@@ -295,18 +318,40 @@ module regsvc_tb;
             $fatal(1);
         end
 
+        // State is reported from the last committed Service transaction. The
+        // packed list is least-significant-word first on the wire, so the
+        // logical register array arrives in reverse order after its version.
+        send_debug_get_state(8'h56);
+        expect_debug_beat(header(8'h82, 8'h56, 8'd17), 1'b0);
+        expect_debug_beat(32'd1, 1'b0); // state schema version
+        repeat (14)
+            expect_debug_beat(32'd0, 1'b0);
+        expect_debug_beat(32'd4, 1'b0);
+        expect_debug_beat(32'd3, 1'b1);
+
         m_ready = 1'b1;
         expect_one_word_reply(8'd7, 8'h30, 32'hfeedface);
 
-        // A failed literal match emits ERROR and resets the service state.
+        // A failed literal match emits ERROR(match_failure) and resets the
+        // service state.
         send_get(8'h40, 32'd16);
-        expect_beat(header(8'd1, 8'h40, 8'd0), 1'b1);
+        expect_beat(header(8'd1, 8'h40, 8'd1), 1'b0);
+        expect_beat(32'd2, 1'b1);
         send_get(8'h41, 32'd0);
         expect_one_word_reply(8'd8, 8'h41, 32'd0);
 
+        // An operation with no handler emits ERROR(function_clause), rather
+        // than silently leaving a synchronous caller waiting forever.
+        send_set(8'h42, 32'd0, 32'd7, 32'hffffffff);
+        send_unknown(8'h43);
+        expect_beat(header(8'd1, 8'h43, 8'd1), 1'b0);
+        expect_beat(32'd1, 1'b1);
+        send_get(8'h44, 32'd0);
+        expect_one_word_reply(8'd8, 8'h44, 32'd0);
+
         @(negedge clk);
-        if (accepted_output_beats !== 15) begin
-            $display("FAIL: expected 15 accepted output beats, got %0d",
+        if (accepted_output_beats !== 20) begin
+            $display("FAIL: expected 20 accepted output beats, got %0d",
                      accepted_output_beats);
             $fatal(1);
         end

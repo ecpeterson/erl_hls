@@ -1,3 +1,6 @@
+// Base adapter from the generated XLS proc ports to AXI4-Stream. It contains
+// no management endpoint; axis_regsvc_instrumented_wrapper composes this
+// adapter with the independently serviced debug monitor.
 module axis_regsvc_xls_axis_wrapper (
     (* X_INTERFACE_PARAMETER = "XIL_INTERFACENAME ACLK, ASSOCIATED_BUSIF S_AXIS:M_AXIS, ASSOCIATED_RESET ARESETN" *)
     (* X_INTERFACE_INFO = "xilinx.com:signal:clock:1.0 ACLK CLK" *)
@@ -27,7 +30,12 @@ module axis_regsvc_xls_axis_wrapper (
     (* X_INTERFACE_INFO = "xilinx.com:interface:axis:1.0 M_AXIS TREADY" *)
     input  wire        m_axis_tready,
     (* X_INTERFACE_INFO = "xilinx.com:interface:axis:1.0 M_AXIS TLAST" *)
-    output wire        m_axis_tlast
+    output wire        m_axis_tlast,
+
+    // Always-ready observation channel carrying each newly committed service
+    // state. This remains internal to the instrumented wrapper.
+    output wire [511:0] state_data,
+    output wire         state_valid
 );
 
     wire [32:0] xls_in;
@@ -49,7 +57,11 @@ module axis_regsvc_xls_axis_wrapper (
 
         .regsvc__ext_send(xls_out),
         .regsvc__ext_send_vld(m_axis_tvalid),
-        .regsvc__ext_send_rdy(m_axis_tready)
+        .regsvc__ext_send_rdy(m_axis_tready),
+
+        .regsvc__ext_state(state_data),
+        .regsvc__ext_state_vld(state_valid),
+        .regsvc__ext_state_rdy(1'b1)
     );
 
 endmodule

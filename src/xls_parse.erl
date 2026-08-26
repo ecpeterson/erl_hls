@@ -24,6 +24,8 @@ to_xls(Filename) ->
     StateName = state(Forms),
     StateRecord = find_record(Forms, StateName),
     StateWidth = record_width(StateRecord),
+    StateStructName = string:titlecase(lists:delete($_, atom_to_list(StateName))),
+    StateFunctionName = string:lowercase(StateStructName),
 
     Emitted = ["// ", Filename, ".x\n",
     """
@@ -35,6 +37,8 @@ to_xls(Filename) ->
     const NOREPLY = u1:0;  // some standard erlang tokens
     const REPLY = u1:1;
     const OK = u1:0;
+    const ERROR_FUNCTION_CLAUSE = u32:1;
+    const ERROR_MATCH_FAILURE = u32:2;
 
 
     """,
@@ -60,63 +64,62 @@ to_xls(Filename) ->
     proc Service {
       req_in:   chan<axis::Frame> in;
       resp_out: chan<axis::Frame> out;
-
-      config(req_in: chan<axis::Frame> in, resp_out: chan<axis::Frame> out) {
-        (req_in, resp_out)
-      }
-
-
-    """,
+    """, "\n",
+    ["  state_out: chan<bits[", integer_to_list(StateWidth), "]> out;\n\n"],
+    ["  config(req_in: chan<axis::Frame> in, resp_out: chan<axis::Frame> out,\n",
+     "         state_out: chan<bits[", integer_to_list(StateWidth), "]> out) {\n",
+     "    (req_in, resp_out, state_out)\n",
+     "  }\n\n"],
     % TODO: actually look at the code here and do nontrivial init
-    [
-        "  init {\n",
-        ["    let s = zero!<", string:titlecase(atom_to_list(StateName)), ">();\n"],
-        ["    (Tag::", string:uppercase(atom_to_list(StateName)), ", s, bits_from_", atom_to_list(StateName), "(s))\n"],
-        "  }\n\n"
-    ],
-    ["  next(state: (Tag, State, bits[", integer_to_list(StateWidth), "])) {\n",
+    ["  init { zero!<", StateStructName, ">() }\n\n"],
+    ["  next(state: ", StateStructName, ") {\n",
     """
         let (tok1, frame) = recv(join(), req_in);
-
+    """, "\n",
+    ["    let state_record = (Tag::", string:uppercase(atom_to_list(StateName)),
+     ", state, bits_from_", StateFunctionName, "(state));\n\n"],
+    """
         // cognate to {reply, Reply, State}
         let (resp, new_state) = match frame.header.op as Tag {
 
     """],
     [
-        ["\nTag::", string:uppercase(Op), " => {\n",
+        ["\n", "Tag::", string:uppercase(Op), " => {\n",
         "let request = ", lists:delete($_, Op), "_from_bits(frame.payload);\n",
         Body,
         RetVal, "\n",
         "},\n"]
         ||  Clause <- handle_call(Forms),
             Op <- [atom_to_list(op_from_clause(Clause))],
-            {Body, RetVal} <- [branch_from_clause(Clause, ["request", "state"],
+            {Body, RetVal} <- [branch_from_clause(Clause, ["request", "state_record"],
                 fun(R) -> ["(axis::pack(", R, ".1.0 as u8, ", R, ".1.2), ", R, ".2)"] end)]
     ],
     [
-        ["\nTag::", string:uppercase(Op), " => {\n",
+        ["\n", "Tag::", string:uppercase(Op), " => {\n",
         "let request = ", Op, "_from_bits(frame.payload);\n",
         Body,
         RetVal, "\n",
         "},\n"]
         ||  Clause <- handle_cast(Forms),
             Op <- [lists:delete($_, atom_to_list(op_from_clause(Clause)))],
-            {Body, RetVal} <- [branch_from_clause(Clause, ["request", "state"],
+            {Body, RetVal} <- [branch_from_clause(Clause, ["request", "state_record"],
                 fun(R) -> ["(zero!<axis::Frame>(), ", R, ".1)"] end)]
     ],
     """
 
         _ => {
-          // TODO: emit error code here
-          (zero!<axis::Frame>(), state)
+          let s = zero!<State>();
+          (axis::pack(Tag::ERROR as u8, ERROR_FUNCTION_CLAUSE),
+           (Tag::STATE, s, bits_from_state(s)))
         }
 
         };
 
         let txid = frame.header.txid;
         let resp2 = axis::Frame { header: axis::Header { txid, ..resp.header }, ..resp };
-        send_if(tok1, resp_out, resp2.header.op != (Tag::NONE as u8), resp2);
-        new_state
+        let tok2 = send_if(tok1, resp_out, resp2.header.op != (Tag::NONE as u8), resp2);
+        send(tok2, state_out, new_state.2);
+        new_state.1
       }
     }
 
@@ -124,18 +127,21 @@ to_xls(Filename) ->
     """,
     """
     proc Top {
-      ext_recv: chan<axis::Beat> in;
-      ext_send: chan<axis::Beat> out;
-
-      config(ext_recv: chan<axis::Beat> in, ext_send: chan<axis::Beat> out) {
+      ext_recv:  chan<axis::Beat> in;
+      ext_send:  chan<axis::Beat> out;
+    """, "\n",
+    ["  ext_state: chan<bits[", integer_to_list(StateWidth), "]> out;\n\n"],
+    ["  config(ext_recv: chan<axis::Beat> in, ext_send: chan<axis::Beat> out,\n",
+     "         ext_state: chan<bits[", integer_to_list(StateWidth), "]> out) {\n"],
+    """
         let (req_p,  req_c ) = chan<axis::Frame, u32:1>("req");
         let (resp_p, resp_c) = chan<axis::Frame, u32:1>("resp");
 
         spawn axis::Rx(ext_recv, req_p);
-        spawn Service(req_c, resp_p);
+        spawn Service(req_c, resp_p, ext_state);
         spawn axis::Tx(resp_c, ext_send);
 
-        (ext_recv, ext_send)
+        (ext_recv, ext_send, ext_state)
       }
 
       init { () }
@@ -212,7 +218,7 @@ branch_from_clause(Clause, ArgVals, Postprocessor) ->
         ], "bool:false) {\n",
         %% TODO: actually call init here. probably have to write a toplevel state creation fn
         "    let s = zero!<State>();\n",
-        "    (axis::pack(Tag::ERROR as u8, zero!<bits[0]>()), (Tag::STATE, s, bits_from_state(s)))\n",
+        "    (axis::pack(Tag::ERROR as u8, ERROR_MATCH_FAILURE), (Tag::STATE, s, bits_from_state(s)))\n",
         "} else {\n",
             %% TODO: it would be preferable to branch on the REPLY/NOREPLY tag,
             %% but we have to wait for the XLS type system to allow tagged sums,
