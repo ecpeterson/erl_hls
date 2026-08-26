@@ -23,12 +23,14 @@ XLS IR conversion, optimization, and Verilog generation there. It then runs
 two Icarus checks: a deterministic SystemVerilog scenario (including the
 independent debug AXIS endpoint), followed by the same EUnit application
 scenario used for the CPU reference process. The latter reaches the simulated
-RTL through a VPI bridge and a pair of named pipes. The runner does not use or
-modify the VM's existing `~/erl_xls` checkout.
+RTL through a VPI bridge. Independent application and debug FIFO pairs carry
+the two AXI Stream paths. The runner does not use or modify the VM's existing
+`~/erl_xls` checkout.
 
 The remote host and paths can be overridden with `ERL_XLS_REMOTE_HOST`,
 `ERL_XLS_REMOTE_ROOT`, and `ERL_XLS_REMOTE_XLS`.
 
-The VPI bridge currently carries the application stream. The debug stream is
-covered by the SystemVerilog scenario and is the next endpoint to expose to
-Erlang. See the [debug protocol](docs/debug-protocol.md) for that interface.
+The shared EUnit scenario uses the application stream and queries the debug
+counters from Erlang. The SystemVerilog scenario additionally proves that a
+debug query completes while application output is backpressured. See the
+[debug protocol](docs/debug-protocol.md) for that interface.

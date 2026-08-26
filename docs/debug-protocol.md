@@ -45,3 +45,16 @@ cannot prevent counter queries from completing.
 Future state snapshots and trace buffers must preserve this rule. In
 particular, trace overflow drops trace events and increments a drop counter
 rather than applying backpressure to the application.
+
+## Erlang simulation client
+
+The Icarus VPI bridge exposes the application and debug streams as independent
+named FIFO pairs: `app_tx`/`app_rx` and `debug_tx`/`debug_rx`. The
+`xls_debug` gen_server owns the debug pair, correlates replies by transaction
+identifier, and decodes `DEBUG_COUNTERS` into a map with named counter fields.
+
+The generated-RTL regression starts this client alongside `xls_gs`, runs the
+same application scenario as the CPU reference test, and queries the resulting
+counter snapshot from Erlang. The deterministic SystemVerilog test separately
+checks the stronger availability case in which application output is held
+under backpressure while the debug query completes.

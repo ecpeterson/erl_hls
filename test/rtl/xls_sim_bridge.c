@@ -12,6 +12,7 @@
 #include "vpi_user.h"
 
 #define BUFFER_SIZE 65536
+#define PATH_SIZE 4096
 
 typedef struct {
     uint8_t bytes[BUFFER_SIZE];
@@ -20,31 +21,33 @@ typedef struct {
 } byte_ring_t;
 
 typedef struct {
+    const char *name;
+    vpiHandle h_s_data;
+    vpiHandle h_s_valid;
+    vpiHandle h_s_ready;
+    vpiHandle h_s_last;
+    vpiHandle h_m_data;
+    vpiHandle h_m_valid;
+    vpiHandle h_m_ready;
+    int fd_host_to_sim;
+    int fd_sim_to_host;
+    byte_ring_t input_bytes;
+    byte_ring_t output_bytes;
     uint32_t s_data;
     int s_valid;
     int s_last;
+    int s_ready_sample;
     int m_ready;
-} drives_t;
+    unsigned input_payload_words;
+    unsigned input_beat_number;
+    unsigned output_beat_number;
+    int output_armed;
+} axis_endpoint_t;
 
 static vpiHandle h_clk;
 static vpiHandle h_resetn;
-static vpiHandle h_s_data;
-static vpiHandle h_s_valid;
-static vpiHandle h_s_ready;
-static vpiHandle h_s_last;
-static vpiHandle h_m_data;
-static vpiHandle h_m_valid;
-static vpiHandle h_m_ready;
-
-static int fd_host_to_sim = -1;
-static int fd_sim_to_host = -1;
-static byte_ring_t input_bytes;
-static byte_ring_t output_bytes;
-static drives_t drv;
-static unsigned input_payload_words;
-static unsigned input_beat_number;
-static unsigned output_beat_number;
-static int output_armed;
+static axis_endpoint_t app_endpoint;
+static axis_endpoint_t debug_endpoint;
 
 static size_t ring_free(const byte_ring_t *ring) {
     return BUFFER_SIZE - ring->count;
@@ -111,66 +114,119 @@ static void put_bit(vpiHandle signal, int bit) {
     vpi_put_value(signal, &value, NULL, vpiNoDelay);
 }
 
-static void pump_input(void) {
+static void pump_input(axis_endpoint_t *endpoint) {
     uint8_t buffer[4096];
     ssize_t count;
     size_t index;
 
-    while (ring_free(&input_bytes) >= sizeof(buffer)) {
-        count = read(fd_host_to_sim, buffer, sizeof(buffer));
+    while (ring_free(&endpoint->input_bytes) >= sizeof(buffer)) {
+        count = read(endpoint->fd_host_to_sim, buffer, sizeof(buffer));
         if (count > 0) {
-            vpi_printf("xls_sim_bridge: read %ld host byte(s)\n", (long)count);
+            vpi_printf("xls_sim_bridge[%s]: read %ld host byte(s)\n",
+                       endpoint->name, (long)count);
             for (index = 0; index < (size_t)count; index++)
-                ring_push(&input_bytes, buffer[index]);
+                ring_push(&endpoint->input_bytes, buffer[index]);
         } else if (count == 0 || errno == EAGAIN || errno == EWOULDBLOCK) {
             return;
         } else if (errno != EINTR) {
-            vpi_printf("xls_sim_bridge: input FIFO read failed: %s\n", strerror(errno));
+            vpi_printf("xls_sim_bridge[%s]: input FIFO read failed: %s\n",
+                       endpoint->name, strerror(errno));
             return;
         }
     }
 }
 
-static void pump_output(void) {
+static void pump_output(axis_endpoint_t *endpoint) {
     uint8_t buffer[4096];
-    size_t count = output_bytes.count;
+    size_t count = endpoint->output_bytes.count;
     size_t index;
     ssize_t written;
 
     if (count > sizeof(buffer))
         count = sizeof(buffer);
     for (index = 0; index < count; index++)
-        buffer[index] = output_bytes.bytes[(output_bytes.head + index) % BUFFER_SIZE];
+        buffer[index] = endpoint->output_bytes.bytes[
+            (endpoint->output_bytes.head + index) % BUFFER_SIZE
+        ];
 
     if (count == 0)
         return;
-    written = write(fd_sim_to_host, buffer, count);
+    written = write(endpoint->fd_sim_to_host, buffer, count);
     if (written > 0) {
-        output_bytes.head = (output_bytes.head + (size_t)written) % BUFFER_SIZE;
-        output_bytes.count -= (size_t)written;
+        endpoint->output_bytes.head =
+            (endpoint->output_bytes.head + (size_t)written) % BUFFER_SIZE;
+        endpoint->output_bytes.count -= (size_t)written;
     } else if (written < 0 && errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR) {
-        vpi_printf("xls_sim_bridge: output FIFO write failed: %s\n", strerror(errno));
+        vpi_printf("xls_sim_bridge[%s]: output FIFO write failed: %s\n",
+                   endpoint->name, strerror(errno));
     }
 }
 
-static void load_input_beat(void) {
+static void load_input_beat(axis_endpoint_t *endpoint) {
     uint32_t word;
 
-    if (drv.s_valid || input_bytes.count < 4)
+    if (endpoint->s_valid || endpoint->input_bytes.count < 4)
         return;
 
-    word = ring_pop_word(&input_bytes);
-    drv.s_data = word;
-    drv.s_valid = 1;
-    if (input_payload_words == 0) {
-        input_payload_words = word & 0xffU;
-        drv.s_last = input_payload_words == 0;
+    word = ring_pop_word(&endpoint->input_bytes);
+    endpoint->s_data = word;
+    endpoint->s_valid = 1;
+    if (endpoint->input_payload_words == 0) {
+        endpoint->input_payload_words = word & 0xffU;
+        endpoint->s_last = endpoint->input_payload_words == 0;
     } else {
-        drv.s_last = input_payload_words == 1;
-        input_payload_words--;
+        endpoint->s_last = endpoint->input_payload_words == 1;
+        endpoint->input_payload_words--;
     }
-    vpi_printf("xls_sim_bridge: input beat %u data=%08x last=%d\n",
-               ++input_beat_number, word, drv.s_last);
+    vpi_printf("xls_sim_bridge[%s]: input beat %u data=%08x last=%d\n",
+               endpoint->name, ++endpoint->input_beat_number, word, endpoint->s_last);
+}
+
+static void reset_endpoint(axis_endpoint_t *endpoint) {
+    endpoint->s_data = 0;
+    endpoint->s_valid = 0;
+    endpoint->s_last = 0;
+    endpoint->m_ready = 1;
+    endpoint->input_payload_words = 0;
+    endpoint->output_armed = 0;
+}
+
+static void step_endpoint(axis_endpoint_t *endpoint) {
+    if (endpoint->s_valid && endpoint->s_ready_sample) {
+        vpi_printf("xls_sim_bridge[%s]: accepted input beat %u\n",
+                   endpoint->name, endpoint->input_beat_number);
+        if (endpoint->s_last)
+            endpoint->output_armed = 1;
+        endpoint->s_valid = 0;
+        endpoint->s_last = 0;
+    }
+
+    if (get_bit(endpoint->h_m_valid) && endpoint->m_ready) {
+        if (endpoint->output_armed) {
+            vpi_printf("xls_sim_bridge[%s]: output beat %u data=%08x\n",
+                       endpoint->name, ++endpoint->output_beat_number,
+                       get_u32(endpoint->h_m_data));
+            if (ring_free(&endpoint->output_bytes) >= 4)
+                ring_push_word(&endpoint->output_bytes, get_u32(endpoint->h_m_data));
+            else
+                vpi_printf("xls_sim_bridge[%s]: internal output buffer overflow\n",
+                           endpoint->name);
+        } else {
+            vpi_printf("xls_sim_bridge[%s]: discarded pre-request output %08x\n",
+                       endpoint->name, get_u32(endpoint->h_m_data));
+        }
+    }
+
+    pump_output(endpoint);
+    endpoint->m_ready = ring_free(&endpoint->output_bytes) >= 4;
+    load_input_beat(endpoint);
+}
+
+static void apply_drives(axis_endpoint_t *endpoint) {
+    put_u32(endpoint->h_s_data, endpoint->s_data);
+    put_bit(endpoint->h_s_valid, endpoint->s_valid);
+    put_bit(endpoint->h_s_last, endpoint->s_last);
+    put_bit(endpoint->h_m_ready, endpoint->m_ready);
 }
 
 static void schedule_sync_cb(PLI_INT32 reason, PLI_INT32 (*callback)(p_cb_data)) {
@@ -186,56 +242,32 @@ static void schedule_sync_cb(PLI_INT32 reason, PLI_INT32 (*callback)(p_cb_data))
 
 static PLI_INT32 cb_readwrite(p_cb_data cb) {
     (void)cb;
-    put_u32(h_s_data, drv.s_data);
-    put_bit(h_s_valid, drv.s_valid);
-    put_bit(h_s_last, drv.s_last);
-    put_bit(h_m_ready, drv.m_ready);
+    apply_drives(&app_endpoint);
+    apply_drives(&debug_endpoint);
     return 0;
 }
 
 static PLI_INT32 cb_readonly(p_cb_data cb) {
     (void)cb;
-    if (!get_bit(h_clk))
+    if (!get_bit(h_clk)) {
+        app_endpoint.s_ready_sample = get_bit(app_endpoint.h_s_ready);
+        debug_endpoint.s_ready_sample = get_bit(debug_endpoint.h_s_ready);
         return 0;
+    }
 
-    pump_input();
-    pump_output();
+    pump_input(&app_endpoint);
+    pump_input(&debug_endpoint);
+    pump_output(&app_endpoint);
+    pump_output(&debug_endpoint);
 
     if (!get_bit(h_resetn)) {
-        drv.s_data = 0;
-        drv.s_valid = 0;
-        drv.s_last = 0;
-        drv.m_ready = 1;
-        input_payload_words = 0;
-        output_armed = 0;
+        reset_endpoint(&app_endpoint);
+        reset_endpoint(&debug_endpoint);
         return 0;
     }
 
-    if (drv.s_valid && get_bit(h_s_ready)) {
-        vpi_printf("xls_sim_bridge: accepted input beat %u\n", input_beat_number);
-        if (drv.s_last)
-            output_armed = 1;
-        drv.s_valid = 0;
-        drv.s_last = 0;
-    }
-
-    if (get_bit(h_m_valid) && drv.m_ready) {
-        if (output_armed) {
-            vpi_printf("xls_sim_bridge: output beat %u data=%08x\n",
-                       ++output_beat_number, get_u32(h_m_data));
-            if (ring_free(&output_bytes) >= 4)
-                ring_push_word(&output_bytes, get_u32(h_m_data));
-            else
-                vpi_printf("xls_sim_bridge: internal output buffer overflow\n");
-        } else {
-            vpi_printf("xls_sim_bridge: discarded pre-request output %08x\n",
-                       get_u32(h_m_data));
-        }
-    }
-
-    pump_output();
-    drv.m_ready = ring_free(&output_bytes) >= 4;
-    load_input_beat();
+    step_endpoint(&app_endpoint);
+    step_endpoint(&debug_endpoint);
     return 0;
 }
 
@@ -246,23 +278,37 @@ static PLI_INT32 cb_clk_change(p_cb_data cb) {
     return 0;
 }
 
-static int find_signals(void) {
-#define FIND(handle, name) handle = vpi_handle_by_name((PLI_BYTE8 *)"regsvc_bridge_tb." name, NULL)
-    FIND(h_clk, "clk");
-    FIND(h_resetn, "resetn");
-    FIND(h_s_data, "s_axis_tdata");
-    FIND(h_s_valid, "s_axis_tvalid");
-    FIND(h_s_ready, "s_axis_tready");
-    FIND(h_s_last, "s_axis_tlast");
-    FIND(h_m_data, "m_axis_tdata");
-    FIND(h_m_valid, "m_axis_tvalid");
-    FIND(h_m_ready, "m_axis_tready");
+static vpiHandle find_signal(const char *name) {
+    char path[PATH_SIZE];
+    snprintf(path, sizeof(path), "regsvc_bridge_tb.%s", name);
+    return vpi_handle_by_name((PLI_BYTE8 *)path, NULL);
+}
+
+static int find_endpoint_signals(
+    axis_endpoint_t *endpoint,
+    const char *s_prefix,
+    const char *m_prefix
+) {
+    char name[128];
+#define FIND(handle, prefix, suffix) do { \
+    snprintf(name, sizeof(name), "%s_%s", prefix, suffix); \
+    endpoint->handle = find_signal(name); \
+} while (0)
+    FIND(h_s_data, s_prefix, "tdata");
+    FIND(h_s_valid, s_prefix, "tvalid");
+    FIND(h_s_ready, s_prefix, "tready");
+    FIND(h_s_last, s_prefix, "tlast");
+    FIND(h_m_data, m_prefix, "tdata");
+    FIND(h_m_valid, m_prefix, "tvalid");
+    FIND(h_m_ready, m_prefix, "tready");
 #undef FIND
-    return h_clk && h_resetn && h_s_data && h_s_valid && h_s_ready && h_s_last &&
-           h_m_data && h_m_valid && h_m_ready;
+    return endpoint->h_s_data && endpoint->h_s_valid && endpoint->h_s_ready &&
+           endpoint->h_s_last && endpoint->h_m_data && endpoint->h_m_valid &&
+           endpoint->h_m_ready;
 }
 
 static int open_fifo(const char *path) {
+    int fd;
     if (unlink(path) != 0 && errno != ENOENT) {
         vpi_printf("xls_sim_bridge: cannot remove %s: %s\n", path, strerror(errno));
         return -1;
@@ -271,13 +317,28 @@ static int open_fifo(const char *path) {
         vpi_printf("xls_sim_bridge: cannot create %s: %s\n", path, strerror(errno));
         return -1;
     }
-    return open(path, O_RDWR | O_NONBLOCK);
+    fd = open(path, O_RDWR | O_NONBLOCK);
+    if (fd < 0)
+        vpi_printf("xls_sim_bridge: cannot open %s: %s\n", path, strerror(errno));
+    return fd;
+}
+
+static int open_endpoint_fifos(
+    axis_endpoint_t *endpoint,
+    const char *directory,
+    const char *prefix
+) {
+    char host_to_sim[PATH_SIZE];
+    char sim_to_host[PATH_SIZE];
+    snprintf(host_to_sim, sizeof(host_to_sim), "%s/%s_tx", directory, prefix);
+    snprintf(sim_to_host, sizeof(sim_to_host), "%s/%s_rx", directory, prefix);
+    endpoint->fd_host_to_sim = open_fifo(host_to_sim);
+    endpoint->fd_sim_to_host = open_fifo(sim_to_host);
+    return endpoint->fd_host_to_sim >= 0 && endpoint->fd_sim_to_host >= 0;
 }
 
 static PLI_INT32 cb_start_of_sim(p_cb_data cb) {
     const char *directory = getenv("ERL_XLS_SIM_DIR");
-    char host_to_sim[4096];
-    char sim_to_host[4096];
     s_cb_data clock_cb;
     (void)cb;
 
@@ -285,22 +346,28 @@ static PLI_INT32 cb_start_of_sim(p_cb_data cb) {
         vpi_printf("xls_sim_bridge: ERL_XLS_SIM_DIR is not set\n");
         return 0;
     }
-    if (!find_signals()) {
+
+    memset(&app_endpoint, 0, sizeof(app_endpoint));
+    memset(&debug_endpoint, 0, sizeof(debug_endpoint));
+    app_endpoint.name = "app";
+    debug_endpoint.name = "debug";
+    h_clk = find_signal("clk");
+    h_resetn = find_signal("resetn");
+    if (!h_clk || !h_resetn ||
+        !find_endpoint_signals(&app_endpoint, "s_axis", "m_axis") ||
+        !find_endpoint_signals(&debug_endpoint, "s_dbg", "m_dbg")) {
         vpi_printf("xls_sim_bridge: failed to find regsvc_bridge_tb AXIS signals\n");
         return 0;
     }
 
-    snprintf(host_to_sim, sizeof(host_to_sim), "%s/app_tx", directory);
-    snprintf(sim_to_host, sizeof(sim_to_host), "%s/app_rx", directory);
-    fd_host_to_sim = open_fifo(host_to_sim);
-    fd_sim_to_host = open_fifo(sim_to_host);
-    if (fd_host_to_sim < 0 || fd_sim_to_host < 0) {
+    if (!open_endpoint_fifos(&app_endpoint, directory, "app") ||
+        !open_endpoint_fifos(&debug_endpoint, directory, "debug")) {
         vpi_printf("xls_sim_bridge: failed to open transport FIFOs\n");
         return 0;
     }
 
-    memset(&drv, 0, sizeof(drv));
-    drv.m_ready = 1;
+    reset_endpoint(&app_endpoint);
+    reset_endpoint(&debug_endpoint);
     schedule_sync_cb(cbReadWriteSynch, cb_readwrite);
 
     memset(&clock_cb, 0, sizeof(clock_cb));
@@ -308,7 +375,8 @@ static PLI_INT32 cb_start_of_sim(p_cb_data cb) {
     clock_cb.cb_rtn = cb_clk_change;
     clock_cb.obj = h_clk;
     vpi_register_cb(&clock_cb);
-    vpi_printf("xls_sim_bridge: listening in %s\n", directory);
+    vpi_printf("xls_sim_bridge: application and debug endpoints listening in %s\n",
+               directory);
     return 0;
 }
 

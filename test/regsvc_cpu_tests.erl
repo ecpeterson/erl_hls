@@ -12,11 +12,23 @@ simulated_rtl_test_() ->
         SimDir ->
             WritePath = filename:join(SimDir, "app_tx"),
             ReadPath = filename:join(SimDir, "app_rx"),
-            target_test_(fun() ->
-                xls_gs:start_link(regsvc, [], [
-                    {transport, WritePath, ReadPath}
-                ])
-            end)
+            DebugWritePath = filename:join(SimDir, "debug_tx"),
+            DebugReadPath = filename:join(SimDir, "debug_rx"),
+            {setup,
+                fun() ->
+                    {ok, Pid} = xls_gs:start_link(regsvc, [], [
+                        {transport, WritePath, ReadPath}
+                    ]),
+                    {ok, DebugPid} = xls_debug:start_link(DebugWritePath, DebugReadPath),
+                    {Pid, DebugPid}
+                end,
+                fun({Pid, DebugPid}) ->
+                    xls_debug:stop(DebugPid),
+                    regsvc:stop(Pid)
+                end,
+                fun({Pid, DebugPid}) ->
+                    scenario_(Pid) ++ debug_scenario_(DebugPid)
+                end}
     end.
 
 target_test_(Start) ->
@@ -39,4 +51,22 @@ scenario_(Pid) ->
         ?_assertEqual(3, regsvc:get(Pid, 0)),
         ?_assertEqual(ok, regsvc:set(Pid, 1, 4, 16#ffffffff)),
         ?_assertEqual([3, 4, 0], regsvc:bulk_get(Pid, 0, 3))
+    ].
+
+debug_scenario_(DebugPid) ->
+    [
+        ?_test(begin
+            {ok, Counters} = xls_debug:get_counters(DebugPid),
+            ?assertEqual(1, maps:get(version, Counters)),
+            ?assert(maps:get(cycles, Counters) > 0),
+            ?assertEqual(21, maps:get(app_rx_beats, Counters)),
+            ?assertEqual(7, maps:get(app_rx_frames, Counters)),
+            %% XLS emits one initialization frame before the four application
+            %% replies. The VPI bridge drains it before accepting host traffic,
+            %% but the passive RTL monitor correctly includes it.
+            ?assertEqual(11, maps:get(app_tx_beats, Counters)),
+            ?assertEqual(5, maps:get(app_tx_frames, Counters)),
+            ?assertEqual(0, maps:get(app_rx_stall_cycles, Counters)),
+            ?assertEqual(0, maps:get(app_tx_stall_cycles, Counters))
+        end)
     ].

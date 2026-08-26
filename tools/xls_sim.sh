@@ -36,6 +36,7 @@ cp "$project_root/test/rtl/xls_sim_bridge.c" "$local_stage/xls_sim_bridge.c"
 # even though it cannot load the newer BEAMs produced by the Mac's OTP release.
 for source in \
     "$project_root/src/xls_gs.erl" \
+    "$project_root/src/xls_debug.erl" \
     "$project_root/src/xls_lists.erl" \
     "$project_root/src/xls_nums.erl" \
     "$project_root/src/xls_type.erl" \

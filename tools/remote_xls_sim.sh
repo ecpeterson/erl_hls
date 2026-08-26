@@ -49,7 +49,12 @@ iverilog \
 
 sim_dir="$stage/sim"
 mkdir -p "$sim_dir"
-rm -f "$sim_dir/app_tx" "$sim_dir/app_rx" "$sim_dir/vvp.log"
+rm -f \
+    "$sim_dir/app_tx" \
+    "$sim_dir/app_rx" \
+    "$sim_dir/debug_tx" \
+    "$sim_dir/debug_rx" \
+    "$sim_dir/vvp.log"
 
 sim_pid=
 cleanup() {
@@ -65,8 +70,15 @@ ERL_XLS_SIM_DIR="$sim_dir" \
     >"$sim_dir/vvp.log" 2>&1 &
 sim_pid=$!
 
+# The VPI module creates all four FIFOs during start-of-simulation setup. Do
+# not start the Erlang clients until those transport endpoints are ready.
 for _attempt in $(seq 1 100); do
-    if [[ -p "$sim_dir/app_tx" && -p "$sim_dir/app_rx" ]]; then
+    if [[ \
+        -p "$sim_dir/app_tx" && \
+        -p "$sim_dir/app_rx" && \
+        -p "$sim_dir/debug_tx" && \
+        -p "$sim_dir/debug_rx" \
+    ]]; then
         break
     fi
     if ! kill -0 "$sim_pid" 2>/dev/null; then
@@ -76,7 +88,12 @@ for _attempt in $(seq 1 100); do
     sleep 0.05
 done
 
-if [[ ! -p "$sim_dir/app_tx" || ! -p "$sim_dir/app_rx" ]]; then
+if [[ \
+    ! -p "$sim_dir/app_tx" || \
+    ! -p "$sim_dir/app_rx" || \
+    ! -p "$sim_dir/debug_tx" || \
+    ! -p "$sim_dir/debug_rx" \
+]]; then
     cat "$sim_dir/vvp.log"
     echo "Timed out waiting for simulator transport FIFOs" >&2
     exit 1
@@ -88,7 +105,8 @@ erlc -o "$beam_dir" "$stage/erl_src/xls_type.erl"
 erlc -pa "$beam_dir" -o "$beam_dir" \
     "$stage/erl_src/xls_lists.erl" \
     "$stage/erl_src/xls_nums.erl" \
-    "$stage/erl_src/xls_gs.erl"
+    "$stage/erl_src/xls_gs.erl" \
+    "$stage/erl_src/xls_debug.erl"
 erlc -pa "$beam_dir" -o "$beam_dir" "$stage/erl_src/regsvc.erl"
 erlc -pa "$beam_dir" -o "$beam_dir" \
     "$stage/test_src/regsvc_cpu_tests.erl"

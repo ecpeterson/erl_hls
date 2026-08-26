@@ -13,6 +13,15 @@ module regsvc_bridge_tb;
     wire        m_axis_tvalid;
     reg         m_axis_tready = 1'b1;
 
+    reg  [31:0] s_dbg_tdata = 32'b0;
+    reg         s_dbg_tvalid = 1'b0;
+    wire        s_dbg_tready;
+    reg         s_dbg_tlast = 1'b0;
+
+    wire [31:0] m_dbg_tdata;
+    wire        m_dbg_tvalid;
+    reg         m_dbg_tready = 1'b1;
+
     axis_regsvc_instrumented_wrapper dut (
         .aclk(clk),
         .aresetn(resetn),
@@ -26,15 +35,15 @@ module regsvc_bridge_tb;
         .m_axis_tvalid(m_axis_tvalid),
         .m_axis_tready(m_axis_tready),
         .m_axis_tlast(),
-        .s_dbg_tdata(32'b0),
+        .s_dbg_tdata(s_dbg_tdata),
         .s_dbg_tkeep(4'hf),
-        .s_dbg_tvalid(1'b0),
-        .s_dbg_tready(),
-        .s_dbg_tlast(1'b0),
-        .m_dbg_tdata(),
+        .s_dbg_tvalid(s_dbg_tvalid),
+        .s_dbg_tready(s_dbg_tready),
+        .s_dbg_tlast(s_dbg_tlast),
+        .m_dbg_tdata(m_dbg_tdata),
         .m_dbg_tkeep(),
-        .m_dbg_tvalid(),
-        .m_dbg_tready(1'b1),
+        .m_dbg_tvalid(m_dbg_tvalid),
+        .m_dbg_tready(m_dbg_tready),
         .m_dbg_tlast()
     );
 
