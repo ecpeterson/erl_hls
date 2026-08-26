@@ -69,8 +69,15 @@ transpile(sublist, [Descriptor, List, Start, Count], State1) ->
     BigSize = xls_type:width(Type),
 
     State2 = xls_parse:instr(State1, [List, " as bits[", integer_to_list(BigSize), "]"]),
-    State3 = xls_parse:instr(State2, [xls_parse:reference(State2), " >> ((", Start, " - u32:1) * ", integer_to_list(SmallSize), ")"]),
-    State4 = xls_parse:instr(State3, [xls_parse:reference(State3), " & (all_ones!<bits[", integer_to_list(BigSize), "]>() << (", Count, " * ", integer_to_list(SmallSize), "))"]),
+    %% XLS casts array element zero to the most-significant bits. Move Start to
+    %% that position, then retain Count elements at the top and clear the tail.
+    State3 = xls_parse:instr(State2, [xls_parse:reference(State2), " << ((", Start, " - u32:1) * ", integer_to_list(SmallSize), ")"]),
+    State4 = xls_parse:instr(State3, [
+        xls_parse:reference(State3),
+        " & (all_ones!<bits[", integer_to_list(BigSize), "]>() << (",
+        integer_to_list(BigSize), " - (", Count, " * ",
+        integer_to_list(SmallSize), ")))"
+    ]),
     xls_parse:instr(State4, [xls_parse:reference(State4), " as ", xls_type:print_type(Type)]);
 transpile(array_slice, [{phantom, type, OldDescriptor}, List, {static, integer, Start}, {static, integer, Length}], _State) ->
     {xls_type, xls_lists, list, [Subtype, _OldLength]} = OldDescriptor,
@@ -78,7 +85,15 @@ transpile(array_slice, [{phantom, type, OldDescriptor}, List, {static, integer, 
     ["array_slice(", List, ", ", integer_to_list(Start - 1), ", zero!<", xls_type:print_type(NewDescriptor), ">() )"].
 
 pack(List, list, [ElementType, _Length]) ->
-    << (xls_type:pack(Element, ElementType)) || Element <- List >>.
+    %% XLS casts array element zero to the most-significant bits, while the AXIS
+    %% serializer sends the least-significant word first. Accumulate in reverse
+    %% wire order so the XLS side can use a zero-cost array/bit cast, then
+    %% flatten the iolist once without a separate list-reversal pass.
+    iolist_to_binary(lists:foldl(
+        fun(Element, Acc) -> [xls_type:pack(Element, ElementType) | Acc] end,
+        [],
+        List
+    )).
 
 unpack(Packed, list, [ElementType, Length]) ->
     {Rest, Backwards} = lists:foldl(
@@ -88,7 +103,9 @@ unpack(Packed, list, [ElementType, Length]) ->
         end,
         {Packed, []}, lists:seq(1, Length)
     ),
-    {lists:reverse(Backwards), Rest}.
+    %% Backwards reverses the least-significant-word-first wire representation
+    %% back into the logical Erlang list order.
+    {Backwards, Rest}.
 
 print_type(list, [Subtype, Count]) ->
     [xls_type:print_type(Subtype), "[", integer_to_list(Count), "]"].
