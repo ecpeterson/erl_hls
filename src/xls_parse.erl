@@ -37,6 +37,8 @@ to_xls(Filename) ->
     const NOREPLY = u1:0;  // some standard erlang tokens
     const REPLY = u1:1;
     const OK = u1:0;
+    const ERROR_FUNCTION_CLAUSE = u32:1;
+    const ERROR_MATCH_FAILURE = u32:2;
 
 
     """,
@@ -62,8 +64,8 @@ to_xls(Filename) ->
     proc Service {
       req_in:   chan<axis::Frame> in;
       resp_out: chan<axis::Frame> out;
-    """,
-    ["\n  state_out: chan<bits[", integer_to_list(StateWidth), "]> out;\n\n"],
+    """, "\n",
+    ["  state_out: chan<bits[", integer_to_list(StateWidth), "]> out;\n\n"],
     ["  config(req_in: chan<axis::Frame> in, resp_out: chan<axis::Frame> out,\n",
      "         state_out: chan<bits[", integer_to_list(StateWidth), "]> out) {\n",
      "    (req_in, resp_out, state_out)\n",
@@ -73,8 +75,8 @@ to_xls(Filename) ->
     ["  next(state: ", StateStructName, ") {\n",
     """
         let (tok1, frame) = recv(join(), req_in);
-    """,
-    ["\n    let state_record = (Tag::", string:uppercase(atom_to_list(StateName)),
+    """, "\n",
+    ["    let state_record = (Tag::", string:uppercase(atom_to_list(StateName)),
      ", state, bits_from_", StateFunctionName, "(state));\n\n"],
     """
         // cognate to {reply, Reply, State}
@@ -82,7 +84,7 @@ to_xls(Filename) ->
 
     """],
     [
-        ["\nTag::", string:uppercase(Op), " => {\n",
+        ["\n", "Tag::", string:uppercase(Op), " => {\n",
         "let request = ", lists:delete($_, Op), "_from_bits(frame.payload);\n",
         Body,
         RetVal, "\n",
@@ -93,7 +95,7 @@ to_xls(Filename) ->
                 fun(R) -> ["(axis::pack(", R, ".1.0 as u8, ", R, ".1.2), ", R, ".2)"] end)]
     ],
     [
-        ["\nTag::", string:uppercase(Op), " => {\n",
+        ["\n", "Tag::", string:uppercase(Op), " => {\n",
         "let request = ", Op, "_from_bits(frame.payload);\n",
         Body,
         RetVal, "\n",
@@ -106,8 +108,9 @@ to_xls(Filename) ->
     """
 
         _ => {
-          // TODO: emit error code here
-          (zero!<axis::Frame>(), state_record)
+          let s = zero!<State>();
+          (axis::pack(Tag::ERROR as u8, ERROR_FUNCTION_CLAUSE),
+           (Tag::STATE, s, bits_from_state(s)))
         }
 
         };
@@ -126,8 +129,8 @@ to_xls(Filename) ->
     proc Top {
       ext_recv:  chan<axis::Beat> in;
       ext_send:  chan<axis::Beat> out;
-    """,
-    ["\n  ext_state: chan<bits[", integer_to_list(StateWidth), "]> out;\n\n"],
+    """, "\n",
+    ["  ext_state: chan<bits[", integer_to_list(StateWidth), "]> out;\n\n"],
     ["  config(ext_recv: chan<axis::Beat> in, ext_send: chan<axis::Beat> out,\n",
      "         ext_state: chan<bits[", integer_to_list(StateWidth), "]> out) {\n"],
     """
@@ -215,7 +218,7 @@ branch_from_clause(Clause, ArgVals, Postprocessor) ->
         ], "bool:false) {\n",
         %% TODO: actually call init here. probably have to write a toplevel state creation fn
         "    let s = zero!<State>();\n",
-        "    (axis::pack(Tag::ERROR as u8, zero!<bits[0]>()), (Tag::STATE, s, bits_from_state(s)))\n",
+        "    (axis::pack(Tag::ERROR as u8, ERROR_MATCH_FAILURE), (Tag::STATE, s, bits_from_state(s)))\n",
         "} else {\n",
             %% TODO: it would be preferable to branch on the REPLY/NOREPLY tag,
             %% but we have to wait for the XLS type system to allow tagged sums,

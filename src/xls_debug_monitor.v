@@ -31,11 +31,14 @@ module xls_debug_monitor #(
     input  wire        m_dbg_tready,
     output reg         m_dbg_tlast
 );
-    localparam [7:0] DEBUG_GET_COUNTERS = 8'hd0;
-    localparam [7:0] DEBUG_COUNTERS     = 8'hd1;
-    localparam [7:0] DEBUG_GET_STATE    = 8'hd2;
-    localparam [7:0] DEBUG_STATE        = 8'hd3;
-    localparam [7:0] DEBUG_ERROR        = 8'hdf;
+    // Host-to-FPGA requests occupy the low half of the tag space.
+    localparam [7:0] DEBUG_GET_COUNTERS = 8'h01;
+    localparam [7:0] DEBUG_GET_STATE    = 8'h02;
+
+    // FPGA-to-host replies occupy the high half of the tag space.
+    localparam [7:0] DEBUG_COUNTERS     = 8'h81;
+    localparam [7:0] DEBUG_STATE        = 8'h82;
+    localparam [7:0] DEBUG_ERROR        = 8'hff;
     localparam [7:0] DEBUG_VERSION      = 8'd2;
     localparam [31:0] STATE_VERSION     = 32'd1;
     localparam [7:0] COUNTER_WORDS      = 8'd8;

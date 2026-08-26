@@ -1,3 +1,6 @@
+// Base adapter from the generated XLS proc ports to AXI4-Stream. It contains
+// no management endpoint; axis_regsvc_instrumented_wrapper composes this
+// adapter with the independently serviced debug monitor.
 module axis_regsvc_xls_axis_wrapper (
     (* X_INTERFACE_PARAMETER = "XIL_INTERFACENAME ACLK, ASSOCIATED_BUSIF S_AXIS:M_AXIS, ASSOCIATED_RESET ARESETN" *)
     (* X_INTERFACE_INFO = "xilinx.com:signal:clock:1.0 ACLK CLK" *)

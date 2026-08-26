@@ -5,11 +5,14 @@
 -export([start_link/2, start_link/3, stop/1, get_counters/1, get_state/1]).
 -export([init/1, handle_call/3, handle_cast/2, terminate/2]).
 
--define(DEBUG_GET_COUNTERS, 16#d0).
--define(DEBUG_COUNTERS, 16#d1).
--define(DEBUG_GET_STATE, 16#d2).
--define(DEBUG_STATE, 16#d3).
--define(DEBUG_ERROR, 16#df).
+%% Host-to-FPGA requests occupy the low half of the tag space.
+-define(DEBUG_GET_COUNTERS, 16#01).
+-define(DEBUG_GET_STATE, 16#02).
+
+%% FPGA-to-host replies occupy the high half of the tag space.
+-define(DEBUG_COUNTERS, 16#81).
+-define(DEBUG_STATE, 16#82).
+-define(DEBUG_ERROR, 16#ff).
 -define(RX_FRAME, '$debug_frame').
 
 %% TODO: Factor descriptor ownership, frame I/O, and exact reads shared with
@@ -107,20 +110,44 @@ decode_reply(?DEBUG_COUNTERS, <<
         app_tx_frames => AppTxFrames,
         app_tx_stall_cycles => AppTxStalls
     }};
-decode_reply(?DEBUG_STATE, <<1:32/little-unsigned-integer, StateBits/binary>>, Module)
-        when Module =/= undefined ->
-    case Module:unpack(state, StateBits) of
-        {DecodedState, <<>>} -> {ok, DecodedState};
-        {_DecodedState, Rest} -> {error, {trailing_state_data, Rest}}
-    end;
-decode_reply(?DEBUG_STATE, _Payload, undefined) ->
-    {error, no_state_decoder};
-decode_reply(?DEBUG_STATE, <<Version:32/little-unsigned-integer, _/binary>>, _Module) ->
-    {error, {unsupported_state_version, Version}};
-decode_reply(?DEBUG_ERROR, <<ErrorCode:32/little-unsigned-integer>>, _Module) ->
-    {error, {debug_error, ErrorCode}};
+decode_reply(?DEBUG_STATE, Payload, Module) ->
+    decode_state_reply(Payload, Module);
+decode_reply(?DEBUG_ERROR, <<ErrorCode:32/little-unsigned-integer>> = Payload, _Module) ->
+    {error, #{reason => {debug_error, ErrorCode}, raw => Payload}};
+decode_reply(?DEBUG_ERROR, Payload, _Module) ->
+    {error, #{reason => malformed_debug_error, raw => Payload}};
 decode_reply(Tag, Payload, _Module) ->
     {error, {unexpected_reply, Tag, Payload}}.
+
+decode_state_reply(<<Version:32/little-unsigned-integer, StateBits/binary>>, Module) ->
+    Snapshot = #{version => Version, raw => StateBits},
+    case {Version, Module} of
+        {1, undefined} ->
+            {ok, Snapshot#{state => undefined}};
+        {1, _} ->
+            decode_state_bits(Module, StateBits, Snapshot);
+        {_, _} ->
+            {error, Snapshot#{reason => {unsupported_state_version, Version}}}
+    end;
+decode_state_reply(Payload, _Module) ->
+    {error, #{reason => malformed_state_reply, raw => Payload}}.
+
+decode_state_bits(Module, StateBits, Snapshot) ->
+    try Module:unpack(state, StateBits) of
+        {DecodedState, <<>>} ->
+            {ok, Snapshot#{state => DecodedState}};
+        {DecodedState, Rest} ->
+            {error, Snapshot#{
+                reason => {trailing_state_data, Rest},
+                state => DecodedState
+            }}
+    catch
+        Class:Reason:Stacktrace ->
+            {error, Snapshot#{
+                reason => {state_decode_failed, Class, Reason},
+                stacktrace => Stacktrace
+            }}
+    end.
 
 listener(FD, Parent) ->
     {ok, <<PayloadLength:8, TxID:8, _Flags:8, Tag:8>>} = read_exact(FD, 4),

@@ -1,3 +1,5 @@
+// Instrumented top level: the base XLS-to-AXIS application adapter plus the
+// passive debug monitor and its independent AXI4-Stream endpoint.
 module axis_regsvc_instrumented_wrapper (
     (* X_INTERFACE_PARAMETER = "XIL_INTERFACENAME ACLK, ASSOCIATED_BUSIF S_AXIS:M_AXIS:S_DBG:M_DBG, ASSOCIATED_RESET ARESETN" *)
     (* X_INTERFACE_INFO = "xilinx.com:signal:clock:1.0 ACLK CLK" *)

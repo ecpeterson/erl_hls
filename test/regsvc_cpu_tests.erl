@@ -29,7 +29,9 @@ simulated_rtl_test_() ->
                     regsvc:stop(Pid)
                 end,
                 fun({Pid, DebugPid}) ->
-                    scenario_(Pid) ++ debug_scenario_(DebugPid)
+                    scenario_(Pid) ++
+                        debug_scenario_(DebugPid) ++
+                        rtl_error_scenario_(Pid)
                 end}
     end.
 
@@ -69,7 +71,24 @@ debug_scenario_(DebugPid) ->
             ?assertEqual(0, maps:get(app_tx_stall_cycles, Counters))
         end),
         ?_test(begin
-            {ok, {state, Registers}} = xls_debug:get_state(DebugPid),
-            ?assertEqual([3, 4 | lists:duplicate(14, 0)], Registers)
+            {ok, Snapshot} = xls_debug:get_state(DebugPid),
+            ?assertEqual(1, maps:get(version, Snapshot)),
+            ?assertEqual(64, byte_size(maps:get(raw, Snapshot))),
+            {state, Registers} = maps:get(state, Snapshot),
+            ?assertEqual([3, 4 | lists:duplicate(14, 0)], Registers),
+            ?assertEqual(regsvc:pack({state, Registers}), maps:get(raw, Snapshot))
         end)
+    ].
+
+rtl_error_scenario_(Pid) ->
+    [
+        ?_assertEqual(
+            {error, {remote_error, match_failure}},
+            gen_server:call(Pid, {get, 16})
+        ),
+        ?_assertEqual(
+            {error, {remote_error, function_clause}},
+            gen_server:call(Pid, {ack, 0})
+        ),
+        ?_assertEqual(0, regsvc:get(Pid, 0))
     ].

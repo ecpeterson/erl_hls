@@ -47,6 +47,8 @@ stop(PID) ->
 
 -define(DEVICE_NODE, "/dev/axismsg0").
 -define(RX_SIGIL, '$pl_message').
+-define(ERROR_FUNCTION_CLAUSE, 1).
+-define(ERROR_MATCH_FAILURE, 2).
 
 -record(header, {
     tag :: 0..255,
@@ -89,7 +91,7 @@ handle_cast(Message, GS = #state{module = Module, state = State, fd = none}) ->
 handle_cast({?RX_SIGIL, Header, Payload}, GS = #state{module = Module}) ->
     {From, NewPending} = maps:take(Header#header.tx_id, GS#state.pending),
     Tag = Module:unpack_tag(Header#header.tag),
-    {Reply, << >>} = Module:unpack(Tag, Payload),
+    {Reply, << >>} = unpack_reply(Module, Tag, Payload),
     gen_server:reply(From, Reply),
     {noreply, GS#state{pending = NewPending}};
 handle_cast(Message, GS = #state{module = Module}) ->
@@ -174,6 +176,17 @@ read_exact(FH, Length, Acc) ->
         eof -> {error, unexpected_eof};
         {error, Reason} -> {error, Reason}
     end.
+
+unpack_reply(_Module, error, <<ErrorCode:32/little-unsigned-integer, Rest/binary>>) ->
+    {{error, {remote_error, error_reason(ErrorCode)}}, Rest};
+unpack_reply(_Module, error, Payload) ->
+    {{error, {remote_error, {malformed_error, Payload}}}, <<>>};
+unpack_reply(Module, Tag, Payload) ->
+    Module:unpack(Tag, Payload).
+
+error_reason(?ERROR_FUNCTION_CLAUSE) -> function_clause;
+error_reason(?ERROR_MATCH_FAILURE) -> match_failure;
+error_reason(ErrorCode) -> {unknown_error, ErrorCode}.
 
 %%%
 %%% Utilities for un/pack

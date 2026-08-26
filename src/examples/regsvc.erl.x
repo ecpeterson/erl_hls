@@ -7,6 +7,8 @@ import axis;
 const NOREPLY = u1:0;  // some standard erlang tokens
 const REPLY = u1:1;
 const OK = u1:0;
+const ERROR_FUNCTION_CLAUSE = u32:1;
+const ERROR_MATCH_FAILURE = u32:2;
 
 const MAX_PAYLOAD = u32:3;
 
@@ -172,7 +174,7 @@ let _1 = (Tag::ACK, _0, bits_from_ack(_0));
 let _2 = (REPLY, _1, state_1, );
 let _3 = if (bool:false) {
     let s = zero!<State>();
-    (axis::pack(Tag::ERROR as u8, zero!<bits[0]>()), (Tag::STATE, s, bits_from_state(s)))
+    (axis::pack(Tag::ERROR as u8, ERROR_MATCH_FAILURE), (Tag::STATE, s, bits_from_state(s)))
 } else {
     (axis::pack(_2.1.0 as u8, _2.1.2), _2.2)
 };
@@ -198,7 +200,7 @@ let _5 = (Tag::READ, _4, bits_from_read(_4));
 let _6 = (REPLY, _5, state_1, );
 let _7 = if ((static_match_1_1 != static_match_1_2) || bool:false) {
     let s = zero!<State>();
-    (axis::pack(Tag::ERROR as u8, zero!<bits[0]>()), (Tag::STATE, s, bits_from_state(s)))
+    (axis::pack(Tag::ERROR as u8, ERROR_MATCH_FAILURE), (Tag::STATE, s, bits_from_state(s)))
 } else {
     (axis::pack(_6.1.0 as u8, _6.1.2), _6.2)
 };
@@ -227,7 +229,7 @@ let _8 = (Tag::BULK_READ, _7, bits_from_bulkread(_7));
 let _9 = (REPLY, _8, state_1, );
 let _10 = if (bool:false) {
     let s = zero!<State>();
-    (axis::pack(Tag::ERROR as u8, zero!<bits[0]>()), (Tag::STATE, s, bits_from_state(s)))
+    (axis::pack(Tag::ERROR as u8, ERROR_MATCH_FAILURE), (Tag::STATE, s, bits_from_state(s)))
 } else {
     (axis::pack(_9.1.0 as u8, _9.1.2), _9.2)
 };
@@ -261,7 +263,7 @@ let _11 = (Tag::STATE, _10, bits_from_state(_10));
 let _12 = (NOREPLY, _11, );
 let _13 = if (bool:false) {
     let s = zero!<State>();
-    (axis::pack(Tag::ERROR as u8, zero!<bits[0]>()), (Tag::STATE, s, bits_from_state(s)))
+    (axis::pack(Tag::ERROR as u8, ERROR_MATCH_FAILURE), (Tag::STATE, s, bits_from_state(s)))
 } else {
     (zero!<axis::Frame>(), _12.1)
 };
@@ -269,8 +271,9 @@ _13
 },
 
     _ => {
-      // TODO: emit error code here
-      (zero!<axis::Frame>(), state_record)
+      let s = zero!<State>();
+      (axis::pack(Tag::ERROR as u8, ERROR_FUNCTION_CLAUSE),
+       (Tag::STATE, s, bits_from_state(s)))
     }
 
     };

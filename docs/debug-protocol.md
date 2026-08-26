@@ -16,8 +16,12 @@ empty payload and on the final payload beat otherwise. Every beat currently has
 
 ## Version 2 operations
 
-`DEBUG_GET_COUNTERS` (`0xd0`) has no payload. Its reply is `DEBUG_COUNTERS`
-(`0xd1`) with eight words captured from one coherent monitor snapshot:
+Request tags sent from the host occupy `0x01` through `0x7f`. Reply tags sent
+from the FPGA occupy `0x81` through `0xff`, allowing adapters and future
+routers to reject a tag used in the wrong direction.
+
+`DEBUG_GET_COUNTERS` (`0x01`) has no payload. Its reply is `DEBUG_COUNTERS`
+(`0x81`) with eight words captured from one coherent monitor snapshot:
 
 1. Protocol version.
 2. Cycles since reset.
@@ -28,7 +32,7 @@ empty payload and on the final payload beat otherwise. Every beat currently has
 7. Accepted application output frames.
 8. Application output stall cycles.
 
-`DEBUG_GET_STATE` (`0xd2`) also has no payload. Its `DEBUG_STATE` (`0xd3`)
+`DEBUG_GET_STATE` (`0x02`) also has no payload. Its `DEBUG_STATE` (`0x82`)
 reply begins with a one-word state-schema version, followed by the packed
 private state record. Version 1 state records use the same least-significant-
 word-first representation as application payloads, so the generated Erlang
@@ -43,11 +47,16 @@ block a query for the preceding committed value. The current compiler's init
 state is zero, matching the debug mirror's reset value. A future nontrivial
 initializer must also publish its initial packed state.
 
+This is deliberately a last-committed-state view. If translated handlers later
+gain blocking operations such as `receive` or `gen_server:call/3`, a suspended
+handler's continuation and wait reason will need a separate execution-status
+observation; they must not be presented as committed callback state.
+
 An input stall is a cycle with `TVALID && !TREADY` on the request path. An
 output stall is a cycle with `TVALID && !TREADY` on the reply path. Counters are
 32-bit wrapping counters in this prototype.
 
-Malformed or unsupported requests receive `DEBUG_ERROR` (`0xdf`) with a
+Malformed or unsupported requests receive `DEBUG_ERROR` (`0xff`) with a
 one-word error code. Error code 1 means an unsupported or malformed request.
 
 ## Availability rule
@@ -70,7 +79,9 @@ named FIFO pairs: `app_tx`/`app_rx` and `debug_tx`/`debug_rx`. The
 identifier, and decodes `DEBUG_COUNTERS` into a map with named counter fields.
 When started with the translated service module, it uses that module's
 generated state unpacker to decode `DEBUG_STATE` into the original private
-record tuple.
+record tuple. State results retain the schema version and raw packed bytes in
+addition to the decoded record. Without a service module, callers still receive
+the version and raw bytes, with the decoded `state` field set to `undefined`.
 
 The generated-RTL regression starts this client alongside `xls_gs`, runs the
 same application scenario as the CPU reference test, and queries the resulting
