@@ -19,7 +19,9 @@ simulated_rtl_test_() ->
                     {ok, Pid} = xls_gs:start_link(regsvc, [], [
                         {transport, WritePath, ReadPath}
                     ]),
-                    {ok, DebugPid} = xls_debug:start_link(DebugWritePath, DebugReadPath),
+                    {ok, DebugPid} = xls_debug:start_link(
+                        regsvc, DebugWritePath, DebugReadPath
+                    ),
                     {Pid, DebugPid}
                 end,
                 fun({Pid, DebugPid}) ->
@@ -57,7 +59,7 @@ debug_scenario_(DebugPid) ->
     [
         ?_test(begin
             {ok, Counters} = xls_debug:get_counters(DebugPid),
-            ?assertEqual(1, maps:get(version, Counters)),
+            ?assertEqual(2, maps:get(version, Counters)),
             ?assert(maps:get(cycles, Counters) > 0),
             ?assertEqual(21, maps:get(app_rx_beats, Counters)),
             ?assertEqual(7, maps:get(app_rx_frames, Counters)),
@@ -65,5 +67,9 @@ debug_scenario_(DebugPid) ->
             ?assertEqual(4, maps:get(app_tx_frames, Counters)),
             ?assertEqual(0, maps:get(app_rx_stall_cycles, Counters)),
             ?assertEqual(0, maps:get(app_tx_stall_cycles, Counters))
+        end),
+        ?_test(begin
+            {ok, {state, Registers}} = xls_debug:get_state(DebugPid),
+            ?assertEqual([3, 4 | lists:duplicate(14, 0)], Registers)
         end)
     ].

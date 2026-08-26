@@ -106,6 +106,22 @@ module regsvc_tb;
         end
     endtask
 
+    task automatic send_debug_get_state;
+        input [7:0] txid;
+        begin
+            @(negedge clk);
+            dbg_s_data = header(8'hd2, txid, 8'd0);
+            dbg_s_last = 1'b1;
+            dbg_s_valid = 1'b1;
+            while (!dbg_s_ready)
+                @(posedge clk);
+            @(negedge clk);
+            dbg_s_data = 32'b0;
+            dbg_s_last = 1'b0;
+            dbg_s_valid = 1'b0;
+        end
+    endtask
+
     task automatic receive_debug_beat;
         output [31:0] word;
         input         expected_last;
@@ -281,7 +297,7 @@ module regsvc_tb;
         // RX beats, RX frames, RX stalls, TX beats, TX frames, TX stalls.
         send_debug_get_counters(8'h55);
         expect_debug_beat(header(8'hd1, 8'h55, 8'd8), 1'b0);
-        expect_debug_beat(32'd1, 1'b0);
+        expect_debug_beat(32'd2, 1'b0);
         receive_debug_beat(debug_word, 1'b0); // cycles
         receive_debug_beat(debug_word, 1'b0); // RX beats
         receive_debug_beat(debug_word, 1'b0); // RX frames
@@ -294,6 +310,17 @@ module regsvc_tb;
                      debug_word);
             $fatal(1);
         end
+
+        // State is reported from the last committed Service transaction. The
+        // packed list is least-significant-word first on the wire, so the
+        // logical register array arrives in reverse order after its version.
+        send_debug_get_state(8'h56);
+        expect_debug_beat(header(8'hd3, 8'h56, 8'd17), 1'b0);
+        expect_debug_beat(32'd1, 1'b0); // state schema version
+        repeat (14)
+            expect_debug_beat(32'd0, 1'b0);
+        expect_debug_beat(32'd4, 1'b0);
+        expect_debug_beat(32'd3, 1'b1);
 
         m_ready = 1'b1;
         expect_one_word_reply(8'd7, 8'h30, 32'hfeedface);

@@ -24,6 +24,8 @@ to_xls(Filename) ->
     StateName = state(Forms),
     StateRecord = find_record(Forms, StateName),
     StateWidth = record_width(StateRecord),
+    StateStructName = string:titlecase(lists:delete($_, atom_to_list(StateName))),
+    StateFunctionName = string:lowercase(StateStructName),
 
     Emitted = ["// ", Filename, ".x\n",
     """
@@ -60,24 +62,21 @@ to_xls(Filename) ->
     proc Service {
       req_in:   chan<axis::Frame> in;
       resp_out: chan<axis::Frame> out;
-
-      config(req_in: chan<axis::Frame> in, resp_out: chan<axis::Frame> out) {
-        (req_in, resp_out)
-      }
-
-
     """,
+    ["\n  state_out: chan<bits[", integer_to_list(StateWidth), "]> out;\n\n"],
+    ["  config(req_in: chan<axis::Frame> in, resp_out: chan<axis::Frame> out,\n",
+     "         state_out: chan<bits[", integer_to_list(StateWidth), "]> out) {\n",
+     "    (req_in, resp_out, state_out)\n",
+     "  }\n\n"],
     % TODO: actually look at the code here and do nontrivial init
-    [
-        "  init {\n",
-        ["    let s = zero!<", string:titlecase(atom_to_list(StateName)), ">();\n"],
-        ["    (Tag::", string:uppercase(atom_to_list(StateName)), ", s, bits_from_", atom_to_list(StateName), "(s))\n"],
-        "  }\n\n"
-    ],
-    ["  next(state: (Tag, State, bits[", integer_to_list(StateWidth), "])) {\n",
+    ["  init { zero!<", StateStructName, ">() }\n\n"],
+    ["  next(state: ", StateStructName, ") {\n",
     """
         let (tok1, frame) = recv(join(), req_in);
-
+    """,
+    ["\n    let state_record = (Tag::", string:uppercase(atom_to_list(StateName)),
+     ", state, bits_from_", StateFunctionName, "(state));\n\n"],
+    """
         // cognate to {reply, Reply, State}
         let (resp, new_state) = match frame.header.op as Tag {
 
@@ -90,7 +89,7 @@ to_xls(Filename) ->
         "},\n"]
         ||  Clause <- handle_call(Forms),
             Op <- [atom_to_list(op_from_clause(Clause))],
-            {Body, RetVal} <- [branch_from_clause(Clause, ["request", "state"],
+            {Body, RetVal} <- [branch_from_clause(Clause, ["request", "state_record"],
                 fun(R) -> ["(axis::pack(", R, ".1.0 as u8, ", R, ".1.2), ", R, ".2)"] end)]
     ],
     [
@@ -101,22 +100,23 @@ to_xls(Filename) ->
         "},\n"]
         ||  Clause <- handle_cast(Forms),
             Op <- [lists:delete($_, atom_to_list(op_from_clause(Clause)))],
-            {Body, RetVal} <- [branch_from_clause(Clause, ["request", "state"],
+            {Body, RetVal} <- [branch_from_clause(Clause, ["request", "state_record"],
                 fun(R) -> ["(zero!<axis::Frame>(), ", R, ".1)"] end)]
     ],
     """
 
         _ => {
           // TODO: emit error code here
-          (zero!<axis::Frame>(), state)
+          (zero!<axis::Frame>(), state_record)
         }
 
         };
 
         let txid = frame.header.txid;
         let resp2 = axis::Frame { header: axis::Header { txid, ..resp.header }, ..resp };
-        send_if(tok1, resp_out, resp2.header.op != (Tag::NONE as u8), resp2);
-        new_state
+        let tok2 = send_if(tok1, resp_out, resp2.header.op != (Tag::NONE as u8), resp2);
+        send(tok2, state_out, new_state.2);
+        new_state.1
       }
     }
 
@@ -124,18 +124,21 @@ to_xls(Filename) ->
     """,
     """
     proc Top {
-      ext_recv: chan<axis::Beat> in;
-      ext_send: chan<axis::Beat> out;
-
-      config(ext_recv: chan<axis::Beat> in, ext_send: chan<axis::Beat> out) {
+      ext_recv:  chan<axis::Beat> in;
+      ext_send:  chan<axis::Beat> out;
+    """,
+    ["\n  ext_state: chan<bits[", integer_to_list(StateWidth), "]> out;\n\n"],
+    ["  config(ext_recv: chan<axis::Beat> in, ext_send: chan<axis::Beat> out,\n",
+     "         ext_state: chan<bits[", integer_to_list(StateWidth), "]> out) {\n"],
+    """
         let (req_p,  req_c ) = chan<axis::Frame, u32:1>("req");
         let (resp_p, resp_c) = chan<axis::Frame, u32:1>("resp");
 
         spawn axis::Rx(ext_recv, req_p);
-        spawn Service(req_c, resp_p);
+        spawn Service(req_c, resp_p, ext_state);
         spawn axis::Tx(resp_c, ext_send);
 
-        (ext_recv, ext_send)
+        (ext_recv, ext_send, ext_state)
       }
 
       init { () }

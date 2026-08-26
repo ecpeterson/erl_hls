@@ -51,6 +51,9 @@ module axis_regsvc_instrumented_wrapper (
     (* X_INTERFACE_INFO = "xilinx.com:interface:axis:1.0 M_DBG TLAST" *)
     output wire        m_dbg_tlast
 );
+    wire [511:0] app_state_data;
+    wire         app_state_valid;
+
     axis_regsvc_xls_axis_wrapper application (
         .aclk(aclk),
         .aresetn(aresetn),
@@ -63,10 +66,14 @@ module axis_regsvc_instrumented_wrapper (
         .m_axis_tkeep(m_axis_tkeep),
         .m_axis_tvalid(m_axis_tvalid),
         .m_axis_tready(m_axis_tready),
-        .m_axis_tlast(m_axis_tlast)
+        .m_axis_tlast(m_axis_tlast),
+        .state_data(app_state_data),
+        .state_valid(app_state_valid)
     );
 
-    xls_debug_monitor debug_monitor (
+    xls_debug_monitor #(
+        .STATE_BITS(512)
+    ) debug_monitor (
         .aclk(aclk),
         .aresetn(aresetn),
         .app_rx_tvalid(s_axis_tvalid),
@@ -75,6 +82,8 @@ module axis_regsvc_instrumented_wrapper (
         .app_tx_tvalid(m_axis_tvalid),
         .app_tx_tready(m_axis_tready),
         .app_tx_tlast(m_axis_tlast),
+        .app_state_data(app_state_data),
+        .app_state_valid(app_state_valid),
         .s_dbg_tdata(s_dbg_tdata),
         .s_dbg_tkeep(s_dbg_tkeep),
         .s_dbg_tvalid(s_dbg_tvalid),

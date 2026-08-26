@@ -144,18 +144,18 @@ fn bits_from_state(s: State) -> bits[bit_count<State>()] {
 proc Service {
   req_in:   chan<axis::Frame> in;
   resp_out: chan<axis::Frame> out;
+  state_out: chan<bits[512]> out;
 
-  config(req_in: chan<axis::Frame> in, resp_out: chan<axis::Frame> out) {
-    (req_in, resp_out)
+  config(req_in: chan<axis::Frame> in, resp_out: chan<axis::Frame> out,
+         state_out: chan<bits[512]> out) {
+    (req_in, resp_out, state_out)
   }
 
-  init {
-    let s = zero!<State>();
-    (Tag::STATE, s, bits_from_state(s))
-  }
+  init { zero!<State>() }
 
-  next(state: (Tag, State, bits[512])) {
+  next(state: State) {
     let (tok1, frame) = recv(join(), req_in);
+    let state_record = (Tag::STATE, state, bits_from_state(state));
 
     // cognate to {reply, Reply, State}
     let (resp, new_state) = match frame.header.op as Tag {
@@ -163,7 +163,7 @@ proc Service {
 Tag::PING => {
 let request = ping_from_bits(frame.payload);
 let value_1 = request.value;
-let state_1 = state;
+let state_1 = state_record;
 let _0 = Ack {
   value: value_1,
   ..zero!<Ack>()
@@ -182,7 +182,7 @@ _3
 Tag::GET => {
 let request = get_from_bits(frame.payload);
 let register_1 = request.register;
-let state_1 = state;
+let state_1 = state_record;
 let _0 = register_1 < 16;
 let static_match_1_1 = bool:1 ;
 let static_match_1_2 = _0 ;
@@ -209,7 +209,7 @@ Tag::BULK_GET => {
 let request = bulkget_from_bits(frame.payload);
 let start_1 = request.start;
 let count_1 = request.count;
-let state_1 = state;
+let state_1 = state_record;
 let _0 = state_1.1.registers;
 let _1 = start_1 + 1;
 let _2 = _0 as bits[512];
@@ -239,7 +239,7 @@ let request = set_from_bits(frame.payload);
 let register_1 = request.register;
 let value_1 = request.value;
 let mask_1 = request.mask;
-let state_1 = state;
+let state_1 = state_record;
 let _0 = register_1 + 1;
 let _1 = state_1.1.registers;
 let _2 = _1[_0 - u32:1];
@@ -270,31 +270,34 @@ _13
 
     _ => {
       // TODO: emit error code here
-      (zero!<axis::Frame>(), state)
+      (zero!<axis::Frame>(), state_record)
     }
 
     };
 
     let txid = frame.header.txid;
     let resp2 = axis::Frame { header: axis::Header { txid, ..resp.header }, ..resp };
-    send_if(tok1, resp_out, resp2.header.op != (Tag::NONE as u8), resp2);
-    new_state
+    let tok2 = send_if(tok1, resp_out, resp2.header.op != (Tag::NONE as u8), resp2);
+    send(tok2, state_out, new_state.2);
+    new_state.1
   }
 }
 
 proc Top {
-  ext_recv: chan<axis::Beat> in;
-  ext_send: chan<axis::Beat> out;
+  ext_recv:  chan<axis::Beat> in;
+  ext_send:  chan<axis::Beat> out;
+  ext_state: chan<bits[512]> out;
 
-  config(ext_recv: chan<axis::Beat> in, ext_send: chan<axis::Beat> out) {
+  config(ext_recv: chan<axis::Beat> in, ext_send: chan<axis::Beat> out,
+         ext_state: chan<bits[512]> out) {
     let (req_p,  req_c ) = chan<axis::Frame, u32:1>("req");
     let (resp_p, resp_c) = chan<axis::Frame, u32:1>("resp");
 
     spawn axis::Rx(ext_recv, req_p);
-    spawn Service(req_c, resp_p);
+    spawn Service(req_c, resp_p, ext_state);
     spawn axis::Tx(resp_c, ext_send);
 
-    (ext_recv, ext_send)
+    (ext_recv, ext_send, ext_state)
   }
 
   init { () }
