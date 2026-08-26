@@ -34,3 +34,66 @@ iverilog \
     regsvc.v
 
 vvp regsvc.vvp
+
+iverilog-vpi xls_sim_bridge.c
+
+iverilog \
+    -g2012 \
+    -s regsvc_bridge_tb \
+    -o regsvc_bridge.vvp \
+    regsvc_bridge_tb.sv \
+    regsvc_instrumented_wrapper.v \
+    xls_debug_monitor.v \
+    regsvc_wrapper.v \
+    regsvc.v
+
+sim_dir="$stage/sim"
+mkdir -p "$sim_dir"
+rm -f "$sim_dir/app_tx" "$sim_dir/app_rx" "$sim_dir/vvp.log"
+
+sim_pid=
+cleanup() {
+    if [[ -n "$sim_pid" ]]; then
+        kill "$sim_pid" 2>/dev/null || true
+        wait "$sim_pid" 2>/dev/null || true
+    fi
+}
+trap cleanup EXIT
+
+ERL_XLS_SIM_DIR="$sim_dir" \
+    vvp -M "$stage" -m xls_sim_bridge regsvc_bridge.vvp \
+    >"$sim_dir/vvp.log" 2>&1 &
+sim_pid=$!
+
+for _attempt in $(seq 1 100); do
+    if [[ -p "$sim_dir/app_tx" && -p "$sim_dir/app_rx" ]]; then
+        break
+    fi
+    if ! kill -0 "$sim_pid" 2>/dev/null; then
+        cat "$sim_dir/vvp.log"
+        exit 1
+    fi
+    sleep 0.05
+done
+
+if [[ ! -p "$sim_dir/app_tx" || ! -p "$sim_dir/app_rx" ]]; then
+    cat "$sim_dir/vvp.log"
+    echo "Timed out waiting for simulator transport FIFOs" >&2
+    exit 1
+fi
+
+beam_dir="$stage/beam"
+mkdir -p "$beam_dir"
+erlc -o "$beam_dir" "$stage/erl_src/xls_type.erl"
+erlc -pa "$beam_dir" -o "$beam_dir" \
+    "$stage/erl_src/xls_lists.erl" \
+    "$stage/erl_src/xls_nums.erl" \
+    "$stage/erl_src/xls_gs.erl"
+erlc -pa "$beam_dir" -o "$beam_dir" "$stage/erl_src/regsvc.erl"
+erlc -pa "$beam_dir" -o "$beam_dir" \
+    "$stage/test_src/regsvc_cpu_tests.erl"
+
+ERL_XLS_SIM_DIR="$sim_dir" erl \
+    -noshell \
+    -pa "$beam_dir" \
+    -eval 'case eunit:test(regsvc_cpu_tests, [verbose]) of ok -> halt(0); error -> halt(1) end.'

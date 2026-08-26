@@ -18,13 +18,17 @@ tools/xls_sim.sh
 ```
 
 This regenerates `regsvc.x` from the Erlang source, copies only the required
-inputs into `/home/ecpeterson/erl_xls-build/regsvc` on `192.168.64.7`, runs XLS
-IR conversion, optimization, and Verilog generation there, and executes the
-result with Icarus. It does not use or modify the VM's existing `~/erl_xls`
-checkout.
+inputs into `/home/ecpeterson/erl_xls-build/regsvc` on `192.168.64.7`, and runs
+XLS IR conversion, optimization, and Verilog generation there. It then runs
+two Icarus checks: a deterministic SystemVerilog scenario (including the
+independent debug AXIS endpoint), followed by the same EUnit application
+scenario used for the CPU reference process. The latter reaches the simulated
+RTL through a VPI bridge and a pair of named pipes. The runner does not use or
+modify the VM's existing `~/erl_xls` checkout.
 
 The remote host and paths can be overridden with `ERL_XLS_REMOTE_HOST`,
 `ERL_XLS_REMOTE_ROOT`, and `ERL_XLS_REMOTE_XLS`.
 
-The RTL regression exercises application behavior and a separate debug AXIS
-endpoint. See the [debug protocol](docs/debug-protocol.md) for that interface.
+The VPI bridge currently carries the application stream. The debug stream is
+covered by the SystemVerilog scenario and is the next endpoint to expose to
+Erlang. See the [debug protocol](docs/debug-protocol.md) for that interface.

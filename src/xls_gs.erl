@@ -22,6 +22,7 @@
 -record(state, {
     module :: module(),
     fd = none :: none | file:io_device(),
+    listener = none :: none | pid(),
     pending = #{} :: #{0..255 => gen_server:from()},
     tx_id = 0 :: 0..255,
     state :: state()
@@ -55,16 +56,17 @@ stop(PID) ->
 }).
 
 init({Module, Arg, Options}) ->
-    GS = case lists:member(pl, Options) of
-        false -> #state{state = Module:init(Arg), module = Module};
-        true ->
-            {ok, FDWrite} = file:open(?DEVICE_NODE, [write, raw, binary]),
+    GS = case transport_paths(Options) of
+        cpu ->
+            #state{state = Module:init(Arg), module = Module};
+        {WritePath, ReadPath} ->
+            {ok, FDWrite} = file:open(WritePath, [write, raw, binary]),
             Self = self(),
-            _Listener = spawn_link(fun () ->
-                {ok, FDRead} = file:open(?DEVICE_NODE, [read, raw, binary]),
+            Listener = spawn_link(fun () ->
+                {ok, FDRead} = file:open(ReadPath, [read, raw, binary]),
                 listener(FDRead, Self)
             end),
-            #state{module = Module, fd = FDWrite}
+            #state{module = Module, fd = FDWrite, listener = Listener}
     end,
     {ok, GS}.
 
@@ -99,7 +101,20 @@ handle_cast(Message, GS = #state{module = Module}) ->
         tx_id = (GS#state.tx_id + 1) rem 256
     }}.
 
-terminate(normal, _State) ->
+terminate(_Reason, #state{fd = FD, listener = Listener}) ->
+    try
+        case Listener of
+            none -> ok;
+            _ ->
+                unlink(Listener),
+                exit(Listener, shutdown)
+        end
+    after
+        case FD of
+            none -> ok;
+            _ -> file:close(FD)
+        end
+    end,
     ok.
 
 code_change(_OldVsn, GS, _Extra) ->
@@ -118,12 +133,23 @@ transmit(FH, Header, Payload) ->
     >>,
     file:write(FH, <<PackedHeader/binary, Payload/binary>>).
 
+transport_paths(Options) ->
+    case lists:keyfind(transport, 1, Options) of
+        {transport, WritePath, ReadPath} ->
+            {WritePath, ReadPath};
+        false ->
+            case lists:member(pl, Options) of
+                true -> {?DEVICE_NODE, ?DEVICE_NODE};
+                false -> cpu
+            end
+    end.
+
 %%%
 %%% Subordinate process which listens on the character device
 %%%
 
 listener(FH, Parent) ->
-    {ok, Header} = file:read(FH, 4),
+    {ok, Header} = read_exact(FH, 4),
     <<
         PayloadLength:8/integer,
         TxID:8/integer,
@@ -131,9 +157,23 @@ listener(FH, Parent) ->
         Tag:8/integer
     >> = Header,
     UnpackedHeader = #header{tag = Tag, tx_id = TxID, flags = Flags},
-    {ok, Payload} = file:read(FH, 4*PayloadLength),
+    {ok, Payload} = read_exact(FH, 4*PayloadLength),
     gen_server:cast(Parent, {?RX_SIGIL, UnpackedHeader, Payload}),
     listener(FH, Parent).
+
+read_exact(_FH, 0) ->
+    {ok, <<>>};
+read_exact(FH, Length) ->
+    read_exact(FH, Length, <<>>).
+
+read_exact(_FH, Length, Acc) when byte_size(Acc) =:= Length ->
+    {ok, Acc};
+read_exact(FH, Length, Acc) ->
+    case file:read(FH, Length - byte_size(Acc)) of
+        {ok, Bytes} -> read_exact(FH, Length, <<Acc/binary, Bytes/binary>>);
+        eof -> {error, unexpected_eof};
+        {error, Reason} -> {error, Reason}
+    end.
 
 %%%
 %%% Utilities for un/pack
