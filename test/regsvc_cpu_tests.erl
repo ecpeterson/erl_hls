@@ -61,11 +61,8 @@ debug_scenario_(DebugPid) ->
             ?assert(maps:get(cycles, Counters) > 0),
             ?assertEqual(21, maps:get(app_rx_beats, Counters)),
             ?assertEqual(7, maps:get(app_rx_frames, Counters)),
-            %% XLS emits one initialization frame before the four application
-            %% replies. The VPI bridge drains it before accepting host traffic,
-            %% but the passive RTL monitor correctly includes it.
-            ?assertEqual(11, maps:get(app_tx_beats, Counters)),
-            ?assertEqual(5, maps:get(app_tx_frames, Counters)),
+            ?assertEqual(10, maps:get(app_tx_beats, Counters)),
+            ?assertEqual(4, maps:get(app_tx_frames, Counters)),
             ?assertEqual(0, maps:get(app_rx_stall_cycles, Counters)),
             ?assertEqual(0, maps:get(app_tx_stall_cycles, Counters))
         end)

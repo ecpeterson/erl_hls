@@ -79,6 +79,7 @@ pub proc Rx {
 }
 
 struct TxState {
+  active: u1,
   header: Header,
   payload: bits[FRAME_BITS],
   beats_sent: u8,
@@ -95,23 +96,27 @@ pub proc Tx {
   init { zero!<TxState>() }
 
   next(state: TxState) {
-    // maybe latch new payload
-    let (tok, state2) = if state.header.payload_words >= state.beats_sent {
+    let (tok, state2) = if state.active {
       (join(), state)
     } else {
       let (tok1, frame) = recv(join(), resp_in);
       let payload = bits_from_frame(frame);
       let header = frame.header;
-      (tok1, TxState { header, payload, ..zero!<TxState>() } )
+      (tok1, TxState { active: u1:1, header, payload, ..zero!<TxState>() })
     };
 
+    let last = state2.beats_sent == state2.header.payload_words;
     send(tok, axis_out, Beat {
-      tlast: state2.beats_sent == state2.header.payload_words,
+      tlast: last,
       word: state2.payload[32 * state2.beats_sent +: u32],
     });
 
-    let beats_sent = state2.beats_sent + u8:1;
-    TxState { beats_sent, ..state2 }
+    if last {
+      zero!<TxState>()
+    } else {
+      let beats_sent = state2.beats_sent + u8:1;
+      TxState { beats_sent, ..state2 }
+    }
   }
 }
 

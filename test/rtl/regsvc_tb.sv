@@ -231,6 +231,16 @@ module regsvc_tb;
         @(negedge clk);
         resetn = 1'b1;
 
+        // Tx must wait for a real response frame instead of emitting its
+        // zero-initialized state after reset.
+        repeat (8) begin
+            @(posedge clk);
+            if (m_valid) begin
+                $display("FAIL: application output became valid before a request");
+                $fatal(1);
+            end
+        end
+
         // Basic call/reply and transaction-ID preservation.
         send_ping(8'h11, 32'h12345678);
         expect_one_word_reply(8'd7, 8'h11, 32'h12345678);
@@ -294,6 +304,12 @@ module regsvc_tb;
         send_get(8'h41, 32'd0);
         expect_one_word_reply(8'd8, 8'h41, 32'd0);
 
+        @(negedge clk);
+        if (accepted_output_beats !== 15) begin
+            $display("FAIL: expected 15 accepted output beats, got %0d",
+                     accepted_output_beats);
+            $fatal(1);
+        end
         $display("PASS: regsvc RTL behavior (%0d output beats)",
                  accepted_output_beats);
         $finish;

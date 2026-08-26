@@ -30,6 +30,11 @@ the two AXI Stream paths. The runner does not use or modify the VM's existing
 The remote host and paths can be overridden with `ERL_XLS_REMOTE_HOST`,
 `ERL_XLS_REMOTE_ROOT`, and `ERL_XLS_REMOTE_XLS`.
 
+GitHub Actions runs the same generated-RTL and bridged-EUnit regressions on
+Ubuntu using a checksum-pinned XLS release. `tools/prepare_xls_sim.sh` creates
+the portable simulation staging directory; `tools/remote_xls_sim.sh` executes
+that directory on any Linux host with XLS, Erlang, and Icarus installed.
+
 The shared EUnit scenario uses the application stream and queries the debug
 counters from Erlang. The SystemVerilog scenario additionally proves that a
 debug query completes while application output is backpressured. See the
