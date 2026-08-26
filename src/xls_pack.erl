@@ -1,7 +1,7 @@
 -module(xls_pack).
 -export([parse_transform/2]).
 
--define(MAX_TAGS, 255).  % bounded by tag width in axis header
+-define(MAX_TAG_VALUE, 255).  % bounded by tag width in axis header
 
 % -define(debug(X), begin io:format("~w@~w: ~p~n", [?FUNCTION_NAME, ?LINE, X]), X end).
 -define(debug(X), X).
@@ -30,7 +30,9 @@ parse_transform(Forms, _Options) ->
     {BodyForms, EOFForm} = {lists:droplast(TailForms), lists:last(TailForms)},
 
     PublicStructNames = xls_parse:find_attribute(Forms, xls_tags),
-    true = length(PublicStructNames) =< ?MAX_TAGS,
+    StateName = xls_parse:state(Forms),
+    SerializableStructNames = [StateName | PublicStructNames],
+    true = length([error | SerializableStructNames]) =< ?MAX_TAG_VALUE,
     ExportAttr = {attribute, element(2, ModuleAttr), export,
         [{pack, 1}, {unpack, 2}, {pack_tag, 1}, {unpack_tag, 1}]
     },
@@ -48,13 +50,11 @@ parse_transform(Forms, _Options) ->
                     [binary]
                 }
                 ||  {attribute, _L, record, {_T, Fields}} <- [xls_parse:find_record(Forms, Tag)],
-                    {typed_record_field,
-                        {record_field, _1, {atom, _2, FieldAtom}, _Default},
-                        Desc
-                    } <- Fields
+                    {typed_record_field, Field, Desc} <- Fields,
+                    FieldAtom <- [xls_parse:record_field_name(Field)]
             ]}
         ]}
-        ||  Tag <- PublicStructNames
+        ||  Tag <- SerializableStructNames
     ]},
 
     UnpackForm = {function, Line, unpack, 2, [
@@ -81,17 +81,17 @@ parse_transform(Forms, _Options) ->
                        [{cons, Line, {atom, Line, Tag}, {var, Line, 'Unpacked'}}]},
                  {var, Line, 'Rest'}]}
         ]}
-        ||  Tag <- PublicStructNames
+        ||  Tag <- SerializableStructNames
     ]},
 
     PackTagForm = {function, Line, pack_tag, 1, [
         {clause, Line, [{atom, Line, Tag}], [], [{integer, Line, Index}]}
-        ||  {Index, Tag} <- lists:enumerate([error, state | PublicStructNames])
+        ||  {Index, Tag} <- lists:enumerate([error, StateName | PublicStructNames])
     ]},
 
     UnpackTagForm = {function, Line, unpack_tag, 1, [
         {clause, Line, [{integer, Line, Index}], [], [{atom, Line, Tag}]}
-        ||  {Index, Tag} <- lists:enumerate([error, state | PublicStructNames])
+        ||  {Index, Tag} <- lists:enumerate([error, StateName | PublicStructNames])
     ]},
 
     EmittedForms = [FileAttr, ModuleAttr, ExportAttr] ++ BodyForms ++ [PackForm, UnpackForm, PackTagForm, UnpackTagForm, EOFForm],

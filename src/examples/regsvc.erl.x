@@ -131,7 +131,15 @@ struct State {
   registers : u32[16],
 }
 
-fn bits_from_state(s: State) -> bits[0] { zero!<bits[0]>() }
+fn state_from_bits<N: u32>(raw: bits[N]) -> State {
+  State {
+    registers: raw[0:512],
+  }
+}
+
+fn bits_from_state(s: State) -> bits[bit_count<State>()] {
+  (s.registers as bits[512]) ++  zero!<bits[0]>()
+}
 
 proc Service {
   req_in:   chan<axis::Frame> in;
@@ -146,7 +154,7 @@ proc Service {
     (Tag::STATE, s, bits_from_state(s))
   }
 
-  next(state: (Tag, State, bits[0])) {
+  next(state: (Tag, State, bits[512])) {
     let (tok1, frame) = recv(join(), req_in);
 
     // cognate to {reply, Reply, State}

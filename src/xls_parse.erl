@@ -12,7 +12,7 @@ module.
 -export([reference/2, reference/1, instr/2, anonymous_variable/1]).
 -export_type([ir/0, printable/0, static/0, phantom/0]).
 -export_type([clause_state/0]).
--compile(export_all).  % TODO: remove me
+-compile([export_all, nowarn_export_all]).  % TODO: remove export_all
 
 -define(debug(X), begin io:format("~w@~w: ~p~n", [?FUNCTION_NAME, ?LINE, X]), X end).
 
@@ -21,6 +21,9 @@ module.
 to_xls(Filename) ->
     {ok, Forms} = parse_file(Filename),
     PublicStructNames = find_attribute(Forms, xls_tags),
+    StateName = state(Forms),
+    StateRecord = find_record(Forms, StateName),
+    StateWidth = record_width(StateRecord),
 
     Emitted = ["// ", Filename, ".x\n",
     """
@@ -40,7 +43,7 @@ to_xls(Filename) ->
     "  NONE = u8:0,\n",
     [
         ["  ", string:uppercase(atom_to_list(Atom)), " = u8:", integer_to_list(Index), ",\n"]
-        ||  {Index, Atom} <- lists:enumerate([error, state(Forms) | PublicStructNames])
+        ||  {Index, Atom} <- lists:enumerate([error, StateName | PublicStructNames])
     ],
     "}\n\n",
     [
@@ -50,8 +53,9 @@ to_xls(Filename) ->
         ||  Op <- PublicStructNames,
             Record <- [find_record(Forms, Op)]
     ],
-    struct_from_record(find_record(Forms, state(Forms))), "\n",
-    dummy_bitsfromstruct(find_record(Forms, state(Forms))), "\n",
+    struct_from_record(StateRecord), "\n",
+    structfrombits_from_record(StateRecord), "\n",
+    bitsfromstruct_from_record(StateRecord), "\n",
     """
     proc Service {
       req_in:   chan<axis::Frame> in;
@@ -66,18 +70,18 @@ to_xls(Filename) ->
     % TODO: actually look at the code here and do nontrivial init
     [
         "  init {\n",
-        ["    let s = zero!<", string:titlecase(atom_to_list(state(Forms))), ">();\n"],
-        ["    (Tag::", string:uppercase(atom_to_list(state(Forms))), ", s, bits_from_", atom_to_list(state(Forms)), "(s))\n"],
+        ["    let s = zero!<", string:titlecase(atom_to_list(StateName)), ">();\n"],
+        ["    (Tag::", string:uppercase(atom_to_list(StateName)), ", s, bits_from_", atom_to_list(StateName), "(s))\n"],
         "  }\n\n"
     ],
+    ["  next(state: (Tag, State, bits[", integer_to_list(StateWidth), "])) {\n",
     """
-      next(state: (Tag, State, bits[0])) {
         let (tok1, frame) = recv(join(), req_in);
 
         // cognate to {reply, Reply, State}
         let (resp, new_state) = match frame.header.op as Tag {
 
-    """,
+    """],
     [
         ["\nTag::", string:uppercase(Op), " => {\n",
         "let request = ", lists:delete($_, Op), "_from_bits(frame.payload);\n",
@@ -405,9 +409,10 @@ structfrombits_from_record(RecordForm) ->
     "  ", StructName, " {\n",
     lists:reverse(element(1, lists:foldl(
         fun(
-            {typed_record_field, {record_field, _1, {atom, _2, Slot}, _Default}, Type},
+            {typed_record_field, Field, Type},
             {Body, Offset}
         ) ->
+            Slot = record_field_name(Field),
             Descriptor = xls_type:descriptor(Type),
             NextOffset = Offset + xls_type:width(Descriptor),
             Line = io_lib:format("    ~w: raw[~w:~w],~n", [Slot, Offset, NextOffset]),
@@ -425,7 +430,8 @@ bitsfromstruct_from_record(_RecordForm = {attribute, _L, record, {NameAtom, Fiel
     StructName = string:titlecase(Name),
     ["fn bits_from_", string:lowercase(StructName), "(s: ", StructName, ") -> bits[bit_count<", StructName, ">()] {\n",
         ["  ", lists:foldl(
-            fun({typed_record_field, {record_field, _1, {atom, _2, Slot}, _Default}, Type}, Body) ->
+            fun({typed_record_field, Field, Type}, Body) ->
+                Slot = record_field_name(Field),
                 Line = io_lib:format("(s.~w as bits[~w]) ++ ", [Slot, xls_type:width(xls_type:descriptor(Type))]),
                 [Line | Body]  % implicit lists:reverse with this join order
             end,
@@ -433,13 +439,20 @@ bitsfromstruct_from_record(_RecordForm = {attribute, _L, record, {NameAtom, Fiel
         )],
     "}\n"].
 
--spec dummy_bitsfromstruct(erl_parse:af_record_decl()) -> iolist().
--doc "Builds a dummy packer for a struct for coverage's sake.".
-dummy_bitsfromstruct(RecordForm) ->
-    {attribute, _L, record, {NameAtom, _Fields}} = RecordForm,
-    Name = lists:delete($_, atom_to_list(NameAtom)),
-    StructName = string:titlecase(Name),
-    ["fn bits_from_", string:lowercase(StructName), "(s: ", StructName, ") -> bits[0] { zero!<bits[0]>() }\n"].
+-spec record_width(erl_parse:af_record_decl()) -> non_neg_integer().
+-doc "Calculates the packed width of an Erlang record's XLS struct.".
+record_width({attribute, _L, record, {_NameAtom, Fields}}) ->
+    lists:sum([
+        xls_type:width(xls_type:descriptor(Type))
+        || {typed_record_field, _Field, Type} <- Fields
+    ]).
+
+-spec record_field_name(erl_parse:af_record_field()) -> atom().
+-doc "Extracts a field name from record declarations with or without a default.".
+record_field_name({record_field, _L, {atom, _AtomL, Name}}) ->
+    Name;
+record_field_name({record_field, _L, {atom, _AtomL, Name}, _Default}) ->
+    Name.
 
 %%%
 %%% clause_state utilities
