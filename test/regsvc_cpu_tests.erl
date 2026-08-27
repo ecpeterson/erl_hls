@@ -16,22 +16,61 @@ simulated_rtl_test_() ->
             DebugReadPath = filename:join(SimDir, "debug_rx"),
             {setup,
                 fun() ->
-                    {ok, Pid} = xls_gs:start_link(regsvc, [], [
-                        {transport, WritePath, ReadPath}
-                    ]),
-                    {ok, DebugPid} = xls_debug:start_link(
-                        regsvc, DebugWritePath, DebugReadPath
+                    {ok, AppFabric} = xls_fabric:start_link(
+                        WritePath, ReadPath
                     ),
-                    {Pid, DebugPid}
+                    {ok, DebugFabric} = xls_fabric:start_link(
+                        DebugWritePath, DebugReadPath
+                    ),
+                    {ok, PidOne} = xls_gs:start_link(regsvc, [], [
+                        {fabric, AppFabric, 1}
+                    ]),
+                    {ok, PidTwo} = xls_gs:start_link(regsvc, [], [
+                        {fabric, AppFabric, 2}
+                    ]),
+                    {ok, DebugPidOne} = xls_debug:start_link(
+                        regsvc, {fabric, DebugFabric, 1}
+                    ),
+                    {ok, DebugPidTwo} = xls_debug:start_link(
+                        regsvc, {fabric, DebugFabric, 2}
+                    ),
+                    {
+                        AppFabric,
+                        DebugFabric,
+                        PidOne,
+                        PidTwo,
+                        DebugPidOne,
+                        DebugPidTwo
+                    }
                 end,
-                fun({Pid, DebugPid}) ->
-                    xls_debug:stop(DebugPid),
-                    regsvc:stop(Pid)
+                fun({
+                    AppFabric,
+                    DebugFabric,
+                    PidOne,
+                    PidTwo,
+                    DebugPidOne,
+                    DebugPidTwo
+                }) ->
+                    xls_debug:stop(DebugPidTwo),
+                    xls_debug:stop(DebugPidOne),
+                    regsvc:stop(PidTwo),
+                    regsvc:stop(PidOne),
+                    xls_fabric:stop(DebugFabric),
+                    xls_fabric:stop(AppFabric)
                 end,
-                fun({Pid, DebugPid}) ->
-                    scenario_(Pid) ++
-                        debug_scenario_(DebugPid) ++
-                        rtl_error_scenario_(Pid)
+                fun({
+                    _AppFabric,
+                    _DebugFabric,
+                    PidOne,
+                    PidTwo,
+                    DebugPidOne,
+                    DebugPidTwo
+                }) ->
+                    scenario_(PidOne) ++
+                        debug_scenario_(DebugPidOne) ++
+                        routed_pair_scenario_(PidOne, PidTwo) ++
+                        routed_debug_scenario_(DebugPidTwo) ++
+                        rtl_error_scenario_(PidOne)
                 end}
     end.
 
@@ -68,7 +107,10 @@ debug_scenario_(DebugPid) ->
             ?assertEqual(10, maps:get(app_tx_beats, Counters)),
             ?assertEqual(4, maps:get(app_tx_frames, Counters)),
             ?assertEqual(0, maps:get(app_rx_stall_cycles, Counters)),
-            ?assertEqual(0, maps:get(app_tx_stall_cycles, Counters))
+            %% Egress polling phase is host/VPI-scheduling dependent here. The
+            %% cycle-controlled RTL test checks routed TX stalls while it
+            %% deliberately blocks the shared application output.
+            ?assert(maps:get(app_tx_stall_cycles, Counters) =< 4)
         end),
         ?_test(begin
             {ok, Snapshot} = xls_debug:get_state(DebugPid),
@@ -121,4 +163,45 @@ rtl_error_scenario_(Pid) ->
             gen_server:call(Pid, {ack, 0})
         ),
         ?_assertEqual(0, regsvc:get(Pid, 0))
+    ].
+
+routed_pair_scenario_(PidOne, PidTwo) ->
+    [
+        ?_assertEqual(ok, regsvc:set(PidTwo, 0, 16#22, 16#ffffffff)),
+        ?_assertEqual(16#22, regsvc:get(PidTwo, 0)),
+        ?_assertEqual(3, regsvc:get(PidOne, 0)),
+        ?_test(begin
+            Parent = self(),
+            spawn(fun() ->
+                Parent ! {endpoint_one, regsvc:ping(PidOne, 16#11111111)}
+            end),
+            spawn(fun() ->
+                Parent ! {endpoint_two, regsvc:ping(PidTwo, 16#22222222)}
+            end),
+            ?assertEqual(
+                {endpoint_one, 16#11111111},
+                receive ReplyOne = {endpoint_one, _} -> ReplyOne end
+            ),
+            ?assertEqual(
+                {endpoint_two, 16#22222222},
+                receive ReplyTwo = {endpoint_two, _} -> ReplyTwo end
+            )
+        end)
+    ].
+
+routed_debug_scenario_(DebugPid) ->
+    [
+        ?_test(begin
+            {ok, Snapshot} = xls_debug:get_state(DebugPid),
+            {state, Registers} = maps:get(state, Snapshot),
+            ?assertEqual([16#22 | lists:duplicate(15, 0)], Registers)
+        end),
+        ?_test(begin
+            {ok, Counters} = xls_debug:get_counters(DebugPid),
+            ?assertEqual(8, maps:get(app_rx_beats, Counters)),
+            ?assertEqual(3, maps:get(app_rx_frames, Counters)),
+            ?assertEqual(4, maps:get(app_tx_beats, Counters)),
+            ?assertEqual(2, maps:get(app_tx_frames, Counters)),
+            ?assert(maps:get(app_tx_stall_cycles, Counters) =< 2)
+        end)
     ].

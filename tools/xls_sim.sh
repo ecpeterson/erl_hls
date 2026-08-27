@@ -17,9 +17,11 @@ rsync -a -e "ssh -o BatchMode=yes" \
     "$local_stage/axis.x" \
     "$local_stage/regsvc_core_adapter.v" \
     "$local_stage/regsvc_debug_top.v" \
+    "$local_stage/xls_fabric_router.x" \
     "$local_stage/xls_debug_monitor.x" \
     "$local_stage/xls_debug_tap.v" \
-    "$local_stage/regsvc_tb.sv" \
+    "$local_stage/regsvc_pair_fixture.sv" \
+    "$local_stage/regsvc_pair_tb.sv" \
     "$local_stage/regsvc_bridge_tb.sv" \
     "$local_stage/xls_sim_bridge.c" \
     "$local_stage/erl_src" \

@@ -20,6 +20,12 @@ typedef struct {
     size_t count;
 } byte_ring_t;
 
+typedef enum {
+    INPUT_ROUTE_HEADER,
+    INPUT_FRAME_HEADER,
+    INPUT_FRAME_PAYLOAD
+} input_phase_t;
+
 typedef struct {
     const char *name;
     vpiHandle h_s_data;
@@ -38,9 +44,14 @@ typedef struct {
     int s_last;
     int s_ready_sample;
     int m_ready;
+    /* Remaining payload words after the inner four-byte frame header. */
     unsigned input_payload_words;
+    /* Which word comes next in the routed packet read from the byte FIFO. */
+    input_phase_t input_phase;
+    /* Diagnostic counters used only to make VPI logs easier to correlate. */
     unsigned input_beat_number;
     unsigned output_beat_number;
+    /* Suppress reset-time output until the first complete request is sent. */
     int output_armed;
 } axis_endpoint_t;
 
@@ -171,12 +182,19 @@ static void load_input_beat(axis_endpoint_t *endpoint) {
     word = ring_pop_word(&endpoint->input_bytes);
     endpoint->s_data = word;
     endpoint->s_valid = 1;
-    if (endpoint->input_payload_words == 0) {
+    if (endpoint->input_phase == INPUT_ROUTE_HEADER) {
+        endpoint->s_last = 0;
+        endpoint->input_phase = INPUT_FRAME_HEADER;
+    } else if (endpoint->input_phase == INPUT_FRAME_HEADER) {
         endpoint->input_payload_words = word & 0xffU;
         endpoint->s_last = endpoint->input_payload_words == 0;
+        endpoint->input_phase = endpoint->s_last ?
+            INPUT_ROUTE_HEADER : INPUT_FRAME_PAYLOAD;
     } else {
         endpoint->s_last = endpoint->input_payload_words == 1;
         endpoint->input_payload_words--;
+        if (endpoint->s_last)
+            endpoint->input_phase = INPUT_ROUTE_HEADER;
     }
     vpi_printf("xls_sim_bridge[%s]: input beat %u data=%08x last=%d\n",
                endpoint->name, ++endpoint->input_beat_number, word, endpoint->s_last);
@@ -188,6 +206,7 @@ static void reset_endpoint(axis_endpoint_t *endpoint) {
     endpoint->s_last = 0;
     endpoint->m_ready = 1;
     endpoint->input_payload_words = 0;
+    endpoint->input_phase = INPUT_ROUTE_HEADER;
     endpoint->output_armed = 0;
 }
 

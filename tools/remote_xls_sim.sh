@@ -56,19 +56,54 @@ cd "$stage"
     --fifo_module= \
     xls_debug_server.opt.ir > xls_debug_server.v
 
+"$xls_root/ir_converter_main" \
+    --warnings_as_errors=false \
+    --dslx_stdlib_path="$stdlib" \
+    --top=PairIngress \
+    xls_fabric_router.x > xls_fabric_ingress.ir
+
+"$xls_root/opt_main" xls_fabric_ingress.ir > xls_fabric_ingress.opt.ir
+
+"$xls_root/codegen_main" \
+    --pipeline_stages=1 \
+    --delay_model=unit \
+    --use_system_verilog=false \
+    --reset=reset \
+    --fifo_module= \
+    xls_fabric_ingress.opt.ir > xls_fabric_ingress.v
+
+"$xls_root/ir_converter_main" \
+    --warnings_as_errors=false \
+    --dslx_stdlib_path="$stdlib" \
+    --top=PairEgress \
+    xls_fabric_router.x > xls_fabric_egress.ir
+
+"$xls_root/opt_main" xls_fabric_egress.ir > xls_fabric_egress.opt.ir
+
+"$xls_root/codegen_main" \
+    --pipeline_stages=1 \
+    --delay_model=unit \
+    --use_system_verilog=false \
+    --reset=reset \
+    --fifo_module= \
+    xls_fabric_egress.opt.ir > xls_fabric_egress.v
+
 iverilog \
     -g2012 \
-    -s regsvc_tb \
-    -o regsvc.vvp \
-    regsvc_tb.sv \
+    -s regsvc_pair_tb \
+    -o regsvc_pair.vvp \
+    regsvc_pair_tb.sv \
+    regsvc_pair_fixture.sv \
     regsvc_debug_top.v \
+    xls_fabric_ingress.v \
+    xls_fabric_egress.v \
     xls_debug_tap.v \
     xls_debug_observer.v \
     xls_debug_server.v \
     regsvc_core_adapter.v \
     regsvc.v
 
-vvp regsvc.vvp
+vvp regsvc_pair.vvp
 
 iverilog-vpi xls_sim_bridge.c
 
@@ -77,7 +112,10 @@ iverilog \
     -s regsvc_bridge_tb \
     -o regsvc_bridge.vvp \
     regsvc_bridge_tb.sv \
+    regsvc_pair_fixture.sv \
     regsvc_debug_top.v \
+    xls_fabric_ingress.v \
+    xls_fabric_egress.v \
     xls_debug_tap.v \
     xls_debug_observer.v \
     xls_debug_server.v \
@@ -140,6 +178,7 @@ beam_dir="$stage/beam"
 mkdir -p "$beam_dir"
 erlc -o "$beam_dir" "$stage/erl_src/xls_type.erl"
 erlc -pa "$beam_dir" -o "$beam_dir" \
+    "$stage/erl_src/xls_fabric.erl" \
     "$stage/erl_src/xls_lists.erl" \
     "$stage/erl_src/xls_nums.erl" \
     "$stage/erl_src/xls_gs.erl" \
