@@ -34,6 +34,12 @@ identities at its boundary.
     monitor :: reference()
 }).
 
+-record(frame, {
+    route :: route(),
+    header :: header(),
+    payload :: binary()
+}).
+
 -record(state, {
     fd :: file:io_device(),
     listener :: pid(),
@@ -106,9 +112,10 @@ handle_call(
     _From,
     State = #state{fd = FD}
 ) ->
-    case encode_frame(Route, Header, Payload) of
-        {ok, Frame} ->
-            {reply, file:write(FD, Frame), State};
+    Frame = #frame{route = Route, header = Header, payload = Payload},
+    case encode_frame(Frame) of
+        {ok, EncodedFrame} ->
+            {reply, file:write(FD, EncodedFrame), State};
         {error, _Reason} = Error ->
             {reply, Error, State}
     end;
@@ -119,17 +126,12 @@ handle_cast(_Message, State) ->
     {noreply, State}.
 
 handle_info(
-    {?RX_FRAME, Source, Destination, Tag, TxID, Flags, Payload},
+    #frame{route = Route, header = Header, payload = Payload},
     State = #state{routes = Routes}
 ) ->
-    Route = {Source, Destination},
     case Routes of
         #{Route := #route_owner{pid = Owner}} ->
-            gen_server:cast(Owner, {
-                ?RX_FRAME,
-                {Tag, TxID, Flags},
-                Payload
-            });
+            gen_server:cast(Owner, {?RX_FRAME, Header, Payload});
         _ ->
             ok
     end,
@@ -157,9 +159,12 @@ terminate(_Reason, #state{fd = FD, listener = Listener}) ->
     end,
     ok.
 
--spec encode_frame(route(), header(), binary()) ->
-    {ok, binary()} | {error, term()}.
-encode_frame({Source, Destination}, {Tag, TxID, Flags}, Payload)
+-spec encode_frame(#frame{}) -> {ok, binary()} | {error, term()}.
+encode_frame(#frame{
+    route = {Source, Destination},
+    header = {Tag, TxID, Flags},
+    payload = Payload
+})
         when is_integer(Source), Source >= 0, Source =< 16#ffff,
              is_integer(Destination), Destination >= 0,
              Destination =< 16#ffff,
@@ -178,8 +183,8 @@ encode_frame({Source, Destination}, {Tag, TxID, Flags}, Payload)
             Header = <<PayloadWords:8, TxID:8, Flags:8, Tag:8>>,
             {ok, <<Route/binary, Header/binary, Payload/binary>>}
     end;
-encode_frame(Route, Header, Payload) ->
-    {error, {invalid_frame, Route, Header, Payload}}.
+encode_frame(Frame) ->
+    {error, {invalid_frame, Frame}}.
 
 valid_route({Source, Destination}) ->
     is_integer(Source) andalso Source >= 0 andalso Source =< 16#ffff andalso
@@ -192,14 +197,10 @@ listener(FD, Parent) ->
     {ok, <<Destination:16/little, Source:16/little>>} = read_exact(FD, 4),
     {ok, <<PayloadLength:8, TxID:8, Flags:8, Tag:8>>} = read_exact(FD, 4),
     {ok, Payload} = read_exact(FD, 4 * PayloadLength),
-    Parent ! {
-        ?RX_FRAME,
-        Source,
-        Destination,
-        Tag,
-        TxID,
-        Flags,
-        Payload
+    Parent ! #frame{
+        route = {Source, Destination},
+        header = {Tag, TxID, Flags},
+        payload = Payload
     },
     listener(FD, Parent).
 
