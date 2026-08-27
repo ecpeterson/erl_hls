@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-project_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-apio_home=${ERL_XLS_APIO_HOME:-"$project_root/_build/openxc7/apio-home"}
-build_root=${ERL_XLS_OPENXC7_BUILD_ROOT:-"$project_root/_build/openxc7/smoke"}
+experiment_root=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+apio_home=${ERL_XLS_APIO_HOME:-"$experiment_root/.apio"}
+build_root=${ERL_XLS_OPENXC7_BUILD_ROOT:-"$experiment_root/build"}
 openxc7="$apio_home/packages/openxc7"
 oss_cad_suite="$apio_home/packages/oss-cad-suite"
 nextpnr_python="$openxc7/share/nextpnr/python"
@@ -12,7 +12,7 @@ prjxray_db="$openxc7/share/nextpnr/external/prjxray-db"
 require_executable() {
     if [[ ! -x "$1" ]]; then
         echo "Missing executable: $1" >&2
-        echo "Install the repository-local Apio packages described in README.md." >&2
+        echo "Install the experiment-local Apio packages described in README.md." >&2
         exit 1
     fi
 }
@@ -97,7 +97,7 @@ make_chipdb() {
 make_chipdb xc7z010clg225-1
 make_chipdb xc7z020clg484-2
 
-design="$project_root/test/openxc7/smoke.v"
+design="$experiment_root/smoke.v"
 netlist="$build_root/smoke.json"
 
 echo "Synthesizing openXC7 smoke design"
@@ -143,7 +143,7 @@ build_part() {
 
 build_part \
     xc7z010clg225-1 \
-    "$project_root/test/openxc7/xc7z010clg225.xdc"
+    "$experiment_root/xc7z010clg225.xdc"
 build_part \
     xc7z020clg484-2 \
-    "$project_root/test/openxc7/xc7z020clg484.xdc"
+    "$experiment_root/xc7z020clg484.xdc"
