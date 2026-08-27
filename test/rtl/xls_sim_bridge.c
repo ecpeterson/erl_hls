@@ -39,6 +39,7 @@ typedef struct {
     int s_ready_sample;
     int m_ready;
     unsigned input_payload_words;
+    unsigned input_phase;
     unsigned input_beat_number;
     unsigned output_beat_number;
     int output_armed;
@@ -171,12 +172,18 @@ static void load_input_beat(axis_endpoint_t *endpoint) {
     word = ring_pop_word(&endpoint->input_bytes);
     endpoint->s_data = word;
     endpoint->s_valid = 1;
-    if (endpoint->input_payload_words == 0) {
+    if (endpoint->input_phase == 0) {
+        endpoint->s_last = 0;
+        endpoint->input_phase = 1;
+    } else if (endpoint->input_phase == 1) {
         endpoint->input_payload_words = word & 0xffU;
         endpoint->s_last = endpoint->input_payload_words == 0;
+        endpoint->input_phase = endpoint->s_last ? 0 : 2;
     } else {
         endpoint->s_last = endpoint->input_payload_words == 1;
         endpoint->input_payload_words--;
+        if (endpoint->s_last)
+            endpoint->input_phase = 0;
     }
     vpi_printf("xls_sim_bridge[%s]: input beat %u data=%08x last=%d\n",
                endpoint->name, ++endpoint->input_beat_number, word, endpoint->s_last);
@@ -188,6 +195,7 @@ static void reset_endpoint(axis_endpoint_t *endpoint) {
     endpoint->s_last = 0;
     endpoint->m_ready = 1;
     endpoint->input_payload_words = 0;
+    endpoint->input_phase = 0;
     endpoint->output_armed = 0;
 }
 

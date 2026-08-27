@@ -23,6 +23,7 @@
     module :: module(),
     fd = none :: none | file:io_device(),
     listener = none :: none | pid(),
+    fabric = none :: none | {pid(), 0..65535, 0..65535},
     pending = #{} :: #{0..255 => gen_server:from()},
     tx_id = 0 :: 0..255,
     state :: state()
@@ -32,7 +33,6 @@
 %%% server management
 %%%
 
-% TODO: could take an Options which specifies PL vs PS?
 start_link(Module, Arg) ->
     start_link(Module, Arg, []).
 start_link(Module, Arg, Options) ->
@@ -47,6 +47,7 @@ stop(PID) ->
 
 -define(DEVICE_NODE, "/dev/axismsg0").
 -define(RX_SIGIL, '$pl_message').
+-define(FABRIC_RX, '$xls_fabric_frame').
 -define(ERROR_FUNCTION_CLAUSE, 1).
 -define(ERROR_MATCH_FAILURE, 2).
 
@@ -58,9 +59,15 @@ stop(PID) ->
 }).
 
 init({Module, Arg, Options}) ->
-    GS = case transport_paths(Options) of
+    GS = case transport(Options) of
         cpu ->
             #state{state = Module:init(Arg), module = Module};
+        {fabric, Broker, LocalEndpoint, PeerEndpoint} ->
+            ok = xls_fabric:register_peer(Broker, PeerEndpoint, self()),
+            #state{
+                module = Module,
+                fabric = {Broker, LocalEndpoint, PeerEndpoint}
+            };
         {WritePath, ReadPath} ->
             {ok, FDWrite} = file:open(WritePath, [write, raw, binary]),
             Self = self(),
@@ -72,38 +79,60 @@ init({Module, Arg, Options}) ->
     end,
     {ok, GS}.
 
-handle_call(Message, _From, GS = #state{module = Module, state = State, fd = none}) ->
+handle_call(
+    Message,
+    _From,
+    GS = #state{module = Module, state = State, fd = none, fabric = none}
+) ->
     {reply, Reply, NewState} = Module:handle_call(Message, State),
     {reply, Reply, GS#state{state = NewState}};
 handle_call(Message, From, GS = #state{module = Module}) ->
     Tag = element(1, Message),
     Header = #header{tag = Module:pack_tag(Tag), tx_id = GS#state.tx_id},
     Payload = Module:pack(Message),
-    transmit(GS#state.fd, Header, Payload),
+    ok = transmit(GS, Header, Payload),
     {noreply, GS#state{
         tx_id = (GS#state.tx_id + 1) rem 256,
         pending = (GS#state.pending)#{GS#state.tx_id => From}
     }}.
 
-handle_cast(Message, GS = #state{module = Module, state = State, fd = none}) ->
+handle_cast(
+    Message,
+    GS = #state{module = Module, state = State, fd = none, fabric = none}
+) ->
     {noreply, NewState} = Module:handle_cast(Message, State),
     {noreply, GS#state{state = NewState}};
 handle_cast({?RX_SIGIL, Header, Payload}, GS = #state{module = Module}) ->
-    {From, NewPending} = maps:take(Header#header.tx_id, GS#state.pending),
-    Tag = Module:unpack_tag(Header#header.tag),
-    {Reply, << >>} = unpack_reply(Module, Tag, Payload),
-    gen_server:reply(From, Reply),
-    {noreply, GS#state{pending = NewPending}};
+    handle_reply(Header, Payload, Module, GS);
+handle_cast(
+    {?FABRIC_RX, PeerEndpoint, LocalEndpoint, PackedHeader, Payload},
+    GS = #state{
+        module = Module,
+        fabric = {_Broker, LocalEndpoint, PeerEndpoint}
+    }
+) ->
+    <<_PayloadLength:8, TxID:8, Flags:8, Tag:8>> = PackedHeader,
+    Header = #header{tag = Tag, tx_id = TxID, flags = Flags},
+    handle_reply(Header, Payload, Module, GS);
+handle_cast({?FABRIC_RX, _Source, _Destination, _Header, _Payload}, GS) ->
+    {noreply, GS};
 handle_cast(Message, GS = #state{module = Module}) ->
     Tag = element(1, Message),
     Header = #header{tag = Module:pack_tag(Tag), tx_id = GS#state.tx_id},
     Payload = Module:pack(Message),
-    transmit(GS#state.fd, Header, Payload),
+    ok = transmit(GS, Header, Payload),
     {noreply, GS#state{
         tx_id = (GS#state.tx_id + 1) rem 256
     }}.
 
-terminate(_Reason, #state{fd = FD, listener = Listener}) ->
+handle_reply(Header, Payload, Module, GS) ->
+    {From, NewPending} = maps:take(Header#header.tx_id, GS#state.pending),
+    Tag = Module:unpack_tag(Header#header.tag),
+    {Reply, << >>} = unpack_reply(Module, Tag, Payload),
+    gen_server:reply(From, Reply),
+    {noreply, GS#state{pending = NewPending}}.
+
+terminate(_Reason, #state{fd = FD, listener = Listener, fabric = Fabric}) ->
     try
         case Listener of
             none -> ok;
@@ -117,6 +146,11 @@ terminate(_Reason, #state{fd = FD, listener = Listener}) ->
             _ -> file:close(FD)
         end
     end,
+    case Fabric of
+        none -> ok;
+        {Broker, _LocalEndpoint, PeerEndpoint} ->
+            xls_fabric:unregister_peer(Broker, PeerEndpoint)
+    end,
     ok.
 
 code_change(_OldVsn, GS, _Extra) ->
@@ -126,16 +160,41 @@ code_change(_OldVsn, GS, _Extra) ->
 %%% Helper
 %%%
 
-transmit(FH, Header, Payload) ->
+transmit(#state{fd = FH, fabric = none}, Header, Payload) ->
     PackedHeader = <<
         (size(Payload) div 4):8/integer,
         (Header#header.tx_id):8/integer,
         (Header#header.flags):8/integer,
         (Header#header.tag):8/integer
     >>,
-    file:write(FH, <<PackedHeader/binary, Payload/binary>>).
+    file:write(FH, <<PackedHeader/binary, Payload/binary>>);
+transmit(
+    #state{fabric = {Broker, LocalEndpoint, PeerEndpoint}},
+    Header,
+    Payload
+) ->
+    PackedHeader = <<
+        (size(Payload) div 4):8/integer,
+        (Header#header.tx_id):8/integer,
+        (Header#header.flags):8/integer,
+        (Header#header.tag):8/integer
+    >>,
+    xls_fabric:send(
+        Broker,
+        LocalEndpoint,
+        PeerEndpoint,
+        <<PackedHeader/binary, Payload/binary>>
+    ).
 
-transport_paths(Options) ->
+transport(Options) ->
+    case lists:keyfind(fabric, 1, Options) of
+        {fabric, Broker, PeerEndpoint} ->
+            {fabric, Broker, 0, PeerEndpoint};
+        false ->
+            file_transport(Options)
+    end.
+
+file_transport(Options) ->
     case lists:keyfind(transport, 1, Options) of
         {transport, WritePath, ReadPath} ->
             {WritePath, ReadPath};

@@ -17,24 +17,33 @@
 -define(DEBUG_TRACE, 16#83).
 -define(DEBUG_ERROR, 16#ff).
 -define(RX_FRAME, '$debug_frame').
+-define(FABRIC_RX, '$xls_fabric_frame').
 
 -define(TRACE_VERSION, 1).
 -define(TRACE_RECORD_WORDS, 2).
 -define(TRACE_APPLICATION_RX, 1).
 -define(TRACE_APPLICATION_TX, 2).
 
-%% TODO: Factor descriptor ownership, frame I/O, and exact reads shared with
-%% xls_gs into a transport process. Keep the application and debug protocol
-%% clients separate so they can retain independent queues and failure modes.
+%% Routed mode factors descriptor ownership and exact reads into xls_fabric.
+%% Direct file mode intentionally remains available without a broker. Its
+%% duplicated frame I/O can be factored later without coupling application and
+%% debug queues or failure domains.
 
 -record(state, {
     module = undefined :: module() | undefined,
-    fd :: file:io_device(),
-    listener :: pid(),
+    fd = none :: none | file:io_device(),
+    listener = none :: none | pid(),
+    fabric = none :: none | {pid(), 0..65535, 0..65535},
     pending = #{} :: #{0..255 => gen_server:from()},
     tx_id = 0 :: 0..255
 }).
 
+start_link(Module, {fabric, Broker, PeerEndpoint}) ->
+    gen_server:start_link(
+        ?MODULE,
+        {Module, {fabric, Broker, 0, PeerEndpoint}},
+        []
+    );
 start_link(WritePath, ReadPath) ->
     start_link(undefined, WritePath, ReadPath).
 
@@ -53,6 +62,12 @@ get_state(Pid) ->
 get_trace(Pid) ->
     gen_server:call(Pid, get_trace).
 
+init({Module, {fabric, Broker, LocalEndpoint, PeerEndpoint}}) ->
+    ok = xls_fabric:register_peer(Broker, PeerEndpoint, self()),
+    {ok, #state{
+        module = Module,
+        fabric = {Broker, LocalEndpoint, PeerEndpoint}
+    }};
 init({Module, WritePath, ReadPath}) ->
     {ok, FDWrite} = file:open(WritePath, [write, raw, binary]),
     Self = self(),
@@ -69,8 +84,8 @@ handle_call(get_state, From, State) ->
 handle_call(get_trace, From, State) ->
     request(?DEBUG_GET_TRACE, From, State).
 
-request(Tag, From, State = #state{fd = FD, tx_id = TxID, pending = Pending}) ->
-    ok = write_frame(FD, Tag, TxID, <<>>),
+request(Tag, From, State = #state{tx_id = TxID, pending = Pending}) ->
+    ok = write_frame(State, Tag, TxID, <<>>),
     {noreply, State#state{
         pending = Pending#{TxID => From},
         tx_id = (TxID + 1) rem 256
@@ -82,25 +97,69 @@ handle_cast(
 ) ->
     {From, NewPending} = maps:take(TxID, Pending),
     gen_server:reply(From, decode_reply(Tag, Payload, Module)),
-    {noreply, State#state{pending = NewPending}}.
+    {noreply, State#state{pending = NewPending}};
+handle_cast(
+    {?FABRIC_RX, PeerEndpoint, LocalEndpoint, PackedHeader, Payload},
+    State = #state{
+        module = Module,
+        pending = Pending,
+        fabric = {_Broker, LocalEndpoint, PeerEndpoint}
+    }
+) ->
+    <<_PayloadLength:8, TxID:8, _Flags:8, Tag:8>> = PackedHeader,
+    {From, NewPending} = maps:take(TxID, Pending),
+    gen_server:reply(From, decode_reply(Tag, Payload, Module)),
+    {noreply, State#state{pending = NewPending}};
+handle_cast({?FABRIC_RX, _Source, _Destination, _Header, _Payload}, State) ->
+    {noreply, State}.
 
-terminate(_Reason, #state{fd = FD, listener = Listener}) ->
+terminate(_Reason, #state{fd = FD, listener = Listener, fabric = Fabric}) ->
     try
-        unlink(Listener),
-        exit(Listener, shutdown)
+        case Listener of
+            none -> ok;
+            _ ->
+                unlink(Listener),
+                exit(Listener, shutdown)
+        end
     after
-        file:close(FD)
+        case FD of
+            none -> ok;
+            _ -> file:close(FD)
+        end
+    end,
+    case Fabric of
+        none -> ok;
+        {Broker, _LocalEndpoint, PeerEndpoint} ->
+            xls_fabric:unregister_peer(Broker, PeerEndpoint)
     end,
     ok.
 
-write_frame(FD, Tag, TxID, Payload) ->
+write_frame(#state{fd = FD, fabric = none}, Tag, TxID, Payload) ->
     Header = <<
         (byte_size(Payload) div 4):8,
         TxID:8,
         0:8,
         Tag:8
     >>,
-    file:write(FD, <<Header/binary, Payload/binary>>).
+    file:write(FD, <<Header/binary, Payload/binary>>);
+write_frame(
+    #state{fabric = {Broker, LocalEndpoint, PeerEndpoint}},
+    Tag,
+    TxID,
+    Payload
+) ->
+    Header = <<
+        (byte_size(Payload) div 4):8,
+        TxID:8,
+        0:8,
+        Tag:8
+    >>,
+    xls_fabric:send(
+        Broker,
+        LocalEndpoint,
+        PeerEndpoint,
+        <<Header/binary, Payload/binary>>
+    ).
 
 decode_reply(?DEBUG_COUNTERS, <<
     Version:32/little-unsigned-integer,
