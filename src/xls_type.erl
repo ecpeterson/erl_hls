@@ -2,7 +2,7 @@
 -moduledoc """
  
 """.
--export([zero/1, width/1, pack/2, unpack/2, print_type/1]).
+-export([zero/0, zero/1, width/1, pack/2, unpack/2, print_type/1]).
 -compile(export_all).
 
 %%%
@@ -59,6 +59,16 @@ XLS expression.
 %%%
 %%% Descriptor-level versions which dispatch on Module
 %%%
+
+-spec zero() -> no_return().
+-doc """
+Type-directed zero-value marker for translated record field defaults.
+
+`xls_pack` replaces this call with `zero/1` using the field's type annotation.
+Calling it outside a transformed record declaration is an error.
+""".
+zero() ->
+    error(unexpanded_xls_zero).
 
 -spec zero(descriptor()) -> any().
 -doc "". 

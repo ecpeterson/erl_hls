@@ -26,6 +26,12 @@ to_xls(Filename) ->
     StateWidth = record_width(StateRecord),
     StateStructName = string:titlecase(lists:delete($_, atom_to_list(StateName))),
     StateFunctionName = string:lowercase(StateStructName),
+    ok = lists:foreach(
+        fun(Name) ->
+            validate_record_defaults(find_record(Forms, Name))
+        end,
+        [StateName | PublicStructNames]
+    ),
 
     Emitted = ["// ", Filename, ".x\n",
     """
@@ -459,6 +465,48 @@ record_field_name({record_field, _L, {atom, _AtomL, Name}}) ->
     Name;
 record_field_name({record_field, _L, {atom, _AtomL, Name}, _Default}) ->
     Name.
+
+-spec validate_record_defaults(erl_parse:af_record_decl()) -> ok.
+-doc """
+Requires every field in a translated record to use the type-directed
+`xls_type:zero()` marker, keeping Erlang defaults consistent with XLS `zero!`.
+""".
+validate_record_defaults({attribute, _L, record, {RecordName, Fields}}) ->
+    lists:foreach(
+        fun({
+            typed_record_field,
+            {record_field, Line, {atom, _AtomLine, FieldName}, Default},
+            _Type
+        }) ->
+            case is_zero_default(Default) of
+                true -> ok;
+                false ->
+                    error({invalid_xls_record_default, RecordName, FieldName, Line})
+            end;
+           ({
+            typed_record_field,
+            {record_field, Line, {atom, _AtomLine, FieldName}},
+            _Type
+        }) ->
+            error({missing_xls_record_default, RecordName, FieldName, Line});
+           (Field) ->
+            error({untyped_xls_record_field, RecordName, Field})
+        end,
+        Fields
+    ),
+    ok.
+
+-spec is_zero_default(erl_parse:abstract_expr()) -> boolean().
+-doc "Recognizes the type-directed zero marker in a record declaration.".
+is_zero_default({
+    call,
+    _Line,
+    {remote, _RemoteLine, {atom, _ModuleLine, xls_type}, {atom, _NameLine, zero}},
+    []
+}) ->
+    true;
+is_zero_default(_Default) ->
+    false.
 
 %%%
 %%% clause_state utilities

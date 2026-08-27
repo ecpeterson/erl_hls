@@ -45,7 +45,7 @@ set(Index, List, Item) ->
         {_, [Old | Rest]} -> [Old | set(Index - 1, Rest, Item)]
     end.
 
-zero(list, {xls_type, xls_lists, list, [Subtype, Count]}) ->
+zero(list, [Subtype, Count]) ->
     new(Subtype, Count).
 
 %% TODO: bake new into record construction?

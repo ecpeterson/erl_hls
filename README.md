@@ -40,3 +40,19 @@ counters and committed process state from Erlang. The SystemVerilog scenario
 additionally proves that both kinds of debug query complete while application
 output is backpressured. See the [debug protocol](docs/debug-protocol.md) for
 that interface.
+
+## Translated record defaults
+
+Every field in a private-state or wire record must have a type-directed zero
+default:
+
+```erlang
+-record(state, {
+    registers = xls_type:zero() :: xls_lists:list(xls_nums:u32(), 16)
+}).
+```
+
+The `xls_pack` parse transform expands this marker into the corresponding
+Erlang value using the field's type annotation. The XLS compiler uses the same
+annotation to generate `zero!`, avoiding a duplicated type descriptor and
+ensuring that CPU and hardware instances begin with the same record values.
