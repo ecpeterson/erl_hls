@@ -60,7 +60,13 @@ struct TraceMetadata { kind: TraceKind, flags: u8, txid: u8, op: u8 }
 
 struct TraceEvent { cycle: u32, metadata: TraceMetadata }
 
-struct TraceBuffer { events: TraceEvent[TRACE_DEPTH], count: TraceCount, drops: u32 }
+const TRACE_EVENT_BITS = bit_count<TraceEvent>();
+const TRACE_DATA_BITS = TRACE_DEPTH * TRACE_EVENT_BITS;
+
+// Packed storage avoids dynamic reads and updates of unpacked Verilog arrays,
+// which Icarus 11 simulates incorrectly. Events remain typed at the boundary;
+// this representation is private to the bounded buffer.
+struct TraceBuffer { data: bits[TRACE_DATA_BITS], count: TraceCount, drops: u32 }
 
 struct Counters {
     cycles: u32,
@@ -92,13 +98,17 @@ struct MonitorState {
 const COUNTER_WORDS = ((bit_count<Counters>() / u32:32) as u8) + u8:1;
 const STATE_WORDS = (APPLICATION_STATE_BITS / u32:32) as u8;
 const STATE_REPLY_WORDS = STATE_WORDS + u8:1;
-const TRACE_RECORD_WORDS = (bit_count<TraceEvent>() / u32:32) as u8;
+const TRACE_RECORD_WORDS = (TRACE_EVENT_BITS / u32:32) as u8;
 const TRACE_HEADER_WORDS = (bit_count<TraceReplyHeader>() / u32:32) as u8;
 const MONITOR_STATE_BITS = bit_count<MonitorState>();
 
 fn trace_event_metadata(event: TraceEvent) -> u32 {
     ((event.metadata.kind as u32) << u32:24) | ((event.metadata.flags as u32) << u32:16) |
     ((event.metadata.txid as u32) << u32:8) | event.metadata.op as u32
+}
+
+fn trace_event_bits(event: TraceEvent) -> bits[TRACE_EVENT_BITS] {
+    ((trace_event_metadata(event) as u64) << u64:32) | event.cycle as u64
 }
 
 fn append_trace(trace: TraceBuffer, event: TraceEvent, enabled: u1) -> TraceBuffer {
@@ -108,7 +118,8 @@ fn append_trace(trace: TraceBuffer, event: TraceEvent, enabled: u1) -> TraceBuff
         TraceBuffer { drops: trace.drops + u32:1, ..trace }
     } else {
         TraceBuffer {
-            events: update(trace.events, trace.count, event),
+            data: bit_slice_update(
+                trace.data, (trace.count as u32) * TRACE_EVENT_BITS, trace_event_bits(event)),
             count: trace.count + TraceCount:1,
             ..trace
         }
@@ -255,8 +266,7 @@ fn response_trace_payload(state: DebugState) -> u32 {
         u8:4 => state.snapshot.tap_drops,
         _ => {
             let event_word_index = (payload_index as u32) - u32:5;
-            let event = state.snapshot.trace.events[event_word_index >> u32:1];
-            if event_word_index[0:1] == u1:0 { event.cycle } else { trace_event_metadata(event) }
+            state.snapshot.trace.data[event_word_index * u32:32+:u32]
         },
     }
 }
