@@ -2,14 +2,8 @@
 
 -behavior(gen_server).
 
--export([
-    start_link/2,
-    start_link/3,
-    stop/1,
-    get_counters/1,
-    get_state/1,
-    get_trace/1
-]).
+-export([start_link/2, start_link/3, stop/1]).
+-export([get_counters/1, get_state/1, get_trace/1]).
 -export([init/1, handle_call/3, handle_cast/2, terminate/2]).
 
 %% Host-to-FPGA requests occupy the low half of the tag space.
@@ -23,6 +17,11 @@
 -define(DEBUG_TRACE, 16#83).
 -define(DEBUG_ERROR, 16#ff).
 -define(RX_FRAME, '$debug_frame').
+
+-define(TRACE_VERSION, 1).
+-define(TRACE_RECORD_WORDS, 2).
+-define(TRACE_APPLICATION_RX, 1).
+-define(TRACE_APPLICATION_TX, 2).
 
 %% TODO: Factor descriptor ownership, frame I/O, and exact reads shared with
 %% xls_gs into a transport process. Keep the application and debug protocol
@@ -180,13 +179,14 @@ decode_trace_reply(<<
         observation_drops => ObservationDrops,
         raw => Payload
     },
+    ExpectedBytes = Count * ?TRACE_RECORD_WORDS * 4,
     case {Version, RecordWords, byte_size(Records)} of
-        {1, 2, Bytes} when Bytes =:= Count * 8 ->
+        {?TRACE_VERSION, ?TRACE_RECORD_WORDS, ExpectedBytes} ->
             {ok, Trace#{events => decode_trace_events(Records, [])}};
-        {1, 2, Bytes} ->
+        {?TRACE_VERSION, ?TRACE_RECORD_WORDS, Bytes} ->
             {error, Trace#{reason => {
                 malformed_trace_records,
-                Count * 8,
+                ExpectedBytes,
                 Bytes
             }}};
         _ ->
@@ -219,8 +219,8 @@ decode_trace_events(<<
     },
     decode_trace_events(Rest, [Event | Acc]).
 
-trace_kind(1) -> application_rx;
-trace_kind(2) -> application_tx;
+trace_kind(?TRACE_APPLICATION_RX) -> application_rx;
+trace_kind(?TRACE_APPLICATION_TX) -> application_tx;
 trace_kind(Code) -> {unknown, Code}.
 
 listener(FD, Parent) ->

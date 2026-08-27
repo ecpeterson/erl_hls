@@ -32,7 +32,7 @@ module regsvc_tb;
 
     integer accepted_output_beats = 0;
 
-    axis_regsvc_instrumented_wrapper dut (
+    axis_regsvc_debug_top dut (
         .aclk(clk),
         .aresetn(resetn),
         .s_axis_tdata(s_data),

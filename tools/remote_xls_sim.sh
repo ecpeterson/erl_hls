@@ -61,7 +61,7 @@ iverilog \
     -s regsvc_tb \
     -o regsvc.vvp \
     regsvc_tb.sv \
-    regsvc_instrumented_wrapper.v \
+    regsvc_debug_top.v \
     xls_debug_tap.v \
     xls_debug_observer.v \
     xls_debug_server.v \
@@ -77,7 +77,7 @@ iverilog \
     -s regsvc_bridge_tb \
     -o regsvc_bridge.vvp \
     regsvc_bridge_tb.sv \
-    regsvc_instrumented_wrapper.v \
+    regsvc_debug_top.v \
     xls_debug_tap.v \
     xls_debug_observer.v \
     xls_debug_server.v \

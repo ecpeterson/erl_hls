@@ -1,5 +1,8 @@
 module xls_debug_tap #(
-    parameter integer STATE_BITS = 512
+    parameter integer STATE_BITS = 512,
+    parameter integer STREAM_OBSERVATION_BITS = 32 + 3,
+    parameter integer OBSERVATION_BITS =
+        STATE_BITS + 32 + 2 * STREAM_OBSERVATION_BITS + 1
 ) (
     input  wire                  aclk,
     input  wire                  aresetn,
@@ -13,7 +16,7 @@ module xls_debug_tap #(
     input  wire [31:0]           app_tx_tdata,
     input  wire [STATE_BITS-1:0] app_state_data,
     input  wire                  app_state_valid,
-    output wire [STATE_BITS+102:0] observation_data,
+    output wire [OBSERVATION_BITS-1:0] observation_data,
     output wire                  observation_valid,
     input  wire                  observation_ready
 );
@@ -50,14 +53,14 @@ module xls_debug_tap #(
         observed_state_data,
         observation_drops,
         app_tx_tdata,
-        app_rx_tdata,
-        observed_state_valid,
         app_tx_tlast,
         app_tx_tready,
         app_tx_tvalid,
+        app_rx_tdata,
         app_rx_tlast,
         app_rx_tready,
-        app_rx_tvalid
+        app_rx_tvalid,
+        observed_state_valid
     };
     assign observation_valid = aresetn;
 endmodule

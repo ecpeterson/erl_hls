@@ -1,6 +1,6 @@
-// Instrumented top level: the base XLS-to-AXIS application adapter plus the
-// passive debug monitor and its independent AXI4-Stream endpoint.
-module axis_regsvc_instrumented_wrapper (
+// Debug top level: the base XLS-to-AXIS application adapter plus the passive
+// tap and independently scheduled XLS observer and debug server.
+module axis_regsvc_debug_top (
     (* X_INTERFACE_PARAMETER = "XIL_INTERFACENAME ACLK, ASSOCIATED_BUSIF S_AXIS:M_AXIS:S_DBG:M_DBG, ASSOCIATED_RESET ARESETN" *)
     (* X_INTERFACE_INFO = "xilinx.com:signal:clock:1.0 ACLK CLK" *)
     input  wire        aclk,
@@ -53,21 +53,39 @@ module axis_regsvc_instrumented_wrapper (
     (* X_INTERFACE_INFO = "xilinx.com:interface:axis:1.0 M_DBG TLAST" *)
     output wire        m_dbg_tlast
 );
-    wire [511:0] app_state_data;
+    // These mirror the logical DSLX types. SNAPSHOT_BITS is the Verilog-side
+    // equivalent of bit_count<MonitorState>(); changing TRACE_DEPTH updates
+    // the trace array, its count width, and the flattened snapshot width. The
+    // DSLX TRACE_DEPTH must change with this value before regenerating RTL.
+    localparam integer APPLICATION_STATE_BITS = 512;
+    localparam integer TRACE_DEPTH = 8;
+    localparam integer TRACE_EVENT_BITS = 64;
+    localparam integer TRACE_COUNT_BITS = $clog2(TRACE_DEPTH + 1);
+    localparam integer STREAM_OBSERVATION_BITS = 32 + 3;
+    localparam integer OBSERVATION_BITS =
+        APPLICATION_STATE_BITS + 32 + 2 * STREAM_OBSERVATION_BITS + 1;
+    localparam integer COUNTER_BITS = 7 * 32;
+    localparam integer TRACE_BUFFER_BITS =
+        TRACE_DEPTH * TRACE_EVENT_BITS + TRACE_COUNT_BITS + 32;
+    localparam integer SNAPSHOT_BITS =
+        COUNTER_BITS + 32 + APPLICATION_STATE_BITS + 2 + TRACE_BUFFER_BITS;
+    localparam integer DEBUG_BEAT_BITS = 4 + 1 + 32;
+
+    wire [APPLICATION_STATE_BITS-1:0] app_state_data;
     wire         app_state_valid;
-    wire [614:0] debug_observation_data;
+    wire [OBSERVATION_BITS-1:0] debug_observation_data;
     wire         debug_observation_valid;
     wire         debug_observation_ready;
-    wire [36:0]  debug_request = {
+    wire [DEBUG_BEAT_BITS-1:0] debug_request = {
         s_dbg_tkeep,
         s_dbg_tlast,
         s_dbg_tdata
     };
-    wire [36:0]  debug_response;
+    wire [DEBUG_BEAT_BITS-1:0] debug_response;
     wire [7:0]   snapshot_request;
     wire          snapshot_request_valid;
     wire          snapshot_request_ready;
-    wire [1317:0] snapshot;
+    wire [SNAPSHOT_BITS-1:0] snapshot;
     wire          snapshot_valid;
     wire          snapshot_ready;
 
@@ -89,7 +107,7 @@ module axis_regsvc_instrumented_wrapper (
     );
 
     xls_debug_tap #(
-        .STATE_BITS(512)
+        .STATE_BITS(APPLICATION_STATE_BITS)
     ) debug_tap (
         .aclk(aclk),
         .aresetn(aresetn),

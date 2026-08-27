@@ -16,7 +16,7 @@ rsync -a -e "ssh -o BatchMode=yes" \
     "$local_stage/regsvc.x" \
     "$local_stage/axis.x" \
     "$local_stage/regsvc_wrapper.v" \
-    "$local_stage/regsvc_instrumented_wrapper.v" \
+    "$local_stage/regsvc_debug_top.v" \
     "$local_stage/xls_debug_monitor.x" \
     "$local_stage/xls_debug_tap.v" \
     "$local_stage/regsvc_tb.sv" \
