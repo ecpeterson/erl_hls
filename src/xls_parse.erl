@@ -473,22 +473,24 @@ Requires every field in a translated record to use the type-directed
 """.
 validate_record_defaults({attribute, _L, record, {RecordName, Fields}}) ->
     lists:foreach(
-        fun
-            ({typed_record_field,
-                {record_field, Line, {atom, _AtomLine, FieldName}, Default},
-                _Type}) ->
-                case is_zero_default(Default) of
-                    true -> ok;
-                    false ->
-                        error({invalid_xls_record_default,
-                            RecordName, FieldName, Line})
-                end;
-            ({typed_record_field,
-                {record_field, Line, {atom, _AtomLine, FieldName}},
-                _Type}) ->
-                error({missing_xls_record_default, RecordName, FieldName, Line});
-            (Field) ->
-                error({untyped_xls_record_field, RecordName, Field})
+        fun({
+            typed_record_field,
+            {record_field, Line, {atom, _AtomLine, FieldName}, Default},
+            _Type
+        }) ->
+            case is_zero_default(Default) of
+                true -> ok;
+                false ->
+                    error({invalid_xls_record_default, RecordName, FieldName, Line})
+            end;
+           ({
+            typed_record_field,
+            {record_field, Line, {atom, _AtomLine, FieldName}},
+            _Type
+        }) ->
+            error({missing_xls_record_default, RecordName, FieldName, Line});
+           (Field) ->
+            error({untyped_xls_record_field, RecordName, Field})
         end,
         Fields
     ),
@@ -496,9 +498,12 @@ validate_record_defaults({attribute, _L, record, {RecordName, Fields}}) ->
 
 -spec is_zero_default(erl_parse:abstract_expr()) -> boolean().
 -doc "Recognizes the type-directed zero marker in a record declaration.".
-is_zero_default({call, _Line,
+is_zero_default({
+    call,
+    _Line,
     {remote, _RemoteLine, {atom, _ModuleLine, xls_type}, {atom, _NameLine, zero}},
-    []}) ->
+    []
+}) ->
     true;
 is_zero_default(_Default) ->
     false.

@@ -122,16 +122,16 @@ rewrite_record_defaults_in_form(
                 [rewrite_record_field_default(Field) || Field <- Fields]
             }};
         false ->
-            {attribute, Line, record, {RecordName, Fields}}
+            RecordForm
     end;
 rewrite_record_defaults_in_form(Form, _SerializableStructNames) ->
     Form.
 
-rewrite_record_field_default(
-    {typed_record_field,
-        {record_field, Line, {atom, AtomLine, FieldName}, _Default},
-        Type}
-) ->
+rewrite_record_field_default({
+    typed_record_field,
+    {record_field, Line, {atom, AtomLine, FieldName}, _Default},
+    Type
+}) ->
     ExpandedDefault = {call,
         Line,
         {remote, Line, {atom, Line, xls_type}, {atom, Line, zero}},
