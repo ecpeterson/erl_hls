@@ -122,6 +122,22 @@ module regsvc_tb;
         end
     endtask
 
+    task automatic send_debug_get_trace;
+        input [7:0] txid;
+        begin
+            @(negedge clk);
+            dbg_s_data = header(8'h03, txid, 8'd0);
+            dbg_s_last = 1'b1;
+            dbg_s_valid = 1'b1;
+            while (!dbg_s_ready)
+                @(posedge clk);
+            @(negedge clk);
+            dbg_s_data = 32'b0;
+            dbg_s_last = 1'b0;
+            dbg_s_valid = 1'b0;
+        end
+    endtask
+
     task automatic receive_debug_beat;
         output [31:0] word;
         input         expected_last;
@@ -155,6 +171,21 @@ module regsvc_tb;
                          expected_word, debug_word);
                 $fatal(1);
             end
+        end
+    endtask
+
+    task automatic expect_trace_event;
+        input [7:0] kind;
+        input [7:0] txid;
+        input [7:0] op;
+        input       expected_last;
+        begin
+            receive_debug_beat(debug_word, 1'b0); // observation cycle
+            if (debug_word == 32'd0) begin
+                $display("FAIL: trace event has a zero cycle timestamp");
+                $fatal(1);
+            end
+            expect_debug_beat({kind, 8'h00, txid, op}, expected_last);
         end
     endtask
 
@@ -304,7 +335,7 @@ module regsvc_tb;
         // RX beats, RX frames, RX stalls, TX beats, TX frames, TX stalls.
         send_debug_get_counters(8'h55);
         expect_debug_beat(header(8'h81, 8'h55, 8'd8), 1'b0);
-        expect_debug_beat(32'd2, 1'b0);
+        expect_debug_beat(32'd3, 1'b0);
         receive_debug_beat(debug_word, 1'b0); // cycles
         receive_debug_beat(debug_word, 1'b0); // RX beats
         receive_debug_beat(debug_word, 1'b0); // RX frames
@@ -328,6 +359,33 @@ module regsvc_tb;
             expect_debug_beat(32'd0, 1'b0);
         expect_debug_beat(32'd4, 1'b0);
         expect_debug_beat(32'd3, 1'b1);
+
+        // Reading trace drains a bounded oldest-first buffer. It remains
+        // available under application backpressure and reports rather than
+        // blocking when later events do not fit.
+        send_debug_get_trace(8'h57);
+        expect_debug_beat(header(8'h83, 8'h57, 8'd21), 1'b0);
+        expect_debug_beat(32'd1, 1'b0); // trace schema version
+        expect_debug_beat(32'd2, 1'b0); // words per event
+        expect_debug_beat(32'd8, 1'b0); // retained events
+        expect_debug_beat(32'd4, 1'b0); // events dropped after filling
+        receive_debug_beat(debug_word, 1'b0); // tap observation drops
+        expect_trace_event(8'd1, 8'h11, 8'd5, 1'b0);
+        expect_trace_event(8'd2, 8'h11, 8'd7, 1'b0);
+        expect_trace_event(8'd1, 8'h20, 8'd3, 1'b0);
+        expect_trace_event(8'd1, 8'h21, 8'd4, 1'b0);
+        expect_trace_event(8'd2, 8'h21, 8'd8, 1'b0);
+        expect_trace_event(8'd1, 8'h22, 8'd3, 1'b0);
+        expect_trace_event(8'd1, 8'h23, 8'd4, 1'b0);
+        expect_trace_event(8'd2, 8'h23, 8'd8, 1'b1);
+
+        send_debug_get_trace(8'h58);
+        expect_debug_beat(header(8'h83, 8'h58, 8'd5), 1'b0);
+        expect_debug_beat(32'd1, 1'b0);
+        expect_debug_beat(32'd2, 1'b0);
+        expect_debug_beat(32'd0, 1'b0); // prior read drained events
+        expect_debug_beat(32'd0, 1'b0); // and reset event drops
+        receive_debug_beat(debug_word, 1'b1); // cumulative tap drops
 
         m_ready = 1'b1;
         expect_one_word_reply(8'd7, 8'h30, 32'hfeedface);

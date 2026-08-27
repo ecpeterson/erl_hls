@@ -61,7 +61,7 @@ debug_scenario_(DebugPid) ->
     [
         ?_test(begin
             {ok, Counters} = xls_debug:get_counters(DebugPid),
-            ?assertEqual(2, maps:get(version, Counters)),
+            ?assertEqual(3, maps:get(version, Counters)),
             ?assert(maps:get(cycles, Counters) > 0),
             ?assertEqual(21, maps:get(app_rx_beats, Counters)),
             ?assertEqual(7, maps:get(app_rx_frames, Counters)),
@@ -77,6 +77,36 @@ debug_scenario_(DebugPid) ->
             {state, Registers} = maps:get(state, Snapshot),
             ?assertEqual([3, 4 | lists:duplicate(14, 0)], Registers),
             ?assertEqual(regsvc:pack({state, Registers}), maps:get(raw, Snapshot))
+        end),
+        ?_test(begin
+            {ok, Trace} = xls_debug:get_trace(DebugPid),
+            Events = maps:get(events, Trace),
+            ?assertEqual(1, maps:get(version, Trace)),
+            ?assertEqual(2, maps:get(record_words, Trace)),
+            ?assertEqual(8, maps:get(count, Trace)),
+            ?assertEqual(8, length(Events)),
+            ?assertEqual(3, maps:get(dropped, Trace)),
+            ?assertEqual([
+                {application_rx, 0, 5},
+                {application_tx, 0, 7},
+                {application_rx, 1, 3},
+                {application_rx, 2, 4},
+                {application_tx, 2, 8},
+                {application_rx, 3, 3},
+                {application_rx, 4, 4},
+                {application_tx, 4, 8}
+            ], [
+                {
+                    maps:get(kind, Event),
+                    maps:get(tx_id, Event),
+                    maps:get(op, Event)
+                }
+                || Event <- Events
+            ]),
+            ?assert(lists:all(
+                fun(Event) -> maps:get(cycle, Event) > 0 end,
+                Events
+            ))
         end)
     ].
 

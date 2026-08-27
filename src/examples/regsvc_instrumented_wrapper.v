@@ -55,6 +55,21 @@ module axis_regsvc_instrumented_wrapper (
 );
     wire [511:0] app_state_data;
     wire         app_state_valid;
+    wire [614:0] debug_observation_data;
+    wire         debug_observation_valid;
+    wire         debug_observation_ready;
+    wire [36:0]  debug_request = {
+        s_dbg_tkeep,
+        s_dbg_tlast,
+        s_dbg_tdata
+    };
+    wire [36:0]  debug_response;
+    wire [7:0]   snapshot_request;
+    wire          snapshot_request_valid;
+    wire          snapshot_request_ready;
+    wire [1317:0] snapshot;
+    wire          snapshot_valid;
+    wire          snapshot_ready;
 
     axis_regsvc_xls_axis_wrapper application (
         .aclk(aclk),
@@ -73,28 +88,58 @@ module axis_regsvc_instrumented_wrapper (
         .state_valid(app_state_valid)
     );
 
-    xls_debug_monitor #(
+    xls_debug_tap #(
         .STATE_BITS(512)
-    ) debug_monitor (
+    ) debug_tap (
         .aclk(aclk),
         .aresetn(aresetn),
         .app_rx_tvalid(s_axis_tvalid),
         .app_rx_tready(s_axis_tready),
         .app_rx_tlast(s_axis_tlast),
+        .app_rx_tdata(s_axis_tdata),
         .app_tx_tvalid(m_axis_tvalid),
         .app_tx_tready(m_axis_tready),
         .app_tx_tlast(m_axis_tlast),
+        .app_tx_tdata(m_axis_tdata),
         .app_state_data(app_state_data),
         .app_state_valid(app_state_valid),
-        .s_dbg_tdata(s_dbg_tdata),
-        .s_dbg_tkeep(s_dbg_tkeep),
-        .s_dbg_tvalid(s_dbg_tvalid),
-        .s_dbg_tready(s_dbg_tready),
-        .s_dbg_tlast(s_dbg_tlast),
-        .m_dbg_tdata(m_dbg_tdata),
-        .m_dbg_tkeep(m_dbg_tkeep),
-        .m_dbg_tvalid(m_dbg_tvalid),
-        .m_dbg_tready(m_dbg_tready),
-        .m_dbg_tlast(m_dbg_tlast)
+        .observation_data(debug_observation_data),
+        .observation_valid(debug_observation_valid),
+        .observation_ready(debug_observation_ready)
     );
+
+    __xls_debug_monitor__Observer_0_next debug_observer (
+        .clk(aclk),
+        .reset(!aresetn),
+        .xls_debug_monitor__observation_in(debug_observation_data),
+        .xls_debug_monitor__observation_in_vld(debug_observation_valid),
+        .xls_debug_monitor__observation_in_rdy(debug_observation_ready),
+        .xls_debug_monitor__snapshot_request_in(snapshot_request),
+        .xls_debug_monitor__snapshot_request_in_vld(snapshot_request_valid),
+        .xls_debug_monitor__snapshot_request_in_rdy(snapshot_request_ready),
+        .xls_debug_monitor__snapshot_out(snapshot),
+        .xls_debug_monitor__snapshot_out_vld(snapshot_valid),
+        .xls_debug_monitor__snapshot_out_rdy(snapshot_ready)
+    );
+
+    __xls_debug_monitor__DebugServer_0_next debug_server (
+        .clk(aclk),
+        .reset(!aresetn),
+        .xls_debug_monitor__request_in(debug_request),
+        .xls_debug_monitor__request_in_vld(s_dbg_tvalid),
+        .xls_debug_monitor__request_in_rdy(s_dbg_tready),
+        .xls_debug_monitor__response_out(debug_response),
+        .xls_debug_monitor__response_out_vld(m_dbg_tvalid),
+        .xls_debug_monitor__response_out_rdy(m_dbg_tready),
+        .xls_debug_monitor__snapshot_request_out(snapshot_request),
+        .xls_debug_monitor__snapshot_request_out_vld(snapshot_request_valid),
+        .xls_debug_monitor__snapshot_request_out_rdy(snapshot_request_ready),
+        .xls_debug_monitor__snapshot_in(snapshot),
+        .xls_debug_monitor__snapshot_in_vld(snapshot_valid),
+        .xls_debug_monitor__snapshot_in_rdy(snapshot_ready)
+    );
+
+    assign m_dbg_tdata = debug_response[31:0];
+    assign m_dbg_tlast = debug_response[32];
+    assign m_dbg_tkeep = debug_response[36:33];
 endmodule

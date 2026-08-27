@@ -23,13 +23,48 @@ cd "$stage"
     --fifo_module= \
     regsvc.opt.ir > regsvc.v
 
+"$xls_root/ir_converter_main" \
+    --warnings_as_errors=false \
+    --dslx_stdlib_path="$stdlib" \
+    --top=Observer \
+    xls_debug_monitor.x > xls_debug_observer.ir
+
+"$xls_root/opt_main" xls_debug_observer.ir > xls_debug_observer.opt.ir
+
+"$xls_root/codegen_main" \
+    --pipeline_stages=2 \
+    --delay_model=unit \
+    --use_system_verilog=false \
+    --reset=reset \
+    --fifo_module= \
+    xls_debug_observer.opt.ir > xls_debug_observer.v
+
+"$xls_root/ir_converter_main" \
+    --warnings_as_errors=false \
+    --dslx_stdlib_path="$stdlib" \
+    --top=DebugServer \
+    xls_debug_monitor.x > xls_debug_server.ir
+
+"$xls_root/opt_main" xls_debug_server.ir > xls_debug_server.opt.ir
+
+"$xls_root/codegen_main" \
+    --pipeline_stages=3 \
+    --worst_case_throughput=2 \
+    --delay_model=unit \
+    --use_system_verilog=false \
+    --reset=reset \
+    --fifo_module= \
+    xls_debug_server.opt.ir > xls_debug_server.v
+
 iverilog \
     -g2012 \
     -s regsvc_tb \
     -o regsvc.vvp \
     regsvc_tb.sv \
     regsvc_instrumented_wrapper.v \
-    xls_debug_monitor.v \
+    xls_debug_tap.v \
+    xls_debug_observer.v \
+    xls_debug_server.v \
     regsvc_wrapper.v \
     regsvc.v
 
@@ -43,7 +78,9 @@ iverilog \
     -o regsvc_bridge.vvp \
     regsvc_bridge_tb.sv \
     regsvc_instrumented_wrapper.v \
-    xls_debug_monitor.v \
+    xls_debug_tap.v \
+    xls_debug_observer.v \
+    xls_debug_server.v \
     regsvc_wrapper.v \
     regsvc.v
 

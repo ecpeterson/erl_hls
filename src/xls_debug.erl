@@ -2,16 +2,25 @@
 
 -behavior(gen_server).
 
--export([start_link/2, start_link/3, stop/1, get_counters/1, get_state/1]).
+-export([
+    start_link/2,
+    start_link/3,
+    stop/1,
+    get_counters/1,
+    get_state/1,
+    get_trace/1
+]).
 -export([init/1, handle_call/3, handle_cast/2, terminate/2]).
 
 %% Host-to-FPGA requests occupy the low half of the tag space.
 -define(DEBUG_GET_COUNTERS, 16#01).
 -define(DEBUG_GET_STATE, 16#02).
+-define(DEBUG_GET_TRACE, 16#03).
 
 %% FPGA-to-host replies occupy the high half of the tag space.
 -define(DEBUG_COUNTERS, 16#81).
 -define(DEBUG_STATE, 16#82).
+-define(DEBUG_TRACE, 16#83).
 -define(DEBUG_ERROR, 16#ff).
 -define(RX_FRAME, '$debug_frame').
 
@@ -42,6 +51,9 @@ get_counters(Pid) ->
 get_state(Pid) ->
     gen_server:call(Pid, get_state).
 
+get_trace(Pid) ->
+    gen_server:call(Pid, get_trace).
+
 init({Module, WritePath, ReadPath}) ->
     {ok, FDWrite} = file:open(WritePath, [write, raw, binary]),
     Self = self(),
@@ -51,14 +63,15 @@ init({Module, WritePath, ReadPath}) ->
     end),
     {ok, #state{module = Module, fd = FDWrite, listener = Listener}}.
 
-handle_call(get_counters, From, State = #state{fd = FD, tx_id = TxID, pending = Pending}) ->
-    ok = write_frame(FD, ?DEBUG_GET_COUNTERS, TxID, <<>>),
-    {noreply, State#state{
-        pending = Pending#{TxID => From},
-        tx_id = (TxID + 1) rem 256
-    }};
-handle_call(get_state, From, State = #state{fd = FD, tx_id = TxID, pending = Pending}) ->
-    ok = write_frame(FD, ?DEBUG_GET_STATE, TxID, <<>>),
+handle_call(get_counters, From, State) ->
+    request(?DEBUG_GET_COUNTERS, From, State);
+handle_call(get_state, From, State) ->
+    request(?DEBUG_GET_STATE, From, State);
+handle_call(get_trace, From, State) ->
+    request(?DEBUG_GET_TRACE, From, State).
+
+request(Tag, From, State = #state{fd = FD, tx_id = TxID, pending = Pending}) ->
+    ok = write_frame(FD, Tag, TxID, <<>>),
     {noreply, State#state{
         pending = Pending#{TxID => From},
         tx_id = (TxID + 1) rem 256
@@ -112,6 +125,8 @@ decode_reply(?DEBUG_COUNTERS, <<
     }};
 decode_reply(?DEBUG_STATE, Payload, Module) ->
     decode_state_reply(Payload, Module);
+decode_reply(?DEBUG_TRACE, Payload, _Module) ->
+    decode_trace_reply(Payload);
 decode_reply(?DEBUG_ERROR, <<ErrorCode:32/little-unsigned-integer>> = Payload, _Module) ->
     {error, #{reason => {debug_error, ErrorCode}, raw => Payload}};
 decode_reply(?DEBUG_ERROR, Payload, _Module) ->
@@ -148,6 +163,65 @@ decode_state_bits(Module, StateBits, Snapshot) ->
                 stacktrace => Stacktrace
             }}
     end.
+
+decode_trace_reply(<<
+    Version:32/little-unsigned-integer,
+    RecordWords:32/little-unsigned-integer,
+    Count:32/little-unsigned-integer,
+    Dropped:32/little-unsigned-integer,
+    ObservationDrops:32/little-unsigned-integer,
+    Records/binary
+>> = Payload) ->
+    Trace = #{
+        version => Version,
+        record_words => RecordWords,
+        count => Count,
+        dropped => Dropped,
+        observation_drops => ObservationDrops,
+        raw => Payload
+    },
+    case {Version, RecordWords, byte_size(Records)} of
+        {1, 2, Bytes} when Bytes =:= Count * 8 ->
+            {ok, Trace#{events => decode_trace_events(Records, [])}};
+        {1, 2, Bytes} ->
+            {error, Trace#{reason => {
+                malformed_trace_records,
+                Count * 8,
+                Bytes
+            }}};
+        _ ->
+            {error, Trace#{reason => {
+                unsupported_trace_schema,
+                Version,
+                RecordWords
+            }}}
+    end;
+decode_trace_reply(Payload) ->
+    {error, #{reason => malformed_trace_reply, raw => Payload}}.
+
+decode_trace_events(<<>>, Acc) ->
+    lists:reverse(Acc);
+decode_trace_events(<<
+    Cycle:32/little-unsigned-integer,
+    Op:8,
+    TxID:8,
+    Flags:8,
+    KindCode:8,
+    Rest/binary
+>>, Acc) ->
+    Event = #{
+        cycle => Cycle,
+        kind => trace_kind(KindCode),
+        kind_code => KindCode,
+        flags => Flags,
+        tx_id => TxID,
+        op => Op
+    },
+    decode_trace_events(Rest, [Event | Acc]).
+
+trace_kind(1) -> application_rx;
+trace_kind(2) -> application_tx;
+trace_kind(Code) -> {unknown, Code}.
 
 listener(FD, Parent) ->
     {ok, <<PayloadLength:8, TxID:8, _Flags:8, Tag:8>>} = read_exact(FD, 4),
