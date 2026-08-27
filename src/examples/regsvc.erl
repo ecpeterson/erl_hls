@@ -20,39 +20,40 @@
 %%%
 
 -record(set, {
-    register = 0 :: xls_nums:u32(),
-    value = 0 :: xls_nums:u32(),
-    mask = 0 :: xls_nums:u32()
+    register = xls_type:zero() :: xls_nums:u32(),
+    value = xls_type:zero() :: xls_nums:u32(),
+    mask = xls_type:zero() :: xls_nums:u32()
 }).
 
 -record(get, {
-    register = 0 :: xls_nums:u32()
+    register = xls_type:zero() :: xls_nums:u32()
 }).
 
 -record(ping, {
-    value = 0 :: xls_nums:u32()
+    value = xls_type:zero() :: xls_nums:u32()
 }).
 
 -record(bulk_get, {
-    start = 0 :: xls_nums:u32(),
-    count = 0 :: xls_nums:u32()
+    start = xls_type:zero() :: xls_nums:u32(),
+    count = xls_type:zero() :: xls_nums:u32()
 }).
 
 -record(ack, {
-    value = 0 :: xls_nums:u32()
+    value = xls_type:zero() :: xls_nums:u32()
 }).
 
 -record(read, {
-    value = 0 :: xls_nums:u32()
+    value = xls_type:zero() :: xls_nums:u32()
 }).
 
 -record(bulk_read, {
-    %% TODO: better initializer?
-    values = [] :: xls_lists:list(xls_nums:u32(), ?MAX_PAYLOAD)  % ?MAX_PAYLOAD
+    values = xls_type:zero() ::
+        xls_lists:list(xls_nums:u32(), ?MAX_PAYLOAD)
 }).
 
 -record(state, {
-    registers :: xls_lists:list(xls_nums:u32(), ?REGISTER_COUNT)  % TODO: put a real type here. can also transpile a constructor?
+    registers = xls_type:zero() ::
+        xls_lists:list(xls_nums:u32(), ?REGISTER_COUNT)
 }).
 
 %%%
@@ -90,9 +91,7 @@ stop(PID) ->
 
 -spec init(any()) -> #state{}.  % obligatory type signature
 init([]) ->
-    #state{
-        registers = xls_lists:new(xls_nums:u32(), ?REGISTER_COUNT)
-    }.
+    #state{}.
 
 handle_cast(#set{register = Register, value = Value, mask = Mask}, State) ->
     OldValue = xls_lists:nth(Register + 1, State#state.registers),

@@ -32,6 +32,9 @@ parse_transform(Forms, _Options) ->
     PublicStructNames = xls_parse:find_attribute(Forms, xls_tags),
     StateName = xls_parse:state(Forms),
     SerializableStructNames = [StateName | PublicStructNames],
+    RewrittenBodyForms = rewrite_record_defaults(
+        BodyForms, SerializableStructNames
+    ),
     true = length([error | SerializableStructNames]) =< ?MAX_TAG_VALUE,
     ExportAttr = {attribute, element(2, ModuleAttr), export,
         [{pack, 1}, {unpack, 2}, {pack_tag, 1}, {unpack_tag, 1}]
@@ -94,6 +97,46 @@ parse_transform(Forms, _Options) ->
         ||  {Index, Tag} <- lists:enumerate([error, StateName | PublicStructNames])
     ]},
 
-    EmittedForms = [FileAttr, ModuleAttr, ExportAttr] ++ BodyForms ++ [PackForm, UnpackForm, PackTagForm, UnpackTagForm, EOFForm],
+    EmittedForms =
+        [FileAttr, ModuleAttr, ExportAttr] ++
+        RewrittenBodyForms ++
+        [PackForm, UnpackForm, PackTagForm, UnpackTagForm, EOFForm],
     % io:format("~s~n", [[[erl_pp:form(Form), "\n"] || Form <- EmittedForms]]),
     EmittedForms.
+
+rewrite_record_defaults(Forms, SerializableStructNames) ->
+    [
+        rewrite_record_defaults_in_form(Form, SerializableStructNames)
+        || Form <- Forms
+    ].
+
+rewrite_record_defaults_in_form(
+    RecordForm = {attribute, Line, record, {RecordName, Fields}},
+    SerializableStructNames
+) ->
+    case lists:member(RecordName, SerializableStructNames) of
+        true ->
+            ok = xls_parse:validate_record_defaults(RecordForm),
+            {attribute, Line, record, {
+                RecordName,
+                [rewrite_record_field_default(Field) || Field <- Fields]
+            }};
+        false ->
+            {attribute, Line, record, {RecordName, Fields}}
+    end;
+rewrite_record_defaults_in_form(Form, _SerializableStructNames) ->
+    Form.
+
+rewrite_record_field_default(
+    {typed_record_field,
+        {record_field, Line, {atom, AtomLine, FieldName}, _Default},
+        Type}
+) ->
+    ExpandedDefault = {call,
+        Line,
+        {remote, Line, {atom, Line, xls_type}, {atom, Line, zero}},
+        [calls_from_types(replace_anno(Line, Type))]
+    },
+    {typed_record_field,
+        {record_field, Line, {atom, AtomLine, FieldName}, ExpandedDefault},
+        Type}.
