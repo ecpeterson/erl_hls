@@ -65,7 +65,7 @@ iverilog \
     xls_debug_tap.v \
     xls_debug_observer.v \
     xls_debug_server.v \
-    regsvc_wrapper.v \
+    regsvc_core_adapter.v \
     regsvc.v
 
 vvp regsvc.vvp
@@ -81,7 +81,7 @@ iverilog \
     xls_debug_tap.v \
     xls_debug_observer.v \
     xls_debug_server.v \
-    regsvc_wrapper.v \
+    regsvc_core_adapter.v \
     regsvc.v
 
 sim_dir="$stage/sim"

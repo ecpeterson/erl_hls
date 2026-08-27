@@ -15,7 +15,7 @@ ssh -o BatchMode=yes "$remote_host" mkdir -p "$remote_stage"
 rsync -a -e "ssh -o BatchMode=yes" \
     "$local_stage/regsvc.x" \
     "$local_stage/axis.x" \
-    "$local_stage/regsvc_wrapper.v" \
+    "$local_stage/regsvc_core_adapter.v" \
     "$local_stage/regsvc_debug_top.v" \
     "$local_stage/xls_debug_monitor.x" \
     "$local_stage/xls_debug_tap.v" \

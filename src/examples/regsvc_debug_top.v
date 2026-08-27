@@ -89,7 +89,7 @@ module axis_regsvc_debug_top (
     wire          snapshot_valid;
     wire          snapshot_ready;
 
-    axis_regsvc_xls_axis_wrapper application (
+    axis_regsvc_core_adapter application (
         .aclk(aclk),
         .aresetn(aresetn),
         .s_axis_tdata(s_axis_tdata),
