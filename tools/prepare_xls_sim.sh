@@ -19,10 +19,12 @@ TMP_X="$stage/regsvc.x" erl \
     '
 
 cp "$project_root/experiments/05-xls/axis.x" "$stage/axis.x"
-cp "$project_root/src/examples/regsvc_wrapper.v" "$stage/regsvc_wrapper.v"
-cp "$project_root/src/examples/regsvc_instrumented_wrapper.v" \
-    "$stage/regsvc_instrumented_wrapper.v"
-cp "$project_root/src/xls_debug_monitor.v" "$stage/xls_debug_monitor.v"
+cp "$project_root/src/examples/regsvc_core_adapter.v" \
+    "$stage/regsvc_core_adapter.v"
+cp "$project_root/src/examples/regsvc_debug_top.v" \
+    "$stage/regsvc_debug_top.v"
+cp "$project_root/src/xls_debug_monitor.x" "$stage/xls_debug_monitor.x"
+cp "$project_root/src/xls_debug_tap.v" "$stage/xls_debug_tap.v"
 cp "$project_root/test/rtl/regsvc_tb.sv" "$stage/regsvc_tb.sv"
 cp "$project_root/test/rtl/regsvc_bridge_tb.sv" "$stage/regsvc_bridge_tb.sv"
 cp "$project_root/test/rtl/xls_sim_bridge.c" "$stage/xls_sim_bridge.c"
