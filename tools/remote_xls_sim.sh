@@ -90,24 +90,10 @@ cd "$stage"
 
 iverilog \
     -g2012 \
-    -s regsvc_tb \
-    -o regsvc.vvp \
-    regsvc_tb.sv \
-    regsvc_debug_top.v \
-    xls_debug_tap.v \
-    xls_debug_observer.v \
-    xls_debug_server.v \
-    regsvc_core_adapter.v \
-    regsvc.v
-
-vvp regsvc.vvp
-
-iverilog \
-    -g2012 \
     -s regsvc_pair_tb \
     -o regsvc_pair.vvp \
     regsvc_pair_tb.sv \
-    regsvc_pair_top.v \
+    regsvc_pair_fixture.sv \
     regsvc_debug_top.v \
     xls_fabric_ingress.v \
     xls_fabric_egress.v \
@@ -126,7 +112,7 @@ iverilog \
     -s regsvc_bridge_tb \
     -o regsvc_bridge.vvp \
     regsvc_bridge_tb.sv \
-    regsvc_pair_top.v \
+    regsvc_pair_fixture.sv \
     regsvc_debug_top.v \
     xls_fabric_ingress.v \
     xls_fabric_egress.v \

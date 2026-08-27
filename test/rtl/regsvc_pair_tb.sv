@@ -27,7 +27,7 @@ module regsvc_pair_tb;
     reg [31:0] observed_word;
     integer index;
 
-    axis_regsvc_pair_top dut (
+    regsvc_pair_fixture dut (
         .aclk(clk),
         .aresetn(resetn),
         .s_axis_tdata(s_data),
@@ -186,6 +186,16 @@ module regsvc_pair_tb;
         repeat (5) @(posedge clk);
         @(negedge clk);
         resetn = 1'b1;
+
+        // Neither endpoint may turn its zero-initialized output state into a
+        // routed packet before a real request arrives.
+        repeat (8) begin
+            @(posedge clk);
+            if (m_valid || dbg_m_valid) begin
+                $display("FAIL: routed output became valid before a request");
+                $fatal(1);
+            end
+        end
 
         // Let both independent processes produce replies while the one shared
         // application output is blocked.

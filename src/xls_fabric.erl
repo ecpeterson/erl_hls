@@ -1,19 +1,35 @@
 -module(xls_fabric).
 -module_doc """
 Owns one routed frame transport and dispatches replies to Erlang proxy
-processes by their remote fabric endpoint. Application and debug paths use
+processes by their registered return route. Application and debug paths use
 separate instances so their queues and failure domains remain independent.
+
+The routing source is adapter metadata: it selects the host-side proxy and is
+not delivered as a sender identity inside the process's ordinary message. A
+future distribution adapter may map bounded fabric endpoints to Erlang process
+identities at its boundary.
 """.
 
 -behavior(gen_server).
 
 -export([start_link/2, stop/1]).
--export([register_peer/3, unregister_peer/2, send/4]).
+-export([register_route/3, send/4]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2]).
 
 -define(RX_FRAME, '$xls_fabric_frame').
 
--record(peer, {
+-type endpoint() :: 0..65535.
+-type route() :: {
+    Source :: endpoint(),
+    Destination :: endpoint()
+}.
+-type header() :: {
+    Tag :: byte(),
+    TxID :: byte(),
+    Flags :: byte()
+}.
+
+-record(route_owner, {
     pid :: pid(),
     monitor :: reference()
 }).
@@ -21,7 +37,7 @@ separate instances so their queues and failure domains remain independent.
 -record(state, {
     fd :: file:io_device(),
     listener :: pid(),
-    peers = #{} :: #{0..65535 => #peer{}}
+    routes = #{} :: #{route() => #route_owner{}}
 }).
 
 start_link(WritePath, ReadPath) ->
@@ -30,14 +46,13 @@ start_link(WritePath, ReadPath) ->
 stop(Pid) ->
     gen_server:stop(Pid).
 
-register_peer(Pid, Endpoint, Owner) ->
-    gen_server:call(Pid, {register_peer, Endpoint, Owner}).
+-spec register_route(pid(), route(), pid()) -> ok | {error, term()}.
+register_route(Pid, Route, Owner) ->
+    gen_server:call(Pid, {register_route, Route, Owner}).
 
-unregister_peer(Pid, Endpoint) ->
-    gen_server:call(Pid, {unregister_peer, Endpoint, self()}).
-
-send(Pid, Source, Destination, Frame) ->
-    gen_server:call(Pid, {send, Source, Destination, Frame}).
+-spec send(pid(), route(), header(), binary()) -> ok | {error, term()}.
+send(Pid, Route, Header, Payload) ->
+    gen_server:call(Pid, {send, Route, Header, Payload}).
 
 init({WritePath, ReadPath}) ->
     {ok, FDWrite} = file:open(WritePath, [write, raw, binary]),
@@ -46,46 +61,54 @@ init({WritePath, ReadPath}) ->
         {ok, FDRead} = file:open(ReadPath, [read, raw, binary]),
         listener(FDRead, Self)
     end),
+    %% TODO: Define the supervision relationship among the two physical-path
+    %% brokers and their proxy clients. In particular, choose how broker death,
+    %% proxy restart, and endpoint re-registration propagate through the tree.
     {ok, #state{fd = FDWrite, listener = Listener}}.
 
 handle_call(
-    {register_peer, Endpoint, Owner},
+    {register_route, Route, Owner},
     _From,
-    State = #state{peers = Peers}
-) when is_integer(Endpoint), Endpoint >= 0, Endpoint =< 16#ffff, is_pid(Owner) ->
-    case maps:find(Endpoint, Peers) of
-        error ->
+    State = #state{routes = Routes}
+) when is_pid(Owner) ->
+    case {valid_route(Route), Routes} of
+        {true, #{Route := #route_owner{pid = Owner}}} ->
+            {reply, ok, State};
+        {true, #{Route := #route_owner{
+            pid = Existing,
+            monitor = OldMonitor
+        }}} ->
+            case is_process_alive(Existing) of
+                true ->
+                    {reply, {error, {route_in_use, Route, Existing}}, State};
+                false ->
+                    demonitor(OldMonitor, [flush]),
+                    Monitor = monitor(process, Owner),
+                    RouteOwner = #route_owner{
+                        pid = Owner,
+                        monitor = Monitor
+                    },
+                    {reply, ok, State#state{
+                        routes = Routes#{Route => RouteOwner}
+                    }}
+            end;
+        {true, _} ->
             Monitor = monitor(process, Owner),
-            Peer = #peer{pid = Owner, monitor = Monitor},
-            {reply, ok, State#state{peers = Peers#{Endpoint => Peer}}};
-        {ok, #peer{pid = Owner}} ->
-            {reply, ok, State};
-        {ok, #peer{pid = Existing}} ->
-            {reply, {error, {endpoint_in_use, Endpoint, Existing}}, State}
+            RouteOwner = #route_owner{pid = Owner, monitor = Monitor},
+            {reply, ok, State#state{
+                routes = Routes#{Route => RouteOwner}
+            }};
+        {false, _} ->
+            {reply, {error, {invalid_route, Route}}, State}
     end;
 handle_call(
-    {unregister_peer, Endpoint, Owner},
-    _From,
-    State = #state{peers = Peers}
-) ->
-    case maps:find(Endpoint, Peers) of
-        {ok, #peer{pid = Owner, monitor = Monitor}} ->
-            demonitor(Monitor, [flush]),
-            {reply, ok, State#state{peers = maps:remove(Endpoint, Peers)}};
-        error ->
-            {reply, ok, State};
-        {ok, #peer{pid = Existing}} ->
-            {reply, {error, {not_endpoint_owner, Endpoint, Existing}}, State}
-    end;
-handle_call(
-    {send, Source, Destination, Frame},
+    {send, Route, Header, Payload},
     _From,
     State = #state{fd = FD}
 ) ->
-    case validate_frame(Source, Destination, Frame) of
-        ok ->
-            Route = <<Destination:16/little, Source:16/little>>,
-            {reply, file:write(FD, <<Route/binary, Frame/binary>>), State};
+    case encode_frame(Route, Header, Payload) of
+        {ok, Frame} ->
+            {reply, file:write(FD, Frame), State};
         {error, _Reason} = Error ->
             {reply, Error, State}
     end;
@@ -96,29 +119,32 @@ handle_cast(_Message, State) ->
     {noreply, State}.
 
 handle_info(
-    {?RX_FRAME, Source, Destination, Header, Payload},
-    State = #state{peers = Peers}
+    {?RX_FRAME, Source, Destination, Tag, TxID, Flags, Payload},
+    State = #state{routes = Routes}
 ) ->
-    case maps:find(Source, Peers) of
-        {ok, #peer{pid = Owner}} ->
+    Route = {Source, Destination},
+    case Routes of
+        #{Route := #route_owner{pid = Owner}} ->
             gen_server:cast(Owner, {
-                ?RX_FRAME, Source, Destination, Header, Payload
+                ?RX_FRAME,
+                {Tag, TxID, Flags},
+                Payload
             });
-        error ->
+        _ ->
             ok
     end,
     {noreply, State};
 handle_info(
     {'DOWN', Monitor, process, Owner, _Reason},
-    State = #state{peers = Peers}
+    State = #state{routes = Routes}
 ) ->
-    NewPeers = maps:filter(
-        fun(_Endpoint, #peer{pid = Pid, monitor = Ref}) ->
+    NewRoutes = maps:filter(
+        fun(_Route, #route_owner{pid = Pid, monitor = Ref}) ->
             Pid =/= Owner orelse Ref =/= Monitor
         end,
-        Peers
+        Routes
     ),
-    {noreply, State#state{peers = NewPeers}};
+    {noreply, State#state{routes = NewRoutes}};
 handle_info(_Message, State) ->
     {noreply, State}.
 
@@ -131,22 +157,50 @@ terminate(_Reason, #state{fd = FD, listener = Listener}) ->
     end,
     ok.
 
-validate_frame(Source, Destination, <<PayloadWords:8, _/binary>> = Frame)
+-spec encode_frame(route(), header(), binary()) ->
+    {ok, binary()} | {error, term()}.
+encode_frame({Source, Destination}, {Tag, TxID, Flags}, Payload)
         when is_integer(Source), Source >= 0, Source =< 16#ffff,
              is_integer(Destination), Destination >= 0,
-             Destination =< 16#ffff ->
-    case byte_size(Frame) of
-        Size when Size =:= 4 + PayloadWords * 4 -> ok;
-        Size -> {error, {invalid_frame_size, 4 + PayloadWords * 4, Size}}
+             Destination =< 16#ffff,
+             is_integer(Tag), Tag >= 0, Tag =< 16#ff,
+             is_integer(TxID), TxID >= 0, TxID =< 16#ff,
+             is_integer(Flags), Flags >= 0, Flags =< 16#ff,
+             is_binary(Payload) ->
+    case byte_size(Payload) of
+        Size when Size rem 4 =/= 0 ->
+            {error, {unaligned_payload, Size}};
+        Size when Size > 16#ff * 4 ->
+            {error, {payload_too_large, Size}};
+        Size ->
+            PayloadWords = Size div 4,
+            Route = <<Destination:16/little, Source:16/little>>,
+            Header = <<PayloadWords:8, TxID:8, Flags:8, Tag:8>>,
+            {ok, <<Route/binary, Header/binary, Payload/binary>>}
     end;
-validate_frame(Source, Destination, Frame) ->
-    {error, {invalid_frame, Source, Destination, Frame}}.
+encode_frame(Route, Header, Payload) ->
+    {error, {invalid_frame, Route, Header, Payload}}.
+
+valid_route({Source, Destination}) ->
+    is_integer(Source) andalso Source >= 0 andalso Source =< 16#ffff andalso
+        is_integer(Destination) andalso Destination >= 0 andalso
+        Destination =< 16#ffff;
+valid_route(_Route) ->
+    false.
 
 listener(FD, Parent) ->
     {ok, <<Destination:16/little, Source:16/little>>} = read_exact(FD, 4),
-    {ok, <<PayloadLength:8, _/binary>> = Header} = read_exact(FD, 4),
+    {ok, <<PayloadLength:8, TxID:8, Flags:8, Tag:8>>} = read_exact(FD, 4),
     {ok, Payload} = read_exact(FD, 4 * PayloadLength),
-    Parent ! {?RX_FRAME, Source, Destination, Header, Payload},
+    Parent ! {
+        ?RX_FRAME,
+        Source,
+        Destination,
+        Tag,
+        TxID,
+        Flags,
+        Payload
+    },
     listener(FD, Parent).
 
 read_exact(_FD, 0) ->

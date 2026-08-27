@@ -2,7 +2,7 @@
 
 -behavior(gen_server).
 
--export([start_link/2, start_link/3, stop/1]).
+-export([start_link/2, stop/1]).
 -export([get_counters/1, get_state/1, get_trace/1]).
 -export([init/1, handle_call/3, handle_cast/2, terminate/2]).
 
@@ -16,7 +16,6 @@
 -define(DEBUG_STATE, 16#82).
 -define(DEBUG_TRACE, 16#83).
 -define(DEBUG_ERROR, 16#ff).
--define(RX_FRAME, '$debug_frame').
 -define(FABRIC_RX, '$xls_fabric_frame').
 
 -define(TRACE_VERSION, 1).
@@ -24,16 +23,13 @@
 -define(TRACE_APPLICATION_RX, 1).
 -define(TRACE_APPLICATION_TX, 2).
 
-%% Routed mode factors descriptor ownership and exact reads into xls_fabric.
-%% Direct file mode intentionally remains available without a broker. Its
-%% duplicated frame I/O can be factored later without coupling application and
-%% debug queues or failure domains.
-
 -record(state, {
     module = undefined :: module() | undefined,
-    fd = none :: none | file:io_device(),
-    listener = none :: none | pid(),
-    fabric = none :: none | {pid(), 0..65535, 0..65535},
+    fabric :: {
+        Broker :: pid(),
+        LocalEndpoint :: 0..65535,
+        PeerEndpoint :: 0..65535
+    },
     pending = #{} :: #{0..255 => gen_server:from()},
     tx_id = 0 :: 0..255
 }).
@@ -43,12 +39,7 @@ start_link(Module, {fabric, Broker, PeerEndpoint}) ->
         ?MODULE,
         {Module, {fabric, Broker, 0, PeerEndpoint}},
         []
-    );
-start_link(WritePath, ReadPath) ->
-    start_link(undefined, WritePath, ReadPath).
-
-start_link(Module, WritePath, ReadPath) ->
-    gen_server:start_link(?MODULE, {Module, WritePath, ReadPath}, []).
+    ).
 
 stop(Pid) ->
     gen_server:stop(Pid).
@@ -63,19 +54,15 @@ get_trace(Pid) ->
     gen_server:call(Pid, get_trace).
 
 init({Module, {fabric, Broker, LocalEndpoint, PeerEndpoint}}) ->
-    ok = xls_fabric:register_peer(Broker, PeerEndpoint, self()),
+    ok = xls_fabric:register_route(
+        Broker,
+        {PeerEndpoint, LocalEndpoint},
+        self()
+    ),
     {ok, #state{
         module = Module,
         fabric = {Broker, LocalEndpoint, PeerEndpoint}
-    }};
-init({Module, WritePath, ReadPath}) ->
-    {ok, FDWrite} = file:open(WritePath, [write, raw, binary]),
-    Self = self(),
-    Listener = spawn_link(fun() ->
-        {ok, FDRead} = file:open(ReadPath, [read, raw, binary]),
-        listener(FDRead, Self)
-    end),
-    {ok, #state{module = Module, fd = FDWrite, listener = Listener}}.
+    }}.
 
 handle_call(get_counters, From, State) ->
     request(?DEBUG_GET_COUNTERS, From, State);
@@ -92,73 +79,29 @@ request(Tag, From, State = #state{tx_id = TxID, pending = Pending}) ->
     }}.
 
 handle_cast(
-    {?RX_FRAME, Tag, TxID, Payload},
+    {?FABRIC_RX, {Tag, TxID, _Flags}, Payload},
     State = #state{module = Module, pending = Pending}
 ) ->
     {From, NewPending} = maps:take(TxID, Pending),
     gen_server:reply(From, decode_reply(Tag, Payload, Module)),
-    {noreply, State#state{pending = NewPending}};
-handle_cast(
-    {?FABRIC_RX, PeerEndpoint, LocalEndpoint, PackedHeader, Payload},
-    State = #state{
-        module = Module,
-        pending = Pending,
-        fabric = {_Broker, LocalEndpoint, PeerEndpoint}
-    }
-) ->
-    <<_PayloadLength:8, TxID:8, _Flags:8, Tag:8>> = PackedHeader,
-    {From, NewPending} = maps:take(TxID, Pending),
-    gen_server:reply(From, decode_reply(Tag, Payload, Module)),
-    {noreply, State#state{pending = NewPending}};
-handle_cast({?FABRIC_RX, _Source, _Destination, _Header, _Payload}, State) ->
-    {noreply, State}.
+    {noreply, State#state{pending = NewPending}}.
 
-terminate(_Reason, #state{fd = FD, listener = Listener, fabric = Fabric}) ->
-    try
-        case Listener of
-            none -> ok;
-            _ ->
-                unlink(Listener),
-                exit(Listener, shutdown)
-        end
-    after
-        case FD of
-            none -> ok;
-            _ -> file:close(FD)
-        end
-    end,
-    case Fabric of
-        none -> ok;
-        {Broker, _LocalEndpoint, PeerEndpoint} ->
-            xls_fabric:unregister_peer(Broker, PeerEndpoint)
-    end,
+terminate(_Reason, _State) ->
+    %% Route ownership is monitored by xls_fabric, so cleanup also occurs for
+    %% exits which bypass terminate/2 or coincide with broker failure.
     ok.
 
-write_frame(#state{fd = FD, fabric = none}, Tag, TxID, Payload) ->
-    Header = <<
-        (byte_size(Payload) div 4):8,
-        TxID:8,
-        0:8,
-        Tag:8
-    >>,
-    file:write(FD, <<Header/binary, Payload/binary>>);
 write_frame(
     #state{fabric = {Broker, LocalEndpoint, PeerEndpoint}},
     Tag,
     TxID,
     Payload
 ) ->
-    Header = <<
-        (byte_size(Payload) div 4):8,
-        TxID:8,
-        0:8,
-        Tag:8
-    >>,
     xls_fabric:send(
         Broker,
-        LocalEndpoint,
-        PeerEndpoint,
-        <<Header/binary, Payload/binary>>
+        {LocalEndpoint, PeerEndpoint},
+        {Tag, TxID, 0},
+        Payload
     ).
 
 decode_reply(?DEBUG_COUNTERS, <<
@@ -281,23 +224,3 @@ decode_trace_events(<<
 trace_kind(?TRACE_APPLICATION_RX) -> application_rx;
 trace_kind(?TRACE_APPLICATION_TX) -> application_tx;
 trace_kind(Code) -> {unknown, Code}.
-
-listener(FD, Parent) ->
-    {ok, <<PayloadLength:8, TxID:8, _Flags:8, Tag:8>>} = read_exact(FD, 4),
-    {ok, Payload} = read_exact(FD, 4 * PayloadLength),
-    gen_server:cast(Parent, {?RX_FRAME, Tag, TxID, Payload}),
-    listener(FD, Parent).
-
-read_exact(_FD, 0) ->
-    {ok, <<>>};
-read_exact(FD, Length) ->
-    read_exact(FD, Length, <<>>).
-
-read_exact(_FD, Length, Acc) when byte_size(Acc) =:= Length ->
-    {ok, Acc};
-read_exact(FD, Length, Acc) ->
-    case file:read(FD, Length - byte_size(Acc)) of
-        {ok, Bytes} -> read_exact(FD, Length, <<Acc/binary, Bytes/binary>>);
-        eof -> {error, unexpected_eof};
-        {error, Reason} -> {error, Reason}
-    end.

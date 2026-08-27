@@ -22,7 +22,7 @@ module regsvc_bridge_tb;
     wire        m_dbg_tvalid;
     reg         m_dbg_tready = 1'b1;
 
-    axis_regsvc_pair_top dut (
+    regsvc_pair_fixture dut (
         .aclk(clk),
         .aresetn(resetn),
         .s_axis_tdata(s_axis_tdata),
