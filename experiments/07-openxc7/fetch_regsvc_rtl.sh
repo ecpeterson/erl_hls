@@ -38,7 +38,7 @@ manifest_inputs=(
     regsvc_core_adapter.v
     regsvc_debug_top.v
     xls_debug_tap.v
-    xls_trace_ram_1r1w.v
+    xls_trace_store.v
     regsvc_pair_fixture.sv
     remote_xls_sim.sh
 )

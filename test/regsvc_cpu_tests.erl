@@ -128,6 +128,7 @@ debug_scenario_(Pid, DebugPid) ->
             ?assertEqual(11, maps:get(count, Trace)),
             ?assertEqual(11, length(Events)),
             ?assertEqual(0, maps:get(dropped, Trace)),
+            ?assertEqual(0, maps:get(observation_drops, Trace)),
             ?assertEqual([
                 {application_rx, 0, 5},
                 {application_tx, 0, 7},
@@ -151,12 +152,15 @@ debug_scenario_(Pid, DebugPid) ->
             ?assert(lists:all(
                 fun(Event) -> maps:get(cycle, Event) > 0 end,
                 Events
-            ))
+            )),
+            Cycles = [maps:get(cycle, Event) || Event <- Events],
+            ?assertEqual(Cycles, lists:sort(Cycles))
         end),
         ?_test(begin
             {ok, Trace} = xls_debug:get_trace(DebugPid),
             ?assertEqual(0, maps:get(count, Trace)),
             ?assertEqual(0, maps:get(dropped, Trace)),
+            ?assertEqual(0, maps:get(observation_drops, Trace)),
             ?assertEqual([], maps:get(events, Trace))
         end),
         ?_test(begin
@@ -171,6 +175,7 @@ debug_scenario_(Pid, DebugPid) ->
             ?assertEqual(64, maps:get(count, Trace)),
             ?assertEqual(64, length(Events)),
             ?assertEqual(2, maps:get(dropped, Trace)),
+            ?assertEqual(0, maps:get(observation_drops, Trace)),
             ?assertEqual(lists:flatmap(
                 fun(TxID) ->
                     [
@@ -192,6 +197,7 @@ debug_scenario_(Pid, DebugPid) ->
             {ok, Trace} = xls_debug:get_trace(DebugPid),
             ?assertEqual(0, maps:get(count, Trace)),
             ?assertEqual(0, maps:get(dropped, Trace)),
+            ?assertEqual(0, maps:get(observation_drops, Trace)),
             ?assertEqual([], maps:get(events, Trace))
         end)
     ].

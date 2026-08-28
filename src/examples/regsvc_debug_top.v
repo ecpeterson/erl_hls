@@ -64,6 +64,9 @@ module axis_regsvc_debug_top (
     localparam integer TRACE_ROW_BITS = $clog2(TRACE_ROW_COUNT);
     localparam integer TRACE_ADDRESS_BITS = TRACE_ROW_BITS + 1;
     localparam integer TRACE_ROW_DATA_BITS = 2 * TRACE_EVENT_BITS;
+    localparam integer TRACE_READ_BITS = TRACE_ADDRESS_BITS + 1;
+    localparam integer TRACE_WRITE_BITS =
+        TRACE_ADDRESS_BITS + TRACE_ROW_DATA_BITS;
     localparam integer STREAM_OBSERVATION_BITS = 32 + 3;
     localparam integer OBSERVATION_BITS =
         APPLICATION_STATE_BITS + 32 + 2 * STREAM_OBSERVATION_BITS + 1;
@@ -91,18 +94,15 @@ module axis_regsvc_debug_top (
     wire [SNAPSHOT_BITS-1:0] snapshot;
     wire          snapshot_valid;
     wire          snapshot_ready;
-    wire [TRACE_ADDRESS_BITS-1:0] trace_read_request;
+    wire [TRACE_WRITE_BITS-1:0] trace_write;
+    wire          trace_write_valid;
+    wire          trace_write_ready;
+    wire [TRACE_READ_BITS-1:0] trace_read_request;
     wire          trace_read_request_valid;
     wire          trace_read_request_ready;
-    wire [TRACE_ROW_DATA_BITS-1:0] trace_read_response;
+    wire [TRACE_EVENT_BITS-1:0] trace_read_response;
     wire          trace_read_response_valid;
     wire          trace_read_response_ready;
-    wire [TRACE_ADDRESS_BITS-1:0] trace_ram_read_address;
-    wire          trace_ram_read_enable;
-    wire [TRACE_ROW_DATA_BITS-1:0] trace_ram_read_data;
-    wire [TRACE_ADDRESS_BITS-1:0] trace_ram_write_address;
-    wire [TRACE_ROW_DATA_BITS-1:0] trace_ram_write_data;
-    wire          trace_ram_write_enable;
 
     axis_regsvc_core_adapter application (
         .aclk(aclk),
@@ -153,31 +153,27 @@ module axis_regsvc_debug_top (
         .xls_debug_monitor__snapshot_out(snapshot),
         .xls_debug_monitor__snapshot_out_vld(snapshot_valid),
         .xls_debug_monitor__snapshot_out_rdy(snapshot_ready),
-        .xls_debug_monitor__trace_read_request_in(trace_read_request),
-        .xls_debug_monitor__trace_read_request_in_vld(trace_read_request_valid),
-        .xls_debug_monitor__trace_read_request_in_rdy(trace_read_request_ready),
-        .xls_debug_monitor__trace_read_response_out(trace_read_response),
-        .xls_debug_monitor__trace_read_response_out_vld(trace_read_response_valid),
-        .xls_debug_monitor__trace_read_response_out_rdy(trace_read_response_ready),
-        .trace_rd_addr(trace_ram_read_address),
-        .trace_rd_en(trace_ram_read_enable),
-        .trace_rd_data(trace_ram_read_data),
-        .trace_wr_addr(trace_ram_write_address),
-        .trace_wr_data(trace_ram_write_data),
-        .trace_wr_en(trace_ram_write_enable)
+        .xls_debug_monitor__trace_write_out(trace_write),
+        .xls_debug_monitor__trace_write_out_vld(trace_write_valid),
+        .xls_debug_monitor__trace_write_out_rdy(trace_write_ready)
     );
 
-    xls_trace_ram_1r1w #(
+    xls_trace_store #(
         .ADDR_WIDTH(TRACE_ADDRESS_BITS),
-        .DATA_WIDTH(TRACE_ROW_DATA_BITS)
-    ) trace_ram (
+        .ROW_WIDTH(TRACE_ROW_DATA_BITS),
+        .EVENT_WIDTH(TRACE_EVENT_BITS)
+    ) trace_store (
         .clk(aclk),
-        .rd_addr(trace_ram_read_address),
-        .rd_en(trace_ram_read_enable),
-        .rd_data(trace_ram_read_data),
-        .wr_addr(trace_ram_write_address),
-        .wr_data(trace_ram_write_data),
-        .wr_en(trace_ram_write_enable)
+        .reset(!aresetn),
+        .write_request(trace_write),
+        .write_request_valid(trace_write_valid),
+        .write_request_ready(trace_write_ready),
+        .read_request(trace_read_request),
+        .read_request_valid(trace_read_request_valid),
+        .read_request_ready(trace_read_request_ready),
+        .read_response(trace_read_response),
+        .read_response_valid(trace_read_response_valid),
+        .read_response_ready(trace_read_response_ready)
     );
 
     __xls_debug_monitor__DebugServer_0_next debug_server (

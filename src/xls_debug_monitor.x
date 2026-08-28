@@ -78,12 +78,8 @@ struct TraceBuffer {
 }
 
 struct TraceWrite { valid: u1, address: TraceAddress, data: u128 }
-
-// These shapes are consumed by codegen's external 1R1W RAM rewrite. Unit
-// masks mean every write replaces one complete 128-bit row.
-struct RamReadRequest { address: TraceAddress, mask: () }
-struct RamReadResponse { data: u128 }
-struct RamWriteRequest { address: TraceAddress, data: u128, mask: () }
+struct TraceRowWrite { address: TraceAddress, data: u128 }
+struct TraceRead { address: TraceAddress, high: u1 }
 
 struct Counters {
     cycles: u32,
@@ -176,7 +172,8 @@ fn apply_observation(state: MonitorState, observation: Observation)
     -> (MonitorState, TraceWrite) {
     let app_rx_accepted = observation.rx.valid && observation.rx.ready;
     let app_tx_accepted = observation.tx.valid && observation.tx.ready;
-    let cycle = state.counters.cycles + u32:1;
+    let dropped_observations = observation.tap_drops - state.tap_drops;
+    let cycle = state.counters.cycles + u32:1 + dropped_observations;
     let rx_event = TraceEvent {
         cycle,
         metadata: TraceMetadata {
@@ -247,6 +244,68 @@ fn apply_observation(state: MonitorState, observation: Observation)
     )
 }
 
+#[test]
+fn simultaneous_trace_events_share_one_row_test() {
+    let rx_data = (u32:5 << u32:24) | (u32:0x12 << u32:8);
+    let tx_data = (u32:7 << u32:24) | (u32:0x12 << u32:8);
+    let observation = Observation {
+        rx: StreamObservation {
+            data: rx_data, tlast: u1:0, ready: u1:1, valid: u1:1,
+        },
+        tx: StreamObservation {
+            data: tx_data, tlast: u1:0, ready: u1:1, valid: u1:1,
+        },
+        ..zero!<Observation>()
+    };
+    let (observed, write) = apply_observation(
+        zero!<MonitorState>(), observation);
+    let rx_event = TraceEvent {
+        cycle: u32:1,
+        metadata: TraceMetadata {
+            kind: TraceKind::APPLICATION_RX,
+            flags: u8:0,
+            txid: u8:0x12,
+            op: u8:5,
+        },
+    };
+    let tx_event = TraceEvent {
+        cycle: u32:1,
+        metadata: TraceMetadata {
+            kind: TraceKind::APPLICATION_TX,
+            flags: u8:0,
+            txid: u8:0x12,
+            op: u8:7,
+        },
+    };
+    assert_eq(observed.trace.count, TraceCount:2);
+    assert_eq(observed.trace.pending_valid, u1:0);
+    assert_eq(write.valid, u1:1);
+    assert_eq(write.address, TraceAddress:0);
+    assert_eq(trace_address(u1:1, TraceCount:0), TraceAddress:32);
+    assert_eq(trace_address(u1:1, TraceCount:63), TraceAddress:63);
+    assert_eq(
+        write.data,
+        ((trace_event_bits(tx_event) as u128) << u128:64) |
+        trace_event_bits(rx_event) as u128);
+}
+
+#[test]
+fn dropped_observations_advance_cycle_test() {
+    let initial = MonitorState {
+        counters: Counters { cycles: u32:10, ..zero!<Counters>() },
+        tap_drops: u32:7,
+        ..zero!<MonitorState>()
+    };
+    let observation = Observation {
+        tap_drops: u32:12,
+        ..zero!<Observation>()
+    };
+    let (observed, write) = apply_observation(initial, observation);
+    assert_eq(observed.counters.cycles, u32:16);
+    assert_eq(observed.tap_drops, u32:12);
+    assert_eq(write.valid, u1:0);
+}
+
 // Observer is its own top-level proc so XLS schedules it for one observation
 // every cycle. Coupling it to the variable-length response loop would impose
 // DebugServer's slower recurrence on passive sampling and manufacture drops.
@@ -254,31 +313,16 @@ proc Observer {
     observation_in: chan<Observation> in;
     snapshot_request_in: chan<RequestTag> in;
     snapshot_out: chan<MonitorState> out;
-    trace_read_request_in: chan<TraceAddress> in;
-    trace_read_response_out: chan<u128> out;
-    trace_rd_req: chan<RamReadRequest> out;
-    trace_rd_resp: chan<RamReadResponse> in;
-    trace_wr_req: chan<RamWriteRequest> out;
-    trace_wr_comp: chan<()> in;
+    trace_write_out: chan<TraceRowWrite> out;
 
     config(observation_in: chan<Observation> in, snapshot_request_in: chan<RequestTag> in,
            snapshot_out: chan<MonitorState> out,
-           trace_read_request_in: chan<TraceAddress> in,
-           trace_read_response_out: chan<u128> out,
-           trace_rd_req: chan<RamReadRequest> out,
-           trace_rd_resp: chan<RamReadResponse> in,
-           trace_wr_req: chan<RamWriteRequest> out,
-           trace_wr_comp: chan<()> in) {
+           trace_write_out: chan<TraceRowWrite> out) {
         (
             observation_in,
             snapshot_request_in,
             snapshot_out,
-            trace_read_request_in,
-            trace_read_response_out,
-            trace_rd_req,
-            trace_rd_resp,
-            trace_wr_req,
-            trace_wr_comp,
+            trace_write_out,
         )
     }
 
@@ -288,36 +332,16 @@ proc Observer {
         let (tok_observation, observation) = recv(join(), observation_in);
         let (observed, trace_write) = apply_observation(state, observation);
 
-        let write_request = RamWriteRequest {
+        let write_request = TraceRowWrite {
             address: trace_write.address,
             data: trace_write.data,
-            mask: (),
         };
-        let tok_write_request = send_if(
-            tok_observation, trace_wr_req, trace_write.valid, write_request);
-        let (tok_write_complete, _) = recv_if(
-            tok_write_request, trace_wr_comp, trace_write.valid, ());
-
-        let (tok_read_input, read_address, read_requested) = recv_non_blocking(
-            tok_observation, trace_read_request_in, TraceAddress:0);
-        let read_request = RamReadRequest { address: read_address, mask: () };
-        let tok_read_request = send_if(
-            tok_read_input, trace_rd_req, read_requested, read_request);
-        let (tok_read_complete, read_response) = recv_if(
-            tok_read_request,
-            trace_rd_resp,
-            read_requested,
-            zero!<RamReadResponse>());
-        let tok_read_response = send_if(
-            tok_read_complete,
-            trace_read_response_out,
-            read_requested,
-            read_response.data);
+        let tok_trace_write = send_if(
+            tok_observation, trace_write_out, trace_write.valid, write_request);
 
         let (tok_snapshot_request, request, requested) = recv_non_blocking(
             tok_observation, snapshot_request_in, RequestTag::NONE);
-        let tok_snapshot = join(
-            tok_write_complete, tok_read_response, tok_snapshot_request);
+        let tok_snapshot = join(tok_trace_write, tok_snapshot_request);
         send_if(tok_snapshot, snapshot_out, requested, observed);
 
         if requested && request == RequestTag::GET_TRACE {
@@ -339,7 +363,7 @@ struct DebugState {
     response_index: u8,
     txid: u8,
     snapshot: MonitorState,
-    trace_row: u128,
+    trace_event: u64,
 }
 
 fn valid_empty_request(request: Beat) -> u1 {
@@ -388,15 +412,19 @@ fn trace_event_is_pending(state: DebugState) -> u1 {
     trace_event_index(state) == state.snapshot.trace.count - TraceCount:1
 }
 
-fn trace_row_read_needed(state: DebugState) -> u1 {
+fn trace_event_read_needed(state: DebugState) -> u1 {
     state.reply_tag == ReplyTag::TRACE &&
     state.response_index > TRACE_HEADER_WORDS &&
-    trace_word_index(state)[0:2] == u2:0 &&
+    trace_word_index(state)[0:1] == u1:0 &&
     !trace_event_is_pending(state)
 }
 
-fn trace_read_address(state: DebugState) -> TraceAddress {
-    trace_address(state.snapshot.trace.bank, trace_event_index(state))
+fn trace_read(state: DebugState) -> TraceRead {
+    let event_index = trace_event_index(state);
+    TraceRead {
+        address: trace_address(state.snapshot.trace.bank, event_index),
+        high: event_index[0:1],
+    }
 }
 
 fn response_trace_payload(state: DebugState) -> u32 {
@@ -413,7 +441,7 @@ fn response_trace_payload(state: DebugState) -> u32 {
                 trace_event_bits(state.snapshot.trace.pending_event)[
                     (word_index[0:1] as u32) * u32:32+:u32]
             } else {
-                state.trace_row[(word_index[0:2] as u32) * u32:32+:u32]
+                state.trace_event[(word_index[0:1] as u32) * u32:32+:u32]
             }
         },
     }
@@ -460,13 +488,13 @@ proc DebugServer {
     response_out: chan<Beat> out;
     snapshot_request_out: chan<RequestTag> out;
     snapshot_in: chan<MonitorState> in;
-    trace_read_request_out: chan<TraceAddress> out;
-    trace_read_response_in: chan<u128> in;
+    trace_read_request_out: chan<TraceRead> out;
+    trace_read_response_in: chan<u64> in;
 
     config(request_in: chan<Beat> in, response_out: chan<Beat> out,
            snapshot_request_out: chan<RequestTag> out, snapshot_in: chan<MonitorState> in,
-           trace_read_request_out: chan<TraceAddress> out,
-           trace_read_response_in: chan<u128> in) {
+           trace_read_request_out: chan<TraceRead> out,
+           trace_read_response_in: chan<u64> in) {
         (
             request_in,
             response_out,
@@ -497,34 +525,34 @@ proc DebugServer {
                     response_index: u8:0,
                     txid: request.word[8:16],
                     snapshot,
-                    trace_row: u128:0,
+                    trace_event: u64:0,
                 },
             )
         };
 
-        let read_needed = trace_row_read_needed(response);
+        let read_needed = trace_event_read_needed(response);
         let tok_read_request = send_if(
             tok1,
             trace_read_request_out,
             read_needed,
-            trace_read_address(response));
-        let (tok_read_response, trace_row) = recv_if(
-            tok_read_request, trace_read_response_in, read_needed, u128:0);
-        let response_with_row = if read_needed {
-            DebugState { trace_row, ..response }
+            trace_read(response));
+        let (tok_read_response, trace_event) = recv_if(
+            tok_read_request, trace_read_response_in, read_needed, u64:0);
+        let response_with_event = if read_needed {
+            DebugState { trace_event, ..response }
         } else {
             response
         };
 
-        let beat = response_beat(response_with_row);
+        let beat = response_beat(response_with_event);
         send(tok_read_response, response_out, beat);
 
         if beat.tlast {
             zero!<DebugState>()
         } else {
             DebugState {
-                response_index: response_with_row.response_index + u8:1,
-                ..response_with_row
+                response_index: response_with_event.response_index + u8:1,
+                ..response_with_event
             }
         }
     }

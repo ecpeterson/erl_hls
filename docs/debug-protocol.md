@@ -63,12 +63,20 @@ operation tag from most- to least-significant byte. Kinds 1 and 2 denote an
 accepted application input or output frame header. Flag bit 0 records whether
 that header also ended the frame.
 
-The prototype retains eight events and drops newer events once full. Reading
-the trace clears the retained events and its event-drop count; the passive
-tap's observation-drop count is cumulative. This record is deliberately a
-small instrumentation envelope, not an encoding of ERTS trace messages. A
-later schema can add trace tokens and distribution context while preserving
-the independent endpoint and drain operation.
+The prototype retains 64 events and drops newer events once full. Reading the
+trace atomically freezes that bank, switches collection to a second bank, and
+resets the new bank's event-drop count. The passive tap's observation-drop
+count is cumulative. This record is deliberately a small instrumentation
+envelope, not an encoding of ERTS trace messages. A later schema can add trace
+tokens and distribution context while preserving the independent endpoint and
+drain operation.
+
+Complete event pairs are stored in an external 1R1W memory as 128-bit rows. A
+possible odd final event travels in the snapshot descriptor. This lets one
+observer cycle retain both an input and output frame header without requiring
+two writes to the same memory, while FPGA synthesis can implement the bulk
+storage as block RAM. The RAM itself is not reset; the retained count prevents
+unwritten rows from being read.
 
 This is deliberately a last-committed-state view. If translated handlers later
 gain blocking operations such as `receive` or `gen_server:call/3`, a suspended
@@ -90,8 +98,14 @@ may block later debug queries, but cannot block application traffic; a blocked
 application output cannot prevent counter, state, or trace queries from
 completing. State commit pulses are retained by the tap until the observer
 accepts them. Other missed observation cycles increment the cumulative count
-reported by `DEBUG_TRACE`. Trace overflow drops events and increments its own
-counter rather than applying backpressure to the application.
+reported by `DEBUG_TRACE`; the cycle counter and later trace timestamps advance
+across those gaps. Stream counters and trace events are complete only when that
+observation-drop count is zero. Trace overflow drops events and increments its
+own counter rather than applying backpressure to the application.
+
+Only one debug reply is serialized at a time. Consequently, the next trace
+request cannot reclaim a frozen bank until the prior trace reply has completed;
+application observations continue into the other bank meanwhile.
 
 ## Erlang simulation client
 
@@ -112,4 +126,6 @@ same application scenario as the CPU reference test, and queries the resulting
 counter, state, and trace snapshots from Erlang. The deterministic
 SystemVerilog test separately checks the stronger availability case in which
 application output is held under backpressure while all three debug queries
-complete, including exact retained-event ordering and overflow accounting.
+complete, including exact two-event ordering and trace-bank overlap. The
+bridged EUnit scenario checks odd trace counts, a full 64-event bank, overflow
+accounting, and drain-on-read behavior.
