@@ -25,12 +25,18 @@ iverilog \
 
 vvp xls_trace_store.vvp
 
-"$xls_root/interpreter_main" \
-    --dslx_stdlib_path="$stdlib" \
-    xls_debug_monitor.x
+# The interpreter runs tests from its entry module, not imported modules, so
+# keep every test-bearing DSLX module explicit here.
+for test_module in xls_debug_trace.x xls_debug_observer.x; do
+    "$xls_root/interpreter_main" \
+        --dslx_path=. \
+        --dslx_stdlib_path="$stdlib" \
+        "$test_module"
+done
 
 "$xls_root/ir_converter_main" \
     --warnings_as_errors=false \
+    --dslx_path=. \
     --dslx_stdlib_path="$stdlib" \
     --top=Top \
     regsvc.x > regsvc.ir
@@ -47,9 +53,10 @@ vvp xls_trace_store.vvp
 
 "$xls_root/ir_converter_main" \
     --warnings_as_errors=false \
+    --dslx_path=. \
     --dslx_stdlib_path="$stdlib" \
     --top=Observer \
-    xls_debug_monitor.x > xls_debug_observer.ir
+    xls_debug_observer.x > xls_debug_observer.ir
 
 "$xls_root/opt_main" xls_debug_observer.ir > xls_debug_observer.opt.ir
 
@@ -63,9 +70,10 @@ vvp xls_trace_store.vvp
 
 "$xls_root/ir_converter_main" \
     --warnings_as_errors=false \
+    --dslx_path=. \
     --dslx_stdlib_path="$stdlib" \
     --top=DebugServer \
-    xls_debug_monitor.x > xls_debug_server.ir
+    xls_debug_server.x > xls_debug_server.ir
 
 "$xls_root/opt_main" xls_debug_server.ir > xls_debug_server.opt.ir
 
@@ -80,6 +88,7 @@ vvp xls_trace_store.vvp
 
 "$xls_root/ir_converter_main" \
     --warnings_as_errors=false \
+    --dslx_path=. \
     --dslx_stdlib_path="$stdlib" \
     --top=PairIngress \
     xls_fabric_router.x > xls_fabric_ingress.ir
@@ -96,6 +105,7 @@ vvp xls_trace_store.vvp
 
 "$xls_root/ir_converter_main" \
     --warnings_as_errors=false \
+    --dslx_path=. \
     --dslx_stdlib_path="$stdlib" \
     --top=PairEgress \
     xls_fabric_router.x > xls_fabric_egress.ir

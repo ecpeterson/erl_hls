@@ -141,21 +141,21 @@ module axis_regsvc_debug_top (
         .observation_ready(debug_observation_ready)
     );
 
-    __xls_debug_monitor__Observer_0_next debug_observer (
+    __xls_debug_observer__Observer_0_next debug_observer (
         .clk(aclk),
         .reset(!aresetn),
-        .xls_debug_monitor__observation_in(debug_observation_data),
-        .xls_debug_monitor__observation_in_vld(debug_observation_valid),
-        .xls_debug_monitor__observation_in_rdy(debug_observation_ready),
-        .xls_debug_monitor__snapshot_request_in(snapshot_request),
-        .xls_debug_monitor__snapshot_request_in_vld(snapshot_request_valid),
-        .xls_debug_monitor__snapshot_request_in_rdy(snapshot_request_ready),
-        .xls_debug_monitor__snapshot_out(snapshot),
-        .xls_debug_monitor__snapshot_out_vld(snapshot_valid),
-        .xls_debug_monitor__snapshot_out_rdy(snapshot_ready),
-        .xls_debug_monitor__trace_write_out(trace_write),
-        .xls_debug_monitor__trace_write_out_vld(trace_write_valid),
-        .xls_debug_monitor__trace_write_out_rdy(trace_write_ready)
+        .xls_debug_observer__observation_in(debug_observation_data),
+        .xls_debug_observer__observation_in_vld(debug_observation_valid),
+        .xls_debug_observer__observation_in_rdy(debug_observation_ready),
+        .xls_debug_observer__snapshot_request_in(snapshot_request),
+        .xls_debug_observer__snapshot_request_in_vld(snapshot_request_valid),
+        .xls_debug_observer__snapshot_request_in_rdy(snapshot_request_ready),
+        .xls_debug_observer__snapshot_out(snapshot),
+        .xls_debug_observer__snapshot_out_vld(snapshot_valid),
+        .xls_debug_observer__snapshot_out_rdy(snapshot_ready),
+        .xls_debug_observer__trace_write_out(trace_write),
+        .xls_debug_observer__trace_write_out_vld(trace_write_valid),
+        .xls_debug_observer__trace_write_out_rdy(trace_write_ready)
     );
 
     xls_trace_store #(
@@ -176,27 +176,27 @@ module axis_regsvc_debug_top (
         .read_response_ready(trace_read_response_ready)
     );
 
-    __xls_debug_monitor__DebugServer_0_next debug_server (
+    __xls_debug_server__DebugServer_0_next debug_server (
         .clk(aclk),
         .reset(!aresetn),
-        .xls_debug_monitor__request_in(debug_request),
-        .xls_debug_monitor__request_in_vld(s_dbg_tvalid),
-        .xls_debug_monitor__request_in_rdy(s_dbg_tready),
-        .xls_debug_monitor__response_out(debug_response),
-        .xls_debug_monitor__response_out_vld(m_dbg_tvalid),
-        .xls_debug_monitor__response_out_rdy(m_dbg_tready),
-        .xls_debug_monitor__snapshot_request_out(snapshot_request),
-        .xls_debug_monitor__snapshot_request_out_vld(snapshot_request_valid),
-        .xls_debug_monitor__snapshot_request_out_rdy(snapshot_request_ready),
-        .xls_debug_monitor__snapshot_in(snapshot),
-        .xls_debug_monitor__snapshot_in_vld(snapshot_valid),
-        .xls_debug_monitor__snapshot_in_rdy(snapshot_ready),
-        .xls_debug_monitor__trace_read_request_out(trace_read_request),
-        .xls_debug_monitor__trace_read_request_out_vld(trace_read_request_valid),
-        .xls_debug_monitor__trace_read_request_out_rdy(trace_read_request_ready),
-        .xls_debug_monitor__trace_read_response_in(trace_read_response),
-        .xls_debug_monitor__trace_read_response_in_vld(trace_read_response_valid),
-        .xls_debug_monitor__trace_read_response_in_rdy(trace_read_response_ready)
+        .xls_debug_server__request_in(debug_request),
+        .xls_debug_server__request_in_vld(s_dbg_tvalid),
+        .xls_debug_server__request_in_rdy(s_dbg_tready),
+        .xls_debug_server__response_out(debug_response),
+        .xls_debug_server__response_out_vld(m_dbg_tvalid),
+        .xls_debug_server__response_out_rdy(m_dbg_tready),
+        .xls_debug_server__snapshot_request_out(snapshot_request),
+        .xls_debug_server__snapshot_request_out_vld(snapshot_request_valid),
+        .xls_debug_server__snapshot_request_out_rdy(snapshot_request_ready),
+        .xls_debug_server__snapshot_in(snapshot),
+        .xls_debug_server__snapshot_in_vld(snapshot_valid),
+        .xls_debug_server__snapshot_in_rdy(snapshot_ready),
+        .xls_debug_server__trace_read_request_out(trace_read_request),
+        .xls_debug_server__trace_read_request_out_vld(trace_read_request_valid),
+        .xls_debug_server__trace_read_request_out_rdy(trace_read_request_ready),
+        .xls_debug_server__trace_read_response_in(trace_read_response),
+        .xls_debug_server__trace_read_response_in_vld(trace_read_response_valid),
+        .xls_debug_server__trace_read_response_in_rdy(trace_read_response_ready)
     );
 
     assign m_dbg_tdata = debug_response[31:0];

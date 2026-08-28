@@ -99,11 +99,13 @@ placement or routing failures still stop the build.
 | block-RAM-backed trace | 12,542 | 16,454 | 4 |
 
 Moving bounded trace events out of the observer's recurrent state reduces both
-estimated logic cells and flip-flops by about 24%. Each endpoint uses two
-`RAMB36E1` primitives for its 128-bit-wide physical store; logical ping-pong
-banks keep collection independent of draining a frozen snapshot. The resource
-regression requires exactly four block RAMs to survive both raw-pair and
-compile-harness synthesis.
+estimated logic cells and flip-flops by about 24%. Each instrumented hardware
+endpoint uses two `RAMB36E1` primitives for its 128-bit-wide physical store, so
+this two-endpoint fixture uses four and an otherwise identical N-endpoint
+design would use 2N. Logical ping-pong banks share that physical store rather
+than doubling it. Host-side `xls_gs` proxy processes do not themselves consume
+FPGA memory. The resource regression requires exactly four block RAMs to
+survive both raw-pair and compile-harness synthesis.
 
 The compile harness successfully places, routes, and assembles for
 `xc7z020clg484-2`. The deterministic run uses 14,527 of 106,400 `SLICE_LUTX`
@@ -113,13 +115,29 @@ the translated application service, at about 1.8 ns of logic and 18.9 ns of
 routing, rather than in the debug snapshot handshake. This is a useful compile
 proof, not a timing-closed implementation.
 
-The same pair packs to 41% of LUT, 47% of flip-flop, and 6% of block-RAM sites
-on `xc7z010clg225-1`, but the pinned nextpnr still cannot produce a legal
-placement. Its analytical placer cannot legalize the design, while a separate
-simulated-annealing attempt completes annealing but fails the post-placement
-validity check; neither reaches routing. The much lower aggregate site counts
-make placement legality and local slice structure, rather than simple device
-capacity, the relevant smaller-device question.
+For `xc7z010clg225-1`, nextpnr reports 41% of its logical `SLICE_LUTX` BELs,
+47% of flip-flops, and 6% of block-RAM sites, but cannot produce a legal
+placement. The LUT denominator counts the O5 and O6 BELs associated with
+17,600 physical LUTs; those paired outputs are not independently placeable, so
+41% is not a physical-LUT occupancy figure. The analytical placer cannot
+legalize the design, while a separate simulated-annealing attempt completes
+annealing but fails the post-placement validity check; neither reaches routing.
+
+A one-off subsystem ablation narrows the threshold. The application pair,
+Observer pair with compact server stubs, DebugServer pair with compact observer
+stubs, and an application pair with only one instrumented endpoint all route.
+Two complete debug endpoints still fail placement even when the application
+cores are replaced with small state-producing stubs. Disabling carry-chain
+inference does not change that outcome, so the carry primitive named by one
+legalization error is not itself the bottleneck.
+
+Because those stubs alter substantial logic, the ablation does not yet isolate
+one construct as the cause. The leading design-side hypothesis is the wide
+Observer–DebugServer boundary: each server retains an 875-bit snapshot which
+includes a 512-bit committed application state. Replacing only that handoff
+with operation-specific narrow transfers or a memory-backed snapshot is the
+confirming experiment. A revision-matched nextpnr and database bisect is also
+warranted before assuming every failure is intrinsic to the part.
 
 The `xc7z020` place-and-route takes roughly 20 minutes on the M2. Machine-
 readable Yosys statistics and nextpnr timing/utilization reports are retained

@@ -104,8 +104,8 @@ sources=(
     "$project_root/test/rtl/regsvc_pair_fixture.sv"
     "$project_root/src/examples/regsvc_debug_top.v"
     "$project_root/src/examples/regsvc_core_adapter.v"
-    "$project_root/src/xls_debug_tap.v"
-    "$project_root/src/xls_trace_store.v"
+    "$project_root/priv/rtl/xls_debug_tap.v"
+    "$project_root/priv/rtl/xls_trace_store.v"
     "$generated_rtl/regsvc.v"
     "$generated_rtl/xls_debug_observer.v"
     "$generated_rtl/xls_debug_server.v"
@@ -128,8 +128,15 @@ done
 
 verify_manifest_entry \
     input axis.x "$project_root/experiments/05-xls/axis.x"
-verify_manifest_entry \
-    input xls_debug_monitor.x "$project_root/src/xls_debug_monitor.x"
+for debug_module in \
+    xls_debug_types.x \
+    xls_debug_trace.x \
+    xls_debug_observer.x \
+    xls_debug_server.x
+do
+    verify_manifest_entry \
+        input "$debug_module" "$project_root/src/$debug_module"
+done
 verify_manifest_entry \
     input xls_fabric_router.x "$project_root/src/xls_fabric_router.x"
 verify_manifest_entry \
@@ -137,9 +144,9 @@ verify_manifest_entry \
 verify_manifest_entry \
     input regsvc_debug_top.v "$project_root/src/examples/regsvc_debug_top.v"
 verify_manifest_entry \
-    input xls_debug_tap.v "$project_root/src/xls_debug_tap.v"
+    input xls_debug_tap.v "$project_root/priv/rtl/xls_debug_tap.v"
 verify_manifest_entry \
-    input xls_trace_store.v "$project_root/src/xls_trace_store.v"
+    input xls_trace_store.v "$project_root/priv/rtl/xls_trace_store.v"
 verify_manifest_entry \
     input regsvc_pair_fixture.sv "$project_root/test/rtl/regsvc_pair_fixture.sv"
 verify_manifest_entry \

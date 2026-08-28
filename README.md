@@ -31,15 +31,20 @@ The remote host and paths can be overridden with `ERL_XLS_REMOTE_HOST`,
 GitHub Actions runs the same generated-RTL and bridged-EUnit regressions on
 Ubuntu using a checksum-pinned XLS release. `tools/prepare_xls_sim.sh` creates
 the portable simulation staging directory; `tools/remote_xls_sim.sh` executes
-that directory on any Linux host with XLS, Erlang, and Icarus installed.
+that directory on any Linux host with XLS, Erlang, and Icarus installed. The
+same remote runner invokes the XLS interpreter on `xls_debug_trace.x` and
+`xls_debug_observer.x`, so their `#[test]` functions run in both GitHub Actions
+and the UTM flow before the debug procs are lowered to RTL.
 
-The debug monitor itself is written in XLS and lowered beside the application;
-a small passive RTL tap keeps instrumentation ready signals out of the
-application datapath. The shared EUnit scenario queries counters, committed
-process state, and a bounded frame trace from Erlang, including trace overflow
-and drain behavior. The SystemVerilog scenario additionally proves that routed
-debug access remains available while application output is backpressured. See
-the [debug protocol](docs/debug-protocol.md) for that interface.
+The debug subsystem is divided into focused XLS modules for shared types,
+trace storage semantics, passive observation, and response serialization, and
+is lowered beside the application. A small passive RTL tap keeps
+instrumentation ready signals out of the application datapath. The shared
+EUnit scenario queries counters, committed process state, and a bounded frame
+trace from Erlang, including trace overflow and drain behavior. The
+SystemVerilog scenario additionally proves that routed debug access remains
+available while application output is backpressured. See the
+[debug protocol](docs/debug-protocol.md) for that interface.
 
 The routed simulation hosts two independent `regsvc` instances behind each
 shared stream. A 32-bit source/destination envelope precedes the existing
