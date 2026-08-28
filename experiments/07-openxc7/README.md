@@ -76,9 +76,10 @@ four-interface logical fixture out of context for an architectural resource
 estimate. It then simulates, synthesizes, and routes a two-pin compile harness.
 The harness enumerates application and debug test cases for both endpoints,
 uses LFSRs for payload and flow-control variation, and folds all responses into
-a registered rotating digest. A flip-flop-retention check guards against
-pruning translated-process state without pretending that PS-facing AXI streams
-are physical board pins or creating one large combinational output path.
+a registered rotating digest. Flip-flop and block-RAM retention checks guard
+against pruning translated-process state or the four trace RAM primitives without
+pretending that PS-facing AXI streams are physical board pins or creating one
+large combinational output path.
 
 The same design can be retried explicitly on the smaller part:
 
@@ -92,22 +93,33 @@ placement or routing failures still stop the build.
 
 ## Current result
 
-The raw routed pair synthesizes to an estimated 16,546 logic cells and 21,724
-flip-flops. It infers no block RAM or DSP resources: the current generated
-FIFOs, trace buffers, and state snapshots expand into LUTs and registers.
+| design | estimated logic cells | flip-flops | `RAMB36E1` |
+| --- | ---: | ---: | ---: |
+| register-backed trace baseline | 16,546 | 21,724 | 0 |
+| block-RAM-backed trace | 12,542 | 16,454 | 4 |
+
+Moving bounded trace events out of the observer's recurrent state reduces both
+estimated logic cells and flip-flops by about 24%. Each endpoint uses two
+`RAMB36E1` primitives for its 128-bit-wide physical store; logical ping-pong
+banks keep collection independent of draining a frozen snapshot. The resource
+regression requires exactly four block RAMs to survive both raw-pair and
+compile-harness synthesis.
 
 The compile harness successfully places, routes, and assembles for
-`xc7z020clg484-2`. A representative deterministic run uses 21,627 of 106,400
-`SLICE_LUTX` sites and 21,881 of 106,400 `SLICE_FFX` sites. It reaches 44.21
-MHz against the requested 100 MHz; the critical path is about 0.9 ns of logic
-and 21.7 ns of routing across the debug snapshot handshake. This is a useful
-baseline, not a timing-closed implementation.
+`xc7z020clg484-2`. The deterministic run uses 14,527 of 106,400 `SLICE_LUTX`
+sites, 16,611 of 106,400 `SLICE_FFX` sites, and 4 of 140 `RAMB36E1` sites. It
+reaches 48.32 MHz against the requested 100 MHz. The critical path is now in
+the translated application service, at about 1.8 ns of logic and 18.9 ns of
+routing, rather than in the debug snapshot handshake. This is a useful compile
+proof, not a timing-closed implementation.
 
-The same pair packs to 61% of LUT and 62% of flip-flop sites on
-`xc7z010clg225-1`, but the pinned nextpnr cannot produce a legal placement with
-the tested placers and settings. Reducing register-expanded instrumentation
-storage is therefore the clearest next step before treating the smaller device
-as a routed-pair target.
+The same pair packs to 41% of LUT, 47% of flip-flop, and 6% of block-RAM sites
+on `xc7z010clg225-1`, but the pinned nextpnr still cannot produce a legal
+placement. Its analytical placer cannot legalize the design, while a separate
+simulated-annealing attempt completes annealing but fails the post-placement
+validity check; neither reaches routing. The much lower aggregate site counts
+make placement legality and local slice structure, rather than simple device
+capacity, the relevant smaller-device question.
 
 The `xc7z020` place-and-route takes roughly 20 minutes on the M2. Machine-
 readable Yosys statistics and nextpnr timing/utilization reports are retained
