@@ -40,10 +40,11 @@ The debug subsystem is divided into focused XLS modules for shared types,
 trace storage semantics, passive observation, and response serialization, and
 is lowered beside the application. A small passive RTL tap keeps
 instrumentation ready signals out of the application datapath. The shared
-EUnit scenario queries counters, committed process state, and a bounded frame
-trace from Erlang, including trace overflow and drain behavior. The
-SystemVerilog scenario additionally proves that routed debug access remains
-available while application output is backpressured. See the
+EUnit scenario queries counters and a bounded frame trace from Erlang,
+including trace overflow and drain behavior. Packed application state is not
+mirrored into the passive debug path. The SystemVerilog scenario additionally
+proves that routed debug access remains available while application output is
+backpressured and that the reserved former state-query tag is rejected. See the
 [debug protocol](docs/debug-protocol.md) for that interface.
 
 The routed simulation hosts two independent `regsvc` instances behind each

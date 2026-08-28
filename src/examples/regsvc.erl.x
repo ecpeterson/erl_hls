@@ -146,18 +146,15 @@ fn bits_from_state(s: State) -> bits[bit_count<State>()] {
 proc Service {
   req_in:   chan<axis::Frame> in;
   resp_out: chan<axis::Frame> out;
-  state_out: chan<bits[512]> out;
-
-  config(req_in: chan<axis::Frame> in, resp_out: chan<axis::Frame> out,
-         state_out: chan<bits[512]> out) {
-    (req_in, resp_out, state_out)
+  config(req_in: chan<axis::Frame> in, resp_out: chan<axis::Frame> out) {
+    (req_in, resp_out)
   }
 
   init { zero!<State>() }
 
   next(state: State) {
     let (tok1, frame) = recv(join(), req_in);
-    let state_record = (Tag::STATE, state, bits_from_state(state));
+    let state_record = (Tag::STATE, state);
 
     // cognate to {reply, Reply, State}
     let (resp, new_state) = match frame.header.op as Tag {
@@ -174,7 +171,7 @@ let _1 = (Tag::ACK, _0, bits_from_ack(_0));
 let _2 = (REPLY, _1, state_1, );
 let _3 = if (bool:false) {
     let s = zero!<State>();
-    (axis::pack(Tag::ERROR as u8, ERROR_MATCH_FAILURE), (Tag::STATE, s, bits_from_state(s)))
+    (axis::pack(Tag::ERROR as u8, ERROR_MATCH_FAILURE), (Tag::STATE, s))
 } else {
     (axis::pack(_2.1.0 as u8, _2.1.2), _2.2)
 };
@@ -200,7 +197,7 @@ let _5 = (Tag::READ, _4, bits_from_read(_4));
 let _6 = (REPLY, _5, state_1, );
 let _7 = if ((static_match_1_1 != static_match_1_2) || bool:false) {
     let s = zero!<State>();
-    (axis::pack(Tag::ERROR as u8, ERROR_MATCH_FAILURE), (Tag::STATE, s, bits_from_state(s)))
+    (axis::pack(Tag::ERROR as u8, ERROR_MATCH_FAILURE), (Tag::STATE, s))
 } else {
     (axis::pack(_6.1.0 as u8, _6.1.2), _6.2)
 };
@@ -229,7 +226,7 @@ let _8 = (Tag::BULK_READ, _7, bits_from_bulkread(_7));
 let _9 = (REPLY, _8, state_1, );
 let _10 = if (bool:false) {
     let s = zero!<State>();
-    (axis::pack(Tag::ERROR as u8, ERROR_MATCH_FAILURE), (Tag::STATE, s, bits_from_state(s)))
+    (axis::pack(Tag::ERROR as u8, ERROR_MATCH_FAILURE), (Tag::STATE, s))
 } else {
     (axis::pack(_9.1.0 as u8, _9.1.2), _9.2)
 };
@@ -259,11 +256,11 @@ let _10 = State {
   registers: newregisters_1,
   ..(state_1).1
 };
-let _11 = (Tag::STATE, _10, bits_from_state(_10));
+let _11 = (Tag::STATE, _10);
 let _12 = (NOREPLY, _11, );
 let _13 = if (bool:false) {
     let s = zero!<State>();
-    (axis::pack(Tag::ERROR as u8, ERROR_MATCH_FAILURE), (Tag::STATE, s, bits_from_state(s)))
+    (axis::pack(Tag::ERROR as u8, ERROR_MATCH_FAILURE), (Tag::STATE, s))
 } else {
     (zero!<axis::Frame>(), _12.1)
 };
@@ -273,15 +270,14 @@ _13
     _ => {
       let s = zero!<State>();
       (axis::pack(Tag::ERROR as u8, ERROR_FUNCTION_CLAUSE),
-       (Tag::STATE, s, bits_from_state(s)))
+       (Tag::STATE, s))
     }
 
     };
 
     let txid = frame.header.txid;
     let resp2 = axis::Frame { header: axis::Header { txid, ..resp.header }, ..resp };
-    let tok2 = send_if(tok1, resp_out, resp2.header.op != (Tag::NONE as u8), resp2);
-    send(tok2, state_out, new_state.2);
+    send_if(tok1, resp_out, resp2.header.op != (Tag::NONE as u8), resp2);
     new_state.1
   }
 }
@@ -289,18 +285,15 @@ _13
 proc Top {
   ext_recv:  chan<axis::Beat> in;
   ext_send:  chan<axis::Beat> out;
-  ext_state: chan<bits[512]> out;
-
-  config(ext_recv: chan<axis::Beat> in, ext_send: chan<axis::Beat> out,
-         ext_state: chan<bits[512]> out) {
+  config(ext_recv: chan<axis::Beat> in, ext_send: chan<axis::Beat> out) {
     let (req_p,  req_c ) = chan<axis::Frame, u32:1>("req");
     let (resp_p, resp_c) = chan<axis::Frame, u32:1>("resp");
 
     spawn axis::Rx(ext_recv, req_p);
-    spawn Service(req_c, resp_p, ext_state);
+    spawn Service(req_c, resp_p);
     spawn axis::Tx(resp_c, ext_send);
 
-    (ext_recv, ext_send, ext_state)
+    (ext_recv, ext_send)
   }
 
   init { () }

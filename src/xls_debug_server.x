@@ -12,8 +12,6 @@ struct TraceReplyHeader {
 }
 
 const COUNTER_WORDS = ((bit_count<debug::Counters>() / u32:32) as u8) + u8:1;
-const STATE_WORDS = (debug::APPLICATION_STATE_BITS / u32:32) as u8;
-const STATE_REPLY_WORDS = STATE_WORDS + u8:1;
 const TRACE_RECORD_WORDS = (debug::TRACE_EVENT_BITS / u32:32) as u8;
 const TRACE_HEADER_WORDS = (bit_count<TraceReplyHeader>() / u32:32) as u8;
 
@@ -37,7 +35,6 @@ fn reply_tag_for_request(request: debug::Beat) -> debug::ReplyTag {
     } else {
         match request.word[24:32] as debug::RequestTag {
             debug::RequestTag::GET_COUNTERS => debug::ReplyTag::COUNTERS,
-            debug::RequestTag::GET_STATE => debug::ReplyTag::STATE,
             debug::RequestTag::GET_TRACE => debug::ReplyTag::TRACE,
             _ => debug::ReplyTag::ERROR,
         }
@@ -56,7 +53,6 @@ fn response_words(reply_tag: debug::ReplyTag,
                   snapshot: debug::MonitorState) -> u8 {
     match reply_tag {
         debug::ReplyTag::COUNTERS => COUNTER_WORDS,
-        debug::ReplyTag::STATE => STATE_REPLY_WORDS,
         debug::ReplyTag::TRACE =>
             TRACE_HEADER_WORDS +
             ((snapshot.trace.count as u8) * TRACE_RECORD_WORDS),
@@ -126,12 +122,6 @@ fn response_payload(state: DebugState) -> u32 {
             u8:7 => state.snapshot.counters.app_tx_frames,
             u8:8 => state.snapshot.counters.app_tx_stall_cycles,
             _ => u32:0,
-        },
-        debug::ReplyTag::STATE => if state.response_index == u8:1 {
-            debug::STATE_VERSION
-        } else {
-            state.snapshot.committed_state[
-                ((state.response_index as u32) - u32:2) * u32:32+:u32]
         },
         debug::ReplyTag::TRACE => response_trace_payload(state),
         _ => u32:1,

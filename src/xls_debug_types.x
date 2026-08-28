@@ -9,7 +9,7 @@ import std;
 pub enum RequestTag : u8 {
     NONE = 0x00,
     GET_COUNTERS = 0x01,
-    GET_STATE = 0x02,
+    // 0x02 is reserved for a future request.
     GET_TRACE = 0x03,
 }
 
@@ -17,7 +17,7 @@ pub enum ReplyTag : u8 {
     // Allows zero-initialized server state; an active response never emits it.
     NONE = 0x00,
     COUNTERS = 0x81,
-    STATE = 0x82,
+    // 0x82 is reserved for a future reply.
     TRACE = 0x83,
     ERROR = 0xff,
 }
@@ -28,10 +28,8 @@ pub enum TraceKind : u8 {
     APPLICATION_TX = 2,
 }
 
-pub const DEBUG_VERSION = u32:3;
-pub const STATE_VERSION = u32:1;
+pub const DEBUG_VERSION = u32:4;
 pub const TRACE_VERSION = u32:1;
-pub const APPLICATION_STATE_BITS = u32:512;
 pub const TRACE_DEPTH = u32:64;
 pub const TRACE_COUNT_BITS = std::clog2(TRACE_DEPTH + u32:1);
 pub const TRACE_ROW_COUNT = TRACE_DEPTH / u32:2;
@@ -46,11 +44,9 @@ pub struct Beat { keep: u4, tlast: u1, word: u32 }
 pub struct StreamObservation { data: u32, tlast: u1, ready: u1, valid: u1 }
 
 pub struct Observation {
-    committed_state: bits[APPLICATION_STATE_BITS],
     tap_drops: u32,
     tx: StreamObservation,
     rx: StreamObservation,
-    state_valid: u1,
 }
 
 // This is deliberately a small, versioned event envelope, not an attempt to
@@ -91,7 +87,6 @@ pub struct Counters {
 pub struct MonitorState {
     counters: Counters,
     tap_drops: u32,
-    committed_state: bits[APPLICATION_STATE_BITS],
     app_rx_in_frame: u1,
     app_tx_in_frame: u1,
     trace: TraceBuffer,

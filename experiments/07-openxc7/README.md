@@ -96,52 +96,38 @@ placement or routing failures still stop the build.
 | design | estimated logic cells | flip-flops | `RAMB36E1` |
 | --- | ---: | ---: | ---: |
 | register-backed trace baseline | 16,546 | 21,724 | 0 |
-| block-RAM-backed trace | 12,542 | 16,454 | 4 |
+| version 3: block-RAM trace and passive state mirror | 12,542 | 16,454 | 4 |
+| version 4: block-RAM trace without passive state mirror | 7,229 | 8,108 | 4 |
 
 Moving bounded trace events out of the observer's recurrent state reduces both
-estimated logic cells and flip-flops by about 24%. Each instrumented hardware
-endpoint uses two `RAMB36E1` primitives for its 128-bit-wide physical store, so
-this two-endpoint fixture uses four and an otherwise identical N-endpoint
-design would use 2N. Logical ping-pong banks share that physical store rather
-than doubling it. Host-side `xls_gs` proxy processes do not themselves consume
-FPGA memory. The resource regression requires exactly four block RAMs to
-survive both raw-pair and compile-harness synthesis.
+estimated logic cells and flip-flops by about 24%. Removing the always-on
+512-bit state observation path then reduces them by a further 42% and 51%,
+respectively. State serialization remains generated, but no packed state is
+formed or replicated in the live service recurrence. The former state-query
+tags are reserved until a narrow, on-demand replacement has defined coherent
+snapshot semantics.
 
-The compile harness successfully places, routes, and assembles for
-`xc7z020clg484-2`. The deterministic run uses 14,527 of 106,400 `SLICE_LUTX`
-sites, 16,611 of 106,400 `SLICE_FFX` sites, and 4 of 140 `RAMB36E1` sites. It
-reaches 48.32 MHz against the requested 100 MHz. The critical path is now in
-the translated application service, at about 1.8 ns of logic and 18.9 ns of
-routing, rather than in the debug snapshot handshake. This is a useful compile
-proof, not a timing-closed implementation.
+Each instrumented hardware endpoint uses two `RAMB36E1` primitives for its
+128-bit-wide trace store, so this two-endpoint fixture uses four and an
+otherwise identical N-endpoint design would use 2N. Logical ping-pong banks
+share that physical store rather than doubling it. Host-side `xls_gs` proxy
+processes do not themselves consume FPGA memory. The resource regression
+requires exactly four block RAMs to survive both raw-pair and compile-harness
+synthesis.
 
-For `xc7z010clg225-1`, nextpnr reports 41% of its logical `SLICE_LUTX` BELs,
-47% of flip-flops, and 6% of block-RAM sites, but cannot produce a legal
-placement. The LUT denominator counts the O5 and O6 BELs associated with
-17,600 physical LUTs; those paired outputs are not independently placeable, so
-41% is not a physical-LUT occupancy figure. The analytical placer cannot
-legalize the design, while a separate simulated-annealing attempt completes
-annealing but fails the post-placement validity check; neither reaches routing.
+The complete version-4 compile harness now places, routes, and assembles for
+both target parts:
 
-A one-off subsystem ablation narrows the threshold. The application pair,
-Observer pair with compact server stubs, DebugServer pair with compact observer
-stubs, and an application pair with only one instrumented endpoint all route.
-Two complete debug endpoints still fail placement even when the application
-cores are replaced with small state-producing stubs. Disabling carry-chain
-inference does not change that outcome, so the carry primitive named by one
-legalization error is not itself the bottleneck.
+| part | `SLICE_LUTX` | `SLICE_FFX` | `RAMB36E1` | estimated maximum clock |
+| --- | ---: | ---: | ---: | ---: |
+| `xc7z010clg225-1` | 9,291 / 35,200 | 8,265 / 35,200 | 4 / 60 | 61.32 MHz |
+| `xc7z020clg484-2` | 9,291 / 106,400 | 8,265 / 106,400 | 4 / 140 | 63.34 MHz |
 
-Because those stubs alter substantial logic, the ablation does not yet isolate
-one construct as the cause. The leading design-side hypothesis is the wide
-Observer–DebugServer boundary: each server retains an 875-bit snapshot which
-includes a 512-bit committed application state. Replacing only that handoff
-with operation-specific narrow transfers or a memory-backed snapshot is the
-confirming experiment. A revision-matched nextpnr and database bisect is also
-warranted before assuming every failure is intrinsic to the part.
-
-The `xc7z020` place-and-route takes roughly 20 minutes on the M2. Machine-
-readable Yosys statistics and nextpnr timing/utilization reports are retained
-under `build/regsvc/`.
+The LUT denominators count separately addressable O5 and O6 BELs rather than
+physical LUT packages, so those ratios are not physical-LUT occupancy figures.
+Neither result closes the requested 100 MHz timing target, but both are valid
+compile-only bitstreams. Machine-readable Yosys statistics and nextpnr timing
+and utilization reports are retained under `build/regsvc/`.
 
 ## Bitstream safety and scope
 
@@ -152,9 +138,10 @@ the corresponding board schematic.
 
 This is a PL compile proof. It does not instantiate PS7, exercise DMA, validate
 a board design, or demonstrate the harness transactions in silicon. A focused
-Icarus test checks application tags 3–10 and debug tags 1–4 at both endpoints
-and observes application and debug responses. The existing routed RTL and
-bridged EUnit regressions remain the fuller behavioral correctness checks.
+Icarus test checks application tags 3–10, the supported counter and trace debug
+requests, and reserved/unsupported-tag errors at both endpoints while observing
+application and debug responses. The routed RTL and bridged EUnit regressions
+remain the fuller behavioral correctness checks.
 
 Repeated builds print a checksum of deterministic Project X-Ray frames rather
 than the final `.bit`, whose metadata includes its build time and input path.

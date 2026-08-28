@@ -54,9 +54,9 @@ module axis_regsvc_debug_top (
     output wire        m_dbg_tlast
 );
     // These mirror the logical DSLX types. Complete trace-event pairs live in
-    // a 1R1W block RAM; the flattened snapshot carries only its frozen-bank
-    // descriptor and a possible odd final event.
-    localparam integer APPLICATION_STATE_BITS = 512;
+    // a 1R1W block RAM; the flattened snapshot carries the counters, tap-drop
+    // count, in-frame flags, frozen-bank descriptor, and a possible odd final
+    // event.
     localparam integer TRACE_DEPTH = 64;
     localparam integer TRACE_EVENT_BITS = 64;
     localparam integer TRACE_COUNT_BITS = $clog2(TRACE_DEPTH + 1);
@@ -69,16 +69,14 @@ module axis_regsvc_debug_top (
         TRACE_ADDRESS_BITS + TRACE_ROW_DATA_BITS;
     localparam integer STREAM_OBSERVATION_BITS = 32 + 3;
     localparam integer OBSERVATION_BITS =
-        APPLICATION_STATE_BITS + 32 + 2 * STREAM_OBSERVATION_BITS + 1;
+        32 + 2 * STREAM_OBSERVATION_BITS;
     localparam integer COUNTER_BITS = 7 * 32;
     localparam integer TRACE_BUFFER_BITS =
         1 + TRACE_COUNT_BITS + 32 + 1 + TRACE_EVENT_BITS;
     localparam integer SNAPSHOT_BITS =
-        COUNTER_BITS + 32 + APPLICATION_STATE_BITS + 2 + TRACE_BUFFER_BITS;
+        COUNTER_BITS + 32 + 2 + TRACE_BUFFER_BITS;
     localparam integer DEBUG_BEAT_BITS = 4 + 1 + 32;
 
-    wire [APPLICATION_STATE_BITS-1:0] app_state_data;
-    wire         app_state_valid;
     wire [OBSERVATION_BITS-1:0] debug_observation_data;
     wire         debug_observation_valid;
     wire         debug_observation_ready;
@@ -116,14 +114,10 @@ module axis_regsvc_debug_top (
         .m_axis_tkeep(m_axis_tkeep),
         .m_axis_tvalid(m_axis_tvalid),
         .m_axis_tready(m_axis_tready),
-        .m_axis_tlast(m_axis_tlast),
-        .state_data(app_state_data),
-        .state_valid(app_state_valid)
+        .m_axis_tlast(m_axis_tlast)
     );
 
-    xls_debug_tap #(
-        .STATE_BITS(APPLICATION_STATE_BITS)
-    ) debug_tap (
+    xls_debug_tap debug_tap (
         .aclk(aclk),
         .aresetn(aresetn),
         .app_rx_tvalid(s_axis_tvalid),
@@ -134,8 +128,6 @@ module axis_regsvc_debug_top (
         .app_tx_tready(m_axis_tready),
         .app_tx_tlast(m_axis_tlast),
         .app_tx_tdata(m_axis_tdata),
-        .app_state_data(app_state_data),
-        .app_state_valid(app_state_valid),
         .observation_data(debug_observation_data),
         .observation_valid(debug_observation_valid),
         .observation_ready(debug_observation_ready)

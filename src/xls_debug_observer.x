@@ -63,11 +63,6 @@ pub fn apply_observation(state: debug::MonitorState,
                     (observation.tx.valid && !observation.tx.ready) as u32,
             },
             tap_drops: observation.tap_drops,
-            committed_state: if observation.state_valid {
-                observation.committed_state
-            } else {
-                state.committed_state
-            },
             app_rx_in_frame: next_in_frame(
                 state.app_rx_in_frame,
                 observation.rx.valid,

@@ -100,7 +100,7 @@ debug_scenario_(Pid, DebugPid) ->
     [
         ?_test(begin
             {ok, Counters} = xls_debug:get_counters(DebugPid),
-            ?assertEqual(3, maps:get(version, Counters)),
+            ?assertEqual(4, maps:get(version, Counters)),
             ?assert(maps:get(cycles, Counters) > 0),
             ?assertEqual(21, maps:get(app_rx_beats, Counters)),
             ?assertEqual(7, maps:get(app_rx_frames, Counters)),
@@ -111,14 +111,6 @@ debug_scenario_(Pid, DebugPid) ->
             %% cycle-controlled RTL test checks routed TX stalls while it
             %% deliberately blocks the shared application output.
             ?assert(maps:get(app_tx_stall_cycles, Counters) =< 4)
-        end),
-        ?_test(begin
-            {ok, Snapshot} = xls_debug:get_state(DebugPid),
-            ?assertEqual(1, maps:get(version, Snapshot)),
-            ?assertEqual(64, byte_size(maps:get(raw, Snapshot))),
-            {state, Registers} = maps:get(state, Snapshot),
-            ?assertEqual([3, 4 | lists:duplicate(14, 0)], Registers),
-            ?assertEqual(regsvc:pack({state, Registers}), maps:get(raw, Snapshot))
         end),
         ?_test(begin
             {ok, Trace} = xls_debug:get_trace(DebugPid),
@@ -242,12 +234,8 @@ routed_pair_scenario_(PidOne, PidTwo) ->
 routed_debug_scenario_(DebugPid) ->
     [
         ?_test(begin
-            {ok, Snapshot} = xls_debug:get_state(DebugPid),
-            {state, Registers} = maps:get(state, Snapshot),
-            ?assertEqual([16#22 | lists:duplicate(15, 0)], Registers)
-        end),
-        ?_test(begin
             {ok, Counters} = xls_debug:get_counters(DebugPid),
+            ?assertEqual(4, maps:get(version, Counters)),
             ?assertEqual(8, maps:get(app_rx_beats, Counters)),
             ?assertEqual(3, maps:get(app_rx_frames, Counters)),
             ?assertEqual(4, maps:get(app_tx_beats, Counters)),

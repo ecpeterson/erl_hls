@@ -138,7 +138,7 @@ module regsvc_pair_tb;
         end
     endtask
 
-    task automatic send_debug_state;
+    task automatic send_reserved_state_request;
         input [15:0] endpoint;
         input [7:0] txid;
         begin
@@ -336,37 +336,40 @@ module regsvc_pair_tb;
             $display("FAIL: malformed debug counters header: %08x", observed_word);
             $fatal(1);
         end
-        for (index = 0; index < 8; index = index + 1)
+        for (index = 0; index < 8; index = index + 1) begin
             receive_debug_beat(observed_word, index == 7);
+            if (index == 0 && observed_word !== 32'd4) begin
+                $display("FAIL: unexpected debug protocol version %0d",
+                         observed_word);
+                $fatal(1);
+            end
+        end
         if (observed_word == 32'd0) begin
             $display("FAIL: blocked routed reply produced no endpoint TX stalls");
             $fatal(1);
         end
 
-        send_debug_state(first_endpoint, 8'h57);
+        // The former passive full-state read is deliberately not part of
+        // protocol version 4. Keep its old tag reserved and verify that stale
+        // clients receive a bounded error instead of a state snapshot.
+        send_reserved_state_request(first_endpoint, 8'h57);
         receive_debug_beat(observed_word, 1'b0);
         if (observed_word !== route(first_endpoint, 16'd0)) begin
-            $display("FAIL: state reply came from wrong endpoint: %08x",
+            $display("FAIL: reserved-tag reply came from wrong endpoint: %08x",
                      observed_word);
             $fatal(1);
         end
         receive_debug_beat(observed_word, 1'b0);
-        if (observed_word !== header(8'h82, 8'h57, 8'd17)) begin
-            $display("FAIL: malformed debug state header: %08x", observed_word);
+        if (observed_word !== header(8'hff, 8'h57, 8'd1)) begin
+            $display("FAIL: malformed reserved-tag error header: %08x",
+                     observed_word);
             $fatal(1);
         end
-        receive_debug_beat(observed_word, 1'b0);
+        receive_debug_beat(observed_word, 1'b1);
         if (observed_word !== 32'd1) begin
-            $display("FAIL: unexpected state version %0d", observed_word);
+            $display("FAIL: unexpected reserved-tag error code %0d",
+                     observed_word);
             $fatal(1);
-        end
-        for (index = 0; index < 16; index = index + 1) begin
-            receive_debug_beat(observed_word, index == 15);
-            if (observed_word !== 32'd0) begin
-                $display("FAIL: ping changed state word %0d to %08x",
-                         index, observed_word);
-                $fatal(1);
-            end
         end
 
         // The selected endpoint has accepted both the request and response
