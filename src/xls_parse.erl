@@ -23,9 +23,7 @@ to_xls(Filename) ->
     PublicStructNames = find_attribute(Forms, xls_tags),
     StateName = state(Forms),
     StateRecord = find_record(Forms, StateName),
-    StateWidth = record_width(StateRecord),
     StateStructName = string:titlecase(lists:delete($_, atom_to_list(StateName))),
-    StateFunctionName = string:lowercase(StateStructName),
     ok = lists:foreach(
         fun(Name) ->
             validate_record_defaults(find_record(Forms, Name))
@@ -71,10 +69,8 @@ to_xls(Filename) ->
       req_in:   chan<axis::Frame> in;
       resp_out: chan<axis::Frame> out;
     """, "\n",
-    ["  state_out: chan<bits[", integer_to_list(StateWidth), "]> out;\n\n"],
-    ["  config(req_in: chan<axis::Frame> in, resp_out: chan<axis::Frame> out,\n",
-     "         state_out: chan<bits[", integer_to_list(StateWidth), "]> out) {\n",
-     "    (req_in, resp_out, state_out)\n",
+    ["  config(req_in: chan<axis::Frame> in, resp_out: chan<axis::Frame> out) {\n",
+     "    (req_in, resp_out)\n",
      "  }\n\n"],
     % TODO: actually look at the code here and do nontrivial init
     ["  init { zero!<", StateStructName, ">() }\n\n"],
@@ -83,7 +79,7 @@ to_xls(Filename) ->
         let (tok1, frame) = recv(join(), req_in);
     """, "\n",
     ["    let state_record = (Tag::", string:uppercase(atom_to_list(StateName)),
-     ", state, bits_from_", StateFunctionName, "(state));\n\n"],
+     ", state);\n\n"],
     """
         // cognate to {reply, Reply, State}
         let (resp, new_state) = match frame.header.op as Tag {
@@ -97,7 +93,7 @@ to_xls(Filename) ->
         "},\n"]
         ||  Clause <- handle_call(Forms),
             Op <- [atom_to_list(op_from_clause(Clause))],
-            {Body, RetVal} <- [branch_from_clause(Clause, ["request", "state_record"],
+            {Body, RetVal} <- [branch_from_clause(Clause, ["request", "state_record"], StateName,
                 fun(R) -> ["(axis::pack(", R, ".1.0 as u8, ", R, ".1.2), ", R, ".2)"] end)]
     ],
     [
@@ -108,7 +104,7 @@ to_xls(Filename) ->
         "},\n"]
         ||  Clause <- handle_cast(Forms),
             Op <- [lists:delete($_, atom_to_list(op_from_clause(Clause)))],
-            {Body, RetVal} <- [branch_from_clause(Clause, ["request", "state_record"],
+            {Body, RetVal} <- [branch_from_clause(Clause, ["request", "state_record"], StateName,
                 fun(R) -> ["(zero!<axis::Frame>(), ", R, ".1)"] end)]
     ],
     """
@@ -116,15 +112,14 @@ to_xls(Filename) ->
         _ => {
           let s = zero!<State>();
           (axis::pack(Tag::ERROR as u8, ERROR_FUNCTION_CLAUSE),
-           (Tag::STATE, s, bits_from_state(s)))
+           (Tag::STATE, s))
         }
 
         };
 
         let txid = frame.header.txid;
         let resp2 = axis::Frame { header: axis::Header { txid, ..resp.header }, ..resp };
-        let tok2 = send_if(tok1, resp_out, resp2.header.op != (Tag::NONE as u8), resp2);
-        send(tok2, state_out, new_state.2);
+        send_if(tok1, resp_out, resp2.header.op != (Tag::NONE as u8), resp2);
         new_state.1
       }
     }
@@ -136,18 +131,16 @@ to_xls(Filename) ->
       ext_recv:  chan<axis::Beat> in;
       ext_send:  chan<axis::Beat> out;
     """, "\n",
-    ["  ext_state: chan<bits[", integer_to_list(StateWidth), "]> out;\n\n"],
-    ["  config(ext_recv: chan<axis::Beat> in, ext_send: chan<axis::Beat> out,\n",
-     "         ext_state: chan<bits[", integer_to_list(StateWidth), "]> out) {\n"],
+    ["  config(ext_recv: chan<axis::Beat> in, ext_send: chan<axis::Beat> out) {\n"],
     """
         let (req_p,  req_c ) = chan<axis::Frame, u32:1>("req");
         let (resp_p, resp_c) = chan<axis::Frame, u32:1>("resp");
 
         spawn axis::Rx(ext_recv, req_p);
-        spawn Service(req_c, resp_p, ext_state);
+        spawn Service(req_c, resp_p);
         spawn axis::Tx(resp_c, ext_send);
 
-        (ext_recv, ext_send, ext_state)
+        (ext_recv, ext_send)
       }
 
       init { () }
@@ -189,13 +182,19 @@ print({static, integer, Integer}) ->
     match_counter = 0 :: integer(),
     named_counters = #{} :: #{atom() => integer()},
     statements = [] :: printable(),
-    reference = none :: none | ir()
+    reference = none :: none | ir(),
+    state_name = undefined :: undefined | atom()
 }).
 -type clause_state() :: #clause_state{}.
 
--spec branch_from_clause(erl_parse:af_clause(), [atom()], fun((printable()) -> printable())) -> {printable(), string()}.
+-spec branch_from_clause(
+    erl_parse:af_clause(),
+    [atom()],
+    atom(),
+    fun((printable()) -> printable())
+) -> {printable(), string()}.
 -doc "Processes an Erlang clause from handle_*/2 into XLS.".
-branch_from_clause(Clause, ArgVals, Postprocessor) ->
+branch_from_clause(Clause, ArgVals, StateName, Postprocessor) ->
     {clause, _1, ArgPatterns, _2, Body} = Clause,
     InjectMatch = fun
         F({{match, LineNo, LHS, RHS}, Arg}) ->
@@ -211,7 +210,7 @@ branch_from_clause(Clause, ArgVals, Postprocessor) ->
         fun(Statement, State) ->
             statement_from_statement(Statement, State#clause_state{reference = none})
         end,
-        #clause_state{}, BigBody
+        #clause_state{state_name = StateName}, BigBody
     ),
 
     OutState = instr(ComputeState, [
@@ -224,7 +223,7 @@ branch_from_clause(Clause, ArgVals, Postprocessor) ->
         ], "bool:false) {\n",
         %% TODO: actually call init here. probably have to write a toplevel state creation fn
         "    let s = zero!<State>();\n",
-        "    (axis::pack(Tag::ERROR as u8, ERROR_MATCH_FAILURE), (Tag::STATE, s, bits_from_state(s)))\n",
+        "    (axis::pack(Tag::ERROR as u8, ERROR_MATCH_FAILURE), (Tag::STATE, s))\n",
         "} else {\n",
             %% TODO: it would be preferable to branch on the REPLY/NOREPLY tag,
             %% but we have to wait for the XLS type system to allow tagged sums,
@@ -282,13 +281,7 @@ statement_from_statement({record, _L, NameAtom, Fields}, State) ->
         "  ..zero!<", string:titlecase(lists:delete($_, atom_to_list(NameAtom))), ">()\n",
         "}"
     ]),
-    instr(SecondState, [
-        "(",  % tag, struct, bits
-        "Tag::", string:uppercase(atom_to_list(NameAtom)), ", ",
-        reference(SecondState), ", ",
-        "bits_from_", lists:delete($_, atom_to_list(NameAtom)), "(", reference(SecondState), ")"
-        ")"
-    ]);
+    instr(SecondState, record_value(NameAtom, reference(SecondState), SecondState));
 statement_from_statement({record, _L, ToUpdate, NameAtom, UpdateFields}, State) ->
     InputState = statement_from_statement(ToUpdate, State),
     {Assignments, IntermediateState} = lists:foldl(
@@ -304,13 +297,7 @@ statement_from_statement({record, _L, ToUpdate, NameAtom, UpdateFields}, State) 
         "  ..(", InputState#clause_state.reference, ").1\n",
         "}"
     ]),
-    instr(SecondState, [
-        "(",  % tag, struct, bits
-        "Tag::", string:uppercase(atom_to_list(NameAtom)), ", ",
-        reference(SecondState), ", ",
-        "bits_from_", lists:delete($_, atom_to_list(NameAtom)), "(", reference(SecondState), ")"
-        ")"
-    ]);
+    instr(SecondState, record_value(NameAtom, reference(SecondState), SecondState));
 statement_from_statement({call, _L, MF, Args}, State) ->
     {remote, _1, {atom, _2, Module}, {atom, _3, FAtom}} = MF,
 
@@ -331,6 +318,15 @@ statement_from_statement({record_field, _L, Object, _RecordAtom, {atom, _LL, Slo
 statement_from_statement({match, _L, LHS, RHS}, State) ->
     RHSState = statement_from_statement(RHS, State),
     destructure_lhs(LHS, RHSState).
+
+-spec record_value(atom(), ir(), clause_state()) -> iolist().
+record_value(NameAtom, Struct, #clause_state{state_name = NameAtom}) ->
+    ["(Tag::", string:uppercase(atom_to_list(NameAtom)), ", ", Struct, ")"];
+record_value(NameAtom, Struct, _State) ->
+    [
+        "(Tag::", string:uppercase(atom_to_list(NameAtom)), ", ", Struct, ", ",
+        "bits_from_", lists:delete($_, atom_to_list(NameAtom)), "(", Struct, "))"
+    ].
 
 -spec destructure_lhs(erl_parse:af_pattern(), clause_state()) -> clause_state().
 -doc """

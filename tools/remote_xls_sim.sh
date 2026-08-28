@@ -7,8 +7,36 @@ stdlib="$xls_root/xls/dslx/stdlib"
 
 cd "$stage"
 
+iverilog \
+    -g2012 \
+    -s xls_debug_tap_tb \
+    -o xls_debug_tap.vvp \
+    xls_debug_tap_tb.sv \
+    xls_debug_tap.v
+
+vvp xls_debug_tap.vvp
+
+iverilog \
+    -g2012 \
+    -s xls_trace_store_tb \
+    -o xls_trace_store.vvp \
+    xls_trace_store_tb.sv \
+    xls_trace_store.v
+
+vvp xls_trace_store.vvp
+
+# The interpreter runs tests from its entry module, not imported modules, so
+# keep every test-bearing DSLX module explicit here.
+for test_module in xls_debug_trace.x xls_debug_observer.x; do
+    "$xls_root/interpreter_main" \
+        --dslx_path=. \
+        --dslx_stdlib_path="$stdlib" \
+        "$test_module"
+done
+
 "$xls_root/ir_converter_main" \
     --warnings_as_errors=false \
+    --dslx_path=. \
     --dslx_stdlib_path="$stdlib" \
     --top=Top \
     regsvc.x > regsvc.ir
@@ -25,9 +53,10 @@ cd "$stage"
 
 "$xls_root/ir_converter_main" \
     --warnings_as_errors=false \
+    --dslx_path=. \
     --dslx_stdlib_path="$stdlib" \
     --top=Observer \
-    xls_debug_monitor.x > xls_debug_observer.ir
+    xls_debug_observer.x > xls_debug_observer.ir
 
 "$xls_root/opt_main" xls_debug_observer.ir > xls_debug_observer.opt.ir
 
@@ -41,9 +70,10 @@ cd "$stage"
 
 "$xls_root/ir_converter_main" \
     --warnings_as_errors=false \
+    --dslx_path=. \
     --dslx_stdlib_path="$stdlib" \
     --top=DebugServer \
-    xls_debug_monitor.x > xls_debug_server.ir
+    xls_debug_server.x > xls_debug_server.ir
 
 "$xls_root/opt_main" xls_debug_server.ir > xls_debug_server.opt.ir
 
@@ -58,6 +88,7 @@ cd "$stage"
 
 "$xls_root/ir_converter_main" \
     --warnings_as_errors=false \
+    --dslx_path=. \
     --dslx_stdlib_path="$stdlib" \
     --top=PairIngress \
     xls_fabric_router.x > xls_fabric_ingress.ir
@@ -74,6 +105,7 @@ cd "$stage"
 
 "$xls_root/ir_converter_main" \
     --warnings_as_errors=false \
+    --dslx_path=. \
     --dslx_stdlib_path="$stdlib" \
     --top=PairEgress \
     xls_fabric_router.x > xls_fabric_egress.ir
@@ -98,6 +130,7 @@ iverilog \
     xls_fabric_ingress.v \
     xls_fabric_egress.v \
     xls_debug_tap.v \
+    xls_trace_store.v \
     xls_debug_observer.v \
     xls_debug_server.v \
     regsvc_core_adapter.v \
@@ -117,6 +150,7 @@ iverilog \
     xls_fabric_ingress.v \
     xls_fabric_egress.v \
     xls_debug_tap.v \
+    xls_trace_store.v \
     xls_debug_observer.v \
     xls_debug_server.v \
     regsvc_core_adapter.v \

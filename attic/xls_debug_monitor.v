@@ -1,6 +1,7 @@
 // Frozen version 2 reference implementation. The integrated regsvc simulation
-// now lowers xls_debug_monitor.x and uses xls_debug_tap.v. Retain this compact
-// RTL baseline until the generated monitor has also passed Vivado integration.
+// now lowers separate observer/server DSLX modules and uses xls_debug_tap.v.
+// Retain this compact RTL baseline until the generated monitor has also passed
+// Vivado integration.
 module xls_debug_monitor #(
     parameter integer STATE_BITS = 32
 ) (

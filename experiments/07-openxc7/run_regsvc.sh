@@ -104,7 +104,8 @@ sources=(
     "$project_root/test/rtl/regsvc_pair_fixture.sv"
     "$project_root/src/examples/regsvc_debug_top.v"
     "$project_root/src/examples/regsvc_core_adapter.v"
-    "$project_root/src/xls_debug_tap.v"
+    "$project_root/priv/rtl/xls_debug_tap.v"
+    "$project_root/priv/rtl/xls_trace_store.v"
     "$generated_rtl/regsvc.v"
     "$generated_rtl/xls_debug_observer.v"
     "$generated_rtl/xls_debug_server.v"
@@ -127,8 +128,15 @@ done
 
 verify_manifest_entry \
     input axis.x "$project_root/experiments/05-xls/axis.x"
-verify_manifest_entry \
-    input xls_debug_monitor.x "$project_root/src/xls_debug_monitor.x"
+for debug_module in \
+    xls_debug_types.x \
+    xls_debug_trace.x \
+    xls_debug_observer.x \
+    xls_debug_server.x
+do
+    verify_manifest_entry \
+        input "$debug_module" "$project_root/src/$debug_module"
+done
 verify_manifest_entry \
     input xls_fabric_router.x "$project_root/src/xls_fabric_router.x"
 verify_manifest_entry \
@@ -136,7 +144,9 @@ verify_manifest_entry \
 verify_manifest_entry \
     input regsvc_debug_top.v "$project_root/src/examples/regsvc_debug_top.v"
 verify_manifest_entry \
-    input xls_debug_tap.v "$project_root/src/xls_debug_tap.v"
+    input xls_debug_tap.v "$project_root/priv/rtl/xls_debug_tap.v"
+verify_manifest_entry \
+    input xls_trace_store.v "$project_root/priv/rtl/xls_trace_store.v"
 verify_manifest_entry \
     input regsvc_pair_fixture.sv "$project_root/test/rtl/regsvc_pair_fixture.sv"
 verify_manifest_entry \
@@ -215,21 +225,31 @@ harness_yosys+=" write_json \"$harness_netlist\""
 import json
 import sys
 
-def flip_flops(path):
+def cell_types(path):
     with open(path, encoding="utf-8") as stream:
         report = json.load(stream)
     modules = list(report.get("modules", {}).values())
     if len(modules) != 1:
         raise SystemExit(f"Expected one flattened module in {path}")
-    cell_types = modules[0].get("num_cells_by_type", {})
-    return sum(count for name, count in cell_types.items() if name.startswith("FD"))
+    return modules[0].get("num_cells_by_type", {})
+
+def flip_flops(types):
+    return sum(count for name, count in types.items() if name.startswith("FD"))
 
 core_path, harness_path = sys.argv[1:]
-core_ffs = flip_flops(core_path)
-harness_ffs = flip_flops(harness_path)
+core_types = cell_types(core_path)
+harness_types = cell_types(harness_path)
+core_ffs = flip_flops(core_types)
+harness_ffs = flip_flops(harness_types)
 print(f"Retained flip-flops: raw pair {core_ffs}, harness {harness_ffs}")
 if harness_ffs < core_ffs:
     raise SystemExit("Compile harness pruned translated-process state")
+
+core_brams = core_types.get("RAMB36E1", 0)
+harness_brams = harness_types.get("RAMB36E1", 0)
+print(f"Inferred RAMB36E1: raw pair {core_brams}, harness {harness_brams}")
+if core_brams != 4 or harness_brams != 4:
+    raise SystemExit("Expected exactly four inferred trace block RAMs")
 ' "$core_stats" "$harness_stats"
 
 case "$target" in

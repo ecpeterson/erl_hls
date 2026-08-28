@@ -3,17 +3,17 @@
 -behavior(gen_server).
 
 -export([start_link/2, stop/1]).
--export([get_counters/1, get_state/1, get_trace/1]).
+-export([get_counters/1, get_trace/1]).
 -export([init/1, handle_call/3, handle_cast/2, terminate/2]).
 
 %% Host-to-FPGA requests occupy the low half of the tag space.
 -define(DEBUG_GET_COUNTERS, 16#01).
--define(DEBUG_GET_STATE, 16#02).
+%% 16#02 is reserved for a future request.
 -define(DEBUG_GET_TRACE, 16#03).
 
 %% FPGA-to-host replies occupy the high half of the tag space.
 -define(DEBUG_COUNTERS, 16#81).
--define(DEBUG_STATE, 16#82).
+%% 16#82 is reserved for a future reply.
 -define(DEBUG_TRACE, 16#83).
 -define(DEBUG_ERROR, 16#ff).
 -define(FABRIC_RX, '$xls_fabric_frame').
@@ -47,9 +47,6 @@ stop(Pid) ->
 get_counters(Pid) ->
     gen_server:call(Pid, get_counters).
 
-get_state(Pid) ->
-    gen_server:call(Pid, get_state).
-
 get_trace(Pid) ->
     gen_server:call(Pid, get_trace).
 
@@ -66,8 +63,6 @@ init({Module, {fabric, Broker, LocalEndpoint, PeerEndpoint}}) ->
 
 handle_call(get_counters, From, State) ->
     request(?DEBUG_GET_COUNTERS, From, State);
-handle_call(get_state, From, State) ->
-    request(?DEBUG_GET_STATE, From, State);
 handle_call(get_trace, From, State) ->
     request(?DEBUG_GET_TRACE, From, State).
 
@@ -124,8 +119,6 @@ decode_reply(?DEBUG_COUNTERS, <<
         app_tx_frames => AppTxFrames,
         app_tx_stall_cycles => AppTxStalls
     }};
-decode_reply(?DEBUG_STATE, Payload, Module) ->
-    decode_state_reply(Payload, Module);
 decode_reply(?DEBUG_TRACE, Payload, _Module) ->
     decode_trace_reply(Payload);
 decode_reply(?DEBUG_ERROR, <<ErrorCode:32/little-unsigned-integer>> = Payload, _Module) ->
@@ -134,36 +127,6 @@ decode_reply(?DEBUG_ERROR, Payload, _Module) ->
     {error, #{reason => malformed_debug_error, raw => Payload}};
 decode_reply(Tag, Payload, _Module) ->
     {error, {unexpected_reply, Tag, Payload}}.
-
-decode_state_reply(<<Version:32/little-unsigned-integer, StateBits/binary>>, Module) ->
-    Snapshot = #{version => Version, raw => StateBits},
-    case {Version, Module} of
-        {1, undefined} ->
-            {ok, Snapshot#{state => undefined}};
-        {1, _} ->
-            decode_state_bits(Module, StateBits, Snapshot);
-        {_, _} ->
-            {error, Snapshot#{reason => {unsupported_state_version, Version}}}
-    end;
-decode_state_reply(Payload, _Module) ->
-    {error, #{reason => malformed_state_reply, raw => Payload}}.
-
-decode_state_bits(Module, StateBits, Snapshot) ->
-    try Module:unpack(state, StateBits) of
-        {DecodedState, <<>>} ->
-            {ok, Snapshot#{state => DecodedState}};
-        {DecodedState, Rest} ->
-            {error, Snapshot#{
-                reason => {trailing_state_data, Rest},
-                state => DecodedState
-            }}
-    catch
-        Class:Reason:Stacktrace ->
-            {error, Snapshot#{
-                reason => {state_decode_failed, Class, Reason},
-                stacktrace => Stacktrace
-            }}
-    end.
 
 decode_trace_reply(<<
     Version:32/little-unsigned-integer,

@@ -25,19 +25,23 @@ rtl_files=(
 )
 expected_modules=(
     __regsvc__Top_0_next
-    __xls_debug_monitor__Observer_0_next
-    __xls_debug_monitor__DebugServer_0_next
+    __xls_debug_observer__Observer_0_next
+    __xls_debug_server__DebugServer_0_next
     __xls_fabric_router__PairIngress_0_next
     __xls_fabric_router__PairEgress_0_next
 )
 manifest_inputs=(
     regsvc.x
     axis.x
-    xls_debug_monitor.x
+    xls_debug_types.x
+    xls_debug_trace.x
+    xls_debug_observer.x
+    xls_debug_server.x
     xls_fabric_router.x
     regsvc_core_adapter.v
     regsvc_debug_top.v
     xls_debug_tap.v
+    xls_trace_store.v
     regsvc_pair_fixture.sv
     remote_xls_sim.sh
 )
