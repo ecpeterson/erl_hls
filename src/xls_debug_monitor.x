@@ -65,6 +65,7 @@ struct TraceMetadata { kind: TraceKind, flags: u8, txid: u8, op: u8 }
 struct TraceEvent { cycle: u32, metadata: TraceMetadata }
 
 const TRACE_EVENT_BITS = bit_count<TraceEvent>();
+type TraceRow = bits[TRACE_EVENT_BITS * u32:2];
 
 // Complete event pairs live in an external 1R1W RAM. A possible odd final
 // event remains here so the observer never needs more than one write per
@@ -77,8 +78,8 @@ struct TraceBuffer {
     pending_event: TraceEvent,
 }
 
-struct TraceWrite { valid: u1, address: TraceAddress, data: u128 }
-struct TraceRowWrite { address: TraceAddress, data: u128 }
+struct TraceWrite { valid: u1, address: TraceAddress, data: TraceRow }
+struct TraceRowWrite { address: TraceAddress, data: TraceRow }
 struct TraceRead { address: TraceAddress, high: u1 }
 
 struct Counters {
@@ -136,8 +137,8 @@ fn append_trace(trace: TraceBuffer, event: TraceEvent, enabled: u1,
     } else if trace.count == TRACE_DEPTH as TraceCount {
         (TraceBuffer { drops: trace.drops + u32:1, ..trace }, write)
     } else if trace.pending_valid {
-        let row = ((trace_event_bits(event) as u128) << u128:64) |
-            trace_event_bits(trace.pending_event) as u128;
+        let row = ((trace_event_bits(event) as TraceRow) << TRACE_EVENT_BITS) |
+            trace_event_bits(trace.pending_event) as TraceRow;
         (
             TraceBuffer {
                 count: trace.count + TraceCount:1,
@@ -285,8 +286,8 @@ fn simultaneous_trace_events_share_one_row_test() {
     assert_eq(trace_address(u1:1, TraceCount:63), TraceAddress:63);
     assert_eq(
         write.data,
-        ((trace_event_bits(tx_event) as u128) << u128:64) |
-        trace_event_bits(rx_event) as u128);
+        ((trace_event_bits(tx_event) as TraceRow) << TRACE_EVENT_BITS) |
+        trace_event_bits(rx_event) as TraceRow);
 }
 
 #[test]

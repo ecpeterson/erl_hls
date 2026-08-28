@@ -9,6 +9,15 @@ cd "$stage"
 
 iverilog \
     -g2012 \
+    -s xls_debug_tap_tb \
+    -o xls_debug_tap.vvp \
+    xls_debug_tap_tb.sv \
+    xls_debug_tap.v
+
+vvp xls_debug_tap.vvp
+
+iverilog \
+    -g2012 \
     -s xls_trace_store_tb \
     -o xls_trace_store.vvp \
     xls_trace_store_tb.sv \

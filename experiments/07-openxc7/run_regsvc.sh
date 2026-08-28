@@ -241,8 +241,8 @@ if harness_ffs < core_ffs:
 core_brams = core_types.get("RAMB36E1", 0)
 harness_brams = harness_types.get("RAMB36E1", 0)
 print(f"Inferred RAMB36E1: raw pair {core_brams}, harness {harness_brams}")
-if core_brams < 4 or harness_brams < 4:
-    raise SystemExit("Trace storage did not retain four inferred block RAMs")
+if core_brams != 4 or harness_brams != 4:
+    raise SystemExit("Expected exactly four inferred trace block RAMs")
 ' "$core_stats" "$harness_stats"
 
 case "$target" in

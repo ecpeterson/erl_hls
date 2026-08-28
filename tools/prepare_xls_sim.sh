@@ -27,6 +27,8 @@ cp "$project_root/src/xls_fabric_router.x" "$stage/xls_fabric_router.x"
 cp "$project_root/src/xls_debug_monitor.x" "$stage/xls_debug_monitor.x"
 cp "$project_root/src/xls_debug_tap.v" "$stage/xls_debug_tap.v"
 cp "$project_root/src/xls_trace_store.v" "$stage/xls_trace_store.v"
+cp "$project_root/test/rtl/xls_debug_tap_tb.sv" \
+    "$stage/xls_debug_tap_tb.sv"
 cp "$project_root/test/rtl/regsvc_pair_fixture.sv" \
     "$stage/regsvc_pair_fixture.sv"
 cp "$project_root/test/rtl/regsvc_pair_tb.sv" "$stage/regsvc_pair_tb.sv"

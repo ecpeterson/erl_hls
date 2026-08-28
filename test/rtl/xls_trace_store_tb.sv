@@ -29,6 +29,12 @@ module xls_trace_store_tb;
 
     always #5 clk = ~clk;
 
+    initial begin : watchdog
+        #10000;
+        $display("FAIL: trace-store simulation timed out");
+        $fatal(1);
+    end
+
     task automatic write_row;
         input [5:0] address;
         input [127:0] data;

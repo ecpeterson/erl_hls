@@ -20,6 +20,7 @@ rsync -a -e "ssh -o BatchMode=yes" \
     "$local_stage/xls_fabric_router.x" \
     "$local_stage/xls_debug_monitor.x" \
     "$local_stage/xls_debug_tap.v" \
+    "$local_stage/xls_debug_tap_tb.sv" \
     "$local_stage/xls_trace_store.v" \
     "$local_stage/xls_trace_store_tb.sv" \
     "$local_stage/regsvc_pair_fixture.sv" \
