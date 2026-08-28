@@ -8,8 +8,11 @@
 
 -export([u8/0, s8/0, u16/0, s16/0, u32/0, s32/0, u64/0, s64/0]).    % integers
 -export_type([u8/0, s8/0, u16/0, s16/0, u32/0, s32/0, u64/0, s64/0]).
+-export([u32_shl/2, u32_shr/2]).
 -export([float64/0, float32/0, float16/0]).                         % floats
 -export_type([float64/0, float32/0, float16/0]).
+
+-define(U32_MASK, 16#ffffffff).
 
 %%% unsigned integers
 -type u8() :: 0 .. (1 bsl 8 - 1).
@@ -41,6 +44,24 @@ float16() -> {xls_type, ?MODULE, ?FUNCTION_NAME, []}.
 float32() -> {xls_type, ?MODULE, ?FUNCTION_NAME, []}.
 float64() -> {xls_type, ?MODULE, ?FUNCTION_NAME, []}.
 
+-doc "Fixed-width logical left shift with DSLX `u32` wraparound semantics.".
+-spec u32_shl(u32(), 0..31) -> u32().
+u32_shl(Value, Amount)
+        when is_integer(Value), Value >= 0, Value =< ?U32_MASK,
+             is_integer(Amount), Amount >= 0, Amount < 32 ->
+    (Value bsl Amount) band ?U32_MASK;
+u32_shl(_Value, _Amount) ->
+    error(badarg).
+
+-doc "Fixed-width logical right shift for a DSLX `u32` value.".
+-spec u32_shr(u32(), 0..31) -> u32().
+u32_shr(Value, Amount)
+        when is_integer(Value), Value >= 0, Value =< ?U32_MASK,
+             is_integer(Amount), Amount >= 0, Amount < 32 ->
+    Value bsr Amount;
+u32_shr(_Value, _Amount) ->
+    error(badarg).
+
 width(u8,      []) -> 8;
 width(u16,     []) -> 16;
 width(u32,     []) -> 32;
@@ -65,6 +86,10 @@ zero(float16, []) -> 0.0;
 zero(float32, []) -> 0.0;
 zero(float64, []) -> 0.0 .
 
+transpile(u32_shl, [Value, Amount], _State) ->
+    [Value, " << ", Amount];
+transpile(u32_shr, [Value, Amount], _State) ->
+    [Value, " >> ", Amount];
 transpile(Type, [], State) ->
     xls_parse:reference(State, {phantom, type, ?MODULE:Type()}).
 

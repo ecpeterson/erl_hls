@@ -55,6 +55,31 @@ done
     --warnings_as_errors=false \
     --dslx_path=. \
     --dslx_stdlib_path="$stdlib" \
+    --top=Top \
+    phi_halo_cell.x > phi_halo_cell.ir
+
+"$xls_root/opt_main" phi_halo_cell.ir > phi_halo_cell.opt.ir
+
+"$xls_root/codegen_main" \
+    --pipeline_stages=1 \
+    --delay_model=unit \
+    --use_system_verilog=false \
+    --reset=reset \
+    --fifo_module= \
+    phi_halo_cell.opt.ir > phi_halo_cell.v
+
+iverilog \
+    -g2012 \
+    -s phi_halo_cell_tb \
+    -o phi_halo_cell.vvp \
+    phi_halo_cell_tb.sv \
+    phi_halo_cell.v
+
+vvp phi_halo_cell.vvp
+
+"$xls_root/ir_converter_main" \
+    --warnings_as_errors=false \
+    --dslx_stdlib_path="$stdlib" \
     --top=Observer \
     xls_debug_observer.x > xls_debug_observer.ir
 

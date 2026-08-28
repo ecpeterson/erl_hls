@@ -14,6 +14,7 @@ cp "$project_root/tools/remote_xls_sim.sh" "$local_stage/remote_xls_sim.sh"
 ssh -o BatchMode=yes "$remote_host" mkdir -p "$remote_stage"
 rsync -a -e "ssh -o BatchMode=yes" \
     "$local_stage/regsvc.x" \
+    "$local_stage/phi_halo_cell.x" \
     "$local_stage/axis.x" \
     "$local_stage/regsvc_core_adapter.v" \
     "$local_stage/regsvc_debug_top.v" \
@@ -29,6 +30,7 @@ rsync -a -e "ssh -o BatchMode=yes" \
     "$local_stage/regsvc_pair_fixture.sv" \
     "$local_stage/regsvc_pair_tb.sv" \
     "$local_stage/regsvc_bridge_tb.sv" \
+    "$local_stage/phi_halo_cell_tb.sv" \
     "$local_stage/xls_sim_bridge.c" \
     "$local_stage/erl_src" \
     "$local_stage/test_src" \

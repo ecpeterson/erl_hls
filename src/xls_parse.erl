@@ -97,14 +97,18 @@ to_xls(Filename) ->
                 fun(R) -> ["(axis::pack(", R, ".1.0 as u8, ", R, ".1.2), ", R, ".2)"] end)]
     ],
     [
-        ["\n", "Tag::", string:uppercase(Op), " => {\n",
-        "let request = ", Op, "_from_bits(frame.payload);\n",
+        ["\n", "Tag::", string:uppercase(TagName), " => {\n",
+        "let request = ", StructFunctionName, "_from_bits(frame.payload);\n",
         Body,
         RetVal, "\n",
         "},\n"]
         ||  Clause <- handle_cast(Forms),
-            Op <- [lists:delete($_, atom_to_list(op_from_clause(Clause)))],
-            {Body, RetVal} <- [branch_from_clause(Clause, ["request", "state_record"], StateName,
+            TagName <- [atom_to_list(op_from_clause(Clause))],
+            StructFunctionName <- [lists:delete($_, TagName)],
+            {Body, RetVal} <- [branch_from_clause(
+                Clause,
+                ["request", "state_record"],
+                StateName,
                 fun(R) -> ["(zero!<axis::Frame>(), ", R, ".1)"] end)]
     ],
     """
@@ -423,7 +427,15 @@ structfrombits_from_record(RecordForm) ->
             Slot = record_field_name(Field),
             Descriptor = xls_type:descriptor(Type),
             NextOffset = Offset + xls_type:width(Descriptor),
-            Line = io_lib:format("    ~w: raw[~w:~w],~n", [Slot, Offset, NextOffset]),
+            Line = io_lib:format(
+                "    ~w: raw[~w:~w] as ~s,~n",
+                [
+                    Slot,
+                    Offset,
+                    NextOffset,
+                    xls_type:print_type(Descriptor)
+                ]
+            ),
             {[Line | Body], NextOffset}
         end,
         {[], 0}, Fields
@@ -562,6 +574,8 @@ instr(ClauseState, Place, Expr) ->
 -spec op(Op :: atom(), Args :: [any()]) -> iolist().
 -doc "Translates a built-in Erlang op to an XLS op.".
 op('+', [Left, Right]) -> [Left, " + ", Right];
+op('bsl', _Args) -> error({unsupported_erlang_shift, 'bsl'});
+op('bsr', _Args) -> error({unsupported_erlang_shift, 'bsr'});
 op('band', [Left, Right]) -> [Left, " & ", Right];
 op('bor', [Left, Right]) -> [Left, " | ", Right];
 op('bnot', [Operand]) -> ["!", Operand];

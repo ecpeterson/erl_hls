@@ -9,12 +9,16 @@ cd "$project_root"
 
 rebar3 eunit
 
-TMP_X="$stage/regsvc.x" erl \
+ERL_XLS_REGSVC_X="$stage/regsvc.x" \
+ERL_XLS_PHI_HALO_X="$stage/phi_halo_cell.x" \
+erl \
     -noshell \
     -pa "$project_root/_build/test/lib/erl_xls/ebin" \
     -eval '
-        Output = xls_parse:to_xls("src/examples/regsvc.erl"),
-        ok = file:write_file(os:getenv("TMP_X"), Output),
+        Regsvc = xls_parse:to_xls("src/examples/regsvc.erl"),
+        PhiHalo = xls_parse:to_xls("src/examples/phi_halo_cell.erl"),
+        ok = file:write_file(os:getenv("ERL_XLS_REGSVC_X"), Regsvc),
+        ok = file:write_file(os:getenv("ERL_XLS_PHI_HALO_X"), PhiHalo),
         halt().
     '
 
@@ -38,6 +42,8 @@ cp "$project_root/test/rtl/regsvc_pair_tb.sv" "$stage/regsvc_pair_tb.sv"
 cp "$project_root/test/rtl/regsvc_bridge_tb.sv" "$stage/regsvc_bridge_tb.sv"
 cp "$project_root/test/rtl/xls_trace_store_tb.sv" \
     "$stage/xls_trace_store_tb.sv"
+cp "$project_root/test/rtl/phi_halo_cell_tb.sv" \
+    "$stage/phi_halo_cell_tb.sv"
 cp "$project_root/test/rtl/xls_sim_bridge.c" "$stage/xls_sim_bridge.c"
 
 # `erlc -P` writes source listings after includes, macros, and parse transforms
