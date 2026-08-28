@@ -67,7 +67,7 @@ simulated_rtl_test_() ->
                     DebugPidTwo
                 }) ->
                     scenario_(PidOne) ++
-                        debug_scenario_(DebugPidOne) ++
+                        debug_scenario_(PidOne, DebugPidOne) ++
                         routed_pair_scenario_(PidOne, PidTwo) ++
                         routed_debug_scenario_(DebugPidTwo) ++
                         rtl_error_scenario_(PidOne)
@@ -96,7 +96,7 @@ scenario_(Pid) ->
         ?_assertEqual([3, 4, 0], regsvc:bulk_get(Pid, 0, 3))
     ].
 
-debug_scenario_(DebugPid) ->
+debug_scenario_(Pid, DebugPid) ->
     [
         ?_test(begin
             {ok, Counters} = xls_debug:get_counters(DebugPid),
@@ -125,9 +125,9 @@ debug_scenario_(DebugPid) ->
             Events = maps:get(events, Trace),
             ?assertEqual(1, maps:get(version, Trace)),
             ?assertEqual(2, maps:get(record_words, Trace)),
-            ?assertEqual(8, maps:get(count, Trace)),
-            ?assertEqual(8, length(Events)),
-            ?assertEqual(3, maps:get(dropped, Trace)),
+            ?assertEqual(11, maps:get(count, Trace)),
+            ?assertEqual(11, length(Events)),
+            ?assertEqual(0, maps:get(dropped, Trace)),
             ?assertEqual([
                 {application_rx, 0, 5},
                 {application_tx, 0, 7},
@@ -136,7 +136,10 @@ debug_scenario_(DebugPid) ->
                 {application_tx, 2, 8},
                 {application_rx, 3, 3},
                 {application_rx, 4, 4},
-                {application_tx, 4, 8}
+                {application_tx, 4, 8},
+                {application_rx, 5, 3},
+                {application_rx, 6, 6},
+                {application_tx, 6, 9}
             ], [
                 {
                     maps:get(kind, Event),
@@ -149,6 +152,47 @@ debug_scenario_(DebugPid) ->
                 fun(Event) -> maps:get(cycle, Event) > 0 end,
                 Events
             ))
+        end),
+        ?_test(begin
+            {ok, Trace} = xls_debug:get_trace(DebugPid),
+            ?assertEqual(0, maps:get(count, Trace)),
+            ?assertEqual(0, maps:get(dropped, Trace)),
+            ?assertEqual([], maps:get(events, Trace))
+        end),
+        ?_test(begin
+            lists:foreach(
+                fun(Value) ->
+                    ?assertEqual(Value, regsvc:ping(Pid, Value))
+                end,
+                lists:seq(1, 33)
+            ),
+            {ok, Trace} = xls_debug:get_trace(DebugPid),
+            Events = maps:get(events, Trace),
+            ?assertEqual(64, maps:get(count, Trace)),
+            ?assertEqual(64, length(Events)),
+            ?assertEqual(2, maps:get(dropped, Trace)),
+            ?assertEqual(lists:flatmap(
+                fun(TxID) ->
+                    [
+                        {application_rx, TxID, 5},
+                        {application_tx, TxID, 7}
+                    ]
+                end,
+                lists:seq(7, 38)
+            ), [
+                {
+                    maps:get(kind, Event),
+                    maps:get(tx_id, Event),
+                    maps:get(op, Event)
+                }
+                || Event <- Events
+            ])
+        end),
+        ?_test(begin
+            {ok, Trace} = xls_debug:get_trace(DebugPid),
+            ?assertEqual(0, maps:get(count, Trace)),
+            ?assertEqual(0, maps:get(dropped, Trace)),
+            ?assertEqual([], maps:get(events, Trace))
         end)
     ].
 

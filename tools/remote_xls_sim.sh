@@ -32,11 +32,12 @@ cd "$stage"
 "$xls_root/opt_main" xls_debug_observer.ir > xls_debug_observer.opt.ir
 
 "$xls_root/codegen_main" \
-    --pipeline_stages=2 \
+    --pipeline_stages=3 \
     --delay_model=unit \
     --use_system_verilog=false \
     --reset=reset \
     --fifo_module= \
+    --ram_configurations=trace:1R1W:xls_debug_monitor__trace_rd_req:xls_debug_monitor__trace_rd_resp:xls_debug_monitor__trace_wr_req:xls_debug_monitor__trace_wr_comp:1 \
     xls_debug_observer.opt.ir > xls_debug_observer.v
 
 "$xls_root/ir_converter_main" \
@@ -98,6 +99,7 @@ iverilog \
     xls_fabric_ingress.v \
     xls_fabric_egress.v \
     xls_debug_tap.v \
+    xls_trace_ram_1r1w.v \
     xls_debug_observer.v \
     xls_debug_server.v \
     regsvc_core_adapter.v \
@@ -117,6 +119,7 @@ iverilog \
     xls_fabric_ingress.v \
     xls_fabric_egress.v \
     xls_debug_tap.v \
+    xls_trace_ram_1r1w.v \
     xls_debug_observer.v \
     xls_debug_server.v \
     regsvc_core_adapter.v \

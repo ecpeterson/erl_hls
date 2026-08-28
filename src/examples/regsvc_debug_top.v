@@ -53,20 +53,23 @@ module axis_regsvc_debug_top (
     (* X_INTERFACE_INFO = "xilinx.com:interface:axis:1.0 M_DBG TLAST" *)
     output wire        m_dbg_tlast
 );
-    // These mirror the logical DSLX types. SNAPSHOT_BITS is the Verilog-side
-    // equivalent of bit_count<MonitorState>(); changing TRACE_DEPTH updates
-    // the trace array, its count width, and the flattened snapshot width. The
-    // DSLX TRACE_DEPTH must change with this value before regenerating RTL.
+    // These mirror the logical DSLX types. Complete trace-event pairs live in
+    // a 1R1W block RAM; the flattened snapshot carries only its frozen-bank
+    // descriptor and a possible odd final event.
     localparam integer APPLICATION_STATE_BITS = 512;
-    localparam integer TRACE_DEPTH = 8;
+    localparam integer TRACE_DEPTH = 64;
     localparam integer TRACE_EVENT_BITS = 64;
     localparam integer TRACE_COUNT_BITS = $clog2(TRACE_DEPTH + 1);
+    localparam integer TRACE_ROW_COUNT = TRACE_DEPTH / 2;
+    localparam integer TRACE_ROW_BITS = $clog2(TRACE_ROW_COUNT);
+    localparam integer TRACE_ADDRESS_BITS = TRACE_ROW_BITS + 1;
+    localparam integer TRACE_ROW_DATA_BITS = 2 * TRACE_EVENT_BITS;
     localparam integer STREAM_OBSERVATION_BITS = 32 + 3;
     localparam integer OBSERVATION_BITS =
         APPLICATION_STATE_BITS + 32 + 2 * STREAM_OBSERVATION_BITS + 1;
     localparam integer COUNTER_BITS = 7 * 32;
     localparam integer TRACE_BUFFER_BITS =
-        TRACE_DEPTH * TRACE_EVENT_BITS + TRACE_COUNT_BITS + 32;
+        1 + TRACE_COUNT_BITS + 32 + 1 + TRACE_EVENT_BITS;
     localparam integer SNAPSHOT_BITS =
         COUNTER_BITS + 32 + APPLICATION_STATE_BITS + 2 + TRACE_BUFFER_BITS;
     localparam integer DEBUG_BEAT_BITS = 4 + 1 + 32;
@@ -88,6 +91,18 @@ module axis_regsvc_debug_top (
     wire [SNAPSHOT_BITS-1:0] snapshot;
     wire          snapshot_valid;
     wire          snapshot_ready;
+    wire [TRACE_ADDRESS_BITS-1:0] trace_read_request;
+    wire          trace_read_request_valid;
+    wire          trace_read_request_ready;
+    wire [TRACE_ROW_DATA_BITS-1:0] trace_read_response;
+    wire          trace_read_response_valid;
+    wire          trace_read_response_ready;
+    wire [TRACE_ADDRESS_BITS-1:0] trace_ram_read_address;
+    wire          trace_ram_read_enable;
+    wire [TRACE_ROW_DATA_BITS-1:0] trace_ram_read_data;
+    wire [TRACE_ADDRESS_BITS-1:0] trace_ram_write_address;
+    wire [TRACE_ROW_DATA_BITS-1:0] trace_ram_write_data;
+    wire          trace_ram_write_enable;
 
     axis_regsvc_core_adapter application (
         .aclk(aclk),
@@ -137,7 +152,32 @@ module axis_regsvc_debug_top (
         .xls_debug_monitor__snapshot_request_in_rdy(snapshot_request_ready),
         .xls_debug_monitor__snapshot_out(snapshot),
         .xls_debug_monitor__snapshot_out_vld(snapshot_valid),
-        .xls_debug_monitor__snapshot_out_rdy(snapshot_ready)
+        .xls_debug_monitor__snapshot_out_rdy(snapshot_ready),
+        .xls_debug_monitor__trace_read_request_in(trace_read_request),
+        .xls_debug_monitor__trace_read_request_in_vld(trace_read_request_valid),
+        .xls_debug_monitor__trace_read_request_in_rdy(trace_read_request_ready),
+        .xls_debug_monitor__trace_read_response_out(trace_read_response),
+        .xls_debug_monitor__trace_read_response_out_vld(trace_read_response_valid),
+        .xls_debug_monitor__trace_read_response_out_rdy(trace_read_response_ready),
+        .trace_rd_addr(trace_ram_read_address),
+        .trace_rd_en(trace_ram_read_enable),
+        .trace_rd_data(trace_ram_read_data),
+        .trace_wr_addr(trace_ram_write_address),
+        .trace_wr_data(trace_ram_write_data),
+        .trace_wr_en(trace_ram_write_enable)
+    );
+
+    xls_trace_ram_1r1w #(
+        .ADDR_WIDTH(TRACE_ADDRESS_BITS),
+        .DATA_WIDTH(TRACE_ROW_DATA_BITS)
+    ) trace_ram (
+        .clk(aclk),
+        .rd_addr(trace_ram_read_address),
+        .rd_en(trace_ram_read_enable),
+        .rd_data(trace_ram_read_data),
+        .wr_addr(trace_ram_write_address),
+        .wr_data(trace_ram_write_data),
+        .wr_en(trace_ram_write_enable)
     );
 
     __xls_debug_monitor__DebugServer_0_next debug_server (
@@ -154,7 +194,13 @@ module axis_regsvc_debug_top (
         .xls_debug_monitor__snapshot_request_out_rdy(snapshot_request_ready),
         .xls_debug_monitor__snapshot_in(snapshot),
         .xls_debug_monitor__snapshot_in_vld(snapshot_valid),
-        .xls_debug_monitor__snapshot_in_rdy(snapshot_ready)
+        .xls_debug_monitor__snapshot_in_rdy(snapshot_ready),
+        .xls_debug_monitor__trace_read_request_out(trace_read_request),
+        .xls_debug_monitor__trace_read_request_out_vld(trace_read_request_valid),
+        .xls_debug_monitor__trace_read_request_out_rdy(trace_read_request_ready),
+        .xls_debug_monitor__trace_read_response_in(trace_read_response),
+        .xls_debug_monitor__trace_read_response_in_vld(trace_read_response_valid),
+        .xls_debug_monitor__trace_read_response_in_rdy(trace_read_response_ready)
     );
 
     assign m_dbg_tdata = debug_response[31:0];

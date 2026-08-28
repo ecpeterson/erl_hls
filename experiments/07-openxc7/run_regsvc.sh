@@ -105,6 +105,7 @@ sources=(
     "$project_root/src/examples/regsvc_debug_top.v"
     "$project_root/src/examples/regsvc_core_adapter.v"
     "$project_root/src/xls_debug_tap.v"
+    "$project_root/src/xls_trace_ram_1r1w.v"
     "$generated_rtl/regsvc.v"
     "$generated_rtl/xls_debug_observer.v"
     "$generated_rtl/xls_debug_server.v"
@@ -137,6 +138,8 @@ verify_manifest_entry \
     input regsvc_debug_top.v "$project_root/src/examples/regsvc_debug_top.v"
 verify_manifest_entry \
     input xls_debug_tap.v "$project_root/src/xls_debug_tap.v"
+verify_manifest_entry \
+    input xls_trace_ram_1r1w.v "$project_root/src/xls_trace_ram_1r1w.v"
 verify_manifest_entry \
     input regsvc_pair_fixture.sv "$project_root/test/rtl/regsvc_pair_fixture.sv"
 verify_manifest_entry \
