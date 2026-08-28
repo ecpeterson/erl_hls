@@ -13,8 +13,6 @@ module phi_halo_cell_tb;
     wire output_valid;
     reg output_ready = 1'b1;
 
-    wire [359:0] committed_state;
-    wire committed_state_valid;
     reg [31:0] observed_word;
 
     __phi_halo_cell__Top_0_next dut (
@@ -23,12 +21,9 @@ module phi_halo_cell_tb;
         .phi_halo_cell__ext_recv({input_last, input_data}),
         .phi_halo_cell__ext_recv_vld(input_valid),
         .phi_halo_cell__ext_send_rdy(output_ready),
-        .phi_halo_cell__ext_state_rdy(1'b1),
         .phi_halo_cell__ext_recv_rdy(input_ready),
         .phi_halo_cell__ext_send(output_beat),
-        .phi_halo_cell__ext_send_vld(output_valid),
-        .phi_halo_cell__ext_state(committed_state),
-        .phi_halo_cell__ext_state_vld(committed_state_valid)
+        .phi_halo_cell__ext_send_vld(output_valid)
     );
 
     always #5 clk = ~clk;
