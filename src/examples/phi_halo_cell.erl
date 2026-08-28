@@ -21,10 +21,11 @@ deliberately modular `u32` in both the CPU reference and generated DSLX.  A
 later numeric policy may replace wraparound with a wider accumulator or
 saturation.
 
-These callbacks are the arithmetic kernel, not yet a network-facing actor.
-The future fabric scheduler must stage out-of-order messages and deliver only
-one halo per direction for the kernel's current epoch.  Calling the exported
-CPU harness with a future or duplicate halo violates that runtime contract.
+The `handle_call/2` and `handle_cast/2` callbacks remain the lowerable
+arithmetic kernel.  The CPU-facing process is owned by
+`phi_halo_cell_runtime`, which stages events in `xls_statem` and exposes two
+outer states: `gathering` and `ready`.  Epoch and direction-ready bits remain
+inner data; changing either does not by itself retry a postponed event.
 """.
 
 -export([
@@ -32,10 +33,21 @@ CPU harness with a future or duplicate halo violates that runtime contract.
     offer_east/3,
     offer_west/3,
     offer_south/3,
-    diffuse/3
+    diffuse/3,
+    send_diffuse/3,
+    receive_diffuse/2,
+    runtime_info/1
 ]).
 -export([start_link/0, stop/1]).
--export([init/1, handle_call/2, handle_cast/2]).
+-export([
+    init/1,
+    handle_call/2,
+    handle_cast/2,
+    event_kind/1,
+    event_epoch/1,
+    state_epoch/1,
+    phase_ready/1
+]).
 
 -behavior(xls_gs).
 -xls_tags([halo_n, halo_e, halo_w, halo_s, diffuse, field]).
@@ -43,6 +55,7 @@ CPU harness with a future or duplicate halo violates that runtime contract.
 
 -define(LAYER_COUNT, 2).
 -define(U32_MASK, 16#ffffffff).
+-define(MAILBOX_CAPACITY, 16).
 
 -define(NORTH_READY, 1).
 -define(EAST_READY, 2).
@@ -111,26 +124,53 @@ CPU harness with a future or duplicate halo violates that runtime contract.
 
 -spec offer_north(pid(), xls_nums:u32(), [xls_nums:u32()]) -> ok.
 offer_north(PID, Epoch, Values) ->
-    gen_server:cast(PID, #halo_n{epoch = Epoch, values = Values}).
+    xls_statem:cast(PID, #halo_n{epoch = Epoch, values = Values}).
 
 -spec offer_east(pid(), xls_nums:u32(), [xls_nums:u32()]) -> ok.
 offer_east(PID, Epoch, Values) ->
-    gen_server:cast(PID, #halo_e{epoch = Epoch, values = Values}).
+    xls_statem:cast(PID, #halo_e{epoch = Epoch, values = Values}).
 
 -spec offer_west(pid(), xls_nums:u32(), [xls_nums:u32()]) -> ok.
 offer_west(PID, Epoch, Values) ->
-    gen_server:cast(PID, #halo_w{epoch = Epoch, values = Values}).
+    xls_statem:cast(PID, #halo_w{epoch = Epoch, values = Values}).
 
 -spec offer_south(pid(), xls_nums:u32(), [xls_nums:u32()]) -> ok.
 offer_south(PID, Epoch, Values) ->
-    gen_server:cast(PID, #halo_s{epoch = Epoch, values = Values}).
+    xls_statem:cast(PID, #halo_s{epoch = Epoch, values = Values}).
 
 -spec diffuse(pid(), xls_nums:u32(), xls_nums:u32()) ->
     {NextEpoch :: xls_nums:u32(), Values :: [xls_nums:u32()]}.
 diffuse(PID, Epoch, Charge) ->
     #field{epoch = NextEpoch, values = Values} =
-        gen_server:call(PID, #diffuse{epoch = Epoch, charge = Charge}),
+        xls_statem:call(PID, #diffuse{epoch = Epoch, charge = Charge}),
     {NextEpoch, Values}.
+
+-doc "Starts a diffuse call without waiting for its reply.".
+-spec send_diffuse(pid(), xls_nums:u32(), xls_nums:u32()) ->
+    gen_server:request_id().
+send_diffuse(PID, Epoch, Charge) ->
+    xls_statem:send_request(
+        PID,
+        #diffuse{epoch = Epoch, charge = Charge}
+    ).
+
+-doc "Receives and unpacks a reply from `send_diffuse/3`.".
+-spec receive_diffuse(gen_server:request_id(), timeout()) ->
+    {reply, {xls_nums:u32(), [xls_nums:u32()]}} |
+    {error, term()} |
+    timeout.
+receive_diffuse(RequestID, Timeout) ->
+    case xls_statem:receive_response(RequestID, Timeout) of
+        {reply, #field{epoch = NextEpoch, values = Values}} ->
+            {reply, {NextEpoch, Values}};
+        Result ->
+            Result
+    end.
+
+-doc "Returns diagnostic state from the CPU scheduler wrapper.".
+-spec runtime_info(pid()) -> map().
+runtime_info(PID) ->
+    xls_statem:info(PID).
 
 %%%
 %%% Server management
@@ -138,11 +178,15 @@ diffuse(PID, Epoch, Charge) ->
 
 -spec start_link() -> {ok, pid()}.
 start_link() ->
-    xls_gs:start_link(?MODULE, []).
+    xls_statem:start_link(
+        phi_halo_cell_runtime,
+        [],
+        [{mailbox_capacity, ?MAILBOX_CAPACITY}]
+    ).
 
 -spec stop(pid()) -> ok.
 stop(PID) ->
-    xls_gs:stop(PID).
+    xls_statem:stop(PID).
 
 %%%
 %%% xls_gs callbacks
@@ -233,3 +277,29 @@ handle_call(
     {reply,
         #field{epoch = NextEpoch, values = NewPhi},
         State#state{epoch = NextEpoch, phi = NewPhi, ready = 0}}.
+
+%% Runtime-only inspection helpers.  They keep record knowledge in this
+%% lowerable module while the scheduler remains a separate OTP-style wrapper.
+-spec event_epoch(tuple()) -> xls_nums:u32().
+event_epoch(#halo_n{epoch = Epoch}) -> Epoch;
+event_epoch(#halo_e{epoch = Epoch}) -> Epoch;
+event_epoch(#halo_w{epoch = Epoch}) -> Epoch;
+event_epoch(#halo_s{epoch = Epoch}) -> Epoch;
+event_epoch(#diffuse{epoch = Epoch}) -> Epoch.
+
+-spec event_kind(tuple()) -> halo | diffuse.
+event_kind(#halo_n{}) -> halo;
+event_kind(#halo_e{}) -> halo;
+event_kind(#halo_w{}) -> halo;
+event_kind(#halo_s{}) -> halo;
+event_kind(#diffuse{}) -> diffuse.
+
+-spec state_epoch(#state{}) -> xls_nums:u32().
+state_epoch(#state{epoch = Epoch}) ->
+    Epoch.
+
+-spec phase_ready(#state{}) -> boolean().
+phase_ready(#state{ready = ?ALL_READY}) ->
+    true;
+phase_ready(#state{}) ->
+    false.
