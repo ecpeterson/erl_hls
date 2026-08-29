@@ -215,6 +215,22 @@ boolean_case_preserves_branch_badmatches_test() ->
     ),
     ?assertNotEqual(nomatch, binary:match(XLS, <<"case_match_">>)).
 
+xls_type_as_preserves_the_host_value_and_emits_a_dslx_cast_test() ->
+    ?assertEqual(0, xls_type:as(xls_nums:u32(), 0)),
+    Clause = parse_clause(
+        "probe() -> xls_type:as(xls_nums:u32(), 0)."
+    ),
+    {Body, Result} = xls_parse:branch_from_clause(
+        Clause,
+        [],
+        state,
+        fun(R) -> R end,
+        "failure",
+        #{}
+    ),
+    XLS = iolist_to_binary(xls_parse:print([Body, Result])),
+    ?assertNotEqual(nomatch, binary:match(XLS, <<"(0 as u32)">>)).
+
 boolean_case_bindings_are_local_to_each_arm_test() ->
     Clause = parse_clause(
         "probe(Condition) -> "
