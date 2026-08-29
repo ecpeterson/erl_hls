@@ -88,6 +88,7 @@ struct Cell {
   best_direction : u32,
   moves_received : u8,
   anyon : u32,
+  random_state : u32,
 }
 
 fn cell_from_bits<N: u32>(raw: bits[N]) -> Cell {
@@ -102,11 +103,12 @@ fn cell_from_bits<N: u32>(raw: bits[N]) -> Cell {
     best_direction: raw[264:296] as u32,
     moves_received: raw[296:304] as u8,
     anyon: raw[304:336] as u32,
+    random_state: raw[336:368] as u32,
   }
 }
 
 fn bits_from_cell(s: Cell) -> bits[bit_count<Cell>()] {
-  (s.anyon as bits[32]) ++ (s.moves_received as bits[8]) ++ (s.best_direction as bits[32]) ++ (s.best_phi0 as bits[32]) ++ (s.seen_sources as bits[32]) ++ (s.phi_received as bits[8]) ++ (s.phi_sum as bits[64]) ++ (s.phi as bits[64]) ++ (s.diffusion_round as bits[32]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
+  (s.random_state as bits[32]) ++ (s.anyon as bits[32]) ++ (s.moves_received as bits[8]) ++ (s.best_direction as bits[32]) ++ (s.best_phi0 as bits[32]) ++ (s.seen_sources as bits[32]) ++ (s.phi_received as bits[8]) ++ (s.phi_sum as bits[64]) ++ (s.phi as bits[64]) ++ (s.diffusion_round as bits[32]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
 }
 
 struct EntryEffects {
@@ -140,6 +142,7 @@ struct Machine {
 
 fn initial_machine() -> Machine {
 let _0 = Cell {
+  random_state: 1831565813,
   ..zero!<Cell>()
 };
 let _1 = (Tag::CELL, _0);
@@ -564,96 +567,591 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
         let _OldPhase_1 = old_phase;
         let __1 = phase;
         let Cell_1 = (Tag::CELL, data);
-        let _0 = Cell_1.1.step;
-        let _1 = Anyonmove {
-          step: _0,
-          present: 0,
+        let _0 = Cell_1.1.random_state;
+        let _1 = (_0 ^ (_0 << u32:13)) & u32:0xffffffff;
+        let _2 = (_1 ^ (_1 >> u32:17)) & u32:0xffffffff;
+        let _3 = (_2 ^ (_2 << u32:5)) & u32:0xffffffff;
+        let NextRandom_1 = _3;
+        let _4 = NextRandom_1 >> 31;
+        let _5 = _4 == 1;
+        let Heads_1 = _5;
+        let _6 = Cell_1.1.anyon;
+        let _7 = _6 == 1;
+        let _8 = Cell_1.1.best_direction;
+        let _9 = _8 != 0;
+        let _10 = _9 && Heads_1;
+        let _11 = _7 && _10;
+        let Move_1 = _11;
+        let _12 = (0 as u32);
+        let Absent_1 = _12;
+        let _14 = if Move_1 {
+          let _13 = (1 as u32);
+          (_13, bool:false)
+        } else {
+          (Absent_1, bool:false)
+        };
+        let case_match_1_1 = bool:false;
+        let case_match_1_2 = _14.1;
+        let Present_1 = _14.0;
+        let _15 = Cell_1.1.best_direction;
+        let _16 = _15 == 1;
+        let _17 = if _16 {
+          (Present_1, bool:false)
+        } else {
+          (Absent_1, bool:false)
+        };
+        let case_match_2_1 = bool:false;
+        let case_match_2_2 = _17.1;
+        let NorthPresent_1 = _17.0;
+        let _18 = Cell_1.1.best_direction;
+        let _19 = _18 == 2;
+        let _20 = if _19 {
+          (Present_1, bool:false)
+        } else {
+          (Absent_1, bool:false)
+        };
+        let case_match_3_1 = bool:false;
+        let case_match_3_2 = _20.1;
+        let EastPresent_1 = _20.0;
+        let _21 = Cell_1.1.best_direction;
+        let _22 = _21 == 4;
+        let _23 = if _22 {
+          (Present_1, bool:false)
+        } else {
+          (Absent_1, bool:false)
+        };
+        let case_match_4_1 = bool:false;
+        let case_match_4_2 = _23.1;
+        let WestPresent_1 = _23.0;
+        let _24 = Cell_1.1.best_direction;
+        let _25 = _24 == 8;
+        let _26 = if _25 {
+          (Present_1, bool:false)
+        } else {
+          (Absent_1, bool:false)
+        };
+        let case_match_5_1 = bool:false;
+        let case_match_5_2 = _26.1;
+        let SouthPresent_1 = _26.0;
+        let _27 = Cell_1.1.step;
+        let _28 = Anyonmove {
+          step: _27,
+          present: NorthPresent_1,
           ..zero!<Anyonmove>()
         };
-        let _2 = (Tag::ANYON_MOVE, _1, bits_from_anyonmove(_1));
-        let Message_1 = _2;
-        let _3 = if (bool:false) {
+        let _29 = (Tag::ANYON_MOVE, _28, bits_from_anyonmove(_28));
+        let North_1 = _29;
+        let _30 = Cell_1.1.step;
+        let _31 = Anyonmove {
+          step: _30,
+          present: EastPresent_1,
+          ..zero!<Anyonmove>()
+        };
+        let _32 = (Tag::ANYON_MOVE, _31, bits_from_anyonmove(_31));
+        let East_1 = _32;
+        let _33 = Cell_1.1.step;
+        let _34 = Anyonmove {
+          step: _33,
+          present: WestPresent_1,
+          ..zero!<Anyonmove>()
+        };
+        let _35 = (Tag::ANYON_MOVE, _34, bits_from_anyonmove(_34));
+        let West_1 = _35;
+        let _36 = Cell_1.1.step;
+        let _37 = Anyonmove {
+          step: _36,
+          present: SouthPresent_1,
+          ..zero!<Anyonmove>()
+        };
+        let _38 = (Tag::ANYON_MOVE, _37, bits_from_anyonmove(_37));
+        let South_1 = _38;
+        let _39 = Cell_1.1.anyon;
+        let _40 = _39 ^ Present_1;
+        let _41 = Cell {
+          anyon: _40,
+          random_state: NextRandom_1,
+          ..(Cell_1).1
+        };
+        let _42 = (Tag::CELL, _41);
+        let Updated_1 = _42;
+        let _43 = if ((case_match_1_1 != case_match_1_2) || (case_match_2_1 != case_match_2_2) || (case_match_3_1 != case_match_3_2) || (case_match_4_1 != case_match_4_2) || (case_match_5_1 != case_match_5_2) || bool:false) {
             data
         } else {
-            Cell_1.1
+            Updated_1.1
         };
-        _3
+        _43
       };
       let north = {
         let _OldPhase_1 = old_phase;
         let __1 = phase;
         let Cell_1 = (Tag::CELL, data);
-        let _0 = Cell_1.1.step;
-        let _1 = Anyonmove {
-          step: _0,
-          present: 0,
+        let _0 = Cell_1.1.random_state;
+        let _1 = (_0 ^ (_0 << u32:13)) & u32:0xffffffff;
+        let _2 = (_1 ^ (_1 >> u32:17)) & u32:0xffffffff;
+        let _3 = (_2 ^ (_2 << u32:5)) & u32:0xffffffff;
+        let NextRandom_1 = _3;
+        let _4 = NextRandom_1 >> 31;
+        let _5 = _4 == 1;
+        let Heads_1 = _5;
+        let _6 = Cell_1.1.anyon;
+        let _7 = _6 == 1;
+        let _8 = Cell_1.1.best_direction;
+        let _9 = _8 != 0;
+        let _10 = _9 && Heads_1;
+        let _11 = _7 && _10;
+        let Move_1 = _11;
+        let _12 = (0 as u32);
+        let Absent_1 = _12;
+        let _14 = if Move_1 {
+          let _13 = (1 as u32);
+          (_13, bool:false)
+        } else {
+          (Absent_1, bool:false)
+        };
+        let case_match_1_1 = bool:false;
+        let case_match_1_2 = _14.1;
+        let Present_1 = _14.0;
+        let _15 = Cell_1.1.best_direction;
+        let _16 = _15 == 1;
+        let _17 = if _16 {
+          (Present_1, bool:false)
+        } else {
+          (Absent_1, bool:false)
+        };
+        let case_match_2_1 = bool:false;
+        let case_match_2_2 = _17.1;
+        let NorthPresent_1 = _17.0;
+        let _18 = Cell_1.1.best_direction;
+        let _19 = _18 == 2;
+        let _20 = if _19 {
+          (Present_1, bool:false)
+        } else {
+          (Absent_1, bool:false)
+        };
+        let case_match_3_1 = bool:false;
+        let case_match_3_2 = _20.1;
+        let EastPresent_1 = _20.0;
+        let _21 = Cell_1.1.best_direction;
+        let _22 = _21 == 4;
+        let _23 = if _22 {
+          (Present_1, bool:false)
+        } else {
+          (Absent_1, bool:false)
+        };
+        let case_match_4_1 = bool:false;
+        let case_match_4_2 = _23.1;
+        let WestPresent_1 = _23.0;
+        let _24 = Cell_1.1.best_direction;
+        let _25 = _24 == 8;
+        let _26 = if _25 {
+          (Present_1, bool:false)
+        } else {
+          (Absent_1, bool:false)
+        };
+        let case_match_5_1 = bool:false;
+        let case_match_5_2 = _26.1;
+        let SouthPresent_1 = _26.0;
+        let _27 = Cell_1.1.step;
+        let _28 = Anyonmove {
+          step: _27,
+          present: NorthPresent_1,
           ..zero!<Anyonmove>()
         };
-        let _2 = (Tag::ANYON_MOVE, _1, bits_from_anyonmove(_1));
-        let Message_1 = _2;
-        let _3 = if (bool:false) {
+        let _29 = (Tag::ANYON_MOVE, _28, bits_from_anyonmove(_28));
+        let North_1 = _29;
+        let _30 = Cell_1.1.step;
+        let _31 = Anyonmove {
+          step: _30,
+          present: EastPresent_1,
+          ..zero!<Anyonmove>()
+        };
+        let _32 = (Tag::ANYON_MOVE, _31, bits_from_anyonmove(_31));
+        let East_1 = _32;
+        let _33 = Cell_1.1.step;
+        let _34 = Anyonmove {
+          step: _33,
+          present: WestPresent_1,
+          ..zero!<Anyonmove>()
+        };
+        let _35 = (Tag::ANYON_MOVE, _34, bits_from_anyonmove(_34));
+        let West_1 = _35;
+        let _36 = Cell_1.1.step;
+        let _37 = Anyonmove {
+          step: _36,
+          present: SouthPresent_1,
+          ..zero!<Anyonmove>()
+        };
+        let _38 = (Tag::ANYON_MOVE, _37, bits_from_anyonmove(_37));
+        let South_1 = _38;
+        let _39 = Cell_1.1.anyon;
+        let _40 = _39 ^ Present_1;
+        let _41 = Cell {
+          anyon: _40,
+          random_state: NextRandom_1,
+          ..(Cell_1).1
+        };
+        let _42 = (Tag::CELL, _41);
+        let Updated_1 = _42;
+        let _43 = if ((case_match_1_1 != case_match_1_2) || (case_match_2_1 != case_match_2_2) || (case_match_3_1 != case_match_3_2) || (case_match_4_1 != case_match_4_2) || (case_match_5_1 != case_match_5_2) || bool:false) {
             zero!<axis::Frame>()
         } else {
-            axis::pack(Message_1.0 as u8, Message_1.2)
+            axis::pack(North_1.0 as u8, North_1.2)
         };
-        _3
+        _43
       };
       let east = {
         let _OldPhase_1 = old_phase;
         let __1 = phase;
         let Cell_1 = (Tag::CELL, data);
-        let _0 = Cell_1.1.step;
-        let _1 = Anyonmove {
-          step: _0,
-          present: 0,
+        let _0 = Cell_1.1.random_state;
+        let _1 = (_0 ^ (_0 << u32:13)) & u32:0xffffffff;
+        let _2 = (_1 ^ (_1 >> u32:17)) & u32:0xffffffff;
+        let _3 = (_2 ^ (_2 << u32:5)) & u32:0xffffffff;
+        let NextRandom_1 = _3;
+        let _4 = NextRandom_1 >> 31;
+        let _5 = _4 == 1;
+        let Heads_1 = _5;
+        let _6 = Cell_1.1.anyon;
+        let _7 = _6 == 1;
+        let _8 = Cell_1.1.best_direction;
+        let _9 = _8 != 0;
+        let _10 = _9 && Heads_1;
+        let _11 = _7 && _10;
+        let Move_1 = _11;
+        let _12 = (0 as u32);
+        let Absent_1 = _12;
+        let _14 = if Move_1 {
+          let _13 = (1 as u32);
+          (_13, bool:false)
+        } else {
+          (Absent_1, bool:false)
+        };
+        let case_match_1_1 = bool:false;
+        let case_match_1_2 = _14.1;
+        let Present_1 = _14.0;
+        let _15 = Cell_1.1.best_direction;
+        let _16 = _15 == 1;
+        let _17 = if _16 {
+          (Present_1, bool:false)
+        } else {
+          (Absent_1, bool:false)
+        };
+        let case_match_2_1 = bool:false;
+        let case_match_2_2 = _17.1;
+        let NorthPresent_1 = _17.0;
+        let _18 = Cell_1.1.best_direction;
+        let _19 = _18 == 2;
+        let _20 = if _19 {
+          (Present_1, bool:false)
+        } else {
+          (Absent_1, bool:false)
+        };
+        let case_match_3_1 = bool:false;
+        let case_match_3_2 = _20.1;
+        let EastPresent_1 = _20.0;
+        let _21 = Cell_1.1.best_direction;
+        let _22 = _21 == 4;
+        let _23 = if _22 {
+          (Present_1, bool:false)
+        } else {
+          (Absent_1, bool:false)
+        };
+        let case_match_4_1 = bool:false;
+        let case_match_4_2 = _23.1;
+        let WestPresent_1 = _23.0;
+        let _24 = Cell_1.1.best_direction;
+        let _25 = _24 == 8;
+        let _26 = if _25 {
+          (Present_1, bool:false)
+        } else {
+          (Absent_1, bool:false)
+        };
+        let case_match_5_1 = bool:false;
+        let case_match_5_2 = _26.1;
+        let SouthPresent_1 = _26.0;
+        let _27 = Cell_1.1.step;
+        let _28 = Anyonmove {
+          step: _27,
+          present: NorthPresent_1,
           ..zero!<Anyonmove>()
         };
-        let _2 = (Tag::ANYON_MOVE, _1, bits_from_anyonmove(_1));
-        let Message_1 = _2;
-        let _3 = if (bool:false) {
+        let _29 = (Tag::ANYON_MOVE, _28, bits_from_anyonmove(_28));
+        let North_1 = _29;
+        let _30 = Cell_1.1.step;
+        let _31 = Anyonmove {
+          step: _30,
+          present: EastPresent_1,
+          ..zero!<Anyonmove>()
+        };
+        let _32 = (Tag::ANYON_MOVE, _31, bits_from_anyonmove(_31));
+        let East_1 = _32;
+        let _33 = Cell_1.1.step;
+        let _34 = Anyonmove {
+          step: _33,
+          present: WestPresent_1,
+          ..zero!<Anyonmove>()
+        };
+        let _35 = (Tag::ANYON_MOVE, _34, bits_from_anyonmove(_34));
+        let West_1 = _35;
+        let _36 = Cell_1.1.step;
+        let _37 = Anyonmove {
+          step: _36,
+          present: SouthPresent_1,
+          ..zero!<Anyonmove>()
+        };
+        let _38 = (Tag::ANYON_MOVE, _37, bits_from_anyonmove(_37));
+        let South_1 = _38;
+        let _39 = Cell_1.1.anyon;
+        let _40 = _39 ^ Present_1;
+        let _41 = Cell {
+          anyon: _40,
+          random_state: NextRandom_1,
+          ..(Cell_1).1
+        };
+        let _42 = (Tag::CELL, _41);
+        let Updated_1 = _42;
+        let _43 = if ((case_match_1_1 != case_match_1_2) || (case_match_2_1 != case_match_2_2) || (case_match_3_1 != case_match_3_2) || (case_match_4_1 != case_match_4_2) || (case_match_5_1 != case_match_5_2) || bool:false) {
             zero!<axis::Frame>()
         } else {
-            axis::pack(Message_1.0 as u8, Message_1.2)
+            axis::pack(East_1.0 as u8, East_1.2)
         };
-        _3
+        _43
       };
       let west = {
         let _OldPhase_1 = old_phase;
         let __1 = phase;
         let Cell_1 = (Tag::CELL, data);
-        let _0 = Cell_1.1.step;
-        let _1 = Anyonmove {
-          step: _0,
-          present: 0,
+        let _0 = Cell_1.1.random_state;
+        let _1 = (_0 ^ (_0 << u32:13)) & u32:0xffffffff;
+        let _2 = (_1 ^ (_1 >> u32:17)) & u32:0xffffffff;
+        let _3 = (_2 ^ (_2 << u32:5)) & u32:0xffffffff;
+        let NextRandom_1 = _3;
+        let _4 = NextRandom_1 >> 31;
+        let _5 = _4 == 1;
+        let Heads_1 = _5;
+        let _6 = Cell_1.1.anyon;
+        let _7 = _6 == 1;
+        let _8 = Cell_1.1.best_direction;
+        let _9 = _8 != 0;
+        let _10 = _9 && Heads_1;
+        let _11 = _7 && _10;
+        let Move_1 = _11;
+        let _12 = (0 as u32);
+        let Absent_1 = _12;
+        let _14 = if Move_1 {
+          let _13 = (1 as u32);
+          (_13, bool:false)
+        } else {
+          (Absent_1, bool:false)
+        };
+        let case_match_1_1 = bool:false;
+        let case_match_1_2 = _14.1;
+        let Present_1 = _14.0;
+        let _15 = Cell_1.1.best_direction;
+        let _16 = _15 == 1;
+        let _17 = if _16 {
+          (Present_1, bool:false)
+        } else {
+          (Absent_1, bool:false)
+        };
+        let case_match_2_1 = bool:false;
+        let case_match_2_2 = _17.1;
+        let NorthPresent_1 = _17.0;
+        let _18 = Cell_1.1.best_direction;
+        let _19 = _18 == 2;
+        let _20 = if _19 {
+          (Present_1, bool:false)
+        } else {
+          (Absent_1, bool:false)
+        };
+        let case_match_3_1 = bool:false;
+        let case_match_3_2 = _20.1;
+        let EastPresent_1 = _20.0;
+        let _21 = Cell_1.1.best_direction;
+        let _22 = _21 == 4;
+        let _23 = if _22 {
+          (Present_1, bool:false)
+        } else {
+          (Absent_1, bool:false)
+        };
+        let case_match_4_1 = bool:false;
+        let case_match_4_2 = _23.1;
+        let WestPresent_1 = _23.0;
+        let _24 = Cell_1.1.best_direction;
+        let _25 = _24 == 8;
+        let _26 = if _25 {
+          (Present_1, bool:false)
+        } else {
+          (Absent_1, bool:false)
+        };
+        let case_match_5_1 = bool:false;
+        let case_match_5_2 = _26.1;
+        let SouthPresent_1 = _26.0;
+        let _27 = Cell_1.1.step;
+        let _28 = Anyonmove {
+          step: _27,
+          present: NorthPresent_1,
           ..zero!<Anyonmove>()
         };
-        let _2 = (Tag::ANYON_MOVE, _1, bits_from_anyonmove(_1));
-        let Message_1 = _2;
-        let _3 = if (bool:false) {
+        let _29 = (Tag::ANYON_MOVE, _28, bits_from_anyonmove(_28));
+        let North_1 = _29;
+        let _30 = Cell_1.1.step;
+        let _31 = Anyonmove {
+          step: _30,
+          present: EastPresent_1,
+          ..zero!<Anyonmove>()
+        };
+        let _32 = (Tag::ANYON_MOVE, _31, bits_from_anyonmove(_31));
+        let East_1 = _32;
+        let _33 = Cell_1.1.step;
+        let _34 = Anyonmove {
+          step: _33,
+          present: WestPresent_1,
+          ..zero!<Anyonmove>()
+        };
+        let _35 = (Tag::ANYON_MOVE, _34, bits_from_anyonmove(_34));
+        let West_1 = _35;
+        let _36 = Cell_1.1.step;
+        let _37 = Anyonmove {
+          step: _36,
+          present: SouthPresent_1,
+          ..zero!<Anyonmove>()
+        };
+        let _38 = (Tag::ANYON_MOVE, _37, bits_from_anyonmove(_37));
+        let South_1 = _38;
+        let _39 = Cell_1.1.anyon;
+        let _40 = _39 ^ Present_1;
+        let _41 = Cell {
+          anyon: _40,
+          random_state: NextRandom_1,
+          ..(Cell_1).1
+        };
+        let _42 = (Tag::CELL, _41);
+        let Updated_1 = _42;
+        let _43 = if ((case_match_1_1 != case_match_1_2) || (case_match_2_1 != case_match_2_2) || (case_match_3_1 != case_match_3_2) || (case_match_4_1 != case_match_4_2) || (case_match_5_1 != case_match_5_2) || bool:false) {
             zero!<axis::Frame>()
         } else {
-            axis::pack(Message_1.0 as u8, Message_1.2)
+            axis::pack(West_1.0 as u8, West_1.2)
         };
-        _3
+        _43
       };
       let south = {
         let _OldPhase_1 = old_phase;
         let __1 = phase;
         let Cell_1 = (Tag::CELL, data);
-        let _0 = Cell_1.1.step;
-        let _1 = Anyonmove {
-          step: _0,
-          present: 0,
+        let _0 = Cell_1.1.random_state;
+        let _1 = (_0 ^ (_0 << u32:13)) & u32:0xffffffff;
+        let _2 = (_1 ^ (_1 >> u32:17)) & u32:0xffffffff;
+        let _3 = (_2 ^ (_2 << u32:5)) & u32:0xffffffff;
+        let NextRandom_1 = _3;
+        let _4 = NextRandom_1 >> 31;
+        let _5 = _4 == 1;
+        let Heads_1 = _5;
+        let _6 = Cell_1.1.anyon;
+        let _7 = _6 == 1;
+        let _8 = Cell_1.1.best_direction;
+        let _9 = _8 != 0;
+        let _10 = _9 && Heads_1;
+        let _11 = _7 && _10;
+        let Move_1 = _11;
+        let _12 = (0 as u32);
+        let Absent_1 = _12;
+        let _14 = if Move_1 {
+          let _13 = (1 as u32);
+          (_13, bool:false)
+        } else {
+          (Absent_1, bool:false)
+        };
+        let case_match_1_1 = bool:false;
+        let case_match_1_2 = _14.1;
+        let Present_1 = _14.0;
+        let _15 = Cell_1.1.best_direction;
+        let _16 = _15 == 1;
+        let _17 = if _16 {
+          (Present_1, bool:false)
+        } else {
+          (Absent_1, bool:false)
+        };
+        let case_match_2_1 = bool:false;
+        let case_match_2_2 = _17.1;
+        let NorthPresent_1 = _17.0;
+        let _18 = Cell_1.1.best_direction;
+        let _19 = _18 == 2;
+        let _20 = if _19 {
+          (Present_1, bool:false)
+        } else {
+          (Absent_1, bool:false)
+        };
+        let case_match_3_1 = bool:false;
+        let case_match_3_2 = _20.1;
+        let EastPresent_1 = _20.0;
+        let _21 = Cell_1.1.best_direction;
+        let _22 = _21 == 4;
+        let _23 = if _22 {
+          (Present_1, bool:false)
+        } else {
+          (Absent_1, bool:false)
+        };
+        let case_match_4_1 = bool:false;
+        let case_match_4_2 = _23.1;
+        let WestPresent_1 = _23.0;
+        let _24 = Cell_1.1.best_direction;
+        let _25 = _24 == 8;
+        let _26 = if _25 {
+          (Present_1, bool:false)
+        } else {
+          (Absent_1, bool:false)
+        };
+        let case_match_5_1 = bool:false;
+        let case_match_5_2 = _26.1;
+        let SouthPresent_1 = _26.0;
+        let _27 = Cell_1.1.step;
+        let _28 = Anyonmove {
+          step: _27,
+          present: NorthPresent_1,
           ..zero!<Anyonmove>()
         };
-        let _2 = (Tag::ANYON_MOVE, _1, bits_from_anyonmove(_1));
-        let Message_1 = _2;
-        let _3 = if (bool:false) {
+        let _29 = (Tag::ANYON_MOVE, _28, bits_from_anyonmove(_28));
+        let North_1 = _29;
+        let _30 = Cell_1.1.step;
+        let _31 = Anyonmove {
+          step: _30,
+          present: EastPresent_1,
+          ..zero!<Anyonmove>()
+        };
+        let _32 = (Tag::ANYON_MOVE, _31, bits_from_anyonmove(_31));
+        let East_1 = _32;
+        let _33 = Cell_1.1.step;
+        let _34 = Anyonmove {
+          step: _33,
+          present: WestPresent_1,
+          ..zero!<Anyonmove>()
+        };
+        let _35 = (Tag::ANYON_MOVE, _34, bits_from_anyonmove(_34));
+        let West_1 = _35;
+        let _36 = Cell_1.1.step;
+        let _37 = Anyonmove {
+          step: _36,
+          present: SouthPresent_1,
+          ..zero!<Anyonmove>()
+        };
+        let _38 = (Tag::ANYON_MOVE, _37, bits_from_anyonmove(_37));
+        let South_1 = _38;
+        let _39 = Cell_1.1.anyon;
+        let _40 = _39 ^ Present_1;
+        let _41 = Cell {
+          anyon: _40,
+          random_state: NextRandom_1,
+          ..(Cell_1).1
+        };
+        let _42 = (Tag::CELL, _41);
+        let Updated_1 = _42;
+        let _43 = if ((case_match_1_1 != case_match_1_2) || (case_match_2_1 != case_match_2_2) || (case_match_3_1 != case_match_3_2) || (case_match_4_1 != case_match_4_2) || (case_match_5_1 != case_match_5_2) || bool:false) {
             zero!<axis::Frame>()
         } else {
-            axis::pack(Message_1.0 as u8, Message_1.2)
+            axis::pack(South_1.0 as u8, South_1.2)
         };
-        _3
+        _43
       };
       (entered_data, EntryEffects {
         north_valid: u1:1,

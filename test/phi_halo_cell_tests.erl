@@ -7,6 +7,9 @@
 -define(WEST_MASK, 4).
 -define(SOUTH_MASK, 8).
 -define(ALL_DIRECTIONS, 15).
+-define(PRNG_SEED, 16#6d2b79f5).
+-define(PRNG_FIRST, 16#40aec71f).
+-define(PRNG_SECOND, 16#91e00c19).
 
 repeated_diffusion_precedes_comparison_and_flipping_test() ->
     with_cell(fun repeated_diffusion_comparison_and_flipping/2).
@@ -22,6 +25,9 @@ full_comparison_batch_uses_reserved_progress_slot_test() ->
 
 comparison_entry_labels_recipient_edges_test() ->
     with_cell(fun comparison_entry_labels_recipient_edges/2).
+
+coin_gates_selected_anyon_output_test() ->
+    with_cell(fun coin_gates_selected_anyon_output/2).
 
 comparison_source_orders_test_() ->
     Unique = comparison_messages([
@@ -75,6 +81,72 @@ invalid_comparison_sources_fail_test_() ->
         || Source <- [0, 3, 16]
     ].
 
+directional_coin_moves_test_() ->
+    [
+        {atom_to_binary(Direction), fun() ->
+            DirectionMask = direction_mask(Direction),
+            Cell = flipping_cell(1, DirectionMask, ?PRNG_FIRST),
+            {Updated, Actions} = phi_halo_cell:handle_enter(
+                comparing,
+                flipping,
+                Cell
+            ),
+            ?assertEqual(
+                {cell, 0, 2, [15, 15], [0, 0], 0,
+                    ?ALL_DIRECTIONS, 18, DirectionMask, 0, 0,
+                    ?PRNG_SECOND},
+                Updated
+            ),
+            ?assertEqual(
+                expected_anyon_actions(0, Direction),
+                Actions
+            )
+        end}
+        || Direction <- [north, east, west, south]
+    ].
+
+coin_advances_when_no_move_is_eligible_test_() ->
+    Cases = [
+        {tails, 1, ?EAST_MASK, ?PRNG_SEED, ?PRNG_FIRST, 1},
+        {no_anyon, 0, ?EAST_MASK, ?PRNG_FIRST, ?PRNG_SECOND, 0},
+        {tied_maximum, 1, 0, ?PRNG_FIRST, ?PRNG_SECOND, 1}
+    ],
+    [
+        {atom_to_binary(Name), fun() ->
+            Cell = flipping_cell(Anyon, Direction, Random0),
+            {Updated, Actions} = phi_halo_cell:handle_enter(
+                comparing,
+                flipping,
+                Cell
+            ),
+            ?assertMatch(
+                {cell, 0, 2, [15, 15], [0, 0], 0,
+                    ?ALL_DIRECTIONS, 18, Direction, 0,
+                    ExpectedAnyon, Random1},
+                Updated
+            ),
+            ?assertEqual(expected_anyon_actions(0, none), Actions)
+        end}
+        || {Name, Anyon, Direction, Random0, Random1, ExpectedAnyon} <- Cases
+    ].
+
+local_departure_and_arrivals_combine_by_parity_test() ->
+    Cell = flipping_cell(1, ?EAST_MASK, ?PRNG_FIRST),
+    {Departed, _Actions} = phi_halo_cell:handle_enter(
+        comparing,
+        flipping,
+        Cell
+    ),
+    {gathering, Advanced, consume} = apply_anyons(
+        [true, false, true, true],
+        Departed
+    ),
+    ?assertMatch(
+        {cell, 1, 0, [15, 15], [0, 0], 0,
+            ?ALL_DIRECTIONS, 18, ?EAST_MASK, 0, 1, ?PRNG_SECOND},
+        Advanced
+    ).
+
 deferred_connection_delays_initial_entry_test() ->
     {Collectors, Ref} = start_collectors(),
     {ok, PID} = phi_halo_cell:start_link(),
@@ -101,7 +173,8 @@ early_phi_casts_wait_for_initial_entry_test() ->
         ?assertEqual(disconnected, maps:get(lifecycle, Before)),
         ?assertEqual(4, maps:get(committed, maps:get(mailbox, Before))),
         ?assertMatch(
-            {cell, 0, 0, [0, 0], [0, 0], 0, 0, 0, 0, 0, 0},
+            {cell, 0, 0, [0, 0], [0, 0], 0,
+                0, 0, 0, 0, 0, ?PRNG_SEED},
             maps:get(data, Before)),
         assert_no_neighbor_cast(Ref),
 
@@ -116,7 +189,8 @@ early_phi_casts_wait_for_initial_entry_test() ->
         ?assertEqual(gathering, maps:get(phase, After)),
         ?assertEqual(0, maps:get(committed, maps:get(mailbox, After))),
         ?assertMatch(
-            {cell, 0, 1, [8, 6], [0, 0], 0, 0, 0, 0, 0, 0},
+            {cell, 0, 1, [8, 6], [0, 0], 0,
+                0, 0, 0, 0, 0, ?PRNG_SEED},
             maps:get(data, After))
     after
         case is_process_alive(PID) of
@@ -187,7 +261,7 @@ boolean_anyon_api_encodes_move_test() ->
         ok = phi_halo_cell:offer_anyon(PID, 0, true),
         ?assertMatch(
             {cell, 0, 2, [0, 0], [0, 0], 0,
-                ?ALL_DIRECTIONS, 0, 0, 1, 1},
+                ?ALL_DIRECTIONS, 0, 0, 1, 1, ?PRNG_FIRST},
             maps:get(data, phi_halo_cell:runtime_info(PID))
         )
     end).
@@ -319,7 +393,8 @@ message_wire_abi_test() ->
     ).
 
 two_layer_relaxation_coefficients_test() ->
-    Initial = {cell, 0, 0, [40, 20], [0, 0], 0, 0, 0, 0, 0, 0},
+    Initial = {cell, 0, 0, [40, 20], [0, 0], 0,
+        0, 0, 0, 0, 0, ?PRNG_SEED},
     Message0 = {phi, 0, [8, 12]},
     {gathering, First, consume} =
         phi_halo_cell:handle_cast(Message0, gathering, Initial),
@@ -330,7 +405,8 @@ two_layer_relaxation_coefficients_test() ->
     {repeat_phase, RoundOne, consume} =
         phi_halo_cell:handle_cast(Message0, gathering, Third),
     ?assertEqual(
-        {cell, 0, 1, [19, 19], [0, 0], 0, 0, 0, 0, 0, 0},
+        {cell, 0, 1, [19, 19], [0, 0], 0,
+            0, 0, 0, 0, 0, ?PRNG_SEED},
         RoundOne
     ),
 
@@ -344,7 +420,8 @@ two_layer_relaxation_coefficients_test() ->
     {comparing, Compared, consume} =
         phi_halo_cell:handle_cast(Message1, gathering, Seventh),
     ?assertEqual(
-        {cell, 0, 2, [12, 17], [0, 0], 0, 0, 0, 0, 0, 0},
+        {cell, 0, 2, [12, 17], [0, 0], 0,
+            0, 0, 0, 0, 0, ?PRNG_SEED},
         Compared
     ),
 
@@ -361,7 +438,7 @@ two_layer_relaxation_coefficients_test() ->
     ),
     ?assertMatch(
         {cell, 0, 2, [12, 17], [0, 0], 0,
-            ?ALL_DIRECTIONS, 14, ?EAST_MASK, 0, 0},
+            ?ALL_DIRECTIONS, 14, ?EAST_MASK, 0, 0, ?PRNG_SEED},
         Final
     ).
 
@@ -381,7 +458,8 @@ repeated_diffusion_comparison_and_flipping(PID, Ref) ->
     AfterDiffusion = phi_halo_cell:runtime_info(PID),
     ?assertEqual(comparing, maps:get(phase, AfterDiffusion)),
     ?assertMatch(
-        {cell, 0, 2, [15, 15], [0, 0], 0, 0, 0, 0, 0, 0},
+        {cell, 0, 2, [15, 15], [0, 0], 0,
+            0, 0, 0, 0, 0, ?PRNG_SEED},
         maps:get(data, AfterDiffusion)
     ),
 
@@ -396,7 +474,7 @@ repeated_diffusion_comparison_and_flipping(PID, Ref) ->
     ?assertEqual(flipping, maps:get(phase, AfterComparison)),
     ?assertMatch(
         {cell, 0, 2, [15, 15], [0, 0], 0,
-            ?ALL_DIRECTIONS, 18, ?EAST_MASK, 0, 0},
+            ?ALL_DIRECTIONS, 18, ?EAST_MASK, 0, 0, ?PRNG_FIRST},
         maps:get(data, AfterComparison)
     ),
 
@@ -409,10 +487,54 @@ repeated_diffusion_comparison_and_flipping(PID, Ref) ->
     ?assertEqual(0, maps:get(committed, maps:get(mailbox, Info))),
     ?assertMatch(
         {cell, 1, 0, [15, 15], [0, 0], 0,
-            ?ALL_DIRECTIONS, 18, ?EAST_MASK, 0, 0},
+            ?ALL_DIRECTIONS, 18, ?EAST_MASK, 0, 0, ?PRNG_FIRST},
         maps:get(data, Info)
     ),
     assert_no_neighbor_cast(Ref).
+
+coin_gates_selected_anyon_output(PID, Ref) ->
+    enter_comparing(PID, Ref, [0, 0], [0, 0]),
+    offer_comparisons(PID, [
+        {north, 14},
+        {east, 18},
+        {west, 17},
+        {south, 16}
+    ]),
+    %% The first draw is tails. One incoming move creates a local anyon for
+    %% the following decoder step without conflating arrival with departure.
+    expect_anyon_batch(Ref, 0, none),
+    offer_anyons(PID, 0, [true, false, false, false]),
+    expect_neighbor_batch(Ref, {phi, 2, [0, 0]}),
+
+    four_phis(PID, 2, [0, 0]),
+    expect_neighbor_batch(Ref, {phi, 3, [65536, 0]}),
+    four_phis(PID, 3, [0, 0]),
+    expect_comparison_batch(Ref, 1, 81920),
+
+    %% The second draw is heads. The protocol chooses the unique adjacent
+    %% maximum; it does not require that maximum to exceed the local field.
+    offer_comparisons(PID, 1, [
+        {north, 10},
+        {east, 13},
+        {west, 12},
+        {south, 11}
+    ]),
+    expect_anyon_batch(Ref, 1, east),
+    Flipping = phi_halo_cell:runtime_info(PID),
+    ?assertEqual(flipping, maps:get(phase, Flipping)),
+    ?assertMatch(
+        {cell, 1, 2, [81920, 3276], [0, 0], 0,
+            ?ALL_DIRECTIONS, 13, ?EAST_MASK, 0, 0, ?PRNG_SECOND},
+        maps:get(data, Flipping)
+    ),
+
+    four_anyons(PID, 1, false),
+    expect_neighbor_batch(Ref, {phi, 4, [81920, 3276]}),
+    ?assertMatch(
+        {cell, 2, 0, [81920, 3276], [0, 0], 0,
+            ?ALL_DIRECTIONS, 13, ?EAST_MASK, 0, 0, ?PRNG_SECOND},
+        maps:get(data, phi_halo_cell:runtime_info(PID))
+    ).
 
 staged_next_phase_messages(PID, Ref) ->
     expect_neighbor_batch(Ref, {phi, 0, [0, 0]}),
@@ -433,7 +555,8 @@ staged_next_phase_messages(PID, Ref) ->
     ?assertEqual(gathering, maps:get(phase, AfterRepeat)),
     ?assertEqual(0, maps:get(postponed, AfterRepeat)),
     ?assertMatch(
-        {cell, 0, 1, [20, 11], [8, 12], 1, 0, 0, 0, 0, 0},
+        {cell, 0, 1, [20, 11], [8, 12], 1,
+            0, 0, 0, 0, 0, ?PRNG_SEED},
         maps:get(data, AfterRepeat)
     ),
 
@@ -455,7 +578,7 @@ staged_next_phase_messages(PID, Ref) ->
     ?assertEqual(1, maps:get(postponed, AfterEntry)),
     ?assertMatch(
         {cell, 0, 2, [11, 11], [0, 0], 0,
-            ?NORTH_MASK, 14, ?NORTH_MASK, 0, 0},
+            ?NORTH_MASK, 14, ?NORTH_MASK, 0, 0, ?PRNG_SEED},
         maps:get(data, AfterEntry)
     ),
 
@@ -470,7 +593,7 @@ staged_next_phase_messages(PID, Ref) ->
     ?assertEqual(0, maps:get(postponed, AfterFlip)),
     ?assertMatch(
         {cell, 0, 2, [11, 11], [0, 0], 0,
-            ?ALL_DIRECTIONS, 18, ?EAST_MASK, 1, 0},
+            ?ALL_DIRECTIONS, 18, ?EAST_MASK, 1, 0, ?PRNG_FIRST},
         maps:get(data, AfterFlip)
     ),
 
@@ -490,7 +613,7 @@ staged_next_phase_messages(PID, Ref) ->
     ?assertEqual(0, maps:get(postponed, AfterGather)),
     ?assertMatch(
         {cell, 1, 0, [11, 11], [8, 12], 1,
-            ?ALL_DIRECTIONS, 18, ?EAST_MASK, 0, 0},
+            ?ALL_DIRECTIONS, 18, ?EAST_MASK, 0, 0, ?PRNG_FIRST},
         maps:get(data, AfterGather)
     ).
 
@@ -511,7 +634,8 @@ full_staged_diffusion_epoch(PID, Ref) ->
     ?assertEqual(0, maps:get(postponed, Complete)),
     ?assertEqual(0, maps:get(committed, maps:get(mailbox, Complete))),
     ?assertMatch(
-        {cell, 0, 2, [4, 2], [0, 0], 0, 0, 0, 0, 0, 0},
+        {cell, 0, 2, [4, 2], [0, 0], 0,
+            0, 0, 0, 0, 0, ?PRNG_SEED},
         maps:get(data, Complete)
     ).
 
@@ -540,7 +664,7 @@ full_staged_comparison(PID, Ref) ->
     ?assertEqual(0, maps:get(committed, maps:get(mailbox, Complete))),
     ?assertMatch(
         {cell, 0, 2, [0, 0], [0, 0], 0,
-            ?ALL_DIRECTIONS, 4, ?SOUTH_MASK, 0, 0},
+            ?ALL_DIRECTIONS, 4, ?SOUTH_MASK, 0, 0, ?PRNG_FIRST},
         maps:get(data, Complete)
     ).
 
@@ -564,7 +688,7 @@ comparison_order_tests(Kind, Messages, Best, BestDirection) ->
             ),
             ?assertMatch(
                 {cell, 0, 2, [15, 15], [0, 0], 0,
-                    ?ALL_DIRECTIONS, Best, BestDirection, 0, 0},
+                    ?ALL_DIRECTIONS, Best, BestDirection, 0, 0, ?PRNG_SEED},
                 Final
             )
         end}
@@ -572,7 +696,12 @@ comparison_order_tests(Kind, Messages, Best, BestDirection) ->
     ].
 
 comparison_cell() ->
-    {cell, 0, 2, [15, 15], [0, 0], 0, 0, 0, 0, 0, 0}.
+    {cell, 0, 2, [15, 15], [0, 0], 0,
+        0, 0, 0, 0, 0, ?PRNG_SEED}.
+
+flipping_cell(Anyon, Direction, RandomState) ->
+    {cell, 0, 2, [15, 15], [0, 0], 0,
+        ?ALL_DIRECTIONS, 18, Direction, 0, Anyon, RandomState}.
 
 comparison_messages(SourcesAndValues) ->
     [
@@ -586,6 +715,20 @@ apply_comparisons([Message | Rest], Cell) ->
     {comparing, Next, consume} =
         phi_halo_cell:handle_cast(Message, comparing, Cell),
     apply_comparisons(Rest, Next).
+
+apply_anyons([Present], Cell) ->
+    phi_halo_cell:handle_cast(
+        {anyon_move, 0, present_word(Present)},
+        flipping,
+        Cell
+    );
+apply_anyons([Present | Rest], Cell) ->
+    {flipping, Next, consume} = phi_halo_cell:handle_cast(
+        {anyon_move, 0, present_word(Present)},
+        flipping,
+        Cell
+    ),
+    apply_anyons(Rest, Next).
 
 permutations([]) ->
     [[]];
@@ -646,7 +789,7 @@ await_step(PID, Step, Attempts) ->
     Info = phi_halo_cell:runtime_info(PID),
     case maps:get(data, Info) of
         {cell, CurrentStep, _Round, _Phi, _Sum, _PhiReceived,
-                _Seen, _Best, _Direction, _MovesReceived, _Anyon}
+                _Seen, _Best, _Direction, _MovesReceived, _Anyon, _Random}
                 when CurrentStep >= Step ->
             ok;
         _ ->
@@ -761,6 +904,15 @@ expect_comparison_and_anyon_sequences(Ref, Step, Value) ->
         )
     ).
 
+expect_anyon_batch(Ref, Step, Selected) ->
+    expect_remaining_neighbor_sequences(
+        Ref,
+        maps:map(
+            fun(_Port, Message) -> [Message] end,
+            anyon_outputs(Step, Selected)
+        )
+    ).
+
 comparison_outputs(Step, Value) ->
     #{
         north => {phi0, Step, ?SOUTH_MASK, Value},
@@ -768,6 +920,25 @@ comparison_outputs(Step, Value) ->
         west => {phi0, Step, ?EAST_MASK, Value},
         south => {phi0, Step, ?NORTH_MASK, Value}
     }.
+
+anyon_outputs(Step, Selected) ->
+    maps:from_list([
+        {Port, {anyon_move, Step, selected_word(Port, Selected)}}
+        || Port <- [north, east, west, south]
+    ]).
+
+expected_anyon_actions(Step, Selected) ->
+    Outputs = anyon_outputs(Step, Selected),
+    [
+        {cast, Port, maps:get(Port, Outputs)}
+        || Port <- [north, east, west, south]
+    ].
+
+selected_word(Port, Port) -> 1;
+selected_word(_Port, _Selected) -> 0.
+
+present_word(false) -> 0;
+present_word(true) -> 1.
 
 assert_no_neighbor_cast(Ref) ->
     receive
@@ -782,6 +953,14 @@ four_anyons(PID, Step, Present) ->
     ok = phi_halo_cell:offer_anyon(PID, Step, Present),
     ok = phi_halo_cell:offer_anyon(PID, Step, Present),
     ok = phi_halo_cell:offer_anyon(PID, Step, Present).
+
+offer_anyons(PID, Step, Presents) ->
+    lists:foreach(
+        fun(Present) ->
+            ok = phi_halo_cell:offer_anyon(PID, Step, Present)
+        end,
+        Presents
+    ).
 
 four_phis(PID, Epoch, Values) ->
     ok = phi_halo_cell:offer_phi(PID, Epoch, Values),
