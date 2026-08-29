@@ -2,7 +2,7 @@
 -moduledoc """
  
 """.
--export([zero/0, zero/1, width/1, pack/2, unpack/2, print_type/1]).
+-export([zero/0, zero/1, as/2, width/1, pack/2, unpack/2, print_type/1]).
 -compile(export_all).
 
 %%%
@@ -74,6 +74,20 @@ zero() ->
 -doc "". 
 zero(#xls_type{module = Module, name = Name, args = Args}) ->
     Module:zero(Name, Args).
+
+-doc """
+Ascribes an XLS type to a value whose Erlang representation is unchanged.
+
+On the BEAM this returns `Value`. Translation emits a DSLX `as` expression,
+which is useful when the surrounding expression does not determine the width
+of an Erlang literal.
+""".
+-spec as(descriptor(), Value) -> Value.
+as(_Descriptor, Value) ->
+    Value.
+
+transpile(as, [{phantom, type, Descriptor}, Value], _State) ->
+    ["(", Value, " as ", print_type(Descriptor), ")"].
 
 -spec width(descriptor()) -> integer().
 -doc "". 
