@@ -8,6 +8,25 @@ autonomous_two_phase_test() ->
 mailbox_stages_future_halos_test() ->
     with_cell(fun staged_future_phase/1).
 
+explicit_output_recipient_test() ->
+    TestPID = self(),
+    OutputPID = spawn_link(fun() ->
+        receive
+            Message -> TestPID ! {forwarded_output, Message}
+        end
+    end),
+    {ok, PID} = phi_halo_cell:start_link(OutputPID),
+    try
+        receive
+            {forwarded_output, {xls_statem, PID, {halo, 0, [0, 0]}}} ->
+                ok
+        after 1000 ->
+            error(initial_halo_was_not_routed_to_output_pid)
+        end
+    after
+        phi_halo_cell:stop(PID)
+    end.
+
 invalid_epoch_stops_cell_test() ->
     {ok, PID} = phi_halo_cell:start_link(),
     unlink(PID),
@@ -20,25 +39,29 @@ invalid_epoch_stops_cell_test() ->
         error(cell_did_not_stop_on_invalid_epoch)
     end.
 
-transpiles_uniform_bounded_machine_test() ->
-    XLS = iolist_to_binary(
+generated_dslx_matches_checked_in_artifact_test() ->
+    {ok, Expected} = file:read_file(
+        "src/examples/phi_halo_cell.erl.x"
+    ),
+    Generated = iolist_to_binary(
         xls_parse:to_xls("src/examples/phi_halo_cell.erl")
     ),
-    ?assertNotEqual(nomatch, binary:match(XLS, <<"enum Phase">>)),
-    ?assertNotEqual(nomatch, binary:match(XLS, <<"enum Directive">>)),
-    ?assertNotEqual(nomatch, binary:match(XLS, <<"struct MailboxSlot">>)),
-    ?assertNotEqual(
-        nomatch,
-        binary:match(XLS, <<"recv_if_non_blocking">>)
+    ?assertEqual(Expected, Generated).
+
+halo_wire_abi_test() ->
+    Halo = {halo, 16#01020304, [16#11121314, 16#21222324]},
+    ?assertEqual(3, phi_halo_cell:pack_tag(halo)),
+    ?assertEqual(halo, phi_halo_cell:unpack_tag(3)),
+    Packed = phi_halo_cell:pack(Halo),
+    ?assertEqual(
+        <<
+            16#01020304:32/unsigned-little-integer,
+            16#21222324:32/unsigned-little-integer,
+            16#11121314:32/unsigned-little-integer
+        >>,
+        Packed
     ),
-    ?assertNotEqual(nomatch, binary:match(XLS, <<"axis::ReservedRx">>)),
-    ?assertNotEqual(nomatch, binary:match(XLS, <<"admission_pending">>)),
-    ?assertNotEqual(nomatch, binary:match(XLS, <<"Tag::HALO">>)),
-    ?assertNotEqual(nomatch, binary:match(XLS, <<"invalid_conclusion">>)),
-    ?assertNotEqual(nomatch, binary:match(XLS, <<" << 3">>)),
-    ?assertNotEqual(nomatch, binary:match(XLS, <<" >> 4">>)),
-    ?assertEqual(nomatch, binary:match(XLS, <<"DIFFUSE">>)),
-    ?assertEqual(nomatch, binary:match(XLS, <<"HALO_N">>)).
+    ?assertEqual({Halo, <<>>}, phi_halo_cell:unpack(halo, Packed)).
 
 with_cell(Test) ->
     {ok, PID} = phi_halo_cell:start_link(),

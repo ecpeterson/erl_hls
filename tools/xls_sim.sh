@@ -39,3 +39,13 @@ rsync -a -e "ssh -o BatchMode=yes" \
 
 ssh -o BatchMode=yes "$remote_host" \
     bash "$remote_stage/remote_xls_sim.sh" "$remote_stage" "$remote_xls"
+
+# Keep the source-adjacent review artifacts honest. The DSLX is generated
+# locally; retrieve the RTL only after the pinned remote flow has simulated it.
+rsync -a -e "ssh -o BatchMode=yes" \
+    "$remote_host:$remote_stage/phi_halo_cell.v" \
+    "$local_stage/phi_halo_cell.v"
+cmp "$local_stage/phi_halo_cell.x" \
+    "$project_root/src/examples/phi_halo_cell.erl.x"
+cmp "$local_stage/phi_halo_cell.v" \
+    "$project_root/src/examples/phi_halo_cell.v"

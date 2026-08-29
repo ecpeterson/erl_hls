@@ -1,6 +1,6 @@
 -module(xls_statem_tests).
 
--behaviour(xls_statem).
+-behavior(xls_statem).
 
 -include_lib("eunit/include/eunit.hrl").
 
@@ -10,7 +10,7 @@ postponed_retry_requires_outer_state_change_test() ->
     {ok, PID} = xls_statem:start_link(
         ?MODULE,
         [],
-        [{mailbox_capacity, 8}]
+        [{mailbox_capacity, 8}, {output, self()}]
     ),
     try
         postponed_retry_boundary(PID)
@@ -25,12 +25,12 @@ mailbox_overflow_is_fail_stop_test() ->
     {ok, PID} = xls_statem:start_link(
         ?MODULE,
         [],
-        [{mailbox_capacity, 1}]
+        [{mailbox_capacity, 1}, {output, self()}]
     ),
     unlink(PID),
     Monitor = monitor(process, PID),
-    ok = xls_statem:send(PID, block),
-    ok = xls_statem:send(PID, overflow),
+    ok = xls_statem:cast(PID, block),
+    ok = xls_statem:cast(PID, overflow),
     receive
         {'DOWN', Monitor, process, PID, {mailbox_full, overflow}} -> ok
     after 1000 ->
@@ -41,11 +41,11 @@ invalid_conclusion_is_fail_stop_test() ->
     {ok, PID} = xls_statem:start_link(
         ?MODULE,
         [],
-        [{mailbox_capacity, 1}]
+        [{mailbox_capacity, 1}, {output, self()}]
     ),
     unlink(PID),
     Monitor = monitor(process, PID),
-    ok = xls_statem:send(PID, invalid_emit),
+    ok = xls_statem:cast(PID, invalid_emit),
     receive
         {'DOWN', Monitor, process, PID,
                 {{bad_xls_statem_conclusion, true, waiting, postpone},
@@ -61,7 +61,17 @@ capacity_matches_lowered_u8_bound_test() ->
         xls_statem:start_link(
             ?MODULE,
             [],
-            [{mailbox_capacity, 256}]
+            [{mailbox_capacity, 256}, {output, self()}]
+        )
+    ).
+
+output_recipient_is_required_test() ->
+    ?assertError(
+        badarg,
+        xls_statem:start_link(
+            ?MODULE,
+            [],
+            [{mailbox_capacity, 1}]
         )
     ).
 
@@ -102,11 +112,11 @@ transition(invalid_emit, {waiting, Data}) ->
     {{true, forbidden}, {waiting, Data}, postpone}.
 
 postponed_retry_boundary(PID) ->
-    ok = xls_statem:send(PID, deferred),
-    ok = xls_statem:send(PID, data_change),
-    ok = xls_statem:send(PID, same_state_transition),
+    ok = xls_statem:cast(PID, deferred),
+    ok = xls_statem:cast(PID, data_change),
+    ok = xls_statem:cast(PID, same_state_transition),
     PID ! informational,
-    ok = xls_statem:send(PID, younger),
+    ok = xls_statem:cast(PID, younger),
 
     Before = xls_statem:info(PID),
     ?assertEqual(waiting, maps:get(phase, Before)),
@@ -123,7 +133,7 @@ postponed_retry_boundary(PID) ->
         maps:get(log, maps:get(data, Before))
     ),
 
-    ok = xls_statem:send(PID, advance),
+    ok = xls_statem:cast(PID, advance),
     receive
         {xls_statem, PID, handled} -> ok
     after 1000 ->

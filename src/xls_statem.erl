@@ -1,42 +1,71 @@
+%%%% xls_statem
+%%%%
+%% TODO: Add a fixed-shape synchronous call/reply contract once its response
+%% path and bounded lifetime have a lowerable representation.
+%% TODO: Evaluate the useful bounded subsets of gen_statem state-enter calls,
+%% timeouts, and next_event actions instead of growing ad hoc alternatives.
+
 -module(xls_statem).
 -moduledoc """
-A bounded CPU scheduler for an XLS-shaped state machine.
+A bounded CPU reference scheduler for XLS state machines.
 
-The scheduler borrows one semantic rule from `gen_statem`: a postponed input
-is retried only after the outer phase atom changes. Updating the separate data
-value, or returning the same phase again, does not make it eligible. It
-does not otherwise reproduce the `gen_statem` callback API.
+An `xls_statem` callback separates its finite-control `Phase` atom from its
+rich `Data` value. The CPU scheduler in this module provides reference
+semantics for the ordering and postponement rules used by the generated
+implementation.
 
-Every transition returns one fixed product:
+## Callback contract
+
+`init/1` returns an optional initial output and the initial machine value:
+
+```
+{{Emit, Output}, {Phase, Data}}
+```
+
+`transition/2` receives one application message and the current
+`{Phase, Data}` pair. It always returns the fixed product:
 
 ```
 {{Emit, Output}, {NextPhase, NextData}, Directive}
 ```
 
-`Directive` is `consume`, `postpone`, or `fail`. `Emit` permits at most one
-output per consumed input; a postponed or failing transition cannot emit.
-This closed shape has a direct XLS representation and avoids both tagged-tuple
-return unions and unbounded action lists. An XLS implementation represents a
-suppressed output as a zero `axis::Frame`.
+The directive determines what happens to the input:
 
-The callback receives one application message type, not OTP's disjoint union
-of calls, casts, and info events. Missing clauses, callback exceptions, a
-`fail` directive, and exhausting the bounded mailbox stop the CPU scheduler.
-The generated fabric latches a failed machine inert and issues one slot credit
-before its stream receiver can accept the first beat of a frame. It does not
-provide OTP termination diagnostics.
+  * `consume` removes it from the mailbox and may emit one output.
+  * `postpone` retains it and cannot emit.
+  * `fail` installs the returned phase and data for diagnostics, then stops the
+    CPU process; it cannot emit.
 
-Postponed inputs retain capacity. A protocol must therefore size the mailbox
-so that an input capable of changing phase can still be admitted. Otherwise
-the CPU model fails on overflow and a backpressured fabric can make no progress.
+Outputs are delivered to the PID in the required `{output, PID}` start option.
+The message has the form `{xls_statem, MachinePID, Output}`.
 
-As with any host-side reference process, the ordinary BEAM mailbox precedes
-this bounded queue. It is a semantic model, not a host admission guarantee.
+The CPU scheduler admits asynchronous casts and ordinary process messages.
+Synchronous calls are not yet part of the callback contract and stop it.
+
+## Postponement
+
+The scheduler tries the oldest eligible input. A postponed input becomes
+eligible again only after the `Phase` atom changes; changing `Data`, or
+returning the same phase, does not retry it. A postponed transition which does
+change phase therefore makes that same input immediately eligible. This retry
+boundary is borrowed from `gen_statem`, but this module is not a compatible
+implementation of its callback API.
+
+## Capacity and failure
+
+Postponed inputs retain mailbox capacity. The configured capacity must leave
+room for an input capable of advancing the phase, or the protocol can
+deadlock under backpressure. On the CPU, an overflowing cast or ordinary
+process message stops the scheduler. Missing callback clauses, callback
+exceptions, invalid callback results, and `fail` directives also stop it.
+
+The ordinary BEAM mailbox sits in front of this bounded queue, so this module
+models scheduling semantics rather than host-side admission guarantees.
 """.
 
--behaviour(gen_server).
+-behavior(gen_server).
 
--export([start_link/3, stop/1, send/2, info/1]).
+-export([start_link/3, stop/1, cast/2, info/1]).
 -export([
     init/1,
     handle_call/3,
@@ -46,6 +75,10 @@ this bounded queue. It is a semantic model, not a host admission guarantee.
     code_change/3
 ]).
 -export_type([phase/0, directive/0, conclusion/0]).
+
+%%%
+%%% Callback contract
+%%%
 
 -type phase() :: atom().
 -type data() :: term().
@@ -68,7 +101,7 @@ this bounded queue. It is a semantic model, not a host admission guarantee.
 
 -optional_callbacks([terminate/3]).
 
--record(state, {
+-record(runtime, {
     module :: module(),
     phase :: phase(),
     data :: data(),
@@ -78,78 +111,91 @@ this bounded queue. It is a semantic model, not a host admission guarantee.
     next_message_id = 0 :: non_neg_integer()
 }).
 
--doc "Starts a machine with a required mailbox capacity in `1..255`.".
+%%%
+%%% Client interface
+%%%
+
+-doc "Starts a machine with required mailbox-capacity and output options.".
 -spec start_link(module(), term(), [start_option()]) ->
     gen_server:start_ret().
 start_link(Module, Arg, Options) ->
-    Caller = self(),
-    {Capacity, Output} = start_options(Options, Caller),
+    {Capacity, Output} = start_options(Options),
     gen_server:start_link(?MODULE, {Module, Arg, Capacity, Output}, []).
 
 -spec stop(pid()) -> ok.
 stop(PID) ->
     gen_server:stop(PID).
 
--doc "Asynchronously sends one application message to the CPU scheduler.".
--spec send(pid(), term()) -> ok.
-send(PID, Message) ->
+-doc "Asynchronously casts one application message to the CPU scheduler.".
+-spec cast(pid(), term()) -> ok.
+cast(PID, Message) ->
     gen_server:cast(PID, Message).
 
--doc "Returns the outer phase, callback data, and bounded queue counters.".
+-doc "Returns the phase, callback data, and bounded queue counters.".
 -spec info(pid()) -> map().
 info(PID) ->
-    state_info(sys:get_state(PID)).
+    format_info(sys:get_state(PID)).
+
+%%%
+%%% gen_server callbacks
+%%%
 
 init({Module, Arg, Capacity, Output}) ->
     {{Emit, InitialOutput}, {Phase, Data}} = Module:init(Arg),
     true = is_atom(Phase),
     true = is_boolean(Emit),
-    State = #state{
+    Runtime = #runtime{
         module = Module,
         phase = Phase,
         data = Data,
         output = Output,
         mailbox = xls_mailbox:new(Capacity)
     },
-    maybe_emit(Emit, InitialOutput, State),
-    {ok, State}.
+    maybe_emit(Emit, InitialOutput, Runtime),
+    {ok, Runtime}.
 
-handle_call(Request, _From, State) ->
+%% Synchronous calls deliberately fail instead of masquerading as casts.
+%% The TODO at the top records the missing lowerable call/reply contract.
+handle_call(Request, _From, Runtime) ->
     {stop, {unsupported_xls_statem_call, Request},
-        {error, unsupported_call}, State}.
+        {error, unsupported_call}, Runtime}.
 
-handle_cast(Message, State0) ->
-    admit_and_process(Message, State0).
+handle_cast(Message, Runtime0) ->
+    admit_and_process(Message, Runtime0).
 
-handle_info(Message, State0) ->
-    admit_and_process(Message, State0).
+handle_info(Message, Runtime0) ->
+    admit_and_process(Message, Runtime0).
 
-terminate(Reason, #state{
+terminate(Reason, #runtime{
     module = Module,
     phase = Phase,
     data = Data
 }) ->
-    %%%% This callback is host-side diagnostics and is not lowered into XLS.
+    %% Host-side diagnostic hook; it is not part of the lowered callback.
     case erlang:function_exported(Module, terminate, 3) of
         true -> Module:terminate(Reason, Phase, Data);
         false -> ok
     end.
 
-code_change(_OldVersion, _State, _Extra) ->
+code_change(_OldVersion, _Runtime, _Extra) ->
     {error, xls_statem_code_change_not_supported}.
 
-admit_and_process(Message, State0) ->
-    case enqueue(Message, State0) of
-        {ok, State1} ->
-            case process_messages(State1) of
-                {ok, State2} -> {noreply, State2};
-                {stop, Reason, State2} -> {stop, Reason, State2}
+%%%
+%%% Bounded scheduling
+%%%
+
+admit_and_process(Message, Runtime0) ->
+    case enqueue(Message, Runtime0) of
+        {ok, Runtime1} ->
+            case process_messages(Runtime1) of
+                {ok, Runtime2} -> {noreply, Runtime2};
+                {stop, Reason, Runtime2} -> {stop, Reason, Runtime2}
             end;
         {error, full} ->
-            {stop, {mailbox_full, Message}, State0}
+            {stop, {mailbox_full, Message}, Runtime0}
     end.
 
-enqueue(Message, State = #state{
+enqueue(Message, Runtime = #runtime{
     mailbox = Mailbox0,
     next_message_id = MessageID
 }) ->
@@ -164,13 +210,13 @@ enqueue(Message, State = #state{
                 Entry,
                 Mailbox1
             ),
-            {ok, State#state{
+            {ok, Runtime#runtime{
                 mailbox = Mailbox2,
                 next_message_id = MessageID + 1
             }}
     end.
 
-process_messages(State = #state{
+process_messages(Runtime = #runtime{
     mailbox = Mailbox,
     postponed = Postponed
 }) ->
@@ -179,15 +225,15 @@ process_messages(State = #state{
     end,
     case xls_mailbox:select([Eligible], Mailbox) of
         none ->
-            {ok, State};
+            {ok, Runtime};
         {ok, Selection, 1, Entry} ->
-            process_message(Selection, Entry, State)
+            process_message(Selection, Entry, Runtime)
     end.
 
 process_message(
     Selection,
     {MessageID, Message},
-    State = #state{
+    Runtime = #runtime{
         module = Module,
         phase = Phase,
         data = Data,
@@ -198,39 +244,43 @@ process_message(
     Conclusion = Module:transition(Message, {Phase, Data}),
     {{Emit, Output}, {NextPhase, NextData}, Directive} = Conclusion,
     ok = validate_conclusion(Emit, NextPhase, Directive),
-    NextState0 = State#state{
+    NextRuntime0 = Runtime#runtime{
         phase = NextPhase,
         data = NextData
     },
     case Directive of
         fail ->
-            {stop, {xls_statem_failure, Message}, NextState0};
+            {stop, {xls_statem_failure, Message}, NextRuntime0};
         postpone ->
             finish_transition(
                 Phase,
-                NextState0#state{
+                NextRuntime0#runtime{
                     postponed = Postponed0#{MessageID => true}
                 }
             );
         consume ->
-            maybe_emit(Emit, Output, State),
+            maybe_emit(Emit, Output, NextRuntime0),
             {ok, {MessageID, Message}, Mailbox1} =
                 xls_mailbox:consume(Selection, Mailbox0),
             finish_transition(
                 Phase,
-                NextState0#state{
+                NextRuntime0#runtime{
                     mailbox = Mailbox1,
                     postponed = maps:remove(MessageID, Postponed0)
                 }
             )
     end.
 
-finish_transition(PreviousPhase, State0) ->
-    State1 = case State0#state.phase =/= PreviousPhase of
-        true -> State0#state{postponed = #{}};
-        false -> State0
+finish_transition(PreviousPhase, Runtime0) ->
+    Runtime1 = case Runtime0#runtime.phase =/= PreviousPhase of
+        true -> Runtime0#runtime{postponed = #{}};
+        false -> Runtime0
     end,
-    process_messages(State1).
+    process_messages(Runtime1).
+
+%%%
+%%% Validation and diagnostics
+%%%
 
 validate_conclusion(Emit, NextPhase, consume)
         when is_boolean(Emit), is_atom(NextPhase) ->
@@ -242,13 +292,13 @@ validate_conclusion(false, NextPhase, Directive)
 validate_conclusion(Emit, NextPhase, Directive) ->
     error({bad_xls_statem_conclusion, Emit, NextPhase, Directive}).
 
-maybe_emit(false, _Output, _State) ->
+maybe_emit(false, _Output, _Runtime) ->
     ok;
-maybe_emit(true, Output, #state{output = Recipient}) ->
+maybe_emit(true, Output, #runtime{output = Recipient}) ->
     Recipient ! {xls_statem, self(), Output},
     ok.
 
-state_info(#state{
+format_info(#runtime{
     phase = Phase,
     data = Data,
     mailbox = Mailbox,
@@ -261,7 +311,7 @@ state_info(#state{
         mailbox => xls_mailbox:info(Mailbox)
     }.
 
-start_options(Options, DefaultOutput) ->
+start_options(Options) ->
     Known = lists:all(
         fun
             ({mailbox_capacity, _Capacity}) -> true;
@@ -271,7 +321,7 @@ start_options(Options, DefaultOutput) ->
         Options
     ),
     Capacity = proplists:get_value(mailbox_capacity, Options),
-    Output = proplists:get_value(output, Options, DefaultOutput),
+    Output = proplists:get_value(output, Options),
     case Known andalso
             is_integer(Capacity) andalso
             Capacity > 0 andalso Capacity =< 255 andalso
