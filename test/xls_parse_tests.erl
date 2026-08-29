@@ -278,6 +278,77 @@ state_machine_init_guard_is_rejected_test() ->
         "init([]) when false -> {ok, waiting, #cell{}}.\n"
     ).
 
+repeat_phase_lowering_creates_an_explicit_boundary_test() ->
+    CastSource =
+        "handle_cast(#message{value = 0}, waiting, Cell) ->\n"
+        "  {waiting, Cell, consume};\n"
+        "handle_cast(#message{}, waiting, Cell) ->\n"
+        "  {repeat_phase, Cell, consume}.\n",
+    with_statem_fixture(
+        "repeat_phase_lowering_fixture",
+        "[waiting]",
+        CastSource,
+        fun(XLS) ->
+            ?assertNotEqual(
+                nomatch,
+                binary:match(
+                    XLS,
+                    <<"Directive::CONSUME, bool:0">>
+                )
+            ),
+            ?assertNotEqual(
+                nomatch,
+                binary:match(
+                    XLS,
+                    <<"Directive::CONSUME, bool:1">>
+                )
+            ),
+            ?assertNotEqual(
+                nomatch,
+                binary:match(XLS, <<"let invalid_repeat =">>)
+            ),
+            ?assertNotEqual(
+                nomatch,
+                binary:match(XLS, <<"let phase_boundary =">>)
+            ),
+            ?assertNotEqual(
+                nomatch,
+                binary:match(
+                    XLS,
+                    <<"enter_pending: effective && phase_boundary">>
+                )
+            ),
+            ?assertEqual(nomatch, binary:match(XLS, <<"blocked_phase">>)),
+            ?assertNotEqual(
+                nomatch,
+                binary:match(
+                    XLS,
+                    <<"!admitted_slots[0].postponed;">>
+                )
+            )
+        end
+    ).
+
+repeat_phase_rejects_nonconsume_directives_test_() ->
+    [
+        ?_test(repeat_phase_rejects_directive(Directive))
+        || Directive <- [postpone, fail]
+    ].
+
+repeat_phase_is_not_a_declarable_phase_test() ->
+    CastSource =
+        "handle_cast(#message{}, waiting, Cell) ->\n"
+        "  {waiting, Cell, consume}.\n",
+    ?assertError(
+        {reserved_xls_statem_phase, repeat_phase},
+        with_statem_fixture(
+            "reserved_repeat_phase_fixture",
+            "[repeat_phase]",
+            CastSource,
+            fun(_XLS) -> ok end
+        )
+    ).
+
 non_word_aligned_state_machine_message_is_rejected_test() ->
     Path = filename:join("_build", "non_word_statem_fixture.erl"),
     ok = filelib:ensure_dir(Path),
@@ -304,6 +375,52 @@ non_word_aligned_state_machine_message_is_rejected_test() ->
     after
         ok = file:delete(Path)
     end.
+
+with_statem_fixture(ModuleName, Phases, CastSource, Test) ->
+    Path = filename:join("_build", ModuleName ++ ".erl"),
+    ok = filelib:ensure_dir(Path),
+    Source = iolist_to_binary([
+        "-module(", ModuleName, ").\n",
+        "-xls_data(cell).\n",
+        "-xls_phases(", Phases, ").\n",
+        "-xls_outputs([out]).\n",
+        "-xls_mailbox_capacity(2).\n",
+        "-xls_tags([message]).\n",
+        "-record(message, {\n",
+        "  value = xls_type:zero() :: xls_nums:u32()\n",
+        "}).\n",
+        "-record(cell, {\n",
+        "  value = xls_type:zero() :: xls_nums:u32()\n",
+        "}).\n",
+        "init([]) -> {ok, waiting, #cell{}}.\n",
+        "handle_enter(_OldPhase, waiting, Cell) ->\n",
+        "  Message = #message{value = Cell#cell.value},\n",
+        "  {Cell, [{cast, out, Message}]}.\n",
+        CastSource
+    ]),
+    ok = file:write_file(Path, Source),
+    try
+        Test(iolist_to_binary(xls_parse:to_xls(Path)))
+    after
+        ok = file:delete(Path)
+    end.
+
+repeat_phase_rejects_directive(Directive) ->
+    CastSource = io_lib:format(
+        "handle_cast(#message{}, waiting, Cell) ->~n"
+        "  {repeat_phase, Cell, ~p}.~n",
+        [Directive]
+    ),
+    ?assertException(
+        error,
+        {bad_xls_statem_repeat_result, _, _},
+        with_statem_fixture(
+            "repeat_phase_directive_fixture",
+            "[waiting]",
+            CastSource,
+            fun(_XLS) -> ok end
+        )
+    ).
 
 assert_bad_init_head(ModuleName, InitSource) ->
     Path = filename:join("_build", ModuleName ++ ".erl"),

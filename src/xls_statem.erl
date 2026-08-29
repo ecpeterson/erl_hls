@@ -51,6 +51,20 @@ conclusion:
 {NextPhase, NextData, Directive}
 ```
 
+It may instead request an explicit same-phase scheduling boundary:
+
+```
+{repeat_phase, NextData, consume}
+```
+
+This consumes the input, invokes `handle_enter(Phase, Phase, NextData)` once,
+and then retries all postponed inputs in arrival order. `repeat_phase` is a
+reserved result atom and may only be combined with `consume`. Returning the
+current phase in the ordinary conclusion does not enter it again or retry
+postponed input. This is deliberately stronger than `gen_statem`'s
+`repeat_state`: `repeat_phase` begins a new postponement generation, while
+`repeat_state` does not make postponed events eligible.
+
 Clauses for the same message record and phase are tried in source order. The
 body of the first clause whose supported head and guard sequence match is
 selected; a failure in that body does not resume the clause search.
@@ -58,7 +72,8 @@ selected; a failure in that body does not resume the clause search.
 The directive determines what happens to the input:
 
   * `consume` removes it from the bounded mailbox.
-  * `postpone` retains it until the phase atom changes.
+  * `postpone` retains it until a real phase change or an explicit
+    `repeat_phase` boundary.
   * `fail` installs the returned phase and data for diagnostics, then stops.
 
 This API borrows phase-entry and postponed-event ordering from `gen_statem`,
@@ -67,9 +82,10 @@ but it is deliberately smaller and is not callback-compatible with OTP.
 ## Postponement
 
 The scheduler tries the oldest eligible input. Changing `Data`, or returning
-the same phase, does not retry a postponed message. On a real phase change,
-the new phase is entered first and all postponed messages then become eligible
-again in arrival order.
+the same phase in an ordinary conclusion, does not retry a postponed message.
+On a real phase change or an explicit `repeat_phase` boundary, the phase is
+entered first and all postponed messages then become eligible again in arrival
+order.
 
 ## Capacity and failure
 
@@ -112,11 +128,17 @@ models scheduling semantics rather than host-side admission guarantees.
 -type output_port() :: atom().
 -type data() :: term().
 -type directive() :: consume | postpone | fail.
--type conclusion() :: {
-    NextPhase :: phase(),
-    NextData :: data(),
-    directive()
-}.
+-type conclusion() ::
+    {
+        NextPhase :: phase(),
+        NextData :: data(),
+        directive()
+    } |
+    {
+        repeat_phase,
+        NextData :: data(),
+        consume
+    }.
 -type cast_action() :: {cast, output_port(), term()}.
 -type enter_result() :: {NextData :: data(), [cast_action()]}.
 -type start_option() ::
@@ -187,7 +209,7 @@ info(PID) ->
 
 init({Module, Arg, Capacity, Outputs}) ->
     {ok, Phase, Data} = Module:init(Arg),
-    true = is_atom(Phase),
+    ok = validate_phase(Phase),
     {Lifecycle, OutputMap} = case Outputs of
         undefined -> {disconnected, #{}};
         _ -> {connected, Outputs}
@@ -311,33 +333,47 @@ process_message(
         postponed = Postponed0
     }
 ) ->
-    {NextPhase, NextData, Directive} =
-        Module:handle_cast(Message, Phase, Data),
-    ok = validate_conclusion(NextPhase, Directive),
-    NextRuntime0 = Runtime#runtime{
-        phase = NextPhase,
-        data = NextData
-    },
-    case Directive of
-        fail ->
-            {stop, {xls_statem_failure, Message}, NextRuntime0};
-        postpone ->
-            finish_transition(
-                Phase,
-                NextRuntime0#runtime{
-                    postponed = Postponed0#{MessageID => true}
-                }
-            );
-        consume ->
+    case Module:handle_cast(Message, Phase, Data) of
+        {repeat_phase, NextData, consume} ->
             {ok, {MessageID, Message}, Mailbox1} =
                 xls_mailbox:consume(Selection, Mailbox0),
-            finish_transition(
+            finish_repeat(
                 Phase,
-                NextRuntime0#runtime{
+                Runtime#runtime{
+                    data = NextData,
                     mailbox = Mailbox1,
                     postponed = maps:remove(MessageID, Postponed0)
                 }
-            )
+            );
+        {repeat_phase, _NextData, Directive} ->
+            error({bad_xls_statem_conclusion, repeat_phase, Directive});
+        {NextPhase, NextData, Directive} ->
+            ok = validate_conclusion(NextPhase, Directive),
+            NextRuntime0 = Runtime#runtime{
+                phase = NextPhase,
+                data = NextData
+            },
+            case Directive of
+                fail ->
+                    {stop, {xls_statem_failure, Message}, NextRuntime0};
+                postpone ->
+                    finish_transition(
+                        Phase,
+                        NextRuntime0#runtime{
+                            postponed = Postponed0#{MessageID => true}
+                        }
+                    );
+                consume ->
+                    {ok, {MessageID, Message}, Mailbox1} =
+                        xls_mailbox:consume(Selection, Mailbox0),
+                    finish_transition(
+                        Phase,
+                        NextRuntime0#runtime{
+                            mailbox = Mailbox1,
+                            postponed = maps:remove(MessageID, Postponed0)
+                        }
+                    )
+            end
     end.
 
 finish_transition(PreviousPhase, Runtime0 = #runtime{phase = Phase}) ->
@@ -349,6 +385,10 @@ finish_transition(PreviousPhase, Runtime0 = #runtime{phase = Phase}) ->
             Runtime0
     end,
     process_messages(Runtime1).
+
+finish_repeat(Phase, Runtime0) ->
+    Entered = enter_phase(Phase, Runtime0),
+    process_messages(Entered#runtime{postponed = #{}}).
 
 %%%
 %%% Phase entry and validation
@@ -372,13 +412,18 @@ enter_phase(OldPhase, Runtime = #runtime{
     Runtime#runtime{data = NextData}.
 
 validate_conclusion(NextPhase, Directive)
-        when is_atom(NextPhase),
+        when is_atom(NextPhase), NextPhase =/= repeat_phase,
              (Directive =:= consume orelse
               Directive =:= postpone orelse
               Directive =:= fail) ->
     ok;
 validate_conclusion(NextPhase, Directive) ->
     error({bad_xls_statem_conclusion, NextPhase, Directive}).
+
+validate_phase(Phase) when is_atom(Phase), Phase =/= repeat_phase ->
+    ok;
+validate_phase(Phase) ->
+    error({bad_xls_statem_phase, Phase}).
 
 validate_casts(Casts, Outputs) when is_list(Casts) ->
     Ports = lists:map(

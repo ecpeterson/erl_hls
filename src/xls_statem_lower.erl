@@ -299,7 +299,10 @@ lower_cast_group(
     DataName,
     EnumAtoms
 ) ->
-    Clauses = [strip_dispatched_phase(Clause) || Clause <- Clauses0],
+    Clauses = [
+        strip_dispatched_phase(normalize_cast_result(Clause, Phase))
+        || Clause <- Clauses0
+    ],
     MessageValue = [
         "(Tag::", uppercase(Tag), ", message, bits_from_",
         record_function_name(Tag), "(message))"
@@ -313,12 +316,14 @@ lower_cast_group(
             ["(Tag::", uppercase(DataName), ", data)"]
         )
     ],
-    Failure = "(phase, data, Directive::FAIL)",
+    Failure = "(phase, data, Directive::FAIL, u1:0)",
     {Body, Result} = xls_callback_lower:lower(
         Clauses,
         Arguments,
         DataName,
-        fun(R) -> ["(", R, ".0, ", R, ".1.1, ", R, ".2)"] end,
+        fun(R) -> [
+            "(", R, ".0, ", R, ".1.1, ", R, ".2, ", R, ".3)"
+        ] end,
         Failure,
         Failure,
         EnumAtoms
@@ -329,6 +334,57 @@ lower_cast_group(
         body => xls_parse:print(Body),
         result => xls_parse:print(Result)
     }.
+
+%% `repeat_phase` is a scheduling boundary rather than a phase value. Normalize
+%% both callback result forms to one XLS product whose final bit requests the
+%% boundary. Keeping this rewrite here prevents the generic expression lowerer
+%% from having to know about xls_statem callback semantics.
+normalize_cast_result(
+    {clause, Line, Patterns, Guards, Body0},
+    Phase
+) ->
+    {Prefix, Result0} = split_last(Body0),
+    Result = normalize_cast_result_expression(Result0, Phase),
+    {clause, Line, Patterns, Guards, Prefix ++ [Result]}.
+
+normalize_cast_result_expression(
+    {tuple, Line, [
+        {atom, _RepeatLine, repeat_phase},
+        Data,
+        {atom, _ConsumeLine, consume}
+    ]},
+    Phase
+) ->
+    {tuple, Line, [
+        {atom, Line, Phase},
+        Data,
+        {atom, Line, consume},
+        {atom, Line, true}
+    ]};
+normalize_cast_result_expression(
+    {tuple, Line, [{atom, _RepeatLine, repeat_phase} | _] = Elements},
+    _Phase
+) ->
+    error({bad_xls_statem_repeat_result, Line, Elements});
+normalize_cast_result_expression(
+    {tuple, Line, [NextPhase, Data, Directive]},
+    _Phase
+) ->
+    {tuple, Line, [
+        NextPhase,
+        Data,
+        Directive,
+        {atom, Line, false}
+    ]};
+normalize_cast_result_expression(
+    {'case', Line, Expression, Clauses},
+    Phase
+) ->
+    {'case', Line, Expression, [
+        normalize_cast_result(Clause, Phase) || Clause <- Clauses
+    ]};
+normalize_cast_result_expression(Expression, _Phase) ->
+    Expression.
 
 cast_key(
     {clause, Line, Patterns, _Guards, _Body},
@@ -362,6 +418,10 @@ validate_names(PhaseNames, MessageNames, OutputNames, DataName)
     true = PhaseNames =/= [],
     true = MessageNames =/= [],
     true = OutputNames =/= [],
+    case lists:member(repeat_phase, PhaseNames) of
+        true -> error({reserved_xls_statem_phase, repeat_phase});
+        false -> ok
+    end,
     ok = require_unique(phase, PhaseNames),
     ok = require_unique(message_tag, MessageNames),
     ok = require_unique(output, OutputNames),

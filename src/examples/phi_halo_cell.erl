@@ -11,15 +11,20 @@ An autonomous cell for a small phi-decoder protocol experiment.
 The cell has two control phases with direct protocol meanings:
 
   * On entering `gathering`, it casts its current two-layer phi value to each
-    of four neighbors. Four phi messages complete one field update and move
-    the cell to `flipping`.
+    of four neighbors. Four phi messages complete one diffusion round. An
+    intermediate round explicitly repeats `gathering`, which sends the updated
+    value and releases messages for the next diffusion epoch. The final round
+    moves the cell to `flipping`.
   * On entering `flipping`, it casts one anyon update to each neighbor. Four
     anyon messages complete the step and move the cell back to `gathering`.
 
-Messages for the next phase may arrive early. They are postponed until the
-phase atom changes, then retried in their original arrival order. Partial sums,
-receive counts, and the step number are data changes and do not themselves
-retry a postponed message.
+Phi messages carry a wrapping diffusion epoch in their first `u32` word. The
+cell derives that epoch from its decoder step and diffusion round, so repeated
+diffusion does not widen the 96-bit phi frame. Messages for the next diffusion
+epoch or phase may arrive early. They are postponed until the phase changes or
+is explicitly repeated, then retried in their original arrival order. Partial
+sums and receive counts are ordinary data changes and do not themselves retry
+a postponed message.
 
 The generated module exposes four separately backpressured output ports named
 `north`, `east`, `west`, and `south`. The CPU scheduler maps those names to the
@@ -33,16 +38,18 @@ deduplicate it or the cell must use a fixed source mask.
 
 ## Deliberate simplifications
 
-This slice performs one phi exchange per anyon step. The stochastic coin takes
-its no-move branch, so every flipping entry sends `present = false`; input
-noise is also absent. Incoming anyon updates are still combined by parity so
-the phase protocol does not erase a move supplied by a test or a future
-neighbor.
+This slice performs two diffusion rounds per anyon step. Two is the smallest
+round count which exercises same-phase re-entry and next-epoch postponement;
+it is a compile-time protocol fixture rather than a convergence policy. The
+stochastic coin takes its no-move branch, so every flipping entry sends
+`present = false`; input noise is also absent. Incoming anyon updates are still
+combined by parity so the phase protocol does not erase a move supplied by a
+test or a future neighbor.
 
-A fuller decoder needs repeated diffusion rounds, move selection based on a
-post-diffusion neighbor comparison, measurement input, and correction output.
-Those additions should preserve the two genuine barrier phases; a parity-only
-wakeup phase would not have direct protocol meaning.
+A fuller decoder needs a configurable diffusion stopping rule, move selection
+based on a post-diffusion neighbor comparison, measurement input, and
+correction output. Those additions should preserve the two genuine barrier
+phases; a parity-only wakeup phase would not have direct protocol meaning.
 
 ## Field arithmetic
 
@@ -67,6 +74,7 @@ keep the CPU model aligned with fixed-width generated arithmetic.
 -define(LAYER_COUNT, 2).
 -define(MAILBOX_CAPACITY, 5).
 -define(NEIGHBOR_COUNT, 4).
+-define(DIFFUSION_ROUNDS, 2).
 -define(U32_MASK, 16#ffffffff).
 
 -behavior(xls_statem).
@@ -79,15 +87,16 @@ keep the CPU model aligned with fixed-width generated arithmetic.
 
 %% TODO: Replace the two-element xls_lists values with xls_vec once vector
 %% arithmetic is part of the lowerable library.
-%% TODO: Add the repeated diffusion and post-diffusion phi0 barriers before
-%% enabling a nontrivial coin and correction output.
+%% TODO: Replace the fixed diffusion count with the decoder's stopping rule and
+%% add the post-diffusion phi0 barrier before enabling a nontrivial coin and
+%% correction output.
 %% TODO: Revisit neighbor configuration so FPGA topology can be fixed at
 %% compile time while CPU models retain ergonomic runtime wiring.
 %% TODO: Separate logical field types from word-aligned wire codecs so
 %% #anyon_move.present can be boolean in lowerable callbacks.
 
 -record(phi, {
-    step = xls_type:zero() :: xls_nums:u32(),
+    epoch = xls_type:zero() :: xls_nums:u32(),
     values = xls_type:zero() ::
         xls_lists:list(xls_nums:u32(), ?LAYER_COUNT)
 }).
@@ -99,6 +108,7 @@ keep the CPU model aligned with fixed-width generated arithmetic.
 
 -record(cell, {
     step = xls_type:zero() :: xls_nums:u32(),
+    diffusion_round = xls_type:zero() :: xls_nums:u32(),
     phi = xls_type:zero() ::
         xls_lists:list(xls_nums:u32(), ?LAYER_COUNT),
     phi_sum = xls_type:zero() ::
@@ -110,7 +120,9 @@ keep the CPU model aligned with fixed-width generated arithmetic.
 
 -type phase() :: gathering | flipping.
 -type directive() :: consume | postpone | fail.
--type conclusion() :: {phase(), #cell{}, directive()}.
+-type conclusion() ::
+    {phase(), #cell{}, directive()} |
+    {repeat_phase, #cell{}, consume}.
 -type neighbors() :: #{
     north := pid(),
     east := pid(),
@@ -157,10 +169,10 @@ connect(PID, Neighbors) ->
 stop(PID) ->
     xls_statem:stop(PID).
 
--doc "Offers one neighbor phi value to a cell.".
+-doc "Offers one neighbor phi value for diffusion `Epoch` to a cell.".
 -spec offer_phi(pid(), xls_nums:u32(), [xls_nums:u32()]) -> ok.
-offer_phi(PID, Step, Values) ->
-    xls_statem:cast(PID, #phi{step = Step, values = Values}).
+offer_phi(PID, Epoch, Values) ->
+    xls_statem:cast(PID, #phi{epoch = Epoch, values = Values}).
 
 -doc "Offers one neighbor anyon update to a cell.".
 -spec offer_anyon(pid(), xls_nums:u32(), boolean()) -> ok.
@@ -187,7 +199,9 @@ init([]) ->
 -spec handle_enter(phase(), phase(), #cell{}) ->
     xls_statem:enter_result().
 handle_enter(_OldPhase, gathering, Cell) ->
-    Message = #phi{step = Cell#cell.step, values = Cell#cell.phi},
+    Epoch = ((Cell#cell.step * ?DIFFUSION_ROUNDS) +
+        Cell#cell.diffusion_round) band ?U32_MASK,
+    Message = #phi{epoch = Epoch, values = Cell#cell.phi},
     {Cell, [
         {cast, north, Message},
         {cast, east, Message},
@@ -207,10 +221,10 @@ handle_enter(_OldPhase, flipping, Cell) ->
 -spec handle_cast(#phi{} | #anyon_move{}, phase(), #cell{}) ->
     conclusion().
 handle_cast(
-    #phi{step = Step, values = Values},
+    #phi{epoch = Epoch, values = Values},
     gathering,
-    Cell = #cell{step = Step}
-) ->
+    Cell = #cell{step = Step, diffusion_round = Round}
+) when Epoch =:= ((Step * ?DIFFUSION_ROUNDS + Round) band ?U32_MASK) ->
     Value0 = xls_lists:nth(1, Values),
     Value1 = xls_lists:nth(2, Values),
     Sum0 = (xls_lists:nth(1, Cell#cell.phi_sum) + Value0)
@@ -238,6 +252,7 @@ handle_cast(
             PhiFirst = xls_lists:set(1, Cell#cell.phi, New0),
             NewPhi = xls_lists:set(2, PhiFirst, New1),
             Updated = Cell#cell{
+                diffusion_round = Round + 1,
                 phi = NewPhi,
                 phi_sum = xls_lists:new(
                     xls_nums:u32(),
@@ -245,8 +260,18 @@ handle_cast(
                 ),
                 phi_received = 0
             },
-            {flipping, Updated, consume}
+            case Round + 1 =:= ?DIFFUSION_ROUNDS of
+                false -> {repeat_phase, Updated, consume};
+                true -> {flipping, Updated, consume}
+            end
     end;
+handle_cast(
+    #phi{epoch = Epoch},
+    gathering,
+    Cell = #cell{step = Step, diffusion_round = Round}
+) when Epoch =:= ((Step * ?DIFFUSION_ROUNDS + Round + 1)
+        band ?U32_MASK) ->
+    {gathering, Cell, postpone};
 handle_cast(#phi{}, gathering, Cell) ->
     {gathering, Cell, fail};
 handle_cast(
@@ -258,10 +283,10 @@ handle_cast(
 handle_cast(#anyon_move{}, gathering, Cell) ->
     {gathering, Cell, fail};
 handle_cast(
-    #phi{step = EventStep},
+    #phi{epoch = Epoch},
     flipping,
-    Cell = #cell{step = Step}
-) when EventStep =:= ((Step + 1) band ?U32_MASK) ->
+    Cell = #cell{step = Step, diffusion_round = Round}
+) when Epoch =:= ((Step * ?DIFFUSION_ROUNDS + Round) band ?U32_MASK) ->
     {flipping, Cell, postpone};
 handle_cast(#phi{}, flipping, Cell) ->
     {flipping, Cell, fail};
@@ -282,6 +307,7 @@ handle_cast(
         true ->
             Advanced = Cell#cell{
                 step = (Cell#cell.step + 1) band ?U32_MASK,
+                diffusion_round = 0,
                 moves_received = 0,
                 anyon = NextAnyon
             },

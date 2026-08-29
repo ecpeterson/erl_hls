@@ -29,6 +29,98 @@ postponed_retry_requires_phase_change_test() ->
         stop_if_alive(PID)
     end.
 
+ordinary_same_phase_does_not_reenter_or_retry_test() ->
+    {ok, PID} = start(8),
+    try
+        receive {'$gen_cast', started} -> ok end,
+        ok = xls_statem:cast(PID, {repeat_deferred, first}),
+        ok = xls_statem:cast(PID, same_phase_transition),
+
+        Info = xls_statem:info(PID),
+        ?assertEqual(waiting, maps:get(phase, Info)),
+        ?assertEqual(1, maps:get(postponed, Info)),
+        ?assertEqual(
+            [
+                {enter, waiting, waiting},
+                {repeat_deferred, first, postponed},
+                same_phase_transition
+            ],
+            maps:get(log, maps:get(data, Info))
+        ),
+        receive
+            {'$gen_cast', started} ->
+                error(unexpected_same_phase_entry)
+        after 0 ->
+            ok
+        end
+    after
+        stop_if_alive(PID)
+    end.
+
+repeat_phase_enters_before_replaying_in_arrival_order_test() ->
+    {ok, PID} = start(8),
+    try
+        receive {'$gen_cast', started} -> ok end,
+        ok = xls_statem:cast(PID, {repeat_deferred, first}),
+        ok = xls_statem:cast(PID, {repeat_deferred, second}),
+        ok = xls_statem:cast(PID, repeat_boundary),
+        receive
+            {'$gen_cast', started} -> ok
+        after 1000 ->
+            error(missing_repeat_phase_entry_cast)
+        end,
+
+        Info = xls_statem:info(PID),
+        ?assertEqual(waiting, maps:get(phase, Info)),
+        ?assertEqual(0, maps:get(postponed, Info)),
+        ?assertEqual(0, maps:get(committed, maps:get(mailbox, Info))),
+        ?assertEqual(
+            [
+                {enter, waiting, waiting},
+                {repeat_deferred, first, postponed},
+                {repeat_deferred, second, postponed},
+                repeat_boundary,
+                {enter, waiting, waiting},
+                {repeat_deferred, first, replayed},
+                {repeat_deferred, second, replayed}
+            ],
+            maps:get(log, maps:get(data, Info))
+        )
+    after
+        stop_if_alive(PID)
+    end.
+
+repeat_phase_waits_for_connection_test() ->
+    {ok, PID} = start_deferred(4),
+    try
+        ok = xls_statem:cast(PID, repeat_boundary),
+        Before = xls_statem:info(PID),
+        ?assertEqual([], maps:get(log, maps:get(data, Before))),
+        ?assertEqual(1, maps:get(committed, maps:get(mailbox, Before))),
+
+        ok = xls_statem:connect(PID, #{out => self()}),
+        receive {'$gen_cast', started} -> ok end,
+        receive {'$gen_cast', started} -> ok end,
+        After = xls_statem:info(PID),
+        ?assertEqual(
+            [
+                {enter, waiting, waiting},
+                repeat_boundary,
+                {enter, waiting, waiting}
+            ],
+            maps:get(log, maps:get(data, After))
+        ),
+        ?assertEqual(0, maps:get(committed, maps:get(mailbox, After)))
+    after
+        stop_if_alive(PID)
+    end.
+
+invalid_repeat_phase_directives_are_fail_stop_test_() ->
+    [
+        ?_test(reject_repeat_phase_directive(Directive))
+        || Directive <- [postpone, fail]
+    ].
+
 mailbox_overflow_is_fail_stop_test() ->
     {ok, PID} = start(1),
     receive {'$gen_cast', started} -> ok end,
@@ -58,6 +150,28 @@ invalid_conclusion_is_fail_stop_test() ->
 
 capacity_matches_lowered_u8_bound_test() ->
     ?assertError(badarg, start(256)).
+
+repeat_phase_is_reserved_from_application_phases_test() ->
+    Previous = process_flag(trap_exit, true),
+    try
+        ?assertMatch(
+            {error, {{bad_xls_statem_phase, repeat_phase}, _InitStack}},
+            xls_statem:start_link(
+                ?MODULE,
+                repeat_phase,
+                [{mailbox_capacity, 1}, {outputs, #{out => self()}}]
+            )
+        ),
+        receive
+            {'EXIT', _PID,
+                {{bad_xls_statem_phase, repeat_phase}, _ExitStack}} ->
+                ok
+        after 0 ->
+            ok
+        end
+    after
+        process_flag(trap_exit, Previous)
+    end.
 
 outputs_may_be_connected_after_start_test() ->
     {ok, PID} = start_deferred(4),
@@ -108,7 +222,9 @@ init([]) ->
         eligible => false,
         handled => false,
         log => []
-    }}.
+    }};
+init(repeat_phase) ->
+    {ok, repeat_phase, #{}}.
 
 handle_enter(OldPhase, waiting, Data) ->
     {log({enter, OldPhase, waiting}, Data), [{cast, out, started}]};
@@ -129,6 +245,19 @@ handle_cast(data_change, waiting, Data) ->
     {waiting, NextData, consume};
 handle_cast(same_phase_transition, waiting, Data) ->
     {waiting, log(same_phase_transition, Data), consume};
+handle_cast({repeat_deferred, Label}, waiting,
+        Data = #{eligible := false}) ->
+    NextData = log({repeat_deferred, Label, postponed}, Data),
+    {waiting, NextData, postpone};
+handle_cast({repeat_deferred, Label}, waiting,
+        Data = #{eligible := true}) ->
+    NextData = log({repeat_deferred, Label, replayed}, Data),
+    {waiting, NextData, consume};
+handle_cast(repeat_boundary, waiting, Data) ->
+    NextData = log(repeat_boundary, Data#{eligible := true}),
+    {repeat_phase, NextData, consume};
+handle_cast({invalid_repeat_phase, Directive}, waiting, Data) ->
+    {repeat_phase, Data, Directive};
 handle_cast(informational, waiting, Data) ->
     {waiting, log(informational, Data), consume};
 handle_cast(younger, waiting, Data) ->
@@ -211,6 +340,21 @@ postponed_retry_boundary(PID) ->
     ),
     Mailbox = maps:get(mailbox, After),
     ?assertEqual(0, maps:get(committed, Mailbox)).
+
+reject_repeat_phase_directive(Directive) ->
+    {ok, PID} = start(1),
+    receive {'$gen_cast', started} -> ok end,
+    unlink(PID),
+    Monitor = monitor(process, PID),
+    ok = xls_statem:cast(PID, {invalid_repeat_phase, Directive}),
+    receive
+        {'DOWN', Monitor, process, PID,
+                {{bad_xls_statem_conclusion, repeat_phase, Directive},
+                    _Stack}} ->
+            ok
+    after 1000 ->
+        error({machine_did_not_reject_repeat_phase_directive, Directive})
+    end.
 
 stop_if_alive(PID) ->
     case is_process_alive(PID) of

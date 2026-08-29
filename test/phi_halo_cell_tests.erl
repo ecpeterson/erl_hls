@@ -2,11 +2,14 @@
 
 -include_lib("eunit/include/eunit.hrl").
 
-gathering_and_flipping_are_protocol_phases_test() ->
-    with_cell(fun two_protocol_phases/2).
+repeated_diffusion_precedes_flipping_test() ->
+    with_cell(fun repeated_diffusion_and_flipping/2).
 
-early_messages_retry_at_meaningful_phase_changes_test() ->
+early_messages_retry_at_protocol_boundaries_test() ->
     with_cell(fun staged_next_phase_messages/2).
+
+full_next_epoch_batch_uses_reserved_progress_slot_test() ->
+    with_cell(fun full_staged_diffusion_epoch/2).
 
 deferred_connection_delays_initial_entry_test() ->
     {Collectors, Ref} = start_collectors(),
@@ -29,28 +32,25 @@ early_phi_casts_wait_for_initial_entry_test() ->
     {Collectors, Ref} = start_collectors(),
     {ok, PID} = phi_halo_cell:start_link(),
     try
-        lists:foreach(
-            fun(_) -> phi_halo_cell:offer_phi(PID, 0, [16, 32]) end,
-            lists:seq(1, 4)
-        ),
+        four_phis(PID, 0, [16, 32]),
         Before = phi_halo_cell:runtime_info(PID),
         ?assertEqual(disconnected, maps:get(lifecycle, Before)),
         ?assertEqual(4, maps:get(committed, maps:get(mailbox, Before))),
-        ?assertMatch({cell, 0, [0, 0], [0, 0], 0, 0, 0},
+        ?assertMatch({cell, 0, 0, [0, 0], [0, 0], 0, 0, 0},
             maps:get(data, Before)),
         assert_no_neighbor_cast(Ref),
 
         ok = phi_halo_cell:connect(PID, Collectors),
-        expect_neighbor_sequences(
-            Ref,
-            [{phi, 0, [0, 0]}, {anyon_move, 0, 0}]
-        ),
+        expect_neighbor_sequences(Ref, [
+            {phi, 0, [0, 0]},
+            {phi, 1, [8, 6]}
+        ]),
 
         After = phi_halo_cell:runtime_info(PID),
         ?assertEqual(connected, maps:get(lifecycle, After)),
-        ?assertEqual(flipping, maps:get(phase, After)),
+        ?assertEqual(gathering, maps:get(phase, After)),
         ?assertEqual(0, maps:get(committed, maps:get(mailbox, After))),
-        ?assertMatch({cell, 0, [8, 6], [0, 0], 0, 0, 0},
+        ?assertMatch({cell, 0, 1, [8, 6], [0, 0], 0, 0, 0},
             maps:get(data, After))
     after
         case is_process_alive(PID) of
@@ -60,7 +60,7 @@ early_phi_casts_wait_for_initial_entry_test() ->
         stop_collectors(Ref, Collectors)
     end.
 
-deferred_degree_four_cycle_completes_round_test() ->
+deferred_degree_four_cycle_completes_multiple_steps_test() ->
     Cells = [
         begin
             {ok, PID} = phi_halo_cell:start_link(),
@@ -89,12 +89,12 @@ deferred_degree_four_cycle_completes_round_test() ->
             SouthEast,
             torus_neighbors(SouthWest, NorthEast)
         ),
-        lists:foreach(fun await_completed_round/1, Cells)
+        lists:foreach(fun(PID) -> await_step(PID, 2) end, Cells)
     after
         lists:foreach(fun stop_cell/1, Cells)
     end.
 
-all_causal_one_round_interleavings_test_() ->
+all_causal_final_round_interleavings_test_() ->
     [
         {iolist_to_binary(io_lib:format("~p", [Schedule])),
             fun() -> exercise_interleaving(Schedule) end}
@@ -107,7 +107,7 @@ four_named_outputs_receive_one_cast_each_test() ->
         assert_no_neighbor_cast(Ref)
     end).
 
-invalid_step_stops_cell_test() ->
+invalid_diffusion_epoch_stops_cell_test() ->
     {PID, Collectors, Ref} = start_cell(),
     unlink(PID),
     expect_neighbor_batch(Ref, {phi, 0, [0, 0]}),
@@ -116,21 +116,20 @@ invalid_step_stops_cell_test() ->
     receive
         {'DOWN', Monitor, process, PID, {xls_statem_failure, _Message}} -> ok
     after 1000 ->
-        error(cell_did_not_stop_on_invalid_step)
+        error(cell_did_not_stop_on_invalid_diffusion_epoch)
     end,
     stop_collectors(Ref, Collectors).
 
 boolean_anyon_api_encodes_move_test() ->
     with_cell(fun(PID, Ref) ->
         expect_neighbor_batch(Ref, {phi, 0, [0, 0]}),
-        lists:foreach(
-            fun(_) -> phi_halo_cell:offer_phi(PID, 0, [0, 0]) end,
-            lists:seq(1, 4)
-        ),
+        four_phis(PID, 0, [0, 0]),
+        expect_neighbor_batch(Ref, {phi, 1, [0, 0]}),
+        four_phis(PID, 1, [0, 0]),
         expect_neighbor_batch(Ref, {anyon_move, 0, 0}),
         ok = phi_halo_cell:offer_anyon(PID, 0, true),
         ?assertMatch(
-            {cell, 0, [0, 0], [0, 0], 0, 1, 1},
+            {cell, 0, 2, [0, 0], [0, 0], 0, 1, 1},
             maps:get(data, phi_halo_cell:runtime_info(PID))
         )
     end).
@@ -140,10 +139,9 @@ invalid_anyon_word_stops_cell_in_flipping_test() ->
     unlink(PID),
     try
         expect_neighbor_batch(Ref, {phi, 0, [0, 0]}),
-        lists:foreach(
-            fun(_) -> phi_halo_cell:offer_phi(PID, 0, [0, 0]) end,
-            lists:seq(1, 4)
-        ),
+        four_phis(PID, 0, [0, 0]),
+        expect_neighbor_batch(Ref, {phi, 1, [0, 0]}),
+        four_phis(PID, 1, [0, 0]),
         expect_neighbor_batch(Ref, {anyon_move, 0, 0}),
         ?assertEqual(
             flipping,
@@ -181,8 +179,8 @@ generated_dslx_matches_checked_in_artifact_test() ->
         DispatchStart,
         byte_size(Generated) - DispatchStart
     ),
-    %% Each message has two clauses in each phase, but code generation emits
-    %% one ordered selector per {message tag, phase} pair.
+    %% Multiple clauses for a message and phase still produce one ordered
+    %% selector per {message tag, phase} pair.
     ?assertEqual(
         2,
         length(binary:matches(Dispatch, <<"Phase::GATHERING =>">>))
@@ -238,62 +236,99 @@ message_wire_abi_test() ->
     ).
 
 two_layer_relaxation_coefficients_test() ->
-    Initial = {cell, 0, [40, 20], [0, 0], 0, 0, 0},
-    Message = {phi, 0, [8, 12]},
+    Initial = {cell, 0, 0, [40, 20], [0, 0], 0, 0, 0},
+    Message0 = {phi, 0, [8, 12]},
     {gathering, First, consume} =
-        phi_halo_cell:handle_cast(Message, gathering, Initial),
+        phi_halo_cell:handle_cast(Message0, gathering, Initial),
     {gathering, Second, consume} =
-        phi_halo_cell:handle_cast(Message, gathering, First),
+        phi_halo_cell:handle_cast(Message0, gathering, First),
     {gathering, Third, consume} =
-        phi_halo_cell:handle_cast(Message, gathering, Second),
+        phi_halo_cell:handle_cast(Message0, gathering, Second),
+    {repeat_phase, RoundOne, consume} =
+        phi_halo_cell:handle_cast(Message0, gathering, Third),
     ?assertEqual(
-        {flipping, {cell, 0, [19, 19], [0, 0], 0, 0, 0}, consume},
-        phi_halo_cell:handle_cast(Message, gathering, Third)
+        {cell, 0, 1, [19, 19], [0, 0], 0, 0, 0},
+        RoundOne
+    ),
+
+    Message1 = {phi, 1, [8, 12]},
+    {gathering, Fifth, consume} =
+        phi_halo_cell:handle_cast(Message1, gathering, RoundOne),
+    {gathering, Sixth, consume} =
+        phi_halo_cell:handle_cast(Message1, gathering, Fifth),
+    {gathering, Seventh, consume} =
+        phi_halo_cell:handle_cast(Message1, gathering, Sixth),
+    ?assertEqual(
+        {flipping, {cell, 0, 2, [12, 17], [0, 0], 0, 0, 0}, consume},
+        phi_halo_cell:handle_cast(Message1, gathering, Seventh)
     ).
 
-two_protocol_phases(PID, Ref) ->
+repeated_diffusion_and_flipping(PID, Ref) ->
     expect_neighbor_batch(Ref, {phi, 0, [0, 0]}),
 
     ok = phi_halo_cell:offer_phi(PID, 0, [32, 48]),
     ok = phi_halo_cell:offer_phi(PID, 0, [64, 80]),
     ok = phi_halo_cell:offer_phi(PID, 0, [16, 32]),
     ok = phi_halo_cell:offer_phi(PID, 0, [48, 64]),
+    expect_neighbor_batch(Ref, {phi, 1, [20, 11]}),
+    AfterRoundOne = phi_halo_cell:runtime_info(PID),
+    ?assertEqual(gathering, maps:get(phase, AfterRoundOne)),
+
+    four_phis(PID, 1, [16, 32]),
     expect_neighbor_batch(Ref, {anyon_move, 0, 0}),
     ?assertEqual(flipping, maps:get(phase, phi_halo_cell:runtime_info(PID))),
 
     four_anyons(PID, 0, false),
-    expect_neighbor_batch(Ref, {phi, 1, [20, 11]}),
+    expect_neighbor_batch(Ref, {phi, 2, [15, 15]}),
 
     Info = phi_halo_cell:runtime_info(PID),
     ?assertEqual(gathering, maps:get(phase, Info)),
     ?assertEqual(0, maps:get(postponed, Info)),
     ?assertEqual(0, maps:get(committed, maps:get(mailbox, Info))),
-    ?assertMatch({cell, 1, [20, 11], [0, 0], 0, 0, 0},
+    ?assertMatch({cell, 1, 0, [15, 15], [0, 0], 0, 0, 0},
         maps:get(data, Info)),
     assert_no_neighbor_cast(Ref).
 
 staged_next_phase_messages(PID, Ref) ->
     expect_neighbor_batch(Ref, {phi, 0, [0, 0]}),
 
-    %% A faster neighbor can enter flipping while this cell still gathers.
-    ok = phi_halo_cell:offer_anyon(PID, 0, false),
+    %% A faster neighbor can begin the next diffusion epoch while this cell is
+    %% still gathering the current one.
+    ok = phi_halo_cell:offer_phi(PID, 1, [8, 12]),
     ok = phi_halo_cell:offer_phi(PID, 0, [32, 48]),
     ok = phi_halo_cell:offer_phi(PID, 0, [64, 80]),
     ok = phi_halo_cell:offer_phi(PID, 0, [16, 32]),
+    BeforeRepeat = phi_halo_cell:runtime_info(PID),
+    ?assertEqual(gathering, maps:get(phase, BeforeRepeat)),
+    ?assertEqual(1, maps:get(postponed, BeforeRepeat)),
+
+    ok = phi_halo_cell:offer_phi(PID, 0, [48, 64]),
+    expect_neighbor_batch(Ref, {phi, 1, [20, 11]}),
+    AfterRepeat = phi_halo_cell:runtime_info(PID),
+    ?assertEqual(gathering, maps:get(phase, AfterRepeat)),
+    ?assertEqual(0, maps:get(postponed, AfterRepeat)),
+    ?assertMatch({cell, 0, 1, [20, 11], [8, 12], 1, 0, 0},
+        maps:get(data, AfterRepeat)),
+
+    %% An early flipping message survives the final diffusion round.
+    ok = phi_halo_cell:offer_anyon(PID, 0, false),
+    ok = phi_halo_cell:offer_phi(PID, 1, [8, 12]),
+    ok = phi_halo_cell:offer_phi(PID, 1, [8, 12]),
     BeforeFlip = phi_halo_cell:runtime_info(PID),
     ?assertEqual(gathering, maps:get(phase, BeforeFlip)),
     ?assertEqual(1, maps:get(postponed, BeforeFlip)),
 
-    ok = phi_halo_cell:offer_phi(PID, 0, [48, 64]),
+    ok = phi_halo_cell:offer_phi(PID, 1, [8, 12]),
     expect_neighbor_batch(Ref, {anyon_move, 0, 0}),
     AfterFlip = phi_halo_cell:runtime_info(PID),
     ?assertEqual(flipping, maps:get(phase, AfterFlip)),
     ?assertEqual(0, maps:get(postponed, AfterFlip)),
-    ?assertMatch({cell, 0, [20, 11], [0, 0], 0, 1, 0},
+    ?assertMatch({cell, 0, 2, [11, 11], [0, 0], 0, 1, 0},
         maps:get(data, AfterFlip)),
 
-    %% The symmetric case occurs while this cell waits for anyon updates.
-    ok = phi_halo_cell:offer_phi(PID, 1, [8, 12]),
+    %% The symmetric case occurs while this cell waits for anyon updates. The
+    %% next step starts at diffusion epoch 2, not decoder step 1 on the wire.
+    ok = phi_halo_cell:offer_phi(PID, 2, [8, 12]),
     ok = phi_halo_cell:offer_anyon(PID, 0, false),
     ok = phi_halo_cell:offer_anyon(PID, 0, false),
     BeforeGather = phi_halo_cell:runtime_info(PID),
@@ -301,26 +336,50 @@ staged_next_phase_messages(PID, Ref) ->
     ?assertEqual(1, maps:get(postponed, BeforeGather)),
 
     ok = phi_halo_cell:offer_anyon(PID, 0, false),
-    expect_neighbor_batch(Ref, {phi, 1, [20, 11]}),
+    expect_neighbor_batch(Ref, {phi, 2, [11, 11]}),
     AfterGather = phi_halo_cell:runtime_info(PID),
     ?assertEqual(gathering, maps:get(phase, AfterGather)),
     ?assertEqual(0, maps:get(postponed, AfterGather)),
-    ?assertMatch({cell, 1, [20, 11], [8, 12], 1, 0, 0},
+    ?assertMatch({cell, 1, 0, [11, 11], [8, 12], 1, 0, 0},
         maps:get(data, AfterGather)).
+
+full_staged_diffusion_epoch(PID, Ref) ->
+    expect_neighbor_batch(Ref, {phi, 0, [0, 0]}),
+
+    %% Four next-epoch messages can occupy the queue while the fifth slot
+    %% remains available to make progress on the current epoch.
+    four_phis(PID, 1, [8, 12]),
+    Staged = phi_halo_cell:runtime_info(PID),
+    ?assertEqual(4, maps:get(postponed, Staged)),
+    ?assertEqual(4, maps:get(committed, maps:get(mailbox, Staged))),
+
+    four_phis(PID, 0, [0, 0]),
+    expect_neighbor_sequences(Ref, [
+        {phi, 1, [0, 0]},
+        {anyon_move, 0, 0}
+    ]),
+    Complete = phi_halo_cell:runtime_info(PID),
+    ?assertEqual(flipping, maps:get(phase, Complete)),
+    ?assertEqual(0, maps:get(postponed, Complete)),
+    ?assertEqual(0, maps:get(committed, maps:get(mailbox, Complete))),
+    ?assertMatch({cell, 0, 2, [4, 2], [0, 0], 0, 0, 0},
+        maps:get(data, Complete)).
 
 exercise_interleaving(Schedule) ->
     with_cell(fun(PID, Ref) ->
         expect_neighbor_batch(Ref, {phi, 0, [0, 0]}),
+        four_phis(PID, 0, [16, 32]),
+        expect_neighbor_batch(Ref, {phi, 1, [8, 6]}),
         lists:foreach(
             fun
-                (phi) -> phi_halo_cell:offer_phi(PID, 0, [16, 32]);
+                (phi) -> phi_halo_cell:offer_phi(PID, 1, [16, 32]);
                 (anyon) -> phi_halo_cell:offer_anyon(PID, 0, false)
             end,
             Schedule
         ),
         expect_neighbor_sequences(
             Ref,
-            [{anyon_move, 0, 0}, {phi, 1, [8, 6]}]
+            [{anyon_move, 0, 0}, {phi, 2, [11, 10]}]
         ),
         Info = phi_halo_cell:runtime_info(PID),
         ?assertEqual(gathering, maps:get(phase, Info)),
@@ -353,21 +412,20 @@ torus_neighbors(Horizontal, Vertical) ->
         south => Vertical
     }.
 
-await_completed_round(PID) ->
-    await_completed_round(PID, 1000).
+await_step(PID, Step) ->
+    await_step(PID, Step, 1000).
 
-await_completed_round(_PID, 0) ->
-    error(cell_did_not_complete_protocol_round);
-await_completed_round(PID, Attempts) ->
+await_step(_PID, Step, 0) ->
+    error({cell_did_not_reach_decoder_step, Step});
+await_step(PID, Step, Attempts) ->
     Info = phi_halo_cell:runtime_info(PID),
-    %% The step advances only on the flipping-to-gathering transition.
     case maps:get(data, Info) of
-        {cell, Step, _Phi, _Sum, _PhiReceived, _MovesReceived, _Anyon}
-                when Step > 0 ->
+        {cell, CurrentStep, _Round, _Phi, _Sum, _PhiReceived,
+                _MovesReceived, _Anyon} when CurrentStep >= Step ->
             ok;
         _ ->
             receive after 1 -> ok end,
-            await_completed_round(PID, Attempts - 1)
+            await_step(PID, Step, Attempts - 1)
     end.
 
 stop_cell(PID) ->
@@ -462,6 +520,12 @@ four_anyons(PID, Step, Present) ->
     ok = phi_halo_cell:offer_anyon(PID, Step, Present),
     ok = phi_halo_cell:offer_anyon(PID, Step, Present),
     ok = phi_halo_cell:offer_anyon(PID, Step, Present).
+
+four_phis(PID, Epoch, Values) ->
+    ok = phi_halo_cell:offer_phi(PID, Epoch, Values),
+    ok = phi_halo_cell:offer_phi(PID, Epoch, Values),
+    ok = phi_halo_cell:offer_phi(PID, Epoch, Values),
+    ok = phi_halo_cell:offer_phi(PID, Epoch, Values).
 
 causal_schedules(PhiRemaining, AnyonRemaining) ->
     causal_schedules(PhiRemaining, AnyonRemaining, 0, []).
