@@ -57,6 +57,9 @@ jobs:
           fi
           "$XLS_ROOT/codegen_main" --version
 
+      - name: Run Erlang tests
+        run: rebar3 eunit
+
       - name: Prepare simulation inputs
         run: bash tools/prepare_xls_sim.sh "$PWD/_build/xls_sim/regsvc"
 
@@ -64,6 +67,9 @@ jobs:
         env:
           XLS_ROOT: ${{ runner.temp }}/xls
         run: bash tools/remote_xls_sim.sh "$PWD/_build/xls_sim/regsvc" "$XLS_ROOT"
+
+      - name: Verify checked generated artifacts
+        run: bash tools/xls_goldens.sh check "$PWD/_build/xls_sim/regsvc"
 
       - name: Upload simulation diagnostics
         if: failure()

@@ -2,62 +2,77 @@
 %%%%
 %% TODO: Add a fixed-shape synchronous call/reply contract once its response
 %% path and bounded lifetime have a lowerable representation.
-%% TODO: Evaluate the useful bounded subsets of gen_statem state-enter calls,
-%% timeouts, and next_event actions instead of growing ad hoc alternatives.
+%% TODO: Evaluate bounded subsets of gen_statem timeouts and next_event
+%% actions instead of growing ad hoc alternatives.
 
 -module(xls_statem).
 -moduledoc """
 A bounded CPU reference scheduler for XLS state machines.
 
 An `xls_statem` callback separates its finite-control `Phase` atom from its
-rich `Data` value. The CPU scheduler in this module provides reference
-semantics for the ordering and postponement rules used by the generated
-implementation.
+rich `Data` value. The CPU scheduler in this module defines the ordering and
+postponement rules shared with the generated implementation.
 
-## Callback contract
+## Callbacks
 
-`init/1` returns an optional initial output and the initial machine value:
-
-```
-{{Emit, Output}, {Phase, Data}}
-```
-
-`transition/2` receives one application message and the current
-`{Phase, Data}` pair. It always returns the fixed product:
+`init/1` returns the initial phase and data:
 
 ```
-{{Emit, Output}, {NextPhase, NextData}, Directive}
+{ok, Phase, Data}
+```
+
+The initial phase is entered when the output ports are connected. Every later
+change of the phase atom also invokes `handle_enter/3` once, before postponed
+messages are retried:
+
+```
+handle_enter(OldPhase, Phase, Data) -> {NextData, Casts}
+```
+
+`OldPhase` equals `Phase` for the initial entry. `Casts` is a bounded list of
+`{cast, Port, Message}` actions. Each configured port may occur at most once
+in an entry. On the CPU each action is delivered with `gen_server:cast/2` to
+the PID configured for that port.
+
+Passing an output map to `start_link/3` connects and enters the initial phase
+immediately. A cyclic CPU topology can instead start all of its machines
+without that option and then call `connect/2` on each one. Casts received before
+connection occupy the bounded mailbox and are processed after initial entry.
+Disconnection is a scheduler lifecycle state separate from the callback phase;
+no application callback is dispatched while the machine is disconnected.
+The generated implementation has statically connected ports and therefore
+enters its initial phase on startup.
+
+`handle_cast/3` receives one application message and returns one fixed-shape
+conclusion:
+
+```
+{NextPhase, NextData, Directive}
 ```
 
 The directive determines what happens to the input:
 
-  * `consume` removes it from the mailbox and may emit one output.
-  * `postpone` retains it and cannot emit.
-  * `fail` installs the returned phase and data for diagnostics, then stops the
-    CPU process; it cannot emit.
+  * `consume` removes it from the bounded mailbox.
+  * `postpone` retains it until the phase atom changes.
+  * `fail` installs the returned phase and data for diagnostics, then stops.
 
-Outputs are delivered to the PID in the required `{output, PID}` start option.
-The message has the form `{xls_statem, MachinePID, Output}`.
-
-The CPU scheduler admits asynchronous casts and ordinary process messages.
-Synchronous calls are not yet part of the callback contract and stop it.
+This API borrows phase-entry and postponed-event ordering from `gen_statem`,
+but it is deliberately smaller and is not callback-compatible with OTP.
 
 ## Postponement
 
-The scheduler tries the oldest eligible input. A postponed input becomes
-eligible again only after the `Phase` atom changes; changing `Data`, or
-returning the same phase, does not retry it. A postponed transition which does
-change phase therefore makes that same input immediately eligible. This retry
-boundary is borrowed from `gen_statem`, but this module is not a compatible
-implementation of its callback API.
+The scheduler tries the oldest eligible input. Changing `Data`, or returning
+the same phase, does not retry a postponed message. On a real phase change,
+the new phase is entered first and all postponed messages then become eligible
+again in arrival order.
 
 ## Capacity and failure
 
-Postponed inputs retain mailbox capacity. The configured capacity must leave
-room for an input capable of advancing the phase, or the protocol can
-deadlock under backpressure. On the CPU, an overflowing cast or ordinary
-process message stops the scheduler. Missing callback clauses, callback
-exceptions, invalid callback results, and `fail` directives also stop it.
+Postponed messages retain mailbox capacity. The configured capacity must leave
+room for a message capable of advancing the phase, or the protocol can deadlock
+under backpressure. On the CPU, mailbox overflow stops the process. Missing
+callback clauses, callback exceptions, ordinary non-cast process messages,
+invalid callback results, and `fail` directives stop it as well.
 
 The ordinary BEAM mailbox sits in front of this bounded queue, so this module
 models scheduling semantics rather than host-side admission guarantees.
@@ -65,7 +80,7 @@ models scheduling semantics rather than host-side admission guarantees.
 
 -behavior(gen_server).
 
--export([start_link/3, stop/1, cast/2, info/1]).
+-export([start_link/3, connect/2, stop/1, cast/2, info/1]).
 -export([
     init/1,
     handle_call/3,
@@ -74,38 +89,52 @@ models scheduling semantics rather than host-side admission guarantees.
     terminate/2,
     code_change/3
 ]).
--export_type([phase/0, directive/0, conclusion/0]).
+-export_type([
+    phase/0,
+    output_port/0,
+    directive/0,
+    conclusion/0,
+    cast_action/0,
+    enter_result/0
+]).
 
 %%%
 %%% Callback contract
 %%%
 
 -type phase() :: atom().
+-type lifecycle() :: disconnected | connected.
+-type output_port() :: atom().
 -type data() :: term().
 -type directive() :: consume | postpone | fail.
 -type conclusion() :: {
-    {Emit :: boolean(), Output :: term()},
-    {NextPhase :: phase(), NextData :: data()},
+    NextPhase :: phase(),
+    NextData :: data(),
     directive()
 }.
+-type cast_action() :: {cast, output_port(), term()}.
+-type enter_result() :: {NextData :: data(), [cast_action()]}.
 -type start_option() ::
     {mailbox_capacity, 1..255} |
-    {output, pid()}.
+    {outputs, #{output_port() := pid()}}.
 
 -callback init(term()) -> {
-    {Emit :: boolean(), Output :: term()},
-    {InitialPhase :: phase(), InitialData :: data()}
+    ok,
+    InitialPhase :: phase(),
+    InitialData :: data()
 }.
--callback transition(term(), {phase(), data()}) -> conclusion().
+-callback handle_enter(OldPhase :: phase(), phase(), data()) -> enter_result().
+-callback handle_cast(term(), phase(), data()) -> conclusion().
 -callback terminate(term(), phase(), data()) -> term().
 
 -optional_callbacks([terminate/3]).
 
 -record(runtime, {
     module :: module(),
+    lifecycle = disconnected :: lifecycle(),
     phase :: phase(),
     data :: data(),
-    output :: pid(),
+    outputs = #{} :: #{output_port() := pid()},
     mailbox :: xls_mailbox:mailbox(),
     postponed = #{} :: #{non_neg_integer() => true},
     next_message_id = 0 :: non_neg_integer()
@@ -115,12 +144,23 @@ models scheduling semantics rather than host-side admission guarantees.
 %%% Client interface
 %%%
 
--doc "Starts a machine with required mailbox-capacity and output options.".
+-doc "Starts a machine with a required mailbox capacity and optional outputs.".
 -spec start_link(module(), term(), [start_option()]) ->
     gen_server:start_ret().
 start_link(Module, Arg, Options) ->
-    {Capacity, Output} = start_options(Options),
-    gen_server:start_link(?MODULE, {Module, Arg, Capacity, Output}, []).
+    {Capacity, Outputs} = start_options(Options),
+    gen_server:start_link(?MODULE, {Module, Arg, Capacity, Outputs}, []).
+
+-doc "Connects deferred outputs and enters the initial phase.".
+%% TODO: Define topology ownership and reconnection after a supervised restart;
+%% a restarted deferred machine has no output map until it is connected again.
+-spec connect(pid(), #{output_port() := pid()}) ->
+    ok | {error, already_connected}.
+connect(PID, Outputs) ->
+    case valid_outputs(Outputs) of
+        true -> gen_server:call(PID, {connect, Outputs});
+        false -> error(badarg)
+    end.
 
 -spec stop(pid()) -> ok.
 stop(PID) ->
@@ -131,7 +171,7 @@ stop(PID) ->
 cast(PID, Message) ->
     gen_server:cast(PID, Message).
 
--doc "Returns the phase, callback data, and bounded queue counters.".
+-doc "Returns the lifecycle, phase, callback data, and queue counters.".
 -spec info(pid()) -> map().
 info(PID) ->
     format_info(sys:get_state(PID)).
@@ -140,22 +180,42 @@ info(PID) ->
 %%% gen_server callbacks
 %%%
 
-init({Module, Arg, Capacity, Output}) ->
-    {{Emit, InitialOutput}, {Phase, Data}} = Module:init(Arg),
+init({Module, Arg, Capacity, Outputs}) ->
+    {ok, Phase, Data} = Module:init(Arg),
     true = is_atom(Phase),
-    true = is_boolean(Emit),
-    Runtime = #runtime{
+    {Lifecycle, OutputMap} = case Outputs of
+        undefined -> {disconnected, #{}};
+        _ -> {connected, Outputs}
+    end,
+    Runtime0 = #runtime{
         module = Module,
+        lifecycle = Lifecycle,
         phase = Phase,
         data = Data,
-        output = Output,
+        outputs = OutputMap,
         mailbox = xls_mailbox:new(Capacity)
     },
-    maybe_emit(Emit, InitialOutput, Runtime),
-    {ok, Runtime}.
+    case Lifecycle of
+        disconnected -> {ok, Runtime0};
+        connected -> {ok, enter_phase(Phase, Runtime0)}
+    end.
 
 %% Synchronous calls deliberately fail instead of masquerading as casts.
 %% The TODO at the top records the missing lowerable call/reply contract.
+handle_call({connect, Outputs}, _From,
+        Runtime0 = #runtime{lifecycle = disconnected, phase = Phase}) ->
+    Connected = Runtime0#runtime{
+        lifecycle = connected,
+        outputs = Outputs
+    },
+    Runtime1 = enter_phase(Phase, Connected),
+    case process_messages(Runtime1) of
+        {ok, Runtime2} -> {reply, ok, Runtime2};
+        {stop, Reason, Runtime2} ->
+            {stop, Reason, {error, Reason}, Runtime2}
+    end;
+handle_call({connect, _Outputs}, _From, Runtime) ->
+    {reply, {error, already_connected}, Runtime};
 handle_call(Request, _From, Runtime) ->
     {stop, {unsupported_xls_statem_call, Request},
         {error, unsupported_call}, Runtime}.
@@ -163,8 +223,8 @@ handle_call(Request, _From, Runtime) ->
 handle_cast(Message, Runtime0) ->
     admit_and_process(Message, Runtime0).
 
-handle_info(Message, Runtime0) ->
-    admit_and_process(Message, Runtime0).
+handle_info(Message, Runtime) ->
+    {stop, {unsupported_xls_statem_info, Message}, Runtime}.
 
 terminate(Reason, #runtime{
     module = Module,
@@ -184,7 +244,12 @@ code_change(_OldVersion, _Runtime, _Extra) ->
 %%% Bounded scheduling
 %%%
 
-admit_and_process(Message, Runtime0) ->
+admit_and_process(Message, Runtime0 = #runtime{lifecycle = disconnected}) ->
+    case enqueue(Message, Runtime0) of
+        {ok, Runtime1} -> {noreply, Runtime1};
+        {error, full} -> {stop, {mailbox_full, Message}, Runtime0}
+    end;
+admit_and_process(Message, Runtime0 = #runtime{lifecycle = connected}) ->
     case enqueue(Message, Runtime0) of
         {ok, Runtime1} ->
             case process_messages(Runtime1) of
@@ -241,9 +306,9 @@ process_message(
         postponed = Postponed0
     }
 ) ->
-    Conclusion = Module:transition(Message, {Phase, Data}),
-    {{Emit, Output}, {NextPhase, NextData}, Directive} = Conclusion,
-    ok = validate_conclusion(Emit, NextPhase, Directive),
+    {NextPhase, NextData, Directive} =
+        Module:handle_cast(Message, Phase, Data),
+    ok = validate_conclusion(NextPhase, Directive),
     NextRuntime0 = Runtime#runtime{
         phase = NextPhase,
         data = NextData
@@ -259,7 +324,6 @@ process_message(
                 }
             );
         consume ->
-            maybe_emit(Emit, Output, NextRuntime0),
             {ok, {MessageID, Message}, Mailbox1} =
                 xls_mailbox:consume(Selection, Mailbox0),
             finish_transition(
@@ -271,42 +335,84 @@ process_message(
             )
     end.
 
-finish_transition(PreviousPhase, Runtime0) ->
-    Runtime1 = case Runtime0#runtime.phase =/= PreviousPhase of
-        true -> Runtime0#runtime{postponed = #{}};
-        false -> Runtime0
+finish_transition(PreviousPhase, Runtime0 = #runtime{phase = Phase}) ->
+    Runtime1 = case Phase =/= PreviousPhase of
+        true ->
+            Entered = enter_phase(PreviousPhase, Runtime0),
+            Entered#runtime{postponed = #{}};
+        false ->
+            Runtime0
     end,
     process_messages(Runtime1).
 
 %%%
-%%% Validation and diagnostics
+%%% Phase entry and validation
 %%%
 
-validate_conclusion(Emit, NextPhase, consume)
-        when is_boolean(Emit), is_atom(NextPhase) ->
-    ok;
-validate_conclusion(false, NextPhase, Directive)
-        when is_atom(NextPhase),
-             (Directive =:= postpone orelse Directive =:= fail) ->
-    ok;
-validate_conclusion(Emit, NextPhase, Directive) ->
-    error({bad_xls_statem_conclusion, Emit, NextPhase, Directive}).
-
-maybe_emit(false, _Output, _Runtime) ->
-    ok;
-maybe_emit(true, Output, #runtime{output = Recipient}) ->
-    Recipient ! {xls_statem, self(), Output},
-    ok.
-
-format_info(#runtime{
+enter_phase(OldPhase, Runtime = #runtime{
+    module = Module,
+    lifecycle = connected,
     phase = Phase,
     data = Data,
+    outputs = Outputs
+}) ->
+    {NextData, Casts} = Module:handle_enter(OldPhase, Phase, Data),
+    ok = validate_casts(Casts, Outputs),
+    lists:foreach(
+        fun({cast, Port, Message}) ->
+            gen_server:cast(maps:get(Port, Outputs), Message)
+        end,
+        Casts
+    ),
+    Runtime#runtime{data = NextData}.
+
+validate_conclusion(NextPhase, Directive)
+        when is_atom(NextPhase),
+             (Directive =:= consume orelse
+              Directive =:= postpone orelse
+              Directive =:= fail) ->
+    ok;
+validate_conclusion(NextPhase, Directive) ->
+    error({bad_xls_statem_conclusion, NextPhase, Directive}).
+
+validate_casts(Casts, Outputs) when is_list(Casts) ->
+    Ports = lists:map(
+        fun
+            ({cast, Port, _Message}) when is_atom(Port) ->
+                case maps:is_key(Port, Outputs) of
+                    true -> Port;
+                    false -> error({unknown_xls_statem_output, Port})
+                end;
+            (Action) ->
+                error({bad_xls_statem_action, Action})
+        end,
+        Casts
+    ),
+    case length(Ports) =:= length(lists:usort(Ports)) of
+        true -> ok;
+        false -> error({duplicate_xls_statem_ports, Ports})
+    end;
+validate_casts(Actions, _Outputs) ->
+    error({bad_xls_statem_actions, Actions}).
+
+%%%
+%%% Options and diagnostics
+%%%
+
+format_info(#runtime{
+    lifecycle = Lifecycle,
+    phase = Phase,
+    data = Data,
+    outputs = Outputs,
     mailbox = Mailbox,
     postponed = Postponed
 }) ->
     #{
+        lifecycle => Lifecycle,
         phase => Phase,
         data => Data,
+        connected => Lifecycle =:= connected,
+        outputs => output_names(Outputs),
         postponed => map_size(Postponed),
         mailbox => xls_mailbox:info(Mailbox)
     }.
@@ -315,17 +421,32 @@ start_options(Options) ->
     Known = lists:all(
         fun
             ({mailbox_capacity, _Capacity}) -> true;
-            ({output, _Output}) -> true;
+            ({outputs, _Outputs}) -> true;
             (_Option) -> false
         end,
         Options
     ),
     Capacity = proplists:get_value(mailbox_capacity, Options),
-    Output = proplists:get_value(output, Options),
+    Outputs = proplists:get_value(outputs, Options, undefined),
+    ValidOutputs = Outputs =:= undefined orelse valid_outputs(Outputs),
     case Known andalso
             is_integer(Capacity) andalso
             Capacity > 0 andalso Capacity =< 255 andalso
-            is_pid(Output) of
-        true -> {Capacity, Output};
+            ValidOutputs of
+        true -> {Capacity, Outputs};
         false -> error(badarg)
     end.
+
+valid_outputs(Outputs) when is_map(Outputs) ->
+    maps:fold(
+        fun(Port, PID, Valid) ->
+            Valid andalso is_atom(Port) andalso is_pid(PID)
+        end,
+        true,
+        Outputs
+    );
+valid_outputs(_Outputs) ->
+    false.
+
+output_names(Outputs) ->
+    lists:sort(maps:keys(Outputs)).

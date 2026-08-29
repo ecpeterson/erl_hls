@@ -10,12 +10,13 @@ pub enum Tag : u8 {
   NONE = u8:0,
   ERROR = u8:1,
   CELL = u8:2,
-  HALO = u8:3,
+  PHI = u8:3,
+  ANYON_MOVE = u8:4,
 }
 
 enum Phase : u8 {
-  GATHER_EVEN = u8:0,
-  GATHER_ODD = u8:1,
+  GATHERING = u8:0,
+  FLIPPING = u8:1,
 }
 
 enum Directive : u2 {
@@ -24,57 +25,86 @@ enum Directive : u2 {
   FAIL = u2:2,
 }
 
-struct Halo {
-  epoch : u32,
+struct Phi {
+  step : u32,
   values : u32[2],
 }
 
-fn halo_from_bits<N: u32>(raw: bits[N]) -> Halo {
-  Halo {
-    epoch: raw[0:32] as u32,
+fn phi_from_bits<N: u32>(raw: bits[N]) -> Phi {
+  Phi {
+    step: raw[0:32] as u32,
     values: raw[32:96] as u32[2],
   }
 }
 
-fn bits_from_halo(s: Halo) -> bits[bit_count<Halo>()] {
-  (s.values as bits[64]) ++ (s.epoch as bits[32]) ++  zero!<bits[0]>()
+fn bits_from_phi(s: Phi) -> bits[bit_count<Phi>()] {
+  (s.values as bits[64]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
+}
+
+struct Anyonmove {
+  step : u32,
+  present : u32,
+}
+
+fn anyonmove_from_bits<N: u32>(raw: bits[N]) -> Anyonmove {
+  Anyonmove {
+    step: raw[0:32] as u32,
+    present: raw[32:64] as u32,
+  }
+}
+
+fn bits_from_anyonmove(s: Anyonmove) -> bits[bit_count<Anyonmove>()] {
+  (s.present as bits[32]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
 }
 
 struct Cell {
-  epoch : u32,
+  step : u32,
   phi : u32[2],
-  halo_sum : u32[2],
-  received : u8,
-  charge : u32,
+  phi_sum : u32[2],
+  phi_received : u8,
+  moves_received : u8,
+  anyon : u32,
 }
 
 fn cell_from_bits<N: u32>(raw: bits[N]) -> Cell {
   Cell {
-    epoch: raw[0:32] as u32,
+    step: raw[0:32] as u32,
     phi: raw[32:96] as u32[2],
-    halo_sum: raw[96:160] as u32[2],
-    received: raw[160:168] as u8,
-    charge: raw[168:200] as u32,
+    phi_sum: raw[96:160] as u32[2],
+    phi_received: raw[160:168] as u8,
+    moves_received: raw[168:176] as u8,
+    anyon: raw[176:208] as u32,
   }
 }
 
 fn bits_from_cell(s: Cell) -> bits[bit_count<Cell>()] {
-  (s.charge as bits[32]) ++ (s.received as bits[8]) ++ (s.halo_sum as bits[64]) ++ (s.phi as bits[64]) ++ (s.epoch as bits[32]) ++  zero!<bits[0]>()
+  (s.anyon as bits[32]) ++ (s.moves_received as bits[8]) ++ (s.phi_received as bits[8]) ++ (s.phi_sum as bits[64]) ++ (s.phi as bits[64]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
+}
+
+struct EntryEffects {
+  north_valid: u1,
+  north: axis::Frame,
+  east_valid: u1,
+  east: axis::Frame,
+  west_valid: u1,
+  west: axis::Frame,
+  south_valid: u1,
+  south: axis::Frame,
 }
 
 struct MailboxSlot {
   postponed: u1,
   blocked_phase: Phase,
-  message: Halo,
+  frame: axis::Frame,
 }
 
 struct Machine {
   phase: Phase,
+  entered_from: Phase,
   data: Cell,
   slots: MailboxSlot[5],
   occupied: u8,
-  boot_pending: u1,
-  boot: Halo,
+  enter_pending: u1,
   // Reserves one queue slot for the frame being assembled.
   admission_pending: u1,
   // A failed service ignores input until reset.
@@ -82,324 +112,665 @@ struct Machine {
 }
 
 fn initial_machine() -> Machine {
-let _0 = Halo {
-  ..zero!<Halo>()
-};
-let _1 = (Tag::HALO, _0, bits_from_halo(_0));
-let initialhalo_1 = _1;
-let _2 = Cell {
-  charge: 5,
+let _0 = Cell {
   ..zero!<Cell>()
 };
-let _3 = (Tag::CELL, _2);
-let initialcell_1 = _3;
-let _4 = (bool:1, initialhalo_1, );
-let _5 = (Phase::GATHER_EVEN, initialcell_1, );
-let _6 = (_4, _5, );
-let _7 = if (bool:false) {
+let _1 = (Tag::CELL, _0);
+let _2 = (Phase::GATHERING, _1, );
+let _3 = if (bool:false) {
     zero!<Machine>()
 } else {
     Machine {
-  boot_pending: _6.0.0,
-  boot: _6.0.1.1,
-  phase: _6.1.0,
-  data: _6.1.1.1,
+  phase: _2.0,
+  entered_from: _2.0,
+  data: _2.1.1,
+  enter_pending: u1:1,
   ..zero!<Machine>()
 }
 };
-  _7
+  _3
 }
 
-fn dispatch(message: Halo, phase: Phase, data: Cell) -> (axis::Frame, Phase, Cell, Directive) {
-let eventepoch_1 = message.epoch;
-let values_1 = message.values;
-let phase_1 = (phase, (Tag::CELL, data)).0;
-let cell_1 = (phase, (Tag::CELL, data)).1;
-let _0 = cell_1.1.epoch;
-let currentepoch_1 = _0;
-let _1 = currentepoch_1 + 1;
-let _2 = _1 & 4294967295;
-let nextepoch_1 = _2;
-let _3 = eventepoch_1 == currentepoch_1;
-let current_1 = _3;
-let _4 = eventepoch_1 == nextepoch_1;
-let next_1 = _4;
-let _5 = current_1 || next_1;
-let valid_1 = _5;
-let _6 = values_1[1 - u32:1];
-let value0_1 = _6;
-let _7 = values_1[2 - u32:1];
-let value1_1 = _7;
-let _8 = cell_1.1.halo_sum;
-let _9 = _8[1 - u32:1];
-let _10 = _9 + value0_1;
-let _11 = _10 & 4294967295;
-let sum0_1 = _11;
-let _12 = cell_1.1.halo_sum;
-let _13 = _12[2 - u32:1];
-let _14 = _13 + value1_1;
-let _15 = _14 & 4294967295;
-let sum1_1 = _15;
-let _16 = cell_1.1.halo_sum;
-let _17 = update(_16, 1 - u32:1, sum0_1);
-let sumfirst_1 = _17;
-let _18 = update(sumfirst_1, 2 - u32:1, sum1_1);
-let newsum_1 = _18;
-let _19 = cell_1.1.received;
-let _20 = _19 + 1;
-let receivednext_1 = _20;
-let _21 = receivednext_1 == 4;
-let ready_1 = _21;
-let _22 = cell_1.1.phi;
-let _23 = _22[1 - u32:1];
-let p0_1 = _23;
-let _24 = cell_1.1.phi;
-let _25 = _24[2 - u32:1];
-let p1_1 = _25;
-let _26 = p0_1 << 3;
-let _27 = p0_1 << 1;
-let _28 = _26 + _27;
-let _29 = p1_1 << 1;
-let _30 = _28 + _29;
-let _31 = _30 + sum0_1;
-let _32 = _31 & 4294967295;
-let numerator0_1 = _32;
-let _33 = p1_1 << 3;
-let _34 = p1_1 << 1;
-let _35 = _33 + _34;
-let _36 = p0_1 << 1;
-let _37 = _35 + _36;
-let _38 = _37 + sum1_1;
-let _39 = _38 & 4294967295;
-let numerator1_1 = _39;
-let _40 = cell_1.1.charge;
-let _41 = numerator0_1 >> 4;
-let _42 = _40 + _41;
-let _43 = _42 & 4294967295;
-let new0_1 = _43;
-let _44 = numerator1_1 >> 4;
-let new1_1 = _44;
-let _45 = cell_1.1.phi;
-let _46 = update(_45, 1 - u32:1, new0_1);
-let phifirst_1 = _46;
-let _47 = update(phifirst_1, 2 - u32:1, new1_1);
-let newphi_1 = _47;
-let _48 = Cell {
-  halo_sum: newsum_1,
-  received: receivednext_1,
-  ..(cell_1).1
-};
-let _49 = (Tag::CELL, _48);
-let accumulated_1 = _49;
-let _50 = zero!<u32[2]>();
-let _51 = Cell {
-  epoch: nextepoch_1,
-  phi: newphi_1,
-  halo_sum: _50,
-  received: 0,
-  ..(cell_1).1
-};
-let _52 = (Tag::CELL, _51);
-let advanced_1 = _52;
-let _53 = if ready_1 { advanced_1 } else { accumulated_1 };
-let currentcell_1 = _53;
-let _54 = if current_1 { currentcell_1 } else { cell_1 };
-let nextcell_1 = _54;
-let _55 = current_1 && ready_1;
-let emit_1 = _55;
-let _56 = Halo {
-  epoch: nextepoch_1,
-  values: newphi_1,
-  ..zero!<Halo>()
-};
-let _57 = (Tag::HALO, _56, bits_from_halo(_56));
-let candidateoutput_1 = _57;
-let _58 = Halo {
-  ..zero!<Halo>()
-};
-let _59 = (Tag::HALO, _58, bits_from_halo(_58));
-let _60 = if emit_1 { candidateoutput_1 } else { _59 };
-let output_1 = _60;
-let _61 = phase_1 == Phase::GATHER_EVEN;
-let _62 = if _61 { Phase::GATHER_ODD } else { Phase::GATHER_EVEN };
-let otherphase_1 = _62;
-let _63 = if emit_1 { otherphase_1 } else { phase_1 };
-let nextphase_1 = _63;
-let _64 = if next_1 { Directive::POSTPONE } else { Directive::CONSUME };
-let candidatedirective_1 = _64;
-let _65 = if valid_1 { candidatedirective_1 } else { Directive::FAIL };
-let directive_1 = _65;
-let _66 = (emit_1, output_1, );
-let _67 = (nextphase_1, nextcell_1, );
-let _68 = (_66, _67, directive_1, );
-let _69 = if (bool:false) {
-    (zero!<axis::Frame>(), phase, data, Directive::FAIL)
-} else {
-    (if _68.0.0 {
-    axis::pack(Tag::HALO as u8, _68.0.1.2)
-  } else { zero!<axis::Frame>() },
-  _68.1.0, _68.1.1.1, _68.2)
-};
-  _69
+fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
+  match phase {
+    Phase::GATHERING => {
+      let entered_data = {
+        let _oldphase_1 = old_phase;
+        let _dispatchedphase_1 = phase;
+        let cell_1 = (Tag::CELL, data);
+        let _0 = cell_1.1.step;
+        let _1 = cell_1.1.phi;
+        let _2 = Phi {
+          step: _0,
+          values: _1,
+          ..zero!<Phi>()
+        };
+        let _3 = (Tag::PHI, _2, bits_from_phi(_2));
+        let message_1 = _3;
+        let _4 = if (bool:false) {
+            data
+        } else {
+            cell_1.1
+        };
+        _4
+      };
+      let north = {
+        let _oldphase_1 = old_phase;
+        let _dispatchedphase_1 = phase;
+        let cell_1 = (Tag::CELL, data);
+        let _0 = cell_1.1.step;
+        let _1 = cell_1.1.phi;
+        let _2 = Phi {
+          step: _0,
+          values: _1,
+          ..zero!<Phi>()
+        };
+        let _3 = (Tag::PHI, _2, bits_from_phi(_2));
+        let message_1 = _3;
+        let _4 = if (bool:false) {
+            zero!<axis::Frame>()
+        } else {
+            axis::pack(message_1.0 as u8, message_1.2)
+        };
+        _4
+      };
+      let east = {
+        let _oldphase_1 = old_phase;
+        let _dispatchedphase_1 = phase;
+        let cell_1 = (Tag::CELL, data);
+        let _0 = cell_1.1.step;
+        let _1 = cell_1.1.phi;
+        let _2 = Phi {
+          step: _0,
+          values: _1,
+          ..zero!<Phi>()
+        };
+        let _3 = (Tag::PHI, _2, bits_from_phi(_2));
+        let message_1 = _3;
+        let _4 = if (bool:false) {
+            zero!<axis::Frame>()
+        } else {
+            axis::pack(message_1.0 as u8, message_1.2)
+        };
+        _4
+      };
+      let west = {
+        let _oldphase_1 = old_phase;
+        let _dispatchedphase_1 = phase;
+        let cell_1 = (Tag::CELL, data);
+        let _0 = cell_1.1.step;
+        let _1 = cell_1.1.phi;
+        let _2 = Phi {
+          step: _0,
+          values: _1,
+          ..zero!<Phi>()
+        };
+        let _3 = (Tag::PHI, _2, bits_from_phi(_2));
+        let message_1 = _3;
+        let _4 = if (bool:false) {
+            zero!<axis::Frame>()
+        } else {
+            axis::pack(message_1.0 as u8, message_1.2)
+        };
+        _4
+      };
+      let south = {
+        let _oldphase_1 = old_phase;
+        let _dispatchedphase_1 = phase;
+        let cell_1 = (Tag::CELL, data);
+        let _0 = cell_1.1.step;
+        let _1 = cell_1.1.phi;
+        let _2 = Phi {
+          step: _0,
+          values: _1,
+          ..zero!<Phi>()
+        };
+        let _3 = (Tag::PHI, _2, bits_from_phi(_2));
+        let message_1 = _3;
+        let _4 = if (bool:false) {
+            zero!<axis::Frame>()
+        } else {
+            axis::pack(message_1.0 as u8, message_1.2)
+        };
+        _4
+      };
+      (entered_data, EntryEffects {
+        north_valid: u1:1,
+        north: north,
+        east_valid: u1:1,
+        east: east,
+        west_valid: u1:1,
+        west: west,
+        south_valid: u1:1,
+        south: south,
+      })
+    },
+    Phase::FLIPPING => {
+      let entered_data = {
+        let _oldphase_1 = old_phase;
+        let _dispatchedphase_1 = phase;
+        let cell_1 = (Tag::CELL, data);
+        let _0 = cell_1.1.step;
+        let _1 = Anyonmove {
+          step: _0,
+          present: 0,
+          ..zero!<Anyonmove>()
+        };
+        let _2 = (Tag::ANYON_MOVE, _1, bits_from_anyonmove(_1));
+        let message_1 = _2;
+        let _3 = if (bool:false) {
+            data
+        } else {
+            cell_1.1
+        };
+        _3
+      };
+      let north = {
+        let _oldphase_1 = old_phase;
+        let _dispatchedphase_1 = phase;
+        let cell_1 = (Tag::CELL, data);
+        let _0 = cell_1.1.step;
+        let _1 = Anyonmove {
+          step: _0,
+          present: 0,
+          ..zero!<Anyonmove>()
+        };
+        let _2 = (Tag::ANYON_MOVE, _1, bits_from_anyonmove(_1));
+        let message_1 = _2;
+        let _3 = if (bool:false) {
+            zero!<axis::Frame>()
+        } else {
+            axis::pack(message_1.0 as u8, message_1.2)
+        };
+        _3
+      };
+      let east = {
+        let _oldphase_1 = old_phase;
+        let _dispatchedphase_1 = phase;
+        let cell_1 = (Tag::CELL, data);
+        let _0 = cell_1.1.step;
+        let _1 = Anyonmove {
+          step: _0,
+          present: 0,
+          ..zero!<Anyonmove>()
+        };
+        let _2 = (Tag::ANYON_MOVE, _1, bits_from_anyonmove(_1));
+        let message_1 = _2;
+        let _3 = if (bool:false) {
+            zero!<axis::Frame>()
+        } else {
+            axis::pack(message_1.0 as u8, message_1.2)
+        };
+        _3
+      };
+      let west = {
+        let _oldphase_1 = old_phase;
+        let _dispatchedphase_1 = phase;
+        let cell_1 = (Tag::CELL, data);
+        let _0 = cell_1.1.step;
+        let _1 = Anyonmove {
+          step: _0,
+          present: 0,
+          ..zero!<Anyonmove>()
+        };
+        let _2 = (Tag::ANYON_MOVE, _1, bits_from_anyonmove(_1));
+        let message_1 = _2;
+        let _3 = if (bool:false) {
+            zero!<axis::Frame>()
+        } else {
+            axis::pack(message_1.0 as u8, message_1.2)
+        };
+        _3
+      };
+      let south = {
+        let _oldphase_1 = old_phase;
+        let _dispatchedphase_1 = phase;
+        let cell_1 = (Tag::CELL, data);
+        let _0 = cell_1.1.step;
+        let _1 = Anyonmove {
+          step: _0,
+          present: 0,
+          ..zero!<Anyonmove>()
+        };
+        let _2 = (Tag::ANYON_MOVE, _1, bits_from_anyonmove(_1));
+        let message_1 = _2;
+        let _3 = if (bool:false) {
+            zero!<axis::Frame>()
+        } else {
+            axis::pack(message_1.0 as u8, message_1.2)
+        };
+        _3
+      };
+      (entered_data, EntryEffects {
+        north_valid: u1:1,
+        north: north,
+        east_valid: u1:1,
+        east: east,
+        west_valid: u1:1,
+        west: west,
+        south_valid: u1:1,
+        south: south,
+      })
+    },
+  }
+}
+
+fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Directive) {
+  match frame.header.op as Tag {
+    Tag::PHI => {
+      let message = phi_from_bits(frame.payload);
+      match phase {
+        Phase::GATHERING => {
+          let eventstep_1 = message.step;
+          let values_1 = message.values;
+          let _dispatchedphase_1 = phase;
+          let cell_1 = (Tag::CELL, data);
+          let _0 = cell_1.1.step;
+          let _1 = eventstep_1 == _0;
+          let current_1 = _1;
+          let _2 = values_1[1 - u32:1];
+          let value0_1 = _2;
+          let _3 = values_1[2 - u32:1];
+          let value1_1 = _3;
+          let _4 = cell_1.1.phi_sum;
+          let _5 = _4[1 - u32:1];
+          let _6 = _5 + value0_1;
+          let _7 = _6 & 4294967295;
+          let sum0_1 = _7;
+          let _8 = cell_1.1.phi_sum;
+          let _9 = _8[2 - u32:1];
+          let _10 = _9 + value1_1;
+          let _11 = _10 & 4294967295;
+          let sum1_1 = _11;
+          let _12 = cell_1.1.phi_sum;
+          let _13 = update(_12, 1 - u32:1, sum0_1);
+          let sumfirst_1 = _13;
+          let _14 = update(sumfirst_1, 2 - u32:1, sum1_1);
+          let newsum_1 = _14;
+          let _15 = cell_1.1.phi_received;
+          let _16 = _15 + 1;
+          let receivednext_1 = _16;
+          let _17 = receivednext_1 == 4;
+          let ready_1 = _17;
+          let _18 = cell_1.1.phi;
+          let _19 = _18[1 - u32:1];
+          let p0_1 = _19;
+          let _20 = cell_1.1.phi;
+          let _21 = _20[2 - u32:1];
+          let p1_1 = _21;
+          let _22 = cell_1.1.anyon;
+          let _23 = _22 << 16;
+          let charge_1 = _23;
+          let _24 = p0_1 >> 2;
+          let _25 = charge_1 + _24;
+          let _26 = p1_1 << 1;
+          let _27 = _26 + sum0_1;
+          let _28 = _27 >> 3;
+          let _29 = _25 + _28;
+          let _30 = _29 & 4294967295;
+          let new0_1 = _30;
+          let _31 = p1_1 * 3;
+          let _32 = _31 >> 2;
+          let _33 = p0_1 + sum1_1;
+          let _34 = _33 / 20;
+          let _35 = _32 + _34;
+          let _36 = _35 & 4294967295;
+          let new1_1 = _36;
+          let _37 = cell_1.1.phi;
+          let _38 = update(_37, 1 - u32:1, new0_1);
+          let phifirst_1 = _38;
+          let _39 = update(phifirst_1, 2 - u32:1, new1_1);
+          let newphi_1 = _39;
+          let _40 = Cell {
+            phi_sum: newsum_1,
+            phi_received: receivednext_1,
+            ..(cell_1).1
+          };
+          let _41 = (Tag::CELL, _40);
+          let accumulated_1 = _41;
+          let _42 = zero!<u32[2]>();
+          let _43 = Cell {
+            phi: newphi_1,
+            phi_sum: _42,
+            phi_received: 0,
+            ..(cell_1).1
+          };
+          let _44 = (Tag::CELL, _43);
+          let updated_1 = _44;
+          let _47 = if current_1 {
+          let _46 = if ready_1 {
+          let _45 = (Phase::FLIPPING, updated_1, Directive::CONSUME, );
+            (_45, bool:false)
+          } else {
+          let _45 = (Phase::GATHERING, accumulated_1, Directive::CONSUME, );
+            (_45, bool:false)
+          };
+          let case_match_1_1 = bool:false;
+          let case_match_1_2 = _46.1;
+            (_46.0, (case_match_1_1 != case_match_1_2) || bool:false)
+          } else {
+          let _45 = (Phase::GATHERING, cell_1, Directive::FAIL, );
+            (_45, bool:false)
+          };
+          let case_match_2_1 = bool:false;
+          let case_match_2_2 = _47.1;
+          let _48 = if ((case_match_2_1 != case_match_2_2) || bool:false) {
+              (phase, data, Directive::FAIL)
+          } else {
+              (_47.0.0, _47.0.1.1, _47.0.2)
+          };
+          _48
+        },
+        Phase::FLIPPING => {
+          let eventstep_1 = message.step;
+          let _dispatchedphase_1 = phase;
+          let cell_1 = (Tag::CELL, data);
+          let _0 = cell_1.1.step;
+          let _1 = _0 + 1;
+          let _2 = _1 & 4294967295;
+          let nextstep_1 = _2;
+          let _3 = eventstep_1 == nextstep_1;
+          let _5 = if _3 {
+          let _4 = (Phase::FLIPPING, cell_1, Directive::POSTPONE, );
+            (_4, bool:false)
+          } else {
+          let _4 = (Phase::FLIPPING, cell_1, Directive::FAIL, );
+            (_4, bool:false)
+          };
+          let case_match_1_1 = bool:false;
+          let case_match_1_2 = _5.1;
+          let _6 = if ((case_match_1_1 != case_match_1_2) || bool:false) {
+              (phase, data, Directive::FAIL)
+          } else {
+              (_5.0.0, _5.0.1.1, _5.0.2)
+          };
+          _6
+        },
+        _ => (phase, data, Directive::FAIL),
+      }
+    },
+    Tag::ANYON_MOVE => {
+      let message = anyonmove_from_bits(frame.payload);
+      match phase {
+        Phase::GATHERING => {
+          let eventstep_1 = message.step;
+          let _dispatchedphase_1 = phase;
+          let cell_1 = (Tag::CELL, data);
+          let _0 = cell_1.1.step;
+          let _1 = eventstep_1 == _0;
+          let _3 = if _1 {
+          let _2 = (Phase::GATHERING, cell_1, Directive::POSTPONE, );
+            (_2, bool:false)
+          } else {
+          let _2 = (Phase::GATHERING, cell_1, Directive::FAIL, );
+            (_2, bool:false)
+          };
+          let case_match_1_1 = bool:false;
+          let case_match_1_2 = _3.1;
+          let _4 = if ((case_match_1_1 != case_match_1_2) || bool:false) {
+              (phase, data, Directive::FAIL)
+          } else {
+              (_3.0.0, _3.0.1.1, _3.0.2)
+          };
+          _4
+        },
+        Phase::FLIPPING => {
+          let eventstep_1 = message.step;
+          let present_1 = message.present;
+          let _dispatchedphase_1 = phase;
+          let cell_1 = (Tag::CELL, data);
+          let _0 = cell_1.1.step;
+          let _1 = eventstep_1 == _0;
+          let current_1 = _1;
+          let _2 = present_1 < 2;
+          let validpresent_1 = _2;
+          let _3 = cell_1.1.moves_received;
+          let _4 = _3 + 1;
+          let receivednext_1 = _4;
+          let _5 = receivednext_1 == 4;
+          let ready_1 = _5;
+          let _6 = cell_1.1.anyon;
+          let _7 = _6 + present_1;
+          let _8 = _7 & 1;
+          let nextanyon_1 = _8;
+          let _9 = Cell {
+            moves_received: receivednext_1,
+            anyon: nextanyon_1,
+            ..(cell_1).1
+          };
+          let _10 = (Tag::CELL, _9);
+          let accumulated_1 = _10;
+          let _11 = cell_1.1.step;
+          let _12 = _11 + 1;
+          let _13 = _12 & 4294967295;
+          let _14 = Cell {
+            step: _13,
+            moves_received: 0,
+            anyon: nextanyon_1,
+            ..(cell_1).1
+          };
+          let _15 = (Tag::CELL, _14);
+          let advanced_1 = _15;
+          let _16 = current_1 && validpresent_1;
+          let _19 = if _16 {
+          let _18 = if ready_1 {
+          let _17 = (Phase::GATHERING, advanced_1, Directive::CONSUME, );
+            (_17, bool:false)
+          } else {
+          let _17 = (Phase::FLIPPING, accumulated_1, Directive::CONSUME, );
+            (_17, bool:false)
+          };
+          let case_match_1_1 = bool:false;
+          let case_match_1_2 = _18.1;
+            (_18.0, (case_match_1_1 != case_match_1_2) || bool:false)
+          } else {
+          let _17 = (Phase::FLIPPING, cell_1, Directive::FAIL, );
+            (_17, bool:false)
+          };
+          let case_match_2_1 = bool:false;
+          let case_match_2_2 = _19.1;
+          let _20 = if ((case_match_2_1 != case_match_2_2) || bool:false) {
+              (phase, data, Directive::FAIL)
+          } else {
+              (_19.0.0, _19.0.1.1, _19.0.2)
+          };
+          _20
+        },
+        _ => (phase, data, Directive::FAIL),
+      }
+    },
+    _ => (phase, data, Directive::FAIL),
+  }
 }
 
 proc Service {
   req_in: chan<axis::Frame> in;
-  resp_out: chan<axis::Frame> out;
+  north_out: chan<axis::Frame> out;
+  east_out: chan<axis::Frame> out;
+  west_out: chan<axis::Frame> out;
+  south_out: chan<axis::Frame> out;
   admission_out: chan<u1> out;
 
   config(req_in: chan<axis::Frame> in,
-         resp_out: chan<axis::Frame> out,
+         north_out: chan<axis::Frame> out,
+         east_out: chan<axis::Frame> out,
+         west_out: chan<axis::Frame> out,
+         south_out: chan<axis::Frame> out,
          admission_out: chan<u1> out) {
-    (req_in, resp_out, admission_out)
+    (req_in, north_out, east_out, west_out, south_out, admission_out)
   }
 
   init { initial_machine() }
 
   next(machine: Machine) {
-    if machine.boot_pending {
-      let response = axis::pack(Tag::HALO as u8, bits_from_halo(machine.boot));
-      send(join(), resp_out, response);
-      Machine { boot_pending: u1:0, ..machine }
-    } else if machine.failed {
+    if machine.failed {
       machine
+    } else if machine.enter_pending {
+      let (entered_data, effects) = enter(
+        machine.entered_from, machine.phase, machine.data);
+      let north_tok = send_if(
+        join(), north_out, effects.north_valid, effects.north);
+      let east_tok = send_if(
+        join(), east_out, effects.east_valid, effects.east);
+      let west_tok = send_if(
+        join(), west_out, effects.west_valid, effects.west);
+      let south_tok = send_if(
+        join(), south_out, effects.south_valid, effects.south);
+      let reserve = !machine.admission_pending &&
+        machine.occupied < MAILBOX_CAPACITY;
+      let admission_tok = send_if(
+        join(), admission_out, reserve, u1:1);
+      let _entry_tok = join(join(join(join(north_tok, east_tok), west_tok), south_tok), admission_tok);
+      Machine {
+        data: entered_data,
+        enter_pending: u1:0,
+        admission_pending: machine.admission_pending || reserve,
+        ..machine
+      }
     } else {
       let (tok, frame, received) = recv_if_non_blocking(
         join(), req_in, machine.admission_pending,
         zero!<axis::Frame>());
-      let tag_ok = frame.header.op == (Tag::HALO as u8);
+      let tag_ok = (frame.header.op == (Tag::PHI as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::ANYON_MOVE as u8) && frame.header.payload_words == u8:2);
       let accepted = received && tag_ok;
       let invalid_input = received && !tag_ok;
-      let incoming = halo_from_bits(frame.payload);
       let incoming_slot = MailboxSlot {
-        message: incoming,
+        frame,
         ..zero!<MailboxSlot>()
       };
       let admitted_slots = if accepted {
         update(machine.slots, machine.occupied as u32, incoming_slot)
       } else { machine.slots };
       let admitted_occupied = machine.occupied + (accepted as u8);
-    let eligible_0 = u8:0 < admitted_occupied &&
-      (!admitted_slots[0].postponed || admitted_slots[0].blocked_phase != machine.phase);
-    let eligible_1 = u8:1 < admitted_occupied &&
-      (!admitted_slots[1].postponed || admitted_slots[1].blocked_phase != machine.phase);
-    let eligible_2 = u8:2 < admitted_occupied &&
-      (!admitted_slots[2].postponed || admitted_slots[2].blocked_phase != machine.phase);
-    let eligible_3 = u8:3 < admitted_occupied &&
-      (!admitted_slots[3].postponed || admitted_slots[3].blocked_phase != machine.phase);
-    let eligible_4 = u8:4 < admitted_occupied &&
-      (!admitted_slots[4].postponed || admitted_slots[4].blocked_phase != machine.phase);
-    let found = eligible_0 || eligible_1 || eligible_2 || eligible_3 || eligible_4;
-    let selected = if eligible_0 { u8:0 } else { if eligible_1 { u8:1 } else { if eligible_2 { u8:2 } else { if eligible_3 { u8:3 } else { if eligible_4 { u8:4 } else { u8:0 } } } } };
-    let message = admitted_slots[selected as u32].message;
-    let dispatchable = found && !invalid_input;
-    let (response, next_phase, next_data, directive) =
-      if dispatchable {
-        dispatch(message, machine.phase, machine.data)
-      } else {
-        (zero!<axis::Frame>(), machine.phase, machine.data,
-         Directive::CONSUME)
+      let eligible_0 = u8:0 < admitted_occupied &&
+        (!admitted_slots[0].postponed || admitted_slots[0].blocked_phase != machine.phase);
+      let eligible_1 = u8:1 < admitted_occupied &&
+        (!admitted_slots[1].postponed || admitted_slots[1].blocked_phase != machine.phase);
+      let eligible_2 = u8:2 < admitted_occupied &&
+        (!admitted_slots[2].postponed || admitted_slots[2].blocked_phase != machine.phase);
+      let eligible_3 = u8:3 < admitted_occupied &&
+        (!admitted_slots[3].postponed || admitted_slots[3].blocked_phase != machine.phase);
+      let eligible_4 = u8:4 < admitted_occupied &&
+        (!admitted_slots[4].postponed || admitted_slots[4].blocked_phase != machine.phase);
+      let found = eligible_0 || eligible_1 || eligible_2 || eligible_3 || eligible_4;
+      let selected = if eligible_0 { u8:0 } else { if eligible_1 { u8:1 } else { if eligible_2 { u8:2 } else { if eligible_3 { u8:3 } else { if eligible_4 { u8:4 } else { u8:0 } } } } };
+      let selected_frame = admitted_slots[selected as u32].frame;
+      let dispatchable = found && !invalid_input;
+      let (next_phase, next_data, directive) =
+        if dispatchable {
+          dispatch(selected_frame, machine.phase, machine.data)
+        } else {
+          (machine.phase, machine.data, Directive::CONSUME)
+        };
+      let effective = dispatchable;
+      let selected_slot = admitted_slots[selected as u32];
+      let postponed_slot = MailboxSlot {
+        postponed: u1:1,
+        blocked_phase: machine.phase,
+        ..selected_slot
       };
-    let emits = response.header.op != (Tag::NONE as u8);
-    let invalid_conclusion = dispatchable &&
-      directive != Directive::CONSUME && emits;
-    let effective = dispatchable && !invalid_conclusion;
-    let selected_slot = admitted_slots[selected as u32];
-    let postponed_slot = MailboxSlot {
-      postponed: u1:1,
-      blocked_phase: machine.phase,
-      ..selected_slot
-    };
-    let postponed_slots = update(
-      admitted_slots, selected as u32, postponed_slot);
-    let compacted_0 = if u8:0 < selected {
-      admitted_slots[0]
-    } else if u8:1 < admitted_occupied {
-      admitted_slots[1]
-    } else { zero!<MailboxSlot>() };
-    let compacted_1 = if u8:1 < selected {
-      admitted_slots[1]
-    } else if u8:2 < admitted_occupied {
-      admitted_slots[2]
-    } else { zero!<MailboxSlot>() };
-    let compacted_2 = if u8:2 < selected {
-      admitted_slots[2]
-    } else if u8:3 < admitted_occupied {
-      admitted_slots[3]
-    } else { zero!<MailboxSlot>() };
-    let compacted_3 = if u8:3 < selected {
-      admitted_slots[3]
-    } else if u8:4 < admitted_occupied {
-      admitted_slots[4]
-    } else { zero!<MailboxSlot>() };
-    let compacted_4 = zero!<MailboxSlot>();
-    let compacted_slots = [compacted_0, compacted_1, compacted_2, compacted_3, compacted_4];
-    let transition_slots = match directive {
-      Directive::CONSUME => compacted_slots,
-      Directive::POSTPONE => postponed_slots,
-      Directive::FAIL => admitted_slots,
-    };
-    let candidate_slots = if effective {
-      transition_slots
-    } else { admitted_slots };
-    let candidate_occupied = if effective &&
-        directive == Directive::CONSUME {
-      admitted_occupied - u8:1
-    } else { admitted_occupied };
-    let candidate_phase = if effective {
-      next_phase
-    } else { machine.phase };
-    let candidate_data = if effective {
-      next_data
-    } else { machine.data };
-    let phase_changed = candidate_phase != machine.phase;
-    let unblocked_slots = [MailboxSlot { postponed: u1:0, ..candidate_slots[0] },
-      MailboxSlot { postponed: u1:0, ..candidate_slots[1] },
-      MailboxSlot { postponed: u1:0, ..candidate_slots[2] },
-      MailboxSlot { postponed: u1:0, ..candidate_slots[3] },
-      MailboxSlot { postponed: u1:0, ..candidate_slots[4] }];
-    let final_slots = if phase_changed {
-      unblocked_slots
-    } else { candidate_slots };
-    let should_send = effective &&
-      directive == Directive::CONSUME &&
-      emits;
-    let response_tok = send_if(
-      tok, resp_out, should_send, response);
-    let failed = invalid_input || invalid_conclusion ||
-      (effective && directive == Directive::FAIL);
-    let admission_pending = machine.admission_pending && !received;
-    // Preserve occupied + admission_pending <= MAILBOX_CAPACITY.
-    let reserve = !failed && !received && !admission_pending &&
-      candidate_occupied < MAILBOX_CAPACITY;
-    let _admission_tok = send_if(
-      response_tok, admission_out, reserve, u1:1);
-    Machine {
-      phase: candidate_phase,
-      data: candidate_data,
-      slots: final_slots,
-      occupied: candidate_occupied,
-      admission_pending: admission_pending || reserve,
-      failed,
-      ..machine
-    }
+      let postponed_slots = update(
+        admitted_slots, selected as u32, postponed_slot);
+      let compacted_0 = if u8:0 < selected {
+        admitted_slots[0]
+      } else if u8:1 < admitted_occupied {
+        admitted_slots[1]
+      } else { zero!<MailboxSlot>() };
+      let compacted_1 = if u8:1 < selected {
+        admitted_slots[1]
+      } else if u8:2 < admitted_occupied {
+        admitted_slots[2]
+      } else { zero!<MailboxSlot>() };
+      let compacted_2 = if u8:2 < selected {
+        admitted_slots[2]
+      } else if u8:3 < admitted_occupied {
+        admitted_slots[3]
+      } else { zero!<MailboxSlot>() };
+      let compacted_3 = if u8:3 < selected {
+        admitted_slots[3]
+      } else if u8:4 < admitted_occupied {
+        admitted_slots[4]
+      } else { zero!<MailboxSlot>() };
+      let compacted_4 = zero!<MailboxSlot>();
+      let compacted_slots = [compacted_0, compacted_1, compacted_2, compacted_3, compacted_4];
+      let transition_slots = match directive {
+        Directive::CONSUME => compacted_slots,
+        Directive::POSTPONE => postponed_slots,
+        Directive::FAIL => admitted_slots,
+      };
+      let candidate_slots = if effective {
+        transition_slots
+      } else { admitted_slots };
+      let candidate_occupied = if effective &&
+          directive == Directive::CONSUME {
+        admitted_occupied - u8:1
+      } else { admitted_occupied };
+      let candidate_phase = if effective {
+        next_phase
+      } else { machine.phase };
+      let candidate_data = if effective {
+        next_data
+      } else { machine.data };
+      let phase_changed = candidate_phase != machine.phase;
+      let unblocked_slots = [MailboxSlot { postponed: u1:0, ..candidate_slots[0] },
+        MailboxSlot { postponed: u1:0, ..candidate_slots[1] },
+        MailboxSlot { postponed: u1:0, ..candidate_slots[2] },
+        MailboxSlot { postponed: u1:0, ..candidate_slots[3] },
+        MailboxSlot { postponed: u1:0, ..candidate_slots[4] }];
+      let final_slots = if phase_changed {
+        unblocked_slots
+      } else { candidate_slots };
+      let failed = invalid_input ||
+        (effective && directive == Directive::FAIL);
+      let admission_pending =
+        machine.admission_pending && !received;
+      // Preserve occupied + admission_pending <= capacity.
+      let reserve = !failed && !received && !admission_pending &&
+        candidate_occupied < MAILBOX_CAPACITY;
+      let _admission_tok = send_if(
+        tok, admission_out, reserve, u1:1);
+      Machine {
+        phase: candidate_phase,
+        entered_from: if phase_changed {
+          machine.phase
+        } else { machine.entered_from },
+        data: candidate_data,
+        slots: final_slots,
+        occupied: candidate_occupied,
+        enter_pending: effective && phase_changed && !failed,
+        admission_pending: admission_pending || reserve,
+        failed,
+        ..machine
+      }
     }
   }
 }
 
 pub proc Top {
   ext_recv: chan<axis::Beat> in;
-  ext_send: chan<axis::Beat> out;
+  north_send: chan<axis::Beat> out;
+  east_send: chan<axis::Beat> out;
+  west_send: chan<axis::Beat> out;
+  south_send: chan<axis::Beat> out;
 
   config(ext_recv: chan<axis::Beat> in,
-         ext_send: chan<axis::Beat> out) {
+         north_send: chan<axis::Beat> out,
+         east_send: chan<axis::Beat> out,
+         west_send: chan<axis::Beat> out,
+         south_send: chan<axis::Beat> out) {
     let (req_p, req_c) = chan<axis::Frame, u32:1>("req");
-    let (resp_p, resp_c) = chan<axis::Frame, u32:1>("resp");
     let (admit_p, admit_c) = chan<u1, u32:1>("admit");
+    let (north_p, north_c) = chan<axis::Frame, u32:1>("north");
+    let (east_p, east_c) = chan<axis::Frame, u32:1>("east");
+    let (west_p, west_c) = chan<axis::Frame, u32:1>("west");
+    let (south_p, south_c) = chan<axis::Frame, u32:1>("south");
     spawn axis::ReservedRx(ext_recv, req_p, admit_c);
-    spawn Service(req_c, resp_p, admit_p);
-    spawn axis::Tx(resp_c, ext_send);
-    (ext_recv, ext_send)
+    spawn Service(req_c, north_p, east_p, west_p, south_p, admit_p);
+    spawn axis::Tx(north_c, north_send);
+    spawn axis::Tx(east_c, east_send);
+    spawn axis::Tx(west_c, west_send);
+    spawn axis::Tx(south_c, south_send);
+    (ext_recv, north_send, east_send, west_send, south_send)
   }
 
   init { () }

@@ -1,147 +1,170 @@
 %%%% phi_halo_cell.erl
 %%%%
-%%%% One cell core from a two-layer, three-dimensional phi-decoder relaxation
-%%%% mesh. The callback uses a fixed product which has one XLS type.
+%%%% One cell from a two-layer, three-dimensional phi-decoder relaxation mesh.
 
 -module(phi_halo_cell).
 -moduledoc """
-An autonomous cell core for the phi-decoder field update
-(arXiv:1406.2338, equation 4).
+An autonomous cell for a small phi-decoder protocol experiment.
 
-## Field update
+## Protocol
 
-The cell consumes four halo messages for its current epoch. Its four in-plane
-neighbors are symmetric, so their two-layer values are accumulated as they
-arrive instead of being stored in directional slots. The fourth message
-performs the Jacobi update, advances the epoch, and emits the next halo. There
-is no coordinating `diffuse` request.
+The cell has two control phases with direct protocol meanings:
 
-The two layers form the smallest periodic z dimension: each layer sees the
-other twice. Field values are unsigned Q16.16 in the intended deployment. The
-CPU probe uses ordinary Erlang arithmetic while generated DSLX applies the
-operand widths; explicit masks retain the data fields as `u32` values.
+  * On entering `gathering`, it casts its current two-layer phi value to each
+    of four neighbors. Four phi messages complete one field update and move
+    the cell to `flipping`.
+  * On entering `flipping`, it casts one anyon update to each neighbor. Four
+    anyon messages complete the step and move the cell back to `gathering`.
 
-## Scheduling
+Messages for the next phase may arrive early. They are postponed until the
+phase atom changes, then retried in their original arrival order. Partial sums,
+receive counts, and the step number are data changes and do not themselves
+retry a postponed message.
 
-The control phases `gather_even` and `gather_odd` alternate when a four-way
-join completes. They form the retry boundary for one-epoch-lookahead halos.
-Changes to the epoch, partial sum, and receive count are data changes and do
-not by themselves retry a postponed halo.
+The generated module exposes four separately backpressured output ports named
+`north`, `east`, `west`, and `south`. The CPU scheduler maps those names to the
+four PIDs passed to `start_link/1`; no broadcast recipient is hidden in the
+cell. To build a cyclic CPU mesh, start every cell with `start_link/0` and then
+wire each one with `connect/2`; its initial gathering entry runs on connection.
 
-## Output port
+The count-based joins rely on the topology delivering exactly one message per
+incoming edge in each phase. A topology which can duplicate an edge must
+deduplicate it or the cell must use a fixed source mask.
 
-The callback produces one halo on the cell's output port. In the CPU runtime,
-`start_link/1` names the process which receives that output. The generated
-module exposes it as one outbound stream. An enclosing mesh topology must fan
-the stream out to the four neighboring inputs and keep the output pending until
-all four edges have accepted it; that topology is not part of this cell-core
-module.
+## Deliberate simplifications
 
-## Input assumption
+This slice performs one phi exchange per anyon step. The stochastic coin takes
+its no-move branch, so every flipping entry sends `present = 0`; input noise is
+also absent. Incoming anyon updates are still combined by parity so the phase
+protocol does not erase a move supplied by a test or a future neighbor.
 
-The count-based join assumes the topology admits exactly one halo from each
-incoming edge per epoch. If a transport can duplicate an edge, the topology
-must deduplicate it or this data record must regain a fixed source mask.
+A fuller decoder needs repeated diffusion rounds, move selection based on a
+post-diffusion neighbor comparison, measurement input, and correction output.
+Those additions should preserve the two genuine barrier phases; a parity-only
+wakeup phase would not have direct protocol meaning.
+
+## Field arithmetic
+
+The two stored layers are a deliberately small z-depth probe. Layer zero is the
+syndrome plane and layer one uses the charge-free bulk coefficient. Values use
+unsigned Q16.16 in the intended deployment. Integer operations implement this
+two-layer specialization of the relaxation coefficients; explicit `u32` masks
+keep the CPU model aligned with fixed-width generated arithmetic.
 """.
 
 -export([
     start_link/0,
     start_link/1,
+    connect/2,
     stop/1,
-    offer/3,
-    receive_halo/2,
+    offer_phi/3,
+    offer_anyon/3,
     runtime_info/1
 ]).
--export([init/1, transition/2]).
+-export([init/1, handle_enter/3, handle_cast/3]).
 
 -define(LAYER_COUNT, 2).
 -define(MAILBOX_CAPACITY, 5).
 -define(NEIGHBOR_COUNT, 4).
--define(LOCAL_CHARGE, 5).
 -define(U32_MASK, 16#ffffffff).
 
 -behavior(xls_statem).
 -xls_data(cell).
--xls_phases([gather_even, gather_odd]).
+-xls_phases([gathering, flipping]).
+-xls_outputs([north, east, west, south]).
 -xls_mailbox_capacity(?MAILBOX_CAPACITY).
--xls_tags([halo]).
+-xls_tags([phi, anyon_move]).
 -compile({parse_transform, xls_pack}).
 
-%% LOCAL_CHARGE is a hand-checkable fixture until a syndrome source supplies
-%% this cell's charge in the generated topology.
-%% TODO: lower a static fanout which retains a completion mask until all four
-%% neighboring inputs accept the emitted halo.
-%% TODO: replace the two-element xls_lists values with xls_vec once vector
+%% TODO: Replace the two-element xls_lists values with xls_vec once vector
 %% arithmetic is part of the lowerable library.
-%% TODO: teach the lowering to type same-shaped if/case branches so this
-%% callback can use idiomatic Erlang control flow instead of xls_type:select.
+%% TODO: Add the repeated diffusion and post-diffusion phi0 barriers before
+%% enabling a nontrivial coin and correction output.
+%% TODO: Revisit neighbor configuration so FPGA topology can be fixed at
+%% compile time while CPU models retain ergonomic runtime wiring.
+%% TODO: Preserve the word-aligned u32 anyon message ABI while exposing
+%% presence as a boolean internally, then express anyon parity with xor.
 
--record(halo, {
-    epoch = xls_type:zero() :: xls_nums:u32(),
+-record(phi, {
+    step = xls_type:zero() :: xls_nums:u32(),
     values = xls_type:zero() ::
         xls_lists:list(xls_nums:u32(), ?LAYER_COUNT)
 }).
 
--record(cell, {
-    epoch = xls_type:zero() :: xls_nums:u32(),
-    phi = xls_type:zero() ::
-        xls_lists:list(xls_nums:u32(), ?LAYER_COUNT),
-    halo_sum = xls_type:zero() ::
-        xls_lists:list(xls_nums:u32(), ?LAYER_COUNT),
-    received = xls_type:zero() :: xls_nums:u8(),
-    charge = xls_type:zero() :: xls_nums:u32()
+-record(anyon_move, {
+    step = xls_type:zero() :: xls_nums:u32(),
+    present = xls_type:zero() :: xls_nums:u32()
 }).
 
--type phase() :: gather_even | gather_odd.
+-record(cell, {
+    step = xls_type:zero() :: xls_nums:u32(),
+    phi = xls_type:zero() ::
+        xls_lists:list(xls_nums:u32(), ?LAYER_COUNT),
+    phi_sum = xls_type:zero() ::
+        xls_lists:list(xls_nums:u32(), ?LAYER_COUNT),
+    phi_received = xls_type:zero() :: xls_nums:u8(),
+    moves_received = xls_type:zero() :: xls_nums:u8(),
+    anyon = xls_type:zero() :: xls_nums:u32()
+}).
+
+-type phase() :: gathering | flipping.
 -type directive() :: consume | postpone | fail.
--type output() :: {boolean(), #halo{}}.
--type machine() :: {phase(), #cell{}}.
--type conclusion() :: {output(), machine(), directive()}.
+-type conclusion() :: {phase(), #cell{}, directive()}.
+-type neighbors() :: #{
+    north := pid(),
+    east := pid(),
+    west := pid(),
+    south := pid()
+}.
 
 %%%
 %%% CPU interface
 %%%
 
--doc "Starts a standalone probe whose outputs are delivered to the caller.".
+-doc "Starts a cell whose outputs will be connected later.".
 -spec start_link() -> {ok, pid()}.
 start_link() ->
-    start_link(self()).
-
--doc "Starts a cell core whose halos are delivered to `OutputPID`.".
--spec start_link(pid()) -> {ok, pid()}.
-start_link(OutputPID) ->
     xls_statem:start_link(
         ?MODULE,
         [],
-        [
-            {mailbox_capacity, ?MAILBOX_CAPACITY},
-            {output, OutputPID}
-        ]
+        [{mailbox_capacity, ?MAILBOX_CAPACITY}]
     ).
+
+-doc "Starts and immediately connects one process per named output.".
+-spec start_link(neighbors()) -> {ok, pid()}.
+start_link(Neighbors) ->
+    case valid_neighbors(Neighbors) of
+        true ->
+            Options = [
+                {mailbox_capacity, ?MAILBOX_CAPACITY},
+                {outputs, Neighbors}
+            ],
+            xls_statem:start_link(?MODULE, [], Options);
+        false ->
+            error(badarg)
+    end.
+
+-doc "Connects a deferred cell to its four named neighbors.".
+-spec connect(pid(), neighbors()) -> ok | {error, already_connected}.
+connect(PID, Neighbors) ->
+    case valid_neighbors(Neighbors) of
+        true -> xls_statem:connect(PID, Neighbors);
+        false -> error(badarg)
+    end.
 
 -spec stop(pid()) -> ok.
 stop(PID) ->
     xls_statem:stop(PID).
 
--doc "Offers one neighbor halo to the autonomous cell.".
--spec offer(pid(), xls_nums:u32(), [xls_nums:u32()]) -> ok.
-offer(PID, Epoch, Values) ->
-    xls_statem:cast(PID, #halo{epoch = Epoch, values = Values}).
+-doc "Offers one neighbor phi value to a cell.".
+-spec offer_phi(pid(), xls_nums:u32(), [xls_nums:u32()]) -> ok.
+offer_phi(PID, Step, Values) ->
+    xls_statem:cast(PID, #phi{step = Step, values = Values}).
 
--doc """
-Receives one initial or newly diffused halo emitted by the cell. The calling
-process must be the output recipient supplied to `start_link/1`; `PID`
-identifies the source cell in that process's mailbox.
-""".
--spec receive_halo(pid(), timeout()) ->
-    {ok, xls_nums:u32(), [xls_nums:u32()]} | timeout.
-receive_halo(PID, Timeout) ->
-    receive
-        {xls_statem, PID, #halo{epoch = Epoch, values = Values}} ->
-            {ok, Epoch, Values}
-    after Timeout ->
-        timeout
-    end.
+-doc "Offers one neighbor anyon update to a cell.".
+-spec offer_anyon(pid(), xls_nums:u32(), 0 | 1) -> ok.
+offer_anyon(PID, Step, Present) ->
+    xls_statem:cast(PID, #anyon_move{step = Step, present = Present}).
 
 -doc "Returns diagnostic data from the bounded CPU scheduler.".
 -spec runtime_info(pid()) -> map().
@@ -152,68 +175,129 @@ runtime_info(PID) ->
 %%% xls_statem callbacks
 %%%
 
--spec init(any()) -> {output(), machine()}.
+-spec init(any()) -> {ok, phase(), #cell{}}.
 init([]) ->
-    InitialHalo = #halo{},
-    InitialCell = #cell{charge = ?LOCAL_CHARGE},
-    {{true, InitialHalo}, {gather_even, InitialCell}}.
+    {ok, gathering, #cell{}}.
 
--spec transition(#halo{}, machine()) -> conclusion().
-transition(
-    #halo{epoch = EventEpoch, values = Values},
-    {Phase, Cell}
+-spec handle_enter(phase(), phase(), #cell{}) ->
+    xls_statem:enter_result().
+handle_enter(_OldPhase, gathering, Cell) ->
+    Message = #phi{step = Cell#cell.step, values = Cell#cell.phi},
+    {Cell, [
+        {cast, north, Message},
+        {cast, east, Message},
+        {cast, west, Message},
+        {cast, south, Message}
+    ]};
+handle_enter(_OldPhase, flipping, Cell) ->
+    %% The dummy coin keeps the local anyon and reports no outgoing move.
+    Message = #anyon_move{step = Cell#cell.step, present = 0},
+    {Cell, [
+        {cast, north, Message},
+        {cast, east, Message},
+        {cast, west, Message},
+        {cast, south, Message}
+    ]}.
+
+-spec handle_cast(#phi{} | #anyon_move{}, phase(), #cell{}) ->
+    conclusion().
+%% TODO: Rewrite this gathering update with idiomatic guards and case clauses
+%% once lowering supports the required control flow directly.
+handle_cast(
+    #phi{step = EventStep, values = Values},
+    gathering,
+    Cell
 ) ->
-    CurrentEpoch = Cell#cell.epoch,
-    NextEpoch = (CurrentEpoch + 1) band ?U32_MASK,
-    Current = EventEpoch =:= CurrentEpoch,
-    Next = EventEpoch =:= NextEpoch,
-    Valid = Current orelse Next,
-
+    Current = EventStep =:= Cell#cell.step,
     Value0 = xls_lists:nth(1, Values),
     Value1 = xls_lists:nth(2, Values),
-    Sum0 = (xls_lists:nth(1, Cell#cell.halo_sum) + Value0)
+    Sum0 = (xls_lists:nth(1, Cell#cell.phi_sum) + Value0)
         band ?U32_MASK,
-    Sum1 = (xls_lists:nth(2, Cell#cell.halo_sum) + Value1)
+    Sum1 = (xls_lists:nth(2, Cell#cell.phi_sum) + Value1)
         band ?U32_MASK,
-    SumFirst = xls_lists:set(1, Cell#cell.halo_sum, Sum0),
+    SumFirst = xls_lists:set(1, Cell#cell.phi_sum, Sum0),
     NewSum = xls_lists:set(2, SumFirst, Sum1),
-    ReceivedNext = Cell#cell.received + 1,
+    ReceivedNext = Cell#cell.phi_received + 1,
     Ready = ReceivedNext =:= ?NEIGHBOR_COUNT,
 
     P0 = xls_lists:nth(1, Cell#cell.phi),
     P1 = xls_lists:nth(2, Cell#cell.phi),
-    Numerator0 = ((P0 bsl 3) + (P0 bsl 1) + (P1 bsl 1) + Sum0)
+    Charge = Cell#cell.anyon bsl 16,
+    New0 = (Charge + (P0 bsr 2) +
+        (((P1 bsl 1) + Sum0) bsr 3)) band ?U32_MASK,
+    New1 = (((P1 * 3) bsr 2) + ((P0 + Sum1) div 20))
         band ?U32_MASK,
-    Numerator1 = ((P1 bsl 3) + (P1 bsl 1) + (P0 bsl 1) + Sum1)
-        band ?U32_MASK,
-    New0 = (Cell#cell.charge + (Numerator0 bsr 4)) band ?U32_MASK,
-    New1 = Numerator1 bsr 4,
     PhiFirst = xls_lists:set(1, Cell#cell.phi, New0),
     NewPhi = xls_lists:set(2, PhiFirst, New1),
 
     Accumulated = Cell#cell{
-        halo_sum = NewSum,
-        received = ReceivedNext
+        phi_sum = NewSum,
+        phi_received = ReceivedNext
+    },
+    Updated = Cell#cell{
+        phi = NewPhi,
+        phi_sum = xls_lists:new(xls_nums:u32(), ?LAYER_COUNT),
+        phi_received = 0
+    },
+    case Current of
+        false ->
+            {gathering, Cell, fail};
+        true ->
+            case Ready of
+                false -> {gathering, Accumulated, consume};
+                true -> {flipping, Updated, consume}
+            end
+    end;
+handle_cast(
+    #anyon_move{step = EventStep},
+    gathering,
+    Cell
+) ->
+    case EventStep =:= Cell#cell.step of
+        true -> {gathering, Cell, postpone};
+        false -> {gathering, Cell, fail}
+    end;
+handle_cast(
+    #phi{step = EventStep},
+    flipping,
+    Cell
+) ->
+    NextStep = (Cell#cell.step + 1) band ?U32_MASK,
+    case EventStep =:= NextStep of
+        true -> {flipping, Cell, postpone};
+        false -> {flipping, Cell, fail}
+    end;
+handle_cast(
+    #anyon_move{step = EventStep, present = Present},
+    flipping,
+    Cell
+) ->
+    Current = EventStep =:= Cell#cell.step,
+    ValidPresent = Present < 2,
+    ReceivedNext = Cell#cell.moves_received + 1,
+    Ready = ReceivedNext =:= ?NEIGHBOR_COUNT,
+    NextAnyon = (Cell#cell.anyon + Present) band 1,
+    Accumulated = Cell#cell{
+        moves_received = ReceivedNext,
+        anyon = NextAnyon
     },
     Advanced = Cell#cell{
-        epoch = NextEpoch,
-        phi = NewPhi,
-        halo_sum = xls_lists:new(xls_nums:u32(), ?LAYER_COUNT),
-        received = 0
+        step = (Cell#cell.step + 1) band ?U32_MASK,
+        moves_received = 0,
+        anyon = NextAnyon
     },
-    CurrentCell = xls_type:select(Ready, Advanced, Accumulated),
-    NextCell = xls_type:select(Current, CurrentCell, Cell),
+    case Current andalso ValidPresent of
+        false ->
+            {flipping, Cell, fail};
+        true ->
+            case Ready of
+                false -> {flipping, Accumulated, consume};
+                true -> {gathering, Advanced, consume}
+            end
+    end.
 
-    Emit = Current andalso Ready,
-    CandidateOutput = #halo{epoch = NextEpoch, values = NewPhi},
-    Output = xls_type:select(Emit, CandidateOutput, #halo{}),
-    OtherPhase = xls_type:select(
-        Phase =:= gather_even,
-        gather_odd,
-        gather_even
-    ),
-    NextPhase = xls_type:select(Emit, OtherPhase, Phase),
-    CandidateDirective = xls_type:select(Next, postpone, consume),
-    Directive = xls_type:select(Valid, CandidateDirective, fail),
-
-    {{Emit, Output}, {NextPhase, NextCell}, Directive}.
+valid_neighbors(Neighbors) ->
+    is_map(Neighbors) andalso
+        lists:sort(maps:keys(Neighbors)) =:=
+            lists:sort([north, east, west, south]) andalso
+        lists:all(fun is_pid/1, maps:values(Neighbors)).
