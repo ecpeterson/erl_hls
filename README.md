@@ -17,13 +17,25 @@ available on macOS:
 tools/xls_sim.sh
 ```
 
-This regenerates `regsvc.x` from the Erlang source, copies only the required
-inputs into `/home/ecpeterson/erl_xls-build/regsvc` on `192.168.64.7`, and runs
-XLS IR conversion, optimization, and Verilog generation there. It then runs a
-cycle-controlled two-process SystemVerilog routing scenario and the EUnit
-application scenario through a VPI bridge. Independent application and debug
-FIFO pairs carry the two physical AXI Stream paths. The runner does not use or
-modify the VM's existing `~/erl_xls` checkout.
+This regenerates the translated DSLX from the Erlang sources, copies only the
+required inputs into `/home/ecpeterson/erl_xls-build/regsvc` on
+`192.168.64.7`, and runs XLS IR conversion, optimization, and Verilog
+generation there. It then runs a cycle-controlled two-process SystemVerilog
+routing scenario and the EUnit application scenario through a VPI bridge.
+Independent application and debug FIFO pairs carry the two physical AXI Stream
+paths. The runner does not use or modify the VM's existing `~/erl_xls`
+checkout, and finishes by checking all four source-adjacent DSLX and RTL
+artifacts.
+
+After changing the translator or either translated example, refresh all four
+checked-in artifacts with the same full regression:
+
+```sh
+tools/update_xls_goldens.sh
+```
+
+The files are copied only after the pinned remote flow and its simulations
+complete successfully.
 
 The remote host and paths can be overridden with `ERL_XLS_REMOTE_HOST`,
 `ERL_XLS_REMOTE_ROOT`, and `ERL_XLS_REMOTE_XLS`.

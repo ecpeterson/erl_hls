@@ -25,6 +25,41 @@ deferred_connection_delays_initial_entry_test() ->
         stop_collectors(Ref, Collectors)
     end.
 
+early_phi_casts_wait_for_initial_entry_test() ->
+    {Collectors, Ref} = start_collectors(),
+    {ok, PID} = phi_halo_cell:start_link(),
+    try
+        lists:foreach(
+            fun(_) -> phi_halo_cell:offer_phi(PID, 0, [16, 32]) end,
+            lists:seq(1, 4)
+        ),
+        Before = phi_halo_cell:runtime_info(PID),
+        ?assertEqual(disconnected, maps:get(lifecycle, Before)),
+        ?assertEqual(4, maps:get(committed, maps:get(mailbox, Before))),
+        ?assertMatch({cell, 0, [0, 0], [0, 0], 0, 0, 0},
+            maps:get(data, Before)),
+        assert_no_neighbor_cast(Ref),
+
+        ok = phi_halo_cell:connect(PID, Collectors),
+        expect_neighbor_sequences(
+            Ref,
+            [{phi, 0, [0, 0]}, {anyon_move, 0, 0}]
+        ),
+
+        After = phi_halo_cell:runtime_info(PID),
+        ?assertEqual(connected, maps:get(lifecycle, After)),
+        ?assertEqual(flipping, maps:get(phase, After)),
+        ?assertEqual(0, maps:get(committed, maps:get(mailbox, After))),
+        ?assertMatch({cell, 0, [8, 6], [0, 0], 0, 0, 0},
+            maps:get(data, After))
+    after
+        case is_process_alive(PID) of
+            true -> phi_halo_cell:stop(PID);
+            false -> ok
+        end,
+        stop_collectors(Ref, Collectors)
+    end.
+
 deferred_degree_four_cycle_completes_round_test() ->
     Cells = [
         begin

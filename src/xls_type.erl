@@ -75,8 +75,9 @@ zero() ->
 zero(#xls_type{module = Module, name = Name, args = Args}) ->
     Module:zero(Name, Args).
 
-%% TODO: Move lowerable non-type operations into an xls_primitives-style
-%% module once there is a family of them rather than a single selection.
+%% TODO: Replace this eager helper with direct lowering for Erlang `if` and
+%% `case`, including branch-local expressions and a same-type result join.
+%% Do not grow this into a substitute library for language-level control flow.
 -doc "Chooses between two values of the same XLS type.".
 -spec select(boolean(), T, T) -> T.
 select(true, WhenTrue, _WhenFalse) ->

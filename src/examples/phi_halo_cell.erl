@@ -29,7 +29,7 @@ wire each one with `connect/2`; its initial gathering entry runs on connection.
 
 The count-based joins rely on the topology delivering exactly one message per
 incoming edge in each phase. A topology which can duplicate an edge must
-deduplicate it or the cell must regain a fixed source mask.
+deduplicate it or the cell must use a fixed source mask.
 
 ## Deliberate simplifications
 
@@ -38,10 +38,10 @@ its no-move branch, so every flipping entry sends `present = 0`; input noise is
 also absent. Incoming anyon updates are still combined by parity so the phase
 protocol does not erase a move supplied by a test or a future neighbor.
 
-A fuller decoder needs repeated diffusion rounds, the post-diffusion neighbor
-comparison used to choose a move, measurement input, and correction output.
-Those additions should preserve the two genuine barrier phases instead of
-reintroducing a parity phase whose only purpose is to wake postponed input.
+A fuller decoder needs repeated diffusion rounds, move selection based on a
+post-diffusion neighbor comparison, measurement input, and correction output.
+Those additions should preserve the two genuine barrier phases; a parity-only
+wakeup phase would not have direct protocol meaning.
 
 ## Field arithmetic
 
@@ -80,6 +80,10 @@ keep the CPU model aligned with fixed-width generated arithmetic.
 %% arithmetic is part of the lowerable library.
 %% TODO: Add the repeated diffusion and post-diffusion phi0 barriers before
 %% enabling a nontrivial coin and correction output.
+%% TODO: Revisit neighbor configuration so FPGA topology can be fixed at
+%% compile time while CPU models retain ergonomic runtime wiring.
+%% TODO: Preserve the word-aligned u32 anyon message ABI while exposing
+%% presence as a boolean internally, then express anyon parity with xor.
 
 -record(phi, {
     step = xls_type:zero() :: xls_nums:u32(),
@@ -131,14 +135,11 @@ start_link() ->
 start_link(Neighbors) ->
     case valid_neighbors(Neighbors) of
         true ->
-            xls_statem:start_link(
-                ?MODULE,
-                [],
-                [
-                    {mailbox_capacity, ?MAILBOX_CAPACITY},
-                    {outputs, Neighbors}
-                ]
-            );
+            Options = [
+                {mailbox_capacity, ?MAILBOX_CAPACITY},
+                {outputs, Neighbors}
+            ],
+            xls_statem:start_link(?MODULE, [], Options);
         false ->
             error(badarg)
     end.
@@ -200,6 +201,8 @@ handle_enter(_OldPhase, flipping, Cell) ->
 
 -spec handle_cast(#phi{} | #anyon_move{}, phase(), #cell{}) ->
     conclusion().
+%% TODO: Rewrite this gathering update with idiomatic guards and case clauses
+%% once lowering supports the required control flow directly.
 handle_cast(
     #phi{step = EventStep, values = Values},
     gathering,

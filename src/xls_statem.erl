@@ -38,6 +38,8 @@ Passing an output map to `start_link/3` connects and enters the initial phase
 immediately. A cyclic CPU topology can instead start all of its machines
 without that option and then call `connect/2` on each one. Casts received before
 connection occupy the bounded mailbox and are processed after initial entry.
+Disconnection is a scheduler lifecycle state separate from the callback phase;
+no application callback is dispatched while the machine is disconnected.
 The generated implementation has statically connected ports and therefore
 enters its initial phase on startup.
 
@@ -101,6 +103,7 @@ models scheduling semantics rather than host-side admission guarantees.
 %%%
 
 -type phase() :: atom().
+-type lifecycle() :: disconnected | connected.
 -type output_port() :: atom().
 -type data() :: term().
 -type directive() :: consume | postpone | fail.
@@ -128,9 +131,10 @@ models scheduling semantics rather than host-side admission guarantees.
 
 -record(runtime, {
     module :: module(),
+    lifecycle = disconnected :: lifecycle(),
     phase :: phase(),
     data :: data(),
-    outputs :: undefined | #{output_port() := pid()},
+    outputs = #{} :: #{output_port() := pid()},
     mailbox :: xls_mailbox:mailbox(),
     postponed = #{} :: #{non_neg_integer() => true},
     next_message_id = 0 :: non_neg_integer()
@@ -167,7 +171,7 @@ stop(PID) ->
 cast(PID, Message) ->
     gen_server:cast(PID, Message).
 
--doc "Returns the phase, callback data, and bounded queue counters.".
+-doc "Returns the lifecycle, phase, callback data, and queue counters.".
 -spec info(pid()) -> map().
 info(PID) ->
     format_info(sys:get_state(PID)).
@@ -179,23 +183,32 @@ info(PID) ->
 init({Module, Arg, Capacity, Outputs}) ->
     {ok, Phase, Data} = Module:init(Arg),
     true = is_atom(Phase),
+    {Lifecycle, OutputMap} = case Outputs of
+        undefined -> {disconnected, #{}};
+        _ -> {connected, Outputs}
+    end,
     Runtime0 = #runtime{
         module = Module,
+        lifecycle = Lifecycle,
         phase = Phase,
         data = Data,
-        outputs = Outputs,
+        outputs = OutputMap,
         mailbox = xls_mailbox:new(Capacity)
     },
-    case Outputs of
-        undefined -> {ok, Runtime0};
-        _ -> {ok, enter_phase(Phase, Runtime0)}
+    case Lifecycle of
+        disconnected -> {ok, Runtime0};
+        connected -> {ok, enter_phase(Phase, Runtime0)}
     end.
 
 %% Synchronous calls deliberately fail instead of masquerading as casts.
 %% The TODO at the top records the missing lowerable call/reply contract.
 handle_call({connect, Outputs}, _From,
-        Runtime0 = #runtime{phase = Phase, outputs = undefined}) ->
-    Runtime1 = enter_phase(Phase, Runtime0#runtime{outputs = Outputs}),
+        Runtime0 = #runtime{lifecycle = disconnected, phase = Phase}) ->
+    Connected = Runtime0#runtime{
+        lifecycle = connected,
+        outputs = Outputs
+    },
+    Runtime1 = enter_phase(Phase, Connected),
     case process_messages(Runtime1) of
         {ok, Runtime2} -> {reply, ok, Runtime2};
         {stop, Reason, Runtime2} ->
@@ -231,12 +244,12 @@ code_change(_OldVersion, _Runtime, _Extra) ->
 %%% Bounded scheduling
 %%%
 
-admit_and_process(Message, Runtime0 = #runtime{outputs = undefined}) ->
+admit_and_process(Message, Runtime0 = #runtime{lifecycle = disconnected}) ->
     case enqueue(Message, Runtime0) of
         {ok, Runtime1} -> {noreply, Runtime1};
         {error, full} -> {stop, {mailbox_full, Message}, Runtime0}
     end;
-admit_and_process(Message, Runtime0) ->
+admit_and_process(Message, Runtime0 = #runtime{lifecycle = connected}) ->
     case enqueue(Message, Runtime0) of
         {ok, Runtime1} ->
             case process_messages(Runtime1) of
@@ -338,6 +351,7 @@ finish_transition(PreviousPhase, Runtime0 = #runtime{phase = Phase}) ->
 
 enter_phase(OldPhase, Runtime = #runtime{
     module = Module,
+    lifecycle = connected,
     phase = Phase,
     data = Data,
     outputs = Outputs
@@ -386,6 +400,7 @@ validate_casts(Actions, _Outputs) ->
 %%%
 
 format_info(#runtime{
+    lifecycle = Lifecycle,
     phase = Phase,
     data = Data,
     outputs = Outputs,
@@ -393,9 +408,10 @@ format_info(#runtime{
     postponed = Postponed
 }) ->
     #{
+        lifecycle => Lifecycle,
         phase => Phase,
         data => Data,
-        connected => Outputs =/= undefined,
+        connected => Lifecycle =:= connected,
         outputs => output_names(Outputs),
         postponed => map_size(Postponed),
         mailbox => xls_mailbox:info(Mailbox)
@@ -432,7 +448,5 @@ valid_outputs(Outputs) when is_map(Outputs) ->
 valid_outputs(_Outputs) ->
     false.
 
-output_names(undefined) ->
-    [];
 output_names(Outputs) ->
     lists:sort(maps:keys(Outputs)).

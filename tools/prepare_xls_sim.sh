@@ -7,7 +7,7 @@ project_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 mkdir -p "$stage/erl_src" "$stage/test_src"
 cd "$project_root"
 
-rebar3 eunit
+rebar3 as test compile
 
 ERL_XLS_REGSVC_X="$stage/regsvc.x" \
 ERL_XLS_PHI_HALO_X="$stage/phi_halo_cell.x" \
