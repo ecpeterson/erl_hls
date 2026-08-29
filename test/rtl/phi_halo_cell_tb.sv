@@ -29,6 +29,7 @@ module phi_halo_cell_tb;
     integer check_port;
     reg [32:0] stalled_beat;
     reg check_south_stall = 1'b0;
+    reg check_east_stall = 1'b0;
 
     __phi_halo_cell__Top_0_next dut (
         .clk(clk),
@@ -68,6 +69,16 @@ module phi_halo_cell_tb;
                 end
                 if (output_beat[SOUTH] !== stalled_beat) begin
                     $display("FAIL: stalled south output was not stable");
+                    $fatal(1);
+                end
+            end
+            if (check_east_stall) begin
+                if (!output_valid[EAST]) begin
+                    $display("FAIL: stalled east output dropped valid");
+                    $fatal(1);
+                end
+                if (output_beat[EAST] !== stalled_beat) begin
+                    $display("FAIL: stalled east output was not stable");
                     $fatal(1);
                 end
             end
@@ -308,25 +319,134 @@ module phi_halo_cell_tb;
             $fatal(1);
         end
 
-        // Four current-step ANYONs complete the flipping barrier, increment
-        // the decoder step, reset the diffusion round, and enter gathering at
-        // wire epoch two with the final [15, 15] diffusion value.
-        send_anyon(32'd0, 32'd0);
+        // The first xorshift32 result has its high bit clear, so step zero
+        // cannot move even though east won the comparison. One incoming move
+        // seeds a local anyon for the next decoder step.
+        send_anyon(32'd0, 32'd1);
         send_anyon(32'd0, 32'd0);
         send_anyon(32'd0, 32'd0);
         send_anyon(32'd0, 32'd0);
         expect_all_phi(15, 32'd2, 32'd15, 32'd15);
 
+        // With the local anyon present, zero-valued neighbors still contribute
+        // its Q16.16 charge. The two rounds finish at [81923, 3285].
+        send_phi(32'd2, 32'd0, 32'd0);
+        send_phi(32'd2, 32'd0, 32'd0);
+        send_phi(32'd2, 32'd0, 32'd0);
+        send_phi(32'd2, 32'd0, 32'd0);
+        expect_all_phi(19, 32'd3, 32'd65542, 32'd11);
+
+        send_phi(32'd3, 32'd0, 32'd0);
+        send_phi(32'd3, 32'd0, 32'd0);
+        send_phi(32'd3, 32'd0, 32'd0);
+        send_phi(32'd3, 32'd0, 32'd0);
+        for (check_port = 0; check_port < 4;
+                check_port = check_port + 1)
+            wait_for_count(check_port, 27);
+        check_phi0(NORTH, 23, 32'd1, SOUTH_MASK, 32'd81923);
+        check_phi0(EAST, 23, 32'd1, WEST_MASK, 32'd81923);
+        check_phi0(WEST, 23, 32'd1, EAST_MASK, 32'd81923);
+        check_phi0(SOUTH, 23, 32'd1, NORTH_MASK, 32'd81923);
+
+        // The second xorshift32 result has its high bit set. East is the
+        // unique winner, so its output alone carries present=1. Stall that
+        // selected frame to exercise the new data under backpressure.
+        output_ready[EAST] = 1'b0;
+        send_phi0(32'd1, NORTH_MASK, 32'd90000);
+        send_phi0(32'd1, EAST_MASK, 32'd100000);
+        send_phi0(32'd1, WEST_MASK, 32'd95000);
+        send_phi0(32'd1, SOUTH_MASK, 32'd85000);
+
+        while (!output_valid[EAST])
+            @(posedge clk);
+        @(negedge clk);
+        stalled_beat = output_beat[EAST];
+        if (stalled_beat !== {1'b0, header(8'd4, 8'd2)}) begin
+            $display("FAIL: east did not stall on the selected ANYON header");
+            $fatal(1);
+        end
+        check_east_stall = 1'b1;
+
+        wait_for_count(NORTH, 30);
+        wait_for_count(WEST, 30);
+        wait_for_count(SOUTH, 30);
+        repeat (8) @(posedge clk);
+        if (beat_count[EAST] != 27) begin
+            $display("FAIL: blocked east transferred a selected ANYON beat");
+            $fatal(1);
+        end
+        for (check_port = 0; check_port < 4;
+                check_port = check_port + 1) begin
+            if (check_port != EAST && beat_count[check_port] != 30) begin
+                $display("FAIL: selected ANYON entry replayed a completed port");
+                $fatal(1);
+            end
+            if (check_port != EAST)
+                check_anyon(check_port, 27, 32'd1, 32'd0);
+        end
+
+        check_east_stall = 1'b0;
+        output_ready[EAST] = 1'b1;
+        wait_for_count(EAST, 30);
+        check_anyon(EAST, 27, 32'd1, 32'd1);
+        if (beat_count[NORTH] != 30 || beat_count[WEST] != 30 ||
+                beat_count[SOUTH] != 30) begin
+            $display("FAIL: completed ports replayed while east caught up");
+            $fatal(1);
+        end
+
+        // The outgoing move clears the local anyon. One incoming move restores
+        // it by parity, which the charge term in the following round exposes.
+        send_anyon(32'd1, 32'd1);
+        send_anyon(32'd1, 32'd0);
+        send_anyon(32'd1, 32'd0);
+        send_anyon(32'd1, 32'd0);
+        expect_all_phi(30, 32'd4, 32'd81923, 32'd3285);
+
+        send_phi(32'd4, 32'd0, 32'd0);
+        send_phi(32'd4, 32'd0, 32'd0);
+        send_phi(32'd4, 32'd0, 32'd0);
+        send_phi(32'd4, 32'd0, 32'd0);
+        expect_all_phi(34, 32'd5, 32'd86837, 32'd6559);
+
+        // The third xorshift32 result is also heads. Complete another
+        // comparison with north as the unique winner. Observing north's move
+        // proves the stalled step-one entry advanced the generator once, not
+        // once per retry or output port.
+        send_phi(32'd5, 32'd0, 32'd0);
+        send_phi(32'd5, 32'd0, 32'd0);
+        send_phi(32'd5, 32'd0, 32'd0);
+        send_phi(32'd5, 32'd0, 32'd0);
+        for (check_port = 0; check_port < 4;
+                check_port = check_port + 1)
+            wait_for_count(check_port, 42);
+        check_phi0(NORTH, 38, 32'd2, SOUTH_MASK, 32'd88884);
+        check_phi0(EAST, 38, 32'd2, WEST_MASK, 32'd88884);
+        check_phi0(WEST, 38, 32'd2, EAST_MASK, 32'd88884);
+        check_phi0(SOUTH, 38, 32'd2, NORTH_MASK, 32'd88884);
+
+        send_phi0(32'd2, NORTH_MASK, 32'd120000);
+        send_phi0(32'd2, EAST_MASK, 32'd110000);
+        send_phi0(32'd2, WEST_MASK, 32'd100000);
+        send_phi0(32'd2, SOUTH_MASK, 32'd90000);
+        for (check_port = 0; check_port < 4;
+                check_port = check_port + 1)
+            wait_for_count(check_port, 45);
+        check_anyon(NORTH, 42, 32'd2, 32'd1);
+        check_anyon(EAST, 42, 32'd2, 32'd0);
+        check_anyon(WEST, 42, 32'd2, 32'd0);
+        check_anyon(SOUTH, 42, 32'd2, 32'd0);
+
         repeat (8) @(posedge clk);
         for (check_port = 0; check_port < 4;
                 check_port = check_port + 1) begin
-            if (beat_count[check_port] != 19) begin
-                $display("FAIL: unexpected output after next-step entry");
+            if (beat_count[check_port] != 45) begin
+                $display("FAIL: unexpected output after second coin check");
                 $fatal(1);
             end
         end
 
-        $display("PASS: diffusion, source-aware comparison, and flipping");
+        $display("PASS: comparison, coin-gated move, and backpressure");
         $finish;
     end
 endmodule
