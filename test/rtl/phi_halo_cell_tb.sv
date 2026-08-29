@@ -95,12 +95,12 @@ module phi_halo_cell_tb;
     endtask
 
     task automatic send_phi;
-        input [31:0] step;
+        input [31:0] epoch;
         input [31:0] layer_zero;
         input [31:0] layer_one;
         begin
             send_beat(header(8'd3, 8'd3), 1'b0);
-            send_beat(step, 1'b0);
+            send_beat(epoch, 1'b0);
             // Fixed arrays put element zero in the most-significant bits.
             send_beat(layer_one, 1'b0);
             send_beat(layer_zero, 1'b1);
@@ -149,12 +149,12 @@ module phi_halo_cell_tb;
     task automatic check_phi;
         input integer port;
         input integer base;
-        input [31:0] step;
+        input [31:0] epoch;
         input [31:0] layer_zero;
         input [31:0] layer_one;
         begin
             check_beat(port, base + 0, header(8'd3, 8'd3), 1'b0);
-            check_beat(port, base + 1, step, 1'b0);
+            check_beat(port, base + 1, epoch, 1'b0);
             check_beat(port, base + 2, layer_one, 1'b0);
             check_beat(port, base + 3, layer_zero, 1'b1);
         end
@@ -174,27 +174,14 @@ module phi_halo_cell_tb;
 
     task automatic expect_all_phi;
         input integer base;
-        input [31:0] step;
+        input [31:0] epoch;
         input [31:0] layer_zero;
         input [31:0] layer_one;
         integer port;
         begin
             for (port = 0; port < 4; port = port + 1) begin
                 wait_for_count(port, base + 4);
-                check_phi(port, base, step, layer_zero, layer_one);
-            end
-        end
-    endtask
-
-    task automatic expect_all_anyon;
-        input integer base;
-        input [31:0] step;
-        input [31:0] present;
-        integer port;
-        begin
-            for (port = 0; port < 4; port = port + 1) begin
-                wait_for_count(port, base + 3);
-                check_anyon(port, base, step, present);
+                check_phi(port, base, epoch, layer_zero, layer_one);
             end
         end
     endtask
@@ -213,29 +200,32 @@ module phi_halo_cell_tb;
         @(negedge clk);
         reset = 1'b0;
 
-        // Stall south across three entries. Its transmitter holds the initial
-        // PHI and its frame FIFO holds the ANYON, so the following PHI entry
-        // must block in Service after north/east/west have accepted it.
-        output_ready = 4'b0111;
-        wait_for_count(NORTH, 4);
-        wait_for_count(EAST, 4);
-        wait_for_count(WEST, 4);
+        output_ready = 4'b1111;
+        expect_all_phi(0, 32'd0, 32'd0, 32'd0);
+
+        // A complete next-epoch batch occupies four of the five mailbox
+        // slots. Each current-epoch PHI must still enter and leave through
+        // the fifth reserved progress slot. Completing epoch zero repeats
+        // gathering, releases the lookahead batch, and emits epoch one.
+        send_phi(32'd1, 32'd16, 32'd32);
+        send_phi(32'd1, 32'd16, 32'd32);
+        send_phi(32'd1, 32'd16, 32'd32);
+        send_phi(32'd1, 32'd16, 32'd32);
+
+        // Exercise the four output handshakes independently. South stalls on
+        // the repeated entry while the other three ports accept that PHI and
+        // the following flipping entry.
+        output_ready[SOUTH] = 1'b0;
+        send_phi(32'd0, 32'd32, 32'd48);
+        send_phi(32'd0, 32'd64, 32'd80);
+        send_phi(32'd0, 32'd16, 32'd32);
+        send_phi(32'd0, 32'd48, 32'd64);
+
         while (!output_valid[SOUTH])
             @(posedge clk);
         @(negedge clk);
         stalled_beat = output_beat[SOUTH];
         check_south_stall = 1'b1;
-
-        // Four early ANYONs occupy four of five mailbox slots. Current PHIs
-        // must still make progress through the fifth reserved slot.
-        send_anyon(32'd0, 32'd0);
-        send_anyon(32'd0, 32'd0);
-        send_anyon(32'd0, 32'd0);
-        send_anyon(32'd0, 32'd0);
-        send_phi(32'd0, 32'd32, 32'd48);
-        send_phi(32'd0, 32'd64, 32'd80);
-        send_phi(32'd0, 32'd16, 32'd32);
-        send_phi(32'd0, 32'd48, 32'd64);
 
         wait_for_count(NORTH, 11);
         wait_for_count(EAST, 11);
@@ -248,11 +238,11 @@ module phi_halo_cell_tb;
                 $fatal(1);
             end
             check_phi(check_port, 0, 32'd0, 32'd0, 32'd0);
-            check_anyon(check_port, 4, 32'd0, 32'd0);
-            check_phi(check_port, 7, 32'd1, 32'd20, 32'd11);
+            check_phi(check_port, 4, 32'd1, 32'd20, 32'd11);
+            check_anyon(check_port, 8, 32'd0, 32'd0);
         end
-        if (beat_count[SOUTH] != 0) begin
-            $display("FAIL: blocked south output transferred a beat");
+        if (beat_count[SOUTH] != 4) begin
+            $display("FAIL: blocked south output transferred a repeated beat");
             $fatal(1);
         end
 
@@ -260,36 +250,33 @@ module phi_halo_cell_tb;
         output_ready[SOUTH] = 1'b1;
         wait_for_count(SOUTH, 11);
         check_phi(SOUTH, 0, 32'd0, 32'd0, 32'd0);
-        check_anyon(SOUTH, 4, 32'd0, 32'd0);
-        check_phi(SOUTH, 7, 32'd1, 32'd20, 32'd11);
+        check_phi(SOUTH, 4, 32'd1, 32'd20, 32'd11);
+        check_anyon(SOUTH, 8, 32'd0, 32'd0);
         if (beat_count[NORTH] != 11 || beat_count[EAST] != 11 ||
                 beat_count[WEST] != 11) begin
             $display("FAIL: completed entry replayed accepted ports");
             $fatal(1);
         end
 
-        // The symmetric lookahead: next-step PHI waits in flipping and is
-        // retried only after four current ANYONs enter gathering.
-        send_phi(32'd1, 32'd16, 32'd32);
-        send_phi(32'd1, 32'd16, 32'd32);
-        send_phi(32'd1, 32'd16, 32'd32);
-        send_phi(32'd1, 32'd16, 32'd32);
-        expect_all_anyon(11, 32'd1, 32'd0);
+        // The final diffusion result is [15, 15]. Four current-step ANYONs
+        // complete the flipping barrier, increment the decoder step, reset
+        // the diffusion round, and enter gathering at wire epoch two.
+        send_anyon(32'd0, 32'd0);
+        send_anyon(32'd0, 32'd0);
+        send_anyon(32'd0, 32'd0);
+        send_anyon(32'd0, 32'd0);
+        expect_all_phi(11, 32'd2, 32'd15, 32'd15);
 
-        send_phi(32'd2, 32'd8, 32'd12);
-        send_anyon(32'd1, 32'd0);
-        send_anyon(32'd1, 32'd0);
-        send_anyon(32'd1, 32'd0);
-        send_anyon(32'd1, 32'd0);
-        expect_all_phi(14, 32'd2, 32'd15, 32'd15);
+        repeat (8) @(posedge clk);
+        for (check_port = 0; check_port < 4;
+                check_port = check_port + 1) begin
+            if (beat_count[check_port] != 15) begin
+                $display("FAIL: unexpected output after next-step entry");
+                $fatal(1);
+            end
+        end
 
-        // The early PHI already supplied one input for step two.
-        send_phi(32'd2, 32'd16, 32'd32);
-        send_phi(32'd2, 32'd16, 32'd32);
-        send_phi(32'd2, 32'd16, 32'd32);
-        expect_all_anyon(18, 32'd2, 32'd0);
-
-        $display("PASS: gathering/flipping phi cell with four explicit ports");
+        $display("PASS: two-round phi diffusion with repeat-phase entry");
         $finish;
     end
 endmodule
