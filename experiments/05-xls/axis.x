@@ -78,6 +78,48 @@ pub proc Rx {
   }
 }
 
+struct ReservedRxState {
+  admitted: u1,
+  rx: RxState,
+}
+
+// Receives one admission credit in its own activation before accepting the
+// first beat of a frame. The consumer retains that credit until the assembled
+// Frame is delivered, so a bounded mailbox reserves capacity before assembly.
+pub proc ReservedRx {
+  axis_in: chan<Beat> in;
+  instr_out: chan<Frame> out;
+  admission_in: chan<u1> in;
+
+  config(axis_in: chan<Beat> in,
+         instr_out: chan<Frame> out,
+         admission_in: chan<u1> in) {
+    (axis_in, instr_out, admission_in)
+  }
+
+  init { zero!<ReservedRxState>() }
+
+  next(state: ReservedRxState) {
+    if !state.admitted {
+      let (_tok, _credit) = recv(join(), admission_in);
+      ReservedRxState { admitted: u1:1, ..state }
+    } else {
+      let (tok, beat) = recv(join(), axis_in);
+      let payload = bit_slice_update(
+        state.rx.payload, state.rx.words_seen * 32, beat.word);
+      let words_seen = state.rx.words_seen + u8:1;
+
+      if beat.tlast {
+        send(tok, instr_out, frame_from_bits(payload));
+        zero!<ReservedRxState>()
+      } else {
+        let rx = RxState { payload, words_seen };
+        ReservedRxState { rx, ..state }
+      }
+    }
+  }
+}
+
 struct TxState {
   active: u1,
   header: Header,

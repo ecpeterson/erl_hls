@@ -11,8 +11,9 @@ lets `gen_statem` postpone events, this arrangement depends on translated user
 code not bypassing the controller with a low-level `receive`.  It is
 deliberately not part of `xls_gs`: that runtime retains direct
 `gen_server`-style dispatch and does not provide selective receive.  The module
-is the CPU reference semantics for a future bounded FPGA mailbox
-implementation.
+is the CPU reference semantics for the bounded FPGA mailbox emitted by the
+`xls_statem` lowering; that wrapper grants the stream receiver a slot credit
+before it can accept a frame's first beat.
 
 Reservation is the serialized admission point.  It consumes capacity before
 the transport accepts or assembles a complete message.  Once separate slots

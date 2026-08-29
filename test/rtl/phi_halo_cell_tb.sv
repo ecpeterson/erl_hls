@@ -11,7 +11,7 @@ module phi_halo_cell_tb;
 
     wire [32:0] output_beat;
     wire output_valid;
-    reg output_ready = 1'b1;
+    reg output_ready = 1'b0;
 
     reg [31:0] observed_word;
 
@@ -55,39 +55,16 @@ module phi_halo_cell_tb;
     endtask
 
     task automatic send_halo;
-        input [7:0] tag;
         input [31:0] epoch;
         input [31:0] layer_zero;
         input [31:0] layer_one;
         begin
-            send_beat(header(tag, 8'h00, 8'd3), 1'b0);
+            send_beat(header(8'd3, 8'h00, 8'd3), 1'b0);
             send_beat(epoch, 1'b0);
-            // DSLX array element zero occupies the most-significant bits, so
-            // the least-significant-word-first AXIS format carries layer one
-            // before layer zero.  The generated Erlang codec hides this.
+            // Fixed arrays cast element zero into the most-significant bits,
+            // so the least-significant-word-first wire order is reversed.
             send_beat(layer_one, 1'b0);
             send_beat(layer_zero, 1'b1);
-        end
-    endtask
-
-    task automatic send_zero_halos;
-        input [31:0] epoch;
-        begin
-            send_halo(8'd3, epoch, 32'd0, 32'd0);
-            send_halo(8'd4, epoch, 32'd0, 32'd0);
-            send_halo(8'd5, epoch, 32'd0, 32'd0);
-            send_halo(8'd6, epoch, 32'd0, 32'd0);
-        end
-    endtask
-
-    task automatic send_diffuse;
-        input [7:0] txid;
-        input [31:0] epoch;
-        input [31:0] charge;
-        begin
-            send_beat(header(8'd7, txid, 8'd2), 1'b0);
-            send_beat(epoch, 1'b0);
-            send_beat(charge, 1'b1);
         end
     endtask
 
@@ -95,6 +72,8 @@ module phi_halo_cell_tb;
         input [31:0] expected_word;
         input expected_last;
         begin : wait_for_beat
+            @(negedge clk);
+            output_ready = 1'b1;
             forever begin
                 @(posedge clk);
                 if (output_valid && output_ready) begin
@@ -114,22 +93,22 @@ module phi_halo_cell_tb;
         end
     endtask
 
-    task automatic expect_field;
-        input [7:0] txid;
+    task automatic expect_halo;
         input [31:0] epoch;
         input [31:0] layer_zero;
         input [31:0] layer_one;
         begin
-            expect_beat(header(8'd8, txid, 8'd3), 1'b0);
+            expect_beat(header(8'd3, 8'h00, 8'd3), 1'b0);
             expect_beat(epoch, 1'b0);
-            // See send_halo: fixed-size arrays use reverse wire order.
             expect_beat(layer_one, 1'b0);
             expect_beat(layer_zero, 1'b1);
+            @(negedge clk);
+            output_ready = 1'b0;
         end
     endtask
 
     initial begin : watchdog
-        #2000000;
+        #3000000;
         $display("FAIL: phi halo simulation timed out");
         $fatal(1);
     end
@@ -139,17 +118,38 @@ module phi_halo_cell_tb;
         @(negedge clk);
         reset = 1'b0;
 
-        send_zero_halos(32'd0);
-        send_diffuse(8'h11, 32'd0, 32'h20000000);
-        expect_field(8'h11, 32'd1, 32'h20000000, 32'd0);
+        // Every cell seeds the mesh; no coordinator sends a diffuse request.
+        // Until that boot output commits, Service has not reserved an input
+        // slot and ReservedRx must not accept even the first beat of a frame.
+        repeat (3) @(posedge clk);
+        if (input_ready !== 1'b0) begin
+            $display("FAIL: input became ready without mailbox credit");
+            $fatal(1);
+        end
+        expect_halo(32'd0, 32'd0, 32'd0);
 
-        // Multiplication by ten overflows u32 before the right shift. This
-        // distinguishes fixed-width DSLX arithmetic from BEAM bignums.
-        send_zero_halos(32'd1);
-        send_diffuse(8'h12, 32'd1, 32'd0);
-        expect_field(8'h12, 32'd2, 32'h04000000, 32'h04000000);
+        send_halo(32'd0, 32'd32, 32'd48);
+        send_halo(32'd0, 32'd64, 32'd80);
+        send_halo(32'd0, 32'd16, 32'd32);
+        send_halo(32'd0, 32'd48, 32'd64);
+        expect_halo(32'd1, 32'd15, 32'd14);
 
-        $display("PASS: phi halo generated RTL behavior");
+        // Four epoch-2 messages arrive around epoch-1 messages. They are
+        // retained while younger current input completes the first join, then
+        // replayed after the outer phase toggles.
+        send_halo(32'd1, 32'd16, 32'd32);
+        send_halo(32'd2, 32'd0, 32'd0);
+        send_halo(32'd1, 32'd16, 32'd32);
+        send_halo(32'd2, 32'd0, 32'd0);
+        send_halo(32'd1, 32'd16, 32'd32);
+        send_halo(32'd2, 32'd0, 32'd0);
+        send_halo(32'd2, 32'd0, 32'd0);
+        send_halo(32'd1, 32'd16, 32'd32);
+
+        expect_halo(32'd2, 32'd20, 32'd18);
+        expect_halo(32'd3, 32'd19, 32'd13);
+
+        $display("PASS: autonomous phi mailbox RTL behavior");
         $finish;
     end
 endmodule

@@ -1,48 +1,42 @@
 -module(xls_statem).
 -moduledoc """
-A bounded CPU reference runtime for a small, explicit subset of `gen_statem`.
+A bounded CPU scheduler for an XLS-shaped state machine.
 
-The callback has an outer state name and a separate data value.  Returning
-`postpone` keeps the current event resident in an `xls_mailbox`.  Postponed
-events are excluded while the outer state name is unchanged, even when the
-data value changes.  Only a transition for which `NextState =/= State` makes
-all postponed events eligible again, in their original arrival order.  This is
-the same retry boundary used by `gen_statem`.
+The scheduler borrows one semantic rule from `gen_statem`: a postponed input
+is retried only after the outer phase atom changes. Updating the separate data
+value, or returning the same phase again, does not make it eligible. It
+does not otherwise reproduce the `gen_statem` callback API.
 
-The callback surface follows `gen_statem`'s `handle_event_function` mode, with
-deliberately narrower types: state names are atoms, `init/1` returns only
-`{ok, StateName, Data}`, and event callbacks return `keep_state_and_data`,
-`keep_state`, or `next_state`, optionally followed by `postpone` and reply
-actions.  An optional `terminate/3` callback is honored.  Init actions,
-timeouts, state-enter calls, `next_event`, hibernation, hot code upgrades, and
-fabric proxying are not implemented.
+Every transition returns one fixed product:
 
-An event is postponed only when its matching callback explicitly returns a
-postpone action.  A missing `handle_event/4` clause or a callback exception
-crashes the runtime, as it does in `gen_statem`; it is not treated as a
-selective-receive miss.
+```
+{{Emit, Output}, {NextPhase, NextData}, Directive}
+```
 
-The bounded mailbox begins after the outer BEAM mailbox: callers of this CPU
-model can still enqueue unbounded raw process messages before this runtime
-admits them.  A fabric implementation must reserve capacity before accepting a
-frame rather than relying on this host-side boundary.
+`Directive` is `consume`, `postpone`, or `fail`. `Emit` permits at most one
+output per consumed input; a postponed or failing transition cannot emit.
+This closed shape has a direct XLS representation and avoids both tagged-tuple
+return unions and unbounded action lists. An XLS implementation represents a
+suppressed output as a zero `axis::Frame`.
 
-If this host-side boundary fills, a call receives `{error, mailbox_full}`;
-casts and ordinary process messages stop the runtime because they provide no
-admission response channel.
+The callback receives one application message type, not OTP's disjoint union
+of calls, casts, and info events. Missing clauses, callback exceptions, a
+`fail` directive, and exhausting the bounded mailbox stop the CPU scheduler.
+The generated fabric latches a failed machine inert and issues one slot credit
+before its stream receiver can accept the first beat of a frame. It does not
+provide OTP termination diagnostics.
+
+Postponed inputs retain capacity. A protocol must therefore size the mailbox
+so that an input capable of changing phase can still be admitted. Otherwise
+the CPU model fails on overflow and a backpressured fabric can make no progress.
+
+As with any host-side reference process, the ordinary BEAM mailbox precedes
+this bounded queue. It is a semantic model, not a host admission guarantee.
 """.
 
 -behaviour(gen_server).
 
--export([
-    start_link/3,
-    stop/1,
-    call/2,
-    cast/2,
-    send_request/2,
-    receive_response/2,
-    info/1
-]).
+-export([start_link/3, stop/1, send/2, info/1]).
 -export([
     init/1,
     handle_call/3,
@@ -51,267 +45,237 @@ admission response channel.
     terminate/2,
     code_change/3
 ]).
+-export_type([phase/0, directive/0, conclusion/0]).
 
--type state_name() :: atom().
+-type phase() :: atom().
 -type data() :: term().
--type event_type() :: {call, gen_server:from()} | cast | info.
--type start_option() :: {mailbox_capacity, pos_integer()}.
--type response_timeout() :: timeout() | {abs, integer()}.
--type reply_action() :: {reply, gen_server:from(), term()}.
--type action() :: postpone | {postpone, boolean()} | reply_action().
--type actions() :: action() | [action()].
--type callback_result() ::
-    keep_state_and_data |
-    {keep_state_and_data, actions()} |
-    {keep_state, data()} |
-    {keep_state, data(), actions()} |
-    {next_state, state_name(), data()} |
-    {next_state, state_name(), data(), actions()}.
+-type directive() :: consume | postpone | fail.
+-type conclusion() :: {
+    {Emit :: boolean(), Output :: term()},
+    {NextPhase :: phase(), NextData :: data()},
+    directive()
+}.
+-type start_option() ::
+    {mailbox_capacity, 1..255} |
+    {output, pid()}.
 
--callback callback_mode() -> handle_event_function.
--callback init(term()) -> {ok, state_name(), data()}.
--callback handle_event(event_type(), term(), state_name(), data()) ->
-    callback_result().
--callback terminate(term(), state_name(), data()) -> term().
+-callback init(term()) -> {
+    {Emit :: boolean(), Output :: term()},
+    {InitialPhase :: phase(), InitialData :: data()}
+}.
+-callback transition(term(), {phase(), data()}) -> conclusion().
+-callback terminate(term(), phase(), data()) -> term().
 
 -optional_callbacks([terminate/3]).
 
 -record(state, {
     module :: module(),
-    state_name :: state_name(),
+    phase :: phase(),
     data :: data(),
+    output :: pid(),
     mailbox :: xls_mailbox:mailbox(),
     postponed = #{} :: #{non_neg_integer() => true},
-    next_event_id = 0 :: non_neg_integer()
+    next_message_id = 0 :: non_neg_integer()
 }).
 
--doc "Starts a state machine with one required `{mailbox_capacity, N}` option.".
+-doc "Starts a machine with a required mailbox capacity in `1..255`.".
 -spec start_link(module(), term(), [start_option()]) ->
     gen_server:start_ret().
-start_link(Module, Arg, Options) when is_atom(Module), is_list(Options) ->
-    Capacity = mailbox_capacity(Options),
-    gen_server:start_link(?MODULE, {Module, Arg, Capacity}, []);
-start_link(_Module, _Arg, _Options) ->
-    error(badarg).
+start_link(Module, Arg, Options) ->
+    Caller = self(),
+    {Capacity, Output} = start_options(Options, Caller),
+    gen_server:start_link(?MODULE, {Module, Arg, Capacity, Output}, []).
 
 -spec stop(pid()) -> ok.
 stop(PID) ->
     gen_server:stop(PID).
 
--spec call(pid(), term()) -> term().
-call(PID, Request) ->
-    gen_server:call(PID, Request).
+-doc "Asynchronously sends one application message to the CPU scheduler.".
+-spec send(pid(), term()) -> ok.
+send(PID, Message) ->
+    gen_server:cast(PID, Message).
 
--spec cast(pid(), term()) -> ok.
-cast(PID, Event) ->
-    gen_server:cast(PID, Event).
-
--doc "Starts an asynchronous call compatible with `receive_response/2`.".
--spec send_request(pid(), term()) -> gen_server:request_id().
-send_request(PID, Request) ->
-    gen_server:send_request(PID, Request).
-
--spec receive_response(gen_server:request_id(), response_timeout()) ->
-    {reply, term()} | {error, term()} | timeout.
-receive_response(RequestID, Timeout) ->
-    gen_server:receive_response(RequestID, Timeout).
-
--doc "Returns the outer state, callback data, and bounded queue counters.".
+-doc "Returns the outer phase, callback data, and bounded queue counters.".
 -spec info(pid()) -> map().
 info(PID) ->
     state_info(sys:get_state(PID)).
 
-init({Module, Arg, Capacity}) ->
-    handle_event_function = Module:callback_mode(),
-    case Module:init(Arg) of
-        {ok, InitialState, Data} when is_atom(InitialState) ->
-            {ok, #state{
-                module = Module,
-                state_name = InitialState,
-                data = Data,
-                mailbox = xls_mailbox:new(Capacity)
-            }};
-        Result ->
-            {stop, {bad_xls_statem_init, Result}}
-    end.
+init({Module, Arg, Capacity, Output}) ->
+    {{Emit, InitialOutput}, {Phase, Data}} = Module:init(Arg),
+    true = is_atom(Phase),
+    true = is_boolean(Emit),
+    State = #state{
+        module = Module,
+        phase = Phase,
+        data = Data,
+        output = Output,
+        mailbox = xls_mailbox:new(Capacity)
+    },
+    maybe_emit(Emit, InitialOutput, State),
+    {ok, State}.
 
-handle_call(Event, From, State0) ->
-    case enqueue({call, From}, Event, State0) of
-        {ok, State1} ->
-            {noreply, process_events(State1)};
-        {error, full} ->
-            {reply, {error, mailbox_full}, State0}
-    end.
+handle_call(Request, _From, State) ->
+    {stop, {unsupported_xls_statem_call, Request},
+        {error, unsupported_call}, State}.
 
-handle_cast(Event, State0) ->
-    case enqueue(cast, Event, State0) of
-        {ok, State1} ->
-            {noreply, process_events(State1)};
-        {error, full} ->
-            {stop, {mailbox_full, Event}, State0}
-    end.
+handle_cast(Message, State0) ->
+    admit_and_process(Message, State0).
 
-handle_info(Event, State0) ->
-    case enqueue(info, Event, State0) of
-        {ok, State1} ->
-            {noreply, process_events(State1)};
-        {error, full} ->
-            {stop, {mailbox_full, Event}, State0}
-    end.
+handle_info(Message, State0) ->
+    admit_and_process(Message, State0).
 
 terminate(Reason, #state{
     module = Module,
-    state_name = StateName,
+    phase = Phase,
     data = Data
 }) ->
+    %%%% This callback is host-side diagnostics and is not lowered into XLS.
     case erlang:function_exported(Module, terminate, 3) of
-        true -> Module:terminate(Reason, StateName, Data);
+        true -> Module:terminate(Reason, Phase, Data);
         false -> ok
     end.
 
 code_change(_OldVersion, _State, _Extra) ->
     {error, xls_statem_code_change_not_supported}.
 
-enqueue(Type, Content, State = #state{
+admit_and_process(Message, State0) ->
+    case enqueue(Message, State0) of
+        {ok, State1} ->
+            case process_messages(State1) of
+                {ok, State2} -> {noreply, State2};
+                {stop, Reason, State2} -> {stop, Reason, State2}
+            end;
+        {error, full} ->
+            {stop, {mailbox_full, Message}, State0}
+    end.
+
+enqueue(Message, State = #state{
     mailbox = Mailbox0,
-    next_event_id = EventID
+    next_message_id = MessageID
 }) ->
     Generation = maps:get(generation, xls_mailbox:info(Mailbox0)),
     case xls_mailbox:reserve(Generation, self(), Mailbox0) of
         {error, full, _Mailbox} ->
             {error, full};
         {ok, Reservation, Mailbox1} ->
-            Event = {EventID, Type, Content},
+            Entry = {MessageID, Message},
             {ok, Mailbox2} = xls_mailbox:commit(
                 Reservation,
-                Event,
+                Entry,
                 Mailbox1
             ),
             {ok, State#state{
                 mailbox = Mailbox2,
-                next_event_id = EventID + 1
+                next_message_id = MessageID + 1
             }}
     end.
 
-process_events(State = #state{
+process_messages(State = #state{
     mailbox = Mailbox,
     postponed = Postponed
 }) ->
-    NotPostponed = fun({EventID, _Type, _Content}) ->
-        not maps:is_key(EventID, Postponed)
+    Eligible = fun({MessageID, _Message}) ->
+        not maps:is_key(MessageID, Postponed)
     end,
-    case xls_mailbox:select([NotPostponed], Mailbox) of
+    case xls_mailbox:select([Eligible], Mailbox) of
         none ->
-            State;
-        {ok, Selection, 1, Event} ->
-            process_event(Selection, Event, State)
+            {ok, State};
+        {ok, Selection, 1, Entry} ->
+            process_message(Selection, Entry, State)
     end.
 
-process_event(
+process_message(
     Selection,
-    {EventID, Type, Content},
+    {MessageID, Message},
     State = #state{
         module = Module,
-        state_name = StateName,
+        phase = Phase,
         data = Data,
         mailbox = Mailbox0,
         postponed = Postponed0
     }
 ) ->
-    Result = Module:handle_event(Type, Content, StateName, Data),
-    {NextStateName, NextData, Actions} = normalize_result(
-        Result,
-        StateName,
-        Data
-    ),
-    Postpone = postpone_action(Actions),
-    ok = perform_actions(Actions),
-    {Mailbox1, Postponed1} = case Postpone of
-        true ->
-            {Mailbox0, Postponed0#{EventID => true}};
-        false ->
-            {ok, {EventID, Type, Content}, ConsumedMailbox} =
+    Conclusion = Module:transition(Message, {Phase, Data}),
+    {{Emit, Output}, {NextPhase, NextData}, Directive} = Conclusion,
+    ok = validate_conclusion(Emit, NextPhase, Directive),
+    NextState0 = State#state{
+        phase = NextPhase,
+        data = NextData
+    },
+    case Directive of
+        fail ->
+            {stop, {xls_statem_failure, Message}, NextState0};
+        postpone ->
+            finish_transition(
+                Phase,
+                NextState0#state{
+                    postponed = Postponed0#{MessageID => true}
+                }
+            );
+        consume ->
+            maybe_emit(Emit, Output, State),
+            {ok, {MessageID, Message}, Mailbox1} =
                 xls_mailbox:consume(Selection, Mailbox0),
-            {ConsumedMailbox, maps:remove(EventID, Postponed0)}
+            finish_transition(
+                Phase,
+                NextState0#state{
+                    mailbox = Mailbox1,
+                    postponed = maps:remove(MessageID, Postponed0)
+                }
+            )
+    end.
+
+finish_transition(PreviousPhase, State0) ->
+    State1 = case State0#state.phase =/= PreviousPhase of
+        true -> State0#state{postponed = #{}};
+        false -> State0
     end,
-    StateChanged = NextStateName =/= StateName,
-    NextPostponed = case StateChanged of
-        true -> #{};
-        false -> Postponed1
-    end,
-    process_events(State#state{
-        state_name = NextStateName,
-        data = NextData,
-        mailbox = Mailbox1,
-        postponed = NextPostponed
-    }).
+    process_messages(State1).
 
-normalize_result(keep_state_and_data, StateName, Data) ->
-    {StateName, Data, []};
-normalize_result({keep_state_and_data, Actions}, StateName, Data) ->
-    {StateName, Data, listify(Actions)};
-normalize_result({keep_state, NewData}, StateName, _Data) ->
-    {StateName, NewData, []};
-normalize_result({keep_state, NewData, Actions}, StateName, _Data) ->
-    {StateName, NewData, listify(Actions)};
-normalize_result({next_state, NextState, NewData}, _StateName, _Data)
-        when is_atom(NextState) ->
-    {NextState, NewData, []};
-normalize_result(
-    {next_state, NextState, NewData, Actions},
-    _StateName,
-    _Data
-) when is_atom(NextState) ->
-    {NextState, NewData, listify(Actions)};
-normalize_result(Result, _StateName, _Data) ->
-    error({bad_xls_statem_result, Result}).
+validate_conclusion(Emit, NextPhase, consume)
+        when is_boolean(Emit), is_atom(NextPhase) ->
+    ok;
+validate_conclusion(false, NextPhase, Directive)
+        when is_atom(NextPhase),
+             (Directive =:= postpone orelse Directive =:= fail) ->
+    ok;
+validate_conclusion(Emit, NextPhase, Directive) ->
+    error({bad_xls_statem_conclusion, Emit, NextPhase, Directive}).
 
-listify(Actions) when is_list(Actions) ->
-    Actions;
-listify(Action) ->
-    [Action].
-
-postpone_action(Actions) ->
-    lists:foldl(
-        fun
-            (postpone, _Postpone) -> true;
-            ({postpone, Value}, _Postpone) when is_boolean(Value) -> Value;
-            ({reply, _From, _Reply}, Postpone) -> Postpone;
-            (Action, _Postpone) -> error({bad_xls_statem_action, Action})
-        end,
-        false,
-        Actions
-    ).
-
-perform_actions(Actions) ->
-    lists:foreach(
-        fun
-            ({reply, From, Reply}) -> gen_server:reply(From, Reply);
-            (postpone) -> ok;
-            ({postpone, Value}) when is_boolean(Value) -> ok;
-            (Action) -> error({bad_xls_statem_action, Action})
-        end,
-        Actions
-    ).
+maybe_emit(false, _Output, _State) ->
+    ok;
+maybe_emit(true, Output, #state{output = Recipient}) ->
+    Recipient ! {xls_statem, self(), Output},
+    ok.
 
 state_info(#state{
-    state_name = StateName,
+    phase = Phase,
     data = Data,
     mailbox = Mailbox,
     postponed = Postponed
 }) ->
     #{
-        state_name => StateName,
+        phase => Phase,
         data => Data,
         postponed => map_size(Postponed),
         mailbox => xls_mailbox:info(Mailbox)
     }.
 
-mailbox_capacity(Options) ->
-    case Options of
-        [{mailbox_capacity, Capacity}]
-                when is_integer(Capacity), Capacity > 0 ->
-            Capacity;
-        _ ->
-            error(badarg)
+start_options(Options, DefaultOutput) ->
+    Known = lists:all(
+        fun
+            ({mailbox_capacity, _Capacity}) -> true;
+            ({output, _Output}) -> true;
+            (_Option) -> false
+        end,
+        Options
+    ),
+    Capacity = proplists:get_value(mailbox_capacity, Options),
+    Output = proplists:get_value(output, Options, DefaultOutput),
+    case Known andalso
+            is_integer(Capacity) andalso
+            Capacity > 0 andalso Capacity =< 255 andalso
+            is_pid(Output) of
+        true -> {Capacity, Output};
+        false -> error(badarg)
     end.
