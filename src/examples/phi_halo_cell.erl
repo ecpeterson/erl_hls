@@ -21,8 +21,11 @@ The cell has three control phases with direct protocol meanings:
     the largest neighboring value and its direction when that maximum is
     unique. A tie has no candidate direction. The cell then moves to
     `flipping`.
-  * On entering `flipping`, it casts one anyon update to each neighbor. Four
-    anyon messages complete the step and move the cell back to `gathering`.
+  * On entering `flipping`, it advances a small pseudorandom generator and
+    moves a local anyon toward the unique comparison winner on heads. Exactly
+    one neighbor receives a present anyon update for a move; the other three
+    receive an absent update. Four incoming anyon messages complete the step
+    and move the cell back to `gathering`.
 
 Phi messages carry a wrapping diffusion epoch in their first `u32` word. The
 cell derives that epoch from its decoder step and diffusion round, so repeated
@@ -51,15 +54,21 @@ cell has emitted the message needed to release the first.
 This slice performs two diffusion rounds per anyon step. Two is the smallest
 round count which exercises same-phase re-entry and next-epoch postponement;
 it is a compile-time protocol fixture rather than a convergence policy. The
-stochastic coin takes its no-move branch, so the recorded comparison winner is
-not yet used and every flipping entry sends `present = false`; input noise is
-also absent. Incoming anyon updates are still combined by parity so the phase
-protocol does not erase a move supplied by a test or a future neighbor.
+coin is the most-significant bit of a deterministic `xorshift32` sequence. Its
+fixed seed makes CPU and RTL runs reproducible, but also correlates the coins
+of cells which begin together. A mesh intended to model independent coins must
+supply distinct nonzero seeds through a future static per-instance
+configuration mechanism. Input noise is still absent.
 
-A fuller decoder needs a configurable diffusion stopping rule, move selection
-based on a post-diffusion neighbor comparison, measurement input, and
-correction output. Those additions should preserve the three genuine barrier
-phases; a parity-only wakeup phase would not have direct protocol meaning.
+An outgoing move toggles the local anyon before incoming moves are combined by
+parity. Consequently, simultaneous arrivals and departures produce the same
+occupancy regardless of message order. This module does not emit the physical
+correction associated with the selected edge.
+
+A fuller decoder needs a configurable diffusion stopping rule, independent
+per-cell coin streams, measurement input, and correction output. Those
+additions should preserve the three genuine barrier phases; a parity-only
+wakeup phase would not have direct protocol meaning.
 
 ## Field arithmetic
 
@@ -86,6 +95,7 @@ keep the CPU model aligned with fixed-width generated arithmetic.
 -define(MAILBOX_CAPACITY, 5).
 -define(NEIGHBOR_COUNT, 4).
 -define(DIFFUSION_ROUNDS, 2).
+-define(PRNG_SEED, 16#6d2b79f5).
 -define(U32_MASK, 16#ffffffff).
 -define(NO_DIRECTION, 0).
 -define(NORTH_MASK, 1).
@@ -105,10 +115,12 @@ keep the CPU model aligned with fixed-width generated arithmetic.
 %% TODO: Replace the two-element xls_lists values with xls_vec once vector
 %% arithmetic is part of the lowerable library.
 %% TODO: Replace the fixed diffusion count with the decoder's stopping rule and
-%% use the recorded comparison winner to drive a nontrivial coin and correction
-%% output.
+%% expose the measurement and physical-correction boundaries.
 %% TODO: Revisit neighbor configuration so FPGA topology can be fixed at
 %% compile time while CPU models retain ergonomic runtime wiring.
+%% TODO: Give statically instantiated cells distinct nonzero PRNG seeds. The
+%% fixed seed above is a reproducible single-cell fixture, not an independent
+%% random source for every cell in a mesh.
 %% TODO: Separate logical field types from word-aligned wire codecs so
 %% #anyon_move.present can be boolean in lowerable callbacks.
 
@@ -141,7 +153,8 @@ keep the CPU model aligned with fixed-width generated arithmetic.
     best_phi0 = xls_type:zero() :: xls_nums:u32(),
     best_direction = xls_type:zero() :: xls_nums:u32(),
     moves_received = xls_type:zero() :: xls_nums:u8(),
-    anyon = xls_type:zero() :: xls_nums:u32()
+    anyon = xls_type:zero() :: xls_nums:u32(),
+    random_state = xls_type:zero() :: xls_nums:u32()
 }).
 
 -type phase() :: gathering | comparing | flipping.
@@ -231,7 +244,7 @@ runtime_info(PID) ->
 
 -spec init(any()) -> {ok, phase(), #cell{}}.
 init([]) ->
-    {ok, gathering, #cell{}}.
+    {ok, gathering, #cell{random_state = ?PRNG_SEED}}.
 
 -spec handle_enter(phase(), phase(), #cell{}) ->
     xls_statem:enter_result().
@@ -274,13 +287,57 @@ handle_enter(_OldPhase, comparing, Cell) ->
         {cast, south, South}
     ]};
 handle_enter(_OldPhase, flipping, Cell) ->
-    %% The dummy coin keeps the local anyon and reports no outgoing move.
-    Message = #anyon_move{step = Cell#cell.step, present = 0},
-    {Cell, [
-        {cast, north, Message},
-        {cast, east, Message},
-        {cast, west, Message},
-        {cast, south, Message}
+    NextRandom = xls_prng:xorshift32(Cell#cell.random_state),
+    Heads = (NextRandom bsr 31) =:= 1,
+    Move = Cell#cell.anyon =:= 1 andalso
+        Cell#cell.best_direction =/= ?NO_DIRECTION andalso
+        Heads,
+    Absent = xls_type:as(xls_nums:u32(), 0),
+    Present = case Move of
+        false -> Absent;
+        true -> xls_type:as(xls_nums:u32(), 1)
+    end,
+    NorthPresent = case Cell#cell.best_direction =:= ?NORTH_MASK of
+        false -> Absent;
+        true -> Present
+    end,
+    EastPresent = case Cell#cell.best_direction =:= ?EAST_MASK of
+        false -> Absent;
+        true -> Present
+    end,
+    WestPresent = case Cell#cell.best_direction =:= ?WEST_MASK of
+        false -> Absent;
+        true -> Present
+    end,
+    SouthPresent = case Cell#cell.best_direction =:= ?SOUTH_MASK of
+        false -> Absent;
+        true -> Present
+    end,
+    North = #anyon_move{
+        step = Cell#cell.step,
+        present = NorthPresent
+    },
+    East = #anyon_move{
+        step = Cell#cell.step,
+        present = EastPresent
+    },
+    West = #anyon_move{
+        step = Cell#cell.step,
+        present = WestPresent
+    },
+    South = #anyon_move{
+        step = Cell#cell.step,
+        present = SouthPresent
+    },
+    Updated = Cell#cell{
+        anyon = Cell#cell.anyon bxor Present,
+        random_state = NextRandom
+    },
+    {Updated, [
+        {cast, north, North},
+        {cast, east, East},
+        {cast, west, West},
+        {cast, south, South}
     ]}.
 
 -spec handle_cast(#phi{} | #phi0{} | #anyon_move{}, phase(), #cell{}) ->
