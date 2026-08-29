@@ -65,6 +65,9 @@ jobs:
           XLS_ROOT: ${{ runner.temp }}/xls
         run: bash tools/remote_xls_sim.sh "$PWD/_build/xls_sim/regsvc" "$XLS_ROOT"
 
+      - name: Verify checked generated RTL
+        run: cmp _build/xls_sim/regsvc/phi_halo_cell.v src/examples/phi_halo_cell.v
+
       - name: Upload simulation diagnostics
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

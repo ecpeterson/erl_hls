@@ -162,94 +162,7 @@ to_xls_gs(Filename, Forms) ->
     print(Emitted).
 
 to_xls_statem(Filename, Forms, PhaseNames) ->
-    [MessageName] = find_attribute(Forms, xls_tags),
-    Capacity = find_attribute(Forms, xls_mailbox_capacity),
-    true = is_integer(Capacity) andalso Capacity > 0 andalso Capacity =< 255,
-    DataName = find_attribute(Forms, xls_data),
-    MessageRecord = find_record(Forms, MessageName),
-    DataRecord = find_record(Forms, DataName),
-    ok = validate_record_defaults(MessageRecord),
-    ok = validate_record_defaults(DataRecord),
-
-    EnumAtoms = enum_atoms(PhaseNames),
-    [InitClause] = find_function(Forms, init, 1),
-    [TransitionClause] = find_function(Forms, transition, 2),
-    InitPostprocessor = fun(R) -> [
-        "Machine {\n",
-        "  boot_pending: ", R, ".0.0,\n",
-        "  boot: ", R, ".0.1.1,\n",
-        "  phase: ", R, ".1.0,\n",
-        "  data: ", R, ".1.1.1,\n",
-        "  ..zero!<Machine>()\n",
-        "}"
-    ] end,
-    {InitBody, InitResult} = branch_from_clause(
-        InitClause,
-        [],
-        DataName,
-        InitPostprocessor,
-        "zero!<Machine>()",
-        EnumAtoms
-    ),
-    TransitionPostprocessor = fun(R) -> [
-        "(if ", R, ".0.0 {\n",
-        "    axis::pack(Tag::", uppercase(MessageName), " as u8, ",
-        R, ".0.1.2)\n",
-        "  } else { zero!<axis::Frame>() },\n",
-        "  ", R, ".1.0, ", R, ".1.1.1, ", R, ".2)"
-    ] end,
-    TransitionFailure = [
-        "(zero!<axis::Frame>(), phase, data, Directive::FAIL)"
-    ],
-    {TransitionBody, TransitionResult} = branch_from_clause(
-        TransitionClause,
-        [
-            "message",
-            ["(phase, (Tag::", uppercase(DataName), ", data))"]
-        ],
-        DataName,
-        TransitionPostprocessor,
-        TransitionFailure,
-        EnumAtoms
-    ),
-    RecordDeclarations = print([
-        struct_from_record(MessageRecord), "\n",
-        structfrombits_from_record(MessageRecord), "\n",
-        bitsfromstruct_from_record(MessageRecord), "\n",
-        struct_from_record(DataRecord), "\n",
-        structfrombits_from_record(DataRecord), "\n",
-        bitsfromstruct_from_record(DataRecord), "\n"
-    ]),
-    xls_statem_codegen:emit(#{
-        source => Filename,
-        capacity => Capacity,
-        phases => PhaseNames,
-        message_name => MessageName,
-        data_name => DataName,
-        record_declarations => RecordDeclarations,
-        init => #{
-            body => print(InitBody),
-            result => print(InitResult)
-        },
-        transition => #{
-            body => print(TransitionBody),
-            result => print(TransitionResult)
-        }
-    }).
-
-enum_atoms(PhaseNames) ->
-    PhaseAtoms = [
-        {Name, ["Phase::", uppercase(Name)]} || Name <- PhaseNames
-    ],
-    DirectiveAtoms = [
-        {consume, "Directive::CONSUME"},
-        {postpone, "Directive::POSTPONE"},
-        {fail, "Directive::FAIL"}
-    ],
-    maps:from_list(PhaseAtoms ++ DirectiveAtoms).
-
-uppercase(Atom) ->
-    string:uppercase(atom_to_list(Atom)).
+    xls_statem_lower:lower(Filename, Forms, PhaseNames).
 
 %% We employ a limited IR with three kinds of objects:
 %%  + static objects which admit expression in terms of the XLS runtime,
@@ -336,13 +249,10 @@ branch_from_clause(
     ),
 
     OutState = instr(ComputeState, [
-        "if (", [
-            ["(", Name, "_1 != ", Name, "_", integer_to_list(VV), ") || "]
-            ||  K := V <- ComputeState#clause_state.named_counters,
-                V > 1,
-                VV <- lists:seq(2, V),
-                Name <- [if is_atom(K) -> atom_to_list(K) ; true -> K end]
-        ], "bool:false) {\n",
+        "if (", mismatch_expression(
+            ComputeState#clause_state.named_counters,
+            #{}
+        ), ") {\n",
         "    ", Failure, "\n",
         "} else {\n",
             %% TODO: it would be preferable to branch on the REPLY/NOREPLY tag,
@@ -430,6 +340,8 @@ statement_from_statement({record, _L, ToUpdate, NameAtom, UpdateFields}, State) 
         "}"
     ]),
     instr(SecondState, record_value(NameAtom, reference(SecondState), SecondState));
+statement_from_statement({'case', _L, Condition, Clauses}, State) ->
+    lower_boolean_case(Condition, Clauses, State);
 statement_from_statement({call, _L, MF, Args}, State) ->
     {remote, _1, {atom, _2, Module}, {atom, _3, FAtom}} = MF,
 
@@ -451,6 +363,131 @@ statement_from_statement({match, _L, LHS, RHS}, State) ->
     RHSState = statement_from_statement(RHS, State),
     destructure_lhs(LHS, RHSState).
 
+%% XLS requires all branches of an expression to have one type.  This is the
+%% directly representable subset of Erlang case: a boolean scrutinee, two
+%% unguarded branches, and branch-local bindings whose final expressions have
+%% the same XLS type.  This subset does not implement Erlang's rule for a
+%% variable bound in every branch to become available after the case, so each
+%% branch is emitted as its own lexical block.
+lower_boolean_case(Condition, Clauses, State0) ->
+    {TrueBody, FalseBody} = boolean_case_bodies(Clauses),
+    ConditionState = statement_from_statement(
+        Condition,
+        State0#clause_state{reference = none}
+    ),
+    BranchBase = ConditionState#clause_state{
+        statements = [],
+        reference = none
+    },
+    TrueState = lower_expression_sequence(TrueBody, BranchBase),
+    FalseState = lower_expression_sequence(FalseBody, BranchBase),
+    AnonymousCounter = erlang:max(
+        TrueState#clause_state.anonymous_counter,
+        FalseState#clause_state.anonymous_counter
+    ),
+    CaseMatchCounter = erlang:max(
+        TrueState#clause_state.match_counter,
+        FalseState#clause_state.match_counter
+    ) + 1,
+    BaseCounters = BranchBase#clause_state.named_counters,
+    MergedState = ConditionState#clause_state{
+        anonymous_counter = AnonymousCounter,
+        match_counter = CaseMatchCounter,
+        reference = none
+    },
+    CaseState = instr(MergedState, [
+        "if ", reference(ConditionState), " {\n",
+        lists:reverse(TrueState#clause_state.statements),
+        "  (", reference(TrueState), ", ", mismatch_expression(
+            TrueState#clause_state.named_counters,
+            BaseCounters
+        ), ")\n",
+        "} else {\n",
+        lists:reverse(FalseState#clause_state.statements),
+        "  (", reference(FalseState), ", ", mismatch_expression(
+            FalseState#clause_state.named_counters,
+            BaseCounters
+        ), ")\n",
+        "}"
+    ]),
+    CaseReference = reference(CaseState),
+    MatchBase = "case_match_" ++ integer_to_list(CaseMatchCounter),
+    {ExpectedName, ExpectedState} = uniquify(CaseState, MatchBase),
+    {ActualName, ActualState} = uniquify(ExpectedState, MatchBase),
+    ActualState#clause_state{
+        reference = [CaseReference, ".0"],
+        statements = [
+            ["let ", ActualName, " = ", CaseReference, ".1;\n"],
+            ["let ", ExpectedName, " = bool:false;\n"]
+            | ActualState#clause_state.statements
+        ]
+    }.
+
+boolean_case_bodies(Clauses) ->
+    case lists:foldl(
+        fun
+            ({clause, _Line, [{atom, _PatternLine, true}], [], Body},
+                    {none, False}) ->
+                {Body, False};
+            ({clause, Line, [{atom, _PatternLine, true}], [], _Body},
+                    {_True, _False}) ->
+                error({duplicate_xls_boolean_case_branch, Line, true});
+            ({clause, _Line, [{atom, _PatternLine, false}], [], Body},
+                    {True, none}) ->
+                {True, Body};
+            ({clause, Line, [{atom, _PatternLine, false}], [], _Body},
+                    {_True, _False}) ->
+                error({duplicate_xls_boolean_case_branch, Line, false});
+            (Clause, _Bodies) ->
+                error({unsupported_xls_case_clause, Clause})
+        end,
+        {none, none},
+        Clauses
+    ) of
+        {none, _} -> error({missing_xls_boolean_case_branch, true});
+        {_, none} -> error({missing_xls_boolean_case_branch, false});
+        Bodies -> Bodies
+    end.
+
+lower_expression_sequence(Expressions, State0) ->
+    lists:foldl(
+        fun(Expression, State) ->
+            statement_from_statement(
+                Expression,
+                State#clause_state{reference = none}
+            )
+        end,
+        State0,
+        Expressions
+    ).
+
+mismatch_expression(Counters, Baseline) ->
+    [
+        [
+            [
+                "(", counter_name(Key), "_1 != ", counter_name(Key), "_",
+                integer_to_list(Index), ") || "
+            ]
+            || Index <- rebound_indexes(
+                maps:get(Key, Baseline, 0),
+                Final
+            )
+        ]
+        || Key := Final <- Counters
+    ] ++ ["bool:false"].
+
+rebound_indexes(Baseline, Final) ->
+    First = erlang:max(2, Baseline + 1),
+    case First =< Final of
+        true -> lists:seq(First, Final);
+        false -> []
+    end.
+
+counter_name(Key) when is_atom(Key) ->
+    atom_to_list(Key);
+counter_name(Key) ->
+    Key.
+
 -spec record_value(atom(), ir(), clause_state()) -> iolist().
 record_value(NameAtom, Struct, #clause_state{state_name = NameAtom}) ->
     ["(Tag::", string:uppercase(atom_to_list(NameAtom)), ", ", Struct, ")"];
@@ -470,10 +507,14 @@ destructure_lhs({var, _L, NameAtom}, State) ->
     %% TODO: also want to report eg line number on error, other present state
     {Name, NewState} = uniquify(State, NameAtom),
 
-    %% TODO: make this more gensym-y, rather than just reserving a name class
+    %% Synthetic equality checks use these namespaces. Rejecting them at the
+    %% Erlang boundary keeps their generated bindings hygienic until the IR has
+    %% a proper gensym facility.
     case Name of
         "static_match" ++ _Rest ->
-            error(illegal);
+            error({reserved_xls_variable, NameAtom, static_match});
+        "case_match" ++ _Rest ->
+            error({reserved_xls_variable, NameAtom, case_match});
         _ -> ok
     end,
 
@@ -715,6 +756,8 @@ instr(ClauseState, Place, Expr) ->
 -spec op(Op :: atom(), Args :: [any()]) -> iolist().
 -doc "Translates a built-in Erlang op to an XLS op.".
 op('+', [Left, Right]) -> [Left, " + ", Right];
+op('*', [Left, Right]) -> [Left, " * ", Right];
+op('div', [Left, Right]) -> [Left, " / ", Right];
 op('bsl', [Left, Right]) -> [Left, " << ", Right];
 op('bsr', [Left, Right]) -> [Left, " >> ", Right];
 op('band', [Left, Right]) -> [Left, " & ", Right];
