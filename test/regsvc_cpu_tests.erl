@@ -108,6 +108,9 @@ scenario_(Pid) ->
         ?_assertEqual([3, 4, 0], regsvc:bulk_get(Pid, 0, 3))
     ].
 
+%% Host/VPI polling determines the bridged egress stall total, so these
+%% scenarios check transferred traffic but do not bound app_tx_stall_cycles.
+%% regsvc_pair_tb checks TX backpressure under cycle-controlled stimulus.
 debug_scenario_(Pid, DebugPid) ->
     [
         ?_test(begin
@@ -118,11 +121,7 @@ debug_scenario_(Pid, DebugPid) ->
             ?assertEqual(7, maps:get(app_rx_frames, Counters)),
             ?assertEqual(10, maps:get(app_tx_beats, Counters)),
             ?assertEqual(4, maps:get(app_tx_frames, Counters)),
-            ?assertEqual(0, maps:get(app_rx_stall_cycles, Counters)),
-            %% Egress polling phase is host/VPI-scheduling dependent here. The
-            %% cycle-controlled RTL test checks routed TX stalls while it
-            %% deliberately blocks the shared application output.
-            ?assert(maps:get(app_tx_stall_cycles, Counters) =< 4)
+            ?assertEqual(0, maps:get(app_rx_stall_cycles, Counters))
         end),
         ?_test(begin
             {ok, Trace} = xls_debug:get_trace(DebugPid),
@@ -273,7 +272,6 @@ routed_debug_scenario_(DebugPid) ->
             ?assertEqual(8, maps:get(app_rx_beats, Counters)),
             ?assertEqual(3, maps:get(app_rx_frames, Counters)),
             ?assertEqual(4, maps:get(app_tx_beats, Counters)),
-            ?assertEqual(2, maps:get(app_tx_frames, Counters)),
-            ?assert(maps:get(app_tx_stall_cycles, Counters) =< 2)
+            ?assertEqual(2, maps:get(app_tx_frames, Counters))
         end)
     ].
