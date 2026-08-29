@@ -3,14 +3,17 @@
 A bounded, associative mailbox semantic model.
 
 This module is a state value owned by a trusted process runtime, not a server
-and not an API for remote senders.  A future `xls_gs` or `xls_statem`
-controller will keep it alongside the translated process state and will be the
-only code which calls these functions.  Peers ask the transport to deliver a
-message; the controller performs the corresponding mailbox operations.  Like
-the event queue which lets `gen_statem` postpone events, this arrangement
-depends on translated user code not bypassing the controller with a low-level
-`receive`.  The module is the CPU reference semantics for a future bounded
-FPGA mailbox implementation.
+and not an API for remote senders.  `xls_statem` provides a CPU-side controller
+which keeps it alongside callback data.  Peers ask the transport to deliver a
+message rather than calling these functions themselves; the controller
+performs the corresponding mailbox operations.  Like the event queue which
+lets `gen_statem` postpone events, this arrangement depends on translated user
+code not bypassing the controller with a low-level `receive`.  It is
+deliberately not part of `xls_gs`: that runtime retains direct
+`gen_server`-style dispatch and does not provide selective receive.  The module
+is the CPU reference semantics for the bounded FPGA mailbox emitted by the
+`xls_statem` lowering; that wrapper grants the stream receiver a slot credit
+before it can accept a frame's first beat.
 
 Reservation is the serialized admission point.  It consumes capacity before
 the transport accepts or assembles a complete message.  Once separate slots

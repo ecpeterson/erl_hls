@@ -4,9 +4,8 @@
 %%%%    + erl_syntax might be a little more ergonomic, have a look
 
 -module(xls_parse).
--module_doc """
-Transforms the Erlang source for an `xls_gs` instance into a corresponding XLS
-module.
+-moduledoc """
+Transforms supported Erlang actor modules into corresponding XLS modules.
 """.
 -export([to_xls/1]).
 -export([reference/2, reference/1, instr/2, anonymous_variable/1]).
@@ -17,9 +16,15 @@ module.
 -define(debug(X), begin io:format("~w@~w: ~p~n", [?FUNCTION_NAME, ?LINE, X]), X end).
 
 -spec to_xls(string()) -> iolist().
--doc "Transpiles an Erlang `xls_gs` module to a corresponding XLS module.".
+-doc "Transpiles a supported Erlang actor module to a corresponding XLS module.".
 to_xls(Filename) ->
     {ok, Forms} = parse_file(Filename),
+    case find_optional_attribute(Forms, xls_phases) of
+        none -> to_xls_gs(Filename, Forms);
+        {ok, PhaseNames} -> to_xls_statem(Filename, Forms, PhaseNames)
+    end.
+
+to_xls_gs(Filename, Forms) ->
     PublicStructNames = find_attribute(Forms, xls_tags),
     StateName = state(Forms),
     StateRecord = find_record(Forms, StateName),
@@ -97,14 +102,18 @@ to_xls(Filename) ->
                 fun(R) -> ["(axis::pack(", R, ".1.0 as u8, ", R, ".1.2), ", R, ".2)"] end)]
     ],
     [
-        ["\n", "Tag::", string:uppercase(Op), " => {\n",
-        "let request = ", Op, "_from_bits(frame.payload);\n",
+        ["\n", "Tag::", string:uppercase(TagName), " => {\n",
+        "let request = ", StructFunctionName, "_from_bits(frame.payload);\n",
         Body,
         RetVal, "\n",
         "},\n"]
         ||  Clause <- handle_cast(Forms),
-            Op <- [lists:delete($_, atom_to_list(op_from_clause(Clause)))],
-            {Body, RetVal} <- [branch_from_clause(Clause, ["request", "state_record"], StateName,
+            TagName <- [atom_to_list(op_from_clause(Clause))],
+            StructFunctionName <- [lists:delete($_, TagName)],
+            {Body, RetVal} <- [branch_from_clause(
+                Clause,
+                ["request", "state_record"],
+                StateName,
                 fun(R) -> ["(zero!<axis::Frame>(), ", R, ".1)"] end)]
     ],
     """
@@ -152,6 +161,96 @@ to_xls(Filename) ->
 
     print(Emitted).
 
+to_xls_statem(Filename, Forms, PhaseNames) ->
+    [MessageName] = find_attribute(Forms, xls_tags),
+    Capacity = find_attribute(Forms, xls_mailbox_capacity),
+    true = is_integer(Capacity) andalso Capacity > 0 andalso Capacity =< 255,
+    DataName = find_attribute(Forms, xls_data),
+    MessageRecord = find_record(Forms, MessageName),
+    DataRecord = find_record(Forms, DataName),
+    ok = validate_record_defaults(MessageRecord),
+    ok = validate_record_defaults(DataRecord),
+
+    EnumAtoms = enum_atoms(PhaseNames),
+    [InitClause] = find_function(Forms, init, 1),
+    [TransitionClause] = find_function(Forms, transition, 2),
+    InitPostprocessor = fun(R) -> [
+        "Machine {\n",
+        "  boot_pending: ", R, ".0.0,\n",
+        "  boot: ", R, ".0.1.1,\n",
+        "  phase: ", R, ".1.0,\n",
+        "  data: ", R, ".1.1.1,\n",
+        "  ..zero!<Machine>()\n",
+        "}"
+    ] end,
+    {InitBody, InitResult} = branch_from_clause(
+        InitClause,
+        [],
+        DataName,
+        InitPostprocessor,
+        "zero!<Machine>()",
+        EnumAtoms
+    ),
+    TransitionPostprocessor = fun(R) -> [
+        "(if ", R, ".0.0 {\n",
+        "    axis::pack(Tag::", uppercase(MessageName), " as u8, ",
+        R, ".0.1.2)\n",
+        "  } else { zero!<axis::Frame>() },\n",
+        "  ", R, ".1.0, ", R, ".1.1.1, ", R, ".2)"
+    ] end,
+    TransitionFailure = [
+        "(zero!<axis::Frame>(), phase, data, Directive::FAIL)"
+    ],
+    {TransitionBody, TransitionResult} = branch_from_clause(
+        TransitionClause,
+        [
+            "message",
+            ["(phase, (Tag::", uppercase(DataName), ", data))"]
+        ],
+        DataName,
+        TransitionPostprocessor,
+        TransitionFailure,
+        EnumAtoms
+    ),
+    RecordDeclarations = print([
+        struct_from_record(MessageRecord), "\n",
+        structfrombits_from_record(MessageRecord), "\n",
+        bitsfromstruct_from_record(MessageRecord), "\n",
+        struct_from_record(DataRecord), "\n",
+        structfrombits_from_record(DataRecord), "\n",
+        bitsfromstruct_from_record(DataRecord), "\n"
+    ]),
+    xls_statem_codegen:emit(#{
+        source => Filename,
+        capacity => Capacity,
+        phases => PhaseNames,
+        message_name => MessageName,
+        data_name => DataName,
+        record_declarations => RecordDeclarations,
+        init => #{
+            body => print(InitBody),
+            result => print(InitResult)
+        },
+        transition => #{
+            body => print(TransitionBody),
+            result => print(TransitionResult)
+        }
+    }).
+
+enum_atoms(PhaseNames) ->
+    PhaseAtoms = [
+        {Name, ["Phase::", uppercase(Name)]} || Name <- PhaseNames
+    ],
+    DirectiveAtoms = [
+        {consume, "Directive::CONSUME"},
+        {postpone, "Directive::POSTPONE"},
+        {fail, "Directive::FAIL"}
+    ],
+    maps:from_list(PhaseAtoms ++ DirectiveAtoms).
+
+uppercase(Atom) ->
+    string:uppercase(atom_to_list(Atom)).
+
 %% We employ a limited IR with three kinds of objects:
 %%  + static objects which admit expression in terms of the XLS runtime,
 %%  + phantom objects which do not admit expression in terms of the XLS runtime,
@@ -183,7 +282,8 @@ print({static, integer, Integer}) ->
     named_counters = #{} :: #{atom() => integer()},
     statements = [] :: printable(),
     reference = none :: none | ir(),
-    state_name = undefined :: undefined | atom()
+    state_name = undefined :: undefined | atom(),
+    enum_atoms = #{} :: #{atom() => printable()}
 }).
 -type clause_state() :: #clause_state{}.
 
@@ -195,6 +295,28 @@ print({static, integer, Integer}) ->
 ) -> {printable(), string()}.
 -doc "Processes an Erlang clause from handle_*/2 into XLS.".
 branch_from_clause(Clause, ArgVals, StateName, Postprocessor) ->
+    Failure = [
+        "let s = zero!<State>();\n",
+        "    (axis::pack(Tag::ERROR as u8, ERROR_MATCH_FAILURE), ",
+        "(Tag::STATE, s))"
+    ],
+    branch_from_clause(
+        Clause,
+        ArgVals,
+        StateName,
+        Postprocessor,
+        Failure,
+        #{}
+    ).
+
+branch_from_clause(
+    Clause,
+    ArgVals,
+    StateName,
+    Postprocessor,
+    Failure,
+    EnumAtoms
+) ->
     {clause, _1, ArgPatterns, _2, Body} = Clause,
     InjectMatch = fun
         F({{match, LineNo, LHS, RHS}, Arg}) ->
@@ -210,7 +332,7 @@ branch_from_clause(Clause, ArgVals, StateName, Postprocessor) ->
         fun(Statement, State) ->
             statement_from_statement(Statement, State#clause_state{reference = none})
         end,
-        #clause_state{state_name = StateName}, BigBody
+        #clause_state{state_name = StateName, enum_atoms = EnumAtoms}, BigBody
     ),
 
     OutState = instr(ComputeState, [
@@ -221,9 +343,7 @@ branch_from_clause(Clause, ArgVals, StateName, Postprocessor) ->
                 VV <- lists:seq(2, V),
                 Name <- [if is_atom(K) -> atom_to_list(K) ; true -> K end]
         ], "bool:false) {\n",
-        %% TODO: actually call init here. probably have to write a toplevel state creation fn
-        "    let s = zero!<State>();\n",
-        "    (axis::pack(Tag::ERROR as u8, ERROR_MATCH_FAILURE), (Tag::STATE, s))\n",
+        "    ", Failure, "\n",
         "} else {\n",
             %% TODO: it would be preferable to branch on the REPLY/NOREPLY tag,
             %% but we have to wait for the XLS type system to allow tagged sums,
@@ -241,8 +361,17 @@ expression into a sequence of simple emitted XLS expressions.
 """.
 statement_from_statement(String, State) when is_list(String) ->
     reference(State, String);
-statement_from_statement({atom, _L, Atom}, State) ->
-    reference(State, string:uppercase(atom_to_list(Atom)));
+statement_from_statement({atom, _L, true}, State) ->
+    reference(State, "bool:1");
+statement_from_statement({atom, _L, false}, State) ->
+    reference(State, "bool:0");
+statement_from_statement({atom, _L, Atom}, State = #clause_state{
+    enum_atoms = EnumAtoms
+}) ->
+    reference(
+        State,
+        maps:get(Atom, EnumAtoms, string:uppercase(atom_to_list(Atom)))
+    );
 statement_from_statement({var, _L, Atom}, State) ->
     reference(State, get_name(State, Atom));
 statement_from_statement({integer, _L, Integer}, State) ->
@@ -267,33 +396,36 @@ statement_from_statement({tuple, _L, Slots}, State) ->
     ),
     instr(IntermediateState, ["(", [[Ref, ", "] || Ref <- lists:reverse(BwdReferences)], ")"]);
 statement_from_statement({record, _L, NameAtom, Fields}, State) ->
-    {Assignments, IntermediateState} = lists:foldl(
+    {BwdAssignments, IntermediateState} = lists:foldl(
         fun({record_field, _1, {atom, _2, FieldAtom}, RHS}, {Assignments, ThisState}) ->
             NewState = statement_from_statement(RHS, ThisState#clause_state{reference = none}),
-            {Assignments#{FieldAtom => NewState#clause_state.reference}, NewState}
+            {[{FieldAtom, NewState#clause_state.reference} | Assignments], NewState}
         end,
-        {#{}, State}, Fields
+        {[], State}, Fields
     ),
+    Assignments = lists:reverse(BwdAssignments),
     SecondState = instr(IntermediateState, [
         string:titlecase(lists:delete($_, atom_to_list(NameAtom))), " {\n",
         [["  ", atom_to_list(FieldAtom), ": ", Reference, ",\n"]
-            || FieldAtom := Reference <- Assignments],
+            || {FieldAtom, Reference} <- Assignments],
         "  ..zero!<", string:titlecase(lists:delete($_, atom_to_list(NameAtom))), ">()\n",
         "}"
     ]),
     instr(SecondState, record_value(NameAtom, reference(SecondState), SecondState));
 statement_from_statement({record, _L, ToUpdate, NameAtom, UpdateFields}, State) ->
     InputState = statement_from_statement(ToUpdate, State),
-    {Assignments, IntermediateState} = lists:foldl(
+    {BwdAssignments, IntermediateState} = lists:foldl(
         fun({record_field, _1, {atom, _2, FieldAtom}, RHS}, {Assignments, ThisState}) ->
             NewState = statement_from_statement(RHS, ThisState#clause_state{reference = none}),
-            {Assignments#{FieldAtom => NewState#clause_state.reference}, NewState}
+            {[{FieldAtom, NewState#clause_state.reference} | Assignments], NewState}
         end,
-        {#{}, InputState}, UpdateFields
+        {[], InputState}, UpdateFields
     ),
+    Assignments = lists:reverse(BwdAssignments),
     SecondState = instr(IntermediateState, [
         string:titlecase(lists:delete($_, atom_to_list(NameAtom))), " {\n",
-            [["  ", atom_to_list(FieldAtom), ": ", Reference, ",\n"] || FieldAtom := Reference <- Assignments],
+            [["  ", atom_to_list(FieldAtom), ": ", Reference, ",\n"]
+                || {FieldAtom, Reference} <- Assignments],
         "  ..(", InputState#clause_state.reference, ").1\n",
         "}"
     ]),
@@ -359,6 +491,19 @@ destructure_lhs({record, _L, _Atom, Slots}, State) ->
         State, Slots
     ),
     IntermediateState#clause_state{reference = RecordRef};
+destructure_lhs({tuple, _L, Slots}, State) ->
+    TupleRef = State#clause_state.reference,
+    IntermediateState = lists:foldl(
+        fun({Index, LHS}, ThisState) ->
+            Substate = ThisState#clause_state{
+                reference = [TupleRef, ".", integer_to_list(Index)]
+            },
+            destructure_lhs(LHS, Substate)
+        end,
+        State,
+        lists:enumerate(0, Slots)
+    ),
+    IntermediateState#clause_state{reference = TupleRef};
 %% constant cases
 destructure_lhs({atom, _L, Atom}, State) when Atom == true orelse Atom == false ->
     EncodedValue = case Atom of
@@ -423,7 +568,15 @@ structfrombits_from_record(RecordForm) ->
             Slot = record_field_name(Field),
             Descriptor = xls_type:descriptor(Type),
             NextOffset = Offset + xls_type:width(Descriptor),
-            Line = io_lib:format("    ~w: raw[~w:~w],~n", [Slot, Offset, NextOffset]),
+            Line = io_lib:format(
+                "    ~w: raw[~w:~w] as ~s,~n",
+                [
+                    Slot,
+                    Offset,
+                    NextOffset,
+                    xls_type:print_type(Descriptor)
+                ]
+            ),
             {[Line | Body], NextOffset}
         end,
         {[], 0}, Fields
@@ -562,10 +715,15 @@ instr(ClauseState, Place, Expr) ->
 -spec op(Op :: atom(), Args :: [any()]) -> iolist().
 -doc "Translates a built-in Erlang op to an XLS op.".
 op('+', [Left, Right]) -> [Left, " + ", Right];
+op('bsl', [Left, Right]) -> [Left, " << ", Right];
+op('bsr', [Left, Right]) -> [Left, " >> ", Right];
 op('band', [Left, Right]) -> [Left, " & ", Right];
 op('bor', [Left, Right]) -> [Left, " | ", Right];
 op('bnot', [Operand]) -> ["!", Operand];
-op('<', [Left, Right]) -> [Left, " < ", Right].
+op('<', [Left, Right]) -> [Left, " < ", Right];
+op('=:=', [Left, Right]) -> [Left, " == ", Right];
+op('andalso', [Left, Right]) -> [Left, " && ", Right];
+op('orelse', [Left, Right]) -> [Left, " || ", Right].
 
 %%%
 %%% Search / selection tools
@@ -596,8 +754,16 @@ init(Forms) ->
     [Value].
 
 -spec state([erl_parse:abstract_form()]) -> atom().
--doc "Finds the record name which carries process state.".
+-doc "Finds the record name which carries an actor's rich data value.".
 state(Forms) ->
+    case find_optional_attribute(Forms, xls_data) of
+        {ok, DataAtom} ->
+            DataAtom;
+        none ->
+            inferred_state(Forms)
+    end.
+
+inferred_state(Forms) ->
     InitSpec = find_spec(Forms, init, 1),
     {attribute, _1, spec, {
         {init, 1},
@@ -640,6 +806,20 @@ find_attribute(Forms, Atom) ->
         Forms
     ),
     Value.
+
+-spec find_optional_attribute([erl_parse:abstract_form()], atom()) ->
+    none | {ok, term()}.
+find_optional_attribute(Forms, Atom) ->
+    case lists:search(
+        fun
+            ({attribute, _Line, Name, _Value}) -> Name =:= Atom;
+            (_Form) -> false
+        end,
+        Forms
+    ) of
+        {value, {attribute, _Line, Atom, Value}} -> {ok, Value};
+        false -> none
+    end.
 
 -spec find_spec([erl_parse:abstract_form()], atom(), integer()) -> erl_parse:af_function_spec().
 -doc "Finds the function type declaration with the given F/A from the set of Forms.".

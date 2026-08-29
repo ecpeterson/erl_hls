@@ -33,9 +33,9 @@ struct Set {
 
 fn set_from_bits<N: u32>(raw: bits[N]) -> Set {
   Set {
-    register: raw[0:32],
-    value: raw[32:64],
-    mask: raw[64:96],
+    register: raw[0:32] as u32,
+    value: raw[32:64] as u32,
+    mask: raw[64:96] as u32,
   }
 }
 
@@ -49,7 +49,7 @@ struct Get {
 
 fn get_from_bits<N: u32>(raw: bits[N]) -> Get {
   Get {
-    register: raw[0:32],
+    register: raw[0:32] as u32,
   }
 }
 
@@ -63,7 +63,7 @@ struct Ping {
 
 fn ping_from_bits<N: u32>(raw: bits[N]) -> Ping {
   Ping {
-    value: raw[0:32],
+    value: raw[0:32] as u32,
   }
 }
 
@@ -78,8 +78,8 @@ struct Bulkget {
 
 fn bulkget_from_bits<N: u32>(raw: bits[N]) -> Bulkget {
   Bulkget {
-    start: raw[0:32],
-    count: raw[32:64],
+    start: raw[0:32] as u32,
+    count: raw[32:64] as u32,
   }
 }
 
@@ -93,7 +93,7 @@ struct Ack {
 
 fn ack_from_bits<N: u32>(raw: bits[N]) -> Ack {
   Ack {
-    value: raw[0:32],
+    value: raw[0:32] as u32,
   }
 }
 
@@ -107,7 +107,7 @@ struct Read {
 
 fn read_from_bits<N: u32>(raw: bits[N]) -> Read {
   Read {
-    value: raw[0:32],
+    value: raw[0:32] as u32,
   }
 }
 
@@ -121,7 +121,7 @@ struct Bulkread {
 
 fn bulkread_from_bits<N: u32>(raw: bits[N]) -> Bulkread {
   Bulkread {
-    values: raw[0:96],
+    values: raw[0:96] as u32[3],
   }
 }
 
@@ -135,7 +135,7 @@ struct State {
 
 fn state_from_bits<N: u32>(raw: bits[N]) -> State {
   State {
-    registers: raw[0:512],
+    registers: raw[0:512] as u32[16],
   }
 }
 
