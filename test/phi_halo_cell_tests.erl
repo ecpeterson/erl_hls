@@ -120,6 +120,50 @@ invalid_step_stops_cell_test() ->
     end,
     stop_collectors(Ref, Collectors).
 
+boolean_anyon_api_encodes_move_test() ->
+    with_cell(fun(PID, Ref) ->
+        expect_neighbor_batch(Ref, {phi, 0, [0, 0]}),
+        lists:foreach(
+            fun(_) -> phi_halo_cell:offer_phi(PID, 0, [0, 0]) end,
+            lists:seq(1, 4)
+        ),
+        expect_neighbor_batch(Ref, {anyon_move, 0, 0}),
+        ok = phi_halo_cell:offer_anyon(PID, 0, true),
+        ?assertMatch(
+            {cell, 0, [0, 0], [0, 0], 0, 1, 1},
+            maps:get(data, phi_halo_cell:runtime_info(PID))
+        )
+    end).
+
+invalid_anyon_word_stops_cell_in_flipping_test() ->
+    {PID, Collectors, Ref} = start_cell(),
+    unlink(PID),
+    try
+        expect_neighbor_batch(Ref, {phi, 0, [0, 0]}),
+        lists:foreach(
+            fun(_) -> phi_halo_cell:offer_phi(PID, 0, [0, 0]) end,
+            lists:seq(1, 4)
+        ),
+        expect_neighbor_batch(Ref, {anyon_move, 0, 0}),
+        ?assertEqual(
+            flipping,
+            maps:get(phase, phi_halo_cell:runtime_info(PID))
+        ),
+
+        Monitor = monitor(process, PID),
+        ok = xls_statem:cast(PID, {anyon_move, 0, 2}),
+        receive
+            {'DOWN', Monitor, process, PID,
+                    {xls_statem_failure, _Message}} ->
+                ok
+        after 1000 ->
+            error(cell_did_not_stop_on_invalid_anyon_word)
+        end
+    after
+        stop_cell(PID),
+        stop_collectors(Ref, Collectors)
+    end.
+
 generated_dslx_matches_checked_in_artifact_test() ->
     {ok, Expected} = file:read_file(
         "src/examples/phi_halo_cell.erl.x"
@@ -128,6 +172,25 @@ generated_dslx_matches_checked_in_artifact_test() ->
         xls_parse:to_xls("src/examples/phi_halo_cell.erl")
     ),
     ?assertEqual(Expected, Generated),
+    {DispatchStart, _DispatchMarkerLength} = binary:match(
+        Generated,
+        <<"fn dispatch">>
+    ),
+    Dispatch = binary:part(
+        Generated,
+        DispatchStart,
+        byte_size(Generated) - DispatchStart
+    ),
+    %% Each message has two clauses in each phase, but code generation emits
+    %% one ordered selector per {message tag, phase} pair.
+    ?assertEqual(
+        2,
+        length(binary:matches(Dispatch, <<"Phase::GATHERING =>">>))
+    ),
+    ?assertEqual(
+        2,
+        length(binary:matches(Dispatch, <<"Phase::FLIPPING =>">>))
+    ),
     ?assertNotEqual(
         nomatch,
         binary:match(
@@ -198,7 +261,7 @@ two_protocol_phases(PID, Ref) ->
     expect_neighbor_batch(Ref, {anyon_move, 0, 0}),
     ?assertEqual(flipping, maps:get(phase, phi_halo_cell:runtime_info(PID))),
 
-    four_anyons(PID, 0, 0),
+    four_anyons(PID, 0, false),
     expect_neighbor_batch(Ref, {phi, 1, [20, 11]}),
 
     Info = phi_halo_cell:runtime_info(PID),
@@ -213,7 +276,7 @@ staged_next_phase_messages(PID, Ref) ->
     expect_neighbor_batch(Ref, {phi, 0, [0, 0]}),
 
     %% A faster neighbor can enter flipping while this cell still gathers.
-    ok = phi_halo_cell:offer_anyon(PID, 0, 0),
+    ok = phi_halo_cell:offer_anyon(PID, 0, false),
     ok = phi_halo_cell:offer_phi(PID, 0, [32, 48]),
     ok = phi_halo_cell:offer_phi(PID, 0, [64, 80]),
     ok = phi_halo_cell:offer_phi(PID, 0, [16, 32]),
@@ -231,13 +294,13 @@ staged_next_phase_messages(PID, Ref) ->
 
     %% The symmetric case occurs while this cell waits for anyon updates.
     ok = phi_halo_cell:offer_phi(PID, 1, [8, 12]),
-    ok = phi_halo_cell:offer_anyon(PID, 0, 0),
-    ok = phi_halo_cell:offer_anyon(PID, 0, 0),
+    ok = phi_halo_cell:offer_anyon(PID, 0, false),
+    ok = phi_halo_cell:offer_anyon(PID, 0, false),
     BeforeGather = phi_halo_cell:runtime_info(PID),
     ?assertEqual(flipping, maps:get(phase, BeforeGather)),
     ?assertEqual(1, maps:get(postponed, BeforeGather)),
 
-    ok = phi_halo_cell:offer_anyon(PID, 0, 0),
+    ok = phi_halo_cell:offer_anyon(PID, 0, false),
     expect_neighbor_batch(Ref, {phi, 1, [20, 11]}),
     AfterGather = phi_halo_cell:runtime_info(PID),
     ?assertEqual(gathering, maps:get(phase, AfterGather)),
@@ -251,7 +314,7 @@ exercise_interleaving(Schedule) ->
         lists:foreach(
             fun
                 (phi) -> phi_halo_cell:offer_phi(PID, 0, [16, 32]);
-                (anyon) -> phi_halo_cell:offer_anyon(PID, 0, 0)
+                (anyon) -> phi_halo_cell:offer_anyon(PID, 0, false)
             end,
             Schedule
         ),

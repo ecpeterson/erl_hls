@@ -34,10 +34,11 @@ handle_enter(OldPhase, Phase, Data) -> {NextData, Casts}
 in an entry. On the CPU each action is delivered with `gen_server:cast/2` to
 the PID configured for that port.
 
-Passing an output map to `start_link/3` connects and enters the initial phase
-immediately. A cyclic CPU topology can instead start all of its machines
-without that option and then call `connect/2` on each one. Casts received before
-connection occupy the bounded mailbox and are processed after initial entry.
+Passing `{outputs, Map}` in the options to `start_link/3` connects and enters
+the initial phase immediately. A cyclic CPU topology can instead start all of
+its machines without that option and then call `connect/2` on each one. Casts
+received before connection occupy the bounded mailbox and are processed after
+initial entry.
 Disconnection is a scheduler lifecycle state separate from the callback phase;
 no application callback is dispatched while the machine is disconnected.
 The generated implementation has statically connected ports and therefore
@@ -49,6 +50,10 @@ conclusion:
 ```
 {NextPhase, NextData, Directive}
 ```
+
+Clauses for the same message record and phase are tried in source order. The
+body of the first clause whose supported head and guard sequence match is
+selected; a failure in that body does not resume the clause search.
 
 The directive determines what happens to the input:
 

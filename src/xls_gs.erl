@@ -1,4 +1,16 @@
 -module(xls_gs).
+-moduledoc """
+A CPU adapter and callback contract for simple XLS-backed servers.
+
+Callback modules use `init/1`, `handle_call/2`, and `handle_cast/2` with the
+fixed result shapes declared below. When a module is translated, clauses for
+the same input record are tried in source order. The body of the first clause
+whose supported head and guard sequence match is selected. An input record tag
+handled by the server must belong exclusively to either `handle_call/2` or
+`handle_cast/2`, because the generated request header does not otherwise
+encode which callback family should receive it.
+""".
+
 -export([start_link/2, start_link/3, stop/1]).
 -export([init/1, handle_call/3, handle_cast/2, terminate/2, code_change/3]).
 -export([generic_unpack/2]).

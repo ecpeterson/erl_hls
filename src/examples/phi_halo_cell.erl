@@ -34,9 +34,10 @@ deduplicate it or the cell must use a fixed source mask.
 ## Deliberate simplifications
 
 This slice performs one phi exchange per anyon step. The stochastic coin takes
-its no-move branch, so every flipping entry sends `present = 0`; input noise is
-also absent. Incoming anyon updates are still combined by parity so the phase
-protocol does not erase a move supplied by a test or a future neighbor.
+its no-move branch, so every flipping entry sends `present = false`; input
+noise is also absent. Incoming anyon updates are still combined by parity so
+the phase protocol does not erase a move supplied by a test or a future
+neighbor.
 
 A fuller decoder needs repeated diffusion rounds, move selection based on a
 post-diffusion neighbor comparison, measurement input, and correction output.
@@ -82,8 +83,8 @@ keep the CPU model aligned with fixed-width generated arithmetic.
 %% enabling a nontrivial coin and correction output.
 %% TODO: Revisit neighbor configuration so FPGA topology can be fixed at
 %% compile time while CPU models retain ergonomic runtime wiring.
-%% TODO: Preserve the word-aligned u32 anyon message ABI while exposing
-%% presence as a boolean internally, then express anyon parity with xor.
+%% TODO: Separate logical field types from word-aligned wire codecs so
+%% #anyon_move.present can be boolean in lowerable callbacks.
 
 -record(phi, {
     step = xls_type:zero() :: xls_nums:u32(),
@@ -162,9 +163,13 @@ offer_phi(PID, Step, Values) ->
     xls_statem:cast(PID, #phi{step = Step, values = Values}).
 
 -doc "Offers one neighbor anyon update to a cell.".
--spec offer_anyon(pid(), xls_nums:u32(), 0 | 1) -> ok.
-offer_anyon(PID, Step, Present) ->
-    xls_statem:cast(PID, #anyon_move{step = Step, present = Present}).
+-spec offer_anyon(pid(), xls_nums:u32(), boolean()) -> ok.
+offer_anyon(PID, Step, Present) when is_boolean(Present) ->
+    PresentWord = case Present of
+        false -> 0;
+        true -> 1
+    end,
+    xls_statem:cast(PID, #anyon_move{step = Step, present = PresentWord}).
 
 -doc "Returns diagnostic data from the bounded CPU scheduler.".
 -spec runtime_info(pid()) -> map().
@@ -201,14 +206,11 @@ handle_enter(_OldPhase, flipping, Cell) ->
 
 -spec handle_cast(#phi{} | #anyon_move{}, phase(), #cell{}) ->
     conclusion().
-%% TODO: Rewrite this gathering update with idiomatic guards and case clauses
-%% once lowering supports the required control flow directly.
 handle_cast(
-    #phi{step = EventStep, values = Values},
+    #phi{step = Step, values = Values},
     gathering,
-    Cell
+    Cell = #cell{step = Step}
 ) ->
-    Current = EventStep =:= Cell#cell.step,
     Value0 = xls_lists:nth(1, Values),
     Value1 = xls_lists:nth(2, Values),
     Sum0 = (xls_lists:nth(1, Cell#cell.phi_sum) + Value0)
@@ -218,83 +220,75 @@ handle_cast(
     SumFirst = xls_lists:set(1, Cell#cell.phi_sum, Sum0),
     NewSum = xls_lists:set(2, SumFirst, Sum1),
     ReceivedNext = Cell#cell.phi_received + 1,
-    Ready = ReceivedNext =:= ?NEIGHBOR_COUNT,
-
-    P0 = xls_lists:nth(1, Cell#cell.phi),
-    P1 = xls_lists:nth(2, Cell#cell.phi),
-    Charge = Cell#cell.anyon bsl 16,
-    New0 = (Charge + (P0 bsr 2) +
-        (((P1 bsl 1) + Sum0) bsr 3)) band ?U32_MASK,
-    New1 = (((P1 * 3) bsr 2) + ((P0 + Sum1) div 20))
-        band ?U32_MASK,
-    PhiFirst = xls_lists:set(1, Cell#cell.phi, New0),
-    NewPhi = xls_lists:set(2, PhiFirst, New1),
-
-    Accumulated = Cell#cell{
-        phi_sum = NewSum,
-        phi_received = ReceivedNext
-    },
-    Updated = Cell#cell{
-        phi = NewPhi,
-        phi_sum = xls_lists:new(xls_nums:u32(), ?LAYER_COUNT),
-        phi_received = 0
-    },
-    case Current of
+    case ReceivedNext =:= ?NEIGHBOR_COUNT of
         false ->
-            {gathering, Cell, fail};
+            Accumulated = Cell#cell{
+                phi_sum = NewSum,
+                phi_received = ReceivedNext
+            },
+            {gathering, Accumulated, consume};
         true ->
-            case Ready of
-                false -> {gathering, Accumulated, consume};
-                true -> {flipping, Updated, consume}
-            end
+            P0 = xls_lists:nth(1, Cell#cell.phi),
+            P1 = xls_lists:nth(2, Cell#cell.phi),
+            Charge = Cell#cell.anyon bsl 16,
+            New0 = (Charge + (P0 bsr 2) +
+                (((P1 bsl 1) + Sum0) bsr 3)) band ?U32_MASK,
+            New1 = (((P1 * 3) bsr 2) + ((P0 + Sum1) div 20))
+                band ?U32_MASK,
+            PhiFirst = xls_lists:set(1, Cell#cell.phi, New0),
+            NewPhi = xls_lists:set(2, PhiFirst, New1),
+            Updated = Cell#cell{
+                phi = NewPhi,
+                phi_sum = xls_lists:new(
+                    xls_nums:u32(),
+                    ?LAYER_COUNT
+                ),
+                phi_received = 0
+            },
+            {flipping, Updated, consume}
     end;
+handle_cast(#phi{}, gathering, Cell) ->
+    {gathering, Cell, fail};
 handle_cast(
-    #anyon_move{step = EventStep},
+    #anyon_move{step = Step},
     gathering,
-    Cell
+    Cell = #cell{step = Step}
 ) ->
-    case EventStep =:= Cell#cell.step of
-        true -> {gathering, Cell, postpone};
-        false -> {gathering, Cell, fail}
-    end;
+    {gathering, Cell, postpone};
+handle_cast(#anyon_move{}, gathering, Cell) ->
+    {gathering, Cell, fail};
 handle_cast(
     #phi{step = EventStep},
     flipping,
-    Cell
-) ->
-    NextStep = (Cell#cell.step + 1) band ?U32_MASK,
-    case EventStep =:= NextStep of
-        true -> {flipping, Cell, postpone};
-        false -> {flipping, Cell, fail}
-    end;
+    Cell = #cell{step = Step}
+) when EventStep =:= ((Step + 1) band ?U32_MASK) ->
+    {flipping, Cell, postpone};
+handle_cast(#phi{}, flipping, Cell) ->
+    {flipping, Cell, fail};
 handle_cast(
-    #anyon_move{step = EventStep, present = Present},
+    #anyon_move{step = Step, present = PresentWord},
     flipping,
-    Cell
-) ->
-    Current = EventStep =:= Cell#cell.step,
-    ValidPresent = Present < 2,
+    Cell = #cell{step = Step}
+) when PresentWord < 2 ->
     ReceivedNext = Cell#cell.moves_received + 1,
-    Ready = ReceivedNext =:= ?NEIGHBOR_COUNT,
-    NextAnyon = (Cell#cell.anyon + Present) band 1,
-    Accumulated = Cell#cell{
-        moves_received = ReceivedNext,
-        anyon = NextAnyon
-    },
-    Advanced = Cell#cell{
-        step = (Cell#cell.step + 1) band ?U32_MASK,
-        moves_received = 0,
-        anyon = NextAnyon
-    },
-    case Current andalso ValidPresent of
+    NextAnyon = Cell#cell.anyon bxor PresentWord,
+    case ReceivedNext =:= ?NEIGHBOR_COUNT of
         false ->
-            {flipping, Cell, fail};
+            Accumulated = Cell#cell{
+                moves_received = ReceivedNext,
+                anyon = NextAnyon
+            },
+            {flipping, Accumulated, consume};
         true ->
-            case Ready of
-                false -> {flipping, Accumulated, consume};
-                true -> {gathering, Advanced, consume}
-            end
-    end.
+            Advanced = Cell#cell{
+                step = (Cell#cell.step + 1) band ?U32_MASK,
+                moves_received = 0,
+                anyon = NextAnyon
+            },
+            {gathering, Advanced, consume}
+    end;
+handle_cast(#anyon_move{}, flipping, Cell) ->
+    {flipping, Cell, fail}.
 
 valid_neighbors(Neighbors) ->
     is_map(Neighbors) andalso

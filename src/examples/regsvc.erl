@@ -93,7 +93,10 @@ stop(PID) ->
 init([]) ->
     #state{}.
 
-handle_cast(#set{register = Register, value = Value, mask = Mask}, State) ->
+handle_cast(#set{mask = Mask}, State) when Mask =:= 0 ->
+    {noreply, State};
+handle_cast(#set{register = Register, value = Value, mask = Mask}, State)
+        when Register < ?REGISTER_COUNT ->
     OldValue = xls_lists:nth(Register + 1, State#state.registers),
     NewValue = (OldValue band bnot Mask) bor (Value band Mask),
     NewRegisters = xls_lists:set(Register + 1, State#state.registers, NewValue),
@@ -101,11 +104,16 @@ handle_cast(#set{register = Register, value = Value, mask = Mask}, State) ->
 
 handle_call(#ping{value = Value}, State) ->
     {reply, #ack{value = Value}, State};
-handle_call(#get{register = Register}, State) ->
-    true = Register < ?REGISTER_COUNT,  %% example of input validation
+handle_call(#get{register = Register}, State)
+        when Register < ?REGISTER_COUNT ->
     Value = xls_lists:nth(Register + 1, State#state.registers),
     {reply, #read{value = Value}, State};
-handle_call(#bulk_get{start = Start, count = Count}, State) ->
+handle_call(#bulk_get{count = 0}, State) ->
+    {reply, #bulk_read{}, State};
+handle_call(#bulk_get{start = Start, count = Count}, State)
+        when Count > 0,
+             Count =< ?MAX_PAYLOAD,
+             Start + Count =< ?REGISTER_COUNT ->
     Sublist = xls_lists:sublist(
         xls_lists:list(xls_nums:u32(), ?REGISTER_COUNT),
         State#state.registers, Start + 1, Count

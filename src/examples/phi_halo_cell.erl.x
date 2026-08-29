@@ -135,102 +135,102 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
   match phase {
     Phase::GATHERING => {
       let entered_data = {
-        let _oldphase_1 = old_phase;
-        let _dispatchedphase_1 = phase;
-        let cell_1 = (Tag::CELL, data);
-        let _0 = cell_1.1.step;
-        let _1 = cell_1.1.phi;
+        let _OldPhase_1 = old_phase;
+        let __1 = phase;
+        let Cell_1 = (Tag::CELL, data);
+        let _0 = Cell_1.1.step;
+        let _1 = Cell_1.1.phi;
         let _2 = Phi {
           step: _0,
           values: _1,
           ..zero!<Phi>()
         };
         let _3 = (Tag::PHI, _2, bits_from_phi(_2));
-        let message_1 = _3;
+        let Message_1 = _3;
         let _4 = if (bool:false) {
             data
         } else {
-            cell_1.1
+            Cell_1.1
         };
         _4
       };
       let north = {
-        let _oldphase_1 = old_phase;
-        let _dispatchedphase_1 = phase;
-        let cell_1 = (Tag::CELL, data);
-        let _0 = cell_1.1.step;
-        let _1 = cell_1.1.phi;
+        let _OldPhase_1 = old_phase;
+        let __1 = phase;
+        let Cell_1 = (Tag::CELL, data);
+        let _0 = Cell_1.1.step;
+        let _1 = Cell_1.1.phi;
         let _2 = Phi {
           step: _0,
           values: _1,
           ..zero!<Phi>()
         };
         let _3 = (Tag::PHI, _2, bits_from_phi(_2));
-        let message_1 = _3;
+        let Message_1 = _3;
         let _4 = if (bool:false) {
             zero!<axis::Frame>()
         } else {
-            axis::pack(message_1.0 as u8, message_1.2)
+            axis::pack(Message_1.0 as u8, Message_1.2)
         };
         _4
       };
       let east = {
-        let _oldphase_1 = old_phase;
-        let _dispatchedphase_1 = phase;
-        let cell_1 = (Tag::CELL, data);
-        let _0 = cell_1.1.step;
-        let _1 = cell_1.1.phi;
+        let _OldPhase_1 = old_phase;
+        let __1 = phase;
+        let Cell_1 = (Tag::CELL, data);
+        let _0 = Cell_1.1.step;
+        let _1 = Cell_1.1.phi;
         let _2 = Phi {
           step: _0,
           values: _1,
           ..zero!<Phi>()
         };
         let _3 = (Tag::PHI, _2, bits_from_phi(_2));
-        let message_1 = _3;
+        let Message_1 = _3;
         let _4 = if (bool:false) {
             zero!<axis::Frame>()
         } else {
-            axis::pack(message_1.0 as u8, message_1.2)
+            axis::pack(Message_1.0 as u8, Message_1.2)
         };
         _4
       };
       let west = {
-        let _oldphase_1 = old_phase;
-        let _dispatchedphase_1 = phase;
-        let cell_1 = (Tag::CELL, data);
-        let _0 = cell_1.1.step;
-        let _1 = cell_1.1.phi;
+        let _OldPhase_1 = old_phase;
+        let __1 = phase;
+        let Cell_1 = (Tag::CELL, data);
+        let _0 = Cell_1.1.step;
+        let _1 = Cell_1.1.phi;
         let _2 = Phi {
           step: _0,
           values: _1,
           ..zero!<Phi>()
         };
         let _3 = (Tag::PHI, _2, bits_from_phi(_2));
-        let message_1 = _3;
+        let Message_1 = _3;
         let _4 = if (bool:false) {
             zero!<axis::Frame>()
         } else {
-            axis::pack(message_1.0 as u8, message_1.2)
+            axis::pack(Message_1.0 as u8, Message_1.2)
         };
         _4
       };
       let south = {
-        let _oldphase_1 = old_phase;
-        let _dispatchedphase_1 = phase;
-        let cell_1 = (Tag::CELL, data);
-        let _0 = cell_1.1.step;
-        let _1 = cell_1.1.phi;
+        let _OldPhase_1 = old_phase;
+        let __1 = phase;
+        let Cell_1 = (Tag::CELL, data);
+        let _0 = Cell_1.1.step;
+        let _1 = Cell_1.1.phi;
         let _2 = Phi {
           step: _0,
           values: _1,
           ..zero!<Phi>()
         };
         let _3 = (Tag::PHI, _2, bits_from_phi(_2));
-        let message_1 = _3;
+        let Message_1 = _3;
         let _4 = if (bool:false) {
             zero!<axis::Frame>()
         } else {
-            axis::pack(message_1.0 as u8, message_1.2)
+            axis::pack(Message_1.0 as u8, Message_1.2)
         };
         _4
       };
@@ -247,97 +247,97 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
     },
     Phase::FLIPPING => {
       let entered_data = {
-        let _oldphase_1 = old_phase;
-        let _dispatchedphase_1 = phase;
-        let cell_1 = (Tag::CELL, data);
-        let _0 = cell_1.1.step;
+        let _OldPhase_1 = old_phase;
+        let __1 = phase;
+        let Cell_1 = (Tag::CELL, data);
+        let _0 = Cell_1.1.step;
         let _1 = Anyonmove {
           step: _0,
           present: 0,
           ..zero!<Anyonmove>()
         };
         let _2 = (Tag::ANYON_MOVE, _1, bits_from_anyonmove(_1));
-        let message_1 = _2;
+        let Message_1 = _2;
         let _3 = if (bool:false) {
             data
         } else {
-            cell_1.1
+            Cell_1.1
         };
         _3
       };
       let north = {
-        let _oldphase_1 = old_phase;
-        let _dispatchedphase_1 = phase;
-        let cell_1 = (Tag::CELL, data);
-        let _0 = cell_1.1.step;
+        let _OldPhase_1 = old_phase;
+        let __1 = phase;
+        let Cell_1 = (Tag::CELL, data);
+        let _0 = Cell_1.1.step;
         let _1 = Anyonmove {
           step: _0,
           present: 0,
           ..zero!<Anyonmove>()
         };
         let _2 = (Tag::ANYON_MOVE, _1, bits_from_anyonmove(_1));
-        let message_1 = _2;
+        let Message_1 = _2;
         let _3 = if (bool:false) {
             zero!<axis::Frame>()
         } else {
-            axis::pack(message_1.0 as u8, message_1.2)
+            axis::pack(Message_1.0 as u8, Message_1.2)
         };
         _3
       };
       let east = {
-        let _oldphase_1 = old_phase;
-        let _dispatchedphase_1 = phase;
-        let cell_1 = (Tag::CELL, data);
-        let _0 = cell_1.1.step;
+        let _OldPhase_1 = old_phase;
+        let __1 = phase;
+        let Cell_1 = (Tag::CELL, data);
+        let _0 = Cell_1.1.step;
         let _1 = Anyonmove {
           step: _0,
           present: 0,
           ..zero!<Anyonmove>()
         };
         let _2 = (Tag::ANYON_MOVE, _1, bits_from_anyonmove(_1));
-        let message_1 = _2;
+        let Message_1 = _2;
         let _3 = if (bool:false) {
             zero!<axis::Frame>()
         } else {
-            axis::pack(message_1.0 as u8, message_1.2)
+            axis::pack(Message_1.0 as u8, Message_1.2)
         };
         _3
       };
       let west = {
-        let _oldphase_1 = old_phase;
-        let _dispatchedphase_1 = phase;
-        let cell_1 = (Tag::CELL, data);
-        let _0 = cell_1.1.step;
+        let _OldPhase_1 = old_phase;
+        let __1 = phase;
+        let Cell_1 = (Tag::CELL, data);
+        let _0 = Cell_1.1.step;
         let _1 = Anyonmove {
           step: _0,
           present: 0,
           ..zero!<Anyonmove>()
         };
         let _2 = (Tag::ANYON_MOVE, _1, bits_from_anyonmove(_1));
-        let message_1 = _2;
+        let Message_1 = _2;
         let _3 = if (bool:false) {
             zero!<axis::Frame>()
         } else {
-            axis::pack(message_1.0 as u8, message_1.2)
+            axis::pack(Message_1.0 as u8, Message_1.2)
         };
         _3
       };
       let south = {
-        let _oldphase_1 = old_phase;
-        let _dispatchedphase_1 = phase;
-        let cell_1 = (Tag::CELL, data);
-        let _0 = cell_1.1.step;
+        let _OldPhase_1 = old_phase;
+        let __1 = phase;
+        let Cell_1 = (Tag::CELL, data);
+        let _0 = Cell_1.1.step;
         let _1 = Anyonmove {
           step: _0,
           present: 0,
           ..zero!<Anyonmove>()
         };
         let _2 = (Tag::ANYON_MOVE, _1, bits_from_anyonmove(_1));
-        let message_1 = _2;
+        let Message_1 = _2;
         let _3 = if (bool:false) {
             zero!<axis::Frame>()
         } else {
-            axis::pack(message_1.0 as u8, message_1.2)
+            axis::pack(Message_1.0 as u8, Message_1.2)
         };
         _3
       };
@@ -361,130 +361,133 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
       let message = phi_from_bits(frame.payload);
       match phase {
         Phase::GATHERING => {
-          let eventstep_1 = message.step;
-          let values_1 = message.values;
-          let _dispatchedphase_1 = phase;
-          let cell_1 = (Tag::CELL, data);
-          let _0 = cell_1.1.step;
-          let _1 = eventstep_1 == _0;
-          let current_1 = _1;
-          let _2 = values_1[1 - u32:1];
-          let value0_1 = _2;
-          let _3 = values_1[2 - u32:1];
-          let value1_1 = _3;
-          let _4 = cell_1.1.phi_sum;
-          let _5 = _4[1 - u32:1];
-          let _6 = _5 + value0_1;
-          let _7 = _6 & 4294967295;
-          let sum0_1 = _7;
-          let _8 = cell_1.1.phi_sum;
-          let _9 = _8[2 - u32:1];
-          let _10 = _9 + value1_1;
-          let _11 = _10 & 4294967295;
-          let sum1_1 = _11;
-          let _12 = cell_1.1.phi_sum;
-          let _13 = update(_12, 1 - u32:1, sum0_1);
-          let sumfirst_1 = _13;
-          let _14 = update(sumfirst_1, 2 - u32:1, sum1_1);
-          let newsum_1 = _14;
-          let _15 = cell_1.1.phi_received;
-          let _16 = _15 + 1;
-          let receivednext_1 = _16;
-          let _17 = receivednext_1 == 4;
-          let ready_1 = _17;
-          let _18 = cell_1.1.phi;
-          let _19 = _18[1 - u32:1];
-          let p0_1 = _19;
-          let _20 = cell_1.1.phi;
-          let _21 = _20[2 - u32:1];
-          let p1_1 = _21;
-          let _22 = cell_1.1.anyon;
-          let _23 = _22 << 16;
-          let charge_1 = _23;
-          let _24 = p0_1 >> 2;
-          let _25 = charge_1 + _24;
-          let _26 = p1_1 << 1;
-          let _27 = _26 + sum0_1;
-          let _28 = _27 >> 3;
-          let _29 = _25 + _28;
-          let _30 = _29 & 4294967295;
-          let new0_1 = _30;
-          let _31 = p1_1 * 3;
-          let _32 = _31 >> 2;
-          let _33 = p0_1 + sum1_1;
-          let _34 = _33 / 20;
-          let _35 = _32 + _34;
-          let _36 = _35 & 4294967295;
-          let new1_1 = _36;
-          let _37 = cell_1.1.phi;
-          let _38 = update(_37, 1 - u32:1, new0_1);
-          let phifirst_1 = _38;
-          let _39 = update(phifirst_1, 2 - u32:1, new1_1);
-          let newphi_1 = _39;
-          let _40 = Cell {
-            phi_sum: newsum_1,
-            phi_received: receivednext_1,
-            ..(cell_1).1
-          };
-          let _41 = (Tag::CELL, _40);
-          let accumulated_1 = _41;
-          let _42 = zero!<u32[2]>();
-          let _43 = Cell {
-            phi: newphi_1,
-            phi_sum: _42,
-            phi_received: 0,
-            ..(cell_1).1
-          };
-          let _44 = (Tag::CELL, _43);
-          let updated_1 = _44;
-          let _47 = if current_1 {
-          let _46 = if ready_1 {
-          let _45 = (Phase::FLIPPING, updated_1, Directive::CONSUME, );
-            (_45, bool:false)
-          } else {
-          let _45 = (Phase::GATHERING, accumulated_1, Directive::CONSUME, );
-            (_45, bool:false)
-          };
-          let case_match_1_1 = bool:false;
-          let case_match_1_2 = _46.1;
-            (_46.0, (case_match_1_1 != case_match_1_2) || bool:false)
-          } else {
-          let _45 = (Phase::GATHERING, cell_1, Directive::FAIL, );
-            (_45, bool:false)
-          };
-          let case_match_2_1 = bool:false;
-          let case_match_2_2 = _47.1;
-          let _48 = if ((case_match_2_1 != case_match_2_2) || bool:false) {
+          let Xls_clause_1_Step_1 = message.step;
+          let Xls_clause_1_Values_1 = message.values;
+          let Xls_clause_1_Cell_1 = (Tag::CELL, data);
+          if Xls_clause_1_Step_1 == data.step {
+            let _0 = Xls_clause_1_Values_1[1 - u32:1];
+            let Xls_clause_1_Value0_1 = _0;
+            let _1 = Xls_clause_1_Values_1[2 - u32:1];
+            let Xls_clause_1_Value1_1 = _1;
+            let _2 = Xls_clause_1_Cell_1.1.phi_sum;
+            let _3 = _2[1 - u32:1];
+            let _4 = _3 + Xls_clause_1_Value0_1;
+            let _5 = _4 & 4294967295;
+            let Xls_clause_1_Sum0_1 = _5;
+            let _6 = Xls_clause_1_Cell_1.1.phi_sum;
+            let _7 = _6[2 - u32:1];
+            let _8 = _7 + Xls_clause_1_Value1_1;
+            let _9 = _8 & 4294967295;
+            let Xls_clause_1_Sum1_1 = _9;
+            let _10 = Xls_clause_1_Cell_1.1.phi_sum;
+            let _11 = update(_10, 1 - u32:1, Xls_clause_1_Sum0_1);
+            let Xls_clause_1_SumFirst_1 = _11;
+            let _12 = update(Xls_clause_1_SumFirst_1, 2 - u32:1, Xls_clause_1_Sum1_1);
+            let Xls_clause_1_NewSum_1 = _12;
+            let _13 = Xls_clause_1_Cell_1.1.phi_received;
+            let _14 = _13 + 1;
+            let Xls_clause_1_ReceivedNext_1 = _14;
+            let _15 = Xls_clause_1_ReceivedNext_1 == 4;
+            let _42 = if _15 {
+              let _16 = Xls_clause_1_Cell_1.1.phi;
+              let _17 = _16[1 - u32:1];
+              let Xls_clause_1_P0_1 = _17;
+              let _18 = Xls_clause_1_Cell_1.1.phi;
+              let _19 = _18[2 - u32:1];
+              let Xls_clause_1_P1_1 = _19;
+              let _20 = Xls_clause_1_Cell_1.1.anyon;
+              let _21 = _20 << 16;
+              let Xls_clause_1_Charge_1 = _21;
+              let _22 = Xls_clause_1_P0_1 >> 2;
+              let _23 = Xls_clause_1_Charge_1 + _22;
+              let _24 = Xls_clause_1_P1_1 << 1;
+              let _25 = _24 + Xls_clause_1_Sum0_1;
+              let _26 = _25 >> 3;
+              let _27 = _23 + _26;
+              let _28 = _27 & 4294967295;
+              let Xls_clause_1_New0_1 = _28;
+              let _29 = Xls_clause_1_P1_1 * 3;
+              let _30 = _29 >> 2;
+              let _31 = Xls_clause_1_P0_1 + Xls_clause_1_Sum1_1;
+              let _32 = _31 / 20;
+              let _33 = _30 + _32;
+              let _34 = _33 & 4294967295;
+              let Xls_clause_1_New1_1 = _34;
+              let _35 = Xls_clause_1_Cell_1.1.phi;
+              let _36 = update(_35, 1 - u32:1, Xls_clause_1_New0_1);
+              let Xls_clause_1_PhiFirst_1 = _36;
+              let _37 = update(Xls_clause_1_PhiFirst_1, 2 - u32:1, Xls_clause_1_New1_1);
+              let Xls_clause_1_NewPhi_1 = _37;
+              let _38 = zero!<u32[2]>();
+              let _39 = Cell {
+                phi: Xls_clause_1_NewPhi_1,
+                phi_sum: _38,
+                phi_received: 0,
+                ..(Xls_clause_1_Cell_1).1
+              };
+              let _40 = (Tag::CELL, _39);
+              let Xls_clause_1_Updated_1 = _40;
+              let _41 = (Phase::FLIPPING, Xls_clause_1_Updated_1, Directive::CONSUME, );
+              (_41, bool:false)
+            } else {
+              let _16 = Cell {
+                phi_sum: Xls_clause_1_NewSum_1,
+                phi_received: Xls_clause_1_ReceivedNext_1,
+                ..(Xls_clause_1_Cell_1).1
+              };
+              let _17 = (Tag::CELL, _16);
+              let Xls_clause_1_Accumulated_1 = _17;
+              let _18 = (Phase::GATHERING, Xls_clause_1_Accumulated_1, Directive::CONSUME, );
+              (_18, bool:false)
+            };
+            let case_match_1_1 = bool:false;
+            let case_match_1_2 = _42.1;
+            if ((case_match_1_1 != case_match_1_2) || bool:false) {
               (phase, data, Directive::FAIL)
+            } else {
+              (_42.0.0, _42.0.1.1, _42.0.2)
+            }
           } else {
-              (_47.0.0, _47.0.1.1, _47.0.2)
-          };
-          _48
+            let Xls_clause_2_Cell_1 = (Tag::CELL, data);
+            if bool:true {
+              let _0 = (Phase::GATHERING, Xls_clause_2_Cell_1, Directive::FAIL, );
+              if (bool:false) {
+                (phase, data, Directive::FAIL)
+              } else {
+                (_0.0, _0.1.1, _0.2)
+              }
+            } else {
+              (phase, data, Directive::FAIL)
+            }
+          }
         },
         Phase::FLIPPING => {
-          let eventstep_1 = message.step;
-          let _dispatchedphase_1 = phase;
-          let cell_1 = (Tag::CELL, data);
-          let _0 = cell_1.1.step;
-          let _1 = _0 + 1;
-          let _2 = _1 & 4294967295;
-          let nextstep_1 = _2;
-          let _3 = eventstep_1 == nextstep_1;
-          let _5 = if _3 {
-          let _4 = (Phase::FLIPPING, cell_1, Directive::POSTPONE, );
-            (_4, bool:false)
-          } else {
-          let _4 = (Phase::FLIPPING, cell_1, Directive::FAIL, );
-            (_4, bool:false)
-          };
-          let case_match_1_1 = bool:false;
-          let case_match_1_2 = _5.1;
-          let _6 = if ((case_match_1_1 != case_match_1_2) || bool:false) {
+          let Xls_clause_1_EventStep_1 = message.step;
+          let Xls_clause_1_Cell_1 = (Tag::CELL, data);
+          let Xls_clause_1_Step_1 = data.step;
+          let _0 = Xls_clause_1_Step_1 + 1;
+          let _1 = _0 & 4294967295;
+          let _2 = Xls_clause_1_EventStep_1 == _1;
+          if _2 {
+            let _3 = (Phase::FLIPPING, Xls_clause_1_Cell_1, Directive::POSTPONE, );
+            if (bool:false) {
               (phase, data, Directive::FAIL)
+            } else {
+              (_3.0, _3.1.1, _3.2)
+            }
           } else {
-              (_5.0.0, _5.0.1.1, _5.0.2)
-          };
-          _6
+            let Xls_clause_2_Cell_1 = (Tag::CELL, data);
+            if bool:true {
+              let _0 = (Phase::FLIPPING, Xls_clause_2_Cell_1, Directive::FAIL, );
+              if (bool:false) {
+                (phase, data, Directive::FAIL)
+              } else {
+                (_0.0, _0.1.1, _0.2)
+              }
+            } else {
+              (phase, data, Directive::FAIL)
+            }
+          }
         },
         _ => (phase, data, Directive::FAIL),
       }
@@ -493,88 +496,94 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
       let message = anyonmove_from_bits(frame.payload);
       match phase {
         Phase::GATHERING => {
-          let eventstep_1 = message.step;
-          let _dispatchedphase_1 = phase;
-          let cell_1 = (Tag::CELL, data);
-          let _0 = cell_1.1.step;
-          let _1 = eventstep_1 == _0;
-          let _3 = if _1 {
-          let _2 = (Phase::GATHERING, cell_1, Directive::POSTPONE, );
-            (_2, bool:false)
-          } else {
-          let _2 = (Phase::GATHERING, cell_1, Directive::FAIL, );
-            (_2, bool:false)
-          };
-          let case_match_1_1 = bool:false;
-          let case_match_1_2 = _3.1;
-          let _4 = if ((case_match_1_1 != case_match_1_2) || bool:false) {
+          let Xls_clause_1_Step_1 = message.step;
+          let Xls_clause_1_Cell_1 = (Tag::CELL, data);
+          if Xls_clause_1_Step_1 == data.step {
+            let _0 = (Phase::GATHERING, Xls_clause_1_Cell_1, Directive::POSTPONE, );
+            if (bool:false) {
               (phase, data, Directive::FAIL)
+            } else {
+              (_0.0, _0.1.1, _0.2)
+            }
           } else {
-              (_3.0.0, _3.0.1.1, _3.0.2)
-          };
-          _4
+            let Xls_clause_2_Cell_1 = (Tag::CELL, data);
+            if bool:true {
+              let _0 = (Phase::GATHERING, Xls_clause_2_Cell_1, Directive::FAIL, );
+              if (bool:false) {
+                (phase, data, Directive::FAIL)
+              } else {
+                (_0.0, _0.1.1, _0.2)
+              }
+            } else {
+              (phase, data, Directive::FAIL)
+            }
+          }
         },
         Phase::FLIPPING => {
-          let eventstep_1 = message.step;
-          let present_1 = message.present;
-          let _dispatchedphase_1 = phase;
-          let cell_1 = (Tag::CELL, data);
-          let _0 = cell_1.1.step;
-          let _1 = eventstep_1 == _0;
-          let current_1 = _1;
-          let _2 = present_1 < 2;
-          let validpresent_1 = _2;
-          let _3 = cell_1.1.moves_received;
-          let _4 = _3 + 1;
-          let receivednext_1 = _4;
-          let _5 = receivednext_1 == 4;
-          let ready_1 = _5;
-          let _6 = cell_1.1.anyon;
-          let _7 = _6 + present_1;
-          let _8 = _7 & 1;
-          let nextanyon_1 = _8;
-          let _9 = Cell {
-            moves_received: receivednext_1,
-            anyon: nextanyon_1,
-            ..(cell_1).1
-          };
-          let _10 = (Tag::CELL, _9);
-          let accumulated_1 = _10;
-          let _11 = cell_1.1.step;
-          let _12 = _11 + 1;
-          let _13 = _12 & 4294967295;
-          let _14 = Cell {
-            step: _13,
-            moves_received: 0,
-            anyon: nextanyon_1,
-            ..(cell_1).1
-          };
-          let _15 = (Tag::CELL, _14);
-          let advanced_1 = _15;
-          let _16 = current_1 && validpresent_1;
-          let _19 = if _16 {
-          let _18 = if ready_1 {
-          let _17 = (Phase::GATHERING, advanced_1, Directive::CONSUME, );
-            (_17, bool:false)
+          let Xls_clause_1_Step_1 = message.step;
+          let Xls_clause_1_PresentWord_1 = message.present;
+          let Xls_clause_1_Cell_1 = (Tag::CELL, data);
+          let _1 = if Xls_clause_1_Step_1 == data.step {
+            let _0 = Xls_clause_1_PresentWord_1 < 2;
+            (_0, bool:false)
           } else {
-          let _17 = (Phase::FLIPPING, accumulated_1, Directive::CONSUME, );
-            (_17, bool:false)
+            (bool:0, bool:false)
           };
           let case_match_1_1 = bool:false;
-          let case_match_1_2 = _18.1;
-            (_18.0, (case_match_1_1 != case_match_1_2) || bool:false)
-          } else {
-          let _17 = (Phase::FLIPPING, cell_1, Directive::FAIL, );
-            (_17, bool:false)
-          };
-          let case_match_2_1 = bool:false;
-          let case_match_2_2 = _19.1;
-          let _20 = if ((case_match_2_1 != case_match_2_2) || bool:false) {
+          let case_match_1_2 = _1.1;
+          if _1.0 {
+            let _2 = Xls_clause_1_Cell_1.1.moves_received;
+            let _3 = _2 + 1;
+            let Xls_clause_1_ReceivedNext_1 = _3;
+            let _4 = Xls_clause_1_Cell_1.1.anyon;
+            let _5 = _4 ^ Xls_clause_1_PresentWord_1;
+            let Xls_clause_1_NextAnyon_1 = _5;
+            let _6 = Xls_clause_1_ReceivedNext_1 == 4;
+            let _13 = if _6 {
+              let _7 = Xls_clause_1_Cell_1.1.step;
+              let _8 = _7 + 1;
+              let _9 = _8 & 4294967295;
+              let _10 = Cell {
+                step: _9,
+                moves_received: 0,
+                anyon: Xls_clause_1_NextAnyon_1,
+                ..(Xls_clause_1_Cell_1).1
+              };
+              let _11 = (Tag::CELL, _10);
+              let Xls_clause_1_Advanced_1 = _11;
+              let _12 = (Phase::GATHERING, Xls_clause_1_Advanced_1, Directive::CONSUME, );
+              (_12, bool:false)
+            } else {
+              let _7 = Cell {
+                moves_received: Xls_clause_1_ReceivedNext_1,
+                anyon: Xls_clause_1_NextAnyon_1,
+                ..(Xls_clause_1_Cell_1).1
+              };
+              let _8 = (Tag::CELL, _7);
+              let Xls_clause_1_Accumulated_1 = _8;
+              let _9 = (Phase::FLIPPING, Xls_clause_1_Accumulated_1, Directive::CONSUME, );
+              (_9, bool:false)
+            };
+            let case_match_2_1 = bool:false;
+            let case_match_2_2 = _13.1;
+            if ((case_match_2_1 != case_match_2_2) || bool:false) {
               (phase, data, Directive::FAIL)
+            } else {
+              (_13.0.0, _13.0.1.1, _13.0.2)
+            }
           } else {
-              (_19.0.0, _19.0.1.1, _19.0.2)
-          };
-          _20
+            let Xls_clause_2_Cell_1 = (Tag::CELL, data);
+            if bool:true {
+              let _0 = (Phase::FLIPPING, Xls_clause_2_Cell_1, Directive::FAIL, );
+              if (bool:false) {
+                (phase, data, Directive::FAIL)
+              } else {
+                (_0.0, _0.1.1, _0.2)
+              }
+            } else {
+              (phase, data, Directive::FAIL)
+            }
+          }
         },
         _ => (phase, data, Directive::FAIL),
       }

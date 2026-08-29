@@ -233,9 +233,9 @@ parse_action(
     OutputNames,
     _Line
 ) ->
-    ok = require_declared(entry_output, Port, OutputNames),
+    require_declared(entry_output, Port, OutputNames),
     Tag = message_tag(Message, Bindings),
-    ok = require_declared(entry_message, Tag, MessageNames),
+    require_declared(entry_message, Tag, MessageNames),
     #{port => Port, tag => Tag, message => Message};
 parse_action(Action, _Bindings, _MessageNames, _OutputNames, Line) ->
     error({bad_xls_statem_entry_action, Line, Action}).
@@ -276,45 +276,51 @@ literal_list(Expression, ContextLine) ->
 
 lower_casts(Forms, PhaseNames, MessageNames, DataName, EnumAtoms) ->
     Clauses = xls_parse:find_function(Forms, handle_cast, 3),
+    Groups = xls_callback_lower:group_by(
+        Clauses,
+        fun(Clause) ->
+            cast_key(Clause, MessageNames, PhaseNames)
+        end
+    ),
     Casts = [
-        lower_cast(
-            Clause,
-            PhaseNames,
-            MessageNames,
+        lower_cast_group(
+            Key,
+            Group,
             DataName,
             EnumAtoms
         )
-        || Clause <- Clauses
+        || {Key, Group} <- Groups
     ],
-    Keys = [{maps:get(tag, Cast), maps:get(phase, Cast)} || Cast <- Casts],
-    ok = require_unique(cast_phase, Keys),
     Casts.
 
-lower_cast(
-    Clause0 = {clause, Line, Patterns, Guards, _Body},
-    PhaseNames,
-    MessageNames,
+lower_cast_group(
+    {Tag, Phase},
+    Clauses0,
     DataName,
     EnumAtoms
 ) ->
-    {Tag, Phase} = cast_head(
-        Line,
-        Patterns,
-        Guards,
-        MessageNames,
-        PhaseNames
-    ),
-    Clause = strip_dispatched_phase(Clause0),
-    {Body, Result} = xls_parse:branch_from_clause(
-        Clause,
-        [
-            "message",
-            "phase",
+    Clauses = [strip_dispatched_phase(Clause) || Clause <- Clauses0],
+    MessageValue = [
+        "(Tag::", uppercase(Tag), ", message, bits_from_",
+        record_function_name(Tag), "(message))"
+    ],
+    Arguments = [
+        xls_callback_lower:record_argument(Tag, "message", MessageValue),
+        xls_callback_lower:value_argument("phase"),
+        xls_callback_lower:record_argument(
+            DataName,
+            "data",
             ["(Tag::", uppercase(DataName), ", data)"]
-        ],
+        )
+    ],
+    Failure = "(phase, data, Directive::FAIL)",
+    {Body, Result} = xls_callback_lower:lower(
+        Clauses,
+        Arguments,
         DataName,
         fun(R) -> ["(", R, ".0, ", R, ".1.1, ", R, ".2)"] end,
-        "(phase, data, Directive::FAIL)",
+        Failure,
+        Failure,
         EnumAtoms
     ),
     #{
@@ -323,6 +329,28 @@ lower_cast(
         body => xls_parse:print(Body),
         result => xls_parse:print(Result)
     }.
+
+cast_key(
+    {clause, Line, Patterns, _Guards, _Body},
+    MessageNames,
+    PhaseNames
+) ->
+    {Tag, Phase} = cast_head(
+        Line,
+        Patterns,
+        MessageNames,
+        PhaseNames
+    ),
+    {Tag, Phase}.
+
+cast_head(_Line, [MessagePattern, {atom, _PhaseLine, Phase}, _DataPattern],
+        MessageNames, PhaseNames) ->
+    Tag = xls_callback_lower:record_pattern_name(MessagePattern),
+    require_declared(cast_message, Tag, MessageNames),
+    require_declared(cast_phase, Phase, PhaseNames),
+    {Tag, Phase};
+cast_head(Line, Patterns, _MessageNames, _PhaseNames) ->
+    error({unsupported_xls_statem_cast_head, Line, Patterns}).
 
 %%%
 %%% Validation and AST utilities
@@ -345,21 +373,10 @@ entry_phase(_Line, [
     {atom, _PhaseLine, Phase},
     {var, _DataLine, _Data}
 ], [], PhaseNames) ->
-    ok = require_declared(entry_phase, Phase, PhaseNames),
+    require_declared(entry_phase, Phase, PhaseNames),
     Phase;
 entry_phase(Line, Patterns, Guards, _PhaseNames) ->
     error({unsupported_xls_statem_enter_head, Line, Patterns, Guards}).
-
-cast_head(_Line, [
-    {record, _MessageLine, Tag, _Fields},
-    {atom, _PhaseLine, Phase},
-    {var, _DataLine, _Data}
-], [], MessageNames, PhaseNames) ->
-    ok = require_declared(cast_message, Tag, MessageNames),
-    ok = require_declared(cast_phase, Phase, PhaseNames),
-    {Tag, Phase};
-cast_head(Line, Patterns, Guards, _MessageNames, _PhaseNames) ->
-    error({unsupported_xls_statem_cast_head, Line, Patterns, Guards}).
 
 validate_capacity(Capacity)
         when is_integer(Capacity), Capacity > 0, Capacity =< 255 ->
@@ -403,7 +420,7 @@ strip_dispatched_phase({clause, Line, [First, Phase, Third], Guards, Body}) ->
         Guards, Body}.
 
 dispatched_phase_variable({atom, Line, _Phase}) ->
-    {var, Line, '_DispatchedPhase'}.
+    {var, Line, '_'}.
 
 replace_body({clause, Line, Patterns, Guards, _Body}, Body) ->
     {clause, Line, Patterns, Guards, Body}.
@@ -419,3 +436,6 @@ lowered(Body, Result) ->
 
 uppercase(Atom) ->
     string:uppercase(atom_to_list(Atom)).
+
+record_function_name(Atom) ->
+    lists:delete($_, atom_to_list(Atom)).

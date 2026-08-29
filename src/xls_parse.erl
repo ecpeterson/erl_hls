@@ -8,10 +8,36 @@
 Transforms supported Erlang actor modules into corresponding XLS modules.
 """.
 -export([to_xls/1]).
--export([reference/2, reference/1, instr/2, anonymous_variable/1]).
+%% Internal API shared by the actor-specific lowerers while this module is
+%% split into smaller compiler passes.
+-export([
+    bitsfromstruct_from_record/1,
+    branch_from_clause/4,
+    branch_from_clause/6,
+    find_attribute/2,
+    find_function/3,
+    find_record/2,
+    mismatch_expression/2,
+    print/1,
+    record_width/1,
+    statement_from_statement/2,
+    struct_from_record/1,
+    structfrombits_from_record/1,
+    uniquify/2,
+    validate_record_defaults/1
+]).
+-export([
+    reference/2,
+    reference/1,
+    instr/2,
+    instr/3,
+    anonymous_variable/1
+]).
 -export_type([ir/0, printable/0, static/0, phantom/0]).
 -export_type([clause_state/0]).
 -compile([export_all, nowarn_export_all]).  % TODO: remove export_all
+
+-include("xls_parse.hrl").
 
 -define(debug(X), begin io:format("~w@~w: ~p~n", [?FUNCTION_NAME, ?LINE, X]), X end).
 
@@ -90,32 +116,7 @@ to_xls_gs(Filename, Forms) ->
         let (resp, new_state) = match frame.header.op as Tag {
 
     """],
-    [
-        ["\n", "Tag::", string:uppercase(Op), " => {\n",
-        "let request = ", lists:delete($_, Op), "_from_bits(frame.payload);\n",
-        Body,
-        RetVal, "\n",
-        "},\n"]
-        ||  Clause <- handle_call(Forms),
-            Op <- [atom_to_list(op_from_clause(Clause))],
-            {Body, RetVal} <- [branch_from_clause(Clause, ["request", "state_record"], StateName,
-                fun(R) -> ["(axis::pack(", R, ".1.0 as u8, ", R, ".1.2), ", R, ".2)"] end)]
-    ],
-    [
-        ["\n", "Tag::", string:uppercase(TagName), " => {\n",
-        "let request = ", StructFunctionName, "_from_bits(frame.payload);\n",
-        Body,
-        RetVal, "\n",
-        "},\n"]
-        ||  Clause <- handle_cast(Forms),
-            TagName <- [atom_to_list(op_from_clause(Clause))],
-            StructFunctionName <- [lists:delete($_, TagName)],
-            {Body, RetVal} <- [branch_from_clause(
-                Clause,
-                ["request", "state_record"],
-                StateName,
-                fun(R) -> ["(zero!<axis::Frame>(), ", R, ".1)"] end)]
-    ],
+    xls_gs_lower:callback_arms(Forms, StateName),
     """
 
         _ => {
@@ -189,15 +190,6 @@ print({static, integer, Integer}) ->
 -doc """
  
 """.
--record(clause_state, {
-    anonymous_counter = 0 :: integer(),
-    match_counter = 0 :: integer(),
-    named_counters = #{} :: #{atom() => integer()},
-    statements = [] :: printable(),
-    reference = none :: none | ir(),
-    state_name = undefined :: undefined | atom(),
-    enum_atoms = #{} :: #{atom() => printable()}
-}).
 -type clause_state() :: #clause_state{}.
 
 -spec branch_from_clause(
@@ -397,13 +389,17 @@ lower_boolean_case(Condition, Clauses, State0) ->
     },
     CaseState = instr(MergedState, [
         "if ", reference(ConditionState), " {\n",
-        lists:reverse(TrueState#clause_state.statements),
+        xls_parse_io:indent(print(
+            lists:reverse(TrueState#clause_state.statements)
+        ), 2),
         "  (", reference(TrueState), ", ", mismatch_expression(
             TrueState#clause_state.named_counters,
             BaseCounters
         ), ")\n",
         "} else {\n",
-        lists:reverse(FalseState#clause_state.statements),
+        xls_parse_io:indent(print(
+            lists:reverse(FalseState#clause_state.statements)
+        ), 2),
         "  (", reference(FalseState), ", ", mismatch_expression(
             FalseState#clause_state.named_counters,
             BaseCounters
@@ -461,6 +457,7 @@ lower_expression_sequence(Expressions, State0) ->
         Expressions
     ).
 
+-spec mismatch_expression(map(), map()) -> printable().
 mismatch_expression(Counters, Baseline) ->
     [
         [
@@ -506,18 +503,6 @@ destructure_lhs({var, _L, NameAtom}, State) ->
     %% TODO: need to record time-order data to report correct error
     %% TODO: also want to report eg line number on error, other present state
     {Name, NewState} = uniquify(State, NameAtom),
-
-    %% Synthetic equality checks use these namespaces. Rejecting them at the
-    %% Erlang boundary keeps their generated bindings hygienic until the IR has
-    %% a proper gensym facility.
-    case Name of
-        "static_match" ++ _Rest ->
-            error({reserved_xls_variable, NameAtom, static_match});
-        "case_match" ++ _Rest ->
-            error({reserved_xls_variable, NameAtom, case_match});
-        _ -> ok
-    end,
-
     RHS = NewState#clause_state.reference,
     Bind = ["let ", Name, " = ", RHS, ";\n"],
     NewState#clause_state{statements = [Bind | NewState#clause_state.statements]};
@@ -709,15 +694,16 @@ anonymous_variable(State = #clause_state{anonymous_counter = Counter}) ->
 -spec get_name(clause_state(), atom()) -> string().
 -doc "Maps Erlang variable names onto emitted XLS names.".
 get_name(_State, Name) ->
-    %% XLS wants names to be lower case, and we affix the _1 to avoid collisions
-    %% with names hard-coded into the template (e.g., state, request).
-    string:lowercase(atom_to_list(Name)) ++ "_1".
+    %% The suffix avoids collisions with names hard-coded into the template
+    %% (e.g., state and request). DSLX identifiers are case-sensitive, so keep
+    %% the Erlang spelling instead of conflating variables such as Foo and FOO.
+    atom_to_list(Name) ++ "_1".
 
-%% TODO: explain why this is needed
--spec uniquify(clause_state(), atom() | string()) -> string().
+-spec uniquify(clause_state(), atom() | string()) ->
+    {string(), clause_state()}.
 -doc "Rewrites NameAtom in a way that guarantees no collision with previous uses.".
 uniquify(State, NameAtom) when is_atom(NameAtom) ->
-    Name = string:lowercase(atom_to_list(NameAtom)),
+    Name = atom_to_list(NameAtom),
     uniquify(State, Name);
 uniquify(State = #clause_state{named_counters = Counters}, Name) ->
     Counter = maps:get(Name, Counters, 0) + 1,
@@ -756,39 +742,28 @@ instr(ClauseState, Place, Expr) ->
 -spec op(Op :: atom(), Args :: [any()]) -> iolist().
 -doc "Translates a built-in Erlang op to an XLS op.".
 op('+', [Left, Right]) -> [Left, " + ", Right];
+op('-', [Left, Right]) -> [Left, " - ", Right];
 op('*', [Left, Right]) -> [Left, " * ", Right];
 op('div', [Left, Right]) -> [Left, " / ", Right];
 op('bsl', [Left, Right]) -> [Left, " << ", Right];
 op('bsr', [Left, Right]) -> [Left, " >> ", Right];
 op('band', [Left, Right]) -> [Left, " & ", Right];
 op('bor', [Left, Right]) -> [Left, " | ", Right];
+op('bxor', [Left, Right]) -> [Left, " ^ ", Right];
 op('bnot', [Operand]) -> ["!", Operand];
+op('not', [Operand]) -> ["!", Operand];
 op('<', [Left, Right]) -> [Left, " < ", Right];
+op('=<', [Left, Right]) -> [Left, " <= ", Right];
+op('>', [Left, Right]) -> [Left, " > ", Right];
+op('>=', [Left, Right]) -> [Left, " >= ", Right];
 op('=:=', [Left, Right]) -> [Left, " == ", Right];
+op('=/=', [Left, Right]) -> [Left, " != ", Right];
 op('andalso', [Left, Right]) -> [Left, " && ", Right];
 op('orelse', [Left, Right]) -> [Left, " || ", Right].
 
 %%%
 %%% Search / selection tools
 %%%
-
-%% TODO: be more consistent about whether you return un/packed abstract forms
-
--spec op_from_clause(erl_parse:af_clause()) -> atom().
--doc "Extracts the record type name being matched against in this Clause.".
-op_from_clause(Clause) ->
-    {clause, _1, [{record, _2, Atom, _Contents} | _Rest], _3, _Body} = Clause,
-    Atom.
-
--spec handle_cast([erl_parse:abstract_form()]) -> erl_parse:af_clause_seq().
--doc "Picks out the handle_cast/2 function from the set of Forms.".
-handle_cast(Forms) ->
-    find_function(Forms, handle_cast, 2).
-
--spec handle_call([erl_parse:abstract_form()]) -> erl_parse:af_clause_seq().
--doc "Picks out the handle_call/2 function from the set of Forms.".
-handle_call(Forms) ->
-    find_function(Forms, handle_call, 2).
 
 -spec init([erl_parse:abstract_form()]) -> erl_parse:af_clause().
 -doc "Picks out the init/1 function from the set of Forms.".

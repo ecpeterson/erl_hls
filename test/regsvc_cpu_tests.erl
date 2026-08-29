@@ -3,7 +3,19 @@
 -include_lib("eunit/include/eunit.hrl").
 
 cpu_reference_test_() ->
-    target_test_(fun regsvc:start_link/0).
+    target_test_(fun regsvc:start_link/0, fun scenario_/1).
+
+guarded_cast_clause_cpu_test_() ->
+    target_test_(
+        fun regsvc:start_link/0,
+        fun guarded_cast_clause_scenario_/1
+    ).
+
+ordered_call_clause_cpu_test_() ->
+    target_test_(
+        fun regsvc:start_link/0,
+        fun ordered_call_clause_scenario_/1
+    ).
 
 simulated_rtl_test_() ->
     case os:getenv("ERL_XLS_SIM_DIR") of
@@ -74,7 +86,7 @@ simulated_rtl_test_() ->
                 end}
     end.
 
-target_test_(Start) ->
+target_test_(Start, Scenario) ->
     {setup,
         fun() ->
             {ok, Pid} = Start(),
@@ -83,7 +95,7 @@ target_test_(Start) ->
         fun(Pid) ->
             regsvc:stop(Pid)
         end,
-        fun(Pid) -> scenario_(Pid) end}.
+        fun(Pid) -> Scenario(Pid) end}.
 
 scenario_(Pid) ->
     [
@@ -196,8 +208,17 @@ debug_scenario_(Pid, DebugPid) ->
 
 rtl_error_scenario_(Pid) ->
     [
+        ?_test(begin
+            ok = regsvc:set(Pid, 16, 16#ffffffff, 0),
+            ?assertEqual(3, regsvc:get(Pid, 0))
+        end),
+        ?_assertEqual([], regsvc:bulk_get(Pid, 16, 0)),
         ?_assertEqual(
-            {error, {remote_error, match_failure}},
+            {error, {remote_error, function_clause}},
+            gen_server:call(Pid, {bulk_get, 16, 1})
+        ),
+        ?_assertEqual(
+            {error, {remote_error, function_clause}},
             gen_server:call(Pid, {get, 16})
         ),
         ?_assertEqual(
@@ -205,6 +226,19 @@ rtl_error_scenario_(Pid) ->
             gen_server:call(Pid, {ack, 0})
         ),
         ?_assertEqual(0, regsvc:get(Pid, 0))
+    ].
+
+guarded_cast_clause_scenario_(Pid) ->
+    [
+        ?_test(begin
+            ok = regsvc:set(Pid, 16, 16#ffffffff, 0),
+            ?assertEqual(0, regsvc:get(Pid, 0))
+        end)
+    ].
+
+ordered_call_clause_scenario_(Pid) ->
+    [
+        ?_assertEqual([], regsvc:bulk_get(Pid, 16, 0))
     ].
 
 routed_pair_scenario_(PidOne, PidTwo) ->

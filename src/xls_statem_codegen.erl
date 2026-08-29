@@ -170,7 +170,7 @@ entry_arm(#{
     [
         "    Phase::", uppercase(Phase), " => {\n",
         "      let entered_data = {\n",
-        indent(DataBody, 8),
+        xls_parse_io:indent(DataBody, 8),
         "        ", DataResult, "\n",
         "      };\n",
         [entry_output_binding(Port, maps:get(Port, OutputSpecs))
@@ -200,7 +200,7 @@ entry_output_binding(Port, #{
 }) ->
     [
         "      let ", name(Port), " = {\n",
-        indent(Body, 8),
+        xls_parse_io:indent(Body, 8),
         "        ", Result, "\n",
         "      };\n"
     ].
@@ -241,8 +241,8 @@ dispatch_phase_arm(#{
 }) ->
     [
         "        Phase::", uppercase(Phase), " => {\n",
-        indent(Body, 10),
-        "          ", Result, "\n",
+        xls_parse_io:indent(Body, 10),
+        xls_parse_io:indent(Result, 10),
         "        },\n"
     ].
 
@@ -561,8 +561,3 @@ join_with(_Separator, []) ->
     [];
 join_with(Separator, [First | Rest]) ->
     [First | [[Separator, Item] || Item <- Rest]].
-
-indent(Data, Spaces) ->
-    Prefix = lists:duplicate(Spaces, $\s),
-    Lines = string:split(iolist_to_binary(Data), "\n", all),
-    [[Prefix, Line, "\n"] || Line <- Lines, Line =/= <<>>].

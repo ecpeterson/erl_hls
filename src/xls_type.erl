@@ -2,7 +2,7 @@
 -moduledoc """
  
 """.
--export([zero/0, zero/1, select/3, width/1, pack/2, unpack/2, print_type/1]).
+-export([zero/0, zero/1, width/1, pack/2, unpack/2, print_type/1]).
 -compile(export_all).
 
 %%%
@@ -74,19 +74,6 @@ zero() ->
 -doc "". 
 zero(#xls_type{module = Module, name = Name, args = Args}) ->
     Module:zero(Name, Args).
-
-%% TODO: Replace this eager helper with direct lowering for Erlang `if` and
-%% `case`, including branch-local expressions and a same-type result join.
-%% Do not grow this into a substitute library for language-level control flow.
--doc "Chooses between two values of the same XLS type.".
--spec select(boolean(), T, T) -> T.
-select(true, WhenTrue, _WhenFalse) ->
-    WhenTrue;
-select(false, _WhenTrue, WhenFalse) ->
-    WhenFalse.
-
-transpile(select, [Condition, WhenTrue, WhenFalse], _State) ->
-    ["if ", Condition, " { ", WhenTrue, " } else { ", WhenFalse, " }"].
 
 -spec width(descriptor()) -> integer().
 -doc "". 
