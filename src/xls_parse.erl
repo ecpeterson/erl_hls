@@ -827,10 +827,22 @@ find_spec(Forms, F, A) ->
 -spec parse_file(string()) -> [erl_parse:abstract_form()].
 -doc "Helper routine for reading an entire .erl source file into memory.".
 parse_file(Filename) ->
-    {ok, Epp} = epp:open([{name, Filename}]),
+    {ok, Epp} = epp:open([
+        {name, Filename},
+        {includes, include_paths(Filename)}
+    ]),
     try
         {ok, epp:parse_file(Epp)}
     after
         epp:close(Epp),
         err
+    end.
+
+include_paths(Filename) ->
+    SourceDirectory = filename:dirname(Filename),
+    case code:lib_dir(erl_xls, include) of
+        {error, bad_name} ->
+            [SourceDirectory, filename:absname("include")];
+        ApplicationInclude ->
+            [SourceDirectory, ApplicationInclude]
     end.

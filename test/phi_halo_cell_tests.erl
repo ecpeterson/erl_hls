@@ -29,6 +29,49 @@ comparison_entry_labels_recipient_edges_test() ->
 coin_gates_selected_anyon_output_test() ->
     with_cell(fun coin_gates_selected_anyon_output/2).
 
+measurement_gates_diffusion_and_toggles_anyon_test() ->
+    {CardinalCollectors, Ref} = start_collectors(),
+    Parent = self(),
+    Syndrome = spawn_link(fun() ->
+        collector_loop(Parent, Ref, syndrome)
+    end),
+    Collectors = CardinalCollectors#{syndrome => Syndrome},
+    {ok, PID} = phi_halo_cell:start_link(),
+    try
+        ok = phi_halo_cell:connect(PID, Collectors),
+        expect_port_cast(Ref, syndrome, {phenom_request, 0}),
+
+        four_phis(PID, 0, [0, 0]),
+        Waiting = phi_halo_cell:runtime_info(PID),
+        ?assertEqual(measuring, maps:get(phase, Waiting)),
+        ?assertEqual(4, maps:get(postponed, Waiting)),
+        ?assertEqual(4, maps:get(committed, maps:get(mailbox, Waiting))),
+        ?assertMatch(
+            {cell, 0, 0, [0, 0], [0, 0], 0,
+                0, 0, 0, 0, 0, ?PRNG_SEED},
+            maps:get(data, Waiting)
+        ),
+        assert_no_neighbor_cast(Ref),
+
+        ok = phi_halo_cell:offer_measurement(PID, 0, true),
+        expect_neighbor_sequences(Ref, [
+            {phi, 0, [0, 0]},
+            {phi, 1, [65536, 0]}
+        ]),
+        Running = phi_halo_cell:runtime_info(PID),
+        ?assertEqual(gathering, maps:get(phase, Running)),
+        ?assertEqual(0, maps:get(postponed, Running)),
+        ?assertEqual(0, maps:get(committed, maps:get(mailbox, Running))),
+        ?assertMatch(
+            {cell, 0, 1, [65536, 0], [0, 0], 0,
+                0, 0, 0, 0, 1, ?PRNG_SEED},
+            maps:get(data, Running)
+        )
+    after
+        stop_cell(PID),
+        stop_collectors(Ref, Collectors)
+    end.
+
 comparison_source_orders_test_() ->
     Unique = comparison_messages([
         {north, 14},
@@ -137,7 +180,7 @@ local_departure_and_arrivals_combine_by_parity_test() ->
         flipping,
         Cell
     ),
-    {gathering, Advanced, consume} = apply_anyons(
+    {measuring, Advanced, consume} = apply_anyons(
         [true, false, true, true],
         Departed
     ),
@@ -148,8 +191,13 @@ local_departure_and_arrivals_combine_by_parity_test() ->
     ).
 
 deferred_connection_delays_initial_entry_test() ->
-    {Collectors, Ref} = start_collectors(),
+    {CardinalCollectors, Ref} = start_collectors(),
     {ok, PID} = phi_halo_cell:start_link(),
+    Collectors = add_zero_measurement_source(
+        PID,
+        CardinalCollectors,
+        Ref
+    ),
     try
         Info = phi_halo_cell:runtime_info(PID),
         ?assertNot(maps:get(connected, Info)),
@@ -165,8 +213,13 @@ deferred_connection_delays_initial_entry_test() ->
     end.
 
 early_phi_casts_wait_for_initial_entry_test() ->
-    {Collectors, Ref} = start_collectors(),
+    {CardinalCollectors, Ref} = start_collectors(),
     {ok, PID} = phi_halo_cell:start_link(),
+    Collectors = add_zero_measurement_source(
+        PID,
+        CardinalCollectors,
+        Ref
+    ),
     try
         four_phis(PID, 0, [16, 32]),
         Before = phi_halo_cell:runtime_info(PID),
@@ -209,29 +262,52 @@ deferred_degree_four_cycle_completes_multiple_steps_test() ->
         end
         || _ <- lists:seq(1, 4)
     ],
+    MeasurementSources = [
+        spawn_link(fun() -> zero_measurement_loop(PID) end)
+        || PID <- Cells
+    ],
     [NorthWest, NorthEast, SouthWest, SouthEast] = Cells,
+    [NorthWestMeasurement, NorthEastMeasurement,
+        SouthWestMeasurement, SouthEastMeasurement] = MeasurementSources,
     try
         %% In a 2x2 periodic mesh, north and south reach the same cell, as do
         %% east and west; the four named ports still represent four edges.
         ok = phi_halo_cell:connect(
             NorthWest,
-            torus_neighbors(NorthEast, SouthWest)
+            torus_neighbors(
+                NorthEast,
+                SouthWest,
+                NorthWestMeasurement
+            )
         ),
         ok = phi_halo_cell:connect(
             NorthEast,
-            torus_neighbors(NorthWest, SouthEast)
+            torus_neighbors(
+                NorthWest,
+                SouthEast,
+                NorthEastMeasurement
+            )
         ),
         ok = phi_halo_cell:connect(
             SouthWest,
-            torus_neighbors(SouthEast, NorthWest)
+            torus_neighbors(
+                SouthEast,
+                NorthWest,
+                SouthWestMeasurement
+            )
         ),
         ok = phi_halo_cell:connect(
             SouthEast,
-            torus_neighbors(SouthWest, NorthEast)
+            torus_neighbors(
+                SouthWest,
+                NorthEast,
+                SouthEastMeasurement
+            )
         ),
         lists:foreach(fun(PID) -> await_step(PID, 2) end, Cells)
     after
-        lists:foreach(fun stop_cell/1, Cells)
+        lists:foreach(fun stop_cell/1, Cells),
+        lists:foreach(fun(PID) -> PID ! stop end, MeasurementSources)
     end.
 
 four_named_outputs_receive_one_cast_each_test() ->
@@ -312,16 +388,20 @@ generated_dslx_matches_checked_in_artifact_test() ->
     %% Multiple clauses for a message and phase still produce one ordered
     %% selector per {message tag, phase} pair.
     ?assertEqual(
-        3,
+        4,
         length(binary:matches(Dispatch, <<"Phase::GATHERING =>">>))
     ),
     ?assertEqual(
-        2,
+        3,
         length(binary:matches(Dispatch, <<"Phase::FLIPPING =>">>))
     ),
     ?assertEqual(
-        3,
+        4,
         length(binary:matches(Dispatch, <<"Phase::COMPARING =>">>))
+    ),
+    ?assertEqual(
+        4,
+        length(binary:matches(Dispatch, <<"Phase::MEASURING =>">>))
     ),
     ?assertNotEqual(
         nomatch,
@@ -344,18 +424,37 @@ generated_dslx_matches_checked_in_artifact_test() ->
             Generated,
             <<"Tag::PHI0 as u8) && frame.header.payload_words == u8:3">>
         )
+    ),
+    ?assertNotEqual(
+        nomatch,
+        binary:match(
+            Generated,
+            <<"Tag::PHENOM_ANYON as u8) && "
+              "frame.header.payload_words == u8:2">>
+        )
     ).
 
 message_wire_abi_test() ->
     Phi = {phi, 16#01020304, [16#11121314, 16#21222324]},
     Move = {anyon_move, 16#31323334, 1},
     Phi0 = {phi0, 16#41424344, ?SOUTH_MASK, 16#51525354},
+    Measurement = {phenom_anyon, 16#61626364, 1},
     ?assertEqual(3, phi_halo_cell:pack_tag(phi)),
     ?assertEqual(4, phi_halo_cell:pack_tag(anyon_move)),
     ?assertEqual(5, phi_halo_cell:pack_tag(phi0)),
     ?assertEqual(phi, phi_halo_cell:unpack_tag(3)),
     ?assertEqual(anyon_move, phi_halo_cell:unpack_tag(4)),
     ?assertEqual(phi0, phi_halo_cell:unpack_tag(5)),
+    ?assertEqual(6, phi_halo_cell:pack_tag(phenom_config)),
+    ?assertEqual(7, phi_halo_cell:pack_tag(phenom_request)),
+    ?assertEqual(8, phi_halo_cell:pack_tag(phenom_query)),
+    ?assertEqual(9, phi_halo_cell:pack_tag(phenom_data)),
+    ?assertEqual(10, phi_halo_cell:pack_tag(phenom_anyon)),
+    ?assertEqual(phenom_config, phi_halo_cell:unpack_tag(6)),
+    ?assertEqual(phenom_request, phi_halo_cell:unpack_tag(7)),
+    ?assertEqual(phenom_query, phi_halo_cell:unpack_tag(8)),
+    ?assertEqual(phenom_data, phi_halo_cell:unpack_tag(9)),
+    ?assertEqual(phenom_anyon, phi_halo_cell:unpack_tag(10)),
     PackedPhi = phi_halo_cell:pack(Phi),
     ?assertEqual(
         <<
@@ -390,6 +489,18 @@ message_wire_abi_test() ->
     ?assertEqual(
         {Phi0, <<>>},
         phi_halo_cell:unpack(phi0, PackedPhi0)
+    ),
+    PackedMeasurement = phi_halo_cell:pack(Measurement),
+    ?assertEqual(
+        <<
+            16#61626364:32/unsigned-little-integer,
+            1:32/unsigned-little-integer
+        >>,
+        PackedMeasurement
+    ),
+    ?assertEqual(
+        {Measurement, <<>>},
+        phi_halo_cell:unpack(phenom_anyon, PackedMeasurement)
     ).
 
 two_layer_relaxation_coefficients_test() ->
@@ -768,16 +879,55 @@ with_cell(Test) ->
     end.
 
 start_cell() ->
-    {Collectors, Ref} = start_collectors(),
+    {CardinalCollectors, Ref} = start_collectors(),
+    MeasurementSource = spawn_link(fun() ->
+        unbound_zero_measurement_loop(Ref)
+    end),
+    Collectors = CardinalCollectors#{syndrome => MeasurementSource},
     {ok, PID} = phi_halo_cell:start_link(Collectors),
+    MeasurementSource ! {target, PID},
     {PID, Collectors, Ref}.
 
-torus_neighbors(Horizontal, Vertical) ->
+add_zero_measurement_source(PID, Collectors, Ref) ->
+    MeasurementSource = spawn_link(fun() ->
+        zero_measurement_loop(PID, Ref)
+    end),
+    Collectors#{syndrome => MeasurementSource}.
+
+unbound_zero_measurement_loop(Ref) ->
+    %% An immediate start can cast its first request before start_link/1
+    %% returns the cell PID. Selective receive leaves that request queued until
+    %% the caller supplies the target.
+    receive
+        {target, PID} -> zero_measurement_loop(PID, Ref)
+    end.
+
+zero_measurement_loop(PID) ->
+    receive
+        {'$gen_cast', {phenom_request, Step}} ->
+            ok = phi_halo_cell:offer_measurement(PID, Step, false),
+            zero_measurement_loop(PID);
+        stop ->
+            ok
+    end.
+
+zero_measurement_loop(PID, Ref) ->
+    receive
+        {'$gen_cast', {phenom_request, Step}} ->
+            ok = phi_halo_cell:offer_measurement(PID, Step, false),
+            zero_measurement_loop(PID, Ref);
+        {stop, Stopper} ->
+            Stopper ! {collector_stopped, Ref, syndrome},
+            ok
+    end.
+
+torus_neighbors(Horizontal, Vertical, MeasurementSource) ->
     #{
         north => Vertical,
         east => Horizontal,
         west => Horizontal,
-        south => Vertical
+        south => Vertical,
+        syndrome => MeasurementSource
     }.
 
 await_step(PID, Step) ->
@@ -821,6 +971,17 @@ collector_loop(Parent, Ref, Port) ->
         {stop, Stopper} ->
             Stopper ! {collector_stopped, Ref, Port},
             ok
+    end.
+
+expect_port_cast(Ref, Port, Expected) ->
+    receive
+        {neighbor_cast, Ref, Port, Expected} ->
+            ok;
+        {neighbor_cast, Ref, OtherPort, Other} ->
+            error({unexpected_neighbor_cast,
+                OtherPort, Port, Expected, Other})
+    after 1000 ->
+        error({missing_neighbor_cast, Port, Expected})
     end.
 
 expect_neighbor_batch(Ref, Expected) ->
@@ -997,13 +1158,14 @@ stop_collectors(Ref, Collectors) ->
         fun(_Port, PID) -> PID ! {stop, self()} end,
         Collectors
     ),
+    Ports = maps:keys(Collectors),
     lists:foreach(
         fun(Port) ->
             receive
                 {collector_stopped, Ref, Port} -> ok
             end
         end,
-        [north, east, west, south]
+        Ports
     ),
     flush_neighbor_casts(Ref).
 

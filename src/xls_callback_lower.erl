@@ -71,7 +71,7 @@ lower_chain(
         state_name = StateName,
         enum_atoms = EnumAtoms
     },
-    {PatternState, Conditions} = xls_pattern_lower:compile(
+    {PatternState, Conditions} = xls_pattern_lower:lower(
         Patterns,
         Arguments,
         Initial

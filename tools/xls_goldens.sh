@@ -20,12 +20,20 @@ generated=(
     regsvc.v
     phi_halo_cell.x
     phi_halo_cell.v
+    phenom_data_cell.x
+    phenom_data_cell.v
+    phenom_syndrome_cell.x
+    phenom_syndrome_cell.v
 )
 goldens=(
     src/examples/regsvc.erl.x
     src/examples/regsvc.v
     src/examples/phi_halo_cell.erl.x
     src/examples/phi_halo_cell.v
+    src/examples/phenom_data_cell.erl.x
+    src/examples/phenom_data_cell.v
+    src/examples/phenom_syndrome_cell.erl.x
+    src/examples/phenom_syndrome_cell.v
 )
 
 missing=false

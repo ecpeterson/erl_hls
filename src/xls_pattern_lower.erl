@@ -10,7 +10,7 @@
 -include("xls_parse.hrl").
 
 -export([
-    compile/3,
+    lower/3,
     record_argument/3,
     record_pattern_name/1,
     value_argument/1
@@ -45,12 +45,12 @@ record_pattern_name({match, _Line, Pattern, {var, _VarLine, _Name}}) ->
 record_pattern_name(Pattern) ->
     error({unsupported_xls_record_pattern, Pattern}).
 
--spec compile(
+-spec lower(
     [erl_parse:af_pattern()],
     [argument()],
     xls_parse:clause_state()
 ) -> {xls_parse:clause_state(), [xls_parse:printable()]}.
-compile(Patterns, Arguments, State)
+lower(Patterns, Arguments, State)
         when length(Patterns) =:= length(Arguments) ->
     Context0 = #{state => State, bindings => #{}, conditions => []},
     Context1 = lists:foldl(
@@ -64,7 +64,7 @@ compile(Patterns, Arguments, State)
         maps:get(state, Context1),
         lists:reverse(maps:get(conditions, Context1))
     };
-compile(Patterns, Arguments, _State) ->
+lower(Patterns, Arguments, _State) ->
     error({bad_xls_pattern_arity,
         pattern_line(Patterns), length(Patterns), length(Arguments)}).
 

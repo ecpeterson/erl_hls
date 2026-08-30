@@ -25,10 +25,10 @@ routing scenario and the EUnit application scenario through a VPI bridge.
 Independent application and debug FIFO pairs carry the two physical AXI Stream
 paths. The runner does not use or modify the VM's existing `~/erl_xls`
 checkout, and finishes by checking all four source-adjacent DSLX and RTL
-artifacts.
+artifact pairs declared in `tools/xls_goldens.sh`.
 
-After changing the translator or either translated example, refresh all four
-checked-in artifacts with the same full regression:
+After changing the translator or a translated example, refresh the checked-in
+artifacts with the same full regression:
 
 ```sh
 tools/update_xls_goldens.sh
@@ -36,6 +36,12 @@ tools/update_xls_goldens.sh
 
 The files are copied only after the pinned remote flow and its simulations
 complete successfully.
+
+The phi example also includes lowerable phenomenological data- and syndrome-
+noise actors. CPU tests wire those actors to a self-periodic phi cell and run
+the request/query/measurement pipeline across consecutive decoder steps. The
+pinned XLS flow converts, optimizes, and generates RTL for each actor; an
+elaborated multi-actor hardware mesh remains a separate topology task.
 
 The remote host and paths can be overridden with `ERL_XLS_REMOTE_HOST`,
 `ERL_XLS_REMOTE_ROOT`, and `ERL_XLS_REMOTE_XLS`.
