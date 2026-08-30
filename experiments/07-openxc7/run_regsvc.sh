@@ -127,7 +127,7 @@ do
 done
 
 verify_manifest_entry \
-    input axis.x "$project_root/experiments/05-xls/axis.x"
+    input axis.x "$project_root/src/axis.x"
 for debug_module in \
     xls_debug_types.x \
     xls_debug_trace.x \

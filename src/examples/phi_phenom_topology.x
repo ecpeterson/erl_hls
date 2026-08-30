@@ -151,9 +151,14 @@ pub proc Top {
     spawn DataConfig(data_config_p);
     spawn SyndromeConfig(syndrome_config_p);
 
-    // TODO: Replace these pairwise mux trees with a generated, credit-aware
-    // N-way ingress. This first fixture favors direct composition over FIFO
-    // count; every tree edge currently contributes one 128-bit buffer.
+    // TODO: Generate this wrapper from a semantic actor graph containing
+    // instances, application routes, coupled fanout, startup messages, and
+    // reset domains. A restricted static supervisor can supply instances and
+    // reset relationships, but application-data routes must remain explicit.
+    // The transport backend should replace these pairwise mux trees with a
+    // credit-aware N-way ingress. This first fixture favors direct composition
+    // over FIFO count; every tree edge currently contributes one 128-bit
+    // buffer.
     //
     // Four logical ports from an actor also alias one destination here. The
     // barrier protocols tolerate their interleaving, but a general topology

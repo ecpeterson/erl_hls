@@ -5,10 +5,18 @@
 Build with these steps:
 
 ```sh
-ir_converter_main --warnings_as_errors=false --top=Top regsvc.x > regsvc.ir  # warnings_as_errors only relevant for erl_xls codegen
+ir_converter_main \
+    --warnings_as_errors=false \
+    --dslx_path=../../src \
+    --top=Top \
+    regsvc.x > regsvc.ir
 opt_main regsvc.ir > regsvc.opt.ir
 codegen_main --pipeline_stages=1 --delay_model=unit --use_system_verilog=false --reset=reset regsvc.opt.ir --fifo_module= > regsvc.v
 ```
+
+The shared `axis.x` runtime module now lives in `src/`; it is no longer local
+to this historical experiment. `--warnings_as_errors=false` is only needed for
+the Erlang-generated DSLX.
 
 Then, import the generated `xls_regsvc.v` alongside the static `xls_regsvc_wrapper.v` (which segments the message bus into TDATA, TLAST, etc., and adds Vivado port annotations).
 

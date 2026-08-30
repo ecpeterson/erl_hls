@@ -46,7 +46,7 @@ erl \
         halt().
     '
 
-cp "$project_root/experiments/05-xls/axis.x" "$stage/axis.x"
+cp "$project_root/src/axis.x" "$stage/axis.x"
 cp "$project_root/src/examples/phi_phenom_topology.x" \
     "$stage/phi_phenom_topology.x"
 cp "$project_root/src/examples/regsvc_core_adapter.v" \

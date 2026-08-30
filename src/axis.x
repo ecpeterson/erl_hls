@@ -154,8 +154,14 @@ pub proc ReservedFrame {
 // Fairly merges two atomic Frame streams. Since a Frame is transferred in one
 // channel operation, arbitration has no packet lock or TLAST state. Preference
 // alternates after every attempt. An empty preferred input yields the cycle
-// and lets the other input go first on the next activation. This keeps one
-// non-blocking receive operation per channel, as required by XLS lowering.
+// and lets the other input go first on the next activation.
+//
+// XLS requires a non-blocking receive to be the only receive operation on its
+// channel, even when two receive sites are in mutually exclusive branches.
+// Trying the preferred input and then the other one would therefore need to
+// poll both channels and retain an unselected Frame. Keep this small symmetric
+// mux stateless apart from its preference bit; a generated N-way ingress can
+// choose a different throughput/storage tradeoff.
 pub proc FrameMux2 {
   left_in: chan<Frame> in;
   right_in: chan<Frame> in;
