@@ -376,6 +376,10 @@ generated_dslx_matches_checked_in_artifact_test() ->
         xls_parse:to_xls("src/examples/phi_halo_cell.erl")
     ),
     ?assertEqual(Expected, Generated),
+    ?assertNotEqual(
+        nomatch,
+        binary:match(Generated, <<"pub proc Service">>)
+    ),
     {DispatchStart, _DispatchMarkerLength} = binary:match(
         Generated,
         <<"fn dispatch">>

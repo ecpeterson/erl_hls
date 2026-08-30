@@ -78,9 +78,9 @@ done
     --fifo_module= \
     phi_halo_cell.opt.ir > phi_halo_cell.v
 
-# The phenomenological actors currently have CPU protocol coverage and
-# compile/codegen conformance coverage. Their eventual elaborated mesh will
-# supply the multi-process RTL simulation boundary.
+# Keep independent actor codegen for the source-adjacent goldens. The combined
+# frame topology below imports these DSLX modules and generates one collision-
+# free RTL graph rather than composing their separately generated Verilog.
 for actor in phenom_data_cell phenom_syndrome_cell; do
     "$xls_root/ir_converter_main" \
         --warnings_as_errors=false \
@@ -100,6 +100,24 @@ for actor in phenom_data_cell phenom_syndrome_cell; do
         "$actor.opt.ir" > "$actor.v"
 done
 
+"$xls_root/ir_converter_main" \
+    --warnings_as_errors=false \
+    --dslx_path=. \
+    --dslx_stdlib_path="$stdlib" \
+    --top=Top \
+    phi_phenom_topology.x > phi_phenom_topology.ir
+
+"$xls_root/opt_main" \
+    phi_phenom_topology.ir > phi_phenom_topology.opt.ir
+
+"$xls_root/codegen_main" \
+    --pipeline_stages=1 \
+    --delay_model=unit \
+    --use_system_verilog=false \
+    --reset=reset \
+    --fifo_module= \
+    phi_phenom_topology.opt.ir > phi_phenom_topology.v
+
 iverilog \
     -g2012 \
     -s phi_halo_cell_tb \
@@ -108,6 +126,15 @@ iverilog \
     phi_halo_cell.v
 
 vvp phi_halo_cell.vvp
+
+iverilog \
+    -g2012 \
+    -s phi_phenom_topology_tb \
+    -o phi_phenom_topology.vvp \
+    phi_phenom_topology_tb.sv \
+    phi_phenom_topology.v
+
+vvp phi_phenom_topology.vvp
 
 "$xls_root/ir_converter_main" \
     --warnings_as_errors=false \

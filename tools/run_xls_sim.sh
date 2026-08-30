@@ -18,6 +18,7 @@ rsync -a -e "ssh -o BatchMode=yes" \
     "$local_stage/phi_halo_cell.x" \
     "$local_stage/phenom_data_cell.x" \
     "$local_stage/phenom_syndrome_cell.x" \
+    "$local_stage/phi_phenom_topology.x" \
     "$local_stage/xls_case_fixture.x" \
     "$local_stage/axis.x" \
     "$local_stage/regsvc_core_adapter.v" \
@@ -35,6 +36,7 @@ rsync -a -e "ssh -o BatchMode=yes" \
     "$local_stage/regsvc_pair_tb.sv" \
     "$local_stage/regsvc_bridge_tb.sv" \
     "$local_stage/phi_halo_cell_tb.sv" \
+    "$local_stage/phi_phenom_topology_tb.sv" \
     "$local_stage/xls_sim_bridge.c" \
     "$local_stage/erl_src" \
     "$local_stage/test_src" \
@@ -46,11 +48,15 @@ ssh -o BatchMode=yes "$remote_host" \
 
 # Retrieve review artifacts only after the remote runner has generated and
 # simulated them successfully.
+# The combined topology source is handwritten. Its regenerated RTL is brought
+# back for local review and synthesis; behavioral regeneration, rather than a
+# 500-KiB checked golden, is enforced by the remote simulation above.
 rsync -a -e "ssh -o BatchMode=yes" \
     --include=regsvc.v \
     --include=phi_halo_cell.v \
     --include=phenom_data_cell.v \
     --include=phenom_syndrome_cell.v \
+    --include=phi_phenom_topology.v \
     --exclude='*' \
     "$remote_host:$remote_stage/" \
     "$local_stage/"

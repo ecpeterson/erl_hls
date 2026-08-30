@@ -39,9 +39,23 @@ complete successfully.
 
 The phi example also includes lowerable phenomenological data- and syndrome-
 noise actors. CPU tests wire those actors to a self-periodic phi cell and run
-the request/query/measurement pipeline across consecutive decoder steps. The
-pinned XLS flow converts, optimizes, and generates RTL for each actor; an
-elaborated multi-actor hardware mesh remains a separate topology task.
+the request/query/measurement pipeline across consecutive decoder steps.
+`phi_phenom_topology.x` elaborates the same deliberately small arrangement as
+one generated hardware graph. Actors exchange complete `axis::Frame` values,
+so internal links retain the shared record-tag ABI without serializing frames
+into AXI beats. Fair mergers feed each actor's mailbox-admission gate, static
+one-shot sources give the noise actors distinct PRNG seeds, and a tapped
+syndrome announcement provides one observable output. The depth-one links
+ahead of admission are explicit bounded network queues: an actor's send may
+complete before the destination reserves its mailbox slot.
+
+The generated-RTL regression runs this closed network for consecutive decoder
+steps and stalls the observation port before releasing it, checking that a
+complete frame remains stable and that the graph continues afterward. Four
+logical edges share each actor instance in this plumbing fixture, so identical
+data-qubit events cancel by parity; measurement noise still drives the phi
+cell. A nondegenerate lattice with distinct actor instances remains a larger
+topology and synthesis task.
 
 The remote host and paths can be overridden with `ERL_XLS_REMOTE_HOST`,
 `ERL_XLS_REMOTE_ROOT`, and `ERL_XLS_REMOTE_XLS`.

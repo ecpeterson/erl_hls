@@ -120,6 +120,73 @@ pub proc ReservedRx {
   }
 }
 
+// Applies the same admission-credit contract as ReservedRx to an already
+// assembled Frame. This is the natural boundary for links between generated
+// actors: the receiver reserves bounded-mailbox capacity before this adapter
+// transfers one complete message into the actor. Upstream Frame FIFOs may
+// still form explicit bounded network or egress queues before that admission
+// point.
+pub proc ReservedFrame {
+  frame_in: chan<Frame> in;
+  frame_out: chan<Frame> out;
+  admission_in: chan<u1> in;
+
+  config(frame_in: chan<Frame> in,
+         frame_out: chan<Frame> out,
+         admission_in: chan<u1> in) {
+    (frame_in, frame_out, admission_in)
+  }
+
+  init { u1:0 }
+
+  next(admitted: u1) {
+    if admitted {
+      let (tok, frame) = recv(join(), frame_in);
+      send(tok, frame_out, frame);
+      u1:0
+    } else {
+      let (_tok, _credit) = recv(join(), admission_in);
+      u1:1
+    }
+  }
+}
+
+// Fairly merges two atomic Frame streams. Since a Frame is transferred in one
+// channel operation, arbitration has no packet lock or TLAST state. Preference
+// alternates after every attempt. An empty preferred input yields the cycle
+// and lets the other input go first on the next activation.
+//
+// XLS requires a non-blocking receive to be the only receive operation on its
+// channel, even when two receive sites are in mutually exclusive branches.
+// Trying the preferred input and then the other one would therefore need to
+// poll both channels and retain an unselected Frame. Keep this small symmetric
+// mux stateless apart from its preference bit; a generated N-way ingress can
+// choose a different throughput/storage tradeoff.
+pub proc FrameMux2 {
+  left_in: chan<Frame> in;
+  right_in: chan<Frame> in;
+  frame_out: chan<Frame> out;
+
+  config(left_in: chan<Frame> in,
+         right_in: chan<Frame> in,
+         frame_out: chan<Frame> out) {
+    (left_in, right_in, frame_out)
+  }
+
+  init { u1:0 }
+
+  next(prefer_right: u1) {
+    let (left_tok, left, left_valid) = recv_if_non_blocking(
+      join(), left_in, !prefer_right, zero!<Frame>());
+    let (tok, right, right_valid) = recv_if_non_blocking(
+      left_tok, right_in, prefer_right, zero!<Frame>());
+    let valid = left_valid || right_valid;
+    let frame = if left_valid { left } else { right };
+    send_if(tok, frame_out, valid, frame);
+    !prefer_right
+  }
+}
+
 struct TxState {
   active: u1,
   header: Header,

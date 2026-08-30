@@ -46,7 +46,9 @@ erl \
         halt().
     '
 
-cp "$project_root/experiments/05-xls/axis.x" "$stage/axis.x"
+cp "$project_root/src/axis.x" "$stage/axis.x"
+cp "$project_root/src/examples/phi_phenom_topology.x" \
+    "$stage/phi_phenom_topology.x"
 cp "$project_root/src/examples/regsvc_core_adapter.v" \
     "$stage/regsvc_core_adapter.v"
 cp "$project_root/src/examples/regsvc_debug_top.v" \
@@ -68,6 +70,8 @@ cp "$project_root/test/rtl/xls_trace_store_tb.sv" \
     "$stage/xls_trace_store_tb.sv"
 cp "$project_root/test/rtl/phi_halo_cell_tb.sv" \
     "$stage/phi_halo_cell_tb.sv"
+cp "$project_root/test/rtl/phi_phenom_topology_tb.sv" \
+    "$stage/phi_phenom_topology_tb.sv"
 cp "$project_root/test/rtl/xls_sim_bridge.c" "$stage/xls_sim_bridge.c"
 
 # `erlc -P` writes source listings after includes, macros, and parse transforms
