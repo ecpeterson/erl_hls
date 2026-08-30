@@ -215,6 +215,22 @@ boolean_case_preserves_branch_badmatches_test() ->
     ),
     ?assertNotEqual(nomatch, binary:match(XLS, <<"case_match_">>)).
 
+xls_type_as_preserves_the_host_value_and_emits_a_dslx_cast_test() ->
+    ?assertEqual(0, xls_type:as(xls_nums:u32(), 0)),
+    Clause = parse_clause(
+        "probe() -> xls_type:as(xls_nums:u32(), 0)."
+    ),
+    {Body, Result} = xls_parse:branch_from_clause(
+        Clause,
+        [],
+        state,
+        fun(R) -> R end,
+        "failure",
+        #{}
+    ),
+    XLS = iolist_to_binary(xls_parse:print([Body, Result])),
+    ?assertNotEqual(nomatch, binary:match(XLS, <<"(0 as u32)">>)).
+
 boolean_case_bindings_are_local_to_each_arm_test() ->
     Clause = parse_clause(
         "probe(Condition) -> "
@@ -276,6 +292,28 @@ state_machine_init_guard_is_rejected_test() ->
     assert_bad_init_head(
         "statem_init_guard_fixture",
         "init([]) when false -> {ok, waiting, #cell{}}.\n"
+    ).
+
+state_machine_entry_action_accepts_record_update_test() ->
+    EnterSource =
+        "handle_enter(_OldPhase, waiting, Cell) ->\n"
+        "  Message = #message{},\n"
+        "  {Cell, [{cast, out, Message#message{"
+        "value = Cell#cell.value}}]}.\n",
+    CastSource =
+        "handle_cast(#message{}, waiting, Cell) ->\n"
+        "  {waiting, Cell, consume}.\n",
+    with_statem_fixture(
+        "statem_entry_record_update_fixture",
+        "[waiting]",
+        EnterSource,
+        CastSource,
+        fun(XLS) ->
+            ?assertNotEqual(
+                nomatch,
+                binary:match(XLS, <<"..(Message_1).1">>)
+            )
+        end
     ).
 
 repeat_phase_lowering_creates_an_explicit_boundary_test() ->
@@ -377,6 +415,19 @@ non_word_aligned_state_machine_message_is_rejected_test() ->
     end.
 
 with_statem_fixture(ModuleName, Phases, CastSource, Test) ->
+    EnterSource =
+        "handle_enter(_OldPhase, waiting, Cell) ->\n"
+        "  Message = #message{value = Cell#cell.value},\n"
+        "  {Cell, [{cast, out, Message}]}.\n",
+    with_statem_fixture(
+        ModuleName,
+        Phases,
+        EnterSource,
+        CastSource,
+        Test
+    ).
+
+with_statem_fixture(ModuleName, Phases, EnterSource, CastSource, Test) ->
     Path = filename:join("_build", ModuleName ++ ".erl"),
     ok = filelib:ensure_dir(Path),
     Source = iolist_to_binary([
@@ -393,9 +444,7 @@ with_statem_fixture(ModuleName, Phases, CastSource, Test) ->
         "  value = xls_type:zero() :: xls_nums:u32()\n",
         "}).\n",
         "init([]) -> {ok, waiting, #cell{}}.\n",
-        "handle_enter(_OldPhase, waiting, Cell) ->\n",
-        "  Message = #message{value = Cell#cell.value},\n",
-        "  {Cell, [{cast, out, Message}]}.\n",
+        EnterSource,
         CastSource
     ]),
     ok = file:write_file(Path, Source),

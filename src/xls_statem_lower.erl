@@ -242,6 +242,8 @@ parse_action(Action, _Bindings, _MessageNames, _OutputNames, Line) ->
 
 message_tag({record, _Line, Tag, _Fields}, _Bindings) ->
     Tag;
+message_tag({record, _Line, _Base, Tag, _Fields}, _Bindings) ->
+    Tag;
 message_tag({var, _Line, Name}, Bindings) ->
     case maps:find(Name, Bindings) of
         {ok, Tag} -> Tag;
