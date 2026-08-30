@@ -11,6 +11,8 @@ rebar3 as test compile
 
 ERL_XLS_REGSVC_X="$stage/regsvc.x" \
 ERL_XLS_PHI_HALO_X="$stage/phi_halo_cell.x" \
+ERL_XLS_PHENOM_DATA_X="$stage/phenom_data_cell.x" \
+ERL_XLS_PHENOM_SYNDROME_X="$stage/phenom_syndrome_cell.x" \
 ERL_XLS_CASE_FIXTURE_X="$stage/xls_case_fixture.x" \
 erl \
     -noshell \
@@ -18,11 +20,25 @@ erl \
     -eval '
         Regsvc = xls_parse:to_xls("src/examples/regsvc.erl"),
         PhiHalo = xls_parse:to_xls("src/examples/phi_halo_cell.erl"),
+        PhenomData = xls_parse:to_xls(
+            "src/examples/phenom_data_cell.erl"
+        ),
+        PhenomSyndrome = xls_parse:to_xls(
+            "src/examples/phenom_syndrome_cell.erl"
+        ),
         CaseFixture = xls_parse:to_xls(
             "test_data/xls_case_fixture.erl"
         ),
         ok = file:write_file(os:getenv("ERL_XLS_REGSVC_X"), Regsvc),
         ok = file:write_file(os:getenv("ERL_XLS_PHI_HALO_X"), PhiHalo),
+        ok = file:write_file(
+            os:getenv("ERL_XLS_PHENOM_DATA_X"),
+            PhenomData
+        ),
+        ok = file:write_file(
+            os:getenv("ERL_XLS_PHENOM_SYNDROME_X"),
+            PhenomSyndrome
+        ),
         ok = file:write_file(
             os:getenv("ERL_XLS_CASE_FIXTURE_X"),
             CaseFixture

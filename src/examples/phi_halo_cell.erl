@@ -8,7 +8,13 @@ An autonomous cell for a small phi-decoder protocol experiment.
 
 ## Protocol
 
-The cell has three control phases with direct protocol meanings:
+The cell has four control phases with direct protocol meanings:
+
+  * On entering `measuring`, it asks its paired phenomenological syndrome cell
+    for the detection event at the current step. The reply is XORed into the
+    local anyon before diffusion begins. Halo traffic from a faster neighbor is
+    postponed at this boundary, so an absent reply is never interpreted as a
+    zero measurement.
 
   * On entering `gathering`, it casts its current two-layer phi value to each
     of four neighbors. Four phi messages complete one diffusion round. An
@@ -25,7 +31,7 @@ The cell has three control phases with direct protocol meanings:
     moves a local anyon toward the unique comparison winner on heads. Exactly
     one neighbor receives a present anyon update for a move; the other three
     receive an absent update. Four incoming anyon messages complete the step
-    and move the cell back to `gathering`.
+    and move the cell back to `measuring`.
 
 Phi messages carry a wrapping diffusion epoch in their first `u32` word. The
 cell derives that epoch from its decoder step and diffusion round, so repeated
@@ -35,11 +41,12 @@ is explicitly repeated, then retried in their original arrival order. Partial
 sums, receive masks, and receive counts are ordinary data changes and do not
 themselves retry a postponed message.
 
-The generated module exposes four separately backpressured output ports named
-`north`, `east`, `west`, and `south`. The CPU scheduler maps those names to the
-four PIDs passed to `start_link/1`; no broadcast recipient is hidden in the
-cell. To build a cyclic CPU mesh, start every cell with `start_link/0` and then
-wire each one with `connect/2`; its initial gathering entry runs on connection.
+The generated module exposes five separately backpressured output ports:
+`north`, `east`, `west`, and `south` for the decoder mesh, plus `syndrome` for
+its measurement source. The CPU scheduler maps those names to the PIDs passed
+to `start_link/1`; no recipient is hidden in the cell. To build a cyclic CPU
+topology, start every cell with `start_link/0` and then call `connect/2`; its
+initial measurement request runs on connection.
 
 The diffusion and anyon joins rely on the topology delivering exactly one
 message per incoming edge in each phase. The comparison join is source-aware:
@@ -58,7 +65,8 @@ coin is the most-significant bit of a deterministic `xorshift32` sequence. Its
 fixed seed makes CPU and RTL runs reproducible, but also correlates the coins
 of cells which begin together. A mesh intended to model independent coins must
 supply distinct nonzero seeds through a future static per-instance
-configuration mechanism. Input noise is still absent.
+configuration mechanism. The paired syndrome input supplies nontrivial noise;
+its data and measurement generators are separate actors.
 
 An outgoing move toggles the local anyon before incoming moves are combined by
 parity. Consequently, simultaneous arrivals and departures produce the same
@@ -66,9 +74,9 @@ occupancy regardless of message order. This module does not emit the physical
 correction associated with the selected edge.
 
 A fuller decoder needs a configurable diffusion stopping rule, independent
-per-cell coin streams, measurement input, and correction output. Those
-additions should preserve the three genuine barrier phases; a parity-only
-wakeup phase would not have direct protocol meaning.
+per-cell coin streams, richer noise/measurement configuration, and correction
+output. Those additions should preserve the four genuine barrier phases; a
+parity-only wakeup phase would not have direct protocol meaning.
 
 ## Field arithmetic
 
@@ -79,6 +87,8 @@ two-layer specialization of the relaxation coefficients; explicit `u32` masks
 keep the CPU model aligned with fixed-width generated arithmetic.
 """.
 
+-include("phi_protocol.hrl").
+
 -export([
     start_link/0,
     start_link/1,
@@ -87,6 +97,7 @@ keep the CPU model aligned with fixed-width generated arithmetic.
     offer_phi/3,
     offer_phi0/4,
     offer_anyon/3,
+    offer_measurement/3,
     runtime_info/1
 ]).
 -export([init/1, handle_enter/3, handle_cast/3]).
@@ -98,24 +109,19 @@ keep the CPU model aligned with fixed-width generated arithmetic.
 -define(PRNG_SEED, 16#6d2b79f5).
 -define(U32_MASK, 16#ffffffff).
 -define(NO_DIRECTION, 0).
--define(NORTH_MASK, 1).
--define(EAST_MASK, 2).
--define(WEST_MASK, 4).
--define(SOUTH_MASK, 8).
--define(ALL_DIRECTIONS, 15).
 
 -behavior(xls_statem).
 -xls_data(cell).
--xls_phases([gathering, comparing, flipping]).
--xls_outputs([north, east, west, south]).
+-xls_phases([measuring, gathering, comparing, flipping]).
+-xls_outputs([north, east, west, south, syndrome]).
 -xls_mailbox_capacity(?MAILBOX_CAPACITY).
--xls_tags([phi, anyon_move, phi0]).
+-xls_tags(?PHI_PROTOCOL_TAGS).
 -compile({parse_transform, xls_pack}).
 
 %% TODO: Replace the two-element xls_lists values with xls_vec once vector
 %% arithmetic is part of the lowerable library.
 %% TODO: Replace the fixed diffusion count with the decoder's stopping rule and
-%% expose the measurement and physical-correction boundaries.
+%% expose the physical-correction boundary.
 %% TODO: Revisit neighbor configuration so FPGA topology can be fixed at
 %% compile time while CPU models retain ergonomic runtime wiring.
 %% TODO: Give statically instantiated cells distinct nonzero PRNG seeds. The
@@ -123,23 +129,6 @@ keep the CPU model aligned with fixed-width generated arithmetic.
 %% random source for every cell in a mesh.
 %% TODO: Separate logical field types from word-aligned wire codecs so
 %% #anyon_move.present can be boolean in lowerable callbacks.
-
--record(phi, {
-    epoch = xls_type:zero() :: xls_nums:u32(),
-    values = xls_type:zero() ::
-        xls_lists:list(xls_nums:u32(), ?LAYER_COUNT)
-}).
-
--record(phi0, {
-    step = xls_type:zero() :: xls_nums:u32(),
-    source = xls_type:zero() :: xls_nums:u32(),
-    value = xls_type:zero() :: xls_nums:u32()
-}).
-
--record(anyon_move, {
-    step = xls_type:zero() :: xls_nums:u32(),
-    present = xls_type:zero() :: xls_nums:u32()
-}).
 
 -record(cell, {
     step = xls_type:zero() :: xls_nums:u32(),
@@ -157,7 +146,7 @@ keep the CPU model aligned with fixed-width generated arithmetic.
     random_state = xls_type:zero() :: xls_nums:u32()
 }).
 
--type phase() :: gathering | comparing | flipping.
+-type phase() :: measuring | gathering | comparing | flipping.
 -type directive() :: consume | postpone | fail.
 -type conclusion() ::
     {phase(), #cell{}, directive()} |
@@ -166,7 +155,8 @@ keep the CPU model aligned with fixed-width generated arithmetic.
     north := pid(),
     east := pid(),
     west := pid(),
-    south := pid()
+    south := pid(),
+    syndrome := pid()
 }.
 -type direction() :: north | east | west | south.
 
@@ -197,7 +187,7 @@ start_link(Neighbors) ->
             error(badarg)
     end.
 
--doc "Connects a deferred cell to its four named neighbors.".
+-doc "Connects a deferred cell to four neighbors and its syndrome source.".
 -spec connect(pid(), neighbors()) -> ok | {error, already_connected}.
 connect(PID, Neighbors) ->
     case valid_neighbors(Neighbors) of
@@ -233,6 +223,18 @@ offer_anyon(PID, Step, Present) when is_boolean(Present) ->
     end,
     xls_statem:cast(PID, #anyon_move{step = Step, present = PresentWord}).
 
+-doc "Offers the detection event for one decoder step.".
+-spec offer_measurement(pid(), xls_nums:u32(), boolean()) -> ok.
+offer_measurement(PID, Step, Present) when is_boolean(Present) ->
+    PresentWord = case Present of
+        false -> 0;
+        true -> 1
+    end,
+    xls_statem:cast(PID, #phenom_anyon{
+        step = Step,
+        present = PresentWord
+    }).
+
 -doc "Returns diagnostic data from the bounded CPU scheduler.".
 -spec runtime_info(pid()) -> map().
 runtime_info(PID) ->
@@ -244,10 +246,13 @@ runtime_info(PID) ->
 
 -spec init(any()) -> {ok, phase(), #cell{}}.
 init([]) ->
-    {ok, gathering, #cell{random_state = ?PRNG_SEED}}.
+    {ok, measuring, #cell{random_state = ?PRNG_SEED}}.
 
 -spec handle_enter(phase(), phase(), #cell{}) ->
     xls_statem:enter_result().
+handle_enter(_OldPhase, measuring, Cell) ->
+    Request = #phenom_request{step = Cell#cell.step},
+    {Cell, [{cast, syndrome, Request}]};
 handle_enter(_OldPhase, gathering, Cell) ->
     Epoch = ((Cell#cell.step * ?DIFFUSION_ROUNDS) +
         Cell#cell.diffusion_round) band ?U32_MASK,
@@ -265,10 +270,10 @@ handle_enter(_OldPhase, comparing, Cell) ->
         value = Phi0
     },
     {Cell, [
-        {cast, north, Message#phi0{source = ?SOUTH_MASK}},
-        {cast, east, Message#phi0{source = ?WEST_MASK}},
-        {cast, west, Message#phi0{source = ?EAST_MASK}},
-        {cast, south, Message#phi0{source = ?NORTH_MASK}}
+        {cast, north, Message#phi0{source = ?PHI_SOUTH_MASK}},
+        {cast, east, Message#phi0{source = ?PHI_WEST_MASK}},
+        {cast, west, Message#phi0{source = ?PHI_EAST_MASK}},
+        {cast, south, Message#phi0{source = ?PHI_NORTH_MASK}}
     ]};
 handle_enter(_OldPhase, flipping, Cell) ->
     NextRandom = xls_prng:xorshift32(Cell#cell.random_state),
@@ -283,10 +288,10 @@ handle_enter(_OldPhase, flipping, Cell) ->
     end,
     {NorthPresent, EastPresent, WestPresent, SouthPresent} =
         case Cell#cell.best_direction of
-            ?NORTH_MASK -> {Present, Absent, Absent, Absent};
-            ?EAST_MASK -> {Absent, Present, Absent, Absent};
-            ?WEST_MASK -> {Absent, Absent, Present, Absent};
-            ?SOUTH_MASK -> {Absent, Absent, Absent, Present};
+            ?PHI_NORTH_MASK -> {Present, Absent, Absent, Absent};
+            ?PHI_EAST_MASK -> {Absent, Present, Absent, Absent};
+            ?PHI_WEST_MASK -> {Absent, Absent, Present, Absent};
+            ?PHI_SOUTH_MASK -> {Absent, Absent, Absent, Present};
             _ -> {Absent, Absent, Absent, Absent}
         end,
     Message = #anyon_move{step = Cell#cell.step},
@@ -301,8 +306,33 @@ handle_enter(_OldPhase, flipping, Cell) ->
         {cast, south, Message#anyon_move{present = SouthPresent}}
     ]}.
 
--spec handle_cast(#phi{} | #phi0{} | #anyon_move{}, phase(), #cell{}) ->
+-spec handle_cast(
+    #phi{} | #phi0{} | #anyon_move{} | #phenom_anyon{},
+    phase(),
+    #cell{}
+) ->
     conclusion().
+handle_cast(
+    #phenom_anyon{step = Step, present = Present},
+    measuring,
+    Cell = #cell{step = Step}
+) when Present < 2 ->
+    Updated = Cell#cell{anyon = Cell#cell.anyon bxor Present},
+    {gathering, Updated, consume};
+handle_cast(#phenom_anyon{}, measuring, Cell) ->
+    {measuring, Cell, fail};
+handle_cast(
+    #phi{epoch = Epoch},
+    measuring,
+    Cell = #cell{step = Step}
+) when Epoch =:= ((Step * ?DIFFUSION_ROUNDS) band ?U32_MASK) ->
+    {measuring, Cell, postpone};
+handle_cast(#phi{}, measuring, Cell) ->
+    {measuring, Cell, fail};
+handle_cast(#phi0{}, measuring, Cell) ->
+    {measuring, Cell, fail};
+handle_cast(#anyon_move{}, measuring, Cell) ->
+    {measuring, Cell, fail};
 handle_cast(
     #phi{epoch = Epoch, values = Values},
     gathering,
@@ -378,6 +408,14 @@ handle_cast(
 handle_cast(#anyon_move{}, gathering, Cell) ->
     {gathering, Cell, fail};
 handle_cast(
+    #phenom_anyon{step = EventStep},
+    gathering,
+    Cell = #cell{step = Step}
+) when EventStep =:= ((Step + 1) band ?U32_MASK) ->
+    {gathering, Cell, postpone};
+handle_cast(#phenom_anyon{}, gathering, Cell) ->
+    {gathering, Cell, fail};
+handle_cast(
     #phi0{step = Step, source = Source, value = Value},
     comparing,
     Cell = #cell{
@@ -386,10 +424,10 @@ handle_cast(
         best_phi0 = Best,
         best_direction = BestDirection
     }
-) when (Source =:= ?NORTH_MASK orelse
-        Source =:= ?EAST_MASK orelse
-        Source =:= ?WEST_MASK orelse
-        Source =:= ?SOUTH_MASK),
+) when (Source =:= ?PHI_NORTH_MASK orelse
+        Source =:= ?PHI_EAST_MASK orelse
+        Source =:= ?PHI_WEST_MASK orelse
+        Source =:= ?PHI_SOUTH_MASK),
        Seen band Source =:= 0 ->
     NewSeen = Seen bor Source,
     NewBest = case Value > Best of
@@ -406,7 +444,7 @@ handle_cast(
         best_phi0 = NewBest,
         best_direction = NewBestDirection
     },
-    case NewSeen =:= ?ALL_DIRECTIONS of
+    case NewSeen =:= ?PHI_ALL_DIRECTIONS of
         false -> {comparing, Compared, consume};
         true -> {flipping, Compared, consume}
     end;
@@ -427,6 +465,14 @@ handle_cast(
 ) ->
     {comparing, Cell, postpone};
 handle_cast(#anyon_move{}, comparing, Cell) ->
+    {comparing, Cell, fail};
+handle_cast(
+    #phenom_anyon{step = EventStep},
+    comparing,
+    Cell = #cell{step = Step}
+) when EventStep =:= ((Step + 1) band ?U32_MASK) ->
+    {comparing, Cell, postpone};
+handle_cast(#phenom_anyon{}, comparing, Cell) ->
     {comparing, Cell, fail};
 handle_cast(
     #phi{epoch = Epoch},
@@ -457,19 +503,27 @@ handle_cast(
                 moves_received = 0,
                 anyon = NextAnyon
             },
-            {gathering, Advanced, consume}
+            {measuring, Advanced, consume}
     end;
 handle_cast(#anyon_move{}, flipping, Cell) ->
+    {flipping, Cell, fail};
+handle_cast(
+    #phenom_anyon{step = EventStep},
+    flipping,
+    Cell = #cell{step = Step}
+) when EventStep =:= ((Step + 1) band ?U32_MASK) ->
+    {flipping, Cell, postpone};
+handle_cast(#phenom_anyon{}, flipping, Cell) ->
     {flipping, Cell, fail}.
 
-source_mask(north) -> ?NORTH_MASK;
-source_mask(east) -> ?EAST_MASK;
-source_mask(west) -> ?WEST_MASK;
-source_mask(south) -> ?SOUTH_MASK;
+source_mask(north) -> ?PHI_NORTH_MASK;
+source_mask(east) -> ?PHI_EAST_MASK;
+source_mask(west) -> ?PHI_WEST_MASK;
+source_mask(south) -> ?PHI_SOUTH_MASK;
 source_mask(_Direction) -> error(badarg).
 
 valid_neighbors(Neighbors) ->
     is_map(Neighbors) andalso
         lists:sort(maps:keys(Neighbors)) =:=
-            lists:sort([north, east, west, south]) andalso
+            lists:sort([north, east, west, south, syndrome]) andalso
         lists:all(fun is_pid/1, maps:values(Neighbors)).

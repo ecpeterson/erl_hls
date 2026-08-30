@@ -13,7 +13,7 @@ module __axis__Top__ReservedRx_0_next(
 );
   wire [32:0] __phi_halo_cell__ext_recv_reg_init = {1'h0, 32'h0000_0000};
   wire [127:0] __phi_halo_cell__req_reg_init = {{8'h00, 8'h00, 8'h00, 8'h00}, 96'h0000_0000_0000_0000_0000_0000};
-  wire [32:0] literal_13347 = {1'h0, 32'h0000_0000};
+  wire [32:0] literal_15904 = {1'h0, 32'h0000_0000};
   reg ____state_0;
   reg [7:0] ____state_2;
   reg [127:0] ____state_1;
@@ -26,71 +26,71 @@ module __axis__Top__ReservedRx_0_next(
   wire [32:0] phi_halo_cell__ext_recv_select;
   wire beat_tlast;
   wire p0_all_active_inputs_valid;
-  wire and_13357;
+  wire and_15914;
   wire phi_halo_cell__req_valid_inv;
   wire __phi_halo_cell__req_vld_buf;
   wire phi_halo_cell__req_valid_load_en;
-  wire nor_13356;
+  wire nor_15913;
   wire phi_halo_cell__req_not_pred;
   wire phi_halo_cell__req_load_en;
   wire [1:0] ____state_1__next_value_predicates;
-  wire [2:0] one_hot_13369;
+  wire [2:0] one_hot_15926;
   wire [31:0] beat_word;
   wire p0_stage_done;
-  wire [31:0] sel_15156;
+  wire [31:0] sel_17990;
   wire phi_halo_cell__admit_valid_inv;
   wire phi_halo_cell__ext_recv_valid_inv;
-  wire [31:0] sel_15155;
-  wire [31:0] sel_15154;
-  wire [31:0] sel_15153;
+  wire [31:0] sel_17989;
+  wire [31:0] sel_17988;
+  wire [31:0] sel_17987;
   wire phi_halo_cell__admit_valid_load_en;
   wire phi_halo_cell__ext_recv_valid_load_en;
   wire ____state_1__at_most_one_next_value;
-  wire [1:0] concat_13414;
+  wire [1:0] concat_15971;
   wire [127:0] payload;
   wire [7:0] words_seen;
   wire phi_halo_cell__admit_load_en;
   wire phi_halo_cell__ext_recv_load_en;
-  wire or_15159;
-  wire nand_13385;
-  wire [127:0] one_hot_sel_13415;
-  wire and_13429;
-  wire [7:0] one_hot_sel_13422;
+  wire or_17992;
+  wire nand_15942;
+  wire [127:0] one_hot_sel_15972;
+  wire and_15986;
+  wire [7:0] one_hot_sel_15979;
   wire [127:0] __phi_halo_cell__req_buf;
-  assign phi_halo_cell__ext_recv_select = ____state_0 ? __phi_halo_cell__ext_recv_reg : literal_13347;
+  assign phi_halo_cell__ext_recv_select = ____state_0 ? __phi_halo_cell__ext_recv_reg : literal_15904;
   assign beat_tlast = phi_halo_cell__ext_recv_select[32:32];
   assign p0_all_active_inputs_valid = (~____state_0 | __phi_halo_cell__ext_recv_valid_reg) & (____state_0 | __phi_halo_cell__admit_valid_reg);
-  assign and_13357 = ____state_0 & beat_tlast;
+  assign and_15914 = ____state_0 & beat_tlast;
   assign phi_halo_cell__req_valid_inv = ~__phi_halo_cell__req_valid_reg;
-  assign __phi_halo_cell__req_vld_buf = p0_all_active_inputs_valid & and_13357;
+  assign __phi_halo_cell__req_vld_buf = p0_all_active_inputs_valid & and_15914;
   assign phi_halo_cell__req_valid_load_en = phi_halo_cell__req_rdy | phi_halo_cell__req_valid_inv;
-  assign nor_13356 = ~(~____state_0 | beat_tlast);
-  assign phi_halo_cell__req_not_pred = ~and_13357;
+  assign nor_15913 = ~(~____state_0 | beat_tlast);
+  assign phi_halo_cell__req_not_pred = ~and_15914;
   assign phi_halo_cell__req_load_en = __phi_halo_cell__req_vld_buf & phi_halo_cell__req_valid_load_en;
-  assign ____state_1__next_value_predicates = {nor_13356, and_13357};
-  assign one_hot_13369 = {____state_1__next_value_predicates[1:0] == 2'h0, ____state_1__next_value_predicates[1] && !____state_1__next_value_predicates[0], ____state_1__next_value_predicates[0]};
+  assign ____state_1__next_value_predicates = {nor_15913, and_15914};
+  assign one_hot_15926 = {____state_1__next_value_predicates[1:0] == 2'h0, ____state_1__next_value_predicates[1] && !____state_1__next_value_predicates[0], ____state_1__next_value_predicates[0]};
   assign beat_word = phi_halo_cell__ext_recv_select[31:0];
   assign p0_stage_done = p0_all_active_inputs_valid & (phi_halo_cell__req_not_pred | phi_halo_cell__req_load_en);
-  assign sel_15156 = ____state_2[2:0] == 3'h0 ? beat_word : ____state_1[31:0];
+  assign sel_17990 = ____state_2[2:0] == 3'h0 ? beat_word : ____state_1[31:0];
   assign phi_halo_cell__admit_valid_inv = ~__phi_halo_cell__admit_valid_reg;
   assign phi_halo_cell__ext_recv_valid_inv = ~__phi_halo_cell__ext_recv_valid_reg;
-  assign sel_15155 = ____state_2[2:0] == 3'h3 ? beat_word : ____state_1[127:96];
-  assign sel_15154 = ____state_2[2:0] == 3'h2 ? beat_word : ____state_1[95:64];
-  assign sel_15153 = ____state_2[2:0] == 3'h1 ? beat_word : ____state_1[63:32];
+  assign sel_17989 = ____state_2[2:0] == 3'h3 ? beat_word : ____state_1[127:96];
+  assign sel_17988 = ____state_2[2:0] == 3'h2 ? beat_word : ____state_1[95:64];
+  assign sel_17987 = ____state_2[2:0] == 3'h1 ? beat_word : ____state_1[63:32];
   assign phi_halo_cell__admit_valid_load_en = p0_stage_done & ~____state_0 | phi_halo_cell__admit_valid_inv;
   assign phi_halo_cell__ext_recv_valid_load_en = p0_stage_done & ____state_0 | phi_halo_cell__ext_recv_valid_inv;
-  assign ____state_1__at_most_one_next_value = nor_13356 == one_hot_13369[1] & and_13357 == one_hot_13369[0];
-  assign concat_13414 = {nor_13356 & p0_stage_done, and_13357 & p0_stage_done};
-  assign payload = {sel_15155, sel_15154, sel_15153, sel_15156};
+  assign ____state_1__at_most_one_next_value = nor_15913 == one_hot_15926[1] & and_15914 == one_hot_15926[0];
+  assign concat_15971 = {nor_15913 & p0_stage_done, and_15914 & p0_stage_done};
+  assign payload = {sel_17989, sel_17988, sel_17987, sel_17990};
   assign words_seen = ____state_2 + 8'h01;
   assign phi_halo_cell__admit_load_en = phi_halo_cell__admit_vld & phi_halo_cell__admit_valid_load_en;
   assign phi_halo_cell__ext_recv_load_en = phi_halo_cell__ext_recv_vld & phi_halo_cell__ext_recv_valid_load_en;
-  assign or_15159 = ~p0_stage_done | ____state_1__at_most_one_next_value | reset;
-  assign nand_13385 = ~(____state_0 & beat_tlast);
-  assign one_hot_sel_13415 = 128'h0000_0000_0000_0000_0000_0000_0000_0000 & {128{concat_13414[0]}} | payload & {128{concat_13414[1]}};
-  assign and_13429 = (nor_13356 | and_13357) & p0_stage_done;
-  assign one_hot_sel_13422 = 8'h00 & {8{concat_13414[0]}} | words_seen & {8{concat_13414[1]}};
-  assign __phi_halo_cell__req_buf = {{sel_15156[7:0], sel_15156[15:8], sel_15156[23:16], sel_15156[31:24]}, {sel_15155, sel_15154, sel_15153}};
+  assign or_17992 = ~p0_stage_done | ____state_1__at_most_one_next_value | reset;
+  assign nand_15942 = ~(____state_0 & beat_tlast);
+  assign one_hot_sel_15972 = 128'h0000_0000_0000_0000_0000_0000_0000_0000 & {128{concat_15971[0]}} | payload & {128{concat_15971[1]}};
+  assign and_15986 = (nor_15913 | and_15914) & p0_stage_done;
+  assign one_hot_sel_15979 = 8'h00 & {8{concat_15971[0]}} | words_seen & {8{concat_15971[1]}};
+  assign __phi_halo_cell__req_buf = {{sel_17990[7:0], sel_17990[15:8], sel_17990[23:16], sel_17990[31:24]}, {sel_17989, sel_17988, sel_17987}};
   always @ (posedge clk) begin
     if (reset) begin
       ____state_0 <= 1'h0;
@@ -103,9 +103,9 @@ module __axis__Top__ReservedRx_0_next(
       __phi_halo_cell__req_reg <= __phi_halo_cell__req_reg_init;
       __phi_halo_cell__req_valid_reg <= 1'h0;
     end else begin
-      ____state_0 <= p0_stage_done ? nand_13385 : ____state_0;
-      ____state_2 <= and_13429 ? one_hot_sel_13422 : ____state_2;
-      ____state_1 <= and_13429 ? one_hot_sel_13415 : ____state_1;
+      ____state_0 <= p0_stage_done ? nand_15942 : ____state_0;
+      ____state_2 <= and_15986 ? one_hot_sel_15979 : ____state_2;
+      ____state_1 <= and_15986 ? one_hot_sel_15972 : ____state_1;
       __phi_halo_cell__ext_recv_reg <= phi_halo_cell__ext_recv_load_en ? phi_halo_cell__ext_recv : __phi_halo_cell__ext_recv_reg;
       __phi_halo_cell__ext_recv_valid_reg <= phi_halo_cell__ext_recv_valid_load_en ? phi_halo_cell__ext_recv_vld : __phi_halo_cell__ext_recv_valid_reg;
       __phi_halo_cell__admit_reg <= phi_halo_cell__admit_load_en ? phi_halo_cell__admit : __phi_halo_cell__admit_reg;
@@ -133,7 +133,7 @@ module __axis__Top__Tx_0_next(
 );
   wire [127:0] __phi_halo_cell__north_reg_init = {{8'h00, 8'h00, 8'h00, 8'h00}, 96'h0000_0000_0000_0000_0000_0000};
   wire [32:0] __phi_halo_cell__north_send_reg_init = {1'h0, 32'h0000_0000};
-  wire [127:0] literal_13485 = {{8'h00, 8'h00, 8'h00, 8'h00}, 96'h0000_0000_0000_0000_0000_0000};
+  wire [127:0] literal_16042 = {{8'h00, 8'h00, 8'h00, 8'h00}, 96'h0000_0000_0000_0000_0000_0000};
   reg ____state_0;
   reg [7:0] ____state_6;
   reg [7:0] ____state_1;
@@ -150,77 +150,77 @@ module __axis__Top__Tx_0_next(
   wire [7:0] state2_header_payload_words;
   wire last;
   wire phi_halo_cell__north_send_valid_inv;
-  wire nor_13497;
-  wire not_13498;
+  wire nor_16054;
+  wire not_16055;
   wire __phi_halo_cell__north_send_vld_buf;
   wire phi_halo_cell__north_send_valid_load_en;
   wire [1:0] ____state_1__next_value_predicates;
   wire [1:0] ____state_6__next_value_predicates;
   wire phi_halo_cell__north_send_load_en;
-  wire [2:0] one_hot_13507;
-  wire [2:0] one_hot_13508;
+  wire [2:0] one_hot_16064;
+  wire [2:0] one_hot_16065;
   wire [7:0] frame_header_op__1;
   wire [7:0] frame_header_flags__1;
   wire [7:0] frame_header_txid__1;
   wire p0_stage_done;
   wire phi_halo_cell__north_valid_inv;
-  wire and_13547;
+  wire and_16104;
   wire [95:0] frame_payload__1;
   wire [31:0] state2_payload__1;
   wire phi_halo_cell__north_valid_load_en;
   wire ____state_1__at_most_one_next_value;
   wire ____state_6__at_most_one_next_value;
-  wire [1:0] concat_13550;
+  wire [1:0] concat_16107;
   wire [127:0] payload;
-  wire [1:0] concat_13563;
+  wire [1:0] concat_16120;
   wire [7:0] beats_sent;
   wire phi_halo_cell__north_load_en;
-  wire or_15163;
-  wire or_15167;
-  wire [7:0] one_hot_sel_13551;
-  wire and_13571;
-  wire [127:0] one_hot_sel_13558;
-  wire [7:0] one_hot_sel_13564;
+  wire or_17996;
+  wire or_18000;
+  wire [7:0] one_hot_sel_16108;
+  wire and_16128;
+  wire [127:0] one_hot_sel_16115;
+  wire [7:0] one_hot_sel_16121;
   wire [32:0] __phi_halo_cell__north_send_buf;
   assign state2_header_payload_words_0_case_cmp = ~____state_0;
-  assign phi_halo_cell__north_select = state2_header_payload_words_0_case_cmp ? __phi_halo_cell__north_reg : literal_13485;
+  assign phi_halo_cell__north_select = state2_header_payload_words_0_case_cmp ? __phi_halo_cell__north_reg : literal_16042;
   assign frame_header__1 = phi_halo_cell__north_select[127:96];
   assign frame_header_payload_words__1 = frame_header__1[31:24];
   assign state2_beats_sent__2 = ____state_6 & {8{____state_0}};
   assign state2_header_payload_words = ____state_0 ? ____state_1 : frame_header_payload_words__1;
   assign last = state2_beats_sent__2 == state2_header_payload_words;
   assign phi_halo_cell__north_send_valid_inv = ~__phi_halo_cell__north_send_valid_reg;
-  assign nor_13497 = ~(last | ____state_0);
-  assign not_13498 = ~last;
+  assign nor_16054 = ~(last | ____state_0);
+  assign not_16055 = ~last;
   assign __phi_halo_cell__north_send_vld_buf = ____state_0 | __phi_halo_cell__north_valid_reg;
   assign phi_halo_cell__north_send_valid_load_en = phi_halo_cell__north_send_rdy | phi_halo_cell__north_send_valid_inv;
-  assign ____state_1__next_value_predicates = {last, nor_13497};
-  assign ____state_6__next_value_predicates = {not_13498, last};
+  assign ____state_1__next_value_predicates = {last, nor_16054};
+  assign ____state_6__next_value_predicates = {not_16055, last};
   assign phi_halo_cell__north_send_load_en = __phi_halo_cell__north_send_vld_buf & phi_halo_cell__north_send_valid_load_en;
-  assign one_hot_13507 = {____state_1__next_value_predicates[1:0] == 2'h0, ____state_1__next_value_predicates[1] && !____state_1__next_value_predicates[0], ____state_1__next_value_predicates[0]};
-  assign one_hot_13508 = {____state_6__next_value_predicates[1:0] == 2'h0, ____state_6__next_value_predicates[1] && !____state_6__next_value_predicates[0], ____state_6__next_value_predicates[0]};
+  assign one_hot_16064 = {____state_1__next_value_predicates[1:0] == 2'h0, ____state_1__next_value_predicates[1] && !____state_1__next_value_predicates[0], ____state_1__next_value_predicates[0]};
+  assign one_hot_16065 = {____state_6__next_value_predicates[1:0] == 2'h0, ____state_6__next_value_predicates[1] && !____state_6__next_value_predicates[0], ____state_6__next_value_predicates[0]};
   assign frame_header_op__1 = frame_header__1[7:0];
   assign frame_header_flags__1 = frame_header__1[15:8];
   assign frame_header_txid__1 = frame_header__1[23:16];
   assign p0_stage_done = __phi_halo_cell__north_send_vld_buf & phi_halo_cell__north_send_load_en;
   assign phi_halo_cell__north_valid_inv = ~__phi_halo_cell__north_valid_reg;
-  assign and_13547 = last & p0_stage_done;
+  assign and_16104 = last & p0_stage_done;
   assign frame_payload__1 = phi_halo_cell__north_select[95:0];
   assign state2_payload__1 = ____state_0 ? ____state_5[31:0] : {frame_header_op__1, frame_header_flags__1, frame_header_txid__1, frame_header_payload_words__1};
   assign phi_halo_cell__north_valid_load_en = p0_stage_done & state2_header_payload_words_0_case_cmp | phi_halo_cell__north_valid_inv;
-  assign ____state_1__at_most_one_next_value = last == one_hot_13507[1] & nor_13497 == one_hot_13507[0];
-  assign ____state_6__at_most_one_next_value = not_13498 == one_hot_13508[1] & last == one_hot_13508[0];
-  assign concat_13550 = {and_13547, nor_13497 & p0_stage_done};
+  assign ____state_1__at_most_one_next_value = last == one_hot_16064[1] & nor_16054 == one_hot_16064[0];
+  assign ____state_6__at_most_one_next_value = not_16055 == one_hot_16065[1] & last == one_hot_16065[0];
+  assign concat_16107 = {and_16104, nor_16054 & p0_stage_done};
   assign payload = {frame_payload__1, frame_header_op__1, frame_header_flags__1, frame_header_txid__1, frame_header_payload_words__1};
-  assign concat_13563 = {not_13498 & p0_stage_done, and_13547};
+  assign concat_16120 = {not_16055 & p0_stage_done, and_16104};
   assign beats_sent = state2_beats_sent__2 + 8'h01;
   assign phi_halo_cell__north_load_en = phi_halo_cell__north_vld & phi_halo_cell__north_valid_load_en;
-  assign or_15163 = ~p0_stage_done | ____state_1__at_most_one_next_value | reset;
-  assign or_15167 = ~p0_stage_done | ____state_6__at_most_one_next_value | reset;
-  assign one_hot_sel_13551 = frame_header_payload_words__1 & {8{concat_13550[0]}} | 8'h00 & {8{concat_13550[1]}};
-  assign and_13571 = (last | nor_13497) & p0_stage_done;
-  assign one_hot_sel_13558 = payload & {128{concat_13550[0]}} | 128'h0000_0000_0000_0000_0000_0000_0000_0000 & {128{concat_13550[1]}};
-  assign one_hot_sel_13564 = 8'h00 & {8{concat_13563[0]}} | beats_sent & {8{concat_13563[1]}};
+  assign or_17996 = ~p0_stage_done | ____state_1__at_most_one_next_value | reset;
+  assign or_18000 = ~p0_stage_done | ____state_6__at_most_one_next_value | reset;
+  assign one_hot_sel_16108 = frame_header_payload_words__1 & {8{concat_16107[0]}} | 8'h00 & {8{concat_16107[1]}};
+  assign and_16128 = (last | nor_16054) & p0_stage_done;
+  assign one_hot_sel_16115 = payload & {128{concat_16107[0]}} | 128'h0000_0000_0000_0000_0000_0000_0000_0000 & {128{concat_16107[1]}};
+  assign one_hot_sel_16121 = 8'h00 & {8{concat_16120[0]}} | beats_sent & {8{concat_16120[1]}};
   assign __phi_halo_cell__north_send_buf = {last, state2_beats_sent__2[2:0] == 3'h0 ? state2_payload__1 : (state2_beats_sent__2[2:0] == 3'h1 ? ____state_5[63:32] : (state2_beats_sent__2[2:0] == 3'h2 ? ____state_5[95:64] : (state2_beats_sent__2[2:0] == 3'h3 ? ____state_5[127:96] : 32'h0000_0000)))};
   always @ (posedge clk) begin
     if (reset) begin
@@ -233,10 +233,10 @@ module __axis__Top__Tx_0_next(
       __phi_halo_cell__north_send_reg <= __phi_halo_cell__north_send_reg_init;
       __phi_halo_cell__north_send_valid_reg <= 1'h0;
     end else begin
-      ____state_0 <= p0_stage_done ? not_13498 : ____state_0;
-      ____state_6 <= p0_stage_done ? one_hot_sel_13564 : ____state_6;
-      ____state_1 <= and_13571 ? one_hot_sel_13551 : ____state_1;
-      ____state_5 <= and_13571 ? one_hot_sel_13558 : ____state_5;
+      ____state_0 <= p0_stage_done ? not_16055 : ____state_0;
+      ____state_6 <= p0_stage_done ? one_hot_sel_16121 : ____state_6;
+      ____state_1 <= and_16128 ? one_hot_sel_16108 : ____state_1;
+      ____state_5 <= and_16128 ? one_hot_sel_16115 : ____state_5;
       __phi_halo_cell__north_reg <= phi_halo_cell__north_load_en ? phi_halo_cell__north : __phi_halo_cell__north_reg;
       __phi_halo_cell__north_valid_reg <= phi_halo_cell__north_valid_load_en ? phi_halo_cell__north_vld : __phi_halo_cell__north_valid_reg;
       __phi_halo_cell__north_send_reg <= phi_halo_cell__north_send_load_en ? __phi_halo_cell__north_send_buf : __phi_halo_cell__north_send_reg;
@@ -261,7 +261,7 @@ module __axis__Top__Tx_1_next(
 );
   wire [127:0] __phi_halo_cell__east_reg_init = {{8'h00, 8'h00, 8'h00, 8'h00}, 96'h0000_0000_0000_0000_0000_0000};
   wire [32:0] __phi_halo_cell__east_send_reg_init = {1'h0, 32'h0000_0000};
-  wire [127:0] literal_13620 = {{8'h00, 8'h00, 8'h00, 8'h00}, 96'h0000_0000_0000_0000_0000_0000};
+  wire [127:0] literal_16177 = {{8'h00, 8'h00, 8'h00, 8'h00}, 96'h0000_0000_0000_0000_0000_0000};
   reg ____state_0;
   reg [7:0] ____state_6;
   reg [7:0] ____state_1;
@@ -278,77 +278,77 @@ module __axis__Top__Tx_1_next(
   wire [7:0] state2_header_payload_words;
   wire last;
   wire phi_halo_cell__east_send_valid_inv;
-  wire nor_13632;
-  wire not_13633;
+  wire nor_16189;
+  wire not_16190;
   wire __phi_halo_cell__east_send_vld_buf;
   wire phi_halo_cell__east_send_valid_load_en;
   wire [1:0] ____state_1__next_value_predicates;
   wire [1:0] ____state_6__next_value_predicates;
   wire phi_halo_cell__east_send_load_en;
-  wire [2:0] one_hot_13642;
-  wire [2:0] one_hot_13643;
+  wire [2:0] one_hot_16199;
+  wire [2:0] one_hot_16200;
   wire [7:0] frame_header_op__1;
   wire [7:0] frame_header_flags__1;
   wire [7:0] frame_header_txid__1;
   wire p0_stage_done;
   wire phi_halo_cell__east_valid_inv;
-  wire and_13682;
+  wire and_16239;
   wire [95:0] frame_payload__1;
   wire [31:0] state2_payload__1;
   wire phi_halo_cell__east_valid_load_en;
   wire ____state_1__at_most_one_next_value;
   wire ____state_6__at_most_one_next_value;
-  wire [1:0] concat_13685;
+  wire [1:0] concat_16242;
   wire [127:0] payload;
-  wire [1:0] concat_13698;
+  wire [1:0] concat_16255;
   wire [7:0] beats_sent;
   wire phi_halo_cell__east_load_en;
-  wire or_15169;
-  wire or_15173;
-  wire [7:0] one_hot_sel_13686;
-  wire and_13706;
-  wire [127:0] one_hot_sel_13693;
-  wire [7:0] one_hot_sel_13699;
+  wire or_18002;
+  wire or_18006;
+  wire [7:0] one_hot_sel_16243;
+  wire and_16263;
+  wire [127:0] one_hot_sel_16250;
+  wire [7:0] one_hot_sel_16256;
   wire [32:0] __phi_halo_cell__east_send_buf;
   assign state2_header_payload_words_0_case_cmp = ~____state_0;
-  assign phi_halo_cell__east_select = state2_header_payload_words_0_case_cmp ? __phi_halo_cell__east_reg : literal_13620;
+  assign phi_halo_cell__east_select = state2_header_payload_words_0_case_cmp ? __phi_halo_cell__east_reg : literal_16177;
   assign frame_header__1 = phi_halo_cell__east_select[127:96];
   assign frame_header_payload_words__1 = frame_header__1[31:24];
   assign state2_beats_sent__2 = ____state_6 & {8{____state_0}};
   assign state2_header_payload_words = ____state_0 ? ____state_1 : frame_header_payload_words__1;
   assign last = state2_beats_sent__2 == state2_header_payload_words;
   assign phi_halo_cell__east_send_valid_inv = ~__phi_halo_cell__east_send_valid_reg;
-  assign nor_13632 = ~(last | ____state_0);
-  assign not_13633 = ~last;
+  assign nor_16189 = ~(last | ____state_0);
+  assign not_16190 = ~last;
   assign __phi_halo_cell__east_send_vld_buf = ____state_0 | __phi_halo_cell__east_valid_reg;
   assign phi_halo_cell__east_send_valid_load_en = phi_halo_cell__east_send_rdy | phi_halo_cell__east_send_valid_inv;
-  assign ____state_1__next_value_predicates = {last, nor_13632};
-  assign ____state_6__next_value_predicates = {not_13633, last};
+  assign ____state_1__next_value_predicates = {last, nor_16189};
+  assign ____state_6__next_value_predicates = {not_16190, last};
   assign phi_halo_cell__east_send_load_en = __phi_halo_cell__east_send_vld_buf & phi_halo_cell__east_send_valid_load_en;
-  assign one_hot_13642 = {____state_1__next_value_predicates[1:0] == 2'h0, ____state_1__next_value_predicates[1] && !____state_1__next_value_predicates[0], ____state_1__next_value_predicates[0]};
-  assign one_hot_13643 = {____state_6__next_value_predicates[1:0] == 2'h0, ____state_6__next_value_predicates[1] && !____state_6__next_value_predicates[0], ____state_6__next_value_predicates[0]};
+  assign one_hot_16199 = {____state_1__next_value_predicates[1:0] == 2'h0, ____state_1__next_value_predicates[1] && !____state_1__next_value_predicates[0], ____state_1__next_value_predicates[0]};
+  assign one_hot_16200 = {____state_6__next_value_predicates[1:0] == 2'h0, ____state_6__next_value_predicates[1] && !____state_6__next_value_predicates[0], ____state_6__next_value_predicates[0]};
   assign frame_header_op__1 = frame_header__1[7:0];
   assign frame_header_flags__1 = frame_header__1[15:8];
   assign frame_header_txid__1 = frame_header__1[23:16];
   assign p0_stage_done = __phi_halo_cell__east_send_vld_buf & phi_halo_cell__east_send_load_en;
   assign phi_halo_cell__east_valid_inv = ~__phi_halo_cell__east_valid_reg;
-  assign and_13682 = last & p0_stage_done;
+  assign and_16239 = last & p0_stage_done;
   assign frame_payload__1 = phi_halo_cell__east_select[95:0];
   assign state2_payload__1 = ____state_0 ? ____state_5[31:0] : {frame_header_op__1, frame_header_flags__1, frame_header_txid__1, frame_header_payload_words__1};
   assign phi_halo_cell__east_valid_load_en = p0_stage_done & state2_header_payload_words_0_case_cmp | phi_halo_cell__east_valid_inv;
-  assign ____state_1__at_most_one_next_value = last == one_hot_13642[1] & nor_13632 == one_hot_13642[0];
-  assign ____state_6__at_most_one_next_value = not_13633 == one_hot_13643[1] & last == one_hot_13643[0];
-  assign concat_13685 = {and_13682, nor_13632 & p0_stage_done};
+  assign ____state_1__at_most_one_next_value = last == one_hot_16199[1] & nor_16189 == one_hot_16199[0];
+  assign ____state_6__at_most_one_next_value = not_16190 == one_hot_16200[1] & last == one_hot_16200[0];
+  assign concat_16242 = {and_16239, nor_16189 & p0_stage_done};
   assign payload = {frame_payload__1, frame_header_op__1, frame_header_flags__1, frame_header_txid__1, frame_header_payload_words__1};
-  assign concat_13698 = {not_13633 & p0_stage_done, and_13682};
+  assign concat_16255 = {not_16190 & p0_stage_done, and_16239};
   assign beats_sent = state2_beats_sent__2 + 8'h01;
   assign phi_halo_cell__east_load_en = phi_halo_cell__east_vld & phi_halo_cell__east_valid_load_en;
-  assign or_15169 = ~p0_stage_done | ____state_1__at_most_one_next_value | reset;
-  assign or_15173 = ~p0_stage_done | ____state_6__at_most_one_next_value | reset;
-  assign one_hot_sel_13686 = frame_header_payload_words__1 & {8{concat_13685[0]}} | 8'h00 & {8{concat_13685[1]}};
-  assign and_13706 = (last | nor_13632) & p0_stage_done;
-  assign one_hot_sel_13693 = payload & {128{concat_13685[0]}} | 128'h0000_0000_0000_0000_0000_0000_0000_0000 & {128{concat_13685[1]}};
-  assign one_hot_sel_13699 = 8'h00 & {8{concat_13698[0]}} | beats_sent & {8{concat_13698[1]}};
+  assign or_18002 = ~p0_stage_done | ____state_1__at_most_one_next_value | reset;
+  assign or_18006 = ~p0_stage_done | ____state_6__at_most_one_next_value | reset;
+  assign one_hot_sel_16243 = frame_header_payload_words__1 & {8{concat_16242[0]}} | 8'h00 & {8{concat_16242[1]}};
+  assign and_16263 = (last | nor_16189) & p0_stage_done;
+  assign one_hot_sel_16250 = payload & {128{concat_16242[0]}} | 128'h0000_0000_0000_0000_0000_0000_0000_0000 & {128{concat_16242[1]}};
+  assign one_hot_sel_16256 = 8'h00 & {8{concat_16255[0]}} | beats_sent & {8{concat_16255[1]}};
   assign __phi_halo_cell__east_send_buf = {last, state2_beats_sent__2[2:0] == 3'h0 ? state2_payload__1 : (state2_beats_sent__2[2:0] == 3'h1 ? ____state_5[63:32] : (state2_beats_sent__2[2:0] == 3'h2 ? ____state_5[95:64] : (state2_beats_sent__2[2:0] == 3'h3 ? ____state_5[127:96] : 32'h0000_0000)))};
   always @ (posedge clk) begin
     if (reset) begin
@@ -361,10 +361,10 @@ module __axis__Top__Tx_1_next(
       __phi_halo_cell__east_send_reg <= __phi_halo_cell__east_send_reg_init;
       __phi_halo_cell__east_send_valid_reg <= 1'h0;
     end else begin
-      ____state_0 <= p0_stage_done ? not_13633 : ____state_0;
-      ____state_6 <= p0_stage_done ? one_hot_sel_13699 : ____state_6;
-      ____state_1 <= and_13706 ? one_hot_sel_13686 : ____state_1;
-      ____state_5 <= and_13706 ? one_hot_sel_13693 : ____state_5;
+      ____state_0 <= p0_stage_done ? not_16190 : ____state_0;
+      ____state_6 <= p0_stage_done ? one_hot_sel_16256 : ____state_6;
+      ____state_1 <= and_16263 ? one_hot_sel_16243 : ____state_1;
+      ____state_5 <= and_16263 ? one_hot_sel_16250 : ____state_5;
       __phi_halo_cell__east_reg <= phi_halo_cell__east_load_en ? phi_halo_cell__east : __phi_halo_cell__east_reg;
       __phi_halo_cell__east_valid_reg <= phi_halo_cell__east_valid_load_en ? phi_halo_cell__east_vld : __phi_halo_cell__east_valid_reg;
       __phi_halo_cell__east_send_reg <= phi_halo_cell__east_send_load_en ? __phi_halo_cell__east_send_buf : __phi_halo_cell__east_send_reg;
@@ -389,7 +389,7 @@ module __axis__Top__Tx_2_next(
 );
   wire [127:0] __phi_halo_cell__west_reg_init = {{8'h00, 8'h00, 8'h00, 8'h00}, 96'h0000_0000_0000_0000_0000_0000};
   wire [32:0] __phi_halo_cell__west_send_reg_init = {1'h0, 32'h0000_0000};
-  wire [127:0] literal_13755 = {{8'h00, 8'h00, 8'h00, 8'h00}, 96'h0000_0000_0000_0000_0000_0000};
+  wire [127:0] literal_16312 = {{8'h00, 8'h00, 8'h00, 8'h00}, 96'h0000_0000_0000_0000_0000_0000};
   reg ____state_0;
   reg [7:0] ____state_6;
   reg [7:0] ____state_1;
@@ -406,77 +406,77 @@ module __axis__Top__Tx_2_next(
   wire [7:0] state2_header_payload_words;
   wire last;
   wire phi_halo_cell__west_send_valid_inv;
-  wire nor_13767;
-  wire not_13768;
+  wire nor_16324;
+  wire not_16325;
   wire __phi_halo_cell__west_send_vld_buf;
   wire phi_halo_cell__west_send_valid_load_en;
   wire [1:0] ____state_1__next_value_predicates;
   wire [1:0] ____state_6__next_value_predicates;
   wire phi_halo_cell__west_send_load_en;
-  wire [2:0] one_hot_13777;
-  wire [2:0] one_hot_13778;
+  wire [2:0] one_hot_16334;
+  wire [2:0] one_hot_16335;
   wire [7:0] frame_header_op__1;
   wire [7:0] frame_header_flags__1;
   wire [7:0] frame_header_txid__1;
   wire p0_stage_done;
   wire phi_halo_cell__west_valid_inv;
-  wire and_13817;
+  wire and_16374;
   wire [95:0] frame_payload__1;
   wire [31:0] state2_payload__1;
   wire phi_halo_cell__west_valid_load_en;
   wire ____state_1__at_most_one_next_value;
   wire ____state_6__at_most_one_next_value;
-  wire [1:0] concat_13820;
+  wire [1:0] concat_16377;
   wire [127:0] payload;
-  wire [1:0] concat_13833;
+  wire [1:0] concat_16390;
   wire [7:0] beats_sent;
   wire phi_halo_cell__west_load_en;
-  wire or_15175;
-  wire or_15179;
-  wire [7:0] one_hot_sel_13821;
-  wire and_13841;
-  wire [127:0] one_hot_sel_13828;
-  wire [7:0] one_hot_sel_13834;
+  wire or_18008;
+  wire or_18012;
+  wire [7:0] one_hot_sel_16378;
+  wire and_16398;
+  wire [127:0] one_hot_sel_16385;
+  wire [7:0] one_hot_sel_16391;
   wire [32:0] __phi_halo_cell__west_send_buf;
   assign state2_header_payload_words_0_case_cmp = ~____state_0;
-  assign phi_halo_cell__west_select = state2_header_payload_words_0_case_cmp ? __phi_halo_cell__west_reg : literal_13755;
+  assign phi_halo_cell__west_select = state2_header_payload_words_0_case_cmp ? __phi_halo_cell__west_reg : literal_16312;
   assign frame_header__1 = phi_halo_cell__west_select[127:96];
   assign frame_header_payload_words__1 = frame_header__1[31:24];
   assign state2_beats_sent__2 = ____state_6 & {8{____state_0}};
   assign state2_header_payload_words = ____state_0 ? ____state_1 : frame_header_payload_words__1;
   assign last = state2_beats_sent__2 == state2_header_payload_words;
   assign phi_halo_cell__west_send_valid_inv = ~__phi_halo_cell__west_send_valid_reg;
-  assign nor_13767 = ~(last | ____state_0);
-  assign not_13768 = ~last;
+  assign nor_16324 = ~(last | ____state_0);
+  assign not_16325 = ~last;
   assign __phi_halo_cell__west_send_vld_buf = ____state_0 | __phi_halo_cell__west_valid_reg;
   assign phi_halo_cell__west_send_valid_load_en = phi_halo_cell__west_send_rdy | phi_halo_cell__west_send_valid_inv;
-  assign ____state_1__next_value_predicates = {last, nor_13767};
-  assign ____state_6__next_value_predicates = {not_13768, last};
+  assign ____state_1__next_value_predicates = {last, nor_16324};
+  assign ____state_6__next_value_predicates = {not_16325, last};
   assign phi_halo_cell__west_send_load_en = __phi_halo_cell__west_send_vld_buf & phi_halo_cell__west_send_valid_load_en;
-  assign one_hot_13777 = {____state_1__next_value_predicates[1:0] == 2'h0, ____state_1__next_value_predicates[1] && !____state_1__next_value_predicates[0], ____state_1__next_value_predicates[0]};
-  assign one_hot_13778 = {____state_6__next_value_predicates[1:0] == 2'h0, ____state_6__next_value_predicates[1] && !____state_6__next_value_predicates[0], ____state_6__next_value_predicates[0]};
+  assign one_hot_16334 = {____state_1__next_value_predicates[1:0] == 2'h0, ____state_1__next_value_predicates[1] && !____state_1__next_value_predicates[0], ____state_1__next_value_predicates[0]};
+  assign one_hot_16335 = {____state_6__next_value_predicates[1:0] == 2'h0, ____state_6__next_value_predicates[1] && !____state_6__next_value_predicates[0], ____state_6__next_value_predicates[0]};
   assign frame_header_op__1 = frame_header__1[7:0];
   assign frame_header_flags__1 = frame_header__1[15:8];
   assign frame_header_txid__1 = frame_header__1[23:16];
   assign p0_stage_done = __phi_halo_cell__west_send_vld_buf & phi_halo_cell__west_send_load_en;
   assign phi_halo_cell__west_valid_inv = ~__phi_halo_cell__west_valid_reg;
-  assign and_13817 = last & p0_stage_done;
+  assign and_16374 = last & p0_stage_done;
   assign frame_payload__1 = phi_halo_cell__west_select[95:0];
   assign state2_payload__1 = ____state_0 ? ____state_5[31:0] : {frame_header_op__1, frame_header_flags__1, frame_header_txid__1, frame_header_payload_words__1};
   assign phi_halo_cell__west_valid_load_en = p0_stage_done & state2_header_payload_words_0_case_cmp | phi_halo_cell__west_valid_inv;
-  assign ____state_1__at_most_one_next_value = last == one_hot_13777[1] & nor_13767 == one_hot_13777[0];
-  assign ____state_6__at_most_one_next_value = not_13768 == one_hot_13778[1] & last == one_hot_13778[0];
-  assign concat_13820 = {and_13817, nor_13767 & p0_stage_done};
+  assign ____state_1__at_most_one_next_value = last == one_hot_16334[1] & nor_16324 == one_hot_16334[0];
+  assign ____state_6__at_most_one_next_value = not_16325 == one_hot_16335[1] & last == one_hot_16335[0];
+  assign concat_16377 = {and_16374, nor_16324 & p0_stage_done};
   assign payload = {frame_payload__1, frame_header_op__1, frame_header_flags__1, frame_header_txid__1, frame_header_payload_words__1};
-  assign concat_13833 = {not_13768 & p0_stage_done, and_13817};
+  assign concat_16390 = {not_16325 & p0_stage_done, and_16374};
   assign beats_sent = state2_beats_sent__2 + 8'h01;
   assign phi_halo_cell__west_load_en = phi_halo_cell__west_vld & phi_halo_cell__west_valid_load_en;
-  assign or_15175 = ~p0_stage_done | ____state_1__at_most_one_next_value | reset;
-  assign or_15179 = ~p0_stage_done | ____state_6__at_most_one_next_value | reset;
-  assign one_hot_sel_13821 = frame_header_payload_words__1 & {8{concat_13820[0]}} | 8'h00 & {8{concat_13820[1]}};
-  assign and_13841 = (last | nor_13767) & p0_stage_done;
-  assign one_hot_sel_13828 = payload & {128{concat_13820[0]}} | 128'h0000_0000_0000_0000_0000_0000_0000_0000 & {128{concat_13820[1]}};
-  assign one_hot_sel_13834 = 8'h00 & {8{concat_13833[0]}} | beats_sent & {8{concat_13833[1]}};
+  assign or_18008 = ~p0_stage_done | ____state_1__at_most_one_next_value | reset;
+  assign or_18012 = ~p0_stage_done | ____state_6__at_most_one_next_value | reset;
+  assign one_hot_sel_16378 = frame_header_payload_words__1 & {8{concat_16377[0]}} | 8'h00 & {8{concat_16377[1]}};
+  assign and_16398 = (last | nor_16324) & p0_stage_done;
+  assign one_hot_sel_16385 = payload & {128{concat_16377[0]}} | 128'h0000_0000_0000_0000_0000_0000_0000_0000 & {128{concat_16377[1]}};
+  assign one_hot_sel_16391 = 8'h00 & {8{concat_16390[0]}} | beats_sent & {8{concat_16390[1]}};
   assign __phi_halo_cell__west_send_buf = {last, state2_beats_sent__2[2:0] == 3'h0 ? state2_payload__1 : (state2_beats_sent__2[2:0] == 3'h1 ? ____state_5[63:32] : (state2_beats_sent__2[2:0] == 3'h2 ? ____state_5[95:64] : (state2_beats_sent__2[2:0] == 3'h3 ? ____state_5[127:96] : 32'h0000_0000)))};
   always @ (posedge clk) begin
     if (reset) begin
@@ -489,10 +489,10 @@ module __axis__Top__Tx_2_next(
       __phi_halo_cell__west_send_reg <= __phi_halo_cell__west_send_reg_init;
       __phi_halo_cell__west_send_valid_reg <= 1'h0;
     end else begin
-      ____state_0 <= p0_stage_done ? not_13768 : ____state_0;
-      ____state_6 <= p0_stage_done ? one_hot_sel_13834 : ____state_6;
-      ____state_1 <= and_13841 ? one_hot_sel_13821 : ____state_1;
-      ____state_5 <= and_13841 ? one_hot_sel_13828 : ____state_5;
+      ____state_0 <= p0_stage_done ? not_16325 : ____state_0;
+      ____state_6 <= p0_stage_done ? one_hot_sel_16391 : ____state_6;
+      ____state_1 <= and_16398 ? one_hot_sel_16378 : ____state_1;
+      ____state_5 <= and_16398 ? one_hot_sel_16385 : ____state_5;
       __phi_halo_cell__west_reg <= phi_halo_cell__west_load_en ? phi_halo_cell__west : __phi_halo_cell__west_reg;
       __phi_halo_cell__west_valid_reg <= phi_halo_cell__west_valid_load_en ? phi_halo_cell__west_vld : __phi_halo_cell__west_valid_reg;
       __phi_halo_cell__west_send_reg <= phi_halo_cell__west_send_load_en ? __phi_halo_cell__west_send_buf : __phi_halo_cell__west_send_reg;
@@ -517,7 +517,7 @@ module __axis__Top__Tx_3_next(
 );
   wire [127:0] __phi_halo_cell__south_reg_init = {{8'h00, 8'h00, 8'h00, 8'h00}, 96'h0000_0000_0000_0000_0000_0000};
   wire [32:0] __phi_halo_cell__south_send_reg_init = {1'h0, 32'h0000_0000};
-  wire [127:0] literal_13890 = {{8'h00, 8'h00, 8'h00, 8'h00}, 96'h0000_0000_0000_0000_0000_0000};
+  wire [127:0] literal_16447 = {{8'h00, 8'h00, 8'h00, 8'h00}, 96'h0000_0000_0000_0000_0000_0000};
   reg ____state_0;
   reg [7:0] ____state_6;
   reg [7:0] ____state_1;
@@ -534,77 +534,77 @@ module __axis__Top__Tx_3_next(
   wire [7:0] state2_header_payload_words;
   wire last;
   wire phi_halo_cell__south_send_valid_inv;
-  wire nor_13902;
-  wire not_13903;
+  wire nor_16459;
+  wire not_16460;
   wire __phi_halo_cell__south_send_vld_buf;
   wire phi_halo_cell__south_send_valid_load_en;
   wire [1:0] ____state_1__next_value_predicates;
   wire [1:0] ____state_6__next_value_predicates;
   wire phi_halo_cell__south_send_load_en;
-  wire [2:0] one_hot_13912;
-  wire [2:0] one_hot_13913;
+  wire [2:0] one_hot_16469;
+  wire [2:0] one_hot_16470;
   wire [7:0] frame_header_op__1;
   wire [7:0] frame_header_flags__1;
   wire [7:0] frame_header_txid__1;
   wire p0_stage_done;
   wire phi_halo_cell__south_valid_inv;
-  wire and_13952;
+  wire and_16509;
   wire [95:0] frame_payload__1;
   wire [31:0] state2_payload__1;
   wire phi_halo_cell__south_valid_load_en;
   wire ____state_1__at_most_one_next_value;
   wire ____state_6__at_most_one_next_value;
-  wire [1:0] concat_13955;
+  wire [1:0] concat_16512;
   wire [127:0] payload;
-  wire [1:0] concat_13968;
+  wire [1:0] concat_16525;
   wire [7:0] beats_sent;
   wire phi_halo_cell__south_load_en;
-  wire or_15181;
-  wire or_15185;
-  wire [7:0] one_hot_sel_13956;
-  wire and_13976;
-  wire [127:0] one_hot_sel_13963;
-  wire [7:0] one_hot_sel_13969;
+  wire or_18014;
+  wire or_18018;
+  wire [7:0] one_hot_sel_16513;
+  wire and_16533;
+  wire [127:0] one_hot_sel_16520;
+  wire [7:0] one_hot_sel_16526;
   wire [32:0] __phi_halo_cell__south_send_buf;
   assign state2_header_payload_words_0_case_cmp = ~____state_0;
-  assign phi_halo_cell__south_select = state2_header_payload_words_0_case_cmp ? __phi_halo_cell__south_reg : literal_13890;
+  assign phi_halo_cell__south_select = state2_header_payload_words_0_case_cmp ? __phi_halo_cell__south_reg : literal_16447;
   assign frame_header__1 = phi_halo_cell__south_select[127:96];
   assign frame_header_payload_words__1 = frame_header__1[31:24];
   assign state2_beats_sent__2 = ____state_6 & {8{____state_0}};
   assign state2_header_payload_words = ____state_0 ? ____state_1 : frame_header_payload_words__1;
   assign last = state2_beats_sent__2 == state2_header_payload_words;
   assign phi_halo_cell__south_send_valid_inv = ~__phi_halo_cell__south_send_valid_reg;
-  assign nor_13902 = ~(last | ____state_0);
-  assign not_13903 = ~last;
+  assign nor_16459 = ~(last | ____state_0);
+  assign not_16460 = ~last;
   assign __phi_halo_cell__south_send_vld_buf = ____state_0 | __phi_halo_cell__south_valid_reg;
   assign phi_halo_cell__south_send_valid_load_en = phi_halo_cell__south_send_rdy | phi_halo_cell__south_send_valid_inv;
-  assign ____state_1__next_value_predicates = {last, nor_13902};
-  assign ____state_6__next_value_predicates = {not_13903, last};
+  assign ____state_1__next_value_predicates = {last, nor_16459};
+  assign ____state_6__next_value_predicates = {not_16460, last};
   assign phi_halo_cell__south_send_load_en = __phi_halo_cell__south_send_vld_buf & phi_halo_cell__south_send_valid_load_en;
-  assign one_hot_13912 = {____state_1__next_value_predicates[1:0] == 2'h0, ____state_1__next_value_predicates[1] && !____state_1__next_value_predicates[0], ____state_1__next_value_predicates[0]};
-  assign one_hot_13913 = {____state_6__next_value_predicates[1:0] == 2'h0, ____state_6__next_value_predicates[1] && !____state_6__next_value_predicates[0], ____state_6__next_value_predicates[0]};
+  assign one_hot_16469 = {____state_1__next_value_predicates[1:0] == 2'h0, ____state_1__next_value_predicates[1] && !____state_1__next_value_predicates[0], ____state_1__next_value_predicates[0]};
+  assign one_hot_16470 = {____state_6__next_value_predicates[1:0] == 2'h0, ____state_6__next_value_predicates[1] && !____state_6__next_value_predicates[0], ____state_6__next_value_predicates[0]};
   assign frame_header_op__1 = frame_header__1[7:0];
   assign frame_header_flags__1 = frame_header__1[15:8];
   assign frame_header_txid__1 = frame_header__1[23:16];
   assign p0_stage_done = __phi_halo_cell__south_send_vld_buf & phi_halo_cell__south_send_load_en;
   assign phi_halo_cell__south_valid_inv = ~__phi_halo_cell__south_valid_reg;
-  assign and_13952 = last & p0_stage_done;
+  assign and_16509 = last & p0_stage_done;
   assign frame_payload__1 = phi_halo_cell__south_select[95:0];
   assign state2_payload__1 = ____state_0 ? ____state_5[31:0] : {frame_header_op__1, frame_header_flags__1, frame_header_txid__1, frame_header_payload_words__1};
   assign phi_halo_cell__south_valid_load_en = p0_stage_done & state2_header_payload_words_0_case_cmp | phi_halo_cell__south_valid_inv;
-  assign ____state_1__at_most_one_next_value = last == one_hot_13912[1] & nor_13902 == one_hot_13912[0];
-  assign ____state_6__at_most_one_next_value = not_13903 == one_hot_13913[1] & last == one_hot_13913[0];
-  assign concat_13955 = {and_13952, nor_13902 & p0_stage_done};
+  assign ____state_1__at_most_one_next_value = last == one_hot_16469[1] & nor_16459 == one_hot_16469[0];
+  assign ____state_6__at_most_one_next_value = not_16460 == one_hot_16470[1] & last == one_hot_16470[0];
+  assign concat_16512 = {and_16509, nor_16459 & p0_stage_done};
   assign payload = {frame_payload__1, frame_header_op__1, frame_header_flags__1, frame_header_txid__1, frame_header_payload_words__1};
-  assign concat_13968 = {not_13903 & p0_stage_done, and_13952};
+  assign concat_16525 = {not_16460 & p0_stage_done, and_16509};
   assign beats_sent = state2_beats_sent__2 + 8'h01;
   assign phi_halo_cell__south_load_en = phi_halo_cell__south_vld & phi_halo_cell__south_valid_load_en;
-  assign or_15181 = ~p0_stage_done | ____state_1__at_most_one_next_value | reset;
-  assign or_15185 = ~p0_stage_done | ____state_6__at_most_one_next_value | reset;
-  assign one_hot_sel_13956 = frame_header_payload_words__1 & {8{concat_13955[0]}} | 8'h00 & {8{concat_13955[1]}};
-  assign and_13976 = (last | nor_13902) & p0_stage_done;
-  assign one_hot_sel_13963 = payload & {128{concat_13955[0]}} | 128'h0000_0000_0000_0000_0000_0000_0000_0000 & {128{concat_13955[1]}};
-  assign one_hot_sel_13969 = 8'h00 & {8{concat_13968[0]}} | beats_sent & {8{concat_13968[1]}};
+  assign or_18014 = ~p0_stage_done | ____state_1__at_most_one_next_value | reset;
+  assign or_18018 = ~p0_stage_done | ____state_6__at_most_one_next_value | reset;
+  assign one_hot_sel_16513 = frame_header_payload_words__1 & {8{concat_16512[0]}} | 8'h00 & {8{concat_16512[1]}};
+  assign and_16533 = (last | nor_16459) & p0_stage_done;
+  assign one_hot_sel_16520 = payload & {128{concat_16512[0]}} | 128'h0000_0000_0000_0000_0000_0000_0000_0000 & {128{concat_16512[1]}};
+  assign one_hot_sel_16526 = 8'h00 & {8{concat_16525[0]}} | beats_sent & {8{concat_16525[1]}};
   assign __phi_halo_cell__south_send_buf = {last, state2_beats_sent__2[2:0] == 3'h0 ? state2_payload__1 : (state2_beats_sent__2[2:0] == 3'h1 ? ____state_5[63:32] : (state2_beats_sent__2[2:0] == 3'h2 ? ____state_5[95:64] : (state2_beats_sent__2[2:0] == 3'h3 ? ____state_5[127:96] : 32'h0000_0000)))};
   always @ (posedge clk) begin
     if (reset) begin
@@ -617,10 +617,10 @@ module __axis__Top__Tx_3_next(
       __phi_halo_cell__south_send_reg <= __phi_halo_cell__south_send_reg_init;
       __phi_halo_cell__south_send_valid_reg <= 1'h0;
     end else begin
-      ____state_0 <= p0_stage_done ? not_13903 : ____state_0;
-      ____state_6 <= p0_stage_done ? one_hot_sel_13969 : ____state_6;
-      ____state_1 <= and_13976 ? one_hot_sel_13956 : ____state_1;
-      ____state_5 <= and_13976 ? one_hot_sel_13963 : ____state_5;
+      ____state_0 <= p0_stage_done ? not_16460 : ____state_0;
+      ____state_6 <= p0_stage_done ? one_hot_sel_16526 : ____state_6;
+      ____state_1 <= and_16533 ? one_hot_sel_16513 : ____state_1;
+      ____state_5 <= and_16533 ? one_hot_sel_16520 : ____state_5;
       __phi_halo_cell__south_reg <= phi_halo_cell__south_load_en ? phi_halo_cell__south : __phi_halo_cell__south_reg;
       __phi_halo_cell__south_valid_reg <= phi_halo_cell__south_valid_load_en ? phi_halo_cell__south_vld : __phi_halo_cell__south_valid_reg;
       __phi_halo_cell__south_send_reg <= phi_halo_cell__south_send_load_en ? __phi_halo_cell__south_send_buf : __phi_halo_cell__south_send_reg;
@@ -630,6 +630,134 @@ module __axis__Top__Tx_3_next(
   assign phi_halo_cell__south_rdy = phi_halo_cell__south_load_en;
   assign phi_halo_cell__south_send = __phi_halo_cell__south_send_reg;
   assign phi_halo_cell__south_send_vld = __phi_halo_cell__south_send_valid_reg;
+endmodule
+
+
+module __axis__Top__Tx_4_next(
+  input wire clk,
+  input wire reset,
+  input wire [127:0] phi_halo_cell__syndrome,
+  input wire phi_halo_cell__syndrome_vld,
+  input wire phi_halo_cell__syndrome_send_rdy,
+  output wire phi_halo_cell__syndrome_rdy,
+  output wire [32:0] phi_halo_cell__syndrome_send,
+  output wire phi_halo_cell__syndrome_send_vld
+);
+  wire [127:0] __phi_halo_cell__syndrome_reg_init = {{8'h00, 8'h00, 8'h00, 8'h00}, 96'h0000_0000_0000_0000_0000_0000};
+  wire [32:0] __phi_halo_cell__syndrome_send_reg_init = {1'h0, 32'h0000_0000};
+  wire [127:0] literal_16582 = {{8'h00, 8'h00, 8'h00, 8'h00}, 96'h0000_0000_0000_0000_0000_0000};
+  reg ____state_0;
+  reg [7:0] ____state_6;
+  reg [7:0] ____state_1;
+  reg [127:0] ____state_5;
+  reg [127:0] __phi_halo_cell__syndrome_reg;
+  reg __phi_halo_cell__syndrome_valid_reg;
+  reg [32:0] __phi_halo_cell__syndrome_send_reg;
+  reg __phi_halo_cell__syndrome_send_valid_reg;
+  wire state2_header_payload_words_0_case_cmp;
+  wire [127:0] phi_halo_cell__syndrome_select;
+  wire [31:0] frame_header__1;
+  wire [7:0] frame_header_payload_words__1;
+  wire [7:0] state2_beats_sent__2;
+  wire [7:0] state2_header_payload_words;
+  wire last;
+  wire phi_halo_cell__syndrome_send_valid_inv;
+  wire nor_16594;
+  wire not_16595;
+  wire __phi_halo_cell__syndrome_send_vld_buf;
+  wire phi_halo_cell__syndrome_send_valid_load_en;
+  wire [1:0] ____state_1__next_value_predicates;
+  wire [1:0] ____state_6__next_value_predicates;
+  wire phi_halo_cell__syndrome_send_load_en;
+  wire [2:0] one_hot_16604;
+  wire [2:0] one_hot_16605;
+  wire [7:0] frame_header_op__1;
+  wire [7:0] frame_header_flags__1;
+  wire [7:0] frame_header_txid__1;
+  wire p0_stage_done;
+  wire phi_halo_cell__syndrome_valid_inv;
+  wire and_16644;
+  wire [95:0] frame_payload__1;
+  wire [31:0] state2_payload__1;
+  wire phi_halo_cell__syndrome_valid_load_en;
+  wire ____state_1__at_most_one_next_value;
+  wire ____state_6__at_most_one_next_value;
+  wire [1:0] concat_16647;
+  wire [127:0] payload;
+  wire [1:0] concat_16660;
+  wire [7:0] beats_sent;
+  wire phi_halo_cell__syndrome_load_en;
+  wire or_18020;
+  wire or_18024;
+  wire [7:0] one_hot_sel_16648;
+  wire and_16668;
+  wire [127:0] one_hot_sel_16655;
+  wire [7:0] one_hot_sel_16661;
+  wire [32:0] __phi_halo_cell__syndrome_send_buf;
+  assign state2_header_payload_words_0_case_cmp = ~____state_0;
+  assign phi_halo_cell__syndrome_select = state2_header_payload_words_0_case_cmp ? __phi_halo_cell__syndrome_reg : literal_16582;
+  assign frame_header__1 = phi_halo_cell__syndrome_select[127:96];
+  assign frame_header_payload_words__1 = frame_header__1[31:24];
+  assign state2_beats_sent__2 = ____state_6 & {8{____state_0}};
+  assign state2_header_payload_words = ____state_0 ? ____state_1 : frame_header_payload_words__1;
+  assign last = state2_beats_sent__2 == state2_header_payload_words;
+  assign phi_halo_cell__syndrome_send_valid_inv = ~__phi_halo_cell__syndrome_send_valid_reg;
+  assign nor_16594 = ~(last | ____state_0);
+  assign not_16595 = ~last;
+  assign __phi_halo_cell__syndrome_send_vld_buf = ____state_0 | __phi_halo_cell__syndrome_valid_reg;
+  assign phi_halo_cell__syndrome_send_valid_load_en = phi_halo_cell__syndrome_send_rdy | phi_halo_cell__syndrome_send_valid_inv;
+  assign ____state_1__next_value_predicates = {last, nor_16594};
+  assign ____state_6__next_value_predicates = {not_16595, last};
+  assign phi_halo_cell__syndrome_send_load_en = __phi_halo_cell__syndrome_send_vld_buf & phi_halo_cell__syndrome_send_valid_load_en;
+  assign one_hot_16604 = {____state_1__next_value_predicates[1:0] == 2'h0, ____state_1__next_value_predicates[1] && !____state_1__next_value_predicates[0], ____state_1__next_value_predicates[0]};
+  assign one_hot_16605 = {____state_6__next_value_predicates[1:0] == 2'h0, ____state_6__next_value_predicates[1] && !____state_6__next_value_predicates[0], ____state_6__next_value_predicates[0]};
+  assign frame_header_op__1 = frame_header__1[7:0];
+  assign frame_header_flags__1 = frame_header__1[15:8];
+  assign frame_header_txid__1 = frame_header__1[23:16];
+  assign p0_stage_done = __phi_halo_cell__syndrome_send_vld_buf & phi_halo_cell__syndrome_send_load_en;
+  assign phi_halo_cell__syndrome_valid_inv = ~__phi_halo_cell__syndrome_valid_reg;
+  assign and_16644 = last & p0_stage_done;
+  assign frame_payload__1 = phi_halo_cell__syndrome_select[95:0];
+  assign state2_payload__1 = ____state_0 ? ____state_5[31:0] : {frame_header_op__1, frame_header_flags__1, frame_header_txid__1, frame_header_payload_words__1};
+  assign phi_halo_cell__syndrome_valid_load_en = p0_stage_done & state2_header_payload_words_0_case_cmp | phi_halo_cell__syndrome_valid_inv;
+  assign ____state_1__at_most_one_next_value = last == one_hot_16604[1] & nor_16594 == one_hot_16604[0];
+  assign ____state_6__at_most_one_next_value = not_16595 == one_hot_16605[1] & last == one_hot_16605[0];
+  assign concat_16647 = {and_16644, nor_16594 & p0_stage_done};
+  assign payload = {frame_payload__1, frame_header_op__1, frame_header_flags__1, frame_header_txid__1, frame_header_payload_words__1};
+  assign concat_16660 = {not_16595 & p0_stage_done, and_16644};
+  assign beats_sent = state2_beats_sent__2 + 8'h01;
+  assign phi_halo_cell__syndrome_load_en = phi_halo_cell__syndrome_vld & phi_halo_cell__syndrome_valid_load_en;
+  assign or_18020 = ~p0_stage_done | ____state_1__at_most_one_next_value | reset;
+  assign or_18024 = ~p0_stage_done | ____state_6__at_most_one_next_value | reset;
+  assign one_hot_sel_16648 = frame_header_payload_words__1 & {8{concat_16647[0]}} | 8'h00 & {8{concat_16647[1]}};
+  assign and_16668 = (last | nor_16594) & p0_stage_done;
+  assign one_hot_sel_16655 = payload & {128{concat_16647[0]}} | 128'h0000_0000_0000_0000_0000_0000_0000_0000 & {128{concat_16647[1]}};
+  assign one_hot_sel_16661 = 8'h00 & {8{concat_16660[0]}} | beats_sent & {8{concat_16660[1]}};
+  assign __phi_halo_cell__syndrome_send_buf = {last, state2_beats_sent__2[2:0] == 3'h0 ? state2_payload__1 : (state2_beats_sent__2[2:0] == 3'h1 ? ____state_5[63:32] : (state2_beats_sent__2[2:0] == 3'h2 ? ____state_5[95:64] : (state2_beats_sent__2[2:0] == 3'h3 ? ____state_5[127:96] : 32'h0000_0000)))};
+  always @ (posedge clk) begin
+    if (reset) begin
+      ____state_0 <= 1'h0;
+      ____state_6 <= 8'h00;
+      ____state_1 <= 8'h00;
+      ____state_5 <= 128'h0000_0000_0000_0000_0000_0000_0000_0000;
+      __phi_halo_cell__syndrome_reg <= __phi_halo_cell__syndrome_reg_init;
+      __phi_halo_cell__syndrome_valid_reg <= 1'h0;
+      __phi_halo_cell__syndrome_send_reg <= __phi_halo_cell__syndrome_send_reg_init;
+      __phi_halo_cell__syndrome_send_valid_reg <= 1'h0;
+    end else begin
+      ____state_0 <= p0_stage_done ? not_16595 : ____state_0;
+      ____state_6 <= p0_stage_done ? one_hot_sel_16661 : ____state_6;
+      ____state_1 <= and_16668 ? one_hot_sel_16648 : ____state_1;
+      ____state_5 <= and_16668 ? one_hot_sel_16655 : ____state_5;
+      __phi_halo_cell__syndrome_reg <= phi_halo_cell__syndrome_load_en ? phi_halo_cell__syndrome : __phi_halo_cell__syndrome_reg;
+      __phi_halo_cell__syndrome_valid_reg <= phi_halo_cell__syndrome_valid_load_en ? phi_halo_cell__syndrome_vld : __phi_halo_cell__syndrome_valid_reg;
+      __phi_halo_cell__syndrome_send_reg <= phi_halo_cell__syndrome_send_load_en ? __phi_halo_cell__syndrome_send_buf : __phi_halo_cell__syndrome_send_reg;
+      __phi_halo_cell__syndrome_send_valid_reg <= phi_halo_cell__syndrome_send_valid_load_en ? __phi_halo_cell__syndrome_send_vld_buf : __phi_halo_cell__syndrome_send_valid_reg;
+    end
+  end
+  assign phi_halo_cell__syndrome_rdy = phi_halo_cell__syndrome_load_en;
+  assign phi_halo_cell__syndrome_send = __phi_halo_cell__syndrome_send_reg;
+  assign phi_halo_cell__syndrome_send_vld = __phi_halo_cell__syndrome_send_valid_reg;
 endmodule
 
 
@@ -650,6 +778,7 @@ module __phi_halo_cell__Top__Service_0_next(
   input wire [127:0] phi_halo_cell__req,
   input wire phi_halo_cell__req_vld,
   input wire phi_halo_cell__south_rdy,
+  input wire phi_halo_cell__syndrome_rdy,
   input wire phi_halo_cell__west_rdy,
   output wire phi_halo_cell__admit,
   output wire phi_halo_cell__admit_vld,
@@ -660,28 +789,11 @@ module __phi_halo_cell__Top__Service_0_next(
   output wire phi_halo_cell__req_rdy,
   output wire [127:0] phi_halo_cell__south,
   output wire phi_halo_cell__south_vld,
+  output wire [127:0] phi_halo_cell__syndrome,
+  output wire phi_halo_cell__syndrome_vld,
   output wire [127:0] phi_halo_cell__west,
   output wire phi_halo_cell__west_vld
 );
-  function automatic [1:0] priority_sel_2b_2way (input reg [1:0] sel, input reg [1:0] case0, input reg [1:0] case1, input reg [1:0] default_value);
-    begin
-      casez (sel)
-        2'b?1: begin
-          priority_sel_2b_2way = case0;
-        end
-        2'b10: begin
-          priority_sel_2b_2way = case1;
-        end
-        2'b00: begin
-          priority_sel_2b_2way = default_value;
-        end
-        default: begin
-          // Propagate X
-          priority_sel_2b_2way = 2'dx;
-        end
-      endcase
-    end
-  endfunction
   function automatic priority_sel_1b_2way (input reg [1:0] sel, input reg case0, input reg case1, input reg default_value);
     begin
       casez (sel)
@@ -701,30 +813,67 @@ module __phi_halo_cell__Top__Service_0_next(
       endcase
     end
   endfunction
-  function automatic priority_sel_1b_5way (input reg [4:0] sel, input reg case0, input reg case1, input reg case2, input reg case3, input reg case4, input reg default_value);
+  function automatic priority_sel_1b_3way (input reg [2:0] sel, input reg case0, input reg case1, input reg case2, input reg default_value);
     begin
       casez (sel)
-        5'b????1: begin
-          priority_sel_1b_5way = case0;
+        3'b??1: begin
+          priority_sel_1b_3way = case0;
         end
-        5'b???10: begin
-          priority_sel_1b_5way = case1;
+        3'b?10: begin
+          priority_sel_1b_3way = case1;
         end
-        5'b??100: begin
-          priority_sel_1b_5way = case2;
+        3'b100: begin
+          priority_sel_1b_3way = case2;
         end
-        5'b?1000: begin
-          priority_sel_1b_5way = case3;
-        end
-        5'b10000: begin
-          priority_sel_1b_5way = case4;
-        end
-        5'b0_0000: begin
-          priority_sel_1b_5way = default_value;
+        3'b000: begin
+          priority_sel_1b_3way = default_value;
         end
         default: begin
           // Propagate X
-          priority_sel_1b_5way = 1'dx;
+          priority_sel_1b_3way = 1'dx;
+        end
+      endcase
+    end
+  endfunction
+  function automatic [1:0] priority_sel_2b_10way (input reg [9:0] sel, input reg [1:0] case0, input reg [1:0] case1, input reg [1:0] case2, input reg [1:0] case3, input reg [1:0] case4, input reg [1:0] case5, input reg [1:0] case6, input reg [1:0] case7, input reg [1:0] case8, input reg [1:0] case9, input reg [1:0] default_value);
+    begin
+      casez (sel)
+        10'b?????????1: begin
+          priority_sel_2b_10way = case0;
+        end
+        10'b????????10: begin
+          priority_sel_2b_10way = case1;
+        end
+        10'b???????100: begin
+          priority_sel_2b_10way = case2;
+        end
+        10'b??????1000: begin
+          priority_sel_2b_10way = case3;
+        end
+        10'b?????10000: begin
+          priority_sel_2b_10way = case4;
+        end
+        10'b????100000: begin
+          priority_sel_2b_10way = case5;
+        end
+        10'b???1000000: begin
+          priority_sel_2b_10way = case6;
+        end
+        10'b??10000000: begin
+          priority_sel_2b_10way = case7;
+        end
+        10'b?100000000: begin
+          priority_sel_2b_10way = case8;
+        end
+        10'b1000000000: begin
+          priority_sel_2b_10way = case9;
+        end
+        10'b00_0000_0000: begin
+          priority_sel_2b_10way = default_value;
+        end
+        default: begin
+          // Propagate X
+          priority_sel_2b_10way = 2'dx;
         end
       endcase
     end
@@ -764,21 +913,24 @@ module __phi_halo_cell__Top__Service_0_next(
     end
   endfunction
   // lint_on MULTIPLY
-  function automatic [95:0] priority_sel_96b_2way (input reg [1:0] sel, input reg [95:0] case0, input reg [95:0] case1, input reg [95:0] default_value);
+  function automatic [95:0] priority_sel_96b_3way (input reg [2:0] sel, input reg [95:0] case0, input reg [95:0] case1, input reg [95:0] case2, input reg [95:0] default_value);
     begin
       casez (sel)
-        2'b?1: begin
-          priority_sel_96b_2way = case0;
+        3'b??1: begin
+          priority_sel_96b_3way = case0;
         end
-        2'b10: begin
-          priority_sel_96b_2way = case1;
+        3'b?10: begin
+          priority_sel_96b_3way = case1;
         end
-        2'b00: begin
-          priority_sel_96b_2way = default_value;
+        3'b100: begin
+          priority_sel_96b_3way = case2;
+        end
+        3'b000: begin
+          priority_sel_96b_3way = default_value;
         end
         default: begin
           // Propagate X
-          priority_sel_96b_2way = 96'dx;
+          priority_sel_96b_3way = 96'dx;
         end
       endcase
     end
@@ -806,7 +958,33 @@ module __phi_halo_cell__Top__Service_0_next(
   wire [127:0] __phi_halo_cell__east_reg_init = {{8'h00, 8'h00, 8'h00, 8'h00}, 96'h0000_0000_0000_0000_0000_0000};
   wire [127:0] __phi_halo_cell__west_reg_init = {{8'h00, 8'h00, 8'h00, 8'h00}, 96'h0000_0000_0000_0000_0000_0000};
   wire [127:0] __phi_halo_cell__south_reg_init = {{8'h00, 8'h00, 8'h00, 8'h00}, 96'h0000_0000_0000_0000_0000_0000};
-  wire [127:0] literal_14084 = {{8'h00, 8'h00, 8'h00, 8'h00}, 96'h0000_0000_0000_0000_0000_0000};
+  wire [127:0] __phi_halo_cell__syndrome_reg_init = {{8'h00, 8'h00, 8'h00, 8'h00}, 96'h0000_0000_0000_0000_0000_0000};
+  wire [127:0] literal_16793 = {{8'h00, 8'h00, 8'h00, 8'h00}, 96'h0000_0000_0000_0000_0000_0000};
+  wire literal_16746[0:3];
+  assign literal_16746[0] = 1'h0;
+  assign literal_16746[1] = 1'h1;
+  assign literal_16746[2] = 1'h1;
+  assign literal_16746[3] = 1'h1;
+  wire literal_16747[0:3];
+  assign literal_16747[0] = 1'h1;
+  assign literal_16747[1] = 1'h0;
+  assign literal_16747[2] = 1'h0;
+  assign literal_16747[3] = 1'h0;
+  wire [1:0] literal_16741[0:3];
+  assign literal_16741[0] = 2'h0;
+  assign literal_16741[1] = 2'h3;
+  assign literal_16741[2] = 2'h3;
+  assign literal_16741[3] = 2'h2;
+  wire [2:0] literal_16742[0:3];
+  assign literal_16742[0] = 3'h0;
+  assign literal_16742[1] = 3'h3;
+  assign literal_16742[2] = 3'h5;
+  assign literal_16742[3] = 3'h4;
+  wire [2:0] literal_16743[0:3];
+  assign literal_16743[0] = 3'h7;
+  assign literal_16743[1] = 3'h0;
+  assign literal_16743[2] = 3'h0;
+  assign literal_16743[3] = 3'h0;
   wire unblocked_slots_tuple_idx_0[0:4];
   assign unblocked_slots_tuple_idx_0[0] = 1'h0;
   assign unblocked_slots_tuple_idx_0[1] = 1'h0;
@@ -820,12 +998,12 @@ module __phi_halo_cell__Top__Service_0_next(
   reg [7:0] ____state_14;
   reg [95:0] ____state_13_tuple_element_1_tuple_element_1[0:4];
   reg [7:0] ____state_13_tuple_element_1_tuple_element_0_tuple_element_3[0:4];
-  reg [31:0] ____state_7;
   reg [31:0] ____state_2;
   reg [31:0] ____state_3;
+  reg [31:0] ____state_7;
   reg [1:0] ____state_0;
-  reg [1:0] ____state_10;
   reg [1:0] ____state_6;
+  reg [1:0] ____state_10;
   reg [31:0] ____state_12;
   reg [31:0] ____state_8;
   reg [31:0] ____state_11;
@@ -839,6 +1017,7 @@ module __phi_halo_cell__Top__Service_0_next(
   reg __phi_halo_cell__east_has_been_sent_reg;
   reg __phi_halo_cell__west_has_been_sent_reg;
   reg __phi_halo_cell__south_has_been_sent_reg;
+  reg __phi_halo_cell__syndrome_has_been_sent_reg;
   reg [127:0] __phi_halo_cell__req_reg;
   reg __phi_halo_cell__req_valid_reg;
   reg __phi_halo_cell__admit_reg;
@@ -851,126 +1030,139 @@ module __phi_halo_cell__Top__Service_0_next(
   reg __phi_halo_cell__west_valid_reg;
   reg [127:0] __phi_halo_cell__south_reg;
   reg __phi_halo_cell__south_valid_reg;
-  wire nor_14082;
+  reg [127:0] __phi_halo_cell__syndrome_reg;
+  reg __phi_halo_cell__syndrome_valid_reg;
+  wire nor_16791;
   wire received;
   wire [127:0] phi_halo_cell__req_select;
   wire [31:0] frame_header;
   wire [7:0] frame_header_op;
   wire [7:0] frame_header__1_payload_words;
   wire [7:0] MAILBOX_CAPACITY;
-  wire eq_14093;
+  wire eq_16802;
+  wire eq_16804;
   wire tag_ok;
   wire accepted;
   wire [7:0] admitted_occupied;
-  wire and_14109;
-  wire [31:0] concat_14110;
-  wire ugt_14112;
+  wire and_16829;
+  wire [31:0] concat_16830;
+  wire ugt_16832;
   wire admitted_slots_tuple_idx_0[0:4];
-  wire or_reduce_14114;
+  wire or_reduce_16834;
   wire postponed__4;
-  wire ugt_14118;
+  wire ugt_16838;
   wire postponed__3;
   wire eligible_4;
-  wire [1:0] unexpand_for_next_value_2560_0__2_case_0_case_1_case_0;
-  wire or_reduce_14122;
+  wire [1:0] unexpand_for_next_value_3152_0__2_case_0_case_0_case_0;
+  wire or_reduce_16842;
   wire postponed__2;
   wire eligible_3;
   wire postponed__1;
   wire eligible_2;
   wire [7:0] compacted_4_tup1_tup0_tup0;
   wire eligible_1;
-  wire eq_14133;
+  wire eq_16853;
   wire postponed;
-  wire [95:0] sel_14142;
+  wire [95:0] sel_16862;
   wire [7:0] selected;
   wire [95:0] admitted_slots_tuple_idx_1_tuple_idx_1[0:4];
-  wire [2:0] bit_slice_14145;
+  wire [2:0] bit_slice_16865;
   wire [95:0] selected_slot_tuple_idx_1_tuple_idx_1;
   wire [31:0] Xls_clause_1_Value1_1;
   wire [31:0] _5__9_source;
   wire [31:0] _5__8_source;
   wire [31:0] _5__7_source;
   wire [31:0] _5__6_source;
-  wire [7:0] sel_14154;
+  wire [7:0] sel_16875;
+  wire [30:0] add_16876;
   wire [31:0] Xls_clause_2_Epoch_1;
-  wire _0__15;
-  wire _1__5;
-  wire _2__5;
+  wire _0__19;
+  wire _1__6;
+  wire _2__6;
   wire [31:0] _7__3;
   wire [31:0] Absent_1__1;
-  wire [1:0] unexpand_for_next_value_2560_0__2_case_0_case_0_case_1;
   wire [7:0] admitted_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[0:4];
-  wire eq_14166;
+  wire [1:0] unexpand_for_next_value_3152_0__2_case_0_case_0_case_2;
+  wire [1:0] unexpand_for_next_value_3152_0__2_case_0_case_1_case_1;
+  wire eq_16888;
+  wire eq_16889;
+  wire [1:0] unexpand_for_next_value_3152_0__2_case_0_case_0_case_3;
+  wire eq_16893;
   wire _8__3;
   wire [31:0] Xls_clause_1_NewSeen_1;
-  wire [1:0] unexpand_for_next_value_2560_0__2_case_0_case_0_case_2;
-  wire [30:0] add_14170;
-  wire eq_14172;
-  wire nor_14173;
   wire [7:0] selected_slot_tuple_idx_1_tuple_idx_0_tuple_idx_3;
-  wire and_14175;
-  wire _21__2;
-  wire eq_14177;
-  wire [31:0] _1;
-  wire or_14182;
-  wire eq_14183;
-  wire nand_14184;
-  wire eq_14185;
-  wire or_14187;
-  wire [31:0] _2__1;
-  wire eq_14190;
-  wire eq_14191;
-  wire _0__11;
-  wire [1:0] concat_14197;
-  wire [1:0] concat_14199;
-  wire and_14201;
-  wire _4__1;
-  wire postponed_slot_tup0;
-  wire eligible_0;
-  wire invalid_input;
-  wire eq_14214;
-  wire _6__1;
-  wire [1:0] priority_sel_14218;
-  wire _3;
+  wire eq_16898;
+  wire eq_16899;
+  wire [31:0] _1__1;
+  wire _3__1;
   wire _19;
   wire _47;
-  wire found;
+  wire nor_16905;
+  wire and_16907;
+  wire _21__2;
+  wire eq_16909;
+  wire eq_16914;
+  wire or_16916;
+  wire eq_16917;
+  wire [31:0] _2__2;
+  wire or_16919;
+  wire _0__14;
+  wire nand_16922;
+  wire _6__1;
+  wire nand_16925;
+  wire or_16927;
+  wire [2:0] concat_16930;
+  wire [1:0] concat_16933;
+  wire _4__1;
+  wire nand_16936;
+  wire postponed_slot_tup0;
+  wire nand_16939;
+  wire [31:0] _8__1;
+  wire eligible_0;
+  wire invalid_input;
   wire compacted_4_tup0;
-  wire nand_14234;
-  wire and_14237;
+  wire nand_16945;
+  wire and_16947;
+  wire eq_16952;
+  wire _2;
+  wire _2__8;
+  wire found;
   wire dispatchable;
-  wire [1:0] priority_sel_14247;
-  wire [1:0] concat_14249;
+  wire [1:0] priority_sel_16985;
+  wire [1:0] priority_sel_16987;
   wire [1:0] directive;
   wire [1:0] next_phase_squeezed;
   wire repeat_phase;
   wire invalid_repeat;
-  wire transition_slots_default_case_cmp;
   wire effective;
   wire transition_slots_predicate_piece_0;
   wire candidate_occupied_1_case_cmp;
-  wire [7:0] add_14299;
+  wire [7:0] add_17037;
   wire [1:0] candidate_phase_squeezed;
   wire failed;
   wire [7:0] candidate_occupied;
-  wire nor_14263;
+  wire nor_17002;
   wire phase_changed;
   wire [31:0] Xls_clause_1_Value_1;
-  wire and_14270;
+  wire and_17009;
   wire phase_boundary;
   wire reserve__1;
   wire reserve;
+  wire effects_north_valid;
+  wire effects_syndrome_valid;
   wire _12__2;
-  wire and_14276;
-  wire and_14278;
+  wire and_17013;
+  wire and_17015;
+  wire eq_17016;
   wire final_slots_0_case_cmp;
-  wire and_14286;
-  wire and_14288;
-  wire and_14291;
-  wire and_14292;
-  wire and_14293;
-  wire eq_14294;
-  wire [18:0] _1__1;
+  wire and_17024;
+  wire and_17026;
+  wire and_17027;
+  wire and_17029;
+  wire and_17030;
+  wire eq_17031;
+  wire and_17032;
+  wire [18:0] _1__7;
   wire __phi_halo_cell__admit_buf;
   wire __phi_halo_cell__admit_not_has_been_sent;
   wire phi_halo_cell__admit_valid_inv;
@@ -983,16 +1175,20 @@ module __phi_halo_cell__Top__Service_0_next(
   wire phi_halo_cell__west_valid_inv;
   wire __phi_halo_cell__south_not_has_been_sent;
   wire phi_halo_cell__south_valid_inv;
-  wire and_14306;
-  wire and_14308;
+  wire __phi_halo_cell__syndrome_vld_buf;
+  wire __phi_halo_cell__syndrome_not_has_been_sent;
+  wire phi_halo_cell__syndrome_valid_inv;
+  wire and_17044;
+  wire and_17046;
   wire Xls_clause_1_NewBestDirection_1_0_case_cmp;
   wire _15__1;
+  wire and_17051;
   wire candidate_occupied_0_case_cmp;
-  wire and_14316;
+  wire and_17053;
   wire candidate_slots_0_case_cmp;
-  wire and_14319;
-  wire and_14320;
-  wire or_14321;
+  wire and_17056;
+  wire or_17057;
+  wire and_17059;
   wire __phi_halo_cell__admit_valid_and_not_has_been_sent;
   wire phi_halo_cell__admit_valid_load_en;
   wire __phi_halo_cell__north_valid_and_not_has_been_sent;
@@ -1003,33 +1199,44 @@ module __phi_halo_cell__Top__Service_0_next(
   wire phi_halo_cell__west_valid_load_en;
   wire __phi_halo_cell__south_valid_and_not_has_been_sent;
   wire phi_halo_cell__south_valid_load_en;
-  wire and_14337;
-  wire and_14338;
-  wire and_14339;
-  wire and_14340;
-  wire and_14341;
-  wire and_14342;
-  wire and_14343;
-  wire and_14344;
-  wire and_14345;
-  wire and_14346;
-  wire and_14347;
-  wire and_14348;
-  wire and_14349;
-  wire and_14350;
-  wire and_14351;
-  wire and_14352;
-  wire and_14353;
-  wire and_14354;
-  wire and_14355;
-  wire and_14356;
-  wire and_14357;
-  wire and_14358;
-  wire and_14359;
-  wire and_14360;
-  wire and_14361;
-  wire and_14362;
-  wire and_14363;
+  wire __phi_halo_cell__syndrome_valid_and_not_has_been_sent;
+  wire phi_halo_cell__syndrome_valid_load_en;
+  wire and_17074;
+  wire and_17075;
+  wire and_17076;
+  wire and_17077;
+  wire and_17078;
+  wire nor_17079;
+  wire and_17080;
+  wire and_17081;
+  wire and_17082;
+  wire nor_17083;
+  wire and_17084;
+  wire and_17085;
+  wire and_17086;
+  wire and_17087;
+  wire and_17088;
+  wire and_17089;
+  wire and_17090;
+  wire and_17091;
+  wire and_17092;
+  wire and_17093;
+  wire and_17094;
+  wire and_17095;
+  wire and_17096;
+  wire and_17097;
+  wire and_17098;
+  wire and_17099;
+  wire and_17100;
+  wire and_17101;
+  wire and_17102;
+  wire and_17103;
+  wire and_17104;
+  wire and_17105;
+  wire and_17106;
+  wire and_17107;
+  wire and_17108;
+  wire and_17109;
   wire [31:0] _12;
   wire _7__9;
   wire _9;
@@ -1041,14 +1248,16 @@ module __phi_halo_cell__Top__Service_0_next(
   wire phi_halo_cell__east_load_en;
   wire phi_halo_cell__west_load_en;
   wire phi_halo_cell__south_load_en;
+  wire phi_halo_cell__syndrome_not_pred;
+  wire phi_halo_cell__syndrome_load_en;
   wire [1:0] ____state_3__next_value_predicates;
   wire [1:0] ____state_7__next_value_predicates;
   wire [1:0] ____state_8__next_value_predicates;
   wire [2:0] ____state_9__next_value_predicates;
-  wire [1:0] ____state_11__next_value_predicates;
+  wire [2:0] ____state_11__next_value_predicates;
   wire [1:0] ____state_14__next_value_predicates;
   wire [1:0] ____state_16__next_value_predicates;
-  wire [10:0] ____state_0__next_value_predicates;
+  wire [18:0] ____state_0__next_value_predicates;
   wire [1:0] ____state_6__next_value_predicates;
   wire [1:0] ____state_10__next_value_predicates;
   wire [4:0] ____state_13_tuple_element_0__next_value_predicates;
@@ -1056,45 +1265,46 @@ module __phi_halo_cell__Top__Service_0_next(
   wire [31:0] _8;
   wire [31:0] _35;
   wire Move_1__1;
-  wire [2:0] one_hot_14421;
-  wire [2:0] one_hot_14422;
-  wire [2:0] one_hot_14423;
-  wire [3:0] one_hot_14424;
-  wire [2:0] one_hot_14425;
-  wire [2:0] one_hot_14426;
-  wire [2:0] one_hot_14427;
-  wire [11:0] one_hot_14428;
-  wire [2:0] one_hot_14429;
-  wire [2:0] one_hot_14430;
-  wire [5:0] one_hot_14431;
-  wire [8:0] one_hot_14432;
-  wire [14:0] _2__15;
-  wire [30:0] add_14375;
-  wire [63:0] umul_14376;
-  wire [95:0] array_index_14400;
-  wire [95:0] array_index_14402;
-  wire [95:0] array_index_14404;
-  wire [7:0] array_index_14408;
-  wire [7:0] array_index_14410;
-  wire [7:0] array_index_14412;
+  wire [2:0] one_hot_17170;
+  wire [2:0] one_hot_17171;
+  wire [2:0] one_hot_17172;
+  wire [3:0] one_hot_17173;
+  wire [3:0] one_hot_17174;
+  wire [2:0] one_hot_17175;
+  wire [2:0] one_hot_17176;
+  wire [19:0] one_hot_17177;
+  wire [2:0] one_hot_17178;
+  wire [2:0] one_hot_17179;
+  wire [5:0] one_hot_17180;
+  wire [8:0] one_hot_17181;
+  wire [14:0] _2__1;
+  wire [30:0] add_17121;
+  wire [63:0] umul_17122;
+  wire [95:0] array_index_17149;
+  wire [95:0] array_index_17151;
+  wire [95:0] array_index_17153;
+  wire [7:0] array_index_17157;
+  wire [7:0] array_index_17159;
+  wire [7:0] array_index_17161;
   wire p0_all_active_outputs_ready;
-  wire [30:0] add_14418;
-  wire ne_14455;
-  wire or_reduce_14457;
-  wire ugt_14459;
+  wire [30:0] add_17167;
+  wire ne_17208;
+  wire or_reduce_17210;
+  wire ugt_17212;
   wire phi_halo_cell__req_valid_inv;
-  wire and_14712;
-  wire and_14713;
-  wire and_14719;
-  wire and_14727;
+  wire and_17492;
+  wire and_17493;
+  wire and_17499;
+  wire and_17507;
+  wire and_17523;
   wire _22__2;
   wire admission_pending;
-  wire [15:0] add_14473;
-  wire and_14812;
-  wire and_14813;
-  wire and_14814;
-  wire and_14815;
-  wire [31:0] concat_14541;
+  wire [15:0] add_17226;
+  wire and_17601;
+  wire and_17602;
+  wire and_17603;
+  wire and_17604;
+  wire [31:0] concat_17307;
   wire compacted_0_tup0;
   wire compacted_1_tup0;
   wire compacted_2_tup0;
@@ -1108,7 +1318,7 @@ module __phi_halo_cell__Top__Service_0_next(
   wire [7:0] compacted_1_tup1_tup0_tup3;
   wire [7:0] compacted_2_tup1_tup0_tup3;
   wire [7:0] compacted_3_tup1_tup0_tup3;
-  wire [95:0] concat_14436;
+  wire [95:0] concat_17185;
   wire phi_halo_cell__req_valid_load_en;
   wire ____state_3__at_most_one_next_value;
   wire ____state_7__at_most_one_next_value;
@@ -1122,32 +1332,32 @@ module __phi_halo_cell__Top__Service_0_next(
   wire ____state_10__at_most_one_next_value;
   wire ____state_13_tuple_element_0__at_most_one_next_value;
   wire ____state_13_tuple_element_1_tuple_element_1__at_most_one_next_value;
-  wire [1:0] concat_14715;
+  wire [1:0] concat_17495;
   wire [31:0] _42;
-  wire [1:0] concat_14722;
-  wire [1:0] concat_14729;
-  wire [2:0] concat_14737;
-  wire [1:0] concat_14744;
-  wire [31:0] Xls_clause_1_NextAnyon_1;
+  wire [1:0] concat_17502;
+  wire [1:0] concat_17509;
+  wire [2:0] concat_17517;
+  wire [2:0] concat_17525;
+  wire [31:0] _3__7;
   wire [31:0] _22__1;
   wire [16:0] NextRandom_1__11;
   wire [9:0] NextRandom_1__10;
   wire [4:0] NextRandom_1__9;
-  wire [1:0] concat_14754;
-  wire [1:0] concat_14764;
+  wire [1:0] concat_17535;
+  wire [1:0] concat_17545;
   wire [31:0] _27;
   wire [31:0] _30;
-  wire [30:0] add_14552;
-  wire [31:0] sign_ext_14553;
-  wire [10:0] concat_14793;
-  wire [1:0] concat_14800;
-  wire [1:0] unexpand_for_next_value_2560_6__2_case_0_case_0_case_0_case_1_case_0;
-  wire [1:0] concat_14807;
-  wire [1:0] unexpand_for_next_value_2560_10__2_case_0_case_1_case_2_case_1_case_0;
-  wire [4:0] concat_14817;
+  wire [30:0] add_17318;
+  wire [31:0] sign_ext_17319;
+  wire [18:0] concat_17582;
+  wire [1:0] concat_17589;
+  wire [1:0] unexpand_for_next_value_3152_6__2_case_0_case_0_case_1_case_1_case_0;
+  wire [1:0] concat_17596;
+  wire [1:0] unexpand_for_next_value_3152_10__2_case_0_case_1_case_3_case_1_case_0;
+  wire [4:0] concat_17606;
   wire postponed_slots_tuple_idx_0[0:4];
   wire compacted_slots_tuple_idx_0[0:4];
-  wire [7:0] concat_14830;
+  wire [7:0] concat_17619;
   wire [95:0] postponed_slots_tuple_idx_1_tuple_idx_1[0:4];
   wire [95:0] compacted_slots_tuple_idx_1_tuple_idx_1[0:4];
   wire [7:0] postponed_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[0:4];
@@ -1159,58 +1369,59 @@ module __phi_halo_cell__Top__Service_0_next(
   wire __phi_halo_cell__east_valid_and_ready_txfr;
   wire __phi_halo_cell__west_valid_and_ready_txfr;
   wire __phi_halo_cell__south_valid_and_ready_txfr;
-  wire [31:0] tuple_14522;
+  wire __phi_halo_cell__syndrome_valid_and_all_active_outputs_ready;
+  wire __phi_halo_cell__syndrome_valid_and_ready_txfr;
+  wire [31:0] tuple_17284;
   wire phi_halo_cell__req_load_en;
-  wire or_15187;
-  wire or_15189;
-  wire or_15191;
-  wire or_15193;
-  wire or_15195;
-  wire or_15197;
-  wire or_15199;
-  wire or_15201;
-  wire or_15203;
-  wire or_15205;
-  wire or_15207;
-  wire or_15209;
-  wire [31:0] _8__1;
-  wire and_14853;
-  wire [31:0] one_hot_sel_14716;
-  wire and_14856;
-  wire [31:0] one_hot_sel_14723;
-  wire and_14859;
-  wire [31:0] one_hot_sel_14730;
-  wire and_14862;
-  wire [31:0] one_hot_sel_14738;
-  wire and_14865;
-  wire [31:0] one_hot_sel_14745;
-  wire and_14868;
+  wire or_18026;
+  wire or_18028;
+  wire or_18030;
+  wire or_18032;
+  wire or_18034;
+  wire or_18036;
+  wire or_18038;
+  wire or_18040;
+  wire or_18042;
+  wire or_18044;
+  wire or_18046;
+  wire or_18048;
+  wire and_17643;
+  wire [31:0] one_hot_sel_17496;
+  wire and_17646;
+  wire [31:0] one_hot_sel_17503;
+  wire and_17649;
+  wire [31:0] one_hot_sel_17510;
+  wire and_17652;
+  wire [31:0] one_hot_sel_17518;
+  wire and_17655;
+  wire [31:0] one_hot_sel_17526;
+  wire and_17658;
   wire [31:0] NextRandom_1;
-  wire and_14870;
-  wire [7:0] one_hot_sel_14755;
-  wire and_14873;
-  wire and_14605;
-  wire and_14875;
-  wire one_hot_sel_14765;
-  wire and_14878;
-  wire or_14603;
+  wire and_17660;
+  wire [7:0] one_hot_sel_17536;
+  wire and_17663;
+  wire and_17383;
+  wire and_17665;
+  wire one_hot_sel_17546;
+  wire and_17668;
+  wire or_17381;
   wire [31:0] _31;
-  wire and_14881;
+  wire and_17671;
   wire [31:0] _37;
-  wire [31:0] and_14623;
-  wire and_14885;
-  wire [31:0] and_14624;
-  wire [1:0] one_hot_sel_14794;
-  wire and_14890;
-  wire [1:0] one_hot_sel_14801;
-  wire and_14893;
-  wire [1:0] one_hot_sel_14808;
-  wire and_14896;
-  wire one_hot_sel_14818[0:4];
-  wire and_14899;
-  wire [95:0] one_hot_sel_14831[0:4];
-  wire and_14902;
-  wire [7:0] one_hot_sel_14844[0:4];
+  wire [31:0] and_17400;
+  wire and_17675;
+  wire [31:0] and_17401;
+  wire [1:0] one_hot_sel_17583;
+  wire and_17680;
+  wire [1:0] one_hot_sel_17590;
+  wire and_17683;
+  wire [1:0] one_hot_sel_17597;
+  wire and_17686;
+  wire one_hot_sel_17607[0:4];
+  wire and_17689;
+  wire [95:0] one_hot_sel_17620[0:4];
+  wire and_17692;
+  wire [7:0] one_hot_sel_17633[0:4];
   wire __phi_halo_cell__admit_not_stage_load;
   wire __phi_halo_cell__admit_has_been_sent_reg_load_en;
   wire __phi_halo_cell__east_not_stage_load;
@@ -1218,131 +1429,145 @@ module __phi_halo_cell__Top__Service_0_next(
   wire __phi_halo_cell__east_has_been_sent_reg_load_en;
   wire __phi_halo_cell__west_has_been_sent_reg_load_en;
   wire __phi_halo_cell__south_has_been_sent_reg_load_en;
+  wire __phi_halo_cell__syndrome_not_stage_load;
+  wire __phi_halo_cell__syndrome_has_been_sent_reg_load_en;
   wire [127:0] effects_north;
   wire [127:0] effects_east;
   wire [127:0] effects_west;
   wire [127:0] effects_south;
-  assign nor_14082 = ~(____state_17 | ____state_15 | ~____state_16);
-  assign received = nor_14082 & __phi_halo_cell__req_valid_reg;
-  assign phi_halo_cell__req_select = received ? __phi_halo_cell__req_reg : literal_14084;
+  wire [127:0] effects_syndrome;
+  assign nor_16791 = ~(____state_17 | ____state_15 | ~____state_16);
+  assign received = nor_16791 & __phi_halo_cell__req_valid_reg;
+  assign phi_halo_cell__req_select = received ? __phi_halo_cell__req_reg : literal_16793;
   assign frame_header = phi_halo_cell__req_select[127:96];
   assign frame_header_op = frame_header[7:0];
   assign frame_header__1_payload_words = frame_header[31:24];
   assign MAILBOX_CAPACITY = 8'h05;
-  assign eq_14093 = frame_header__1_payload_words == 8'h03;
-  assign tag_ok = frame_header_op == 8'h03 & eq_14093 | frame_header_op == 8'h04 & frame_header__1_payload_words == 8'h02 | frame_header_op == MAILBOX_CAPACITY & eq_14093;
+  assign eq_16802 = frame_header__1_payload_words == 8'h03;
+  assign eq_16804 = frame_header__1_payload_words == 8'h02;
+  assign tag_ok = frame_header_op == 8'h03 & eq_16802 | frame_header_op == 8'h04 & eq_16804 | frame_header_op == MAILBOX_CAPACITY & eq_16802 | frame_header_op == 8'h06 & eq_16804 | frame_header_op == 8'h07 & frame_header__1_payload_words == 8'h01 | frame_header_op == 8'h08 & eq_16804 | frame_header_op == 8'h09 & eq_16802 | frame_header_op == 8'h0a & eq_16804;
   assign accepted = received & tag_ok;
   assign admitted_occupied = ____state_14 + {7'h00, accepted};
-  assign and_14109 = ~accepted & ____state_13_tuple_element_0[____state_14 > 8'h04 ? 3'h4 : ____state_14[2:0]];
-  assign concat_14110 = {24'h00_0000, ____state_14};
-  assign ugt_14112 = admitted_occupied > 8'h04;
-  assign or_reduce_14114 = |admitted_occupied[7:2];
+  assign and_16829 = ~accepted & ____state_13_tuple_element_0[____state_14 > 8'h04 ? 3'h4 : ____state_14[2:0]];
+  assign concat_16830 = {24'h00_0000, ____state_14};
+  assign ugt_16832 = admitted_occupied > 8'h04;
+  assign or_reduce_16834 = |admitted_occupied[7:2];
   assign postponed__4 = admitted_slots_tuple_idx_0[3'h4];
-  assign ugt_14118 = admitted_occupied > 8'h02;
+  assign ugt_16838 = admitted_occupied > 8'h02;
   assign postponed__3 = admitted_slots_tuple_idx_0[3'h3];
-  assign eligible_4 = ~(~ugt_14112 | postponed__4);
-  assign unexpand_for_next_value_2560_0__2_case_0_case_1_case_0 = 2'h0;
-  assign or_reduce_14122 = |admitted_occupied[7:1];
+  assign eligible_4 = ~(~ugt_16832 | postponed__4);
+  assign unexpand_for_next_value_3152_0__2_case_0_case_0_case_0 = 2'h0;
+  assign or_reduce_16842 = |admitted_occupied[7:1];
   assign postponed__2 = admitted_slots_tuple_idx_0[3'h2];
-  assign eligible_3 = ~(~or_reduce_14114 | postponed__3);
+  assign eligible_3 = ~(~or_reduce_16834 | postponed__3);
   assign postponed__1 = admitted_slots_tuple_idx_0[3'h1];
-  assign eligible_2 = ~(~ugt_14118 | postponed__2);
+  assign eligible_2 = ~(~ugt_16838 | postponed__2);
   assign compacted_4_tup1_tup0_tup0 = 8'h00;
-  assign eligible_1 = ~(~or_reduce_14122 | postponed__1);
-  assign eq_14133 = admitted_occupied == compacted_4_tup1_tup0_tup0;
+  assign eligible_1 = ~(~or_reduce_16842 | postponed__1);
+  assign eq_16853 = admitted_occupied == compacted_4_tup1_tup0_tup0;
   assign postponed = admitted_slots_tuple_idx_0[3'h0];
-  assign sel_14142 = accepted ? phi_halo_cell__req_select[95:0] : ____state_13_tuple_element_1_tuple_element_1[____state_14 > 8'h04 ? 3'h4 : ____state_14[2:0]];
-  assign selected = {5'h00, eligible_1 ? 3'h1 : (eligible_2 ? 3'h2 : (eligible_3 ? 3'h3 : {eligible_4, unexpand_for_next_value_2560_0__2_case_0_case_1_case_0}))} & {8{eq_14133 | postponed}};
-  assign bit_slice_14145 = selected[2:0];
-  assign selected_slot_tuple_idx_1_tuple_idx_1 = admitted_slots_tuple_idx_1_tuple_idx_1[bit_slice_14145 > 3'h4 ? 3'h4 : bit_slice_14145];
+  assign sel_16862 = accepted ? phi_halo_cell__req_select[95:0] : ____state_13_tuple_element_1_tuple_element_1[____state_14 > 8'h04 ? 3'h4 : ____state_14[2:0]];
+  assign selected = {5'h00, eligible_1 ? 3'h1 : (eligible_2 ? 3'h2 : (eligible_3 ? 3'h3 : {eligible_4, unexpand_for_next_value_3152_0__2_case_0_case_0_case_0}))} & {8{eq_16853 | postponed}};
+  assign bit_slice_16865 = selected[2:0];
+  assign selected_slot_tuple_idx_1_tuple_idx_1 = admitted_slots_tuple_idx_1_tuple_idx_1[bit_slice_16865 > 3'h4 ? 3'h4 : bit_slice_16865];
   assign Xls_clause_1_Value1_1 = selected_slot_tuple_idx_1_tuple_idx_1[63:32];
   assign _5__9_source = 32'h0000_0001;
   assign _5__8_source = 32'h0000_0002;
   assign _5__7_source = 32'h0000_0004;
   assign _5__6_source = 32'h0000_0008;
-  assign sel_14154 = accepted ? frame_header_op : ____state_13_tuple_element_1_tuple_element_0_tuple_element_3[____state_14 > 8'h04 ? 3'h4 : ____state_14[2:0]];
+  assign sel_16875 = accepted ? frame_header_op : ____state_13_tuple_element_1_tuple_element_0_tuple_element_3[____state_14 > 8'h04 ? 3'h4 : ____state_14[2:0]];
+  assign add_16876 = ____state_2[30:0] + ____state_3[31:1];
   assign Xls_clause_2_Epoch_1 = selected_slot_tuple_idx_1_tuple_idx_1[31:0];
-  assign _0__15 = Xls_clause_1_Value1_1 == _5__9_source;
-  assign _1__5 = Xls_clause_1_Value1_1 == _5__8_source;
-  assign _2__5 = Xls_clause_1_Value1_1 == _5__7_source;
+  assign _0__19 = Xls_clause_1_Value1_1 == _5__9_source;
+  assign _1__6 = Xls_clause_1_Value1_1 == _5__8_source;
+  assign _2__6 = Xls_clause_1_Value1_1 == _5__7_source;
   assign _7__3 = ____state_7 & Xls_clause_1_Value1_1;
   assign Absent_1__1 = 32'h0000_0000;
-  assign unexpand_for_next_value_2560_0__2_case_0_case_0_case_1 = 2'h1;
-  assign eq_14166 = Xls_clause_2_Epoch_1 == ____state_2;
+  assign unexpand_for_next_value_3152_0__2_case_0_case_0_case_2 = 2'h2;
+  assign unexpand_for_next_value_3152_0__2_case_0_case_1_case_1 = 2'h1;
+  assign eq_16888 = add_16876 == selected_slot_tuple_idx_1_tuple_idx_1[31:1];
+  assign eq_16889 = ____state_3[0] == selected_slot_tuple_idx_1_tuple_idx_1[0];
+  assign unexpand_for_next_value_3152_0__2_case_0_case_0_case_3 = 2'h3;
+  assign eq_16893 = Xls_clause_2_Epoch_1 == ____state_2;
   assign _8__3 = _7__3 == Absent_1__1;
   assign Xls_clause_1_NewSeen_1 = ____state_7 | Xls_clause_1_Value1_1;
-  assign unexpand_for_next_value_2560_0__2_case_0_case_0_case_2 = 2'h2;
-  assign add_14170 = ____state_2[30:0] + ____state_3[31:1];
-  assign eq_14172 = ____state_0 == unexpand_for_next_value_2560_0__2_case_0_case_0_case_1;
-  assign nor_14173 = ~(____state_0[0] | ____state_0[1]);
-  assign selected_slot_tuple_idx_1_tuple_idx_0_tuple_idx_3 = admitted_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[bit_slice_14145 > 3'h4 ? 3'h4 : bit_slice_14145];
-  assign and_14175 = eq_14166 & (_0__15 | _1__5 | _2__5 | Xls_clause_1_Value1_1 == _5__6_source) & _8__3;
-  assign _21__2 = Xls_clause_1_NewSeen_1 == 32'h0000_000f;
-  assign eq_14177 = ____state_0 == unexpand_for_next_value_2560_0__2_case_0_case_0_case_2;
-  assign _1 = {add_14170, ____state_3[0]};
-  assign or_14182 = eq_14172 | nor_14173;
-  assign eq_14183 = selected_slot_tuple_idx_1_tuple_idx_0_tuple_idx_3 == 8'h04;
-  assign nand_14184 = ~(and_14175 & _21__2);
-  assign eq_14185 = selected_slot_tuple_idx_1_tuple_idx_0_tuple_idx_3 == 8'h03;
-  assign or_14187 = ____state_0[0] | ____state_0[1];
-  assign _2__1 = _1 + _5__9_source;
-  assign eq_14190 = add_14170 == selected_slot_tuple_idx_1_tuple_idx_1[31:1];
-  assign eq_14191 = ____state_3[0] == selected_slot_tuple_idx_1_tuple_idx_1[0];
-  assign _0__11 = selected_slot_tuple_idx_1_tuple_idx_1[63:33] == 31'h0000_0000;
-  assign concat_14197 = {eq_14177, or_14182};
-  assign concat_14199 = {eq_14172, nor_14173};
-  assign and_14201 = eq_14185 & ~(eq_14177 | eq_14172) & or_14187;
-  assign _4__1 = Xls_clause_2_Epoch_1 == _2__1;
-  assign postponed_slot_tup0 = 1'h1;
-  assign eligible_0 = ~(eq_14133 | postponed);
-  assign invalid_input = received & ~tag_ok;
-  assign eq_14214 = selected_slot_tuple_idx_1_tuple_idx_0_tuple_idx_3 == MAILBOX_CAPACITY;
-  assign _6__1 = ____state_10 == 2'h3;
-  assign priority_sel_14218 = priority_sel_2b_2way(concat_14199, unexpand_for_next_value_2560_0__2_case_0_case_1_case_0, nand_14184 ? unexpand_for_next_value_2560_0__2_case_0_case_0_case_1 : unexpand_for_next_value_2560_0__2_case_0_case_0_case_2, ____state_0);
-  assign _3 = eq_14190 & eq_14191;
-  assign _19 = ____state_6 == 2'h3;
+  assign selected_slot_tuple_idx_1_tuple_idx_0_tuple_idx_3 = admitted_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[bit_slice_16865 > 3'h4 ? 3'h4 : bit_slice_16865];
+  assign eq_16898 = ____state_0 == unexpand_for_next_value_3152_0__2_case_0_case_0_case_2;
+  assign eq_16899 = ____state_0 == unexpand_for_next_value_3152_0__2_case_0_case_1_case_1;
+  assign _1__1 = {add_16876, ____state_3[0]};
+  assign _3__1 = eq_16888 & eq_16889;
+  assign _19 = ____state_6 == unexpand_for_next_value_3152_0__2_case_0_case_0_case_3;
   assign _47 = ____state_3 == _5__9_source;
-  assign found = eligible_0 | eligible_1 | eligible_2 | eligible_3 | eligible_4;
+  assign nor_16905 = ~(____state_0[0] | ____state_0[1]);
+  assign and_16907 = eq_16893 & (_0__19 | _1__6 | _2__6 | Xls_clause_1_Value1_1 == _5__6_source) & _8__3;
+  assign _21__2 = Xls_clause_1_NewSeen_1 == 32'h0000_000f;
+  assign eq_16909 = selected_slot_tuple_idx_1_tuple_idx_0_tuple_idx_3 == 8'h0a;
+  assign eq_16914 = selected_slot_tuple_idx_1_tuple_idx_0_tuple_idx_3 == MAILBOX_CAPACITY;
+  assign or_16916 = ____state_0[0] | ____state_0[1];
+  assign eq_16917 = selected_slot_tuple_idx_1_tuple_idx_0_tuple_idx_3 == 8'h03;
+  assign _2__2 = _1__1 + _5__9_source;
+  assign or_16919 = eq_16898 | eq_16899;
+  assign _0__14 = selected_slot_tuple_idx_1_tuple_idx_1[63:33] == 31'h0000_0000;
+  assign nand_16922 = ~(_3__1 & _19 & _47);
+  assign _6__1 = ____state_10 == unexpand_for_next_value_3152_0__2_case_0_case_0_case_3;
+  assign nand_16925 = ~(and_16907 & _21__2);
+  assign or_16927 = selected_slot_tuple_idx_1_tuple_idx_0_tuple_idx_3 == 8'h09 | selected_slot_tuple_idx_1_tuple_idx_0_tuple_idx_3 == 8'h08 | selected_slot_tuple_idx_1_tuple_idx_0_tuple_idx_3 == 8'h07 | selected_slot_tuple_idx_1_tuple_idx_0_tuple_idx_3 == 8'h06;
+  assign concat_16930 = {eq_16898, eq_16899, nor_16905};
+  assign concat_16933 = {eq_16899, nor_16905};
+  assign _4__1 = Xls_clause_2_Epoch_1 == _2__2;
+  assign nand_16936 = ~(eq_16888 & eq_16889);
+  assign postponed_slot_tup0 = 1'h1;
+  assign nand_16939 = ~(eq_16893 & _0__14);
+  assign _8__1 = ____state_2 + _5__9_source;
+  assign eligible_0 = ~(eq_16853 | postponed);
+  assign invalid_input = received & ~tag_ok;
   assign compacted_4_tup0 = 1'h0;
-  assign nand_14234 = ~(eq_14166 & _0__11 & _6__1);
-  assign and_14237 = _3 & _19 & _47;
+  assign nand_16945 = ~(eq_16893 & _0__14 & _6__1);
+  assign and_16947 = eq_16893 & _0__14;
+  assign eq_16952 = selected_slot_tuple_idx_1_tuple_idx_0_tuple_idx_3 == 8'h04;
+  assign _2 = ~(____state_2[30:0] != selected_slot_tuple_idx_1_tuple_idx_1[31:1] | selected_slot_tuple_idx_1_tuple_idx_1[0]);
+  assign _2__8 = Xls_clause_2_Epoch_1 == _8__1;
+  assign found = eligible_0 | eligible_1 | eligible_2 | eligible_3 | eligible_4;
   assign dispatchable = found & ~invalid_input;
-  assign priority_sel_14247 = priority_sel_2b_5way({eq_14214, eq_14183, and_14201, {2{eq_14185}} & {eq_14177 | eq_14172, nor_14173}}, (_4__1 ? unexpand_for_next_value_2560_0__2_case_0_case_0_case_1 : unexpand_for_next_value_2560_0__2_case_0_case_0_case_2) & {2{~(eq_14190 & eq_14191)}}, _3 ? unexpand_for_next_value_2560_0__2_case_0_case_0_case_1 : unexpand_for_next_value_2560_0__2_case_0_case_0_case_2, unexpand_for_next_value_2560_0__2_case_0_case_0_case_2, {priority_sel_1b_2way(concat_14197, ~eq_14166, ~(eq_14166 & _0__11), postponed_slot_tup0), eq_14166 & or_14182}, {priority_sel_1b_2way(concat_14199, ~eq_14166, ~and_14175, postponed_slot_tup0), ~(~eq_14166 | ____state_0[0] | ____state_0[1])}, unexpand_for_next_value_2560_0__2_case_0_case_0_case_2);
-  assign concat_14249 = {priority_sel_1b_5way({eq_14214, eq_14183 & ~eq_14177 & ~or_14182, {2{eq_14183}} & concat_14197, eq_14185}, ____state_0[1], compacted_4_tup0, nand_14234, ____state_0[1], priority_sel_14218[1], ____state_0[1]), priority_sel_1b_5way({eq_14214, eq_14183 | and_14201, {3{eq_14185}} & {eq_14177, eq_14172, nor_14173}}, and_14237, postponed_slot_tup0, compacted_4_tup0, ____state_0[0], priority_sel_14218[0], ____state_0[0])};
-  assign directive = priority_sel_14247 & {2{dispatchable}};
-  assign next_phase_squeezed = dispatchable ? concat_14249 : ____state_0;
-  assign repeat_phase = dispatchable & eq_14185 & nor_14173 & _3 & ~(~_19 | _47);
-  assign invalid_repeat = repeat_phase & (directive != unexpand_for_next_value_2560_0__2_case_0_case_1_case_0 | next_phase_squeezed != ____state_0);
-  assign transition_slots_default_case_cmp = directive[1];
+  assign priority_sel_16985 = priority_sel_2b_10way({eq_16909 & or_16916, ~(~eq_16909 | ____state_0[0] | ____state_0[1]), or_16927 | eq_16914 & ~(eq_16898 | eq_16899) & or_16916, {3{eq_16914}} & concat_16930, eq_16952, eq_16917 & ~eq_16899 & or_16916, {2{eq_16917}} & concat_16933}, _2 ? unexpand_for_next_value_3152_0__2_case_0_case_1_case_1 : unexpand_for_next_value_3152_0__2_case_0_case_0_case_2, (_4__1 ? unexpand_for_next_value_3152_0__2_case_0_case_1_case_1 : unexpand_for_next_value_3152_0__2_case_0_case_0_case_2) & {2{nand_16936}}, _3__1 ? unexpand_for_next_value_3152_0__2_case_0_case_1_case_1 : unexpand_for_next_value_3152_0__2_case_0_case_0_case_2, {priority_sel_1b_2way({or_16919, nor_16905}, postponed_slot_tup0, ~eq_16893, nand_16939), eq_16893 & or_16919}, unexpand_for_next_value_3152_0__2_case_0_case_0_case_2, eq_16893 ? unexpand_for_next_value_3152_0__2_case_0_case_1_case_1 : unexpand_for_next_value_3152_0__2_case_0_case_0_case_2, {~and_16907, compacted_4_tup0}, unexpand_for_next_value_3152_0__2_case_0_case_0_case_2, {nand_16939, compacted_4_tup0}, _2__8 ? unexpand_for_next_value_3152_0__2_case_0_case_1_case_1 : unexpand_for_next_value_3152_0__2_case_0_case_0_case_2, unexpand_for_next_value_3152_0__2_case_0_case_0_case_2);
+  assign priority_sel_16987 = priority_sel_2b_5way({eq_16909, or_16927, eq_16914, eq_16952, eq_16917}, {priority_sel_1b_2way(concat_16933, compacted_4_tup0, ~nand_16922, postponed_slot_tup0), priority_sel_1b_3way(concat_16930, compacted_4_tup0, nand_16922, compacted_4_tup0, postponed_slot_tup0)}, {priority_sel_1b_2way({eq_16898, eq_16899 | nor_16905}, compacted_4_tup0, postponed_slot_tup0, nand_16945), priority_sel_1b_3way(concat_16930, compacted_4_tup0, postponed_slot_tup0, compacted_4_tup0, nand_16945)}, {____state_0[1], priority_sel_1b_3way(concat_16930, compacted_4_tup0, postponed_slot_tup0, ~nand_16925, ____state_0[0])}, ____state_0, {____state_0[1], priority_sel_1b_3way(concat_16930, and_16947, postponed_slot_tup0, compacted_4_tup0, postponed_slot_tup0)}, ____state_0);
+  assign directive = priority_sel_16985 & {2{dispatchable}};
+  assign next_phase_squeezed = dispatchable ? priority_sel_16987 : ____state_0;
+  assign repeat_phase = dispatchable & eq_16917 & ~(nand_16936 | ~_19 | _47) & eq_16899;
+  assign invalid_repeat = repeat_phase & (directive[0] | directive[1] | next_phase_squeezed != ____state_0);
   assign effective = dispatchable & ~invalid_repeat;
-  assign transition_slots_predicate_piece_0 = ~(directive[0] | transition_slots_default_case_cmp);
+  assign transition_slots_predicate_piece_0 = ~(directive[0] | directive[1]);
   assign candidate_occupied_1_case_cmp = effective & transition_slots_predicate_piece_0;
-  assign add_14299 = admitted_occupied + 8'hff;
-  assign candidate_phase_squeezed = effective ? concat_14249 : ____state_0;
-  assign failed = invalid_input | invalid_repeat | effective & directive == unexpand_for_next_value_2560_0__2_case_0_case_0_case_2;
-  assign candidate_occupied = candidate_occupied_1_case_cmp ? add_14299 : admitted_occupied;
-  assign nor_14263 = ~(____state_17 | ____state_15);
+  assign add_17037 = admitted_occupied + 8'hff;
+  assign candidate_phase_squeezed = effective ? priority_sel_16987 : ____state_0;
+  assign failed = invalid_input | invalid_repeat | effective & directive == unexpand_for_next_value_3152_0__2_case_0_case_0_case_2;
+  assign candidate_occupied = candidate_occupied_1_case_cmp ? add_17037 : admitted_occupied;
+  assign nor_17002 = ~(____state_17 | ____state_15);
   assign phase_changed = candidate_phase_squeezed != ____state_0;
   assign Xls_clause_1_Value_1 = selected_slot_tuple_idx_1_tuple_idx_1[95:64];
-  assign and_14270 = nor_14263 & effective;
+  assign and_17009 = nor_17002 & effective;
   assign phase_boundary = phase_changed | effective & repeat_phase;
   assign reserve__1 = ~failed & ~received & ~(____state_16 & ~received) & candidate_occupied < MAILBOX_CAPACITY;
   assign reserve = ~(____state_16 | ____state_14 > 8'h04);
+  assign effects_north_valid = literal_16746[____state_0];
+  assign effects_syndrome_valid = literal_16747[____state_0];
   assign _12__2 = Xls_clause_1_Value_1 > ____state_8;
-  assign and_14276 = and_14270 & eq_14214;
-  assign and_14278 = and_14270 & eq_14183;
+  assign and_17013 = and_17009 & eq_16914;
+  assign and_17015 = and_17009 & eq_16952;
+  assign eq_17016 = ____state_0 == unexpand_for_next_value_3152_0__2_case_0_case_0_case_3;
   assign final_slots_0_case_cmp = ~phase_boundary;
-  assign and_14286 = and_14270 & eq_14185;
-  assign and_14288 = and_14276 & eq_14172;
-  assign and_14291 = and_14278 & eq_14177;
-  assign and_14292 = nor_14263 & final_slots_0_case_cmp;
-  assign and_14293 = nor_14263 & phase_boundary;
-  assign eq_14294 = priority_sel_14247 == unexpand_for_next_value_2560_0__2_case_0_case_0_case_1;
-  assign _1__1 = ____state_12[31:13] ^ ____state_12[18:0];
+  assign and_17024 = and_17009 & eq_16917;
+  assign and_17026 = and_17013 & eq_16898;
+  assign and_17027 = and_17009 & eq_16909;
+  assign and_17029 = and_17015 & eq_17016;
+  assign and_17030 = nor_17002 & final_slots_0_case_cmp;
+  assign eq_17031 = priority_sel_16985 == unexpand_for_next_value_3152_0__2_case_0_case_1_case_1;
+  assign and_17032 = nor_17002 & phase_boundary;
+  assign _1__7 = ____state_12[31:13] ^ ____state_12[18:0];
   assign __phi_halo_cell__admit_buf = ~____state_17 & ~____state_15 & reserve__1 | ~____state_17 & ____state_15 & reserve;
   assign __phi_halo_cell__admit_not_has_been_sent = ~__phi_halo_cell__admit_has_been_sent_reg;
   assign phi_halo_cell__admit_valid_inv = ~__phi_halo_cell__admit_valid_reg;
-  assign __phi_halo_cell__east_vld_buf = ~(____state_17 | ~____state_15);
+  assign __phi_halo_cell__east_vld_buf = ~(____state_17 | ~____state_15 | ~effects_north_valid);
   assign __phi_halo_cell__north_not_has_been_sent = ~__phi_halo_cell__north_has_been_sent_reg;
   assign phi_halo_cell__north_valid_inv = ~__phi_halo_cell__north_valid_reg;
   assign __phi_halo_cell__east_not_has_been_sent = ~__phi_halo_cell__east_has_been_sent_reg;
@@ -1351,16 +1576,20 @@ module __phi_halo_cell__Top__Service_0_next(
   assign phi_halo_cell__west_valid_inv = ~__phi_halo_cell__west_valid_reg;
   assign __phi_halo_cell__south_not_has_been_sent = ~__phi_halo_cell__south_has_been_sent_reg;
   assign phi_halo_cell__south_valid_inv = ~__phi_halo_cell__south_valid_reg;
-  assign and_14306 = and_14286 & nor_14173;
-  assign and_14308 = and_14288 & and_14175;
+  assign __phi_halo_cell__syndrome_vld_buf = ~(____state_17 | ~____state_15 | ~effects_syndrome_valid);
+  assign __phi_halo_cell__syndrome_not_has_been_sent = ~__phi_halo_cell__syndrome_has_been_sent_reg;
+  assign phi_halo_cell__syndrome_valid_inv = ~__phi_halo_cell__syndrome_valid_reg;
+  assign and_17044 = and_17024 & eq_16899;
+  assign and_17046 = and_17026 & and_16907;
   assign Xls_clause_1_NewBestDirection_1_0_case_cmp = ~_12__2;
   assign _15__1 = Xls_clause_1_Value_1 == ____state_8;
+  assign and_17051 = and_17027 & nor_16905;
   assign candidate_occupied_0_case_cmp = ~candidate_occupied_1_case_cmp;
-  assign and_14316 = and_14291 & eq_14166 & _0__11;
+  assign and_17053 = and_17029 & and_16947;
   assign candidate_slots_0_case_cmp = ~effective;
-  assign and_14319 = and_14292 & effective;
-  assign and_14320 = and_14293 & effective;
-  assign or_14321 = directive[0] | transition_slots_default_case_cmp;
+  assign and_17056 = and_17030 & effective;
+  assign or_17057 = directive[0] | directive[1];
+  assign and_17059 = and_17032 & effective;
   assign __phi_halo_cell__admit_valid_and_not_has_been_sent = __phi_halo_cell__admit_buf & __phi_halo_cell__admit_not_has_been_sent;
   assign phi_halo_cell__admit_valid_load_en = phi_halo_cell__admit_rdy | phi_halo_cell__admit_valid_inv;
   assign __phi_halo_cell__north_valid_and_not_has_been_sent = __phi_halo_cell__east_vld_buf & __phi_halo_cell__north_not_has_been_sent;
@@ -1371,37 +1600,48 @@ module __phi_halo_cell__Top__Service_0_next(
   assign phi_halo_cell__west_valid_load_en = phi_halo_cell__west_rdy | phi_halo_cell__west_valid_inv;
   assign __phi_halo_cell__south_valid_and_not_has_been_sent = __phi_halo_cell__east_vld_buf & __phi_halo_cell__south_not_has_been_sent;
   assign phi_halo_cell__south_valid_load_en = phi_halo_cell__south_rdy | phi_halo_cell__south_valid_inv;
-  assign and_14337 = and_14306 & _3 & _19;
-  assign and_14338 = and_14291 & eq_14166 & _0__11 & _6__1;
-  assign and_14339 = and_14306 & and_14237;
-  assign and_14340 = and_14288 & ~(~(and_14175 & _12__2));
-  assign and_14341 = and_14308 & Xls_clause_1_NewBestDirection_1_0_case_cmp & _15__1;
-  assign and_14342 = __phi_halo_cell__east_vld_buf & ~eq_14172 & or_14187;
-  assign and_14343 = nor_14263 & candidate_occupied_0_case_cmp;
-  assign and_14344 = nor_14263 & candidate_occupied_1_case_cmp;
-  assign and_14345 = and_14286 & eq_14172;
-  assign and_14346 = and_14286 & eq_14177;
-  assign and_14347 = and_14278 & nor_14173;
-  assign and_14348 = and_14278 & eq_14172;
-  assign and_14349 = and_14276 & nor_14173;
-  assign and_14350 = and_14306 & ~(_3 & _19 & _47);
-  assign and_14351 = and_14291 & nand_14234;
-  assign and_14352 = and_14288 & ~nand_14184;
-  assign and_14353 = and_14288 & nand_14184;
-  assign and_14354 = and_14306 & _3 & ~_19;
-  assign and_14355 = and_14316 & ~_6__1;
-  assign and_14356 = and_14292 & candidate_slots_0_case_cmp;
-  assign and_14357 = and_14319 & transition_slots_predicate_piece_0;
-  assign and_14358 = and_14319 & eq_14294;
-  assign and_14359 = and_14319 & transition_slots_default_case_cmp;
-  assign and_14360 = and_14293 & candidate_slots_0_case_cmp;
-  assign and_14361 = and_14320 & transition_slots_predicate_piece_0;
-  assign and_14362 = and_14320 & eq_14294 & or_14321;
-  assign and_14363 = and_14320 & ~eq_14294 & or_14321;
+  assign __phi_halo_cell__syndrome_valid_and_not_has_been_sent = __phi_halo_cell__syndrome_vld_buf & __phi_halo_cell__syndrome_not_has_been_sent;
+  assign phi_halo_cell__syndrome_valid_load_en = phi_halo_cell__syndrome_rdy | phi_halo_cell__syndrome_valid_inv;
+  assign and_17074 = and_17044 & _3__1 & _19;
+  assign and_17075 = and_17029 & eq_16893 & _0__14 & _6__1;
+  assign and_17076 = and_17044 & _3__1 & _19 & _47;
+  assign and_17077 = and_17026 & ~(~(and_16907 & _12__2));
+  assign and_17078 = and_17046 & Xls_clause_1_NewBestDirection_1_0_case_cmp & _15__1;
+  assign nor_17079 = ~(____state_17 | ~____state_15 | ~eq_17016);
+  assign and_17080 = and_17051 & and_16947;
+  assign and_17081 = nor_17002 & candidate_occupied_0_case_cmp;
+  assign and_17082 = nor_17002 & candidate_occupied_1_case_cmp;
+  assign nor_17083 = ~(____state_17 | ~____state_15);
+  assign and_17084 = and_17024 & nor_16905;
+  assign and_17085 = and_17024 & eq_16898;
+  assign and_17086 = and_17024 & eq_17016;
+  assign and_17087 = and_17015 & nor_16905;
+  assign and_17088 = and_17015 & eq_16899;
+  assign and_17089 = and_17015 & eq_16898;
+  assign and_17090 = and_17013 & nor_16905;
+  assign and_17091 = and_17013 & eq_16899;
+  assign and_17092 = and_17027 & eq_16899;
+  assign and_17093 = and_17027 & eq_16898;
+  assign and_17094 = and_17027 & eq_17016;
+  assign and_17095 = and_17044 & nand_16922;
+  assign and_17096 = and_17029 & nand_16945;
+  assign and_17097 = and_17026 & ~nand_16925;
+  assign and_17098 = and_17026 & nand_16925;
+  assign and_17099 = and_17051 & nand_16939;
+  assign and_17100 = and_17044 & _3__1 & ~_19;
+  assign and_17101 = and_17053 & ~_6__1;
+  assign and_17102 = and_17030 & candidate_slots_0_case_cmp;
+  assign and_17103 = and_17056 & transition_slots_predicate_piece_0;
+  assign and_17104 = and_17056 & eq_17031 & or_17057;
+  assign and_17105 = and_17056 & ~eq_17031 & or_17057;
+  assign and_17106 = and_17032 & candidate_slots_0_case_cmp;
+  assign and_17107 = and_17059 & transition_slots_predicate_piece_0;
+  assign and_17108 = and_17059 & eq_17031 & or_17057;
+  assign and_17109 = and_17059 & ~eq_17031 & or_17057;
   assign _12 = ____state_5_1 + Xls_clause_1_Value1_1;
   assign _7__9 = ____state_11 == _5__9_source;
   assign _9 = ____state_9 != Absent_1__1;
-  assign NextRandom_1__5 = _1__1[18] ^ _1__1[13];
+  assign NextRandom_1__5 = _1__7[18] ^ _1__7[13];
   assign phi_halo_cell__admit_not_pred = ~__phi_halo_cell__admit_buf;
   assign phi_halo_cell__admit_load_en = __phi_halo_cell__admit_valid_and_not_has_been_sent & phi_halo_cell__admit_valid_load_en;
   assign phi_halo_cell__east_not_pred = ~__phi_halo_cell__east_vld_buf;
@@ -1409,116 +1649,119 @@ module __phi_halo_cell__Top__Service_0_next(
   assign phi_halo_cell__east_load_en = __phi_halo_cell__east_valid_and_not_has_been_sent & phi_halo_cell__east_valid_load_en;
   assign phi_halo_cell__west_load_en = __phi_halo_cell__west_valid_and_not_has_been_sent & phi_halo_cell__west_valid_load_en;
   assign phi_halo_cell__south_load_en = __phi_halo_cell__south_valid_and_not_has_been_sent & phi_halo_cell__south_valid_load_en;
-  assign ____state_3__next_value_predicates = {and_14337, and_14338};
-  assign ____state_7__next_value_predicates = {and_14339, and_14308};
-  assign ____state_8__next_value_predicates = {and_14339, and_14340};
-  assign ____state_9__next_value_predicates = {and_14339, and_14340, and_14341};
-  assign ____state_11__next_value_predicates = {and_14342, and_14316};
-  assign ____state_14__next_value_predicates = {and_14343, and_14344};
-  assign ____state_16__next_value_predicates = {nor_14263, __phi_halo_cell__east_vld_buf};
-  assign ____state_0__next_value_predicates = {and_14345, and_14346, and_14347, and_14348, and_14349, and_14339, and_14350, and_14338, and_14351, and_14352, and_14353};
-  assign ____state_6__next_value_predicates = {and_14354, and_14337};
-  assign ____state_10__next_value_predicates = {and_14355, and_14338};
-  assign ____state_13_tuple_element_0__next_value_predicates = {and_14293, and_14356, and_14357, and_14358, and_14359};
-  assign ____state_13_tuple_element_1_tuple_element_1__next_value_predicates = {and_14356, and_14357, and_14358, and_14359, and_14360, and_14361, and_14362, and_14363};
+  assign phi_halo_cell__syndrome_not_pred = ~__phi_halo_cell__syndrome_vld_buf;
+  assign phi_halo_cell__syndrome_load_en = __phi_halo_cell__syndrome_valid_and_not_has_been_sent & phi_halo_cell__syndrome_valid_load_en;
+  assign ____state_3__next_value_predicates = {and_17074, and_17075};
+  assign ____state_7__next_value_predicates = {and_17076, and_17046};
+  assign ____state_8__next_value_predicates = {and_17076, and_17077};
+  assign ____state_9__next_value_predicates = {and_17076, and_17077, and_17078};
+  assign ____state_11__next_value_predicates = {nor_17079, and_17053, and_17080};
+  assign ____state_14__next_value_predicates = {and_17081, and_17082};
+  assign ____state_16__next_value_predicates = {nor_17002, nor_17083};
+  assign ____state_0__next_value_predicates = {and_17084, and_17085, and_17086, and_17087, and_17088, and_17089, and_17090, and_17091, and_17092, and_17093, and_17094, and_17076, and_17095, and_17075, and_17096, and_17097, and_17098, and_17099, and_17080};
+  assign ____state_6__next_value_predicates = {and_17100, and_17074};
+  assign ____state_10__next_value_predicates = {and_17101, and_17075};
+  assign ____state_13_tuple_element_0__next_value_predicates = {and_17032, and_17102, and_17103, and_17104, and_17105};
+  assign ____state_13_tuple_element_1_tuple_element_1__next_value_predicates = {and_17102, and_17103, and_17104, and_17105, and_17106, and_17107, and_17108, and_17109};
   assign _8 = ____state_5_0 + Xls_clause_1_Value_1;
   assign _35 = ____state_4_0 + _12;
   assign Move_1__1 = _7__9 & _9 & NextRandom_1__5;
-  assign one_hot_14421 = {____state_3__next_value_predicates[1:0] == 2'h0, ____state_3__next_value_predicates[1] && !____state_3__next_value_predicates[0], ____state_3__next_value_predicates[0]};
-  assign one_hot_14422 = {____state_7__next_value_predicates[1:0] == 2'h0, ____state_7__next_value_predicates[1] && !____state_7__next_value_predicates[0], ____state_7__next_value_predicates[0]};
-  assign one_hot_14423 = {____state_8__next_value_predicates[1:0] == 2'h0, ____state_8__next_value_predicates[1] && !____state_8__next_value_predicates[0], ____state_8__next_value_predicates[0]};
-  assign one_hot_14424 = {____state_9__next_value_predicates[2:0] == 3'h0, ____state_9__next_value_predicates[2] && ____state_9__next_value_predicates[1:0] == 2'h0, ____state_9__next_value_predicates[1] && !____state_9__next_value_predicates[0], ____state_9__next_value_predicates[0]};
-  assign one_hot_14425 = {____state_11__next_value_predicates[1:0] == 2'h0, ____state_11__next_value_predicates[1] && !____state_11__next_value_predicates[0], ____state_11__next_value_predicates[0]};
-  assign one_hot_14426 = {____state_14__next_value_predicates[1:0] == 2'h0, ____state_14__next_value_predicates[1] && !____state_14__next_value_predicates[0], ____state_14__next_value_predicates[0]};
-  assign one_hot_14427 = {____state_16__next_value_predicates[1:0] == 2'h0, ____state_16__next_value_predicates[1] && !____state_16__next_value_predicates[0], ____state_16__next_value_predicates[0]};
-  assign one_hot_14428 = {____state_0__next_value_predicates[10:0] == 11'h000, ____state_0__next_value_predicates[10] && ____state_0__next_value_predicates[9:0] == 10'h000, ____state_0__next_value_predicates[9] && ____state_0__next_value_predicates[8:0] == 9'h000, ____state_0__next_value_predicates[8] && ____state_0__next_value_predicates[7:0] == 8'h00, ____state_0__next_value_predicates[7] && ____state_0__next_value_predicates[6:0] == 7'h00, ____state_0__next_value_predicates[6] && ____state_0__next_value_predicates[5:0] == 6'h00, ____state_0__next_value_predicates[5] && ____state_0__next_value_predicates[4:0] == 5'h00, ____state_0__next_value_predicates[4] && ____state_0__next_value_predicates[3:0] == 4'h0, ____state_0__next_value_predicates[3] && ____state_0__next_value_predicates[2:0] == 3'h0, ____state_0__next_value_predicates[2] && ____state_0__next_value_predicates[1:0] == 2'h0, ____state_0__next_value_predicates[1] && !____state_0__next_value_predicates[0], ____state_0__next_value_predicates[0]};
-  assign one_hot_14429 = {____state_6__next_value_predicates[1:0] == 2'h0, ____state_6__next_value_predicates[1] && !____state_6__next_value_predicates[0], ____state_6__next_value_predicates[0]};
-  assign one_hot_14430 = {____state_10__next_value_predicates[1:0] == 2'h0, ____state_10__next_value_predicates[1] && !____state_10__next_value_predicates[0], ____state_10__next_value_predicates[0]};
-  assign one_hot_14431 = {____state_13_tuple_element_0__next_value_predicates[4:0] == 5'h00, ____state_13_tuple_element_0__next_value_predicates[4] && ____state_13_tuple_element_0__next_value_predicates[3:0] == 4'h0, ____state_13_tuple_element_0__next_value_predicates[3] && ____state_13_tuple_element_0__next_value_predicates[2:0] == 3'h0, ____state_13_tuple_element_0__next_value_predicates[2] && ____state_13_tuple_element_0__next_value_predicates[1:0] == 2'h0, ____state_13_tuple_element_0__next_value_predicates[1] && !____state_13_tuple_element_0__next_value_predicates[0], ____state_13_tuple_element_0__next_value_predicates[0]};
-  assign one_hot_14432 = {____state_13_tuple_element_1_tuple_element_1__next_value_predicates[7:0] == 8'h00, ____state_13_tuple_element_1_tuple_element_1__next_value_predicates[7] && ____state_13_tuple_element_1_tuple_element_1__next_value_predicates[6:0] == 7'h00, ____state_13_tuple_element_1_tuple_element_1__next_value_predicates[6] && ____state_13_tuple_element_1_tuple_element_1__next_value_predicates[5:0] == 6'h00, ____state_13_tuple_element_1_tuple_element_1__next_value_predicates[5] && ____state_13_tuple_element_1_tuple_element_1__next_value_predicates[4:0] == 5'h00, ____state_13_tuple_element_1_tuple_element_1__next_value_predicates[4] && ____state_13_tuple_element_1_tuple_element_1__next_value_predicates[3:0] == 4'h0, ____state_13_tuple_element_1_tuple_element_1__next_value_predicates[3] && ____state_13_tuple_element_1_tuple_element_1__next_value_predicates[2:0] == 3'h0, ____state_13_tuple_element_1_tuple_element_1__next_value_predicates[2] && ____state_13_tuple_element_1_tuple_element_1__next_value_predicates[1:0] == 2'h0, ____state_13_tuple_element_1_tuple_element_1__next_value_predicates[1] && !____state_13_tuple_element_1_tuple_element_1__next_value_predicates[0], ____state_13_tuple_element_1_tuple_element_1__next_value_predicates[0]};
-  assign _2__15 = {_1__1[1:0], ____state_12[12:0]} ^ _1__1[18:4];
-  assign add_14375 = ____state_4_1[31:1] + ____state_4_1[30:0];
-  assign umul_14376 = umul64b_32b_x_32b(_35, 32'hcccc_cccd);
-  assign array_index_14400 = admitted_slots_tuple_idx_1_tuple_idx_1[3'h1];
-  assign array_index_14402 = admitted_slots_tuple_idx_1_tuple_idx_1[3'h2];
-  assign array_index_14404 = admitted_slots_tuple_idx_1_tuple_idx_1[3'h3];
-  assign array_index_14408 = admitted_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[3'h1];
-  assign array_index_14410 = admitted_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[3'h2];
-  assign array_index_14412 = admitted_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[3'h3];
-  assign p0_all_active_outputs_ready = (phi_halo_cell__admit_not_pred | phi_halo_cell__admit_load_en | __phi_halo_cell__admit_has_been_sent_reg) & (phi_halo_cell__east_not_pred | phi_halo_cell__north_load_en | __phi_halo_cell__north_has_been_sent_reg) & (phi_halo_cell__east_not_pred | phi_halo_cell__east_load_en | __phi_halo_cell__east_has_been_sent_reg) & (phi_halo_cell__east_not_pred | phi_halo_cell__west_load_en | __phi_halo_cell__west_has_been_sent_reg) & (phi_halo_cell__east_not_pred | phi_halo_cell__south_load_en | __phi_halo_cell__south_has_been_sent_reg);
-  assign add_14418 = ____state_4_1[30:0] + _8[31:1];
-  assign ne_14455 = bit_slice_14145 != 3'h0;
-  assign or_reduce_14457 = |selected[7:1];
-  assign ugt_14459 = bit_slice_14145 > 3'h2;
+  assign one_hot_17170 = {____state_3__next_value_predicates[1:0] == 2'h0, ____state_3__next_value_predicates[1] && !____state_3__next_value_predicates[0], ____state_3__next_value_predicates[0]};
+  assign one_hot_17171 = {____state_7__next_value_predicates[1:0] == 2'h0, ____state_7__next_value_predicates[1] && !____state_7__next_value_predicates[0], ____state_7__next_value_predicates[0]};
+  assign one_hot_17172 = {____state_8__next_value_predicates[1:0] == 2'h0, ____state_8__next_value_predicates[1] && !____state_8__next_value_predicates[0], ____state_8__next_value_predicates[0]};
+  assign one_hot_17173 = {____state_9__next_value_predicates[2:0] == 3'h0, ____state_9__next_value_predicates[2] && ____state_9__next_value_predicates[1:0] == 2'h0, ____state_9__next_value_predicates[1] && !____state_9__next_value_predicates[0], ____state_9__next_value_predicates[0]};
+  assign one_hot_17174 = {____state_11__next_value_predicates[2:0] == 3'h0, ____state_11__next_value_predicates[2] && ____state_11__next_value_predicates[1:0] == 2'h0, ____state_11__next_value_predicates[1] && !____state_11__next_value_predicates[0], ____state_11__next_value_predicates[0]};
+  assign one_hot_17175 = {____state_14__next_value_predicates[1:0] == 2'h0, ____state_14__next_value_predicates[1] && !____state_14__next_value_predicates[0], ____state_14__next_value_predicates[0]};
+  assign one_hot_17176 = {____state_16__next_value_predicates[1:0] == 2'h0, ____state_16__next_value_predicates[1] && !____state_16__next_value_predicates[0], ____state_16__next_value_predicates[0]};
+  assign one_hot_17177 = {____state_0__next_value_predicates[18:0] == 19'h0_0000, ____state_0__next_value_predicates[18] && ____state_0__next_value_predicates[17:0] == 18'h0_0000, ____state_0__next_value_predicates[17] && ____state_0__next_value_predicates[16:0] == 17'h0_0000, ____state_0__next_value_predicates[16] && ____state_0__next_value_predicates[15:0] == 16'h0000, ____state_0__next_value_predicates[15] && ____state_0__next_value_predicates[14:0] == 15'h0000, ____state_0__next_value_predicates[14] && ____state_0__next_value_predicates[13:0] == 14'h0000, ____state_0__next_value_predicates[13] && ____state_0__next_value_predicates[12:0] == 13'h0000, ____state_0__next_value_predicates[12] && ____state_0__next_value_predicates[11:0] == 12'h000, ____state_0__next_value_predicates[11] && ____state_0__next_value_predicates[10:0] == 11'h000, ____state_0__next_value_predicates[10] && ____state_0__next_value_predicates[9:0] == 10'h000, ____state_0__next_value_predicates[9] && ____state_0__next_value_predicates[8:0] == 9'h000, ____state_0__next_value_predicates[8] && ____state_0__next_value_predicates[7:0] == 8'h00, ____state_0__next_value_predicates[7] && ____state_0__next_value_predicates[6:0] == 7'h00, ____state_0__next_value_predicates[6] && ____state_0__next_value_predicates[5:0] == 6'h00, ____state_0__next_value_predicates[5] && ____state_0__next_value_predicates[4:0] == 5'h00, ____state_0__next_value_predicates[4] && ____state_0__next_value_predicates[3:0] == 4'h0, ____state_0__next_value_predicates[3] && ____state_0__next_value_predicates[2:0] == 3'h0, ____state_0__next_value_predicates[2] && ____state_0__next_value_predicates[1:0] == 2'h0, ____state_0__next_value_predicates[1] && !____state_0__next_value_predicates[0], ____state_0__next_value_predicates[0]};
+  assign one_hot_17178 = {____state_6__next_value_predicates[1:0] == 2'h0, ____state_6__next_value_predicates[1] && !____state_6__next_value_predicates[0], ____state_6__next_value_predicates[0]};
+  assign one_hot_17179 = {____state_10__next_value_predicates[1:0] == 2'h0, ____state_10__next_value_predicates[1] && !____state_10__next_value_predicates[0], ____state_10__next_value_predicates[0]};
+  assign one_hot_17180 = {____state_13_tuple_element_0__next_value_predicates[4:0] == 5'h00, ____state_13_tuple_element_0__next_value_predicates[4] && ____state_13_tuple_element_0__next_value_predicates[3:0] == 4'h0, ____state_13_tuple_element_0__next_value_predicates[3] && ____state_13_tuple_element_0__next_value_predicates[2:0] == 3'h0, ____state_13_tuple_element_0__next_value_predicates[2] && ____state_13_tuple_element_0__next_value_predicates[1:0] == 2'h0, ____state_13_tuple_element_0__next_value_predicates[1] && !____state_13_tuple_element_0__next_value_predicates[0], ____state_13_tuple_element_0__next_value_predicates[0]};
+  assign one_hot_17181 = {____state_13_tuple_element_1_tuple_element_1__next_value_predicates[7:0] == 8'h00, ____state_13_tuple_element_1_tuple_element_1__next_value_predicates[7] && ____state_13_tuple_element_1_tuple_element_1__next_value_predicates[6:0] == 7'h00, ____state_13_tuple_element_1_tuple_element_1__next_value_predicates[6] && ____state_13_tuple_element_1_tuple_element_1__next_value_predicates[5:0] == 6'h00, ____state_13_tuple_element_1_tuple_element_1__next_value_predicates[5] && ____state_13_tuple_element_1_tuple_element_1__next_value_predicates[4:0] == 5'h00, ____state_13_tuple_element_1_tuple_element_1__next_value_predicates[4] && ____state_13_tuple_element_1_tuple_element_1__next_value_predicates[3:0] == 4'h0, ____state_13_tuple_element_1_tuple_element_1__next_value_predicates[3] && ____state_13_tuple_element_1_tuple_element_1__next_value_predicates[2:0] == 3'h0, ____state_13_tuple_element_1_tuple_element_1__next_value_predicates[2] && ____state_13_tuple_element_1_tuple_element_1__next_value_predicates[1:0] == 2'h0, ____state_13_tuple_element_1_tuple_element_1__next_value_predicates[1] && !____state_13_tuple_element_1_tuple_element_1__next_value_predicates[0], ____state_13_tuple_element_1_tuple_element_1__next_value_predicates[0]};
+  assign _2__1 = {_1__7[1:0], ____state_12[12:0]} ^ _1__7[18:4];
+  assign add_17121 = ____state_4_1[31:1] + ____state_4_1[30:0];
+  assign umul_17122 = umul64b_32b_x_32b(_35, 32'hcccc_cccd);
+  assign array_index_17149 = admitted_slots_tuple_idx_1_tuple_idx_1[3'h1];
+  assign array_index_17151 = admitted_slots_tuple_idx_1_tuple_idx_1[3'h2];
+  assign array_index_17153 = admitted_slots_tuple_idx_1_tuple_idx_1[3'h3];
+  assign array_index_17157 = admitted_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[3'h1];
+  assign array_index_17159 = admitted_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[3'h2];
+  assign array_index_17161 = admitted_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[3'h3];
+  assign p0_all_active_outputs_ready = (phi_halo_cell__admit_not_pred | phi_halo_cell__admit_load_en | __phi_halo_cell__admit_has_been_sent_reg) & (phi_halo_cell__east_not_pred | phi_halo_cell__north_load_en | __phi_halo_cell__north_has_been_sent_reg) & (phi_halo_cell__east_not_pred | phi_halo_cell__east_load_en | __phi_halo_cell__east_has_been_sent_reg) & (phi_halo_cell__east_not_pred | phi_halo_cell__west_load_en | __phi_halo_cell__west_has_been_sent_reg) & (phi_halo_cell__east_not_pred | phi_halo_cell__south_load_en | __phi_halo_cell__south_has_been_sent_reg) & (phi_halo_cell__syndrome_not_pred | phi_halo_cell__syndrome_load_en | __phi_halo_cell__syndrome_has_been_sent_reg);
+  assign add_17167 = ____state_4_1[30:0] + _8[31:1];
+  assign ne_17208 = bit_slice_16865 != 3'h0;
+  assign or_reduce_17210 = |selected[7:1];
+  assign ugt_17212 = bit_slice_16865 > 3'h2;
   assign phi_halo_cell__req_valid_inv = ~__phi_halo_cell__req_valid_reg;
-  assign and_14712 = and_14337 & p0_all_active_outputs_ready;
-  assign and_14713 = and_14338 & p0_all_active_outputs_ready;
-  assign and_14719 = and_14339 & p0_all_active_outputs_ready;
-  assign and_14727 = and_14340 & p0_all_active_outputs_ready;
+  assign and_17492 = and_17074 & p0_all_active_outputs_ready;
+  assign and_17493 = and_17075 & p0_all_active_outputs_ready;
+  assign and_17499 = and_17076 & p0_all_active_outputs_ready;
+  assign and_17507 = and_17077 & p0_all_active_outputs_ready;
+  assign and_17523 = and_17080 & p0_all_active_outputs_ready;
   assign _22__2 = ____state_11[0] ^ Move_1__1;
   assign admission_pending = ~(~____state_16 | received);
-  assign add_14473 = ____state_11[15:0] + {unexpand_for_next_value_2560_0__2_case_0_case_1_case_0, ____state_4_0[31:18]};
-  assign and_14812 = and_14356 & p0_all_active_outputs_ready;
-  assign and_14813 = and_14357 & p0_all_active_outputs_ready;
-  assign and_14814 = and_14358 & p0_all_active_outputs_ready;
-  assign and_14815 = and_14359 & p0_all_active_outputs_ready;
-  assign concat_14541 = {24'h00_0000, selected};
-  assign compacted_0_tup0 = ne_14455 ? postponed : or_reduce_14122 & postponed__1;
-  assign compacted_1_tup0 = or_reduce_14457 ? postponed__1 : ugt_14118 & postponed__2;
-  assign compacted_2_tup0 = ugt_14459 ? postponed__2 : or_reduce_14114 & postponed__3;
-  assign compacted_3_tup0 = selected[2] ? postponed__3 : ugt_14112 & postponed__4;
-  assign compacted_0_tup1_tup1 = ne_14455 ? admitted_slots_tuple_idx_1_tuple_idx_1[3'h0] : array_index_14400 & {96{or_reduce_14122}};
-  assign compacted_1_tup1_tup1 = or_reduce_14457 ? array_index_14400 : array_index_14402 & {96{ugt_14118}};
-  assign compacted_2_tup1_tup1 = ugt_14459 ? array_index_14402 : array_index_14404 & {96{or_reduce_14114}};
-  assign compacted_3_tup1_tup1 = selected[2] ? array_index_14404 : admitted_slots_tuple_idx_1_tuple_idx_1[3'h4] & {96{ugt_14112}};
+  assign add_17226 = ____state_11[15:0] + {unexpand_for_next_value_3152_0__2_case_0_case_0_case_0, ____state_4_0[31:18]};
+  assign and_17601 = and_17102 & p0_all_active_outputs_ready;
+  assign and_17602 = and_17103 & p0_all_active_outputs_ready;
+  assign and_17603 = and_17104 & p0_all_active_outputs_ready;
+  assign and_17604 = and_17105 & p0_all_active_outputs_ready;
+  assign concat_17307 = {24'h00_0000, selected};
+  assign compacted_0_tup0 = ne_17208 ? postponed : or_reduce_16842 & postponed__1;
+  assign compacted_1_tup0 = or_reduce_17210 ? postponed__1 : ugt_16838 & postponed__2;
+  assign compacted_2_tup0 = ugt_17212 ? postponed__2 : or_reduce_16834 & postponed__3;
+  assign compacted_3_tup0 = selected[2] ? postponed__3 : ugt_16832 & postponed__4;
+  assign compacted_0_tup1_tup1 = ne_17208 ? admitted_slots_tuple_idx_1_tuple_idx_1[3'h0] : array_index_17149 & {96{or_reduce_16842}};
+  assign compacted_1_tup1_tup1 = or_reduce_17210 ? array_index_17149 : array_index_17151 & {96{ugt_16838}};
+  assign compacted_2_tup1_tup1 = ugt_17212 ? array_index_17151 : array_index_17153 & {96{or_reduce_16834}};
+  assign compacted_3_tup1_tup1 = selected[2] ? array_index_17153 : admitted_slots_tuple_idx_1_tuple_idx_1[3'h4] & {96{ugt_16832}};
   assign compacted_4_tup1_tup1 = 96'h0000_0000_0000_0000_0000_0000;
-  assign compacted_0_tup1_tup0_tup3 = ne_14455 ? admitted_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[3'h0] : array_index_14408 & {8{or_reduce_14122}};
-  assign compacted_1_tup1_tup0_tup3 = or_reduce_14457 ? array_index_14408 : array_index_14410 & {8{ugt_14118}};
-  assign compacted_2_tup1_tup0_tup3 = ugt_14459 ? array_index_14410 : array_index_14412 & {8{or_reduce_14114}};
-  assign compacted_3_tup1_tup0_tup3 = selected[2] ? array_index_14412 : admitted_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[3'h4] & {8{ugt_14112}};
-  assign concat_14436 = {____state_4_0, ____state_4_1, add_14170, ____state_3[0]};
-  assign phi_halo_cell__req_valid_load_en = p0_all_active_outputs_ready & nor_14082 | phi_halo_cell__req_valid_inv;
-  assign ____state_3__at_most_one_next_value = and_14337 == one_hot_14421[1] & and_14338 == one_hot_14421[0];
-  assign ____state_7__at_most_one_next_value = and_14339 == one_hot_14422[1] & and_14308 == one_hot_14422[0];
-  assign ____state_8__at_most_one_next_value = and_14339 == one_hot_14423[1] & and_14340 == one_hot_14423[0];
-  assign ____state_9__at_most_one_next_value = and_14339 == one_hot_14424[2] & and_14340 == one_hot_14424[1] & and_14341 == one_hot_14424[0];
-  assign ____state_11__at_most_one_next_value = and_14342 == one_hot_14425[1] & and_14316 == one_hot_14425[0];
-  assign ____state_14__at_most_one_next_value = and_14343 == one_hot_14426[1] & and_14344 == one_hot_14426[0];
-  assign ____state_16__at_most_one_next_value = nor_14263 == one_hot_14427[1] & __phi_halo_cell__east_vld_buf == one_hot_14427[0];
-  assign ____state_0__at_most_one_next_value = and_14345 == one_hot_14428[10] & and_14346 == one_hot_14428[9] & and_14347 == one_hot_14428[8] & and_14348 == one_hot_14428[7] & and_14349 == one_hot_14428[6] & and_14339 == one_hot_14428[5] & and_14350 == one_hot_14428[4] & and_14338 == one_hot_14428[3] & and_14351 == one_hot_14428[2] & and_14352 == one_hot_14428[1] & and_14353 == one_hot_14428[0];
-  assign ____state_6__at_most_one_next_value = and_14354 == one_hot_14429[1] & and_14337 == one_hot_14429[0];
-  assign ____state_10__at_most_one_next_value = and_14355 == one_hot_14430[1] & and_14338 == one_hot_14430[0];
-  assign ____state_13_tuple_element_0__at_most_one_next_value = and_14293 == one_hot_14431[4] & and_14356 == one_hot_14431[3] & and_14357 == one_hot_14431[2] & and_14358 == one_hot_14431[1] & and_14359 == one_hot_14431[0];
-  assign ____state_13_tuple_element_1_tuple_element_1__at_most_one_next_value = and_14356 == one_hot_14432[7] & and_14357 == one_hot_14432[6] & and_14358 == one_hot_14432[5] & and_14359 == one_hot_14432[4] & and_14360 == one_hot_14432[3] & and_14361 == one_hot_14432[2] & and_14362 == one_hot_14432[1] & and_14363 == one_hot_14432[0];
-  assign concat_14715 = {and_14712, and_14713};
+  assign compacted_0_tup1_tup0_tup3 = ne_17208 ? admitted_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[3'h0] : array_index_17157 & {8{or_reduce_16842}};
+  assign compacted_1_tup1_tup0_tup3 = or_reduce_17210 ? array_index_17157 : array_index_17159 & {8{ugt_16838}};
+  assign compacted_2_tup1_tup0_tup3 = ugt_17212 ? array_index_17159 : array_index_17161 & {8{or_reduce_16834}};
+  assign compacted_3_tup1_tup0_tup3 = selected[2] ? array_index_17161 : admitted_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[3'h4] & {8{ugt_16832}};
+  assign concat_17185 = {____state_4_0, ____state_4_1, add_16876, ____state_3[0]};
+  assign phi_halo_cell__req_valid_load_en = p0_all_active_outputs_ready & nor_16791 | phi_halo_cell__req_valid_inv;
+  assign ____state_3__at_most_one_next_value = and_17074 == one_hot_17170[1] & and_17075 == one_hot_17170[0];
+  assign ____state_7__at_most_one_next_value = and_17076 == one_hot_17171[1] & and_17046 == one_hot_17171[0];
+  assign ____state_8__at_most_one_next_value = and_17076 == one_hot_17172[1] & and_17077 == one_hot_17172[0];
+  assign ____state_9__at_most_one_next_value = and_17076 == one_hot_17173[2] & and_17077 == one_hot_17173[1] & and_17078 == one_hot_17173[0];
+  assign ____state_11__at_most_one_next_value = nor_17079 == one_hot_17174[2] & and_17053 == one_hot_17174[1] & and_17080 == one_hot_17174[0];
+  assign ____state_14__at_most_one_next_value = and_17081 == one_hot_17175[1] & and_17082 == one_hot_17175[0];
+  assign ____state_16__at_most_one_next_value = nor_17002 == one_hot_17176[1] & nor_17083 == one_hot_17176[0];
+  assign ____state_0__at_most_one_next_value = and_17084 == one_hot_17177[18] & and_17085 == one_hot_17177[17] & and_17086 == one_hot_17177[16] & and_17087 == one_hot_17177[15] & and_17088 == one_hot_17177[14] & and_17089 == one_hot_17177[13] & and_17090 == one_hot_17177[12] & and_17091 == one_hot_17177[11] & and_17092 == one_hot_17177[10] & and_17093 == one_hot_17177[9] & and_17094 == one_hot_17177[8] & and_17076 == one_hot_17177[7] & and_17095 == one_hot_17177[6] & and_17075 == one_hot_17177[5] & and_17096 == one_hot_17177[4] & and_17097 == one_hot_17177[3] & and_17098 == one_hot_17177[2] & and_17099 == one_hot_17177[1] & and_17080 == one_hot_17177[0];
+  assign ____state_6__at_most_one_next_value = and_17100 == one_hot_17178[1] & and_17074 == one_hot_17178[0];
+  assign ____state_10__at_most_one_next_value = and_17101 == one_hot_17179[1] & and_17075 == one_hot_17179[0];
+  assign ____state_13_tuple_element_0__at_most_one_next_value = and_17032 == one_hot_17180[4] & and_17102 == one_hot_17180[3] & and_17103 == one_hot_17180[2] & and_17104 == one_hot_17180[1] & and_17105 == one_hot_17180[0];
+  assign ____state_13_tuple_element_1_tuple_element_1__at_most_one_next_value = and_17102 == one_hot_17181[7] & and_17103 == one_hot_17181[6] & and_17104 == one_hot_17181[5] & and_17105 == one_hot_17181[4] & and_17106 == one_hot_17181[3] & and_17107 == one_hot_17181[2] & and_17108 == one_hot_17181[1] & and_17109 == one_hot_17181[0];
+  assign concat_17495 = {and_17492, and_17493};
   assign _42 = ____state_3 + _5__9_source;
-  assign concat_14722 = {and_14719, and_14308 & p0_all_active_outputs_ready};
-  assign concat_14729 = {and_14719, and_14727};
-  assign concat_14737 = {and_14719, and_14727, and_14341 & p0_all_active_outputs_ready};
-  assign concat_14744 = {and_14342 & p0_all_active_outputs_ready, and_14316 & p0_all_active_outputs_ready};
-  assign Xls_clause_1_NextAnyon_1 = ____state_11 ^ Xls_clause_1_Value1_1;
+  assign concat_17502 = {and_17499, and_17046 & p0_all_active_outputs_ready};
+  assign concat_17509 = {and_17499, and_17507};
+  assign concat_17517 = {and_17499, and_17507, and_17078 & p0_all_active_outputs_ready};
+  assign concat_17525 = {nor_17079 & p0_all_active_outputs_ready, and_17053 & p0_all_active_outputs_ready, and_17523};
+  assign _3__7 = ____state_11 ^ Xls_clause_1_Value1_1;
   assign _22__1 = {____state_11[31:1], _22__2};
-  assign NextRandom_1__11 = _1__1[18:2] ^ {_1__1[13:2], _2__15[14:10]};
-  assign NextRandom_1__10 = _2__15[14:5] ^ _2__15[9:0];
-  assign NextRandom_1__9 = _2__15[4:0];
-  assign concat_14754 = {and_14343 & p0_all_active_outputs_ready, and_14344 & p0_all_active_outputs_ready};
-  assign concat_14764 = {nor_14263 & p0_all_active_outputs_ready, __phi_halo_cell__east_vld_buf & p0_all_active_outputs_ready};
-  assign _27 = {add_14473, ____state_4_0[17:2]};
-  assign _30 = {3'h0, add_14418[30:2]};
-  assign add_14552 = {compacted_4_tup0, add_14375[30:1]} + {3'h0, umul_14376[63:36]};
-  assign sign_ext_14553 = {32{~_19}};
-  assign concat_14793 = {and_14345 & p0_all_active_outputs_ready, and_14346 & p0_all_active_outputs_ready, and_14347 & p0_all_active_outputs_ready, and_14348 & p0_all_active_outputs_ready, and_14349 & p0_all_active_outputs_ready, and_14719, and_14350 & p0_all_active_outputs_ready, and_14713, and_14351 & p0_all_active_outputs_ready, and_14352 & p0_all_active_outputs_ready, and_14353 & p0_all_active_outputs_ready};
-  assign concat_14800 = {and_14354 & p0_all_active_outputs_ready, and_14712};
-  assign unexpand_for_next_value_2560_6__2_case_0_case_0_case_0_case_1_case_0 = ____state_6 + unexpand_for_next_value_2560_0__2_case_0_case_0_case_1;
-  assign concat_14807 = {and_14355 & p0_all_active_outputs_ready, and_14713};
-  assign unexpand_for_next_value_2560_10__2_case_0_case_1_case_2_case_1_case_0 = ____state_10 + unexpand_for_next_value_2560_0__2_case_0_case_0_case_1;
-  assign concat_14817 = {and_14293 & p0_all_active_outputs_ready, and_14812, and_14813, and_14814, and_14815};
+  assign NextRandom_1__11 = _1__7[18:2] ^ {_1__7[13:2], _2__1[14:10]};
+  assign NextRandom_1__10 = _2__1[14:5] ^ _2__1[9:0];
+  assign NextRandom_1__9 = _2__1[4:0];
+  assign concat_17535 = {and_17081 & p0_all_active_outputs_ready, and_17082 & p0_all_active_outputs_ready};
+  assign concat_17545 = {nor_17002 & p0_all_active_outputs_ready, nor_17083 & p0_all_active_outputs_ready};
+  assign _27 = {add_17226, ____state_4_0[17:2]};
+  assign _30 = {3'h0, add_17167[30:2]};
+  assign add_17318 = {compacted_4_tup0, add_17121[30:1]} + {3'h0, umul_17122[63:36]};
+  assign sign_ext_17319 = {32{~_19}};
+  assign concat_17582 = {and_17084 & p0_all_active_outputs_ready, and_17085 & p0_all_active_outputs_ready, and_17086 & p0_all_active_outputs_ready, and_17087 & p0_all_active_outputs_ready, and_17088 & p0_all_active_outputs_ready, and_17089 & p0_all_active_outputs_ready, and_17090 & p0_all_active_outputs_ready, and_17091 & p0_all_active_outputs_ready, and_17092 & p0_all_active_outputs_ready, and_17093 & p0_all_active_outputs_ready, and_17094 & p0_all_active_outputs_ready, and_17499, and_17095 & p0_all_active_outputs_ready, and_17493, and_17096 & p0_all_active_outputs_ready, and_17097 & p0_all_active_outputs_ready, and_17098 & p0_all_active_outputs_ready, and_17099 & p0_all_active_outputs_ready, and_17523};
+  assign concat_17589 = {and_17100 & p0_all_active_outputs_ready, and_17492};
+  assign unexpand_for_next_value_3152_6__2_case_0_case_0_case_1_case_1_case_0 = ____state_6 + unexpand_for_next_value_3152_0__2_case_0_case_1_case_1;
+  assign concat_17596 = {and_17101 & p0_all_active_outputs_ready, and_17493};
+  assign unexpand_for_next_value_3152_10__2_case_0_case_1_case_3_case_1_case_0 = ____state_10 + unexpand_for_next_value_3152_0__2_case_0_case_1_case_1;
+  assign concat_17606 = {and_17032 & p0_all_active_outputs_ready, and_17601, and_17602, and_17603, and_17604};
   assign compacted_slots_tuple_idx_0[0] = compacted_0_tup0;
   assign compacted_slots_tuple_idx_0[1] = compacted_1_tup0;
   assign compacted_slots_tuple_idx_0[2] = compacted_2_tup0;
   assign compacted_slots_tuple_idx_0[3] = compacted_3_tup0;
   assign compacted_slots_tuple_idx_0[4] = compacted_4_tup0;
-  assign concat_14830 = {and_14812, and_14813, and_14814, and_14815, and_14360 & p0_all_active_outputs_ready, and_14361 & p0_all_active_outputs_ready, and_14362 & p0_all_active_outputs_ready, and_14363 & p0_all_active_outputs_ready};
+  assign concat_17619 = {and_17601, and_17602, and_17603, and_17604, and_17106 & p0_all_active_outputs_ready, and_17107 & p0_all_active_outputs_ready, and_17108 & p0_all_active_outputs_ready, and_17109 & p0_all_active_outputs_ready};
   assign compacted_slots_tuple_idx_1_tuple_idx_1[0] = compacted_0_tup1_tup1;
   assign compacted_slots_tuple_idx_1_tuple_idx_1[1] = compacted_1_tup1_tup1;
   assign compacted_slots_tuple_idx_1_tuple_idx_1[2] = compacted_2_tup1_tup1;
@@ -1536,70 +1779,71 @@ module __phi_halo_cell__Top__Service_0_next(
   assign __phi_halo_cell__east_valid_and_ready_txfr = __phi_halo_cell__east_valid_and_not_has_been_sent & phi_halo_cell__east_load_en;
   assign __phi_halo_cell__west_valid_and_ready_txfr = __phi_halo_cell__west_valid_and_not_has_been_sent & phi_halo_cell__west_load_en;
   assign __phi_halo_cell__south_valid_and_ready_txfr = __phi_halo_cell__south_valid_and_not_has_been_sent & phi_halo_cell__south_load_en;
-  assign tuple_14522 = {{7'h01, or_14182}, compacted_4_tup1_tup0_tup0, compacted_4_tup1_tup0_tup0, {5'h00, nor_14173 ? unexpand_for_next_value_2560_0__2_case_0_case_0_case_1 : unexpand_for_next_value_2560_0__2_case_0_case_0_case_2, or_14182}};
+  assign __phi_halo_cell__syndrome_valid_and_all_active_outputs_ready = __phi_halo_cell__syndrome_vld_buf & p0_all_active_outputs_ready;
+  assign __phi_halo_cell__syndrome_valid_and_ready_txfr = __phi_halo_cell__syndrome_valid_and_not_has_been_sent & phi_halo_cell__syndrome_load_en;
+  assign tuple_17284 = {{6'h00, literal_16741[____state_0]}, compacted_4_tup1_tup0_tup0, compacted_4_tup1_tup0_tup0, {5'h00, literal_16742[____state_0]}};
   assign phi_halo_cell__req_load_en = phi_halo_cell__req_vld & phi_halo_cell__req_valid_load_en;
-  assign or_15187 = ~p0_all_active_outputs_ready | ____state_3__at_most_one_next_value | reset;
-  assign or_15189 = ~p0_all_active_outputs_ready | ____state_7__at_most_one_next_value | reset;
-  assign or_15191 = ~p0_all_active_outputs_ready | ____state_8__at_most_one_next_value | reset;
-  assign or_15193 = ~p0_all_active_outputs_ready | ____state_9__at_most_one_next_value | reset;
-  assign or_15195 = ~p0_all_active_outputs_ready | ____state_11__at_most_one_next_value | reset;
-  assign or_15197 = ~p0_all_active_outputs_ready | ____state_14__at_most_one_next_value | reset;
-  assign or_15199 = ~p0_all_active_outputs_ready | ____state_16__at_most_one_next_value | reset;
-  assign or_15201 = ~p0_all_active_outputs_ready | ____state_0__at_most_one_next_value | reset;
-  assign or_15203 = ~p0_all_active_outputs_ready | ____state_6__at_most_one_next_value | reset;
-  assign or_15205 = ~p0_all_active_outputs_ready | ____state_10__at_most_one_next_value | reset;
-  assign or_15207 = ~p0_all_active_outputs_ready | ____state_13_tuple_element_0__at_most_one_next_value | reset;
-  assign or_15209 = ~p0_all_active_outputs_ready | ____state_13_tuple_element_1_tuple_element_1__at_most_one_next_value | reset;
-  assign _8__1 = ____state_2 + _5__9_source;
-  assign and_14853 = and_14338 & p0_all_active_outputs_ready;
-  assign one_hot_sel_14716 = Absent_1__1 & {32{concat_14715[0]}} | _42 & {32{concat_14715[1]}};
-  assign and_14856 = (and_14337 | and_14338) & p0_all_active_outputs_ready;
-  assign one_hot_sel_14723 = Xls_clause_1_NewSeen_1 & {32{concat_14722[0]}} | Absent_1__1 & {32{concat_14722[1]}};
-  assign and_14859 = (and_14339 | and_14308) & p0_all_active_outputs_ready;
-  assign one_hot_sel_14730 = Xls_clause_1_Value_1 & {32{concat_14729[0]}} | Absent_1__1 & {32{concat_14729[1]}};
-  assign and_14862 = (and_14339 | and_14340) & p0_all_active_outputs_ready;
-  assign one_hot_sel_14738 = Absent_1__1 & {32{concat_14737[0]}} | Xls_clause_1_Value1_1 & {32{concat_14737[1]}} | Absent_1__1 & {32{concat_14737[2]}};
-  assign and_14865 = (and_14339 | and_14340 | and_14341) & p0_all_active_outputs_ready;
-  assign one_hot_sel_14745 = Xls_clause_1_NextAnyon_1 & {32{concat_14744[0]}} | _22__1 & {32{concat_14744[1]}};
-  assign and_14868 = (and_14342 | and_14316) & p0_all_active_outputs_ready;
+  assign or_18026 = ~p0_all_active_outputs_ready | ____state_3__at_most_one_next_value | reset;
+  assign or_18028 = ~p0_all_active_outputs_ready | ____state_7__at_most_one_next_value | reset;
+  assign or_18030 = ~p0_all_active_outputs_ready | ____state_8__at_most_one_next_value | reset;
+  assign or_18032 = ~p0_all_active_outputs_ready | ____state_9__at_most_one_next_value | reset;
+  assign or_18034 = ~p0_all_active_outputs_ready | ____state_11__at_most_one_next_value | reset;
+  assign or_18036 = ~p0_all_active_outputs_ready | ____state_14__at_most_one_next_value | reset;
+  assign or_18038 = ~p0_all_active_outputs_ready | ____state_16__at_most_one_next_value | reset;
+  assign or_18040 = ~p0_all_active_outputs_ready | ____state_0__at_most_one_next_value | reset;
+  assign or_18042 = ~p0_all_active_outputs_ready | ____state_6__at_most_one_next_value | reset;
+  assign or_18044 = ~p0_all_active_outputs_ready | ____state_10__at_most_one_next_value | reset;
+  assign or_18046 = ~p0_all_active_outputs_ready | ____state_13_tuple_element_0__at_most_one_next_value | reset;
+  assign or_18048 = ~p0_all_active_outputs_ready | ____state_13_tuple_element_1_tuple_element_1__at_most_one_next_value | reset;
+  assign and_17643 = and_17075 & p0_all_active_outputs_ready;
+  assign one_hot_sel_17496 = Absent_1__1 & {32{concat_17495[0]}} | _42 & {32{concat_17495[1]}};
+  assign and_17646 = (and_17074 | and_17075) & p0_all_active_outputs_ready;
+  assign one_hot_sel_17503 = Xls_clause_1_NewSeen_1 & {32{concat_17502[0]}} | Absent_1__1 & {32{concat_17502[1]}};
+  assign and_17649 = (and_17076 | and_17046) & p0_all_active_outputs_ready;
+  assign one_hot_sel_17510 = Xls_clause_1_Value_1 & {32{concat_17509[0]}} | Absent_1__1 & {32{concat_17509[1]}};
+  assign and_17652 = (and_17076 | and_17077) & p0_all_active_outputs_ready;
+  assign one_hot_sel_17518 = Absent_1__1 & {32{concat_17517[0]}} | Xls_clause_1_Value1_1 & {32{concat_17517[1]}} | Absent_1__1 & {32{concat_17517[2]}};
+  assign and_17655 = (and_17076 | and_17077 | and_17078) & p0_all_active_outputs_ready;
+  assign one_hot_sel_17526 = _3__7 & {32{concat_17525[0]}} | _3__7 & {32{concat_17525[1]}} | _22__1 & {32{concat_17525[2]}};
+  assign and_17658 = (nor_17079 | and_17053 | and_17080) & p0_all_active_outputs_ready;
   assign NextRandom_1 = {NextRandom_1__11, NextRandom_1__10, NextRandom_1__9};
-  assign and_14870 = and_14342 & p0_all_active_outputs_ready;
-  assign one_hot_sel_14755 = add_14299 & {8{concat_14754[0]}} | admitted_occupied & {8{concat_14754[1]}};
-  assign and_14873 = (and_14343 | and_14344) & p0_all_active_outputs_ready;
-  assign and_14605 = ~____state_15 & effective & phase_boundary & ~failed;
-  assign and_14875 = ~____state_17 & p0_all_active_outputs_ready;
-  assign one_hot_sel_14765 = (____state_16 | ____state_14 < MAILBOX_CAPACITY) & concat_14764[0] | (admission_pending | reserve__1) & concat_14764[1];
-  assign and_14878 = (nor_14263 | __phi_halo_cell__east_vld_buf) & p0_all_active_outputs_ready;
-  assign or_14603 = ____state_17 | (____state_15 ? ____state_17 : failed);
+  assign and_17660 = nor_17079 & p0_all_active_outputs_ready;
+  assign one_hot_sel_17536 = add_17037 & {8{concat_17535[0]}} | admitted_occupied & {8{concat_17535[1]}};
+  assign and_17663 = (and_17081 | and_17082) & p0_all_active_outputs_ready;
+  assign and_17383 = ~____state_15 & effective & phase_boundary & ~failed;
+  assign and_17665 = ~____state_17 & p0_all_active_outputs_ready;
+  assign one_hot_sel_17546 = (____state_16 | ____state_14 < MAILBOX_CAPACITY) & concat_17545[0] | (admission_pending | reserve__1) & concat_17545[1];
+  assign and_17668 = (nor_17002 | nor_17083) & p0_all_active_outputs_ready;
+  assign or_17381 = ____state_17 | (____state_15 ? ____state_17 : failed);
   assign _31 = _27 + _30;
-  assign and_14881 = ~(____state_17 | ____state_15 | candidate_slots_0_case_cmp) & eq_14185 & nor_14173 & eq_14190 & eq_14191 & _19 & p0_all_active_outputs_ready;
-  assign _37 = {compacted_4_tup0, add_14552};
-  assign and_14623 = _8 & sign_ext_14553;
-  assign and_14885 = ~(____state_17 | ____state_15 | candidate_slots_0_case_cmp) & eq_14185 & nor_14173 & _3 & p0_all_active_outputs_ready;
-  assign and_14624 = _12 & sign_ext_14553;
-  assign one_hot_sel_14794 = unexpand_for_next_value_2560_0__2_case_0_case_0_case_1 & {2{concat_14793[0]}} | unexpand_for_next_value_2560_0__2_case_0_case_0_case_2 & {2{concat_14793[1]}} | unexpand_for_next_value_2560_0__2_case_0_case_0_case_2 & {2{concat_14793[2]}} | unexpand_for_next_value_2560_0__2_case_0_case_1_case_0 & {2{concat_14793[3]}} | unexpand_for_next_value_2560_0__2_case_0_case_1_case_0 & {2{concat_14793[4]}} | unexpand_for_next_value_2560_0__2_case_0_case_0_case_1 & {2{concat_14793[5]}} | unexpand_for_next_value_2560_0__2_case_0_case_1_case_0 & {2{concat_14793[6]}} | unexpand_for_next_value_2560_0__2_case_0_case_0_case_1 & {2{concat_14793[7]}} | unexpand_for_next_value_2560_0__2_case_0_case_1_case_0 & {2{concat_14793[8]}} | unexpand_for_next_value_2560_0__2_case_0_case_0_case_2 & {2{concat_14793[9]}} | unexpand_for_next_value_2560_0__2_case_0_case_0_case_1 & {2{concat_14793[10]}};
-  assign and_14890 = (and_14345 | and_14346 | and_14347 | and_14348 | and_14349 | and_14339 | and_14350 | and_14338 | and_14351 | and_14352 | and_14353) & p0_all_active_outputs_ready;
-  assign one_hot_sel_14801 = unexpand_for_next_value_2560_0__2_case_0_case_1_case_0 & {2{concat_14800[0]}} | unexpand_for_next_value_2560_6__2_case_0_case_0_case_0_case_1_case_0 & {2{concat_14800[1]}};
-  assign and_14893 = (and_14354 | and_14337) & p0_all_active_outputs_ready;
-  assign one_hot_sel_14808 = unexpand_for_next_value_2560_0__2_case_0_case_1_case_0 & {2{concat_14807[0]}} | unexpand_for_next_value_2560_10__2_case_0_case_1_case_2_case_1_case_0 & {2{concat_14807[1]}};
-  assign and_14896 = (and_14355 | and_14338) & p0_all_active_outputs_ready;
-  assign one_hot_sel_14818[0] = admitted_slots_tuple_idx_0[0] & concat_14817[0] | postponed_slots_tuple_idx_0[0] & concat_14817[1] | compacted_slots_tuple_idx_0[0] & concat_14817[2] | admitted_slots_tuple_idx_0[0] & concat_14817[3] | unblocked_slots_tuple_idx_0[0] & concat_14817[4];
-  assign one_hot_sel_14818[1] = admitted_slots_tuple_idx_0[1] & concat_14817[0] | postponed_slots_tuple_idx_0[1] & concat_14817[1] | compacted_slots_tuple_idx_0[1] & concat_14817[2] | admitted_slots_tuple_idx_0[1] & concat_14817[3] | unblocked_slots_tuple_idx_0[1] & concat_14817[4];
-  assign one_hot_sel_14818[2] = admitted_slots_tuple_idx_0[2] & concat_14817[0] | postponed_slots_tuple_idx_0[2] & concat_14817[1] | compacted_slots_tuple_idx_0[2] & concat_14817[2] | admitted_slots_tuple_idx_0[2] & concat_14817[3] | unblocked_slots_tuple_idx_0[2] & concat_14817[4];
-  assign one_hot_sel_14818[3] = admitted_slots_tuple_idx_0[3] & concat_14817[0] | postponed_slots_tuple_idx_0[3] & concat_14817[1] | compacted_slots_tuple_idx_0[3] & concat_14817[2] | admitted_slots_tuple_idx_0[3] & concat_14817[3] | unblocked_slots_tuple_idx_0[3] & concat_14817[4];
-  assign one_hot_sel_14818[4] = admitted_slots_tuple_idx_0[4] & concat_14817[0] | postponed_slots_tuple_idx_0[4] & concat_14817[1] | compacted_slots_tuple_idx_0[4] & concat_14817[2] | admitted_slots_tuple_idx_0[4] & concat_14817[3] | unblocked_slots_tuple_idx_0[4] & concat_14817[4];
-  assign and_14899 = (and_14293 | and_14356 | and_14357 | and_14358 | and_14359) & p0_all_active_outputs_ready;
-  assign one_hot_sel_14831[0] = admitted_slots_tuple_idx_1_tuple_idx_1[0] & {96{concat_14830[0]}} | postponed_slots_tuple_idx_1_tuple_idx_1[0] & {96{concat_14830[1]}} | compacted_slots_tuple_idx_1_tuple_idx_1[0] & {96{concat_14830[2]}} | admitted_slots_tuple_idx_1_tuple_idx_1[0] & {96{concat_14830[3]}} | admitted_slots_tuple_idx_1_tuple_idx_1[0] & {96{concat_14830[4]}} | postponed_slots_tuple_idx_1_tuple_idx_1[0] & {96{concat_14830[5]}} | compacted_slots_tuple_idx_1_tuple_idx_1[0] & {96{concat_14830[6]}} | admitted_slots_tuple_idx_1_tuple_idx_1[0] & {96{concat_14830[7]}};
-  assign one_hot_sel_14831[1] = admitted_slots_tuple_idx_1_tuple_idx_1[1] & {96{concat_14830[0]}} | postponed_slots_tuple_idx_1_tuple_idx_1[1] & {96{concat_14830[1]}} | compacted_slots_tuple_idx_1_tuple_idx_1[1] & {96{concat_14830[2]}} | admitted_slots_tuple_idx_1_tuple_idx_1[1] & {96{concat_14830[3]}} | admitted_slots_tuple_idx_1_tuple_idx_1[1] & {96{concat_14830[4]}} | postponed_slots_tuple_idx_1_tuple_idx_1[1] & {96{concat_14830[5]}} | compacted_slots_tuple_idx_1_tuple_idx_1[1] & {96{concat_14830[6]}} | admitted_slots_tuple_idx_1_tuple_idx_1[1] & {96{concat_14830[7]}};
-  assign one_hot_sel_14831[2] = admitted_slots_tuple_idx_1_tuple_idx_1[2] & {96{concat_14830[0]}} | postponed_slots_tuple_idx_1_tuple_idx_1[2] & {96{concat_14830[1]}} | compacted_slots_tuple_idx_1_tuple_idx_1[2] & {96{concat_14830[2]}} | admitted_slots_tuple_idx_1_tuple_idx_1[2] & {96{concat_14830[3]}} | admitted_slots_tuple_idx_1_tuple_idx_1[2] & {96{concat_14830[4]}} | postponed_slots_tuple_idx_1_tuple_idx_1[2] & {96{concat_14830[5]}} | compacted_slots_tuple_idx_1_tuple_idx_1[2] & {96{concat_14830[6]}} | admitted_slots_tuple_idx_1_tuple_idx_1[2] & {96{concat_14830[7]}};
-  assign one_hot_sel_14831[3] = admitted_slots_tuple_idx_1_tuple_idx_1[3] & {96{concat_14830[0]}} | postponed_slots_tuple_idx_1_tuple_idx_1[3] & {96{concat_14830[1]}} | compacted_slots_tuple_idx_1_tuple_idx_1[3] & {96{concat_14830[2]}} | admitted_slots_tuple_idx_1_tuple_idx_1[3] & {96{concat_14830[3]}} | admitted_slots_tuple_idx_1_tuple_idx_1[3] & {96{concat_14830[4]}} | postponed_slots_tuple_idx_1_tuple_idx_1[3] & {96{concat_14830[5]}} | compacted_slots_tuple_idx_1_tuple_idx_1[3] & {96{concat_14830[6]}} | admitted_slots_tuple_idx_1_tuple_idx_1[3] & {96{concat_14830[7]}};
-  assign one_hot_sel_14831[4] = admitted_slots_tuple_idx_1_tuple_idx_1[4] & {96{concat_14830[0]}} | postponed_slots_tuple_idx_1_tuple_idx_1[4] & {96{concat_14830[1]}} | compacted_slots_tuple_idx_1_tuple_idx_1[4] & {96{concat_14830[2]}} | admitted_slots_tuple_idx_1_tuple_idx_1[4] & {96{concat_14830[3]}} | admitted_slots_tuple_idx_1_tuple_idx_1[4] & {96{concat_14830[4]}} | postponed_slots_tuple_idx_1_tuple_idx_1[4] & {96{concat_14830[5]}} | compacted_slots_tuple_idx_1_tuple_idx_1[4] & {96{concat_14830[6]}} | admitted_slots_tuple_idx_1_tuple_idx_1[4] & {96{concat_14830[7]}};
-  assign and_14902 = (and_14356 | and_14357 | and_14358 | and_14359 | and_14360 | and_14361 | and_14362 | and_14363) & p0_all_active_outputs_ready;
-  assign one_hot_sel_14844[0] = admitted_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[0] & {8{concat_14830[0]}} | postponed_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[0] & {8{concat_14830[1]}} | compacted_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[0] & {8{concat_14830[2]}} | admitted_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[0] & {8{concat_14830[3]}} | admitted_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[0] & {8{concat_14830[4]}} | postponed_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[0] & {8{concat_14830[5]}} | compacted_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[0] & {8{concat_14830[6]}} | admitted_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[0] & {8{concat_14830[7]}};
-  assign one_hot_sel_14844[1] = admitted_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[1] & {8{concat_14830[0]}} | postponed_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[1] & {8{concat_14830[1]}} | compacted_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[1] & {8{concat_14830[2]}} | admitted_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[1] & {8{concat_14830[3]}} | admitted_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[1] & {8{concat_14830[4]}} | postponed_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[1] & {8{concat_14830[5]}} | compacted_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[1] & {8{concat_14830[6]}} | admitted_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[1] & {8{concat_14830[7]}};
-  assign one_hot_sel_14844[2] = admitted_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[2] & {8{concat_14830[0]}} | postponed_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[2] & {8{concat_14830[1]}} | compacted_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[2] & {8{concat_14830[2]}} | admitted_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[2] & {8{concat_14830[3]}} | admitted_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[2] & {8{concat_14830[4]}} | postponed_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[2] & {8{concat_14830[5]}} | compacted_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[2] & {8{concat_14830[6]}} | admitted_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[2] & {8{concat_14830[7]}};
-  assign one_hot_sel_14844[3] = admitted_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[3] & {8{concat_14830[0]}} | postponed_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[3] & {8{concat_14830[1]}} | compacted_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[3] & {8{concat_14830[2]}} | admitted_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[3] & {8{concat_14830[3]}} | admitted_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[3] & {8{concat_14830[4]}} | postponed_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[3] & {8{concat_14830[5]}} | compacted_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[3] & {8{concat_14830[6]}} | admitted_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[3] & {8{concat_14830[7]}};
-  assign one_hot_sel_14844[4] = admitted_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[4] & {8{concat_14830[0]}} | postponed_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[4] & {8{concat_14830[1]}} | compacted_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[4] & {8{concat_14830[2]}} | admitted_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[4] & {8{concat_14830[3]}} | admitted_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[4] & {8{concat_14830[4]}} | postponed_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[4] & {8{concat_14830[5]}} | compacted_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[4] & {8{concat_14830[6]}} | admitted_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[4] & {8{concat_14830[7]}};
+  assign and_17671 = ~(____state_17 | ____state_15 | candidate_slots_0_case_cmp) & eq_16917 & eq_16899 & eq_16888 & eq_16889 & _19 & p0_all_active_outputs_ready;
+  assign _37 = {compacted_4_tup0, add_17318};
+  assign and_17400 = _8 & sign_ext_17319;
+  assign and_17675 = ~(____state_17 | ____state_15 | candidate_slots_0_case_cmp) & eq_16917 & eq_16899 & _3__1 & p0_all_active_outputs_ready;
+  assign and_17401 = _12 & sign_ext_17319;
+  assign one_hot_sel_17583 = unexpand_for_next_value_3152_0__2_case_0_case_1_case_1 & {2{concat_17582[0]}} | unexpand_for_next_value_3152_0__2_case_0_case_0_case_0 & {2{concat_17582[1]}} | unexpand_for_next_value_3152_0__2_case_0_case_0_case_2 & {2{concat_17582[2]}} | unexpand_for_next_value_3152_0__2_case_0_case_0_case_3 & {2{concat_17582[3]}} | unexpand_for_next_value_3152_0__2_case_0_case_0_case_3 & {2{concat_17582[4]}} | unexpand_for_next_value_3152_0__2_case_0_case_0_case_0 & {2{concat_17582[5]}} | unexpand_for_next_value_3152_0__2_case_0_case_1_case_1 & {2{concat_17582[6]}} | unexpand_for_next_value_3152_0__2_case_0_case_0_case_2 & {2{concat_17582[7]}} | unexpand_for_next_value_3152_0__2_case_0_case_0_case_3 & {2{concat_17582[8]}} | unexpand_for_next_value_3152_0__2_case_0_case_0_case_2 & {2{concat_17582[9]}} | unexpand_for_next_value_3152_0__2_case_0_case_1_case_1 & {2{concat_17582[10]}} | unexpand_for_next_value_3152_0__2_case_0_case_1_case_1 & {2{concat_17582[11]}} | unexpand_for_next_value_3152_0__2_case_0_case_0_case_0 & {2{concat_17582[12]}} | unexpand_for_next_value_3152_0__2_case_0_case_0_case_2 & {2{concat_17582[13]}} | unexpand_for_next_value_3152_0__2_case_0_case_1_case_1 & {2{concat_17582[14]}} | unexpand_for_next_value_3152_0__2_case_0_case_0_case_0 & {2{concat_17582[15]}} | unexpand_for_next_value_3152_0__2_case_0_case_0_case_3 & {2{concat_17582[16]}} | unexpand_for_next_value_3152_0__2_case_0_case_0_case_2 & {2{concat_17582[17]}} | unexpand_for_next_value_3152_0__2_case_0_case_0_case_0 & {2{concat_17582[18]}};
+  assign and_17680 = (and_17084 | and_17085 | and_17086 | and_17087 | and_17088 | and_17089 | and_17090 | and_17091 | and_17092 | and_17093 | and_17094 | and_17076 | and_17095 | and_17075 | and_17096 | and_17097 | and_17098 | and_17099 | and_17080) & p0_all_active_outputs_ready;
+  assign one_hot_sel_17590 = unexpand_for_next_value_3152_0__2_case_0_case_0_case_0 & {2{concat_17589[0]}} | unexpand_for_next_value_3152_6__2_case_0_case_0_case_1_case_1_case_0 & {2{concat_17589[1]}};
+  assign and_17683 = (and_17100 | and_17074) & p0_all_active_outputs_ready;
+  assign one_hot_sel_17597 = unexpand_for_next_value_3152_0__2_case_0_case_0_case_0 & {2{concat_17596[0]}} | unexpand_for_next_value_3152_10__2_case_0_case_1_case_3_case_1_case_0 & {2{concat_17596[1]}};
+  assign and_17686 = (and_17101 | and_17075) & p0_all_active_outputs_ready;
+  assign one_hot_sel_17607[0] = admitted_slots_tuple_idx_0[0] & concat_17606[0] | postponed_slots_tuple_idx_0[0] & concat_17606[1] | compacted_slots_tuple_idx_0[0] & concat_17606[2] | admitted_slots_tuple_idx_0[0] & concat_17606[3] | unblocked_slots_tuple_idx_0[0] & concat_17606[4];
+  assign one_hot_sel_17607[1] = admitted_slots_tuple_idx_0[1] & concat_17606[0] | postponed_slots_tuple_idx_0[1] & concat_17606[1] | compacted_slots_tuple_idx_0[1] & concat_17606[2] | admitted_slots_tuple_idx_0[1] & concat_17606[3] | unblocked_slots_tuple_idx_0[1] & concat_17606[4];
+  assign one_hot_sel_17607[2] = admitted_slots_tuple_idx_0[2] & concat_17606[0] | postponed_slots_tuple_idx_0[2] & concat_17606[1] | compacted_slots_tuple_idx_0[2] & concat_17606[2] | admitted_slots_tuple_idx_0[2] & concat_17606[3] | unblocked_slots_tuple_idx_0[2] & concat_17606[4];
+  assign one_hot_sel_17607[3] = admitted_slots_tuple_idx_0[3] & concat_17606[0] | postponed_slots_tuple_idx_0[3] & concat_17606[1] | compacted_slots_tuple_idx_0[3] & concat_17606[2] | admitted_slots_tuple_idx_0[3] & concat_17606[3] | unblocked_slots_tuple_idx_0[3] & concat_17606[4];
+  assign one_hot_sel_17607[4] = admitted_slots_tuple_idx_0[4] & concat_17606[0] | postponed_slots_tuple_idx_0[4] & concat_17606[1] | compacted_slots_tuple_idx_0[4] & concat_17606[2] | admitted_slots_tuple_idx_0[4] & concat_17606[3] | unblocked_slots_tuple_idx_0[4] & concat_17606[4];
+  assign and_17689 = (and_17032 | and_17102 | and_17103 | and_17104 | and_17105) & p0_all_active_outputs_ready;
+  assign one_hot_sel_17620[0] = admitted_slots_tuple_idx_1_tuple_idx_1[0] & {96{concat_17619[0]}} | postponed_slots_tuple_idx_1_tuple_idx_1[0] & {96{concat_17619[1]}} | compacted_slots_tuple_idx_1_tuple_idx_1[0] & {96{concat_17619[2]}} | admitted_slots_tuple_idx_1_tuple_idx_1[0] & {96{concat_17619[3]}} | admitted_slots_tuple_idx_1_tuple_idx_1[0] & {96{concat_17619[4]}} | postponed_slots_tuple_idx_1_tuple_idx_1[0] & {96{concat_17619[5]}} | compacted_slots_tuple_idx_1_tuple_idx_1[0] & {96{concat_17619[6]}} | admitted_slots_tuple_idx_1_tuple_idx_1[0] & {96{concat_17619[7]}};
+  assign one_hot_sel_17620[1] = admitted_slots_tuple_idx_1_tuple_idx_1[1] & {96{concat_17619[0]}} | postponed_slots_tuple_idx_1_tuple_idx_1[1] & {96{concat_17619[1]}} | compacted_slots_tuple_idx_1_tuple_idx_1[1] & {96{concat_17619[2]}} | admitted_slots_tuple_idx_1_tuple_idx_1[1] & {96{concat_17619[3]}} | admitted_slots_tuple_idx_1_tuple_idx_1[1] & {96{concat_17619[4]}} | postponed_slots_tuple_idx_1_tuple_idx_1[1] & {96{concat_17619[5]}} | compacted_slots_tuple_idx_1_tuple_idx_1[1] & {96{concat_17619[6]}} | admitted_slots_tuple_idx_1_tuple_idx_1[1] & {96{concat_17619[7]}};
+  assign one_hot_sel_17620[2] = admitted_slots_tuple_idx_1_tuple_idx_1[2] & {96{concat_17619[0]}} | postponed_slots_tuple_idx_1_tuple_idx_1[2] & {96{concat_17619[1]}} | compacted_slots_tuple_idx_1_tuple_idx_1[2] & {96{concat_17619[2]}} | admitted_slots_tuple_idx_1_tuple_idx_1[2] & {96{concat_17619[3]}} | admitted_slots_tuple_idx_1_tuple_idx_1[2] & {96{concat_17619[4]}} | postponed_slots_tuple_idx_1_tuple_idx_1[2] & {96{concat_17619[5]}} | compacted_slots_tuple_idx_1_tuple_idx_1[2] & {96{concat_17619[6]}} | admitted_slots_tuple_idx_1_tuple_idx_1[2] & {96{concat_17619[7]}};
+  assign one_hot_sel_17620[3] = admitted_slots_tuple_idx_1_tuple_idx_1[3] & {96{concat_17619[0]}} | postponed_slots_tuple_idx_1_tuple_idx_1[3] & {96{concat_17619[1]}} | compacted_slots_tuple_idx_1_tuple_idx_1[3] & {96{concat_17619[2]}} | admitted_slots_tuple_idx_1_tuple_idx_1[3] & {96{concat_17619[3]}} | admitted_slots_tuple_idx_1_tuple_idx_1[3] & {96{concat_17619[4]}} | postponed_slots_tuple_idx_1_tuple_idx_1[3] & {96{concat_17619[5]}} | compacted_slots_tuple_idx_1_tuple_idx_1[3] & {96{concat_17619[6]}} | admitted_slots_tuple_idx_1_tuple_idx_1[3] & {96{concat_17619[7]}};
+  assign one_hot_sel_17620[4] = admitted_slots_tuple_idx_1_tuple_idx_1[4] & {96{concat_17619[0]}} | postponed_slots_tuple_idx_1_tuple_idx_1[4] & {96{concat_17619[1]}} | compacted_slots_tuple_idx_1_tuple_idx_1[4] & {96{concat_17619[2]}} | admitted_slots_tuple_idx_1_tuple_idx_1[4] & {96{concat_17619[3]}} | admitted_slots_tuple_idx_1_tuple_idx_1[4] & {96{concat_17619[4]}} | postponed_slots_tuple_idx_1_tuple_idx_1[4] & {96{concat_17619[5]}} | compacted_slots_tuple_idx_1_tuple_idx_1[4] & {96{concat_17619[6]}} | admitted_slots_tuple_idx_1_tuple_idx_1[4] & {96{concat_17619[7]}};
+  assign and_17692 = (and_17102 | and_17103 | and_17104 | and_17105 | and_17106 | and_17107 | and_17108 | and_17109) & p0_all_active_outputs_ready;
+  assign one_hot_sel_17633[0] = admitted_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[0] & {8{concat_17619[0]}} | postponed_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[0] & {8{concat_17619[1]}} | compacted_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[0] & {8{concat_17619[2]}} | admitted_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[0] & {8{concat_17619[3]}} | admitted_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[0] & {8{concat_17619[4]}} | postponed_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[0] & {8{concat_17619[5]}} | compacted_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[0] & {8{concat_17619[6]}} | admitted_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[0] & {8{concat_17619[7]}};
+  assign one_hot_sel_17633[1] = admitted_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[1] & {8{concat_17619[0]}} | postponed_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[1] & {8{concat_17619[1]}} | compacted_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[1] & {8{concat_17619[2]}} | admitted_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[1] & {8{concat_17619[3]}} | admitted_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[1] & {8{concat_17619[4]}} | postponed_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[1] & {8{concat_17619[5]}} | compacted_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[1] & {8{concat_17619[6]}} | admitted_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[1] & {8{concat_17619[7]}};
+  assign one_hot_sel_17633[2] = admitted_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[2] & {8{concat_17619[0]}} | postponed_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[2] & {8{concat_17619[1]}} | compacted_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[2] & {8{concat_17619[2]}} | admitted_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[2] & {8{concat_17619[3]}} | admitted_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[2] & {8{concat_17619[4]}} | postponed_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[2] & {8{concat_17619[5]}} | compacted_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[2] & {8{concat_17619[6]}} | admitted_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[2] & {8{concat_17619[7]}};
+  assign one_hot_sel_17633[3] = admitted_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[3] & {8{concat_17619[0]}} | postponed_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[3] & {8{concat_17619[1]}} | compacted_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[3] & {8{concat_17619[2]}} | admitted_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[3] & {8{concat_17619[3]}} | admitted_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[3] & {8{concat_17619[4]}} | postponed_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[3] & {8{concat_17619[5]}} | compacted_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[3] & {8{concat_17619[6]}} | admitted_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[3] & {8{concat_17619[7]}};
+  assign one_hot_sel_17633[4] = admitted_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[4] & {8{concat_17619[0]}} | postponed_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[4] & {8{concat_17619[1]}} | compacted_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[4] & {8{concat_17619[2]}} | admitted_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[4] & {8{concat_17619[3]}} | admitted_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[4] & {8{concat_17619[4]}} | postponed_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[4] & {8{concat_17619[5]}} | compacted_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[4] & {8{concat_17619[6]}} | admitted_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[4] & {8{concat_17619[7]}};
   assign __phi_halo_cell__admit_not_stage_load = ~__phi_halo_cell__admit_valid_and_all_active_outputs_ready;
   assign __phi_halo_cell__admit_has_been_sent_reg_load_en = __phi_halo_cell__admit_valid_and_ready_txfr | __phi_halo_cell__admit_valid_and_all_active_outputs_ready;
   assign __phi_halo_cell__east_not_stage_load = ~__phi_halo_cell__east_valid_and_all_active_outputs_ready;
@@ -1607,10 +1851,13 @@ module __phi_halo_cell__Top__Service_0_next(
   assign __phi_halo_cell__east_has_been_sent_reg_load_en = __phi_halo_cell__east_valid_and_ready_txfr | __phi_halo_cell__east_valid_and_all_active_outputs_ready;
   assign __phi_halo_cell__west_has_been_sent_reg_load_en = __phi_halo_cell__west_valid_and_ready_txfr | __phi_halo_cell__east_valid_and_all_active_outputs_ready;
   assign __phi_halo_cell__south_has_been_sent_reg_load_en = __phi_halo_cell__south_valid_and_ready_txfr | __phi_halo_cell__east_valid_and_all_active_outputs_ready;
-  assign effects_north = {tuple_14522, priority_sel_96b_2way(concat_14199, concat_14436, {____state_4_0, _5__6_source, ____state_2}, {63'h0000_0000_0000_0000, ~(~(____state_9 == _5__9_source & Move_1__1)), ____state_2})};
-  assign effects_east = {tuple_14522, priority_sel_96b_2way(concat_14199, concat_14436, {____state_4_0, _5__7_source, ____state_2}, {63'h0000_0000_0000_0000, ~(~(____state_9 == _5__8_source & Move_1__1)), ____state_2})};
-  assign effects_west = {tuple_14522, priority_sel_96b_2way(concat_14199, concat_14436, {____state_4_0, _5__8_source, ____state_2}, {63'h0000_0000_0000_0000, ~(~(____state_9 == _5__7_source & Move_1__1)), ____state_2})};
-  assign effects_south = {tuple_14522, priority_sel_96b_2way(concat_14199, concat_14436, {____state_4_0, _5__9_source, ____state_2}, {63'h0000_0000_0000_0000, ~(~(____state_9 == _5__6_source & Move_1__1)), ____state_2})};
+  assign __phi_halo_cell__syndrome_not_stage_load = ~__phi_halo_cell__syndrome_valid_and_all_active_outputs_ready;
+  assign __phi_halo_cell__syndrome_has_been_sent_reg_load_en = __phi_halo_cell__syndrome_valid_and_ready_txfr | __phi_halo_cell__syndrome_valid_and_all_active_outputs_ready;
+  assign effects_north = {tuple_17284, priority_sel_96b_3way(concat_16930, compacted_4_tup1_tup1, concat_17185, {____state_4_0, _5__6_source, ____state_2}, {63'h0000_0000_0000_0000, ~(~(____state_9 == _5__9_source & Move_1__1)), ____state_2})};
+  assign effects_east = {tuple_17284, priority_sel_96b_3way(concat_16930, compacted_4_tup1_tup1, concat_17185, {____state_4_0, _5__7_source, ____state_2}, {63'h0000_0000_0000_0000, ~(~(____state_9 == _5__8_source & Move_1__1)), ____state_2})};
+  assign effects_west = {tuple_17284, priority_sel_96b_3way(concat_16930, compacted_4_tup1_tup1, concat_17185, {____state_4_0, _5__8_source, ____state_2}, {63'h0000_0000_0000_0000, ~(~(____state_9 == _5__7_source & Move_1__1)), ____state_2})};
+  assign effects_south = {tuple_17284, priority_sel_96b_3way(concat_16930, compacted_4_tup1_tup1, concat_17185, {____state_4_0, _5__9_source, ____state_2}, {63'h0000_0000_0000_0000, ~(~(____state_9 == _5__6_source & Move_1__1)), ____state_2})};
+  assign effects_syndrome = {{8'h01, compacted_4_tup1_tup0_tup0, compacted_4_tup1_tup0_tup0, {5'h00, literal_16743[____state_0]}}, {64'h0000_0000_0000_0000, {32{nor_16905}} & ____state_2}};
   always @ (posedge clk) begin
     if (reset) begin
       ____state_16 <= 1'h0;
@@ -1632,12 +1879,12 @@ module __phi_halo_cell__Top__Service_0_next(
       ____state_13_tuple_element_1_tuple_element_0_tuple_element_3[2] <= ____state_13_tuple_element_1_tuple_element_0_tuple_element_3_init[2];
       ____state_13_tuple_element_1_tuple_element_0_tuple_element_3[3] <= ____state_13_tuple_element_1_tuple_element_0_tuple_element_3_init[3];
       ____state_13_tuple_element_1_tuple_element_0_tuple_element_3[4] <= ____state_13_tuple_element_1_tuple_element_0_tuple_element_3_init[4];
-      ____state_7 <= 32'h0000_0000;
       ____state_2 <= 32'h0000_0000;
       ____state_3 <= 32'h0000_0000;
+      ____state_7 <= 32'h0000_0000;
       ____state_0 <= 2'h0;
-      ____state_10 <= 2'h0;
       ____state_6 <= 2'h0;
+      ____state_10 <= 2'h0;
       ____state_12 <= 32'h6d2b_79f5;
       ____state_8 <= 32'h0000_0000;
       ____state_11 <= 32'h0000_0000;
@@ -1651,6 +1898,7 @@ module __phi_halo_cell__Top__Service_0_next(
       __phi_halo_cell__east_has_been_sent_reg <= 1'h0;
       __phi_halo_cell__west_has_been_sent_reg <= 1'h0;
       __phi_halo_cell__south_has_been_sent_reg <= 1'h0;
+      __phi_halo_cell__syndrome_has_been_sent_reg <= 1'h0;
       __phi_halo_cell__req_reg <= __phi_halo_cell__req_reg_init;
       __phi_halo_cell__req_valid_reg <= 1'h0;
       __phi_halo_cell__admit_reg <= 1'h0;
@@ -1663,45 +1911,48 @@ module __phi_halo_cell__Top__Service_0_next(
       __phi_halo_cell__west_valid_reg <= 1'h0;
       __phi_halo_cell__south_reg <= __phi_halo_cell__south_reg_init;
       __phi_halo_cell__south_valid_reg <= 1'h0;
+      __phi_halo_cell__syndrome_reg <= __phi_halo_cell__syndrome_reg_init;
+      __phi_halo_cell__syndrome_valid_reg <= 1'h0;
     end else begin
-      ____state_16 <= and_14878 ? one_hot_sel_14765 : ____state_16;
-      ____state_17 <= p0_all_active_outputs_ready ? or_14603 : ____state_17;
-      ____state_15 <= and_14875 ? and_14605 : ____state_15;
-      ____state_13_tuple_element_0[0] <= and_14899 ? one_hot_sel_14818[0] : ____state_13_tuple_element_0[0];
-      ____state_13_tuple_element_0[1] <= and_14899 ? one_hot_sel_14818[1] : ____state_13_tuple_element_0[1];
-      ____state_13_tuple_element_0[2] <= and_14899 ? one_hot_sel_14818[2] : ____state_13_tuple_element_0[2];
-      ____state_13_tuple_element_0[3] <= and_14899 ? one_hot_sel_14818[3] : ____state_13_tuple_element_0[3];
-      ____state_13_tuple_element_0[4] <= and_14899 ? one_hot_sel_14818[4] : ____state_13_tuple_element_0[4];
-      ____state_14 <= and_14873 ? one_hot_sel_14755 : ____state_14;
-      ____state_13_tuple_element_1_tuple_element_1[0] <= and_14902 ? one_hot_sel_14831[0] : ____state_13_tuple_element_1_tuple_element_1[0];
-      ____state_13_tuple_element_1_tuple_element_1[1] <= and_14902 ? one_hot_sel_14831[1] : ____state_13_tuple_element_1_tuple_element_1[1];
-      ____state_13_tuple_element_1_tuple_element_1[2] <= and_14902 ? one_hot_sel_14831[2] : ____state_13_tuple_element_1_tuple_element_1[2];
-      ____state_13_tuple_element_1_tuple_element_1[3] <= and_14902 ? one_hot_sel_14831[3] : ____state_13_tuple_element_1_tuple_element_1[3];
-      ____state_13_tuple_element_1_tuple_element_1[4] <= and_14902 ? one_hot_sel_14831[4] : ____state_13_tuple_element_1_tuple_element_1[4];
-      ____state_13_tuple_element_1_tuple_element_0_tuple_element_3[0] <= and_14902 ? one_hot_sel_14844[0] : ____state_13_tuple_element_1_tuple_element_0_tuple_element_3[0];
-      ____state_13_tuple_element_1_tuple_element_0_tuple_element_3[1] <= and_14902 ? one_hot_sel_14844[1] : ____state_13_tuple_element_1_tuple_element_0_tuple_element_3[1];
-      ____state_13_tuple_element_1_tuple_element_0_tuple_element_3[2] <= and_14902 ? one_hot_sel_14844[2] : ____state_13_tuple_element_1_tuple_element_0_tuple_element_3[2];
-      ____state_13_tuple_element_1_tuple_element_0_tuple_element_3[3] <= and_14902 ? one_hot_sel_14844[3] : ____state_13_tuple_element_1_tuple_element_0_tuple_element_3[3];
-      ____state_13_tuple_element_1_tuple_element_0_tuple_element_3[4] <= and_14902 ? one_hot_sel_14844[4] : ____state_13_tuple_element_1_tuple_element_0_tuple_element_3[4];
-      ____state_7 <= and_14859 ? one_hot_sel_14723 : ____state_7;
-      ____state_2 <= and_14853 ? _8__1 : ____state_2;
-      ____state_3 <= and_14856 ? one_hot_sel_14716 : ____state_3;
-      ____state_0 <= and_14890 ? one_hot_sel_14794 : ____state_0;
-      ____state_10 <= and_14896 ? one_hot_sel_14808 : ____state_10;
-      ____state_6 <= and_14893 ? one_hot_sel_14801 : ____state_6;
-      ____state_12 <= and_14870 ? NextRandom_1 : ____state_12;
-      ____state_8 <= and_14862 ? one_hot_sel_14730 : ____state_8;
-      ____state_11 <= and_14868 ? one_hot_sel_14745 : ____state_11;
-      ____state_9 <= and_14865 ? one_hot_sel_14738 : ____state_9;
-      ____state_5_1 <= and_14885 ? and_14624 : ____state_5_1;
-      ____state_5_0 <= and_14885 ? and_14623 : ____state_5_0;
-      ____state_4_1 <= and_14881 ? _37 : ____state_4_1;
-      ____state_4_0 <= and_14881 ? _31 : ____state_4_0;
+      ____state_16 <= and_17668 ? one_hot_sel_17546 : ____state_16;
+      ____state_17 <= p0_all_active_outputs_ready ? or_17381 : ____state_17;
+      ____state_15 <= and_17665 ? and_17383 : ____state_15;
+      ____state_13_tuple_element_0[0] <= and_17689 ? one_hot_sel_17607[0] : ____state_13_tuple_element_0[0];
+      ____state_13_tuple_element_0[1] <= and_17689 ? one_hot_sel_17607[1] : ____state_13_tuple_element_0[1];
+      ____state_13_tuple_element_0[2] <= and_17689 ? one_hot_sel_17607[2] : ____state_13_tuple_element_0[2];
+      ____state_13_tuple_element_0[3] <= and_17689 ? one_hot_sel_17607[3] : ____state_13_tuple_element_0[3];
+      ____state_13_tuple_element_0[4] <= and_17689 ? one_hot_sel_17607[4] : ____state_13_tuple_element_0[4];
+      ____state_14 <= and_17663 ? one_hot_sel_17536 : ____state_14;
+      ____state_13_tuple_element_1_tuple_element_1[0] <= and_17692 ? one_hot_sel_17620[0] : ____state_13_tuple_element_1_tuple_element_1[0];
+      ____state_13_tuple_element_1_tuple_element_1[1] <= and_17692 ? one_hot_sel_17620[1] : ____state_13_tuple_element_1_tuple_element_1[1];
+      ____state_13_tuple_element_1_tuple_element_1[2] <= and_17692 ? one_hot_sel_17620[2] : ____state_13_tuple_element_1_tuple_element_1[2];
+      ____state_13_tuple_element_1_tuple_element_1[3] <= and_17692 ? one_hot_sel_17620[3] : ____state_13_tuple_element_1_tuple_element_1[3];
+      ____state_13_tuple_element_1_tuple_element_1[4] <= and_17692 ? one_hot_sel_17620[4] : ____state_13_tuple_element_1_tuple_element_1[4];
+      ____state_13_tuple_element_1_tuple_element_0_tuple_element_3[0] <= and_17692 ? one_hot_sel_17633[0] : ____state_13_tuple_element_1_tuple_element_0_tuple_element_3[0];
+      ____state_13_tuple_element_1_tuple_element_0_tuple_element_3[1] <= and_17692 ? one_hot_sel_17633[1] : ____state_13_tuple_element_1_tuple_element_0_tuple_element_3[1];
+      ____state_13_tuple_element_1_tuple_element_0_tuple_element_3[2] <= and_17692 ? one_hot_sel_17633[2] : ____state_13_tuple_element_1_tuple_element_0_tuple_element_3[2];
+      ____state_13_tuple_element_1_tuple_element_0_tuple_element_3[3] <= and_17692 ? one_hot_sel_17633[3] : ____state_13_tuple_element_1_tuple_element_0_tuple_element_3[3];
+      ____state_13_tuple_element_1_tuple_element_0_tuple_element_3[4] <= and_17692 ? one_hot_sel_17633[4] : ____state_13_tuple_element_1_tuple_element_0_tuple_element_3[4];
+      ____state_2 <= and_17643 ? _8__1 : ____state_2;
+      ____state_3 <= and_17646 ? one_hot_sel_17496 : ____state_3;
+      ____state_7 <= and_17649 ? one_hot_sel_17503 : ____state_7;
+      ____state_0 <= and_17680 ? one_hot_sel_17583 : ____state_0;
+      ____state_6 <= and_17683 ? one_hot_sel_17590 : ____state_6;
+      ____state_10 <= and_17686 ? one_hot_sel_17597 : ____state_10;
+      ____state_12 <= and_17660 ? NextRandom_1 : ____state_12;
+      ____state_8 <= and_17652 ? one_hot_sel_17510 : ____state_8;
+      ____state_11 <= and_17658 ? one_hot_sel_17526 : ____state_11;
+      ____state_9 <= and_17655 ? one_hot_sel_17518 : ____state_9;
+      ____state_5_1 <= and_17675 ? and_17401 : ____state_5_1;
+      ____state_5_0 <= and_17675 ? and_17400 : ____state_5_0;
+      ____state_4_1 <= and_17671 ? _37 : ____state_4_1;
+      ____state_4_0 <= and_17671 ? _31 : ____state_4_0;
       __phi_halo_cell__admit_has_been_sent_reg <= __phi_halo_cell__admit_has_been_sent_reg_load_en ? __phi_halo_cell__admit_not_stage_load : __phi_halo_cell__admit_has_been_sent_reg;
       __phi_halo_cell__north_has_been_sent_reg <= __phi_halo_cell__north_has_been_sent_reg_load_en ? __phi_halo_cell__east_not_stage_load : __phi_halo_cell__north_has_been_sent_reg;
       __phi_halo_cell__east_has_been_sent_reg <= __phi_halo_cell__east_has_been_sent_reg_load_en ? __phi_halo_cell__east_not_stage_load : __phi_halo_cell__east_has_been_sent_reg;
       __phi_halo_cell__west_has_been_sent_reg <= __phi_halo_cell__west_has_been_sent_reg_load_en ? __phi_halo_cell__east_not_stage_load : __phi_halo_cell__west_has_been_sent_reg;
       __phi_halo_cell__south_has_been_sent_reg <= __phi_halo_cell__south_has_been_sent_reg_load_en ? __phi_halo_cell__east_not_stage_load : __phi_halo_cell__south_has_been_sent_reg;
+      __phi_halo_cell__syndrome_has_been_sent_reg <= __phi_halo_cell__syndrome_has_been_sent_reg_load_en ? __phi_halo_cell__syndrome_not_stage_load : __phi_halo_cell__syndrome_has_been_sent_reg;
       __phi_halo_cell__req_reg <= phi_halo_cell__req_load_en ? phi_halo_cell__req : __phi_halo_cell__req_reg;
       __phi_halo_cell__req_valid_reg <= phi_halo_cell__req_valid_load_en ? phi_halo_cell__req_vld : __phi_halo_cell__req_valid_reg;
       __phi_halo_cell__admit_reg <= phi_halo_cell__admit_load_en ? __phi_halo_cell__admit_buf : __phi_halo_cell__admit_reg;
@@ -1714,6 +1965,8 @@ module __phi_halo_cell__Top__Service_0_next(
       __phi_halo_cell__west_valid_reg <= phi_halo_cell__west_valid_load_en ? __phi_halo_cell__west_valid_and_not_has_been_sent : __phi_halo_cell__west_valid_reg;
       __phi_halo_cell__south_reg <= phi_halo_cell__south_load_en ? effects_south : __phi_halo_cell__south_reg;
       __phi_halo_cell__south_valid_reg <= phi_halo_cell__south_valid_load_en ? __phi_halo_cell__south_valid_and_not_has_been_sent : __phi_halo_cell__south_valid_reg;
+      __phi_halo_cell__syndrome_reg <= phi_halo_cell__syndrome_load_en ? effects_syndrome : __phi_halo_cell__syndrome_reg;
+      __phi_halo_cell__syndrome_valid_reg <= phi_halo_cell__syndrome_valid_load_en ? __phi_halo_cell__syndrome_valid_and_not_has_been_sent : __phi_halo_cell__syndrome_valid_reg;
     end
   end
   assign phi_halo_cell__admit = __phi_halo_cell__admit_reg;
@@ -1725,25 +1978,27 @@ module __phi_halo_cell__Top__Service_0_next(
   assign phi_halo_cell__req_rdy = phi_halo_cell__req_load_en;
   assign phi_halo_cell__south = __phi_halo_cell__south_reg;
   assign phi_halo_cell__south_vld = __phi_halo_cell__south_valid_reg;
+  assign phi_halo_cell__syndrome = __phi_halo_cell__syndrome_reg;
+  assign phi_halo_cell__syndrome_vld = __phi_halo_cell__syndrome_valid_reg;
   assign phi_halo_cell__west = __phi_halo_cell__west_reg;
   assign phi_halo_cell__west_vld = __phi_halo_cell__west_valid_reg;
   for (genvar __i0 = 0; __i0 < 5; __i0 = __i0 + 1) begin : gen__admitted_slots_tuple_idx_0_0
-    assign admitted_slots_tuple_idx_0[__i0] = concat_14110 == __i0 ? and_14109 : ____state_13_tuple_element_0[__i0];
+    assign admitted_slots_tuple_idx_0[__i0] = concat_16830 == __i0 ? and_16829 : ____state_13_tuple_element_0[__i0];
   end
   for (genvar __i0 = 0; __i0 < 5; __i0 = __i0 + 1) begin : gen__admitted_slots_tuple_idx_1_tuple_idx_1_0
-    assign admitted_slots_tuple_idx_1_tuple_idx_1[__i0] = concat_14110 == __i0 ? sel_14142 : ____state_13_tuple_element_1_tuple_element_1[__i0];
+    assign admitted_slots_tuple_idx_1_tuple_idx_1[__i0] = concat_16830 == __i0 ? sel_16862 : ____state_13_tuple_element_1_tuple_element_1[__i0];
   end
   for (genvar __i0 = 0; __i0 < 5; __i0 = __i0 + 1) begin : gen__admitted_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3_0
-    assign admitted_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[__i0] = concat_14110 == __i0 ? sel_14154 : ____state_13_tuple_element_1_tuple_element_0_tuple_element_3[__i0];
+    assign admitted_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[__i0] = concat_16830 == __i0 ? sel_16875 : ____state_13_tuple_element_1_tuple_element_0_tuple_element_3[__i0];
   end
   for (genvar __i0 = 0; __i0 < 5; __i0 = __i0 + 1) begin : gen__postponed_slots_tuple_idx_0_0
-    assign postponed_slots_tuple_idx_0[__i0] = concat_14541 == __i0 ? postponed_slot_tup0 : admitted_slots_tuple_idx_0[__i0];
+    assign postponed_slots_tuple_idx_0[__i0] = concat_17307 == __i0 ? postponed_slot_tup0 : admitted_slots_tuple_idx_0[__i0];
   end
   for (genvar __i0 = 0; __i0 < 5; __i0 = __i0 + 1) begin : gen__postponed_slots_tuple_idx_1_tuple_idx_1_0
-    assign postponed_slots_tuple_idx_1_tuple_idx_1[__i0] = concat_14541 == __i0 ? selected_slot_tuple_idx_1_tuple_idx_1 : admitted_slots_tuple_idx_1_tuple_idx_1[__i0];
+    assign postponed_slots_tuple_idx_1_tuple_idx_1[__i0] = concat_17307 == __i0 ? selected_slot_tuple_idx_1_tuple_idx_1 : admitted_slots_tuple_idx_1_tuple_idx_1[__i0];
   end
   for (genvar __i0 = 0; __i0 < 5; __i0 = __i0 + 1) begin : gen__postponed_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3_0
-    assign postponed_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[__i0] = concat_14541 == __i0 ? selected_slot_tuple_idx_1_tuple_idx_0_tuple_idx_3 : admitted_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[__i0];
+    assign postponed_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[__i0] = concat_17307 == __i0 ? selected_slot_tuple_idx_1_tuple_idx_0_tuple_idx_3 : admitted_slots_tuple_idx_1_tuple_idx_0_tuple_idx_3[__i0];
   end
 endmodule
 
@@ -1767,47 +2022,47 @@ module fifo_for_depth_1_ty_bits_1__with_bypass_register_push(
   reg buf__1[0:1];
   wire is_full_bool;
   wire can_do_push;
-  wire and_15272;
-  wire eq_15277;
-  wire ne_15261;
-  wire and_15278;
-  wire or_15275;
-  wire [2:0] add_15269;
+  wire and_18118;
+  wire eq_18123;
+  wire ne_18107;
+  wire and_18124;
+  wire or_18121;
+  wire [2:0] add_18115;
   wire [2:0] long_buf_size_lit;
-  wire [2:0] add_15264;
+  wire [2:0] add_18110;
   wire popped;
-  wire [1:0] sub_15290;
-  wire [1:0] add_15292;
-  wire [2:0] umod_15270;
-  wire [2:0] umod_15265;
+  wire [1:0] sub_18136;
+  wire [1:0] add_18138;
+  wire [2:0] umod_18116;
+  wire [2:0] umod_18111;
   wire pushed;
   wire [1:0] next_head_if_push;
   wire did_push_occur;
   wire [1:0] next_tail_if_pop;
   wire did_pop_occur;
-  wire [1:0] sel_15294;
-  wire array_update_15301[0:1];
+  wire [1:0] sel_18140;
+  wire array_update_18147[0:1];
   assign is_full_bool = slots == 2'h1;
   assign can_do_push = ~is_full_bool | pop_ready;
-  assign and_15272 = pop_ready & push_valid;
-  assign eq_15277 = head == tail;
-  assign ne_15261 = head != tail;
-  assign and_15278 = eq_15277 & and_15272;
-  assign or_15275 = ne_15261 | push_valid;
-  assign add_15269 = {1'h0, head} + {1'h0, 2'h1};
+  assign and_18118 = pop_ready & push_valid;
+  assign eq_18123 = head == tail;
+  assign ne_18107 = head != tail;
+  assign and_18124 = eq_18123 & and_18118;
+  assign or_18121 = ne_18107 | push_valid;
+  assign add_18115 = {1'h0, head} + {1'h0, 2'h1};
   assign long_buf_size_lit = 3'h2;
-  assign add_15264 = {1'h0, tail} + {1'h0, 2'h1};
-  assign popped = pop_ready & or_15275;
-  assign sub_15290 = slots - 2'h1;
-  assign add_15292 = slots + 2'h1;
-  assign umod_15270 = add_15269 % long_buf_size_lit;
-  assign umod_15265 = add_15264 % long_buf_size_lit;
+  assign add_18110 = {1'h0, tail} + {1'h0, 2'h1};
+  assign popped = pop_ready & or_18121;
+  assign sub_18136 = slots - 2'h1;
+  assign add_18138 = slots + 2'h1;
+  assign umod_18116 = add_18115 % long_buf_size_lit;
+  assign umod_18111 = add_18110 % long_buf_size_lit;
   assign pushed = ~is_full_bool & push_valid;
-  assign next_head_if_push = umod_15270[1:0];
-  assign did_push_occur = (can_do_push | and_15272) & push_valid & ~and_15278 & ~is_full_bool;
-  assign next_tail_if_pop = umod_15265[1:0];
-  assign did_pop_occur = (ne_15261 | and_15272) & pop_ready & ~and_15278;
-  assign sel_15294 = pushed ? (popped ? slots : add_15292) : (popped ? sub_15290 : slots);
+  assign next_head_if_push = umod_18116[1:0];
+  assign did_push_occur = (can_do_push | and_18118) & push_valid & ~and_18124 & ~is_full_bool;
+  assign next_tail_if_pop = umod_18111[1:0];
+  assign did_pop_occur = (ne_18107 | and_18118) & pop_ready & ~and_18124;
+  assign sel_18140 = pushed ? (popped ? slots : add_18138) : (popped ? sub_18136 : slots);
   always @ (posedge clk) begin
     if (reset) begin
       head <= 2'h0;
@@ -1818,16 +2073,16 @@ module fifo_for_depth_1_ty_bits_1__with_bypass_register_push(
     end else begin
       head <= did_push_occur ? next_head_if_push : head;
       tail <= did_pop_occur ? next_tail_if_pop : tail;
-      slots <= sel_15294;
-      buf__1[0] <= did_push_occur ? array_update_15301[0] : buf__1[0];
-      buf__1[1] <= did_push_occur ? array_update_15301[1] : buf__1[1];
+      slots <= sel_18140;
+      buf__1[0] <= did_push_occur ? array_update_18147[0] : buf__1[0];
+      buf__1[1] <= did_push_occur ? array_update_18147[1] : buf__1[1];
     end
   end
   assign push_ready = ~is_full_bool;
-  assign pop_valid = or_15275;
-  assign pop_data = eq_15277 ? push_data : buf__1[tail > 2'h1 ? 1'h1 : tail[0:0]];
-  for (genvar __i0 = 0; __i0 < 2; __i0 = __i0 + 1) begin : gen__array_update_15301_0
-    assign array_update_15301[__i0] = head == __i0 ? push_data : buf__1[__i0];
+  assign pop_valid = or_18121;
+  assign pop_data = eq_18123 ? push_data : buf__1[tail > 2'h1 ? 1'h1 : tail[0:0]];
+  for (genvar __i0 = 0; __i0 < 2; __i0 = __i0 + 1) begin : gen__array_update_18147_0
+    assign array_update_18147[__i0] = head == __i0 ? push_data : buf__1[__i0];
   end
 endmodule
 
@@ -1851,47 +2106,47 @@ module fifo_for_depth_1_ty___bits_8___bits_8___bits_8___bits_8____bits_96___with
   reg [127:0] buf__1[0:1];
   wire is_full_bool;
   wire can_do_push;
-  wire and_15329;
-  wire eq_15334;
-  wire ne_15318;
-  wire and_15335;
-  wire or_15332;
-  wire [2:0] add_15326;
+  wire and_18175;
+  wire eq_18180;
+  wire ne_18164;
+  wire and_18181;
+  wire or_18178;
+  wire [2:0] add_18172;
   wire [2:0] long_buf_size_lit;
-  wire [2:0] add_15321;
+  wire [2:0] add_18167;
   wire popped;
-  wire [1:0] sub_15347;
-  wire [1:0] add_15349;
-  wire [2:0] umod_15327;
-  wire [2:0] umod_15322;
+  wire [1:0] sub_18193;
+  wire [1:0] add_18195;
+  wire [2:0] umod_18173;
+  wire [2:0] umod_18168;
   wire pushed;
   wire [1:0] next_head_if_push;
   wire did_push_occur;
   wire [1:0] next_tail_if_pop;
   wire did_pop_occur;
-  wire [1:0] sel_15351;
-  wire [127:0] array_update_15358[0:1];
+  wire [1:0] sel_18197;
+  wire [127:0] array_update_18204[0:1];
   assign is_full_bool = slots == 2'h1;
   assign can_do_push = ~is_full_bool | pop_ready;
-  assign and_15329 = pop_ready & push_valid;
-  assign eq_15334 = head == tail;
-  assign ne_15318 = head != tail;
-  assign and_15335 = eq_15334 & and_15329;
-  assign or_15332 = ne_15318 | push_valid;
-  assign add_15326 = {1'h0, head} + {1'h0, 2'h1};
+  assign and_18175 = pop_ready & push_valid;
+  assign eq_18180 = head == tail;
+  assign ne_18164 = head != tail;
+  assign and_18181 = eq_18180 & and_18175;
+  assign or_18178 = ne_18164 | push_valid;
+  assign add_18172 = {1'h0, head} + {1'h0, 2'h1};
   assign long_buf_size_lit = 3'h2;
-  assign add_15321 = {1'h0, tail} + {1'h0, 2'h1};
-  assign popped = pop_ready & or_15332;
-  assign sub_15347 = slots - 2'h1;
-  assign add_15349 = slots + 2'h1;
-  assign umod_15327 = add_15326 % long_buf_size_lit;
-  assign umod_15322 = add_15321 % long_buf_size_lit;
+  assign add_18167 = {1'h0, tail} + {1'h0, 2'h1};
+  assign popped = pop_ready & or_18178;
+  assign sub_18193 = slots - 2'h1;
+  assign add_18195 = slots + 2'h1;
+  assign umod_18173 = add_18172 % long_buf_size_lit;
+  assign umod_18168 = add_18167 % long_buf_size_lit;
   assign pushed = ~is_full_bool & push_valid;
-  assign next_head_if_push = umod_15327[1:0];
-  assign did_push_occur = (can_do_push | and_15329) & push_valid & ~and_15335 & ~is_full_bool;
-  assign next_tail_if_pop = umod_15322[1:0];
-  assign did_pop_occur = (ne_15318 | and_15329) & pop_ready & ~and_15335;
-  assign sel_15351 = pushed ? (popped ? slots : add_15349) : (popped ? sub_15347 : slots);
+  assign next_head_if_push = umod_18173[1:0];
+  assign did_push_occur = (can_do_push | and_18175) & push_valid & ~and_18181 & ~is_full_bool;
+  assign next_tail_if_pop = umod_18168[1:0];
+  assign did_pop_occur = (ne_18164 | and_18175) & pop_ready & ~and_18181;
+  assign sel_18197 = pushed ? (popped ? slots : add_18195) : (popped ? sub_18193 : slots);
   always @ (posedge clk) begin
     if (reset) begin
       head <= 2'h0;
@@ -1902,16 +2157,16 @@ module fifo_for_depth_1_ty___bits_8___bits_8___bits_8___bits_8____bits_96___with
     end else begin
       head <= did_push_occur ? next_head_if_push : head;
       tail <= did_pop_occur ? next_tail_if_pop : tail;
-      slots <= sel_15351;
-      buf__1[0] <= did_push_occur ? array_update_15358[0] : buf__1[0];
-      buf__1[1] <= did_push_occur ? array_update_15358[1] : buf__1[1];
+      slots <= sel_18197;
+      buf__1[0] <= did_push_occur ? array_update_18204[0] : buf__1[0];
+      buf__1[1] <= did_push_occur ? array_update_18204[1] : buf__1[1];
     end
   end
   assign push_ready = ~is_full_bool;
-  assign pop_valid = or_15332;
-  assign pop_data = eq_15334 ? push_data : buf__1[tail > 2'h1 ? 1'h1 : tail[0:0]];
-  for (genvar __i0 = 0; __i0 < 2; __i0 = __i0 + 1) begin : gen__array_update_15358_0
-    assign array_update_15358[__i0] = head == __i0 ? push_data : buf__1[__i0];
+  assign pop_valid = or_18178;
+  assign pop_data = eq_18180 ? push_data : buf__1[tail > 2'h1 ? 1'h1 : tail[0:0]];
+  for (genvar __i0 = 0; __i0 < 2; __i0 = __i0 + 1) begin : gen__array_update_18204_0
+    assign array_update_18204[__i0] = head == __i0 ? push_data : buf__1[__i0];
   end
 endmodule
 
@@ -1935,47 +2190,47 @@ module fifo_for_depth_1_ty___bits_8___bits_8___bits_8___bits_8____bits_96___with
   reg [127:0] buf__1[0:1];
   wire is_full_bool;
   wire can_do_push;
-  wire and_15386;
-  wire eq_15391;
-  wire ne_15375;
-  wire and_15392;
-  wire or_15389;
-  wire [2:0] add_15383;
+  wire and_18232;
+  wire eq_18237;
+  wire ne_18221;
+  wire and_18238;
+  wire or_18235;
+  wire [2:0] add_18229;
   wire [2:0] long_buf_size_lit;
-  wire [2:0] add_15378;
+  wire [2:0] add_18224;
   wire popped;
-  wire [1:0] sub_15404;
-  wire [1:0] add_15406;
-  wire [2:0] umod_15384;
-  wire [2:0] umod_15379;
+  wire [1:0] sub_18250;
+  wire [1:0] add_18252;
+  wire [2:0] umod_18230;
+  wire [2:0] umod_18225;
   wire pushed;
   wire [1:0] next_head_if_push;
   wire did_push_occur;
   wire [1:0] next_tail_if_pop;
   wire did_pop_occur;
-  wire [1:0] sel_15408;
-  wire [127:0] array_update_15415[0:1];
+  wire [1:0] sel_18254;
+  wire [127:0] array_update_18261[0:1];
   assign is_full_bool = slots == 2'h1;
   assign can_do_push = ~is_full_bool | pop_ready;
-  assign and_15386 = pop_ready & push_valid;
-  assign eq_15391 = head == tail;
-  assign ne_15375 = head != tail;
-  assign and_15392 = eq_15391 & and_15386;
-  assign or_15389 = ne_15375 | push_valid;
-  assign add_15383 = {1'h0, head} + {1'h0, 2'h1};
+  assign and_18232 = pop_ready & push_valid;
+  assign eq_18237 = head == tail;
+  assign ne_18221 = head != tail;
+  assign and_18238 = eq_18237 & and_18232;
+  assign or_18235 = ne_18221 | push_valid;
+  assign add_18229 = {1'h0, head} + {1'h0, 2'h1};
   assign long_buf_size_lit = 3'h2;
-  assign add_15378 = {1'h0, tail} + {1'h0, 2'h1};
-  assign popped = pop_ready & or_15389;
-  assign sub_15404 = slots - 2'h1;
-  assign add_15406 = slots + 2'h1;
-  assign umod_15384 = add_15383 % long_buf_size_lit;
-  assign umod_15379 = add_15378 % long_buf_size_lit;
+  assign add_18224 = {1'h0, tail} + {1'h0, 2'h1};
+  assign popped = pop_ready & or_18235;
+  assign sub_18250 = slots - 2'h1;
+  assign add_18252 = slots + 2'h1;
+  assign umod_18230 = add_18229 % long_buf_size_lit;
+  assign umod_18225 = add_18224 % long_buf_size_lit;
   assign pushed = ~is_full_bool & push_valid;
-  assign next_head_if_push = umod_15384[1:0];
-  assign did_push_occur = (can_do_push | and_15386) & push_valid & ~and_15392 & ~is_full_bool;
-  assign next_tail_if_pop = umod_15379[1:0];
-  assign did_pop_occur = (ne_15375 | and_15386) & pop_ready & ~and_15392;
-  assign sel_15408 = pushed ? (popped ? slots : add_15406) : (popped ? sub_15404 : slots);
+  assign next_head_if_push = umod_18230[1:0];
+  assign did_push_occur = (can_do_push | and_18232) & push_valid & ~and_18238 & ~is_full_bool;
+  assign next_tail_if_pop = umod_18225[1:0];
+  assign did_pop_occur = (ne_18221 | and_18232) & pop_ready & ~and_18238;
+  assign sel_18254 = pushed ? (popped ? slots : add_18252) : (popped ? sub_18250 : slots);
   always @ (posedge clk) begin
     if (reset) begin
       head <= 2'h0;
@@ -1986,16 +2241,16 @@ module fifo_for_depth_1_ty___bits_8___bits_8___bits_8___bits_8____bits_96___with
     end else begin
       head <= did_push_occur ? next_head_if_push : head;
       tail <= did_pop_occur ? next_tail_if_pop : tail;
-      slots <= sel_15408;
-      buf__1[0] <= did_push_occur ? array_update_15415[0] : buf__1[0];
-      buf__1[1] <= did_push_occur ? array_update_15415[1] : buf__1[1];
+      slots <= sel_18254;
+      buf__1[0] <= did_push_occur ? array_update_18261[0] : buf__1[0];
+      buf__1[1] <= did_push_occur ? array_update_18261[1] : buf__1[1];
     end
   end
   assign push_ready = ~is_full_bool;
-  assign pop_valid = or_15389;
-  assign pop_data = eq_15391 ? push_data : buf__1[tail > 2'h1 ? 1'h1 : tail[0:0]];
-  for (genvar __i0 = 0; __i0 < 2; __i0 = __i0 + 1) begin : gen__array_update_15415_0
-    assign array_update_15415[__i0] = head == __i0 ? push_data : buf__1[__i0];
+  assign pop_valid = or_18235;
+  assign pop_data = eq_18237 ? push_data : buf__1[tail > 2'h1 ? 1'h1 : tail[0:0]];
+  for (genvar __i0 = 0; __i0 < 2; __i0 = __i0 + 1) begin : gen__array_update_18261_0
+    assign array_update_18261[__i0] = head == __i0 ? push_data : buf__1[__i0];
   end
 endmodule
 
@@ -2019,47 +2274,47 @@ module fifo_for_depth_1_ty___bits_8___bits_8___bits_8___bits_8____bits_96___with
   reg [127:0] buf__1[0:1];
   wire is_full_bool;
   wire can_do_push;
-  wire and_15443;
-  wire eq_15448;
-  wire ne_15432;
-  wire and_15449;
-  wire or_15446;
-  wire [2:0] add_15440;
+  wire and_18289;
+  wire eq_18294;
+  wire ne_18278;
+  wire and_18295;
+  wire or_18292;
+  wire [2:0] add_18286;
   wire [2:0] long_buf_size_lit;
-  wire [2:0] add_15435;
+  wire [2:0] add_18281;
   wire popped;
-  wire [1:0] sub_15461;
-  wire [1:0] add_15463;
-  wire [2:0] umod_15441;
-  wire [2:0] umod_15436;
+  wire [1:0] sub_18307;
+  wire [1:0] add_18309;
+  wire [2:0] umod_18287;
+  wire [2:0] umod_18282;
   wire pushed;
   wire [1:0] next_head_if_push;
   wire did_push_occur;
   wire [1:0] next_tail_if_pop;
   wire did_pop_occur;
-  wire [1:0] sel_15465;
-  wire [127:0] array_update_15472[0:1];
+  wire [1:0] sel_18311;
+  wire [127:0] array_update_18318[0:1];
   assign is_full_bool = slots == 2'h1;
   assign can_do_push = ~is_full_bool | pop_ready;
-  assign and_15443 = pop_ready & push_valid;
-  assign eq_15448 = head == tail;
-  assign ne_15432 = head != tail;
-  assign and_15449 = eq_15448 & and_15443;
-  assign or_15446 = ne_15432 | push_valid;
-  assign add_15440 = {1'h0, head} + {1'h0, 2'h1};
+  assign and_18289 = pop_ready & push_valid;
+  assign eq_18294 = head == tail;
+  assign ne_18278 = head != tail;
+  assign and_18295 = eq_18294 & and_18289;
+  assign or_18292 = ne_18278 | push_valid;
+  assign add_18286 = {1'h0, head} + {1'h0, 2'h1};
   assign long_buf_size_lit = 3'h2;
-  assign add_15435 = {1'h0, tail} + {1'h0, 2'h1};
-  assign popped = pop_ready & or_15446;
-  assign sub_15461 = slots - 2'h1;
-  assign add_15463 = slots + 2'h1;
-  assign umod_15441 = add_15440 % long_buf_size_lit;
-  assign umod_15436 = add_15435 % long_buf_size_lit;
+  assign add_18281 = {1'h0, tail} + {1'h0, 2'h1};
+  assign popped = pop_ready & or_18292;
+  assign sub_18307 = slots - 2'h1;
+  assign add_18309 = slots + 2'h1;
+  assign umod_18287 = add_18286 % long_buf_size_lit;
+  assign umod_18282 = add_18281 % long_buf_size_lit;
   assign pushed = ~is_full_bool & push_valid;
-  assign next_head_if_push = umod_15441[1:0];
-  assign did_push_occur = (can_do_push | and_15443) & push_valid & ~and_15449 & ~is_full_bool;
-  assign next_tail_if_pop = umod_15436[1:0];
-  assign did_pop_occur = (ne_15432 | and_15443) & pop_ready & ~and_15449;
-  assign sel_15465 = pushed ? (popped ? slots : add_15463) : (popped ? sub_15461 : slots);
+  assign next_head_if_push = umod_18287[1:0];
+  assign did_push_occur = (can_do_push | and_18289) & push_valid & ~and_18295 & ~is_full_bool;
+  assign next_tail_if_pop = umod_18282[1:0];
+  assign did_pop_occur = (ne_18278 | and_18289) & pop_ready & ~and_18295;
+  assign sel_18311 = pushed ? (popped ? slots : add_18309) : (popped ? sub_18307 : slots);
   always @ (posedge clk) begin
     if (reset) begin
       head <= 2'h0;
@@ -2070,16 +2325,16 @@ module fifo_for_depth_1_ty___bits_8___bits_8___bits_8___bits_8____bits_96___with
     end else begin
       head <= did_push_occur ? next_head_if_push : head;
       tail <= did_pop_occur ? next_tail_if_pop : tail;
-      slots <= sel_15465;
-      buf__1[0] <= did_push_occur ? array_update_15472[0] : buf__1[0];
-      buf__1[1] <= did_push_occur ? array_update_15472[1] : buf__1[1];
+      slots <= sel_18311;
+      buf__1[0] <= did_push_occur ? array_update_18318[0] : buf__1[0];
+      buf__1[1] <= did_push_occur ? array_update_18318[1] : buf__1[1];
     end
   end
   assign push_ready = ~is_full_bool;
-  assign pop_valid = or_15446;
-  assign pop_data = eq_15448 ? push_data : buf__1[tail > 2'h1 ? 1'h1 : tail[0:0]];
-  for (genvar __i0 = 0; __i0 < 2; __i0 = __i0 + 1) begin : gen__array_update_15472_0
-    assign array_update_15472[__i0] = head == __i0 ? push_data : buf__1[__i0];
+  assign pop_valid = or_18292;
+  assign pop_data = eq_18294 ? push_data : buf__1[tail > 2'h1 ? 1'h1 : tail[0:0]];
+  for (genvar __i0 = 0; __i0 < 2; __i0 = __i0 + 1) begin : gen__array_update_18318_0
+    assign array_update_18318[__i0] = head == __i0 ? push_data : buf__1[__i0];
   end
 endmodule
 
@@ -2103,47 +2358,47 @@ module fifo_for_depth_1_ty___bits_8___bits_8___bits_8___bits_8____bits_96___with
   reg [127:0] buf__1[0:1];
   wire is_full_bool;
   wire can_do_push;
-  wire and_15500;
-  wire eq_15505;
-  wire ne_15489;
-  wire and_15506;
-  wire or_15503;
-  wire [2:0] add_15497;
+  wire and_18346;
+  wire eq_18351;
+  wire ne_18335;
+  wire and_18352;
+  wire or_18349;
+  wire [2:0] add_18343;
   wire [2:0] long_buf_size_lit;
-  wire [2:0] add_15492;
+  wire [2:0] add_18338;
   wire popped;
-  wire [1:0] sub_15518;
-  wire [1:0] add_15520;
-  wire [2:0] umod_15498;
-  wire [2:0] umod_15493;
+  wire [1:0] sub_18364;
+  wire [1:0] add_18366;
+  wire [2:0] umod_18344;
+  wire [2:0] umod_18339;
   wire pushed;
   wire [1:0] next_head_if_push;
   wire did_push_occur;
   wire [1:0] next_tail_if_pop;
   wire did_pop_occur;
-  wire [1:0] sel_15522;
-  wire [127:0] array_update_15529[0:1];
+  wire [1:0] sel_18368;
+  wire [127:0] array_update_18375[0:1];
   assign is_full_bool = slots == 2'h1;
   assign can_do_push = ~is_full_bool | pop_ready;
-  assign and_15500 = pop_ready & push_valid;
-  assign eq_15505 = head == tail;
-  assign ne_15489 = head != tail;
-  assign and_15506 = eq_15505 & and_15500;
-  assign or_15503 = ne_15489 | push_valid;
-  assign add_15497 = {1'h0, head} + {1'h0, 2'h1};
+  assign and_18346 = pop_ready & push_valid;
+  assign eq_18351 = head == tail;
+  assign ne_18335 = head != tail;
+  assign and_18352 = eq_18351 & and_18346;
+  assign or_18349 = ne_18335 | push_valid;
+  assign add_18343 = {1'h0, head} + {1'h0, 2'h1};
   assign long_buf_size_lit = 3'h2;
-  assign add_15492 = {1'h0, tail} + {1'h0, 2'h1};
-  assign popped = pop_ready & or_15503;
-  assign sub_15518 = slots - 2'h1;
-  assign add_15520 = slots + 2'h1;
-  assign umod_15498 = add_15497 % long_buf_size_lit;
-  assign umod_15493 = add_15492 % long_buf_size_lit;
+  assign add_18338 = {1'h0, tail} + {1'h0, 2'h1};
+  assign popped = pop_ready & or_18349;
+  assign sub_18364 = slots - 2'h1;
+  assign add_18366 = slots + 2'h1;
+  assign umod_18344 = add_18343 % long_buf_size_lit;
+  assign umod_18339 = add_18338 % long_buf_size_lit;
   assign pushed = ~is_full_bool & push_valid;
-  assign next_head_if_push = umod_15498[1:0];
-  assign did_push_occur = (can_do_push | and_15500) & push_valid & ~and_15506 & ~is_full_bool;
-  assign next_tail_if_pop = umod_15493[1:0];
-  assign did_pop_occur = (ne_15489 | and_15500) & pop_ready & ~and_15506;
-  assign sel_15522 = pushed ? (popped ? slots : add_15520) : (popped ? sub_15518 : slots);
+  assign next_head_if_push = umod_18344[1:0];
+  assign did_push_occur = (can_do_push | and_18346) & push_valid & ~and_18352 & ~is_full_bool;
+  assign next_tail_if_pop = umod_18339[1:0];
+  assign did_pop_occur = (ne_18335 | and_18346) & pop_ready & ~and_18352;
+  assign sel_18368 = pushed ? (popped ? slots : add_18366) : (popped ? sub_18364 : slots);
   always @ (posedge clk) begin
     if (reset) begin
       head <= 2'h0;
@@ -2154,16 +2409,16 @@ module fifo_for_depth_1_ty___bits_8___bits_8___bits_8___bits_8____bits_96___with
     end else begin
       head <= did_push_occur ? next_head_if_push : head;
       tail <= did_pop_occur ? next_tail_if_pop : tail;
-      slots <= sel_15522;
-      buf__1[0] <= did_push_occur ? array_update_15529[0] : buf__1[0];
-      buf__1[1] <= did_push_occur ? array_update_15529[1] : buf__1[1];
+      slots <= sel_18368;
+      buf__1[0] <= did_push_occur ? array_update_18375[0] : buf__1[0];
+      buf__1[1] <= did_push_occur ? array_update_18375[1] : buf__1[1];
     end
   end
   assign push_ready = ~is_full_bool;
-  assign pop_valid = or_15503;
-  assign pop_data = eq_15505 ? push_data : buf__1[tail > 2'h1 ? 1'h1 : tail[0:0]];
-  for (genvar __i0 = 0; __i0 < 2; __i0 = __i0 + 1) begin : gen__array_update_15529_0
-    assign array_update_15529[__i0] = head == __i0 ? push_data : buf__1[__i0];
+  assign pop_valid = or_18349;
+  assign pop_data = eq_18351 ? push_data : buf__1[tail > 2'h1 ? 1'h1 : tail[0:0]];
+  for (genvar __i0 = 0; __i0 < 2; __i0 = __i0 + 1) begin : gen__array_update_18375_0
+    assign array_update_18375[__i0] = head == __i0 ? push_data : buf__1[__i0];
   end
 endmodule
 
@@ -2187,47 +2442,47 @@ module fifo_for_depth_1_ty___bits_8___bits_8___bits_8___bits_8____bits_96___with
   reg [127:0] buf__1[0:1];
   wire is_full_bool;
   wire can_do_push;
-  wire and_15557;
-  wire eq_15562;
-  wire ne_15546;
-  wire and_15563;
-  wire or_15560;
-  wire [2:0] add_15554;
+  wire and_18403;
+  wire eq_18408;
+  wire ne_18392;
+  wire and_18409;
+  wire or_18406;
+  wire [2:0] add_18400;
   wire [2:0] long_buf_size_lit;
-  wire [2:0] add_15549;
+  wire [2:0] add_18395;
   wire popped;
-  wire [1:0] sub_15575;
-  wire [1:0] add_15577;
-  wire [2:0] umod_15555;
-  wire [2:0] umod_15550;
+  wire [1:0] sub_18421;
+  wire [1:0] add_18423;
+  wire [2:0] umod_18401;
+  wire [2:0] umod_18396;
   wire pushed;
   wire [1:0] next_head_if_push;
   wire did_push_occur;
   wire [1:0] next_tail_if_pop;
   wire did_pop_occur;
-  wire [1:0] sel_15579;
-  wire [127:0] array_update_15586[0:1];
+  wire [1:0] sel_18425;
+  wire [127:0] array_update_18432[0:1];
   assign is_full_bool = slots == 2'h1;
   assign can_do_push = ~is_full_bool | pop_ready;
-  assign and_15557 = pop_ready & push_valid;
-  assign eq_15562 = head == tail;
-  assign ne_15546 = head != tail;
-  assign and_15563 = eq_15562 & and_15557;
-  assign or_15560 = ne_15546 | push_valid;
-  assign add_15554 = {1'h0, head} + {1'h0, 2'h1};
+  assign and_18403 = pop_ready & push_valid;
+  assign eq_18408 = head == tail;
+  assign ne_18392 = head != tail;
+  assign and_18409 = eq_18408 & and_18403;
+  assign or_18406 = ne_18392 | push_valid;
+  assign add_18400 = {1'h0, head} + {1'h0, 2'h1};
   assign long_buf_size_lit = 3'h2;
-  assign add_15549 = {1'h0, tail} + {1'h0, 2'h1};
-  assign popped = pop_ready & or_15560;
-  assign sub_15575 = slots - 2'h1;
-  assign add_15577 = slots + 2'h1;
-  assign umod_15555 = add_15554 % long_buf_size_lit;
-  assign umod_15550 = add_15549 % long_buf_size_lit;
+  assign add_18395 = {1'h0, tail} + {1'h0, 2'h1};
+  assign popped = pop_ready & or_18406;
+  assign sub_18421 = slots - 2'h1;
+  assign add_18423 = slots + 2'h1;
+  assign umod_18401 = add_18400 % long_buf_size_lit;
+  assign umod_18396 = add_18395 % long_buf_size_lit;
   assign pushed = ~is_full_bool & push_valid;
-  assign next_head_if_push = umod_15555[1:0];
-  assign did_push_occur = (can_do_push | and_15557) & push_valid & ~and_15563 & ~is_full_bool;
-  assign next_tail_if_pop = umod_15550[1:0];
-  assign did_pop_occur = (ne_15546 | and_15557) & pop_ready & ~and_15563;
-  assign sel_15579 = pushed ? (popped ? slots : add_15577) : (popped ? sub_15575 : slots);
+  assign next_head_if_push = umod_18401[1:0];
+  assign did_push_occur = (can_do_push | and_18403) & push_valid & ~and_18409 & ~is_full_bool;
+  assign next_tail_if_pop = umod_18396[1:0];
+  assign did_pop_occur = (ne_18392 | and_18403) & pop_ready & ~and_18409;
+  assign sel_18425 = pushed ? (popped ? slots : add_18423) : (popped ? sub_18421 : slots);
   always @ (posedge clk) begin
     if (reset) begin
       head <= 2'h0;
@@ -2238,16 +2493,100 @@ module fifo_for_depth_1_ty___bits_8___bits_8___bits_8___bits_8____bits_96___with
     end else begin
       head <= did_push_occur ? next_head_if_push : head;
       tail <= did_pop_occur ? next_tail_if_pop : tail;
-      slots <= sel_15579;
-      buf__1[0] <= did_push_occur ? array_update_15586[0] : buf__1[0];
-      buf__1[1] <= did_push_occur ? array_update_15586[1] : buf__1[1];
+      slots <= sel_18425;
+      buf__1[0] <= did_push_occur ? array_update_18432[0] : buf__1[0];
+      buf__1[1] <= did_push_occur ? array_update_18432[1] : buf__1[1];
     end
   end
   assign push_ready = ~is_full_bool;
-  assign pop_valid = or_15560;
-  assign pop_data = eq_15562 ? push_data : buf__1[tail > 2'h1 ? 1'h1 : tail[0:0]];
-  for (genvar __i0 = 0; __i0 < 2; __i0 = __i0 + 1) begin : gen__array_update_15586_0
-    assign array_update_15586[__i0] = head == __i0 ? push_data : buf__1[__i0];
+  assign pop_valid = or_18406;
+  assign pop_data = eq_18408 ? push_data : buf__1[tail > 2'h1 ? 1'h1 : tail[0:0]];
+  for (genvar __i0 = 0; __i0 < 2; __i0 = __i0 + 1) begin : gen__array_update_18432_0
+    assign array_update_18432[__i0] = head == __i0 ? push_data : buf__1[__i0];
+  end
+endmodule
+
+
+module fifo_for_depth_1_ty___bits_8___bits_8___bits_8___bits_8____bits_96___with_bypass_register_push___5(
+  input wire clk,
+  input wire reset,
+  input wire push_valid,
+  input wire pop_ready,
+  input wire [127:0] push_data,
+  output wire push_ready,
+  output wire pop_valid,
+  output wire [127:0] pop_data
+);
+  wire [127:0] buf__1_init[0:1];
+  assign buf__1_init[0] = {{8'h00, 8'h00, 8'h00, 8'h00}, 96'h0000_0000_0000_0000_0000_0000};
+  assign buf__1_init[1] = {{8'h00, 8'h00, 8'h00, 8'h00}, 96'h0000_0000_0000_0000_0000_0000};
+  reg [1:0] head;
+  reg [1:0] tail;
+  reg [1:0] slots;
+  reg [127:0] buf__1[0:1];
+  wire is_full_bool;
+  wire can_do_push;
+  wire and_18460;
+  wire eq_18465;
+  wire ne_18449;
+  wire and_18466;
+  wire or_18463;
+  wire [2:0] add_18457;
+  wire [2:0] long_buf_size_lit;
+  wire [2:0] add_18452;
+  wire popped;
+  wire [1:0] sub_18478;
+  wire [1:0] add_18480;
+  wire [2:0] umod_18458;
+  wire [2:0] umod_18453;
+  wire pushed;
+  wire [1:0] next_head_if_push;
+  wire did_push_occur;
+  wire [1:0] next_tail_if_pop;
+  wire did_pop_occur;
+  wire [1:0] sel_18482;
+  wire [127:0] array_update_18489[0:1];
+  assign is_full_bool = slots == 2'h1;
+  assign can_do_push = ~is_full_bool | pop_ready;
+  assign and_18460 = pop_ready & push_valid;
+  assign eq_18465 = head == tail;
+  assign ne_18449 = head != tail;
+  assign and_18466 = eq_18465 & and_18460;
+  assign or_18463 = ne_18449 | push_valid;
+  assign add_18457 = {1'h0, head} + {1'h0, 2'h1};
+  assign long_buf_size_lit = 3'h2;
+  assign add_18452 = {1'h0, tail} + {1'h0, 2'h1};
+  assign popped = pop_ready & or_18463;
+  assign sub_18478 = slots - 2'h1;
+  assign add_18480 = slots + 2'h1;
+  assign umod_18458 = add_18457 % long_buf_size_lit;
+  assign umod_18453 = add_18452 % long_buf_size_lit;
+  assign pushed = ~is_full_bool & push_valid;
+  assign next_head_if_push = umod_18458[1:0];
+  assign did_push_occur = (can_do_push | and_18460) & push_valid & ~and_18466 & ~is_full_bool;
+  assign next_tail_if_pop = umod_18453[1:0];
+  assign did_pop_occur = (ne_18449 | and_18460) & pop_ready & ~and_18466;
+  assign sel_18482 = pushed ? (popped ? slots : add_18480) : (popped ? sub_18478 : slots);
+  always @ (posedge clk) begin
+    if (reset) begin
+      head <= 2'h0;
+      tail <= 2'h0;
+      slots <= 2'h0;
+      buf__1[0] <= buf__1_init[0];
+      buf__1[1] <= buf__1_init[1];
+    end else begin
+      head <= did_push_occur ? next_head_if_push : head;
+      tail <= did_pop_occur ? next_tail_if_pop : tail;
+      slots <= sel_18482;
+      buf__1[0] <= did_push_occur ? array_update_18489[0] : buf__1[0];
+      buf__1[1] <= did_push_occur ? array_update_18489[1] : buf__1[1];
+    end
+  end
+  assign push_ready = ~is_full_bool;
+  assign pop_valid = or_18463;
+  assign pop_data = eq_18465 ? push_data : buf__1[tail > 2'h1 ? 1'h1 : tail[0:0]];
+  for (genvar __i0 = 0; __i0 < 2; __i0 = __i0 + 1) begin : gen__array_update_18489_0
+    assign array_update_18489[__i0] = head == __i0 ? push_data : buf__1[__i0];
   end
 endmodule
 
@@ -2260,6 +2599,7 @@ module __phi_halo_cell__Top_0_next(
   input wire phi_halo_cell__ext_recv_vld,
   input wire phi_halo_cell__north_send_rdy,
   input wire phi_halo_cell__south_send_rdy,
+  input wire phi_halo_cell__syndrome_send_rdy,
   input wire phi_halo_cell__west_send_rdy,
   output wire [32:0] phi_halo_cell__east_send,
   output wire phi_halo_cell__east_send_vld,
@@ -2268,202 +2608,237 @@ module __phi_halo_cell__Top_0_next(
   output wire phi_halo_cell__north_send_vld,
   output wire [32:0] phi_halo_cell__south_send,
   output wire phi_halo_cell__south_send_vld,
+  output wire [32:0] phi_halo_cell__syndrome_send,
+  output wire phi_halo_cell__syndrome_send_vld,
   output wire [32:0] phi_halo_cell__west_send,
   output wire phi_halo_cell__west_send_vld
 );
-  wire instantiation_output_15054;
-  wire instantiation_output_15079;
-  wire [127:0] instantiation_output_15103;
-  wire instantiation_output_15104;
-  wire instantiation_output_15092;
-  wire [32:0] instantiation_output_15096;
-  wire instantiation_output_15097;
-  wire instantiation_output_15067;
-  wire [32:0] instantiation_output_15071;
-  wire instantiation_output_15072;
-  wire instantiation_output_15143;
-  wire [32:0] instantiation_output_15147;
-  wire instantiation_output_15148;
-  wire instantiation_output_15124;
-  wire [32:0] instantiation_output_15128;
-  wire instantiation_output_15129;
-  wire instantiation_output_15046;
-  wire instantiation_output_15047;
-  wire [127:0] instantiation_output_15059;
-  wire instantiation_output_15060;
-  wire [127:0] instantiation_output_15084;
-  wire instantiation_output_15085;
-  wire instantiation_output_15111;
-  wire [127:0] instantiation_output_15116;
-  wire instantiation_output_15117;
-  wire [127:0] instantiation_output_15135;
-  wire instantiation_output_15136;
-  wire instantiation_output_15594;
-  wire instantiation_output_15595;
-  wire instantiation_output_15596;
-  wire instantiation_output_15601;
-  wire [127:0] instantiation_output_15602;
-  wire instantiation_output_15603;
-  wire instantiation_output_15608;
-  wire [127:0] instantiation_output_15609;
-  wire instantiation_output_15610;
-  wire instantiation_output_15615;
-  wire [127:0] instantiation_output_15616;
-  wire instantiation_output_15617;
-  wire instantiation_output_15622;
-  wire [127:0] instantiation_output_15623;
-  wire instantiation_output_15624;
-  wire instantiation_output_15629;
-  wire [127:0] instantiation_output_15630;
-  wire instantiation_output_15631;
+  wire instantiation_output_17869;
+  wire instantiation_output_17894;
+  wire [127:0] instantiation_output_17918;
+  wire instantiation_output_17919;
+  wire instantiation_output_17907;
+  wire [32:0] instantiation_output_17911;
+  wire instantiation_output_17912;
+  wire instantiation_output_17882;
+  wire [32:0] instantiation_output_17886;
+  wire instantiation_output_17887;
+  wire instantiation_output_17977;
+  wire [32:0] instantiation_output_17981;
+  wire instantiation_output_17982;
+  wire instantiation_output_17939;
+  wire [32:0] instantiation_output_17943;
+  wire instantiation_output_17944;
+  wire instantiation_output_17958;
+  wire [32:0] instantiation_output_17962;
+  wire instantiation_output_17963;
+  wire instantiation_output_17861;
+  wire instantiation_output_17862;
+  wire [127:0] instantiation_output_17874;
+  wire instantiation_output_17875;
+  wire [127:0] instantiation_output_17899;
+  wire instantiation_output_17900;
+  wire instantiation_output_17926;
+  wire [127:0] instantiation_output_17931;
+  wire instantiation_output_17932;
+  wire [127:0] instantiation_output_17950;
+  wire instantiation_output_17951;
+  wire [127:0] instantiation_output_17969;
+  wire instantiation_output_17970;
+  wire instantiation_output_18497;
+  wire instantiation_output_18498;
+  wire instantiation_output_18499;
+  wire instantiation_output_18504;
+  wire [127:0] instantiation_output_18505;
+  wire instantiation_output_18506;
+  wire instantiation_output_18511;
+  wire [127:0] instantiation_output_18512;
+  wire instantiation_output_18513;
+  wire instantiation_output_18518;
+  wire [127:0] instantiation_output_18519;
+  wire instantiation_output_18520;
+  wire instantiation_output_18525;
+  wire [127:0] instantiation_output_18526;
+  wire instantiation_output_18527;
+  wire instantiation_output_18532;
+  wire [127:0] instantiation_output_18533;
+  wire instantiation_output_18534;
+  wire instantiation_output_18539;
+  wire [127:0] instantiation_output_18540;
+  wire instantiation_output_18541;
 
   // ===== Instantiations
   __axis__Top__ReservedRx_0_next __axis__Top__ReservedRx_0_next_inst0 (
     .reset(reset),
-    .phi_halo_cell__admit(instantiation_output_15595),
-    .phi_halo_cell__admit_vld(instantiation_output_15596),
+    .phi_halo_cell__admit(instantiation_output_18498),
+    .phi_halo_cell__admit_vld(instantiation_output_18499),
     .phi_halo_cell__ext_recv(phi_halo_cell__ext_recv),
     .phi_halo_cell__ext_recv_vld(phi_halo_cell__ext_recv_vld),
-    .phi_halo_cell__req_rdy(instantiation_output_15615),
-    .phi_halo_cell__admit_rdy(instantiation_output_15054),
-    .phi_halo_cell__ext_recv_rdy(instantiation_output_15079),
-    .phi_halo_cell__req(instantiation_output_15103),
-    .phi_halo_cell__req_vld(instantiation_output_15104),
+    .phi_halo_cell__req_rdy(instantiation_output_18518),
+    .phi_halo_cell__admit_rdy(instantiation_output_17869),
+    .phi_halo_cell__ext_recv_rdy(instantiation_output_17894),
+    .phi_halo_cell__req(instantiation_output_17918),
+    .phi_halo_cell__req_vld(instantiation_output_17919),
     .clk(clk)
   );
   __axis__Top__Tx_0_next __axis__Top__Tx_0_next_inst1 (
     .reset(reset),
-    .phi_halo_cell__north(instantiation_output_15609),
-    .phi_halo_cell__north_vld(instantiation_output_15610),
+    .phi_halo_cell__north(instantiation_output_18512),
+    .phi_halo_cell__north_vld(instantiation_output_18513),
     .phi_halo_cell__north_send_rdy(phi_halo_cell__north_send_rdy),
-    .phi_halo_cell__north_rdy(instantiation_output_15092),
-    .phi_halo_cell__north_send(instantiation_output_15096),
-    .phi_halo_cell__north_send_vld(instantiation_output_15097),
+    .phi_halo_cell__north_rdy(instantiation_output_17907),
+    .phi_halo_cell__north_send(instantiation_output_17911),
+    .phi_halo_cell__north_send_vld(instantiation_output_17912),
     .clk(clk)
   );
   __axis__Top__Tx_1_next __axis__Top__Tx_1_next_inst2 (
     .reset(reset),
-    .phi_halo_cell__east(instantiation_output_15602),
-    .phi_halo_cell__east_vld(instantiation_output_15603),
+    .phi_halo_cell__east(instantiation_output_18505),
+    .phi_halo_cell__east_vld(instantiation_output_18506),
     .phi_halo_cell__east_send_rdy(phi_halo_cell__east_send_rdy),
-    .phi_halo_cell__east_rdy(instantiation_output_15067),
-    .phi_halo_cell__east_send(instantiation_output_15071),
-    .phi_halo_cell__east_send_vld(instantiation_output_15072),
+    .phi_halo_cell__east_rdy(instantiation_output_17882),
+    .phi_halo_cell__east_send(instantiation_output_17886),
+    .phi_halo_cell__east_send_vld(instantiation_output_17887),
     .clk(clk)
   );
   __axis__Top__Tx_2_next __axis__Top__Tx_2_next_inst3 (
     .reset(reset),
-    .phi_halo_cell__west(instantiation_output_15630),
-    .phi_halo_cell__west_vld(instantiation_output_15631),
+    .phi_halo_cell__west(instantiation_output_18540),
+    .phi_halo_cell__west_vld(instantiation_output_18541),
     .phi_halo_cell__west_send_rdy(phi_halo_cell__west_send_rdy),
-    .phi_halo_cell__west_rdy(instantiation_output_15143),
-    .phi_halo_cell__west_send(instantiation_output_15147),
-    .phi_halo_cell__west_send_vld(instantiation_output_15148),
+    .phi_halo_cell__west_rdy(instantiation_output_17977),
+    .phi_halo_cell__west_send(instantiation_output_17981),
+    .phi_halo_cell__west_send_vld(instantiation_output_17982),
     .clk(clk)
   );
   __axis__Top__Tx_3_next __axis__Top__Tx_3_next_inst4 (
     .reset(reset),
-    .phi_halo_cell__south(instantiation_output_15623),
-    .phi_halo_cell__south_vld(instantiation_output_15624),
+    .phi_halo_cell__south(instantiation_output_18526),
+    .phi_halo_cell__south_vld(instantiation_output_18527),
     .phi_halo_cell__south_send_rdy(phi_halo_cell__south_send_rdy),
-    .phi_halo_cell__south_rdy(instantiation_output_15124),
-    .phi_halo_cell__south_send(instantiation_output_15128),
-    .phi_halo_cell__south_send_vld(instantiation_output_15129),
+    .phi_halo_cell__south_rdy(instantiation_output_17939),
+    .phi_halo_cell__south_send(instantiation_output_17943),
+    .phi_halo_cell__south_send_vld(instantiation_output_17944),
     .clk(clk)
   );
-  __phi_halo_cell__Top_0_next__1 __phi_halo_cell__Top_0_next__1_inst5 (
+  __axis__Top__Tx_4_next __axis__Top__Tx_4_next_inst5 (
+    .reset(reset),
+    .phi_halo_cell__syndrome(instantiation_output_18533),
+    .phi_halo_cell__syndrome_vld(instantiation_output_18534),
+    .phi_halo_cell__syndrome_send_rdy(phi_halo_cell__syndrome_send_rdy),
+    .phi_halo_cell__syndrome_rdy(instantiation_output_17958),
+    .phi_halo_cell__syndrome_send(instantiation_output_17962),
+    .phi_halo_cell__syndrome_send_vld(instantiation_output_17963),
+    .clk(clk)
+  );
+  __phi_halo_cell__Top_0_next__1 __phi_halo_cell__Top_0_next__1_inst6 (
     .reset(reset),
     .clk(clk)
   );
-  __phi_halo_cell__Top__Service_0_next __phi_halo_cell__Top__Service_0_next_inst6 (
+  __phi_halo_cell__Top__Service_0_next __phi_halo_cell__Top__Service_0_next_inst7 (
     .reset(reset),
-    .phi_halo_cell__admit_rdy(instantiation_output_15594),
-    .phi_halo_cell__east_rdy(instantiation_output_15601),
-    .phi_halo_cell__north_rdy(instantiation_output_15608),
-    .phi_halo_cell__req(instantiation_output_15616),
-    .phi_halo_cell__req_vld(instantiation_output_15617),
-    .phi_halo_cell__south_rdy(instantiation_output_15622),
-    .phi_halo_cell__west_rdy(instantiation_output_15629),
-    .phi_halo_cell__admit(instantiation_output_15046),
-    .phi_halo_cell__admit_vld(instantiation_output_15047),
-    .phi_halo_cell__east(instantiation_output_15059),
-    .phi_halo_cell__east_vld(instantiation_output_15060),
-    .phi_halo_cell__north(instantiation_output_15084),
-    .phi_halo_cell__north_vld(instantiation_output_15085),
-    .phi_halo_cell__req_rdy(instantiation_output_15111),
-    .phi_halo_cell__south(instantiation_output_15116),
-    .phi_halo_cell__south_vld(instantiation_output_15117),
-    .phi_halo_cell__west(instantiation_output_15135),
-    .phi_halo_cell__west_vld(instantiation_output_15136),
+    .phi_halo_cell__admit_rdy(instantiation_output_18497),
+    .phi_halo_cell__east_rdy(instantiation_output_18504),
+    .phi_halo_cell__north_rdy(instantiation_output_18511),
+    .phi_halo_cell__req(instantiation_output_18519),
+    .phi_halo_cell__req_vld(instantiation_output_18520),
+    .phi_halo_cell__south_rdy(instantiation_output_18525),
+    .phi_halo_cell__syndrome_rdy(instantiation_output_18532),
+    .phi_halo_cell__west_rdy(instantiation_output_18539),
+    .phi_halo_cell__admit(instantiation_output_17861),
+    .phi_halo_cell__admit_vld(instantiation_output_17862),
+    .phi_halo_cell__east(instantiation_output_17874),
+    .phi_halo_cell__east_vld(instantiation_output_17875),
+    .phi_halo_cell__north(instantiation_output_17899),
+    .phi_halo_cell__north_vld(instantiation_output_17900),
+    .phi_halo_cell__req_rdy(instantiation_output_17926),
+    .phi_halo_cell__south(instantiation_output_17931),
+    .phi_halo_cell__south_vld(instantiation_output_17932),
+    .phi_halo_cell__syndrome(instantiation_output_17950),
+    .phi_halo_cell__syndrome_vld(instantiation_output_17951),
+    .phi_halo_cell__west(instantiation_output_17969),
+    .phi_halo_cell__west_vld(instantiation_output_17970),
     .clk(clk)
   );
   fifo_for_depth_1_ty_bits_1__with_bypass_register_push materialized_fifo_fifo_phi_halo_cell__admit_ (
     .reset(reset),
-    .push_data(instantiation_output_15046),
-    .push_valid(instantiation_output_15047),
-    .pop_ready(instantiation_output_15054),
-    .push_ready(instantiation_output_15594),
-    .pop_data(instantiation_output_15595),
-    .pop_valid(instantiation_output_15596),
+    .push_data(instantiation_output_17861),
+    .push_valid(instantiation_output_17862),
+    .pop_ready(instantiation_output_17869),
+    .push_ready(instantiation_output_18497),
+    .pop_data(instantiation_output_18498),
+    .pop_valid(instantiation_output_18499),
     .clk(clk)
   );
   fifo_for_depth_1_ty___bits_8___bits_8___bits_8___bits_8____bits_96___with_bypass_register_push materialized_fifo_fifo_phi_halo_cell__east_ (
     .reset(reset),
-    .push_data(instantiation_output_15059),
-    .push_valid(instantiation_output_15060),
-    .pop_ready(instantiation_output_15067),
-    .push_ready(instantiation_output_15601),
-    .pop_data(instantiation_output_15602),
-    .pop_valid(instantiation_output_15603),
+    .push_data(instantiation_output_17874),
+    .push_valid(instantiation_output_17875),
+    .pop_ready(instantiation_output_17882),
+    .push_ready(instantiation_output_18504),
+    .pop_data(instantiation_output_18505),
+    .pop_valid(instantiation_output_18506),
     .clk(clk)
   );
   fifo_for_depth_1_ty___bits_8___bits_8___bits_8___bits_8____bits_96___with_bypass_register_push___1 materialized_fifo_fifo_phi_halo_cell__north_ (
     .reset(reset),
-    .push_data(instantiation_output_15084),
-    .push_valid(instantiation_output_15085),
-    .pop_ready(instantiation_output_15092),
-    .push_ready(instantiation_output_15608),
-    .pop_data(instantiation_output_15609),
-    .pop_valid(instantiation_output_15610),
+    .push_data(instantiation_output_17899),
+    .push_valid(instantiation_output_17900),
+    .pop_ready(instantiation_output_17907),
+    .push_ready(instantiation_output_18511),
+    .pop_data(instantiation_output_18512),
+    .pop_valid(instantiation_output_18513),
     .clk(clk)
   );
   fifo_for_depth_1_ty___bits_8___bits_8___bits_8___bits_8____bits_96___with_bypass_register_push___2 materialized_fifo_fifo_phi_halo_cell__req_ (
     .reset(reset),
-    .push_data(instantiation_output_15103),
-    .push_valid(instantiation_output_15104),
-    .pop_ready(instantiation_output_15111),
-    .push_ready(instantiation_output_15615),
-    .pop_data(instantiation_output_15616),
-    .pop_valid(instantiation_output_15617),
+    .push_data(instantiation_output_17918),
+    .push_valid(instantiation_output_17919),
+    .pop_ready(instantiation_output_17926),
+    .push_ready(instantiation_output_18518),
+    .pop_data(instantiation_output_18519),
+    .pop_valid(instantiation_output_18520),
     .clk(clk)
   );
   fifo_for_depth_1_ty___bits_8___bits_8___bits_8___bits_8____bits_96___with_bypass_register_push___3 materialized_fifo_fifo_phi_halo_cell__south_ (
     .reset(reset),
-    .push_data(instantiation_output_15116),
-    .push_valid(instantiation_output_15117),
-    .pop_ready(instantiation_output_15124),
-    .push_ready(instantiation_output_15622),
-    .pop_data(instantiation_output_15623),
-    .pop_valid(instantiation_output_15624),
+    .push_data(instantiation_output_17931),
+    .push_valid(instantiation_output_17932),
+    .pop_ready(instantiation_output_17939),
+    .push_ready(instantiation_output_18525),
+    .pop_data(instantiation_output_18526),
+    .pop_valid(instantiation_output_18527),
     .clk(clk)
   );
-  fifo_for_depth_1_ty___bits_8___bits_8___bits_8___bits_8____bits_96___with_bypass_register_push___4 materialized_fifo_fifo_phi_halo_cell__west_ (
+  fifo_for_depth_1_ty___bits_8___bits_8___bits_8___bits_8____bits_96___with_bypass_register_push___4 materialized_fifo_fifo_phi_halo_cell__syndrome_ (
     .reset(reset),
-    .push_data(instantiation_output_15135),
-    .push_valid(instantiation_output_15136),
-    .pop_ready(instantiation_output_15143),
-    .push_ready(instantiation_output_15629),
-    .pop_data(instantiation_output_15630),
-    .pop_valid(instantiation_output_15631),
+    .push_data(instantiation_output_17950),
+    .push_valid(instantiation_output_17951),
+    .pop_ready(instantiation_output_17958),
+    .push_ready(instantiation_output_18532),
+    .pop_data(instantiation_output_18533),
+    .pop_valid(instantiation_output_18534),
     .clk(clk)
   );
-  assign phi_halo_cell__east_send = instantiation_output_15071;
-  assign phi_halo_cell__east_send_vld = instantiation_output_15072;
-  assign phi_halo_cell__ext_recv_rdy = instantiation_output_15079;
-  assign phi_halo_cell__north_send = instantiation_output_15096;
-  assign phi_halo_cell__north_send_vld = instantiation_output_15097;
-  assign phi_halo_cell__south_send = instantiation_output_15128;
-  assign phi_halo_cell__south_send_vld = instantiation_output_15129;
-  assign phi_halo_cell__west_send = instantiation_output_15147;
-  assign phi_halo_cell__west_send_vld = instantiation_output_15148;
+  fifo_for_depth_1_ty___bits_8___bits_8___bits_8___bits_8____bits_96___with_bypass_register_push___5 materialized_fifo_fifo_phi_halo_cell__west_ (
+    .reset(reset),
+    .push_data(instantiation_output_17969),
+    .push_valid(instantiation_output_17970),
+    .pop_ready(instantiation_output_17977),
+    .push_ready(instantiation_output_18539),
+    .pop_data(instantiation_output_18540),
+    .pop_valid(instantiation_output_18541),
+    .clk(clk)
+  );
+  assign phi_halo_cell__east_send = instantiation_output_17886;
+  assign phi_halo_cell__east_send_vld = instantiation_output_17887;
+  assign phi_halo_cell__ext_recv_rdy = instantiation_output_17894;
+  assign phi_halo_cell__north_send = instantiation_output_17911;
+  assign phi_halo_cell__north_send_vld = instantiation_output_17912;
+  assign phi_halo_cell__south_send = instantiation_output_17943;
+  assign phi_halo_cell__south_send_vld = instantiation_output_17944;
+  assign phi_halo_cell__syndrome_send = instantiation_output_17962;
+  assign phi_halo_cell__syndrome_send_vld = instantiation_output_17963;
+  assign phi_halo_cell__west_send = instantiation_output_17981;
+  assign phi_halo_cell__west_send_vld = instantiation_output_17982;
 endmodule

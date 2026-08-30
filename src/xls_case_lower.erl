@@ -164,7 +164,7 @@ merge_shape(Left, Right, Line) ->
 lower_chain([
     {Line, Pattern, Guards, Body} | Rest
 ], Argument, Subject, BranchBase) ->
-    {PatternState, PatternConditions0} = xls_pattern_lower:compile(
+    {PatternState, PatternConditions0} = xls_pattern_lower:lower(
         [Pattern],
         [Argument],
         BranchBase

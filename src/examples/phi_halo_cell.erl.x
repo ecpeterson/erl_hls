@@ -13,12 +13,18 @@ pub enum Tag : u8 {
   PHI = u8:3,
   ANYON_MOVE = u8:4,
   PHI0 = u8:5,
+  PHENOM_CONFIG = u8:6,
+  PHENOM_REQUEST = u8:7,
+  PHENOM_QUERY = u8:8,
+  PHENOM_DATA = u8:9,
+  PHENOM_ANYON = u8:10,
 }
 
 enum Phase : u8 {
-  GATHERING = u8:0,
-  COMPARING = u8:1,
-  FLIPPING = u8:2,
+  MEASURING = u8:0,
+  GATHERING = u8:1,
+  COMPARING = u8:2,
+  FLIPPING = u8:3,
 }
 
 enum Directive : u2 {
@@ -77,6 +83,86 @@ fn bits_from_phi0(s: Phi0) -> bits[bit_count<Phi0>()] {
   (s.value as bits[32]) ++ (s.source as bits[32]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
 }
 
+struct Phenomconfig {
+  seed : u32,
+  threshold : u32,
+}
+
+fn phenomconfig_from_bits<N: u32>(raw: bits[N]) -> Phenomconfig {
+  Phenomconfig {
+    seed: raw[0:32] as u32,
+    threshold: raw[32:64] as u32,
+  }
+}
+
+fn bits_from_phenomconfig(s: Phenomconfig) -> bits[bit_count<Phenomconfig>()] {
+  (s.threshold as bits[32]) ++ (s.seed as bits[32]) ++  zero!<bits[0]>()
+}
+
+struct Phenomrequest {
+  step : u32,
+}
+
+fn phenomrequest_from_bits<N: u32>(raw: bits[N]) -> Phenomrequest {
+  Phenomrequest {
+    step: raw[0:32] as u32,
+  }
+}
+
+fn bits_from_phenomrequest(s: Phenomrequest) -> bits[bit_count<Phenomrequest>()] {
+  (s.step as bits[32]) ++  zero!<bits[0]>()
+}
+
+struct Phenomquery {
+  step : u32,
+  source : u32,
+}
+
+fn phenomquery_from_bits<N: u32>(raw: bits[N]) -> Phenomquery {
+  Phenomquery {
+    step: raw[0:32] as u32,
+    source: raw[32:64] as u32,
+  }
+}
+
+fn bits_from_phenomquery(s: Phenomquery) -> bits[bit_count<Phenomquery>()] {
+  (s.source as bits[32]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
+}
+
+struct Phenomdata {
+  step : u32,
+  source : u32,
+  present : u32,
+}
+
+fn phenomdata_from_bits<N: u32>(raw: bits[N]) -> Phenomdata {
+  Phenomdata {
+    step: raw[0:32] as u32,
+    source: raw[32:64] as u32,
+    present: raw[64:96] as u32,
+  }
+}
+
+fn bits_from_phenomdata(s: Phenomdata) -> bits[bit_count<Phenomdata>()] {
+  (s.present as bits[32]) ++ (s.source as bits[32]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
+}
+
+struct Phenomanyon {
+  step : u32,
+  present : u32,
+}
+
+fn phenomanyon_from_bits<N: u32>(raw: bits[N]) -> Phenomanyon {
+  Phenomanyon {
+    step: raw[0:32] as u32,
+    present: raw[32:64] as u32,
+  }
+}
+
+fn bits_from_phenomanyon(s: Phenomanyon) -> bits[bit_count<Phenomanyon>()] {
+  (s.present as bits[32]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
+}
+
 struct Cell {
   step : u32,
   diffusion_round : u32,
@@ -120,6 +206,8 @@ struct EntryEffects {
   west: axis::Frame,
   south_valid: u1,
   south: axis::Frame,
+  syndrome_valid: u1,
+  syndrome: axis::Frame,
 }
 
 struct MailboxSlot {
@@ -146,7 +234,7 @@ let _0 = Cell {
   ..zero!<Cell>()
 };
 let _1 = (Tag::CELL, _0);
-let _2 = (Phase::GATHERING, _1, );
+let _2 = (Phase::MEASURING, _1, );
 let _3 = if (bool:false) {
     zero!<Machine>()
 } else {
@@ -163,6 +251,60 @@ let _3 = if (bool:false) {
 
 fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
   match phase {
+    Phase::MEASURING => {
+      let entered_data = {
+        let _OldPhase_1 = old_phase;
+        let __1 = phase;
+        let Cell_1 = (Tag::CELL, data);
+        let _0 = Cell_1.1.step;
+        let _1 = Phenomrequest {
+          step: _0,
+          ..zero!<Phenomrequest>()
+        };
+        let _2 = (Tag::PHENOM_REQUEST, _1, bits_from_phenomrequest(_1));
+        let Request_1 = _2;
+        let _3 = if (bool:false) {
+            data
+        } else {
+            Cell_1.1
+        };
+        _3
+      };
+      let north = zero!<axis::Frame>();
+      let east = zero!<axis::Frame>();
+      let west = zero!<axis::Frame>();
+      let south = zero!<axis::Frame>();
+      let syndrome = {
+        let _OldPhase_1 = old_phase;
+        let __1 = phase;
+        let Cell_1 = (Tag::CELL, data);
+        let _0 = Cell_1.1.step;
+        let _1 = Phenomrequest {
+          step: _0,
+          ..zero!<Phenomrequest>()
+        };
+        let _2 = (Tag::PHENOM_REQUEST, _1, bits_from_phenomrequest(_1));
+        let Request_1 = _2;
+        let _3 = if (bool:false) {
+            zero!<axis::Frame>()
+        } else {
+            axis::pack(Request_1.0 as u8, Request_1.2)
+        };
+        _3
+      };
+      (entered_data, EntryEffects {
+        north_valid: u1:0,
+        north: north,
+        east_valid: u1:0,
+        east: east,
+        west_valid: u1:0,
+        west: west,
+        south_valid: u1:0,
+        south: south,
+        syndrome_valid: u1:1,
+        syndrome: syndrome,
+      })
+    },
     Phase::GATHERING => {
       let entered_data = {
         let _OldPhase_1 = old_phase;
@@ -289,6 +431,7 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
         };
         _8
       };
+      let syndrome = zero!<axis::Frame>();
       (entered_data, EntryEffects {
         north_valid: u1:1,
         north: north,
@@ -298,6 +441,8 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
         west: west,
         south_valid: u1:1,
         south: south,
+        syndrome_valid: u1:0,
+        syndrome: syndrome,
       })
     },
     Phase::COMPARING => {
@@ -431,6 +576,7 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
         };
         _7
       };
+      let syndrome = zero!<axis::Frame>();
       (entered_data, EntryEffects {
         north_valid: u1:1,
         north: north,
@@ -440,6 +586,8 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
         west: west,
         south_valid: u1:1,
         south: south,
+        syndrome_valid: u1:0,
+        syndrome: syndrome,
       })
     },
     Phase::FLIPPING => {
@@ -883,6 +1031,7 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
         };
         _27
       };
+      let syndrome = zero!<axis::Frame>();
       (entered_data, EntryEffects {
         north_valid: u1:1,
         north: north,
@@ -892,6 +1041,8 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
         west: west,
         south_valid: u1:1,
         south: south,
+        syndrome_valid: u1:0,
+        syndrome: syndrome,
       })
     },
   }
@@ -902,6 +1053,34 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
     Tag::PHI => {
       let message = phi_from_bits(frame.payload);
       match phase {
+        Phase::MEASURING => {
+          let Xls_clause_1_Epoch_1 = message.epoch;
+          let Xls_clause_1_Cell_1 = (Tag::CELL, data);
+          let Xls_clause_1_Step_1 = data.step;
+          let _0 = Xls_clause_1_Step_1 * 2;
+          let _1 = _0 & 4294967295;
+          let _2 = Xls_clause_1_Epoch_1 == _1;
+          if _2 {
+            let _3 = (Phase::MEASURING, Xls_clause_1_Cell_1, Directive::POSTPONE, bool:0, );
+            if (bool:false) {
+              (phase, data, Directive::FAIL, u1:0)
+            } else {
+              (_3.0, _3.1.1, _3.2, _3.3)
+            }
+          } else {
+            let Xls_clause_2_Cell_1 = (Tag::CELL, data);
+            if bool:true {
+              let _0 = (Phase::MEASURING, Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
+              if (bool:false) {
+                (phase, data, Directive::FAIL, u1:0)
+              } else {
+                (_0.0, _0.1.1, _0.2, _0.3)
+              }
+            } else {
+              (phase, data, Directive::FAIL, u1:0)
+            }
+          }
+        },
         Phase::GATHERING => {
           let Xls_clause_1_Epoch_1 = message.epoch;
           let Xls_clause_1_Values_1 = message.values;
@@ -1112,6 +1291,19 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
     Tag::ANYON_MOVE => {
       let message = anyonmove_from_bits(frame.payload);
       match phase {
+        Phase::MEASURING => {
+          let Xls_clause_1_Cell_1 = (Tag::CELL, data);
+          if bool:true {
+            let _0 = (Phase::MEASURING, Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
+            if (bool:false) {
+              (phase, data, Directive::FAIL, u1:0)
+            } else {
+              (_0.0, _0.1.1, _0.2, _0.3)
+            }
+          } else {
+            (phase, data, Directive::FAIL, u1:0)
+          }
+        },
         Phase::GATHERING => {
           let Xls_clause_1_Step_1 = message.step;
           let Xls_clause_1_Cell_1 = (Tag::CELL, data);
@@ -1193,7 +1385,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
               };
               let _11 = (Tag::CELL, _10);
               let Xls_clause_1_Advanced_1 = _11;
-              let _12 = (Phase::GATHERING, Xls_clause_1_Advanced_1, Directive::CONSUME, bool:0, );
+              let _12 = (Phase::MEASURING, Xls_clause_1_Advanced_1, Directive::CONSUME, bool:0, );
               (_12, bool:false)
             } else {
               let _7 = Cell {
@@ -1233,6 +1425,19 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
     Tag::PHI0 => {
       let message = phi0_from_bits(frame.payload);
       match phase {
+        Phase::MEASURING => {
+          let Xls_clause_1_Cell_1 = (Tag::CELL, data);
+          if bool:true {
+            let _0 = (Phase::MEASURING, Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
+            if (bool:false) {
+              (phase, data, Directive::FAIL, u1:0)
+            } else {
+              (_0.0, _0.1.1, _0.2, _0.3)
+            }
+          } else {
+            (phase, data, Directive::FAIL, u1:0)
+          }
+        },
         Phase::GATHERING => {
           let Xls_clause_1_Step_1 = message.step;
           let Xls_clause_1_Cell_1 = (Tag::CELL, data);
@@ -1376,6 +1581,161 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
         _ => (phase, data, Directive::FAIL, u1:0),
       }
     },
+    Tag::PHENOM_CONFIG => {
+      let message = phenomconfig_from_bits(frame.payload);
+      match phase {
+        _ => (phase, data, Directive::FAIL, u1:0),
+      }
+    },
+    Tag::PHENOM_REQUEST => {
+      let message = phenomrequest_from_bits(frame.payload);
+      match phase {
+        _ => (phase, data, Directive::FAIL, u1:0),
+      }
+    },
+    Tag::PHENOM_QUERY => {
+      let message = phenomquery_from_bits(frame.payload);
+      match phase {
+        _ => (phase, data, Directive::FAIL, u1:0),
+      }
+    },
+    Tag::PHENOM_DATA => {
+      let message = phenomdata_from_bits(frame.payload);
+      match phase {
+        _ => (phase, data, Directive::FAIL, u1:0),
+      }
+    },
+    Tag::PHENOM_ANYON => {
+      let message = phenomanyon_from_bits(frame.payload);
+      match phase {
+        Phase::MEASURING => {
+          let Xls_clause_1_Step_1 = message.step;
+          let Xls_clause_1_Present_1 = message.present;
+          let Xls_clause_1_Cell_1 = (Tag::CELL, data);
+          let _1 = if Xls_clause_1_Step_1 == data.step {
+            let _0 = Xls_clause_1_Present_1 < 2;
+            (_0, bool:false)
+          } else {
+            (bool:0, bool:false)
+          };
+          let case_match_1_1 = bool:false;
+          let case_match_1_2 = _1.1;
+          if _1.0 {
+            let _2 = Xls_clause_1_Cell_1.1.anyon;
+            let _3 = _2 ^ Xls_clause_1_Present_1;
+            let _4 = Cell {
+              anyon: _3,
+              ..(Xls_clause_1_Cell_1).1
+            };
+            let _5 = (Tag::CELL, _4);
+            let Xls_clause_1_Updated_1 = _5;
+            let _6 = (Phase::GATHERING, Xls_clause_1_Updated_1, Directive::CONSUME, bool:0, );
+            if (bool:false) {
+              (phase, data, Directive::FAIL, u1:0)
+            } else {
+              (_6.0, _6.1.1, _6.2, _6.3)
+            }
+          } else {
+            let Xls_clause_2_Cell_1 = (Tag::CELL, data);
+            if bool:true {
+              let _0 = (Phase::MEASURING, Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
+              if (bool:false) {
+                (phase, data, Directive::FAIL, u1:0)
+              } else {
+                (_0.0, _0.1.1, _0.2, _0.3)
+              }
+            } else {
+              (phase, data, Directive::FAIL, u1:0)
+            }
+          }
+        },
+        Phase::GATHERING => {
+          let Xls_clause_1_EventStep_1 = message.step;
+          let Xls_clause_1_Cell_1 = (Tag::CELL, data);
+          let Xls_clause_1_Step_1 = data.step;
+          let _0 = Xls_clause_1_Step_1 + 1;
+          let _1 = _0 & 4294967295;
+          let _2 = Xls_clause_1_EventStep_1 == _1;
+          if _2 {
+            let _3 = (Phase::GATHERING, Xls_clause_1_Cell_1, Directive::POSTPONE, bool:0, );
+            if (bool:false) {
+              (phase, data, Directive::FAIL, u1:0)
+            } else {
+              (_3.0, _3.1.1, _3.2, _3.3)
+            }
+          } else {
+            let Xls_clause_2_Cell_1 = (Tag::CELL, data);
+            if bool:true {
+              let _0 = (Phase::GATHERING, Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
+              if (bool:false) {
+                (phase, data, Directive::FAIL, u1:0)
+              } else {
+                (_0.0, _0.1.1, _0.2, _0.3)
+              }
+            } else {
+              (phase, data, Directive::FAIL, u1:0)
+            }
+          }
+        },
+        Phase::COMPARING => {
+          let Xls_clause_1_EventStep_1 = message.step;
+          let Xls_clause_1_Cell_1 = (Tag::CELL, data);
+          let Xls_clause_1_Step_1 = data.step;
+          let _0 = Xls_clause_1_Step_1 + 1;
+          let _1 = _0 & 4294967295;
+          let _2 = Xls_clause_1_EventStep_1 == _1;
+          if _2 {
+            let _3 = (Phase::COMPARING, Xls_clause_1_Cell_1, Directive::POSTPONE, bool:0, );
+            if (bool:false) {
+              (phase, data, Directive::FAIL, u1:0)
+            } else {
+              (_3.0, _3.1.1, _3.2, _3.3)
+            }
+          } else {
+            let Xls_clause_2_Cell_1 = (Tag::CELL, data);
+            if bool:true {
+              let _0 = (Phase::COMPARING, Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
+              if (bool:false) {
+                (phase, data, Directive::FAIL, u1:0)
+              } else {
+                (_0.0, _0.1.1, _0.2, _0.3)
+              }
+            } else {
+              (phase, data, Directive::FAIL, u1:0)
+            }
+          }
+        },
+        Phase::FLIPPING => {
+          let Xls_clause_1_EventStep_1 = message.step;
+          let Xls_clause_1_Cell_1 = (Tag::CELL, data);
+          let Xls_clause_1_Step_1 = data.step;
+          let _0 = Xls_clause_1_Step_1 + 1;
+          let _1 = _0 & 4294967295;
+          let _2 = Xls_clause_1_EventStep_1 == _1;
+          if _2 {
+            let _3 = (Phase::FLIPPING, Xls_clause_1_Cell_1, Directive::POSTPONE, bool:0, );
+            if (bool:false) {
+              (phase, data, Directive::FAIL, u1:0)
+            } else {
+              (_3.0, _3.1.1, _3.2, _3.3)
+            }
+          } else {
+            let Xls_clause_2_Cell_1 = (Tag::CELL, data);
+            if bool:true {
+              let _0 = (Phase::FLIPPING, Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
+              if (bool:false) {
+                (phase, data, Directive::FAIL, u1:0)
+              } else {
+                (_0.0, _0.1.1, _0.2, _0.3)
+              }
+            } else {
+              (phase, data, Directive::FAIL, u1:0)
+            }
+          }
+        },
+        _ => (phase, data, Directive::FAIL, u1:0),
+      }
+    },
     _ => (phase, data, Directive::FAIL, u1:0),
   }
 }
@@ -1386,6 +1746,7 @@ proc Service {
   east_out: chan<axis::Frame> out;
   west_out: chan<axis::Frame> out;
   south_out: chan<axis::Frame> out;
+  syndrome_out: chan<axis::Frame> out;
   admission_out: chan<u1> out;
 
   config(req_in: chan<axis::Frame> in,
@@ -1393,8 +1754,9 @@ proc Service {
          east_out: chan<axis::Frame> out,
          west_out: chan<axis::Frame> out,
          south_out: chan<axis::Frame> out,
+         syndrome_out: chan<axis::Frame> out,
          admission_out: chan<u1> out) {
-    (req_in, north_out, east_out, west_out, south_out, admission_out)
+    (req_in, north_out, east_out, west_out, south_out, syndrome_out, admission_out)
   }
 
   init { initial_machine() }
@@ -1413,11 +1775,13 @@ proc Service {
         join(), west_out, effects.west_valid, effects.west);
       let south_tok = send_if(
         join(), south_out, effects.south_valid, effects.south);
+      let syndrome_tok = send_if(
+        join(), syndrome_out, effects.syndrome_valid, effects.syndrome);
       let reserve = !machine.admission_pending &&
         machine.occupied < MAILBOX_CAPACITY;
       let admission_tok = send_if(
         join(), admission_out, reserve, u1:1);
-      let _entry_tok = join(join(join(join(north_tok, east_tok), west_tok), south_tok), admission_tok);
+      let _entry_tok = join(join(join(join(join(north_tok, east_tok), west_tok), south_tok), syndrome_tok), admission_tok);
       Machine {
         data: entered_data,
         enter_pending: u1:0,
@@ -1428,7 +1792,7 @@ proc Service {
       let (tok, frame, received) = recv_if_non_blocking(
         join(), req_in, machine.admission_pending,
         zero!<axis::Frame>());
-      let tag_ok = (frame.header.op == (Tag::PHI as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::ANYON_MOVE as u8) && frame.header.payload_words == u8:2) || (frame.header.op == (Tag::PHI0 as u8) && frame.header.payload_words == u8:3);
+      let tag_ok = (frame.header.op == (Tag::PHI as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::ANYON_MOVE as u8) && frame.header.payload_words == u8:2) || (frame.header.op == (Tag::PHI0 as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHENOM_CONFIG as u8) && frame.header.payload_words == u8:2) || (frame.header.op == (Tag::PHENOM_REQUEST as u8) && frame.header.payload_words == u8:1) || (frame.header.op == (Tag::PHENOM_QUERY as u8) && frame.header.payload_words == u8:2) || (frame.header.op == (Tag::PHENOM_DATA as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHENOM_ANYON as u8) && frame.header.payload_words == u8:2);
       let accepted = received && tag_ok;
       let invalid_input = received && !tag_ok;
       let incoming_slot = MailboxSlot {
@@ -1553,25 +1917,29 @@ pub proc Top {
   east_send: chan<axis::Beat> out;
   west_send: chan<axis::Beat> out;
   south_send: chan<axis::Beat> out;
+  syndrome_send: chan<axis::Beat> out;
 
   config(ext_recv: chan<axis::Beat> in,
          north_send: chan<axis::Beat> out,
          east_send: chan<axis::Beat> out,
          west_send: chan<axis::Beat> out,
-         south_send: chan<axis::Beat> out) {
+         south_send: chan<axis::Beat> out,
+         syndrome_send: chan<axis::Beat> out) {
     let (req_p, req_c) = chan<axis::Frame, u32:1>("req");
     let (admit_p, admit_c) = chan<u1, u32:1>("admit");
     let (north_p, north_c) = chan<axis::Frame, u32:1>("north");
     let (east_p, east_c) = chan<axis::Frame, u32:1>("east");
     let (west_p, west_c) = chan<axis::Frame, u32:1>("west");
     let (south_p, south_c) = chan<axis::Frame, u32:1>("south");
+    let (syndrome_p, syndrome_c) = chan<axis::Frame, u32:1>("syndrome");
     spawn axis::ReservedRx(ext_recv, req_p, admit_c);
-    spawn Service(req_c, north_p, east_p, west_p, south_p, admit_p);
+    spawn Service(req_c, north_p, east_p, west_p, south_p, syndrome_p, admit_p);
     spawn axis::Tx(north_c, north_send);
     spawn axis::Tx(east_c, east_send);
     spawn axis::Tx(west_c, west_send);
     spawn axis::Tx(south_c, south_send);
-    (ext_recv, north_send, east_send, west_send, south_send)
+    spawn axis::Tx(syndrome_c, syndrome_send);
+    (ext_recv, north_send, east_send, west_send, south_send, syndrome_send)
   }
 
   init { () }

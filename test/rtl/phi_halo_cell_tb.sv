@@ -5,6 +5,7 @@ module phi_halo_cell_tb;
     localparam integer EAST  = 1;
     localparam integer WEST  = 2;
     localparam integer SOUTH = 3;
+    localparam integer SYNDROME = 4;
 
     localparam [31:0] NORTH_MASK = 32'd1;
     localparam [31:0] EAST_MASK  = 32'd2;
@@ -19,12 +20,12 @@ module phi_halo_cell_tb;
     reg input_valid = 1'b0;
     wire input_ready;
 
-    wire [32:0] output_beat [0:3];
-    wire [3:0] output_valid;
-    reg [3:0] output_ready = 4'b0000;
+    wire [32:0] output_beat [0:4];
+    wire [4:0] output_valid;
+    reg [4:0] output_ready = 5'b00000;
 
-    reg [32:0] captured [0:3][0:63];
-    integer beat_count [0:3];
+    reg [32:0] captured [0:4][0:63];
+    integer beat_count [0:4];
     integer port_index;
     integer check_port;
     reg [32:0] stalled_beat;
@@ -48,14 +49,17 @@ module phi_halo_cell_tb;
         .phi_halo_cell__west_send_vld(output_valid[WEST]),
         .phi_halo_cell__south_send_rdy(output_ready[SOUTH]),
         .phi_halo_cell__south_send(output_beat[SOUTH]),
-        .phi_halo_cell__south_send_vld(output_valid[SOUTH])
+        .phi_halo_cell__south_send_vld(output_valid[SOUTH]),
+        .phi_halo_cell__syndrome_send_rdy(output_ready[SYNDROME]),
+        .phi_halo_cell__syndrome_send(output_beat[SYNDROME]),
+        .phi_halo_cell__syndrome_send_vld(output_valid[SYNDROME])
     );
 
     always #5 clk = ~clk;
 
     always @(posedge clk) begin
         if (!reset) begin
-            for (port_index = 0; port_index < 4; port_index = port_index + 1) begin
+            for (port_index = 0; port_index < 5; port_index = port_index + 1) begin
                 if (output_valid[port_index] && output_ready[port_index]) begin
                     captured[port_index][beat_count[port_index]] <=
                         output_beat[port_index];
@@ -145,6 +149,16 @@ module phi_halo_cell_tb;
         end
     endtask
 
+    task automatic send_measurement;
+        input [31:0] step;
+        input [31:0] present;
+        begin
+            send_beat(header(8'd10, 8'd2), 1'b0);
+            send_beat(step, 1'b0);
+            send_beat(present, 1'b1);
+        end
+    endtask
+
     task automatic wait_for_count;
         input integer port;
         input integer target;
@@ -214,6 +228,21 @@ module phi_halo_cell_tb;
         end
     endtask
 
+    task automatic expect_measurement_request;
+        input integer base;
+        input [31:0] step;
+        begin
+            wait_for_count(SYNDROME, base + 2);
+            check_beat(
+                SYNDROME,
+                base + 0,
+                header(8'd7, 8'd1),
+                1'b0
+            );
+            check_beat(SYNDROME, base + 1, step, 1'b1);
+        end
+    endtask
+
     task automatic expect_all_phi;
         input integer base;
         input [31:0] epoch;
@@ -235,14 +264,16 @@ module phi_halo_cell_tb;
     end
 
     initial begin : scenario
-        for (port_index = 0; port_index < 4; port_index = port_index + 1)
+        for (port_index = 0; port_index < 5; port_index = port_index + 1)
             beat_count[port_index] = 0;
 
         repeat (5) @(posedge clk);
         @(negedge clk);
         reset = 1'b0;
 
-        output_ready = 4'b1111;
+        output_ready = 5'b11111;
+        expect_measurement_request(0, 32'd0);
+        send_measurement(32'd0, 32'd0);
         expect_all_phi(0, 32'd0, 32'd0, 32'd0);
 
         // Complete the first diffusion round. Repeating gathering emits the
@@ -326,6 +357,8 @@ module phi_halo_cell_tb;
         send_anyon(32'd0, 32'd0);
         send_anyon(32'd0, 32'd0);
         send_anyon(32'd0, 32'd0);
+        expect_measurement_request(2, 32'd1);
+        send_measurement(32'd1, 32'd0);
         expect_all_phi(15, 32'd2, 32'd15, 32'd15);
 
         // With the local anyon present, zero-valued neighbors still contribute
@@ -401,6 +434,8 @@ module phi_halo_cell_tb;
         send_anyon(32'd1, 32'd0);
         send_anyon(32'd1, 32'd0);
         send_anyon(32'd1, 32'd0);
+        expect_measurement_request(4, 32'd2);
+        send_measurement(32'd2, 32'd0);
         expect_all_phi(30, 32'd4, 32'd81923, 32'd3285);
 
         send_phi(32'd4, 32'd0, 32'd0);

@@ -16,6 +16,8 @@ ssh -o BatchMode=yes "$remote_host" mkdir -p "$remote_stage"
 rsync -a -e "ssh -o BatchMode=yes" \
     "$local_stage/regsvc.x" \
     "$local_stage/phi_halo_cell.x" \
+    "$local_stage/phenom_data_cell.x" \
+    "$local_stage/phenom_syndrome_cell.x" \
     "$local_stage/xls_case_fixture.x" \
     "$local_stage/axis.x" \
     "$local_stage/regsvc_core_adapter.v" \
@@ -47,6 +49,8 @@ ssh -o BatchMode=yes "$remote_host" \
 rsync -a -e "ssh -o BatchMode=yes" \
     --include=regsvc.v \
     --include=phi_halo_cell.v \
+    --include=phenom_data_cell.v \
+    --include=phenom_syndrome_cell.v \
     --exclude='*' \
     "$remote_host:$remote_stage/" \
     "$local_stage/"
