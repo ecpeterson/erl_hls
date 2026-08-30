@@ -66,7 +66,6 @@ round plus the request which changes the phase and releases them.
 -xls_phases([configuring, waiting, collecting, announcing]).
 -xls_outputs([north, east, west, south, phi]).
 -xls_mailbox_capacity(?MAILBOX_CAPACITY).
--xls_tags(?PHI_PROTOCOL_TAGS).
 -compile({parse_transform, xls_pack}).
 
 -record(syndrome, {

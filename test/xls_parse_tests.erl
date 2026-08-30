@@ -22,6 +22,80 @@ ordered_gs_clauses_share_one_tag_arm_test() ->
     ?assertEqual(1, length(binary:matches(Xls, <<"Tag::SET =>">>))),
     ?assertEqual(1, length(binary:matches(Xls, <<"Tag::BULK_GET =>">>))).
 
+repeated_xls_tags_follow_include_expanded_source_order_test() ->
+    Path = "test_data/xls_tags_fixture.erl",
+    Xls = iolist_to_binary(xls_parse:to_xls(Path)),
+    ?assertNotEqual(nomatch, binary:match(Xls, <<"FIRST = u8:3">>)),
+    ?assertNotEqual(nomatch, binary:match(Xls, <<"SHARED = u8:4">>)),
+    ?assertNotEqual(nomatch, binary:match(Xls, <<"LAST = u8:5">>)),
+    ?assertNotEqual(nomatch, binary:match(Xls, <<"Tag::FIRST =>">>)),
+    ?assertNotEqual(nomatch, binary:match(Xls, <<"Tag::SHARED =>">>)),
+    ?assertNotEqual(nomatch, binary:match(Xls, <<"Tag::LAST =>">>)),
+
+    {ok, Module, Binary} = compile:file(Path, [binary]),
+    {module, Module} = code:load_binary(Module, Path, Binary),
+    try
+        ?assertEqual(3, Module:pack_tag(first)),
+        ?assertEqual(4, Module:pack_tag(shared)),
+        ?assertEqual(5, Module:pack_tag(last)),
+        ?assertEqual(first, Module:unpack_tag(3)),
+        ?assertEqual(shared, Module:unpack_tag(4)),
+        ?assertEqual(last, Module:unpack_tag(5))
+    after
+        true = code:delete(Module),
+        _ = code:purge(Module)
+    end.
+
+repeated_xls_tags_reach_state_machine_lowering_test() ->
+    Xls = iolist_to_binary(xls_parse:to_xls(
+        "test_data/xls_tags_statem_fixture.erl"
+    )),
+    ?assertNotEqual(nomatch, binary:match(Xls, <<"FIRST = u8:3">>)),
+    ?assertNotEqual(nomatch, binary:match(Xls, <<"SHARED = u8:4">>)),
+    ?assertNotEqual(nomatch, binary:match(Xls, <<"LAST = u8:5">>)),
+    ?assertNotEqual(nomatch, binary:match(Xls, <<"Tag::FIRST">>)),
+    ?assertNotEqual(nomatch, binary:match(Xls, <<"Tag::SHARED">>)),
+    ?assertNotEqual(nomatch, binary:match(Xls, <<"Tag::LAST">>)).
+
+duplicate_xls_tags_are_rejected_across_blocks_test() ->
+    Forms = [
+        {attribute, 1, xls_tags, [first, shared]},
+        {attribute, 2, xls_tags, [shared, last]}
+    ],
+    ?assertError({duplicate_xls_tags, [shared]}, xls_parse:find_tags(Forms)),
+    ?assertError(
+        {duplicate_xls_tags, [first]},
+        xls_parse:find_tags([
+            {attribute, 3, xls_tags, [first, first]}
+        ])
+    ).
+
+malformed_xls_tag_fragments_are_rejected_test() ->
+    ?assertError(
+        {invalid_xls_tags, 7, [first, 2]},
+        xls_parse:find_tags([{attribute, 7, xls_tags, [first, 2]}])
+    ),
+    ?assertError(
+        {invalid_xls_tags, 9, first},
+        xls_parse:find_tags([{attribute, 9, xls_tags, first}])
+    ).
+
+xls_tags_fill_but_do_not_overflow_the_u8_namespace_test() ->
+    Tags = [
+        list_to_atom("xls_capacity_tag_" ++ integer_to_list(Index))
+        || Index <- lists:seq(1, 254)
+    ],
+    ?assertEqual(
+        lists:sublist(Tags, 253),
+        xls_parse:find_tags([
+            {attribute, 1, xls_tags, lists:sublist(Tags, 253)}
+        ])
+    ),
+    ?assertError(
+        {too_many_xls_tags, 254, 253},
+        xls_parse:find_tags([{attribute, 2, xls_tags, Tags}])
+    ).
+
 guard_alternatives_are_rejected_test() ->
     [Clause] = parse_clauses(
         "probe(#message{value = Value}, State) "

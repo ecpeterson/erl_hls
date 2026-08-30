@@ -1,8 +1,6 @@
 -module(xls_pack).
 -export([parse_transform/2]).
 
--define(MAX_TAG_VALUE, 255).  % bounded by tag width in axis header
-
 % -define(debug(X), begin io:format("~w@~w: ~p~n", [?FUNCTION_NAME, ?LINE, X]), X end).
 -define(debug(X), X).
 
@@ -29,13 +27,12 @@ parse_transform(Forms, _Options) ->
     [FileAttr, ModuleAttr | TailForms] = Forms,
     {BodyForms, EOFForm} = {lists:droplast(TailForms), lists:last(TailForms)},
 
-    PublicStructNames = xls_parse:find_attribute(Forms, xls_tags),
+    PublicStructNames = xls_parse:find_tags(Forms),
     StateName = xls_parse:state(Forms),
     SerializableStructNames = [StateName | PublicStructNames],
     RewrittenBodyForms = rewrite_record_defaults(
         BodyForms, SerializableStructNames
     ),
-    true = length([error | SerializableStructNames]) =< ?MAX_TAG_VALUE,
     ExportAttr = {attribute, element(2, ModuleAttr), export,
         [{pack, 1}, {unpack, 2}, {pack_tag, 1}, {unpack_tag, 1}]
     },

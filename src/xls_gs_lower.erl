@@ -11,7 +11,7 @@
 
 -spec callback_arms([erl_parse:abstract_form()], atom()) -> iolist().
 callback_arms(Forms, StateName) ->
-    DeclaredTags = xls_parse:find_attribute(Forms, xls_tags),
+    DeclaredTags = xls_parse:find_tags(Forms),
     CallGroups = callback_groups(Forms, handle_call),
     CastGroups = callback_groups(Forms, handle_cast),
     ok = validate_groups(CallGroups, CastGroups, DeclaredTags),

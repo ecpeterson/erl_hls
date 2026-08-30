@@ -25,6 +25,13 @@ every arm binds it.
 State-machine phase-entry action lists remain statically shaped: this support
 does not make the ports or number of `{cast, Port, Message}` actions
 conditional.
+
+## Wire tags
+
+An actor may declare more than one `-xls_tags([...])` attribute. The compiler
+concatenates every block in include-expanded source order. That order is part
+of the wire ABI: appending a block preserves existing tag values, while
+prepending or moving one can renumber them. Every entry must be a unique atom.
 """.
 -export([to_xls/1]).
 %% Internal API shared by the actor-specific lowerers while this module is
@@ -34,6 +41,7 @@ conditional.
     branch_from_clause/4,
     branch_from_clause/6,
     find_attribute/2,
+    find_tags/1,
     find_function/3,
     find_record/2,
     mismatch_expression/2,
@@ -59,6 +67,7 @@ conditional.
 -include("xls_parse.hrl").
 
 -define(debug(X), begin io:format("~w@~w: ~p~n", [?FUNCTION_NAME, ?LINE, X]), X end).
+-define(MAX_PUBLIC_TAGS, 253).  % u8 minus none, error, and actor data
 
 -spec to_xls(string()) -> iolist().
 -doc "Transpiles a supported Erlang actor module to a corresponding XLS module.".
@@ -70,7 +79,7 @@ to_xls(Filename) ->
     end.
 
 to_xls_gs(Filename, Forms) ->
-    PublicStructNames = find_attribute(Forms, xls_tags),
+    PublicStructNames = find_tags(Forms),
     StateName = state(Forms),
     StateRecord = find_record(Forms, StateName),
     StateStructName = string:titlecase(lists:delete($_, atom_to_list(StateName))),
@@ -793,6 +802,53 @@ find_attribute(Forms, Atom) ->
         Forms
     ),
     Value.
+
+-spec find_tags([erl_parse:abstract_form()]) -> [atom()].
+-doc "Collects all xls_tags attributes in include-expanded source order.".
+find_tags(Forms) ->
+    Fragments = [
+        {Line, Value}
+        || {attribute, Line, xls_tags, Value} <- Forms
+    ],
+    case Fragments of
+        [] ->
+            error({missing_xls_attribute, xls_tags});
+        _ ->
+            Tags = lists:append([
+                validate_tag_fragment(Line, Value)
+                || {Line, Value} <- Fragments
+            ]),
+            case duplicate_tags(Tags) of
+                [] -> validate_tag_count(Tags);
+                Duplicates -> error({duplicate_xls_tags, Duplicates})
+            end
+    end.
+
+validate_tag_count(Tags) when length(Tags) =< ?MAX_PUBLIC_TAGS ->
+    Tags;
+validate_tag_count(Tags) ->
+    error({too_many_xls_tags, length(Tags), ?MAX_PUBLIC_TAGS}).
+
+validate_tag_fragment(Line, Tags) when is_list(Tags) ->
+    case lists:all(fun is_atom/1, Tags) of
+        true -> Tags;
+        false -> error({invalid_xls_tags, Line, Tags})
+    end;
+validate_tag_fragment(Line, Value) ->
+    error({invalid_xls_tags, Line, Value}).
+
+duplicate_tags(Tags) ->
+    duplicate_tags(Tags, #{}, []).
+
+duplicate_tags([], _Counts, Duplicates) ->
+    lists:reverse(Duplicates);
+duplicate_tags([Tag | Rest], Counts, Duplicates) ->
+    Count = maps:get(Tag, Counts, 0),
+    NextDuplicates = case Count of
+        1 -> [Tag | Duplicates];
+        _ -> Duplicates
+    end,
+    duplicate_tags(Rest, Counts#{Tag => Count + 1}, NextDuplicates).
 
 -spec find_optional_attribute([erl_parse:abstract_form()], atom()) ->
     none | {ok, term()}.
