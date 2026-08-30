@@ -115,7 +115,6 @@ keep the CPU model aligned with fixed-width generated arithmetic.
 -xls_phases([measuring, gathering, comparing, flipping]).
 -xls_outputs([north, east, west, south, syndrome]).
 -xls_mailbox_capacity(?MAILBOX_CAPACITY).
--xls_tags(?PHI_PROTOCOL_TAGS).
 -compile({parse_transform, xls_pack}).
 
 %% TODO: Replace the two-element xls_lists values with xls_vec once vector

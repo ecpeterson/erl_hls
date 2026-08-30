@@ -92,3 +92,18 @@ The `xls_pack` parse transform expands this marker into the corresponding
 Erlang value using the field's type annotation. The XLS compiler uses the same
 annotation to generate `zero!`, avoiding a duplicated type descriptor and
 ensuring that CPU and hardware instances begin with the same record values.
+
+## Wire tags
+
+An actor may split its wire-record declaration across repeated
+`-xls_tags([...])` attributes, including attributes contributed by header
+files. The compiler concatenates the blocks in include-expanded source order;
+each tag must be a unique atom, and an actor may declare at most 253 of them.
+Error and actor-data tags occupy values 1 and 2, and public record tags begin
+at 3.
+
+The ordering is part of the wire ABI. Appending a block preserves existing
+values, but prepending a block or moving an include can renumber every tag
+after it. A shared protocol header may therefore own both its record schemas
+and their tag block, provided every independently lowered participant includes
+it after the same preceding tag sequence.

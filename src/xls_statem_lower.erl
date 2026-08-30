@@ -12,7 +12,7 @@
 -spec lower(file:filename(), [erl_parse:abstract_form()], [atom(), ...]) ->
     iolist().
 lower(Filename, Forms, PhaseNames) ->
-    MessageNames = xls_parse:find_attribute(Forms, xls_tags),
+    MessageNames = xls_parse:find_tags(Forms),
     OutputNames = xls_parse:find_attribute(Forms, xls_outputs),
     Capacity = xls_parse:find_attribute(Forms, xls_mailbox_capacity),
     DataName = xls_parse:find_attribute(Forms, xls_data),

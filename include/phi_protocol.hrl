@@ -1,8 +1,10 @@
 %%%% Shared wire schema for the phi and phenomenological-noise examples.
 %%%%
-%%%% Message tag order is part of the wire ABI.  Every independently lowered
-%%%% actor in this example includes this complete schema so a frame emitted by
-%%%% one module has the same numeric tag at every receiver.
+%%%% This header declares the shared xls_tags block as well as its records.
+%%%% Repeated xls_tags blocks concatenate in include-expanded source order, so
+%%%% this header's position is part of the wire ABI.  Every independently
+%%%% lowered actor includes it at the same position so a frame emitted by one
+%%%% module has the same numeric tag at every receiver.
 %%%%
 %%%% This shared table is a bridge for an example whose actors are compiled
 %%%% separately, not a requirement that all fabric tags become global.  A
@@ -14,7 +16,7 @@
 -ifndef(PHI_PROTOCOL_HRL).
 -define(PHI_PROTOCOL_HRL, true).
 
--define(PHI_PROTOCOL_TAGS, [
+-xls_tags([
     phi,
     anyon_move,
     phi0,

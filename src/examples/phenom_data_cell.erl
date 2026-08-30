@@ -52,7 +52,6 @@ physical or Pauli-frame correction sink.
 -xls_phases([configuring, collecting, reporting]).
 -xls_outputs([north, east, west, south]).
 -xls_mailbox_capacity(?MAILBOX_CAPACITY).
--xls_tags(?PHI_PROTOCOL_TAGS).
 -compile({parse_transform, xls_pack}).
 
 %% TODO: Add the other Pauli channel(s) once the surrounding experiment
