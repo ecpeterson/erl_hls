@@ -6,6 +6,23 @@
 -module(xls_parse).
 -moduledoc """
 Transforms supported Erlang actor modules into corresponding XLS modules.
+
+## Control flow
+
+Callback bodies may use Boolean `case` and source-ordered `if` expressions.
+Each `if` clause accepts one guard sequence from the same side-effect-free
+expression subset as a callback guard, including comma-separated tests and
+`andalso` or `orelse`. The expression must end in a literal `true` clause: a
+nonexhaustive `if` is rejected until generated code has a typed representation
+for Erlang's `if_clause` failure.
+
+Bindings made inside a `case` or `if` arm remain local to that arm. The lowerer
+does not yet make a variable available after the expression merely because
+every arm binds it.
+
+State-machine phase-entry action lists remain statically shaped: this support
+does not make the ports or number of `{cast, Port, Message}` actions
+conditional.
 """.
 -export([to_xls/1]).
 %% Internal API shared by the actor-specific lowerers while this module is
@@ -332,6 +349,8 @@ statement_from_statement({record, _L, ToUpdate, NameAtom, UpdateFields}, State) 
         "}"
     ]),
     instr(SecondState, record_value(NameAtom, reference(SecondState), SecondState));
+statement_from_statement({'if', Line, Clauses}, State) ->
+    lower_if(Line, Clauses, State);
 statement_from_statement({'case', _L, Condition, Clauses}, State) ->
     lower_boolean_case(Condition, Clauses, State);
 statement_from_statement({call, _L, MF, Args}, State) ->
@@ -354,6 +373,44 @@ statement_from_statement({record_field, _L, Object, _RecordAtom, {atom, _LL, Slo
 statement_from_statement({match, _L, LHS, RHS}, State) ->
     RHSState = statement_from_statement(RHS, State),
     destructure_lhs(LHS, RHSState).
+
+%% `if` clauses are guard-only and therefore need no pattern projection.  The
+%% supported form is exhaustive: a final literal `true` clause supplies the
+%% value and XLS type for the otherwise branch.  Earlier clauses become nested
+%% boolean cases, reusing their branch-local binding and badmatch bookkeeping.
+%% A nonexhaustive Erlang `if` raises `if_clause`; representing that path needs
+%% a typed exception carrier and is deliberately left for a later extension.
+lower_if(Line, Clauses, State) ->
+    Normalized = [normalize_if_clause(Clause) || Clause <- Clauses],
+    case lists:reverse(Normalized) of
+        [{_FallbackLine, {atom, _TrueLine, true}, Fallback} | Reversed] ->
+            Prefix = lists:reverse(Reversed),
+            case [ClauseLine || {ClauseLine, {atom, _, true}, _} <- Prefix] of
+                [] ->
+                    lower_expression_sequence(
+                        nested_if_cases(Prefix, Fallback),
+                        State
+                    );
+                [CatchallLine | _] ->
+                    error({nonfinal_xls_if_fallback, CatchallLine})
+            end;
+        _ ->
+            error({missing_xls_if_fallback, Line})
+    end.
+
+normalize_if_clause({clause, Line, [], Guards, Body}) when Body =/= [] ->
+    {Line, xls_guard_lower:predicate(Guards, Line), Body};
+normalize_if_clause(Clause) ->
+    error({unsupported_xls_if_clause, Clause}).
+
+nested_if_cases([], Fallback) ->
+    Fallback;
+nested_if_cases([{Line, Predicate, Body} | Rest], Fallback) ->
+    [{'case', Line, Predicate, [
+        {clause, Line, [{atom, Line, true}], [], Body},
+        {clause, Line, [{atom, Line, false}], [],
+            nested_if_cases(Rest, Fallback)}
+    ]}].
 
 %% XLS requires all branches of an expression to have one type.  This is the
 %% directly representable subset of Erlang case: a boolean scrutinee, two

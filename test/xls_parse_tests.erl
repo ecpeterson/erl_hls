@@ -282,6 +282,115 @@ case_preservation_keeps_bookkeeping_names_distinct_test() ->
     ?assertNotEqual(nomatch, binary:match(XLS, <<"Case_match_1_1">>)),
     ?assertNotEqual(nomatch, binary:match(XLS, <<"case_match_1_1">>)).
 
+if_clauses_preserve_source_order_and_comma_guards_test() ->
+    XLS = lower_expression_clause(
+        "probe(Value) -> if "
+        "Value >= 10 -> Value + 1; "
+        "Value >= 0, Value < 20 -> Value + 2; "
+        "true -> Value + 3 end.",
+        ["value"]
+    ),
+    {First, _} = binary:match(XLS, <<"Value_1 >= 10">>),
+    {Second, _} = binary:match(XLS, <<"Value_1 >= 0">>),
+    {Third, _} = binary:match(XLS, <<"Value_1 < 20">>),
+    ?assert(First < Second),
+    ?assert(Second < Third),
+    ?assertEqual(nomatch, binary:match(XLS, <<" && ">>)).
+
+if_branch_bindings_are_local_test() ->
+    XLS = lower_expression_clause(
+        "probe(Value) -> if "
+        "Value > 0 -> Choice = Value + 1, Choice; "
+        "true -> Choice = Value - 1, Choice end.",
+        ["value"]
+    ),
+    ?assertEqual(2, length(binary:matches(XLS, <<"let Choice_1">>))),
+    ?assertEqual(nomatch, binary:match(XLS, <<"Choice_2">>)).
+
+selected_if_body_badmatch_reaches_body_failure_test() ->
+    XLS = lower_callback_clauses(
+        "probe(#message{value = Value}, State) -> "
+        "Result = if "
+        "Value =:= 0 -> true = false, Value; "
+        "true -> Value + 1 end, "
+        "{Result, State}."
+    ),
+    ?assertNotEqual(nomatch, binary:match(XLS, <<"static_match_">>)),
+    ?assertNotEqual(nomatch, binary:match(XLS, <<"case_match_">>)),
+    ?assertNotEqual(nomatch, binary:match(XLS, <<"body_failure">>)).
+
+if_without_true_fallback_is_rejected_test() ->
+    Clause = parse_clause(
+        "probe(Value) -> if Value =:= 0 -> Value end."
+    ),
+    ?assertException(
+        error,
+        {missing_xls_if_fallback, _},
+        xls_parse:branch_from_clause(
+            Clause,
+            ["value"],
+            state,
+            fun(R) -> R end,
+            "failure",
+            #{}
+        )
+    ).
+
+if_guard_alternatives_are_rejected_test() ->
+    Clause = parse_clause(
+        "probe(Value) -> if "
+        "Value =:= 0; Value =:= 1 -> Value; true -> 2 end."
+    ),
+    ?assertException(
+        error,
+        {unsupported_xls_guard_sequences, _, _},
+        xls_parse:branch_from_clause(
+            Clause,
+            ["value"],
+            state,
+            fun(R) -> R end,
+            "failure",
+            #{}
+        )
+    ).
+
+xls_gs_callback_body_accepts_if_test() ->
+    Path = filename:join("_build", "gs_if_fixture.erl"),
+    ok = filelib:ensure_dir(Path),
+    Source = <<
+        "-module(gs_if_fixture).\n"
+        "-xls_data(state).\n"
+        "-xls_tags([message, query]).\n"
+        "-record(message, {\n"
+        "  value = xls_type:zero() :: xls_nums:u32()\n"
+        "}).\n"
+        "-record(query, {\n"
+        "  value = xls_type:zero() :: xls_nums:u32()\n"
+        "}).\n"
+        "-record(state, {\n"
+        "  value = xls_type:zero() :: xls_nums:u32()\n"
+        "}).\n"
+        "init([]) -> #state{}.\n"
+        "handle_cast(#message{value = Value}, State) ->\n"
+        "  Next = if Value > 0 -> Value; true -> State#state.value end,\n"
+        "  {noreply, State#state{value = Next}}.\n"
+        "handle_call(#query{value = Value}, State) ->\n"
+        "  Reply = if\n"
+        "    Value > 0 -> #message{value = Value};\n"
+        "    true -> #message{value = State#state.value}\n"
+        "  end,\n"
+        "  {reply, Reply, State}.\n"
+    >>,
+    ok = file:write_file(Path, Source),
+    try
+        XLS = iolist_to_binary(xls_parse:to_xls(Path)),
+        ?assertNotEqual(nomatch, binary:match(XLS, <<"Tag::MESSAGE =>">>)),
+        ?assertNotEqual(nomatch, binary:match(XLS, <<"Tag::QUERY =>">>)),
+        ?assertNotEqual(nomatch, binary:match(XLS, <<"Value_1 > 0">>))
+    after
+        ok = file:delete(Path)
+    end.
+
 state_machine_init_argument_is_rejected_test() ->
     assert_bad_init_head(
         "statem_init_argument_fixture",
@@ -365,6 +474,48 @@ repeat_phase_lowering_creates_an_explicit_boundary_test() ->
                 )
             )
         end
+    ).
+
+state_machine_final_if_normalizes_repeat_phase_test() ->
+    CastSource =
+        "handle_cast(#message{value = Value}, waiting, Cell) ->\n"
+        "  if\n"
+        "    Value =:= 0 -> {repeat_phase, Cell, consume};\n"
+        "    true -> {waiting, Cell, consume}\n"
+        "  end.\n",
+    with_statem_fixture(
+        "statem_final_if_fixture",
+        "[waiting]",
+        CastSource,
+        fun(XLS) ->
+            ?assertNotEqual(
+                nomatch,
+                binary:match(XLS, <<"Directive::CONSUME, bool:1">>)
+            ),
+            ?assertNotEqual(
+                nomatch,
+                binary:match(XLS, <<"Directive::CONSUME, bool:0">>)
+            )
+        end
+    ).
+
+state_machine_indirect_if_result_is_rejected_test() ->
+    CastSource =
+        "handle_cast(#message{value = Value}, waiting, Cell) ->\n"
+        "  Result = if\n"
+        "    Value =:= 0 -> {repeat_phase, Cell, consume};\n"
+        "    true -> {waiting, Cell, consume}\n"
+        "  end,\n"
+        "  Result.\n",
+    ?assertException(
+        error,
+        {unsupported_xls_statem_cast_result, {var, _, 'Result'}},
+        with_statem_fixture(
+            "statem_indirect_if_fixture",
+            "[waiting]",
+            CastSource,
+            fun(_XLS) -> ok end
+        )
     ).
 
 repeat_phase_rejects_nonconsume_directives_test_() ->
@@ -532,6 +683,17 @@ lower_callback_clauses(Source) ->
         fun(R) -> R end,
         "no_clause",
         "body_failure",
+        #{}
+    ),
+    iolist_to_binary(xls_parse:print([Body, Result])).
+
+lower_expression_clause(Source, Arguments) ->
+    {Body, Result} = xls_parse:branch_from_clause(
+        parse_clause(Source),
+        Arguments,
+        state,
+        fun(R) -> R end,
+        "failure",
         #{}
     ),
     iolist_to_binary(xls_parse:print([Body, Result])).

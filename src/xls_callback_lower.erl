@@ -231,20 +231,13 @@ add_condition(Condition, Context = #{conditions := Conditions}) ->
     Context#{conditions := [Condition | Conditions]}.
 
 %%%
-%%% Guards
+%%% Guard selection
 %%%
 
 lower_guard([], State, Conditions, _Line) ->
     {State, conjunction(Conditions)};
-lower_guard([Expressions], State0, Conditions, Line)
-        when Expressions =/= [] ->
-    ok = lists:foreach(
-        fun(Expression) ->
-            validate_guard_predicate(Expression)
-        end,
-        Expressions
-    ),
-    Predicate = rewrite_short_circuit(guard_sequence(Expressions)),
+lower_guard(Guards, State0, Conditions, Line) ->
+    Predicate = xls_guard_lower:predicate(Guards, Line),
     Guard = case Conditions of
         [] -> Predicate;
         _ -> lazy_conjunction(Line, conjunction(Conditions), Predicate)
@@ -253,64 +246,7 @@ lower_guard([Expressions], State0, Conditions, Line)
         Guard,
         State0#clause_state{reference = none}
     ),
-    {State1, State1#clause_state.reference};
-lower_guard(Guards, _State, _Conditions, Line) ->
-    error({unsupported_xls_guard_sequences, Line, Guards}).
-
-validate_guard_predicate({atom, _Line, Atom})
-        when Atom =:= true; Atom =:= false ->
-    ok;
-validate_guard_predicate({op, _Line, 'not', Operand}) ->
-    validate_guard_predicate(Operand);
-validate_guard_predicate({op, _Line, Operator, Left, Right})
-        when Operator =:= 'andalso'; Operator =:= 'orelse' ->
-    ok = validate_guard_predicate(Left),
-    validate_guard_predicate(Right);
-validate_guard_predicate({op, Line, Operator, Left, Right}) ->
-    case lists:member(Operator, comparison_operators()) of
-        true ->
-            ok = validate_guard_value(Left),
-            validate_guard_value(Right);
-        false ->
-            unsupported_guard(Line, {non_boolean_predicate, Operator})
-    end;
-validate_guard_predicate(Expression) ->
-    unsupported_guard(guard_line(Expression), non_boolean_predicate).
-
-validate_guard_value({var, _Line, _Name}) ->
-    ok;
-validate_guard_value({integer, _Line, _Integer}) ->
-    ok;
-validate_guard_value({atom, _Line, Atom})
-        when Atom =:= true; Atom =:= false ->
-    ok;
-validate_guard_value({record_field, _Line, Object, _Record, _Field}) ->
-    validate_guard_value(Object);
-validate_guard_value({op, _Line, 'not', Operand}) ->
-    validate_guard_predicate(Operand);
-validate_guard_value({op, _Line, 'bnot', Operand}) ->
-    validate_guard_value(Operand);
-validate_guard_value({op, _Line, Operator, Left, Right})
-        when Operator =:= 'andalso'; Operator =:= 'orelse' ->
-    ok = validate_guard_predicate(Left),
-    validate_guard_predicate(Right);
-validate_guard_value({op, Line, Operator, Left, Right}) ->
-    case lists:member(Operator, comparison_operators()) orelse
-            lists:member(Operator, arithmetic_operators()) of
-        true ->
-            ok = validate_guard_value(Left),
-            validate_guard_value(Right);
-        false ->
-            unsupported_guard(Line, {unsupported_operator, Operator})
-    end;
-validate_guard_value(Expression) ->
-    unsupported_guard(guard_line(Expression), unsupported_expression).
-
-guard_sequence([Expression]) ->
-    Expression;
-guard_sequence([Expression | Rest]) ->
-    {op, guard_line(Expression), 'andalso',
-        Expression, guard_sequence(Rest)}.
+    {State1, State1#clause_state.reference}.
 
 lazy_conjunction(Line, Left, Right) ->
     {'case', Line, Left, [
@@ -319,47 +255,6 @@ lazy_conjunction(Line, Left, Right) ->
             {atom, Line, false}
         ]}
     ]}.
-
-rewrite_short_circuit({op, Line, 'andalso', Left, Right}) ->
-    {'case', Line, rewrite_short_circuit(Left), [
-        {clause, Line, [{atom, Line, true}], [], [
-            rewrite_short_circuit(Right)
-        ]},
-        {clause, Line, [{atom, Line, false}], [], [
-            {atom, Line, false}
-        ]}
-    ]};
-rewrite_short_circuit({op, Line, 'orelse', Left, Right}) ->
-    {'case', Line, rewrite_short_circuit(Left), [
-        {clause, Line, [{atom, Line, true}], [], [
-            {atom, Line, true}
-        ]},
-        {clause, Line, [{atom, Line, false}], [], [
-            rewrite_short_circuit(Right)
-        ]}
-    ]};
-rewrite_short_circuit(Tuple) when is_tuple(Tuple) ->
-    list_to_tuple([
-        rewrite_short_circuit(Element) || Element <- tuple_to_list(Tuple)
-    ]);
-rewrite_short_circuit(List) when is_list(List) ->
-    [rewrite_short_circuit(Element) || Element <- List];
-rewrite_short_circuit(Term) ->
-    Term.
-
-unsupported_guard(Line, Reason) ->
-    error({unsupported_xls_guard, Line, Reason}).
-
-guard_line(Expression) when is_tuple(Expression), tuple_size(Expression) >= 2 ->
-    element(2, Expression);
-guard_line(_Expression) ->
-    undefined.
-
-comparison_operators() ->
-    ['<', '=<', '>', '>=', '=:=', '=/='].
-
-arithmetic_operators() ->
-    ['+', '-', '*', 'band', 'bor', 'bxor', 'bsl', 'bsr'].
 
 %%%
 %%% AST and output utilities
