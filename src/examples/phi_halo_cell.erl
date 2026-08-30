@@ -404,14 +404,10 @@ handle_cast(
         true -> Value;
         false -> Best
     end,
-    %% TODO: Express this as an if once general if lowering is available.
-    NewBestDirection = case Value > Best of
-        true -> Source;
-        false ->
-            case Value =:= Best of
-                true -> xls_type:as(xls_nums:u32(), ?NO_DIRECTION);
-                false -> BestDirection
-            end
+    NewBestDirection = if
+        Value > Best -> Source;
+        Value =:= Best -> xls_type:as(xls_nums:u32(), ?NO_DIRECTION);
+        true -> BestDirection
     end,
     Compared = Cell#cell{
         seen_sources = NewSeen,
