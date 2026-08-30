@@ -1,12 +1,24 @@
 %%%% xls_guard_lower
 %%%%
 %%%% Shared lowering for the side-effect-free Erlang guard subset accepted in
-%%%% callback clause heads and `if` expressions.
+%%%% callback clause heads, `case` clauses, and `if` expressions.
 
 -module(xls_guard_lower).
 -moduledoc false.
 
--export([predicate/2]).
+-export([condition/3, predicate/2]).
+
+-spec condition(
+    [[erl_parse:abstract_expression()]],
+    [xls_parse:printable()],
+    erl_anno:location()
+) -> term().
+condition([], Conditions, _Line) ->
+    conjunction(Conditions);
+condition(Guards, [], Line) ->
+    predicate(Guards, Line);
+condition(Guards, Conditions, Line) ->
+    lazy_conjunction(Line, conjunction(Conditions), predicate(Guards, Line)).
 
 -spec predicate([[erl_parse:abstract_expression()]], erl_anno:location()) ->
     erl_parse:abstract_expression().
@@ -102,6 +114,26 @@ rewrite_short_circuit(List) when is_list(List) ->
     [rewrite_short_circuit(Element) || Element <- List];
 rewrite_short_circuit(Term) ->
     Term.
+
+lazy_conjunction(Line, Left, Right) ->
+    {'case', Line, Left, [
+        {clause, Line, [{atom, Line, true}], [], [Right]},
+        {clause, Line, [{atom, Line, false}], [], [
+            {atom, Line, false}
+        ]}
+    ]}.
+
+conjunction([]) ->
+    "bool:true";
+conjunction([Only]) ->
+    Only;
+conjunction(Expressions) ->
+    ["(", join_with(" && ", Expressions), ")"].
+
+join_with(_Separator, []) ->
+    [];
+join_with(Separator, [First | Rest]) ->
+    [First | [[Separator, Item] || Item <- Rest]].
 
 unsupported_guard(Line, Reason) ->
     error({unsupported_xls_guard, Line, Reason}).

@@ -247,6 +247,215 @@ boolean_case_bindings_are_local_to_each_arm_test() ->
     XLS = iolist_to_binary(xls_parse:print([Body, Result])),
     ?assertEqual(nomatch, binary:match(XLS, <<"X_2">>)).
 
+ordered_integer_case_uses_guards_then_falls_through_test() ->
+    XLS = lower_expression_clause(
+        "probe(Value) -> case Value of "
+        "0 -> 10; "
+        "Selected when Selected < 3 -> 20; "
+        "_ -> 30 end.",
+        ["value"]
+    ),
+    {Literal, _} = binary:match(XLS, <<"== 0">>),
+    {Guard, _} = binary:match(XLS, <<"Selected_1 < 3">>),
+    ?assert(Literal < Guard),
+    ?assertNotEqual(nomatch, binary:match(XLS, <<"else {">>)).
+
+general_case_evaluates_its_scrutinee_once_test() ->
+    XLS = lower_expression_clause(
+        "probe(Value) -> case Value + 1 of "
+        "0 -> 10; "
+        "_ -> 20 end.",
+        ["value"]
+    ),
+    ?assertEqual(1, length(binary:matches(XLS, <<"Value_1 + 1">>))).
+
+tuple_case_projects_and_compares_repeated_variables_test() ->
+    XLS = lower_expression_clause(
+        "probe(Pair) -> case Pair of "
+        "{Same, Same} -> Same; "
+        "{_, Right} -> Right; "
+        "_ -> 0 end.",
+        ["pair"]
+    ),
+    ?assertNotEqual(nomatch, binary:match(XLS, <<".0">>)),
+    ?assertNotEqual(nomatch, binary:match(XLS, <<".1">>)),
+    ?assertNotEqual(nomatch, binary:match(XLS, <<"Same_1 ==">>)).
+
+case_pattern_compares_an_outer_binding_instead_of_rebinding_test() ->
+    XLS = lower_expression_clause(
+        "probe(Value, Outer) -> case Value of "
+        "Outer -> 1; "
+        "_ -> 2 end.",
+        ["value", "outer"]
+    ),
+    ?assertNotEqual(nomatch, binary:match(XLS, <<"Outer_1 ==">>)),
+    ?assertEqual(nomatch, binary:match(XLS, <<"let Outer_2">>)).
+
+case_alias_binds_the_whole_value_and_its_fields_test() ->
+    XLS = lower_expression_clause(
+        "probe(Pair) -> case Pair of "
+        "Whole = {Left, _} when Left > 0 -> Whole; "
+        "_ -> {0, 0} end.",
+        ["pair"]
+    ),
+    ?assertNotEqual(nomatch, binary:match(XLS, <<"let Whole_1">>)),
+    ?assertNotEqual(nomatch, binary:match(XLS, <<"let Left_1">>)),
+    ?assertNotEqual(nomatch, binary:match(XLS, <<"Left_1 > 0">>)).
+
+selected_general_case_body_badmatch_does_not_fall_through_test() ->
+    XLS = lower_expression_clause(
+        "probe(Value) -> case Value of "
+        "0 -> true = false, 1; "
+        "_ -> 2 end.",
+        ["value"]
+    ),
+    ?assertNotEqual(nomatch, binary:match(XLS, <<"static_match_">>)),
+    ?assertNotEqual(nomatch, binary:match(XLS, <<"case_match_">>)),
+    ?assertNotEqual(
+        nomatch,
+        binary:match(XLS, <<
+            "(1, (static_match_1_1 != static_match_1_2) || bool:false)\n"
+            "  } else {\n"
+            "    (2, bool:false)"
+        >>)
+    ).
+
+general_case_bindings_are_local_to_each_arm_test() ->
+    XLS = lower_expression_clause(
+        "probe(Value) -> case Value of "
+        "0 -> Choice = 1, Choice; "
+        "_ -> Choice = 2, Choice end.",
+        ["value"]
+    ),
+    ?assertEqual(2, length(binary:matches(XLS, <<"let Choice_1">>))),
+    ?assertEqual(nomatch, binary:match(XLS, <<"Choice_2">>)).
+
+case_alias_catchall_is_exhaustive_test() ->
+    XLS = lower_expression_clause(
+        "probe(Value) -> case Value of "
+        "0 -> 1; "
+        "Whole = _ -> Whole end.",
+        ["value"]
+    ),
+    ?assertNotEqual(nomatch, binary:match(XLS, <<"let Whole_1">>)).
+
+homogeneous_record_case_supports_aliases_fields_and_guards_test() ->
+    XLS = lower_callback_clauses(
+        "probe(Message = #message{}, State) -> "
+        "Result = case Message of "
+        "Whole = #message{value = 0} -> Whole; "
+        "#message{value = Value} when Value < 4 -> Message; "
+        "_ -> Message end, "
+        "{Result, State}."
+    ),
+    ?assertNotEqual(nomatch, binary:match(XLS, <<"Tag::MESSAGE">>)),
+    ?assertNotEqual(nomatch, binary:match(XLS, <<".1.value == 0">>)),
+    ?assertNotEqual(nomatch, binary:match(XLS, <<"Value_1 < 4">>)),
+    ?assertNotEqual(nomatch, binary:match(XLS, <<"Whole_1">>)).
+
+general_case_without_fallback_is_rejected_test() ->
+    Clause = parse_clause(
+        "probe(Value) -> case Value of 0 -> 1; 1 -> 2 end."
+    ),
+    ?assertException(
+        error,
+        {missing_xls_case_fallback, _},
+        xls_parse:branch_from_clause(
+            Clause,
+            ["value"],
+            state,
+            fun(R) -> R end,
+            "failure",
+            #{}
+        )
+    ).
+
+guarded_general_case_fallback_is_rejected_test() ->
+    Clause = parse_clause(
+        "probe(Value) -> case Value of 0 -> 1; "
+        "Fallback when Fallback >= 0 -> 2 end."
+    ),
+    ?assertException(
+        error,
+        {guarded_xls_case_fallback, _},
+        xls_parse:branch_from_clause(
+            Clause,
+            ["value"],
+            state,
+            fun(R) -> R end,
+            "failure",
+            #{}
+        )
+    ).
+
+nonfinal_general_case_fallback_is_rejected_test() ->
+    Clause = parse_clause(
+        "probe(Value) -> case Value of _ -> 0; 1 -> 1; _ -> 2 end."
+    ),
+    ?assertException(
+        error,
+        {nonfinal_xls_case_fallback, _},
+        xls_parse:branch_from_clause(
+            Clause,
+            ["value"],
+            state,
+            fun(R) -> R end,
+            "failure",
+            #{}
+        )
+    ).
+
+nonfinal_alias_case_fallback_is_rejected_test() ->
+    Clause = parse_clause(
+        "probe(Value) -> case Value of Whole = _ -> Whole; _ -> 2 end."
+    ),
+    ?assertException(
+        error,
+        {nonfinal_xls_case_fallback, _},
+        xls_parse:branch_from_clause(
+            Clause,
+            ["value"],
+            state,
+            fun(R) -> R end,
+            "failure",
+            #{}
+        )
+    ).
+
+general_case_rejects_incompatible_pattern_shapes_test() ->
+    Clause = parse_clause(
+        "probe(Value) -> case Value of {0, _} -> 1; 0 -> 2; _ -> 3 end."
+    ),
+    ?assertException(
+        error,
+        {incompatible_xls_case_pattern_shapes, _, _},
+        xls_parse:branch_from_clause(
+            Clause,
+            ["value"],
+            state,
+            fun(R) -> R end,
+            "failure",
+            #{}
+        )
+    ).
+
+general_case_rejects_heterogeneous_record_patterns_test() ->
+    Clause = parse_clause(
+        "probe(Value) -> case Value of #left{} -> 1; #right{} -> 2; _ -> 3 end."
+    ),
+    ?assertException(
+        error,
+        {incompatible_xls_case_pattern_shapes, _, _},
+        xls_parse:branch_from_clause(
+            Clause,
+            ["value"],
+            state,
+            fun(R) -> R end,
+            "failure",
+            #{}
+        )
+    ).
+
 duplicate_boolean_case_arm_is_rejected_test() ->
     Clause = parse_clause(
         "probe(Condition) -> "
@@ -391,6 +600,20 @@ xls_gs_callback_body_accepts_if_test() ->
         ok = file:delete(Path)
     end.
 
+xls_gs_callback_bodies_accept_general_case_test() ->
+    XLS = iolist_to_binary(xls_parse:to_xls(
+        "test_data/xls_case_fixture.erl"
+    )),
+    ?assertNotEqual(nomatch, binary:match(XLS, <<"Tag::QUERY =>">>)),
+    ?assertNotEqual(nomatch, binary:match(XLS, <<"Tag::UPDATE =>">>)),
+    ?assertNotEqual(nomatch, binary:match(XLS, <<"Choice_1 < 8">>)),
+    ?assertNotEqual(
+        nomatch,
+        binary:match(XLS, <<"Request_1.0 == Tag::QUERY">>)
+    ),
+    ?assertNotEqual(nomatch, binary:match(XLS, <<"Original_1 < 8">>)),
+    ?assertNotEqual(nomatch, binary:match(XLS, <<"case_match_">>)).
+
 state_machine_init_argument_is_rejected_test() ->
     assert_bad_init_head(
         "statem_init_argument_fixture",
@@ -495,6 +718,34 @@ state_machine_final_if_normalizes_repeat_phase_test() ->
             ?assertNotEqual(
                 nomatch,
                 binary:match(XLS, <<"Directive::CONSUME, bool:0">>)
+            )
+        end
+    ).
+
+state_machine_final_general_case_normalizes_each_conclusion_test() ->
+    CastSource =
+        "handle_cast(#message{value = Value}, waiting, Cell) ->\n"
+        "  case Value of\n"
+        "    0 -> {repeat_phase, Cell, consume};\n"
+        "    1 -> {waiting, Cell, consume};\n"
+        "    _ -> {waiting, Cell, fail}\n"
+        "  end.\n",
+    with_statem_fixture(
+        "statem_final_case_fixture",
+        "[waiting]",
+        CastSource,
+        fun(XLS) ->
+            ?assertNotEqual(
+                nomatch,
+                binary:match(XLS, <<"Directive::CONSUME, bool:1">>)
+            ),
+            ?assertNotEqual(
+                nomatch,
+                binary:match(XLS, <<"Directive::CONSUME, bool:0">>)
+            ),
+            ?assertNotEqual(
+                nomatch,
+                binary:match(XLS, <<"Directive::FAIL, bool:0">>)
             )
         end
     ).
@@ -663,12 +914,12 @@ parse_clauses(Source) ->
 
 callback_arguments() ->
     [
-        xls_callback_lower:record_argument(
+        xls_pattern_lower:record_argument(
             message,
             "message",
             "(Tag::MESSAGE, message, bits)"
         ),
-        xls_callback_lower:record_argument(
+        xls_pattern_lower:record_argument(
             state,
             "data",
             "(Tag::STATE, data)"

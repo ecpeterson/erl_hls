@@ -11,14 +11,22 @@ rebar3 as test compile
 
 ERL_XLS_REGSVC_X="$stage/regsvc.x" \
 ERL_XLS_PHI_HALO_X="$stage/phi_halo_cell.x" \
+ERL_XLS_CASE_FIXTURE_X="$stage/xls_case_fixture.x" \
 erl \
     -noshell \
     -pa "$project_root/_build/test/lib/erl_xls/ebin" \
     -eval '
         Regsvc = xls_parse:to_xls("src/examples/regsvc.erl"),
         PhiHalo = xls_parse:to_xls("src/examples/phi_halo_cell.erl"),
+        CaseFixture = xls_parse:to_xls(
+            "test_data/xls_case_fixture.erl"
+        ),
         ok = file:write_file(os:getenv("ERL_XLS_REGSVC_X"), Regsvc),
         ok = file:write_file(os:getenv("ERL_XLS_PHI_HALO_X"), PhiHalo),
+        ok = file:write_file(
+            os:getenv("ERL_XLS_CASE_FIXTURE_X"),
+            CaseFixture
+        ),
         halt().
     '
 

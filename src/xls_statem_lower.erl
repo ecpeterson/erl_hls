@@ -310,9 +310,9 @@ lower_cast_group(
         record_function_name(Tag), "(message))"
     ],
     Arguments = [
-        xls_callback_lower:record_argument(Tag, "message", MessageValue),
-        xls_callback_lower:value_argument("phase"),
-        xls_callback_lower:record_argument(
+        xls_pattern_lower:record_argument(Tag, "message", MessageValue),
+        xls_pattern_lower:value_argument("phase"),
+        xls_pattern_lower:record_argument(
             DataName,
             "data",
             ["(Tag::", uppercase(DataName), ", data)"]
@@ -412,7 +412,7 @@ cast_key(
 
 cast_head(_Line, [MessagePattern, {atom, _PhaseLine, Phase}, _DataPattern],
         MessageNames, PhaseNames) ->
-    Tag = xls_callback_lower:record_pattern_name(MessagePattern),
+    Tag = xls_pattern_lower:record_pattern_name(MessagePattern),
     require_declared(cast_message, Tag, MessageNames),
     require_declared(cast_phase, Phase, PhaseNames),
     {Tag, Phase};

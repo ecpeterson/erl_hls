@@ -474,67 +474,58 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
         let case_match_1_2 = _14.1;
         let Present_1 = _14.0;
         let _15 = Cell_1.1.best_direction;
-        let _16 = _15 == 1;
-        let _17 = if _16 {
-          (Present_1, bool:false)
-        } else {
-          (Absent_1, bool:false)
+        let _17 = {
+          if _15 == 1 {
+            let _16 = (Present_1, Absent_1, Absent_1, Absent_1, );
+            (_16, bool:false)
+          } else {
+            if _15 == 2 {
+              let _16 = (Absent_1, Present_1, Absent_1, Absent_1, );
+              (_16, bool:false)
+            } else {
+              if _15 == 4 {
+                let _16 = (Absent_1, Absent_1, Present_1, Absent_1, );
+                (_16, bool:false)
+              } else {
+                if _15 == 8 {
+                  let _16 = (Absent_1, Absent_1, Absent_1, Present_1, );
+                  (_16, bool:false)
+                } else {
+                  let _16 = (Absent_1, Absent_1, Absent_1, Absent_1, );
+                  (_16, bool:false)
+                }
+              }
+            }
+          }
         };
         let case_match_2_1 = bool:false;
         let case_match_2_2 = _17.1;
-        let NorthPresent_1 = _17.0;
-        let _18 = Cell_1.1.best_direction;
-        let _19 = _18 == 2;
-        let _20 = if _19 {
-          (Present_1, bool:false)
-        } else {
-          (Absent_1, bool:false)
-        };
-        let case_match_3_1 = bool:false;
-        let case_match_3_2 = _20.1;
-        let EastPresent_1 = _20.0;
-        let _21 = Cell_1.1.best_direction;
-        let _22 = _21 == 4;
-        let _23 = if _22 {
-          (Present_1, bool:false)
-        } else {
-          (Absent_1, bool:false)
-        };
-        let case_match_4_1 = bool:false;
-        let case_match_4_2 = _23.1;
-        let WestPresent_1 = _23.0;
-        let _24 = Cell_1.1.best_direction;
-        let _25 = _24 == 8;
-        let _26 = if _25 {
-          (Present_1, bool:false)
-        } else {
-          (Absent_1, bool:false)
-        };
-        let case_match_5_1 = bool:false;
-        let case_match_5_2 = _26.1;
-        let SouthPresent_1 = _26.0;
-        let _27 = Cell_1.1.step;
-        let _28 = Anyonmove {
-          step: _27,
+        let NorthPresent_1 = _17.0.0;
+        let EastPresent_1 = _17.0.1;
+        let WestPresent_1 = _17.0.2;
+        let SouthPresent_1 = _17.0.3;
+        let _18 = Cell_1.1.step;
+        let _19 = Anyonmove {
+          step: _18,
           ..zero!<Anyonmove>()
         };
-        let _29 = (Tag::ANYON_MOVE, _28, bits_from_anyonmove(_28));
-        let Message_1 = _29;
-        let _30 = Cell_1.1.anyon;
-        let _31 = _30 ^ Present_1;
-        let _32 = Cell {
-          anyon: _31,
+        let _20 = (Tag::ANYON_MOVE, _19, bits_from_anyonmove(_19));
+        let Message_1 = _20;
+        let _21 = Cell_1.1.anyon;
+        let _22 = _21 ^ Present_1;
+        let _23 = Cell {
+          anyon: _22,
           random_state: NextRandom_1,
           ..(Cell_1).1
         };
-        let _33 = (Tag::CELL, _32);
-        let Updated_1 = _33;
-        let _34 = if ((case_match_1_1 != case_match_1_2) || (case_match_2_1 != case_match_2_2) || (case_match_3_1 != case_match_3_2) || (case_match_4_1 != case_match_4_2) || (case_match_5_1 != case_match_5_2) || bool:false) {
+        let _24 = (Tag::CELL, _23);
+        let Updated_1 = _24;
+        let _25 = if ((case_match_1_1 != case_match_1_2) || (case_match_2_1 != case_match_2_2) || bool:false) {
             data
         } else {
             Updated_1.1
         };
-        _34
+        _25
       };
       let north = {
         let _OldPhase_1 = old_phase;
@@ -567,72 +558,63 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
         let case_match_1_2 = _14.1;
         let Present_1 = _14.0;
         let _15 = Cell_1.1.best_direction;
-        let _16 = _15 == 1;
-        let _17 = if _16 {
-          (Present_1, bool:false)
-        } else {
-          (Absent_1, bool:false)
+        let _17 = {
+          if _15 == 1 {
+            let _16 = (Present_1, Absent_1, Absent_1, Absent_1, );
+            (_16, bool:false)
+          } else {
+            if _15 == 2 {
+              let _16 = (Absent_1, Present_1, Absent_1, Absent_1, );
+              (_16, bool:false)
+            } else {
+              if _15 == 4 {
+                let _16 = (Absent_1, Absent_1, Present_1, Absent_1, );
+                (_16, bool:false)
+              } else {
+                if _15 == 8 {
+                  let _16 = (Absent_1, Absent_1, Absent_1, Present_1, );
+                  (_16, bool:false)
+                } else {
+                  let _16 = (Absent_1, Absent_1, Absent_1, Absent_1, );
+                  (_16, bool:false)
+                }
+              }
+            }
+          }
         };
         let case_match_2_1 = bool:false;
         let case_match_2_2 = _17.1;
-        let NorthPresent_1 = _17.0;
-        let _18 = Cell_1.1.best_direction;
-        let _19 = _18 == 2;
-        let _20 = if _19 {
-          (Present_1, bool:false)
-        } else {
-          (Absent_1, bool:false)
-        };
-        let case_match_3_1 = bool:false;
-        let case_match_3_2 = _20.1;
-        let EastPresent_1 = _20.0;
-        let _21 = Cell_1.1.best_direction;
-        let _22 = _21 == 4;
-        let _23 = if _22 {
-          (Present_1, bool:false)
-        } else {
-          (Absent_1, bool:false)
-        };
-        let case_match_4_1 = bool:false;
-        let case_match_4_2 = _23.1;
-        let WestPresent_1 = _23.0;
-        let _24 = Cell_1.1.best_direction;
-        let _25 = _24 == 8;
-        let _26 = if _25 {
-          (Present_1, bool:false)
-        } else {
-          (Absent_1, bool:false)
-        };
-        let case_match_5_1 = bool:false;
-        let case_match_5_2 = _26.1;
-        let SouthPresent_1 = _26.0;
-        let _27 = Cell_1.1.step;
-        let _28 = Anyonmove {
-          step: _27,
+        let NorthPresent_1 = _17.0.0;
+        let EastPresent_1 = _17.0.1;
+        let WestPresent_1 = _17.0.2;
+        let SouthPresent_1 = _17.0.3;
+        let _18 = Cell_1.1.step;
+        let _19 = Anyonmove {
+          step: _18,
           ..zero!<Anyonmove>()
         };
-        let _29 = (Tag::ANYON_MOVE, _28, bits_from_anyonmove(_28));
-        let Message_1 = _29;
-        let _30 = Cell_1.1.anyon;
-        let _31 = _30 ^ Present_1;
-        let _32 = Cell {
-          anyon: _31,
+        let _20 = (Tag::ANYON_MOVE, _19, bits_from_anyonmove(_19));
+        let Message_1 = _20;
+        let _21 = Cell_1.1.anyon;
+        let _22 = _21 ^ Present_1;
+        let _23 = Cell {
+          anyon: _22,
           random_state: NextRandom_1,
           ..(Cell_1).1
         };
-        let _33 = (Tag::CELL, _32);
-        let Updated_1 = _33;
-        let _34 = Anyonmove {
+        let _24 = (Tag::CELL, _23);
+        let Updated_1 = _24;
+        let _25 = Anyonmove {
           present: NorthPresent_1,
           ..(Message_1).1
         };
-        let _35 = (Tag::ANYON_MOVE, _34, bits_from_anyonmove(_34));
-        let _36 = if ((case_match_1_1 != case_match_1_2) || (case_match_2_1 != case_match_2_2) || (case_match_3_1 != case_match_3_2) || (case_match_4_1 != case_match_4_2) || (case_match_5_1 != case_match_5_2) || bool:false) {
+        let _26 = (Tag::ANYON_MOVE, _25, bits_from_anyonmove(_25));
+        let _27 = if ((case_match_1_1 != case_match_1_2) || (case_match_2_1 != case_match_2_2) || bool:false) {
             zero!<axis::Frame>()
         } else {
-            axis::pack(_35.0 as u8, _35.2)
+            axis::pack(_26.0 as u8, _26.2)
         };
-        _36
+        _27
       };
       let east = {
         let _OldPhase_1 = old_phase;
@@ -665,72 +647,63 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
         let case_match_1_2 = _14.1;
         let Present_1 = _14.0;
         let _15 = Cell_1.1.best_direction;
-        let _16 = _15 == 1;
-        let _17 = if _16 {
-          (Present_1, bool:false)
-        } else {
-          (Absent_1, bool:false)
+        let _17 = {
+          if _15 == 1 {
+            let _16 = (Present_1, Absent_1, Absent_1, Absent_1, );
+            (_16, bool:false)
+          } else {
+            if _15 == 2 {
+              let _16 = (Absent_1, Present_1, Absent_1, Absent_1, );
+              (_16, bool:false)
+            } else {
+              if _15 == 4 {
+                let _16 = (Absent_1, Absent_1, Present_1, Absent_1, );
+                (_16, bool:false)
+              } else {
+                if _15 == 8 {
+                  let _16 = (Absent_1, Absent_1, Absent_1, Present_1, );
+                  (_16, bool:false)
+                } else {
+                  let _16 = (Absent_1, Absent_1, Absent_1, Absent_1, );
+                  (_16, bool:false)
+                }
+              }
+            }
+          }
         };
         let case_match_2_1 = bool:false;
         let case_match_2_2 = _17.1;
-        let NorthPresent_1 = _17.0;
-        let _18 = Cell_1.1.best_direction;
-        let _19 = _18 == 2;
-        let _20 = if _19 {
-          (Present_1, bool:false)
-        } else {
-          (Absent_1, bool:false)
-        };
-        let case_match_3_1 = bool:false;
-        let case_match_3_2 = _20.1;
-        let EastPresent_1 = _20.0;
-        let _21 = Cell_1.1.best_direction;
-        let _22 = _21 == 4;
-        let _23 = if _22 {
-          (Present_1, bool:false)
-        } else {
-          (Absent_1, bool:false)
-        };
-        let case_match_4_1 = bool:false;
-        let case_match_4_2 = _23.1;
-        let WestPresent_1 = _23.0;
-        let _24 = Cell_1.1.best_direction;
-        let _25 = _24 == 8;
-        let _26 = if _25 {
-          (Present_1, bool:false)
-        } else {
-          (Absent_1, bool:false)
-        };
-        let case_match_5_1 = bool:false;
-        let case_match_5_2 = _26.1;
-        let SouthPresent_1 = _26.0;
-        let _27 = Cell_1.1.step;
-        let _28 = Anyonmove {
-          step: _27,
+        let NorthPresent_1 = _17.0.0;
+        let EastPresent_1 = _17.0.1;
+        let WestPresent_1 = _17.0.2;
+        let SouthPresent_1 = _17.0.3;
+        let _18 = Cell_1.1.step;
+        let _19 = Anyonmove {
+          step: _18,
           ..zero!<Anyonmove>()
         };
-        let _29 = (Tag::ANYON_MOVE, _28, bits_from_anyonmove(_28));
-        let Message_1 = _29;
-        let _30 = Cell_1.1.anyon;
-        let _31 = _30 ^ Present_1;
-        let _32 = Cell {
-          anyon: _31,
+        let _20 = (Tag::ANYON_MOVE, _19, bits_from_anyonmove(_19));
+        let Message_1 = _20;
+        let _21 = Cell_1.1.anyon;
+        let _22 = _21 ^ Present_1;
+        let _23 = Cell {
+          anyon: _22,
           random_state: NextRandom_1,
           ..(Cell_1).1
         };
-        let _33 = (Tag::CELL, _32);
-        let Updated_1 = _33;
-        let _34 = Anyonmove {
+        let _24 = (Tag::CELL, _23);
+        let Updated_1 = _24;
+        let _25 = Anyonmove {
           present: EastPresent_1,
           ..(Message_1).1
         };
-        let _35 = (Tag::ANYON_MOVE, _34, bits_from_anyonmove(_34));
-        let _36 = if ((case_match_1_1 != case_match_1_2) || (case_match_2_1 != case_match_2_2) || (case_match_3_1 != case_match_3_2) || (case_match_4_1 != case_match_4_2) || (case_match_5_1 != case_match_5_2) || bool:false) {
+        let _26 = (Tag::ANYON_MOVE, _25, bits_from_anyonmove(_25));
+        let _27 = if ((case_match_1_1 != case_match_1_2) || (case_match_2_1 != case_match_2_2) || bool:false) {
             zero!<axis::Frame>()
         } else {
-            axis::pack(_35.0 as u8, _35.2)
+            axis::pack(_26.0 as u8, _26.2)
         };
-        _36
+        _27
       };
       let west = {
         let _OldPhase_1 = old_phase;
@@ -763,72 +736,63 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
         let case_match_1_2 = _14.1;
         let Present_1 = _14.0;
         let _15 = Cell_1.1.best_direction;
-        let _16 = _15 == 1;
-        let _17 = if _16 {
-          (Present_1, bool:false)
-        } else {
-          (Absent_1, bool:false)
+        let _17 = {
+          if _15 == 1 {
+            let _16 = (Present_1, Absent_1, Absent_1, Absent_1, );
+            (_16, bool:false)
+          } else {
+            if _15 == 2 {
+              let _16 = (Absent_1, Present_1, Absent_1, Absent_1, );
+              (_16, bool:false)
+            } else {
+              if _15 == 4 {
+                let _16 = (Absent_1, Absent_1, Present_1, Absent_1, );
+                (_16, bool:false)
+              } else {
+                if _15 == 8 {
+                  let _16 = (Absent_1, Absent_1, Absent_1, Present_1, );
+                  (_16, bool:false)
+                } else {
+                  let _16 = (Absent_1, Absent_1, Absent_1, Absent_1, );
+                  (_16, bool:false)
+                }
+              }
+            }
+          }
         };
         let case_match_2_1 = bool:false;
         let case_match_2_2 = _17.1;
-        let NorthPresent_1 = _17.0;
-        let _18 = Cell_1.1.best_direction;
-        let _19 = _18 == 2;
-        let _20 = if _19 {
-          (Present_1, bool:false)
-        } else {
-          (Absent_1, bool:false)
-        };
-        let case_match_3_1 = bool:false;
-        let case_match_3_2 = _20.1;
-        let EastPresent_1 = _20.0;
-        let _21 = Cell_1.1.best_direction;
-        let _22 = _21 == 4;
-        let _23 = if _22 {
-          (Present_1, bool:false)
-        } else {
-          (Absent_1, bool:false)
-        };
-        let case_match_4_1 = bool:false;
-        let case_match_4_2 = _23.1;
-        let WestPresent_1 = _23.0;
-        let _24 = Cell_1.1.best_direction;
-        let _25 = _24 == 8;
-        let _26 = if _25 {
-          (Present_1, bool:false)
-        } else {
-          (Absent_1, bool:false)
-        };
-        let case_match_5_1 = bool:false;
-        let case_match_5_2 = _26.1;
-        let SouthPresent_1 = _26.0;
-        let _27 = Cell_1.1.step;
-        let _28 = Anyonmove {
-          step: _27,
+        let NorthPresent_1 = _17.0.0;
+        let EastPresent_1 = _17.0.1;
+        let WestPresent_1 = _17.0.2;
+        let SouthPresent_1 = _17.0.3;
+        let _18 = Cell_1.1.step;
+        let _19 = Anyonmove {
+          step: _18,
           ..zero!<Anyonmove>()
         };
-        let _29 = (Tag::ANYON_MOVE, _28, bits_from_anyonmove(_28));
-        let Message_1 = _29;
-        let _30 = Cell_1.1.anyon;
-        let _31 = _30 ^ Present_1;
-        let _32 = Cell {
-          anyon: _31,
+        let _20 = (Tag::ANYON_MOVE, _19, bits_from_anyonmove(_19));
+        let Message_1 = _20;
+        let _21 = Cell_1.1.anyon;
+        let _22 = _21 ^ Present_1;
+        let _23 = Cell {
+          anyon: _22,
           random_state: NextRandom_1,
           ..(Cell_1).1
         };
-        let _33 = (Tag::CELL, _32);
-        let Updated_1 = _33;
-        let _34 = Anyonmove {
+        let _24 = (Tag::CELL, _23);
+        let Updated_1 = _24;
+        let _25 = Anyonmove {
           present: WestPresent_1,
           ..(Message_1).1
         };
-        let _35 = (Tag::ANYON_MOVE, _34, bits_from_anyonmove(_34));
-        let _36 = if ((case_match_1_1 != case_match_1_2) || (case_match_2_1 != case_match_2_2) || (case_match_3_1 != case_match_3_2) || (case_match_4_1 != case_match_4_2) || (case_match_5_1 != case_match_5_2) || bool:false) {
+        let _26 = (Tag::ANYON_MOVE, _25, bits_from_anyonmove(_25));
+        let _27 = if ((case_match_1_1 != case_match_1_2) || (case_match_2_1 != case_match_2_2) || bool:false) {
             zero!<axis::Frame>()
         } else {
-            axis::pack(_35.0 as u8, _35.2)
+            axis::pack(_26.0 as u8, _26.2)
         };
-        _36
+        _27
       };
       let south = {
         let _OldPhase_1 = old_phase;
@@ -861,72 +825,63 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
         let case_match_1_2 = _14.1;
         let Present_1 = _14.0;
         let _15 = Cell_1.1.best_direction;
-        let _16 = _15 == 1;
-        let _17 = if _16 {
-          (Present_1, bool:false)
-        } else {
-          (Absent_1, bool:false)
+        let _17 = {
+          if _15 == 1 {
+            let _16 = (Present_1, Absent_1, Absent_1, Absent_1, );
+            (_16, bool:false)
+          } else {
+            if _15 == 2 {
+              let _16 = (Absent_1, Present_1, Absent_1, Absent_1, );
+              (_16, bool:false)
+            } else {
+              if _15 == 4 {
+                let _16 = (Absent_1, Absent_1, Present_1, Absent_1, );
+                (_16, bool:false)
+              } else {
+                if _15 == 8 {
+                  let _16 = (Absent_1, Absent_1, Absent_1, Present_1, );
+                  (_16, bool:false)
+                } else {
+                  let _16 = (Absent_1, Absent_1, Absent_1, Absent_1, );
+                  (_16, bool:false)
+                }
+              }
+            }
+          }
         };
         let case_match_2_1 = bool:false;
         let case_match_2_2 = _17.1;
-        let NorthPresent_1 = _17.0;
-        let _18 = Cell_1.1.best_direction;
-        let _19 = _18 == 2;
-        let _20 = if _19 {
-          (Present_1, bool:false)
-        } else {
-          (Absent_1, bool:false)
-        };
-        let case_match_3_1 = bool:false;
-        let case_match_3_2 = _20.1;
-        let EastPresent_1 = _20.0;
-        let _21 = Cell_1.1.best_direction;
-        let _22 = _21 == 4;
-        let _23 = if _22 {
-          (Present_1, bool:false)
-        } else {
-          (Absent_1, bool:false)
-        };
-        let case_match_4_1 = bool:false;
-        let case_match_4_2 = _23.1;
-        let WestPresent_1 = _23.0;
-        let _24 = Cell_1.1.best_direction;
-        let _25 = _24 == 8;
-        let _26 = if _25 {
-          (Present_1, bool:false)
-        } else {
-          (Absent_1, bool:false)
-        };
-        let case_match_5_1 = bool:false;
-        let case_match_5_2 = _26.1;
-        let SouthPresent_1 = _26.0;
-        let _27 = Cell_1.1.step;
-        let _28 = Anyonmove {
-          step: _27,
+        let NorthPresent_1 = _17.0.0;
+        let EastPresent_1 = _17.0.1;
+        let WestPresent_1 = _17.0.2;
+        let SouthPresent_1 = _17.0.3;
+        let _18 = Cell_1.1.step;
+        let _19 = Anyonmove {
+          step: _18,
           ..zero!<Anyonmove>()
         };
-        let _29 = (Tag::ANYON_MOVE, _28, bits_from_anyonmove(_28));
-        let Message_1 = _29;
-        let _30 = Cell_1.1.anyon;
-        let _31 = _30 ^ Present_1;
-        let _32 = Cell {
-          anyon: _31,
+        let _20 = (Tag::ANYON_MOVE, _19, bits_from_anyonmove(_19));
+        let Message_1 = _20;
+        let _21 = Cell_1.1.anyon;
+        let _22 = _21 ^ Present_1;
+        let _23 = Cell {
+          anyon: _22,
           random_state: NextRandom_1,
           ..(Cell_1).1
         };
-        let _33 = (Tag::CELL, _32);
-        let Updated_1 = _33;
-        let _34 = Anyonmove {
+        let _24 = (Tag::CELL, _23);
+        let Updated_1 = _24;
+        let _25 = Anyonmove {
           present: SouthPresent_1,
           ..(Message_1).1
         };
-        let _35 = (Tag::ANYON_MOVE, _34, bits_from_anyonmove(_34));
-        let _36 = if ((case_match_1_1 != case_match_1_2) || (case_match_2_1 != case_match_2_2) || (case_match_3_1 != case_match_3_2) || (case_match_4_1 != case_match_4_2) || (case_match_5_1 != case_match_5_2) || bool:false) {
+        let _26 = (Tag::ANYON_MOVE, _25, bits_from_anyonmove(_25));
+        let _27 = if ((case_match_1_1 != case_match_1_2) || (case_match_2_1 != case_match_2_2) || bool:false) {
             zero!<axis::Frame>()
         } else {
-            axis::pack(_35.0 as u8, _35.2)
+            axis::pack(_26.0 as u8, _26.2)
         };
-        _36
+        _27
       };
       (entered_data, EntryEffects {
         north_valid: u1:1,
