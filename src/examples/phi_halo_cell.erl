@@ -260,31 +260,15 @@ handle_enter(_OldPhase, gathering, Cell) ->
     ]};
 handle_enter(_OldPhase, comparing, Cell) ->
     Phi0 = xls_lists:nth(1, Cell#cell.phi),
-    North = #phi0{
+    Message = #phi0{
         step = Cell#cell.step,
-        source = ?SOUTH_MASK,
-        value = Phi0
-    },
-    East = #phi0{
-        step = Cell#cell.step,
-        source = ?WEST_MASK,
-        value = Phi0
-    },
-    West = #phi0{
-        step = Cell#cell.step,
-        source = ?EAST_MASK,
-        value = Phi0
-    },
-    South = #phi0{
-        step = Cell#cell.step,
-        source = ?NORTH_MASK,
         value = Phi0
     },
     {Cell, [
-        {cast, north, North},
-        {cast, east, East},
-        {cast, west, West},
-        {cast, south, South}
+        {cast, north, Message#phi0{source = ?SOUTH_MASK}},
+        {cast, east, Message#phi0{source = ?WEST_MASK}},
+        {cast, west, Message#phi0{source = ?EAST_MASK}},
+        {cast, south, Message#phi0{source = ?NORTH_MASK}}
     ]};
 handle_enter(_OldPhase, flipping, Cell) ->
     NextRandom = xls_prng:xorshift32(Cell#cell.random_state),
@@ -313,31 +297,16 @@ handle_enter(_OldPhase, flipping, Cell) ->
         false -> Absent;
         true -> Present
     end,
-    North = #anyon_move{
-        step = Cell#cell.step,
-        present = NorthPresent
-    },
-    East = #anyon_move{
-        step = Cell#cell.step,
-        present = EastPresent
-    },
-    West = #anyon_move{
-        step = Cell#cell.step,
-        present = WestPresent
-    },
-    South = #anyon_move{
-        step = Cell#cell.step,
-        present = SouthPresent
-    },
+    Message = #anyon_move{step = Cell#cell.step},
     Updated = Cell#cell{
         anyon = Cell#cell.anyon bxor Present,
         random_state = NextRandom
     },
     {Updated, [
-        {cast, north, North},
-        {cast, east, East},
-        {cast, west, West},
-        {cast, south, South}
+        {cast, north, Message#anyon_move{present = NorthPresent}},
+        {cast, east, Message#anyon_move{present = EastPresent}},
+        {cast, west, Message#anyon_move{present = WestPresent}},
+        {cast, south, Message#anyon_move{present = SouthPresent}}
     ]}.
 
 -spec handle_cast(#phi{} | #phi0{} | #anyon_move{}, phase(), #cell{}) ->
@@ -435,6 +404,7 @@ handle_cast(
         true -> Value;
         false -> Best
     end,
+    %% TODO: Express this as an if once general if lowering is available.
     NewBestDirection = case Value > Best of
         true -> Source;
         false ->
