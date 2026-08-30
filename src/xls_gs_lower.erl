@@ -25,7 +25,7 @@ callback_groups(Forms, Function) ->
     xls_callback_lower:group_by(Clauses, fun callback_tag/1).
 
 callback_tag({clause, _Line, [MessagePattern, _DataPattern], _Guards, _Body}) ->
-    xls_callback_lower:record_pattern_name(MessagePattern).
+    xls_pattern_lower:record_pattern_name(MessagePattern).
 
 validate_groups(CallGroups, CastGroups, DeclaredTags) ->
     CallTags = [Tag || {Tag, _Clauses} <- CallGroups],
@@ -42,12 +42,12 @@ validate_groups(CallGroups, CastGroups, DeclaredTags) ->
 
 callback_arm(Kind, {Tag, Clauses}, StateName) ->
     Arguments = [
-        xls_callback_lower:record_argument(
+        xls_pattern_lower:record_argument(
             Tag,
             "request",
             public_record_value(Tag, "request")
         ),
-        xls_callback_lower:record_argument(
+        xls_pattern_lower:record_argument(
             StateName,
             "state_record.1",
             "state_record"

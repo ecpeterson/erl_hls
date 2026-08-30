@@ -51,6 +51,16 @@ done
     --fifo_module= \
     regsvc.opt.ir > regsvc.v
 
+# Compile-only conformance coverage for tuple and homogeneous-record case
+# patterns in an xls_gs callback. The phi simulation below covers integer
+# case selection in xls_statem.
+"$xls_root/ir_converter_main" \
+    --warnings_as_errors=false \
+    --dslx_path=. \
+    --dslx_stdlib_path="$stdlib" \
+    --top=Top \
+    xls_case_fixture.x > xls_case_fixture.ir
+
 "$xls_root/ir_converter_main" \
     --warnings_as_errors=false \
     --dslx_path=. \

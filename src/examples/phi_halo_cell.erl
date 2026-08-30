@@ -281,22 +281,14 @@ handle_enter(_OldPhase, flipping, Cell) ->
         false -> Absent;
         true -> xls_type:as(xls_nums:u32(), 1)
     end,
-    NorthPresent = case Cell#cell.best_direction =:= ?NORTH_MASK of
-        false -> Absent;
-        true -> Present
-    end,
-    EastPresent = case Cell#cell.best_direction =:= ?EAST_MASK of
-        false -> Absent;
-        true -> Present
-    end,
-    WestPresent = case Cell#cell.best_direction =:= ?WEST_MASK of
-        false -> Absent;
-        true -> Present
-    end,
-    SouthPresent = case Cell#cell.best_direction =:= ?SOUTH_MASK of
-        false -> Absent;
-        true -> Present
-    end,
+    {NorthPresent, EastPresent, WestPresent, SouthPresent} =
+        case Cell#cell.best_direction of
+            ?NORTH_MASK -> {Present, Absent, Absent, Absent};
+            ?EAST_MASK -> {Absent, Present, Absent, Absent};
+            ?WEST_MASK -> {Absent, Absent, Present, Absent};
+            ?SOUTH_MASK -> {Absent, Absent, Absent, Present};
+            _ -> {Absent, Absent, Absent, Absent}
+        end,
     Message = #anyon_move{step = Cell#cell.step},
     Updated = Cell#cell{
         anyon = Cell#cell.anyon bxor Present,

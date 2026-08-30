@@ -9,12 +9,14 @@ Transforms supported Erlang actor modules into corresponding XLS modules.
 
 ## Control flow
 
-Callback bodies may use Boolean `case` and source-ordered `if` expressions.
-Each `if` clause accepts one guard sequence from the same side-effect-free
-expression subset as a callback guard, including comma-separated tests and
-`andalso` or `orelse`. The expression must end in a literal `true` clause: a
-nonexhaustive `if` is rejected until generated code has a typed representation
-for Erlang's `if_clause` failure.
+Callback bodies may use source-ordered `case` and `if` expressions. Supported
+`case` patterns include literals, variables, aliases, tuples, and homogeneous
+records. A general `case` must end in an unguarded catch-all clause. Each
+clause accepts one guard sequence from the same side-effect-free expression
+subset as a callback guard, including comma-separated tests and `andalso` or
+`orelse`. An `if` must similarly end in a literal `true` clause. Nonexhaustive
+control flow is rejected until generated code has a typed representation for
+Erlang's `case_clause` and `if_clause` failures.
 
 Bindings made inside a `case` or `if` arm remain local to that arm. The lowerer
 does not yet make a variable available after the expression merely because
@@ -351,8 +353,8 @@ statement_from_statement({record, _L, ToUpdate, NameAtom, UpdateFields}, State) 
     instr(SecondState, record_value(NameAtom, reference(SecondState), SecondState));
 statement_from_statement({'if', Line, Clauses}, State) ->
     lower_if(Line, Clauses, State);
-statement_from_statement({'case', _L, Condition, Clauses}, State) ->
-    lower_boolean_case(Condition, Clauses, State);
+statement_from_statement({'case', Line, Condition, Clauses}, State) ->
+    xls_case_lower:lower(Line, Condition, Clauses, State);
 statement_from_statement({call, _L, MF, Args}, State) ->
     {remote, _1, {atom, _2, Module}, {atom, _3, FAtom}} = MF,
 
@@ -411,96 +413,6 @@ nested_if_cases([{Line, Predicate, Body} | Rest], Fallback) ->
         {clause, Line, [{atom, Line, false}], [],
             nested_if_cases(Rest, Fallback)}
     ]}].
-
-%% XLS requires all branches of an expression to have one type.  This is the
-%% directly representable subset of Erlang case: a boolean scrutinee, two
-%% unguarded branches, and branch-local bindings whose final expressions have
-%% the same XLS type.  This subset does not implement Erlang's rule for a
-%% variable bound in every branch to become available after the case, so each
-%% branch is emitted as its own lexical block.
-lower_boolean_case(Condition, Clauses, State0) ->
-    {TrueBody, FalseBody} = boolean_case_bodies(Clauses),
-    ConditionState = statement_from_statement(
-        Condition,
-        State0#clause_state{reference = none}
-    ),
-    BranchBase = ConditionState#clause_state{
-        statements = [],
-        reference = none
-    },
-    TrueState = lower_expression_sequence(TrueBody, BranchBase),
-    FalseState = lower_expression_sequence(FalseBody, BranchBase),
-    AnonymousCounter = erlang:max(
-        TrueState#clause_state.anonymous_counter,
-        FalseState#clause_state.anonymous_counter
-    ),
-    CaseMatchCounter = erlang:max(
-        TrueState#clause_state.match_counter,
-        FalseState#clause_state.match_counter
-    ) + 1,
-    BaseCounters = BranchBase#clause_state.named_counters,
-    MergedState = ConditionState#clause_state{
-        anonymous_counter = AnonymousCounter,
-        match_counter = CaseMatchCounter,
-        reference = none
-    },
-    CaseState = instr(MergedState, [
-        "if ", reference(ConditionState), " {\n",
-        xls_parse_io:indent(print(
-            lists:reverse(TrueState#clause_state.statements)
-        ), 2),
-        "  (", reference(TrueState), ", ", mismatch_expression(
-            TrueState#clause_state.named_counters,
-            BaseCounters
-        ), ")\n",
-        "} else {\n",
-        xls_parse_io:indent(print(
-            lists:reverse(FalseState#clause_state.statements)
-        ), 2),
-        "  (", reference(FalseState), ", ", mismatch_expression(
-            FalseState#clause_state.named_counters,
-            BaseCounters
-        ), ")\n",
-        "}"
-    ]),
-    CaseReference = reference(CaseState),
-    MatchBase = "case_match_" ++ integer_to_list(CaseMatchCounter),
-    {ExpectedName, ExpectedState} = uniquify(CaseState, MatchBase),
-    {ActualName, ActualState} = uniquify(ExpectedState, MatchBase),
-    ActualState#clause_state{
-        reference = [CaseReference, ".0"],
-        statements = [
-            ["let ", ActualName, " = ", CaseReference, ".1;\n"],
-            ["let ", ExpectedName, " = bool:false;\n"]
-            | ActualState#clause_state.statements
-        ]
-    }.
-
-boolean_case_bodies(Clauses) ->
-    case lists:foldl(
-        fun
-            ({clause, _Line, [{atom, _PatternLine, true}], [], Body},
-                    {none, False}) ->
-                {Body, False};
-            ({clause, Line, [{atom, _PatternLine, true}], [], _Body},
-                    {_True, _False}) ->
-                error({duplicate_xls_boolean_case_branch, Line, true});
-            ({clause, _Line, [{atom, _PatternLine, false}], [], Body},
-                    {True, none}) ->
-                {True, Body};
-            ({clause, Line, [{atom, _PatternLine, false}], [], _Body},
-                    {_True, _False}) ->
-                error({duplicate_xls_boolean_case_branch, Line, false});
-            (Clause, _Bodies) ->
-                error({unsupported_xls_case_clause, Clause})
-        end,
-        {none, none},
-        Clauses
-    ) of
-        {none, _} -> error({missing_xls_boolean_case_branch, true});
-        {_, none} -> error({missing_xls_boolean_case_branch, false});
-        Bodies -> Bodies
-    end.
 
 lower_expression_sequence(Expressions, State0) ->
     lists:foldl(
