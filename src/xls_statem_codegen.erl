@@ -264,7 +264,7 @@ service(#{
         unblocked_array := UnblockedArray
     } = queue_expansion(Capacity),
     [
-        "proc Service {\n",
+        "pub proc Service {\n",
         "  req_in: chan<axis::Frame> in;\n",
         [
             ["  ", name(Port), "_out: chan<axis::Frame> out;\n"]

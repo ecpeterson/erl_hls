@@ -1740,7 +1740,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
   }
 }
 
-proc Service {
+pub proc Service {
   req_in: chan<axis::Frame> in;
   north_out: chan<axis::Frame> out;
   east_out: chan<axis::Frame> out;
