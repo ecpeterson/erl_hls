@@ -148,6 +148,47 @@ iverilog \
 
 vvp phi_torus_topology.vvp
 
+# Elaborate the checked distance-three graph to IR so distinct cross-family
+# shifts and wrapping are accepted by the pinned XLS build. Full optimization,
+# RTL generation, and simulation remain on the distance-one smoke below; those
+# later stages would otherwise make the first regression pay the full 54-actor
+# cost.
+"$xls_root/ir_converter_main" \
+    --warnings_as_errors=false \
+    --dslx_path=. \
+    --dslx_stdlib_path="$stdlib" \
+    --top=Top \
+    phi_noise_topology.x > phi_noise_topology.ir
+
+# This distance-one graph exercises all six family types, per-instance
+# startup, and queued announcement fanout through generated RTL.
+"$xls_root/ir_converter_main" \
+    --warnings_as_errors=false \
+    --dslx_path=. \
+    --dslx_stdlib_path="$stdlib" \
+    --top=Top \
+    phi_noise_topology_smoke.x > phi_noise_topology_smoke.ir
+
+"$xls_root/opt_main" \
+    phi_noise_topology_smoke.ir > phi_noise_topology_smoke.opt.ir
+
+"$xls_root/codegen_main" \
+    --pipeline_stages=1 \
+    --delay_model=unit \
+    --use_system_verilog=false \
+    --reset=reset \
+    --fifo_module= \
+    phi_noise_topology_smoke.opt.ir > phi_noise_topology_smoke.v
+
+iverilog \
+    -g2012 \
+    -s phi_noise_topology_smoke_tb \
+    -o phi_noise_topology_smoke.vvp \
+    phi_noise_topology_smoke_tb.sv \
+    phi_noise_topology_smoke.v
+
+vvp phi_noise_topology_smoke.vvp
+
 iverilog \
     -g2012 \
     -s phi_halo_cell_tb \

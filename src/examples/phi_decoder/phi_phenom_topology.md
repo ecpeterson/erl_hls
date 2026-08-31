@@ -121,5 +121,52 @@ depth-one queues are implemented in registers. The six actor services account
 for roughly 19,242 of the estimated logic cells; queue representation is
 therefore the other obvious target before scaling the witness.
 
-This witness still does not model the full syndrome/data-cell geometry,
-per-instance noise configuration, or a production-throughput external merge.
+This single-family witness still does not model the syndrome/data-cell geometry
+or a production-throughput external merge.
+
+## Nondegenerate phi/noise geometry
+
+`phi_noise_topology.erl` adds the first nondegenerate periodic decoder geometry.
+It uses six `Distance`-by-`Distance` families:
+`phi_x`, `phi_z`, `syndrome_x`, `syndrome_z`, `data_even`, and `data_odd`.
+`data_even[X,Y]` and `data_odd[X,Y]` represent physical data coordinates
+`[X,2Y]` and `[X,2Y+1]`. That parity split turns every cardinal neighborhood
+into an ordinary wrapped translation between equal-shaped families, so the
+current compact relation form needs no parity-dependent or affine index
+language.
+
+```mermaid
+flowchart LR
+    PX["phi_x"] -->|"cardinal torus"| PX
+    PZ["phi_z"] -->|"cardinal torus"| PZ
+
+    PX -->|"request"| SX["syndrome_x"]
+    SX -->|"announcement"| PX
+    PZ -->|"request"| SZ["syndrome_z"]
+    SZ -->|"announcement"| PZ
+
+    SX <-->|"queries / replies"| DE["data_even"]
+    SX <-->|"queries / replies"| DO["data_odd"]
+    SZ <-->|"queries / replies"| DE
+    SZ <-->|"queries / replies"| DO
+
+    SX -->|"queued copy"| XO["x_announcements"]
+    SZ -->|"queued copy"| ZO["z_announcements"]
+```
+
+At the default distance three, the plan has 54 actor instances, 28 compact
+route relations, and 36 explicit startup messages: one for every member of the
+four noise families. The route-rule count is independent of distance; only the
+family bounds and startup entries grow. Startup seeds are deterministic,
+distinct, and nonzero. Queued fanout exposes one coordinate-free activity tap
+for each syndrome plane. Because `phenom_anyon` does not carry the originating
+family coordinate, those taps are useful for backpressure and liveness checks,
+not for reconstructing or validating the full decoder state.
+
+The present noise configuration is still a plumbing fixture. Its common high
+threshold deliberately produces frequent binary events rather than modeling a
+full Pauli channel, and every phi actor still uses the same fixed actor-local
+seed. The explicit startup list also caps this example at distance 50; the
+compact route representation itself has no such bound. Per-instance phi seeds,
+coordinate-preserving observation, and a physically calibrated noise model
+remain later decoder work.

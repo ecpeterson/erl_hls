@@ -20,6 +20,8 @@ rsync -a -e "ssh -o BatchMode=yes" \
     "$local_stage/phenom_syndrome_cell.x" \
     "$local_stage/phi_phenom_topology.x" \
     "$local_stage/phi_torus_topology.x" \
+    "$local_stage/phi_noise_topology.x" \
+    "$local_stage/phi_noise_topology_smoke.x" \
     "$local_stage/ordered_egress_actor.x" \
     "$local_stage/ordered_egress_topology.x" \
     "$local_stage/xls_case_fixture.x" \
@@ -41,6 +43,7 @@ rsync -a -e "ssh -o BatchMode=yes" \
     "$local_stage/phi_halo_cell_tb.sv" \
     "$local_stage/phi_phenom_topology_tb.sv" \
     "$local_stage/phi_torus_topology_tb.sv" \
+    "$local_stage/phi_noise_topology_smoke_tb.sv" \
     "$local_stage/ordered_egress_topology_tb.sv" \
     "$local_stage/xls_sim_bridge.c" \
     "$local_stage/erl_src" \

@@ -24,6 +24,7 @@ generated=(
     phenom_syndrome_cell.x
     phi_phenom_topology.x
     phi_torus_topology.x
+    phi_noise_topology.x
 )
 goldens=(
     src/examples/regsvc/regsvc.erl.x
@@ -32,6 +33,7 @@ goldens=(
     src/examples/phi_decoder/phenom_syndrome_cell.erl.x
     src/examples/phi_decoder/phi_phenom_topology.x
     src/examples/phi_decoder/phi_torus_topology.x
+    src/examples/phi_decoder/phi_noise_topology.x
 )
 verilog=(
     regsvc.v

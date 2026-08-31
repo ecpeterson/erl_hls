@@ -1,31 +1,42 @@
 %%%% xls_topology_family_dslx
 %%%%
-%%%% Lowers one regular two-dimensional actor family into compact DSLX.
+%%%% Lowers regular two-dimensional actor families into compact DSLX.
 
 -module(xls_topology_family_dslx).
 -moduledoc """
-Generates the first compact regular-family DSLX backend.
+Generates the compact regular-family DSLX backend used by the phi/noise
+experiment.
 
-The accepted subset is deliberately the phi torus shape: one rectangular
-two-dimensional family, wrapped same-family translations, and one or more
-scalar external outputs. Exact actors, startup traffic, cross-family routes,
-and route fanout remain outside this backend.
+The accepted subset is deliberately narrow: one or more same-shaped
+two-dimensional families, wrapped translations between those families,
+single-recipient routes, and queued two-way fanout from one family endpoint to
+one family endpoint plus one scalar external output. Exact actors and other
+route forms remain outside this backend.
 
-The generated source contains one reusable node proc and nested `unroll_for!`
-spawns over channel arrays. Its source size therefore follows the number of
-family rules rather than the number of family members. XLS still elaborates
-one actor and the required bounded queues per coordinate.
+The generated source contains one reusable node proc per family and nested
+`unroll_for!` spawns over channel arrays. Its routing structure therefore
+follows the number of family rules rather than the number of family members.
+Explicit startup values still produce one match arm per configured member, and
+XLS elaborates one actor and the required bounded queues per coordinate.
 
 Each compact lane relation becomes one channel array. When two ports alias one
 destination, both router arms use the same array element, preserving the
-actor's source-ordered egress. A scalar external is fed by a fair polling merge
-whose statically indexed receive sites are unrolled; runtime channel indexing
-is not supported by the pinned XLS build.
+actor's source-ordered egress. Queued fanout starts after the common ordered
+egress accepts the event and waits for both bounded branch arrays. A scalar
+external is fed by a fair polling merge whose statically indexed receive sites
+are unrolled; runtime channel indexing is not supported by the pinned XLS
+build.
+
+Family-member startup remains explicit normalized data. A family which has
+startup data must provide exactly one frame for every member. The generated
+node inserts that frame ahead of its first routed receive, while the actor
+graph and routing stay compact.
 """.
 
 -export([emit/2]).
 
 -define(U32_MAX, 16#ffffffff).
+-define(MAX_PAYLOAD_BITS, 96).
 
 -doc "Emits deterministic regular-family DSLX from a normalized plan.".
 -spec emit(hls_topology:plan(), xls_topology_dslx:profile()) -> iolist().
@@ -39,14 +50,10 @@ emit(Plan, Profile) ->
 lower(Plan, Profile) ->
     ok = require_empty(actors, Plan),
     ok = require_empty(routes, Plan),
-    ok = require_empty(startup, Plan),
-    Family = require_one_family(maps:get(families, Plan, [])),
-    [Width, Height] = require_two_dimensional_shape(Family),
-    ok = validate_dimensions(maps:get(id, Family), Width, Height),
-    FamilyId = maps:get(id, Family),
-    Module = maps:get(module, Family),
-    ModuleName = identifier(Module, family_module),
-    Interface = hls_actor_interface:from_module(Module),
+    Families0 = require_families(maps:get(families, Plan, [])),
+    [Width, Height] = require_common_shape(Families0),
+    Families1 = annotate_families(Families0),
+    FamilyIndex = index_by_id(Families1),
     Externals = annotate_externals(require_externals(
         maps:get(externals, Plan, [])
     )),
@@ -54,7 +61,8 @@ lower(Plan, Profile) ->
         {maps:get(id, External), External} || External <- Externals
     ]),
     Relations = maps:get(route_relations, Plan, []),
-    ok = validate_relations(Relations, FamilyId),
+    ok = validate_relations(Relations, FamilyIndex),
+    ok = validate_route_selectors(Relations, FamilyIndex, ExternalIndex),
     LaneRelations = derive_lane_relations(Relations),
     case maps:get(lane_relations, Plan, '$missing') of
         LaneRelations -> ok;
@@ -63,30 +71,29 @@ lower(Plan, Profile) ->
     end,
     Lanes = annotate_lanes(
         LaneRelations,
-        FamilyId,
         [Width, Height],
         ExternalIndex
     ),
-    ok = validate_lane_ports(Lanes, maps:get(outputs, Family)),
+    Routes = annotate_routes(Relations, Lanes),
+    Startup = annotate_startup(maps:get(startup, Plan), FamilyIndex),
+    Families = [annotate_family_graph(
+        Family,
+        Routes,
+        Lanes,
+        Startup
+    ) || Family <- Families1],
+    ok = validate_lane_ports(Families),
     ok = validate_external_lanes(Externals, Lanes),
     Physical = validate_profile(Profile),
     #{
         name => maps:get(name, Physical),
         depth => maps:get(channel_depth, Physical),
-        family => Family#{
-            module_name => ModuleName,
-            egress_depth => max(
-                1,
-                hls_actor_interface:max_entry_effects(Interface)
-            )
-        },
+        families => Families,
         width => Width,
         height => Height,
+        routes => Routes,
         lanes => Lanes,
-        family_lanes => [
-            Lane || Lane <- Lanes,
-            maps:get(kind, Lane) =:= family
-        ],
+        startup => Startup,
         externals => Externals
     }.
 
@@ -96,16 +103,28 @@ require_empty(Field, Plan) ->
         Value -> error({unsupported_dslx_family_section, Field, Value})
     end.
 
-require_one_family([Family]) -> Family;
-require_one_family(Families) ->
-    error({unsupported_dslx_family_count, length(Families)}).
+require_families([_ | _] = Families) -> Families;
+require_families([]) -> error({unsupported_family_count, 0}).
 
-require_two_dimensional_shape(Family) ->
-    case maps:get(shape, Family) of
-        [Width, Height] -> [Width, Height];
-        Shape -> error({unsupported_dslx_family_shape,
-            maps:get(id, Family), Shape})
-    end.
+require_common_shape([First | Rest]) ->
+    Shape = require_two_dimensional_shape(First),
+    lists:foreach(
+        fun(Family) ->
+            case require_two_dimensional_shape(Family) of
+                Shape -> ok;
+                Other -> error({incompatible_family_shape,
+                    maps:get(id, Family), Shape, Other})
+            end
+        end,
+        Rest
+    ),
+    Shape.
+
+require_two_dimensional_shape(Family = #{shape := [Width, Height]}) ->
+    ok = validate_dimensions(maps:get(id, Family), Width, Height),
+    [Width, Height];
+require_two_dimensional_shape(#{id := Id, shape := Shape}) ->
+    error({unsupported_family_shape, Id, Shape}).
 
 validate_dimensions(_FamilyId, Width, Height)
         when is_integer(Width), Width > 0, Width =< ?U32_MAX,
@@ -118,16 +137,38 @@ validate_dimensions(FamilyId, Width, Height) ->
 require_externals([_ | _] = Externals) -> Externals;
 require_externals([]) -> error({unsupported_dslx_family_external_count, 0}).
 
-validate_relations(Relations, FamilyId) ->
+annotate_families(Families) ->
+    [
+        begin
+            Module = maps:get(module, Family),
+            Interface = hls_actor_interface:from_module(Module),
+            Family#{
+                index => Index,
+                module_name => identifier(Module, family_module),
+                interface => Interface,
+                egress_depth => max(
+                    1,
+                    hls_actor_interface:max_entry_effects(Interface)
+                )
+            }
+        end
+        || {Index, Family} <- lists:enumerate(0, Families)
+    ].
+
+validate_relations(Relations, FamilyIndex) ->
     lists:foreach(
         fun(Relation = #{source := Source = {SourceFamily, _Port}}) ->
-            case SourceFamily of
-                FamilyId -> ok;
-                _ -> error({unsupported_relation_source, Source})
-            end,
+            true = maps:is_key(SourceFamily, FamilyIndex),
             case Relation of
                 #{delivery := direct, recipients := [Recipient]} ->
-                    validate_relation_recipient(Source, Recipient, FamilyId);
+                    validate_relation_recipient(
+                        Source, Recipient, FamilyIndex
+                    );
+                #{delivery := queued, recipients := Recipients}
+                        when length(Recipients) =:= 2 ->
+                    validate_queued_recipients(
+                        Source, Recipients, FamilyIndex
+                    );
                 #{delivery := Delivery, recipients := Recipients} ->
                     error({unsupported_route, Source, Delivery, Recipients})
             end
@@ -137,13 +178,29 @@ validate_relations(Relations, FamilyId) ->
 
 validate_relation_recipient(
         _Source,
-        {family, FamilyId, {translate, [_DX, _DY], wrap}},
-        FamilyId) ->
+        {family, DestinationId, {translate, [_DX, _DY], wrap}},
+        FamilyIndex) ->
+    true = maps:is_key(DestinationId, FamilyIndex),
     ok;
-validate_relation_recipient(_Source, {external, _ExternalId}, _FamilyId) ->
+validate_relation_recipient(_Source, {external, _ExternalId}, _FamilyIndex) ->
     ok;
-validate_relation_recipient(Source, Recipient, _FamilyId) ->
-    error({unsupported_dslx_family_recipient, Source, Recipient}).
+validate_relation_recipient(Source, Recipient, _FamilyIndex) ->
+    error({unsupported_recipient, Source, Recipient}).
+
+validate_queued_recipients(Source, Recipients, FamilyIndex) ->
+    lists:foreach(
+        fun(Recipient) ->
+            validate_relation_recipient(Source, Recipient, FamilyIndex)
+        end,
+        Recipients
+    ),
+    case lists:sort([recipient_kind(Recipient) || Recipient <- Recipients]) of
+        [external, family] -> ok;
+        Kinds -> error({unsupported_queued_recipients, Source, Kinds})
+    end.
+
+recipient_kind({family, _, _}) -> family;
+recipient_kind({external, _}) -> external.
 
 derive_lane_relations(Relations) ->
     LanePorts = lists:foldl(
@@ -195,38 +252,41 @@ annotate_externals(Externals) ->
         || {Index, External} <- lists:enumerate(0, Externals)
     ].
 
-annotate_lanes(Lanes, FamilyId, Shape, ExternalIndex) ->
+annotate_lanes(Lanes, Shape, ExternalIndex) ->
     [
-        annotate_lane(Index, Lane, FamilyId, Shape, ExternalIndex)
+        annotate_lane(Index, Lane, Shape, ExternalIndex)
         || {Index, Lane} <- lists:enumerate(0, Lanes)
     ].
 
-annotate_lane(Index, Lane, FamilyId, Shape, ExternalIndex) ->
-    case maps:get(source, Lane) of
-        FamilyId -> ok;
-        Source -> error({unsupported_dslx_lane_source, Source})
-    end,
+annotate_lane(
+        Index,
+        Lane = #{destination :=
+            {family, DestinationId, {translate, [DX, DY], wrap}}},
+        [Width, Height],
+        _ExternalIndex) ->
     Stem = ["lane_", integer_to_list(Index)],
     Base = Lane#{index => Index, stem => Stem},
-    case maps:get(destination, Lane) of
-        {family, FamilyId, {translate, [DX, DY], wrap}} ->
-            Base#{
-                kind => family,
-                inverse_shift => [
-                    inverse_shift(DX, lists:nth(1, Shape)),
-                    inverse_shift(DY, lists:nth(2, Shape))
-                ]
-            };
-        {external, ExternalId} ->
-            case maps:find(ExternalId, ExternalIndex) of
-                {ok, External} ->
-                    Base#{kind => external, external => External};
-                error ->
-                    error({unknown_dslx_family_lane_external, ExternalId})
-            end;
-        Destination ->
-            error({unsupported_dslx_lane_destination, Destination})
-    end.
+    Base#{
+        kind => family,
+        destination_family => DestinationId,
+        inverse_shift => [
+            inverse_shift(DX, Width),
+            inverse_shift(DY, Height)
+        ]
+    };
+annotate_lane(
+        Index,
+        Lane = #{destination := {external, ExternalId}},
+        _Shape,
+        ExternalIndex) ->
+    Stem = ["lane_", integer_to_list(Index)],
+    Base = Lane#{index => Index, stem => Stem},
+    case maps:find(ExternalId, ExternalIndex) of
+        {ok, External} -> Base#{kind => external, external => External};
+        error -> error({unknown_external, ExternalId})
+    end;
+annotate_lane(_Index, #{destination := Destination}, _Shape, _ExternalIndex) ->
+    error({unsupported_destination, Destination}).
 
 inverse_shift(0, _Size) -> zero;
 inverse_shift(Offset, _Size) when Offset > 0 ->
@@ -234,15 +294,69 @@ inverse_shift(Offset, _Size) when Offset > 0 ->
 inverse_shift(Offset, _Size) ->
     {plus, -Offset}.
 
-validate_lane_ports(Lanes, Outputs) ->
-    Ports = lists:append([
-        maps:get(source_ports, Lane) || Lane <- Lanes
+annotate_routes(Relations, Lanes) ->
+    LaneIndex = maps:from_list([
+        {{maps:get(source, Lane), maps:get(destination, Lane)}, Lane}
+        || Lane <- Lanes
     ]),
-    case {lists:sort(Ports), lists:sort(Outputs)} of
-        {Same, Same} -> ok;
-        _ -> error({inconsistent_dslx_family_lane_ports,
-            lists:sort(Outputs), lists:sort(Ports)})
+    [
+        Relation#{lanes => [
+            maps:get({SourceFamily, Recipient}, LaneIndex)
+            || Recipient <- maps:get(recipients, Relation)
+        ]}
+        || Relation <- Relations,
+           {SourceFamily, _Port} <- [maps:get(source, Relation)]
+    ].
+
+annotate_family_graph(Family, Routes, Lanes, Startup) ->
+    Id = maps:get(id, Family),
+    OutboundLanes = [Lane || Lane <- Lanes, maps:get(source, Lane) =:= Id],
+    InboundLanes = [
+        Lane
+        || Lane <- Lanes,
+           maps:get(kind, Lane) =:= family,
+           maps:get(destination_family, Lane) =:= Id
+    ],
+    FamilyStartup = [
+        Item || Item <- Startup, maps:get(family, Item) =:= Id
+    ],
+    Family#{
+        routes => [
+            Route
+            || Route <- Routes,
+               {SourceFamily, _} <- [maps:get(source, Route)],
+               SourceFamily =:= Id
+        ],
+        outbound_lanes => OutboundLanes,
+        inbound_lanes => InboundLanes,
+        startup => family_startup(Family, FamilyStartup)
+    }.
+
+family_startup(_Family, []) -> none;
+family_startup(Family, Items) ->
+    Expected = maps:get(instance_count, Family),
+    case length(Items) of
+        Expected -> #{items => Items};
+        Count -> error({incomplete_family_startup,
+            maps:get(id, Family), Expected, Count})
     end.
+
+validate_lane_ports(Families) ->
+    lists:foreach(
+        fun(Family) ->
+            Ports = lists:usort(lists:append([
+                maps:get(source_ports, Lane)
+                || Lane <- maps:get(outbound_lanes, Family)
+            ])),
+            Outputs = lists:sort(maps:get(outputs, Family)),
+            case lists:sort(Ports) of
+                Outputs -> ok;
+                Other -> error({inconsistent_family_lane_ports,
+                    maps:get(id, Family), Outputs, Other})
+            end
+        end,
+        Families
+    ).
 
 validate_external_lanes(Externals, Lanes) ->
     lists:foreach(
@@ -255,12 +369,121 @@ validate_external_lanes(Externals, Lanes) ->
             ],
             case Matches of
                 [_] -> ok;
-                _ -> error({unsupported_dslx_family_external_lane_count,
+                _ -> error({unsupported_external_lane_count,
                     Id, length(Matches)})
             end
         end,
         Externals
     ).
+
+validate_route_selectors(Relations, FamilyIndex, ExternalIndex) ->
+    lists:foreach(
+        fun(#{
+            source := Source = {SourceId, Port},
+            recipients := Recipients
+        }) ->
+            SourceInterface = maps:get(
+                interface,
+                maps:get(SourceId, FamilyIndex)
+            ),
+            Schemas = hls_actor_interface:output_schemas(
+                SourceInterface,
+                Port
+            ),
+            lists:foreach(
+                fun
+                    ({family, DestinationId, _} = Recipient) ->
+                        DestinationInterface = maps:get(
+                            interface,
+                            maps:get(DestinationId, FamilyIndex)
+                        ),
+                        lists:foreach(
+                            fun(Schema) ->
+                                SourceSelector = maps:get(
+                                    selector,
+                                    hls_actor_interface:schema(
+                                        SourceInterface, Schema
+                                    )
+                                ),
+                                DestinationSelector = maps:get(
+                                    selector,
+                                    hls_actor_interface:schema(
+                                        DestinationInterface, Schema
+                                    )
+                                ),
+                                case DestinationSelector of
+                                    SourceSelector -> ok;
+                                    _ -> error({unsupported_route_tag_remap,
+                                        Source, Recipient, Schema,
+                                        SourceSelector, DestinationSelector})
+                                end
+                            end,
+                            Schemas
+                        );
+                    ({external, ExternalId}) ->
+                        true = maps:is_key(ExternalId, ExternalIndex)
+                end,
+                Recipients
+            )
+        end,
+        Relations
+    ).
+
+annotate_startup(Startup, FamilyIndex) when is_list(Startup) ->
+    [annotate_startup_item(Item, FamilyIndex) || Item <- Startup];
+annotate_startup(Startup, _FamilyIndex) ->
+    error({invalid_startup, Startup}).
+
+annotate_startup_item(
+        #{target := Target, delivery := cast, messages := [Message]},
+        FamilyIndex) ->
+    [FamilyId | Coordinates] = tuple_to_list(Target),
+    #{interface := Interface, module := Module} =
+        maps:get(FamilyId, FamilyIndex),
+    case hls_actor_interface:initial_effects(Interface) of
+        [] -> ok;
+        Effects -> error({startup_target_has_initial_effects,
+            Target, Module, Effects})
+    end,
+    Packed = pack_startup_message(Target, Module, Message),
+    Packed#{
+        target => Target,
+        family => FamilyId,
+        coordinates => Coordinates
+    };
+annotate_startup_item(Item, _FamilyIndex) ->
+    error({unsupported_family_startup, Item}).
+
+pack_startup_message(Target, Module, Message)
+        when is_tuple(Message), tuple_size(Message) > 0,
+             is_atom(element(1, Message)) ->
+    TagName = element(1, Message),
+    {Tag, Payload} = case {Module:pack_tag(TagName), Module:pack(Message)} of
+        {PackedTag, PackedPayload}
+                when is_integer(PackedTag), PackedTag >= 0,
+                     PackedTag =< 255, is_binary(PackedPayload) ->
+            {PackedTag, PackedPayload};
+        Invalid -> error({invalid_packed_startup, Target, Invalid})
+    end,
+    Width = bit_size(Payload),
+    case Width > 0 andalso Width rem 32 =:= 0 andalso
+            Width =< ?MAX_PAYLOAD_BITS of
+        true -> #{
+            tag => Tag,
+            payload => payload_literal(Payload)
+        };
+        false -> error({unsupported_startup_payload, Target, Width})
+    end;
+pack_startup_message(Target, _Module, Message) ->
+    error({invalid_startup_message, Target, Message}).
+
+payload_literal(Payload) ->
+    Width = bit_size(Payload),
+    Digits = Width div 4,
+    Value = binary:decode_unsigned(Payload, little),
+    Hex = integer_to_list(Value, 16),
+    ["u", integer_to_list(Width), ":0x",
+        lists:duplicate(Digits - length(Hex), $0), Hex].
 
 validate_profile(Profile) when is_map(Profile) ->
     Required = lists:sort([channel_depth, name]),
@@ -307,27 +530,31 @@ reserved_identifiers() ->
 render(Spec) ->
     [
         preamble(Spec),
-        family_router(Spec),
+        startup_support(maps:get(families, Spec)),
+        family_routers(Spec),
         frame_grid_mux(maps:get(externals, Spec)),
-        family_node(Spec),
-        family_torus(Spec),
+        family_nodes(Spec),
+        family_grid(Spec),
         top_proc(Spec)
     ].
 
 preamble(Spec) ->
-    Family = maps:get(family, Spec),
+    Families = maps:get(families, Spec),
+    Modules = lists:usort([
+        maps:get(module_name, Family) || Family <- Families
+    ]),
     [
         "// ", maps:get(name, Spec), ".x\n",
         "// Auto-generated by xls_topology_dslx from compact Erlang family ",
         "rules.\n",
         "// Manual changes will be overwritten.\n",
         "//\n",
-        "// One reusable node and nested unroll_for! spawns retain regular ",
-        "source structure.\n",
+        preamble_node_comment(Families),
         "// Scalar external streams use fair polling over statically indexed ",
         "family lanes.\n\n",
         "import axis;\n",
-        "import ", maps:get(module_name, Family), ";\n\n",
+        [["import ", Module, ";\n"] || Module <- Modules],
+        "\n",
         "const CHANNEL_DEPTH = u32:", integer_to_list(maps:get(depth, Spec)),
         ";\n",
         "const WIDTH = u32:", integer_to_list(maps:get(width, Spec)), ";\n",
@@ -335,17 +562,71 @@ preamble(Spec) ->
         ";\n\n"
     ].
 
-family_router(Spec) ->
-    Family = maps:get(family, Spec),
-    Module = maps:get(module_name, Family),
-    Lanes = maps:get(lanes, Spec),
-    Outputs = maps:get(outputs, Family),
-    PortIndex = maps:from_list(lists:append([
-        [{Port, Lane} || Port <- maps:get(source_ports, Lane)]
-        || Lane <- Lanes
-    ])),
+preamble_node_comment([_]) ->
+    "// One reusable node and nested unroll_for! spawns retain regular "
+    "source structure.\n";
+preamble_node_comment([_, _ | _]) ->
+    "// Reusable family nodes and nested unroll_for! spawns retain regular "
+    "source structure.\n".
+
+startup_support(Families) ->
+    [[startup_function(Family), startup_prefix(Family)]
+        || Family <- Families].
+
+startup_function(#{startup := none}) -> [];
+startup_function(Family = #{startup := #{items := Items}}) ->
     [
-        "proc FamilyRouter {\n",
+        "fn ", startup_function_name(Family),
+        "(x: u32, y: u32) -> axis::Frame {\n",
+        "  match (x, y) {\n",
+        [startup_arm(Item) || Item <- Items],
+        "    _ => zero!<axis::Frame>(),\n",
+        "  }\n}\n\n"
+    ].
+
+startup_prefix(#{startup := none}) -> [];
+startup_prefix(Family = #{startup := #{}}) ->
+    [
+        "proc ", startup_prefix_name(Family), "<X: u32, Y: u32> {\n",
+        "  routed_in: chan<axis::Frame> in;\n",
+        "  frame_out: chan<axis::Frame> out;\n\n",
+        config_signature([
+            "routed_in: chan<axis::Frame> in",
+            "frame_out: chan<axis::Frame> out"
+        ], 2),
+        "    (routed_in, frame_out)\n  }\n\n",
+        "  init { u1:0 }\n\n",
+        "  next(started: u1) {\n",
+        "    let (tok, routed_frame) = recv_if(\n",
+        "      join(), routed_in, started, zero!<axis::Frame>());\n",
+        "    let startup_frame = ", startup_function_name(Family),
+        "(X, Y);\n",
+        "    let frame = if started { routed_frame } else { startup_frame };\n",
+        "    send(tok, frame_out, frame);\n",
+        "    u1:1\n",
+        "  }\n",
+        "}\n\n"
+    ].
+
+startup_arm(#{coordinates := [X, Y], tag := Tag, payload := Payload}) ->
+    ["    (u32:", integer_to_list(X), ", u32:", integer_to_list(Y),
+        ") => axis::pack(u8:", integer_to_list(Tag), ", ", Payload,
+        "),\n"].
+
+family_routers(Spec) ->
+    [family_router(Spec, Family) || Family <- maps:get(families, Spec)].
+
+family_router(Spec, Family) ->
+    Module = maps:get(module_name, Family),
+    Lanes = maps:get(outbound_lanes, Family),
+    Outputs = maps:get(outputs, Family),
+    RouteIndex = maps:from_list([
+        {Port, Route}
+        || Route <- maps:get(routes, Family),
+           {_FamilyId, Port} <- [maps:get(source, Route)]
+    ]),
+    [
+        "proc ", router_name(Spec, Family), " {\n",
         "  egress_in: chan<", Module, "::Egress> in;\n",
         [["  ", lane_output(Lane), ": chan<axis::Frame> out;\n"]
             || Lane <- Lanes],
@@ -364,17 +645,24 @@ family_router(Spec) ->
         "    let (tok, egress) = recv(join(), egress_in);\n",
         "    let _route_tok = match egress.port {\n",
         [
-            begin
-                Lane = maps:get(Port, PortIndex),
-                ["      ", Module, "::OutputPort::", uppercase(Port),
-                    " => send(tok, ", lane_output(Lane),
-                    ", egress.frame),\n"]
-            end
+            router_arm(Module, Port, maps:get(Port, RouteIndex))
             || Port <- Outputs
         ],
         "    };\n",
         "    state\n  }\n}\n\n"
     ].
+
+router_arm(Module, Port, #{delivery := direct, lanes := [Lane]}) ->
+    ["      ", Module, "::OutputPort::", uppercase(Port),
+        " => send(tok, ", lane_output(Lane), ", egress.frame),\n"];
+router_arm(Module, Port, #{delivery := queued, lanes := [Left, Right]}) ->
+    ["      ", Module, "::OutputPort::", uppercase(Port), " => {\n",
+        "        let branch_0_tok = send(tok, ", lane_output(Left),
+        ", egress.frame);\n",
+        "        let branch_1_tok = send(tok, ", lane_output(Right),
+        ", egress.frame);\n",
+        "        join(branch_0_tok, branch_1_tok)\n",
+        "      },\n"].
 
 frame_grid_mux([]) -> [];
 frame_grid_mux(_Externals) ->
@@ -440,18 +728,21 @@ frame_grid_mux(_Externals) ->
 
     """.
 
-family_node(Spec) ->
-    Family = maps:get(family, Spec),
+family_nodes(Spec) ->
+    [family_node(Spec, Family) || Family <- maps:get(families, Spec)].
+
+family_node(Spec, Family) ->
     Module = maps:get(module_name, Family),
-    FamilyLanes = maps:get(family_lanes, Spec),
-    Lanes = maps:get(lanes, Spec),
+    InboundLanes = maps:get(inbound_lanes, Family),
+    OutboundLanes = maps:get(outbound_lanes, Family),
     Inputs = [[incoming_name(Index), ": chan<axis::Frame> in"]
-        || {Index, _Lane} <- lists:enumerate(0, FamilyLanes)],
+        || {Index, _Lane} <- lists:enumerate(0, InboundLanes)],
     Outputs = [[lane_output(Lane), ": chan<axis::Frame> out"]
-        || Lane <- Lanes],
-    {IngressRoot, MuxCode} = node_mux_tree(length(FamilyLanes)),
+        || Lane <- OutboundLanes],
+    {IngressRoot, MuxCode} = node_mux_tree(length(InboundLanes)),
+    {AdmissionRoot, PrefixCode} = node_startup(Family, IngressRoot),
     [
-        "proc FamilyNode {\n",
+        "proc ", node_name(Spec, Family), node_parametrics(Family), " {\n",
         config_signature(Inputs ++ Outputs, 2),
         "    let (actor_req_p, actor_req_c) =\n",
         "      chan<axis::Frame, CHANNEL_DEPTH>(\"actor_req\");\n",
@@ -463,17 +754,27 @@ family_node(Spec) ->
         ">(\"actor_egress\");\n",
         "    spawn ", Module, "::Service(\n",
         "      actor_req_c, actor_egress_p, actor_admit_p);\n",
-        "    spawn FamilyRouter(actor_egress_c",
-        [[", ", lane_output(Lane)] || Lane <- Lanes],
+        "    spawn ", router_name(Spec, Family), "(actor_egress_c",
+        [[", ", lane_output(Lane)] || Lane <- OutboundLanes],
         ");\n",
         MuxCode,
-        "    spawn axis::ReservedFrame(", IngressRoot,
+        PrefixCode,
+        "    spawn axis::ReservedFrame(", AdmissionRoot,
         ", actor_req_p, actor_admit_c);\n",
         "    ()\n  }\n\n",
         "  init { () }\n",
         "  next(state: ()) { state }\n",
         "}\n\n"
     ].
+
+node_startup(#{startup := none}, IngressRoot) -> {IngressRoot, []};
+node_startup(Family = #{startup := #{}}, IngressRoot) ->
+    {"startup_c", [
+        "    let (startup_p, startup_c) =\n",
+        "      chan<axis::Frame, CHANNEL_DEPTH>(\"startup\");\n",
+        "    spawn ", startup_prefix_name(Family), "<X, Y>(",
+        IngressRoot, ", startup_p);\n"
+    ]}.
 
 node_mux_tree(0) ->
     error(unsupported_dslx_family_without_inbound_lanes);
@@ -501,25 +802,20 @@ mux_round([Left, Right | Rest], Level, Pair, Next, Code0) ->
     ],
     mux_round(Rest, Level, Pair + 1, [Stem ++ "_c" | Next], Code).
 
-family_torus(Spec) ->
+family_grid(Spec) ->
     Lanes = maps:get(lanes, Spec),
-    FamilyLanes = maps:get(family_lanes, Spec),
     Externals = maps:get(externals, Spec),
     [
-        "proc FamilyTorus<TORUS_WIDTH: u32, TORUS_HEIGHT: u32> {\n",
+        "proc ", grid_name(Spec),
+        "<TORUS_WIDTH: u32, TORUS_HEIGHT: u32> {\n",
         config_signature(
             [[maps:get(output_name, External),
                 ": chan<axis::Frame> out"] || External <- Externals],
             2
         ),
         [lane_array(Lane) || Lane <- Lanes],
-        "    unroll_for! (x, _): (u32, ()) in u32:0..TORUS_WIDTH {\n",
-        "      unroll_for! (y, _): (u32, ()) in u32:0..TORUS_HEIGHT {\n",
-        "        spawn FamilyNode(\n",
-        node_spawn_arguments(FamilyLanes, Lanes),
-        "        );\n",
-        "      }(())\n",
-        "    }(());\n",
+        [family_spawn(Spec, Family)
+            || Family <- maps:get(families, Spec)],
         [external_merge_spawn(External, Lanes) || External <- Externals],
         "    ()\n  }\n\n",
         "  init { () }\n",
@@ -536,10 +832,29 @@ lane_array(Lane) ->
         "[TORUS_HEIGHT][TORUS_WIDTH](\"", Stem, "\");\n"
     ].
 
-node_spawn_arguments(FamilyLanes, Lanes) ->
+family_spawn(Spec, Family) ->
+    [
+        family_comment(Spec, Family),
+        "    unroll_for! (x, _): (u32, ()) in u32:0..TORUS_WIDTH {\n",
+        "      unroll_for! (y, _): (u32, ()) in u32:0..TORUS_HEIGHT {\n",
+        "        spawn ", node_name(Spec, Family),
+        node_specialization(Family), "(\n",
+        node_spawn_arguments(Family),
+        "        );\n",
+        "      }(())\n",
+        "    }(());\n"
+    ].
+
+family_comment(#{families := [_]}, _Family) -> [];
+family_comment(_Spec, Family) ->
+    ["    // Family ", io_lib:format("~tp", [maps:get(id, Family)]), ".\n"].
+
+node_spawn_arguments(Family) ->
+    InboundLanes = maps:get(inbound_lanes, Family),
+    OutboundLanes = maps:get(outbound_lanes, Family),
     Arguments =
-        [family_lane_consumer(Lane) || Lane <- FamilyLanes] ++
-        [[maps:get(stem, Lane), "_p[x][y]"] || Lane <- Lanes],
+        [family_lane_consumer(Lane) || Lane <- InboundLanes] ++
+        [[maps:get(stem, Lane), "_p[x][y]"] || Lane <- OutboundLanes],
     [
         ["          ", Argument, separator(Index, length(Arguments)), "\n"]
         || {Index, Argument} <- lists:enumerate(0, Arguments)
@@ -581,7 +896,7 @@ top_proc(Spec) ->
                 ": chan<axis::Frame> out"] || External <- Externals],
             2
         ),
-        "    spawn FamilyTorus<WIDTH, HEIGHT>(",
+        "    spawn ", grid_name(Spec), "<WIDTH, HEIGHT>(",
         join_with(", ", [maps:get(output_name, External)
             || External <- Externals]),
         ");\n",
@@ -606,6 +921,31 @@ config_signature(Arguments, Indent) ->
 incoming_name(Index) -> ["incoming_", integer_to_list(Index)].
 lane_output(Lane) -> [maps:get(stem, Lane), "_out"].
 
+router_name(Spec, Family) ->
+    ["FamilyRouter", family_suffix(Spec, Family)].
+
+node_name(Spec, Family) ->
+    ["FamilyNode", family_suffix(Spec, Family)].
+
+startup_function_name(Family) ->
+    ["family_", integer_to_list(maps:get(index, Family)), "_startup"].
+
+startup_prefix_name(Family) ->
+    ["StartupPrefix", integer_to_list(maps:get(index, Family))].
+
+node_parametrics(#{startup := none}) -> [];
+node_parametrics(#{startup := #{}}) -> "<X: u32, Y: u32>".
+
+node_specialization(#{startup := none}) -> [];
+node_specialization(#{startup := #{}}) -> "<x, y>".
+
+family_suffix(#{families := [_]}, _Family) -> [];
+family_suffix(#{families := [_, _ | _]}, #{index := Index}) ->
+    integer_to_list(Index).
+
+grid_name(#{families := [_]}) -> "FamilyTorus";
+grid_name(#{families := [_, _ | _]}) -> "FamilyGrid".
+
 separator(Index, Arity) when Index + 1 < Arity -> ",";
 separator(_Index, _Arity) -> "".
 
@@ -620,3 +960,6 @@ uppercase(Atom) -> string:uppercase(atom_to_list(Atom)).
 join_with(_Separator, []) -> [];
 join_with(Separator, [First | Rest]) ->
     [First | [[Separator, Item] || Item <- Rest]].
+
+index_by_id(Items) ->
+    maps:from_list([{maps:get(id, Item), Item} || Item <- Items]).
