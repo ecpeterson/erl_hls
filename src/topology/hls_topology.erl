@@ -7,22 +7,22 @@
 Normalizes provisional, closed actor topologies expressed as ordinary Erlang
 data.
 
-The current format contains exact actor instances, external outputs, exact
-routes, explicit multi-recipient delivery modes, and per-actor startup
-messages. It
-intentionally has no lifecycle, placement, transport, numeric tags, or
-generated-hardware concepts. Actor output names, their artifact ABI order,
-mailbox bounds, schema layouts, phase-specific dispatches, and phase-entry
-effects are read from the compiler's provisional actor-interface summary
-rather than repeated in the topology.
+The current format contains exact actor instances, actor families, external
+outputs, routes, explicit multi-recipient delivery modes, and per-instance
+startup messages. It intentionally has no lifecycle, placement, transport,
+numeric tags, or generated-hardware concepts. Actor output names, their
+artifact ABI order, mailbox bounds, schema layouts, phase-specific dispatches,
+and phase-entry effects are read from the compiler's provisional
+actor-interface summary rather than repeated in the topology.
 
 The same format also supports rectangular actor families plus wrapped
 translation relations. A family is a dictionary entry
 whose fixed `shape` gives the bound of each positional index. A relation such
 as `{translate, [0, -1], wrap}` maps one family member to its northern neighbor
-without enumerating members or possible pairs. This first compact subset has no
-general expression language, sparse exceptions, family startup formulas, or
-placement rules.
+without enumerating members or possible pairs. Startup may name bounded family
+members explicitly; this keeps arbitrary per-instance values as ordinary
+Erlang data without adding an initializer language. This first compact subset
+has no general expression language, sparse exceptions, or placement rules.
 
 Exact actor declarations are a map from logical instance ID to actor module.
 IDs are atoms, nonnegative integers, or nonempty tuples recursively containing
@@ -94,9 +94,9 @@ normalize(Spec) ->
 
 normalize_current(Spec) ->
     ok = validate_top_level(Spec),
-    hls_topology_family:normalize(Spec, fun normalize_exact_sections/1).
+    hls_topology_family:normalize(Spec, fun normalize_exact_sections/2).
 
-normalize_exact_sections(Spec) ->
+normalize_exact_sections(Spec, FamilyIndex) ->
     Actors = normalize_actors(maps:get(actors, Spec)),
     ActorIndex = maps:from_list([
         {maps:get(id, Actor), Actor} || Actor <- Actors
@@ -110,7 +110,11 @@ normalize_exact_sections(Spec) ->
         ActorIndex,
         ExternalIndex
     ),
-    Startup = normalize_startup(maps:get(startup, Spec), ActorIndex),
+    Startup = normalize_startup(
+        maps:get(startup, Spec),
+        ActorIndex,
+        FamilyIndex
+    ),
 
     #{
         version => 1,
@@ -454,23 +458,54 @@ derive_lanes(Routes) ->
 %%% Startup and shared validation
 %%%
 
-normalize_startup(Specs, ActorIndex) when is_list(Specs) ->
-    Startup = [normalize_startup_item(Spec, ActorIndex) || Spec <- Specs],
+normalize_startup(Specs, ActorIndex, FamilyIndex) when is_list(Specs) ->
+    Startup = [
+        normalize_startup_item(Spec, ActorIndex, FamilyIndex)
+        || Spec <- Specs
+    ],
     require_unique(
         duplicate_startup_targets,
         [maps:get(target, Item) || Item <- Startup]
     ),
     sort_by(fun(Item) -> maps:get(target, Item) end, Startup);
-normalize_startup(Specs, _ActorIndex) ->
+normalize_startup(Specs, _ActorIndex, _FamilyIndex) ->
     error({invalid_topology_field, startup, Specs}).
 
-normalize_startup_item({ActorId, Messages}, ActorIndex)
+normalize_startup_item({Target, Messages}, ActorIndex, FamilyIndex)
         when is_list(Messages), Messages =/= [] ->
-    Actor = require_actor(ActorId, ActorIndex, startup),
-    ok = validate_startup_schemas(ActorId, Messages, Actor),
-    #{target => ActorId, delivery => cast, messages => Messages};
-normalize_startup_item(Spec, _ActorIndex) ->
+    Actor = require_startup_target(Target, ActorIndex, FamilyIndex),
+    ok = validate_startup_schemas(Target, Messages, Actor),
+    #{target => Target, delivery => cast, messages => Messages};
+normalize_startup_item(Spec, _ActorIndex, _FamilyIndex) ->
     error({invalid_startup_spec, Spec}).
+
+require_startup_target(Target, ActorIndex, FamilyIndex) ->
+    case maps:find(Target, ActorIndex) of
+        {ok, Actor} -> Actor;
+        error -> require_family_instance(Target, FamilyIndex)
+    end.
+
+require_family_instance(Target, FamilyIndex)
+        when is_tuple(Target), tuple_size(Target) > 1 ->
+    FamilyId = element(1, Target),
+    Coordinates = tl(tuple_to_list(Target)),
+    case maps:find(FamilyId, FamilyIndex) of
+        {ok, Family = #{shape := Shape}}
+                when length(Coordinates) =:= length(Shape) ->
+            case lists:all(
+                fun({Coordinate, Size}) ->
+                    is_integer(Coordinate) andalso
+                        Coordinate >= 0 andalso Coordinate < Size
+                end,
+                lists:zip(Coordinates, Shape)
+            ) of
+                true -> Family;
+                false -> error({invalid_family_instance, Target, Shape})
+            end;
+        _ -> error({unknown_actor, Target, startup})
+    end;
+require_family_instance(Target, _FamilyIndex) ->
+    error({unknown_actor, Target, startup}).
 
 validate_startup_schemas(ActorId, Messages, Actor) ->
     Interface = maps:get(interface, Actor),

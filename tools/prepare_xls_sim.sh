@@ -15,6 +15,8 @@ ERL_HLS_PHENOM_DATA_X="$stage/phenom_data_cell.x" \
 ERL_HLS_PHENOM_SYNDROME_X="$stage/phenom_syndrome_cell.x" \
 ERL_HLS_PHI_PHENOM_TOPOLOGY_X="$stage/phi_phenom_topology.x" \
 ERL_HLS_PHI_TORUS_TOPOLOGY_X="$stage/phi_torus_topology.x" \
+ERL_HLS_PHI_NOISE_TOPOLOGY_X="$stage/phi_noise_topology.x" \
+ERL_HLS_PHI_NOISE_TOPOLOGY_SMOKE_X="$stage/phi_noise_topology_smoke.x" \
 ERL_HLS_ORDERED_EGRESS_ACTOR_X="$stage/ordered_egress_actor.x" \
 ERL_HLS_ORDERED_EGRESS_TOPOLOGY_X="$stage/ordered_egress_topology.x" \
 ERL_HLS_CASE_FIXTURE_X="$stage/xls_case_fixture.x" \
@@ -38,6 +40,8 @@ erl \
         ),
         PhiPhenomTopology = phi_phenom_topology_dslx:to_dslx(),
         PhiTorusTopology = phi_torus_topology_dslx:to_dslx(),
+        PhiNoiseTopology = phi_noise_topology_dslx:to_dslx(),
+        PhiNoiseTopologySmoke = phi_noise_topology_dslx:to_dslx(1),
         OrderedEgressActor = xls_parse:to_xls(
             "test/ordered_egress_actor.erl"
         ),
@@ -63,6 +67,14 @@ erl \
         ok = file:write_file(
             os:getenv("ERL_HLS_PHI_TORUS_TOPOLOGY_X"),
             PhiTorusTopology
+        ),
+        ok = file:write_file(
+            os:getenv("ERL_HLS_PHI_NOISE_TOPOLOGY_X"),
+            PhiNoiseTopology
+        ),
+        ok = file:write_file(
+            os:getenv("ERL_HLS_PHI_NOISE_TOPOLOGY_SMOKE_X"),
+            PhiNoiseTopologySmoke
         ),
         ok = file:write_file(
             os:getenv("ERL_HLS_ORDERED_EGRESS_ACTOR_X"),
@@ -108,6 +120,8 @@ cp "$project_root/test/rtl/phi_phenom_topology_tb.sv" \
     "$stage/phi_phenom_topology_tb.sv"
 cp "$project_root/test/rtl/phi_torus_topology_tb.sv" \
     "$stage/phi_torus_topology_tb.sv"
+cp "$project_root/test/rtl/phi_noise_topology_smoke_tb.sv" \
+    "$stage/phi_noise_topology_smoke_tb.sv"
 cp "$project_root/test/rtl/ordered_egress_topology_tb.sv" \
     "$stage/ordered_egress_topology_tb.sv"
 cp "$project_root/test/rtl/xls_sim_bridge.c" "$stage/xls_sim_bridge.c"

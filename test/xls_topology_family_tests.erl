@@ -91,6 +91,73 @@ generated_family_topology_matches_checked_in_artifact_test() ->
         iolist_to_binary(phi_torus_topology_dslx:to_dslx())
     ).
 
+generated_multi_family_topology_retains_compact_structure_test() ->
+    Generated = iolist_to_binary(phi_noise_topology_dslx:to_dslx()),
+    ?assertEqual(6, count(Generated, <<"proc FamilyRouter">>)),
+    ?assertEqual(6, count(Generated, <<"proc FamilyNode">>)),
+    ?assertEqual(6, count(Generated, <<"spawn FamilyNode">>)),
+    ?assertEqual(30, count(Generated, <<
+        "chan<axis::Frame, CHANNEL_DEPTH>[TORUS_HEIGHT][TORUS_WIDTH]"
+    >>)),
+    ?assertEqual(4, count(Generated, <<"fn family_">>)),
+    ?assertEqual(4, count(Generated, <<"proc StartupPrefix">>)),
+    ?assertEqual(4, count(Generated, <<"spawn StartupPrefix">>)),
+    ?assertEqual(2, count(Generated, <<
+        "let branch_0_tok = send(tok"
+    >>)),
+    ?assertEqual(2, count(Generated, <<
+        "spawn FrameGridMux<TORUS_WIDTH, TORUS_HEIGHT>("
+    >>)),
+    ?assertNotEqual(nomatch, binary:match(Generated, <<
+        "proc FamilyGrid<TORUS_WIDTH: u32, TORUS_HEIGHT: u32>"
+    >>)).
+
+generated_family_startup_precedes_routed_input_test() ->
+    Generated = iolist_to_binary(phi_noise_topology_dslx:to_dslx()),
+    ?assertEqual(36, count(Generated, <<") => axis::pack(u8:6,">>)),
+    ?assertNotEqual(nomatch, binary:match(Generated, <<
+        "let (tok, routed_frame) = recv_if(\n"
+        "      join(), routed_in, started, zero!<axis::Frame>());\n"
+        "    let startup_frame = family_0_startup(X, Y);\n"
+        "    let frame = if started { routed_frame } else { startup_frame };"
+    >>)),
+    ?assertNotEqual(nomatch, binary:match(Generated, <<
+        "spawn StartupPrefix0<X, Y>("
+    >>)),
+    ?assertNotEqual(nomatch, binary:match(Generated, <<
+        "spawn FamilyNode0<x, y>("
+    >>)),
+    ?assertEqual(nomatch, binary:match(Generated, <<
+        "startup_frame: axis::Frame"
+    >>)).
+
+family_backend_rejects_partial_family_startup_test() ->
+    Plan = hls_topology:normalize(phi_noise_topology:topology(2)),
+    [_First | Rest] = maps:get(startup, Plan),
+    ?assertError(
+        {incomplete_family_startup, data_even, 4, 3},
+        xls_topology_dslx:emit(
+            Plan#{startup := Rest},
+            phi_noise_topology_dslx:profile()
+        )
+    ).
+
+family_backend_rejects_cross_family_selector_remap_test() ->
+    Plan = hls_topology:normalize(selector_remap_topology()),
+    Recipient = {family, source, {translate, [0, 0], wrap}},
+    ?assertError(
+        {unsupported_route_tag_remap,
+            {destination, message_out},
+            Recipient,
+            message,
+            4,
+            3},
+        xls_topology_dslx:emit(
+            Plan,
+            #{name => selector_remap_topology, channel_depth => 1}
+        )
+    ).
+
 family_backend_rejects_route_fanout_test() ->
     Spec = phi_torus_topology:topology(3, 3),
     Source = {phi, north},
@@ -158,6 +225,34 @@ generated(Spec) ->
         hls_topology:normalize(Spec),
         phi_torus_topology_dslx:profile()
     )).
+
+selector_remap_topology() ->
+    #{
+        version => 1,
+        actors => #{},
+        families => #{
+            source => #{
+                module => hls_topology_source_fixture,
+                shape => [1, 1]
+            },
+            destination => #{
+                module => hls_topology_reordered_fixture,
+                shape => [1, 1]
+            }
+        },
+        externals => [{padding, out, [padding]}],
+        routes => [],
+        route_relations => [
+            {{source, out}, [
+                {family, destination, {translate, [0, 0], wrap}}
+            ]},
+            {{destination, message_out}, [
+                {family, source, {translate, [0, 0], wrap}}
+            ]},
+            {{destination, padding_out}, [{external, padding}]}
+        ],
+        startup => []
+    }.
 
 scrub_dimensions(Generated, Value) ->
     Width = <<"const WIDTH = u32:", Value/binary, ";">>,

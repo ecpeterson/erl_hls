@@ -15,7 +15,7 @@ normalization.
 
 -export([normalize/2, routes_for_instance/3]).
 
--spec normalize(map(), fun((map()) -> map())) -> map().
+-spec normalize(map(), fun((map(), map()) -> map())) -> map().
 normalize(
     Spec = #{
         actors := ActorSpecs,
@@ -31,7 +31,7 @@ normalize(
         ActorSpecs,
         FamilyIndex
     ),
-    Exact = #{externals := Externals} = NormalizeExact(Spec),
+    Exact = #{externals := Externals} = NormalizeExact(Spec, FamilyIndex),
     ExternalIndex = index_by_id(Externals),
     Relations = normalize_route_relations(
         RelationSpecs,
