@@ -21,7 +21,8 @@
 }).
 
 init([]) ->
-    {ok, waiting, #cell{}}.
+    InitialPhase = waiting,
+    {ok, InitialPhase, #cell{}}.
 
 handle_enter(_OldPhase, waiting, Cell) ->
     {Cell, [{cast, out, #first{value = Cell#cell.value}}]}.

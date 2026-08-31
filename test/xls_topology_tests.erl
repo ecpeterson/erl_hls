@@ -111,17 +111,10 @@ invalid_actor_module_is_rejected_test() ->
 
 indexed_tuple_actor_ids_normalize_and_emit_without_mangling_test() ->
     Id = {phi, 17, {tile, 2, 3}},
-    Ports = [north, east, west, south, syndrome],
-    Spec = #{
-        version => 0,
-        actors => #{Id => phi_halo_cell},
-        externals => [],
-        routes => [{{Id, Port}, [{actor, Id}]} || Port <- Ports],
-        startup => []
-    },
+    Spec = rename_actor_id(phi_phenom_topology:topology(), phi, Id),
     Plan = xls_topology:normalize(Spec),
-    ?assertEqual([Id], [maps:get(id, Actor)
-        || Actor <- maps:get(actors, Plan)]),
+    ?assert(lists:member(Id, [maps:get(id, Actor)
+        || Actor <- maps:get(actors, Plan)])),
     Profile = (phi_phenom_topology_dslx:profile())#{
         name := indexed_phi_topology
     },
@@ -131,7 +124,7 @@ indexed_tuple_actor_ids_normalize_and_emit_without_mangling_test() ->
     >>)),
     ?assertNotEqual(nomatch, binary:match(
         Generated,
-        <<"spawn phi_halo_cell::Service(\n      actor_0_req_c">>
+        <<"spawn phi_halo_cell::Service(\n">>
     )).
 
 route_sources_are_checked_and_total_test() ->
@@ -234,6 +227,67 @@ actor_output_abi_order_is_preserved_test() ->
     ?assertEqual(
         [north, east, west, south, syndrome],
         maps:get(outputs, Phi)
+    ).
+
+incompatible_actor_route_schema_is_rejected_test() ->
+    Spec = phi_phenom_topology:topology(),
+    Source = {phi, syndrome},
+    ?assertError(
+        {incompatible_route_schemas,
+            Source,
+            {actor, data},
+            [phenom_request],
+            [phenom_config, phenom_query]},
+        xls_topology:normalize(replace_route(
+            Spec,
+            Source,
+            {Source, [{actor, data}]}
+        ))
+    ).
+
+incompatible_actor_route_layout_is_rejected_test() ->
+    SourceFields = [#{
+        name => value,
+        type => {xls_type, xls_nums, u32, []}
+    }],
+    DestinationFields = [#{
+        name => value,
+        type => {xls_type, xls_nums, u64, []}
+    }],
+    ?assertError(
+        {incompatible_route_schema_layout,
+            {source, out},
+            {actor, destination},
+            message,
+            SourceFields,
+            DestinationFields},
+        xls_topology:normalize(layout_fixture_topology())
+    ).
+
+incompatible_external_route_schema_is_rejected_test() ->
+    Spec = phi_phenom_topology:topology(),
+    ?assertError(
+        {incompatible_route_schemas,
+            {syndrome, phi},
+            {external, announcement},
+            [phenom_anyon],
+            [phi]},
+        xls_topology:normalize(Spec#{
+            externals := [{announcement, out, [phi]}]
+        })
+    ).
+
+incompatible_startup_schema_is_rejected_test() ->
+    Spec = phi_phenom_topology:topology(),
+    ?assertError(
+        {incompatible_startup_schema,
+            data,
+            0,
+            phenom_request,
+            [phenom_config, phenom_query]},
+        xls_topology:normalize(Spec#{
+            startup := [{data, [{phenom_request, 0}]}]
+        })
     ).
 
 generated_topology_is_deterministic_test() ->
@@ -376,47 +430,54 @@ dslx_backend_rejects_unknown_aliased_port_order_policy_test() ->
         )
     ).
 
-dslx_backend_reads_all_repeated_codebook_fragments_test() ->
-    Ports = [north, east, west, south, syndrome],
-    Spec = #{
-        version => 0,
-        actors => #{
-            a_phi => phi_halo_cell,
-            z_fixture => xls_topology_codebook_fixture
-        },
-        externals => [],
-        routes =>
-            [{{a_phi, Port}, [{actor, z_fixture}]} || Port <- Ports] ++
-            [{{z_fixture, Port}, [{actor, a_phi}]} || Port <- Ports],
-        startup => []
-    },
-    Common = [
-        phi,
-        anyon_move,
-        phi0,
-        phenom_config,
-        phenom_request,
-        phenom_query,
-        phenom_data,
-        phenom_anyon
-    ],
-    Extended = Common ++ [fixture_extra],
+dslx_backend_rejects_unimplemented_route_tag_remap_test() ->
+    Plan = xls_topology:normalize(reordered_fixture_topology()),
     ?assertError(
-        {incompatible_actor_codebook, z_fixture, Common, Extended},
-        xls_topology_dslx:emit(
-            xls_topology:normalize(Spec),
-            phi_phenom_topology_dslx:profile()
-        )
+        {unsupported_dslx_route_tag_remap,
+            {source, out},
+            {actor, destination},
+            message,
+            3,
+            4},
+        xls_topology_dslx:emit(Plan, fixture_profile(selector_fixture))
     ).
 
+dslx_backend_rejects_incoherent_external_schema_encoding_test() ->
+    Plan = xls_topology:normalize(external_encoding_fixture_topology()),
+    try xls_topology_dslx:emit(
+        Plan,
+        fixture_profile(external_encoding_fixture)
+    ) of
+        _ -> ?assert(false)
+    catch
+        error:{incompatible_dslx_external_schema_encoding,
+                shared, message, _Existing, _New} -> ok
+    end.
+
+dslx_backend_rejects_ambiguous_external_selector_test() ->
+    Plan = xls_topology:normalize(external_selector_fixture_topology()),
+    try xls_topology_dslx:emit(
+        Plan,
+        fixture_profile(external_selector_fixture)
+    ) of
+        _ -> ?assert(false)
+    catch
+        error:{ambiguous_dslx_external_selector,
+                shared, 3, _ExistingSchema, _NewSchema} -> ok
+    end.
+
 dslx_backend_accepts_preserved_nonaliased_graph_test() ->
-    Plan = xls_topology:normalize(nonaliased_phi_ring()),
+    Plan = xls_topology:normalize(nonaliased_phi_pair()),
     Profile = (phi_phenom_topology_dslx:profile())#{
-        name := nonaliased_phi_ring,
+        name := nonaliased_phi_pair,
         aliased_port_order := preserve
     },
     Generated = iolist_to_binary(xls_topology_dslx:emit(Plan, Profile)),
-    ?assertEqual(5, count(Generated, <<"spawn phi_halo_cell::Service(">>)),
+    ?assertEqual(1, count(Generated, <<"spawn phi_halo_cell::Service(">>)),
+    ?assertEqual(
+        1,
+        count(Generated, <<"spawn phenom_syndrome_cell::Service(">>)
+    ),
     ?assertEqual(
         nomatch,
         binary:match(Generated, <<"Aliased-port lanes permitted">>)
@@ -447,7 +508,15 @@ dslx_backend_rejects_aliased_external_lane_test() ->
         end
         || Route <- maps:get(routes, Spec)
     ],
-    Plan = xls_topology:normalize(Spec#{routes := Routes}),
+    Plan = xls_topology:normalize(Spec#{
+        externals := [{announcement, out, [
+            anyon_move,
+            phi,
+            phi0,
+            phenom_anyon
+        ]}],
+        routes := Routes
+    }),
     try xls_topology_dslx:emit(
         Plan,
         phi_phenom_topology_dslx:profile()
@@ -490,7 +559,7 @@ dslx_backend_requires_identifier_external_names_test() ->
 dslx_backend_rejects_startup_target_with_initial_effects_test() ->
     Spec = phi_phenom_topology:topology(),
     Plan = xls_topology:normalize(Spec#{startup := [
-        {phi, [{phenom_config, 1, 2}]}
+        {phi, [{phenom_anyon, 0, 0}]}
     ]}),
     try xls_topology_dslx:emit(
         Plan,
@@ -505,19 +574,32 @@ dslx_backend_rejects_startup_target_with_initial_effects_test() ->
 
 dslx_backend_explicitly_rejects_startup_only_actor_test() ->
     Spec = phi_phenom_topology:topology(),
+    Actors = maps:get(actors, Spec),
     Directions = [north, east, west, south],
     Routes = [
         case Route of
             {Source = {syndrome, Port}, _Recipients} ->
                 case lists:member(Port, Directions) of
-                    true -> {Source, [{actor, phi}]};
+                    true -> {Source, [{actor, data2}]};
                     false -> Route
                 end;
             _ -> Route
         end
         || Route <- maps:get(routes, Spec)
     ],
-    Plan = xls_topology:normalize(Spec#{routes := Routes}),
+    Data2Routes = [
+        {{data2, Port}, [{actor, syndrome}]}
+        || Port <- Directions
+    ],
+    [DataStartup] = [
+        Messages
+        || {data, Messages} <- maps:get(startup, Spec)
+    ],
+    Plan = xls_topology:normalize(Spec#{
+        actors := Actors#{data2 => phenom_data_cell},
+        routes := Routes ++ Data2Routes,
+        startup := maps:get(startup, Spec) ++ [{data2, DataStartup}]
+    }),
     ?assertError(
         {unsupported_dslx_startup_only_actor, data},
         xls_topology_dslx:emit(
@@ -617,25 +699,162 @@ expected_phi_aliased_lanes() ->
         }
     ].
 
-nonaliased_phi_ring() ->
-    Ids = [{phi, Index} || Index <- lists:seq(0, 4)],
-    Ports = [north, east, west, south, syndrome],
-    Routes = lists:append([
-        [
-            {{Source, Port}, [{actor, lists:nth(
-                ((SourceIndex + PortIndex) rem length(Ids)) + 1,
-                Ids
-            )}]}
-            || {PortIndex, Port} <- lists:enumerate(0, Ports)
-        ]
-        || {SourceIndex, Source} <- lists:enumerate(0, Ids)
-    ]),
+nonaliased_phi_pair() ->
+    Directions = [north, east, west, south],
+    PhiExternalIds = #{
+        north => phi_north,
+        east => phi_east,
+        west => phi_west,
+        south => phi_south
+    },
+    QueryExternalIds = #{
+        north => query_north,
+        east => query_east,
+        west => query_west,
+        south => query_south
+    },
+    PhiExternals = [
+        {maps:get(Port, PhiExternalIds), out, [anyon_move, phi, phi0]}
+        || Port <- Directions
+    ],
+    QueryExternals = [
+        {maps:get(Port, QueryExternalIds), out, [phenom_query]}
+        || Port <- Directions
+    ],
     #{
         version => 0,
-        actors => maps:from_list([{Id, phi_halo_cell} || Id <- Ids]),
-        externals => [],
-        routes => Routes,
+        actors => #{
+            phi => phi_halo_cell,
+            syndrome => phenom_syndrome_cell
+        },
+        externals => PhiExternals ++ QueryExternals,
+        routes =>
+            [
+                {{phi, Port}, [{external, maps:get(Port, PhiExternalIds)}]}
+                || Port <- Directions
+            ] ++
+            [{{phi, syndrome}, [{actor, syndrome}]}] ++
+            [
+                {{syndrome, Port}, [
+                    {external, maps:get(Port, QueryExternalIds)}
+                ]}
+                || Port <- Directions
+            ] ++
+            [{{syndrome, phi}, [{actor, phi}]}],
         startup => []
     }.
+
+layout_fixture_topology() ->
+    #{
+        version => 0,
+        actors => #{
+            source => xls_topology_source_fixture,
+            destination => xls_topology_layout_fixture
+        },
+        externals => [{sink, out, [message]}],
+        routes => [
+            {{source, out}, [{actor, destination}]},
+            {{destination, out}, [{external, sink}]}
+        ],
+        startup => []
+    }.
+
+reordered_fixture_topology() ->
+    #{
+        version => 0,
+        actors => #{
+            source => xls_topology_source_fixture,
+            destination => xls_topology_reordered_fixture
+        },
+        externals => [
+            {message_sink, out, [message]},
+            {padding_sink, out, [padding]}
+        ],
+        routes => [
+            {{source, out}, [{actor, destination}]},
+            {{destination, message_out}, [{external, message_sink}]},
+            {{destination, padding_out}, [{external, padding_sink}]}
+        ],
+        startup => []
+    }.
+
+external_encoding_fixture_topology() ->
+    #{
+        version => 0,
+        actors => #{
+            source => xls_topology_source_fixture,
+            reordered => xls_topology_reordered_fixture
+        },
+        externals => [
+            {shared, out, [message]},
+            {padding_sink, out, [padding]}
+        ],
+        routes => [
+            {{source, out}, [{external, shared}]},
+            {{reordered, message_out}, [{external, shared}]},
+            {{reordered, padding_out}, [{external, padding_sink}]}
+        ],
+        startup => []
+    }.
+
+external_selector_fixture_topology() ->
+    #{
+        version => 0,
+        actors => #{
+            source => xls_topology_source_fixture,
+            reordered => xls_topology_reordered_fixture
+        },
+        externals => [
+            {shared, out, [message, padding]},
+            {message_sink, out, [message]}
+        ],
+        routes => [
+            {{source, out}, [{external, shared}]},
+            {{reordered, message_out}, [{external, message_sink}]},
+            {{reordered, padding_out}, [{external, shared}]}
+        ],
+        startup => []
+    }.
+
+fixture_profile(Name) ->
+    #{
+        version => 0,
+        name => Name,
+        channel_depth => 1,
+        aliased_port_order => preserve
+    }.
+
+rename_actor_id(Spec, OldId, NewId) ->
+    Actors0 = maps:get(actors, Spec),
+    {Module, Actors1} = maps:take(OldId, Actors0),
+    Spec#{
+        actors := Actors1#{NewId => Module},
+        routes := [rename_route_actor(Route, OldId, NewId)
+            || Route <- maps:get(routes, Spec)],
+        startup := [
+            {rename_id(Id, OldId, NewId), Messages}
+            || {Id, Messages} <- maps:get(startup, Spec)
+        ]
+    }.
+
+rename_route_actor({Source, Recipients}, OldId, NewId) ->
+    {rename_source(Source, OldId, NewId),
+        [rename_recipient(Recipient, OldId, NewId)
+            || Recipient <- Recipients]};
+rename_route_actor({Source, Delivery, Recipients}, OldId, NewId) ->
+    {rename_source(Source, OldId, NewId), Delivery,
+        [rename_recipient(Recipient, OldId, NewId)
+            || Recipient <- Recipients]}.
+
+rename_source({Id, Port}, OldId, NewId) ->
+    {rename_id(Id, OldId, NewId), Port}.
+
+rename_recipient({actor, Id}, OldId, NewId) ->
+    {actor, rename_id(Id, OldId, NewId)};
+rename_recipient(Recipient = {external, _Id}, _OldId, _NewId) ->
+    Recipient.
+
+rename_id(OldId, OldId, NewId) -> NewId;
+rename_id(Id, _OldId, _NewId) -> Id.
 
 count(Binary, Pattern) -> length(binary:matches(Binary, Pattern)).

@@ -17,9 +17,9 @@ completes at a common egress queue, after which a lossless distributor waits
 for both the phi and observation branches. Each actor ingress ends at one
 mailbox-admission gate.
 
-The temporary startup-quiescence check evaluates the configured actors'
-initial callbacks in the build VM. These fixture actors are trusted and
-deterministic; emitted initial-effect summaries should replace that check.
+Startup quiescence is checked from each configured actor's statically known
+initial phase and source-ordered entry-effect summary. Topology generation does
+not execute actor callbacks.
 
 The one-instance periodic topology makes four output ports of each actor
 converge on one destination. The current binary mux trees preserve FIFO order
@@ -36,9 +36,10 @@ identifiers.
 
 The generated-RTL regression runs consecutive decoder steps, stalls the
 observation port, checks that a complete frame remains stable, then verifies
-that the graph continues. The shared actor codebook is validated, but
-route-interface compatibility is still an explicit unchecked profile
-assumption pending emitted actor interface summaries.
+that the graph continues. Compiler-emitted actor summaries now check routed
+schema membership and actor-to-actor layouts. Direct actor edges still require
+equal local selectors because this backend does not yet generate tag remappers;
+producers sharing an external output must agree on its selector and layout.
 
 This generator consumes an exact heterogeneous graph, so its proc and channel
 instances are explicit. A later parametric-family backend should retain regular

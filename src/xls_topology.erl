@@ -10,9 +10,10 @@ data.
 Version 0 contains exact actor instances, external outputs, exact routes,
 explicit multi-recipient delivery modes, and per-actor startup messages. It
 intentionally has no lifecycle, placement, transport, numeric tags, or
-generated-hardware concepts. Actor output names, their artifact ABI order, and
-mailbox bounds are read from compiled actor modules rather than repeated in the
-topology.
+generated-hardware concepts. Actor output names, their artifact ABI order,
+mailbox bounds, schema layouts, phase-specific dispatches, and phase-entry
+effects are read from the compiler's provisional actor-interface summary
+rather than repeated in the topology.
 
 Actor declarations are a map from logical instance ID to actor module. IDs are
 atoms, nonnegative integers, or nonempty tuples recursively
@@ -42,11 +43,10 @@ points:
 A backend may implement only a subset, but it must not silently rename one
 completion point as another.
 
-The current actor metadata does not identify the schemas accepted by each
-callback or emitted by each output. Schema compatibility therefore remains a
-later actor-lowering check; this module does not infer it from a wire codebook.
-Reading attributes from loaded modules is temporary scaffolding for that future
-actor catalog, not the intended long-term catalog boundary.
+Route validation uses the union of schemas which the current lowerer proves can
+be emitted through a source port and dispatched by a recipient. A dispatch is
+not a claim that every payload passes callback patterns and guards. Numeric tag
+compatibility remains a physical-backend concern.
 """.
 
 -export([from_module/1, normalize/1]).
@@ -94,7 +94,7 @@ normalize(Spec) ->
 
     #{
         version => 0,
-        actors => Actors,
+        actors => [maps:remove(interface, Actor) || Actor <- Actors],
         externals => Externals,
         routes => Routes,
         startup => Startup,
@@ -140,46 +140,20 @@ normalize_actor_entry(Id, Module) ->
 
 actor_summary(Id, Module) ->
     case code:ensure_loaded(Module) of
-        {module, Module} -> actor_attributes(Id, Module);
+        {module, Module} ->
+            Interface = xls_actor_interface:from_module(Module),
+            #{
+                id => Id,
+                module => Module,
+                outputs => maps:get(outputs, Interface),
+                mailbox_capacity => maps:get(
+                    mailbox_capacity,
+                    Interface
+                ),
+                interface => Interface
+            };
         {error, Reason} ->
             error({topology_actor_unavailable, Id, Module, Reason})
-    end.
-
-actor_attributes(Id, Module) ->
-    Attributes = Module:module_info(attributes),
-    case lists:member(
-        xls_statem,
-        proplists:get_value(behavior, Attributes, [])
-    ) of
-        true -> ok;
-        false -> error({not_an_xls_statem_actor, Id, Module})
-    end,
-    Outputs = attribute(Id, Module, xls_outputs, Attributes),
-    case is_list(Outputs) andalso
-            lists:all(fun erlang:is_atom/1, Outputs) of
-        true -> require_unique(duplicate_actor_outputs, Outputs);
-        false -> error({invalid_actor_outputs, Id, Module, Outputs})
-    end,
-    Capacity = case attribute(
-        Id,
-        Module,
-        xls_mailbox_capacity,
-        Attributes
-    ) of
-        [Value] when is_integer(Value), Value > 0 -> Value;
-        Value -> error({invalid_actor_mailbox_capacity, Id, Module, Value})
-    end,
-    #{
-        id => Id,
-        module => Module,
-        outputs => Outputs,
-        mailbox_capacity => Capacity
-    }.
-
-attribute(Id, Module, Name, Attributes) ->
-    case proplists:get_value(Name, Attributes, '$missing') of
-        '$missing' -> error({missing_actor_attribute, Id, Module, Name});
-        Value -> Value
     end.
 
 normalize_externals(Specs) when is_list(Specs) ->
@@ -220,7 +194,17 @@ normalize_routes(Specs, ActorIndex, ExternalIndex) when is_list(Specs) ->
            Port <- maps:get(outputs, Actor)
     ]),
     case Expected -- lists:sort(Sources) of
-        [] -> sort_by(fun(Route) -> maps:get(source, Route) end, Routes);
+        [] ->
+            Sorted = sort_by(
+                fun(Route) -> maps:get(source, Route) end,
+                Routes
+            ),
+            ok = validate_route_interfaces(
+                Sorted,
+                ActorIndex,
+                ExternalIndex
+            ),
+            Sorted;
         Missing -> error({unrouted_outputs, Missing})
     end;
 normalize_routes(Specs, _ActorIndex, _ExternalIndex) ->
@@ -322,6 +306,91 @@ normalize_recipient(
 normalize_recipient(Recipient, Source, _ActorIndex, _ExternalIndex) ->
     error({invalid_route_recipient, Source, Recipient}).
 
+validate_route_interfaces(Routes, ActorIndex, ExternalIndex) ->
+    lists:foreach(
+        fun(Route) ->
+            Source = {ActorId, Port} = maps:get(source, Route),
+            SourceActor = maps:get(ActorId, ActorIndex),
+            SourceInterface = maps:get(interface, SourceActor),
+            Emitted = xls_actor_interface:output_schemas(
+                SourceInterface,
+                Port
+            ),
+            lists:foreach(
+                fun(Recipient) ->
+                    validate_route_recipient_interface(
+                        Source,
+                        SourceInterface,
+                        Emitted,
+                        Recipient,
+                        ActorIndex,
+                        ExternalIndex
+                    )
+                end,
+                maps:get(recipients, Route)
+            )
+        end,
+        Routes
+    ).
+
+validate_route_recipient_interface(
+    Source,
+    SourceInterface,
+    Emitted,
+    Recipient = {actor, ActorId},
+    ActorIndex,
+    _ExternalIndex
+) ->
+    Destination = maps:get(ActorId, ActorIndex),
+    DestinationInterface = maps:get(interface, Destination),
+    Dispatched = xls_actor_interface:dispatched_schemas(
+        DestinationInterface
+    ),
+    require_route_schemas(Source, Recipient, Emitted, Dispatched),
+    lists:foreach(
+        fun(Schema) ->
+            SourceSchema = xls_actor_interface:schema(
+                SourceInterface,
+                Schema
+            ),
+            DestinationSchema = xls_actor_interface:schema(
+                DestinationInterface,
+                Schema
+            ),
+            SourceFields = maps:get(fields, SourceSchema),
+            DestinationFields = maps:get(fields, DestinationSchema),
+            case SourceFields =:= DestinationFields of
+                true -> ok;
+                false -> error({incompatible_route_schema_layout,
+                    Source, Recipient, Schema,
+                    SourceFields, DestinationFields})
+            end
+        end,
+        Emitted
+    );
+validate_route_recipient_interface(
+    Source,
+    _SourceInterface,
+    Emitted,
+    Recipient = {external, ExternalId},
+    _ActorIndex,
+    ExternalIndex
+) ->
+    External = maps:get(ExternalId, ExternalIndex),
+    require_route_schemas(
+        Source,
+        Recipient,
+        Emitted,
+        maps:get(schemas, External)
+    ).
+
+require_route_schemas(Source, Recipient, Emitted, Dispatched) ->
+    case Emitted -- Dispatched of
+        [] -> ok;
+        Unsupported -> error({incompatible_route_schemas,
+            Source, Recipient, Unsupported, Dispatched})
+    end.
+
 derive_lanes(Routes) ->
     LanePorts = lists:foldl(
         fun(Route, Acc0) ->
@@ -365,10 +434,37 @@ normalize_startup(Specs, _ActorIndex) ->
 
 normalize_startup_item({ActorId, Messages}, ActorIndex)
         when is_list(Messages), Messages =/= [] ->
-    _ = require_actor(ActorId, ActorIndex, startup),
+    Actor = require_actor(ActorId, ActorIndex, startup),
+    ok = validate_startup_schemas(ActorId, Messages, Actor),
     #{target => ActorId, delivery => cast, messages => Messages};
 normalize_startup_item(Spec, _ActorIndex) ->
     error({invalid_startup_spec, Spec}).
+
+validate_startup_schemas(ActorId, Messages, Actor) ->
+    Interface = maps:get(interface, Actor),
+    Dispatched = xls_actor_interface:dispatched_schemas(
+        Interface
+    ),
+    lists:foreach(
+        fun({Index, Message}) ->
+            case startup_schema(Message) of
+                none -> ok;
+                {ok, Schema} ->
+                    case lists:member(Schema, Dispatched) of
+                        true -> ok;
+                        false -> error({incompatible_startup_schema,
+                            ActorId, Index, Schema, Dispatched})
+                    end
+            end
+        end,
+        lists:enumerate(0, Messages)
+    ).
+
+startup_schema(Message) when is_tuple(Message), tuple_size(Message) > 0,
+        is_atom(element(1, Message)) ->
+    {ok, element(1, Message)};
+startup_schema(_Message) ->
+    none.
 
 require_actor(ActorId, ActorIndex, Context) ->
     case maps:find(ActorId, ActorIndex) of

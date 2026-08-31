@@ -33,7 +33,7 @@ concatenates every block in include-expanded source order. That order is part
 of the wire ABI: appending a block preserves existing tag values, while
 prepending or moving one can renumber them. Every entry must be a unique atom.
 """.
--export([to_xls/1]).
+-export([actor_interface/1, to_xls/1]).
 %% Internal API shared by the actor-specific lowerers while this module is
 %% split into smaller compiler passes.
 -export([
@@ -41,12 +41,15 @@ prepending or moving one can renumber them. Every entry must be a unique atom.
     branch_from_clause/4,
     branch_from_clause/6,
     find_attribute/2,
+    find_optional_attribute/2,
     find_tags/1,
     find_function/3,
     find_record/2,
     mismatch_expression/2,
     print/1,
+    record_field_name/1,
     record_width/1,
+    state/1,
     statement_from_statement/2,
     struct_from_record/1,
     structfrombits_from_record/1,
@@ -76,6 +79,17 @@ to_xls(Filename) ->
     case find_optional_attribute(Forms, xls_phases) of
         none -> to_xls_gs(Filename, Forms);
         {ok, PhaseNames} -> to_xls_statem(Filename, Forms, PhaseNames)
+    end.
+
+-spec actor_interface(file:filename()) -> map().
+-doc "Returns the include-expanded interface inferred for one xls_statem file.".
+actor_interface(Filename) ->
+    {ok, Forms} = parse_file(Filename),
+    case find_optional_attribute(Forms, xls_phases) of
+        {ok, PhaseNames} ->
+            xls_statem_lower:interface(Forms, PhaseNames);
+        none ->
+            error({unsupported_xls_actor_interface, Filename, xls_gs})
     end.
 
 to_xls_gs(Filename, Forms) ->

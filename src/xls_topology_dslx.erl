@@ -7,16 +7,17 @@
 Generates the deliberately small, closed DSLX topology backend.
 
 The input is a normalized `xls_topology` plan plus a physical profile. This
-backend uses complete `axis::Frame` channels, one shared public actor codebook,
-depth-N channel buffers, binary `axis::FrameMux2` ingress trees, and one
-`axis::ReservedFrame` admission boundary per actor. Startup records are packed
-by their destination actor's generated Erlang packer, so the topology does not
-repeat record layouts or numeric tags.
+backend uses complete `axis::Frame` channels, depth-N channel buffers, binary
+`axis::FrameMux2` ingress trees, and one `axis::ReservedFrame` admission
+boundary per actor. Startup records are packed by their destination actor's
+generated Erlang packer, so the topology does not repeat record layouts or
+numeric tags.
 
 This is intentionally an executable application fixture, not a general
-semantics-preserving topology backend. The profile must explicitly assume
-route-interface compatibility because actor summaries do not expose enough
-information to check it yet. Its
+semantics-preserving topology backend. Logical route schemas and layouts are
+checked from emitted actor summaries. Direct Frame transport additionally
+requires each routed schema to have the same local selector at both actors;
+selector remapping remains a later backend feature. The profile's
 `aliased_port_order` setting says whether the fixture permits the current mux
 trees to reorder messages sent through different ports of one actor to one
 destination. The generator derives the affected lanes from the semantic plan;
@@ -31,10 +32,9 @@ lossless distributor waits for every bounded branch channel. Startup is not an
 ordinary competing ingress. A per-destination prefix emits all startup frames
 in list order before it performs its first routed-input receive.
 
-Until actor summaries expose initial-effect metadata, startup quiescence
-validation executes `init/1` and the initial `handle_enter/3` in the build VM.
-This fixture backend must therefore be used only with trusted, deterministic
-actor modules; isolation and timeouts remain future compiler work.
+Startup quiescence is checked from the statically known initial phase and its
+source-ordered entry effects. Actor callbacks are not executed by topology
+generation.
 """.
 
 -export([emit/2, from_module/2]).
@@ -69,7 +69,7 @@ lower(Plan, Profile) ->
         {maps:get(id, Actor), Actor} || Actor <- Actors
     ]),
     Physical = validate_profile(Profile, Plan),
-    ok = validate_shared_codebook(Actors),
+    ok = validate_route_selectors(maps:get(routes, Plan), ActorIndex),
     ok = validate_startup_quiescence(maps:get(startup, Plan), ActorIndex),
     Routes = physical_route_order(Actors, maps:get(routes, Plan)),
     Startup = pack_startup(maps:get(startup, Plan), ActorIndex),
@@ -87,9 +87,7 @@ validate_profile(Profile, Plan) when is_map(Profile) ->
     Required = lists:sort([
         aliased_port_order,
         channel_depth,
-        codebook,
         name,
-        route_interfaces,
         version
     ]),
     Keys = lists:sort(maps:keys(Profile)),
@@ -106,15 +104,6 @@ validate_profile(Profile, Plan) when is_map(Profile) ->
     case maps:get(channel_depth, Profile) of
         Depth when is_integer(Depth), Depth > 0 -> ok;
         Depth -> error({invalid_dslx_channel_depth, Depth})
-    end,
-    case maps:get(route_interfaces, Profile) of
-        assumed_compatible -> ok;
-        InterfacePolicy ->
-            error({unsupported_dslx_route_interfaces, InterfacePolicy})
-    end,
-    case maps:get(codebook, Profile) of
-        shared -> ok;
-        CodebookPolicy -> error({unsupported_dslx_codebook, CodebookPolicy})
     end,
     RealizedLanes = derive_realized_lanes(maps:get(routes, Plan)),
     case maps:get(lanes, Plan, '$missing') of
@@ -204,10 +193,16 @@ describe_aliased_lane(Lane, ActorIndex) ->
     }.
 
 annotate_actors(Actors) ->
-    [annotate_actor(Index, Actor)
+    Interfaces = maps:from_list([
+        {Module, xls_actor_interface:from_module(Module)}
+        || Module <- lists:usort([
+            maps:get(module, Actor) || Actor <- Actors
+        ])
+    ]),
+    [annotate_actor(Index, Actor, Interfaces)
         || {Index, Actor} <- lists:enumerate(0, Actors)].
 
-annotate_actor(Index, Actor) ->
+annotate_actor(Index, Actor, Interfaces) ->
     Module = maps:get(module, Actor),
     ModuleName = identifier(Module, {actor_module, maps:get(id, Actor)}),
     Outputs = maps:get(outputs, Actor),
@@ -224,6 +219,7 @@ annotate_actor(Index, Actor) ->
     ]),
     Actor#{
         index => Index,
+        interface => maps:get(Module, Interfaces),
         module_name => ModuleName,
         stem => ["actor_", integer_to_list(Index)],
         output_channels => OutputChannels
@@ -242,78 +238,160 @@ annotate_externals(Externals) ->
         || {Index, External} <- lists:enumerate(0, Externals)
     ].
 
-validate_shared_codebook([]) -> ok;
-validate_shared_codebook([First | Rest]) ->
-    Expected = public_codebook(First),
+validate_route_selectors(Routes, ActorIndex) ->
     lists:foreach(
-        fun(Actor) ->
-            case public_codebook(Actor) of
-                Expected -> ok;
-                Actual -> error({incompatible_actor_codebook,
-                    maps:get(id, Actor), Expected, Actual})
-            end
+        fun(Route) ->
+            Source = {SourceId, Port} = maps:get(source, Route),
+            SourceActor = maps:get(SourceId, ActorIndex),
+            SourceInterface = maps:get(interface, SourceActor),
+            Schemas = xls_actor_interface:output_schemas(
+                SourceInterface,
+                Port
+            ),
+            lists:foreach(
+                fun
+                    ({actor, DestinationId} = Recipient) ->
+                        DestinationActor = maps:get(
+                            DestinationId,
+                            ActorIndex
+                        ),
+                        DestinationInterface = maps:get(
+                            interface,
+                            DestinationActor
+                        ),
+                        lists:foreach(
+                            fun(Schema) ->
+                                validate_route_selector(
+                                    Source,
+                                    Recipient,
+                                    Schema,
+                                    SourceInterface,
+                                    DestinationInterface
+                                )
+                            end,
+                            Schemas
+                        );
+                    ({external, _ExternalId}) ->
+                        ok
+                end,
+                maps:get(recipients, Route)
+            )
         end,
-        Rest
-    ).
+        Routes
+    ),
+    validate_external_selectors(Routes, ActorIndex).
 
-public_codebook(Actor) ->
-    Module = maps:get(module, Actor),
-    Attributes = Module:module_info(attributes),
-    Fragments = proplists:get_all_values(xls_tags, Attributes),
-    case Fragments =/= [] andalso lists:all(
-        fun(Fragment) ->
-            is_list(Fragment) andalso
-                lists:all(fun erlang:is_atom/1, Fragment)
-        end,
-        Fragments
-    ) of
-        true ->
-            Tags = lists:append(Fragments),
-            case duplicate_values(Tags) of
-                [] -> Tags;
-                Duplicates -> error({duplicate_actor_codebook_tags,
-                    maps:get(id, Actor), Module, Duplicates})
-            end;
-        false -> error({invalid_actor_codebook,
-            maps:get(id, Actor), Module, Fragments})
+validate_route_selector(Source, Recipient, Schema,
+        SourceInterface, DestinationInterface) ->
+    SourceSelector = maps:get(
+        selector,
+        xls_actor_interface:schema(SourceInterface, Schema)
+    ),
+    DestinationSelector = maps:get(
+        selector,
+        xls_actor_interface:schema(DestinationInterface, Schema)
+    ),
+    case SourceSelector =:= DestinationSelector of
+        true -> ok;
+        false -> error({unsupported_dslx_route_tag_remap,
+            Source, Recipient, Schema,
+            SourceSelector, DestinationSelector})
     end.
+
+validate_external_selectors(Routes, ActorIndex) ->
+    Bindings = lists:foldl(
+        fun(Route, Acc0) ->
+            {SourceId, Port} = Source = maps:get(source, Route),
+            Interface = maps:get(
+                interface,
+                maps:get(SourceId, ActorIndex)
+            ),
+            Schemas = xls_actor_interface:output_schemas(Interface, Port),
+            lists:foldl(
+                fun
+                    ({external, ExternalId}, Acc1) ->
+                        New = [
+                            #{
+                                source => Source,
+                                schema => Schema,
+                                selector => maps:get(
+                                    selector,
+                                    xls_actor_interface:schema(
+                                        Interface,
+                                        Schema
+                                    )
+                                ),
+                                fields => maps:get(
+                                    fields,
+                                    xls_actor_interface:schema(
+                                        Interface,
+                                        Schema
+                                    )
+                                )
+                            }
+                            || Schema <- Schemas
+                        ],
+                        maps:update_with(
+                            ExternalId,
+                            fun(Old) -> New ++ Old end,
+                            New,
+                            Acc1
+                        );
+                    ({actor, _ActorId}, Acc1) ->
+                        Acc1
+                end,
+                Acc0,
+                maps:get(recipients, Route)
+            )
+        end,
+        #{},
+        Routes
+    ),
+    maps:foreach(fun validate_external_bindings/2, Bindings).
+
+validate_external_bindings(ExternalId, Bindings) ->
+    _ = lists:foldl(
+        fun(Binding, {BySchema0, BySelector0}) ->
+            Schema = maps:get(schema, Binding),
+            Selector = maps:get(selector, Binding),
+            Fields = maps:get(fields, Binding),
+            Encoding = {
+                Selector,
+                Fields,
+                maps:get(source, Binding)
+            },
+            BySchema = case maps:find(Schema, BySchema0) of
+                error -> BySchema0#{Schema => Encoding};
+                {ok, {Selector, Fields, _ExistingSource}} ->
+                    BySchema0;
+                {ok, Existing} ->
+                    error({incompatible_dslx_external_schema_encoding,
+                        ExternalId, Schema, Existing, Encoding})
+            end,
+            BySelector = case maps:find(Selector, BySelector0) of
+                error -> BySelector0#{Selector => Schema};
+                {ok, Schema} -> BySelector0;
+                {ok, ExistingSchema} ->
+                    error({ambiguous_dslx_external_selector,
+                        ExternalId, Selector, ExistingSchema, Schema})
+            end,
+            {BySchema, BySelector}
+        end,
+        {#{}, #{}},
+        Bindings
+    ),
+    ok.
 
 validate_startup_quiescence(Startup, ActorIndex) ->
     lists:foreach(
         fun(Item) ->
             Target = maps:get(target, Item),
             Actor = maps:get(Target, ActorIndex),
-            Module = maps:get(module, Actor),
-            InitResult = try Module:init([]) of
-                Result0 -> Result0
-            catch
-                InitClass:InitReason ->
-                    error({cannot_validate_startup_target_init,
-                        Target, Module, InitClass, InitReason})
-            end,
-            {InitialPhase, InitialData} = case InitResult of
-                {ok, Phase, Data} -> {Phase, Data};
-                _ -> error({invalid_startup_target_init,
-                    Target, Module, InitResult})
-            end,
-            EntryResult = try Module:handle_enter(
-                InitialPhase,
-                InitialPhase,
-                InitialData
-            ) of
-                Result1 -> Result1
-            catch
-                EntryClass:EntryReason ->
-                    error({cannot_validate_startup_target_entry,
-                        Target, Module, EntryClass, EntryReason})
-            end,
-            case EntryResult of
-                {_EnteredData, []} -> ok;
-                {_EnteredData, Effects} ->
-                    error({startup_target_has_initial_effects,
-                        Target, Module, Effects});
-                _ -> error({invalid_startup_target_entry,
-                    Target, Module, EntryResult})
+            Interface = maps:get(interface, Actor),
+            case xls_actor_interface:initial_effects(Interface) of
+                [] -> ok;
+                Effects -> error({startup_target_has_initial_effects,
+                    Target, maps:get(module, Actor), Effects})
             end
         end,
         Startup
@@ -685,10 +763,10 @@ preamble(Spec, Graph) ->
         "// Auto-generated by xls_topology_dslx from normalized Erlang data.\n",
         "// Manual changes will be overwritten.\n",
         "//\n",
-        "// Fixture boundary: route-interface compatibility is assumed by ",
-        "the profile,\n",
-        "// not compiler-checked. Actor public tags use one validated shared ",
-        "codebook.\n",
+        "// Actor summaries validate route schemas and actor-to-actor layouts.\n",
+        "// Direct Frame edges also require matching local selectors; tag ",
+        "remapping\n",
+        "// is not implemented. External producers must agree on one encoding.\n",
         "// The ",
         integer_to_list(AliasCount),
         " aliased lane(s)\n",
@@ -917,15 +995,3 @@ join_tokens([First, Second | Rest]) ->
 join_with(_Separator, []) -> [];
 join_with(Separator, [First | Rest]) ->
     [First | [[Separator, Item] || Item <- Rest]].
-
-duplicate_values(Values) ->
-    Counts = lists:foldl(
-        fun(Value, Acc) ->
-            maps:update_with(Value, fun(Count) -> Count + 1 end, 1, Acc)
-        end,
-        #{},
-        Values
-    ),
-    lists:sort([
-        Value || {Value, Count} <- maps:to_list(Counts), Count > 1
-    ]).

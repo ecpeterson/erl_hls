@@ -2,7 +2,16 @@
 -moduledoc """
  
 """.
--export([zero/0, zero/1, as/2, width/1, pack/2, unpack/2, print_type/1]).
+-export([
+    as/2,
+    descriptor/1,
+    pack/2,
+    print_type/1,
+    unpack/2,
+    width/1,
+    zero/0,
+    zero/1
+]).
 -compile(export_all).
 
 %%%

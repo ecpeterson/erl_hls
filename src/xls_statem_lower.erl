@@ -7,42 +7,39 @@
 -module(xls_statem_lower).
 -moduledoc false.
 
--export([lower/3]).
+-export([interface/2, lower/3]).
+
+-type interface() :: map().
+
+-spec interface([erl_parse:abstract_form()], [atom(), ...]) -> interface().
+-doc "Summarizes the statically dispatched and emitted xls_statem schemas.".
+interface(Forms, PhaseNames) ->
+    interface_from_prepared(prepare(Forms, PhaseNames)).
 
 -spec lower(file:filename(), [erl_parse:abstract_form()], [atom(), ...]) ->
     iolist().
 lower(Filename, Forms, PhaseNames) ->
-    MessageNames = xls_parse:find_tags(Forms),
-    OutputNames = xls_parse:find_attribute(Forms, xls_outputs),
-    Capacity = xls_parse:find_attribute(Forms, xls_mailbox_capacity),
-    DataName = xls_parse:find_attribute(Forms, xls_data),
-    ok = validate_names(PhaseNames, MessageNames, OutputNames, DataName),
-    ok = validate_capacity(Capacity),
-
-    RecordNames = MessageNames ++ [DataName],
-    Records = [xls_parse:find_record(Forms, Name) || Name <- RecordNames],
-    ok = lists:foreach(
-        fun xls_parse:validate_record_defaults/1,
-        Records
-    ),
+    Declarations = declarations(Forms, PhaseNames),
+    MessageNames = maps:get(message_names, Declarations),
     MessageWords = maps:from_list([
         {Name, message_words(Forms, Name)} || Name <- MessageNames
     ]),
+    Prepared = prepare_callbacks(Forms, Declarations),
+    OutputNames = maps:get(output_names, Prepared),
+    Capacity = maps:get(capacity, Prepared),
+    DataName = maps:get(data_name, Prepared),
+    Records = maps:get(records, Prepared),
 
     EnumAtoms = enum_atoms(PhaseNames),
-    Init = lower_init(Forms, DataName, EnumAtoms),
+    Init = lower_init(maps:get(init_clause, Prepared), DataName, EnumAtoms),
     Entries = lower_entries(
-        Forms,
-        PhaseNames,
-        MessageNames,
+        maps:get(entries, Prepared),
         OutputNames,
         DataName,
         EnumAtoms
     ),
     Casts = lower_casts(
-        Forms,
-        PhaseNames,
-        MessageNames,
+        maps:get(cast_groups, Prepared),
         DataName,
         EnumAtoms
     ),
@@ -68,13 +65,226 @@ lower(Filename, Forms, PhaseNames) ->
         casts => Casts
     }).
 
+prepare(Forms, PhaseNames) ->
+    prepare_callbacks(Forms, declarations(Forms, PhaseNames)).
+
+declarations(Forms, PhaseNames) ->
+    MessageNames = xls_parse:find_tags(Forms),
+    OutputNames = xls_parse:find_attribute(Forms, xls_outputs),
+    Capacity = xls_parse:find_attribute(Forms, xls_mailbox_capacity),
+    DataName = xls_parse:find_attribute(Forms, xls_data),
+    ok = validate_names(PhaseNames, MessageNames, OutputNames, DataName),
+    ok = validate_capacity(Capacity),
+
+    RecordNames = MessageNames ++ [DataName],
+    Records = [xls_parse:find_record(Forms, Name) || Name <- RecordNames],
+    ok = lists:foreach(
+        fun xls_parse:validate_record_defaults/1,
+        Records
+    ),
+    #{
+        module => xls_parse:find_attribute(Forms, module),
+        phases => PhaseNames,
+        message_names => MessageNames,
+        output_names => OutputNames,
+        capacity => Capacity,
+        data_name => DataName,
+        records => Records
+    }.
+
+prepare_callbacks(Forms, Declarations) ->
+    PhaseNames = maps:get(phases, Declarations),
+    MessageNames = maps:get(message_names, Declarations),
+    OutputNames = maps:get(output_names, Declarations),
+    [InitClause] = xls_parse:find_function(Forms, init, 1),
+    ok = validate_init_head(InitClause),
+    _ = rewrite_init_result(InitClause),
+    Entries = analyze_entries(
+        Forms,
+        PhaseNames,
+        MessageNames,
+        OutputNames
+    ),
+    CastGroups = analyze_cast_groups(Forms, PhaseNames, MessageNames),
+    Declarations#{
+        init_clause => InitClause,
+        initial_phase => initial_phase(InitClause, PhaseNames),
+        entries => Entries,
+        cast_groups => CastGroups
+    }.
+
+%%%
+%%% Actor interface analysis
+%%%
+
+interface_from_prepared(Prepared) ->
+    Entries = maps:get(entries, Prepared),
+    CastGroups = maps:get(cast_groups, Prepared),
+    #{
+        version => 0,
+        module => maps:get(module, Prepared),
+        phases => maps:get(phases, Prepared),
+        initial_phase => maps:get(initial_phase, Prepared),
+        outputs => maps:get(output_names, Prepared),
+        mailbox_capacity => maps:get(capacity, Prepared),
+        schemas => schema_summaries(
+            maps:get(records, Prepared),
+            maps:get(message_names, Prepared)
+        ),
+        dispatches => dispatches(
+            CastGroups,
+            maps:get(message_names, Prepared),
+            maps:get(phases, Prepared)
+        ),
+        entry_effects => lists:append([
+            interface_effects(Entry) || Entry <- Entries
+        ])
+    }.
+
+initial_phase({clause, _Line, _Patterns, _Guards, Body}, PhaseNames) ->
+    {Prefix, Result} = split_last(Body),
+    Phase = case Result of
+        {tuple, _TupleLine, [
+            {atom, _OkLine, ok},
+            PhaseExpression,
+            _Data
+        ]} ->
+            resolve_static_atom(PhaseExpression, Prefix);
+        _ -> unknown
+    end,
+    case Phase of
+        unknown -> unknown;
+        _ ->
+            require_declared(initial_phase, Phase, PhaseNames),
+            Phase
+    end.
+
+resolve_static_atom({atom, _Line, Value}, _Prefix) ->
+    Value;
+resolve_static_atom({var, _Line, Name}, Prefix) ->
+    case [
+        Value
+        || {match, _MatchLine,
+                {var, _VarLine, Name0},
+                {atom, _AtomLine, Value}} <- Prefix,
+           Name0 =:= Name
+    ] of
+        [Value] -> Value;
+        _ -> unknown
+    end;
+resolve_static_atom(_Expression, _Prefix) ->
+    unknown.
+
+schema_summaries(Records, MessageNames) ->
+    RecordIndex = maps:from_list([
+        {Name, Record}
+        || Record = {attribute, _Line, record, {Name, _Fields}} <- Records
+    ]),
+    [
+        schema_summary(maps:get(Name, RecordIndex), Name, Selector)
+        || {Selector, Name} <- lists:zip(
+            lists:seq(3, length(MessageNames) + 2),
+            MessageNames
+        )
+    ].
+
+schema_summary(Record, Name, Selector) ->
+    #{
+        name => Name,
+        selector => Selector,
+        fields => record_fields(Record)
+    }.
+
+record_fields({attribute, _Line, record, {_Name, Fields}}) ->
+    [
+        #{
+            name => xls_parse:record_field_name(Field),
+            type => xls_type:descriptor(Type)
+        }
+        || {typed_record_field, Field, Type} <- Fields
+    ].
+
+analyze_entries(Forms, PhaseNames, MessageNames, OutputNames) ->
+    Clauses = xls_parse:find_function(Forms, handle_enter, 3),
+    Entries = [
+        analyze_entry(Clause, PhaseNames, MessageNames, OutputNames)
+        || Clause <- Clauses
+    ],
+    EntryPhases = [maps:get(phase, Entry) || Entry <- Entries],
+    ok = require_unique(entry_phase, EntryPhases),
+    case lists:sort(EntryPhases) =:= lists:sort(PhaseNames) of
+        true -> order_entries(Entries, PhaseNames);
+        false -> error({incomplete_xls_statem_entries,
+            PhaseNames, EntryPhases})
+    end.
+
+analyze_entry(
+    Clause = {clause, Line, Patterns, Guards, Body},
+    PhaseNames,
+    MessageNames,
+    OutputNames
+) ->
+    Phase = entry_phase(Line, Patterns, Guards, PhaseNames),
+    {Prefix, Last} = split_last(Body),
+    {DataExpression, ActionList} = case Last of
+        {tuple, _TupleLine, [DataExpr, ActionExpression]} ->
+            {DataExpr, ActionExpression};
+        _ -> error({bad_xls_statem_enter_result, Line, Last})
+    end,
+    #{
+        phase => Phase,
+        clause => Clause,
+        prefix => Prefix,
+        data_expression => DataExpression,
+        actions => parse_actions(
+            ActionList,
+            Prefix,
+            MessageNames,
+            OutputNames,
+            Line
+        )
+    }.
+
+order_entries(Entries, PhaseNames) ->
+    EntryIndex = maps:from_list([
+        {maps:get(phase, Entry), Entry} || Entry <- Entries
+    ]),
+    [maps:get(Phase, EntryIndex) || Phase <- PhaseNames].
+
+interface_effects(#{phase := Phase, actions := Actions}) ->
+    [
+        #{
+            phase => Phase,
+            order => maps:get(order, Action),
+            port => maps:get(port, Action),
+            schema => maps:get(tag, Action)
+        }
+        || Action <- Actions
+    ].
+
+analyze_cast_groups(Forms, PhaseNames, MessageNames) ->
+    Clauses = xls_parse:find_function(Forms, handle_cast, 3),
+    xls_callback_lower:group_by(
+        Clauses,
+        fun(Clause) ->
+            cast_key(Clause, MessageNames, PhaseNames)
+        end
+    ).
+
+dispatches(CastGroups, MessageNames, PhaseNames) ->
+    Keys = maps:from_keys([Key || {Key, _Clauses} <- CastGroups], true),
+    [
+        #{schema => Schema, phase => Phase}
+        || Schema <- MessageNames,
+           Phase <- PhaseNames,
+           maps:is_key({Schema, Phase}, Keys)
+    ].
+
 %%%
 %%% init/1
 %%%
 
-lower_init(Forms, DataName, EnumAtoms) ->
-    [Clause0] = xls_parse:find_function(Forms, init, 1),
-    ok = validate_init_head(Clause0),
+lower_init(Clause0, DataName, EnumAtoms) ->
     Clause = rewrite_init_result(Clause0),
     Postprocessor = fun(R) -> [
         "Machine {\n",
@@ -118,49 +328,27 @@ validate_init_head({clause, Line, Patterns, Guards, _Body}) ->
 %%% handle_enter/3
 %%%
 
-lower_entries(Forms, PhaseNames, MessageNames, OutputNames, DataName,
-        EnumAtoms) ->
-    Clauses = xls_parse:find_function(Forms, handle_enter, 3),
-    Entries = [
-        lower_entry(
-            Clause,
-            PhaseNames,
-            MessageNames,
-            OutputNames,
-            DataName,
-            EnumAtoms
-        )
-        || Clause <- Clauses
-    ],
-    EntryPhases = [maps:get(phase, Entry) || Entry <- Entries],
-    ok = require_unique(entry_phase, EntryPhases),
-    case lists:sort(EntryPhases) =:= lists:sort(PhaseNames) of
-        true -> Entries;
-        false -> error({incomplete_xls_statem_entries, PhaseNames, EntryPhases})
-    end.
+lower_entries(Entries, OutputNames, DataName, EnumAtoms) ->
+    [
+        lower_entry(Entry, OutputNames, DataName, EnumAtoms)
+        || Entry <- Entries
+    ].
 
 lower_entry(
-    Clause0 = {clause, Line, Patterns, Guards, Body0},
-    PhaseNames,
-    MessageNames,
+    #{
+        phase := Phase,
+        clause := Clause0,
+        prefix := Prefix,
+        data_expression := DataExpression,
+        actions := OrderedActions
+    },
     OutputNames,
     DataName,
     EnumAtoms
 ) ->
-    Phase = entry_phase(Line, Patterns, Guards, PhaseNames),
-    {Prefix, Last} = split_last(Body0),
-    {DataExpression, ActionList} = case Last of
-        {tuple, _TupleLine, [DataExpr, ActionExpression]} ->
-            {DataExpr, ActionExpression};
-        _ -> error({bad_xls_statem_enter_result, Line, Last})
-    end,
-    Actions = parse_actions(
-        ActionList,
-        Prefix,
-        MessageNames,
-        OutputNames,
-        Line
-    ),
+    Actions = maps:from_list([
+        {maps:get(port, Action), Action} || Action <- OrderedActions
+    ]),
     Clause = strip_dispatched_phase(Clause0),
     DataClause = replace_body(Clause, Prefix ++ [DataExpression]),
     {DataBody, DataResult} = xls_parse:branch_from_clause(
@@ -189,7 +377,8 @@ lower_entry(
 
 lower_entry_output(_Clause, _Prefix, none, _DataName, _EnumAtoms) ->
     #{valid => false};
-lower_entry_output(Clause, Prefix, #{message := Message}, DataName,
+lower_entry_output(Clause, Prefix,
+        #{message := Message, tag := Tag}, DataName,
         EnumAtoms) ->
     MessageClause = replace_body(Clause, Prefix ++ [Message]),
     {Body, Result} = xls_parse:branch_from_clause(
@@ -200,7 +389,7 @@ lower_entry_output(Clause, Prefix, #{message := Message}, DataName,
         "zero!<axis::Frame>()",
         EnumAtoms
     ),
-    (lowered(Body, Result))#{valid => true}.
+    (lowered(Body, Result))#{valid => true, tag => Tag}.
 
 enter_args(DataName) ->
     [
@@ -213,14 +402,20 @@ parse_actions(ActionList, Prefix, MessageNames, OutputNames, Line) ->
     ActionExpressions = literal_list(ActionList, Line),
     Bindings = record_bindings(Prefix),
     Parsed = lists:map(
-        fun(Action) ->
-            parse_action(Action, Bindings, MessageNames, OutputNames, Line)
+        fun({Order, Action}) ->
+            (parse_action(
+                Action,
+                Bindings,
+                MessageNames,
+                OutputNames,
+                Line
+            ))#{order => Order}
         end,
-        ActionExpressions
+        lists:enumerate(0, ActionExpressions)
     ),
     Ports = [maps:get(port, Action) || Action <- Parsed],
     ok = require_unique(entry_output, Ports),
-    maps:from_list([{maps:get(port, Action), Action} || Action <- Parsed]).
+    Parsed.
 
 parse_action(
     {tuple, _TupleLine, [
@@ -276,15 +471,8 @@ literal_list(Expression, ContextLine) ->
 %%% handle_cast/3
 %%%
 
-lower_casts(Forms, PhaseNames, MessageNames, DataName, EnumAtoms) ->
-    Clauses = xls_parse:find_function(Forms, handle_cast, 3),
-    Groups = xls_callback_lower:group_by(
-        Clauses,
-        fun(Clause) ->
-            cast_key(Clause, MessageNames, PhaseNames)
-        end
-    ),
-    Casts = [
+lower_casts(Groups, DataName, EnumAtoms) ->
+    [
         lower_cast_group(
             Key,
             Group,
@@ -292,8 +480,7 @@ lower_casts(Forms, PhaseNames, MessageNames, DataName, EnumAtoms) ->
             EnumAtoms
         )
         || {Key, Group} <- Groups
-    ],
-    Casts.
+    ].
 
 lower_cast_group(
     {Tag, Phase},

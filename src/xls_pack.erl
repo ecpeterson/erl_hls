@@ -29,6 +29,7 @@ parse_transform(Forms, _Options) ->
 
     PublicStructNames = xls_parse:find_tags(Forms),
     StateName = xls_parse:state(Forms),
+    InterfaceAttributes = actor_interface_attributes(Forms, ModuleAttr),
     SerializableStructNames = [StateName | PublicStructNames],
     RewrittenBodyForms = rewrite_record_defaults(
         BodyForms, SerializableStructNames
@@ -96,10 +97,31 @@ parse_transform(Forms, _Options) ->
 
     EmittedForms =
         [FileAttr, ModuleAttr, ExportAttr] ++
+        InterfaceAttributes ++
         RewrittenBodyForms ++
         [PackForm, UnpackForm, PackTagForm, UnpackTagForm, EOFForm],
     % io:format("~s~n", [[[erl_pp:form(Form), "\n"] || Form <- EmittedForms]]),
     EmittedForms.
+
+actor_interface_attributes(Forms, ModuleAttr) ->
+    case xls_parse:find_optional_attribute(Forms, xls_phases) of
+        {ok, PhaseNames} ->
+            %% Interface inference is deliberately no stricter than explicit
+            %% DSLX lowering. A CPU-valid actor outside that subset must retain
+            %% the compilation behavior it had before summaries existed; a
+            %% topology which selects it will report the missing summary.
+            try xls_statem_lower:interface(Forms, PhaseNames) of
+                Interface ->
+                    [{attribute,
+                        element(2, ModuleAttr),
+                        xls_actor_interface,
+                        Interface}]
+            catch
+                error:_Reason -> []
+            end;
+        none ->
+            []
+    end.
 
 rewrite_record_defaults(Forms, SerializableStructNames) ->
     [
