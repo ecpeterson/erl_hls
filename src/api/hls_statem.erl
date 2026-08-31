@@ -30,9 +30,12 @@ handle_enter(OldPhase, Phase, Data) -> {NextData, Casts}
 ```
 
 `OldPhase` equals `Phase` for the initial entry. `Casts` is a bounded list of
-`{cast, Port, Message}` actions. Each configured port may occur at most once
-in an entry. On the CPU each action is delivered with `gen_server:cast/2` to
-the PID configured for that port.
+`{cast, Port, Message}` actions. A statically placed
+`{cast_if, Condition, Port, Message}` retains its position in that ordered list
+but emits only when `Condition` is true. Ports and list shape remain static,
+and each configured port may occur at most once in an entry. On the CPU each
+enabled action is delivered with `gen_server:cast/2` to the PID configured for
+that port.
 
 Passing `{outputs, Map}` in the options to `start_link/3` connects and enters
 the initial phase immediately. A cyclic CPU topology can instead start all of
@@ -139,7 +142,9 @@ models scheduling semantics rather than host-side admission guarantees.
         NextData :: data(),
         consume
     }.
--type cast_action() :: {cast, output_port(), term()}.
+-type cast_action() ::
+    {cast, output_port(), term()} |
+    {cast_if, boolean(), output_port(), term()}.
 -type enter_result() :: {NextData :: data(), [cast_action()]}.
 -type start_option() ::
     {mailbox_capacity, 1..255} |
@@ -404,8 +409,13 @@ enter_phase(OldPhase, Runtime = #runtime{
     {NextData, Casts} = Module:handle_enter(OldPhase, Phase, Data),
     ok = validate_casts(Casts, Outputs),
     lists:foreach(
-        fun({cast, Port, Message}) ->
-            gen_server:cast(maps:get(Port, Outputs), Message)
+        fun
+            ({cast, Port, Message}) ->
+                gen_server:cast(maps:get(Port, Outputs), Message);
+            ({cast_if, true, Port, Message}) ->
+                gen_server:cast(maps:get(Port, Outputs), Message);
+            ({cast_if, false, _Port, _Message}) ->
+                ok
         end,
         Casts
     ),
@@ -429,6 +439,12 @@ validate_casts(Casts, Outputs) when is_list(Casts) ->
     Ports = lists:map(
         fun
             ({cast, Port, _Message}) when is_atom(Port) ->
+                case maps:is_key(Port, Outputs) of
+                    true -> Port;
+                    false -> error({unknown_hls_statem_output, Port})
+                end;
+            ({cast_if, Enabled, Port, _Message})
+                    when is_boolean(Enabled), is_atom(Port) ->
                 case maps:is_key(Port, Outputs) of
                     true -> Port;
                     false -> error({unknown_hls_statem_output, Port})

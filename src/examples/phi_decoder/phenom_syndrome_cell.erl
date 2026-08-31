@@ -52,6 +52,7 @@ round plus the request which changes the phase and releases them.
     connect/2,
     stop/1,
     configure/3,
+    configure/5,
     offer_request/2,
     offer_data/4,
     runtime_info/1
@@ -59,6 +60,7 @@ round plus the request which changes the phase and releases them.
 -export([init/1, handle_enter/3, handle_cast/3]).
 
 -define(MAILBOX_CAPACITY, 5).
+-define(U16_MASK, 16#ffff).
 -define(U32_MASK, 16#ffffffff).
 
 -behavior(hls_statem).
@@ -75,7 +77,9 @@ round plus the request which changes the phase and releases them.
     previous_measurement = hls_type:zero() :: hls_nums:u32(),
     announcement = hls_type:zero() :: hls_nums:u32(),
     random_state = hls_type:zero() :: hls_nums:u32(),
-    threshold = hls_type:zero() :: hls_nums:u32()
+    threshold = hls_type:zero() :: hls_nums:u32(),
+    x = hls_type:zero() :: hls_nums:u16(),
+    y = hls_type:zero() :: hls_nums:u16()
 }).
 
 -type phase() :: configuring | waiting | collecting | announcing.
@@ -131,21 +135,35 @@ stop(PID) ->
 
 -doc "Configures a nonzero PRNG seed and `u32` error threshold.".
 -spec configure(pid(), hls_nums:u32(), hls_nums:u32()) -> ok.
-configure(PID, Seed, Threshold)
-        when is_integer(Seed), Seed > 0, Seed =< ?U32_MASK,
-             is_integer(Threshold), Threshold >= 0,
-             Threshold =< ?U32_MASK ->
+configure(PID, Seed, Threshold) ->
+    configure(PID, Seed, Threshold, 0, 0).
+
+-doc "Configures the PRNG, error threshold, and lattice coordinate.".
+-spec configure(
+    pid(),
+    hls_nums:u32(),
+    hls_nums:u32(),
+    hls_nums:u16(),
+    hls_nums:u16()
+) -> ok.
+configure(PID, Seed, Threshold, X, Y)
+        when Seed > 0, Seed =< ?U32_MASK,
+             Threshold >= 0, Threshold =< ?U32_MASK,
+             X >= 0, X =< ?U16_MASK,
+             Y >= 0, Y =< ?U16_MASK ->
     hls_statem:cast(PID, #phenom_config{
         seed = Seed,
-        threshold = Threshold
+        threshold = Threshold,
+        x = X,
+        y = Y
     });
-configure(_PID, _Seed, _Threshold) ->
+configure(_PID, _Seed, _Threshold, _X, _Y) ->
     error(badarg).
 
 -doc "Offers one round request from the paired phi cell.".
 -spec offer_request(pid(), hls_nums:u32()) -> ok.
 offer_request(PID, Step)
-        when is_integer(Step), Step >= 0, Step =< ?U32_MASK ->
+        when Step >= 0, Step =< ?U32_MASK ->
     hls_statem:cast(PID, #phenom_request{step = Step});
 offer_request(_PID, _Step) ->
     error(badarg).
@@ -153,8 +171,7 @@ offer_request(_PID, _Step) ->
 -doc "Offers one Boolean data event from a named neighboring edge.".
 -spec offer_data(pid(), hls_nums:u32(), direction(), boolean()) -> ok.
 offer_data(PID, Step, Source, Present)
-        when is_integer(Step), Step >= 0, Step =< ?U32_MASK,
-             is_boolean(Present) ->
+        when Step >= 0, Step =< ?U32_MASK ->
     SourceMask = source_mask(Source),
     PresentWord = case Present of
         false -> 0;
@@ -196,7 +213,9 @@ handle_enter(_OldPhase, collecting, Syndrome) ->
 handle_enter(_OldPhase, announcing, Syndrome) ->
     Anyon = #phenom_anyon{
         step = Syndrome#syndrome.step,
-        present = Syndrome#syndrome.announcement
+        present = Syndrome#syndrome.announcement,
+        x = Syndrome#syndrome.x,
+        y = Syndrome#syndrome.y
     },
     {Syndrome, [{cast, phi, Anyon}]}.
 
@@ -206,14 +225,18 @@ handle_enter(_OldPhase, announcing, Syndrome) ->
     #syndrome{}
 ) -> conclusion().
 handle_cast(
-    #phenom_config{seed = Seed, threshold = Threshold},
+    #phenom_config{seed = Seed, threshold = Threshold, x = X, y = Y},
     configuring,
     Syndrome
 ) when Seed > 0, Seed =< ?U32_MASK,
-       Threshold >= 0, Threshold =< ?U32_MASK ->
+       Threshold >= 0, Threshold =< ?U32_MASK,
+       X >= 0, X =< ?U16_MASK,
+       Y >= 0, Y =< ?U16_MASK ->
     Configured = Syndrome#syndrome{
         random_state = Seed,
-        threshold = Threshold
+        threshold = Threshold,
+        x = X,
+        y = Y
     },
     {waiting, Configured, consume};
 handle_cast(#phenom_config{}, configuring, Syndrome) ->

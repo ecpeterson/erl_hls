@@ -18,6 +18,7 @@ pub enum Tag : u8 {
   PHENOM_QUERY = u8:8,
   PHENOM_DATA = u8:9,
   PHENOM_ANYON = u8:10,
+  PHI_CORRECTION = u8:11,
 }
 
 enum Phase : u8 {
@@ -85,17 +86,21 @@ fn bits_from_phi0(s: Phi0) -> bits[bit_count<Phi0>()] {
 struct Phenomconfig {
   seed : u32,
   threshold : u32,
+  x : u16,
+  y : u16,
 }
 
 fn phenomconfig_from_bits<N: u32>(raw: bits[N]) -> Phenomconfig {
   Phenomconfig {
     seed: raw[0:32] as u32,
     threshold: raw[32:64] as u32,
+    x: raw[64:80] as u16,
+    y: raw[80:96] as u16,
   }
 }
 
 fn bits_from_phenomconfig(s: Phenomconfig) -> bits[bit_count<Phenomconfig>()] {
-  (s.threshold as bits[32]) ++ (s.seed as bits[32]) ++  zero!<bits[0]>()
+  (s.y as bits[16]) ++ (s.x as bits[16]) ++ (s.threshold as bits[32]) ++ (s.seed as bits[32]) ++  zero!<bits[0]>()
 }
 
 struct Phenomrequest {
@@ -149,17 +154,41 @@ fn bits_from_phenomdata(s: Phenomdata) -> bits[bit_count<Phenomdata>()] {
 struct Phenomanyon {
   step : u32,
   present : u32,
+  x : u16,
+  y : u16,
 }
 
 fn phenomanyon_from_bits<N: u32>(raw: bits[N]) -> Phenomanyon {
   Phenomanyon {
     step: raw[0:32] as u32,
     present: raw[32:64] as u32,
+    x: raw[64:80] as u16,
+    y: raw[80:96] as u16,
   }
 }
 
 fn bits_from_phenomanyon(s: Phenomanyon) -> bits[bit_count<Phenomanyon>()] {
-  (s.present as bits[32]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
+  (s.y as bits[16]) ++ (s.x as bits[16]) ++ (s.present as bits[32]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
+}
+
+struct Phicorrection {
+  step : u32,
+  x : u16,
+  y : u16,
+  direction : u32,
+}
+
+fn phicorrection_from_bits<N: u32>(raw: bits[N]) -> Phicorrection {
+  Phicorrection {
+    step: raw[0:32] as u32,
+    x: raw[32:48] as u16,
+    y: raw[48:64] as u16,
+    direction: raw[64:96] as u32,
+  }
+}
+
+fn bits_from_phicorrection(s: Phicorrection) -> bits[bit_count<Phicorrection>()] {
+  (s.direction as bits[32]) ++ (s.y as bits[16]) ++ (s.x as bits[16]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
 }
 
 struct Datacell {
@@ -200,6 +229,7 @@ pub const EGRESS_DEPTH = u32:4;
 
 struct EntryEffects {
   count: u8,
+  valid: bool[4],
   values: Egress[4],
 }
 
@@ -258,6 +288,12 @@ fn enter(old_phase: Phase, phase: Phase, data: Datacell) -> (Datacell, EntryEffe
       };
       (entered_data, EntryEffects {
         count: u8:0,
+        valid: [
+          bool:false,
+          bool:false,
+          bool:false,
+          bool:false,
+        ],
         values: [
           zero!<Egress>(),
           zero!<Egress>(),
@@ -280,6 +316,12 @@ fn enter(old_phase: Phase, phase: Phase, data: Datacell) -> (Datacell, EntryEffe
       };
       (entered_data, EntryEffects {
         count: u8:0,
+        valid: [
+          bool:false,
+          bool:false,
+          bool:false,
+          bool:false,
+        ],
         values: [
           zero!<Egress>(),
           zero!<Egress>(),
@@ -309,6 +351,9 @@ fn enter(old_phase: Phase, phase: Phase, data: Datacell) -> (Datacell, EntryEffe
         };
         _4
       };
+      let effect_0_valid = {
+        bool:true
+      };
       let effect_0 = {
         let _OldPhase_1 = old_phase;
         let __1 = phase;
@@ -333,6 +378,9 @@ fn enter(old_phase: Phase, phase: Phase, data: Datacell) -> (Datacell, EntryEffe
             axis::pack(_5.0 as u8, _5.2)
         };
         _6
+      };
+      let effect_1_valid = {
+        bool:true
       };
       let effect_1 = {
         let _OldPhase_1 = old_phase;
@@ -359,6 +407,9 @@ fn enter(old_phase: Phase, phase: Phase, data: Datacell) -> (Datacell, EntryEffe
         };
         _6
       };
+      let effect_2_valid = {
+        bool:true
+      };
       let effect_2 = {
         let _OldPhase_1 = old_phase;
         let __1 = phase;
@@ -383,6 +434,9 @@ fn enter(old_phase: Phase, phase: Phase, data: Datacell) -> (Datacell, EntryEffe
             axis::pack(_5.0 as u8, _5.2)
         };
         _6
+      };
+      let effect_3_valid = {
+        bool:true
       };
       let effect_3 = {
         let _OldPhase_1 = old_phase;
@@ -411,6 +465,12 @@ fn enter(old_phase: Phase, phase: Phase, data: Datacell) -> (Datacell, EntryEffe
       };
       (entered_data, EntryEffects {
         count: u8:4,
+        valid: [
+          effect_0_valid,
+          effect_1_valid,
+          effect_2_valid,
+          effect_3_valid,
+        ],
         values: [
           Egress { port: OutputPort::NORTH, frame: effect_0 },
           Egress { port: OutputPort::EAST, frame: effect_1 },
@@ -720,6 +780,12 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
         _ => (phase, data, Directive::FAIL, u1:0),
       }
     },
+    Tag::PHI_CORRECTION => {
+      let message = phicorrection_from_bits(frame.payload);
+      match phase {
+        _ => (phase, data, Directive::FAIL, u1:0),
+      }
+    },
     _ => (phase, data, Directive::FAIL, u1:0),
   }
 }
@@ -746,8 +812,10 @@ pub proc Service {
       let has_effect = machine.entry_effect_index < effects.count;
       let effect = effects.values[
         machine.entry_effect_index as u32];
+      let emit_effect = has_effect && effects.valid[
+        machine.entry_effect_index as u32];
       let egress_tok = send_if(
-        join(), egress_out, has_effect, effect);
+        join(), egress_out, emit_effect, effect);
       let next_effect_index =
         machine.entry_effect_index + (has_effect as u8);
       let entry_complete = next_effect_index >= effects.count;
@@ -770,7 +838,7 @@ pub proc Service {
       let (tok, frame, received) = recv_if_non_blocking(
         join(), req_in, machine.admission_pending,
         zero!<axis::Frame>());
-      let tag_ok = (frame.header.op == (Tag::PHI as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::ANYON_MOVE as u8) && frame.header.payload_words == u8:2) || (frame.header.op == (Tag::PHI0 as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHENOM_CONFIG as u8) && frame.header.payload_words == u8:2) || (frame.header.op == (Tag::PHENOM_REQUEST as u8) && frame.header.payload_words == u8:1) || (frame.header.op == (Tag::PHENOM_QUERY as u8) && frame.header.payload_words == u8:2) || (frame.header.op == (Tag::PHENOM_DATA as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHENOM_ANYON as u8) && frame.header.payload_words == u8:2);
+      let tag_ok = (frame.header.op == (Tag::PHI as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::ANYON_MOVE as u8) && frame.header.payload_words == u8:2) || (frame.header.op == (Tag::PHI0 as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHENOM_CONFIG as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHENOM_REQUEST as u8) && frame.header.payload_words == u8:1) || (frame.header.op == (Tag::PHENOM_QUERY as u8) && frame.header.payload_words == u8:2) || (frame.header.op == (Tag::PHENOM_DATA as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHENOM_ANYON as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHI_CORRECTION as u8) && frame.header.payload_words == u8:3);
       let accepted = received && tag_ok;
       let invalid_input = received && !tag_ok;
       let incoming_slot = MailboxSlot {

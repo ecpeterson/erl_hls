@@ -6,6 +6,7 @@ module phi_halo_cell_tb;
     localparam integer WEST  = 2;
     localparam integer SOUTH = 3;
     localparam integer SYNDROME = 4;
+    localparam integer CORRECTION = 5;
 
     localparam [31:0] NORTH_MASK = 32'd1;
     localparam [31:0] EAST_MASK  = 32'd2;
@@ -20,12 +21,12 @@ module phi_halo_cell_tb;
     reg input_valid = 1'b0;
     wire input_ready;
 
-    wire [32:0] output_beat [0:4];
-    wire [4:0] output_valid;
-    reg [4:0] output_ready = 5'b00000;
+    wire [32:0] output_beat [0:5];
+    wire [5:0] output_valid;
+    reg [5:0] output_ready = 6'b000000;
 
-    reg [32:0] captured [0:4][0:63];
-    integer beat_count [0:4];
+    reg [32:0] captured [0:5][0:63];
+    integer beat_count [0:5];
     integer port_index;
     integer check_port;
     reg [32:0] stalled_beat;
@@ -52,14 +53,17 @@ module phi_halo_cell_tb;
         .phi_halo_cell__south_send_vld(output_valid[SOUTH]),
         .phi_halo_cell__syndrome_send_rdy(output_ready[SYNDROME]),
         .phi_halo_cell__syndrome_send(output_beat[SYNDROME]),
-        .phi_halo_cell__syndrome_send_vld(output_valid[SYNDROME])
+        .phi_halo_cell__syndrome_send_vld(output_valid[SYNDROME]),
+        .phi_halo_cell__correction_send_rdy(output_ready[CORRECTION]),
+        .phi_halo_cell__correction_send(output_beat[CORRECTION]),
+        .phi_halo_cell__correction_send_vld(output_valid[CORRECTION])
     );
 
     always #5 clk = ~clk;
 
     always @(posedge clk) begin
         if (!reset) begin
-            for (port_index = 0; port_index < 5; port_index = port_index + 1) begin
+            for (port_index = 0; port_index < 6; port_index = port_index + 1) begin
                 if (output_valid[port_index] && output_ready[port_index]) begin
                     captured[port_index][beat_count[port_index]] <=
                         output_beat[port_index];
@@ -153,9 +157,11 @@ module phi_halo_cell_tb;
         input [31:0] step;
         input [31:0] present;
         begin
-            send_beat(header(8'd10, 8'd2), 1'b0);
+            send_beat(header(8'd10, 8'd3), 1'b0);
             send_beat(step, 1'b0);
-            send_beat(present, 1'b1);
+            send_beat(present, 1'b0);
+            // This direct actor fixture always measures the origin cell.
+            send_beat(32'd0, 1'b1);
         end
     endtask
 
@@ -228,6 +234,18 @@ module phi_halo_cell_tb;
         end
     endtask
 
+    task automatic check_correction;
+        input integer base;
+        input [31:0] step;
+        input [31:0] direction;
+        begin
+            check_beat(CORRECTION, base + 0, header(8'd11, 8'd3), 1'b0);
+            check_beat(CORRECTION, base + 1, step, 1'b0);
+            check_beat(CORRECTION, base + 2, 32'd0, 1'b0);
+            check_beat(CORRECTION, base + 3, direction, 1'b1);
+        end
+    endtask
+
     task automatic expect_measurement_request;
         input integer base;
         input [31:0] step;
@@ -264,14 +282,14 @@ module phi_halo_cell_tb;
     end
 
     initial begin : scenario
-        for (port_index = 0; port_index < 5; port_index = port_index + 1)
+        for (port_index = 0; port_index < 6; port_index = port_index + 1)
             beat_count[port_index] = 0;
 
         repeat (5) @(posedge clk);
         @(negedge clk);
         reset = 1'b0;
 
-        output_ready = 5'b11111;
+        output_ready = 6'b111111;
         expect_measurement_request(0, 32'd0);
         send_measurement(32'd0, 32'd0);
         expect_all_phi(0, 32'd0, 32'd0, 32'd0);
@@ -344,6 +362,10 @@ module phi_halo_cell_tb;
         wait_for_count(SOUTH, 15);
         check_phi0(SOUTH, 8, 32'd0, NORTH_MASK, 32'd15);
         check_anyon(SOUTH, 12, 32'd0, 32'd0);
+        if (beat_count[CORRECTION] != 0) begin
+            $display("FAIL: tails emitted a correction");
+            $fatal(1);
+        end
         if (beat_count[NORTH] != 15 || beat_count[EAST] != 15 ||
                 beat_count[WEST] != 15) begin
             $display("FAIL: completed entry replayed accepted ports");
@@ -422,6 +444,8 @@ module phi_halo_cell_tb;
         output_ready[EAST] = 1'b1;
         wait_for_count(EAST, 30);
         check_anyon(EAST, 27, 32'd1, 32'd1);
+        wait_for_count(CORRECTION, 4);
+        check_correction(0, 32'd1, EAST_MASK);
         if (beat_count[NORTH] != 30 || beat_count[WEST] != 30 ||
                 beat_count[SOUTH] != 30) begin
             $display("FAIL: completed ports replayed while east caught up");
@@ -471,6 +495,8 @@ module phi_halo_cell_tb;
         check_anyon(EAST, 42, 32'd2, 32'd0);
         check_anyon(WEST, 42, 32'd2, 32'd0);
         check_anyon(SOUTH, 42, 32'd2, 32'd0);
+        wait_for_count(CORRECTION, 8);
+        check_correction(4, 32'd2, NORTH_MASK);
 
         repeat (8) @(posedge clk);
         for (check_port = 0; check_port < 4;
@@ -479,6 +505,10 @@ module phi_halo_cell_tb;
                 $display("FAIL: unexpected output after second coin check");
                 $fatal(1);
             end
+        end
+        if (beat_count[CORRECTION] != 8) begin
+            $display("FAIL: unexpected correction output count");
+            $fatal(1);
         end
 
         $display("PASS: comparison, coin-gated move, and backpressure");

@@ -16,15 +16,15 @@ const HEIGHT = u32:3;
 
 fn family_0_startup(x: u32, y: u32) -> axis::Frame {
   match (x, y) {
-    (u32:0, u32:0) => axis::pack(u8:6, u64:0x8000000000000001),
-    (u32:0, u32:1) => axis::pack(u8:6, u64:0x8000000000000002),
-    (u32:0, u32:2) => axis::pack(u8:6, u64:0x8000000000000003),
-    (u32:1, u32:0) => axis::pack(u8:6, u64:0x8000000000000004),
-    (u32:1, u32:1) => axis::pack(u8:6, u64:0x8000000000000005),
-    (u32:1, u32:2) => axis::pack(u8:6, u64:0x8000000000000006),
-    (u32:2, u32:0) => axis::pack(u8:6, u64:0x8000000000000007),
-    (u32:2, u32:1) => axis::pack(u8:6, u64:0x8000000000000008),
-    (u32:2, u32:2) => axis::pack(u8:6, u64:0x8000000000000009),
+    (u32:0, u32:0) => axis::pack(u8:6, uN[96]:0x00000000800000009E3779B9),
+    (u32:0, u32:1) => axis::pack(u8:6, uN[96]:0x00010000800000003C6EF372),
+    (u32:0, u32:2) => axis::pack(u8:6, uN[96]:0x0002000080000000DAA66D2B),
+    (u32:1, u32:0) => axis::pack(u8:6, uN[96]:0x000000018000000078DDE6E4),
+    (u32:1, u32:1) => axis::pack(u8:6, uN[96]:0x00010001800000001715609D),
+    (u32:1, u32:2) => axis::pack(u8:6, uN[96]:0x0002000180000000B54CDA56),
+    (u32:2, u32:0) => axis::pack(u8:6, uN[96]:0x00000002800000005384540F),
+    (u32:2, u32:1) => axis::pack(u8:6, uN[96]:0x0001000280000000F1BBCDC8),
+    (u32:2, u32:2) => axis::pack(u8:6, uN[96]:0x00020002800000008FF34781),
     _ => zero!<axis::Frame>(),
   }
 }
@@ -54,15 +54,15 @@ proc StartupPrefix0<X: u32, Y: u32> {
 
 fn family_1_startup(x: u32, y: u32) -> axis::Frame {
   match (x, y) {
-    (u32:0, u32:0) => axis::pack(u8:6, u64:0x800000000000000A),
-    (u32:0, u32:1) => axis::pack(u8:6, u64:0x800000000000000B),
-    (u32:0, u32:2) => axis::pack(u8:6, u64:0x800000000000000C),
-    (u32:1, u32:0) => axis::pack(u8:6, u64:0x800000000000000D),
-    (u32:1, u32:1) => axis::pack(u8:6, u64:0x800000000000000E),
-    (u32:1, u32:2) => axis::pack(u8:6, u64:0x800000000000000F),
-    (u32:2, u32:0) => axis::pack(u8:6, u64:0x8000000000000010),
-    (u32:2, u32:1) => axis::pack(u8:6, u64:0x8000000000000011),
-    (u32:2, u32:2) => axis::pack(u8:6, u64:0x8000000000000012),
+    (u32:0, u32:0) => axis::pack(u8:6, uN[96]:0x00000000800000002E2AC13A),
+    (u32:0, u32:1) => axis::pack(u8:6, uN[96]:0x0001000080000000CC623AF3),
+    (u32:0, u32:2) => axis::pack(u8:6, uN[96]:0x00020000800000006A99B4AC),
+    (u32:1, u32:0) => axis::pack(u8:6, uN[96]:0x000000018000000008D12E65),
+    (u32:1, u32:1) => axis::pack(u8:6, uN[96]:0x0001000180000000A708A81E),
+    (u32:1, u32:2) => axis::pack(u8:6, uN[96]:0x0002000180000000454021D7),
+    (u32:2, u32:0) => axis::pack(u8:6, uN[96]:0x0000000280000000E3779B90),
+    (u32:2, u32:1) => axis::pack(u8:6, uN[96]:0x000100028000000081AF1549),
+    (u32:2, u32:2) => axis::pack(u8:6, uN[96]:0x00020002800000001FE68F02),
     _ => zero!<axis::Frame>(),
   }
 }
@@ -92,15 +92,15 @@ proc StartupPrefix1<X: u32, Y: u32> {
 
 fn family_4_startup(x: u32, y: u32) -> axis::Frame {
   match (x, y) {
-    (u32:0, u32:0) => axis::pack(u8:6, u64:0x8000000000000013),
-    (u32:0, u32:1) => axis::pack(u8:6, u64:0x8000000000000014),
-    (u32:0, u32:2) => axis::pack(u8:6, u64:0x8000000000000015),
-    (u32:1, u32:0) => axis::pack(u8:6, u64:0x8000000000000016),
-    (u32:1, u32:1) => axis::pack(u8:6, u64:0x8000000000000017),
-    (u32:1, u32:2) => axis::pack(u8:6, u64:0x8000000000000018),
-    (u32:2, u32:0) => axis::pack(u8:6, u64:0x8000000000000019),
-    (u32:2, u32:1) => axis::pack(u8:6, u64:0x800000000000001A),
-    (u32:2, u32:2) => axis::pack(u8:6, u64:0x800000000000001B),
+    (u32:0, u32:0) => axis::pack(u8:6, uN[96]:0x0000000080000000BE1E08BB),
+    (u32:0, u32:1) => axis::pack(u8:6, uN[96]:0x00010000800000005C558274),
+    (u32:0, u32:2) => axis::pack(u8:6, uN[96]:0x0002000080000000FA8CFC2D),
+    (u32:1, u32:0) => axis::pack(u8:6, uN[96]:0x000000018000000098C475E6),
+    (u32:1, u32:1) => axis::pack(u8:6, uN[96]:0x000100018000000036FBEF9F),
+    (u32:1, u32:2) => axis::pack(u8:6, uN[96]:0x0002000180000000D5336958),
+    (u32:2, u32:0) => axis::pack(u8:6, uN[96]:0x0000000280000000736AE311),
+    (u32:2, u32:1) => axis::pack(u8:6, uN[96]:0x000100028000000011A25CCA),
+    (u32:2, u32:2) => axis::pack(u8:6, uN[96]:0x0002000280000000AFD9D683),
     _ => zero!<axis::Frame>(),
   }
 }
@@ -130,15 +130,15 @@ proc StartupPrefix4<X: u32, Y: u32> {
 
 fn family_5_startup(x: u32, y: u32) -> axis::Frame {
   match (x, y) {
-    (u32:0, u32:0) => axis::pack(u8:6, u64:0x800000000000001C),
-    (u32:0, u32:1) => axis::pack(u8:6, u64:0x800000000000001D),
-    (u32:0, u32:2) => axis::pack(u8:6, u64:0x800000000000001E),
-    (u32:1, u32:0) => axis::pack(u8:6, u64:0x800000000000001F),
-    (u32:1, u32:1) => axis::pack(u8:6, u64:0x8000000000000020),
-    (u32:1, u32:2) => axis::pack(u8:6, u64:0x8000000000000021),
-    (u32:2, u32:0) => axis::pack(u8:6, u64:0x8000000000000022),
-    (u32:2, u32:1) => axis::pack(u8:6, u64:0x8000000000000023),
-    (u32:2, u32:2) => axis::pack(u8:6, u64:0x8000000000000024),
+    (u32:0, u32:0) => axis::pack(u8:6, uN[96]:0x00000000800000004E11503C),
+    (u32:0, u32:1) => axis::pack(u8:6, uN[96]:0x0001000080000000EC48C9F5),
+    (u32:0, u32:2) => axis::pack(u8:6, uN[96]:0x00020000800000008A8043AE),
+    (u32:1, u32:0) => axis::pack(u8:6, uN[96]:0x000000018000000028B7BD67),
+    (u32:1, u32:1) => axis::pack(u8:6, uN[96]:0x0001000180000000C6EF3720),
+    (u32:1, u32:2) => axis::pack(u8:6, uN[96]:0x00020001800000006526B0D9),
+    (u32:2, u32:0) => axis::pack(u8:6, uN[96]:0x0000000280000000035E2A92),
+    (u32:2, u32:1) => axis::pack(u8:6, uN[96]:0x0001000280000000A195A44B),
+    (u32:2, u32:2) => axis::pack(u8:6, uN[96]:0x00020002800000003FCD1E04),
     _ => zero!<axis::Frame>(),
   }
 }
@@ -235,6 +235,7 @@ proc FamilyRouter2 {
   lane_10_out: chan<axis::Frame> out;
   lane_11_out: chan<axis::Frame> out;
   lane_12_out: chan<axis::Frame> out;
+  lane_13_out: chan<axis::Frame> out;
 
   config(
     egress_in: chan<phi_halo_cell::Egress> in,
@@ -242,9 +243,10 @@ proc FamilyRouter2 {
     lane_9_out: chan<axis::Frame> out,
     lane_10_out: chan<axis::Frame> out,
     lane_11_out: chan<axis::Frame> out,
-    lane_12_out: chan<axis::Frame> out
+    lane_12_out: chan<axis::Frame> out,
+    lane_13_out: chan<axis::Frame> out
   ) {
-    (egress_in, lane_8_out, lane_9_out, lane_10_out, lane_11_out, lane_12_out)
+    (egress_in, lane_8_out, lane_9_out, lane_10_out, lane_11_out, lane_12_out, lane_13_out)
   }
 
   init { () }
@@ -252,11 +254,12 @@ proc FamilyRouter2 {
   next(state: ()) {
     let (tok, egress) = recv(join(), egress_in);
     let _route_tok = match egress.port {
-      phi_halo_cell::OutputPort::NORTH => send(tok, lane_9_out, egress.frame),
-      phi_halo_cell::OutputPort::EAST => send(tok, lane_11_out, egress.frame),
-      phi_halo_cell::OutputPort::WEST => send(tok, lane_8_out, egress.frame),
-      phi_halo_cell::OutputPort::SOUTH => send(tok, lane_10_out, egress.frame),
-      phi_halo_cell::OutputPort::SYNDROME => send(tok, lane_12_out, egress.frame),
+      phi_halo_cell::OutputPort::NORTH => send(tok, lane_10_out, egress.frame),
+      phi_halo_cell::OutputPort::EAST => send(tok, lane_12_out, egress.frame),
+      phi_halo_cell::OutputPort::WEST => send(tok, lane_9_out, egress.frame),
+      phi_halo_cell::OutputPort::SOUTH => send(tok, lane_11_out, egress.frame),
+      phi_halo_cell::OutputPort::SYNDROME => send(tok, lane_13_out, egress.frame),
+      phi_halo_cell::OutputPort::CORRECTION => send(tok, lane_8_out, egress.frame),
     };
     state
   }
@@ -264,21 +267,23 @@ proc FamilyRouter2 {
 
 proc FamilyRouter3 {
   egress_in: chan<phi_halo_cell::Egress> in;
-  lane_13_out: chan<axis::Frame> out;
   lane_14_out: chan<axis::Frame> out;
   lane_15_out: chan<axis::Frame> out;
   lane_16_out: chan<axis::Frame> out;
   lane_17_out: chan<axis::Frame> out;
+  lane_18_out: chan<axis::Frame> out;
+  lane_19_out: chan<axis::Frame> out;
 
   config(
     egress_in: chan<phi_halo_cell::Egress> in,
-    lane_13_out: chan<axis::Frame> out,
     lane_14_out: chan<axis::Frame> out,
     lane_15_out: chan<axis::Frame> out,
     lane_16_out: chan<axis::Frame> out,
-    lane_17_out: chan<axis::Frame> out
+    lane_17_out: chan<axis::Frame> out,
+    lane_18_out: chan<axis::Frame> out,
+    lane_19_out: chan<axis::Frame> out
   ) {
-    (egress_in, lane_13_out, lane_14_out, lane_15_out, lane_16_out, lane_17_out)
+    (egress_in, lane_14_out, lane_15_out, lane_16_out, lane_17_out, lane_18_out, lane_19_out)
   }
 
   init { () }
@@ -286,11 +291,12 @@ proc FamilyRouter3 {
   next(state: ()) {
     let (tok, egress) = recv(join(), egress_in);
     let _route_tok = match egress.port {
-      phi_halo_cell::OutputPort::NORTH => send(tok, lane_14_out, egress.frame),
-      phi_halo_cell::OutputPort::EAST => send(tok, lane_16_out, egress.frame),
-      phi_halo_cell::OutputPort::WEST => send(tok, lane_13_out, egress.frame),
-      phi_halo_cell::OutputPort::SOUTH => send(tok, lane_15_out, egress.frame),
-      phi_halo_cell::OutputPort::SYNDROME => send(tok, lane_17_out, egress.frame),
+      phi_halo_cell::OutputPort::NORTH => send(tok, lane_16_out, egress.frame),
+      phi_halo_cell::OutputPort::EAST => send(tok, lane_18_out, egress.frame),
+      phi_halo_cell::OutputPort::WEST => send(tok, lane_15_out, egress.frame),
+      phi_halo_cell::OutputPort::SOUTH => send(tok, lane_17_out, egress.frame),
+      phi_halo_cell::OutputPort::SYNDROME => send(tok, lane_19_out, egress.frame),
+      phi_halo_cell::OutputPort::CORRECTION => send(tok, lane_14_out, egress.frame),
     };
     state
   }
@@ -298,23 +304,23 @@ proc FamilyRouter3 {
 
 proc FamilyRouter4 {
   egress_in: chan<phenom_syndrome_cell::Egress> in;
-  lane_18_out: chan<axis::Frame> out;
-  lane_19_out: chan<axis::Frame> out;
   lane_20_out: chan<axis::Frame> out;
   lane_21_out: chan<axis::Frame> out;
   lane_22_out: chan<axis::Frame> out;
   lane_23_out: chan<axis::Frame> out;
+  lane_24_out: chan<axis::Frame> out;
+  lane_25_out: chan<axis::Frame> out;
 
   config(
     egress_in: chan<phenom_syndrome_cell::Egress> in,
-    lane_18_out: chan<axis::Frame> out,
-    lane_19_out: chan<axis::Frame> out,
     lane_20_out: chan<axis::Frame> out,
     lane_21_out: chan<axis::Frame> out,
     lane_22_out: chan<axis::Frame> out,
-    lane_23_out: chan<axis::Frame> out
+    lane_23_out: chan<axis::Frame> out,
+    lane_24_out: chan<axis::Frame> out,
+    lane_25_out: chan<axis::Frame> out
   ) {
-    (egress_in, lane_18_out, lane_19_out, lane_20_out, lane_21_out, lane_22_out, lane_23_out)
+    (egress_in, lane_20_out, lane_21_out, lane_22_out, lane_23_out, lane_24_out, lane_25_out)
   }
 
   init { () }
@@ -322,13 +328,13 @@ proc FamilyRouter4 {
   next(state: ()) {
     let (tok, egress) = recv(join(), egress_in);
     let _route_tok = match egress.port {
-      phenom_syndrome_cell::OutputPort::NORTH => send(tok, lane_21_out, egress.frame),
-      phenom_syndrome_cell::OutputPort::EAST => send(tok, lane_20_out, egress.frame),
-      phenom_syndrome_cell::OutputPort::WEST => send(tok, lane_19_out, egress.frame),
-      phenom_syndrome_cell::OutputPort::SOUTH => send(tok, lane_22_out, egress.frame),
+      phenom_syndrome_cell::OutputPort::NORTH => send(tok, lane_23_out, egress.frame),
+      phenom_syndrome_cell::OutputPort::EAST => send(tok, lane_22_out, egress.frame),
+      phenom_syndrome_cell::OutputPort::WEST => send(tok, lane_21_out, egress.frame),
+      phenom_syndrome_cell::OutputPort::SOUTH => send(tok, lane_24_out, egress.frame),
       phenom_syndrome_cell::OutputPort::PHI => {
-        let branch_0_tok = send(tok, lane_18_out, egress.frame);
-        let branch_1_tok = send(tok, lane_23_out, egress.frame);
+        let branch_0_tok = send(tok, lane_20_out, egress.frame);
+        let branch_1_tok = send(tok, lane_25_out, egress.frame);
         join(branch_0_tok, branch_1_tok)
       },
     };
@@ -338,23 +344,23 @@ proc FamilyRouter4 {
 
 proc FamilyRouter5 {
   egress_in: chan<phenom_syndrome_cell::Egress> in;
-  lane_24_out: chan<axis::Frame> out;
-  lane_25_out: chan<axis::Frame> out;
   lane_26_out: chan<axis::Frame> out;
   lane_27_out: chan<axis::Frame> out;
   lane_28_out: chan<axis::Frame> out;
   lane_29_out: chan<axis::Frame> out;
+  lane_30_out: chan<axis::Frame> out;
+  lane_31_out: chan<axis::Frame> out;
 
   config(
     egress_in: chan<phenom_syndrome_cell::Egress> in,
-    lane_24_out: chan<axis::Frame> out,
-    lane_25_out: chan<axis::Frame> out,
     lane_26_out: chan<axis::Frame> out,
     lane_27_out: chan<axis::Frame> out,
     lane_28_out: chan<axis::Frame> out,
-    lane_29_out: chan<axis::Frame> out
+    lane_29_out: chan<axis::Frame> out,
+    lane_30_out: chan<axis::Frame> out,
+    lane_31_out: chan<axis::Frame> out
   ) {
-    (egress_in, lane_24_out, lane_25_out, lane_26_out, lane_27_out, lane_28_out, lane_29_out)
+    (egress_in, lane_26_out, lane_27_out, lane_28_out, lane_29_out, lane_30_out, lane_31_out)
   }
 
   init { () }
@@ -362,13 +368,13 @@ proc FamilyRouter5 {
   next(state: ()) {
     let (tok, egress) = recv(join(), egress_in);
     let _route_tok = match egress.port {
-      phenom_syndrome_cell::OutputPort::NORTH => send(tok, lane_25_out, egress.frame),
-      phenom_syndrome_cell::OutputPort::EAST => send(tok, lane_28_out, egress.frame),
-      phenom_syndrome_cell::OutputPort::WEST => send(tok, lane_27_out, egress.frame),
-      phenom_syndrome_cell::OutputPort::SOUTH => send(tok, lane_26_out, egress.frame),
+      phenom_syndrome_cell::OutputPort::NORTH => send(tok, lane_27_out, egress.frame),
+      phenom_syndrome_cell::OutputPort::EAST => send(tok, lane_30_out, egress.frame),
+      phenom_syndrome_cell::OutputPort::WEST => send(tok, lane_29_out, egress.frame),
+      phenom_syndrome_cell::OutputPort::SOUTH => send(tok, lane_28_out, egress.frame),
       phenom_syndrome_cell::OutputPort::PHI => {
-        let branch_0_tok = send(tok, lane_24_out, egress.frame);
-        let branch_1_tok = send(tok, lane_29_out, egress.frame);
+        let branch_0_tok = send(tok, lane_26_out, egress.frame);
+        let branch_1_tok = send(tok, lane_31_out, egress.frame);
         join(branch_0_tok, branch_1_tok)
       },
     };
@@ -522,17 +528,18 @@ proc FamilyNode2 {
     lane_9_out: chan<axis::Frame> out,
     lane_10_out: chan<axis::Frame> out,
     lane_11_out: chan<axis::Frame> out,
-    lane_12_out: chan<axis::Frame> out
+    lane_12_out: chan<axis::Frame> out,
+    lane_13_out: chan<axis::Frame> out
   ) {
     let (actor_req_p, actor_req_c) =
       chan<axis::Frame, CHANNEL_DEPTH>("actor_req");
     let (actor_admit_p, actor_admit_c) =
       chan<u1, CHANNEL_DEPTH>("actor_admit");
     let (actor_egress_p, actor_egress_c) =
-      chan<phi_halo_cell::Egress, u32:4>("actor_egress");
+      chan<phi_halo_cell::Egress, u32:5>("actor_egress");
     spawn phi_halo_cell::Service(
       actor_req_c, actor_egress_p, actor_admit_p);
-    spawn FamilyRouter2(actor_egress_c, lane_8_out, lane_9_out, lane_10_out, lane_11_out, lane_12_out);
+    spawn FamilyRouter2(actor_egress_c, lane_8_out, lane_9_out, lane_10_out, lane_11_out, lane_12_out, lane_13_out);
     let (ingress_mux_0_0_p, ingress_mux_0_0_c) =
       chan<axis::Frame, CHANNEL_DEPTH>("ingress_mux_0_0");
     spawn axis::FrameMux2(incoming_0, incoming_1, ingress_mux_0_0_p);
@@ -560,21 +567,22 @@ proc FamilyNode3 {
     incoming_2: chan<axis::Frame> in,
     incoming_3: chan<axis::Frame> in,
     incoming_4: chan<axis::Frame> in,
-    lane_13_out: chan<axis::Frame> out,
     lane_14_out: chan<axis::Frame> out,
     lane_15_out: chan<axis::Frame> out,
     lane_16_out: chan<axis::Frame> out,
-    lane_17_out: chan<axis::Frame> out
+    lane_17_out: chan<axis::Frame> out,
+    lane_18_out: chan<axis::Frame> out,
+    lane_19_out: chan<axis::Frame> out
   ) {
     let (actor_req_p, actor_req_c) =
       chan<axis::Frame, CHANNEL_DEPTH>("actor_req");
     let (actor_admit_p, actor_admit_c) =
       chan<u1, CHANNEL_DEPTH>("actor_admit");
     let (actor_egress_p, actor_egress_c) =
-      chan<phi_halo_cell::Egress, u32:4>("actor_egress");
+      chan<phi_halo_cell::Egress, u32:5>("actor_egress");
     spawn phi_halo_cell::Service(
       actor_req_c, actor_egress_p, actor_admit_p);
-    spawn FamilyRouter3(actor_egress_c, lane_13_out, lane_14_out, lane_15_out, lane_16_out, lane_17_out);
+    spawn FamilyRouter3(actor_egress_c, lane_14_out, lane_15_out, lane_16_out, lane_17_out, lane_18_out, lane_19_out);
     let (ingress_mux_0_0_p, ingress_mux_0_0_c) =
       chan<axis::Frame, CHANNEL_DEPTH>("ingress_mux_0_0");
     spawn axis::FrameMux2(incoming_0, incoming_1, ingress_mux_0_0_p);
@@ -602,12 +610,12 @@ proc FamilyNode4<X: u32, Y: u32> {
     incoming_2: chan<axis::Frame> in,
     incoming_3: chan<axis::Frame> in,
     incoming_4: chan<axis::Frame> in,
-    lane_18_out: chan<axis::Frame> out,
-    lane_19_out: chan<axis::Frame> out,
     lane_20_out: chan<axis::Frame> out,
     lane_21_out: chan<axis::Frame> out,
     lane_22_out: chan<axis::Frame> out,
-    lane_23_out: chan<axis::Frame> out
+    lane_23_out: chan<axis::Frame> out,
+    lane_24_out: chan<axis::Frame> out,
+    lane_25_out: chan<axis::Frame> out
   ) {
     let (actor_req_p, actor_req_c) =
       chan<axis::Frame, CHANNEL_DEPTH>("actor_req");
@@ -617,7 +625,7 @@ proc FamilyNode4<X: u32, Y: u32> {
       chan<phenom_syndrome_cell::Egress, u32:4>("actor_egress");
     spawn phenom_syndrome_cell::Service(
       actor_req_c, actor_egress_p, actor_admit_p);
-    spawn FamilyRouter4(actor_egress_c, lane_18_out, lane_19_out, lane_20_out, lane_21_out, lane_22_out, lane_23_out);
+    spawn FamilyRouter4(actor_egress_c, lane_20_out, lane_21_out, lane_22_out, lane_23_out, lane_24_out, lane_25_out);
     let (ingress_mux_0_0_p, ingress_mux_0_0_c) =
       chan<axis::Frame, CHANNEL_DEPTH>("ingress_mux_0_0");
     spawn axis::FrameMux2(incoming_0, incoming_1, ingress_mux_0_0_p);
@@ -648,12 +656,12 @@ proc FamilyNode5<X: u32, Y: u32> {
     incoming_2: chan<axis::Frame> in,
     incoming_3: chan<axis::Frame> in,
     incoming_4: chan<axis::Frame> in,
-    lane_24_out: chan<axis::Frame> out,
-    lane_25_out: chan<axis::Frame> out,
     lane_26_out: chan<axis::Frame> out,
     lane_27_out: chan<axis::Frame> out,
     lane_28_out: chan<axis::Frame> out,
-    lane_29_out: chan<axis::Frame> out
+    lane_29_out: chan<axis::Frame> out,
+    lane_30_out: chan<axis::Frame> out,
+    lane_31_out: chan<axis::Frame> out
   ) {
     let (actor_req_p, actor_req_c) =
       chan<axis::Frame, CHANNEL_DEPTH>("actor_req");
@@ -663,7 +671,7 @@ proc FamilyNode5<X: u32, Y: u32> {
       chan<phenom_syndrome_cell::Egress, u32:4>("actor_egress");
     spawn phenom_syndrome_cell::Service(
       actor_req_c, actor_egress_p, actor_admit_p);
-    spawn FamilyRouter5(actor_egress_c, lane_24_out, lane_25_out, lane_26_out, lane_27_out, lane_28_out, lane_29_out);
+    spawn FamilyRouter5(actor_egress_c, lane_26_out, lane_27_out, lane_28_out, lane_29_out, lane_30_out, lane_31_out);
     let (ingress_mux_0_0_p, ingress_mux_0_0_c) =
       chan<axis::Frame, CHANNEL_DEPTH>("ingress_mux_0_0");
     spawn axis::FrameMux2(incoming_0, incoming_1, ingress_mux_0_0_p);
@@ -690,7 +698,9 @@ proc FamilyNode5<X: u32, Y: u32> {
 proc FamilyGrid<TORUS_WIDTH: u32, TORUS_HEIGHT: u32> {
   config(
     x_announcements_out: chan<axis::Frame> out,
-    z_announcements_out: chan<axis::Frame> out
+    x_corrections_out: chan<axis::Frame> out,
+    z_announcements_out: chan<axis::Frame> out,
+    z_corrections_out: chan<axis::Frame> out
   ) {
     let (lane_0_p, lane_0_c) =
       chan<axis::Frame, CHANNEL_DEPTH>[TORUS_HEIGHT][TORUS_WIDTH]("lane_0");
@@ -752,14 +762,18 @@ proc FamilyGrid<TORUS_WIDTH: u32, TORUS_HEIGHT: u32> {
       chan<axis::Frame, CHANNEL_DEPTH>[TORUS_HEIGHT][TORUS_WIDTH]("lane_28");
     let (lane_29_p, lane_29_c) =
       chan<axis::Frame, CHANNEL_DEPTH>[TORUS_HEIGHT][TORUS_WIDTH]("lane_29");
+    let (lane_30_p, lane_30_c) =
+      chan<axis::Frame, CHANNEL_DEPTH>[TORUS_HEIGHT][TORUS_WIDTH]("lane_30");
+    let (lane_31_p, lane_31_c) =
+      chan<axis::Frame, CHANNEL_DEPTH>[TORUS_HEIGHT][TORUS_WIDTH]("lane_31");
     // Family data_even.
     unroll_for! (x, _): (u32, ()) in u32:0..TORUS_WIDTH {
       unroll_for! (y, _): (u32, ()) in u32:0..TORUS_HEIGHT {
         spawn FamilyNode0<x, y>(
-          lane_19_c[x][y],
-          lane_20_c[(x + TORUS_WIDTH - u32:1) % TORUS_WIDTH][y],
-          lane_25_c[(x + TORUS_WIDTH - u32:1) % TORUS_WIDTH][y],
-          lane_26_c[(x + TORUS_WIDTH - u32:1) % TORUS_WIDTH][(y + TORUS_HEIGHT - u32:1) % TORUS_HEIGHT],
+          lane_21_c[x][y],
+          lane_22_c[(x + TORUS_WIDTH - u32:1) % TORUS_WIDTH][y],
+          lane_27_c[(x + TORUS_WIDTH - u32:1) % TORUS_WIDTH][y],
+          lane_28_c[(x + TORUS_WIDTH - u32:1) % TORUS_WIDTH][(y + TORUS_HEIGHT - u32:1) % TORUS_HEIGHT],
           lane_0_p[x][y],
           lane_1_p[x][y],
           lane_2_p[x][y],
@@ -771,10 +785,10 @@ proc FamilyGrid<TORUS_WIDTH: u32, TORUS_HEIGHT: u32> {
     unroll_for! (x, _): (u32, ()) in u32:0..TORUS_WIDTH {
       unroll_for! (y, _): (u32, ()) in u32:0..TORUS_HEIGHT {
         spawn FamilyNode1<x, y>(
-          lane_21_c[x][(y + u32:1) % TORUS_HEIGHT],
-          lane_22_c[x][y],
-          lane_27_c[x][y],
-          lane_28_c[(x + TORUS_WIDTH - u32:1) % TORUS_WIDTH][y],
+          lane_23_c[x][(y + u32:1) % TORUS_HEIGHT],
+          lane_24_c[x][y],
+          lane_29_c[x][y],
+          lane_30_c[(x + TORUS_WIDTH - u32:1) % TORUS_WIDTH][y],
           lane_4_p[x][y],
           lane_5_p[x][y],
           lane_6_p[x][y],
@@ -786,16 +800,17 @@ proc FamilyGrid<TORUS_WIDTH: u32, TORUS_HEIGHT: u32> {
     unroll_for! (x, _): (u32, ()) in u32:0..TORUS_WIDTH {
       unroll_for! (y, _): (u32, ()) in u32:0..TORUS_HEIGHT {
         spawn FamilyNode2(
-          lane_8_c[(x + u32:1) % TORUS_WIDTH][y],
-          lane_9_c[x][(y + u32:1) % TORUS_HEIGHT],
-          lane_10_c[x][(y + TORUS_HEIGHT - u32:1) % TORUS_HEIGHT],
-          lane_11_c[(x + TORUS_WIDTH - u32:1) % TORUS_WIDTH][y],
-          lane_23_c[x][y],
+          lane_9_c[(x + u32:1) % TORUS_WIDTH][y],
+          lane_10_c[x][(y + u32:1) % TORUS_HEIGHT],
+          lane_11_c[x][(y + TORUS_HEIGHT - u32:1) % TORUS_HEIGHT],
+          lane_12_c[(x + TORUS_WIDTH - u32:1) % TORUS_WIDTH][y],
+          lane_25_c[x][y],
           lane_8_p[x][y],
           lane_9_p[x][y],
           lane_10_p[x][y],
           lane_11_p[x][y],
-          lane_12_p[x][y]
+          lane_12_p[x][y],
+          lane_13_p[x][y]
         );
       }(())
     }(());
@@ -803,16 +818,17 @@ proc FamilyGrid<TORUS_WIDTH: u32, TORUS_HEIGHT: u32> {
     unroll_for! (x, _): (u32, ()) in u32:0..TORUS_WIDTH {
       unroll_for! (y, _): (u32, ()) in u32:0..TORUS_HEIGHT {
         spawn FamilyNode3(
-          lane_13_c[(x + u32:1) % TORUS_WIDTH][y],
-          lane_14_c[x][(y + u32:1) % TORUS_HEIGHT],
-          lane_15_c[x][(y + TORUS_HEIGHT - u32:1) % TORUS_HEIGHT],
-          lane_16_c[(x + TORUS_WIDTH - u32:1) % TORUS_WIDTH][y],
-          lane_29_c[x][y],
-          lane_13_p[x][y],
+          lane_15_c[(x + u32:1) % TORUS_WIDTH][y],
+          lane_16_c[x][(y + u32:1) % TORUS_HEIGHT],
+          lane_17_c[x][(y + TORUS_HEIGHT - u32:1) % TORUS_HEIGHT],
+          lane_18_c[(x + TORUS_WIDTH - u32:1) % TORUS_WIDTH][y],
+          lane_31_c[x][y],
           lane_14_p[x][y],
           lane_15_p[x][y],
           lane_16_p[x][y],
-          lane_17_p[x][y]
+          lane_17_p[x][y],
+          lane_18_p[x][y],
+          lane_19_p[x][y]
         );
       }(())
     }(());
@@ -824,13 +840,13 @@ proc FamilyGrid<TORUS_WIDTH: u32, TORUS_HEIGHT: u32> {
           lane_1_c[x][y],
           lane_4_c[x][y],
           lane_5_c[x][(y + TORUS_HEIGHT - u32:1) % TORUS_HEIGHT],
-          lane_12_c[x][y],
-          lane_18_p[x][y],
-          lane_19_p[x][y],
+          lane_13_c[x][y],
           lane_20_p[x][y],
           lane_21_p[x][y],
           lane_22_p[x][y],
-          lane_23_p[x][y]
+          lane_23_p[x][y],
+          lane_24_p[x][y],
+          lane_25_p[x][y]
         );
       }(())
     }(());
@@ -842,18 +858,20 @@ proc FamilyGrid<TORUS_WIDTH: u32, TORUS_HEIGHT: u32> {
           lane_3_c[(x + u32:1) % TORUS_WIDTH][y],
           lane_6_c[(x + u32:1) % TORUS_WIDTH][y],
           lane_7_c[x][y],
-          lane_17_c[x][y],
-          lane_24_p[x][y],
-          lane_25_p[x][y],
+          lane_19_c[x][y],
           lane_26_p[x][y],
           lane_27_p[x][y],
           lane_28_p[x][y],
-          lane_29_p[x][y]
+          lane_29_p[x][y],
+          lane_30_p[x][y],
+          lane_31_p[x][y]
         );
       }(())
     }(());
-    spawn FrameGridMux<TORUS_WIDTH, TORUS_HEIGHT>(lane_18_c, x_announcements_out);
-    spawn FrameGridMux<TORUS_WIDTH, TORUS_HEIGHT>(lane_24_c, z_announcements_out);
+    spawn FrameGridMux<TORUS_WIDTH, TORUS_HEIGHT>(lane_20_c, x_announcements_out);
+    spawn FrameGridMux<TORUS_WIDTH, TORUS_HEIGHT>(lane_8_c, x_corrections_out);
+    spawn FrameGridMux<TORUS_WIDTH, TORUS_HEIGHT>(lane_26_c, z_announcements_out);
+    spawn FrameGridMux<TORUS_WIDTH, TORUS_HEIGHT>(lane_14_c, z_corrections_out);
     ()
   }
 
@@ -863,14 +881,18 @@ proc FamilyGrid<TORUS_WIDTH: u32, TORUS_HEIGHT: u32> {
 
 pub proc Top {
   x_announcements_out: chan<axis::Frame> out;
+  x_corrections_out: chan<axis::Frame> out;
   z_announcements_out: chan<axis::Frame> out;
+  z_corrections_out: chan<axis::Frame> out;
 
   config(
     x_announcements_out: chan<axis::Frame> out,
-    z_announcements_out: chan<axis::Frame> out
+    x_corrections_out: chan<axis::Frame> out,
+    z_announcements_out: chan<axis::Frame> out,
+    z_corrections_out: chan<axis::Frame> out
   ) {
-    spawn FamilyGrid<WIDTH, HEIGHT>(x_announcements_out, z_announcements_out);
-    (x_announcements_out, z_announcements_out)
+    spawn FamilyGrid<WIDTH, HEIGHT>(x_announcements_out, x_corrections_out, z_announcements_out, z_corrections_out);
+    (x_announcements_out, x_corrections_out, z_announcements_out, z_corrections_out)
   }
 
   init { () }

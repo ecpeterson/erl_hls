@@ -14,9 +14,11 @@ generator; source-less deployed beams use their validated embedded summary.
 
 The summary records only facts already required by the current lowerer:
 message record layouts and local selectors, phase-specific cast dispatch, and
-source-ordered phase-entry effects. A dispatch means that the generated actor
-has a callback group for that schema and phase; it does not claim that every
-payload passes the group's patterns and guards.
+source-ordered phase-entry effects. Predicate-bearing effects are marked
+conditional but remain part of the conservative output-schema union. A
+dispatch means that the generated actor has a callback group for that schema
+and phase; it does not claim that every payload passes the group's patterns and
+guards.
 
 This is internal compiler data for the phi topology experiment, not a stable
 application behavior or a general Erlang protocol description.

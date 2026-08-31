@@ -5,7 +5,7 @@
 phi_interface_records_protocol_facts_test() ->
     Interface = hls_actor_interface:from_module(phi_halo_cell),
     ?assertEqual(measuring, maps:get(initial_phase, Interface)),
-    ?assertEqual(4, hls_actor_interface:max_entry_effects(Interface)),
+    ?assertEqual(5, hls_actor_interface:max_entry_effects(Interface)),
     ?assertEqual(
         [anyon_move, phi, phi0],
         hls_actor_interface:output_schemas(Interface, north)
@@ -13,6 +13,10 @@ phi_interface_records_protocol_facts_test() ->
     ?assertEqual(
         [phenom_request],
         hls_actor_interface:output_schemas(Interface, syndrome)
+    ),
+    ?assertEqual(
+        [phi_correction],
+        hls_actor_interface:output_schemas(Interface, correction)
     ),
     ?assertEqual(
         [anyon_move, phenom_anyon, phi, phi0],
@@ -46,6 +50,47 @@ phi_interface_records_protocol_facts_test() ->
             || Effect <- Gathering
         ]
     ),
+    Flipping = [
+        Effect
+        || Effect <- maps:get(entry_effects, Interface),
+           maps:get(phase, Effect) =:= flipping
+    ],
+    ?assertEqual(
+        [
+            {0, north, anyon_move},
+            {1, east, anyon_move},
+            {2, west, anyon_move},
+            {3, south, anyon_move},
+            {4, correction, phi_correction}
+        ],
+        [
+            {maps:get(order, Effect),
+                maps:get(port, Effect),
+                maps:get(schema, Effect)}
+            || Effect <- Flipping
+        ]
+    ),
+    [CorrectionEffect] = [
+        Effect
+        || Effect <- Flipping,
+           maps:get(port, Effect) =:= correction
+    ],
+    ?assert(maps:get(conditional, CorrectionEffect)),
+    ?assertEqual(
+        [{step, u32}, {present, u32}, {x, u16}, {y, u16}],
+        schema_fields(Interface, phenom_anyon)
+    ),
+    ?assertEqual(
+        [{step, u32}, {x, u16}, {y, u16}, {direction, u32}],
+        schema_fields(Interface, phi_correction)
+    ),
+    ?assertEqual(
+        11,
+        maps:get(selector, hls_actor_interface:schema(
+            Interface,
+            phi_correction
+        ))
+    ),
     ?assertNot(maps:is_key(data_fields, Interface)),
     ?assertNot(maps:is_key(data_schema, Interface)).
 
@@ -73,6 +118,14 @@ phenomenological_interfaces_are_distinct_test() ->
     ?assertEqual(
         [phenom_anyon],
         hls_actor_interface:output_schemas(Syndrome, phi)
+    ),
+    ?assertEqual(
+        [{seed, u32}, {threshold, u32}, {x, u16}, {y, u16}],
+        schema_fields(Syndrome, phenom_config)
+    ),
+    ?assertEqual(
+        [{step, u32}, {present, u32}, {x, u16}, {y, u16}],
+        schema_fields(Syndrome, phenom_anyon)
     ).
 
 source_and_compiled_interfaces_agree_test_() ->
@@ -122,6 +175,15 @@ unsupported_interface_inference_does_not_narrow_cpu_compilation_test() ->
         {missing_hls_actor_interface, Module},
         hls_actor_interface:from_module(Module)
     ).
+
+schema_fields(Interface, Name) ->
+    [
+        {maps:get(name, Field), element(3, maps:get(type, Field))}
+        || Field <- maps:get(
+            fields,
+            hls_actor_interface:schema(Interface, Name)
+        )
+    ].
 
 stale_embedded_interface_is_rejected_test() ->
     Module = hls_actor_stale_fixture,

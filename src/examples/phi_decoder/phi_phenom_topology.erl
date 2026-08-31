@@ -9,6 +9,12 @@ The closed phi/noise experiment as an ordinary Erlang topology term.
 The companion `phi_phenom_topology.x` is generated from this term plus a
 separate DSLX deployment profile. This module contains no channels, muxes,
 frames, or numeric tags.
+
+The entries called `externals` below are typed topology boundaries. In the
+generated fixture they become top-level DSLX output channels consumed by the
+RTL testbench. No current mechanism automatically forwards them through the
+PL-PS bridge or chooses an ERTS recipient; that requires an explicit deployment
+adapter which has not been built for the phi example.
 """.
 
 -include("phi_protocol.hrl").
@@ -32,11 +38,15 @@ topology() ->
         },
         families => #{},
         externals => [
-            {announcement, out, [phenom_anyon]}
+            {announcement, out, [phenom_anyon]},
+            {correction, out, [phi_correction]}
         ],
         routes =>
             routes(phi, Directions, phi) ++
-            [{{phi, syndrome}, [{actor, syndrome}]}] ++
+            [
+                {{phi, syndrome}, [{actor, syndrome}]},
+                {{phi, correction}, [{external, correction}]}
+            ] ++
             routes(syndrome, Directions, data) ++
             [{{syndrome, phi}, queued, [
                 {actor, phi},
@@ -47,11 +57,15 @@ topology() ->
         startup => [
             {data, [#phenom_config{
                 seed = ?DATA_PRNG_SEED,
-                threshold = ?HALF_THRESHOLD
+                threshold = ?HALF_THRESHOLD,
+                x = 0,
+                y = 0
             }]},
             {syndrome, [#phenom_config{
                 seed = ?SYNDROME_PRNG_SEED,
-                threshold = ?HALF_THRESHOLD
+                threshold = ?HALF_THRESHOLD,
+                x = 0,
+                y = 0
             }]}
         ]
     }.

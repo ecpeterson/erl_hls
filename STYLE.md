@@ -10,6 +10,9 @@ compatibility scaffolding for an obsolete internal format.
 - Bind a related group of values once instead of repeating `maps:get/2` calls.
 - Use guards for scalar constraints and `case` for genuine alternatives, not
   as a substitute for pattern matching.
+- In typed internal APIs, use guards for semantic bounds without repeating
+  scalar type checks such as `is_integer/1`; trust specs and Dialyzer for the
+  type contract. Check types explicitly at untyped or untrusted boundaries.
 - Keep internal error reasons concise. Include values needed to diagnose bad
   input, but rely on the stacktrace to identify the module and validation
   layer.

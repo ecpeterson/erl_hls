@@ -5,7 +5,7 @@ syndrome cell, and one phenomenological data cell. Its sources are split by
 responsibility:
 
 - `phi_phenom_topology.erl` declares actors, exact routes, startup messages,
-  and the observable output as ordinary Erlang data.
+  and observable outputs as ordinary Erlang data.
 - `phi_phenom_topology_dslx.erl` declares temporary physical choices for this
   executable fixture.
 - `phi_phenom_topology.x` is generated and checked in as a golden artifact.
@@ -30,8 +30,8 @@ at the destination ingress. The physical profile no longer needs an
 alias-order exception. The current implementation conservatively serializes
 all entry actions from an actor, including actions for different recipients.
 The common egress is explicitly sized for that artifact's largest phase-entry
-effect list, so the phi actors' four-frame bursts do not depend on incidental
-mux-tree buffering before they can complete.
+effect list, so the phi actors' five-slot flipping sequences do not depend on
+incidental mux-tree buffering before they can complete.
 
 Logical actor IDs may be tuple-indexed values such as `{phi, X, Y}`; generated
 channel names use canonical numeric instance indexes. In this exact backend,
@@ -56,10 +56,11 @@ large grid globally.
 ## Compact torus witness
 
 `phi_torus_topology.erl` is the first rule-preserving family plan. It declares
-one bounded rectangular `phi_halo_cell` family and five route relations: four
-wrapped cardinal translations and one external syndrome-request stream. A
-5-by-5 plan and a 50-by-50 plan therefore contain the same one family and five
-rules; only the shape and derived instance count differ.
+one bounded rectangular `phi_halo_cell` family and six route relations: four
+wrapped cardinal translations, one external syndrome-request stream, and one
+external correction-decision stream. A 5-by-5 plan and a 50-by-50 plan
+therefore contain the same one family and six rules; only the shape and derived
+instance count differ.
 
 The generated proc hierarchy is:
 
@@ -70,8 +71,8 @@ flowchart LR
     subgraph FamilyTorus
         Spawn["nested unroll_for!&lt;x,y&gt;"] --> Node["FamilyNode × W·H"]
         Arrays["bounded lane channel arrays"]
-        ExternalLane["syndrome lane array"] --> GridMux["FrameGridMux"]
-        GridMux --> Output["syndrome_requests_out"]
+        ExternalLanes["syndrome and correction lane arrays"] --> GridMux["FrameGridMux × 2"]
+        GridMux --> Outputs["syndrome_requests_out / corrections_out"]
     end
 
     Torus --> Spawn
@@ -86,14 +87,14 @@ flowchart LR
     Node -. "instantiates" .-> OneFamilyNode
     Arrays --> NeighborInputs
     Router -- "north / east / west / south" --> Arrays
-    Router -- "syndrome" --> ExternalLane
+    Router -- "syndrome / correction" --> ExternalLanes
 ```
 
 `FamilyTorus` and `FamilyNode` each appear once in generated source. XLS
 elaboration instantiates one node, service, router, admission gate, and ingress
 mux tree per coordinate. The lane arrays connect those instances without an
-expanded global route table. `FrameGridMux` is only the scalar observation
-boundary; it is not on the cardinal mesh paths.
+expanded global route table. `FrameGridMux` appears only at the two scalar
+observation boundaries; it is not on the cardinal mesh paths.
 
 The topology normalizer validates every family output and route interface once
 per rule. `hls_topology:routes_for_instance/3` resolves selected coordinates for
@@ -106,20 +107,18 @@ The generated DSLX contains one reusable family node and nested `unroll_for!`
 spawns over two-dimensional channel arrays. A 5-by-5 and a 50-by-50 torus have
 the same generated source structure; XLS still elaborates the required actor
 and queue resources for every coordinate. Runtime channel-array indexing is
-not supported by the pinned XLS build, so the scalar syndrome-request boundary
-uses statically indexed unrolled receives gated by a round-robin cursor. This
-polling merge is bounded and fair but not work-conserving: each family member
-gets one turn per `Width * Height` completed activations. The default rectangular
-2-by-3 fixture is compiled to RTL and verifies all six initial requests, stable
-backpressure, and no duplication.
+not supported by the pinned XLS build, so each scalar external boundary uses
+statically indexed unrolled receives gated by a round-robin cursor. These
+polling merges are bounded and fair but not work-conserving: each family member
+gets one turn per `Width * Height` completed activations. The default
+rectangular 2-by-3 fixture is compiled to RTL and verifies all six initial
+requests, stable backpressure, and no duplication. Its correction stream stays
+idle because this structural witness has no syndrome source to advance the
+actors.
 
-A preliminary out-of-context Yosys 0.63 `synth_xilinx` run for xc7 on that
-2-by-3 RTL reports about 30,833 estimated logic cells, 33,864 flip-flops, 24
-DSP48E1s, and no block RAM. This is an architectural warning, not a fit result:
-it has neither placement nor timing constraints, and the current 128-bit
-depth-one queues are implemented in registers. The six actor services account
-for roughly 19,242 of the estimated logic cells; queue representation is
-therefore the other obvious target before scaling the witness.
+Resource use needs to be remeasured after adding coordinates and the correction
+stream. The current 128-bit depth-one queues are still implemented in registers,
+so queue representation remains an obvious target before scaling the witness.
 
 This single-family witness still does not model the syndrome/data-cell geometry
 or a production-throughput external merge.
@@ -152,21 +151,40 @@ flowchart LR
 
     SX -->|"queued copy"| XO["x_announcements"]
     SZ -->|"queued copy"| ZO["z_announcements"]
+    PX -->|"applied moves"| XC["x_corrections"]
+    PZ -->|"applied moves"| ZC["z_corrections"]
 ```
 
-At the default distance three, the plan has 54 actor instances, 28 compact
+At the default distance three, the plan has 54 actor instances, 30 compact
 route relations, and 36 explicit startup messages: one for every member of the
 four noise families. The route-rule count is independent of distance; only the
 family bounds and startup entries grow. Startup seeds are deterministic,
-distinct, and nonzero. Queued fanout exposes one coordinate-free activity tap
-for each syndrome plane. Because `phenom_anyon` does not carry the originating
-family coordinate, those taps are useful for backpressure and liveness checks,
-not for reconstructing or validating the full decoder state.
+distinct, nonzero, and deliberately mixed so the first distance-three syndrome
+plane is not spatially uniform.
+
+Each syndrome announcement carries its `{X, Y}` coordinate; the external port
+identifies the X or Z plane. Each phi cell retains that coordinate and may emit
+one `phi_correction` decision after its four anyon-move actions for the step.
+The plane, syndrome coordinate, and selected direction together identify the
+neighboring data-qubit edge; the single event stream does not mean that a phi
+cell is associated with only one data qubit.
+
+The correction action is a statically placed `cast_if`: it retains its position
+in the ordered entry-effect list, but its move predicate suppresses the frame
+when no correction was applied. This matches the reference implementation's
+sparse correction behavior, so traffic scales with corrections rather than
+physical qubits and steps.
+
+These `external` endpoints currently become output channels on the generated
+DSLX `Top` proc. The RTL benches consume them directly. They are not yet wired
+to `hls_fabric`, a PL-PS frame adapter, or an ERTS process; a deployment must
+make that gateway and correction-application policy explicit.
 
 The present noise configuration is still a plumbing fixture. Its common high
 threshold deliberately produces frequent binary events rather than modeling a
 full Pauli channel, and every phi actor still uses the same fixed actor-local
 seed. The explicit startup list also caps this example at distance 50; the
 compact route representation itself has no such bound. Per-instance phi seeds,
-coordinate-preserving observation, and a physically calibrated noise model
-remain later decoder work.
+an explicit PL/host correction adapter, applying decisions to a data-qubit
+correction history, and a physically calibrated noise model remain later
+decoder work.

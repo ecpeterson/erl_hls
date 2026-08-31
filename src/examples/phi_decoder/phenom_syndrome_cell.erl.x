@@ -18,6 +18,7 @@ pub enum Tag : u8 {
   PHENOM_QUERY = u8:8,
   PHENOM_DATA = u8:9,
   PHENOM_ANYON = u8:10,
+  PHI_CORRECTION = u8:11,
 }
 
 enum Phase : u8 {
@@ -86,17 +87,21 @@ fn bits_from_phi0(s: Phi0) -> bits[bit_count<Phi0>()] {
 struct Phenomconfig {
   seed : u32,
   threshold : u32,
+  x : u16,
+  y : u16,
 }
 
 fn phenomconfig_from_bits<N: u32>(raw: bits[N]) -> Phenomconfig {
   Phenomconfig {
     seed: raw[0:32] as u32,
     threshold: raw[32:64] as u32,
+    x: raw[64:80] as u16,
+    y: raw[80:96] as u16,
   }
 }
 
 fn bits_from_phenomconfig(s: Phenomconfig) -> bits[bit_count<Phenomconfig>()] {
-  (s.threshold as bits[32]) ++ (s.seed as bits[32]) ++  zero!<bits[0]>()
+  (s.y as bits[16]) ++ (s.x as bits[16]) ++ (s.threshold as bits[32]) ++ (s.seed as bits[32]) ++  zero!<bits[0]>()
 }
 
 struct Phenomrequest {
@@ -150,17 +155,41 @@ fn bits_from_phenomdata(s: Phenomdata) -> bits[bit_count<Phenomdata>()] {
 struct Phenomanyon {
   step : u32,
   present : u32,
+  x : u16,
+  y : u16,
 }
 
 fn phenomanyon_from_bits<N: u32>(raw: bits[N]) -> Phenomanyon {
   Phenomanyon {
     step: raw[0:32] as u32,
     present: raw[32:64] as u32,
+    x: raw[64:80] as u16,
+    y: raw[80:96] as u16,
   }
 }
 
 fn bits_from_phenomanyon(s: Phenomanyon) -> bits[bit_count<Phenomanyon>()] {
-  (s.present as bits[32]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
+  (s.y as bits[16]) ++ (s.x as bits[16]) ++ (s.present as bits[32]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
+}
+
+struct Phicorrection {
+  step : u32,
+  x : u16,
+  y : u16,
+  direction : u32,
+}
+
+fn phicorrection_from_bits<N: u32>(raw: bits[N]) -> Phicorrection {
+  Phicorrection {
+    step: raw[0:32] as u32,
+    x: raw[32:48] as u16,
+    y: raw[48:64] as u16,
+    direction: raw[64:96] as u32,
+  }
+}
+
+fn bits_from_phicorrection(s: Phicorrection) -> bits[bit_count<Phicorrection>()] {
+  (s.direction as bits[32]) ++ (s.y as bits[16]) ++ (s.x as bits[16]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
 }
 
 struct Syndrome {
@@ -171,6 +200,8 @@ struct Syndrome {
   announcement : u32,
   random_state : u32,
   threshold : u32,
+  x : u16,
+  y : u16,
 }
 
 fn syndrome_from_bits<N: u32>(raw: bits[N]) -> Syndrome {
@@ -182,11 +213,13 @@ fn syndrome_from_bits<N: u32>(raw: bits[N]) -> Syndrome {
     announcement: raw[128:160] as u32,
     random_state: raw[160:192] as u32,
     threshold: raw[192:224] as u32,
+    x: raw[224:240] as u16,
+    y: raw[240:256] as u16,
   }
 }
 
 fn bits_from_syndrome(s: Syndrome) -> bits[bit_count<Syndrome>()] {
-  (s.threshold as bits[32]) ++ (s.random_state as bits[32]) ++ (s.announcement as bits[32]) ++ (s.previous_measurement as bits[32]) ++ (s.data_parity as bits[32]) ++ (s.seen_sources as bits[32]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
+  (s.y as bits[16]) ++ (s.x as bits[16]) ++ (s.threshold as bits[32]) ++ (s.random_state as bits[32]) ++ (s.announcement as bits[32]) ++ (s.previous_measurement as bits[32]) ++ (s.data_parity as bits[32]) ++ (s.seen_sources as bits[32]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
 }
 
 pub enum OutputPort : u8 {
@@ -206,6 +239,7 @@ pub const EGRESS_DEPTH = u32:4;
 
 struct EntryEffects {
   count: u8,
+  valid: bool[5],
   values: Egress[5],
 }
 
@@ -264,6 +298,13 @@ fn enter(old_phase: Phase, phase: Phase, data: Syndrome) -> (Syndrome, EntryEffe
       };
       (entered_data, EntryEffects {
         count: u8:0,
+        valid: [
+          bool:false,
+          bool:false,
+          bool:false,
+          bool:false,
+          bool:false,
+        ],
         values: [
           zero!<Egress>(),
           zero!<Egress>(),
@@ -287,6 +328,13 @@ fn enter(old_phase: Phase, phase: Phase, data: Syndrome) -> (Syndrome, EntryEffe
       };
       (entered_data, EntryEffects {
         count: u8:0,
+        valid: [
+          bool:false,
+          bool:false,
+          bool:false,
+          bool:false,
+          bool:false,
+        ],
         values: [
           zero!<Egress>(),
           zero!<Egress>(),
@@ -315,6 +363,9 @@ fn enter(old_phase: Phase, phase: Phase, data: Syndrome) -> (Syndrome, EntryEffe
         };
         _3
       };
+      let effect_0_valid = {
+        bool:true
+      };
       let effect_0 = {
         let _OldPhase_1 = old_phase;
         let __1 = phase;
@@ -337,6 +388,9 @@ fn enter(old_phase: Phase, phase: Phase, data: Syndrome) -> (Syndrome, EntryEffe
             axis::pack(_4.0 as u8, _4.2)
         };
         _5
+      };
+      let effect_1_valid = {
+        bool:true
       };
       let effect_1 = {
         let _OldPhase_1 = old_phase;
@@ -361,6 +415,9 @@ fn enter(old_phase: Phase, phase: Phase, data: Syndrome) -> (Syndrome, EntryEffe
         };
         _5
       };
+      let effect_2_valid = {
+        bool:true
+      };
       let effect_2 = {
         let _OldPhase_1 = old_phase;
         let __1 = phase;
@@ -383,6 +440,9 @@ fn enter(old_phase: Phase, phase: Phase, data: Syndrome) -> (Syndrome, EntryEffe
             axis::pack(_4.0 as u8, _4.2)
         };
         _5
+      };
+      let effect_3_valid = {
+        bool:true
       };
       let effect_3 = {
         let _OldPhase_1 = old_phase;
@@ -409,6 +469,13 @@ fn enter(old_phase: Phase, phase: Phase, data: Syndrome) -> (Syndrome, EntryEffe
       };
       (entered_data, EntryEffects {
         count: u8:4,
+        valid: [
+          effect_0_valid,
+          effect_1_valid,
+          effect_2_valid,
+          effect_3_valid,
+          bool:false,
+        ],
         values: [
           Egress { port: OutputPort::NORTH, frame: effect_0 },
           Egress { port: OutputPort::EAST, frame: effect_1 },
@@ -425,19 +492,26 @@ fn enter(old_phase: Phase, phase: Phase, data: Syndrome) -> (Syndrome, EntryEffe
         let Syndrome_1 = (Tag::SYNDROME, data);
         let _0 = Syndrome_1.1.step;
         let _1 = Syndrome_1.1.announcement;
-        let _2 = Phenomanyon {
+        let _2 = Syndrome_1.1.x;
+        let _3 = Syndrome_1.1.y;
+        let _4 = Phenomanyon {
           step: _0,
           present: _1,
+          x: _2,
+          y: _3,
           ..zero!<Phenomanyon>()
         };
-        let _3 = (Tag::PHENOM_ANYON, _2, bits_from_phenomanyon(_2));
-        let Anyon_1 = _3;
-        let _4 = if (bool:false) {
+        let _5 = (Tag::PHENOM_ANYON, _4, bits_from_phenomanyon(_4));
+        let Anyon_1 = _5;
+        let _6 = if (bool:false) {
             data
         } else {
             Syndrome_1.1
         };
-        _4
+        _6
+      };
+      let effect_0_valid = {
+        bool:true
       };
       let effect_0 = {
         let _OldPhase_1 = old_phase;
@@ -445,22 +519,33 @@ fn enter(old_phase: Phase, phase: Phase, data: Syndrome) -> (Syndrome, EntryEffe
         let Syndrome_1 = (Tag::SYNDROME, data);
         let _0 = Syndrome_1.1.step;
         let _1 = Syndrome_1.1.announcement;
-        let _2 = Phenomanyon {
+        let _2 = Syndrome_1.1.x;
+        let _3 = Syndrome_1.1.y;
+        let _4 = Phenomanyon {
           step: _0,
           present: _1,
+          x: _2,
+          y: _3,
           ..zero!<Phenomanyon>()
         };
-        let _3 = (Tag::PHENOM_ANYON, _2, bits_from_phenomanyon(_2));
-        let Anyon_1 = _3;
-        let _4 = if (bool:false) {
+        let _5 = (Tag::PHENOM_ANYON, _4, bits_from_phenomanyon(_4));
+        let Anyon_1 = _5;
+        let _6 = if (bool:false) {
             zero!<axis::Frame>()
         } else {
             axis::pack(Anyon_1.0 as u8, Anyon_1.2)
         };
-        _4
+        _6
       };
       (entered_data, EntryEffects {
         count: u8:1,
+        valid: [
+          effect_0_valid,
+          bool:false,
+          bool:false,
+          bool:false,
+          bool:false,
+        ],
         values: [
           Egress { port: OutputPort::PHI, frame: effect_0 },
           zero!<Egress>(),
@@ -499,45 +584,81 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
         Phase::CONFIGURING => {
           let Xls_clause_1_Seed_1 = message.seed;
           let Xls_clause_1_Threshold_1 = message.threshold;
+          let Xls_clause_1_X_1 = message.x;
+          let Xls_clause_1_Y_1 = message.y;
           let Xls_clause_1_Syndrome_1 = (Tag::SYNDROME, data);
           let _0 = Xls_clause_1_Seed_1 > 0;
-          let _6 = if _0 {
+          let _14 = if _0 {
             let _1 = Xls_clause_1_Seed_1 <= 4294967295;
-            let _5 = if _1 {
+            let _13 = if _1 {
               let _2 = Xls_clause_1_Threshold_1 >= 0;
-              let _4 = if _2 {
+              let _12 = if _2 {
                 let _3 = Xls_clause_1_Threshold_1 <= 4294967295;
-                (_3, bool:false)
+                let _11 = if _3 {
+                  let _4 = Xls_clause_1_X_1 >= 0;
+                  let _10 = if _4 {
+                    let _5 = Xls_clause_1_X_1 <= 65535;
+                    let _9 = if _5 {
+                      let _6 = Xls_clause_1_Y_1 >= 0;
+                      let _8 = if _6 {
+                        let _7 = Xls_clause_1_Y_1 <= 65535;
+                        (_7, bool:false)
+                      } else {
+                        (bool:0, bool:false)
+                      };
+                      let case_match_1_1 = bool:false;
+                      let case_match_1_2 = _8.1;
+                      (_8.0, (case_match_1_1 != case_match_1_2) || bool:false)
+                    } else {
+                      (bool:0, bool:false)
+                    };
+                    let case_match_2_1 = bool:false;
+                    let case_match_2_2 = _9.1;
+                    (_9.0, (case_match_2_1 != case_match_2_2) || bool:false)
+                  } else {
+                    (bool:0, bool:false)
+                  };
+                  let case_match_3_1 = bool:false;
+                  let case_match_3_2 = _10.1;
+                  (_10.0, (case_match_3_1 != case_match_3_2) || bool:false)
+                } else {
+                  (bool:0, bool:false)
+                };
+                let case_match_4_1 = bool:false;
+                let case_match_4_2 = _11.1;
+                (_11.0, (case_match_4_1 != case_match_4_2) || bool:false)
               } else {
                 (bool:0, bool:false)
               };
-              let case_match_1_1 = bool:false;
-              let case_match_1_2 = _4.1;
-              (_4.0, (case_match_1_1 != case_match_1_2) || bool:false)
+              let case_match_5_1 = bool:false;
+              let case_match_5_2 = _12.1;
+              (_12.0, (case_match_5_1 != case_match_5_2) || bool:false)
             } else {
               (bool:0, bool:false)
             };
-            let case_match_2_1 = bool:false;
-            let case_match_2_2 = _5.1;
-            (_5.0, (case_match_2_1 != case_match_2_2) || bool:false)
+            let case_match_6_1 = bool:false;
+            let case_match_6_2 = _13.1;
+            (_13.0, (case_match_6_1 != case_match_6_2) || bool:false)
           } else {
             (bool:0, bool:false)
           };
-          let case_match_3_1 = bool:false;
-          let case_match_3_2 = _6.1;
-          if _6.0 {
-            let _7 = Syndrome {
+          let case_match_7_1 = bool:false;
+          let case_match_7_2 = _14.1;
+          if _14.0 {
+            let _15 = Syndrome {
               random_state: Xls_clause_1_Seed_1,
               threshold: Xls_clause_1_Threshold_1,
+              x: Xls_clause_1_X_1,
+              y: Xls_clause_1_Y_1,
               ..(Xls_clause_1_Syndrome_1).1
             };
-            let _8 = (Tag::SYNDROME, _7);
-            let Xls_clause_1_Configured_1 = _8;
-            let _9 = (Phase::WAITING, Xls_clause_1_Configured_1, Directive::CONSUME, bool:0, );
+            let _16 = (Tag::SYNDROME, _15);
+            let Xls_clause_1_Configured_1 = _16;
+            let _17 = (Phase::WAITING, Xls_clause_1_Configured_1, Directive::CONSUME, bool:0, );
             if (bool:false) {
               (phase, data, Directive::FAIL, u1:0)
             } else {
-              (_9.0, _9.1.1, _9.2, _9.3)
+              (_17.0, _17.1.1, _17.2, _17.3)
             }
           } else {
             let Xls_clause_2_Syndrome_1 = (Tag::SYNDROME, data);
@@ -933,6 +1054,12 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
         _ => (phase, data, Directive::FAIL, u1:0),
       }
     },
+    Tag::PHI_CORRECTION => {
+      let message = phicorrection_from_bits(frame.payload);
+      match phase {
+        _ => (phase, data, Directive::FAIL, u1:0),
+      }
+    },
     _ => (phase, data, Directive::FAIL, u1:0),
   }
 }
@@ -959,8 +1086,10 @@ pub proc Service {
       let has_effect = machine.entry_effect_index < effects.count;
       let effect = effects.values[
         machine.entry_effect_index as u32];
+      let emit_effect = has_effect && effects.valid[
+        machine.entry_effect_index as u32];
       let egress_tok = send_if(
-        join(), egress_out, has_effect, effect);
+        join(), egress_out, emit_effect, effect);
       let next_effect_index =
         machine.entry_effect_index + (has_effect as u8);
       let entry_complete = next_effect_index >= effects.count;
@@ -983,7 +1112,7 @@ pub proc Service {
       let (tok, frame, received) = recv_if_non_blocking(
         join(), req_in, machine.admission_pending,
         zero!<axis::Frame>());
-      let tag_ok = (frame.header.op == (Tag::PHI as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::ANYON_MOVE as u8) && frame.header.payload_words == u8:2) || (frame.header.op == (Tag::PHI0 as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHENOM_CONFIG as u8) && frame.header.payload_words == u8:2) || (frame.header.op == (Tag::PHENOM_REQUEST as u8) && frame.header.payload_words == u8:1) || (frame.header.op == (Tag::PHENOM_QUERY as u8) && frame.header.payload_words == u8:2) || (frame.header.op == (Tag::PHENOM_DATA as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHENOM_ANYON as u8) && frame.header.payload_words == u8:2);
+      let tag_ok = (frame.header.op == (Tag::PHI as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::ANYON_MOVE as u8) && frame.header.payload_words == u8:2) || (frame.header.op == (Tag::PHI0 as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHENOM_CONFIG as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHENOM_REQUEST as u8) && frame.header.payload_words == u8:1) || (frame.header.op == (Tag::PHENOM_QUERY as u8) && frame.header.payload_words == u8:2) || (frame.header.op == (Tag::PHENOM_DATA as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHENOM_ANYON as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHI_CORRECTION as u8) && frame.header.payload_words == u8:3);
       let accepted = received && tag_ok;
       let invalid_input = received && !tag_ok;
       let incoming_slot = MailboxSlot {

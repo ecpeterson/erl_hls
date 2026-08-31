@@ -26,7 +26,7 @@ cryptography.
 -doc "Advances one 32-bit xorshift state and returns the next state.".
 -spec xorshift32(hls_nums:u32()) -> hls_nums:u32().
 xorshift32(State0)
-        when is_integer(State0), State0 >= 0, State0 =< ?U32_MASK ->
+        when State0 >= 0, State0 =< ?U32_MASK ->
     State1 = (State0 bxor (State0 bsl 13)) band ?U32_MASK,
     State2 = (State1 bxor (State1 bsr 17)) band ?U32_MASK,
     (State2 bxor (State2 bsl 5)) band ?U32_MASK;

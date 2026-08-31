@@ -6,10 +6,10 @@
 -moduledoc """
 Generates the compact regular phi-torus DSLX fixture.
 
-The semantic topology remains a family and five route rules. The backend uses
+The semantic topology remains a family and six route rules. The backend uses
 channel arrays and nested `unroll_for!` spawns, so this module does not choose
-or enumerate actor-instance names. The scalar syndrome-request boundary is a
-fair polling merge over the bounded family lanes.
+or enumerate actor-instance names. The scalar syndrome-request and correction
+boundaries are fair polling merges over the bounded family lanes.
 """.
 
 -export([profile/0, to_dslx/0]).

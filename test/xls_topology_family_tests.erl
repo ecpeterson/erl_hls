@@ -6,7 +6,7 @@ generated_family_topology_is_compact_test() ->
     Generated = generated(phi_torus_topology:topology(2, 2)),
     ?assertEqual(1, count(Generated, <<"spawn FamilyNode(">>)),
     ?assertEqual(1, count(Generated, <<"spawn phi_halo_cell::Service(">>)),
-    ?assertEqual(3, count(Generated,
+    ?assertEqual(4, count(Generated,
         <<"chan<axis::Frame, CHANNEL_DEPTH>[TORUS_HEIGHT][TORUS_WIDTH]">>
     )),
     ?assertEqual(4, count(Generated, <<"unroll_for! (">>)),
@@ -16,18 +16,18 @@ generated_family_topology_is_compact_test() ->
 generated_two_by_two_router_preserves_alias_lanes_test() ->
     Generated = generated(phi_torus_topology:topology(2, 2)),
     ?assertNotEqual(nomatch, binary:match(Generated, <<
-        "OutputPort::NORTH => send(tok, lane_1_out, egress.frame),\n"
-        "      phi_halo_cell::OutputPort::EAST => send(tok, lane_2_out, "
+        "OutputPort::NORTH => send(tok, lane_2_out, egress.frame),\n"
+        "      phi_halo_cell::OutputPort::EAST => send(tok, lane_3_out, "
     >>)),
     ?assertNotEqual(nomatch, binary:match(Generated, <<
-        "OutputPort::WEST => send(tok, lane_2_out, egress.frame),\n"
-        "      phi_halo_cell::OutputPort::SOUTH => send(tok, lane_1_out, "
+        "OutputPort::WEST => send(tok, lane_3_out, egress.frame),\n"
+        "      phi_halo_cell::OutputPort::SOUTH => send(tok, lane_2_out, "
     >>)),
     ?assertNotEqual(nomatch, binary:match(Generated, <<
-        "lane_1_c[x][(y + TORUS_HEIGHT - u32:1) % TORUS_HEIGHT]"
+        "lane_2_c[x][(y + TORUS_HEIGHT - u32:1) % TORUS_HEIGHT]"
     >>)),
     ?assertNotEqual(nomatch, binary:match(Generated, <<
-        "lane_2_c[(x + TORUS_WIDTH - u32:1) % TORUS_WIDTH][y]"
+        "lane_3_c[(x + TORUS_WIDTH - u32:1) % TORUS_WIDTH][y]"
     >>)).
 
 generated_external_merge_uses_static_channel_sites_test() ->
@@ -58,10 +58,10 @@ generated_external_merge_uses_static_channel_sites_test() ->
 rectangular_torus_wires_all_inverse_translations_test() ->
     Generated = generated(phi_torus_topology:topology(3, 4)),
     ExpectedInputs = [
-        <<"lane_1_c[(x + u32:1) % TORUS_WIDTH][y]">>,
-        <<"lane_2_c[x][(y + u32:1) % TORUS_HEIGHT]">>,
-        <<"lane_3_c[x][(y + TORUS_HEIGHT - u32:1) % TORUS_HEIGHT]">>,
-        <<"lane_4_c[(x + TORUS_WIDTH - u32:1) % TORUS_WIDTH][y]">>
+        <<"lane_2_c[(x + u32:1) % TORUS_WIDTH][y]">>,
+        <<"lane_3_c[x][(y + u32:1) % TORUS_HEIGHT]">>,
+        <<"lane_4_c[x][(y + TORUS_HEIGHT - u32:1) % TORUS_HEIGHT]">>,
+        <<"lane_5_c[(x + TORUS_WIDTH - u32:1) % TORUS_WIDTH][y]">>
     ],
     lists:foreach(
         fun(Input) ->
@@ -78,7 +78,7 @@ five_and_fifty_wide_tori_have_the_same_generated_structure_test() ->
         scrub_dimensions(Large, <<"50">>)
     ),
     ?assertEqual(1, count(Large, <<"spawn FamilyNode(">>)),
-    ?assertEqual(5, count(Large,
+    ?assertEqual(6, count(Large,
         <<"chan<axis::Frame, CHANNEL_DEPTH>[TORUS_HEIGHT][TORUS_WIDTH]">>
     )).
 
@@ -96,7 +96,7 @@ generated_multi_family_topology_retains_compact_structure_test() ->
     ?assertEqual(6, count(Generated, <<"proc FamilyRouter">>)),
     ?assertEqual(6, count(Generated, <<"proc FamilyNode">>)),
     ?assertEqual(6, count(Generated, <<"spawn FamilyNode">>)),
-    ?assertEqual(30, count(Generated, <<
+    ?assertEqual(32, count(Generated, <<
         "chan<axis::Frame, CHANNEL_DEPTH>[TORUS_HEIGHT][TORUS_WIDTH]"
     >>)),
     ?assertEqual(4, count(Generated, <<"fn family_">>)),
@@ -105,7 +105,7 @@ generated_multi_family_topology_retains_compact_structure_test() ->
     ?assertEqual(2, count(Generated, <<
         "let branch_0_tok = send(tok"
     >>)),
-    ?assertEqual(2, count(Generated, <<
+    ?assertEqual(4, count(Generated, <<
         "spawn FrameGridMux<TORUS_WIDTH, TORUS_HEIGHT>("
     >>)),
     ?assertNotEqual(nomatch, binary:match(Generated, <<
@@ -115,6 +115,7 @@ generated_multi_family_topology_retains_compact_structure_test() ->
 generated_family_startup_precedes_routed_input_test() ->
     Generated = iolist_to_binary(phi_noise_topology_dslx:to_dslx()),
     ?assertEqual(36, count(Generated, <<") => axis::pack(u8:6,">>)),
+    ?assertNotEqual(nomatch, binary:match(Generated, <<"uN[96]:0x">>)),
     ?assertNotEqual(nomatch, binary:match(Generated, <<
         "let (tok, routed_frame) = recv_if(\n"
         "      join(), routed_in, started, zero!<axis::Frame>());\n"

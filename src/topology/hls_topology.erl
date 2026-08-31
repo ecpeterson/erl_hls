@@ -15,6 +15,13 @@ artifact ABI order, mailbox bounds, schema layouts, phase-specific dispatches,
 and phase-entry effects are read from the compiler's provisional
 actor-interface summary rather than repeated in the topology.
 
+Here an external output is only a typed boundary of the logical graph. The XLS
+backends currently render it as a channel on the generated top proc. It does
+not by itself select a PL-PS transport, register an `hls_fabric` route, or name
+an Erlang process. A testbench or a later deployment shell/gateway must connect
+that channel to a consumer explicitly; there is not yet a CPU topology
+interpreter which makes that connection automatically.
+
 The same format also supports rectangular actor families plus wrapped
 translation relations. A family is a dictionary entry
 whose fixed `shape` gives the bound of each positional index. A relation such

@@ -15,12 +15,12 @@ xorshift32_has_fixed_width_beam_semantics_test() ->
     ?assertEqual(16#0003e01f, hls_prng:xorshift32(16#ffffffff)),
     ?assertEqual(0, hls_prng:xorshift32(0)).
 
-xorshift32_rejects_non_u32_values_test() ->
+xorshift32_rejects_out_of_range_values_test() ->
     lists:foreach(
         fun(Value) ->
             ?assertError(badarg, hls_prng:xorshift32(Value))
         end,
-        [-1, 16#100000000, 1.0, not_an_integer]
+        [-1, 16#100000000]
     ).
 
 xorshift32_transpiles_to_sequential_fixed_width_steps_test() ->

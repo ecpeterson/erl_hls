@@ -10,6 +10,10 @@ module phi_phenom_topology_tb;
     wire [127:0] announcement;
     wire announcement_valid;
 
+    wire correction_ready = 1'b1;
+    wire [127:0] correction;
+    wire correction_valid;
+
     reg [127:0] captured [0:3];
     reg [127:0] stalled_announcement;
     integer announcement_count = 0;
@@ -20,7 +24,10 @@ module phi_phenom_topology_tb;
         .reset(reset),
         .phi_phenom_topology__announcement_out_rdy(announcement_ready),
         .phi_phenom_topology__announcement_out(announcement),
-        .phi_phenom_topology__announcement_out_vld(announcement_valid)
+        .phi_phenom_topology__announcement_out_vld(announcement_valid),
+        .phi_phenom_topology__correction_out_rdy(correction_ready),
+        .phi_phenom_topology__correction_out(correction),
+        .phi_phenom_topology__correction_out_vld(correction_valid)
     );
 
     always #5 clk = ~clk;
@@ -29,6 +36,10 @@ module phi_phenom_topology_tb;
         if (!reset && announcement_valid && announcement_ready) begin
             captured[announcement_count] <= announcement;
             announcement_count <= announcement_count + 1;
+        end
+        if (!reset && correction_valid && correction_ready) begin
+            $display("FAIL: degenerate topology emitted a correction");
+            $fatal(1);
         end
     end
 
@@ -70,7 +81,7 @@ module phi_phenom_topology_tb;
         begin
             header = captured[index][127:96];
             if (header[7:0] !== PHENOM_ANYON_TAG ||
-                    header[31:24] !== 8'd2) begin
+                    header[31:24] !== 8'd3) begin
                 $display(
                     "FAIL: announcement %0d has malformed header %08x",
                     index,
@@ -97,7 +108,7 @@ module phi_phenom_topology_tb;
                 $fatal(1);
             end
             if (captured[index][95:64] !== 32'd0) begin
-                $display("FAIL: announcement %0d has nonzero padding", index);
+                $display("FAIL: announcement %0d has nonzero coordinates", index);
                 $fatal(1);
             end
         end

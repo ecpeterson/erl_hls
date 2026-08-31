@@ -439,21 +439,13 @@ pack_startup_message(Target, Index, Module, Message)
             Width =< ?MAX_PAYLOAD_BITS of
         true -> #{
             tag => Tag,
-            payload => payload_literal(Payload)
+            payload => xls_nums:packed_unsigned_literal(Payload)
         };
         false -> error({unsupported_startup_payload_width,
             Target, Index, Width})
     end;
 pack_startup_message(Target, Index, _Module, Message) ->
     error({invalid_startup_message, Target, Index, Message}).
-
-payload_literal(Payload) ->
-    Width = bit_size(Payload),
-    Digits = Width div 4,
-    Value = binary:decode_unsigned(Payload, little),
-    Hex = integer_to_list(Value, 16),
-    ["u", integer_to_list(Width), ":0x",
-        lists:duplicate(Digits - length(Hex), $0), Hex].
 
 identifier(Name, Context) when is_atom(Name) ->
     identifier(atom_to_list(Name), Context);
