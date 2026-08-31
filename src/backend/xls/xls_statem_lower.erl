@@ -58,6 +58,7 @@ lower(Filename, Forms, PhaseNames) ->
         message_names => MessageNames,
         message_words => MessageWords,
         output_names => OutputNames,
+        max_entry_effects => max_entry_effects(maps:get(entries, Prepared)),
         data_name => DataName,
         record_declarations => RecordDeclarations,
         init => Init,
@@ -262,6 +263,9 @@ interface_effects(#{phase := Phase, actions := Actions}) ->
         || Action <- Actions
     ].
 
+max_entry_effects(Entries) ->
+    lists:max([length(maps:get(actions, Entry)) || Entry <- Entries]).
+
 analyze_cast_groups(Forms, PhaseNames, MessageNames) ->
     Clauses = xls_parse:find_function(Forms, handle_cast, 3),
     xls_callback_lower:group_by(
@@ -346,9 +350,6 @@ lower_entry(
     DataName,
     EnumAtoms
 ) ->
-    Actions = maps:from_list([
-        {maps:get(port, Action), Action} || Action <- OrderedActions
-    ]),
     Clause = strip_dispatched_phase(Clause0),
     DataClause = replace_body(Clause, Prefix ++ [DataExpression]),
     {DataBody, DataResult} = xls_parse:branch_from_clause(
@@ -359,26 +360,25 @@ lower_entry(
         "data",
         EnumAtoms
     ),
-    OutputSpecs = maps:from_list([
-        {Port, lower_entry_output(
+    Effects = [
+        lower_entry_effect(
             Clause,
             Prefix,
-            maps:get(Port, Actions, none),
+            Action,
             DataName,
             EnumAtoms
-        )}
-        || Port <- OutputNames
-    ]),
+        )
+        || Action <- OrderedActions
+    ],
+    true = length(Effects) =< length(OutputNames),
     #{
         phase => Phase,
         data => lowered(DataBody, DataResult),
-        outputs => OutputSpecs
+        effects => Effects
     }.
 
-lower_entry_output(_Clause, _Prefix, none, _DataName, _EnumAtoms) ->
-    #{valid => false};
-lower_entry_output(Clause, Prefix,
-        #{message := Message, tag := Tag}, DataName,
+lower_entry_effect(Clause, Prefix,
+        #{message := Message, port := Port, tag := Tag}, DataName,
         EnumAtoms) ->
     MessageClause = replace_body(Clause, Prefix ++ [Message]),
     {Body, Result} = xls_parse:branch_from_clause(
@@ -389,7 +389,7 @@ lower_entry_output(Clause, Prefix,
         "zero!<axis::Frame>()",
         EnumAtoms
     ),
-    (lowered(Body, Result))#{valid => true, tag => Tag}.
+    (lowered(Body, Result))#{port => Port, tag => Tag}.
 
 enter_args(DataName) ->
     [
@@ -616,6 +616,11 @@ validate_names(PhaseNames, MessageNames, OutputNames, DataName)
     true = PhaseNames =/= [],
     true = MessageNames =/= [],
     true = OutputNames =/= [],
+    case length(OutputNames) =< 255 of
+        true -> ok;
+        false -> error({too_many_hls_statem_outputs,
+            length(OutputNames), 255})
+    end,
     case lists:member(repeat_phase, PhaseNames) of
         true -> error({reserved_hls_statem_phase, repeat_phase});
         false -> ok

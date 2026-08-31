@@ -27,6 +27,7 @@ application behavior or a general Erlang protocol description.
     dispatched_schemas/2,
     from_module/1,
     initial_effects/1,
+    max_entry_effects/1,
     output_schemas/2,
     schema/2
 ]).
@@ -101,6 +102,19 @@ initial_effects(Summary) ->
                    maps:get(phase, Effect) =:= Phase
             ]
     end.
+
+-spec max_entry_effects(summary()) -> non_neg_integer().
+-doc "Returns the largest source-ordered effect list of any phase entry.".
+max_entry_effects(Summary) ->
+    Effects = maps:get(entry_effects, Summary),
+    lists:max([
+        length([
+            Effect
+            || Effect <- Effects,
+               maps:get(phase, Effect) =:= Phase
+        ])
+        || Phase <- maps:get(phases, Summary)
+    ]).
 
 -spec schema(summary(), atom()) -> map().
 -doc "Looks up one public message schema by record name.".

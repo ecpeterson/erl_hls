@@ -15,7 +15,7 @@
 -type entry() :: #{
     phase := atom(),
     data := lowered_clause(),
-    outputs := #{atom() := map()}
+    effects := [map()]
 }.
 -type cast_clause() :: #{
     tag := atom(),
@@ -47,6 +47,7 @@ emit(Spec) ->
         enter_function(Spec),
         dispatch_function(Spec),
         service(Spec),
+        egress_demux(Spec),
         top(Spec)
     ].
 
@@ -103,18 +104,29 @@ phase_declaration(Phases) ->
 machine_declarations(#{
     capacity := Capacity,
     output_names := OutputNames,
+    max_entry_effects := MaxEntryEffects,
     data_name := DataName
 }) ->
     DataStruct = record_struct_name(DataName),
     [
-        "struct EntryEffects {\n",
+        "pub enum OutputPort : u8 {\n",
         [
             [
-                "  ", name(Port), "_valid: u1,\n",
-                "  ", name(Port), ": axis::Frame,\n"
+                "  ", uppercase(Port), " = u8:",
+                integer_to_list(Index), ",\n"
             ]
-            || Port <- OutputNames
+            || {Index, Port} <- lists:enumerate(0, OutputNames)
         ],
+        "}\n\n",
+        "pub struct Egress {\n",
+        "  port: OutputPort,\n",
+        "  frame: axis::Frame,\n",
+        "}\n\n",
+        "pub const EGRESS_DEPTH = u32:",
+        integer_to_list(max(1, MaxEntryEffects)), ";\n\n",
+        "struct EntryEffects {\n",
+        "  count: u8,\n",
+        "  values: Egress[", integer_to_list(length(OutputNames)), "],\n",
         "}\n\n",
         "struct MailboxSlot {\n",
         "  postponed: u1,\n",
@@ -127,6 +139,7 @@ machine_declarations(#{
         "  slots: MailboxSlot[", integer_to_list(Capacity), "],\n",
         "  occupied: u8,\n",
         "  enter_pending: u1,\n",
+        "  entry_effect_index: u8,\n",
         "  // Reserves one queue slot for the frame being assembled.\n",
         "  admission_pending: u1,\n",
         "  // A failed service ignores input until reset.\n",
@@ -164,41 +177,40 @@ enter_function(#{
 entry_arm(#{
     phase := Phase,
     data := #{body := DataBody, result := DataResult},
-    outputs := OutputSpecs
+    effects := Effects
 }, OutputNames) ->
+    Padding = length(OutputNames) - length(Effects),
     [
         "    Phase::", uppercase(Phase), " => {\n",
         "      let entered_data = {\n",
         xls_parse_io:indent(DataBody, 8),
         "        ", DataResult, "\n",
         "      };\n",
-        [entry_output_binding(Port, maps:get(Port, OutputSpecs))
-            || Port <- OutputNames],
+        [entry_effect_binding(Index, Effect)
+            || {Index, Effect} <- lists:enumerate(0, Effects)],
         "      (entered_data, EntryEffects {\n",
+        "        count: u8:", integer_to_list(length(Effects)), ",\n",
+        "        values: [\n",
         [
             [
-                "        ", name(Port), "_valid: u1:",
-                bool_digit(maps:get(valid, maps:get(Port, OutputSpecs))),
-                ",\n",
-                "        ", name(Port), ": ", name(Port), ",\n"
+                "          Egress { port: OutputPort::",
+                uppercase(maps:get(port, Effect)),
+                ", frame: effect_", integer_to_list(Index), " },\n"
             ]
-            || Port <- OutputNames
+            || {Index, Effect} <- lists:enumerate(0, Effects)
         ],
+        lists:duplicate(Padding, "          zero!<Egress>(),\n"),
+        "        ],\n",
         "      })\n",
         "    },\n"
     ].
 
-entry_output_binding(Port, #{valid := false}) ->
-    [
-        "      let ", name(Port), " = zero!<axis::Frame>();\n"
-    ];
-entry_output_binding(Port, #{
-    valid := true,
+entry_effect_binding(Index, #{
     body := Body,
     result := Result
 }) ->
     [
-        "      let ", name(Port), " = {\n",
+        "      let effect_", integer_to_list(Index), " = {\n",
         xls_parse_io:indent(Body, 8),
         "        ", Result, "\n",
         "      };\n"
@@ -252,8 +264,7 @@ dispatch_phase_arm(#{
 service(#{
     capacity := Capacity,
     message_names := MessageNames,
-    message_words := MessageWords,
-    output_names := OutputNames
+    message_words := MessageWords
 }) ->
     #{
         eligible_bindings := EligibleBindings,
@@ -266,27 +277,19 @@ service(#{
     [
         "pub proc Service {\n",
         "  req_in: chan<axis::Frame> in;\n",
-        [
-            ["  ", name(Port), "_out: chan<axis::Frame> out;\n"]
-            || Port <- OutputNames
-        ],
+        "  egress_out: chan<Egress> out;\n",
         "  admission_out: chan<u1> out;\n\n",
         "  config(req_in: chan<axis::Frame> in,\n",
-        [
-            ["         ", name(Port), "_out: chan<axis::Frame> out,\n"]
-            || Port <- OutputNames
-        ],
+        "         egress_out: chan<Egress> out,\n",
         "         admission_out: chan<u1> out) {\n",
-        "    (req_in, ",
-        join_with(", ", [[name(Port), "_out"] || Port <- OutputNames]),
-        ", admission_out)\n",
+        "    (req_in, egress_out, admission_out)\n",
         "  }\n\n",
         "  init { initial_machine() }\n\n",
         "  next(machine: Machine) {\n",
         "    if machine.failed {\n",
         "      machine\n",
         "    } else if machine.enter_pending {\n",
-        entry_scheduler(OutputNames),
+        entry_scheduler(),
         "    } else {\n",
         "      let (tok, frame, received) = recv_if_non_blocking(\n",
         "        join(), req_in, machine.admission_pending,\n",
@@ -379,29 +382,30 @@ service(#{
         "}\n\n"
     ].
 
-entry_scheduler(OutputNames) ->
-    SendBindings = [
-        [
-            "      let ", name(Port), "_tok = send_if(\n",
-            "        join(), ", name(Port), "_out, effects.",
-            name(Port), "_valid, effects.", name(Port), ");\n"
-        ]
-        || Port <- OutputNames
-    ],
-    Tokens = [[name(Port), "_tok"] || Port <- OutputNames],
+entry_scheduler() ->
     [
         "      let (entered_data, effects) = enter(\n",
         "        machine.entered_from, machine.phase, machine.data);\n",
-        SendBindings,
-        "      let reserve = !machine.admission_pending &&\n",
+        "      let has_effect = machine.entry_effect_index < effects.count;\n",
+        "      let effect = effects.values[\n",
+        "        machine.entry_effect_index as u32];\n",
+        "      let egress_tok = send_if(\n",
+        "        join(), egress_out, has_effect, effect);\n",
+        "      let next_effect_index =\n",
+        "        machine.entry_effect_index + (has_effect as u8);\n",
+        "      let entry_complete = next_effect_index >= effects.count;\n",
+        "      let reserve = entry_complete &&\n",
+        "        !machine.admission_pending &&\n",
         "        machine.occupied < MAILBOX_CAPACITY;\n",
         "      let admission_tok = send_if(\n",
-        "        join(), admission_out, reserve, u1:1);\n",
-        "      let _entry_tok = ", join_tokens(Tokens ++ ["admission_tok"]),
-        ";\n",
+        "        egress_tok, admission_out, reserve, u1:1);\n",
+        "      let _entry_tok = admission_tok;\n",
         "      Machine {\n",
-        "        data: entered_data,\n",
-        "        enter_pending: u1:0,\n",
+        "        data: if entry_complete { entered_data } else { machine.data },\n",
+        "        enter_pending: !entry_complete,\n",
+        "        entry_effect_index: if entry_complete {\n",
+        "          u8:0\n",
+        "        } else { next_effect_index },\n",
         "        admission_pending: machine.admission_pending || reserve,\n",
         "        ..machine\n",
         "      }\n"
@@ -491,6 +495,43 @@ compaction_binding(Index, _Capacity) ->
 %%% Top-level streams
 %%%
 
+egress_demux(#{output_names := OutputNames}) ->
+    [
+        "proc EgressDemux {\n",
+        "  egress_in: chan<Egress> in;\n",
+        [
+            ["  ", name(Port), "_out: chan<axis::Frame> out;\n"]
+            || Port <- OutputNames
+        ],
+        "\n  config(egress_in: chan<Egress> in,\n",
+        [
+            ["         ", name(Port), "_out: chan<axis::Frame> out",
+                separator(Index, length(OutputNames)), "\n"]
+            || {Index, Port} <- lists:enumerate(0, OutputNames)
+        ],
+        "  ) {\n",
+        "    (egress_in, ",
+        join_with(", ", [[name(Port), "_out"] || Port <- OutputNames]),
+        ")\n",
+        "  }\n\n",
+        "  init { () }\n\n",
+        "  next(state: ()) {\n",
+        "    let (tok, egress) = recv(join(), egress_in);\n",
+        "    let _send_tok = match egress.port {\n",
+        [
+            [
+                "      OutputPort::", uppercase(Port), " =>\n",
+                "        send(tok, ", name(Port),
+                "_out, egress.frame),\n"
+            ]
+            || Port <- OutputNames
+        ],
+        "    };\n",
+        "    state\n",
+        "  }\n",
+        "}\n\n"
+    ].
+
 top(#{output_names := OutputNames}) ->
     [
         "pub proc Top {\n",
@@ -508,6 +549,8 @@ top(#{output_names := OutputNames}) ->
         "_send: chan<axis::Beat> out) {\n",
         "    let (req_p, req_c) = chan<axis::Frame, u32:1>(\"req\");\n",
         "    let (admit_p, admit_c) = chan<u1, u32:1>(\"admit\");\n",
+        "    let (egress_p, egress_c) =\n",
+        "      chan<Egress, EGRESS_DEPTH>(\"egress\");\n",
         [
             [
                 "    let (", name(Port), "_p, ", name(Port),
@@ -516,9 +559,10 @@ top(#{output_names := OutputNames}) ->
             || Port <- OutputNames
         ],
         "    spawn axis::ReservedRx(ext_recv, req_p, admit_c);\n",
-        "    spawn Service(req_c, ",
+        "    spawn Service(req_c, egress_p, admit_p);\n",
+        "    spawn EgressDemux(egress_c, ",
         join_with(", ", [[name(Port), "_p"] || Port <- OutputNames]),
-        ", admit_p);\n",
+        ");\n",
         [
             [
                 "    spawn axis::Tx(", name(Port), "_c, ", name(Port),
@@ -551,13 +595,8 @@ record_struct_name(Atom) ->
 record_function_name(Atom) ->
     lists:delete($_, atom_to_list(Atom)).
 
-bool_digit(true) -> "1";
-bool_digit(false) -> "0".
-
-join_tokens([Token]) ->
-    Token;
-join_tokens([First, Second | Rest]) ->
-    join_tokens([["join(", First, ", ", Second, ")"] | Rest]).
+separator(Index, Count) when Index + 1 < Count -> ",";
+separator(_Index, _Count) -> "".
 
 join_with(_Separator, []) ->
     [];

@@ -189,17 +189,24 @@ fn bits_from_syndrome(s: Syndrome) -> bits[bit_count<Syndrome>()] {
   (s.threshold as bits[32]) ++ (s.random_state as bits[32]) ++ (s.announcement as bits[32]) ++ (s.previous_measurement as bits[32]) ++ (s.data_parity as bits[32]) ++ (s.seen_sources as bits[32]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
 }
 
+pub enum OutputPort : u8 {
+  NORTH = u8:0,
+  EAST = u8:1,
+  WEST = u8:2,
+  SOUTH = u8:3,
+  PHI = u8:4,
+}
+
+pub struct Egress {
+  port: OutputPort,
+  frame: axis::Frame,
+}
+
+pub const EGRESS_DEPTH = u32:4;
+
 struct EntryEffects {
-  north_valid: u1,
-  north: axis::Frame,
-  east_valid: u1,
-  east: axis::Frame,
-  west_valid: u1,
-  west: axis::Frame,
-  south_valid: u1,
-  south: axis::Frame,
-  phi_valid: u1,
-  phi: axis::Frame,
+  count: u8,
+  values: Egress[5],
 }
 
 struct MailboxSlot {
@@ -214,6 +221,7 @@ struct Machine {
   slots: MailboxSlot[5],
   occupied: u8,
   enter_pending: u1,
+  entry_effect_index: u8,
   // Reserves one queue slot for the frame being assembled.
   admission_pending: u1,
   // A failed service ignores input until reset.
@@ -254,22 +262,15 @@ fn enter(old_phase: Phase, phase: Phase, data: Syndrome) -> (Syndrome, EntryEffe
         };
         _0
       };
-      let north = zero!<axis::Frame>();
-      let east = zero!<axis::Frame>();
-      let west = zero!<axis::Frame>();
-      let south = zero!<axis::Frame>();
-      let phi = zero!<axis::Frame>();
       (entered_data, EntryEffects {
-        north_valid: u1:0,
-        north: north,
-        east_valid: u1:0,
-        east: east,
-        west_valid: u1:0,
-        west: west,
-        south_valid: u1:0,
-        south: south,
-        phi_valid: u1:0,
-        phi: phi,
+        count: u8:0,
+        values: [
+          zero!<Egress>(),
+          zero!<Egress>(),
+          zero!<Egress>(),
+          zero!<Egress>(),
+          zero!<Egress>(),
+        ],
       })
     },
     Phase::WAITING => {
@@ -284,22 +285,15 @@ fn enter(old_phase: Phase, phase: Phase, data: Syndrome) -> (Syndrome, EntryEffe
         };
         _0
       };
-      let north = zero!<axis::Frame>();
-      let east = zero!<axis::Frame>();
-      let west = zero!<axis::Frame>();
-      let south = zero!<axis::Frame>();
-      let phi = zero!<axis::Frame>();
       (entered_data, EntryEffects {
-        north_valid: u1:0,
-        north: north,
-        east_valid: u1:0,
-        east: east,
-        west_valid: u1:0,
-        west: west,
-        south_valid: u1:0,
-        south: south,
-        phi_valid: u1:0,
-        phi: phi,
+        count: u8:0,
+        values: [
+          zero!<Egress>(),
+          zero!<Egress>(),
+          zero!<Egress>(),
+          zero!<Egress>(),
+          zero!<Egress>(),
+        ],
       })
     },
     Phase::COLLECTING => {
@@ -321,7 +315,7 @@ fn enter(old_phase: Phase, phase: Phase, data: Syndrome) -> (Syndrome, EntryEffe
         };
         _3
       };
-      let north = {
+      let effect_0 = {
         let _OldPhase_1 = old_phase;
         let __1 = phase;
         let Syndrome_1 = (Tag::SYNDROME, data);
@@ -344,7 +338,7 @@ fn enter(old_phase: Phase, phase: Phase, data: Syndrome) -> (Syndrome, EntryEffe
         };
         _5
       };
-      let east = {
+      let effect_1 = {
         let _OldPhase_1 = old_phase;
         let __1 = phase;
         let Syndrome_1 = (Tag::SYNDROME, data);
@@ -367,7 +361,7 @@ fn enter(old_phase: Phase, phase: Phase, data: Syndrome) -> (Syndrome, EntryEffe
         };
         _5
       };
-      let west = {
+      let effect_2 = {
         let _OldPhase_1 = old_phase;
         let __1 = phase;
         let Syndrome_1 = (Tag::SYNDROME, data);
@@ -390,7 +384,7 @@ fn enter(old_phase: Phase, phase: Phase, data: Syndrome) -> (Syndrome, EntryEffe
         };
         _5
       };
-      let south = {
+      let effect_3 = {
         let _OldPhase_1 = old_phase;
         let __1 = phase;
         let Syndrome_1 = (Tag::SYNDROME, data);
@@ -413,18 +407,15 @@ fn enter(old_phase: Phase, phase: Phase, data: Syndrome) -> (Syndrome, EntryEffe
         };
         _5
       };
-      let phi = zero!<axis::Frame>();
       (entered_data, EntryEffects {
-        north_valid: u1:1,
-        north: north,
-        east_valid: u1:1,
-        east: east,
-        west_valid: u1:1,
-        west: west,
-        south_valid: u1:1,
-        south: south,
-        phi_valid: u1:0,
-        phi: phi,
+        count: u8:4,
+        values: [
+          Egress { port: OutputPort::NORTH, frame: effect_0 },
+          Egress { port: OutputPort::EAST, frame: effect_1 },
+          Egress { port: OutputPort::WEST, frame: effect_2 },
+          Egress { port: OutputPort::SOUTH, frame: effect_3 },
+          zero!<Egress>(),
+        ],
       })
     },
     Phase::ANNOUNCING => {
@@ -448,11 +439,7 @@ fn enter(old_phase: Phase, phase: Phase, data: Syndrome) -> (Syndrome, EntryEffe
         };
         _4
       };
-      let north = zero!<axis::Frame>();
-      let east = zero!<axis::Frame>();
-      let west = zero!<axis::Frame>();
-      let south = zero!<axis::Frame>();
-      let phi = {
+      let effect_0 = {
         let _OldPhase_1 = old_phase;
         let __1 = phase;
         let Syndrome_1 = (Tag::SYNDROME, data);
@@ -473,16 +460,14 @@ fn enter(old_phase: Phase, phase: Phase, data: Syndrome) -> (Syndrome, EntryEffe
         _4
       };
       (entered_data, EntryEffects {
-        north_valid: u1:0,
-        north: north,
-        east_valid: u1:0,
-        east: east,
-        west_valid: u1:0,
-        west: west,
-        south_valid: u1:0,
-        south: south,
-        phi_valid: u1:1,
-        phi: phi,
+        count: u8:1,
+        values: [
+          Egress { port: OutputPort::PHI, frame: effect_0 },
+          zero!<Egress>(),
+          zero!<Egress>(),
+          zero!<Egress>(),
+          zero!<Egress>(),
+        ],
       })
     },
   }
@@ -954,21 +939,13 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
 
 pub proc Service {
   req_in: chan<axis::Frame> in;
-  north_out: chan<axis::Frame> out;
-  east_out: chan<axis::Frame> out;
-  west_out: chan<axis::Frame> out;
-  south_out: chan<axis::Frame> out;
-  phi_out: chan<axis::Frame> out;
+  egress_out: chan<Egress> out;
   admission_out: chan<u1> out;
 
   config(req_in: chan<axis::Frame> in,
-         north_out: chan<axis::Frame> out,
-         east_out: chan<axis::Frame> out,
-         west_out: chan<axis::Frame> out,
-         south_out: chan<axis::Frame> out,
-         phi_out: chan<axis::Frame> out,
+         egress_out: chan<Egress> out,
          admission_out: chan<u1> out) {
-    (req_in, north_out, east_out, west_out, south_out, phi_out, admission_out)
+    (req_in, egress_out, admission_out)
   }
 
   init { initial_machine() }
@@ -979,24 +956,26 @@ pub proc Service {
     } else if machine.enter_pending {
       let (entered_data, effects) = enter(
         machine.entered_from, machine.phase, machine.data);
-      let north_tok = send_if(
-        join(), north_out, effects.north_valid, effects.north);
-      let east_tok = send_if(
-        join(), east_out, effects.east_valid, effects.east);
-      let west_tok = send_if(
-        join(), west_out, effects.west_valid, effects.west);
-      let south_tok = send_if(
-        join(), south_out, effects.south_valid, effects.south);
-      let phi_tok = send_if(
-        join(), phi_out, effects.phi_valid, effects.phi);
-      let reserve = !machine.admission_pending &&
+      let has_effect = machine.entry_effect_index < effects.count;
+      let effect = effects.values[
+        machine.entry_effect_index as u32];
+      let egress_tok = send_if(
+        join(), egress_out, has_effect, effect);
+      let next_effect_index =
+        machine.entry_effect_index + (has_effect as u8);
+      let entry_complete = next_effect_index >= effects.count;
+      let reserve = entry_complete &&
+        !machine.admission_pending &&
         machine.occupied < MAILBOX_CAPACITY;
       let admission_tok = send_if(
-        join(), admission_out, reserve, u1:1);
-      let _entry_tok = join(join(join(join(join(north_tok, east_tok), west_tok), south_tok), phi_tok), admission_tok);
+        egress_tok, admission_out, reserve, u1:1);
+      let _entry_tok = admission_tok;
       Machine {
-        data: entered_data,
-        enter_pending: u1:0,
+        data: if entry_complete { entered_data } else { machine.data },
+        enter_pending: !entry_complete,
+        entry_effect_index: if entry_complete {
+          u8:0
+        } else { next_effect_index },
         admission_pending: machine.admission_pending || reserve,
         ..machine
       }
@@ -1123,6 +1102,44 @@ pub proc Service {
   }
 }
 
+proc EgressDemux {
+  egress_in: chan<Egress> in;
+  north_out: chan<axis::Frame> out;
+  east_out: chan<axis::Frame> out;
+  west_out: chan<axis::Frame> out;
+  south_out: chan<axis::Frame> out;
+  phi_out: chan<axis::Frame> out;
+
+  config(egress_in: chan<Egress> in,
+         north_out: chan<axis::Frame> out,
+         east_out: chan<axis::Frame> out,
+         west_out: chan<axis::Frame> out,
+         south_out: chan<axis::Frame> out,
+         phi_out: chan<axis::Frame> out
+  ) {
+    (egress_in, north_out, east_out, west_out, south_out, phi_out)
+  }
+
+  init { () }
+
+  next(state: ()) {
+    let (tok, egress) = recv(join(), egress_in);
+    let _send_tok = match egress.port {
+      OutputPort::NORTH =>
+        send(tok, north_out, egress.frame),
+      OutputPort::EAST =>
+        send(tok, east_out, egress.frame),
+      OutputPort::WEST =>
+        send(tok, west_out, egress.frame),
+      OutputPort::SOUTH =>
+        send(tok, south_out, egress.frame),
+      OutputPort::PHI =>
+        send(tok, phi_out, egress.frame),
+    };
+    state
+  }
+}
+
 pub proc Top {
   ext_recv: chan<axis::Beat> in;
   north_send: chan<axis::Beat> out;
@@ -1139,13 +1156,16 @@ pub proc Top {
          phi_send: chan<axis::Beat> out) {
     let (req_p, req_c) = chan<axis::Frame, u32:1>("req");
     let (admit_p, admit_c) = chan<u1, u32:1>("admit");
+    let (egress_p, egress_c) =
+      chan<Egress, EGRESS_DEPTH>("egress");
     let (north_p, north_c) = chan<axis::Frame, u32:1>("north");
     let (east_p, east_c) = chan<axis::Frame, u32:1>("east");
     let (west_p, west_c) = chan<axis::Frame, u32:1>("west");
     let (south_p, south_c) = chan<axis::Frame, u32:1>("south");
     let (phi_p, phi_c) = chan<axis::Frame, u32:1>("phi");
     spawn axis::ReservedRx(ext_recv, req_p, admit_c);
-    spawn Service(req_c, north_p, east_p, west_p, south_p, phi_p, admit_p);
+    spawn Service(req_c, egress_p, admit_p);
+    spawn EgressDemux(egress_c, north_p, east_p, west_p, south_p, phi_p);
     spawn axis::Tx(north_c, north_send);
     spawn axis::Tx(east_c, east_send);
     spawn axis::Tx(west_c, west_send);

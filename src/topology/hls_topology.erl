@@ -4,34 +4,41 @@
 
 -module(hls_topology).
 -moduledoc """
-Normalizes a provisional, closed actor topology expressed as ordinary Erlang
+Normalizes provisional, closed actor topologies expressed as ordinary Erlang
 data.
 
-Version 0 contains exact actor instances, external outputs, exact routes,
-explicit multi-recipient delivery modes, and per-actor startup messages. It
+The current format contains exact actor instances, external outputs, exact
+routes, explicit multi-recipient delivery modes, and per-actor startup
+messages. It
 intentionally has no lifecycle, placement, transport, numeric tags, or
 generated-hardware concepts. Actor output names, their artifact ABI order,
 mailbox bounds, schema layouts, phase-specific dispatches, and phase-entry
 effects are read from the compiler's provisional actor-interface summary
 rather than repeated in the topology.
 
-Actor declarations are a map from logical instance ID to actor module. IDs are
-atoms, nonnegative integers, or nonempty tuples recursively
-containing those values, so a regular family can use IDs such as `{phi, X, Y}`
-without allocating an atom per instance. This solves instance identity and atom
-allocation, but it does not compactly represent a family; parametric families
-belong in a later rule-preserving representation. The normalized plan is a
-sorted list for deterministic traversal; consumers build maps when they need
-indexed lookup.
+The same format also supports rectangular actor families plus wrapped
+translation relations. A family is a dictionary entry
+whose fixed `shape` gives the bound of each positional index. A relation such
+as `{translate, [0, -1], wrap}` maps one family member to its northern neighbor
+without enumerating members or possible pairs. This first compact subset has no
+general expression language, sparse exceptions, family startup formulas, or
+placement rules.
 
-Every actor output must have exactly one disposition, every referenced
-endpoint must exist, and live runtime identities are rejected. Normalization
-sorts unordered input, preserves message order within each startup target, and
-derives sender-to-recipient ordering lanes.
+Exact actor declarations are a map from logical instance ID to actor module.
+IDs are atoms, nonnegative integers, or nonempty tuples recursively containing
+those values. A family member uses the same representation, such as
+`{phi, X, Y}`, without allocating an atom per instance. Normalized exact
+sections and compact family sections are sorted for deterministic traversal;
+consumers build maps when they need indexed lookup.
+
+Every exact actor and family output must have exactly one disposition, every
+referenced endpoint must exist, and live runtime identities are rejected.
+Normalization sorts unordered input, preserves message order within each
+startup target, and derives exact lanes or compact lane relations.
 
 A singleton route is `{Source, [Recipient]}`. A route with two or more
 recipients is `{Source, Delivery, Recipients}` so fanout cannot acquire an
-implicit completion rule. Version 0 distinguishes four semantic completion
+implicit completion rule. The format distinguishes four semantic completion
 points:
 
   * `coupled`: the source event completes after every recipient accepts;
@@ -44,12 +51,17 @@ A backend may implement only a subset, but it must not silently rename one
 completion point as another.
 
 Route validation uses the union of schemas which the current lowerer proves can
-be emitted through a source port and dispatched by a recipient. A dispatch is
-not a claim that every payload passes callback patterns and guards. Numeric tag
-compatibility remains a physical-backend concern.
+be emitted through a source port and dispatched by a recipient. Family
+relations validate those facts once per artifact relation rather than once per
+member. A dispatch is not a claim that every payload passes callback patterns
+and guards. Numeric tag compatibility remains a physical-backend concern.
 """.
 
--export([from_module/1, normalize/1]).
+-export([
+    from_module/1,
+    normalize/1,
+    routes_for_instance/3
+]).
 -export_type([plan/0, spec/0]).
 
 -type spec() :: map().
@@ -70,13 +82,21 @@ from_module(Module) when is_atom(Module) ->
 from_module(Module) ->
     error({invalid_topology_module, Module}).
 
--doc "Validates and canonicalizes one version-0 topology term.".
+-doc "Validates and canonicalizes one supported topology term.".
 -spec normalize(spec()) -> plan().
 normalize(Spec) ->
     ok = ensure_static(Spec),
-    ok = validate_top_level(Spec),
-    0 = validate_version(maps:get(version, Spec)),
+    case Spec of
+        #{version := 1} -> normalize_current(Spec);
+        #{version := Version} -> error({unsupported_version, Version});
+        _ -> validate_top_level(Spec)
+    end.
 
+normalize_current(Spec) ->
+    ok = validate_top_level(Spec),
+    hls_topology_family:normalize(Spec, fun normalize_exact_sections/1).
+
+normalize_exact_sections(Spec) ->
     Actors = normalize_actors(maps:get(actors, Spec)),
     ActorIndex = maps:from_list([
         {maps:get(id, Actor), Actor} || Actor <- Actors
@@ -93,7 +113,7 @@ normalize(Spec) ->
     Startup = normalize_startup(maps:get(startup, Spec), ActorIndex),
 
     #{
-        version => 0,
+        version => 1,
         actors => [maps:remove(interface, Actor) || Actor <- Actors],
         externals => Externals,
         routes => Routes,
@@ -101,12 +121,27 @@ normalize(Spec) ->
         lanes => derive_lanes(Routes)
     }.
 
+-doc "Resolves one family's compact rules for one bounded member.".
+-spec routes_for_instance(plan(), term(), [non_neg_integer()]) -> [map()].
+routes_for_instance(Plan = #{families := _}, FamilyId, Coordinates) ->
+    hls_topology_family:routes_for_instance(Plan, FamilyId, Coordinates);
+routes_for_instance(Plan, _FamilyId, _Coordinates) ->
+    error({invalid_topology_plan, Plan}).
+
 %%%
 %%% Actor and external endpoints
 %%%
 
 validate_top_level(Spec) when is_map(Spec) ->
-    Required = [actors, externals, routes, startup, version],
+    Required = [
+        actors,
+        externals,
+        families,
+        route_relations,
+        routes,
+        startup,
+        version
+    ],
     Keys = maps:keys(Spec),
     case {Required -- Keys, Keys -- Required} of
         {[], []} -> ok;
@@ -115,9 +150,6 @@ validate_top_level(Spec) when is_map(Spec) ->
     end;
 validate_top_level(_Spec) ->
     error({invalid_topology, expected_map}).
-
-validate_version(0) -> 0;
-validate_version(Version) -> error({unsupported_topology_version, Version}).
 
 normalize_actors(Specs) when is_map(Specs) ->
     Pairs = [normalize_actor_entry(Id, Module)

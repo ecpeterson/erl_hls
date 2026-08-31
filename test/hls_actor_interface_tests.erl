@@ -5,6 +5,7 @@
 phi_interface_records_protocol_facts_test() ->
     Interface = hls_actor_interface:from_module(phi_halo_cell),
     ?assertEqual(measuring, maps:get(initial_phase, Interface)),
+    ?assertEqual(4, hls_actor_interface:max_entry_effects(Interface)),
     ?assertEqual(
         [anyon_move, phi, phi0],
         hls_actor_interface:output_schemas(Interface, north)
@@ -51,6 +52,8 @@ phi_interface_records_protocol_facts_test() ->
 phenomenological_interfaces_are_distinct_test() ->
     Data = hls_actor_interface:from_module(phenom_data_cell),
     Syndrome = hls_actor_interface:from_module(phenom_syndrome_cell),
+    ?assertEqual(4, hls_actor_interface:max_entry_effects(Data)),
+    ?assertEqual(4, hls_actor_interface:max_entry_effects(Syndrome)),
     ?assertEqual(
         [phenom_config, phenom_query],
         hls_actor_interface:dispatched_schemas(Data)

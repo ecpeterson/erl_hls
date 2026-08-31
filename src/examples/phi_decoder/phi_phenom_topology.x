@@ -5,9 +5,8 @@
 // Actor summaries validate route schemas and actor-to-actor layouts.
 // Direct Frame edges also require matching local selectors; tag remapping
 // is not implemented. External producers must agree on one encoding.
-// The 3 aliased lane(s)
-// below may reorder across source ports; these muxes do not implement general
-// Erlang same-sender lane ordering.
+// One typed actor egress feeds one queue per source/recipient lane; the 3
+// lane(s) reached through multiple source ports retain actor action order.
 // 2 startup prefix(es) emit all target startup frames before
 // receiving that target's first routed frame.
 
@@ -18,13 +17,8 @@ import phi_halo_cell;
 
 const CHANNEL_DEPTH = u32:1;
 
-// Aliased-port lanes permitted to reorder in this fixture:
-//   data (phenom_data_cell) [east,north,south,west] -> {actor,syndrome} (phenom_syndrome_cell)
-//   phi (phi_halo_cell) [east,north,south,west] -> {actor,phi} (phi_halo_cell)
-//   syndrome (phenom_syndrome_cell) [east,north,south,west] -> {actor,data} (phenom_data_cell)
-
-// Queued fanout: source completion is acceptance by the common actor-output
-// channel; the downstream distributor then waits for every branch channel.
+// 1 queued fanout route(s) complete at actor-egress acceptance;
+// their source router subsequently waits for every lane queue.
 
 proc FrameRelay {
   frame_in: chan<axis::Frame> in;
@@ -44,25 +38,100 @@ proc FrameRelay {
   }
 }
 
-proc QueuedFanout2 {
-  frame_in: chan<axis::Frame> in;
-  branch_0_out: chan<axis::Frame> out;
-  branch_1_out: chan<axis::Frame> out;
+proc ActorRouter0 {
+  egress_in: chan<phenom_data_cell::Egress> in;
+  actor_0_lane_0_out: chan<axis::Frame> out;
 
-  config(frame_in: chan<axis::Frame> in,
-         branch_0_out: chan<axis::Frame> out,
-         branch_1_out: chan<axis::Frame> out
+  config(egress_in: chan<phenom_data_cell::Egress> in,
+         actor_0_lane_0_out: chan<axis::Frame> out
   ) {
-    (frame_in, branch_0_out, branch_1_out)
+    (egress_in, actor_0_lane_0_out)
   }
 
   init { () }
 
   next(state: ()) {
-    let (tok, frame) = recv(join(), frame_in);
-    let branch_0_tok = send(tok, branch_0_out, frame);
-    let branch_1_tok = send(tok, branch_1_out, frame);
-    let _done = join(branch_0_tok, branch_1_tok);
+    let (tok, egress) = recv(join(), egress_in);
+    let _route_tok = match egress.port {
+      phenom_data_cell::OutputPort::NORTH =>
+        send(tok, actor_0_lane_0_out, egress.frame),
+      phenom_data_cell::OutputPort::EAST =>
+        send(tok, actor_0_lane_0_out, egress.frame),
+      phenom_data_cell::OutputPort::WEST =>
+        send(tok, actor_0_lane_0_out, egress.frame),
+      phenom_data_cell::OutputPort::SOUTH =>
+        send(tok, actor_0_lane_0_out, egress.frame),
+    };
+    state
+  }
+}
+
+proc ActorRouter1 {
+  egress_in: chan<phi_halo_cell::Egress> in;
+  actor_1_lane_1_out: chan<axis::Frame> out;
+  actor_1_lane_2_out: chan<axis::Frame> out;
+
+  config(egress_in: chan<phi_halo_cell::Egress> in,
+         actor_1_lane_1_out: chan<axis::Frame> out,
+         actor_1_lane_2_out: chan<axis::Frame> out
+  ) {
+    (egress_in, actor_1_lane_1_out, actor_1_lane_2_out)
+  }
+
+  init { () }
+
+  next(state: ()) {
+    let (tok, egress) = recv(join(), egress_in);
+    let _route_tok = match egress.port {
+      phi_halo_cell::OutputPort::NORTH =>
+        send(tok, actor_1_lane_1_out, egress.frame),
+      phi_halo_cell::OutputPort::EAST =>
+        send(tok, actor_1_lane_1_out, egress.frame),
+      phi_halo_cell::OutputPort::WEST =>
+        send(tok, actor_1_lane_1_out, egress.frame),
+      phi_halo_cell::OutputPort::SOUTH =>
+        send(tok, actor_1_lane_1_out, egress.frame),
+      phi_halo_cell::OutputPort::SYNDROME =>
+        send(tok, actor_1_lane_2_out, egress.frame),
+    };
+    state
+  }
+}
+
+proc ActorRouter2 {
+  egress_in: chan<phenom_syndrome_cell::Egress> in;
+  actor_2_lane_3_out: chan<axis::Frame> out;
+  actor_2_lane_4_out: chan<axis::Frame> out;
+  actor_2_lane_5_out: chan<axis::Frame> out;
+
+  config(egress_in: chan<phenom_syndrome_cell::Egress> in,
+         actor_2_lane_3_out: chan<axis::Frame> out,
+         actor_2_lane_4_out: chan<axis::Frame> out,
+         actor_2_lane_5_out: chan<axis::Frame> out
+  ) {
+    (egress_in, actor_2_lane_3_out, actor_2_lane_4_out, actor_2_lane_5_out)
+  }
+
+  init { () }
+
+  next(state: ()) {
+    let (tok, egress) = recv(join(), egress_in);
+    let _route_tok = match egress.port {
+      phenom_syndrome_cell::OutputPort::NORTH =>
+        send(tok, actor_2_lane_3_out, egress.frame),
+      phenom_syndrome_cell::OutputPort::EAST =>
+        send(tok, actor_2_lane_3_out, egress.frame),
+      phenom_syndrome_cell::OutputPort::WEST =>
+        send(tok, actor_2_lane_3_out, egress.frame),
+      phenom_syndrome_cell::OutputPort::SOUTH =>
+        send(tok, actor_2_lane_3_out, egress.frame),
+      phenom_syndrome_cell::OutputPort::PHI =>
+        {
+        let lane_4_tok = send(tok, actor_2_lane_4_out, egress.frame);
+        let lane_5_tok = send(tok, actor_2_lane_5_out, egress.frame);
+        join(lane_4_tok, lane_5_tok)
+      },
+    };
     state
   }
 }
@@ -126,82 +195,48 @@ pub proc Top {
     // Actor data uses phenom_data_cell output ABI order [north,east,west,south].
     let (actor_0_req_p, actor_0_req_c) = chan<axis::Frame, CHANNEL_DEPTH>("actor_0_req");
     let (actor_0_admit_p, actor_0_admit_c) = chan<u1, CHANNEL_DEPTH>("actor_0_admit");
-    let (actor_0_output_0_p, actor_0_output_0_c) = chan<axis::Frame, CHANNEL_DEPTH>("actor_0_output_0");
-    let (actor_0_output_1_p, actor_0_output_1_c) = chan<axis::Frame, CHANNEL_DEPTH>("actor_0_output_1");
-    let (actor_0_output_2_p, actor_0_output_2_c) = chan<axis::Frame, CHANNEL_DEPTH>("actor_0_output_2");
-    let (actor_0_output_3_p, actor_0_output_3_c) = chan<axis::Frame, CHANNEL_DEPTH>("actor_0_output_3");
+    let (actor_0_egress_p, actor_0_egress_c) = chan<phenom_data_cell::Egress, u32:4>("actor_0_egress");
     // Actor phi uses phi_halo_cell output ABI order [north,east,west,south,syndrome].
     let (actor_1_req_p, actor_1_req_c) = chan<axis::Frame, CHANNEL_DEPTH>("actor_1_req");
     let (actor_1_admit_p, actor_1_admit_c) = chan<u1, CHANNEL_DEPTH>("actor_1_admit");
-    let (actor_1_output_0_p, actor_1_output_0_c) = chan<axis::Frame, CHANNEL_DEPTH>("actor_1_output_0");
-    let (actor_1_output_1_p, actor_1_output_1_c) = chan<axis::Frame, CHANNEL_DEPTH>("actor_1_output_1");
-    let (actor_1_output_2_p, actor_1_output_2_c) = chan<axis::Frame, CHANNEL_DEPTH>("actor_1_output_2");
-    let (actor_1_output_3_p, actor_1_output_3_c) = chan<axis::Frame, CHANNEL_DEPTH>("actor_1_output_3");
-    let (actor_1_output_4_p, actor_1_output_4_c) = chan<axis::Frame, CHANNEL_DEPTH>("actor_1_output_4");
+    let (actor_1_egress_p, actor_1_egress_c) = chan<phi_halo_cell::Egress, u32:4>("actor_1_egress");
     // Actor syndrome uses phenom_syndrome_cell output ABI order [north,east,west,south,phi].
     let (actor_2_req_p, actor_2_req_c) = chan<axis::Frame, CHANNEL_DEPTH>("actor_2_req");
     let (actor_2_admit_p, actor_2_admit_c) = chan<u1, CHANNEL_DEPTH>("actor_2_admit");
-    let (actor_2_output_0_p, actor_2_output_0_c) = chan<axis::Frame, CHANNEL_DEPTH>("actor_2_output_0");
-    let (actor_2_output_1_p, actor_2_output_1_c) = chan<axis::Frame, CHANNEL_DEPTH>("actor_2_output_1");
-    let (actor_2_output_2_p, actor_2_output_2_c) = chan<axis::Frame, CHANNEL_DEPTH>("actor_2_output_2");
-    let (actor_2_output_3_p, actor_2_output_3_c) = chan<axis::Frame, CHANNEL_DEPTH>("actor_2_output_3");
-    let (actor_2_output_4_p, actor_2_output_4_c) = chan<axis::Frame, CHANNEL_DEPTH>("actor_2_output_4");
+    let (actor_2_egress_p, actor_2_egress_c) = chan<phenom_syndrome_cell::Egress, u32:4>("actor_2_egress");
     spawn phenom_data_cell::Service(
       actor_0_req_c,
-      actor_0_output_0_p,
-      actor_0_output_1_p,
-      actor_0_output_2_p,
-      actor_0_output_3_p,
+      actor_0_egress_p,
       actor_0_admit_p);
     spawn phi_halo_cell::Service(
       actor_1_req_c,
-      actor_1_output_0_p,
-      actor_1_output_1_p,
-      actor_1_output_2_p,
-      actor_1_output_3_p,
-      actor_1_output_4_p,
+      actor_1_egress_p,
       actor_1_admit_p);
     spawn phenom_syndrome_cell::Service(
       actor_2_req_c,
-      actor_2_output_0_p,
-      actor_2_output_1_p,
-      actor_2_output_2_p,
-      actor_2_output_3_p,
-      actor_2_output_4_p,
+      actor_2_egress_p,
       actor_2_admit_p);
-    let (route_13_branch_0_p, route_13_branch_0_c) = chan<axis::Frame, CHANNEL_DEPTH>("route_13_branch_0");
-    let (route_13_branch_1_p, route_13_branch_1_c) = chan<axis::Frame, CHANNEL_DEPTH>("route_13_branch_1");
-    spawn QueuedFanout2(actor_2_output_4_c, route_13_branch_0_p, route_13_branch_1_p);
-    let (actor_0_ingress_mux_0_0_p, actor_0_ingress_mux_0_0_c) = chan<axis::Frame, CHANNEL_DEPTH>("actor_0_ingress_mux_0_0");
-    spawn axis::FrameMux2(actor_2_output_0_c, actor_2_output_1_c, actor_0_ingress_mux_0_0_p);
-    let (actor_0_ingress_mux_0_1_p, actor_0_ingress_mux_0_1_c) = chan<axis::Frame, CHANNEL_DEPTH>("actor_0_ingress_mux_0_1");
-    spawn axis::FrameMux2(actor_2_output_2_c, actor_2_output_3_c, actor_0_ingress_mux_0_1_p);
-    let (actor_0_ingress_mux_1_0_p, actor_0_ingress_mux_1_0_c) = chan<axis::Frame, CHANNEL_DEPTH>("actor_0_ingress_mux_1_0");
-    spawn axis::FrameMux2(actor_0_ingress_mux_0_0_c, actor_0_ingress_mux_0_1_c, actor_0_ingress_mux_1_0_p);
+    let (actor_0_lane_0_p, actor_0_lane_0_c) = chan<axis::Frame, CHANNEL_DEPTH>("actor_0_lane_0");
+    let (actor_1_lane_1_p, actor_1_lane_1_c) = chan<axis::Frame, CHANNEL_DEPTH>("actor_1_lane_1");
+    let (actor_1_lane_2_p, actor_1_lane_2_c) = chan<axis::Frame, CHANNEL_DEPTH>("actor_1_lane_2");
+    let (actor_2_lane_3_p, actor_2_lane_3_c) = chan<axis::Frame, CHANNEL_DEPTH>("actor_2_lane_3");
+    let (actor_2_lane_4_p, actor_2_lane_4_c) = chan<axis::Frame, CHANNEL_DEPTH>("actor_2_lane_4");
+    let (actor_2_lane_5_p, actor_2_lane_5_c) = chan<axis::Frame, CHANNEL_DEPTH>("actor_2_lane_5");
+    spawn ActorRouter0(actor_0_egress_c, actor_0_lane_0_p);
+    spawn ActorRouter1(actor_1_egress_c, actor_1_lane_1_p, actor_1_lane_2_p);
+    spawn ActorRouter2(actor_2_egress_c, actor_2_lane_3_p, actor_2_lane_4_p, actor_2_lane_5_p);
     let (startup_0_prefix_p, startup_0_prefix_c) = chan<axis::Frame, CHANNEL_DEPTH>("startup_0_prefix");
-    spawn StartupPrefix0(actor_0_ingress_mux_1_0_c, startup_0_prefix_p);
+    spawn StartupPrefix0(actor_2_lane_3_c, startup_0_prefix_p);
     spawn axis::ReservedFrame(startup_0_prefix_c, actor_0_req_p, actor_0_admit_c);
     let (actor_1_ingress_mux_0_0_p, actor_1_ingress_mux_0_0_c) = chan<axis::Frame, CHANNEL_DEPTH>("actor_1_ingress_mux_0_0");
-    spawn axis::FrameMux2(actor_1_output_0_c, actor_1_output_1_c, actor_1_ingress_mux_0_0_p);
-    let (actor_1_ingress_mux_0_1_p, actor_1_ingress_mux_0_1_c) = chan<axis::Frame, CHANNEL_DEPTH>("actor_1_ingress_mux_0_1");
-    spawn axis::FrameMux2(actor_1_output_2_c, actor_1_output_3_c, actor_1_ingress_mux_0_1_p);
-    let (actor_1_ingress_mux_1_0_p, actor_1_ingress_mux_1_0_c) = chan<axis::Frame, CHANNEL_DEPTH>("actor_1_ingress_mux_1_0");
-    spawn axis::FrameMux2(actor_1_ingress_mux_0_0_c, actor_1_ingress_mux_0_1_c, actor_1_ingress_mux_1_0_p);
-    let (actor_1_ingress_mux_2_0_p, actor_1_ingress_mux_2_0_c) = chan<axis::Frame, CHANNEL_DEPTH>("actor_1_ingress_mux_2_0");
-    spawn axis::FrameMux2(actor_1_ingress_mux_1_0_c, route_13_branch_0_c, actor_1_ingress_mux_2_0_p);
-    spawn axis::ReservedFrame(actor_1_ingress_mux_2_0_c, actor_1_req_p, actor_1_admit_c);
+    spawn axis::FrameMux2(actor_1_lane_1_c, actor_2_lane_4_c, actor_1_ingress_mux_0_0_p);
+    spawn axis::ReservedFrame(actor_1_ingress_mux_0_0_c, actor_1_req_p, actor_1_admit_c);
     let (actor_2_ingress_mux_0_0_p, actor_2_ingress_mux_0_0_c) = chan<axis::Frame, CHANNEL_DEPTH>("actor_2_ingress_mux_0_0");
-    spawn axis::FrameMux2(actor_0_output_0_c, actor_0_output_1_c, actor_2_ingress_mux_0_0_p);
-    let (actor_2_ingress_mux_0_1_p, actor_2_ingress_mux_0_1_c) = chan<axis::Frame, CHANNEL_DEPTH>("actor_2_ingress_mux_0_1");
-    spawn axis::FrameMux2(actor_0_output_2_c, actor_0_output_3_c, actor_2_ingress_mux_0_1_p);
-    let (actor_2_ingress_mux_1_0_p, actor_2_ingress_mux_1_0_c) = chan<axis::Frame, CHANNEL_DEPTH>("actor_2_ingress_mux_1_0");
-    spawn axis::FrameMux2(actor_2_ingress_mux_0_0_c, actor_2_ingress_mux_0_1_c, actor_2_ingress_mux_1_0_p);
-    let (actor_2_ingress_mux_2_0_p, actor_2_ingress_mux_2_0_c) = chan<axis::Frame, CHANNEL_DEPTH>("actor_2_ingress_mux_2_0");
-    spawn axis::FrameMux2(actor_2_ingress_mux_1_0_c, actor_1_output_4_c, actor_2_ingress_mux_2_0_p);
+    spawn axis::FrameMux2(actor_0_lane_0_c, actor_1_lane_2_c, actor_2_ingress_mux_0_0_p);
     let (startup_1_prefix_p, startup_1_prefix_c) = chan<axis::Frame, CHANNEL_DEPTH>("startup_1_prefix");
-    spawn StartupPrefix1(actor_2_ingress_mux_2_0_c, startup_1_prefix_p);
+    spawn StartupPrefix1(actor_2_ingress_mux_0_0_c, startup_1_prefix_p);
     spawn axis::ReservedFrame(startup_1_prefix_c, actor_2_req_p, actor_2_admit_c);
-    spawn FrameRelay(route_13_branch_1_c, announcement_out);
+    spawn FrameRelay(actor_2_lane_5_c, announcement_out);
 
     (announcement_out,)
   }

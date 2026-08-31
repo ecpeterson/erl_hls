@@ -78,9 +78,9 @@ done
     --fifo_module= \
     phi_halo_cell.opt.ir > phi_halo_cell.v
 
-# Keep independent actor codegen for the source-adjacent goldens. The combined
-# frame topology below imports these DSLX modules and generates one collision-
-# free RTL graph rather than composing their separately generated Verilog.
+# Keep independent actor codegen as a compile check. The combined frame
+# topology below imports these DSLX modules and generates one collision-free
+# RTL graph rather than composing their separately generated Verilog.
 for actor in phenom_data_cell phenom_syndrome_cell; do
     "$xls_root/ir_converter_main" \
         --warnings_as_errors=false \
@@ -118,6 +118,36 @@ done
     --fifo_module= \
     phi_phenom_topology.opt.ir > phi_phenom_topology.v
 
+# The regular torus source retains one family node and elaboration-time loops;
+# this compile/codegen check proves the pinned XLS build accepts its channel
+# arrays, statically indexed polling merge, and wrapped node wiring.
+"$xls_root/ir_converter_main" \
+    --warnings_as_errors=false \
+    --dslx_path=. \
+    --dslx_stdlib_path="$stdlib" \
+    --top=Top \
+    phi_torus_topology.x > phi_torus_topology.ir
+
+"$xls_root/opt_main" \
+    phi_torus_topology.ir > phi_torus_topology.opt.ir
+
+"$xls_root/codegen_main" \
+    --pipeline_stages=1 \
+    --delay_model=unit \
+    --use_system_verilog=false \
+    --reset=reset \
+    --fifo_module= \
+    phi_torus_topology.opt.ir > phi_torus_topology.v
+
+iverilog \
+    -g2012 \
+    -s phi_torus_topology_tb \
+    -o phi_torus_topology.vvp \
+    phi_torus_topology_tb.sv \
+    phi_torus_topology.v
+
+vvp phi_torus_topology.vvp
+
 iverilog \
     -g2012 \
     -s phi_halo_cell_tb \
@@ -135,6 +165,35 @@ iverilog \
     phi_phenom_topology.v
 
 vvp phi_phenom_topology.vvp
+
+# A small observable fixture distinguishes source action order from the actor's
+# declared port order and holds the shared external lane under backpressure.
+"$xls_root/ir_converter_main" \
+    --warnings_as_errors=false \
+    --dslx_path=. \
+    --dslx_stdlib_path="$stdlib" \
+    --top=Top \
+    ordered_egress_topology.x > ordered_egress_topology.ir
+
+"$xls_root/opt_main" \
+    ordered_egress_topology.ir > ordered_egress_topology.opt.ir
+
+"$xls_root/codegen_main" \
+    --pipeline_stages=1 \
+    --delay_model=unit \
+    --use_system_verilog=false \
+    --reset=reset \
+    --fifo_module= \
+    ordered_egress_topology.opt.ir > ordered_egress_topology.v
+
+iverilog \
+    -g2012 \
+    -s ordered_egress_topology_tb \
+    -o ordered_egress_topology.vvp \
+    ordered_egress_topology_tb.sv \
+    ordered_egress_topology.v
+
+vvp ordered_egress_topology.vvp
 
 "$xls_root/ir_converter_main" \
     --warnings_as_errors=false \
