@@ -120,7 +120,7 @@ indexed_tuple_actor_ids_normalize_and_emit_without_mangling_test() ->
     },
     Generated = iolist_to_binary(xls_topology_dslx:emit(Plan, Profile)),
     ?assertNotEqual(nomatch, binary:match(Generated, <<
-        "{phi,17,{tile,2,3}} (phi_halo_cell)"
+        "Actor {phi,17,{tile,2,3}} uses phi_halo_cell"
     >>)),
     ?assertNotEqual(nomatch, binary:match(
         Generated,
@@ -315,19 +315,25 @@ generated_topology_has_expected_physical_shape_test() ->
     Generated = iolist_to_binary(phi_phenom_topology_dslx:to_dslx()),
     ?assertEqual(3, count(Generated, <<"::Service(">>)),
     ?assertEqual(3, count(Generated, <<"spawn axis::ReservedFrame(">>)),
-    ?assertEqual(11, count(Generated, <<"spawn axis::FrameMux2(">>)),
-    ?assertEqual(1, count(Generated, <<"spawn QueuedFanout2(">>)),
-    ?assertEqual(0, count(Generated, <<"BufferedFanout">>)),
+    ?assertEqual(2, count(Generated, <<"spawn axis::FrameMux2(">>)),
+    ?assertEqual(3, count(Generated, <<"proc ActorRouter">>)),
+    ?assertEqual(3, count(Generated, <<"spawn ActorRouter">>)),
+    ?assertEqual(3, count(Generated, <<"::Egress, u32:4>">>)),
+    ?assertEqual(0, count(Generated, <<"QueuedFanout">>)),
     ?assertEqual(2, count(Generated, <<"proc StartupPrefix">>)),
     ?assertEqual(2, count(Generated, <<"spawn StartupPrefix">>)),
     ?assertNotEqual(nomatch, binary:match(
         Generated,
-        <<"Aliased-port lanes permitted to reorder in this fixture">>
+        <<"lane(s) reached through multiple source ports retain actor action ",
+            "order">>
     )),
-    ?assertNotEqual(nomatch, binary:match(Generated, <<
-        "data (phenom_data_cell) [east,north,south,west] -> "
-        "{actor,syndrome} (phenom_syndrome_cell)"
-    >>)),
+    ?assertEqual(nomatch, binary:match(Generated, <<"may_reorder">>)),
+    ?assertNotEqual(nomatch, binary:match(Generated,
+        <<"phenom_data_cell::OutputPort::NORTH =>\n"
+          "        send(tok, actor_0_lane_0_out, egress.frame),\n"
+          "      phenom_data_cell::OutputPort::EAST =>\n"
+          "        send(tok, actor_0_lane_0_out, egress.frame)">>
+    )),
     ?assertNotEqual(
         nomatch,
         binary:match(Generated, <<"u64:0x800000009E3779B9">>)
@@ -406,27 +412,25 @@ generated_topology_matches_checked_in_artifact_test() ->
     Generated = iolist_to_binary(phi_phenom_topology_dslx:to_dslx()),
     ?assertEqual(Expected, Generated).
 
-dslx_backend_requires_aliased_port_order_policy_test() ->
-    Plan = hls_topology:from_module(phi_phenom_topology),
-    Profile = phi_phenom_topology_dslx:profile(),
-    try xls_topology_dslx:emit(
-        Plan,
-        Profile#{aliased_port_order := preserve}
-    ) of
-        _ -> ?assert(false)
-    catch
-        error:{unsupported_dslx_aliased_port_order, preserve, Lanes} ->
-            ?assertEqual(expected_phi_aliased_lanes(), Lanes)
-    end.
-
-dslx_backend_rejects_unknown_aliased_port_order_policy_test() ->
+dslx_backend_rejects_removed_alias_escape_hatch_test() ->
     Plan = hls_topology:from_module(phi_phenom_topology),
     Profile = phi_phenom_topology_dslx:profile(),
     ?assertError(
-        {invalid_dslx_aliased_port_order, accidental},
+        {invalid_dslx_profile_keys, [], [aliased_port_order]},
         xls_topology_dslx:emit(
             Plan,
-            Profile#{aliased_port_order := accidental}
+            Profile#{aliased_port_order => may_reorder}
+        )
+    ).
+
+dslx_backend_rejects_channel_depth_wider_than_u32_test() ->
+    Plan = hls_topology:from_module(phi_phenom_topology),
+    Profile = phi_phenom_topology_dslx:profile(),
+    ?assertError(
+        {invalid_dslx_channel_depth, 16#100000000},
+        xls_topology_dslx:emit(
+            Plan,
+            Profile#{channel_depth := 16#100000000}
         )
     ).
 
@@ -466,11 +470,10 @@ dslx_backend_rejects_ambiguous_external_selector_test() ->
                 shared, 3, _ExistingSchema, _NewSchema} -> ok
     end.
 
-dslx_backend_accepts_preserved_nonaliased_graph_test() ->
+dslx_backend_accepts_nonaliased_graph_test() ->
     Plan = hls_topology:normalize(nonaliased_phi_pair()),
     Profile = (phi_phenom_topology_dslx:profile())#{
-        name := nonaliased_phi_pair,
-        aliased_port_order := preserve
+        name := nonaliased_phi_pair
     },
     Generated = iolist_to_binary(xls_topology_dslx:emit(Plan, Profile)),
     ?assertEqual(1, count(Generated, <<"spawn phi_halo_cell::Service(">>)),
@@ -496,7 +499,7 @@ dslx_backend_rejects_stale_cached_lanes_test() ->
         error:{inconsistent_dslx_plan_lanes, _Realized, _Cached} -> ok
     end.
 
-dslx_backend_rejects_aliased_external_lane_test() ->
+dslx_backend_supports_aliased_external_lane_test() ->
     Spec = phi_phenom_topology:topology(),
     Routes = [
         case Route of
@@ -517,15 +520,15 @@ dslx_backend_rejects_aliased_external_lane_test() ->
         ]}],
         routes := Routes
     }),
-    try xls_topology_dslx:emit(
+    Generated = iolist_to_binary(xls_topology_dslx:emit(
         Plan,
         phi_phenom_topology_dslx:profile()
-    ) of
-        _ -> ?assert(false)
-    catch
-        error:{unsupported_dslx_aliased_external_lane,
-                phi, announcement} -> ok
-    end.
+    )),
+    ?assertEqual(
+        [east, north],
+        maps:get(source_ports, lane(Plan, phi, {external, announcement}))
+    ),
+    ?assertNotEqual(nomatch, binary:match(Generated, <<"proc ActorRouter">>)).
 
 dslx_backend_requires_identifier_external_names_test() ->
     Spec = phi_phenom_topology:topology(),
@@ -674,31 +677,6 @@ replace_route(Spec, Source, Replacement) ->
         || Route <- maps:get(routes, Spec)
     ]}.
 
-expected_phi_aliased_lanes() ->
-    [
-        #{
-            source => data,
-            source_module => phenom_data_cell,
-            source_ports => [east, north, south, west],
-            destination => {actor, syndrome},
-            destination_module => phenom_syndrome_cell
-        },
-        #{
-            source => phi,
-            source_module => phi_halo_cell,
-            source_ports => [east, north, south, west],
-            destination => {actor, phi},
-            destination_module => phi_halo_cell
-        },
-        #{
-            source => syndrome,
-            source_module => phenom_syndrome_cell,
-            source_ports => [east, north, south, west],
-            destination => {actor, data},
-            destination_module => phenom_data_cell
-        }
-    ].
-
 nonaliased_phi_pair() ->
     Directions = [north, east, west, south],
     PhiExternalIds = #{
@@ -722,11 +700,12 @@ nonaliased_phi_pair() ->
         || Port <- Directions
     ],
     #{
-        version => 0,
+        version => 1,
         actors => #{
             phi => phi_halo_cell,
             syndrome => phenom_syndrome_cell
         },
+        families => #{},
         externals => PhiExternals ++ QueryExternals,
         routes =>
             [
@@ -741,31 +720,35 @@ nonaliased_phi_pair() ->
                 || Port <- Directions
             ] ++
             [{{syndrome, phi}, [{actor, phi}]}],
+        route_relations => [],
         startup => []
     }.
 
 layout_fixture_topology() ->
     #{
-        version => 0,
+        version => 1,
         actors => #{
             source => hls_topology_source_fixture,
             destination => hls_topology_layout_fixture
         },
+        families => #{},
         externals => [{sink, out, [message]}],
         routes => [
             {{source, out}, [{actor, destination}]},
             {{destination, out}, [{external, sink}]}
         ],
+        route_relations => [],
         startup => []
     }.
 
 reordered_fixture_topology() ->
     #{
-        version => 0,
+        version => 1,
         actors => #{
             source => hls_topology_source_fixture,
             destination => hls_topology_reordered_fixture
         },
+        families => #{},
         externals => [
             {message_sink, out, [message]},
             {padding_sink, out, [padding]}
@@ -775,16 +758,18 @@ reordered_fixture_topology() ->
             {{destination, message_out}, [{external, message_sink}]},
             {{destination, padding_out}, [{external, padding_sink}]}
         ],
+        route_relations => [],
         startup => []
     }.
 
 external_encoding_fixture_topology() ->
     #{
-        version => 0,
+        version => 1,
         actors => #{
             source => hls_topology_source_fixture,
             reordered => hls_topology_reordered_fixture
         },
+        families => #{},
         externals => [
             {shared, out, [message]},
             {padding_sink, out, [padding]}
@@ -794,16 +779,18 @@ external_encoding_fixture_topology() ->
             {{reordered, message_out}, [{external, shared}]},
             {{reordered, padding_out}, [{external, padding_sink}]}
         ],
+        route_relations => [],
         startup => []
     }.
 
 external_selector_fixture_topology() ->
     #{
-        version => 0,
+        version => 1,
         actors => #{
             source => hls_topology_source_fixture,
             reordered => hls_topology_reordered_fixture
         },
+        families => #{},
         externals => [
             {shared, out, [message, padding]},
             {message_sink, out, [message]}
@@ -813,15 +800,14 @@ external_selector_fixture_topology() ->
             {{reordered, message_out}, [{external, message_sink}]},
             {{reordered, padding_out}, [{external, shared}]}
         ],
+        route_relations => [],
         startup => []
     }.
 
 fixture_profile(Name) ->
     #{
-        version => 0,
         name => Name,
-        channel_depth => 1,
-        aliased_port_order => preserve
+        channel_depth => 1
     }.
 
 rename_actor_id(Spec, OldId, NewId) ->

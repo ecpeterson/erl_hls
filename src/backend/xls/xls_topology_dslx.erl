@@ -17,14 +17,10 @@ This is intentionally an executable application fixture, not a general
 semantics-preserving topology backend. Logical route schemas and layouts are
 checked from emitted actor summaries. Direct Frame transport additionally
 requires each routed schema to have the same local selector at both actors;
-selector remapping remains a later backend feature. The profile's
-`aliased_port_order` setting says whether the fixture permits the current mux
-trees to reorder messages sent through different ports of one actor to one
-destination. The generator derives the affected lanes from the semantic plan;
-the physical profile does not repeat their actors, modules, ports, or routes.
-`may_reorder` is an explicit fixture limitation, not a proof that an
-application is permutation-invariant and not general Erlang lane-ordering
-support.
+selector remapping remains a later backend feature. Each generated actor has
+one source-ordered typed egress. The topology router maps it into one queue per
+logical source/recipient lane, so messages sent through aliased ports cannot be
+re-arbitrated before that recipient.
 
 The backend implements only `queued` multi-recipient delivery: the actor event
 completes when its one common egress channel accepts the frame, after which a
@@ -34,11 +30,14 @@ in list order before it performs its first routed-input receive.
 
 Startup quiescence is checked from the statically known initial phase and its
 source-ordered entry effects. Actor callbacks are not executed by topology
-generation.
+generation. Regular-family plans are delegated to the narrower channel-array
+backend in `xls_topology_family_dslx`.
 """.
 
 -export([emit/2, from_module/2]).
 -export_type([profile/0]).
+
+-define(U32_MAX, 16#ffffffff).
 
 -type profile() :: map().
 
@@ -51,18 +50,24 @@ from_module(TopologyModule, Profile) when is_atom(TopologyModule) ->
 
 -doc "Emits deterministic DSLX from one normalized plan and physical profile.".
 -spec emit(hls_topology:plan(), profile()) -> iolist().
-emit(Plan, Profile) ->
-    render(lower(Plan, Profile)).
+emit(#{actors := [_ | _], families := [_ | _]}, _Profile) ->
+    error(mixed_topology);
+emit(Plan = #{families := []}, Profile) ->
+    render(lower(Plan, Profile));
+emit(Plan = #{actors := [], families := [_ | _]}, Profile) ->
+    xls_topology_family_dslx:emit(Plan, Profile);
+emit(Plan, _Profile) ->
+    error({invalid_topology_plan, Plan}).
 
 %%%
 %%% Backend lowering and validation
 %%%
 
-lower(Plan, Profile) ->
-    case maps:get(version, Plan, '$missing') of
-        0 -> ok;
-        Version -> error({unsupported_dslx_topology_version, Version})
-    end,
+lower(Plan = #{
+        families := [],
+        route_relations := [],
+        lane_relations := []
+    }, Profile) ->
     Actors = annotate_actors(maps:get(actors, Plan)),
     Externals = annotate_externals(maps:get(externals, Plan)),
     ActorIndex = maps:from_list([
@@ -72,6 +77,11 @@ lower(Plan, Profile) ->
     ok = validate_route_selectors(maps:get(routes, Plan), ActorIndex),
     ok = validate_startup_quiescence(maps:get(startup, Plan), ActorIndex),
     Routes = physical_route_order(Actors, maps:get(routes, Plan)),
+    Lanes = annotate_lanes(
+        maps:get(lanes, Plan),
+        Actors,
+        Externals
+    ),
     Startup = pack_startup(maps:get(startup, Plan), ActorIndex),
     #{
         name => maps:get(name, Physical),
@@ -79,30 +89,21 @@ lower(Plan, Profile) ->
         actors => Actors,
         externals => Externals,
         routes => Routes,
-        startup => Startup,
-        aliased_lanes => maps:get(aliased_lanes, Physical)
+        lanes => Lanes,
+        startup => Startup
     }.
 
 validate_profile(Profile, Plan) when is_map(Profile) ->
-    Required = lists:sort([
-        aliased_port_order,
-        channel_depth,
-        name,
-        version
-    ]),
+    Required = lists:sort([channel_depth, name]),
     Keys = lists:sort(maps:keys(Profile)),
     case {Required -- Keys, Keys -- Required} of
         {[], []} -> ok;
         {Missing, Unknown} ->
             error({invalid_dslx_profile_keys, Missing, Unknown})
     end,
-    case maps:get(version, Profile) of
-        0 -> ok;
-        Version -> error({unsupported_dslx_profile_version, Version})
-    end,
     Name = identifier(maps:get(name, Profile), topology_name),
     case maps:get(channel_depth, Profile) of
-        Depth when is_integer(Depth), Depth > 0 -> ok;
+        Depth when is_integer(Depth), Depth > 0, Depth =< ?U32_MAX -> ok;
         Depth -> error({invalid_dslx_channel_depth, Depth})
     end,
     RealizedLanes = derive_realized_lanes(maps:get(routes, Plan)),
@@ -111,35 +112,9 @@ validate_profile(Profile, Plan) when is_map(Profile) ->
         CachedLanes -> error({inconsistent_dslx_plan_lanes,
             RealizedLanes, CachedLanes})
     end,
-    AliasedLanes = describe_aliased_lanes(
-        RealizedLanes,
-        maps:get(actors, Plan)
-    ),
-    ok = validate_aliased_port_order(
-        maps:get(aliased_port_order, Profile),
-        AliasedLanes
-    ),
-    Profile#{
-        name := Name,
-        aliased_lanes => AliasedLanes
-    };
+    Profile#{name := Name};
 validate_profile(Profile, _Plan) ->
     error({invalid_dslx_profile, Profile}).
-
-validate_aliased_port_order(preserve, []) -> ok;
-validate_aliased_port_order(preserve, Lanes) ->
-    error({unsupported_dslx_aliased_port_order, preserve, Lanes});
-validate_aliased_port_order(may_reorder, _Lanes) -> ok;
-validate_aliased_port_order(Policy, _Lanes) ->
-    error({invalid_dslx_aliased_port_order, Policy}).
-
-describe_aliased_lanes(Lanes, Actors) ->
-    ActorIndex = maps:from_list([
-        {maps:get(id, Actor), Actor} || Actor <- Actors
-    ]),
-    [describe_aliased_lane(Lane, ActorIndex)
-        || Lane <- Lanes,
-           length(maps:get(source_ports, Lane)) > 1].
 
 derive_realized_lanes(Routes) ->
     LanePorts = lists:foldl(
@@ -172,25 +147,6 @@ derive_realized_lanes(Routes) ->
                lists:sort(maps:to_list(LanePorts))
     ].
 
-describe_aliased_lane(Lane, ActorIndex) ->
-    Source = maps:get(source, Lane),
-    Destination = maps:get(destination, Lane),
-    SourceActor = maps:get(Source, ActorIndex),
-    DestinationModule = case Destination of
-        {actor, DestinationId} ->
-            maps:get(module, maps:get(DestinationId, ActorIndex));
-        {external, ExternalId} ->
-            error({unsupported_dslx_aliased_external_lane,
-                Source, ExternalId});
-        _ -> error({invalid_dslx_aliased_destination, Destination})
-    end,
-    #{
-        source => Source,
-        source_module => maps:get(module, SourceActor),
-        source_ports => maps:get(source_ports, Lane),
-        destination => Destination,
-        destination_module => DestinationModule
-    }.
 
 annotate_actors(Actors) ->
     Interfaces = maps:from_list([
@@ -212,17 +168,15 @@ annotate_actor(Index, Actor, Interfaces) ->
         end,
         Outputs
     ),
-    OutputChannels = maps:from_list([
-        {Port, ["actor_", integer_to_list(Index), "_output_",
-            integer_to_list(OutputIndex)]}
-        || {OutputIndex, Port} <- lists:enumerate(0, Outputs)
-    ]),
     Actor#{
         index => Index,
         interface => maps:get(Module, Interfaces),
         module_name => ModuleName,
         stem => ["actor_", integer_to_list(Index)],
-        output_channels => OutputChannels
+        egress_channel => ["actor_", integer_to_list(Index), "_egress"],
+        egress_depth => max(1, hls_actor_interface:max_entry_effects(
+            maps:get(Module, Interfaces)
+        ))
     }.
 
 annotate_externals(Externals) ->
@@ -236,6 +190,33 @@ annotate_externals(Externals) ->
             stem => ["external_", integer_to_list(Index)]
         }
         || {Index, External} <- lists:enumerate(0, Externals)
+    ].
+
+annotate_lanes(Lanes, Actors, Externals) ->
+    ActorIndex = maps:from_list([
+        {maps:get(id, Actor), Actor} || Actor <- Actors
+    ]),
+    ExternalIndex = maps:from_list([
+        {maps:get(id, External), External} || External <- Externals
+    ]),
+    [
+        begin
+            Source = maps:get(source, Lane),
+            SourceActor = maps:get(Source, ActorIndex),
+            Destination = maps:get(destination, Lane),
+            Lane#{
+                index => Index,
+                destination_key => recipient_key(
+                    Destination,
+                    ActorIndex,
+                    ExternalIndex
+                ),
+                channel => ["actor_",
+                    integer_to_list(maps:get(index, SourceActor)),
+                    "_lane_", integer_to_list(Index)]
+            }
+        end
+        || {Index, Lane} <- lists:enumerate(0, Lanes)
     ].
 
 validate_route_selectors(Routes, ActorIndex) ->
@@ -406,8 +387,7 @@ physical_route_order(Actors, Routes) ->
             || Port <- maps:get(outputs, Actor)]
         || Actor <- Actors
     ]),
-    [Route#{index => Index}
-        || {Index, Route} <- lists:enumerate(0, Ordered)].
+    Ordered.
 
 pack_startup(Startup, ActorIndex) ->
     [
@@ -506,8 +486,8 @@ render(Spec) ->
     Depth = maps:get(depth, Spec),
     RouteGraph = route_graph(
         maps:get(routes, Spec),
+        maps:get(lanes, Spec),
         Actors,
-        Externals,
         Depth
     ),
     {IngressCode, FinalGraph} = ingress_graph(
@@ -520,7 +500,11 @@ render(Spec) ->
     [
         preamble(Spec, FinalGraph),
         relay_proc(Externals),
-        fanout_procs(maps:get(fanout_arities, FinalGraph)),
+        actor_router_procs(
+            Actors,
+            maps:get(routes, FinalGraph),
+            maps:get(lanes, Spec)
+        ),
         startup_procs(maps:get(startup, Spec)),
         top_proc(
             Actors,
@@ -531,107 +515,58 @@ render(Spec) ->
         )
     ].
 
-route_graph(Routes, Actors, Externals, Depth) ->
-    ActorIndex = maps:from_list([
-        {maps:get(id, Actor), Actor} || Actor <- Actors
+route_graph(Routes, Lanes, Actors, Depth) ->
+    lists:foreach(fun validate_route_delivery/1, Routes),
+    LaneIndex = maps:from_list([
+        {{maps:get(source, Lane), maps:get(destination, Lane)}, Lane}
+        || Lane <- Lanes
     ]),
-    ExternalIndex = maps:from_list([
-        {maps:get(id, External), External} || External <- Externals
-    ]),
-    lists:foldl(
-        fun(Route, Graph) ->
-            lower_route(Route, ActorIndex, ExternalIndex, Depth, Graph)
+    Routed = [
+        Route#{lanes => [
+            maps:get({SourceId, Recipient}, LaneIndex)
+            || Recipient <- maps:get(recipients, Route)
+        ]}
+        || Route <- Routes,
+           {SourceId, _Port} <- [maps:get(source, Route)]
+    ],
+    Leaves = lists:foldl(
+        fun(Lane, Acc) ->
+            maps:update_with(
+                maps:get(destination_key, Lane),
+                fun(Existing) -> Existing ++ [consumer(
+                    maps:get(channel, Lane)
+                )] end,
+                [consumer(maps:get(channel, Lane))],
+                Acc
+            )
         end,
-        #{
-            leaves => #{},
-            route_code => [],
-            fanout_arities => []
-        },
-        Routes
-    ).
+        #{},
+        Lanes
+    ),
+    RouteCode = [
+        [frame_channel(maps:get(channel, Lane), Depth) || Lane <- Lanes],
+        [actor_router_spawn(Actor, Lanes) || Actor <- Actors]
+    ],
+    #{
+        leaves => Leaves,
+        route_code => RouteCode,
+        routes => Routed
+    }.
 
-lower_route(Route, ActorIndex, ExternalIndex, Depth, Graph) ->
-    {SourceActorId, Port} = maps:get(source, Route),
-    SourceActor = maps:get(SourceActorId, ActorIndex),
-    SourceChannel = maps:get(Port, maps:get(output_channels, SourceActor)),
+validate_route_delivery(Route) ->
     Recipients = maps:get(recipients, Route),
     case {maps:get(delivery, Route), Recipients} of
-        {direct, [Recipient]} ->
-            add_leaf(
-                recipient_key(Recipient, ActorIndex, ExternalIndex),
-                consumer(SourceChannel),
-                Graph
-            );
-        {queued, [_, _ | _]} ->
-            lower_queued_fanout(
-                Route,
-                SourceChannel,
-                Recipients,
-                ActorIndex,
-                ExternalIndex,
-                Depth,
-                Graph
-            );
+        {direct, [_]} -> ok;
+        {queued, [_, _ | _]} -> ok;
         {Delivery, _} ->
             error({unsupported_dslx_route_delivery,
                 maps:get(source, Route), Delivery, length(Recipients)})
     end.
 
-lower_queued_fanout(
-    Route,
-    SourceChannel,
-    Recipients,
-    ActorIndex,
-    ExternalIndex,
-    Depth,
-    Graph0
-) ->
-    RouteIndex = maps:get(index, Route),
-    Branches = [
-        ["route_", integer_to_list(RouteIndex), "_branch_",
-            integer_to_list(Index)]
-        || {Index, _Recipient} <- lists:enumerate(0, Recipients)
-    ],
-    Declarations = [frame_channel(Channel, Depth) || Channel <- Branches],
-    Spawn = [
-        "    spawn QueuedFanout", integer_to_list(length(Recipients)),
-        "(", consumer(SourceChannel),
-        [[", ", producer(Branch)] || Branch <- Branches],
-        ");\n"
-    ],
-    Graph1 = Graph0#{
-        route_code := maps:get(route_code, Graph0) ++
-            Declarations ++ [Spawn],
-        fanout_arities := lists:usort([
-            length(Recipients) | maps:get(fanout_arities, Graph0)
-        ])
-    },
-    lists:foldl(
-        fun({Recipient, Branch}, Graph) ->
-            add_leaf(
-                recipient_key(Recipient, ActorIndex, ExternalIndex),
-                consumer(Branch),
-                Graph
-            )
-        end,
-        Graph1,
-        lists:zip(Recipients, Branches)
-    ).
-
 recipient_key({actor, Id}, ActorIndex, _ExternalIndex) ->
     {actor, maps:get(index, maps:get(Id, ActorIndex))};
 recipient_key({external, Id}, _ActorIndex, ExternalIndex) ->
     {external, maps:get(index, maps:get(Id, ExternalIndex))}.
-
-add_leaf(Key, Channel, Graph) ->
-    Leaves0 = maps:get(leaves, Graph),
-    Leaves = maps:update_with(
-        Key,
-        fun(Existing) -> Existing ++ [Channel] end,
-        [Channel],
-        Leaves0
-    ),
-    Graph#{leaves := Leaves}.
 
 ingress_graph(Actors, Externals, Startup, Graph0, Depth) ->
     StartupIndex = maps:from_list([
@@ -755,8 +690,16 @@ preamble(Spec, Graph) ->
     Modules = lists:usort([
         maps:get(module_name, Actor) || Actor <- maps:get(actors, Spec)
     ]),
-    AliasedLanes = maps:get(aliased_lanes, Spec),
-    AliasCount = length(AliasedLanes),
+    AliasCount = length([
+        Lane
+        || Lane <- maps:get(lanes, Spec),
+           length(maps:get(source_ports, Lane)) > 1
+    ]),
+    FanoutCount = length([
+        Route
+        || Route <- maps:get(routes, Graph),
+           maps:get(delivery, Route) =:= queued
+    ]),
     StartupCount = length(maps:get(startup, Spec)),
     [
         "// ", maps:get(name, Spec), ".x\n",
@@ -767,12 +710,11 @@ preamble(Spec, Graph) ->
         "// Direct Frame edges also require matching local selectors; tag ",
         "remapping\n",
         "// is not implemented. External producers must agree on one encoding.\n",
-        "// The ",
-        integer_to_list(AliasCount),
-        " aliased lane(s)\n",
-        "// below may reorder across source ports; these muxes do not ",
-        "implement general\n",
-        "// Erlang same-sender lane ordering.\n",
+        "// One typed actor egress feeds one queue per source/recipient lane; ",
+        "the ",
+        integer_to_list(AliasCount), "\n",
+        "// lane(s) reached through multiple source ports retain actor action ",
+        "order.\n",
         "// ", integer_to_list(StartupCount), " startup prefix(es) emit all ",
         "target startup frames before\n",
         "// receiving that target's first routed frame.\n\n",
@@ -781,36 +723,15 @@ preamble(Spec, Graph) ->
         "\n",
         "const CHANNEL_DEPTH = u32:", integer_to_list(maps:get(depth, Spec)),
         ";\n\n",
-        alias_comments(AliasedLanes),
-        case maps:get(fanout_arities, Graph) of
-            [] -> [];
+        case FanoutCount of
+            0 -> [];
             _ -> [
-                "// Queued fanout: source completion is acceptance by the ",
-                "common actor-output\n",
-                "// channel; the downstream distributor then waits for ",
-                "every branch channel.\n\n"
+                "// ", integer_to_list(FanoutCount),
+                " queued fanout route(s) complete at actor-egress acceptance;\n",
+                "// their source router subsequently waits for every lane ",
+                "queue.\n\n"
             ]
         end
-    ].
-
-alias_comments([]) -> [];
-alias_comments(AliasedLanes) ->
-    [
-        "// Aliased-port lanes permitted to reorder in this fixture:\n",
-        [aliased_lane_comment(Lane) || Lane <- AliasedLanes],
-        "\n"
-    ].
-
-aliased_lane_comment(Lane) ->
-    [
-        "//   ", io_lib:format("~p (~p) ~p -> ~p (~p)", [
-            maps:get(source, Lane),
-            maps:get(source_module, Lane),
-            maps:get(source_ports, Lane),
-            maps:get(destination, Lane),
-            maps:get(destination_module, Lane)
-        ]),
-        "\n"
     ].
 
 relay_proc([]) -> [];
@@ -836,33 +757,79 @@ relay_proc(_Externals) ->
 
     """, "\n"].
 
-fanout_procs(Arities) -> [fanout_proc(Arity) || Arity <- Arities].
-
-fanout_proc(Arity) ->
-    Indexes = lists:seq(0, Arity - 1),
-    Tokens = [["branch_", integer_to_list(Index), "_tok"]
-        || Index <- Indexes],
+actor_router_procs(Actors, Routes, Lanes) ->
     [
-        "proc QueuedFanout", integer_to_list(Arity), " {\n",
-        "  frame_in: chan<axis::Frame> in;\n",
-        [["  branch_", integer_to_list(Index),
-            "_out: chan<axis::Frame> out;\n"] || Index <- Indexes],
-        "\n  config(frame_in: chan<axis::Frame> in,\n",
-        [["         branch_", integer_to_list(Index),
-            "_out: chan<axis::Frame> out",
-            separator(Index, Arity), "\n"] || Index <- Indexes],
-        "  ) {\n    (frame_in",
-        [[", branch_", integer_to_list(Index), "_out"] || Index <- Indexes],
+        actor_router_proc(
+            Actor,
+            [Route || Route <- Routes,
+                element(1, maps:get(source, Route)) =:= maps:get(id, Actor)],
+            [Lane || Lane <- Lanes,
+                maps:get(source, Lane) =:= maps:get(id, Actor)]
+        )
+        || Actor <- Actors
+    ].
+
+actor_router_proc(Actor, Routes, Lanes) ->
+    Module = maps:get(module_name, Actor),
+    Count = length(Lanes),
+    [
+        "proc ActorRouter", integer_to_list(maps:get(index, Actor)), " {\n",
+        "  egress_in: chan<", Module, "::Egress> in;\n",
+        [["  ", lane_output(Lane),
+            ": chan<axis::Frame> out;\n"] || Lane <- Lanes],
+        "\n  config(egress_in: chan<", Module, "::Egress> in,\n",
+        [["         ", lane_output(Lane),
+            ": chan<axis::Frame> out",
+            separator(Index, Count), "\n"]
+            || {Index, Lane} <- lists:enumerate(0, Lanes)],
+        "  ) {\n    (egress_in",
+        [[", ", lane_output(Lane)] || Lane <- Lanes],
         ")\n  }\n\n",
         "  init { () }\n\n",
         "  next(state: ()) {\n",
-        "    let (tok, frame) = recv(join(), frame_in);\n",
-        [["    let ", lists:nth(Index + 1, Tokens),
-            " = send(tok, branch_", integer_to_list(Index),
-            "_out, frame);\n"] || Index <- Indexes],
-        "    let _done = ", join_tokens(Tokens), ";\n",
+        "    let (tok, egress) = recv(join(), egress_in);\n",
+        "    let _route_tok = match egress.port {\n",
+        [actor_router_arm(Module, Route) || Route <- Routes],
+        "    };\n",
         "    state\n  }\n}\n\n"
     ].
+
+actor_router_arm(Module, Route) ->
+    {_Source, Port} = maps:get(source, Route),
+    Lanes = maps:get(lanes, Route),
+    Tokens = [["lane_", integer_to_list(maps:get(index, Lane)), "_tok"]
+        || Lane <- Lanes],
+    Body = case Lanes of
+        [Lane] -> [
+            "send(tok, ", lane_output(Lane), ", egress.frame)"
+        ];
+        [_, _ | _] -> [
+            "{\n",
+            [
+                ["        let ", Token, " = send(tok, ",
+                    lane_output(Lane), ", egress.frame);\n"]
+                || {Token, Lane} <- lists:zip(Tokens, Lanes)
+            ],
+            "        ", join_tokens(Tokens), "\n",
+            "      }"
+        ]
+    end,
+    [
+        "      ", Module, "::OutputPort::", uppercase(Port), " =>\n",
+        "        ", Body, ",\n"
+    ].
+
+actor_router_spawn(Actor, Lanes) ->
+    ActorLanes = [Lane || Lane <- Lanes,
+        maps:get(source, Lane) =:= maps:get(id, Actor)],
+    [
+        "    spawn ActorRouter", integer_to_list(maps:get(index, Actor)),
+        "(", consumer(maps:get(egress_channel, Actor)),
+        [[", ", producer(maps:get(channel, Lane))] || Lane <- ActorLanes],
+        ");\n"
+    ].
+
+lane_output(Lane) -> [maps:get(channel, Lane), "_out"].
 
 separator(Index, Arity) when Index + 1 < Arity -> ",";
 separator(_Index, _Arity) -> "".
@@ -944,8 +911,7 @@ actor_channels(Actors, Depth) ->
             io_lib:format("~p", [maps:get(outputs, Actor)]), ".\n",
             frame_channel([maps:get(stem, Actor), "_req"], Depth),
             admission_channel([maps:get(stem, Actor), "_admit"], Depth),
-            [frame_channel(Channel, Depth)
-                || {_Port, Channel} <- output_channels(Actor)]
+            egress_channel(Actor, Depth)
         ]
         || Actor <- Actors
     ].
@@ -955,17 +921,12 @@ actor_spawns(Actors) ->
         [
             "    spawn ", maps:get(module_name, Actor), "::Service(\n",
             "      ", consumer([maps:get(stem, Actor), "_req"]),
-            [[",\n      ", producer(Channel)]
-                || {_Port, Channel} <- output_channels(Actor)],
+            ",\n      ", producer(maps:get(egress_channel, Actor)),
             ",\n      ", producer([maps:get(stem, Actor), "_admit"]),
             ");\n"
         ]
         || Actor <- Actors
     ].
-
-output_channels(Actor) ->
-    Channels = maps:get(output_channels, Actor),
-    [{Port, maps:get(Port, Channels)} || Port <- maps:get(outputs, Actor)].
 
 external_tuple([]) -> "()";
 external_tuple([External]) -> ["(", maps:get(output_name, External), ",)"];
@@ -985,8 +946,19 @@ admission_channel(Channel, _Depth) ->
         ") = chan<u1, CHANNEL_DEPTH>(\"", Channel, "\");\n"
     ].
 
+egress_channel(Actor, _Depth) ->
+    Channel = maps:get(egress_channel, Actor),
+    [
+        "    let (", producer(Channel), ", ", consumer(Channel),
+        ") = chan<", maps:get(module_name, Actor),
+        "::Egress, u32:", integer_to_list(maps:get(egress_depth, Actor)),
+        ">(\"", Channel, "\");\n"
+    ].
+
 producer(Channel) -> [Channel, "_p"].
 consumer(Channel) -> [Channel, "_c"].
+
+uppercase(Atom) -> string:uppercase(atom_to_list(Atom)).
 
 join_tokens([Token]) -> Token;
 join_tokens([First, Second | Rest]) ->

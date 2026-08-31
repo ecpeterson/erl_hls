@@ -1,3 +1,10 @@
 *.beam
 _build
 .DS_Store
+
+# Pinned XLS regenerates and simulates these actor artifacts in _build. Keep
+# the smaller DSLX beside its Erlang source for review, but not generated RTL.
+/src/examples/regsvc/regsvc.v
+/src/examples/phi_decoder/phi_halo_cell.v
+/src/examples/phi_decoder/phenom_data_cell.v
+/src/examples/phi_decoder/phenom_syndrome_cell.v

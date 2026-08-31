@@ -722,6 +722,91 @@ state_machine_entry_action_accepts_record_update_test() ->
         end
     ).
 
+state_machine_entry_actions_use_one_source_ordered_egress_test() ->
+    Path = filename:join("_build", "ordered_egress_fixture.erl"),
+    ok = filelib:ensure_dir(Path),
+    Source = <<
+        "-module(ordered_egress_fixture).\n"
+        "-hls_data(cell).\n"
+        "-hls_phases([waiting]).\n"
+        "-hls_outputs([first, second, third]).\n"
+        "-hls_mailbox_capacity(1).\n"
+        "-hls_tags([message]).\n"
+        "-record(message, {value = hls_type:zero() :: hls_nums:u32()}).\n"
+        "-record(cell, {value = hls_type:zero() :: hls_nums:u32()}).\n"
+        "init([]) -> {ok, waiting, #cell{}}.\n"
+        "handle_enter(_Old, waiting, Cell) ->\n"
+        "  {Cell, [\n"
+        "    {cast, third, #message{value = 3}},\n"
+        "    {cast, first, #message{value = 1}},\n"
+        "    {cast, second, #message{value = 2}}\n"
+        "  ]}.\n"
+        "handle_cast(#message{value = Value}, waiting, Cell) ->\n"
+        "  {waiting, Cell#cell{value = Value}, consume}.\n"
+    >>,
+    ok = file:write_file(Path, Source),
+    try
+        XLS = iolist_to_binary(xls_parse:to_xls(Path)),
+        {Third, _} = binary:match(XLS, <<
+            "Egress { port: OutputPort::THIRD, frame: effect_0 }"
+        >>),
+        {First, _} = binary:match(XLS, <<
+            "Egress { port: OutputPort::FIRST, frame: effect_1 }"
+        >>),
+        {Second, _} = binary:match(XLS, <<
+            "Egress { port: OutputPort::SECOND, frame: effect_2 }"
+        >>),
+        ?assert(Third < First),
+        ?assert(First < Second),
+        ?assertNotEqual(nomatch, binary:match(
+            XLS,
+            <<"pub const EGRESS_DEPTH = u32:3;">>
+        )),
+        ?assertNotEqual(nomatch, binary:match(
+            XLS,
+            <<"chan<Egress, EGRESS_DEPTH>(\"egress\")">>
+        )),
+        ?assertEqual(1, length(binary:matches(
+            XLS,
+            <<"join(), egress_out, has_effect, effect">>
+        ))),
+        ?assertNotEqual(nomatch, binary:match(
+            XLS,
+            <<"proc EgressDemux {">>
+        )),
+        ?assertNotEqual(nomatch, binary:match(
+            XLS,
+            <<"spawn EgressDemux(egress_c, first_p, second_p, third_p)">>
+        ))
+    after
+        ok = file:delete(Path)
+    end.
+
+state_machine_output_count_fits_ordered_egress_abi_test() ->
+    Path = filename:join("_build", "too_many_outputs_fixture.erl"),
+    ok = filelib:ensure_dir(Path),
+    Outputs = lists:join(", ", [
+        ["output_", integer_to_list(Index)]
+        || Index <- lists:seq(0, 255)
+    ]),
+    Source = iolist_to_binary([
+        "-module(too_many_outputs_fixture).\n",
+        "-hls_data(cell).\n",
+        "-hls_phases([waiting]).\n",
+        "-hls_outputs([", Outputs, "]).\n",
+        "-hls_mailbox_capacity(1).\n",
+        "-hls_tags([message]).\n"
+    ]),
+    ok = file:write_file(Path, Source),
+    try
+        ?assertError(
+            {too_many_hls_statem_outputs, 256, 255},
+            xls_parse:to_xls(Path)
+        )
+    after
+        ok = file:delete(Path)
+    end.
+
 repeat_phase_lowering_creates_an_explicit_boundary_test() ->
     CastSource =
         "handle_cast(#message{value = 0}, waiting, Cell) ->\n"

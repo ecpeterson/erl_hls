@@ -19,17 +19,18 @@ frames, or numeric tags.
 -define(SYNDROME_PRNG_SEED, 16#85ebca6b).
 -define(HALF_THRESHOLD, 16#80000000).
 
--doc "Returns the version-0 semantic topology for the three-actor fixture.".
+-doc "Returns the semantic topology for the three-actor fixture.".
 -spec topology() -> hls_topology:spec().
 topology() ->
     Directions = [north, east, west, south],
     #{
-        version => 0,
+        version => 1,
         actors => #{
             phi => phi_halo_cell,
             syndrome => phenom_syndrome_cell,
             data => phenom_data_cell
         },
+        families => #{},
         externals => [
             {announcement, out, [phenom_anyon]}
         ],
@@ -42,6 +43,7 @@ topology() ->
                 {external, announcement}
             ]}] ++
             routes(data, Directions, syndrome),
+        route_relations => [],
         startup => [
             {data, [#phenom_config{
                 seed = ?DATA_PRNG_SEED,

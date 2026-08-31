@@ -26,9 +26,11 @@ generation there. It then runs a cycle-controlled two-process SystemVerilog
 routing scenario and the EUnit application scenario through a VPI bridge.
 Independent application and debug FIFO pairs carry the two physical AXI Stream
 paths. The runner does not use or modify the VM's existing `~/erl_hls`
-checkout, and finishes by checking all four source-adjacent DSLX and RTL
-artifact pairs plus the generated topology DSLX golden declared in
-`tools/xls_goldens.sh`.
+checkout, and finishes by checking the source-adjacent generated DSLX and the
+compact Verilog digest manifest declared in `tools/xls_goldens.sh`. Generated
+Verilog is compiled and simulated from the staging directory instead of being
+checked into the repository; GitHub Actions uploads it with the other
+diagnostics when a regression or digest check fails.
 
 After changing the translator or a translated example, refresh the checked-in
 artifacts with the same full regression:
