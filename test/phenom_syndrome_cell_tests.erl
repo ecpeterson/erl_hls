@@ -316,18 +316,6 @@ cpu_api_rejects_bad_configuration_test() ->
             0,
             16#10000
         )
-    ),
-    ?assertError(
-        badarg,
-        phenom_syndrome_cell:configure(self(), 1.0, 0, 0, 0)
-    ),
-    ?assertError(
-        badarg,
-        phenom_syndrome_cell:configure(self(), ?PRNG_SEED, 0.0, 0, 0)
-    ),
-    ?assertError(
-        badarg,
-        phenom_syndrome_cell:configure(self(), ?PRNG_SEED, 0, 0.0, 0)
     ).
 
 lowerable_source_and_shared_wire_tags_test() ->

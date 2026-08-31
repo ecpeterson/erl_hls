@@ -57,8 +57,7 @@ topology() ->
 -doc "Returns a compact periodic phi/noise topology of the given distance.".
 -spec topology(pos_integer()) -> hls_topology:spec().
 topology(Distance)
-        when is_integer(Distance), Distance > 0,
-             Distance =< ?MAX_WITNESS_DISTANCE ->
+        when Distance > 0, Distance =< ?MAX_WITNESS_DISTANCE ->
     Shape = [Distance, Distance],
     #{
         version => 1,

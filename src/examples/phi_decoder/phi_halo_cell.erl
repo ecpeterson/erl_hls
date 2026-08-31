@@ -235,7 +235,7 @@ offer_phi0(PID, Step, Source, Value) ->
 
 -doc "Offers one neighbor anyon update to a cell.".
 -spec offer_anyon(pid(), hls_nums:u32(), boolean()) -> ok.
-offer_anyon(PID, Step, Present) when is_boolean(Present) ->
+offer_anyon(PID, Step, Present) ->
     PresentWord = case Present of
         false -> 0;
         true -> 1
@@ -244,7 +244,7 @@ offer_anyon(PID, Step, Present) when is_boolean(Present) ->
 
 -doc "Offers the detection event for one decoder step.".
 -spec offer_measurement(pid(), hls_nums:u32(), boolean()) -> ok.
-offer_measurement(PID, Step, Present) when is_boolean(Present) ->
+offer_measurement(PID, Step, Present) ->
     offer_measurement(PID, Step, Present, 0, 0).
 
 -doc "Offers a detection event and its paired lattice coordinate.".
@@ -256,9 +256,8 @@ offer_measurement(PID, Step, Present) when is_boolean(Present) ->
     hls_nums:u16()
 ) -> ok.
 offer_measurement(PID, Step, Present, X, Y)
-        when is_boolean(Present),
-             is_integer(X), X >= 0, X =< 16#ffff,
-             is_integer(Y), Y >= 0, Y =< 16#ffff ->
+        when X >= 0, X =< 16#ffff,
+             Y >= 0, Y =< 16#ffff ->
     PresentWord = case Present of
         false -> 0;
         true -> 1

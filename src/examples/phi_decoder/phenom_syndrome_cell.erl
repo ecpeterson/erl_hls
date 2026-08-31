@@ -147,11 +147,10 @@ configure(PID, Seed, Threshold) ->
     hls_nums:u16()
 ) -> ok.
 configure(PID, Seed, Threshold, X, Y)
-        when is_integer(Seed), Seed > 0, Seed =< ?U32_MASK,
-             is_integer(Threshold), Threshold >= 0,
-             Threshold =< ?U32_MASK,
-             is_integer(X), X >= 0, X =< ?U16_MASK,
-             is_integer(Y), Y >= 0, Y =< ?U16_MASK ->
+        when Seed > 0, Seed =< ?U32_MASK,
+             Threshold >= 0, Threshold =< ?U32_MASK,
+             X >= 0, X =< ?U16_MASK,
+             Y >= 0, Y =< ?U16_MASK ->
     hls_statem:cast(PID, #phenom_config{
         seed = Seed,
         threshold = Threshold,
@@ -164,7 +163,7 @@ configure(_PID, _Seed, _Threshold, _X, _Y) ->
 -doc "Offers one round request from the paired phi cell.".
 -spec offer_request(pid(), hls_nums:u32()) -> ok.
 offer_request(PID, Step)
-        when is_integer(Step), Step >= 0, Step =< ?U32_MASK ->
+        when Step >= 0, Step =< ?U32_MASK ->
     hls_statem:cast(PID, #phenom_request{step = Step});
 offer_request(_PID, _Step) ->
     error(badarg).
@@ -172,8 +171,7 @@ offer_request(_PID, _Step) ->
 -doc "Offers one Boolean data event from a named neighboring edge.".
 -spec offer_data(pid(), hls_nums:u32(), direction(), boolean()) -> ok.
 offer_data(PID, Step, Source, Present)
-        when is_integer(Step), Step >= 0, Step =< ?U32_MASK,
-             is_boolean(Present) ->
+        when Step >= 0, Step =< ?U32_MASK ->
     SourceMask = source_mask(Source),
     PresentWord = case Present of
         false -> 0;

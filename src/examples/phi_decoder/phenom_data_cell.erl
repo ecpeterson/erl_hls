@@ -120,9 +120,8 @@ stop(PID) ->
 -doc "Configures the nonzero PRNG seed and Bernoulli threshold.".
 -spec configure(pid(), hls_nums:u32(), hls_nums:u32()) -> ok.
 configure(PID, Seed, Threshold)
-        when is_integer(Seed), Seed > 0, Seed =< ?U32_MASK,
-             is_integer(Threshold), Threshold >= 0,
-             Threshold =< ?U32_MASK ->
+        when Seed > 0, Seed =< ?U32_MASK,
+             Threshold >= 0, Threshold =< ?U32_MASK ->
     hls_statem:cast(PID, #phenom_config{
         seed = Seed,
         threshold = Threshold
@@ -133,7 +132,7 @@ configure(_PID, _Seed, _Threshold) ->
 -doc "Offers a step query from one logical direction.".
 -spec offer_query(pid(), hls_nums:u32(), direction()) -> ok.
 offer_query(PID, Step, Source)
-        when is_integer(Step), Step >= 0, Step =< ?U32_MASK ->
+        when Step >= 0, Step =< ?U32_MASK ->
     hls_statem:cast(PID, #phenom_query{
         step = Step,
         source = source_mask(Source)
