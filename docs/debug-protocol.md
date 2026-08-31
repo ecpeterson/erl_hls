@@ -79,8 +79,8 @@ one-word error code. Error code 1 means an unsupported or malformed request.
 
 ## Availability rule
 
-The XLS observer only receives application stream signals through a passive
-tap. Packed application state and state-commit signals do not cross this
+The hardware observer only receives application stream signals through a
+passive tap. Packed application state and state-commit signals do not cross this
 boundary, and none of the observer's outputs feed the application ready/valid
 path. A blocked debug consumer may block later debug queries, but cannot block
 application traffic; a blocked application output cannot prevent counter or
@@ -99,7 +99,7 @@ application observations continue into the other bank meanwhile.
 
 The Icarus VPI bridge exposes the application and debug streams as independent
 named FIFO pairs: `app_tx`/`app_rx` and `debug_tx`/`debug_rx`. The
-`xls_debug` gen_server owns the debug pair, correlates replies by transaction
+`hls_debug` gen_server owns the debug pair, correlates replies by transaction
 identifier, and decodes `DEBUG_COUNTERS` into a map with named counter fields.
 Its public query API consists of `get_counters/1` and `get_trace/1`.
 `get_trace/1` decodes `DEBUG_TRACE` into a map that preserves the raw payload
@@ -108,7 +108,7 @@ state packers and unpackers remain available as type-serialization support;
 they are not exercised by the live service recurrence or exposed through the
 version 4 debug protocol.
 
-The generated-RTL regression starts this client alongside `xls_gs`, runs the
+The generated-RTL regression starts this client alongside `hls_gs`, runs the
 same application scenario as the CPU reference test, and queries the resulting
 counter and trace snapshots from Erlang. The deterministic SystemVerilog test
 separately checks the stronger availability case in which application output

@@ -4,8 +4,8 @@
 # Entry-point scripts source this file after enabling `set -euo pipefail`.
 
 experiment_root=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-apio_home=${ERL_XLS_APIO_HOME:-"$experiment_root/.apio"}
-build_root=${ERL_XLS_OPENXC7_BUILD_ROOT:-"$experiment_root/build"}
+apio_home=${ERL_HLS_APIO_HOME:-"$experiment_root/.apio"}
+build_root=${ERL_HLS_OPENXC7_BUILD_ROOT:-"$experiment_root/build"}
 openxc7="$apio_home/packages/openxc7"
 oss_cad_suite="$apio_home/packages/oss-cad-suite"
 nextpnr_python="$openxc7/share/nextpnr/python"

@@ -160,7 +160,7 @@ forward_anyons(Parent, Phi) ->
     receive
         {'$gen_cast', Message = #phenom_anyon{}} ->
             Parent ! {phenom_pipeline, Message},
-            xls_statem:cast(Phi, Message),
+            hls_statem:cast(Phi, Message),
             forward_anyons(Parent, Phi);
         stop ->
             ok

@@ -9,25 +9,25 @@ cd "$stage"
 
 iverilog \
     -g2012 \
-    -s xls_debug_tap_tb \
-    -o xls_debug_tap.vvp \
-    xls_debug_tap_tb.sv \
-    xls_debug_tap.v
+    -s hls_debug_tap_tb \
+    -o hls_debug_tap.vvp \
+    hls_debug_tap_tb.sv \
+    hls_debug_tap.v
 
-vvp xls_debug_tap.vvp
+vvp hls_debug_tap.vvp
 
 iverilog \
     -g2012 \
-    -s xls_trace_store_tb \
-    -o xls_trace_store.vvp \
-    xls_trace_store_tb.sv \
-    xls_trace_store.v
+    -s hls_trace_store_tb \
+    -o hls_trace_store.vvp \
+    hls_trace_store_tb.sv \
+    hls_trace_store.v
 
-vvp xls_trace_store.vvp
+vvp hls_trace_store.vvp
 
 # The interpreter runs tests from its entry module, not imported modules, so
 # keep every test-bearing DSLX module explicit here.
-for test_module in xls_debug_trace.x xls_debug_observer.x; do
+for test_module in hls_debug_trace.x hls_debug_observer.x; do
     "$xls_root/interpreter_main" \
         --dslx_path=. \
         --dslx_stdlib_path="$stdlib" \
@@ -52,8 +52,8 @@ done
     regsvc.opt.ir > regsvc.v
 
 # Compile-only conformance coverage for tuple and homogeneous-record case
-# patterns in an xls_gs callback. The phi simulation below covers integer
-# case selection in xls_statem.
+# patterns in an hls_gs callback. The phi simulation below covers integer
+# case selection in hls_statem.
 "$xls_root/ir_converter_main" \
     --warnings_as_errors=false \
     --dslx_path=. \
@@ -140,9 +140,9 @@ vvp phi_phenom_topology.vvp
     --warnings_as_errors=false \
     --dslx_stdlib_path="$stdlib" \
     --top=Observer \
-    xls_debug_observer.x > xls_debug_observer.ir
+    hls_debug_observer.x > hls_debug_observer.ir
 
-"$xls_root/opt_main" xls_debug_observer.ir > xls_debug_observer.opt.ir
+"$xls_root/opt_main" hls_debug_observer.ir > hls_debug_observer.opt.ir
 
 "$xls_root/codegen_main" \
     --pipeline_stages=2 \
@@ -150,16 +150,16 @@ vvp phi_phenom_topology.vvp
     --use_system_verilog=false \
     --reset=reset \
     --fifo_module= \
-    xls_debug_observer.opt.ir > xls_debug_observer.v
+    hls_debug_observer.opt.ir > hls_debug_observer.v
 
 "$xls_root/ir_converter_main" \
     --warnings_as_errors=false \
     --dslx_path=. \
     --dslx_stdlib_path="$stdlib" \
     --top=DebugServer \
-    xls_debug_server.x > xls_debug_server.ir
+    hls_debug_server.x > hls_debug_server.ir
 
-"$xls_root/opt_main" xls_debug_server.ir > xls_debug_server.opt.ir
+"$xls_root/opt_main" hls_debug_server.ir > hls_debug_server.opt.ir
 
 "$xls_root/codegen_main" \
     --pipeline_stages=3 \
@@ -168,16 +168,16 @@ vvp phi_phenom_topology.vvp
     --use_system_verilog=false \
     --reset=reset \
     --fifo_module= \
-    xls_debug_server.opt.ir > xls_debug_server.v
+    hls_debug_server.opt.ir > hls_debug_server.v
 
 "$xls_root/ir_converter_main" \
     --warnings_as_errors=false \
     --dslx_path=. \
     --dslx_stdlib_path="$stdlib" \
     --top=PairIngress \
-    xls_fabric_router.x > xls_fabric_ingress.ir
+    hls_fabric_router.x > hls_fabric_ingress.ir
 
-"$xls_root/opt_main" xls_fabric_ingress.ir > xls_fabric_ingress.opt.ir
+"$xls_root/opt_main" hls_fabric_ingress.ir > hls_fabric_ingress.opt.ir
 
 "$xls_root/codegen_main" \
     --pipeline_stages=1 \
@@ -185,16 +185,16 @@ vvp phi_phenom_topology.vvp
     --use_system_verilog=false \
     --reset=reset \
     --fifo_module= \
-    xls_fabric_ingress.opt.ir > xls_fabric_ingress.v
+    hls_fabric_ingress.opt.ir > hls_fabric_ingress.v
 
 "$xls_root/ir_converter_main" \
     --warnings_as_errors=false \
     --dslx_path=. \
     --dslx_stdlib_path="$stdlib" \
     --top=PairEgress \
-    xls_fabric_router.x > xls_fabric_egress.ir
+    hls_fabric_router.x > hls_fabric_egress.ir
 
-"$xls_root/opt_main" xls_fabric_egress.ir > xls_fabric_egress.opt.ir
+"$xls_root/opt_main" hls_fabric_egress.ir > hls_fabric_egress.opt.ir
 
 "$xls_root/codegen_main" \
     --pipeline_stages=1 \
@@ -202,7 +202,7 @@ vvp phi_phenom_topology.vvp
     --use_system_verilog=false \
     --reset=reset \
     --fifo_module= \
-    xls_fabric_egress.opt.ir > xls_fabric_egress.v
+    hls_fabric_egress.opt.ir > hls_fabric_egress.v
 
 iverilog \
     -g2012 \
@@ -211,12 +211,12 @@ iverilog \
     regsvc_pair_tb.sv \
     regsvc_pair_fixture.sv \
     regsvc_debug_top.v \
-    xls_fabric_ingress.v \
-    xls_fabric_egress.v \
-    xls_debug_tap.v \
-    xls_trace_store.v \
-    xls_debug_observer.v \
-    xls_debug_server.v \
+    hls_fabric_ingress.v \
+    hls_fabric_egress.v \
+    hls_debug_tap.v \
+    hls_trace_store.v \
+    hls_debug_observer.v \
+    hls_debug_server.v \
     regsvc_core_adapter.v \
     regsvc.v
 
@@ -231,12 +231,12 @@ iverilog \
     regsvc_bridge_tb.sv \
     regsvc_pair_fixture.sv \
     regsvc_debug_top.v \
-    xls_fabric_ingress.v \
-    xls_fabric_egress.v \
-    xls_debug_tap.v \
-    xls_trace_store.v \
-    xls_debug_observer.v \
-    xls_debug_server.v \
+    hls_fabric_ingress.v \
+    hls_fabric_egress.v \
+    hls_debug_tap.v \
+    hls_trace_store.v \
+    hls_debug_observer.v \
+    hls_debug_server.v \
     regsvc_core_adapter.v \
     regsvc.v
 
@@ -258,7 +258,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-ERL_XLS_SIM_DIR="$sim_dir" \
+ERL_HLS_SIM_DIR="$sim_dir" \
     vvp -M "$stage" -m xls_sim_bridge regsvc_bridge.vvp \
     >"$sim_dir/vvp.log" 2>&1 &
 sim_pid=$!
@@ -294,18 +294,18 @@ fi
 
 beam_dir="$stage/beam"
 mkdir -p "$beam_dir"
-erlc -o "$beam_dir" "$stage/erl_src/xls_type.erl"
+erlc -o "$beam_dir" "$stage/erl_src/hls_type.erl"
 erlc -pa "$beam_dir" -o "$beam_dir" \
-    "$stage/erl_src/xls_fabric.erl" \
-    "$stage/erl_src/xls_lists.erl" \
-    "$stage/erl_src/xls_nums.erl" \
-    "$stage/erl_src/xls_gs.erl" \
-    "$stage/erl_src/xls_debug.erl"
+    "$stage/erl_src/hls_fabric.erl" \
+    "$stage/erl_src/hls_lists.erl" \
+    "$stage/erl_src/hls_nums.erl" \
+    "$stage/erl_src/hls_gs.erl" \
+    "$stage/erl_src/hls_debug.erl"
 erlc -pa "$beam_dir" -o "$beam_dir" "$stage/erl_src/regsvc.erl"
 erlc -pa "$beam_dir" -o "$beam_dir" \
     "$stage/test_src/regsvc_cpu_tests.erl"
 
-ERL_XLS_SIM_DIR="$sim_dir" erl \
+ERL_HLS_SIM_DIR="$sim_dir" erl \
     -noshell \
     -pa "$beam_dir" \
     -eval 'case eunit:test(regsvc_cpu_tests, [verbose]) of ok -> halt(0); error -> halt(1) end.'

@@ -3,10 +3,10 @@ set -euo pipefail
 
 experiment_root=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 project_root=$(cd "$experiment_root/../.." && pwd)
-build_root=${ERL_XLS_OPENXC7_BUILD_ROOT:-"$experiment_root/build"}
-remote_host=${ERL_XLS_REMOTE_HOST:-192.168.64.7}
-remote_root=${ERL_XLS_REMOTE_ROOT:-/home/ecpeterson/erl_xls-build}
-remote_xls=${ERL_XLS_REMOTE_XLS:-/home/ecpeterson/xls-v0.0.0-9235-gb179d691e-linux-x64}
+build_root=${ERL_HLS_OPENXC7_BUILD_ROOT:-"$experiment_root/build"}
+remote_host=${ERL_HLS_REMOTE_HOST:-192.168.64.7}
+remote_root=${ERL_HLS_REMOTE_ROOT:-/home/ecpeterson/erl_hls-build}
+remote_xls=${ERL_HLS_REMOTE_XLS:-/home/ecpeterson/xls-v0.0.0-9235-gb179d691e-linux-x64}
 
 readonly expected_xls_version=v0.0.0-9235-gb179d691e
 readonly publish_parent="$build_root/regsvc"
@@ -18,30 +18,30 @@ rsync_shell="ssh -o BatchMode=yes -o ConnectTimeout=10"
 
 rtl_files=(
     regsvc.v
-    xls_debug_observer.v
-    xls_debug_server.v
-    xls_fabric_ingress.v
-    xls_fabric_egress.v
+    hls_debug_observer.v
+    hls_debug_server.v
+    hls_fabric_ingress.v
+    hls_fabric_egress.v
 )
 expected_modules=(
     __regsvc__Top_0_next
-    __xls_debug_observer__Observer_0_next
-    __xls_debug_server__DebugServer_0_next
-    __xls_fabric_router__PairIngress_0_next
-    __xls_fabric_router__PairEgress_0_next
+    __hls_debug_observer__Observer_0_next
+    __hls_debug_server__DebugServer_0_next
+    __hls_fabric_router__PairIngress_0_next
+    __hls_fabric_router__PairEgress_0_next
 )
 manifest_inputs=(
     regsvc.x
     axis.x
-    xls_debug_types.x
-    xls_debug_trace.x
-    xls_debug_observer.x
-    xls_debug_server.x
-    xls_fabric_router.x
+    hls_debug_types.x
+    hls_debug_trace.x
+    hls_debug_observer.x
+    hls_debug_server.x
+    hls_fabric_router.x
     regsvc_core_adapter.v
     regsvc_debug_top.v
-    xls_debug_tap.v
-    xls_trace_store.v
+    hls_debug_tap.v
+    hls_trace_store.v
     regsvc_pair_fixture.sv
     remote_xls_sim.sh
 )
@@ -105,11 +105,11 @@ trap 'exit 143' TERM
 case "$remote_host$remote_root$remote_xls" in
     *$'\n'*) fail "remote configuration must not contain newlines" ;;
 esac
-[[ -n "$remote_host" ]] || fail "ERL_XLS_REMOTE_HOST must not be empty"
+[[ -n "$remote_host" ]] || fail "ERL_HLS_REMOTE_HOST must not be empty"
 [[ "$remote_root" == /* && "$remote_root" != / ]] ||
-    fail "ERL_XLS_REMOTE_ROOT must be a non-root absolute path"
+    fail "ERL_HLS_REMOTE_ROOT must be a non-root absolute path"
 [[ "$remote_xls" == /* ]] ||
-    fail "ERL_XLS_REMOTE_XLS must be an absolute path"
+    fail "ERL_HLS_REMOTE_XLS must be an absolute path"
 
 mkdir -p "$publish_parent" "$release_root"
 local_stage=$(mktemp -d "$publish_parent/.fetch-regsvc.XXXXXX")
@@ -184,7 +184,7 @@ done
 
 manifest="$release_stage/manifest.sha256"
 {
-    printf '# erl_xls openXC7 generated-RTL provenance, schema 1\n'
+    printf '# erl_hls openXC7 generated-RTL provenance, schema 1\n'
     printf 'xls-version\t%s\n' "$remote_version"
     for input_file in "${manifest_inputs[@]}"; do
         [[ -s "$local_stage/$input_file" ]] ||

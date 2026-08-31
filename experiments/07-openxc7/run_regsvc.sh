@@ -102,23 +102,23 @@ fi
 
 sources=(
     "$project_root/test/rtl/regsvc_pair_fixture.sv"
-    "$project_root/src/examples/regsvc_debug_top.v"
-    "$project_root/src/examples/regsvc_core_adapter.v"
-    "$project_root/priv/rtl/xls_debug_tap.v"
-    "$project_root/priv/rtl/xls_trace_store.v"
+    "$project_root/src/examples/regsvc/regsvc_debug_top.v"
+    "$project_root/src/examples/regsvc/regsvc_core_adapter.v"
+    "$project_root/priv/rtl/debug/hls_debug_tap.v"
+    "$project_root/priv/rtl/debug/hls_trace_store.v"
     "$generated_rtl/regsvc.v"
-    "$generated_rtl/xls_debug_observer.v"
-    "$generated_rtl/xls_debug_server.v"
-    "$generated_rtl/xls_fabric_ingress.v"
-    "$generated_rtl/xls_fabric_egress.v"
+    "$generated_rtl/hls_debug_observer.v"
+    "$generated_rtl/hls_debug_server.v"
+    "$generated_rtl/hls_fabric_ingress.v"
+    "$generated_rtl/hls_fabric_egress.v"
 )
 
 for generated_file in \
     regsvc.v \
-    xls_debug_observer.v \
-    xls_debug_server.v \
-    xls_fabric_ingress.v \
-    xls_fabric_egress.v
+    hls_debug_observer.v \
+    hls_debug_server.v \
+    hls_fabric_ingress.v \
+    hls_fabric_egress.v
 do
     verify_manifest_entry \
         output \
@@ -127,26 +127,29 @@ do
 done
 
 verify_manifest_entry \
-    input axis.x "$project_root/src/axis.x"
+    input axis.x "$project_root/priv/xls/lib/axis.x"
 for debug_module in \
-    xls_debug_types.x \
-    xls_debug_trace.x \
-    xls_debug_observer.x \
-    xls_debug_server.x
+    hls_debug_types.x \
+    hls_debug_trace.x \
+    hls_debug_observer.x \
+    hls_debug_server.x
 do
     verify_manifest_entry \
-        input "$debug_module" "$project_root/src/$debug_module"
+        input "$debug_module" "$project_root/priv/xls/debug/$debug_module"
 done
 verify_manifest_entry \
-    input xls_fabric_router.x "$project_root/src/xls_fabric_router.x"
+    input hls_fabric_router.x \
+    "$project_root/priv/xls/fabric/hls_fabric_router.x"
 verify_manifest_entry \
-    input regsvc_core_adapter.v "$project_root/src/examples/regsvc_core_adapter.v"
+    input regsvc_core_adapter.v \
+    "$project_root/src/examples/regsvc/regsvc_core_adapter.v"
 verify_manifest_entry \
-    input regsvc_debug_top.v "$project_root/src/examples/regsvc_debug_top.v"
+    input regsvc_debug_top.v \
+    "$project_root/src/examples/regsvc/regsvc_debug_top.v"
 verify_manifest_entry \
-    input xls_debug_tap.v "$project_root/priv/rtl/xls_debug_tap.v"
+    input hls_debug_tap.v "$project_root/priv/rtl/debug/hls_debug_tap.v"
 verify_manifest_entry \
-    input xls_trace_store.v "$project_root/priv/rtl/xls_trace_store.v"
+    input hls_trace_store.v "$project_root/priv/rtl/debug/hls_trace_store.v"
 verify_manifest_entry \
     input regsvc_pair_fixture.sv "$project_root/test/rtl/regsvc_pair_fixture.sv"
 verify_manifest_entry \

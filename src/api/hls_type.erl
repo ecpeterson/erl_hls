@@ -1,0 +1,126 @@
+-module(hls_type).
+-moduledoc """
+ 
+""".
+-export([
+    as/2,
+    descriptor/1,
+    pack/2,
+    print_type/1,
+    unpack/2,
+    width/1,
+    zero/0,
+    zero/1
+]).
+-compile(export_all).
+
+%%%
+%%% Structure for XLS type descriptors
+%%%
+
+-record(hls_type, {
+    module,
+    name,
+    args
+}).
+-doc "". 
+-type descriptor() :: #hls_type{
+    module :: module(),
+    name :: atom(),
+    args :: [arg()]
+}.
+-type arg() :: integer() | descriptor().
+
+%%%
+%%% hls_type behavior
+%%%
+
+-doc "Packs a `Value` according to a type `Descriptor`.".
+-callback pack(Value :: any(), atom(), [any()]) -> binary().
+
+-doc """
+Unpacks a value previously processed by pack/2.  This is usually a sub-call of
+an `hls_gs` instance's `unpack/2`.
+""".
+-callback unpack(Packed :: binary(), atom(), [any()]) -> {Value :: any(), Rest :: binary()}.
+
+-doc """
+Converts an Erlang call with XLS embodiments of its arguments to an equivalent
+XLS expression.
+""".
+%% TODO: might need to supply clause state for anonymous variables
+-callback transpile(FnName :: atom(), XLSArgs :: [xls_parse:ir()], State :: xls_parse:clause_state()) -> xls_parse:ir().
+
+-doc "Builds an empty Erlang instance of this type.".
+-callback zero(TypeName :: atom(), Args :: [arg()]) -> any().
+
+-doc "Emits the corresponding XLS type for the Erlang type descriptor.".
+-callback print_type(TypeName :: atom(), Args :: [any()]) -> xls_parse:printable().
+
+-doc "Calculate the bit width of this type when packed.".
+-callback width(Name :: atom(), Args :: [any()]) -> integer().
+
+% -doc """
+% in-XLS un/pack? or maybe transpiles to `as` but has no Erlang effect?
+% """.
+% -callback as(Descriptor :: [any()], InValue :: any()) -> OutValue :: any().
+
+%%%
+%%% Descriptor-level versions which dispatch on Module
+%%%
+
+-spec zero() -> no_return().
+-doc """
+Type-directed zero-value marker for translated record field defaults.
+
+`hls_pack` replaces this call with `zero/1` using the field's type annotation.
+Calling it outside a transformed record declaration is an error.
+""".
+zero() ->
+    error(unexpanded_hls_zero).
+
+-spec zero(descriptor()) -> any().
+-doc "". 
+zero(#hls_type{module = Module, name = Name, args = Args}) ->
+    Module:zero(Name, Args).
+
+-doc """
+Ascribes an XLS type to a value whose Erlang representation is unchanged.
+
+On the BEAM this returns `Value`. Translation emits a DSLX `as` expression,
+which is useful when the surrounding expression does not determine the width
+of an Erlang literal.
+""".
+-spec as(descriptor(), Value) -> Value.
+as(_Descriptor, Value) ->
+    Value.
+
+transpile(as, [{phantom, type, Descriptor}, Value], _State) ->
+    ["(", Value, " as ", print_type(Descriptor), ")"].
+
+-spec width(descriptor()) -> integer().
+-doc "". 
+width(#hls_type{module = Module, name = Name, args = Args}) ->
+    Module:width(Name, Args).
+
+pack(Value, {hls_type, Module, Name, Args}) ->
+    Module:pack(Value, Name, Args).
+
+unpack(Binary, {hls_type, Module, Name, Args}) ->
+    Module:unpack(Binary, Name, Args).
+
+print_type({hls_type, Module, Name, Args}) ->
+    Module:print_type(Name, Args).
+
+%%%
+%%% 
+%%%
+
+-spec descriptor(erl_parse:af_abstract_type()) -> descriptor().
+-doc "". 
+descriptor({remote_type, _1, [{atom, _2, Module}, {atom, _3, Name}, Args]}) ->
+    {hls_type, Module, Name, [descriptor(Arg) || Arg <- Args]};
+descriptor({integer, _1, Integer}) ->
+    Integer;
+descriptor({atom, _1, Atom}) ->
+    Atom.

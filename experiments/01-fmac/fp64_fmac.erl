@@ -6,7 +6,7 @@
 
 %%%
 %%% Common types
-%%% TODO: move to erl_xls.erl
+%%% TODO: move to erl_hls.erl
 %%%
 
 -type from() :: {PID :: pid(), Tag :: any()}.
