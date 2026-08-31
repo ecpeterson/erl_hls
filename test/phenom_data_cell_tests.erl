@@ -143,7 +143,7 @@ cpu_api_rejects_bad_configuration_test() ->
 
 lowerable_source_and_shared_wire_tags_test() ->
     XLS = iolist_to_binary(
-        xls_parse:to_xls("src/examples/phenom_data_cell.erl")
+        xls_parse:to_xls("src/examples/phi_decoder/phenom_data_cell.erl")
     ),
     ?assertNotEqual(
         nomatch,
@@ -197,11 +197,11 @@ assert_query_failure(Messages) ->
     try
         ok = phenom_data_cell:configure(PID, ?SEED, 0),
         Monitor = monitor(process, PID),
-        lists:foreach(fun(Message) -> xls_statem:cast(PID, Message) end,
+        lists:foreach(fun(Message) -> hls_statem:cast(PID, Message) end,
             Messages),
         receive
             {'DOWN', Monitor, process, PID,
-                    {xls_statem_failure, _Message}} ->
+                    {hls_statem_failure, _Message}} ->
                 ok
         after 1000 ->
             error(data_cell_did_not_stop)

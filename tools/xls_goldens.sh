@@ -27,15 +27,15 @@ generated=(
     phi_phenom_topology.x
 )
 goldens=(
-    src/examples/regsvc.erl.x
-    src/examples/regsvc.v
-    src/examples/phi_halo_cell.erl.x
-    src/examples/phi_halo_cell.v
-    src/examples/phenom_data_cell.erl.x
-    src/examples/phenom_data_cell.v
-    src/examples/phenom_syndrome_cell.erl.x
-    src/examples/phenom_syndrome_cell.v
-    src/examples/phi_phenom_topology.x
+    src/examples/regsvc/regsvc.erl.x
+    src/examples/regsvc/regsvc.v
+    src/examples/phi_decoder/phi_halo_cell.erl.x
+    src/examples/phi_decoder/phi_halo_cell.v
+    src/examples/phi_decoder/phenom_data_cell.erl.x
+    src/examples/phi_decoder/phenom_data_cell.v
+    src/examples/phi_decoder/phenom_syndrome_cell.erl.x
+    src/examples/phi_decoder/phenom_syndrome_cell.v
+    src/examples/phi_decoder/phi_phenom_topology.x
 )
 
 missing=false

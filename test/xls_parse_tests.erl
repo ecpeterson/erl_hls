@@ -3,7 +3,7 @@
 -include_lib("eunit/include/eunit.hrl").
 
 passive_state_observation_is_not_emitted_test() ->
-    Xls = iolist_to_binary(xls_parse:to_xls("src/examples/regsvc.erl")),
+    Xls = iolist_to_binary(xls_parse:to_xls("src/examples/regsvc/regsvc.erl")),
 
     %% State serialization remains part of the generated API, but the live
     %% Service recurrence carries only the tagged struct and never packs it.
@@ -16,14 +16,14 @@ passive_state_observation_is_not_emitted_test() ->
     ?assertEqual(nomatch, binary:match(Xls, <<"ext_state">>)).
 
 ordered_gs_clauses_share_one_tag_arm_test() ->
-    Xls = iolist_to_binary(xls_parse:to_xls("src/examples/regsvc.erl")),
+    Xls = iolist_to_binary(xls_parse:to_xls("src/examples/regsvc/regsvc.erl")),
 
     %% Multiple cast and call clauses each share one wire-tag dispatch arm.
     ?assertEqual(1, length(binary:matches(Xls, <<"Tag::SET =>">>))),
     ?assertEqual(1, length(binary:matches(Xls, <<"Tag::BULK_GET =>">>))).
 
-repeated_xls_tags_follow_include_expanded_source_order_test() ->
-    Path = "test_data/xls_tags_fixture.erl",
+repeated_hls_tags_follow_include_expanded_source_order_test() ->
+    Path = "test_data/hls_tags_fixture.erl",
     Xls = iolist_to_binary(xls_parse:to_xls(Path)),
     ?assertNotEqual(nomatch, binary:match(Xls, <<"FIRST = u8:3">>)),
     ?assertNotEqual(nomatch, binary:match(Xls, <<"SHARED = u8:4">>)),
@@ -46,9 +46,9 @@ repeated_xls_tags_follow_include_expanded_source_order_test() ->
         _ = code:purge(Module)
     end.
 
-repeated_xls_tags_reach_state_machine_lowering_test() ->
+repeated_hls_tags_reach_state_machine_lowering_test() ->
     Xls = iolist_to_binary(xls_parse:to_xls(
-        "test_data/xls_tags_statem_fixture.erl"
+        "test_data/hls_tags_statem_fixture.erl"
     )),
     ?assertNotEqual(nomatch, binary:match(Xls, <<"FIRST = u8:3">>)),
     ?assertNotEqual(nomatch, binary:match(Xls, <<"SHARED = u8:4">>)),
@@ -57,43 +57,43 @@ repeated_xls_tags_reach_state_machine_lowering_test() ->
     ?assertNotEqual(nomatch, binary:match(Xls, <<"Tag::SHARED">>)),
     ?assertNotEqual(nomatch, binary:match(Xls, <<"Tag::LAST">>)).
 
-duplicate_xls_tags_are_rejected_across_blocks_test() ->
+duplicate_hls_tags_are_rejected_across_blocks_test() ->
     Forms = [
-        {attribute, 1, xls_tags, [first, shared]},
-        {attribute, 2, xls_tags, [shared, last]}
+        {attribute, 1, hls_tags, [first, shared]},
+        {attribute, 2, hls_tags, [shared, last]}
     ],
-    ?assertError({duplicate_xls_tags, [shared]}, xls_parse:find_tags(Forms)),
+    ?assertError({duplicate_hls_tags, [shared]}, xls_parse:find_tags(Forms)),
     ?assertError(
-        {duplicate_xls_tags, [first]},
+        {duplicate_hls_tags, [first]},
         xls_parse:find_tags([
-            {attribute, 3, xls_tags, [first, first]}
+            {attribute, 3, hls_tags, [first, first]}
         ])
     ).
 
-malformed_xls_tag_fragments_are_rejected_test() ->
+malformed_hls_tag_fragments_are_rejected_test() ->
     ?assertError(
-        {invalid_xls_tags, 7, [first, 2]},
-        xls_parse:find_tags([{attribute, 7, xls_tags, [first, 2]}])
+        {invalid_hls_tags, 7, [first, 2]},
+        xls_parse:find_tags([{attribute, 7, hls_tags, [first, 2]}])
     ),
     ?assertError(
-        {invalid_xls_tags, 9, first},
-        xls_parse:find_tags([{attribute, 9, xls_tags, first}])
+        {invalid_hls_tags, 9, first},
+        xls_parse:find_tags([{attribute, 9, hls_tags, first}])
     ).
 
-xls_tags_fill_but_do_not_overflow_the_u8_namespace_test() ->
+hls_tags_fill_but_do_not_overflow_the_u8_namespace_test() ->
     Tags = [
-        list_to_atom("xls_capacity_tag_" ++ integer_to_list(Index))
+        list_to_atom("hls_capacity_tag_" ++ integer_to_list(Index))
         || Index <- lists:seq(1, 254)
     ],
     ?assertEqual(
         lists:sublist(Tags, 253),
         xls_parse:find_tags([
-            {attribute, 1, xls_tags, lists:sublist(Tags, 253)}
+            {attribute, 1, hls_tags, lists:sublist(Tags, 253)}
         ])
     ),
     ?assertError(
-        {too_many_xls_tags, 254, 253},
-        xls_parse:find_tags([{attribute, 2, xls_tags, Tags}])
+        {too_many_hls_tags, 254, 253},
+        xls_parse:find_tags([{attribute, 2, hls_tags, Tags}])
     ).
 
 guard_alternatives_are_rejected_test() ->
@@ -242,13 +242,13 @@ same_gs_tag_cannot_be_both_call_and_cast_test() ->
     ok = filelib:ensure_dir(Path),
     Source = <<
         "-module(ambiguous_gs_tag_fixture).\n"
-        "-xls_data(state).\n"
-        "-xls_tags([message]).\n"
+        "-hls_data(state).\n"
+        "-hls_tags([message]).\n"
         "-record(message, {\n"
-        "  value = xls_type:zero() :: xls_nums:u32()\n"
+        "  value = hls_type:zero() :: hls_nums:u32()\n"
         "}).\n"
         "-record(state, {\n"
-        "  value = xls_type:zero() :: xls_nums:u32()\n"
+        "  value = hls_type:zero() :: hls_nums:u32()\n"
         "}).\n"
         "init([]) -> #state{}.\n"
         "handle_call(#message{}, State) ->\n"
@@ -259,7 +259,7 @@ same_gs_tag_cannot_be_both_call_and_cast_test() ->
     ok = file:write_file(Path, Source),
     try
         ?assertError(
-            {ambiguous_xls_gs_callback_tags, [message]},
+            {ambiguous_hls_gs_callback_tags, [message]},
             xls_parse:to_xls(Path)
         )
     after
@@ -289,10 +289,10 @@ boolean_case_preserves_branch_badmatches_test() ->
     ),
     ?assertNotEqual(nomatch, binary:match(XLS, <<"case_match_">>)).
 
-xls_type_as_preserves_the_host_value_and_emits_a_dslx_cast_test() ->
-    ?assertEqual(0, xls_type:as(xls_nums:u32(), 0)),
+hls_type_as_preserves_the_host_value_and_emits_a_dslx_cast_test() ->
+    ?assertEqual(0, hls_type:as(hls_nums:u32(), 0)),
     Clause = parse_clause(
-        "probe() -> xls_type:as(xls_nums:u32(), 0)."
+        "probe() -> hls_type:as(hls_nums:u32(), 0)."
     ),
     {Body, Result} = xls_parse:branch_from_clause(
         Clause,
@@ -637,21 +637,21 @@ if_guard_alternatives_are_rejected_test() ->
         )
     ).
 
-xls_gs_callback_body_accepts_if_test() ->
+hls_gs_callback_body_accepts_if_test() ->
     Path = filename:join("_build", "gs_if_fixture.erl"),
     ok = filelib:ensure_dir(Path),
     Source = <<
         "-module(gs_if_fixture).\n"
-        "-xls_data(state).\n"
-        "-xls_tags([message, query]).\n"
+        "-hls_data(state).\n"
+        "-hls_tags([message, query]).\n"
         "-record(message, {\n"
-        "  value = xls_type:zero() :: xls_nums:u32()\n"
+        "  value = hls_type:zero() :: hls_nums:u32()\n"
         "}).\n"
         "-record(query, {\n"
-        "  value = xls_type:zero() :: xls_nums:u32()\n"
+        "  value = hls_type:zero() :: hls_nums:u32()\n"
         "}).\n"
         "-record(state, {\n"
-        "  value = xls_type:zero() :: xls_nums:u32()\n"
+        "  value = hls_type:zero() :: hls_nums:u32()\n"
         "}).\n"
         "init([]) -> #state{}.\n"
         "handle_cast(#message{value = Value}, State) ->\n"
@@ -674,7 +674,7 @@ xls_gs_callback_body_accepts_if_test() ->
         ok = file:delete(Path)
     end.
 
-xls_gs_callback_bodies_accept_general_case_test() ->
+hls_gs_callback_bodies_accept_general_case_test() ->
     XLS = iolist_to_binary(xls_parse:to_xls(
         "test_data/xls_case_fixture.erl"
     )),
@@ -834,7 +834,7 @@ state_machine_indirect_if_result_is_rejected_test() ->
         "  Result.\n",
     ?assertException(
         error,
-        {unsupported_xls_statem_cast_result, {var, _, 'Result'}},
+        {unsupported_hls_statem_cast_result, {var, _, 'Result'}},
         with_statem_fixture(
             "statem_indirect_if_fixture",
             "[waiting]",
@@ -854,7 +854,7 @@ repeat_phase_is_not_a_declarable_phase_test() ->
         "handle_cast(#message{}, waiting, Cell) ->\n"
         "  {waiting, Cell, consume}.\n",
     ?assertError(
-        {reserved_xls_statem_phase, repeat_phase},
+        {reserved_hls_statem_phase, repeat_phase},
         with_statem_fixture(
             "reserved_repeat_phase_fixture",
             "[repeat_phase]",
@@ -868,16 +868,16 @@ non_word_aligned_state_machine_message_is_rejected_test() ->
     ok = filelib:ensure_dir(Path),
     Source = <<
         "-module(non_word_statem_fixture).\n"
-        "-xls_data(cell).\n"
-        "-xls_phases([waiting]).\n"
-        "-xls_outputs([out]).\n"
-        "-xls_mailbox_capacity(1).\n"
-        "-xls_tags([message]).\n"
+        "-hls_data(cell).\n"
+        "-hls_phases([waiting]).\n"
+        "-hls_outputs([out]).\n"
+        "-hls_mailbox_capacity(1).\n"
+        "-hls_tags([message]).\n"
         "-record(message, {\n"
-        "  value = xls_type:zero() :: xls_nums:u8()\n"
+        "  value = hls_type:zero() :: hls_nums:u8()\n"
         "}).\n"
         "-record(cell, {\n"
-        "  value = xls_type:zero() :: xls_nums:u32()\n"
+        "  value = hls_type:zero() :: hls_nums:u32()\n"
         "}).\n"
     >>,
     ok = file:write_file(Path, Source),
@@ -908,16 +908,16 @@ with_statem_fixture(ModuleName, Phases, EnterSource, CastSource, Test) ->
     ok = filelib:ensure_dir(Path),
     Source = iolist_to_binary([
         "-module(", ModuleName, ").\n",
-        "-xls_data(cell).\n",
-        "-xls_phases(", Phases, ").\n",
-        "-xls_outputs([out]).\n",
-        "-xls_mailbox_capacity(2).\n",
-        "-xls_tags([message]).\n",
+        "-hls_data(cell).\n",
+        "-hls_phases(", Phases, ").\n",
+        "-hls_outputs([out]).\n",
+        "-hls_mailbox_capacity(2).\n",
+        "-hls_tags([message]).\n",
         "-record(message, {\n",
-        "  value = xls_type:zero() :: xls_nums:u32()\n",
+        "  value = hls_type:zero() :: hls_nums:u32()\n",
         "}).\n",
         "-record(cell, {\n",
-        "  value = xls_type:zero() :: xls_nums:u32()\n",
+        "  value = hls_type:zero() :: hls_nums:u32()\n",
         "}).\n",
         "init([]) -> {ok, waiting, #cell{}}.\n",
         EnterSource,
@@ -938,7 +938,7 @@ repeat_phase_rejects_directive(Directive) ->
     ),
     ?assertException(
         error,
-        {bad_xls_statem_repeat_result, _, _},
+        {bad_hls_statem_repeat_result, _, _},
         with_statem_fixture(
             "repeat_phase_directive_fixture",
             "[waiting]",
@@ -952,16 +952,16 @@ assert_bad_init_head(ModuleName, InitSource) ->
     ok = filelib:ensure_dir(Path),
     Source = iolist_to_binary([
         "-module(", ModuleName, ").\n",
-        "-xls_data(cell).\n",
-        "-xls_phases([waiting]).\n",
-        "-xls_outputs([out]).\n",
-        "-xls_mailbox_capacity(1).\n",
-        "-xls_tags([message]).\n",
+        "-hls_data(cell).\n",
+        "-hls_phases([waiting]).\n",
+        "-hls_outputs([out]).\n",
+        "-hls_mailbox_capacity(1).\n",
+        "-hls_tags([message]).\n",
         "-record(message, {\n",
-        "  value = xls_type:zero() :: xls_nums:u32()\n",
+        "  value = hls_type:zero() :: hls_nums:u32()\n",
         "}).\n",
         "-record(cell, {\n",
-        "  value = xls_type:zero() :: xls_nums:u32()\n",
+        "  value = hls_type:zero() :: hls_nums:u32()\n",
         "}).\n",
         InitSource
     ]),
@@ -969,7 +969,7 @@ assert_bad_init_head(ModuleName, InitSource) ->
     try
         ?assertException(
             error,
-            {unsupported_xls_statem_init_head, _, _, _},
+            {unsupported_hls_statem_init_head, _, _, _},
             xls_parse:to_xls(Path)
         )
     after

@@ -357,12 +357,12 @@ static int open_endpoint_fifos(
 }
 
 static PLI_INT32 cb_start_of_sim(p_cb_data cb) {
-    const char *directory = getenv("ERL_XLS_SIM_DIR");
+    const char *directory = getenv("ERL_HLS_SIM_DIR");
     s_cb_data clock_cb;
     (void)cb;
 
     if (!directory) {
-        vpi_printf("xls_sim_bridge: ERL_XLS_SIM_DIR is not set\n");
+        vpi_printf("xls_sim_bridge: ERL_HLS_SIM_DIR is not set\n");
         return 0;
     }
 

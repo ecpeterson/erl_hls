@@ -98,7 +98,7 @@ duplicate_comparison_source_stops_cell_test() ->
         ok = phi_halo_cell:offer_phi0(PID, 0, north, 99),
         receive
             {'DOWN', Monitor, process, PID,
-                    {xls_statem_failure, {phi0, 0, ?NORTH_MASK, 99}}} ->
+                    {hls_statem_failure, {phi0, 0, ?NORTH_MASK, 99}}} ->
                 ok
         after 1000 ->
             error(cell_did_not_stop_on_duplicate_comparison_source)
@@ -323,7 +323,7 @@ invalid_diffusion_epoch_stops_cell_test() ->
     Monitor = monitor(process, PID),
     ok = phi_halo_cell:offer_phi(PID, 2, [0, 0]),
     receive
-        {'DOWN', Monitor, process, PID, {xls_statem_failure, _Message}} -> ok
+        {'DOWN', Monitor, process, PID, {hls_statem_failure, _Message}} -> ok
     after 1000 ->
         error(cell_did_not_stop_on_invalid_diffusion_epoch)
     end,
@@ -355,10 +355,10 @@ invalid_anyon_word_stops_cell_in_flipping_test() ->
         ),
 
         Monitor = monitor(process, PID),
-        ok = xls_statem:cast(PID, {anyon_move, 0, 2}),
+        ok = hls_statem:cast(PID, {anyon_move, 0, 2}),
         receive
             {'DOWN', Monitor, process, PID,
-                    {xls_statem_failure, _Message}} ->
+                    {hls_statem_failure, _Message}} ->
                 ok
         after 1000 ->
             error(cell_did_not_stop_on_invalid_anyon_word)
@@ -370,10 +370,10 @@ invalid_anyon_word_stops_cell_in_flipping_test() ->
 
 generated_dslx_matches_checked_in_artifact_test() ->
     {ok, Expected} = file:read_file(
-        "src/examples/phi_halo_cell.erl.x"
+        "src/examples/phi_decoder/phi_halo_cell.erl.x"
     ),
     Generated = iolist_to_binary(
-        xls_parse:to_xls("src/examples/phi_halo_cell.erl")
+        xls_parse:to_xls("src/examples/phi_decoder/phi_halo_cell.erl")
     ),
     ?assertEqual(Expected, Generated),
     ?assertNotEqual(

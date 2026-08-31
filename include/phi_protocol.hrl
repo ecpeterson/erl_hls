@@ -1,7 +1,7 @@
 %%%% Shared wire schema for the phi and phenomenological-noise examples.
 %%%%
-%%%% This header declares the shared xls_tags block as well as its records.
-%%%% Repeated xls_tags blocks concatenate in include-expanded source order, so
+%%%% This header declares the shared hls_tags block as well as its records.
+%%%% Repeated hls_tags blocks concatenate in include-expanded source order, so
 %%%% this header's position is part of the wire ABI.  Every independently
 %%%% lowered actor includes it at the same position so a frame emitted by one
 %%%% module has the same numeric tag at every receiver.
@@ -16,7 +16,7 @@
 -ifndef(PHI_PROTOCOL_HRL).
 -define(PHI_PROTOCOL_HRL, true).
 
--xls_tags([
+-hls_tags([
     phi,
     anyon_move,
     phi0,
@@ -34,45 +34,45 @@
 -define(PHI_ALL_DIRECTIONS, 15).
 
 -record(phi, {
-    epoch = xls_type:zero() :: xls_nums:u32(),
-    values = xls_type:zero() ::
-        xls_lists:list(xls_nums:u32(), 2)
+    epoch = hls_type:zero() :: hls_nums:u32(),
+    values = hls_type:zero() ::
+        hls_lists:list(hls_nums:u32(), 2)
 }).
 
 -record(phi0, {
-    step = xls_type:zero() :: xls_nums:u32(),
-    source = xls_type:zero() :: xls_nums:u32(),
-    value = xls_type:zero() :: xls_nums:u32()
+    step = hls_type:zero() :: hls_nums:u32(),
+    source = hls_type:zero() :: hls_nums:u32(),
+    value = hls_type:zero() :: hls_nums:u32()
 }).
 
 -record(anyon_move, {
-    step = xls_type:zero() :: xls_nums:u32(),
-    present = xls_type:zero() :: xls_nums:u32()
+    step = hls_type:zero() :: hls_nums:u32(),
+    present = hls_type:zero() :: hls_nums:u32()
 }).
 
 -record(phenom_config, {
-    seed = xls_type:zero() :: xls_nums:u32(),
-    threshold = xls_type:zero() :: xls_nums:u32()
+    seed = hls_type:zero() :: hls_nums:u32(),
+    threshold = hls_type:zero() :: hls_nums:u32()
 }).
 
 -record(phenom_request, {
-    step = xls_type:zero() :: xls_nums:u32()
+    step = hls_type:zero() :: hls_nums:u32()
 }).
 
 -record(phenom_query, {
-    step = xls_type:zero() :: xls_nums:u32(),
-    source = xls_type:zero() :: xls_nums:u32()
+    step = hls_type:zero() :: hls_nums:u32(),
+    source = hls_type:zero() :: hls_nums:u32()
 }).
 
 -record(phenom_data, {
-    step = xls_type:zero() :: xls_nums:u32(),
-    source = xls_type:zero() :: xls_nums:u32(),
-    present = xls_type:zero() :: xls_nums:u32()
+    step = hls_type:zero() :: hls_nums:u32(),
+    source = hls_type:zero() :: hls_nums:u32(),
+    present = hls_type:zero() :: hls_nums:u32()
 }).
 
 -record(phenom_anyon, {
-    step = xls_type:zero() :: xls_nums:u32(),
-    present = xls_type:zero() :: xls_nums:u32()
+    step = hls_type:zero() :: hls_nums:u32(),
+    present = hls_type:zero() :: hls_nums:u32()
 }).
 
 -endif.

@@ -1,0 +1,14 @@
+{application, erl_hls, [
+    {description, "Cross-platform environment for hardware applications."},
+    {vsn, "0.0.1"},
+    {registered, []},
+    {mod, {erl_hls_app, []}},
+    {applications, [
+        kernel,
+        stdlib
+    ]},
+    {env, []},
+    {modules, []},
+    {licenses, ["Apache-2.0"]},
+    {links, []}
+ ]}.

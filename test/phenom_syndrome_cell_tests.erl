@@ -266,7 +266,7 @@ cpu_api_rejects_bad_configuration_test() ->
 
 lowerable_source_and_shared_wire_tags_test() ->
     XLS = iolist_to_binary(
-        xls_parse:to_xls("src/examples/phenom_syndrome_cell.erl")
+        xls_parse:to_xls("src/examples/phi_decoder/phenom_syndrome_cell.erl")
     ),
     ?assertNotEqual(
         nomatch,

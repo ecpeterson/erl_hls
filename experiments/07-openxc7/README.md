@@ -1,7 +1,7 @@
 # Native openXC7 experiments
 
 This experiment checks whether the open-source Xilinx 7-series toolchain can
-build `erl_xls` designs natively on Apple Silicon. It has two targets:
+build `erl_hls` designs natively on Apple Silicon. It has two targets:
 
 - a small counter smoke test for `xc7z010clg225-1` and `xc7z020clg484-2`; and
 - the current two-process, packet-routed `regsvc` fixture, including a separate
@@ -63,7 +63,7 @@ content-addressed release, checks its XLS version and output hashes, and
 verifies the live handwritten RTL inputs against the same manifest.
 
 The UTM defaults match the main simulation flow. They can be overridden with
-`ERL_XLS_REMOTE_HOST`, `ERL_XLS_REMOTE_ROOT`, and `ERL_XLS_REMOTE_XLS`.
+`ERL_HLS_REMOTE_HOST`, `ERL_HLS_REMOTE_ROOT`, and `ERL_HLS_REMOTE_XLS`.
 
 ## Build the routed pair
 
@@ -110,7 +110,7 @@ snapshot semantics.
 Each instrumented hardware endpoint uses two `RAMB36E1` primitives for its
 128-bit-wide trace store, so this two-endpoint fixture uses four and an
 otherwise identical N-endpoint design would use 2N. Logical ping-pong banks
-share that physical store rather than doubling it. Host-side `xls_gs` proxy
+share that physical store rather than doubling it. Host-side `hls_gs` proxy
 processes do not themselves consume FPGA memory. The resource regression
 requires exactly four block RAMs to survive both raw-pair and compile-harness
 synthesis.

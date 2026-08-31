@@ -1,28 +1,28 @@
 %%%% xls_case_fixture
 %%%%
 %%%% Compile-only conformance fixture for expression-level case patterns in
-%%%% both the generic expression lowerer and xls_gs callback renderer.
+%%%% both the generic expression lowerer and hls_gs callback renderer.
 
 -module(xls_case_fixture).
 
--xls_data(state).
--xls_tags([query, update, reply]).
+-hls_data(state).
+-hls_tags([query, update, reply]).
 
 -record(query, {
-    mode = xls_type:zero() :: xls_nums:u32(),
-    value = xls_type:zero() :: xls_nums:u32()
+    mode = hls_type:zero() :: hls_nums:u32(),
+    value = hls_type:zero() :: hls_nums:u32()
 }).
 
 -record(update, {
-    value = xls_type:zero() :: xls_nums:u32()
+    value = hls_type:zero() :: hls_nums:u32()
 }).
 
 -record(reply, {
-    value = xls_type:zero() :: xls_nums:u32()
+    value = hls_type:zero() :: hls_nums:u32()
 }).
 
 -record(state, {
-    fallback = xls_type:zero() :: xls_nums:u32()
+    fallback = hls_type:zero() :: hls_nums:u32()
 }).
 
 init([]) ->

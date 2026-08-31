@@ -2,6 +2,9 @@
 
 We (partially) recreate `regsvc` from the previous example as an Erlang `gen_server`, transpile it to XLS, and design the Erlang-side client to be retargetable between the two execution environments.
 
+This directory is a frozen historical snapshot. Its old `xls_*` project API
+names are preserved as recorded; the corresponding live APIs now use `hls_*`.
+
 ## Structure
 
 `xls_gs` is a thin-ish wrapper over `gen_server` (GS for Gen Server).  Beyond the requirements spelled out in the behavior, modules which implement `xls_gs` are expected to meet the following requirements:

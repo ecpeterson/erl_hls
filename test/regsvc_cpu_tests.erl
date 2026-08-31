@@ -18,7 +18,7 @@ ordered_call_clause_cpu_test_() ->
     ).
 
 simulated_rtl_test_() ->
-    case os:getenv("ERL_XLS_SIM_DIR") of
+    case os:getenv("ERL_HLS_SIM_DIR") of
         false ->
             [];
         SimDir ->
@@ -28,22 +28,22 @@ simulated_rtl_test_() ->
             DebugReadPath = filename:join(SimDir, "debug_rx"),
             {setup,
                 fun() ->
-                    {ok, AppFabric} = xls_fabric:start_link(
+                    {ok, AppFabric} = hls_fabric:start_link(
                         WritePath, ReadPath
                     ),
-                    {ok, DebugFabric} = xls_fabric:start_link(
+                    {ok, DebugFabric} = hls_fabric:start_link(
                         DebugWritePath, DebugReadPath
                     ),
-                    {ok, PidOne} = xls_gs:start_link(regsvc, [], [
+                    {ok, PidOne} = hls_gs:start_link(regsvc, [], [
                         {fabric, AppFabric, 1}
                     ]),
-                    {ok, PidTwo} = xls_gs:start_link(regsvc, [], [
+                    {ok, PidTwo} = hls_gs:start_link(regsvc, [], [
                         {fabric, AppFabric, 2}
                     ]),
-                    {ok, DebugPidOne} = xls_debug:start_link(
+                    {ok, DebugPidOne} = hls_debug:start_link(
                         regsvc, {fabric, DebugFabric, 1}
                     ),
-                    {ok, DebugPidTwo} = xls_debug:start_link(
+                    {ok, DebugPidTwo} = hls_debug:start_link(
                         regsvc, {fabric, DebugFabric, 2}
                     ),
                     {
@@ -63,12 +63,12 @@ simulated_rtl_test_() ->
                     DebugPidOne,
                     DebugPidTwo
                 }) ->
-                    xls_debug:stop(DebugPidTwo),
-                    xls_debug:stop(DebugPidOne),
+                    hls_debug:stop(DebugPidTwo),
+                    hls_debug:stop(DebugPidOne),
                     regsvc:stop(PidTwo),
                     regsvc:stop(PidOne),
-                    xls_fabric:stop(DebugFabric),
-                    xls_fabric:stop(AppFabric)
+                    hls_fabric:stop(DebugFabric),
+                    hls_fabric:stop(AppFabric)
                 end,
                 fun({
                     _AppFabric,
@@ -114,7 +114,7 @@ scenario_(Pid) ->
 debug_scenario_(Pid, DebugPid) ->
     [
         ?_test(begin
-            {ok, Counters} = xls_debug:get_counters(DebugPid),
+            {ok, Counters} = hls_debug:get_counters(DebugPid),
             ?assertEqual(4, maps:get(version, Counters)),
             ?assert(maps:get(cycles, Counters) > 0),
             ?assertEqual(21, maps:get(app_rx_beats, Counters)),
@@ -124,7 +124,7 @@ debug_scenario_(Pid, DebugPid) ->
             ?assertEqual(0, maps:get(app_rx_stall_cycles, Counters))
         end),
         ?_test(begin
-            {ok, Trace} = xls_debug:get_trace(DebugPid),
+            {ok, Trace} = hls_debug:get_trace(DebugPid),
             Events = maps:get(events, Trace),
             ?assertEqual(1, maps:get(version, Trace)),
             ?assertEqual(2, maps:get(record_words, Trace)),
@@ -160,7 +160,7 @@ debug_scenario_(Pid, DebugPid) ->
             ?assertEqual(Cycles, lists:sort(Cycles))
         end),
         ?_test(begin
-            {ok, Trace} = xls_debug:get_trace(DebugPid),
+            {ok, Trace} = hls_debug:get_trace(DebugPid),
             ?assertEqual(0, maps:get(count, Trace)),
             ?assertEqual(0, maps:get(dropped, Trace)),
             ?assertEqual(0, maps:get(observation_drops, Trace)),
@@ -173,7 +173,7 @@ debug_scenario_(Pid, DebugPid) ->
                 end,
                 lists:seq(1, 33)
             ),
-            {ok, Trace} = xls_debug:get_trace(DebugPid),
+            {ok, Trace} = hls_debug:get_trace(DebugPid),
             Events = maps:get(events, Trace),
             ?assertEqual(64, maps:get(count, Trace)),
             ?assertEqual(64, length(Events)),
@@ -197,7 +197,7 @@ debug_scenario_(Pid, DebugPid) ->
             ])
         end),
         ?_test(begin
-            {ok, Trace} = xls_debug:get_trace(DebugPid),
+            {ok, Trace} = hls_debug:get_trace(DebugPid),
             ?assertEqual(0, maps:get(count, Trace)),
             ?assertEqual(0, maps:get(dropped, Trace)),
             ?assertEqual(0, maps:get(observation_drops, Trace)),
@@ -267,7 +267,7 @@ routed_pair_scenario_(PidOne, PidTwo) ->
 routed_debug_scenario_(DebugPid) ->
     [
         ?_test(begin
-            {ok, Counters} = xls_debug:get_counters(DebugPid),
+            {ok, Counters} = hls_debug:get_counters(DebugPid),
             ?assertEqual(4, maps:get(version, Counters)),
             ?assertEqual(8, maps:get(app_rx_beats, Counters)),
             ?assertEqual(3, maps:get(app_rx_frames, Counters)),
