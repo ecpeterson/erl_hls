@@ -126,6 +126,7 @@ machine_declarations(#{
         integer_to_list(max(1, MaxEntryEffects)), ";\n\n",
         "struct EntryEffects {\n",
         "  count: u8,\n",
+        "  valid: bool[", integer_to_list(length(OutputNames)), "],\n",
         "  values: Egress[", integer_to_list(length(OutputNames)), "],\n",
         "}\n\n",
         "struct MailboxSlot {\n",
@@ -190,6 +191,13 @@ entry_arm(#{
             || {Index, Effect} <- lists:enumerate(0, Effects)],
         "      (entered_data, EntryEffects {\n",
         "        count: u8:", integer_to_list(length(Effects)), ",\n",
+        "        valid: [\n",
+        [
+            ["          effect_", integer_to_list(Index), "_valid,\n"]
+            || {Index, _Effect} <- lists:enumerate(0, Effects)
+        ],
+        lists:duplicate(Padding, "          bool:false,\n"),
+        "        ],\n",
         "        values: [\n",
         [
             [
@@ -207,9 +215,14 @@ entry_arm(#{
 
 entry_effect_binding(Index, #{
     body := Body,
-    result := Result
+    result := Result,
+    valid := #{body := ValidBody, result := ValidResult}
 }) ->
     [
+        "      let effect_", integer_to_list(Index), "_valid = {\n",
+        xls_parse_io:indent(ValidBody, 8),
+        "        ", ValidResult, "\n",
+        "      };\n",
         "      let effect_", integer_to_list(Index), " = {\n",
         xls_parse_io:indent(Body, 8),
         "        ", Result, "\n",
@@ -389,8 +402,10 @@ entry_scheduler() ->
         "      let has_effect = machine.entry_effect_index < effects.count;\n",
         "      let effect = effects.values[\n",
         "        machine.entry_effect_index as u32];\n",
+        "      let emit_effect = has_effect && effects.valid[\n",
+        "        machine.entry_effect_index as u32];\n",
         "      let egress_tok = send_if(\n",
-        "        join(), egress_out, has_effect, effect);\n",
+        "        join(), egress_out, emit_effect, effect);\n",
         "      let next_effect_index =\n",
         "        machine.entry_effect_index + (has_effect as u8);\n",
         "      let entry_complete = next_effect_index >= effects.count;\n",

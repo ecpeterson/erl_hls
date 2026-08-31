@@ -5,6 +5,8 @@
 
 -define(PRNG_SEED, 16#6d2b79f5).
 -define(HALF_THRESHOLD, 16#80000000).
+-define(SYNDROME_X, 7).
+-define(SYNDROME_Y, 11).
 
 closed_noise_pipeline_advances_phi_test() ->
     {ok, Data} = phenom_data_cell:start_link(),
@@ -12,6 +14,7 @@ closed_noise_pipeline_advances_phi_test() ->
     {ok, Phi} = phi_halo_cell:start_link(),
     Parent = self(),
     AnyonTap = spawn_link(fun() -> forward_anyons(Parent, Phi) end),
+    CorrectionSink = spawn_link(fun discard_casts/0),
     try
         ok = phenom_data_cell:connect(Data, four_ports(Syndrome)),
         ok = phenom_syndrome_cell:connect(Syndrome,
@@ -24,7 +27,9 @@ closed_noise_pipeline_advances_phi_test() ->
         ok = phenom_syndrome_cell:configure(
             Syndrome,
             ?PRNG_SEED,
-            ?HALF_THRESHOLD
+            ?HALF_THRESHOLD,
+            ?SYNDROME_X,
+            ?SYNDROME_Y
         ),
         await_phase(phenom_data_cell, Data, collecting),
         await_phase(phenom_syndrome_cell, Syndrome, waiting),
@@ -32,15 +37,18 @@ closed_noise_pipeline_advances_phi_test() ->
         %% A one-cell periodic decoder is enough to exercise the complete
         %% pacing path. Its four logical edges share a PID but retain distinct
         %% port identities in their messages.
-        PhiOutputs = (four_ports(Phi))#{syndrome => Syndrome},
+        PhiOutputs = (four_ports(Phi))#{
+            syndrome => Syndrome,
+            correction => CorrectionSink
+        },
         ok = phi_halo_cell:connect(Phi, PhiOutputs),
 
         %% The data event is reported on four edges and cancels by parity in
         %% this degenerate topology. The syndrome PRNG's first measurement
         %% fault, and then its falling edge, therefore produce these two
         %% consecutive detection events.
-        expect_anyon(0, 1),
-        expect_anyon(1, 1),
+        expect_anyon(0, 1, ?SYNDROME_X, ?SYNDROME_Y),
+        expect_anyon(1, 1, ?SYNDROME_X, ?SYNDROME_Y),
         await_step(Phi, 1),
 
         DataInfo = phenom_data_cell:runtime_info(Data),
@@ -53,7 +61,8 @@ closed_noise_pipeline_advances_phi_test() ->
         stop_if_alive(phi_halo_cell, Phi),
         stop_if_alive(phenom_syndrome_cell, Syndrome),
         stop_if_alive(phenom_data_cell, Data),
-        AnyonTap ! stop
+        AnyonTap ! stop,
+        CorrectionSink ! stop
     end.
 
 odd_data_error_reaches_phi_test() ->
@@ -95,7 +104,9 @@ odd_data_error_reaches_phi_test() ->
         ok = phenom_syndrome_cell:configure(
             Syndrome,
             ?PRNG_SEED,
-            0
+            0,
+            ?SYNDROME_X,
+            ?SYNDROME_Y
         ),
         maps:foreach(
             fun(_Direction, PID) ->
@@ -106,7 +117,7 @@ odd_data_error_reaches_phi_test() ->
         await_phase(phenom_syndrome_cell, Syndrome, waiting),
         ok = phi_halo_cell:connect(
             Phi,
-            (four_ports(Sink))#{syndrome => Syndrome}
+            (four_ports(Sink))#{syndrome => Syndrome, correction => Sink}
         ),
 
         %% The paired syndrome supplies one query to each data cell. Stand-in
@@ -125,7 +136,7 @@ odd_data_error_reaches_phi_test() ->
             end,
             Data
         ),
-        expect_anyon(0, 1),
+        expect_anyon(0, 1, ?SYNDROME_X, ?SYNDROME_Y),
         await_phase(phi_halo_cell, Phi, gathering),
         #{data := PhiData} = phi_halo_cell:runtime_info(Phi),
         ?assertEqual(1, element(11, PhiData))
@@ -166,15 +177,17 @@ forward_anyons(Parent, Phi) ->
             ok
     end.
 
-expect_anyon(Step, Present) ->
+expect_anyon(Step, Present, X, Y) ->
     receive
         {phenom_pipeline, #phenom_anyon{
                 step = Step,
-                present = Present
+                present = Present,
+                x = X,
+                y = Y
             }} ->
             ok
     after 2000 ->
-        error({missing_phenom_anyon, Step, Present})
+        error({missing_phenom_anyon, Step, Present, X, Y})
     end.
 
 await_phase(Module, PID, Phase) ->

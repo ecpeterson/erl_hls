@@ -7,6 +7,8 @@
 -define(PRNG_FIRST, 16#40aec71f).
 -define(PRNG_SECOND, 16#91e00c19).
 -define(HALF_THRESHOLD, 16#80000000).
+-define(COORD_X, 16#1234).
+-define(COORD_Y, 16#abcd).
 
 query_entry_labels_recipient_edges_test() ->
     Cell = collecting_cell(?PRNG_SEED, 0),
@@ -41,7 +43,12 @@ response_order_does_not_change_parity_test() ->
     ],
     lists:foreach(
         fun(Permutation) ->
-            Cell0 = collecting_cell(?PRNG_SEED, 0),
+            Cell0 = collecting_cell(
+                ?PRNG_SEED,
+                0,
+                ?COORD_X,
+                ?COORD_Y
+            ),
             {announcing, Cell1, consume} = apply_responses(
                 Permutation,
                 0,
@@ -49,13 +56,15 @@ response_order_does_not_change_parity_test() ->
             ),
             ?assertEqual(
                 {syndrome, 0, ?PHI_ALL_DIRECTIONS, 1, 0, 1,
-                    ?PRNG_FIRST, 0},
+                    ?PRNG_FIRST, 0, ?COORD_X, ?COORD_Y},
                 Cell1
             ),
             ?assertEqual(
                 {Cell1, [{cast, phi, #phenom_anyon{
                     step = 0,
-                    present = 1
+                    present = 1,
+                    x = ?COORD_X,
+                    y = ?COORD_Y
                 }}]},
                 phenom_syndrome_cell:handle_enter(
                     collecting,
@@ -78,7 +87,7 @@ measurement_error_appears_at_both_boundaries_test() ->
     %% measurement toggles the otherwise empty data parity.
     ?assertEqual(
         {syndrome, 0, ?PHI_ALL_DIRECTIONS, 0, 1, 1,
-            ?PRNG_FIRST, ?HALF_THRESHOLD},
+            ?PRNG_FIRST, ?HALF_THRESHOLD, 0, 0},
         First
     ),
 
@@ -96,7 +105,7 @@ measurement_error_appears_at_both_boundaries_test() ->
     %% measurement error therefore supplies this round's detection event.
     ?assertEqual(
         {syndrome, 1, ?PHI_ALL_DIRECTIONS, 0, 0, 1,
-            ?PRNG_SECOND, ?HALF_THRESHOLD},
+            ?PRNG_SECOND, ?HALF_THRESHOLD, 0, 0},
         Second
     ).
 
@@ -106,13 +115,13 @@ prng_advances_once_when_join_completes_test() ->
     {collecting, Cell2, consume} = offer_direct(east, false, 0, Cell1),
     {collecting, Cell3, consume} = offer_direct(west, false, 0, Cell2),
     ?assertMatch(
-        {syndrome, 0, _, 0, 0, 0, ?PRNG_SEED, ?HALF_THRESHOLD},
+        {syndrome, 0, _, 0, 0, 0, ?PRNG_SEED, ?HALF_THRESHOLD, 0, 0},
         Cell3
     ),
     {announcing, Cell4, consume} = offer_direct(south, false, 0, Cell3),
     ?assertMatch(
         {syndrome, 0, ?PHI_ALL_DIRECTIONS, 0, 1, 1,
-            ?PRNG_FIRST, ?HALF_THRESHOLD},
+            ?PRNG_FIRST, ?HALF_THRESHOLD, 0, 0},
         Cell4
     ).
 
@@ -166,7 +175,20 @@ invalid_configuration_and_request_steps_fail_test() ->
     ?assertEqual(
         {configuring, Initial, fail},
         phenom_syndrome_cell:handle_cast(
-            #phenom_config{seed = 0, threshold = 0},
+            #phenom_config{seed = 0, threshold = 0, x = 0, y = 0},
+            configuring,
+            Initial
+        )
+    ),
+    ?assertEqual(
+        {configuring, Initial, fail},
+        phenom_syndrome_cell:handle_cast(
+            #phenom_config{
+                seed = ?PRNG_SEED,
+                threshold = 0,
+                x = 16#10000,
+                y = 0
+            },
             configuring,
             Initial
         )
@@ -199,7 +221,13 @@ early_next_request_replays_after_announcement_test() ->
     ]),
     {ok, PID} = phenom_syndrome_cell:start_link(Outputs),
     try
-        ok = phenom_syndrome_cell:configure(PID, ?PRNG_SEED, 0),
+        ok = phenom_syndrome_cell:configure(
+            PID,
+            ?PRNG_SEED,
+            0,
+            ?COORD_X,
+            ?COORD_Y
+        ),
         ok = phenom_syndrome_cell:offer_request(PID, 0),
         expect_query_batch(0),
 
@@ -213,13 +241,19 @@ early_next_request_replays_after_announcement_test() ->
         ok = phenom_syndrome_cell:offer_data(PID, 0, west, true),
         ok = phenom_syndrome_cell:offer_data(PID, 0, south, true),
 
-        expect_cast(#phenom_anyon{step = 0, present = 1}),
+        expect_cast(#phenom_anyon{
+            step = 0,
+            present = 1,
+            x = ?COORD_X,
+            y = ?COORD_Y
+        }),
         expect_query_batch(1),
         After = phenom_syndrome_cell:runtime_info(PID),
         ?assertEqual(collecting, maps:get(phase, After)),
         ?assertEqual(0, maps:get(postponed, After)),
         ?assertEqual(
-            {syndrome, 1, 0, 0, 0, 0, ?PRNG_FIRST, 0},
+            {syndrome, 1, 0, 0, 0, 0, ?PRNG_FIRST, 0,
+                ?COORD_X, ?COORD_Y},
             maps:get(data, After)
         )
     after
@@ -262,6 +296,38 @@ cpu_api_rejects_bad_configuration_test() ->
             ?PRNG_SEED,
             16#100000000
         )
+    ),
+    ?assertError(
+        badarg,
+        phenom_syndrome_cell:configure(
+            self(),
+            ?PRNG_SEED,
+            0,
+            -1,
+            0
+        )
+    ),
+    ?assertError(
+        badarg,
+        phenom_syndrome_cell:configure(
+            self(),
+            ?PRNG_SEED,
+            0,
+            0,
+            16#10000
+        )
+    ),
+    ?assertError(
+        badarg,
+        phenom_syndrome_cell:configure(self(), 1.0, 0, 0, 0)
+    ),
+    ?assertError(
+        badarg,
+        phenom_syndrome_cell:configure(self(), ?PRNG_SEED, 0.0, 0, 0)
+    ),
+    ?assertError(
+        badarg,
+        phenom_syndrome_cell:configure(self(), ?PRNG_SEED, 0, 0.0, 0)
     ).
 
 lowerable_source_and_shared_wire_tags_test() ->
@@ -284,13 +350,31 @@ lowerable_source_and_shared_wire_tags_test() ->
         nomatch,
         binary:match(XLS, <<" << u32:13">>)
     ),
+    ?assertNotEqual(
+        nomatch,
+        binary:match(XLS, <<
+            "struct Phenomanyon {\n"
+            "  step : u32,\n"
+            "  present : u32,\n"
+            "  x : u16,\n"
+            "  y : u16,"
+        >>)
+    ),
     ?assertEqual(7, phenom_syndrome_cell:pack_tag(phenom_request)),
     ?assertEqual(10, phenom_syndrome_cell:pack_tag(phenom_anyon)).
 
 collecting_cell(Seed, Threshold) ->
+    collecting_cell(Seed, Threshold, 0, 0).
+
+collecting_cell(Seed, Threshold, X, Y) ->
     {ok, configuring, Initial} = phenom_syndrome_cell:init([]),
     {waiting, Configured, consume} = phenom_syndrome_cell:handle_cast(
-        #phenom_config{seed = Seed, threshold = Threshold},
+        #phenom_config{
+            seed = Seed,
+            threshold = Threshold,
+            x = X,
+            y = Y
+        },
         configuring,
         Initial
     ),

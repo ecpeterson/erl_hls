@@ -14,6 +14,14 @@ module phi_noise_topology_smoke_tb;
     wire [127:0] z_announcement;
     wire z_valid;
 
+    wire x_correction_ready = 1'b1;
+    wire [127:0] x_correction;
+    wire x_correction_valid;
+
+    wire z_correction_ready = 1'b1;
+    wire [127:0] z_correction;
+    wire z_correction_valid;
+
     reg [127:0] captured_x;
     reg [127:0] captured_z;
     reg [127:0] stalled_x;
@@ -30,7 +38,13 @@ module phi_noise_topology_smoke_tb;
         .phi_noise_topology_smoke__x_announcements_out_vld(x_valid),
         .phi_noise_topology_smoke__z_announcements_out_rdy(z_ready),
         .phi_noise_topology_smoke__z_announcements_out(z_announcement),
-        .phi_noise_topology_smoke__z_announcements_out_vld(z_valid)
+        .phi_noise_topology_smoke__z_announcements_out_vld(z_valid),
+        .phi_noise_topology_smoke__x_corrections_out_rdy(x_correction_ready),
+        .phi_noise_topology_smoke__x_corrections_out(x_correction),
+        .phi_noise_topology_smoke__x_corrections_out_vld(x_correction_valid),
+        .phi_noise_topology_smoke__z_corrections_out_rdy(z_correction_ready),
+        .phi_noise_topology_smoke__z_corrections_out(z_correction),
+        .phi_noise_topology_smoke__z_corrections_out_vld(z_correction_valid)
     );
 
     always #5 clk = ~clk;
@@ -43,6 +57,14 @@ module phi_noise_topology_smoke_tb;
         if (!reset && z_valid && z_ready && z_count == 0) begin
             captured_z <= z_announcement;
             z_count <= 1;
+        end
+        if (!reset && x_correction_valid && x_correction_ready) begin
+            $display("FAIL: distance-one x plane emitted a correction");
+            $fatal(1);
+        end
+        if (!reset && z_correction_valid && z_correction_ready) begin
+            $display("FAIL: distance-one z plane emitted a correction");
+            $fatal(1);
         end
     end
 
@@ -82,7 +104,7 @@ module phi_noise_topology_smoke_tb;
         begin
             header = frame[127:96];
             if (header[7:0] !== PHENOM_ANYON_TAG ||
-                    header[31:24] !== 8'd2) begin
+                    header[31:24] !== 8'd3) begin
                 $display("FAIL: %s announcement has malformed header %08x",
                     plane, header);
                 $fatal(1);

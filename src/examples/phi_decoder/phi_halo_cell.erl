@@ -41,12 +41,16 @@ is explicitly repeated, then retried in their original arrival order. Partial
 sums, receive masks, and receive counts are ordinary data changes and do not
 themselves retry a postponed message.
 
-The generated module exposes five separately backpressured output ports:
-`north`, `east`, `west`, and `south` for the decoder mesh, plus `syndrome` for
-its measurement source. The CPU scheduler maps those names to the PIDs passed
-to `start_link/1`; no recipient is hidden in the cell. To build a cyclic CPU
-topology, start every cell with `start_link/0` and then call `connect/2`; its
-initial measurement request runs on connection.
+The generated module exposes six separately backpressured output ports:
+`north`, `east`, `west`, and `south` for the decoder mesh, `syndrome` for its
+measurement source, and one provisional `correction` event stream. A physical
+correction belongs to the data-qubit edge between this syndrome location and
+the selected neighboring syndrome location. The compact event identifies that
+edge by syndrome coordinate and direction; it is not a claim that a phi cell
+has only one neighboring data qubit. The CPU scheduler maps output names to the
+PIDs passed to `start_link/1`; no recipient is hidden in the cell. To build a
+cyclic CPU topology, start every cell with `start_link/0` and then call
+`connect/2`; its initial measurement request runs on connection.
 
 The diffusion and anyon joins rely on the topology delivering exactly one
 message per incoming edge in each phase. The comparison join is source-aware:
@@ -70,21 +74,27 @@ its data and measurement generators are separate actors.
 
 An outgoing move toggles the local anyon before incoming moves are combined by
 parity. Consequently, simultaneous arrivals and departures produce the same
-occupancy regardless of message order. This module does not emit the physical
-correction associated with the selected edge.
+occupancy regardless of message order. Like the reference phi implementation,
+this fixture emits a correction only when a move occurs. Its statically placed
+`cast_if` action retains source order while a runtime predicate suppresses the
+unused effect, so correction traffic scales with applied moves rather than
+physical qubits and steps.
 
 A fuller decoder needs a configurable diffusion stopping rule, independent
-per-cell coin streams, richer noise/measurement configuration, and correction
-output. Those additions should preserve the four genuine barrier phases; a
-parity-only wakeup phase would not have direct protocol meaning.
+per-cell coin streams, and richer noise/measurement configuration. Those
+additions should preserve the four genuine barrier phases; a parity-only wakeup
+phase would not have direct protocol meaning.
 
 ## Field arithmetic
 
 The two stored layers are a deliberately small z-depth probe. Layer zero is the
 syndrome plane and layer one uses the charge-free bulk coefficient. Values use
-unsigned Q16.16 in the intended deployment. Integer operations implement this
-two-layer specialization of the relaxation coefficients; explicit `u32` masks
-keep the CPU model aligned with fixed-width generated arithmetic.
+a raw unsigned Q16.16 encoding in this fixture. Integer operations implement
+this two-layer specialization of the relaxation coefficients; explicit `u32`
+masks keep the CPU model aligned with fixed-width generated arithmetic. The
+intended decoder should instead use an explicit fixed-point type after its
+signedness, range, rounding, and overflow behavior have been checked against
+the reference implementation.
 """.
 
 -include("phi_protocol.hrl").
@@ -98,6 +108,7 @@ keep the CPU model aligned with fixed-width generated arithmetic.
     offer_phi0/4,
     offer_anyon/3,
     offer_measurement/3,
+    offer_measurement/5,
     runtime_info/1
 ]).
 -export([init/1, handle_enter/3, handle_cast/3]).
@@ -113,14 +124,20 @@ keep the CPU model aligned with fixed-width generated arithmetic.
 -behavior(hls_statem).
 -hls_data(cell).
 -hls_phases([measuring, gathering, comparing, flipping]).
--hls_outputs([north, east, west, south, syndrome]).
+-hls_outputs([north, east, west, south, syndrome, correction]).
 -hls_mailbox_capacity(?MAILBOX_CAPACITY).
 -compile({parse_transform, hls_pack}).
 
 %% TODO: Replace the two-element hls_lists values with hls_vec once vector
 %% arithmetic is part of the lowerable library.
-%% TODO: Replace the fixed diffusion count with the decoder's stopping rule and
-%% expose the physical-correction boundary.
+%% TODO: Replace raw u32 Q16.16 field values and hand-coded shifts with an
+%% explicit lowerable fixed-point type and operators after settling signedness,
+%% integer/fraction widths, rounding, and overflow against the reference
+%% decoder.
+%% TODO: Replace the fixed diffusion count with the decoder's stopping rule.
+%% TODO: Choose the deployment boundary for applied corrections: either route
+%% each move to its neighboring data-qubit actor in PL, or translate the
+%% coordinate/direction event in an explicit PL-PS gateway.
 %% TODO: Revisit neighbor configuration so FPGA topology can be fixed at
 %% compile time while CPU models retain ergonomic runtime wiring.
 %% TODO: Give statically instantiated cells distinct nonzero PRNG seeds. The
@@ -142,7 +159,9 @@ keep the CPU model aligned with fixed-width generated arithmetic.
     best_direction = hls_type:zero() :: hls_nums:u32(),
     moves_received = hls_type:zero() :: hls_nums:u8(),
     anyon = hls_type:zero() :: hls_nums:u32(),
-    random_state = hls_type:zero() :: hls_nums:u32()
+    random_state = hls_type:zero() :: hls_nums:u32(),
+    x = hls_type:zero() :: hls_nums:u16(),
+    y = hls_type:zero() :: hls_nums:u16()
 }).
 
 -type phase() :: measuring | gathering | comparing | flipping.
@@ -155,7 +174,8 @@ keep the CPU model aligned with fixed-width generated arithmetic.
     east := pid(),
     west := pid(),
     south := pid(),
-    syndrome := pid()
+    syndrome := pid(),
+    correction := pid()
 }.
 -type direction() :: north | east | west | south.
 
@@ -186,7 +206,7 @@ start_link(Neighbors) ->
             error(badarg)
     end.
 
--doc "Connects a deferred cell to four neighbors and its syndrome source.".
+-doc "Connects a deferred cell to its mesh, syndrome, and correction outputs.".
 -spec connect(pid(), neighbors()) -> ok | {error, already_connected}.
 connect(PID, Neighbors) ->
     case valid_neighbors(Neighbors) of
@@ -225,13 +245,29 @@ offer_anyon(PID, Step, Present) when is_boolean(Present) ->
 -doc "Offers the detection event for one decoder step.".
 -spec offer_measurement(pid(), hls_nums:u32(), boolean()) -> ok.
 offer_measurement(PID, Step, Present) when is_boolean(Present) ->
+    offer_measurement(PID, Step, Present, 0, 0).
+
+-doc "Offers a detection event and its paired lattice coordinate.".
+-spec offer_measurement(
+    pid(),
+    hls_nums:u32(),
+    boolean(),
+    hls_nums:u16(),
+    hls_nums:u16()
+) -> ok.
+offer_measurement(PID, Step, Present, X, Y)
+        when is_boolean(Present),
+             is_integer(X), X >= 0, X =< 16#ffff,
+             is_integer(Y), Y >= 0, Y =< 16#ffff ->
     PresentWord = case Present of
         false -> 0;
         true -> 1
     end,
     hls_statem:cast(PID, #phenom_anyon{
         step = Step,
-        present = PresentWord
+        present = PresentWord,
+        x = X,
+        y = Y
     }).
 
 -doc "Returns diagnostic data from the bounded CPU scheduler.".
@@ -294,6 +330,16 @@ handle_enter(_OldPhase, flipping, Cell) ->
             _ -> {Absent, Absent, Absent, Absent}
         end,
     Message = #anyon_move{step = Cell#cell.step},
+    CorrectionDirection = case Move of
+        false -> Absent;
+        true -> Cell#cell.best_direction
+    end,
+    Correction = #phi_correction{
+        step = Cell#cell.step,
+        x = Cell#cell.x,
+        y = Cell#cell.y,
+        direction = CorrectionDirection
+    },
     Updated = Cell#cell{
         anyon = Cell#cell.anyon bxor Present,
         random_state = NextRandom
@@ -302,7 +348,8 @@ handle_enter(_OldPhase, flipping, Cell) ->
         {cast, north, Message#anyon_move{present = NorthPresent}},
         {cast, east, Message#anyon_move{present = EastPresent}},
         {cast, west, Message#anyon_move{present = WestPresent}},
-        {cast, south, Message#anyon_move{present = SouthPresent}}
+        {cast, south, Message#anyon_move{present = SouthPresent}},
+        {cast_if, Move, correction, Correction}
     ]}.
 
 -spec handle_cast(
@@ -312,11 +359,17 @@ handle_enter(_OldPhase, flipping, Cell) ->
 ) ->
     conclusion().
 handle_cast(
-    #phenom_anyon{step = Step, present = Present},
+    #phenom_anyon{step = Step, present = Present, x = X, y = Y},
     measuring,
     Cell = #cell{step = Step}
-) when Present < 2 ->
-    Updated = Cell#cell{anyon = Cell#cell.anyon bxor Present},
+) when Present < 2,
+       X >= 0, X =< 16#ffff,
+       Y >= 0, Y =< 16#ffff ->
+    Updated = Cell#cell{
+        anyon = Cell#cell.anyon bxor Present,
+        x = X,
+        y = Y
+    },
     {gathering, Updated, consume};
 handle_cast(#phenom_anyon{}, measuring, Cell) ->
     {measuring, Cell, fail};
@@ -524,5 +577,5 @@ source_mask(_Direction) -> error(badarg).
 valid_neighbors(Neighbors) ->
     is_map(Neighbors) andalso
         lists:sort(maps:keys(Neighbors)) =:=
-            lists:sort([north, east, west, south, syndrome]) andalso
+            lists:sort([north, east, west, south, syndrome, correction]) andalso
         lists:all(fun is_pid/1, maps:values(Neighbors)).

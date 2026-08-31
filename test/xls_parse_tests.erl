@@ -722,6 +722,36 @@ state_machine_entry_action_accepts_record_update_test() ->
         end
     ).
 
+state_machine_entry_action_accepts_runtime_predicate_test() ->
+    EnterSource =
+        "handle_enter(_OldPhase, waiting, Cell) ->\n"
+        "  Enabled = Cell#cell.value =/= 0,\n"
+        "  {Cell, [{cast_if, Enabled, out, #message{"
+        "value = Cell#cell.value}}]}.\n",
+    CastSource =
+        "handle_cast(#message{}, waiting, Cell) ->\n"
+        "  {waiting, Cell, consume}.\n",
+    with_statem_fixture(
+        "statem_conditional_entry_fixture",
+        "[waiting]",
+        EnterSource,
+        CastSource,
+        fun(XLS) ->
+            ?assertNotEqual(
+                nomatch,
+                binary:match(XLS, <<"effect_0_valid">>)
+            ),
+            ?assertNotEqual(
+                nomatch,
+                binary:match(XLS, <<"emit_effect = has_effect &&">>)
+            ),
+            ?assertNotEqual(
+                nomatch,
+                binary:match(XLS, <<" != 0">>)
+            )
+        end
+    ).
+
 state_machine_entry_actions_use_one_source_ordered_egress_test() ->
     Path = filename:join("_build", "ordered_egress_fixture.erl"),
     ok = filelib:ensure_dir(Path),
@@ -768,7 +798,7 @@ state_machine_entry_actions_use_one_source_ordered_egress_test() ->
         )),
         ?assertEqual(1, length(binary:matches(
             XLS,
-            <<"join(), egress_out, has_effect, effect">>
+            <<"join(), egress_out, emit_effect, effect">>
         ))),
         ?assertNotEqual(nomatch, binary:match(
             XLS,

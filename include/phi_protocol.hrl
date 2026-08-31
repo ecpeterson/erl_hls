@@ -24,7 +24,8 @@
     phenom_request,
     phenom_query,
     phenom_data,
-    phenom_anyon
+    phenom_anyon,
+    phi_correction
 ]).
 
 -define(PHI_NORTH_MASK, 1).
@@ -52,7 +53,9 @@
 
 -record(phenom_config, {
     seed = hls_type:zero() :: hls_nums:u32(),
-    threshold = hls_type:zero() :: hls_nums:u32()
+    threshold = hls_type:zero() :: hls_nums:u32(),
+    x = hls_type:zero() :: hls_nums:u16(),
+    y = hls_type:zero() :: hls_nums:u16()
 }).
 
 -record(phenom_request, {
@@ -72,7 +75,19 @@
 
 -record(phenom_anyon, {
     step = hls_type:zero() :: hls_nums:u32(),
-    present = hls_type:zero() :: hls_nums:u32()
+    present = hls_type:zero() :: hls_nums:u32(),
+    x = hls_type:zero() :: hls_nums:u16(),
+    y = hls_type:zero() :: hls_nums:u16()
+}).
+
+%% A provisional sparse correction boundary event. The output stream identifies
+%% the decoder plane; x/y name a syndrome location, and direction selects its
+%% neighboring data-qubit edge. A valid event always has a nonzero direction.
+-record(phi_correction, {
+    step = hls_type:zero() :: hls_nums:u32(),
+    x = hls_type:zero() :: hls_nums:u16(),
+    y = hls_type:zero() :: hls_nums:u16(),
+    direction = hls_type:zero() :: hls_nums:u32()
 }).
 
 -endif.

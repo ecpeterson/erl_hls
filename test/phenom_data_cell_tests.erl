@@ -130,7 +130,7 @@ configuration_rejects_zero_seed_test() ->
     ?assertEqual(
         {configuring, Cell, fail},
         phenom_data_cell:handle_cast(
-            {phenom_config, 0, 123},
+            {phenom_config, 0, 123, 0, 0},
             configuring,
             Cell
         )

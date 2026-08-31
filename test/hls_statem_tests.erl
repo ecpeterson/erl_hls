@@ -20,6 +20,24 @@ initial_enter_precedes_first_cast_test() ->
         stop_if_alive(PID)
     end.
 
+conditional_entry_cast_can_be_suppressed_test() ->
+    {ok, PID} = hls_statem:start_link(
+        ?MODULE,
+        {emit, false},
+        [{mailbox_capacity, 1}, {outputs, #{out => self()}}]
+    ),
+    try
+        ?assertEqual(waiting, maps:get(phase, hls_statem:info(PID))),
+        receive
+            {'$gen_cast', started} ->
+                error(disabled_entry_cast_was_sent)
+        after 10 ->
+            ok
+        end
+    after
+        stop_if_alive(PID)
+    end.
+
 postponed_retry_requires_phase_change_test() ->
     {ok, PID} = start(8),
     try
@@ -220,6 +238,15 @@ init([]) ->
     {ok, waiting, #{
         attempts => 0,
         eligible => false,
+        emit => true,
+        handled => false,
+        log => []
+    }};
+init({emit, Enabled}) when is_boolean(Enabled) ->
+    {ok, waiting, #{
+        attempts => 0,
+        eligible => false,
+        emit => Enabled,
         handled => false,
         log => []
     }};
@@ -227,7 +254,9 @@ init(repeat_phase) ->
     {ok, repeat_phase, #{}}.
 
 handle_enter(OldPhase, waiting, Data) ->
-    {log({enter, OldPhase, waiting}, Data), [{cast, out, started}]};
+    {log({enter, OldPhase, waiting}, Data), [
+        {cast_if, maps:get(emit, Data), out, started}
+    ]};
 handle_enter(OldPhase, ready, Data) ->
     {log({enter, OldPhase, ready}, Data), [{cast, out, handled}]}.
 

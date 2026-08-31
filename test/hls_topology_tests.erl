@@ -8,9 +8,20 @@ phi_phenom_topology_normalizes_test() ->
         [data, phi, syndrome],
         [maps:get(id, Actor) || Actor <- maps:get(actors, Plan)]
     ),
-    ?assertEqual(14, length(maps:get(routes, Plan))),
+    ?assertEqual(15, length(maps:get(routes, Plan))),
     ?assertEqual(
-        [#{id => announcement, direction => out, schemas => [phenom_anyon]}],
+        [
+            #{
+                id => announcement,
+                direction => out,
+                schemas => [phenom_anyon]
+            },
+            #{
+                id => correction,
+                direction => out,
+                schemas => [phi_correction]
+            }
+        ],
         maps:get(externals, Plan)
     ),
     ?assertEqual(
@@ -20,6 +31,14 @@ phi_phenom_topology_normalizes_test() ->
             recipients => [{actor, phi}, {external, announcement}]
         },
         route(Plan, {syndrome, phi})
+    ),
+    ?assertEqual(
+        #{
+            source => {phi, correction},
+            delivery => direct,
+            recipients => [{external, correction}]
+        },
+        route(Plan, {phi, correction})
     ),
     ?assertEqual(
         [data, syndrome],
@@ -225,7 +244,7 @@ actor_output_abi_order_is_preserved_test() ->
            maps:get(id, Actor) =:= phi
     ]),
     ?assertEqual(
-        [north, east, west, south, syndrome],
+        [north, east, west, south, syndrome, correction],
         maps:get(outputs, Phi)
     ).
 
@@ -273,7 +292,10 @@ incompatible_external_route_schema_is_rejected_test() ->
             [phenom_anyon],
             [phi]},
         hls_topology:normalize(Spec#{
-            externals := [{announcement, out, [phi]}]
+            externals := [
+                {announcement, out, [phi]},
+                {correction, out, [phi_correction]}
+            ]
         })
     ).
 
@@ -318,7 +340,8 @@ generated_topology_has_expected_physical_shape_test() ->
     ?assertEqual(2, count(Generated, <<"spawn axis::FrameMux2(">>)),
     ?assertEqual(3, count(Generated, <<"proc ActorRouter">>)),
     ?assertEqual(3, count(Generated, <<"spawn ActorRouter">>)),
-    ?assertEqual(3, count(Generated, <<"::Egress, u32:4>">>)),
+    ?assertEqual(2, count(Generated, <<"::Egress, u32:4>">>)),
+    ?assertEqual(1, count(Generated, <<"::Egress, u32:5>">>)),
     ?assertEqual(0, count(Generated, <<"QueuedFanout">>)),
     ?assertEqual(2, count(Generated, <<"proc StartupPrefix">>)),
     ?assertEqual(2, count(Generated, <<"spawn StartupPrefix">>)),
@@ -336,19 +359,19 @@ generated_topology_has_expected_physical_shape_test() ->
     )),
     ?assertNotEqual(
         nomatch,
-        binary:match(Generated, <<"u64:0x800000009E3779B9">>)
+        binary:match(Generated, <<"uN[96]:0x00000000800000009E3779B9">>)
     ),
     ?assertNotEqual(
         nomatch,
-        binary:match(Generated, <<"u64:0x8000000085EBCA6B">>)
+        binary:match(Generated, <<"uN[96]:0x000000008000000085EBCA6B">>)
     ).
 
 generated_startup_preserves_per_actor_message_order_test() ->
     Spec = phi_phenom_topology:topology(),
     Plan = hls_topology:normalize(Spec#{startup := [
         {data, [
-            {phenom_config, 1, 2},
-            {phenom_config, 3, 4}
+            {phenom_config, 1, 2, 3, 4},
+            {phenom_config, 5, 6, 7, 8}
         ]}
     ]}),
     Generated = iolist_to_binary(xls_topology_dslx:emit(
@@ -357,11 +380,13 @@ generated_startup_preserves_per_actor_message_order_test() ->
     )),
     {First, _} = binary:match(
         Generated,
-        <<"u32:0 => axis::pack(u8:6, u64:0x0000000200000001)">>
+        <<"u32:0 => axis::pack(u8:6, "
+          "uN[96]:0x000400030000000200000001)">>
     ),
     {Second, _} = binary:match(
         Generated,
-        <<"u32:1 => axis::pack(u8:6, u64:0x0000000400000003)">>
+        <<"u32:1 => axis::pack(u8:6, "
+          "uN[96]:0x000800070000000600000005)">>
     ),
     ?assert(First < Second),
     ?assertEqual(1, count(Generated, <<"recv_if(\n">>)),
@@ -512,12 +537,15 @@ dslx_backend_supports_aliased_external_lane_test() ->
         || Route <- maps:get(routes, Spec)
     ],
     Plan = hls_topology:normalize(Spec#{
-        externals := [{announcement, out, [
-            anyon_move,
-            phi,
-            phi0,
-            phenom_anyon
-        ]}],
+        externals := [
+            {announcement, out, [
+                anyon_move,
+                phi,
+                phi0,
+                phenom_anyon
+            ]},
+            {correction, out, [phi_correction]}
+        ],
         routes := Routes
     }),
     Generated = iolist_to_binary(xls_topology_dslx:emit(
@@ -548,7 +576,10 @@ dslx_backend_requires_identifier_external_names_test() ->
         || Route <- maps:get(routes, Spec)
     ],
     Plan = hls_topology:normalize(Spec#{
-        externals := [{ExternalId, out, [phenom_anyon]}],
+        externals := [
+            {ExternalId, out, [phenom_anyon]},
+            {correction, out, [phi_correction]}
+        ],
         routes := Routes
     }),
     ?assertError(
@@ -562,7 +593,7 @@ dslx_backend_requires_identifier_external_names_test() ->
 dslx_backend_rejects_startup_target_with_initial_effects_test() ->
     Spec = phi_phenom_topology:topology(),
     Plan = hls_topology:normalize(Spec#{startup := [
-        {phi, [{phenom_anyon, 0, 0}]}
+        {phi, [{phenom_anyon, 0, 0, 0, 0}]}
     ]}),
     try xls_topology_dslx:emit(
         Plan,
@@ -706,13 +737,18 @@ nonaliased_phi_pair() ->
             syndrome => phenom_syndrome_cell
         },
         families => #{},
-        externals => PhiExternals ++ QueryExternals,
+        externals =>
+            PhiExternals ++ QueryExternals ++
+            [{correction, out, [phi_correction]}],
         routes =>
             [
                 {{phi, Port}, [{external, maps:get(Port, PhiExternalIds)}]}
                 || Port <- Directions
             ] ++
-            [{{phi, syndrome}, [{actor, syndrome}]}] ++
+            [
+                {{phi, syndrome}, [{actor, syndrome}]},
+                {{phi, correction}, [{external, correction}]}
+            ] ++
             [
                 {{syndrome, Port}, [
                     {external, maps:get(Port, QueryExternalIds)}

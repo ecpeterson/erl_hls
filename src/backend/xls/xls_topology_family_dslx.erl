@@ -470,20 +470,12 @@ pack_startup_message(Target, Module, Message)
             Width =< ?MAX_PAYLOAD_BITS of
         true -> #{
             tag => Tag,
-            payload => payload_literal(Payload)
+            payload => xls_nums:packed_unsigned_literal(Payload)
         };
         false -> error({unsupported_startup_payload, Target, Width})
     end;
 pack_startup_message(Target, _Module, Message) ->
     error({invalid_startup_message, Target, Message}).
-
-payload_literal(Payload) ->
-    Width = bit_size(Payload),
-    Digits = Width div 4,
-    Value = binary:decode_unsigned(Payload, little),
-    Hex = integer_to_list(Value, 16),
-    ["u", integer_to_list(Width), ":0x",
-        lists:duplicate(Digits - length(Hex), $0), Hex].
 
 validate_profile(Profile) when is_map(Profile) ->
     Required = lists:sort([channel_depth, name]),

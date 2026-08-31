@@ -56,8 +56,8 @@ physical or Pauli-frame correction sink.
 
 %% TODO: Add the other Pauli channel(s) once the surrounding experiment
 %% distinguishes their syndrome neighborhoods.
-%% TODO: Accept a selected-edge correction once the phi topology exposes a
-%% correction boundary.
+%% TODO: Apply selected-edge correction decisions to the corresponding data
+%% qubits once the demo includes its coordinate-to-qubit application step.
 
 -record(data_cell, {
     step = hls_type:zero() :: hls_nums:u32(),

@@ -29,6 +29,28 @@ comparison_entry_labels_recipient_edges_test() ->
 coin_gates_selected_anyon_output_test() ->
     with_cell(fun coin_gates_selected_anyon_output/2).
 
+measurement_coordinate_reaches_correction_test() ->
+    {ok, measuring, Initial} = phi_halo_cell:init([]),
+    {gathering, Updated, consume} = phi_halo_cell:handle_cast(
+        {phenom_anyon, 0, 1, 16#1234, 16#abcd},
+        measuring,
+        Initial
+    ),
+    ?assertMatch(
+        {cell, 0, 0, [0, 0], [0, 0], 0,
+            0, 0, 0, 0, 1, ?PRNG_SEED, 16#1234, 16#abcd},
+        Updated
+    ),
+    {_AfterFlip, Actions} = phi_halo_cell:handle_enter(
+        comparing,
+        flipping,
+        Updated
+    ),
+    ?assertEqual(
+        expected_anyon_actions(0, none, 16#1234, 16#abcd),
+        Actions
+    ).
+
 measurement_gates_diffusion_and_toggles_anyon_test() ->
     {CardinalCollectors, Ref} = start_collectors(),
     Parent = self(),
@@ -48,7 +70,7 @@ measurement_gates_diffusion_and_toggles_anyon_test() ->
         ?assertEqual(4, maps:get(committed, maps:get(mailbox, Waiting))),
         ?assertMatch(
             {cell, 0, 0, [0, 0], [0, 0], 0,
-                0, 0, 0, 0, 0, ?PRNG_SEED},
+                0, 0, 0, 0, 0, ?PRNG_SEED, 0, 0},
             maps:get(data, Waiting)
         ),
         assert_no_neighbor_cast(Ref),
@@ -64,7 +86,7 @@ measurement_gates_diffusion_and_toggles_anyon_test() ->
         ?assertEqual(0, maps:get(committed, maps:get(mailbox, Running))),
         ?assertMatch(
             {cell, 0, 1, [65536, 0], [0, 0], 0,
-                0, 0, 0, 0, 1, ?PRNG_SEED},
+                0, 0, 0, 0, 1, ?PRNG_SEED, 0, 0},
             maps:get(data, Running)
         )
     after
@@ -137,11 +159,11 @@ directional_coin_moves_test_() ->
             ?assertEqual(
                 {cell, 0, 2, [15, 15], [0, 0], 0,
                     ?ALL_DIRECTIONS, 18, DirectionMask, 0, 0,
-                    ?PRNG_SECOND},
+                    ?PRNG_SECOND, 0, 0},
                 Updated
             ),
             ?assertEqual(
-                expected_anyon_actions(0, Direction),
+                expected_anyon_actions(0, Direction, 0, 0),
                 Actions
             )
         end}
@@ -165,10 +187,10 @@ coin_advances_when_no_move_is_eligible_test_() ->
             ?assertMatch(
                 {cell, 0, 2, [15, 15], [0, 0], 0,
                     ?ALL_DIRECTIONS, 18, Direction, 0,
-                    ExpectedAnyon, Random1},
+                    ExpectedAnyon, Random1, 0, 0},
                 Updated
             ),
-            ?assertEqual(expected_anyon_actions(0, none), Actions)
+            ?assertEqual(expected_anyon_actions(0, none, 0, 0), Actions)
         end}
         || {Name, Anyon, Direction, Random0, Random1, ExpectedAnyon} <- Cases
     ].
@@ -186,7 +208,7 @@ local_departure_and_arrivals_combine_by_parity_test() ->
     ),
     ?assertMatch(
         {cell, 1, 0, [15, 15], [0, 0], 0,
-            ?ALL_DIRECTIONS, 18, ?EAST_MASK, 0, 1, ?PRNG_SECOND},
+            ?ALL_DIRECTIONS, 18, ?EAST_MASK, 0, 1, ?PRNG_SECOND, 0, 0},
         Advanced
     ).
 
@@ -227,7 +249,7 @@ early_phi_casts_wait_for_initial_entry_test() ->
         ?assertEqual(4, maps:get(committed, maps:get(mailbox, Before))),
         ?assertMatch(
             {cell, 0, 0, [0, 0], [0, 0], 0,
-                0, 0, 0, 0, 0, ?PRNG_SEED},
+                0, 0, 0, 0, 0, ?PRNG_SEED, 0, 0},
             maps:get(data, Before)),
         assert_no_neighbor_cast(Ref),
 
@@ -243,7 +265,7 @@ early_phi_casts_wait_for_initial_entry_test() ->
         ?assertEqual(0, maps:get(committed, maps:get(mailbox, After))),
         ?assertMatch(
             {cell, 0, 1, [8, 6], [0, 0], 0,
-                0, 0, 0, 0, 0, ?PRNG_SEED},
+                0, 0, 0, 0, 0, ?PRNG_SEED, 0, 0},
             maps:get(data, After))
     after
         case is_process_alive(PID) of
@@ -333,11 +355,11 @@ boolean_anyon_api_encodes_move_test() ->
     with_cell(fun(PID, Ref) ->
         enter_comparing(PID, Ref, [0, 0], [0, 0]),
         four_phi0s(PID, 0, 0),
-        expect_neighbor_batch(Ref, {anyon_move, 0, 0}),
+        expect_anyon_batch(Ref, 0, none),
         ok = phi_halo_cell:offer_anyon(PID, 0, true),
         ?assertMatch(
             {cell, 0, 2, [0, 0], [0, 0], 0,
-                ?ALL_DIRECTIONS, 0, 0, 1, 1, ?PRNG_FIRST},
+                ?ALL_DIRECTIONS, 0, 0, 1, 1, ?PRNG_FIRST, 0, 0},
             maps:get(data, phi_halo_cell:runtime_info(PID))
         )
     end).
@@ -348,7 +370,7 @@ invalid_anyon_word_stops_cell_in_flipping_test() ->
     try
         enter_comparing(PID, Ref, [0, 0], [0, 0]),
         four_phi0s(PID, 0, 0),
-        expect_neighbor_batch(Ref, {anyon_move, 0, 0}),
+        expect_anyon_batch(Ref, 0, none),
         ?assertEqual(
             flipping,
             maps:get(phase, phi_halo_cell:runtime_info(PID))
@@ -434,7 +456,15 @@ generated_dslx_matches_checked_in_artifact_test() ->
         binary:match(
             Generated,
             <<"Tag::PHENOM_ANYON as u8) && "
-              "frame.header.payload_words == u8:2">>
+              "frame.header.payload_words == u8:3">>
+        )
+    ),
+    ?assertNotEqual(
+        nomatch,
+        binary:match(
+            Generated,
+            <<"Tag::PHI_CORRECTION as u8) && "
+              "frame.header.payload_words == u8:3">>
         )
     ).
 
@@ -442,7 +472,9 @@ message_wire_abi_test() ->
     Phi = {phi, 16#01020304, [16#11121314, 16#21222324]},
     Move = {anyon_move, 16#31323334, 1},
     Phi0 = {phi0, 16#41424344, ?SOUTH_MASK, 16#51525354},
-    Measurement = {phenom_anyon, 16#61626364, 1},
+    Measurement = {phenom_anyon, 16#61626364, 1, 16#7172, 16#8182},
+    Correction = {phi_correction, 16#91929394, 16#a1a2, 16#b1b2,
+        ?WEST_MASK},
     ?assertEqual(3, phi_halo_cell:pack_tag(phi)),
     ?assertEqual(4, phi_halo_cell:pack_tag(anyon_move)),
     ?assertEqual(5, phi_halo_cell:pack_tag(phi0)),
@@ -454,11 +486,13 @@ message_wire_abi_test() ->
     ?assertEqual(8, phi_halo_cell:pack_tag(phenom_query)),
     ?assertEqual(9, phi_halo_cell:pack_tag(phenom_data)),
     ?assertEqual(10, phi_halo_cell:pack_tag(phenom_anyon)),
+    ?assertEqual(11, phi_halo_cell:pack_tag(phi_correction)),
     ?assertEqual(phenom_config, phi_halo_cell:unpack_tag(6)),
     ?assertEqual(phenom_request, phi_halo_cell:unpack_tag(7)),
     ?assertEqual(phenom_query, phi_halo_cell:unpack_tag(8)),
     ?assertEqual(phenom_data, phi_halo_cell:unpack_tag(9)),
     ?assertEqual(phenom_anyon, phi_halo_cell:unpack_tag(10)),
+    ?assertEqual(phi_correction, phi_halo_cell:unpack_tag(11)),
     PackedPhi = phi_halo_cell:pack(Phi),
     ?assertEqual(
         <<
@@ -498,18 +532,34 @@ message_wire_abi_test() ->
     ?assertEqual(
         <<
             16#61626364:32/unsigned-little-integer,
-            1:32/unsigned-little-integer
+            1:32/unsigned-little-integer,
+            16#7172:16/unsigned-little-integer,
+            16#8182:16/unsigned-little-integer
         >>,
         PackedMeasurement
     ),
     ?assertEqual(
         {Measurement, <<>>},
         phi_halo_cell:unpack(phenom_anyon, PackedMeasurement)
+    ),
+    PackedCorrection = phi_halo_cell:pack(Correction),
+    ?assertEqual(
+        <<
+            16#91929394:32/unsigned-little-integer,
+            16#a1a2:16/unsigned-little-integer,
+            16#b1b2:16/unsigned-little-integer,
+            ?WEST_MASK:32/unsigned-little-integer
+        >>,
+        PackedCorrection
+    ),
+    ?assertEqual(
+        {Correction, <<>>},
+        phi_halo_cell:unpack(phi_correction, PackedCorrection)
     ).
 
 two_layer_relaxation_coefficients_test() ->
     Initial = {cell, 0, 0, [40, 20], [0, 0], 0,
-        0, 0, 0, 0, 0, ?PRNG_SEED},
+        0, 0, 0, 0, 0, ?PRNG_SEED, 0, 0},
     Message0 = {phi, 0, [8, 12]},
     {gathering, First, consume} =
         phi_halo_cell:handle_cast(Message0, gathering, Initial),
@@ -521,7 +571,7 @@ two_layer_relaxation_coefficients_test() ->
         phi_halo_cell:handle_cast(Message0, gathering, Third),
     ?assertEqual(
         {cell, 0, 1, [19, 19], [0, 0], 0,
-            0, 0, 0, 0, 0, ?PRNG_SEED},
+            0, 0, 0, 0, 0, ?PRNG_SEED, 0, 0},
         RoundOne
     ),
 
@@ -536,7 +586,7 @@ two_layer_relaxation_coefficients_test() ->
         phi_halo_cell:handle_cast(Message1, gathering, Seventh),
     ?assertEqual(
         {cell, 0, 2, [12, 17], [0, 0], 0,
-            0, 0, 0, 0, 0, ?PRNG_SEED},
+            0, 0, 0, 0, 0, ?PRNG_SEED, 0, 0},
         Compared
     ),
 
@@ -553,7 +603,7 @@ two_layer_relaxation_coefficients_test() ->
     ),
     ?assertMatch(
         {cell, 0, 2, [12, 17], [0, 0], 0,
-            ?ALL_DIRECTIONS, 14, ?EAST_MASK, 0, 0, ?PRNG_SEED},
+            ?ALL_DIRECTIONS, 14, ?EAST_MASK, 0, 0, ?PRNG_SEED, 0, 0},
         Final
     ).
 
@@ -574,7 +624,7 @@ repeated_diffusion_comparison_and_flipping(PID, Ref) ->
     ?assertEqual(comparing, maps:get(phase, AfterDiffusion)),
     ?assertMatch(
         {cell, 0, 2, [15, 15], [0, 0], 0,
-            0, 0, 0, 0, 0, ?PRNG_SEED},
+            0, 0, 0, 0, 0, ?PRNG_SEED, 0, 0},
         maps:get(data, AfterDiffusion)
     ),
 
@@ -584,12 +634,12 @@ repeated_diffusion_comparison_and_flipping(PID, Ref) ->
         {west, 17},
         {south, 16}
     ]),
-    expect_neighbor_batch(Ref, {anyon_move, 0, 0}),
+    expect_anyon_batch(Ref, 0, none),
     AfterComparison = phi_halo_cell:runtime_info(PID),
     ?assertEqual(flipping, maps:get(phase, AfterComparison)),
     ?assertMatch(
         {cell, 0, 2, [15, 15], [0, 0], 0,
-            ?ALL_DIRECTIONS, 18, ?EAST_MASK, 0, 0, ?PRNG_FIRST},
+            ?ALL_DIRECTIONS, 18, ?EAST_MASK, 0, 0, ?PRNG_FIRST, 0, 0},
         maps:get(data, AfterComparison)
     ),
 
@@ -602,7 +652,7 @@ repeated_diffusion_comparison_and_flipping(PID, Ref) ->
     ?assertEqual(0, maps:get(committed, maps:get(mailbox, Info))),
     ?assertMatch(
         {cell, 1, 0, [15, 15], [0, 0], 0,
-            ?ALL_DIRECTIONS, 18, ?EAST_MASK, 0, 0, ?PRNG_FIRST},
+            ?ALL_DIRECTIONS, 18, ?EAST_MASK, 0, 0, ?PRNG_FIRST, 0, 0},
         maps:get(data, Info)
     ),
     assert_no_neighbor_cast(Ref).
@@ -639,7 +689,7 @@ coin_gates_selected_anyon_output(PID, Ref) ->
     ?assertEqual(flipping, maps:get(phase, Flipping)),
     ?assertMatch(
         {cell, 1, 2, [81920, 3276], [0, 0], 0,
-            ?ALL_DIRECTIONS, 13, ?EAST_MASK, 0, 0, ?PRNG_SECOND},
+            ?ALL_DIRECTIONS, 13, ?EAST_MASK, 0, 0, ?PRNG_SECOND, 0, 0},
         maps:get(data, Flipping)
     ),
 
@@ -647,7 +697,7 @@ coin_gates_selected_anyon_output(PID, Ref) ->
     expect_neighbor_batch(Ref, {phi, 4, [81920, 3276]}),
     ?assertMatch(
         {cell, 2, 0, [81920, 3276], [0, 0], 0,
-            ?ALL_DIRECTIONS, 13, ?EAST_MASK, 0, 0, ?PRNG_SECOND},
+            ?ALL_DIRECTIONS, 13, ?EAST_MASK, 0, 0, ?PRNG_SECOND, 0, 0},
         maps:get(data, phi_halo_cell:runtime_info(PID))
     ).
 
@@ -671,7 +721,7 @@ staged_next_phase_messages(PID, Ref) ->
     ?assertEqual(0, maps:get(postponed, AfterRepeat)),
     ?assertMatch(
         {cell, 0, 1, [20, 11], [8, 12], 1,
-            0, 0, 0, 0, 0, ?PRNG_SEED},
+            0, 0, 0, 0, 0, ?PRNG_SEED, 0, 0},
         maps:get(data, AfterRepeat)
     ),
 
@@ -693,7 +743,7 @@ staged_next_phase_messages(PID, Ref) ->
     ?assertEqual(1, maps:get(postponed, AfterEntry)),
     ?assertMatch(
         {cell, 0, 2, [11, 11], [0, 0], 0,
-            ?NORTH_MASK, 14, ?NORTH_MASK, 0, 0, ?PRNG_SEED},
+            ?NORTH_MASK, 14, ?NORTH_MASK, 0, 0, ?PRNG_SEED, 0, 0},
         maps:get(data, AfterEntry)
     ),
 
@@ -702,13 +752,13 @@ staged_next_phase_messages(PID, Ref) ->
         {west, 17},
         {south, 16}
     ]),
-    expect_neighbor_batch(Ref, {anyon_move, 0, 0}),
+    expect_anyon_batch(Ref, 0, none),
     AfterFlip = phi_halo_cell:runtime_info(PID),
     ?assertEqual(flipping, maps:get(phase, AfterFlip)),
     ?assertEqual(0, maps:get(postponed, AfterFlip)),
     ?assertMatch(
         {cell, 0, 2, [11, 11], [0, 0], 0,
-            ?ALL_DIRECTIONS, 18, ?EAST_MASK, 1, 0, ?PRNG_FIRST},
+            ?ALL_DIRECTIONS, 18, ?EAST_MASK, 1, 0, ?PRNG_FIRST, 0, 0},
         maps:get(data, AfterFlip)
     ),
 
@@ -728,7 +778,7 @@ staged_next_phase_messages(PID, Ref) ->
     ?assertEqual(0, maps:get(postponed, AfterGather)),
     ?assertMatch(
         {cell, 1, 0, [11, 11], [8, 12], 1,
-            ?ALL_DIRECTIONS, 18, ?EAST_MASK, 0, 0, ?PRNG_FIRST},
+            ?ALL_DIRECTIONS, 18, ?EAST_MASK, 0, 0, ?PRNG_FIRST, 0, 0},
         maps:get(data, AfterGather)
     ).
 
@@ -750,7 +800,7 @@ full_staged_diffusion_epoch(PID, Ref) ->
     ?assertEqual(0, maps:get(committed, maps:get(mailbox, Complete))),
     ?assertMatch(
         {cell, 0, 2, [4, 2], [0, 0], 0,
-            0, 0, 0, 0, 0, ?PRNG_SEED},
+            0, 0, 0, 0, 0, ?PRNG_SEED, 0, 0},
         maps:get(data, Complete)
     ).
 
@@ -779,7 +829,7 @@ full_staged_comparison(PID, Ref) ->
     ?assertEqual(0, maps:get(committed, maps:get(mailbox, Complete))),
     ?assertMatch(
         {cell, 0, 2, [0, 0], [0, 0], 0,
-            ?ALL_DIRECTIONS, 4, ?SOUTH_MASK, 0, 0, ?PRNG_FIRST},
+            ?ALL_DIRECTIONS, 4, ?SOUTH_MASK, 0, 0, ?PRNG_FIRST, 0, 0},
         maps:get(data, Complete)
     ).
 
@@ -803,7 +853,8 @@ comparison_order_tests(Kind, Messages, Best, BestDirection) ->
             ),
             ?assertMatch(
                 {cell, 0, 2, [15, 15], [0, 0], 0,
-                    ?ALL_DIRECTIONS, Best, BestDirection, 0, 0, ?PRNG_SEED},
+                    ?ALL_DIRECTIONS, Best, BestDirection, 0, 0, ?PRNG_SEED,
+                    0, 0},
                 Final
             )
         end}
@@ -812,11 +863,11 @@ comparison_order_tests(Kind, Messages, Best, BestDirection) ->
 
 comparison_cell() ->
     {cell, 0, 2, [15, 15], [0, 0], 0,
-        0, 0, 0, 0, 0, ?PRNG_SEED}.
+        0, 0, 0, 0, 0, ?PRNG_SEED, 0, 0}.
 
 flipping_cell(Anyon, Direction, RandomState) ->
     {cell, 0, 2, [15, 15], [0, 0], 0,
-        ?ALL_DIRECTIONS, 18, Direction, 0, Anyon, RandomState}.
+        ?ALL_DIRECTIONS, 18, Direction, 0, Anyon, RandomState, 0, 0}.
 
 comparison_messages(SourcesAndValues) ->
     [
@@ -911,6 +962,8 @@ zero_measurement_loop(PID) ->
         {'$gen_cast', {phenom_request, Step}} ->
             ok = phi_halo_cell:offer_measurement(PID, Step, false),
             zero_measurement_loop(PID);
+        {'$gen_cast', {phi_correction, _, _, _, _}} ->
+            zero_measurement_loop(PID);
         stop ->
             ok
     end.
@@ -919,6 +972,8 @@ zero_measurement_loop(PID, Ref) ->
     receive
         {'$gen_cast', {phenom_request, Step}} ->
             ok = phi_halo_cell:offer_measurement(PID, Step, false),
+            zero_measurement_loop(PID, Ref);
+        {'$gen_cast', {phi_correction, _, _, _, _}} ->
             zero_measurement_loop(PID, Ref);
         {stop, Stopper} ->
             Stopper ! {collector_stopped, Ref, syndrome},
@@ -931,7 +986,8 @@ torus_neighbors(Horizontal, Vertical, MeasurementSource) ->
         east => Horizontal,
         west => Horizontal,
         south => Vertical,
-        syndrome => MeasurementSource
+        syndrome => MeasurementSource,
+        correction => MeasurementSource
     }.
 
 await_step(PID, Step) ->
@@ -943,7 +999,8 @@ await_step(PID, Step, Attempts) ->
     Info = phi_halo_cell:runtime_info(PID),
     case maps:get(data, Info) of
         {cell, CurrentStep, _Round, _Phi, _Sum, _PhiReceived,
-                _Seen, _Best, _Direction, _MovesReceived, _Anyon, _Random}
+                _Seen, _Best, _Direction, _MovesReceived, _Anyon, _Random,
+                _X, _Y}
                 when CurrentStep >= Step ->
             ok;
         _ ->
@@ -958,7 +1015,7 @@ stop_cell(PID) ->
     end.
 
 start_collectors() ->
-    Ports = [north, east, west, south],
+    Ports = [north, east, west, south, correction],
     Parent = self(),
     Ref = make_ref(),
     Collectors = maps:from_list([
@@ -1061,22 +1118,24 @@ expect_comparison_sequences(Ref, Prefix, Step, Value) ->
 
 expect_comparison_and_anyon_sequences(Ref, Step, Value) ->
     Anyon = {anyon_move, Step, 0},
-    expect_remaining_neighbor_sequences(
-        Ref,
-        maps:map(
-            fun(_Port, Message) -> [Message, Anyon] end,
-            comparison_outputs(Step, Value)
-        )
-    ).
+    Remaining = maps:map(
+        fun(_Port, Message) -> [Message, Anyon] end,
+        comparison_outputs(Step, Value)
+    ),
+    expect_remaining_neighbor_sequences(Ref, Remaining).
 
 expect_anyon_batch(Ref, Step, Selected) ->
-    expect_remaining_neighbor_sequences(
-        Ref,
-        maps:map(
-            fun(_Port, Message) -> [Message] end,
-            anyon_outputs(Step, Selected)
-        )
-    ).
+    Cardinal = maps:map(
+        fun(_Port, Message) -> [Message] end,
+        anyon_outputs(Step, Selected)
+    ),
+    Remaining = case Selected of
+        none -> Cardinal;
+        _ -> Cardinal#{correction => [
+            {phi_correction, Step, 0, 0, correction_direction(Selected)}
+        ]}
+    end,
+    expect_remaining_neighbor_sequences(Ref, Remaining).
 
 comparison_outputs(Step, Value) ->
     #{
@@ -1092,12 +1151,16 @@ anyon_outputs(Step, Selected) ->
         || Port <- [north, east, west, south]
     ]).
 
-expected_anyon_actions(Step, Selected) ->
+expected_anyon_actions(Step, Selected, X, Y) ->
     Outputs = anyon_outputs(Step, Selected),
     [
         {cast, Port, maps:get(Port, Outputs)}
         || Port <- [north, east, west, south]
-    ].
+    ] ++ [{cast_if, Selected =/= none, correction, {phi_correction,
+        Step, X, Y, correction_direction(Selected)}}].
+
+correction_direction(none) -> 0;
+correction_direction(Direction) -> direction_mask(Direction).
 
 selected_word(Port, Port) -> 1;
 selected_word(_Port, _Selected) -> 0.

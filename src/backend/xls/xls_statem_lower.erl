@@ -254,14 +254,19 @@ order_entries(Entries, PhaseNames) ->
 
 interface_effects(#{phase := Phase, actions := Actions}) ->
     [
-        #{
+        maybe_conditional_effect(Action, #{
             phase => Phase,
             order => maps:get(order, Action),
             port => maps:get(port, Action),
             schema => maps:get(tag, Action)
-        }
+        })
         || Action <- Actions
     ].
+
+maybe_conditional_effect(#{condition := _Condition}, Effect) ->
+    Effect#{conditional => true};
+maybe_conditional_effect(_Action, Effect) ->
+    Effect.
 
 max_entry_effects(Entries) ->
     lists:max([length(maps:get(actions, Entry)) || Entry <- Entries]).
@@ -378,7 +383,7 @@ lower_entry(
     }.
 
 lower_entry_effect(Clause, Prefix,
-        #{message := Message, port := Port, tag := Tag}, DataName,
+        Action = #{message := Message, port := Port, tag := Tag}, DataName,
         EnumAtoms) ->
     MessageClause = replace_body(Clause, Prefix ++ [Message]),
     {Body, Result} = xls_parse:branch_from_clause(
@@ -389,7 +394,32 @@ lower_entry_effect(Clause, Prefix,
         "zero!<axis::Frame>()",
         EnumAtoms
     ),
-    (lowered(Body, Result))#{port => Port, tag => Tag}.
+    (lowered(Body, Result))#{
+        port => Port,
+        tag => Tag,
+        valid => lower_effect_condition(
+            Action,
+            Clause,
+            Prefix,
+            DataName,
+            EnumAtoms
+        )
+    }.
+
+lower_effect_condition(
+        #{condition := Condition}, Clause, Prefix, DataName, EnumAtoms) ->
+    ConditionClause = replace_body(Clause, Prefix ++ [Condition]),
+    {Body, Result} = xls_parse:branch_from_clause(
+        ConditionClause,
+        enter_args(DataName),
+        DataName,
+        fun(R) -> R end,
+        "bool:false",
+        EnumAtoms
+    ),
+    lowered(Body, Result);
+lower_effect_condition(_Action, _Clause, _Prefix, _DataName, _EnumAtoms) ->
+    lowered([], "bool:true").
 
 enter_args(DataName) ->
     [
@@ -399,6 +429,8 @@ enter_args(DataName) ->
     ].
 
 parse_actions(ActionList, Prefix, MessageNames, OutputNames, Line) ->
+    %% The list shape and ports remain static. A cast_if condition controls
+    %% whether its allocated ordered slot emits at runtime.
     ActionExpressions = literal_list(ActionList, Line),
     Bindings = record_bindings(Prefix),
     Parsed = lists:map(
@@ -432,6 +464,27 @@ parse_action(
     Tag = message_tag(Message, Bindings),
     require_declared(entry_message, Tag, MessageNames),
     #{port => Port, tag => Tag, message => Message};
+parse_action(
+    {tuple, _TupleLine, [
+        {atom, _CastLine, cast_if},
+        Condition,
+        {atom, _PortLine, Port},
+        Message
+    ]},
+    Bindings,
+    MessageNames,
+    OutputNames,
+    _Line
+) ->
+    require_declared(entry_output, Port, OutputNames),
+    Tag = message_tag(Message, Bindings),
+    require_declared(entry_message, Tag, MessageNames),
+    #{
+        port => Port,
+        tag => Tag,
+        message => Message,
+        condition => Condition
+    };
 parse_action(Action, _Bindings, _MessageNames, _OutputNames, Line) ->
     error({bad_hls_statem_entry_action, Line, Action}).
 

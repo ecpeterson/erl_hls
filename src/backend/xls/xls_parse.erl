@@ -22,9 +22,10 @@ Bindings made inside a `case` or `if` arm remain local to that arm. The lowerer
 does not yet make a variable available after the expression merely because
 every arm binds it.
 
-State-machine phase-entry action lists remain statically shaped: this support
-does not make the ports or number of `{cast, Port, Message}` actions
-conditional.
+State-machine phase-entry action lists remain statically shaped. An action may
+be `{cast_if, Condition, Port, Message}` to suppress that statically allocated
+effect at runtime, but neither its port nor its position in the ordered action
+list is dynamic.
 
 ## Wire tags
 
@@ -553,6 +554,9 @@ destructure_lhs({atom, _L, Atom}, State) when Atom == true orelse Atom == false 
 %%%
 %%% XLS does not support `(struct) as bits` and `(bits) as struct` conversions,
 %%% so we have to emit manual un/packers.
+%%% TODO: Give selected public message structs and packers a cross-module DSLX
+%%% interface so topology startup code can emit typed constructors instead of
+%%% opaque prepacked literals.
 %%%
 
 -spec struct_from_record(erl_parse:af_record_decl()) -> iolist().

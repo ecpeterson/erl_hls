@@ -18,6 +18,7 @@ pub enum Tag : u8 {
   PHENOM_QUERY = u8:8,
   PHENOM_DATA = u8:9,
   PHENOM_ANYON = u8:10,
+  PHI_CORRECTION = u8:11,
 }
 
 enum Phase : u8 {
@@ -86,17 +87,21 @@ fn bits_from_phi0(s: Phi0) -> bits[bit_count<Phi0>()] {
 struct Phenomconfig {
   seed : u32,
   threshold : u32,
+  x : u16,
+  y : u16,
 }
 
 fn phenomconfig_from_bits<N: u32>(raw: bits[N]) -> Phenomconfig {
   Phenomconfig {
     seed: raw[0:32] as u32,
     threshold: raw[32:64] as u32,
+    x: raw[64:80] as u16,
+    y: raw[80:96] as u16,
   }
 }
 
 fn bits_from_phenomconfig(s: Phenomconfig) -> bits[bit_count<Phenomconfig>()] {
-  (s.threshold as bits[32]) ++ (s.seed as bits[32]) ++  zero!<bits[0]>()
+  (s.y as bits[16]) ++ (s.x as bits[16]) ++ (s.threshold as bits[32]) ++ (s.seed as bits[32]) ++  zero!<bits[0]>()
 }
 
 struct Phenomrequest {
@@ -150,17 +155,41 @@ fn bits_from_phenomdata(s: Phenomdata) -> bits[bit_count<Phenomdata>()] {
 struct Phenomanyon {
   step : u32,
   present : u32,
+  x : u16,
+  y : u16,
 }
 
 fn phenomanyon_from_bits<N: u32>(raw: bits[N]) -> Phenomanyon {
   Phenomanyon {
     step: raw[0:32] as u32,
     present: raw[32:64] as u32,
+    x: raw[64:80] as u16,
+    y: raw[80:96] as u16,
   }
 }
 
 fn bits_from_phenomanyon(s: Phenomanyon) -> bits[bit_count<Phenomanyon>()] {
-  (s.present as bits[32]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
+  (s.y as bits[16]) ++ (s.x as bits[16]) ++ (s.present as bits[32]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
+}
+
+struct Phicorrection {
+  step : u32,
+  x : u16,
+  y : u16,
+  direction : u32,
+}
+
+fn phicorrection_from_bits<N: u32>(raw: bits[N]) -> Phicorrection {
+  Phicorrection {
+    step: raw[0:32] as u32,
+    x: raw[32:48] as u16,
+    y: raw[48:64] as u16,
+    direction: raw[64:96] as u32,
+  }
+}
+
+fn bits_from_phicorrection(s: Phicorrection) -> bits[bit_count<Phicorrection>()] {
+  (s.direction as bits[32]) ++ (s.y as bits[16]) ++ (s.x as bits[16]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
 }
 
 struct Cell {
@@ -175,6 +204,8 @@ struct Cell {
   moves_received : u8,
   anyon : u32,
   random_state : u32,
+  x : u16,
+  y : u16,
 }
 
 fn cell_from_bits<N: u32>(raw: bits[N]) -> Cell {
@@ -190,11 +221,13 @@ fn cell_from_bits<N: u32>(raw: bits[N]) -> Cell {
     moves_received: raw[296:304] as u8,
     anyon: raw[304:336] as u32,
     random_state: raw[336:368] as u32,
+    x: raw[368:384] as u16,
+    y: raw[384:400] as u16,
   }
 }
 
 fn bits_from_cell(s: Cell) -> bits[bit_count<Cell>()] {
-  (s.random_state as bits[32]) ++ (s.anyon as bits[32]) ++ (s.moves_received as bits[8]) ++ (s.best_direction as bits[32]) ++ (s.best_phi0 as bits[32]) ++ (s.seen_sources as bits[32]) ++ (s.phi_received as bits[8]) ++ (s.phi_sum as bits[64]) ++ (s.phi as bits[64]) ++ (s.diffusion_round as bits[32]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
+  (s.y as bits[16]) ++ (s.x as bits[16]) ++ (s.random_state as bits[32]) ++ (s.anyon as bits[32]) ++ (s.moves_received as bits[8]) ++ (s.best_direction as bits[32]) ++ (s.best_phi0 as bits[32]) ++ (s.seen_sources as bits[32]) ++ (s.phi_received as bits[8]) ++ (s.phi_sum as bits[64]) ++ (s.phi as bits[64]) ++ (s.diffusion_round as bits[32]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
 }
 
 pub enum OutputPort : u8 {
@@ -203,6 +236,7 @@ pub enum OutputPort : u8 {
   WEST = u8:2,
   SOUTH = u8:3,
   SYNDROME = u8:4,
+  CORRECTION = u8:5,
 }
 
 pub struct Egress {
@@ -210,11 +244,12 @@ pub struct Egress {
   frame: axis::Frame,
 }
 
-pub const EGRESS_DEPTH = u32:4;
+pub const EGRESS_DEPTH = u32:5;
 
 struct EntryEffects {
   count: u8,
-  values: Egress[5],
+  valid: bool[6],
+  values: Egress[6],
 }
 
 struct MailboxSlot {
@@ -278,6 +313,9 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
         };
         _3
       };
+      let effect_0_valid = {
+        bool:true
+      };
       let effect_0 = {
         let _OldPhase_1 = old_phase;
         let __1 = phase;
@@ -298,8 +336,17 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
       };
       (entered_data, EntryEffects {
         count: u8:1,
+        valid: [
+          effect_0_valid,
+          bool:false,
+          bool:false,
+          bool:false,
+          bool:false,
+          bool:false,
+        ],
         values: [
           Egress { port: OutputPort::SYNDROME, frame: effect_0 },
+          zero!<Egress>(),
           zero!<Egress>(),
           zero!<Egress>(),
           zero!<Egress>(),
@@ -333,6 +380,9 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
         };
         _8
       };
+      let effect_0_valid = {
+        bool:true
+      };
       let effect_0 = {
         let _OldPhase_1 = old_phase;
         let __1 = phase;
@@ -357,6 +407,9 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
             axis::pack(Message_1.0 as u8, Message_1.2)
         };
         _8
+      };
+      let effect_1_valid = {
+        bool:true
       };
       let effect_1 = {
         let _OldPhase_1 = old_phase;
@@ -383,6 +436,9 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
         };
         _8
       };
+      let effect_2_valid = {
+        bool:true
+      };
       let effect_2 = {
         let _OldPhase_1 = old_phase;
         let __1 = phase;
@@ -407,6 +463,9 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
             axis::pack(Message_1.0 as u8, Message_1.2)
         };
         _8
+      };
+      let effect_3_valid = {
+        bool:true
       };
       let effect_3 = {
         let _OldPhase_1 = old_phase;
@@ -435,11 +494,20 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
       };
       (entered_data, EntryEffects {
         count: u8:4,
+        valid: [
+          effect_0_valid,
+          effect_1_valid,
+          effect_2_valid,
+          effect_3_valid,
+          bool:false,
+          bool:false,
+        ],
         values: [
           Egress { port: OutputPort::NORTH, frame: effect_0 },
           Egress { port: OutputPort::EAST, frame: effect_1 },
           Egress { port: OutputPort::WEST, frame: effect_2 },
           Egress { port: OutputPort::SOUTH, frame: effect_3 },
+          zero!<Egress>(),
           zero!<Egress>(),
         ],
       })
@@ -466,6 +534,9 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
             Cell_1.1
         };
         _5
+      };
+      let effect_0_valid = {
+        bool:true
       };
       let effect_0 = {
         let _OldPhase_1 = old_phase;
@@ -494,6 +565,9 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
         };
         _7
       };
+      let effect_1_valid = {
+        bool:true
+      };
       let effect_1 = {
         let _OldPhase_1 = old_phase;
         let __1 = phase;
@@ -521,6 +595,9 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
         };
         _7
       };
+      let effect_2_valid = {
+        bool:true
+      };
       let effect_2 = {
         let _OldPhase_1 = old_phase;
         let __1 = phase;
@@ -547,6 +624,9 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
             axis::pack(_6.0 as u8, _6.2)
         };
         _7
+      };
+      let effect_3_valid = {
+        bool:true
       };
       let effect_3 = {
         let _OldPhase_1 = old_phase;
@@ -577,11 +657,20 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
       };
       (entered_data, EntryEffects {
         count: u8:4,
+        valid: [
+          effect_0_valid,
+          effect_1_valid,
+          effect_2_valid,
+          effect_3_valid,
+          bool:false,
+          bool:false,
+        ],
         values: [
           Egress { port: OutputPort::NORTH, frame: effect_0 },
           Egress { port: OutputPort::EAST, frame: effect_1 },
           Egress { port: OutputPort::WEST, frame: effect_2 },
           Egress { port: OutputPort::SOUTH, frame: effect_3 },
+          zero!<Egress>(),
           zero!<Egress>(),
         ],
       })
@@ -655,21 +744,45 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
         };
         let _20 = (Tag::ANYON_MOVE, _19, bits_from_anyonmove(_19));
         let Message_1 = _20;
-        let _21 = Cell_1.1.anyon;
-        let _22 = _21 ^ Present_1;
-        let _23 = Cell {
-          anyon: _22,
+        let _22 = if Move_1 {
+          let _21 = Cell_1.1.best_direction;
+          (_21, bool:false)
+        } else {
+          (Absent_1, bool:false)
+        };
+        let case_match_3_1 = bool:false;
+        let case_match_3_2 = _22.1;
+        let CorrectionDirection_1 = _22.0;
+        let _23 = Cell_1.1.step;
+        let _24 = Cell_1.1.x;
+        let _25 = Cell_1.1.y;
+        let _26 = Phicorrection {
+          step: _23,
+          x: _24,
+          y: _25,
+          direction: CorrectionDirection_1,
+          ..zero!<Phicorrection>()
+        };
+        let _27 = (Tag::PHI_CORRECTION, _26, bits_from_phicorrection(_26));
+        let Correction_1 = _27;
+        let _28 = Cell_1.1.anyon;
+        let _29 = _28 ^ Present_1;
+        let _30 = Cell {
+          anyon: _29,
           random_state: NextRandom_1,
           ..(Cell_1).1
         };
-        let _24 = (Tag::CELL, _23);
-        let Updated_1 = _24;
-        let _25 = if ((case_match_1_1 != case_match_1_2) || (case_match_2_1 != case_match_2_2) || bool:false) {
+        let _31 = (Tag::CELL, _30);
+        let Updated_1 = _31;
+        let _32 = if ((case_match_1_1 != case_match_1_2) || (case_match_2_1 != case_match_2_2) || (case_match_3_1 != case_match_3_2) || bool:false) {
             data
         } else {
             Updated_1.1
         };
-        _25
+        _32
+      };
+      let effect_0_valid = {
+        bool:true
       };
       let effect_0 = {
         let _OldPhase_1 = old_phase;
@@ -739,26 +852,50 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
         };
         let _20 = (Tag::ANYON_MOVE, _19, bits_from_anyonmove(_19));
         let Message_1 = _20;
-        let _21 = Cell_1.1.anyon;
-        let _22 = _21 ^ Present_1;
-        let _23 = Cell {
-          anyon: _22,
+        let _22 = if Move_1 {
+          let _21 = Cell_1.1.best_direction;
+          (_21, bool:false)
+        } else {
+          (Absent_1, bool:false)
+        };
+        let case_match_3_1 = bool:false;
+        let case_match_3_2 = _22.1;
+        let CorrectionDirection_1 = _22.0;
+        let _23 = Cell_1.1.step;
+        let _24 = Cell_1.1.x;
+        let _25 = Cell_1.1.y;
+        let _26 = Phicorrection {
+          step: _23,
+          x: _24,
+          y: _25,
+          direction: CorrectionDirection_1,
+          ..zero!<Phicorrection>()
+        };
+        let _27 = (Tag::PHI_CORRECTION, _26, bits_from_phicorrection(_26));
+        let Correction_1 = _27;
+        let _28 = Cell_1.1.anyon;
+        let _29 = _28 ^ Present_1;
+        let _30 = Cell {
+          anyon: _29,
           random_state: NextRandom_1,
           ..(Cell_1).1
         };
-        let _24 = (Tag::CELL, _23);
-        let Updated_1 = _24;
-        let _25 = Anyonmove {
+        let _31 = (Tag::CELL, _30);
+        let Updated_1 = _31;
+        let _32 = Anyonmove {
           present: NorthPresent_1,
           ..(Message_1).1
         };
-        let _26 = (Tag::ANYON_MOVE, _25, bits_from_anyonmove(_25));
-        let _27 = if ((case_match_1_1 != case_match_1_2) || (case_match_2_1 != case_match_2_2) || bool:false) {
+        let _33 = (Tag::ANYON_MOVE, _32, bits_from_anyonmove(_32));
+        let _34 = if ((case_match_1_1 != case_match_1_2) || (case_match_2_1 != case_match_2_2) || (case_match_3_1 != case_match_3_2) || bool:false) {
             zero!<axis::Frame>()
         } else {
-            axis::pack(_26.0 as u8, _26.2)
+            axis::pack(_33.0 as u8, _33.2)
         };
-        _27
+        _34
+      };
+      let effect_1_valid = {
+        bool:true
       };
       let effect_1 = {
         let _OldPhase_1 = old_phase;
@@ -828,26 +965,50 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
         };
         let _20 = (Tag::ANYON_MOVE, _19, bits_from_anyonmove(_19));
         let Message_1 = _20;
-        let _21 = Cell_1.1.anyon;
-        let _22 = _21 ^ Present_1;
-        let _23 = Cell {
-          anyon: _22,
+        let _22 = if Move_1 {
+          let _21 = Cell_1.1.best_direction;
+          (_21, bool:false)
+        } else {
+          (Absent_1, bool:false)
+        };
+        let case_match_3_1 = bool:false;
+        let case_match_3_2 = _22.1;
+        let CorrectionDirection_1 = _22.0;
+        let _23 = Cell_1.1.step;
+        let _24 = Cell_1.1.x;
+        let _25 = Cell_1.1.y;
+        let _26 = Phicorrection {
+          step: _23,
+          x: _24,
+          y: _25,
+          direction: CorrectionDirection_1,
+          ..zero!<Phicorrection>()
+        };
+        let _27 = (Tag::PHI_CORRECTION, _26, bits_from_phicorrection(_26));
+        let Correction_1 = _27;
+        let _28 = Cell_1.1.anyon;
+        let _29 = _28 ^ Present_1;
+        let _30 = Cell {
+          anyon: _29,
           random_state: NextRandom_1,
           ..(Cell_1).1
         };
-        let _24 = (Tag::CELL, _23);
-        let Updated_1 = _24;
-        let _25 = Anyonmove {
+        let _31 = (Tag::CELL, _30);
+        let Updated_1 = _31;
+        let _32 = Anyonmove {
           present: EastPresent_1,
           ..(Message_1).1
         };
-        let _26 = (Tag::ANYON_MOVE, _25, bits_from_anyonmove(_25));
-        let _27 = if ((case_match_1_1 != case_match_1_2) || (case_match_2_1 != case_match_2_2) || bool:false) {
+        let _33 = (Tag::ANYON_MOVE, _32, bits_from_anyonmove(_32));
+        let _34 = if ((case_match_1_1 != case_match_1_2) || (case_match_2_1 != case_match_2_2) || (case_match_3_1 != case_match_3_2) || bool:false) {
             zero!<axis::Frame>()
         } else {
-            axis::pack(_26.0 as u8, _26.2)
+            axis::pack(_33.0 as u8, _33.2)
         };
-        _27
+        _34
+      };
+      let effect_2_valid = {
+        bool:true
       };
       let effect_2 = {
         let _OldPhase_1 = old_phase;
@@ -917,26 +1078,50 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
         };
         let _20 = (Tag::ANYON_MOVE, _19, bits_from_anyonmove(_19));
         let Message_1 = _20;
-        let _21 = Cell_1.1.anyon;
-        let _22 = _21 ^ Present_1;
-        let _23 = Cell {
-          anyon: _22,
+        let _22 = if Move_1 {
+          let _21 = Cell_1.1.best_direction;
+          (_21, bool:false)
+        } else {
+          (Absent_1, bool:false)
+        };
+        let case_match_3_1 = bool:false;
+        let case_match_3_2 = _22.1;
+        let CorrectionDirection_1 = _22.0;
+        let _23 = Cell_1.1.step;
+        let _24 = Cell_1.1.x;
+        let _25 = Cell_1.1.y;
+        let _26 = Phicorrection {
+          step: _23,
+          x: _24,
+          y: _25,
+          direction: CorrectionDirection_1,
+          ..zero!<Phicorrection>()
+        };
+        let _27 = (Tag::PHI_CORRECTION, _26, bits_from_phicorrection(_26));
+        let Correction_1 = _27;
+        let _28 = Cell_1.1.anyon;
+        let _29 = _28 ^ Present_1;
+        let _30 = Cell {
+          anyon: _29,
           random_state: NextRandom_1,
           ..(Cell_1).1
         };
-        let _24 = (Tag::CELL, _23);
-        let Updated_1 = _24;
-        let _25 = Anyonmove {
+        let _31 = (Tag::CELL, _30);
+        let Updated_1 = _31;
+        let _32 = Anyonmove {
           present: WestPresent_1,
           ..(Message_1).1
         };
-        let _26 = (Tag::ANYON_MOVE, _25, bits_from_anyonmove(_25));
-        let _27 = if ((case_match_1_1 != case_match_1_2) || (case_match_2_1 != case_match_2_2) || bool:false) {
+        let _33 = (Tag::ANYON_MOVE, _32, bits_from_anyonmove(_32));
+        let _34 = if ((case_match_1_1 != case_match_1_2) || (case_match_2_1 != case_match_2_2) || (case_match_3_1 != case_match_3_2) || bool:false) {
             zero!<axis::Frame>()
         } else {
-            axis::pack(_26.0 as u8, _26.2)
+            axis::pack(_33.0 as u8, _33.2)
         };
-        _27
+        _34
+      };
+      let effect_3_valid = {
+        bool:true
       };
       let effect_3 = {
         let _OldPhase_1 = old_phase;
@@ -1006,34 +1191,274 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
         };
         let _20 = (Tag::ANYON_MOVE, _19, bits_from_anyonmove(_19));
         let Message_1 = _20;
-        let _21 = Cell_1.1.anyon;
-        let _22 = _21 ^ Present_1;
-        let _23 = Cell {
-          anyon: _22,
+        let _22 = if Move_1 {
+          let _21 = Cell_1.1.best_direction;
+          (_21, bool:false)
+        } else {
+          (Absent_1, bool:false)
+        };
+        let case_match_3_1 = bool:false;
+        let case_match_3_2 = _22.1;
+        let CorrectionDirection_1 = _22.0;
+        let _23 = Cell_1.1.step;
+        let _24 = Cell_1.1.x;
+        let _25 = Cell_1.1.y;
+        let _26 = Phicorrection {
+          step: _23,
+          x: _24,
+          y: _25,
+          direction: CorrectionDirection_1,
+          ..zero!<Phicorrection>()
+        };
+        let _27 = (Tag::PHI_CORRECTION, _26, bits_from_phicorrection(_26));
+        let Correction_1 = _27;
+        let _28 = Cell_1.1.anyon;
+        let _29 = _28 ^ Present_1;
+        let _30 = Cell {
+          anyon: _29,
           random_state: NextRandom_1,
           ..(Cell_1).1
         };
-        let _24 = (Tag::CELL, _23);
-        let Updated_1 = _24;
-        let _25 = Anyonmove {
+        let _31 = (Tag::CELL, _30);
+        let Updated_1 = _31;
+        let _32 = Anyonmove {
           present: SouthPresent_1,
           ..(Message_1).1
         };
-        let _26 = (Tag::ANYON_MOVE, _25, bits_from_anyonmove(_25));
-        let _27 = if ((case_match_1_1 != case_match_1_2) || (case_match_2_1 != case_match_2_2) || bool:false) {
+        let _33 = (Tag::ANYON_MOVE, _32, bits_from_anyonmove(_32));
+        let _34 = if ((case_match_1_1 != case_match_1_2) || (case_match_2_1 != case_match_2_2) || (case_match_3_1 != case_match_3_2) || bool:false) {
             zero!<axis::Frame>()
         } else {
-            axis::pack(_26.0 as u8, _26.2)
+            axis::pack(_33.0 as u8, _33.2)
         };
-        _27
+        _34
+      };
+      let effect_4_valid = {
+        let _OldPhase_1 = old_phase;
+        let __1 = phase;
+        let Cell_1 = (Tag::CELL, data);
+        let _0 = Cell_1.1.random_state;
+        let _1 = (_0 ^ (_0 << u32:13)) & u32:0xffffffff;
+        let _2 = (_1 ^ (_1 >> u32:17)) & u32:0xffffffff;
+        let _3 = (_2 ^ (_2 << u32:5)) & u32:0xffffffff;
+        let NextRandom_1 = _3;
+        let _4 = NextRandom_1 >> 31;
+        let _5 = _4 == 1;
+        let Heads_1 = _5;
+        let _6 = Cell_1.1.anyon;
+        let _7 = _6 == 1;
+        let _8 = Cell_1.1.best_direction;
+        let _9 = _8 != 0;
+        let _10 = _9 && Heads_1;
+        let _11 = _7 && _10;
+        let Move_1 = _11;
+        let _12 = (0 as u32);
+        let Absent_1 = _12;
+        let _14 = if Move_1 {
+          let _13 = (1 as u32);
+          (_13, bool:false)
+        } else {
+          (Absent_1, bool:false)
+        };
+        let case_match_1_1 = bool:false;
+        let case_match_1_2 = _14.1;
+        let Present_1 = _14.0;
+        let _15 = Cell_1.1.best_direction;
+        let _17 = {
+          if _15 == 1 {
+            let _16 = (Present_1, Absent_1, Absent_1, Absent_1, );
+            (_16, bool:false)
+          } else {
+            if _15 == 2 {
+              let _16 = (Absent_1, Present_1, Absent_1, Absent_1, );
+              (_16, bool:false)
+            } else {
+              if _15 == 4 {
+                let _16 = (Absent_1, Absent_1, Present_1, Absent_1, );
+                (_16, bool:false)
+              } else {
+                if _15 == 8 {
+                  let _16 = (Absent_1, Absent_1, Absent_1, Present_1, );
+                  (_16, bool:false)
+                } else {
+                  let _16 = (Absent_1, Absent_1, Absent_1, Absent_1, );
+                  (_16, bool:false)
+                }
+              }
+            }
+          }
+        };
+        let case_match_2_1 = bool:false;
+        let case_match_2_2 = _17.1;
+        let NorthPresent_1 = _17.0.0;
+        let EastPresent_1 = _17.0.1;
+        let WestPresent_1 = _17.0.2;
+        let SouthPresent_1 = _17.0.3;
+        let _18 = Cell_1.1.step;
+        let _19 = Anyonmove {
+          step: _18,
+          ..zero!<Anyonmove>()
+        };
+        let _20 = (Tag::ANYON_MOVE, _19, bits_from_anyonmove(_19));
+        let Message_1 = _20;
+        let _22 = if Move_1 {
+          let _21 = Cell_1.1.best_direction;
+          (_21, bool:false)
+        } else {
+          (Absent_1, bool:false)
+        };
+        let case_match_3_1 = bool:false;
+        let case_match_3_2 = _22.1;
+        let CorrectionDirection_1 = _22.0;
+        let _23 = Cell_1.1.step;
+        let _24 = Cell_1.1.x;
+        let _25 = Cell_1.1.y;
+        let _26 = Phicorrection {
+          step: _23,
+          x: _24,
+          y: _25,
+          direction: CorrectionDirection_1,
+          ..zero!<Phicorrection>()
+        };
+        let _27 = (Tag::PHI_CORRECTION, _26, bits_from_phicorrection(_26));
+        let Correction_1 = _27;
+        let _28 = Cell_1.1.anyon;
+        let _29 = _28 ^ Present_1;
+        let _30 = Cell {
+          anyon: _29,
+          random_state: NextRandom_1,
+          ..(Cell_1).1
+        };
+        let _31 = (Tag::CELL, _30);
+        let Updated_1 = _31;
+        let _32 = if ((case_match_1_1 != case_match_1_2) || (case_match_2_1 != case_match_2_2) || (case_match_3_1 != case_match_3_2) || bool:false) {
+            bool:false
+        } else {
+            Move_1
+        };
+        _32
+      };
+      let effect_4 = {
+        let _OldPhase_1 = old_phase;
+        let __1 = phase;
+        let Cell_1 = (Tag::CELL, data);
+        let _0 = Cell_1.1.random_state;
+        let _1 = (_0 ^ (_0 << u32:13)) & u32:0xffffffff;
+        let _2 = (_1 ^ (_1 >> u32:17)) & u32:0xffffffff;
+        let _3 = (_2 ^ (_2 << u32:5)) & u32:0xffffffff;
+        let NextRandom_1 = _3;
+        let _4 = NextRandom_1 >> 31;
+        let _5 = _4 == 1;
+        let Heads_1 = _5;
+        let _6 = Cell_1.1.anyon;
+        let _7 = _6 == 1;
+        let _8 = Cell_1.1.best_direction;
+        let _9 = _8 != 0;
+        let _10 = _9 && Heads_1;
+        let _11 = _7 && _10;
+        let Move_1 = _11;
+        let _12 = (0 as u32);
+        let Absent_1 = _12;
+        let _14 = if Move_1 {
+          let _13 = (1 as u32);
+          (_13, bool:false)
+        } else {
+          (Absent_1, bool:false)
+        };
+        let case_match_1_1 = bool:false;
+        let case_match_1_2 = _14.1;
+        let Present_1 = _14.0;
+        let _15 = Cell_1.1.best_direction;
+        let _17 = {
+          if _15 == 1 {
+            let _16 = (Present_1, Absent_1, Absent_1, Absent_1, );
+            (_16, bool:false)
+          } else {
+            if _15 == 2 {
+              let _16 = (Absent_1, Present_1, Absent_1, Absent_1, );
+              (_16, bool:false)
+            } else {
+              if _15 == 4 {
+                let _16 = (Absent_1, Absent_1, Present_1, Absent_1, );
+                (_16, bool:false)
+              } else {
+                if _15 == 8 {
+                  let _16 = (Absent_1, Absent_1, Absent_1, Present_1, );
+                  (_16, bool:false)
+                } else {
+                  let _16 = (Absent_1, Absent_1, Absent_1, Absent_1, );
+                  (_16, bool:false)
+                }
+              }
+            }
+          }
+        };
+        let case_match_2_1 = bool:false;
+        let case_match_2_2 = _17.1;
+        let NorthPresent_1 = _17.0.0;
+        let EastPresent_1 = _17.0.1;
+        let WestPresent_1 = _17.0.2;
+        let SouthPresent_1 = _17.0.3;
+        let _18 = Cell_1.1.step;
+        let _19 = Anyonmove {
+          step: _18,
+          ..zero!<Anyonmove>()
+        };
+        let _20 = (Tag::ANYON_MOVE, _19, bits_from_anyonmove(_19));
+        let Message_1 = _20;
+        let _22 = if Move_1 {
+          let _21 = Cell_1.1.best_direction;
+          (_21, bool:false)
+        } else {
+          (Absent_1, bool:false)
+        };
+        let case_match_3_1 = bool:false;
+        let case_match_3_2 = _22.1;
+        let CorrectionDirection_1 = _22.0;
+        let _23 = Cell_1.1.step;
+        let _24 = Cell_1.1.x;
+        let _25 = Cell_1.1.y;
+        let _26 = Phicorrection {
+          step: _23,
+          x: _24,
+          y: _25,
+          direction: CorrectionDirection_1,
+          ..zero!<Phicorrection>()
+        };
+        let _27 = (Tag::PHI_CORRECTION, _26, bits_from_phicorrection(_26));
+        let Correction_1 = _27;
+        let _28 = Cell_1.1.anyon;
+        let _29 = _28 ^ Present_1;
+        let _30 = Cell {
+          anyon: _29,
+          random_state: NextRandom_1,
+          ..(Cell_1).1
+        };
+        let _31 = (Tag::CELL, _30);
+        let Updated_1 = _31;
+        let _32 = if ((case_match_1_1 != case_match_1_2) || (case_match_2_1 != case_match_2_2) || (case_match_3_1 != case_match_3_2) || bool:false) {
+            zero!<axis::Frame>()
+        } else {
+            axis::pack(Correction_1.0 as u8, Correction_1.2)
+        };
+        _32
       };
       (entered_data, EntryEffects {
-        count: u8:4,
+        count: u8:5,
+        valid: [
+          effect_0_valid,
+          effect_1_valid,
+          effect_2_valid,
+          effect_3_valid,
+          effect_4_valid,
+          bool:false,
+        ],
         values: [
           Egress { port: OutputPort::NORTH, frame: effect_0 },
           Egress { port: OutputPort::EAST, frame: effect_1 },
           Egress { port: OutputPort::WEST, frame: effect_2 },
           Egress { port: OutputPort::SOUTH, frame: effect_3 },
+          Egress { port: OutputPort::CORRECTION, frame: effect_4 },
           zero!<Egress>(),
         ],
       })
@@ -1604,29 +2029,65 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
         Phase::MEASURING => {
           let Xls_clause_1_Step_1 = message.step;
           let Xls_clause_1_Present_1 = message.present;
+          let Xls_clause_1_X_1 = message.x;
+          let Xls_clause_1_Y_1 = message.y;
           let Xls_clause_1_Cell_1 = (Tag::CELL, data);
-          let _1 = if Xls_clause_1_Step_1 == data.step {
+          let _9 = if Xls_clause_1_Step_1 == data.step {
             let _0 = Xls_clause_1_Present_1 < 2;
-            (_0, bool:false)
+            let _8 = if _0 {
+              let _1 = Xls_clause_1_X_1 >= 0;
+              let _7 = if _1 {
+                let _2 = Xls_clause_1_X_1 <= 65535;
+                let _6 = if _2 {
+                  let _3 = Xls_clause_1_Y_1 >= 0;
+                  let _5 = if _3 {
+                    let _4 = Xls_clause_1_Y_1 <= 65535;
+                    (_4, bool:false)
+                  } else {
+                    (bool:0, bool:false)
+                  };
+                  let case_match_1_1 = bool:false;
+                  let case_match_1_2 = _5.1;
+                  (_5.0, (case_match_1_1 != case_match_1_2) || bool:false)
+                } else {
+                  (bool:0, bool:false)
+                };
+                let case_match_2_1 = bool:false;
+                let case_match_2_2 = _6.1;
+                (_6.0, (case_match_2_1 != case_match_2_2) || bool:false)
+              } else {
+                (bool:0, bool:false)
+              };
+              let case_match_3_1 = bool:false;
+              let case_match_3_2 = _7.1;
+              (_7.0, (case_match_3_1 != case_match_3_2) || bool:false)
+            } else {
+              (bool:0, bool:false)
+            };
+            let case_match_4_1 = bool:false;
+            let case_match_4_2 = _8.1;
+            (_8.0, (case_match_4_1 != case_match_4_2) || bool:false)
           } else {
             (bool:0, bool:false)
           };
-          let case_match_1_1 = bool:false;
-          let case_match_1_2 = _1.1;
-          if _1.0 {
-            let _2 = Xls_clause_1_Cell_1.1.anyon;
-            let _3 = _2 ^ Xls_clause_1_Present_1;
-            let _4 = Cell {
-              anyon: _3,
+          let case_match_5_1 = bool:false;
+          let case_match_5_2 = _9.1;
+          if _9.0 {
+            let _10 = Xls_clause_1_Cell_1.1.anyon;
+            let _11 = _10 ^ Xls_clause_1_Present_1;
+            let _12 = Cell {
+              anyon: _11,
+              x: Xls_clause_1_X_1,
+              y: Xls_clause_1_Y_1,
               ..(Xls_clause_1_Cell_1).1
             };
-            let _5 = (Tag::CELL, _4);
-            let Xls_clause_1_Updated_1 = _5;
-            let _6 = (Phase::GATHERING, Xls_clause_1_Updated_1, Directive::CONSUME, bool:0, );
+            let _13 = (Tag::CELL, _12);
+            let Xls_clause_1_Updated_1 = _13;
+            let _14 = (Phase::GATHERING, Xls_clause_1_Updated_1, Directive::CONSUME, bool:0, );
             if (bool:false) {
               (phase, data, Directive::FAIL, u1:0)
             } else {
-              (_6.0, _6.1.1, _6.2, _6.3)
+              (_14.0, _14.1.1, _14.2, _14.3)
             }
           } else {
             let Xls_clause_2_Cell_1 = (Tag::CELL, data);
@@ -1729,6 +2190,12 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
         _ => (phase, data, Directive::FAIL, u1:0),
       }
     },
+    Tag::PHI_CORRECTION => {
+      let message = phicorrection_from_bits(frame.payload);
+      match phase {
+        _ => (phase, data, Directive::FAIL, u1:0),
+      }
+    },
     _ => (phase, data, Directive::FAIL, u1:0),
   }
 }
@@ -1755,8 +2222,10 @@ pub proc Service {
       let has_effect = machine.entry_effect_index < effects.count;
       let effect = effects.values[
         machine.entry_effect_index as u32];
+      let emit_effect = has_effect && effects.valid[
+        machine.entry_effect_index as u32];
       let egress_tok = send_if(
-        join(), egress_out, has_effect, effect);
+        join(), egress_out, emit_effect, effect);
       let next_effect_index =
         machine.entry_effect_index + (has_effect as u8);
       let entry_complete = next_effect_index >= effects.count;
@@ -1779,7 +2248,7 @@ pub proc Service {
       let (tok, frame, received) = recv_if_non_blocking(
         join(), req_in, machine.admission_pending,
         zero!<axis::Frame>());
-      let tag_ok = (frame.header.op == (Tag::PHI as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::ANYON_MOVE as u8) && frame.header.payload_words == u8:2) || (frame.header.op == (Tag::PHI0 as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHENOM_CONFIG as u8) && frame.header.payload_words == u8:2) || (frame.header.op == (Tag::PHENOM_REQUEST as u8) && frame.header.payload_words == u8:1) || (frame.header.op == (Tag::PHENOM_QUERY as u8) && frame.header.payload_words == u8:2) || (frame.header.op == (Tag::PHENOM_DATA as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHENOM_ANYON as u8) && frame.header.payload_words == u8:2);
+      let tag_ok = (frame.header.op == (Tag::PHI as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::ANYON_MOVE as u8) && frame.header.payload_words == u8:2) || (frame.header.op == (Tag::PHI0 as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHENOM_CONFIG as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHENOM_REQUEST as u8) && frame.header.payload_words == u8:1) || (frame.header.op == (Tag::PHENOM_QUERY as u8) && frame.header.payload_words == u8:2) || (frame.header.op == (Tag::PHENOM_DATA as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHENOM_ANYON as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHI_CORRECTION as u8) && frame.header.payload_words == u8:3);
       let accepted = received && tag_ok;
       let invalid_input = received && !tag_ok;
       let incoming_slot = MailboxSlot {
@@ -1905,15 +2374,17 @@ proc EgressDemux {
   west_out: chan<axis::Frame> out;
   south_out: chan<axis::Frame> out;
   syndrome_out: chan<axis::Frame> out;
+  correction_out: chan<axis::Frame> out;
 
   config(egress_in: chan<Egress> in,
          north_out: chan<axis::Frame> out,
          east_out: chan<axis::Frame> out,
          west_out: chan<axis::Frame> out,
          south_out: chan<axis::Frame> out,
-         syndrome_out: chan<axis::Frame> out
+         syndrome_out: chan<axis::Frame> out,
+         correction_out: chan<axis::Frame> out
   ) {
-    (egress_in, north_out, east_out, west_out, south_out, syndrome_out)
+    (egress_in, north_out, east_out, west_out, south_out, syndrome_out, correction_out)
   }
 
   init { () }
@@ -1931,6 +2402,8 @@ proc EgressDemux {
         send(tok, south_out, egress.frame),
       OutputPort::SYNDROME =>
         send(tok, syndrome_out, egress.frame),
+      OutputPort::CORRECTION =>
+        send(tok, correction_out, egress.frame),
     };
     state
   }
@@ -1943,13 +2416,15 @@ pub proc Top {
   west_send: chan<axis::Beat> out;
   south_send: chan<axis::Beat> out;
   syndrome_send: chan<axis::Beat> out;
+  correction_send: chan<axis::Beat> out;
 
   config(ext_recv: chan<axis::Beat> in,
          north_send: chan<axis::Beat> out,
          east_send: chan<axis::Beat> out,
          west_send: chan<axis::Beat> out,
          south_send: chan<axis::Beat> out,
-         syndrome_send: chan<axis::Beat> out) {
+         syndrome_send: chan<axis::Beat> out,
+         correction_send: chan<axis::Beat> out) {
     let (req_p, req_c) = chan<axis::Frame, u32:1>("req");
     let (admit_p, admit_c) = chan<u1, u32:1>("admit");
     let (egress_p, egress_c) =
@@ -1959,15 +2434,17 @@ pub proc Top {
     let (west_p, west_c) = chan<axis::Frame, u32:1>("west");
     let (south_p, south_c) = chan<axis::Frame, u32:1>("south");
     let (syndrome_p, syndrome_c) = chan<axis::Frame, u32:1>("syndrome");
+    let (correction_p, correction_c) = chan<axis::Frame, u32:1>("correction");
     spawn axis::ReservedRx(ext_recv, req_p, admit_c);
     spawn Service(req_c, egress_p, admit_p);
-    spawn EgressDemux(egress_c, north_p, east_p, west_p, south_p, syndrome_p);
+    spawn EgressDemux(egress_c, north_p, east_p, west_p, south_p, syndrome_p, correction_p);
     spawn axis::Tx(north_c, north_send);
     spawn axis::Tx(east_c, east_send);
     spawn axis::Tx(west_c, west_send);
     spawn axis::Tx(south_c, south_send);
     spawn axis::Tx(syndrome_c, syndrome_send);
-    (ext_recv, north_send, east_send, west_send, south_send, syndrome_send)
+    spawn axis::Tx(correction_c, correction_send);
+    (ext_recv, north_send, east_send, west_send, south_send, syndrome_send, correction_send)
   }
 
   init { () }
