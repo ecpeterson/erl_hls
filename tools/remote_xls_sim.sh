@@ -149,10 +149,9 @@ iverilog \
 vvp phi_torus_topology.vvp
 
 # Elaborate the checked distance-three graph to IR so distinct cross-family
-# shifts and wrapping are accepted by the pinned XLS build. Full optimization,
-# RTL generation, and simulation remain on the distance-one smoke below; those
-# later stages would otherwise make the first regression pay the full 54-actor
-# cost.
+# shifts and wrapping are accepted by the pinned XLS build. The opt-in
+# run_phi_noise_topology_sim.sh handles full distance-three RTL simulation;
+# this routine regression keeps the cheaper distance-one smoke below.
 "$xls_root/ir_converter_main" \
     --warnings_as_errors=false \
     --dslx_path=. \

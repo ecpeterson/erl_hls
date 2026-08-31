@@ -188,3 +188,29 @@ compact route representation itself has no such bound. Per-instance phi seeds,
 an explicit PL/host correction adapter, applying decisions to a data-qubit
 correction history, and a physically calibrated noise model remain later
 decoder work.
+
+### Distance-three RTL simulation
+
+`tools/run_phi_noise_topology_sim.sh` is the opt-in full-graph regression. It
+regenerates the distance-three DSLX, runs XLS conversion, optimization, and
+Verilog generation on the configured build host, then compiles and runs
+`phi_noise_topology_tb.sv` with Icarus. The cost is deliberately excluded from
+the routine CI job.
+
+The bench holds one announcement stream under backpressure, checks that its
+frame remains stable, and leaves the other three outputs drainable. It then
+accepts announcements in arbitrary merge order and requires every coordinate
+from both planes in steps zero through two, proving that steps zero and one
+completed everywhere. The current deterministic fixture also produces four
+sparse step-one corrections per plane; the bench compares those as
+coordinate/direction sets rather than as one globally ordered trace. Those
+sets are regression goldens for this fixture, not a logical-correctness or
+winding test.
+
+On the 4-core, 8-GiB UTM using the pinned XLS build, the first run measured
+about 15 seconds and 195 MiB for DSLX conversion, 3 minutes 51 seconds and
+2.3 GiB for optimization, 52 seconds and 299 MiB for code generation,
+25 seconds and 456 MiB for Icarus compilation, and 60 seconds and 142 MiB for
+simulation. The generated Verilog is about 9.9 MB and 166,000 lines. These are
+host build costs, not an FPGA utilization estimate; the runner saves compact
+timing and digest reports but does not copy that Verilog into the repository.

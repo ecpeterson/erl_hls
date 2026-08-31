@@ -122,6 +122,8 @@ cp "$project_root/test/rtl/phi_torus_topology_tb.sv" \
     "$stage/phi_torus_topology_tb.sv"
 cp "$project_root/test/rtl/phi_noise_topology_smoke_tb.sv" \
     "$stage/phi_noise_topology_smoke_tb.sv"
+cp "$project_root/test/rtl/phi_noise_topology_tb.sv" \
+    "$stage/phi_noise_topology_tb.sv"
 cp "$project_root/test/rtl/ordered_egress_topology_tb.sv" \
     "$stage/ordered_egress_topology_tb.sv"
 cp "$project_root/test/rtl/xls_sim_bridge.c" "$stage/xls_sim_bridge.c"
