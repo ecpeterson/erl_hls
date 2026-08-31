@@ -14,7 +14,7 @@ case "$mode" in
 esac
 
 # Keep this manifest explicit: these are the source-adjacent artifacts produced
-# by the Erlang translator and the pinned XLS code generator.
+# by the Erlang translator, topology generator, and pinned XLS code generator.
 generated=(
     regsvc.x
     regsvc.v
@@ -24,6 +24,7 @@ generated=(
     phenom_data_cell.v
     phenom_syndrome_cell.x
     phenom_syndrome_cell.v
+    phi_phenom_topology.x
 )
 goldens=(
     src/examples/regsvc.erl.x
@@ -34,6 +35,7 @@ goldens=(
     src/examples/phenom_data_cell.v
     src/examples/phenom_syndrome_cell.erl.x
     src/examples/phenom_syndrome_cell.v
+    src/examples/phi_phenom_topology.x
 )
 
 missing=false

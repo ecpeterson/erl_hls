@@ -13,6 +13,7 @@ ERL_XLS_REGSVC_X="$stage/regsvc.x" \
 ERL_XLS_PHI_HALO_X="$stage/phi_halo_cell.x" \
 ERL_XLS_PHENOM_DATA_X="$stage/phenom_data_cell.x" \
 ERL_XLS_PHENOM_SYNDROME_X="$stage/phenom_syndrome_cell.x" \
+ERL_XLS_PHI_PHENOM_TOPOLOGY_X="$stage/phi_phenom_topology.x" \
 ERL_XLS_CASE_FIXTURE_X="$stage/xls_case_fixture.x" \
 erl \
     -noshell \
@@ -29,6 +30,7 @@ erl \
         CaseFixture = xls_parse:to_xls(
             "test_data/xls_case_fixture.erl"
         ),
+        PhiPhenomTopology = phi_phenom_topology_dslx:to_dslx(),
         ok = file:write_file(os:getenv("ERL_XLS_REGSVC_X"), Regsvc),
         ok = file:write_file(os:getenv("ERL_XLS_PHI_HALO_X"), PhiHalo),
         ok = file:write_file(
@@ -43,12 +45,14 @@ erl \
             os:getenv("ERL_XLS_CASE_FIXTURE_X"),
             CaseFixture
         ),
+        ok = file:write_file(
+            os:getenv("ERL_XLS_PHI_PHENOM_TOPOLOGY_X"),
+            PhiPhenomTopology
+        ),
         halt().
     '
 
 cp "$project_root/src/axis.x" "$stage/axis.x"
-cp "$project_root/src/examples/phi_phenom_topology.x" \
-    "$stage/phi_phenom_topology.x"
 cp "$project_root/src/examples/regsvc_core_adapter.v" \
     "$stage/regsvc_core_adapter.v"
 cp "$project_root/src/examples/regsvc_debug_top.v" \

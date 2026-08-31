@@ -48,9 +48,10 @@ ssh -o BatchMode=yes "$remote_host" \
 
 # Retrieve review artifacts only after the remote runner has generated and
 # simulated them successfully.
-# The combined topology source is handwritten. Its regenerated RTL is brought
-# back for local review and synthesis; behavioral regeneration, rather than a
-# 500-KiB checked golden, is enforced by the remote simulation above.
+# The topology DSLX is generated locally from its Erlang plan and physical
+# profile. Its regenerated RTL is brought back for review and synthesis;
+# behavioral regeneration, rather than a 500-KiB Verilog golden, is enforced
+# by the remote simulation above.
 rsync -a -e "ssh -o BatchMode=yes" \
     --include=regsvc.v \
     --include=phi_halo_cell.v \
