@@ -85,7 +85,7 @@ incomplete_and_nonzero_status_rounds_do_not_query_test() ->
     ),
     ?assertEqual(draining, maps:get(phase, State5)).
 
-matching_quiet_empty_rounds_emit_one_line_query_test() ->
+matching_quiet_empty_rounds_emit_whole_device_query_test() ->
     {State0, _Cutoff} = new_experiment(),
     {State1, []} = status_round(
         x_decoder_events,
@@ -105,8 +105,9 @@ matching_quiet_empty_rounds_emit_one_line_query_test() ->
         ?PHENOM_QUIET_MASK,
         State2
     ),
-    ?assertEqual(querying, maps:get(phase, State3)),
-    ?assertEqual([line_query()], Commands).
+    ?assertEqual(querying_x, maps:get(phase, State3)),
+    ?assertEqual(?CUTOFF_STEP + 1, maps:get(closeout_step, State3)),
+    ?assertEqual([snapshot_query(x)], Commands).
 
 correction_update_precedes_drain_query_test() ->
     {State0, _Cutoff} = new_experiment(),
@@ -130,7 +131,7 @@ correction_update_precedes_drain_query_test() ->
         ?PHENOM_QUIET_MASK,
         State1
     ),
-    {_State3, QueryCommands} = status_round(
+    {State3, QueryCommands} = status_round(
         z_decoder_events,
         ?CUTOFF_STEP,
         ?PHENOM_QUIET_MASK,
@@ -140,9 +141,13 @@ correction_update_precedes_drain_query_test() ->
         [
             {control_router, data, {0, 5, 0, 5},
                 #pauli_update{pauli = z}},
-            line_query()
+            snapshot_query(x)
         ],
         CorrectionCommands ++ XStatusCommands ++ QueryCommands
+    ),
+    ?assertEqual(
+        [{x, ?CUTOFF_STEP, 0, 0, ?PHI_NORTH_MASK}],
+        maps:get(correction_log, State3)
     ).
 
 duplicate_correction_fails_before_status_fence_test() ->
@@ -179,33 +184,48 @@ out_of_range_correction_fails_reducer_test() ->
     ),
     ?assertEqual(failed, maps:get(phase, Failed)).
 
-out_of_order_replies_xor_after_ignoring_wrong_request_test() ->
+out_of_order_whole_device_replies_build_canonical_witness_test() ->
     Querying = querying_state(),
     {Querying, []} = phi_memory_experiment:event(
         data_measurements,
-        reply(?REQUEST_ID + 1, 0, 1),
+        reply(?REQUEST_ID + 1, 0, 0, 1),
         Querying
     ),
-    {State1, []} = phi_memory_experiment:event(
+    XReplies = [
+        reply(?REQUEST_ID, X, Y, anti_x(pauli_at(X, Y)))
+        || {X, Y} <- lists:reverse(snapshot_coordinates())
+    ],
+    {QueryingZ, [ZQuery]} = replies(XReplies, Querying),
+    ?assertEqual(querying_z, maps:get(phase, QueryingZ)),
+    ?assertEqual(snapshot_query(z), ZQuery),
+    {QueryingZ, []} = phi_memory_experiment:event(
         data_measurements,
-        reply(?REQUEST_ID, 2, 1),
-        Querying
+        reply(?REQUEST_ID + 7, 2, 5, 1),
+        QueryingZ
     ),
-    {State2, []} = phi_memory_experiment:event(
-        data_measurements,
-        reply(?REQUEST_ID, 0, 0),
-        State1
+    ZReplies = [
+        reply(?REQUEST_ID + 1, X, Y, anti_z(pauli_at(X, Y)))
+        || {X, Y} <- snapshot_coordinates()
+    ],
+    {done, Witness, Done} = replies(ZReplies, QueryingZ),
+    ?assertEqual(done, maps:get(phase, Done)),
+    ?assertEqual(?CUTOFF_STEP, maps:get(closeout_step, Witness)),
+    ?assertEqual([], maps:get(corrections, Witness)),
+    ?assertEqual(
+        lists:sort([
+            {{X, Y}, pauli_at(X, Y)}
+            || {X, Y} <- snapshot_coordinates()
+        ]),
+        maps:get(data_paulis, Witness)
     ),
-    {done, 0, Done} = phi_memory_experiment:event(
-        data_measurements,
-        reply(?REQUEST_ID, 1, 1),
-        State2
-    ),
-    ?assertEqual(done, maps:get(phase, Done)).
+    ?assertEqual(
+        #{y => ?LINE_Y, measurement => z, parity => 0},
+        maps:get(row, Witness)
+    ).
 
 duplicate_reply_fails_test() ->
     Querying = querying_state(),
-    Reply = reply(?REQUEST_ID, 2, 1),
+    Reply = reply(?REQUEST_ID, 2, 5, 1),
     {State1, []} = phi_memory_experiment:event(
         data_measurements,
         Reply,
@@ -217,6 +237,61 @@ duplicate_reply_fails_test() ->
         State1
     ),
     ?assertEqual(failed, maps:get(phase, Failed)).
+
+late_x_reply_fails_during_z_query_test() ->
+    QueryingX = querying_state(),
+    XReplies = [
+        reply(?REQUEST_ID, X, Y, 0)
+        || {X, Y} <- snapshot_coordinates()
+    ],
+    {QueryingZ, [_ZQuery]} = replies(XReplies, QueryingX),
+    {error, late_reply, Failed} = phi_memory_experiment:event(
+        data_measurements,
+        reply(?REQUEST_ID, 0, 0, 0),
+        QueryingZ
+    ),
+    ?assertEqual(failed, maps:get(phase, Failed)).
+
+request_id_wraps_between_snapshot_queries_test() ->
+    Max = 16#ffffffff,
+    {State0, _Cutoff} = phi_memory_experiment:new(#{
+        distance => ?DISTANCE,
+        first_quiet_step => ?CUTOFF_STEP,
+        line_y => ?LINE_Y,
+        measurement => z,
+        request_id => Max
+    }),
+    {State1, []} = status_round(
+        x_decoder_events,
+        ?CUTOFF_STEP,
+        ?PHENOM_QUIET_MASK,
+        State0
+    ),
+    {QueryingX, [XQuery]} = status_round(
+        z_decoder_events,
+        ?CUTOFF_STEP,
+        ?PHENOM_QUIET_MASK,
+        State1
+    ),
+    ?assertEqual(
+        {control_router, data, {0, 0, 2, 5}, #pauli_query{
+            request_id = Max,
+            measurement = x
+        }},
+        XQuery
+    ),
+    XReplies = [
+        reply(Max, X, Y, 0)
+        || {X, Y} <- snapshot_coordinates()
+    ],
+    {_QueryingZ, [ZQuery]} = replies(XReplies, QueryingX),
+    ?assertEqual(
+        {control_router, data, {0, 0, 2, 5}, #pauli_query{
+            request_id = 0,
+            measurement = z
+        }},
+        ZQuery
+    ).
 
 new_experiment() ->
     phi_memory_experiment:new(#{
@@ -241,7 +316,7 @@ querying_state() ->
         ?PHENOM_QUIET_MASK,
         State1
     ),
-    ?assertEqual(line_query(), Query),
+    ?assertEqual(snapshot_query(x), Query),
     State2.
 
 status_round(Stream, Step, Flags, State) ->
@@ -268,14 +343,60 @@ coordinates() ->
            Y <- lists:seq(0, ?DISTANCE - 1)
     ].
 
-line_query() ->
-    {control_router, data, {0, ?LINE_Y, ?DISTANCE - 1, ?LINE_Y},
-        #pauli_query{request_id = ?REQUEST_ID, measurement = z}}.
+snapshot_coordinates() ->
+    [
+        {X, Y}
+        || X <- lists:seq(0, ?DISTANCE - 1),
+           Y <- lists:seq(0, 2 * ?DISTANCE - 1)
+    ].
 
-reply(RequestId, X, Anticommutes) ->
+snapshot_query(x) ->
+    {control_router, data, {0, 0, ?DISTANCE - 1, 2 * ?DISTANCE - 1},
+        #pauli_query{request_id = ?REQUEST_ID, measurement = x}};
+snapshot_query(z) ->
+    {control_router, data, {0, 0, ?DISTANCE - 1, 2 * ?DISTANCE - 1},
+        #pauli_query{request_id = ?REQUEST_ID + 1, measurement = z}}.
+
+reply(RequestId, X, Y, Anticommutes) ->
     #pauli_reply{
         request_id = RequestId,
         x = X,
-        y = ?LINE_Y,
+        y = Y,
         anticommutes = Anticommutes
     }.
+
+replies(Replies, State) ->
+    replies(Replies, State, []).
+
+replies([], State, Commands) ->
+    {State, Commands};
+replies([Reply | Rest], State, Commands) ->
+    case phi_memory_experiment:event(data_measurements, Reply, State) of
+        {Next, NewCommands} ->
+            replies(Rest, Next, Commands ++ NewCommands);
+        {done, _Witness, _Done} = Done when Rest =:= [] ->
+            Done;
+        {done, _Witness, _Done} = Done ->
+            error({replies_after_done, Rest, Done});
+        {error, _Reason, _Failed} = Error ->
+            error({unexpected_reply_error, Reply, Error})
+    end.
+
+pauli_at(0, 0) -> i;
+pauli_at(0, 1) -> x;
+pauli_at(0, 2) -> z;
+pauli_at(0, 3) -> y;
+pauli_at(0, ?LINE_Y) -> x;
+pauli_at(1, ?LINE_Y) -> z;
+pauli_at(2, ?LINE_Y) -> y;
+pauli_at(_X, _Y) -> i.
+
+anti_x(i) -> 0;
+anti_x(x) -> 0;
+anti_x(y) -> 1;
+anti_x(z) -> 1.
+
+anti_z(i) -> 0;
+anti_z(x) -> 1;
+anti_z(y) -> 1;
+anti_z(z) -> 0.

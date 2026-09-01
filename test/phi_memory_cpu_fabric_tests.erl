@@ -27,5 +27,23 @@ cutoff_is_the_activation_boundary_test() ->
     end.
 
 distance_three_noisy_closeout_test_() ->
-    #{expected := Expected} = phi_memory_demo:fixture(),
-    {timeout, 10, ?_assertEqual(Expected, phi_memory_demo:run_cpu())}.
+    {timeout, 10, ?_test(begin
+        Fixture = phi_memory_demo:fixture(),
+        Actual = phi_memory_demo:run_cpu(),
+        ?assertEqual(ok, phi_memory_demo:verify(Actual)),
+        Envelope = phi_memory_demo:witness_envelope(Actual),
+        Options = maps:get(options, Fixture),
+        ?assertEqual(
+            {ok, Options, Actual},
+            phi_memory_demo:decode_witness_envelope(Envelope)
+        ),
+        ok = maybe_write_witness(Envelope)
+    end)}.
+
+maybe_write_witness(Envelope) ->
+    case os:getenv("ERL_HLS_PHI_CPU_WITNESS") of
+        false ->
+            ok;
+        Path ->
+            file:write_file(Path, io_lib:format("~tp.~n", [Envelope]))
+    end.

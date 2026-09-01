@@ -5,7 +5,8 @@
 -module(phi_memory_experiment).
 -moduledoc """
 Reduces phi/noise output events into the commands needed to finish one memory
-experiment and measure one caller-selected horizontal data row. The caller is
+experiment and snapshot the cumulative Pauli frame of every data qubit. The
+snapshot also evaluates one caller-selected horizontal row. The caller is
 responsible for choosing a row and Pauli which represent the intended
 nontrivial logical operator; this plumbing reducer does not prove homology.
 Its `distance` option must come from the active normalized topology. The pure
@@ -27,7 +28,9 @@ data-qubit Pauli updates. A complete status round from both decoder planes is a
 closeout fence only when every coordinate reports both `quiet = 1` and
 `present = 0`. Correction and status share one ordered output per plane, so at
 that point every earlier correction has crossed the output boundary. The
-resulting line query follows all update commands on the one serialized ingress.
+resulting whole-device queries follow all update commands on the one serialized
+ingress. Anticommutation queries against X and Z recover the complete
+projective Pauli at each coordinate without changing the actor protocol.
 
 The fence is a safety condition, not a convergence guarantee. The current
 fixed-round decoder can leave symmetric nonempty configurations stationary, so
@@ -42,7 +45,7 @@ wire envelope. Reset or gateway failure must abort and restart the experiment.
 -include("phi_protocol.hrl").
 
 -export([new/1, event/3]).
--export_type([stream/0, options/0, command/0, state/0, result/0]).
+-export_type([stream/0, options/0, command/0, witness/0, state/0, result/0]).
 
 -define(U32_MASK, 16#ffffffff).
 
@@ -71,10 +74,26 @@ wire envelope. Reset or gateway failure must abort and restart the experiment.
     rectangle(),
     #noise_cutoff{} | #pauli_update{} | #pauli_query{}
 }.
+-type witness() :: #{
+    closeout_step := hls_nums:u32(),
+    corrections := [{
+        x | z,
+        hls_nums:u32(),
+        hls_nums:u16(),
+        hls_nums:u16(),
+        hls_nums:u32()
+    }],
+    data_paulis := [{{hls_nums:u16(), hls_nums:u16()}, hls_pauli:pauli()}],
+    row := #{
+        y := hls_nums:u16(),
+        measurement := hls_pauli:pauli(),
+        parity := 0 | 1
+    }
+}.
 -type state() :: map().
 -type result() ::
     {state(), [command()]} |
-    {done, 0 | 1, state()} |
+    {done, witness(), state()} |
     {error, atom(), state()}.
 
 -doc "Starts one closeout and returns its whole-fabric cutoff command.".
@@ -102,7 +121,8 @@ new(#{
                 closed_steps => #{},
                 zero_steps => #{x => #{}, z => #{}},
                 seen_corrections => #{},
-                replies => #{}
+                correction_log => [],
+                replies => #{x => #{}, z => #{}}
             },
             Rectangle = {0, 0, Distance - 1, 2 * Distance - 1},
             {State, [{control_router, noise, Rectangle, #noise_cutoff{
@@ -138,9 +158,11 @@ decoder_event(Plane, Correction = #phi_correction{},
 decoder_event(Plane, Status = #phi_status{},
         State = #{phase := draining}) ->
     status(Plane, Status, State);
-decoder_event(_Plane, #phi_correction{}, State = #{phase := querying}) ->
+decoder_event(_Plane, #phi_correction{}, State = #{phase := Phase})
+        when Phase =:= querying_x; Phase =:= querying_z ->
     {error, late_correction, State#{phase := failed}};
-decoder_event(_Plane, #phi_status{}, State = #{phase := querying}) ->
+decoder_event(_Plane, #phi_status{}, State = #{phase := Phase})
+        when Phase =:= querying_x; Phase =:= querying_z ->
     {State, []};
 decoder_event(_Plane, _Event, State) ->
     {error, decoder_event, State}.
@@ -156,7 +178,8 @@ correction(
     State = #{
         distance := Distance,
         closed_steps := Closed,
-        seen_corrections := Seen
+        seen_corrections := Seen,
+        correction_log := CorrectionLog
     }
 ) when X >= 0, X < Distance, Y >= 0, Y < Distance,
         (Direction =:= ?PHI_NORTH_MASK orelse
@@ -179,7 +202,11 @@ correction(
                     Command = {control_router, data,
                         {DataX, DataY, DataX, DataY},
                         #pauli_update{pauli = Pauli}},
-                    {State#{seen_corrections := Seen#{Key => true}},
+                    Logged = {Plane, Step, X, Y, Direction},
+                    {State#{
+                        seen_corrections := Seen#{Key => true},
+                        correction_log := [Logged | CorrectionLog]
+                    },
                         [Command]}
             end
     end;
@@ -270,8 +297,6 @@ complete_status_round(
 maybe_query(State = #{
     zero_steps := #{x := XSteps, z := ZSteps},
     distance := Distance,
-    line_y := LineY,
-    measurement := Measurement,
     request_id := RequestId
 }) ->
     Common = lists:sort([
@@ -280,14 +305,14 @@ maybe_query(State = #{
     case Common of
         [] ->
             {State, []};
-        [_Step | _] ->
+        [Step | _] ->
             Query = #pauli_query{
                 request_id = RequestId,
-                measurement = Measurement
+                measurement = x
             },
             Command = {control_router, data,
-                {0, LineY, Distance - 1, LineY}, Query},
-            {State#{phase := querying}, [Command]}
+                {0, 0, Distance - 1, 2 * Distance - 1}, Query},
+            {State#{phase := querying_x, closeout_step => Step}, [Command]}
     end.
 
 prune_zero_steps(State = #{
@@ -308,6 +333,11 @@ measurement_reply(_Reply, State = #{phase := Phase})
         when Phase =:= draining; Phase =:= done; Phase =:= failed ->
     {State, []};
 measurement_reply(
+    #pauli_reply{request_id = RequestId},
+    State = #{phase := querying_z, request_id := RequestId}
+) ->
+    {error, late_reply, State#{phase := failed}};
+measurement_reply(
     #pauli_reply{
         request_id = RequestId,
         x = X,
@@ -315,40 +345,113 @@ measurement_reply(
         anticommutes = Anticommutes
     },
     State = #{
-        phase := querying,
+        phase := Phase,
         request_id := ExpectedRequestId,
         distance := Distance,
-        line_y := Y,
         replies := Replies
     }
-) when RequestId =:= ExpectedRequestId,
-        X >= 0, X < Distance,
+) when (Phase =:= querying_x orelse Phase =:= querying_z),
+        X >= 0, X < Distance, Y >= 0, Y < 2 * Distance,
         Anticommutes < 2 ->
-    case maps:is_key(X, Replies) of
+    {Measurement, ActiveRequestId} = query_identity(
+        Phase,
+        ExpectedRequestId
+    ),
+    case RequestId =:= ActiveRequestId of
+        false ->
+            {State, []};
+        true ->
+            collect_reply(
+                Measurement,
+                {X, Y},
+                Anticommutes,
+                State,
+                Replies,
+                Distance
+            )
+    end;
+measurement_reply(#pauli_reply{}, State = #{phase := Phase})
+        when Phase =:= querying_x; Phase =:= querying_z ->
+    {error, reply, State#{phase := failed}}.
+
+collect_reply(Measurement, Coordinate, Anticommutes, State, Replies, Distance) ->
+    MeasurementReplies = maps:get(Measurement, Replies),
+    case maps:is_key(Coordinate, MeasurementReplies) of
         true ->
             {error, duplicate_reply, State#{phase := failed}};
         false ->
-            UpdatedReplies = Replies#{X => Anticommutes},
+            UpdatedMeasurementReplies = MeasurementReplies#{
+                Coordinate => Anticommutes
+            },
+            UpdatedReplies = Replies#{Measurement := UpdatedMeasurementReplies},
             Updated = State#{replies := UpdatedReplies},
-            case map_size(UpdatedReplies) =:= Distance of
+            case map_size(UpdatedMeasurementReplies) =:=
+                    2 * Distance * Distance of
                 false ->
                     {Updated, []};
                 true ->
-                    Parity = lists:foldl(
-                        fun(Value, Acc) -> Value bxor Acc end,
-                        0,
-                        maps:values(UpdatedReplies)
-                    ),
-                    Done = Updated#{phase := done},
-                    {done, Parity, Done}
+                    complete_query(Measurement, Updated)
             end
-    end;
-measurement_reply(#pauli_reply{request_id = RequestId},
-        State = #{phase := querying, request_id := Expected})
-        when RequestId =/= Expected ->
-    {State, []};
-measurement_reply(#pauli_reply{}, State) ->
-    {error, reply, State#{phase := failed}}.
+    end.
+
+complete_query(x, State = #{distance := Distance, request_id := RequestId}) ->
+    Query = #pauli_query{
+        request_id = next_request_id(RequestId),
+        measurement = z
+    },
+    Command = {control_router, data,
+        {0, 0, Distance - 1, 2 * Distance - 1}, Query},
+    {State#{phase := querying_z}, [Command]};
+complete_query(z, State) ->
+    Witness = witness(State),
+    Done = State#{phase := done},
+    {done, Witness, Done}.
+
+query_identity(querying_x, RequestId) -> {x, RequestId};
+query_identity(querying_z, RequestId) -> {z, next_request_id(RequestId)}.
+
+next_request_id(RequestId) ->
+    (RequestId + 1) band ?U32_MASK.
+
+witness(#{
+    closeout_step := CloseoutStep,
+    correction_log := Corrections,
+    replies := #{x := AntiX, z := AntiZ},
+    line_y := LineY,
+    measurement := Measurement
+}) ->
+    DataPaulis = lists:sort([
+        {Coordinate, pauli(maps:get(Coordinate, AntiX), AntiZValue)}
+        || {Coordinate, AntiZValue} <- maps:to_list(AntiZ)
+    ]),
+    RowParity = lists:foldl(
+        fun
+            ({{_X, Y}, Pauli}, Parity) when Y =:= LineY ->
+                parity(hls_pauli:anticommutes(Pauli, Measurement)) bxor Parity;
+            (_Other, Parity) ->
+                Parity
+        end,
+        0,
+        DataPaulis
+    ),
+    #{
+        closeout_step => CloseoutStep,
+        corrections => lists:sort(Corrections),
+        data_paulis => DataPaulis,
+        row => #{
+            y => LineY,
+            measurement => Measurement,
+            parity => RowParity
+        }
+    }.
+
+pauli(0, 0) -> i;
+pauli(0, 1) -> x;
+pauli(1, 0) -> z;
+pauli(1, 1) -> y.
+
+parity(false) -> 0;
+parity(true) -> 1.
 
 step_closed(Plane, Step, Closed) ->
     case maps:find(Plane, Closed) of

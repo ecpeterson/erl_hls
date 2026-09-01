@@ -8,9 +8,14 @@ remote_root=${ERL_HLS_REMOTE_ROOT:-/home/ecpeterson/erl_hls-build}
 remote_xls=${ERL_HLS_REMOTE_XLS:-/home/ecpeterson/xls-v0.0.0-9235-gb179d691e-linux-x64}
 remote_stage="$remote_root/phi_memory_demo"
 reuse_rtl=${ERL_HLS_PHI_DEMO_REUSE_RTL:-0}
+cpu_witness="$local_stage/phi_memory_cpu_witness.term"
 
 cd "$project_root"
-rebar3 eunit --module=phi_memory_cpu_fabric_tests
+mkdir -p "$local_stage"
+rm -f "$cpu_witness"
+ERL_HLS_PHI_CPU_WITNESS="$cpu_witness" \
+    rebar3 eunit --module=phi_memory_cpu_fabric_tests
+test -s "$cpu_witness"
 
 ERL_HLS_PHI_BRIDGE_DISTANCE=demo \
     "$project_root/tools/prepare_xls_sim.sh" "$local_stage"
@@ -29,6 +34,7 @@ rsync -a -e "ssh -o BatchMode=yes" \
     "$local_stage/hls_spatial_router.x" \
     "$local_stage/phi_memory_bridge_tb.sv" \
     "$local_stage/xls_sim_bridge.c" \
+    "$cpu_witness" \
     "$local_stage/erl_src" \
     "$local_stage/test_src" \
     "$local_stage/remote_phi_memory_demo.sh" \

@@ -205,8 +205,8 @@ flowchart LR
         CR -->|"whole grid: noise_cutoff"| DO
         CR -->|"whole grid: noise_cutoff"| SX
         CR -->|"whole grid: noise_cutoff"| SZ
-        CR -->|"point: pauli_update<br/>line: pauli_query"| DE
-        CR -->|"point: pauli_update<br/>line: pauli_query"| DO
+        CR -->|"point: pauli_update<br/>whole grid: pauli_query"| DE
+        CR -->|"point: pauli_update<br/>whole grid: pauli_query"| DO
     end
 
     Gateway -->|"one SpatialFrame stream"| CR
@@ -217,7 +217,7 @@ flowchart LR
     ZE -. "map each correction<br/>to a point update" .-> Runner
     XE -. "complete quiet + empty<br/>same-step X status" .-> Runner
     ZE -. "complete quiet + empty<br/>same-step Z status" .-> Runner
-    DM -. "XOR Distance replies" .-> Runner
+    DM -. "two full X/Z snapshots<br/>canonical Pauli witness" .-> Runner
 ```
 
 At the default distance three, the plan has 54 actor instances, 34 compact
@@ -339,15 +339,18 @@ status. The reducer translates each sparse correction into a point-addressed
 planes closes the decoder only when every coordinate is quiet and empty.
 Because each cell's status follows its optional correction on the same ordered
 plane output, the two complete sets also fence all earlier correction events.
-The reducer then issues one horizontal-line `pauli_query` after the queued
-point updates and XORs the `Distance` replies. This is a sound completion
-witness, not a liveness guarantee: the current fixed-round decoder can leave
-symmetric nonempty anyon configurations stationary. Until its tie-breaking or
-stopping rule is strengthened, the ERTS runner must bound the closeout wait and
-report nonconvergence rather than inferring completion from elapsed time. This
-first protocol assumes one lossless, non-restarting fabric activation; a reset
-or gateway failure aborts the experiment rather than invoking unspecified
-retry behavior.
+The reducer then issues two whole-data-grid `pauli_query` commands after the
+queued point updates. Anticommutation with X and Z uniquely reconstructs each
+projective Pauli. The canonical result records the common closeout step, the
+coordinate-sorted Pauli frame, the sorted correction set, and the parity of the
+selected horizontal row. This is a sound completion witness, not a liveness
+guarantee: the current fixed-round decoder can leave symmetric nonempty anyon
+configurations stationary. Until its tie-breaking or stopping rule is
+strengthened, the ERTS runner must bound the closeout wait and report
+nonconvergence rather than inferring completion from elapsed time. This first
+protocol assumes one lossless, non-restarting fabric activation; a reset or
+gateway failure aborts the experiment rather than invoking unspecified retry
+behavior.
 
 The present distance-three noise configuration is still a plumbing fixture.
 Its common high noise rate deliberately produces frequent binary events rather
@@ -424,31 +427,36 @@ topology. The routine remote regression instead generates the same wrapper
 around a zero-noise distance-one topology, compiles it through XLS and Icarus,
 and connects its AXIS ports to `hls_fabric` through the VPI FIFO bridge. A real
 `phi_memory_runner` then sends cutoff, observes the quiet/empty fence, issues
-the line query, and returns parity zero to its ERTS caller. This is an
-end-to-end transport and protocol witness; the aliased distance-one geometry
-is not a decoder-correctness test.
+both whole-grid Pauli queries, and returns the two-qubit identity snapshot to
+its ERTS caller. This is an end-to-end transport and protocol witness; the
+aliased distance-one geometry is not a decoder-correctness test.
 
 The local regression now performs the full noisy distance-three closeout with
 cutoff step 16, physical row four, and a Z measurement through
-`phi_memory_cpu_fabric`; the deterministic fixture returns parity one. Run the
-same fixture through both the CPU realization and the checked distance-three
-gateway with:
+`phi_memory_cpu_fabric`. Its deterministic full-device witness closes at step
+21, contains 84 corrections, reconstructs 18 Paulis, and returns row parity
+one. Run the same fixture through both the CPU realization and the checked
+distance-three gateway with:
 
 ```sh
 tools/run_phi_memory_demo.sh
 ```
 
-The script derives the distance, noise rate, experiment options, and expected
-parity from `phi_memory_demo:fixture/0`. It uses the `ERL_HLS_REMOTE_*`
-settings described in the README, retrieves only logs and compact metrics, and
-leaves the generated Verilog on the remote build host. This comparison remains
-outside routine CI because of the costs below.
+The script derives the distance, noise rate, experiment options, and compact
+golden summary from `phi_memory_demo:fixture/0`. The CPU regression writes its
+complete canonical witness into the staging directory; the remote bridge must
+match that exact term as well as the checked summary. The script uses the
+`ERL_HLS_REMOTE_*` settings described in the README, retrieves only logs and
+compact metrics, and leaves the generated Verilog on the remote build host.
+This comparison remains outside routine CI because of the costs below.
 
-On the 4-core, 8-GiB UTM using the pinned XLS build, the complete comparison
-passed with parity one. It measured about 33 seconds and 449 MiB for DSLX
-conversion, 6 minutes 28 seconds and 3.21 GiB for optimization, 1 minute 10
-seconds and 294 MiB for code generation, 27 seconds and 472 MiB for Icarus
-compilation, and 4 minutes 45 seconds and 151 MiB for simulation. The generated
-Verilog is about 8.6 MiB and 150,146 lines. These are host build costs, not an
-FPGA utilization estimate; the runner saves compact timing and digest reports
-but does not copy that Verilog into the repository.
+On the 4-core, 8-GiB UTM using the pinned XLS build, the earlier line-parity
+comparison passed with parity one. It measured about 33 seconds and 449 MiB
+for DSLX conversion, 6 minutes 28 seconds and 3.21 GiB for optimization, 1
+minute 10 seconds and 294 MiB for code generation, 27 seconds and 472 MiB for
+Icarus compilation, and 4 minutes 45 seconds and 151 MiB for simulation. The
+generated Verilog is about 8.6 MiB and 150,146 lines. These are host build
+costs, not an FPGA utilization estimate; the runner saves compact timing and
+digest reports but does not copy that Verilog into the repository.
+Reusing that compiled Icarus image, the later full-device witness comparison
+completed in 5 minutes 42 seconds.

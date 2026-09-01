@@ -6,9 +6,15 @@ xls_root=${2:?usage: remote_phi_memory_demo.sh STAGE XLS_ROOT}
 stdlib="$xls_root/dslx/stdlib"
 reuse_rtl=${ERL_HLS_PHI_DEMO_REUSE_RTL:-0}
 startup_timeout=${ERL_HLS_SIM_STARTUP_TIMEOUT:-120}
+cpu_witness="$stage/phi_memory_cpu_witness.term"
 
 if [[ ! "$startup_timeout" =~ ^[1-9][0-9]*$ ]]; then
     echo "ERL_HLS_SIM_STARTUP_TIMEOUT must be a positive integer" >&2
+    exit 1
+fi
+
+if [[ ! -s "$cpu_witness" ]]; then
+    echo "Missing CPU witness: $cpu_witness" >&2
     exit 1
 fi
 
@@ -125,7 +131,9 @@ erlc -pa "$beam_dir" -o "$beam_dir" \
     "$stage/test_src/phi_memory_bridge_tests.erl"
 
 /usr/bin/time -v -o phi_memory_gateway-sim.time \
-    env ERL_HLS_PHI_SIM_DIR="$sim_dir" ERL_HLS_PHI_DEMO=d3 \
+    env ERL_HLS_PHI_SIM_DIR="$sim_dir" \
+    ERL_HLS_PHI_DEMO=d3 \
+    ERL_HLS_PHI_CPU_WITNESS="$cpu_witness" \
     erl -noshell -pa "$beam_dir" \
     -eval 'case eunit:test(phi_memory_bridge_tests, [verbose]) of
         ok -> halt(0);

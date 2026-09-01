@@ -53,6 +53,9 @@ regression closes a zero-noise distance-one experiment from ERTS through its
 generated gateway and Icarus model. The opt-in
 `tools/run_phi_memory_demo.sh` command runs the same noisy distance-three
 fixture first on ERTS and then through Icarus on the configured remote host.
+After the common quiet/empty fence, both paths query every data qubit against X
+and Z, reconstruct the complete Pauli frame, and compare the resulting
+coordinate-sorted witness directly.
 See the
 [generated phi/noise topology](src/examples/phi_decoder/phi_phenom_topology.md) for its
 structure, checks, and current limitations.

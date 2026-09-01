@@ -64,21 +64,55 @@ runner_routes_and_closeout_test() ->
             y = 0,
             flags = Quiet
         }),
-        [_, _, QuerySend] =
+        [_, _, XQuerySend] =
             phi_memory_fabric_fixture:await_sends(
                 Fabric,
                 3,
                 ?TIMEOUT
             ),
-        ?assertEqual(encoded(query_command()), QuerySend),
+        ?assertEqual(encoded(query_command(x)), XQuerySend),
 
         ok = deliver(Fabric, data_measurements, #pauli_reply{
             request_id = ?REQUEST_ID,
             x = 0,
-            y = ?LINE_Y,
+            y = 1,
             anticommutes = 1
         }),
-        ?assertEqual({ok, 1}, phi_memory_runner:await(Runner))
+        ok = deliver(Fabric, data_measurements, #pauli_reply{
+            request_id = ?REQUEST_ID,
+            x = 0,
+            y = 0,
+            anticommutes = 0
+        }),
+        [_, _, _, ZQuerySend] =
+            phi_memory_fabric_fixture:await_sends(
+                Fabric,
+                4,
+                ?TIMEOUT
+            ),
+        ?assertEqual(encoded(query_command(z)), ZQuerySend),
+
+        ok = deliver(Fabric, data_measurements, #pauli_reply{
+            request_id = ?REQUEST_ID + 1,
+            x = 0,
+            y = 0,
+            anticommutes = 0
+        }),
+        ok = deliver(Fabric, data_measurements, #pauli_reply{
+            request_id = ?REQUEST_ID + 1,
+            x = 0,
+            y = 1,
+            anticommutes = 0
+        }),
+        Expected = {ok, #{
+            closeout_step => ?CUTOFF_STEP,
+            corrections => [
+                {x, ?CUTOFF_STEP, 0, 0, ?PHI_NORTH_MASK}
+            ],
+            data_paulis => [{{0, 0}, i}, {{0, 1}, z}],
+            row => #{y => ?LINE_Y, measurement => z, parity => 0}
+        }},
+        ?assertEqual(Expected, phi_memory_runner:await(Runner))
     after
         stop(Runner, Fabric)
     end.
@@ -170,9 +204,14 @@ cutoff_command() ->
         first_quiet_step = ?CUTOFF_STEP
     }}.
 
-query_command() ->
-    {control_router, data, {0, ?LINE_Y, 0, ?LINE_Y}, #pauli_query{
+query_command(x) ->
+    {control_router, data, {0, 0, 0, 1}, #pauli_query{
         request_id = ?REQUEST_ID,
+        measurement = x
+    }};
+query_command(z) ->
+    {control_router, data, {0, 0, 0, 1}, #pauli_query{
+        request_id = ?REQUEST_ID + 1,
         measurement = z
     }}.
 

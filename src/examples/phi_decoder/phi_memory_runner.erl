@@ -44,7 +44,8 @@ models transaction-correlated call and cast traffic intended for lowering.
     boundary :: map(),
     experiment :: phi_memory_experiment:state(),
     timer :: reference(),
-    result = running :: running | {ok, 0 | 1} | {error, term()},
+    result = running ::
+        running | {ok, phi_memory_experiment:witness()} | {error, term()},
     waiters = [] :: [gen_server:from()]
 }).
 
@@ -60,7 +61,8 @@ stop(Pid) ->
     gen_server:stop(Pid).
 
 -doc "Waits until the experiment completes, fails, or reaches its timeout.".
--spec await(pid()) -> {ok, 0 | 1} | {error, term()}.
+-spec await(pid()) ->
+    {ok, phi_memory_experiment:witness()} | {error, term()}.
 await(Pid) ->
     gen_server:call(Pid, await, infinity).
 
@@ -154,9 +156,9 @@ consume(Stream, Event, State = #state{
                 {error, Reason} ->
                     {noreply, finish({error, {send, Reason}}, State)}
             end;
-        {done, Parity, Updated} ->
+        {done, Witness, Updated} ->
             Done = State#state{experiment = Updated},
-            {noreply, finish({ok, Parity}, Done)};
+            {noreply, finish({ok, Witness}, Done)};
         {error, Reason, Updated} ->
             Failed = State#state{experiment = Updated},
             {noreply, finish({error, {experiment, Reason}}, Failed)}
