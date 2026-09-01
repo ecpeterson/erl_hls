@@ -11,6 +11,22 @@
 -define(PRNG_FIRST, 16#40aec71f).
 -define(PRNG_SECOND, 16#91e00c19).
 
+configuration_requires_nonzero_seed_test() ->
+    {ok, configuring, Empty} = phi_halo_cell:init([]),
+    ?assertEqual(
+        {Empty, []},
+        phi_halo_cell:handle_enter(configuring, configuring, Empty)
+    ),
+    ?assertEqual(
+        {configuring, Empty, fail},
+        phi_halo_cell:handle_cast({phi_config, 0}, configuring, Empty)
+    ),
+    ?assertError(badarg, phi_halo_cell:configure(self(), 0)),
+    ?assertError(
+        badarg,
+        phi_halo_cell:configure(self(), 16#100000000)
+    ).
+
 repeated_diffusion_precedes_comparison_and_flipping_test() ->
     with_cell(fun repeated_diffusion_comparison_and_flipping/2).
 
@@ -30,7 +46,12 @@ coin_gates_selected_anyon_output_test() ->
     with_cell(fun coin_gates_selected_anyon_output/2).
 
 measurement_coordinate_reaches_correction_test() ->
-    {ok, measuring, Initial} = phi_halo_cell:init([]),
+    {ok, configuring, Empty} = phi_halo_cell:init([]),
+    {measuring, Initial, consume} = phi_halo_cell:handle_cast(
+        {phi_config, ?PRNG_SEED},
+        configuring,
+        Empty
+    ),
     {gathering, Updated, consume} = phi_halo_cell:handle_cast(
         {phenom_anyon, 0, 1, 16#1234, 16#abcd},
         measuring,
@@ -61,6 +82,8 @@ measurement_gates_diffusion_and_toggles_anyon_test() ->
     {ok, PID} = phi_halo_cell:start_link(),
     try
         ok = phi_halo_cell:connect(PID, Collectors),
+        assert_no_neighbor_cast(Ref),
+        ok = phi_halo_cell:configure(PID, ?PRNG_SEED),
         expect_port_cast(Ref, syndrome, {phenom_request, 0}),
 
         four_phis(PID, 0, [0, 0]),
@@ -212,7 +235,7 @@ local_departure_and_arrivals_combine_by_parity_test() ->
         Advanced
     ).
 
-deferred_connection_delays_initial_entry_test() ->
+configuration_delays_initial_entry_test() ->
     {CardinalCollectors, Ref} = start_collectors(),
     {ok, PID} = phi_halo_cell:start_link(),
     Collectors = add_zero_measurement_source(
@@ -223,6 +246,29 @@ deferred_connection_delays_initial_entry_test() ->
     try
         Info = phi_halo_cell:runtime_info(PID),
         ?assertNot(maps:get(connected, Info)),
+        assert_no_neighbor_cast(Ref),
+        ok = phi_halo_cell:connect(PID, Collectors),
+        assert_no_neighbor_cast(Ref),
+        ok = phi_halo_cell:configure(PID, ?PRNG_SEED),
+        expect_neighbor_batch(Ref, {phi, 0, [0, 0]})
+    after
+        case is_process_alive(PID) of
+            true -> phi_halo_cell:stop(PID);
+            false -> ok
+        end,
+        stop_collectors(Ref, Collectors)
+    end.
+
+configuration_may_precede_connection_test() ->
+    {CardinalCollectors, Ref} = start_collectors(),
+    {ok, PID} = phi_halo_cell:start_link(),
+    Collectors = add_zero_measurement_source(
+        PID,
+        CardinalCollectors,
+        Ref
+    ),
+    try
+        ok = phi_halo_cell:configure(PID, ?PRNG_SEED),
         assert_no_neighbor_cast(Ref),
         ok = phi_halo_cell:connect(PID, Collectors),
         expect_neighbor_batch(Ref, {phi, 0, [0, 0]})
@@ -249,11 +295,13 @@ early_phi_casts_wait_for_initial_entry_test() ->
         ?assertEqual(4, maps:get(committed, maps:get(mailbox, Before))),
         ?assertMatch(
             {cell, 0, 0, [0, 0], [0, 0], 0,
-                0, 0, 0, 0, 0, ?PRNG_SEED, 0, 0},
+                0, 0, 0, 0, 0, 0, 0, 0},
             maps:get(data, Before)),
         assert_no_neighbor_cast(Ref),
 
         ok = phi_halo_cell:connect(PID, Collectors),
+        assert_no_neighbor_cast(Ref),
+        ok = phi_halo_cell:configure(PID, ?PRNG_SEED),
         expect_neighbor_sequences(Ref, [
             {phi, 0, [0, 0]},
             {phi, 1, [8, 6]}
@@ -325,6 +373,10 @@ deferred_degree_four_cycle_completes_multiple_steps_test() ->
                 NorthEast,
                 SouthEastMeasurement
             )
+        ),
+        lists:foreach(
+            fun({PID, Seed}) -> ok = phi_halo_cell:configure(PID, Seed) end,
+            lists:zip(Cells, lists:seq(1, length(Cells)))
         ),
         lists:foreach(fun(PID) -> await_step(PID, 2) end, Cells)
     after
@@ -414,20 +466,24 @@ generated_dslx_matches_checked_in_artifact_test() ->
     %% Multiple clauses for a message and phase still produce one ordered
     %% selector per {message tag, phase} pair.
     ?assertEqual(
-        4,
+        5,
         length(binary:matches(Dispatch, <<"Phase::GATHERING =>">>))
     ),
     ?assertEqual(
-        3,
+        4,
         length(binary:matches(Dispatch, <<"Phase::FLIPPING =>">>))
     ),
     ?assertEqual(
-        4,
+        5,
         length(binary:matches(Dispatch, <<"Phase::COMPARING =>">>))
     ),
     ?assertEqual(
-        4,
+        5,
         length(binary:matches(Dispatch, <<"Phase::MEASURING =>">>))
+    ),
+    ?assertEqual(
+        5,
+        length(binary:matches(Dispatch, <<"Phase::CONFIGURING =>">>))
     ),
     ?assertNotEqual(
         nomatch,
@@ -466,6 +522,14 @@ generated_dslx_matches_checked_in_artifact_test() ->
             <<"Tag::PHI_CORRECTION as u8) && "
               "frame.header.payload_words == u8:3">>
         )
+    ),
+    ?assertNotEqual(
+        nomatch,
+        binary:match(
+            Generated,
+            <<"Tag::PHI_CONFIG as u8) && "
+              "frame.header.payload_words == u8:1">>
+        )
     ).
 
 message_wire_abi_test() ->
@@ -475,6 +539,7 @@ message_wire_abi_test() ->
     Measurement = {phenom_anyon, 16#61626364, 1, 16#7172, 16#8182},
     Correction = {phi_correction, 16#91929394, 16#a1a2, 16#b1b2,
         ?WEST_MASK},
+    Config = {phi_config, 16#c1c2c3c4},
     ?assertEqual(3, phi_halo_cell:pack_tag(phi)),
     ?assertEqual(4, phi_halo_cell:pack_tag(anyon_move)),
     ?assertEqual(5, phi_halo_cell:pack_tag(phi0)),
@@ -487,12 +552,14 @@ message_wire_abi_test() ->
     ?assertEqual(9, phi_halo_cell:pack_tag(phenom_data)),
     ?assertEqual(10, phi_halo_cell:pack_tag(phenom_anyon)),
     ?assertEqual(11, phi_halo_cell:pack_tag(phi_correction)),
+    ?assertEqual(12, phi_halo_cell:pack_tag(phi_config)),
     ?assertEqual(phenom_config, phi_halo_cell:unpack_tag(6)),
     ?assertEqual(phenom_request, phi_halo_cell:unpack_tag(7)),
     ?assertEqual(phenom_query, phi_halo_cell:unpack_tag(8)),
     ?assertEqual(phenom_data, phi_halo_cell:unpack_tag(9)),
     ?assertEqual(phenom_anyon, phi_halo_cell:unpack_tag(10)),
     ?assertEqual(phi_correction, phi_halo_cell:unpack_tag(11)),
+    ?assertEqual(phi_config, phi_halo_cell:unpack_tag(12)),
     PackedPhi = phi_halo_cell:pack(Phi),
     ?assertEqual(
         <<
@@ -555,6 +622,15 @@ message_wire_abi_test() ->
     ?assertEqual(
         {Correction, <<>>},
         phi_halo_cell:unpack(phi_correction, PackedCorrection)
+    ),
+    PackedConfig = phi_halo_cell:pack(Config),
+    ?assertEqual(
+        <<16#c1c2c3c4:32/unsigned-little-integer>>,
+        PackedConfig
+    ),
+    ?assertEqual(
+        {Config, <<>>},
+        phi_halo_cell:unpack(phi_config, PackedConfig)
     ).
 
 two_layer_relaxation_coefficients_test() ->
@@ -941,6 +1017,7 @@ start_cell() ->
     Collectors = CardinalCollectors#{syndrome => MeasurementSource},
     {ok, PID} = phi_halo_cell:start_link(Collectors),
     MeasurementSource ! {target, PID},
+    ok = phi_halo_cell:configure(PID, ?PRNG_SEED),
     {PID, Collectors, Ref}.
 
 add_zero_measurement_source(PID, Collectors, Ref) ->

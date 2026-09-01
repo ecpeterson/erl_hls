@@ -13,11 +13,22 @@ top-proc boundary streams, so this is a structural topology witness rather
 than the complete phenomenological-noise deployment. They are not implicitly
 attached to an Erlang process or PL-PS gateway.
 
-No actor instance or route pair is enumerated here. A family member is named
-`{phi, X, Y}` only when a consumer resolves a particular coordinate.
+No actor instance is flattened into the `actors` map, and no route pair is
+enumerated here. The v0 startup model does still enumerate one configuration
+message per family member so that every phi cell gets a distinct deterministic
+tie-breaking seed. A family member is named `{phi, X, Y}` only by that instance
+constant or when a consumer resolves a particular coordinate. This example
+helper bounds each dimension at 50 because it materializes that startup list;
+the compact family and route forms do not have that bound.
 """.
 
+-include("phi_protocol.hrl").
+
 -export([topology/0, topology/2]).
+
+-define(MAX_WITNESS_DIMENSION, 50).
+-define(SEED_STRIDE, 16#9e3779b9).
+-define(U32_MASK, 16#ffffffff).
 
 -doc "Returns the compact two-by-three torus used by the RTL witness.".
 -spec topology() -> hls_topology:spec().
@@ -26,7 +37,9 @@ topology() ->
 
 -doc "Returns a compact `Width` by `Height` periodic phi family.".
 -spec topology(pos_integer(), pos_integer()) -> hls_topology:spec().
-topology(Width, Height) ->
+topology(Width, Height)
+        when Width > 0, Width =< ?MAX_WITNESS_DIMENSION,
+             Height > 0, Height =< ?MAX_WITNESS_DIMENSION ->
     #{
         version => 1,
         actors => #{},
@@ -49,10 +62,25 @@ topology(Width, Height) ->
             {{phi, syndrome}, [{external, syndrome_requests}]},
             {{phi, correction}, [{external, corrections}]}
         ],
-        startup => []
-    }.
+        startup => startup(Width, Height)
+    };
+topology(_Width, _Height) ->
+    error(badarg).
 
 relation(Port, Offset) ->
     {{phi, Port}, [
         {family, phi, {translate, Offset, wrap}}
     ]}.
+
+startup(Width, Height) ->
+    [
+        {{phi, X, Y}, [#phi_config{
+            seed = seed(Height, X, Y)
+        }]}
+        || X <- lists:seq(0, Width - 1),
+           Y <- lists:seq(0, Height - 1)
+    ].
+
+seed(Height, X, Y) ->
+    Index = X * Height + Y + 1,
+    (Index * ?SEED_STRIDE) band ?U32_MASK.

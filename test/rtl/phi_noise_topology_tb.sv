@@ -11,10 +11,12 @@ module phi_noise_topology_tb;
     localparam [8:0] ALL_COORDINATES = 9'h1ff;
     // These sets are deterministic fixture goldens, not a logical-decoder
     // correctness or winding assertion.
-    localparam [8:0] EXPECTED_X_CORRECTIONS =
-        (9'b1 << 1) | (9'b1 << 4) | (9'b1 << 6) | (9'b1 << 8);
-    localparam [8:0] EXPECTED_Z_CORRECTIONS =
-        (9'b1 << 0) | (9'b1 << 5) | (9'b1 << 6) | (9'b1 << 8);
+    localparam [8:0] EXPECTED_X_CORRECTIONS_STEP_0 = 9'b0;
+    localparam [8:0] EXPECTED_X_CORRECTIONS_STEP_1 =
+        (9'b1 << 1) | (9'b1 << 6);
+    localparam [8:0] EXPECTED_Z_CORRECTIONS_STEP_0 = 9'b1 << 4;
+    localparam [8:0] EXPECTED_Z_CORRECTIONS_STEP_1 =
+        (9'b1 << 0) | (9'b1 << 4);
 
     reg clk = 1'b0;
     reg reset = 1'b1;
@@ -41,7 +43,9 @@ module phi_noise_topology_tb;
     reg [8:0] z_announcements_step_0 = 9'b0;
     reg [8:0] z_announcements_step_1 = 9'b0;
     reg [8:0] z_announcements_step_2 = 9'b0;
+    reg [8:0] x_corrections_step_0 = 9'b0;
     reg [8:0] x_corrections_step_1 = 9'b0;
+    reg [8:0] z_corrections_step_0 = 9'b0;
     reg [8:0] z_corrections_step_1 = 9'b0;
     reg [127:0] stalled_x_announcement;
     integer cycle;
@@ -74,26 +78,25 @@ module phi_noise_topology_tb;
     always #5 clk = ~clk;
 
     function automatic [31:0] expected_x_direction;
+        input [31:0] step;
         input integer coordinate;
         begin
-            case (coordinate)
-                1: expected_x_direction = WEST;
-                4: expected_x_direction = EAST;
-                6: expected_x_direction = SOUTH;
-                8: expected_x_direction = NORTH;
+            case ({step, coordinate})
+                {32'd1, 32'd1}: expected_x_direction = WEST;
+                {32'd1, 32'd6}: expected_x_direction = SOUTH;
                 default: expected_x_direction = 32'd0;
             endcase
         end
     endfunction
 
     function automatic [31:0] expected_z_direction;
+        input [31:0] step;
         input integer coordinate;
         begin
-            case (coordinate)
-                0: expected_z_direction = WEST;
-                5: expected_z_direction = EAST;
-                6: expected_z_direction = NORTH;
-                8: expected_z_direction = SOUTH;
+            case ({step, coordinate})
+                {32'd0, 32'd4}: expected_z_direction = EAST;
+                {32'd1, 32'd0}: expected_z_direction = WEST;
+                {32'd1, 32'd4}: expected_z_direction = SOUTH;
                 default: expected_z_direction = 32'd0;
             endcase
         end
@@ -238,39 +241,51 @@ module phi_noise_topology_tb;
                 );
                 $fatal(1);
             end
-            if (step == 32'd0) begin
-                $display("FAIL: %s plane emitted a step-0 correction", plane);
-                $fatal(1);
-            end
-            if (step == 32'd1) begin
+            if (step == 32'd0 || step == 32'd1) begin
                 coordinate = 3 * x + y;
                 coordinate_mask = 9'b1 << coordinate;
                 expected_direction = plane == "x" ?
-                    expected_x_direction(coordinate) :
-                    expected_z_direction(coordinate);
+                    expected_x_direction(step, coordinate) :
+                    expected_z_direction(step, coordinate);
                 $display(
-                    "TRACE: %s correction step=1 x=%0d y=%0d direction=%0d",
+                    "TRACE: %s correction step=%0d x=%0d y=%0d direction=%0d",
                     plane,
+                    step,
                     x,
                     y,
                     direction
                 );
                 if (expected_direction == 0 || direction != expected_direction) begin
                     $display(
-                        "FAIL: unexpected %s step-1 correction at %0d,%0d",
+                        "FAIL: unexpected %s step-%0d correction at %0d,%0d",
                         plane,
+                        step,
                         x,
                         y
                     );
                     $fatal(1);
                 end
-                if (plane == "x") begin
+                if (plane == "x" && step == 32'd0) begin
+                    if ((x_corrections_step_0 & coordinate_mask) != 0) begin
+                        $display("FAIL: duplicate x correction at %0d,%0d", x, y);
+                        $fatal(1);
+                    end
+                    x_corrections_step_0 =
+                        x_corrections_step_0 | coordinate_mask;
+                end else if (plane == "x") begin
                     if ((x_corrections_step_1 & coordinate_mask) != 0) begin
                         $display("FAIL: duplicate x correction at %0d,%0d", x, y);
                         $fatal(1);
                     end
                     x_corrections_step_1 =
                         x_corrections_step_1 | coordinate_mask;
+                end else if (step == 32'd0) begin
+                    if ((z_corrections_step_0 & coordinate_mask) != 0) begin
+                        $display("FAIL: duplicate z correction at %0d,%0d", x, y);
+                        $fatal(1);
+                    end
+                    z_corrections_step_0 =
+                        z_corrections_step_0 | coordinate_mask;
                 end else begin
                     if ((z_corrections_step_1 & coordinate_mask) != 0) begin
                         $display("FAIL: duplicate z correction at %0d,%0d", x, y);
@@ -332,8 +347,14 @@ module phi_noise_topology_tb;
                     z_announcements_step_0 === ALL_COORDINATES &&
                     z_announcements_step_1 === ALL_COORDINATES &&
                     z_announcements_step_2 === ALL_COORDINATES &&
-                    x_corrections_step_1 === EXPECTED_X_CORRECTIONS &&
-                    z_corrections_step_1 === EXPECTED_Z_CORRECTIONS
+                    x_corrections_step_0 ===
+                        EXPECTED_X_CORRECTIONS_STEP_0 &&
+                    x_corrections_step_1 ===
+                        EXPECTED_X_CORRECTIONS_STEP_1 &&
+                    z_corrections_step_0 ===
+                        EXPECTED_Z_CORRECTIONS_STEP_0 &&
+                    z_corrections_step_1 ===
+                        EXPECTED_Z_CORRECTIONS_STEP_1
                 );
                 cycle = cycle + 1)
             @(posedge clk);
@@ -361,11 +382,15 @@ module phi_noise_topology_tb;
             );
             $fatal(1);
         end
-        if (x_corrections_step_1 !== EXPECTED_X_CORRECTIONS ||
-                z_corrections_step_1 !== EXPECTED_Z_CORRECTIONS) begin
+        if (x_corrections_step_0 !== EXPECTED_X_CORRECTIONS_STEP_0 ||
+                x_corrections_step_1 !== EXPECTED_X_CORRECTIONS_STEP_1 ||
+                z_corrections_step_0 !== EXPECTED_Z_CORRECTIONS_STEP_0 ||
+                z_corrections_step_1 !== EXPECTED_Z_CORRECTIONS_STEP_1) begin
             $display(
-                "FAIL: incomplete corrections x=%03x z=%03x",
+                "FAIL: incomplete corrections x0=%03x x1=%03x z0=%03x z1=%03x",
+                x_corrections_step_0,
                 x_corrections_step_1,
+                z_corrections_step_0,
                 z_corrections_step_1
             );
             $fatal(1);

@@ -30,13 +30,12 @@ All family coordinates are zero-based `{X, Y}` pairs.  The topology has six
 distance.  Distance three is the smallest witness in which the four cardinal
 phi neighbors are distinct.
 
-Every noise actor receives one explicit configuration message.  The seeds are
-deterministic, nonzero, and distinct across the four noise families; the high
-common threshold is intended to exercise the generated graph rather than
-specify a physical noise model.  Phi cells retain their actor-local fixture
-seed for now. Because this example materializes those configurations as an
-ordinary list, it accepts witness distances only up to 50; that is not a bound
-in the compact family or route model.
+Every actor receives one explicit configuration message.  The PRNG seeds are
+deterministic, nonzero, and distinct across all six families; the high common
+noise threshold is intended to exercise the generated graph rather than
+specify a physical noise model. Because this example materializes those
+configurations as an ordinary list, it accepts witness distances only up to
+50; that is not a bound in the compact family or route model.
 """.
 
 -include("phi_protocol.hrl").
@@ -147,18 +146,29 @@ announcement_relation(Source, Destination, External) ->
     ]}.
 
 startup(Distance) ->
-    family_startup(data_even, 0, Distance) ++
-        family_startup(data_odd, 1, Distance) ++
-        family_startup(syndrome_x, 2, Distance) ++
-        family_startup(syndrome_z, 3, Distance).
+    noise_family_startup(data_even, 0, Distance) ++
+        noise_family_startup(data_odd, 1, Distance) ++
+        noise_family_startup(syndrome_x, 2, Distance) ++
+        noise_family_startup(syndrome_z, 3, Distance) ++
+        phi_family_startup(phi_x, 4, Distance) ++
+        phi_family_startup(phi_z, 5, Distance).
 
-family_startup(Family, FamilyIndex, Distance) ->
+noise_family_startup(Family, FamilyIndex, Distance) ->
     [
         {{Family, X, Y}, [#phenom_config{
             seed = seed(FamilyIndex, Distance, X, Y),
             threshold = ?EXERCISE_THRESHOLD,
             x = X,
             y = Y
+        }]}
+        || X <- lists:seq(0, Distance - 1),
+           Y <- lists:seq(0, Distance - 1)
+    ].
+
+phi_family_startup(Family, FamilyIndex, Distance) ->
+    [
+        {{Family, X, Y}, [#phi_config{
+            seed = seed(FamilyIndex, Distance, X, Y)
         }]}
         || X <- lists:seq(0, Distance - 1),
            Y <- lists:seq(0, Distance - 1)

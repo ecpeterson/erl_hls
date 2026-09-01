@@ -12,6 +12,8 @@ module phi_halo_cell_tb;
     localparam [31:0] EAST_MASK  = 32'd2;
     localparam [31:0] WEST_MASK  = 32'd4;
     localparam [31:0] SOUTH_MASK = 32'd8;
+    localparam [7:0] PHI_CONFIG_TAG = 8'd12;
+    localparam [31:0] PHI_PRNG_SEED = 32'h6d2b79f5;
 
     reg clk = 1'b0;
     reg reset = 1'b1;
@@ -128,6 +130,14 @@ module phi_halo_cell_tb;
             // Fixed arrays put element zero in the most-significant bits.
             send_beat(layer_one, 1'b0);
             send_beat(layer_zero, 1'b1);
+        end
+    endtask
+
+    task automatic send_config;
+        input [31:0] seed;
+        begin
+            send_beat(header(PHI_CONFIG_TAG, 8'd1), 1'b0);
+            send_beat(seed, 1'b1);
         end
     endtask
 
@@ -290,6 +300,7 @@ module phi_halo_cell_tb;
         reset = 1'b0;
 
         output_ready = 6'b111111;
+        send_config(PHI_PRNG_SEED);
         expect_measurement_request(0, 32'd0);
         send_measurement(32'd0, 32'd0);
         expect_all_phi(0, 32'd0, 32'd0, 32'd0);

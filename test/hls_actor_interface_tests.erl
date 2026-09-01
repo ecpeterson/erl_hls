@@ -4,7 +4,7 @@
 
 phi_interface_records_protocol_facts_test() ->
     Interface = hls_actor_interface:from_module(phi_halo_cell),
-    ?assertEqual(measuring, maps:get(initial_phase, Interface)),
+    ?assertEqual(configuring, maps:get(initial_phase, Interface)),
     ?assertEqual(5, hls_actor_interface:max_entry_effects(Interface)),
     ?assertEqual(
         [anyon_move, phi, phi0],
@@ -19,18 +19,10 @@ phi_interface_records_protocol_facts_test() ->
         hls_actor_interface:output_schemas(Interface, correction)
     ),
     ?assertEqual(
-        [anyon_move, phenom_anyon, phi, phi0],
+        [anyon_move, phenom_anyon, phi, phi0, phi_config],
         hls_actor_interface:dispatched_schemas(Interface)
     ),
-    ?assertEqual(
-        [#{
-            phase => measuring,
-            order => 0,
-            port => syndrome,
-            schema => phenom_request
-        }],
-        hls_actor_interface:initial_effects(Interface)
-    ),
+    ?assertEqual([], hls_actor_interface:initial_effects(Interface)),
     Gathering = [
         Effect
         || Effect <- maps:get(entry_effects, Interface),
@@ -85,10 +77,21 @@ phi_interface_records_protocol_facts_test() ->
         schema_fields(Interface, phi_correction)
     ),
     ?assertEqual(
+        [{seed, u32}],
+        schema_fields(Interface, phi_config)
+    ),
+    ?assertEqual(
         11,
         maps:get(selector, hls_actor_interface:schema(
             Interface,
             phi_correction
+        ))
+    ),
+    ?assertEqual(
+        12,
+        maps:get(selector, hls_actor_interface:schema(
+            Interface,
+            phi_config
         ))
     ),
     ?assertNot(maps:is_key(data_fields, Interface)),

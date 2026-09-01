@@ -19,13 +19,15 @@ pub enum Tag : u8 {
   PHENOM_DATA = u8:9,
   PHENOM_ANYON = u8:10,
   PHI_CORRECTION = u8:11,
+  PHI_CONFIG = u8:12,
 }
 
 enum Phase : u8 {
-  MEASURING = u8:0,
-  GATHERING = u8:1,
-  COMPARING = u8:2,
-  FLIPPING = u8:3,
+  CONFIGURING = u8:0,
+  MEASURING = u8:1,
+  GATHERING = u8:2,
+  COMPARING = u8:3,
+  FLIPPING = u8:4,
 }
 
 enum Directive : u2 {
@@ -192,6 +194,20 @@ fn bits_from_phicorrection(s: Phicorrection) -> bits[bit_count<Phicorrection>()]
   (s.direction as bits[32]) ++ (s.y as bits[16]) ++ (s.x as bits[16]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
 }
 
+struct Phiconfig {
+  seed : u32,
+}
+
+fn phiconfig_from_bits<N: u32>(raw: bits[N]) -> Phiconfig {
+  Phiconfig {
+    seed: raw[0:32] as u32,
+  }
+}
+
+fn bits_from_phiconfig(s: Phiconfig) -> bits[bit_count<Phiconfig>()] {
+  (s.seed as bits[32]) ++  zero!<bits[0]>()
+}
+
 struct Cell {
   step : u32,
   diffusion_round : u32,
@@ -273,11 +289,10 @@ struct Machine {
 
 fn initial_machine() -> Machine {
 let _0 = Cell {
-  random_state: 1831565813,
   ..zero!<Cell>()
 };
 let _1 = (Tag::CELL, _0);
-let _2 = (Phase::MEASURING, _1, );
+let _2 = (Phase::CONFIGURING, _1, );
 let _3 = if (bool:false) {
     zero!<Machine>()
 } else {
@@ -294,6 +309,38 @@ let _3 = if (bool:false) {
 
 fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
   match phase {
+    Phase::CONFIGURING => {
+      let entered_data = {
+        let _OldPhase_1 = old_phase;
+        let __1 = phase;
+        let Cell_1 = (Tag::CELL, data);
+        let _0 = if (bool:false) {
+            data
+        } else {
+            Cell_1.1
+        };
+        _0
+      };
+      (entered_data, EntryEffects {
+        count: u8:0,
+        valid: [
+          bool:false,
+          bool:false,
+          bool:false,
+          bool:false,
+          bool:false,
+          bool:false,
+        ],
+        values: [
+          zero!<Egress>(),
+          zero!<Egress>(),
+          zero!<Egress>(),
+          zero!<Egress>(),
+          zero!<Egress>(),
+          zero!<Egress>(),
+        ],
+      })
+    },
     Phase::MEASURING => {
       let entered_data = {
         let _OldPhase_1 = old_phase;
@@ -1471,6 +1518,29 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
     Tag::PHI => {
       let message = phi_from_bits(frame.payload);
       match phase {
+        Phase::CONFIGURING => {
+          let Xls_clause_1_Cell_1 = (Tag::CELL, data);
+          if message.epoch == 0 {
+            let _0 = (Phase::CONFIGURING, Xls_clause_1_Cell_1, Directive::POSTPONE, bool:0, );
+            if (bool:false) {
+              (phase, data, Directive::FAIL, u1:0)
+            } else {
+              (_0.0, _0.1.1, _0.2, _0.3)
+            }
+          } else {
+            let Xls_clause_2_Cell_1 = (Tag::CELL, data);
+            if bool:true {
+              let _0 = (Phase::CONFIGURING, Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
+              if (bool:false) {
+                (phase, data, Directive::FAIL, u1:0)
+              } else {
+                (_0.0, _0.1.1, _0.2, _0.3)
+              }
+            } else {
+              (phase, data, Directive::FAIL, u1:0)
+            }
+          }
+        },
         Phase::MEASURING => {
           let Xls_clause_1_Epoch_1 = message.epoch;
           let Xls_clause_1_Cell_1 = (Tag::CELL, data);
@@ -1709,6 +1779,19 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
     Tag::ANYON_MOVE => {
       let message = anyonmove_from_bits(frame.payload);
       match phase {
+        Phase::CONFIGURING => {
+          let Xls_clause_1_Cell_1 = (Tag::CELL, data);
+          if bool:true {
+            let _0 = (Phase::CONFIGURING, Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
+            if (bool:false) {
+              (phase, data, Directive::FAIL, u1:0)
+            } else {
+              (_0.0, _0.1.1, _0.2, _0.3)
+            }
+          } else {
+            (phase, data, Directive::FAIL, u1:0)
+          }
+        },
         Phase::MEASURING => {
           let Xls_clause_1_Cell_1 = (Tag::CELL, data);
           if bool:true {
@@ -1843,6 +1926,19 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
     Tag::PHI0 => {
       let message = phi0_from_bits(frame.payload);
       match phase {
+        Phase::CONFIGURING => {
+          let Xls_clause_1_Cell_1 = (Tag::CELL, data);
+          if bool:true {
+            let _0 = (Phase::CONFIGURING, Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
+            if (bool:false) {
+              (phase, data, Directive::FAIL, u1:0)
+            } else {
+              (_0.0, _0.1.1, _0.2, _0.3)
+            }
+          } else {
+            (phase, data, Directive::FAIL, u1:0)
+          }
+        },
         Phase::MEASURING => {
           let Xls_clause_1_Cell_1 = (Tag::CELL, data);
           if bool:true {
@@ -2026,6 +2122,29 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
     Tag::PHENOM_ANYON => {
       let message = phenomanyon_from_bits(frame.payload);
       match phase {
+        Phase::CONFIGURING => {
+          let Xls_clause_1_Cell_1 = (Tag::CELL, data);
+          if message.step == 0 {
+            let _0 = (Phase::CONFIGURING, Xls_clause_1_Cell_1, Directive::POSTPONE, bool:0, );
+            if (bool:false) {
+              (phase, data, Directive::FAIL, u1:0)
+            } else {
+              (_0.0, _0.1.1, _0.2, _0.3)
+            }
+          } else {
+            let Xls_clause_2_Cell_1 = (Tag::CELL, data);
+            if bool:true {
+              let _0 = (Phase::CONFIGURING, Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
+              if (bool:false) {
+                (phase, data, Directive::FAIL, u1:0)
+              } else {
+                (_0.0, _0.1.1, _0.2, _0.3)
+              }
+            } else {
+              (phase, data, Directive::FAIL, u1:0)
+            }
+          }
+        },
         Phase::MEASURING => {
           let Xls_clause_1_Step_1 = message.step;
           let Xls_clause_1_Present_1 = message.present;
@@ -2196,6 +2315,102 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
         _ => (phase, data, Directive::FAIL, u1:0),
       }
     },
+    Tag::PHI_CONFIG => {
+      let message = phiconfig_from_bits(frame.payload);
+      match phase {
+        Phase::CONFIGURING => {
+          let Xls_clause_1_Seed_1 = message.seed;
+          let Xls_clause_1_Cell_1 = (Tag::CELL, data);
+          let _0 = Xls_clause_1_Seed_1 > 0;
+          let _2 = if _0 {
+            let _1 = Xls_clause_1_Seed_1 <= 4294967295;
+            (_1, bool:false)
+          } else {
+            (bool:0, bool:false)
+          };
+          let case_match_1_1 = bool:false;
+          let case_match_1_2 = _2.1;
+          if _2.0 {
+            let _3 = Cell {
+              random_state: Xls_clause_1_Seed_1,
+              ..(Xls_clause_1_Cell_1).1
+            };
+            let _4 = (Tag::CELL, _3);
+            let _5 = (Phase::MEASURING, _4, Directive::CONSUME, bool:0, );
+            if (bool:false) {
+              (phase, data, Directive::FAIL, u1:0)
+            } else {
+              (_5.0, _5.1.1, _5.2, _5.3)
+            }
+          } else {
+            let Xls_clause_2_Cell_1 = (Tag::CELL, data);
+            if bool:true {
+              let _0 = (Phase::CONFIGURING, Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
+              if (bool:false) {
+                (phase, data, Directive::FAIL, u1:0)
+              } else {
+                (_0.0, _0.1.1, _0.2, _0.3)
+              }
+            } else {
+              (phase, data, Directive::FAIL, u1:0)
+            }
+          }
+        },
+        Phase::MEASURING => {
+          let Xls_clause_1_Cell_1 = (Tag::CELL, data);
+          if bool:true {
+            let _0 = (Phase::MEASURING, Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
+            if (bool:false) {
+              (phase, data, Directive::FAIL, u1:0)
+            } else {
+              (_0.0, _0.1.1, _0.2, _0.3)
+            }
+          } else {
+            (phase, data, Directive::FAIL, u1:0)
+          }
+        },
+        Phase::GATHERING => {
+          let Xls_clause_1_Cell_1 = (Tag::CELL, data);
+          if bool:true {
+            let _0 = (Phase::GATHERING, Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
+            if (bool:false) {
+              (phase, data, Directive::FAIL, u1:0)
+            } else {
+              (_0.0, _0.1.1, _0.2, _0.3)
+            }
+          } else {
+            (phase, data, Directive::FAIL, u1:0)
+          }
+        },
+        Phase::COMPARING => {
+          let Xls_clause_1_Cell_1 = (Tag::CELL, data);
+          if bool:true {
+            let _0 = (Phase::COMPARING, Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
+            if (bool:false) {
+              (phase, data, Directive::FAIL, u1:0)
+            } else {
+              (_0.0, _0.1.1, _0.2, _0.3)
+            }
+          } else {
+            (phase, data, Directive::FAIL, u1:0)
+          }
+        },
+        Phase::FLIPPING => {
+          let Xls_clause_1_Cell_1 = (Tag::CELL, data);
+          if bool:true {
+            let _0 = (Phase::FLIPPING, Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
+            if (bool:false) {
+              (phase, data, Directive::FAIL, u1:0)
+            } else {
+              (_0.0, _0.1.1, _0.2, _0.3)
+            }
+          } else {
+            (phase, data, Directive::FAIL, u1:0)
+          }
+        },
+        _ => (phase, data, Directive::FAIL, u1:0),
+      }
+    },
     _ => (phase, data, Directive::FAIL, u1:0),
   }
 }
@@ -2248,7 +2463,7 @@ pub proc Service {
       let (tok, frame, received) = recv_if_non_blocking(
         join(), req_in, machine.admission_pending,
         zero!<axis::Frame>());
-      let tag_ok = (frame.header.op == (Tag::PHI as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::ANYON_MOVE as u8) && frame.header.payload_words == u8:2) || (frame.header.op == (Tag::PHI0 as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHENOM_CONFIG as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHENOM_REQUEST as u8) && frame.header.payload_words == u8:1) || (frame.header.op == (Tag::PHENOM_QUERY as u8) && frame.header.payload_words == u8:2) || (frame.header.op == (Tag::PHENOM_DATA as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHENOM_ANYON as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHI_CORRECTION as u8) && frame.header.payload_words == u8:3);
+      let tag_ok = (frame.header.op == (Tag::PHI as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::ANYON_MOVE as u8) && frame.header.payload_words == u8:2) || (frame.header.op == (Tag::PHI0 as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHENOM_CONFIG as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHENOM_REQUEST as u8) && frame.header.payload_words == u8:1) || (frame.header.op == (Tag::PHENOM_QUERY as u8) && frame.header.payload_words == u8:2) || (frame.header.op == (Tag::PHENOM_DATA as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHENOM_ANYON as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHI_CORRECTION as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHI_CONFIG as u8) && frame.header.payload_words == u8:1);
       let accepted = received && tag_ok;
       let invalid_input = received && !tag_ok;
       let incoming_slot = MailboxSlot {

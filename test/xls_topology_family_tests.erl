@@ -4,14 +4,14 @@
 
 generated_family_topology_is_compact_test() ->
     Generated = generated(phi_torus_topology:topology(2, 2)),
-    ?assertEqual(1, count(Generated, <<"spawn FamilyNode(">>)),
+    ?assertEqual(1, count(Generated, <<"spawn FamilyNode<">>)),
     ?assertEqual(1, count(Generated, <<"spawn phi_halo_cell::Service(">>)),
     ?assertEqual(4, count(Generated,
         <<"chan<axis::Frame, u32:0>[TORUS_HEIGHT][TORUS_WIDTH]">>
     )),
     ?assertEqual(4, count(Generated, <<"unroll_for! (">>)),
-    ?assertEqual(1, count(Generated, <<"proc FamilyIngress {">>)),
-    ?assertEqual(1, count(Generated, <<"spawn FamilyIngress(">>)),
+    ?assertEqual(1, count(Generated, <<"proc FamilyIngress<">>)),
+    ?assertEqual(1, count(Generated, <<"spawn FamilyIngress<">>)),
     ?assertEqual(0, count(Generated, <<"spawn axis::FrameMux2(">>)),
     ?assertEqual(0, count(Generated, <<"spawn axis::ReservedFrame(">>)),
     ?assertEqual(nomatch, binary:match(Generated, <<"actor_0">>)),
@@ -74,9 +74,13 @@ rectangular_torus_wires_all_inverse_translations_test() ->
         ExpectedInputs
     ).
 
-five_and_fifty_wide_tori_have_the_same_generated_structure_test() ->
-    Small = generated(phi_torus_topology:topology(5, 5)),
-    Large = generated(phi_torus_topology:topology(50, 50)),
+five_and_fifty_wide_tori_have_the_same_generated_route_structure_test() ->
+    %% Instance constants are still enumerated by the v0 startup model. Strip
+    %% them here to isolate the compact family and route representation.
+    SmallSpec = phi_torus_topology:topology(5, 5),
+    LargeSpec = phi_torus_topology:topology(50, 50),
+    Small = generated(SmallSpec#{startup := []}),
+    Large = generated(LargeSpec#{startup := []}),
     ?assertEqual(
         scrub_dimensions(Small, <<"5">>),
         scrub_dimensions(Large, <<"50">>)
@@ -111,7 +115,7 @@ generated_multi_family_topology_retains_compact_structure_test() ->
     ?assertEqual(7, count(Generated, <<
         "chan<axis::Frame, CHANNEL_DEPTH>"
     >>)),
-    ?assertEqual(4, count(Generated, <<"fn family_">>)),
+    ?assertEqual(6, count(Generated, <<"fn family_">>)),
     ?assertEqual(0, count(Generated, <<"StartupPrefix">>)),
     ?assertEqual(0, count(Generated, <<"spawn axis::FrameMux2(">>)),
     ?assertEqual(0, count(Generated, <<"spawn axis::ReservedFrame(">>)),
@@ -149,6 +153,16 @@ generated_family_startup_precedes_routed_input_test() ->
     >>)),
     ?assertEqual(nomatch, binary:match(Generated, <<
         "startup_frame: axis::Frame"
+    >>)).
+
+generated_phi_torus_startup_is_per_coordinate_test() ->
+    Generated = generated(phi_torus_topology:topology()),
+    ?assertEqual(6, count(Generated, <<") => axis::pack(">>)),
+    ?assertNotEqual(nomatch, binary:match(Generated, <<
+        "join(), frame_out, family_0_startup(X, Y));"
+    >>)),
+    ?assertNotEqual(nomatch, binary:match(Generated, <<
+        "spawn FamilyNode<x, y>("
     >>)).
 
 family_backend_rejects_partial_family_startup_test() ->
@@ -231,7 +245,15 @@ family_backend_rejects_headless_plan_test() ->
 
 family_backend_rejects_dimensions_wider_than_dslx_u32_test() ->
     TooWide = 16#100000000,
-    Plan = hls_topology:normalize(phi_torus_topology:topology(TooWide, 1)),
+    Spec = phi_torus_topology:topology(1, 1),
+    Families = maps:get(families, Spec),
+    Plan = hls_topology:normalize(Spec#{
+        families := Families#{phi := #{
+            module => phi_halo_cell,
+            shape => [TooWide, 1]
+        }},
+        startup := []
+    }),
     ?assertError(
         {unsupported_dslx_family_dimensions,
             phi,

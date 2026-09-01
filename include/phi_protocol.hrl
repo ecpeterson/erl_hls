@@ -25,7 +25,8 @@
     phenom_query,
     phenom_data,
     phenom_anyon,
-    phi_correction
+    phi_correction,
+    phi_config
 ]).
 
 -define(PHI_NORTH_MASK, 1).
@@ -88,6 +89,11 @@
     x = hls_type:zero() :: hls_nums:u16(),
     y = hls_type:zero() :: hls_nums:u16(),
     direction = hls_type:zero() :: hls_nums:u32()
+}).
+
+%% One statically provisioned coin stream per logical phi-cell instance.
+-record(phi_config, {
+    seed = hls_type:zero() :: hls_nums:u32()
 }).
 
 -endif.

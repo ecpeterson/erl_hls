@@ -45,6 +45,36 @@ fn family_1_startup(x: u32, y: u32) -> axis::Frame {
   }
 }
 
+fn family_2_startup(x: u32, y: u32) -> axis::Frame {
+  match (x, y) {
+    (u32:0, u32:0) => axis::pack(u8:12, u32:0xDE0497BD),
+    (u32:0, u32:1) => axis::pack(u8:12, u32:0x7C3C1176),
+    (u32:0, u32:2) => axis::pack(u8:12, u32:0x1A738B2F),
+    (u32:1, u32:0) => axis::pack(u8:12, u32:0xB8AB04E8),
+    (u32:1, u32:1) => axis::pack(u8:12, u32:0x56E27EA1),
+    (u32:1, u32:2) => axis::pack(u8:12, u32:0xF519F85A),
+    (u32:2, u32:0) => axis::pack(u8:12, u32:0x93517213),
+    (u32:2, u32:1) => axis::pack(u8:12, u32:0x3188EBCC),
+    (u32:2, u32:2) => axis::pack(u8:12, u32:0xCFC06585),
+    _ => zero!<axis::Frame>(),
+  }
+}
+
+fn family_3_startup(x: u32, y: u32) -> axis::Frame {
+  match (x, y) {
+    (u32:0, u32:0) => axis::pack(u8:12, u32:0x6DF7DF3E),
+    (u32:0, u32:1) => axis::pack(u8:12, u32:0x0C2F58F7),
+    (u32:0, u32:2) => axis::pack(u8:12, u32:0xAA66D2B0),
+    (u32:1, u32:0) => axis::pack(u8:12, u32:0x489E4C69),
+    (u32:1, u32:1) => axis::pack(u8:12, u32:0xE6D5C622),
+    (u32:1, u32:2) => axis::pack(u8:12, u32:0x850D3FDB),
+    (u32:2, u32:0) => axis::pack(u8:12, u32:0x2344B994),
+    (u32:2, u32:1) => axis::pack(u8:12, u32:0xC17C334D),
+    (u32:2, u32:2) => axis::pack(u8:12, u32:0x5FB3AD06),
+    _ => zero!<axis::Frame>(),
+  }
+}
+
 fn family_4_startup(x: u32, y: u32) -> axis::Frame {
   match (x, y) {
     (u32:0, u32:0) => axis::pack(u8:6, uN[96]:0x0000000080000000BE1E08BB),
@@ -451,7 +481,7 @@ proc FamilyIngress1<X: u32, Y: u32> {
 }
 
 // Retains one mailbox credit while polling one input per activation.
-proc FamilyIngress2 {
+proc FamilyIngress2<X: u32, Y: u32> {
   incoming_0: chan<axis::Frame> in;
   incoming_1: chan<axis::Frame> in;
   incoming_2: chan<axis::Frame> in;
@@ -472,12 +502,16 @@ proc FamilyIngress2 {
     (incoming_0, incoming_1, incoming_2, incoming_3, incoming_4, frame_out, admission_in)
   }
 
-  init { (u3:0, u1:0) }
+  init { (u3:0, u1:0, u1:0) }
 
-  next(state: (u3, u1)) {
+  next(state: (u3, u1, u1)) {
     if !state.1 {
       let (_tok, _credit) = recv(join(), admission_in);
-      (state.0, u1:1)
+      (state.0, u1:1, state.2)
+    } else if !state.2 {
+      let _tok = send(
+        join(), frame_out, family_2_startup(X, Y));
+      (state.0, u1:0, u1:1)
     } else {
       let (tok_0, frame_0, valid_0) = recv_if_non_blocking(
         join(), incoming_0, state.0 == u3:0, zero!<axis::Frame>());
@@ -497,13 +531,13 @@ proc FamilyIngress2 {
       } else {
         state.0 + u3:1
       };
-      (next_cursor, !received)
+      (next_cursor, !received, state.2)
     }
   }
 }
 
 // Retains one mailbox credit while polling one input per activation.
-proc FamilyIngress3 {
+proc FamilyIngress3<X: u32, Y: u32> {
   incoming_0: chan<axis::Frame> in;
   incoming_1: chan<axis::Frame> in;
   incoming_2: chan<axis::Frame> in;
@@ -524,12 +558,16 @@ proc FamilyIngress3 {
     (incoming_0, incoming_1, incoming_2, incoming_3, incoming_4, frame_out, admission_in)
   }
 
-  init { (u3:0, u1:0) }
+  init { (u3:0, u1:0, u1:0) }
 
-  next(state: (u3, u1)) {
+  next(state: (u3, u1, u1)) {
     if !state.1 {
       let (_tok, _credit) = recv(join(), admission_in);
-      (state.0, u1:1)
+      (state.0, u1:1, state.2)
+    } else if !state.2 {
+      let _tok = send(
+        join(), frame_out, family_3_startup(X, Y));
+      (state.0, u1:0, u1:1)
     } else {
       let (tok_0, frame_0, valid_0) = recv_if_non_blocking(
         join(), incoming_0, state.0 == u3:0, zero!<axis::Frame>());
@@ -549,7 +587,7 @@ proc FamilyIngress3 {
       } else {
         state.0 + u3:1
       };
-      (next_cursor, !received)
+      (next_cursor, !received, state.2)
     }
   }
 }
@@ -722,7 +760,7 @@ proc FamilyNode1<X: u32, Y: u32> {
   next(state: ()) { state }
 }
 
-proc FamilyNode2 {
+proc FamilyNode2<X: u32, Y: u32> {
   config(
     incoming_0: chan<axis::Frame> in,
     incoming_1: chan<axis::Frame> in,
@@ -745,7 +783,7 @@ proc FamilyNode2 {
     spawn phi_halo_cell::Service(
       actor_req_c, actor_egress_p, actor_admit_p);
     spawn FamilyRouter2(actor_egress_c, lane_8_out, lane_9_out, lane_10_out, lane_11_out, lane_12_out, lane_13_out);
-    spawn FamilyIngress2(incoming_0, incoming_1, incoming_2, incoming_3, incoming_4, actor_req_p, actor_admit_c);
+    spawn FamilyIngress2<X, Y>(incoming_0, incoming_1, incoming_2, incoming_3, incoming_4, actor_req_p, actor_admit_c);
     ()
   }
 
@@ -753,7 +791,7 @@ proc FamilyNode2 {
   next(state: ()) { state }
 }
 
-proc FamilyNode3 {
+proc FamilyNode3<X: u32, Y: u32> {
   config(
     incoming_0: chan<axis::Frame> in,
     incoming_1: chan<axis::Frame> in,
@@ -776,7 +814,7 @@ proc FamilyNode3 {
     spawn phi_halo_cell::Service(
       actor_req_c, actor_egress_p, actor_admit_p);
     spawn FamilyRouter3(actor_egress_c, lane_14_out, lane_15_out, lane_16_out, lane_17_out, lane_18_out, lane_19_out);
-    spawn FamilyIngress3(incoming_0, incoming_1, incoming_2, incoming_3, incoming_4, actor_req_p, actor_admit_c);
+    spawn FamilyIngress3<X, Y>(incoming_0, incoming_1, incoming_2, incoming_3, incoming_4, actor_req_p, actor_admit_c);
     ()
   }
 
@@ -950,7 +988,7 @@ proc FamilyGrid<TORUS_WIDTH: u32, TORUS_HEIGHT: u32> {
     // Family phi_x.
     unroll_for! (x, _): (u32, ()) in u32:0..TORUS_WIDTH {
       unroll_for! (y, _): (u32, ()) in u32:0..TORUS_HEIGHT {
-        spawn FamilyNode2(
+        spawn FamilyNode2<x, y>(
           lane_9_c[(x + u32:1) % TORUS_WIDTH][y],
           lane_10_c[x][(y + u32:1) % TORUS_HEIGHT],
           lane_11_c[x][(y + TORUS_HEIGHT - u32:1) % TORUS_HEIGHT],
@@ -968,7 +1006,7 @@ proc FamilyGrid<TORUS_WIDTH: u32, TORUS_HEIGHT: u32> {
     // Family phi_z.
     unroll_for! (x, _): (u32, ()) in u32:0..TORUS_WIDTH {
       unroll_for! (y, _): (u32, ()) in u32:0..TORUS_HEIGHT {
-        spawn FamilyNode3(
+        spawn FamilyNode3<x, y>(
           lane_15_c[(x + u32:1) % TORUS_WIDTH][y],
           lane_16_c[x][(y + u32:1) % TORUS_HEIGHT],
           lane_17_c[x][(y + TORUS_HEIGHT - u32:1) % TORUS_HEIGHT],

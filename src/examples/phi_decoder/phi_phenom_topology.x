@@ -7,7 +7,7 @@
 // is not implemented. External producers must agree on one encoding.
 // One typed actor egress feeds one queue per source/recipient lane; the 3
 // lane(s) reached through multiple source ports retain actor action order.
-// 2 startup prefix(es) emit all target startup frames before
+// 3 startup prefix(es) emit all target startup frames before
 // receiving that target's first routed frame.
 
 import axis;
@@ -179,6 +179,31 @@ proc StartupPrefix1 {
   next(index: u32) {
     let starting = index < u32:1;
     let startup_frame = match index {
+      u32:0 => axis::pack(u8:12, u32:0x6D2B79F5),
+      _ => zero!<axis::Frame>(),
+    };
+    let (tok, routed_frame) = recv_if(
+      join(), routed_in, !starting, zero!<axis::Frame>());
+    let frame = if starting { startup_frame } else { routed_frame };
+    send(tok, frame_out, frame);
+    if starting { index + u32:1 } else { index }
+  }
+}
+
+proc StartupPrefix2 {
+  routed_in: chan<axis::Frame> in;
+  frame_out: chan<axis::Frame> out;
+
+  config(routed_in: chan<axis::Frame> in,
+         frame_out: chan<axis::Frame> out) {
+    (routed_in, frame_out)
+  }
+
+  init { u32:0 }
+
+  next(index: u32) {
+    let starting = index < u32:1;
+    let startup_frame = match index {
       u32:0 => axis::pack(u8:6, uN[96]:0x000000008000000085EBCA6B),
       _ => zero!<axis::Frame>(),
     };
@@ -237,12 +262,14 @@ pub proc Top {
     spawn axis::ReservedFrame(startup_0_prefix_c, actor_0_req_p, actor_0_admit_c);
     let (actor_1_ingress_mux_0_0_p, actor_1_ingress_mux_0_0_c) = chan<axis::Frame, CHANNEL_DEPTH>("actor_1_ingress_mux_0_0");
     spawn axis::FrameMux2(actor_1_lane_1_c, actor_2_lane_5_c, actor_1_ingress_mux_0_0_p);
-    spawn axis::ReservedFrame(actor_1_ingress_mux_0_0_c, actor_1_req_p, actor_1_admit_c);
+    let (startup_1_prefix_p, startup_1_prefix_c) = chan<axis::Frame, CHANNEL_DEPTH>("startup_1_prefix");
+    spawn StartupPrefix1(actor_1_ingress_mux_0_0_c, startup_1_prefix_p);
+    spawn axis::ReservedFrame(startup_1_prefix_c, actor_1_req_p, actor_1_admit_c);
     let (actor_2_ingress_mux_0_0_p, actor_2_ingress_mux_0_0_c) = chan<axis::Frame, CHANNEL_DEPTH>("actor_2_ingress_mux_0_0");
     spawn axis::FrameMux2(actor_0_lane_0_c, actor_1_lane_2_c, actor_2_ingress_mux_0_0_p);
-    let (startup_1_prefix_p, startup_1_prefix_c) = chan<axis::Frame, CHANNEL_DEPTH>("startup_1_prefix");
-    spawn StartupPrefix1(actor_2_ingress_mux_0_0_c, startup_1_prefix_p);
-    spawn axis::ReservedFrame(startup_1_prefix_c, actor_2_req_p, actor_2_admit_c);
+    let (startup_2_prefix_p, startup_2_prefix_c) = chan<axis::Frame, CHANNEL_DEPTH>("startup_2_prefix");
+    spawn StartupPrefix2(actor_2_ingress_mux_0_0_c, startup_2_prefix_p);
+    spawn axis::ReservedFrame(startup_2_prefix_c, actor_2_req_p, actor_2_admit_c);
     spawn FrameRelay(actor_2_lane_6_c, announcement_out);
     spawn FrameRelay(actor_1_lane_3_c, correction_out);
 
