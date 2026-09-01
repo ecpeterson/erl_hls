@@ -48,17 +48,18 @@ whole-topology reset discards router and actor traffic together; independent
 actor restart will require the lifecycle layer to close and flush affected
 fanout or to add incarnation-aware leaf delivery.
 
-"External" still means a typed channel on the generated DSLX top proc. This
-example does not yet supply a PL-PS gateway or an ERTS process which transports
-these envelopes and output Frames. `phi_memory_experiment` is only the pure
-host-side reducer: it maps sparse corrections to point-addressed Pauli updates,
-waits for complete same-step quiet and empty status sets from both planes, then
-issues a line query and XORs the replies. The physical adapter must preserve
-command order and each source's event order, validate the boundary encoding,
-and deliver Pauli updates at most once. This first protocol assigns no recovery
-semantics to a reset or gateway failure; the experiment aborts. Cutoffs are
-scheduled far enough ahead to reach every leaf, and experiments quiesce before
-the u32 step counter rolls over.
+"External" means a typed channel on the generated DSLX top proc.
+`phi_memory_gateway` adapts those channels to one routed AXI-stream boundary,
+and `phi_memory_runner` connects that boundary to the pure
+`phi_memory_experiment` reducer through `hls_fabric`. The reducer maps sparse
+corrections to point-addressed Pauli updates, waits for complete same-step
+quiet and empty status sets from both planes, then issues a line query and XORs
+the replies. The real DMA driver still needs this routed boundary. The adapter
+preserves command order and each source's event order, validates the encoding,
+and delivers Pauli updates at most once. This first protocol assigns no
+recovery semantics to a reset or gateway failure; the experiment aborts.
+Cutoffs are scheduled far enough ahead to reach every leaf, and experiments
+quiesce before the u32 step counter rolls over.
 
 All family coordinates are zero-based `{X, Y}` pairs.  The topology has six
 `Distance`-by-`Distance` families and 34 route relations regardless of
@@ -75,7 +76,7 @@ configurations as an ordinary list, it accepts witness distances only up to
 
 -include("phi_protocol.hrl").
 
--export([topology/0, topology/1, correction_update/3]).
+-export([topology/0, topology/1, topology/2, correction_update/3]).
 
 -define(DEFAULT_DISTANCE, 3).
 -define(MAX_WITNESS_DISTANCE, 50).
@@ -92,6 +93,15 @@ topology() ->
 -spec topology(pos_integer()) -> hls_topology:spec().
 topology(Distance)
         when Distance > 0, Distance =< ?MAX_WITNESS_DISTANCE ->
+    topology(Distance, ?EXERCISE_THRESHOLD);
+topology(_Distance) ->
+    error(badarg).
+
+-doc "Returns a topology with an explicit phenomenological-noise threshold.".
+-spec topology(pos_integer(), hls_nums:u32()) -> hls_topology:spec().
+topology(Distance, NoiseThreshold)
+        when Distance > 0, Distance =< ?MAX_WITNESS_DISTANCE,
+             NoiseThreshold >= 0, NoiseThreshold =< ?U32_MASK ->
     Shape = [Distance, Distance],
     #{
         version => 1,
@@ -114,9 +124,9 @@ topology(Distance)
         ],
         routes => [],
         route_relations => route_relations(),
-        startup => startup(Distance)
+        startup => startup(Distance, NoiseThreshold)
     };
-topology(_Distance) ->
+topology(_Distance, _NoiseThreshold) ->
     error(badarg).
 
 -doc "Maps one sparse decoder move to its physical data-qubit update.".
@@ -239,19 +249,25 @@ announcement_relation(Source, Destination, External) ->
         {external, External}
     ]}.
 
-startup(Distance) ->
-    data_family_startup(data_even, 0, 0, Distance) ++
-        data_family_startup(data_odd, 1, 1, Distance) ++
-        noise_family_startup(syndrome_x, 2, Distance) ++
-        noise_family_startup(syndrome_z, 3, Distance) ++
+startup(Distance, NoiseThreshold) ->
+    data_family_startup(data_even, 0, 0, Distance, NoiseThreshold) ++
+        data_family_startup(data_odd, 1, 1, Distance, NoiseThreshold) ++
+        noise_family_startup(syndrome_x, 2, Distance, NoiseThreshold) ++
+        noise_family_startup(syndrome_z, 3, Distance, NoiseThreshold) ++
         phi_family_startup(phi_x, 4, Distance) ++
         phi_family_startup(phi_z, 5, Distance).
 
-data_family_startup(Family, PhysicalYParity, FamilyIndex, Distance) ->
+data_family_startup(
+    Family,
+    PhysicalYParity,
+    FamilyIndex,
+    Distance,
+    NoiseThreshold
+) ->
     [
         {{Family, X, Y}, [#phenom_config{
             seed = seed(FamilyIndex, Distance, X, Y),
-            threshold = ?EXERCISE_THRESHOLD,
+            threshold = NoiseThreshold,
             x = X,
             y = 2 * Y + PhysicalYParity
         }]}
@@ -259,11 +275,11 @@ data_family_startup(Family, PhysicalYParity, FamilyIndex, Distance) ->
            Y <- lists:seq(0, Distance - 1)
     ].
 
-noise_family_startup(Family, FamilyIndex, Distance) ->
+noise_family_startup(Family, FamilyIndex, Distance, NoiseThreshold) ->
     [
         {{Family, X, Y}, [#phenom_config{
             seed = seed(FamilyIndex, Distance, X, Y),
-            threshold = ?EXERCISE_THRESHOLD,
+            threshold = NoiseThreshold,
             x = X,
             y = Y
         }]}

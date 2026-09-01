@@ -28,6 +28,7 @@ typedef enum {
 
 typedef struct {
     const char *name;
+    int enabled;
     vpiHandle h_s_data;
     vpiHandle h_s_valid;
     vpiHandle h_s_ready;
@@ -57,6 +58,7 @@ typedef struct {
 
 static vpiHandle h_clk;
 static vpiHandle h_resetn;
+static const char *hierarchy_root;
 static axis_endpoint_t app_endpoint;
 static axis_endpoint_t debug_endpoint;
 
@@ -130,6 +132,9 @@ static void pump_input(axis_endpoint_t *endpoint) {
     ssize_t count;
     size_t index;
 
+    if (!endpoint->enabled)
+        return;
+
     while (ring_free(&endpoint->input_bytes) >= sizeof(buffer)) {
         count = read(endpoint->fd_host_to_sim, buffer, sizeof(buffer));
         if (count > 0) {
@@ -152,6 +157,9 @@ static void pump_output(axis_endpoint_t *endpoint) {
     size_t count = endpoint->output_bytes.count;
     size_t index;
     ssize_t written;
+
+    if (!endpoint->enabled)
+        return;
 
     if (count > sizeof(buffer))
         count = sizeof(buffer);
@@ -176,7 +184,8 @@ static void pump_output(axis_endpoint_t *endpoint) {
 static void load_input_beat(axis_endpoint_t *endpoint) {
     uint32_t word;
 
-    if (endpoint->s_valid || endpoint->input_bytes.count < 4)
+    if (!endpoint->enabled || endpoint->s_valid ||
+        endpoint->input_bytes.count < 4)
         return;
 
     word = ring_pop_word(&endpoint->input_bytes);
@@ -201,6 +210,8 @@ static void load_input_beat(axis_endpoint_t *endpoint) {
 }
 
 static void reset_endpoint(axis_endpoint_t *endpoint) {
+    if (!endpoint->enabled)
+        return;
     endpoint->s_data = 0;
     endpoint->s_valid = 0;
     endpoint->s_last = 0;
@@ -211,6 +222,9 @@ static void reset_endpoint(axis_endpoint_t *endpoint) {
 }
 
 static void step_endpoint(axis_endpoint_t *endpoint) {
+    if (!endpoint->enabled)
+        return;
+
     if (endpoint->s_valid && endpoint->s_ready_sample) {
         vpi_printf("xls_sim_bridge[%s]: accepted input beat %u\n",
                    endpoint->name, endpoint->input_beat_number);
@@ -242,6 +256,8 @@ static void step_endpoint(axis_endpoint_t *endpoint) {
 }
 
 static void apply_drives(axis_endpoint_t *endpoint) {
+    if (!endpoint->enabled)
+        return;
     put_u32(endpoint->h_s_data, endpoint->s_data);
     put_bit(endpoint->h_s_valid, endpoint->s_valid);
     put_bit(endpoint->h_s_last, endpoint->s_last);
@@ -269,8 +285,10 @@ static PLI_INT32 cb_readwrite(p_cb_data cb) {
 static PLI_INT32 cb_readonly(p_cb_data cb) {
     (void)cb;
     if (!get_bit(h_clk)) {
-        app_endpoint.s_ready_sample = get_bit(app_endpoint.h_s_ready);
-        debug_endpoint.s_ready_sample = get_bit(debug_endpoint.h_s_ready);
+        if (app_endpoint.enabled)
+            app_endpoint.s_ready_sample = get_bit(app_endpoint.h_s_ready);
+        if (debug_endpoint.enabled)
+            debug_endpoint.s_ready_sample = get_bit(debug_endpoint.h_s_ready);
         return 0;
     }
 
@@ -299,7 +317,7 @@ static PLI_INT32 cb_clk_change(p_cb_data cb) {
 
 static vpiHandle find_signal(const char *name) {
     char path[PATH_SIZE];
-    snprintf(path, sizeof(path), "regsvc_bridge_tb.%s", name);
+    snprintf(path, sizeof(path), "%s.%s", hierarchy_root, name);
     return vpi_handle_by_name((PLI_BYTE8 *)path, NULL);
 }
 
@@ -358,6 +376,9 @@ static int open_endpoint_fifos(
 
 static PLI_INT32 cb_start_of_sim(p_cb_data cb) {
     const char *directory = getenv("ERL_HLS_SIM_DIR");
+    const char *configured_root = getenv("ERL_HLS_SIM_TOP");
+    const char *app_only_value = getenv("ERL_HLS_SIM_APP_ONLY");
+    int app_only = app_only_value && strcmp(app_only_value, "1") == 0;
     s_cb_data clock_cb;
     (void)cb;
 
@@ -368,19 +389,26 @@ static PLI_INT32 cb_start_of_sim(p_cb_data cb) {
 
     memset(&app_endpoint, 0, sizeof(app_endpoint));
     memset(&debug_endpoint, 0, sizeof(debug_endpoint));
+    hierarchy_root = configured_root && configured_root[0] != '\0' ?
+        configured_root : "regsvc_bridge_tb";
     app_endpoint.name = "app";
+    app_endpoint.enabled = 1;
     debug_endpoint.name = "debug";
+    debug_endpoint.enabled = !app_only;
     h_clk = find_signal("clk");
     h_resetn = find_signal("resetn");
     if (!h_clk || !h_resetn ||
         !find_endpoint_signals(&app_endpoint, "s_axis", "m_axis") ||
-        !find_endpoint_signals(&debug_endpoint, "s_dbg", "m_dbg")) {
-        vpi_printf("xls_sim_bridge: failed to find regsvc_bridge_tb AXIS signals\n");
+        (debug_endpoint.enabled &&
+         !find_endpoint_signals(&debug_endpoint, "s_dbg", "m_dbg"))) {
+        vpi_printf("xls_sim_bridge: failed to find %s AXIS signals\n",
+                   hierarchy_root);
         return 0;
     }
 
     if (!open_endpoint_fifos(&app_endpoint, directory, "app") ||
-        !open_endpoint_fifos(&debug_endpoint, directory, "debug")) {
+        (debug_endpoint.enabled &&
+         !open_endpoint_fifos(&debug_endpoint, directory, "debug"))) {
         vpi_printf("xls_sim_bridge: failed to open transport FIFOs\n");
         return 0;
     }
@@ -394,8 +422,9 @@ static PLI_INT32 cb_start_of_sim(p_cb_data cb) {
     clock_cb.cb_rtn = cb_clk_change;
     clock_cb.obj = h_clk;
     vpi_register_cb(&clock_cb);
-    vpi_printf("xls_sim_bridge: application and debug endpoints listening in %s\n",
-               directory);
+    vpi_printf("xls_sim_bridge: application%s endpoint%s listening in %s\n",
+               debug_endpoint.enabled ? " and debug" : "",
+               debug_endpoint.enabled ? "s" : "", directory);
     return 0;
 }
 

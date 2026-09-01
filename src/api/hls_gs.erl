@@ -111,7 +111,7 @@ handle_cast(
     {noreply, NewState} = Module:handle_cast(Message, State),
     {noreply, GS#state{state = NewState}};
 handle_cast(
-    {?FABRIC_RX, {Tag, TxID, Flags}, Payload},
+    {?FABRIC_RX, _Route, {Tag, TxID, Flags}, Payload},
     GS = #state{module = Module, fabric = {_Broker, _Local, _Peer}}
 ) ->
     Header = #header{tag = Tag, tx_id = TxID, flags = Flags},

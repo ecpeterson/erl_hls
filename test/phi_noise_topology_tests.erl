@@ -422,6 +422,23 @@ family_startup_targets_are_bounded_and_typed_test() ->
         })
     ).
 
+explicit_noise_threshold_changes_only_phenomenological_startup_test() ->
+    Default = maps:get(startup, phi_noise_topology:topology(1)),
+    Quiet = maps:get(startup, phi_noise_topology:topology(1, 0)),
+    ?assertEqual(
+        [Target || {Target, [#phi_config{}]} <- Default],
+        [Target || {Target, [#phi_config{}]} <- Quiet]
+    ),
+    ?assertEqual(
+        4,
+        length([
+            ok
+            || {_Target, [#phenom_config{threshold = 0}]} <- Quiet
+        ])
+    ),
+    ?assertError(badarg, phi_noise_topology:topology(1, -1)),
+    ?assertError(badarg, phi_noise_topology:topology(1, 16#100000000)).
+
 distance_changes_bounds_and_startup_not_route_rules_test() ->
     Small = phi_noise_topology:topology(3),
     Large = phi_noise_topology:topology(5),

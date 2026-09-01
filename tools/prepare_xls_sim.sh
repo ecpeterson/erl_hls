@@ -17,6 +17,7 @@ ERL_HLS_PHI_PHENOM_TOPOLOGY_X="$stage/phi_phenom_topology.x" \
 ERL_HLS_PHI_TORUS_TOPOLOGY_X="$stage/phi_torus_topology.x" \
 ERL_HLS_PHI_NOISE_TOPOLOGY_X="$stage/phi_noise_topology.x" \
 ERL_HLS_PHI_NOISE_TOPOLOGY_SMOKE_X="$stage/phi_noise_topology_smoke.x" \
+ERL_HLS_PHI_MEMORY_GATEWAY_X="$stage/phi_memory_gateway.x" \
 ERL_HLS_ORDERED_EGRESS_ACTOR_X="$stage/ordered_egress_actor.x" \
 ERL_HLS_ORDERED_EGRESS_TOPOLOGY_X="$stage/ordered_egress_topology.x" \
 ERL_HLS_CASE_FIXTURE_X="$stage/xls_case_fixture.x" \
@@ -41,7 +42,10 @@ erl \
         PhiPhenomTopology = phi_phenom_topology_dslx:to_dslx(),
         PhiTorusTopology = phi_torus_topology_dslx:to_dslx(),
         PhiNoiseTopology = phi_noise_topology_dslx:to_dslx(),
-        PhiNoiseTopologySmoke = phi_noise_topology_dslx:to_dslx(1),
+        %% The routine D1 closeout fixture disables random injection so empty
+        %% decoder planes let the ERTS witness terminate deterministically.
+        PhiNoiseTopologySmoke = phi_noise_topology_dslx:to_dslx(1, 0),
+        PhiMemoryGateway = phi_memory_gateway_dslx:to_dslx(1),
         OrderedEgressActor = xls_parse:to_xls(
             "test/ordered_egress_actor.erl"
         ),
@@ -75,6 +79,10 @@ erl \
         ok = file:write_file(
             os:getenv("ERL_HLS_PHI_NOISE_TOPOLOGY_SMOKE_X"),
             PhiNoiseTopologySmoke
+        ),
+        ok = file:write_file(
+            os:getenv("ERL_HLS_PHI_MEMORY_GATEWAY_X"),
+            PhiMemoryGateway
         ),
         ok = file:write_file(
             os:getenv("ERL_HLS_ORDERED_EGRESS_ACTOR_X"),
@@ -128,6 +136,8 @@ cp "$project_root/test/rtl/phi_noise_topology_smoke_tb.sv" \
     "$stage/phi_noise_topology_smoke_tb.sv"
 cp "$project_root/test/rtl/phi_noise_topology_tb.sv" \
     "$stage/phi_noise_topology_tb.sv"
+cp "$project_root/test/rtl/phi_memory_bridge_tb.sv" \
+    "$stage/phi_memory_bridge_tb.sv"
 cp "$project_root/test/rtl/ordered_egress_topology_tb.sv" \
     "$stage/ordered_egress_topology_tb.sv"
 cp "$project_root/test/rtl/xls_sim_bridge.c" "$stage/xls_sim_bridge.c"
@@ -142,10 +152,18 @@ for source in \
     "$project_root/src/api/hls_lists.erl" \
     "$project_root/src/api/hls_nums.erl" \
     "$project_root/src/api/hls_type.erl" \
-    "$project_root/src/examples/regsvc/regsvc.erl"
+    "$project_root/src/examples/regsvc/regsvc.erl" \
+    "$project_root/src/examples/phi_decoder/hls_pauli.erl" \
+    "$project_root/src/examples/phi_decoder/phenom_data_cell.erl" \
+    "$project_root/src/examples/phi_decoder/phenom_syndrome_cell.erl" \
+    "$project_root/src/examples/phi_decoder/phi_halo_cell.erl" \
+    "$project_root/src/examples/phi_decoder/phi_memory_experiment.erl" \
+    "$project_root/src/examples/phi_decoder/phi_memory_runner.erl" \
+    "$project_root/src/examples/phi_decoder/phi_memory_wire.erl" \
+    "$project_root/src/examples/phi_decoder/phi_noise_topology.erl"
 do
     erlc -pa "$project_root/_build/test/lib/erl_hls/ebin" \
-        -P -o "$stage/erl_src" "$source"
+        -I "$project_root/include" -P -o "$stage/erl_src" "$source"
     module=$(basename "$source" .erl)
     cp "$stage/erl_src/$module.P" "$stage/erl_src/$module.erl"
 done
@@ -154,3 +172,8 @@ erlc -pa "$project_root/_build/test/lib/erl_hls/ebin" \
     -P -o "$stage/test_src" "$project_root/test/regsvc_cpu_tests.erl"
 cp "$stage/test_src/regsvc_cpu_tests.P" \
     "$stage/test_src/regsvc_cpu_tests.erl"
+
+erlc -pa "$project_root/_build/test/lib/erl_hls/ebin" \
+    -P -o "$stage/test_src" "$project_root/test/phi_memory_bridge_tests.erl"
+cp "$stage/test_src/phi_memory_bridge_tests.P" \
+    "$stage/test_src/phi_memory_bridge_tests.erl"
