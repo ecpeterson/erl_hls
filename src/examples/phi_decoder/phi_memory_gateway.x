@@ -12,14 +12,14 @@ const DATA_HEIGHT = HEIGHT * u16:2;
 const BOUNDARY_VERSION = u8:1;
 const HOST_ENDPOINT = u16:0;
 const GATEWAY_ENDPOINT = u16:1;
-const DATA_ENDPOINT = u16:2;
+const DATA_MEASUREMENTS_ENDPOINT = u16:2;
 const X_ANNOUNCEMENTS_ENDPOINT = u16:3;
 const X_DECODER_EVENTS_ENDPOINT = u16:4;
 const Z_ANNOUNCEMENTS_ENDPOINT = u16:5;
 const Z_DECODER_EVENTS_ENDPOINT = u16:6;
 const OP_PAULI_QUERY = u8:13;
-const OP_NOISE_CUTOFF = u8:15;
 const OP_PAULI_UPDATE = u8:16;
+const OP_NOISE_CUTOFF = u8:15;
 
 type BoundaryFrame = axis::FrameN<u32:4>;
 
@@ -79,9 +79,9 @@ fn rectangle(frame: BoundaryFrame) -> hls_spatial_router::Rectangle {
 
 fn header_valid(header: axis::Header) -> u1 {
   let op_and_words = match header.op {
-    OP_NOISE_CUTOFF => header.payload_words == u8:3,
-    OP_PAULI_UPDATE => header.payload_words == u8:3,
     OP_PAULI_QUERY => header.payload_words == u8:4,
+    OP_PAULI_UPDATE => header.payload_words == u8:3,
+    OP_NOISE_CUTOFF => header.payload_words == u8:3,
     _ => false,
   };
   header.flags == BOUNDARY_VERSION && header.txid == u8:0 && op_and_words
@@ -94,9 +94,9 @@ fn rectangle_valid(bounds: hls_spatial_router::Rectangle) -> u1 {
 
 fn actor_payload_valid(frame: BoundaryFrame) -> u1 {
   match frame.header.op {
-    OP_NOISE_CUTOFF => true,
-    OP_PAULI_UPDATE => frame.payload[64:96] as u32 <= u32:3,
     OP_PAULI_QUERY => frame.payload[96:128] as u32 <= u32:3,
+    OP_PAULI_UPDATE => frame.payload[64:96] as u32 <= u32:3,
+    OP_NOISE_CUTOFF => true,
     _ => false,
   }
 }
@@ -107,11 +107,21 @@ fn boundary_valid(frame: BoundaryFrame) -> u1 {
 }
 
 fn inner_payload_words(op: u8) -> u8 {
-  if op == OP_PAULI_QUERY { u8:2 } else { u8:1 }
+  match op {
+    OP_PAULI_QUERY => u8:2,
+    OP_PAULI_UPDATE => u8:1,
+    OP_NOISE_CUTOFF => u8:1,
+    _ => u8:0,
+  }
 }
 
 fn control_target(op: u8) -> u2 {
-  if op == OP_NOISE_CUTOFF { u2:1 } else { u2:0 }
+  match op {
+    OP_PAULI_QUERY => u2:0,
+    OP_PAULI_UPDATE => u2:0,
+    OP_NOISE_CUTOFF => u2:1,
+    _ => u2:0,
+  }
 }
 
 fn spatial_frame(frame: BoundaryFrame) ->
@@ -163,7 +173,7 @@ struct RoutedFrame {
 
 fn source_endpoint(cursor: u32) -> u16 {
   match cursor {
-    u32:0 => DATA_ENDPOINT,
+    u32:0 => DATA_MEASUREMENTS_ENDPOINT,
     u32:1 => X_ANNOUNCEMENTS_ENDPOINT,
     u32:2 => X_DECODER_EVENTS_ENDPOINT,
     u32:3 => Z_ANNOUNCEMENTS_ENDPOINT,
@@ -173,7 +183,7 @@ fn source_endpoint(cursor: u32) -> u16 {
 
 // Polls one statically indexed input per activation and advances after
 // every attempt, so no continuously active stream can starve another.
-proc FrameMux5 {
+proc FrameMux {
   frame_in: chan<axis::Frame>[u32:5] in;
   routed_out: chan<RoutedFrame> out;
 
@@ -207,7 +217,7 @@ proc FrameMux5 {
   }
 }
 
-// FrameMux5 may fill this gate's single upstream holding slot before the
+// FrameMux may fill this gate's single upstream holding slot before the
 // first valid command. Nothing reaches RoutedTx until the activation
 // credit arrives, and the full slot backpressures further mux output.
 proc EgressGate {
@@ -344,7 +354,7 @@ pub proc Top {
       topology_outputs_p[u32:2],
       topology_outputs_p[u32:3],
       topology_outputs_p[u32:4]);
-    spawn FrameMux5(topology_outputs_c, pre_gate_p);
+    spawn FrameMux(topology_outputs_c, pre_gate_p);
     spawn EgressGate(pre_gate_c, egress_p, arm_c);
     spawn RoutedTx(egress_c, routed_out);
     (routed_in, routed_out)

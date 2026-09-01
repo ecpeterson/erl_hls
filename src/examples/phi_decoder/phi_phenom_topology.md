@@ -254,16 +254,21 @@ topology, but `phi_memory_gateway` now merges them into distinct routed source
 endpoints. `hls_fabric` registers all five routes to one `phi_memory_runner`,
 which decodes their records and feeds the pure reducer. Route identity supplies
 the plane or measurement-stream identity that is deliberately absent from the
-actor payload.
+actor payload. `phi_memory_boundary` derives this canonical output order, the
+endpoint allocation shown in the diagram, and each selector and packed width
+from the compact topology and generated actor codecs; the host wire codec and
+DSLX gateway generator consume the same contract.
 
 Host commands use destination endpoint 1. Their boundary frame has four
 payload words: a full-width prefix of four little-endian `u16` rectangle bounds
-followed by one or two actor payload words. `axis::FrameN<4>` provides this
-wider boundary without changing the three-word `axis::Frame` ABI inside the
-actor graph. The gateway validates the route, boundary version, message length,
-rectangle, and target-specific payload before constructing the ordinary actor
-frame. Its first valid command also supplies a one-shot egress activation token,
-so topology output cannot escape before the host has installed its routes.
+followed by one or two actor payload words. The generator therefore selects
+`axis::FrameN<4>` for the current contract; the capacity follows the widest
+declared command rather than being a global `axis::Frame` limit. This wider
+boundary does not change the three-word actor ABI. The gateway validates the
+route, boundary version, message length, rectangle, and target-specific payload
+before constructing the ordinary actor frame. Its first valid command also
+supplies a one-shot egress activation token, so topology output cannot escape
+before the host has installed its routes.
 
 The one application ingress is the externally addressed `control_router`
 service. Its envelope contains an ordinary actor frame plus an internal target
@@ -274,6 +279,13 @@ incarnations; one broadcast may therefore straddle lifecycle churn. The
 present whole-topology reset flushes router and actor traffic together.
 Independent restart will need lifecycle-owned flushing or generation checks at
 the leaves.
+
+A malformed routed packet is drained without actor delivery so the receiver
+can accept the next packet in sync. The present boundary has no trustworthy
+operation identity or reserved error path for every malformed packet, so this
+case ends at the runner timeout. A later typed protocol-fault sideband should
+close the owning connection; actual transport-process failure already reaches
+the runner through its `hls_fabric` monitor as `{fabric_down, Reason}`.
 
 The current physical lowering uses one lossless, statically unrolled
 distributor per family. It finishes the selected family sends before accepting
@@ -310,11 +322,12 @@ or gateway failure aborts the experiment rather than invoking unspecified
 retry behavior.
 
 The present distance-three noise configuration is still a plumbing fixture.
-Its common high threshold deliberately produces frequent binary events rather
-than modeling a full Pauli channel. The explicit startup list also caps this
-example at distance 50; the compact route representation itself has no such
-bound. The direct VPI bridge now transports the reducer's ordered commands and
-the five routed output streams in simulation. The real DMA `axismsg` driver
+Its common high noise rate deliberately produces frequent binary events rather
+than modeling a full Pauli channel. That rate is encoded as the `u32` threshold
+used by each cell's Bernoulli comparison. The explicit startup list also caps
+this example at distance 50; the compact route representation itself has no
+such bound. The direct VPI bridge now transports the reducer's ordered commands
+and the five routed output streams in simulation. The real DMA `axismsg` driver
 still expects its older unrouted frame boundary and must be adapted before this
 gateway can be used on a PS/PL link. A physically calibrated noise model remains
 later decoder work.

@@ -6,42 +6,33 @@
 -moduledoc """
 Encodes the direct host boundary around one generated phi/noise fabric.
 
-The ordinary routed fabric envelope addresses one `control_router` endpoint.
-Its inner frame retains the actor message selector, but prefixes the payload
-with an inclusive rectangle packed as four little-endian `u16` values. The
-generated gateway derives the internal data/noise target from that selector.
-Its host-facing frame is width-parametric, while actor-local frames retain the
-compact three-word payload used by the current generated actors.
+The routed fabric envelope addresses the `control_router`. The command frame
+prefixes its actor payload with an inclusive rectangle of four little-endian
+`u16` values. The generated gateway maps the actor message selector to its
+internal data or noise target. Host-facing frames are width-parametric;
+actor-local frames retain the current compact three-word payload.
 
 FPGA outputs use one source endpoint per generated external channel. Their
 actor frames are otherwise unchanged. Route identity therefore supplies the
 X/Z plane or measurement-stream identity which is intentionally absent from
 the actor records.
 
-Flags value one versions this example boundary. Commands are ordered and
-at-most-once: transport failure aborts an experiment rather than retrying a
-possibly applied Pauli update.
+Boundary version one is carried in the frame flags byte. Commands are ordered
+and at-most-once: transport failure aborts an experiment rather than retrying
+a possibly applied Pauli update.
 """.
 
 -include("phi_protocol.hrl").
 
 -export([
     version/0,
-    control_route/0,
-    event_routes/0,
+    control_route/1,
+    event_routes/1,
     encode_command/2,
     decode_event/4
 ]).
 -export_type([route/0, header/0]).
 
--define(VERSION, 1).
--define(HOST_ENDPOINT, 0).
--define(CONTROL_ENDPOINT, 1).
--define(DATA_MEASUREMENTS_ENDPOINT, 2).
--define(X_ANNOUNCEMENTS_ENDPOINT, 3).
--define(X_DECODER_EVENTS_ENDPOINT, 4).
--define(Z_ANNOUNCEMENTS_ENDPOINT, 5).
--define(Z_DECODER_EVENTS_ENDPOINT, 6).
 -define(U32_MAX, 16#ffffffff).
 
 -type endpoint() :: 0..65535.
@@ -54,84 +45,142 @@ possibly applied Pauli update.
 
 -doc "Returns the boundary version carried in the frame flags byte.".
 -spec version() -> 1.
-version() -> ?VERSION.
+version() -> phi_memory_boundary:version().
 
--doc "Returns the one host-to-control-router route.".
--spec control_route() -> route().
-control_route() -> {?HOST_ENDPOINT, ?CONTROL_ENDPOINT}.
+-doc "Returns the contract's one host-to-control-router route.".
+-spec control_route(map()) -> route().
+control_route(Contract) ->
+    #{
+        host_endpoint := Host,
+        ingress := #{endpoint := Gateway}
+    } = Contract,
+    {Host, Gateway}.
 
--doc "Returns each FPGA-to-host route and its logical output stream.".
--spec event_routes() -> [{route(), phi_memory_experiment:stream()}].
-event_routes() ->
+-doc "Returns the contract's FPGA-to-host routes and logical output streams.".
+-spec event_routes(map()) -> [{route(), phi_memory_experiment:stream()}].
+event_routes(#{host_endpoint := Host, outputs := Outputs}) ->
     [
-        {{?DATA_MEASUREMENTS_ENDPOINT, ?HOST_ENDPOINT}, data_measurements},
-        {{?X_ANNOUNCEMENTS_ENDPOINT, ?HOST_ENDPOINT}, x_announcements},
-        {{?X_DECODER_EVENTS_ENDPOINT, ?HOST_ENDPOINT}, x_decoder_events},
-        {{?Z_ANNOUNCEMENTS_ENDPOINT, ?HOST_ENDPOINT}, z_announcements},
-        {{?Z_DECODER_EVENTS_ENDPOINT, ?HOST_ENDPOINT}, z_decoder_events}
+        {{Endpoint, Host}, Stream}
+        || #{endpoint := Endpoint, stream := Stream} <- Outputs
     ].
 
--doc "Encodes one reducer command for a fabric with the given distance.".
--spec encode_command(phi_memory_experiment:command(), pos_integer()) ->
+-doc "Encodes one reducer command using the generated boundary contract.".
+-spec encode_command(phi_memory_experiment:command(), map()) ->
     {ok, route(), header(), binary()} | {error, atom()}.
 encode_command(
     {control_router, data, Rectangle, Message = #pauli_query{
         request_id = RequestId,
         measurement = Measurement
     }},
-    Distance
+    Contract
 ) when RequestId >= 0, RequestId =< ?U32_MAX ->
     case hls_pauli:is_pauli(Measurement) of
-        true -> encode(Rectangle, Message, phenom_data_cell, Distance);
+        true -> encode(data, Rectangle, Message, Contract);
         false -> {error, message}
     end;
 encode_command(
     {control_router, data, Rectangle, Message = #pauli_update{
         pauli = Pauli
     }},
-    Distance
+    Contract
 ) ->
     case hls_pauli:is_pauli(Pauli) of
-        true -> encode(Rectangle, Message, phenom_data_cell, Distance);
+        true -> encode(data, Rectangle, Message, Contract);
         false -> {error, message}
     end;
 encode_command(
     {control_router, noise, Rectangle, Message = #noise_cutoff{
         first_quiet_step = Step
     }},
-    Distance
+    Contract
 ) when Step >= 0, Step =< ?U32_MAX ->
-    encode(Rectangle, Message, phenom_data_cell, Distance);
-encode_command(_Command, _Distance) ->
+    encode(noise, Rectangle, Message, Contract);
+encode_command(_Command, _Contract) ->
     {error, command}.
 
 -doc "Decodes and validates one routed FPGA event.".
--spec decode_event(route(), header(), binary(), pos_integer()) ->
+-spec decode_event(route(), header(), binary(), map()) ->
     {ok, phi_memory_experiment:stream(), tuple()} | {error, atom()}.
-decode_event(Route, {Tag, 0, ?VERSION}, Payload, Distance)
-        when is_binary(Payload), Distance > 0 ->
-    case lists:keyfind(Route, 1, event_routes()) of
-        {Route, Stream} -> decode_stream(Stream, Tag, Payload, Distance);
-        false -> {error, route}
+decode_event(Route, {Tag, 0, Version}, Payload, Contract)
+        when is_binary(Payload) ->
+    #{version := ExpectedVersion} = Contract,
+    case Version of
+        ExpectedVersion -> decode_route(Route, Tag, Payload, Contract);
+        _ -> {error, frame}
     end;
-decode_event(_Route, _Header, _Payload, _Distance) ->
+decode_event(_Route, _Header, _Payload, _Contract) ->
     {error, frame}.
 
-encode(Rectangle, Message, Module, Distance) ->
-    case encode_rectangle(Rectangle, Distance) of
-        {ok, Bounds} ->
-            Tag = Module:pack_tag(element(1, Message)),
+encode(Target, Rectangle, Message, Contract) ->
+    #{
+        version := Version,
+        host_endpoint := Host,
+        ingress := #{
+            endpoint := Gateway,
+            shape := Shape,
+            targets := Targets
+        }
+    } = Contract,
+    Schema = element(1, Message),
+    case {
+        encode_rectangle(Rectangle, Shape),
+        command_schema(Target, Schema, Targets)
+    } of
+        {{ok, Bounds}, {ok, #{module := Module, selector := Selector}}} ->
             Payload = Module:pack(Message),
-            {ok, control_route(), {Tag, 0, ?VERSION},
+            {ok, {Host, Gateway}, {Selector, 0, Version},
                 <<Bounds/binary, Payload/binary>>};
-        {error, _Reason} = Error ->
-            Error
+        {{error, _Reason} = Error, _CommandSchema} ->
+            Error;
+        {_Rectangle, error} ->
+            {error, command}
     end.
 
-encode_rectangle({X0, Y0, X1, Y1}, Distance)
-        when Distance > 0,
-             X0 >= 0, X0 =< X1, X1 < Distance,
-             Y0 >= 0, Y0 =< Y1, Y1 < 2 * Distance,
+command_schema(Target, Schema, Targets) ->
+    case [
+        Descriptor
+        || #{id := Id, schemas := Schemas} <- Targets,
+           Id =:= Target,
+           Descriptor = #{name := Name} <- Schemas,
+           Name =:= Schema
+    ] of
+        [Descriptor] -> {ok, Descriptor};
+        [] -> error
+    end.
+
+decode_route(Route, Tag, Payload, Contract = #{
+    host_endpoint := Host,
+    outputs := Outputs
+}) ->
+    Distance = contract_distance(Contract),
+    case [
+        Output
+        || Output = #{endpoint := Source} <- Outputs,
+           Route =:= {Source, Host}
+    ] of
+        [Output] -> decode_output(Output, Tag, Payload, Distance);
+        [] -> {error, route}
+    end.
+
+decode_output(#{stream := Stream, schemas := Schemas}, Tag, Payload, Distance) ->
+    case [
+        Schema
+        || Schema = #{selector := Selector} <- Schemas,
+           Selector =:= Tag
+    ] of
+        [#{name := Name, module := Module, width := Width}]
+                when bit_size(Payload) =:= Width ->
+            {Record, <<>>} = Module:unpack(Name, Payload),
+            validate_event(Stream, Record, Distance);
+        [#{}] ->
+            {error, payload};
+        [] ->
+            {error, selector}
+    end.
+
+encode_rectangle({X0, Y0, X1, Y1}, [Width, Height])
+        when X0 >= 0, X0 =< X1, X1 < Width,
+             Y0 >= 0, Y0 =< Y1, Y1 < Height,
              X1 =< 16#ffff, Y1 =< 16#ffff ->
     {ok, <<
         X0:16/little-unsigned-integer,
@@ -139,76 +188,15 @@ encode_rectangle({X0, Y0, X1, Y1}, Distance)
         X1:16/little-unsigned-integer,
         Y1:16/little-unsigned-integer
     >>};
-encode_rectangle(_Rectangle, _Distance) ->
+encode_rectangle(_Rectangle, _Shape) ->
     {error, rectangle}.
 
-decode_stream(data_measurements, Tag, Payload, Distance) ->
-    decode_one(
-        data_measurements,
-        phenom_data_cell,
-        pauli_reply,
-        Tag,
-        Payload,
-        Distance
-    );
-decode_stream(Stream, Tag, Payload, Distance)
-        when Stream =:= x_announcements; Stream =:= z_announcements ->
-    decode_one(
-        Stream,
-        phenom_syndrome_cell,
-        phenom_anyon,
-        Tag,
-        Payload,
-        Distance
-    );
-decode_stream(Stream, Tag, Payload, Distance)
-        when Stream =:= x_decoder_events; Stream =:= z_decoder_events ->
-    CorrectionTag = phi_halo_cell:pack_tag(phi_correction),
-    StatusTag = phi_halo_cell:pack_tag(phi_status),
-    case Tag of
-        CorrectionTag ->
-            decode_one(
-                Stream,
-                phi_halo_cell,
-                phi_correction,
-                Tag,
-                Payload,
-                Distance
-            );
-        StatusTag ->
-            decode_one(
-                Stream,
-                phi_halo_cell,
-                phi_status,
-                Tag,
-                Payload,
-                Distance
-            );
-        _ ->
-            {error, selector}
-    end.
+contract_distance(#{ingress := #{shape := [Distance, DataHeight]}}) ->
+    DataHeight = 2 * Distance,
+    Distance.
 
-decode_one(Stream, Module, Schema, Tag, Payload, Distance) ->
-    ExpectedTag = Module:pack_tag(Schema),
-    Width = schema_width(Schema),
-    case {Tag, bit_size(Payload)} of
-        {ExpectedTag, Width} ->
-            {Record, <<>>} = Module:unpack(Schema, Payload),
-            validate_event(Stream, Record, Distance);
-        {ExpectedTag, _OtherWidth} ->
-            {error, payload};
-        _ ->
-            {error, selector}
-    end.
-
-%% Every event crosses the current actor-local three-word Frame ABI. Keeping
-%% this boundary width explicit avoids loading compiler-analysis modules in the
-%% deployed ERTS node; codec tests compare it with each generated packer.
-schema_width(phenom_anyon) -> 96;
-schema_width(phi_correction) -> 96;
-schema_width(phi_status) -> 96;
-schema_width(pauli_reply) -> 96.
-
+%% Event-specific semantic checks supplement the schema-derived selector and
+%% payload-width validation above.
 validate_event(
     data_measurements,
     Reply = #pauli_reply{x = X, y = Y, anticommutes = Anticommutes},

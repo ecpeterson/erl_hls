@@ -35,7 +35,13 @@ parse_transform(Forms, _Options) ->
         BodyForms, SerializableStructNames
     ),
     ExportAttr = {attribute, element(2, ModuleAttr), export,
-        [{pack, 1}, {unpack, 2}, {pack_tag, 1}, {unpack_tag, 1}]
+        [
+            {pack, 1},
+            {unpack, 2},
+            {pack_tag, 1},
+            {unpack_tag, 1},
+            {pack_width, 1}
+        ]
     },
     {eof, Line} = EOFForm,
 
@@ -95,13 +101,46 @@ parse_transform(Forms, _Options) ->
         ||  {Index, Tag} <- lists:enumerate([error, StateName | PublicStructNames])
     ]},
 
+    PackWidthForm = {function, Line, pack_width, 1, [
+        {clause, Line, [{atom, Line, Tag}], [], [
+            record_width_expression(Forms, Tag, Line)
+        ]}
+        || Tag <- SerializableStructNames
+    ]},
+
     EmittedForms =
         [FileAttr, ModuleAttr, ExportAttr] ++
         InterfaceAttributes ++
         RewrittenBodyForms ++
-        [PackForm, UnpackForm, PackTagForm, UnpackTagForm, EOFForm],
+        [
+            PackForm,
+            UnpackForm,
+            PackTagForm,
+            UnpackTagForm,
+            PackWidthForm,
+            EOFForm
+        ],
     % io:format("~s~n", [[[erl_pp:form(Form), "\n"] || Form <- EmittedForms]]),
     EmittedForms.
+
+record_width_expression(Forms, Tag, Line) ->
+    {attribute, _RecordLine, record, {_Tag, Fields}} =
+        xls_parse:find_record(Forms, Tag),
+    lists:foldl(
+        fun({typed_record_field, _Field, Descriptor}, Sum) ->
+            Width = {call,
+                Line,
+                {remote,
+                    Line,
+                    {atom, Line, hls_type},
+                    {atom, Line, width}},
+                [calls_from_types(replace_anno(Line, Descriptor))]
+            },
+            {op, Line, '+', Sum, Width}
+        end,
+        {integer, Line, 0},
+        Fields
+    ).
 
 actor_interface_attributes(Forms, ModuleAttr) ->
     case xls_parse:find_optional_attribute(Forms, hls_phases) of

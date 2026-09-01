@@ -503,6 +503,7 @@ erlc -pa "$beam_dir" -o "$beam_dir" \
     "$stage/erl_src/phenom_data_cell.erl" \
     "$stage/erl_src/phenom_syndrome_cell.erl" \
     "$stage/erl_src/phi_halo_cell.erl" \
+    "$stage/erl_src/phi_memory_boundary.erl" \
     "$stage/erl_src/phi_memory_experiment.erl" \
     "$stage/erl_src/phi_memory_runner.erl" \
     "$stage/erl_src/phi_memory_wire.erl" \

@@ -94,8 +94,13 @@ struct RxStateN<PAYLOAD_WORDS: u32> {
 }
 
 // Assembles a frame with a statically selected payload capacity. Unlike the
-// original actor Rx above, this boundary-oriented receiver also checks that
-// TLAST agrees with the declared payload length and drops malformed frames.
+// original actor Rx above, this boundary-oriented receiver checks that TLAST
+// agrees with the declared payload length. A malformed packet is fully drained
+// and emits no application frame, so the next packet starts in sync.
+//
+// TODO: Report rejection on a typed protocol-fault sideband. Its connection
+// owner should close or advance the session; a distribution adapter may then
+// translate that session failure for the semantic relationships it owns.
 pub proc RxN<PAYLOAD_WORDS: u32> {
   axis_in: chan<Beat> in;
   instr_out: chan<FrameN<PAYLOAD_WORDS>> out;
@@ -400,6 +405,61 @@ proc FrameN9RoundTripTest {
     };
     let sent_tok = send(join(), frame_out, expected);
     let (received_tok, actual) = recv(sent_tok, frame_in);
+    assert_eq(actual, expected);
+    let _done = send(received_tok, terminator, true);
+    state
+  }
+}
+
+#[test_proc]
+proc RxNRejectsMalformedAndResynchronizesTest {
+  terminator: chan<bool> out;
+  beat_out: chan<Beat> out;
+  frame_in: chan<FrameN<u32:2>> in;
+
+  config(terminator: chan<bool> out) {
+    let (beat_p, beat_c) =
+      chan<Beat, u32:1>("rx_n_reject_test_beat");
+    let (frame_p, frame_c) =
+      chan<FrameN<u32:2>, u32:1>("rx_n_reject_test_frame");
+    spawn RxN<u32:2>(beat_c, frame_p);
+    (terminator, beat_p, frame_c)
+  }
+
+  init { () }
+
+  next(state: ()) {
+    let malformed_header = Header {
+      payload_words: u8:2,
+      op: u8:17,
+      ..zero!<Header>()
+    };
+    let valid_header = Header {
+      payload_words: u8:1,
+      op: u8:23,
+      ..zero!<Header>()
+    };
+    let tok_0 = send(join(), beat_out, Beat {
+      tlast: u1:0,
+      word: bits_from_header(malformed_header) as u32,
+    });
+    let tok_1 = send(tok_0, beat_out, Beat {
+      tlast: u1:1,
+      word: u32:0xaaaaaaaa,
+    });
+    let tok_2 = send(tok_1, beat_out, Beat {
+      tlast: u1:0,
+      word: bits_from_header(valid_header) as u32,
+    });
+    let tok_3 = send(tok_2, beat_out, Beat {
+      tlast: u1:1,
+      word: u32:0x12345678,
+    });
+    let (received_tok, actual) = recv(tok_3, frame_in);
+    let expected = FrameN<u32:2> {
+      header: valid_header,
+      payload: u32:0 ++ u32:0x12345678,
+    };
     assert_eq(actual, expected);
     let _done = send(received_tok, terminator, true);
     state

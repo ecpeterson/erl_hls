@@ -157,6 +157,7 @@ for source in \
     "$project_root/src/examples/phi_decoder/phenom_data_cell.erl" \
     "$project_root/src/examples/phi_decoder/phenom_syndrome_cell.erl" \
     "$project_root/src/examples/phi_decoder/phi_halo_cell.erl" \
+    "$project_root/src/examples/phi_decoder/phi_memory_boundary.erl" \
     "$project_root/src/examples/phi_decoder/phi_memory_experiment.erl" \
     "$project_root/src/examples/phi_decoder/phi_memory_runner.erl" \
     "$project_root/src/examples/phi_decoder/phi_memory_wire.erl" \

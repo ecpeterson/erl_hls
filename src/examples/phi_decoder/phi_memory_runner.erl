@@ -19,6 +19,10 @@ topology output until the first valid host command, and the runner chooses a
 future cutoff step so the command can take effect before that round. A real
 loader should make activation an explicit manifest-owned handshake and replace
 the explicit distance argument without changing the reducer.
+
+This coordinator remains an ordinary `gen_server`: it needs delayed replies,
+timer and monitor messages, and unsolicited streams, while `hls_gs` currently
+models transaction-correlated call and cast traffic intended for lowering.
 """.
 
 -behavior(gen_server).
@@ -31,7 +35,7 @@ the explicit distance argument without changing the reducer.
 -record(state, {
     fabric :: pid(),
     fabric_monitor :: reference(),
-    distance :: pos_integer(),
+    boundary :: map(),
     experiment :: phi_memory_experiment:state(),
     timer :: reference(),
     result = running :: running | {ok, 0 | 1} | {error, term()},
@@ -56,10 +60,10 @@ await(Pid) ->
 
 init({Fabric, Options = #{distance := Distance}, Timeout})
         when Timeout > 0 ->
-    _ = phi_noise_topology:topology(Distance),
-    case register_routes(Fabric) of
+    Boundary = phi_memory_boundary:contract(Distance),
+    case register_routes(Fabric, Boundary) of
         ok ->
-            start_experiment(Fabric, Options, Distance, Timeout);
+            start_experiment(Fabric, Options, Boundary, Timeout);
         {error, Reason} ->
             {stop, {routes, Reason}}
     end.
@@ -73,9 +77,9 @@ handle_call(Request, _From, State) ->
 
 handle_cast(
     {?FABRIC_RX, Route, Header, Payload},
-    State = #state{result = running, distance = Distance}
+    State = #state{result = running, boundary = Boundary}
 ) ->
-    case phi_memory_wire:decode_event(Route, Header, Payload, Distance) of
+    case phi_memory_wire:decode_event(Route, Header, Payload, Boundary) of
         {ok, Stream, Event} ->
             consume(Stream, Event, State);
         {error, Reason} ->
@@ -115,16 +119,16 @@ terminate(_Reason, #state{timer = Timer, fabric_monitor = Monitor}) ->
     demonitor(Monitor, [flush]),
     ok.
 
-start_experiment(Fabric, Options, Distance, Timeout) ->
+start_experiment(Fabric, Options, Boundary, Timeout) ->
     FabricMonitor = monitor(process, Fabric),
     {Experiment, Commands} = phi_memory_experiment:new(Options),
-    case send_commands(Commands, Fabric, Distance) of
+    case send_commands(Commands, Fabric, Boundary) of
         ok ->
             Timer = erlang:send_after(Timeout, self(), experiment_timeout),
             {ok, #state{
                 fabric = Fabric,
                 fabric_monitor = FabricMonitor,
-                distance = Distance,
+                boundary = Boundary,
                 experiment = Experiment,
                 timer = Timer
             }};
@@ -135,11 +139,11 @@ start_experiment(Fabric, Options, Distance, Timeout) ->
 consume(Stream, Event, State = #state{
     experiment = Experiment,
     fabric = Fabric,
-    distance = Distance
+    boundary = Boundary
 }) ->
     case phi_memory_experiment:event(Stream, Event, Experiment) of
         {Updated, Commands} ->
-            case send_commands(Commands, Fabric, Distance) of
+            case send_commands(Commands, Fabric, Boundary) of
                 ok -> {noreply, State#state{experiment = Updated}};
                 {error, Reason} ->
                     {noreply, finish({error, {send, Reason}}, State)}
@@ -152,7 +156,7 @@ consume(Stream, Event, State = #state{
             {noreply, finish({error, {experiment, Reason}}, Failed)}
     end.
 
-register_routes(Fabric) ->
+register_routes(Fabric, Boundary) ->
     lists:foldl(
         fun
             ({Route, _Stream}, ok) ->
@@ -161,21 +165,21 @@ register_routes(Fabric) ->
                 Error
         end,
         ok,
-        phi_memory_wire:event_routes()
+        phi_memory_wire:event_routes(Boundary)
     ).
 
-send_commands(Commands, Fabric, Distance) ->
+send_commands(Commands, Fabric, Boundary) ->
     lists:foldl(
         fun
-            (Command, ok) -> send_command(Command, Fabric, Distance);
+            (Command, ok) -> send_command(Command, Fabric, Boundary);
             (_Command, {error, _Reason} = Error) -> Error
         end,
         ok,
         Commands
     ).
 
-send_command(Command, Fabric, Distance) ->
-    case phi_memory_wire:encode_command(Command, Distance) of
+send_command(Command, Fabric, Boundary) ->
+    case phi_memory_wire:encode_command(Command, Boundary) of
         {ok, Route, Header, Payload} ->
             hls_fabric:send(Fabric, Route, Header, Payload);
         {error, _Reason} = Error ->

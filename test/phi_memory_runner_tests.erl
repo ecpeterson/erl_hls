@@ -14,7 +14,7 @@ runner_routes_and_closeout_test() ->
     try
         ExpectedRoutes = maps:from_list([
             {Route, Runner}
-            || {Route, _Stream} <- phi_memory_wire:event_routes()
+            || {Route, _Stream} <- phi_memory_wire:event_routes(boundary())
         ]),
         ?assertEqual(
             ExpectedRoutes,
@@ -179,7 +179,7 @@ query_command() ->
 encoded(Command) ->
     {ok, Route, Header, Payload} = phi_memory_wire:encode_command(
         Command,
-        ?DISTANCE
+        boundary()
     ),
     {Route, Header, Payload}.
 
@@ -203,9 +203,12 @@ route(Stream) ->
     {Route, Stream} = lists:keyfind(
         Stream,
         2,
-        phi_memory_wire:event_routes()
+        phi_memory_wire:event_routes(boundary())
     ),
     Route.
+
+boundary() ->
+    phi_memory_boundary:contract(?DISTANCE).
 
 stop(Runner, Fabric) ->
     stop_if_alive(phi_memory_runner, Runner),

@@ -4,7 +4,7 @@
 -include("phi_protocol.hrl").
 
 -define(DISTANCE, 3).
--define(EXERCISE_THRESHOLD, 16#80000000).
+-define(EXERCISE_RATE, 16#80000000).
 -define(SEED_STRIDE, 16#9e3779b9).
 -define(U32_MASK, 16#ffffffff).
 
@@ -325,7 +325,7 @@ startup_is_explicit_distinct_and_nonzero_test() ->
                syndrome_z
            ])
     ],
-    FirstEvents = [hls_prng:xorshift32(Seed) < ?EXERCISE_THRESHOLD
+    FirstEvents = [hls_prng:xorshift32(Seed) < ?EXERCISE_RATE
         || Seed <- NoiseSeeds],
     ?assert(lists:member(true, FirstEvents)),
     ?assert(lists:member(false, FirstEvents)).
@@ -390,7 +390,7 @@ normalized_startup_retains_family_instance_targets_test() ->
             delivery => cast,
             messages => [#phenom_config{
                 seed = (36 * ?SEED_STRIDE) band ?U32_MASK,
-                threshold = ?EXERCISE_THRESHOLD,
+                threshold = ?EXERCISE_RATE,
                 x = 2,
                 y = 2
             }]
@@ -422,7 +422,7 @@ family_startup_targets_are_bounded_and_typed_test() ->
         })
     ).
 
-explicit_noise_threshold_changes_only_phenomenological_startup_test() ->
+explicit_noise_rate_changes_only_phenomenological_startup_test() ->
     Default = maps:get(startup, phi_noise_topology:topology(1)),
     Quiet = maps:get(startup, phi_noise_topology:topology(1, 0)),
     ?assertEqual(
@@ -565,7 +565,7 @@ startup_seed({{Family, X, Y}, [#phenom_config{
         syndrome_z
     ])),
     assert_startup_coordinates(X, Y),
-    ?assertEqual(?EXERCISE_THRESHOLD, Threshold),
+    ?assertEqual(?EXERCISE_RATE, Threshold),
     ?assertEqual(X, ConfigX),
     ?assertEqual(configured_y(Family, Y), ConfigY),
     ?assert(Seed > 0),

@@ -32,10 +32,10 @@ to_dslx(Distance) ->
     Plan = hls_topology:normalize(phi_noise_topology:topology(Distance)),
     xls_topology_dslx:emit(Plan, profile()).
 
--doc "Generates DSLX with an explicit phenomenological-noise threshold.".
+-doc "Generates DSLX with an explicit `u32` phenomenological-noise rate.".
 -spec to_dslx(pos_integer(), hls_nums:u32()) -> iolist().
-to_dslx(Distance, NoiseThreshold) ->
+to_dslx(Distance, NoiseRate) ->
     Plan = hls_topology:normalize(
-        phi_noise_topology:topology(Distance, NoiseThreshold)
+        phi_noise_topology:topology(Distance, NoiseRate)
     ),
     xls_topology_dslx:emit(Plan, profile()).

@@ -68,8 +68,9 @@ phi neighbors are distinct.
 
 Every actor receives one explicit configuration message.  The PRNG seeds are
 deterministic, nonzero, and distinct across all six families; the high common
-noise threshold is intended to exercise the generated graph rather than
-specify a physical noise model. Because this example materializes those
+noise rate is intended to exercise the generated graph rather than specify a
+physical noise model. The rate is encoded as the `u32` threshold used by each
+cell's Bernoulli comparison. Because this example materializes those
 configurations as an ordinary list, it accepts witness distances only up to
 50; that is not a bound in the compact family or route model.
 """.
@@ -80,7 +81,7 @@ configurations as an ordinary list, it accepts witness distances only up to
 
 -define(DEFAULT_DISTANCE, 3).
 -define(MAX_WITNESS_DISTANCE, 50).
--define(EXERCISE_THRESHOLD, 16#80000000).
+-define(EXERCISE_RATE, 16#80000000).
 -define(SEED_STRIDE, 16#9e3779b9).
 -define(U32_MASK, 16#ffffffff).
 
@@ -93,15 +94,15 @@ topology() ->
 -spec topology(pos_integer()) -> hls_topology:spec().
 topology(Distance)
         when Distance > 0, Distance =< ?MAX_WITNESS_DISTANCE ->
-    topology(Distance, ?EXERCISE_THRESHOLD);
+    topology(Distance, ?EXERCISE_RATE);
 topology(_Distance) ->
     error(badarg).
 
--doc "Returns a topology with an explicit phenomenological-noise threshold.".
+-doc "Returns a topology with an explicit `u32` phenomenological-noise rate.".
 -spec topology(pos_integer(), hls_nums:u32()) -> hls_topology:spec().
-topology(Distance, NoiseThreshold)
+topology(Distance, NoiseRate)
         when Distance > 0, Distance =< ?MAX_WITNESS_DISTANCE,
-             NoiseThreshold >= 0, NoiseThreshold =< ?U32_MASK ->
+             NoiseRate >= 0, NoiseRate =< ?U32_MASK ->
     Shape = [Distance, Distance],
     #{
         version => 1,
@@ -124,9 +125,9 @@ topology(Distance, NoiseThreshold)
         ],
         routes => [],
         route_relations => route_relations(),
-        startup => startup(Distance, NoiseThreshold)
+        startup => startup(Distance, NoiseRate)
     };
-topology(_Distance, _NoiseThreshold) ->
+topology(_Distance, _NoiseRate) ->
     error(badarg).
 
 -doc "Maps one sparse decoder move to its physical data-qubit update.".
@@ -249,11 +250,11 @@ announcement_relation(Source, Destination, External) ->
         {external, External}
     ]}.
 
-startup(Distance, NoiseThreshold) ->
-    data_family_startup(data_even, 0, 0, Distance, NoiseThreshold) ++
-        data_family_startup(data_odd, 1, 1, Distance, NoiseThreshold) ++
-        noise_family_startup(syndrome_x, 2, Distance, NoiseThreshold) ++
-        noise_family_startup(syndrome_z, 3, Distance, NoiseThreshold) ++
+startup(Distance, NoiseRate) ->
+    data_family_startup(data_even, 0, 0, Distance, NoiseRate) ++
+        data_family_startup(data_odd, 1, 1, Distance, NoiseRate) ++
+        noise_family_startup(syndrome_x, 2, Distance, NoiseRate) ++
+        noise_family_startup(syndrome_z, 3, Distance, NoiseRate) ++
         phi_family_startup(phi_x, 4, Distance) ++
         phi_family_startup(phi_z, 5, Distance).
 
@@ -262,12 +263,12 @@ data_family_startup(
     PhysicalYParity,
     FamilyIndex,
     Distance,
-    NoiseThreshold
+    NoiseRate
 ) ->
     [
         {{Family, X, Y}, [#phenom_config{
             seed = seed(FamilyIndex, Distance, X, Y),
-            threshold = NoiseThreshold,
+            threshold = NoiseRate,
             x = X,
             y = 2 * Y + PhysicalYParity
         }]}
@@ -275,11 +276,11 @@ data_family_startup(
            Y <- lists:seq(0, Distance - 1)
     ].
 
-noise_family_startup(Family, FamilyIndex, Distance, NoiseThreshold) ->
+noise_family_startup(Family, FamilyIndex, Distance, NoiseRate) ->
     [
         {{Family, X, Y}, [#phenom_config{
             seed = seed(FamilyIndex, Distance, X, Y),
-            threshold = NoiseThreshold,
+            threshold = NoiseRate,
             x = X,
             y = Y
         }]}
