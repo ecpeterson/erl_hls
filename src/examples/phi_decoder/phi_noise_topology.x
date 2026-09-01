@@ -29,29 +29,6 @@ fn family_0_startup(x: u32, y: u32) -> axis::Frame {
   }
 }
 
-proc StartupPrefix0<X: u32, Y: u32> {
-  routed_in: chan<axis::Frame> in;
-  frame_out: chan<axis::Frame> out;
-
-  config(
-    routed_in: chan<axis::Frame> in,
-    frame_out: chan<axis::Frame> out
-  ) {
-    (routed_in, frame_out)
-  }
-
-  init { u1:0 }
-
-  next(started: u1) {
-    let (tok, routed_frame) = recv_if(
-      join(), routed_in, started, zero!<axis::Frame>());
-    let startup_frame = family_0_startup(X, Y);
-    let frame = if started { routed_frame } else { startup_frame };
-    send(tok, frame_out, frame);
-    u1:1
-  }
-}
-
 fn family_1_startup(x: u32, y: u32) -> axis::Frame {
   match (x, y) {
     (u32:0, u32:0) => axis::pack(u8:6, uN[96]:0x00000000800000002E2AC13A),
@@ -64,29 +41,6 @@ fn family_1_startup(x: u32, y: u32) -> axis::Frame {
     (u32:2, u32:1) => axis::pack(u8:6, uN[96]:0x000100028000000081AF1549),
     (u32:2, u32:2) => axis::pack(u8:6, uN[96]:0x00020002800000001FE68F02),
     _ => zero!<axis::Frame>(),
-  }
-}
-
-proc StartupPrefix1<X: u32, Y: u32> {
-  routed_in: chan<axis::Frame> in;
-  frame_out: chan<axis::Frame> out;
-
-  config(
-    routed_in: chan<axis::Frame> in,
-    frame_out: chan<axis::Frame> out
-  ) {
-    (routed_in, frame_out)
-  }
-
-  init { u1:0 }
-
-  next(started: u1) {
-    let (tok, routed_frame) = recv_if(
-      join(), routed_in, started, zero!<axis::Frame>());
-    let startup_frame = family_1_startup(X, Y);
-    let frame = if started { routed_frame } else { startup_frame };
-    send(tok, frame_out, frame);
-    u1:1
   }
 }
 
@@ -105,29 +59,6 @@ fn family_4_startup(x: u32, y: u32) -> axis::Frame {
   }
 }
 
-proc StartupPrefix4<X: u32, Y: u32> {
-  routed_in: chan<axis::Frame> in;
-  frame_out: chan<axis::Frame> out;
-
-  config(
-    routed_in: chan<axis::Frame> in,
-    frame_out: chan<axis::Frame> out
-  ) {
-    (routed_in, frame_out)
-  }
-
-  init { u1:0 }
-
-  next(started: u1) {
-    let (tok, routed_frame) = recv_if(
-      join(), routed_in, started, zero!<axis::Frame>());
-    let startup_frame = family_4_startup(X, Y);
-    let frame = if started { routed_frame } else { startup_frame };
-    send(tok, frame_out, frame);
-    u1:1
-  }
-}
-
 fn family_5_startup(x: u32, y: u32) -> axis::Frame {
   match (x, y) {
     (u32:0, u32:0) => axis::pack(u8:6, uN[96]:0x00000000800000004E11503C),
@@ -140,29 +71,6 @@ fn family_5_startup(x: u32, y: u32) -> axis::Frame {
     (u32:2, u32:1) => axis::pack(u8:6, uN[96]:0x0001000280000000A195A44B),
     (u32:2, u32:2) => axis::pack(u8:6, uN[96]:0x00020002800000003FCD1E04),
     _ => zero!<axis::Frame>(),
-  }
-}
-
-proc StartupPrefix5<X: u32, Y: u32> {
-  routed_in: chan<axis::Frame> in;
-  frame_out: chan<axis::Frame> out;
-
-  config(
-    routed_in: chan<axis::Frame> in,
-    frame_out: chan<axis::Frame> out
-  ) {
-    (routed_in, frame_out)
-  }
-
-  init { u1:0 }
-
-  next(started: u1) {
-    let (tok, routed_frame) = recv_if(
-      join(), routed_in, started, zero!<axis::Frame>());
-    let startup_frame = family_5_startup(X, Y);
-    let frame = if started { routed_frame } else { startup_frame };
-    send(tok, frame_out, frame);
-    u1:1
   }
 }
 
@@ -437,6 +345,326 @@ proc FrameGridMux<GRID_WIDTH: u32, GRID_HEIGHT: u32> {
   init { () }
   next(state: ()) { state }
 }
+// Retains one mailbox credit while polling one input per activation.
+proc FamilyIngress0<X: u32, Y: u32> {
+  incoming_0: chan<axis::Frame> in;
+  incoming_1: chan<axis::Frame> in;
+  incoming_2: chan<axis::Frame> in;
+  incoming_3: chan<axis::Frame> in;
+  frame_out: chan<axis::Frame> out;
+  admission_in: chan<u1> in;
+
+  config(
+    incoming_0: chan<axis::Frame> in,
+    incoming_1: chan<axis::Frame> in,
+    incoming_2: chan<axis::Frame> in,
+    incoming_3: chan<axis::Frame> in,
+    frame_out: chan<axis::Frame> out,
+    admission_in: chan<u1> in
+  ) {
+    (incoming_0, incoming_1, incoming_2, incoming_3, frame_out, admission_in)
+  }
+
+  init { (u2:0, u1:0, u1:0) }
+
+  next(state: (u2, u1, u1)) {
+    if !state.1 {
+      let (_tok, _credit) = recv(join(), admission_in);
+      (state.0, u1:1, state.2)
+    } else if !state.2 {
+      let _tok = send(
+        join(), frame_out, family_0_startup(X, Y));
+      (state.0, u1:0, u1:1)
+    } else {
+      let (tok_0, frame_0, valid_0) = recv_if_non_blocking(
+        join(), incoming_0, state.0 == u2:0, zero!<axis::Frame>());
+      let (tok_1, frame_1, valid_1) = recv_if_non_blocking(
+        tok_0, incoming_1, state.0 == u2:1, zero!<axis::Frame>());
+      let (tok_2, frame_2, valid_2) = recv_if_non_blocking(
+        tok_1, incoming_2, state.0 == u2:2, zero!<axis::Frame>());
+      let (tok_3, frame_3, valid_3) = recv_if_non_blocking(
+        tok_2, incoming_3, state.0 == u2:3, zero!<axis::Frame>());
+      let received = valid_0 || valid_1 || valid_2 || valid_3;
+      let frame = if valid_0 { frame_0 } else { if valid_1 { frame_1 } else { if valid_2 { frame_2 } else { frame_3 } } };
+      let _done = send_if(tok_3, frame_out, received, frame);
+      let next_cursor = if state.0 == u2:3 {
+        u2:0
+      } else {
+        state.0 + u2:1
+      };
+      (next_cursor, !received, state.2)
+    }
+  }
+}
+
+// Retains one mailbox credit while polling one input per activation.
+proc FamilyIngress1<X: u32, Y: u32> {
+  incoming_0: chan<axis::Frame> in;
+  incoming_1: chan<axis::Frame> in;
+  incoming_2: chan<axis::Frame> in;
+  incoming_3: chan<axis::Frame> in;
+  frame_out: chan<axis::Frame> out;
+  admission_in: chan<u1> in;
+
+  config(
+    incoming_0: chan<axis::Frame> in,
+    incoming_1: chan<axis::Frame> in,
+    incoming_2: chan<axis::Frame> in,
+    incoming_3: chan<axis::Frame> in,
+    frame_out: chan<axis::Frame> out,
+    admission_in: chan<u1> in
+  ) {
+    (incoming_0, incoming_1, incoming_2, incoming_3, frame_out, admission_in)
+  }
+
+  init { (u2:0, u1:0, u1:0) }
+
+  next(state: (u2, u1, u1)) {
+    if !state.1 {
+      let (_tok, _credit) = recv(join(), admission_in);
+      (state.0, u1:1, state.2)
+    } else if !state.2 {
+      let _tok = send(
+        join(), frame_out, family_1_startup(X, Y));
+      (state.0, u1:0, u1:1)
+    } else {
+      let (tok_0, frame_0, valid_0) = recv_if_non_blocking(
+        join(), incoming_0, state.0 == u2:0, zero!<axis::Frame>());
+      let (tok_1, frame_1, valid_1) = recv_if_non_blocking(
+        tok_0, incoming_1, state.0 == u2:1, zero!<axis::Frame>());
+      let (tok_2, frame_2, valid_2) = recv_if_non_blocking(
+        tok_1, incoming_2, state.0 == u2:2, zero!<axis::Frame>());
+      let (tok_3, frame_3, valid_3) = recv_if_non_blocking(
+        tok_2, incoming_3, state.0 == u2:3, zero!<axis::Frame>());
+      let received = valid_0 || valid_1 || valid_2 || valid_3;
+      let frame = if valid_0 { frame_0 } else { if valid_1 { frame_1 } else { if valid_2 { frame_2 } else { frame_3 } } };
+      let _done = send_if(tok_3, frame_out, received, frame);
+      let next_cursor = if state.0 == u2:3 {
+        u2:0
+      } else {
+        state.0 + u2:1
+      };
+      (next_cursor, !received, state.2)
+    }
+  }
+}
+
+// Retains one mailbox credit while polling one input per activation.
+proc FamilyIngress2 {
+  incoming_0: chan<axis::Frame> in;
+  incoming_1: chan<axis::Frame> in;
+  incoming_2: chan<axis::Frame> in;
+  incoming_3: chan<axis::Frame> in;
+  incoming_4: chan<axis::Frame> in;
+  frame_out: chan<axis::Frame> out;
+  admission_in: chan<u1> in;
+
+  config(
+    incoming_0: chan<axis::Frame> in,
+    incoming_1: chan<axis::Frame> in,
+    incoming_2: chan<axis::Frame> in,
+    incoming_3: chan<axis::Frame> in,
+    incoming_4: chan<axis::Frame> in,
+    frame_out: chan<axis::Frame> out,
+    admission_in: chan<u1> in
+  ) {
+    (incoming_0, incoming_1, incoming_2, incoming_3, incoming_4, frame_out, admission_in)
+  }
+
+  init { (u3:0, u1:0) }
+
+  next(state: (u3, u1)) {
+    if !state.1 {
+      let (_tok, _credit) = recv(join(), admission_in);
+      (state.0, u1:1)
+    } else {
+      let (tok_0, frame_0, valid_0) = recv_if_non_blocking(
+        join(), incoming_0, state.0 == u3:0, zero!<axis::Frame>());
+      let (tok_1, frame_1, valid_1) = recv_if_non_blocking(
+        tok_0, incoming_1, state.0 == u3:1, zero!<axis::Frame>());
+      let (tok_2, frame_2, valid_2) = recv_if_non_blocking(
+        tok_1, incoming_2, state.0 == u3:2, zero!<axis::Frame>());
+      let (tok_3, frame_3, valid_3) = recv_if_non_blocking(
+        tok_2, incoming_3, state.0 == u3:3, zero!<axis::Frame>());
+      let (tok_4, frame_4, valid_4) = recv_if_non_blocking(
+        tok_3, incoming_4, state.0 == u3:4, zero!<axis::Frame>());
+      let received = valid_0 || valid_1 || valid_2 || valid_3 || valid_4;
+      let frame = if valid_0 { frame_0 } else { if valid_1 { frame_1 } else { if valid_2 { frame_2 } else { if valid_3 { frame_3 } else { frame_4 } } } };
+      let _done = send_if(tok_4, frame_out, received, frame);
+      let next_cursor = if state.0 == u3:4 {
+        u3:0
+      } else {
+        state.0 + u3:1
+      };
+      (next_cursor, !received)
+    }
+  }
+}
+
+// Retains one mailbox credit while polling one input per activation.
+proc FamilyIngress3 {
+  incoming_0: chan<axis::Frame> in;
+  incoming_1: chan<axis::Frame> in;
+  incoming_2: chan<axis::Frame> in;
+  incoming_3: chan<axis::Frame> in;
+  incoming_4: chan<axis::Frame> in;
+  frame_out: chan<axis::Frame> out;
+  admission_in: chan<u1> in;
+
+  config(
+    incoming_0: chan<axis::Frame> in,
+    incoming_1: chan<axis::Frame> in,
+    incoming_2: chan<axis::Frame> in,
+    incoming_3: chan<axis::Frame> in,
+    incoming_4: chan<axis::Frame> in,
+    frame_out: chan<axis::Frame> out,
+    admission_in: chan<u1> in
+  ) {
+    (incoming_0, incoming_1, incoming_2, incoming_3, incoming_4, frame_out, admission_in)
+  }
+
+  init { (u3:0, u1:0) }
+
+  next(state: (u3, u1)) {
+    if !state.1 {
+      let (_tok, _credit) = recv(join(), admission_in);
+      (state.0, u1:1)
+    } else {
+      let (tok_0, frame_0, valid_0) = recv_if_non_blocking(
+        join(), incoming_0, state.0 == u3:0, zero!<axis::Frame>());
+      let (tok_1, frame_1, valid_1) = recv_if_non_blocking(
+        tok_0, incoming_1, state.0 == u3:1, zero!<axis::Frame>());
+      let (tok_2, frame_2, valid_2) = recv_if_non_blocking(
+        tok_1, incoming_2, state.0 == u3:2, zero!<axis::Frame>());
+      let (tok_3, frame_3, valid_3) = recv_if_non_blocking(
+        tok_2, incoming_3, state.0 == u3:3, zero!<axis::Frame>());
+      let (tok_4, frame_4, valid_4) = recv_if_non_blocking(
+        tok_3, incoming_4, state.0 == u3:4, zero!<axis::Frame>());
+      let received = valid_0 || valid_1 || valid_2 || valid_3 || valid_4;
+      let frame = if valid_0 { frame_0 } else { if valid_1 { frame_1 } else { if valid_2 { frame_2 } else { if valid_3 { frame_3 } else { frame_4 } } } };
+      let _done = send_if(tok_4, frame_out, received, frame);
+      let next_cursor = if state.0 == u3:4 {
+        u3:0
+      } else {
+        state.0 + u3:1
+      };
+      (next_cursor, !received)
+    }
+  }
+}
+
+// Retains one mailbox credit while polling one input per activation.
+proc FamilyIngress4<X: u32, Y: u32> {
+  incoming_0: chan<axis::Frame> in;
+  incoming_1: chan<axis::Frame> in;
+  incoming_2: chan<axis::Frame> in;
+  incoming_3: chan<axis::Frame> in;
+  incoming_4: chan<axis::Frame> in;
+  frame_out: chan<axis::Frame> out;
+  admission_in: chan<u1> in;
+
+  config(
+    incoming_0: chan<axis::Frame> in,
+    incoming_1: chan<axis::Frame> in,
+    incoming_2: chan<axis::Frame> in,
+    incoming_3: chan<axis::Frame> in,
+    incoming_4: chan<axis::Frame> in,
+    frame_out: chan<axis::Frame> out,
+    admission_in: chan<u1> in
+  ) {
+    (incoming_0, incoming_1, incoming_2, incoming_3, incoming_4, frame_out, admission_in)
+  }
+
+  init { (u3:0, u1:0, u1:0) }
+
+  next(state: (u3, u1, u1)) {
+    if !state.1 {
+      let (_tok, _credit) = recv(join(), admission_in);
+      (state.0, u1:1, state.2)
+    } else if !state.2 {
+      let _tok = send(
+        join(), frame_out, family_4_startup(X, Y));
+      (state.0, u1:0, u1:1)
+    } else {
+      let (tok_0, frame_0, valid_0) = recv_if_non_blocking(
+        join(), incoming_0, state.0 == u3:0, zero!<axis::Frame>());
+      let (tok_1, frame_1, valid_1) = recv_if_non_blocking(
+        tok_0, incoming_1, state.0 == u3:1, zero!<axis::Frame>());
+      let (tok_2, frame_2, valid_2) = recv_if_non_blocking(
+        tok_1, incoming_2, state.0 == u3:2, zero!<axis::Frame>());
+      let (tok_3, frame_3, valid_3) = recv_if_non_blocking(
+        tok_2, incoming_3, state.0 == u3:3, zero!<axis::Frame>());
+      let (tok_4, frame_4, valid_4) = recv_if_non_blocking(
+        tok_3, incoming_4, state.0 == u3:4, zero!<axis::Frame>());
+      let received = valid_0 || valid_1 || valid_2 || valid_3 || valid_4;
+      let frame = if valid_0 { frame_0 } else { if valid_1 { frame_1 } else { if valid_2 { frame_2 } else { if valid_3 { frame_3 } else { frame_4 } } } };
+      let _done = send_if(tok_4, frame_out, received, frame);
+      let next_cursor = if state.0 == u3:4 {
+        u3:0
+      } else {
+        state.0 + u3:1
+      };
+      (next_cursor, !received, state.2)
+    }
+  }
+}
+
+// Retains one mailbox credit while polling one input per activation.
+proc FamilyIngress5<X: u32, Y: u32> {
+  incoming_0: chan<axis::Frame> in;
+  incoming_1: chan<axis::Frame> in;
+  incoming_2: chan<axis::Frame> in;
+  incoming_3: chan<axis::Frame> in;
+  incoming_4: chan<axis::Frame> in;
+  frame_out: chan<axis::Frame> out;
+  admission_in: chan<u1> in;
+
+  config(
+    incoming_0: chan<axis::Frame> in,
+    incoming_1: chan<axis::Frame> in,
+    incoming_2: chan<axis::Frame> in,
+    incoming_3: chan<axis::Frame> in,
+    incoming_4: chan<axis::Frame> in,
+    frame_out: chan<axis::Frame> out,
+    admission_in: chan<u1> in
+  ) {
+    (incoming_0, incoming_1, incoming_2, incoming_3, incoming_4, frame_out, admission_in)
+  }
+
+  init { (u3:0, u1:0, u1:0) }
+
+  next(state: (u3, u1, u1)) {
+    if !state.1 {
+      let (_tok, _credit) = recv(join(), admission_in);
+      (state.0, u1:1, state.2)
+    } else if !state.2 {
+      let _tok = send(
+        join(), frame_out, family_5_startup(X, Y));
+      (state.0, u1:0, u1:1)
+    } else {
+      let (tok_0, frame_0, valid_0) = recv_if_non_blocking(
+        join(), incoming_0, state.0 == u3:0, zero!<axis::Frame>());
+      let (tok_1, frame_1, valid_1) = recv_if_non_blocking(
+        tok_0, incoming_1, state.0 == u3:1, zero!<axis::Frame>());
+      let (tok_2, frame_2, valid_2) = recv_if_non_blocking(
+        tok_1, incoming_2, state.0 == u3:2, zero!<axis::Frame>());
+      let (tok_3, frame_3, valid_3) = recv_if_non_blocking(
+        tok_2, incoming_3, state.0 == u3:3, zero!<axis::Frame>());
+      let (tok_4, frame_4, valid_4) = recv_if_non_blocking(
+        tok_3, incoming_4, state.0 == u3:4, zero!<axis::Frame>());
+      let received = valid_0 || valid_1 || valid_2 || valid_3 || valid_4;
+      let frame = if valid_0 { frame_0 } else { if valid_1 { frame_1 } else { if valid_2 { frame_2 } else { if valid_3 { frame_3 } else { frame_4 } } } };
+      let _done = send_if(tok_4, frame_out, received, frame);
+      let next_cursor = if state.0 == u3:4 {
+        u3:0
+      } else {
+        state.0 + u3:1
+      };
+      (next_cursor, !received, state.2)
+    }
+  }
+}
+
 proc FamilyNode0<X: u32, Y: u32> {
   config(
     incoming_0: chan<axis::Frame> in,
@@ -457,19 +685,7 @@ proc FamilyNode0<X: u32, Y: u32> {
     spawn phenom_data_cell::Service(
       actor_req_c, actor_egress_p, actor_admit_p);
     spawn FamilyRouter0(actor_egress_c, lane_0_out, lane_1_out, lane_2_out, lane_3_out);
-    let (ingress_mux_0_0_p, ingress_mux_0_0_c) =
-      chan<axis::Frame, CHANNEL_DEPTH>("ingress_mux_0_0");
-    spawn axis::FrameMux2(incoming_0, incoming_1, ingress_mux_0_0_p);
-    let (ingress_mux_0_1_p, ingress_mux_0_1_c) =
-      chan<axis::Frame, CHANNEL_DEPTH>("ingress_mux_0_1");
-    spawn axis::FrameMux2(incoming_2, incoming_3, ingress_mux_0_1_p);
-    let (ingress_mux_1_0_p, ingress_mux_1_0_c) =
-      chan<axis::Frame, CHANNEL_DEPTH>("ingress_mux_1_0");
-    spawn axis::FrameMux2(ingress_mux_0_0_c, ingress_mux_0_1_c, ingress_mux_1_0_p);
-    let (startup_p, startup_c) =
-      chan<axis::Frame, CHANNEL_DEPTH>("startup");
-    spawn StartupPrefix0<X, Y>(ingress_mux_1_0_c, startup_p);
-    spawn axis::ReservedFrame(startup_c, actor_req_p, actor_admit_c);
+    spawn FamilyIngress0<X, Y>(incoming_0, incoming_1, incoming_2, incoming_3, actor_req_p, actor_admit_c);
     ()
   }
 
@@ -497,19 +713,7 @@ proc FamilyNode1<X: u32, Y: u32> {
     spawn phenom_data_cell::Service(
       actor_req_c, actor_egress_p, actor_admit_p);
     spawn FamilyRouter1(actor_egress_c, lane_4_out, lane_5_out, lane_6_out, lane_7_out);
-    let (ingress_mux_0_0_p, ingress_mux_0_0_c) =
-      chan<axis::Frame, CHANNEL_DEPTH>("ingress_mux_0_0");
-    spawn axis::FrameMux2(incoming_0, incoming_1, ingress_mux_0_0_p);
-    let (ingress_mux_0_1_p, ingress_mux_0_1_c) =
-      chan<axis::Frame, CHANNEL_DEPTH>("ingress_mux_0_1");
-    spawn axis::FrameMux2(incoming_2, incoming_3, ingress_mux_0_1_p);
-    let (ingress_mux_1_0_p, ingress_mux_1_0_c) =
-      chan<axis::Frame, CHANNEL_DEPTH>("ingress_mux_1_0");
-    spawn axis::FrameMux2(ingress_mux_0_0_c, ingress_mux_0_1_c, ingress_mux_1_0_p);
-    let (startup_p, startup_c) =
-      chan<axis::Frame, CHANNEL_DEPTH>("startup");
-    spawn StartupPrefix1<X, Y>(ingress_mux_1_0_c, startup_p);
-    spawn axis::ReservedFrame(startup_c, actor_req_p, actor_admit_c);
+    spawn FamilyIngress1<X, Y>(incoming_0, incoming_1, incoming_2, incoming_3, actor_req_p, actor_admit_c);
     ()
   }
 
@@ -540,19 +744,7 @@ proc FamilyNode2 {
     spawn phi_halo_cell::Service(
       actor_req_c, actor_egress_p, actor_admit_p);
     spawn FamilyRouter2(actor_egress_c, lane_8_out, lane_9_out, lane_10_out, lane_11_out, lane_12_out, lane_13_out);
-    let (ingress_mux_0_0_p, ingress_mux_0_0_c) =
-      chan<axis::Frame, CHANNEL_DEPTH>("ingress_mux_0_0");
-    spawn axis::FrameMux2(incoming_0, incoming_1, ingress_mux_0_0_p);
-    let (ingress_mux_0_1_p, ingress_mux_0_1_c) =
-      chan<axis::Frame, CHANNEL_DEPTH>("ingress_mux_0_1");
-    spawn axis::FrameMux2(incoming_2, incoming_3, ingress_mux_0_1_p);
-    let (ingress_mux_1_0_p, ingress_mux_1_0_c) =
-      chan<axis::Frame, CHANNEL_DEPTH>("ingress_mux_1_0");
-    spawn axis::FrameMux2(ingress_mux_0_0_c, ingress_mux_0_1_c, ingress_mux_1_0_p);
-    let (ingress_mux_2_0_p, ingress_mux_2_0_c) =
-      chan<axis::Frame, CHANNEL_DEPTH>("ingress_mux_2_0");
-    spawn axis::FrameMux2(ingress_mux_1_0_c, incoming_4, ingress_mux_2_0_p);
-    spawn axis::ReservedFrame(ingress_mux_2_0_c, actor_req_p, actor_admit_c);
+    spawn FamilyIngress2(incoming_0, incoming_1, incoming_2, incoming_3, incoming_4, actor_req_p, actor_admit_c);
     ()
   }
 
@@ -583,19 +775,7 @@ proc FamilyNode3 {
     spawn phi_halo_cell::Service(
       actor_req_c, actor_egress_p, actor_admit_p);
     spawn FamilyRouter3(actor_egress_c, lane_14_out, lane_15_out, lane_16_out, lane_17_out, lane_18_out, lane_19_out);
-    let (ingress_mux_0_0_p, ingress_mux_0_0_c) =
-      chan<axis::Frame, CHANNEL_DEPTH>("ingress_mux_0_0");
-    spawn axis::FrameMux2(incoming_0, incoming_1, ingress_mux_0_0_p);
-    let (ingress_mux_0_1_p, ingress_mux_0_1_c) =
-      chan<axis::Frame, CHANNEL_DEPTH>("ingress_mux_0_1");
-    spawn axis::FrameMux2(incoming_2, incoming_3, ingress_mux_0_1_p);
-    let (ingress_mux_1_0_p, ingress_mux_1_0_c) =
-      chan<axis::Frame, CHANNEL_DEPTH>("ingress_mux_1_0");
-    spawn axis::FrameMux2(ingress_mux_0_0_c, ingress_mux_0_1_c, ingress_mux_1_0_p);
-    let (ingress_mux_2_0_p, ingress_mux_2_0_c) =
-      chan<axis::Frame, CHANNEL_DEPTH>("ingress_mux_2_0");
-    spawn axis::FrameMux2(ingress_mux_1_0_c, incoming_4, ingress_mux_2_0_p);
-    spawn axis::ReservedFrame(ingress_mux_2_0_c, actor_req_p, actor_admit_c);
+    spawn FamilyIngress3(incoming_0, incoming_1, incoming_2, incoming_3, incoming_4, actor_req_p, actor_admit_c);
     ()
   }
 
@@ -626,22 +806,7 @@ proc FamilyNode4<X: u32, Y: u32> {
     spawn phenom_syndrome_cell::Service(
       actor_req_c, actor_egress_p, actor_admit_p);
     spawn FamilyRouter4(actor_egress_c, lane_20_out, lane_21_out, lane_22_out, lane_23_out, lane_24_out, lane_25_out);
-    let (ingress_mux_0_0_p, ingress_mux_0_0_c) =
-      chan<axis::Frame, CHANNEL_DEPTH>("ingress_mux_0_0");
-    spawn axis::FrameMux2(incoming_0, incoming_1, ingress_mux_0_0_p);
-    let (ingress_mux_0_1_p, ingress_mux_0_1_c) =
-      chan<axis::Frame, CHANNEL_DEPTH>("ingress_mux_0_1");
-    spawn axis::FrameMux2(incoming_2, incoming_3, ingress_mux_0_1_p);
-    let (ingress_mux_1_0_p, ingress_mux_1_0_c) =
-      chan<axis::Frame, CHANNEL_DEPTH>("ingress_mux_1_0");
-    spawn axis::FrameMux2(ingress_mux_0_0_c, ingress_mux_0_1_c, ingress_mux_1_0_p);
-    let (ingress_mux_2_0_p, ingress_mux_2_0_c) =
-      chan<axis::Frame, CHANNEL_DEPTH>("ingress_mux_2_0");
-    spawn axis::FrameMux2(ingress_mux_1_0_c, incoming_4, ingress_mux_2_0_p);
-    let (startup_p, startup_c) =
-      chan<axis::Frame, CHANNEL_DEPTH>("startup");
-    spawn StartupPrefix4<X, Y>(ingress_mux_2_0_c, startup_p);
-    spawn axis::ReservedFrame(startup_c, actor_req_p, actor_admit_c);
+    spawn FamilyIngress4<X, Y>(incoming_0, incoming_1, incoming_2, incoming_3, incoming_4, actor_req_p, actor_admit_c);
     ()
   }
 
@@ -672,22 +837,7 @@ proc FamilyNode5<X: u32, Y: u32> {
     spawn phenom_syndrome_cell::Service(
       actor_req_c, actor_egress_p, actor_admit_p);
     spawn FamilyRouter5(actor_egress_c, lane_26_out, lane_27_out, lane_28_out, lane_29_out, lane_30_out, lane_31_out);
-    let (ingress_mux_0_0_p, ingress_mux_0_0_c) =
-      chan<axis::Frame, CHANNEL_DEPTH>("ingress_mux_0_0");
-    spawn axis::FrameMux2(incoming_0, incoming_1, ingress_mux_0_0_p);
-    let (ingress_mux_0_1_p, ingress_mux_0_1_c) =
-      chan<axis::Frame, CHANNEL_DEPTH>("ingress_mux_0_1");
-    spawn axis::FrameMux2(incoming_2, incoming_3, ingress_mux_0_1_p);
-    let (ingress_mux_1_0_p, ingress_mux_1_0_c) =
-      chan<axis::Frame, CHANNEL_DEPTH>("ingress_mux_1_0");
-    spawn axis::FrameMux2(ingress_mux_0_0_c, ingress_mux_0_1_c, ingress_mux_1_0_p);
-    let (ingress_mux_2_0_p, ingress_mux_2_0_c) =
-      chan<axis::Frame, CHANNEL_DEPTH>("ingress_mux_2_0");
-    spawn axis::FrameMux2(ingress_mux_1_0_c, incoming_4, ingress_mux_2_0_p);
-    let (startup_p, startup_c) =
-      chan<axis::Frame, CHANNEL_DEPTH>("startup");
-    spawn StartupPrefix5<X, Y>(ingress_mux_2_0_c, startup_p);
-    spawn axis::ReservedFrame(startup_c, actor_req_p, actor_admit_c);
+    spawn FamilyIngress5<X, Y>(incoming_0, incoming_1, incoming_2, incoming_3, incoming_4, actor_req_p, actor_admit_c);
     ()
   }
 

@@ -53,6 +53,20 @@ and channel instances are explicit. The compact torus plan below uses a
 separate family backend that retains regular structure instead of flattening a
 large grid globally.
 
+### Topology input-flop area check
+
+A one-flag out-of-context XC7 synthesis comparison of the exact one-cell
+phi/noise fixture keeps producer output flops in both variants:
+
+| consumer input flops | estimated logic cells | flip-flops | LUT1–LUT6 | `DSP48E1` |
+| --- | ---: | ---: | ---: | ---: |
+| enabled | 8,860 | 9,417 | 9,834 | 4 |
+| disabled | 8,273 | 7,887 | 9,390 | 4 |
+
+Both variants come from the same optimized IR and use the pinned XLS build and
+the experiment-local openXC7 Yosys. This is an area-only synthesis result; it
+does not establish placement, routing, or timing closure.
+
 ## Compact torus witness
 
 `phi_torus_topology.erl` is the first rule-preserving family plan. It declares
@@ -78,9 +92,11 @@ flowchart LR
     Torus --> Spawn
 
     subgraph OneFamilyNode["each FamilyNode"]
-        NeighborInputs["neighbor lane inputs"] --> IngressMux["FrameMux2 tree"]
-        IngressMux --> Admission["ReservedFrame admission"]
-        Admission --> Service["phi_halo_cell::Service"]
+        NeighborInputs["neighbor lane inputs"] --> Ingress["FamilyIngress"]
+        Startup["optional coordinate startup"] --> Ingress
+        Credits["mailbox admission credits"] --> Ingress
+        Ingress --> ActorQueue["actor request queue"]
+        ActorQueue --> Service["phi_halo_cell::Service"]
         Service -- "ordered Egress" --> Router["FamilyRouter"]
     end
 
@@ -90,11 +106,16 @@ flowchart LR
     Router -- "syndrome / correction" --> ExternalLanes
 ```
 
-`FamilyTorus` and `FamilyNode` each appear once in generated source. XLS
-elaboration instantiates one node, service, router, admission gate, and ingress
-mux tree per coordinate. The lane arrays connect those instances without an
-expanded global route table. `FrameGridMux` appears only at the two scalar
-observation boundaries; it is not on the cardinal mesh paths.
+`FamilyTorus`, `FamilyNode`, and `FamilyIngress` each appear once in generated
+source. XLS elaboration instantiates one node, service, router, integrated
+ingress, and actor request queue per coordinate. The ingress retains one
+mailbox credit while fairly polling its statically known input lanes, then
+transfers one complete frame and consumes the credit. For configured families,
+the same ingress sends the coordinate startup frame under the first credit
+before polling routed traffic. This replaces the earlier buffered `FrameMux2`
+tree, `StartupPrefix`, and separate `ReservedFrame` process without changing
+the lane arrays or actor mailbox boundary. `FrameGridMux` appears only at the
+two scalar observation boundaries; it is not on the cardinal mesh paths.
 
 The topology normalizer validates every family output and route interface once
 per rule. `hls_topology:routes_for_instance/3` resolves selected coordinates for
@@ -116,9 +137,12 @@ requests, stable backpressure, and no duplication. Its correction stream stays
 idle because this structural witness has no syndrome source to advance the
 actors.
 
-Resource use needs to be remeasured after adding coordinates and the correction
-stream. The current 128-bit depth-one queues are still implemented in registers,
-so queue representation remains an obvious target before scaling the witness.
+The lane arrays still use 128-bit depth-one queues implemented in registers.
+The repository's topology codegen scripts disable XLS's implicit consumer
+input flops while retaining its producer output flops as timing boundaries;
+each retained output stage is also one entry of physical buffering. The lane
+queues themselves are intentional cyclic-network buffers; changing their
+representation is a separate physical-backend choice.
 
 This single-family witness still does not model the syndrome/data-cell geometry
 or a production-throughput external merge.
@@ -188,6 +212,26 @@ compact route representation itself has no such bound. Per-instance phi seeds,
 an explicit PL/host correction adapter, applying decisions to a data-qubit
 correction history, and a physically calibrated noise model remain later
 decoder work.
+
+### Distance-two synthesis A/B
+
+The full six-family graph is small enough at distance two for repeatable
+out-of-context XC7 mapping:
+
+| ingress | consumer input flops | estimated logic cells | flip-flops | LUT1–LUT6 | `DSP48E1` |
+| --- | --- | ---: | ---: | ---: | ---: |
+| buffered mux trees | enabled | 84,465 | 105,324 | 93,517 | 32 |
+| integrated credit-aware | enabled | 71,258 | 79,212 | 79,409 | 32 |
+| integrated credit-aware | disabled | 69,723 | 65,756 | 77,984 | 32 |
+
+With the codegen flops held constant, integrated ingress removes 15.6% of the
+estimated logic cells, 24.8% of the flip-flops, and 15.1% of the LUTs. Removing
+the redundant consumer input flops then saves a further 2.2%, 17.0%, and 1.8%
+respectively. All three variants use the same topology, actor artifacts, and
+openXC7 Yosys command. Distance two aliases north with south and east with
+west, so this comparison controls the before/after change but is not a scaling
+estimate for the nondegenerate distance-three geometry. It also establishes no
+part fit, placement, routing, or timing result.
 
 ### Distance-three RTL simulation
 
