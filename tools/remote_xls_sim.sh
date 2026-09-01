@@ -110,9 +110,9 @@ done
 "$xls_root/opt_main" \
     phi_phenom_topology.ir > phi_phenom_topology.opt.ir
 
-# All generated topology codegen below follows this policy. Links already have
-# their declared bounded FIFOs. Retain producer output flops as timing
-# boundaries without adding an implicit queue at every consumer input.
+# All generated topology codegen below follows this policy. Compact family
+# lanes require producer output flops as their bounded holding slots; other
+# topologies retain explicit link FIFOs. Avoid duplicate consumer input queues.
 "$xls_root/codegen_main" \
     --pipeline_stages=1 \
     --delay_model=unit \

@@ -3,6 +3,7 @@
 // Manual changes will be overwritten.
 //
 // One reusable node and nested unroll_for! spawns retain regular source structure.
+// Direct lanes carry depth-zero metadata and require registered router output slots.
 // Scalar external streams use fair polling over statically indexed family lanes.
 
 import axis;
@@ -180,15 +181,15 @@ proc FamilyTorus<TORUS_WIDTH: u32, TORUS_HEIGHT: u32> {
     syndrome_requests_out: chan<axis::Frame> out
   ) {
     let (lane_0_p, lane_0_c) =
-      chan<axis::Frame, CHANNEL_DEPTH>[TORUS_HEIGHT][TORUS_WIDTH]("lane_0");
+      chan<axis::Frame, u32:0>[TORUS_HEIGHT][TORUS_WIDTH]("lane_0");
     let (lane_1_p, lane_1_c) =
-      chan<axis::Frame, CHANNEL_DEPTH>[TORUS_HEIGHT][TORUS_WIDTH]("lane_1");
+      chan<axis::Frame, u32:0>[TORUS_HEIGHT][TORUS_WIDTH]("lane_1");
     let (lane_2_p, lane_2_c) =
-      chan<axis::Frame, CHANNEL_DEPTH>[TORUS_HEIGHT][TORUS_WIDTH]("lane_2");
+      chan<axis::Frame, u32:0>[TORUS_HEIGHT][TORUS_WIDTH]("lane_2");
     let (lane_3_p, lane_3_c) =
-      chan<axis::Frame, CHANNEL_DEPTH>[TORUS_HEIGHT][TORUS_WIDTH]("lane_3");
+      chan<axis::Frame, u32:0>[TORUS_HEIGHT][TORUS_WIDTH]("lane_3");
     let (lane_4_p, lane_4_c) =
-      chan<axis::Frame, CHANNEL_DEPTH>[TORUS_HEIGHT][TORUS_WIDTH]("lane_4");
+      chan<axis::Frame, u32:0>[TORUS_HEIGHT][TORUS_WIDTH]("lane_4");
     unroll_for! (x, _): (u32, ()) in u32:0..TORUS_WIDTH {
       unroll_for! (y, _): (u32, ()) in u32:0..TORUS_HEIGHT {
         spawn FamilyNode(

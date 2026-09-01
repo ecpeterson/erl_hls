@@ -84,7 +84,7 @@ flowchart LR
 
     subgraph FamilyTorus
         Spawn["nested unroll_for!&lt;x,y&gt;"] --> Node["FamilyNode × W·H"]
-        Arrays["bounded lane channel arrays"]
+        Arrays["depth-zero lane arrays / router-output slots"]
         ExternalLanes["syndrome and correction lane arrays"] --> GridMux["FrameGridMux × 2"]
         GridMux --> Outputs["syndrome_requests_out / corrections_out"]
     end
@@ -114,8 +114,9 @@ transfers one complete frame and consumes the credit. For configured families,
 the same ingress sends the coordinate startup frame under the first credit
 before polling routed traffic. This replaces the earlier buffered `FrameMux2`
 tree, `StartupPrefix`, and separate `ReservedFrame` process without changing
-the lane arrays or actor mailbox boundary. `FrameGridMux` appears only at the
-two scalar observation boundaries; it is not on the cardinal mesh paths.
+the actor mailbox boundary or adding another input queue. `FrameGridMux`
+appears only at the scalar observation boundaries; it is not on the cardinal
+mesh paths.
 
 The topology normalizer validates every family output and route interface once
 per rule. `hls_topology:routes_for_instance/3` resolves selected coordinates for
@@ -137,12 +138,16 @@ requests, stable backpressure, and no duplication. Its correction stream stays
 idle because this structural witness has no syndrome source to advance the
 actors.
 
-The lane arrays still use 128-bit depth-one queues implemented in registers.
-The repository's topology codegen scripts disable XLS's implicit consumer
-input flops while retaining its producer output flops as timing boundaries;
-each retained output stage is also one entry of physical buffering. The lane
-queues themselves are intentional cyclic-network buffers; changing their
-representation is a separate physical-backend choice.
+The lane arrays explicitly declare depth zero. This supplies the pinned block
+stitcher's per-channel FIFO metadata without installing a global default which
+could mask another unannotated channel. The adapter is zero-capacity and
+bypassing; synthesis removes its 128-bit storage and most of its controller
+state. Codegen disables implicit consumer input flops and retains one registered
+producer output for every router lane. That output stage is the lane's one
+bounded holding slot and timing boundary. Placing the pinned materialized
+depth-one FIFO used here after it would double-buffer the route and allocate two
+additional 128-bit storage words. Actor request, admission, egress, and
+external-merge queues remain explicit.
 
 This single-family witness still does not model the syndrome/data-cell geometry
 or a production-throughput external merge.
@@ -213,25 +218,29 @@ an explicit PL/host correction adapter, applying decisions to a data-qubit
 correction history, and a physically calibrated noise model remain later
 decoder work.
 
-### Distance-two synthesis A/B
+### Distance-three synthesis progression
 
-The full six-family graph is small enough at distance two for repeatable
-out-of-context XC7 mapping:
+Out-of-context XC7 mapping of the full nondegenerate graph gives:
 
-| ingress | consumer input flops | estimated logic cells | flip-flops | LUT1–LUT6 | `DSP48E1` |
-| --- | --- | ---: | ---: | ---: | ---: |
-| buffered mux trees | enabled | 84,465 | 105,324 | 93,517 | 32 |
-| integrated credit-aware | enabled | 71,258 | 79,212 | 79,409 | 32 |
-| integrated credit-aware | disabled | 69,723 | 65,756 | 77,984 | 32 |
+| ingress | lane holding storage | consumer input flops | estimated logic cells | flip-flops | LUT1–LUT6 | `DSP48E1` |
+| --- | --- | --- | ---: | ---: | ---: | ---: |
+| buffered mux trees | router output + depth-one FIFO | enabled | 193,795 | 264,146 | 214,606 | 72 |
+| integrated credit-aware | router output + depth-one FIFO | disabled | 153,843 | 156,920 | 173,480 | 72 |
+| integrated credit-aware | router output | disabled | 135,199 | 111,416 | 153,265 | 72 |
 
-With the codegen flops held constant, integrated ingress removes 15.6% of the
-estimated logic cells, 24.8% of the flip-flops, and 15.1% of the LUTs. Removing
-the redundant consumer input flops then saves a further 2.2%, 17.0%, and 1.8%
-respectively. All three variants use the same topology, actor artifacts, and
-openXC7 Yosys command. Distance two aliases north with south and east with
-west, so this comparison controls the before/after change but is not a scaling
-estimate for the nondegenerate distance-three geometry. It also establishes no
-part fit, placement, routing, or timing result.
+Using the already-registered router output as the lane's only holding slot
+removes 12.1% of the remaining estimated logic cells, 29.0% of the flip-flops,
+and 11.7% of the LUTs. Relative to the original wrapper, the cumulative
+reductions are 30.2%, 57.8%, and 28.6%. The full stalled-output distance-three
+bench passes with the reduced lane capacity. The global producer-output-flop
+policy cannot also be disabled: XLS detects the resulting combinational
+request/admission cycle.
+
+All rows use the same logical routing graph and actor artifacts; their physical
+lane and ingress configurations differ as shown. These are area-only synthesis
+results; they establish no part fit, placement, routing, or timing closure. The
+final ABC map has logic depth 32 versus 33 for the preceding row, but that is
+only a coarse technology-mapping metric.
 
 ### Distance-three RTL simulation
 
