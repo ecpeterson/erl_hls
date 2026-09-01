@@ -38,8 +38,8 @@ whether gauge recentering is preferable.
 -define(S32_SIGN, (1 bsl (?S32_BITS - 1))).
 -define(S32_MIN, (-?S32_SIGN)).
 -define(S32_MAX, (?S32_SIGN - 1)).
--define(MIN_INTEGER, (-(1 bsl 15))).
--define(MAX_INTEGER, ((1 bsl 15) - 1)).
+-define(MIN_REPRESENTABLE_INTEGER, (-(1 bsl 15))).
+-define(MAX_REPRESENTABLE_INTEGER, ((1 bsl 15) - 1)).
 
 -type field() :: hls_nums:s32().
 -type accumulator() :: hls_nums:s64().
@@ -51,7 +51,9 @@ field() ->
 
 -doc "Encodes an exactly representable integer as Q15.16.".
 -spec from_integer(integer()) -> field().
-from_integer(Value) when Value >= ?MIN_INTEGER, Value =< ?MAX_INTEGER ->
+from_integer(Value)
+        when Value >= ?MIN_REPRESENTABLE_INTEGER,
+             Value =< ?MAX_REPRESENTABLE_INTEGER ->
     Value bsl ?FRACTION_BITS;
 from_integer(_Value) ->
     error(badarg).
