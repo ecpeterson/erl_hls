@@ -3,6 +3,8 @@
 -include_lib("eunit/include/eunit.hrl").
 
 unsigned_literal_uses_canonical_dslx_type_test() ->
+    ?assertEqual("u3", lists:flatten(xls_nums:unsigned_type(3))),
+    ?assertEqual("uN[96]", lists:flatten(xls_nums:unsigned_type(96))),
     ?assertEqual(
         "u32:0x0000002A",
         lists:flatten(xls_nums:unsigned_literal(42, 32))

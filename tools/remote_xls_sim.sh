@@ -110,9 +110,14 @@ done
 "$xls_root/opt_main" \
     phi_phenom_topology.ir > phi_phenom_topology.opt.ir
 
+# All generated topology codegen below follows this policy. Links already have
+# their declared bounded FIFOs. Retain producer output flops as timing
+# boundaries without adding an implicit queue at every consumer input.
 "$xls_root/codegen_main" \
     --pipeline_stages=1 \
     --delay_model=unit \
+    --flop_inputs=false \
+    --flop_outputs=true \
     --use_system_verilog=false \
     --reset=reset \
     --fifo_module= \
@@ -134,6 +139,8 @@ done
 "$xls_root/codegen_main" \
     --pipeline_stages=1 \
     --delay_model=unit \
+    --flop_inputs=false \
+    --flop_outputs=true \
     --use_system_verilog=false \
     --reset=reset \
     --fifo_module= \
@@ -174,6 +181,8 @@ vvp phi_torus_topology.vvp
 "$xls_root/codegen_main" \
     --pipeline_stages=1 \
     --delay_model=unit \
+    --flop_inputs=false \
+    --flop_outputs=true \
     --use_system_verilog=false \
     --reset=reset \
     --fifo_module= \
@@ -221,6 +230,8 @@ vvp phi_phenom_topology.vvp
 "$xls_root/codegen_main" \
     --pipeline_stages=1 \
     --delay_model=unit \
+    --flop_inputs=false \
+    --flop_outputs=true \
     --use_system_verilog=false \
     --reset=reset \
     --fifo_module= \

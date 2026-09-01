@@ -10,6 +10,10 @@ generated_family_topology_is_compact_test() ->
         <<"chan<axis::Frame, CHANNEL_DEPTH>[TORUS_HEIGHT][TORUS_WIDTH]">>
     )),
     ?assertEqual(4, count(Generated, <<"unroll_for! (">>)),
+    ?assertEqual(1, count(Generated, <<"proc FamilyIngress {">>)),
+    ?assertEqual(1, count(Generated, <<"spawn FamilyIngress(">>)),
+    ?assertEqual(0, count(Generated, <<"spawn axis::FrameMux2(">>)),
+    ?assertEqual(0, count(Generated, <<"spawn axis::ReservedFrame(">>)),
     ?assertEqual(nomatch, binary:match(Generated, <<"actor_0">>)),
     ?assertEqual(nomatch, binary:match(Generated, <<"{phi,0,0}">>)).
 
@@ -94,14 +98,22 @@ generated_family_topology_matches_checked_in_artifact_test() ->
 generated_multi_family_topology_retains_compact_structure_test() ->
     Generated = iolist_to_binary(phi_noise_topology_dslx:to_dslx()),
     ?assertEqual(6, count(Generated, <<"proc FamilyRouter">>)),
+    ?assertEqual(6, count(Generated, <<"proc FamilyIngress">>)),
     ?assertEqual(6, count(Generated, <<"proc FamilyNode">>)),
+    ?assertEqual(6, count(Generated, <<"spawn FamilyIngress">>)),
     ?assertEqual(6, count(Generated, <<"spawn FamilyNode">>)),
     ?assertEqual(32, count(Generated, <<
         "chan<axis::Frame, CHANNEL_DEPTH>[TORUS_HEIGHT][TORUS_WIDTH]"
     >>)),
+    %% 32 lane arrays, six actor request queues, and the reusable external
+    %% grid-column declaration; ingress itself adds no Frame queue.
+    ?assertEqual(39, count(Generated, <<
+        "chan<axis::Frame, CHANNEL_DEPTH>"
+    >>)),
     ?assertEqual(4, count(Generated, <<"fn family_">>)),
-    ?assertEqual(4, count(Generated, <<"proc StartupPrefix">>)),
-    ?assertEqual(4, count(Generated, <<"spawn StartupPrefix">>)),
+    ?assertEqual(0, count(Generated, <<"StartupPrefix">>)),
+    ?assertEqual(0, count(Generated, <<"spawn axis::FrameMux2(">>)),
+    ?assertEqual(0, count(Generated, <<"spawn axis::ReservedFrame(">>)),
     ?assertEqual(2, count(Generated, <<
         "let branch_0_tok = send(tok"
     >>)),
@@ -117,13 +129,19 @@ generated_family_startup_precedes_routed_input_test() ->
     ?assertEqual(36, count(Generated, <<") => axis::pack(u8:6,">>)),
     ?assertNotEqual(nomatch, binary:match(Generated, <<"uN[96]:0x">>)),
     ?assertNotEqual(nomatch, binary:match(Generated, <<
-        "let (tok, routed_frame) = recv_if(\n"
-        "      join(), routed_in, started, zero!<axis::Frame>());\n"
-        "    let startup_frame = family_0_startup(X, Y);\n"
-        "    let frame = if started { routed_frame } else { startup_frame };"
+        "if !state.1 {\n"
+        "      let (_tok, _credit) = recv(join(), admission_in);\n"
+        "      (state.0, u1:1, state.2)\n"
+        "    } else if !state.2 {\n"
+        "      let _tok = send(\n"
+        "        join(), frame_out, family_0_startup(X, Y));\n"
+        "      (state.0, u1:0, u1:1)"
     >>)),
     ?assertNotEqual(nomatch, binary:match(Generated, <<
-        "spawn StartupPrefix0<X, Y>("
+        "spawn FamilyIngress0<X, Y>("
+    >>)),
+    ?assertNotEqual(nomatch, binary:match(Generated, <<
+        "let _done = send_if(tok_"
     >>)),
     ?assertNotEqual(nomatch, binary:match(Generated, <<
         "spawn FamilyNode0<x, y>("

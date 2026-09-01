@@ -102,6 +102,50 @@ proc FrameGridMux<GRID_WIDTH: u32, GRID_HEIGHT: u32> {
   init { () }
   next(state: ()) { state }
 }
+// Retains one mailbox credit while polling one input per activation.
+proc FamilyIngress {
+  incoming_0: chan<axis::Frame> in;
+  incoming_1: chan<axis::Frame> in;
+  incoming_2: chan<axis::Frame> in;
+  frame_out: chan<axis::Frame> out;
+  admission_in: chan<u1> in;
+
+  config(
+    incoming_0: chan<axis::Frame> in,
+    incoming_1: chan<axis::Frame> in,
+    incoming_2: chan<axis::Frame> in,
+    frame_out: chan<axis::Frame> out,
+    admission_in: chan<u1> in
+  ) {
+    (incoming_0, incoming_1, incoming_2, frame_out, admission_in)
+  }
+
+  init { (u2:0, u1:0) }
+
+  next(state: (u2, u1)) {
+    if !state.1 {
+      let (_tok, _credit) = recv(join(), admission_in);
+      (state.0, u1:1)
+    } else {
+      let (tok_0, frame_0, valid_0) = recv_if_non_blocking(
+        join(), incoming_0, state.0 == u2:0, zero!<axis::Frame>());
+      let (tok_1, frame_1, valid_1) = recv_if_non_blocking(
+        tok_0, incoming_1, state.0 == u2:1, zero!<axis::Frame>());
+      let (tok_2, frame_2, valid_2) = recv_if_non_blocking(
+        tok_1, incoming_2, state.0 == u2:2, zero!<axis::Frame>());
+      let received = valid_0 || valid_1 || valid_2;
+      let frame = if valid_0 { frame_0 } else { if valid_1 { frame_1 } else { frame_2 } };
+      let _done = send_if(tok_2, frame_out, received, frame);
+      let next_cursor = if state.0 == u2:2 {
+        u2:0
+      } else {
+        state.0 + u2:1
+      };
+      (next_cursor, !received)
+    }
+  }
+}
+
 proc FamilyNode {
   config(
     incoming_0: chan<axis::Frame> in,
@@ -122,13 +166,7 @@ proc FamilyNode {
     spawn phi_halo_cell::Service(
       actor_req_c, actor_egress_p, actor_admit_p);
     spawn FamilyRouter(actor_egress_c, lane_0_out, lane_1_out, lane_2_out, lane_3_out, lane_4_out);
-    let (ingress_mux_0_0_p, ingress_mux_0_0_c) =
-      chan<axis::Frame, CHANNEL_DEPTH>("ingress_mux_0_0");
-    spawn axis::FrameMux2(incoming_0, incoming_1, ingress_mux_0_0_p);
-    let (ingress_mux_1_0_p, ingress_mux_1_0_c) =
-      chan<axis::Frame, CHANNEL_DEPTH>("ingress_mux_1_0");
-    spawn axis::FrameMux2(ingress_mux_0_0_c, incoming_2, ingress_mux_1_0_p);
-    spawn axis::ReservedFrame(ingress_mux_1_0_c, actor_req_p, actor_admit_c);
+    spawn FamilyIngress(incoming_0, incoming_1, incoming_2, actor_req_p, actor_admit_c);
     ()
   }
 

@@ -4,7 +4,18 @@
 
 -module(xls_nums).
 
--export([packed_unsigned_literal/1, unsigned_literal/2]).
+-export([packed_unsigned_literal/1, unsigned_literal/2, unsigned_type/1]).
+
+-doc "Prints the DSLX type for an unsigned value of the given width.".
+-spec unsigned_type(pos_integer()) -> iolist().
+unsigned_type(Width) when Width > 0, Width < 8 ->
+    ["u", integer_to_list(Width)];
+unsigned_type(8) -> "u8";
+unsigned_type(16) -> "u16";
+unsigned_type(32) -> "u32";
+unsigned_type(64) -> "u64";
+unsigned_type(Width) when Width > 0 ->
+    ["uN[", integer_to_list(Width), "]"].
 
 -doc "Prints a byte-aligned unsigned value as a DSLX literal.".
 -spec unsigned_literal(non_neg_integer(), pos_integer()) -> iolist().
@@ -24,9 +35,3 @@ packed_unsigned_literal(Packed) when is_binary(Packed) ->
         binary:decode_unsigned(Packed, little),
         bit_size(Packed)
     ).
-
-unsigned_type(8) -> "u8";
-unsigned_type(16) -> "u16";
-unsigned_type(32) -> "u32";
-unsigned_type(64) -> "u64";
-unsigned_type(Width) -> hls_type:print_type(hls_nums:uN(Width)).

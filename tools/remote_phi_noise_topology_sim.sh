@@ -73,12 +73,16 @@ timed_output \
     "$xls_root/opt_main" \
     phi_noise_topology.ir
 
+# Topology links already have explicit bounded FIFOs. Retain producer output
+# flops as timing boundaries without adding consumer input queues.
 timed_output \
     phi_noise_topology-codegen \
     phi_noise_topology.v \
     "$xls_root/codegen_main" \
     --pipeline_stages=1 \
     --delay_model=unit \
+    --flop_inputs=false \
+    --flop_outputs=true \
     --use_system_verilog=false \
     --reset=reset \
     --fifo_module= \

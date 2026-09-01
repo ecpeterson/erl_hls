@@ -16,8 +16,10 @@ route forms remain outside this backend.
 The generated source contains one reusable node proc per family and nested
 `unroll_for!` spawns over channel arrays. Its routing structure therefore
 follows the number of family rules rather than the number of family members.
-Explicit startup values still produce one match arm per configured member, and
-XLS elaborates one actor and the required bounded queues per coordinate.
+Each node has one credit-aware ingress which polls its incoming lanes directly,
+without a tree of buffered two-way muxes. Explicit startup values still
+produce one match arm per configured member, and XLS elaborates one actor and
+the required bounded lane and mailbox queues per coordinate.
 
 Each compact lane relation becomes one channel array. When two ports alias one
 destination, both router arms use the same array element, preserving the
@@ -29,8 +31,8 @@ build.
 
 Family-member startup remains explicit normalized data. A family which has
 startup data must provide exactly one frame for every member. The generated
-node inserts that frame ahead of its first routed receive, while the actor
-graph and routing stay compact.
+ingress sends that frame under the actor's first admission credit, ahead of its
+first routed receive, while the actor graph and routing stay compact.
 """.
 
 -export([emit/2]).
@@ -525,6 +527,7 @@ render(Spec) ->
         startup_support(maps:get(families, Spec)),
         family_routers(Spec),
         frame_grid_mux(maps:get(externals, Spec)),
+        family_ingresses(Spec),
         family_nodes(Spec),
         family_grid(Spec),
         top_proc(Spec)
@@ -562,8 +565,7 @@ preamble_node_comment([_, _ | _]) ->
     "source structure.\n".
 
 startup_support(Families) ->
-    [[startup_function(Family), startup_prefix(Family)]
-        || Family <- Families].
+    [startup_function(Family) || Family <- Families].
 
 startup_function(#{startup := none}) -> [];
 startup_function(Family = #{startup := #{items := Items}}) ->
@@ -574,30 +576,6 @@ startup_function(Family = #{startup := #{items := Items}}) ->
         [startup_arm(Item) || Item <- Items],
         "    _ => zero!<axis::Frame>(),\n",
         "  }\n}\n\n"
-    ].
-
-startup_prefix(#{startup := none}) -> [];
-startup_prefix(Family = #{startup := #{}}) ->
-    [
-        "proc ", startup_prefix_name(Family), "<X: u32, Y: u32> {\n",
-        "  routed_in: chan<axis::Frame> in;\n",
-        "  frame_out: chan<axis::Frame> out;\n\n",
-        config_signature([
-            "routed_in: chan<axis::Frame> in",
-            "frame_out: chan<axis::Frame> out"
-        ], 2),
-        "    (routed_in, frame_out)\n  }\n\n",
-        "  init { u1:0 }\n\n",
-        "  next(started: u1) {\n",
-        "    let (tok, routed_frame) = recv_if(\n",
-        "      join(), routed_in, started, zero!<axis::Frame>());\n",
-        "    let startup_frame = ", startup_function_name(Family),
-        "(X, Y);\n",
-        "    let frame = if started { routed_frame } else { startup_frame };\n",
-        "    send(tok, frame_out, frame);\n",
-        "    u1:1\n",
-        "  }\n",
-        "}\n\n"
     ].
 
 startup_arm(#{coordinates := [X, Y], tag := Tag, payload := Payload}) ->
@@ -720,6 +698,129 @@ frame_grid_mux(_Externals) ->
 
     """.
 
+family_ingresses(Spec) ->
+    [family_ingress(Spec, Family) || Family <- maps:get(families, Spec)].
+
+family_ingress(_Spec, #{inbound_lanes := []}) ->
+    error(no_inbound_lanes);
+family_ingress(Spec, Family = #{inbound_lanes := InboundLanes}) ->
+    InputCount = length(InboundLanes),
+    InputNames = [incoming_name(Index)
+        || Index <- lists:seq(0, InputCount - 1)],
+    CursorType = xls_nums:unsigned_type(cursor_width(InputCount)),
+    InputMembers = [
+        [Name, ": chan<axis::Frame> in"] || Name <- InputNames
+    ],
+    Members = InputMembers ++ [
+        "frame_out: chan<axis::Frame> out",
+        "admission_in: chan<u1> in"
+    ],
+    MemberNames = InputNames ++ ["frame_out", "admission_in"],
+    [
+        "// Retains one mailbox credit while polling one input per ",
+        "activation.\n",
+        "proc ", ingress_name(Spec, Family), node_parametrics(Family), " {\n",
+        [["  ", Member, ";\n"] || Member <- Members],
+        "\n",
+        config_signature(Members, 2),
+        "    (", join_with(", ", MemberNames), ")\n  }\n\n",
+        ingress_init(Family, CursorType),
+        ingress_next(Family, CursorType, InputCount),
+        "}\n\n"
+    ].
+
+ingress_init(#{startup := none}, CursorType) ->
+    ["  init { (", cursor_literal(CursorType, 0), ", u1:0) }\n\n"];
+ingress_init(#{startup := #{}}, CursorType) ->
+    ["  init { (", cursor_literal(CursorType, 0),
+        ", u1:0, u1:0) }\n\n"].
+
+ingress_next(#{startup := none}, CursorType, InputCount) ->
+    [
+        "  next(state: (", CursorType, ", u1)) {\n",
+        "    if !state.1 {\n",
+        ingress_credit_state(false),
+        "    } else {\n",
+        ingress_poll(CursorType, InputCount, false),
+        "    }\n",
+        "  }\n"
+    ];
+ingress_next(Family = #{startup := #{}}, CursorType, InputCount) ->
+    [
+        "  next(state: (", CursorType, ", u1, u1)) {\n",
+        "    if !state.1 {\n",
+        ingress_credit_state(true),
+        "    } else if !state.2 {\n",
+        "      let _tok = send(\n",
+        "        join(), frame_out, ", startup_function_name(Family),
+        "(X, Y));\n",
+        "      (state.0, u1:0, u1:1)\n",
+        "    } else {\n",
+        ingress_poll(CursorType, InputCount, true),
+        "    }\n",
+        "  }\n"
+    ].
+
+ingress_credit_state(HasStartup) ->
+    [
+        "      let (_tok, _credit) = recv(join(), admission_in);\n",
+        "      (state.0, u1:1", ingress_started_state(HasStartup), ")\n"
+    ].
+
+ingress_started_state(false) -> [];
+ingress_started_state(true) -> ", state.2".
+
+ingress_poll(CursorType, InputCount, HasStartup) ->
+    Indexes = lists:seq(0, InputCount - 1),
+    [
+        [ingress_receive(Index, CursorType) || Index <- Indexes],
+        "      let received = ",
+        join_with(" || ", [valid_name(Index) || Index <- Indexes]), ";\n",
+        "      let frame = ", select_received_frame(Indexes), ";\n",
+        "      let _done = send_if(", token_name(InputCount - 1),
+        ", frame_out, received, frame);\n",
+        "      let next_cursor = if state.0 == ",
+        cursor_literal(CursorType, InputCount - 1), " {\n",
+        "        ", cursor_literal(CursorType, 0), "\n",
+        "      } else {\n",
+        "        state.0 + ", cursor_literal(CursorType, 1), "\n",
+        "      };\n",
+        "      (next_cursor, !received", ingress_started_state(HasStartup),
+        ")\n"
+    ].
+
+ingress_receive(Index, CursorType) ->
+    PreviousToken = case Index of
+        0 -> "join()";
+        _ -> token_name(Index - 1)
+    end,
+    [
+        "      let (", token_name(Index), ", ", frame_name(Index), ", ",
+        valid_name(Index), ") = recv_if_non_blocking(\n",
+        "        ", PreviousToken, ", ", incoming_name(Index),
+        ", state.0 == ", cursor_literal(CursorType, Index),
+        ", zero!<axis::Frame>());\n"
+    ].
+
+select_received_frame([Index]) -> frame_name(Index);
+select_received_frame([Index | Rest]) ->
+    ["if ", valid_name(Index), " { ", frame_name(Index),
+        " } else { ", select_received_frame(Rest), " }"].
+
+cursor_width(InputCount) ->
+    cursor_width(InputCount - 1, 0).
+
+cursor_width(0, 0) -> 1;
+cursor_width(0, Width) -> Width;
+cursor_width(Value, Width) -> cursor_width(Value bsr 1, Width + 1).
+
+cursor_literal(CursorType, Value) ->
+    [CursorType, ":", integer_to_list(Value)].
+
+token_name(Index) -> ["tok_", integer_to_list(Index)].
+frame_name(Index) -> ["frame_", integer_to_list(Index)].
+valid_name(Index) -> ["valid_", integer_to_list(Index)].
+
 family_nodes(Spec) ->
     [family_node(Spec, Family) || Family <- maps:get(families, Spec)].
 
@@ -731,8 +832,6 @@ family_node(Spec, Family) ->
         || {Index, _Lane} <- lists:enumerate(0, InboundLanes)],
     Outputs = [[lane_output(Lane), ": chan<axis::Frame> out"]
         || Lane <- OutboundLanes],
-    {IngressRoot, MuxCode} = node_mux_tree(length(InboundLanes)),
-    {AdmissionRoot, PrefixCode} = node_startup(Family, IngressRoot),
     [
         "proc ", node_name(Spec, Family), node_parametrics(Family), " {\n",
         config_signature(Inputs ++ Outputs, 2),
@@ -749,50 +848,18 @@ family_node(Spec, Family) ->
         "    spawn ", router_name(Spec, Family), "(actor_egress_c",
         [[", ", lane_output(Lane)] || Lane <- OutboundLanes],
         ");\n",
-        MuxCode,
-        PrefixCode,
-        "    spawn axis::ReservedFrame(", AdmissionRoot,
-        ", actor_req_p, actor_admit_c);\n",
+        "    spawn ", ingress_name(Spec, Family),
+        ingress_specialization(Family), "(",
+        join_with(", ", [
+            incoming_name(Index)
+            || {Index, _Lane} <- lists:enumerate(0, InboundLanes)
+        ] ++ ["actor_req_p", "actor_admit_c"]),
+        ");\n",
         "    ()\n  }\n\n",
         "  init { () }\n",
         "  next(state: ()) { state }\n",
         "}\n\n"
     ].
-
-node_startup(#{startup := none}, IngressRoot) -> {IngressRoot, []};
-node_startup(Family = #{startup := #{}}, IngressRoot) ->
-    {"startup_c", [
-        "    let (startup_p, startup_c) =\n",
-        "      chan<axis::Frame, CHANNEL_DEPTH>(\"startup\");\n",
-        "    spawn ", startup_prefix_name(Family), "<X, Y>(",
-        IngressRoot, ", startup_p);\n"
-    ]}.
-
-node_mux_tree(0) ->
-    error(unsupported_dslx_family_without_inbound_lanes);
-node_mux_tree(Count) ->
-    Inputs = [incoming_name(Index) || Index <- lists:seq(0, Count - 1)],
-    mux_tree(Inputs, 0, []).
-
-mux_tree([Root], _Level, Code) -> {Root, Code};
-mux_tree(Inputs, Level, Code0) ->
-    {Next, Code} = mux_round(Inputs, Level, 0, [], []),
-    mux_tree(Next, Level + 1, Code0 ++ Code).
-
-mux_round([], _Level, _Pair, Next, Code) ->
-    {lists:reverse(Next), Code};
-mux_round([Last], _Level, _Pair, Next, Code) ->
-    {lists:reverse([Last | Next]), Code};
-mux_round([Left, Right | Rest], Level, Pair, Next, Code0) ->
-    Stem = ["ingress_mux_", integer_to_list(Level), "_",
-        integer_to_list(Pair)],
-    Code = Code0 ++ [
-        "    let (", Stem, "_p, ", Stem, "_c) =\n",
-        "      chan<axis::Frame, CHANNEL_DEPTH>(\"", Stem, "\");\n",
-        "    spawn axis::FrameMux2(", Left, ", ", Right, ", ", Stem,
-        "_p);\n"
-    ],
-    mux_round(Rest, Level, Pair + 1, [Stem ++ "_c" | Next], Code).
 
 family_grid(Spec) ->
     Lanes = maps:get(lanes, Spec),
@@ -919,17 +986,20 @@ router_name(Spec, Family) ->
 node_name(Spec, Family) ->
     ["FamilyNode", family_suffix(Spec, Family)].
 
+ingress_name(Spec, Family) ->
+    ["FamilyIngress", family_suffix(Spec, Family)].
+
 startup_function_name(Family) ->
     ["family_", integer_to_list(maps:get(index, Family)), "_startup"].
-
-startup_prefix_name(Family) ->
-    ["StartupPrefix", integer_to_list(maps:get(index, Family))].
 
 node_parametrics(#{startup := none}) -> [];
 node_parametrics(#{startup := #{}}) -> "<X: u32, Y: u32>".
 
 node_specialization(#{startup := none}) -> [];
 node_specialization(#{startup := #{}}) -> "<x, y>".
+
+ingress_specialization(#{startup := none}) -> [];
+ingress_specialization(#{startup := #{}}) -> "<X, Y>".
 
 family_suffix(#{families := [_]}, _Family) -> [];
 family_suffix(#{families := [_, _ | _]}, #{index := Index}) ->
