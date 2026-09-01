@@ -23,6 +23,7 @@ adapter which has not been built for the phi example.
 
 -define(DATA_PRNG_SEED, 16#9e3779b9).
 -define(SYNDROME_PRNG_SEED, 16#85ebca6b).
+-define(PHI_PRNG_SEED, 16#6d2b79f5).
 -define(HALF_THRESHOLD, 16#80000000).
 
 -doc "Returns the semantic topology for the three-actor fixture.".
@@ -66,7 +67,8 @@ topology() ->
                 threshold = ?HALF_THRESHOLD,
                 x = 0,
                 y = 0
-            }]}
+            }]},
+            {phi, [#phi_config{seed = ?PHI_PRNG_SEED}]}
         ]
     }.
 

@@ -1,13 +1,25 @@
 -module(hls_parametric_topology_tests).
 
 -include_lib("eunit/include/eunit.hrl").
+-include("phi_protocol.hrl").
 
-phi_torus_normalizes_without_instances_test() ->
+phi_torus_normalizes_without_expanded_actor_instances_test() ->
     Plan = hls_topology:from_module(phi_torus_topology),
     ?assertEqual(1, maps:get(version, Plan)),
     ?assertEqual([], maps:get(actors, Plan)),
     ?assertEqual([], maps:get(routes, Plan)),
-    ?assertEqual([], maps:get(startup, Plan)),
+    Startup = maps:get(startup, Plan),
+    ?assertEqual(6, length(Startup)),
+    ?assertEqual(
+        [{phi, X, Y} || X <- lists:seq(0, 1), Y <- lists:seq(0, 2)],
+        [maps:get(target, Item) || Item <- Startup]
+    ),
+    Seeds = [
+        Config#phi_config.seed
+        || #{messages := [Config = #phi_config{}]} <- Startup
+    ],
+    ?assertEqual(6, length(lists:usort(Seeds))),
+    ?assert(lists:all(fun(Seed) -> Seed =/= 0 end, Seeds)),
     ?assertEqual(6, length(maps:get(route_relations, Plan))),
     [Family] = maps:get(families, Plan),
     ?assertEqual(phi, maps:get(id, Family)),
@@ -41,7 +53,7 @@ topology_normalizer_rejects_obsolete_version_test() ->
         hls_topology:normalize(Spec#{version := 0})
     ).
 
-family_size_does_not_expand_the_normalized_plan_test() ->
+family_size_does_not_expand_routes_but_does_enumerate_v0_startup_test() ->
     Small = hls_topology:normalize(phi_torus_topology:topology(5, 5)),
     Large = hls_topology:normalize(phi_torus_topology:topology(50, 50)),
     ?assertEqual([], maps:get(actors, Small)),
@@ -61,7 +73,9 @@ family_size_does_not_expand_the_normalized_plan_test() ->
     ?assertEqual(
         maps:get(route_relations, Small),
         maps:get(route_relations, Large)
-    ).
+    ),
+    ?assertEqual(25, length(maps:get(startup, Small))),
+    ?assertEqual(2500, length(maps:get(startup, Large))).
 
 wrapped_routes_resolve_one_boundary_member_test() ->
     Plan = hls_topology:normalize(phi_torus_topology:topology(5, 4)),
@@ -189,11 +203,19 @@ family_outputs_are_total_and_unique_test() ->
     ).
 
 family_shape_and_translation_are_bounded_test() ->
+    Spec0 = phi_torus_topology:topology(),
+    Families0 = maps:get(families, Spec0),
     ?assertError(
         {invalid_family_shape, phi, [0, 2]},
-        hls_topology:normalize(phi_torus_topology:topology(0, 2))
+        hls_topology:normalize(Spec0#{
+            families := Families0#{phi := #{
+                module => phi_halo_cell,
+                shape => [0, 2]
+            }},
+            startup := []
+        })
     ),
-    Spec = phi_torus_topology:topology(),
+    Spec = Spec0,
     Source = {phi, north},
     Invalid = replace_relation(
         Spec,

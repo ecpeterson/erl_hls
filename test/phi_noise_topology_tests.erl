@@ -174,38 +174,30 @@ phi_and_syndrome_pairs_share_coordinates_test() ->
         coordinates(?DISTANCE)
     ).
 
-noise_startup_is_explicit_distinct_and_nonzero_test() ->
+startup_is_explicit_distinct_and_nonzero_test() ->
     Spec = phi_noise_topology:topology(),
     Startup = maps:get(startup, Spec),
-    ?assertEqual(4 * ?DISTANCE * ?DISTANCE, length(Startup)),
+    ?assertEqual(6 * ?DISTANCE * ?DISTANCE, length(Startup)),
     Seeds = [
-        begin
-            ?assert(lists:member(Family, [
-                data_even,
-                data_odd,
-                syndrome_x,
-                syndrome_z
-            ])),
-            ?assert(X >= 0 andalso X < ?DISTANCE),
-            ?assert(Y >= 0 andalso Y < ?DISTANCE),
-            ?assertEqual(?EXERCISE_THRESHOLD, Threshold),
-            ?assertEqual(X, ConfigX),
-            ?assertEqual(Y, ConfigY),
-            ?assert(Seed > 0),
-            Seed
-        end
-        || {{Family, X, Y}, [#phenom_config{
-                seed = Seed,
-                threshold = Threshold,
-                x = ConfigX,
-                y = ConfigY
-            }]} <- Startup
+        startup_seed(Item) || Item <- Startup
     ],
+    ?assertEqual(
+        [data_even, data_odd, phi_x, phi_z, syndrome_x, syndrome_z],
+        lists:usort([Family || {{Family, _, _}, [_]} <- Startup])
+    ),
     ?assertEqual(length(Seeds), length(lists:usort(Seeds))),
-    FirstEvents = [
-        hls_prng:xorshift32(Seed) < ?EXERCISE_THRESHOLD
-        || Seed <- Seeds
+    NoiseSeeds = [
+        Seed
+        || {{Family, _, _}, [#phenom_config{seed = Seed}]} <- Startup,
+           lists:member(Family, [
+               data_even,
+               data_odd,
+               syndrome_x,
+               syndrome_z
+           ])
     ],
+    FirstEvents = [hls_prng:xorshift32(Seed) < ?EXERCISE_THRESHOLD
+        || Seed <- NoiseSeeds],
     ?assert(lists:member(true, FirstEvents)),
     ?assert(lists:member(false, FirstEvents)).
 
@@ -235,11 +227,21 @@ first_step_syndrome_fixture_is_spatially_nonuniform_test() ->
 normalized_startup_retains_family_instance_targets_test() ->
     Plan = hls_topology:from_module(phi_noise_topology),
     Startup = maps:get(startup, Plan),
-    ?assertEqual(36, length(Startup)),
+    ?assertEqual(54, length(Startup)),
     ?assertEqual(32, length(maps:get(lane_relations, Plan))),
     ?assert(lists:all(
         fun(#{source_ports := Ports}) -> length(Ports) =:= 1 end,
         maps:get(lane_relations, Plan)
+    )),
+    ?assert(lists:member(
+        #{
+            target => {phi_z, 2, 2},
+            delivery => cast,
+            messages => [#phi_config{
+                seed = (54 * ?SEED_STRIDE) band ?U32_MASK
+            }]
+        },
+        Startup
     )),
     ?assertEqual(
         #{
@@ -285,8 +287,8 @@ distance_changes_bounds_and_startup_not_route_rules_test() ->
         maps:get(route_relations, Small),
         maps:get(route_relations, Large)
     ),
-    ?assertEqual(36, length(maps:get(startup, Small))),
-    ?assertEqual(100, length(maps:get(startup, Large))),
+    ?assertEqual(54, length(maps:get(startup, Small))),
+    ?assertEqual(150, length(maps:get(startup, Large))),
     maps:foreach(
         fun(_Family, #{shape := Shape}) -> ?assertEqual([5, 5], Shape) end,
         maps:get(families, Large)
@@ -294,7 +296,7 @@ distance_changes_bounds_and_startup_not_route_rules_test() ->
 
 explicit_startup_witness_has_a_practical_bound_test() ->
     ?assertError(badarg, phi_noise_topology:topology(0)),
-    ?assertEqual(10000, length(maps:get(
+    ?assertEqual(15000, length(maps:get(
         startup,
         phi_noise_topology:topology(50)
     ))),
@@ -390,6 +392,34 @@ opposite(south) -> north.
 
 count_value(Value, Values) ->
     length([ok || Candidate <- Values, Candidate =:= Value]).
+
+startup_seed({{Family, X, Y}, [#phenom_config{
+    seed = Seed,
+    threshold = Threshold,
+    x = ConfigX,
+    y = ConfigY
+}]}) ->
+    ?assert(lists:member(Family, [
+        data_even,
+        data_odd,
+        syndrome_x,
+        syndrome_z
+    ])),
+    assert_startup_coordinates(X, Y),
+    ?assertEqual(?EXERCISE_THRESHOLD, Threshold),
+    ?assertEqual(X, ConfigX),
+    ?assertEqual(Y, ConfigY),
+    ?assert(Seed > 0),
+    Seed;
+startup_seed({{Family, X, Y}, [#phi_config{seed = Seed}]}) ->
+    ?assert(lists:member(Family, [phi_x, phi_z])),
+    assert_startup_coordinates(X, Y),
+    ?assert(Seed > 0),
+    Seed.
+
+assert_startup_coordinates(X, Y) ->
+    ?assert(X >= 0 andalso X < ?DISTANCE),
+    ?assert(Y >= 0 andalso Y < ?DISTANCE).
 
 first_event(#phenom_config{seed = Seed, threshold = Threshold}) ->
     case hls_prng:xorshift32(Seed) < Threshold of

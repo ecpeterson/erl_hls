@@ -8,7 +8,9 @@ An autonomous cell for a small phi-decoder protocol experiment.
 
 ## Protocol
 
-The cell has four control phases with direct protocol meanings:
+The cell begins quiescent in `configuring`. A single nonzero seed selects its
+coin stream and advances it to the four control phases with direct protocol
+meanings:
 
   * On entering `measuring`, it asks its paired phenomenological syndrome cell
     for the detection event at the current step. The reply is XORed into the
@@ -50,7 +52,8 @@ edge by syndrome coordinate and direction; it is not a claim that a phi cell
 has only one neighboring data qubit. The CPU scheduler maps output names to the
 PIDs passed to `start_link/1`; no recipient is hidden in the cell. To build a
 cyclic CPU topology, start every cell with `start_link/0` and then call
-`connect/2`; its initial measurement request runs on connection.
+`connect/2`; its initial measurement request runs once both connection and
+configuration are complete.
 
 The diffusion and anyon joins rely on the topology delivering exactly one
 message per incoming edge in each phase. The comparison join is source-aware:
@@ -65,12 +68,11 @@ cell has emitted the message needed to release the first.
 This slice performs two diffusion rounds per anyon step. Two is the smallest
 round count which exercises same-phase re-entry and next-epoch postponement;
 it is a compile-time protocol fixture rather than a convergence policy. The
-coin is the most-significant bit of a deterministic `xorshift32` sequence. Its
-fixed seed makes CPU and RTL runs reproducible, but also correlates the coins
-of cells which begin together. A mesh intended to model independent coins must
-supply distinct nonzero seeds through a future static per-instance
-configuration mechanism. The paired syndrome input supplies nontrivial noise;
-its data and measurement generators are separate actors.
+coin is the most-significant bit of a deterministic `xorshift32` sequence.
+Each cell receives a nonzero seed before it begins, so a topology can give
+statically instantiated cells distinct reproducible streams. The paired
+syndrome input supplies nontrivial noise; its data and measurement generators
+are separate actors.
 
 An outgoing move toggles the local anyon before incoming moves are combined by
 parity. Consequently, simultaneous arrivals and departures produce the same
@@ -80,10 +82,10 @@ this fixture emits a correction only when a move occurs. Its statically placed
 unused effect, so correction traffic scales with applied moves rather than
 physical qubits and steps.
 
-A fuller decoder needs a configurable diffusion stopping rule, independent
-per-cell coin streams, and richer noise/measurement configuration. Those
-additions should preserve the four genuine barrier phases; a parity-only wakeup
-phase would not have direct protocol meaning.
+A fuller decoder needs a configurable diffusion stopping rule and richer
+noise/measurement configuration. Those additions should preserve the four
+genuine barrier phases; a parity-only wakeup phase would not have direct
+protocol meaning.
 
 ## Field arithmetic
 
@@ -102,6 +104,7 @@ the reference implementation.
 -export([
     start_link/0,
     start_link/1,
+    configure/2,
     connect/2,
     stop/1,
     offer_phi/3,
@@ -117,13 +120,12 @@ the reference implementation.
 -define(MAILBOX_CAPACITY, 5).
 -define(NEIGHBOR_COUNT, 4).
 -define(DIFFUSION_ROUNDS, 2).
--define(PRNG_SEED, 16#6d2b79f5).
 -define(U32_MASK, 16#ffffffff).
 -define(NO_DIRECTION, 0).
 
 -behavior(hls_statem).
 -hls_data(cell).
--hls_phases([measuring, gathering, comparing, flipping]).
+-hls_phases([configuring, measuring, gathering, comparing, flipping]).
 -hls_outputs([north, east, west, south, syndrome, correction]).
 -hls_mailbox_capacity(?MAILBOX_CAPACITY).
 -compile({parse_transform, hls_pack}).
@@ -140,9 +142,6 @@ the reference implementation.
 %% coordinate/direction event in an explicit PL-PS gateway.
 %% TODO: Revisit neighbor configuration so FPGA topology can be fixed at
 %% compile time while CPU models retain ergonomic runtime wiring.
-%% TODO: Give statically instantiated cells distinct nonzero PRNG seeds. The
-%% fixed seed above is a reproducible single-cell fixture, not an independent
-%% random source for every cell in a mesh.
 %% TODO: Separate logical field types from word-aligned wire codecs so
 %% #anyon_move.present can be boolean in lowerable callbacks.
 
@@ -164,7 +163,7 @@ the reference implementation.
     y = hls_type:zero() :: hls_nums:u16()
 }).
 
--type phase() :: measuring | gathering | comparing | flipping.
+-type phase() :: configuring | measuring | gathering | comparing | flipping.
 -type directive() :: consume | postpone | fail.
 -type conclusion() ::
     {phase(), #cell{}, directive()} |
@@ -217,6 +216,13 @@ connect(PID, Neighbors) ->
 -spec stop(pid()) -> ok.
 stop(PID) ->
     hls_statem:stop(PID).
+
+-doc "Configures the cell's nonzero coin-stream seed.".
+-spec configure(pid(), hls_nums:u32()) -> ok.
+configure(PID, Seed) when Seed > 0, Seed =< ?U32_MASK ->
+    hls_statem:cast(PID, #phi_config{seed = Seed});
+configure(_PID, _Seed) ->
+    error(badarg).
 
 -doc "Offers one neighbor phi value for diffusion `Epoch` to a cell.".
 -spec offer_phi(pid(), hls_nums:u32(), [hls_nums:u32()]) -> ok.
@@ -280,10 +286,12 @@ runtime_info(PID) ->
 
 -spec init(any()) -> {ok, phase(), #cell{}}.
 init([]) ->
-    {ok, measuring, #cell{random_state = ?PRNG_SEED}}.
+    {ok, configuring, #cell{}}.
 
 -spec handle_enter(phase(), phase(), #cell{}) ->
     hls_statem:enter_result().
+handle_enter(_OldPhase, configuring, Cell) ->
+    {Cell, []};
 handle_enter(_OldPhase, measuring, Cell) ->
     Request = #phenom_request{step = Cell#cell.step},
     {Cell, [{cast, syndrome, Request}]};
@@ -352,11 +360,33 @@ handle_enter(_OldPhase, flipping, Cell) ->
     ]}.
 
 -spec handle_cast(
-    #phi{} | #phi0{} | #anyon_move{} | #phenom_anyon{},
+    #phi_config{} | #phi{} | #phi0{} | #anyon_move{} | #phenom_anyon{},
     phase(),
     #cell{}
 ) ->
     conclusion().
+handle_cast(
+    #phi_config{seed = Seed},
+    configuring,
+    Cell
+) when Seed > 0, Seed =< ?U32_MASK ->
+    {measuring, Cell#cell{random_state = Seed}, consume};
+handle_cast(#phi_config{}, configuring, Cell) ->
+    {configuring, Cell, fail};
+handle_cast(#phi{epoch = 0}, configuring, Cell) ->
+    {configuring, Cell, postpone};
+handle_cast(#phi{}, configuring, Cell) ->
+    {configuring, Cell, fail};
+handle_cast(#phenom_anyon{step = 0}, configuring, Cell) ->
+    {configuring, Cell, postpone};
+handle_cast(#phenom_anyon{}, configuring, Cell) ->
+    {configuring, Cell, fail};
+handle_cast(#phi0{}, configuring, Cell) ->
+    {configuring, Cell, fail};
+handle_cast(#anyon_move{}, configuring, Cell) ->
+    {configuring, Cell, fail};
+handle_cast(#phi_config{}, measuring, Cell) ->
+    {measuring, Cell, fail};
 handle_cast(
     #phenom_anyon{step = Step, present = Present, x = X, y = Y},
     measuring,
@@ -466,6 +496,8 @@ handle_cast(
     {gathering, Cell, postpone};
 handle_cast(#phenom_anyon{}, gathering, Cell) ->
     {gathering, Cell, fail};
+handle_cast(#phi_config{}, gathering, Cell) ->
+    {gathering, Cell, fail};
 handle_cast(
     #phi0{step = Step, source = Source, value = Value},
     comparing,
@@ -525,6 +557,8 @@ handle_cast(
     {comparing, Cell, postpone};
 handle_cast(#phenom_anyon{}, comparing, Cell) ->
     {comparing, Cell, fail};
+handle_cast(#phi_config{}, comparing, Cell) ->
+    {comparing, Cell, fail};
 handle_cast(
     #phi{epoch = Epoch},
     flipping,
@@ -565,6 +599,8 @@ handle_cast(
 ) when EventStep =:= ((Step + 1) band ?U32_MASK) ->
     {flipping, Cell, postpone};
 handle_cast(#phenom_anyon{}, flipping, Cell) ->
+    {flipping, Cell, fail};
+handle_cast(#phi_config{}, flipping, Cell) ->
     {flipping, Cell, fail}.
 
 source_mask(north) -> ?PHI_NORTH_MASK;

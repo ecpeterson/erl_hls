@@ -41,7 +41,7 @@ phi_phenom_topology_normalizes_test() ->
         route(Plan, {phi, correction})
     ),
     ?assertEqual(
-        [data, syndrome],
+        [data, phi, syndrome],
         [maps:get(target, Item) || Item <- maps:get(startup, Plan)]
     ).
 
@@ -343,8 +343,8 @@ generated_topology_has_expected_physical_shape_test() ->
     ?assertEqual(2, count(Generated, <<"::Egress, u32:4>">>)),
     ?assertEqual(1, count(Generated, <<"::Egress, u32:5>">>)),
     ?assertEqual(0, count(Generated, <<"QueuedFanout">>)),
-    ?assertEqual(2, count(Generated, <<"proc StartupPrefix">>)),
-    ?assertEqual(2, count(Generated, <<"spawn StartupPrefix">>)),
+    ?assertEqual(3, count(Generated, <<"proc StartupPrefix">>)),
+    ?assertEqual(3, count(Generated, <<"spawn StartupPrefix">>)),
     ?assertNotEqual(nomatch, binary:match(
         Generated,
         <<"lane(s) reached through multiple source ports retain actor action ",
@@ -364,6 +364,10 @@ generated_topology_has_expected_physical_shape_test() ->
     ?assertNotEqual(
         nomatch,
         binary:match(Generated, <<"uN[96]:0x000000008000000085EBCA6B">>)
+    ),
+    ?assertNotEqual(
+        nomatch,
+        binary:match(Generated, <<"axis::pack(u8:12, u32:0x6D2B79F5)">>)
     ).
 
 generated_startup_preserves_per_actor_message_order_test() ->
@@ -413,8 +417,14 @@ generated_startup_prefix_precedes_routed_admission_test() ->
         Generated,
         <<"spawn axis::ReservedFrame(startup_1_prefix_c">>
     ),
+    {Prefix2, _} = binary:match(Generated, <<"spawn StartupPrefix2(">>),
+    {Admission2, _} = binary:match(
+        Generated,
+        <<"spawn axis::ReservedFrame(startup_2_prefix_c">>
+    ),
     ?assert(Prefix0 < Admission0),
     ?assert(Prefix1 < Admission1),
+    ?assert(Prefix2 < Admission2),
     ?assertEqual(0, count(Generated, <<"FrameMux2(startup_">>)).
 
 dslx_backend_rejects_unpacked_startup_data_test() ->
@@ -591,18 +601,23 @@ dslx_backend_requires_identifier_external_names_test() ->
     ).
 
 dslx_backend_rejects_startup_target_with_initial_effects_test() ->
-    Spec = phi_phenom_topology:topology(),
-    Plan = hls_topology:normalize(Spec#{startup := [
-        {phi, [{phenom_anyon, 0, 0, 0, 0}]}
-    ]}),
+    Plan = hls_topology:normalize(#{
+        version => 1,
+        actors => #{source => hls_topology_source_fixture},
+        families => #{},
+        externals => [{out, out, [message]}],
+        routes => [{{source, out}, [{external, out}]}],
+        route_relations => [],
+        startup => [{source, [{message, 0}]}]
+    }),
     try xls_topology_dslx:emit(
         Plan,
-        phi_phenom_topology_dslx:profile()
+        fixture_profile(initial_effect_startup)
     ) of
         _ -> ?assert(false)
     catch
         error:{startup_target_has_initial_effects,
-                phi, phi_halo_cell, Effects} ->
+                source, hls_topology_source_fixture, Effects} ->
             ?assertMatch([_ | _], Effects)
     end.
 

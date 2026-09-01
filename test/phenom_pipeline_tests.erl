@@ -42,6 +42,7 @@ closed_noise_pipeline_advances_phi_test() ->
             correction => CorrectionSink
         },
         ok = phi_halo_cell:connect(Phi, PhiOutputs),
+        ok = phi_halo_cell:configure(Phi, ?PRNG_SEED),
 
         %% The data event is reported on four edges and cancels by parity in
         %% this degenerate topology. The syndrome PRNG's first measurement
@@ -119,6 +120,7 @@ odd_data_error_reaches_phi_test() ->
             Phi,
             (four_ports(Sink))#{syndrome => Syndrome, correction => Sink}
         ),
+        ok = phi_halo_cell:configure(Phi, ?PRNG_SEED),
 
         %% The paired syndrome supplies one query to each data cell. Stand-in
         %% neighboring syndromes supply the other three edge identities. Only

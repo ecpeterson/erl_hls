@@ -73,8 +73,10 @@ does not establish placement, routing, or timing closure.
 one bounded rectangular `phi_halo_cell` family and six route relations: four
 wrapped cardinal translations, one external syndrome-request stream, and one
 external correction-decision stream. A 5-by-5 plan and a 50-by-50 plan
-therefore contain the same one family and six rules; only the shape and derived
-instance count differ.
+therefore contain the same one family and six rules; only the shape, derived
+instance count, and explicit per-coordinate startup constants differ. The v0
+startup representation enumerates one deterministic, nonzero phi coin seed per
+member; it is not yet a compact instance-constant formula.
 
 The generated proc hierarchy is:
 
@@ -126,17 +128,18 @@ family backend maps each aliased pair to one channel array, reusing the ordered
 actor egress rather than merging the ports again at the receiver.
 
 The generated DSLX contains one reusable family node and nested `unroll_for!`
-spawns over two-dimensional channel arrays. A 5-by-5 and a 50-by-50 torus have
-the same generated source structure; XLS still elaborates the required actor
-and queue resources for every coordinate. Runtime channel-array indexing is
-not supported by the pinned XLS build, so each scalar external boundary uses
-statically indexed unrolled receives gated by a round-robin cursor. These
-polling merges are bounded and fair but not work-conserving: each family member
-gets one turn per `Width * Height` completed activations. The default
-rectangular 2-by-3 fixture is compiled to RTL and verifies all six initial
-requests, stable backpressure, and no duplication. Its correction stream stays
-idle because this structural witness has no syndrome source to advance the
-actors.
+spawns over two-dimensional channel arrays. With instance startup omitted, a
+5-by-5 and a 50-by-50 torus have the same generated routing structure; the
+operational fixture additionally emits one startup match arm per coordinate.
+XLS still elaborates the required actor and queue resources for every
+coordinate. Runtime channel-array indexing is not supported by the pinned XLS
+build, so each scalar external boundary uses statically indexed unrolled
+receives gated by a round-robin cursor. These polling merges are bounded and
+fair but not work-conserving: each family member gets one turn per
+`Width * Height` completed activations. The default rectangular 2-by-3 fixture
+is compiled to RTL and verifies all six post-configuration initial requests,
+stable backpressure, and no duplication. Its correction stream stays idle
+because this structural witness has no syndrome source to advance the actors.
 
 The lane arrays explicitly declare depth zero. This supplies the pinned block
 stitcher's per-channel FIFO metadata without installing a global default which
@@ -185,11 +188,11 @@ flowchart LR
 ```
 
 At the default distance three, the plan has 54 actor instances, 30 compact
-route relations, and 36 explicit startup messages: one for every member of the
-four noise families. The route-rule count is independent of distance; only the
-family bounds and startup entries grow. Startup seeds are deterministic,
-distinct, nonzero, and deliberately mixed so the first distance-three syndrome
-plane is not spatially uniform.
+route relations, and 54 explicit startup messages: one for every actor. The
+route-rule count is independent of distance; only the family bounds and startup
+entries grow. PRNG seeds are deterministic, distinct, and nonzero across all
+six families. The noise seeds are deliberately mixed so the first
+distance-three syndrome plane is not spatially uniform.
 
 Each syndrome announcement carries its `{X, Y}` coordinate; the external port
 identifies the X or Z plane. Each phi cell retains that coordinate and may emit
@@ -211,10 +214,9 @@ make that gateway and correction-application policy explicit.
 
 The present noise configuration is still a plumbing fixture. Its common high
 threshold deliberately produces frequent binary events rather than modeling a
-full Pauli channel, and every phi actor still uses the same fixed actor-local
-seed. The explicit startup list also caps this example at distance 50; the
-compact route representation itself has no such bound. Per-instance phi seeds,
-an explicit PL/host correction adapter, applying decisions to a data-qubit
+full Pauli channel. The explicit startup list also caps this example at
+distance 50; the compact route representation itself has no such bound. An
+explicit PL/host correction adapter, applying decisions to a data-qubit
 correction history, and a physically calibrated noise model remain later
 decoder work.
 
