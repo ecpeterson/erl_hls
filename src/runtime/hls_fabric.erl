@@ -4,10 +4,19 @@ Owns one routed frame transport and dispatches replies to Erlang proxy
 processes by their registered return route. Application and debug paths use
 separate instances so their queues and failure domains remain independent.
 
-The routing source is adapter metadata: it selects the host-side proxy and is
-not delivered as a sender identity inside the process's ordinary message. A
-future distribution adapter may map bounded fabric endpoints to Erlang process
+The complete route is delivered to its registered owner as transport metadata.
+It can distinguish several unsolicited streams owned by one proxy, but is not
+inserted as a sender identity into an actor's ordinary message. A future
+distribution adapter may map bounded fabric endpoints to Erlang process
 identities at its boundary.
+
+The current FIFO adapter reads whenever the operating system supplies data and
+casts complete frames to the owner. That handoff preserves order and lossless
+delivery while memory is available, but it is not bounded backpressure: a slow
+owner can accumulate an arbitrarily large BEAM mailbox. The simulation runner
+must therefore drain every registered route continuously. A hardware DMA
+adapter needs an owner demand/acknowledgement protocol and a bounded broker
+queue before this transport can claim end-to-end admission.
 """.
 
 -behavior(gen_server).
@@ -131,7 +140,9 @@ handle_info(
 ) ->
     case Routes of
         #{Route := #route_owner{pid = Owner}} ->
-            gen_server:cast(Owner, {?RX_FRAME, Header, Payload});
+            %% TODO: Replace this unbounded mailbox handoff with a bounded
+            %% owner-demand protocol before using unsolicited DMA streams.
+            gen_server:cast(Owner, {?RX_FRAME, Route, Header, Payload});
         _ ->
             ok
     end,

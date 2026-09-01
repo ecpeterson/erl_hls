@@ -74,7 +74,7 @@ request(Tag, From, State = #state{tx_id = TxID, pending = Pending}) ->
     }}.
 
 handle_cast(
-    {?FABRIC_RX, {Tag, TxID, _Flags}, Payload},
+    {?FABRIC_RX, _Route, {Tag, TxID, _Flags}, Payload},
     State = #state{module = Module, pending = Pending}
 ) ->
     {From, NewPending} = maps:take(TxID, Pending),

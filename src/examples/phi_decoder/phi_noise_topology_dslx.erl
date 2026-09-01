@@ -11,7 +11,7 @@ The default artifact uses the nondegenerate distance-three semantic topology.
 family types and cross-family routes at a smaller elaborated distance.
 """.
 
--export([profile/0, to_dslx/0, to_dslx/1]).
+-export([profile/0, to_dslx/0, to_dslx/1, to_dslx/2]).
 
 -doc "Returns the physical profile shared by the review and smoke artifacts.".
 -spec profile() -> xls_topology_dslx:profile().
@@ -30,4 +30,12 @@ to_dslx() ->
 -spec to_dslx(pos_integer()) -> iolist().
 to_dslx(Distance) ->
     Plan = hls_topology:normalize(phi_noise_topology:topology(Distance)),
+    xls_topology_dslx:emit(Plan, profile()).
+
+-doc "Generates DSLX with an explicit `u32` phenomenological-noise rate.".
+-spec to_dslx(pos_integer(), hls_nums:u32()) -> iolist().
+to_dslx(Distance, NoiseRate) ->
+    Plan = hls_topology:normalize(
+        phi_noise_topology:topology(Distance, NoiseRate)
+    ),
     xls_topology_dslx:emit(Plan, profile()).

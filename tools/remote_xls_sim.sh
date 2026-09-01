@@ -28,6 +28,7 @@ vvp hls_trace_store.vvp
 # The interpreter runs tests from its entry module, not imported modules, so
 # keep every test-bearing DSLX module explicit here.
 for test_module in \
+    axis.x \
     hls_debug_trace.x \
     hls_debug_observer.x \
     hls_spatial_router.x
@@ -210,6 +211,28 @@ iverilog \
 
 vvp phi_noise_topology_smoke.vvp
 
+# Wrap the same zero-noise D1 graph in its routed host gateway. This is the
+# routine end-to-end ERTS fixture; the checked gateway source imports D3.
+"$xls_root/ir_converter_main" \
+    --warnings_as_errors=false \
+    --dslx_path=. \
+    --dslx_stdlib_path="$stdlib" \
+    --top=Top \
+    phi_memory_gateway.x > phi_memory_gateway.ir
+
+"$xls_root/opt_main" \
+    phi_memory_gateway.ir > phi_memory_gateway.opt.ir
+
+"$xls_root/codegen_main" \
+    --pipeline_stages=1 \
+    --delay_model=unit \
+    --flop_inputs=false \
+    --flop_outputs=true \
+    --use_system_verilog=false \
+    --reset=reset \
+    --fifo_module= \
+    phi_memory_gateway.opt.ir > phi_memory_gateway.v
+
 iverilog \
     -g2012 \
     -s phi_halo_cell_tb \
@@ -349,6 +372,13 @@ iverilog-vpi xls_sim_bridge.c
 
 iverilog \
     -g2012 \
+    -s phi_memory_bridge_tb \
+    -o phi_memory_bridge.vvp \
+    phi_memory_bridge_tb.sv \
+    phi_memory_gateway.v
+
+iverilog \
+    -g2012 \
     -s regsvc_bridge_tb \
     -o regsvc_bridge.vvp \
     regsvc_bridge_tb.sv \
@@ -432,3 +462,56 @@ ERL_HLS_SIM_DIR="$sim_dir" erl \
     -noshell \
     -pa "$beam_dir" \
     -eval 'case eunit:test(regsvc_cpu_tests, [verbose]) of ok -> halt(0); error -> halt(1) end.'
+
+kill "$sim_pid" 2>/dev/null || true
+wait "$sim_pid" 2>/dev/null || true
+sim_pid=
+
+phi_sim_dir="$stage/phi_sim"
+mkdir -p "$phi_sim_dir"
+rm -f \
+    "$phi_sim_dir/app_tx" \
+    "$phi_sim_dir/app_rx" \
+    "$phi_sim_dir/vvp.log"
+
+ERL_HLS_SIM_DIR="$phi_sim_dir" \
+ERL_HLS_SIM_TOP=phi_memory_bridge_tb \
+ERL_HLS_SIM_APP_ONLY=1 \
+    vvp -M "$stage" -m xls_sim_bridge phi_memory_bridge.vvp \
+    >"$phi_sim_dir/vvp.log" 2>&1 &
+sim_pid=$!
+
+for _attempt in $(seq 1 100); do
+    if [[ -p "$phi_sim_dir/app_tx" && -p "$phi_sim_dir/app_rx" ]]; then
+        break
+    fi
+    if ! kill -0 "$sim_pid" 2>/dev/null; then
+        cat "$phi_sim_dir/vvp.log"
+        exit 1
+    fi
+    sleep 0.05
+done
+
+if [[ ! -p "$phi_sim_dir/app_tx" || ! -p "$phi_sim_dir/app_rx" ]]; then
+    cat "$phi_sim_dir/vvp.log"
+    echo "Timed out waiting for phi simulator transport FIFOs" >&2
+    exit 1
+fi
+
+erlc -pa "$beam_dir" -o "$beam_dir" \
+    "$stage/erl_src/hls_pauli.erl" \
+    "$stage/erl_src/phenom_data_cell.erl" \
+    "$stage/erl_src/phenom_syndrome_cell.erl" \
+    "$stage/erl_src/phi_halo_cell.erl" \
+    "$stage/erl_src/phi_memory_boundary.erl" \
+    "$stage/erl_src/phi_memory_experiment.erl" \
+    "$stage/erl_src/phi_memory_runner.erl" \
+    "$stage/erl_src/phi_memory_wire.erl" \
+    "$stage/erl_src/phi_noise_topology.erl"
+erlc -pa "$beam_dir" -o "$beam_dir" \
+    "$stage/test_src/phi_memory_bridge_tests.erl"
+
+ERL_HLS_PHI_SIM_DIR="$phi_sim_dir" erl \
+    -noshell \
+    -pa "$beam_dir" \
+    -eval 'case eunit:test(phi_memory_bridge_tests, [verbose]) of ok -> halt(0); error -> halt(1) end.'

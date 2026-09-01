@@ -169,14 +169,15 @@ language.
 
 ```mermaid
 flowchart LR
-    Coordinator["ERTS runner +<br/>phi_memory_experiment"]
-    Gateway["future PL-PS adapter"]
+    Caller["ERTS caller"] --> Runner["phi_memory_runner<br/>+ phi_memory_experiment"]
+    Runner -->|"ordered commands"| Broker["hls_fabric<br/>route broker"]
+    Broker -->|"32-bit routed AXIS<br/>endpoint 0 → 1"| Gateway["phi_memory_gateway"]
 
-    Coordinator -->|"ordered commands"| Gateway
-    Gateway -->|"one SpatialFrame stream"| CR["control_router<br/>only application ingress"]
-    Gateway -->|"decoded events"| Coordinator
+    Gateway -->|"endpoints 2–6 → 0<br/>five routed event streams"| Broker
+    Broker -->|"route + header + payload"| Runner
 
     subgraph Fabric["generated one-fabric topology"]
+        CR["control_router<br/>spatial fanout"]
         PX["phi_x"] -->|"cardinal torus"| PX
         PZ["phi_z"] -->|"cardinal torus"| PZ
 
@@ -190,11 +191,11 @@ flowchart LR
         SZ <-->|"queries / replies"| DE
         SZ <-->|"queries / replies"| DO
 
-        SX -->|"diagnostic copy"| XO["x_announcements"] --> Gateway
-        SZ -->|"diagnostic copy"| ZO["z_announcements"] --> Gateway
-        PX -->|"correction + post-move status"| XE["x_decoder_events"] --> Gateway
-        PZ -->|"correction + post-move status"| ZE["z_decoder_events"] --> Gateway
-        DE -->|"Pauli reply"| DM["data_measurements"] --> Gateway
+        SX -->|"diagnostic copy"| XO["x_announcements<br/>source endpoint 3"] --> Gateway
+        SZ -->|"diagnostic copy"| ZO["z_announcements<br/>source endpoint 5"] --> Gateway
+        PX -->|"correction + post-move status"| XE["x_decoder_events<br/>source endpoint 4"] --> Gateway
+        PZ -->|"correction + post-move status"| ZE["z_decoder_events<br/>source endpoint 6"] --> Gateway
+        DE -->|"Pauli reply"| DM["data_measurements<br/>source endpoint 2"] --> Gateway
         DO -->|"Pauli reply"| DM
 
         CR -->|"whole grid: noise_cutoff"| DE
@@ -205,11 +206,13 @@ flowchart LR
         CR -->|"point: pauli_update<br/>line: pauli_query"| DO
     end
 
-    XE -. "map each correction<br/>to a point update" .-> Coordinator
-    ZE -. "map each correction<br/>to a point update" .-> Coordinator
-    XE -. "complete quiet + empty<br/>same-step X status" .-> Coordinator
-    ZE -. "complete quiet + empty<br/>same-step Z status" .-> Coordinator
-    DM -. "XOR Distance replies" .-> Coordinator
+    Gateway -->|"one SpatialFrame stream"| CR
+
+    XE -. "map each correction<br/>to a point update" .-> Runner
+    ZE -. "map each correction<br/>to a point update" .-> Runner
+    XE -. "complete quiet + empty<br/>same-step X status" .-> Runner
+    ZE -. "complete quiet + empty<br/>same-step Z status" .-> Runner
+    DM -. "XOR Distance replies" .-> Runner
 ```
 
 At the default distance three, the plan has 54 actor instances, 34 compact
@@ -246,10 +249,32 @@ Pauli measurement. The reply carries a request ID, physical data coordinate,
 and parity bit. Both data families share one fairly merged output; request IDs
 and coordinates make its unspecified cross-family order irrelevant.
 
-These `external` endpoints currently become output channels on the generated
-DSLX `Top` proc. The RTL benches consume them directly. They are not yet wired
-to `hls_fabric`, a PL-PS frame adapter, or an ERTS process; a deployment must
-make that gateway and correction-application policy explicit.
+These `external` endpoints remain five typed channels on the generated
+topology, but `phi_memory_gateway` now merges them into distinct routed source
+endpoints. `hls_fabric` registers all five routes to one `phi_memory_runner`,
+which decodes their records and feeds the pure reducer. Route identity supplies
+the plane or measurement-stream identity that is deliberately absent from the
+actor payload. `phi_memory_boundary` derives this canonical output order, the
+endpoint allocation shown in the diagram, and each selector and packed width
+from the compact topology and generated actor codecs; the host wire codec and
+DSLX gateway generator consume the same contract.
+
+Host commands use destination endpoint 1. Their boundary frame has four
+payload words: a full-width prefix of four little-endian `u16` rectangle bounds
+followed by one or two actor payload words. The generator therefore selects
+`axis::FrameN<4>` for the current contract; the capacity follows the widest
+declared command rather than being a global `axis::Frame` limit. This wider
+boundary does not change the three-word actor ABI. The gateway validates the
+route, boundary version, message length, rectangle, and target-specific payload
+before constructing the ordinary actor frame. Its first valid command also
+supplies a one-shot egress activation token, so topology output cannot escape
+before the host has installed its routes.
+
+The generated gateway contains only that phi-specific validation, output
+selection, and topology composition. It imports route-envelope ingress, the
+activation gate, and frame serialization from `hls_fabric_router.x`; those
+transport procs are shared with other fabric boundaries rather than repeated
+as a static block in the Erlang generator.
 
 The one application ingress is the externally addressed `control_router`
 service. Its envelope contains an ordinary actor frame plus an internal target
@@ -261,13 +286,22 @@ present whole-topology reset flushes router and actor traffic together.
 Independent restart will need lifecycle-owned flushing or generation checks at
 the leaves.
 
+A malformed routed packet is drained without actor delivery so the receiver
+can accept the next packet in sync. The present boundary has no trustworthy
+operation identity or reserved error path for every malformed packet, so this
+case ends at the runner timeout. A later typed protocol-fault sideband should
+close the owning connection; actual transport-process failure already reaches
+the runner through its `hls_fabric` monitor as `{fabric_down, Reason}`.
+
 The current physical lowering uses one lossless, statically unrolled
 distributor per family. It finishes the selected family sends before accepting
 another envelope, but top-level router acceptance is bounded network admission,
-not simultaneous actor-mailbox admission. The raw channel assumes that its
-eventual gateway has validated rectangle bounds and target/schema combinations;
-frame lengths and constrained field values are part of that check. Pauli
-updates are at-most-once, and retry will require an explicit duplicate policy.
+not simultaneous actor-mailbox admission. The gateway validates rectangle
+bounds and target/schema combinations before this point. Pauli updates are
+at-most-once: a malformed frame, transport failure, reset, or timeout aborts
+the experiment, and retry will require an explicit operation identity and
+bounded duplicate suppression.
+
 `hls_spatial_router.x` also defines tested pair, quadrant, and leaf building
 blocks for a later generated tree inside one fabric. Neither implementation
 defines how a global rectangle is partitioned, addressed, or retried across
@@ -293,12 +327,15 @@ first protocol assumes one lossless, non-restarting fabric activation; a reset
 or gateway failure aborts the experiment rather than invoking unspecified
 retry behavior.
 
-The present noise configuration is still a plumbing fixture. Its common high
-threshold deliberately produces frequent binary events rather than modeling a
-full Pauli channel. The explicit startup list also caps this example at
-distance 50; the compact route representation itself has no such bound. A
-PL/host adapter must still transport the reducer's ordered commands and each
-source's ordered decoded events. A physically calibrated noise model remains
+The present distance-three noise configuration is still a plumbing fixture.
+Its common high noise rate deliberately produces frequent binary events rather
+than modeling a full Pauli channel. That rate is encoded as the `u32` threshold
+used by each cell's Bernoulli comparison. The explicit startup list also caps
+this example at distance 50; the compact route representation itself has no
+such bound. The direct VPI bridge now transports the reducer's ordered commands
+and the five routed output streams in simulation. The real DMA `axismsg` driver
+still expects its older unrouted frame boundary and must be adapted before this
+gateway can be used on a PS/PL link. A physically calibrated noise model remains
 later decoder work.
 
 ### Distance-three synthesis progression
@@ -359,6 +396,15 @@ applies one point-addressed X update, and observes the corresponding
 anticommutation change on a second query. Distance one aliases decoder routes,
 so this smoke test exercises control plumbing rather than the nondegenerate
 drain criterion.
+
+`phi_memory_gateway.x` is the checked generated wrapper for the distance-three
+topology. The routine remote regression instead generates the same wrapper
+around a zero-noise distance-one topology, compiles it through XLS and Icarus,
+and connects its AXIS ports to `hls_fabric` through the VPI FIFO bridge. A real
+`phi_memory_runner` then sends cutoff, observes the quiet/empty fence, issues
+the line query, and returns parity zero to its ERTS caller. This is an
+end-to-end transport and protocol witness; the aliased distance-one geometry
+is not a decoder-correctness test.
 
 On the 4-core, 8-GiB UTM using the pinned XLS build, the saturated
 fixed-point-field run measured about 23 seconds and 302 MiB for DSLX conversion,

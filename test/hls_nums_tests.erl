@@ -36,6 +36,12 @@ variable_unsigned_type_transpiles_test() ->
 transformed_record_supports_variable_width_fields_and_lists_test() ->
     Message = {message, 16#abcdef, [1, 16#654321], 16#ab, 16#1020304050},
     Packed = hls_variable_width_pack_fixture:pack(Message),
+    ?assertEqual(120, hls_variable_width_pack_fixture:pack_width(message)),
+    ?assertEqual(24, hls_variable_width_pack_fixture:pack_width(state)),
+    ?assertEqual(
+        hls_variable_width_pack_fixture:pack_width(message),
+        bit_size(Packed)
+    ),
     ?assertEqual(
         <<16#abcdef:24/little,
           16#654321:24/little,

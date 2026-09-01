@@ -46,7 +46,9 @@ The phi example also includes lowerable phenomenological data- and syndrome-
 noise actors. CPU tests wire those actors to a self-periodic phi cell and run
 the request/query/measurement pipeline across consecutive decoder steps. The
 closed hardware fixture is now an Erlang semantic topology plus a separate
-physical profile which generates its DSLX wrapper. See the
+physical profile which generates its DSLX wrapper. The remote regression also
+closes a zero-noise distance-one memory experiment from ERTS through its
+generated gateway and Icarus model. See the
 [generated phi/noise topology](src/examples/phi_decoder/phi_phenom_topology.md) for its
 structure, checks, and current limitations.
 

@@ -38,6 +38,9 @@ repeated_hls_tags_follow_include_expanded_source_order_test() ->
         ?assertEqual(3, Module:pack_tag(first)),
         ?assertEqual(4, Module:pack_tag(shared)),
         ?assertEqual(5, Module:pack_tag(last)),
+        ?assertEqual(32, Module:pack_width(first)),
+        ?assertEqual(32, Module:pack_width(shared)),
+        ?assertEqual(32, Module:pack_width(last)),
         ?assertEqual(first, Module:unpack_tag(3)),
         ?assertEqual(shared, Module:unpack_tag(4)),
         ?assertEqual(last, Module:unpack_tag(5))

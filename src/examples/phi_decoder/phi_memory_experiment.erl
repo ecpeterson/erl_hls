@@ -42,7 +42,7 @@ wire envelope. Reset or gateway failure must abort and restart the experiment.
 -include("phi_protocol.hrl").
 
 -export([new/1, event/3]).
--export_type([options/0, command/0, state/0, result/0]).
+-export_type([stream/0, options/0, command/0, state/0, result/0]).
 
 -define(U32_MASK, 16#ffffffff).
 
