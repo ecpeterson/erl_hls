@@ -8,7 +8,7 @@ phi_phenom_topology_normalizes_test() ->
         [data, phi, syndrome],
         [maps:get(id, Actor) || Actor <- maps:get(actors, Plan)]
     ),
-    ?assertEqual(15, length(maps:get(routes, Plan))),
+    ?assertEqual(17, length(maps:get(routes, Plan))),
     ?assertEqual(
         [
             #{
@@ -17,9 +17,14 @@ phi_phenom_topology_normalizes_test() ->
                 schemas => [phenom_anyon]
             },
             #{
-                id => correction,
+                id => data_measurements,
                 direction => out,
-                schemas => [phi_correction]
+                schemas => [pauli_reply]
+            },
+            #{
+                id => decoder_events,
+                direction => out,
+                schemas => [phi_correction, phi_status]
             }
         ],
         maps:get(externals, Plan)
@@ -36,9 +41,25 @@ phi_phenom_topology_normalizes_test() ->
         #{
             source => {phi, correction},
             delivery => direct,
-            recipients => [{external, correction}]
+            recipients => [{external, decoder_events}]
         },
         route(Plan, {phi, correction})
+    ),
+    ?assertEqual(
+        #{
+            source => {phi, status},
+            delivery => direct,
+            recipients => [{external, decoder_events}]
+        },
+        route(Plan, {phi, status})
+    ),
+    ?assertEqual(
+        #{
+            source => {data, measurement},
+            delivery => direct,
+            recipients => [{external, data_measurements}]
+        },
+        route(Plan, {data, measurement})
     ),
     ?assertEqual(
         [data, phi, syndrome],
@@ -244,7 +265,7 @@ actor_output_abi_order_is_preserved_test() ->
            maps:get(id, Actor) =:= phi
     ]),
     ?assertEqual(
-        [north, east, west, south, syndrome, correction],
+        [north, east, west, south, syndrome, correction, status],
         maps:get(outputs, Phi)
     ).
 
@@ -256,7 +277,8 @@ incompatible_actor_route_schema_is_rejected_test() ->
             Source,
             {actor, data},
             [phenom_request],
-            [phenom_config, phenom_query]},
+            [noise_cutoff, pauli_query, pauli_update,
+                phenom_config, phenom_query]},
         hls_topology:normalize(replace_route(
             Spec,
             Source,
@@ -294,7 +316,8 @@ incompatible_external_route_schema_is_rejected_test() ->
         hls_topology:normalize(Spec#{
             externals := [
                 {announcement, out, [phi]},
-                {correction, out, [phi_correction]}
+                {data_measurements, out, [pauli_reply]},
+                {decoder_events, out, [phi_correction, phi_status]}
             ]
         })
     ).
@@ -306,7 +329,8 @@ incompatible_startup_schema_is_rejected_test() ->
             data,
             0,
             phenom_request,
-            [phenom_config, phenom_query]},
+            [noise_cutoff, pauli_query, pauli_update,
+                phenom_config, phenom_query]},
         hls_topology:normalize(Spec#{
             startup := [{data, [{phenom_request, 0}]}]
         })
@@ -554,7 +578,8 @@ dslx_backend_supports_aliased_external_lane_test() ->
                 phi0,
                 phenom_anyon
             ]},
-            {correction, out, [phi_correction]}
+            {data_measurements, out, [pauli_reply]},
+            {decoder_events, out, [phi_correction, phi_status]}
         ],
         routes := Routes
     }),
@@ -588,7 +613,8 @@ dslx_backend_requires_identifier_external_names_test() ->
     Plan = hls_topology:normalize(Spec#{
         externals := [
             {ExternalId, out, [phenom_anyon]},
-            {correction, out, [phi_correction]}
+            {data_measurements, out, [pauli_reply]},
+            {decoder_events, out, [phi_correction, phi_status]}
         ],
         routes := Routes
     }),
@@ -603,6 +629,7 @@ dslx_backend_requires_identifier_external_names_test() ->
 dslx_backend_rejects_startup_target_with_initial_effects_test() ->
     Plan = hls_topology:normalize(#{
         version => 1,
+        ingresses => [],
         actors => #{source => hls_topology_source_fixture},
         families => #{},
         externals => [{out, out, [message]}],
@@ -639,6 +666,8 @@ dslx_backend_explicitly_rejects_startup_only_actor_test() ->
     Data2Routes = [
         {{data2, Port}, [{actor, syndrome}]}
         || Port <- Directions
+    ] ++ [
+        {{data2, measurement}, [{external, data_measurements}]}
     ],
     [DataStartup] = [
         Messages
@@ -747,6 +776,7 @@ nonaliased_phi_pair() ->
     ],
     #{
         version => 1,
+        ingresses => [],
         actors => #{
             phi => phi_halo_cell,
             syndrome => phenom_syndrome_cell
@@ -754,7 +784,10 @@ nonaliased_phi_pair() ->
         families => #{},
         externals =>
             PhiExternals ++ QueryExternals ++
-            [{correction, out, [phi_correction]}],
+            [
+                {decoder_events, out, [phi_correction, phi_status]},
+                {announcement, out, [phenom_anyon]}
+            ],
         routes =>
             [
                 {{phi, Port}, [{external, maps:get(Port, PhiExternalIds)}]}
@@ -762,7 +795,8 @@ nonaliased_phi_pair() ->
             ] ++
             [
                 {{phi, syndrome}, [{actor, syndrome}]},
-                {{phi, correction}, [{external, correction}]}
+                {{phi, correction}, [{external, decoder_events}]},
+                {{phi, status}, [{external, decoder_events}]}
             ] ++
             [
                 {{syndrome, Port}, [
@@ -770,7 +804,12 @@ nonaliased_phi_pair() ->
                 ]}
                 || Port <- Directions
             ] ++
-            [{{syndrome, phi}, [{actor, phi}]}],
+            [
+                {{syndrome, phi}, queued, [
+                    {actor, phi},
+                    {external, announcement}
+                ]}
+            ],
         route_relations => [],
         startup => []
     }.
@@ -778,6 +817,7 @@ nonaliased_phi_pair() ->
 layout_fixture_topology() ->
     #{
         version => 1,
+        ingresses => [],
         actors => #{
             source => hls_topology_source_fixture,
             destination => hls_topology_layout_fixture
@@ -795,6 +835,7 @@ layout_fixture_topology() ->
 reordered_fixture_topology() ->
     #{
         version => 1,
+        ingresses => [],
         actors => #{
             source => hls_topology_source_fixture,
             destination => hls_topology_reordered_fixture
@@ -816,6 +857,7 @@ reordered_fixture_topology() ->
 external_encoding_fixture_topology() ->
     #{
         version => 1,
+        ingresses => [],
         actors => #{
             source => hls_topology_source_fixture,
             reordered => hls_topology_reordered_fixture
@@ -837,6 +879,7 @@ external_encoding_fixture_topology() ->
 external_selector_fixture_topology() ->
     #{
         version => 1,
+        ingresses => [],
         actors => #{
             source => hls_topology_source_fixture,
             reordered => hls_topology_reordered_fixture

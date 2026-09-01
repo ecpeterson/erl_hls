@@ -94,6 +94,8 @@ cp "$project_root/src/examples/regsvc/regsvc_debug_top.v" \
     "$stage/regsvc_debug_top.v"
 cp "$project_root/priv/xls/fabric/hls_fabric_router.x" \
     "$stage/hls_fabric_router.x"
+cp "$project_root/priv/xls/fabric/hls_spatial_router.x" \
+    "$stage/hls_spatial_router.x"
 cp "$project_root/priv/xls/debug/hls_debug_types.x" \
     "$stage/hls_debug_types.x"
 cp "$project_root/priv/xls/debug/hls_debug_trace.x" \
@@ -116,6 +118,8 @@ cp "$project_root/test/rtl/debug/hls_trace_store_tb.sv" \
     "$stage/hls_trace_store_tb.sv"
 cp "$project_root/test/rtl/phi_halo_cell_tb.sv" \
     "$stage/phi_halo_cell_tb.sv"
+cp "$project_root/test/rtl/phenom_data_cell_tb.sv" \
+    "$stage/phenom_data_cell_tb.sv"
 cp "$project_root/test/rtl/phi_phenom_topology_tb.sv" \
     "$stage/phi_phenom_topology_tb.sv"
 cp "$project_root/test/rtl/phi_torus_topology_tb.sv" \

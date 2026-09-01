@@ -7,10 +7,17 @@
 Internal family normalizer used by `hls_topology`.
 
 The supported compact subset is intentionally small: zero-based rectangular
-families and same-shape wrapped translations. Relations currently target
+families, same-shape wrapped translations, and rectangle-addressed ingress
+whose targets name statically embedded families. Relations currently target
 families or external outputs; routes do not yet cross between the exact and
 family sections. Family members and route pairs are never enumerated during
 normalization.
+
+An ingress ID denotes the single router service addressed at the application
+boundary. Target IDs and rectangles are selectors interpreted inside that
+router; they are not alternate ERTS destinations. Embedded coordinates denote
+stable logical services, not actor generations. Router acceptance is a bounded
+network handoff rather than an atomic multicast admission guarantee.
 """.
 
 -export([normalize/2, routes_for_instance/3]).
@@ -38,8 +45,13 @@ normalize(
         FamilyIndex,
         ExternalIndex
     ),
+    Ingresses = normalize_ingresses(
+        maps:get(ingresses, Spec),
+        FamilyIndex
+    ),
     Exact#{
         families => strip_interfaces(Families),
+        ingresses => Ingresses,
         route_relations => Relations,
         lane_relations => derive_lane_relations(Relations, FamilyIndex)
     }.
@@ -109,6 +121,167 @@ normalize_family(Id, Spec) when is_map(Spec) ->
     };
 normalize_family(Id, Spec) ->
     error({invalid_family_spec, Id, Spec}).
+
+%%%
+%%% Rectangle-addressed ingress
+%%%
+
+normalize_ingresses(Specs, FamilyIndex) when is_list(Specs) ->
+    Ingresses = [normalize_ingress(Spec, FamilyIndex) || Spec <- Specs],
+    require_unique(
+        duplicate_ingress_ids,
+        [maps:get(id, Ingress) || Ingress <- Ingresses]
+    ),
+    sort_by(fun(Ingress) -> maps:get(id, Ingress) end, Ingresses);
+normalize_ingresses(Specs, _FamilyIndex) ->
+    error({invalid_topology_field, ingresses, Specs}).
+
+normalize_ingress({Id, {rectangle, Shape}, TargetSpecs}, FamilyIndex)
+        when is_list(TargetSpecs), TargetSpecs =/= [] ->
+    ok = validate_id(Id),
+    ok = validate_rectangle_shape(Id, Shape),
+    Targets = [
+        normalize_ingress_target(Target, Shape, FamilyIndex)
+        || Target <- TargetSpecs
+    ],
+    require_unique(
+        duplicate_ingress_targets,
+        [maps:get(id, Target) || Target <- Targets]
+    ),
+    ok = validate_ingress_embeddings(Id, Targets),
+    #{
+        id => Id,
+        kind => rectangle,
+        shape => Shape,
+        targets => sort_by(fun(Target) -> maps:get(id, Target) end, Targets)
+    };
+normalize_ingress(Spec, _FamilyIndex) ->
+    error({invalid_ingress, Spec}).
+
+normalize_ingress_target(
+    {Id, Schemas, RecipientSpecs},
+    Shape,
+    FamilyIndex
+) when is_list(Schemas), Schemas =/= [],
+       is_list(RecipientSpecs), RecipientSpecs =/= [] ->
+    ok = validate_id(Id),
+    case lists:all(fun erlang:is_atom/1, Schemas) of
+        true -> require_unique(duplicate_ingress_schemas, Schemas);
+        false -> error({invalid_ingress_schemas, Id, Schemas})
+    end,
+    Recipients = [
+        normalize_ingress_recipient(Recipient, Shape, FamilyIndex)
+        || Recipient <- RecipientSpecs
+    ],
+    require_unique(duplicate_ingress_recipients, Recipients),
+    ok = validate_ingress_interfaces(Id, Schemas, Recipients, FamilyIndex),
+    #{
+        id => Id,
+        schemas => lists:sort(Schemas),
+        recipients => lists:sort(Recipients)
+    };
+normalize_ingress_target(Target, _Shape, _FamilyIndex) ->
+    error({invalid_ingress_target, Target}).
+
+normalize_ingress_recipient(
+    {family, FamilyId, {embed, Scale, Offset}},
+    AddressShape,
+    FamilyIndex
+) ->
+    Family = require_family(FamilyId, FamilyIndex, ingress),
+    FamilyShape = maps:get(shape, Family),
+    case {FamilyShape, Scale, Offset, AddressShape} of
+        {[_, _], [ScaleX, ScaleY], [OffsetX, OffsetY], [LimitX, LimitY]}
+                when is_integer(ScaleX), ScaleX > 0,
+                     ScaleX =< LimitX,
+                     is_integer(ScaleY), ScaleY > 0,
+                     ScaleY =< LimitY,
+                     is_integer(OffsetX), OffsetX >= 0,
+                     is_integer(OffsetY), OffsetY >= 0 ->
+            [FamilyWidth, FamilyHeight] = FamilyShape,
+            case OffsetX + ScaleX * (FamilyWidth - 1) < LimitX andalso
+                    OffsetY + ScaleY * (FamilyHeight - 1) < LimitY of
+                true -> #{
+                    family => FamilyId,
+                    scale => Scale,
+                    offset => Offset
+                };
+                false -> error({ingress_embedding, FamilyId,
+                    FamilyShape, Scale, Offset, AddressShape})
+            end;
+        _ -> error({ingress_embedding, FamilyId,
+            FamilyShape, Scale, Offset, AddressShape})
+    end;
+normalize_ingress_recipient(Recipient, _Shape, _FamilyIndex) ->
+    error({invalid_ingress_recipient, Recipient}).
+
+validate_ingress_embeddings(IngressId, Targets) ->
+    Embeddings = lists:foldl(
+        fun(#{recipients := Recipients}, Acc0) ->
+            lists:foldl(
+                fun(#{family := FamilyId, scale := Scale, offset := Offset},
+                        Acc) ->
+                    maps:update_with(
+                        FamilyId,
+                        fun(Values) -> [{Scale, Offset} | Values] end,
+                        [{Scale, Offset}],
+                        Acc
+                    )
+                end,
+                Acc0,
+                Recipients
+            )
+        end,
+        #{},
+        Targets
+    ),
+    lists:foreach(
+        fun({FamilyId, Values}) ->
+            case lists:usort(Values) of
+                [_] -> ok;
+                Distinct -> error({ingress_embeddings,
+                    IngressId, FamilyId, Distinct})
+            end
+        end,
+        lists:sort(maps:to_list(Embeddings))
+    ).
+
+validate_rectangle_shape(_Id, [Width, Height])
+        when is_integer(Width), Width > 0,
+             is_integer(Height), Height > 0 ->
+    ok;
+validate_rectangle_shape(Id, Shape) ->
+    error({invalid_ingress_shape, Id, Shape}).
+
+validate_ingress_interfaces(TargetId, Schemas, Recipients, FamilyIndex) ->
+    lists:foreach(
+        fun(#{family := FamilyId}) ->
+            #{interface := Interface} = maps:get(FamilyId, FamilyIndex),
+            Dispatched = hls_actor_interface:dispatched_schemas(Interface),
+            case Schemas -- Dispatched of
+                [] -> ok;
+                Missing -> error({ingress_schemas,
+                    TargetId, FamilyId, Missing})
+            end
+        end,
+        Recipients
+    ),
+    lists:foreach(
+        fun(Schema) ->
+            Layouts = lists:usort([
+                maps:get(fields, hls_actor_interface:schema(
+                    maps:get(interface, maps:get(FamilyId, FamilyIndex)),
+                    Schema
+                ))
+                || #{family := FamilyId} <- Recipients
+            ]),
+            case Layouts of
+                [_] -> ok;
+                _ -> error({ingress_layouts, TargetId, Schema, Layouts})
+            end
+        end,
+        Schemas
+    ).
 
 reject_family_namespace_collisions(Families) ->
     Collisions = lists:sort([

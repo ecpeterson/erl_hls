@@ -20,6 +20,11 @@ pub enum Tag : u8 {
   PHENOM_ANYON = u8:10,
   PHI_CORRECTION = u8:11,
   PHI_CONFIG = u8:12,
+  PAULI_QUERY = u8:13,
+  PAULI_REPLY = u8:14,
+  NOISE_CUTOFF = u8:15,
+  PAULI_UPDATE = u8:16,
+  PHI_STATUS = u8:17,
 }
 
 enum Phase : u8 {
@@ -38,13 +43,13 @@ enum Directive : u2 {
 
 struct Phi {
   epoch : u32,
-  values : u32[2],
+  values : s32[2],
 }
 
 fn phi_from_bits<N: u32>(raw: bits[N]) -> Phi {
   Phi {
     epoch: raw[0:32] as u32,
-    values: raw[32:96] as u32[2],
+    values: raw[32:96] as s32[2],
   }
 }
 
@@ -71,14 +76,14 @@ fn bits_from_anyonmove(s: Anyonmove) -> bits[bit_count<Anyonmove>()] {
 struct Phi0 {
   step : u32,
   source : u32,
-  value : u32,
+  value : s32,
 }
 
 fn phi0_from_bits<N: u32>(raw: bits[N]) -> Phi0 {
   Phi0 {
     step: raw[0:32] as u32,
     source: raw[32:64] as u32,
-    value: raw[64:96] as u32,
+    value: raw[64:96] as s32,
   }
 }
 
@@ -139,24 +144,24 @@ fn bits_from_phenomquery(s: Phenomquery) -> bits[bit_count<Phenomquery>()] {
 struct Phenomdata {
   step : u32,
   source : u32,
-  present : u32,
+  flags : u32,
 }
 
 fn phenomdata_from_bits<N: u32>(raw: bits[N]) -> Phenomdata {
   Phenomdata {
     step: raw[0:32] as u32,
     source: raw[32:64] as u32,
-    present: raw[64:96] as u32,
+    flags: raw[64:96] as u32,
   }
 }
 
 fn bits_from_phenomdata(s: Phenomdata) -> bits[bit_count<Phenomdata>()] {
-  (s.present as bits[32]) ++ (s.source as bits[32]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
+  (s.flags as bits[32]) ++ (s.source as bits[32]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
 }
 
 struct Phenomanyon {
   step : u32,
-  present : u32,
+  flags : u32,
   x : u16,
   y : u16,
 }
@@ -164,14 +169,14 @@ struct Phenomanyon {
 fn phenomanyon_from_bits<N: u32>(raw: bits[N]) -> Phenomanyon {
   Phenomanyon {
     step: raw[0:32] as u32,
-    present: raw[32:64] as u32,
+    flags: raw[32:64] as u32,
     x: raw[64:80] as u16,
     y: raw[80:96] as u16,
   }
 }
 
 fn bits_from_phenomanyon(s: Phenomanyon) -> bits[bit_count<Phenomanyon>()] {
-  (s.y as bits[16]) ++ (s.x as bits[16]) ++ (s.present as bits[32]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
+  (s.y as bits[16]) ++ (s.x as bits[16]) ++ (s.flags as bits[32]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
 }
 
 struct Phicorrection {
@@ -208,42 +213,130 @@ fn bits_from_phiconfig(s: Phiconfig) -> bits[bit_count<Phiconfig>()] {
   (s.seed as bits[32]) ++  zero!<bits[0]>()
 }
 
+struct Pauliquery {
+  request_id : u32,
+  measurement : u32,
+}
+
+fn pauliquery_from_bits<N: u32>(raw: bits[N]) -> Pauliquery {
+  Pauliquery {
+    request_id: raw[0:32] as u32,
+    measurement: raw[32:64] as u32,
+  }
+}
+
+fn bits_from_pauliquery(s: Pauliquery) -> bits[bit_count<Pauliquery>()] {
+  (s.measurement as bits[32]) ++ (s.request_id as bits[32]) ++  zero!<bits[0]>()
+}
+
+struct Paulireply {
+  request_id : u32,
+  x : u16,
+  y : u16,
+  anticommutes : u32,
+}
+
+fn paulireply_from_bits<N: u32>(raw: bits[N]) -> Paulireply {
+  Paulireply {
+    request_id: raw[0:32] as u32,
+    x: raw[32:48] as u16,
+    y: raw[48:64] as u16,
+    anticommutes: raw[64:96] as u32,
+  }
+}
+
+fn bits_from_paulireply(s: Paulireply) -> bits[bit_count<Paulireply>()] {
+  (s.anticommutes as bits[32]) ++ (s.y as bits[16]) ++ (s.x as bits[16]) ++ (s.request_id as bits[32]) ++  zero!<bits[0]>()
+}
+
+struct Noisecutoff {
+  first_quiet_step : u32,
+}
+
+fn noisecutoff_from_bits<N: u32>(raw: bits[N]) -> Noisecutoff {
+  Noisecutoff {
+    first_quiet_step: raw[0:32] as u32,
+  }
+}
+
+fn bits_from_noisecutoff(s: Noisecutoff) -> bits[bit_count<Noisecutoff>()] {
+  (s.first_quiet_step as bits[32]) ++  zero!<bits[0]>()
+}
+
+struct Pauliupdate {
+  pauli : u32,
+}
+
+fn pauliupdate_from_bits<N: u32>(raw: bits[N]) -> Pauliupdate {
+  Pauliupdate {
+    pauli: raw[0:32] as u32,
+  }
+}
+
+fn bits_from_pauliupdate(s: Pauliupdate) -> bits[bit_count<Pauliupdate>()] {
+  (s.pauli as bits[32]) ++  zero!<bits[0]>()
+}
+
+struct Phistatus {
+  step : u32,
+  x : u16,
+  y : u16,
+  flags : u32,
+}
+
+fn phistatus_from_bits<N: u32>(raw: bits[N]) -> Phistatus {
+  Phistatus {
+    step: raw[0:32] as u32,
+    x: raw[32:48] as u16,
+    y: raw[48:64] as u16,
+    flags: raw[64:96] as u32,
+  }
+}
+
+fn bits_from_phistatus(s: Phistatus) -> bits[bit_count<Phistatus>()] {
+  (s.flags as bits[32]) ++ (s.y as bits[16]) ++ (s.x as bits[16]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
+}
+
 struct Cell {
   step : u32,
   diffusion_round : u32,
-  phi : u32[2],
-  phi_sum : u32[2],
+  phi : s32[2],
+  phi_sum : s64[2],
   phi_received : u8,
   seen_sources : u32,
-  best_phi0 : u32,
+  best_phi0 : s32,
   best_direction : u32,
   moves_received : u8,
   anyon : u32,
   random_state : u32,
   x : u16,
   y : u16,
+  noise_quiet : u32,
+  status_valid : u32,
 }
 
 fn cell_from_bits<N: u32>(raw: bits[N]) -> Cell {
   Cell {
     step: raw[0:32] as u32,
     diffusion_round: raw[32:64] as u32,
-    phi: raw[64:128] as u32[2],
-    phi_sum: raw[128:192] as u32[2],
-    phi_received: raw[192:200] as u8,
-    seen_sources: raw[200:232] as u32,
-    best_phi0: raw[232:264] as u32,
-    best_direction: raw[264:296] as u32,
-    moves_received: raw[296:304] as u8,
-    anyon: raw[304:336] as u32,
-    random_state: raw[336:368] as u32,
-    x: raw[368:384] as u16,
-    y: raw[384:400] as u16,
+    phi: raw[64:128] as s32[2],
+    phi_sum: raw[128:256] as s64[2],
+    phi_received: raw[256:264] as u8,
+    seen_sources: raw[264:296] as u32,
+    best_phi0: raw[296:328] as s32,
+    best_direction: raw[328:360] as u32,
+    moves_received: raw[360:368] as u8,
+    anyon: raw[368:400] as u32,
+    random_state: raw[400:432] as u32,
+    x: raw[432:448] as u16,
+    y: raw[448:464] as u16,
+    noise_quiet: raw[464:496] as u32,
+    status_valid: raw[496:528] as u32,
   }
 }
 
 fn bits_from_cell(s: Cell) -> bits[bit_count<Cell>()] {
-  (s.y as bits[16]) ++ (s.x as bits[16]) ++ (s.random_state as bits[32]) ++ (s.anyon as bits[32]) ++ (s.moves_received as bits[8]) ++ (s.best_direction as bits[32]) ++ (s.best_phi0 as bits[32]) ++ (s.seen_sources as bits[32]) ++ (s.phi_received as bits[8]) ++ (s.phi_sum as bits[64]) ++ (s.phi as bits[64]) ++ (s.diffusion_round as bits[32]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
+  (s.status_valid as bits[32]) ++ (s.noise_quiet as bits[32]) ++ (s.y as bits[16]) ++ (s.x as bits[16]) ++ (s.random_state as bits[32]) ++ (s.anyon as bits[32]) ++ (s.moves_received as bits[8]) ++ (s.best_direction as bits[32]) ++ (s.best_phi0 as bits[32]) ++ (s.seen_sources as bits[32]) ++ (s.phi_received as bits[8]) ++ (s.phi_sum as bits[128]) ++ (s.phi as bits[64]) ++ (s.diffusion_round as bits[32]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
 }
 
 pub enum OutputPort : u8 {
@@ -253,6 +346,7 @@ pub enum OutputPort : u8 {
   SOUTH = u8:3,
   SYNDROME = u8:4,
   CORRECTION = u8:5,
+  STATUS = u8:6,
 }
 
 pub struct Egress {
@@ -264,8 +358,8 @@ pub const EGRESS_DEPTH = u32:5;
 
 struct EntryEffects {
   count: u8,
-  valid: bool[6],
-  values: Egress[6],
+  valid: bool[7],
+  values: Egress[7],
 }
 
 struct MailboxSlot {
@@ -330,8 +424,10 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
           bool:false,
           bool:false,
           bool:false,
+          bool:false,
         ],
         values: [
+          zero!<Egress>(),
           zero!<Egress>(),
           zero!<Egress>(),
           zero!<Egress>(),
@@ -347,44 +443,159 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
         let __1 = phase;
         let Cell_1 = (Tag::CELL, data);
         let _0 = Cell_1.1.step;
-        let _1 = Phenomrequest {
-          step: _0,
+        let _1 = _0 - 1;
+        let _2 = _1 & 4294967295;
+        let CompletedStep_1 = _2;
+        let _3 = Cell_1.1.x;
+        let _4 = Cell_1.1.y;
+        let _5 = Cell_1.1.anyon;
+        let _6 = Cell_1.1.noise_quiet;
+        let _7 = _6 << 1;
+        let _8 = _5 | _7;
+        let _9 = Phistatus {
+          step: CompletedStep_1,
+          x: _3,
+          y: _4,
+          flags: _8,
+          ..zero!<Phistatus>()
+        };
+        let _10 = (Tag::PHI_STATUS, _9, bits_from_phistatus(_9));
+        let Status_1 = _10;
+        let _11 = Cell_1.1.step;
+        let _12 = Phenomrequest {
+          step: _11,
           ..zero!<Phenomrequest>()
         };
-        let _2 = (Tag::PHENOM_REQUEST, _1, bits_from_phenomrequest(_1));
-        let Request_1 = _2;
-        let _3 = if (bool:false) {
+        let _13 = (Tag::PHENOM_REQUEST, _12, bits_from_phenomrequest(_12));
+        let Request_1 = _13;
+        let _14 = if (bool:false) {
             data
         } else {
             Cell_1.1
         };
-        _3
+        _14
       };
       let effect_0_valid = {
-        bool:true
+        let _OldPhase_1 = old_phase;
+        let __1 = phase;
+        let Cell_1 = (Tag::CELL, data);
+        let _0 = Cell_1.1.step;
+        let _1 = _0 - 1;
+        let _2 = _1 & 4294967295;
+        let CompletedStep_1 = _2;
+        let _3 = Cell_1.1.x;
+        let _4 = Cell_1.1.y;
+        let _5 = Cell_1.1.anyon;
+        let _6 = Cell_1.1.noise_quiet;
+        let _7 = _6 << 1;
+        let _8 = _5 | _7;
+        let _9 = Phistatus {
+          step: CompletedStep_1,
+          x: _3,
+          y: _4,
+          flags: _8,
+          ..zero!<Phistatus>()
+        };
+        let _10 = (Tag::PHI_STATUS, _9, bits_from_phistatus(_9));
+        let Status_1 = _10;
+        let _11 = Cell_1.1.step;
+        let _12 = Phenomrequest {
+          step: _11,
+          ..zero!<Phenomrequest>()
+        };
+        let _13 = (Tag::PHENOM_REQUEST, _12, bits_from_phenomrequest(_12));
+        let Request_1 = _13;
+        let _14 = Cell_1.1.status_valid;
+        let _15 = _14 == 1;
+        let _16 = if (bool:false) {
+            bool:false
+        } else {
+            _15
+        };
+        _16
       };
       let effect_0 = {
         let _OldPhase_1 = old_phase;
         let __1 = phase;
         let Cell_1 = (Tag::CELL, data);
         let _0 = Cell_1.1.step;
-        let _1 = Phenomrequest {
-          step: _0,
+        let _1 = _0 - 1;
+        let _2 = _1 & 4294967295;
+        let CompletedStep_1 = _2;
+        let _3 = Cell_1.1.x;
+        let _4 = Cell_1.1.y;
+        let _5 = Cell_1.1.anyon;
+        let _6 = Cell_1.1.noise_quiet;
+        let _7 = _6 << 1;
+        let _8 = _5 | _7;
+        let _9 = Phistatus {
+          step: CompletedStep_1,
+          x: _3,
+          y: _4,
+          flags: _8,
+          ..zero!<Phistatus>()
+        };
+        let _10 = (Tag::PHI_STATUS, _9, bits_from_phistatus(_9));
+        let Status_1 = _10;
+        let _11 = Cell_1.1.step;
+        let _12 = Phenomrequest {
+          step: _11,
           ..zero!<Phenomrequest>()
         };
-        let _2 = (Tag::PHENOM_REQUEST, _1, bits_from_phenomrequest(_1));
-        let Request_1 = _2;
-        let _3 = if (bool:false) {
+        let _13 = (Tag::PHENOM_REQUEST, _12, bits_from_phenomrequest(_12));
+        let Request_1 = _13;
+        let _14 = if (bool:false) {
+            zero!<axis::Frame>()
+        } else {
+            axis::pack(Status_1.0 as u8, Status_1.2)
+        };
+        _14
+      };
+      let effect_1_valid = {
+        bool:true
+      };
+      let effect_1 = {
+        let _OldPhase_1 = old_phase;
+        let __1 = phase;
+        let Cell_1 = (Tag::CELL, data);
+        let _0 = Cell_1.1.step;
+        let _1 = _0 - 1;
+        let _2 = _1 & 4294967295;
+        let CompletedStep_1 = _2;
+        let _3 = Cell_1.1.x;
+        let _4 = Cell_1.1.y;
+        let _5 = Cell_1.1.anyon;
+        let _6 = Cell_1.1.noise_quiet;
+        let _7 = _6 << 1;
+        let _8 = _5 | _7;
+        let _9 = Phistatus {
+          step: CompletedStep_1,
+          x: _3,
+          y: _4,
+          flags: _8,
+          ..zero!<Phistatus>()
+        };
+        let _10 = (Tag::PHI_STATUS, _9, bits_from_phistatus(_9));
+        let Status_1 = _10;
+        let _11 = Cell_1.1.step;
+        let _12 = Phenomrequest {
+          step: _11,
+          ..zero!<Phenomrequest>()
+        };
+        let _13 = (Tag::PHENOM_REQUEST, _12, bits_from_phenomrequest(_12));
+        let Request_1 = _13;
+        let _14 = if (bool:false) {
             zero!<axis::Frame>()
         } else {
             axis::pack(Request_1.0 as u8, Request_1.2)
         };
-        _3
+        _14
       };
       (entered_data, EntryEffects {
-        count: u8:1,
+        count: u8:2,
         valid: [
           effect_0_valid,
+          effect_1_valid,
           bool:false,
           bool:false,
           bool:false,
@@ -392,7 +603,8 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
           bool:false,
         ],
         values: [
-          Egress { port: OutputPort::SYNDROME, frame: effect_0 },
+          Egress { port: OutputPort::STATUS, frame: effect_0 },
+          Egress { port: OutputPort::SYNDROME, frame: effect_1 },
           zero!<Egress>(),
           zero!<Egress>(),
           zero!<Egress>(),
@@ -548,12 +760,14 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
           effect_3_valid,
           bool:false,
           bool:false,
+          bool:false,
         ],
         values: [
           Egress { port: OutputPort::NORTH, frame: effect_0 },
           Egress { port: OutputPort::EAST, frame: effect_1 },
           Egress { port: OutputPort::WEST, frame: effect_2 },
           Egress { port: OutputPort::SOUTH, frame: effect_3 },
+          zero!<Egress>(),
           zero!<Egress>(),
           zero!<Egress>(),
         ],
@@ -711,12 +925,14 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
           effect_3_valid,
           bool:false,
           bool:false,
+          bool:false,
         ],
         values: [
           Egress { port: OutputPort::NORTH, frame: effect_0 },
           Egress { port: OutputPort::EAST, frame: effect_1 },
           Egress { port: OutputPort::WEST, frame: effect_2 },
           Egress { port: OutputPort::SOUTH, frame: effect_3 },
+          zero!<Egress>(),
           zero!<Egress>(),
           zero!<Egress>(),
         ],
@@ -1499,6 +1715,7 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
           effect_3_valid,
           effect_4_valid,
           bool:false,
+          bool:false,
         ],
         values: [
           Egress { port: OutputPort::NORTH, frame: effect_0 },
@@ -1506,6 +1723,7 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
           Egress { port: OutputPort::WEST, frame: effect_2 },
           Egress { port: OutputPort::SOUTH, frame: effect_3 },
           Egress { port: OutputPort::CORRECTION, frame: effect_4 },
+          zero!<Egress>(),
           zero!<Egress>(),
         ],
       })
@@ -1586,100 +1804,85 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
             let Xls_clause_1_Value1_1 = _5;
             let _6 = Xls_clause_1_Cell_1.1.phi_sum;
             let _7 = _6[1 - u32:1];
-            let _8 = _7 + Xls_clause_1_Value0_1;
-            let _9 = _8 & 4294967295;
-            let Xls_clause_1_Sum0_1 = _9;
-            let _10 = Xls_clause_1_Cell_1.1.phi_sum;
-            let _11 = _10[2 - u32:1];
-            let _12 = _11 + Xls_clause_1_Value1_1;
-            let _13 = _12 & 4294967295;
-            let Xls_clause_1_Sum1_1 = _13;
-            let _14 = Xls_clause_1_Cell_1.1.phi_sum;
-            let _15 = update(_14, 1 - u32:1, Xls_clause_1_Sum0_1);
-            let Xls_clause_1_SumFirst_1 = _15;
-            let _16 = update(Xls_clause_1_SumFirst_1, 2 - u32:1, Xls_clause_1_Sum1_1);
-            let Xls_clause_1_NewSum_1 = _16;
-            let _17 = Xls_clause_1_Cell_1.1.phi_received;
-            let _18 = _17 + 1;
-            let Xls_clause_1_ReceivedNext_1 = _18;
-            let _19 = Xls_clause_1_ReceivedNext_1 == 4;
-            let _52 = if _19 {
+            let _8 = (_7 + (Xls_clause_1_Value0_1 as s64));
+            let Xls_clause_1_Sum0_1 = _8;
+            let _9 = Xls_clause_1_Cell_1.1.phi_sum;
+            let _10 = _9[2 - u32:1];
+            let _11 = (_10 + (Xls_clause_1_Value1_1 as s64));
+            let Xls_clause_1_Sum1_1 = _11;
+            let _12 = Xls_clause_1_Cell_1.1.phi_sum;
+            let _13 = update(_12, 1 - u32:1, Xls_clause_1_Sum0_1);
+            let Xls_clause_1_SumFirst_1 = _13;
+            let _14 = update(Xls_clause_1_SumFirst_1, 2 - u32:1, Xls_clause_1_Sum1_1);
+            let Xls_clause_1_NewSum_1 = _14;
+            let _15 = Xls_clause_1_Cell_1.1.phi_received;
+            let _16 = _15 + 1;
+            let Xls_clause_1_ReceivedNext_1 = _16;
+            let _17 = Xls_clause_1_ReceivedNext_1 == 4;
+            let _38 = if _17 {
+              let _18 = Xls_clause_1_Cell_1.1.phi;
+              let _19 = _18[1 - u32:1];
+              let Xls_clause_1_P0_1 = _19;
               let _20 = Xls_clause_1_Cell_1.1.phi;
-              let _21 = _20[1 - u32:1];
-              let Xls_clause_1_P0_1 = _21;
-              let _22 = Xls_clause_1_Cell_1.1.phi;
-              let _23 = _22[2 - u32:1];
-              let Xls_clause_1_P1_1 = _23;
-              let _24 = Xls_clause_1_Cell_1.1.anyon;
-              let _25 = _24 << 16;
-              let Xls_clause_1_Charge_1 = _25;
-              let _26 = Xls_clause_1_P0_1 >> 2;
-              let _27 = Xls_clause_1_Charge_1 + _26;
-              let _28 = Xls_clause_1_P1_1 << 1;
-              let _29 = _28 + Xls_clause_1_Sum0_1;
-              let _30 = _29 >> 3;
-              let _31 = _27 + _30;
-              let _32 = _31 & 4294967295;
-              let Xls_clause_1_New0_1 = _32;
-              let _33 = Xls_clause_1_P1_1 * 3;
-              let _34 = _33 >> 2;
-              let _35 = Xls_clause_1_P0_1 + Xls_clause_1_Sum1_1;
-              let _36 = _35 / 20;
-              let _37 = _34 + _36;
-              let _38 = _37 & 4294967295;
-              let Xls_clause_1_New1_1 = _38;
-              let _39 = Xls_clause_1_Cell_1.1.phi;
-              let _40 = update(_39, 1 - u32:1, Xls_clause_1_New0_1);
-              let Xls_clause_1_PhiFirst_1 = _40;
-              let _41 = update(Xls_clause_1_PhiFirst_1, 2 - u32:1, Xls_clause_1_New1_1);
-              let Xls_clause_1_NewPhi_1 = _41;
-              let _42 = Xls_clause_1_Round_1 + 1;
-              let _43 = zero!<u32[2]>();
-              let _44 = Cell {
-                diffusion_round: _42,
+              let _21 = _20[2 - u32:1];
+              let Xls_clause_1_P1_1 = _21;
+              let _22 = Xls_clause_1_Cell_1.1.anyon;
+              let _23 = (if (((_22 as s64) << u32:16) + (if ((Xls_clause_1_P0_1 as s64) * s64:18 + (Xls_clause_1_P1_1 as s64) * s64:2 + Xls_clause_1_Sum0_1) < s64:0 { (((Xls_clause_1_P0_1 as s64) * s64:18 + (Xls_clause_1_P1_1 as s64) * s64:2 + Xls_clause_1_Sum0_1) - s64:12) / s64:24 } else { (((Xls_clause_1_P0_1 as s64) * s64:18 + (Xls_clause_1_P1_1 as s64) * s64:2 + Xls_clause_1_Sum0_1) + s64:12) / s64:24 })) > s64:2147483647 { s32:2147483647 } else if (((_22 as s64) << u32:16) + (if ((Xls_clause_1_P0_1 as s64) * s64:18 + (Xls_clause_1_P1_1 as s64) * s64:2 + Xls_clause_1_Sum0_1) < s64:0 { (((Xls_clause_1_P0_1 as s64) * s64:18 + (Xls_clause_1_P1_1 as s64) * s64:2 + Xls_clause_1_Sum0_1) - s64:12) / s64:24 } else { (((Xls_clause_1_P0_1 as s64) * s64:18 + (Xls_clause_1_P1_1 as s64) * s64:2 + Xls_clause_1_Sum0_1) + s64:12) / s64:24 })) < s64:-2147483648 { s32:-2147483648 } else { (((_22 as s64) << u32:16) + (if ((Xls_clause_1_P0_1 as s64) * s64:18 + (Xls_clause_1_P1_1 as s64) * s64:2 + Xls_clause_1_Sum0_1) < s64:0 { (((Xls_clause_1_P0_1 as s64) * s64:18 + (Xls_clause_1_P1_1 as s64) * s64:2 + Xls_clause_1_Sum0_1) - s64:12) / s64:24 } else { (((Xls_clause_1_P0_1 as s64) * s64:18 + (Xls_clause_1_P1_1 as s64) * s64:2 + Xls_clause_1_Sum0_1) + s64:12) / s64:24 })) as s32 });
+              let Xls_clause_1_New0_1 = _23;
+              let _24 = (if ((if ((Xls_clause_1_P0_1 as s64) + (Xls_clause_1_P1_1 as s64) * s64:15 + Xls_clause_1_Sum1_1) < s64:0 { (((Xls_clause_1_P0_1 as s64) + (Xls_clause_1_P1_1 as s64) * s64:15 + Xls_clause_1_Sum1_1) - s64:10) / s64:20 } else { (((Xls_clause_1_P0_1 as s64) + (Xls_clause_1_P1_1 as s64) * s64:15 + Xls_clause_1_Sum1_1) + s64:10) / s64:20 })) > s64:2147483647 { s32:2147483647 } else if ((if ((Xls_clause_1_P0_1 as s64) + (Xls_clause_1_P1_1 as s64) * s64:15 + Xls_clause_1_Sum1_1) < s64:0 { (((Xls_clause_1_P0_1 as s64) + (Xls_clause_1_P1_1 as s64) * s64:15 + Xls_clause_1_Sum1_1) - s64:10) / s64:20 } else { (((Xls_clause_1_P0_1 as s64) + (Xls_clause_1_P1_1 as s64) * s64:15 + Xls_clause_1_Sum1_1) + s64:10) / s64:20 })) < s64:-2147483648 { s32:-2147483648 } else { ((if ((Xls_clause_1_P0_1 as s64) + (Xls_clause_1_P1_1 as s64) * s64:15 + Xls_clause_1_Sum1_1) < s64:0 { (((Xls_clause_1_P0_1 as s64) + (Xls_clause_1_P1_1 as s64) * s64:15 + Xls_clause_1_Sum1_1) - s64:10) / s64:20 } else { (((Xls_clause_1_P0_1 as s64) + (Xls_clause_1_P1_1 as s64) * s64:15 + Xls_clause_1_Sum1_1) + s64:10) / s64:20 })) as s32 });
+              let Xls_clause_1_New1_1 = _24;
+              let _25 = Xls_clause_1_Cell_1.1.phi;
+              let _26 = update(_25, 1 - u32:1, Xls_clause_1_New0_1);
+              let Xls_clause_1_PhiFirst_1 = _26;
+              let _27 = update(Xls_clause_1_PhiFirst_1, 2 - u32:1, Xls_clause_1_New1_1);
+              let Xls_clause_1_NewPhi_1 = _27;
+              let _28 = Xls_clause_1_Round_1 + 1;
+              let _29 = zero!<s64[2]>();
+              let _30 = Cell {
+                diffusion_round: _28,
                 phi: Xls_clause_1_NewPhi_1,
-                phi_sum: _43,
+                phi_sum: _29,
                 phi_received: 0,
                 ..(Xls_clause_1_Cell_1).1
               };
-              let _45 = (Tag::CELL, _44);
-              let Xls_clause_1_Updated_1 = _45;
-              let _46 = Xls_clause_1_Round_1 + 1;
-              let _47 = _46 == 2;
-              let _51 = if _47 {
-                let _48 = Cell {
+              let _31 = (Tag::CELL, _30);
+              let Xls_clause_1_Updated_1 = _31;
+              let _32 = Xls_clause_1_Round_1 + 1;
+              let _33 = _32 == 2;
+              let _37 = if _33 {
+                let _34 = Cell {
                   seen_sources: 0,
                   best_phi0: 0,
                   best_direction: 0,
                   ..(Xls_clause_1_Updated_1).1
                 };
-                let _49 = (Tag::CELL, _48);
-                let _50 = (Phase::COMPARING, _49, Directive::CONSUME, bool:0, );
-                (_50, bool:false)
+                let _35 = (Tag::CELL, _34);
+                let _36 = (Phase::COMPARING, _35, Directive::CONSUME, bool:0, );
+                (_36, bool:false)
               } else {
-                let _48 = (Phase::GATHERING, Xls_clause_1_Updated_1, Directive::CONSUME, bool:1, );
-                (_48, bool:false)
+                let _34 = (Phase::GATHERING, Xls_clause_1_Updated_1, Directive::CONSUME, bool:1, );
+                (_34, bool:false)
               };
               let case_match_1_1 = bool:false;
-              let case_match_1_2 = _51.1;
-              (_51.0, (case_match_1_1 != case_match_1_2) || bool:false)
+              let case_match_1_2 = _37.1;
+              (_37.0, (case_match_1_1 != case_match_1_2) || bool:false)
             } else {
-              let _20 = Cell {
+              let _18 = Cell {
                 phi_sum: Xls_clause_1_NewSum_1,
                 phi_received: Xls_clause_1_ReceivedNext_1,
                 ..(Xls_clause_1_Cell_1).1
               };
-              let _21 = (Tag::CELL, _20);
-              let Xls_clause_1_Accumulated_1 = _21;
-              let _22 = (Phase::GATHERING, Xls_clause_1_Accumulated_1, Directive::CONSUME, bool:0, );
-              (_22, bool:false)
+              let _19 = (Tag::CELL, _18);
+              let Xls_clause_1_Accumulated_1 = _19;
+              let _20 = (Phase::GATHERING, Xls_clause_1_Accumulated_1, Directive::CONSUME, bool:0, );
+              (_20, bool:false)
             };
             let case_match_2_1 = bool:false;
-            let case_match_2_2 = _52.1;
+            let case_match_2_2 = _38.1;
             if ((case_match_2_1 != case_match_2_2) || bool:false) {
               (phase, data, Directive::FAIL, u1:0)
             } else {
-              (_52.0.0, _52.0.1.1, _52.0.2, _52.0.3)
+              (_38.0.0, _38.0.1.1, _38.0.2, _38.0.3)
             }
           } else {
             let Xls_clause_2_Epoch_1 = message.epoch;
@@ -1882,6 +2085,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
                 diffusion_round: 0,
                 moves_received: 0,
                 anyon: Xls_clause_1_NextAnyon_1,
+                status_valid: 1,
                 ..(Xls_clause_1_Cell_1).1
               };
               let _11 = (Tag::CELL, _10);
@@ -2028,55 +2232,65 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
           if _10.0 {
             let _11 = Xls_clause_1_Seen_1 | Xls_clause_1_Source_1;
             let Xls_clause_1_NewSeen_1 = _11;
-            let _12 = Xls_clause_1_Value_1 > Xls_clause_1_Best_1;
-            let _13 = if _12 {
+            let _12 = Xls_clause_1_Seen_1 == 0;
+            let _13 = Xls_clause_1_Value_1 > Xls_clause_1_Best_1;
+            let _14 = _12 || _13;
+            let _15 = if _14 {
               (Xls_clause_1_Value_1, bool:false)
             } else {
               (Xls_clause_1_Best_1, bool:false)
             };
             let case_match_6_1 = bool:false;
-            let case_match_6_2 = _13.1;
-            let Xls_clause_1_NewBest_1 = _13.0;
-            let _14 = Xls_clause_1_Value_1 > Xls_clause_1_Best_1;
-            let _18 = if _14 {
+            let case_match_6_2 = _15.1;
+            let Xls_clause_1_NewBest_1 = _15.0;
+            let _16 = Xls_clause_1_Seen_1 == 0;
+            let _22 = if _16 {
               (Xls_clause_1_Source_1, bool:false)
             } else {
-              let _15 = Xls_clause_1_Value_1 == Xls_clause_1_Best_1;
-              let _17 = if _15 {
-                let _16 = (0 as u32);
-                (_16, bool:false)
+              let _17 = Xls_clause_1_Value_1 > Xls_clause_1_Best_1;
+              let _21 = if _17 {
+                (Xls_clause_1_Source_1, bool:false)
               } else {
-                (Xls_clause_1_BestDirection_1, bool:false)
+                let _18 = Xls_clause_1_Value_1 == Xls_clause_1_Best_1;
+                let _20 = if _18 {
+                  let _19 = (0 as u32);
+                  (_19, bool:false)
+                } else {
+                  (Xls_clause_1_BestDirection_1, bool:false)
+                };
+                let case_match_7_1 = bool:false;
+                let case_match_7_2 = _20.1;
+                (_20.0, (case_match_7_1 != case_match_7_2) || bool:false)
               };
-              let case_match_7_1 = bool:false;
-              let case_match_7_2 = _17.1;
-              (_17.0, (case_match_7_1 != case_match_7_2) || bool:false)
+              let case_match_8_1 = bool:false;
+              let case_match_8_2 = _21.1;
+              (_21.0, (case_match_8_1 != case_match_8_2) || bool:false)
             };
-            let case_match_8_1 = bool:false;
-            let case_match_8_2 = _18.1;
-            let Xls_clause_1_NewBestDirection_1 = _18.0;
-            let _19 = Cell {
+            let case_match_9_1 = bool:false;
+            let case_match_9_2 = _22.1;
+            let Xls_clause_1_NewBestDirection_1 = _22.0;
+            let _23 = Cell {
               seen_sources: Xls_clause_1_NewSeen_1,
               best_phi0: Xls_clause_1_NewBest_1,
               best_direction: Xls_clause_1_NewBestDirection_1,
               ..(Xls_clause_1_Cell_1).1
             };
-            let _20 = (Tag::CELL, _19);
-            let Xls_clause_1_Compared_1 = _20;
-            let _21 = Xls_clause_1_NewSeen_1 == 15;
-            let _23 = if _21 {
-              let _22 = (Phase::FLIPPING, Xls_clause_1_Compared_1, Directive::CONSUME, bool:0, );
-              (_22, bool:false)
+            let _24 = (Tag::CELL, _23);
+            let Xls_clause_1_Compared_1 = _24;
+            let _25 = Xls_clause_1_NewSeen_1 == 15;
+            let _27 = if _25 {
+              let _26 = (Phase::FLIPPING, Xls_clause_1_Compared_1, Directive::CONSUME, bool:0, );
+              (_26, bool:false)
             } else {
-              let _22 = (Phase::COMPARING, Xls_clause_1_Compared_1, Directive::CONSUME, bool:0, );
-              (_22, bool:false)
+              let _26 = (Phase::COMPARING, Xls_clause_1_Compared_1, Directive::CONSUME, bool:0, );
+              (_26, bool:false)
             };
-            let case_match_9_1 = bool:false;
-            let case_match_9_2 = _23.1;
-            if ((case_match_6_1 != case_match_6_2) || (case_match_8_1 != case_match_8_2) || (case_match_9_1 != case_match_9_2) || bool:false) {
+            let case_match_10_1 = bool:false;
+            let case_match_10_2 = _27.1;
+            if ((case_match_10_1 != case_match_10_2) || (case_match_6_1 != case_match_6_2) || (case_match_9_1 != case_match_9_2) || bool:false) {
               (phase, data, Directive::FAIL, u1:0)
             } else {
-              (_23.0.0, _23.0.1.1, _23.0.2, _23.0.3)
+              (_27.0.0, _27.0.1.1, _27.0.2, _27.0.3)
             }
           } else {
             let Xls_clause_2_Cell_1 = (Tag::CELL, data);
@@ -2147,12 +2361,12 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
         },
         Phase::MEASURING => {
           let Xls_clause_1_Step_1 = message.step;
-          let Xls_clause_1_Present_1 = message.present;
+          let Xls_clause_1_Flags_1 = message.flags;
           let Xls_clause_1_X_1 = message.x;
           let Xls_clause_1_Y_1 = message.y;
           let Xls_clause_1_Cell_1 = (Tag::CELL, data);
           let _9 = if Xls_clause_1_Step_1 == data.step {
-            let _0 = Xls_clause_1_Present_1 < 2;
+            let _0 = Xls_clause_1_Flags_1 < 4;
             let _8 = if _0 {
               let _1 = Xls_clause_1_X_1 >= 0;
               let _7 = if _1 {
@@ -2192,21 +2406,27 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
           let case_match_5_1 = bool:false;
           let case_match_5_2 = _9.1;
           if _9.0 {
-            let _10 = Xls_clause_1_Cell_1.1.anyon;
-            let _11 = _10 ^ Xls_clause_1_Present_1;
-            let _12 = Cell {
-              anyon: _11,
+            let _10 = Xls_clause_1_Flags_1 & 1;
+            let Xls_clause_1_Present_1 = _10;
+            let _11 = Xls_clause_1_Flags_1 & 2;
+            let _12 = _11 >> 1;
+            let Xls_clause_1_Quiet_1 = _12;
+            let _13 = Xls_clause_1_Cell_1.1.anyon;
+            let _14 = _13 ^ Xls_clause_1_Present_1;
+            let _15 = Cell {
+              anyon: _14,
               x: Xls_clause_1_X_1,
               y: Xls_clause_1_Y_1,
+              noise_quiet: Xls_clause_1_Quiet_1,
               ..(Xls_clause_1_Cell_1).1
             };
-            let _13 = (Tag::CELL, _12);
-            let Xls_clause_1_Updated_1 = _13;
-            let _14 = (Phase::GATHERING, Xls_clause_1_Updated_1, Directive::CONSUME, bool:0, );
+            let _16 = (Tag::CELL, _15);
+            let Xls_clause_1_Updated_1 = _16;
+            let _17 = (Phase::GATHERING, Xls_clause_1_Updated_1, Directive::CONSUME, bool:0, );
             if (bool:false) {
               (phase, data, Directive::FAIL, u1:0)
             } else {
-              (_14.0, _14.1.1, _14.2, _14.3)
+              (_17.0, _17.1.1, _17.2, _17.3)
             }
           } else {
             let Xls_clause_2_Cell_1 = (Tag::CELL, data);
@@ -2411,6 +2631,36 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
         _ => (phase, data, Directive::FAIL, u1:0),
       }
     },
+    Tag::PAULI_QUERY => {
+      let message = pauliquery_from_bits(frame.payload);
+      match phase {
+        _ => (phase, data, Directive::FAIL, u1:0),
+      }
+    },
+    Tag::PAULI_REPLY => {
+      let message = paulireply_from_bits(frame.payload);
+      match phase {
+        _ => (phase, data, Directive::FAIL, u1:0),
+      }
+    },
+    Tag::NOISE_CUTOFF => {
+      let message = noisecutoff_from_bits(frame.payload);
+      match phase {
+        _ => (phase, data, Directive::FAIL, u1:0),
+      }
+    },
+    Tag::PAULI_UPDATE => {
+      let message = pauliupdate_from_bits(frame.payload);
+      match phase {
+        _ => (phase, data, Directive::FAIL, u1:0),
+      }
+    },
+    Tag::PHI_STATUS => {
+      let message = phistatus_from_bits(frame.payload);
+      match phase {
+        _ => (phase, data, Directive::FAIL, u1:0),
+      }
+    },
     _ => (phase, data, Directive::FAIL, u1:0),
   }
 }
@@ -2463,7 +2713,7 @@ pub proc Service {
       let (tok, frame, received) = recv_if_non_blocking(
         join(), req_in, machine.admission_pending,
         zero!<axis::Frame>());
-      let tag_ok = (frame.header.op == (Tag::PHI as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::ANYON_MOVE as u8) && frame.header.payload_words == u8:2) || (frame.header.op == (Tag::PHI0 as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHENOM_CONFIG as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHENOM_REQUEST as u8) && frame.header.payload_words == u8:1) || (frame.header.op == (Tag::PHENOM_QUERY as u8) && frame.header.payload_words == u8:2) || (frame.header.op == (Tag::PHENOM_DATA as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHENOM_ANYON as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHI_CORRECTION as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHI_CONFIG as u8) && frame.header.payload_words == u8:1);
+      let tag_ok = (frame.header.op == (Tag::PHI as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::ANYON_MOVE as u8) && frame.header.payload_words == u8:2) || (frame.header.op == (Tag::PHI0 as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHENOM_CONFIG as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHENOM_REQUEST as u8) && frame.header.payload_words == u8:1) || (frame.header.op == (Tag::PHENOM_QUERY as u8) && frame.header.payload_words == u8:2) || (frame.header.op == (Tag::PHENOM_DATA as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHENOM_ANYON as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHI_CORRECTION as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHI_CONFIG as u8) && frame.header.payload_words == u8:1) || (frame.header.op == (Tag::PAULI_QUERY as u8) && frame.header.payload_words == u8:2) || (frame.header.op == (Tag::PAULI_REPLY as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::NOISE_CUTOFF as u8) && frame.header.payload_words == u8:1) || (frame.header.op == (Tag::PAULI_UPDATE as u8) && frame.header.payload_words == u8:1) || (frame.header.op == (Tag::PHI_STATUS as u8) && frame.header.payload_words == u8:3);
       let accepted = received && tag_ok;
       let invalid_input = received && !tag_ok;
       let incoming_slot = MailboxSlot {
@@ -2590,6 +2840,7 @@ proc EgressDemux {
   south_out: chan<axis::Frame> out;
   syndrome_out: chan<axis::Frame> out;
   correction_out: chan<axis::Frame> out;
+  status_out: chan<axis::Frame> out;
 
   config(egress_in: chan<Egress> in,
          north_out: chan<axis::Frame> out,
@@ -2597,9 +2848,10 @@ proc EgressDemux {
          west_out: chan<axis::Frame> out,
          south_out: chan<axis::Frame> out,
          syndrome_out: chan<axis::Frame> out,
-         correction_out: chan<axis::Frame> out
+         correction_out: chan<axis::Frame> out,
+         status_out: chan<axis::Frame> out
   ) {
-    (egress_in, north_out, east_out, west_out, south_out, syndrome_out, correction_out)
+    (egress_in, north_out, east_out, west_out, south_out, syndrome_out, correction_out, status_out)
   }
 
   init { () }
@@ -2619,6 +2871,8 @@ proc EgressDemux {
         send(tok, syndrome_out, egress.frame),
       OutputPort::CORRECTION =>
         send(tok, correction_out, egress.frame),
+      OutputPort::STATUS =>
+        send(tok, status_out, egress.frame),
     };
     state
   }
@@ -2632,6 +2886,7 @@ pub proc Top {
   south_send: chan<axis::Beat> out;
   syndrome_send: chan<axis::Beat> out;
   correction_send: chan<axis::Beat> out;
+  status_send: chan<axis::Beat> out;
 
   config(ext_recv: chan<axis::Beat> in,
          north_send: chan<axis::Beat> out,
@@ -2639,7 +2894,8 @@ pub proc Top {
          west_send: chan<axis::Beat> out,
          south_send: chan<axis::Beat> out,
          syndrome_send: chan<axis::Beat> out,
-         correction_send: chan<axis::Beat> out) {
+         correction_send: chan<axis::Beat> out,
+         status_send: chan<axis::Beat> out) {
     let (req_p, req_c) = chan<axis::Frame, u32:1>("req");
     let (admit_p, admit_c) = chan<u1, u32:1>("admit");
     let (egress_p, egress_c) =
@@ -2650,16 +2906,18 @@ pub proc Top {
     let (south_p, south_c) = chan<axis::Frame, u32:1>("south");
     let (syndrome_p, syndrome_c) = chan<axis::Frame, u32:1>("syndrome");
     let (correction_p, correction_c) = chan<axis::Frame, u32:1>("correction");
+    let (status_p, status_c) = chan<axis::Frame, u32:1>("status");
     spawn axis::ReservedRx(ext_recv, req_p, admit_c);
     spawn Service(req_c, egress_p, admit_p);
-    spawn EgressDemux(egress_c, north_p, east_p, west_p, south_p, syndrome_p, correction_p);
+    spawn EgressDemux(egress_c, north_p, east_p, west_p, south_p, syndrome_p, correction_p, status_p);
     spawn axis::Tx(north_c, north_send);
     spawn axis::Tx(east_c, east_send);
     spawn axis::Tx(west_c, west_send);
     spawn axis::Tx(south_c, south_send);
     spawn axis::Tx(syndrome_c, syndrome_send);
     spawn axis::Tx(correction_c, correction_send);
-    (ext_recv, north_send, east_send, west_send, south_send, syndrome_send, correction_send)
+    spawn axis::Tx(status_c, status_send);
+    (ext_recv, north_send, east_send, west_send, south_send, syndrome_send, correction_send, status_send)
   }
 
   init { () }

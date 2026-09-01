@@ -7,6 +7,7 @@
 -define(PRNG_FIRST, 16#40aec71f).
 -define(PRNG_SECOND, 16#91e00c19).
 -define(HALF_THRESHOLD, 16#80000000).
+-define(U32_MASK, 16#ffffffff).
 -define(COORD_X, 16#1234).
 -define(COORD_Y, 16#abcd).
 
@@ -55,14 +56,14 @@ response_order_does_not_change_parity_test() ->
                 Cell0
             ),
             ?assertEqual(
-                {syndrome, 0, ?PHI_ALL_DIRECTIONS, 1, 0, 1,
-                    ?PRNG_FIRST, 0, ?COORD_X, ?COORD_Y},
+                syndrome(0, ?PHI_ALL_DIRECTIONS, 1, 0, 1,
+                    ?PRNG_FIRST, 0, ?COORD_X, ?COORD_Y),
                 Cell1
             ),
             ?assertEqual(
                 {Cell1, [{cast, phi, #phenom_anyon{
                     step = 0,
-                    present = 1,
+                    flags = ?PHENOM_PRESENT_MASK,
                     x = ?COORD_X,
                     y = ?COORD_Y
                 }}]},
@@ -86,8 +87,8 @@ measurement_error_appears_at_both_boundaries_test() ->
     %% The first random word is below the threshold, so the current
     %% measurement toggles the otherwise empty data parity.
     ?assertEqual(
-        {syndrome, 0, ?PHI_ALL_DIRECTIONS, 0, 1, 1,
-            ?PRNG_FIRST, ?HALF_THRESHOLD, 0, 0},
+        syndrome(0, ?PHI_ALL_DIRECTIONS, 0, 1, 1,
+            ?PRNG_FIRST, ?HALF_THRESHOLD, 0, 0),
         First
     ),
 
@@ -104,8 +105,8 @@ measurement_error_appears_at_both_boundaries_test() ->
     %% The second word is above the threshold. The falling edge of the prior
     %% measurement error therefore supplies this round's detection event.
     ?assertEqual(
-        {syndrome, 1, ?PHI_ALL_DIRECTIONS, 0, 0, 1,
-            ?PRNG_SECOND, ?HALF_THRESHOLD, 0, 0},
+        syndrome(1, ?PHI_ALL_DIRECTIONS, 0, 0, 1,
+            ?PRNG_SECOND, ?HALF_THRESHOLD, 0, 0),
         Second
     ).
 
@@ -115,13 +116,14 @@ prng_advances_once_when_join_completes_test() ->
     {collecting, Cell2, consume} = offer_direct(east, false, 0, Cell1),
     {collecting, Cell3, consume} = offer_direct(west, false, 0, Cell2),
     ?assertMatch(
-        {syndrome, 0, _, 0, 0, 0, ?PRNG_SEED, ?HALF_THRESHOLD, 0, 0},
+        {syndrome, 0, _, 0, 0, 0, 0, 0,
+            ?PRNG_SEED, ?HALF_THRESHOLD, 0, 0, 0, 0, 0},
         Cell3
     ),
     {announcing, Cell4, consume} = offer_direct(south, false, 0, Cell3),
     ?assertMatch(
-        {syndrome, 0, ?PHI_ALL_DIRECTIONS, 0, 1, 1,
-            ?PRNG_FIRST, ?HALF_THRESHOLD, 0, 0},
+        {syndrome, 0, ?PHI_ALL_DIRECTIONS, 0, 1, 1, 0, 0,
+            ?PRNG_FIRST, ?HALF_THRESHOLD, 0, 0, 0, 0, 0},
         Cell4
     ).
 
@@ -137,7 +139,11 @@ duplicate_invalid_and_stale_data_fail_test() ->
             ?assertEqual(
                 {collecting, Cell0, fail},
                 phenom_syndrome_cell:handle_cast(
-                    #phenom_data{step = 0, source = Source, present = 0},
+                    #phenom_data{
+                        step = 0,
+                        source = Source,
+                        flags = 0
+                    },
                     collecting,
                     Cell0
                 )
@@ -151,7 +157,7 @@ duplicate_invalid_and_stale_data_fail_test() ->
             #phenom_data{
                 step = 0,
                 source = ?PHI_NORTH_MASK,
-                present = 2
+                flags = 4
             },
             collecting,
             Cell0
@@ -163,7 +169,7 @@ duplicate_invalid_and_stale_data_fail_test() ->
             #phenom_data{
                 step = 16#ffffffff,
                 source = ?PHI_NORTH_MASK,
-                present = 0
+                flags = 0
             },
             collecting,
             Cell0
@@ -243,7 +249,7 @@ early_next_request_replays_after_announcement_test() ->
 
         expect_cast(#phenom_anyon{
             step = 0,
-            present = 1,
+            flags = ?PHENOM_PRESENT_MASK,
             x = ?COORD_X,
             y = ?COORD_Y
         }),
@@ -252,8 +258,8 @@ early_next_request_replays_after_announcement_test() ->
         ?assertEqual(collecting, maps:get(phase, After)),
         ?assertEqual(0, maps:get(postponed, After)),
         ?assertEqual(
-            {syndrome, 1, 0, 0, 0, 0, ?PRNG_FIRST, 0,
-                ?COORD_X, ?COORD_Y},
+            {syndrome, 1, 0, 0, 0, 0, 1, 0,
+                ?PRNG_FIRST, 0, ?COORD_X, ?COORD_Y, 0, 0, 0},
             maps:get(data, After)
         )
     after
@@ -318,6 +324,59 @@ cpu_api_rejects_bad_configuration_test() ->
         )
     ).
 
+cutoff_freezes_prng_after_first_quiet_round_test() ->
+    Outputs = maps:from_list([
+        {north, self()},
+        {east, self()},
+        {west, self()},
+        {south, self()},
+        {phi, self()}
+    ]),
+    {ok, PID} = phenom_syndrome_cell:start_link(Outputs),
+    try
+        ok = phenom_syndrome_cell:configure(
+            PID,
+            ?PRNG_SEED,
+            ?U32_MASK,
+            ?COORD_X,
+            ?COORD_Y
+        ),
+        ok = phenom_syndrome_cell:noise_cutoff(PID, 1),
+
+        run_round(PID, 0),
+        expect_cast(#phenom_anyon{
+            step = 0,
+            flags = ?PHENOM_PRESENT_MASK,
+            x = ?COORD_X,
+            y = ?COORD_Y
+        }),
+
+        run_round(PID, 1),
+        expect_cast(#phenom_anyon{
+            step = 1,
+            flags = ?PHENOM_PRESENT_MASK,
+            x = ?COORD_X,
+            y = ?COORD_Y
+        }),
+
+        run_round(PID, 2),
+        expect_cast(#phenom_anyon{
+            step = 2,
+            flags = 0,
+            x = ?COORD_X,
+            y = ?COORD_Y
+        }),
+        Info = phenom_syndrome_cell:runtime_info(PID),
+        ?assertMatch(
+            {syndrome, 2, ?PHI_ALL_DIRECTIONS, 0, 0, 0, 0, 0,
+                ?PRNG_FIRST, ?U32_MASK, ?COORD_X, ?COORD_Y,
+                1, 0, 1},
+            maps:get(data, Info)
+        )
+    after
+        stop_if_alive(PID)
+    end.
+
 lowerable_source_and_shared_wire_tags_test() ->
     XLS = iolist_to_binary(
         xls_parse:to_xls("src/examples/phi_decoder/phenom_syndrome_cell.erl")
@@ -332,6 +391,10 @@ lowerable_source_and_shared_wire_tags_test() ->
     ),
     ?assertNotEqual(
         nomatch,
+        binary:match(XLS, <<"NOISE_CUTOFF = u8:15">>)
+    ),
+    ?assertNotEqual(
+        nomatch,
         binary:match(XLS, <<"Phase::ANNOUNCING">>)
     ),
     ?assertNotEqual(
@@ -343,13 +406,19 @@ lowerable_source_and_shared_wire_tags_test() ->
         binary:match(XLS, <<
             "struct Phenomanyon {\n"
             "  step : u32,\n"
-            "  present : u32,\n"
+            "  flags : u32,\n"
             "  x : u16,\n"
             "  y : u16,"
         >>)
     ),
     ?assertEqual(7, phenom_syndrome_cell:pack_tag(phenom_request)),
-    ?assertEqual(10, phenom_syndrome_cell:pack_tag(phenom_anyon)).
+    ?assertEqual(10, phenom_syndrome_cell:pack_tag(phenom_anyon)),
+    ?assertEqual(15, phenom_syndrome_cell:pack_tag(noise_cutoff)),
+    Interface = hls_actor_interface:from_module(phenom_syndrome_cell),
+    ?assertEqual(
+        [phenom_anyon],
+        hls_actor_interface:output_schemas(Interface, phi)
+    ).
 
 collecting_cell(Seed, Threshold) ->
     collecting_cell(Seed, Threshold, 0, 0).
@@ -373,6 +442,11 @@ collecting_cell(Seed, Threshold, X, Y) ->
     ),
     Collecting.
 
+syndrome(Step, Seen, Parity, PreviousMeasurement, Announcement, Random,
+        Threshold, X, Y) ->
+    {syndrome, Step, Seen, Parity, PreviousMeasurement, Announcement,
+        0, 0, Random, Threshold, X, Y, 0, 0, 0}.
+
 apply_responses([Response], Step, Cell) ->
     offer_direct(Response, Step, Cell);
 apply_responses([Response | Rest], Step, Cell0) ->
@@ -391,7 +465,7 @@ offer_direct(Direction, Present, Step, Cell) ->
         #phenom_data{
             step = Step,
             source = direction_mask(Direction),
-            present = PresentWord
+            flags = PresentWord
         },
         collecting,
         Cell
@@ -399,6 +473,16 @@ offer_direct(Direction, Present, Step, Cell) ->
 
 all_absent() ->
     [{north, false}, {east, false}, {west, false}, {south, false}].
+
+run_round(PID, Step) ->
+    ok = phenom_syndrome_cell:offer_request(PID, Step),
+    expect_query_batch(Step),
+    lists:foreach(
+        fun(Direction) ->
+            ok = phenom_syndrome_cell:offer_data(PID, Step, Direction, false)
+        end,
+        [north, east, west, south]
+    ).
 
 direction_mask(north) -> ?PHI_NORTH_MASK;
 direction_mask(east) -> ?PHI_EAST_MASK;

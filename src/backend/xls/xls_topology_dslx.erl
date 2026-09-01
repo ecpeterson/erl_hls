@@ -65,6 +65,7 @@ emit(Plan, _Profile) ->
 
 lower(Plan = #{
         families := [],
+        ingresses := [],
         route_relations := [],
         lane_relations := []
     }, Profile) ->

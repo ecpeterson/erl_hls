@@ -8,9 +8,10 @@ Normalizes provisional, closed actor topologies expressed as ordinary Erlang
 data.
 
 The current format contains exact actor instances, actor families, external
-outputs, routes, explicit multi-recipient delivery modes, and per-instance
-startup messages. It intentionally has no lifecycle, placement, transport,
-numeric tags, or generated-hardware concepts. Actor output names, their
+outputs, bounded rectangle-addressed ingress, routes, explicit multi-recipient
+delivery modes, and per-instance startup messages. It intentionally has no
+lifecycle, placement, transport, numeric tags, or generated-hardware concepts.
+Actor output names, their
 artifact ABI order, mailbox bounds, schema layouts, phase-specific dispatches,
 and phase-entry effects are read from the compiler's provisional
 actor-interface summary rather than repeated in the topology.
@@ -21,6 +22,19 @@ not by itself select a PL-PS transport, register an `hls_fabric` route, or name
 an Erlang process. A testbench or a later deployment shell/gateway must connect
 that channel to a consumer explicitly; there is not yet a CPU topology
 interpreter which makes that connection automatically.
+
+A rectangle ingress similarly names one externally addressable router service,
+not a set of actor destinations. Its envelope first reaches that service; only
+then does the router interpret the target and rectangle as an internal bounded
+multicast. Rectangle coordinates name stable logical services rather than
+actor incarnations. Acceptance by that router is bounded network admission,
+not simultaneous mailbox admission at every selected actor. This compact
+format does not make a multicast atomic with respect to restart: a lifecycle
+implementation must flush affected fanout or protect leaf delivery with
+generations when actors can restart independently. The eventual external
+gateway is responsible for validating the complete envelope, including frame
+lengths and constrained payload fields, and defining any retry or duplicate
+policy.
 
 The same format also supports rectangular actor families plus wrapped
 translation relations. A family is a dictionary entry
@@ -148,6 +162,7 @@ validate_top_level(Spec) when is_map(Spec) ->
         actors,
         externals,
         families,
+        ingresses,
         route_relations,
         routes,
         startup,

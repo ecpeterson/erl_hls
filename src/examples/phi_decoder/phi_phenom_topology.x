@@ -5,7 +5,7 @@
 // Actor summaries validate route schemas and actor-to-actor layouts.
 // Direct Frame edges also require matching local selectors; tag remapping
 // is not implemented. External producers must agree on one encoding.
-// One typed actor egress feeds one queue per source/recipient lane; the 3
+// One typed actor egress feeds one queue per source/recipient lane; the 4
 // lane(s) reached through multiple source ports retain actor action order.
 // 3 startup prefix(es) emit all target startup frames before
 // receiving that target's first routed frame.
@@ -41,11 +41,13 @@ proc FrameRelay {
 proc ActorRouter0 {
   egress_in: chan<phenom_data_cell::Egress> in;
   actor_0_lane_0_out: chan<axis::Frame> out;
+  actor_0_lane_1_out: chan<axis::Frame> out;
 
   config(egress_in: chan<phenom_data_cell::Egress> in,
-         actor_0_lane_0_out: chan<axis::Frame> out
+         actor_0_lane_0_out: chan<axis::Frame> out,
+         actor_0_lane_1_out: chan<axis::Frame> out
   ) {
-    (egress_in, actor_0_lane_0_out)
+    (egress_in, actor_0_lane_0_out, actor_0_lane_1_out)
   }
 
   init { () }
@@ -61,6 +63,8 @@ proc ActorRouter0 {
         send(tok, actor_0_lane_0_out, egress.frame),
       phenom_data_cell::OutputPort::SOUTH =>
         send(tok, actor_0_lane_0_out, egress.frame),
+      phenom_data_cell::OutputPort::MEASUREMENT =>
+        send(tok, actor_0_lane_1_out, egress.frame),
     };
     state
   }
@@ -68,16 +72,16 @@ proc ActorRouter0 {
 
 proc ActorRouter1 {
   egress_in: chan<phi_halo_cell::Egress> in;
-  actor_1_lane_1_out: chan<axis::Frame> out;
   actor_1_lane_2_out: chan<axis::Frame> out;
   actor_1_lane_3_out: chan<axis::Frame> out;
+  actor_1_lane_4_out: chan<axis::Frame> out;
 
   config(egress_in: chan<phi_halo_cell::Egress> in,
-         actor_1_lane_1_out: chan<axis::Frame> out,
          actor_1_lane_2_out: chan<axis::Frame> out,
-         actor_1_lane_3_out: chan<axis::Frame> out
+         actor_1_lane_3_out: chan<axis::Frame> out,
+         actor_1_lane_4_out: chan<axis::Frame> out
   ) {
-    (egress_in, actor_1_lane_1_out, actor_1_lane_2_out, actor_1_lane_3_out)
+    (egress_in, actor_1_lane_2_out, actor_1_lane_3_out, actor_1_lane_4_out)
   }
 
   init { () }
@@ -86,17 +90,19 @@ proc ActorRouter1 {
     let (tok, egress) = recv(join(), egress_in);
     let _route_tok = match egress.port {
       phi_halo_cell::OutputPort::NORTH =>
-        send(tok, actor_1_lane_1_out, egress.frame),
-      phi_halo_cell::OutputPort::EAST =>
-        send(tok, actor_1_lane_1_out, egress.frame),
-      phi_halo_cell::OutputPort::WEST =>
-        send(tok, actor_1_lane_1_out, egress.frame),
-      phi_halo_cell::OutputPort::SOUTH =>
-        send(tok, actor_1_lane_1_out, egress.frame),
-      phi_halo_cell::OutputPort::SYNDROME =>
         send(tok, actor_1_lane_2_out, egress.frame),
-      phi_halo_cell::OutputPort::CORRECTION =>
+      phi_halo_cell::OutputPort::EAST =>
+        send(tok, actor_1_lane_2_out, egress.frame),
+      phi_halo_cell::OutputPort::WEST =>
+        send(tok, actor_1_lane_2_out, egress.frame),
+      phi_halo_cell::OutputPort::SOUTH =>
+        send(tok, actor_1_lane_2_out, egress.frame),
+      phi_halo_cell::OutputPort::SYNDROME =>
         send(tok, actor_1_lane_3_out, egress.frame),
+      phi_halo_cell::OutputPort::CORRECTION =>
+        send(tok, actor_1_lane_4_out, egress.frame),
+      phi_halo_cell::OutputPort::STATUS =>
+        send(tok, actor_1_lane_4_out, egress.frame),
     };
     state
   }
@@ -104,16 +110,16 @@ proc ActorRouter1 {
 
 proc ActorRouter2 {
   egress_in: chan<phenom_syndrome_cell::Egress> in;
-  actor_2_lane_4_out: chan<axis::Frame> out;
   actor_2_lane_5_out: chan<axis::Frame> out;
   actor_2_lane_6_out: chan<axis::Frame> out;
+  actor_2_lane_7_out: chan<axis::Frame> out;
 
   config(egress_in: chan<phenom_syndrome_cell::Egress> in,
-         actor_2_lane_4_out: chan<axis::Frame> out,
          actor_2_lane_5_out: chan<axis::Frame> out,
-         actor_2_lane_6_out: chan<axis::Frame> out
+         actor_2_lane_6_out: chan<axis::Frame> out,
+         actor_2_lane_7_out: chan<axis::Frame> out
   ) {
-    (egress_in, actor_2_lane_4_out, actor_2_lane_5_out, actor_2_lane_6_out)
+    (egress_in, actor_2_lane_5_out, actor_2_lane_6_out, actor_2_lane_7_out)
   }
 
   init { () }
@@ -122,18 +128,18 @@ proc ActorRouter2 {
     let (tok, egress) = recv(join(), egress_in);
     let _route_tok = match egress.port {
       phenom_syndrome_cell::OutputPort::NORTH =>
-        send(tok, actor_2_lane_4_out, egress.frame),
+        send(tok, actor_2_lane_5_out, egress.frame),
       phenom_syndrome_cell::OutputPort::EAST =>
-        send(tok, actor_2_lane_4_out, egress.frame),
+        send(tok, actor_2_lane_5_out, egress.frame),
       phenom_syndrome_cell::OutputPort::WEST =>
-        send(tok, actor_2_lane_4_out, egress.frame),
+        send(tok, actor_2_lane_5_out, egress.frame),
       phenom_syndrome_cell::OutputPort::SOUTH =>
-        send(tok, actor_2_lane_4_out, egress.frame),
+        send(tok, actor_2_lane_5_out, egress.frame),
       phenom_syndrome_cell::OutputPort::PHI =>
         {
-        let lane_5_tok = send(tok, actor_2_lane_5_out, egress.frame);
         let lane_6_tok = send(tok, actor_2_lane_6_out, egress.frame);
-        join(lane_5_tok, lane_6_tok)
+        let lane_7_tok = send(tok, actor_2_lane_7_out, egress.frame);
+        join(lane_6_tok, lane_7_tok)
       },
     };
     state
@@ -217,17 +223,19 @@ proc StartupPrefix2 {
 
 pub proc Top {
   announcement_out: chan<axis::Frame> out;
-  correction_out: chan<axis::Frame> out;
+  data_measurements_out: chan<axis::Frame> out;
+  decoder_events_out: chan<axis::Frame> out;
 
   config(
       announcement_out: chan<axis::Frame> out,
-      correction_out: chan<axis::Frame> out
+      data_measurements_out: chan<axis::Frame> out,
+      decoder_events_out: chan<axis::Frame> out
   ) {
-    // Actor data uses phenom_data_cell output ABI order [north,east,west,south].
+    // Actor data uses phenom_data_cell output ABI order [north,east,west,south,measurement].
     let (actor_0_req_p, actor_0_req_c) = chan<axis::Frame, CHANNEL_DEPTH>("actor_0_req");
     let (actor_0_admit_p, actor_0_admit_c) = chan<u1, CHANNEL_DEPTH>("actor_0_admit");
     let (actor_0_egress_p, actor_0_egress_c) = chan<phenom_data_cell::Egress, u32:4>("actor_0_egress");
-    // Actor phi uses phi_halo_cell output ABI order [north,east,west,south,syndrome,correction].
+    // Actor phi uses phi_halo_cell output ABI order [north,east,west,south,syndrome,correction,status].
     let (actor_1_req_p, actor_1_req_c) = chan<axis::Frame, CHANNEL_DEPTH>("actor_1_req");
     let (actor_1_admit_p, actor_1_admit_c) = chan<u1, CHANNEL_DEPTH>("actor_1_admit");
     let (actor_1_egress_p, actor_1_egress_c) = chan<phi_halo_cell::Egress, u32:5>("actor_1_egress");
@@ -248,32 +256,34 @@ pub proc Top {
       actor_2_egress_p,
       actor_2_admit_p);
     let (actor_0_lane_0_p, actor_0_lane_0_c) = chan<axis::Frame, CHANNEL_DEPTH>("actor_0_lane_0");
-    let (actor_1_lane_1_p, actor_1_lane_1_c) = chan<axis::Frame, CHANNEL_DEPTH>("actor_1_lane_1");
+    let (actor_0_lane_1_p, actor_0_lane_1_c) = chan<axis::Frame, CHANNEL_DEPTH>("actor_0_lane_1");
     let (actor_1_lane_2_p, actor_1_lane_2_c) = chan<axis::Frame, CHANNEL_DEPTH>("actor_1_lane_2");
     let (actor_1_lane_3_p, actor_1_lane_3_c) = chan<axis::Frame, CHANNEL_DEPTH>("actor_1_lane_3");
-    let (actor_2_lane_4_p, actor_2_lane_4_c) = chan<axis::Frame, CHANNEL_DEPTH>("actor_2_lane_4");
+    let (actor_1_lane_4_p, actor_1_lane_4_c) = chan<axis::Frame, CHANNEL_DEPTH>("actor_1_lane_4");
     let (actor_2_lane_5_p, actor_2_lane_5_c) = chan<axis::Frame, CHANNEL_DEPTH>("actor_2_lane_5");
     let (actor_2_lane_6_p, actor_2_lane_6_c) = chan<axis::Frame, CHANNEL_DEPTH>("actor_2_lane_6");
-    spawn ActorRouter0(actor_0_egress_c, actor_0_lane_0_p);
-    spawn ActorRouter1(actor_1_egress_c, actor_1_lane_1_p, actor_1_lane_2_p, actor_1_lane_3_p);
-    spawn ActorRouter2(actor_2_egress_c, actor_2_lane_4_p, actor_2_lane_5_p, actor_2_lane_6_p);
+    let (actor_2_lane_7_p, actor_2_lane_7_c) = chan<axis::Frame, CHANNEL_DEPTH>("actor_2_lane_7");
+    spawn ActorRouter0(actor_0_egress_c, actor_0_lane_0_p, actor_0_lane_1_p);
+    spawn ActorRouter1(actor_1_egress_c, actor_1_lane_2_p, actor_1_lane_3_p, actor_1_lane_4_p);
+    spawn ActorRouter2(actor_2_egress_c, actor_2_lane_5_p, actor_2_lane_6_p, actor_2_lane_7_p);
     let (startup_0_prefix_p, startup_0_prefix_c) = chan<axis::Frame, CHANNEL_DEPTH>("startup_0_prefix");
-    spawn StartupPrefix0(actor_2_lane_4_c, startup_0_prefix_p);
+    spawn StartupPrefix0(actor_2_lane_5_c, startup_0_prefix_p);
     spawn axis::ReservedFrame(startup_0_prefix_c, actor_0_req_p, actor_0_admit_c);
     let (actor_1_ingress_mux_0_0_p, actor_1_ingress_mux_0_0_c) = chan<axis::Frame, CHANNEL_DEPTH>("actor_1_ingress_mux_0_0");
-    spawn axis::FrameMux2(actor_1_lane_1_c, actor_2_lane_5_c, actor_1_ingress_mux_0_0_p);
+    spawn axis::FrameMux2(actor_1_lane_2_c, actor_2_lane_6_c, actor_1_ingress_mux_0_0_p);
     let (startup_1_prefix_p, startup_1_prefix_c) = chan<axis::Frame, CHANNEL_DEPTH>("startup_1_prefix");
     spawn StartupPrefix1(actor_1_ingress_mux_0_0_c, startup_1_prefix_p);
     spawn axis::ReservedFrame(startup_1_prefix_c, actor_1_req_p, actor_1_admit_c);
     let (actor_2_ingress_mux_0_0_p, actor_2_ingress_mux_0_0_c) = chan<axis::Frame, CHANNEL_DEPTH>("actor_2_ingress_mux_0_0");
-    spawn axis::FrameMux2(actor_0_lane_0_c, actor_1_lane_2_c, actor_2_ingress_mux_0_0_p);
+    spawn axis::FrameMux2(actor_0_lane_0_c, actor_1_lane_3_c, actor_2_ingress_mux_0_0_p);
     let (startup_2_prefix_p, startup_2_prefix_c) = chan<axis::Frame, CHANNEL_DEPTH>("startup_2_prefix");
     spawn StartupPrefix2(actor_2_ingress_mux_0_0_c, startup_2_prefix_p);
     spawn axis::ReservedFrame(startup_2_prefix_c, actor_2_req_p, actor_2_admit_c);
-    spawn FrameRelay(actor_2_lane_6_c, announcement_out);
-    spawn FrameRelay(actor_1_lane_3_c, correction_out);
+    spawn FrameRelay(actor_2_lane_7_c, announcement_out);
+    spawn FrameRelay(actor_0_lane_1_c, data_measurements_out);
+    spawn FrameRelay(actor_1_lane_4_c, decoder_events_out);
 
-    (announcement_out, correction_out)
+    (announcement_out, data_measurements_out, decoder_events_out)
   }
 
   init { () }

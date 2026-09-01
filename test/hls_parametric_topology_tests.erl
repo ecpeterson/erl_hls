@@ -20,22 +20,22 @@ phi_torus_normalizes_without_expanded_actor_instances_test() ->
     ],
     ?assertEqual(6, length(lists:usort(Seeds))),
     ?assert(lists:all(fun(Seed) -> Seed =/= 0 end, Seeds)),
-    ?assertEqual(6, length(maps:get(route_relations, Plan))),
+    ?assertEqual(7, length(maps:get(route_relations, Plan))),
     [Family] = maps:get(families, Plan),
     ?assertEqual(phi, maps:get(id, Family)),
     ?assertEqual(phi_halo_cell, maps:get(module, Family)),
     ?assertEqual([2, 3], maps:get(shape, Family)),
     ?assertEqual(6, maps:get(instance_count, Family)),
     ?assertEqual(
-        [north, east, west, south, syndrome, correction],
+        [north, east, west, south, syndrome, correction, status],
         maps:get(outputs, Family)
     ),
     ?assertEqual(
         [
             #{
-                id => corrections,
+                id => decoder_events,
                 direction => out,
-                schemas => [phi_correction]
+                schemas => [phi_correction, phi_status]
             },
             #{
                 id => syndrome_requests,
@@ -60,8 +60,8 @@ family_size_does_not_expand_routes_but_does_enumerate_v0_startup_test() ->
     ?assertEqual([], maps:get(actors, Large)),
     ?assertEqual([], maps:get(routes, Small)),
     ?assertEqual([], maps:get(routes, Large)),
-    ?assertEqual(6, length(maps:get(route_relations, Small))),
-    ?assertEqual(6, length(maps:get(route_relations, Large))),
+    ?assertEqual(7, length(maps:get(route_relations, Small))),
+    ?assertEqual(7, length(maps:get(route_relations, Large))),
     [SmallFamily] = maps:get(families, Small),
     [LargeFamily] = maps:get(families, Large),
     ?assertEqual(25, maps:get(instance_count, SmallFamily)),
@@ -80,7 +80,7 @@ family_size_does_not_expand_routes_but_does_enumerate_v0_startup_test() ->
 wrapped_routes_resolve_one_boundary_member_test() ->
     Plan = hls_topology:normalize(phi_torus_topology:topology(5, 4)),
     Routes = hls_topology:routes_for_instance(Plan, phi, [0, 0]),
-    ?assertEqual(6, length(Routes)),
+    ?assertEqual(7, length(Routes)),
     ?assertEqual(
         [{actor, {phi, 0, 3}}],
         maps:get(recipients, route(Routes, north))
@@ -102,8 +102,12 @@ wrapped_routes_resolve_one_boundary_member_test() ->
         maps:get(recipients, route(Routes, syndrome))
     ),
     ?assertEqual(
-        [{external, corrections}],
+        [{external, decoder_events}],
         maps:get(recipients, route(Routes, correction))
+    ),
+    ?assertEqual(
+        [{external, decoder_events}],
+        maps:get(recipients, route(Routes, status))
     ),
     ?assert(lists:all(
         fun(Route) ->
@@ -138,10 +142,10 @@ two_by_two_torus_exposes_opposite_port_aliases_test() ->
         ))
     ),
     ?assertEqual(
-        [correction],
+        [correction, status],
         maps:get(source_ports, lane_relation(
             Plan,
-            {external, corrections}
+            {external, decoder_events}
         ))
     ).
 
@@ -149,19 +153,19 @@ three_by_three_torus_has_distinct_cardinal_lanes_test() ->
     Plan = hls_topology:normalize(phi_torus_topology:topology(3, 3)),
     ?assertEqual(6, length(maps:get(lane_relations, Plan))),
     lists:foreach(
-        fun({Destination, Port}) ->
+        fun({Destination, Ports}) ->
             ?assertEqual(
-                [Port],
+                Ports,
                 maps:get(source_ports, lane_relation(Plan, Destination))
             )
         end,
         [
-            {{family, phi, {translate, [0, -1], wrap}}, north},
-            {{family, phi, {translate, [1, 0], wrap}}, east},
-            {{family, phi, {translate, [-1, 0], wrap}}, west},
-            {{family, phi, {translate, [0, 1], wrap}}, south},
-            {{external, syndrome_requests}, syndrome},
-            {{external, corrections}, correction}
+            {{family, phi, {translate, [0, -1], wrap}}, [north]},
+            {{family, phi, {translate, [1, 0], wrap}}, [east]},
+            {{family, phi, {translate, [-1, 0], wrap}}, [west]},
+            {{family, phi, {translate, [0, 1], wrap}}, [south]},
+            {{external, syndrome_requests}, [syndrome]},
+            {{external, decoder_events}, [correction, status]}
         ]
     ).
 
@@ -273,6 +277,15 @@ relation_endpoints_are_checked_test() ->
 
 family_relation_interfaces_are_checked_once_per_rule_test() ->
     Spec = phi_torus_topology:topology(50, 50),
+    MalformedExternals = [
+        case External of
+            {syndrome_requests, out, _Schemas} ->
+                {syndrome_requests, out, [phi]};
+            _ ->
+                External
+        end
+        || External <- maps:get(externals, Spec)
+    ],
     ?assertError(
         {incompatible_route_schemas,
             {phi, syndrome},
@@ -280,10 +293,7 @@ family_relation_interfaces_are_checked_once_per_rule_test() ->
             [phenom_request],
             [phi]},
         hls_topology:normalize(Spec#{
-            externals := [
-                {syndrome_requests, out, [phi]},
-                {corrections, out, [phi_correction]}
-            ]
+            externals := MalformedExternals
         })
     ).
 
@@ -328,17 +338,16 @@ instance_route_coordinates_are_checked_test() ->
 route(Routes, Port) ->
     hd([
         Route
-        || Route <- Routes,
-           {_Instance, SourcePort} <- [maps:get(source, Route)],
+        || Route = #{source := {_Instance, SourcePort}} <- Routes,
            SourcePort =:= Port
     ]).
 
 lane_relation(Plan, Destination) ->
     hd([
         Lane
-        || Lane <- maps:get(lane_relations, Plan),
-           maps:get(source, Lane) =:= phi,
-           maps:get(destination, Lane) =:= Destination
+        || Lane = #{source := phi, destination := LaneDestination} <-
+               maps:get(lane_relations, Plan),
+           LaneDestination =:= Destination
     ]).
 
 replace_relation(Spec, Source, Replacement) ->

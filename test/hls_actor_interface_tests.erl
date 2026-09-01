@@ -69,7 +69,7 @@ phi_interface_records_protocol_facts_test() ->
     ],
     ?assert(maps:get(conditional, CorrectionEffect)),
     ?assertEqual(
-        [{step, u32}, {present, u32}, {x, u16}, {y, u16}],
+        [{step, u32}, {flags, u32}, {x, u16}, {y, u16}],
         schema_fields(Interface, phenom_anyon)
     ),
     ?assertEqual(
@@ -103,7 +103,8 @@ phenomenological_interfaces_are_distinct_test() ->
     ?assertEqual(4, hls_actor_interface:max_entry_effects(Data)),
     ?assertEqual(4, hls_actor_interface:max_entry_effects(Syndrome)),
     ?assertEqual(
-        [phenom_config, phenom_query],
+        [noise_cutoff, pauli_query, pauli_update,
+            phenom_config, phenom_query],
         hls_actor_interface:dispatched_schemas(Data)
     ),
     ?assertEqual(
@@ -111,7 +112,11 @@ phenomenological_interfaces_are_distinct_test() ->
         hls_actor_interface:output_schemas(Data, east)
     ),
     ?assertEqual(
-        [phenom_config, phenom_data, phenom_request],
+        [pauli_reply],
+        hls_actor_interface:output_schemas(Data, measurement)
+    ),
+    ?assertEqual(
+        [noise_cutoff, phenom_config, phenom_data, phenom_request],
         hls_actor_interface:dispatched_schemas(Syndrome)
     ),
     ?assertEqual(
@@ -127,8 +132,16 @@ phenomenological_interfaces_are_distinct_test() ->
         schema_fields(Syndrome, phenom_config)
     ),
     ?assertEqual(
-        [{step, u32}, {present, u32}, {x, u16}, {y, u16}],
+        [{step, u32}, {flags, u32}, {x, u16}, {y, u16}],
         schema_fields(Syndrome, phenom_anyon)
+    ),
+    ?assertEqual(
+        [{request_id, u32}, {measurement, pauli}],
+        schema_fields(Data, pauli_query)
+    ),
+    ?assertEqual(
+        [{request_id, u32}, {x, u16}, {y, u16}, {anticommutes, u32}],
+        schema_fields(Data, pauli_reply)
     ).
 
 source_and_compiled_interfaces_agree_test_() ->

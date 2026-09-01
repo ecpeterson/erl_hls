@@ -23,15 +23,120 @@ default_topology_has_six_bounded_families_test() ->
         end,
         maps:get(families, Spec)
     ),
-    ?assertEqual(30, length(maps:get(route_relations, Spec))),
+    ?assertEqual(34, length(maps:get(route_relations, Spec))),
     ?assertEqual(
         [
             {x_announcements, out, [phenom_anyon]},
             {z_announcements, out, [phenom_anyon]},
-            {x_corrections, out, [phi_correction]},
-            {z_corrections, out, [phi_correction]}
+            {x_decoder_events, out, [phi_correction, phi_status]},
+            {z_decoder_events, out, [phi_correction, phi_status]},
+            {data_measurements, out, [pauli_reply]}
         ],
         maps:get(externals, Spec)
+    ).
+
+normalized_control_router_embeds_the_physical_checkerboard_test() ->
+    Plan = hls_topology:from_module(phi_noise_topology),
+    ?assertEqual(
+        [#{
+            id => control_router,
+            kind => rectangle,
+            shape => [?DISTANCE, 2 * ?DISTANCE],
+            targets => [
+                #{
+                    id => data,
+                    schemas => [pauli_query, pauli_update],
+                    recipients => [
+                        #{
+                            family => data_even,
+                            scale => [1, 2],
+                            offset => [0, 0]
+                        },
+                        #{
+                            family => data_odd,
+                            scale => [1, 2],
+                            offset => [0, 1]
+                        }
+                    ]
+                },
+                #{
+                    id => noise,
+                    schemas => [noise_cutoff],
+                    recipients => [
+                        #{
+                            family => data_even,
+                            scale => [1, 2],
+                            offset => [0, 0]
+                        },
+                        #{
+                            family => data_odd,
+                            scale => [1, 2],
+                            offset => [0, 1]
+                        },
+                        #{
+                            family => syndrome_x,
+                            scale => [1, 2],
+                            offset => [0, 0]
+                        },
+                        #{
+                            family => syndrome_z,
+                            scale => [1, 2],
+                            offset => [0, 0]
+                        }
+                    ]
+                }
+            ]
+        }],
+        maps:get(ingresses, Plan)
+    ).
+
+one_ingress_requires_consistent_family_embedding_test() ->
+    Spec = phi_noise_topology:topology(1),
+    [{control_router, Rectangle, Targets}] = maps:get(ingresses, Spec),
+    ChangedTargets = [
+        case Target of
+            {noise, Schemas, Recipients} ->
+                {noise, Schemas, [
+                    case Recipient of
+                        {family, data_even, {embed, _Scale, Offset}} ->
+                            {family, data_even, {embed, [1, 1], Offset}};
+                        _ -> Recipient
+                    end
+                    || Recipient <- Recipients
+                ]};
+            _ -> Target
+        end
+        || Target <- Targets
+    ],
+    ?assertError(
+        {ingress_embeddings, control_router, data_even, [
+            {[1, 1], [0, 0]},
+            {[1, 2], [0, 0]}
+        ]},
+        hls_topology:normalize(Spec#{
+            ingresses := [{control_router, Rectangle, ChangedTargets}]
+        })
+    ).
+
+singleton_family_scale_must_fit_the_address_domain_test() ->
+    Spec = phi_noise_topology:topology(1),
+    [{control_router, Rectangle, Targets}] = maps:get(ingresses, Spec),
+    ChangedTargets = [
+        {TargetId, Schemas, [
+            case Recipient of
+                {family, data_even, {embed, _Scale, Offset}} ->
+                    {family, data_even, {embed, [2, 2], Offset}};
+                _ -> Recipient
+            end
+            || Recipient <- Recipients
+        ]}
+        || {TargetId, Schemas, Recipients} <- Targets
+    ],
+    ?assertError(
+        {ingress_embedding, data_even, [1, 1], [2, 2], [0, 0], [1, 2]},
+        hls_topology:normalize(Spec#{
+            ingresses := [{control_router, Rectangle, ChangedTargets}]
+        })
     ).
 
 family_modules_match_protocol_roles_test() ->
@@ -117,6 +222,22 @@ each_data_qubit_touches_two_checks_of_each_plane_test() ->
         [data_even, data_odd]
     ).
 
+data_measurement_boundary_hides_family_split_test() ->
+    Plan = hls_topology:from_module(phi_noise_topology),
+    lists:foreach(
+        fun({Family, X, Y}) ->
+            ?assertEqual(
+                [{external, data_measurements}],
+                recipients(Plan, Family, [X, Y], measurement)
+            )
+        end,
+        [
+            {Family, X, Y}
+            || Family <- [data_even, data_odd],
+               [X, Y] <- coordinates(?DISTANCE)
+        ]
+    ).
+
 x_and_z_checks_overlap_on_zero_or_two_data_qubits_test() ->
     Plan = hls_topology:from_module(phi_noise_topology),
     XNeighborhoods = [
@@ -149,12 +270,20 @@ phi_and_syndrome_pairs_share_coordinates_test() ->
                 recipients(Plan, phi_z, Coordinates, syndrome)
             ),
             ?assertEqual(
-                [{external, x_corrections}],
+                [{external, x_decoder_events}],
                 recipients(Plan, phi_x, Coordinates, correction)
             ),
             ?assertEqual(
-                [{external, z_corrections}],
+                [{external, z_decoder_events}],
                 recipients(Plan, phi_z, Coordinates, correction)
+            ),
+            ?assertEqual(
+                [{external, x_decoder_events}],
+                recipients(Plan, phi_x, Coordinates, status)
+            ),
+            ?assertEqual(
+                [{external, z_decoder_events}],
+                recipients(Plan, phi_z, Coordinates, status)
             ),
             assert_announcement_fanout(
                 Plan,
@@ -228,11 +357,23 @@ normalized_startup_retains_family_instance_targets_test() ->
     Plan = hls_topology:from_module(phi_noise_topology),
     Startup = maps:get(startup, Plan),
     ?assertEqual(54, length(Startup)),
-    ?assertEqual(32, length(maps:get(lane_relations, Plan))),
-    ?assert(lists:all(
-        fun(#{source_ports := Ports}) -> length(Ports) =:= 1 end,
-        maps:get(lane_relations, Plan)
-    )),
+    Lanes = maps:get(lane_relations, Plan),
+    ?assertEqual(34, length(Lanes)),
+    ?assertEqual(
+        [
+            #{
+                source => phi_x,
+                destination => {external, x_decoder_events},
+                source_ports => [correction, status]
+            },
+            #{
+                source => phi_z,
+                destination => {external, z_decoder_events},
+                source_ports => [correction, status]
+            }
+        ],
+        [Lane || Lane = #{source_ports := [_, _ | _]} <- Lanes]
+    ),
     ?assert(lists:member(
         #{
             target => {phi_z, 2, 2},
@@ -271,7 +412,8 @@ family_startup_targets_are_bounded_and_typed_test() ->
             {data_even, 0, 0},
             0,
             phenom_request,
-            [phenom_config, phenom_query]},
+            [noise_cutoff, pauli_query, pauli_update,
+                phenom_config, phenom_query]},
         hls_topology:normalize(Spec#{
             startup := [
                 {{data_even, 0, 0}, [#phenom_request{step = 0}]}
@@ -408,7 +550,7 @@ startup_seed({{Family, X, Y}, [#phenom_config{
     assert_startup_coordinates(X, Y),
     ?assertEqual(?EXERCISE_THRESHOLD, Threshold),
     ?assertEqual(X, ConfigX),
-    ?assertEqual(Y, ConfigY),
+    ?assertEqual(configured_y(Family, Y), ConfigY),
     ?assert(Seed > 0),
     Seed;
 startup_seed({{Family, X, Y}, [#phi_config{seed = Seed}]}) ->
@@ -416,6 +558,11 @@ startup_seed({{Family, X, Y}, [#phi_config{seed = Seed}]}) ->
     assert_startup_coordinates(X, Y),
     ?assert(Seed > 0),
     Seed.
+
+configured_y(data_even, Y) -> 2 * Y;
+configured_y(data_odd, Y) -> 2 * Y + 1;
+configured_y(syndrome_x, Y) -> Y;
+configured_y(syndrome_z, Y) -> Y.
 
 assert_startup_coordinates(X, Y) ->
     ?assert(X >= 0 andalso X < ?DISTANCE),

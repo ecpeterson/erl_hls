@@ -7,6 +7,8 @@
 -define(WEST_MASK, 4).
 -define(SOUTH_MASK, 8).
 -define(ALL_DIRECTIONS, 15).
+-define(PRESENT_MASK, 1).
+-define(QUIET_MASK, 2).
 -define(PRNG_SEED, 16#6d2b79f5).
 -define(PRNG_FIRST, 16#40aec71f).
 -define(PRNG_SECOND, 16#91e00c19).
@@ -59,7 +61,7 @@ measurement_coordinate_reaches_correction_test() ->
     ),
     ?assertMatch(
         {cell, 0, 0, [0, 0], [0, 0], 0,
-            0, 0, 0, 0, 1, ?PRNG_SEED, 16#1234, 16#abcd},
+            0, 0, 0, 0, 1, ?PRNG_SEED, 16#1234, 16#abcd, 0, 0},
         Updated
     ),
     {_AfterFlip, Actions} = phi_halo_cell:handle_enter(
@@ -71,6 +73,46 @@ measurement_coordinate_reaches_correction_test() ->
         expected_anyon_actions(0, none, 16#1234, 16#abcd),
         Actions
     ).
+
+status_is_suppressed_initially_and_reports_post_move_occupancy_test() ->
+    {CardinalCollectors, Ref} = start_collectors(),
+    %% Sharing one collector makes the actor's status-before-request effect
+    %% order observable through Erlang's per-sender signal ordering.
+    StatusAndSyndrome = maps:get(status, CardinalCollectors),
+    Collectors = CardinalCollectors#{syndrome => StatusAndSyndrome},
+    {ok, PID} = phi_halo_cell:start_link(),
+    try
+        ok = phi_halo_cell:connect(PID, Collectors),
+        ok = phi_halo_cell:configure(PID, ?PRNG_SEED),
+        expect_port_cast(Ref, status, {phenom_request, 0}),
+        assert_no_neighbor_cast(Ref),
+
+        %% Quiet is carried independently of occupancy. One incoming move
+        %% then creates the cell's post-step anyon.
+        ok = hls_statem:cast(PID, {
+            phenom_anyon, 0, ?QUIET_MASK, 16#1234, 16#abcd
+        }),
+        expect_neighbor_batch(Ref, {phi, 0, [0, 0]}),
+        four_phis(PID, 0, [0, 0]),
+        expect_neighbor_batch(Ref, {phi, 1, [0, 0]}),
+        four_phis(PID, 1, [0, 0]),
+        expect_comparison_batch(Ref, 0, 0),
+        four_phi0s(PID, 0, 0),
+        expect_anyon_batch(Ref, 0, none),
+        offer_anyons(PID, 0, [true, false, false, false]),
+
+        expect_port_cast(Ref, status, {
+            phi_status,
+            0,
+            16#1234,
+            16#abcd,
+            ?PRESENT_MASK bor ?QUIET_MASK
+        }),
+        expect_port_cast(Ref, status, {phenom_request, 1})
+    after
+        stop_cell(PID),
+        stop_collectors(Ref, CardinalCollectors)
+    end.
 
 measurement_gates_diffusion_and_toggles_anyon_test() ->
     {CardinalCollectors, Ref} = start_collectors(),
@@ -93,7 +135,7 @@ measurement_gates_diffusion_and_toggles_anyon_test() ->
         ?assertEqual(4, maps:get(committed, maps:get(mailbox, Waiting))),
         ?assertMatch(
             {cell, 0, 0, [0, 0], [0, 0], 0,
-                0, 0, 0, 0, 0, ?PRNG_SEED, 0, 0},
+                0, 0, 0, 0, 0, ?PRNG_SEED, 0, 0, 0, 0},
             maps:get(data, Waiting)
         ),
         assert_no_neighbor_cast(Ref),
@@ -109,7 +151,7 @@ measurement_gates_diffusion_and_toggles_anyon_test() ->
         ?assertEqual(0, maps:get(committed, maps:get(mailbox, Running))),
         ?assertMatch(
             {cell, 0, 1, [65536, 0], [0, 0], 0,
-                0, 0, 0, 0, 1, ?PRNG_SEED, 0, 0},
+                0, 0, 0, 0, 1, ?PRNG_SEED, 0, 0, 0, 0},
             maps:get(data, Running)
         )
     after
@@ -130,8 +172,22 @@ comparison_source_orders_test_() ->
         {west, 18},
         {south, 16}
     ]),
+    Negative = comparison_messages([
+        {north, -4},
+        {east, -1},
+        {west, -3},
+        {south, -2}
+    ]),
+    NegativeTied = comparison_messages([
+        {north, -(1 bsl 31)},
+        {east, -1},
+        {west, -1},
+        {south, -2}
+    ]),
     comparison_order_tests(unique, Unique, 18, ?EAST_MASK) ++
-        comparison_order_tests(tied, Tied, 18, 0).
+        comparison_order_tests(tied, Tied, 18, 0) ++
+        comparison_order_tests(negative, Negative, -1, ?EAST_MASK) ++
+        comparison_order_tests(negative_tied, NegativeTied, -1, 0).
 
 duplicate_comparison_source_stops_cell_test() ->
     {PID, Collectors, Ref} = start_cell(),
@@ -182,7 +238,7 @@ directional_coin_moves_test_() ->
             ?assertEqual(
                 {cell, 0, 2, [15, 15], [0, 0], 0,
                     ?ALL_DIRECTIONS, 18, DirectionMask, 0, 0,
-                    ?PRNG_SECOND, 0, 0},
+                    ?PRNG_SECOND, 0, 0, 0, 0},
                 Updated
             ),
             ?assertEqual(
@@ -210,7 +266,7 @@ coin_advances_when_no_move_is_eligible_test_() ->
             ?assertMatch(
                 {cell, 0, 2, [15, 15], [0, 0], 0,
                     ?ALL_DIRECTIONS, 18, Direction, 0,
-                    ExpectedAnyon, Random1, 0, 0},
+                    ExpectedAnyon, Random1, 0, 0, 0, 0},
                 Updated
             ),
             ?assertEqual(expected_anyon_actions(0, none, 0, 0), Actions)
@@ -231,7 +287,8 @@ local_departure_and_arrivals_combine_by_parity_test() ->
     ),
     ?assertMatch(
         {cell, 1, 0, [15, 15], [0, 0], 0,
-            ?ALL_DIRECTIONS, 18, ?EAST_MASK, 0, 1, ?PRNG_SECOND, 0, 0},
+            ?ALL_DIRECTIONS, 18, ?EAST_MASK, 0, 1, ?PRNG_SECOND, 0, 0,
+            0, 1},
         Advanced
     ).
 
@@ -295,7 +352,7 @@ early_phi_casts_wait_for_initial_entry_test() ->
         ?assertEqual(4, maps:get(committed, maps:get(mailbox, Before))),
         ?assertMatch(
             {cell, 0, 0, [0, 0], [0, 0], 0,
-                0, 0, 0, 0, 0, 0, 0, 0},
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
             maps:get(data, Before)),
         assert_no_neighbor_cast(Ref),
 
@@ -304,7 +361,7 @@ early_phi_casts_wait_for_initial_entry_test() ->
         ok = phi_halo_cell:configure(PID, ?PRNG_SEED),
         expect_neighbor_sequences(Ref, [
             {phi, 0, [0, 0]},
-            {phi, 1, [8, 6]}
+            {phi, 1, [3, 6]}
         ]),
 
         After = phi_halo_cell:runtime_info(PID),
@@ -312,8 +369,8 @@ early_phi_casts_wait_for_initial_entry_test() ->
         ?assertEqual(gathering, maps:get(phase, After)),
         ?assertEqual(0, maps:get(committed, maps:get(mailbox, After))),
         ?assertMatch(
-            {cell, 0, 1, [8, 6], [0, 0], 0,
-                0, 0, 0, 0, 0, ?PRNG_SEED, 0, 0},
+            {cell, 0, 1, [3, 6], [0, 0], 0,
+                0, 0, 0, 0, 0, ?PRNG_SEED, 0, 0, 0, 0},
             maps:get(data, After))
     after
         case is_process_alive(PID) of
@@ -411,7 +468,7 @@ boolean_anyon_api_encodes_move_test() ->
         ok = phi_halo_cell:offer_anyon(PID, 0, true),
         ?assertMatch(
             {cell, 0, 2, [0, 0], [0, 0], 0,
-                ?ALL_DIRECTIONS, 0, 0, 1, 1, ?PRNG_FIRST, 0, 0},
+                ?ALL_DIRECTIONS, 0, 0, 1, 1, ?PRNG_FIRST, 0, 0, 0, 0},
             maps:get(data, phi_halo_cell:runtime_info(PID))
         )
     end).
@@ -453,6 +510,14 @@ generated_dslx_matches_checked_in_artifact_test() ->
     ?assertNotEqual(
         nomatch,
         binary:match(Generated, <<"pub proc Service">>)
+    ),
+    ?assertNotEqual(
+        nomatch,
+        binary:match(Generated, <<"PHI_STATUS = u8:17">>)
+    ),
+    ?assertNotEqual(
+        nomatch,
+        binary:match(Generated, <<"STATUS = u8:6">>)
     ),
     {DispatchStart, _DispatchMarkerLength} = binary:match(
         Generated,
@@ -540,6 +605,8 @@ message_wire_abi_test() ->
     Correction = {phi_correction, 16#91929394, 16#a1a2, 16#b1b2,
         ?WEST_MASK},
     Config = {phi_config, 16#c1c2c3c4},
+    Status = {phi_status, 16#d1d2d3d4, 16#e1e2, 16#f1f2,
+        ?PRESENT_MASK bor ?QUIET_MASK},
     ?assertEqual(3, phi_halo_cell:pack_tag(phi)),
     ?assertEqual(4, phi_halo_cell:pack_tag(anyon_move)),
     ?assertEqual(5, phi_halo_cell:pack_tag(phi0)),
@@ -553,6 +620,7 @@ message_wire_abi_test() ->
     ?assertEqual(10, phi_halo_cell:pack_tag(phenom_anyon)),
     ?assertEqual(11, phi_halo_cell:pack_tag(phi_correction)),
     ?assertEqual(12, phi_halo_cell:pack_tag(phi_config)),
+    ?assertEqual(17, phi_halo_cell:pack_tag(phi_status)),
     ?assertEqual(phenom_config, phi_halo_cell:unpack_tag(6)),
     ?assertEqual(phenom_request, phi_halo_cell:unpack_tag(7)),
     ?assertEqual(phenom_query, phi_halo_cell:unpack_tag(8)),
@@ -560,6 +628,7 @@ message_wire_abi_test() ->
     ?assertEqual(phenom_anyon, phi_halo_cell:unpack_tag(10)),
     ?assertEqual(phi_correction, phi_halo_cell:unpack_tag(11)),
     ?assertEqual(phi_config, phi_halo_cell:unpack_tag(12)),
+    ?assertEqual(phi_status, phi_halo_cell:unpack_tag(17)),
     PackedPhi = phi_halo_cell:pack(Phi),
     ?assertEqual(
         <<
@@ -631,11 +700,25 @@ message_wire_abi_test() ->
     ?assertEqual(
         {Config, <<>>},
         phi_halo_cell:unpack(phi_config, PackedConfig)
+    ),
+    PackedStatus = phi_halo_cell:pack(Status),
+    ?assertEqual(
+        <<
+            16#d1d2d3d4:32/unsigned-little-integer,
+            16#e1e2:16/unsigned-little-integer,
+            16#f1f2:16/unsigned-little-integer,
+            (?PRESENT_MASK bor ?QUIET_MASK):32/unsigned-little-integer
+        >>,
+        PackedStatus
+    ),
+    ?assertEqual(
+        {Status, <<>>},
+        phi_halo_cell:unpack(phi_status, PackedStatus)
     ).
 
 two_layer_relaxation_coefficients_test() ->
     Initial = {cell, 0, 0, [40, 20], [0, 0], 0,
-        0, 0, 0, 0, 0, ?PRNG_SEED, 0, 0},
+        0, 0, 0, 0, 0, ?PRNG_SEED, 0, 0, 0, 0},
     Message0 = {phi, 0, [8, 12]},
     {gathering, First, consume} =
         phi_halo_cell:handle_cast(Message0, gathering, Initial),
@@ -646,8 +729,8 @@ two_layer_relaxation_coefficients_test() ->
     {repeat_phase, RoundOne, consume} =
         phi_halo_cell:handle_cast(Message0, gathering, Third),
     ?assertEqual(
-        {cell, 0, 1, [19, 19], [0, 0], 0,
-            0, 0, 0, 0, 0, ?PRNG_SEED, 0, 0},
+        {cell, 0, 1, [33, 19], [0, 0], 0,
+            0, 0, 0, 0, 0, ?PRNG_SEED, 0, 0, 0, 0},
         RoundOne
     ),
 
@@ -661,8 +744,8 @@ two_layer_relaxation_coefficients_test() ->
     {comparing, Compared, consume} =
         phi_halo_cell:handle_cast(Message1, gathering, Seventh),
     ?assertEqual(
-        {cell, 0, 2, [12, 17], [0, 0], 0,
-            0, 0, 0, 0, 0, ?PRNG_SEED, 0, 0},
+        {cell, 0, 2, [28, 18], [0, 0], 0,
+            0, 0, 0, 0, 0, ?PRNG_SEED, 0, 0, 0, 0},
         Compared
     ),
 
@@ -678,8 +761,9 @@ two_layer_relaxation_coefficients_test() ->
         Compared
     ),
     ?assertMatch(
-        {cell, 0, 2, [12, 17], [0, 0], 0,
-            ?ALL_DIRECTIONS, 14, ?EAST_MASK, 0, 0, ?PRNG_SEED, 0, 0},
+        {cell, 0, 2, [28, 18], [0, 0], 0,
+            ?ALL_DIRECTIONS, 14, ?EAST_MASK, 0, 0, ?PRNG_SEED, 0, 0,
+            0, 0},
         Final
     ).
 
@@ -690,17 +774,17 @@ repeated_diffusion_comparison_and_flipping(PID, Ref) ->
     ok = phi_halo_cell:offer_phi(PID, 0, [64, 80]),
     ok = phi_halo_cell:offer_phi(PID, 0, [16, 32]),
     ok = phi_halo_cell:offer_phi(PID, 0, [48, 64]),
-    expect_neighbor_batch(Ref, {phi, 1, [20, 11]}),
+    expect_neighbor_batch(Ref, {phi, 1, [7, 11]}),
     AfterRoundOne = phi_halo_cell:runtime_info(PID),
     ?assertEqual(gathering, maps:get(phase, AfterRoundOne)),
 
     four_phis(PID, 1, [16, 32]),
-    expect_comparison_batch(Ref, 0, 15),
+    expect_comparison_batch(Ref, 0, 9),
     AfterDiffusion = phi_halo_cell:runtime_info(PID),
     ?assertEqual(comparing, maps:get(phase, AfterDiffusion)),
     ?assertMatch(
-        {cell, 0, 2, [15, 15], [0, 0], 0,
-            0, 0, 0, 0, 0, ?PRNG_SEED, 0, 0},
+        {cell, 0, 2, [9, 15], [0, 0], 0,
+            0, 0, 0, 0, 0, ?PRNG_SEED, 0, 0, 0, 0},
         maps:get(data, AfterDiffusion)
     ),
 
@@ -714,21 +798,27 @@ repeated_diffusion_comparison_and_flipping(PID, Ref) ->
     AfterComparison = phi_halo_cell:runtime_info(PID),
     ?assertEqual(flipping, maps:get(phase, AfterComparison)),
     ?assertMatch(
-        {cell, 0, 2, [15, 15], [0, 0], 0,
-            ?ALL_DIRECTIONS, 18, ?EAST_MASK, 0, 0, ?PRNG_FIRST, 0, 0},
+        {cell, 0, 2, [9, 15], [0, 0], 0,
+            ?ALL_DIRECTIONS, 18, ?EAST_MASK, 0, 0, ?PRNG_FIRST, 0, 0,
+            0, 0},
         maps:get(data, AfterComparison)
     ),
 
     four_anyons(PID, 0, false),
-    expect_neighbor_batch(Ref, {phi, 2, [15, 15]}),
+    expect_status_and_neighbor_batch(
+        Ref,
+        {phi_status, 0, 0, 0, 0},
+        {phi, 2, [9, 15]}
+    ),
 
     Info = phi_halo_cell:runtime_info(PID),
     ?assertEqual(gathering, maps:get(phase, Info)),
     ?assertEqual(0, maps:get(postponed, Info)),
     ?assertEqual(0, maps:get(committed, maps:get(mailbox, Info))),
     ?assertMatch(
-        {cell, 1, 0, [15, 15], [0, 0], 0,
-            ?ALL_DIRECTIONS, 18, ?EAST_MASK, 0, 0, ?PRNG_FIRST, 0, 0},
+        {cell, 1, 0, [9, 15], [0, 0], 0,
+            ?ALL_DIRECTIONS, 18, ?EAST_MASK, 0, 0, ?PRNG_FIRST, 0, 0,
+            0, 1},
         maps:get(data, Info)
     ),
     assert_no_neighbor_cast(Ref).
@@ -745,12 +835,16 @@ coin_gates_selected_anyon_output(PID, Ref) ->
     %% the following decoder step without conflating arrival with departure.
     expect_anyon_batch(Ref, 0, none),
     offer_anyons(PID, 0, [true, false, false, false]),
-    expect_neighbor_batch(Ref, {phi, 2, [0, 0]}),
+    expect_status_and_neighbor_batch(
+        Ref,
+        {phi_status, 0, 0, 0, ?PRESENT_MASK},
+        {phi, 2, [0, 0]}
+    ),
 
     four_phis(PID, 2, [0, 0]),
     expect_neighbor_batch(Ref, {phi, 3, [65536, 0]}),
     four_phis(PID, 3, [0, 0]),
-    expect_comparison_batch(Ref, 1, 81920),
+    expect_comparison_batch(Ref, 1, 114688),
 
     %% The second draw is heads. The protocol chooses the unique adjacent
     %% maximum; it does not require that maximum to exceed the local field.
@@ -764,16 +858,22 @@ coin_gates_selected_anyon_output(PID, Ref) ->
     Flipping = phi_halo_cell:runtime_info(PID),
     ?assertEqual(flipping, maps:get(phase, Flipping)),
     ?assertMatch(
-        {cell, 1, 2, [81920, 3276], [0, 0], 0,
-            ?ALL_DIRECTIONS, 13, ?EAST_MASK, 0, 0, ?PRNG_SECOND, 0, 0},
+        {cell, 1, 2, [114688, 3277], [0, 0], 0,
+            ?ALL_DIRECTIONS, 13, ?EAST_MASK, 0, 0, ?PRNG_SECOND, 0, 0,
+            0, 1},
         maps:get(data, Flipping)
     ),
 
     four_anyons(PID, 1, false),
-    expect_neighbor_batch(Ref, {phi, 4, [81920, 3276]}),
+    expect_status_and_neighbor_batch(
+        Ref,
+        {phi_status, 1, 0, 0, 0},
+        {phi, 4, [114688, 3277]}
+    ),
     ?assertMatch(
-        {cell, 2, 0, [81920, 3276], [0, 0], 0,
-            ?ALL_DIRECTIONS, 13, ?EAST_MASK, 0, 0, ?PRNG_SECOND, 0, 0},
+        {cell, 2, 0, [114688, 3277], [0, 0], 0,
+            ?ALL_DIRECTIONS, 13, ?EAST_MASK, 0, 0, ?PRNG_SECOND, 0, 0,
+            0, 1},
         maps:get(data, phi_halo_cell:runtime_info(PID))
     ).
 
@@ -791,13 +891,13 @@ staged_next_phase_messages(PID, Ref) ->
     ?assertEqual(1, maps:get(postponed, BeforeRepeat)),
 
     ok = phi_halo_cell:offer_phi(PID, 0, [48, 64]),
-    expect_neighbor_batch(Ref, {phi, 1, [20, 11]}),
+    expect_neighbor_batch(Ref, {phi, 1, [7, 11]}),
     AfterRepeat = phi_halo_cell:runtime_info(PID),
     ?assertEqual(gathering, maps:get(phase, AfterRepeat)),
     ?assertEqual(0, maps:get(postponed, AfterRepeat)),
     ?assertMatch(
-        {cell, 0, 1, [20, 11], [8, 12], 1,
-            0, 0, 0, 0, 0, ?PRNG_SEED, 0, 0},
+        {cell, 0, 1, [7, 11], [8, 12], 1,
+            0, 0, 0, 0, 0, ?PRNG_SEED, 0, 0, 0, 0},
         maps:get(data, AfterRepeat)
     ),
 
@@ -813,13 +913,14 @@ staged_next_phase_messages(PID, Ref) ->
     ?assertEqual(2, maps:get(postponed, BeforeComparison)),
 
     ok = phi_halo_cell:offer_phi(PID, 1, [8, 12]),
-    expect_comparison_batch(Ref, 0, 11),
+    expect_comparison_batch(Ref, 0, 8),
     AfterEntry = phi_halo_cell:runtime_info(PID),
     ?assertEqual(comparing, maps:get(phase, AfterEntry)),
     ?assertEqual(1, maps:get(postponed, AfterEntry)),
     ?assertMatch(
-        {cell, 0, 2, [11, 11], [0, 0], 0,
-            ?NORTH_MASK, 14, ?NORTH_MASK, 0, 0, ?PRNG_SEED, 0, 0},
+        {cell, 0, 2, [8, 11], [0, 0], 0,
+            ?NORTH_MASK, 14, ?NORTH_MASK, 0, 0, ?PRNG_SEED, 0, 0,
+            0, 0},
         maps:get(data, AfterEntry)
     ),
 
@@ -833,8 +934,9 @@ staged_next_phase_messages(PID, Ref) ->
     ?assertEqual(flipping, maps:get(phase, AfterFlip)),
     ?assertEqual(0, maps:get(postponed, AfterFlip)),
     ?assertMatch(
-        {cell, 0, 2, [11, 11], [0, 0], 0,
-            ?ALL_DIRECTIONS, 18, ?EAST_MASK, 1, 0, ?PRNG_FIRST, 0, 0},
+        {cell, 0, 2, [8, 11], [0, 0], 0,
+            ?ALL_DIRECTIONS, 18, ?EAST_MASK, 1, 0, ?PRNG_FIRST, 0, 0,
+            0, 0},
         maps:get(data, AfterFlip)
     ),
 
@@ -848,13 +950,18 @@ staged_next_phase_messages(PID, Ref) ->
     ?assertEqual(1, maps:get(postponed, BeforeGather)),
 
     ok = phi_halo_cell:offer_anyon(PID, 0, false),
-    expect_neighbor_batch(Ref, {phi, 2, [11, 11]}),
+    expect_status_and_neighbor_batch(
+        Ref,
+        {phi_status, 0, 0, 0, 0},
+        {phi, 2, [8, 11]}
+    ),
     AfterGather = phi_halo_cell:runtime_info(PID),
     ?assertEqual(gathering, maps:get(phase, AfterGather)),
     ?assertEqual(0, maps:get(postponed, AfterGather)),
     ?assertMatch(
-        {cell, 1, 0, [11, 11], [8, 12], 1,
-            ?ALL_DIRECTIONS, 18, ?EAST_MASK, 0, 0, ?PRNG_FIRST, 0, 0},
+        {cell, 1, 0, [8, 11], [8, 12], 1,
+            ?ALL_DIRECTIONS, 18, ?EAST_MASK, 0, 0, ?PRNG_FIRST, 0, 0,
+            0, 1},
         maps:get(data, AfterGather)
     ).
 
@@ -869,14 +976,14 @@ full_staged_diffusion_epoch(PID, Ref) ->
     ?assertEqual(4, maps:get(committed, maps:get(mailbox, Staged))),
 
     four_phis(PID, 0, [0, 0]),
-    expect_comparison_sequences(Ref, {phi, 1, [0, 0]}, 0, 4),
+    expect_comparison_sequences(Ref, {phi, 1, [0, 0]}, 0, 1),
     Complete = phi_halo_cell:runtime_info(PID),
     ?assertEqual(comparing, maps:get(phase, Complete)),
     ?assertEqual(0, maps:get(postponed, Complete)),
     ?assertEqual(0, maps:get(committed, maps:get(mailbox, Complete))),
     ?assertMatch(
-        {cell, 0, 2, [4, 2], [0, 0], 0,
-            0, 0, 0, 0, 0, ?PRNG_SEED, 0, 0},
+        {cell, 0, 2, [1, 2], [0, 0], 0,
+            0, 0, 0, 0, 0, ?PRNG_SEED, 0, 0, 0, 0},
         maps:get(data, Complete)
     ).
 
@@ -905,7 +1012,8 @@ full_staged_comparison(PID, Ref) ->
     ?assertEqual(0, maps:get(committed, maps:get(mailbox, Complete))),
     ?assertMatch(
         {cell, 0, 2, [0, 0], [0, 0], 0,
-            ?ALL_DIRECTIONS, 4, ?SOUTH_MASK, 0, 0, ?PRNG_FIRST, 0, 0},
+            ?ALL_DIRECTIONS, 4, ?SOUTH_MASK, 0, 0, ?PRNG_FIRST, 0, 0,
+            0, 0},
         maps:get(data, Complete)
     ).
 
@@ -930,7 +1038,7 @@ comparison_order_tests(Kind, Messages, Best, BestDirection) ->
             ?assertMatch(
                 {cell, 0, 2, [15, 15], [0, 0], 0,
                     ?ALL_DIRECTIONS, Best, BestDirection, 0, 0, ?PRNG_SEED,
-                    0, 0},
+                    0, 0, 0, 0},
                 Final
             )
         end}
@@ -939,11 +1047,12 @@ comparison_order_tests(Kind, Messages, Best, BestDirection) ->
 
 comparison_cell() ->
     {cell, 0, 2, [15, 15], [0, 0], 0,
-        0, 0, 0, 0, 0, ?PRNG_SEED, 0, 0}.
+        0, 0, 0, 0, 0, ?PRNG_SEED, 0, 0, 0, 0}.
 
 flipping_cell(Anyon, Direction, RandomState) ->
     {cell, 0, 2, [15, 15], [0, 0], 0,
-        ?ALL_DIRECTIONS, 18, Direction, 0, Anyon, RandomState, 0, 0}.
+        ?ALL_DIRECTIONS, 18, Direction, 0, Anyon, RandomState, 0, 0,
+        0, 0}.
 
 comparison_messages(SourcesAndValues) ->
     [
@@ -993,9 +1102,14 @@ enter_comparing(PID, Ref, RoundZeroValues, RoundOneValues) ->
 relax([P0, P1], [Value0, Value1]) ->
     Sum0 = Value0 * 4,
     Sum1 = Value1 * 4,
-    New0 = (P0 bsr 2) + (((P1 bsl 1) + Sum0) bsr 3),
-    New1 = ((P1 * 3) bsr 2) + ((P0 + Sum1) div 20),
+    New0 = round_nearest(18 * P0 + 2 * P1 + Sum0, 24),
+    New1 = round_nearest(P0 + 15 * P1 + Sum1, 20),
     [New0, New1].
+
+round_nearest(Numerator, Denominator) when Numerator >= 0 ->
+    (Numerator + Denominator div 2) div Denominator;
+round_nearest(Numerator, Denominator) ->
+    -round_nearest(-Numerator, Denominator).
 
 with_cell(Test) ->
     {PID, Collectors, Ref} = start_cell(),
@@ -1041,6 +1155,8 @@ zero_measurement_loop(PID) ->
             zero_measurement_loop(PID);
         {'$gen_cast', {phi_correction, _, _, _, _}} ->
             zero_measurement_loop(PID);
+        {'$gen_cast', {phi_status, _, _, _, _}} ->
+            zero_measurement_loop(PID);
         stop ->
             ok
     end.
@@ -1051,6 +1167,8 @@ zero_measurement_loop(PID, Ref) ->
             ok = phi_halo_cell:offer_measurement(PID, Step, false),
             zero_measurement_loop(PID, Ref);
         {'$gen_cast', {phi_correction, _, _, _, _}} ->
+            zero_measurement_loop(PID, Ref);
+        {'$gen_cast', {phi_status, _, _, _, _}} ->
             zero_measurement_loop(PID, Ref);
         {stop, Stopper} ->
             Stopper ! {collector_stopped, Ref, syndrome},
@@ -1064,7 +1182,8 @@ torus_neighbors(Horizontal, Vertical, MeasurementSource) ->
         west => Horizontal,
         south => Vertical,
         syndrome => MeasurementSource,
-        correction => MeasurementSource
+        correction => MeasurementSource,
+        status => MeasurementSource
     }.
 
 await_step(PID, Step) ->
@@ -1077,7 +1196,7 @@ await_step(PID, Step, Attempts) ->
     case maps:get(data, Info) of
         {cell, CurrentStep, _Round, _Phi, _Sum, _PhiReceived,
                 _Seen, _Best, _Direction, _MovesReceived, _Anyon, _Random,
-                _X, _Y}
+                _X, _Y, _NoiseQuiet, _StatusValid}
                 when CurrentStep >= Step ->
             ok;
         _ ->
@@ -1092,7 +1211,7 @@ stop_cell(PID) ->
     end.
 
 start_collectors() ->
-    Ports = [north, east, west, south, correction],
+    Ports = [north, east, west, south, correction, status],
     Parent = self(),
     Ref = make_ref(),
     Collectors = maps:from_list([
@@ -1120,6 +1239,33 @@ expect_port_cast(Ref, Port, Expected) ->
                 OtherPort, Port, Expected, Other})
     after 1000 ->
         error({missing_neighbor_cast, Port, Expected})
+    end.
+
+expect_status_and_neighbor_batch(Ref, Status, Neighbor) ->
+    Expected = #{
+        north => Neighbor,
+        east => Neighbor,
+        west => Neighbor,
+        south => Neighbor,
+        status => Status
+    },
+    expect_port_messages(Ref, Expected).
+
+expect_port_messages(_Ref, Expected) when map_size(Expected) =:= 0 ->
+    ok;
+expect_port_messages(Ref, Expected) ->
+    receive
+        {neighbor_cast, Ref, Port, Message} ->
+            case maps:take(Port, Expected) of
+                {Message, Remaining} ->
+                    expect_port_messages(Ref, Remaining);
+                {Other, _Remaining} ->
+                    error({unexpected_neighbor_cast, Port, Other, Message});
+                error ->
+                    error({duplicate_neighbor_cast, Port, Message})
+            end
+    after 1000 ->
+        error({missing_neighbor_casts, Expected})
     end.
 
 expect_neighbor_batch(Ref, Expected) ->

@@ -9,6 +9,7 @@
 topology() ->
     #{
         version => 1,
+        ingresses => [],
         actors => #{ordered => ordered_egress_actor},
         families => #{},
         externals => [{ordered_values, out, [ordered_value]}],

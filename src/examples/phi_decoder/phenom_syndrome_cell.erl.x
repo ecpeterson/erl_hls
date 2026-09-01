@@ -20,6 +20,11 @@ pub enum Tag : u8 {
   PHENOM_ANYON = u8:10,
   PHI_CORRECTION = u8:11,
   PHI_CONFIG = u8:12,
+  PAULI_QUERY = u8:13,
+  PAULI_REPLY = u8:14,
+  NOISE_CUTOFF = u8:15,
+  PAULI_UPDATE = u8:16,
+  PHI_STATUS = u8:17,
 }
 
 enum Phase : u8 {
@@ -37,13 +42,13 @@ enum Directive : u2 {
 
 struct Phi {
   epoch : u32,
-  values : u32[2],
+  values : s32[2],
 }
 
 fn phi_from_bits<N: u32>(raw: bits[N]) -> Phi {
   Phi {
     epoch: raw[0:32] as u32,
-    values: raw[32:96] as u32[2],
+    values: raw[32:96] as s32[2],
   }
 }
 
@@ -70,14 +75,14 @@ fn bits_from_anyonmove(s: Anyonmove) -> bits[bit_count<Anyonmove>()] {
 struct Phi0 {
   step : u32,
   source : u32,
-  value : u32,
+  value : s32,
 }
 
 fn phi0_from_bits<N: u32>(raw: bits[N]) -> Phi0 {
   Phi0 {
     step: raw[0:32] as u32,
     source: raw[32:64] as u32,
-    value: raw[64:96] as u32,
+    value: raw[64:96] as s32,
   }
 }
 
@@ -138,24 +143,24 @@ fn bits_from_phenomquery(s: Phenomquery) -> bits[bit_count<Phenomquery>()] {
 struct Phenomdata {
   step : u32,
   source : u32,
-  present : u32,
+  flags : u32,
 }
 
 fn phenomdata_from_bits<N: u32>(raw: bits[N]) -> Phenomdata {
   Phenomdata {
     step: raw[0:32] as u32,
     source: raw[32:64] as u32,
-    present: raw[64:96] as u32,
+    flags: raw[64:96] as u32,
   }
 }
 
 fn bits_from_phenomdata(s: Phenomdata) -> bits[bit_count<Phenomdata>()] {
-  (s.present as bits[32]) ++ (s.source as bits[32]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
+  (s.flags as bits[32]) ++ (s.source as bits[32]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
 }
 
 struct Phenomanyon {
   step : u32,
-  present : u32,
+  flags : u32,
   x : u16,
   y : u16,
 }
@@ -163,14 +168,14 @@ struct Phenomanyon {
 fn phenomanyon_from_bits<N: u32>(raw: bits[N]) -> Phenomanyon {
   Phenomanyon {
     step: raw[0:32] as u32,
-    present: raw[32:64] as u32,
+    flags: raw[32:64] as u32,
     x: raw[64:80] as u16,
     y: raw[80:96] as u16,
   }
 }
 
 fn bits_from_phenomanyon(s: Phenomanyon) -> bits[bit_count<Phenomanyon>()] {
-  (s.y as bits[16]) ++ (s.x as bits[16]) ++ (s.present as bits[32]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
+  (s.y as bits[16]) ++ (s.x as bits[16]) ++ (s.flags as bits[32]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
 }
 
 struct Phicorrection {
@@ -207,16 +212,105 @@ fn bits_from_phiconfig(s: Phiconfig) -> bits[bit_count<Phiconfig>()] {
   (s.seed as bits[32]) ++  zero!<bits[0]>()
 }
 
+struct Pauliquery {
+  request_id : u32,
+  measurement : u32,
+}
+
+fn pauliquery_from_bits<N: u32>(raw: bits[N]) -> Pauliquery {
+  Pauliquery {
+    request_id: raw[0:32] as u32,
+    measurement: raw[32:64] as u32,
+  }
+}
+
+fn bits_from_pauliquery(s: Pauliquery) -> bits[bit_count<Pauliquery>()] {
+  (s.measurement as bits[32]) ++ (s.request_id as bits[32]) ++  zero!<bits[0]>()
+}
+
+struct Paulireply {
+  request_id : u32,
+  x : u16,
+  y : u16,
+  anticommutes : u32,
+}
+
+fn paulireply_from_bits<N: u32>(raw: bits[N]) -> Paulireply {
+  Paulireply {
+    request_id: raw[0:32] as u32,
+    x: raw[32:48] as u16,
+    y: raw[48:64] as u16,
+    anticommutes: raw[64:96] as u32,
+  }
+}
+
+fn bits_from_paulireply(s: Paulireply) -> bits[bit_count<Paulireply>()] {
+  (s.anticommutes as bits[32]) ++ (s.y as bits[16]) ++ (s.x as bits[16]) ++ (s.request_id as bits[32]) ++  zero!<bits[0]>()
+}
+
+struct Noisecutoff {
+  first_quiet_step : u32,
+}
+
+fn noisecutoff_from_bits<N: u32>(raw: bits[N]) -> Noisecutoff {
+  Noisecutoff {
+    first_quiet_step: raw[0:32] as u32,
+  }
+}
+
+fn bits_from_noisecutoff(s: Noisecutoff) -> bits[bit_count<Noisecutoff>()] {
+  (s.first_quiet_step as bits[32]) ++  zero!<bits[0]>()
+}
+
+struct Pauliupdate {
+  pauli : u32,
+}
+
+fn pauliupdate_from_bits<N: u32>(raw: bits[N]) -> Pauliupdate {
+  Pauliupdate {
+    pauli: raw[0:32] as u32,
+  }
+}
+
+fn bits_from_pauliupdate(s: Pauliupdate) -> bits[bit_count<Pauliupdate>()] {
+  (s.pauli as bits[32]) ++  zero!<bits[0]>()
+}
+
+struct Phistatus {
+  step : u32,
+  x : u16,
+  y : u16,
+  flags : u32,
+}
+
+fn phistatus_from_bits<N: u32>(raw: bits[N]) -> Phistatus {
+  Phistatus {
+    step: raw[0:32] as u32,
+    x: raw[32:48] as u16,
+    y: raw[48:64] as u16,
+    flags: raw[64:96] as u32,
+  }
+}
+
+fn bits_from_phistatus(s: Phistatus) -> bits[bit_count<Phistatus>()] {
+  (s.flags as bits[32]) ++ (s.y as bits[16]) ++ (s.x as bits[16]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
+}
+
 struct Syndrome {
   step : u32,
   seen_sources : u32,
   data_parity : u32,
   previous_measurement : u32,
   announcement : u32,
+  data_quiet : u32,
+  announcement_quiet : u32,
   random_state : u32,
   threshold : u32,
   x : u16,
   y : u16,
+  noise_disabled : u32,
+  cutoff_armed : u32,
+  cutoff_step : u32,
 }
 
 fn syndrome_from_bits<N: u32>(raw: bits[N]) -> Syndrome {
@@ -226,15 +320,20 @@ fn syndrome_from_bits<N: u32>(raw: bits[N]) -> Syndrome {
     data_parity: raw[64:96] as u32,
     previous_measurement: raw[96:128] as u32,
     announcement: raw[128:160] as u32,
-    random_state: raw[160:192] as u32,
-    threshold: raw[192:224] as u32,
-    x: raw[224:240] as u16,
-    y: raw[240:256] as u16,
+    data_quiet: raw[160:192] as u32,
+    announcement_quiet: raw[192:224] as u32,
+    random_state: raw[224:256] as u32,
+    threshold: raw[256:288] as u32,
+    x: raw[288:304] as u16,
+    y: raw[304:320] as u16,
+    noise_disabled: raw[320:352] as u32,
+    cutoff_armed: raw[352:384] as u32,
+    cutoff_step: raw[384:416] as u32,
   }
 }
 
 fn bits_from_syndrome(s: Syndrome) -> bits[bit_count<Syndrome>()] {
-  (s.y as bits[16]) ++ (s.x as bits[16]) ++ (s.threshold as bits[32]) ++ (s.random_state as bits[32]) ++ (s.announcement as bits[32]) ++ (s.previous_measurement as bits[32]) ++ (s.data_parity as bits[32]) ++ (s.seen_sources as bits[32]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
+  (s.cutoff_step as bits[32]) ++ (s.cutoff_armed as bits[32]) ++ (s.noise_disabled as bits[32]) ++ (s.y as bits[16]) ++ (s.x as bits[16]) ++ (s.threshold as bits[32]) ++ (s.random_state as bits[32]) ++ (s.announcement_quiet as bits[32]) ++ (s.data_quiet as bits[32]) ++ (s.announcement as bits[32]) ++ (s.previous_measurement as bits[32]) ++ (s.data_parity as bits[32]) ++ (s.seen_sources as bits[32]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
 }
 
 pub enum OutputPort : u8 {
@@ -507,23 +606,26 @@ fn enter(old_phase: Phase, phase: Phase, data: Syndrome) -> (Syndrome, EntryEffe
         let Syndrome_1 = (Tag::SYNDROME, data);
         let _0 = Syndrome_1.1.step;
         let _1 = Syndrome_1.1.announcement;
-        let _2 = Syndrome_1.1.x;
-        let _3 = Syndrome_1.1.y;
-        let _4 = Phenomanyon {
+        let _2 = Syndrome_1.1.announcement_quiet;
+        let _3 = _2 << 1;
+        let _4 = _1 | _3;
+        let _5 = Syndrome_1.1.x;
+        let _6 = Syndrome_1.1.y;
+        let _7 = Phenomanyon {
           step: _0,
-          present: _1,
-          x: _2,
-          y: _3,
+          flags: _4,
+          x: _5,
+          y: _6,
           ..zero!<Phenomanyon>()
         };
-        let _5 = (Tag::PHENOM_ANYON, _4, bits_from_phenomanyon(_4));
-        let Anyon_1 = _5;
-        let _6 = if (bool:false) {
+        let _8 = (Tag::PHENOM_ANYON, _7, bits_from_phenomanyon(_7));
+        let Anyon_1 = _8;
+        let _9 = if (bool:false) {
             data
         } else {
             Syndrome_1.1
         };
-        _6
+        _9
       };
       let effect_0_valid = {
         bool:true
@@ -534,23 +636,26 @@ fn enter(old_phase: Phase, phase: Phase, data: Syndrome) -> (Syndrome, EntryEffe
         let Syndrome_1 = (Tag::SYNDROME, data);
         let _0 = Syndrome_1.1.step;
         let _1 = Syndrome_1.1.announcement;
-        let _2 = Syndrome_1.1.x;
-        let _3 = Syndrome_1.1.y;
-        let _4 = Phenomanyon {
+        let _2 = Syndrome_1.1.announcement_quiet;
+        let _3 = _2 << 1;
+        let _4 = _1 | _3;
+        let _5 = Syndrome_1.1.x;
+        let _6 = Syndrome_1.1.y;
+        let _7 = Phenomanyon {
           step: _0,
-          present: _1,
-          x: _2,
-          y: _3,
+          flags: _4,
+          x: _5,
+          y: _6,
           ..zero!<Phenomanyon>()
         };
-        let _5 = (Tag::PHENOM_ANYON, _4, bits_from_phenomanyon(_4));
-        let Anyon_1 = _5;
-        let _6 = if (bool:false) {
+        let _8 = (Tag::PHENOM_ANYON, _7, bits_from_phenomanyon(_7));
+        let Anyon_1 = _8;
+        let _9 = if (bool:false) {
             zero!<axis::Frame>()
         } else {
             axis::pack(Anyon_1.0 as u8, Anyon_1.2)
         };
-        _6
+        _9
       };
       (entered_data, EntryEffects {
         count: u8:1,
@@ -766,6 +871,8 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
               seen_sources: 0,
               data_parity: 0,
               announcement: 0,
+              data_quiet: 1,
+              announcement_quiet: 0,
               ..(Xls_clause_1_Syndrome_1).1
             };
             let _1 = (Tag::SYNDROME, _0);
@@ -831,6 +938,8 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
               seen_sources: 0,
               data_parity: 0,
               announcement: 0,
+              data_quiet: 1,
+              announcement_quiet: 0,
               ..(Xls_clause_1_Syndrome_1).1
             };
             let _4 = (Tag::SYNDROME, _3);
@@ -907,7 +1016,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
         Phase::COLLECTING => {
           let Xls_clause_1_Step_1 = message.step;
           let Xls_clause_1_Source_1 = message.source;
-          let Xls_clause_1_Present_1 = message.present;
+          let Xls_clause_1_Flags_1 = message.flags;
           let Xls_clause_1_Syndrome_1 = (Tag::SYNDROME, data);
           let Xls_clause_1_Seen_1 = data.seen_sources;
           let Xls_clause_1_Parity_1 = data.data_parity;
@@ -944,7 +1053,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
               let _7 = Xls_clause_1_Seen_1 & Xls_clause_1_Source_1;
               let _8 = _7 == 0;
               let _10 = if _8 {
-                let _9 = Xls_clause_1_Present_1 < 2;
+                let _9 = Xls_clause_1_Flags_1 < 4;
                 (_9, bool:false)
               } else {
                 (bool:0, bool:false)
@@ -964,59 +1073,117 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
           let case_match_6_1 = bool:false;
           let case_match_6_2 = _12.1;
           if _12.0 {
-            let _13 = Xls_clause_1_Seen_1 | Xls_clause_1_Source_1;
-            let Xls_clause_1_NewSeen_1 = _13;
-            let _14 = Xls_clause_1_Parity_1 ^ Xls_clause_1_Present_1;
-            let Xls_clause_1_NewParity_1 = _14;
-            let _15 = Xls_clause_1_NewSeen_1 == 15;
-            let _27 = if _15 {
-              let _16 = (Xls_clause_1_RandomState_1 ^ (Xls_clause_1_RandomState_1 << u32:13)) & u32:0xffffffff;
-              let _17 = (_16 ^ (_16 >> u32:17)) & u32:0xffffffff;
-              let _18 = (_17 ^ (_17 << u32:5)) & u32:0xffffffff;
-              let Xls_clause_1_NextRandom_1 = _18;
-              let _19 = Xls_clause_1_NextRandom_1 < Xls_clause_1_Threshold_1;
-              let _21 = if _19 {
-                let _20 = (1 as u32);
-                (_20, bool:false)
+            let _13 = Xls_clause_1_Flags_1 & 1;
+            let Xls_clause_1_Present_1 = _13;
+            let _14 = Xls_clause_1_Flags_1 & 2;
+            let _15 = _14 >> 1;
+            let Xls_clause_1_Quiet_1 = _15;
+            let _16 = Xls_clause_1_Seen_1 | Xls_clause_1_Source_1;
+            let Xls_clause_1_NewSeen_1 = _16;
+            let _17 = Xls_clause_1_Parity_1 ^ Xls_clause_1_Present_1;
+            let Xls_clause_1_NewParity_1 = _17;
+            let _18 = Xls_clause_1_Syndrome_1.1.data_quiet;
+            let _19 = _18 & Xls_clause_1_Quiet_1;
+            let Xls_clause_1_NewDataQuiet_1 = _19;
+            let _20 = Xls_clause_1_NewSeen_1 == 15;
+            let _47 = if _20 {
+              let _21 = Xls_clause_1_Syndrome_1.1.cutoff_armed;
+              let _22 = _21 == 1;
+              let _23 = Xls_clause_1_Syndrome_1.1.cutoff_step;
+              let _24 = Xls_clause_1_Step_1 >= _23;
+              let _25 = _22 && _24;
+              let Xls_clause_1_CutoffApplies_1 = _25;
+              let _26 = Xls_clause_1_Syndrome_1.1.noise_disabled;
+              let _27 = _26 == 1;
+              let _28 = _27 || Xls_clause_1_CutoffApplies_1;
+              let Xls_clause_1_NoiseDisabled_1 = _28;
+              let _30 = if Xls_clause_1_NoiseDisabled_1 {
+                let _29 = (1 as u32);
+                (_29, bool:false)
               } else {
-                let _20 = (0 as u32);
-                (_20, bool:false)
+                let _29 = (0 as u32);
+                (_29, bool:false)
               };
               let case_match_7_1 = bool:false;
-              let case_match_7_2 = _21.1;
-              let Xls_clause_1_Measurement_1 = _21.0;
-              let _22 = Xls_clause_1_NewParity_1 ^ Xls_clause_1_Measurement_1;
-              let _23 = _22 ^ Xls_clause_1_PreviousMeasurement_1;
-              let Xls_clause_1_Detection_1 = _23;
-              let _24 = Syndrome {
+              let case_match_7_2 = _30.1;
+              let Xls_clause_1_NoiseDisabledWord_1 = _30.0;
+              let _34 = if Xls_clause_1_NoiseDisabled_1 {
+                (Xls_clause_1_RandomState_1, bool:false)
+              } else {
+                let _31 = (Xls_clause_1_RandomState_1 ^ (Xls_clause_1_RandomState_1 << u32:13)) & u32:0xffffffff;
+                let _32 = (_31 ^ (_31 >> u32:17)) & u32:0xffffffff;
+                let _33 = (_32 ^ (_32 << u32:5)) & u32:0xffffffff;
+                (_33, bool:false)
+              };
+              let case_match_8_1 = bool:false;
+              let case_match_8_2 = _34.1;
+              let Xls_clause_1_NextRandom_1 = _34.0;
+              let _38 = if Xls_clause_1_NoiseDisabled_1 {
+                let _35 = (0 as u32);
+                (_35, bool:false)
+              } else {
+                let _35 = Xls_clause_1_NextRandom_1 < Xls_clause_1_Threshold_1;
+                let _37 = if _35 {
+                  let _36 = (1 as u32);
+                  (_36, bool:false)
+                } else {
+                  let _36 = (0 as u32);
+                  (_36, bool:false)
+                };
+                let case_match_9_1 = bool:false;
+                let case_match_9_2 = _37.1;
+                (_37.0, (case_match_9_1 != case_match_9_2) || bool:false)
+              };
+              let case_match_10_1 = bool:false;
+              let case_match_10_2 = _38.1;
+              let Xls_clause_1_Measurement_1 = _38.0;
+              let _39 = Xls_clause_1_NewParity_1 ^ Xls_clause_1_Measurement_1;
+              let _40 = _39 ^ Xls_clause_1_PreviousMeasurement_1;
+              let Xls_clause_1_Detection_1 = _40;
+              let _41 = Xls_clause_1_NewDataQuiet_1 & Xls_clause_1_NoiseDisabledWord_1;
+              let _43 = if Xls_clause_1_CutoffApplies_1 {
+                let _42 = (0 as u32);
+                (_42, bool:false)
+              } else {
+                let _42 = Xls_clause_1_Syndrome_1.1.cutoff_armed;
+                (_42, bool:false)
+              };
+              let case_match_11_1 = bool:false;
+              let case_match_11_2 = _43.1;
+              let _44 = Syndrome {
                 seen_sources: Xls_clause_1_NewSeen_1,
                 data_parity: Xls_clause_1_NewParity_1,
                 previous_measurement: Xls_clause_1_Measurement_1,
                 announcement: Xls_clause_1_Detection_1,
+                data_quiet: Xls_clause_1_NewDataQuiet_1,
+                announcement_quiet: _41,
                 random_state: Xls_clause_1_NextRandom_1,
+                noise_disabled: Xls_clause_1_NoiseDisabledWord_1,
+                cutoff_armed: _43.0,
                 ..(Xls_clause_1_Syndrome_1).1
               };
-              let _25 = (Tag::SYNDROME, _24);
-              let Xls_clause_1_Complete_1 = _25;
-              let _26 = (Phase::ANNOUNCING, Xls_clause_1_Complete_1, Directive::CONSUME, bool:0, );
-              (_26, (case_match_7_1 != case_match_7_2) || bool:false)
+              let _45 = (Tag::SYNDROME, _44);
+              let Xls_clause_1_Complete_1 = _45;
+              let _46 = (Phase::ANNOUNCING, Xls_clause_1_Complete_1, Directive::CONSUME, bool:0, );
+              (_46, (case_match_10_1 != case_match_10_2) || (case_match_11_1 != case_match_11_2) || (case_match_7_1 != case_match_7_2) || (case_match_8_1 != case_match_8_2) || bool:false)
             } else {
-              let _16 = Syndrome {
+              let _21 = Syndrome {
                 seen_sources: Xls_clause_1_NewSeen_1,
                 data_parity: Xls_clause_1_NewParity_1,
+                data_quiet: Xls_clause_1_NewDataQuiet_1,
                 ..(Xls_clause_1_Syndrome_1).1
               };
-              let _17 = (Tag::SYNDROME, _16);
-              let Xls_clause_1_Collected_1 = _17;
-              let _18 = (Phase::COLLECTING, Xls_clause_1_Collected_1, Directive::CONSUME, bool:0, );
-              (_18, bool:false)
+              let _22 = (Tag::SYNDROME, _21);
+              let Xls_clause_1_Collected_1 = _22;
+              let _23 = (Phase::COLLECTING, Xls_clause_1_Collected_1, Directive::CONSUME, bool:0, );
+              (_23, bool:false)
             };
-            let case_match_8_1 = bool:false;
-            let case_match_8_2 = _27.1;
-            if ((case_match_8_1 != case_match_8_2) || bool:false) {
+            let case_match_12_1 = bool:false;
+            let case_match_12_2 = _47.1;
+            if ((case_match_12_1 != case_match_12_2) || bool:false) {
               (phase, data, Directive::FAIL, u1:0)
             } else {
-              (_27.0.0, _27.0.1.1, _27.0.2, _27.0.3)
+              (_47.0.0, _47.0.1.1, _47.0.2, _47.0.3)
             }
           } else {
             let Xls_clause_2_Syndrome_1 = (Tag::SYNDROME, data);
@@ -1081,6 +1248,166 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
         _ => (phase, data, Directive::FAIL, u1:0),
       }
     },
+    Tag::PAULI_QUERY => {
+      let message = pauliquery_from_bits(frame.payload);
+      match phase {
+        _ => (phase, data, Directive::FAIL, u1:0),
+      }
+    },
+    Tag::PAULI_REPLY => {
+      let message = paulireply_from_bits(frame.payload);
+      match phase {
+        _ => (phase, data, Directive::FAIL, u1:0),
+      }
+    },
+    Tag::NOISE_CUTOFF => {
+      let message = noisecutoff_from_bits(frame.payload);
+      match phase {
+        Phase::CONFIGURING => {
+          let Xls_clause_1_Syndrome_1 = (Tag::SYNDROME, data);
+          if bool:true {
+            let _0 = (Phase::CONFIGURING, Xls_clause_1_Syndrome_1, Directive::FAIL, bool:0, );
+            if (bool:false) {
+              (phase, data, Directive::FAIL, u1:0)
+            } else {
+              (_0.0, _0.1.1, _0.2, _0.3)
+            }
+          } else {
+            (phase, data, Directive::FAIL, u1:0)
+          }
+        },
+        Phase::WAITING => {
+          let Xls_clause_1_FirstQuietStep_1 = message.first_quiet_step;
+          let Xls_clause_1_Syndrome_1 = (Tag::SYNDROME, data);
+          let Xls_clause_1_Step_1 = data.step;
+          let _1 = if (data.noise_disabled == 0 && data.cutoff_armed == 0) {
+            let _0 = Xls_clause_1_FirstQuietStep_1 >= Xls_clause_1_Step_1;
+            (_0, bool:false)
+          } else {
+            (bool:0, bool:false)
+          };
+          let case_match_1_1 = bool:false;
+          let case_match_1_2 = _1.1;
+          if _1.0 {
+            let _2 = Syndrome {
+              cutoff_armed: 1,
+              cutoff_step: Xls_clause_1_FirstQuietStep_1,
+              ..(Xls_clause_1_Syndrome_1).1
+            };
+            let _3 = (Tag::SYNDROME, _2);
+            let _4 = (Phase::WAITING, _3, Directive::CONSUME, bool:0, );
+            if (bool:false) {
+              (phase, data, Directive::FAIL, u1:0)
+            } else {
+              (_4.0, _4.1.1, _4.2, _4.3)
+            }
+          } else {
+            let Xls_clause_2_Syndrome_1 = (Tag::SYNDROME, data);
+            if bool:true {
+              let _0 = (Phase::WAITING, Xls_clause_2_Syndrome_1, Directive::FAIL, bool:0, );
+              if (bool:false) {
+                (phase, data, Directive::FAIL, u1:0)
+              } else {
+                (_0.0, _0.1.1, _0.2, _0.3)
+              }
+            } else {
+              (phase, data, Directive::FAIL, u1:0)
+            }
+          }
+        },
+        Phase::COLLECTING => {
+          let Xls_clause_1_FirstQuietStep_1 = message.first_quiet_step;
+          let Xls_clause_1_Syndrome_1 = (Tag::SYNDROME, data);
+          let Xls_clause_1_Step_1 = data.step;
+          let _1 = if (data.noise_disabled == 0 && data.cutoff_armed == 0) {
+            let _0 = Xls_clause_1_FirstQuietStep_1 >= Xls_clause_1_Step_1;
+            (_0, bool:false)
+          } else {
+            (bool:0, bool:false)
+          };
+          let case_match_1_1 = bool:false;
+          let case_match_1_2 = _1.1;
+          if _1.0 {
+            let _2 = Syndrome {
+              cutoff_armed: 1,
+              cutoff_step: Xls_clause_1_FirstQuietStep_1,
+              ..(Xls_clause_1_Syndrome_1).1
+            };
+            let _3 = (Tag::SYNDROME, _2);
+            let _4 = (Phase::COLLECTING, _3, Directive::CONSUME, bool:0, );
+            if (bool:false) {
+              (phase, data, Directive::FAIL, u1:0)
+            } else {
+              (_4.0, _4.1.1, _4.2, _4.3)
+            }
+          } else {
+            let Xls_clause_2_Syndrome_1 = (Tag::SYNDROME, data);
+            if bool:true {
+              let _0 = (Phase::COLLECTING, Xls_clause_2_Syndrome_1, Directive::FAIL, bool:0, );
+              if (bool:false) {
+                (phase, data, Directive::FAIL, u1:0)
+              } else {
+                (_0.0, _0.1.1, _0.2, _0.3)
+              }
+            } else {
+              (phase, data, Directive::FAIL, u1:0)
+            }
+          }
+        },
+        Phase::ANNOUNCING => {
+          let Xls_clause_1_FirstQuietStep_1 = message.first_quiet_step;
+          let Xls_clause_1_Syndrome_1 = (Tag::SYNDROME, data);
+          let Xls_clause_1_Step_1 = data.step;
+          let _1 = if (data.noise_disabled == 0 && data.cutoff_armed == 0) {
+            let _0 = Xls_clause_1_FirstQuietStep_1 > Xls_clause_1_Step_1;
+            (_0, bool:false)
+          } else {
+            (bool:0, bool:false)
+          };
+          let case_match_1_1 = bool:false;
+          let case_match_1_2 = _1.1;
+          if _1.0 {
+            let _2 = Syndrome {
+              cutoff_armed: 1,
+              cutoff_step: Xls_clause_1_FirstQuietStep_1,
+              ..(Xls_clause_1_Syndrome_1).1
+            };
+            let _3 = (Tag::SYNDROME, _2);
+            let _4 = (Phase::ANNOUNCING, _3, Directive::CONSUME, bool:0, );
+            if (bool:false) {
+              (phase, data, Directive::FAIL, u1:0)
+            } else {
+              (_4.0, _4.1.1, _4.2, _4.3)
+            }
+          } else {
+            let Xls_clause_2_Syndrome_1 = (Tag::SYNDROME, data);
+            if bool:true {
+              let _0 = (Phase::ANNOUNCING, Xls_clause_2_Syndrome_1, Directive::FAIL, bool:0, );
+              if (bool:false) {
+                (phase, data, Directive::FAIL, u1:0)
+              } else {
+                (_0.0, _0.1.1, _0.2, _0.3)
+              }
+            } else {
+              (phase, data, Directive::FAIL, u1:0)
+            }
+          }
+        },
+        _ => (phase, data, Directive::FAIL, u1:0),
+      }
+    },
+    Tag::PAULI_UPDATE => {
+      let message = pauliupdate_from_bits(frame.payload);
+      match phase {
+        _ => (phase, data, Directive::FAIL, u1:0),
+      }
+    },
+    Tag::PHI_STATUS => {
+      let message = phistatus_from_bits(frame.payload);
+      match phase {
+        _ => (phase, data, Directive::FAIL, u1:0),
+      }
+    },
     _ => (phase, data, Directive::FAIL, u1:0),
   }
 }
@@ -1133,7 +1460,7 @@ pub proc Service {
       let (tok, frame, received) = recv_if_non_blocking(
         join(), req_in, machine.admission_pending,
         zero!<axis::Frame>());
-      let tag_ok = (frame.header.op == (Tag::PHI as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::ANYON_MOVE as u8) && frame.header.payload_words == u8:2) || (frame.header.op == (Tag::PHI0 as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHENOM_CONFIG as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHENOM_REQUEST as u8) && frame.header.payload_words == u8:1) || (frame.header.op == (Tag::PHENOM_QUERY as u8) && frame.header.payload_words == u8:2) || (frame.header.op == (Tag::PHENOM_DATA as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHENOM_ANYON as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHI_CORRECTION as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHI_CONFIG as u8) && frame.header.payload_words == u8:1);
+      let tag_ok = (frame.header.op == (Tag::PHI as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::ANYON_MOVE as u8) && frame.header.payload_words == u8:2) || (frame.header.op == (Tag::PHI0 as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHENOM_CONFIG as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHENOM_REQUEST as u8) && frame.header.payload_words == u8:1) || (frame.header.op == (Tag::PHENOM_QUERY as u8) && frame.header.payload_words == u8:2) || (frame.header.op == (Tag::PHENOM_DATA as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHENOM_ANYON as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHI_CORRECTION as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHI_CONFIG as u8) && frame.header.payload_words == u8:1) || (frame.header.op == (Tag::PAULI_QUERY as u8) && frame.header.payload_words == u8:2) || (frame.header.op == (Tag::PAULI_REPLY as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::NOISE_CUTOFF as u8) && frame.header.payload_words == u8:1) || (frame.header.op == (Tag::PAULI_UPDATE as u8) && frame.header.payload_words == u8:1) || (frame.header.op == (Tag::PHI_STATUS as u8) && frame.header.payload_words == u8:3);
       let accepted = received && tag_ok;
       let invalid_input = received && !tag_ok;
       let incoming_slot = MailboxSlot {
