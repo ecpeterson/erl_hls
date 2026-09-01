@@ -11,9 +11,9 @@ module phi_torus_topology_tb;
     wire [127:0] syndrome_request;
     wire syndrome_valid;
 
-    wire correction_ready = 1'b1;
-    wire [127:0] correction;
-    wire correction_valid;
+    wire decoder_events_ready = 1'b1;
+    wire [127:0] decoder_events;
+    wire decoder_events_valid;
 
     reg [127:0] captured [0:CELL_COUNT-1];
     reg [127:0] stalled_request;
@@ -27,9 +27,9 @@ module phi_torus_topology_tb;
         .phi_torus_topology__syndrome_requests_out_rdy(syndrome_ready),
         .phi_torus_topology__syndrome_requests_out(syndrome_request),
         .phi_torus_topology__syndrome_requests_out_vld(syndrome_valid),
-        .phi_torus_topology__corrections_out_rdy(correction_ready),
-        .phi_torus_topology__corrections_out(correction),
-        .phi_torus_topology__corrections_out_vld(correction_valid)
+        .phi_torus_topology__decoder_events_out_rdy(decoder_events_ready),
+        .phi_torus_topology__decoder_events_out(decoder_events),
+        .phi_torus_topology__decoder_events_out_vld(decoder_events_valid)
     );
 
     always #5 clk = ~clk;
@@ -43,8 +43,8 @@ module phi_torus_topology_tb;
             captured[request_count] <= syndrome_request;
             request_count <= request_count + 1;
         end
-        if (!reset && correction_valid && correction_ready) begin
-            $display("FAIL: torus emitted a correction without a measurement");
+        if (!reset && decoder_events_valid && decoder_events_ready) begin
+            $display("FAIL: torus emitted a decoder event without a measurement");
             $fatal(1);
         end
     end

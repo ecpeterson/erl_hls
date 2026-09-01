@@ -124,7 +124,11 @@ fi
     sha256sum phi_noise_topology.x phi_noise_topology.v
     grep -H -E \
         'Elapsed \(wall clock\)|Maximum resident set size' \
-        phi_noise_topology-*.time
+        phi_noise_topology-ir.time \
+        phi_noise_topology-opt.time \
+        phi_noise_topology-codegen.time \
+        phi_noise_topology-iverilog.time \
+        phi_noise_topology-vvp.time
 } > phi_noise_topology.metrics.new
 mv phi_noise_topology.metrics.new phi_noise_topology.metrics
 cat phi_noise_topology.metrics

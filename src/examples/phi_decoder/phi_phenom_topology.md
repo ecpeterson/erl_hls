@@ -70,11 +70,12 @@ does not establish placement, routing, or timing closure.
 ## Compact torus witness
 
 `phi_torus_topology.erl` is the first rule-preserving family plan. It declares
-one bounded rectangular `phi_halo_cell` family and six route relations: four
-wrapped cardinal translations, one external syndrome-request stream, and one
-external correction-decision stream. A 5-by-5 plan and a 50-by-50 plan
-therefore contain the same one family and six rules; only the shape, derived
-instance count, and explicit per-coordinate startup constants differ. The v0
+one bounded rectangular `phi_halo_cell` family and seven route relations: four
+wrapped cardinal translations, one external syndrome-request stream, and the
+correction and status outputs which share one external decoder-event stream. A
+5-by-5 plan and a 50-by-50 plan therefore contain the same one family and seven
+rules; only the shape, derived instance count, and explicit per-coordinate
+startup constants differ. The v0
 startup representation enumerates one deterministic, nonzero phi coin seed per
 member; it is not yet a compact instance-constant formula.
 
@@ -87,8 +88,8 @@ flowchart LR
     subgraph FamilyTorus
         Spawn["nested unroll_for!&lt;x,y&gt;"] --> Node["FamilyNode × W·H"]
         Arrays["depth-zero lane arrays / router-output slots"]
-        ExternalLanes["syndrome and correction lane arrays"] --> GridMux["FrameGridMux × 2"]
-        GridMux --> Outputs["syndrome_requests_out / corrections_out"]
+        ExternalLanes["syndrome-request and decoder-event lane arrays"] --> GridMux["FrameGridMux × 2"]
+        GridMux --> Outputs["syndrome_requests_out / decoder_events_out"]
     end
 
     Torus --> Spawn
@@ -105,7 +106,7 @@ flowchart LR
     Node -. "instantiates" .-> OneFamilyNode
     Arrays --> NeighborInputs
     Router -- "north / east / west / south" --> Arrays
-    Router -- "syndrome / correction" --> ExternalLanes
+    Router -- "syndrome / correction / status" --> ExternalLanes
 ```
 
 `FamilyTorus`, `FamilyNode`, and `FamilyIngress` each appear once in generated
@@ -138,7 +139,7 @@ receives gated by a round-robin cursor. These polling merges are bounded and
 fair but not work-conserving: each family member gets one turn per
 `Width * Height` completed activations. The default rectangular 2-by-3 fixture
 is compiled to RTL and verifies all six post-configuration initial requests,
-stable backpressure, and no duplication. Its correction stream stays idle
+stable backpressure, and no duplication. Its decoder-event stream stays idle
 because this structural witness has no syndrome source to advance the actors.
 
 The lane arrays explicitly declare depth zero. This supplies the pinned block
@@ -168,26 +169,50 @@ language.
 
 ```mermaid
 flowchart LR
-    PX["phi_x"] -->|"cardinal torus"| PX
-    PZ["phi_z"] -->|"cardinal torus"| PZ
+    Coordinator["ERTS runner +<br/>phi_memory_experiment"]
+    Gateway["future PL-PS adapter"]
 
-    PX -->|"request"| SX["syndrome_x"]
-    SX -->|"announcement"| PX
-    PZ -->|"request"| SZ["syndrome_z"]
-    SZ -->|"announcement"| PZ
+    Coordinator -->|"ordered commands"| Gateway
+    Gateway -->|"one SpatialFrame stream"| CR["control_router<br/>only application ingress"]
+    Gateway -->|"decoded events"| Coordinator
 
-    SX <-->|"queries / replies"| DE["data_even"]
-    SX <-->|"queries / replies"| DO["data_odd"]
-    SZ <-->|"queries / replies"| DE
-    SZ <-->|"queries / replies"| DO
+    subgraph Fabric["generated one-fabric topology"]
+        PX["phi_x"] -->|"cardinal torus"| PX
+        PZ["phi_z"] -->|"cardinal torus"| PZ
 
-    SX -->|"queued copy"| XO["x_announcements"]
-    SZ -->|"queued copy"| ZO["z_announcements"]
-    PX -->|"applied moves"| XC["x_corrections"]
-    PZ -->|"applied moves"| ZC["z_corrections"]
+        PX -->|"request"| SX["syndrome_x"]
+        SX -->|"announcement"| PX
+        PZ -->|"request"| SZ["syndrome_z"]
+        SZ -->|"announcement"| PZ
+
+        SX <-->|"queries / replies"| DE["data_even"]
+        SX <-->|"queries / replies"| DO["data_odd"]
+        SZ <-->|"queries / replies"| DE
+        SZ <-->|"queries / replies"| DO
+
+        SX -->|"diagnostic copy"| XO["x_announcements"] --> Gateway
+        SZ -->|"diagnostic copy"| ZO["z_announcements"] --> Gateway
+        PX -->|"correction + post-move status"| XE["x_decoder_events"] --> Gateway
+        PZ -->|"correction + post-move status"| ZE["z_decoder_events"] --> Gateway
+        DE -->|"Pauli reply"| DM["data_measurements"] --> Gateway
+        DO -->|"Pauli reply"| DM
+
+        CR -->|"whole grid: noise_cutoff"| DE
+        CR -->|"whole grid: noise_cutoff"| DO
+        CR -->|"whole grid: noise_cutoff"| SX
+        CR -->|"whole grid: noise_cutoff"| SZ
+        CR -->|"point: pauli_update<br/>line: pauli_query"| DE
+        CR -->|"point: pauli_update<br/>line: pauli_query"| DO
+    end
+
+    XE -. "map each correction<br/>to a point update" .-> Coordinator
+    ZE -. "map each correction<br/>to a point update" .-> Coordinator
+    XE -. "complete quiet + empty<br/>same-step X status" .-> Coordinator
+    ZE -. "complete quiet + empty<br/>same-step Z status" .-> Coordinator
+    DM -. "XOR Distance replies" .-> Coordinator
 ```
 
-At the default distance three, the plan has 54 actor instances, 30 compact
+At the default distance three, the plan has 54 actor instances, 34 compact
 route relations, and 54 explicit startup messages: one for every actor. The
 route-rule count is independent of distance; only the family bounds and startup
 entries grow. PRNG seeds are deterministic, distinct, and nonzero across all
@@ -195,11 +220,17 @@ six families. The noise seeds are deliberately mixed so the first
 distance-three syndrome plane is not spatially uniform.
 
 Each syndrome announcement carries its `{X, Y}` coordinate; the external port
-identifies the X or Z plane. Each phi cell retains that coordinate and may emit
-one `phi_correction` decision after its four anyon-move actions for the step.
-The plane, syndrome coordinate, and selected direction together identify the
-neighboring data-qubit edge; the single event stream does not mean that a phi
-cell is associated with only one data qubit.
+identifies the X or Z plane. Announcements are diagnostic and do not close an
+experiment. They are nevertheless lossless branches of the syndrome-to-phi
+fanout, so a runner must drain both streams continuously or it will stall the
+decoder. Each phi cell retains that coordinate and may emit one
+`phi_correction` after its four anyon-move actions for the step, followed by a
+`phi_status` reporting occupancy and propagated noise-quiet state. Correction
+and status share one plane boundary, which preserves each source cell's order
+while leaving cross-cell merge order unspecified. The plane, syndrome
+coordinate, and selected direction together identify the neighboring data-
+qubit edge; the single event stream does not mean that a phi cell is associated
+with only one data qubit.
 
 The correction action is a statically placed `cast_if`: it retains its position
 in the ordered entry-effect list, but its move predicate suppresses the frame
@@ -207,22 +238,73 @@ when no correction was applied. This matches the reference implementation's
 sparse correction behavior, so traffic scales with corrections rather than
 physical qubits and steps.
 
+Each data actor retains one cumulative projective Pauli containing both
+physical errors and applied decoder corrections. The current binary noise event
+is Y because it is visible to both syndrome planes; two such events cancel.
+After cutoff, `pauli_query` asks whether that frame anticommutes with a requested
+Pauli measurement. The reply carries a request ID, physical data coordinate,
+and parity bit. Both data families share one fairly merged output; request IDs
+and coordinates make its unspecified cross-family order irrelevant.
+
 These `external` endpoints currently become output channels on the generated
 DSLX `Top` proc. The RTL benches consume them directly. They are not yet wired
 to `hls_fabric`, a PL-PS frame adapter, or an ERTS process; a deployment must
 make that gateway and correction-application policy explicit.
 
+The one application ingress is the externally addressed `control_router`
+service. Its envelope contains an ordinary actor frame plus an internal target
+and inclusive rectangle. `noise` selects all noise actors, while `data`
+selects data actors for Pauli queries or correction updates. Coordinates name
+stable logical services, like registered process names, rather than actor
+incarnations; one broadcast may therefore straddle lifecycle churn. The
+present whole-topology reset flushes router and actor traffic together.
+Independent restart will need lifecycle-owned flushing or generation checks at
+the leaves.
+
+The current physical lowering uses one lossless, statically unrolled
+distributor per family. It finishes the selected family sends before accepting
+another envelope, but top-level router acceptance is bounded network admission,
+not simultaneous actor-mailbox admission. The raw channel assumes that its
+eventual gateway has validated rectangle bounds and target/schema combinations;
+frame lengths and constrained field values are part of that check. Pauli
+updates are at-most-once, and retry will require an explicit duplicate policy.
+`hls_spatial_router.x` also defines tested pair, quadrant, and leaf building
+blocks for a later generated tree inside one fabric. Neither implementation
+defines how a global rectangle is partitioned, addressed, or retried across
+multiple FPGAs. A multi-FPGA adapter must intersect the rectangle with each
+local partition and re-originate explicitly addressed per-fabric commands;
+partial delivery and failure semantics remain unresolved.
+
+`phi_memory_experiment` is the example-local, pure ERTS reducer for closing one
+memory experiment. It first sends a whole-grid cutoff. Every data reply then
+propagates its persistent quiet bit through the syndrome announcement and phi
+status. The reducer translates each sparse correction into a point-addressed
+`pauli_update` immediately. A complete same-step status set from both decoder
+planes closes the decoder only when every coordinate is quiet and empty.
+Because each cell's status follows its optional correction on the same ordered
+plane output, the two complete sets also fence all earlier correction events.
+The reducer then issues one horizontal-line `pauli_query` after the queued
+point updates and XORs the `Distance` replies. This is a sound completion
+witness, not a liveness guarantee: the current fixed-round decoder can leave
+symmetric nonempty anyon configurations stationary. Until its tie-breaking or
+stopping rule is strengthened, the ERTS runner must bound the closeout wait and
+report nonconvergence rather than inferring completion from elapsed time. This
+first protocol assumes one lossless, non-restarting fabric activation; a reset
+or gateway failure aborts the experiment rather than invoking unspecified
+retry behavior.
+
 The present noise configuration is still a plumbing fixture. Its common high
 threshold deliberately produces frequent binary events rather than modeling a
 full Pauli channel. The explicit startup list also caps this example at
-distance 50; the compact route representation itself has no such bound. An
-explicit PL/host correction adapter, applying decisions to a data-qubit
-correction history, and a physically calibrated noise model remain later
-decoder work.
+distance 50; the compact route representation itself has no such bound. A
+PL/host adapter must still transport the reducer's ordered commands and each
+source's ordered decoded events. A physically calibrated noise model remains
+later decoder work.
 
 ### Distance-three synthesis progression
 
-Out-of-context XC7 mapping of the full nondegenerate graph gives:
+The last out-of-context XC7 mapping progression, before the Pauli snapshot
+state and output were added, was:
 
 | ingress | lane holding storage | consumer input flops | estimated logic cells | flip-flops | LUT1–LUT6 | `DSP48E1` |
 | --- | --- | --- | ---: | ---: | ---: | ---: |
@@ -252,20 +334,38 @@ Verilog generation on the configured build host, then compiles and runs
 `phi_noise_topology_tb.sv` with Icarus. The cost is deliberately excluded from
 the routine CI job.
 
-The bench holds one announcement stream under backpressure, checks that its
-frame remains stable, and leaves the other three outputs drainable. It then
-accepts announcements in arbitrary merge order and requires every coordinate
-from both planes in steps zero through two, proving that steps zero and one
-completed everywhere. The current deterministic fixture also produces four
-sparse step-one corrections per plane; the bench compares those as
-coordinate/direction sets rather than as one globally ordered trace. Those
-sets are regression goldens for this fixture, not a logical-correctness or
-winding test.
+The distance-three bench holds one announcement stream under backpressure,
+checks that its frame remains stable, and otherwise continuously drains every
+output. It accepts announcements in arbitrary merge order and requires every
+coordinate from both planes in steps zero through two, proving that steps zero
+and one completed everywhere. The current deterministic fixture also produces
+sparse corrections; the bench compares those as coordinate/direction sets
+rather than as one globally ordered trace. It also requires a complete status
+set after each checked step. Those sets are regression goldens for this
+fixture, not a logical-correctness or winding test.
 
-On the 4-core, 8-GiB UTM using the pinned XLS build, the first run measured
-about 15 seconds and 195 MiB for DSLX conversion, 3 minutes 51 seconds and
-2.3 GiB for optimization, 52 seconds and 299 MiB for code generation,
-25 seconds and 456 MiB for Icarus compilation, and 60 seconds and 142 MiB for
-simulation. The generated Verilog is about 9.9 MB and 166,000 lines. These are
-host build costs, not an FPGA utilization estimate; the runner saves compact
-timing and digest reports but does not copy that Verilog into the repository.
+The same bench drives `control_router` over the nondegenerate physical
+coordinate space. It broadcasts a future cutoff over the full 3-by-6 data
+grid, requires all 18 phi cells to report quiet in that exact step, queries the
+three data qubits on physical row four, applies one point-addressed X update,
+and queries the row again. The XOR of the three Z-anticommutation replies must
+toggle. This verifies rectangular target embedding and the correction/query
+path in the synthesized D3 network; it deliberately does not wait for empty
+decoder planes or claim a logical-correctness result.
+
+The routine distance-one smoke bench does drive `control_router`. It sends one
+whole-fabric cutoff, waits for propagated quiet status, queries one data line,
+applies one point-addressed X update, and observes the corresponding
+anticommutation change on a second query. Distance one aliases decoder routes,
+so this smoke test exercises control plumbing rather than the nondegenerate
+drain criterion.
+
+On the 4-core, 8-GiB UTM using the pinned XLS build, the saturated
+fixed-point-field run measured about 23 seconds and 302 MiB for DSLX conversion,
+6 minutes 22 seconds and 3.18 GiB for optimization, 1 minute 10 seconds and 286
+MiB for code generation, 27 seconds and 469 MiB for Icarus compilation, and 2
+minutes 8 seconds and 149 MiB for simulation. The generated Verilog is about
+8.5 MiB and 148,292 lines. These are host build costs, not an FPGA utilization
+estimate;
+the runner saves compact timing and digest reports but does not copy that
+Verilog into the repository.

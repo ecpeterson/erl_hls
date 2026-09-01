@@ -55,6 +55,7 @@ proc FamilyRouter {
       phi_halo_cell::OutputPort::SOUTH => send(tok, lane_3_out, egress.frame),
       phi_halo_cell::OutputPort::SYNDROME => send(tok, lane_1_out, egress.frame),
       phi_halo_cell::OutputPort::CORRECTION => send(tok, lane_0_out, egress.frame),
+      phi_halo_cell::OutputPort::STATUS => send(tok, lane_0_out, egress.frame),
     };
     state
   }
@@ -193,7 +194,7 @@ proc FamilyNode<X: u32, Y: u32> {
 
 proc FamilyTorus<TORUS_WIDTH: u32, TORUS_HEIGHT: u32> {
   config(
-    corrections_out: chan<axis::Frame> out,
+    decoder_events_out: chan<axis::Frame> out,
     syndrome_requests_out: chan<axis::Frame> out
   ) {
     let (lane_0_p, lane_0_c) =
@@ -220,7 +221,7 @@ proc FamilyTorus<TORUS_WIDTH: u32, TORUS_HEIGHT: u32> {
         );
       }(())
     }(());
-    spawn FrameGridMux<TORUS_WIDTH, TORUS_HEIGHT>(lane_0_c, corrections_out);
+    spawn FrameGridMux<TORUS_WIDTH, TORUS_HEIGHT>(lane_0_c, decoder_events_out);
     spawn FrameGridMux<TORUS_WIDTH, TORUS_HEIGHT>(lane_1_c, syndrome_requests_out);
     ()
   }
@@ -230,15 +231,15 @@ proc FamilyTorus<TORUS_WIDTH: u32, TORUS_HEIGHT: u32> {
 }
 
 pub proc Top {
-  corrections_out: chan<axis::Frame> out;
+  decoder_events_out: chan<axis::Frame> out;
   syndrome_requests_out: chan<axis::Frame> out;
 
   config(
-    corrections_out: chan<axis::Frame> out,
+    decoder_events_out: chan<axis::Frame> out,
     syndrome_requests_out: chan<axis::Frame> out
   ) {
-    spawn FamilyTorus<WIDTH, HEIGHT>(corrections_out, syndrome_requests_out);
-    (corrections_out, syndrome_requests_out)
+    spawn FamilyTorus<WIDTH, HEIGHT>(decoder_events_out, syndrome_requests_out);
+    (decoder_events_out, syndrome_requests_out)
   }
 
   init { () }

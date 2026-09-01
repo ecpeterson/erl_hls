@@ -14,19 +14,54 @@ ordinary wrapped translation between equal-shaped families.
 
 The two external announcement outputs retain the producing `{X, Y}`
 coordinate. The output port identifies the X- or Z-syndrome plane, so a host
-can reconstruct lattice activity without relying on merge order. The two
-correction outputs similarly identify the decoder plane; together, plane,
-syndrome coordinate, and direction identify the neighboring data-qubit edge
-to correct.
+can reconstruct lattice activity without relying on merge order. Each decoder
+plane has one event output carrying sparse corrections and one post-move status
+per coordinate. It preserves each source cell's correction-before-status order;
+cross-cell merge order is unspecified. Together, plane, syndrome coordinate,
+and correction direction identify the neighboring data-qubit edge to correct.
+Both data-family measurement replies share one external output; their payload
+coordinates use the physical data-qubit lattice and do not expose the internal
+even/odd family split.
 
-"External" currently means a typed output channel on the generated DSLX top
-proc. This example does not yet supply a PL-PS gateway or an ERTS process which
-consumes those channels. That adapter must eventually decode the event and
-apply or accumulate the corresponding data-qubit correction (unless correction
-application instead remains wholly within PL).
+The `control_router` ingress names one stable router service at the application
+boundary. A host or distribution adapter addresses its envelope to that one
+service; the envelope's target and rectangle are inner multicast selectors,
+not ERTS process destinations. The data target embeds `data_even[X,Y]` at
+physical coordinate `[X,2Y]` and `data_odd[X,Y]` at `[X,2Y+1]`, so one
+horizontal line query reaches exactly `Distance` data actors without naming
+either implementation family. Its noise target reaches both data families and
+both syndrome planes; a whole-address-space cutoff therefore uses one host
+command.
+
+This rectangle names coordinates inside one generated fabric. The current
+router neither distributes one command over several FPGAs nor makes such a
+broadcast atomic. A multi-FPGA adapter must intersect a global rectangle with
+the deployed partitions and send an explicitly addressed command to each
+fabric router. Partial availability, failure, and retry semantics remain open.
+
+Coordinates name stable logical services, like registered process names, not
+particular actor incarnations. Router acceptance is bounded network admission,
+not atomic admission to every selected actor mailbox. Each family distributor
+retains order and completes its selected sends before taking another envelope,
+but a lifecycle change may still discard resident copies. The present
+whole-topology reset discards router and actor traffic together; independent
+actor restart will require the lifecycle layer to close and flush affected
+fanout or to add incarnation-aware leaf delivery.
+
+"External" still means a typed channel on the generated DSLX top proc. This
+example does not yet supply a PL-PS gateway or an ERTS process which transports
+these envelopes and output Frames. `phi_memory_experiment` is only the pure
+host-side reducer: it maps sparse corrections to point-addressed Pauli updates,
+waits for complete same-step quiet and empty status sets from both planes, then
+issues a line query and XORs the replies. The physical adapter must preserve
+command order and each source's event order, validate the boundary encoding,
+and deliver Pauli updates at most once. This first protocol assigns no recovery
+semantics to a reset or gateway failure; the experiment aborts. Cutoffs are
+scheduled far enough ahead to reach every leaf, and experiments quiesce before
+the u32 step counter rolls over.
 
 All family coordinates are zero-based `{X, Y}` pairs.  The topology has six
-`Distance`-by-`Distance` families and 30 route relations regardless of
+`Distance`-by-`Distance` families and 34 route relations regardless of
 distance.  Distance three is the smallest witness in which the four cardinal
 phi neighbors are distinct.
 
@@ -40,7 +75,7 @@ configurations as an ordinary list, it accepts witness distances only up to
 
 -include("phi_protocol.hrl").
 
--export([topology/0, topology/1]).
+-export([topology/0, topology/1, correction_update/3]).
 
 -define(DEFAULT_DISTANCE, 3).
 -define(MAX_WITNESS_DISTANCE, 50).
@@ -61,6 +96,7 @@ topology(Distance)
     #{
         version => 1,
         actors => #{},
+        ingresses => [control_router_ingress(Distance)],
         families => #{
             phi_x => #{module => phi_halo_cell, shape => Shape},
             phi_z => #{module => phi_halo_cell, shape => Shape},
@@ -72,8 +108,9 @@ topology(Distance)
         externals => [
             {x_announcements, out, [phenom_anyon]},
             {z_announcements, out, [phenom_anyon]},
-            {x_corrections, out, [phi_correction]},
-            {z_corrections, out, [phi_correction]}
+            {x_decoder_events, out, [phi_correction, phi_status]},
+            {z_decoder_events, out, [phi_correction, phi_status]},
+            {data_measurements, out, [pauli_reply]}
         ],
         routes => [],
         route_relations => route_relations(),
@@ -82,22 +119,77 @@ topology(Distance)
 topology(_Distance) ->
     error(badarg).
 
+-doc "Maps one sparse decoder move to its physical data-qubit update.".
+-spec correction_update(
+    x | z,
+    #phi_correction{},
+    pos_integer()
+) -> {{non_neg_integer(), non_neg_integer()}, hls_pauli:pauli()}.
+correction_update(
+    Plane,
+    #phi_correction{x = X, y = Y, direction = Direction},
+    Distance
+) when Distance > 0, X >= 0, X < Distance, Y >= 0, Y < Distance ->
+    DataHeight = 2 * Distance,
+    case {Plane, Direction} of
+        {x, ?PHI_NORTH_MASK} ->
+            {{X, wrap(2 * Y - 1, DataHeight)}, hls_pauli:z()};
+        {x, ?PHI_EAST_MASK} ->
+            {{wrap(X + 1, Distance), 2 * Y}, hls_pauli:z()};
+        {x, ?PHI_WEST_MASK} ->
+            {{X, 2 * Y}, hls_pauli:z()};
+        {x, ?PHI_SOUTH_MASK} ->
+            {{X, 2 * Y + 1}, hls_pauli:z()};
+        {z, ?PHI_NORTH_MASK} ->
+            {{wrap(X + 1, Distance), 2 * Y}, hls_pauli:x()};
+        {z, ?PHI_EAST_MASK} ->
+            {{wrap(X + 1, Distance), 2 * Y + 1}, hls_pauli:x()};
+        {z, ?PHI_WEST_MASK} ->
+            {{X, 2 * Y + 1}, hls_pauli:x()};
+        {z, ?PHI_SOUTH_MASK} ->
+            {{wrap(X + 1, Distance), wrap(2 * Y + 2, DataHeight)},
+                hls_pauli:x()};
+        _ ->
+            error(badarg)
+    end;
+correction_update(_Plane, _Correction, _Distance) ->
+    error(badarg).
+
+wrap(Value, Modulus) ->
+    (Value + Modulus) rem Modulus.
+
+control_router_ingress(Distance) ->
+    DataEven = {family, data_even, {embed, [1, 2], [0, 0]}},
+    DataOdd = {family, data_odd, {embed, [1, 2], [0, 1]}},
+    SyndromeX = {family, syndrome_x, {embed, [1, 2], [0, 0]}},
+    SyndromeZ = {family, syndrome_z, {embed, [1, 2], [0, 0]}},
+    {control_router, {rectangle, [Distance, 2 * Distance]}, [
+        {data, [pauli_query, pauli_update], [DataEven, DataOdd]},
+        {noise, [noise_cutoff], [
+            DataEven,
+            DataOdd,
+            SyndromeX,
+            SyndromeZ
+        ]}
+    ]}.
+
 route_relations() ->
-    phi_relations(phi_x, syndrome_x, x_corrections) ++
-        phi_relations(phi_z, syndrome_z, z_corrections) ++
+    phi_relations(phi_x, syndrome_x, x_decoder_events) ++
+        phi_relations(phi_z, syndrome_z, z_decoder_events) ++
         syndrome_x_relations() ++
         syndrome_z_relations() ++
         data_even_relations() ++
         data_odd_relations().
 
-phi_relations(Phi, Syndrome, Corrections) ->
+phi_relations(Phi, Syndrome, DecoderEvents) ->
     [
         relation(Phi, north, Phi, [0, -1]),
         relation(Phi, east, Phi, [1, 0]),
         relation(Phi, west, Phi, [-1, 0]),
         relation(Phi, south, Phi, [0, 1]),
         relation(Phi, syndrome, Syndrome, [0, 0]),
-        {{Phi, correction}, [{external, Corrections}]}
+        {{Phi, correction}, [{external, DecoderEvents}]},
+        {{Phi, status}, [{external, DecoderEvents}]}
     ].
 
 syndrome_x_relations() ->
@@ -123,7 +215,8 @@ data_even_relations() ->
         relation(data_even, north, syndrome_z, [-1, -1]),
         relation(data_even, east, syndrome_x, [0, 0]),
         relation(data_even, west, syndrome_x, [-1, 0]),
-        relation(data_even, south, syndrome_z, [-1, 0])
+        relation(data_even, south, syndrome_z, [-1, 0]),
+        {{data_even, measurement}, [{external, data_measurements}]}
     ].
 
 data_odd_relations() ->
@@ -131,7 +224,8 @@ data_odd_relations() ->
         relation(data_odd, north, syndrome_x, [0, 0]),
         relation(data_odd, east, syndrome_z, [0, 0]),
         relation(data_odd, west, syndrome_z, [-1, 0]),
-        relation(data_odd, south, syndrome_x, [0, 1])
+        relation(data_odd, south, syndrome_x, [0, 1]),
+        {{data_odd, measurement}, [{external, data_measurements}]}
     ].
 
 relation(Source, Port, Destination, Offset) ->
@@ -146,12 +240,24 @@ announcement_relation(Source, Destination, External) ->
     ]}.
 
 startup(Distance) ->
-    noise_family_startup(data_even, 0, Distance) ++
-        noise_family_startup(data_odd, 1, Distance) ++
+    data_family_startup(data_even, 0, 0, Distance) ++
+        data_family_startup(data_odd, 1, 1, Distance) ++
         noise_family_startup(syndrome_x, 2, Distance) ++
         noise_family_startup(syndrome_z, 3, Distance) ++
         phi_family_startup(phi_x, 4, Distance) ++
         phi_family_startup(phi_z, 5, Distance).
+
+data_family_startup(Family, PhysicalYParity, FamilyIndex, Distance) ->
+    [
+        {{Family, X, Y}, [#phenom_config{
+            seed = seed(FamilyIndex, Distance, X, Y),
+            threshold = ?EXERCISE_THRESHOLD,
+            x = X,
+            y = 2 * Y + PhysicalYParity
+        }]}
+        || X <- lists:seq(0, Distance - 1),
+           Y <- lists:seq(0, Distance - 1)
+    ].
 
 noise_family_startup(Family, FamilyIndex, Distance) ->
     [

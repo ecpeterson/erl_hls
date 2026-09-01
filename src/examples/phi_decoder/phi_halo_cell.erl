@@ -43,17 +43,23 @@ is explicitly repeated, then retried in their original arrival order. Partial
 sums, receive masks, and receive counts are ordinary data changes and do not
 themselves retry a postponed message.
 
-The generated module exposes six separately backpressured output ports:
+The generated module exposes seven separately backpressured output ports:
 `north`, `east`, `west`, and `south` for the decoder mesh, `syndrome` for its
-measurement source, and one provisional `correction` event stream. A physical
-correction belongs to the data-qubit edge between this syndrome location and
-the selected neighboring syndrome location. The compact event identifies that
-edge by syndrome coordinate and direction; it is not a claim that a phi cell
-has only one neighboring data qubit. The CPU scheduler maps output names to the
-PIDs passed to `start_link/1`; no recipient is hidden in the cell. To build a
-cyclic CPU topology, start every cell with `start_link/0` and then call
-`connect/2`; its initial measurement request runs once both connection and
-configuration are complete.
+measurement source, and provisional `correction` and `status` event streams. A
+physical correction belongs to the data-qubit edge between this syndrome
+location and the selected neighboring syndrome location. The compact event
+identifies that edge by syndrome coordinate and direction; it is not a claim
+that a phi cell has only one neighboring data qubit. Status is emitted after
+all four incoming moves complete the step and reports both the resulting local
+anyon occupancy and the quiet certificate propagated from that step's
+syndrome neighborhood. For one cell, its optional correction precedes its
+status on the source-ordered egress. Complete same-step quiet and empty status
+sets from both decoder planes can therefore fence all earlier correction
+events. The CPU scheduler maps output names to the PIDs passed to
+`start_link/1`; no recipient is hidden in the cell. To build a cyclic CPU
+topology, start every cell with `start_link/0` and then call `connect/2`; its
+initial measurement request runs once both connection and configuration are
+complete.
 
 The diffusion and anyon joins rely on the topology delivering exactly one
 message per incoming edge in each phase. The comparison join is source-aware:
@@ -91,12 +97,12 @@ protocol meaning.
 
 The two stored layers are a deliberately small z-depth probe. Layer zero is the
 syndrome plane and layer one uses the charge-free bulk coefficient. Values use
-a raw unsigned Q16.16 encoding in this fixture. Integer operations implement
-this two-layer specialization of the relaxation coefficients; explicit `u32`
-masks keep the CPU model aligned with fixed-width generated arithmetic. The
-intended decoder should instead use an explicit fixed-point type after its
-signedness, range, rounding, and overflow behavior have been checked against
-the reference implementation.
+the example-local signed Q15.16 `phi_field` type. Each recurrence widens its
+complete rational numerator to 64 bits, rounds once to the nearest stored value
+with ties away from zero, then saturates to the 32-bit field. For `eta = 1/4`,
+the center plane retains `3/4` of its old value and receives `1/24` of each of
+its six spatial neighbors; the terminal bulk layer retains `3/4` and receives
+`1/20` of each of its five neighbors.
 """.
 
 -include("phi_protocol.hrl").
@@ -126,16 +132,12 @@ the reference implementation.
 -behavior(hls_statem).
 -hls_data(cell).
 -hls_phases([configuring, measuring, gathering, comparing, flipping]).
--hls_outputs([north, east, west, south, syndrome, correction]).
+-hls_outputs([north, east, west, south, syndrome, correction, status]).
 -hls_mailbox_capacity(?MAILBOX_CAPACITY).
 -compile({parse_transform, hls_pack}).
 
 %% TODO: Replace the two-element hls_lists values with hls_vec once vector
 %% arithmetic is part of the lowerable library.
-%% TODO: Replace raw u32 Q16.16 field values and hand-coded shifts with an
-%% explicit lowerable fixed-point type and operators after settling signedness,
-%% integer/fraction widths, rounding, and overflow against the reference
-%% decoder.
 %% TODO: Replace the fixed diffusion count with the decoder's stopping rule.
 %% TODO: Choose the deployment boundary for applied corrections: either route
 %% each move to its neighboring data-qubit actor in PL, or translate the
@@ -149,18 +151,20 @@ the reference implementation.
     step = hls_type:zero() :: hls_nums:u32(),
     diffusion_round = hls_type:zero() :: hls_nums:u32(),
     phi = hls_type:zero() ::
-        hls_lists:list(hls_nums:u32(), ?LAYER_COUNT),
+        hls_lists:list(phi_field:field(), ?LAYER_COUNT),
     phi_sum = hls_type:zero() ::
-        hls_lists:list(hls_nums:u32(), ?LAYER_COUNT),
+        hls_lists:list(hls_nums:s64(), ?LAYER_COUNT),
     phi_received = hls_type:zero() :: hls_nums:u8(),
     seen_sources = hls_type:zero() :: hls_nums:u32(),
-    best_phi0 = hls_type:zero() :: hls_nums:u32(),
+    best_phi0 = hls_type:zero() :: phi_field:field(),
     best_direction = hls_type:zero() :: hls_nums:u32(),
     moves_received = hls_type:zero() :: hls_nums:u8(),
     anyon = hls_type:zero() :: hls_nums:u32(),
     random_state = hls_type:zero() :: hls_nums:u32(),
     x = hls_type:zero() :: hls_nums:u16(),
-    y = hls_type:zero() :: hls_nums:u16()
+    y = hls_type:zero() :: hls_nums:u16(),
+    noise_quiet = hls_type:zero() :: hls_nums:u32(),
+    status_valid = hls_type:zero() :: hls_nums:u32()
 }).
 
 -type phase() :: configuring | measuring | gathering | comparing | flipping.
@@ -174,7 +178,8 @@ the reference implementation.
     west := pid(),
     south := pid(),
     syndrome := pid(),
-    correction := pid()
+    correction := pid(),
+    status := pid()
 }.
 -type direction() :: north | east | west | south.
 
@@ -225,12 +230,12 @@ configure(_PID, _Seed) ->
     error(badarg).
 
 -doc "Offers one neighbor phi value for diffusion `Epoch` to a cell.".
--spec offer_phi(pid(), hls_nums:u32(), [hls_nums:u32()]) -> ok.
+-spec offer_phi(pid(), hls_nums:u32(), [phi_field:field()]) -> ok.
 offer_phi(PID, Epoch, Values) ->
     hls_statem:cast(PID, #phi{epoch = Epoch, values = Values}).
 
 -doc "Offers one final phi0 value from `Source` as seen by the cell.".
--spec offer_phi0(pid(), hls_nums:u32(), direction(), hls_nums:u32()) -> ok.
+-spec offer_phi0(pid(), hls_nums:u32(), direction(), phi_field:field()) -> ok.
 offer_phi0(PID, Step, Source, Value) ->
     SourceMask = source_mask(Source),
     hls_statem:cast(PID, #phi0{
@@ -270,7 +275,7 @@ offer_measurement(PID, Step, Present, X, Y)
     end,
     hls_statem:cast(PID, #phenom_anyon{
         step = Step,
-        present = PresentWord,
+        flags = PresentWord,
         x = X,
         y = Y
     }).
@@ -293,8 +298,18 @@ init([]) ->
 handle_enter(_OldPhase, configuring, Cell) ->
     {Cell, []};
 handle_enter(_OldPhase, measuring, Cell) ->
+    CompletedStep = (Cell#cell.step - 1) band ?U32_MASK,
+    Status = #phi_status{
+        step = CompletedStep,
+        x = Cell#cell.x,
+        y = Cell#cell.y,
+        flags = Cell#cell.anyon bor (Cell#cell.noise_quiet bsl 1)
+    },
     Request = #phenom_request{step = Cell#cell.step},
-    {Cell, [{cast, syndrome, Request}]};
+    {Cell, [
+        {cast_if, Cell#cell.status_valid =:= 1, status, Status},
+        {cast, syndrome, Request}
+    ]};
 handle_enter(_OldPhase, gathering, Cell) ->
     Epoch = ((Cell#cell.step * ?DIFFUSION_ROUNDS) +
         Cell#cell.diffusion_round) band ?U32_MASK,
@@ -388,16 +403,19 @@ handle_cast(#anyon_move{}, configuring, Cell) ->
 handle_cast(#phi_config{}, measuring, Cell) ->
     {measuring, Cell, fail};
 handle_cast(
-    #phenom_anyon{step = Step, present = Present, x = X, y = Y},
+    #phenom_anyon{step = Step, flags = Flags, x = X, y = Y},
     measuring,
     Cell = #cell{step = Step}
-) when Present < 2,
+) when Flags < 4,
        X >= 0, X =< 16#ffff,
        Y >= 0, Y =< 16#ffff ->
+    Present = Flags band ?PHENOM_PRESENT_MASK,
+    Quiet = (Flags band ?PHENOM_QUIET_MASK) bsr 1,
     Updated = Cell#cell{
         anyon = Cell#cell.anyon bxor Present,
         x = X,
-        y = Y
+        y = Y,
+        noise_quiet = Quiet
     },
     {gathering, Updated, consume};
 handle_cast(#phenom_anyon{}, measuring, Cell) ->
@@ -421,10 +439,12 @@ handle_cast(
 ) when Epoch =:= ((Step * ?DIFFUSION_ROUNDS + Round) band ?U32_MASK) ->
     Value0 = hls_lists:nth(1, Values),
     Value1 = hls_lists:nth(2, Values),
-    Sum0 = (hls_lists:nth(1, Cell#cell.phi_sum) + Value0)
-        band ?U32_MASK,
-    Sum1 = (hls_lists:nth(2, Cell#cell.phi_sum) + Value1)
-        band ?U32_MASK,
+    Sum0 = phi_field:accumulate(
+        hls_lists:nth(1, Cell#cell.phi_sum), Value0
+    ),
+    Sum1 = phi_field:accumulate(
+        hls_lists:nth(2, Cell#cell.phi_sum), Value1
+    ),
     SumFirst = hls_lists:set(1, Cell#cell.phi_sum, Sum0),
     NewSum = hls_lists:set(2, SumFirst, Sum1),
     ReceivedNext = Cell#cell.phi_received + 1,
@@ -438,18 +458,17 @@ handle_cast(
         true ->
             P0 = hls_lists:nth(1, Cell#cell.phi),
             P1 = hls_lists:nth(2, Cell#cell.phi),
-            Charge = Cell#cell.anyon bsl 16,
-            New0 = (Charge + (P0 bsr 2) +
-                (((P1 bsl 1) + Sum0) bsr 3)) band ?U32_MASK,
-            New1 = (((P1 * 3) bsr 2) + ((P0 + Sum1) div 20))
-                band ?U32_MASK,
+            New0 = phi_field:relax_center(
+                Cell#cell.anyon, P0, P1, Sum0
+            ),
+            New1 = phi_field:relax_bulk(P0, P1, Sum1),
             PhiFirst = hls_lists:set(1, Cell#cell.phi, New0),
             NewPhi = hls_lists:set(2, PhiFirst, New1),
             Updated = Cell#cell{
                 diffusion_round = Round + 1,
                 phi = NewPhi,
                 phi_sum = hls_lists:new(
-                    hls_nums:u32(),
+                    hls_nums:s64(),
                     ?LAYER_COUNT
                 ),
                 phi_received = 0
@@ -513,11 +532,12 @@ handle_cast(
         Source =:= ?PHI_SOUTH_MASK),
        Seen band Source =:= 0 ->
     NewSeen = Seen bor Source,
-    NewBest = case Value > Best of
+    NewBest = case Seen =:= 0 orelse Value > Best of
         true -> Value;
         false -> Best
     end,
     NewBestDirection = if
+        Seen =:= 0 -> Source;
         Value > Best -> Source;
         Value =:= Best -> hls_type:as(hls_nums:u32(), ?NO_DIRECTION);
         true -> BestDirection
@@ -586,7 +606,8 @@ handle_cast(
                 step = (Cell#cell.step + 1) band ?U32_MASK,
                 diffusion_round = 0,
                 moves_received = 0,
-                anyon = NextAnyon
+                anyon = NextAnyon,
+                status_valid = 1
             },
             {measuring, Advanced, consume}
     end;
@@ -612,5 +633,7 @@ source_mask(_Direction) -> error(badarg).
 valid_neighbors(Neighbors) ->
     is_map(Neighbors) andalso
         lists:sort(maps:keys(Neighbors)) =:=
-            lists:sort([north, east, west, south, syndrome, correction]) andalso
+            lists:sort([
+                north, east, west, south, syndrome, correction, status
+            ]) andalso
         lists:all(fun is_pid/1, maps:values(Neighbors)).

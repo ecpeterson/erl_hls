@@ -32,6 +32,7 @@ topology() ->
     Directions = [north, east, west, south],
     #{
         version => 1,
+        ingresses => [],
         actors => #{
             phi => phi_halo_cell,
             syndrome => phenom_syndrome_cell,
@@ -40,20 +41,25 @@ topology() ->
         families => #{},
         externals => [
             {announcement, out, [phenom_anyon]},
-            {correction, out, [phi_correction]}
+            {decoder_events, out, [phi_correction, phi_status]},
+            {data_measurements, out, [pauli_reply]}
         ],
         routes =>
             routes(phi, Directions, phi) ++
             [
                 {{phi, syndrome}, [{actor, syndrome}]},
-                {{phi, correction}, [{external, correction}]}
+                {{phi, correction}, [{external, decoder_events}]},
+                {{phi, status}, [{external, decoder_events}]}
             ] ++
             routes(syndrome, Directions, data) ++
             [{{syndrome, phi}, queued, [
                 {actor, phi},
                 {external, announcement}
             ]}] ++
-            routes(data, Directions, syndrome),
+            routes(data, Directions, syndrome) ++
+            [
+                {{data, measurement}, [{external, data_measurements}]}
+            ],
         route_relations => [],
         startup => [
             {data, [#phenom_config{

@@ -26,7 +26,12 @@
     phenom_data,
     phenom_anyon,
     phi_correction,
-    phi_config
+    phi_config,
+    pauli_query,
+    pauli_reply,
+    noise_cutoff,
+    pauli_update,
+    phi_status
 ]).
 
 -define(PHI_NORTH_MASK, 1).
@@ -34,17 +39,19 @@
 -define(PHI_WEST_MASK, 4).
 -define(PHI_SOUTH_MASK, 8).
 -define(PHI_ALL_DIRECTIONS, 15).
+-define(PHENOM_PRESENT_MASK, 1).
+-define(PHENOM_QUIET_MASK, 2).
 
 -record(phi, {
     epoch = hls_type:zero() :: hls_nums:u32(),
     values = hls_type:zero() ::
-        hls_lists:list(hls_nums:u32(), 2)
+        hls_lists:list(phi_field:field(), 2)
 }).
 
 -record(phi0, {
     step = hls_type:zero() :: hls_nums:u32(),
     source = hls_type:zero() :: hls_nums:u32(),
-    value = hls_type:zero() :: hls_nums:u32()
+    value = hls_type:zero() :: phi_field:field()
 }).
 
 -record(anyon_move, {
@@ -71,12 +78,14 @@
 -record(phenom_data, {
     step = hls_type:zero() :: hls_nums:u32(),
     source = hls_type:zero() :: hls_nums:u32(),
-    present = hls_type:zero() :: hls_nums:u32()
+    %% PHENOM_PRESENT_MASK and PHENOM_QUIET_MASK share this wire word.
+    flags = hls_type:zero() :: hls_nums:u32()
 }).
 
 -record(phenom_anyon, {
     step = hls_type:zero() :: hls_nums:u32(),
-    present = hls_type:zero() :: hls_nums:u32(),
+    %% PHENOM_PRESENT_MASK and PHENOM_QUIET_MASK share this wire word.
+    flags = hls_type:zero() :: hls_nums:u32(),
     x = hls_type:zero() :: hls_nums:u16(),
     y = hls_type:zero() :: hls_nums:u16()
 }).
@@ -94,6 +103,55 @@
 %% One statically provisioned coin stream per logical phi-cell instance.
 -record(phi_config, {
     seed = hls_type:zero() :: hls_nums:u32()
+}).
+
+%% Queries one data qubit's cumulative physical-error and decoder-correction
+%% Pauli frame. The experiment coordinator sends this only after it has stopped
+%% noise and drained decoder correction traffic. Spatial addressing belongs to
+%% the topology envelope, not this actor message.
+-record(pauli_query, {
+    request_id = hls_type:zero() :: hls_nums:u32(),
+    measurement = hls_type:zero() :: hls_pauli:pauli()
+}).
+
+%% Replies with the parity between the requested measurement and the actor's
+%% cumulative physical-error and decoder-correction frame.
+-record(pauli_reply, {
+    request_id = hls_type:zero() :: hls_nums:u32(),
+    x = hls_type:zero() :: hls_nums:u16(),
+    y = hls_type:zero() :: hls_nums:u16(),
+    anticommutes = hls_type:zero() :: hls_nums:u32()
+}).
+
+%% Stops new phenomenological noise beginning with `first_quiet_step`. The
+%% command must reach every source before that round's random decision. Quiet
+%% bits propagate through data replies, syndrome announcements, and post-move
+%% phi status, so the experiment coordinator waits for a complete certified
+%% quiet status set before testing convergence. Experiments quiesce before the
+%% u32 step counter rolls over.
+-record(noise_cutoff, {
+    first_quiet_step = hls_type:zero() :: hls_nums:u32()
+}).
+
+%% Applies one decoder correction to the addressed data qubit's Pauli frame.
+%% The topology adapter translates a `phi_correction` into the destination and
+%% Pauli value. Applying the same update twice cancels it, so updates must be
+%% delivered at most once until the protocol carries operation identities.
+-record(pauli_update, {
+    pauli = hls_type:zero() :: hls_pauli:pauli()
+}).
+
+%% Reports one phi cell's occupancy after every move for `step` has arrived.
+%% On each decoder-plane output, a cell's status follows that cell's optional
+%% correction for the same step. A complete all-zero coordinate set therefore
+%% proves both that the plane is empty and that its earlier correction events
+%% have crossed that output boundary.
+-record(phi_status, {
+    step = hls_type:zero() :: hls_nums:u32(),
+    x = hls_type:zero() :: hls_nums:u16(),
+    y = hls_type:zero() :: hls_nums:u16(),
+    %% PHENOM_PRESENT_MASK and PHENOM_QUIET_MASK share this wire word.
+    flags = hls_type:zero() :: hls_nums:u32()
 }).
 
 -endif.

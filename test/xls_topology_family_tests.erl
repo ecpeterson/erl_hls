@@ -59,6 +59,38 @@ generated_external_merge_uses_static_channel_sites_test() ->
         "chan<axis::Frame>[GRID_WIDTH][GRID_HEIGHT]"
     >>)).
 
+generated_external_merges_distinct_source_families_test() ->
+    Generated = generated(shared_external_topology()),
+    ?assertEqual(2, count(Generated, <<"spawn FamilyNode">>)),
+    ?assertEqual(4, count(Generated, <<
+        "spawn FrameGridMux<TORUS_WIDTH, TORUS_HEIGHT>("
+    >>)),
+    ?assertEqual(2, count(Generated, <<
+        "chan<axis::Frame, CHANNEL_DEPTH>[u32:2]"
+    >>)),
+    ?assertEqual(2, count(Generated, <<"spawn FrameArrayMux<u32:2>(">>)),
+    ?assertNotEqual(nomatch, binary:match(Generated, <<
+        "external_0_lanes_p[u32:0]"
+    >>)),
+    ?assertNotEqual(nomatch, binary:match(Generated, <<
+        "external_0_lanes_p[u32:1]"
+    >>)).
+
+family_backend_rejects_external_without_a_lane_test() ->
+    Spec = phi_torus_topology:topology(2, 2),
+    Plan = hls_topology:normalize(Spec#{
+        externals := maps:get(externals, Spec) ++ [
+            {orphan, out, [phenom_request]}
+        ]
+    }),
+    ?assertError(
+        {external_lanes, orphan, 0},
+        xls_topology_dslx:emit(
+            Plan,
+            phi_torus_topology_dslx:profile()
+        )
+    ).
+
 rectangular_torus_wires_all_inverse_translations_test() ->
     Generated = generated(phi_torus_topology:topology(3, 4)),
     ExpectedInputs = [
@@ -106,13 +138,14 @@ generated_multi_family_topology_retains_compact_structure_test() ->
     ?assertEqual(6, count(Generated, <<"proc FamilyNode">>)),
     ?assertEqual(6, count(Generated, <<"spawn FamilyIngress">>)),
     ?assertEqual(6, count(Generated, <<"spawn FamilyNode">>)),
-    ?assertEqual(32, count(Generated, <<
+    ?assertEqual(38, count(Generated, <<
         "chan<axis::Frame, u32:0>[TORUS_HEIGHT][TORUS_WIDTH]"
     >>)),
-    %% The 32 lane arrays use per-coordinate router output registers as their
-    %% holding slots. The six actor request queues and reusable external
-    %% grid-column queue remain explicit; ingress itself adds no Frame queue.
-    ?assertEqual(7, count(Generated, <<
+    %% The 34 lane arrays and four addressed-control arrays use per-coordinate
+    %% output registers as their holding slots. The six actor request queues,
+    %% reusable external grid-column queue, and shared output fan-ins remain
+    %% explicit; actor ingress itself adds no Frame queue.
+    ?assertEqual(8, count(Generated, <<
         "chan<axis::Frame, CHANNEL_DEPTH>"
     >>)),
     ?assertEqual(6, count(Generated, <<"fn family_">>)),
@@ -122,8 +155,37 @@ generated_multi_family_topology_retains_compact_structure_test() ->
     ?assertEqual(2, count(Generated, <<
         "let branch_0_tok = send(tok"
     >>)),
-    ?assertEqual(4, count(Generated, <<
+    ?assertEqual(6, count(Generated, <<
         "spawn FrameGridMux<TORUS_WIDTH, TORUS_HEIGHT>("
+    >>)),
+    ?assertEqual(1, count(Generated, <<
+        "spawn FrameArrayMux<u32:2>("
+    >>)),
+    ?assertEqual(1, count(Generated, <<"proc SpatialIngressRouter">>)),
+    ?assertEqual(1, count(Generated, <<"spawn SpatialIngressRouter">>)),
+    ?assertEqual(4, count(Generated, <<"proc FamilyControl">>)),
+    ?assertEqual(4, count(Generated, <<"spawn FamilyControl">>)),
+    ?assertEqual(4, count(Generated, <<
+        "chan<hls_spatial_router::SpatialFrame, u32:0>"
+    >>)),
+    ?assertNotEqual(nomatch, binary:match(Generated, <<
+        "pub enum ControlTarget : u2 {\n"
+        "  DATA = 0,\n"
+        "  NOISE = 1,\n"
+        "}"
+    >>)),
+    ?assertNotEqual(nomatch, binary:match(Generated, <<
+        "packet.target == ControlTarget::DATA as u2"
+    >>)),
+    assert_ingress_selector(Generated, phenom_data_cell, pauli_query),
+    assert_ingress_selector(Generated, phenom_data_cell, pauli_update),
+    assert_ingress_selector(Generated, phenom_data_cell, noise_cutoff),
+    ?assertNotEqual(nomatch, binary:match(Generated, <<
+        "control_router_in: chan<hls_spatial_router::SpatialFrame> in"
+    >>)),
+    ?assertNotEqual(nomatch, binary:match(Generated, <<
+        "hls_spatial_router::contains(\n"
+        "            packet.rectangle, address_x, address_y)"
     >>)),
     ?assertNotEqual(nomatch, binary:match(Generated, <<
         "proc FamilyGrid<TORUS_WIDTH: u32, TORUS_HEIGHT: u32>"
@@ -191,6 +253,28 @@ family_backend_rejects_cross_family_selector_remap_test() ->
             #{name => selector_remap_topology, channel_depth => 1}
         )
     ).
+
+family_backend_rejects_incompatible_external_schema_test() ->
+    Plan = hls_topology:normalize(external_schema_topology()),
+    try xls_topology_dslx:emit(
+            Plan,
+            #{name => external_schema_topology, channel_depth => 1}
+        ) of
+        _ -> ?assert(false)
+    catch
+        error:{external_schema, shared, message, _Existing, _New} -> ok
+    end.
+
+family_backend_rejects_ambiguous_external_selector_test() ->
+    Plan = hls_topology:normalize(external_selector_topology()),
+    try xls_topology_dslx:emit(
+            Plan,
+            #{name => external_selector_topology, channel_depth => 1}
+        ) of
+        _ -> ?assert(false)
+    catch
+        error:{external_selector, shared, 3, _Existing, _New} -> ok
+    end.
 
 family_backend_rejects_route_fanout_test() ->
     Spec = phi_torus_topology:topology(3, 3),
@@ -262,15 +346,47 @@ family_backend_rejects_dimensions_wider_than_dslx_u32_test() ->
         xls_topology_dslx:emit(Plan, phi_torus_topology_dslx:profile())
     ).
 
+rectangle_ingress_accepts_the_full_u16_coordinate_extent_test() ->
+    Plan0 = hls_topology:normalize(phi_noise_topology:topology(1)),
+    [Ingress0] = maps:get(ingresses, Plan0),
+    Plan = Plan0#{ingresses := [Ingress0#{shape := [16#10000, 2]}]},
+    Generated = iolist_to_binary(xls_topology_dslx:emit(
+        Plan,
+        phi_noise_topology_dslx:profile()
+    )),
+    ?assertNotEqual(nomatch, binary:match(Generated, <<
+        "control_router_in: chan<hls_spatial_router::SpatialFrame> in"
+    >>)).
+
+rectangle_ingress_rejects_an_extent_beyond_u16_coordinates_test() ->
+    Plan0 = hls_topology:normalize(phi_noise_topology:topology(1)),
+    [Ingress0] = maps:get(ingresses, Plan0),
+    Plan = Plan0#{ingresses := [Ingress0#{shape := [16#10001, 2]}]},
+    ?assertError(
+        {ingress_shape, [16#10001, 2], 16#10000},
+        xls_topology_dslx:emit(
+            Plan,
+            phi_noise_topology_dslx:profile()
+        )
+    ).
+
 generated(Spec) ->
     iolist_to_binary(xls_topology_dslx:emit(
         hls_topology:normalize(Spec),
         phi_torus_topology_dslx:profile()
     )).
 
+assert_ingress_selector(Generated, Module, Schema) ->
+    Selector = Module:pack_tag(Schema),
+    Needle = iolist_to_binary([
+        "packet.frame.header.op == u8:", integer_to_list(Selector)
+    ]),
+    ?assertNotEqual(nomatch, binary:match(Generated, Needle)).
+
 selector_remap_topology() ->
     #{
         version => 1,
+        ingresses => [],
         actors => #{},
         families => #{
             source => #{
@@ -293,6 +409,86 @@ selector_remap_topology() ->
             ]},
             {{destination, padding_out}, [{external, padding}]}
         ],
+        startup => []
+    }.
+
+shared_external_topology() ->
+    #{
+        version => 1,
+        ingresses => [],
+        actors => #{},
+        families => #{
+            left => #{module => phi_halo_cell, shape => [2, 2]},
+            right => #{module => phi_halo_cell, shape => [2, 2]}
+        },
+        externals => [
+            {syndrome_requests, out, [phenom_request]},
+            {decoder_events, out, [phi_correction, phi_status]}
+        ],
+        routes => [],
+        route_relations =>
+            shared_external_relations(left) ++
+                shared_external_relations(right),
+        startup => []
+    }.
+
+shared_external_relations(Family) ->
+    [
+        {{Family, north}, [
+            {family, Family, {translate, [0, -1], wrap}}
+        ]},
+        {{Family, east}, [
+            {family, Family, {translate, [1, 0], wrap}}
+        ]},
+        {{Family, west}, [
+            {family, Family, {translate, [-1, 0], wrap}}
+        ]},
+        {{Family, south}, [
+            {family, Family, {translate, [0, 1], wrap}}
+        ]},
+        {{Family, syndrome}, [{external, syndrome_requests}]},
+        {{Family, correction}, [{external, decoder_events}]},
+        {{Family, status}, [{external, decoder_events}]}
+    ].
+
+external_schema_topology() ->
+    external_fixture_topology(
+        [{shared, out, [message]}, {padding, out, [padding]}],
+        [
+            {{source, out}, [{external, shared}]},
+            {{destination, message_out}, [{external, shared}]},
+            {{destination, padding_out}, [{external, padding}]}
+        ]
+    ).
+
+external_selector_topology() ->
+    external_fixture_topology(
+        [{shared, out, [message, padding]}, {message, out, [message]}],
+        [
+            {{source, out}, [{external, shared}]},
+            {{destination, message_out}, [{external, message}]},
+            {{destination, padding_out}, [{external, shared}]}
+        ]
+    ).
+
+external_fixture_topology(Externals, Relations) ->
+    #{
+        version => 1,
+        ingresses => [],
+        actors => #{},
+        families => #{
+            source => #{
+                module => hls_topology_source_fixture,
+                shape => [1, 1]
+            },
+            destination => #{
+                module => hls_topology_reordered_fixture,
+                shape => [1, 1]
+            }
+        },
+        externals => Externals,
+        routes => [],
+        route_relations => Relations,
         startup => []
     }.
 

@@ -11,8 +11,9 @@ A source-aware syndrome cell which supplies noise events to one phi cell.
 The paired phi cell starts each round by sending one `phenom_request`. The
 syndrome then enters `collecting` and casts a `phenom_query` to each of its
 four neighboring data cells. Four distinct `phenom_data` responses are
-combined by parity. Entering `announcing` sends the resulting detection event
-to the paired phi cell as one `phenom_anyon`.
+combined by parity. Their quiet bits are ANDed with the syndrome source's own
+quiet state. Entering `announcing` sends the resulting detection event and
+neighborhood quiet certificate to the paired phi cell as one `phenom_anyon`.
 
 There is deliberately no timer in this actor. The phi request is its clock, so
 the CPU reference process and generated module observe the same round
@@ -32,6 +33,12 @@ one-round measurement fault appears at both of its temporal boundaries.
 The threshold is a runtime message until the generated topology can supply
 static per-instance configuration. A host should configure every syndrome
 before allowing its paired phi cell to issue the first request.
+
+A `noise_cutoff` names the first quiet step. It is consumed immediately when
+received before that step's random decision. At and after the boundary the
+measurement contribution is zero and the PRNG no longer advances. The first
+quiet announcement can still contain the trailing edge of a preceding
+measurement fault.
 
 ## Source labels and capacity
 
@@ -53,6 +60,7 @@ round plus the request which changes the phase and releases them.
     stop/1,
     configure/3,
     configure/5,
+    noise_cutoff/2,
     offer_request/2,
     offer_data/4,
     runtime_info/1
@@ -76,10 +84,15 @@ round plus the request which changes the phase and releases them.
     data_parity = hls_type:zero() :: hls_nums:u32(),
     previous_measurement = hls_type:zero() :: hls_nums:u32(),
     announcement = hls_type:zero() :: hls_nums:u32(),
+    data_quiet = hls_type:zero() :: hls_nums:u32(),
+    announcement_quiet = hls_type:zero() :: hls_nums:u32(),
     random_state = hls_type:zero() :: hls_nums:u32(),
     threshold = hls_type:zero() :: hls_nums:u32(),
     x = hls_type:zero() :: hls_nums:u16(),
-    y = hls_type:zero() :: hls_nums:u16()
+    y = hls_type:zero() :: hls_nums:u16(),
+    noise_disabled = hls_type:zero() :: hls_nums:u32(),
+    cutoff_armed = hls_type:zero() :: hls_nums:u32(),
+    cutoff_step = hls_type:zero() :: hls_nums:u32()
 }).
 
 -type phase() :: configuring | waiting | collecting | announcing.
@@ -160,6 +173,16 @@ configure(PID, Seed, Threshold, X, Y)
 configure(_PID, _Seed, _Threshold, _X, _Y) ->
     error(badarg).
 
+-doc "Arms the first round which must inject no new measurement noise.".
+-spec noise_cutoff(pid(), hls_nums:u32()) -> ok.
+noise_cutoff(PID, FirstQuietStep)
+        when FirstQuietStep >= 0, FirstQuietStep =< ?U32_MASK ->
+    hls_statem:cast(PID, #noise_cutoff{
+        first_quiet_step = FirstQuietStep
+    });
+noise_cutoff(_PID, _FirstQuietStep) ->
+    error(badarg).
+
 -doc "Offers one round request from the paired phi cell.".
 -spec offer_request(pid(), hls_nums:u32()) -> ok.
 offer_request(PID, Step)
@@ -180,7 +203,7 @@ offer_data(PID, Step, Source, Present)
     hls_statem:cast(PID, #phenom_data{
         step = Step,
         source = SourceMask,
-        present = PresentWord
+        flags = PresentWord
     }).
 
 -doc "Returns scheduler diagnostics and the syndrome's current data.".
@@ -213,14 +236,16 @@ handle_enter(_OldPhase, collecting, Syndrome) ->
 handle_enter(_OldPhase, announcing, Syndrome) ->
     Anyon = #phenom_anyon{
         step = Syndrome#syndrome.step,
-        present = Syndrome#syndrome.announcement,
+        flags = Syndrome#syndrome.announcement bor
+            (Syndrome#syndrome.announcement_quiet bsl 1),
         x = Syndrome#syndrome.x,
         y = Syndrome#syndrome.y
     },
     {Syndrome, [{cast, phi, Anyon}]}.
 
 -spec handle_cast(
-    #phenom_config{} | #phenom_request{} | #phenom_data{},
+    #phenom_config{} | #phenom_request{} | #phenom_data{} |
+        #noise_cutoff{},
     phase(),
     #syndrome{}
 ) -> conclusion().
@@ -251,8 +276,27 @@ handle_cast(#phenom_request{}, configuring, Syndrome) ->
     {configuring, Syndrome, fail};
 handle_cast(#phenom_data{}, configuring, Syndrome) ->
     {configuring, Syndrome, fail};
+handle_cast(#noise_cutoff{}, configuring, Syndrome) ->
+    {configuring, Syndrome, fail};
 
 handle_cast(#phenom_config{}, waiting, Syndrome) ->
+    {waiting, Syndrome, fail};
+handle_cast(
+    #noise_cutoff{
+        first_quiet_step = FirstQuietStep
+    },
+    waiting,
+    Syndrome = #syndrome{
+        step = Step,
+        noise_disabled = 0,
+        cutoff_armed = 0
+    }
+) when FirstQuietStep >= Step ->
+    {waiting, Syndrome#syndrome{
+        cutoff_armed = 1,
+        cutoff_step = FirstQuietStep
+    }, consume};
+handle_cast(#noise_cutoff{}, waiting, Syndrome) ->
     {waiting, Syndrome, fail};
 handle_cast(
     #phenom_request{step = Step},
@@ -262,7 +306,9 @@ handle_cast(
     Collecting = Syndrome#syndrome{
         seen_sources = 0,
         data_parity = 0,
-        announcement = 0
+        announcement = 0,
+        data_quiet = 1,
+        announcement_quiet = 0
     },
     {collecting, Collecting, consume};
 handle_cast(#phenom_request{}, waiting, Syndrome) ->
@@ -279,6 +325,23 @@ handle_cast(#phenom_data{}, waiting, Syndrome) ->
 handle_cast(#phenom_config{}, collecting, Syndrome) ->
     {collecting, Syndrome, fail};
 handle_cast(
+    #noise_cutoff{
+        first_quiet_step = FirstQuietStep
+    },
+    collecting,
+    Syndrome = #syndrome{
+        step = Step,
+        noise_disabled = 0,
+        cutoff_armed = 0
+    }
+) when FirstQuietStep >= Step ->
+    {collecting, Syndrome#syndrome{
+        cutoff_armed = 1,
+        cutoff_step = FirstQuietStep
+    }, consume};
+handle_cast(#noise_cutoff{}, collecting, Syndrome) ->
+    {collecting, Syndrome, fail};
+handle_cast(
     #phenom_request{step = NextStep},
     collecting,
     Syndrome = #syndrome{step = Step}
@@ -287,7 +350,7 @@ handle_cast(
 handle_cast(#phenom_request{}, collecting, Syndrome) ->
     {collecting, Syndrome, fail};
 handle_cast(
-    #phenom_data{step = Step, source = Source, present = Present},
+    #phenom_data{step = Step, source = Source, flags = Flags},
     collecting,
     Syndrome = #syndrome{
         step = Step,
@@ -302,21 +365,39 @@ handle_cast(
         Source =:= ?PHI_WEST_MASK orelse
         Source =:= ?PHI_SOUTH_MASK),
        Seen band Source =:= 0,
-       Present < 2 ->
+       Flags < 4 ->
+    Present = Flags band ?PHENOM_PRESENT_MASK,
+    Quiet = (Flags band ?PHENOM_QUIET_MASK) bsr 1,
     NewSeen = Seen bor Source,
     NewParity = Parity bxor Present,
+    NewDataQuiet = Syndrome#syndrome.data_quiet band Quiet,
     case NewSeen =:= ?PHI_ALL_DIRECTIONS of
         false ->
             Collected = Syndrome#syndrome{
                 seen_sources = NewSeen,
-                data_parity = NewParity
+                data_parity = NewParity,
+                data_quiet = NewDataQuiet
             },
             {collecting, Collected, consume};
         true ->
-            NextRandom = hls_prng:xorshift32(RandomState),
-            Measurement = case NextRandom < Threshold of
+            CutoffApplies = Syndrome#syndrome.cutoff_armed =:= 1 andalso
+                Step >= Syndrome#syndrome.cutoff_step,
+            NoiseDisabled = Syndrome#syndrome.noise_disabled =:= 1 orelse
+                CutoffApplies,
+            NoiseDisabledWord = case NoiseDisabled of
                 false -> hls_type:as(hls_nums:u32(), 0);
                 true -> hls_type:as(hls_nums:u32(), 1)
+            end,
+            NextRandom = case NoiseDisabled of
+                true -> RandomState;
+                false -> hls_prng:xorshift32(RandomState)
+            end,
+            Measurement = case NoiseDisabled of
+                true -> hls_type:as(hls_nums:u32(), 0);
+                false -> case NextRandom < Threshold of
+                    false -> hls_type:as(hls_nums:u32(), 0);
+                    true -> hls_type:as(hls_nums:u32(), 1)
+                end
             end,
             Detection = NewParity bxor Measurement bxor PreviousMeasurement,
             Complete = Syndrome#syndrome{
@@ -324,7 +405,14 @@ handle_cast(
                 data_parity = NewParity,
                 previous_measurement = Measurement,
                 announcement = Detection,
-                random_state = NextRandom
+                data_quiet = NewDataQuiet,
+                announcement_quiet = NewDataQuiet band NoiseDisabledWord,
+                random_state = NextRandom,
+                noise_disabled = NoiseDisabledWord,
+                cutoff_armed = case CutoffApplies of
+                    false -> Syndrome#syndrome.cutoff_armed;
+                    true -> hls_type:as(hls_nums:u32(), 0)
+                end
             },
             {announcing, Complete, consume}
     end;
@@ -332,6 +420,23 @@ handle_cast(#phenom_data{}, collecting, Syndrome) ->
     {collecting, Syndrome, fail};
 
 handle_cast(#phenom_config{}, announcing, Syndrome) ->
+    {announcing, Syndrome, fail};
+handle_cast(
+    #noise_cutoff{
+        first_quiet_step = FirstQuietStep
+    },
+    announcing,
+    Syndrome = #syndrome{
+        step = Step,
+        noise_disabled = 0,
+        cutoff_armed = 0
+    }
+) when FirstQuietStep > Step ->
+    {announcing, Syndrome#syndrome{
+        cutoff_armed = 1,
+        cutoff_step = FirstQuietStep
+    }, consume};
+handle_cast(#noise_cutoff{}, announcing, Syndrome) ->
     {announcing, Syndrome, fail};
 handle_cast(
     #phenom_request{step = NextStep},
@@ -342,7 +447,9 @@ handle_cast(
         step = NextStep,
         seen_sources = 0,
         data_parity = 0,
-        announcement = 0
+        announcement = 0,
+        data_quiet = 1,
+        announcement_quiet = 0
     },
     {collecting, Collecting, consume};
 handle_cast(#phenom_request{}, announcing, Syndrome) ->

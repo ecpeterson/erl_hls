@@ -16,7 +16,12 @@ closed_noise_pipeline_advances_phi_test() ->
     AnyonTap = spawn_link(fun() -> forward_anyons(Parent, Phi) end),
     CorrectionSink = spawn_link(fun discard_casts/0),
     try
-        ok = phenom_data_cell:connect(Data, four_ports(Syndrome)),
+        ok = phenom_data_cell:connect(
+            Data,
+            (four_ports(Syndrome))#{
+                measurement => CorrectionSink
+            }
+        ),
         ok = phenom_syndrome_cell:connect(Syndrome,
             (four_ports(Data))#{phi => AnyonTap}),
         ok = phenom_data_cell:configure(
@@ -39,7 +44,8 @@ closed_noise_pipeline_advances_phi_test() ->
         %% port identities in their messages.
         PhiOutputs = (four_ports(Phi))#{
             syndrome => Syndrome,
-            correction => CorrectionSink
+            correction => CorrectionSink,
+            status => CorrectionSink
         },
         ok = phi_halo_cell:connect(Phi, PhiOutputs),
         ok = phi_halo_cell:configure(Phi, ?PRNG_SEED),
@@ -84,7 +90,10 @@ odd_data_error_reaches_phi_test() ->
         maps:foreach(
             fun(Direction, PID) ->
                 ReturnPort = opposite(Direction),
-                Outputs = (four_ports(Sink))#{ReturnPort => Syndrome},
+                Outputs = (four_ports(Sink))#{
+                    ReturnPort => Syndrome,
+                    measurement => Sink
+                },
                 ok = phenom_data_cell:connect(PID, Outputs),
                 Threshold = case Direction of
                     north -> ?HALF_THRESHOLD;
@@ -118,7 +127,11 @@ odd_data_error_reaches_phi_test() ->
         await_phase(phenom_syndrome_cell, Syndrome, waiting),
         ok = phi_halo_cell:connect(
             Phi,
-            (four_ports(Sink))#{syndrome => Syndrome, correction => Sink}
+            (four_ports(Sink))#{
+                syndrome => Syndrome,
+                correction => Sink,
+                status => Sink
+            }
         ),
         ok = phi_halo_cell:configure(Phi, ?PRNG_SEED),
 
@@ -183,7 +196,7 @@ expect_anyon(Step, Present, X, Y) ->
     receive
         {phenom_pipeline, #phenom_anyon{
                 step = Step,
-                present = Present,
+                flags = Present,
                 x = X,
                 y = Y
             }} ->

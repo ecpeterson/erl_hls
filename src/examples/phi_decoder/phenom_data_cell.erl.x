@@ -20,12 +20,18 @@ pub enum Tag : u8 {
   PHENOM_ANYON = u8:10,
   PHI_CORRECTION = u8:11,
   PHI_CONFIG = u8:12,
+  PAULI_QUERY = u8:13,
+  PAULI_REPLY = u8:14,
+  NOISE_CUTOFF = u8:15,
+  PAULI_UPDATE = u8:16,
+  PHI_STATUS = u8:17,
 }
 
 enum Phase : u8 {
   CONFIGURING = u8:0,
   COLLECTING = u8:1,
   REPORTING = u8:2,
+  REPLYING = u8:3,
 }
 
 enum Directive : u2 {
@@ -36,13 +42,13 @@ enum Directive : u2 {
 
 struct Phi {
   epoch : u32,
-  values : u32[2],
+  values : s32[2],
 }
 
 fn phi_from_bits<N: u32>(raw: bits[N]) -> Phi {
   Phi {
     epoch: raw[0:32] as u32,
-    values: raw[32:96] as u32[2],
+    values: raw[32:96] as s32[2],
   }
 }
 
@@ -69,14 +75,14 @@ fn bits_from_anyonmove(s: Anyonmove) -> bits[bit_count<Anyonmove>()] {
 struct Phi0 {
   step : u32,
   source : u32,
-  value : u32,
+  value : s32,
 }
 
 fn phi0_from_bits<N: u32>(raw: bits[N]) -> Phi0 {
   Phi0 {
     step: raw[0:32] as u32,
     source: raw[32:64] as u32,
-    value: raw[64:96] as u32,
+    value: raw[64:96] as s32,
   }
 }
 
@@ -137,24 +143,24 @@ fn bits_from_phenomquery(s: Phenomquery) -> bits[bit_count<Phenomquery>()] {
 struct Phenomdata {
   step : u32,
   source : u32,
-  present : u32,
+  flags : u32,
 }
 
 fn phenomdata_from_bits<N: u32>(raw: bits[N]) -> Phenomdata {
   Phenomdata {
     step: raw[0:32] as u32,
     source: raw[32:64] as u32,
-    present: raw[64:96] as u32,
+    flags: raw[64:96] as u32,
   }
 }
 
 fn bits_from_phenomdata(s: Phenomdata) -> bits[bit_count<Phenomdata>()] {
-  (s.present as bits[32]) ++ (s.source as bits[32]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
+  (s.flags as bits[32]) ++ (s.source as bits[32]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
 }
 
 struct Phenomanyon {
   step : u32,
-  present : u32,
+  flags : u32,
   x : u16,
   y : u16,
 }
@@ -162,14 +168,14 @@ struct Phenomanyon {
 fn phenomanyon_from_bits<N: u32>(raw: bits[N]) -> Phenomanyon {
   Phenomanyon {
     step: raw[0:32] as u32,
-    present: raw[32:64] as u32,
+    flags: raw[32:64] as u32,
     x: raw[64:80] as u16,
     y: raw[80:96] as u16,
   }
 }
 
 fn bits_from_phenomanyon(s: Phenomanyon) -> bits[bit_count<Phenomanyon>()] {
-  (s.y as bits[16]) ++ (s.x as bits[16]) ++ (s.present as bits[32]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
+  (s.y as bits[16]) ++ (s.x as bits[16]) ++ (s.flags as bits[32]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
 }
 
 struct Phicorrection {
@@ -206,12 +212,105 @@ fn bits_from_phiconfig(s: Phiconfig) -> bits[bit_count<Phiconfig>()] {
   (s.seed as bits[32]) ++  zero!<bits[0]>()
 }
 
+struct Pauliquery {
+  request_id : u32,
+  measurement : u32,
+}
+
+fn pauliquery_from_bits<N: u32>(raw: bits[N]) -> Pauliquery {
+  Pauliquery {
+    request_id: raw[0:32] as u32,
+    measurement: raw[32:64] as u32,
+  }
+}
+
+fn bits_from_pauliquery(s: Pauliquery) -> bits[bit_count<Pauliquery>()] {
+  (s.measurement as bits[32]) ++ (s.request_id as bits[32]) ++  zero!<bits[0]>()
+}
+
+struct Paulireply {
+  request_id : u32,
+  x : u16,
+  y : u16,
+  anticommutes : u32,
+}
+
+fn paulireply_from_bits<N: u32>(raw: bits[N]) -> Paulireply {
+  Paulireply {
+    request_id: raw[0:32] as u32,
+    x: raw[32:48] as u16,
+    y: raw[48:64] as u16,
+    anticommutes: raw[64:96] as u32,
+  }
+}
+
+fn bits_from_paulireply(s: Paulireply) -> bits[bit_count<Paulireply>()] {
+  (s.anticommutes as bits[32]) ++ (s.y as bits[16]) ++ (s.x as bits[16]) ++ (s.request_id as bits[32]) ++  zero!<bits[0]>()
+}
+
+struct Noisecutoff {
+  first_quiet_step : u32,
+}
+
+fn noisecutoff_from_bits<N: u32>(raw: bits[N]) -> Noisecutoff {
+  Noisecutoff {
+    first_quiet_step: raw[0:32] as u32,
+  }
+}
+
+fn bits_from_noisecutoff(s: Noisecutoff) -> bits[bit_count<Noisecutoff>()] {
+  (s.first_quiet_step as bits[32]) ++  zero!<bits[0]>()
+}
+
+struct Pauliupdate {
+  pauli : u32,
+}
+
+fn pauliupdate_from_bits<N: u32>(raw: bits[N]) -> Pauliupdate {
+  Pauliupdate {
+    pauli: raw[0:32] as u32,
+  }
+}
+
+fn bits_from_pauliupdate(s: Pauliupdate) -> bits[bit_count<Pauliupdate>()] {
+  (s.pauli as bits[32]) ++  zero!<bits[0]>()
+}
+
+struct Phistatus {
+  step : u32,
+  x : u16,
+  y : u16,
+  flags : u32,
+}
+
+fn phistatus_from_bits<N: u32>(raw: bits[N]) -> Phistatus {
+  Phistatus {
+    step: raw[0:32] as u32,
+    x: raw[32:48] as u16,
+    y: raw[48:64] as u16,
+    flags: raw[64:96] as u32,
+  }
+}
+
+fn bits_from_phistatus(s: Phistatus) -> bits[bit_count<Phistatus>()] {
+  (s.flags as bits[32]) ++ (s.y as bits[16]) ++ (s.x as bits[16]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
+}
+
 struct Datacell {
   step : u32,
   seen_sources : u32,
   threshold : u32,
   event : u32,
   random_state : u32,
+  x : u16,
+  y : u16,
+  accumulated_pauli : u32,
+  reply_request_id : u32,
+  reply_anticommutes : u32,
+  reply_resume : u32,
+  noise_disabled : u32,
+  cutoff_armed : u32,
+  cutoff_step : u32,
 }
 
 fn datacell_from_bits<N: u32>(raw: bits[N]) -> Datacell {
@@ -221,11 +320,20 @@ fn datacell_from_bits<N: u32>(raw: bits[N]) -> Datacell {
     threshold: raw[64:96] as u32,
     event: raw[96:128] as u32,
     random_state: raw[128:160] as u32,
+    x: raw[160:176] as u16,
+    y: raw[176:192] as u16,
+    accumulated_pauli: raw[192:224] as u32,
+    reply_request_id: raw[224:256] as u32,
+    reply_anticommutes: raw[256:288] as u32,
+    reply_resume: raw[288:320] as u32,
+    noise_disabled: raw[320:352] as u32,
+    cutoff_armed: raw[352:384] as u32,
+    cutoff_step: raw[384:416] as u32,
   }
 }
 
 fn bits_from_datacell(s: Datacell) -> bits[bit_count<Datacell>()] {
-  (s.random_state as bits[32]) ++ (s.event as bits[32]) ++ (s.threshold as bits[32]) ++ (s.seen_sources as bits[32]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
+  (s.cutoff_step as bits[32]) ++ (s.cutoff_armed as bits[32]) ++ (s.noise_disabled as bits[32]) ++ (s.reply_resume as bits[32]) ++ (s.reply_anticommutes as bits[32]) ++ (s.reply_request_id as bits[32]) ++ (s.accumulated_pauli as bits[32]) ++ (s.y as bits[16]) ++ (s.x as bits[16]) ++ (s.random_state as bits[32]) ++ (s.event as bits[32]) ++ (s.threshold as bits[32]) ++ (s.seen_sources as bits[32]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
 }
 
 pub enum OutputPort : u8 {
@@ -233,6 +341,7 @@ pub enum OutputPort : u8 {
   EAST = u8:1,
   WEST = u8:2,
   SOUTH = u8:3,
+  MEASUREMENT = u8:4,
 }
 
 pub struct Egress {
@@ -244,8 +353,8 @@ pub const EGRESS_DEPTH = u32:4;
 
 struct EntryEffects {
   count: u8,
-  valid: bool[4],
-  values: Egress[4],
+  valid: bool[5],
+  values: Egress[5],
 }
 
 struct MailboxSlot {
@@ -308,8 +417,10 @@ fn enter(old_phase: Phase, phase: Phase, data: Datacell) -> (Datacell, EntryEffe
           bool:false,
           bool:false,
           bool:false,
+          bool:false,
         ],
         values: [
+          zero!<Egress>(),
           zero!<Egress>(),
           zero!<Egress>(),
           zero!<Egress>(),
@@ -336,8 +447,10 @@ fn enter(old_phase: Phase, phase: Phase, data: Datacell) -> (Datacell, EntryEffe
           bool:false,
           bool:false,
           bool:false,
+          bool:false,
         ],
         values: [
+          zero!<Egress>(),
           zero!<Egress>(),
           zero!<Egress>(),
           zero!<Egress>(),
@@ -352,19 +465,22 @@ fn enter(old_phase: Phase, phase: Phase, data: Datacell) -> (Datacell, EntryEffe
         let Cell_1 = (Tag::DATA_CELL, data);
         let _0 = Cell_1.1.step;
         let _1 = Cell_1.1.event;
-        let _2 = Phenomdata {
+        let _2 = Cell_1.1.noise_disabled;
+        let _3 = _2 << 1;
+        let _4 = _1 | _3;
+        let _5 = Phenomdata {
           step: _0,
-          present: _1,
+          flags: _4,
           ..zero!<Phenomdata>()
         };
-        let _3 = (Tag::PHENOM_DATA, _2, bits_from_phenomdata(_2));
-        let Message_1 = _3;
-        let _4 = if (bool:false) {
+        let _6 = (Tag::PHENOM_DATA, _5, bits_from_phenomdata(_5));
+        let Message_1 = _6;
+        let _7 = if (bool:false) {
             data
         } else {
             Cell_1.1
         };
-        _4
+        _7
       };
       let effect_0_valid = {
         bool:true
@@ -375,24 +491,27 @@ fn enter(old_phase: Phase, phase: Phase, data: Datacell) -> (Datacell, EntryEffe
         let Cell_1 = (Tag::DATA_CELL, data);
         let _0 = Cell_1.1.step;
         let _1 = Cell_1.1.event;
-        let _2 = Phenomdata {
+        let _2 = Cell_1.1.noise_disabled;
+        let _3 = _2 << 1;
+        let _4 = _1 | _3;
+        let _5 = Phenomdata {
           step: _0,
-          present: _1,
+          flags: _4,
           ..zero!<Phenomdata>()
         };
-        let _3 = (Tag::PHENOM_DATA, _2, bits_from_phenomdata(_2));
-        let Message_1 = _3;
-        let _4 = Phenomdata {
+        let _6 = (Tag::PHENOM_DATA, _5, bits_from_phenomdata(_5));
+        let Message_1 = _6;
+        let _7 = Phenomdata {
           source: 8,
           ..(Message_1).1
         };
-        let _5 = (Tag::PHENOM_DATA, _4, bits_from_phenomdata(_4));
-        let _6 = if (bool:false) {
+        let _8 = (Tag::PHENOM_DATA, _7, bits_from_phenomdata(_7));
+        let _9 = if (bool:false) {
             zero!<axis::Frame>()
         } else {
-            axis::pack(_5.0 as u8, _5.2)
+            axis::pack(_8.0 as u8, _8.2)
         };
-        _6
+        _9
       };
       let effect_1_valid = {
         bool:true
@@ -403,24 +522,27 @@ fn enter(old_phase: Phase, phase: Phase, data: Datacell) -> (Datacell, EntryEffe
         let Cell_1 = (Tag::DATA_CELL, data);
         let _0 = Cell_1.1.step;
         let _1 = Cell_1.1.event;
-        let _2 = Phenomdata {
+        let _2 = Cell_1.1.noise_disabled;
+        let _3 = _2 << 1;
+        let _4 = _1 | _3;
+        let _5 = Phenomdata {
           step: _0,
-          present: _1,
+          flags: _4,
           ..zero!<Phenomdata>()
         };
-        let _3 = (Tag::PHENOM_DATA, _2, bits_from_phenomdata(_2));
-        let Message_1 = _3;
-        let _4 = Phenomdata {
+        let _6 = (Tag::PHENOM_DATA, _5, bits_from_phenomdata(_5));
+        let Message_1 = _6;
+        let _7 = Phenomdata {
           source: 4,
           ..(Message_1).1
         };
-        let _5 = (Tag::PHENOM_DATA, _4, bits_from_phenomdata(_4));
-        let _6 = if (bool:false) {
+        let _8 = (Tag::PHENOM_DATA, _7, bits_from_phenomdata(_7));
+        let _9 = if (bool:false) {
             zero!<axis::Frame>()
         } else {
-            axis::pack(_5.0 as u8, _5.2)
+            axis::pack(_8.0 as u8, _8.2)
         };
-        _6
+        _9
       };
       let effect_2_valid = {
         bool:true
@@ -431,24 +553,27 @@ fn enter(old_phase: Phase, phase: Phase, data: Datacell) -> (Datacell, EntryEffe
         let Cell_1 = (Tag::DATA_CELL, data);
         let _0 = Cell_1.1.step;
         let _1 = Cell_1.1.event;
-        let _2 = Phenomdata {
+        let _2 = Cell_1.1.noise_disabled;
+        let _3 = _2 << 1;
+        let _4 = _1 | _3;
+        let _5 = Phenomdata {
           step: _0,
-          present: _1,
+          flags: _4,
           ..zero!<Phenomdata>()
         };
-        let _3 = (Tag::PHENOM_DATA, _2, bits_from_phenomdata(_2));
-        let Message_1 = _3;
-        let _4 = Phenomdata {
+        let _6 = (Tag::PHENOM_DATA, _5, bits_from_phenomdata(_5));
+        let Message_1 = _6;
+        let _7 = Phenomdata {
           source: 2,
           ..(Message_1).1
         };
-        let _5 = (Tag::PHENOM_DATA, _4, bits_from_phenomdata(_4));
-        let _6 = if (bool:false) {
+        let _8 = (Tag::PHENOM_DATA, _7, bits_from_phenomdata(_7));
+        let _9 = if (bool:false) {
             zero!<axis::Frame>()
         } else {
-            axis::pack(_5.0 as u8, _5.2)
+            axis::pack(_8.0 as u8, _8.2)
         };
-        _6
+        _9
       };
       let effect_3_valid = {
         bool:true
@@ -459,24 +584,27 @@ fn enter(old_phase: Phase, phase: Phase, data: Datacell) -> (Datacell, EntryEffe
         let Cell_1 = (Tag::DATA_CELL, data);
         let _0 = Cell_1.1.step;
         let _1 = Cell_1.1.event;
-        let _2 = Phenomdata {
+        let _2 = Cell_1.1.noise_disabled;
+        let _3 = _2 << 1;
+        let _4 = _1 | _3;
+        let _5 = Phenomdata {
           step: _0,
-          present: _1,
+          flags: _4,
           ..zero!<Phenomdata>()
         };
-        let _3 = (Tag::PHENOM_DATA, _2, bits_from_phenomdata(_2));
-        let Message_1 = _3;
-        let _4 = Phenomdata {
+        let _6 = (Tag::PHENOM_DATA, _5, bits_from_phenomdata(_5));
+        let Message_1 = _6;
+        let _7 = Phenomdata {
           source: 1,
           ..(Message_1).1
         };
-        let _5 = (Tag::PHENOM_DATA, _4, bits_from_phenomdata(_4));
-        let _6 = if (bool:false) {
+        let _8 = (Tag::PHENOM_DATA, _7, bits_from_phenomdata(_7));
+        let _9 = if (bool:false) {
             zero!<axis::Frame>()
         } else {
-            axis::pack(_5.0 as u8, _5.2)
+            axis::pack(_8.0 as u8, _8.2)
         };
-        _6
+        _9
       };
       (entered_data, EntryEffects {
         count: u8:4,
@@ -485,12 +613,84 @@ fn enter(old_phase: Phase, phase: Phase, data: Datacell) -> (Datacell, EntryEffe
           effect_1_valid,
           effect_2_valid,
           effect_3_valid,
+          bool:false,
         ],
         values: [
           Egress { port: OutputPort::NORTH, frame: effect_0 },
           Egress { port: OutputPort::EAST, frame: effect_1 },
           Egress { port: OutputPort::WEST, frame: effect_2 },
           Egress { port: OutputPort::SOUTH, frame: effect_3 },
+          zero!<Egress>(),
+        ],
+      })
+    },
+    Phase::REPLYING => {
+      let entered_data = {
+        let _OldPhase_1 = old_phase;
+        let __1 = phase;
+        let Cell_1 = (Tag::DATA_CELL, data);
+        let _0 = Cell_1.1.reply_request_id;
+        let _1 = Cell_1.1.x;
+        let _2 = Cell_1.1.y;
+        let _3 = Cell_1.1.reply_anticommutes;
+        let _4 = Paulireply {
+          request_id: _0,
+          x: _1,
+          y: _2,
+          anticommutes: _3,
+          ..zero!<Paulireply>()
+        };
+        let _5 = (Tag::PAULI_REPLY, _4, bits_from_paulireply(_4));
+        let Reply_1 = _5;
+        let _6 = if (bool:false) {
+            data
+        } else {
+            Cell_1.1
+        };
+        _6
+      };
+      let effect_0_valid = {
+        bool:true
+      };
+      let effect_0 = {
+        let _OldPhase_1 = old_phase;
+        let __1 = phase;
+        let Cell_1 = (Tag::DATA_CELL, data);
+        let _0 = Cell_1.1.reply_request_id;
+        let _1 = Cell_1.1.x;
+        let _2 = Cell_1.1.y;
+        let _3 = Cell_1.1.reply_anticommutes;
+        let _4 = Paulireply {
+          request_id: _0,
+          x: _1,
+          y: _2,
+          anticommutes: _3,
+          ..zero!<Paulireply>()
+        };
+        let _5 = (Tag::PAULI_REPLY, _4, bits_from_paulireply(_4));
+        let Reply_1 = _5;
+        let _6 = if (bool:false) {
+            zero!<axis::Frame>()
+        } else {
+            axis::pack(Reply_1.0 as u8, Reply_1.2)
+        };
+        _6
+      };
+      (entered_data, EntryEffects {
+        count: u8:1,
+        valid: [
+          effect_0_valid,
+          bool:false,
+          bool:false,
+          bool:false,
+          bool:false,
+        ],
+        values: [
+          Egress { port: OutputPort::MEASUREMENT, frame: effect_0 },
+          zero!<Egress>(),
+          zero!<Egress>(),
+          zero!<Egress>(),
+          zero!<Egress>(),
         ],
       })
     },
@@ -523,21 +723,27 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
         Phase::CONFIGURING => {
           let Xls_clause_1_Seed_1 = message.seed;
           let Xls_clause_1_Threshold_1 = message.threshold;
+          let Xls_clause_1_X_1 = message.x;
+          let Xls_clause_1_Y_1 = message.y;
           let Xls_clause_1_Cell_1 = (Tag::DATA_CELL, data);
           let _0 = Xls_clause_1_Seed_1 > 0;
           if _0 {
-            let _1 = Datacell {
+            let _1 = u32:0;
+            let _2 = Datacell {
               threshold: Xls_clause_1_Threshold_1,
               random_state: Xls_clause_1_Seed_1,
+              x: Xls_clause_1_X_1,
+              y: Xls_clause_1_Y_1,
+              accumulated_pauli: _1,
               ..(Xls_clause_1_Cell_1).1
             };
-            let _2 = (Tag::DATA_CELL, _1);
-            let Xls_clause_1_Configured_1 = _2;
-            let _3 = (Phase::COLLECTING, Xls_clause_1_Configured_1, Directive::CONSUME, bool:0, );
+            let _3 = (Tag::DATA_CELL, _2);
+            let Xls_clause_1_Configured_1 = _3;
+            let _4 = (Phase::COLLECTING, Xls_clause_1_Configured_1, Directive::CONSUME, bool:0, );
             if (bool:false) {
               (phase, data, Directive::FAIL, u1:0)
             } else {
-              (_3.0, _3.1.1, _3.2, _3.3)
+              (_4.0, _4.1.1, _4.2, _4.3)
             }
           } else {
             let Xls_clause_2_Cell_1 = (Tag::DATA_CELL, data);
@@ -551,6 +757,19 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
             } else {
               (phase, data, Directive::FAIL, u1:0)
             }
+          }
+        },
+        Phase::REPLYING => {
+          let Xls_clause_1_Cell_1 = (Tag::DATA_CELL, data);
+          if bool:true {
+            let _0 = (Phase::REPLYING, Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
+            if (bool:false) {
+              (phase, data, Directive::FAIL, u1:0)
+            } else {
+              (_0.0, _0.1.1, _0.2, _0.3)
+            }
+          } else {
+            (phase, data, Directive::FAIL, u1:0)
           }
         },
         _ => (phase, data, Directive::FAIL, u1:0),
@@ -638,34 +857,96 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
             let _11 = Xls_clause_1_Seen_1 | Xls_clause_1_Source_1;
             let Xls_clause_1_NewSeen_1 = _11;
             let _12 = Xls_clause_1_NewSeen_1 == 15;
-            let _24 = if _12 {
-              let _13 = Xls_clause_1_Cell_1.1.random_state;
-              let _14 = (_13 ^ (_13 << u32:13)) & u32:0xffffffff;
-              let _15 = (_14 ^ (_14 >> u32:17)) & u32:0xffffffff;
-              let _16 = (_15 ^ (_15 << u32:5)) & u32:0xffffffff;
-              let Xls_clause_1_NextRandom_1 = _16;
-              let _17 = Xls_clause_1_Cell_1.1.threshold;
-              let _18 = Xls_clause_1_NextRandom_1 < _17;
-              let _20 = if _18 {
-                let _19 = (1 as u32);
-                (_19, bool:false)
+            let _42 = if _12 {
+              let _13 = Xls_clause_1_Cell_1.1.cutoff_armed;
+              let _14 = _13 == 1;
+              let _15 = Xls_clause_1_Cell_1.1.cutoff_step;
+              let _16 = Xls_clause_1_Step_1 >= _15;
+              let _17 = _14 && _16;
+              let Xls_clause_1_CutoffApplies_1 = _17;
+              let _18 = Xls_clause_1_Cell_1.1.noise_disabled;
+              let _19 = _18 == 1;
+              let _20 = _19 || Xls_clause_1_CutoffApplies_1;
+              let Xls_clause_1_NoiseDisabled_1 = _20;
+              let _22 = if Xls_clause_1_NoiseDisabled_1 {
+                let _21 = (1 as u32);
+                (_21, bool:false)
               } else {
-                let _19 = (0 as u32);
-                (_19, bool:false)
+                let _21 = (0 as u32);
+                (_21, bool:false)
               };
               let case_match_6_1 = bool:false;
-              let case_match_6_2 = _20.1;
-              let Xls_clause_1_Event_1 = _20.0;
-              let _21 = Datacell {
+              let case_match_6_2 = _22.1;
+              let Xls_clause_1_NoiseDisabledWord_1 = _22.0;
+              let _27 = if Xls_clause_1_NoiseDisabled_1 {
+                let _23 = Xls_clause_1_Cell_1.1.random_state;
+                (_23, bool:false)
+              } else {
+                let _23 = Xls_clause_1_Cell_1.1.random_state;
+                let _24 = (_23 ^ (_23 << u32:13)) & u32:0xffffffff;
+                let _25 = (_24 ^ (_24 >> u32:17)) & u32:0xffffffff;
+                let _26 = (_25 ^ (_25 << u32:5)) & u32:0xffffffff;
+                (_26, bool:false)
+              };
+              let case_match_7_1 = bool:false;
+              let case_match_7_2 = _27.1;
+              let Xls_clause_1_NextRandom_1 = _27.0;
+              let _32 = if Xls_clause_1_NoiseDisabled_1 {
+                let _28 = (0 as u32);
+                (_28, bool:false)
+              } else {
+                let _28 = Xls_clause_1_Cell_1.1.threshold;
+                let _29 = Xls_clause_1_NextRandom_1 < _28;
+                let _31 = if _29 {
+                  let _30 = (1 as u32);
+                  (_30, bool:false)
+                } else {
+                  let _30 = (0 as u32);
+                  (_30, bool:false)
+                };
+                let case_match_8_1 = bool:false;
+                let case_match_8_2 = _31.1;
+                (_31.0, (case_match_8_1 != case_match_8_2) || bool:false)
+              };
+              let case_match_9_1 = bool:false;
+              let case_match_9_2 = _32.1;
+              let Xls_clause_1_Event_1 = _32.0;
+              let _36 = {
+                if Xls_clause_1_Event_1 == 1 {
+                  let _33 = Xls_clause_1_Cell_1.1.accumulated_pauli;
+                  let _34 = u32:3;
+                  let _35 = (_33 ^ _34);
+                  (_35, bool:false)
+                } else {
+                  let _33 = Xls_clause_1_Cell_1.1.accumulated_pauli;
+                  (_33, bool:false)
+                }
+              };
+              let case_match_10_1 = bool:false;
+              let case_match_10_2 = _36.1;
+              let Xls_clause_1_AccumulatedPauli_1 = _36.0;
+              let _38 = if Xls_clause_1_CutoffApplies_1 {
+                let _37 = (0 as u32);
+                (_37, bool:false)
+              } else {
+                let _37 = Xls_clause_1_Cell_1.1.cutoff_armed;
+                (_37, bool:false)
+              };
+              let case_match_11_1 = bool:false;
+              let case_match_11_2 = _38.1;
+              let _39 = Datacell {
                 seen_sources: Xls_clause_1_NewSeen_1,
                 event: Xls_clause_1_Event_1,
                 random_state: Xls_clause_1_NextRandom_1,
+                accumulated_pauli: Xls_clause_1_AccumulatedPauli_1,
+                noise_disabled: Xls_clause_1_NoiseDisabledWord_1,
+                cutoff_armed: _38.0,
                 ..(Xls_clause_1_Cell_1).1
               };
-              let _22 = (Tag::DATA_CELL, _21);
-              let Xls_clause_1_Completed_1 = _22;
-              let _23 = (Phase::REPORTING, Xls_clause_1_Completed_1, Directive::CONSUME, bool:0, );
-              (_23, (case_match_6_1 != case_match_6_2) || bool:false)
+              let _40 = (Tag::DATA_CELL, _39);
+              let Xls_clause_1_Completed_1 = _40;
+              let _41 = (Phase::REPORTING, Xls_clause_1_Completed_1, Directive::CONSUME, bool:0, );
+              (_41, (case_match_10_1 != case_match_10_2) || (case_match_11_1 != case_match_11_2) || (case_match_6_1 != case_match_6_2) || (case_match_7_1 != case_match_7_2) || (case_match_9_1 != case_match_9_2) || bool:false)
             } else {
               let _13 = Datacell {
                 seen_sources: Xls_clause_1_NewSeen_1,
@@ -675,12 +956,12 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
               let _15 = (Phase::COLLECTING, _14, Directive::CONSUME, bool:0, );
               (_15, bool:false)
             };
-            let case_match_7_1 = bool:false;
-            let case_match_7_2 = _24.1;
-            if ((case_match_7_1 != case_match_7_2) || bool:false) {
+            let case_match_12_1 = bool:false;
+            let case_match_12_2 = _42.1;
+            if ((case_match_12_1 != case_match_12_2) || bool:false) {
               (phase, data, Directive::FAIL, u1:0)
             } else {
-              (_24.0.0, _24.0.1.1, _24.0.2, _24.0.3)
+              (_42.0.0, _42.0.1.1, _42.0.2, _42.0.3)
             }
           } else {
             let Xls_clause_2_QueryStep_1 = message.step;
@@ -780,6 +1061,181 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
             }
           }
         },
+        Phase::REPLYING => {
+          let Xls_clause_1_Step_1 = message.step;
+          let Xls_clause_1_Source_1 = message.source;
+          let Xls_clause_1_Cell_1 = (Tag::DATA_CELL, data);
+          let Xls_clause_1_Seen_1 = data.seen_sources;
+          let _10 = if (Xls_clause_1_Step_1 == data.step && data.reply_resume == 1) {
+            let _0 = Xls_clause_1_Source_1 == 1;
+            let _6 = if _0 {
+              (bool:1, bool:false)
+            } else {
+              let _1 = Xls_clause_1_Source_1 == 2;
+              let _5 = if _1 {
+                (bool:1, bool:false)
+              } else {
+                let _2 = Xls_clause_1_Source_1 == 4;
+                let _4 = if _2 {
+                  (bool:1, bool:false)
+                } else {
+                  let _3 = Xls_clause_1_Source_1 == 8;
+                  (_3, bool:false)
+                };
+                let case_match_1_1 = bool:false;
+                let case_match_1_2 = _4.1;
+                (_4.0, (case_match_1_1 != case_match_1_2) || bool:false)
+              };
+              let case_match_2_1 = bool:false;
+              let case_match_2_2 = _5.1;
+              (_5.0, (case_match_2_1 != case_match_2_2) || bool:false)
+            };
+            let case_match_3_1 = bool:false;
+            let case_match_3_2 = _6.1;
+            let _9 = if _6.0 {
+              let _7 = Xls_clause_1_Seen_1 & Xls_clause_1_Source_1;
+              let _8 = _7 == 0;
+              (_8, bool:false)
+            } else {
+              (bool:0, bool:false)
+            };
+            let case_match_4_1 = bool:false;
+            let case_match_4_2 = _9.1;
+            (_9.0, (case_match_3_1 != case_match_3_2) || (case_match_4_1 != case_match_4_2) || bool:false)
+          } else {
+            (bool:0, bool:false)
+          };
+          let case_match_5_1 = bool:false;
+          let case_match_5_2 = _10.1;
+          if _10.0 {
+            let _11 = Xls_clause_1_Seen_1 | Xls_clause_1_Source_1;
+            let Xls_clause_1_NewSeen_1 = _11;
+            let _12 = Xls_clause_1_NewSeen_1 == 15;
+            let _17 = if _12 {
+              let _13 = (0 as u32);
+              let _14 = Datacell {
+                seen_sources: Xls_clause_1_NewSeen_1,
+                event: _13,
+                ..(Xls_clause_1_Cell_1).1
+              };
+              let _15 = (Tag::DATA_CELL, _14);
+              let _16 = (Phase::REPORTING, _15, Directive::CONSUME, bool:0, );
+              (_16, bool:false)
+            } else {
+              let _13 = Datacell {
+                seen_sources: Xls_clause_1_NewSeen_1,
+                ..(Xls_clause_1_Cell_1).1
+              };
+              let _14 = (Tag::DATA_CELL, _13);
+              let _15 = (Phase::REPLYING, _14, Directive::CONSUME, bool:0, );
+              (_15, bool:false)
+            };
+            let case_match_6_1 = bool:false;
+            let case_match_6_2 = _17.1;
+            if ((case_match_6_1 != case_match_6_2) || bool:false) {
+              (phase, data, Directive::FAIL, u1:0)
+            } else {
+              (_17.0.0, _17.0.1.1, _17.0.2, _17.0.3)
+            }
+          } else {
+            let Xls_clause_2_QueryStep_1 = message.step;
+            let Xls_clause_2_Cell_1 = (Tag::DATA_CELL, data);
+            let Xls_clause_2_Step_1 = data.step;
+            let _3 = if data.reply_resume == 1 {
+              let _0 = Xls_clause_2_Step_1 + 1;
+              let _1 = _0 & 4294967295;
+              let _2 = Xls_clause_2_QueryStep_1 == _1;
+              (_2, bool:false)
+            } else {
+              (bool:0, bool:false)
+            };
+            let case_match_1_1 = bool:false;
+            let case_match_1_2 = _3.1;
+            if _3.0 {
+              let _4 = (Phase::REPLYING, Xls_clause_2_Cell_1, Directive::POSTPONE, bool:0, );
+              if (bool:false) {
+                (phase, data, Directive::FAIL, u1:0)
+              } else {
+                (_4.0, _4.1.1, _4.2, _4.3)
+              }
+            } else {
+              let Xls_clause_3_QueryStep_1 = message.step;
+              let Xls_clause_3_Source_1 = message.source;
+              let Xls_clause_3_Cell_1 = (Tag::DATA_CELL, data);
+              let Xls_clause_3_Step_1 = data.step;
+              let _11 = if data.reply_resume == 2 {
+                let _0 = Xls_clause_3_Step_1 + 1;
+                let _1 = _0 & 4294967295;
+                let _2 = Xls_clause_3_QueryStep_1 == _1;
+                let _10 = if _2 {
+                  let _3 = Xls_clause_3_Source_1 == 1;
+                  let _9 = if _3 {
+                    (bool:1, bool:false)
+                  } else {
+                    let _4 = Xls_clause_3_Source_1 == 2;
+                    let _8 = if _4 {
+                      (bool:1, bool:false)
+                    } else {
+                      let _5 = Xls_clause_3_Source_1 == 4;
+                      let _7 = if _5 {
+                        (bool:1, bool:false)
+                      } else {
+                        let _6 = Xls_clause_3_Source_1 == 8;
+                        (_6, bool:false)
+                      };
+                      let case_match_1_1 = bool:false;
+                      let case_match_1_2 = _7.1;
+                      (_7.0, (case_match_1_1 != case_match_1_2) || bool:false)
+                    };
+                    let case_match_2_1 = bool:false;
+                    let case_match_2_2 = _8.1;
+                    (_8.0, (case_match_2_1 != case_match_2_2) || bool:false)
+                  };
+                  let case_match_3_1 = bool:false;
+                  let case_match_3_2 = _9.1;
+                  (_9.0, (case_match_3_1 != case_match_3_2) || bool:false)
+                } else {
+                  (bool:0, bool:false)
+                };
+                let case_match_4_1 = bool:false;
+                let case_match_4_2 = _10.1;
+                (_10.0, (case_match_4_1 != case_match_4_2) || bool:false)
+              } else {
+                (bool:0, bool:false)
+              };
+              let case_match_5_1 = bool:false;
+              let case_match_5_2 = _11.1;
+              if _11.0 {
+                let _12 = Datacell {
+                  step: Xls_clause_3_QueryStep_1,
+                  seen_sources: Xls_clause_3_Source_1,
+                  event: 0,
+                  ..(Xls_clause_3_Cell_1).1
+                };
+                let _13 = (Tag::DATA_CELL, _12);
+                let Xls_clause_3_Collecting_1 = _13;
+                let _14 = (Phase::COLLECTING, Xls_clause_3_Collecting_1, Directive::CONSUME, bool:0, );
+                if (bool:false) {
+                  (phase, data, Directive::FAIL, u1:0)
+                } else {
+                  (_14.0, _14.1.1, _14.2, _14.3)
+                }
+              } else {
+                let Xls_clause_4_Cell_1 = (Tag::DATA_CELL, data);
+                if bool:true {
+                  let _0 = (Phase::REPLYING, Xls_clause_4_Cell_1, Directive::FAIL, bool:0, );
+                  if (bool:false) {
+                    (phase, data, Directive::FAIL, u1:0)
+                  } else {
+                    (_0.0, _0.1.1, _0.2, _0.3)
+                  }
+                } else {
+                  (phase, data, Directive::FAIL, u1:0)
+                }
+              }
+            }
+          }
+        },
         _ => (phase, data, Directive::FAIL, u1:0),
       }
     },
@@ -803,6 +1259,414 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
     },
     Tag::PHI_CONFIG => {
       let message = phiconfig_from_bits(frame.payload);
+      match phase {
+        _ => (phase, data, Directive::FAIL, u1:0),
+      }
+    },
+    Tag::PAULI_QUERY => {
+      let message = pauliquery_from_bits(frame.payload);
+      match phase {
+        Phase::CONFIGURING => {
+          let Xls_clause_1_Cell_1 = (Tag::DATA_CELL, data);
+          if bool:true {
+            let _0 = (Phase::CONFIGURING, Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
+            if (bool:false) {
+              (phase, data, Directive::FAIL, u1:0)
+            } else {
+              (_0.0, _0.1.1, _0.2, _0.3)
+            }
+          } else {
+            (phase, data, Directive::FAIL, u1:0)
+          }
+        },
+        Phase::COLLECTING => {
+          let Xls_clause_1_RequestId_1 = message.request_id;
+          let Xls_clause_1_Measurement_1 = message.measurement;
+          let Xls_clause_1_Cell_1 = (Tag::DATA_CELL, data);
+          if data.noise_disabled == 1 {
+            let _0 = (Xls_clause_1_Measurement_1 <= u32:3);
+            let _8 = if _0 {
+              let _1 = Xls_clause_1_Cell_1.1.accumulated_pauli;
+              let _2 = ((((_1 >> u32:1) & Xls_clause_1_Measurement_1) ^ (_1 & (Xls_clause_1_Measurement_1 >> u32:1))) & u32:1) == u32:1;
+              let _4 = if _2 {
+                let _3 = (1 as u32);
+                (_3, bool:false)
+              } else {
+                let _3 = (0 as u32);
+                (_3, bool:false)
+              };
+              let case_match_1_1 = bool:false;
+              let case_match_1_2 = _4.1;
+              let _5 = Datacell {
+                reply_request_id: Xls_clause_1_RequestId_1,
+                reply_anticommutes: _4.0,
+                reply_resume: 1,
+                ..(Xls_clause_1_Cell_1).1
+              };
+              let _6 = (Tag::DATA_CELL, _5);
+              let Xls_clause_1_Replying_1 = _6;
+              let _7 = (Phase::REPLYING, Xls_clause_1_Replying_1, Directive::CONSUME, bool:0, );
+              (_7, (case_match_1_1 != case_match_1_2) || bool:false)
+            } else {
+              let _1 = (Phase::COLLECTING, Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
+              (_1, bool:false)
+            };
+            let case_match_2_1 = bool:false;
+            let case_match_2_2 = _8.1;
+            if ((case_match_2_1 != case_match_2_2) || bool:false) {
+              (phase, data, Directive::FAIL, u1:0)
+            } else {
+              (_8.0.0, _8.0.1.1, _8.0.2, _8.0.3)
+            }
+          } else {
+            let Xls_clause_2_Cell_1 = (Tag::DATA_CELL, data);
+            if bool:true {
+              let _0 = (Phase::COLLECTING, Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
+              if (bool:false) {
+                (phase, data, Directive::FAIL, u1:0)
+              } else {
+                (_0.0, _0.1.1, _0.2, _0.3)
+              }
+            } else {
+              (phase, data, Directive::FAIL, u1:0)
+            }
+          }
+        },
+        Phase::REPORTING => {
+          let Xls_clause_1_RequestId_1 = message.request_id;
+          let Xls_clause_1_Measurement_1 = message.measurement;
+          let Xls_clause_1_Cell_1 = (Tag::DATA_CELL, data);
+          if data.noise_disabled == 1 {
+            let _0 = (Xls_clause_1_Measurement_1 <= u32:3);
+            let _8 = if _0 {
+              let _1 = Xls_clause_1_Cell_1.1.accumulated_pauli;
+              let _2 = ((((_1 >> u32:1) & Xls_clause_1_Measurement_1) ^ (_1 & (Xls_clause_1_Measurement_1 >> u32:1))) & u32:1) == u32:1;
+              let _4 = if _2 {
+                let _3 = (1 as u32);
+                (_3, bool:false)
+              } else {
+                let _3 = (0 as u32);
+                (_3, bool:false)
+              };
+              let case_match_1_1 = bool:false;
+              let case_match_1_2 = _4.1;
+              let _5 = Datacell {
+                reply_request_id: Xls_clause_1_RequestId_1,
+                reply_anticommutes: _4.0,
+                reply_resume: 2,
+                ..(Xls_clause_1_Cell_1).1
+              };
+              let _6 = (Tag::DATA_CELL, _5);
+              let Xls_clause_1_Replying_1 = _6;
+              let _7 = (Phase::REPLYING, Xls_clause_1_Replying_1, Directive::CONSUME, bool:0, );
+              (_7, (case_match_1_1 != case_match_1_2) || bool:false)
+            } else {
+              let _1 = (Phase::REPORTING, Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
+              (_1, bool:false)
+            };
+            let case_match_2_1 = bool:false;
+            let case_match_2_2 = _8.1;
+            if ((case_match_2_1 != case_match_2_2) || bool:false) {
+              (phase, data, Directive::FAIL, u1:0)
+            } else {
+              (_8.0.0, _8.0.1.1, _8.0.2, _8.0.3)
+            }
+          } else {
+            let Xls_clause_2_Cell_1 = (Tag::DATA_CELL, data);
+            if bool:true {
+              let _0 = (Phase::REPORTING, Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
+              if (bool:false) {
+                (phase, data, Directive::FAIL, u1:0)
+              } else {
+                (_0.0, _0.1.1, _0.2, _0.3)
+              }
+            } else {
+              (phase, data, Directive::FAIL, u1:0)
+            }
+          }
+        },
+        Phase::REPLYING => {
+          let Xls_clause_1_RequestId_1 = message.request_id;
+          let Xls_clause_1_Measurement_1 = message.measurement;
+          let Xls_clause_1_Cell_1 = (Tag::DATA_CELL, data);
+          if data.noise_disabled == 1 {
+            let _0 = (Xls_clause_1_Measurement_1 <= u32:3);
+            let _8 = if _0 {
+              let _1 = Xls_clause_1_Cell_1.1.accumulated_pauli;
+              let _2 = ((((_1 >> u32:1) & Xls_clause_1_Measurement_1) ^ (_1 & (Xls_clause_1_Measurement_1 >> u32:1))) & u32:1) == u32:1;
+              let _4 = if _2 {
+                let _3 = (1 as u32);
+                (_3, bool:false)
+              } else {
+                let _3 = (0 as u32);
+                (_3, bool:false)
+              };
+              let case_match_1_1 = bool:false;
+              let case_match_1_2 = _4.1;
+              let _5 = Datacell {
+                reply_request_id: Xls_clause_1_RequestId_1,
+                reply_anticommutes: _4.0,
+                ..(Xls_clause_1_Cell_1).1
+              };
+              let _6 = (Tag::DATA_CELL, _5);
+              let Xls_clause_1_Replying_1 = _6;
+              let _7 = (Phase::REPLYING, Xls_clause_1_Replying_1, Directive::CONSUME, bool:1, );
+              (_7, (case_match_1_1 != case_match_1_2) || bool:false)
+            } else {
+              let _1 = (Phase::REPLYING, Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
+              (_1, bool:false)
+            };
+            let case_match_2_1 = bool:false;
+            let case_match_2_2 = _8.1;
+            if ((case_match_2_1 != case_match_2_2) || bool:false) {
+              (phase, data, Directive::FAIL, u1:0)
+            } else {
+              (_8.0.0, _8.0.1.1, _8.0.2, _8.0.3)
+            }
+          } else {
+            let Xls_clause_2_Cell_1 = (Tag::DATA_CELL, data);
+            if bool:true {
+              let _0 = (Phase::REPLYING, Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
+              if (bool:false) {
+                (phase, data, Directive::FAIL, u1:0)
+              } else {
+                (_0.0, _0.1.1, _0.2, _0.3)
+              }
+            } else {
+              (phase, data, Directive::FAIL, u1:0)
+            }
+          }
+        },
+        _ => (phase, data, Directive::FAIL, u1:0),
+      }
+    },
+    Tag::PAULI_REPLY => {
+      let message = paulireply_from_bits(frame.payload);
+      match phase {
+        _ => (phase, data, Directive::FAIL, u1:0),
+      }
+    },
+    Tag::NOISE_CUTOFF => {
+      let message = noisecutoff_from_bits(frame.payload);
+      match phase {
+        Phase::CONFIGURING => {
+          let Xls_clause_1_Cell_1 = (Tag::DATA_CELL, data);
+          if bool:true {
+            let _0 = (Phase::CONFIGURING, Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
+            if (bool:false) {
+              (phase, data, Directive::FAIL, u1:0)
+            } else {
+              (_0.0, _0.1.1, _0.2, _0.3)
+            }
+          } else {
+            (phase, data, Directive::FAIL, u1:0)
+          }
+        },
+        Phase::COLLECTING => {
+          let Xls_clause_1_FirstQuietStep_1 = message.first_quiet_step;
+          let Xls_clause_1_Cell_1 = (Tag::DATA_CELL, data);
+          let Xls_clause_1_Step_1 = data.step;
+          let _1 = if (data.noise_disabled == 0 && data.cutoff_armed == 0) {
+            let _0 = Xls_clause_1_FirstQuietStep_1 >= Xls_clause_1_Step_1;
+            (_0, bool:false)
+          } else {
+            (bool:0, bool:false)
+          };
+          let case_match_1_1 = bool:false;
+          let case_match_1_2 = _1.1;
+          if _1.0 {
+            let _2 = Datacell {
+              cutoff_armed: 1,
+              cutoff_step: Xls_clause_1_FirstQuietStep_1,
+              ..(Xls_clause_1_Cell_1).1
+            };
+            let _3 = (Tag::DATA_CELL, _2);
+            let _4 = (Phase::COLLECTING, _3, Directive::CONSUME, bool:0, );
+            if (bool:false) {
+              (phase, data, Directive::FAIL, u1:0)
+            } else {
+              (_4.0, _4.1.1, _4.2, _4.3)
+            }
+          } else {
+            let Xls_clause_2_Cell_1 = (Tag::DATA_CELL, data);
+            if bool:true {
+              let _0 = (Phase::COLLECTING, Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
+              if (bool:false) {
+                (phase, data, Directive::FAIL, u1:0)
+              } else {
+                (_0.0, _0.1.1, _0.2, _0.3)
+              }
+            } else {
+              (phase, data, Directive::FAIL, u1:0)
+            }
+          }
+        },
+        Phase::REPORTING => {
+          let Xls_clause_1_FirstQuietStep_1 = message.first_quiet_step;
+          let Xls_clause_1_Cell_1 = (Tag::DATA_CELL, data);
+          let Xls_clause_1_Step_1 = data.step;
+          let _1 = if (data.noise_disabled == 0 && data.cutoff_armed == 0) {
+            let _0 = Xls_clause_1_FirstQuietStep_1 > Xls_clause_1_Step_1;
+            (_0, bool:false)
+          } else {
+            (bool:0, bool:false)
+          };
+          let case_match_1_1 = bool:false;
+          let case_match_1_2 = _1.1;
+          if _1.0 {
+            let _2 = Datacell {
+              cutoff_armed: 1,
+              cutoff_step: Xls_clause_1_FirstQuietStep_1,
+              ..(Xls_clause_1_Cell_1).1
+            };
+            let _3 = (Tag::DATA_CELL, _2);
+            let _4 = (Phase::REPORTING, _3, Directive::CONSUME, bool:0, );
+            if (bool:false) {
+              (phase, data, Directive::FAIL, u1:0)
+            } else {
+              (_4.0, _4.1.1, _4.2, _4.3)
+            }
+          } else {
+            let Xls_clause_2_Cell_1 = (Tag::DATA_CELL, data);
+            if bool:true {
+              let _0 = (Phase::REPORTING, Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
+              if (bool:false) {
+                (phase, data, Directive::FAIL, u1:0)
+              } else {
+                (_0.0, _0.1.1, _0.2, _0.3)
+              }
+            } else {
+              (phase, data, Directive::FAIL, u1:0)
+            }
+          }
+        },
+        Phase::REPLYING => {
+          let Xls_clause_1_Cell_1 = (Tag::DATA_CELL, data);
+          if bool:true {
+            let _0 = (Phase::REPLYING, Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
+            if (bool:false) {
+              (phase, data, Directive::FAIL, u1:0)
+            } else {
+              (_0.0, _0.1.1, _0.2, _0.3)
+            }
+          } else {
+            (phase, data, Directive::FAIL, u1:0)
+          }
+        },
+        _ => (phase, data, Directive::FAIL, u1:0),
+      }
+    },
+    Tag::PAULI_UPDATE => {
+      let message = pauliupdate_from_bits(frame.payload);
+      match phase {
+        Phase::CONFIGURING => {
+          let Xls_clause_1_Cell_1 = (Tag::DATA_CELL, data);
+          if bool:true {
+            let _0 = (Phase::CONFIGURING, Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
+            if (bool:false) {
+              (phase, data, Directive::FAIL, u1:0)
+            } else {
+              (_0.0, _0.1.1, _0.2, _0.3)
+            }
+          } else {
+            (phase, data, Directive::FAIL, u1:0)
+          }
+        },
+        Phase::COLLECTING => {
+          let Xls_clause_1_Pauli_1 = message.pauli;
+          let Xls_clause_1_Cell_1 = (Tag::DATA_CELL, data);
+          if bool:true {
+            let _0 = (Xls_clause_1_Pauli_1 <= u32:3);
+            let _6 = if _0 {
+              let _1 = Xls_clause_1_Cell_1.1.accumulated_pauli;
+              let _2 = (_1 ^ Xls_clause_1_Pauli_1);
+              let _3 = Datacell {
+                accumulated_pauli: _2,
+                ..(Xls_clause_1_Cell_1).1
+              };
+              let _4 = (Tag::DATA_CELL, _3);
+              let _5 = (Phase::COLLECTING, _4, Directive::CONSUME, bool:0, );
+              (_5, bool:false)
+            } else {
+              let _1 = (Phase::COLLECTING, Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
+              (_1, bool:false)
+            };
+            let case_match_1_1 = bool:false;
+            let case_match_1_2 = _6.1;
+            if ((case_match_1_1 != case_match_1_2) || bool:false) {
+              (phase, data, Directive::FAIL, u1:0)
+            } else {
+              (_6.0.0, _6.0.1.1, _6.0.2, _6.0.3)
+            }
+          } else {
+            (phase, data, Directive::FAIL, u1:0)
+          }
+        },
+        Phase::REPORTING => {
+          let Xls_clause_1_Pauli_1 = message.pauli;
+          let Xls_clause_1_Cell_1 = (Tag::DATA_CELL, data);
+          if bool:true {
+            let _0 = (Xls_clause_1_Pauli_1 <= u32:3);
+            let _6 = if _0 {
+              let _1 = Xls_clause_1_Cell_1.1.accumulated_pauli;
+              let _2 = (_1 ^ Xls_clause_1_Pauli_1);
+              let _3 = Datacell {
+                accumulated_pauli: _2,
+                ..(Xls_clause_1_Cell_1).1
+              };
+              let _4 = (Tag::DATA_CELL, _3);
+              let _5 = (Phase::REPORTING, _4, Directive::CONSUME, bool:0, );
+              (_5, bool:false)
+            } else {
+              let _1 = (Phase::REPORTING, Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
+              (_1, bool:false)
+            };
+            let case_match_1_1 = bool:false;
+            let case_match_1_2 = _6.1;
+            if ((case_match_1_1 != case_match_1_2) || bool:false) {
+              (phase, data, Directive::FAIL, u1:0)
+            } else {
+              (_6.0.0, _6.0.1.1, _6.0.2, _6.0.3)
+            }
+          } else {
+            (phase, data, Directive::FAIL, u1:0)
+          }
+        },
+        Phase::REPLYING => {
+          let Xls_clause_1_Pauli_1 = message.pauli;
+          let Xls_clause_1_Cell_1 = (Tag::DATA_CELL, data);
+          if bool:true {
+            let _0 = (Xls_clause_1_Pauli_1 <= u32:3);
+            let _6 = if _0 {
+              let _1 = Xls_clause_1_Cell_1.1.accumulated_pauli;
+              let _2 = (_1 ^ Xls_clause_1_Pauli_1);
+              let _3 = Datacell {
+                accumulated_pauli: _2,
+                ..(Xls_clause_1_Cell_1).1
+              };
+              let _4 = (Tag::DATA_CELL, _3);
+              let _5 = (Phase::REPLYING, _4, Directive::CONSUME, bool:0, );
+              (_5, bool:false)
+            } else {
+              let _1 = (Phase::REPLYING, Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
+              (_1, bool:false)
+            };
+            let case_match_1_1 = bool:false;
+            let case_match_1_2 = _6.1;
+            if ((case_match_1_1 != case_match_1_2) || bool:false) {
+              (phase, data, Directive::FAIL, u1:0)
+            } else {
+              (_6.0.0, _6.0.1.1, _6.0.2, _6.0.3)
+            }
+          } else {
+            (phase, data, Directive::FAIL, u1:0)
+          }
+        },
+        _ => (phase, data, Directive::FAIL, u1:0),
+      }
+    },
+    Tag::PHI_STATUS => {
+      let message = phistatus_from_bits(frame.payload);
       match phase {
         _ => (phase, data, Directive::FAIL, u1:0),
       }
@@ -859,7 +1723,7 @@ pub proc Service {
       let (tok, frame, received) = recv_if_non_blocking(
         join(), req_in, machine.admission_pending,
         zero!<axis::Frame>());
-      let tag_ok = (frame.header.op == (Tag::PHI as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::ANYON_MOVE as u8) && frame.header.payload_words == u8:2) || (frame.header.op == (Tag::PHI0 as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHENOM_CONFIG as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHENOM_REQUEST as u8) && frame.header.payload_words == u8:1) || (frame.header.op == (Tag::PHENOM_QUERY as u8) && frame.header.payload_words == u8:2) || (frame.header.op == (Tag::PHENOM_DATA as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHENOM_ANYON as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHI_CORRECTION as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHI_CONFIG as u8) && frame.header.payload_words == u8:1);
+      let tag_ok = (frame.header.op == (Tag::PHI as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::ANYON_MOVE as u8) && frame.header.payload_words == u8:2) || (frame.header.op == (Tag::PHI0 as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHENOM_CONFIG as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHENOM_REQUEST as u8) && frame.header.payload_words == u8:1) || (frame.header.op == (Tag::PHENOM_QUERY as u8) && frame.header.payload_words == u8:2) || (frame.header.op == (Tag::PHENOM_DATA as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHENOM_ANYON as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHI_CORRECTION as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHI_CONFIG as u8) && frame.header.payload_words == u8:1) || (frame.header.op == (Tag::PAULI_QUERY as u8) && frame.header.payload_words == u8:2) || (frame.header.op == (Tag::PAULI_REPLY as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::NOISE_CUTOFF as u8) && frame.header.payload_words == u8:1) || (frame.header.op == (Tag::PAULI_UPDATE as u8) && frame.header.payload_words == u8:1) || (frame.header.op == (Tag::PHI_STATUS as u8) && frame.header.payload_words == u8:3);
       let accepted = received && tag_ok;
       let invalid_input = received && !tag_ok;
       let incoming_slot = MailboxSlot {
@@ -984,14 +1848,16 @@ proc EgressDemux {
   east_out: chan<axis::Frame> out;
   west_out: chan<axis::Frame> out;
   south_out: chan<axis::Frame> out;
+  measurement_out: chan<axis::Frame> out;
 
   config(egress_in: chan<Egress> in,
          north_out: chan<axis::Frame> out,
          east_out: chan<axis::Frame> out,
          west_out: chan<axis::Frame> out,
-         south_out: chan<axis::Frame> out
+         south_out: chan<axis::Frame> out,
+         measurement_out: chan<axis::Frame> out
   ) {
-    (egress_in, north_out, east_out, west_out, south_out)
+    (egress_in, north_out, east_out, west_out, south_out, measurement_out)
   }
 
   init { () }
@@ -1007,6 +1873,8 @@ proc EgressDemux {
         send(tok, west_out, egress.frame),
       OutputPort::SOUTH =>
         send(tok, south_out, egress.frame),
+      OutputPort::MEASUREMENT =>
+        send(tok, measurement_out, egress.frame),
     };
     state
   }
@@ -1018,12 +1886,14 @@ pub proc Top {
   east_send: chan<axis::Beat> out;
   west_send: chan<axis::Beat> out;
   south_send: chan<axis::Beat> out;
+  measurement_send: chan<axis::Beat> out;
 
   config(ext_recv: chan<axis::Beat> in,
          north_send: chan<axis::Beat> out,
          east_send: chan<axis::Beat> out,
          west_send: chan<axis::Beat> out,
-         south_send: chan<axis::Beat> out) {
+         south_send: chan<axis::Beat> out,
+         measurement_send: chan<axis::Beat> out) {
     let (req_p, req_c) = chan<axis::Frame, u32:1>("req");
     let (admit_p, admit_c) = chan<u1, u32:1>("admit");
     let (egress_p, egress_c) =
@@ -1032,14 +1902,16 @@ pub proc Top {
     let (east_p, east_c) = chan<axis::Frame, u32:1>("east");
     let (west_p, west_c) = chan<axis::Frame, u32:1>("west");
     let (south_p, south_c) = chan<axis::Frame, u32:1>("south");
+    let (measurement_p, measurement_c) = chan<axis::Frame, u32:1>("measurement");
     spawn axis::ReservedRx(ext_recv, req_p, admit_c);
     spawn Service(req_c, egress_p, admit_p);
-    spawn EgressDemux(egress_c, north_p, east_p, west_p, south_p);
+    spawn EgressDemux(egress_c, north_p, east_p, west_p, south_p, measurement_p);
     spawn axis::Tx(north_c, north_send);
     spawn axis::Tx(east_c, east_send);
     spawn axis::Tx(west_c, west_send);
     spawn axis::Tx(south_c, south_send);
-    (ext_recv, north_send, east_send, west_send, south_send)
+    spawn axis::Tx(measurement_c, measurement_send);
+    (ext_recv, north_send, east_send, west_send, south_send, measurement_send)
   }
 
   init { () }

@@ -8,7 +8,7 @@ A compact, rule-preserving phi-cell torus.
 
 The family dictionary contains one `phi_halo_cell` artifact with a bounded
 two-dimensional shape. Four wrapped translation relations connect its mesh
-ports. The remaining `syndrome` and `correction` outputs are exposed as
+ports. The remaining `syndrome`, `correction`, and `status` outputs are exposed as
 top-proc boundary streams, so this is a structural topology witness rather
 than the complete phenomenological-noise deployment. They are not implicitly
 attached to an Erlang process or PL-PS gateway.
@@ -43,6 +43,7 @@ topology(Width, Height)
     #{
         version => 1,
         actors => #{},
+        ingresses => [],
         families => #{
             phi => #{
                 module => phi_halo_cell,
@@ -51,7 +52,7 @@ topology(Width, Height)
         },
         externals => [
             {syndrome_requests, out, [phenom_request]},
-            {corrections, out, [phi_correction]}
+            {decoder_events, out, [phi_correction, phi_status]}
         ],
         routes => [],
         route_relations => [
@@ -60,7 +61,8 @@ topology(Width, Height)
             relation(west, [-1, 0]),
             relation(south, [0, 1]),
             {{phi, syndrome}, [{external, syndrome_requests}]},
-            {{phi, correction}, [{external, corrections}]}
+            {{phi, correction}, [{external, decoder_events}]},
+            {{phi, status}, [{external, decoder_events}]}
         ],
         startup => startup(Width, Height)
     };

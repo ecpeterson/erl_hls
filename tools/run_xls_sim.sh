@@ -29,6 +29,7 @@ rsync -a -e "ssh -o BatchMode=yes" \
     "$local_stage/regsvc_core_adapter.v" \
     "$local_stage/regsvc_debug_top.v" \
     "$local_stage/hls_fabric_router.x" \
+    "$local_stage/hls_spatial_router.x" \
     "$local_stage/hls_debug_types.x" \
     "$local_stage/hls_debug_trace.x" \
     "$local_stage/hls_debug_observer.x" \
@@ -41,6 +42,7 @@ rsync -a -e "ssh -o BatchMode=yes" \
     "$local_stage/regsvc_pair_tb.sv" \
     "$local_stage/regsvc_bridge_tb.sv" \
     "$local_stage/phi_halo_cell_tb.sv" \
+    "$local_stage/phenom_data_cell_tb.sv" \
     "$local_stage/phi_phenom_topology_tb.sv" \
     "$local_stage/phi_torus_topology_tb.sv" \
     "$local_stage/phi_noise_topology_smoke_tb.sv" \

@@ -7,6 +7,7 @@ module phi_halo_cell_tb;
     localparam integer SOUTH = 3;
     localparam integer SYNDROME = 4;
     localparam integer CORRECTION = 5;
+    localparam integer STATUS = 6;
 
     localparam [31:0] NORTH_MASK = 32'd1;
     localparam [31:0] EAST_MASK  = 32'd2;
@@ -23,12 +24,12 @@ module phi_halo_cell_tb;
     reg input_valid = 1'b0;
     wire input_ready;
 
-    wire [32:0] output_beat [0:5];
-    wire [5:0] output_valid;
-    reg [5:0] output_ready = 6'b000000;
+    wire [32:0] output_beat [0:6];
+    wire [6:0] output_valid;
+    reg [6:0] output_ready = 7'b0000000;
 
-    reg [32:0] captured [0:5][0:63];
-    integer beat_count [0:5];
+    reg [32:0] captured [0:6][0:63];
+    integer beat_count [0:6];
     integer port_index;
     integer check_port;
     reg [32:0] stalled_beat;
@@ -58,14 +59,17 @@ module phi_halo_cell_tb;
         .phi_halo_cell__syndrome_send_vld(output_valid[SYNDROME]),
         .phi_halo_cell__correction_send_rdy(output_ready[CORRECTION]),
         .phi_halo_cell__correction_send(output_beat[CORRECTION]),
-        .phi_halo_cell__correction_send_vld(output_valid[CORRECTION])
+        .phi_halo_cell__correction_send_vld(output_valid[CORRECTION]),
+        .phi_halo_cell__status_send_rdy(output_ready[STATUS]),
+        .phi_halo_cell__status_send(output_beat[STATUS]),
+        .phi_halo_cell__status_send_vld(output_valid[STATUS])
     );
 
     always #5 clk = ~clk;
 
     always @(posedge clk) begin
         if (!reset) begin
-            for (port_index = 0; port_index < 6; port_index = port_index + 1) begin
+            for (port_index = 0; port_index < 7; port_index = port_index + 1) begin
                 if (output_valid[port_index] && output_ready[port_index]) begin
                     captured[port_index][beat_count[port_index]] <=
                         output_beat[port_index];
@@ -256,6 +260,19 @@ module phi_halo_cell_tb;
         end
     endtask
 
+    task automatic check_status;
+        input integer base;
+        input [31:0] step;
+        input [31:0] flags;
+        begin
+            check_beat(STATUS, base + 0, header(8'd17, 8'd3), 1'b0);
+            check_beat(STATUS, base + 1, step, 1'b0);
+            // This direct actor fixture always uses the origin coordinate.
+            check_beat(STATUS, base + 2, 32'd0, 1'b0);
+            check_beat(STATUS, base + 3, flags, 1'b1);
+        end
+    endtask
+
     task automatic expect_measurement_request;
         input integer base;
         input [31:0] step;
@@ -292,26 +309,31 @@ module phi_halo_cell_tb;
     end
 
     initial begin : scenario
-        for (port_index = 0; port_index < 6; port_index = port_index + 1)
+        for (port_index = 0; port_index < 7; port_index = port_index + 1)
             beat_count[port_index] = 0;
 
         repeat (5) @(posedge clk);
         @(negedge clk);
         reset = 1'b0;
 
-        output_ready = 6'b111111;
+        output_ready = 7'b1111111;
         send_config(PHI_PRNG_SEED);
         expect_measurement_request(0, 32'd0);
+        if (beat_count[STATUS] != 0) begin
+            $display("FAIL: initial measuring entry emitted a status");
+            $fatal(1);
+        end
         send_measurement(32'd0, 32'd0);
         expect_all_phi(0, 32'd0, 32'd0, 32'd0);
 
-        // Complete the first diffusion round. Repeating gathering emits the
-        // updated value at epoch one before another message can dispatch.
+        // Complete the first canonical rounded diffusion round. Repeating
+        // gathering emits [7, 11] at epoch one before another message can
+        // dispatch.
         send_phi(32'd0, 32'd32, 32'd48);
         send_phi(32'd0, 32'd64, 32'd80);
         send_phi(32'd0, 32'd16, 32'd32);
         send_phi(32'd0, 32'd48, 32'd64);
-        expect_all_phi(4, 32'd1, 32'd20, 32'd11);
+        expect_all_phi(4, 32'd1, 32'd7, 32'd11);
 
         // A complete early comparison batch occupies four of the five
         // mailbox slots. Each current diffusion message must enter and leave
@@ -322,7 +344,8 @@ module phi_halo_cell_tb;
         send_phi0(32'd0, WEST_MASK, 32'd17);
         send_phi0(32'd0, SOUTH_MASK, 32'd16);
 
-        // The second diffusion round produces [15, 15] and enters comparing.
+        // The second rounded diffusion round produces [9, 15] and enters
+        // comparing.
         // Independently stall south's wire output while the other three ports
         // complete theirs. Its transmitter retains the comparison frame, so
         // the staged inputs can still enter flipping and queue that phase's
@@ -354,12 +377,12 @@ module phi_halo_cell_tb;
                 $fatal(1);
             end
             check_phi(check_port, 0, 32'd0, 32'd0, 32'd0);
-            check_phi(check_port, 4, 32'd1, 32'd20, 32'd11);
+            check_phi(check_port, 4, 32'd1, 32'd7, 32'd11);
             check_anyon(check_port, 12, 32'd0, 32'd0);
         end
-        check_phi0(NORTH, 8, 32'd0, SOUTH_MASK, 32'd15);
-        check_phi0(EAST, 8, 32'd0, WEST_MASK, 32'd15);
-        check_phi0(WEST, 8, 32'd0, EAST_MASK, 32'd15);
+        check_phi0(NORTH, 8, 32'd0, SOUTH_MASK, 32'd9);
+        check_phi0(EAST, 8, 32'd0, WEST_MASK, 32'd9);
+        check_phi0(WEST, 8, 32'd0, EAST_MASK, 32'd9);
         if (beat_count[SOUTH] != 8) begin
             $display("FAIL: blocked south transferred a comparison beat");
             $fatal(1);
@@ -371,7 +394,7 @@ module phi_halo_cell_tb;
         check_south_stall = 1'b0;
         output_ready[SOUTH] = 1'b1;
         wait_for_count(SOUTH, 15);
-        check_phi0(SOUTH, 8, 32'd0, NORTH_MASK, 32'd15);
+        check_phi0(SOUTH, 8, 32'd0, NORTH_MASK, 32'd9);
         check_anyon(SOUTH, 12, 32'd0, 32'd0);
         if (beat_count[CORRECTION] != 0) begin
             $display("FAIL: tails emitted a correction");
@@ -386,21 +409,29 @@ module phi_halo_cell_tb;
         // The first xorshift32 result has its high bit clear, so step zero
         // cannot move even though east won the comparison. One incoming move
         // seeds a local anyon for the next decoder step.
+        // Status is the first post-move effect. Holding the next syndrome
+        // request proves the complete status can cross its output before that
+        // request is accepted by its own stream.
+        output_ready[SYNDROME] = 1'b0;
         send_anyon(32'd0, 32'd1);
         send_anyon(32'd0, 32'd0);
         send_anyon(32'd0, 32'd0);
         send_anyon(32'd0, 32'd0);
+        wait_for_count(STATUS, 4);
+        check_status(0, 32'd0, 32'd1);
+        output_ready[SYNDROME] = 1'b1;
         expect_measurement_request(2, 32'd1);
         send_measurement(32'd1, 32'd0);
-        expect_all_phi(15, 32'd2, 32'd15, 32'd15);
+        expect_all_phi(15, 32'd2, 32'd9, 32'd15);
 
         // With the local anyon present, zero-valued neighbors still contribute
-        // its Q16.16 charge. The two rounds finish at [81923, 3285].
+        // its signed Q15.16 charge. Rounded updates produce [65544, 12] and
+        // then [114695, 3286].
         send_phi(32'd2, 32'd0, 32'd0);
         send_phi(32'd2, 32'd0, 32'd0);
         send_phi(32'd2, 32'd0, 32'd0);
         send_phi(32'd2, 32'd0, 32'd0);
-        expect_all_phi(19, 32'd3, 32'd65542, 32'd11);
+        expect_all_phi(19, 32'd3, 32'd65544, 32'd12);
 
         send_phi(32'd3, 32'd0, 32'd0);
         send_phi(32'd3, 32'd0, 32'd0);
@@ -409,19 +440,20 @@ module phi_halo_cell_tb;
         for (check_port = 0; check_port < 4;
                 check_port = check_port + 1)
             wait_for_count(check_port, 27);
-        check_phi0(NORTH, 23, 32'd1, SOUTH_MASK, 32'd81923);
-        check_phi0(EAST, 23, 32'd1, WEST_MASK, 32'd81923);
-        check_phi0(WEST, 23, 32'd1, EAST_MASK, 32'd81923);
-        check_phi0(SOUTH, 23, 32'd1, NORTH_MASK, 32'd81923);
+        check_phi0(NORTH, 23, 32'd1, SOUTH_MASK, 32'd114695);
+        check_phi0(EAST, 23, 32'd1, WEST_MASK, 32'd114695);
+        check_phi0(WEST, 23, 32'd1, EAST_MASK, 32'd114695);
+        check_phi0(SOUTH, 23, 32'd1, NORTH_MASK, 32'd114695);
 
-        // The second xorshift32 result has its high bit set. East is the
-        // unique winner, so its output alone carries present=1. Stall that
-        // selected frame to exercise the new data under backpressure.
+        // The second xorshift32 result has its high bit set. East is the unique
+        // winner above the local value 114695, so its output alone carries
+        // present=1. Stall that selected frame to exercise the new data under
+        // backpressure.
         output_ready[EAST] = 1'b0;
-        send_phi0(32'd1, NORTH_MASK, 32'd90000);
-        send_phi0(32'd1, EAST_MASK, 32'd100000);
-        send_phi0(32'd1, WEST_MASK, 32'd95000);
-        send_phi0(32'd1, SOUTH_MASK, 32'd85000);
+        send_phi0(32'd1, NORTH_MASK, 32'd120000);
+        send_phi0(32'd1, EAST_MASK, 32'd130000);
+        send_phi0(32'd1, WEST_MASK, 32'd125000);
+        send_phi0(32'd1, SOUTH_MASK, 32'd115000);
 
         while (!output_valid[EAST])
             @(posedge clk);
@@ -471,18 +503,21 @@ module phi_halo_cell_tb;
         send_anyon(32'd1, 32'd0);
         expect_measurement_request(4, 32'd2);
         send_measurement(32'd2, 32'd0);
-        expect_all_phi(30, 32'd4, 32'd81923, 32'd3285);
+        expect_all_phi(30, 32'd4, 32'd114695, 32'd3286);
 
+        // The next rounded relaxation trace is [151831, 8199] followed by
+        // [180093, 13741].
         send_phi(32'd4, 32'd0, 32'd0);
         send_phi(32'd4, 32'd0, 32'd0);
         send_phi(32'd4, 32'd0, 32'd0);
         send_phi(32'd4, 32'd0, 32'd0);
-        expect_all_phi(34, 32'd5, 32'd86837, 32'd6559);
+        expect_all_phi(34, 32'd5, 32'd151831, 32'd8199);
 
-        // The third xorshift32 result is also heads. Complete another
-        // comparison with north as the unique winner. Observing north's move
-        // proves the stalled step-one entry advanced the generator once, not
-        // once per retry or output port.
+        // The third xorshift32 result is also heads. Complete an all-negative
+        // signed comparison with east as the unique least-negative winner.
+        // Observing east's move proves both signed ordering and that the
+        // stalled step-one entry
+        // advanced the generator once, not once per retry or output port.
         send_phi(32'd5, 32'd0, 32'd0);
         send_phi(32'd5, 32'd0, 32'd0);
         send_phi(32'd5, 32'd0, 32'd0);
@@ -490,24 +525,24 @@ module phi_halo_cell_tb;
         for (check_port = 0; check_port < 4;
                 check_port = check_port + 1)
             wait_for_count(check_port, 42);
-        check_phi0(NORTH, 38, 32'd2, SOUTH_MASK, 32'd88884);
-        check_phi0(EAST, 38, 32'd2, WEST_MASK, 32'd88884);
-        check_phi0(WEST, 38, 32'd2, EAST_MASK, 32'd88884);
-        check_phi0(SOUTH, 38, 32'd2, NORTH_MASK, 32'd88884);
+        check_phi0(NORTH, 38, 32'd2, SOUTH_MASK, 32'd180093);
+        check_phi0(EAST, 38, 32'd2, WEST_MASK, 32'd180093);
+        check_phi0(WEST, 38, 32'd2, EAST_MASK, 32'd180093);
+        check_phi0(SOUTH, 38, 32'd2, NORTH_MASK, 32'd180093);
 
-        send_phi0(32'd2, NORTH_MASK, 32'd120000);
-        send_phi0(32'd2, EAST_MASK, 32'd110000);
-        send_phi0(32'd2, WEST_MASK, 32'd100000);
-        send_phi0(32'd2, SOUTH_MASK, 32'd90000);
+        send_phi0(32'd2, NORTH_MASK, 32'hfffffffc);
+        send_phi0(32'd2, EAST_MASK, 32'hffffffff);
+        send_phi0(32'd2, WEST_MASK, 32'hfffffffd);
+        send_phi0(32'd2, SOUTH_MASK, 32'hfffffffe);
         for (check_port = 0; check_port < 4;
                 check_port = check_port + 1)
             wait_for_count(check_port, 45);
-        check_anyon(NORTH, 42, 32'd2, 32'd1);
-        check_anyon(EAST, 42, 32'd2, 32'd0);
+        check_anyon(NORTH, 42, 32'd2, 32'd0);
+        check_anyon(EAST, 42, 32'd2, 32'd1);
         check_anyon(WEST, 42, 32'd2, 32'd0);
         check_anyon(SOUTH, 42, 32'd2, 32'd0);
         wait_for_count(CORRECTION, 8);
-        check_correction(4, 32'd2, NORTH_MASK);
+        check_correction(4, 32'd2, EAST_MASK);
 
         repeat (8) @(posedge clk);
         for (check_port = 0; check_port < 4;

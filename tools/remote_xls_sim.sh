@@ -27,7 +27,11 @@ vvp hls_trace_store.vvp
 
 # The interpreter runs tests from its entry module, not imported modules, so
 # keep every test-bearing DSLX module explicit here.
-for test_module in hls_debug_trace.x hls_debug_observer.x; do
+for test_module in \
+    hls_debug_trace.x \
+    hls_debug_observer.x \
+    hls_spatial_router.x
+do
     "$xls_root/interpreter_main" \
         --dslx_path=. \
         --dslx_stdlib_path="$stdlib" \
@@ -99,6 +103,15 @@ for actor in phenom_data_cell phenom_syndrome_cell; do
         --fifo_module= \
         "$actor.opt.ir" > "$actor.v"
 done
+
+iverilog \
+    -g2012 \
+    -s phenom_data_cell_tb \
+    -o phenom_data_cell.vvp \
+    phenom_data_cell_tb.sv \
+    phenom_data_cell.v
+
+vvp phenom_data_cell.vvp
 
 "$xls_root/ir_converter_main" \
     --warnings_as_errors=false \
