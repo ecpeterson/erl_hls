@@ -4,7 +4,12 @@
 
 -module(phi_memory_runner).
 -moduledoc """
-Runs one phi memory closeout over an `hls_fabric` process.
+Runs one phi memory closeout over the call protocol exposed by `hls_fabric`.
+
+A physical `hls_fabric` connects that protocol to FIFO, DMA, or simulation
+transport. The example-local `phi_memory_cpu_fabric` implements the same calls
+and routed frame codec around ordinary `hls_statem` actors, so both backends
+use this coordinator and the same `phi_memory_experiment` reducer.
 
 The runner owns every routed phi output, continuously decodes those streams,
 feeds `phi_memory_experiment`, and submits each returned spatial command before
@@ -18,7 +23,8 @@ The simulation releases reset before ERTS connects. Its gateway holds every
 topology output until the first valid host command, and the runner chooses a
 future cutoff step so the command can take effect before that round. A real
 loader should make activation an explicit manifest-owned handshake and replace
-the explicit distance argument without changing the reducer.
+the explicit distance argument without changing the reducer. The CPU
+realization queues the first cutoff before activating its actors.
 
 This coordinator remains an ordinary `gen_server`: it needs delayed replies,
 timer and monitor messages, and unsolicited streams, while `hls_gs` currently

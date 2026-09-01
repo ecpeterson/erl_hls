@@ -87,6 +87,73 @@ boundary_commands_use_u16_rectangles_test() ->
         Payload
     ).
 
+command_codecs_round_trip_test() ->
+    Contract = phi_memory_boundary:contract(3),
+    Commands = [
+        {control_router, noise, {0, 0, 2, 5}, #noise_cutoff{
+            first_quiet_step = 17
+        }},
+        {control_router, data, {1, 4, 1, 4}, #pauli_update{
+            pauli = y
+        }},
+        {control_router, data, {0, 2, 2, 2}, #pauli_query{
+            request_id = 16#12345678,
+            measurement = z
+        }}
+    ],
+    lists:foreach(
+        fun(Command) ->
+            {ok, Route, Header, Payload} =
+                phi_memory_wire:encode_command(Command, Contract),
+            ?assertEqual(
+                {ok, Command},
+                phi_memory_wire:decode_command(
+                    Route, Header, Payload, Contract
+                )
+            )
+        end,
+        Commands
+    ).
+
+event_codecs_round_trip_test() ->
+    Contract = phi_memory_boundary:contract(3),
+    Events = [
+        {data_measurements, #pauli_reply{
+            request_id = 7, x = 1, y = 4, anticommutes = 1
+        }},
+        {x_announcements, #phenom_anyon{
+            step = 8, flags = 3, x = 2, y = 1
+        }},
+        {z_announcements, #phenom_anyon{
+            step = 9, flags = 0, x = 0, y = 2
+        }},
+        {x_decoder_events, #phi_correction{
+            step = 10, x = 1, y = 0, direction = ?PHI_EAST_MASK
+        }},
+        {x_decoder_events, #phi_status{
+            step = 10, x = 1, y = 0, flags = 2
+        }},
+        {z_decoder_events, #phi_correction{
+            step = 11, x = 2, y = 2, direction = ?PHI_NORTH_MASK
+        }},
+        {z_decoder_events, #phi_status{
+            step = 11, x = 2, y = 2, flags = 1
+        }}
+    ],
+    lists:foreach(
+        fun({Stream, Event}) ->
+            {ok, Route, Header, Payload} =
+                phi_memory_wire:encode_event(Stream, Event, Contract),
+            ?assertEqual(
+                {ok, Stream, Event},
+                phi_memory_wire:decode_event(
+                    Route, Header, Payload, Contract
+                )
+            )
+        end,
+        Events
+    ).
+
 event_codecs_match_the_actor_frame_payload_test() ->
     Records = [
         {phenom_syndrome_cell, #phenom_anyon{
@@ -136,5 +203,90 @@ wrong_event_route_and_version_are_rejected_test() ->
         {error, frame},
         phi_memory_wire:decode_event(
             {2, 0}, {Tag, 0, 2}, Payload, Contract
+        )
+    ).
+
+invalid_command_frames_are_rejected_test() ->
+    Contract = phi_memory_boundary:contract(3),
+    Command = {control_router, data, {0, 0, 2, 0}, #pauli_query{
+        request_id = 1,
+        measurement = x
+    }},
+    {ok, Route, {Tag, 0, Version}, Payload} =
+        phi_memory_wire:encode_command(Command, Contract),
+    <<Bounds:8/binary, RequestId:4/binary, _Pauli:4/binary>> = Payload,
+    ?assertEqual(
+        {error, route},
+        phi_memory_wire:decode_command(
+            {99, 1}, {Tag, 0, Version}, Payload, Contract
+        )
+    ),
+    ?assertEqual(
+        {error, frame},
+        phi_memory_wire:decode_command(
+            Route, {Tag, 1, Version}, Payload, Contract
+        )
+    ),
+    ?assertEqual(
+        {error, selector},
+        phi_memory_wire:decode_command(
+            Route, {255, 0, Version}, Payload, Contract
+        )
+    ),
+    ?assertEqual(
+        {error, payload},
+        phi_memory_wire:decode_command(
+            Route, {Tag, 0, Version}, Bounds, Contract
+        )
+    ),
+    ?assertEqual(
+        {error, rectangle},
+        phi_memory_wire:decode_command(
+            Route,
+            {Tag, 0, Version},
+            <<0:16/little, 0:16/little, 3:16/little, 0:16/little,
+                RequestId/binary, 2:32/little>>,
+            Contract
+        )
+    ),
+    ?assertEqual(
+        {error, message},
+        phi_memory_wire:decode_command(
+            Route,
+            {Tag, 0, Version},
+            <<Bounds/binary, RequestId/binary, 4:32/little>>,
+            Contract
+        )
+    ).
+
+invalid_events_are_rejected_before_encoding_test() ->
+    Contract = phi_memory_boundary:contract(3),
+    ?assertEqual(
+        {error, event},
+        phi_memory_wire:encode_event(
+            x_decoder_events,
+            #phi_correction{
+                step = 1,
+                x = 0,
+                y = 0,
+                direction = 0
+            },
+            Contract
+        )
+    ),
+    ?assertEqual(
+        {error, event},
+        phi_memory_wire:encode_event(
+            x_announcements,
+            #phenom_anyon{step = 1, flags = 0, x = 3, y = 0},
+            Contract
+        )
+    ),
+    ?assertEqual(
+        {error, event},
+        phi_memory_wire:encode_event(
+            x_announcements,
+            #phi_status{step = 1, flags = 0, x = 0, y = 0},
+            Contract
         )
     ).

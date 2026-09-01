@@ -9,36 +9,46 @@ simulated_rtl_test_() ->
         false ->
             [];
         SimDir ->
+            {Options, Expected, RunnerTimeout, TestTimeout} = fixture(),
             {setup,
-                fun() -> start(SimDir) end,
+                fun() -> start(SimDir, Options, RunnerTimeout) end,
                 fun stop/1,
                 fun({_Fabric, Runner}) ->
-                    {timeout, 180, ?_assertEqual(
-                        {ok, 0},
+                    {timeout, TestTimeout, ?_assertEqual(
+                        Expected,
                         phi_memory_runner:await(Runner)
                     )}
                 end}
     end.
 
-start(SimDir) ->
+start(SimDir, Options, RunnerTimeout) ->
     WritePath = filename:join(SimDir, "app_tx"),
     ReadPath = filename:join(SimDir, "app_rx"),
     {ok, Fabric} = hls_fabric:start_link(WritePath, ReadPath),
-    Options = #{
-        distance => 1,
-        %% The synthesized actors are already advancing while the host route
-        %% is installed. Arm a future round, as the cutoff protocol requires.
-        first_quiet_step => 16,
-        line_y => 0,
-        measurement => z,
-        request_id => 16#504849
-    },
     {ok, Runner} = phi_memory_runner:start_link(
         Fabric,
         Options,
-        ?RUNNER_TIMEOUT
+        RunnerTimeout
     ),
     {Fabric, Runner}.
+
+fixture() ->
+    case os:getenv("ERL_HLS_PHI_DEMO") of
+        "d3" ->
+            #{options := Options, expected := Expected} =
+                phi_memory_demo:fixture(),
+            {Options, Expected, 600000, 660};
+        _ ->
+            Options = #{
+                distance => 1,
+                %% The synthesized actors advance while ERTS installs routes.
+                first_quiet_step => 16,
+                line_y => 0,
+                measurement => z,
+                request_id => 16#504849
+            },
+            {Options, {ok, 0}, ?RUNNER_TIMEOUT, 180}
+    end.
 
 stop({Fabric, Runner}) ->
     stop_if_alive(phi_memory_runner, Runner),

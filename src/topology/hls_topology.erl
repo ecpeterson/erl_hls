@@ -19,9 +19,9 @@ actor-interface summary rather than repeated in the topology.
 Here an external output is only a typed boundary of the logical graph. The XLS
 backends currently render it as a channel on the generated top proc. It does
 not by itself select a PL-PS transport, register an `hls_fabric` route, or name
-an Erlang process. A testbench or a later deployment shell/gateway must connect
-that channel to a consumer explicitly; there is not yet a CPU topology
-interpreter which makes that connection automatically.
+an Erlang process. A testbench or deployment shell must connect that channel
+to a consumer explicitly. The phi example has a narrow CPU realization of
+this family subset; there is not yet a general CPU topology interpreter.
 
 A rectangle ingress similarly names one externally addressable router service,
 not a set of actor destinations. Its envelope first reaches that service; only

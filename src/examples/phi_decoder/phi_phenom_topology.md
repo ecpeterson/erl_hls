@@ -170,13 +170,16 @@ language.
 ```mermaid
 flowchart LR
     Caller["ERTS caller"] --> Runner["phi_memory_runner<br/>+ phi_memory_experiment"]
-    Runner -->|"ordered commands"| Broker["hls_fabric<br/>route broker"]
+    Runner -->|"register_route + send"| Broker["hls_fabric<br/>route broker"]
     Broker -->|"32-bit routed AXIS<br/>endpoint 0 → 1"| Gateway["phi_memory_gateway"]
-
     Gateway -->|"endpoints 2–6 → 0<br/>five routed event streams"| Broker
     Broker -->|"route + header + payload"| Runner
 
-    subgraph Fabric["generated one-fabric topology"]
+    Runner -->|"same calls and routed ABI"| CPU["phi_memory_cpu_fabric<br/>functional ERTS deployment"]
+    CPU -->|"decoded spatial command"| CR
+    CPU -->|"encoded routes 2–6"| Runner
+
+    subgraph Fabric["normalized one-fabric topology"]
         CR["control_router<br/>spatial fanout"]
         PX["phi_x"] -->|"cardinal torus"| PX
         PZ["phi_z"] -->|"cardinal torus"| PZ
@@ -191,11 +194,11 @@ flowchart LR
         SZ <-->|"queries / replies"| DE
         SZ <-->|"queries / replies"| DO
 
-        SX -->|"diagnostic copy"| XO["x_announcements<br/>source endpoint 3"] --> Gateway
-        SZ -->|"diagnostic copy"| ZO["z_announcements<br/>source endpoint 5"] --> Gateway
-        PX -->|"correction + post-move status"| XE["x_decoder_events<br/>source endpoint 4"] --> Gateway
-        PZ -->|"correction + post-move status"| ZE["z_decoder_events<br/>source endpoint 6"] --> Gateway
-        DE -->|"Pauli reply"| DM["data_measurements<br/>source endpoint 2"] --> Gateway
+        SX -->|"diagnostic copy"| XO["x_announcements<br/>source endpoint 3"]
+        SZ -->|"diagnostic copy"| ZO["z_announcements<br/>source endpoint 5"]
+        PX -->|"correction + post-move status"| XE["x_decoder_events<br/>source endpoint 4"]
+        PZ -->|"correction + post-move status"| ZE["z_decoder_events<br/>source endpoint 6"]
+        DE -->|"Pauli reply"| DM["data_measurements<br/>source endpoint 2"]
         DO -->|"Pauli reply"| DM
 
         CR -->|"whole grid: noise_cutoff"| DE
@@ -207,6 +210,8 @@ flowchart LR
     end
 
     Gateway -->|"one SpatialFrame stream"| CR
+    XO & ZO & XE & ZE & DM -->|"generated channels"| Gateway
+    XO & ZO & XE & ZE & DM -. "ordinary records via<br/>CPU forwarding processes" .-> CPU
 
     XE -. "map each correction<br/>to a point update" .-> Runner
     ZE -. "map each correction<br/>to a point update" .-> Runner
@@ -258,6 +263,23 @@ actor payload. `phi_memory_boundary` derives this canonical output order, the
 endpoint allocation shown in the diagram, and each selector and packed width
 from the compact topology and generated actor codecs; the host wire codec and
 DSLX gateway generator consume the same contract.
+
+`phi_memory_cpu_fabric` is the example-local realization of that same compact
+plan. It starts every family member as a disconnected `hls_statem`, resolves
+each member's routes from the normalized relations, and groups output ports
+with the same recipients behind one forwarding process. It queues all startup
+messages and the first cutoff before connecting data and syndrome actors, then
+phi actors; the decoder therefore cannot outrun the command which closes its
+noise epoch. Rectangle delivery uses the normalized ingress embeddings rather
+than a second copy of the checkerboard geometry.
+
+The CPU realization accepts the same `register_route` and `send` calls as
+`hls_fabric`, and decodes commands and encodes events through
+`phi_memory_wire`. The runner and reducer are consequently unchanged between
+CPU and transported deployments. Its actor and forwarding mailboxes are
+ordinary Erlang mailboxes, however: this is a functional reference for the
+current topology subset, not a model of bounded network backpressure, physical
+fanout completion, reset, or admission.
 
 Host commands use destination endpoint 1. Their boundary frame has four
 payload words: a full-width prefix of four little-endian `u16` rectangle bounds
@@ -406,12 +428,27 @@ the line query, and returns parity zero to its ERTS caller. This is an
 end-to-end transport and protocol witness; the aliased distance-one geometry
 is not a decoder-correctness test.
 
-On the 4-core, 8-GiB UTM using the pinned XLS build, the saturated
-fixed-point-field run measured about 23 seconds and 302 MiB for DSLX conversion,
-6 minutes 22 seconds and 3.18 GiB for optimization, 1 minute 10 seconds and 286
-MiB for code generation, 27 seconds and 469 MiB for Icarus compilation, and 2
-minutes 8 seconds and 149 MiB for simulation. The generated Verilog is about
-8.5 MiB and 148,292 lines. These are host build costs, not an FPGA utilization
-estimate;
-the runner saves compact timing and digest reports but does not copy that
-Verilog into the repository.
+The local regression now performs the full noisy distance-three closeout with
+cutoff step 16, physical row four, and a Z measurement through
+`phi_memory_cpu_fabric`; the deterministic fixture returns parity one. Run the
+same fixture through both the CPU realization and the checked distance-three
+gateway with:
+
+```sh
+tools/run_phi_memory_demo.sh
+```
+
+The script derives the distance, noise rate, experiment options, and expected
+parity from `phi_memory_demo:fixture/0`. It uses the `ERL_HLS_REMOTE_*`
+settings described in the README, retrieves only logs and compact metrics, and
+leaves the generated Verilog on the remote build host. This comparison remains
+outside routine CI because of the costs below.
+
+On the 4-core, 8-GiB UTM using the pinned XLS build, the complete comparison
+passed with parity one. It measured about 33 seconds and 449 MiB for DSLX
+conversion, 6 minutes 28 seconds and 3.21 GiB for optimization, 1 minute 10
+seconds and 294 MiB for code generation, 27 seconds and 472 MiB for Icarus
+compilation, and 4 minutes 45 seconds and 151 MiB for simulation. The generated
+Verilog is about 8.6 MiB and 150,146 lines. These are host build costs, not an
+FPGA utilization estimate; the runner saves compact timing and digest reports
+but does not copy that Verilog into the repository.
