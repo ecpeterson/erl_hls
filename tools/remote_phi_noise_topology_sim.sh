@@ -73,8 +73,8 @@ timed_output \
     "$xls_root/opt_main" \
     phi_noise_topology.ir
 
-# Topology links already have explicit bounded FIFOs. Retain producer output
-# flops as timing boundaries without adding consumer input queues.
+# Compact family lanes require producer output flops as their bounded holding
+# slots. Retain those flops while avoiding duplicate consumer input queues.
 timed_output \
     phi_noise_topology-codegen \
     phi_noise_topology.v \

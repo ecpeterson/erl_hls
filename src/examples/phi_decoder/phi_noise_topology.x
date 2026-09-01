@@ -3,6 +3,7 @@
 // Manual changes will be overwritten.
 //
 // Reusable family nodes and nested unroll_for! spawns retain regular source structure.
+// Direct lanes carry depth-zero metadata and require registered router output slots.
 // Scalar external streams use fair polling over statically indexed family lanes.
 
 import axis;
@@ -853,69 +854,69 @@ proc FamilyGrid<TORUS_WIDTH: u32, TORUS_HEIGHT: u32> {
     z_corrections_out: chan<axis::Frame> out
   ) {
     let (lane_0_p, lane_0_c) =
-      chan<axis::Frame, CHANNEL_DEPTH>[TORUS_HEIGHT][TORUS_WIDTH]("lane_0");
+      chan<axis::Frame, u32:0>[TORUS_HEIGHT][TORUS_WIDTH]("lane_0");
     let (lane_1_p, lane_1_c) =
-      chan<axis::Frame, CHANNEL_DEPTH>[TORUS_HEIGHT][TORUS_WIDTH]("lane_1");
+      chan<axis::Frame, u32:0>[TORUS_HEIGHT][TORUS_WIDTH]("lane_1");
     let (lane_2_p, lane_2_c) =
-      chan<axis::Frame, CHANNEL_DEPTH>[TORUS_HEIGHT][TORUS_WIDTH]("lane_2");
+      chan<axis::Frame, u32:0>[TORUS_HEIGHT][TORUS_WIDTH]("lane_2");
     let (lane_3_p, lane_3_c) =
-      chan<axis::Frame, CHANNEL_DEPTH>[TORUS_HEIGHT][TORUS_WIDTH]("lane_3");
+      chan<axis::Frame, u32:0>[TORUS_HEIGHT][TORUS_WIDTH]("lane_3");
     let (lane_4_p, lane_4_c) =
-      chan<axis::Frame, CHANNEL_DEPTH>[TORUS_HEIGHT][TORUS_WIDTH]("lane_4");
+      chan<axis::Frame, u32:0>[TORUS_HEIGHT][TORUS_WIDTH]("lane_4");
     let (lane_5_p, lane_5_c) =
-      chan<axis::Frame, CHANNEL_DEPTH>[TORUS_HEIGHT][TORUS_WIDTH]("lane_5");
+      chan<axis::Frame, u32:0>[TORUS_HEIGHT][TORUS_WIDTH]("lane_5");
     let (lane_6_p, lane_6_c) =
-      chan<axis::Frame, CHANNEL_DEPTH>[TORUS_HEIGHT][TORUS_WIDTH]("lane_6");
+      chan<axis::Frame, u32:0>[TORUS_HEIGHT][TORUS_WIDTH]("lane_6");
     let (lane_7_p, lane_7_c) =
-      chan<axis::Frame, CHANNEL_DEPTH>[TORUS_HEIGHT][TORUS_WIDTH]("lane_7");
+      chan<axis::Frame, u32:0>[TORUS_HEIGHT][TORUS_WIDTH]("lane_7");
     let (lane_8_p, lane_8_c) =
-      chan<axis::Frame, CHANNEL_DEPTH>[TORUS_HEIGHT][TORUS_WIDTH]("lane_8");
+      chan<axis::Frame, u32:0>[TORUS_HEIGHT][TORUS_WIDTH]("lane_8");
     let (lane_9_p, lane_9_c) =
-      chan<axis::Frame, CHANNEL_DEPTH>[TORUS_HEIGHT][TORUS_WIDTH]("lane_9");
+      chan<axis::Frame, u32:0>[TORUS_HEIGHT][TORUS_WIDTH]("lane_9");
     let (lane_10_p, lane_10_c) =
-      chan<axis::Frame, CHANNEL_DEPTH>[TORUS_HEIGHT][TORUS_WIDTH]("lane_10");
+      chan<axis::Frame, u32:0>[TORUS_HEIGHT][TORUS_WIDTH]("lane_10");
     let (lane_11_p, lane_11_c) =
-      chan<axis::Frame, CHANNEL_DEPTH>[TORUS_HEIGHT][TORUS_WIDTH]("lane_11");
+      chan<axis::Frame, u32:0>[TORUS_HEIGHT][TORUS_WIDTH]("lane_11");
     let (lane_12_p, lane_12_c) =
-      chan<axis::Frame, CHANNEL_DEPTH>[TORUS_HEIGHT][TORUS_WIDTH]("lane_12");
+      chan<axis::Frame, u32:0>[TORUS_HEIGHT][TORUS_WIDTH]("lane_12");
     let (lane_13_p, lane_13_c) =
-      chan<axis::Frame, CHANNEL_DEPTH>[TORUS_HEIGHT][TORUS_WIDTH]("lane_13");
+      chan<axis::Frame, u32:0>[TORUS_HEIGHT][TORUS_WIDTH]("lane_13");
     let (lane_14_p, lane_14_c) =
-      chan<axis::Frame, CHANNEL_DEPTH>[TORUS_HEIGHT][TORUS_WIDTH]("lane_14");
+      chan<axis::Frame, u32:0>[TORUS_HEIGHT][TORUS_WIDTH]("lane_14");
     let (lane_15_p, lane_15_c) =
-      chan<axis::Frame, CHANNEL_DEPTH>[TORUS_HEIGHT][TORUS_WIDTH]("lane_15");
+      chan<axis::Frame, u32:0>[TORUS_HEIGHT][TORUS_WIDTH]("lane_15");
     let (lane_16_p, lane_16_c) =
-      chan<axis::Frame, CHANNEL_DEPTH>[TORUS_HEIGHT][TORUS_WIDTH]("lane_16");
+      chan<axis::Frame, u32:0>[TORUS_HEIGHT][TORUS_WIDTH]("lane_16");
     let (lane_17_p, lane_17_c) =
-      chan<axis::Frame, CHANNEL_DEPTH>[TORUS_HEIGHT][TORUS_WIDTH]("lane_17");
+      chan<axis::Frame, u32:0>[TORUS_HEIGHT][TORUS_WIDTH]("lane_17");
     let (lane_18_p, lane_18_c) =
-      chan<axis::Frame, CHANNEL_DEPTH>[TORUS_HEIGHT][TORUS_WIDTH]("lane_18");
+      chan<axis::Frame, u32:0>[TORUS_HEIGHT][TORUS_WIDTH]("lane_18");
     let (lane_19_p, lane_19_c) =
-      chan<axis::Frame, CHANNEL_DEPTH>[TORUS_HEIGHT][TORUS_WIDTH]("lane_19");
+      chan<axis::Frame, u32:0>[TORUS_HEIGHT][TORUS_WIDTH]("lane_19");
     let (lane_20_p, lane_20_c) =
-      chan<axis::Frame, CHANNEL_DEPTH>[TORUS_HEIGHT][TORUS_WIDTH]("lane_20");
+      chan<axis::Frame, u32:0>[TORUS_HEIGHT][TORUS_WIDTH]("lane_20");
     let (lane_21_p, lane_21_c) =
-      chan<axis::Frame, CHANNEL_DEPTH>[TORUS_HEIGHT][TORUS_WIDTH]("lane_21");
+      chan<axis::Frame, u32:0>[TORUS_HEIGHT][TORUS_WIDTH]("lane_21");
     let (lane_22_p, lane_22_c) =
-      chan<axis::Frame, CHANNEL_DEPTH>[TORUS_HEIGHT][TORUS_WIDTH]("lane_22");
+      chan<axis::Frame, u32:0>[TORUS_HEIGHT][TORUS_WIDTH]("lane_22");
     let (lane_23_p, lane_23_c) =
-      chan<axis::Frame, CHANNEL_DEPTH>[TORUS_HEIGHT][TORUS_WIDTH]("lane_23");
+      chan<axis::Frame, u32:0>[TORUS_HEIGHT][TORUS_WIDTH]("lane_23");
     let (lane_24_p, lane_24_c) =
-      chan<axis::Frame, CHANNEL_DEPTH>[TORUS_HEIGHT][TORUS_WIDTH]("lane_24");
+      chan<axis::Frame, u32:0>[TORUS_HEIGHT][TORUS_WIDTH]("lane_24");
     let (lane_25_p, lane_25_c) =
-      chan<axis::Frame, CHANNEL_DEPTH>[TORUS_HEIGHT][TORUS_WIDTH]("lane_25");
+      chan<axis::Frame, u32:0>[TORUS_HEIGHT][TORUS_WIDTH]("lane_25");
     let (lane_26_p, lane_26_c) =
-      chan<axis::Frame, CHANNEL_DEPTH>[TORUS_HEIGHT][TORUS_WIDTH]("lane_26");
+      chan<axis::Frame, u32:0>[TORUS_HEIGHT][TORUS_WIDTH]("lane_26");
     let (lane_27_p, lane_27_c) =
-      chan<axis::Frame, CHANNEL_DEPTH>[TORUS_HEIGHT][TORUS_WIDTH]("lane_27");
+      chan<axis::Frame, u32:0>[TORUS_HEIGHT][TORUS_WIDTH]("lane_27");
     let (lane_28_p, lane_28_c) =
-      chan<axis::Frame, CHANNEL_DEPTH>[TORUS_HEIGHT][TORUS_WIDTH]("lane_28");
+      chan<axis::Frame, u32:0>[TORUS_HEIGHT][TORUS_WIDTH]("lane_28");
     let (lane_29_p, lane_29_c) =
-      chan<axis::Frame, CHANNEL_DEPTH>[TORUS_HEIGHT][TORUS_WIDTH]("lane_29");
+      chan<axis::Frame, u32:0>[TORUS_HEIGHT][TORUS_WIDTH]("lane_29");
     let (lane_30_p, lane_30_c) =
-      chan<axis::Frame, CHANNEL_DEPTH>[TORUS_HEIGHT][TORUS_WIDTH]("lane_30");
+      chan<axis::Frame, u32:0>[TORUS_HEIGHT][TORUS_WIDTH]("lane_30");
     let (lane_31_p, lane_31_c) =
-      chan<axis::Frame, CHANNEL_DEPTH>[TORUS_HEIGHT][TORUS_WIDTH]("lane_31");
+      chan<axis::Frame, u32:0>[TORUS_HEIGHT][TORUS_WIDTH]("lane_31");
     // Family data_even.
     unroll_for! (x, _): (u32, ()) in u32:0..TORUS_WIDTH {
       unroll_for! (y, _): (u32, ()) in u32:0..TORUS_HEIGHT {

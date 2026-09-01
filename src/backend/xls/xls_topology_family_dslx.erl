@@ -19,15 +19,23 @@ follows the number of family rules rather than the number of family members.
 Each node has one credit-aware ingress which polls its incoming lanes directly,
 without a tree of buffered two-way muxes. Explicit startup values still
 produce one match arm per configured member, and XLS elaborates one actor and
-the required bounded lane and mailbox queues per coordinate.
+the registered lane holding slots and bounded mailbox queues per coordinate.
 
-Each compact lane relation becomes one channel array. When two ports alias one
-destination, both router arms use the same array element, preserving the
-actor's source-ordered egress. Queued fanout starts after the common ordered
-egress accepts the event and waits for both bounded branch arrays. A scalar
-external is fed by a fair polling merge whose statically indexed receive sites
-are unrolled; runtime channel indexing is not supported by the pinned XLS
-build.
+Each compact lane relation becomes a depth-zero direct channel array. The
+explicit depth supplies the pinned block stitcher's per-channel FIFO metadata
+without installing a global default which could mask another unannotated
+channel. The graph must then be code-generated with one registered output per
+router lane; the repository scripts enforce that policy. That register is the
+lane's bounded holding slot and timing boundary, instead of placing another
+FIFO immediately after it. When two ports alias one destination, both router
+arms use the same array element, preserving the actor's source-ordered egress.
+Queued fanout starts after the common ordered egress accepts the event and waits
+for both registered branches. A scalar external is fed by a fair polling merge
+whose statically indexed receive sites are unrolled; runtime channel indexing
+is not supported by the pinned XLS build.
+
+The profile's `channel_depth` controls the remaining explicit actor-request,
+admission, and external-merge queues. It does not change direct lane capacity.
 
 Family-member startup remains explicit normalized data. A family which has
 startup data must provide exactly one frame for every member. The generated
@@ -545,6 +553,8 @@ preamble(Spec) ->
         "// Manual changes will be overwritten.\n",
         "//\n",
         preamble_node_comment(Families),
+        "// Direct lanes carry depth-zero metadata and require registered ",
+        "router output slots.\n",
         "// Scalar external streams use fair polling over statically indexed ",
         "family lanes.\n\n",
         "import axis;\n",
@@ -883,11 +893,13 @@ family_grid(Spec) ->
     ].
 
 lane_array(Lane) ->
-    %% As above, the rightmost dimension is the outer x dimension in DSLX.
+    %% Codegen retains one registered output per router lane, so a nonzero FIFO
+    %% here would double-buffer every route. As above, the rightmost dimension
+    %% is the outer x dimension in DSLX.
     Stem = maps:get(stem, Lane),
     [
         "    let (", Stem, "_p, ", Stem, "_c) =\n",
-        "      chan<axis::Frame, CHANNEL_DEPTH>",
+        "      chan<axis::Frame, u32:0>",
         "[TORUS_HEIGHT][TORUS_WIDTH](\"", Stem, "\");\n"
     ].
 

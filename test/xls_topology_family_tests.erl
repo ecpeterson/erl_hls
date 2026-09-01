@@ -7,7 +7,7 @@ generated_family_topology_is_compact_test() ->
     ?assertEqual(1, count(Generated, <<"spawn FamilyNode(">>)),
     ?assertEqual(1, count(Generated, <<"spawn phi_halo_cell::Service(">>)),
     ?assertEqual(4, count(Generated,
-        <<"chan<axis::Frame, CHANNEL_DEPTH>[TORUS_HEIGHT][TORUS_WIDTH]">>
+        <<"chan<axis::Frame, u32:0>[TORUS_HEIGHT][TORUS_WIDTH]">>
     )),
     ?assertEqual(4, count(Generated, <<"unroll_for! (">>)),
     ?assertEqual(1, count(Generated, <<"proc FamilyIngress {">>)),
@@ -83,7 +83,7 @@ five_and_fifty_wide_tori_have_the_same_generated_structure_test() ->
     ),
     ?assertEqual(1, count(Large, <<"spawn FamilyNode(">>)),
     ?assertEqual(6, count(Large,
-        <<"chan<axis::Frame, CHANNEL_DEPTH>[TORUS_HEIGHT][TORUS_WIDTH]">>
+        <<"chan<axis::Frame, u32:0>[TORUS_HEIGHT][TORUS_WIDTH]">>
     )).
 
 generated_family_topology_matches_checked_in_artifact_test() ->
@@ -103,11 +103,12 @@ generated_multi_family_topology_retains_compact_structure_test() ->
     ?assertEqual(6, count(Generated, <<"spawn FamilyIngress">>)),
     ?assertEqual(6, count(Generated, <<"spawn FamilyNode">>)),
     ?assertEqual(32, count(Generated, <<
-        "chan<axis::Frame, CHANNEL_DEPTH>[TORUS_HEIGHT][TORUS_WIDTH]"
+        "chan<axis::Frame, u32:0>[TORUS_HEIGHT][TORUS_WIDTH]"
     >>)),
-    %% 32 lane arrays, six actor request queues, and the reusable external
-    %% grid-column declaration; ingress itself adds no Frame queue.
-    ?assertEqual(39, count(Generated, <<
+    %% The 32 lane arrays use per-coordinate router output registers as their
+    %% holding slots. The six actor request queues and reusable external
+    %% grid-column queue remain explicit; ingress itself adds no Frame queue.
+    ?assertEqual(7, count(Generated, <<
         "chan<axis::Frame, CHANNEL_DEPTH>"
     >>)),
     ?assertEqual(4, count(Generated, <<"fn family_">>)),
