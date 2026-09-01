@@ -270,6 +270,12 @@ before constructing the ordinary actor frame. Its first valid command also
 supplies a one-shot egress activation token, so topology output cannot escape
 before the host has installed its routes.
 
+The generated gateway contains only that phi-specific validation, output
+selection, and topology composition. It imports route-envelope ingress, the
+activation gate, and frame serialization from `hls_fabric_router.x`; those
+transport procs are shared with other fabric boundaries rather than repeated
+as a static block in the Erlang generator.
+
 The one application ingress is the externally addressed `control_router`
 service. Its envelope contains an ordinary actor frame plus an internal target
 and inclusive rectangle. `noise` selects all noise actors, while `data`

@@ -16,6 +16,7 @@ generated_gateway_ends_with_newline_test() ->
 
 default_gateway_keeps_topology_as_an_import_test() ->
     Generated = generated(3),
+    assert_contains(Generated, <<"import hls_fabric_router;">>),
     ?assertNotEqual(
         nomatch,
         binary:match(Generated, <<"import phi_noise_topology;">>)
@@ -59,38 +60,44 @@ boundary_contract_is_explicit_test() ->
 
 first_valid_command_arms_topology_egress_test() ->
     Generated = generated(3),
+    Router = fabric_router(),
     assert_contains(Generated, <<"send_if(tok, arm_out, valid && !armed">>),
     assert_contains(Generated, <<"send_if(\n      arm_tok, spatial_out, valid">>),
-    assert_contains(Generated, <<
-        "proc EgressGate {\n  frame_in: chan<RoutedFrame> in;"
+    assert_contains(Router, <<
+        "pub proc EgressGate {\n    frame_in: chan<RoutedFrame> in;"
     >>),
-    assert_contains(Generated, <<"if armed {\n      let (tok, frame) = recv(join(), frame_in);">>),
+    assert_contains(Router, <<
+        "if armed {\n            let (tok, frame) = recv(join(), frame_in);"
+    >>),
     assert_contains(Generated, <<"spawn SpatialIngress(boundary_frames_c, control_p, arm_p)">>),
-    assert_contains(Generated, <<"chan<RoutedFrame, u32:1>(\"pre_gate\")">>),
+    assert_contains(Generated, <<
+        "chan<hls_fabric_router::RoutedFrame, u32:1>(\"pre_gate\")"
+    >>),
     assert_contains(Generated, <<"spawn FrameMux(topology_outputs_c, pre_gate_p)">>),
-    assert_contains(Generated, <<"spawn EgressGate(pre_gate_c, egress_p, arm_c)">>),
+    assert_contains(Generated, <<"spawn hls_fabric_router::EgressGate(\n">>),
     assert_contains(Generated, <<"chan<axis::Frame, u32:0>[u32:5](\"topology_outputs\")">>),
-    ?assertEqual(nomatch, binary:match(Generated, <<"FrameMux {\n  arm_in:">>)).
+    ?assertEqual(nomatch, binary:match(Generated, <<"FrameMux {\n  arm_in:">>)),
+    ?assertEqual(nomatch, binary:match(Generated, <<"proc EgressGate {">>)).
 
 same_channel_operations_have_one_syntactic_site_test() ->
-    Generated = generated(3),
-    assert_contains(Generated, <<
-        "let (tok, routed) = recv_if(\n      join(), frame_in, !state.active"
+    Router = fabric_router(),
+    assert_contains(Router, <<
+        "let (tok, routed) = recv_if(\n            join(), frame_in, !state.active"
     >>),
     ?assertEqual(
         nomatch,
-        binary:match(Generated, <<"let (tok, state2) = if state.active">>)
+        binary:match(Router, <<"let (tok, state2) = if state.active">>)
     ),
-    assert_contains(Generated, <<
+    assert_contains(Router, <<
         "let (beat, next_state) = if state2.route_pending {"
     >>),
     ?assertEqual(
         1,
-        count(Generated, <<"let _done = send(tok, routed_out, beat);">>)
+        count(Router, <<"let _done = send(tok, routed_out, beat);">>)
     ),
     ?assertEqual(
         nomatch,
-        binary:match(Generated, <<"send(tok, routed_out, axis::Beat">>)
+        binary:match(Router, <<"send(tok, routed_out, axis::Beat">>)
     ),
     {ok, Axis} = file:read_file("priv/xls/lib/axis.x"),
     assert_contains(Axis, <<
@@ -103,6 +110,7 @@ same_channel_operations_have_one_syntactic_site_test() ->
 
 egress_contract_is_explicit_test() ->
     Generated = generated(3),
+    Router = fabric_router(),
     lists:foreach(
         fun(Endpoint) -> assert_contains(Generated, Endpoint) end,
         [
@@ -115,15 +123,24 @@ egress_contract_is_explicit_test() ->
     ),
     assert_contains(Generated, <<"cursor == candidate">>),
     assert_contains(Generated, <<"cursor == u32:4 { u32:0 }">>),
-    assert_contains(Generated, <<"word: route_word(state2.source, HOST_ENDPOINT)">>),
+    assert_contains(Router, <<"word: route_word(state2.source, DESTINATION)">>),
     assert_contains(Generated, <<"flags: BOUNDARY_VERSION">>),
-    assert_contains(Generated, <<"txid: u8:0">>).
+    assert_contains(Generated, <<"txid: u8:0">>),
+    assert_contains(Generated, <<
+        "spawn hls_fabric_router::RoutedTx<HOST_ENDPOINT>("
+    >>),
+    ?assertEqual(nomatch, binary:match(Generated, <<"proc RoutedTx {">>)),
+    ?assertEqual(nomatch, binary:match(Generated, <<"proc EndpointIngress<">>)).
 
 unsupported_distance_is_rejected_test() ->
     ?assertError(badarg, phi_memory_gateway_dslx:to_dslx(2)).
 
 generated(Distance) ->
     iolist_to_binary(phi_memory_gateway_dslx:to_dslx(Distance)).
+
+fabric_router() ->
+    {ok, Router} = file:read_file("priv/xls/fabric/hls_fabric_router.x"),
+    Router.
 
 assert_contains(Haystack, Needle) ->
     ?assertNotEqual(nomatch, binary:match(Haystack, Needle)).

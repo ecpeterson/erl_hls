@@ -3,6 +3,7 @@
 // Manual changes will be overwritten.
 
 import axis;
+import hls_fabric_router;
 import hls_spatial_router;
 import phi_noise_topology;
 
@@ -22,51 +23,6 @@ const OP_PAULI_UPDATE = u8:16;
 const OP_NOISE_CUTOFF = u8:15;
 
 type BoundaryFrame = axis::FrameN<u32:4>;
-
-enum RouteState : u2 {
-  HEADER = 0,
-  FORWARD = 1,
-  DROP = 2,
-}
-
-fn route_word(source: u16, destination: u16) -> u32 {
-  ((source as u32) << u32:16) | destination as u32
-}
-
-// Consumes exactly one route beat, then forwards or drains the complete
-// boundary Frame. Invalid routes cannot desynchronize the next packet.
-proc RouteIngress {
-  routed_in: chan<axis::Beat> in;
-  boundary_out: chan<axis::Beat> out;
-
-  config(
-      routed_in: chan<axis::Beat> in,
-      boundary_out: chan<axis::Beat> out
-  ) {
-    (routed_in, boundary_out)
-  }
-
-  init { RouteState::HEADER }
-
-  next(state: RouteState) {
-    let (tok, beat) = recv(join(), routed_in);
-    match state {
-      RouteState::HEADER => if beat.tlast {
-        RouteState::HEADER
-      } else if beat.word == route_word(HOST_ENDPOINT, GATEWAY_ENDPOINT) {
-        RouteState::FORWARD
-      } else {
-        RouteState::DROP
-      },
-      RouteState::FORWARD => {
-        let _done = send(tok, boundary_out, beat);
-        if beat.tlast { RouteState::HEADER } else { RouteState::FORWARD }
-      },
-      RouteState::DROP =>
-        if beat.tlast { RouteState::HEADER } else { RouteState::DROP },
-    }
-  }
-}
 
 fn rectangle(frame: BoundaryFrame) -> hls_spatial_router::Rectangle {
   hls_spatial_router::Rectangle {
@@ -166,11 +122,6 @@ proc SpatialIngress {
   }
 }
 
-struct RoutedFrame {
-  source: u16,
-  frame: axis::Frame,
-}
-
 fn source_endpoint(cursor: u32) -> u16 {
   match cursor {
     u32:0 => DATA_MEASUREMENTS_ENDPOINT,
@@ -185,11 +136,11 @@ fn source_endpoint(cursor: u32) -> u16 {
 // every attempt, so no continuously active stream can starve another.
 proc FrameMux {
   frame_in: chan<axis::Frame>[u32:5] in;
-  routed_out: chan<RoutedFrame> out;
+  routed_out: chan<hls_fabric_router::RoutedFrame> out;
 
   config(
       frame_in: chan<axis::Frame>[u32:5] in,
-      routed_out: chan<RoutedFrame> out
+      routed_out: chan<hls_fabric_router::RoutedFrame> out
   ) {
     (frame_in, routed_out)
   }
@@ -211,114 +162,20 @@ proc FrameMux {
           if valid { next_frame } else { acc.2 }
         )
       }((join(), u1:0, zero!<axis::Frame>()));
-    let routed = RoutedFrame { source: source_endpoint(cursor), frame };
-    let _done = send_if(tok, routed_out, received, routed);
-    if cursor == u32:4 { u32:0 } else { cursor + u32:1 }
-  }
-}
-
-// FrameMux may fill this gate's single upstream holding slot before the
-// first valid command. Nothing reaches RoutedTx until the activation
-// credit arrives, and the full slot backpressures further mux output.
-proc EgressGate {
-  frame_in: chan<RoutedFrame> in;
-  frame_out: chan<RoutedFrame> out;
-  arm_in: chan<u1> in;
-
-  config(
-      frame_in: chan<RoutedFrame> in,
-      frame_out: chan<RoutedFrame> out,
-      arm_in: chan<u1> in
-  ) {
-    (frame_in, frame_out, arm_in)
-  }
-
-  init { u1:0 }
-
-  next(armed: u1) {
-    if armed {
-      let (tok, frame) = recv(join(), frame_in);
-      let _done = send(tok, frame_out, frame);
-      armed
-    } else {
-      let (_tok, arm) = recv(join(), arm_in);
-      arm
-    }
-  }
-}
-
-fn header_word(header: axis::Header) -> u32 {
-  ((header.op as u32) << u32:24) |
-    ((header.flags as u32) << u32:16) |
-    ((header.txid as u32) << u32:8) |
-    header.payload_words as u32
-}
-
-struct RoutedTxState {
-  active: u1,
-  route_pending: u1,
-  source: u16,
-  frame: axis::Frame,
-  beats_sent: u8,
-}
-
-proc RoutedTx {
-  frame_in: chan<RoutedFrame> in;
-  routed_out: chan<axis::Beat> out;
-
-  config(
-      frame_in: chan<RoutedFrame> in,
-      routed_out: chan<axis::Beat> out
-  ) {
-    (frame_in, routed_out)
-  }
-
-  init { zero!<RoutedTxState>() }
-
-  next(state: RoutedTxState) {
-    let (tok, routed) = recv_if(
-      join(), frame_in, !state.active, zero!<RoutedFrame>());
-    let state2 = if state.active {
-      state
-    } else {
-      RoutedTxState {
-        active: u1:1,
-        route_pending: u1:1,
-        source: routed.source,
-        frame: routed.frame,
-        ..zero!<RoutedTxState>()
-      }
-    };
-    let (beat, next_state) = if state2.route_pending {
-      let beat = axis::Beat {
-        tlast: u1:0,
-        word: route_word(state2.source, HOST_ENDPOINT),
-      };
-      (beat, RoutedTxState { route_pending: u1:0, ..state2 })
-    } else {
-      let header = axis::Header {
+    let boundary_frame = axis::Frame {
+      header: axis::Header {
         txid: u8:0,
         flags: BOUNDARY_VERSION,
-        ..state2.frame.header
-      };
-      let last = state2.beats_sent == header.payload_words;
-      let word = if state2.beats_sent == u8:0 {
-        header_word(header)
-      } else {
-        state2.frame.payload[
-          u8:32 * (state2.beats_sent - u8:1) +: u32]
-      };
-      let beat = axis::Beat { tlast: last, word };
-      let next_state = if last {
-        zero!<RoutedTxState>()
-      } else {
-        let beats_sent = state2.beats_sent + u8:1;
-        RoutedTxState { beats_sent, ..state2 }
-      };
-      (beat, next_state)
+        ..frame.header
+      },
+      ..frame
     };
-    let _done = send(tok, routed_out, beat);
-    next_state
+    let routed = hls_fabric_router::RoutedFrame {
+      source: source_endpoint(cursor),
+      frame: boundary_frame,
+    };
+    let _done = send_if(tok, routed_out, received, routed);
+    if cursor == u32:4 { u32:0 } else { cursor + u32:1 }
   }
 }
 
@@ -340,10 +197,12 @@ pub proc Top {
     let (topology_outputs_p, topology_outputs_c) =
       chan<axis::Frame, u32:0>[u32:5]("topology_outputs");
     let (pre_gate_p, pre_gate_c) =
-      chan<RoutedFrame, u32:1>("pre_gate");
+      chan<hls_fabric_router::RoutedFrame, u32:1>("pre_gate");
     let (egress_p, egress_c) =
-      chan<RoutedFrame, u32:1>("egress");
-    spawn RouteIngress(routed_in, boundary_beats_p);
+      chan<hls_fabric_router::RoutedFrame, u32:1>("egress");
+    spawn hls_fabric_router::EndpointIngress<
+      HOST_ENDPOINT, GATEWAY_ENDPOINT
+    >(routed_in, boundary_beats_p);
     spawn axis::RxN<u32:4>(
       boundary_beats_c, boundary_frames_p);
     spawn SpatialIngress(boundary_frames_c, control_p, arm_p);
@@ -355,8 +214,10 @@ pub proc Top {
       topology_outputs_p[u32:3],
       topology_outputs_p[u32:4]);
     spawn FrameMux(topology_outputs_c, pre_gate_p);
-    spawn EgressGate(pre_gate_c, egress_p, arm_c);
-    spawn RoutedTx(egress_c, routed_out);
+    spawn hls_fabric_router::EgressGate(
+      pre_gate_c, egress_p, arm_c);
+    spawn hls_fabric_router::RoutedTx<HOST_ENDPOINT>(
+      egress_c, routed_out);
     (routed_in, routed_out)
   }
 
