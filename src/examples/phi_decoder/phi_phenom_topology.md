@@ -170,13 +170,16 @@ language.
 ```mermaid
 flowchart LR
     Caller["ERTS caller"] --> Runner["phi_memory_runner<br/>+ phi_memory_experiment"]
-    Runner -->|"ordered commands"| Broker["hls_fabric<br/>route broker"]
+    Runner -->|"register_route + send"| Broker["hls_fabric<br/>route broker"]
     Broker -->|"32-bit routed AXIS<br/>endpoint 0 → 1"| Gateway["phi_memory_gateway"]
-
     Gateway -->|"endpoints 2–6 → 0<br/>five routed event streams"| Broker
     Broker -->|"route + header + payload"| Runner
 
-    subgraph Fabric["generated one-fabric topology"]
+    Runner -->|"same calls and routed ABI"| CPU["phi_memory_cpu_fabric<br/>functional ERTS deployment"]
+    CPU -->|"decoded spatial command"| CR
+    CPU -->|"encoded routes 2–6"| Runner
+
+    subgraph Fabric["normalized one-fabric topology"]
         CR["control_router<br/>spatial fanout"]
         PX["phi_x"] -->|"cardinal torus"| PX
         PZ["phi_z"] -->|"cardinal torus"| PZ
@@ -191,28 +194,30 @@ flowchart LR
         SZ <-->|"queries / replies"| DE
         SZ <-->|"queries / replies"| DO
 
-        SX -->|"diagnostic copy"| XO["x_announcements<br/>source endpoint 3"] --> Gateway
-        SZ -->|"diagnostic copy"| ZO["z_announcements<br/>source endpoint 5"] --> Gateway
-        PX -->|"correction + post-move status"| XE["x_decoder_events<br/>source endpoint 4"] --> Gateway
-        PZ -->|"correction + post-move status"| ZE["z_decoder_events<br/>source endpoint 6"] --> Gateway
-        DE -->|"Pauli reply"| DM["data_measurements<br/>source endpoint 2"] --> Gateway
+        SX -->|"diagnostic copy"| XO["x_announcements<br/>source endpoint 3"]
+        SZ -->|"diagnostic copy"| ZO["z_announcements<br/>source endpoint 5"]
+        PX -->|"correction + post-move status"| XE["x_decoder_events<br/>source endpoint 4"]
+        PZ -->|"correction + post-move status"| ZE["z_decoder_events<br/>source endpoint 6"]
+        DE -->|"Pauli reply"| DM["data_measurements<br/>source endpoint 2"]
         DO -->|"Pauli reply"| DM
 
         CR -->|"whole grid: noise_cutoff"| DE
         CR -->|"whole grid: noise_cutoff"| DO
         CR -->|"whole grid: noise_cutoff"| SX
         CR -->|"whole grid: noise_cutoff"| SZ
-        CR -->|"point: pauli_update<br/>line: pauli_query"| DE
-        CR -->|"point: pauli_update<br/>line: pauli_query"| DO
+        CR -->|"point: pauli_update<br/>whole grid: pauli_query"| DE
+        CR -->|"point: pauli_update<br/>whole grid: pauli_query"| DO
     end
 
     Gateway -->|"one SpatialFrame stream"| CR
+    XO & ZO & XE & ZE & DM -->|"generated channels"| Gateway
+    XO & ZO & XE & ZE & DM -. "ordinary records via<br/>CPU forwarding processes" .-> CPU
 
     XE -. "map each correction<br/>to a point update" .-> Runner
     ZE -. "map each correction<br/>to a point update" .-> Runner
     XE -. "complete quiet + empty<br/>same-step X status" .-> Runner
     ZE -. "complete quiet + empty<br/>same-step Z status" .-> Runner
-    DM -. "XOR Distance replies" .-> Runner
+    DM -. "one selected-basis snapshot<br/>canonical bit witness" .-> Runner
 ```
 
 At the default distance three, the plan has 54 actor instances, 34 compact
@@ -245,9 +250,11 @@ Each data actor retains one cumulative projective Pauli containing both
 physical errors and applied decoder corrections. The current binary noise event
 is Y because it is visible to both syndrome planes; two such events cancel.
 After cutoff, `pauli_query` asks whether that frame anticommutes with a requested
-Pauli measurement. The reply carries a request ID, physical data coordinate,
-and parity bit. Both data families share one fairly merged output; request IDs
-and coordinates make its unspecified cross-family order irrelevant.
+Pauli measurement. This operation nondestructively inspects the simulator's
+classical accumulator; the physical memory protocol uses it for only one basis
+before reset. The reply carries a request ID, physical data coordinate, and
+parity bit. Both data families share one fairly merged output; request IDs and
+coordinates make its unspecified cross-family order irrelevant.
 
 These `external` endpoints remain five typed channels on the generated
 topology, but `phi_memory_gateway` now merges them into distinct routed source
@@ -258,6 +265,23 @@ actor payload. `phi_memory_boundary` derives this canonical output order, the
 endpoint allocation shown in the diagram, and each selector and packed width
 from the compact topology and generated actor codecs; the host wire codec and
 DSLX gateway generator consume the same contract.
+
+`phi_memory_cpu_fabric` is the example-local realization of that same compact
+plan. It starts every family member as a disconnected `hls_statem`, resolves
+each member's routes from the normalized relations, and groups output ports
+with the same recipients behind one forwarding process. It queues all startup
+messages and the first cutoff before connecting data and syndrome actors, then
+phi actors; the decoder therefore cannot outrun the command which closes its
+noise epoch. Rectangle delivery uses the normalized ingress embeddings rather
+than a second copy of the checkerboard geometry.
+
+The CPU realization accepts the same `register_route` and `send` calls as
+`hls_fabric`, and decodes commands and encodes events through
+`phi_memory_wire`. The runner and reducer are consequently unchanged between
+CPU and transported deployments. Its actor and forwarding mailboxes are
+ordinary Erlang mailboxes, however: this is a functional reference for the
+current topology subset, not a model of bounded network backpressure, physical
+fanout completion, reset, or admission.
 
 Host commands use destination endpoint 1. Their boundary frame has four
 payload words: a full-width prefix of four little-endian `u16` rectangle bounds
@@ -317,15 +341,20 @@ status. The reducer translates each sparse correction into a point-addressed
 planes closes the decoder only when every coordinate is quiet and empty.
 Because each cell's status follows its optional correction on the same ordered
 plane output, the two complete sets also fence all earlier correction events.
-The reducer then issues one horizontal-line `pauli_query` after the queued
-point updates and XORs the `Distance` replies. This is a sound completion
-witness, not a liveness guarantee: the current fixed-round decoder can leave
-symmetric nonempty anyon configurations stationary. Until its tie-breaking or
-stopping rule is strengthened, the ERTS runner must bound the closeout wait and
-report nonconvergence rather than inferring completion from elapsed time. This
-first protocol assumes one lossless, non-restarting fabric activation; a reset
-or gateway failure aborts the experiment rather than invoking unspecified
-retry behavior.
+The reducer then issues one whole-data-grid `pauli_query` in the caller-selected
+basis after the queued point updates. The canonical result records the common
+closeout step, every coordinate's anticommutation bit, the sorted correction
+set, and the parity of the selected horizontal row. A complementary-basis
+measurement requires reset and a separate run; sequential X and Z queries
+would not describe one physical shot. This is a sound completion witness, not
+a liveness guarantee: the current fixed-round decoder can leave symmetric
+nonempty anyon configurations stationary. Until its tie-breaking or stopping
+rule is
+strengthened, the ERTS runner must bound the closeout wait and report
+nonconvergence rather than inferring completion from elapsed time. This first
+protocol assumes one lossless, non-restarting fabric activation; a reset or
+gateway failure aborts the experiment rather than invoking unspecified retry
+behavior.
 
 The present distance-three noise configuration is still a plumbing fixture.
 Its common high noise rate deliberately produces frequent binary events rather
@@ -340,7 +369,7 @@ later decoder work.
 
 ### Distance-three synthesis progression
 
-The last out-of-context XC7 mapping progression, before the Pauli snapshot
+The last out-of-context XC7 mapping progression, before the data-measurement
 state and output were added, was:
 
 | ingress | lane holding storage | consumer input flops | estimated logic cells | flip-flops | LUT1–LUT6 | `DSP48E1` |
@@ -390,28 +419,49 @@ toggle. This verifies rectangular target embedding and the correction/query
 path in the synthesized D3 network; it deliberately does not wait for empty
 decoder planes or claim a logical-correctness result.
 
-The routine distance-one smoke bench does drive `control_router`. It sends one
-whole-fabric cutoff, waits for propagated quiet status, queries one data line,
-applies one point-addressed X update, and observes the corresponding
-anticommutation change on a second query. Distance one aliases decoder routes,
-so this smoke test exercises control plumbing rather than the nondegenerate
-drain criterion.
+The routine distance-one topology smoke bench does drive `control_router`. It
+sends one whole-fabric cutoff, waits for propagated quiet status, inspects one
+data line, applies one point-addressed X update, and observes the corresponding
+anticommutation change with a second same-basis inspection. That is a
+nondestructive simulator plumbing check, not two physical measurements.
+Distance one aliases decoder routes, so the bench does not test the
+nondegenerate drain criterion.
 
 `phi_memory_gateway.x` is the checked generated wrapper for the distance-three
 topology. The routine remote regression instead generates the same wrapper
 around a zero-noise distance-one topology, compiles it through XLS and Icarus,
 and connects its AXIS ports to `hls_fabric` through the VPI FIFO bridge. A real
 `phi_memory_runner` then sends cutoff, observes the quiet/empty fence, issues
-the line query, and returns parity zero to its ERTS caller. This is an
-end-to-end transport and protocol witness; the aliased distance-one geometry
-is not a decoder-correctness test.
+one whole-grid Z query, and returns the two zero anticommutation bits to its
+ERTS caller. This is an end-to-end transport and protocol witness; the aliased
+distance-one geometry is not a decoder-correctness test.
 
-On the 4-core, 8-GiB UTM using the pinned XLS build, the saturated
-fixed-point-field run measured about 23 seconds and 302 MiB for DSLX conversion,
-6 minutes 22 seconds and 3.18 GiB for optimization, 1 minute 10 seconds and 286
-MiB for code generation, 27 seconds and 469 MiB for Icarus compilation, and 2
-minutes 8 seconds and 149 MiB for simulation. The generated Verilog is about
-8.5 MiB and 148,292 lines. These are host build costs, not an FPGA utilization
-estimate;
-the runner saves compact timing and digest reports but does not copy that
-Verilog into the repository.
+The local regression now performs the full noisy distance-three closeout with
+cutoff step 16, physical row four, and a Z measurement through
+`phi_memory_cpu_fabric`. Its deterministic full-device witness closes at step
+21, contains 84 corrections, records 18 Z-anticommutation bits (six set), and
+returns row parity one. Run the same fixture through both the CPU realization
+and the checked distance-three gateway with:
+
+```sh
+tools/run_phi_memory_demo.sh
+```
+
+The script derives the distance, noise rate, experiment options, and compact
+golden summary from `phi_memory_demo:fixture/0`. The CPU regression writes its
+complete canonical witness into the staging directory; the remote bridge must
+match that exact term as well as the checked summary. The script uses the
+`ERL_HLS_REMOTE_*` settings described in the README, retrieves only logs and
+compact metrics, and leaves the generated Verilog on the remote build host.
+This comparison remains outside routine CI because of the costs below.
+
+On the 4-core, 8-GiB UTM using the pinned XLS build, the earlier line-parity
+comparison passed with parity one. It measured about 33 seconds and 449 MiB
+for DSLX conversion, 6 minutes 28 seconds and 3.21 GiB for optimization, 1
+minute 10 seconds and 294 MiB for code generation, 27 seconds and 472 MiB for
+Icarus compilation, and 4 minutes 45 seconds and 151 MiB for simulation. The
+generated Verilog is about 8.6 MiB and 150,146 lines. These are host build
+costs, not an FPGA utilization estimate; the runner saves compact timing and
+digest reports but does not copy that Verilog into the repository.
+Reusing that compiled Icarus image, the later full-device witness comparison
+completed in 5 minutes 42 seconds.

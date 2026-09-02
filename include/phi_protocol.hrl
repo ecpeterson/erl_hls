@@ -105,17 +105,20 @@
     seed = hls_type:zero() :: hls_nums:u32()
 }).
 
-%% Queries one data qubit's cumulative physical-error and decoder-correction
-%% Pauli frame. The experiment coordinator sends this only after it has stopped
-%% noise and drained decoder correction traffic. Spatial addressing belongs to
-%% the topology envelope, not this actor message.
+%% Inspects one simulator's cumulative physical-error and decoder-correction
+%% Pauli frame. The reply is the bit which would flip a measurement in the
+%% requested basis. This actor operation is nondestructive classical simulator
+%% introspection; a physical memory experiment may use only one basis before
+%% reset. The coordinator sends it only after stopping noise and draining
+%% decoder correction traffic. Spatial addressing belongs to the topology
+%% envelope, not this actor message.
 -record(pauli_query, {
     request_id = hls_type:zero() :: hls_nums:u32(),
     measurement = hls_type:zero() :: hls_pauli:pauli()
 }).
 
-%% Replies with the parity between the requested measurement and the actor's
-%% cumulative physical-error and decoder-correction frame.
+%% Replies with the anticommutation bit between the requested measurement and
+%% the actor's cumulative physical-error and decoder-correction frame.
 -record(pauli_reply, {
     request_id = hls_type:zero() :: hls_nums:u32(),
     x = hls_type:zero() :: hls_nums:u16(),

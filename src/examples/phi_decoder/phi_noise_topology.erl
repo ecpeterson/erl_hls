@@ -28,7 +28,7 @@ boundary. A host or distribution adapter addresses its envelope to that one
 service; the envelope's target and rectangle are inner multicast selectors,
 not ERTS process destinations. The data target embeds `data_even[X,Y]` at
 physical coordinate `[X,2Y]` and `data_odd[X,Y]` at `[X,2Y+1]`, so one
-horizontal line query reaches exactly `Distance` data actors without naming
+rectangle can select a physical line or the whole data grid without naming
 either implementation family. Its noise target reaches both data families and
 both syndrome planes; a whole-address-space cutoff therefore uses one host
 command.
@@ -53,8 +53,10 @@ fanout or to add incarnation-aware leaf delivery.
 and `phi_memory_runner` connects that boundary to the pure
 `phi_memory_experiment` reducer through `hls_fabric`. The reducer maps sparse
 corrections to point-addressed Pauli updates, waits for complete same-step
-quiet and empty status sets from both planes, then issues a line query and XORs
-the replies. The real DMA driver still needs this routed boundary. The adapter
+quiet and empty status sets from both planes, then issues one whole-grid query
+in the selected basis and XORs the requested line's replies. A complementary
+basis requires a separate reset and run. The real DMA driver still needs this
+routed boundary. The adapter
 preserves command order and each source's event order, validates the encoding,
 and delivers Pauli updates at most once. This first protocol assigns no
 recovery semantics to a reset or gateway failure; the experiment aborts.

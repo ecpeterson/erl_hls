@@ -75,10 +75,25 @@ runner_routes_and_closeout_test() ->
         ok = deliver(Fabric, data_measurements, #pauli_reply{
             request_id = ?REQUEST_ID,
             x = 0,
-            y = ?LINE_Y,
+            y = 1,
             anticommutes = 1
         }),
-        ?assertEqual({ok, 1}, phi_memory_runner:await(Runner))
+        ok = deliver(Fabric, data_measurements, #pauli_reply{
+            request_id = ?REQUEST_ID,
+            x = 0,
+            y = 0,
+            anticommutes = 0
+        }),
+        Expected = {ok, #{
+            closeout_step => ?CUTOFF_STEP,
+            corrections => [
+                {x, ?CUTOFF_STEP, 0, 0, ?PHI_NORTH_MASK}
+            ],
+            measurement => z,
+            data_anticommutations => [{{0, 0}, 0}, {{0, 1}, 1}],
+            row => #{y => ?LINE_Y, parity => 0}
+        }},
+        ?assertEqual(Expected, phi_memory_runner:await(Runner))
     after
         stop(Runner, Fabric)
     end.
@@ -171,7 +186,7 @@ cutoff_command() ->
     }}.
 
 query_command() ->
-    {control_router, data, {0, ?LINE_Y, 0, ?LINE_Y}, #pauli_query{
+    {control_router, data, {0, 0, 0, 1}, #pauli_query{
         request_id = ?REQUEST_ID,
         measurement = z
     }}.

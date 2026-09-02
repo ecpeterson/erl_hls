@@ -85,7 +85,7 @@ incomplete_and_nonzero_status_rounds_do_not_query_test() ->
     ),
     ?assertEqual(draining, maps:get(phase, State5)).
 
-matching_quiet_empty_rounds_emit_one_line_query_test() ->
+matching_quiet_empty_rounds_emit_whole_device_query_test() ->
     {State0, _Cutoff} = new_experiment(),
     {State1, []} = status_round(
         x_decoder_events,
@@ -106,7 +106,8 @@ matching_quiet_empty_rounds_emit_one_line_query_test() ->
         State2
     ),
     ?assertEqual(querying, maps:get(phase, State3)),
-    ?assertEqual([line_query()], Commands).
+    ?assertEqual(?CUTOFF_STEP + 1, maps:get(closeout_step, State3)),
+    ?assertEqual([snapshot_query()], Commands).
 
 correction_update_precedes_drain_query_test() ->
     {State0, _Cutoff} = new_experiment(),
@@ -130,7 +131,7 @@ correction_update_precedes_drain_query_test() ->
         ?PHENOM_QUIET_MASK,
         State1
     ),
-    {_State3, QueryCommands} = status_round(
+    {State3, QueryCommands} = status_round(
         z_decoder_events,
         ?CUTOFF_STEP,
         ?PHENOM_QUIET_MASK,
@@ -140,9 +141,13 @@ correction_update_precedes_drain_query_test() ->
         [
             {control_router, data, {0, 5, 0, 5},
                 #pauli_update{pauli = z}},
-            line_query()
+            snapshot_query()
         ],
         CorrectionCommands ++ XStatusCommands ++ QueryCommands
+    ),
+    ?assertEqual(
+        [{x, ?CUTOFF_STEP, 0, 0, ?PHI_NORTH_MASK}],
+        maps:get(correction_log, State3)
     ).
 
 duplicate_correction_fails_before_status_fence_test() ->
@@ -179,33 +184,37 @@ out_of_range_correction_fails_reducer_test() ->
     ),
     ?assertEqual(failed, maps:get(phase, Failed)).
 
-out_of_order_replies_xor_after_ignoring_wrong_request_test() ->
+out_of_order_whole_device_replies_build_canonical_witness_test() ->
     Querying = querying_state(),
     {Querying, []} = phi_memory_experiment:event(
         data_measurements,
-        reply(?REQUEST_ID + 1, 0, 1),
+        reply(?REQUEST_ID + 1, 0, 0, 1),
         Querying
     ),
-    {State1, []} = phi_memory_experiment:event(
-        data_measurements,
-        reply(?REQUEST_ID, 2, 1),
-        Querying
+    Replies = [
+        reply(?REQUEST_ID, X, Y, anticommutes_at(X, Y))
+        || {X, Y} <- lists:reverse(snapshot_coordinates())
+    ],
+    {done, Witness, Done} = replies(Replies, Querying),
+    ?assertEqual(done, maps:get(phase, Done)),
+    ?assertEqual(?CUTOFF_STEP, maps:get(closeout_step, Witness)),
+    ?assertEqual([], maps:get(corrections, Witness)),
+    ?assertEqual(z, maps:get(measurement, Witness)),
+    ?assertEqual(
+        lists:sort([
+            {{X, Y}, anticommutes_at(X, Y)}
+            || {X, Y} <- snapshot_coordinates()
+        ]),
+        maps:get(data_anticommutations, Witness)
     ),
-    {State2, []} = phi_memory_experiment:event(
-        data_measurements,
-        reply(?REQUEST_ID, 0, 0),
-        State1
-    ),
-    {done, 0, Done} = phi_memory_experiment:event(
-        data_measurements,
-        reply(?REQUEST_ID, 1, 1),
-        State2
-    ),
-    ?assertEqual(done, maps:get(phase, Done)).
+    ?assertEqual(
+        #{y => ?LINE_Y, parity => 0},
+        maps:get(row, Witness)
+    ).
 
 duplicate_reply_fails_test() ->
     Querying = querying_state(),
-    Reply = reply(?REQUEST_ID, 2, 1),
+    Reply = reply(?REQUEST_ID, 2, 5, 1),
     {State1, []} = phi_memory_experiment:event(
         data_measurements,
         Reply,
@@ -217,6 +226,69 @@ duplicate_reply_fails_test() ->
         State1
     ),
     ?assertEqual(failed, maps:get(phase, Failed)).
+
+maximum_request_id_is_used_without_a_successor_test() ->
+    Max = 16#ffffffff,
+    {State0, _Cutoff} = phi_memory_experiment:new(#{
+        distance => ?DISTANCE,
+        first_quiet_step => ?CUTOFF_STEP,
+        line_y => ?LINE_Y,
+        measurement => z,
+        request_id => Max
+    }),
+    {State1, []} = status_round(
+        x_decoder_events,
+        ?CUTOFF_STEP,
+        ?PHENOM_QUIET_MASK,
+        State0
+    ),
+    {_Querying, [Query]} = status_round(
+        z_decoder_events,
+        ?CUTOFF_STEP,
+        ?PHENOM_QUIET_MASK,
+        State1
+    ),
+    ?assertEqual(
+        {control_router, data, {0, 0, 2, 5}, #pauli_query{
+            request_id = Max,
+            measurement = z
+        }},
+        Query
+    ).
+
+complementary_basis_requires_a_fresh_experiment_test() ->
+    {State0, _Cutoff} = phi_memory_experiment:new(#{
+        distance => ?DISTANCE,
+        first_quiet_step => ?CUTOFF_STEP,
+        line_y => ?LINE_Y,
+        measurement => x,
+        request_id => ?REQUEST_ID
+    }),
+    {State1, []} = status_round(
+        x_decoder_events,
+        ?CUTOFF_STEP,
+        ?PHENOM_QUIET_MASK,
+        State0
+    ),
+    {Querying, [Query]} = status_round(
+        z_decoder_events,
+        ?CUTOFF_STEP,
+        ?PHENOM_QUIET_MASK,
+        State1
+    ),
+    ?assertEqual(
+        {control_router, data, {0, 0, 2, 5}, #pauli_query{
+            request_id = ?REQUEST_ID,
+            measurement = x
+        }},
+        Query
+    ),
+    Replies = [
+        reply(?REQUEST_ID, X, Y, (X + Y) band 1)
+        || {X, Y} <- snapshot_coordinates()
+    ],
+    {done, Witness, _Done} = replies(Replies, Querying),
+    ?assertEqual(x, maps:get(measurement, Witness)).
 
 new_experiment() ->
     phi_memory_experiment:new(#{
@@ -241,7 +313,7 @@ querying_state() ->
         ?PHENOM_QUIET_MASK,
         State1
     ),
-    ?assertEqual(line_query(), Query),
+    ?assertEqual(snapshot_query(), Query),
     State2.
 
 status_round(Stream, Step, Flags, State) ->
@@ -268,14 +340,44 @@ coordinates() ->
            Y <- lists:seq(0, ?DISTANCE - 1)
     ].
 
-line_query() ->
-    {control_router, data, {0, ?LINE_Y, ?DISTANCE - 1, ?LINE_Y},
+snapshot_coordinates() ->
+    [
+        {X, Y}
+        || X <- lists:seq(0, ?DISTANCE - 1),
+           Y <- lists:seq(0, 2 * ?DISTANCE - 1)
+    ].
+
+snapshot_query() ->
+    {control_router, data, {0, 0, ?DISTANCE - 1, 2 * ?DISTANCE - 1},
         #pauli_query{request_id = ?REQUEST_ID, measurement = z}}.
 
-reply(RequestId, X, Anticommutes) ->
+reply(RequestId, X, Y, Anticommutes) ->
     #pauli_reply{
         request_id = RequestId,
         x = X,
-        y = ?LINE_Y,
+        y = Y,
         anticommutes = Anticommutes
     }.
+
+replies(Replies, State) ->
+    replies(Replies, State, []).
+
+replies([], State, Commands) ->
+    {State, Commands};
+replies([Reply | Rest], State, Commands) ->
+    case phi_memory_experiment:event(data_measurements, Reply, State) of
+        {Next, NewCommands} ->
+            replies(Rest, Next, Commands ++ NewCommands);
+        {done, _Witness, _Done} = Done when Rest =:= [] ->
+            Done;
+        {done, _Witness, _Done} = Done ->
+            error({replies_after_done, Rest, Done});
+        {error, _Reason, _Failed} = Error ->
+            error({unexpected_reply_error, Reply, Error})
+    end.
+
+anticommutes_at(0, 0) -> 1;
+anticommutes_at(0, 1) -> 1;
+anticommutes_at(0, ?LINE_Y) -> 1;
+anticommutes_at(2, ?LINE_Y) -> 1;
+anticommutes_at(_X, _Y) -> 0.

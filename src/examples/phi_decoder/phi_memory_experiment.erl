@@ -5,8 +5,9 @@
 -module(phi_memory_experiment).
 -moduledoc """
 Reduces phi/noise output events into the commands needed to finish one memory
-experiment and measure one caller-selected horizontal data row. The caller is
-responsible for choosing a row and Pauli which represent the intended
+experiment and measure every data qubit in one caller-selected Pauli basis.
+The snapshot also evaluates one caller-selected horizontal row. The caller is
+responsible for choosing a row and basis which represent the intended
 nontrivial logical operator; this plumbing reducer does not prove homology.
 Its `distance` option must come from the active normalized topology. The pure
 reducer cannot discover or verify that deployment fact on its own.
@@ -27,7 +28,10 @@ data-qubit Pauli updates. A complete status round from both decoder planes is a
 closeout fence only when every coordinate reports both `quiet = 1` and
 `present = 0`. Correction and status share one ordered output per plane, so at
 that point every earlier correction has crossed the output boundary. The
-resulting line query follows all update commands on the one serialized ingress.
+resulting whole-device query follows all update commands on the one serialized
+ingress. One experiment measures either X or Z. Measuring the complementary
+basis requires a reset and a separate run; sequential X and Z queries would
+incorrectly treat destructive physical measurements as Pauli-frame tomography.
 
 The fence is a safety condition, not a convergence guarantee. The current
 fixed-round decoder can leave symmetric nonempty configurations stationary, so
@@ -42,7 +46,7 @@ wire envelope. Reset or gateway failure must abort and restart the experiment.
 -include("phi_protocol.hrl").
 
 -export([new/1, event/3]).
--export_type([stream/0, options/0, command/0, state/0, result/0]).
+-export_type([stream/0, options/0, command/0, witness/0, state/0, result/0]).
 
 -define(U32_MASK, 16#ffffffff).
 
@@ -56,7 +60,7 @@ wire envelope. Reset or gateway failure must abort and restart the experiment.
     distance := pos_integer(),
     first_quiet_step := hls_nums:u32(),
     line_y := hls_nums:u16(),
-    measurement := hls_pauli:pauli(),
+    measurement := x | z,
     request_id := hls_nums:u32()
 }.
 -type rectangle() :: {
@@ -71,10 +75,28 @@ wire envelope. Reset or gateway failure must abort and restart the experiment.
     rectangle(),
     #noise_cutoff{} | #pauli_update{} | #pauli_query{}
 }.
+-type witness() :: #{
+    closeout_step := hls_nums:u32(),
+    corrections := [{
+        x | z,
+        hls_nums:u32(),
+        hls_nums:u16(),
+        hls_nums:u16(),
+        hls_nums:u32()
+    }],
+    measurement := x | z,
+    data_anticommutations := [
+        {{hls_nums:u16(), hls_nums:u16()}, 0 | 1}
+    ],
+    row := #{
+        y := hls_nums:u16(),
+        parity := 0 | 1
+    }
+}.
 -type state() :: map().
 -type result() ::
     {state(), [command()]} |
-    {done, 0 | 1, state()} |
+    {done, witness(), state()} |
     {error, atom(), state()}.
 
 -doc "Starts one closeout and returns its whole-fabric cutoff command.".
@@ -88,29 +110,26 @@ new(#{
 }) when Distance > 0,
         FirstQuietStep >= 0, FirstQuietStep =< ?U32_MASK,
         LineY >= 0, LineY < 2 * Distance,
+        (Measurement =:= x orelse Measurement =:= z),
         RequestId >= 0, RequestId =< ?U32_MASK ->
-    case hls_pauli:is_pauli(Measurement) of
-        true ->
-            State = #{
-                distance => Distance,
-                cutoff_step => FirstQuietStep,
-                line_y => LineY,
-                measurement => Measurement,
-                request_id => RequestId,
-                phase => draining,
-                status_rounds => #{},
-                closed_steps => #{},
-                zero_steps => #{x => #{}, z => #{}},
-                seen_corrections => #{},
-                replies => #{}
-            },
-            Rectangle = {0, 0, Distance - 1, 2 * Distance - 1},
-            {State, [{control_router, noise, Rectangle, #noise_cutoff{
-                first_quiet_step = FirstQuietStep
-            }}]};
-        false ->
-            error(badarg)
-    end;
+    State = #{
+        distance => Distance,
+        cutoff_step => FirstQuietStep,
+        line_y => LineY,
+        measurement => Measurement,
+        request_id => RequestId,
+        phase => draining,
+        status_rounds => #{},
+        closed_steps => #{},
+        zero_steps => #{x => #{}, z => #{}},
+        seen_corrections => #{},
+        correction_log => [],
+        replies => #{}
+    },
+    Rectangle = {0, 0, Distance - 1, 2 * Distance - 1},
+    {State, [{control_router, noise, Rectangle, #noise_cutoff{
+        first_quiet_step = FirstQuietStep
+    }}]};
 new(_Options) ->
     error(badarg).
 
@@ -138,9 +157,11 @@ decoder_event(Plane, Correction = #phi_correction{},
 decoder_event(Plane, Status = #phi_status{},
         State = #{phase := draining}) ->
     status(Plane, Status, State);
-decoder_event(_Plane, #phi_correction{}, State = #{phase := querying}) ->
+decoder_event(_Plane, #phi_correction{}, State = #{phase := Phase})
+        when Phase =:= querying ->
     {error, late_correction, State#{phase := failed}};
-decoder_event(_Plane, #phi_status{}, State = #{phase := querying}) ->
+decoder_event(_Plane, #phi_status{}, State = #{phase := Phase})
+        when Phase =:= querying ->
     {State, []};
 decoder_event(_Plane, _Event, State) ->
     {error, decoder_event, State}.
@@ -156,7 +177,8 @@ correction(
     State = #{
         distance := Distance,
         closed_steps := Closed,
-        seen_corrections := Seen
+        seen_corrections := Seen,
+        correction_log := CorrectionLog
     }
 ) when X >= 0, X < Distance, Y >= 0, Y < Distance,
         (Direction =:= ?PHI_NORTH_MASK orelse
@@ -179,7 +201,11 @@ correction(
                     Command = {control_router, data,
                         {DataX, DataY, DataX, DataY},
                         #pauli_update{pauli = Pauli}},
-                    {State#{seen_corrections := Seen#{Key => true}},
+                    Logged = {Plane, Step, X, Y, Direction},
+                    {State#{
+                        seen_corrections := Seen#{Key => true},
+                        correction_log := [Logged | CorrectionLog]
+                    },
                         [Command]}
             end
     end;
@@ -270,7 +296,6 @@ complete_status_round(
 maybe_query(State = #{
     zero_steps := #{x := XSteps, z := ZSteps},
     distance := Distance,
-    line_y := LineY,
     measurement := Measurement,
     request_id := RequestId
 }) ->
@@ -280,14 +305,14 @@ maybe_query(State = #{
     case Common of
         [] ->
             {State, []};
-        [_Step | _] ->
+        [Step | _] ->
             Query = #pauli_query{
                 request_id = RequestId,
                 measurement = Measurement
             },
             Command = {control_router, data,
-                {0, LineY, Distance - 1, LineY}, Query},
-            {State#{phase := querying}, [Command]}
+                {0, 0, Distance - 1, 2 * Distance - 1}, Query},
+            {State#{phase := querying, closeout_step => Step}, [Command]}
     end.
 
 prune_zero_steps(State = #{
@@ -318,37 +343,70 @@ measurement_reply(
         phase := querying,
         request_id := ExpectedRequestId,
         distance := Distance,
-        line_y := Y,
         replies := Replies
     }
-) when RequestId =:= ExpectedRequestId,
-        X >= 0, X < Distance,
+) when X >= 0, X < Distance, Y >= 0, Y < 2 * Distance,
         Anticommutes < 2 ->
-    case maps:is_key(X, Replies) of
+    case RequestId =:= ExpectedRequestId of
+        false ->
+            {State, []};
+        true ->
+            collect_reply(
+                {X, Y},
+                Anticommutes,
+                State,
+                Replies,
+                Distance
+            )
+    end;
+measurement_reply(#pauli_reply{}, State = #{phase := querying}) ->
+    {error, reply, State#{phase := failed}}.
+
+collect_reply(Coordinate, Anticommutes, State, Replies, Distance) ->
+    case maps:is_key(Coordinate, Replies) of
         true ->
             {error, duplicate_reply, State#{phase := failed}};
         false ->
-            UpdatedReplies = Replies#{X => Anticommutes},
+            UpdatedReplies = Replies#{Coordinate => Anticommutes},
             Updated = State#{replies := UpdatedReplies},
-            case map_size(UpdatedReplies) =:= Distance of
+            case map_size(UpdatedReplies) =:= 2 * Distance * Distance of
                 false ->
                     {Updated, []};
                 true ->
-                    Parity = lists:foldl(
-                        fun(Value, Acc) -> Value bxor Acc end,
-                        0,
-                        maps:values(UpdatedReplies)
-                    ),
+                    Witness = witness(Updated),
                     Done = Updated#{phase := done},
-                    {done, Parity, Done}
+                    {done, Witness, Done}
             end
-    end;
-measurement_reply(#pauli_reply{request_id = RequestId},
-        State = #{phase := querying, request_id := Expected})
-        when RequestId =/= Expected ->
-    {State, []};
-measurement_reply(#pauli_reply{}, State) ->
-    {error, reply, State#{phase := failed}}.
+    end.
+
+witness(#{
+    closeout_step := CloseoutStep,
+    correction_log := Corrections,
+    replies := Replies,
+    line_y := LineY,
+    measurement := Measurement
+}) ->
+    DataAnticommutations = lists:sort(maps:to_list(Replies)),
+    RowParity = lists:foldl(
+        fun
+            ({{_X, Y}, Anticommutes}, Parity) when Y =:= LineY ->
+                Anticommutes bxor Parity;
+            (_Other, Parity) ->
+                Parity
+        end,
+        0,
+        DataAnticommutations
+    ),
+    #{
+        closeout_step => CloseoutStep,
+        corrections => lists:sort(Corrections),
+        measurement => Measurement,
+        data_anticommutations => DataAnticommutations,
+        row => #{
+            y => LineY,
+            parity => RowParity
+        }
+    }.
 
 step_closed(Plane, Step, Closed) ->
     case maps:find(Plane, Closed) of

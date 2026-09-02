@@ -41,11 +41,27 @@ erl \
         ),
         PhiPhenomTopology = phi_phenom_topology_dslx:to_dslx(),
         PhiTorusTopology = phi_torus_topology_dslx:to_dslx(),
-        PhiNoiseTopology = phi_noise_topology_dslx:to_dslx(),
+        #{
+            distance := DemoDistance,
+            noise_rate := DemoNoiseRate
+        } = phi_memory_demo:fixture(),
+        PhiNoiseTopology = phi_noise_topology_dslx:to_dslx(
+            DemoDistance,
+            DemoNoiseRate
+        ),
         %% The routine D1 closeout fixture disables random injection so empty
         %% decoder planes let the ERTS witness terminate deterministically.
         PhiNoiseTopologySmoke = phi_noise_topology_dslx:to_dslx(1, 0),
-        PhiMemoryGateway = phi_memory_gateway_dslx:to_dslx(1),
+        PhiBridgeDistance = case os:getenv(
+            "ERL_HLS_PHI_BRIDGE_DISTANCE"
+        ) of
+            false -> 1;
+            "demo" -> DemoDistance;
+            Text -> list_to_integer(Text)
+        end,
+        PhiMemoryGateway = phi_memory_gateway_dslx:to_dslx(
+            PhiBridgeDistance
+        ),
         OrderedEgressActor = xls_parse:to_xls(
             "test/ordered_egress_actor.erl"
         ),
@@ -158,6 +174,7 @@ for source in \
     "$project_root/src/examples/phi_decoder/phenom_syndrome_cell.erl" \
     "$project_root/src/examples/phi_decoder/phi_halo_cell.erl" \
     "$project_root/src/examples/phi_decoder/phi_memory_boundary.erl" \
+    "$project_root/src/examples/phi_decoder/phi_memory_demo.erl" \
     "$project_root/src/examples/phi_decoder/phi_memory_experiment.erl" \
     "$project_root/src/examples/phi_decoder/phi_memory_runner.erl" \
     "$project_root/src/examples/phi_decoder/phi_memory_wire.erl" \
