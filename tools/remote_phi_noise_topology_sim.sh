@@ -6,6 +6,7 @@ stage=${1:?usage: remote_phi_noise_topology_sim.sh STAGE XLS_ROOT [TIMEOUT]}
 xls_root=${2:?usage: remote_phi_noise_topology_sim.sh STAGE XLS_ROOT [TIMEOUT]}
 stage_timeout=${3:-2h}
 stdlib="$xls_root/xls/dslx/stdlib"
+. "$stage/phi_scheduler_rams.sh"
 
 cd "$stage"
 
@@ -79,13 +80,15 @@ timed_output \
     phi_noise_topology-codegen \
     phi_noise_topology.v \
     "$xls_root/codegen_main" \
-    --pipeline_stages=1 \
+    --pipeline_stages=2 \
+    --worst_case_throughput=2 \
     --delay_model=unit \
     --flop_inputs=false \
     --flop_outputs=true \
     --use_system_verilog=false \
     --reset=reset \
     --fifo_module= \
+    --ram_configurations="$(phi_scheduler_ram_configurations)" \
     phi_noise_topology.opt.ir
 
 timed_command \
@@ -95,6 +98,7 @@ timed_command \
     -s phi_noise_topology_tb \
     -o phi_noise_topology.vvp.new \
     phi_noise_topology_tb.sv \
+    hls_1rw_ram.v \
     phi_noise_topology.v
 mv phi_noise_topology.vvp.new phi_noise_topology.vvp
 

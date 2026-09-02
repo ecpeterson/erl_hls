@@ -46,6 +46,10 @@ emit(Distance, TopologyModule, Artifact) ->
         "import axis;\n",
         "import hls_fabric_router;\n",
         "import hls_spatial_router;\n",
+        [["import ", Module, ";\n"]
+            || Module <- lists:usort([
+                Name || {_Stem, Name} <- scheduler_ram_bindings()
+            ])],
         "import ", atom_to_list(TopologyModule), ";\n\n",
         "const WIDTH = u16:", integer_to_list(Distance), ";\n",
         "const HEIGHT = u16:", integer_to_list(Distance), ";\n",
@@ -266,11 +270,15 @@ frame_mux(Contract = #{outputs := Outputs}) ->
 
 top_proc(TopologyModule, Contract = #{outputs := Outputs}) ->
     OutputCount = length(Outputs),
+    RamMembers = scheduler_ram_members(),
+    RamNames = scheduler_ram_names(),
     [
         "pub proc Top {\n",
+        [["  ", Member, ";\n"] || Member <- RamMembers],
         "  routed_in: chan<axis::Beat> in;\n",
         "  routed_out: chan<axis::Beat> out;\n\n",
         "  config(\n",
+        [["      ", Member, ",\n"] || Member <- RamMembers],
         "      routed_in: chan<axis::Beat> in,\n",
         "      routed_out: chan<axis::Beat> out\n",
         "  ) {\n",
@@ -295,6 +303,7 @@ top_proc(TopologyModule, Contract = #{outputs := Outputs}) ->
         "      boundary_beats_c, boundary_frames_p);\n",
         "    spawn SpatialIngress(boundary_frames_c, control_p, arm_p);\n",
         "    spawn ", atom_to_list(TopologyModule), "::Top(\n",
+        [["      ", Name, ",\n"] || Name <- RamNames],
         "      control_c,\n",
         topology_outputs(Contract), ");\n",
         "    spawn FrameMux(topology_outputs_c, pre_gate_p);\n",
@@ -302,11 +311,49 @@ top_proc(TopologyModule, Contract = #{outputs := Outputs}) ->
         "      pre_gate_c, egress_p, arm_c);\n",
         "    spawn hls_fabric_router::RoutedTx<HOST_ENDPOINT>(\n",
         "      egress_c, routed_out);\n",
-        "    (routed_in, routed_out)\n",
+        "    (", join_with(", ", RamNames ++
+            ["routed_in", "routed_out"]), ")\n",
         "  }\n\n",
         "  init { () }\n",
         "  next(state: ()) { state }\n",
         "}\n"
+    ].
+
+scheduler_ram_members() ->
+    lists:append([
+        [
+            [Stem, "_ram_req_out: chan<", Module,
+                "::MachineRamReq> out"],
+            [Stem, "_ram_resp_in: chan<", Module,
+                "::MachineRamResp> in"],
+            [Stem, "_ram_wr_comp_in: chan<()> in"],
+            [Stem, "_mailbox_req_out: chan<", Module,
+                "::MailboxRamReq> out"],
+            [Stem, "_mailbox_resp_in: chan<", Module,
+                "::MailboxRamResp> in"],
+            [Stem, "_mailbox_wr_comp_in: chan<()> in"]
+        ]
+        || {Stem, Module} <- scheduler_ram_bindings()
+    ]).
+
+scheduler_ram_names() ->
+    lists:append([
+        [
+            [Stem, "_ram_req_out"],
+            [Stem, "_ram_resp_in"],
+            [Stem, "_ram_wr_comp_in"],
+            [Stem, "_mailbox_req_out"],
+            [Stem, "_mailbox_resp_in"],
+            [Stem, "_mailbox_wr_comp_in"]
+        ]
+        || {Stem, _Module} <- scheduler_ram_bindings()
+    ]).
+
+scheduler_ram_bindings() ->
+    #{groups := Groups} = phi_noise_topology_dslx:scheduler_plan(),
+    [
+        {["scheduler_", integer_to_list(Index)], atom_to_list(Module)}
+        || {Index, #{module := Module}} <- lists:enumerate(0, Groups)
     ].
 
 boundary_constants(#{

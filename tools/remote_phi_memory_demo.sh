@@ -4,6 +4,7 @@ set -euo pipefail
 stage=${1:?usage: remote_phi_memory_demo.sh STAGE XLS_ROOT}
 xls_root=${2:?usage: remote_phi_memory_demo.sh STAGE XLS_ROOT}
 stdlib="$xls_root/xls/dslx/stdlib"
+. "$stage/phi_scheduler_rams.sh"
 reuse_rtl=${ERL_HLS_PHI_DEMO_REUSE_RTL:-0}
 startup_timeout=${ERL_HLS_SIM_STARTUP_TIMEOUT:-120}
 cpu_witness="$stage/phi_memory_cpu_witness.term"
@@ -43,13 +44,15 @@ if [[ "$reuse_rtl" != 1 ]]; then
 
     timed_output codegen phi_memory_gateway.v \
         "$xls_root/codegen_main" \
-        --pipeline_stages=1 \
+        --pipeline_stages=2 \
+        --worst_case_throughput=2 \
         --delay_model=unit \
         --flop_inputs=false \
         --flop_outputs=true \
         --use_system_verilog=false \
         --reset=reset \
         --fifo_module= \
+        --ram_configurations="$(phi_scheduler_ram_configurations)" \
         phi_memory_gateway.opt.ir
 
 elif [[ ! -f phi_memory_gateway.v ]]; then
@@ -140,6 +143,7 @@ iverilog-vpi xls_sim_bridge.c
     -o phi_memory_gateway.vvp \
     phi_memory_bridge_tb.sv \
     phi_memory_debug_top.v \
+    hls_1rw_ram.v \
     phi_memory_gateway.v \
     hls_fabric_ingress.v \
     hls_fabric_egress.v \

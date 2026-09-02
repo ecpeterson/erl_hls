@@ -24,12 +24,12 @@ module phi_torus_topology_tb;
     __phi_torus_topology__Top_0_next dut (
         .clk(clk),
         .reset(reset),
-        .phi_torus_topology__syndrome_requests_out_rdy(syndrome_ready),
-        .phi_torus_topology__syndrome_requests_out(syndrome_request),
-        .phi_torus_topology__syndrome_requests_out_vld(syndrome_valid),
-        .phi_torus_topology__decoder_events_out_rdy(decoder_events_ready),
-        .phi_torus_topology__decoder_events_out(decoder_events),
-        .phi_torus_topology__decoder_events_out_vld(decoder_events_valid)
+        ._syndrome_requests_out_rdy(syndrome_ready),
+        ._syndrome_requests_out(syndrome_request),
+        ._syndrome_requests_out_vld(syndrome_valid),
+        ._decoder_events_out_rdy(decoder_events_ready),
+        ._decoder_events_out(decoder_events),
+        ._decoder_events_out_vld(decoder_events_valid)
     );
 
     always #5 clk = ~clk;

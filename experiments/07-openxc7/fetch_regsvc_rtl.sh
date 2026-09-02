@@ -6,9 +6,9 @@ project_root=$(cd "$experiment_root/../.." && pwd)
 build_root=${ERL_HLS_OPENXC7_BUILD_ROOT:-"$experiment_root/build"}
 remote_host=${ERL_HLS_REMOTE_HOST:-192.168.64.7}
 remote_root=${ERL_HLS_REMOTE_ROOT:-/home/ecpeterson/erl_hls-build}
-remote_xls=${ERL_HLS_REMOTE_XLS:-/home/ecpeterson/xls-v0.0.0-9235-gb179d691e-linux-x64}
+remote_xls=${ERL_HLS_REMOTE_XLS:-/home/ecpeterson/xls-v0.0.0-10601-g9f360fc89-linux-x64}
 
-readonly expected_xls_version=v0.0.0-9235-gb179d691e
+readonly expected_xls_version=v0.0.0-10601-g9f360fc89
 readonly publish_parent="$build_root/regsvc"
 readonly publish_path="$publish_parent/generated-rtl"
 readonly release_root="$publish_parent/.generated-rtl-releases"

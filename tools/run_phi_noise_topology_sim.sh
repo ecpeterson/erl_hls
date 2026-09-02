@@ -5,7 +5,7 @@ project_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 local_stage=${1:-"$project_root/_build/xls_sim/phi_noise_topology"}
 remote_host=${ERL_HLS_REMOTE_HOST:-192.168.64.7}
 remote_root=${ERL_HLS_REMOTE_ROOT:-/home/ecpeterson/erl_hls-build}
-remote_xls=${ERL_HLS_REMOTE_XLS:-/home/ecpeterson/xls-v0.0.0-9235-gb179d691e-linux-x64}
+remote_xls=${ERL_HLS_REMOTE_XLS:-/home/ecpeterson/xls-v0.0.0-10601-g9f360fc89-linux-x64}
 stage_timeout=${ERL_HLS_D3_TIMEOUT:-2h}
 remote_stage="$remote_root/phi_noise_topology"
 
@@ -33,6 +33,8 @@ rsync -a -e "ssh -o BatchMode=yes" \
     "$local_stage/phenom_syndrome_cell.x" \
     "$local_stage/phi_noise_topology.x" \
     "$local_stage/phi_noise_topology_tb.sv" \
+    "$local_stage/hls_1rw_ram.v" \
+    "$local_stage/phi_scheduler_rams.sh" \
     "$local_stage/remote_phi_noise_topology_sim.sh" \
     "$remote_host:$remote_stage/"
 

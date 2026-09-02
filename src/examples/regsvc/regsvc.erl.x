@@ -255,7 +255,7 @@ Tag::BULK_GET => {
       let _10 = _9 & (all_ones!<bits[512]>() << (512 - (Xls_clause_2_Count_1 * 32)));
       let _11 = _10 as u32[16];
       let Xls_clause_2_Sublist_1 = _11;
-      let _12 = array_slice(Xls_clause_2_Sublist_1, 0, zero!<u32[3]>() );
+      let _12 = array_slice(Xls_clause_2_Sublist_1, u32:0, zero!<u32[3]>() );
       let Xls_clause_2_Trim_1 = _12;
       let _13 = Bulkread {
         values: Xls_clause_2_Trim_1,

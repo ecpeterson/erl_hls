@@ -48,15 +48,39 @@ proc FamilyRouter {
 
   next(state: ()) {
     let (tok, egress) = recv(join(), egress_in);
-    let _route_tok = match egress.port {
-      phi_halo_cell::OutputPort::NORTH => send(tok, lane_2_out, egress.frame),
-      phi_halo_cell::OutputPort::EAST => send(tok, lane_4_out, egress.frame),
-      phi_halo_cell::OutputPort::WEST => send(tok, lane_4_out, egress.frame),
-      phi_halo_cell::OutputPort::SOUTH => send(tok, lane_3_out, egress.frame),
-      phi_halo_cell::OutputPort::SYNDROME => send(tok, lane_1_out, egress.frame),
-      phi_halo_cell::OutputPort::CORRECTION => send(tok, lane_0_out, egress.frame),
-      phi_halo_cell::OutputPort::STATUS => send(tok, lane_0_out, egress.frame),
+    let lane_0_selected = match egress.port {
+      phi_halo_cell::OutputPort::CORRECTION => true,
+      phi_halo_cell::OutputPort::STATUS => true,
+      _ => false,
     };
+    let lane_1_selected = match egress.port {
+      phi_halo_cell::OutputPort::SYNDROME => true,
+      _ => false,
+    };
+    let lane_2_selected = match egress.port {
+      phi_halo_cell::OutputPort::NORTH => true,
+      _ => false,
+    };
+    let lane_3_selected = match egress.port {
+      phi_halo_cell::OutputPort::SOUTH => true,
+      _ => false,
+    };
+    let lane_4_selected = match egress.port {
+      phi_halo_cell::OutputPort::EAST => true,
+      phi_halo_cell::OutputPort::WEST => true,
+      _ => false,
+    };
+    let lane_0_tok = send_if(
+      tok, lane_0_out, lane_0_selected, egress.frame);
+    let lane_1_tok = send_if(
+      tok, lane_1_out, lane_1_selected, egress.frame);
+    let lane_2_tok = send_if(
+      tok, lane_2_out, lane_2_selected, egress.frame);
+    let lane_3_tok = send_if(
+      tok, lane_3_out, lane_3_selected, egress.frame);
+    let lane_4_tok = send_if(
+      tok, lane_4_out, lane_4_selected, egress.frame);
+    let _route_tok = join(join(join(join(lane_0_tok, lane_1_tok), lane_2_tok), lane_3_tok), lane_4_tok);
     state
   }
 }

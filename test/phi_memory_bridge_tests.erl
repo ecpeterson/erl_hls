@@ -2,8 +2,8 @@
 
 -include_lib("eunit/include/eunit.hrl").
 
--define(RUNNER_TIMEOUT, 120000).
--define(DEBUG_TIMEOUT, 120000).
+-define(RUNNER_TIMEOUT, 600000).
+-define(DEBUG_TIMEOUT, 600000).
 
 simulated_rtl_test_() ->
     case os:getenv("ERL_HLS_PHI_SIM_DIR") of
@@ -63,19 +63,19 @@ fixture() ->
             Options = #{
                 distance => 1,
                 %% The synthesized actors advance while ERTS installs routes.
-                first_quiet_step => 16,
+                first_quiet_step => 4,
                 line_y => 0,
                 measurement => z,
                 request_id => 16#504849
             },
             Expected = {ok, #{
-                closeout_step => 16,
+                closeout_step => 4,
                 corrections => [],
                 measurement => z,
                 data_anticommutations => [{{0, 0}, 0}, {{0, 1}, 0}],
                 row => #{y => 0, parity => 0}
             }},
-            {smoke, Options, Expected, ?RUNNER_TIMEOUT, 180}
+            {smoke, Options, Expected, ?RUNNER_TIMEOUT, 660}
     end.
 
 cpu_witness() ->

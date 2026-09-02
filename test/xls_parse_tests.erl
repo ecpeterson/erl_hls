@@ -799,10 +799,40 @@ state_machine_entry_actions_use_one_source_ordered_egress_test() ->
             XLS,
             <<"chan<Egress, EGRESS_DEPTH>(\"egress\")">>
         )),
-        ?assertEqual(1, length(binary:matches(
+        %% Direct and shared services use the same resumable entry-effect
+        %% progression.
+        ?assertEqual(2, length(binary:matches(
             XLS,
-            <<"join(), egress_out, emit_effect, effect">>
+            <<"egress_valid: emit_effect && can_advance">>
         ))),
+        ?assertNotEqual(nomatch, binary:match(
+            XLS,
+            <<"egress_out, stepped.egress_valid, stepped.egress">>
+        )),
+        ?assertNotEqual(nomatch, binary:match(
+            XLS,
+            <<"pub proc SharedService<\n"
+              "    ACTOR_COUNT: u32,\n"
+              "    PRODUCER_COUNT: u32,\n"
+              "    STARTUP_COUNT: u32">>
+        )),
+        ?assertNotEqual(nomatch, binary:match(
+            XLS,
+            <<"machine: if can_advance { advanced_machine } else { machine }">>
+        )),
+        ?assertNotEqual(nomatch, binary:match(
+            XLS,
+            <<"mailbox_req_out: chan<MailboxRamReq> out">>
+        )),
+        ?assertNotEqual(nomatch, binary:match(
+            XLS,
+            <<"ram_req_out: chan<MachineRamReq> out">>
+        )),
+        ?assertNotEqual(nomatch, binary:match(
+            XLS,
+            <<"fn free_mailbox_index<ACTOR_COUNT: u32, "
+              "PRODUCER_COUNT: u32>">>
+        )),
         ?assertNotEqual(nomatch, binary:match(
             XLS,
             <<"proc EgressDemux {">>

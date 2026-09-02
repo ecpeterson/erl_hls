@@ -14,8 +14,8 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  XLS_VERSION: v0.0.0-9235-gb179d691e
-  XLS_SHA256: 6ba60b797e9f2cc142011b5445aeda8e12f59541159b20a9ca1e8183fab18c86
+  XLS_VERSION: v0.0.0-10601-g9f360fc89
+  XLS_SHA256: 163c27ee1a606b77956e0e2317a5b0ce98390d65b74ab12471356ddb679a835e
 
 jobs:
   test:

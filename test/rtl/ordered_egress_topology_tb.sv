@@ -17,11 +17,11 @@ module ordered_egress_topology_tb;
     __ordered_egress_topology__Top_0_next dut (
         .clk(clk),
         .reset(reset),
-        .ordered_egress_topology__ordered_values_out_rdy(
+        ._ordered_values_out_rdy(
             ordered_values_ready
         ),
-        .ordered_egress_topology__ordered_values_out(ordered_values),
-        .ordered_egress_topology__ordered_values_out_vld(
+        ._ordered_values_out(ordered_values),
+        ._ordered_values_out_vld(
             ordered_values_valid
         )
     );

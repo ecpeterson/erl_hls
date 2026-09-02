@@ -20,8 +20,8 @@ module phi_noise_topology_tb;
     localparam [31:0] EAST = 32'd2;
     localparam [31:0] WEST = 32'd4;
     localparam [31:0] SOUTH = 32'd8;
-    localparam integer MAX_WAIT_CYCLES = 5000;
-    localparam integer MAX_CONTROL_WAIT_CYCLES = 200000;
+    localparam integer MAX_WAIT_CYCLES = 100000;
+    localparam integer MAX_CONTROL_WAIT_CYCLES = 2000000;
     localparam [8:0] ALL_COORDINATES = 9'h1ff;
     localparam [2:0] ALL_QUERY_COORDINATES = 3'b111;
     // These sets are deterministic fixture goldens, not a logical-decoder
@@ -85,50 +85,167 @@ module phi_noise_topology_tb;
     reg [127:0] stalled_x_announcement;
     integer cycle;
 
+    wire [31:0] data_state_addr;
+    wire [441:0] data_state_wr_data;
+    wire data_state_we;
+    wire data_state_re;
+    wire [441:0] data_state_rd_data;
+    wire [31:0] data_mailbox_addr;
+    wire [127:0] data_mailbox_wr_data;
+    wire data_mailbox_we;
+    wire data_mailbox_re;
+    wire [127:0] data_mailbox_rd_data;
+
+    wire [31:0] phi_state_addr;
+    wire [553:0] phi_state_wr_data;
+    wire phi_state_we;
+    wire phi_state_re;
+    wire [553:0] phi_state_rd_data;
+    wire [31:0] phi_mailbox_addr;
+    wire [127:0] phi_mailbox_wr_data;
+    wire phi_mailbox_we;
+    wire phi_mailbox_re;
+    wire [127:0] phi_mailbox_rd_data;
+
+    wire [31:0] syndrome_state_addr;
+    wire [441:0] syndrome_state_wr_data;
+    wire syndrome_state_we;
+    wire syndrome_state_re;
+    wire [441:0] syndrome_state_rd_data;
+    wire [31:0] syndrome_mailbox_addr;
+    wire [127:0] syndrome_mailbox_wr_data;
+    wire syndrome_mailbox_we;
+    wire syndrome_mailbox_re;
+    wire [127:0] syndrome_mailbox_rd_data;
+
     __phi_noise_topology__Top_0_next dut (
         .clk(clk),
         .reset(reset),
-        .phi_noise_topology__control_router_in(control_router),
-        .phi_noise_topology__control_router_in_vld(control_router_valid),
-        .phi_noise_topology__control_router_in_rdy(control_router_ready),
-        .phi_noise_topology__x_announcements_out_rdy(
+        ._control_router_in(control_router),
+        ._control_router_in_vld(control_router_valid),
+        ._control_router_in_rdy(control_router_ready),
+        ._x_announcements_out_rdy(
             x_announcement_ready
         ),
-        .phi_noise_topology__x_announcements_out(x_announcement),
-        .phi_noise_topology__x_announcements_out_vld(
+        ._x_announcements_out(x_announcement),
+        ._x_announcements_out_vld(
             x_announcement_valid
         ),
-        .phi_noise_topology__x_decoder_events_out_rdy(
+        ._x_decoder_events_out_rdy(
             x_decoder_event_ready
         ),
-        .phi_noise_topology__x_decoder_events_out(x_decoder_event),
-        .phi_noise_topology__x_decoder_events_out_vld(
+        ._x_decoder_events_out(x_decoder_event),
+        ._x_decoder_events_out_vld(
             x_decoder_event_valid
         ),
-        .phi_noise_topology__z_announcements_out_rdy(
+        ._z_announcements_out_rdy(
             z_announcement_ready
         ),
-        .phi_noise_topology__z_announcements_out(z_announcement),
-        .phi_noise_topology__z_announcements_out_vld(
+        ._z_announcements_out(z_announcement),
+        ._z_announcements_out_vld(
             z_announcement_valid
         ),
-        .phi_noise_topology__z_decoder_events_out_rdy(
+        ._z_decoder_events_out_rdy(
             z_decoder_event_ready
         ),
-        .phi_noise_topology__z_decoder_events_out(z_decoder_event),
-        .phi_noise_topology__z_decoder_events_out_vld(
+        ._z_decoder_events_out(z_decoder_event),
+        ._z_decoder_events_out_vld(
             z_decoder_event_valid
         ),
-        .phi_noise_topology__data_measurements_out_rdy(
+        ._data_measurements_out_rdy(
             data_measurements_ready
         ),
-        .phi_noise_topology__data_measurements_out(data_measurements),
-        .phi_noise_topology__data_measurements_out_vld(
+        ._data_measurements_out(data_measurements),
+        ._data_measurements_out_vld(
             data_measurements_valid
-        )
+        ),
+        .scheduler_0_state_addr(data_state_addr),
+        .scheduler_0_state_wr_data(data_state_wr_data),
+        .scheduler_0_state_we(data_state_we),
+        .scheduler_0_state_re(data_state_re),
+        .scheduler_0_state_rd_data(data_state_rd_data),
+        .scheduler_0_mailbox_addr(data_mailbox_addr),
+        .scheduler_0_mailbox_wr_data(data_mailbox_wr_data),
+        .scheduler_0_mailbox_we(data_mailbox_we),
+        .scheduler_0_mailbox_re(data_mailbox_re),
+        .scheduler_0_mailbox_rd_data(data_mailbox_rd_data),
+        .scheduler_1_state_addr(phi_state_addr),
+        .scheduler_1_state_wr_data(phi_state_wr_data),
+        .scheduler_1_state_we(phi_state_we),
+        .scheduler_1_state_re(phi_state_re),
+        .scheduler_1_state_rd_data(phi_state_rd_data),
+        .scheduler_1_mailbox_addr(phi_mailbox_addr),
+        .scheduler_1_mailbox_wr_data(phi_mailbox_wr_data),
+        .scheduler_1_mailbox_we(phi_mailbox_we),
+        .scheduler_1_mailbox_re(phi_mailbox_re),
+        .scheduler_1_mailbox_rd_data(phi_mailbox_rd_data),
+        .scheduler_2_state_addr(syndrome_state_addr),
+        .scheduler_2_state_wr_data(syndrome_state_wr_data),
+        .scheduler_2_state_we(syndrome_state_we),
+        .scheduler_2_state_re(syndrome_state_re),
+        .scheduler_2_state_rd_data(syndrome_state_rd_data),
+        .scheduler_2_mailbox_addr(syndrome_mailbox_addr),
+        .scheduler_2_mailbox_wr_data(syndrome_mailbox_wr_data),
+        .scheduler_2_mailbox_we(syndrome_mailbox_we),
+        .scheduler_2_mailbox_re(syndrome_mailbox_re),
+        .scheduler_2_mailbox_rd_data(syndrome_mailbox_rd_data)
     );
 
     always #5 clk = ~clk;
+
+    hls_1rw_ram #(.WIDTH(442), .ADDRESS_WIDTH(5)) data_state (
+        .clk(clk),
+        .addr(data_state_addr[4:0]),
+        .wr_data(data_state_wr_data),
+        .we(data_state_we),
+        .re(data_state_re),
+        .rd_data(data_state_rd_data)
+    );
+
+    hls_1rw_ram #(.WIDTH(554), .ADDRESS_WIDTH(5)) phi_state (
+        .clk(clk),
+        .addr(phi_state_addr[4:0]),
+        .wr_data(phi_state_wr_data),
+        .we(phi_state_we),
+        .re(phi_state_re),
+        .rd_data(phi_state_rd_data)
+    );
+
+    hls_1rw_ram #(.WIDTH(442), .ADDRESS_WIDTH(5)) syndrome_state (
+        .clk(clk),
+        .addr(syndrome_state_addr[4:0]),
+        .wr_data(syndrome_state_wr_data),
+        .we(syndrome_state_we),
+        .re(syndrome_state_re),
+        .rd_data(syndrome_state_rd_data)
+    );
+
+    hls_1rw_ram #(.WIDTH(128), .ADDRESS_WIDTH(7)) data_mailbox (
+        .clk(clk),
+        .addr(data_mailbox_addr[6:0]),
+        .wr_data(data_mailbox_wr_data),
+        .we(data_mailbox_we),
+        .re(data_mailbox_re),
+        .rd_data(data_mailbox_rd_data)
+    );
+
+    hls_1rw_ram #(.WIDTH(128), .ADDRESS_WIDTH(7)) phi_mailbox (
+        .clk(clk),
+        .addr(phi_mailbox_addr[6:0]),
+        .wr_data(phi_mailbox_wr_data),
+        .we(phi_mailbox_we),
+        .re(phi_mailbox_re),
+        .rd_data(phi_mailbox_rd_data)
+    );
+
+    hls_1rw_ram #(.WIDTH(128), .ADDRESS_WIDTH(7)) syndrome_mailbox (
+        .clk(clk),
+        .addr(syndrome_mailbox_addr[6:0]),
+        .wr_data(syndrome_mailbox_wr_data),
+        .we(syndrome_mailbox_we),
+        .re(syndrome_mailbox_re),
+        .rd_data(syndrome_mailbox_rd_data)
+    );
 
     function automatic [127:0] frame1;
         input [7:0] tag;
@@ -631,6 +748,7 @@ module phi_noise_topology_tb;
             );
             $fatal(1);
         end
+        $display("PROGRESS: observed complete distance-three steps 0 through 2");
 
         // Step seven is far enough ahead of the observed step-two traffic for
         // the one whole-fabric command to reach all four noise families before
@@ -664,6 +782,7 @@ module phi_noise_topology_tb;
             );
             $fatal(1);
         end
+        $display("PROGRESS: every distance-three source reports quiet");
 
         // Physical row four is data_even[X,2]. The [1,2] embedding must map
         // this one logical line to exactly X=0,1,2 and no data_odd actor.
@@ -690,6 +809,7 @@ module phi_noise_topology_tb;
             );
             $fatal(1);
         end
+        $display("PROGRESS: first distance-three line query completed");
 
         send_spatial(
             16'd1,
@@ -726,6 +846,7 @@ module phi_noise_topology_tb;
             $display("FAIL: point X update did not toggle line Z parity");
             $fatal(1);
         end
+        $display("PROGRESS: point update changed the line-query parity");
 
         // Give the measurement merge a complete polling sweep after the three
         // expected replies. Any unintended fourth reply is rejected by the

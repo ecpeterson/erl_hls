@@ -25,14 +25,13 @@ either realize the corresponding state there or reject the plan. Actor data
 and mailboxes are separate bindings because safe shared scheduling needs both
 per-instance callback state and per-instance bounded admission state.
 
-A shared executor must never wait on an uncommitted transition while excluding
-another actor in its group. Since callback evaluation is side-effect-free, it
-may evaluate speculatively, but it must commit the new actor state, consume the
-mailbox head, and expose the ordered effect burst only after that whole burst
-can be accepted. If admission is unavailable, it leaves the actor unchanged
-and tries another ready member; it may not retain a partial reservation while
-doing so. The actor-level `fail` directive remains a terminal failure and is
-not this scheduler retry mechanism.
+A shared executor advances one actor by a resumable microstep. If the next
+ordered effect lacks egress credit, the actor keeps its pending-effect index
+and the executor visits another member. An effect which has already been
+accepted is never rolled back or sent again. The executor therefore holds no
+tentative multi-resource reservation, and a blocked member cannot exclude
+another member in its group. The actor-level `fail` directive remains a
+terminal failure and is not this scheduler retry mechanism.
 
 This prevents the executor itself from creating head-of-line deadlock. It does
 not prove progress for an application protocol which has already committed a
@@ -111,7 +110,8 @@ normalize_group(Id, Spec, MemberIndex) when is_atom(Id), is_map(Spec) ->
         members => Members,
         slot_count => SlotCount,
         selection => round_robin,
-        commit => all_or_retry,
+        effect_progress => resumable,
+        reservation => none,
         blocked => yield,
         state_storage => StateStorage,
         mailbox_storage => MailboxStorage

@@ -7,13 +7,15 @@
 Generates the regular multi-family phi/noise DSLX graph.
 
 The default artifact uses the nondegenerate distance-three semantic topology.
-`to_dslx/1` exists so the pinned XLS regression can exercise the same six
+`to_dslx/1` exists so the checked XLS regression can exercise the same six
 family types and cross-family routes at a smaller elaborated distance.
 
-The physical profile retains one complete actor entry-effect burst across the
-registered producer output and its FIFO. A uniform depth-one D2 mapping was
-smaller, but the depth-zero and depth-one D1 smoke graphs both failed to reach
-quiet decoder status within 200,000 cycles.
+The physical profile groups the two data, phi, and syndrome families into
+three homogeneous executors. Each executor stores actor state and mailbox
+frames in separate one-read/write RAMs, owns the mailbox metadata for its
+logical slots, and advances one resumable actor microstep at a time. Compact
+group routers carry addressed requests between executors; there are no
+per-coordinate request, admission, or egress channel arrays.
 """.
 
 -export([
@@ -31,7 +33,8 @@ profile() ->
     #{
         name => phi_noise_topology,
         channel_depth => 1,
-        actor_egress_depth => burst
+        actor_egress_depth => burst,
+        scheduler_groups => scheduler_groups()
     }.
 
 -doc "Returns the provisional homogeneous sharing groups for this topology.".

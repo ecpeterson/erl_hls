@@ -30,17 +30,17 @@ module phi_phenom_topology_tb;
     __phi_phenom_topology__Top_0_next dut (
         .clk(clk),
         .reset(reset),
-        .phi_phenom_topology__announcement_out_rdy(announcement_ready),
-        .phi_phenom_topology__announcement_out(announcement),
-        .phi_phenom_topology__announcement_out_vld(announcement_valid),
-        .phi_phenom_topology__decoder_events_out_rdy(decoder_events_ready),
-        .phi_phenom_topology__decoder_events_out(decoder_events),
-        .phi_phenom_topology__decoder_events_out_vld(decoder_events_valid),
-        .phi_phenom_topology__data_measurements_out_rdy(
+        ._announcement_out_rdy(announcement_ready),
+        ._announcement_out(announcement),
+        ._announcement_out_vld(announcement_valid),
+        ._decoder_events_out_rdy(decoder_events_ready),
+        ._decoder_events_out(decoder_events),
+        ._decoder_events_out_vld(decoder_events_valid),
+        ._data_measurements_out_rdy(
             data_measurements_ready
         ),
-        .phi_phenom_topology__data_measurements_out(data_measurements),
-        .phi_phenom_topology__data_measurements_out_vld(
+        ._data_measurements_out(data_measurements),
+        ._data_measurements_out_vld(
             data_measurements_valid
         )
     );

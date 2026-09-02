@@ -82,7 +82,8 @@ transpile(sublist, [Descriptor, List, Start, Count], State1) ->
 transpile(array_slice, [{phantom, type, OldDescriptor}, List, {static, integer, Start}, {static, integer, Length}], _State) ->
     {hls_type, hls_lists, list, [Subtype, _OldLength]} = OldDescriptor,
     NewDescriptor = list(Subtype, Length),
-    ["array_slice(", List, ", ", integer_to_list(Start - 1), ", zero!<", hls_type:print_type(NewDescriptor), ">() )"].
+    ["array_slice(", List, ", u32:", integer_to_list(Start - 1),
+        ", zero!<", hls_type:print_type(NewDescriptor), ">() )"].
 
 pack(List, list, [ElementType, _Length]) ->
     %% XLS casts array element zero to the most-significant bits, while the AXIS

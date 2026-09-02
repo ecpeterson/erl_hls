@@ -54,18 +54,22 @@ proc ActorRouter0 {
 
   next(state: ()) {
     let (tok, egress) = recv(join(), egress_in);
-    let _route_tok = match egress.port {
-      phenom_data_cell::OutputPort::NORTH =>
-        send(tok, actor_0_lane_0_out, egress.frame),
-      phenom_data_cell::OutputPort::EAST =>
-        send(tok, actor_0_lane_0_out, egress.frame),
-      phenom_data_cell::OutputPort::WEST =>
-        send(tok, actor_0_lane_0_out, egress.frame),
-      phenom_data_cell::OutputPort::SOUTH =>
-        send(tok, actor_0_lane_0_out, egress.frame),
-      phenom_data_cell::OutputPort::MEASUREMENT =>
-        send(tok, actor_0_lane_1_out, egress.frame),
+    let lane_0_selected = match egress.port {
+      phenom_data_cell::OutputPort::NORTH => true,
+      phenom_data_cell::OutputPort::EAST => true,
+      phenom_data_cell::OutputPort::WEST => true,
+      phenom_data_cell::OutputPort::SOUTH => true,
+      _ => false,
     };
+    let lane_1_selected = match egress.port {
+      phenom_data_cell::OutputPort::MEASUREMENT => true,
+      _ => false,
+    };
+    let lane_0_tok = send_if(
+      tok, actor_0_lane_0_out, lane_0_selected, egress.frame);
+    let lane_1_tok = send_if(
+      tok, actor_0_lane_1_out, lane_1_selected, egress.frame);
+    let _route_tok = join(lane_0_tok, lane_1_tok);
     state
   }
 }
@@ -88,22 +92,29 @@ proc ActorRouter1 {
 
   next(state: ()) {
     let (tok, egress) = recv(join(), egress_in);
-    let _route_tok = match egress.port {
-      phi_halo_cell::OutputPort::NORTH =>
-        send(tok, actor_1_lane_2_out, egress.frame),
-      phi_halo_cell::OutputPort::EAST =>
-        send(tok, actor_1_lane_2_out, egress.frame),
-      phi_halo_cell::OutputPort::WEST =>
-        send(tok, actor_1_lane_2_out, egress.frame),
-      phi_halo_cell::OutputPort::SOUTH =>
-        send(tok, actor_1_lane_2_out, egress.frame),
-      phi_halo_cell::OutputPort::SYNDROME =>
-        send(tok, actor_1_lane_3_out, egress.frame),
-      phi_halo_cell::OutputPort::CORRECTION =>
-        send(tok, actor_1_lane_4_out, egress.frame),
-      phi_halo_cell::OutputPort::STATUS =>
-        send(tok, actor_1_lane_4_out, egress.frame),
+    let lane_2_selected = match egress.port {
+      phi_halo_cell::OutputPort::NORTH => true,
+      phi_halo_cell::OutputPort::EAST => true,
+      phi_halo_cell::OutputPort::WEST => true,
+      phi_halo_cell::OutputPort::SOUTH => true,
+      _ => false,
     };
+    let lane_3_selected = match egress.port {
+      phi_halo_cell::OutputPort::SYNDROME => true,
+      _ => false,
+    };
+    let lane_4_selected = match egress.port {
+      phi_halo_cell::OutputPort::CORRECTION => true,
+      phi_halo_cell::OutputPort::STATUS => true,
+      _ => false,
+    };
+    let lane_2_tok = send_if(
+      tok, actor_1_lane_2_out, lane_2_selected, egress.frame);
+    let lane_3_tok = send_if(
+      tok, actor_1_lane_3_out, lane_3_selected, egress.frame);
+    let lane_4_tok = send_if(
+      tok, actor_1_lane_4_out, lane_4_selected, egress.frame);
+    let _route_tok = join(join(lane_2_tok, lane_3_tok), lane_4_tok);
     state
   }
 }
@@ -126,22 +137,28 @@ proc ActorRouter2 {
 
   next(state: ()) {
     let (tok, egress) = recv(join(), egress_in);
-    let _route_tok = match egress.port {
-      phenom_syndrome_cell::OutputPort::NORTH =>
-        send(tok, actor_2_lane_5_out, egress.frame),
-      phenom_syndrome_cell::OutputPort::EAST =>
-        send(tok, actor_2_lane_5_out, egress.frame),
-      phenom_syndrome_cell::OutputPort::WEST =>
-        send(tok, actor_2_lane_5_out, egress.frame),
-      phenom_syndrome_cell::OutputPort::SOUTH =>
-        send(tok, actor_2_lane_5_out, egress.frame),
-      phenom_syndrome_cell::OutputPort::PHI =>
-        {
-        let lane_6_tok = send(tok, actor_2_lane_6_out, egress.frame);
-        let lane_7_tok = send(tok, actor_2_lane_7_out, egress.frame);
-        join(lane_6_tok, lane_7_tok)
-      },
+    let lane_5_selected = match egress.port {
+      phenom_syndrome_cell::OutputPort::NORTH => true,
+      phenom_syndrome_cell::OutputPort::EAST => true,
+      phenom_syndrome_cell::OutputPort::WEST => true,
+      phenom_syndrome_cell::OutputPort::SOUTH => true,
+      _ => false,
     };
+    let lane_6_selected = match egress.port {
+      phenom_syndrome_cell::OutputPort::PHI => true,
+      _ => false,
+    };
+    let lane_7_selected = match egress.port {
+      phenom_syndrome_cell::OutputPort::PHI => true,
+      _ => false,
+    };
+    let lane_5_tok = send_if(
+      tok, actor_2_lane_5_out, lane_5_selected, egress.frame);
+    let lane_6_tok = send_if(
+      tok, actor_2_lane_6_out, lane_6_selected, egress.frame);
+    let lane_7_tok = send_if(
+      tok, actor_2_lane_7_out, lane_7_selected, egress.frame);
+    let _route_tok = join(join(lane_5_tok, lane_6_tok), lane_7_tok);
     state
   }
 }
