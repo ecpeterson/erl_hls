@@ -604,28 +604,44 @@ reproduces the full deterministic closeout witness: step 21, 84 corrections
 split 45 X and 39 Z, and the same six nonzero bits in the final 18-qubit Pauli
 measurement.
 
-| time-multiplexed d=3 implementation | estimated logic cells | flip-flops | LUT1–LUT6 | `RAM32M` | `DSP48E1` |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| raw SystemVerilog, including routed boundary | 2,063 | 708 | 2,358 | 148 | 0 |
-| handwritten DSLX through XLS, decoder core only | 9,065 | 4,525 | 9,495 | 0 | 1 |
+| time-multiplexed d=3 implementation | estimated logic cells | flip-flops | LUT1–LUT6 | `RAM32M` | `RAMB18E1` | `DSP48E1` |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| raw SystemVerilog, including routed boundary | 2,063 | 708 | 2,358 | 148 | 0 | 0 |
+| register-array DSLX core through XLS | 9,065 | 4,525 | 9,495 | 0 | 0 | 1 |
+| one-RAM DSLX core through XLS | 1,248 | 890 | 1,755 | 0 | 1 | 1 |
 
 The matched trajectory and shared schedule remove actor replication as an
-explanation for this remaining 4.4× logic-cell gap. State storage is the
-obvious difference: Yosys infers distributed RAM for the SystemVerilog arrays,
-whereas XLS lowers the arrays inside proc state to individual registers and
-wide dynamic-update muxes. The DSLX core therefore spends more flip-flops than
-the complete raw boundary and receives no `RAM32M` primitives. The lone DSP
-appears only in the whole-core XLS map, presumably for an address or
-constant-multiply choice absent from the isolated divider. A useful next
-compiler or backend experiment is an explicit bounded-memory representation;
-tuning the field datapath alone cannot recover this difference.
+explanation for the register-array core's remaining 4.4× logic-cell gap.
+`phi_sequential_bram_core.x` tests the storage hypothesis directly. It lays out
+each spatial index as ten 32-bit words, boots all 180 used words explicitly,
+and accesses them through XLS's fixed-latency 1RW channel contract. Codegen
+replaces those channels with an external RAM port; the small wrapper infers one
+synchronous Xilinx block RAM. The interpreter model and generated-Verilog
+regression both reproduce the exact step, correction counts, and final Pauli
+mask.
 
-The DSLX core needs 2,844 clocks per decoder step: 2,772 for two Jacobi rounds
-and 72 for the data, syndrome, compare, and apply scans. Its fixed witness
-therefore reaches the step-21 summary after 62,568 engine clocks. The raw
-boundary bench takes 69,722 clocks because it also initializes state, emits and
-backpressures application events, and accepts each correction through the host
-command path.
+Moving state behind that port removes 7,817 estimated logic cells and 3,635
+flip-flops from the XLS row. The BRAM core is smaller than the raw full-boundary
+row in ordinary logic, though the scopes differ and one `RAMB18E1` is not free.
+The remaining DSP is shared arithmetic or addressing rather than replicated
+actor state. This result makes state storage, rather than the narrow field
+datapath or an intrinsic XLS penalty, the dominant cause of the prior gap.
+
+The register-array DSLX core needs 2,844 clocks per decoder step: 2,772 for two
+Jacobi rounds and 72 for the data, syndrome, compare, and apply scans. Its fixed
+witness therefore reaches the step-21 summary after 62,568 engine clocks. The
+one-RAM core takes 163,993 clocks after reset. It serializes the ten-word actor
+records through one read/write port, and RAM latency requires an initiation
+interval of two. The raw boundary bench takes 69,722 clocks while also
+initializing state, emitting and backpressuring application events, and
+accepting each correction through the host command path.
+
+The one-RAM controller is also a concrete actor-deduplication witness: one
+implementation visits many stored actor states. A general scheduler would
+still need bounded ready queues, per-instance mailbox storage, fair service,
+and lifecycle generations; this globally phased decoder does not supply those
+ERTS semantics. It does establish a useful implementation target for actor
+families whose ordering permits temporal sharing.
 
 Replicating the SystemVerilog lane gives the direct area/latency curve below.
 The cycle estimate covers both Jacobi rounds across 18 phi cells, including
@@ -663,6 +679,7 @@ tools/run_phi_relax_bank.sh
 tools/run_phi_relax_xls.sh
 tools/synth_phi_relax_sweep.sh
 tools/run_phi_sequential_xls.sh
+tools/run_phi_sequential_bram_xls.sh
 ```
 
 `tools/run_phi_memory_raw_demo.sh` runs the full ERTS/VPI witness comparison on
