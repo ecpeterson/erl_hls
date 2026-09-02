@@ -47,9 +47,17 @@ erl \
             distance := DemoDistance,
             noise_rate := DemoNoiseRate
         } = phi_memory_demo:fixture(),
+        PhiNoiseDistance = case os:getenv("ERL_HLS_PHI_DISTANCE") of
+            false -> DemoDistance;
+            DistanceText -> list_to_integer(DistanceText)
+        end,
+        PhiNoiseRate = case os:getenv("ERL_HLS_PHI_NOISE_RATE") of
+            false -> DemoNoiseRate;
+            RateText -> list_to_integer(RateText)
+        end,
         PhiNoiseTopology = phi_noise_topology_dslx:to_dslx(
-            DemoDistance,
-            DemoNoiseRate
+            PhiNoiseDistance,
+            PhiNoiseRate
         ),
         %% The routine D1 closeout fixture disables random injection so empty
         %% decoder planes let the ERTS witness terminate deterministically.
@@ -118,6 +126,10 @@ erl \
     '
 
 cp "$project_root/priv/xls/lib/axis.x" "$stage/axis.x"
+cp "$project_root/src/examples/phi_decoder/rtl/phi_relax_lane.x" \
+    "$stage/phi_relax_lane.x"
+cp "$project_root/src/examples/phi_decoder/rtl/phi_sequential_core.x" \
+    "$stage/phi_sequential_core.x"
 cp "$project_root/src/examples/regsvc/regsvc_core_adapter.v" \
     "$stage/regsvc_core_adapter.v"
 cp "$project_root/src/examples/regsvc/regsvc_debug_top.v" \
