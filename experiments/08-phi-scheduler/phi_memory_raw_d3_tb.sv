@@ -1,5 +1,9 @@
 `timescale 1ns/1ps
 
+`ifndef PHI_MEMORY_DUT
+`define PHI_MEMORY_DUT phi_memory_raw_d3
+`endif
+
 module phi_memory_raw_d3_tb;
     reg clk = 1'b0;
     reg resetn = 1'b0;
@@ -32,7 +36,7 @@ module phi_memory_raw_d3_tb;
     // Compact regression witness over every correction field in emission order.
     reg [63:0] correction_hash = 64'hcbf29ce484222325;
 
-    phi_memory_raw_d3 dut (
+    `PHI_MEMORY_DUT dut (
         .aclk(clk),
         .aresetn(resetn),
         .s_axis_tdata(s_data),

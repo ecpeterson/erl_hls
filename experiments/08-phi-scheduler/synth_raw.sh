@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-project_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+experiment_root=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+project_root=$(cd "$experiment_root/../.." && pwd)
 stage=${1:-"$project_root/_build/phi_memory_raw_synth"}
 bundled_yosys="$project_root/experiments/07-openxc7/.apio/packages/oss-cad-suite/bin/yosys"
 
@@ -14,7 +15,7 @@ else
 fi
 
 mkdir -p "$stage"
-rtl_dir="$project_root/src/examples/phi_decoder/rtl"
+rtl_dir="$experiment_root"
 log_file="$stage/phi_memory_raw_d3-yosys.log"
 
 (

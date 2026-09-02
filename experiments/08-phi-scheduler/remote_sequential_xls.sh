@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-stage=${1:?usage: remote_phi_sequential_xls.sh STAGE XLS_ROOT}
-xls_root=${2:?usage: remote_phi_sequential_xls.sh STAGE XLS_ROOT}
+stage=${1:?usage: remote_sequential_xls.sh STAGE XLS_ROOT}
+xls_root=${2:?usage: remote_sequential_xls.sh STAGE XLS_ROOT}
 stdlib="$xls_root/xls/dslx/stdlib"
 
 cd "$stage"
