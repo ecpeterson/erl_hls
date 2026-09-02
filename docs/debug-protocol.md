@@ -101,9 +101,11 @@ The Icarus VPI bridge exposes the application and debug streams as independent
 named FIFO pairs: `app_tx`/`app_rx` and `debug_tx`/`debug_rx`. The
 `hls_debug` gen_server owns the debug pair, correlates replies by transaction
 identifier, and decodes `DEBUG_COUNTERS` into a map with named counter fields.
-Its public query API consists of `get_counters/1` and `get_trace/1`.
-`get_trace/1` decodes `DEBUG_TRACE` into a map that preserves the raw payload
-and numeric event-kind code alongside named event fields. Generated private-
+Its public query API consists of `get_counters/1,2` and `get_trace/1,2`; the
+two-argument forms let a caller select the `gen_server:call` timeout for slow
+simulation transports. `get_trace/1,2` decodes `DEBUG_TRACE` into a map that
+preserves the raw payload and numeric event-kind code alongside named event
+fields. Generated private-
 state packers and unpackers remain available as type-serialization support;
 they are not exercised by the live service recurrence or exposed through the
 version 4 debug protocol.

@@ -367,6 +367,7 @@ iverilog \
     regsvc_pair_tb.sv \
     regsvc_pair_fixture.sv \
     regsvc_debug_top.v \
+    hls_debug_monitor.v \
     hls_fabric_ingress.v \
     hls_fabric_egress.v \
     hls_debug_tap.v \
@@ -385,7 +386,15 @@ iverilog \
     -s phi_memory_bridge_tb \
     -o phi_memory_bridge.vvp \
     phi_memory_bridge_tb.sv \
-    phi_memory_gateway.v
+    phi_memory_debug_top.v \
+    phi_memory_gateway.v \
+    hls_fabric_ingress.v \
+    hls_fabric_egress.v \
+    hls_debug_monitor.v \
+    hls_debug_tap.v \
+    hls_trace_store.v \
+    hls_debug_observer.v \
+    hls_debug_server.v
 
 iverilog \
     -g2012 \
@@ -394,6 +403,7 @@ iverilog \
     regsvc_bridge_tb.sv \
     regsvc_pair_fixture.sv \
     regsvc_debug_top.v \
+    hls_debug_monitor.v \
     hls_fabric_ingress.v \
     hls_fabric_egress.v \
     hls_debug_tap.v \
@@ -482,17 +492,23 @@ mkdir -p "$phi_sim_dir"
 rm -f \
     "$phi_sim_dir/app_tx" \
     "$phi_sim_dir/app_rx" \
+    "$phi_sim_dir/debug_tx" \
+    "$phi_sim_dir/debug_rx" \
     "$phi_sim_dir/vvp.log"
 
 ERL_HLS_SIM_DIR="$phi_sim_dir" \
 ERL_HLS_SIM_TOP=phi_memory_bridge_tb \
-ERL_HLS_SIM_APP_ONLY=1 \
     vvp -M "$stage" -m xls_sim_bridge phi_memory_bridge.vvp \
     >"$phi_sim_dir/vvp.log" 2>&1 &
 sim_pid=$!
 
 for _attempt in $(seq 1 100); do
-    if [[ -p "$phi_sim_dir/app_tx" && -p "$phi_sim_dir/app_rx" ]]; then
+    if [[ \
+        -p "$phi_sim_dir/app_tx" && \
+        -p "$phi_sim_dir/app_rx" && \
+        -p "$phi_sim_dir/debug_tx" && \
+        -p "$phi_sim_dir/debug_rx" \
+    ]]; then
         break
     fi
     if ! kill -0 "$sim_pid" 2>/dev/null; then
@@ -502,7 +518,12 @@ for _attempt in $(seq 1 100); do
     sleep 0.05
 done
 
-if [[ ! -p "$phi_sim_dir/app_tx" || ! -p "$phi_sim_dir/app_rx" ]]; then
+if [[ \
+    ! -p "$phi_sim_dir/app_tx" || \
+    ! -p "$phi_sim_dir/app_rx" || \
+    ! -p "$phi_sim_dir/debug_tx" || \
+    ! -p "$phi_sim_dir/debug_rx" \
+]]; then
     cat "$phi_sim_dir/vvp.log"
     echo "Timed out waiting for phi simulator transport FIFOs" >&2
     exit 1

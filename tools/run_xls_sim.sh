@@ -30,6 +30,7 @@ rsync -a -e "ssh -o BatchMode=yes" \
     "$local_stage/axis.x" \
     "$local_stage/regsvc_core_adapter.v" \
     "$local_stage/regsvc_debug_top.v" \
+    "$local_stage/phi_memory_debug_top.v" \
     "$local_stage/hls_fabric_router.x" \
     "$local_stage/hls_spatial_router.x" \
     "$local_stage/hls_debug_types.x" \
@@ -37,6 +38,7 @@ rsync -a -e "ssh -o BatchMode=yes" \
     "$local_stage/hls_debug_observer.x" \
     "$local_stage/hls_debug_server.x" \
     "$local_stage/hls_debug_tap.v" \
+    "$local_stage/hls_debug_monitor.v" \
     "$local_stage/hls_debug_tap_tb.sv" \
     "$local_stage/hls_trace_store.v" \
     "$local_stage/hls_trace_store_tb.sv" \
@@ -71,6 +73,11 @@ rsync -a -e "ssh -o BatchMode=yes" \
     --include=phenom_data_cell.v \
     --include=phenom_syndrome_cell.v \
     --include=phi_phenom_topology.v \
+    --include=phi_memory_gateway.v \
+    --include=hls_debug_observer.v \
+    --include=hls_debug_server.v \
+    --include=hls_fabric_ingress.v \
+    --include=hls_fabric_egress.v \
     --exclude='*' \
     "$remote_host:$remote_stage/" \
     "$local_stage/"

@@ -122,6 +122,8 @@ cp "$project_root/src/examples/regsvc/regsvc_core_adapter.v" \
     "$stage/regsvc_core_adapter.v"
 cp "$project_root/src/examples/regsvc/regsvc_debug_top.v" \
     "$stage/regsvc_debug_top.v"
+cp "$project_root/src/examples/phi_decoder/phi_memory_debug_top.v" \
+    "$stage/phi_memory_debug_top.v"
 cp "$project_root/priv/xls/fabric/hls_fabric_router.x" \
     "$stage/hls_fabric_router.x"
 cp "$project_root/priv/xls/fabric/hls_spatial_router.x" \
@@ -136,6 +138,8 @@ cp "$project_root/priv/xls/debug/hls_debug_server.x" \
     "$stage/hls_debug_server.x"
 cp "$project_root/priv/rtl/debug/hls_debug_tap.v" \
     "$stage/hls_debug_tap.v"
+cp "$project_root/priv/rtl/debug/hls_debug_monitor.v" \
+    "$stage/hls_debug_monitor.v"
 cp "$project_root/priv/rtl/debug/hls_trace_store.v" \
     "$stage/hls_trace_store.v"
 cp "$project_root/test/rtl/debug/hls_debug_tap_tb.sv" \
