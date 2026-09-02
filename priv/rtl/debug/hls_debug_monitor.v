@@ -90,18 +90,18 @@ module hls_debug_monitor (
     __hls_debug_observer__Observer_0_next debug_observer (
         .clk(aclk),
         .reset(!aresetn),
-        .hls_debug_observer__observation_in(debug_observation_data),
-        .hls_debug_observer__observation_in_vld(debug_observation_valid),
-        .hls_debug_observer__observation_in_rdy(debug_observation_ready),
-        .hls_debug_observer__snapshot_request_in(snapshot_request),
-        .hls_debug_observer__snapshot_request_in_vld(snapshot_request_valid),
-        .hls_debug_observer__snapshot_request_in_rdy(snapshot_request_ready),
-        .hls_debug_observer__snapshot_out(snapshot),
-        .hls_debug_observer__snapshot_out_vld(snapshot_valid),
-        .hls_debug_observer__snapshot_out_rdy(snapshot_ready),
-        .hls_debug_observer__trace_write_out(trace_write),
-        .hls_debug_observer__trace_write_out_vld(trace_write_valid),
-        .hls_debug_observer__trace_write_out_rdy(trace_write_ready)
+        ._observation_in(debug_observation_data),
+        ._observation_in_vld(debug_observation_valid),
+        ._observation_in_rdy(debug_observation_ready),
+        ._snapshot_request_in(snapshot_request),
+        ._snapshot_request_in_vld(snapshot_request_valid),
+        ._snapshot_request_in_rdy(snapshot_request_ready),
+        ._snapshot_out(snapshot),
+        ._snapshot_out_vld(snapshot_valid),
+        ._snapshot_out_rdy(snapshot_ready),
+        ._trace_write_out(trace_write),
+        ._trace_write_out_vld(trace_write_valid),
+        ._trace_write_out_rdy(trace_write_ready)
     );
 
     hls_trace_store #(
@@ -125,30 +125,30 @@ module hls_debug_monitor (
     __hls_debug_server__DebugServer_0_next debug_server (
         .clk(aclk),
         .reset(!aresetn),
-        .hls_debug_server__request_in(debug_request),
-        .hls_debug_server__request_in_vld(s_dbg_tvalid),
-        .hls_debug_server__request_in_rdy(s_dbg_tready),
-        .hls_debug_server__response_out(debug_response),
-        .hls_debug_server__response_out_vld(m_dbg_tvalid),
-        .hls_debug_server__response_out_rdy(m_dbg_tready),
-        .hls_debug_server__snapshot_request_out(snapshot_request),
-        .hls_debug_server__snapshot_request_out_vld(snapshot_request_valid),
-        .hls_debug_server__snapshot_request_out_rdy(snapshot_request_ready),
-        .hls_debug_server__snapshot_in(snapshot),
-        .hls_debug_server__snapshot_in_vld(snapshot_valid),
-        .hls_debug_server__snapshot_in_rdy(snapshot_ready),
-        .hls_debug_server__trace_read_request_out(trace_read_request),
-        .hls_debug_server__trace_read_request_out_vld(
+        ._request_in(debug_request),
+        ._request_in_vld(s_dbg_tvalid),
+        ._request_in_rdy(s_dbg_tready),
+        ._response_out(debug_response),
+        ._response_out_vld(m_dbg_tvalid),
+        ._response_out_rdy(m_dbg_tready),
+        ._snapshot_request_out(snapshot_request),
+        ._snapshot_request_out_vld(snapshot_request_valid),
+        ._snapshot_request_out_rdy(snapshot_request_ready),
+        ._snapshot_in(snapshot),
+        ._snapshot_in_vld(snapshot_valid),
+        ._snapshot_in_rdy(snapshot_ready),
+        ._trace_read_request_out(trace_read_request),
+        ._trace_read_request_out_vld(
             trace_read_request_valid
         ),
-        .hls_debug_server__trace_read_request_out_rdy(
+        ._trace_read_request_out_rdy(
             trace_read_request_ready
         ),
-        .hls_debug_server__trace_read_response_in(trace_read_response),
-        .hls_debug_server__trace_read_response_in_vld(
+        ._trace_read_response_in(trace_read_response),
+        ._trace_read_response_in_vld(
             trace_read_response_valid
         ),
-        .hls_debug_server__trace_read_response_in_rdy(
+        ._trace_read_response_in_rdy(
             trace_read_response_ready
         )
     );

@@ -44,6 +44,8 @@ typedef struct {
     int s_valid;
     int s_last;
     int s_ready_sample;
+    uint32_t m_data_sample;
+    int m_valid_sample;
     int m_ready;
     /* Remaining payload words after the inner four-byte frame header. */
     unsigned input_payload_words;
@@ -52,7 +54,7 @@ typedef struct {
     /* Diagnostic counters used only to make VPI logs easier to correlate. */
     unsigned input_beat_number;
     unsigned output_beat_number;
-    /* Suppress reset-time output until the first complete request is sent. */
+    /* Suppress reset-time output until the host begins its first request. */
     int output_armed;
 } axis_endpoint_t;
 
@@ -215,6 +217,8 @@ static void reset_endpoint(axis_endpoint_t *endpoint) {
     endpoint->s_data = 0;
     endpoint->s_valid = 0;
     endpoint->s_last = 0;
+    endpoint->m_data_sample = 0;
+    endpoint->m_valid_sample = 0;
     endpoint->m_ready = 1;
     endpoint->input_payload_words = 0;
     endpoint->input_phase = INPUT_ROUTE_HEADER;
@@ -228,25 +232,24 @@ static void step_endpoint(axis_endpoint_t *endpoint) {
     if (endpoint->s_valid && endpoint->s_ready_sample) {
         vpi_printf("xls_sim_bridge[%s]: accepted input beat %u\n",
                    endpoint->name, endpoint->input_beat_number);
-        if (endpoint->s_last)
-            endpoint->output_armed = 1;
+        endpoint->output_armed = 1;
         endpoint->s_valid = 0;
         endpoint->s_last = 0;
     }
 
-    if (get_bit(endpoint->h_m_valid) && endpoint->m_ready) {
+    if (endpoint->m_valid_sample && endpoint->m_ready) {
         if (endpoint->output_armed) {
             vpi_printf("xls_sim_bridge[%s]: output beat %u data=%08x\n",
                        endpoint->name, ++endpoint->output_beat_number,
-                       get_u32(endpoint->h_m_data));
+                       endpoint->m_data_sample);
             if (ring_free(&endpoint->output_bytes) >= 4)
-                ring_push_word(&endpoint->output_bytes, get_u32(endpoint->h_m_data));
+                ring_push_word(&endpoint->output_bytes, endpoint->m_data_sample);
             else
                 vpi_printf("xls_sim_bridge[%s]: internal output buffer overflow\n",
                            endpoint->name);
         } else {
             vpi_printf("xls_sim_bridge[%s]: discarded pre-request output %08x\n",
-                       endpoint->name, get_u32(endpoint->h_m_data));
+                       endpoint->name, endpoint->m_data_sample);
         }
     }
 
@@ -285,10 +288,16 @@ static PLI_INT32 cb_readwrite(p_cb_data cb) {
 static PLI_INT32 cb_readonly(p_cb_data cb) {
     (void)cb;
     if (!get_bit(h_clk)) {
-        if (app_endpoint.enabled)
+        if (app_endpoint.enabled) {
             app_endpoint.s_ready_sample = get_bit(app_endpoint.h_s_ready);
-        if (debug_endpoint.enabled)
+            app_endpoint.m_data_sample = get_u32(app_endpoint.h_m_data);
+            app_endpoint.m_valid_sample = get_bit(app_endpoint.h_m_valid);
+        }
+        if (debug_endpoint.enabled) {
             debug_endpoint.s_ready_sample = get_bit(debug_endpoint.h_s_ready);
+            debug_endpoint.m_data_sample = get_u32(debug_endpoint.h_m_data);
+            debug_endpoint.m_valid_sample = get_bit(debug_endpoint.h_m_valid);
+        }
         return 0;
     }
 

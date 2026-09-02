@@ -376,10 +376,17 @@ generated_topology_has_expected_physical_shape_test() ->
     )),
     ?assertEqual(nomatch, binary:match(Generated, <<"may_reorder">>)),
     ?assertNotEqual(nomatch, binary:match(Generated,
-        <<"phenom_data_cell::OutputPort::NORTH =>\n"
-          "        send(tok, actor_0_lane_0_out, egress.frame),\n"
-          "      phenom_data_cell::OutputPort::EAST =>\n"
-          "        send(tok, actor_0_lane_0_out, egress.frame)">>
+        <<"phenom_data_cell::OutputPort::NORTH => true,\n"
+          "      phenom_data_cell::OutputPort::EAST => true,\n"
+          "      phenom_data_cell::OutputPort::WEST => true,\n"
+          "      phenom_data_cell::OutputPort::SOUTH => true,\n"
+          "      _ => false,\n"
+          "    };\n"
+          "    let lane_1_selected = match egress.port">>
+    )),
+    ?assertNotEqual(nomatch, binary:match(Generated,
+        <<"let lane_0_tok = send_if(\n"
+          "      tok, actor_0_lane_0_out, lane_0_selected, egress.frame);">>
     )),
     ?assertNotEqual(
         nomatch,

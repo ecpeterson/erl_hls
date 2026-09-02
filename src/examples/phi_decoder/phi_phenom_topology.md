@@ -502,6 +502,104 @@ and maps to 1,723 estimated XC7 logic cells, 1,293 flip-flops, 2,319 LUTs, one
 `RAMB18E1`, and one `DSP48E1`. The experiment README records the scope,
 comparison tables, latency tradeoffs, and reproduction commands.
 
+The generated phi/noise deployment now consumes that physical plan. The two
+data families share one homogeneous executor, as do the two syndrome families
+and the two phi families. Each d=3 group therefore has 18 logical slots.
+Callback state and mailbox frames use separate one-read/write RAM interfaces
+per group. The executor keeps only bounded mailbox metadata—occupancy, order,
+and postponement bits—in its own state. The target wrapper therefore supplies
+six instances of the small `hls_1rw_ram` inference wrapper: one actor-state RAM
+and one mailbox-frame RAM for each homogeneous group. XLS sees those RAM
+operations but not 54 separate actor or mailbox-frame register banks.
+
+```mermaid
+flowchart LR
+    Host["spatial control ingress"] --> Control["ControlDispatcher"]
+
+    subgraph Groups["one instance per homogeneous group"]
+        Inputs["bounded producer slots<br/>scheduler / control / route credit"]
+        Shared["SharedService<br/>mailbox owner + actor scheduler"]
+        Router["group router<br/>slot + translated destination"]
+        StateRAM["actor-state RAM"]
+        MailboxRAM["mailbox-frame RAM"]
+
+        Inputs --> Shared
+        Shared -->|"scheduled egress"| Router
+        Router -->|"credit after bounded acceptance"| Inputs
+        Shared <-->|"read / write"| StateRAM
+        Shared <-->|"read / write"| MailboxRAM
+    end
+
+    Control --> Inputs
+    Router -->|"addressed request"| Other["destination group's<br/>producer slot"]
+    Router --> ExternalQ["one bounded queue<br/>per external output"]
+    ExternalQ --> External["gateway / test output"]
+```
+
+Each producer has one holding slot before mailbox admission, so a full target
+does not stop the manager from capturing unrelated traffic. The manager
+alternates admission work with round-robin actor visits, preserving bounded
+mailbox order and allowing postponed messages and phase-entry effects to be
+retried. A blocked ordered effect keeps its effect index and yields the
+executor; an accepted effect advances that index and is never rolled back or
+resent. Only one egress is outstanding per group. Its router returns credit
+after the selected destination request slot or external queue accepts the
+complete frame. The external queues are important: one stalled observation
+port does not prevent another group from completing an otherwise independent
+route until that port's own bounded queue fills.
+
+The scheduler does not tentatively acquire several downstream resources, so
+the symmetric "reserve, collide, release, retry" livelock does not arise inside
+this implementation. This is not a general network progress proof. A protocol
+can still deadlock after committing a resource acquisition, and future
+generated components which truly require several grants must use one
+deterministic grant point, a global acquisition order (potentially derived
+from logical address), or a separately proven escape class rather than
+symmetric rollback.
+
+#### Shared mailbox layout
+
+Each homogeneous d=3 group owns one logical array of 18 actor mailboxes. The
+slot order is X-major within each family: `slot = family_base + 3*x + y`.
+The first family in a group has base zero and the second has base nine:
+
+| group | slots 0–8 | slots 9–17 |
+| --- | --- | --- |
+| data | `data_even` | `data_odd` |
+| phi | `phi_x` | `phi_z` |
+| syndrome | `syndrome_x` | `syndrome_z` |
+
+Every actor has five physical frame positions. Position `i` for actor slot `s`
+is mailbox-RAM address `5*s + i`, so the 18 logical mailboxes occupy addresses
+0 through 89 of one 128-by-128-bit inferred RAM. A frame word stores
+`payload_words`, transaction ID, flags, and operation in bits 0–31, followed
+by the 96-bit actor payload in bits 32–127. The mailbox RAM itself is not reset:
+the reset scheduler metadata says that all positions are free, so stale frame
+bits cannot be selected.
+
+Queue order is deliberately not represented by moving those 128-bit words.
+For each actor the scheduler keeps an 8-bit occupancy count, five 8-bit
+physical-position indices in logical arrival order, and five postponement
+bits. Admission chooses an unused physical position and appends its index.
+Consumption compacts only the small index row; postponement marks the physical
+position until the actor reaches a phase boundary. These metadata cost 954
+register bits per group and remain local to the scheduler in this first
+implementation.
+
+The frame RAM is distinct from the actor-state RAM. State address `s` contains
+one packed machine word for actor slot `s`: phase, previous phase, callback
+record, pending-entry flag, entry-effect index, and failure flag. The words are
+442 bits for data and syndrome actors and 554 bits for phi actors. Eighteen
+words are live in each 32-entry inferred state RAM. Unlike the mailbox RAM,
+the scheduler initializes those live words during its boot sweep.
+
+There are also small register-resident queues around this storage. Each
+incoming producer has one `ScheduledRequest` holding slot (three producers for
+the data and phi groups, four for syndrome), and each group permits one
+outstanding scheduled egress. These prevent a full logical mailbox or a
+stalled route from occupying the shared RAM transaction machinery; they are
+not additional per-actor mailboxes.
+
 ### Distance-three RTL simulation
 
 `tools/run_phi_noise_topology_sim.sh` is the opt-in full-graph regression. It
@@ -577,3 +675,54 @@ Reusing that compiled Icarus image, the later full-device witness comparison
 completed in 5 minutes 42 seconds. Wrapping the gateway and then retrieving
 live counters and a full 64-event trace increased the same comparison to 8
 minutes 26 seconds. This is Icarus wall time, not a hardware latency estimate.
+
+The homogeneous scheduler and shared mailbox implementation passes the same
+nondegenerate topology bench in 40,159 post-reset clocks. The last replicated
+implementation of this bench finished in approximately 1,229 clocks, so this
+version trades about 33 times as many hardware clocks for its much smaller
+generated graph. On the same UTM and the upgraded XLS build, conversion took
+22 seconds and 232 MiB, optimization 32 seconds and
+151 MiB, code generation 11 seconds and 71 MiB, and Icarus compilation 4
+seconds and 74 MiB. The generated Verilog is 764 KiB and 13,735 lines, versus
+8.6 MiB and 150,146 lines for the replicated deployment above. Icarus took 11
+minutes 46 seconds to run the serialized design. These measurements expose
+the intended spatial/temporal trade: compilation and generated structure
+shrink sharply while a software event simulator must execute more hardware
+clocks.
+
+Most of that clock increase is structural rather than arithmetic latency. A
+logical delivery now crosses a producer holding slot, a mailbox-RAM write, a
+round-robin actor visit, parallel state/mailbox reads, one resumable actor
+microstep, a state-RAM write, and an egress-credit round trip. One executor
+per group serializes those visits across 18 actors, while the control ingress
+also scans addressed family coordinates. The replicated graph lets all 54
+mailboxes and actor machines make progress concurrently.
+
+The handwritten global-schedule baseline is not a like-for-like clock
+comparison. Its complete 84-correction closeout takes 69,722 clocks, while the
+one-BRAM DSLX worker takes 175,408 clocks; the topology bench above stops after
+its step-two/cutoff/query/update witness. Both experimental workers exploit a
+global round schedule, avoid actor mailboxes and per-message dispatch, and can
+therefore do substantially more useful work per serialized control transition.
+
+An out-of-context XC7 map of the generated scheduler core reports 36,770
+estimated logic cells, 14,430 flip-flops, 43,620 LUTs, and 96 `DSP48E1`s. This
+map leaves the six RAM response ports at the core boundary, so it excludes the
+separately instantiated RAM macros and is not a complete part-fit result. The
+last replicated D3 core above reported 135,199 logic cells and 111,416
+flip-flops, although that older measurement predates some measurement-path
+additions. Of the scheduler core's 96 DSPs, only eight appear in an isolated
+phi actor; the other 88 come from the current routers' full-width division,
+remainder, and linear-coordinate arithmetic. Narrow bounded coordinate
+arithmetic is therefore a high-value follow-up without changing actor or
+mailbox semantics.
+
+The quadtree broadcast used by `qec_runtime` remains a good model for a future
+spatially partitioned control ingress: fixed, even region splits need only
+bounded comparisons and fanout, not division. It does not by itself remove the
+current egress cost, which comes from recovering `(x, y)` with `/ HEIGHT` and
+`% HEIGHT` and then applying wrapped translations. Carrying a narrow named
+family/coordinate address through the scheduled request, and flattening it
+only at a destination RAM, should remove that arithmetic. A quadtree can then
+distribute rectangles among several spatial scheduler partitions without
+reintroducing one host message per actor.

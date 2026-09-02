@@ -29,6 +29,11 @@ lower(Filename, Forms, PhaseNames) ->
     Capacity = maps:get(capacity, Prepared),
     DataName = maps:get(data_name, Prepared),
     Records = maps:get(records, Prepared),
+    StateSummary = state_summary(Records, DataName),
+    DataWidth = lists:sum([
+        hls_type:width(maps:get(type, Field))
+        || Field <- maps:get(fields, StateSummary)
+    ]),
 
     EnumAtoms = enum_atoms(PhaseNames),
     Init = lower_init(maps:get(init_clause, Prepared), DataName, EnumAtoms),
@@ -60,6 +65,7 @@ lower(Filename, Forms, PhaseNames) ->
         output_names => OutputNames,
         max_entry_effects => max_entry_effects(maps:get(entries, Prepared)),
         data_name => DataName,
+        data_width => DataWidth,
         record_declarations => RecordDeclarations,
         init => Init,
         entries => Entries,
@@ -122,12 +128,16 @@ interface_from_prepared(Prepared) ->
     Entries = maps:get(entries, Prepared),
     CastGroups = maps:get(cast_groups, Prepared),
     #{
-        version => 0,
+        version => 1,
         module => maps:get(module, Prepared),
         phases => maps:get(phases, Prepared),
         initial_phase => maps:get(initial_phase, Prepared),
         outputs => maps:get(output_names, Prepared),
         mailbox_capacity => maps:get(capacity, Prepared),
+        state => state_summary(
+            maps:get(records, Prepared),
+            maps:get(data_name, Prepared)
+        ),
         schemas => schema_summaries(
             maps:get(records, Prepared),
             maps:get(message_names, Prepared)
@@ -140,6 +150,18 @@ interface_from_prepared(Prepared) ->
         entry_effects => lists:append([
             interface_effects(Entry) || Entry <- Entries
         ])
+    }.
+
+state_summary(Records, Name) ->
+    [Record] = [
+        Candidate
+        || Candidate = {attribute, _Line, record, {RecordName, _Fields}} <-
+               Records,
+           RecordName =:= Name
+    ],
+    #{
+        name => Name,
+        fields => record_fields(Record)
     }.
 
 initial_phase({clause, _Line, _Patterns, _Guards, Body}, PhaseNames) ->

@@ -18,8 +18,16 @@ The generated source contains one reusable node proc per family and nested
 follows the number of family rules rather than the number of family members.
 Each node has one credit-aware ingress which polls its incoming lanes directly,
 without a tree of buffered two-way muxes. Explicit startup values still
-produce one match arm per configured member, and XLS elaborates one actor and
-the registered lane holding slots and bounded mailbox queues per coordinate.
+produce one match arm per configured member.
+
+Families may either instantiate one actor service per coordinate or join a
+homogeneous scheduler group. A group replaces the per-coordinate services and
+mailboxes with shared ingress, execution, and egress machinery around one
+actor implementation. Actor-machine words and mailbox frames cross separate
+one-read/write RAM boundaries; the scheduler retains only bounded queue-order
+metadata. The current backend requires both scheduler storage bindings to be
+`block_ram`; a target wrapper must connect both generated RAM channel triplets
+to storage with the declared read and write-completion protocol.
 
 Each compact lane relation becomes a depth-zero direct channel array. The
 explicit depth supplies the pinned block stitcher's per-channel FIFO metadata
@@ -72,6 +80,12 @@ lower(Plan, Profile) ->
     ok = require_empty(actors, Plan),
     ok = require_empty(routes, Plan),
     Physical = validate_profile(Profile),
+    SchedulerPlan = hls_scheduler_plan:normalize(
+        Plan,
+        maps:get(scheduler_groups, Physical, #{})
+    ),
+    Schedulers = annotate_schedulers(maps:get(groups, SchedulerPlan)),
+    SchedulerBindings = scheduler_bindings(Schedulers),
     Families0 = require_families(maps:get(families, Plan, [])),
     [Width, Height] = require_common_shape(Families0),
     Families1 = annotate_families(
@@ -106,7 +120,11 @@ lower(Plan, Profile) ->
     Routes = annotate_routes(Relations, Lanes),
     Startup = annotate_startup(maps:get(startup, Plan), FamilyIndex),
     Families = [annotate_family_graph(
-        Family,
+        Family#{scheduler => maps:get(
+            maps:get(id, Family),
+            SchedulerBindings,
+            direct
+        )},
         Routes,
         Lanes,
         Startup,
@@ -117,6 +135,7 @@ lower(Plan, Profile) ->
     #{
         name => maps:get(name, Physical),
         depth => maps:get(channel_depth, Physical),
+        schedulers => Schedulers,
         families => Families,
         width => Width,
         height => Height,
@@ -126,6 +145,39 @@ lower(Plan, Profile) ->
         ingresses => Ingresses,
         externals => Externals
     }.
+
+annotate_schedulers(Groups) ->
+    [annotate_scheduler(Index, Group)
+        || {Index, Group} <- lists:enumerate(0, Groups)].
+
+annotate_scheduler(Index, Group = #{
+    state_storage := block_ram,
+    mailbox_storage := block_ram
+}) ->
+    Group#{
+        index => Index,
+        stem => ["scheduler_", integer_to_list(Index)],
+        module_name => identifier(maps:get(module, Group), scheduler_module)
+    };
+annotate_scheduler(_Index, #{
+    id := Id,
+    state_storage := State,
+    mailbox_storage := Mailbox
+}) ->
+    error({scheduler_storage, Id, State, Mailbox}).
+
+scheduler_bindings(Schedulers) ->
+    maps:from_list([
+        {Id, #{
+            group => maps:get(index, Scheduler),
+            stem => maps:get(stem, Scheduler),
+            base_slot => BaseSlot,
+            slot_count => maps:get(slot_count, Scheduler)
+        }}
+        || Scheduler <- Schedulers,
+           #{kind := family, id := Id, base_slot := BaseSlot} <-
+               maps:get(members, Scheduler)
+    ]).
 
 require_empty(Field, Plan) ->
     case maps:get(Field, Plan, '$missing') of
@@ -657,7 +709,7 @@ annotate_startup_item(
         Effects -> error({startup_target_has_initial_effects,
             Target, Module, Effects})
     end,
-    Packed = pack_startup_message(Target, Module, Message),
+    Packed = pack_startup_message(Target, Module, Interface, Message),
     Packed#{
         target => Target,
         family => FamilyId,
@@ -666,10 +718,11 @@ annotate_startup_item(
 annotate_startup_item(Item, _FamilyIndex) ->
     error({unsupported_family_startup, Item}).
 
-pack_startup_message(Target, Module, Message)
+pack_startup_message(Target, Module, Interface, Message)
         when is_tuple(Message), tuple_size(Message) > 0,
              is_atom(element(1, Message)) ->
     TagName = element(1, Message),
+    Schema = hls_actor_interface:schema(Interface, TagName),
     {Tag, Payload} = case {Module:pack_tag(TagName), Module:pack(Message)} of
         {PackedTag, PackedPayload}
                 when is_integer(PackedTag), PackedTag >= 0,
@@ -682,17 +735,30 @@ pack_startup_message(Target, Module, Message)
             Width =< ?MAX_PAYLOAD_BITS of
         true -> #{
             tag => Tag,
-            payload => xls_nums:packed_unsigned_literal(Payload)
+            payload => xls_nums:packed_unsigned_literal(Payload),
+            schema => TagName,
+            fields => startup_fields(
+                Target,
+                maps:get(fields, Schema),
+                tl(tuple_to_list(Message))
+            )
         };
         false -> error({unsupported_startup_payload, Target, Width})
     end;
-pack_startup_message(Target, _Module, Message) ->
+pack_startup_message(Target, _Module, _Interface, Message) ->
     error({invalid_startup_message, Target, Message}).
+
+startup_fields(_Target, Fields, Values)
+        when length(Fields) =:= length(Values) ->
+    [Field#{value => Value} || {Field, Value} <- lists:zip(Fields, Values)];
+startup_fields(Target, Fields, Values) ->
+    error({invalid_startup_fields, Target, length(Fields), length(Values)}).
 
 validate_profile(Profile) when is_map(Profile) ->
     Required = lists:sort([actor_egress_depth, channel_depth, name]),
     Keys = lists:sort(maps:keys(Profile)),
-    case {Required -- Keys, Keys -- Required} of
+    Allowed = lists:sort([scheduler_groups | Required]),
+    case {Required -- Keys, Keys -- Allowed} of
         {[], []} -> ok;
         {Missing, Unknown} ->
             error({invalid_dslx_profile_keys, Missing, Unknown})
@@ -707,6 +773,10 @@ validate_profile(Profile) when is_map(Profile) ->
         EgressDepth when is_integer(EgressDepth),
                 EgressDepth >= 0, EgressDepth =< ?U32_MAX -> ok;
         EgressDepth -> error({egress_depth, EgressDepth})
+    end,
+    case maps:get(scheduler_groups, Profile, #{}) of
+        Groups when is_map(Groups) -> ok;
+        Groups -> error({scheduler_groups, Groups})
     end,
     Profile#{name := Name};
 validate_profile(Profile) ->
@@ -737,6 +807,8 @@ reserved_identifiers() ->
 %%% Rendering
 %%%
 
+render(Spec = #{schedulers := [_ | _]}) ->
+    xls_topology_scheduler_dslx:emit(Spec);
 render(Spec) ->
     [
         preamble(Spec),
@@ -812,50 +884,62 @@ family_routers(Spec) ->
 family_router(Spec, Family) ->
     Module = maps:get(module_name, Family),
     Lanes = maps:get(outbound_lanes, Family),
-    Outputs = maps:get(outputs, Family),
-    RouteIndex = maps:from_list([
-        {Port, Route}
-        || Route <- maps:get(routes, Family),
-           {_FamilyId, Port} <- [maps:get(source, Route)]
-    ]),
+    Members = [["egress_in: chan<", Module, "::Egress> in"] |
+        [[lane_output(Lane), ": chan<axis::Frame> out"]
+            || Lane <- Lanes]],
+    Routes = maps:get(routes, Family),
     [
         "proc ", router_name(Spec, Family), " {\n",
         "  egress_in: chan<", Module, "::Egress> in;\n",
         [["  ", lane_output(Lane), ": chan<axis::Frame> out;\n"]
             || Lane <- Lanes],
         "\n",
-        config_signature(
-            [["egress_in: chan<", Module, "::Egress> in"] |
-                [[lane_output(Lane), ": chan<axis::Frame> out"]
-                    || Lane <- Lanes]],
-            2
-        ),
+        config_signature(Members, 2),
         "    (egress_in",
         [[", ", lane_output(Lane)] || Lane <- Lanes],
         ")\n  }\n\n",
         "  init { () }\n\n",
         "  next(state: ()) {\n",
         "    let (tok, egress) = recv(join(), egress_in);\n",
-        "    let _route_tok = match egress.port {\n",
-        [
-            router_arm(Module, Port, maps:get(Port, RouteIndex))
-            || Port <- Outputs
-        ],
-        "    };\n",
+        [family_lane_selection(Module, Lane, Routes) || Lane <- Lanes],
+        [family_lane_send(Lane) || Lane <- Lanes],
+        "    let _route_tok = ", join_tokens([
+            family_lane_token(Lane) || Lane <- Lanes
+        ]), ";\n",
         "    state\n  }\n}\n\n"
     ].
 
-router_arm(Module, Port, #{delivery := direct, lanes := [Lane]}) ->
-    ["      ", Module, "::OutputPort::", uppercase(Port),
-        " => send(tok, ", lane_output(Lane), ", egress.frame),\n"];
-router_arm(Module, Port, #{delivery := queued, lanes := [Left, Right]}) ->
-    ["      ", Module, "::OutputPort::", uppercase(Port), " => {\n",
-        "        let branch_0_tok = send(tok, ", lane_output(Left),
-        ", egress.frame);\n",
-        "        let branch_1_tok = send(tok, ", lane_output(Right),
-        ", egress.frame);\n",
-        "        join(branch_0_tok, branch_1_tok)\n",
-        "      },\n"].
+family_lane_selection(Module, Lane, Routes) ->
+    LaneIndex = maps:get(index, Lane),
+    Ports = [
+        Port
+        || Route <- Routes,
+           lists:any(
+               fun(RouteLane) -> maps:get(index, RouteLane) =:= LaneIndex end,
+               maps:get(lanes, Route)
+           ),
+           {_FamilyId, Port} <- [maps:get(source, Route)]
+    ],
+    [
+        "    let ", family_lane_selected(Lane), " = match egress.port {\n",
+        [["      ", Module, "::OutputPort::", uppercase(Port),
+            " => true,\n"] || Port <- Ports],
+        "      _ => false,\n",
+        "    };\n"
+    ].
+
+family_lane_send(Lane) ->
+    [
+        "    let ", family_lane_token(Lane), " = send_if(\n",
+        "      tok, ", lane_output(Lane), ", ",
+        family_lane_selected(Lane), ", egress.frame);\n"
+    ].
+
+family_lane_selected(Lane) ->
+    [maps:get(stem, Lane), "_selected"].
+
+family_lane_token(Lane) ->
+    [maps:get(stem, Lane), "_tok"].
 
 frame_grid_mux([]) -> [];
 frame_grid_mux(_Externals) ->
@@ -1189,7 +1273,6 @@ family_nodes(Spec) ->
     [family_node(Spec, Family) || Family <- maps:get(families, Spec)].
 
 family_node(Spec, Family) ->
-    Module = maps:get(module_name, Family),
     InboundLanes = maps:get(inbound_lanes, Family),
     OutboundLanes = maps:get(outbound_lanes, Family),
     InputCount = length(InboundLanes) + control_input_count(Family),
@@ -1197,9 +1280,31 @@ family_node(Spec, Family) ->
         || Index <- lists:seq(0, InputCount - 1)],
     Outputs = [[lane_output(Lane), ": chan<axis::Frame> out"]
         || Lane <- OutboundLanes],
+    SchedulerMembers = node_scheduler_members(Family),
     [
         "proc ", node_name(Spec, Family), node_parametrics(Family), " {\n",
-        config_signature(Inputs ++ Outputs, 2),
+        config_signature(Inputs ++ Outputs ++ SchedulerMembers, 2),
+        node_body(Spec, Family, InputCount, OutboundLanes),
+        "    ()\n  }\n\n",
+        "  init { () }\n",
+        "  next(state: ()) { state }\n",
+        "}\n\n"
+    ].
+
+node_scheduler_members(#{scheduler := direct}) -> [];
+node_scheduler_members(#{
+    scheduler := #{group := _},
+    module_name := Module
+}) ->
+    [
+        "actor_req_out: chan<axis::Frame> out",
+        "actor_admit_in: chan<u1> in",
+        ["actor_egress_in: chan<", Module, "::Egress> in"]
+    ].
+
+node_body(Spec, Family = #{scheduler := direct}, InputCount, OutboundLanes) ->
+    Module = maps:get(module_name, Family),
+    [
         "    let (actor_req_p, actor_req_c) =\n",
         "      chan<axis::Frame, CHANNEL_DEPTH>(\"actor_req\");\n",
         "    let (actor_admit_p, actor_admit_c) =\n",
@@ -1219,29 +1324,43 @@ family_node(Spec, Family) ->
             incoming_name(Index)
             || Index <- lists:seq(0, InputCount - 1)
         ] ++ ["actor_req_p", "actor_admit_c"]),
+        ");\n"
+    ];
+node_body(Spec, Family = #{scheduler := #{group := _}}, InputCount,
+        OutboundLanes) ->
+    [
+        "    spawn ", router_name(Spec, Family), "(actor_egress_in",
+        [[", ", lane_output(Lane)] || Lane <- OutboundLanes],
         ");\n",
-        "    ()\n  }\n\n",
-        "  init { () }\n",
-        "  next(state: ()) { state }\n",
-        "}\n\n"
+        "    spawn ", ingress_name(Spec, Family),
+        ingress_specialization(Family), "(",
+        join_with(", ", [
+            incoming_name(Index)
+            || Index <- lists:seq(0, InputCount - 1)
+        ] ++ ["actor_req_out", "actor_admit_in"]),
+        ");\n"
     ].
 
 family_grid(Spec) ->
     Lanes = maps:get(lanes, Spec),
     Externals = maps:get(externals, Spec),
     IngressArguments = ingress_arguments(Spec),
+    RamArguments = scheduler_ram_arguments(Spec),
     [
         "proc ", grid_name(Spec),
         "<TORUS_WIDTH: u32, TORUS_HEIGHT: u32> {\n",
         config_signature(
-            IngressArguments ++ [[OutputName, ": chan<axis::Frame> out"]
+            RamArguments ++ IngressArguments ++
+                [[OutputName, ": chan<axis::Frame> out"]
                 || #{output_name := OutputName} <- Externals],
             2
         ),
         [lane_array(Lane) || Lane <- Lanes],
         control_channels(Spec),
+        scheduler_channels(Spec),
         [family_spawn(Spec, Family)
             || Family <- maps:get(families, Spec)],
+        scheduler_spawns(Spec),
         control_spawns(Spec),
         [external_merge_spawn(External, Lanes) || External <- Externals],
         "    ()\n  }\n\n",
@@ -1249,6 +1368,79 @@ family_grid(Spec) ->
         "  next(state: ()) { state }\n",
         "}\n\n"
     ].
+
+scheduler_channels(#{schedulers := Schedulers}) ->
+    [scheduler_channel_bank(Scheduler) || Scheduler <- Schedulers].
+
+scheduler_channel_bank(#{
+    stem := Stem,
+    module_name := Module,
+    slot_count := SlotCount
+}) ->
+    Count = ["u32:", integer_to_list(SlotCount)],
+    [
+        "    let (", Stem, "_req_p, ", Stem, "_req_c) =\n",
+        "      chan<axis::Frame, CHANNEL_DEPTH>[", Count, "]",
+        "(\"", Stem, "_req\");\n",
+        "    let (", Stem, "_admit_p, ", Stem, "_admit_c) =\n",
+        "      chan<u1, CHANNEL_DEPTH>[", Count, "]",
+        "(\"", Stem, "_admit\");\n",
+        "    let (", Stem, "_egress_p, ", Stem, "_egress_c) =\n",
+        "      chan<", Module, "::Egress, u32:1>[", Count, "]",
+        "(\"", Stem, "_egress\");\n",
+        "    let (", Stem, "_request_p, ", Stem, "_request_c) =\n",
+        "      chan<", Module, "::ScheduledRequest, u32:1>(\"",
+        Stem, "_request\");\n",
+        "    let (", Stem, "_scheduled_egress_p, ", Stem,
+        "_scheduled_egress_c) =\n",
+        "      chan<", Module, "::ScheduledEgress, u32:1>(\"",
+        Stem, "_scheduled_egress\");\n",
+        "    let (", Stem, "_scheduled_admit_p, ", Stem,
+        "_scheduled_admit_c) =\n",
+        "      chan<", Module, "::ScheduledAdmission, u32:1>(\"",
+        Stem, "_scheduled_admit\");\n",
+        "    let (", Stem, "_credit_p, ", Stem, "_credit_c) =\n",
+        "      chan<u1, u32:1>(\"", Stem, "_credit\");\n"
+    ].
+
+scheduler_spawns(#{schedulers := Schedulers}) ->
+    [
+        [
+            "    spawn ", Module, "::SchedulerRequestMux<u32:",
+            integer_to_list(SlotCount), ">(\n",
+            "      ", Stem, "_req_c, ", Stem, "_request_p);\n",
+            "    spawn ", Module, "::SharedService<u32:",
+            integer_to_list(SlotCount), ">(\n",
+            "      ", Stem, "_request_c, ", Stem,
+            "_scheduled_egress_p,\n",
+            "      ", Stem, "_scheduled_admit_p, ", Stem,
+            "_credit_c,\n",
+            "      ", Stem, "_ram_req_out, ", Stem,
+            "_ram_resp_in, ", Stem, "_ram_wr_comp_in);\n",
+            "    spawn ", Module, "::SchedulerEgressDemux<u32:",
+            integer_to_list(SlotCount), ">(\n",
+            "      ", Stem, "_scheduled_egress_c, ", Stem,
+            "_egress_p, ", Stem, "_credit_p);\n",
+            "    spawn ", Module, "::SchedulerAdmissionDemux<u32:",
+            integer_to_list(SlotCount), ">(\n",
+            "      ", Stem, "_scheduled_admit_c, ", Stem,
+            "_admit_p);\n"
+        ]
+        || #{stem := Stem, module_name := Module, slot_count := SlotCount} <-
+               Schedulers
+    ].
+
+scheduler_ram_arguments(#{schedulers := Schedulers}) ->
+    lists:append([
+        [
+            [Stem, "_ram_req_out: chan<", Module,
+                "::MachineRamReq> out"],
+            [Stem, "_ram_resp_in: chan<", Module,
+                "::MachineRamResp> in"],
+            [Stem, "_ram_wr_comp_in: chan<()> in"]
+        ]
+        || #{stem := Stem, module_name := Module} <- Schedulers
+    ]).
 
 control_channels(#{ingresses := []}) -> [];
 control_channels(Spec = #{ingresses := [#{recipients := Recipients}]}) ->
@@ -1323,10 +1515,24 @@ node_spawn_arguments(Family) ->
     Arguments =
         [family_lane_consumer(Lane) || Lane <- InboundLanes] ++
         control_consumer(Family) ++
-        [[maps:get(stem, Lane), "_p[x][y]"] || Lane <- OutboundLanes],
+        [[maps:get(stem, Lane), "_p[x][y]"] || Lane <- OutboundLanes] ++
+        scheduler_node_arguments(Family),
     [
         ["          ", Argument, separator(Index, length(Arguments)), "\n"]
         || {Index, Argument} <- lists:enumerate(0, Arguments)
+    ].
+
+scheduler_node_arguments(#{scheduler := direct}) -> [];
+scheduler_node_arguments(#{scheduler := #{
+    stem := Stem,
+    base_slot := BaseSlot
+}}) ->
+    Slot = ["(u32:", integer_to_list(BaseSlot),
+        " + x * TORUS_HEIGHT + y)"],
+    [
+        [Stem, "_req_p[", Slot, "]"],
+        [Stem, "_admit_c[", Slot, "]"],
+        [Stem, "_egress_c[", Slot, "]"]
     ].
 
 control_consumer(#{ingress := none}) -> [];
@@ -1394,15 +1600,22 @@ top_proc(Spec) ->
         || #{input_name := InputName} <- Ingresses],
     ExternalMembers = [[OutputName, ": chan<axis::Frame> out"]
         || #{output_name := OutputName} <- Externals],
-    Names = [InputName || #{input_name := InputName} <- Ingresses] ++
+    RamMembers = scheduler_ram_arguments(Spec),
+    RamNames = lists:append([
+        [[Stem, "_ram_req_out"], [Stem, "_ram_resp_in"],
+            [Stem, "_ram_wr_comp_in"]]
+        || #{stem := Stem} <- maps:get(schedulers, Spec)
+    ]),
+    Names = RamNames ++
+        [InputName || #{input_name := InputName} <- Ingresses] ++
         [OutputName || #{output_name := OutputName} <- Externals],
     [
         "pub proc Top {\n",
         [["  ", Member, ";\n"]
-            || Member <- IngressMembers ++ ExternalMembers],
+            || Member <- RamMembers ++ IngressMembers ++ ExternalMembers],
         "\n",
         config_signature(
-            IngressMembers ++ ExternalMembers,
+            RamMembers ++ IngressMembers ++ ExternalMembers,
             2
         ),
         "    spawn ", grid_name(Spec), "<WIDTH, HEIGHT>(",
@@ -1474,6 +1687,10 @@ channel_tuple([Name]) -> ["(", Name, ",)"];
 channel_tuple(Names) -> ["(", join_with(", ", Names), ")"].
 
 uppercase(Atom) -> string:uppercase(atom_to_list(Atom)).
+
+join_tokens([Token]) -> Token;
+join_tokens([First, Second | Rest]) ->
+    join_tokens([["join(", First, ", ", Second, ")"] | Rest]).
 
 join_with(_Separator, []) -> [];
 join_with(Separator, [First | Rest]) ->

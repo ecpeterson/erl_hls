@@ -803,36 +803,45 @@ actor_router_proc(Actor, Routes, Lanes) ->
         "  init { () }\n\n",
         "  next(state: ()) {\n",
         "    let (tok, egress) = recv(join(), egress_in);\n",
-        "    let _route_tok = match egress.port {\n",
-        [actor_router_arm(Module, Route) || Route <- Routes],
-        "    };\n",
+        [actor_lane_selection(Module, Lane, Routes) || Lane <- Lanes],
+        [actor_lane_send(Lane) || Lane <- Lanes],
+        "    let _route_tok = ", join_tokens([
+            actor_lane_token(Lane) || Lane <- Lanes
+        ]), ";\n",
         "    state\n  }\n}\n\n"
     ].
 
-actor_router_arm(Module, Route) ->
-    {_Source, Port} = maps:get(source, Route),
-    Lanes = maps:get(lanes, Route),
-    Tokens = [["lane_", integer_to_list(maps:get(index, Lane)), "_tok"]
-        || Lane <- Lanes],
-    Body = case Lanes of
-        [Lane] -> [
-            "send(tok, ", lane_output(Lane), ", egress.frame)"
-        ];
-        [_, _ | _] -> [
-            "{\n",
-            [
-                ["        let ", Token, " = send(tok, ",
-                    lane_output(Lane), ", egress.frame);\n"]
-                || {Token, Lane} <- lists:zip(Tokens, Lanes)
-            ],
-            "        ", join_tokens(Tokens), "\n",
-            "      }"
-        ]
-    end,
+actor_lane_selection(Module, Lane, Routes) ->
+    LaneIndex = maps:get(index, Lane),
+    Ports = [
+        Port
+        || Route <- Routes,
+           lists:any(
+               fun(RouteLane) -> maps:get(index, RouteLane) =:= LaneIndex end,
+               maps:get(lanes, Route)
+           ),
+           {_Source, Port} <- [maps:get(source, Route)]
+    ],
     [
-        "      ", Module, "::OutputPort::", uppercase(Port), " =>\n",
-        "        ", Body, ",\n"
+        "    let ", actor_lane_selected(Lane), " = match egress.port {\n",
+        [["      ", Module, "::OutputPort::", uppercase(Port),
+            " => true,\n"] || Port <- Ports],
+        "      _ => false,\n",
+        "    };\n"
     ].
+
+actor_lane_send(Lane) ->
+    [
+        "    let ", actor_lane_token(Lane), " = send_if(\n",
+        "      tok, ", lane_output(Lane), ", ", actor_lane_selected(Lane),
+        ", egress.frame);\n"
+    ].
+
+actor_lane_selected(Lane) ->
+    ["lane_", integer_to_list(maps:get(index, Lane)), "_selected"].
+
+actor_lane_token(Lane) ->
+    ["lane_", integer_to_list(maps:get(index, Lane)), "_tok"].
 
 actor_router_spawn(Actor, Lanes) ->
     ActorLanes = [Lane || Lane <- Lanes,

@@ -4,6 +4,7 @@ set -euo pipefail
 stage=$1
 xls_root=$2
 stdlib="$xls_root/xls/dslx/stdlib"
+. "$stage/phi_scheduler_rams.sh"
 
 cd "$stage"
 
@@ -61,6 +62,8 @@ done
 "$xls_root/codegen_main" \
     --pipeline_stages=1 \
     --delay_model=unit \
+    --flop_inputs=false \
+    --flop_outputs=true \
     --use_system_verilog=false \
     --reset=reset \
     --fifo_module= \
@@ -88,6 +91,8 @@ done
 "$xls_root/codegen_main" \
     --pipeline_stages=1 \
     --delay_model=unit \
+    --flop_inputs=false \
+    --flop_outputs=true \
     --use_system_verilog=false \
     --reset=reset \
     --fifo_module= \
@@ -203,13 +208,15 @@ vvp phi_torus_topology.vvp
     phi_noise_topology_smoke.ir > phi_noise_topology_smoke.opt.ir
 
 "$xls_root/codegen_main" \
-    --pipeline_stages=1 \
+    --pipeline_stages=2 \
+    --worst_case_throughput=2 \
     --delay_model=unit \
     --flop_inputs=false \
     --flop_outputs=true \
     --use_system_verilog=false \
     --reset=reset \
     --fifo_module= \
+    --ram_configurations="$(phi_scheduler_ram_configurations)" \
     phi_noise_topology_smoke.opt.ir > phi_noise_topology_smoke.v
 
 iverilog \
@@ -217,6 +224,7 @@ iverilog \
     -s phi_noise_topology_smoke_tb \
     -o phi_noise_topology_smoke.vvp \
     phi_noise_topology_smoke_tb.sv \
+    hls_1rw_ram.v \
     phi_noise_topology_smoke.v
 
 vvp phi_noise_topology_smoke.vvp
@@ -234,13 +242,15 @@ vvp phi_noise_topology_smoke.vvp
     phi_memory_gateway.ir > phi_memory_gateway.opt.ir
 
 "$xls_root/codegen_main" \
-    --pipeline_stages=1 \
+    --pipeline_stages=2 \
+    --worst_case_throughput=2 \
     --delay_model=unit \
     --flop_inputs=false \
     --flop_outputs=true \
     --use_system_verilog=false \
     --reset=reset \
     --fifo_module= \
+    --ram_configurations="$(phi_scheduler_ram_configurations)" \
     phi_memory_gateway.opt.ir > phi_memory_gateway.v
 
 iverilog \
@@ -338,6 +348,8 @@ vvp ordered_egress_topology.vvp
 "$xls_root/codegen_main" \
     --pipeline_stages=1 \
     --delay_model=unit \
+    --flop_inputs=false \
+    --flop_outputs=true \
     --use_system_verilog=false \
     --reset=reset \
     --fifo_module= \
@@ -355,6 +367,8 @@ vvp ordered_egress_topology.vvp
 "$xls_root/codegen_main" \
     --pipeline_stages=1 \
     --delay_model=unit \
+    --flop_inputs=false \
+    --flop_outputs=true \
     --use_system_verilog=false \
     --reset=reset \
     --fifo_module= \
@@ -387,6 +401,7 @@ iverilog \
     -o phi_memory_bridge.vvp \
     phi_memory_bridge_tb.sv \
     phi_memory_debug_top.v \
+    hls_1rw_ram.v \
     phi_memory_gateway.v \
     hls_fabric_ingress.v \
     hls_fabric_egress.v \

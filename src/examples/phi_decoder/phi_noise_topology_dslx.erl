@@ -7,16 +7,25 @@
 Generates the regular multi-family phi/noise DSLX graph.
 
 The default artifact uses the nondegenerate distance-three semantic topology.
-`to_dslx/1` exists so the pinned XLS regression can exercise the same six
+`to_dslx/1` exists so the checked XLS regression can exercise the same six
 family types and cross-family routes at a smaller elaborated distance.
 
-The physical profile retains one complete actor entry-effect burst across the
-registered producer output and its FIFO. A uniform depth-one D2 mapping was
-smaller, but the depth-zero and depth-one D1 smoke graphs both failed to reach
-quiet decoder status within 200,000 cycles.
+The physical profile groups the two data, phi, and syndrome families into
+three homogeneous executors. Each executor stores actor state and mailbox
+frames in separate one-read/write RAMs, owns the mailbox metadata for its
+logical slots, and advances one resumable actor microstep at a time. Compact
+group routers carry addressed requests between executors; there are no
+per-coordinate request, admission, or egress channel arrays.
 """.
 
--export([profile/0, to_dslx/0, to_dslx/1, to_dslx/2]).
+-export([
+    profile/0,
+    scheduler_groups/0,
+    scheduler_plan/0,
+    to_dslx/0,
+    to_dslx/1,
+    to_dslx/2
+]).
 
 -doc "Returns the physical profile shared by the review and smoke artifacts.".
 -spec profile() -> xls_topology_dslx:profile().
@@ -24,8 +33,38 @@ profile() ->
     #{
         name => phi_noise_topology,
         channel_depth => 1,
-        actor_egress_depth => burst
+        actor_egress_depth => burst,
+        scheduler_groups => scheduler_groups()
     }.
+
+-doc "Returns the provisional homogeneous sharing groups for this topology.".
+-spec scheduler_groups() -> hls_scheduler_plan:spec().
+scheduler_groups() ->
+    #{
+        data => #{
+            members => [{family, data_even}, {family, data_odd}],
+            state_storage => block_ram,
+            mailbox_storage => block_ram
+        },
+        phi => #{
+            members => [{family, phi_x}, {family, phi_z}],
+            state_storage => block_ram,
+            mailbox_storage => block_ram
+        },
+        syndrome => #{
+            members => [{family, syndrome_x}, {family, syndrome_z}],
+            state_storage => block_ram,
+            mailbox_storage => block_ram
+        }
+    }.
+
+-doc "Normalizes the distance-three shared-scheduler deployment plan.".
+-spec scheduler_plan() -> hls_scheduler_plan:plan().
+scheduler_plan() ->
+    hls_scheduler_plan:normalize(
+        hls_topology:from_module(phi_noise_topology),
+        scheduler_groups()
+    ).
 
 -doc "Generates the default nondegenerate distance-three DSLX source.".
 -spec to_dslx() -> iolist().

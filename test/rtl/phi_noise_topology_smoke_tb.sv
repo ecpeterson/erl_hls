@@ -49,6 +49,12 @@ module phi_noise_topology_smoke_tb;
     reg [127:0] stalled_z;
     integer x_count = 0;
     integer z_count = 0;
+    integer x_decoder_event_count = 0;
+    integer z_decoder_event_count = 0;
+    integer state_read_count = 0;
+    integer state_write_count = 0;
+    integer mailbox_read_count = 0;
+    integer mailbox_write_count = 0;
     reg x_quiet_status_seen = 1'b0;
     reg z_quiet_status_seen = 1'b0;
     reg first_reply_seen = 1'b0;
@@ -57,46 +63,163 @@ module phi_noise_topology_smoke_tb;
     reg second_reply_parity;
     integer cycle;
 
+    wire [31:0] data_state_addr;
+    wire [441:0] data_state_wr_data;
+    wire data_state_we;
+    wire data_state_re;
+    wire [441:0] data_state_rd_data;
+    wire [31:0] data_mailbox_addr;
+    wire [127:0] data_mailbox_wr_data;
+    wire data_mailbox_we;
+    wire data_mailbox_re;
+    wire [127:0] data_mailbox_rd_data;
+
+    wire [31:0] phi_state_addr;
+    wire [553:0] phi_state_wr_data;
+    wire phi_state_we;
+    wire phi_state_re;
+    wire [553:0] phi_state_rd_data;
+    wire [31:0] phi_mailbox_addr;
+    wire [127:0] phi_mailbox_wr_data;
+    wire phi_mailbox_we;
+    wire phi_mailbox_re;
+    wire [127:0] phi_mailbox_rd_data;
+
+    wire [31:0] syndrome_state_addr;
+    wire [441:0] syndrome_state_wr_data;
+    wire syndrome_state_we;
+    wire syndrome_state_re;
+    wire [441:0] syndrome_state_rd_data;
+    wire [31:0] syndrome_mailbox_addr;
+    wire [127:0] syndrome_mailbox_wr_data;
+    wire syndrome_mailbox_we;
+    wire syndrome_mailbox_re;
+    wire [127:0] syndrome_mailbox_rd_data;
+
     __phi_noise_topology_smoke__Top_0_next dut (
         .clk(clk),
         .reset(reset),
-        .phi_noise_topology_smoke__control_router_in(control_router),
-        .phi_noise_topology_smoke__control_router_in_vld(
+        ._control_router_in(control_router),
+        ._control_router_in_vld(
             control_router_valid
         ),
-        .phi_noise_topology_smoke__control_router_in_rdy(
+        ._control_router_in_rdy(
             control_router_ready
         ),
-        .phi_noise_topology_smoke__data_measurements_out_rdy(
+        ._data_measurements_out_rdy(
             data_measurements_ready
         ),
-        .phi_noise_topology_smoke__data_measurements_out(data_measurements),
-        .phi_noise_topology_smoke__data_measurements_out_vld(
+        ._data_measurements_out(data_measurements),
+        ._data_measurements_out_vld(
             data_measurements_valid
         ),
-        .phi_noise_topology_smoke__x_announcements_out_rdy(x_ready),
-        .phi_noise_topology_smoke__x_announcements_out(x_announcement),
-        .phi_noise_topology_smoke__x_announcements_out_vld(x_valid),
-        .phi_noise_topology_smoke__x_decoder_events_out_rdy(
+        ._x_announcements_out_rdy(x_ready),
+        ._x_announcements_out(x_announcement),
+        ._x_announcements_out_vld(x_valid),
+        ._x_decoder_events_out_rdy(
             x_decoder_events_ready
         ),
-        .phi_noise_topology_smoke__x_decoder_events_out(x_decoder_events),
-        .phi_noise_topology_smoke__x_decoder_events_out_vld(
+        ._x_decoder_events_out(x_decoder_events),
+        ._x_decoder_events_out_vld(
             x_decoder_events_valid
         ),
-        .phi_noise_topology_smoke__z_announcements_out_rdy(z_ready),
-        .phi_noise_topology_smoke__z_announcements_out(z_announcement),
-        .phi_noise_topology_smoke__z_announcements_out_vld(z_valid),
-        .phi_noise_topology_smoke__z_decoder_events_out_rdy(
+        ._z_announcements_out_rdy(z_ready),
+        ._z_announcements_out(z_announcement),
+        ._z_announcements_out_vld(z_valid),
+        ._z_decoder_events_out_rdy(
             z_decoder_events_ready
         ),
-        .phi_noise_topology_smoke__z_decoder_events_out(z_decoder_events),
-        .phi_noise_topology_smoke__z_decoder_events_out_vld(
+        ._z_decoder_events_out(z_decoder_events),
+        ._z_decoder_events_out_vld(
             z_decoder_events_valid
-        )
+        ),
+        .scheduler_0_state_addr(data_state_addr),
+        .scheduler_0_state_wr_data(data_state_wr_data),
+        .scheduler_0_state_we(data_state_we),
+        .scheduler_0_state_re(data_state_re),
+        .scheduler_0_state_rd_data(data_state_rd_data),
+        .scheduler_0_mailbox_addr(data_mailbox_addr),
+        .scheduler_0_mailbox_wr_data(data_mailbox_wr_data),
+        .scheduler_0_mailbox_we(data_mailbox_we),
+        .scheduler_0_mailbox_re(data_mailbox_re),
+        .scheduler_0_mailbox_rd_data(data_mailbox_rd_data),
+        .scheduler_1_state_addr(phi_state_addr),
+        .scheduler_1_state_wr_data(phi_state_wr_data),
+        .scheduler_1_state_we(phi_state_we),
+        .scheduler_1_state_re(phi_state_re),
+        .scheduler_1_state_rd_data(phi_state_rd_data),
+        .scheduler_1_mailbox_addr(phi_mailbox_addr),
+        .scheduler_1_mailbox_wr_data(phi_mailbox_wr_data),
+        .scheduler_1_mailbox_we(phi_mailbox_we),
+        .scheduler_1_mailbox_re(phi_mailbox_re),
+        .scheduler_1_mailbox_rd_data(phi_mailbox_rd_data),
+        .scheduler_2_state_addr(syndrome_state_addr),
+        .scheduler_2_state_wr_data(syndrome_state_wr_data),
+        .scheduler_2_state_we(syndrome_state_we),
+        .scheduler_2_state_re(syndrome_state_re),
+        .scheduler_2_state_rd_data(syndrome_state_rd_data),
+        .scheduler_2_mailbox_addr(syndrome_mailbox_addr),
+        .scheduler_2_mailbox_wr_data(syndrome_mailbox_wr_data),
+        .scheduler_2_mailbox_we(syndrome_mailbox_we),
+        .scheduler_2_mailbox_re(syndrome_mailbox_re),
+        .scheduler_2_mailbox_rd_data(syndrome_mailbox_rd_data)
     );
 
     always #5 clk = ~clk;
+
+    hls_1rw_ram #(.WIDTH(442), .ADDRESS_WIDTH(5)) data_state (
+        .clk(clk),
+        .addr(data_state_addr[4:0]),
+        .wr_data(data_state_wr_data),
+        .we(data_state_we),
+        .re(data_state_re),
+        .rd_data(data_state_rd_data)
+    );
+
+    hls_1rw_ram #(.WIDTH(554), .ADDRESS_WIDTH(5)) phi_state (
+        .clk(clk),
+        .addr(phi_state_addr[4:0]),
+        .wr_data(phi_state_wr_data),
+        .we(phi_state_we),
+        .re(phi_state_re),
+        .rd_data(phi_state_rd_data)
+    );
+
+    hls_1rw_ram #(.WIDTH(442), .ADDRESS_WIDTH(5)) syndrome_state (
+        .clk(clk),
+        .addr(syndrome_state_addr[4:0]),
+        .wr_data(syndrome_state_wr_data),
+        .we(syndrome_state_we),
+        .re(syndrome_state_re),
+        .rd_data(syndrome_state_rd_data)
+    );
+
+    hls_1rw_ram #(.WIDTH(128), .ADDRESS_WIDTH(7)) data_mailbox (
+        .clk(clk),
+        .addr(data_mailbox_addr[6:0]),
+        .wr_data(data_mailbox_wr_data),
+        .we(data_mailbox_we),
+        .re(data_mailbox_re),
+        .rd_data(data_mailbox_rd_data)
+    );
+
+    hls_1rw_ram #(.WIDTH(128), .ADDRESS_WIDTH(7)) phi_mailbox (
+        .clk(clk),
+        .addr(phi_mailbox_addr[6:0]),
+        .wr_data(phi_mailbox_wr_data),
+        .we(phi_mailbox_we),
+        .re(phi_mailbox_re),
+        .rd_data(phi_mailbox_rd_data)
+    );
+
+    hls_1rw_ram #(.WIDTH(128), .ADDRESS_WIDTH(7)) syndrome_mailbox (
+        .clk(clk),
+        .addr(syndrome_mailbox_addr[6:0]),
+        .wr_data(syndrome_mailbox_wr_data),
+        .we(syndrome_mailbox_we),
+        .re(syndrome_mailbox_re),
+        .rd_data(syndrome_mailbox_rd_data)
+    );
 
     function automatic [127:0] frame1;
         input [7:0] tag;
@@ -207,12 +330,55 @@ module phi_noise_topology_smoke_tb;
             z_count <= 1;
         end
         if (!reset && x_decoder_events_valid && x_decoder_events_ready)
+        begin
+            x_decoder_event_count <= x_decoder_event_count + 1;
             record_decoder_event(x_decoder_events, "x");
+        end
         if (!reset && z_decoder_events_valid && z_decoder_events_ready)
+        begin
+            z_decoder_event_count <= z_decoder_event_count + 1;
             record_decoder_event(z_decoder_events, "z");
+        end
         if (!reset && data_measurements_valid && data_measurements_ready)
             record_pauli_reply(data_measurements);
+        if (!reset) begin
+            state_read_count <= state_read_count + data_state_re +
+                phi_state_re + syndrome_state_re;
+            state_write_count <= state_write_count + data_state_we +
+                phi_state_we + syndrome_state_we;
+            mailbox_read_count <= mailbox_read_count + data_mailbox_re +
+                phi_mailbox_re + syndrome_mailbox_re;
+            mailbox_write_count <= mailbox_write_count + data_mailbox_we +
+                phi_mailbox_we + syndrome_mailbox_we;
+        end
     end
+
+`ifdef HLS_TRACE_MAILBOX
+    always @(posedge clk) begin
+        if (!reset && data_mailbox_we)
+            $display("data mailbox write addr=%0d tag=%0d",
+                data_mailbox_addr, data_mailbox_wr_data[31:24]);
+        if (!reset && phi_mailbox_we)
+            $display("phi mailbox write addr=%0d tag=%0d",
+                phi_mailbox_addr, phi_mailbox_wr_data[31:24]);
+        if (!reset && syndrome_mailbox_we)
+            $display("syndrome mailbox write addr=%0d tag=%0d",
+                syndrome_mailbox_addr,
+                syndrome_mailbox_wr_data[31:24]);
+        if (!reset && data_state_we)
+            $display("data state write slot=%0d phase=%0d enter=%0d failed=%0d",
+                data_state_addr, data_state_wr_data[7:0],
+                data_state_wr_data[432], data_state_wr_data[441]);
+        if (!reset && phi_state_we)
+            $display("phi state write slot=%0d phase=%0d enter=%0d failed=%0d",
+                phi_state_addr, phi_state_wr_data[7:0],
+                phi_state_wr_data[544], phi_state_wr_data[553]);
+        if (!reset && syndrome_state_we)
+            $display("syndrome state write slot=%0d phase=%0d enter=%0d failed=%0d",
+                syndrome_state_addr, syndrome_state_wr_data[7:0],
+                syndrome_state_wr_data[432], syndrome_state_wr_data[441]);
+    end
+`endif
 
     task automatic wait_for_both_valid;
         input integer timeout_cycles;
@@ -223,6 +389,12 @@ module phi_noise_topology_smoke_tb;
                 @(posedge clk);
             if (!(x_valid && z_valid)) begin
                 $display("FAIL: timed out waiting for x and z announcements");
+                $display("  decoder events: x=%0d z=%0d",
+                    x_decoder_event_count, z_decoder_event_count);
+                $display("  state RAM: reads=%0d writes=%0d",
+                    state_read_count, state_write_count);
+                $display("  mailbox RAM: reads=%0d writes=%0d",
+                    mailbox_read_count, mailbox_write_count);
                 $fatal(1);
             end
         end

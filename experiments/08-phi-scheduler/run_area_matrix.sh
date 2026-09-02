@@ -6,7 +6,7 @@ project_root=$(cd "$experiment_root/../.." && pwd)
 local_stage=${1:-"$project_root/_build/phi_area_matrix"}
 remote_host=${ERL_HLS_REMOTE_HOST:-192.168.64.7}
 remote_root=${ERL_HLS_REMOTE_ROOT:-/home/ecpeterson/erl_hls-build}
-remote_xls=${ERL_HLS_REMOTE_XLS:-/home/ecpeterson/xls-v0.0.0-9235-gb179d691e-linux-x64}
+remote_xls=${ERL_HLS_REMOTE_XLS:-/home/ecpeterson/xls-v0.0.0-10601-g9f360fc89-linux-x64}
 remote_stage="$remote_root/phi_area_matrix"
 
 ERL_HLS_PHI_DISTANCE=2 \

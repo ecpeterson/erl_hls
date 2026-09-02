@@ -132,6 +132,7 @@ cp "$project_root/src/examples/regsvc/regsvc_debug_top.v" \
     "$stage/regsvc_debug_top.v"
 cp "$project_root/src/examples/phi_decoder/phi_memory_debug_top.v" \
     "$stage/phi_memory_debug_top.v"
+cp "$project_root/priv/rtl/hls_1rw_ram.v" "$stage/hls_1rw_ram.v"
 cp "$project_root/priv/xls/fabric/hls_fabric_router.x" \
     "$stage/hls_fabric_router.x"
 cp "$project_root/priv/xls/fabric/hls_spatial_router.x" \
@@ -175,6 +176,8 @@ cp "$project_root/test/rtl/phi_memory_bridge_tb.sv" \
 cp "$project_root/test/rtl/ordered_egress_topology_tb.sv" \
     "$stage/ordered_egress_topology_tb.sv"
 cp "$project_root/test/rtl/xls_sim_bridge.c" "$stage/xls_sim_bridge.c"
+cp "$project_root/tools/phi_scheduler_rams.sh" \
+    "$stage/phi_scheduler_rams.sh"
 
 # `erlc -P` writes source listings after includes, macros, and parse transforms
 # have been expanded. This lets an older remote OTP compile its own compatible

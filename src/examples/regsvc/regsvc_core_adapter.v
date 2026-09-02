@@ -46,13 +46,13 @@ module axis_regsvc_core_adapter (
         .clk(aclk),
         .reset(~aresetn),
 
-        .regsvc__ext_recv(xls_in),
-        .regsvc__ext_recv_vld(s_axis_tvalid),
-        .regsvc__ext_recv_rdy(s_axis_tready),
+        ._ext_recv(xls_in),
+        ._ext_recv_vld(s_axis_tvalid),
+        ._ext_recv_rdy(s_axis_tready),
 
-        .regsvc__ext_send(xls_out),
-        .regsvc__ext_send_vld(m_axis_tvalid),
-        .regsvc__ext_send_rdy(m_axis_tready)
+        ._ext_send(xls_out),
+        ._ext_send_vld(m_axis_tvalid),
+        ._ext_send_rdy(m_axis_tready)
     );
 
 endmodule

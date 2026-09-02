@@ -66,57 +66,57 @@ module regsvc_pair_fixture (
     __hls_fabric_router__PairIngress_0_next app_ingress (
         .clk(aclk),
         .reset(!aresetn),
-        .hls_fabric_router__shared_in(app_shared_in),
-        .hls_fabric_router__shared_in_vld(s_axis_tvalid),
-        .hls_fabric_router__shared_in_rdy(s_axis_tready),
-        .hls_fabric_router__endpoint_one_out(app_one_in),
-        .hls_fabric_router__endpoint_one_out_vld(app_one_in_valid),
-        .hls_fabric_router__endpoint_one_out_rdy(app_one_in_ready),
-        .hls_fabric_router__endpoint_two_out(app_two_in),
-        .hls_fabric_router__endpoint_two_out_vld(app_two_in_valid),
-        .hls_fabric_router__endpoint_two_out_rdy(app_two_in_ready)
+        ._shared_in(app_shared_in),
+        ._shared_in_vld(s_axis_tvalid),
+        ._shared_in_rdy(s_axis_tready),
+        ._endpoint_one_out(app_one_in),
+        ._endpoint_one_out_vld(app_one_in_valid),
+        ._endpoint_one_out_rdy(app_one_in_ready),
+        ._endpoint_two_out(app_two_in),
+        ._endpoint_two_out_vld(app_two_in_valid),
+        ._endpoint_two_out_rdy(app_two_in_ready)
     );
 
     __hls_fabric_router__PairEgress_0_next app_egress (
         .clk(aclk),
         .reset(!aresetn),
-        .hls_fabric_router__endpoint_one_in(app_one_out),
-        .hls_fabric_router__endpoint_one_in_vld(app_one_out_valid),
-        .hls_fabric_router__endpoint_one_in_rdy(app_one_out_ready),
-        .hls_fabric_router__endpoint_two_in(app_two_out),
-        .hls_fabric_router__endpoint_two_in_vld(app_two_out_valid),
-        .hls_fabric_router__endpoint_two_in_rdy(app_two_out_ready),
-        .hls_fabric_router__shared_out(app_shared_out),
-        .hls_fabric_router__shared_out_vld(m_axis_tvalid),
-        .hls_fabric_router__shared_out_rdy(m_axis_tready)
+        ._endpoint_one_in(app_one_out),
+        ._endpoint_one_in_vld(app_one_out_valid),
+        ._endpoint_one_in_rdy(app_one_out_ready),
+        ._endpoint_two_in(app_two_out),
+        ._endpoint_two_in_vld(app_two_out_valid),
+        ._endpoint_two_in_rdy(app_two_out_ready),
+        ._shared_out(app_shared_out),
+        ._shared_out_vld(m_axis_tvalid),
+        ._shared_out_rdy(m_axis_tready)
     );
 
     __hls_fabric_router__PairIngress_0_next debug_ingress (
         .clk(aclk),
         .reset(!aresetn),
-        .hls_fabric_router__shared_in(debug_shared_in),
-        .hls_fabric_router__shared_in_vld(s_dbg_tvalid),
-        .hls_fabric_router__shared_in_rdy(s_dbg_tready),
-        .hls_fabric_router__endpoint_one_out(debug_one_in),
-        .hls_fabric_router__endpoint_one_out_vld(debug_one_in_valid),
-        .hls_fabric_router__endpoint_one_out_rdy(debug_one_in_ready),
-        .hls_fabric_router__endpoint_two_out(debug_two_in),
-        .hls_fabric_router__endpoint_two_out_vld(debug_two_in_valid),
-        .hls_fabric_router__endpoint_two_out_rdy(debug_two_in_ready)
+        ._shared_in(debug_shared_in),
+        ._shared_in_vld(s_dbg_tvalid),
+        ._shared_in_rdy(s_dbg_tready),
+        ._endpoint_one_out(debug_one_in),
+        ._endpoint_one_out_vld(debug_one_in_valid),
+        ._endpoint_one_out_rdy(debug_one_in_ready),
+        ._endpoint_two_out(debug_two_in),
+        ._endpoint_two_out_vld(debug_two_in_valid),
+        ._endpoint_two_out_rdy(debug_two_in_ready)
     );
 
     __hls_fabric_router__PairEgress_0_next debug_egress (
         .clk(aclk),
         .reset(!aresetn),
-        .hls_fabric_router__endpoint_one_in(debug_one_out),
-        .hls_fabric_router__endpoint_one_in_vld(debug_one_out_valid),
-        .hls_fabric_router__endpoint_one_in_rdy(debug_one_out_ready),
-        .hls_fabric_router__endpoint_two_in(debug_two_out),
-        .hls_fabric_router__endpoint_two_in_vld(debug_two_out_valid),
-        .hls_fabric_router__endpoint_two_in_rdy(debug_two_out_ready),
-        .hls_fabric_router__shared_out(debug_shared_out),
-        .hls_fabric_router__shared_out_vld(m_dbg_tvalid),
-        .hls_fabric_router__shared_out_rdy(m_dbg_tready)
+        ._endpoint_one_in(debug_one_out),
+        ._endpoint_one_in_vld(debug_one_out_valid),
+        ._endpoint_one_in_rdy(debug_one_out_ready),
+        ._endpoint_two_in(debug_two_out),
+        ._endpoint_two_in_vld(debug_two_out_valid),
+        ._endpoint_two_in_rdy(debug_two_out_ready),
+        ._shared_out(debug_shared_out),
+        ._shared_out_vld(m_dbg_tvalid),
+        ._shared_out_rdy(m_dbg_tready)
     );
 
     axis_regsvc_debug_top endpoint_one (

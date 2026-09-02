@@ -5,6 +5,7 @@
 import axis;
 
 const MAILBOX_CAPACITY = u8:5;
+const MAILBOX_DEPTH = u32:5;
 
 pub enum Tag : u8 {
   NONE = u8:0,
@@ -41,45 +42,45 @@ enum Directive : u2 {
   FAIL = u2:2,
 }
 
-struct Phi {
+pub struct Phi {
   epoch : u32,
   values : s32[2],
 }
 
-fn phi_from_bits<N: u32>(raw: bits[N]) -> Phi {
+pub fn phi_from_bits<N: u32>(raw: bits[N]) -> Phi {
   Phi {
     epoch: raw[0:32] as u32,
     values: raw[32:96] as s32[2],
   }
 }
 
-fn bits_from_phi(s: Phi) -> bits[bit_count<Phi>()] {
+pub fn bits_from_phi(s: Phi) -> bits[bit_count<Phi>()] {
   (s.values as bits[64]) ++ (s.epoch as bits[32]) ++  zero!<bits[0]>()
 }
 
-struct Anyonmove {
+pub struct Anyonmove {
   step : u32,
   present : u32,
 }
 
-fn anyonmove_from_bits<N: u32>(raw: bits[N]) -> Anyonmove {
+pub fn anyonmove_from_bits<N: u32>(raw: bits[N]) -> Anyonmove {
   Anyonmove {
     step: raw[0:32] as u32,
     present: raw[32:64] as u32,
   }
 }
 
-fn bits_from_anyonmove(s: Anyonmove) -> bits[bit_count<Anyonmove>()] {
+pub fn bits_from_anyonmove(s: Anyonmove) -> bits[bit_count<Anyonmove>()] {
   (s.present as bits[32]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
 }
 
-struct Phi0 {
+pub struct Phi0 {
   step : u32,
   source : u32,
   value : s32,
 }
 
-fn phi0_from_bits<N: u32>(raw: bits[N]) -> Phi0 {
+pub fn phi0_from_bits<N: u32>(raw: bits[N]) -> Phi0 {
   Phi0 {
     step: raw[0:32] as u32,
     source: raw[32:64] as u32,
@@ -87,18 +88,18 @@ fn phi0_from_bits<N: u32>(raw: bits[N]) -> Phi0 {
   }
 }
 
-fn bits_from_phi0(s: Phi0) -> bits[bit_count<Phi0>()] {
+pub fn bits_from_phi0(s: Phi0) -> bits[bit_count<Phi0>()] {
   (s.value as bits[32]) ++ (s.source as bits[32]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
 }
 
-struct Phenomconfig {
+pub struct Phenomconfig {
   seed : u32,
   threshold : u32,
   x : u16,
   y : u16,
 }
 
-fn phenomconfig_from_bits<N: u32>(raw: bits[N]) -> Phenomconfig {
+pub fn phenomconfig_from_bits<N: u32>(raw: bits[N]) -> Phenomconfig {
   Phenomconfig {
     seed: raw[0:32] as u32,
     threshold: raw[32:64] as u32,
@@ -107,47 +108,47 @@ fn phenomconfig_from_bits<N: u32>(raw: bits[N]) -> Phenomconfig {
   }
 }
 
-fn bits_from_phenomconfig(s: Phenomconfig) -> bits[bit_count<Phenomconfig>()] {
+pub fn bits_from_phenomconfig(s: Phenomconfig) -> bits[bit_count<Phenomconfig>()] {
   (s.y as bits[16]) ++ (s.x as bits[16]) ++ (s.threshold as bits[32]) ++ (s.seed as bits[32]) ++  zero!<bits[0]>()
 }
 
-struct Phenomrequest {
+pub struct Phenomrequest {
   step : u32,
 }
 
-fn phenomrequest_from_bits<N: u32>(raw: bits[N]) -> Phenomrequest {
+pub fn phenomrequest_from_bits<N: u32>(raw: bits[N]) -> Phenomrequest {
   Phenomrequest {
     step: raw[0:32] as u32,
   }
 }
 
-fn bits_from_phenomrequest(s: Phenomrequest) -> bits[bit_count<Phenomrequest>()] {
+pub fn bits_from_phenomrequest(s: Phenomrequest) -> bits[bit_count<Phenomrequest>()] {
   (s.step as bits[32]) ++  zero!<bits[0]>()
 }
 
-struct Phenomquery {
+pub struct Phenomquery {
   step : u32,
   source : u32,
 }
 
-fn phenomquery_from_bits<N: u32>(raw: bits[N]) -> Phenomquery {
+pub fn phenomquery_from_bits<N: u32>(raw: bits[N]) -> Phenomquery {
   Phenomquery {
     step: raw[0:32] as u32,
     source: raw[32:64] as u32,
   }
 }
 
-fn bits_from_phenomquery(s: Phenomquery) -> bits[bit_count<Phenomquery>()] {
+pub fn bits_from_phenomquery(s: Phenomquery) -> bits[bit_count<Phenomquery>()] {
   (s.source as bits[32]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
 }
 
-struct Phenomdata {
+pub struct Phenomdata {
   step : u32,
   source : u32,
   flags : u32,
 }
 
-fn phenomdata_from_bits<N: u32>(raw: bits[N]) -> Phenomdata {
+pub fn phenomdata_from_bits<N: u32>(raw: bits[N]) -> Phenomdata {
   Phenomdata {
     step: raw[0:32] as u32,
     source: raw[32:64] as u32,
@@ -155,18 +156,18 @@ fn phenomdata_from_bits<N: u32>(raw: bits[N]) -> Phenomdata {
   }
 }
 
-fn bits_from_phenomdata(s: Phenomdata) -> bits[bit_count<Phenomdata>()] {
+pub fn bits_from_phenomdata(s: Phenomdata) -> bits[bit_count<Phenomdata>()] {
   (s.flags as bits[32]) ++ (s.source as bits[32]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
 }
 
-struct Phenomanyon {
+pub struct Phenomanyon {
   step : u32,
   flags : u32,
   x : u16,
   y : u16,
 }
 
-fn phenomanyon_from_bits<N: u32>(raw: bits[N]) -> Phenomanyon {
+pub fn phenomanyon_from_bits<N: u32>(raw: bits[N]) -> Phenomanyon {
   Phenomanyon {
     step: raw[0:32] as u32,
     flags: raw[32:64] as u32,
@@ -175,18 +176,18 @@ fn phenomanyon_from_bits<N: u32>(raw: bits[N]) -> Phenomanyon {
   }
 }
 
-fn bits_from_phenomanyon(s: Phenomanyon) -> bits[bit_count<Phenomanyon>()] {
+pub fn bits_from_phenomanyon(s: Phenomanyon) -> bits[bit_count<Phenomanyon>()] {
   (s.y as bits[16]) ++ (s.x as bits[16]) ++ (s.flags as bits[32]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
 }
 
-struct Phicorrection {
+pub struct Phicorrection {
   step : u32,
   x : u16,
   y : u16,
   direction : u32,
 }
 
-fn phicorrection_from_bits<N: u32>(raw: bits[N]) -> Phicorrection {
+pub fn phicorrection_from_bits<N: u32>(raw: bits[N]) -> Phicorrection {
   Phicorrection {
     step: raw[0:32] as u32,
     x: raw[32:48] as u16,
@@ -195,48 +196,48 @@ fn phicorrection_from_bits<N: u32>(raw: bits[N]) -> Phicorrection {
   }
 }
 
-fn bits_from_phicorrection(s: Phicorrection) -> bits[bit_count<Phicorrection>()] {
+pub fn bits_from_phicorrection(s: Phicorrection) -> bits[bit_count<Phicorrection>()] {
   (s.direction as bits[32]) ++ (s.y as bits[16]) ++ (s.x as bits[16]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
 }
 
-struct Phiconfig {
+pub struct Phiconfig {
   seed : u32,
 }
 
-fn phiconfig_from_bits<N: u32>(raw: bits[N]) -> Phiconfig {
+pub fn phiconfig_from_bits<N: u32>(raw: bits[N]) -> Phiconfig {
   Phiconfig {
     seed: raw[0:32] as u32,
   }
 }
 
-fn bits_from_phiconfig(s: Phiconfig) -> bits[bit_count<Phiconfig>()] {
+pub fn bits_from_phiconfig(s: Phiconfig) -> bits[bit_count<Phiconfig>()] {
   (s.seed as bits[32]) ++  zero!<bits[0]>()
 }
 
-struct Pauliquery {
+pub struct Pauliquery {
   request_id : u32,
   measurement : u32,
 }
 
-fn pauliquery_from_bits<N: u32>(raw: bits[N]) -> Pauliquery {
+pub fn pauliquery_from_bits<N: u32>(raw: bits[N]) -> Pauliquery {
   Pauliquery {
     request_id: raw[0:32] as u32,
     measurement: raw[32:64] as u32,
   }
 }
 
-fn bits_from_pauliquery(s: Pauliquery) -> bits[bit_count<Pauliquery>()] {
+pub fn bits_from_pauliquery(s: Pauliquery) -> bits[bit_count<Pauliquery>()] {
   (s.measurement as bits[32]) ++ (s.request_id as bits[32]) ++  zero!<bits[0]>()
 }
 
-struct Paulireply {
+pub struct Paulireply {
   request_id : u32,
   x : u16,
   y : u16,
   anticommutes : u32,
 }
 
-fn paulireply_from_bits<N: u32>(raw: bits[N]) -> Paulireply {
+pub fn paulireply_from_bits<N: u32>(raw: bits[N]) -> Paulireply {
   Paulireply {
     request_id: raw[0:32] as u32,
     x: raw[32:48] as u16,
@@ -245,46 +246,46 @@ fn paulireply_from_bits<N: u32>(raw: bits[N]) -> Paulireply {
   }
 }
 
-fn bits_from_paulireply(s: Paulireply) -> bits[bit_count<Paulireply>()] {
+pub fn bits_from_paulireply(s: Paulireply) -> bits[bit_count<Paulireply>()] {
   (s.anticommutes as bits[32]) ++ (s.y as bits[16]) ++ (s.x as bits[16]) ++ (s.request_id as bits[32]) ++  zero!<bits[0]>()
 }
 
-struct Noisecutoff {
+pub struct Noisecutoff {
   first_quiet_step : u32,
 }
 
-fn noisecutoff_from_bits<N: u32>(raw: bits[N]) -> Noisecutoff {
+pub fn noisecutoff_from_bits<N: u32>(raw: bits[N]) -> Noisecutoff {
   Noisecutoff {
     first_quiet_step: raw[0:32] as u32,
   }
 }
 
-fn bits_from_noisecutoff(s: Noisecutoff) -> bits[bit_count<Noisecutoff>()] {
+pub fn bits_from_noisecutoff(s: Noisecutoff) -> bits[bit_count<Noisecutoff>()] {
   (s.first_quiet_step as bits[32]) ++  zero!<bits[0]>()
 }
 
-struct Pauliupdate {
+pub struct Pauliupdate {
   pauli : u32,
 }
 
-fn pauliupdate_from_bits<N: u32>(raw: bits[N]) -> Pauliupdate {
+pub fn pauliupdate_from_bits<N: u32>(raw: bits[N]) -> Pauliupdate {
   Pauliupdate {
     pauli: raw[0:32] as u32,
   }
 }
 
-fn bits_from_pauliupdate(s: Pauliupdate) -> bits[bit_count<Pauliupdate>()] {
+pub fn bits_from_pauliupdate(s: Pauliupdate) -> bits[bit_count<Pauliupdate>()] {
   (s.pauli as bits[32]) ++  zero!<bits[0]>()
 }
 
-struct Phistatus {
+pub struct Phistatus {
   step : u32,
   x : u16,
   y : u16,
   flags : u32,
 }
 
-fn phistatus_from_bits<N: u32>(raw: bits[N]) -> Phistatus {
+pub fn phistatus_from_bits<N: u32>(raw: bits[N]) -> Phistatus {
   Phistatus {
     step: raw[0:32] as u32,
     x: raw[32:48] as u16,
@@ -293,11 +294,11 @@ fn phistatus_from_bits<N: u32>(raw: bits[N]) -> Phistatus {
   }
 }
 
-fn bits_from_phistatus(s: Phistatus) -> bits[bit_count<Phistatus>()] {
+pub fn bits_from_phistatus(s: Phistatus) -> bits[bit_count<Phistatus>()] {
   (s.flags as bits[32]) ++ (s.y as bits[16]) ++ (s.x as bits[16]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
 }
 
-struct Cell {
+pub struct Cell {
   step : u32,
   diffusion_round : u32,
   phi : s32[2],
@@ -315,7 +316,7 @@ struct Cell {
   status_valid : u32,
 }
 
-fn cell_from_bits<N: u32>(raw: bits[N]) -> Cell {
+pub fn cell_from_bits<N: u32>(raw: bits[N]) -> Cell {
   Cell {
     step: raw[0:32] as u32,
     diffusion_round: raw[32:64] as u32,
@@ -335,7 +336,7 @@ fn cell_from_bits<N: u32>(raw: bits[N]) -> Cell {
   }
 }
 
-fn bits_from_cell(s: Cell) -> bits[bit_count<Cell>()] {
+pub fn bits_from_cell(s: Cell) -> bits[bit_count<Cell>()] {
   (s.status_valid as bits[32]) ++ (s.noise_quiet as bits[32]) ++ (s.y as bits[16]) ++ (s.x as bits[16]) ++ (s.random_state as bits[32]) ++ (s.anyon as bits[32]) ++ (s.moves_received as bits[8]) ++ (s.best_direction as bits[32]) ++ (s.best_phi0 as bits[32]) ++ (s.seen_sources as bits[32]) ++ (s.phi_received as bits[8]) ++ (s.phi_sum as bits[128]) ++ (s.phi as bits[64]) ++ (s.diffusion_round as bits[32]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
 }
 
@@ -381,6 +382,92 @@ struct Machine {
   failed: u1,
 }
 
+struct SharedMachine {
+  phase: Phase,
+  entered_from: Phase,
+  data: Cell,
+  enter_pending: u1,
+  entry_effect_index: u8,
+  failed: u1,
+}
+
+pub type MachineBits = bits[554];
+
+pub struct MachineRamReq {
+  addr: u32,
+  data: MachineBits,
+  write_mask: (),
+  read_mask: (),
+  we: u1,
+  re: u1,
+}
+
+pub struct MachineRamResp { data: MachineBits }
+
+pub struct MailboxRamReq {
+  addr: u32,
+  data: bits[128],
+  write_mask: (),
+  read_mask: (),
+  we: u1,
+  re: u1,
+}
+
+pub struct MailboxRamResp { data: bits[128] }
+
+struct MachineStep {
+  machine: Machine,
+  egress: Egress,
+  egress_valid: u1,
+  admission_valid: u1,
+}
+
+pub struct ScheduledRequest {
+  slot: u32,
+  frame: axis::Frame,
+  credit: u1,
+}
+
+pub struct ScheduledEgress {
+  slot: u32,
+  egress: Egress,
+}
+
+struct SharedStep {
+  machine: SharedMachine,
+  egress: Egress,
+  egress_valid: u1,
+  dispatched: u1,
+  directive: Directive,
+  phase_boundary: u1,
+}
+
+enum SharedPhase : u3 {
+  BOOT = u3:0,
+  STARTUP = u3:1,
+  COLLECT = u3:2,
+  READ = u3:3,
+  EXECUTE = u3:4,
+}
+
+struct SharedState<ACTOR_COUNT: u32, PRODUCER_COUNT: u32> {
+  phase: SharedPhase,
+  slot: u32,
+  machine: SharedMachine,
+  frame: axis::Frame,
+  received: u1,
+  mailbox_index: u8,
+  order_index: u8,
+  cursor: u32,
+  startup_seen: u32,
+  pending: ScheduledRequest[PRODUCER_COUNT],
+  pending_valid: u1[PRODUCER_COUNT],
+  occupied: u8[ACTOR_COUNT],
+  order: u8[5][ACTOR_COUNT],
+  postponed: u1[5][ACTOR_COUNT],
+  egress_busy: u1,
+}
+
 fn initial_machine() -> Machine {
 let _0 = Cell {
   ..zero!<Cell>()
@@ -399,6 +486,99 @@ let _3 = if (bool:false) {
 }
 };
   _3
+}
+
+fn shared_machine(machine: Machine) -> SharedMachine {
+  SharedMachine {
+    phase: machine.phase,
+    entered_from: machine.entered_from,
+    data: machine.data,
+    enter_pending: machine.enter_pending,
+    entry_effect_index: machine.entry_effect_index,
+    failed: machine.failed,
+  }
+}
+
+fn initial_shared_machine() -> SharedMachine {
+  shared_machine(initial_machine())
+}
+
+fn axis_frame_from_bits(raw: bits[128]) -> axis::Frame {
+  axis::Frame {
+    header: axis::Header {
+      payload_words: raw[0:8],
+      txid: raw[8:16],
+      flags: raw[16:24],
+      op: raw[24:32],
+    },
+    payload: raw[32:128],
+  }
+}
+
+fn bits_from_axis_frame(frame: axis::Frame) -> bits[128] {
+  frame.payload ++ (frame.header.op as bits[8]) ++
+    (frame.header.flags as bits[8]) ++
+    (frame.header.txid as bits[8]) ++
+    (frame.header.payload_words as bits[8])
+}
+
+fn machine_from_bits(raw: MachineBits) -> SharedMachine {
+  SharedMachine {
+    phase: raw[0:8] as Phase,
+    entered_from: raw[8:16] as Phase,
+    data: cell_from_bits(raw[16:544]),
+    enter_pending: raw[544:545],
+    entry_effect_index: raw[545:553],
+    failed: raw[553:554],
+  }
+}
+
+fn bits_from_machine(machine: SharedMachine) -> MachineBits {
+  machine.failed ++
+    (machine.entry_effect_index as bits[8]) ++
+    machine.enter_pending ++
+    bits_from_cell(machine.data) ++
+    (machine.entered_from as bits[8]) ++
+    (machine.phase as bits[8])
+}
+
+fn machine_read(slot: u32) -> MachineRamReq {
+  MachineRamReq {
+    addr: slot,
+    re: u1:1,
+    ..zero!<MachineRamReq>()
+  }
+}
+
+fn machine_write(slot: u32, machine: SharedMachine) -> MachineRamReq {
+  MachineRamReq {
+    addr: slot,
+    data: bits_from_machine(machine),
+    we: u1:1,
+    ..zero!<MachineRamReq>()
+  }
+}
+
+fn mailbox_addr(slot: u32, index: u8) -> u32 {
+  slot * u32:5 + index as u32
+}
+
+fn mailbox_read(slot: u32, index: u8) -> MailboxRamReq {
+  MailboxRamReq {
+    addr: mailbox_addr(slot, index),
+    re: u1:1,
+    ..zero!<MailboxRamReq>()
+  }
+}
+
+fn mailbox_write(
+    slot: u32, index: u8, frame: axis::Frame) -> MailboxRamReq {
+  MailboxRamReq {
+    addr: mailbox_addr(slot, index),
+    data: bits_from_axis_frame(frame),
+    we: u1:1,
+    ..zero!<MailboxRamReq>()
+  }
 }
 
 fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
@@ -2678,54 +2858,43 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
   }
 }
 
-pub proc Service {
-  req_in: chan<axis::Frame> in;
-  egress_out: chan<Egress> out;
-  admission_out: chan<u1> out;
-
-  config(req_in: chan<axis::Frame> in,
-         egress_out: chan<Egress> out,
-         admission_out: chan<u1> out) {
-    (req_in, egress_out, admission_out)
-  }
-
-  init { initial_machine() }
-
-  next(machine: Machine) {
-    if machine.failed {
-      machine
-    } else if machine.enter_pending {
-      let (entered_data, effects) = enter(
-        machine.entered_from, machine.phase, machine.data);
-      let has_effect = machine.entry_effect_index < effects.count;
-      let effect = effects.values[
-        machine.entry_effect_index as u32];
-      let emit_effect = has_effect && effects.valid[
-        machine.entry_effect_index as u32];
-      let egress_tok = send_if(
-        join(), egress_out, emit_effect, effect);
-      let next_effect_index =
-        machine.entry_effect_index + (has_effect as u8);
-      let entry_complete = next_effect_index >= effects.count;
-      let reserve = entry_complete &&
-        !machine.admission_pending &&
-        machine.occupied < MAILBOX_CAPACITY;
-      let admission_tok = send_if(
-        egress_tok, admission_out, reserve, u1:1);
-      let _entry_tok = admission_tok;
-      Machine {
-        data: if entry_complete { entered_data } else { machine.data },
-        enter_pending: !entry_complete,
-        entry_effect_index: if entry_complete {
-          u8:0
-        } else { next_effect_index },
-        admission_pending: machine.admission_pending || reserve,
-        ..machine
-      }
-    } else {
-      let (tok, frame, received) = recv_if_non_blocking(
-        join(), req_in, machine.admission_pending,
-        zero!<axis::Frame>());
+fn machine_step(
+    machine: Machine, frame: axis::Frame, received: u1,
+    egress_ready: u1) -> MachineStep {
+  if machine.failed {
+    MachineStep { machine, ..zero!<MachineStep>() }
+  } else if machine.enter_pending {
+    let (entered_data, effects) = enter(
+      machine.entered_from, machine.phase, machine.data);
+    let has_effect = machine.entry_effect_index < effects.count;
+    let effect = effects.values[
+      machine.entry_effect_index as u32];
+    let emit_effect = has_effect && effects.valid[
+      machine.entry_effect_index as u32];
+    let can_advance = !emit_effect || egress_ready;
+    let next_effect_index = machine.entry_effect_index +
+      ((has_effect && can_advance) as u8);
+    let entry_complete = can_advance &&
+      next_effect_index >= effects.count;
+    let reserve = entry_complete &&
+      !machine.admission_pending &&
+      machine.occupied < MAILBOX_CAPACITY;
+    let advanced_machine = Machine {
+      data: if entry_complete { entered_data } else { machine.data },
+      enter_pending: !entry_complete,
+      entry_effect_index: if entry_complete {
+        u8:0
+      } else { next_effect_index },
+      admission_pending: machine.admission_pending || reserve,
+      ..machine
+    };
+    MachineStep {
+      machine: if can_advance { advanced_machine } else { machine },
+      egress: effect,
+      egress_valid: emit_effect && can_advance,
+      admission_valid: reserve,
+    }
+  } else {
       let tag_ok = (frame.header.op == (Tag::PHI as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::ANYON_MOVE as u8) && frame.header.payload_words == u8:2) || (frame.header.op == (Tag::PHI0 as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHENOM_CONFIG as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHENOM_REQUEST as u8) && frame.header.payload_words == u8:1) || (frame.header.op == (Tag::PHENOM_QUERY as u8) && frame.header.payload_words == u8:2) || (frame.header.op == (Tag::PHENOM_DATA as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHENOM_ANYON as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHI_CORRECTION as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHI_CONFIG as u8) && frame.header.payload_words == u8:1) || (frame.header.op == (Tag::PAULI_QUERY as u8) && frame.header.payload_words == u8:2) || (frame.header.op == (Tag::PAULI_REPLY as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::NOISE_CUTOFF as u8) && frame.header.payload_words == u8:1) || (frame.header.op == (Tag::PAULI_UPDATE as u8) && frame.header.payload_words == u8:1) || (frame.header.op == (Tag::PHI_STATUS as u8) && frame.header.payload_words == u8:3);
       let accepted = received && tag_ok;
       let invalid_input = received && !tag_ok;
@@ -2826,9 +2995,7 @@ pub proc Service {
       // Preserve occupied + admission_pending <= capacity.
       let reserve = !failed && !received && !admission_pending &&
         candidate_occupied < MAILBOX_CAPACITY;
-      let _admission_tok = send_if(
-        tok, admission_out, reserve, u1:1);
-      Machine {
+      let next_machine = Machine {
         phase: candidate_phase,
         entered_from: if phase_boundary {
           machine.phase
@@ -2840,11 +3007,452 @@ pub proc Service {
         admission_pending: admission_pending || reserve,
         failed,
         ..machine
+      };
+      MachineStep {
+        machine: next_machine,
+        admission_valid: reserve,
+        ..zero!<MachineStep>()
       }
-    }
   }
 }
 
+fn shared_machine_step(
+    machine: SharedMachine, frame: axis::Frame, received: u1,
+    egress_ready: u1) -> SharedStep {
+  if machine.failed {
+    SharedStep { machine, ..zero!<SharedStep>() }
+  } else if machine.enter_pending {
+    let (entered_data, effects) = enter(
+      machine.entered_from, machine.phase, machine.data);
+    let has_effect = machine.entry_effect_index < effects.count;
+    let effect = effects.values[
+      machine.entry_effect_index as u32];
+    let emit_effect = has_effect && effects.valid[
+      machine.entry_effect_index as u32];
+    let can_advance = !emit_effect || egress_ready;
+    let next_effect_index = machine.entry_effect_index +
+      ((has_effect && can_advance) as u8);
+    let entry_complete = can_advance &&
+      next_effect_index >= effects.count;
+    let advanced_machine = SharedMachine {
+      data: if entry_complete { entered_data } else { machine.data },
+      enter_pending: !entry_complete,
+      entry_effect_index: if entry_complete {
+        u8:0
+      } else { next_effect_index },
+      ..machine
+    };
+    SharedStep {
+      machine: if can_advance { advanced_machine } else { machine },
+      egress: effect,
+      egress_valid: emit_effect && can_advance,
+      ..zero!<SharedStep>()
+    }
+  } else if received {
+    let tag_ok = (frame.header.op == (Tag::PHI as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::ANYON_MOVE as u8) && frame.header.payload_words == u8:2) || (frame.header.op == (Tag::PHI0 as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHENOM_CONFIG as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHENOM_REQUEST as u8) && frame.header.payload_words == u8:1) || (frame.header.op == (Tag::PHENOM_QUERY as u8) && frame.header.payload_words == u8:2) || (frame.header.op == (Tag::PHENOM_DATA as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHENOM_ANYON as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHI_CORRECTION as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHI_CONFIG as u8) && frame.header.payload_words == u8:1) || (frame.header.op == (Tag::PAULI_QUERY as u8) && frame.header.payload_words == u8:2) || (frame.header.op == (Tag::PAULI_REPLY as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::NOISE_CUTOFF as u8) && frame.header.payload_words == u8:1) || (frame.header.op == (Tag::PAULI_UPDATE as u8) && frame.header.payload_words == u8:1) || (frame.header.op == (Tag::PHI_STATUS as u8) && frame.header.payload_words == u8:3);
+    let (next_phase, next_data, directive, repeat_phase) =
+      if tag_ok {
+        dispatch(frame, machine.phase, machine.data)
+      } else {
+        (machine.phase, machine.data, Directive::FAIL, u1:0)
+      };
+    let invalid_repeat = tag_ok && repeat_phase &&
+      (directive != Directive::CONSUME ||
+       next_phase != machine.phase);
+    let effective = tag_ok && !invalid_repeat;
+    let phase_changed = effective && next_phase != machine.phase;
+    let phase_boundary = phase_changed ||
+      (effective && repeat_phase);
+    let failed = !tag_ok || invalid_repeat ||
+      (effective && directive == Directive::FAIL);
+    let next_machine = SharedMachine {
+      phase: if effective { next_phase } else { machine.phase },
+      entered_from: if phase_boundary {
+        machine.phase
+      } else { machine.entered_from },
+      data: if effective { next_data } else { machine.data },
+      enter_pending: effective && phase_boundary && !failed,
+      failed,
+      ..machine
+    };
+    SharedStep {
+      machine: next_machine,
+      dispatched: tag_ok && !invalid_repeat,
+      directive,
+      phase_boundary,
+      ..zero!<SharedStep>()
+    }
+  } else {
+    SharedStep { machine, ..zero!<SharedStep>() }
+  }
+}
+
+pub proc Service {
+  req_in: chan<axis::Frame> in;
+  egress_out: chan<Egress> out;
+  admission_out: chan<u1> out;
+
+  config(req_in: chan<axis::Frame> in,
+         egress_out: chan<Egress> out,
+         admission_out: chan<u1> out) {
+    (req_in, egress_out, admission_out)
+  }
+
+  init { initial_machine() }
+
+  next(machine: Machine) {
+    let receive_enabled = !machine.failed &&
+      !machine.enter_pending && machine.admission_pending;
+    let (tok, frame, received) = recv_if_non_blocking(
+      join(), req_in, receive_enabled, zero!<axis::Frame>());
+    let stepped = machine_step(machine, frame, received, u1:1);
+    let egress_tok = send_if(
+      tok, egress_out, stepped.egress_valid, stepped.egress);
+    let _admission_tok = send_if(
+      egress_tok, admission_out, stepped.admission_valid, u1:1);
+    stepped.machine
+  }
+}
+
+fn free_mailbox_index<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
+    state: SharedState<ACTOR_COUNT, PRODUCER_COUNT>,
+    slot: u32) -> u8 {
+  let (_found, selected) = unroll_for! (candidate, acc):
+      (u32, (u1, u8)) in
+      u32:0..MAILBOX_DEPTH {
+    let used = unroll_for! (position, found):
+        (u32, u1) in u32:0..MAILBOX_DEPTH {
+      found || (
+        position < state.occupied[slot] as u32 &&
+        state.order[slot][position] == candidate as u8)
+    }(u1:0);
+    let take = !acc.0 && !used;
+    (
+      acc.0 || take,
+      if take { candidate as u8 } else { acc.1 }
+    )
+  }((u1:0, u8:0));
+  selected
+}
+
+fn mailbox_selection<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
+    state: SharedState<ACTOR_COUNT, PRODUCER_COUNT>,
+    slot: u32) -> (u1, u8, u8) {
+  unroll_for! (position, acc):
+      (u32, (u1, u8, u8)) in
+      u32:0..MAILBOX_DEPTH {
+    let physical = state.order[slot][position];
+    let take = !acc.0 &&
+      position < state.occupied[slot] as u32 &&
+      !state.postponed[slot][physical as u32];
+    (
+      acc.0 || take,
+      if take { position as u8 } else { acc.1 },
+      if take { physical } else { acc.2 }
+    )
+  }((u1:0, u8:0, u8:0))
+}
+
+fn compact_order(
+    row: u8[MAILBOX_DEPTH],
+    selected: u8,
+    occupied: u8) -> u8[MAILBOX_DEPTH] {
+  unroll_for! (position, result):
+      (u32, u8[MAILBOX_DEPTH]) in
+      u32:0..MAILBOX_DEPTH {
+    let value = if position < selected as u32 {
+      row[position]
+    } else if position + u32:1 < occupied as u32 {
+      row[position + u32:1]
+    } else {
+      u8:0
+    };
+    update(result, position, value)
+  }(zero!<u8[MAILBOX_DEPTH]>())
+}
+
+// One mailbox owner admits frames, keeps queue metadata, and fairly
+// advances all actors in a homogeneous scheduler group. Every producer
+// has one holding slot, so one full actor cannot block unrelated traffic
+// before manager admission.
+pub proc SharedService<
+    ACTOR_COUNT: u32,
+    PRODUCER_COUNT: u32,
+    STARTUP_COUNT: u32
+> {
+  request_in: chan<ScheduledRequest>[PRODUCER_COUNT] in;
+  startup_in: chan<ScheduledRequest> in;
+  egress_out: chan<ScheduledEgress> out;
+  ram_req_out: chan<MachineRamReq> out;
+  ram_resp_in: chan<MachineRamResp> in;
+  ram_wr_comp_in: chan<()> in;
+  mailbox_req_out: chan<MailboxRamReq> out;
+  mailbox_resp_in: chan<MailboxRamResp> in;
+  mailbox_wr_comp_in: chan<()> in;
+
+  config(
+      request_in: chan<ScheduledRequest>[PRODUCER_COUNT] in,
+      startup_in: chan<ScheduledRequest> in,
+      egress_out: chan<ScheduledEgress> out,
+      ram_req_out: chan<MachineRamReq> out,
+      ram_resp_in: chan<MachineRamResp> in,
+      ram_wr_comp_in: chan<()> in,
+      mailbox_req_out: chan<MailboxRamReq> out,
+      mailbox_resp_in: chan<MailboxRamResp> in,
+      mailbox_wr_comp_in: chan<()> in
+  ) {
+    (
+      request_in,
+      startup_in,
+      egress_out,
+      ram_req_out,
+      ram_resp_in,
+      ram_wr_comp_in,
+      mailbox_req_out,
+      mailbox_resp_in,
+      mailbox_wr_comp_in,
+    )
+  }
+
+  init {
+    SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
+      phase: SharedPhase::BOOT,
+      ..zero!<SharedState<ACTOR_COUNT, PRODUCER_COUNT>>()
+    }
+  }
+
+  next(state: SharedState<ACTOR_COUNT, PRODUCER_COUNT>) {
+    match state.phase {
+      SharedPhase::BOOT => {
+        let write_tok = send(
+          join(),
+          ram_req_out,
+          machine_write(state.cursor, initial_shared_machine()));
+        let (_done, _) = recv(write_tok, ram_wr_comp_in);
+        if state.cursor + u32:1 == ACTOR_COUNT {
+          SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
+            phase: if STARTUP_COUNT == u32:0 {
+              SharedPhase::COLLECT
+            } else {
+              SharedPhase::STARTUP
+            },
+            ..zero!<SharedState<ACTOR_COUNT, PRODUCER_COUNT>>()
+          }
+        } else {
+          SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
+            cursor: state.cursor + u32:1,
+            ..state
+          }
+        }
+      },
+      SharedPhase::STARTUP => {
+        let (tok, request) = recv(join(), startup_in);
+        let physical = state.occupied[request.slot];
+        let write_tok = send(
+          tok,
+          mailbox_req_out,
+          mailbox_write(request.slot, physical, request.frame));
+        let (_done, _) = recv(write_tok, mailbox_wr_comp_in);
+        let occupied = update(
+          state.occupied, request.slot, physical + u8:1);
+        let row = update(
+          state.order[request.slot], physical as u32, physical);
+        let order = update(state.order, request.slot, row);
+        let startup_seen = state.startup_seen + u32:1;
+        SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
+          phase: if startup_seen == STARTUP_COUNT {
+            SharedPhase::COLLECT
+          } else {
+            SharedPhase::STARTUP
+          },
+          startup_seen,
+          occupied,
+          order,
+          ..state
+        }
+      },
+      SharedPhase::COLLECT => {
+        let (capture_tok, pending, pending_valid) =
+          unroll_for! (producer, acc):
+              (u32, (
+                token,
+                ScheduledRequest[PRODUCER_COUNT],
+                u1[PRODUCER_COUNT]
+              )) in u32:0..PRODUCER_COUNT {
+            let (next_tok, request, received) =
+              recv_if_non_blocking(
+                acc.0,
+                request_in[producer],
+                !acc.2[producer],
+                zero!<ScheduledRequest>());
+            (
+              next_tok,
+              if received {
+                update(acc.1, producer, request)
+              } else {
+                acc.1
+              },
+              if received {
+                update(acc.2, producer, u1:1)
+              } else {
+                acc.2
+              }
+            )
+          }((join(), state.pending, state.pending_valid));
+        let (credit_found, credit_producer) =
+          unroll_for! (candidate, acc):
+              (u32, (u1, u32)) in u32:0..PRODUCER_COUNT {
+            let take = !acc.0 && pending_valid[candidate] &&
+              pending[candidate].credit;
+            (acc.0 || take, if take { candidate } else { acc.1 })
+          }((u1:0, u32:0));
+        let (found, producer) = unroll_for! (candidate, acc):
+            (u32, (u1, u32)) in u32:0..PRODUCER_COUNT {
+          let slot = pending[candidate].slot;
+          let eligible = !acc.0 &&
+            pending_valid[candidate] &&
+            !pending[candidate].credit &&
+            slot < ACTOR_COUNT &&
+            state.occupied[slot] < MAILBOX_CAPACITY;
+          (
+            acc.0 || eligible,
+            if eligible { candidate } else { acc.1 }
+          )
+        }((u1:0, u32:0));
+        let request = pending[producer];
+        let physical = free_mailbox_index(state, request.slot);
+        let write_tok = send_if(
+          capture_tok,
+          mailbox_req_out,
+          found,
+          mailbox_write(request.slot, physical, request.frame));
+        let (_done, _) = recv_if(
+          write_tok, mailbox_wr_comp_in, found, ());
+        let old_count = state.occupied[request.slot];
+        let occupied = if found {
+          update(state.occupied, request.slot, old_count + u8:1)
+        } else {
+          state.occupied
+        };
+        let row = update(
+          state.order[request.slot], old_count as u32, physical);
+        let order = if found {
+          update(state.order, request.slot, row)
+        } else {
+          state.order
+        };
+        let remaining_after_admission = if found {
+          update(pending_valid, producer, u1:0)
+        } else {
+          pending_valid
+        };
+        let remaining = if credit_found {
+          update(remaining_after_admission, credit_producer, u1:0)
+        } else {
+          remaining_after_admission
+        };
+        SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
+          phase: SharedPhase::READ,
+          pending,
+          pending_valid: remaining,
+          occupied,
+          order,
+          egress_busy: state.egress_busy && !credit_found,
+          ..state
+        }
+      },
+      SharedPhase::READ => {
+        let (received, order_index, mailbox_index) =
+          mailbox_selection(state, state.cursor);
+        let state_tok = send(
+          join(), ram_req_out, machine_read(state.cursor));
+        let mailbox_tok = send_if(
+          join(),
+          mailbox_req_out,
+          received,
+          mailbox_read(state.cursor, mailbox_index));
+        let (state_done, response) = recv(state_tok, ram_resp_in);
+        let (mailbox_done, mailbox_response) = recv_if(
+          mailbox_tok,
+          mailbox_resp_in,
+          received,
+          zero!<MailboxRamResp>());
+        let _done = join(state_done, mailbox_done);
+        SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
+          phase: SharedPhase::EXECUTE,
+          slot: state.cursor,
+          machine: machine_from_bits(response.data),
+          frame: axis_frame_from_bits(mailbox_response.data),
+          received,
+          mailbox_index,
+          order_index,
+          ..state
+        }
+      },
+      SharedPhase::EXECUTE => {
+        let stepped = shared_machine_step(
+          state.machine, state.frame, state.received,
+          !state.egress_busy);
+        let scheduled = ScheduledEgress {
+          slot: state.slot,
+          egress: stepped.egress,
+        };
+        let egress_tok = send_if(
+          join(), egress_out, stepped.egress_valid, scheduled);
+        let write_tok = send(
+          egress_tok,
+          ram_req_out,
+          machine_write(state.slot, stepped.machine));
+        let (_done, _) = recv(write_tok, ram_wr_comp_in);
+        let consumed = state.received &&
+          stepped.dispatched &&
+          stepped.directive == Directive::CONSUME;
+        let should_postpone = state.received &&
+          stepped.dispatched &&
+          stepped.directive == Directive::POSTPONE;
+        let old_count = state.occupied[state.slot];
+        let occupied = update(
+          state.occupied,
+          state.slot,
+          if consumed { old_count - u8:1 } else { old_count });
+        let compacted = compact_order(
+          state.order[state.slot], state.order_index, old_count);
+        let order = if consumed {
+          update(state.order, state.slot, compacted)
+        } else {
+          state.order
+        };
+        let marked = update(
+          state.postponed[state.slot],
+          state.mailbox_index as u32,
+          u1:1);
+        let postponed_row = if stepped.phase_boundary {
+          zero!<u1[MAILBOX_DEPTH]>()
+        } else if should_postpone {
+          marked
+        } else {
+          state.postponed[state.slot]
+        };
+        let postponed = update(
+          state.postponed, state.slot, postponed_row);
+        let cursor = if state.cursor + u32:1 == ACTOR_COUNT {
+          u32:0
+        } else {
+          state.cursor + u32:1
+        };
+        SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
+          phase: SharedPhase::COLLECT,
+          cursor,
+          occupied,
+          order,
+          postponed,
+          egress_busy: state.egress_busy || stepped.egress_valid,
+          ..state
+        }
+      },
+    }
+  }
+}
 proc EgressDemux {
   egress_in: chan<Egress> in;
   north_out: chan<axis::Frame> out;

@@ -5,7 +5,7 @@ local_stage=${1:?usage: run_xls_sim.sh STAGE}
 project_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 remote_host=${ERL_HLS_REMOTE_HOST:-192.168.64.7}
 remote_root=${ERL_HLS_REMOTE_ROOT:-/home/ecpeterson/erl_hls-build}
-remote_xls=${ERL_HLS_REMOTE_XLS:-/home/ecpeterson/xls-v0.0.0-9235-gb179d691e-linux-x64}
+remote_xls=${ERL_HLS_REMOTE_XLS:-/home/ecpeterson/xls-v0.0.0-10601-g9f360fc89-linux-x64}
 remote_stage="$remote_root/regsvc"
 
 "$project_root/tools/prepare_xls_sim.sh" "$local_stage"
@@ -27,10 +27,12 @@ rsync -a -e "ssh -o BatchMode=yes" \
     "$local_stage/ordered_egress_topology.x" \
     "$local_stage/xls_case_fixture.x" \
     "$local_stage/phi_field_test.x" \
+    "$local_stage/phi_scheduler_rams.sh" \
     "$local_stage/axis.x" \
     "$local_stage/regsvc_core_adapter.v" \
     "$local_stage/regsvc_debug_top.v" \
     "$local_stage/phi_memory_debug_top.v" \
+    "$local_stage/hls_1rw_ram.v" \
     "$local_stage/hls_fabric_router.x" \
     "$local_stage/hls_spatial_router.x" \
     "$local_stage/hls_debug_types.x" \

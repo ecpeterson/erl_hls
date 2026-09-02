@@ -95,7 +95,7 @@ if [[ "$(sha256_file "$manifest")" != "$release_id" ]]; then
     echo "Generated-RTL manifest does not match its content-addressed release" >&2
     exit 1
 fi
-if ! grep -Fxq $'xls-version\tv0.0.0-9235-gb179d691e' "$manifest"; then
+if ! grep -Fxq $'xls-version\tv0.0.0-10601-g9f360fc89' "$manifest"; then
     echo "Generated RTL does not use the pinned XLS version" >&2
     exit 1
 fi
