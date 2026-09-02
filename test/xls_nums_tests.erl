@@ -19,3 +19,7 @@ unsigned_literal_uses_canonical_dslx_type_test() ->
             <<16#12345678:32/little>>
         ))
     ).
+
+signed_type_uses_canonical_dslx_type_test() ->
+    ?assertEqual("s32", xls_nums:signed_type(32)),
+    ?assertEqual("sN[37]", lists:flatten(xls_nums:signed_type(37))).

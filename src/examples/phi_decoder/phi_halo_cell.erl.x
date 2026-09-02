@@ -1819,7 +1819,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
             let _16 = _15 + 1;
             let Xls_clause_1_ReceivedNext_1 = _16;
             let _17 = Xls_clause_1_ReceivedNext_1 == 4;
-            let _38 = if _17 {
+            let _51 = if _17 {
               let _18 = Xls_clause_1_Cell_1.1.phi;
               let _19 = _18[1 - u32:1];
               let Xls_clause_1_P0_1 = _19;
@@ -1827,45 +1827,58 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
               let _21 = _20[2 - u32:1];
               let Xls_clause_1_P1_1 = _21;
               let _22 = Xls_clause_1_Cell_1.1.anyon;
-              let _23 = (if (((_22 as s64) << u32:16) + (if ((Xls_clause_1_P0_1 as s64) * s64:18 + (Xls_clause_1_P1_1 as s64) * s64:2 + Xls_clause_1_Sum0_1) < s64:0 { (((Xls_clause_1_P0_1 as s64) * s64:18 + (Xls_clause_1_P1_1 as s64) * s64:2 + Xls_clause_1_Sum0_1) - s64:12) / s64:24 } else { (((Xls_clause_1_P0_1 as s64) * s64:18 + (Xls_clause_1_P1_1 as s64) * s64:2 + Xls_clause_1_Sum0_1) + s64:12) / s64:24 })) > s64:2147483647 { s32:2147483647 } else if (((_22 as s64) << u32:16) + (if ((Xls_clause_1_P0_1 as s64) * s64:18 + (Xls_clause_1_P1_1 as s64) * s64:2 + Xls_clause_1_Sum0_1) < s64:0 { (((Xls_clause_1_P0_1 as s64) * s64:18 + (Xls_clause_1_P1_1 as s64) * s64:2 + Xls_clause_1_Sum0_1) - s64:12) / s64:24 } else { (((Xls_clause_1_P0_1 as s64) * s64:18 + (Xls_clause_1_P1_1 as s64) * s64:2 + Xls_clause_1_Sum0_1) + s64:12) / s64:24 })) < s64:-2147483648 { s32:-2147483648 } else { (((_22 as s64) << u32:16) + (if ((Xls_clause_1_P0_1 as s64) * s64:18 + (Xls_clause_1_P1_1 as s64) * s64:2 + Xls_clause_1_Sum0_1) < s64:0 { (((Xls_clause_1_P0_1 as s64) * s64:18 + (Xls_clause_1_P1_1 as s64) * s64:2 + Xls_clause_1_Sum0_1) - s64:12) / s64:24 } else { (((Xls_clause_1_P0_1 as s64) * s64:18 + (Xls_clause_1_P1_1 as s64) * s64:2 + Xls_clause_1_Sum0_1) + s64:12) / s64:24 })) as s32 });
-              let Xls_clause_1_New0_1 = _23;
-              let _24 = (if ((if ((Xls_clause_1_P0_1 as s64) + (Xls_clause_1_P1_1 as s64) * s64:15 + Xls_clause_1_Sum1_1) < s64:0 { (((Xls_clause_1_P0_1 as s64) + (Xls_clause_1_P1_1 as s64) * s64:15 + Xls_clause_1_Sum1_1) - s64:10) / s64:20 } else { (((Xls_clause_1_P0_1 as s64) + (Xls_clause_1_P1_1 as s64) * s64:15 + Xls_clause_1_Sum1_1) + s64:10) / s64:20 })) > s64:2147483647 { s32:2147483647 } else if ((if ((Xls_clause_1_P0_1 as s64) + (Xls_clause_1_P1_1 as s64) * s64:15 + Xls_clause_1_Sum1_1) < s64:0 { (((Xls_clause_1_P0_1 as s64) + (Xls_clause_1_P1_1 as s64) * s64:15 + Xls_clause_1_Sum1_1) - s64:10) / s64:20 } else { (((Xls_clause_1_P0_1 as s64) + (Xls_clause_1_P1_1 as s64) * s64:15 + Xls_clause_1_Sum1_1) + s64:10) / s64:20 })) < s64:-2147483648 { s32:-2147483648 } else { ((if ((Xls_clause_1_P0_1 as s64) + (Xls_clause_1_P1_1 as s64) * s64:15 + Xls_clause_1_Sum1_1) < s64:0 { (((Xls_clause_1_P0_1 as s64) + (Xls_clause_1_P1_1 as s64) * s64:15 + Xls_clause_1_Sum1_1) - s64:10) / s64:20 } else { (((Xls_clause_1_P0_1 as s64) + (Xls_clause_1_P1_1 as s64) * s64:15 + Xls_clause_1_Sum1_1) + s64:10) / s64:20 })) as s32 });
-              let Xls_clause_1_New1_1 = _24;
-              let _25 = Xls_clause_1_Cell_1.1.phi;
-              let _26 = update(_25, 1 - u32:1, Xls_clause_1_New0_1);
-              let Xls_clause_1_PhiFirst_1 = _26;
-              let _27 = update(Xls_clause_1_PhiFirst_1, 2 - u32:1, Xls_clause_1_New1_1);
-              let Xls_clause_1_NewPhi_1 = _27;
-              let _28 = Xls_clause_1_Round_1 + 1;
-              let _29 = zero!<s64[2]>();
-              let _30 = Cell {
-                diffusion_round: _28,
+              let _23 = ((Xls_clause_1_P0_1 as sN[37]) * sN[37]:18 + (Xls_clause_1_P1_1 as sN[37]) * sN[37]:2 + (Xls_clause_1_Sum0_1 as sN[37]));
+              let _24 = _23 < sN[37]:0;
+              let _25 = ((if _24 { -(_23) } else { _23 }) as uN[36]);
+              let _26 = (((_25 + uN[36]:12) >> u32:3) as uN[33]);
+              let _27 = ((_26 / uN[33]:3) as sN[33]);
+              let _28 = ((if _24 { -(_27) } else { _27 }) as s64);
+              let _29 = ((_22 as s64) << u32:16) + _28;
+              let _30 = (if _29 > s64:2147483647 { s32:2147483647 } else if _29 < s64:-2147483648 { s32:-2147483648 } else { _29 as s32 });
+              let Xls_clause_1_New0_1 = _30;
+              let _31 = ((Xls_clause_1_P0_1 as sN[37]) * sN[37]:1 + (Xls_clause_1_P1_1 as sN[37]) * sN[37]:15 + (Xls_clause_1_Sum1_1 as sN[37]));
+              let _32 = _31 < sN[37]:0;
+              let _33 = ((if _32 { -(_31) } else { _31 }) as uN[36]);
+              let _34 = (((_33 + uN[36]:10) >> u32:2) as uN[34]);
+              let _35 = ((_34 / uN[34]:5) as sN[33]);
+              let _36 = ((if _32 { -(_35) } else { _35 }) as s64);
+              let _37 = (if _36 > s64:2147483647 { s32:2147483647 } else if _36 < s64:-2147483648 { s32:-2147483648 } else { _36 as s32 });
+              let Xls_clause_1_New1_1 = _37;
+              let _38 = Xls_clause_1_Cell_1.1.phi;
+              let _39 = update(_38, 1 - u32:1, Xls_clause_1_New0_1);
+              let Xls_clause_1_PhiFirst_1 = _39;
+              let _40 = update(Xls_clause_1_PhiFirst_1, 2 - u32:1, Xls_clause_1_New1_1);
+              let Xls_clause_1_NewPhi_1 = _40;
+              let _41 = Xls_clause_1_Round_1 + 1;
+              let _42 = zero!<s64[2]>();
+              let _43 = Cell {
+                diffusion_round: _41,
                 phi: Xls_clause_1_NewPhi_1,
-                phi_sum: _29,
+                phi_sum: _42,
                 phi_received: 0,
                 ..(Xls_clause_1_Cell_1).1
               };
-              let _31 = (Tag::CELL, _30);
-              let Xls_clause_1_Updated_1 = _31;
-              let _32 = Xls_clause_1_Round_1 + 1;
-              let _33 = _32 == 2;
-              let _37 = if _33 {
-                let _34 = Cell {
+              let _44 = (Tag::CELL, _43);
+              let Xls_clause_1_Updated_1 = _44;
+              let _45 = Xls_clause_1_Round_1 + 1;
+              let _46 = _45 == 2;
+              let _50 = if _46 {
+                let _47 = Cell {
                   seen_sources: 0,
                   best_phi0: 0,
                   best_direction: 0,
                   ..(Xls_clause_1_Updated_1).1
                 };
-                let _35 = (Tag::CELL, _34);
-                let _36 = (Phase::COMPARING, _35, Directive::CONSUME, bool:0, );
-                (_36, bool:false)
+                let _48 = (Tag::CELL, _47);
+                let _49 = (Phase::COMPARING, _48, Directive::CONSUME, bool:0, );
+                (_49, bool:false)
               } else {
-                let _34 = (Phase::GATHERING, Xls_clause_1_Updated_1, Directive::CONSUME, bool:1, );
-                (_34, bool:false)
+                let _47 = (Phase::GATHERING, Xls_clause_1_Updated_1, Directive::CONSUME, bool:1, );
+                (_47, bool:false)
               };
               let case_match_1_1 = bool:false;
-              let case_match_1_2 = _37.1;
-              (_37.0, (case_match_1_1 != case_match_1_2) || bool:false)
+              let case_match_1_2 = _50.1;
+              (_50.0, (case_match_1_1 != case_match_1_2) || bool:false)
             } else {
               let _18 = Cell {
                 phi_sum: Xls_clause_1_NewSum_1,
@@ -1878,11 +1891,11 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
               (_20, bool:false)
             };
             let case_match_2_1 = bool:false;
-            let case_match_2_2 = _38.1;
+            let case_match_2_2 = _51.1;
             if ((case_match_2_1 != case_match_2_2) || bool:false) {
               (phase, data, Directive::FAIL, u1:0)
             } else {
-              (_38.0.0, _38.0.1.1, _38.0.2, _38.0.3)
+              (_51.0.0, _51.0.1.1, _51.0.2, _51.0.3)
             }
           } else {
             let Xls_clause_2_Epoch_1 = message.epoch;

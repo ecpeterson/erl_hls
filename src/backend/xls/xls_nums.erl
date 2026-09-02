@@ -4,7 +4,21 @@
 
 -module(xls_nums).
 
--export([packed_unsigned_literal/1, unsigned_literal/2, unsigned_type/1]).
+-export([
+    packed_unsigned_literal/1,
+    signed_type/1,
+    unsigned_literal/2,
+    unsigned_type/1
+]).
+
+-doc "Prints the DSLX type for a signed value of the given width.".
+-spec signed_type(pos_integer()) -> iolist().
+signed_type(8) -> "s8";
+signed_type(16) -> "s16";
+signed_type(32) -> "s32";
+signed_type(64) -> "s64";
+signed_type(Width) when Width > 0 ->
+    ["sN[", integer_to_list(Width), "]"].
 
 -doc "Prints the DSLX type for an unsigned value of the given width.".
 -spec unsigned_type(pos_integer()) -> iolist().
