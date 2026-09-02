@@ -33,12 +33,16 @@ noise and stops advancing its PRNG. Every data reply carries that persistent
 quiet state through the downstream syndrome and phi status, certifying the
 whole noise neighborhood.
 
-Once the cutoff has applied, a controller may query whether the stable
-cumulative Pauli anticommutes with a requested measurement. A query has no
-round number and is accepted from either protocol phase. The short `replying`
-phase emits the reply immediately, then preserves whether the data protocol
-was collecting the current round or reporting the preceding one. Further
-queries repeat that phase boundary and therefore preserve reply order.
+Once the cutoff has applied, a controller may inspect whether the stable
+cumulative Pauli anticommutes with a requested measurement. This is a
+nondestructive read of the simulator's classical Pauli accumulator, not a
+physical qubit measurement. A memory experiment uses one basis; inspecting a
+complementary basis represents a separate reset and run. A query has no round
+number and is accepted from either protocol phase. The short `replying` phase
+emits the reply immediately, then preserves whether the data protocol was
+collecting the current round or reporting the preceding one. Further
+same-basis queries repeat that phase boundary and therefore preserve reply
+order.
 
 This cell still models one binary physical-error event per round. Applying
 decoder corrections is endpoint-local; the topology controller remains

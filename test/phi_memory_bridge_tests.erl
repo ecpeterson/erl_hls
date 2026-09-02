@@ -49,8 +49,9 @@ fixture() ->
             Expected = {ok, #{
                 closeout_step => 16,
                 corrections => [],
-                data_paulis => [{{0, 0}, i}, {{0, 1}, i}],
-                row => #{y => 0, measurement => z, parity => 0}
+                measurement => z,
+                data_anticommutations => [{{0, 0}, 0}, {{0, 1}, 0}],
+                row => #{y => 0, parity => 0}
             }},
             {smoke, Options, Expected, ?RUNNER_TIMEOUT, 180}
     end.
@@ -67,10 +68,10 @@ cpu_witness() ->
 
 verify(demo, Actual) ->
     phi_memory_demo:verify(Actual);
-verify(smoke, {ok, #{data_paulis := DataPaulis}}) ->
-    case [Pauli || {_Coordinate, Pauli} <- DataPaulis, Pauli =/= i] of
+verify(smoke, {ok, #{data_anticommutations := DataAnticommutations}}) ->
+    case [Coordinate || {Coordinate, 1} <- DataAnticommutations] of
         [] -> ok;
-        Nonidentity -> error({nonidentity_smoke, Nonidentity})
+        Anticommuting -> error({anticommuting_smoke, Anticommuting})
     end;
 verify(smoke, Result) ->
     error({smoke_result, Result}).

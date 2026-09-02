@@ -105,9 +105,9 @@ matching_quiet_empty_rounds_emit_whole_device_query_test() ->
         ?PHENOM_QUIET_MASK,
         State2
     ),
-    ?assertEqual(querying_x, maps:get(phase, State3)),
+    ?assertEqual(querying, maps:get(phase, State3)),
     ?assertEqual(?CUTOFF_STEP + 1, maps:get(closeout_step, State3)),
-    ?assertEqual([snapshot_query(x)], Commands).
+    ?assertEqual([snapshot_query()], Commands).
 
 correction_update_precedes_drain_query_test() ->
     {State0, _Cutoff} = new_experiment(),
@@ -141,7 +141,7 @@ correction_update_precedes_drain_query_test() ->
         [
             {control_router, data, {0, 5, 0, 5},
                 #pauli_update{pauli = z}},
-            snapshot_query(x)
+            snapshot_query()
         ],
         CorrectionCommands ++ XStatusCommands ++ QueryCommands
     ),
@@ -191,35 +191,24 @@ out_of_order_whole_device_replies_build_canonical_witness_test() ->
         reply(?REQUEST_ID + 1, 0, 0, 1),
         Querying
     ),
-    XReplies = [
-        reply(?REQUEST_ID, X, Y, anti_x(pauli_at(X, Y)))
+    Replies = [
+        reply(?REQUEST_ID, X, Y, anticommutes_at(X, Y))
         || {X, Y} <- lists:reverse(snapshot_coordinates())
     ],
-    {QueryingZ, [ZQuery]} = replies(XReplies, Querying),
-    ?assertEqual(querying_z, maps:get(phase, QueryingZ)),
-    ?assertEqual(snapshot_query(z), ZQuery),
-    {QueryingZ, []} = phi_memory_experiment:event(
-        data_measurements,
-        reply(?REQUEST_ID + 7, 2, 5, 1),
-        QueryingZ
-    ),
-    ZReplies = [
-        reply(?REQUEST_ID + 1, X, Y, anti_z(pauli_at(X, Y)))
-        || {X, Y} <- snapshot_coordinates()
-    ],
-    {done, Witness, Done} = replies(ZReplies, QueryingZ),
+    {done, Witness, Done} = replies(Replies, Querying),
     ?assertEqual(done, maps:get(phase, Done)),
     ?assertEqual(?CUTOFF_STEP, maps:get(closeout_step, Witness)),
     ?assertEqual([], maps:get(corrections, Witness)),
+    ?assertEqual(z, maps:get(measurement, Witness)),
     ?assertEqual(
         lists:sort([
-            {{X, Y}, pauli_at(X, Y)}
+            {{X, Y}, anticommutes_at(X, Y)}
             || {X, Y} <- snapshot_coordinates()
         ]),
-        maps:get(data_paulis, Witness)
+        maps:get(data_anticommutations, Witness)
     ),
     ?assertEqual(
-        #{y => ?LINE_Y, measurement => z, parity => 0},
+        #{y => ?LINE_Y, parity => 0},
         maps:get(row, Witness)
     ).
 
@@ -238,21 +227,7 @@ duplicate_reply_fails_test() ->
     ),
     ?assertEqual(failed, maps:get(phase, Failed)).
 
-late_x_reply_fails_during_z_query_test() ->
-    QueryingX = querying_state(),
-    XReplies = [
-        reply(?REQUEST_ID, X, Y, 0)
-        || {X, Y} <- snapshot_coordinates()
-    ],
-    {QueryingZ, [_ZQuery]} = replies(XReplies, QueryingX),
-    {error, late_reply, Failed} = phi_memory_experiment:event(
-        data_measurements,
-        reply(?REQUEST_ID, 0, 0, 0),
-        QueryingZ
-    ),
-    ?assertEqual(failed, maps:get(phase, Failed)).
-
-request_id_wraps_between_snapshot_queries_test() ->
+maximum_request_id_is_used_without_a_successor_test() ->
     Max = 16#ffffffff,
     {State0, _Cutoff} = phi_memory_experiment:new(#{
         distance => ?DISTANCE,
@@ -267,7 +242,7 @@ request_id_wraps_between_snapshot_queries_test() ->
         ?PHENOM_QUIET_MASK,
         State0
     ),
-    {QueryingX, [XQuery]} = status_round(
+    {_Querying, [Query]} = status_round(
         z_decoder_events,
         ?CUTOFF_STEP,
         ?PHENOM_QUIET_MASK,
@@ -276,22 +251,44 @@ request_id_wraps_between_snapshot_queries_test() ->
     ?assertEqual(
         {control_router, data, {0, 0, 2, 5}, #pauli_query{
             request_id = Max,
-            measurement = x
-        }},
-        XQuery
-    ),
-    XReplies = [
-        reply(Max, X, Y, 0)
-        || {X, Y} <- snapshot_coordinates()
-    ],
-    {_QueryingZ, [ZQuery]} = replies(XReplies, QueryingX),
-    ?assertEqual(
-        {control_router, data, {0, 0, 2, 5}, #pauli_query{
-            request_id = 0,
             measurement = z
         }},
-        ZQuery
+        Query
     ).
+
+complementary_basis_requires_a_fresh_experiment_test() ->
+    {State0, _Cutoff} = phi_memory_experiment:new(#{
+        distance => ?DISTANCE,
+        first_quiet_step => ?CUTOFF_STEP,
+        line_y => ?LINE_Y,
+        measurement => x,
+        request_id => ?REQUEST_ID
+    }),
+    {State1, []} = status_round(
+        x_decoder_events,
+        ?CUTOFF_STEP,
+        ?PHENOM_QUIET_MASK,
+        State0
+    ),
+    {Querying, [Query]} = status_round(
+        z_decoder_events,
+        ?CUTOFF_STEP,
+        ?PHENOM_QUIET_MASK,
+        State1
+    ),
+    ?assertEqual(
+        {control_router, data, {0, 0, 2, 5}, #pauli_query{
+            request_id = ?REQUEST_ID,
+            measurement = x
+        }},
+        Query
+    ),
+    Replies = [
+        reply(?REQUEST_ID, X, Y, (X + Y) band 1)
+        || {X, Y} <- snapshot_coordinates()
+    ],
+    {done, Witness, _Done} = replies(Replies, Querying),
+    ?assertEqual(x, maps:get(measurement, Witness)).
 
 new_experiment() ->
     phi_memory_experiment:new(#{
@@ -316,7 +313,7 @@ querying_state() ->
         ?PHENOM_QUIET_MASK,
         State1
     ),
-    ?assertEqual(snapshot_query(x), Query),
+    ?assertEqual(snapshot_query(), Query),
     State2.
 
 status_round(Stream, Step, Flags, State) ->
@@ -350,12 +347,9 @@ snapshot_coordinates() ->
            Y <- lists:seq(0, 2 * ?DISTANCE - 1)
     ].
 
-snapshot_query(x) ->
+snapshot_query() ->
     {control_router, data, {0, 0, ?DISTANCE - 1, 2 * ?DISTANCE - 1},
-        #pauli_query{request_id = ?REQUEST_ID, measurement = x}};
-snapshot_query(z) ->
-    {control_router, data, {0, 0, ?DISTANCE - 1, 2 * ?DISTANCE - 1},
-        #pauli_query{request_id = ?REQUEST_ID + 1, measurement = z}}.
+        #pauli_query{request_id = ?REQUEST_ID, measurement = z}}.
 
 reply(RequestId, X, Y, Anticommutes) ->
     #pauli_reply{
@@ -382,21 +376,8 @@ replies([Reply | Rest], State, Commands) ->
             error({unexpected_reply_error, Reply, Error})
     end.
 
-pauli_at(0, 0) -> i;
-pauli_at(0, 1) -> x;
-pauli_at(0, 2) -> z;
-pauli_at(0, 3) -> y;
-pauli_at(0, ?LINE_Y) -> x;
-pauli_at(1, ?LINE_Y) -> z;
-pauli_at(2, ?LINE_Y) -> y;
-pauli_at(_X, _Y) -> i.
-
-anti_x(i) -> 0;
-anti_x(x) -> 0;
-anti_x(y) -> 1;
-anti_x(z) -> 1.
-
-anti_z(i) -> 0;
-anti_z(x) -> 1;
-anti_z(y) -> 1;
-anti_z(z) -> 0.
+anticommutes_at(0, 0) -> 1;
+anticommutes_at(0, 1) -> 1;
+anticommutes_at(0, ?LINE_Y) -> 1;
+anticommutes_at(2, ?LINE_Y) -> 1;
+anticommutes_at(_X, _Y) -> 0.

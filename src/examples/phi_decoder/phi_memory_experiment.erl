@@ -5,9 +5,9 @@
 -module(phi_memory_experiment).
 -moduledoc """
 Reduces phi/noise output events into the commands needed to finish one memory
-experiment and snapshot the cumulative Pauli frame of every data qubit. The
-snapshot also evaluates one caller-selected horizontal row. The caller is
-responsible for choosing a row and Pauli which represent the intended
+experiment and measure every data qubit in one caller-selected Pauli basis.
+The snapshot also evaluates one caller-selected horizontal row. The caller is
+responsible for choosing a row and basis which represent the intended
 nontrivial logical operator; this plumbing reducer does not prove homology.
 Its `distance` option must come from the active normalized topology. The pure
 reducer cannot discover or verify that deployment fact on its own.
@@ -28,9 +28,10 @@ data-qubit Pauli updates. A complete status round from both decoder planes is a
 closeout fence only when every coordinate reports both `quiet = 1` and
 `present = 0`. Correction and status share one ordered output per plane, so at
 that point every earlier correction has crossed the output boundary. The
-resulting whole-device queries follow all update commands on the one serialized
-ingress. Anticommutation queries against X and Z recover the complete
-projective Pauli at each coordinate without changing the actor protocol.
+resulting whole-device query follows all update commands on the one serialized
+ingress. One experiment measures either X or Z. Measuring the complementary
+basis requires a reset and a separate run; sequential X and Z queries would
+incorrectly treat destructive physical measurements as Pauli-frame tomography.
 
 The fence is a safety condition, not a convergence guarantee. The current
 fixed-round decoder can leave symmetric nonempty configurations stationary, so
@@ -59,7 +60,7 @@ wire envelope. Reset or gateway failure must abort and restart the experiment.
     distance := pos_integer(),
     first_quiet_step := hls_nums:u32(),
     line_y := hls_nums:u16(),
-    measurement := hls_pauli:pauli(),
+    measurement := x | z,
     request_id := hls_nums:u32()
 }.
 -type rectangle() :: {
@@ -83,10 +84,12 @@ wire envelope. Reset or gateway failure must abort and restart the experiment.
         hls_nums:u16(),
         hls_nums:u32()
     }],
-    data_paulis := [{{hls_nums:u16(), hls_nums:u16()}, hls_pauli:pauli()}],
+    measurement := x | z,
+    data_anticommutations := [
+        {{hls_nums:u16(), hls_nums:u16()}, 0 | 1}
+    ],
     row := #{
         y := hls_nums:u16(),
-        measurement := hls_pauli:pauli(),
         parity := 0 | 1
     }
 }.
@@ -107,30 +110,26 @@ new(#{
 }) when Distance > 0,
         FirstQuietStep >= 0, FirstQuietStep =< ?U32_MASK,
         LineY >= 0, LineY < 2 * Distance,
+        (Measurement =:= x orelse Measurement =:= z),
         RequestId >= 0, RequestId =< ?U32_MASK ->
-    case hls_pauli:is_pauli(Measurement) of
-        true ->
-            State = #{
-                distance => Distance,
-                cutoff_step => FirstQuietStep,
-                line_y => LineY,
-                measurement => Measurement,
-                request_id => RequestId,
-                phase => draining,
-                status_rounds => #{},
-                closed_steps => #{},
-                zero_steps => #{x => #{}, z => #{}},
-                seen_corrections => #{},
-                correction_log => [],
-                replies => #{x => #{}, z => #{}}
-            },
-            Rectangle = {0, 0, Distance - 1, 2 * Distance - 1},
-            {State, [{control_router, noise, Rectangle, #noise_cutoff{
-                first_quiet_step = FirstQuietStep
-            }}]};
-        false ->
-            error(badarg)
-    end;
+    State = #{
+        distance => Distance,
+        cutoff_step => FirstQuietStep,
+        line_y => LineY,
+        measurement => Measurement,
+        request_id => RequestId,
+        phase => draining,
+        status_rounds => #{},
+        closed_steps => #{},
+        zero_steps => #{x => #{}, z => #{}},
+        seen_corrections => #{},
+        correction_log => [],
+        replies => #{}
+    },
+    Rectangle = {0, 0, Distance - 1, 2 * Distance - 1},
+    {State, [{control_router, noise, Rectangle, #noise_cutoff{
+        first_quiet_step = FirstQuietStep
+    }}]};
 new(_Options) ->
     error(badarg).
 
@@ -159,10 +158,10 @@ decoder_event(Plane, Status = #phi_status{},
         State = #{phase := draining}) ->
     status(Plane, Status, State);
 decoder_event(_Plane, #phi_correction{}, State = #{phase := Phase})
-        when Phase =:= querying_x; Phase =:= querying_z ->
+        when Phase =:= querying ->
     {error, late_correction, State#{phase := failed}};
 decoder_event(_Plane, #phi_status{}, State = #{phase := Phase})
-        when Phase =:= querying_x; Phase =:= querying_z ->
+        when Phase =:= querying ->
     {State, []};
 decoder_event(_Plane, _Event, State) ->
     {error, decoder_event, State}.
@@ -297,6 +296,7 @@ complete_status_round(
 maybe_query(State = #{
     zero_steps := #{x := XSteps, z := ZSteps},
     distance := Distance,
+    measurement := Measurement,
     request_id := RequestId
 }) ->
     Common = lists:sort([
@@ -308,11 +308,11 @@ maybe_query(State = #{
         [Step | _] ->
             Query = #pauli_query{
                 request_id = RequestId,
-                measurement = x
+                measurement = Measurement
             },
             Command = {control_router, data,
                 {0, 0, Distance - 1, 2 * Distance - 1}, Query},
-            {State#{phase := querying_x, closeout_step => Step}, [Command]}
+            {State#{phase := querying, closeout_step => Step}, [Command]}
     end.
 
 prune_zero_steps(State = #{
@@ -333,11 +333,6 @@ measurement_reply(_Reply, State = #{phase := Phase})
         when Phase =:= draining; Phase =:= done; Phase =:= failed ->
     {State, []};
 measurement_reply(
-    #pauli_reply{request_id = RequestId},
-    State = #{phase := querying_z, request_id := RequestId}
-) ->
-    {error, late_reply, State#{phase := failed}};
-measurement_reply(
     #pauli_reply{
         request_id = RequestId,
         x = X,
@@ -345,24 +340,18 @@ measurement_reply(
         anticommutes = Anticommutes
     },
     State = #{
-        phase := Phase,
+        phase := querying,
         request_id := ExpectedRequestId,
         distance := Distance,
         replies := Replies
     }
-) when (Phase =:= querying_x orelse Phase =:= querying_z),
-        X >= 0, X < Distance, Y >= 0, Y < 2 * Distance,
+) when X >= 0, X < Distance, Y >= 0, Y < 2 * Distance,
         Anticommutes < 2 ->
-    {Measurement, ActiveRequestId} = query_identity(
-        Phase,
-        ExpectedRequestId
-    ),
-    case RequestId =:= ActiveRequestId of
+    case RequestId =:= ExpectedRequestId of
         false ->
             {State, []};
         true ->
             collect_reply(
-                Measurement,
                 {X, Y},
                 Anticommutes,
                 State,
@@ -370,88 +359,54 @@ measurement_reply(
                 Distance
             )
     end;
-measurement_reply(#pauli_reply{}, State = #{phase := Phase})
-        when Phase =:= querying_x; Phase =:= querying_z ->
+measurement_reply(#pauli_reply{}, State = #{phase := querying}) ->
     {error, reply, State#{phase := failed}}.
 
-collect_reply(Measurement, Coordinate, Anticommutes, State, Replies, Distance) ->
-    MeasurementReplies = maps:get(Measurement, Replies),
-    case maps:is_key(Coordinate, MeasurementReplies) of
+collect_reply(Coordinate, Anticommutes, State, Replies, Distance) ->
+    case maps:is_key(Coordinate, Replies) of
         true ->
             {error, duplicate_reply, State#{phase := failed}};
         false ->
-            UpdatedMeasurementReplies = MeasurementReplies#{
-                Coordinate => Anticommutes
-            },
-            UpdatedReplies = Replies#{Measurement := UpdatedMeasurementReplies},
+            UpdatedReplies = Replies#{Coordinate => Anticommutes},
             Updated = State#{replies := UpdatedReplies},
-            case map_size(UpdatedMeasurementReplies) =:=
-                    2 * Distance * Distance of
+            case map_size(UpdatedReplies) =:= 2 * Distance * Distance of
                 false ->
                     {Updated, []};
                 true ->
-                    complete_query(Measurement, Updated)
+                    Witness = witness(Updated),
+                    Done = Updated#{phase := done},
+                    {done, Witness, Done}
             end
     end.
-
-complete_query(x, State = #{distance := Distance, request_id := RequestId}) ->
-    Query = #pauli_query{
-        request_id = next_request_id(RequestId),
-        measurement = z
-    },
-    Command = {control_router, data,
-        {0, 0, Distance - 1, 2 * Distance - 1}, Query},
-    {State#{phase := querying_z}, [Command]};
-complete_query(z, State) ->
-    Witness = witness(State),
-    Done = State#{phase := done},
-    {done, Witness, Done}.
-
-query_identity(querying_x, RequestId) -> {x, RequestId};
-query_identity(querying_z, RequestId) -> {z, next_request_id(RequestId)}.
-
-next_request_id(RequestId) ->
-    (RequestId + 1) band ?U32_MASK.
 
 witness(#{
     closeout_step := CloseoutStep,
     correction_log := Corrections,
-    replies := #{x := AntiX, z := AntiZ},
+    replies := Replies,
     line_y := LineY,
     measurement := Measurement
 }) ->
-    DataPaulis = lists:sort([
-        {Coordinate, pauli(maps:get(Coordinate, AntiX), AntiZValue)}
-        || {Coordinate, AntiZValue} <- maps:to_list(AntiZ)
-    ]),
+    DataAnticommutations = lists:sort(maps:to_list(Replies)),
     RowParity = lists:foldl(
         fun
-            ({{_X, Y}, Pauli}, Parity) when Y =:= LineY ->
-                parity(hls_pauli:anticommutes(Pauli, Measurement)) bxor Parity;
+            ({{_X, Y}, Anticommutes}, Parity) when Y =:= LineY ->
+                Anticommutes bxor Parity;
             (_Other, Parity) ->
                 Parity
         end,
         0,
-        DataPaulis
+        DataAnticommutations
     ),
     #{
         closeout_step => CloseoutStep,
         corrections => lists:sort(Corrections),
-        data_paulis => DataPaulis,
+        measurement => Measurement,
+        data_anticommutations => DataAnticommutations,
         row => #{
             y => LineY,
-            measurement => Measurement,
             parity => RowParity
         }
     }.
-
-pauli(0, 0) -> i;
-pauli(0, 1) -> x;
-pauli(1, 0) -> z;
-pauli(1, 1) -> y.
-
-parity(false) -> 0;
-parity(true) -> 1.
 
 step_closed(Plane, Step, Closed) ->
     case maps:find(Plane, Closed) of

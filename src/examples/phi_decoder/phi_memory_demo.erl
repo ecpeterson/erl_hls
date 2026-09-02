@@ -13,10 +13,11 @@ with `phi_memory_cpu_fabric`; the transported path gives the same options to
 `phi_memory_runner` around an `hls_fabric`.
 
 The full witness contains every accepted correction and every final data-qubit
-Pauli. The demo script carries the CPU-produced term to the Icarus host for a
-direct comparison. The checked summary is deliberately small: it catches
-shared drift and establishes that the fixture exercises nonidentity Paulis and
-decoder corrections without committing a long schedule trace.
+Z-anticommutation bit. The demo script carries the CPU-produced term to the
+Icarus host for a direct comparison. The checked summary is deliberately
+small: it catches shared drift and establishes that the fixture exercises both
+measurement outcomes and decoder corrections without committing a long
+schedule trace. An X-basis comparison requires a separate reset and run.
 """.
 
 -export([
@@ -52,8 +53,9 @@ fixture() ->
         expected_summary => #{
             closeout_step => 21,
             correction_count => 84,
-            pauli_counts => #{i => 4, x => 4, y => 2, z => 8},
-            row => #{y => 4, measurement => z, parity => 1}
+            measurement => z,
+            data_counts => #{commutes => 12, anticommutes => 6},
+            row => #{y => 4, parity => 1}
         }
     }.
 
@@ -93,31 +95,37 @@ run_cpu(Timeout) when Timeout > 0 ->
 summary(#{
     closeout_step := CloseoutStep,
     corrections := Corrections,
-    data_paulis := DataPaulis,
+    measurement := Measurement,
+    data_anticommutations := DataAnticommutations,
     row := Row
 }) ->
-    Paulis = [Pauli || {_Coordinate, Pauli} <- DataPaulis],
+    Values = [Value || {_Coordinate, Value} <- DataAnticommutations],
     #{
         closeout_step => CloseoutStep,
         correction_count => length(Corrections),
-        pauli_counts => maps:from_list([
-            {Pauli, length([ok || Value <- Paulis, Value =:= Pauli])}
-            || Pauli <- [i, x, y, z]
-        ]),
+        measurement => Measurement,
+        data_counts => #{
+            commutes => length([ok || 0 <- Values]),
+            anticommutes => length([ok || 1 <- Values])
+        },
         row => Row
     }.
 
 -doc "Checks the full witness shape and the fixture's compact golden.".
 -spec verify({ok, phi_memory_experiment:witness()} | {error, term()}) ->
     ok | {error, term()}.
-verify({ok, Witness = #{corrections := [_ | _], data_paulis := DataPaulis}}) ->
-    Nonidentity = [
-        Pauli || {_Coordinate, Pauli} <- DataPaulis, Pauli =/= i
-    ],
+verify({ok, Witness = #{
+    corrections := [_ | _],
+    data_anticommutations := DataAnticommutations
+}}) ->
+    Values = lists:usort([
+        Value || {_Coordinate, Value} <- DataAnticommutations
+    ]),
     #{expected_summary := Expected} = fixture(),
-    case {Nonidentity, summary(Witness)} of
-        {[_ | _], Expected} -> ok;
-        {[], _Actual} -> {error, trivial_pauli_frame};
+    case {Values, summary(Witness)} of
+        {[0, 1], Expected} -> ok;
+        {[_], _Actual} -> {error, uniform_data_measurement};
+        {[], _Actual} -> {error, empty_data_measurement};
         {_, Actual} -> {error, {summary, Expected, Actual}}
     end;
 verify({ok, _Witness}) ->

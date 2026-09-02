@@ -217,7 +217,7 @@ flowchart LR
     ZE -. "map each correction<br/>to a point update" .-> Runner
     XE -. "complete quiet + empty<br/>same-step X status" .-> Runner
     ZE -. "complete quiet + empty<br/>same-step Z status" .-> Runner
-    DM -. "two full X/Z snapshots<br/>canonical Pauli witness" .-> Runner
+    DM -. "one selected-basis snapshot<br/>canonical bit witness" .-> Runner
 ```
 
 At the default distance three, the plan has 54 actor instances, 34 compact
@@ -250,9 +250,11 @@ Each data actor retains one cumulative projective Pauli containing both
 physical errors and applied decoder corrections. The current binary noise event
 is Y because it is visible to both syndrome planes; two such events cancel.
 After cutoff, `pauli_query` asks whether that frame anticommutes with a requested
-Pauli measurement. The reply carries a request ID, physical data coordinate,
-and parity bit. Both data families share one fairly merged output; request IDs
-and coordinates make its unspecified cross-family order irrelevant.
+Pauli measurement. This operation nondestructively inspects the simulator's
+classical accumulator; the physical memory protocol uses it for only one basis
+before reset. The reply carries a request ID, physical data coordinate, and
+parity bit. Both data families share one fairly merged output; request IDs and
+coordinates make its unspecified cross-family order irrelevant.
 
 These `external` endpoints remain five typed channels on the generated
 topology, but `phi_memory_gateway` now merges them into distinct routed source
@@ -339,13 +341,15 @@ status. The reducer translates each sparse correction into a point-addressed
 planes closes the decoder only when every coordinate is quiet and empty.
 Because each cell's status follows its optional correction on the same ordered
 plane output, the two complete sets also fence all earlier correction events.
-The reducer then issues two whole-data-grid `pauli_query` commands after the
-queued point updates. Anticommutation with X and Z uniquely reconstructs each
-projective Pauli. The canonical result records the common closeout step, the
-coordinate-sorted Pauli frame, the sorted correction set, and the parity of the
-selected horizontal row. This is a sound completion witness, not a liveness
-guarantee: the current fixed-round decoder can leave symmetric nonempty anyon
-configurations stationary. Until its tie-breaking or stopping rule is
+The reducer then issues one whole-data-grid `pauli_query` in the caller-selected
+basis after the queued point updates. The canonical result records the common
+closeout step, every coordinate's anticommutation bit, the sorted correction
+set, and the parity of the selected horizontal row. A complementary-basis
+measurement requires reset and a separate run; sequential X and Z queries
+would not describe one physical shot. This is a sound completion witness, not
+a liveness guarantee: the current fixed-round decoder can leave symmetric
+nonempty anyon configurations stationary. Until its tie-breaking or stopping
+rule is
 strengthened, the ERTS runner must bound the closeout wait and report
 nonconvergence rather than inferring completion from elapsed time. This first
 protocol assumes one lossless, non-restarting fabric activation; a reset or
@@ -365,7 +369,7 @@ later decoder work.
 
 ### Distance-three synthesis progression
 
-The last out-of-context XC7 mapping progression, before the Pauli snapshot
+The last out-of-context XC7 mapping progression, before the data-measurement
 state and output were added, was:
 
 | ingress | lane holding storage | consumer input flops | estimated logic cells | flip-flops | LUT1–LUT6 | `DSP48E1` |
@@ -415,28 +419,29 @@ toggle. This verifies rectangular target embedding and the correction/query
 path in the synthesized D3 network; it deliberately does not wait for empty
 decoder planes or claim a logical-correctness result.
 
-The routine distance-one smoke bench does drive `control_router`. It sends one
-whole-fabric cutoff, waits for propagated quiet status, queries one data line,
-applies one point-addressed X update, and observes the corresponding
-anticommutation change on a second query. Distance one aliases decoder routes,
-so this smoke test exercises control plumbing rather than the nondegenerate
-drain criterion.
+The routine distance-one topology smoke bench does drive `control_router`. It
+sends one whole-fabric cutoff, waits for propagated quiet status, inspects one
+data line, applies one point-addressed X update, and observes the corresponding
+anticommutation change with a second same-basis inspection. That is a
+nondestructive simulator plumbing check, not two physical measurements.
+Distance one aliases decoder routes, so the bench does not test the
+nondegenerate drain criterion.
 
 `phi_memory_gateway.x` is the checked generated wrapper for the distance-three
 topology. The routine remote regression instead generates the same wrapper
 around a zero-noise distance-one topology, compiles it through XLS and Icarus,
 and connects its AXIS ports to `hls_fabric` through the VPI FIFO bridge. A real
 `phi_memory_runner` then sends cutoff, observes the quiet/empty fence, issues
-both whole-grid Pauli queries, and returns the two-qubit identity snapshot to
-its ERTS caller. This is an end-to-end transport and protocol witness; the
-aliased distance-one geometry is not a decoder-correctness test.
+one whole-grid Z query, and returns the two zero anticommutation bits to its
+ERTS caller. This is an end-to-end transport and protocol witness; the aliased
+distance-one geometry is not a decoder-correctness test.
 
 The local regression now performs the full noisy distance-three closeout with
 cutoff step 16, physical row four, and a Z measurement through
 `phi_memory_cpu_fabric`. Its deterministic full-device witness closes at step
-21, contains 84 corrections, reconstructs 18 Paulis, and returns row parity
-one. Run the same fixture through both the CPU realization and the checked
-distance-three gateway with:
+21, contains 84 corrections, records 18 Z-anticommutation bits (six set), and
+returns row parity one. Run the same fixture through both the CPU realization
+and the checked distance-three gateway with:
 
 ```sh
 tools/run_phi_memory_demo.sh
