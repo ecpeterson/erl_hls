@@ -609,6 +609,7 @@ measurement.
 | raw SystemVerilog, including routed boundary | 2,063 | 708 | 2,358 | 148 | 0 | 0 |
 | register-array DSLX core through XLS | 9,065 | 4,525 | 9,495 | 0 | 0 | 1 |
 | one-RAM DSLX core through XLS | 1,248 | 890 | 1,755 | 0 | 1 | 1 |
+| interactive one-RAM DSLX worker + routed boundary | 1,723 | 1,293 | 2,319 | 0 | 1 | 1 |
 
 The matched trajectory and shared schedule remove actor replication as an
 explanation for the register-array core's remaining 4.4× logic-cell gap.
@@ -617,8 +618,13 @@ each spatial index as ten 32-bit words, boots all 180 used words explicitly,
 and accesses them through XLS's fixed-latency 1RW channel contract. Codegen
 replaces those channels with an external RAM port; the small wrapper infers one
 synchronous Xilinx block RAM. The interpreter model and generated-Verilog
-regression both reproduce the exact step, correction counts, and final Pauli
-mask.
+regression reproduce the exact step, ordered correction trace, and final Pauli
+mask. The first area row above measured a summary-only version of the worker;
+the checked source now exposes the real cutoff, correction-update, and query
+exchange through a scheduler-local command/event interface. Adding the routed
+AXI adapter costs 475 estimated logic cells and 403 flip-flops relative to that
+initial storage witness, though the worker interface also changed, so this is
+a useful upper bound rather than a clean subtraction.
 
 Moving state behind that port removes 7,817 estimated logic cells and 3,635
 flip-flops from the XLS row. The BRAM core is smaller than the raw full-boundary
@@ -642,6 +648,41 @@ still need bounded ready queues, per-instance mailbox storage, fair service,
 and lifecycle generations; this globally phased decoder does not supply those
 ERTS semantics. It does establish a useful implementation target for actor
 families whose ordering permits temporal sharing.
+
+The host boundary and worker are now separated as follows:
+
+```mermaid
+flowchart LR
+    ERTS["ERTS phi_memory_runner"] <--> AXIS["routed 32-bit AXI stream"]
+    AXIS <--> Boundary["scheduler boundary<br/>validate + packetize"]
+    Boundary -->|"Command: cutoff / update / query"| Worker["one sequential worker"]
+    Worker -->|"Event: announcement / correction / status / reply"| Boundary
+    Worker <--> RAM["one 256 x 32 1RW block RAM"]
+```
+
+The direct RTL protocol regression takes 175,408 clocks and retains the raw
+baseline's ordered 84-correction checksum and all 18 replies. The unchanged
+ERTS runner also matches the complete CPU witness through Icarus; that bridge
+test takes about 151 seconds on the current UTM. Each correction event crosses
+to ERTS and its point update returns before this conservative worker continues,
+so the test measures a real host-serialization cost rather than hiding
+correction application inside the engine.
+
+This interface is also the intended seam for the next latency/area experiment.
+The current RAM indices already separate the X and Z phi planes into `0..8`
+and `9..17`, and internal events carry a plane plus a local index. A three-way
+implementation can therefore give a data/noise/Pauli owner and each decoder
+plane its own worker and RAM. After the data owner produces one immutable round
+snapshot, the X and Z workers can perform their diffusion and comparison scans
+in parallel, return sparse corrections, and meet at a step barrier. Splitting a
+single plane spatially is also possible, but then each Jacobi round needs halo
+exchange and a stronger inter-worker barrier.
+
+Parallel workers do not by themselves remove the ERTS correction round trip.
+Applying a correction locally before reporting it would require the returning
+`pauli_update` to become an acknowledgement or to be suppressed, with an
+operation identity to avoid double application after failure. The current
+experiment deliberately leaves that protocol decision open.
 
 Replicating the SystemVerilog lane gives the direct area/latency curve below.
 The cycle estimate covers both Jacobi rounds across 18 phi cells, including
@@ -685,6 +726,10 @@ tools/run_phi_sequential_bram_xls.sh
 `tools/run_phi_memory_raw_demo.sh` runs the full ERTS/VPI witness comparison on
 the configured build host without generating XLS RTL or loading the debug
 boundary.
+
+`tools/run_phi_memory_bram_demo.sh` regenerates the RAM-rewritten interactive
+worker, runs its direct protocol and XC7 mapping checks, then drives it with the
+same unmodified ERTS runner and CPU witness.
 
 `tools/run_phi_area_matrix.sh` regenerates the d=2 topology on the configured
 XLS host and repeats the service, transport-black-box, and raw-core mappings.

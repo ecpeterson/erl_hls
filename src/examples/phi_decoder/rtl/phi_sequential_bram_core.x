@@ -1,14 +1,16 @@
-// BRAM-backed, time-multiplexed d=3 phi-decoder core.
+// BRAM-backed, time-multiplexed d=3 phi-decoder worker.
 //
 // This is the memory-backed counterpart to phi_sequential_core.x. One shared
 // controller operates on 18 data, syndrome, and phi state tuples stored as ten
-// 32-bit words per spatial index. The public RAM channels are rewritten by XLS
-// codegen into a fixed-latency 1RW memory interface; the test-only RamModel
-// preserves the same protocol in the DSLX interpreter.
+// 32-bit words per spatial index. Commands and events deliberately form a
+// scheduler-local interface: the routed host boundary is a separate proc, and
+// a later design can place two or more workers and RAM shards behind the same
+// boundary. The public RAM channels are rewritten by XLS codegen into a
+// fixed-latency 1RW memory interface; the test-only RamModel preserves the
+// same protocol in the DSLX interpreter.
 
 const CELL_COUNT = u5:18;
 const PLANE_COUNT = u5:9;
-const CUTOFF_STEP = u32:16;
 const NOISE_RATE = u32:0x80000000;
 const SEED_STRIDE = u32:0x9e3779b9;
 
@@ -28,12 +30,35 @@ const PHI1_A = u4:7;
 const PHI0_B = u4:8;
 const PHI1_B = u4:9;
 
-pub struct Summary {
+pub const COMMAND_CUTOFF = u2:0;
+pub const COMMAND_UPDATE = u2:1;
+pub const COMMAND_QUERY = u2:2;
+
+pub const EVENT_ANNOUNCEMENT = u2:0;
+pub const EVENT_CORRECTION = u2:1;
+pub const EVENT_STATUS = u2:2;
+pub const EVENT_REPLY = u2:3;
+
+pub struct Command {
+  kind: u2,
+  x0: u16,
+  y0: u16,
+  x1: u16,
+  y1: u16,
+  request_id: u32,
+  value: u32,
+}
+
+// Phi-family events use plane plus a 0..8 local index. Replies use a physical
+// data index in 0..17 and ignore plane. The boundary owns coordinate packing
+// and routed endpoint allocation.
+pub struct Event {
+  kind: u2,
+  plane: u1,
+  index: u5,
   step: u32,
-  corrections: u16,
-  x_corrections: u16,
-  z_corrections: u16,
-  measurement_bits: uN[18],
+  request_id: u32,
+  value: u32,
 }
 
 pub struct RamReq {
@@ -76,11 +101,17 @@ enum Phase : u6 {
   APPLY_READ_META = 25,
   APPLY_READ_NEIGHBOR = 26,
   APPLY_WRITE_META = 27,
-  APPLY_READ_DATA_META = 28,
-  APPLY_WRITE_DATA_META = 29,
-  MEASURE_READ = 30,
-  DONE = 31,
+  EMIT_READ_SYNDROME = 28,
+  EMIT_READ_PHI = 29,
+  EMIT_SEND = 30,
+  WAIT_UPDATE = 31,
   BOOT_SEED = 32,
+  WAIT_CUTOFF = 33,
+  UPDATE_READ = 34,
+  UPDATE_WRITE = 35,
+  WAIT_QUERY = 36,
+  QUERY_READ = 37,
+  QUERY_SEND = 38,
 }
 
 struct State {
@@ -89,6 +120,8 @@ struct State {
   index: u5,
   subindex: u4,
   diffusion_round: u1,
+  emit_phase: u3,
+  emit_index: u5,
 
   seed_cursor: u32,
 
@@ -99,6 +132,8 @@ struct State {
   syndrome_previous: u1,
   syndrome_measurement: u1,
   syndrome_parity: u1,
+  syndrome_event: u1,
+  syndrome_quiet: u1,
   phi_rng: u32,
   phi_anyon: u1,
   phi_move: u4,
@@ -122,10 +157,13 @@ struct State {
   div_negative: u1,
 
   anyon_seen: u1,
-  corrections: u16,
-  x_corrections: u16,
-  z_corrections: u16,
-  measurement_bits: uN[18],
+  cutoff_step: u32,
+  command_x0: u16,
+  command_y0: u16,
+  command_x1: u16,
+  command_y1: u16,
+  command_request_id: u32,
+  command_value: u32,
 }
 
 fn xorshift32(value: u32) -> u32 {
@@ -163,6 +201,13 @@ fn write_request(index: u5, slot: u4, data: u32) -> RamReq {
 fn data_pauli(meta: u3) -> u2 { meta[0:2] as u2 }
 fn data_event(meta: u3) -> u1 { meta[2:3] as u1 }
 fn pack_data_meta(pauli: u2, occurred: u1) -> u3 { occurred ++ pauli }
+
+fn syndrome_previous(meta: u3) -> u1 { meta[0:1] as u1 }
+fn syndrome_event(meta: u3) -> u1 { meta[1:2] as u1 }
+fn syndrome_quiet(meta: u3) -> u1 { meta[2:3] as u1 }
+fn pack_syndrome_meta(previous: u1, event: u1, quiet: u1) -> u3 {
+  quiet ++ event ++ previous
+}
 
 fn phi_anyon(meta: u5) -> u1 { meta[0:1] as u1 }
 fn phi_move(meta: u5) -> u4 { meta[1:5] as u4 }
@@ -209,6 +254,28 @@ fn correction_data_index(index: u5, direction: u4) -> u5 {
     _ => u2:3,
   };
   syndrome_data_index(index, arm)
+}
+
+fn selected(index: u5, x0: u16, y0: u16, x1: u16, y1: u16) -> u1 {
+  let x = if index < u5:6 {
+    u16:0
+  } else if index < u5:12 {
+    u16:1
+  } else {
+    u16:2
+  };
+  let y = if index < u5:6 {
+    index as u16
+  } else if index < u5:12 {
+    (index - u5:6) as u16
+  } else {
+    (index - u5:12) as u16
+  };
+  x >= x0 && x <= x1 && y >= y0 && y <= y1
+}
+
+fn anticommutes(left: u2, right: u2) -> u1 {
+  (((left >> u2:1) & right) ^ (left & (right >> u2:1))) as u1
 }
 
 fn phi_neighbor(index: u5, direction: u4) -> u5 {
@@ -314,24 +381,19 @@ fn advance_index(state: State, loop_phase: Phase, done_phase: Phase) -> State {
   }
 }
 
+fn start_emission(state: State) -> State {
+  State {
+    phase: Phase::EMIT_READ_SYNDROME,
+    index: u5:0,
+    emit_phase: u3:0,
+    emit_index: u5:0,
+    ..state
+  }
+}
+
 fn advance_apply(state: State) -> State {
   if state.index == CELL_COUNT - u5:1 {
-    if state.step >= CUTOFF_STEP && !state.anyon_seen {
-      State {
-        phase: Phase::MEASURE_READ,
-        index: u5:0,
-        measurement_bits: uN[18]:0,
-        ..state
-      }
-    } else {
-      State {
-        phase: Phase::DATA_READ_RNG,
-        step: state.step + u32:1,
-        index: u5:0,
-        anyon_seen: u1:0,
-        ..state
-      }
-    }
+    start_emission(state)
   } else {
     State {
       phase: Phase::APPLY_READ_META,
@@ -341,18 +403,88 @@ fn advance_apply(state: State) -> State {
   }
 }
 
+fn advance_emit(state: State) -> State {
+  if state.emit_index != PLANE_COUNT - u5:1 {
+    State {
+      phase: Phase::EMIT_READ_SYNDROME,
+      emit_index: state.emit_index + u5:1,
+      ..state
+    }
+  } else if state.emit_phase != u3:5 {
+    State {
+      phase: Phase::EMIT_READ_SYNDROME,
+      emit_phase: state.emit_phase + u3:1,
+      emit_index: u5:0,
+      ..state
+    }
+  } else if state.step >= state.cutoff_step && !state.anyon_seen {
+    State { phase: Phase::WAIT_QUERY, index: u5:0, ..state }
+  } else {
+    State {
+      phase: Phase::DATA_READ_RNG,
+      step: state.step + u32:1,
+      index: u5:0,
+      anyon_seen: u1:0,
+      ..state
+    }
+  }
+}
+
+fn emit_global_index(state: State) -> u5 {
+  if state.emit_phase[0:1] { state.emit_index + PLANE_COUNT }
+  else { state.emit_index }
+}
+
+fn event_for(state: State) -> Event {
+  let kind = match state.emit_phase {
+    u3:0 | u3:1 => EVENT_ANNOUNCEMENT,
+    u3:2 | u3:3 => EVENT_CORRECTION,
+    _ => EVENT_STATUS,
+  };
+  let value = match kind {
+    EVENT_ANNOUNCEMENT =>
+      (state.syndrome_quiet as u32) << u32:1 |
+        state.syndrome_event as u32,
+    EVENT_CORRECTION => state.phi_move as u32,
+    _ => (state.syndrome_quiet as u32) << u32:1 |
+      state.phi_anyon as u32,
+  };
+  Event {
+    kind,
+    plane: state.emit_phase[0:1] as u1,
+    index: state.emit_index,
+    step: state.step,
+    request_id: u32:0,
+    value,
+  }
+}
+
+fn advance_query(state: State) -> State {
+  if state.index == CELL_COUNT - u5:1 {
+    State { phase: Phase::WAIT_QUERY, index: u5:0, ..state }
+  } else {
+    State {
+      phase: Phase::QUERY_READ,
+      index: state.index + u5:1,
+      ..state
+    }
+  }
+}
+
 pub proc SequentialBramCore {
+  command_in: chan<Command> in;
+  event_out: chan<Event> out;
   ram_req_out: chan<RamReq> out;
   ram_resp_in: chan<RamResp> in;
   ram_wr_comp_in: chan<()> in;
-  summary_out: chan<Summary> out;
 
   config(
+      command_in: chan<Command> in,
+      event_out: chan<Event> out,
       ram_req_out: chan<RamReq> out,
       ram_resp_in: chan<RamResp> in,
-      ram_wr_comp_in: chan<()> in,
-      summary_out: chan<Summary> out
-  ) { (ram_req_out, ram_resp_in, ram_wr_comp_in, summary_out) }
+      ram_wr_comp_in: chan<()> in
+  ) { (command_in, event_out, ram_req_out, ram_resp_in, ram_wr_comp_in) }
 
   init {
     State {
@@ -394,7 +526,7 @@ pub proc SequentialBramCore {
         let (_tok, _) = recv(tok, ram_wr_comp_in);
         if state.step == u32:53 {
           State {
-            phase: Phase::DATA_READ_RNG,
+            phase: Phase::WAIT_CUTOFF,
             step: u32:0,
             index: u5:0,
             ..state
@@ -407,10 +539,24 @@ pub proc SequentialBramCore {
           }
         }
       },
+      Phase::WAIT_CUTOFF => {
+        let (_tok, command) = recv(join(), command_in);
+        if command.kind == COMMAND_CUTOFF {
+          State {
+            phase: Phase::DATA_READ_RNG,
+            step: u32:0,
+            index: u5:0,
+            cutoff_step: command.value,
+            ..state
+          }
+        } else {
+          state
+        }
+      },
       Phase::DATA_READ_RNG => {
         let tok = send(join(), ram_req_out, read_request(state.index, DATA_RNG));
         let (_tok, response) = recv(tok, ram_resp_in);
-        let quiet = state.step >= CUTOFF_STEP;
+        let quiet = state.step >= state.cutoff_step;
         let next_random = xorshift32(response.data);
         State {
           phase: Phase::DATA_READ_META,
@@ -451,7 +597,7 @@ pub proc SequentialBramCore {
         let tok = send(
           join(), ram_req_out, read_request(state.index, SYNDROME_RNG));
         let (_tok, response) = recv(tok, ram_resp_in);
-        let quiet = state.step >= CUTOFF_STEP;
+        let quiet = state.step >= state.cutoff_step;
         let next_random = xorshift32(response.data);
         State {
           phase: Phase::SYNDROME_READ_META,
@@ -468,7 +614,7 @@ pub proc SequentialBramCore {
         State {
           phase: Phase::SYNDROME_READ_DATA,
           subindex: u4:0,
-          syndrome_previous: response.data[0:1] as u1,
+          syndrome_previous: syndrome_previous(response.data as u3),
           ..state
         }
       },
@@ -501,6 +647,8 @@ pub proc SequentialBramCore {
         State {
           phase: Phase::SYNDROME_WRITE_RNG,
           syndrome_previous: state.syndrome_measurement,
+          syndrome_event: detection,
+          syndrome_quiet: state.step >= state.cutoff_step,
           phi_anyon: phi_anyon(meta) ^ detection,
           phi_move: phi_move(meta),
           ..state
@@ -517,7 +665,11 @@ pub proc SequentialBramCore {
         let tok = send(
           join(), ram_req_out,
           write_request(
-            state.index, SYNDROME_META, state.syndrome_previous as u32));
+            state.index, SYNDROME_META,
+            pack_syndrome_meta(
+              state.syndrome_previous,
+              state.syndrome_event,
+              state.syndrome_quiet) as u32));
         let (_tok, _) = recv(tok, ram_wr_comp_in);
         State { phase: Phase::SYNDROME_WRITE_PHI_META, ..state }
       },
@@ -804,11 +956,6 @@ pub proc SequentialBramCore {
             phi_anyon: next_anyon,
             incoming_move_parity: parity,
             anyon_seen: state.anyon_seen || next_anyon,
-            corrections: state.corrections + has_correction as u16,
-            x_corrections: state.x_corrections +
-              (has_correction && state.index < PLANE_COUNT) as u16,
-            z_corrections: state.z_corrections +
-              (has_correction && state.index >= PLANE_COUNT) as u16,
             ..state
           }
         } else {
@@ -826,61 +973,151 @@ pub proc SequentialBramCore {
             state.index, PHI_META,
             pack_phi_meta(state.phi_anyon, state.phi_move) as u32));
         let (_tok, _) = recv(tok, ram_wr_comp_in);
-        if state.phi_move != u4:0 {
-          State { phase: Phase::APPLY_READ_DATA_META, ..state }
-        } else {
-          advance_apply(state)
-        }
+        advance_apply(state)
       },
-      Phase::APPLY_READ_DATA_META => {
-        let data_index = correction_data_index(state.index, state.phi_move);
-        let tok = send(join(), ram_req_out, read_request(data_index, DATA_META));
+      Phase::EMIT_READ_SYNDROME => {
+        let global_index = emit_global_index(state);
+        let tok = send(
+          join(), ram_req_out, read_request(global_index, SYNDROME_META));
         let (_tok, response) = recv(tok, ram_resp_in);
         let meta = response.data as u3;
-        let correction = if state.index < PLANE_COUNT { u2:1 } else { u2:2 };
         State {
-          phase: Phase::APPLY_WRITE_DATA_META,
-          data_meta: pack_data_meta(
-            data_pauli(meta) ^ correction, data_event(meta)),
+          phase: Phase::EMIT_READ_PHI,
+          syndrome_event: syndrome_event(meta),
+          syndrome_quiet: syndrome_quiet(meta),
           ..state
         }
       },
-      Phase::APPLY_WRITE_DATA_META => {
-        let data_index = correction_data_index(state.index, state.phi_move);
-        let tok = send(
-          join(), ram_req_out,
-          write_request(data_index, DATA_META, state.data_meta as u32));
-        let (_tok, _) = recv(tok, ram_wr_comp_in);
-        advance_apply(state)
+      Phase::EMIT_READ_PHI => {
+        let global_index = emit_global_index(state);
+        let tok = send(join(), ram_req_out, read_request(global_index, PHI_META));
+        let (_tok, response) = recv(tok, ram_resp_in);
+        let meta = response.data as u5;
+        let ready = state.emit_phase < u3:2 || state.emit_phase >= u3:4 ||
+          phi_move(meta) != u4:0;
+        let updated = State {
+          phase: Phase::EMIT_SEND,
+          phi_anyon: phi_anyon(meta),
+          phi_move: phi_move(meta),
+          ..state
+        };
+        if ready { updated } else { advance_emit(updated) }
       },
-      Phase::MEASURE_READ => {
-        let tok = send(join(), ram_req_out, read_request(state.index, DATA_META));
-        let (tok, response) = recv(tok, ram_resp_in);
-        let measurement_bit =
-          ((data_pauli(response.data as u3) >> u2:1) & u2:1) as uN[18];
-        let measurement =
-          state.measurement_bits | measurement_bit << state.index;
-        if state.index == CELL_COUNT - u5:1 {
-          let summary = Summary {
-            step: state.step,
-            corrections: state.corrections,
-            x_corrections: state.x_corrections,
-            z_corrections: state.z_corrections,
-            measurement_bits: measurement,
-          };
-          let _done = send(tok, summary_out, summary);
+      Phase::EMIT_SEND => {
+        let tok = send(join(), event_out, event_for(state));
+        if state.emit_phase == u3:2 || state.emit_phase == u3:3 {
+          let _tok = tok;
+          State { phase: Phase::WAIT_UPDATE, index: u5:0, ..state }
+        } else {
+          let _tok = tok;
+          advance_emit(state)
+        }
+      },
+      Phase::WAIT_UPDATE => {
+        let (_tok, command) = recv(join(), command_in);
+        if command.kind == COMMAND_UPDATE {
           State {
-            phase: Phase::DONE,
-            measurement_bits: measurement,
+            phase: Phase::UPDATE_READ,
+            index: u5:0,
+            command_x0: command.x0,
+            command_y0: command.y0,
+            command_x1: command.x1,
+            command_y1: command.y1,
+            command_value: command.value,
             ..state
           }
         } else {
+          state
+        }
+      },
+      Phase::UPDATE_READ => {
+        if selected(
+            state.index,
+            state.command_x0,
+            state.command_y0,
+            state.command_x1,
+            state.command_y1) {
+          let tok = send(
+            join(), ram_req_out, read_request(state.index, DATA_META));
+          let (_tok, response) = recv(tok, ram_resp_in);
+          let meta = response.data as u3;
           State {
+            phase: Phase::UPDATE_WRITE,
+            data_meta: pack_data_meta(
+              data_pauli(meta) ^ state.command_value as u2,
+              data_event(meta)),
+            ..state
+          }
+        } else if state.index == CELL_COUNT - u5:1 {
+          advance_emit(state)
+        } else {
+          State { index: state.index + u5:1, ..state }
+        }
+      },
+      Phase::UPDATE_WRITE => {
+        let tok = send(
+          join(), ram_req_out,
+          write_request(state.index, DATA_META, state.data_meta as u32));
+        let (_tok, _) = recv(tok, ram_wr_comp_in);
+        if state.index == CELL_COUNT - u5:1 {
+          advance_emit(state)
+        } else {
+          State {
+            phase: Phase::UPDATE_READ,
             index: state.index + u5:1,
-            measurement_bits: measurement,
             ..state
           }
         }
+      },
+      Phase::WAIT_QUERY => {
+        let (_tok, command) = recv(join(), command_in);
+        if command.kind == COMMAND_QUERY {
+          State {
+            phase: Phase::QUERY_READ,
+            index: u5:0,
+            command_x0: command.x0,
+            command_y0: command.y0,
+            command_x1: command.x1,
+            command_y1: command.y1,
+            command_request_id: command.request_id,
+            command_value: command.value,
+            ..state
+          }
+        } else {
+          state
+        }
+      },
+      Phase::QUERY_READ => {
+        if selected(
+            state.index,
+            state.command_x0,
+            state.command_y0,
+            state.command_x1,
+            state.command_y1) {
+          let tok = send(
+            join(), ram_req_out, read_request(state.index, DATA_META));
+          let (_tok, response) = recv(tok, ram_resp_in);
+          State {
+            phase: Phase::QUERY_SEND,
+            data_meta: response.data as u3,
+            ..state
+          }
+        } else {
+          advance_query(state)
+        }
+      },
+      Phase::QUERY_SEND => {
+        let event = Event {
+          kind: EVENT_REPLY,
+          plane: u1:0,
+          index: state.index,
+          step: state.step,
+          request_id: state.command_request_id,
+          value: anticommutes(
+            data_pauli(state.data_meta), state.command_value as u2) as u32,
+        };
+        let _tok = send(join(), event_out, event);
+        advance_query(state)
       },
       _ => state,
     }
@@ -915,35 +1152,132 @@ proc RamModel {
   }
 }
 
+struct DriverState {
+  started: u1,
+  corrections: u16,
+  x_corrections: u16,
+  z_corrections: u16,
+  empty_statuses: u5,
+  replies: u5,
+  measurement_bits: uN[18],
+}
+
+fn command(
+    kind: u2, x0: u16, y0: u16, x1: u16, y1: u16,
+    request_id: u32, value: u32) -> Command {
+  Command { kind, x0, y0, x1, y1, request_id, value }
+}
+
+proc Driver {
+  command_out: chan<Command> out;
+  event_in: chan<Event> in;
+  terminator: chan<bool> out;
+
+  config(
+      command_out: chan<Command> out,
+      event_in: chan<Event> in,
+      terminator: chan<bool> out
+  ) { (command_out, event_in, terminator) }
+
+  init { zero!<DriverState>() }
+
+  next(state: DriverState) {
+    if !state.started {
+      let _tok = send(
+        join(), command_out,
+        command(COMMAND_CUTOFF, u16:0, u16:0, u16:2, u16:5,
+          u32:0, u32:16));
+      DriverState { started: u1:1, ..state }
+    } else {
+      let (tok, event) = recv(join(), event_in);
+      if event.kind == EVENT_CORRECTION {
+        let global_index = event.index +
+          if event.plane { PLANE_COUNT } else { u5:0 };
+        let data_index = correction_data_index(
+          global_index, event.value as u4);
+        let x = (data_index / u5:6) as u16;
+        let y = (data_index % u5:6) as u16;
+        let pauli = if event.plane { u32:2 } else { u32:1 };
+        let _tok = send(
+          tok, command_out,
+          command(COMMAND_UPDATE, x, y, x, y, u32:0, pauli));
+        DriverState {
+          corrections: state.corrections + u16:1,
+          x_corrections: state.x_corrections + (!event.plane) as u16,
+          z_corrections: state.z_corrections + event.plane as u16,
+          ..state
+        }
+      } else if event.kind == EVENT_STATUS &&
+          event.step == u32:21 && event.value == u32:2 {
+        let count = state.empty_statuses + u5:1;
+        if count == CELL_COUNT {
+          let _tok = send(
+            tok, command_out,
+            command(COMMAND_QUERY, u16:0, u16:0, u16:2, u16:5,
+              u32:0x00504849, u32:1));
+          DriverState { empty_statuses: count, ..state }
+        } else {
+          DriverState { empty_statuses: count, ..state }
+        }
+      } else if event.kind == EVENT_REPLY {
+        let bit = event.value as u1 as uN[18];
+        let measurement = state.measurement_bits | bit << event.index;
+        let replies = state.replies + u5:1;
+        if replies == CELL_COUNT {
+          assert_eq(
+            (
+              event.request_id,
+              event.step,
+              state.corrections,
+              state.x_corrections,
+              state.z_corrections,
+              measurement,
+            ),
+            (
+              u32:0x00504849,
+              u32:21,
+              u16:84,
+              u16:45,
+              u16:39,
+              uN[18]:0x1320c,
+            ));
+          let _done = send(tok, terminator, true);
+          DriverState {
+            replies,
+            measurement_bits: measurement,
+            ..state
+          }
+        } else {
+          DriverState {
+            replies,
+            measurement_bits: measurement,
+            ..state
+          }
+        }
+      } else {
+        state
+      }
+    }
+  }
+}
+
 #[test_proc]
 proc SequentialBramCoreTest {
   terminator: chan<bool> out;
-  summary_in: chan<Summary> in;
 
   config(terminator: chan<bool> out) {
     let (req_p, req_c) = chan<RamReq>("ram_req");
     let (resp_p, resp_c) = chan<RamResp>("ram_resp");
     let (wr_comp_p, wr_comp_c) = chan<()>("ram_wr_comp");
-    let (summary_p, summary_c) = chan<Summary>("summary");
+    let (command_p, command_c) = chan<Command>("command");
+    let (event_p, event_c) = chan<Event>("event");
     spawn RamModel(req_c, resp_p, wr_comp_p);
-    spawn SequentialBramCore(req_p, resp_c, wr_comp_c, summary_p);
-    (terminator, summary_c)
+    spawn SequentialBramCore(
+      command_c, event_p, req_p, resp_c, wr_comp_c);
+    spawn Driver(command_p, event_c, terminator);
+    (terminator,)
   }
 
   init { () }
-
-  next(state: ()) {
-    let (tok, summary) = recv(join(), summary_in);
-    assert_eq(
-      (
-        summary.step,
-        summary.corrections,
-        summary.x_corrections,
-        summary.z_corrections,
-        summary.measurement_bits,
-      ),
-      (u32:21, u16:84, u16:45, u16:39, uN[18]:0x1320c));
-    let _done = send(tok, terminator, true);
-    state
-  }
+  next(state: ()) { state }
 }

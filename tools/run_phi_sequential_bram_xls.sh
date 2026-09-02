@@ -15,10 +15,12 @@ yosys=${ERL_HLS_YOSYS:-"$oss_cad_suite/bin/yosys"}
 mkdir -p "$local_stage"
 cp "$project_root/src/examples/phi_decoder/rtl/phi_sequential_bram_core.x" \
     "$local_stage/phi_sequential_bram_core.x"
-cp "$project_root/src/examples/phi_decoder/rtl/phi_sequential_bram_top.v" \
-    "$local_stage/phi_sequential_bram_top.v"
-cp "$project_root/src/examples/phi_decoder/rtl/phi_sequential_bram_tb.sv" \
-    "$local_stage/phi_sequential_bram_tb.sv"
+cp "$project_root/src/examples/phi_decoder/rtl/phi_memory_scheduler_boundary.sv" \
+    "$local_stage/phi_memory_scheduler_boundary.sv"
+cp "$project_root/src/examples/phi_decoder/rtl/phi_memory_bram_top.sv" \
+    "$local_stage/phi_memory_bram_top.sv"
+cp "$project_root/test/rtl/phi_memory_raw_d3_tb.sv" \
+    "$local_stage/phi_memory_raw_d3_tb.sv"
 cp "$project_root/tools/remote_phi_sequential_bram_xls.sh" \
     "$local_stage/remote_phi_sequential_bram_xls.sh"
 
@@ -34,20 +36,23 @@ rsync -a -e "ssh -o BatchMode=yes" \
     "$remote_host:$remote_stage/phi_sequential_bram_core.v" \
     "$local_stage/phi_sequential_bram_core.v"
 
-"$iverilog" -g2012 -s phi_sequential_bram_tb \
-    -o "$local_stage/phi_sequential_bram_tb.vvp" \
+"$iverilog" -g2012 -DPHI_MEMORY_DUT=phi_memory_bram_top \
+    -s phi_memory_raw_d3_tb \
+    -o "$local_stage/phi_memory_bram_tb.vvp" \
     "$local_stage/phi_sequential_bram_core.v" \
-    "$local_stage/phi_sequential_bram_top.v" \
-    "$local_stage/phi_sequential_bram_tb.sv"
-"$vvp" "$local_stage/phi_sequential_bram_tb.vvp"
+    "$local_stage/phi_memory_scheduler_boundary.sv" \
+    "$local_stage/phi_memory_bram_top.sv" \
+    "$local_stage/phi_memory_raw_d3_tb.sv"
+"$vvp" "$local_stage/phi_memory_bram_tb.vvp"
 
 log="$local_stage/phi_sequential_bram-yosys.log"
 "$yosys" -Q -q -l "$log" -p \
-    "read_verilog $local_stage/phi_sequential_bram_core.v \
-        $local_stage/phi_sequential_bram_top.v; \
-     hierarchy -check -top phi_sequential_bram_top; \
+    "read_verilog $local_stage/phi_sequential_bram_core.v; \
+     read_verilog -sv $local_stage/phi_memory_scheduler_boundary.sv \
+        $local_stage/phi_memory_bram_top.sv; \
+     hierarchy -check -top phi_memory_bram_top; \
      synth_xilinx -flatten -abc9 -arch xc7 -noiopad \
-        -top phi_sequential_bram_top; \
+        -top phi_memory_bram_top; \
      check -assert; \
      stat -tech xilinx" 2>/dev/null
 
