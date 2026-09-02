@@ -709,7 +709,7 @@ annotate_startup_item(
         Effects -> error({startup_target_has_initial_effects,
             Target, Module, Effects})
     end,
-    Packed = pack_startup_message(Target, Module, Message),
+    Packed = pack_startup_message(Target, Module, Interface, Message),
     Packed#{
         target => Target,
         family => FamilyId,
@@ -718,10 +718,11 @@ annotate_startup_item(
 annotate_startup_item(Item, _FamilyIndex) ->
     error({unsupported_family_startup, Item}).
 
-pack_startup_message(Target, Module, Message)
+pack_startup_message(Target, Module, Interface, Message)
         when is_tuple(Message), tuple_size(Message) > 0,
              is_atom(element(1, Message)) ->
     TagName = element(1, Message),
+    Schema = hls_actor_interface:schema(Interface, TagName),
     {Tag, Payload} = case {Module:pack_tag(TagName), Module:pack(Message)} of
         {PackedTag, PackedPayload}
                 when is_integer(PackedTag), PackedTag >= 0,
@@ -734,12 +735,24 @@ pack_startup_message(Target, Module, Message)
             Width =< ?MAX_PAYLOAD_BITS of
         true -> #{
             tag => Tag,
-            payload => xls_nums:packed_unsigned_literal(Payload)
+            payload => xls_nums:packed_unsigned_literal(Payload),
+            schema => TagName,
+            fields => startup_fields(
+                Target,
+                maps:get(fields, Schema),
+                tl(tuple_to_list(Message))
+            )
         };
         false -> error({unsupported_startup_payload, Target, Width})
     end;
-pack_startup_message(Target, _Module, Message) ->
+pack_startup_message(Target, _Module, _Interface, Message) ->
     error({invalid_startup_message, Target, Message}).
+
+startup_fields(_Target, Fields, Values)
+        when length(Fields) =:= length(Values) ->
+    [Field#{value => Value} || {Field, Value} <- lists:zip(Fields, Values)];
+startup_fields(Target, Fields, Values) ->
+    error({invalid_startup_fields, Target, length(Fields), length(Values)}).
 
 validate_profile(Profile) when is_map(Profile) ->
     Required = lists:sort([actor_egress_depth, channel_depth, name]),

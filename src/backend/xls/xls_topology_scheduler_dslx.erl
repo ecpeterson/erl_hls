@@ -215,6 +215,10 @@ control_support(Spec = #{ingresses := [Ingress]}) ->
            maps:get(ingress, Family) =/= none
     ],
     [
+        "enum ControlFamily : u32 {\n",
+        [control_family_member(Index, Family)
+            || {Index, Family} <- lists:enumerate(0, Controlled)],
+        "}\n\n",
         "struct ControlState {\n",
         "  active: u1,\n",
         "  packet: hls_spatial_router::SpatialFrame,\n",
@@ -244,9 +248,9 @@ control_support(Spec = #{ingresses := [Ingress]}) ->
         "      ControlState { active: u1:1, packet,\n",
         "        ..zero!<ControlState>() }\n",
         "    } else {\n",
-        "      let _done = match state.family {\n",
-        [control_family_arm(Spec, Ingress, Index, Family)
-            || {Index, Family} <- lists:enumerate(0, Controlled)],
+        "      let _done = match state.family as ControlFamily {\n",
+        [control_family_arm(Spec, Ingress, Family)
+            || Family <- Controlled],
         "        _ => join(),\n",
         "      };\n",
         control_advance(length(Controlled)),
@@ -254,6 +258,9 @@ control_support(Spec = #{ingresses := [Ingress]}) ->
         "  }\n",
         "}\n\n"
     ].
+
+control_family_member(Index, #{id := Id}) ->
+    ["  ", uppercase(Id), " = u32:", integer_to_list(Index), ",\n"].
 
 controlled_groups(Families) ->
     lists:usort([
@@ -271,13 +278,14 @@ control_argument(Spec, Group) ->
     [control_output_name(Group), ": chan<", Module,
         "::ScheduledRequest> out"].
 
-control_family_arm(Spec, Ingress, Index, Family = #{
+control_family_arm(Spec, Ingress, Family = #{
+    id := Id,
     scheduler := #{group := Group, base_slot := Base},
     ingress := #{scale := [ScaleX, ScaleY], offset := [OffsetX, OffsetY]}
 }) ->
     Module = scheduler_module(Spec, Group),
     [
-        "        u32:", integer_to_list(Index), " => {\n",
+        "        ControlFamily::", uppercase(Id), " => {\n",
         "          let address_x = (state.x * u32:",
         integer_to_list(ScaleX), " + u32:", integer_to_list(OffsetX),
         ") as u16;\n",
@@ -369,18 +377,31 @@ startup_proc(_Spec, Scheduler = #{
 
 startup_arm(Module, Index, #{
     slot := Slot,
-    tag := Tag,
-    payload := Payload
+    schema := Schema,
+    fields := Fields
 }) ->
+    Struct = record_struct_name(Schema),
+    Function = record_function_name(Schema),
     [
         "      u32:", integer_to_list(Index), " => ",
         Module, "::ScheduledRequest {\n",
         "        slot: u32:", integer_to_list(Slot), ",\n",
-        "        frame: axis::pack(u8:", integer_to_list(Tag), ", ",
-        Payload, "),\n",
+        "        frame: axis::pack(\n",
+        "          ", Module, "::Tag::", uppercase(Schema), " as u8,\n",
+        "          ", Module, "::bits_from_", Function, "(\n",
+        "            ", Module, "::", Struct, " {\n",
+        [startup_field(Field) || Field <- Fields],
+        "            })),\n",
         "        ..zero!<", Module, "::ScheduledRequest>()\n",
         "      },\n"
     ].
+
+startup_field(#{name := Name, type := Type, value := Value})
+        when is_integer(Value) ->
+    ["              ", atom_to_list(Name), ": ",
+        hls_type:print_type(Type), ":", integer_to_list(Value), ",\n"];
+startup_field(#{name := Name, type := Type, value := Value}) ->
+    error({unsupported_startup_literal, Name, Type, Value}).
 
 router_proc(Spec, Scheduler = #{
     module_name := Module,
@@ -793,6 +814,12 @@ channel_tuple([Name]) -> ["(", Name, ",)"];
 channel_tuple(Names) -> ["(", join_with(", ", Names), ")"].
 
 uppercase(Atom) -> string:uppercase(atom_to_list(Atom)).
+
+record_struct_name(Atom) ->
+    string:titlecase(lists:delete($_, atom_to_list(Atom))).
+
+record_function_name(Atom) ->
+    string:lowercase(lists:delete($_, atom_to_list(Atom))).
 
 separator(Index, Count) when Index + 1 < Count -> ",";
 separator(_Index, _Count) -> "".

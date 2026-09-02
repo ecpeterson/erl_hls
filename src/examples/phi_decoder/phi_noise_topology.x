@@ -35,6 +35,13 @@ proc FrameRelay {
     state
   }
 }
+enum ControlFamily : u32 {
+  DATA_EVEN = u32:0,
+  DATA_ODD = u32:1,
+  SYNDROME_X = u32:2,
+  SYNDROME_Z = u32:3,
+}
+
 struct ControlState {
   active: u1,
   packet: hls_spatial_router::SpatialFrame,
@@ -64,8 +71,8 @@ proc ControlDispatcher {
       ControlState { active: u1:1, packet,
         ..zero!<ControlState>() }
     } else {
-      let _done = match state.family {
-        u32:0 => {
+      let _done = match state.family as ControlFamily {
+        ControlFamily::DATA_EVEN => {
           let address_x = (state.x * u32:1 + u32:0) as u16;
           let address_y = (state.y * u32:2 + u32:0) as u16;
           let selected = ((state.packet.target == u2:0 && (state.packet.frame.header.op == u8:13 || state.packet.frame.header.op == u8:16)) || (state.packet.target == u2:1 && (state.packet.frame.header.op == u8:15))) && hls_spatial_router::contains(
@@ -77,7 +84,7 @@ proc ControlDispatcher {
           };
           send_if(join(), scheduler_0_control_out, selected, request)
         },
-        u32:1 => {
+        ControlFamily::DATA_ODD => {
           let address_x = (state.x * u32:1 + u32:0) as u16;
           let address_y = (state.y * u32:2 + u32:1) as u16;
           let selected = ((state.packet.target == u2:0 && (state.packet.frame.header.op == u8:13 || state.packet.frame.header.op == u8:16)) || (state.packet.target == u2:1 && (state.packet.frame.header.op == u8:15))) && hls_spatial_router::contains(
@@ -89,7 +96,7 @@ proc ControlDispatcher {
           };
           send_if(join(), scheduler_0_control_out, selected, request)
         },
-        u32:2 => {
+        ControlFamily::SYNDROME_X => {
           let address_x = (state.x * u32:1 + u32:0) as u16;
           let address_y = (state.y * u32:2 + u32:0) as u16;
           let selected = ((state.packet.target == u2:1 && (state.packet.frame.header.op == u8:15))) && hls_spatial_router::contains(
@@ -101,7 +108,7 @@ proc ControlDispatcher {
           };
           send_if(join(), scheduler_2_control_out, selected, request)
         },
-        u32:3 => {
+        ControlFamily::SYNDROME_Z => {
           let address_x = (state.x * u32:1 + u32:0) as u16;
           let address_y = (state.y * u32:2 + u32:0) as u16;
           let selected = ((state.packet.target == u2:1 && (state.packet.frame.header.op == u8:15))) && hls_spatial_router::contains(
@@ -145,92 +152,236 @@ proc SchedulerStartup0 {
     let request = match index {
       u32:0 => phenom_data_cell::ScheduledRequest {
         slot: u32:0,
-        frame: axis::pack(u8:6, uN[96]:0x00000000800000009E3779B9),
+        frame: axis::pack(
+          phenom_data_cell::Tag::PHENOM_CONFIG as u8,
+          phenom_data_cell::bits_from_phenomconfig(
+            phenom_data_cell::Phenomconfig {
+              seed: u32:2654435769,
+              threshold: u32:2147483648,
+              x: u16:0,
+              y: u16:0,
+            })),
         ..zero!<phenom_data_cell::ScheduledRequest>()
       },
       u32:1 => phenom_data_cell::ScheduledRequest {
         slot: u32:1,
-        frame: axis::pack(u8:6, uN[96]:0x00020000800000003C6EF372),
+        frame: axis::pack(
+          phenom_data_cell::Tag::PHENOM_CONFIG as u8,
+          phenom_data_cell::bits_from_phenomconfig(
+            phenom_data_cell::Phenomconfig {
+              seed: u32:1013904242,
+              threshold: u32:2147483648,
+              x: u16:0,
+              y: u16:2,
+            })),
         ..zero!<phenom_data_cell::ScheduledRequest>()
       },
       u32:2 => phenom_data_cell::ScheduledRequest {
         slot: u32:2,
-        frame: axis::pack(u8:6, uN[96]:0x0004000080000000DAA66D2B),
+        frame: axis::pack(
+          phenom_data_cell::Tag::PHENOM_CONFIG as u8,
+          phenom_data_cell::bits_from_phenomconfig(
+            phenom_data_cell::Phenomconfig {
+              seed: u32:3668340011,
+              threshold: u32:2147483648,
+              x: u16:0,
+              y: u16:4,
+            })),
         ..zero!<phenom_data_cell::ScheduledRequest>()
       },
       u32:3 => phenom_data_cell::ScheduledRequest {
         slot: u32:3,
-        frame: axis::pack(u8:6, uN[96]:0x000000018000000078DDE6E4),
+        frame: axis::pack(
+          phenom_data_cell::Tag::PHENOM_CONFIG as u8,
+          phenom_data_cell::bits_from_phenomconfig(
+            phenom_data_cell::Phenomconfig {
+              seed: u32:2027808484,
+              threshold: u32:2147483648,
+              x: u16:1,
+              y: u16:0,
+            })),
         ..zero!<phenom_data_cell::ScheduledRequest>()
       },
       u32:4 => phenom_data_cell::ScheduledRequest {
         slot: u32:4,
-        frame: axis::pack(u8:6, uN[96]:0x00020001800000001715609D),
+        frame: axis::pack(
+          phenom_data_cell::Tag::PHENOM_CONFIG as u8,
+          phenom_data_cell::bits_from_phenomconfig(
+            phenom_data_cell::Phenomconfig {
+              seed: u32:387276957,
+              threshold: u32:2147483648,
+              x: u16:1,
+              y: u16:2,
+            })),
         ..zero!<phenom_data_cell::ScheduledRequest>()
       },
       u32:5 => phenom_data_cell::ScheduledRequest {
         slot: u32:5,
-        frame: axis::pack(u8:6, uN[96]:0x0004000180000000B54CDA56),
+        frame: axis::pack(
+          phenom_data_cell::Tag::PHENOM_CONFIG as u8,
+          phenom_data_cell::bits_from_phenomconfig(
+            phenom_data_cell::Phenomconfig {
+              seed: u32:3041712726,
+              threshold: u32:2147483648,
+              x: u16:1,
+              y: u16:4,
+            })),
         ..zero!<phenom_data_cell::ScheduledRequest>()
       },
       u32:6 => phenom_data_cell::ScheduledRequest {
         slot: u32:6,
-        frame: axis::pack(u8:6, uN[96]:0x00000002800000005384540F),
+        frame: axis::pack(
+          phenom_data_cell::Tag::PHENOM_CONFIG as u8,
+          phenom_data_cell::bits_from_phenomconfig(
+            phenom_data_cell::Phenomconfig {
+              seed: u32:1401181199,
+              threshold: u32:2147483648,
+              x: u16:2,
+              y: u16:0,
+            })),
         ..zero!<phenom_data_cell::ScheduledRequest>()
       },
       u32:7 => phenom_data_cell::ScheduledRequest {
         slot: u32:7,
-        frame: axis::pack(u8:6, uN[96]:0x0002000280000000F1BBCDC8),
+        frame: axis::pack(
+          phenom_data_cell::Tag::PHENOM_CONFIG as u8,
+          phenom_data_cell::bits_from_phenomconfig(
+            phenom_data_cell::Phenomconfig {
+              seed: u32:4055616968,
+              threshold: u32:2147483648,
+              x: u16:2,
+              y: u16:2,
+            })),
         ..zero!<phenom_data_cell::ScheduledRequest>()
       },
       u32:8 => phenom_data_cell::ScheduledRequest {
         slot: u32:8,
-        frame: axis::pack(u8:6, uN[96]:0x00040002800000008FF34781),
+        frame: axis::pack(
+          phenom_data_cell::Tag::PHENOM_CONFIG as u8,
+          phenom_data_cell::bits_from_phenomconfig(
+            phenom_data_cell::Phenomconfig {
+              seed: u32:2415085441,
+              threshold: u32:2147483648,
+              x: u16:2,
+              y: u16:4,
+            })),
         ..zero!<phenom_data_cell::ScheduledRequest>()
       },
       u32:9 => phenom_data_cell::ScheduledRequest {
         slot: u32:9,
-        frame: axis::pack(u8:6, uN[96]:0x00010000800000002E2AC13A),
+        frame: axis::pack(
+          phenom_data_cell::Tag::PHENOM_CONFIG as u8,
+          phenom_data_cell::bits_from_phenomconfig(
+            phenom_data_cell::Phenomconfig {
+              seed: u32:774553914,
+              threshold: u32:2147483648,
+              x: u16:0,
+              y: u16:1,
+            })),
         ..zero!<phenom_data_cell::ScheduledRequest>()
       },
       u32:10 => phenom_data_cell::ScheduledRequest {
         slot: u32:10,
-        frame: axis::pack(u8:6, uN[96]:0x0003000080000000CC623AF3),
+        frame: axis::pack(
+          phenom_data_cell::Tag::PHENOM_CONFIG as u8,
+          phenom_data_cell::bits_from_phenomconfig(
+            phenom_data_cell::Phenomconfig {
+              seed: u32:3428989683,
+              threshold: u32:2147483648,
+              x: u16:0,
+              y: u16:3,
+            })),
         ..zero!<phenom_data_cell::ScheduledRequest>()
       },
       u32:11 => phenom_data_cell::ScheduledRequest {
         slot: u32:11,
-        frame: axis::pack(u8:6, uN[96]:0x00050000800000006A99B4AC),
+        frame: axis::pack(
+          phenom_data_cell::Tag::PHENOM_CONFIG as u8,
+          phenom_data_cell::bits_from_phenomconfig(
+            phenom_data_cell::Phenomconfig {
+              seed: u32:1788458156,
+              threshold: u32:2147483648,
+              x: u16:0,
+              y: u16:5,
+            })),
         ..zero!<phenom_data_cell::ScheduledRequest>()
       },
       u32:12 => phenom_data_cell::ScheduledRequest {
         slot: u32:12,
-        frame: axis::pack(u8:6, uN[96]:0x000100018000000008D12E65),
+        frame: axis::pack(
+          phenom_data_cell::Tag::PHENOM_CONFIG as u8,
+          phenom_data_cell::bits_from_phenomconfig(
+            phenom_data_cell::Phenomconfig {
+              seed: u32:147926629,
+              threshold: u32:2147483648,
+              x: u16:1,
+              y: u16:1,
+            })),
         ..zero!<phenom_data_cell::ScheduledRequest>()
       },
       u32:13 => phenom_data_cell::ScheduledRequest {
         slot: u32:13,
-        frame: axis::pack(u8:6, uN[96]:0x0003000180000000A708A81E),
+        frame: axis::pack(
+          phenom_data_cell::Tag::PHENOM_CONFIG as u8,
+          phenom_data_cell::bits_from_phenomconfig(
+            phenom_data_cell::Phenomconfig {
+              seed: u32:2802362398,
+              threshold: u32:2147483648,
+              x: u16:1,
+              y: u16:3,
+            })),
         ..zero!<phenom_data_cell::ScheduledRequest>()
       },
       u32:14 => phenom_data_cell::ScheduledRequest {
         slot: u32:14,
-        frame: axis::pack(u8:6, uN[96]:0x0005000180000000454021D7),
+        frame: axis::pack(
+          phenom_data_cell::Tag::PHENOM_CONFIG as u8,
+          phenom_data_cell::bits_from_phenomconfig(
+            phenom_data_cell::Phenomconfig {
+              seed: u32:1161830871,
+              threshold: u32:2147483648,
+              x: u16:1,
+              y: u16:5,
+            })),
         ..zero!<phenom_data_cell::ScheduledRequest>()
       },
       u32:15 => phenom_data_cell::ScheduledRequest {
         slot: u32:15,
-        frame: axis::pack(u8:6, uN[96]:0x0001000280000000E3779B90),
+        frame: axis::pack(
+          phenom_data_cell::Tag::PHENOM_CONFIG as u8,
+          phenom_data_cell::bits_from_phenomconfig(
+            phenom_data_cell::Phenomconfig {
+              seed: u32:3816266640,
+              threshold: u32:2147483648,
+              x: u16:2,
+              y: u16:1,
+            })),
         ..zero!<phenom_data_cell::ScheduledRequest>()
       },
       u32:16 => phenom_data_cell::ScheduledRequest {
         slot: u32:16,
-        frame: axis::pack(u8:6, uN[96]:0x000300028000000081AF1549),
+        frame: axis::pack(
+          phenom_data_cell::Tag::PHENOM_CONFIG as u8,
+          phenom_data_cell::bits_from_phenomconfig(
+            phenom_data_cell::Phenomconfig {
+              seed: u32:2175735113,
+              threshold: u32:2147483648,
+              x: u16:2,
+              y: u16:3,
+            })),
         ..zero!<phenom_data_cell::ScheduledRequest>()
       },
       u32:17 => phenom_data_cell::ScheduledRequest {
         slot: u32:17,
-        frame: axis::pack(u8:6, uN[96]:0x00050002800000001FE68F02),
+        frame: axis::pack(
+          phenom_data_cell::Tag::PHENOM_CONFIG as u8,
+          phenom_data_cell::bits_from_phenomconfig(
+            phenom_data_cell::Phenomconfig {
+              seed: u32:535203586,
+              threshold: u32:2147483648,
+              x: u16:2,
+              y: u16:5,
+            })),
         ..zero!<phenom_data_cell::ScheduledRequest>()
       },
       _ => zero!<phenom_data_cell::ScheduledRequest>(),
@@ -252,92 +403,182 @@ proc SchedulerStartup1 {
     let request = match index {
       u32:0 => phi_halo_cell::ScheduledRequest {
         slot: u32:0,
-        frame: axis::pack(u8:12, u32:0xDE0497BD),
+        frame: axis::pack(
+          phi_halo_cell::Tag::PHI_CONFIG as u8,
+          phi_halo_cell::bits_from_phiconfig(
+            phi_halo_cell::Phiconfig {
+              seed: u32:3724842941,
+            })),
         ..zero!<phi_halo_cell::ScheduledRequest>()
       },
       u32:1 => phi_halo_cell::ScheduledRequest {
         slot: u32:1,
-        frame: axis::pack(u8:12, u32:0x7C3C1176),
+        frame: axis::pack(
+          phi_halo_cell::Tag::PHI_CONFIG as u8,
+          phi_halo_cell::bits_from_phiconfig(
+            phi_halo_cell::Phiconfig {
+              seed: u32:2084311414,
+            })),
         ..zero!<phi_halo_cell::ScheduledRequest>()
       },
       u32:2 => phi_halo_cell::ScheduledRequest {
         slot: u32:2,
-        frame: axis::pack(u8:12, u32:0x1A738B2F),
+        frame: axis::pack(
+          phi_halo_cell::Tag::PHI_CONFIG as u8,
+          phi_halo_cell::bits_from_phiconfig(
+            phi_halo_cell::Phiconfig {
+              seed: u32:443779887,
+            })),
         ..zero!<phi_halo_cell::ScheduledRequest>()
       },
       u32:3 => phi_halo_cell::ScheduledRequest {
         slot: u32:3,
-        frame: axis::pack(u8:12, u32:0xB8AB04E8),
+        frame: axis::pack(
+          phi_halo_cell::Tag::PHI_CONFIG as u8,
+          phi_halo_cell::bits_from_phiconfig(
+            phi_halo_cell::Phiconfig {
+              seed: u32:3098215656,
+            })),
         ..zero!<phi_halo_cell::ScheduledRequest>()
       },
       u32:4 => phi_halo_cell::ScheduledRequest {
         slot: u32:4,
-        frame: axis::pack(u8:12, u32:0x56E27EA1),
+        frame: axis::pack(
+          phi_halo_cell::Tag::PHI_CONFIG as u8,
+          phi_halo_cell::bits_from_phiconfig(
+            phi_halo_cell::Phiconfig {
+              seed: u32:1457684129,
+            })),
         ..zero!<phi_halo_cell::ScheduledRequest>()
       },
       u32:5 => phi_halo_cell::ScheduledRequest {
         slot: u32:5,
-        frame: axis::pack(u8:12, u32:0xF519F85A),
+        frame: axis::pack(
+          phi_halo_cell::Tag::PHI_CONFIG as u8,
+          phi_halo_cell::bits_from_phiconfig(
+            phi_halo_cell::Phiconfig {
+              seed: u32:4112119898,
+            })),
         ..zero!<phi_halo_cell::ScheduledRequest>()
       },
       u32:6 => phi_halo_cell::ScheduledRequest {
         slot: u32:6,
-        frame: axis::pack(u8:12, u32:0x93517213),
+        frame: axis::pack(
+          phi_halo_cell::Tag::PHI_CONFIG as u8,
+          phi_halo_cell::bits_from_phiconfig(
+            phi_halo_cell::Phiconfig {
+              seed: u32:2471588371,
+            })),
         ..zero!<phi_halo_cell::ScheduledRequest>()
       },
       u32:7 => phi_halo_cell::ScheduledRequest {
         slot: u32:7,
-        frame: axis::pack(u8:12, u32:0x3188EBCC),
+        frame: axis::pack(
+          phi_halo_cell::Tag::PHI_CONFIG as u8,
+          phi_halo_cell::bits_from_phiconfig(
+            phi_halo_cell::Phiconfig {
+              seed: u32:831056844,
+            })),
         ..zero!<phi_halo_cell::ScheduledRequest>()
       },
       u32:8 => phi_halo_cell::ScheduledRequest {
         slot: u32:8,
-        frame: axis::pack(u8:12, u32:0xCFC06585),
+        frame: axis::pack(
+          phi_halo_cell::Tag::PHI_CONFIG as u8,
+          phi_halo_cell::bits_from_phiconfig(
+            phi_halo_cell::Phiconfig {
+              seed: u32:3485492613,
+            })),
         ..zero!<phi_halo_cell::ScheduledRequest>()
       },
       u32:9 => phi_halo_cell::ScheduledRequest {
         slot: u32:9,
-        frame: axis::pack(u8:12, u32:0x6DF7DF3E),
+        frame: axis::pack(
+          phi_halo_cell::Tag::PHI_CONFIG as u8,
+          phi_halo_cell::bits_from_phiconfig(
+            phi_halo_cell::Phiconfig {
+              seed: u32:1844961086,
+            })),
         ..zero!<phi_halo_cell::ScheduledRequest>()
       },
       u32:10 => phi_halo_cell::ScheduledRequest {
         slot: u32:10,
-        frame: axis::pack(u8:12, u32:0x0C2F58F7),
+        frame: axis::pack(
+          phi_halo_cell::Tag::PHI_CONFIG as u8,
+          phi_halo_cell::bits_from_phiconfig(
+            phi_halo_cell::Phiconfig {
+              seed: u32:204429559,
+            })),
         ..zero!<phi_halo_cell::ScheduledRequest>()
       },
       u32:11 => phi_halo_cell::ScheduledRequest {
         slot: u32:11,
-        frame: axis::pack(u8:12, u32:0xAA66D2B0),
+        frame: axis::pack(
+          phi_halo_cell::Tag::PHI_CONFIG as u8,
+          phi_halo_cell::bits_from_phiconfig(
+            phi_halo_cell::Phiconfig {
+              seed: u32:2858865328,
+            })),
         ..zero!<phi_halo_cell::ScheduledRequest>()
       },
       u32:12 => phi_halo_cell::ScheduledRequest {
         slot: u32:12,
-        frame: axis::pack(u8:12, u32:0x489E4C69),
+        frame: axis::pack(
+          phi_halo_cell::Tag::PHI_CONFIG as u8,
+          phi_halo_cell::bits_from_phiconfig(
+            phi_halo_cell::Phiconfig {
+              seed: u32:1218333801,
+            })),
         ..zero!<phi_halo_cell::ScheduledRequest>()
       },
       u32:13 => phi_halo_cell::ScheduledRequest {
         slot: u32:13,
-        frame: axis::pack(u8:12, u32:0xE6D5C622),
+        frame: axis::pack(
+          phi_halo_cell::Tag::PHI_CONFIG as u8,
+          phi_halo_cell::bits_from_phiconfig(
+            phi_halo_cell::Phiconfig {
+              seed: u32:3872769570,
+            })),
         ..zero!<phi_halo_cell::ScheduledRequest>()
       },
       u32:14 => phi_halo_cell::ScheduledRequest {
         slot: u32:14,
-        frame: axis::pack(u8:12, u32:0x850D3FDB),
+        frame: axis::pack(
+          phi_halo_cell::Tag::PHI_CONFIG as u8,
+          phi_halo_cell::bits_from_phiconfig(
+            phi_halo_cell::Phiconfig {
+              seed: u32:2232238043,
+            })),
         ..zero!<phi_halo_cell::ScheduledRequest>()
       },
       u32:15 => phi_halo_cell::ScheduledRequest {
         slot: u32:15,
-        frame: axis::pack(u8:12, u32:0x2344B994),
+        frame: axis::pack(
+          phi_halo_cell::Tag::PHI_CONFIG as u8,
+          phi_halo_cell::bits_from_phiconfig(
+            phi_halo_cell::Phiconfig {
+              seed: u32:591706516,
+            })),
         ..zero!<phi_halo_cell::ScheduledRequest>()
       },
       u32:16 => phi_halo_cell::ScheduledRequest {
         slot: u32:16,
-        frame: axis::pack(u8:12, u32:0xC17C334D),
+        frame: axis::pack(
+          phi_halo_cell::Tag::PHI_CONFIG as u8,
+          phi_halo_cell::bits_from_phiconfig(
+            phi_halo_cell::Phiconfig {
+              seed: u32:3246142285,
+            })),
         ..zero!<phi_halo_cell::ScheduledRequest>()
       },
       u32:17 => phi_halo_cell::ScheduledRequest {
         slot: u32:17,
-        frame: axis::pack(u8:12, u32:0x5FB3AD06),
+        frame: axis::pack(
+          phi_halo_cell::Tag::PHI_CONFIG as u8,
+          phi_halo_cell::bits_from_phiconfig(
+            phi_halo_cell::Phiconfig {
+              seed: u32:1605610758,
+            })),
         ..zero!<phi_halo_cell::ScheduledRequest>()
       },
       _ => zero!<phi_halo_cell::ScheduledRequest>(),
@@ -359,92 +600,236 @@ proc SchedulerStartup2 {
     let request = match index {
       u32:0 => phenom_syndrome_cell::ScheduledRequest {
         slot: u32:0,
-        frame: axis::pack(u8:6, uN[96]:0x0000000080000000BE1E08BB),
+        frame: axis::pack(
+          phenom_syndrome_cell::Tag::PHENOM_CONFIG as u8,
+          phenom_syndrome_cell::bits_from_phenomconfig(
+            phenom_syndrome_cell::Phenomconfig {
+              seed: u32:3189639355,
+              threshold: u32:2147483648,
+              x: u16:0,
+              y: u16:0,
+            })),
         ..zero!<phenom_syndrome_cell::ScheduledRequest>()
       },
       u32:1 => phenom_syndrome_cell::ScheduledRequest {
         slot: u32:1,
-        frame: axis::pack(u8:6, uN[96]:0x00010000800000005C558274),
+        frame: axis::pack(
+          phenom_syndrome_cell::Tag::PHENOM_CONFIG as u8,
+          phenom_syndrome_cell::bits_from_phenomconfig(
+            phenom_syndrome_cell::Phenomconfig {
+              seed: u32:1549107828,
+              threshold: u32:2147483648,
+              x: u16:0,
+              y: u16:1,
+            })),
         ..zero!<phenom_syndrome_cell::ScheduledRequest>()
       },
       u32:2 => phenom_syndrome_cell::ScheduledRequest {
         slot: u32:2,
-        frame: axis::pack(u8:6, uN[96]:0x0002000080000000FA8CFC2D),
+        frame: axis::pack(
+          phenom_syndrome_cell::Tag::PHENOM_CONFIG as u8,
+          phenom_syndrome_cell::bits_from_phenomconfig(
+            phenom_syndrome_cell::Phenomconfig {
+              seed: u32:4203543597,
+              threshold: u32:2147483648,
+              x: u16:0,
+              y: u16:2,
+            })),
         ..zero!<phenom_syndrome_cell::ScheduledRequest>()
       },
       u32:3 => phenom_syndrome_cell::ScheduledRequest {
         slot: u32:3,
-        frame: axis::pack(u8:6, uN[96]:0x000000018000000098C475E6),
+        frame: axis::pack(
+          phenom_syndrome_cell::Tag::PHENOM_CONFIG as u8,
+          phenom_syndrome_cell::bits_from_phenomconfig(
+            phenom_syndrome_cell::Phenomconfig {
+              seed: u32:2563012070,
+              threshold: u32:2147483648,
+              x: u16:1,
+              y: u16:0,
+            })),
         ..zero!<phenom_syndrome_cell::ScheduledRequest>()
       },
       u32:4 => phenom_syndrome_cell::ScheduledRequest {
         slot: u32:4,
-        frame: axis::pack(u8:6, uN[96]:0x000100018000000036FBEF9F),
+        frame: axis::pack(
+          phenom_syndrome_cell::Tag::PHENOM_CONFIG as u8,
+          phenom_syndrome_cell::bits_from_phenomconfig(
+            phenom_syndrome_cell::Phenomconfig {
+              seed: u32:922480543,
+              threshold: u32:2147483648,
+              x: u16:1,
+              y: u16:1,
+            })),
         ..zero!<phenom_syndrome_cell::ScheduledRequest>()
       },
       u32:5 => phenom_syndrome_cell::ScheduledRequest {
         slot: u32:5,
-        frame: axis::pack(u8:6, uN[96]:0x0002000180000000D5336958),
+        frame: axis::pack(
+          phenom_syndrome_cell::Tag::PHENOM_CONFIG as u8,
+          phenom_syndrome_cell::bits_from_phenomconfig(
+            phenom_syndrome_cell::Phenomconfig {
+              seed: u32:3576916312,
+              threshold: u32:2147483648,
+              x: u16:1,
+              y: u16:2,
+            })),
         ..zero!<phenom_syndrome_cell::ScheduledRequest>()
       },
       u32:6 => phenom_syndrome_cell::ScheduledRequest {
         slot: u32:6,
-        frame: axis::pack(u8:6, uN[96]:0x0000000280000000736AE311),
+        frame: axis::pack(
+          phenom_syndrome_cell::Tag::PHENOM_CONFIG as u8,
+          phenom_syndrome_cell::bits_from_phenomconfig(
+            phenom_syndrome_cell::Phenomconfig {
+              seed: u32:1936384785,
+              threshold: u32:2147483648,
+              x: u16:2,
+              y: u16:0,
+            })),
         ..zero!<phenom_syndrome_cell::ScheduledRequest>()
       },
       u32:7 => phenom_syndrome_cell::ScheduledRequest {
         slot: u32:7,
-        frame: axis::pack(u8:6, uN[96]:0x000100028000000011A25CCA),
+        frame: axis::pack(
+          phenom_syndrome_cell::Tag::PHENOM_CONFIG as u8,
+          phenom_syndrome_cell::bits_from_phenomconfig(
+            phenom_syndrome_cell::Phenomconfig {
+              seed: u32:295853258,
+              threshold: u32:2147483648,
+              x: u16:2,
+              y: u16:1,
+            })),
         ..zero!<phenom_syndrome_cell::ScheduledRequest>()
       },
       u32:8 => phenom_syndrome_cell::ScheduledRequest {
         slot: u32:8,
-        frame: axis::pack(u8:6, uN[96]:0x0002000280000000AFD9D683),
+        frame: axis::pack(
+          phenom_syndrome_cell::Tag::PHENOM_CONFIG as u8,
+          phenom_syndrome_cell::bits_from_phenomconfig(
+            phenom_syndrome_cell::Phenomconfig {
+              seed: u32:2950289027,
+              threshold: u32:2147483648,
+              x: u16:2,
+              y: u16:2,
+            })),
         ..zero!<phenom_syndrome_cell::ScheduledRequest>()
       },
       u32:9 => phenom_syndrome_cell::ScheduledRequest {
         slot: u32:9,
-        frame: axis::pack(u8:6, uN[96]:0x00000000800000004E11503C),
+        frame: axis::pack(
+          phenom_syndrome_cell::Tag::PHENOM_CONFIG as u8,
+          phenom_syndrome_cell::bits_from_phenomconfig(
+            phenom_syndrome_cell::Phenomconfig {
+              seed: u32:1309757500,
+              threshold: u32:2147483648,
+              x: u16:0,
+              y: u16:0,
+            })),
         ..zero!<phenom_syndrome_cell::ScheduledRequest>()
       },
       u32:10 => phenom_syndrome_cell::ScheduledRequest {
         slot: u32:10,
-        frame: axis::pack(u8:6, uN[96]:0x0001000080000000EC48C9F5),
+        frame: axis::pack(
+          phenom_syndrome_cell::Tag::PHENOM_CONFIG as u8,
+          phenom_syndrome_cell::bits_from_phenomconfig(
+            phenom_syndrome_cell::Phenomconfig {
+              seed: u32:3964193269,
+              threshold: u32:2147483648,
+              x: u16:0,
+              y: u16:1,
+            })),
         ..zero!<phenom_syndrome_cell::ScheduledRequest>()
       },
       u32:11 => phenom_syndrome_cell::ScheduledRequest {
         slot: u32:11,
-        frame: axis::pack(u8:6, uN[96]:0x00020000800000008A8043AE),
+        frame: axis::pack(
+          phenom_syndrome_cell::Tag::PHENOM_CONFIG as u8,
+          phenom_syndrome_cell::bits_from_phenomconfig(
+            phenom_syndrome_cell::Phenomconfig {
+              seed: u32:2323661742,
+              threshold: u32:2147483648,
+              x: u16:0,
+              y: u16:2,
+            })),
         ..zero!<phenom_syndrome_cell::ScheduledRequest>()
       },
       u32:12 => phenom_syndrome_cell::ScheduledRequest {
         slot: u32:12,
-        frame: axis::pack(u8:6, uN[96]:0x000000018000000028B7BD67),
+        frame: axis::pack(
+          phenom_syndrome_cell::Tag::PHENOM_CONFIG as u8,
+          phenom_syndrome_cell::bits_from_phenomconfig(
+            phenom_syndrome_cell::Phenomconfig {
+              seed: u32:683130215,
+              threshold: u32:2147483648,
+              x: u16:1,
+              y: u16:0,
+            })),
         ..zero!<phenom_syndrome_cell::ScheduledRequest>()
       },
       u32:13 => phenom_syndrome_cell::ScheduledRequest {
         slot: u32:13,
-        frame: axis::pack(u8:6, uN[96]:0x0001000180000000C6EF3720),
+        frame: axis::pack(
+          phenom_syndrome_cell::Tag::PHENOM_CONFIG as u8,
+          phenom_syndrome_cell::bits_from_phenomconfig(
+            phenom_syndrome_cell::Phenomconfig {
+              seed: u32:3337565984,
+              threshold: u32:2147483648,
+              x: u16:1,
+              y: u16:1,
+            })),
         ..zero!<phenom_syndrome_cell::ScheduledRequest>()
       },
       u32:14 => phenom_syndrome_cell::ScheduledRequest {
         slot: u32:14,
-        frame: axis::pack(u8:6, uN[96]:0x00020001800000006526B0D9),
+        frame: axis::pack(
+          phenom_syndrome_cell::Tag::PHENOM_CONFIG as u8,
+          phenom_syndrome_cell::bits_from_phenomconfig(
+            phenom_syndrome_cell::Phenomconfig {
+              seed: u32:1697034457,
+              threshold: u32:2147483648,
+              x: u16:1,
+              y: u16:2,
+            })),
         ..zero!<phenom_syndrome_cell::ScheduledRequest>()
       },
       u32:15 => phenom_syndrome_cell::ScheduledRequest {
         slot: u32:15,
-        frame: axis::pack(u8:6, uN[96]:0x0000000280000000035E2A92),
+        frame: axis::pack(
+          phenom_syndrome_cell::Tag::PHENOM_CONFIG as u8,
+          phenom_syndrome_cell::bits_from_phenomconfig(
+            phenom_syndrome_cell::Phenomconfig {
+              seed: u32:56502930,
+              threshold: u32:2147483648,
+              x: u16:2,
+              y: u16:0,
+            })),
         ..zero!<phenom_syndrome_cell::ScheduledRequest>()
       },
       u32:16 => phenom_syndrome_cell::ScheduledRequest {
         slot: u32:16,
-        frame: axis::pack(u8:6, uN[96]:0x0001000280000000A195A44B),
+        frame: axis::pack(
+          phenom_syndrome_cell::Tag::PHENOM_CONFIG as u8,
+          phenom_syndrome_cell::bits_from_phenomconfig(
+            phenom_syndrome_cell::Phenomconfig {
+              seed: u32:2710938699,
+              threshold: u32:2147483648,
+              x: u16:2,
+              y: u16:1,
+            })),
         ..zero!<phenom_syndrome_cell::ScheduledRequest>()
       },
       u32:17 => phenom_syndrome_cell::ScheduledRequest {
         slot: u32:17,
-        frame: axis::pack(u8:6, uN[96]:0x00020002800000003FCD1E04),
+        frame: axis::pack(
+          phenom_syndrome_cell::Tag::PHENOM_CONFIG as u8,
+          phenom_syndrome_cell::bits_from_phenomconfig(
+            phenom_syndrome_cell::Phenomconfig {
+              seed: u32:1070407172,
+              threshold: u32:2147483648,
+              x: u16:2,
+              y: u16:2,
+            })),
         ..zero!<phenom_syndrome_cell::ScheduledRequest>()
       },
       _ => zero!<phenom_syndrome_cell::ScheduledRequest>(),

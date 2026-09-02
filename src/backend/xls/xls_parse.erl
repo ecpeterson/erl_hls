@@ -565,7 +565,7 @@ struct_from_record(RecordForm) ->
     {attribute, _L, record, {NameAtom, Fields}} = RecordForm,
     Name = lists:delete($_, atom_to_list(NameAtom)),
     StructName = string:titlecase(Name),
-    ["struct ", StructName, " {\n",
+    ["pub struct ", StructName, " {\n",
         [io_lib:format("  ~w : ~s,~n", [
                 element(3, element(3, Field)),
                 hls_type:print_type(hls_type:descriptor(Type))
@@ -580,7 +580,7 @@ structfrombits_from_record(RecordForm) ->
     {attribute, _L, record, {NameAtom, Fields}} = RecordForm,
     Name = lists:delete($_, atom_to_list(NameAtom)),
     StructName = string:titlecase(Name),
-    ["fn ", string:lowercase(StructName), "_from_bits<N: u32>(raw: bits[N]) -> ", StructName, " {\n",
+    ["pub fn ", string:lowercase(StructName), "_from_bits<N: u32>(raw: bits[N]) -> ", StructName, " {\n",
     "  ", StructName, " {\n",
     lists:reverse(element(1, lists:foldl(
         fun(
@@ -611,7 +611,7 @@ structfrombits_from_record(RecordForm) ->
 bitsfromstruct_from_record(_RecordForm = {attribute, _L, record, {NameAtom, Fields}}) ->
     Name = lists:delete($_, atom_to_list(NameAtom)),
     StructName = string:titlecase(Name),
-    ["fn bits_from_", string:lowercase(StructName), "(s: ", StructName, ") -> bits[bit_count<", StructName, ">()] {\n",
+    ["pub fn bits_from_", string:lowercase(StructName), "(s: ", StructName, ") -> bits[bit_count<", StructName, ">()] {\n",
         ["  ", lists:foldl(
             fun({typed_record_field, Field, Type}, Body) ->
                 Slot = record_field_name(Field),

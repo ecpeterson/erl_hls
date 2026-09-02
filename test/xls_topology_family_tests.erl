@@ -196,9 +196,11 @@ generated_family_topology_uses_explicit_actor_egress_depth_test() ->
 
 generated_family_startup_precedes_routed_input_test() ->
     Generated = iolist_to_binary(phi_noise_topology_dslx:to_dslx()),
-    ?assertEqual(36, count(Generated, <<"frame: axis::pack(u8:6,">>)),
-    ?assertEqual(18, count(Generated, <<"frame: axis::pack(u8:12,">>)),
-    ?assertNotEqual(nomatch, binary:match(Generated, <<"uN[96]:0x">>)),
+    ?assertEqual(36, count(Generated, <<"::Tag::PHENOM_CONFIG as u8">>)),
+    ?assertEqual(18, count(Generated, <<"::Tag::PHI_CONFIG as u8">>)),
+    ?assertEqual(36, count(Generated, <<"::Phenomconfig {">>)),
+    ?assertEqual(18, count(Generated, <<"::Phiconfig {">>)),
+    ?assertEqual(0, count(Generated, <<"uN[96]:0x">>)),
     ?assertNotEqual(nomatch, binary:match(Generated, <<
         "proc SchedulerStartup0 {"
     >>)),
