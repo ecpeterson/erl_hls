@@ -21,13 +21,13 @@ without a tree of buffered two-way muxes. Explicit startup values still
 produce one match arm per configured member.
 
 Families may either instantiate one actor service per coordinate or join a
-homogeneous scheduler group. A group retains the per-coordinate ingresses and
-routers, but multiplexes their request, admission, and ordered-egress streams
-through one actor implementation. The complete machine state, including the
-bounded mailbox, crosses an explicit one-read/write RAM boundary. The current
-backend requires both scheduler storage bindings to be `block_ram`; a target
-wrapper must connect each generated RAM channel triplet to storage with the
-declared read and write-completion protocol.
+homogeneous scheduler group. A group replaces the per-coordinate services and
+mailboxes with shared ingress, execution, and egress machinery around one
+actor implementation. Actor-machine words and mailbox frames cross separate
+one-read/write RAM boundaries; the scheduler retains only bounded queue-order
+metadata. The current backend requires both scheduler storage bindings to be
+`block_ram`; a target wrapper must connect both generated RAM channel triplets
+to storage with the declared read and write-completion protocol.
 
 Each compact lane relation becomes a depth-zero direct channel array. The
 explicit depth supplies the pinned block stitcher's per-channel FIFO metadata
