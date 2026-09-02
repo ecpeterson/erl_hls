@@ -490,6 +490,190 @@ results; they establish no part fit, placement, routing, or timing closure. The
 final ABC map has logic depth 32 versus 33 for the preceding row, but that is
 only a coarse technology-mapping metric.
 
+### Specialized distance-three RTL baseline
+
+`phi_memory_raw_d3.sv` is a deliberately non-general implementation of the
+canonical distance-three memory fixture. It retains the routed 32-bit
+application boundary and its cutoff, point-update, whole-grid query, and event
+formats, but it does not retain actors, mailboxes, internal Frames, or a
+parameterized topology. One controller scans the fixed arrays in a globally
+synchronous order. It shares one restoring divider across all Q15.16
+recurrences, computes every move from a common snapshot before applying move
+parity, and serializes all output events.
+
+```mermaid
+flowchart LR
+    Host["ERTS / routed AXIS"] --> Parser["command parser"]
+    Parser --> Engine["fixed d=3 sequencer"]
+    Engine <--> State["PRNG, Pauli, anyon,<br/>and two field banks"]
+    Engine <--> Divider["shared restoring divider"]
+    Engine --> Serializer["event serializer"]
+    Serializer --> Host
+```
+
+This is an executable low-overhead reference, not a proposed backend and not a
+proof of the mathematical minimum. In particular, the current multi-read
+arrays map to distributed memory; a more deeply serialized implementation
+could consolidate the wide state into a block RAM. The implementation also
+omits the separately measured debug wrapper, whose purpose is to measure the
+cost of a common boundary service rather than the decoder itself.
+
+The command parser deliberately implements only the fixture's trusted host
+discipline. It accepts one initial whole-grid cutoff, serialized correction
+updates, and at most one outstanding query; it does not reproduce the generated
+gateway's more general lifecycle or concurrency behavior. These packets still
+use the same externally visible application format, allowing the ordinary ERTS
+runner to drive either implementation.
+
+The direct RTL bench drives the real cutoff/update/query packets, echoes every
+sparse correction as the host runner does, periodically backpressures the
+output, and reaches the expected result in 69,722 clocks: 84 corrections (45 X
+and 39 Z), followed by all 18 final measurement replies with the expected six
+nonzero bits. It also checks an ordered checksum over every correction field
+and unique complete quiet/empty status sets. The opt-in bridge run goes further:
+the unchanged `phi_memory_runner` compares the sorted list of every correction
+and every final data-qubit bit with the witness freshly produced by the ERTS
+deployment.
+On the same 4-core, 8-GiB UTM used for the generated experiment, Icarus compiled
+the 38.7-KiB raw core and bridge wrapper in 0.17 seconds. The exact bridge EUnit
+case took 8.4 seconds; its enclosing Erlang process used 12.5 seconds of wall
+time and 39 MiB peak RSS. These remain host simulation costs rather than a
+hardware throughput measurement.
+
+The same XC7 area-only Yosys mapping used for the generated experiments gives:
+
+| implementation | geometry | estimated logic cells | flip-flops | LUT1–LUT6 | `RAM32M` | `DSP48E1` |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| generated actors, selected bounded divisions | d=2 | 68,852 | 55,105 | 79,070 | not recorded | 64 |
+| specialized raw RTL | d=3 | 2,063 | 708 | 2,358 | 148 | 0 |
+
+The 148 `RAM32M` entries are distributed-memory primitives separate from the
+2,358 ordinary logic LUTs, so Yosys's 2,063-cell estimate is not a complete
+count of physical LUT sites.
+
+### Area attribution witnesses
+
+The raw/full comparison changes several things at once. Two smaller
+experiments separate the principal effects. First, the generated d=2 Verilog
+can be mapped at its service-module boundaries. Mapping one representative
+service of each kind, then multiplying by the eight copies present in d=2,
+gives:
+
+| mapped scope | copies in d=2 | estimated logic cells | flip-flops | LUT1–LUT6 | `DSP48E1` |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| one data service | 8 | 2,236 | 849 | 2,504 | 0 |
+| one syndrome service | 8 | 2,752 | 817 | 3,002 | 0 |
+| one phi service | 8 | 2,465 | 1,059 | 3,154 | 8 |
+| 24 services, replicated sum | 24 | 59,624 | 21,800 | 69,280 | 64 |
+| complete generated d=2 graph | — | 68,852 | 55,105 | 79,070 | 64 |
+| d=2 transport with services black-boxed | — | 25,643 | 48,502 | 26,711 | 0 |
+
+These rows are not additive. The black-box cut preserves every real service
+port, but prevents constant propagation and logic packing across that boundary;
+adding it to the independently mapped services overcounts the full graph.
+Conversely, subtracting the replicated service estimates from the full graph
+leaves only 9,228 logic cells and 33,305 flip-flops. The two cuts bracket rather
+than exactly partition transport cost. Both identify the same qualitative
+split: replicated actor services account for most mapped combinational logic
+and every DSP, while the frame, queue, credit, and routing network accounts for
+a large fraction of the registers.
+
+Second, `phi_relax_lane.x` and `phi_relax_bank.sv` implement the same narrow,
+restoring-divider phi recurrence without an Erlang actor. Each accepts one
+cell's two field planes, spends 76 cycles in its pair of divisions, and returns
+the same rounded Q15.16 result. The handwritten DSLX proc is tested by the XLS
+interpreter before code generation; the SystemVerilog lane has an Icarus
+regression with the same vectors.
+
+| one relaxation lane | estimated logic cells | flip-flops | LUT1–LUT6 | `DSP48E1` |
+| --- | ---: | ---: | ---: | ---: |
+| handwritten SystemVerilog | 889 | 197 | 935 | 0 |
+| handwritten DSLX through XLS | 745 | 228 | 955 | 0 |
+
+The small LUT/FF tradeoff and lower XLS logic-cell estimate provide no evidence
+of a large intrinsic XLS penalty in this datapath. They do not measure Erlang
+lowering or the complete sequential controller; they isolate arithmetic and
+its handshake only.
+
+`phi_sequential_core.x` extends that comparison across the complete decoder
+state and schedule. One handwritten DSLX proc scans all 18 data cells, 18
+syndrome cells, and 18 phi cells through one divider lane. It applies sparse
+corrections directly rather than serializing them through ERTS, and omits the
+separately measured routed gateway. Its XLS interpreter regression nevertheless
+reproduces the full deterministic closeout witness: step 21, 84 corrections
+split 45 X and 39 Z, and the same six nonzero bits in the final 18-qubit Pauli
+measurement.
+
+| time-multiplexed d=3 implementation | estimated logic cells | flip-flops | LUT1–LUT6 | `RAM32M` | `DSP48E1` |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| raw SystemVerilog, including routed boundary | 2,063 | 708 | 2,358 | 148 | 0 |
+| handwritten DSLX through XLS, decoder core only | 9,065 | 4,525 | 9,495 | 0 | 1 |
+
+The matched trajectory and shared schedule remove actor replication as an
+explanation for this remaining 4.4× logic-cell gap. State storage is the
+obvious difference: Yosys infers distributed RAM for the SystemVerilog arrays,
+whereas XLS lowers the arrays inside proc state to individual registers and
+wide dynamic-update muxes. The DSLX core therefore spends more flip-flops than
+the complete raw boundary and receives no `RAM32M` primitives. The lone DSP
+appears only in the whole-core XLS map, presumably for an address or
+constant-multiply choice absent from the isolated divider. A useful next
+compiler or backend experiment is an explicit bounded-memory representation;
+tuning the field datapath alone cannot recover this difference.
+
+The DSLX core needs 2,844 clocks per decoder step: 2,772 for two Jacobi rounds
+and 72 for the data, syndrome, compare, and apply scans. Its fixed witness
+therefore reaches the step-21 summary after 62,568 engine clocks. The raw
+boundary bench takes 69,722 clocks because it also initializes state, emits and
+backpressures application events, and accepts each correction through the host
+command path.
+
+Replicating the SystemVerilog lane gives the direct area/latency curve below.
+The cycle estimate covers both Jacobi rounds across 18 phi cells, including
+one command-acceptance cycle per batch but excluding the rest of the decoder
+scan and event traffic.
+
+| relaxation lanes | estimated logic cells | flip-flops | LUT1–LUT6 | estimated diffusion clocks |
+| ---: | ---: | ---: | ---: | ---: |
+| 1 | 889 | 197 | 935 | 2,772 |
+| 2 | 1,774 | 394 | 1,873 | 1,386 |
+| 4 | 3,554 | 788 | 3,743 | 770 |
+| 9 | 8,015 | 1,773 | 8,429 | 308 |
+| 18 | 15,997 | 3,546 | 16,841 | 154 |
+
+Two lanes alone approach the 2,063-cell area of the complete raw sequential
+decoder. The baseline is therefore small chiefly because one arithmetic lane
+is shared across the whole device. A useful generated implementation should
+make this degree of spatial/temporal sharing explicit instead of assuming one
+independent datapath per Erlang actor.
+
+The comparison intentionally favors the specialized row: it fixes one size and
+schedule, replaces all independently progressing actors with one datapath, and
+does not provide Erlang mailbox semantics. Distance two also aliases cardinal
+routes, so the generated row is not a valid decoder geometry despite being the
+smallest completed current mapping. These numbers isolate how much area can be
+saved when those generality requirements are abandoned; they do not attribute
+the difference solely to HLS or XLS.
+
+Run the fast behavioral regression and repeat the mapping with:
+
+```sh
+tools/run_phi_memory_raw_rtl.sh
+tools/synth_phi_memory_raw.sh
+tools/run_phi_relax_bank.sh
+tools/run_phi_relax_xls.sh
+tools/synth_phi_relax_sweep.sh
+tools/run_phi_sequential_xls.sh
+```
+
+`tools/run_phi_memory_raw_demo.sh` runs the full ERTS/VPI witness comparison on
+the configured build host without generating XLS RTL or loading the debug
+boundary.
+
+`tools/run_phi_area_matrix.sh` regenerates the d=2 topology on the configured
+XLS host and repeats the service, transport-black-box, and raw-core mappings.
+Set `ERL_HLS_AREA_CASES=full` when the much slower complete d=2 remap is also
+required; the default uses the checked complete result above.
+
 ### Distance-three RTL simulation
 
 `tools/run_phi_noise_topology_sim.sh` is the opt-in full-graph regression. It

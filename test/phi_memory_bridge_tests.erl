@@ -19,7 +19,7 @@ simulated_rtl_test_() ->
                         Actual = phi_memory_runner:await(Runner),
                         ok = verify(Mode, Actual),
                         ?assertEqual(Expected, Actual),
-                        ok = verify_debug(Debug)
+                        ok = maybe_verify_debug(Debug)
                     end)}
                 end}
     end.
@@ -27,21 +27,33 @@ simulated_rtl_test_() ->
 start(SimDir, Options, RunnerTimeout) ->
     WritePath = filename:join(SimDir, "app_tx"),
     ReadPath = filename:join(SimDir, "app_rx"),
-    DebugWritePath = filename:join(SimDir, "debug_tx"),
-    DebugReadPath = filename:join(SimDir, "debug_rx"),
     {ok, AppFabric} = hls_fabric:start_link(WritePath, ReadPath),
-    {ok, DebugFabric} = hls_fabric:start_link(
-        DebugWritePath, DebugReadPath
-    ),
-    {ok, Debug} = hls_debug:start_link(
-        phi_memory_gateway, {fabric, DebugFabric, 1}
-    ),
+    {DebugFabric, Debug} = start_debug(SimDir),
     {ok, Runner} = phi_memory_runner:start_link(
         AppFabric,
         Options,
         RunnerTimeout
     ),
     {AppFabric, DebugFabric, Debug, Runner}.
+
+start_debug(SimDir) ->
+    case os:getenv("ERL_HLS_PHI_DEBUG") of
+        "0" ->
+            {undefined, undefined};
+        _ ->
+            start_debug_fabric(SimDir)
+    end.
+
+start_debug_fabric(SimDir) ->
+    DebugWritePath = filename:join(SimDir, "debug_tx"),
+    DebugReadPath = filename:join(SimDir, "debug_rx"),
+    {ok, DebugFabric} = hls_fabric:start_link(
+        DebugWritePath, DebugReadPath
+    ),
+    {ok, Debug} = hls_debug:start_link(
+        phi_memory_gateway, {fabric, DebugFabric, 1}
+    ),
+    {DebugFabric, Debug}.
 
 fixture() ->
     case os:getenv("ERL_HLS_PHI_DEMO") of
@@ -86,6 +98,11 @@ verify(smoke, {ok, #{data_anticommutations := DataAnticommutations}}) ->
 verify(smoke, Result) ->
     error({smoke_result, Result}).
 
+maybe_verify_debug(undefined) ->
+    ok;
+maybe_verify_debug(Debug) ->
+    verify_debug(Debug).
+
 verify_debug(Debug) ->
     {ok, Counters} = hls_debug:get_counters(Debug, ?DEBUG_TIMEOUT),
     ?assertEqual(4, maps:get(version, Counters)),
@@ -115,6 +132,8 @@ stop({AppFabric, DebugFabric, Debug, Runner}) ->
     stop_if_alive(hls_fabric, DebugFabric),
     stop_if_alive(hls_fabric, AppFabric).
 
+stop_if_alive(_Module, undefined) ->
+    ok;
 stop_if_alive(Module, Pid) ->
     case is_process_alive(Pid) of
         true -> Module:stop(Pid);

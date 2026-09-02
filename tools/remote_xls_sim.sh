@@ -31,7 +31,9 @@ for test_module in \
     axis.x \
     hls_debug_trace.x \
     hls_debug_observer.x \
-    hls_spatial_router.x
+    hls_spatial_router.x \
+    phi_relax_lane.x \
+    phi_sequential_core.x
 do
     "$xls_root/interpreter_main" \
         --dslx_path=. \
