@@ -4,7 +4,7 @@
 
 -module(hls_actor_interface).
 -moduledoc """
-Reads the narrow, version-0 interface summary emitted by `hls_pack` for an
+Reads the narrow, version-1 interface summary emitted by `hls_pack` for an
 `hls_statem` module.
 
 When the compiling source remains available, the query re-derives the summary
@@ -20,6 +20,14 @@ dispatch means that the generated actor has a callback group for that schema
 and phase; it does not claim that every payload passes the group's patterns and
 guards.
 
+The summary also carries the callback-state layout. Its packed width is derived
+when queried, after custom `hls_type` modules are available; computing it while
+the actor's parse transform runs would make compilation depend on incidental
+source order. This is the state which a shared scheduler may place in generated
+memory. Mailbox slots, phase, postponement, admission, and pending effects
+remain scheduler state and are deliberately not folded into the callback
+record.
+
 This is internal compiler data for the phi topology experiment, not a stable
 application behavior or a general Erlang protocol description.
 """.
@@ -31,7 +39,8 @@ application behavior or a general Erlang protocol description.
     initial_effects/1,
     max_entry_effects/1,
     output_schemas/2,
-    schema/2
+    schema/2,
+    state/1
 ]).
 -export_type([summary/0]).
 
@@ -131,13 +140,23 @@ schema(Summary, Name) ->
             maps:get(module, Summary), Name})
     end.
 
+-spec state(summary()) -> map().
+-doc "Returns the callback-state record name, fields, and packed width.".
+state(Summary) ->
+    State = maps:get(state, Summary),
+    State#{width => lists:sum([
+        hls_type:width(maps:get(type, Field))
+        || Field <- maps:get(fields, State)
+    ])}.
+
 validate(Module, Summary = #{
-    version := 0,
+    version := 1,
     module := Module,
     phases := Phases,
     initial_phase := InitialPhase,
     outputs := Outputs,
     mailbox_capacity := Capacity,
+    state := State,
     schemas := Schemas,
     dispatches := Dispatches,
     entry_effects := Effects
@@ -148,6 +167,7 @@ validate(Module, Summary = #{
         lists:member(InitialPhase, Phases),
     ok = require_unique(interface_phase, Phases),
     ok = require_unique(interface_output, Outputs),
+    ok = validate_state(State),
     SchemaNames = [maps:get(name, Schema) || Schema <- Schemas],
     Selectors = [maps:get(selector, Schema) || Schema <- Schemas],
     ok = require_unique(interface_schema, SchemaNames),
@@ -170,10 +190,25 @@ validate(Module, Summary = #{
         Effects
     ),
     Summary;
-validate(Module, #{version := Version}) when Version =/= 0 ->
+validate(Module, #{version := Version}) when Version =/= 1 ->
     error({unsupported_hls_actor_interface_version, Module, Version});
 validate(Module, Summary) ->
     error({invalid_hls_actor_interface, Module, Summary}).
+
+validate_state(#{name := Name, fields := [_ | _] = Fields})
+        when is_atom(Name) ->
+    true = lists:all(
+        fun
+            (#{name := FieldName, type := Type}) ->
+                is_atom(FieldName) andalso is_tuple(Type);
+            (_) ->
+                false
+        end,
+        Fields
+    ),
+    ok;
+validate_state(State) ->
+    error({state, State}).
 
 validate_behavior(Module, Attributes) ->
     Behaviors =

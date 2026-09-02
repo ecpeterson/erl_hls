@@ -502,6 +502,17 @@ and maps to 1,723 estimated XC7 logic cells, 1,293 flip-flops, 2,319 LUTs, one
 `RAMB18E1`, and one `DSP48E1`. The experiment README records the scope,
 comparison tables, latency tradeoffs, and reproduction commands.
 
+The compiler now has a provisional physical plan for the corresponding
+implementation: the two data families share one homogeneous executor, as do
+the two syndrome families and the two phi families. Each d=3 group therefore
+has 18 logical slots. Callback-state and mailbox storage are separately bound
+to block RAM; the actor interface summary supplies the callback record layout.
+This plan is validated but is not yet consumed by the DSLX topology backend,
+so the generated communication diagram above still describes the executable
+artifact. A shared executor must select ready slots fairly and commit a
+transition only when its complete ordered effect burst can proceed; otherwise
+it leaves that actor unchanged and services another slot.
+
 ### Distance-three RTL simulation
 
 `tools/run_phi_noise_topology_sim.sh` is the opt-in full-graph regression. It

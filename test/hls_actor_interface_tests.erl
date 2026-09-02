@@ -94,8 +94,14 @@ phi_interface_records_protocol_facts_test() ->
             phi_config
         ))
     ),
-    ?assertNot(maps:is_key(data_fields, Interface)),
-    ?assertNot(maps:is_key(data_schema, Interface)).
+    #{name := cell, fields := StateFields, width := 528} =
+        hls_actor_interface:state(Interface),
+    ?assertEqual(
+        [step, diffusion_round, phi, phi_sum, phi_received, seen_sources,
+            best_phi0, best_direction, moves_received, anyon, random_state,
+            x, y, noise_quiet, status_valid],
+        [maps:get(name, Field) || Field <- StateFields]
+    ).
 
 phenomenological_interfaces_are_distinct_test() ->
     Data = hls_actor_interface:from_module(phenom_data_cell),
@@ -142,6 +148,14 @@ phenomenological_interfaces_are_distinct_test() ->
     ?assertEqual(
         [{request_id, u32}, {x, u16}, {y, u16}, {anticommutes, u32}],
         schema_fields(Data, pauli_reply)
+    ),
+    ?assertMatch(
+        #{name := data_cell, width := 416},
+        hls_actor_interface:state(Data)
+    ),
+    ?assertMatch(
+        #{name := syndrome, width := 416},
+        hls_actor_interface:state(Syndrome)
     ).
 
 source_and_compiled_interfaces_agree_test_() ->
