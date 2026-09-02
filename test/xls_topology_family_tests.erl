@@ -165,6 +165,8 @@ generated_multi_family_topology_retains_compact_structure_test() ->
     ?assertEqual(1, count(Generated, <<"spawn SpatialIngressRouter">>)),
     ?assertEqual(4, count(Generated, <<"proc FamilyControl">>)),
     ?assertEqual(4, count(Generated, <<"spawn FamilyControl">>)),
+    ?assertEqual(4, count(Generated, <<"::Egress, u32:3>">>)),
+    ?assertEqual(2, count(Generated, <<"::Egress, u32:4>">>)),
     ?assertEqual(4, count(Generated, <<
         "chan<hls_spatial_router::SpatialFrame, u32:0>"
     >>)),
@@ -190,6 +192,23 @@ generated_multi_family_topology_retains_compact_structure_test() ->
     ?assertNotEqual(nomatch, binary:match(Generated, <<
         "proc FamilyGrid<TORUS_WIDTH: u32, TORUS_HEIGHT: u32>"
     >>)).
+
+generated_family_topology_uses_explicit_actor_egress_depth_test() ->
+    Plan = hls_topology:normalize(phi_noise_topology:topology()),
+    Profile = phi_noise_topology_dslx:profile(),
+    lists:foreach(
+        fun(Depth) ->
+            Generated = iolist_to_binary(xls_topology_dslx:emit(
+                Plan,
+                Profile#{actor_egress_depth := Depth}
+            )),
+            Needle = iolist_to_binary([
+                "::Egress, u32:", integer_to_list(Depth), ">"
+            ]),
+            ?assertEqual(6, count(Generated, Needle))
+        end,
+        [0, 1]
+    ).
 
 generated_family_startup_precedes_routed_input_test() ->
     Generated = iolist_to_binary(phi_noise_topology_dslx:to_dslx()),
@@ -238,6 +257,22 @@ family_backend_rejects_partial_family_startup_test() ->
         )
     ).
 
+family_backend_rejects_invalid_actor_egress_depth_test() ->
+    Plan = hls_topology:normalize(phi_noise_topology:topology(1)),
+    Profile = phi_noise_topology_dslx:profile(),
+    lists:foreach(
+        fun(Value) ->
+            ?assertError(
+                {egress_depth, Value},
+                xls_topology_dslx:emit(
+                    Plan,
+                    Profile#{actor_egress_depth := Value}
+                )
+            )
+        end,
+        [-1, 16#100000000, auto]
+    ).
+
 family_backend_rejects_cross_family_selector_remap_test() ->
     Plan = hls_topology:normalize(selector_remap_topology()),
     Recipient = {family, source, {translate, [0, 0], wrap}},
@@ -250,7 +285,11 @@ family_backend_rejects_cross_family_selector_remap_test() ->
             3},
         xls_topology_dslx:emit(
             Plan,
-            #{name => selector_remap_topology, channel_depth => 1}
+            #{
+                name => selector_remap_topology,
+                channel_depth => 1,
+                actor_egress_depth => burst
+            }
         )
     ).
 
@@ -258,7 +297,11 @@ family_backend_rejects_incompatible_external_schema_test() ->
     Plan = hls_topology:normalize(external_schema_topology()),
     try xls_topology_dslx:emit(
             Plan,
-            #{name => external_schema_topology, channel_depth => 1}
+            #{
+                name => external_schema_topology,
+                channel_depth => 1,
+                actor_egress_depth => burst
+            }
         ) of
         _ -> ?assert(false)
     catch
@@ -269,7 +312,11 @@ family_backend_rejects_ambiguous_external_selector_test() ->
     Plan = hls_topology:normalize(external_selector_topology()),
     try xls_topology_dslx:emit(
             Plan,
-            #{name => external_selector_topology, channel_depth => 1}
+            #{
+                name => external_selector_topology,
+                channel_depth => 1,
+                actor_egress_depth => burst
+            }
         ) of
         _ -> ?assert(false)
     catch

@@ -180,7 +180,7 @@ proc FamilyNode<X: u32, Y: u32> {
     let (actor_admit_p, actor_admit_c) =
       chan<u1, CHANNEL_DEPTH>("actor_admit");
     let (actor_egress_p, actor_egress_c) =
-      chan<phi_halo_cell::Egress, u32:5>("actor_egress");
+      chan<phi_halo_cell::Egress, u32:4>("actor_egress");
     spawn phi_halo_cell::Service(
       actor_req_c, actor_egress_p, actor_admit_p);
     spawn FamilyRouter(actor_egress_c, lane_0_out, lane_1_out, lane_2_out, lane_3_out, lane_4_out);

@@ -32,6 +32,13 @@ Startup quiescence is checked from the statically known initial phase and its
 source-ordered entry effects. Actor callbacks are not executed by topology
 generation. Regular-family plans are delegated to the narrower channel-array
 backend in `xls_topology_family_dslx`.
+
+The physical profile selects an actor-egress depth policy. On an initially
+empty path, `burst` makes the required one-entry producer output register plus
+the per-artifact FIFO large enough for one complete entry-effect burst. This
+depends on code generation retaining `--flop_outputs=true`. A nonnegative
+integer requests that literal XLS channel depth; zero is an explicit bypass
+FIFO and leaves only the producer holding slot.
 """.
 
 -export([emit/2, from_module/2]).
@@ -69,12 +76,15 @@ lower(Plan = #{
         route_relations := [],
         lane_relations := []
     }, Profile) ->
-    Actors = annotate_actors(maps:get(actors, Plan)),
+    Physical = validate_profile(Profile, Plan),
+    Actors = annotate_actors(
+        maps:get(actors, Plan),
+        maps:get(actor_egress_depth, Physical)
+    ),
     Externals = annotate_externals(maps:get(externals, Plan)),
     ActorIndex = maps:from_list([
         {maps:get(id, Actor), Actor} || Actor <- Actors
     ]),
-    Physical = validate_profile(Profile, Plan),
     ok = validate_route_selectors(maps:get(routes, Plan), ActorIndex),
     ok = validate_startup_quiescence(maps:get(startup, Plan), ActorIndex),
     Routes = physical_route_order(Actors, maps:get(routes, Plan)),
@@ -95,7 +105,7 @@ lower(Plan = #{
     }.
 
 validate_profile(Profile, Plan) when is_map(Profile) ->
-    Required = lists:sort([channel_depth, name]),
+    Required = lists:sort([actor_egress_depth, channel_depth, name]),
     Keys = lists:sort(maps:keys(Profile)),
     case {Required -- Keys, Keys -- Required} of
         {[], []} -> ok;
@@ -106,6 +116,12 @@ validate_profile(Profile, Plan) when is_map(Profile) ->
     case maps:get(channel_depth, Profile) of
         Depth when is_integer(Depth), Depth > 0, Depth =< ?U32_MAX -> ok;
         Depth -> error({invalid_dslx_channel_depth, Depth})
+    end,
+    case maps:get(actor_egress_depth, Profile) of
+        burst -> ok;
+        EgressDepth when is_integer(EgressDepth),
+                EgressDepth >= 0, EgressDepth =< ?U32_MAX -> ok;
+        EgressDepth -> error({egress_depth, EgressDepth})
     end,
     RealizedLanes = derive_realized_lanes(maps:get(routes, Plan)),
     case maps:get(lanes, Plan, '$missing') of
@@ -149,17 +165,17 @@ derive_realized_lanes(Routes) ->
     ].
 
 
-annotate_actors(Actors) ->
+annotate_actors(Actors, EgressDepth) ->
     Interfaces = maps:from_list([
         {Module, hls_actor_interface:from_module(Module)}
         || Module <- lists:usort([
             maps:get(module, Actor) || Actor <- Actors
         ])
     ]),
-    [annotate_actor(Index, Actor, Interfaces)
+    [annotate_actor(Index, Actor, Interfaces, EgressDepth)
         || {Index, Actor} <- lists:enumerate(0, Actors)].
 
-annotate_actor(Index, Actor, Interfaces) ->
+annotate_actor(Index, Actor, Interfaces, EgressDepth) ->
     Module = maps:get(module, Actor),
     ModuleName = identifier(Module, {actor_module, maps:get(id, Actor)}),
     Outputs = maps:get(outputs, Actor),
@@ -175,10 +191,16 @@ annotate_actor(Index, Actor, Interfaces) ->
         module_name => ModuleName,
         stem => ["actor_", integer_to_list(Index)],
         egress_channel => ["actor_", integer_to_list(Index), "_egress"],
-        egress_depth => max(1, hls_actor_interface:max_entry_effects(
+        egress_depth => egress_depth(
+            EgressDepth,
             maps:get(Module, Interfaces)
-        ))
+        )
     }.
+
+egress_depth(burst, Interface) ->
+    max(0, hls_actor_interface:max_entry_effects(Interface) - 1);
+egress_depth(Depth, _Interface) ->
+    Depth.
 
 annotate_externals(Externals) ->
     [

@@ -19,7 +19,8 @@ event boundaries are fair polling merges over the bounded family lanes.
 profile() ->
     #{
         name => phi_torus_topology,
-        channel_depth => 1
+        channel_depth => 1,
+        actor_egress_depth => burst
     }.
 
 -doc "Generates DSLX for the compact default torus plan.".

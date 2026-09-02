@@ -911,7 +911,7 @@ proc FamilyNode0<X: u32, Y: u32> {
     let (actor_admit_p, actor_admit_c) =
       chan<u1, CHANNEL_DEPTH>("actor_admit");
     let (actor_egress_p, actor_egress_c) =
-      chan<phenom_data_cell::Egress, u32:4>("actor_egress");
+      chan<phenom_data_cell::Egress, u32:3>("actor_egress");
     spawn phenom_data_cell::Service(
       actor_req_c, actor_egress_p, actor_admit_p);
     spawn FamilyRouter0(actor_egress_c, lane_0_out, lane_1_out, lane_2_out, lane_3_out, lane_4_out);
@@ -941,7 +941,7 @@ proc FamilyNode1<X: u32, Y: u32> {
     let (actor_admit_p, actor_admit_c) =
       chan<u1, CHANNEL_DEPTH>("actor_admit");
     let (actor_egress_p, actor_egress_c) =
-      chan<phenom_data_cell::Egress, u32:4>("actor_egress");
+      chan<phenom_data_cell::Egress, u32:3>("actor_egress");
     spawn phenom_data_cell::Service(
       actor_req_c, actor_egress_p, actor_admit_p);
     spawn FamilyRouter1(actor_egress_c, lane_5_out, lane_6_out, lane_7_out, lane_8_out, lane_9_out);
@@ -972,7 +972,7 @@ proc FamilyNode2<X: u32, Y: u32> {
     let (actor_admit_p, actor_admit_c) =
       chan<u1, CHANNEL_DEPTH>("actor_admit");
     let (actor_egress_p, actor_egress_c) =
-      chan<phi_halo_cell::Egress, u32:5>("actor_egress");
+      chan<phi_halo_cell::Egress, u32:4>("actor_egress");
     spawn phi_halo_cell::Service(
       actor_req_c, actor_egress_p, actor_admit_p);
     spawn FamilyRouter2(actor_egress_c, lane_10_out, lane_11_out, lane_12_out, lane_13_out, lane_14_out, lane_15_out);
@@ -1003,7 +1003,7 @@ proc FamilyNode3<X: u32, Y: u32> {
     let (actor_admit_p, actor_admit_c) =
       chan<u1, CHANNEL_DEPTH>("actor_admit");
     let (actor_egress_p, actor_egress_c) =
-      chan<phi_halo_cell::Egress, u32:5>("actor_egress");
+      chan<phi_halo_cell::Egress, u32:4>("actor_egress");
     spawn phi_halo_cell::Service(
       actor_req_c, actor_egress_p, actor_admit_p);
     spawn FamilyRouter3(actor_egress_c, lane_16_out, lane_17_out, lane_18_out, lane_19_out, lane_20_out, lane_21_out);
@@ -1035,7 +1035,7 @@ proc FamilyNode4<X: u32, Y: u32> {
     let (actor_admit_p, actor_admit_c) =
       chan<u1, CHANNEL_DEPTH>("actor_admit");
     let (actor_egress_p, actor_egress_c) =
-      chan<phenom_syndrome_cell::Egress, u32:4>("actor_egress");
+      chan<phenom_syndrome_cell::Egress, u32:3>("actor_egress");
     spawn phenom_syndrome_cell::Service(
       actor_req_c, actor_egress_p, actor_admit_p);
     spawn FamilyRouter4(actor_egress_c, lane_22_out, lane_23_out, lane_24_out, lane_25_out, lane_26_out, lane_27_out);
@@ -1067,7 +1067,7 @@ proc FamilyNode5<X: u32, Y: u32> {
     let (actor_admit_p, actor_admit_c) =
       chan<u1, CHANNEL_DEPTH>("actor_admit");
     let (actor_egress_p, actor_egress_c) =
-      chan<phenom_syndrome_cell::Egress, u32:4>("actor_egress");
+      chan<phenom_syndrome_cell::Egress, u32:3>("actor_egress");
     spawn phenom_syndrome_cell::Service(
       actor_req_c, actor_egress_p, actor_admit_p);
     spawn FamilyRouter5(actor_egress_c, lane_28_out, lane_29_out, lane_30_out, lane_31_out, lane_32_out, lane_33_out);
