@@ -3,7 +3,7 @@ set -euo pipefail
 
 stage=${1:?usage: remote_phi_memory_demo.sh STAGE XLS_ROOT}
 xls_root=${2:?usage: remote_phi_memory_demo.sh STAGE XLS_ROOT}
-stdlib="$xls_root/dslx/stdlib"
+stdlib="$xls_root/xls/dslx/stdlib"
 reuse_rtl=${ERL_HLS_PHI_DEMO_REUSE_RTL:-0}
 startup_timeout=${ERL_HLS_SIM_STARTUP_TIMEOUT:-120}
 cpu_witness="$stage/phi_memory_cpu_witness.term"
@@ -52,24 +52,110 @@ if [[ "$reuse_rtl" != 1 ]]; then
         --fifo_module= \
         phi_memory_gateway.opt.ir
 
-    iverilog-vpi xls_sim_bridge.c
-    /usr/bin/time -v -o phi_memory_gateway-iverilog.time \
-        iverilog \
-        -g2012 \
-        -s phi_memory_bridge_tb \
-        -o phi_memory_gateway.vvp \
-        phi_memory_bridge_tb.sv \
-        phi_memory_gateway.v
-elif [[ ! -f phi_memory_gateway.vvp || ! -f xls_sim_bridge.vpi ]]; then
-    echo "Cannot reuse missing Icarus artifacts" >&2
+elif [[ ! -f phi_memory_gateway.v ]]; then
+    echo "Cannot reuse missing phi_memory_gateway.v" >&2
     exit 1
 fi
+
+# The monitor and two-endpoint debug router are small enough to regenerate on
+# every run. Reusing the expensive topology RTL must not accidentally reuse a
+# stale debug wrapper or simulation image.
+"$xls_root/ir_converter_main" \
+    --warnings_as_errors=false \
+    --dslx_stdlib_path="$stdlib" \
+    --top=Observer \
+    hls_debug_observer.x > hls_debug_observer.ir
+
+"$xls_root/opt_main" \
+    hls_debug_observer.ir > hls_debug_observer.opt.ir
+
+"$xls_root/codegen_main" \
+    --pipeline_stages=2 \
+    --delay_model=unit \
+    --use_system_verilog=false \
+    --reset=reset \
+    --fifo_module= \
+    hls_debug_observer.opt.ir > hls_debug_observer.v
+
+"$xls_root/ir_converter_main" \
+    --warnings_as_errors=false \
+    --dslx_path=. \
+    --dslx_stdlib_path="$stdlib" \
+    --top=DebugServer \
+    hls_debug_server.x > hls_debug_server.ir
+
+"$xls_root/opt_main" \
+    hls_debug_server.ir > hls_debug_server.opt.ir
+
+"$xls_root/codegen_main" \
+    --pipeline_stages=3 \
+    --worst_case_throughput=2 \
+    --delay_model=unit \
+    --use_system_verilog=false \
+    --reset=reset \
+    --fifo_module= \
+    hls_debug_server.opt.ir > hls_debug_server.v
+
+"$xls_root/ir_converter_main" \
+    --warnings_as_errors=false \
+    --dslx_path=. \
+    --dslx_stdlib_path="$stdlib" \
+    --top=PairIngress \
+    hls_fabric_router.x > hls_fabric_ingress.ir
+
+"$xls_root/opt_main" \
+    hls_fabric_ingress.ir > hls_fabric_ingress.opt.ir
+
+"$xls_root/codegen_main" \
+    --pipeline_stages=1 \
+    --delay_model=unit \
+    --use_system_verilog=false \
+    --reset=reset \
+    --fifo_module= \
+    hls_fabric_ingress.opt.ir > hls_fabric_ingress.v
+
+"$xls_root/ir_converter_main" \
+    --warnings_as_errors=false \
+    --dslx_path=. \
+    --dslx_stdlib_path="$stdlib" \
+    --top=PairEgress \
+    hls_fabric_router.x > hls_fabric_egress.ir
+
+"$xls_root/opt_main" \
+    hls_fabric_egress.ir > hls_fabric_egress.opt.ir
+
+"$xls_root/codegen_main" \
+    --pipeline_stages=1 \
+    --delay_model=unit \
+    --use_system_verilog=false \
+    --reset=reset \
+    --fifo_module= \
+    hls_fabric_egress.opt.ir > hls_fabric_egress.v
+
+iverilog-vpi xls_sim_bridge.c
+/usr/bin/time -v -o phi_memory_gateway-iverilog.time \
+    iverilog \
+    -g2012 \
+    -s phi_memory_bridge_tb \
+    -o phi_memory_gateway.vvp \
+    phi_memory_bridge_tb.sv \
+    phi_memory_debug_top.v \
+    phi_memory_gateway.v \
+    hls_fabric_ingress.v \
+    hls_fabric_egress.v \
+    hls_debug_monitor.v \
+    hls_debug_tap.v \
+    hls_trace_store.v \
+    hls_debug_observer.v \
+    hls_debug_server.v
 
 sim_dir="$stage/sim"
 mkdir -p "$sim_dir"
 rm -f \
     "$sim_dir/app_tx" \
     "$sim_dir/app_rx" \
+    "$sim_dir/debug_tx" \
+    "$sim_dir/debug_rx" \
     "$sim_dir/vvp.log"
 
 sim_pid=
@@ -83,7 +169,6 @@ trap cleanup EXIT
 
 ERL_HLS_SIM_DIR="$sim_dir" \
 ERL_HLS_SIM_TOP=phi_memory_bridge_tb \
-ERL_HLS_SIM_APP_ONLY=1 \
     vvp -M "$stage" -m xls_sim_bridge phi_memory_gateway.vvp \
     >"$sim_dir/vvp.log" 2>&1 &
 sim_pid=$!
@@ -92,7 +177,8 @@ sim_pid=$!
 # time loading before start-of-simulation callbacks create the FIFOs.
 startup_deadline=$((SECONDS + startup_timeout))
 while ((SECONDS < startup_deadline)); do
-    if [[ -p "$sim_dir/app_tx" && -p "$sim_dir/app_rx" ]]; then
+    if [[ -p "$sim_dir/app_tx" && -p "$sim_dir/app_rx" &&
+          -p "$sim_dir/debug_tx" && -p "$sim_dir/debug_rx" ]]; then
         break
     fi
     if ! kill -0 "$sim_pid" 2>/dev/null; then
@@ -102,7 +188,8 @@ while ((SECONDS < startup_deadline)); do
     sleep 0.1
 done
 
-if [[ ! -p "$sim_dir/app_tx" || ! -p "$sim_dir/app_rx" ]]; then
+if [[ ! -p "$sim_dir/app_tx" || ! -p "$sim_dir/app_rx" ||
+      ! -p "$sim_dir/debug_tx" || ! -p "$sim_dir/debug_rx" ]]; then
     cat "$sim_dir/vvp.log"
     echo "Timed out waiting for phi simulator transport FIFOs" >&2
     exit 1
@@ -114,6 +201,7 @@ erlc -o "$beam_dir" "$stage/erl_src/hls_type.erl"
 erlc -pa "$beam_dir" -o "$beam_dir" \
     "$stage/erl_src/hls_fabric.erl" \
     "$stage/erl_src/hls_gs.erl" \
+    "$stage/erl_src/hls_debug.erl" \
     "$stage/erl_src/hls_lists.erl" \
     "$stage/erl_src/hls_nums.erl" \
     "$stage/erl_src/hls_pauli.erl"

@@ -13,20 +13,38 @@ module phi_memory_bridge_tb;
     wire m_axis_tvalid;
     reg m_axis_tready = 1'b1;
 
-    wire [32:0] routed_in = {s_axis_tlast, s_axis_tdata};
-    wire [32:0] routed_out;
+    reg [31:0] s_dbg_tdata = 32'b0;
+    reg s_dbg_tvalid = 1'b0;
+    wire s_dbg_tready;
+    reg s_dbg_tlast = 1'b0;
 
-    assign m_axis_tdata = routed_out[31:0];
+    wire [31:0] m_dbg_tdata;
+    wire m_dbg_tvalid;
+    reg m_dbg_tready = 1'b1;
 
-    __phi_memory_gateway__Top_0_next dut (
-        .clk(clk),
-        .reset(!resetn),
-        .phi_memory_gateway__routed_in(routed_in),
-        .phi_memory_gateway__routed_in_vld(s_axis_tvalid),
-        .phi_memory_gateway__routed_in_rdy(s_axis_tready),
-        .phi_memory_gateway__routed_out_rdy(m_axis_tready),
-        .phi_memory_gateway__routed_out(routed_out),
-        .phi_memory_gateway__routed_out_vld(m_axis_tvalid)
+    phi_memory_debug_top dut (
+        .aclk(clk),
+        .aresetn(resetn),
+        .s_axis_tdata(s_axis_tdata),
+        .s_axis_tkeep(4'hf),
+        .s_axis_tvalid(s_axis_tvalid),
+        .s_axis_tready(s_axis_tready),
+        .s_axis_tlast(s_axis_tlast),
+        .m_axis_tdata(m_axis_tdata),
+        .m_axis_tkeep(),
+        .m_axis_tvalid(m_axis_tvalid),
+        .m_axis_tready(m_axis_tready),
+        .m_axis_tlast(),
+        .s_dbg_tdata(s_dbg_tdata),
+        .s_dbg_tkeep(4'hf),
+        .s_dbg_tvalid(s_dbg_tvalid),
+        .s_dbg_tready(s_dbg_tready),
+        .s_dbg_tlast(s_dbg_tlast),
+        .m_dbg_tdata(m_dbg_tdata),
+        .m_dbg_tkeep(),
+        .m_dbg_tvalid(m_dbg_tvalid),
+        .m_dbg_tready(m_dbg_tready),
+        .m_dbg_tlast()
     );
 
     always #5 clk = ~clk;

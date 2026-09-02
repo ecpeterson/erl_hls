@@ -172,9 +172,16 @@ language.
 flowchart LR
     Caller["ERTS caller"] --> Runner["phi_memory_runner<br/>+ phi_memory_experiment"]
     Runner -->|"register_route + send"| Broker["hls_fabric<br/>route broker"]
-    Broker -->|"32-bit routed AXIS<br/>endpoint 0 → 1"| Gateway["phi_memory_gateway"]
+    Broker -->|"32-bit routed AXIS<br/>endpoint 0 → 1"| Wrapper["phi_memory_debug_top"]
+    Wrapper --> Gateway["phi_memory_gateway"]
     Gateway -->|"endpoints 2–6 → 0<br/>five routed event streams"| Broker
     Broker -->|"route + header + payload"| Runner
+
+    Caller --> Debug["hls_debug"]
+    Debug --> DebugBroker["hls_fabric<br/>debug route broker"]
+    DebugBroker -->|"routed debug AXIS<br/>endpoint 0 → 1"| Wrapper
+    Wrapper -->|"routed counter / trace reply"| DebugBroker
+    Wrapper -. "passive application<br/>RX / TX observation" .-> Monitor["hls_debug_monitor<br/>counters + 64-event trace"]
 
     Runner -->|"same calls and routed ABI"| CPU["phi_memory_cpu_fabric<br/>functional ERTS deployment"]
     CPU -->|"decoded spatial command"| CR
@@ -300,6 +307,31 @@ selection, and topology composition. It imports route-envelope ingress, the
 activation gate, and frame serialization from `hls_fabric_router.x`; those
 transport procs are shared with other fabric boundaries rather than repeated
 as a static block in the Erlang generator.
+
+`phi_memory_debug_top` wraps that generated gateway with the same passive
+monitor used by the smaller `regsvc` example. A second `hls_fabric` owns the
+independent debug stream and routes requests to monitor endpoint one. The
+distance-one and distance-three ERTS/Icarus bridge tests issue live counter and
+trace requests, decode populated maps, require observed application traffic in
+both directions, and reject any passive-observation drop. The trace is attached
+outside the application route-envelope decoder, so it describes physical
+routed packets rather than actor selectors, mailbox admission, coordinates, or
+state transitions. This is a useful boundary-health apparatus, not yet a
+semantic actor debugger.
+
+An out-of-context XC7 mapping of the generated distance-one gateway measured
+the constant boundary cost with `synth_xilinx -flatten -abc9 -noiopad`:
+
+| boundary | estimated logic cells | flip-flops | LUT1–LUT6 | `RAMB36E1` | `DSP48E1` |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| application gateway | 19,033 | 16,393 | 21,732 | 0 | 16 |
+| gateway + routed debug monitor | 20,207 | 18,665 | 22,975 | 2 | 16 |
+
+The monitor adds 1,174 estimated logic cells (6.2%), 2,272 flip-flops (13.9%),
+1,243 LUTs (5.7%), and two block RAMs, with no additional DSPs. The two trace
+banks account for the block RAMs. This is an exact distance-one boundary A/B;
+the monitor is instantiated once per gateway, so these numbers should not be
+multiplied by the actor count or presented as a mapped distance-three result.
 
 The one application ingress is the externally addressed `control_router`
 service. Its envelope contains an ordinary actor frame plus an internal target
@@ -530,4 +562,6 @@ generated Verilog is about 8.6 MiB and 150,146 lines. These are host build
 costs, not an FPGA utilization estimate; the runner saves compact timing and
 digest reports but does not copy that Verilog into the repository.
 Reusing that compiled Icarus image, the later full-device witness comparison
-completed in 5 minutes 42 seconds.
+completed in 5 minutes 42 seconds. Wrapping the gateway and then retrieving
+live counters and a full 64-event trace increased the same comparison to 8
+minutes 26 seconds. This is Icarus wall time, not a hardware latency estimate.

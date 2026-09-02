@@ -3,6 +3,7 @@
 -include_lib("eunit/include/eunit.hrl").
 
 -define(RUNNER_TIMEOUT, 120000).
+-define(DEBUG_TIMEOUT, 120000).
 
 simulated_rtl_test_() ->
     case os:getenv("ERL_HLS_PHI_SIM_DIR") of
@@ -13,11 +14,12 @@ simulated_rtl_test_() ->
             {setup,
                 fun() -> start(SimDir, Options, RunnerTimeout) end,
                 fun stop/1,
-                fun({_Fabric, Runner}) ->
+                fun({_AppFabric, _DebugFabric, Debug, Runner}) ->
                     {timeout, TestTimeout, ?_test(begin
                         Actual = phi_memory_runner:await(Runner),
                         ok = verify(Mode, Actual),
-                        ?assertEqual(Expected, Actual)
+                        ?assertEqual(Expected, Actual),
+                        ok = verify_debug(Debug)
                     end)}
                 end}
     end.
@@ -25,13 +27,21 @@ simulated_rtl_test_() ->
 start(SimDir, Options, RunnerTimeout) ->
     WritePath = filename:join(SimDir, "app_tx"),
     ReadPath = filename:join(SimDir, "app_rx"),
-    {ok, Fabric} = hls_fabric:start_link(WritePath, ReadPath),
+    DebugWritePath = filename:join(SimDir, "debug_tx"),
+    DebugReadPath = filename:join(SimDir, "debug_rx"),
+    {ok, AppFabric} = hls_fabric:start_link(WritePath, ReadPath),
+    {ok, DebugFabric} = hls_fabric:start_link(
+        DebugWritePath, DebugReadPath
+    ),
+    {ok, Debug} = hls_debug:start_link(
+        phi_memory_gateway, {fabric, DebugFabric, 1}
+    ),
     {ok, Runner} = phi_memory_runner:start_link(
-        Fabric,
+        AppFabric,
         Options,
         RunnerTimeout
     ),
-    {Fabric, Runner}.
+    {AppFabric, DebugFabric, Debug, Runner}.
 
 fixture() ->
     case os:getenv("ERL_HLS_PHI_DEMO") of
@@ -76,9 +86,34 @@ verify(smoke, {ok, #{data_anticommutations := DataAnticommutations}}) ->
 verify(smoke, Result) ->
     error({smoke_result, Result}).
 
-stop({Fabric, Runner}) ->
+verify_debug(Debug) ->
+    {ok, Counters} = hls_debug:get_counters(Debug, ?DEBUG_TIMEOUT),
+    ?assertEqual(4, maps:get(version, Counters)),
+    ?assert(maps:get(cycles, Counters) > 0),
+    ?assert(maps:get(app_rx_beats, Counters) > 0),
+    ?assert(maps:get(app_rx_frames, Counters) > 0),
+    ?assert(maps:get(app_tx_beats, Counters) > 0),
+    ?assert(maps:get(app_tx_frames, Counters) > 0),
+    {ok, Trace} = hls_debug:get_trace(Debug, ?DEBUG_TIMEOUT),
+    ?assertEqual(1, maps:get(version, Trace)),
+    ?assertEqual(2, maps:get(record_words, Trace)),
+    ?assertEqual(0, maps:get(observation_drops, Trace)),
+    ?assert(maps:get(count, Trace) > 0),
+    ?assert(lists:any(
+        fun(#{kind := Kind}) -> Kind =:= application_rx end,
+        maps:get(events, Trace)
+    )),
+    ?assert(lists:any(
+        fun(#{kind := Kind}) -> Kind =:= application_tx end,
+        maps:get(events, Trace)
+    )),
+    ok.
+
+stop({AppFabric, DebugFabric, Debug, Runner}) ->
+    stop_if_alive(hls_debug, Debug),
     stop_if_alive(phi_memory_runner, Runner),
-    stop_if_alive(hls_fabric, Fabric).
+    stop_if_alive(hls_fabric, DebugFabric),
+    stop_if_alive(hls_fabric, AppFabric).
 
 stop_if_alive(Module, Pid) ->
     case is_process_alive(Pid) of

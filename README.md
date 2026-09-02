@@ -83,6 +83,12 @@ proves that routed debug access remains available while application output is
 backpressured and that the reserved former state-query tag is rejected. See the
 [debug protocol](docs/debug-protocol.md) for that interface.
 
+The phi memory gateway is wrapped with the same monitor. Its distance-one and
+opt-in distance-three bridge scenarios send real routed debug requests and
+require populated counter and trace replies after the memory experiment. This
+placement observes physical routed application packets; it does not expose
+individual actor mailboxes or state.
+
 The routed simulation hosts two independent `regsvc` instances behind each
 shared stream. A 32-bit source/destination envelope precedes the existing
 application or debug frame, and arbitration retains a selected endpoint through

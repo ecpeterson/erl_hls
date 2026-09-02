@@ -3,7 +3,7 @@
 -behavior(gen_server).
 
 -export([start_link/2, stop/1]).
--export([get_counters/1, get_trace/1]).
+-export([get_counters/1, get_counters/2, get_trace/1, get_trace/2]).
 -export([init/1, handle_call/3, handle_cast/2, terminate/2]).
 
 %% Host-to-FPGA requests occupy the low half of the tag space.
@@ -47,8 +47,14 @@ stop(Pid) ->
 get_counters(Pid) ->
     gen_server:call(Pid, get_counters).
 
+get_counters(Pid, Timeout) ->
+    gen_server:call(Pid, get_counters, Timeout).
+
 get_trace(Pid) ->
     gen_server:call(Pid, get_trace).
+
+get_trace(Pid, Timeout) ->
+    gen_server:call(Pid, get_trace, Timeout).
 
 init({Module, {fabric, Broker, LocalEndpoint, PeerEndpoint}}) ->
     ok = hls_fabric:register_route(
