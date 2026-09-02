@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-project_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-local_stage=${1:-"$project_root/_build/phi_memory_bram_demo"}
+experiment_root=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+project_root=$(cd "$experiment_root/../.." && pwd)
+local_stage=${1:-"$project_root/_build/phi_memory_raw_demo"}
 remote_host=${ERL_HLS_REMOTE_HOST:-192.168.64.7}
 remote_root=${ERL_HLS_REMOTE_ROOT:-/home/ecpeterson/erl_hls-build}
-remote_stage="$remote_root/phi_memory_bram_demo"
+remote_stage="$remote_root/phi_memory_raw_demo"
 cpu_witness="$local_stage/phi_memory_cpu_witness.term"
 
 cd "$project_root"
@@ -15,10 +16,8 @@ ERL_HLS_PHI_CPU_WITNESS="$cpu_witness" \
     rebar3 eunit --module=phi_memory_cpu_fabric_tests
 test -s "$cpu_witness"
 
-# Produce and locally check the RAM-rewritten worker before staging it with the
-# unchanged ERTS runner.
-"$project_root/tools/run_phi_sequential_bram_xls.sh" "$local_stage"
-
+# Expand includes and parse transforms locally, then let the UTM compile BEAM
+# files for its own OTP release. This stages no generated XLS source or RTL.
 for source in \
     "$project_root/src/runtime/hls_fabric.erl" \
     "$project_root/src/api/hls_gs.erl" \
@@ -48,33 +47,34 @@ erlc -pa "$project_root/_build/test/lib/erl_hls/ebin" \
     "$project_root/test/phi_memory_bridge_tests.erl"
 cp "$local_stage/test_src/phi_memory_bridge_tests.P" \
     "$local_stage/test_src/phi_memory_bridge_tests.erl"
-cp "$project_root/test/rtl/phi_memory_raw_bridge_tb.sv" \
+
+cp "$experiment_root/phi_memory_raw_d3.sv" \
+    "$local_stage/phi_memory_raw_d3.sv"
+cp "$experiment_root/phi_memory_raw_bridge_tb.sv" \
     "$local_stage/phi_memory_raw_bridge_tb.sv"
 cp "$project_root/test/rtl/xls_sim_bridge.c" \
     "$local_stage/xls_sim_bridge.c"
-cp "$project_root/tools/remote_phi_memory_bram_demo.sh" \
-    "$local_stage/remote_phi_memory_bram_demo.sh"
+cp "$experiment_root/remote_raw_demo.sh" \
+    "$local_stage/remote_raw_demo.sh"
 
 ssh -o BatchMode=yes "$remote_host" mkdir -p "$remote_stage"
 rsync -a -e "ssh -o BatchMode=yes" \
-    "$local_stage/phi_sequential_bram_core.v" \
-    "$local_stage/phi_memory_scheduler_boundary.sv" \
-    "$local_stage/phi_memory_bram_top.sv" \
+    "$local_stage/phi_memory_raw_d3.sv" \
     "$local_stage/phi_memory_raw_bridge_tb.sv" \
     "$local_stage/xls_sim_bridge.c" \
     "$cpu_witness" \
     "$local_stage/erl_src" \
     "$local_stage/test_src" \
-    "$local_stage/remote_phi_memory_bram_demo.sh" \
+    "$local_stage/remote_raw_demo.sh" \
     "$remote_host:$remote_stage/"
 
 ssh -o BatchMode=yes "$remote_host" \
-    bash "$remote_stage/remote_phi_memory_bram_demo.sh" "$remote_stage"
+    bash "$remote_stage/remote_raw_demo.sh" "$remote_stage"
 
 rsync -a -e "ssh -o BatchMode=yes" \
-    --include=phi_memory_bram_demo.log \
-    --include=phi_memory_bram_demo.metrics \
-    --include='phi_memory_bram-*.time' \
+    --include=phi_memory_raw_demo.log \
+    --include=phi_memory_raw_demo.metrics \
+    --include='phi_memory_raw-*.time' \
     --exclude='*' \
     "$remote_host:$remote_stage/" \
     "$local_stage/"

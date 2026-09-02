@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-project_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-generated=${1:?usage: synth_phi_area_matrix.sh GENERATED_D2_VERILOG [STAGE]}
+experiment_root=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+project_root=$(cd "$experiment_root/../.." && pwd)
+generated=${1:?usage: synth_area_matrix.sh GENERATED_D2_VERILOG [STAGE]}
 stage=${2:-"$project_root/_build/phi_area_matrix"}
 bundled_yosys="$project_root/experiments/07-openxc7/.apio/packages/oss-cad-suite/bin/yosys"
 yosys=${ERL_HLS_YOSYS:-$bundled_yosys}
-raw="$project_root/src/examples/phi_decoder/rtl/phi_memory_raw_d3.sv"
+raw="$experiment_root/phi_memory_raw_d3.sv"
 results="$stage/results.tsv"
 
 mkdir -p "$stage"

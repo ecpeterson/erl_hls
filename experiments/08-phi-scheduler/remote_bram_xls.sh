@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-stage=${1:?usage: remote_phi_sequential_bram_xls.sh STAGE XLS_ROOT}
-xls_root=${2:?usage: remote_phi_sequential_bram_xls.sh STAGE XLS_ROOT}
+stage=${1:?usage: remote_bram_xls.sh STAGE XLS_ROOT}
+xls_root=${2:?usage: remote_bram_xls.sh STAGE XLS_ROOT}
 stdlib="$xls_root/xls/dslx/stdlib"
 ram_request=phi_sequential_bram_core__ram_req_out
 ram_response=phi_sequential_bram_core__ram_resp_in

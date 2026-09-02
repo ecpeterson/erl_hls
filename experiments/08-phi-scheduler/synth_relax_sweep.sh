@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-project_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+experiment_root=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+project_root=$(cd "$experiment_root/../.." && pwd)
 stage=${1:-"$project_root/_build/phi_relax_sweep"}
 bundled_yosys="$project_root/experiments/07-openxc7/.apio/packages/oss-cad-suite/bin/yosys"
 yosys=${ERL_HLS_YOSYS:-$bundled_yosys}
-rtl="$project_root/src/examples/phi_decoder/rtl/phi_relax_bank.sv"
+rtl="$experiment_root/phi_relax_bank.sv"
 results="$stage/results.tsv"
 
 mkdir -p "$stage"

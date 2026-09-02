@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-project_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+experiment_root=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+project_root=$(cd "$experiment_root/../.." && pwd)
 local_stage=${1:-"$project_root/_build/phi_sequential_bram_xls"}
 remote_host=${ERL_HLS_REMOTE_HOST:-192.168.64.7}
 remote_root=${ERL_HLS_REMOTE_ROOT:-/home/ecpeterson/erl_hls-build}
@@ -13,24 +14,24 @@ vvp=${ERL_HLS_VVP:-"$oss_cad_suite/bin/vvp"}
 yosys=${ERL_HLS_YOSYS:-"$oss_cad_suite/bin/yosys"}
 
 mkdir -p "$local_stage"
-cp "$project_root/src/examples/phi_decoder/rtl/phi_sequential_bram_core.x" \
+cp "$experiment_root/phi_sequential_bram_core.x" \
     "$local_stage/phi_sequential_bram_core.x"
-cp "$project_root/src/examples/phi_decoder/rtl/phi_memory_scheduler_boundary.sv" \
+cp "$experiment_root/phi_memory_scheduler_boundary.sv" \
     "$local_stage/phi_memory_scheduler_boundary.sv"
-cp "$project_root/src/examples/phi_decoder/rtl/phi_memory_bram_top.sv" \
+cp "$experiment_root/phi_memory_bram_top.sv" \
     "$local_stage/phi_memory_bram_top.sv"
-cp "$project_root/test/rtl/phi_memory_raw_d3_tb.sv" \
+cp "$experiment_root/phi_memory_raw_d3_tb.sv" \
     "$local_stage/phi_memory_raw_d3_tb.sv"
-cp "$project_root/tools/remote_phi_sequential_bram_xls.sh" \
-    "$local_stage/remote_phi_sequential_bram_xls.sh"
+cp "$experiment_root/remote_bram_xls.sh" \
+    "$local_stage/remote_bram_xls.sh"
 
 ssh -o BatchMode=yes "$remote_host" mkdir -p "$remote_stage"
 rsync -a -e "ssh -o BatchMode=yes" \
     "$local_stage/phi_sequential_bram_core.x" \
-    "$local_stage/remote_phi_sequential_bram_xls.sh" \
+    "$local_stage/remote_bram_xls.sh" \
     "$remote_host:$remote_stage/"
 ssh -o BatchMode=yes "$remote_host" \
-    bash "$remote_stage/remote_phi_sequential_bram_xls.sh" \
+    bash "$remote_stage/remote_bram_xls.sh" \
     "$remote_stage" "$remote_xls"
 rsync -a -e "ssh -o BatchMode=yes" \
     "$remote_host:$remote_stage/phi_sequential_bram_core.v" \

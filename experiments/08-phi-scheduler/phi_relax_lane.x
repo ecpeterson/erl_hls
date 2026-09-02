@@ -1,4 +1,4 @@
-// Handwritten DSLX counterpart to phi_relax_lane.sv.
+// Handwritten DSLX counterpart to the lane in phi_relax_bank.sv.
 //
 // This deliberately bypasses Erlang lowering and actor/mailbox machinery. It
 // exists only to attribute the cost of XLS code generation for the same

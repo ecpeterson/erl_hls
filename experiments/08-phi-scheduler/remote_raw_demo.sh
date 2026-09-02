@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-stage=${1:?usage: remote_phi_memory_raw_demo.sh STAGE}
+stage=${1:?usage: remote_raw_demo.sh STAGE}
 startup_timeout=${ERL_HLS_SIM_STARTUP_TIMEOUT:-120}
 cpu_witness="$stage/phi_memory_cpu_witness.term"
 

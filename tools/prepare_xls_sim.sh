@@ -126,10 +126,6 @@ erl \
     '
 
 cp "$project_root/priv/xls/lib/axis.x" "$stage/axis.x"
-cp "$project_root/src/examples/phi_decoder/rtl/phi_relax_lane.x" \
-    "$stage/phi_relax_lane.x"
-cp "$project_root/src/examples/phi_decoder/rtl/phi_sequential_core.x" \
-    "$stage/phi_sequential_core.x"
 cp "$project_root/src/examples/regsvc/regsvc_core_adapter.v" \
     "$stage/regsvc_core_adapter.v"
 cp "$project_root/src/examples/regsvc/regsvc_debug_top.v" \
