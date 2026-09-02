@@ -490,6 +490,86 @@ results; they establish no part fit, placement, routing, or timing closure. The
 final ABC map has logic depth 32 versus 33 for the preceding row, but that is
 only a coarse technology-mapping metric.
 
+### Specialized distance-three RTL baseline
+
+`phi_memory_raw_d3.sv` is a deliberately non-general implementation of the
+canonical distance-three memory fixture. It retains the routed 32-bit
+application boundary and its cutoff, point-update, whole-grid query, and event
+formats, but it does not retain actors, mailboxes, internal Frames, or a
+parameterized topology. One controller scans the fixed arrays in a globally
+synchronous order. It shares one restoring divider across all Q15.16
+recurrences, computes every move from a common snapshot before applying move
+parity, and serializes all output events.
+
+```mermaid
+flowchart LR
+    Host["ERTS / routed AXIS"] --> Parser["command parser"]
+    Parser --> Engine["fixed d=3 sequencer"]
+    Engine <--> State["PRNG, Pauli, anyon,<br/>and two field banks"]
+    Engine <--> Divider["shared restoring divider"]
+    Engine --> Serializer["event serializer"]
+    Serializer --> Host
+```
+
+This is an executable low-overhead reference, not a proposed backend and not a
+proof of the mathematical minimum. In particular, the current multi-read
+arrays map to distributed memory; a more deeply serialized implementation
+could consolidate the wide state into a block RAM. The implementation also
+omits the separately measured debug wrapper, whose purpose is to measure the
+cost of a common boundary service rather than the decoder itself.
+
+The command parser deliberately implements only the fixture's trusted host
+discipline. It accepts one initial whole-grid cutoff, serialized correction
+updates, and at most one outstanding query; it does not reproduce the generated
+gateway's more general lifecycle or concurrency behavior. These packets still
+use the same externally visible application format, allowing the ordinary ERTS
+runner to drive either implementation.
+
+The direct RTL bench drives the real cutoff/update/query packets, echoes every
+sparse correction as the host runner does, periodically backpressures the
+output, and reaches the expected result in 69,722 clocks: 84 corrections (45 X
+and 39 Z), followed by all 18 final measurement replies with the expected six
+nonzero bits. It also checks an ordered checksum over every correction field
+and unique complete quiet/empty status sets. The opt-in bridge run goes further:
+the unchanged `phi_memory_runner` compares the sorted list of every correction
+and every final data-qubit bit with the witness freshly produced by the ERTS
+deployment.
+On the same 4-core, 8-GiB UTM used for the generated experiment, Icarus compiled
+the 38.7-KiB raw core and bridge wrapper in 0.17 seconds. The exact bridge EUnit
+case took 8.4 seconds; its enclosing Erlang process used 12.5 seconds of wall
+time and 39 MiB peak RSS. These remain host simulation costs rather than a
+hardware throughput measurement.
+
+The same XC7 area-only Yosys mapping used for the generated experiments gives:
+
+| implementation | geometry | estimated logic cells | flip-flops | LUT1–LUT6 | `RAM32M` | `DSP48E1` |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| generated actors, selected bounded divisions | d=2 | 68,852 | 55,105 | 79,070 | not recorded | 64 |
+| specialized raw RTL | d=3 | 2,063 | 708 | 2,358 | 148 | 0 |
+
+The 148 `RAM32M` entries are distributed-memory primitives separate from the
+2,358 ordinary logic LUTs, so Yosys's 2,063-cell estimate is not a complete
+count of physical LUT sites.
+
+The comparison intentionally favors the specialized row: it fixes one size and
+schedule, replaces all independently progressing actors with one datapath, and
+does not provide Erlang mailbox semantics. Distance two also aliases cardinal
+routes, so the generated row is not a valid decoder geometry despite being the
+smallest completed current mapping. These numbers isolate how much area can be
+saved when those generality requirements are abandoned; they do not attribute
+the difference solely to HLS or XLS.
+
+Run the fast behavioral regression and repeat the mapping with:
+
+```sh
+tools/run_phi_memory_raw_rtl.sh
+tools/synth_phi_memory_raw.sh
+```
+
+`tools/run_phi_memory_raw_demo.sh` runs the full ERTS/VPI witness comparison on
+the configured build host without generating XLS RTL or loading the debug
+boundary.
+
 ### Distance-three RTL simulation
 
 `tools/run_phi_noise_topology_sim.sh` is the opt-in full-graph regression. It

@@ -60,6 +60,9 @@ jobs:
       - name: Run Erlang tests
         run: rebar3 eunit
 
+      - name: Run specialized phi RTL regression
+        run: tools/run_phi_memory_raw_rtl.sh
+
       - name: Prepare simulation inputs
         run: bash tools/prepare_xls_sim.sh "$PWD/_build/xls_sim/regsvc"
 
