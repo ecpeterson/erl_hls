@@ -30,8 +30,9 @@ at the destination ingress. The physical profile no longer needs an
 alias-order exception. The current implementation conservatively serializes
 all entry actions from an actor, including actions for different recipients.
 The common egress is explicitly sized for that artifact's largest phase-entry
-effect list, so the phi actors' five-slot flipping sequences do not depend on
-incidental mux-tree buffering before they can complete.
+effect list. Its registered producer slot and FIFO therefore retain the phi
+actors' five-action flipping sequences without depending on incidental
+mux-tree buffering before they can complete.
 
 Logical actor IDs may be tuple-indexed values such as `{phi, X, Y}`; generated
 channel names use canonical numeric instance indexes. In this exact backend,
@@ -366,6 +367,36 @@ and the five routed output streams in simulation. The real DMA `axismsg` driver
 still expects its older unrouted frame boundary and must be adapted before this
 gateway can be used on a PS/PL link. A physically calibrated noise model remains
 later decoder work.
+
+### Ordered-egress capacity experiment
+
+Actor actions share one serialized egress. On an initially empty path, the
+`burst` policy sizes its FIFO so that the FIFO and XLS's registered producer
+output can hold the actor's largest phase-entry action list. This relies on the
+repository code generators retaining `--flop_outputs=true`. Literal profile
+values select a uniform FIFO depth for experiments.
+
+An out-of-context d=2 XC7 comparison measured the actor-egress alternatives
+with consumer input flops disabled and producer output flops enabled:
+
+| actor-egress FIFO | estimated logic cells | flip-flops | LUT1–LUT6 | `DSP48E1` |
+| --- | ---: | ---: | ---: | ---: |
+| previous FIFO-only sizing: 4 for data/syndrome, 5 for phi | 69,801 | 57,634 | 92,258 | 512 |
+| burst accounting for the producer slot: 3 and 4 | 68,688 | 55,489 | 90,872 | 512 |
+| uniform depth one | 65,276 | 50,499 | 88,090 | 512 |
+
+Accounting for the existing producer slot reduces the conservative row by
+1.6% of estimated logic cells, 3.7% of flip-flops, and 1.5% of LUTs without
+reducing its initially empty burst capacity. Uniform depth one reduced the
+counts further, but neither it nor uniform depth zero reached quiet decoder
+status in the d=1 smoke bench within 200,000 cycles. The selected burst policy
+passed that bench and the full d=3 ERTS/Icarus memory closeout. The depth-zero
+d=2 graph reached XLS code generation but was not mapped.
+
+These d=2 results are area witnesses, not decoder-geometry or timing results:
+distance two aliases cardinal routes, and the synthesis jobs shared one
+physical host. The table records deterministic mapped resource counts only;
+it does not compare wall time, part fit, placement, routing, or timing closure.
 
 ### Distance-three synthesis progression
 

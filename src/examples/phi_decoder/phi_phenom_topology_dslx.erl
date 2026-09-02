@@ -22,7 +22,8 @@ different sources are arbitrated at a destination.
 profile() ->
     #{
         name => phi_phenom_topology,
-        channel_depth => 1
+        channel_depth => 1,
+        actor_egress_depth => burst
     }.
 
 -doc "Generates the DSLX source for the closed phi/noise fixture.".

@@ -26,7 +26,8 @@ topology() ->
 profile() ->
     #{
         name => ordered_egress_topology,
-        channel_depth => 1
+        channel_depth => 1,
+        actor_egress_depth => burst
     }.
 
 to_dslx() ->

@@ -364,8 +364,8 @@ generated_topology_has_expected_physical_shape_test() ->
     ?assertEqual(2, count(Generated, <<"spawn axis::FrameMux2(">>)),
     ?assertEqual(3, count(Generated, <<"proc ActorRouter">>)),
     ?assertEqual(3, count(Generated, <<"spawn ActorRouter">>)),
-    ?assertEqual(2, count(Generated, <<"::Egress, u32:4>">>)),
-    ?assertEqual(1, count(Generated, <<"::Egress, u32:5>">>)),
+    ?assertEqual(2, count(Generated, <<"::Egress, u32:3>">>)),
+    ?assertEqual(1, count(Generated, <<"::Egress, u32:4>">>)),
     ?assertEqual(0, count(Generated, <<"QueuedFanout">>)),
     ?assertEqual(3, count(Generated, <<"proc StartupPrefix">>)),
     ?assertEqual(3, count(Generated, <<"spawn StartupPrefix">>)),
@@ -392,6 +392,23 @@ generated_topology_has_expected_physical_shape_test() ->
     ?assertNotEqual(
         nomatch,
         binary:match(Generated, <<"axis::pack(u8:12, u32:0x6D2B79F5)">>)
+    ).
+
+generated_topology_uses_explicit_actor_egress_depth_test() ->
+    Plan = hls_topology:from_module(phi_phenom_topology),
+    Profile = phi_phenom_topology_dslx:profile(),
+    lists:foreach(
+        fun(Depth) ->
+            Generated = iolist_to_binary(xls_topology_dslx:emit(
+                Plan,
+                Profile#{actor_egress_depth := Depth}
+            )),
+            Needle = iolist_to_binary([
+                "::Egress, u32:", integer_to_list(Depth), ">"
+            ]),
+            ?assertEqual(3, count(Generated, Needle))
+        end,
+        [0, 1]
     ).
 
 generated_startup_preserves_per_actor_message_order_test() ->
@@ -491,6 +508,22 @@ dslx_backend_rejects_channel_depth_wider_than_u32_test() ->
             Plan,
             Profile#{channel_depth := 16#100000000}
         )
+    ).
+
+dslx_backend_rejects_invalid_actor_egress_depth_test() ->
+    Plan = hls_topology:from_module(phi_phenom_topology),
+    Profile = phi_phenom_topology_dslx:profile(),
+    lists:foreach(
+        fun(Value) ->
+            ?assertError(
+                {egress_depth, Value},
+                xls_topology_dslx:emit(
+                    Plan,
+                    Profile#{actor_egress_depth := Value}
+                )
+            )
+        end,
+        [-1, 16#100000000, auto]
     ).
 
 dslx_backend_rejects_unimplemented_route_tag_remap_test() ->
@@ -901,7 +934,8 @@ external_selector_fixture_topology() ->
 fixture_profile(Name) ->
     #{
         name => Name,
-        channel_depth => 1
+        channel_depth => 1,
+        actor_egress_depth => burst
     }.
 
 rename_actor_id(Spec, OldId, NewId) ->

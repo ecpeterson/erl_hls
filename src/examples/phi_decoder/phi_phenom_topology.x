@@ -234,15 +234,15 @@ pub proc Top {
     // Actor data uses phenom_data_cell output ABI order [north,east,west,south,measurement].
     let (actor_0_req_p, actor_0_req_c) = chan<axis::Frame, CHANNEL_DEPTH>("actor_0_req");
     let (actor_0_admit_p, actor_0_admit_c) = chan<u1, CHANNEL_DEPTH>("actor_0_admit");
-    let (actor_0_egress_p, actor_0_egress_c) = chan<phenom_data_cell::Egress, u32:4>("actor_0_egress");
+    let (actor_0_egress_p, actor_0_egress_c) = chan<phenom_data_cell::Egress, u32:3>("actor_0_egress");
     // Actor phi uses phi_halo_cell output ABI order [north,east,west,south,syndrome,correction,status].
     let (actor_1_req_p, actor_1_req_c) = chan<axis::Frame, CHANNEL_DEPTH>("actor_1_req");
     let (actor_1_admit_p, actor_1_admit_c) = chan<u1, CHANNEL_DEPTH>("actor_1_admit");
-    let (actor_1_egress_p, actor_1_egress_c) = chan<phi_halo_cell::Egress, u32:5>("actor_1_egress");
+    let (actor_1_egress_p, actor_1_egress_c) = chan<phi_halo_cell::Egress, u32:4>("actor_1_egress");
     // Actor syndrome uses phenom_syndrome_cell output ABI order [north,east,west,south,phi].
     let (actor_2_req_p, actor_2_req_c) = chan<axis::Frame, CHANNEL_DEPTH>("actor_2_req");
     let (actor_2_admit_p, actor_2_admit_c) = chan<u1, CHANNEL_DEPTH>("actor_2_admit");
-    let (actor_2_egress_p, actor_2_egress_c) = chan<phenom_syndrome_cell::Egress, u32:4>("actor_2_egress");
+    let (actor_2_egress_p, actor_2_egress_c) = chan<phenom_syndrome_cell::Egress, u32:3>("actor_2_egress");
     spawn phenom_data_cell::Service(
       actor_0_req_c,
       actor_0_egress_p,

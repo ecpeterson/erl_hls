@@ -39,6 +39,12 @@ by the pinned XLS build.
 
 The profile's `channel_depth` controls the remaining explicit actor-request,
 admission, and external-merge queues. It does not change direct lane capacity.
+`actor_egress_depth` separately selects either end-to-end capacity for one
+complete entry-effect `burst` on an initially empty path or a literal
+nonnegative XLS FIFO depth. The symbolic policy counts the required one-entry
+producer output register and therefore depends on code generation retaining
+`--flop_outputs=true`; a literal zero is a bypass adapter which leaves only
+that physical holding slot.
 
 Family-member startup remains explicit normalized data. A family which has
 startup data must provide exactly one frame for every member. The generated
@@ -65,9 +71,13 @@ emit(Plan, Profile) ->
 lower(Plan, Profile) ->
     ok = require_empty(actors, Plan),
     ok = require_empty(routes, Plan),
+    Physical = validate_profile(Profile),
     Families0 = require_families(maps:get(families, Plan, [])),
     [Width, Height] = require_common_shape(Families0),
-    Families1 = annotate_families(Families0),
+    Families1 = annotate_families(
+        Families0,
+        maps:get(actor_egress_depth, Physical)
+    ),
     FamilyIndex = index_by_id(Families1),
     Ingresses = annotate_ingresses(
         maps:get(ingresses, Plan, []),
@@ -104,7 +114,6 @@ lower(Plan, Profile) ->
     ) || Family <- Families1],
     ok = validate_lane_ports(Families),
     ok = validate_external_lanes(Externals, Lanes),
-    Physical = validate_profile(Profile),
     #{
         name => maps:get(name, Physical),
         depth => maps:get(channel_depth, Physical),
@@ -158,7 +167,7 @@ validate_dimensions(FamilyId, Width, Height) ->
 require_externals([_ | _] = Externals) -> Externals;
 require_externals([]) -> error({unsupported_dslx_family_external_count, 0}).
 
-annotate_families(Families) ->
+annotate_families(Families, EgressDepth) ->
     [
         begin
             Module = maps:get(module, Family),
@@ -167,14 +176,16 @@ annotate_families(Families) ->
                 index => Index,
                 module_name => identifier(Module, family_module),
                 interface => Interface,
-                egress_depth => max(
-                    1,
-                    hls_actor_interface:max_entry_effects(Interface)
-                )
+                egress_depth => egress_depth(EgressDepth, Interface)
             }
         end
         || {Index, Family} <- lists:enumerate(0, Families)
     ].
+
+egress_depth(burst, Interface) ->
+    max(0, hls_actor_interface:max_entry_effects(Interface) - 1);
+egress_depth(Depth, _Interface) ->
+    Depth.
 
 annotate_ingresses([], _FamilyIndex) -> [];
 annotate_ingresses([Ingress = #{
@@ -679,7 +690,7 @@ pack_startup_message(Target, _Module, Message) ->
     error({invalid_startup_message, Target, Message}).
 
 validate_profile(Profile) when is_map(Profile) ->
-    Required = lists:sort([channel_depth, name]),
+    Required = lists:sort([actor_egress_depth, channel_depth, name]),
     Keys = lists:sort(maps:keys(Profile)),
     case {Required -- Keys, Keys -- Required} of
         {[], []} -> ok;
@@ -690,6 +701,12 @@ validate_profile(Profile) when is_map(Profile) ->
     case maps:get(channel_depth, Profile) of
         Depth when is_integer(Depth), Depth > 0, Depth =< ?U32_MAX -> ok;
         Depth -> error({invalid_dslx_channel_depth, Depth})
+    end,
+    case maps:get(actor_egress_depth, Profile) of
+        burst -> ok;
+        EgressDepth when is_integer(EgressDepth),
+                EgressDepth >= 0, EgressDepth =< ?U32_MAX -> ok;
+        EgressDepth -> error({egress_depth, EgressDepth})
     end,
     Profile#{name := Name};
 validate_profile(Profile) ->
