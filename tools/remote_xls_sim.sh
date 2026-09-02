@@ -39,6 +39,16 @@ do
         "$test_module"
 done
 
+# This generated fixture also contains randomized equivalence properties for
+# the narrowed fixed-point lowering. A fixed seed makes failures reproducible.
+"$xls_root/interpreter_main" \
+    --dslx_path=. \
+    --dslx_stdlib_path="$stdlib" \
+    --evaluator=ir-interpreter \
+    --run_quickcheck_when_interpreting \
+    --seed=1 \
+    phi_field_test.x
+
 "$xls_root/ir_converter_main" \
     --warnings_as_errors=false \
     --dslx_path=. \

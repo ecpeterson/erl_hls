@@ -4,9 +4,14 @@ Signed Q15.16 arithmetic for the phi-decoder example.
 
 A field value is stored as a signed 32-bit integer with sixteen fractional
 bits. The BEAM and generated representations are identical; conversion helpers
-exist only for tests and host-side inspection. Diffusion uses signed 64-bit
-intermediates and performs one division per recurrence, rounding to nearest
+exist only for tests and host-side inspection. Diffusion rounds to nearest
 with ties away from zero before the result is saturated to Q15.16.
+
+The generated recurrence uses the fact that a neighbor sum contains exactly
+four field values. Each weighted numerator therefore fits in signed 37 bits.
+Its magnitude fits in 36 unsigned bits, including the rounding offset. Powers
+of two are removed from 24 and 20 before the remaining unsigned divisions by
+3 and 5. These widths are lowering details rather than a narrower field ABI.
 
 The current nonnegative charge model stays far inside the representable range.
 Keeping the sign bit reserves the gauge choice in which empty cells contribute
@@ -38,11 +43,16 @@ whether gauge recentering is preferable.
 -define(S32_SIGN, (1 bsl (?S32_BITS - 1))).
 -define(S32_MIN, (-?S32_SIGN)).
 -define(S32_MAX, (?S32_SIGN - 1)).
+-define(MIN_NEIGHBOR_SUM, (4 * ?S32_MIN)).
+-define(MAX_NEIGHBOR_SUM, (4 * ?S32_MAX)).
+-define(NUMERATOR_BITS, 37).
+-define(MAGNITUDE_BITS, 36).
+-define(QUOTIENT_BITS, 33).
 -define(MIN_REPRESENTABLE_INTEGER, (-(1 bsl 15))).
 -define(MAX_REPRESENTABLE_INTEGER, ((1 bsl 15) - 1)).
 
 -type field() :: hls_nums:s32().
--type accumulator() :: hls_nums:s64().
+-type accumulator() :: ?MIN_NEIGHBOR_SUM..?MAX_NEIGHBOR_SUM.
 
 -doc "Returns the custom signed Q15.16 type descriptor.".
 -spec field() -> {hls_type, module(), field, []}.
@@ -74,19 +84,25 @@ from_ratio(_Numerator, _Denominator) ->
 to_float(Value) ->
     Value / ?SCALE.
 
--doc "Adds one field value to a widened diffusion accumulator.".
+-doc """
+Adds one field value to a widened diffusion accumulator.
+
+The accumulator begins at zero and receives at most four `field()` values.
+Its bounded type is the contract which justifies the narrower generated
+arithmetic even though the actor stores it in an `s64` register.
+""".
 -spec accumulate(accumulator(), field()) -> accumulator().
 accumulate(Sum, Value) ->
     Sum + Value.
 
--doc "Applies the eta=1/4 center-plane relaxation recurrence.".
+-doc "Applies center-plane relaxation to one four-neighbor sum.".
 -spec relax_center(hls_nums:u32(), field(), field(), accumulator()) -> field().
 relax_center(Anyon, Phi0, Phi1, NeighborSum0) ->
     Charge = Anyon bsl ?FRACTION_BITS,
     Smoothed = round_ratio(18 * Phi0 + 2 * Phi1 + NeighborSum0, 24),
     saturate_s32(Charge + Smoothed).
 
--doc "Applies the eta=1/4 terminal bulk-plane recurrence.".
+-doc "Applies terminal bulk-plane relaxation to one four-neighbor sum.".
 -spec relax_bulk(field(), field(), accumulator()) -> field().
 relax_bulk(Phi0, Phi1, NeighborSum1) ->
     saturate_s32(round_ratio(Phi0 + 15 * Phi1 + NeighborSum1, 20)).
@@ -109,28 +125,71 @@ transpile(field, [], State) ->
     xls_parse:reference(State, {phantom, type, field()});
 transpile(accumulate, [Sum, Value], _State) ->
     ["(", Sum, " + (", Value, " as s64))"];
-transpile(relax_center, [Anyon, Phi0, Phi1, NeighborSum0], _State) ->
-    Numerator = ["((", Phi0, " as s64) * s64:18 + (", Phi1,
-        " as s64) * s64:2 + ", NeighborSum0, ")"],
-    Result = ["((", Anyon, " as s64) << u32:16) + ",
-        rounded_division(Numerator, 24)],
-    saturated_s32(Result);
-transpile(relax_bulk, [Phi0, Phi1, NeighborSum1], _State) ->
-    Numerator = ["((", Phi0, " as s64) + (", Phi1,
-        " as s64) * s64:15 + ", NeighborSum1, ")"],
-    saturated_s32(rounded_division(Numerator, 20)).
+transpile(relax_center, [Anyon, Phi0, Phi1, NeighborSum0], State0) ->
+    State1 = weighted_numerator(
+        State0, Phi0, 18, Phi1, 2, NeighborSum0
+    ),
+    State2 = rounded_division(State1, 24, 3, 3),
+    State3 = xls_parse:instr(State2, [
+        "((", Anyon, " as s64) << u32:16) + ",
+        xls_parse:reference(State2)
+    ]),
+    saturated_s32(State3);
+transpile(relax_bulk, [Phi0, Phi1, NeighborSum1], State0) ->
+    State1 = weighted_numerator(
+        State0, Phi0, 1, Phi1, 15, NeighborSum1
+    ),
+    State2 = rounded_division(State1, 20, 2, 5),
+    saturated_s32(State2).
 
-rounded_division(Numerator, Denominator) ->
-    Half = integer_to_list(Denominator div 2),
-    Divisor = integer_to_list(Denominator),
-    ["(if ", Numerator, " < s64:0 { (", Numerator, " - s64:", Half,
-        ") / s64:", Divisor, " } else { (", Numerator, " + s64:", Half,
-        ") / s64:", Divisor, " })"].
+weighted_numerator(
+        State, Phi0, Phi0Weight, Phi1, Phi1Weight, NeighborSum
+) ->
+    Type = xls_nums:signed_type(?NUMERATOR_BITS),
+    xls_parse:instr(State, ["((", Phi0, " as ", Type, ") * ", Type, ":",
+        integer_to_list(Phi0Weight), " + (", Phi1, " as ", Type,
+        ") * ", Type, ":", integer_to_list(Phi1Weight), " + (",
+        NeighborSum, " as ", Type, "))"]).
 
-saturated_s32(Value) ->
-    ["(if (", Value, ") > s64:2147483647 { s32:2147483647 } ",
-        "else if (", Value, ") < s64:-2147483648 { s32:-2147483648 } ",
-        "else { (", Value, ") as s32 })"].
+rounded_division(State0, Denominator, FactorShift, OddDivisor) ->
+    SignedNumerator = xls_nums:signed_type(?NUMERATOR_BITS),
+    MagnitudeType = xls_nums:unsigned_type(?MAGNITUDE_BITS),
+    DividendBits = ?MAGNITUDE_BITS - FactorShift,
+    DividendType = xls_nums:unsigned_type(DividendBits),
+    SignedQuotient = xls_nums:signed_type(?QUOTIENT_BITS),
+    Numerator = xls_parse:reference(State0),
+    State1 = xls_parse:instr(State0, [
+        Numerator, " < ", SignedNumerator, ":0"
+    ]),
+    Negative = xls_parse:reference(State1),
+    State2 = xls_parse:instr(State1, [
+        "((if ", Negative, " { -(", Numerator, ") } else { ",
+        Numerator, " }) as ", MagnitudeType, ")"
+    ]),
+    Magnitude = xls_parse:reference(State2),
+    State3 = xls_parse:instr(State2, [
+        "(((", Magnitude, " + ", MagnitudeType, ":",
+        integer_to_list(Denominator div 2), ") >> u32:",
+        integer_to_list(FactorShift), ") as ", DividendType, ")"
+    ]),
+    RoundedDividend = xls_parse:reference(State3),
+    State4 = xls_parse:instr(State3, [
+        "((", RoundedDividend, " / ", DividendType, ":",
+        integer_to_list(OddDivisor), ") as ", SignedQuotient, ")"
+    ]),
+    Quotient = xls_parse:reference(State4),
+    xls_parse:instr(State4, [
+        "((if ", Negative, " { -(", Quotient, ") } else { ",
+        Quotient, " }) as s64)"
+    ]).
+
+saturated_s32(State) ->
+    Value = xls_parse:reference(State),
+    xls_parse:instr(State, [
+        "(if ", Value, " > s64:2147483647 { s32:2147483647 } ",
+        "else if ", Value, " < s64:-2147483648 { s32:-2147483648 } ",
+        "else { ", Value, " as s32 })"
+    ]).
 
 round_ratio(Numerator, Denominator) when Numerator >= 0 ->
     (Numerator + Denominator div 2) div Denominator;

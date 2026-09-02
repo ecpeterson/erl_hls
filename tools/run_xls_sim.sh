@@ -26,6 +26,7 @@ rsync -a -e "ssh -o BatchMode=yes" \
     "$local_stage/ordered_egress_actor.x" \
     "$local_stage/ordered_egress_topology.x" \
     "$local_stage/xls_case_fixture.x" \
+    "$local_stage/phi_field_test.x" \
     "$local_stage/axis.x" \
     "$local_stage/regsvc_core_adapter.v" \
     "$local_stage/regsvc_debug_top.v" \

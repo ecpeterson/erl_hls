@@ -398,6 +398,41 @@ distance two aliases cardinal routes, and the synthesis jobs shared one
 physical host. The table records deterministic mapped resource counts only;
 it does not compare wall time, part fit, placement, routing, or timing closure.
 
+### Fixed-point division experiment
+
+The first Q15.16 lowering widened each signed recurrence numerator to 64 bits
+and selected between separate positive and negative divisions. XLS implemented
+each `/24` and `/20` path as a 64-bit reciprocal multiplier, using 64 DSPs per
+phi actor. The actor invariant that exactly four `s32` neighbor fields enter
+each sum gives tighter bounds: both weighted numerators fit in `s37`, their
+biased magnitudes fit in `u36`, and their rounded quotients fit in `s33`.
+Factoring `/24` into a shift by three followed by unsigned `/3`, and `/20` into
+a shift by two followed by unsigned `/5`, preserves nearest rounding with ties
+away from zero while leaving one narrow multiplier per recurrence.
+
+An isolated generated phi actor mapped as follows:
+
+| division lowering | estimated logic cells | flip-flops | LUT1–LUT6 | `DSP48E1` |
+| --- | ---: | ---: | ---: | ---: |
+| signed `s64` `/24` and `/20` | 5,706 | 6,452 | 7,675 | 64 |
+| bounded unsigned `/3` and `/5` | 5,136 | 6,404 | 6,133 | 8 |
+
+The selected d=2 topology profile retained the actor-level DSP reduction:
+
+| division lowering | estimated logic cells | flip-flops | LUT1–LUT6 | `DSP48E1` |
+| --- | ---: | ---: | ---: | ---: |
+| signed `s64` `/24` and `/20` | 68,688 | 55,489 | 90,872 | 512 |
+| bounded unsigned `/3` and `/5` | 68,852 | 55,105 | 79,070 | 64 |
+
+The narrower lowering removes 87.5% of DSPs in both scopes and 13.0% of total
+d=2 LUTs. Yosys's coarse logic-cell estimate rises by 0.2% in the composed
+graph because more of the remaining logic maps to LUT3 rather than LUT2; the
+underlying LUT total still falls. Generated interpreter tests cover every
+rounding residue near zero, extrema of the valid four-neighbor domain, and
+2,000 deterministic randomized comparisons with the wide recurrence. The
+actor and full memory benches retain end-to-end coverage. These are again
+mapping results, not placement, routing, or timing closure.
+
 ### Distance-three synthesis progression
 
 The last out-of-context XC7 mapping progression, before the data-measurement

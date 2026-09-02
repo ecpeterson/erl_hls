@@ -21,6 +21,7 @@ ERL_HLS_PHI_MEMORY_GATEWAY_X="$stage/phi_memory_gateway.x" \
 ERL_HLS_ORDERED_EGRESS_ACTOR_X="$stage/ordered_egress_actor.x" \
 ERL_HLS_ORDERED_EGRESS_TOPOLOGY_X="$stage/ordered_egress_topology.x" \
 ERL_HLS_CASE_FIXTURE_X="$stage/xls_case_fixture.x" \
+ERL_HLS_PHI_FIELD_TEST_X="$stage/phi_field_test.x" \
 erl \
     -noshell \
     -pa "$project_root/_build/test/lib/erl_hls/ebin" \
@@ -39,6 +40,7 @@ erl \
         CaseFixture = xls_parse:to_xls(
             "test_data/xls_case_fixture.erl"
         ),
+        PhiFieldTest = phi_field_dslx:to_dslx(),
         PhiPhenomTopology = phi_phenom_topology_dslx:to_dslx(),
         PhiTorusTopology = phi_torus_topology_dslx:to_dslx(),
         #{
@@ -79,6 +81,10 @@ erl \
         ok = file:write_file(
             os:getenv("ERL_HLS_CASE_FIXTURE_X"),
             CaseFixture
+        ),
+        ok = file:write_file(
+            os:getenv("ERL_HLS_PHI_FIELD_TEST_X"),
+            PhiFieldTest
         ),
         ok = file:write_file(
             os:getenv("ERL_HLS_PHI_PHENOM_TOPOLOGY_X"),
