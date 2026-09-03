@@ -12,6 +12,7 @@ emit(Spec0) ->
     Spec = annotate(Spec0),
     [
         preamble(Spec),
+        address_support(Spec),
         frame_relay(Spec),
         control_support(Spec),
         [startup_proc(Spec, Scheduler)
@@ -190,9 +191,9 @@ preamble(Spec = #{families := Families}) ->
         "// Auto-generated from compact Erlang topology and scheduler rules.\n",
         "// Manual changes will be overwritten.\n",
         "//\n",
-        "// Actor state and mailbox frames use separate RAMs. Group routers\n",
-        "// carry scheduled {slot, frame} requests without coordinate-level\n",
-        "// request, admission, or egress channel arrays.\n\n",
+        "// Actor state and mailbox frames use separate RAMs. Requests and\n",
+        "// scheduler egress carry dense RAM slots; each group router maps its\n",
+        "// egress slot to a narrow family and coordinate address.\n\n",
         "import axis;\n",
         case maps:get(ingresses, Spec) of
             [] -> [];
@@ -202,10 +203,87 @@ preamble(Spec = #{families := Families}) ->
         "\n",
         "const CHANNEL_DEPTH = u32:",
         integer_to_list(maps:get(depth, Spec)), ";\n",
-        "const WIDTH = u32:", integer_to_list(maps:get(width, Spec)), ";\n",
-        "const HEIGHT = u32:", integer_to_list(maps:get(height, Spec)),
+        "const WIDTH = u16:", integer_to_list(maps:get(width, Spec)), ";\n",
+        "const HEIGHT = u16:", integer_to_list(maps:get(height, Spec)),
         ";\n\n"
     ].
+
+address_support(Spec = #{families := Families, schedulers := Schedulers}) ->
+    [
+        "enum FamilyId : u8 {\n",
+        [
+            ["  ", uppercase(maps:get(id, Family)), " = u8:",
+                integer_to_list(Index), ",\n"]
+            || {Index, Family} <- lists:enumerate(0, Families)
+        ],
+        "}\n\n",
+        "struct ScheduledAddress {\n",
+        "  family: u8,\n",
+        "  x: u16,\n",
+        "  y: u16,\n",
+        "}\n\n",
+        [scheduler_address_support(Spec, Scheduler)
+            || Scheduler <- Schedulers]
+    ].
+
+scheduler_address_support(_Spec, Scheduler = #{
+    stem := Stem,
+    slot_count := SlotCount
+}) ->
+    Entries = scheduler_address_entries(Scheduler),
+    true = length(Entries) =:= SlotCount,
+    [
+        "fn ", Stem, "_address(slot: u32) -> ScheduledAddress {\n",
+        "  match slot {\n",
+        [
+            ["    u32:", integer_to_list(Slot), " => ",
+                scheduled_address(Family, X, Y), ",\n"]
+            || {Slot, Family, X, Y} <- Entries
+        ],
+        "    _ => zero!<ScheduledAddress>(),\n",
+        "  }\n",
+        "}\n\n",
+        "fn ", Stem, "_slot(address: ScheduledAddress) -> u32 {\n",
+        "  match (address.family as FamilyId, address.x, address.y) {\n",
+        [
+            [
+                "    (FamilyId::", uppercase(Family), ", u16:",
+                integer_to_list(X), ", u16:", integer_to_list(Y),
+                ") => u32:", integer_to_list(Slot), ",\n"
+            ]
+            || {Slot, Family, X, Y} <- Entries
+        ],
+        "    _ => u32:", integer_to_list(SlotCount), ",\n",
+        "  }\n",
+        "}\n\n"
+    ].
+
+scheduler_address_entries(#{members := Members}) ->
+    lists:keysort(1, lists:append([
+        family_address_entries(Member) || Member <- Members
+    ])).
+
+family_address_entries(#{
+    id := Family,
+    base_slot := Base,
+    shape := [Width, Height]
+}) ->
+    [
+        {Base + X * Height + Y, Family, X, Y}
+        || X <- lists:seq(0, Width - 1),
+           Y <- lists:seq(0, Height - 1)
+    ].
+
+scheduled_address(Family, X, Y) ->
+    [
+        "ScheduledAddress { family: FamilyId::",
+        uppercase(Family), " as u8, x: ", u16_value(X),
+        ", y: ", u16_value(Y), " }"
+    ].
+
+u16_value(Value) when is_integer(Value) ->
+    ["u16:", integer_to_list(Value)];
+u16_value(Value) -> Value.
 
 control_support(#{ingresses := []}) -> [];
 control_support(Spec = #{ingresses := [Ingress]}) ->
@@ -215,16 +293,16 @@ control_support(Spec = #{ingresses := [Ingress]}) ->
            maps:get(ingress, Family) =/= none
     ],
     [
-        "enum ControlFamily : u32 {\n",
+        "enum ControlFamily : u8 {\n",
         [control_family_member(Index, Family)
             || {Index, Family} <- lists:enumerate(0, Controlled)],
         "}\n\n",
         "struct ControlState {\n",
         "  active: u1,\n",
         "  packet: hls_spatial_router::SpatialFrame,\n",
-        "  family: u32,\n",
-        "  x: u32,\n",
-        "  y: u32,\n",
+        "  family: u8,\n",
+        "  x: u16,\n",
+        "  y: u16,\n",
         "}\n\n",
         "proc ControlDispatcher {\n",
         "  spatial_in: chan<hls_spatial_router::SpatialFrame> in;\n",
@@ -253,14 +331,14 @@ control_support(Spec = #{ingresses := [Ingress]}) ->
             || Family <- Controlled],
         "        _ => join(),\n",
         "      };\n",
-        control_advance(length(Controlled)),
+        control_advance(Spec, length(Controlled)),
         "    }\n",
         "  }\n",
         "}\n\n"
     ].
 
 control_family_member(Index, #{id := Id}) ->
-    ["  ", uppercase(Id), " = u32:", integer_to_list(Index), ",\n"].
+    ["  ", uppercase(Id), " = u8:", integer_to_list(Index), ",\n"].
 
 controlled_groups(Families) ->
     lists:usort([
@@ -280,26 +358,27 @@ control_argument(Spec, Group) ->
 
 control_family_arm(Spec, Ingress, Family = #{
     id := Id,
-    scheduler := #{group := Group, base_slot := Base},
+    scheduler := #{group := Group},
     ingress := #{scale := [ScaleX, ScaleY], offset := [OffsetX, OffsetY]}
 }) ->
     Module = scheduler_module(Spec, Group),
+    Scheduler = scheduler(Spec, Group),
     [
         "        ControlFamily::", uppercase(Id), " => {\n",
-        "          let address_x = (state.x * u32:",
-        integer_to_list(ScaleX), " + u32:", integer_to_list(OffsetX),
-        ") as u16;\n",
-        "          let address_y = (state.y * u32:",
-        integer_to_list(ScaleY), " + u32:", integer_to_list(OffsetY),
-        ") as u16;\n",
+        "          let address_x = state.x * u16:",
+        integer_to_list(ScaleX), " + u16:", integer_to_list(OffsetX),
+        ";\n",
+        "          let address_y = state.y * u16:",
+        integer_to_list(ScaleY), " + u16:", integer_to_list(OffsetY),
+        ";\n",
         "          let selected = (", control_target_condition(
             maps:get(targets, maps:get(ingress, Family)),
             Ingress
         ), ") && hls_spatial_router::contains(\n",
         "            state.packet.rectangle, address_x, address_y);\n",
         "          let request = ", Module, "::ScheduledRequest {\n",
-        "            slot: u32:", integer_to_list(Base),
-        " + state.x * HEIGHT + state.y,\n",
+        "            slot: ", maps:get(stem, Scheduler), "_slot(",
+        scheduled_address(Id, "state.x", "state.y"), "),\n",
         "            frame: state.packet.frame,\n",
         "            ..zero!<", Module, "::ScheduledRequest>()\n",
         "          };\n",
@@ -326,22 +405,24 @@ control_target_condition(TargetIds, #{targets := Targets}) ->
            lists:member(Id, TargetIds)
     ]).
 
-control_advance(FamilyCount) ->
+control_advance(#{width := Width, height := Height}, FamilyCount) ->
     [
-        "      let last_y = state.y + u32:1 == HEIGHT;\n",
-        "      let last_x = state.x + u32:1 == WIDTH;\n",
-        "      let last_family = state.family + u32:1 == u32:",
+        "      let last_y = state.y + u16:1 == u16:",
+        integer_to_list(Height), ";\n",
+        "      let last_x = state.x + u16:1 == u16:",
+        integer_to_list(Width), ";\n",
+        "      let last_family = state.family + u8:1 == u8:",
         integer_to_list(FamilyCount), ";\n",
         "      let family_done = last_y && last_x;\n",
         "      let all_done = family_done && last_family;\n",
         "      ControlState {\n",
         "        active: !all_done,\n",
-        "        family: if family_done { state.family + u32:1 }\n",
+        "        family: if family_done { state.family + u8:1 }\n",
         "          else { state.family },\n",
         "        x: if last_y {\n",
-        "          if last_x { u32:0 } else { state.x + u32:1 }\n",
+        "          if last_x { u16:0 } else { state.x + u16:1 }\n",
         "        } else { state.x },\n",
-        "        y: if last_y { u32:0 } else { state.y + u32:1 },\n",
+        "        y: if last_y { u16:0 } else { state.y + u16:1 },\n",
         "        ..state\n",
         "      }\n"
     ].
@@ -404,6 +485,7 @@ startup_field(#{name := Name, type := Type, value := Value}) ->
     error({unsupported_startup_literal, Name, Type, Value}).
 
 router_proc(Spec, Scheduler = #{
+    stem := Stem,
     module_name := Module,
     families := Families,
     destinations := Destinations,
@@ -432,8 +514,11 @@ router_proc(Spec, Scheduler = #{
         "  init { () }\n\n",
         "  next(state: ()) {\n",
         "    let (tok, scheduled) = recv(join(), scheduled_in);\n",
-        "    let routed_tok = ",
-        router_family_choice(Spec, Families, 0),
+        "    let address = ", Stem, "_address(scheduled.slot);\n",
+        "    let routed_tok = match address.family as FamilyId {\n",
+        [router_family_arm(Spec, Family) || Family <- Families],
+        "      _ => tok,\n",
+        "    }",
         ";\n",
         "    let _done = send(\n",
         "      routed_tok, credit_out, ", Module,
@@ -453,23 +538,14 @@ router_destination_argument(#{index := Index, module_name := Module}) ->
 router_external_argument(Spec, ExternalId) ->
     [external_output_name(Spec, ExternalId), ": chan<axis::Frame> out"].
 
-router_family_choice(_Spec, [], _Limit) -> "tok";
-router_family_choice(
-    Spec,
-    [Family | Rest],
-    Limit
-) ->
-    Count = maps:get(instance_count, Family),
-    Upper = Limit + Count,
+router_family_arm(Spec, Family = #{id := Id}) ->
     [
-        "if scheduled.slot < u32:", integer_to_list(Upper), " {\n",
-        router_family_routes(Spec, Family, Limit),
-        "    } else {\n",
-        "      ", router_family_choice(Spec, Rest, Upper), "\n",
-        "    }"
+        "      FamilyId::", uppercase(Id), " => {\n",
+        router_family_routes(Spec, Family),
+        "      },\n"
     ].
 
-router_family_routes(Spec, Family, Base) ->
+router_family_routes(Spec, Family) ->
     Module = maps:get(module_name, Family),
     RouteIndex = maps:from_list([
         {Port, Route}
@@ -477,11 +553,9 @@ router_family_routes(Spec, Family, Base) ->
            {_Family, Port} <- [maps:get(source, Route)]
     ]),
     [
-        "      let local = scheduled.slot - u32:",
-        integer_to_list(Base), ";\n",
-        "      let x = local / HEIGHT;\n",
-        "      let y = local % HEIGHT;\n",
-        "      match scheduled.egress.port {\n",
+        "        let x = address.x;\n",
+        "        let y = address.y;\n",
+        "        match scheduled.egress.port {\n",
         [
             router_route_arm(
                 Spec,
@@ -491,7 +565,7 @@ router_family_routes(Spec, Family, Base) ->
             )
             || Port <- maps:get(outputs, Family)
         ],
-        "      }\n"
+        "        }\n"
     ].
 
 router_route_arm(Spec, Module, Port, #{
@@ -524,26 +598,37 @@ route_send(
     Token
 ) ->
     Family = maps:get(DestinationId, maps:get(family_index, Spec)),
-    #{group := Group, base_slot := Base} = maps:get(scheduler, Family),
+    #{group := Group} = maps:get(scheduler, Family),
+    Scheduler = scheduler(Spec, Group),
     Module = scheduler_module(Spec, Group),
-    DestinationX = translated_index("x", DX, "WIDTH"),
-    DestinationY = translated_index("y", DY, "HEIGHT"),
+    DestinationX = translated_index("x", DX, maps:get(width, Spec)),
+    DestinationY = translated_index("y", DY, maps:get(height, Spec)),
     [
         "send(", Token, ", ", router_destination_name(Group), ", ",
         Module, "::ScheduledRequest {\n",
-        "            slot: u32:", integer_to_list(Base), " + ",
-        DestinationX, " * HEIGHT + ", DestinationY, ",\n",
+        "            slot: ", maps:get(stem, Scheduler), "_slot(",
+        scheduled_address(DestinationId, DestinationX, DestinationY), "),\n",
         "            frame: scheduled.egress.frame,\n",
         "            ..zero!<", Module, "::ScheduledRequest>()\n",
         "          })"
     ].
 
-translated_index(Axis, 0, _Size) -> Axis;
-translated_index(Axis, Offset, Size) when Offset > 0 ->
-    ["(", Axis, " + u32:", integer_to_list(Offset), ") % ", Size];
 translated_index(Axis, Offset, Size) ->
-    ["(", Axis, " + ", Size, " - u32:",
-        integer_to_list(-Offset), ") % ", Size].
+    Shift = positive_modulo(Offset, Size),
+    case Shift of
+        0 -> Axis;
+        _ ->
+            Boundary = Size - Shift,
+            [
+                "(if ", Axis, " >= u16:", integer_to_list(Boundary),
+                " { ", Axis, " - u16:", integer_to_list(Boundary),
+                " } else { ", Axis, " + u16:",
+                integer_to_list(Shift), " })"
+            ]
+    end.
+
+positive_modulo(Value, Modulus) ->
+    ((Value rem Modulus) + Modulus) rem Modulus.
 
 %%%
 %%% Network composition

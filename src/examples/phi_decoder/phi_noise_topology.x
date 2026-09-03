@@ -2,9 +2,9 @@
 // Auto-generated from compact Erlang topology and scheduler rules.
 // Manual changes will be overwritten.
 //
-// Actor state and mailbox frames use separate RAMs. Group routers
-// carry scheduled {slot, frame} requests without coordinate-level
-// request, admission, or egress channel arrays.
+// Actor state and mailbox frames use separate RAMs. Requests and
+// scheduler egress carry dense RAM slots; each group router maps its
+// egress slot to a narrow family and coordinate address.
 
 import axis;
 import hls_spatial_router;
@@ -13,8 +13,167 @@ import phenom_syndrome_cell;
 import phi_halo_cell;
 
 const CHANNEL_DEPTH = u32:1;
-const WIDTH = u32:3;
-const HEIGHT = u32:3;
+const WIDTH = u16:3;
+const HEIGHT = u16:3;
+
+enum FamilyId : u8 {
+  DATA_EVEN = u8:0,
+  DATA_ODD = u8:1,
+  PHI_X = u8:2,
+  PHI_Z = u8:3,
+  SYNDROME_X = u8:4,
+  SYNDROME_Z = u8:5,
+}
+
+struct ScheduledAddress {
+  family: u8,
+  x: u16,
+  y: u16,
+}
+
+fn scheduler_0_address(slot: u32) -> ScheduledAddress {
+  match slot {
+    u32:0 => ScheduledAddress { family: FamilyId::DATA_EVEN as u8, x: u16:0, y: u16:0 },
+    u32:1 => ScheduledAddress { family: FamilyId::DATA_EVEN as u8, x: u16:0, y: u16:1 },
+    u32:2 => ScheduledAddress { family: FamilyId::DATA_EVEN as u8, x: u16:0, y: u16:2 },
+    u32:3 => ScheduledAddress { family: FamilyId::DATA_EVEN as u8, x: u16:1, y: u16:0 },
+    u32:4 => ScheduledAddress { family: FamilyId::DATA_EVEN as u8, x: u16:1, y: u16:1 },
+    u32:5 => ScheduledAddress { family: FamilyId::DATA_EVEN as u8, x: u16:1, y: u16:2 },
+    u32:6 => ScheduledAddress { family: FamilyId::DATA_EVEN as u8, x: u16:2, y: u16:0 },
+    u32:7 => ScheduledAddress { family: FamilyId::DATA_EVEN as u8, x: u16:2, y: u16:1 },
+    u32:8 => ScheduledAddress { family: FamilyId::DATA_EVEN as u8, x: u16:2, y: u16:2 },
+    u32:9 => ScheduledAddress { family: FamilyId::DATA_ODD as u8, x: u16:0, y: u16:0 },
+    u32:10 => ScheduledAddress { family: FamilyId::DATA_ODD as u8, x: u16:0, y: u16:1 },
+    u32:11 => ScheduledAddress { family: FamilyId::DATA_ODD as u8, x: u16:0, y: u16:2 },
+    u32:12 => ScheduledAddress { family: FamilyId::DATA_ODD as u8, x: u16:1, y: u16:0 },
+    u32:13 => ScheduledAddress { family: FamilyId::DATA_ODD as u8, x: u16:1, y: u16:1 },
+    u32:14 => ScheduledAddress { family: FamilyId::DATA_ODD as u8, x: u16:1, y: u16:2 },
+    u32:15 => ScheduledAddress { family: FamilyId::DATA_ODD as u8, x: u16:2, y: u16:0 },
+    u32:16 => ScheduledAddress { family: FamilyId::DATA_ODD as u8, x: u16:2, y: u16:1 },
+    u32:17 => ScheduledAddress { family: FamilyId::DATA_ODD as u8, x: u16:2, y: u16:2 },
+    _ => zero!<ScheduledAddress>(),
+  }
+}
+
+fn scheduler_0_slot(address: ScheduledAddress) -> u32 {
+  match (address.family as FamilyId, address.x, address.y) {
+    (FamilyId::DATA_EVEN, u16:0, u16:0) => u32:0,
+    (FamilyId::DATA_EVEN, u16:0, u16:1) => u32:1,
+    (FamilyId::DATA_EVEN, u16:0, u16:2) => u32:2,
+    (FamilyId::DATA_EVEN, u16:1, u16:0) => u32:3,
+    (FamilyId::DATA_EVEN, u16:1, u16:1) => u32:4,
+    (FamilyId::DATA_EVEN, u16:1, u16:2) => u32:5,
+    (FamilyId::DATA_EVEN, u16:2, u16:0) => u32:6,
+    (FamilyId::DATA_EVEN, u16:2, u16:1) => u32:7,
+    (FamilyId::DATA_EVEN, u16:2, u16:2) => u32:8,
+    (FamilyId::DATA_ODD, u16:0, u16:0) => u32:9,
+    (FamilyId::DATA_ODD, u16:0, u16:1) => u32:10,
+    (FamilyId::DATA_ODD, u16:0, u16:2) => u32:11,
+    (FamilyId::DATA_ODD, u16:1, u16:0) => u32:12,
+    (FamilyId::DATA_ODD, u16:1, u16:1) => u32:13,
+    (FamilyId::DATA_ODD, u16:1, u16:2) => u32:14,
+    (FamilyId::DATA_ODD, u16:2, u16:0) => u32:15,
+    (FamilyId::DATA_ODD, u16:2, u16:1) => u32:16,
+    (FamilyId::DATA_ODD, u16:2, u16:2) => u32:17,
+    _ => u32:18,
+  }
+}
+
+fn scheduler_1_address(slot: u32) -> ScheduledAddress {
+  match slot {
+    u32:0 => ScheduledAddress { family: FamilyId::PHI_X as u8, x: u16:0, y: u16:0 },
+    u32:1 => ScheduledAddress { family: FamilyId::PHI_X as u8, x: u16:0, y: u16:1 },
+    u32:2 => ScheduledAddress { family: FamilyId::PHI_X as u8, x: u16:0, y: u16:2 },
+    u32:3 => ScheduledAddress { family: FamilyId::PHI_X as u8, x: u16:1, y: u16:0 },
+    u32:4 => ScheduledAddress { family: FamilyId::PHI_X as u8, x: u16:1, y: u16:1 },
+    u32:5 => ScheduledAddress { family: FamilyId::PHI_X as u8, x: u16:1, y: u16:2 },
+    u32:6 => ScheduledAddress { family: FamilyId::PHI_X as u8, x: u16:2, y: u16:0 },
+    u32:7 => ScheduledAddress { family: FamilyId::PHI_X as u8, x: u16:2, y: u16:1 },
+    u32:8 => ScheduledAddress { family: FamilyId::PHI_X as u8, x: u16:2, y: u16:2 },
+    u32:9 => ScheduledAddress { family: FamilyId::PHI_Z as u8, x: u16:0, y: u16:0 },
+    u32:10 => ScheduledAddress { family: FamilyId::PHI_Z as u8, x: u16:0, y: u16:1 },
+    u32:11 => ScheduledAddress { family: FamilyId::PHI_Z as u8, x: u16:0, y: u16:2 },
+    u32:12 => ScheduledAddress { family: FamilyId::PHI_Z as u8, x: u16:1, y: u16:0 },
+    u32:13 => ScheduledAddress { family: FamilyId::PHI_Z as u8, x: u16:1, y: u16:1 },
+    u32:14 => ScheduledAddress { family: FamilyId::PHI_Z as u8, x: u16:1, y: u16:2 },
+    u32:15 => ScheduledAddress { family: FamilyId::PHI_Z as u8, x: u16:2, y: u16:0 },
+    u32:16 => ScheduledAddress { family: FamilyId::PHI_Z as u8, x: u16:2, y: u16:1 },
+    u32:17 => ScheduledAddress { family: FamilyId::PHI_Z as u8, x: u16:2, y: u16:2 },
+    _ => zero!<ScheduledAddress>(),
+  }
+}
+
+fn scheduler_1_slot(address: ScheduledAddress) -> u32 {
+  match (address.family as FamilyId, address.x, address.y) {
+    (FamilyId::PHI_X, u16:0, u16:0) => u32:0,
+    (FamilyId::PHI_X, u16:0, u16:1) => u32:1,
+    (FamilyId::PHI_X, u16:0, u16:2) => u32:2,
+    (FamilyId::PHI_X, u16:1, u16:0) => u32:3,
+    (FamilyId::PHI_X, u16:1, u16:1) => u32:4,
+    (FamilyId::PHI_X, u16:1, u16:2) => u32:5,
+    (FamilyId::PHI_X, u16:2, u16:0) => u32:6,
+    (FamilyId::PHI_X, u16:2, u16:1) => u32:7,
+    (FamilyId::PHI_X, u16:2, u16:2) => u32:8,
+    (FamilyId::PHI_Z, u16:0, u16:0) => u32:9,
+    (FamilyId::PHI_Z, u16:0, u16:1) => u32:10,
+    (FamilyId::PHI_Z, u16:0, u16:2) => u32:11,
+    (FamilyId::PHI_Z, u16:1, u16:0) => u32:12,
+    (FamilyId::PHI_Z, u16:1, u16:1) => u32:13,
+    (FamilyId::PHI_Z, u16:1, u16:2) => u32:14,
+    (FamilyId::PHI_Z, u16:2, u16:0) => u32:15,
+    (FamilyId::PHI_Z, u16:2, u16:1) => u32:16,
+    (FamilyId::PHI_Z, u16:2, u16:2) => u32:17,
+    _ => u32:18,
+  }
+}
+
+fn scheduler_2_address(slot: u32) -> ScheduledAddress {
+  match slot {
+    u32:0 => ScheduledAddress { family: FamilyId::SYNDROME_X as u8, x: u16:0, y: u16:0 },
+    u32:1 => ScheduledAddress { family: FamilyId::SYNDROME_X as u8, x: u16:0, y: u16:1 },
+    u32:2 => ScheduledAddress { family: FamilyId::SYNDROME_X as u8, x: u16:0, y: u16:2 },
+    u32:3 => ScheduledAddress { family: FamilyId::SYNDROME_X as u8, x: u16:1, y: u16:0 },
+    u32:4 => ScheduledAddress { family: FamilyId::SYNDROME_X as u8, x: u16:1, y: u16:1 },
+    u32:5 => ScheduledAddress { family: FamilyId::SYNDROME_X as u8, x: u16:1, y: u16:2 },
+    u32:6 => ScheduledAddress { family: FamilyId::SYNDROME_X as u8, x: u16:2, y: u16:0 },
+    u32:7 => ScheduledAddress { family: FamilyId::SYNDROME_X as u8, x: u16:2, y: u16:1 },
+    u32:8 => ScheduledAddress { family: FamilyId::SYNDROME_X as u8, x: u16:2, y: u16:2 },
+    u32:9 => ScheduledAddress { family: FamilyId::SYNDROME_Z as u8, x: u16:0, y: u16:0 },
+    u32:10 => ScheduledAddress { family: FamilyId::SYNDROME_Z as u8, x: u16:0, y: u16:1 },
+    u32:11 => ScheduledAddress { family: FamilyId::SYNDROME_Z as u8, x: u16:0, y: u16:2 },
+    u32:12 => ScheduledAddress { family: FamilyId::SYNDROME_Z as u8, x: u16:1, y: u16:0 },
+    u32:13 => ScheduledAddress { family: FamilyId::SYNDROME_Z as u8, x: u16:1, y: u16:1 },
+    u32:14 => ScheduledAddress { family: FamilyId::SYNDROME_Z as u8, x: u16:1, y: u16:2 },
+    u32:15 => ScheduledAddress { family: FamilyId::SYNDROME_Z as u8, x: u16:2, y: u16:0 },
+    u32:16 => ScheduledAddress { family: FamilyId::SYNDROME_Z as u8, x: u16:2, y: u16:1 },
+    u32:17 => ScheduledAddress { family: FamilyId::SYNDROME_Z as u8, x: u16:2, y: u16:2 },
+    _ => zero!<ScheduledAddress>(),
+  }
+}
+
+fn scheduler_2_slot(address: ScheduledAddress) -> u32 {
+  match (address.family as FamilyId, address.x, address.y) {
+    (FamilyId::SYNDROME_X, u16:0, u16:0) => u32:0,
+    (FamilyId::SYNDROME_X, u16:0, u16:1) => u32:1,
+    (FamilyId::SYNDROME_X, u16:0, u16:2) => u32:2,
+    (FamilyId::SYNDROME_X, u16:1, u16:0) => u32:3,
+    (FamilyId::SYNDROME_X, u16:1, u16:1) => u32:4,
+    (FamilyId::SYNDROME_X, u16:1, u16:2) => u32:5,
+    (FamilyId::SYNDROME_X, u16:2, u16:0) => u32:6,
+    (FamilyId::SYNDROME_X, u16:2, u16:1) => u32:7,
+    (FamilyId::SYNDROME_X, u16:2, u16:2) => u32:8,
+    (FamilyId::SYNDROME_Z, u16:0, u16:0) => u32:9,
+    (FamilyId::SYNDROME_Z, u16:0, u16:1) => u32:10,
+    (FamilyId::SYNDROME_Z, u16:0, u16:2) => u32:11,
+    (FamilyId::SYNDROME_Z, u16:1, u16:0) => u32:12,
+    (FamilyId::SYNDROME_Z, u16:1, u16:1) => u32:13,
+    (FamilyId::SYNDROME_Z, u16:1, u16:2) => u32:14,
+    (FamilyId::SYNDROME_Z, u16:2, u16:0) => u32:15,
+    (FamilyId::SYNDROME_Z, u16:2, u16:1) => u32:16,
+    (FamilyId::SYNDROME_Z, u16:2, u16:2) => u32:17,
+    _ => u32:18,
+  }
+}
 
 proc FrameRelay {
   frame_in: chan<axis::Frame> in;
@@ -35,19 +194,19 @@ proc FrameRelay {
     state
   }
 }
-enum ControlFamily : u32 {
-  DATA_EVEN = u32:0,
-  DATA_ODD = u32:1,
-  SYNDROME_X = u32:2,
-  SYNDROME_Z = u32:3,
+enum ControlFamily : u8 {
+  DATA_EVEN = u8:0,
+  DATA_ODD = u8:1,
+  SYNDROME_X = u8:2,
+  SYNDROME_Z = u8:3,
 }
 
 struct ControlState {
   active: u1,
   packet: hls_spatial_router::SpatialFrame,
-  family: u32,
-  x: u32,
-  y: u32,
+  family: u8,
+  x: u16,
+  y: u16,
 }
 
 proc ControlDispatcher {
@@ -73,48 +232,48 @@ proc ControlDispatcher {
     } else {
       let _done = match state.family as ControlFamily {
         ControlFamily::DATA_EVEN => {
-          let address_x = (state.x * u32:1 + u32:0) as u16;
-          let address_y = (state.y * u32:2 + u32:0) as u16;
+          let address_x = state.x * u16:1 + u16:0;
+          let address_y = state.y * u16:2 + u16:0;
           let selected = ((state.packet.target == u2:0 && (state.packet.frame.header.op == u8:13 || state.packet.frame.header.op == u8:16)) || (state.packet.target == u2:1 && (state.packet.frame.header.op == u8:15))) && hls_spatial_router::contains(
             state.packet.rectangle, address_x, address_y);
           let request = phenom_data_cell::ScheduledRequest {
-            slot: u32:0 + state.x * HEIGHT + state.y,
+            slot: scheduler_0_slot(ScheduledAddress { family: FamilyId::DATA_EVEN as u8, x: state.x, y: state.y }),
             frame: state.packet.frame,
             ..zero!<phenom_data_cell::ScheduledRequest>()
           };
           send_if(join(), scheduler_0_control_out, selected, request)
         },
         ControlFamily::DATA_ODD => {
-          let address_x = (state.x * u32:1 + u32:0) as u16;
-          let address_y = (state.y * u32:2 + u32:1) as u16;
+          let address_x = state.x * u16:1 + u16:0;
+          let address_y = state.y * u16:2 + u16:1;
           let selected = ((state.packet.target == u2:0 && (state.packet.frame.header.op == u8:13 || state.packet.frame.header.op == u8:16)) || (state.packet.target == u2:1 && (state.packet.frame.header.op == u8:15))) && hls_spatial_router::contains(
             state.packet.rectangle, address_x, address_y);
           let request = phenom_data_cell::ScheduledRequest {
-            slot: u32:9 + state.x * HEIGHT + state.y,
+            slot: scheduler_0_slot(ScheduledAddress { family: FamilyId::DATA_ODD as u8, x: state.x, y: state.y }),
             frame: state.packet.frame,
             ..zero!<phenom_data_cell::ScheduledRequest>()
           };
           send_if(join(), scheduler_0_control_out, selected, request)
         },
         ControlFamily::SYNDROME_X => {
-          let address_x = (state.x * u32:1 + u32:0) as u16;
-          let address_y = (state.y * u32:2 + u32:0) as u16;
+          let address_x = state.x * u16:1 + u16:0;
+          let address_y = state.y * u16:2 + u16:0;
           let selected = ((state.packet.target == u2:1 && (state.packet.frame.header.op == u8:15))) && hls_spatial_router::contains(
             state.packet.rectangle, address_x, address_y);
           let request = phenom_syndrome_cell::ScheduledRequest {
-            slot: u32:0 + state.x * HEIGHT + state.y,
+            slot: scheduler_2_slot(ScheduledAddress { family: FamilyId::SYNDROME_X as u8, x: state.x, y: state.y }),
             frame: state.packet.frame,
             ..zero!<phenom_syndrome_cell::ScheduledRequest>()
           };
           send_if(join(), scheduler_2_control_out, selected, request)
         },
         ControlFamily::SYNDROME_Z => {
-          let address_x = (state.x * u32:1 + u32:0) as u16;
-          let address_y = (state.y * u32:2 + u32:0) as u16;
+          let address_x = state.x * u16:1 + u16:0;
+          let address_y = state.y * u16:2 + u16:0;
           let selected = ((state.packet.target == u2:1 && (state.packet.frame.header.op == u8:15))) && hls_spatial_router::contains(
             state.packet.rectangle, address_x, address_y);
           let request = phenom_syndrome_cell::ScheduledRequest {
-            slot: u32:9 + state.x * HEIGHT + state.y,
+            slot: scheduler_2_slot(ScheduledAddress { family: FamilyId::SYNDROME_Z as u8, x: state.x, y: state.y }),
             frame: state.packet.frame,
             ..zero!<phenom_syndrome_cell::ScheduledRequest>()
           };
@@ -122,19 +281,19 @@ proc ControlDispatcher {
         },
         _ => join(),
       };
-      let last_y = state.y + u32:1 == HEIGHT;
-      let last_x = state.x + u32:1 == WIDTH;
-      let last_family = state.family + u32:1 == u32:4;
+      let last_y = state.y + u16:1 == u16:3;
+      let last_x = state.x + u16:1 == u16:3;
+      let last_family = state.family + u8:1 == u8:4;
       let family_done = last_y && last_x;
       let all_done = family_done && last_family;
       ControlState {
         active: !all_done,
-        family: if family_done { state.family + u32:1 }
+        family: if family_done { state.family + u8:1 }
           else { state.family },
         x: if last_y {
-          if last_x { u32:0 } else { state.x + u32:1 }
+          if last_x { u16:0 } else { state.x + u16:1 }
         } else { state.x },
-        y: if last_y { u32:0 } else { state.y + u32:1 },
+        y: if last_y { u16:0 } else { state.y + u16:1 },
         ..state
       }
     }
@@ -859,64 +1018,63 @@ proc SchedulerRouter0 {
 
   next(state: ()) {
     let (tok, scheduled) = recv(join(), scheduled_in);
-    let routed_tok = if scheduled.slot < u32:9 {
-      let local = scheduled.slot - u32:0;
-      let x = local / HEIGHT;
-      let y = local % HEIGHT;
-      match scheduled.egress.port {
+    let address = scheduler_0_address(scheduled.slot);
+    let routed_tok = match address.family as FamilyId {
+      FamilyId::DATA_EVEN => {
+        let x = address.x;
+        let y = address.y;
+        match scheduled.egress.port {
         phenom_data_cell::OutputPort::NORTH => send(tok, to_scheduler_2, phenom_syndrome_cell::ScheduledRequest {
-            slot: u32:9 + (x + WIDTH - u32:1) % WIDTH * HEIGHT + (y + HEIGHT - u32:1) % HEIGHT,
+            slot: scheduler_2_slot(ScheduledAddress { family: FamilyId::SYNDROME_Z as u8, x: (if x >= u16:1 { x - u16:1 } else { x + u16:2 }), y: (if y >= u16:1 { y - u16:1 } else { y + u16:2 }) }),
             frame: scheduled.egress.frame,
             ..zero!<phenom_syndrome_cell::ScheduledRequest>()
           }),
         phenom_data_cell::OutputPort::EAST => send(tok, to_scheduler_2, phenom_syndrome_cell::ScheduledRequest {
-            slot: u32:0 + x * HEIGHT + y,
+            slot: scheduler_2_slot(ScheduledAddress { family: FamilyId::SYNDROME_X as u8, x: x, y: y }),
             frame: scheduled.egress.frame,
             ..zero!<phenom_syndrome_cell::ScheduledRequest>()
           }),
         phenom_data_cell::OutputPort::WEST => send(tok, to_scheduler_2, phenom_syndrome_cell::ScheduledRequest {
-            slot: u32:0 + (x + WIDTH - u32:1) % WIDTH * HEIGHT + y,
+            slot: scheduler_2_slot(ScheduledAddress { family: FamilyId::SYNDROME_X as u8, x: (if x >= u16:1 { x - u16:1 } else { x + u16:2 }), y: y }),
             frame: scheduled.egress.frame,
             ..zero!<phenom_syndrome_cell::ScheduledRequest>()
           }),
         phenom_data_cell::OutputPort::SOUTH => send(tok, to_scheduler_2, phenom_syndrome_cell::ScheduledRequest {
-            slot: u32:9 + (x + WIDTH - u32:1) % WIDTH * HEIGHT + y,
+            slot: scheduler_2_slot(ScheduledAddress { family: FamilyId::SYNDROME_Z as u8, x: (if x >= u16:1 { x - u16:1 } else { x + u16:2 }), y: y }),
             frame: scheduled.egress.frame,
             ..zero!<phenom_syndrome_cell::ScheduledRequest>()
           }),
         phenom_data_cell::OutputPort::MEASUREMENT => send(tok, data_measurements_out, scheduled.egress.frame),
-      }
-    } else {
-      if scheduled.slot < u32:18 {
-      let local = scheduled.slot - u32:9;
-      let x = local / HEIGHT;
-      let y = local % HEIGHT;
-      match scheduled.egress.port {
+        }
+      },
+      FamilyId::DATA_ODD => {
+        let x = address.x;
+        let y = address.y;
+        match scheduled.egress.port {
         phenom_data_cell::OutputPort::NORTH => send(tok, to_scheduler_2, phenom_syndrome_cell::ScheduledRequest {
-            slot: u32:0 + x * HEIGHT + y,
+            slot: scheduler_2_slot(ScheduledAddress { family: FamilyId::SYNDROME_X as u8, x: x, y: y }),
             frame: scheduled.egress.frame,
             ..zero!<phenom_syndrome_cell::ScheduledRequest>()
           }),
         phenom_data_cell::OutputPort::EAST => send(tok, to_scheduler_2, phenom_syndrome_cell::ScheduledRequest {
-            slot: u32:9 + x * HEIGHT + y,
+            slot: scheduler_2_slot(ScheduledAddress { family: FamilyId::SYNDROME_Z as u8, x: x, y: y }),
             frame: scheduled.egress.frame,
             ..zero!<phenom_syndrome_cell::ScheduledRequest>()
           }),
         phenom_data_cell::OutputPort::WEST => send(tok, to_scheduler_2, phenom_syndrome_cell::ScheduledRequest {
-            slot: u32:9 + (x + WIDTH - u32:1) % WIDTH * HEIGHT + y,
+            slot: scheduler_2_slot(ScheduledAddress { family: FamilyId::SYNDROME_Z as u8, x: (if x >= u16:1 { x - u16:1 } else { x + u16:2 }), y: y }),
             frame: scheduled.egress.frame,
             ..zero!<phenom_syndrome_cell::ScheduledRequest>()
           }),
         phenom_data_cell::OutputPort::SOUTH => send(tok, to_scheduler_2, phenom_syndrome_cell::ScheduledRequest {
-            slot: u32:0 + x * HEIGHT + (y + u32:1) % HEIGHT,
+            slot: scheduler_2_slot(ScheduledAddress { family: FamilyId::SYNDROME_X as u8, x: x, y: (if y >= u16:2 { y - u16:2 } else { y + u16:1 }) }),
             frame: scheduled.egress.frame,
             ..zero!<phenom_syndrome_cell::ScheduledRequest>()
           }),
         phenom_data_cell::OutputPort::MEASUREMENT => send(tok, data_measurements_out, scheduled.egress.frame),
-      }
-    } else {
-      tok
-    }
+        }
+      },
+      _ => tok,
     };
     let _done = send(
       routed_tok, credit_out, phenom_data_cell::ScheduledRequest {
@@ -950,76 +1108,75 @@ proc SchedulerRouter1 {
 
   next(state: ()) {
     let (tok, scheduled) = recv(join(), scheduled_in);
-    let routed_tok = if scheduled.slot < u32:9 {
-      let local = scheduled.slot - u32:0;
-      let x = local / HEIGHT;
-      let y = local % HEIGHT;
-      match scheduled.egress.port {
+    let address = scheduler_1_address(scheduled.slot);
+    let routed_tok = match address.family as FamilyId {
+      FamilyId::PHI_X => {
+        let x = address.x;
+        let y = address.y;
+        match scheduled.egress.port {
         phi_halo_cell::OutputPort::NORTH => send(tok, to_scheduler_1, phi_halo_cell::ScheduledRequest {
-            slot: u32:0 + x * HEIGHT + (y + HEIGHT - u32:1) % HEIGHT,
+            slot: scheduler_1_slot(ScheduledAddress { family: FamilyId::PHI_X as u8, x: x, y: (if y >= u16:1 { y - u16:1 } else { y + u16:2 }) }),
             frame: scheduled.egress.frame,
             ..zero!<phi_halo_cell::ScheduledRequest>()
           }),
         phi_halo_cell::OutputPort::EAST => send(tok, to_scheduler_1, phi_halo_cell::ScheduledRequest {
-            slot: u32:0 + (x + u32:1) % WIDTH * HEIGHT + y,
+            slot: scheduler_1_slot(ScheduledAddress { family: FamilyId::PHI_X as u8, x: (if x >= u16:2 { x - u16:2 } else { x + u16:1 }), y: y }),
             frame: scheduled.egress.frame,
             ..zero!<phi_halo_cell::ScheduledRequest>()
           }),
         phi_halo_cell::OutputPort::WEST => send(tok, to_scheduler_1, phi_halo_cell::ScheduledRequest {
-            slot: u32:0 + (x + WIDTH - u32:1) % WIDTH * HEIGHT + y,
+            slot: scheduler_1_slot(ScheduledAddress { family: FamilyId::PHI_X as u8, x: (if x >= u16:1 { x - u16:1 } else { x + u16:2 }), y: y }),
             frame: scheduled.egress.frame,
             ..zero!<phi_halo_cell::ScheduledRequest>()
           }),
         phi_halo_cell::OutputPort::SOUTH => send(tok, to_scheduler_1, phi_halo_cell::ScheduledRequest {
-            slot: u32:0 + x * HEIGHT + (y + u32:1) % HEIGHT,
+            slot: scheduler_1_slot(ScheduledAddress { family: FamilyId::PHI_X as u8, x: x, y: (if y >= u16:2 { y - u16:2 } else { y + u16:1 }) }),
             frame: scheduled.egress.frame,
             ..zero!<phi_halo_cell::ScheduledRequest>()
           }),
         phi_halo_cell::OutputPort::SYNDROME => send(tok, to_scheduler_2, phenom_syndrome_cell::ScheduledRequest {
-            slot: u32:0 + x * HEIGHT + y,
+            slot: scheduler_2_slot(ScheduledAddress { family: FamilyId::SYNDROME_X as u8, x: x, y: y }),
             frame: scheduled.egress.frame,
             ..zero!<phenom_syndrome_cell::ScheduledRequest>()
           }),
         phi_halo_cell::OutputPort::CORRECTION => send(tok, x_decoder_events_out, scheduled.egress.frame),
         phi_halo_cell::OutputPort::STATUS => send(tok, x_decoder_events_out, scheduled.egress.frame),
-      }
-    } else {
-      if scheduled.slot < u32:18 {
-      let local = scheduled.slot - u32:9;
-      let x = local / HEIGHT;
-      let y = local % HEIGHT;
-      match scheduled.egress.port {
+        }
+      },
+      FamilyId::PHI_Z => {
+        let x = address.x;
+        let y = address.y;
+        match scheduled.egress.port {
         phi_halo_cell::OutputPort::NORTH => send(tok, to_scheduler_1, phi_halo_cell::ScheduledRequest {
-            slot: u32:9 + x * HEIGHT + (y + HEIGHT - u32:1) % HEIGHT,
+            slot: scheduler_1_slot(ScheduledAddress { family: FamilyId::PHI_Z as u8, x: x, y: (if y >= u16:1 { y - u16:1 } else { y + u16:2 }) }),
             frame: scheduled.egress.frame,
             ..zero!<phi_halo_cell::ScheduledRequest>()
           }),
         phi_halo_cell::OutputPort::EAST => send(tok, to_scheduler_1, phi_halo_cell::ScheduledRequest {
-            slot: u32:9 + (x + u32:1) % WIDTH * HEIGHT + y,
+            slot: scheduler_1_slot(ScheduledAddress { family: FamilyId::PHI_Z as u8, x: (if x >= u16:2 { x - u16:2 } else { x + u16:1 }), y: y }),
             frame: scheduled.egress.frame,
             ..zero!<phi_halo_cell::ScheduledRequest>()
           }),
         phi_halo_cell::OutputPort::WEST => send(tok, to_scheduler_1, phi_halo_cell::ScheduledRequest {
-            slot: u32:9 + (x + WIDTH - u32:1) % WIDTH * HEIGHT + y,
+            slot: scheduler_1_slot(ScheduledAddress { family: FamilyId::PHI_Z as u8, x: (if x >= u16:1 { x - u16:1 } else { x + u16:2 }), y: y }),
             frame: scheduled.egress.frame,
             ..zero!<phi_halo_cell::ScheduledRequest>()
           }),
         phi_halo_cell::OutputPort::SOUTH => send(tok, to_scheduler_1, phi_halo_cell::ScheduledRequest {
-            slot: u32:9 + x * HEIGHT + (y + u32:1) % HEIGHT,
+            slot: scheduler_1_slot(ScheduledAddress { family: FamilyId::PHI_Z as u8, x: x, y: (if y >= u16:2 { y - u16:2 } else { y + u16:1 }) }),
             frame: scheduled.egress.frame,
             ..zero!<phi_halo_cell::ScheduledRequest>()
           }),
         phi_halo_cell::OutputPort::SYNDROME => send(tok, to_scheduler_2, phenom_syndrome_cell::ScheduledRequest {
-            slot: u32:9 + x * HEIGHT + y,
+            slot: scheduler_2_slot(ScheduledAddress { family: FamilyId::SYNDROME_Z as u8, x: x, y: y }),
             frame: scheduled.egress.frame,
             ..zero!<phenom_syndrome_cell::ScheduledRequest>()
           }),
         phi_halo_cell::OutputPort::CORRECTION => send(tok, z_decoder_events_out, scheduled.egress.frame),
         phi_halo_cell::OutputPort::STATUS => send(tok, z_decoder_events_out, scheduled.egress.frame),
-      }
-    } else {
-      tok
-    }
+        }
+      },
+      _ => tok,
     };
     let _done = send(
       routed_tok, credit_out, phi_halo_cell::ScheduledRequest {
@@ -1053,80 +1210,79 @@ proc SchedulerRouter2 {
 
   next(state: ()) {
     let (tok, scheduled) = recv(join(), scheduled_in);
-    let routed_tok = if scheduled.slot < u32:9 {
-      let local = scheduled.slot - u32:0;
-      let x = local / HEIGHT;
-      let y = local % HEIGHT;
-      match scheduled.egress.port {
+    let address = scheduler_2_address(scheduled.slot);
+    let routed_tok = match address.family as FamilyId {
+      FamilyId::SYNDROME_X => {
+        let x = address.x;
+        let y = address.y;
+        match scheduled.egress.port {
         phenom_syndrome_cell::OutputPort::NORTH => send(tok, to_scheduler_0, phenom_data_cell::ScheduledRequest {
-            slot: u32:9 + x * HEIGHT + (y + HEIGHT - u32:1) % HEIGHT,
+            slot: scheduler_0_slot(ScheduledAddress { family: FamilyId::DATA_ODD as u8, x: x, y: (if y >= u16:1 { y - u16:1 } else { y + u16:2 }) }),
             frame: scheduled.egress.frame,
             ..zero!<phenom_data_cell::ScheduledRequest>()
           }),
         phenom_syndrome_cell::OutputPort::EAST => send(tok, to_scheduler_0, phenom_data_cell::ScheduledRequest {
-            slot: u32:0 + (x + u32:1) % WIDTH * HEIGHT + y,
+            slot: scheduler_0_slot(ScheduledAddress { family: FamilyId::DATA_EVEN as u8, x: (if x >= u16:2 { x - u16:2 } else { x + u16:1 }), y: y }),
             frame: scheduled.egress.frame,
             ..zero!<phenom_data_cell::ScheduledRequest>()
           }),
         phenom_syndrome_cell::OutputPort::WEST => send(tok, to_scheduler_0, phenom_data_cell::ScheduledRequest {
-            slot: u32:0 + x * HEIGHT + y,
+            slot: scheduler_0_slot(ScheduledAddress { family: FamilyId::DATA_EVEN as u8, x: x, y: y }),
             frame: scheduled.egress.frame,
             ..zero!<phenom_data_cell::ScheduledRequest>()
           }),
         phenom_syndrome_cell::OutputPort::SOUTH => send(tok, to_scheduler_0, phenom_data_cell::ScheduledRequest {
-            slot: u32:9 + x * HEIGHT + y,
+            slot: scheduler_0_slot(ScheduledAddress { family: FamilyId::DATA_ODD as u8, x: x, y: y }),
             frame: scheduled.egress.frame,
             ..zero!<phenom_data_cell::ScheduledRequest>()
           }),
         phenom_syndrome_cell::OutputPort::PHI => {
           let left_tok = send(tok, x_announcements_out, scheduled.egress.frame);
           let right_tok = send(tok, to_scheduler_1, phi_halo_cell::ScheduledRequest {
-            slot: u32:0 + x * HEIGHT + y,
+            slot: scheduler_1_slot(ScheduledAddress { family: FamilyId::PHI_X as u8, x: x, y: y }),
             frame: scheduled.egress.frame,
             ..zero!<phi_halo_cell::ScheduledRequest>()
           });
           join(left_tok, right_tok)
         },
-      }
-    } else {
-      if scheduled.slot < u32:18 {
-      let local = scheduled.slot - u32:9;
-      let x = local / HEIGHT;
-      let y = local % HEIGHT;
-      match scheduled.egress.port {
+        }
+      },
+      FamilyId::SYNDROME_Z => {
+        let x = address.x;
+        let y = address.y;
+        match scheduled.egress.port {
         phenom_syndrome_cell::OutputPort::NORTH => send(tok, to_scheduler_0, phenom_data_cell::ScheduledRequest {
-            slot: u32:0 + (x + u32:1) % WIDTH * HEIGHT + y,
+            slot: scheduler_0_slot(ScheduledAddress { family: FamilyId::DATA_EVEN as u8, x: (if x >= u16:2 { x - u16:2 } else { x + u16:1 }), y: y }),
             frame: scheduled.egress.frame,
             ..zero!<phenom_data_cell::ScheduledRequest>()
           }),
         phenom_syndrome_cell::OutputPort::EAST => send(tok, to_scheduler_0, phenom_data_cell::ScheduledRequest {
-            slot: u32:9 + (x + u32:1) % WIDTH * HEIGHT + y,
+            slot: scheduler_0_slot(ScheduledAddress { family: FamilyId::DATA_ODD as u8, x: (if x >= u16:2 { x - u16:2 } else { x + u16:1 }), y: y }),
             frame: scheduled.egress.frame,
             ..zero!<phenom_data_cell::ScheduledRequest>()
           }),
         phenom_syndrome_cell::OutputPort::WEST => send(tok, to_scheduler_0, phenom_data_cell::ScheduledRequest {
-            slot: u32:9 + x * HEIGHT + y,
+            slot: scheduler_0_slot(ScheduledAddress { family: FamilyId::DATA_ODD as u8, x: x, y: y }),
             frame: scheduled.egress.frame,
             ..zero!<phenom_data_cell::ScheduledRequest>()
           }),
         phenom_syndrome_cell::OutputPort::SOUTH => send(tok, to_scheduler_0, phenom_data_cell::ScheduledRequest {
-            slot: u32:0 + (x + u32:1) % WIDTH * HEIGHT + (y + u32:1) % HEIGHT,
+            slot: scheduler_0_slot(ScheduledAddress { family: FamilyId::DATA_EVEN as u8, x: (if x >= u16:2 { x - u16:2 } else { x + u16:1 }), y: (if y >= u16:2 { y - u16:2 } else { y + u16:1 }) }),
             frame: scheduled.egress.frame,
             ..zero!<phenom_data_cell::ScheduledRequest>()
           }),
         phenom_syndrome_cell::OutputPort::PHI => {
           let left_tok = send(tok, z_announcements_out, scheduled.egress.frame);
           let right_tok = send(tok, to_scheduler_1, phi_halo_cell::ScheduledRequest {
-            slot: u32:9 + x * HEIGHT + y,
+            slot: scheduler_1_slot(ScheduledAddress { family: FamilyId::PHI_Z as u8, x: x, y: y }),
             frame: scheduled.egress.frame,
             ..zero!<phi_halo_cell::ScheduledRequest>()
           });
           join(left_tok, right_tok)
         },
-      }
-    } else {
-      tok
-    }
+        }
+      },
+      _ => tok,
     };
     let _done = send(
       routed_tok, credit_out, phenom_syndrome_cell::ScheduledRequest {

@@ -142,6 +142,12 @@ generated_multi_family_topology_retains_compact_structure_test() ->
     ?assertEqual(3, count(Generated, <<"proc SchedulerRouter">>)),
     ?assertEqual(3, count(Generated, <<"spawn SchedulerRouter">>)),
     ?assertEqual(3, count(Generated, <<"::SharedService<">>)),
+    ?assertEqual(1, count(Generated, <<"fn scheduler_0_address(">>)),
+    ?assertEqual(1, count(Generated, <<"fn scheduler_1_address(">>)),
+    ?assertEqual(1, count(Generated, <<"fn scheduler_2_address(">>)),
+    ?assertEqual(1, count(Generated, <<"fn scheduler_0_slot(">>)),
+    ?assertEqual(1, count(Generated, <<"fn scheduler_1_slot(">>)),
+    ?assertEqual(1, count(Generated, <<"fn scheduler_2_slot(">>)),
     ?assertEqual(6, count(Generated, <<
         "ScheduledRequest, CHANNEL_DEPTH"
     >>)),
@@ -151,6 +157,12 @@ generated_multi_family_topology_retains_compact_structure_test() ->
     ?assertEqual(0, count(Generated, <<"chan<axis::Frame, u32:0>">>)),
     ?assertEqual(0, count(Generated, <<"spawn axis::FrameMux2(">>)),
     ?assertEqual(0, count(Generated, <<"spawn axis::ReservedFrame(">>)),
+    ?assertEqual(0, count(Generated, <<" / HEIGHT">>)),
+    ?assertEqual(0, count(Generated, <<" % HEIGHT">>)),
+    ?assertEqual(0, count(Generated, <<" % WIDTH">>)),
+    ?assertNotEqual(nomatch, binary:match(Generated, <<
+        "match address.family as FamilyId"
+    >>)),
     ?assertEqual(1, count(Generated, <<"proc ControlDispatcher">>)),
     ?assertEqual(1, count(Generated, <<"spawn ControlDispatcher">>)),
     %% Each RAM request appears in Top's member and config lists and once more
