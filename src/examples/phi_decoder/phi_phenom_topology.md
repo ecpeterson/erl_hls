@@ -951,3 +951,52 @@ that is 0.9% more estimated logic cells, four fewer flip-flops, and 0.3% fewer
 LUTs, with no DSP increase. Effective throughput per estimated logic cell
 therefore improves by 19.7%. Both maps exclude the same twelve external RAM
 macros.
+
+### Overlapped shared-scheduler stages
+
+The shared scheduler now captures producer requests while reading the selected
+actor's state and mailbox entry. After the pure actor microstep has produced an
+accepted effect batch, the scheduler issues the actor-state write and any
+pending mailbox admission without waiting synchronously for their completion.
+The following actor read, or the idle collection phase when no actor is ready,
+drains those completions. Requests to each single-port RAM remain on one
+ordered channel, and at most one completion per RAM is outstanding, so a new
+read cannot overtake the preceding write. The effect-batch send still precedes
+both writes on the token path; downstream backpressure therefore cannot expose
+speculative actor or mailbox state.
+
+This changes a continuously active actor visit from three clocks--read,
+execute/write, and collect/write-completion--to two clocks--read and execute.
+Idle schedulers retain the collection phase. Producer admission and returned
+batch credits use one shared combinational transition in both the idle and
+commit paths; spelling that pure transition once is important, because an
+initial two-call form made XLS duplicate much of the mailbox-management logic.
+No actor-state width, mailbox depth, effect-batch width, or RAM-port count
+changes.
+
+The complete CPU-versus-native-Icarus comparison again agrees on all 84
+accepted corrections and all 18 final data-qubit replies. Relative to fused
+dispatch and entry, the interval from the first accepted application beat
+through the last application output falls from 29,731 to 20,170 clocks, a
+32.2% cycle reduction and a 47.4% throughput increase. The profiler observes
+12,981 actor-state reads, essentially unchanged from 13,023, but every
+completed mailbox and entry visit now takes exactly two clocks rather than
+three. The improvement therefore comes from overlapping RAM completion and
+request capture, rather than eliminating useful actor work. Native Icarus
+completes the witness in 26 seconds, down from 33 seconds.
+
+Cycle-stamped status frames put completion of steps zero through 21 an average
+of 902.6 clocks apart, down from 1,339.8 clocks. This is about 110.8 thousand
+decoder steps per second at 100 MHz or 221.6 thousand at 200 MHz. A one-megahertz
+step rate would require about 903 MHz if expressed as clock frequency alone,
+or about 4.5 times the present effective parallelism at 200 MHz.
+
+An out-of-context XC7 core map reports 54,634 estimated logic cells, 23,239
+flip-flops, 64,689 LUTs, and 16 `DSP48E1`s. Relative to fused dispatch and entry,
+that is 23.4% more estimated logic cells, 0.9% more flip-flops, and 23.0% more
+LUTs, with no DSP increase, for 48.4% more completed-step throughput. Effective
+throughput per estimated logic cell improves by 20.3%. The combinational area
+increase is the cost of updating mailbox-admission and actor-completion
+metadata in one activation; the nearly unchanged register count confirms that
+the overlap did not duplicate actor or mailbox storage. As above, the map
+excludes the same twelve external RAM macros.

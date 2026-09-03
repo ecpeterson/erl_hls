@@ -479,6 +479,8 @@ struct SharedState<ACTOR_COUNT: u32, PRODUCER_COUNT: u32> {
   // Entry work known to need the scheduler's batch sequencer.
   egress_waiters: u1[ACTOR_COUNT],
   egress_busy: u1,
+  state_write_pending: u1,
+  mailbox_write_pending: u1,
 }
 
 fn initial_machine() -> Machine {
@@ -3205,6 +3207,88 @@ fn ready_selection<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
   )
 }
 
+struct Collection<ACTOR_COUNT: u32, PRODUCER_COUNT: u32> {
+  state: SharedState<ACTOR_COUNT, PRODUCER_COUNT>,
+  mailbox_request: MailboxRamReq,
+  mailbox_request_valid: u1,
+}
+
+// Applies at most one returned batch credit and one producer admission to
+// captured requests. This is pure so the idle and pipelined commit paths
+// share exactly the same mailbox metadata transition.
+fn collect_pending<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
+    state: SharedState<ACTOR_COUNT, PRODUCER_COUNT>,
+    pending: ScheduledRequest[PRODUCER_COUNT],
+    pending_valid: u1[PRODUCER_COUNT]) ->
+    Collection<ACTOR_COUNT, PRODUCER_COUNT> {
+  let (credit_found, credit_producer) =
+    unroll_for! (candidate, acc):
+        (u32, (u1, u32)) in u32:0..PRODUCER_COUNT {
+      let take = !acc.0 && pending_valid[candidate] &&
+        pending[candidate].credit;
+      (acc.0 || take, if take { candidate } else { acc.1 })
+    }((u1:0, u32:0));
+  let (found, producer) = unroll_for! (candidate, acc):
+      (u32, (u1, u32)) in u32:0..PRODUCER_COUNT {
+    let slot = pending[candidate].slot;
+    let eligible = !acc.0 && pending_valid[candidate] &&
+      !pending[candidate].credit && slot < ACTOR_COUNT &&
+      state.occupied[slot] < MAILBOX_CAPACITY;
+    (
+      acc.0 || eligible,
+      if eligible { candidate } else { acc.1 }
+    )
+  }((u1:0, u32:0));
+  let request = pending[producer];
+  let slot = if request.slot < ACTOR_COUNT {
+    request.slot
+  } else {
+    u32:0
+  };
+  let physical = free_mailbox_index(state, slot);
+  let old_count = state.occupied[slot];
+  let occupied = if found {
+    update(state.occupied, slot, old_count + u8:1)
+  } else {
+    state.occupied
+  };
+  let row = update(
+    state.order[slot], old_count as u32, physical);
+  let order = if found {
+    update(state.order, slot, row)
+  } else {
+    state.order
+  };
+  let mail_candidates = if found {
+    update(state.mail_candidates, slot, u1:1)
+  } else {
+    state.mail_candidates
+  };
+  let remaining_after_admission = if found {
+    update(pending_valid, producer, u1:0)
+  } else {
+    pending_valid
+  };
+  let remaining = if credit_found {
+    update(remaining_after_admission, credit_producer, u1:0)
+  } else {
+    remaining_after_admission
+  };
+  Collection<ACTOR_COUNT, PRODUCER_COUNT> {
+    state: SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
+      pending,
+      pending_valid: remaining,
+      occupied,
+      order,
+      mail_candidates,
+      egress_busy: state.egress_busy && !credit_found,
+      ..state
+    },
+    mailbox_request: mailbox_write(slot, physical, request.frame),
+    mailbox_request_valid: found,
+  }
+}
+
 // One mailbox owner admits frames, keeps queue metadata, and fairly
 // advances all actors in a homogeneous scheduler group. An entry visit
 // commits its complete ordered effect batch; the group router serializes
@@ -3260,10 +3344,42 @@ pub proc SharedService<
   }
 
   next(state: SharedState<ACTOR_COUNT, PRODUCER_COUNT>) {
+    let capture_enabled =
+      state.phase == SharedPhase::COLLECT ||
+      state.phase == SharedPhase::READ;
+    let (capture_tok, captured_pending, captured_pending_valid) =
+      unroll_for! (producer, acc):
+          (u32, (
+            token,
+            ScheduledRequest[PRODUCER_COUNT],
+            u1[PRODUCER_COUNT]
+          )) in u32:0..PRODUCER_COUNT {
+        let (next_tok, request, captured) =
+          recv_if_non_blocking(
+            acc.0,
+            request_in[producer],
+            capture_enabled && !acc.2[producer],
+            zero!<ScheduledRequest>());
+        (
+          next_tok,
+          if captured {
+            update(acc.1, producer, request)
+          } else {
+            acc.1
+          },
+          if captured {
+            update(acc.2, producer, u1:1)
+          } else {
+            acc.2
+          }
+        )
+      }((join(), state.pending, state.pending_valid));
+    let collected = collect_pending(
+      state, captured_pending, captured_pending_valid);
     match state.phase {
       SharedPhase::BOOT => {
         let write_tok = send(
-          join(),
+          capture_tok,
           ram_req_out,
           machine_write(state.cursor, initial_shared_machine()));
         let (_done, _) = recv(write_tok, ram_wr_comp_in);
@@ -3289,7 +3405,7 @@ pub proc SharedService<
         }
       },
       SharedPhase::STARTUP => {
-        let (tok, request) = recv(join(), startup_in);
+        let (tok, request) = recv(capture_tok, startup_in);
         let physical = state.occupied[request.slot];
         let write_tok = send(
           tok,
@@ -3318,100 +3434,20 @@ pub proc SharedService<
         }
       },
       SharedPhase::COLLECT => {
-        let (capture_tok, pending, pending_valid) =
-          unroll_for! (producer, acc):
-              (u32, (
-                token,
-                ScheduledRequest[PRODUCER_COUNT],
-                u1[PRODUCER_COUNT]
-              )) in u32:0..PRODUCER_COUNT {
-            let (next_tok, request, received) =
-              recv_if_non_blocking(
-                acc.0,
-                request_in[producer],
-                !acc.2[producer],
-                zero!<ScheduledRequest>());
-            (
-              next_tok,
-              if received {
-                update(acc.1, producer, request)
-              } else {
-                acc.1
-              },
-              if received {
-                update(acc.2, producer, u1:1)
-              } else {
-                acc.2
-              }
-            )
-          }((join(), state.pending, state.pending_valid));
-        let (credit_found, credit_producer) =
-          unroll_for! (candidate, acc):
-              (u32, (u1, u32)) in u32:0..PRODUCER_COUNT {
-            let take = !acc.0 && pending_valid[candidate] &&
-              pending[candidate].credit;
-            (acc.0 || take, if take { candidate } else { acc.1 })
-          }((u1:0, u32:0));
-        let (found, producer) = unroll_for! (candidate, acc):
-            (u32, (u1, u32)) in u32:0..PRODUCER_COUNT {
-          let slot = pending[candidate].slot;
-          let eligible = !acc.0 &&
-            pending_valid[candidate] &&
-            !pending[candidate].credit &&
-            slot < ACTOR_COUNT &&
-            state.occupied[slot] < MAILBOX_CAPACITY;
-          (
-            acc.0 || eligible,
-            if eligible { candidate } else { acc.1 }
-          )
-        }((u1:0, u32:0));
-        let request = pending[producer];
-        let physical = free_mailbox_index(state, request.slot);
+        let (state_completion_tok, _) = recv_if(
+          join(), ram_wr_comp_in, state.state_write_pending, ());
+        let (mailbox_completion_tok, _) = recv_if(
+          join(), mailbox_wr_comp_in,
+          state.mailbox_write_pending, ());
         let write_tok = send_if(
           capture_tok,
           mailbox_req_out,
-          found,
-          mailbox_write(request.slot, physical, request.frame));
-        let (_done, _) = recv_if(
-          write_tok, mailbox_wr_comp_in, found, ());
-        let old_count = state.occupied[request.slot];
-        let occupied = if found {
-          update(state.occupied, request.slot, old_count + u8:1)
-        } else {
-          state.occupied
-        };
-        let row = update(
-          state.order[request.slot], old_count as u32, physical);
-        let order = if found {
-          update(state.order, request.slot, row)
-        } else {
-          state.order
-        };
-        let mail_candidates = if found {
-          update(state.mail_candidates, request.slot, u1:1)
-        } else {
-          state.mail_candidates
-        };
-        let remaining_after_admission = if found {
-          update(pending_valid, producer, u1:0)
-        } else {
-          pending_valid
-        };
-        let remaining = if credit_found {
-          update(remaining_after_admission, credit_producer, u1:0)
-        } else {
-          remaining_after_admission
-        };
-        let collected = SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
-          pending,
-          pending_valid: remaining,
-          occupied,
-          order,
-          mail_candidates,
-          egress_busy: state.egress_busy && !credit_found,
-          ..state
-        };
-        let (ready, slot) = ready_selection(collected, state.cursor);
+          collected.mailbox_request_valid,
+          collected.mailbox_request);
+        let _done = join(
+          write_tok, state_completion_tok, mailbox_completion_tok);
+        let (ready, slot) = ready_selection(
+          collected.state, state.cursor);
         SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
           phase: if ready {
             SharedPhase::READ
@@ -3419,7 +3455,10 @@ pub proc SharedService<
             SharedPhase::COLLECT
           },
           slot: if ready { slot } else { state.slot },
-          ..collected
+          state_write_pending: u1:0,
+          mailbox_write_pending:
+            collected.mailbox_request_valid,
+          ..collected.state
         }
       },
       SharedPhase::READ => {
@@ -3442,7 +3481,17 @@ pub proc SharedService<
           mailbox_resp_in,
           read_mailbox && received,
           zero!<MailboxRamResp>());
-        let _done = join(state_done, mailbox_done);
+        let (state_completion_tok, _) = recv_if(
+          join(), ram_wr_comp_in, state.state_write_pending, ());
+        let (mailbox_completion_tok, _) = recv_if(
+          join(), mailbox_wr_comp_in,
+          state.mailbox_write_pending, ());
+        let _done = join(
+          capture_tok,
+          state_done,
+          mailbox_done,
+          state_completion_tok,
+          mailbox_completion_tok);
         SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
           phase: SharedPhase::EXECUTE,
           machine: machine_from_bits(response.data),
@@ -3450,44 +3499,54 @@ pub proc SharedService<
           received: read_mailbox && received,
           mailbox_index,
           order_index,
+          pending: captured_pending,
+          pending_valid: captured_pending_valid,
+          state_write_pending: u1:0,
+          mailbox_write_pending: u1:0,
           ..state
         }
       },
       SharedPhase::EXECUTE => {
+        let working = collected.state;
         let stepped = shared_machine_step(
           state.machine, state.frame, state.received,
-          !state.egress_busy);
+          !working.egress_busy);
         let scheduled = ScheduledEffects {
           slot: state.slot,
           effects: stepped.effects,
         };
         let egress_tok = send_if(
-          join(), egress_out, stepped.effects_valid, scheduled);
-        let write_tok = send(
+          capture_tok, egress_out, stepped.effects_valid, scheduled);
+        let state_write_tok = send(
           egress_tok,
           ram_req_out,
           machine_write(state.slot, stepped.machine));
-        let (_done, _) = recv(write_tok, ram_wr_comp_in);
+        let mailbox_write_tok = send_if(
+          egress_tok,
+          mailbox_req_out,
+          collected.mailbox_request_valid,
+          collected.mailbox_request);
+        let _done = join(state_write_tok, mailbox_write_tok);
         let consumed = state.received &&
           stepped.dispatched &&
           stepped.directive == Directive::CONSUME;
         let should_postpone = state.received &&
           stepped.dispatched &&
           stepped.directive == Directive::POSTPONE;
-        let old_count = state.occupied[state.slot];
+        let old_count = working.occupied[state.slot];
         let occupied = update(
-          state.occupied,
+          working.occupied,
           state.slot,
           if consumed { old_count - u8:1 } else { old_count });
         let compacted = compact_order(
-          state.order[state.slot], state.order_index, old_count);
+          working.order[state.slot], state.order_index, old_count);
         let order = if consumed {
-          update(state.order, state.slot, compacted)
+          update(working.order, state.slot, compacted)
         } else {
-          state.order
+          working.order
         };
         let marked = update(
-          state.postponed[state.slot],
+          working.postponed[state.slot],
           state.mailbox_index as u32,
           u1:1);
         let postponed_row = if stepped.phase_boundary {
@@ -3495,29 +3554,29 @@ pub proc SharedService<
         } else if should_postpone {
           marked
         } else {
-          state.postponed[state.slot]
+          working.postponed[state.slot]
         };
         let postponed = update(
-          state.postponed, state.slot, postponed_row);
+          working.postponed, state.slot, postponed_row);
         let metadata_state = SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
           occupied,
           order,
           postponed,
-          ..state
+          ..working
         };
         let (mail_remaining, _, _) =
           mailbox_selection(metadata_state, state.slot);
         let mail_candidates = update(
-          state.mail_candidates,
+          working.mail_candidates,
           state.slot,
           mail_remaining && !stepped.machine.failed);
         let entry_probes = update(
-          state.entry_probes,
+          working.entry_probes,
           state.slot,
           stepped.machine.enter_pending &&
             !stepped.egress_blocked && !stepped.machine.failed);
         let egress_waiters = update(
-          state.egress_waiters,
+          working.egress_waiters,
           state.slot,
           stepped.machine.enter_pending &&
             stepped.egress_blocked && !stepped.machine.failed);
@@ -3526,8 +3585,7 @@ pub proc SharedService<
         } else {
           state.slot + u32:1
         };
-        SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
-          phase: SharedPhase::COLLECT,
+        let advanced = SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
           cursor,
           occupied,
           order,
@@ -3535,8 +3593,21 @@ pub proc SharedService<
           mail_candidates,
           entry_probes,
           egress_waiters,
-          egress_busy: state.egress_busy || stepped.effects_valid,
-          ..state
+          egress_busy: working.egress_busy || stepped.effects_valid,
+          state_write_pending: u1:1,
+          mailbox_write_pending:
+            collected.mailbox_request_valid,
+          ..working
+        };
+        let (ready, slot) = ready_selection(advanced, cursor);
+        SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
+          phase: if ready {
+            SharedPhase::READ
+          } else {
+            SharedPhase::COLLECT
+          },
+          slot: if ready { slot } else { state.slot },
+          ..advanced
         }
       },
     }

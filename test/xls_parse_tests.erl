@@ -880,6 +880,33 @@ state_machine_entry_actions_use_one_source_ordered_egress_test() ->
         )),
         ?assertNotEqual(nomatch, binary:match(
             XLS,
+            <<"state_write_pending: u1">>
+        )),
+        ?assertNotEqual(nomatch, binary:match(
+            XLS,
+            <<"mailbox_write_pending: u1">>
+        )),
+        ?assertNotEqual(nomatch, binary:match(
+            XLS,
+            <<"fn collect_pending<ACTOR_COUNT: u32, "
+              "PRODUCER_COUNT: u32>">>
+        )),
+        ?assertEqual(1, length(binary:matches(
+            XLS,
+            <<"let collected = collect_pending(">>
+        ))),
+        ?assertNotEqual(nomatch, binary:match(
+            XLS,
+            <<"let capture_enabled =\n"
+              "      state.phase == SharedPhase::COLLECT ||\n"
+              "      state.phase == SharedPhase::READ">>
+        )),
+        ?assertNotEqual(nomatch, binary:match(
+            XLS,
+            <<"let (ready, slot) = ready_selection(advanced, cursor)">>
+        )),
+        ?assertNotEqual(nomatch, binary:match(
+            XLS,
             <<"fn ready_selection<ACTOR_COUNT: u32, "
               "PRODUCER_COUNT: u32>">>
         )),
