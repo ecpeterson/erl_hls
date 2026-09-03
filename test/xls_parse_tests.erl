@@ -814,7 +814,8 @@ state_machine_entry_actions_use_one_source_ordered_egress_test() ->
             <<"pub proc SharedService<\n"
               "    ACTOR_COUNT: u32,\n"
               "    PRODUCER_COUNT: u32,\n"
-              "    STARTUP_COUNT: u32">>
+              "    STARTUP_COUNT: u32,\n"
+              "    INSTANCE_ID: u32">>
         )),
         ?assertNotEqual(nomatch, binary:match(
             XLS,

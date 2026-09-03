@@ -569,9 +569,6 @@ static void discover_scheduler_profiles(vpiHandle scope) {
             memset(&candidate, 0, sizeof(candidate));
             if (populate_scheduler_profile(&candidate, module)) {
                 scheduler_profiles[scheduler_profile_count++] = candidate;
-                vpi_printf(
-                    "xls_sim_bridge[profile]: found %s scheduler at %s\n",
-                    candidate.name, candidate.hierarchy);
             } else {
                 vpi_printf(
                     "xls_sim_bridge[profile]: incomplete scheduler at %s\n",
@@ -579,6 +576,35 @@ static void discover_scheduler_profiles(vpiHandle scope) {
             }
         }
         discover_scheduler_profiles(module);
+    }
+}
+
+static void name_scheduler_profiles(void) {
+    char base_names[MAX_SCHEDULERS][32];
+    unsigned index;
+    unsigned candidate;
+
+    for (index = 0; index < scheduler_profile_count; index++)
+        snprintf(base_names[index], sizeof(base_names[index]), "%s",
+                 scheduler_profiles[index].name);
+
+    for (index = 0; index < scheduler_profile_count; index++) {
+        unsigned matching = 0;
+        unsigned rank = 0;
+        for (candidate = 0; candidate < scheduler_profile_count; candidate++) {
+            if (strcmp(base_names[index], base_names[candidate]) != 0)
+                continue;
+            if (candidate < index)
+                rank++;
+            matching++;
+        }
+        if (matching > 1)
+            snprintf(scheduler_profiles[index].name,
+                     sizeof(scheduler_profiles[index].name), "%s_%u",
+                     base_names[index], rank);
+        vpi_printf("xls_sim_bridge[profile]: found %s scheduler at %s\n",
+                   scheduler_profiles[index].name,
+                   scheduler_profiles[index].hierarchy);
     }
 }
 
@@ -888,6 +914,7 @@ static PLI_INT32 cb_start_of_sim(p_cb_data cb) {
                        scheduler_profile_path, strerror(errno));
         } else {
             discover_scheduler_profiles(NULL);
+            name_scheduler_profiles();
             if (scheduler_profile_count == 0) {
                 vpi_printf(
                     "xls_sim_bridge[profile]: no SharedService instances found\n");

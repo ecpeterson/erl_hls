@@ -211,7 +211,12 @@ machine_declarations(#{
         "  READ = u3:3,\n",
         "  EXECUTE = u3:4,\n",
         "}\n\n",
+        "// XLS channel legalization currently confuses multiple otherwise-\n",
+        "// identical SharedService instances connected to different external\n",
+        "// RAM ports. INSTANCE_ID distinguishes those specializations; it is\n",
+        "// neither actor state nor part of scheduling policy.\n",
         "struct SharedState<ACTOR_COUNT: u32, PRODUCER_COUNT: u32> {\n",
+        "  instance_id: u32,\n",
         "  phase: SharedPhase,\n",
         "  slot: u32,\n",
         "  machine: SharedMachine,\n",
@@ -777,7 +782,8 @@ shared_service(_Spec) ->
     pub proc SharedService<
         ACTOR_COUNT: u32,
         PRODUCER_COUNT: u32,
-        STARTUP_COUNT: u32
+        STARTUP_COUNT: u32,
+        INSTANCE_ID: u32
     > {
       request_in: chan<ScheduledRequest>[PRODUCER_COUNT] in;
       startup_in: chan<ScheduledRequest> in;
@@ -815,6 +821,7 @@ shared_service(_Spec) ->
 
       init {
         SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
+          instance_id: INSTANCE_ID,
           phase: SharedPhase::BOOT,
           ..zero!<SharedState<ACTOR_COUNT, PRODUCER_COUNT>>()
         }

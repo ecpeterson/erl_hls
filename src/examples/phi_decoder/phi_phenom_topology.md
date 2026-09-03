@@ -802,9 +802,39 @@ This rules out handler arithmetic and downstream backpressure as the immediate
 source of the cycle-count multiplier. The current executor pays an
 approximately five-clock non-overlapped visit for every one of its 18 actor
 slots, including empty mailboxes, so an actor is reconsidered only about once
-per 91--96 clocks. Ready-slot selection should remove most data and syndrome
-scans and about 36% of phi scans. Scheduler sharding remains the complementary
-experiment: split the same 18 logical actors across two or three executors and
-remeasure the full-witness clock, area, and request-pressure curves. The
-profile should remain enabled for that comparison so reduced scan time is not
-mistaken for a new router or memory bottleneck.
+per 91--96 clocks.
+
+The first sharding experiment assigns each of the six D3 families to its own
+nine-slot executor, retaining separate state and mailbox RAMs for every shard.
+The same complete 84-correction witness passes in 54,224 debug-counted clocks;
+the interval from first accepted application beat through last application
+output is 53,319 clocks, 1.96 times faster than the three-executor profile.
+Cycle-stamped status frames put completion of steps zero through 21 an average
+of 2,413 clocks apart. This is about 41.4 thousand decoder steps per second at
+100 MHz or 82.9 thousand at 200 MHz. A one-megahertz step rate would still
+require 2.41 GHz, equivalently about 12.1 times the present effective
+parallelism at 200 MHz.
+
+The six executors again completed every busy and idle visit in exactly two
+clocks and observed no state-RAM, mailbox-RAM, or egress stall. The speedup is
+therefore the expected effect of two concurrent nine-slot scans rather than a
+new memory or routing bottleneck. An out-of-context XC7 map reports 39,834
+estimated logic cells, 19,607 flip-flops, 47,112 LUTs, and 16 `DSP48E1`s. The
+one-shard bounded-router core used 32,327 cells, 13,144 flip-flops, 36,423
+LUTs, and eight DSPs. Two-way sharding therefore buys nearly twice the rate for
+23.2% more estimated logic cells, 49.2% more flip-flops, 29.3% more LUTs, and a
+second phi datapath's eight DSPs. Both maps exclude the external RAM macros;
+the sharded core exposes twelve RAM interfaces rather than six, while storing
+the same total number of actor and mailbox entries.
+
+Ready-slot selection is still complementary, but a correct ready bit cannot
+mean only "mailbox nonempty." A slot is runnable when it has an eligible,
+non-postponed message or when its saved machine has pending entry effects; a
+slot whose next effect needs the scheduler's outstanding egress credit is not
+runnable until that credit returns. Mailbox writes, message consumption,
+phase changes that clear postponed bits, machine writes that add or exhaust
+entry effects, and returned credits must maintain those conditions. Once that
+metadata is explicit, a rotating first-set-bit selection gives fair work-
+conserving choice without reading every empty actor. Adding it before those
+states are represented would risk starving actors that have work in their
+machine state but no queued message.
