@@ -105,6 +105,7 @@ maybe_verify_debug(Debug) ->
 
 verify_debug(Debug) ->
     {ok, Counters} = hls_debug:get_counters(Debug, ?DEBUG_TIMEOUT),
+    io:format("PHI_DEBUG_COUNTERS: ~p~n", [Counters]),
     ?assertEqual(4, maps:get(version, Counters)),
     ?assert(maps:get(cycles, Counters) > 0),
     ?assert(maps:get(app_rx_beats, Counters) > 0),
@@ -124,7 +125,21 @@ verify_debug(Debug) ->
         fun(#{kind := Kind}) -> Kind =:= application_tx end,
         maps:get(events, Trace)
     )),
+    ok = maybe_write_debug_metrics(Counters, Trace),
     ok.
+
+maybe_write_debug_metrics(Counters, Trace) ->
+    case os:getenv("ERL_HLS_PHI_DEBUG_METRICS") of
+        false ->
+            ok;
+        Path ->
+            TraceSummary = maps:with(
+                [version, count, dropped, observation_drops],
+                Trace
+            ),
+            Metrics = #{counters => Counters, trace => TraceSummary},
+            file:write_file(Path, io_lib:format("~p.~n", [Metrics]))
+    end.
 
 stop({AppFabric, DebugFabric, Debug, Runner}) ->
     stop_if_alive(hls_debug, Debug),
