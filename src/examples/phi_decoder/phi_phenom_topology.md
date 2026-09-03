@@ -774,3 +774,37 @@ is also cycle-accurate for this synchronous synthesizable RTL, but using it
 for the transported demo will require a compiled host harness in place of the
 current Icarus VPI bridge; its two-state emphasis also makes it a complement
 to, rather than a complete replacement for, four-state Icarus checks.
+
+The native bridge can profile the shared schedulers through VPI without adding
+ports, counters, or state to the synthesized design. It discovers
+`SharedService` instances and samples their request, state-RAM, mailbox-RAM,
+and egress handshakes. The checked full-witness runner enables this profile and
+records the interval from the first accepted application beat through the last
+application output beat in `phi_memory_demo.metrics`.
+
+One 84-correction replay measured 104,665 clocks over that interval:
+
+| Scheduler | Actor visits | Visits with mail | Clocks per visit | Request stall clocks | Egresses |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| data | 20,592 | 2,080 (10.1%) | 5.083 | 8,735 | 1,602 |
+| syndrome | 20,534 | 1,998 (9.7%) | 5.097 | 9,745 | 1,993 |
+| phi | 19,585 | 12,543 (64.0%) | 5.344 | 15,007 | 7,209 |
+
+Every completed visit, busy or idle, took exactly two clocks from its state
+read request to its state write request. The gap from that write to the next
+read averaged 3.083 clocks for data, 3.097 for syndrome, and 3.344 for phi.
+No state-RAM request, mailbox-RAM request, or scheduler-egress stall was
+observed. The producer request stalls are time spent waiting for the
+scheduler's single-entry producer holding slots, not stalls at the external
+RAMs or output routers.
+
+This rules out handler arithmetic and downstream backpressure as the immediate
+source of the cycle-count multiplier. The current executor pays an
+approximately five-clock non-overlapped visit for every one of its 18 actor
+slots, including empty mailboxes, so an actor is reconsidered only about once
+per 91--96 clocks. Ready-slot selection should remove most data and syndrome
+scans and about 36% of phi scans. Scheduler sharding remains the complementary
+experiment: split the same 18 logical actors across two or three executors and
+remeasure the full-witness clock, area, and request-pressure curves. The
+profile should remain enabled for that comparison so reduced scan time is not
+mistaken for a new router or memory bottleneck.
