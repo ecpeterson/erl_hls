@@ -797,14 +797,26 @@ state_machine_entry_actions_use_one_source_ordered_egress_test() ->
         )),
         ?assertNotEqual(nomatch, binary:match(
             XLS,
+            <<"pub const ENTRY_EFFECT_CAPACITY = u32:3;">>
+        )),
+        ?assertNotEqual(nomatch, binary:match(
+            XLS,
             <<"chan<Egress, EGRESS_DEPTH>(\"egress\")">>
         )),
-        %% Direct and shared services use the same resumable entry-effect
-        %% progression.
-        ?assertEqual(2, length(binary:matches(
+        %% The direct service keeps resumable per-effect progression. A shared
+        %% scheduler instead commits one complete ordered batch per entry.
+        ?assertEqual(1, length(binary:matches(
             XLS,
             <<"egress_valid: emit_effect && can_advance">>
         ))),
+        ?assertNotEqual(nomatch, binary:match(
+            XLS,
+            <<"let effects_valid = unroll_for! (index, found):">>
+        )),
+        ?assertNotEqual(nomatch, binary:match(
+            XLS,
+            <<"effects_valid: effects_valid && can_advance">>
+        )),
         ?assertNotEqual(nomatch, binary:match(
             XLS,
             <<"egress_out, stepped.egress_valid, stepped.egress">>
@@ -819,7 +831,7 @@ state_machine_entry_actions_use_one_source_ordered_egress_test() ->
         )),
         ?assertNotEqual(nomatch, binary:match(
             XLS,
-            <<"pub struct ScheduledEgress {\n  slot: u32">>
+            <<"pub struct ScheduledEffects {\n  slot: u32">>
         )),
         ?assertNotEqual(nomatch, binary:match(
             XLS,
@@ -862,7 +874,7 @@ state_machine_entry_actions_use_one_source_ordered_egress_test() ->
         )),
         ?assertNotEqual(nomatch, binary:match(
             XLS,
-            <<"egress_blocked: emit_effect && !egress_ready">>
+            <<"egress_blocked: effects_valid && !egress_ready">>
         )),
         ?assertNotEqual(nomatch, binary:match(
             XLS,

@@ -3,8 +3,9 @@
 // Manual changes will be overwritten.
 //
 // Actor state and mailbox frames use separate RAMs. Requests and
-// scheduler egress carry dense RAM slots; each group router maps its
-// egress slot to a narrow family and coordinate address.
+// scheduler effect batches carry dense RAM slots; each group router
+// maps its slot to a narrow family and coordinate address, then
+// drains the effects in source order.
 
 import axis;
 import hls_spatial_router;
@@ -1124,15 +1125,24 @@ proc SchedulerStartup5 {
   }
 }
 
+// Holds one committed actor-entry batch while routing at most one
+// valid effect per activation. Credit returns only after the final
+// source-order position has been drained.
+struct SchedulerRouter0State {
+  active: u1,
+  scheduled: phenom_data_cell::ScheduledEffects,
+  index: u8,
+}
+
 proc SchedulerRouter0 {
-  scheduled_in: chan<phenom_data_cell::ScheduledEgress> in;
+  scheduled_in: chan<phenom_data_cell::ScheduledEffects> in;
   credit_out: chan<phenom_data_cell::ScheduledRequest> out;
   to_scheduler_4: chan<phenom_syndrome_cell::ScheduledRequest> out;
   to_scheduler_5: chan<phenom_syndrome_cell::ScheduledRequest> out;
   data_measurements_out: chan<axis::Frame> out;
 
   config(
-    scheduled_in: chan<phenom_data_cell::ScheduledEgress> in,
+    scheduled_in: chan<phenom_data_cell::ScheduledEffects> in,
     credit_out: chan<phenom_data_cell::ScheduledRequest> out,
     to_scheduler_4: chan<phenom_syndrome_cell::ScheduledRequest> out,
     to_scheduler_5: chan<phenom_syndrome_cell::ScheduledRequest> out,
@@ -1141,59 +1151,88 @@ proc SchedulerRouter0 {
     (scheduled_in, credit_out, to_scheduler_4, to_scheduler_5, data_measurements_out)
   }
 
-  init { () }
+  init { zero!<SchedulerRouter0State>() }
 
-  next(state: ()) {
-    let (tok, scheduled) = recv(join(), scheduled_in);
+  next(state: SchedulerRouter0State) {
+    let (tok, incoming) = recv_if(
+      join(), scheduled_in, !state.active,
+      zero!<phenom_data_cell::ScheduledEffects>());
+    let scheduled = if state.active {
+      state.scheduled
+    } else { incoming };
+    let index = if state.active { state.index } else { u8:0 };
+    let effect = scheduled.effects.values[index as u32];
+    let emit = index < scheduled.effects.count &&
+      scheduled.effects.valid[index as u32];
     let address = scheduler_0_address(scheduled.slot);
-    let routed_tok = match address.family as FamilyId {
+    let routed_tok = if emit {
+      match address.family as FamilyId {
       FamilyId::DATA_EVEN => {
         let x = address.x;
         let y = address.y;
-        match scheduled.egress.port {
+        match effect.port {
         phenom_data_cell::OutputPort::NORTH => send(tok, to_scheduler_5, phenom_syndrome_cell::ScheduledRequest {
             slot: scheduler_5_slot(ScheduledAddress { family: FamilyId::SYNDROME_Z as u8, x: (if x >= u16:1 { x - u16:1 } else { x + u16:2 }), y: (if y >= u16:1 { y - u16:1 } else { y + u16:2 }) }),
-            frame: scheduled.egress.frame,
+            frame: effect.frame,
             ..zero!<phenom_syndrome_cell::ScheduledRequest>()
           }),
         phenom_data_cell::OutputPort::EAST => send(tok, to_scheduler_4, phenom_syndrome_cell::ScheduledRequest {
             slot: scheduler_4_slot(ScheduledAddress { family: FamilyId::SYNDROME_X as u8, x: x, y: y }),
-            frame: scheduled.egress.frame,
+            frame: effect.frame,
             ..zero!<phenom_syndrome_cell::ScheduledRequest>()
           }),
         phenom_data_cell::OutputPort::WEST => send(tok, to_scheduler_4, phenom_syndrome_cell::ScheduledRequest {
             slot: scheduler_4_slot(ScheduledAddress { family: FamilyId::SYNDROME_X as u8, x: (if x >= u16:1 { x - u16:1 } else { x + u16:2 }), y: y }),
-            frame: scheduled.egress.frame,
+            frame: effect.frame,
             ..zero!<phenom_syndrome_cell::ScheduledRequest>()
           }),
         phenom_data_cell::OutputPort::SOUTH => send(tok, to_scheduler_5, phenom_syndrome_cell::ScheduledRequest {
             slot: scheduler_5_slot(ScheduledAddress { family: FamilyId::SYNDROME_Z as u8, x: (if x >= u16:1 { x - u16:1 } else { x + u16:2 }), y: y }),
-            frame: scheduled.egress.frame,
+            frame: effect.frame,
             ..zero!<phenom_syndrome_cell::ScheduledRequest>()
           }),
-        phenom_data_cell::OutputPort::MEASUREMENT => send(tok, data_measurements_out, scheduled.egress.frame),
+        phenom_data_cell::OutputPort::MEASUREMENT => send(tok, data_measurements_out, effect.frame),
         }
       },
-      _ => tok,
-    };
-    let _done = send(
-      routed_tok, credit_out, phenom_data_cell::ScheduledRequest {
+        _ => tok,
+      }
+    } else { tok };
+    let last = index + u8:1 >= scheduled.effects.count;
+    let _done = send_if(
+      routed_tok, credit_out, last, phenom_data_cell::ScheduledRequest {
         credit: u1:1,
         ..zero!<phenom_data_cell::ScheduledRequest>()
       });
-    state
+    if last {
+      zero!<SchedulerRouter0State>()
+    } else {
+      SchedulerRouter0State {
+        active: u1:1,
+        scheduled,
+        index: index + u8:1,
+      }
+    }
   }
 }
 
+// Holds one committed actor-entry batch while routing at most one
+// valid effect per activation. Credit returns only after the final
+// source-order position has been drained.
+struct SchedulerRouter1State {
+  active: u1,
+  scheduled: phenom_data_cell::ScheduledEffects,
+  index: u8,
+}
+
 proc SchedulerRouter1 {
-  scheduled_in: chan<phenom_data_cell::ScheduledEgress> in;
+  scheduled_in: chan<phenom_data_cell::ScheduledEffects> in;
   credit_out: chan<phenom_data_cell::ScheduledRequest> out;
   to_scheduler_4: chan<phenom_syndrome_cell::ScheduledRequest> out;
   to_scheduler_5: chan<phenom_syndrome_cell::ScheduledRequest> out;
   data_measurements_out: chan<axis::Frame> out;
 
   config(
-    scheduled_in: chan<phenom_data_cell::ScheduledEgress> in,
+    scheduled_in: chan<phenom_data_cell::ScheduledEffects> in,
     credit_out: chan<phenom_data_cell::ScheduledRequest> out,
     to_scheduler_4: chan<phenom_syndrome_cell::ScheduledRequest> out,
     to_scheduler_5: chan<phenom_syndrome_cell::ScheduledRequest> out,
@@ -1202,59 +1241,88 @@ proc SchedulerRouter1 {
     (scheduled_in, credit_out, to_scheduler_4, to_scheduler_5, data_measurements_out)
   }
 
-  init { () }
+  init { zero!<SchedulerRouter1State>() }
 
-  next(state: ()) {
-    let (tok, scheduled) = recv(join(), scheduled_in);
+  next(state: SchedulerRouter1State) {
+    let (tok, incoming) = recv_if(
+      join(), scheduled_in, !state.active,
+      zero!<phenom_data_cell::ScheduledEffects>());
+    let scheduled = if state.active {
+      state.scheduled
+    } else { incoming };
+    let index = if state.active { state.index } else { u8:0 };
+    let effect = scheduled.effects.values[index as u32];
+    let emit = index < scheduled.effects.count &&
+      scheduled.effects.valid[index as u32];
     let address = scheduler_1_address(scheduled.slot);
-    let routed_tok = match address.family as FamilyId {
+    let routed_tok = if emit {
+      match address.family as FamilyId {
       FamilyId::DATA_ODD => {
         let x = address.x;
         let y = address.y;
-        match scheduled.egress.port {
+        match effect.port {
         phenom_data_cell::OutputPort::NORTH => send(tok, to_scheduler_4, phenom_syndrome_cell::ScheduledRequest {
             slot: scheduler_4_slot(ScheduledAddress { family: FamilyId::SYNDROME_X as u8, x: x, y: y }),
-            frame: scheduled.egress.frame,
+            frame: effect.frame,
             ..zero!<phenom_syndrome_cell::ScheduledRequest>()
           }),
         phenom_data_cell::OutputPort::EAST => send(tok, to_scheduler_5, phenom_syndrome_cell::ScheduledRequest {
             slot: scheduler_5_slot(ScheduledAddress { family: FamilyId::SYNDROME_Z as u8, x: x, y: y }),
-            frame: scheduled.egress.frame,
+            frame: effect.frame,
             ..zero!<phenom_syndrome_cell::ScheduledRequest>()
           }),
         phenom_data_cell::OutputPort::WEST => send(tok, to_scheduler_5, phenom_syndrome_cell::ScheduledRequest {
             slot: scheduler_5_slot(ScheduledAddress { family: FamilyId::SYNDROME_Z as u8, x: (if x >= u16:1 { x - u16:1 } else { x + u16:2 }), y: y }),
-            frame: scheduled.egress.frame,
+            frame: effect.frame,
             ..zero!<phenom_syndrome_cell::ScheduledRequest>()
           }),
         phenom_data_cell::OutputPort::SOUTH => send(tok, to_scheduler_4, phenom_syndrome_cell::ScheduledRequest {
             slot: scheduler_4_slot(ScheduledAddress { family: FamilyId::SYNDROME_X as u8, x: x, y: (if y >= u16:2 { y - u16:2 } else { y + u16:1 }) }),
-            frame: scheduled.egress.frame,
+            frame: effect.frame,
             ..zero!<phenom_syndrome_cell::ScheduledRequest>()
           }),
-        phenom_data_cell::OutputPort::MEASUREMENT => send(tok, data_measurements_out, scheduled.egress.frame),
+        phenom_data_cell::OutputPort::MEASUREMENT => send(tok, data_measurements_out, effect.frame),
         }
       },
-      _ => tok,
-    };
-    let _done = send(
-      routed_tok, credit_out, phenom_data_cell::ScheduledRequest {
+        _ => tok,
+      }
+    } else { tok };
+    let last = index + u8:1 >= scheduled.effects.count;
+    let _done = send_if(
+      routed_tok, credit_out, last, phenom_data_cell::ScheduledRequest {
         credit: u1:1,
         ..zero!<phenom_data_cell::ScheduledRequest>()
       });
-    state
+    if last {
+      zero!<SchedulerRouter1State>()
+    } else {
+      SchedulerRouter1State {
+        active: u1:1,
+        scheduled,
+        index: index + u8:1,
+      }
+    }
   }
 }
 
+// Holds one committed actor-entry batch while routing at most one
+// valid effect per activation. Credit returns only after the final
+// source-order position has been drained.
+struct SchedulerRouter2State {
+  active: u1,
+  scheduled: phi_halo_cell::ScheduledEffects,
+  index: u8,
+}
+
 proc SchedulerRouter2 {
-  scheduled_in: chan<phi_halo_cell::ScheduledEgress> in;
+  scheduled_in: chan<phi_halo_cell::ScheduledEffects> in;
   credit_out: chan<phi_halo_cell::ScheduledRequest> out;
   to_scheduler_2: chan<phi_halo_cell::ScheduledRequest> out;
   to_scheduler_4: chan<phenom_syndrome_cell::ScheduledRequest> out;
   x_decoder_events_out: chan<axis::Frame> out;
 
   config(
-    scheduled_in: chan<phi_halo_cell::ScheduledEgress> in,
+    scheduled_in: chan<phi_halo_cell::ScheduledEffects> in,
     credit_out: chan<phi_halo_cell::ScheduledRequest> out,
     to_scheduler_2: chan<phi_halo_cell::ScheduledRequest> out,
     to_scheduler_4: chan<phenom_syndrome_cell::ScheduledRequest> out,
@@ -1263,65 +1331,94 @@ proc SchedulerRouter2 {
     (scheduled_in, credit_out, to_scheduler_2, to_scheduler_4, x_decoder_events_out)
   }
 
-  init { () }
+  init { zero!<SchedulerRouter2State>() }
 
-  next(state: ()) {
-    let (tok, scheduled) = recv(join(), scheduled_in);
+  next(state: SchedulerRouter2State) {
+    let (tok, incoming) = recv_if(
+      join(), scheduled_in, !state.active,
+      zero!<phi_halo_cell::ScheduledEffects>());
+    let scheduled = if state.active {
+      state.scheduled
+    } else { incoming };
+    let index = if state.active { state.index } else { u8:0 };
+    let effect = scheduled.effects.values[index as u32];
+    let emit = index < scheduled.effects.count &&
+      scheduled.effects.valid[index as u32];
     let address = scheduler_2_address(scheduled.slot);
-    let routed_tok = match address.family as FamilyId {
+    let routed_tok = if emit {
+      match address.family as FamilyId {
       FamilyId::PHI_X => {
         let x = address.x;
         let y = address.y;
-        match scheduled.egress.port {
+        match effect.port {
         phi_halo_cell::OutputPort::NORTH => send(tok, to_scheduler_2, phi_halo_cell::ScheduledRequest {
             slot: scheduler_2_slot(ScheduledAddress { family: FamilyId::PHI_X as u8, x: x, y: (if y >= u16:1 { y - u16:1 } else { y + u16:2 }) }),
-            frame: scheduled.egress.frame,
+            frame: effect.frame,
             ..zero!<phi_halo_cell::ScheduledRequest>()
           }),
         phi_halo_cell::OutputPort::EAST => send(tok, to_scheduler_2, phi_halo_cell::ScheduledRequest {
             slot: scheduler_2_slot(ScheduledAddress { family: FamilyId::PHI_X as u8, x: (if x >= u16:2 { x - u16:2 } else { x + u16:1 }), y: y }),
-            frame: scheduled.egress.frame,
+            frame: effect.frame,
             ..zero!<phi_halo_cell::ScheduledRequest>()
           }),
         phi_halo_cell::OutputPort::WEST => send(tok, to_scheduler_2, phi_halo_cell::ScheduledRequest {
             slot: scheduler_2_slot(ScheduledAddress { family: FamilyId::PHI_X as u8, x: (if x >= u16:1 { x - u16:1 } else { x + u16:2 }), y: y }),
-            frame: scheduled.egress.frame,
+            frame: effect.frame,
             ..zero!<phi_halo_cell::ScheduledRequest>()
           }),
         phi_halo_cell::OutputPort::SOUTH => send(tok, to_scheduler_2, phi_halo_cell::ScheduledRequest {
             slot: scheduler_2_slot(ScheduledAddress { family: FamilyId::PHI_X as u8, x: x, y: (if y >= u16:2 { y - u16:2 } else { y + u16:1 }) }),
-            frame: scheduled.egress.frame,
+            frame: effect.frame,
             ..zero!<phi_halo_cell::ScheduledRequest>()
           }),
         phi_halo_cell::OutputPort::SYNDROME => send(tok, to_scheduler_4, phenom_syndrome_cell::ScheduledRequest {
             slot: scheduler_4_slot(ScheduledAddress { family: FamilyId::SYNDROME_X as u8, x: x, y: y }),
-            frame: scheduled.egress.frame,
+            frame: effect.frame,
             ..zero!<phenom_syndrome_cell::ScheduledRequest>()
           }),
-        phi_halo_cell::OutputPort::CORRECTION => send(tok, x_decoder_events_out, scheduled.egress.frame),
-        phi_halo_cell::OutputPort::STATUS => send(tok, x_decoder_events_out, scheduled.egress.frame),
+        phi_halo_cell::OutputPort::CORRECTION => send(tok, x_decoder_events_out, effect.frame),
+        phi_halo_cell::OutputPort::STATUS => send(tok, x_decoder_events_out, effect.frame),
         }
       },
-      _ => tok,
-    };
-    let _done = send(
-      routed_tok, credit_out, phi_halo_cell::ScheduledRequest {
+        _ => tok,
+      }
+    } else { tok };
+    let last = index + u8:1 >= scheduled.effects.count;
+    let _done = send_if(
+      routed_tok, credit_out, last, phi_halo_cell::ScheduledRequest {
         credit: u1:1,
         ..zero!<phi_halo_cell::ScheduledRequest>()
       });
-    state
+    if last {
+      zero!<SchedulerRouter2State>()
+    } else {
+      SchedulerRouter2State {
+        active: u1:1,
+        scheduled,
+        index: index + u8:1,
+      }
+    }
   }
 }
 
+// Holds one committed actor-entry batch while routing at most one
+// valid effect per activation. Credit returns only after the final
+// source-order position has been drained.
+struct SchedulerRouter3State {
+  active: u1,
+  scheduled: phi_halo_cell::ScheduledEffects,
+  index: u8,
+}
+
 proc SchedulerRouter3 {
-  scheduled_in: chan<phi_halo_cell::ScheduledEgress> in;
+  scheduled_in: chan<phi_halo_cell::ScheduledEffects> in;
   credit_out: chan<phi_halo_cell::ScheduledRequest> out;
   to_scheduler_3: chan<phi_halo_cell::ScheduledRequest> out;
   to_scheduler_5: chan<phenom_syndrome_cell::ScheduledRequest> out;
   z_decoder_events_out: chan<axis::Frame> out;
 
   config(
-    scheduled_in: chan<phi_halo_cell::ScheduledEgress> in,
+    scheduled_in: chan<phi_halo_cell::ScheduledEffects> in,
     credit_out: chan<phi_halo_cell::ScheduledRequest> out,
     to_scheduler_3: chan<phi_halo_cell::ScheduledRequest> out,
     to_scheduler_5: chan<phenom_syndrome_cell::ScheduledRequest> out,
@@ -1330,58 +1427,87 @@ proc SchedulerRouter3 {
     (scheduled_in, credit_out, to_scheduler_3, to_scheduler_5, z_decoder_events_out)
   }
 
-  init { () }
+  init { zero!<SchedulerRouter3State>() }
 
-  next(state: ()) {
-    let (tok, scheduled) = recv(join(), scheduled_in);
+  next(state: SchedulerRouter3State) {
+    let (tok, incoming) = recv_if(
+      join(), scheduled_in, !state.active,
+      zero!<phi_halo_cell::ScheduledEffects>());
+    let scheduled = if state.active {
+      state.scheduled
+    } else { incoming };
+    let index = if state.active { state.index } else { u8:0 };
+    let effect = scheduled.effects.values[index as u32];
+    let emit = index < scheduled.effects.count &&
+      scheduled.effects.valid[index as u32];
     let address = scheduler_3_address(scheduled.slot);
-    let routed_tok = match address.family as FamilyId {
+    let routed_tok = if emit {
+      match address.family as FamilyId {
       FamilyId::PHI_Z => {
         let x = address.x;
         let y = address.y;
-        match scheduled.egress.port {
+        match effect.port {
         phi_halo_cell::OutputPort::NORTH => send(tok, to_scheduler_3, phi_halo_cell::ScheduledRequest {
             slot: scheduler_3_slot(ScheduledAddress { family: FamilyId::PHI_Z as u8, x: x, y: (if y >= u16:1 { y - u16:1 } else { y + u16:2 }) }),
-            frame: scheduled.egress.frame,
+            frame: effect.frame,
             ..zero!<phi_halo_cell::ScheduledRequest>()
           }),
         phi_halo_cell::OutputPort::EAST => send(tok, to_scheduler_3, phi_halo_cell::ScheduledRequest {
             slot: scheduler_3_slot(ScheduledAddress { family: FamilyId::PHI_Z as u8, x: (if x >= u16:2 { x - u16:2 } else { x + u16:1 }), y: y }),
-            frame: scheduled.egress.frame,
+            frame: effect.frame,
             ..zero!<phi_halo_cell::ScheduledRequest>()
           }),
         phi_halo_cell::OutputPort::WEST => send(tok, to_scheduler_3, phi_halo_cell::ScheduledRequest {
             slot: scheduler_3_slot(ScheduledAddress { family: FamilyId::PHI_Z as u8, x: (if x >= u16:1 { x - u16:1 } else { x + u16:2 }), y: y }),
-            frame: scheduled.egress.frame,
+            frame: effect.frame,
             ..zero!<phi_halo_cell::ScheduledRequest>()
           }),
         phi_halo_cell::OutputPort::SOUTH => send(tok, to_scheduler_3, phi_halo_cell::ScheduledRequest {
             slot: scheduler_3_slot(ScheduledAddress { family: FamilyId::PHI_Z as u8, x: x, y: (if y >= u16:2 { y - u16:2 } else { y + u16:1 }) }),
-            frame: scheduled.egress.frame,
+            frame: effect.frame,
             ..zero!<phi_halo_cell::ScheduledRequest>()
           }),
         phi_halo_cell::OutputPort::SYNDROME => send(tok, to_scheduler_5, phenom_syndrome_cell::ScheduledRequest {
             slot: scheduler_5_slot(ScheduledAddress { family: FamilyId::SYNDROME_Z as u8, x: x, y: y }),
-            frame: scheduled.egress.frame,
+            frame: effect.frame,
             ..zero!<phenom_syndrome_cell::ScheduledRequest>()
           }),
-        phi_halo_cell::OutputPort::CORRECTION => send(tok, z_decoder_events_out, scheduled.egress.frame),
-        phi_halo_cell::OutputPort::STATUS => send(tok, z_decoder_events_out, scheduled.egress.frame),
+        phi_halo_cell::OutputPort::CORRECTION => send(tok, z_decoder_events_out, effect.frame),
+        phi_halo_cell::OutputPort::STATUS => send(tok, z_decoder_events_out, effect.frame),
         }
       },
-      _ => tok,
-    };
-    let _done = send(
-      routed_tok, credit_out, phi_halo_cell::ScheduledRequest {
+        _ => tok,
+      }
+    } else { tok };
+    let last = index + u8:1 >= scheduled.effects.count;
+    let _done = send_if(
+      routed_tok, credit_out, last, phi_halo_cell::ScheduledRequest {
         credit: u1:1,
         ..zero!<phi_halo_cell::ScheduledRequest>()
       });
-    state
+    if last {
+      zero!<SchedulerRouter3State>()
+    } else {
+      SchedulerRouter3State {
+        active: u1:1,
+        scheduled,
+        index: index + u8:1,
+      }
+    }
   }
 }
 
+// Holds one committed actor-entry batch while routing at most one
+// valid effect per activation. Credit returns only after the final
+// source-order position has been drained.
+struct SchedulerRouter4State {
+  active: u1,
+  scheduled: phenom_syndrome_cell::ScheduledEffects,
+  index: u8,
+}
+
 proc SchedulerRouter4 {
-  scheduled_in: chan<phenom_syndrome_cell::ScheduledEgress> in;
+  scheduled_in: chan<phenom_syndrome_cell::ScheduledEffects> in;
   credit_out: chan<phenom_syndrome_cell::ScheduledRequest> out;
   to_scheduler_0: chan<phenom_data_cell::ScheduledRequest> out;
   to_scheduler_1: chan<phenom_data_cell::ScheduledRequest> out;
@@ -1389,7 +1515,7 @@ proc SchedulerRouter4 {
   x_announcements_out: chan<axis::Frame> out;
 
   config(
-    scheduled_in: chan<phenom_syndrome_cell::ScheduledEgress> in,
+    scheduled_in: chan<phenom_syndrome_cell::ScheduledEffects> in,
     credit_out: chan<phenom_syndrome_cell::ScheduledRequest> out,
     to_scheduler_0: chan<phenom_data_cell::ScheduledRequest> out,
     to_scheduler_1: chan<phenom_data_cell::ScheduledRequest> out,
@@ -1399,60 +1525,89 @@ proc SchedulerRouter4 {
     (scheduled_in, credit_out, to_scheduler_0, to_scheduler_1, to_scheduler_2, x_announcements_out)
   }
 
-  init { () }
+  init { zero!<SchedulerRouter4State>() }
 
-  next(state: ()) {
-    let (tok, scheduled) = recv(join(), scheduled_in);
+  next(state: SchedulerRouter4State) {
+    let (tok, incoming) = recv_if(
+      join(), scheduled_in, !state.active,
+      zero!<phenom_syndrome_cell::ScheduledEffects>());
+    let scheduled = if state.active {
+      state.scheduled
+    } else { incoming };
+    let index = if state.active { state.index } else { u8:0 };
+    let effect = scheduled.effects.values[index as u32];
+    let emit = index < scheduled.effects.count &&
+      scheduled.effects.valid[index as u32];
     let address = scheduler_4_address(scheduled.slot);
-    let routed_tok = match address.family as FamilyId {
+    let routed_tok = if emit {
+      match address.family as FamilyId {
       FamilyId::SYNDROME_X => {
         let x = address.x;
         let y = address.y;
-        match scheduled.egress.port {
+        match effect.port {
         phenom_syndrome_cell::OutputPort::NORTH => send(tok, to_scheduler_1, phenom_data_cell::ScheduledRequest {
             slot: scheduler_1_slot(ScheduledAddress { family: FamilyId::DATA_ODD as u8, x: x, y: (if y >= u16:1 { y - u16:1 } else { y + u16:2 }) }),
-            frame: scheduled.egress.frame,
+            frame: effect.frame,
             ..zero!<phenom_data_cell::ScheduledRequest>()
           }),
         phenom_syndrome_cell::OutputPort::EAST => send(tok, to_scheduler_0, phenom_data_cell::ScheduledRequest {
             slot: scheduler_0_slot(ScheduledAddress { family: FamilyId::DATA_EVEN as u8, x: (if x >= u16:2 { x - u16:2 } else { x + u16:1 }), y: y }),
-            frame: scheduled.egress.frame,
+            frame: effect.frame,
             ..zero!<phenom_data_cell::ScheduledRequest>()
           }),
         phenom_syndrome_cell::OutputPort::WEST => send(tok, to_scheduler_0, phenom_data_cell::ScheduledRequest {
             slot: scheduler_0_slot(ScheduledAddress { family: FamilyId::DATA_EVEN as u8, x: x, y: y }),
-            frame: scheduled.egress.frame,
+            frame: effect.frame,
             ..zero!<phenom_data_cell::ScheduledRequest>()
           }),
         phenom_syndrome_cell::OutputPort::SOUTH => send(tok, to_scheduler_1, phenom_data_cell::ScheduledRequest {
             slot: scheduler_1_slot(ScheduledAddress { family: FamilyId::DATA_ODD as u8, x: x, y: y }),
-            frame: scheduled.egress.frame,
+            frame: effect.frame,
             ..zero!<phenom_data_cell::ScheduledRequest>()
           }),
         phenom_syndrome_cell::OutputPort::PHI => {
-          let left_tok = send(tok, x_announcements_out, scheduled.egress.frame);
+          let left_tok = send(tok, x_announcements_out, effect.frame);
           let right_tok = send(tok, to_scheduler_2, phi_halo_cell::ScheduledRequest {
             slot: scheduler_2_slot(ScheduledAddress { family: FamilyId::PHI_X as u8, x: x, y: y }),
-            frame: scheduled.egress.frame,
+            frame: effect.frame,
             ..zero!<phi_halo_cell::ScheduledRequest>()
           });
           join(left_tok, right_tok)
         },
         }
       },
-      _ => tok,
-    };
-    let _done = send(
-      routed_tok, credit_out, phenom_syndrome_cell::ScheduledRequest {
+        _ => tok,
+      }
+    } else { tok };
+    let last = index + u8:1 >= scheduled.effects.count;
+    let _done = send_if(
+      routed_tok, credit_out, last, phenom_syndrome_cell::ScheduledRequest {
         credit: u1:1,
         ..zero!<phenom_syndrome_cell::ScheduledRequest>()
       });
-    state
+    if last {
+      zero!<SchedulerRouter4State>()
+    } else {
+      SchedulerRouter4State {
+        active: u1:1,
+        scheduled,
+        index: index + u8:1,
+      }
+    }
   }
 }
 
+// Holds one committed actor-entry batch while routing at most one
+// valid effect per activation. Credit returns only after the final
+// source-order position has been drained.
+struct SchedulerRouter5State {
+  active: u1,
+  scheduled: phenom_syndrome_cell::ScheduledEffects,
+  index: u8,
+}
+
 proc SchedulerRouter5 {
-  scheduled_in: chan<phenom_syndrome_cell::ScheduledEgress> in;
+  scheduled_in: chan<phenom_syndrome_cell::ScheduledEffects> in;
   credit_out: chan<phenom_syndrome_cell::ScheduledRequest> out;
   to_scheduler_0: chan<phenom_data_cell::ScheduledRequest> out;
   to_scheduler_1: chan<phenom_data_cell::ScheduledRequest> out;
@@ -1460,7 +1615,7 @@ proc SchedulerRouter5 {
   z_announcements_out: chan<axis::Frame> out;
 
   config(
-    scheduled_in: chan<phenom_syndrome_cell::ScheduledEgress> in,
+    scheduled_in: chan<phenom_syndrome_cell::ScheduledEffects> in,
     credit_out: chan<phenom_syndrome_cell::ScheduledRequest> out,
     to_scheduler_0: chan<phenom_data_cell::ScheduledRequest> out,
     to_scheduler_1: chan<phenom_data_cell::ScheduledRequest> out,
@@ -1470,55 +1625,75 @@ proc SchedulerRouter5 {
     (scheduled_in, credit_out, to_scheduler_0, to_scheduler_1, to_scheduler_3, z_announcements_out)
   }
 
-  init { () }
+  init { zero!<SchedulerRouter5State>() }
 
-  next(state: ()) {
-    let (tok, scheduled) = recv(join(), scheduled_in);
+  next(state: SchedulerRouter5State) {
+    let (tok, incoming) = recv_if(
+      join(), scheduled_in, !state.active,
+      zero!<phenom_syndrome_cell::ScheduledEffects>());
+    let scheduled = if state.active {
+      state.scheduled
+    } else { incoming };
+    let index = if state.active { state.index } else { u8:0 };
+    let effect = scheduled.effects.values[index as u32];
+    let emit = index < scheduled.effects.count &&
+      scheduled.effects.valid[index as u32];
     let address = scheduler_5_address(scheduled.slot);
-    let routed_tok = match address.family as FamilyId {
+    let routed_tok = if emit {
+      match address.family as FamilyId {
       FamilyId::SYNDROME_Z => {
         let x = address.x;
         let y = address.y;
-        match scheduled.egress.port {
+        match effect.port {
         phenom_syndrome_cell::OutputPort::NORTH => send(tok, to_scheduler_0, phenom_data_cell::ScheduledRequest {
             slot: scheduler_0_slot(ScheduledAddress { family: FamilyId::DATA_EVEN as u8, x: (if x >= u16:2 { x - u16:2 } else { x + u16:1 }), y: y }),
-            frame: scheduled.egress.frame,
+            frame: effect.frame,
             ..zero!<phenom_data_cell::ScheduledRequest>()
           }),
         phenom_syndrome_cell::OutputPort::EAST => send(tok, to_scheduler_1, phenom_data_cell::ScheduledRequest {
             slot: scheduler_1_slot(ScheduledAddress { family: FamilyId::DATA_ODD as u8, x: (if x >= u16:2 { x - u16:2 } else { x + u16:1 }), y: y }),
-            frame: scheduled.egress.frame,
+            frame: effect.frame,
             ..zero!<phenom_data_cell::ScheduledRequest>()
           }),
         phenom_syndrome_cell::OutputPort::WEST => send(tok, to_scheduler_1, phenom_data_cell::ScheduledRequest {
             slot: scheduler_1_slot(ScheduledAddress { family: FamilyId::DATA_ODD as u8, x: x, y: y }),
-            frame: scheduled.egress.frame,
+            frame: effect.frame,
             ..zero!<phenom_data_cell::ScheduledRequest>()
           }),
         phenom_syndrome_cell::OutputPort::SOUTH => send(tok, to_scheduler_0, phenom_data_cell::ScheduledRequest {
             slot: scheduler_0_slot(ScheduledAddress { family: FamilyId::DATA_EVEN as u8, x: (if x >= u16:2 { x - u16:2 } else { x + u16:1 }), y: (if y >= u16:2 { y - u16:2 } else { y + u16:1 }) }),
-            frame: scheduled.egress.frame,
+            frame: effect.frame,
             ..zero!<phenom_data_cell::ScheduledRequest>()
           }),
         phenom_syndrome_cell::OutputPort::PHI => {
-          let left_tok = send(tok, z_announcements_out, scheduled.egress.frame);
+          let left_tok = send(tok, z_announcements_out, effect.frame);
           let right_tok = send(tok, to_scheduler_3, phi_halo_cell::ScheduledRequest {
             slot: scheduler_3_slot(ScheduledAddress { family: FamilyId::PHI_Z as u8, x: x, y: y }),
-            frame: scheduled.egress.frame,
+            frame: effect.frame,
             ..zero!<phi_halo_cell::ScheduledRequest>()
           });
           join(left_tok, right_tok)
         },
         }
       },
-      _ => tok,
-    };
-    let _done = send(
-      routed_tok, credit_out, phenom_syndrome_cell::ScheduledRequest {
+        _ => tok,
+      }
+    } else { tok };
+    let last = index + u8:1 >= scheduled.effects.count;
+    let _done = send_if(
+      routed_tok, credit_out, last, phenom_syndrome_cell::ScheduledRequest {
         credit: u1:1,
         ..zero!<phenom_syndrome_cell::ScheduledRequest>()
       });
-    state
+    if last {
+      zero!<SchedulerRouter5State>()
+    } else {
+      SchedulerRouter5State {
+        active: u1:1,
+        scheduled,
+        index: index + u8:1,
+      }
+    }
   }
 }
 
@@ -1582,42 +1757,42 @@ proc SchedulerGrid {
     let (scheduler_0_startup_p, scheduler_0_startup_c) =
       chan<phenom_data_cell::ScheduledRequest, CHANNEL_DEPTH>("scheduler_0_startup");
     let (scheduler_0_egress_p, scheduler_0_egress_c) =
-      chan<phenom_data_cell::ScheduledEgress, CHANNEL_DEPTH>("scheduler_0_egress");
+      chan<phenom_data_cell::ScheduledEffects, CHANNEL_DEPTH>("scheduler_0_egress");
     spawn SchedulerStartup0(scheduler_0_startup_p);
     let (scheduler_1_requests_p, scheduler_1_requests_c) =
       chan<phenom_data_cell::ScheduledRequest, CHANNEL_DEPTH>[u32:4]("scheduler_1_requests");
     let (scheduler_1_startup_p, scheduler_1_startup_c) =
       chan<phenom_data_cell::ScheduledRequest, CHANNEL_DEPTH>("scheduler_1_startup");
     let (scheduler_1_egress_p, scheduler_1_egress_c) =
-      chan<phenom_data_cell::ScheduledEgress, CHANNEL_DEPTH>("scheduler_1_egress");
+      chan<phenom_data_cell::ScheduledEffects, CHANNEL_DEPTH>("scheduler_1_egress");
     spawn SchedulerStartup1(scheduler_1_startup_p);
     let (scheduler_2_requests_p, scheduler_2_requests_c) =
       chan<phi_halo_cell::ScheduledRequest, CHANNEL_DEPTH>[u32:3]("scheduler_2_requests");
     let (scheduler_2_startup_p, scheduler_2_startup_c) =
       chan<phi_halo_cell::ScheduledRequest, CHANNEL_DEPTH>("scheduler_2_startup");
     let (scheduler_2_egress_p, scheduler_2_egress_c) =
-      chan<phi_halo_cell::ScheduledEgress, CHANNEL_DEPTH>("scheduler_2_egress");
+      chan<phi_halo_cell::ScheduledEffects, CHANNEL_DEPTH>("scheduler_2_egress");
     spawn SchedulerStartup2(scheduler_2_startup_p);
     let (scheduler_3_requests_p, scheduler_3_requests_c) =
       chan<phi_halo_cell::ScheduledRequest, CHANNEL_DEPTH>[u32:3]("scheduler_3_requests");
     let (scheduler_3_startup_p, scheduler_3_startup_c) =
       chan<phi_halo_cell::ScheduledRequest, CHANNEL_DEPTH>("scheduler_3_startup");
     let (scheduler_3_egress_p, scheduler_3_egress_c) =
-      chan<phi_halo_cell::ScheduledEgress, CHANNEL_DEPTH>("scheduler_3_egress");
+      chan<phi_halo_cell::ScheduledEffects, CHANNEL_DEPTH>("scheduler_3_egress");
     spawn SchedulerStartup3(scheduler_3_startup_p);
     let (scheduler_4_requests_p, scheduler_4_requests_c) =
       chan<phenom_syndrome_cell::ScheduledRequest, CHANNEL_DEPTH>[u32:5]("scheduler_4_requests");
     let (scheduler_4_startup_p, scheduler_4_startup_c) =
       chan<phenom_syndrome_cell::ScheduledRequest, CHANNEL_DEPTH>("scheduler_4_startup");
     let (scheduler_4_egress_p, scheduler_4_egress_c) =
-      chan<phenom_syndrome_cell::ScheduledEgress, CHANNEL_DEPTH>("scheduler_4_egress");
+      chan<phenom_syndrome_cell::ScheduledEffects, CHANNEL_DEPTH>("scheduler_4_egress");
     spawn SchedulerStartup4(scheduler_4_startup_p);
     let (scheduler_5_requests_p, scheduler_5_requests_c) =
       chan<phenom_syndrome_cell::ScheduledRequest, CHANNEL_DEPTH>[u32:5]("scheduler_5_requests");
     let (scheduler_5_startup_p, scheduler_5_startup_c) =
       chan<phenom_syndrome_cell::ScheduledRequest, CHANNEL_DEPTH>("scheduler_5_startup");
     let (scheduler_5_egress_p, scheduler_5_egress_c) =
-      chan<phenom_syndrome_cell::ScheduledEgress, CHANNEL_DEPTH>("scheduler_5_egress");
+      chan<phenom_syndrome_cell::ScheduledEffects, CHANNEL_DEPTH>("scheduler_5_egress");
     spawn SchedulerStartup5(scheduler_5_startup_p);
     spawn phenom_data_cell::SharedService<
       u32:9, u32:4, u32:9, u32:0>(

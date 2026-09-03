@@ -116,6 +116,7 @@ machine_declarations(#{
 }) ->
     DataStruct = record_struct_name(DataName),
     MachineBits = shared_machine_bits(DataWidth),
+    EffectCapacity = max(1, MaxEntryEffects),
     [
         "pub enum OutputPort : u8 {\n",
         [
@@ -131,11 +132,13 @@ machine_declarations(#{
         "  frame: axis::Frame,\n",
         "}\n\n",
         "pub const EGRESS_DEPTH = u32:",
-        integer_to_list(max(1, MaxEntryEffects)), ";\n\n",
-        "struct EntryEffects {\n",
+        integer_to_list(EffectCapacity), ";\n\n",
+        "pub const ENTRY_EFFECT_CAPACITY = u32:",
+        integer_to_list(EffectCapacity), ";\n\n",
+        "pub struct EntryEffects {\n",
         "  count: u8,\n",
-        "  valid: bool[", integer_to_list(length(OutputNames)), "],\n",
-        "  values: Egress[", integer_to_list(length(OutputNames)), "],\n",
+        "  valid: bool[", integer_to_list(EffectCapacity), "],\n",
+        "  values: Egress[", integer_to_list(EffectCapacity), "],\n",
         "}\n\n",
         "struct MailboxSlot {\n",
         "  postponed: u1,\n",
@@ -159,7 +162,6 @@ machine_declarations(#{
         "  entered_from: Phase,\n",
         "  data: ", DataStruct, ",\n",
         "  enter_pending: u1,\n",
-        "  entry_effect_index: u8,\n",
         "  failed: u1,\n",
         "}\n\n",
         "pub type MachineBits = bits[", integer_to_list(MachineBits), "];\n\n",
@@ -192,14 +194,14 @@ machine_declarations(#{
         "  frame: axis::Frame,\n",
         "  credit: u1,\n",
         "}\n\n",
-        "pub struct ScheduledEgress {\n",
+        "pub struct ScheduledEffects {\n",
         "  slot: u32,\n",
-        "  egress: Egress,\n",
+        "  effects: EntryEffects,\n",
         "}\n\n",
         "struct SharedStep {\n",
         "  machine: SharedMachine,\n",
-        "  egress: Egress,\n",
-        "  egress_valid: u1,\n",
+        "  effects: EntryEffects,\n",
+        "  effects_valid: u1,\n",
         "  dispatched: u1,\n",
         "  directive: Directive,\n",
         "  phase_boundary: u1,\n",
@@ -234,16 +236,16 @@ machine_declarations(#{
         "  postponed: u1[", integer_to_list(Capacity), "][ACTOR_COUNT],\n",
         "  // Mailbox work that has not yet been postponed in this phase.\n",
         "  mail_candidates: u1[ACTOR_COUNT],\n",
-        "  // Entry work whose next effect has not yet been classified.\n",
+        "  // Entry work whose effect batch has not yet been classified.\n",
         "  entry_probes: u1[ACTOR_COUNT],\n",
-        "  // Entry work known to need the scheduler's shared egress.\n",
+        "  // Entry work known to need the scheduler's batch sequencer.\n",
         "  egress_waiters: u1[ACTOR_COUNT],\n",
         "  egress_busy: u1,\n",
         "}\n\n"
     ].
 
 shared_machine_bits(DataWidth) ->
-    26 + DataWidth.
+    18 + DataWidth.
 
 %%%
 %%% Lowered callbacks
@@ -261,7 +263,6 @@ initial_machine(#{init := #{body := Body, result := Result}}) ->
         "    entered_from: machine.entered_from,\n",
         "    data: machine.data,\n",
         "    enter_pending: machine.enter_pending,\n",
-        "    entry_effect_index: machine.entry_effect_index,\n",
         "    failed: machine.failed,\n",
         "  }\n",
         "}\n\n",
@@ -274,8 +275,7 @@ machine_codec(#{capacity := Capacity, data_name := DataName,
         data_width := DataWidth}) ->
     DataStart = 16,
     EnterStart = DataStart + DataWidth,
-    EffectStart = EnterStart + 1,
-    FailedStart = EffectStart + 8,
+    FailedStart = EnterStart + 1,
     DataFunction = record_function_name(DataName),
     [
         "fn axis_frame_from_bits(raw: bits[128]) -> axis::Frame {\n",
@@ -302,8 +302,6 @@ machine_codec(#{capacity := Capacity, data_name := DataName,
         "    data: ", DataFunction, "_from_bits(raw[",
         integer_to_list(DataStart), ":", integer_to_list(EnterStart), "]),\n",
         "    enter_pending: raw[", integer_to_list(EnterStart), ":",
-        integer_to_list(EffectStart), "],\n",
-        "    entry_effect_index: raw[", integer_to_list(EffectStart), ":",
         integer_to_list(FailedStart), "],\n",
         "    failed: raw[", integer_to_list(FailedStart), ":",
         integer_to_list(FailedStart + 1), "],\n",
@@ -311,7 +309,6 @@ machine_codec(#{capacity := Capacity, data_name := DataName,
         "}\n\n",
         "fn bits_from_machine(machine: SharedMachine) -> MachineBits {\n",
         "  machine.failed ++\n",
-        "    (machine.entry_effect_index as bits[8]) ++\n",
         "    machine.enter_pending ++\n",
         "    bits_from_", DataFunction, "(machine.data) ++\n",
         "    (machine.entered_from as bits[8]) ++\n",
@@ -355,15 +352,16 @@ machine_codec(#{capacity := Capacity, data_name := DataName,
 
 enter_function(#{
     data_name := DataName,
-    output_names := OutputNames,
+    max_entry_effects := MaxEntryEffects,
     entries := Entries
 }) ->
     DataStruct = record_struct_name(DataName),
+    EffectCapacity = max(1, MaxEntryEffects),
     [
         "fn enter(old_phase: Phase, phase: Phase, data: ", DataStruct,
         ") -> (", DataStruct, ", EntryEffects) {\n",
         "  match phase {\n",
-        [entry_arm(Entry, OutputNames) || Entry <- Entries],
+        [entry_arm(Entry, EffectCapacity) || Entry <- Entries],
         "  }\n",
         "}\n\n"
     ].
@@ -372,8 +370,8 @@ entry_arm(#{
     phase := Phase,
     data := #{body := DataBody, result := DataResult},
     effects := Effects
-}, OutputNames) ->
-    Padding = length(OutputNames) - length(Effects),
+}, EffectCapacity) ->
+    Padding = EffectCapacity - length(Effects),
     [
         "    Phase::", uppercase(Phase), " => {\n",
         "      let entered_data = {\n",
@@ -670,29 +668,26 @@ shared_machine_entry_step() ->
     [
         "    let (entered_data, effects) = enter(\n",
         "      machine.entered_from, machine.phase, machine.data);\n",
-        "    let has_effect = machine.entry_effect_index < effects.count;\n",
-        "    let effect = effects.values[\n",
-        "      machine.entry_effect_index as u32];\n",
-        "    let emit_effect = has_effect && effects.valid[\n",
-        "      machine.entry_effect_index as u32];\n",
-        "    let can_advance = !emit_effect || egress_ready;\n",
-        "    let next_effect_index = machine.entry_effect_index +\n",
-        "      ((has_effect && can_advance) as u8);\n",
-        "    let entry_complete = can_advance &&\n",
-        "      next_effect_index >= effects.count;\n",
+        "    let effects_valid = unroll_for! (index, found):\n",
+        "        (u32, u1) in u32:0..",
+        %% EntryEffects is padded to the largest entry-action list. Its count
+        %% excludes padding but retains conditional effects so that the
+        %% topology sequencer can preserve their source order.
+        "ENTRY_EFFECT_CAPACITY {\n",
+        "      found || (index < effects.count as u32 &&\n",
+        "        effects.valid[index])\n",
+        "    }(u1:0);\n",
+        "    let can_advance = !effects_valid || egress_ready;\n",
         "    let advanced_machine = SharedMachine {\n",
-        "      data: if entry_complete { entered_data } else { machine.data },\n",
-        "      enter_pending: !entry_complete,\n",
-        "      entry_effect_index: if entry_complete {\n",
-        "        u8:0\n",
-        "      } else { next_effect_index },\n",
+        "      data: entered_data,\n",
+        "      enter_pending: u1:0,\n",
         "      ..machine\n",
         "    };\n",
         "    SharedStep {\n",
         "      machine: if can_advance { advanced_machine } else { machine },\n",
-        "      egress: effect,\n",
-        "      egress_valid: emit_effect && can_advance,\n",
-        "      egress_blocked: emit_effect && !egress_ready,\n",
+        "      effects,\n",
+        "      effects_valid: effects_valid && can_advance,\n",
+        "      egress_blocked: effects_valid && !egress_ready,\n",
         "      ..zero!<SharedStep>()\n",
         "    }\n"
     ].
@@ -785,7 +780,7 @@ shared_service(_Spec) ->
 
     // Finds the first selectable actor at or after the round-robin cursor.
     // A mailbox candidate remains latent while that actor has entry work.
-    // Egress waiters become selectable together when the one shared credit
+    // Egress waiters become selectable together when the one batch credit
     // returns; servicing any one of them consumes it again.
     fn ready_selection<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
         state: SharedState<ACTOR_COUNT, PRODUCER_COUNT>,
@@ -815,9 +810,11 @@ shared_service(_Spec) ->
     }
 
     // One mailbox owner admits frames, keeps queue metadata, and fairly
-    // advances all actors in a homogeneous scheduler group. Every producer
-    // has one holding slot, so one full actor cannot block unrelated traffic
-    // before manager admission.
+    // advances all actors in a homogeneous scheduler group. An entry visit
+    // commits its complete ordered effect batch; the group router serializes
+    // that batch after releasing the actor state. Every producer has one
+    // holding slot, so one full actor cannot block unrelated traffic before
+    // manager admission.
     pub proc SharedService<
         ACTOR_COUNT: u32,
         PRODUCER_COUNT: u32,
@@ -826,7 +823,7 @@ shared_service(_Spec) ->
     > {
       request_in: chan<ScheduledRequest>[PRODUCER_COUNT] in;
       startup_in: chan<ScheduledRequest> in;
-      egress_out: chan<ScheduledEgress> out;
+      egress_out: chan<ScheduledEffects> out;
       ram_req_out: chan<MachineRamReq> out;
       ram_resp_in: chan<MachineRamResp> in;
       ram_wr_comp_in: chan<()> in;
@@ -837,7 +834,7 @@ shared_service(_Spec) ->
       config(
           request_in: chan<ScheduledRequest>[PRODUCER_COUNT] in,
           startup_in: chan<ScheduledRequest> in,
-          egress_out: chan<ScheduledEgress> out,
+          egress_out: chan<ScheduledEffects> out,
           ram_req_out: chan<MachineRamReq> out,
           ram_resp_in: chan<MachineRamResp> in,
           ram_wr_comp_in: chan<()> in,
@@ -1064,12 +1061,12 @@ shared_service(_Spec) ->
             let stepped = shared_machine_step(
               state.machine, state.frame, state.received,
               !state.egress_busy);
-            let scheduled = ScheduledEgress {
+            let scheduled = ScheduledEffects {
               slot: state.slot,
-              egress: stepped.egress,
+              effects: stepped.effects,
             };
             let egress_tok = send_if(
-              join(), egress_out, stepped.egress_valid, scheduled);
+              join(), egress_out, stepped.effects_valid, scheduled);
             let write_tok = send(
               egress_tok,
               ram_req_out,
@@ -1142,7 +1139,7 @@ shared_service(_Spec) ->
               mail_candidates,
               entry_probes,
               egress_waiters,
-              egress_busy: state.egress_busy || stepped.egress_valid,
+              egress_busy: state.egress_busy || stepped.effects_valid,
               ..state
             }
           },

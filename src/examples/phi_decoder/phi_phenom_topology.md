@@ -588,10 +588,12 @@ implementation.
 
 The frame RAM is distinct from the actor-state RAM. State address `s` contains
 one packed machine word for actor slot `s`: phase, previous phase, callback
-record, pending-entry flag, entry-effect index, and failure flag. The words are
-442 bits for data and syndrome actors and 554 bits for phi actors. Eighteen
-words are live in each 32-entry inferred state RAM. Unlike the mailbox RAM,
-the scheduler initializes those live words during its boot sweep.
+record, pending-entry flag, and failure flag. The words are 434 bits for data
+and syndrome actors and 546 bits for phi actors. Eighteen words are live in
+each 32-entry inferred state RAM. Unlike the mailbox RAM, the scheduler
+initializes those live words during its boot sweep. Shared actors no longer
+store an entry-effect cursor: the scheduler commits an entire entry batch,
+and the one cursor for draining it belongs to the group router.
 
 There are also small register-resident queues around this storage. Each
 incoming producer has one `ScheduledRequest` holding slot (three producers for
@@ -868,3 +870,49 @@ increase. Both maps exclude the same twelve external RAM macros. This is a
 reasonable area cost for eliminating almost two-thirds of state-memory traffic,
 even though it confirms that ready selection alone is not the remaining
 throughput breakthrough.
+
+### Batched entry effects
+
+Shared actors now compute all of one `handle_enter/3` callback's effects in a
+single state visit. The scheduler admits the resulting ordered batch as its
+commit point, writes the entered actor state, and may immediately choose
+another actor. A scheduler-local router retains the batch and emits at most one
+valid action per activation in source order. It returns the scheduler's one
+egress credit only after the last batch position has drained. This retains the
+single-resource acquisition rule used by the deadlock argument: no actor state
+or mailbox transaction remains held while a downstream action is blocked.
+
+Conditional casts occupy their original batch positions but are skipped when
+false. A batch is transmitted only when at least one effect is valid, and its
+static capacity is the largest entry-action list for that actor type: four
+effects for data and syndrome cells and five for phi cells. Entry work that
+finds the sequencer busy remains an egress waiter. Because callbacks are pure,
+the scheduler can reread and recompute that batch after credit returns without
+storing speculative actor state.
+
+The complete CPU-versus-native-Icarus comparison continues to agree on all 84
+accepted corrections and all 18 final data-qubit replies. Compared with ready
+selection alone, the interval from the first accepted application beat through
+the last application output falls from 50,191 to 35,892 clocks, a 28.5%
+reduction and a 39.8% throughput increase. Aggregate actor-state visits fall
+from 22,501 to 15,932. Entry visits fall from 11,662 to 4,878 (58.2%), while
+mailbox visits move from 10,839 to 11,053; the latter small increase reflects a
+different legal inter-family arrival order. The profiler's 3,205 `egresses`
+now count admitted effect batches, whereas the earlier 10,832 count individual
+effects and therefore is not a like-for-like traffic reduction.
+
+Cycle-stamped status frames put completion of steps zero through 21 an average
+of 1,618.6 clocks apart, down from about 2,272 clocks. This is about 61.8
+thousand decoder steps per second at 100 MHz or 123.6 thousand at 200 MHz. A
+one-megahertz step rate would require about 1.62 GHz if expressed as clock
+frequency alone, or 8.1 times the present effective parallelism at 200 MHz.
+The native Icarus witness completed in 36 seconds, versus 45 seconds for the
+ready-slot design.
+
+An out-of-context XC7 core map reports 43,872 estimated logic cells, 23,035
+flip-flops, 52,745 LUTs, and 16 `DSP48E1`s. Relative to ready selection this is
+an 8.6% logic-cell, 15.5% flip-flop, and 7.8% LUT increase, with no additional
+DSPs, for 39.8% more effective throughput. Throughput per estimated logic cell
+therefore improves by about 28.8%. The wider batch channels and the six
+in-flight router records explain most of the register increase. As with the
+previous maps, these core-only figures exclude the twelve external RAM macros.

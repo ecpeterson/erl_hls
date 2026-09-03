@@ -86,10 +86,10 @@ module phi_noise_topology_tb;
     integer cycle;
 
     wire [31:0] data_state_addr [0:1];
-    wire [441:0] data_state_wr_data [0:1];
+    wire [433:0] data_state_wr_data [0:1];
     wire data_state_we [0:1];
     wire data_state_re [0:1];
-    wire [441:0] data_state_rd_data [0:1];
+    wire [433:0] data_state_rd_data [0:1];
     wire [31:0] data_mailbox_addr [0:1];
     wire [127:0] data_mailbox_wr_data [0:1];
     wire data_mailbox_we [0:1];
@@ -97,10 +97,10 @@ module phi_noise_topology_tb;
     wire [127:0] data_mailbox_rd_data [0:1];
 
     wire [31:0] phi_state_addr [0:1];
-    wire [553:0] phi_state_wr_data [0:1];
+    wire [545:0] phi_state_wr_data [0:1];
     wire phi_state_we [0:1];
     wire phi_state_re [0:1];
-    wire [553:0] phi_state_rd_data [0:1];
+    wire [545:0] phi_state_rd_data [0:1];
     wire [31:0] phi_mailbox_addr [0:1];
     wire [127:0] phi_mailbox_wr_data [0:1];
     wire phi_mailbox_we [0:1];
@@ -108,10 +108,10 @@ module phi_noise_topology_tb;
     wire [127:0] phi_mailbox_rd_data [0:1];
 
     wire [31:0] syndrome_state_addr [0:1];
-    wire [441:0] syndrome_state_wr_data [0:1];
+    wire [433:0] syndrome_state_wr_data [0:1];
     wire syndrome_state_we [0:1];
     wire syndrome_state_re [0:1];
-    wire [441:0] syndrome_state_rd_data [0:1];
+    wire [433:0] syndrome_state_rd_data [0:1];
     wire [31:0] syndrome_mailbox_addr [0:1];
     wire [127:0] syndrome_mailbox_wr_data [0:1];
     wire syndrome_mailbox_we [0:1];
@@ -226,19 +226,19 @@ module phi_noise_topology_tb;
     genvar ram_index;
     generate
         for (ram_index = 0; ram_index < 2; ram_index = ram_index + 1) begin: scheduler_rams
-            hls_1rw_ram #(.WIDTH(442), .ADDRESS_WIDTH(4)) data_state (
+            hls_1rw_ram #(.WIDTH(434), .ADDRESS_WIDTH(4)) data_state (
                 .clk(clk), .addr(data_state_addr[ram_index][3:0]),
                 .wr_data(data_state_wr_data[ram_index]),
                 .we(data_state_we[ram_index]), .re(data_state_re[ram_index]),
                 .rd_data(data_state_rd_data[ram_index])
             );
-            hls_1rw_ram #(.WIDTH(554), .ADDRESS_WIDTH(4)) phi_state (
+            hls_1rw_ram #(.WIDTH(546), .ADDRESS_WIDTH(4)) phi_state (
                 .clk(clk), .addr(phi_state_addr[ram_index][3:0]),
                 .wr_data(phi_state_wr_data[ram_index]),
                 .we(phi_state_we[ram_index]), .re(phi_state_re[ram_index]),
                 .rd_data(phi_state_rd_data[ram_index])
             );
-            hls_1rw_ram #(.WIDTH(442), .ADDRESS_WIDTH(4)) syndrome_state (
+            hls_1rw_ram #(.WIDTH(434), .ADDRESS_WIDTH(4)) syndrome_state (
                 .clk(clk), .addr(syndrome_state_addr[ram_index][3:0]),
                 .wr_data(syndrome_state_wr_data[ram_index]),
                 .we(syndrome_state_we[ram_index]),
