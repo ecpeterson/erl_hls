@@ -77,14 +77,14 @@ typedef struct {
     uint64_t egresses;
     uint64_t egress_stalls;
     uint64_t active_cycles;
-    uint64_t busy_visit_count;
-    uint64_t busy_visit_cycles;
-    uint64_t busy_visit_min;
-    uint64_t busy_visit_max;
-    uint64_t idle_visit_count;
-    uint64_t idle_visit_cycles;
-    uint64_t idle_visit_min;
-    uint64_t idle_visit_max;
+    uint64_t mailbox_visit_count;
+    uint64_t mailbox_visit_cycles;
+    uint64_t mailbox_visit_min;
+    uint64_t mailbox_visit_max;
+    uint64_t entry_visit_count;
+    uint64_t entry_visit_cycles;
+    uint64_t entry_visit_min;
+    uint64_t entry_visit_max;
     uint64_t intervisit_count;
     uint64_t intervisit_cycles;
     uint64_t intervisit_min;
@@ -198,8 +198,8 @@ static int get_vector_bit(vpiHandle signal, unsigned bit) {
 }
 
 static void reset_latency_minima(scheduler_counts_t *counts) {
-    counts->busy_visit_min = UINT64_MAX;
-    counts->idle_visit_min = UINT64_MAX;
+    counts->mailbox_visit_min = UINT64_MAX;
+    counts->entry_visit_min = UINT64_MAX;
     counts->intervisit_min = UINT64_MAX;
 }
 
@@ -286,16 +286,16 @@ static void write_scheduler_profile(void) {
         PROFILE_VALUE("egresses", counts->egresses);
         PROFILE_VALUE("egress_stalls", counts->egress_stalls);
         PROFILE_VALUE("active_cycles", counts->active_cycles);
-        PROFILE_VALUE("busy_visits", counts->busy_visit_count);
-        PROFILE_VALUE("busy_visit_cycles", counts->busy_visit_cycles);
-        PROFILE_VALUE("busy_visit_min", printable_minimum(
-            counts->busy_visit_count, counts->busy_visit_min));
-        PROFILE_VALUE("busy_visit_max", counts->busy_visit_max);
-        PROFILE_VALUE("idle_visits", counts->idle_visit_count);
-        PROFILE_VALUE("idle_visit_cycles", counts->idle_visit_cycles);
-        PROFILE_VALUE("idle_visit_min", printable_minimum(
-            counts->idle_visit_count, counts->idle_visit_min));
-        PROFILE_VALUE("idle_visit_max", counts->idle_visit_max);
+        PROFILE_VALUE("mailbox_visits", counts->mailbox_visit_count);
+        PROFILE_VALUE("mailbox_visit_cycles", counts->mailbox_visit_cycles);
+        PROFILE_VALUE("mailbox_visit_min", printable_minimum(
+            counts->mailbox_visit_count, counts->mailbox_visit_min));
+        PROFILE_VALUE("mailbox_visit_max", counts->mailbox_visit_max);
+        PROFILE_VALUE("entry_visits", counts->entry_visit_count);
+        PROFILE_VALUE("entry_visit_cycles", counts->entry_visit_cycles);
+        PROFILE_VALUE("entry_visit_min", printable_minimum(
+            counts->entry_visit_count, counts->entry_visit_min));
+        PROFILE_VALUE("entry_visit_max", counts->entry_visit_max);
         PROFILE_VALUE("intervisits", counts->intervisit_count);
         PROFILE_VALUE("intervisit_cycles", counts->intervisit_cycles);
         PROFILE_VALUE("intervisit_min", printable_minimum(
@@ -639,17 +639,17 @@ static void step_scheduler_profile(scheduler_profile_t *profile) {
             if (counts->visit_open && counts->visit_has_mailbox) {
                 update_latency(
                     latency,
-                    &counts->busy_visit_count,
-                    &counts->busy_visit_cycles,
-                    &counts->busy_visit_min,
-                    &counts->busy_visit_max);
+                    &counts->mailbox_visit_count,
+                    &counts->mailbox_visit_cycles,
+                    &counts->mailbox_visit_min,
+                    &counts->mailbox_visit_max);
             } else if (counts->visit_open) {
                 update_latency(
                     latency,
-                    &counts->idle_visit_count,
-                    &counts->idle_visit_cycles,
-                    &counts->idle_visit_min,
-                    &counts->idle_visit_max);
+                    &counts->entry_visit_count,
+                    &counts->entry_visit_cycles,
+                    &counts->entry_visit_min,
+                    &counts->entry_visit_max);
             }
             counts->visit_open = 0;
             counts->previous_write = cycle_number;

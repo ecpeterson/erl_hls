@@ -103,6 +103,8 @@ test -s "$scheduler_profile"
 grep -q '^profile_snapshot=last_application_output$' "$scheduler_profile"
 for scheduler in data phi syndrome; do
     grep -Eq "^${scheduler}(_[0-9]+)?_state_reads=" "$scheduler_profile"
+    grep -Eq "^${scheduler}(_[0-9]+)?_mailbox_visits=" "$scheduler_profile"
+    grep -Eq "^${scheduler}(_[0-9]+)?_entry_visits=" "$scheduler_profile"
 done
 
 cleanup
