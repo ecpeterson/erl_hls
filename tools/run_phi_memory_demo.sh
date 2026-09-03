@@ -8,6 +8,7 @@ remote_root=${ERL_HLS_REMOTE_ROOT:-/home/ecpeterson/erl_hls-build}
 remote_xls=${ERL_HLS_REMOTE_XLS:-/home/ecpeterson/xls-v0.0.0-10601-g9f360fc89-linux-x64}
 remote_stage="$remote_root/phi_memory_demo"
 reuse_rtl=${ERL_HLS_PHI_DEMO_REUSE_RTL:-0}
+native_icarus=${ERL_HLS_PHI_NATIVE_ICARUS:-0}
 cpu_witness="$local_stage/phi_memory_cpu_witness.term"
 
 cd "$project_root"
@@ -52,13 +53,25 @@ rsync -a -e "ssh -o BatchMode=yes" \
 
 ssh -o BatchMode=yes "$remote_host" \
     env ERL_HLS_PHI_DEMO_REUSE_RTL="$reuse_rtl" \
+    ERL_HLS_PHI_DEMO_COMPILE_ONLY="$native_icarus" \
     bash "$remote_stage/remote_phi_memory_demo.sh" \
     "$remote_stage" "$remote_xls"
 
-rsync -a -e "ssh -o BatchMode=yes" \
-    --include=phi_memory_demo.log \
-    --include=phi_memory_demo.metrics \
-    --include='phi_memory_gateway-*.time' \
-    --exclude='*' \
-    "$remote_host:$remote_stage/" \
-    "$local_stage/"
+if [[ "$native_icarus" == 1 ]]; then
+    rsync -a -e "ssh -o BatchMode=yes" \
+        "$remote_host:$remote_stage/phi_memory_gateway.v" \
+        "$remote_host:$remote_stage/hls_debug_observer.v" \
+        "$remote_host:$remote_stage/hls_debug_server.v" \
+        "$remote_host:$remote_stage/hls_fabric_ingress.v" \
+        "$remote_host:$remote_stage/hls_fabric_egress.v" \
+        "$local_stage/"
+    "$project_root/tools/local_phi_memory_demo.sh" "$local_stage"
+else
+    rsync -a -e "ssh -o BatchMode=yes" \
+        --include=phi_memory_demo.log \
+        --include=phi_memory_demo.metrics \
+        --include='phi_memory_gateway-*.time' \
+        --exclude='*' \
+        "$remote_host:$remote_stage/" \
+        "$local_stage/"
+fi

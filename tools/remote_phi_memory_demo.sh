@@ -6,6 +6,7 @@ xls_root=${2:?usage: remote_phi_memory_demo.sh STAGE XLS_ROOT}
 stdlib="$xls_root/xls/dslx/stdlib"
 . "$stage/phi_scheduler_rams.sh"
 reuse_rtl=${ERL_HLS_PHI_DEMO_REUSE_RTL:-0}
+compile_only=${ERL_HLS_PHI_DEMO_COMPILE_ONLY:-0}
 startup_timeout=${ERL_HLS_SIM_STARTUP_TIMEOUT:-120}
 cpu_witness="$stage/phi_memory_cpu_witness.term"
 
@@ -134,6 +135,10 @@ fi
     --reset=reset \
     --fifo_module= \
     hls_fabric_egress.opt.ir > hls_fabric_egress.v
+
+if [[ "$compile_only" == 1 ]]; then
+    exit 0
+fi
 
 iverilog-vpi xls_sim_bridge.c
 /usr/bin/time -v -o phi_memory_gateway-iverilog.time \

@@ -818,6 +818,10 @@ state_machine_entry_actions_use_one_source_ordered_egress_test() ->
         )),
         ?assertNotEqual(nomatch, binary:match(
             XLS,
+            <<"pub struct ScheduledEgress {\n  slot: u32">>
+        )),
+        ?assertNotEqual(nomatch, binary:match(
+            XLS,
             <<"machine: if can_advance { advanced_machine } else { machine }">>
         )),
         ?assertNotEqual(nomatch, binary:match(

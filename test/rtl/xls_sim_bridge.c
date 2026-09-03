@@ -61,6 +61,7 @@ typedef struct {
 static vpiHandle h_clk;
 static vpiHandle h_resetn;
 static const char *hierarchy_root;
+static uint64_t cycle_number;
 static axis_endpoint_t app_endpoint;
 static axis_endpoint_t debug_endpoint;
 
@@ -230,8 +231,9 @@ static void step_endpoint(axis_endpoint_t *endpoint) {
         return;
 
     if (endpoint->s_valid && endpoint->s_ready_sample) {
-        vpi_printf("xls_sim_bridge[%s]: accepted input beat %u\n",
-                   endpoint->name, endpoint->input_beat_number);
+        vpi_printf("xls_sim_bridge[%s]: cycle=%llu accepted input beat %u\n",
+                   endpoint->name, (unsigned long long)cycle_number,
+                   endpoint->input_beat_number);
         endpoint->output_armed = 1;
         endpoint->s_valid = 0;
         endpoint->s_last = 0;
@@ -239,9 +241,10 @@ static void step_endpoint(axis_endpoint_t *endpoint) {
 
     if (endpoint->m_valid_sample && endpoint->m_ready) {
         if (endpoint->output_armed) {
-            vpi_printf("xls_sim_bridge[%s]: output beat %u data=%08x\n",
-                       endpoint->name, ++endpoint->output_beat_number,
-                       endpoint->m_data_sample);
+            vpi_printf(
+                "xls_sim_bridge[%s]: cycle=%llu output beat %u data=%08x\n",
+                endpoint->name, (unsigned long long)cycle_number,
+                ++endpoint->output_beat_number, endpoint->m_data_sample);
             if (ring_free(&endpoint->output_bytes) >= 4)
                 ring_push_word(&endpoint->output_bytes, endpoint->m_data_sample);
             else
@@ -307,11 +310,13 @@ static PLI_INT32 cb_readonly(p_cb_data cb) {
     pump_output(&debug_endpoint);
 
     if (!get_bit(h_resetn)) {
+        cycle_number = 0;
         reset_endpoint(&app_endpoint);
         reset_endpoint(&debug_endpoint);
         return 0;
     }
 
+    cycle_number++;
     step_endpoint(&app_endpoint);
     step_endpoint(&debug_endpoint);
     return 0;

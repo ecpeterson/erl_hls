@@ -655,6 +655,10 @@ and the checked distance-three gateway with:
 tools/run_phi_memory_demo.sh
 ```
 
+Set `ERL_HLS_PHI_NATIVE_ICARUS=1` to keep XLS conversion and code generation
+on the configured build host but retrieve the generated Verilog and run the
+VPI bridge plus Icarus on the local machine.
+
 The script derives the distance, noise rate, experiment options, and compact
 golden summary from `phi_memory_demo:fixture/0`. The CPU regression writes its
 complete canonical witness into the staging directory; the remote bridge must
@@ -726,3 +730,47 @@ family/coordinate address through the scheduled request, and flattening it
 only at a destination RAM, should remove that arithmetic. A quadtree can then
 distribute rectangles among several spatial scheduler partitions without
 reintroducing one host message per actor.
+
+The bounded-routing follow-up replaces that quotient/remainder reconstruction
+with generated static maps between each scheduler's dense RAM slot and a
+`{family, x, y}` address. Wrapped neighbor translations use only a comparison
+and add/subtract at the topology's coordinate width. The address is immutable
+topology metadata rather than another field in the wide, shallow actor-state
+RAM. The same D3 topology bench passes in 39,875 post-reset clocks, compared
+with 40,159 before the change.
+
+An attempted generic alternative passed a packed address table as a proc
+parametric whose width depended on the actor-count parametric. The current DSLX
+type checker rejects that dependency as non-constant even when the width is a
+separate parametric or the bits are wrapped in a parametric struct. Ordinary
+parametric functions and structs do permit this kind of width expression. The
+generated topology maps therefore keep the immutable table out of actor state
+without relying on that proc-parametric limitation; a small compiler reproducer
+is worth revisiting separately.
+
+On the same out-of-context XC7 core map, the new router uses 32,327 estimated
+logic cells, 13,144 flip-flops, 36,423 LUTs, and eight `DSP48E1`s. The 88 DSPs
+attributed to routing disappear; the remaining eight belong to phi
+relaxation. Relative to the first shared-scheduler map, this is a 12.1%
+reduction in estimated logic cells, an 8.9% reduction in flip-flops, and a
+16.5% reduction in LUTs. As above, these core-only figures leave the six
+external RAMs at the boundary.
+
+The full ERTS-plus-RTL fixture also matches the complete 84-correction CPU
+witness and returns all 18 final Pauli replies. Cycle-stamped status frames
+put completion of steps zero through 21 about 4,750 clocks apart; two native
+replays averaged 4,749.8 and 4,758.1 clocks per step. This corresponds to
+about 21.1 thousand decoder steps per second at 100 MHz or 42.1 thousand at
+200 MHz; a one-megahertz decoder-step rate would require an impractical
+4.75 GHz clock.
+At 200 MHz, the present architecture therefore needs about 24 times as much
+effective parallelism to meet the rate target.
+
+Native arm64 Icarus materially improves regression wall time without changing
+RTL semantics. The identical 39,875-clock topology bench takes 19.75 seconds
+on the M2 host rather than 11 minutes 55 seconds in its local x86 UTM, a 36x
+speedup. A native full-witness replay completes in about 58 seconds. Verilator
+is also cycle-accurate for this synchronous synthesizable RTL, but using it
+for the transported demo will require a compiled host harness in place of the
+current Icarus VPI bridge; its two-state emphasis also makes it a complement
+to, rather than a complete replacement for, four-state Icarus checks.
