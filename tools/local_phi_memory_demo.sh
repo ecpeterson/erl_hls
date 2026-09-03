@@ -7,6 +7,7 @@ project_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 sim_dir="$stage/sim_native"
 cpu_witness="$stage/phi_memory_cpu_witness.term"
 debug_metrics="$stage/phi_memory_demo.debug.term"
+scheduler_profile="$stage/phi_memory_demo.scheduler_profile"
 vvp_log="$stage/phi_memory_demo.vvp.log"
 
 for command in iverilog iverilog-vpi vvp rebar3; do
@@ -32,6 +33,7 @@ rm -f \
     "$sim_dir/debug_tx" \
     "$sim_dir/debug_rx" \
     "$debug_metrics" \
+    "$scheduler_profile" \
     "$vvp_log"
 
 cd "$stage"
@@ -63,6 +65,7 @@ trap cleanup EXIT
 
 ERL_HLS_SIM_DIR="$sim_dir" \
 ERL_HLS_SIM_TOP=phi_memory_bridge_tb \
+ERL_HLS_SIM_SCHEDULER_PROFILE="$scheduler_profile" \
     vvp -M "$stage" -m xls_sim_bridge phi_memory_gateway.vvp \
     >"$vvp_log" 2>&1 &
 sim_pid=$!
@@ -96,6 +99,11 @@ ERL_HLS_PHI_DEBUG_METRICS="$debug_metrics" \
     rebar3 eunit --module=phi_memory_bridge_tests
 sim_elapsed=$((SECONDS - sim_start))
 test -s "$debug_metrics"
+test -s "$scheduler_profile"
+grep -q '^profile_snapshot=last_application_output$' "$scheduler_profile"
+for scheduler in data phi syndrome; do
+    grep -q "^${scheduler}_state_reads=" "$scheduler_profile"
+done
 
 cleanup
 sim_pid=
@@ -108,5 +116,6 @@ cd "$stage"
     wc -l phi_memory_gateway.x phi_memory_gateway.v
     sha256_file phi_memory_gateway.x phi_memory_gateway.v
     cat "$debug_metrics"
+    cat "$scheduler_profile"
 } > "$stage/phi_memory_demo.metrics"
 cat "$stage/phi_memory_demo.metrics"
