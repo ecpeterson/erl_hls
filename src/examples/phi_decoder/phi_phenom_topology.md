@@ -916,3 +916,38 @@ DSPs, for 39.8% more effective throughput. Throughput per estimated logic cell
 therefore improves by about 28.8%. The wider batch channels and the six
 in-flight router records explain most of the register increase. As with the
 previous maps, these core-only figures exclude the twelve external RAM macros.
+
+### Fused dispatch and phase entry
+
+When a shared actor's message handler changes or repeats its phase, the
+scheduler now evaluates that phase's `handle_enter/3` callback during the same
+state visit. If the resulting entry batch is empty, or the batch sequencer can
+accept it, the handler result and entered actor state commit together. This
+removes the usual second state-memory visit between dispatch and entry. If a
+nonempty batch cannot be accepted, the scheduler retains the former two-visit
+fallback: it commits the phase transition with entry pending, classifies the
+actor as an egress waiter, and recomputes the pure entry callback after credit
+returns. Direct, one-service-per-actor lowering is unchanged.
+
+The complete CPU-versus-native-Icarus comparison again agrees exactly on all
+84 accepted corrections and all 18 final data-qubit replies. Relative to
+batched entry alone, the measured interval from the first accepted application
+beat through the last application output falls from 35,892 to 29,731 clocks, a
+17.2% cycle reduction and a 20.7% throughput increase. Aggregate actor-state
+visits fall from 15,932 to 13,023, and separate entry visits fall from 4,878 to
+1,474. The remaining entry visits are the fallback taken while an earlier
+batch is still draining.
+
+Cycle-stamped status frames put completion of steps zero through 21 an average
+of 1,339.8 clocks apart, down from 1,618.6 clocks. This is about 74.6 thousand
+decoder steps per second at 100 MHz or 149.3 thousand at 200 MHz. One million
+steps per second would require about 1.34 GHz if expressed as clock frequency
+alone, or about 6.7 times the present effective parallelism at 200 MHz. The
+native Icarus witness completed in 33 seconds.
+
+The out-of-context XC7 core map reports 44,261 estimated logic cells, 23,031
+flip-flops, 52,613 LUTs, and 16 `DSP48E1`s. Compared with batched entry alone,
+that is 0.9% more estimated logic cells, four fewer flip-flops, and 0.3% fewer
+LUTs, with no DSP increase. Effective throughput per estimated logic cell
+therefore improves by 19.7%. Both maps exclude the same twelve external RAM
+macros.

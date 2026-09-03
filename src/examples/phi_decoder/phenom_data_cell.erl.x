@@ -879,6 +879,13 @@ fn enter(old_phase: Phase, phase: Phase, data: Datacell) -> (Datacell, EntryEffe
   }
 }
 
+fn entry_effects_valid(effects: EntryEffects) -> u1 {
+  unroll_for! (index, found):
+      (u32, u1) in u32:0..ENTRY_EFFECT_CAPACITY {
+    found || (index < effects.count as u32 && effects.valid[index])
+  }(u1:0)
+}
+
 fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacell, Directive, u1) {
   match frame.header.op as Tag {
     Tag::PHI => {
@@ -2023,11 +2030,7 @@ fn shared_machine_step(
   } else if machine.enter_pending {
     let (entered_data, effects) = enter(
       machine.entered_from, machine.phase, machine.data);
-    let effects_valid = unroll_for! (index, found):
-        (u32, u1) in u32:0..ENTRY_EFFECT_CAPACITY {
-      found || (index < effects.count as u32 &&
-        effects.valid[index])
-    }(u1:0);
+    let effects_valid = entry_effects_valid(effects);
     let can_advance = !effects_valid || egress_ready;
     let advanced_machine = SharedMachine {
       data: entered_data,
@@ -2058,13 +2061,25 @@ fn shared_machine_step(
       (effective && repeat_phase);
     let failed = !tag_ok || invalid_repeat ||
       (effective && directive == Directive::FAIL);
+    let needs_entry = effective && phase_boundary && !failed;
+    let (entered_data, entry_effects) = if needs_entry {
+      enter(machine.phase, next_phase, next_data)
+    } else {
+      (next_data, zero!<EntryEffects>())
+    };
+    let has_entry_effects =
+      entry_effects_valid(entry_effects);
+    let fuse_entry = needs_entry &&
+      (!has_entry_effects || egress_ready);
     let next_machine = SharedMachine {
       phase: if effective { next_phase } else { machine.phase },
       entered_from: if phase_boundary {
         machine.phase
       } else { machine.entered_from },
-      data: if effective { next_data } else { machine.data },
-      enter_pending: effective && phase_boundary && !failed,
+      data: if fuse_entry {
+        entered_data
+      } else if effective { next_data } else { machine.data },
+      enter_pending: needs_entry && !fuse_entry,
       failed,
       ..machine
     };
@@ -2073,6 +2088,10 @@ fn shared_machine_step(
       dispatched: tag_ok && !invalid_repeat,
       directive,
       phase_boundary,
+      effects: entry_effects,
+      effects_valid: fuse_entry && has_entry_effects,
+      egress_blocked: needs_entry && has_entry_effects &&
+        !egress_ready,
       ..zero!<SharedStep>()
     }
   } else {

@@ -811,11 +811,27 @@ state_machine_entry_actions_use_one_source_ordered_egress_test() ->
         ))),
         ?assertNotEqual(nomatch, binary:match(
             XLS,
-            <<"let effects_valid = unroll_for! (index, found):">>
+            <<"fn entry_effects_valid(effects: EntryEffects) -> u1">>
         )),
         ?assertNotEqual(nomatch, binary:match(
             XLS,
             <<"effects_valid: effects_valid && can_advance">>
+        )),
+        ?assertNotEqual(nomatch, binary:match(
+            XLS,
+            <<"let needs_entry = effective && phase_boundary && !failed">>
+        )),
+        ?assertNotEqual(nomatch, binary:match(
+            XLS,
+            <<"enter(machine.phase, next_phase, next_data)">>
+        )),
+        ?assertNotEqual(nomatch, binary:match(
+            XLS,
+            <<"enter_pending: needs_entry && !fuse_entry">>
+        )),
+        ?assertNotEqual(nomatch, binary:match(
+            XLS,
+            <<"effects_valid: fuse_entry && has_entry_effects">>
         )),
         ?assertNotEqual(nomatch, binary:match(
             XLS,

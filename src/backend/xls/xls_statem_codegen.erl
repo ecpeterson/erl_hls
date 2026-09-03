@@ -47,6 +47,7 @@ emit(Spec) ->
         initial_machine(Spec),
         machine_codec(Spec),
         enter_function(Spec),
+        entry_effects_valid_function(),
         dispatch_function(Spec),
         machine_step_function(Spec),
         shared_machine_step_function(Spec),
@@ -404,6 +405,20 @@ entry_arm(#{
         "    },\n"
     ].
 
+entry_effects_valid_function() ->
+    [
+        """
+        fn entry_effects_valid(effects: EntryEffects) -> u1 {
+          unroll_for! (index, found):
+              (u32, u1) in u32:0..ENTRY_EFFECT_CAPACITY {
+            found || (index < effects.count as u32 && effects.valid[index])
+          }(u1:0)
+        }
+
+        """,
+        "\n"
+    ].
+
 entry_effect_binding(Index, #{
     body := Body,
     result := Result,
@@ -641,13 +656,25 @@ shared_machine_step_function(#{
         "      (effective && repeat_phase);\n",
         "    let failed = !tag_ok || invalid_repeat ||\n",
         "      (effective && directive == Directive::FAIL);\n",
+        "    let needs_entry = effective && phase_boundary && !failed;\n",
+        "    let (entered_data, entry_effects) = if needs_entry {\n",
+        "      enter(machine.phase, next_phase, next_data)\n",
+        "    } else {\n",
+        "      (next_data, zero!<EntryEffects>())\n",
+        "    };\n",
+        "    let has_entry_effects =\n",
+        "      entry_effects_valid(entry_effects);\n",
+        "    let fuse_entry = needs_entry &&\n",
+        "      (!has_entry_effects || egress_ready);\n",
         "    let next_machine = SharedMachine {\n",
         "      phase: if effective { next_phase } else { machine.phase },\n",
         "      entered_from: if phase_boundary {\n",
         "        machine.phase\n",
         "      } else { machine.entered_from },\n",
-        "      data: if effective { next_data } else { machine.data },\n",
-        "      enter_pending: effective && phase_boundary && !failed,\n",
+        "      data: if fuse_entry {\n",
+        "        entered_data\n",
+        "      } else if effective { next_data } else { machine.data },\n",
+        "      enter_pending: needs_entry && !fuse_entry,\n",
         "      failed,\n",
         "      ..machine\n",
         "    };\n",
@@ -656,6 +683,10 @@ shared_machine_step_function(#{
         "      dispatched: tag_ok && !invalid_repeat,\n",
         "      directive,\n",
         "      phase_boundary,\n",
+        "      effects: entry_effects,\n",
+        "      effects_valid: fuse_entry && has_entry_effects,\n",
+        "      egress_blocked: needs_entry && has_entry_effects &&\n",
+        "        !egress_ready,\n",
         "      ..zero!<SharedStep>()\n",
         "    }\n",
         "  } else {\n",
@@ -668,15 +699,7 @@ shared_machine_entry_step() ->
     [
         "    let (entered_data, effects) = enter(\n",
         "      machine.entered_from, machine.phase, machine.data);\n",
-        "    let effects_valid = unroll_for! (index, found):\n",
-        "        (u32, u1) in u32:0..",
-        %% EntryEffects is padded to the largest entry-action list. Its count
-        %% excludes padding but retains conditional effects so that the
-        %% topology sequencer can preserve their source order.
-        "ENTRY_EFFECT_CAPACITY {\n",
-        "      found || (index < effects.count as u32 &&\n",
-        "        effects.valid[index])\n",
-        "    }(u1:0);\n",
+        "    let effects_valid = entry_effects_valid(effects);\n",
         "    let can_advance = !effects_valid || egress_ready;\n",
         "    let advanced_machine = SharedMachine {\n",
         "      data: entered_data,\n",
