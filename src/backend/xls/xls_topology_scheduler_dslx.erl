@@ -252,8 +252,9 @@ preamble(Spec = #{families := Families}) ->
         "// Manual changes will be overwritten.\n",
         "//\n",
         "// Actor state and mailbox frames use separate RAMs. Requests and\n",
-        "// scheduler egress carry dense RAM slots; each group router maps its\n",
-        "// egress slot to a narrow family and coordinate address.\n\n",
+        "// scheduler effect batches carry dense RAM slots; each group router\n",
+        "// maps its slot to a narrow family and coordinate address, then\n",
+        "// drains the effects in source order.\n\n",
         "import axis;\n",
         case maps:get(ingresses, Spec) of
             [] -> [];
@@ -551,9 +552,10 @@ router_proc(Spec, Scheduler = #{
     destinations := Destinations,
     external_ids := ExternalIds
 }) ->
+    StateName = [router_name(Scheduler), "State"],
     Members =
         [
-            ["scheduled_in: chan<", Module, "::ScheduledEgress> in"],
+            ["scheduled_in: chan<", Module, "::ScheduledEffects> in"],
             ["credit_out: chan<", Module, "::ScheduledRequest> out"]
         ] ++
         [router_destination_argument(Destination)
@@ -566,27 +568,54 @@ router_proc(Spec, Scheduler = #{
         [external_output_name(Spec, ExternalId)
             || ExternalId <- ExternalIds],
     [
+        "// Holds one committed actor-entry batch while routing at most one\n",
+        "// valid effect per activation. Credit returns only after the final\n",
+        "// source-order position has been drained.\n",
+        "struct ", StateName, " {\n",
+        "  active: u1,\n",
+        "  scheduled: ", Module, "::ScheduledEffects,\n",
+        "  index: u8,\n",
+        "}\n\n",
         "proc ", router_name(Scheduler), " {\n",
         [["  ", Member, ";\n"] || Member <- Members],
         "\n",
         config_signature(Members, 2),
         "    (", join_with(", ", Names), ")\n  }\n\n",
-        "  init { () }\n\n",
-        "  next(state: ()) {\n",
-        "    let (tok, scheduled) = recv(join(), scheduled_in);\n",
+        "  init { zero!<", StateName, ">() }\n\n",
+        "  next(state: ", StateName, ") {\n",
+        "    let (tok, incoming) = recv_if(\n",
+        "      join(), scheduled_in, !state.active,\n",
+        "      zero!<", Module, "::ScheduledEffects>());\n",
+        "    let scheduled = if state.active {\n",
+        "      state.scheduled\n",
+        "    } else { incoming };\n",
+        "    let index = if state.active { state.index } else { u8:0 };\n",
+        "    let effect = scheduled.effects.values[index as u32];\n",
+        "    let emit = index < scheduled.effects.count &&\n",
+        "      scheduled.effects.valid[index as u32];\n",
         "    let address = ", Stem, "_address(scheduled.slot);\n",
-        "    let routed_tok = match address.family as FamilyId {\n",
+        "    let routed_tok = if emit {\n",
+        "      match address.family as FamilyId {\n",
         [router_family_arm(Spec, Family) || Family <- Families],
-        "      _ => tok,\n",
-        "    }",
-        ";\n",
-        "    let _done = send(\n",
-        "      routed_tok, credit_out, ", Module,
+        "        _ => tok,\n",
+        "      }\n",
+        "    } else { tok };\n",
+        "    let last = index + u8:1 >= scheduled.effects.count;\n",
+        "    let _done = send_if(\n",
+        "      routed_tok, credit_out, last, ", Module,
         "::ScheduledRequest {\n",
         "        credit: u1:1,\n",
         "        ..zero!<", Module, "::ScheduledRequest>()\n",
         "      });\n",
-        "    state\n",
+        "    if last {\n",
+        "      zero!<", StateName, ">()\n",
+        "    } else {\n",
+        "      ", StateName, " {\n",
+        "        active: u1:1,\n",
+        "        scheduled,\n",
+        "        index: index + u8:1,\n",
+        "      }\n",
+        "    }\n",
         "  }\n",
         "}\n\n"
     ].
@@ -615,7 +644,7 @@ router_family_routes(Spec, Family) ->
     [
         "        let x = address.x;\n",
         "        let y = address.y;\n",
-        "        match scheduled.egress.port {\n",
+        "        match effect.port {\n",
         [
             router_route_arm(
                 Spec,
@@ -651,7 +680,7 @@ router_route_arm(Spec, Module, Port, #{
 
 route_send(Spec, {external, ExternalId}, Token) ->
     ["send(", Token, ", ", external_output_name(Spec, ExternalId),
-        ", scheduled.egress.frame)"];
+        ", effect.frame)"];
 route_send(
     Spec,
     {family, DestinationId, {translate, [DX, DY], wrap}},
@@ -668,7 +697,7 @@ route_send(
         Module, "::ScheduledRequest {\n",
         "            slot: ", maps:get(stem, Scheduler), "_slot(",
         scheduled_address(DestinationId, DestinationX, DestinationY), "),\n",
-        "            frame: scheduled.egress.frame,\n",
+        "            frame: effect.frame,\n",
         "            ..zero!<", Module, "::ScheduledRequest>()\n",
         "          })"
     ].
@@ -764,7 +793,7 @@ scheduler_channels(Scheduler = #{
         "      chan<", Module, "::ScheduledRequest, CHANNEL_DEPTH>(\"",
         Stem, "_startup\");\n",
         "    let (", Stem, "_egress_p, ", Stem, "_egress_c) =\n",
-        "      chan<", Module, "::ScheduledEgress, CHANNEL_DEPTH>(\"",
+        "      chan<", Module, "::ScheduledEffects, CHANNEL_DEPTH>(\"",
         Stem, "_egress\");\n",
         case maps:get(startup_count, Scheduler) of
             0 -> [];
