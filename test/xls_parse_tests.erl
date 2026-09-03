@@ -840,6 +840,37 @@ state_machine_entry_actions_use_one_source_ordered_egress_test() ->
         )),
         ?assertNotEqual(nomatch, binary:match(
             XLS,
+            <<"mail_candidates: u1[ACTOR_COUNT]">>
+        )),
+        ?assertNotEqual(nomatch, binary:match(
+            XLS,
+            <<"entry_probes: u1[ACTOR_COUNT]">>
+        )),
+        ?assertNotEqual(nomatch, binary:match(
+            XLS,
+            <<"egress_waiters: u1[ACTOR_COUNT]">>
+        )),
+        ?assertNotEqual(nomatch, binary:match(
+            XLS,
+            <<"fn ready_selection<ACTOR_COUNT: u32, "
+              "PRODUCER_COUNT: u32>">>
+        )),
+        ?assertNotEqual(nomatch, binary:match(
+            XLS,
+            <<"(state.mail_candidates[slot] && !entry_active) ||\n"
+              "      (state.egress_waiters[slot] && !state.egress_busy)">>
+        )),
+        ?assertNotEqual(nomatch, binary:match(
+            XLS,
+            <<"egress_blocked: emit_effect && !egress_ready">>
+        )),
+        ?assertNotEqual(nomatch, binary:match(
+            XLS,
+            <<"stepped.machine.enter_pending &&\n"
+              "            stepped.egress_blocked">>
+        )),
+        ?assertNotEqual(nomatch, binary:match(
+            XLS,
             <<"proc EgressDemux {">>
         )),
         ?assertNotEqual(nomatch, binary:match(

@@ -827,14 +827,44 @@ second phi datapath's eight DSPs. Both maps exclude the external RAM macros;
 the sharded core exposes twelve RAM interfaces rather than six, while storing
 the same total number of actor and mailbox entries.
 
-Ready-slot selection is still complementary, but a correct ready bit cannot
-mean only "mailbox nonempty." A slot is runnable when it has an eligible,
-non-postponed message or when its saved machine has pending entry effects; a
-slot whose next effect needs the scheduler's outstanding egress credit is not
-runnable until that credit returns. Mailbox writes, message consumption,
-phase changes that clear postponed bits, machine writes that add or exhaust
-entry effects, and returned credits must maintain those conditions. Once that
-metadata is explicit, a rotating first-set-bit selection gives fair work-
-conserving choice without reading every empty actor. Adding it before those
-states are represented would risk starving actors that have work in their
-machine state but no queued message.
+The ready-slot implementation makes those scheduler states explicit with
+three bits per actor. `mail_candidates` records a mailbox with an eligible,
+non-postponed message. `entry_probes` records pending entry work whose next
+resource need has not yet been classified. `egress_waiters` records entry work
+known to need the scheduler's one outstanding egress credit. Mailbox work is
+latent while either entry bit is set, and egress waiters become selectable
+together when the shared credit returns. Servicing one waiter consumes the
+credit and makes the others temporarily unselectable again.
+
+Selection is fair and work-conserving. Two statically unrolled priority passes
+find the first selectable slot at or after the round-robin cursor, falling back
+to the first selectable slot before it. This avoids both an empty cyclic scan
+and the large dynamic-index mux synthesized by an earlier rotated-mask
+implementation. Entry execution either completes, remains a probe for its next
+effect, or becomes an egress waiter; it never speculatively loops through entry
+states while a resource is unavailable.
+
+The complete CPU-versus-Icarus comparison still agrees exactly on all 84
+accepted corrections and all 18 final data-qubit replies. Aggregate actor-state
+visits fell from 61,888 to 22,501, a 63.6% reduction. Of the remaining visits,
+10,839 read a mailbox and 11,662 execute pending entry work. The profiler now
+calls these `mailbox_visits` and `entry_visits`; the earlier `busy` and `idle`
+names obscured that a visit without a mailbox read can be useful entry work.
+
+The observed full-witness interval fell from 53,319 to 50,191 clocks, and the
+mean interval between completed decoder steps fell from about 2,413 to 2,272
+clocks, both improvements of about 5.9%. The result is about 44.0 thousand
+decoder steps per second at 100 MHz or 88.0 thousand at 200 MHz. One million
+steps per second would require 2.27 GHz if expressed as clock frequency alone,
+or about 11.4 times the present effective parallelism at 200 MHz. The much
+larger reduction in visits than in elapsed clocks shows that empty-slot scans
+were substantially overlapped with inter-family dependency and credit flow;
+request admission and useful actor visits now dominate this experiment.
+
+An out-of-context XC7 map reports 40,415 estimated logic cells, 19,945
+flip-flops, 48,930 LUTs, and 16 `DSP48E1`s. Relative to the first sharded core,
+ready selection adds 1.5% cells, 1.7% flip-flops, and 3.9% LUTs, with no DSP
+increase. Both maps exclude the same twelve external RAM macros. This is a
+reasonable area cost for eliminating almost two-thirds of state-memory traffic,
+even though it confirms that ready selection alone is not the remaining
+throughput breakthrough.
