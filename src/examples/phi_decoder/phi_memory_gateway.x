@@ -189,18 +189,36 @@ pub proc Top {
   scheduler_0_mailbox_req_out: chan<phenom_data_cell::MailboxRamReq> out;
   scheduler_0_mailbox_resp_in: chan<phenom_data_cell::MailboxRamResp> in;
   scheduler_0_mailbox_wr_comp_in: chan<()> in;
-  scheduler_1_ram_req_out: chan<phi_halo_cell::MachineRamReq> out;
-  scheduler_1_ram_resp_in: chan<phi_halo_cell::MachineRamResp> in;
+  scheduler_1_ram_req_out: chan<phenom_data_cell::MachineRamReq> out;
+  scheduler_1_ram_resp_in: chan<phenom_data_cell::MachineRamResp> in;
   scheduler_1_ram_wr_comp_in: chan<()> in;
-  scheduler_1_mailbox_req_out: chan<phi_halo_cell::MailboxRamReq> out;
-  scheduler_1_mailbox_resp_in: chan<phi_halo_cell::MailboxRamResp> in;
+  scheduler_1_mailbox_req_out: chan<phenom_data_cell::MailboxRamReq> out;
+  scheduler_1_mailbox_resp_in: chan<phenom_data_cell::MailboxRamResp> in;
   scheduler_1_mailbox_wr_comp_in: chan<()> in;
-  scheduler_2_ram_req_out: chan<phenom_syndrome_cell::MachineRamReq> out;
-  scheduler_2_ram_resp_in: chan<phenom_syndrome_cell::MachineRamResp> in;
+  scheduler_2_ram_req_out: chan<phi_halo_cell::MachineRamReq> out;
+  scheduler_2_ram_resp_in: chan<phi_halo_cell::MachineRamResp> in;
   scheduler_2_ram_wr_comp_in: chan<()> in;
-  scheduler_2_mailbox_req_out: chan<phenom_syndrome_cell::MailboxRamReq> out;
-  scheduler_2_mailbox_resp_in: chan<phenom_syndrome_cell::MailboxRamResp> in;
+  scheduler_2_mailbox_req_out: chan<phi_halo_cell::MailboxRamReq> out;
+  scheduler_2_mailbox_resp_in: chan<phi_halo_cell::MailboxRamResp> in;
   scheduler_2_mailbox_wr_comp_in: chan<()> in;
+  scheduler_3_ram_req_out: chan<phi_halo_cell::MachineRamReq> out;
+  scheduler_3_ram_resp_in: chan<phi_halo_cell::MachineRamResp> in;
+  scheduler_3_ram_wr_comp_in: chan<()> in;
+  scheduler_3_mailbox_req_out: chan<phi_halo_cell::MailboxRamReq> out;
+  scheduler_3_mailbox_resp_in: chan<phi_halo_cell::MailboxRamResp> in;
+  scheduler_3_mailbox_wr_comp_in: chan<()> in;
+  scheduler_4_ram_req_out: chan<phenom_syndrome_cell::MachineRamReq> out;
+  scheduler_4_ram_resp_in: chan<phenom_syndrome_cell::MachineRamResp> in;
+  scheduler_4_ram_wr_comp_in: chan<()> in;
+  scheduler_4_mailbox_req_out: chan<phenom_syndrome_cell::MailboxRamReq> out;
+  scheduler_4_mailbox_resp_in: chan<phenom_syndrome_cell::MailboxRamResp> in;
+  scheduler_4_mailbox_wr_comp_in: chan<()> in;
+  scheduler_5_ram_req_out: chan<phenom_syndrome_cell::MachineRamReq> out;
+  scheduler_5_ram_resp_in: chan<phenom_syndrome_cell::MachineRamResp> in;
+  scheduler_5_ram_wr_comp_in: chan<()> in;
+  scheduler_5_mailbox_req_out: chan<phenom_syndrome_cell::MailboxRamReq> out;
+  scheduler_5_mailbox_resp_in: chan<phenom_syndrome_cell::MailboxRamResp> in;
+  scheduler_5_mailbox_wr_comp_in: chan<()> in;
   routed_in: chan<axis::Beat> in;
   routed_out: chan<axis::Beat> out;
 
@@ -211,18 +229,36 @@ pub proc Top {
       scheduler_0_mailbox_req_out: chan<phenom_data_cell::MailboxRamReq> out,
       scheduler_0_mailbox_resp_in: chan<phenom_data_cell::MailboxRamResp> in,
       scheduler_0_mailbox_wr_comp_in: chan<()> in,
-      scheduler_1_ram_req_out: chan<phi_halo_cell::MachineRamReq> out,
-      scheduler_1_ram_resp_in: chan<phi_halo_cell::MachineRamResp> in,
+      scheduler_1_ram_req_out: chan<phenom_data_cell::MachineRamReq> out,
+      scheduler_1_ram_resp_in: chan<phenom_data_cell::MachineRamResp> in,
       scheduler_1_ram_wr_comp_in: chan<()> in,
-      scheduler_1_mailbox_req_out: chan<phi_halo_cell::MailboxRamReq> out,
-      scheduler_1_mailbox_resp_in: chan<phi_halo_cell::MailboxRamResp> in,
+      scheduler_1_mailbox_req_out: chan<phenom_data_cell::MailboxRamReq> out,
+      scheduler_1_mailbox_resp_in: chan<phenom_data_cell::MailboxRamResp> in,
       scheduler_1_mailbox_wr_comp_in: chan<()> in,
-      scheduler_2_ram_req_out: chan<phenom_syndrome_cell::MachineRamReq> out,
-      scheduler_2_ram_resp_in: chan<phenom_syndrome_cell::MachineRamResp> in,
+      scheduler_2_ram_req_out: chan<phi_halo_cell::MachineRamReq> out,
+      scheduler_2_ram_resp_in: chan<phi_halo_cell::MachineRamResp> in,
       scheduler_2_ram_wr_comp_in: chan<()> in,
-      scheduler_2_mailbox_req_out: chan<phenom_syndrome_cell::MailboxRamReq> out,
-      scheduler_2_mailbox_resp_in: chan<phenom_syndrome_cell::MailboxRamResp> in,
+      scheduler_2_mailbox_req_out: chan<phi_halo_cell::MailboxRamReq> out,
+      scheduler_2_mailbox_resp_in: chan<phi_halo_cell::MailboxRamResp> in,
       scheduler_2_mailbox_wr_comp_in: chan<()> in,
+      scheduler_3_ram_req_out: chan<phi_halo_cell::MachineRamReq> out,
+      scheduler_3_ram_resp_in: chan<phi_halo_cell::MachineRamResp> in,
+      scheduler_3_ram_wr_comp_in: chan<()> in,
+      scheduler_3_mailbox_req_out: chan<phi_halo_cell::MailboxRamReq> out,
+      scheduler_3_mailbox_resp_in: chan<phi_halo_cell::MailboxRamResp> in,
+      scheduler_3_mailbox_wr_comp_in: chan<()> in,
+      scheduler_4_ram_req_out: chan<phenom_syndrome_cell::MachineRamReq> out,
+      scheduler_4_ram_resp_in: chan<phenom_syndrome_cell::MachineRamResp> in,
+      scheduler_4_ram_wr_comp_in: chan<()> in,
+      scheduler_4_mailbox_req_out: chan<phenom_syndrome_cell::MailboxRamReq> out,
+      scheduler_4_mailbox_resp_in: chan<phenom_syndrome_cell::MailboxRamResp> in,
+      scheduler_4_mailbox_wr_comp_in: chan<()> in,
+      scheduler_5_ram_req_out: chan<phenom_syndrome_cell::MachineRamReq> out,
+      scheduler_5_ram_resp_in: chan<phenom_syndrome_cell::MachineRamResp> in,
+      scheduler_5_ram_wr_comp_in: chan<()> in,
+      scheduler_5_mailbox_req_out: chan<phenom_syndrome_cell::MailboxRamReq> out,
+      scheduler_5_mailbox_resp_in: chan<phenom_syndrome_cell::MailboxRamResp> in,
+      scheduler_5_mailbox_wr_comp_in: chan<()> in,
       routed_in: chan<axis::Beat> in,
       routed_out: chan<axis::Beat> out
   ) {
@@ -264,6 +300,24 @@ pub proc Top {
       scheduler_2_mailbox_req_out,
       scheduler_2_mailbox_resp_in,
       scheduler_2_mailbox_wr_comp_in,
+      scheduler_3_ram_req_out,
+      scheduler_3_ram_resp_in,
+      scheduler_3_ram_wr_comp_in,
+      scheduler_3_mailbox_req_out,
+      scheduler_3_mailbox_resp_in,
+      scheduler_3_mailbox_wr_comp_in,
+      scheduler_4_ram_req_out,
+      scheduler_4_ram_resp_in,
+      scheduler_4_ram_wr_comp_in,
+      scheduler_4_mailbox_req_out,
+      scheduler_4_mailbox_resp_in,
+      scheduler_4_mailbox_wr_comp_in,
+      scheduler_5_ram_req_out,
+      scheduler_5_ram_resp_in,
+      scheduler_5_ram_wr_comp_in,
+      scheduler_5_mailbox_req_out,
+      scheduler_5_mailbox_resp_in,
+      scheduler_5_mailbox_wr_comp_in,
       control_c,
       topology_outputs_p[u32:0],
       topology_outputs_p[u32:1],
@@ -275,7 +329,7 @@ pub proc Top {
       pre_gate_c, egress_p, arm_c);
     spawn hls_fabric_router::RoutedTx<HOST_ENDPOINT>(
       egress_c, routed_out);
-    (scheduler_0_ram_req_out, scheduler_0_ram_resp_in, scheduler_0_ram_wr_comp_in, scheduler_0_mailbox_req_out, scheduler_0_mailbox_resp_in, scheduler_0_mailbox_wr_comp_in, scheduler_1_ram_req_out, scheduler_1_ram_resp_in, scheduler_1_ram_wr_comp_in, scheduler_1_mailbox_req_out, scheduler_1_mailbox_resp_in, scheduler_1_mailbox_wr_comp_in, scheduler_2_ram_req_out, scheduler_2_ram_resp_in, scheduler_2_ram_wr_comp_in, scheduler_2_mailbox_req_out, scheduler_2_mailbox_resp_in, scheduler_2_mailbox_wr_comp_in, routed_in, routed_out)
+    (scheduler_0_ram_req_out, scheduler_0_ram_resp_in, scheduler_0_ram_wr_comp_in, scheduler_0_mailbox_req_out, scheduler_0_mailbox_resp_in, scheduler_0_mailbox_wr_comp_in, scheduler_1_ram_req_out, scheduler_1_ram_resp_in, scheduler_1_ram_wr_comp_in, scheduler_1_mailbox_req_out, scheduler_1_mailbox_resp_in, scheduler_1_mailbox_wr_comp_in, scheduler_2_ram_req_out, scheduler_2_ram_resp_in, scheduler_2_ram_wr_comp_in, scheduler_2_mailbox_req_out, scheduler_2_mailbox_resp_in, scheduler_2_mailbox_wr_comp_in, scheduler_3_ram_req_out, scheduler_3_ram_resp_in, scheduler_3_ram_wr_comp_in, scheduler_3_mailbox_req_out, scheduler_3_mailbox_resp_in, scheduler_3_mailbox_wr_comp_in, scheduler_4_ram_req_out, scheduler_4_ram_resp_in, scheduler_4_ram_wr_comp_in, scheduler_4_mailbox_req_out, scheduler_4_mailbox_resp_in, scheduler_4_mailbox_wr_comp_in, scheduler_5_ram_req_out, scheduler_5_ram_resp_in, scheduler_5_ram_wr_comp_in, scheduler_5_mailbox_req_out, scheduler_5_mailbox_resp_in, scheduler_5_mailbox_wr_comp_in, routed_in, routed_out)
   }
 
   init { () }

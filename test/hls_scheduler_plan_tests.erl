@@ -5,22 +5,51 @@
 phi_profile_groups_homogeneous_families_test() ->
     #{groups := Groups, direct_members := []} =
         phi_noise_topology_dslx:scheduler_plan(),
+    ?assertEqual(
+        [data_even, data_odd, phi_x, phi_z, syndrome_x, syndrome_z],
+        [maps:get(id, Group) || Group <- Groups]
+    ),
+    assert_group(
+        group(phi_x, Groups),
+        phi_halo_cell,
+        9,
+        [{family, phi_x, 0}]
+    ),
+    assert_group(
+        group(syndrome_z, Groups),
+        phenom_syndrome_cell,
+        9,
+        [{family, syndrome_z, 0}]
+    ),
+    assert_group(
+        group(data_even, Groups),
+        phenom_data_cell,
+        9,
+        [{family, data_even, 0}]
+    ).
+
+one_shard_profile_retains_module_level_groups_test() ->
+    #{groups := Groups, direct_members := []} =
+        phi_noise_topology_dslx:scheduler_plan(1),
     ?assertEqual([data, phi, syndrome], [
         maps:get(id, Group) || Group <- Groups
     ]),
     assert_group(
         group(phi, Groups),
         phi_halo_cell,
+        18,
         [{family, phi_x, 0}, {family, phi_z, 9}]
     ),
     assert_group(
         group(syndrome, Groups),
         phenom_syndrome_cell,
+        18,
         [{family, syndrome_x, 0}, {family, syndrome_z, 9}]
     ),
     assert_group(
         group(data, Groups),
         phenom_data_cell,
+        18,
         [{family, data_even, 0}, {family, data_odd, 9}]
     ).
 
@@ -116,9 +145,9 @@ group_spec(Members) ->
 group(Id, Groups) ->
     hd([Group || Group = #{id := GroupId} <- Groups, GroupId =:= Id]).
 
-assert_group(Group, Module, ExpectedMembers) ->
+assert_group(Group, Module, SlotCount, ExpectedMembers) ->
     ?assertEqual(Module, maps:get(module, Group)),
-    ?assertEqual(18, maps:get(slot_count, Group)),
+    ?assertEqual(SlotCount, maps:get(slot_count, Group)),
     ?assertEqual(5, maps:get(mailbox_capacity, Group)),
     ?assert(maps:get(width, maps:get(state, Group)) > 0),
     ?assertEqual(round_robin, maps:get(selection, Group)),

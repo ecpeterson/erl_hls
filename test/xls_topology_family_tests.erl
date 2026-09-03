@@ -139,16 +139,22 @@ generated_family_topology_matches_checked_in_artifact_test() ->
 
 generated_multi_family_topology_retains_compact_structure_test() ->
     Generated = iolist_to_binary(phi_noise_topology_dslx:to_dslx()),
-    ?assertEqual(3, count(Generated, <<"proc SchedulerRouter">>)),
-    ?assertEqual(3, count(Generated, <<"spawn SchedulerRouter">>)),
-    ?assertEqual(3, count(Generated, <<"::SharedService<">>)),
+    ?assertEqual(6, count(Generated, <<"proc SchedulerRouter">>)),
+    ?assertEqual(6, count(Generated, <<"spawn SchedulerRouter">>)),
+    ?assertEqual(6, count(Generated, <<"::SharedService<">>)),
     ?assertEqual(1, count(Generated, <<"fn scheduler_0_address(">>)),
     ?assertEqual(1, count(Generated, <<"fn scheduler_1_address(">>)),
     ?assertEqual(1, count(Generated, <<"fn scheduler_2_address(">>)),
     ?assertEqual(1, count(Generated, <<"fn scheduler_0_slot(">>)),
     ?assertEqual(1, count(Generated, <<"fn scheduler_1_slot(">>)),
     ?assertEqual(1, count(Generated, <<"fn scheduler_2_slot(">>)),
-    ?assertEqual(6, count(Generated, <<
+    ?assertEqual(1, count(Generated, <<"fn scheduler_3_address(">>)),
+    ?assertEqual(1, count(Generated, <<"fn scheduler_4_address(">>)),
+    ?assertEqual(1, count(Generated, <<"fn scheduler_5_address(">>)),
+    ?assertEqual(1, count(Generated, <<"fn scheduler_3_slot(">>)),
+    ?assertEqual(1, count(Generated, <<"fn scheduler_4_slot(">>)),
+    ?assertEqual(1, count(Generated, <<"fn scheduler_5_slot(">>)),
+    ?assertEqual(12, count(Generated, <<
         "ScheduledRequest, CHANNEL_DEPTH"
     >>)),
     ?assertEqual(0, count(Generated, <<"FamilyRouter">>)),
@@ -167,8 +173,9 @@ generated_multi_family_topology_retains_compact_structure_test() ->
     ?assertEqual(1, count(Generated, <<"spawn ControlDispatcher">>)),
     %% Each RAM request appears in Top's member and config lists and once more
     %% in SchedulerGrid's config list.
-    ?assertEqual(9, count(Generated, <<"::MachineRamReq> out">>)),
-    ?assertEqual(9, count(Generated, <<"::MailboxRamReq> out">>)),
+    ?assertEqual(18, count(Generated, <<"::MachineRamReq> out">>)),
+    ?assertEqual(18, count(Generated, <<"::MailboxRamReq> out">>)),
+    ?assertEqual(1, count(Generated, <<"spawn FrameArrayMux<u32:2>(">>)),
     ?assertNotEqual(nomatch, binary:match(Generated, <<
         "state.packet.target == u2:0"
     >>)),
@@ -185,6 +192,14 @@ generated_multi_family_topology_retains_compact_structure_test() ->
     ?assertNotEqual(nomatch, binary:match(Generated, <<
         "proc SchedulerGrid {"
     >>)).
+
+generated_one_shard_topology_retains_single_external_lanes_test() ->
+    Generated = iolist_to_binary(
+        phi_noise_topology_dslx:to_dslx(3, 16#80000000, 1)
+    ),
+    ?assertEqual(3, count(Generated, <<"::SharedService<">>)),
+    ?assertEqual(0, count(Generated, <<"proc FrameArrayMux">>)),
+    ?assertEqual(0, count(Generated, <<"spawn FrameArrayMux">>)).
 
 generated_family_topology_uses_explicit_actor_egress_depth_test() ->
     Plan = hls_topology:normalize(phi_noise_topology:topology()),

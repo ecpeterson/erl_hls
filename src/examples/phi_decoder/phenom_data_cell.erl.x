@@ -445,7 +445,12 @@ enum SharedPhase : u3 {
   EXECUTE = u3:4,
 }
 
+// XLS channel legalization currently confuses multiple otherwise-
+// identical SharedService instances connected to different external
+// RAM ports. INSTANCE_ID distinguishes those specializations; it is
+// neither actor state nor part of scheduling policy.
 struct SharedState<ACTOR_COUNT: u32, PRODUCER_COUNT: u32> {
+  instance_id: u32,
   phase: SharedPhase,
   slot: u32,
   machine: SharedMachine,
@@ -2175,7 +2180,8 @@ fn compact_order(
 pub proc SharedService<
     ACTOR_COUNT: u32,
     PRODUCER_COUNT: u32,
-    STARTUP_COUNT: u32
+    STARTUP_COUNT: u32,
+    INSTANCE_ID: u32
 > {
   request_in: chan<ScheduledRequest>[PRODUCER_COUNT] in;
   startup_in: chan<ScheduledRequest> in;
@@ -2213,6 +2219,7 @@ pub proc SharedService<
 
   init {
     SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
+      instance_id: INSTANCE_ID,
       phase: SharedPhase::BOOT,
       ..zero!<SharedState<ACTOR_COUNT, PRODUCER_COUNT>>()
     }

@@ -24,25 +24,73 @@ emit(Spec0) ->
     ].
 
 frame_relay(#{externals := []}) -> [];
-frame_relay(#{externals := [_ | _]}) ->
+frame_relay(#{externals := Externals}) ->
+    [
+        """
+        proc FrameRelay {
+          frame_in: chan<axis::Frame> in;
+          frame_out: chan<axis::Frame> out;
+
+          config(
+              frame_in: chan<axis::Frame> in,
+              frame_out: chan<axis::Frame> out
+          ) {
+            (frame_in, frame_out)
+          }
+
+          init { () }
+
+          next(state: ()) {
+            let (tok, frame) = recv(join(), frame_in);
+            let _done = send(tok, frame_out, frame);
+            state
+          }
+        }
+
+        """,
+        case lists:any(
+            fun(#{source_schedulers := Sources}) -> length(Sources) > 1 end,
+            Externals
+        ) of
+            false -> [];
+            true -> frame_array_mux()
+        end
+    ].
+
+frame_array_mux() ->
     """
-    proc FrameRelay {
-      frame_in: chan<axis::Frame> in;
+    proc FrameArrayMux<INPUT_COUNT: u32> {
+      frame_in: chan<axis::Frame>[INPUT_COUNT] in;
       frame_out: chan<axis::Frame> out;
 
       config(
-          frame_in: chan<axis::Frame> in,
+          frame_in: chan<axis::Frame>[INPUT_COUNT] in,
           frame_out: chan<axis::Frame> out
       ) {
         (frame_in, frame_out)
       }
 
-      init { () }
+      init { u32:0 }
 
-      next(state: ()) {
-        let (tok, frame) = recv(join(), frame_in);
-        let _done = send(tok, frame_out, frame);
-        state
+      next(cursor: u32) {
+        let (tok, received, frame) =
+          unroll_for! (candidate, acc):
+              (u32, (token, u1, axis::Frame)) in u32:0..INPUT_COUNT {
+            let selected = cursor == candidate;
+            let (next_tok, next_frame, valid) = recv_if_non_blocking(
+              acc.0, frame_in[candidate], selected, zero!<axis::Frame>());
+            (
+              next_tok,
+              acc.1 | valid,
+              if valid { next_frame } else { acc.2 }
+            )
+          }((join(), u1:0, zero!<axis::Frame>()));
+        let _done = send_if(tok, frame_out, received, frame);
+        if cursor + u32:1 == INPUT_COUNT {
+          u32:0
+        } else {
+          cursor + u32:1
+        }
       }
     }
 
@@ -69,6 +117,8 @@ annotate(Spec = #{families := Families, schedulers := Schedulers}) ->
         )
         || Scheduler <- Schedulers
     ],
+    Externals = [annotate_external(External, Annotated)
+        || External <- maps:get(externals, Spec)],
     Spec#{
         family_index => FamilyIndex,
         scheduler_index => maps:from_list([
@@ -76,8 +126,18 @@ annotate(Spec = #{families := Families, schedulers := Schedulers}) ->
             || Scheduler <- Annotated
         ]),
         family_scheduler => FamilyScheduler,
-        schedulers => Annotated
+        schedulers => Annotated,
+        externals => Externals
     }.
+
+annotate_external(External = #{id := Id}, Schedulers) ->
+    Sources = [
+        maps:get(index, Scheduler)
+        || Scheduler <- Schedulers,
+           lists:member(Id, maps:get(external_ids, Scheduler))
+    ],
+    [_ | _] = Sources,
+    External#{source_schedulers => Sources}.
 
 annotate_scheduler(
     Scheduler = #{index := Index, members := Members},
@@ -659,17 +719,36 @@ grid_proc(Spec = #{
 
 external_channel(External) ->
     Stem = external_buffer_name(External),
-    [
-        "    let (", Stem, "_p, ", Stem, "_c) =\n",
-        "      chan<axis::Frame, CHANNEL_DEPTH>(\"", Stem, "\");\n"
-    ].
+    case maps:get(source_schedulers, External) of
+        [_] ->
+            [
+                "    let (", Stem, "_p, ", Stem, "_c) =\n",
+                "      chan<axis::Frame, CHANNEL_DEPTH>(\"", Stem,
+                "\");\n"
+            ];
+        Sources ->
+            [
+                "    let (", Stem, "_p, ", Stem, "_c) =\n",
+                "      chan<axis::Frame, CHANNEL_DEPTH>[u32:",
+                integer_to_list(length(Sources)), "](\"", Stem, "\");\n"
+            ]
+    end.
 
 external_spawn(External) ->
     Stem = external_buffer_name(External),
-    [
-        "    spawn FrameRelay(", Stem, "_c, ",
-        maps:get(output_name, External), ");\n"
-    ].
+    case maps:get(source_schedulers, External) of
+        [_] ->
+            [
+                "    spawn FrameRelay(", Stem, "_c, ",
+                maps:get(output_name, External), ");\n"
+            ];
+        Sources ->
+            [
+                "    spawn FrameArrayMux<u32:",
+                integer_to_list(length(Sources)), ">(", Stem, "_c, ",
+                maps:get(output_name, External), ");\n"
+            ]
+    end.
 
 scheduler_channels(Scheduler = #{
     stem := Stem,
@@ -696,6 +775,7 @@ scheduler_channels(Scheduler = #{
 
 scheduler_spawn(_Spec, #{
     stem := Stem,
+    index := Index,
     module_name := Module,
     slot_count := SlotCount,
     producers := Producers,
@@ -705,7 +785,8 @@ scheduler_spawn(_Spec, #{
         "    spawn ", Module, "::SharedService<\n",
         "      u32:", integer_to_list(SlotCount), ", u32:",
         integer_to_list(length(Producers)), ", u32:",
-        integer_to_list(StartupCount), ">(\n",
+        integer_to_list(StartupCount), ", u32:",
+        integer_to_list(Index), ">(\n",
         "      ", Stem, "_requests_c, ", Stem, "_startup_c,\n",
         "      ", Stem, "_egress_p,\n",
         "      ", Stem, "_ram_req_out, ", Stem, "_ram_resp_in,\n",
@@ -738,7 +819,7 @@ router_spawn(Spec, Scheduler = #{
             end
             || Destination <- Destinations
         ],
-        [[",\n      ", external_buffer_producer(Spec, ExternalId)]
+        [[",\n      ", external_buffer_producer(Spec, ExternalId, Source)]
             || ExternalId <- ExternalIds],
         ");\n"
     ].
@@ -859,12 +940,22 @@ external_output_name(#{externals := Externals}, Id) ->
     ]),
     maps:get(output_name, External).
 
-external_buffer_producer(#{externals := Externals}, Id) ->
+external_buffer_producer(#{externals := Externals}, Id, Source) ->
     {external, Id, External} = lists:keyfind(Id, 2, [
         {external, maps:get(id, Candidate), Candidate}
         || Candidate <- Externals
     ]),
-    [external_buffer_name(External), "_p"].
+    Stem = external_buffer_name(External),
+    case maps:get(source_schedulers, External) of
+        [_] -> [Stem, "_p"];
+        Sources ->
+            Position = source_position(Source, Sources, 0),
+            [Stem, "_p[u32:", integer_to_list(Position), "]"]
+    end.
+
+source_position(Source, [Source | _], Position) -> Position;
+source_position(Source, [_ | Rest], Position) ->
+    source_position(Source, Rest, Position + 1).
 
 external_buffer_name(#{index := Index}) ->
     ["external_", integer_to_list(Index), "_buffer"].
