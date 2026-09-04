@@ -1079,3 +1079,61 @@ remain actor-qualified without reproducing the protocol records and
 constructors in every actor source. XLS still receives the same explicit
 `1R1W` channel configuration, and this refactoring does not change the memory
 layout, pipeline schedule, or measurements above.
+
+### Phi-family sharding sweep
+
+The scheduler plan can now partition one regular family among several physical
+executors without changing the semantic topology. A member reference of the
+form `{family, Id, {interleaved, Index, Count}}` selects row-major instances
+whose linear index has the indicated residue. Plan normalization requires all
+residues exactly once, rejects overlaps and incomplete partitions, and gives
+each partition dense local state and mailbox slots. The default complete-family
+form is unchanged.
+
+Generated topology routing retains the semantic family address until the final
+hop, then uses a static coordinate table to select both the owning scheduler
+and its dense slot. Control broadcasts use the same table. Startup traffic is
+filtered to the coordinates owned by each partition. This preserves the
+bounded coordinate arithmetic described above: the sharded design contains no
+runtime division or remainder by `WIDTH` or `HEIGHT`.
+
+The D3 sweep leaves the two data and two syndrome families on one scheduler
+each and assigns each of the X and Z phi families to one, two, or three
+interleaved schedulers. Every row passes the complete CPU-versus-native-Icarus
+comparison, agreeing on all 84 accepted corrections and all 18 final data-qubit
+replies. The event order and number of intermediate status frames may differ,
+as expected for another legal actor schedule.
+
+| Phi schedulers per plane | Total schedulers | Application clocks | Mean clocks/step | Steps/s at 200 MHz | Clock for 1 MHz steps | Estimated logic cells | Flip-flops | LUTs | DSPs |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 6 | 13,320 | 576.9 | 346,700 | 576.9 MHz | 41,345 | 24,533 | 53,718 | 16 |
+| 2 | 8 | 10,402 | 438.2 | 456,400 | 438.2 MHz | 49,328 | 33,890 | 67,020 | 32 |
+| 3 | 10 | 9,695 | 400.5 | 499,400 | 400.5 MHz | 59,246 | 44,546 | 81,667 | 48 |
+
+The area figures are out-of-context XC7 maps of the topology core embedded in
+each generated gateway, excluding the gateway and external RAM macros. The
+one-shard row exactly reproduces the 41,345-cell fixed-pipeline baseline above.
+Two phi schedulers per plane improve completed-step throughput by 31.7% for
+19.3% more cells, or about 10% better throughput per cell. A third improves
+throughput by only another 9.4% while adding 20.1% more cells. By then each phi
+scheduler is active for roughly 5,000 clocks and each unsharded syndrome
+scheduler for roughly 4,600, so phi execution is no longer a singular
+bottleneck.
+
+The DSP count rises by 16 at each point because every added X/Z pair contains
+two more phi relaxation datapaths. Wide shallow RAM packing is a second, less
+visible cost: applying the isolated RAM maps above gives approximately 54, 74,
+and 94 `RAMB36E1`-equivalents. Stored logical content is constant, but an
+independently active phi shard still needs an eight-`RAMB36E1` state bank and a
+two-`RAMB36E1` mailbox bank. Avoiding that fragmentation would require packed
+or multipumped memories with enough effective ports to retain the parallelism.
+
+The two-shard profile is therefore the useful candidate from this sweep, but
+it is not yet the default. The next deployment choice should weigh its extra
+DSP and BRAM use against timing closure. Further throughput work should first
+profile a two-shard placed design, then consider balanced static partitions or
+syndrome-family sharding once phi and syndrome utilization converge. The
+current coordinate-to-shard match tables also made the three-shard DSLX-to-IR
+conversion take 13 minutes 45 seconds; a compact generated ownership primitive
+is a worthwhile compiler/code-generation cleanup before substantially larger
+partition counts.

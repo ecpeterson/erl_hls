@@ -4,7 +4,7 @@ This directory contains the implementation ablations used to locate the area
 cost of the generated distance-three phi-decoder. They are executable
 experiments, not backend components or reusable example APIs.
 
-The files answer three progressively narrower questions:
+The files answer four progressively narrower questions:
 
 1. How small can the fixed distance-three experiment become when actor and
    mailbox semantics are replaced by one globally scheduled RTL machine?
@@ -12,6 +12,9 @@ The files answer three progressively narrower questions:
    replicated actor state?
 3. Can a time-multiplexed worker keep its state in one inferred block RAM and
    still service the same routed ERTS protocol?
+4. Once the generated actor deployment uses shared, pipelined schedulers, how
+   much throughput does it recover by partitioning each phi family over two or
+   three executors?
 
 The experiment keeps the application boundary honest: the raw and BRAM
 implementations accept the same cutoff, correction-update, and measurement
@@ -31,6 +34,9 @@ qubit with a witness produced by the CPU actor deployment.
   records behind an XLS 1RW RAM interface.
 - `phi_memory_scheduler_boundary.sv` and `phi_memory_bram_top.sv` adapt that
   worker to the routed 32-bit application protocol.
+- `run_shard_sweep.sh` exercises the generated implementation with one, two,
+  and three interleaved schedulers per phi family. `synth_shard_sweep.sh` maps
+  the corresponding topology cores on a common boundary-free scope.
 
 ```mermaid
 flowchart LR
@@ -79,6 +85,29 @@ one machine. It is that actor implementation lanes and actor state count need
 not scale together. A generated deployment can choose several workers, assign
 many logical instances to each, and keep their distinct states in RAM.
 
+The generated scheduler sweep gives the following D3 results. Every row passes
+the complete ERTS-versus-native-Icarus comparison: all 84 accepted corrections
+and all 18 final data-qubit replies agree with the CPU actor deployment.
+
+| phi executors per plane | total schedulers | application clocks | mean clocks per decoder step | steps/s at 200 MHz | estimated logic cells | flip-flops | LUT1-LUT6 | `DSP48E1` |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 6 | 13,320 | 576.9 | 346,700 | 41,345 | 24,533 | 53,718 | 16 |
+| 2 | 8 | 10,402 | 438.2 | 456,400 | 49,328 | 33,890 | 67,020 | 32 |
+| 3 | 10 | 9,695 | 400.5 | 499,400 | 59,246 | 44,546 | 81,667 | 48 |
+
+Two phi executors per plane are the useful knee in this sweep. Relative to one,
+they increase completed-step throughput by 31.7% for 19.3% more mapped cells,
+improving throughput per cell by about 10%. A third executor adds 20.1% more
+cells to the two-executor design for only 9.4% more throughput. The topology
+maps exclude external RAM macros, as do the corresponding measurements in the
+phi topology notes.
+
+Parallel banks also make BRAM fragmentation part of this trade. Applying the
+previous isolated maps of these RAM shapes gives approximately 54, 74, and 94
+`RAMB36E1`-equivalents for the three rows. The logical actor and mailbox content
+does not grow; each additional phi executor needs its own very wide, shallow
+state RAM and 128-bit mailbox RAM so that the workers can operate concurrently.
+
 ## Running the experiment
 
 The fast local checks are:
@@ -96,6 +125,7 @@ experiments/08-phi-scheduler/synth_relax_sweep.sh
 experiments/08-phi-scheduler/run_sequential_xls.sh
 experiments/08-phi-scheduler/run_bram_xls.sh
 experiments/08-phi-scheduler/run_area_matrix.sh
+experiments/08-phi-scheduler/run_shard_sweep.sh
 ```
 
 The complete ERTS/VPI comparisons are:
@@ -106,17 +136,20 @@ experiments/08-phi-scheduler/run_bram_demo.sh
 ```
 
 The defaults use `192.168.64.7`; the usual `ERL_HLS_REMOTE_*` variables select
-another staging host and XLS installation.
+another staging host and XLS installation. `ERL_HLS_PHI_SHARD_SWEEP` selects a
+space-separated subset of shard counts, and
+`ERL_HLS_PHI_SHARD_REUSE_MAPS=1` reuses completed topology maps.
 
 ## Deliberately missing semantics
 
-The sequential machines do not implement independent actor scheduling,
-mailboxes, lifecycle generations, or arbitrary topology. They compute every
-move from a common snapshot and serialize all events. A real shared-actor
-backend must preserve logical actor identity and bounded mailbox behavior while
-making the number of implementation lanes a physical deployment choice.
+The handwritten sequential machines do not implement independent actor
+scheduling, mailboxes, lifecycle generations, or arbitrary topology. They
+compute every move from a common snapshot and serialize all events. The
+generated sharding sweep does preserve logical actor identity, bounded mailbox
+behavior, and the semantic topology; only its assignment of actors to physical
+executors changes.
 
-The current RAM indices already separate the X and Z decoder planes. A useful
-next experiment could therefore run a data/noise owner and two decoder workers
-in parallel, meeting at a round barrier. Splitting a plane spatially is also
-possible, but would require halo exchange after each Jacobi pass.
+The remaining lower-bound implementations could still run a data/noise owner
+and two decoder workers in parallel, meeting at a round barrier. Splitting one
+of those global-schedule planes spatially would require halo exchange after
+each Jacobi pass.

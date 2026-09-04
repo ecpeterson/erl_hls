@@ -103,8 +103,9 @@ annotate(Spec = #{families := Families, schedulers := Schedulers}) ->
     SchedulerIndex = maps:from_list([
         {maps:get(index, Scheduler), Scheduler} || Scheduler <- Schedulers
     ]),
-    FamilyScheduler = maps:from_list([
-        {maps:get(id, Family), maps:get(group, maps:get(scheduler, Family))}
+    FamilySchedulers = maps:from_list([
+        {maps:get(id, Family), [maps:get(group, Binding)
+            || Binding <- maps:get(schedulers, Family)]}
         || Family <- Families
     ]),
     Annotated = [
@@ -113,7 +114,7 @@ annotate(Spec = #{families := Families, schedulers := Schedulers}) ->
             Families,
             FamilyIndex,
             SchedulerIndex,
-            FamilyScheduler
+            FamilySchedulers
         )
         || Scheduler <- Schedulers
     ],
@@ -125,7 +126,7 @@ annotate(Spec = #{families := Families, schedulers := Schedulers}) ->
             {maps:get(index, Scheduler), Scheduler}
             || Scheduler <- Annotated
         ]),
-        family_scheduler => FamilyScheduler,
+        family_schedulers => FamilySchedulers,
         schedulers => Annotated,
         externals => Externals
     }.
@@ -144,18 +145,18 @@ annotate_scheduler(
     Families,
     FamilyIndex,
     SchedulerIndex,
-    FamilyScheduler
+    FamilySchedulers
 ) ->
     MemberIds = [maps:get(id, Member) || Member <- Members],
     MemberFamilies = [maps:get(Id, FamilyIndex) || Id <- MemberIds],
-    SourceGroups = lists:usort([
-        maps:get(maps:get(id, SourceFamily), FamilyScheduler)
+    SourceGroups = lists:usort(lists:append([
+        maps:get(maps:get(id, SourceFamily), FamilySchedulers)
         || SourceFamily <- Families,
            route_targets_group(
                maps:get(routes, SourceFamily),
                MemberIds
            )
-    ]),
+    ])),
     HasControl = lists:any(
         fun(#{ingress := Ingress}) -> Ingress =/= none end,
         MemberFamilies
@@ -170,12 +171,12 @@ annotate_scheduler(
         {Producer, ProducerNumber}
         || {ProducerNumber, Producer} <- lists:enumerate(0, Producers)
     ]),
-    Destinations = lists:usort([
-        maps:get(DestinationId, FamilyScheduler)
+    Destinations = lists:usort(lists:append([
+        maps:get(DestinationId, FamilySchedulers)
         || Family <- MemberFamilies,
            Route <- maps:get(routes, Family),
            {family, DestinationId, _} <- maps:get(recipients, Route)
-    ]),
+    ])),
     Externals = lists:usort([
         ExternalId
         || Family <- MemberFamilies,
@@ -220,23 +221,19 @@ scheduler_startup_items(
     Family = #{startup := #{items := Items}},
     Scheduler
 ) ->
-    [
-        Item#{slot => family_slot(Family, Scheduler, X, Y)}
-        || Item = #{coordinates := [X, Y]} <- Items
-    ].
+    Member = scheduler_family_member(Family, Scheduler),
+    Coordinates = maps:from_list([
+        {maps:get(coordinates, Instance),
+            maps:get(base_slot, Member) + maps:get(local_index, Instance)}
+        || Instance <- maps:get(instances, Member)
+    ]),
+    [Item#{slot => maps:get([X, Y], Coordinates)}
+        || Item = #{coordinates := [X, Y]} <- Items,
+           maps:is_key([X, Y], Coordinates)].
 
-family_slot(
-    #{id := Id},
-    #{members := Members},
-    X,
-    Y
-) ->
-    {family, Id, #{base_slot := Base, shape := [_Width, Height]}} =
-        lists:keyfind(Id, 2, [
-            {family, maps:get(id, Member), Member}
-            || Member <- Members
-        ]),
-    Base + X * Height + Y.
+scheduler_family_member(#{id := Id}, #{members := Members}) ->
+    hd([Member || Member = #{kind := family, id := MemberId} <- Members,
+        MemberId =:= Id]).
 
 %%%
 %%% Preamble and common control
@@ -284,7 +281,48 @@ address_support(Spec = #{families := Families, schedulers := Schedulers}) ->
         "  y: u16,\n",
         "}\n\n",
         [scheduler_address_support(Spec, Scheduler)
-            || Scheduler <- Schedulers]
+            || Scheduler <- Schedulers],
+        destination_support(Families)
+    ].
+
+destination_support(Families) ->
+    Sharded = [Family || Family <- Families,
+        length(maps:get(schedulers, Family)) > 1],
+    case Sharded of
+        [] -> [];
+        [_ | _] -> [
+            "struct ScheduledDestination {\n",
+            "  scheduler: u8,\n",
+            "  slot: u32,\n",
+            "}\n\n",
+            [family_destination_support(Family) || Family <- Sharded]
+        ]
+    end.
+
+family_destination_support(#{id := Id, schedulers := Bindings}) ->
+    Entries = lists:append([
+        [
+            {maps:get(coordinates, Instance), maps:get(group, Binding),
+                maps:get(base_slot, Binding) +
+                    maps:get(local_index, Instance)}
+            || Instance <- maps:get(instances, Binding)
+        ]
+        || Binding <- Bindings
+    ]),
+    [
+        "fn ", atom_to_list(Id),
+        "_destination(x: u16, y: u16) -> ScheduledDestination {\n",
+        "  match (x, y) {\n",
+        [
+            ["    (u16:", integer_to_list(X), ", u16:",
+                integer_to_list(Y), ") => ScheduledDestination { ",
+                "scheduler: u8:", integer_to_list(Group), ", slot: u32:",
+                integer_to_list(Slot), " },\n"]
+            || {[X, Y], Group, Slot} <- Entries
+        ],
+        "    _ => zero!<ScheduledDestination>(),\n",
+        "  }\n",
+        "}\n\n"
     ].
 
 scheduler_address_support(_Spec, Scheduler = #{
@@ -327,12 +365,11 @@ scheduler_address_entries(#{members := Members}) ->
 family_address_entries(#{
     id := Family,
     base_slot := Base,
-    shape := [Width, Height]
+    instances := Instances
 }) ->
     [
-        {Base + X * Height + Y, Family, X, Y}
-        || X <- lists:seq(0, Width - 1),
-           Y <- lists:seq(0, Height - 1)
+        {Base + Local, Family, X, Y}
+        || #{coordinates := [X, Y], local_index := Local} <- Instances
     ].
 
 scheduled_address(Family, X, Y) ->
@@ -402,10 +439,11 @@ control_family_member(Index, #{id := Id}) ->
     ["  ", uppercase(Id), " = u8:", integer_to_list(Index), ",\n"].
 
 controlled_groups(Families) ->
-    lists:usort([
-        maps:get(group, maps:get(scheduler, Family))
+    lists:usort(lists:append([
+        [maps:get(group, Binding)
+            || Binding <- maps:get(schedulers, Family)]
         || Family <- Families
-    ]).
+    ])).
 
 control_member(Spec, Group) ->
     Module = scheduler_module(Spec, Group),
@@ -417,21 +455,54 @@ control_argument(Spec, Group) ->
     [control_output_name(Group), ": chan<", Module,
         "::ScheduledRequest> out"].
 
+control_family_arm(Spec, Ingress, Family = #{schedulers := [Binding]}) ->
+    control_family_arm_single(Spec, Ingress, Family, Binding);
 control_family_arm(Spec, Ingress, Family = #{
     id := Id,
-    scheduler := #{group := Group},
+    schedulers := Bindings,
     ingress := #{scale := [ScaleX, ScaleY], offset := [OffsetX, OffsetY]}
 }) ->
+    [First | _] = Bindings,
+    Module = scheduler_module(Spec, maps:get(group, First)),
+    [
+        "        ControlFamily::", uppercase(Id), " => {\n",
+        control_address(ScaleX, ScaleY, OffsetX, OffsetY),
+        "          let selected = (", control_target_condition(
+            maps:get(targets, maps:get(ingress, Family)),
+            Ingress
+        ), ") && hls_spatial_router::contains(\n",
+        "            state.packet.rectangle, address_x, address_y);\n",
+        "          let destination = ", atom_to_list(Id),
+        "_destination(state.x, state.y);\n",
+        "          match destination.scheduler {\n",
+        [
+            begin
+                Group = maps:get(group, Binding),
+                ["            u8:", integer_to_list(Group),
+                    " => send_if(join(), ", control_output_name(Group),
+                    ", selected, ", Module, "::ScheduledRequest {\n",
+                    "              slot: destination.slot,\n",
+                    "              frame: state.packet.frame,\n",
+                    "              ..zero!<", Module,
+                    "::ScheduledRequest>()\n",
+                    "            }),\n"]
+            end
+            || Binding <- Bindings
+        ],
+        "            _ => join(),\n",
+        "          }\n",
+        "        },\n"
+    ].
+
+control_family_arm_single(Spec, Ingress, Family = #{
+    id := Id,
+    ingress := #{scale := [ScaleX, ScaleY], offset := [OffsetX, OffsetY]}
+}, #{group := Group}) ->
     Module = scheduler_module(Spec, Group),
     Scheduler = scheduler(Spec, Group),
     [
         "        ControlFamily::", uppercase(Id), " => {\n",
-        "          let address_x = state.x * u16:",
-        integer_to_list(ScaleX), " + u16:", integer_to_list(OffsetX),
-        ";\n",
-        "          let address_y = state.y * u16:",
-        integer_to_list(ScaleY), " + u16:", integer_to_list(OffsetY),
-        ";\n",
+        control_address(ScaleX, ScaleY, OffsetX, OffsetY),
         "          let selected = (", control_target_condition(
             maps:get(targets, maps:get(ingress, Family)),
             Ingress
@@ -446,6 +517,16 @@ control_family_arm(Spec, Ingress, Family = #{
         "          send_if(join(), ", control_output_name(Group),
         ", selected, request)\n",
         "        },\n"
+    ].
+
+control_address(ScaleX, ScaleY, OffsetX, OffsetY) ->
+    [
+        "          let address_x = state.x * u16:",
+        integer_to_list(ScaleX), " + u16:", integer_to_list(OffsetX),
+        ";\n",
+        "          let address_y = state.y * u16:",
+        integer_to_list(ScaleY), " + u16:", integer_to_list(OffsetY),
+        ";\n"
     ].
 
 control_target_condition(TargetIds, #{targets := Targets}) ->
@@ -687,11 +768,27 @@ route_send(
     Token
 ) ->
     Family = maps:get(DestinationId, maps:get(family_index, Spec)),
-    #{group := Group} = maps:get(scheduler, Family),
-    Scheduler = scheduler(Spec, Group),
-    Module = scheduler_module(Spec, Group),
     DestinationX = translated_index("x", DX, maps:get(width, Spec)),
     DestinationY = translated_index("y", DY, maps:get(height, Spec)),
+    route_send_bindings(
+        Spec,
+        maps:get(schedulers, Family),
+        DestinationId,
+        DestinationX,
+        DestinationY,
+        Token
+    ).
+
+route_send_bindings(
+    Spec,
+    [#{group := Group}],
+    DestinationId,
+    DestinationX,
+    DestinationY,
+    Token
+) ->
+    Scheduler = scheduler(Spec, Group),
+    Module = scheduler_module(Spec, Group),
     [
         "send(", Token, ", ", router_destination_name(Group), ", ",
         Module, "::ScheduledRequest {\n",
@@ -700,6 +797,38 @@ route_send(
         "            frame: effect.frame,\n",
         "            ..zero!<", Module, "::ScheduledRequest>()\n",
         "          })"
+    ];
+route_send_bindings(
+    Spec,
+    [First | _] = Bindings,
+    DestinationId,
+    DestinationX,
+    DestinationY,
+    Token
+) ->
+    Module = scheduler_module(Spec, maps:get(group, First)),
+    [
+        "{\n",
+        "          let destination = ", atom_to_list(DestinationId),
+        "_destination(", DestinationX, ", ", DestinationY, ");\n",
+        "          match destination.scheduler {\n",
+        [
+            begin
+                Group = maps:get(group, Binding),
+                ["            u8:", integer_to_list(Group), " => send(",
+                    Token, ", ", router_destination_name(Group), ", ",
+                    Module, "::ScheduledRequest {\n",
+                    "              slot: destination.slot,\n",
+                    "              frame: effect.frame,\n",
+                    "              ..zero!<", Module,
+                    "::ScheduledRequest>()\n",
+                    "            }),\n"]
+            end
+            || Binding <- Bindings
+        ],
+        "            _ => ", Token, ",\n",
+        "          }\n",
+        "        }"
     ].
 
 translated_index(Axis, Offset, Size) ->

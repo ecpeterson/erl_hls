@@ -13,7 +13,7 @@
 
 #define BUFFER_SIZE 65536
 #define PATH_SIZE 4096
-#define MAX_SCHEDULERS 8
+#define MAX_SCHEDULERS 32
 #define MAX_SCHEDULER_INPUTS 8
 
 typedef struct {

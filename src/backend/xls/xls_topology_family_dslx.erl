@@ -121,11 +121,7 @@ lower(Plan, Profile) ->
     Routes = annotate_routes(Relations, Lanes),
     Startup = annotate_startup(maps:get(startup, Plan), FamilyIndex),
     Families = [annotate_family_graph(
-        Family#{scheduler => maps:get(
-            maps:get(id, Family),
-            SchedulerBindings,
-            direct
-        )},
+        with_scheduler_bindings(Family, SchedulerBindings),
         Routes,
         Lanes,
         Startup,
@@ -168,17 +164,32 @@ annotate_scheduler(_Index, #{
     error({scheduler_storage, Id, State, Mailbox}).
 
 scheduler_bindings(Schedulers) ->
-    maps:from_list([
-        {Id, #{
+    lists:foldl(
+        fun({Id, Binding}, Acc) ->
+            maps:update_with(Id, fun(Existing) -> Existing ++ [Binding] end,
+                [Binding], Acc)
+        end,
+        #{},
+        [{Id, #{
             group => maps:get(index, Scheduler),
             stem => maps:get(stem, Scheduler),
             base_slot => BaseSlot,
-            slot_count => maps:get(slot_count, Scheduler)
+            slot_count => maps:get(slot_count, Scheduler),
+            instances => maps:get(instances, Member),
+            reference => maps:get(reference, Member)
         }}
         || Scheduler <- Schedulers,
-           #{kind := family, id := Id, base_slot := BaseSlot} <-
-               maps:get(members, Scheduler)
-    ]).
+           Member = #{kind := family, id := Id, base_slot := BaseSlot} <-
+               maps:get(members, Scheduler)]
+    ).
+
+with_scheduler_bindings(Family = #{id := Id}, Bindings) ->
+    case maps:get(Id, Bindings, []) of
+        [] -> Family#{scheduler => direct, schedulers => []};
+        [Binding] -> Family#{scheduler => Binding, schedulers => [Binding]};
+        [_ | _] = FamilyBindings ->
+            Family#{scheduler => sharded, schedulers => FamilyBindings}
+    end.
 
 require_empty(Field, Plan) ->
     case maps:get(Field, Plan, '$missing') of

@@ -53,6 +53,45 @@ one_shard_profile_retains_module_level_groups_test() ->
         [{family, data_even, 0}, {family, data_odd, 9}]
     ).
 
+interleaved_phi_shards_cover_each_family_once_test() ->
+    lists:foreach(
+        fun(ShardCount) ->
+            #{groups := Groups, direct_members := []} =
+                phi_noise_topology_dslx:scheduler_plan(
+                    {phi_shards, ShardCount}
+                ),
+            PhiX = [Member
+                || Group <- Groups,
+                   Member = #{kind := family, id := phi_x} <-
+                       maps:get(members, Group)],
+            ?assertEqual(ShardCount, length(PhiX)),
+            Coordinates = lists:sort(lists:append([
+                [maps:get(coordinates, Instance)
+                    || Instance <- maps:get(instances, Member)]
+                || Member <- PhiX
+            ])),
+            ?assertEqual(
+                [[X, Y] || X <- lists:seq(0, 2), Y <- lists:seq(0, 2)],
+                Coordinates
+            ),
+            ?assertEqual(9, lists:sum([
+                maps:get(instance_count, Member) || Member <- PhiX
+            ]))
+        end,
+        [1, 2, 3]
+    ).
+
+incomplete_family_partition_is_rejected_test() ->
+    Topology = hls_topology:from_module(phi_noise_topology),
+    ?assertError(
+        {incomplete_partition, {family, phi_x}, 2, [0]},
+        hls_scheduler_plan:normalize(Topology, #{
+            only_half => group_spec([
+                {family, phi_x, {interleaved, 0, 2}}
+            ])
+        })
+    ).
+
 ungrouped_members_keep_direct_realization_test() ->
     Topology = hls_topology:from_module(phi_noise_topology),
     #{groups := [_], direct_members := Direct} =

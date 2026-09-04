@@ -9,6 +9,16 @@ remote_xls=${ERL_HLS_REMOTE_XLS:-/home/ecpeterson/xls-v0.0.0-10601-g9f360fc89-li
 remote_stage="$remote_root/phi_memory_demo"
 reuse_rtl=${ERL_HLS_PHI_DEMO_REUSE_RTL:-0}
 native_icarus=${ERL_HLS_PHI_NATIVE_ICARUS:-0}
+phi_shards=${ERL_HLS_PHI_SHARDS:-1}
+if [[ ! "$phi_shards" =~ ^[1-9][0-9]*$ ]]; then
+    echo "ERL_HLS_PHI_SHARDS must be a positive integer" >&2
+    exit 1
+fi
+if ((phi_shards > 9)); then
+    echo "ERL_HLS_PHI_SHARDS cannot exceed the nine D3 phi cells" >&2
+    exit 1
+fi
+scheduler_count=$((4 + 2 * phi_shards))
 cpu_witness="$local_stage/phi_memory_cpu_witness.term"
 
 cd "$project_root"
@@ -56,6 +66,7 @@ rsync -a -e "ssh -o BatchMode=yes" \
 ssh -o BatchMode=yes "$remote_host" \
     env ERL_HLS_PHI_DEMO_REUSE_RTL="$reuse_rtl" \
     ERL_HLS_PHI_DEMO_COMPILE_ONLY="$native_icarus" \
+    ERL_HLS_PHI_SCHEDULER_COUNT="$scheduler_count" \
     bash "$remote_stage/remote_phi_memory_demo.sh" \
     "$remote_stage" "$remote_xls"
 
@@ -66,6 +77,9 @@ if [[ "$native_icarus" == 1 ]]; then
         "$remote_host:$remote_stage/hls_debug_server.v" \
         "$remote_host:$remote_stage/hls_fabric_ingress.v" \
         "$remote_host:$remote_stage/hls_fabric_egress.v" \
+        "$remote_host:$remote_stage/phi_memory_gateway-ir.time" \
+        "$remote_host:$remote_stage/phi_memory_gateway-opt.time" \
+        "$remote_host:$remote_stage/phi_memory_gateway-codegen.time" \
         "$local_stage/"
     "$project_root/tools/local_phi_memory_demo.sh" "$local_stage"
 else

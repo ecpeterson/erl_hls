@@ -49,6 +49,28 @@ gateway_forwards_independent_scheduler_ram_ports_test() ->
     ?assertEqual(nomatch, binary:match(Generated, <<"_ram_wr_comp_in">>)),
     ?assertEqual(nomatch, binary:match(Generated, <<"_mailbox_wr_comp_in">>)).
 
+sharded_gateway_and_wrapper_expose_every_scheduler_ram_test() ->
+    lists:foreach(
+        fun(ShardCount) ->
+            SchedulerCount = 4 + 2 * ShardCount,
+            Profile = {phi_shards, ShardCount},
+            Gateway = iolist_to_binary(
+                phi_memory_gateway_dslx:to_dslx(3, Profile)
+            ),
+            Wrapper = phi_memory_debug_top_v:to_verilog(Profile),
+            ?assertEqual(2 * SchedulerCount, count(
+                Gateway, <<"::MachineRamReadReq> out">>
+            )),
+            ?assertEqual(SchedulerCount, count(
+                Wrapper, <<"hls_1r1w_ram #(.WIDTH(">>
+            ) div 2),
+            Last = integer_to_binary(SchedulerCount - 1),
+            assert_contains(Wrapper, <<".scheduler_", Last/binary,
+                "_state_rd_addr(">>)
+        end,
+        [1, 2, 3]
+    ).
+
 smoke_gateway_imports_distance_one_staging_topology_test() ->
     Generated = generated(1),
     ?assertMatch(<<"// phi_memory_gateway_smoke.x\n", _/binary>>, Generated),

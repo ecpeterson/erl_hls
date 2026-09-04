@@ -216,6 +216,28 @@ generated_one_shard_topology_retains_single_external_lanes_test() ->
     ?assertEqual(0, count(Generated, <<"proc FrameArrayMux">>)),
     ?assertEqual(0, count(Generated, <<"spawn FrameArrayMux">>)).
 
+generated_phi_family_shards_use_static_destination_tables_test() ->
+    lists:foreach(
+        fun(ShardCount) ->
+            Generated = iolist_to_binary(
+                phi_noise_topology_dslx:to_dslx(
+                    3, 16#80000000, {phi_shards, ShardCount}
+                )
+            ),
+            SchedulerCount = 4 + 2 * ShardCount,
+            ?assertEqual(SchedulerCount,
+                count(Generated, <<"::SharedService<">>)),
+            ?assertEqual(1, count(Generated,
+                <<"fn phi_x_destination(">>)),
+            ?assertEqual(1, count(Generated,
+                <<"fn phi_z_destination(">>)),
+            ?assertEqual(0, count(Generated, <<" / HEIGHT">>)),
+            ?assertEqual(0, count(Generated, <<" % HEIGHT">>)),
+            ?assertEqual(0, count(Generated, <<" % WIDTH">>))
+        end,
+        [2, 3]
+    ).
+
 generated_family_topology_uses_explicit_actor_egress_depth_test() ->
     Plan = hls_topology:normalize(phi_noise_topology:topology()),
     Profile = maps:remove(

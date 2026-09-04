@@ -13,12 +13,12 @@ executor services every member of the group, while each logical actor retains
 its own state and mailbox slots. Ungrouped actors retain their ordinary direct
 realization.
 
-This first format groups complete exact actors or complete families. Every
-member must use the same actor module, which is the current compiler's
-provisional artifact identity. A later artifact fingerprint can replace that
-test without changing the group/member distinction. More parallelism is
-expressed initially by splitting members into additional groups; spatial
-partitions within one family are not yet described.
+This format groups exact actors, complete families, or statically interleaved
+partitions of a family. Every member must use the same actor module, which is
+the current compiler's provisional artifact identity. A later artifact
+fingerprint can replace that test without changing the group/member
+distinction. Family partitions divide the row-major logical instances among
+several executors while leaving semantic family identity and routing intact.
 
 Each storage choice is a required physical binding, not a hint. A backend must
 either realize the corresponding state there or reject the plan. Actor data
@@ -44,8 +44,11 @@ topology-level channel-dependency and reserved-progress obligations.
 -export_type([plan/0, spec/0]).
 
 -type storage() :: registers | block_ram.
--type member_ref() :: {actor, term()} | {family, term()}.
--type spec() :: #{atom() := #{
+-type member_ref() ::
+    {actor, term()} |
+    {family, term()} |
+    {family, term(), {interleaved, non_neg_integer(), pos_integer()}}.
+-type spec() :: #{term() := #{
     members := [member_ref(), ...],
     state_storage := storage(),
     mailbox_storage := storage()
@@ -69,15 +72,20 @@ normalize(Topology = #{actors := _, families := _}, Specs)
         || Group <- Groups
     ]),
     ok = require_unique(members, Grouped),
+    ok = validate_grouped_members(Grouped, MemberIndex),
     All = lists:sort(maps:keys(MemberIndex)),
     #{
         groups => Groups,
-        direct_members => All -- Grouped
+        direct_members => [
+            Reference
+            || Reference <- All,
+               not member_grouped(Reference, Grouped)
+        ]
     };
 normalize(_Topology, Specs) ->
     error({scheduler_groups, Specs}).
 
-normalize_group(Id, Spec, MemberIndex) when is_atom(Id), is_map(Spec) ->
+normalize_group(Id, Spec, MemberIndex) when is_map(Spec) ->
     ok = validate_keys(Id, Spec),
     #{
         members := MemberSpecs,
@@ -135,28 +143,130 @@ validate_storage(Id, Kind, Storage) ->
 
 normalize_members(Id, [_ | _] = MemberSpecs, MemberIndex) ->
     ok = require_unique({group, Id}, MemberSpecs),
-    [lookup_member(Member, MemberIndex)
-        || Member <- lists:sort(MemberSpecs)];
+    Members = [lookup_member(Member, MemberIndex)
+        || Member <- lists:sort(MemberSpecs)],
+    Logical = [{maps:get(kind, Member), maps:get(id, Member)}
+        || Member <- Members],
+    ok = require_unique({group, Id, logical_members}, Logical),
+    Members;
 normalize_members(Id, _MemberSpecs, _MemberIndex) ->
     error({members, Id}).
 
 lookup_member(Reference, MemberIndex) ->
     case maps:find(Reference, MemberIndex) of
-        {ok, Member} -> Member;
-        error -> error({unknown_member, Reference})
+        {ok, Member} -> Member#{
+            reference => Reference,
+            instances => member_instances(Member)
+        };
+        error -> lookup_partition(Reference, MemberIndex)
     end.
+
+lookup_partition(
+    Reference = {family, Id, {interleaved, Index, Count}},
+    MemberIndex
+) when Index >= 0, Count > 0, Index < Count ->
+    case maps:find({family, Id}, MemberIndex) of
+        {ok, Member} ->
+            Instances = [
+                Instance
+                || Instance = #{linear_index := Linear} <-
+                       member_instances(Member),
+                   Linear rem Count =:= Index
+            ],
+            case Instances of
+                [] -> error({empty_partition, Reference});
+                [_ | _] -> Member#{
+                    reference => Reference,
+                    partition => #{
+                        kind => interleaved,
+                        index => Index,
+                        count => Count
+                    },
+                    instances => Instances,
+                    instance_count => length(Instances)
+                }
+            end;
+        error -> error({unknown_member, Reference})
+    end;
+lookup_partition(Reference, _MemberIndex) ->
+    error({unknown_member, Reference}).
 
 assign_slots(Members) ->
     {Reverse, SlotCount} = lists:foldl(
         fun(Member = #{instance_count := Count}, {Acc, Base}) ->
-            {[Member#{base_slot => Base} | Acc], Base + Count}
+            Instances = [Instance#{local_index => Index}
+                || {Index, Instance} <- lists:enumerate(0,
+                    maps:get(instances, Member))],
+            {[Member#{base_slot => Base, instances => Instances} | Acc],
+                Base + Count}
         end,
         {[], 0},
         Members
     ),
     {lists:reverse(Reverse), SlotCount}.
 
-member_reference(#{kind := Kind, id := Id}) -> {Kind, Id}.
+member_reference(#{reference := Reference}) -> Reference.
+
+member_instances(#{kind := actor}) ->
+    [#{linear_index => 0}];
+member_instances(#{kind := family, shape := [Width, Height]}) ->
+    [
+        #{coordinates => [X, Y], linear_index => X * Height + Y}
+        || X <- lists:seq(0, Width - 1),
+           Y <- lists:seq(0, Height - 1)
+    ].
+
+validate_grouped_members(Grouped, MemberIndex) ->
+    lists:foreach(
+        fun(Reference) ->
+            validate_member_coverage(Reference, Grouped)
+        end,
+        maps:keys(MemberIndex)
+    ).
+
+validate_member_coverage({actor, _} = Reference, Grouped) ->
+    ok = require_unique(members, [R || R <- Grouped, R =:= Reference]);
+validate_member_coverage({family, Id} = Reference, Grouped) ->
+    Full = [R || R <- Grouped, R =:= Reference],
+    Partitions = [
+        {Index, Count}
+        || {family, Candidate, {interleaved, Index, Count}} <- Grouped,
+           Candidate =:= Id
+    ],
+    case {Full, Partitions} of
+        {[], []} -> ok;
+        {[_], []} -> ok;
+        {[], [_ | _]} -> validate_partition_coverage(Id, Partitions);
+        _ -> error({overlapping_member, Reference})
+    end.
+
+validate_partition_coverage(Id, Partitions) ->
+    Counts = lists:usort([Count || {_Index, Count} <- Partitions]),
+    case Counts of
+        [Count] ->
+            Indices = lists:sort([Index || {Index, Count0} <- Partitions,
+                Count0 =:= Count]),
+            Expected = lists:seq(0, Count - 1),
+            case Indices =:= Expected of
+                true -> ok;
+                false -> error({incomplete_partition, {family, Id},
+                    Count, Indices})
+            end;
+        _ -> error({mixed_partition_counts, {family, Id}, Counts})
+    end.
+
+member_grouped(Reference, Grouped) ->
+    lists:member(Reference, Grouped) orelse
+        case Reference of
+            {family, Id} -> lists:any(
+                fun
+                    ({family, Id0, {interleaved, _, _}}) -> Id0 =:= Id;
+                    (_) -> false
+                end,
+                Grouped
+            );
+            {actor, _} -> false
+        end.
 
 member_index(#{actors := Actors, families := Families}) ->
     maps:from_list(
