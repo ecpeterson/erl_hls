@@ -780,6 +780,29 @@ state_machine_entry_actions_use_one_source_ordered_egress_test() ->
     ok = file:write_file(Path, Source),
     try
         XLS = iolist_to_binary(xls_parse:to_xls(Path)),
+        ?assertNotEqual(nomatch, binary:match(XLS, <<"import bram;">>)),
+        ?assertNotEqual(nomatch, binary:match(XLS, <<"import mailbox;">>)),
+        ?assertNotEqual(nomatch, binary:match(
+            XLS,
+            <<"pub type MachineRamReadReq = bram::ReadReq;">>
+        )),
+        ?assertNotEqual(nomatch, binary:match(
+            XLS,
+            <<"pub type MailboxRamWriteReq = mailbox::RamWriteReq;">>
+        )),
+        ?assertNotEqual(nomatch, binary:match(
+            XLS,
+            <<"mailbox::write(\n">>
+        )),
+        ?assertNotEqual(nomatch, binary:match(
+            XLS,
+            <<"request.slot, physical, MAILBOX_DEPTH">>
+        )),
+        ?assertEqual(nomatch, binary:match(
+            XLS,
+            <<"pub struct MachineRamReadReq">>
+        )),
+        ?assertEqual(nomatch, binary:match(XLS, <<"fn mailbox_addr(">>)),
         {Third, _} = binary:match(XLS, <<
             "Egress { port: OutputPort::THIRD, frame: effect_0 }"
         >>),

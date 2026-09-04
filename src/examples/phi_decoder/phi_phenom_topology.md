@@ -1070,3 +1070,12 @@ two `RAMB36E1`s. Across two data, two syndrome, and two phi schedulers, that is
 52 `RAMB18E1`s and 28 `RAMB36E1`s, or 54 `RAMB36E1`-equivalents. Those figures
 also expose the fragmentation cost of the current very wide, shallow actor
 state layout; the fixed pipeline neither improves nor worsens it.
+
+The reusable DSLX storage protocol now lives in `priv/xls/lib/bram.x`, while
+`priv/xls/lib/mailbox.x` owns mailbox row types, flattened addressing, and
+frame-row reads and writes. Generated actor modules retain public type aliases
+for their state- and mailbox-RAM channels, so topology and gateway interfaces
+remain actor-qualified without reproducing the protocol records and
+constructors in every actor source. XLS still receives the same explicit
+`1R1W` channel configuration, and this refactoring does not change the memory
+layout, pipeline schedule, or measurements above.

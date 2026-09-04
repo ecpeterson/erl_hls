@@ -3,6 +3,8 @@
 // overwritten the next time it is generated.
 
 import axis;
+import bram;
+import mailbox;
 
 const MAILBOX_CAPACITY = u8:5;
 const MAILBOX_DEPTH = u32:5;
@@ -365,10 +367,7 @@ pub struct EntryEffects {
   values: Egress[5],
 }
 
-struct MailboxSlot {
-  postponed: u1,
-  frame: axis::Frame,
-}
+type MailboxSlot = mailbox::Slot;
 
 struct Machine {
   phase: Phase,
@@ -394,35 +393,15 @@ struct SharedMachine {
 
 pub type MachineBits = bits[546];
 
-pub struct MachineRamReadReq {
-  addr: u32,
-  mask: (),
-}
+pub type MachineRamReadReq = bram::ReadReq;
+pub type MachineRamReadResp = bram::ReadResp<u32:546>;
+pub type MachineRamWriteReq = bram::WriteReq<u32:546>;
+pub type MachineRamWriteResp = bram::WriteResp;
 
-pub struct MachineRamReadResp { data: MachineBits }
-
-pub struct MachineRamWriteReq {
-  addr: u32,
-  data: MachineBits,
-  mask: (),
-}
-
-pub struct MachineRamWriteResp {}
-
-pub struct MailboxRamReadReq {
-  addr: u32,
-  mask: (),
-}
-
-pub struct MailboxRamReadResp { data: bits[128] }
-
-pub struct MailboxRamWriteReq {
-  addr: u32,
-  data: bits[128],
-  mask: (),
-}
-
-pub struct MailboxRamWriteResp {}
+pub type MailboxRamReadReq = mailbox::RamReadReq;
+pub type MailboxRamReadResp = mailbox::RamReadResp;
+pub type MailboxRamWriteReq = mailbox::RamWriteReq;
+pub type MailboxRamWriteResp = mailbox::RamWriteResp;
 
 struct MachineStep {
   machine: Machine,
@@ -431,11 +410,7 @@ struct MachineStep {
   admission_valid: u1,
 }
 
-pub struct ScheduledRequest {
-  slot: u32,
-  frame: axis::Frame,
-  credit: u1,
-}
+pub type ScheduledRequest = mailbox::ScheduledRequest;
 
 pub struct ScheduledEffects {
   slot: u32,
@@ -459,12 +434,7 @@ struct SharedDispatch {
   phase_boundary: u1,
 }
 
-struct Admission {
-  valid: u1,
-  producer: u32,
-  slot: u32,
-  physical: u8,
-}
+type Admission = mailbox::Admission;
 
 enum SharedPhase : u3 {
   BOOT = u3:0,
@@ -540,25 +510,6 @@ fn initial_shared_machine() -> SharedMachine {
   shared_machine(initial_machine())
 }
 
-fn axis_frame_from_bits(raw: bits[128]) -> axis::Frame {
-  axis::Frame {
-    header: axis::Header {
-      payload_words: raw[0:8],
-      txid: raw[8:16],
-      flags: raw[16:24],
-      op: raw[24:32],
-    },
-    payload: raw[32:128],
-  }
-}
-
-fn bits_from_axis_frame(frame: axis::Frame) -> bits[128] {
-  frame.payload ++ (frame.header.op as bits[8]) ++
-    (frame.header.flags as bits[8]) ++
-    (frame.header.txid as bits[8]) ++
-    (frame.header.payload_words as bits[8])
-}
-
 fn machine_from_bits(raw: MachineBits) -> SharedMachine {
   SharedMachine {
     phase: raw[0:8] as Phase,
@@ -578,40 +529,12 @@ fn bits_from_machine(machine: SharedMachine) -> MachineBits {
 }
 
 fn machine_read(slot: u32) -> MachineRamReadReq {
-  MachineRamReadReq {
-    addr: slot,
-    mask: (),
-  }
+  bram::read(slot)
 }
 
 fn machine_write(
     slot: u32, machine: SharedMachine) -> MachineRamWriteReq {
-  MachineRamWriteReq {
-    addr: slot,
-    data: bits_from_machine(machine),
-    mask: (),
-  }
-}
-
-fn mailbox_addr(slot: u32, index: u8) -> u32 {
-  slot * u32:5 + index as u32
-}
-
-fn mailbox_read(slot: u32, index: u8) -> MailboxRamReadReq {
-  MailboxRamReadReq {
-    addr: mailbox_addr(slot, index),
-    mask: (),
-  }
-}
-
-fn mailbox_write(
-    slot: u32, index: u8, frame: axis::Frame)
-    -> MailboxRamWriteReq {
-  MailboxRamWriteReq {
-    addr: mailbox_addr(slot, index),
-    data: bits_from_axis_frame(frame),
-    mask: (),
-  }
+  bram::write(slot, bits_from_machine(machine))
 }
 
 fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
@@ -3579,7 +3502,8 @@ pub proc SharedService<
         let write_tok = send(
           tok,
           mailbox_write_req_out,
-          mailbox_write(request.slot, physical, request.frame));
+          mailbox::write(
+            request.slot, physical, MAILBOX_DEPTH, request.frame));
         let (_done, _) = recv(write_tok, mailbox_write_resp_in);
         let occupied = update(
           state.occupied, request.slot, physical + u8:1);
@@ -3633,7 +3557,7 @@ pub proc SharedService<
           join(),
           mailbox_read_req_out,
           read_mailbox && received,
-          mailbox_read(read_slot, mailbox_index));
+          mailbox::read(read_slot, mailbox_index, MAILBOX_DEPTH));
         let (state_done, response) = recv_if(
           state_read_tok,
           ram_read_resp_in,
@@ -3697,7 +3621,7 @@ pub proc SharedService<
           state.next_valid,
           read_slot);
         let machine = machine_from_bits(response.data);
-        let frame = axis_frame_from_bits(mailbox_response.data);
+        let frame = axis::frame_from_bits(mailbox_response.data);
         let dispatched = shared_machine_dispatch(
           machine, frame, read_mailbox && received);
         let scheduled = ScheduledEffects {
@@ -3720,9 +3644,10 @@ pub proc SharedService<
           join(mailbox_read_tok, egress_tok),
           mailbox_write_req_out,
           reservation.admission.valid,
-          mailbox_write(
+          mailbox::write(
             reservation.admission.slot,
             reservation.admission.physical,
+            MAILBOX_DEPTH,
             admission_frame));
         let _done = join(
           state_done,

@@ -29,6 +29,8 @@ rsync -a -e "ssh -o BatchMode=yes" \
     "$local_stage/phi_field_test.x" \
     "$local_stage/phi_scheduler_rams.sh" \
     "$local_stage/axis.x" \
+    "$local_stage/bram.x" \
+    "$local_stage/mailbox.x" \
     "$local_stage/regsvc_core_adapter.v" \
     "$local_stage/regsvc_debug_top.v" \
     "$local_stage/phi_memory_debug_top.v" \

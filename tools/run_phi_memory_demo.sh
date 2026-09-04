@@ -33,6 +33,8 @@ rsync -a -e "ssh -o BatchMode=yes" \
     "$local_stage/phi_memory_debug_top.v" \
     "$local_stage/hls_1r1w_ram.v" \
     "$local_stage/axis.x" \
+    "$local_stage/bram.x" \
+    "$local_stage/mailbox.x" \
     "$local_stage/hls_fabric_router.x" \
     "$local_stage/hls_spatial_router.x" \
     "$local_stage/hls_debug_types.x" \

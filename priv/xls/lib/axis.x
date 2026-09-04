@@ -3,9 +3,9 @@
 // Beats remain 32 bits. Frame preserves the three-payload-word actor ABI;
 // FrameN lets boundary adapters select another static payload capacity.
 
-const MAX_PAYLOAD = u32:3;
+pub const MAX_PAYLOAD = u32:3;
 const PAYLOAD_BITS = MAX_PAYLOAD * 32;
-const FRAME_BITS = PAYLOAD_BITS + 32;
+pub const FRAME_BITS = PAYLOAD_BITS + 32;
 
 pub struct Beat {
   tlast: u1,
@@ -20,7 +20,7 @@ pub struct Header {
 }
 
 // bridge.erl@167: {<<1,10,0,4>>,<<210,4,0,0>>}
-fn header_from_bits(raw: bits[bit_count<Header>()]) -> Header {
+pub fn header_from_bits(raw: bits[bit_count<Header>()]) -> Header {
   Header {
     payload_words: raw[0:8],
     txid: raw[8:16],
@@ -29,7 +29,7 @@ fn header_from_bits(raw: bits[bit_count<Header>()]) -> Header {
   }
 }
 
-fn bits_from_header(header: Header) -> bits[bit_count<Header>()] {
+pub fn bits_from_header(header: Header) -> bits[bit_count<Header>()] {
   header.op ++ header.flags ++ header.txid ++ header.payload_words
 }
 
@@ -45,14 +45,14 @@ pub struct FrameN<PAYLOAD_WORDS: u32> {
 // a wider frame without widening every internal actor channel.
 pub type Frame = FrameN<MAX_PAYLOAD>;
 
-fn frame_from_bits(raw: bits[bit_count<Frame>()]) -> Frame {
+pub fn frame_from_bits(raw: bits[bit_count<Frame>()]) -> Frame {
   Frame {
     header: header_from_bits(raw[0:32]),
     payload: raw[32:],
   }
 }
 
-fn bits_from_frame(frame: Frame) -> bits[bit_count<Frame>()] {
+pub fn bits_from_frame(frame: Frame) -> bits[bit_count<Frame>()] {
   frame.payload ++ bits_from_header(frame.header)
 }
 
