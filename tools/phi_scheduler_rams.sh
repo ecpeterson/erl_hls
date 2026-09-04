@@ -8,8 +8,8 @@ phi_scheduler_ram_configurations() {
 
     for ((index = 0; index < scheduler_count; index++)); do
         configurations+=(
-            "scheduler_${index}_state:1RW:_scheduler_${index}_ram_req_out:_scheduler_${index}_ram_resp_in:_scheduler_${index}_ram_wr_comp_in"
-            "scheduler_${index}_mailbox:1RW:_scheduler_${index}_mailbox_req_out:_scheduler_${index}_mailbox_resp_in:_scheduler_${index}_mailbox_wr_comp_in"
+            "scheduler_${index}_state:1R1W:_scheduler_${index}_ram_read_req_out:_scheduler_${index}_ram_read_resp_in:_scheduler_${index}_ram_write_req_out:_scheduler_${index}_ram_write_resp_in"
+            "scheduler_${index}_mailbox:1R1W:_scheduler_${index}_mailbox_read_req_out:_scheduler_${index}_mailbox_read_resp_in:_scheduler_${index}_mailbox_write_req_out:_scheduler_${index}_mailbox_write_resp_in"
         )
     done
 

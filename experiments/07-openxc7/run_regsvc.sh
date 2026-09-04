@@ -128,6 +128,10 @@ done
 
 verify_manifest_entry \
     input axis.x "$project_root/priv/xls/lib/axis.x"
+verify_manifest_entry \
+    input bram.x "$project_root/priv/xls/lib/bram.x"
+verify_manifest_entry \
+    input mailbox.x "$project_root/priv/xls/lib/mailbox.x"
 for debug_module in \
     hls_debug_types.x \
     hls_debug_trace.x \

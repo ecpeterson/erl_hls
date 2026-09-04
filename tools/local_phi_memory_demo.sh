@@ -34,6 +34,7 @@ rm -f \
     "$sim_dir/debug_rx" \
     "$debug_metrics" \
     "$scheduler_profile" \
+    "${scheduler_profile}.tmp" \
     "$vvp_log"
 
 cd "$stage"
@@ -44,7 +45,7 @@ iverilog \
     -o phi_memory_gateway.vvp \
     phi_memory_bridge_tb.sv \
     phi_memory_debug_top.v \
-    hls_1rw_ram.v \
+    hls_1r1w_ram.v \
     phi_memory_gateway.v \
     hls_fabric_ingress.v \
     hls_fabric_egress.v \
@@ -99,13 +100,31 @@ ERL_HLS_PHI_DEBUG_METRICS="$debug_metrics" \
     rebar3 eunit --module=phi_memory_bridge_tests
 sim_elapsed=$((SECONDS - sim_start))
 test -s "$debug_metrics"
-test -s "$scheduler_profile"
+profile_deadline=$((SECONDS + 30))
+while ! grep -q '^profile_complete=1$' "$scheduler_profile" 2>/dev/null; do
+    if ! kill -0 "$sim_pid" 2>/dev/null ||
+       ((SECONDS >= profile_deadline)); then
+        cat "$vvp_log"
+        echo "timed out waiting for complete scheduler profile" >&2
+        exit 1
+    fi
+    sleep 0.1
+done
 grep -q '^profile_snapshot=last_application_output$' "$scheduler_profile"
 for scheduler in data phi syndrome; do
     grep -Eq "^${scheduler}(_[0-9]+)?_state_reads=" "$scheduler_profile"
     grep -Eq "^${scheduler}(_[0-9]+)?_mailbox_visits=" "$scheduler_profile"
     grep -Eq "^${scheduler}(_[0-9]+)?_entry_visits=" "$scheduler_profile"
+    grep -Eq "^${scheduler}(_[0-9]+)?_state_same_address_overlaps=0$" \
+        "$scheduler_profile"
+    grep -Eq "^${scheduler}(_[0-9]+)?_mailbox_same_address_overlaps=0$" \
+        "$scheduler_profile"
 done
+if grep -Eq '_same_address_overlaps=[1-9][0-9]*$' "$scheduler_profile"; then
+    echo "shared scheduler overlapped a read and write to one RAM row" >&2
+    exit 1
+fi
+grep -Eq '_state_read_write_overlaps=[1-9][0-9]*$' "$scheduler_profile"
 
 cleanup
 sim_pid=

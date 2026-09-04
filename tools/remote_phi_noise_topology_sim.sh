@@ -98,7 +98,7 @@ timed_command \
     -s phi_noise_topology_tb \
     -o phi_noise_topology.vvp.new \
     phi_noise_topology_tb.sv \
-    hls_1rw_ram.v \
+    hls_1r1w_ram.v \
     phi_noise_topology.v
 mv phi_noise_topology.vvp.new phi_noise_topology.vvp
 

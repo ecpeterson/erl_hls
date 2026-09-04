@@ -322,16 +322,22 @@ top_proc(TopologyModule, Contract = #{outputs := Outputs}) ->
 scheduler_ram_members() ->
     lists:append([
         [
-            [Stem, "_ram_req_out: chan<", Module,
-                "::MachineRamReq> out"],
-            [Stem, "_ram_resp_in: chan<", Module,
-                "::MachineRamResp> in"],
-            [Stem, "_ram_wr_comp_in: chan<()> in"],
-            [Stem, "_mailbox_req_out: chan<", Module,
-                "::MailboxRamReq> out"],
-            [Stem, "_mailbox_resp_in: chan<", Module,
-                "::MailboxRamResp> in"],
-            [Stem, "_mailbox_wr_comp_in: chan<()> in"]
+            [Stem, "_ram_read_req_out: chan<", Module,
+                "::MachineRamReadReq> out"],
+            [Stem, "_ram_read_resp_in: chan<", Module,
+                "::MachineRamReadResp> in"],
+            [Stem, "_ram_write_req_out: chan<", Module,
+                "::MachineRamWriteReq> out"],
+            [Stem, "_ram_write_resp_in: chan<", Module,
+                "::MachineRamWriteResp> in"],
+            [Stem, "_mailbox_read_req_out: chan<", Module,
+                "::MailboxRamReadReq> out"],
+            [Stem, "_mailbox_read_resp_in: chan<", Module,
+                "::MailboxRamReadResp> in"],
+            [Stem, "_mailbox_write_req_out: chan<", Module,
+                "::MailboxRamWriteReq> out"],
+            [Stem, "_mailbox_write_resp_in: chan<", Module,
+                "::MailboxRamWriteResp> in"]
         ]
         || {Stem, Module} <- scheduler_ram_bindings()
     ]).
@@ -339,12 +345,14 @@ scheduler_ram_members() ->
 scheduler_ram_names() ->
     lists:append([
         [
-            [Stem, "_ram_req_out"],
-            [Stem, "_ram_resp_in"],
-            [Stem, "_ram_wr_comp_in"],
-            [Stem, "_mailbox_req_out"],
-            [Stem, "_mailbox_resp_in"],
-            [Stem, "_mailbox_wr_comp_in"]
+            [Stem, "_ram_read_req_out"],
+            [Stem, "_ram_read_resp_in"],
+            [Stem, "_ram_write_req_out"],
+            [Stem, "_ram_write_resp_in"],
+            [Stem, "_mailbox_read_req_out"],
+            [Stem, "_mailbox_read_resp_in"],
+            [Stem, "_mailbox_write_req_out"],
+            [Stem, "_mailbox_write_resp_in"]
         ]
         || {Stem, _Module} <- scheduler_ram_bindings()
     ]).
