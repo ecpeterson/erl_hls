@@ -31,7 +31,7 @@ rsync -a -e "ssh -o BatchMode=yes" \
     "$local_stage/phi_noise_topology.x" \
     "$local_stage/phi_memory_gateway.x" \
     "$local_stage/phi_memory_debug_top.v" \
-    "$local_stage/hls_1rw_ram.v" \
+    "$local_stage/hls_1r1w_ram.v" \
     "$local_stage/axis.x" \
     "$local_stage/hls_fabric_router.x" \
     "$local_stage/hls_spatial_router.x" \

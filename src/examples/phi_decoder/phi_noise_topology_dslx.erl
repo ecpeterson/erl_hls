@@ -14,8 +14,9 @@ The physical profile assigns the two data, phi, and syndrome families to
 homogeneous executors. The default uses one executor per family, giving two
 shards for each actor module; `profile/1` retains the original one-executor-per-
 module form for measurement. Every executor stores actor state and mailbox
-frames in separate one-read/write RAMs, owns the mailbox metadata for its
-logical slots, and advances one resumable actor microstep at a time. Compact
+frames in simple-dual-port RAMs with one read and one write port, owns the
+mailbox metadata for its logical slots, and advances one resumable actor
+microstep at a time. Compact
 group routers carry addressed requests between executors; there are no
 per-coordinate request, admission, or egress channel arrays.
 """.

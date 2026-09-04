@@ -132,7 +132,7 @@ cp "$project_root/src/examples/regsvc/regsvc_debug_top.v" \
     "$stage/regsvc_debug_top.v"
 cp "$project_root/src/examples/phi_decoder/phi_memory_debug_top.v" \
     "$stage/phi_memory_debug_top.v"
-cp "$project_root/priv/rtl/hls_1rw_ram.v" "$stage/hls_1rw_ram.v"
+cp "$project_root/priv/rtl/hls_1r1w_ram.v" "$stage/hls_1r1w_ram.v"
 cp "$project_root/priv/xls/fabric/hls_fabric_router.x" \
     "$stage/hls_fabric_router.x"
 cp "$project_root/priv/xls/fabric/hls_spatial_router.x" \

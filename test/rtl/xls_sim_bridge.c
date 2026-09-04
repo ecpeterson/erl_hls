@@ -89,30 +89,46 @@ typedef struct {
     uint64_t intervisit_cycles;
     uint64_t intervisit_min;
     uint64_t intervisit_max;
+    uint64_t state_read_interval_count;
+    uint64_t state_read_interval_cycles;
+    uint64_t state_read_interval_min;
+    uint64_t state_read_interval_max;
+    uint64_t state_read_write_overlaps;
+    uint64_t state_same_address_overlaps;
+    uint64_t mailbox_read_write_overlaps;
+    uint64_t mailbox_same_address_overlaps;
     uint64_t visit_start;
     uint64_t previous_write;
+    uint64_t previous_state_read;
     int visit_open;
     int visit_has_mailbox;
     int previous_write_valid;
+    int previous_state_read_valid;
 } scheduler_counts_t;
 
 typedef struct {
     char name[32];
     char hierarchy[PATH_SIZE];
-    vpiHandle h_ram_request;
-    vpiHandle h_ram_request_valid;
-    vpiHandle h_ram_request_ready;
-    vpiHandle h_ram_response_valid;
-    vpiHandle h_ram_response_ready;
-    vpiHandle h_ram_write_completion_valid;
-    vpiHandle h_ram_write_completion_ready;
-    vpiHandle h_mailbox_request;
-    vpiHandle h_mailbox_request_valid;
-    vpiHandle h_mailbox_request_ready;
-    vpiHandle h_mailbox_response_valid;
-    vpiHandle h_mailbox_response_ready;
-    vpiHandle h_mailbox_write_completion_valid;
-    vpiHandle h_mailbox_write_completion_ready;
+    vpiHandle h_ram_read_request;
+    vpiHandle h_ram_read_request_valid;
+    vpiHandle h_ram_read_request_ready;
+    vpiHandle h_ram_read_response_valid;
+    vpiHandle h_ram_read_response_ready;
+    vpiHandle h_ram_write_request_valid;
+    vpiHandle h_ram_write_request_ready;
+    vpiHandle h_ram_write_request;
+    vpiHandle h_ram_write_response_valid;
+    vpiHandle h_ram_write_response_ready;
+    vpiHandle h_mailbox_read_request_valid;
+    vpiHandle h_mailbox_read_request_ready;
+    vpiHandle h_mailbox_read_request;
+    vpiHandle h_mailbox_read_response_valid;
+    vpiHandle h_mailbox_read_response_ready;
+    vpiHandle h_mailbox_write_request_valid;
+    vpiHandle h_mailbox_write_request_ready;
+    vpiHandle h_mailbox_write_request;
+    vpiHandle h_mailbox_write_response_valid;
+    vpiHandle h_mailbox_write_response_ready;
     vpiHandle h_request_valid[MAX_SCHEDULER_INPUTS];
     vpiHandle h_request_ready[MAX_SCHEDULER_INPUTS];
     unsigned request_input_count;
@@ -132,7 +148,8 @@ static axis_endpoint_t app_endpoint;
 static axis_endpoint_t debug_endpoint;
 static scheduler_profile_t scheduler_profiles[MAX_SCHEDULERS];
 static unsigned scheduler_profile_count;
-static int scheduler_profile_fd = -1;
+static char scheduler_profile_path[PATH_SIZE];
+static int scheduler_profile_enabled;
 static int scheduler_profile_started;
 static int scheduler_profile_checkpoint_valid;
 static uint64_t scheduler_profile_start_cycle;
@@ -189,18 +206,31 @@ static int get_bit(vpiHandle signal) {
     return (get_u32(signal) & 1U) != 0;
 }
 
-static int get_vector_bit(vpiHandle signal, unsigned bit) {
+static uint32_t get_vector_u32(vpiHandle signal, unsigned lsb) {
     s_vpi_value value;
+    unsigned word = lsb / 32;
+    unsigned shift = lsb % 32;
+    uint64_t result;
+
     value.format = vpiVectorVal;
     vpi_get_value(signal, &value);
-    return ((uint32_t)value.value.vector[bit / 32].aval &
-            (1U << (bit % 32))) != 0;
+    result = (uint32_t)value.value.vector[word].aval >> shift;
+    if (shift != 0)
+        result |= (uint64_t)(uint32_t)value.value.vector[word + 1].aval
+            << (32 - shift);
+    return (uint32_t)result;
+}
+
+static uint32_t get_high_u32(vpiHandle signal) {
+    int size = vpi_get(vpiSize, signal);
+    return get_vector_u32(signal, (unsigned)(size - 32));
 }
 
 static void reset_latency_minima(scheduler_counts_t *counts) {
     counts->mailbox_visit_min = UINT64_MAX;
     counts->entry_visit_min = UINT64_MAX;
     counts->intervisit_min = UINT64_MAX;
+    counts->state_read_interval_min = UINT64_MAX;
 }
 
 static void reset_scheduler_profile_counts(void) {
@@ -237,26 +267,31 @@ static uint64_t printable_minimum(uint64_t count, uint64_t minimum) {
 }
 
 static void write_scheduler_profile(void) {
+    char temporary_path[PATH_SIZE + sizeof(".tmp")];
+    int profile_fd;
     unsigned index;
     uint64_t observed_cycle;
     const scheduler_counts_t *counts;
 
-    if (scheduler_profile_fd < 0 || !scheduler_profile_started)
+    if (!scheduler_profile_enabled || !scheduler_profile_started)
         return;
 
     observed_cycle = scheduler_profile_checkpoint_valid ?
         scheduler_profile_checkpoint_cycle : cycle_number;
-    if (lseek(scheduler_profile_fd, 0, SEEK_SET) < 0 ||
-        ftruncate(scheduler_profile_fd, 0) != 0)
+    snprintf(temporary_path, sizeof(temporary_path), "%s.tmp",
+             scheduler_profile_path);
+    profile_fd = open(
+        temporary_path, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+    if (profile_fd < 0)
         return;
-    dprintf(scheduler_profile_fd, "profile_start_cycle=%llu\n",
+    dprintf(profile_fd, "profile_start_cycle=%llu\n",
             (unsigned long long)scheduler_profile_start_cycle);
-    dprintf(scheduler_profile_fd, "profile_observed_cycle=%llu\n",
+    dprintf(profile_fd, "profile_observed_cycle=%llu\n",
             (unsigned long long)observed_cycle);
-    dprintf(scheduler_profile_fd, "profile_observed_cycles=%llu\n",
+    dprintf(profile_fd, "profile_observed_cycles=%llu\n",
             (unsigned long long)(observed_cycle -
                 scheduler_profile_start_cycle + 1));
-    dprintf(scheduler_profile_fd, "profile_snapshot=%s\n",
+    dprintf(profile_fd, "profile_snapshot=%s\n",
             scheduler_profile_checkpoint_valid ?
                 "last_application_output" : "current");
 
@@ -265,7 +300,7 @@ static void write_scheduler_profile(void) {
         counts = scheduler_profile_checkpoint_valid ?
             &profile->checkpoint : &profile->counts;
 #define PROFILE_VALUE(key, value) \
-        dprintf(scheduler_profile_fd, "%s_%s=%llu\n", profile->name, key, \
+        dprintf(profile_fd, "%s_%s=%llu\n", profile->name, key, \
                 (unsigned long long)(value))
         PROFILE_VALUE("state_reads", counts->state_reads);
         PROFILE_VALUE("state_writes", counts->state_writes);
@@ -301,7 +336,29 @@ static void write_scheduler_profile(void) {
         PROFILE_VALUE("intervisit_min", printable_minimum(
             counts->intervisit_count, counts->intervisit_min));
         PROFILE_VALUE("intervisit_max", counts->intervisit_max);
+        PROFILE_VALUE("state_read_intervals",
+                      counts->state_read_interval_count);
+        PROFILE_VALUE("state_read_interval_cycles",
+                      counts->state_read_interval_cycles);
+        PROFILE_VALUE("state_read_interval_min", printable_minimum(
+            counts->state_read_interval_count,
+            counts->state_read_interval_min));
+        PROFILE_VALUE("state_read_interval_max",
+                      counts->state_read_interval_max);
+        PROFILE_VALUE("state_read_write_overlaps",
+                      counts->state_read_write_overlaps);
+        PROFILE_VALUE("state_same_address_overlaps",
+                      counts->state_same_address_overlaps);
+        PROFILE_VALUE("mailbox_read_write_overlaps",
+                      counts->mailbox_read_write_overlaps);
+        PROFILE_VALUE("mailbox_same_address_overlaps",
+                      counts->mailbox_same_address_overlaps);
 #undef PROFILE_VALUE
+    }
+    dprintf(profile_fd, "profile_complete=1\n");
+    if (close(profile_fd) != 0 ||
+        rename(temporary_path, scheduler_profile_path) != 0) {
+        unlink(temporary_path);
     }
 }
 
@@ -503,22 +560,34 @@ static int populate_scheduler_profile(
 
 #define MODULE_SIGNAL(field, name) \
     profile->field = module_signal(module, name)
-    MODULE_SIGNAL(h_ram_request, "_ram_req_out");
-    MODULE_SIGNAL(h_ram_request_valid, "_ram_req_out_vld");
-    MODULE_SIGNAL(h_ram_request_ready, "_ram_req_out_rdy");
-    MODULE_SIGNAL(h_ram_response_valid, "_ram_resp_in_vld");
-    MODULE_SIGNAL(h_ram_response_ready, "_ram_resp_in_rdy");
-    MODULE_SIGNAL(h_ram_write_completion_valid, "_ram_wr_comp_in_vld");
-    MODULE_SIGNAL(h_ram_write_completion_ready, "_ram_wr_comp_in_rdy");
-    MODULE_SIGNAL(h_mailbox_request, "_mailbox_req_out");
-    MODULE_SIGNAL(h_mailbox_request_valid, "_mailbox_req_out_vld");
-    MODULE_SIGNAL(h_mailbox_request_ready, "_mailbox_req_out_rdy");
-    MODULE_SIGNAL(h_mailbox_response_valid, "_mailbox_resp_in_vld");
-    MODULE_SIGNAL(h_mailbox_response_ready, "_mailbox_resp_in_rdy");
-    MODULE_SIGNAL(h_mailbox_write_completion_valid,
-                  "_mailbox_wr_comp_in_vld");
-    MODULE_SIGNAL(h_mailbox_write_completion_ready,
-                  "_mailbox_wr_comp_in_rdy");
+    MODULE_SIGNAL(h_ram_read_request, "_ram_read_req_out");
+    MODULE_SIGNAL(h_ram_read_request_valid, "_ram_read_req_out_vld");
+    MODULE_SIGNAL(h_ram_read_request_ready, "_ram_read_req_out_rdy");
+    MODULE_SIGNAL(h_ram_read_response_valid, "_ram_read_resp_in_vld");
+    MODULE_SIGNAL(h_ram_read_response_ready, "_ram_read_resp_in_rdy");
+    MODULE_SIGNAL(h_ram_write_request_valid, "_ram_write_req_out_vld");
+    MODULE_SIGNAL(h_ram_write_request_ready, "_ram_write_req_out_rdy");
+    MODULE_SIGNAL(h_ram_write_request, "_ram_write_req_out");
+    MODULE_SIGNAL(h_ram_write_response_valid, "_ram_write_resp_in_vld");
+    MODULE_SIGNAL(h_ram_write_response_ready, "_ram_write_resp_in_rdy");
+    MODULE_SIGNAL(h_mailbox_read_request_valid,
+                  "_mailbox_read_req_out_vld");
+    MODULE_SIGNAL(h_mailbox_read_request_ready,
+                  "_mailbox_read_req_out_rdy");
+    MODULE_SIGNAL(h_mailbox_read_request, "_mailbox_read_req_out");
+    MODULE_SIGNAL(h_mailbox_read_response_valid,
+                  "_mailbox_read_resp_in_vld");
+    MODULE_SIGNAL(h_mailbox_read_response_ready,
+                  "_mailbox_read_resp_in_rdy");
+    MODULE_SIGNAL(h_mailbox_write_request_valid,
+                  "_mailbox_write_req_out_vld");
+    MODULE_SIGNAL(h_mailbox_write_request_ready,
+                  "_mailbox_write_req_out_rdy");
+    MODULE_SIGNAL(h_mailbox_write_request, "_mailbox_write_req_out");
+    MODULE_SIGNAL(h_mailbox_write_response_valid,
+                  "_mailbox_write_resp_in_vld");
+    MODULE_SIGNAL(h_mailbox_write_response_ready,
+                  "_mailbox_write_resp_in_rdy");
     MODULE_SIGNAL(h_startup_valid, "_startup_in_vld");
     MODULE_SIGNAL(h_startup_ready, "_startup_in_rdy");
     MODULE_SIGNAL(h_egress_valid, "_egress_out_vld");
@@ -538,18 +607,26 @@ static int populate_scheduler_profile(
 
     reset_latency_minima(&profile->counts);
     reset_latency_minima(&profile->checkpoint);
-    return profile->h_ram_request && profile->h_ram_request_valid &&
-        profile->h_ram_request_ready && profile->h_ram_response_valid &&
-        profile->h_ram_response_ready &&
-        profile->h_ram_write_completion_valid &&
-        profile->h_ram_write_completion_ready &&
-        profile->h_mailbox_request &&
-        profile->h_mailbox_request_valid &&
-        profile->h_mailbox_request_ready &&
-        profile->h_mailbox_response_valid &&
-        profile->h_mailbox_response_ready &&
-        profile->h_mailbox_write_completion_valid &&
-        profile->h_mailbox_write_completion_ready &&
+    return profile->h_ram_read_request &&
+        profile->h_ram_read_request_valid &&
+        profile->h_ram_read_request_ready &&
+        profile->h_ram_read_response_valid &&
+        profile->h_ram_read_response_ready &&
+        profile->h_ram_write_request &&
+        profile->h_ram_write_request_valid &&
+        profile->h_ram_write_request_ready &&
+        profile->h_ram_write_response_valid &&
+        profile->h_ram_write_response_ready &&
+        profile->h_mailbox_read_request &&
+        profile->h_mailbox_read_request_valid &&
+        profile->h_mailbox_read_request_ready &&
+        profile->h_mailbox_read_response_valid &&
+        profile->h_mailbox_read_response_ready &&
+        profile->h_mailbox_write_request &&
+        profile->h_mailbox_write_request_valid &&
+        profile->h_mailbox_write_request_ready &&
+        profile->h_mailbox_write_response_valid &&
+        profile->h_mailbox_write_response_ready &&
         profile->h_startup_valid && profile->h_startup_ready &&
         profile->h_egress_valid && profile->h_egress_ready &&
         profile->request_input_count > 0;
@@ -584,9 +661,11 @@ static void name_scheduler_profiles(void) {
     unsigned index;
     unsigned candidate;
 
-    for (index = 0; index < scheduler_profile_count; index++)
-        snprintf(base_names[index], sizeof(base_names[index]), "%s",
-                 scheduler_profiles[index].name);
+    for (index = 0; index < scheduler_profile_count; index++) {
+        memcpy(base_names[index], scheduler_profiles[index].name,
+               sizeof(base_names[index]) - 1);
+        base_names[index][sizeof(base_names[index]) - 1] = '\0';
+    }
 
     for (index = 0; index < scheduler_profile_count; index++) {
         unsigned matching = 0;
@@ -600,7 +679,7 @@ static void name_scheduler_profiles(void) {
         }
         if (matching > 1)
             snprintf(scheduler_profiles[index].name,
-                     sizeof(scheduler_profiles[index].name), "%s_%u",
+                     sizeof(scheduler_profiles[index].name), "%.27s_%u",
                      base_names[index], rank);
         vpi_printf("xls_sim_bridge[profile]: found %s scheduler at %s\n",
                    scheduler_profiles[index].name,
@@ -613,86 +692,129 @@ static void step_scheduler_profile(scheduler_profile_t *profile) {
     int active = 0;
     int valid;
     int ready;
+    int state_write_accepted;
+    int state_read_accepted;
+    int mailbox_write_accepted;
+    int mailbox_read_accepted;
     unsigned index;
 
-    valid = get_bit(profile->h_ram_request_valid);
-    ready = get_bit(profile->h_ram_request_ready);
-    if (valid && ready) {
-        if (get_vector_bit(profile->h_ram_request, 0)) {
-            counts->state_reads++;
-            if (counts->previous_write_valid) {
-                update_latency(
-                    cycle_number - counts->previous_write,
-                    &counts->intervisit_count,
-                    &counts->intervisit_cycles,
-                    &counts->intervisit_min,
-                    &counts->intervisit_max);
-            }
-            counts->visit_start = cycle_number;
-            counts->visit_open = 1;
-            counts->visit_has_mailbox = 0;
+    /* Commit the older visit before opening the younger one. In the 1R1W
+     * pipeline both handshakes may occur on the same physical clock. */
+    valid = get_bit(profile->h_ram_write_request_valid);
+    ready = get_bit(profile->h_ram_write_request_ready);
+    state_write_accepted = valid && ready;
+    if (state_write_accepted) {
+        uint64_t latency = counts->visit_open ?
+            cycle_number - counts->visit_start : 0;
+        counts->state_writes++;
+        if (counts->visit_open && counts->visit_has_mailbox) {
+            update_latency(
+                latency,
+                &counts->mailbox_visit_count,
+                &counts->mailbox_visit_cycles,
+                &counts->mailbox_visit_min,
+                &counts->mailbox_visit_max);
+        } else if (counts->visit_open) {
+            update_latency(
+                latency,
+                &counts->entry_visit_count,
+                &counts->entry_visit_cycles,
+                &counts->entry_visit_min,
+                &counts->entry_visit_max);
         }
-        if (get_vector_bit(profile->h_ram_request, 1)) {
-            uint64_t latency = counts->visit_open ?
-                cycle_number - counts->visit_start : 0;
-            counts->state_writes++;
-            if (counts->visit_open && counts->visit_has_mailbox) {
-                update_latency(
-                    latency,
-                    &counts->mailbox_visit_count,
-                    &counts->mailbox_visit_cycles,
-                    &counts->mailbox_visit_min,
-                    &counts->mailbox_visit_max);
-            } else if (counts->visit_open) {
-                update_latency(
-                    latency,
-                    &counts->entry_visit_count,
-                    &counts->entry_visit_cycles,
-                    &counts->entry_visit_min,
-                    &counts->entry_visit_max);
-            }
-            counts->visit_open = 0;
-            counts->previous_write = cycle_number;
-            counts->previous_write_valid = 1;
-        }
+        counts->visit_open = 0;
+        counts->previous_write = cycle_number;
+        counts->previous_write_valid = 1;
         active = 1;
     } else if (valid) {
         counts->state_request_stalls++;
         active = 1;
     }
-    if (get_bit(profile->h_ram_response_valid) &&
-        get_bit(profile->h_ram_response_ready)) {
+
+    valid = get_bit(profile->h_ram_read_request_valid);
+    ready = get_bit(profile->h_ram_read_request_ready);
+    state_read_accepted = valid && ready;
+    if (state_read_accepted) {
+        counts->state_reads++;
+        if (counts->previous_state_read_valid) {
+            update_latency(
+                cycle_number - counts->previous_state_read,
+                &counts->state_read_interval_count,
+                &counts->state_read_interval_cycles,
+                &counts->state_read_interval_min,
+                &counts->state_read_interval_max);
+        }
+        counts->previous_state_read = cycle_number;
+        counts->previous_state_read_valid = 1;
+        if (counts->previous_write_valid) {
+            update_latency(
+                cycle_number - counts->previous_write,
+                &counts->intervisit_count,
+                &counts->intervisit_cycles,
+                &counts->intervisit_min,
+                &counts->intervisit_max);
+        }
+        counts->visit_start = cycle_number;
+        counts->visit_open = 1;
+        counts->visit_has_mailbox = 0;
+        active = 1;
+    } else if (valid) {
+        counts->state_request_stalls++;
+        active = 1;
+    }
+    if (state_write_accepted && state_read_accepted) {
+        counts->state_read_write_overlaps++;
+        if (get_u32(profile->h_ram_read_request) ==
+            get_high_u32(profile->h_ram_write_request))
+            counts->state_same_address_overlaps++;
+    }
+    if (get_bit(profile->h_ram_read_response_valid) &&
+        get_bit(profile->h_ram_read_response_ready)) {
         counts->state_responses++;
         active = 1;
     }
-    if (get_bit(profile->h_ram_write_completion_valid) &&
-        get_bit(profile->h_ram_write_completion_ready)) {
+    if (get_bit(profile->h_ram_write_response_valid) &&
+        get_bit(profile->h_ram_write_response_ready)) {
         counts->state_write_completions++;
         active = 1;
     }
 
-    valid = get_bit(profile->h_mailbox_request_valid);
-    ready = get_bit(profile->h_mailbox_request_ready);
-    if (valid && ready) {
-        if (get_vector_bit(profile->h_mailbox_request, 0)) {
-            counts->mailbox_reads++;
-            if (counts->visit_open)
-                counts->visit_has_mailbox = 1;
-        }
-        if (get_vector_bit(profile->h_mailbox_request, 1))
-            counts->mailbox_writes++;
+    valid = get_bit(profile->h_mailbox_write_request_valid);
+    ready = get_bit(profile->h_mailbox_write_request_ready);
+    mailbox_write_accepted = valid && ready;
+    if (mailbox_write_accepted) {
+        counts->mailbox_writes++;
         active = 1;
     } else if (valid) {
         counts->mailbox_request_stalls++;
         active = 1;
     }
-    if (get_bit(profile->h_mailbox_response_valid) &&
-        get_bit(profile->h_mailbox_response_ready)) {
+
+    valid = get_bit(profile->h_mailbox_read_request_valid);
+    ready = get_bit(profile->h_mailbox_read_request_ready);
+    mailbox_read_accepted = valid && ready;
+    if (mailbox_read_accepted) {
+        counts->mailbox_reads++;
+        if (counts->visit_open)
+            counts->visit_has_mailbox = 1;
+        active = 1;
+    } else if (valid) {
+        counts->mailbox_request_stalls++;
+        active = 1;
+    }
+    if (mailbox_write_accepted && mailbox_read_accepted) {
+        counts->mailbox_read_write_overlaps++;
+        if (get_u32(profile->h_mailbox_read_request) ==
+            get_high_u32(profile->h_mailbox_write_request))
+            counts->mailbox_same_address_overlaps++;
+    }
+    if (get_bit(profile->h_mailbox_read_response_valid) &&
+        get_bit(profile->h_mailbox_read_response_ready)) {
         counts->mailbox_responses++;
         active = 1;
     }
-    if (get_bit(profile->h_mailbox_write_completion_valid) &&
-        get_bit(profile->h_mailbox_write_completion_ready)) {
+    if (get_bit(profile->h_mailbox_write_response_valid) &&
+        get_bit(profile->h_mailbox_write_response_ready)) {
         counts->mailbox_write_completions++;
         active = 1;
     }
@@ -781,7 +903,7 @@ static PLI_INT32 cb_readonly(p_cb_data cb) {
     app_armed_before = app_endpoint.output_armed;
     step_endpoint(&app_endpoint);
     step_endpoint(&debug_endpoint);
-    if (scheduler_profile_fd >= 0 &&
+    if (scheduler_profile_enabled &&
         !app_armed_before && app_endpoint.output_armed) {
         reset_scheduler_profile_counts();
         scheduler_profile_start_cycle = cycle_number;
@@ -872,7 +994,7 @@ static PLI_INT32 cb_start_of_sim(p_cb_data cb) {
     const char *directory = getenv("ERL_HLS_SIM_DIR");
     const char *configured_root = getenv("ERL_HLS_SIM_TOP");
     const char *app_only_value = getenv("ERL_HLS_SIM_APP_ONLY");
-    const char *scheduler_profile_path =
+    const char *configured_scheduler_profile_path =
         getenv("ERL_HLS_SIM_SCHEDULER_PROFILE");
     int app_only = app_only_value && strcmp(app_only_value, "1") == 0;
     s_cb_data clock_cb;
@@ -889,6 +1011,8 @@ static PLI_INT32 cb_start_of_sim(p_cb_data cb) {
     scheduler_profile_count = 0;
     scheduler_profile_started = 0;
     scheduler_profile_checkpoint_valid = 0;
+    scheduler_profile_enabled = 0;
+    scheduler_profile_path[0] = '\0';
     hierarchy_root = configured_root && configured_root[0] != '\0' ?
         configured_root : "regsvc_bridge_tb";
     app_endpoint.name = "app";
@@ -906,20 +1030,25 @@ static PLI_INT32 cb_start_of_sim(p_cb_data cb) {
         return 0;
     }
 
-    if (scheduler_profile_path && scheduler_profile_path[0] != '\0') {
-        scheduler_profile_fd = open(
+    if (configured_scheduler_profile_path &&
+        configured_scheduler_profile_path[0] != '\0') {
+        int profile_fd;
+        snprintf(scheduler_profile_path, sizeof(scheduler_profile_path),
+                 "%s", configured_scheduler_profile_path);
+        profile_fd = open(
             scheduler_profile_path, O_WRONLY | O_CREAT | O_TRUNC, 0600);
-        if (scheduler_profile_fd < 0) {
+        if (profile_fd < 0) {
             vpi_printf("xls_sim_bridge[profile]: cannot open %s: %s\n",
                        scheduler_profile_path, strerror(errno));
         } else {
+            close(profile_fd);
+            scheduler_profile_enabled = 1;
             discover_scheduler_profiles(NULL);
             name_scheduler_profiles();
             if (scheduler_profile_count == 0) {
                 vpi_printf(
                     "xls_sim_bridge[profile]: no SharedService instances found\n");
-                close(scheduler_profile_fd);
-                scheduler_profile_fd = -1;
+                scheduler_profile_enabled = 0;
             }
         }
     }

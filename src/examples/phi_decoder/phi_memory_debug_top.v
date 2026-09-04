@@ -42,37 +42,43 @@ module phi_memory_debug_top (
     wire        debug_local_out_valid;
     wire        debug_local_out_ready;
 
-    wire [31:0] data_state_addr [0:1];
+    wire [31:0] data_state_rd_addr [0:1];
+    wire [31:0] data_state_wr_addr [0:1];
     wire [433:0] data_state_wr_data [0:1];
-    wire data_state_we [0:1];
-    wire data_state_re [0:1];
+    wire data_state_wr_en [0:1];
+    wire data_state_rd_en [0:1];
     wire [433:0] data_state_rd_data [0:1];
-    wire [31:0] data_mailbox_addr [0:1];
+    wire [31:0] data_mailbox_rd_addr [0:1];
+    wire [31:0] data_mailbox_wr_addr [0:1];
     wire [127:0] data_mailbox_wr_data [0:1];
-    wire data_mailbox_we [0:1];
-    wire data_mailbox_re [0:1];
+    wire data_mailbox_wr_en [0:1];
+    wire data_mailbox_rd_en [0:1];
     wire [127:0] data_mailbox_rd_data [0:1];
 
-    wire [31:0] phi_state_addr [0:1];
+    wire [31:0] phi_state_rd_addr [0:1];
+    wire [31:0] phi_state_wr_addr [0:1];
     wire [545:0] phi_state_wr_data [0:1];
-    wire phi_state_we [0:1];
-    wire phi_state_re [0:1];
+    wire phi_state_wr_en [0:1];
+    wire phi_state_rd_en [0:1];
     wire [545:0] phi_state_rd_data [0:1];
-    wire [31:0] phi_mailbox_addr [0:1];
+    wire [31:0] phi_mailbox_rd_addr [0:1];
+    wire [31:0] phi_mailbox_wr_addr [0:1];
     wire [127:0] phi_mailbox_wr_data [0:1];
-    wire phi_mailbox_we [0:1];
-    wire phi_mailbox_re [0:1];
+    wire phi_mailbox_wr_en [0:1];
+    wire phi_mailbox_rd_en [0:1];
     wire [127:0] phi_mailbox_rd_data [0:1];
 
-    wire [31:0] syndrome_state_addr [0:1];
+    wire [31:0] syndrome_state_rd_addr [0:1];
+    wire [31:0] syndrome_state_wr_addr [0:1];
     wire [433:0] syndrome_state_wr_data [0:1];
-    wire syndrome_state_we [0:1];
-    wire syndrome_state_re [0:1];
+    wire syndrome_state_wr_en [0:1];
+    wire syndrome_state_rd_en [0:1];
     wire [433:0] syndrome_state_rd_data [0:1];
-    wire [31:0] syndrome_mailbox_addr [0:1];
+    wire [31:0] syndrome_mailbox_rd_addr [0:1];
+    wire [31:0] syndrome_mailbox_wr_addr [0:1];
     wire [127:0] syndrome_mailbox_wr_data [0:1];
-    wire syndrome_mailbox_we [0:1];
-    wire syndrome_mailbox_re [0:1];
+    wire syndrome_mailbox_wr_en [0:1];
+    wire syndrome_mailbox_rd_en [0:1];
     wire [127:0] syndrome_mailbox_rd_data [0:1];
 
     __phi_memory_gateway__Top_0_next application (
@@ -84,122 +90,140 @@ module phi_memory_debug_top (
         ._routed_out(routed_out),
         ._routed_out_vld(m_axis_tvalid),
         ._routed_out_rdy(m_axis_tready),
-        .scheduler_0_state_addr(data_state_addr[0]),
+        .scheduler_0_state_rd_addr(data_state_rd_addr[0]),
+        .scheduler_0_state_wr_addr(data_state_wr_addr[0]),
         .scheduler_0_state_wr_data(data_state_wr_data[0]),
-        .scheduler_0_state_we(data_state_we[0]),
-        .scheduler_0_state_re(data_state_re[0]),
+        .scheduler_0_state_wr_en(data_state_wr_en[0]),
+        .scheduler_0_state_rd_en(data_state_rd_en[0]),
         .scheduler_0_state_rd_data(data_state_rd_data[0]),
-        .scheduler_0_mailbox_addr(data_mailbox_addr[0]),
+        .scheduler_0_mailbox_rd_addr(data_mailbox_rd_addr[0]),
+        .scheduler_0_mailbox_wr_addr(data_mailbox_wr_addr[0]),
         .scheduler_0_mailbox_wr_data(data_mailbox_wr_data[0]),
-        .scheduler_0_mailbox_we(data_mailbox_we[0]),
-        .scheduler_0_mailbox_re(data_mailbox_re[0]),
+        .scheduler_0_mailbox_wr_en(data_mailbox_wr_en[0]),
+        .scheduler_0_mailbox_rd_en(data_mailbox_rd_en[0]),
         .scheduler_0_mailbox_rd_data(data_mailbox_rd_data[0]),
-        .scheduler_1_state_addr(data_state_addr[1]),
+        .scheduler_1_state_rd_addr(data_state_rd_addr[1]),
+        .scheduler_1_state_wr_addr(data_state_wr_addr[1]),
         .scheduler_1_state_wr_data(data_state_wr_data[1]),
-        .scheduler_1_state_we(data_state_we[1]),
-        .scheduler_1_state_re(data_state_re[1]),
+        .scheduler_1_state_wr_en(data_state_wr_en[1]),
+        .scheduler_1_state_rd_en(data_state_rd_en[1]),
         .scheduler_1_state_rd_data(data_state_rd_data[1]),
-        .scheduler_1_mailbox_addr(data_mailbox_addr[1]),
+        .scheduler_1_mailbox_rd_addr(data_mailbox_rd_addr[1]),
+        .scheduler_1_mailbox_wr_addr(data_mailbox_wr_addr[1]),
         .scheduler_1_mailbox_wr_data(data_mailbox_wr_data[1]),
-        .scheduler_1_mailbox_we(data_mailbox_we[1]),
-        .scheduler_1_mailbox_re(data_mailbox_re[1]),
+        .scheduler_1_mailbox_wr_en(data_mailbox_wr_en[1]),
+        .scheduler_1_mailbox_rd_en(data_mailbox_rd_en[1]),
         .scheduler_1_mailbox_rd_data(data_mailbox_rd_data[1]),
-        .scheduler_2_state_addr(phi_state_addr[0]),
+        .scheduler_2_state_rd_addr(phi_state_rd_addr[0]),
+        .scheduler_2_state_wr_addr(phi_state_wr_addr[0]),
         .scheduler_2_state_wr_data(phi_state_wr_data[0]),
-        .scheduler_2_state_we(phi_state_we[0]),
-        .scheduler_2_state_re(phi_state_re[0]),
+        .scheduler_2_state_wr_en(phi_state_wr_en[0]),
+        .scheduler_2_state_rd_en(phi_state_rd_en[0]),
         .scheduler_2_state_rd_data(phi_state_rd_data[0]),
-        .scheduler_2_mailbox_addr(phi_mailbox_addr[0]),
+        .scheduler_2_mailbox_rd_addr(phi_mailbox_rd_addr[0]),
+        .scheduler_2_mailbox_wr_addr(phi_mailbox_wr_addr[0]),
         .scheduler_2_mailbox_wr_data(phi_mailbox_wr_data[0]),
-        .scheduler_2_mailbox_we(phi_mailbox_we[0]),
-        .scheduler_2_mailbox_re(phi_mailbox_re[0]),
+        .scheduler_2_mailbox_wr_en(phi_mailbox_wr_en[0]),
+        .scheduler_2_mailbox_rd_en(phi_mailbox_rd_en[0]),
         .scheduler_2_mailbox_rd_data(phi_mailbox_rd_data[0]),
-        .scheduler_3_state_addr(phi_state_addr[1]),
+        .scheduler_3_state_rd_addr(phi_state_rd_addr[1]),
+        .scheduler_3_state_wr_addr(phi_state_wr_addr[1]),
         .scheduler_3_state_wr_data(phi_state_wr_data[1]),
-        .scheduler_3_state_we(phi_state_we[1]),
-        .scheduler_3_state_re(phi_state_re[1]),
+        .scheduler_3_state_wr_en(phi_state_wr_en[1]),
+        .scheduler_3_state_rd_en(phi_state_rd_en[1]),
         .scheduler_3_state_rd_data(phi_state_rd_data[1]),
-        .scheduler_3_mailbox_addr(phi_mailbox_addr[1]),
+        .scheduler_3_mailbox_rd_addr(phi_mailbox_rd_addr[1]),
+        .scheduler_3_mailbox_wr_addr(phi_mailbox_wr_addr[1]),
         .scheduler_3_mailbox_wr_data(phi_mailbox_wr_data[1]),
-        .scheduler_3_mailbox_we(phi_mailbox_we[1]),
-        .scheduler_3_mailbox_re(phi_mailbox_re[1]),
+        .scheduler_3_mailbox_wr_en(phi_mailbox_wr_en[1]),
+        .scheduler_3_mailbox_rd_en(phi_mailbox_rd_en[1]),
         .scheduler_3_mailbox_rd_data(phi_mailbox_rd_data[1]),
-        .scheduler_4_state_addr(syndrome_state_addr[0]),
+        .scheduler_4_state_rd_addr(syndrome_state_rd_addr[0]),
+        .scheduler_4_state_wr_addr(syndrome_state_wr_addr[0]),
         .scheduler_4_state_wr_data(syndrome_state_wr_data[0]),
-        .scheduler_4_state_we(syndrome_state_we[0]),
-        .scheduler_4_state_re(syndrome_state_re[0]),
+        .scheduler_4_state_wr_en(syndrome_state_wr_en[0]),
+        .scheduler_4_state_rd_en(syndrome_state_rd_en[0]),
         .scheduler_4_state_rd_data(syndrome_state_rd_data[0]),
-        .scheduler_4_mailbox_addr(syndrome_mailbox_addr[0]),
+        .scheduler_4_mailbox_rd_addr(syndrome_mailbox_rd_addr[0]),
+        .scheduler_4_mailbox_wr_addr(syndrome_mailbox_wr_addr[0]),
         .scheduler_4_mailbox_wr_data(syndrome_mailbox_wr_data[0]),
-        .scheduler_4_mailbox_we(syndrome_mailbox_we[0]),
-        .scheduler_4_mailbox_re(syndrome_mailbox_re[0]),
+        .scheduler_4_mailbox_wr_en(syndrome_mailbox_wr_en[0]),
+        .scheduler_4_mailbox_rd_en(syndrome_mailbox_rd_en[0]),
         .scheduler_4_mailbox_rd_data(syndrome_mailbox_rd_data[0]),
-        .scheduler_5_state_addr(syndrome_state_addr[1]),
+        .scheduler_5_state_rd_addr(syndrome_state_rd_addr[1]),
+        .scheduler_5_state_wr_addr(syndrome_state_wr_addr[1]),
         .scheduler_5_state_wr_data(syndrome_state_wr_data[1]),
-        .scheduler_5_state_we(syndrome_state_we[1]),
-        .scheduler_5_state_re(syndrome_state_re[1]),
+        .scheduler_5_state_wr_en(syndrome_state_wr_en[1]),
+        .scheduler_5_state_rd_en(syndrome_state_rd_en[1]),
         .scheduler_5_state_rd_data(syndrome_state_rd_data[1]),
-        .scheduler_5_mailbox_addr(syndrome_mailbox_addr[1]),
+        .scheduler_5_mailbox_rd_addr(syndrome_mailbox_rd_addr[1]),
+        .scheduler_5_mailbox_wr_addr(syndrome_mailbox_wr_addr[1]),
         .scheduler_5_mailbox_wr_data(syndrome_mailbox_wr_data[1]),
-        .scheduler_5_mailbox_we(syndrome_mailbox_we[1]),
-        .scheduler_5_mailbox_re(syndrome_mailbox_re[1]),
+        .scheduler_5_mailbox_wr_en(syndrome_mailbox_wr_en[1]),
+        .scheduler_5_mailbox_rd_en(syndrome_mailbox_rd_en[1]),
         .scheduler_5_mailbox_rd_data(syndrome_mailbox_rd_data[1])
     );
 
     genvar ram_index;
     generate
         for (ram_index = 0; ram_index < 2; ram_index = ram_index + 1) begin: scheduler_rams
-            hls_1rw_ram #(.WIDTH(434), .ADDRESS_WIDTH(4)) data_state (
+            hls_1r1w_ram #(.WIDTH(434), .ADDRESS_WIDTH(4)) data_state (
                 .clk(aclk),
-                .addr(data_state_addr[ram_index][3:0]),
+                .rd_addr(data_state_rd_addr[ram_index][3:0]),
+                .wr_addr(data_state_wr_addr[ram_index][3:0]),
                 .wr_data(data_state_wr_data[ram_index]),
-                .we(data_state_we[ram_index]),
-                .re(data_state_re[ram_index]),
+                .wr_en(data_state_wr_en[ram_index]),
+                .rd_en(data_state_rd_en[ram_index]),
                 .rd_data(data_state_rd_data[ram_index])
             );
 
-            hls_1rw_ram #(.WIDTH(546), .ADDRESS_WIDTH(4)) phi_state (
+            hls_1r1w_ram #(.WIDTH(546), .ADDRESS_WIDTH(4)) phi_state (
                 .clk(aclk),
-                .addr(phi_state_addr[ram_index][3:0]),
+                .rd_addr(phi_state_rd_addr[ram_index][3:0]),
+                .wr_addr(phi_state_wr_addr[ram_index][3:0]),
                 .wr_data(phi_state_wr_data[ram_index]),
-                .we(phi_state_we[ram_index]),
-                .re(phi_state_re[ram_index]),
+                .wr_en(phi_state_wr_en[ram_index]),
+                .rd_en(phi_state_rd_en[ram_index]),
                 .rd_data(phi_state_rd_data[ram_index])
             );
 
-            hls_1rw_ram #(.WIDTH(434), .ADDRESS_WIDTH(4)) syndrome_state (
+            hls_1r1w_ram #(.WIDTH(434), .ADDRESS_WIDTH(4)) syndrome_state (
                 .clk(aclk),
-                .addr(syndrome_state_addr[ram_index][3:0]),
+                .rd_addr(syndrome_state_rd_addr[ram_index][3:0]),
+                .wr_addr(syndrome_state_wr_addr[ram_index][3:0]),
                 .wr_data(syndrome_state_wr_data[ram_index]),
-                .we(syndrome_state_we[ram_index]),
-                .re(syndrome_state_re[ram_index]),
+                .wr_en(syndrome_state_wr_en[ram_index]),
+                .rd_en(syndrome_state_rd_en[ram_index]),
                 .rd_data(syndrome_state_rd_data[ram_index])
             );
 
-            hls_1rw_ram #(.WIDTH(128), .ADDRESS_WIDTH(6)) data_mailbox (
+            hls_1r1w_ram #(.WIDTH(128), .ADDRESS_WIDTH(6)) data_mailbox (
                 .clk(aclk),
-                .addr(data_mailbox_addr[ram_index][5:0]),
+                .rd_addr(data_mailbox_rd_addr[ram_index][5:0]),
+                .wr_addr(data_mailbox_wr_addr[ram_index][5:0]),
                 .wr_data(data_mailbox_wr_data[ram_index]),
-                .we(data_mailbox_we[ram_index]),
-                .re(data_mailbox_re[ram_index]),
+                .wr_en(data_mailbox_wr_en[ram_index]),
+                .rd_en(data_mailbox_rd_en[ram_index]),
                 .rd_data(data_mailbox_rd_data[ram_index])
             );
 
-            hls_1rw_ram #(.WIDTH(128), .ADDRESS_WIDTH(6)) phi_mailbox (
+            hls_1r1w_ram #(.WIDTH(128), .ADDRESS_WIDTH(6)) phi_mailbox (
                 .clk(aclk),
-                .addr(phi_mailbox_addr[ram_index][5:0]),
+                .rd_addr(phi_mailbox_rd_addr[ram_index][5:0]),
+                .wr_addr(phi_mailbox_wr_addr[ram_index][5:0]),
                 .wr_data(phi_mailbox_wr_data[ram_index]),
-                .we(phi_mailbox_we[ram_index]),
-                .re(phi_mailbox_re[ram_index]),
+                .wr_en(phi_mailbox_wr_en[ram_index]),
+                .rd_en(phi_mailbox_rd_en[ram_index]),
                 .rd_data(phi_mailbox_rd_data[ram_index])
             );
 
-            hls_1rw_ram #(.WIDTH(128), .ADDRESS_WIDTH(6)) syndrome_mailbox (
+            hls_1r1w_ram #(.WIDTH(128), .ADDRESS_WIDTH(6)) syndrome_mailbox (
                 .clk(aclk),
-                .addr(syndrome_mailbox_addr[ram_index][5:0]),
+                .rd_addr(syndrome_mailbox_rd_addr[ram_index][5:0]),
+                .wr_addr(syndrome_mailbox_wr_addr[ram_index][5:0]),
                 .wr_data(syndrome_mailbox_wr_data[ram_index]),
-                .we(syndrome_mailbox_we[ram_index]),
-                .re(syndrome_mailbox_re[ram_index]),
+                .wr_en(syndrome_mailbox_wr_en[ram_index]),
+                .rd_en(syndrome_mailbox_rd_en[ram_index]),
                 .rd_data(syndrome_mailbox_rd_data[ram_index])
             );
         end

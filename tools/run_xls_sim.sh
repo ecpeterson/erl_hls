@@ -32,7 +32,7 @@ rsync -a -e "ssh -o BatchMode=yes" \
     "$local_stage/regsvc_core_adapter.v" \
     "$local_stage/regsvc_debug_top.v" \
     "$local_stage/phi_memory_debug_top.v" \
-    "$local_stage/hls_1rw_ram.v" \
+    "$local_stage/hls_1r1w_ram.v" \
     "$local_stage/hls_fabric_router.x" \
     "$local_stage/hls_spatial_router.x" \
     "$local_stage/hls_debug_types.x" \

@@ -179,10 +179,17 @@ generated_multi_family_topology_retains_compact_structure_test() ->
     >>)),
     ?assertEqual(1, count(Generated, <<"proc ControlDispatcher">>)),
     ?assertEqual(1, count(Generated, <<"spawn ControlDispatcher">>)),
-    %% Each RAM request appears in Top's member and config lists and once more
-    %% in SchedulerGrid's config list.
-    ?assertEqual(18, count(Generated, <<"::MachineRamReq> out">>)),
-    ?assertEqual(18, count(Generated, <<"::MailboxRamReq> out">>)),
+    %% Each RAM channel appears in Top's member and config lists and once more
+    %% in SchedulerGrid's config list.  Independent read and write ports let
+    %% the shared scheduler overlap the younger read with the older commit.
+    ?assertEqual(18, count(Generated, <<"::MachineRamReadReq> out">>)),
+    ?assertEqual(18, count(Generated, <<"::MachineRamReadResp> in">>)),
+    ?assertEqual(18, count(Generated, <<"::MachineRamWriteReq> out">>)),
+    ?assertEqual(18, count(Generated, <<"::MachineRamWriteResp> in">>)),
+    ?assertEqual(18, count(Generated, <<"::MailboxRamReadReq> out">>)),
+    ?assertEqual(18, count(Generated, <<"::MailboxRamReadResp> in">>)),
+    ?assertEqual(18, count(Generated, <<"::MailboxRamWriteReq> out">>)),
+    ?assertEqual(18, count(Generated, <<"::MailboxRamWriteResp> in">>)),
     ?assertEqual(1, count(Generated, <<"spawn FrameArrayMux<u32:2>(">>)),
     ?assertNotEqual(nomatch, binary:match(Generated, <<
         "state.packet.target == u2:0"

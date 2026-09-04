@@ -166,24 +166,28 @@ machine_declarations(#{
         "  failed: u1,\n",
         "}\n\n",
         "pub type MachineBits = bits[", integer_to_list(MachineBits), "];\n\n",
-        "pub struct MachineRamReq {\n",
+        "pub struct MachineRamReadReq {\n",
+        "  addr: u32,\n",
+        "  mask: (),\n",
+        "}\n\n",
+        "pub struct MachineRamReadResp { data: MachineBits }\n\n",
+        "pub struct MachineRamWriteReq {\n",
         "  addr: u32,\n",
         "  data: MachineBits,\n",
-        "  write_mask: (),\n",
-        "  read_mask: (),\n",
-        "  we: u1,\n",
-        "  re: u1,\n",
+        "  mask: (),\n",
         "}\n\n",
-        "pub struct MachineRamResp { data: MachineBits }\n\n",
-        "pub struct MailboxRamReq {\n",
+        "pub struct MachineRamWriteResp {}\n\n",
+        "pub struct MailboxRamReadReq {\n",
+        "  addr: u32,\n",
+        "  mask: (),\n",
+        "}\n\n",
+        "pub struct MailboxRamReadResp { data: bits[128] }\n\n",
+        "pub struct MailboxRamWriteReq {\n",
         "  addr: u32,\n",
         "  data: bits[128],\n",
-        "  write_mask: (),\n",
-        "  read_mask: (),\n",
-        "  we: u1,\n",
-        "  re: u1,\n",
+        "  mask: (),\n",
         "}\n\n",
-        "pub struct MailboxRamResp { data: bits[128] }\n\n",
+        "pub struct MailboxRamWriteResp {}\n\n",
         "struct MachineStep {\n",
         "  machine: Machine,\n",
         "  egress: Egress,\n",
@@ -208,12 +212,22 @@ machine_declarations(#{
         "  phase_boundary: u1,\n",
         "  egress_blocked: u1,\n",
         "}\n\n",
+        "struct SharedDispatch {\n",
+        "  machine: SharedMachine,\n",
+        "  dispatched: u1,\n",
+        "  directive: Directive,\n",
+        "  phase_boundary: u1,\n",
+        "}\n\n",
+        "struct Admission {\n",
+        "  valid: u1,\n",
+        "  producer: u32,\n",
+        "  slot: u32,\n",
+        "  physical: u8,\n",
+        "}\n\n",
         "enum SharedPhase : u3 {\n",
         "  BOOT = u3:0,\n",
         "  STARTUP = u3:1,\n",
-        "  COLLECT = u3:2,\n",
-        "  READ = u3:3,\n",
-        "  EXECUTE = u3:4,\n",
+        "  RUN = u3:2,\n",
         "}\n\n",
         "// XLS channel legalization currently confuses multiple otherwise-\n",
         "// identical SharedService instances connected to different external\n",
@@ -222,12 +236,15 @@ machine_declarations(#{
         "struct SharedState<ACTOR_COUNT: u32, PRODUCER_COUNT: u32> {\n",
         "  instance_id: u32,\n",
         "  phase: SharedPhase,\n",
-        "  slot: u32,\n",
-        "  machine: SharedMachine,\n",
-        "  frame: axis::Frame,\n",
-        "  received: u1,\n",
-        "  mailbox_index: u8,\n",
-        "  order_index: u8,\n",
+        "  next_valid: u1,\n",
+        "  next_slot: u32,\n",
+        "  older_valid: u1,\n",
+        "  older_slot: u32,\n",
+        "  older_dispatch: SharedDispatch,\n",
+        "  older_received: u1,\n",
+        "  older_mailbox_index: u8,\n",
+        "  older_order_index: u8,\n",
+        "  admission_cursor: u32,\n",
         "  cursor: u32,\n",
         "  startup_seen: u32,\n",
         "  pending: ScheduledRequest[PRODUCER_COUNT],\n",
@@ -317,38 +334,36 @@ machine_codec(#{capacity := Capacity, data_name := DataName,
         "    (machine.entered_from as bits[8]) ++\n",
         "    (machine.phase as bits[8])\n",
         "}\n\n",
-        "fn machine_read(slot: u32) -> MachineRamReq {\n",
-        "  MachineRamReq {\n",
+        "fn machine_read(slot: u32) -> MachineRamReadReq {\n",
+        "  MachineRamReadReq {\n",
         "    addr: slot,\n",
-        "    re: u1:1,\n",
-        "    ..zero!<MachineRamReq>()\n",
+        "    mask: (),\n",
         "  }\n",
         "}\n\n",
-        "fn machine_write(slot: u32, machine: SharedMachine) -> MachineRamReq {\n",
-        "  MachineRamReq {\n",
+        "fn machine_write(\n",
+        "    slot: u32, machine: SharedMachine) -> MachineRamWriteReq {\n",
+        "  MachineRamWriteReq {\n",
         "    addr: slot,\n",
         "    data: bits_from_machine(machine),\n",
-        "    we: u1:1,\n",
-        "    ..zero!<MachineRamReq>()\n",
+        "    mask: (),\n",
         "  }\n",
         "}\n\n",
         "fn mailbox_addr(slot: u32, index: u8) -> u32 {\n",
         "  slot * u32:", integer_to_list(Capacity), " + index as u32\n",
         "}\n\n",
-        "fn mailbox_read(slot: u32, index: u8) -> MailboxRamReq {\n",
-        "  MailboxRamReq {\n",
+        "fn mailbox_read(slot: u32, index: u8) -> MailboxRamReadReq {\n",
+        "  MailboxRamReadReq {\n",
         "    addr: mailbox_addr(slot, index),\n",
-        "    re: u1:1,\n",
-        "    ..zero!<MailboxRamReq>()\n",
+        "    mask: (),\n",
         "  }\n",
         "}\n\n",
         "fn mailbox_write(\n",
-        "    slot: u32, index: u8, frame: axis::Frame) -> MailboxRamReq {\n",
-        "  MailboxRamReq {\n",
+        "    slot: u32, index: u8, frame: axis::Frame)\n",
+        "    -> MailboxRamWriteReq {\n",
+        "  MailboxRamWriteReq {\n",
         "    addr: mailbox_addr(slot, index),\n",
         "    data: bits_from_axis_frame(frame),\n",
-        "    we: u1:1,\n",
-        "    ..zero!<MailboxRamReq>()\n",
+        "    mask: (),\n",
         "  }\n",
         "}\n\n"
     ].
@@ -633,14 +648,14 @@ shared_machine_step_function(#{
     message_words := MessageWords
 }) ->
     [
-        "fn shared_machine_step(\n",
-        "    machine: SharedMachine, frame: axis::Frame, received: u1,\n",
-        "    egress_ready: u1) -> SharedStep {\n",
+        "fn shared_machine_dispatch(\n",
+        "    machine: SharedMachine, frame: axis::Frame, received: u1)\n",
+        "    -> SharedDispatch {\n",
         "  if machine.failed {\n",
-        "    SharedStep { machine, ..zero!<SharedStep>() }\n",
-        "  } else if machine.enter_pending {\n",
-        shared_machine_entry_step(),
-        "  } else if received {\n",
+        "    SharedDispatch { machine, ..zero!<SharedDispatch>() }\n",
+        "  } else if machine.enter_pending || !received {\n",
+        "    SharedDispatch { machine, ..zero!<SharedDispatch>() }\n",
+        "  } else {\n",
         "    let tag_ok = ",
         tag_ok_expression(MessageNames, MessageWords), ";\n",
         "    let (next_phase, next_data, directive, repeat_phase) =\n",
@@ -658,41 +673,31 @@ shared_machine_step_function(#{
         "      (effective && repeat_phase);\n",
         "    let failed = !tag_ok || invalid_repeat ||\n",
         "      (effective && directive == Directive::FAIL);\n",
-        "    let needs_entry = effective && phase_boundary && !failed;\n",
-        "    let (entered_data, entry_effects) = if needs_entry {\n",
-        "      enter(machine.phase, next_phase, next_data)\n",
-        "    } else {\n",
-        "      (next_data, zero!<EntryEffects>())\n",
-        "    };\n",
-        "    let has_entry_effects =\n",
-        "      entry_effects_valid(entry_effects);\n",
-        "    let fuse_entry = needs_entry &&\n",
-        "      (!has_entry_effects || egress_ready);\n",
         "    let next_machine = SharedMachine {\n",
         "      phase: if effective { next_phase } else { machine.phase },\n",
         "      entered_from: if phase_boundary {\n",
         "        machine.phase\n",
         "      } else { machine.entered_from },\n",
-        "      data: if fuse_entry {\n",
-        "        entered_data\n",
-        "      } else if effective { next_data } else { machine.data },\n",
-        "      enter_pending: needs_entry && !fuse_entry,\n",
+        "      data: if effective { next_data } else { machine.data },\n",
+        "      enter_pending: effective && phase_boundary && !failed,\n",
         "      failed,\n",
         "      ..machine\n",
         "    };\n",
-        "    SharedStep {\n",
+        "    SharedDispatch {\n",
         "      machine: next_machine,\n",
         "      dispatched: tag_ok && !invalid_repeat,\n",
         "      directive,\n",
         "      phase_boundary,\n",
-        "      effects: entry_effects,\n",
-        "      effects_valid: fuse_entry && has_entry_effects,\n",
-        "      egress_blocked: needs_entry && has_entry_effects &&\n",
-        "        !egress_ready,\n",
-        "      ..zero!<SharedStep>()\n",
+        "      ..zero!<SharedDispatch>()\n",
         "    }\n",
-        "  } else {\n",
+        "  }\n",
+        "}\n\n",
+        "fn shared_machine_enter(machine: SharedMachine, egress_ready: u1)\n",
+        "    -> SharedStep {\n",
+        "  if machine.failed || !machine.enter_pending {\n",
         "    SharedStep { machine, ..zero!<SharedStep>() }\n",
+        "  } else {\n",
+        shared_machine_entry_step(),
         "  }\n",
         "}\n\n"
     ].
@@ -804,21 +809,24 @@ shared_service(_Spec) ->
     }
 
     // Finds the first selectable actor at or after the round-robin cursor.
-    // A mailbox candidate remains latent while that actor has entry work.
-    // Egress waiters become selectable together when the one batch credit
-    // returns; servicing any one of them consumes it again.
+    // The excluded slot has been read but not dispatched, so its next state
+    // is not yet visible to another activation.
     fn ready_selection<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
         state: SharedState<ACTOR_COUNT, PRODUCER_COUNT>,
-        cursor: u32) -> (u1, u32) {
+        cursor: u32,
+        excluded_valid: u1,
+        excluded_slot: u32) -> (u1, u32) {
       let (after_found, after_slot, before_found, before_slot) =
           unroll_for! (slot, acc):
               (u32, (u1, u32, u1, u32)) in u32:0..ACTOR_COUNT {
         let entry_active =
           state.entry_probes[slot] || state.egress_waiters[slot];
-        let selectable =
+        let ready =
           state.entry_probes[slot] ||
           (state.mail_candidates[slot] && !entry_active) ||
           (state.egress_waiters[slot] && !state.egress_busy);
+        let selectable = ready &&
+          (!excluded_valid || slot != excluded_slot);
         let take_after = !acc.0 && slot >= cursor && selectable;
         let take_before = !acc.2 && slot < cursor && selectable;
         (
@@ -834,20 +842,122 @@ shared_service(_Spec) ->
       )
     }
 
-    struct Collection<ACTOR_COUNT: u32, PRODUCER_COUNT: u32> {
-      state: SharedState<ACTOR_COUNT, PRODUCER_COUNT>,
-      mailbox_request: MailboxRamReq,
-      mailbox_request_valid: u1,
+    // Dispatch publishes the actor address and its mailbox action. Entry runs
+    // one pipeline interval later and seals the state/effect values for
+    // in-order commit.
+    fn resolve_entry(step: SharedDispatch, valid: u1, egress_ready: u1) ->
+        SharedStep {
+      let entered = shared_machine_enter(step.machine, egress_ready);
+      if valid {
+        SharedStep {
+          machine: entered.machine,
+          effects: entered.effects,
+          effects_valid: entered.effects_valid,
+          egress_blocked: entered.egress_blocked,
+          dispatched: step.dispatched,
+          directive: step.directive,
+          phase_boundary: step.phase_boundary,
+        }
+      } else {
+        zero!<SharedStep>()
+      }
     }
 
-    // Applies at most one returned batch credit and one producer admission to
-    // captured requests. This is pure so the idle and pipelined commit paths
-    // share exactly the same mailbox metadata transition.
-    fn collect_pending<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
+    // Projects the sealed older activation into scheduler metadata. Its RAM
+    // write shares the RUN activation with a distinct younger actor's read.
+    fn retire_actor<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
         state: SharedState<ACTOR_COUNT, PRODUCER_COUNT>,
+        valid: u1,
+        slot: u32,
+        stepped: SharedStep,
+        received: u1,
+        mailbox_index: u8,
+        order_index: u8) -> SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
+      let consumed = valid && received && stepped.dispatched &&
+        stepped.directive == Directive::CONSUME;
+      let should_postpone = valid && received && stepped.dispatched &&
+        stepped.directive == Directive::POSTPONE;
+      let old_count = state.occupied[slot];
+      let occupied = if valid {
+        update(
+          state.occupied,
+          slot,
+          if consumed { old_count - u8:1 } else { old_count })
+      } else {
+        state.occupied
+      };
+      let compacted = compact_order(
+        state.order[slot], order_index, old_count);
+      let order = if consumed {
+        update(state.order, slot, compacted)
+      } else {
+        state.order
+      };
+      let marked = update(
+        state.postponed[slot], mailbox_index as u32, u1:1);
+      let postponed_row = if stepped.phase_boundary {
+        zero!<u1[MAILBOX_DEPTH]>()
+      } else if should_postpone {
+        marked
+      } else {
+        state.postponed[slot]
+      };
+      let postponed = if valid {
+        update(state.postponed, slot, postponed_row)
+      } else {
+        state.postponed
+      };
+      let metadata_state = SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
+        occupied,
+        order,
+        postponed,
+        ..state
+      };
+      let (mail_remaining, _, _) =
+        mailbox_selection(metadata_state, slot);
+      let mail_candidates = if valid {
+        update(
+          state.mail_candidates,
+          slot,
+          mail_remaining && !stepped.machine.failed)
+      } else {
+        state.mail_candidates
+      };
+      let entry_probes = if valid {
+        update(
+          state.entry_probes,
+          slot,
+          stepped.machine.enter_pending &&
+            !stepped.egress_blocked && !stepped.machine.failed)
+      } else {
+        state.entry_probes
+      };
+      let egress_waiters = if valid {
+        update(
+          state.egress_waiters,
+          slot,
+          stepped.machine.enter_pending &&
+            stepped.egress_blocked && !stepped.machine.failed)
+      } else {
+        state.egress_waiters
+      };
+      SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
+        occupied,
+        order,
+        postponed,
+        mail_candidates,
+        entry_probes,
+        egress_waiters,
+        ..state
+      }
+    }
+
+    // Returned batch credits represent completed effect batches, so they
+    // update scheduler metadata without carrying another actor context.
+    fn collect_credit<PRODUCER_COUNT: u32>(
         pending: ScheduledRequest[PRODUCER_COUNT],
-        pending_valid: u1[PRODUCER_COUNT]) ->
-        Collection<ACTOR_COUNT, PRODUCER_COUNT> {
+        pending_valid: u1[PRODUCER_COUNT],
+        egress_busy: u1) -> (u1[PRODUCER_COUNT], u1) {
       let (credit_found, credit_producer) =
         unroll_for! (candidate, acc):
             (u32, (u1, u32)) in u32:0..PRODUCER_COUNT {
@@ -855,17 +965,62 @@ shared_service(_Spec) ->
             pending[candidate].credit;
           (acc.0 || take, if take { candidate } else { acc.1 })
         }((u1:0, u32:0));
-      let (found, producer) = unroll_for! (candidate, acc):
-          (u32, (u1, u32)) in u32:0..PRODUCER_COUNT {
-        let slot = pending[candidate].slot;
-        let eligible = !acc.0 && pending_valid[candidate] &&
-          !pending[candidate].credit && slot < ACTOR_COUNT &&
-          state.occupied[slot] < MAILBOX_CAPACITY;
+      let remaining = if credit_found {
+        update(pending_valid, credit_producer, u1:0)
+      } else {
+        pending_valid
+      };
+      (remaining, egress_busy && !credit_found)
+    }
+
+    struct AdmissionResult<ACTOR_COUNT: u32, PRODUCER_COUNT: u32> {
+      pending_valid: u1[PRODUCER_COUNT],
+      occupied: u8[ACTOR_COUNT],
+      order: u8[MAILBOX_DEPTH][ACTOR_COUNT],
+      mail_candidates: u1[ACTOR_COUNT],
+      admission: Admission,
+      cursor: u32,
+    }
+
+    // Reserves one producer frame against metadata that already includes the
+    // older sealed activation. The younger address is unresolved and stalls
+    // only same-address admission for this interval.
+    fn reserve_admission<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
+        state: SharedState<ACTOR_COUNT, PRODUCER_COUNT>,
+        pending: ScheduledRequest[PRODUCER_COUNT],
+        pending_valid: u1[PRODUCER_COUNT],
+        excluded_valid: u1,
+        excluded_slot: u32,
+        failed_valid: u1,
+        failed_slot: u32) ->
+        AdmissionResult<ACTOR_COUNT, PRODUCER_COUNT> {
+      let (after_found, after_producer, before_found, before_producer) =
+          unroll_for! (candidate, acc):
+              (u32, (u1, u32, u1, u32)) in u32:0..PRODUCER_COUNT {
+        let request = pending[candidate];
+        let slot = request.slot;
+        let eligible = pending_valid[candidate] && !request.credit &&
+          slot < ACTOR_COUNT &&
+          state.occupied[slot] < MAILBOX_CAPACITY &&
+          (!excluded_valid || slot != excluded_slot) &&
+          (!failed_valid || slot != failed_slot);
+        let take_after = !acc.0 &&
+          candidate >= state.admission_cursor && eligible;
+        let take_before = !acc.2 &&
+          candidate < state.admission_cursor && eligible;
         (
-          acc.0 || eligible,
-          if eligible { candidate } else { acc.1 }
+          acc.0 || take_after,
+          if take_after { candidate } else { acc.1 },
+          acc.2 || take_before,
+          if take_before { candidate } else { acc.3 }
         )
-      }((u1:0, u32:0));
+      }((u1:0, u32:0, u1:0, u32:0));
+      let found = after_found || before_found;
+      let producer = if after_found {
+        after_producer
+      } else {
+        before_producer
+      };
       let request = pending[producer];
       let slot = if request.slot < ACTOR_COUNT {
         request.slot
@@ -891,37 +1046,40 @@ shared_service(_Spec) ->
       } else {
         state.mail_candidates
       };
-      let remaining_after_admission = if found {
+      let remaining = if found {
         update(pending_valid, producer, u1:0)
       } else {
         pending_valid
       };
-      let remaining = if credit_found {
-        update(remaining_after_admission, credit_producer, u1:0)
+      let cursor = if found {
+        if producer + u32:1 == PRODUCER_COUNT {
+          u32:0
+        } else {
+          producer + u32:1
+        }
       } else {
-        remaining_after_admission
+        state.admission_cursor
       };
-      Collection<ACTOR_COUNT, PRODUCER_COUNT> {
-        state: SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
-          pending,
-          pending_valid: remaining,
-          occupied,
-          order,
-          mail_candidates,
-          egress_busy: state.egress_busy && !credit_found,
-          ..state
+      AdmissionResult<ACTOR_COUNT, PRODUCER_COUNT> {
+        pending_valid: remaining,
+        occupied,
+        order,
+        mail_candidates,
+        admission: Admission {
+          valid: found,
+          producer,
+          slot,
+          physical,
         },
-        mailbox_request: mailbox_write(slot, physical, request.frame),
-        mailbox_request_valid: found,
+        cursor,
       }
     }
 
-    // One mailbox owner admits frames, keeps queue metadata, and fairly
-    // advances all actors in a homogeneous scheduler group. An entry visit
-    // commits its complete ordered effect batch; the group router serializes
-    // that batch after releasing the actor state. Every producer has one
-    // holding slot, so one full actor cannot block unrelated traffic before
-    // manager admission.
+    // One mailbox owner advances a fixed in-order two-stage activation. The
+    // older actor enters and commits while a distinct younger actor is read
+    // and dispatched. Independent read and write ports sustain one actor
+    // initiation per XLS two-clock pipeline interval; slot exclusion prevents
+    // a read/write collision without speculative same-slot access.
     pub proc SharedService<
         ACTOR_COUNT: u32,
         PRODUCER_COUNT: u32,
@@ -931,34 +1089,40 @@ shared_service(_Spec) ->
       request_in: chan<ScheduledRequest>[PRODUCER_COUNT] in;
       startup_in: chan<ScheduledRequest> in;
       egress_out: chan<ScheduledEffects> out;
-      ram_req_out: chan<MachineRamReq> out;
-      ram_resp_in: chan<MachineRamResp> in;
-      ram_wr_comp_in: chan<()> in;
-      mailbox_req_out: chan<MailboxRamReq> out;
-      mailbox_resp_in: chan<MailboxRamResp> in;
-      mailbox_wr_comp_in: chan<()> in;
+      ram_read_req_out: chan<MachineRamReadReq> out;
+      ram_read_resp_in: chan<MachineRamReadResp> in;
+      ram_write_req_out: chan<MachineRamWriteReq> out;
+      ram_write_resp_in: chan<MachineRamWriteResp> in;
+      mailbox_read_req_out: chan<MailboxRamReadReq> out;
+      mailbox_read_resp_in: chan<MailboxRamReadResp> in;
+      mailbox_write_req_out: chan<MailboxRamWriteReq> out;
+      mailbox_write_resp_in: chan<MailboxRamWriteResp> in;
 
       config(
           request_in: chan<ScheduledRequest>[PRODUCER_COUNT] in,
           startup_in: chan<ScheduledRequest> in,
           egress_out: chan<ScheduledEffects> out,
-          ram_req_out: chan<MachineRamReq> out,
-          ram_resp_in: chan<MachineRamResp> in,
-          ram_wr_comp_in: chan<()> in,
-          mailbox_req_out: chan<MailboxRamReq> out,
-          mailbox_resp_in: chan<MailboxRamResp> in,
-          mailbox_wr_comp_in: chan<()> in
+          ram_read_req_out: chan<MachineRamReadReq> out,
+          ram_read_resp_in: chan<MachineRamReadResp> in,
+          ram_write_req_out: chan<MachineRamWriteReq> out,
+          ram_write_resp_in: chan<MachineRamWriteResp> in,
+          mailbox_read_req_out: chan<MailboxRamReadReq> out,
+          mailbox_read_resp_in: chan<MailboxRamReadResp> in,
+          mailbox_write_req_out: chan<MailboxRamWriteReq> out,
+          mailbox_write_resp_in: chan<MailboxRamWriteResp> in
       ) {
         (
           request_in,
           startup_in,
           egress_out,
-          ram_req_out,
-          ram_resp_in,
-          ram_wr_comp_in,
-          mailbox_req_out,
-          mailbox_resp_in,
-          mailbox_wr_comp_in,
+          ram_read_req_out,
+          ram_read_resp_in,
+          ram_write_req_out,
+          ram_write_resp_in,
+          mailbox_read_req_out,
+          mailbox_read_resp_in,
+          mailbox_write_req_out,
+          mailbox_write_resp_in,
         )
       }
 
@@ -971,9 +1135,7 @@ shared_service(_Spec) ->
       }
 
       next(state: SharedState<ACTOR_COUNT, PRODUCER_COUNT>) {
-        let capture_enabled =
-          state.phase == SharedPhase::COLLECT ||
-          state.phase == SharedPhase::READ;
+        let capture_enabled = state.phase == SharedPhase::RUN;
         let (capture_tok, captured_pending, captured_pending_valid) =
           unroll_for! (producer, acc):
               (u32, (
@@ -1001,24 +1163,24 @@ shared_service(_Spec) ->
               }
             )
           }((join(), state.pending, state.pending_valid));
-        let collected = collect_pending(
-          state, captured_pending, captured_pending_valid);
         match state.phase {
           SharedPhase::BOOT => {
             let write_tok = send(
               capture_tok,
-              ram_req_out,
+              ram_write_req_out,
               machine_write(state.cursor, initial_shared_machine()));
-            let (_done, _) = recv(write_tok, ram_wr_comp_in);
+            let (_done, _) = recv(write_tok, ram_write_resp_in);
             let entry_probes = update(
               state.entry_probes, state.cursor, u1:1);
             if state.cursor + u32:1 == ACTOR_COUNT {
               SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
                 phase: if STARTUP_COUNT == u32:0 {
-                  SharedPhase::COLLECT
+                  SharedPhase::RUN
                 } else {
                   SharedPhase::STARTUP
                 },
+                next_valid: STARTUP_COUNT == u32:0,
+                next_slot: u32:0,
                 cursor: u32:0,
                 entry_probes,
                 ..state
@@ -1036,9 +1198,9 @@ shared_service(_Spec) ->
             let physical = state.occupied[request.slot];
             let write_tok = send(
               tok,
-              mailbox_req_out,
+              mailbox_write_req_out,
               mailbox_write(request.slot, physical, request.frame));
-            let (_done, _) = recv(write_tok, mailbox_wr_comp_in);
+            let (_done, _) = recv(write_tok, mailbox_write_resp_in);
             let occupied = update(
               state.occupied, request.slot, physical + u8:1);
             let row = update(
@@ -1049,10 +1211,12 @@ shared_service(_Spec) ->
             let startup_seen = state.startup_seen + u32:1;
             SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
               phase: if startup_seen == STARTUP_COUNT {
-                SharedPhase::COLLECT
+                SharedPhase::RUN
               } else {
                 SharedPhase::STARTUP
               },
+              next_valid: startup_seen == STARTUP_COUNT,
+              next_slot: u32:0,
               startup_seen,
               occupied,
               order,
@@ -1060,181 +1224,150 @@ shared_service(_Spec) ->
               ..state
             }
           },
-          SharedPhase::COLLECT => {
-            let (state_completion_tok, _) = recv_if(
-              join(), ram_wr_comp_in, state.state_write_pending, ());
-            let (mailbox_completion_tok, _) = recv_if(
-              join(), mailbox_wr_comp_in,
-              state.mailbox_write_pending, ());
-            let write_tok = send_if(
-              capture_tok,
-              mailbox_req_out,
-              collected.mailbox_request_valid,
-              collected.mailbox_request);
-            let _done = join(
-              write_tok, state_completion_tok, mailbox_completion_tok);
-            let (ready, slot) = ready_selection(
-              collected.state, state.cursor);
-            SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
-              phase: if ready {
-                SharedPhase::READ
-              } else {
-                SharedPhase::COLLECT
-              },
-              slot: if ready { slot } else { state.slot },
-              state_write_pending: u1:0,
-              mailbox_write_pending:
-                collected.mailbox_request_valid,
-              ..collected.state
-            }
-          },
-          SharedPhase::READ => {
-            let entry_active = state.entry_probes[state.slot] ||
-              state.egress_waiters[state.slot];
+          SharedPhase::RUN => {
+            let read_slot = if state.next_valid {
+              state.next_slot
+            } else {
+              u32:0
+            };
+            let entry_active = state.entry_probes[read_slot] ||
+              state.egress_waiters[read_slot];
             let read_mailbox =
-              state.mail_candidates[state.slot] && !entry_active;
+              state.next_valid &&
+              state.mail_candidates[read_slot] && !entry_active;
             let (received, order_index, mailbox_index) =
-              mailbox_selection(state, state.slot);
-            let state_tok = send(
-              join(), ram_req_out, machine_read(state.slot));
-            let mailbox_tok = send_if(
-              join(),
-              mailbox_req_out,
-              read_mailbox && received,
-              mailbox_read(state.slot, mailbox_index));
-            let (state_done, response) = recv(state_tok, ram_resp_in);
-            let (mailbox_done, mailbox_response) = recv_if(
-              mailbox_tok,
-              mailbox_resp_in,
-              read_mailbox && received,
-              zero!<MailboxRamResp>());
+              mailbox_selection(state, read_slot);
             let (state_completion_tok, _) = recv_if(
-              join(), ram_wr_comp_in, state.state_write_pending, ());
+              join(), ram_write_resp_in, state.state_write_pending,
+              zero!<MachineRamWriteResp>());
             let (mailbox_completion_tok, _) = recv_if(
-              join(), mailbox_wr_comp_in,
-              state.mailbox_write_pending, ());
-            let _done = join(
+              join(), mailbox_write_resp_in,
+              state.mailbox_write_pending,
+              zero!<MailboxRamWriteResp>());
+            let state_read_tok = send_if(
+              join(),
+              ram_read_req_out,
+              state.next_valid,
+              machine_read(read_slot));
+            let mailbox_read_tok = send_if(
+              join(),
+              mailbox_read_req_out,
+              read_mailbox && received,
+              mailbox_read(read_slot, mailbox_index));
+            let (state_done, response) = recv_if(
+              state_read_tok,
+              ram_read_resp_in,
+              state.next_valid,
+              zero!<MachineRamReadResp>());
+            let (mailbox_done, mailbox_response) = recv_if(
+              mailbox_read_tok,
+              mailbox_read_resp_in,
+              read_mailbox && received,
+              zero!<MailboxRamReadResp>());
+            let (credit_pending_valid, credit_busy) = collect_credit(
+              captured_pending,
+              captured_pending_valid,
+              state.egress_busy);
+            let resolved = resolve_entry(
+              state.older_dispatch, state.older_valid, !credit_busy);
+            let credited = SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
+              pending: captured_pending,
+              pending_valid: credit_pending_valid,
+              egress_busy: credit_busy ||
+                (state.older_valid && resolved.effects_valid),
+              ..state
+            };
+            let retired = retire_actor(
+              credited,
+              state.older_valid,
+              state.older_slot,
+              resolved,
+              state.older_received,
+              state.older_mailbox_index,
+              state.older_order_index);
+            let reservation = reserve_admission(
+              retired,
+              captured_pending,
+              credit_pending_valid,
+              state.next_valid,
+              read_slot,
+              state.older_valid && resolved.machine.failed,
+              state.older_slot);
+            let admitted = SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
+              pending: captured_pending,
+              pending_valid: reservation.pending_valid,
+              occupied: reservation.occupied,
+              order: reservation.order,
+              mail_candidates: reservation.mail_candidates,
+              admission_cursor: reservation.cursor,
+              ..retired
+            };
+            let cursor = if state.next_valid {
+              if read_slot + u32:1 == ACTOR_COUNT {
+                u32:0
+              } else {
+                read_slot + u32:1
+              }
+            } else {
+              state.cursor
+            };
+            let (ready, next_slot) = ready_selection(
+              admitted,
+              cursor,
+              state.next_valid,
+              read_slot);
+            let machine = machine_from_bits(response.data);
+            let frame = axis_frame_from_bits(mailbox_response.data);
+            let dispatched = shared_machine_dispatch(
+              machine, frame, read_mailbox && received);
+            let scheduled = ScheduledEffects {
+              slot: state.older_slot,
+              effects: resolved.effects,
+            };
+            let egress_tok = send_if(
               capture_tok,
+              egress_out,
+              state.older_valid && resolved.effects_valid,
+              scheduled);
+            let state_write_tok = send_if(
+              join(state_read_tok, egress_tok),
+              ram_write_req_out,
+              state.older_valid,
+              machine_write(state.older_slot, resolved.machine));
+            let admission_frame =
+              captured_pending[reservation.admission.producer].frame;
+            let mailbox_write_tok = send_if(
+              join(mailbox_read_tok, egress_tok),
+              mailbox_write_req_out,
+              reservation.admission.valid,
+              mailbox_write(
+                reservation.admission.slot,
+                reservation.admission.physical,
+                admission_frame));
+            let _done = join(
               state_done,
               mailbox_done,
+              state_write_tok,
+              mailbox_write_tok,
               state_completion_tok,
               mailbox_completion_tok);
             SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
-              phase: SharedPhase::EXECUTE,
-              machine: machine_from_bits(response.data),
-              frame: axis_frame_from_bits(mailbox_response.data),
-              received: read_mailbox && received,
-              mailbox_index,
-              order_index,
-              pending: captured_pending,
-              pending_valid: captured_pending_valid,
-              state_write_pending: u1:0,
-              mailbox_write_pending: u1:0,
-              ..state
-            }
-          },
-          SharedPhase::EXECUTE => {
-            let working = collected.state;
-            let stepped = shared_machine_step(
-              state.machine, state.frame, state.received,
-              !working.egress_busy);
-            let scheduled = ScheduledEffects {
-              slot: state.slot,
-              effects: stepped.effects,
-            };
-            let egress_tok = send_if(
-              capture_tok, egress_out, stepped.effects_valid, scheduled);
-            let state_write_tok = send(
-              egress_tok,
-              ram_req_out,
-              machine_write(state.slot, stepped.machine));
-            let mailbox_write_tok = send_if(
-              egress_tok,
-              mailbox_req_out,
-              collected.mailbox_request_valid,
-              collected.mailbox_request);
-            let _done = join(state_write_tok, mailbox_write_tok);
-            let consumed = state.received &&
-              stepped.dispatched &&
-              stepped.directive == Directive::CONSUME;
-            let should_postpone = state.received &&
-              stepped.dispatched &&
-              stepped.directive == Directive::POSTPONE;
-            let old_count = working.occupied[state.slot];
-            let occupied = update(
-              working.occupied,
-              state.slot,
-              if consumed { old_count - u8:1 } else { old_count });
-            let compacted = compact_order(
-              working.order[state.slot], state.order_index, old_count);
-            let order = if consumed {
-              update(working.order, state.slot, compacted)
-            } else {
-              working.order
-            };
-            let marked = update(
-              working.postponed[state.slot],
-              state.mailbox_index as u32,
-              u1:1);
-            let postponed_row = if stepped.phase_boundary {
-              zero!<u1[MAILBOX_DEPTH]>()
-            } else if should_postpone {
-              marked
-            } else {
-              working.postponed[state.slot]
-            };
-            let postponed = update(
-              working.postponed, state.slot, postponed_row);
-            let metadata_state = SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
-              occupied,
-              order,
-              postponed,
-              ..working
-            };
-            let (mail_remaining, _, _) =
-              mailbox_selection(metadata_state, state.slot);
-            let mail_candidates = update(
-              working.mail_candidates,
-              state.slot,
-              mail_remaining && !stepped.machine.failed);
-            let entry_probes = update(
-              working.entry_probes,
-              state.slot,
-              stepped.machine.enter_pending &&
-                !stepped.egress_blocked && !stepped.machine.failed);
-            let egress_waiters = update(
-              working.egress_waiters,
-              state.slot,
-              stepped.machine.enter_pending &&
-                stepped.egress_blocked && !stepped.machine.failed);
-            let cursor = if state.slot + u32:1 == ACTOR_COUNT {
-              u32:0
-            } else {
-              state.slot + u32:1
-            };
-            let advanced = SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
-              cursor,
-              occupied,
-              order,
-              postponed,
-              mail_candidates,
-              entry_probes,
-              egress_waiters,
-              egress_busy: working.egress_busy || stepped.effects_valid,
-              state_write_pending: u1:1,
-              mailbox_write_pending:
-                collected.mailbox_request_valid,
-              ..working
-            };
-            let (ready, slot) = ready_selection(advanced, cursor);
-            SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
-              phase: if ready {
-                SharedPhase::READ
+              next_valid: ready,
+              next_slot,
+              older_valid: state.next_valid,
+              older_slot: read_slot,
+              older_dispatch: if state.next_valid {
+                dispatched
               } else {
-                SharedPhase::COLLECT
+                zero!<SharedDispatch>()
               },
-              slot: if ready { slot } else { state.slot },
-              ..advanced
+              older_received: read_mailbox && received,
+              older_mailbox_index: mailbox_index,
+              older_order_index: order_index,
+              cursor,
+              state_write_pending: state.older_valid,
+              mailbox_write_pending: reservation.admission.valid,
+              ..admitted
             }
           },
         }

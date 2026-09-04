@@ -819,19 +819,20 @@ state_machine_entry_actions_use_one_source_ordered_egress_test() ->
         )),
         ?assertNotEqual(nomatch, binary:match(
             XLS,
-            <<"let needs_entry = effective && phase_boundary && !failed">>
+            <<"fn shared_machine_dispatch(\n">>
         )),
         ?assertNotEqual(nomatch, binary:match(
             XLS,
-            <<"enter(machine.phase, next_phase, next_data)">>
+            <<"fn shared_machine_enter(machine: SharedMachine, "
+              "egress_ready: u1)">>
         )),
         ?assertNotEqual(nomatch, binary:match(
             XLS,
-            <<"enter_pending: needs_entry && !fuse_entry">>
+            <<"enter_pending: effective && phase_boundary && !failed">>
         )),
-        ?assertNotEqual(nomatch, binary:match(
+        ?assertEqual(nomatch, binary:match(
             XLS,
-            <<"effects_valid: fuse_entry && has_entry_effects">>
+            <<"let fuse_entry =">>
         )),
         ?assertNotEqual(nomatch, binary:match(
             XLS,
@@ -855,11 +856,19 @@ state_machine_entry_actions_use_one_source_ordered_egress_test() ->
         )),
         ?assertNotEqual(nomatch, binary:match(
             XLS,
-            <<"mailbox_req_out: chan<MailboxRamReq> out">>
+            <<"mailbox_read_req_out: chan<MailboxRamReadReq> out">>
         )),
         ?assertNotEqual(nomatch, binary:match(
             XLS,
-            <<"ram_req_out: chan<MachineRamReq> out">>
+            <<"mailbox_write_req_out: chan<MailboxRamWriteReq> out">>
+        )),
+        ?assertNotEqual(nomatch, binary:match(
+            XLS,
+            <<"ram_read_req_out: chan<MachineRamReadReq> out">>
+        )),
+        ?assertNotEqual(nomatch, binary:match(
+            XLS,
+            <<"ram_write_req_out: chan<MachineRamWriteReq> out">>
         )),
         ?assertNotEqual(nomatch, binary:match(
             XLS,
@@ -888,22 +897,20 @@ state_machine_entry_actions_use_one_source_ordered_egress_test() ->
         )),
         ?assertNotEqual(nomatch, binary:match(
             XLS,
-            <<"fn collect_pending<ACTOR_COUNT: u32, "
-              "PRODUCER_COUNT: u32>">>
-        )),
-        ?assertEqual(1, length(binary:matches(
-            XLS,
-            <<"let collected = collect_pending(">>
-        ))),
-        ?assertNotEqual(nomatch, binary:match(
-            XLS,
-            <<"let capture_enabled =\n"
-              "      state.phase == SharedPhase::COLLECT ||\n"
-              "      state.phase == SharedPhase::READ">>
+            <<"older_dispatch: SharedDispatch">>
         )),
         ?assertNotEqual(nomatch, binary:match(
             XLS,
-            <<"let (ready, slot) = ready_selection(advanced, cursor)">>
+            <<"admission: Admission">>
+        )),
+        ?assertNotEqual(nomatch, binary:match(
+            XLS,
+            <<"let capture_enabled = state.phase == SharedPhase::RUN">>
+        )),
+        ?assertEqual(nomatch, binary:match(XLS, <<"SharedPhase::COLLECT">>)),
+        ?assertNotEqual(nomatch, binary:match(
+            XLS,
+            <<"let resolved = resolve_entry(\n">>
         )),
         ?assertNotEqual(nomatch, binary:match(
             XLS,
@@ -912,8 +919,7 @@ state_machine_entry_actions_use_one_source_ordered_egress_test() ->
         )),
         ?assertNotEqual(nomatch, binary:match(
             XLS,
-            <<"(state.mail_candidates[slot] && !entry_active) ||\n"
-              "      (state.egress_waiters[slot] && !state.egress_busy)">>
+            <<"(!excluded_valid || slot != excluded_slot)">>
         )),
         ?assertNotEqual(nomatch, binary:match(
             XLS,
@@ -921,8 +927,7 @@ state_machine_entry_actions_use_one_source_ordered_egress_test() ->
         )),
         ?assertNotEqual(nomatch, binary:match(
             XLS,
-            <<"stepped.machine.enter_pending &&\n"
-              "            stepped.egress_blocked">>
+            <<"state.older_valid && resolved.effects_valid">>
         )),
         ?assertNotEqual(nomatch, binary:match(
             XLS,

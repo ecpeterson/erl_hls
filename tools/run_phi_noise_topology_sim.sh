@@ -33,7 +33,7 @@ rsync -a -e "ssh -o BatchMode=yes" \
     "$local_stage/phenom_syndrome_cell.x" \
     "$local_stage/phi_noise_topology.x" \
     "$local_stage/phi_noise_topology_tb.sv" \
-    "$local_stage/hls_1rw_ram.v" \
+    "$local_stage/hls_1r1w_ram.v" \
     "$local_stage/phi_scheduler_rams.sh" \
     "$local_stage/remote_phi_noise_topology_sim.sh" \
     "$remote_host:$remote_stage/"
