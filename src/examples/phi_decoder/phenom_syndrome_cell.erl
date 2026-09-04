@@ -8,18 +8,23 @@ A source-aware syndrome cell which supplies noise events to one phi cell.
 
 ## Protocol
 
-The paired phi cell starts each round by sending one `phenom_request`. The
-syndrome then enters `collecting` and casts a `phenom_query` to each of its
-four neighboring data cells. Four distinct `phenom_data` responses are
+Configuration starts the first round by casting a `phenom_query` to each of
+the four neighboring data cells. Four distinct `phenom_data` responses are
 combined by parity. Their quiet bits are ANDed with the syndrome source's own
-quiet state. Entering `announcing` sends the resulting detection event and
-neighborhood quiet certificate to the paired phi cell as one `phenom_anyon`.
+quiet state, and the completed result is retained in `announcing`.
 
-There is deliberately no timer in this actor. The phi request is its clock, so
-the CPU reference process and generated module observe the same round
-boundaries. Configuration and all protocol messages share the module's one
-framed input channel; the five named outputs are separate, backpressured
-channels in generated hardware.
+The paired phi cell sends one `phenom_request` for that completed step. The
+request releases the retained detection event and neighborhood quiet
+certificate as one `phenom_anyon`, then starts computation of the following
+step. The source can therefore compute one result while phi processes the
+preceding result, but it cannot run a second step ahead or fill the phi
+mailbox with unrequested announcements.
+
+There is deliberately no timer in this actor. Phi requests provide the credit
+which advances the one-result lookahead, so the CPU reference process and
+generated module associate the same PRNG draw with each step. Configuration
+and all protocol messages share the module's one framed input channel; the
+five named outputs are separate, backpressured channels in generated hardware.
 
 ## Measurement noise
 
@@ -47,8 +52,9 @@ its source as `south`, and so on. Data responses follow the same convention.
 The source mask rejects duplicate or invalid participants, so completion does
 not depend on cross-sender arrival order.
 
-The five-slot mailbox can retain four early data responses for the following
-round plus the request which changes the phase and releases them.
+The five-slot mailbox can retain four responses for the result being computed
+plus an early request for that result. A completed result lives in actor state,
+not in the paired phi actor's mailbox.
 """.
 
 -include("phi_protocol.hrl").
@@ -73,7 +79,7 @@ round plus the request which changes the phase and releases them.
 
 -behavior(hls_statem).
 -hls_data(syndrome).
--hls_phases([configuring, waiting, collecting, announcing]).
+-hls_phases([configuring, collecting, announcing]).
 -hls_outputs([north, east, west, south, phi]).
 -hls_mailbox_capacity(?MAILBOX_CAPACITY).
 -compile({parse_transform, hls_pack}).
@@ -95,7 +101,7 @@ round plus the request which changes the phase and releases them.
     cutoff_step = hls_type:zero() :: hls_nums:u32()
 }).
 
--type phase() :: configuring | waiting | collecting | announcing.
+-type phase() :: configuring | collecting | announcing.
 -type directive() :: consume | postpone | fail.
 -type conclusion() :: {phase(), #syndrome{}, directive()}.
 -type outputs() :: #{
@@ -183,7 +189,7 @@ noise_cutoff(PID, FirstQuietStep)
 noise_cutoff(_PID, _FirstQuietStep) ->
     error(badarg).
 
--doc "Offers one round request from the paired phi cell.".
+-doc "Releases one computed result and permits computation of the next.".
 -spec offer_request(pid(), hls_nums:u32()) -> ok.
 offer_request(PID, Step)
         when Step >= 0, Step =< ?U32_MASK ->
@@ -223,17 +229,12 @@ init([]) ->
     hls_statem:enter_result().
 handle_enter(_OldPhase, configuring, Syndrome) ->
     {Syndrome, []};
-handle_enter(_OldPhase, waiting, Syndrome) ->
-    {Syndrome, []};
 handle_enter(_OldPhase, collecting, Syndrome) ->
-    Query = #phenom_query{step = Syndrome#syndrome.step},
-    {Syndrome, [
-        {cast, north, Query#phenom_query{source = ?PHI_SOUTH_MASK}},
-        {cast, east, Query#phenom_query{source = ?PHI_WEST_MASK}},
-        {cast, west, Query#phenom_query{source = ?PHI_EAST_MASK}},
-        {cast, south, Query#phenom_query{source = ?PHI_NORTH_MASK}}
-    ]};
-handle_enter(_OldPhase, announcing, Syndrome) ->
+    Releasing = Syndrome#syndrome.seen_sources =:= ?PHI_ALL_DIRECTIONS,
+    NextStep = case Releasing of
+        false -> Syndrome#syndrome.step;
+        true -> (Syndrome#syndrome.step + 1) band ?U32_MASK
+    end,
     Anyon = #phenom_anyon{
         step = Syndrome#syndrome.step,
         flags = Syndrome#syndrome.announcement bor
@@ -241,7 +242,23 @@ handle_enter(_OldPhase, announcing, Syndrome) ->
         x = Syndrome#syndrome.x,
         y = Syndrome#syndrome.y
     },
-    {Syndrome, [{cast, phi, Anyon}]}.
+    Query = #phenom_query{step = NextStep},
+    Cleared = Syndrome#syndrome{
+        step = NextStep,
+        seen_sources = 0,
+        announcement = 0,
+        data_quiet = 1,
+        announcement_quiet = 0
+    },
+    {Cleared, [
+        {cast_if, Releasing, phi, Anyon},
+        {cast, north, Query#phenom_query{source = ?PHI_SOUTH_MASK}},
+        {cast, east, Query#phenom_query{source = ?PHI_WEST_MASK}},
+        {cast, west, Query#phenom_query{source = ?PHI_EAST_MASK}},
+        {cast, south, Query#phenom_query{source = ?PHI_NORTH_MASK}}
+    ]};
+handle_enter(_OldPhase, announcing, Syndrome) ->
+    {Syndrome, []}.
 
 -spec handle_cast(
     #phenom_config{} | #phenom_request{} | #phenom_data{} |
@@ -258,12 +275,17 @@ handle_cast(
        X >= 0, X =< ?U16_MASK,
        Y >= 0, Y =< ?U16_MASK ->
     Configured = Syndrome#syndrome{
+        seen_sources = 0,
+        data_parity = 0,
+        announcement = 0,
+        data_quiet = 1,
+        announcement_quiet = 0,
         random_state = Seed,
         threshold = Threshold,
         x = X,
         y = Y
     },
-    {waiting, Configured, consume};
+    {collecting, Configured, consume};
 handle_cast(#phenom_config{}, configuring, Syndrome) ->
     {configuring, Syndrome, fail};
 handle_cast(
@@ -278,49 +300,6 @@ handle_cast(#phenom_data{}, configuring, Syndrome) ->
     {configuring, Syndrome, fail};
 handle_cast(#noise_cutoff{}, configuring, Syndrome) ->
     {configuring, Syndrome, fail};
-
-handle_cast(#phenom_config{}, waiting, Syndrome) ->
-    {waiting, Syndrome, fail};
-handle_cast(
-    #noise_cutoff{
-        first_quiet_step = FirstQuietStep
-    },
-    waiting,
-    Syndrome = #syndrome{
-        step = Step,
-        noise_disabled = 0,
-        cutoff_armed = 0
-    }
-) when FirstQuietStep >= Step ->
-    {waiting, Syndrome#syndrome{
-        cutoff_armed = 1,
-        cutoff_step = FirstQuietStep
-    }, consume};
-handle_cast(#noise_cutoff{}, waiting, Syndrome) ->
-    {waiting, Syndrome, fail};
-handle_cast(
-    #phenom_request{step = Step},
-    waiting,
-    Syndrome = #syndrome{step = Step}
-) ->
-    Collecting = Syndrome#syndrome{
-        seen_sources = 0,
-        data_parity = 0,
-        announcement = 0,
-        data_quiet = 1,
-        announcement_quiet = 0
-    },
-    {collecting, Collecting, consume};
-handle_cast(#phenom_request{}, waiting, Syndrome) ->
-    {waiting, Syndrome, fail};
-handle_cast(
-    #phenom_data{step = Step},
-    waiting,
-    Syndrome = #syndrome{step = Step}
-) ->
-    {waiting, Syndrome, postpone};
-handle_cast(#phenom_data{}, waiting, Syndrome) ->
-    {waiting, Syndrome, fail};
 
 handle_cast(#phenom_config{}, collecting, Syndrome) ->
     {collecting, Syndrome, fail};
@@ -342,10 +321,10 @@ handle_cast(
 handle_cast(#noise_cutoff{}, collecting, Syndrome) ->
     {collecting, Syndrome, fail};
 handle_cast(
-    #phenom_request{step = NextStep},
+    #phenom_request{step = Step},
     collecting,
     Syndrome = #syndrome{step = Step}
-) when NextStep =:= ((Step + 1) band ?U32_MASK) ->
+) ->
     {collecting, Syndrome, postpone};
 handle_cast(#phenom_request{}, collecting, Syndrome) ->
     {collecting, Syndrome, fail};
@@ -439,17 +418,12 @@ handle_cast(
 handle_cast(#noise_cutoff{}, announcing, Syndrome) ->
     {announcing, Syndrome, fail};
 handle_cast(
-    #phenom_request{step = NextStep},
+    #phenom_request{step = Step},
     announcing,
     Syndrome = #syndrome{step = Step}
-) when NextStep =:= ((Step + 1) band ?U32_MASK) ->
+) ->
     Collecting = Syndrome#syndrome{
-        step = NextStep,
-        seen_sources = 0,
-        data_parity = 0,
-        announcement = 0,
-        data_quiet = 1,
-        announcement_quiet = 0
+        data_parity = 0
     },
     {collecting, Collecting, consume};
 handle_cast(#phenom_request{}, announcing, Syndrome) ->

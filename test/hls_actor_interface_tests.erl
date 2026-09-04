@@ -107,7 +107,7 @@ phenomenological_interfaces_are_distinct_test() ->
     Data = hls_actor_interface:from_module(phenom_data_cell),
     Syndrome = hls_actor_interface:from_module(phenom_syndrome_cell),
     ?assertEqual(4, hls_actor_interface:max_entry_effects(Data)),
-    ?assertEqual(4, hls_actor_interface:max_entry_effects(Syndrome)),
+    ?assertEqual(5, hls_actor_interface:max_entry_effects(Syndrome)),
     ?assertEqual(
         [noise_cutoff, pauli_query, pauli_update,
             phenom_config, phenom_query],

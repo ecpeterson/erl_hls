@@ -37,7 +37,6 @@ closed_noise_pipeline_advances_phi_test() ->
             ?SYNDROME_Y
         ),
         await_phase(phenom_data_cell, Data, collecting),
-        await_phase(phenom_syndrome_cell, Syndrome, waiting),
 
         %% A one-cell periodic decoder is enough to exercise the complete
         %% pacing path. Its four logical edges share a PID but retain distinct
@@ -124,7 +123,6 @@ odd_data_error_reaches_phi_test() ->
             end,
             Data
         ),
-        await_phase(phenom_syndrome_cell, Syndrome, waiting),
         ok = phi_halo_cell:connect(
             Phi,
             (four_ports(Sink))#{

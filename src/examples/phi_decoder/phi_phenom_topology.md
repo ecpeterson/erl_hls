@@ -1155,9 +1155,10 @@ requires corrections on both planes. It observed 64 X and 62 Z corrections.
 Between complete steps eight and 32, the graph took 4,048 clocks, or 168.67
 clocks per decoder step. That projects to 1.186 million steps per second at
 200 MHz, and equivalently needs about 168.7 MHz for a one-megahertz step rate.
-The complete three-shard memory experiment took 400.5 clocks per step, so the
-phenomenological source/data round trip—not the phi decoder alone—accounts for
-most of the remaining factor of two.
+The complete three-shard memory experiment took 400.5 clocks per step. The
+one-result lookahead below shows that this gap cannot all be assigned to the
+phenomenological source/data round trip: once that work overlaps phi, the
+host-facing diagnostic streams expose a second bottleneck.
 
 The exclusive VPI issue classification supports that interpretation. During
 a repeated full closeout, the six phi schedulers launched a state read on
@@ -1183,3 +1184,42 @@ not optimize the phenomenological generator merely to improve this demo's
 headline throughput. The next hardware step is timing closure of the useful
 two-shard decoder profile, followed by a decoder-only two-versus-three-shard
 area/timing choice if the placed clock falls short of the required rate.
+
+### One-result phenomenological lookahead
+
+The request-paced source previously began all four data queries only after its
+paired phi actor requested the next step. The revised source computes step zero
+at configuration and retains each completed result until the matching
+`phenom_request` arrives. Consuming that request releases the retained
+`phenom_anyon` and starts the four queries for the following step in one entry
+batch. It can therefore overlap one physical-noise result with phi work, but it
+cannot run two results ahead. Four data responses plus one early request still
+fit the existing five-frame syndrome mailbox, and the completed result lives
+in the unchanged actor-state word.
+
+The complete three-shard CPU-versus-native-Icarus comparison still agrees on
+all 84 corrections and all 18 final data replies. The cycle trace confirms the
+intended overlap. Before the change, the complete step-`n+1` announcement set
+reached the application boundary an average of 105.9 clocks after the last
+step-`n` status; afterward it arrived an average of 37.3 clocks before that
+status. Step zero also completed about 1,100 clocks earlier in this run. The
+steady interval, however, changed only from 400.45 clocks over steps 0--22 to
+399.57 clocks over steps 0--23.
+
+That flat result is an output-bandwidth bound, not a failed lookahead. Every
+step sends 18 diagnostic syndrome announcements, 18 required closeout status
+frames, and on this witness an average of 84 / 22 correction frames. Each is a
+five-beat routed frame, and the current gateway path accepts one output beat
+every two clocks. The resulting lower bound is about 398.2 clocks per step,
+which accounts for the observation. The new run keeps that link occupied while
+the source and decoder work overlap behind it.
+
+The diagnostic announcement streams are ignored by `phi_memory_experiment`;
+they are drained only because their lossless fanout can backpressure the
+decoder. A deployment-oriented follow-up should make those copies optional,
+best-effort, or part of the debug boundary, then repeat the rate measurement.
+The remaining status traffic may eventually merit on-fabric aggregation. Even
+without changing the frame set, an initiation interval of one beat would put
+this particular 32-bit output path at roughly 199 clocks per step, just over
+one million steps per second at 200 MHz. These are transport-throughput
+projections, not timing-closure results.
