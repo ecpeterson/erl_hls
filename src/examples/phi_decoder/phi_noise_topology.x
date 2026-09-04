@@ -1512,17 +1512,15 @@ proc SchedulerRouter4 {
   to_scheduler_0: chan<phenom_data_cell::ScheduledRequest> out;
   to_scheduler_1: chan<phenom_data_cell::ScheduledRequest> out;
   to_scheduler_2: chan<phi_halo_cell::ScheduledRequest> out;
-  x_announcements_out: chan<axis::Frame> out;
 
   config(
     scheduled_in: chan<phenom_syndrome_cell::ScheduledEffects> in,
     credit_out: chan<phenom_syndrome_cell::ScheduledRequest> out,
     to_scheduler_0: chan<phenom_data_cell::ScheduledRequest> out,
     to_scheduler_1: chan<phenom_data_cell::ScheduledRequest> out,
-    to_scheduler_2: chan<phi_halo_cell::ScheduledRequest> out,
-    x_announcements_out: chan<axis::Frame> out
+    to_scheduler_2: chan<phi_halo_cell::ScheduledRequest> out
   ) {
-    (scheduled_in, credit_out, to_scheduler_0, to_scheduler_1, to_scheduler_2, x_announcements_out)
+    (scheduled_in, credit_out, to_scheduler_0, to_scheduler_1, to_scheduler_2)
   }
 
   init { zero!<SchedulerRouter4State>() }
@@ -1565,15 +1563,11 @@ proc SchedulerRouter4 {
             frame: effect.frame,
             ..zero!<phenom_data_cell::ScheduledRequest>()
           }),
-        phenom_syndrome_cell::OutputPort::PHI => {
-          let left_tok = send(tok, x_announcements_out, effect.frame);
-          let right_tok = send(tok, to_scheduler_2, phi_halo_cell::ScheduledRequest {
+        phenom_syndrome_cell::OutputPort::PHI => send(tok, to_scheduler_2, phi_halo_cell::ScheduledRequest {
             slot: scheduler_2_slot(ScheduledAddress { family: FamilyId::PHI_X as u8, x: x, y: y }),
             frame: effect.frame,
             ..zero!<phi_halo_cell::ScheduledRequest>()
-          });
-          join(left_tok, right_tok)
-        },
+          }),
         }
       },
         _ => tok,
@@ -1612,17 +1606,15 @@ proc SchedulerRouter5 {
   to_scheduler_0: chan<phenom_data_cell::ScheduledRequest> out;
   to_scheduler_1: chan<phenom_data_cell::ScheduledRequest> out;
   to_scheduler_3: chan<phi_halo_cell::ScheduledRequest> out;
-  z_announcements_out: chan<axis::Frame> out;
 
   config(
     scheduled_in: chan<phenom_syndrome_cell::ScheduledEffects> in,
     credit_out: chan<phenom_syndrome_cell::ScheduledRequest> out,
     to_scheduler_0: chan<phenom_data_cell::ScheduledRequest> out,
     to_scheduler_1: chan<phenom_data_cell::ScheduledRequest> out,
-    to_scheduler_3: chan<phi_halo_cell::ScheduledRequest> out,
-    z_announcements_out: chan<axis::Frame> out
+    to_scheduler_3: chan<phi_halo_cell::ScheduledRequest> out
   ) {
-    (scheduled_in, credit_out, to_scheduler_0, to_scheduler_1, to_scheduler_3, z_announcements_out)
+    (scheduled_in, credit_out, to_scheduler_0, to_scheduler_1, to_scheduler_3)
   }
 
   init { zero!<SchedulerRouter5State>() }
@@ -1665,15 +1657,11 @@ proc SchedulerRouter5 {
             frame: effect.frame,
             ..zero!<phenom_data_cell::ScheduledRequest>()
           }),
-        phenom_syndrome_cell::OutputPort::PHI => {
-          let left_tok = send(tok, z_announcements_out, effect.frame);
-          let right_tok = send(tok, to_scheduler_3, phi_halo_cell::ScheduledRequest {
+        phenom_syndrome_cell::OutputPort::PHI => send(tok, to_scheduler_3, phi_halo_cell::ScheduledRequest {
             slot: scheduler_3_slot(ScheduledAddress { family: FamilyId::PHI_Z as u8, x: x, y: y }),
             frame: effect.frame,
             ..zero!<phi_halo_cell::ScheduledRequest>()
-          });
-          join(left_tok, right_tok)
-        },
+          }),
         }
       },
         _ => tok,
@@ -1749,9 +1737,7 @@ proc SchedulerGrid {
     scheduler_5_mailbox_write_resp_in: chan<phenom_syndrome_cell::MailboxRamWriteResp> in,
     control_router_in: chan<hls_spatial_router::SpatialFrame> in,
     data_measurements_out: chan<axis::Frame> out,
-    x_announcements_out: chan<axis::Frame> out,
     x_decoder_events_out: chan<axis::Frame> out,
-    z_announcements_out: chan<axis::Frame> out,
     z_decoder_events_out: chan<axis::Frame> out
   ) {
     let (external_0_buffer_p, external_0_buffer_c) =
@@ -1760,10 +1746,6 @@ proc SchedulerGrid {
       chan<axis::Frame, CHANNEL_DEPTH>("external_1_buffer");
     let (external_2_buffer_p, external_2_buffer_c) =
       chan<axis::Frame, CHANNEL_DEPTH>("external_2_buffer");
-    let (external_3_buffer_p, external_3_buffer_c) =
-      chan<axis::Frame, CHANNEL_DEPTH>("external_3_buffer");
-    let (external_4_buffer_p, external_4_buffer_c) =
-      chan<axis::Frame, CHANNEL_DEPTH>("external_4_buffer");
     let (scheduler_0_requests_p, scheduler_0_requests_c) =
       chan<phenom_data_cell::ScheduledRequest, CHANNEL_DEPTH>[u32:4]("scheduler_0_requests");
     let (scheduler_0_startup_p, scheduler_0_startup_c) =
@@ -1868,30 +1850,26 @@ proc SchedulerGrid {
       scheduler_2_egress_c, scheduler_2_requests_p[u32:2],
       scheduler_2_requests_p[u32:0],
       scheduler_4_requests_p[u32:2],
-      external_2_buffer_p);
+      external_1_buffer_p);
     spawn SchedulerRouter3(
       scheduler_3_egress_c, scheduler_3_requests_p[u32:2],
       scheduler_3_requests_p[u32:0],
       scheduler_5_requests_p[u32:2],
-      external_4_buffer_p);
+      external_2_buffer_p);
     spawn SchedulerRouter4(
       scheduler_4_egress_c, scheduler_4_requests_p[u32:4],
       scheduler_0_requests_p[u32:0],
       scheduler_1_requests_p[u32:0],
-      scheduler_2_requests_p[u32:1],
-      external_1_buffer_p);
+      scheduler_2_requests_p[u32:1]);
     spawn SchedulerRouter5(
       scheduler_5_egress_c, scheduler_5_requests_p[u32:4],
       scheduler_0_requests_p[u32:1],
       scheduler_1_requests_p[u32:1],
-      scheduler_3_requests_p[u32:1],
-      external_3_buffer_p);
+      scheduler_3_requests_p[u32:1]);
     spawn ControlDispatcher(control_router_in, scheduler_0_requests_p[u32:2], scheduler_1_requests_p[u32:2], scheduler_4_requests_p[u32:3], scheduler_5_requests_p[u32:3]);
     spawn FrameArrayMux<u32:2>(external_0_buffer_c, data_measurements_out);
-    spawn FrameRelay(external_1_buffer_c, x_announcements_out);
-    spawn FrameRelay(external_2_buffer_c, x_decoder_events_out);
-    spawn FrameRelay(external_3_buffer_c, z_announcements_out);
-    spawn FrameRelay(external_4_buffer_c, z_decoder_events_out);
+    spawn FrameRelay(external_1_buffer_c, x_decoder_events_out);
+    spawn FrameRelay(external_2_buffer_c, z_decoder_events_out);
     ()
   }
 
@@ -1950,9 +1928,7 @@ pub proc Top {
   scheduler_5_mailbox_write_resp_in: chan<phenom_syndrome_cell::MailboxRamWriteResp> in;
   control_router_in: chan<hls_spatial_router::SpatialFrame> in;
   data_measurements_out: chan<axis::Frame> out;
-  x_announcements_out: chan<axis::Frame> out;
   x_decoder_events_out: chan<axis::Frame> out;
-  z_announcements_out: chan<axis::Frame> out;
   z_decoder_events_out: chan<axis::Frame> out;
 
   config(
@@ -2006,9 +1982,7 @@ pub proc Top {
     scheduler_5_mailbox_write_resp_in: chan<phenom_syndrome_cell::MailboxRamWriteResp> in,
     control_router_in: chan<hls_spatial_router::SpatialFrame> in,
     data_measurements_out: chan<axis::Frame> out,
-    x_announcements_out: chan<axis::Frame> out,
     x_decoder_events_out: chan<axis::Frame> out,
-    z_announcements_out: chan<axis::Frame> out,
     z_decoder_events_out: chan<axis::Frame> out
   ) {
     spawn SchedulerGrid(
@@ -2062,12 +2036,10 @@ pub proc Top {
       scheduler_5_mailbox_write_resp_in,
       control_router_in,
       data_measurements_out,
-      x_announcements_out,
       x_decoder_events_out,
-      z_announcements_out,
       z_decoder_events_out
     );
-    (scheduler_0_ram_read_req_out, scheduler_0_ram_read_resp_in, scheduler_0_ram_write_req_out, scheduler_0_ram_write_resp_in, scheduler_0_mailbox_read_req_out, scheduler_0_mailbox_read_resp_in, scheduler_0_mailbox_write_req_out, scheduler_0_mailbox_write_resp_in, scheduler_1_ram_read_req_out, scheduler_1_ram_read_resp_in, scheduler_1_ram_write_req_out, scheduler_1_ram_write_resp_in, scheduler_1_mailbox_read_req_out, scheduler_1_mailbox_read_resp_in, scheduler_1_mailbox_write_req_out, scheduler_1_mailbox_write_resp_in, scheduler_2_ram_read_req_out, scheduler_2_ram_read_resp_in, scheduler_2_ram_write_req_out, scheduler_2_ram_write_resp_in, scheduler_2_mailbox_read_req_out, scheduler_2_mailbox_read_resp_in, scheduler_2_mailbox_write_req_out, scheduler_2_mailbox_write_resp_in, scheduler_3_ram_read_req_out, scheduler_3_ram_read_resp_in, scheduler_3_ram_write_req_out, scheduler_3_ram_write_resp_in, scheduler_3_mailbox_read_req_out, scheduler_3_mailbox_read_resp_in, scheduler_3_mailbox_write_req_out, scheduler_3_mailbox_write_resp_in, scheduler_4_ram_read_req_out, scheduler_4_ram_read_resp_in, scheduler_4_ram_write_req_out, scheduler_4_ram_write_resp_in, scheduler_4_mailbox_read_req_out, scheduler_4_mailbox_read_resp_in, scheduler_4_mailbox_write_req_out, scheduler_4_mailbox_write_resp_in, scheduler_5_ram_read_req_out, scheduler_5_ram_read_resp_in, scheduler_5_ram_write_req_out, scheduler_5_ram_write_resp_in, scheduler_5_mailbox_read_req_out, scheduler_5_mailbox_read_resp_in, scheduler_5_mailbox_write_req_out, scheduler_5_mailbox_write_resp_in, control_router_in, data_measurements_out, x_announcements_out, x_decoder_events_out, z_announcements_out, z_decoder_events_out)
+    (scheduler_0_ram_read_req_out, scheduler_0_ram_read_resp_in, scheduler_0_ram_write_req_out, scheduler_0_ram_write_resp_in, scheduler_0_mailbox_read_req_out, scheduler_0_mailbox_read_resp_in, scheduler_0_mailbox_write_req_out, scheduler_0_mailbox_write_resp_in, scheduler_1_ram_read_req_out, scheduler_1_ram_read_resp_in, scheduler_1_ram_write_req_out, scheduler_1_ram_write_resp_in, scheduler_1_mailbox_read_req_out, scheduler_1_mailbox_read_resp_in, scheduler_1_mailbox_write_req_out, scheduler_1_mailbox_write_resp_in, scheduler_2_ram_read_req_out, scheduler_2_ram_read_resp_in, scheduler_2_ram_write_req_out, scheduler_2_ram_write_resp_in, scheduler_2_mailbox_read_req_out, scheduler_2_mailbox_read_resp_in, scheduler_2_mailbox_write_req_out, scheduler_2_mailbox_write_resp_in, scheduler_3_ram_read_req_out, scheduler_3_ram_read_resp_in, scheduler_3_ram_write_req_out, scheduler_3_ram_write_resp_in, scheduler_3_mailbox_read_req_out, scheduler_3_mailbox_read_resp_in, scheduler_3_mailbox_write_req_out, scheduler_3_mailbox_write_resp_in, scheduler_4_ram_read_req_out, scheduler_4_ram_read_resp_in, scheduler_4_ram_write_req_out, scheduler_4_ram_write_resp_in, scheduler_4_mailbox_read_req_out, scheduler_4_mailbox_read_resp_in, scheduler_4_mailbox_write_req_out, scheduler_4_mailbox_write_resp_in, scheduler_5_ram_read_req_out, scheduler_5_ram_read_resp_in, scheduler_5_ram_write_req_out, scheduler_5_ram_write_resp_in, scheduler_5_mailbox_read_req_out, scheduler_5_mailbox_read_resp_in, scheduler_5_mailbox_write_req_out, scheduler_5_mailbox_write_resp_in, control_router_in, data_measurements_out, x_decoder_events_out, z_decoder_events_out)
   }
 
   init { () }

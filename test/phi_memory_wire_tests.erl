@@ -12,7 +12,7 @@ boundary_contract_tracks_normalized_topology_test() ->
         [maps:get(id, Output) || Output <- maps:get(outputs, Contract)]
     ),
     ?assertEqual(
-        lists:seq(2, 6),
+        [2, 4, 6],
         [maps:get(endpoint, Output) || Output <- maps:get(outputs, Contract)]
     ),
     [Ingress] = maps:get(ingresses, Plan),
@@ -120,12 +120,6 @@ event_codecs_round_trip_test() ->
     Events = [
         {data_measurements, #pauli_reply{
             request_id = 7, x = 1, y = 4, anticommutes = 1
-        }},
-        {x_announcements, #phenom_anyon{
-            step = 8, flags = 3, x = 2, y = 1
-        }},
-        {z_announcements, #phenom_anyon{
-            step = 9, flags = 0, x = 0, y = 2
         }},
         {x_decoder_events, #phi_correction{
             step = 10, x = 1, y = 0, direction = ?PHI_EAST_MASK
@@ -279,14 +273,6 @@ invalid_events_are_rejected_before_encoding_test() ->
         phi_memory_wire:encode_event(
             x_announcements,
             #phenom_anyon{step = 1, flags = 0, x = 3, y = 0},
-            Contract
-        )
-    ),
-    ?assertEqual(
-        {error, event},
-        phi_memory_wire:encode_event(
-            x_announcements,
-            #phi_status{step = 1, flags = 0, x = 0, y = 0},
             Contract
         )
     ).

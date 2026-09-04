@@ -138,6 +138,20 @@ deployment profile; status aggregation and an initiation interval of one beat
 are further transport optimizations. They are separate from decoder-core
 throughput and from the real apparatus, which supplies syndromes externally.
 
+The follow-up splits the host-bound frame serializer from the RAM-backed
+scheduler core. The core retains its two-stage, II=2 RAM timing contract; the
+small reusable `HostRoutedTx` unit is compiled at II=1. With the old diagnostic
+copies still present, the complete three-shard witness improves to 220.46
+clocks per step, about 907 thousand steps per second at 200 MHz, and reports no
+application-TX stalls. Removing the visualization-only copies then cuts the
+application boundary from 942 frames / 4,713 observed beats to 507 frames / 2,535
+beats but leaves cadence at 221.69 clocks per step (about 902 thousand steps
+per second). Thus the II=1 serializer removes the observation-bandwidth bound;
+the remaining rate is internal to the decoder and shared schedulers. Endpoints
+3 and 5 remain reserved, and a future bounded debug-event path can restore the
+visualization without making it lossless application traffic. Inline status
+aggregation remains deferred.
+
 ## Running the experiment
 
 The fast local checks are:

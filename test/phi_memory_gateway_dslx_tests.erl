@@ -64,6 +64,9 @@ sharded_gateway_and_wrapper_expose_every_scheduler_ram_test() ->
             ?assertEqual(SchedulerCount, count(
                 Wrapper, <<"hls_1r1w_ram #(.WIDTH(">>
             ) div 2),
+            assert_contains(Wrapper, <<
+                "__hls_fabric_router__HostRoutedTx_0_next application_egress"
+            >>),
             Last = integer_to_binary(SchedulerCount - 1),
             assert_contains(Wrapper, <<".scheduler_", Last/binary,
                 "_state_rd_addr(">>)
@@ -117,7 +120,10 @@ first_valid_command_arms_topology_egress_test() ->
     >>),
     assert_contains(Generated, <<"spawn FrameMux(topology_outputs_c, pre_gate_p)">>),
     assert_contains(Generated, <<"spawn hls_fabric_router::EgressGate(\n">>),
-    assert_contains(Generated, <<"chan<axis::Frame, u32:0>[u32:5](\"topology_outputs\")">>),
+    assert_contains(Generated, <<
+        "pre_gate_c, routed_frame_out, arm_c);"
+    >>),
+    assert_contains(Generated, <<"chan<axis::Frame, u32:0>[u32:3](\"topology_outputs\")">>),
     ?assertEqual(nomatch, binary:match(Generated, <<"FrameMux {\n  arm_in:">>)),
     ?assertEqual(nomatch, binary:match(Generated, <<"proc EgressGate {">>)).
 
@@ -157,19 +163,25 @@ egress_contract_is_explicit_test() ->
         fun(Endpoint) -> assert_contains(Generated, Endpoint) end,
         [
             <<"const DATA_MEASUREMENTS_ENDPOINT = u16:2;">>,
-            <<"const X_ANNOUNCEMENTS_ENDPOINT = u16:3;">>,
             <<"const X_DECODER_EVENTS_ENDPOINT = u16:4;">>,
-            <<"const Z_ANNOUNCEMENTS_ENDPOINT = u16:5;">>,
             <<"const Z_DECODER_EVENTS_ENDPOINT = u16:6;">>
         ]
     ),
     assert_contains(Generated, <<"cursor == candidate">>),
-    assert_contains(Generated, <<"cursor == u32:4 { u32:0 }">>),
+    assert_contains(Generated, <<"cursor == u32:2 { u32:0 }">>),
     assert_contains(Router, <<"word: route_word(state2.source, DESTINATION)">>),
     assert_contains(Generated, <<"flags: BOUNDARY_VERSION">>),
     assert_contains(Generated, <<"txid: u8:0">>),
     assert_contains(Generated, <<
-        "spawn hls_fabric_router::RoutedTx<HOST_ENDPOINT>("
+        "routed_frame_out: chan<hls_fabric_router::RoutedFrame> out"
+    >>),
+    ?assertEqual(
+        nomatch,
+        binary:match(Generated, <<"spawn hls_fabric_router::RoutedTx<">>)
+    ),
+    assert_contains(Router, <<"pub proc HostRoutedTx {">>),
+    assert_contains(Router, <<
+        "spawn RoutedTx<HOST_ENDPOINT>(frame_in, routed_out);"
     >>),
     ?assertEqual(nomatch, binary:match(Generated, <<"proc RoutedTx {">>)),
     ?assertEqual(nomatch, binary:match(Generated, <<"proc EndpointIngress<">>)).

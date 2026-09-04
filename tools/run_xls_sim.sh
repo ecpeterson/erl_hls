@@ -55,6 +55,7 @@ rsync -a -e "ssh -o BatchMode=yes" \
     "$local_stage/phi_torus_topology_tb.sv" \
     "$local_stage/phi_noise_topology_smoke_tb.sv" \
     "$local_stage/phi_memory_bridge_tb.sv" \
+    "$local_stage/hls_fabric_host_tx_tb.sv" \
     "$local_stage/ordered_egress_topology_tb.sv" \
     "$local_stage/xls_sim_bridge.c" \
     "$local_stage/erl_src" \
@@ -82,6 +83,7 @@ rsync -a -e "ssh -o BatchMode=yes" \
     --include=hls_debug_server.v \
     --include=hls_fabric_ingress.v \
     --include=hls_fabric_egress.v \
+    --include=hls_fabric_host_tx.v \
     --exclude='*' \
     "$remote_host:$remote_stage/" \
     "$local_stage/"

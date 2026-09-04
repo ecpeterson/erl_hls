@@ -1,7 +1,6 @@
 `timescale 1ns/1ps
 
 module phi_noise_topology_smoke_tb;
-    localparam [7:0] PHENOM_ANYON_TAG = 8'd10;
     localparam [7:0] PHI_CORRECTION_TAG = 8'd11;
     localparam [7:0] PAULI_QUERY_TAG = 8'd13;
     localparam [7:0] PAULI_REPLY_TAG = 8'd14;
@@ -23,14 +22,6 @@ module phi_noise_topology_smoke_tb;
     reg control_router_valid = 1'b0;
     wire control_router_ready;
 
-    reg x_ready = 1'b0;
-    wire [127:0] x_announcement;
-    wire x_valid;
-
-    reg z_ready = 1'b0;
-    wire [127:0] z_announcement;
-    wire z_valid;
-
     wire x_decoder_events_ready = 1'b1;
     wire [127:0] x_decoder_events;
     wire x_decoder_events_valid;
@@ -43,18 +34,6 @@ module phi_noise_topology_smoke_tb;
     wire [127:0] data_measurements;
     wire data_measurements_valid;
 
-    reg [127:0] captured_x;
-    reg [127:0] captured_z;
-    reg [127:0] stalled_x;
-    reg [127:0] stalled_z;
-    integer x_count = 0;
-    integer z_count = 0;
-    integer x_decoder_event_count = 0;
-    integer z_decoder_event_count = 0;
-    integer state_read_count = 0;
-    integer state_write_count = 0;
-    integer mailbox_read_count = 0;
-    integer mailbox_write_count = 0;
     reg x_quiet_status_seen = 1'b0;
     reg z_quiet_status_seen = 1'b0;
     reg first_reply_seen = 1'b0;
@@ -121,9 +100,6 @@ module phi_noise_topology_smoke_tb;
         ._data_measurements_out_vld(
             data_measurements_valid
         ),
-        ._x_announcements_out_rdy(x_ready),
-        ._x_announcements_out(x_announcement),
-        ._x_announcements_out_vld(x_valid),
         ._x_decoder_events_out_rdy(
             x_decoder_events_ready
         ),
@@ -131,9 +107,6 @@ module phi_noise_topology_smoke_tb;
         ._x_decoder_events_out_vld(
             x_decoder_events_valid
         ),
-        ._z_announcements_out_rdy(z_ready),
-        ._z_announcements_out(z_announcement),
-        ._z_announcements_out_vld(z_valid),
         ._z_decoder_events_out_rdy(
             z_decoder_events_ready
         ),
@@ -369,24 +342,10 @@ module phi_noise_topology_smoke_tb;
     endtask
 
     always @(posedge clk) begin
-        if (!reset && x_valid && x_ready && x_count == 0) begin
-            captured_x <= x_announcement;
-            x_count <= 1;
-        end
-        if (!reset && z_valid && z_ready && z_count == 0) begin
-            captured_z <= z_announcement;
-            z_count <= 1;
-        end
         if (!reset && x_decoder_events_valid && x_decoder_events_ready)
-        begin
-            x_decoder_event_count <= x_decoder_event_count + 1;
             record_decoder_event(x_decoder_events, "x");
-        end
         if (!reset && z_decoder_events_valid && z_decoder_events_ready)
-        begin
-            z_decoder_event_count <= z_decoder_event_count + 1;
             record_decoder_event(z_decoder_events, "z");
-        end
         if (!reset && data_measurements_valid && data_measurements_ready)
             record_pauli_reply(data_measurements);
         if (!reset) begin
@@ -421,18 +380,6 @@ module phi_noise_topology_smoke_tb;
                     $fatal(1);
                 end
             end
-            state_read_count <= state_read_count + data_state_rd_en[0] +
-                data_state_rd_en[1] + phi_state_rd_en[0] + phi_state_rd_en[1] +
-                syndrome_state_rd_en[0] + syndrome_state_rd_en[1];
-            state_write_count <= state_write_count + data_state_wr_en[0] +
-                data_state_wr_en[1] + phi_state_wr_en[0] + phi_state_wr_en[1] +
-                syndrome_state_wr_en[0] + syndrome_state_wr_en[1];
-            mailbox_read_count <= mailbox_read_count + data_mailbox_rd_en[0] +
-                data_mailbox_rd_en[1] + phi_mailbox_rd_en[0] + phi_mailbox_rd_en[1] +
-                syndrome_mailbox_rd_en[0] + syndrome_mailbox_rd_en[1];
-            mailbox_write_count <= mailbox_write_count + data_mailbox_wr_en[0] +
-                data_mailbox_wr_en[1] + phi_mailbox_wr_en[0] + phi_mailbox_wr_en[1] +
-                syndrome_mailbox_wr_en[0] + syndrome_mailbox_wr_en[1];
         end
     end
 
@@ -474,87 +421,10 @@ module phi_noise_topology_smoke_tb;
     end
 `endif
 
-    task automatic wait_for_both_valid;
-        input integer timeout_cycles;
-        begin
-            for (cycle = 0;
-                    cycle < timeout_cycles && !(x_valid && z_valid);
-                    cycle = cycle + 1)
-                @(posedge clk);
-            if (!(x_valid && z_valid)) begin
-                $display("FAIL: timed out waiting for x and z announcements");
-                $display("  decoder events: x=%0d z=%0d",
-                    x_decoder_event_count, z_decoder_event_count);
-                $display("  state RAM: reads=%0d writes=%0d",
-                    state_read_count, state_write_count);
-                $display("  mailbox RAM: reads=%0d writes=%0d",
-                    mailbox_read_count, mailbox_write_count);
-                $fatal(1);
-            end
-        end
-    endtask
-
-    task automatic wait_for_both_captured;
-        input integer timeout_cycles;
-        begin
-            for (cycle = 0;
-                    cycle < timeout_cycles && !(x_count == 1 && z_count == 1);
-                    cycle = cycle + 1)
-                @(posedge clk);
-            if (!(x_count == 1 && z_count == 1)) begin
-                $display("FAIL: timed out accepting x and z announcements");
-                $fatal(1);
-            end
-            @(negedge clk);
-        end
-    endtask
-
-    task automatic check_announcement;
-        input [127:0] frame;
-        input [7:0] plane;
-        reg [31:0] header;
-        begin
-            header = frame[127:96];
-            if (header[7:0] !== PHENOM_ANYON_TAG ||
-                    header[31:24] !== 8'd3) begin
-                $display("FAIL: %s announcement has malformed header %08x",
-                    plane, header);
-                $fatal(1);
-            end
-            if (frame[31:0] !== 32'd0) begin
-                $display("FAIL: %s announcement has unexpected step %0d",
-                    plane, frame[31:0]);
-                $fatal(1);
-            end
-            if (frame[63:32] > 32'd1 || frame[95:64] !== 32'd0) begin
-                $display("FAIL: %s announcement has malformed payload", plane);
-                $fatal(1);
-            end
-        end
-    endtask
-
     initial begin
         repeat (5) @(posedge clk);
         @(negedge clk);
         reset = 1'b0;
-
-        // Keep both observation branches stalled until each plane has produced
-        // its first complete result. They are independent outputs, and each
-        // must retain its own frame while backpressured.
-        wait_for_both_valid(100000);
-        stalled_x = x_announcement;
-        stalled_z = z_announcement;
-        repeat (200) begin
-            @(posedge clk);
-            if (!x_valid || x_announcement !== stalled_x) begin
-                $display("FAIL: stalled x announcement was not stable");
-                $fatal(1);
-            end
-            if (!z_valid || z_announcement !== stalled_z) begin
-                $display("FAIL: stalled z announcement was not stable");
-                $fatal(1);
-            end
-        end
 
         // The host submits one whole-fabric rectangle to the router service.
         // It expands the envelope into ordinary lossless actor casts; no leaf
@@ -567,14 +437,6 @@ module phi_noise_topology_smoke_tb;
             NOISE_TARGET,
             frame1(NOISE_CUTOFF_TAG, FIRST_QUIET_STEP)
         );
-
-        @(negedge clk);
-        x_ready = 1'b1;
-        z_ready = 1'b1;
-        wait_for_both_captured(100000);
-
-        check_announcement(captured_x, "x");
-        check_announcement(captured_z, "z");
 
         // Quiet reaches each phi status only after every data reply and the
         // paired syndrome source for that completed step are also quiet.

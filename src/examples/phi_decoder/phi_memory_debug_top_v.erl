@@ -5,7 +5,8 @@
 -module(phi_memory_debug_top_v).
 -moduledoc """
 Renders the Verilog wrapper which connects every shared scheduler RAM port to
-one simple 1R1W memory and attaches the passive debug monitor.
+one simple 1R1W memory, attaches the independently compiled host serializer,
+and attaches the passive debug monitor.
 
 The fixed shell lives in `priv/rtl/phi_memory_debug_top.template.v`; only the
 scheduler-dependent wires, gateway ports, and RAM instances are generated.

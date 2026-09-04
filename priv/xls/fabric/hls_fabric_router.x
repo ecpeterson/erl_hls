@@ -238,6 +238,23 @@ pub proc RoutedTx<DESTINATION: u16> {
     }
 }
 
+// Concrete host-bound serializer entry point. Gateways expose RoutedFrame at
+// their scheduling boundary so this proc can be compiled independently at the
+// one-beat-per-clock rate required by the physical stream.
+pub proc HostRoutedTx {
+    frame_in: chan<RoutedFrame> in;
+    routed_out: chan<axis::Beat> out;
+
+    config(frame_in: chan<RoutedFrame> in,
+           routed_out: chan<axis::Beat> out) {
+        spawn RoutedTx<HOST_ENDPOINT>(frame_in, routed_out);
+        (frame_in, routed_out)
+    }
+
+    init { () }
+    next(state: ()) { state }
+}
+
 struct EgressState { grant: EgressGrant, first_pending: u1, first: axis::Beat, prefer_two: u1 }
 
 fn begin_packet(beat: axis::Beat, grant: EgressGrant, prefer_two: u1) -> EgressState {

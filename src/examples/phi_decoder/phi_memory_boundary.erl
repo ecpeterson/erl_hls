@@ -9,9 +9,11 @@ Derives the phi memory bridge contract from `phi_noise_topology`.
 The compact topology and generated actor codecs remain authoritative for the
 spatial ingress, target selectors, message schemas, producer modules, and
 external order. This profile adds the physical facts which topology semantics
-do not supply: boundary version one, host endpoint zero, and consecutive
-endpoint allocation beginning with the ingress at one. Both the host codec and
-the DSLX gateway generator consume this contract.
+do not supply: boundary version one, host endpoint zero, and stable endpoint
+allocation beginning with the ingress at one. Both the host codec and the DSLX
+gateway generator consume this contract. Application endpoints three and five
+remain reserved for the visualization-only announcement streams removed from
+the lossless boundary.
 
 This module deliberately reads the compact source term rather than loading the
 topology compiler in the deployed ERTS node. Development tests compare its
@@ -85,9 +87,13 @@ target(_Index, {Target, _Schemas, _Recipients}, _Families) ->
 
 outputs(Externals, Relations, Families) ->
     [
-        output(Index + 2, External, Relations, Families)
-        || {Index, External} <- lists:enumerate(0, Externals)
+        output(output_endpoint(Id), External, Relations, Families)
+        || External = {Id, out, _Schemas} <- Externals
     ].
+
+output_endpoint(data_measurements) -> 2;
+output_endpoint(x_decoder_events) -> 4;
+output_endpoint(z_decoder_events) -> 6.
 
 output(
     Endpoint,

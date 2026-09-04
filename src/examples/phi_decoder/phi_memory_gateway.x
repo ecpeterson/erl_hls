@@ -17,9 +17,7 @@ const BOUNDARY_VERSION = u8:1;
 const HOST_ENDPOINT = u16:0;
 const GATEWAY_ENDPOINT = u16:1;
 const DATA_MEASUREMENTS_ENDPOINT = u16:2;
-const X_ANNOUNCEMENTS_ENDPOINT = u16:3;
 const X_DECODER_EVENTS_ENDPOINT = u16:4;
-const Z_ANNOUNCEMENTS_ENDPOINT = u16:5;
 const Z_DECODER_EVENTS_ENDPOINT = u16:6;
 const OP_PAULI_QUERY = u8:13;
 const OP_PAULI_UPDATE = u8:16;
@@ -128,9 +126,7 @@ proc SpatialIngress {
 fn source_endpoint(cursor: u32) -> u16 {
   match cursor {
     u32:0 => DATA_MEASUREMENTS_ENDPOINT,
-    u32:1 => X_ANNOUNCEMENTS_ENDPOINT,
-    u32:2 => X_DECODER_EVENTS_ENDPOINT,
-    u32:3 => Z_ANNOUNCEMENTS_ENDPOINT,
+    u32:1 => X_DECODER_EVENTS_ENDPOINT,
     _ => Z_DECODER_EVENTS_ENDPOINT,
   }
 }
@@ -138,11 +134,11 @@ fn source_endpoint(cursor: u32) -> u16 {
 // Polls one statically indexed input per activation and advances after
 // every attempt, so no continuously active stream can starve another.
 proc FrameMux {
-  frame_in: chan<axis::Frame>[u32:5] in;
+  frame_in: chan<axis::Frame>[u32:3] in;
   routed_out: chan<hls_fabric_router::RoutedFrame> out;
 
   config(
-      frame_in: chan<axis::Frame>[u32:5] in,
+      frame_in: chan<axis::Frame>[u32:3] in,
       routed_out: chan<hls_fabric_router::RoutedFrame> out
   ) {
     (frame_in, routed_out)
@@ -153,7 +149,7 @@ proc FrameMux {
   next(cursor: u32) {
     let (tok, received, frame) =
       unroll_for! (candidate, acc):
-          (u32, (token, u1, axis::Frame)) in u32:0..u32:5 {
+          (u32, (token, u1, axis::Frame)) in u32:0..u32:3 {
         let (next_tok, next_frame, valid) = recv_if_non_blocking(
           acc.0,
           frame_in[candidate],
@@ -178,7 +174,7 @@ proc FrameMux {
       frame: boundary_frame,
     };
     let _done = send_if(tok, routed_out, received, routed);
-    if cursor == u32:4 { u32:0 } else { cursor + u32:1 }
+    if cursor == u32:2 { u32:0 } else { cursor + u32:1 }
   }
 }
 
@@ -232,7 +228,7 @@ pub proc Top {
   scheduler_5_mailbox_write_req_out: chan<phenom_syndrome_cell::MailboxRamWriteReq> out;
   scheduler_5_mailbox_write_resp_in: chan<phenom_syndrome_cell::MailboxRamWriteResp> in;
   routed_in: chan<axis::Beat> in;
-  routed_out: chan<axis::Beat> out;
+  routed_frame_out: chan<hls_fabric_router::RoutedFrame> out;
 
   config(
       scheduler_0_ram_read_req_out: chan<phenom_data_cell::MachineRamReadReq> out,
@@ -284,7 +280,7 @@ pub proc Top {
       scheduler_5_mailbox_write_req_out: chan<phenom_syndrome_cell::MailboxRamWriteReq> out,
       scheduler_5_mailbox_write_resp_in: chan<phenom_syndrome_cell::MailboxRamWriteResp> in,
       routed_in: chan<axis::Beat> in,
-      routed_out: chan<axis::Beat> out
+      routed_frame_out: chan<hls_fabric_router::RoutedFrame> out
   ) {
     let (boundary_beats_p, boundary_beats_c) =
       chan<axis::Beat, u32:1>("boundary_beats");
@@ -294,11 +290,9 @@ pub proc Top {
       chan<hls_spatial_router::SpatialFrame, u32:1>("control");
     let (arm_p, arm_c) = chan<u1, u32:1>("arm");
     let (topology_outputs_p, topology_outputs_c) =
-      chan<axis::Frame, u32:0>[u32:5]("topology_outputs");
+      chan<axis::Frame, u32:0>[u32:3]("topology_outputs");
     let (pre_gate_p, pre_gate_c) =
       chan<hls_fabric_router::RoutedFrame, u32:1>("pre_gate");
-    let (egress_p, egress_c) =
-      chan<hls_fabric_router::RoutedFrame, u32:1>("egress");
     spawn hls_fabric_router::EndpointIngress<
       HOST_ENDPOINT, GATEWAY_ENDPOINT
     >(routed_in, boundary_beats_p);
@@ -357,15 +351,11 @@ pub proc Top {
       control_c,
       topology_outputs_p[u32:0],
       topology_outputs_p[u32:1],
-      topology_outputs_p[u32:2],
-      topology_outputs_p[u32:3],
-      topology_outputs_p[u32:4]);
+      topology_outputs_p[u32:2]);
     spawn FrameMux(topology_outputs_c, pre_gate_p);
     spawn hls_fabric_router::EgressGate(
-      pre_gate_c, egress_p, arm_c);
-    spawn hls_fabric_router::RoutedTx<HOST_ENDPOINT>(
-      egress_c, routed_out);
-    (scheduler_0_ram_read_req_out, scheduler_0_ram_read_resp_in, scheduler_0_ram_write_req_out, scheduler_0_ram_write_resp_in, scheduler_0_mailbox_read_req_out, scheduler_0_mailbox_read_resp_in, scheduler_0_mailbox_write_req_out, scheduler_0_mailbox_write_resp_in, scheduler_1_ram_read_req_out, scheduler_1_ram_read_resp_in, scheduler_1_ram_write_req_out, scheduler_1_ram_write_resp_in, scheduler_1_mailbox_read_req_out, scheduler_1_mailbox_read_resp_in, scheduler_1_mailbox_write_req_out, scheduler_1_mailbox_write_resp_in, scheduler_2_ram_read_req_out, scheduler_2_ram_read_resp_in, scheduler_2_ram_write_req_out, scheduler_2_ram_write_resp_in, scheduler_2_mailbox_read_req_out, scheduler_2_mailbox_read_resp_in, scheduler_2_mailbox_write_req_out, scheduler_2_mailbox_write_resp_in, scheduler_3_ram_read_req_out, scheduler_3_ram_read_resp_in, scheduler_3_ram_write_req_out, scheduler_3_ram_write_resp_in, scheduler_3_mailbox_read_req_out, scheduler_3_mailbox_read_resp_in, scheduler_3_mailbox_write_req_out, scheduler_3_mailbox_write_resp_in, scheduler_4_ram_read_req_out, scheduler_4_ram_read_resp_in, scheduler_4_ram_write_req_out, scheduler_4_ram_write_resp_in, scheduler_4_mailbox_read_req_out, scheduler_4_mailbox_read_resp_in, scheduler_4_mailbox_write_req_out, scheduler_4_mailbox_write_resp_in, scheduler_5_ram_read_req_out, scheduler_5_ram_read_resp_in, scheduler_5_ram_write_req_out, scheduler_5_ram_write_resp_in, scheduler_5_mailbox_read_req_out, scheduler_5_mailbox_read_resp_in, scheduler_5_mailbox_write_req_out, scheduler_5_mailbox_write_resp_in, routed_in, routed_out)
+      pre_gate_c, routed_frame_out, arm_c);
+    (scheduler_0_ram_read_req_out, scheduler_0_ram_read_resp_in, scheduler_0_ram_write_req_out, scheduler_0_ram_write_resp_in, scheduler_0_mailbox_read_req_out, scheduler_0_mailbox_read_resp_in, scheduler_0_mailbox_write_req_out, scheduler_0_mailbox_write_resp_in, scheduler_1_ram_read_req_out, scheduler_1_ram_read_resp_in, scheduler_1_ram_write_req_out, scheduler_1_ram_write_resp_in, scheduler_1_mailbox_read_req_out, scheduler_1_mailbox_read_resp_in, scheduler_1_mailbox_write_req_out, scheduler_1_mailbox_write_resp_in, scheduler_2_ram_read_req_out, scheduler_2_ram_read_resp_in, scheduler_2_ram_write_req_out, scheduler_2_ram_write_resp_in, scheduler_2_mailbox_read_req_out, scheduler_2_mailbox_read_resp_in, scheduler_2_mailbox_write_req_out, scheduler_2_mailbox_write_resp_in, scheduler_3_ram_read_req_out, scheduler_3_ram_read_resp_in, scheduler_3_ram_write_req_out, scheduler_3_ram_write_resp_in, scheduler_3_mailbox_read_req_out, scheduler_3_mailbox_read_resp_in, scheduler_3_mailbox_write_req_out, scheduler_3_mailbox_write_resp_in, scheduler_4_ram_read_req_out, scheduler_4_ram_read_resp_in, scheduler_4_ram_write_req_out, scheduler_4_ram_write_resp_in, scheduler_4_mailbox_read_req_out, scheduler_4_mailbox_read_resp_in, scheduler_4_mailbox_write_req_out, scheduler_4_mailbox_write_resp_in, scheduler_5_ram_read_req_out, scheduler_5_ram_read_resp_in, scheduler_5_ram_write_req_out, scheduler_5_ram_write_resp_in, scheduler_5_mailbox_read_req_out, scheduler_5_mailbox_read_resp_in, scheduler_5_mailbox_write_req_out, scheduler_5_mailbox_write_resp_in, routed_in, routed_frame_out)
   }
 
   init { () }

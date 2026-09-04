@@ -12,13 +12,14 @@ two three-by-three syndrome planes.  Each syndrome plane has a matching
 `data_even` and `data_odd` families, which lets every neighborhood remain an
 ordinary wrapped translation between equal-shaped families.
 
-The two external announcement outputs retain the producing `{X, Y}`
-coordinate. The output port identifies the X- or Z-syndrome plane, so a host
-can reconstruct lattice activity without relying on merge order. Each decoder
-plane has one event output carrying sparse corrections and one post-move status
-per coordinate. It preserves each source cell's correction-before-status order;
-cross-cell merge order is unspecified. Together, plane, syndrome coordinate,
-and correction direction identify the neighboring data-qubit edge to correct.
+Each decoder plane has one event output carrying sparse corrections and one
+post-move status per coordinate. It preserves each source cell's
+correction-before-status order; cross-cell merge order is unspecified.
+Together, plane, syndrome coordinate, and correction direction identify the
+neighboring data-qubit edge to correct. Syndrome announcements travel only to
+their paired phi plane. Earlier lossless copies at the application boundary
+existed solely for visualization and needlessly consumed application
+bandwidth; they are candidates for a future best-effort debug event stream.
 Both data-family measurement replies share one external output; their payload
 coordinates use the physical data-qubit lattice and do not expose the internal
 even/odd family split.
@@ -119,8 +120,6 @@ topology(Distance, NoiseRate)
             data_odd => #{module => phenom_data_cell, shape => Shape}
         },
         externals => [
-            {x_announcements, out, [phenom_anyon]},
-            {z_announcements, out, [phenom_anyon]},
             {x_decoder_events, out, [phi_correction, phi_status]},
             {z_decoder_events, out, [phi_correction, phi_status]},
             {data_measurements, out, [pauli_reply]}
@@ -211,7 +210,7 @@ syndrome_x_relations() ->
         relation(syndrome_x, east, data_even, [1, 0]),
         relation(syndrome_x, west, data_even, [0, 0]),
         relation(syndrome_x, south, data_odd, [0, 0]),
-        announcement_relation(syndrome_x, phi_x, x_announcements)
+        relation(syndrome_x, phi, phi_x, [0, 0])
     ].
 
 syndrome_z_relations() ->
@@ -220,7 +219,7 @@ syndrome_z_relations() ->
         relation(syndrome_z, east, data_odd, [1, 0]),
         relation(syndrome_z, west, data_odd, [0, 0]),
         relation(syndrome_z, south, data_even, [1, 1]),
-        announcement_relation(syndrome_z, phi_z, z_announcements)
+        relation(syndrome_z, phi, phi_z, [0, 0])
     ].
 
 data_even_relations() ->
@@ -244,12 +243,6 @@ data_odd_relations() ->
 relation(Source, Port, Destination, Offset) ->
     {{Source, Port}, [
         {family, Destination, {translate, Offset, wrap}}
-    ]}.
-
-announcement_relation(Source, Destination, External) ->
-    {{Source, phi}, queued, [
-        {family, Destination, {translate, [0, 0], wrap}},
-        {external, External}
     ]}.
 
 startup(Distance, NoiseRate) ->

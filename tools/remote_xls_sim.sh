@@ -198,7 +198,7 @@ vvp phi_torus_topology.vvp
     phi_noise_topology.x > phi_noise_topology.ir
 
 # This distance-one graph exercises all six family types, per-instance
-# startup, and queued announcement fanout through generated RTL.
+# startup, and the syndrome-to-phi result paths through generated RTL.
 "$xls_root/ir_converter_main" \
     --warnings_as_errors=false \
     --dslx_path=. \
@@ -376,6 +376,34 @@ vvp ordered_egress_topology.vvp
     --fifo_module= \
     hls_fabric_egress.opt.ir > hls_fabric_egress.v
 
+"$xls_root/ir_converter_main" \
+    --warnings_as_errors=false \
+    --dslx_path=. \
+    --dslx_stdlib_path="$stdlib" \
+    --top=HostRoutedTx \
+    hls_fabric_router.x > hls_fabric_host_tx.ir
+
+"$xls_root/opt_main" hls_fabric_host_tx.ir > hls_fabric_host_tx.opt.ir
+
+"$xls_root/codegen_main" \
+    --pipeline_stages=1 \
+    --delay_model=unit \
+    --flop_inputs=false \
+    --flop_outputs=true \
+    --use_system_verilog=false \
+    --reset=reset \
+    --fifo_module= \
+    hls_fabric_host_tx.opt.ir > hls_fabric_host_tx.v
+
+iverilog \
+    -g2012 \
+    -s hls_fabric_host_tx_tb \
+    -o hls_fabric_host_tx.vvp \
+    hls_fabric_host_tx_tb.sv \
+    hls_fabric_host_tx.v
+
+vvp hls_fabric_host_tx.vvp
+
 iverilog \
     -g2012 \
     -s regsvc_pair_tb \
@@ -405,6 +433,7 @@ iverilog \
     phi_memory_debug_top.v \
     hls_1r1w_ram.v \
     phi_memory_gateway.v \
+    hls_fabric_host_tx.v \
     hls_fabric_ingress.v \
     hls_fabric_egress.v \
     hls_debug_monitor.v \
