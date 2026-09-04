@@ -18,6 +18,7 @@ ERL_HLS_PHI_TORUS_TOPOLOGY_X="$stage/phi_torus_topology.x" \
 ERL_HLS_PHI_NOISE_TOPOLOGY_X="$stage/phi_noise_topology.x" \
 ERL_HLS_PHI_NOISE_TOPOLOGY_SMOKE_X="$stage/phi_noise_topology_smoke.x" \
 ERL_HLS_PHI_MEMORY_GATEWAY_X="$stage/phi_memory_gateway.x" \
+ERL_HLS_PHI_MEMORY_DEBUG_TOP_V="$stage/phi_memory_debug_top.v" \
 ERL_HLS_ORDERED_EGRESS_ACTOR_X="$stage/ordered_egress_actor.x" \
 ERL_HLS_ORDERED_EGRESS_TOPOLOGY_X="$stage/ordered_egress_topology.x" \
 ERL_HLS_CASE_FIXTURE_X="$stage/xls_case_fixture.x" \
@@ -55,9 +56,14 @@ erl \
             false -> DemoNoiseRate;
             RateText -> list_to_integer(RateText)
         end,
+        SchedulerProfile = case os:getenv("ERL_HLS_PHI_SHARDS") of
+            false -> 2;
+            ShardText -> {phi_shards, list_to_integer(ShardText)}
+        end,
         PhiNoiseTopology = phi_noise_topology_dslx:to_dslx(
             PhiNoiseDistance,
-            PhiNoiseRate
+            PhiNoiseRate,
+            SchedulerProfile
         ),
         %% The routine D1 closeout fixture disables random injection so empty
         %% decoder planes let the ERTS witness terminate deterministically.
@@ -69,8 +75,16 @@ erl \
             "demo" -> DemoDistance;
             Text -> list_to_integer(Text)
         end,
-        PhiMemoryGateway = phi_memory_gateway_dslx:to_dslx(
-            PhiBridgeDistance
+        GatewayProfile = case PhiBridgeDistance of
+            3 -> SchedulerProfile;
+            1 -> 2
+        end,
+        PhiMemoryGateway = case PhiBridgeDistance of
+            3 -> phi_memory_gateway_dslx:to_dslx(3, GatewayProfile);
+            1 -> phi_memory_gateway_dslx:to_dslx(1)
+        end,
+        PhiMemoryDebugTop = phi_memory_debug_top_v:to_verilog(
+            GatewayProfile
         ),
         OrderedEgressActor = xls_parse:to_xls(
             "test/ordered_egress_actor.erl"
@@ -115,6 +129,10 @@ erl \
             PhiMemoryGateway
         ),
         ok = file:write_file(
+            os:getenv("ERL_HLS_PHI_MEMORY_DEBUG_TOP_V"),
+            PhiMemoryDebugTop
+        ),
+        ok = file:write_file(
             os:getenv("ERL_HLS_ORDERED_EGRESS_ACTOR_X"),
             OrderedEgressActor
         ),
@@ -132,8 +150,6 @@ cp "$project_root/src/examples/regsvc/regsvc_core_adapter.v" \
     "$stage/regsvc_core_adapter.v"
 cp "$project_root/src/examples/regsvc/regsvc_debug_top.v" \
     "$stage/regsvc_debug_top.v"
-cp "$project_root/src/examples/phi_decoder/phi_memory_debug_top.v" \
-    "$stage/phi_memory_debug_top.v"
 cp "$project_root/priv/rtl/hls_1r1w_ram.v" "$stage/hls_1r1w_ram.v"
 cp "$project_root/priv/xls/fabric/hls_fabric_router.x" \
     "$stage/hls_fabric_router.x"

@@ -11,9 +11,11 @@ The default artifact uses the nondegenerate distance-three semantic topology.
 family types and cross-family routes at a smaller elaborated distance.
 
 The physical profile assigns the two data, phi, and syndrome families to
-homogeneous executors. The default uses one executor per family, giving two
-shards for each actor module; `profile/1` retains the original one-executor-per-
-module form for measurement. Every executor stores actor state and mailbox
+homogeneous executors. The default uses one executor per family. Tagged
+`{phi_shards, N}` profiles divide each phi family into `N` statically
+interleaved executors while leaving data and syndrome families intact;
+`profile/1` also retains the original one-executor-per-module form for
+measurement. Every executor stores actor state and mailbox
 frames in simple-dual-port RAMs with one read and one write port, owns the
 mailbox metadata for its logical slots, and advances one resumable actor
 microstep at a time. Compact
@@ -39,8 +41,9 @@ per-coordinate request, admission, or egress channel arrays.
 profile() ->
     profile(2).
 
--doc "Returns the physical profile for one or two module-level shards.".
--spec profile(1 | 2) -> xls_topology_dslx:profile().
+-doc "Returns a module-, family-, or phi-partitioned physical profile.".
+-spec profile(1 | 2 | {phi_shards, pos_integer()}) ->
+    xls_topology_dslx:profile().
 profile(ShardCount) ->
     #{
         name => phi_noise_topology,
@@ -54,8 +57,9 @@ profile(ShardCount) ->
 scheduler_groups() ->
     scheduler_groups(2).
 
--doc "Returns one scheduler per module or one scheduler per family.".
--spec scheduler_groups(1 | 2) -> hls_scheduler_plan:spec().
+-doc "Returns module-, family-, or interleaved phi-family scheduler groups.".
+-spec scheduler_groups(1 | 2 | {phi_shards, pos_integer()}) ->
+    hls_scheduler_plan:spec().
 scheduler_groups(1) ->
     #{
         data => #{
@@ -86,12 +90,41 @@ scheduler_groups(2) ->
             syndrome_z
         ]
     ]);
+scheduler_groups({phi_shards, 1}) ->
+    scheduler_groups(2);
+scheduler_groups({phi_shards, ShardCount})
+        when ShardCount > 1 ->
+    maps:from_list(
+        [
+            {{0, data_even}, group([data_even])},
+            {{1, data_odd}, group([data_odd])}
+        ] ++
+        [
+            {{2, phi_x, Shard},
+                group_members([{family, phi_x,
+                    {interleaved, Shard, ShardCount}}])}
+            || Shard <- lists:seq(0, ShardCount - 1)
+        ] ++
+        [
+            {{3, phi_z, Shard},
+                group_members([{family, phi_z,
+                    {interleaved, Shard, ShardCount}}])}
+            || Shard <- lists:seq(0, ShardCount - 1)
+        ] ++
+        [
+            {{4, syndrome_x}, group([syndrome_x])},
+            {{5, syndrome_z}, group([syndrome_z])}
+        ]
+    );
 scheduler_groups(_ShardCount) ->
     error(badarg).
 
 group(Families) ->
+    group_members([{family, Family} || Family <- Families]).
+
+group_members(Members) ->
     #{
-        members => [{family, Family} || Family <- Families],
+        members => Members,
         state_storage => block_ram,
         mailbox_storage => block_ram
     }.
@@ -102,7 +135,8 @@ scheduler_plan() ->
     scheduler_plan(2).
 
 -doc "Normalizes the distance-three plan at the selected shard count.".
--spec scheduler_plan(1 | 2) -> hls_scheduler_plan:plan().
+-spec scheduler_plan(1 | 2 | {phi_shards, pos_integer()}) ->
+    hls_scheduler_plan:plan().
 scheduler_plan(ShardCount) ->
     hls_scheduler_plan:normalize(
         hls_topology:from_module(phi_noise_topology),
@@ -126,7 +160,8 @@ to_dslx(Distance, NoiseRate) ->
     to_dslx(Distance, NoiseRate, 2).
 
 -doc "Generates DSLX at an explicit noise rate and scheduler shard count.".
--spec to_dslx(pos_integer(), hls_nums:u32(), 1 | 2) -> iolist().
+-spec to_dslx(pos_integer(), hls_nums:u32(),
+    1 | 2 | {phi_shards, pos_integer()}) -> iolist().
 to_dslx(Distance, NoiseRate, ShardCount) ->
     Plan = hls_topology:normalize(
         phi_noise_topology:topology(Distance, NoiseRate)

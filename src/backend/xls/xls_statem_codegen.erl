@@ -6,7 +6,7 @@
 -module(xls_statem_codegen).
 -moduledoc false.
 
--export([emit/1]).
+-export([emit/1, shared_machine_width/1]).
 
 -type lowered_clause() :: #{
     body := iodata(),
@@ -118,7 +118,7 @@ machine_declarations(#{
     data_width := DataWidth
 }) ->
     DataStruct = record_struct_name(DataName),
-    MachineBits = shared_machine_bits(DataWidth),
+    MachineBits = shared_machine_width(DataWidth),
     EffectCapacity = max(1, MaxEntryEffects),
     [
         "pub enum OutputPort : u8 {\n",
@@ -242,7 +242,9 @@ machine_declarations(#{
         "}\n\n"
     ].
 
-shared_machine_bits(DataWidth) ->
+-doc false.
+-spec shared_machine_width(non_neg_integer()) -> pos_integer().
+shared_machine_width(DataWidth) ->
     18 + DataWidth.
 
 %%%

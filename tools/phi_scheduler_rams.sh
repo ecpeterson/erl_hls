@@ -4,7 +4,7 @@
 phi_scheduler_ram_configurations() {
     local configurations=()
     local index
-    local scheduler_count=${1:-6}
+    local scheduler_count=${1:-${ERL_HLS_PHI_SCHEDULER_COUNT:-6}}
 
     for ((index = 0; index < scheduler_count; index++)); do
         configurations+=(
