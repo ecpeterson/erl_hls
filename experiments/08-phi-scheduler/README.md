@@ -15,6 +15,8 @@ The files answer four progressively narrower questions:
 4. Once the generated actor deployment uses shared, pipelined schedulers, how
    much throughput does it recover by partitioning each phi family over two or
    three executors?
+5. Is the remaining full-demo latency in the decoder, or in the simulated
+   phenomenological source network that will not exist in the real apparatus?
 
 The experiment keeps the application boundary honest: the raw and BRAM
 implementations accept the same cutoff, correction-update, and measurement
@@ -108,6 +110,17 @@ previous isolated maps of these RAM shapes gives approximately 54, 74, and 94
 does not grow; each additional phi executor needs its own very wide, shallow
 state RAM and 128-bit mailbox RAM so that the workers can operate concurrently.
 
+The decoder-only attribution graph keeps the three phi executors per plane and
+their ordinary message protocol but replaces both physical-source families
+with request-paced deterministic sources. A strict 33-round RTL bench observed
+64 X and 62 Z corrections and measured 4,048 clocks from complete step eight
+through complete step 32: 168.67 clocks per step, or 1.186 million steps per
+second at 200 MHz. Phi state reads occurred on 38.5% of aggregate shard clocks,
+versus 17.1% during the complete three-shard closeout. The physical noise/data
+protocol therefore explains most of the complete demo's 400.5 clocks per step;
+optimizing it is not a priority for a deployment whose syndromes arrive from
+external measurement hardware.
+
 ## Running the experiment
 
 The fast local checks are:
@@ -126,6 +139,7 @@ experiments/08-phi-scheduler/run_sequential_xls.sh
 experiments/08-phi-scheduler/run_bram_xls.sh
 experiments/08-phi-scheduler/run_area_matrix.sh
 experiments/08-phi-scheduler/run_shard_sweep.sh
+tools/run_phi_decoder_profile.sh
 ```
 
 The complete ERTS/VPI comparisons are:

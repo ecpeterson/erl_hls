@@ -1137,3 +1137,49 @@ current coordinate-to-shard match tables also made the three-shard DSLX-to-IR
 conversion take 13 minutes 45 seconds; a compact generated ownership primitive
 is a worthwhile compiler/code-generation cleanup before substantially larger
 partition counts.
+
+### Decoder-only throughput attribution
+
+`phi_decoder_profile_topology` removes the two data-qubit and two full syndrome
+families from the three-shard graph. Each phi cell still sends its ordinary
+`phenom_request`; a compact request-paced source advances a deterministic PRNG
+and returns the transition of a Boolean measurement bit as `phenom_anyon`.
+This preserves the phi mailbox, actor, routing, and credit machinery while
+removing the phenomenological neighborhood query and response protocol. The
+source families have separate schedulers, so their RAM activity is not counted
+as decoder activity.
+
+The RTL bench requires one status from every coordinate on both planes for
+every step zero through 32, rejects duplicates and malformed events, and
+requires corrections on both planes. It observed 64 X and 62 Z corrections.
+Between complete steps eight and 32, the graph took 4,048 clocks, or 168.67
+clocks per decoder step. That projects to 1.186 million steps per second at
+200 MHz, and equivalently needs about 168.7 MHz for a one-megahertz step rate.
+The complete three-shard memory experiment took 400.5 clocks per step, so the
+phenomenological source/data round trip—not the phi decoder alone—accounts for
+most of the remaining factor of two.
+
+The exclusive VPI issue classification supports that interpretation. During
+a repeated full closeout, the six phi schedulers launched a state read on
+17.1% of their aggregate clocks. Another 14.6% had producer backpressure but
+no issue, 68.4% had neither a state/RAM stall, egress stall, nor visible
+producer backpressure, and no clock had a blocked state port or egress. The
+decoder-only bench launched phi state reads on 38.5% of aggregate phi-shard
+clocks. Its remaining bubbles include real protocol dependencies and the
+two-stage same-actor exclusion, but they no longer prevent the target rate at
+the assumed clock.
+
+This diagnostic is intentionally not a replacement for the end-to-end golden
+comparison: it supplies a different, deterministic syndrome stream and omits
+correction feedback and the final data-frame query. Run it on the configured
+XLS host and local UTM with:
+
+```sh
+tools/run_phi_decoder_profile.sh
+```
+
+Because the real apparatus supplies syndromes externally, further work should
+not optimize the phenomenological generator merely to improve this demo's
+headline throughput. The next hardware step is timing closure of the useful
+two-shard decoder profile, followed by a decoder-only two-versus-three-shard
+area/timing choice if the placed clock falls short of the required rate.

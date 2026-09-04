@@ -17,6 +17,9 @@ ERL_HLS_PHI_PHENOM_TOPOLOGY_X="$stage/phi_phenom_topology.x" \
 ERL_HLS_PHI_TORUS_TOPOLOGY_X="$stage/phi_torus_topology.x" \
 ERL_HLS_PHI_NOISE_TOPOLOGY_X="$stage/phi_noise_topology.x" \
 ERL_HLS_PHI_NOISE_TOPOLOGY_SMOKE_X="$stage/phi_noise_topology_smoke.x" \
+ERL_HLS_PHI_SYNDROME_REPLAY_X="$stage/phi_syndrome_replay_cell.x" \
+ERL_HLS_PHI_DECODER_PROFILE_X="$stage/phi_decoder_profile_topology.x" \
+ERL_HLS_PHI_DECODER_PROFILE_TOP_V="$stage/phi_decoder_profile_top.v" \
 ERL_HLS_PHI_MEMORY_GATEWAY_X="$stage/phi_memory_gateway.x" \
 ERL_HLS_PHI_MEMORY_DEBUG_TOP_V="$stage/phi_memory_debug_top.v" \
 ERL_HLS_ORDERED_EGRESS_ACTOR_X="$stage/ordered_egress_actor.x" \
@@ -37,6 +40,9 @@ erl \
         ),
         PhenomSyndrome = xls_parse:to_xls(
             "src/examples/phi_decoder/phenom_syndrome_cell.erl"
+        ),
+        PhiSyndromeReplay = xls_parse:to_xls(
+            "src/examples/phi_decoder/phi_syndrome_replay_cell.erl"
         ),
         CaseFixture = xls_parse:to_xls(
             "test_data/xls_case_fixture.erl"
@@ -68,6 +74,16 @@ erl \
         %% The routine D1 closeout fixture disables random injection so empty
         %% decoder planes let the ERTS witness terminate deterministically.
         PhiNoiseTopologySmoke = phi_noise_topology_dslx:to_dslx(1, 0),
+        ProfileShardCount = case os:getenv("ERL_HLS_PHI_PROFILE_SHARDS") of
+            false -> 3;
+            ProfileShardText -> list_to_integer(ProfileShardText)
+        end,
+        PhiDecoderProfile = phi_decoder_profile_topology_dslx:to_dslx(
+            ProfileShardCount
+        ),
+        PhiDecoderProfileTop = phi_decoder_profile_top_v:to_verilog(
+            ProfileShardCount
+        ),
         PhiBridgeDistance = case os:getenv(
             "ERL_HLS_PHI_BRIDGE_DISTANCE"
         ) of
@@ -101,6 +117,10 @@ erl \
             PhenomSyndrome
         ),
         ok = file:write_file(
+            os:getenv("ERL_HLS_PHI_SYNDROME_REPLAY_X"),
+            PhiSyndromeReplay
+        ),
+        ok = file:write_file(
             os:getenv("ERL_HLS_CASE_FIXTURE_X"),
             CaseFixture
         ),
@@ -123,6 +143,14 @@ erl \
         ok = file:write_file(
             os:getenv("ERL_HLS_PHI_NOISE_TOPOLOGY_SMOKE_X"),
             PhiNoiseTopologySmoke
+        ),
+        ok = file:write_file(
+            os:getenv("ERL_HLS_PHI_DECODER_PROFILE_X"),
+            PhiDecoderProfile
+        ),
+        ok = file:write_file(
+            os:getenv("ERL_HLS_PHI_DECODER_PROFILE_TOP_V"),
+            PhiDecoderProfileTop
         ),
         ok = file:write_file(
             os:getenv("ERL_HLS_PHI_MEMORY_GATEWAY_X"),
@@ -189,6 +217,8 @@ cp "$project_root/test/rtl/phi_noise_topology_smoke_tb.sv" \
     "$stage/phi_noise_topology_smoke_tb.sv"
 cp "$project_root/test/rtl/phi_noise_topology_tb.sv" \
     "$stage/phi_noise_topology_tb.sv"
+cp "$project_root/test/rtl/phi_decoder_profile_tb.sv" \
+    "$stage/phi_decoder_profile_tb.sv"
 cp "$project_root/test/rtl/phi_memory_bridge_tb.sv" \
     "$stage/phi_memory_bridge_tb.sv"
 cp "$project_root/test/rtl/ordered_egress_topology_tb.sv" \
