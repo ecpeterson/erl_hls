@@ -148,7 +148,7 @@ iverilog-vpi xls_sim_bridge.c
     -o phi_memory_gateway.vvp \
     phi_memory_bridge_tb.sv \
     phi_memory_debug_top.v \
-    hls_1rw_ram.v \
+    hls_1r1w_ram.v \
     phi_memory_gateway.v \
     hls_fabric_ingress.v \
     hls_fabric_egress.v \

@@ -30,6 +30,8 @@ vvp hls_trace_store.vvp
 # keep every test-bearing DSLX module explicit here.
 for test_module in \
     axis.x \
+    bram.x \
+    mailbox.x \
     hls_debug_trace.x \
     hls_debug_observer.x \
     hls_spatial_router.x
@@ -224,7 +226,7 @@ iverilog \
     -s phi_noise_topology_smoke_tb \
     -o phi_noise_topology_smoke.vvp \
     phi_noise_topology_smoke_tb.sv \
-    hls_1rw_ram.v \
+    hls_1r1w_ram.v \
     phi_noise_topology_smoke.v
 
 vvp phi_noise_topology_smoke.vvp
@@ -401,7 +403,7 @@ iverilog \
     -o phi_memory_bridge.vvp \
     phi_memory_bridge_tb.sv \
     phi_memory_debug_top.v \
-    hls_1rw_ram.v \
+    hls_1r1w_ram.v \
     phi_memory_gateway.v \
     hls_fabric_ingress.v \
     hls_fabric_egress.v \
@@ -453,7 +455,8 @@ sim_pid=$!
 
 # The VPI module creates all four FIFOs during start-of-simulation setup. Do
 # not start the Erlang clients until those transport endpoints are ready.
-for _attempt in $(seq 1 100); do
+startup_deadline=$((SECONDS + 120))
+while ((SECONDS < startup_deadline)); do
     if [[ \
         -p "$sim_dir/app_tx" && \
         -p "$sim_dir/app_rx" && \
@@ -466,7 +469,7 @@ for _attempt in $(seq 1 100); do
         cat "$sim_dir/vvp.log"
         exit 1
     fi
-    sleep 0.05
+    sleep 0.1
 done
 
 if [[ \
@@ -517,7 +520,8 @@ ERL_HLS_SIM_TOP=phi_memory_bridge_tb \
     >"$phi_sim_dir/vvp.log" 2>&1 &
 sim_pid=$!
 
-for _attempt in $(seq 1 100); do
+phi_startup_deadline=$((SECONDS + 120))
+while ((SECONDS < phi_startup_deadline)); do
     if [[ \
         -p "$phi_sim_dir/app_tx" && \
         -p "$phi_sim_dir/app_rx" && \
@@ -530,7 +534,7 @@ for _attempt in $(seq 1 100); do
         cat "$phi_sim_dir/vvp.log"
         exit 1
     fi
-    sleep 0.05
+    sleep 0.1
 done
 
 if [[ \

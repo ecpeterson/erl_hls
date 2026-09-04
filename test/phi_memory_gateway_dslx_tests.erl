@@ -29,6 +29,26 @@ default_gateway_keeps_topology_as_an_import_test() ->
     ?assertNotEqual(nomatch, binary:match(Generated, <<"const WIDTH = u16:3;">>)),
     ?assertNotEqual(nomatch, binary:match(Generated, <<"const HEIGHT = u16:3;">>)).
 
+gateway_forwards_independent_scheduler_ram_ports_test() ->
+    Generated = generated(3),
+    %% Six schedulers expose each typed channel in Top's member and config
+    %% lists; the corresponding names also reach the topology spawn and the
+    %% returned boundary tuple.
+    ?assertEqual(12, count(Generated, <<"::MachineRamReadReq> out">>)),
+    ?assertEqual(12, count(Generated, <<"::MachineRamReadResp> in">>)),
+    ?assertEqual(12, count(Generated, <<"::MachineRamWriteReq> out">>)),
+    ?assertEqual(12, count(Generated, <<"::MachineRamWriteResp> in">>)),
+    ?assertEqual(12, count(Generated, <<"::MailboxRamReadReq> out">>)),
+    ?assertEqual(12, count(Generated, <<"::MailboxRamReadResp> in">>)),
+    ?assertEqual(12, count(Generated, <<"::MailboxRamWriteReq> out">>)),
+    ?assertEqual(12, count(Generated, <<"::MailboxRamWriteResp> in">>)),
+    ?assertEqual(4, count(Generated, <<"scheduler_0_ram_read_req_out">>)),
+    ?assertEqual(4, count(Generated, <<"scheduler_0_ram_write_req_out">>)),
+    ?assertEqual(4, count(Generated, <<"scheduler_0_mailbox_read_req_out">>)),
+    ?assertEqual(4, count(Generated, <<"scheduler_0_mailbox_write_req_out">>)),
+    ?assertEqual(nomatch, binary:match(Generated, <<"_ram_wr_comp_in">>)),
+    ?assertEqual(nomatch, binary:match(Generated, <<"_mailbox_wr_comp_in">>)).
+
 smoke_gateway_imports_distance_one_staging_topology_test() ->
     Generated = generated(1),
     ?assertMatch(<<"// phi_memory_gateway_smoke.x\n", _/binary>>, Generated),

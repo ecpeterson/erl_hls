@@ -33,6 +33,8 @@ expected_modules=(
 manifest_inputs=(
     regsvc.x
     axis.x
+    bram.x
+    mailbox.x
     hls_debug_types.x
     hls_debug_trace.x
     hls_debug_observer.x

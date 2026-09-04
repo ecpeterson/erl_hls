@@ -916,3 +916,166 @@ DSPs, for 39.8% more effective throughput. Throughput per estimated logic cell
 therefore improves by about 28.8%. The wider batch channels and the six
 in-flight router records explain most of the register increase. As with the
 previous maps, these core-only figures exclude the twelve external RAM macros.
+
+### Fused dispatch and phase entry
+
+When a shared actor's message handler changes or repeats its phase, the
+scheduler now evaluates that phase's `handle_enter/3` callback during the same
+state visit. If the resulting entry batch is empty, or the batch sequencer can
+accept it, the handler result and entered actor state commit together. This
+removes the usual second state-memory visit between dispatch and entry. If a
+nonempty batch cannot be accepted, the scheduler retains the former two-visit
+fallback: it commits the phase transition with entry pending, classifies the
+actor as an egress waiter, and recomputes the pure entry callback after credit
+returns. Direct, one-service-per-actor lowering is unchanged.
+
+The complete CPU-versus-native-Icarus comparison again agrees exactly on all
+84 accepted corrections and all 18 final data-qubit replies. Relative to
+batched entry alone, the measured interval from the first accepted application
+beat through the last application output falls from 35,892 to 29,731 clocks, a
+17.2% cycle reduction and a 20.7% throughput increase. Aggregate actor-state
+visits fall from 15,932 to 13,023, and separate entry visits fall from 4,878 to
+1,474. The remaining entry visits are the fallback taken while an earlier
+batch is still draining.
+
+Cycle-stamped status frames put completion of steps zero through 21 an average
+of 1,339.8 clocks apart, down from 1,618.6 clocks. This is about 74.6 thousand
+decoder steps per second at 100 MHz or 149.3 thousand at 200 MHz. One million
+steps per second would require about 1.34 GHz if expressed as clock frequency
+alone, or about 6.7 times the present effective parallelism at 200 MHz. The
+native Icarus witness completed in 33 seconds.
+
+The out-of-context XC7 core map reports 44,261 estimated logic cells, 23,031
+flip-flops, 52,613 LUTs, and 16 `DSP48E1`s. Compared with batched entry alone,
+that is 0.9% more estimated logic cells, four fewer flip-flops, and 0.3% fewer
+LUTs, with no DSP increase. Effective throughput per estimated logic cell
+therefore improves by 19.7%. Both maps exclude the same twelve external RAM
+macros.
+
+### First overlapped shared-scheduler attempt
+
+The first pipelined scheduler captured producer requests while reading the
+selected actor's state and mailbox entry. After the pure actor microstep had
+produced an accepted effect batch, the scheduler issued the actor-state write
+and any pending mailbox admission without waiting synchronously for their
+completion.
+The following actor read, or the idle collection phase when no actor is ready,
+drains those completions. Requests to each single-port RAM remain on one
+ordered channel, and at most one completion per RAM is outstanding, so a new
+read cannot overtake the preceding write. The effect-batch send still precedes
+both writes on the token path; downstream backpressure therefore cannot expose
+speculative actor or mailbox state.
+
+This changed a continuously active actor visit from three clocks--read,
+execute/write, and collect/write-completion--to two clocks--read and execute.
+Idle schedulers retained the collection phase. Producer admission and returned
+batch credits use one shared combinational transition in both the idle and
+commit paths; spelling that pure transition once is important, because an
+initial two-call form made XLS duplicate much of the mailbox-management logic.
+No actor-state width, mailbox depth, effect-batch width, or RAM-port count
+changes.
+
+The complete CPU-versus-native-Icarus comparison again agrees on all 84
+accepted corrections and all 18 final data-qubit replies. Relative to fused
+dispatch and entry, the interval from the first accepted application beat
+through the last application output falls from 29,731 to 20,170 clocks, a
+32.2% cycle reduction and a 47.4% throughput increase. The profiler observes
+12,981 actor-state reads, essentially unchanged from 13,023, but every
+completed mailbox and entry visit now takes exactly two clocks rather than
+three. The improvement therefore comes from overlapping RAM completion and
+request capture, rather than eliminating useful actor work. Native Icarus
+completes the witness in 26 seconds, down from 33 seconds.
+
+Cycle-stamped status frames put completion of steps zero through 21 an average
+of 902.6 clocks apart, down from 1,339.8 clocks. This is about 110.8 thousand
+decoder steps per second at 100 MHz or 221.6 thousand at 200 MHz. A one-megahertz
+step rate would require about 903 MHz if expressed as clock frequency alone,
+or about 4.5 times the present effective parallelism at 200 MHz.
+
+An out-of-context XC7 core map reports 54,634 estimated logic cells, 23,239
+flip-flops, 64,689 LUTs, and 16 `DSP48E1`s. Relative to fused dispatch and entry,
+that is 23.4% more estimated logic cells, 0.9% more flip-flops, and 23.0% more
+LUTs, with no DSP increase, for 48.4% more completed-step throughput. Effective
+throughput per estimated logic cell improves by 20.3%. The combinational area
+increase is the cost of updating mailbox-admission and actor-completion
+metadata in one activation; the nearly unchanged register count confirms that
+the overlap did not duplicate actor or mailbox storage. As above, the map
+excludes the same twelve external RAM macros. The fixed pipeline below
+supersedes this revision.
+
+### Fixed two-stage shared-scheduler pipeline
+
+An ablation first separated dispatch from phase entry while retaining the
+first pipeline's single-port RAM protocol. It passed the complete witness but
+only reduced the core from 54,634 to 53,398 estimated logic cells, while the
+application interval grew from 20,170 to 24,233 clocks. Its 23,241 flip-flops,
+63,810 LUTs, and 16 `DSP48E1`s likewise remained close to the expensive first
+attempt. The area increase therefore did not principally come from fusing
+dispatch with entry, and simple unfusion was rejected as both large and slower.
+
+The replacement is a fixed, in-order pipeline with two registered actor
+contexts. In one steady `RUN` activation, the older context performs phase
+entry and retires while a distinct younger context receives its state and
+mailbox values and performs message dispatch. Each actor-state and mailbox
+store is now a simple-dual-port RAM with one read and one write port. There is
+no periodic collection trigger: write responses are collected at the start of
+the next `RUN` activation, and the independent write port accepts the older
+commit while the read port opens the younger visit.
+
+Pipeline position supplies the age order used for hazards. The younger slot
+is excluded from admission and from the next ready selection until its dispatch
+result has advanced to the older context. Retirement projects the older
+context's queue and readiness metadata before selection, so that slot may be
+chosen again only after its state write. Thus simultaneous RAM accesses always
+belong to distinct actors; a scheduler with only one ready actor deliberately
+bubbles rather than forwarding speculative state. This is a small instance of
+the visibility discipline described in [*High-Level Synthesis of Efficient
+Pipelines with Visibility Control*](https://arxiv.org/abs/2607.18765): fixed
+stage order identifies older effects, while unresolved younger same-address
+accesses are withheld. The scheduler does not need transaction sequence tags
+or a dynamic rollback rule.
+
+The distance-one RTL bench passes, and the complete CPU-versus-native-Icarus
+comparison agrees on all 84 accepted corrections and all 18 final data-qubit
+replies. The interval from the first accepted application beat through the
+last application output was 13,322--13,350 clocks across repeated runs, down
+from 20,170 clocks: about a 34% cycle reduction and a 51% throughput increase.
+Although separating dispatch and entry raises aggregate actor-state reads from
+12,981 to 15,326--15,354, every completed mailbox and entry visit takes exactly
+two clocks. Each scheduler observes a minimum interval of two clocks between
+accepted state reads, with no state- or mailbox-RAM request stalls. The
+profiler also observes thousands of simultaneous read/write acceptances and no
+same-row overlap in either RAM; both RTL topology benches assert that hazard
+invariant directly. The native Icarus witness completes in 22 seconds.
+
+Cycle-stamped status frames put completion of steps zero through 21 an average
+of 576.3 clocks apart, down from 902.6 clocks. This is about 173.5 thousand
+decoder steps per second at 100 MHz or 347.0 thousand at 200 MHz. One million
+steps per second would require about 576 MHz if expressed as clock frequency
+alone, or about 2.9 times the present effective parallelism at 200 MHz.
+
+An out-of-context XC7 core map reports 41,345 estimated logic cells, 24,533
+flip-flops, 53,718 LUTs, and 16 `DSP48E1`s. Relative to the first pipeline this
+is 24.3% fewer estimated logic cells and 17.0% fewer LUTs, with 5.6% more
+flip-flops for the registered contexts. It is also 6.6% fewer estimated logic
+cells than fused dispatch and entry before pipelining; LUTs are 2.1% higher and
+flip-flops are 6.5% higher than that revision. The map excludes the twelve
+external RAM macros.
+
+The new RAM interface does not duplicate stored contents. Separate XC7 maps of
+the three instantiated RAM shapes infer the same primitives as their earlier
+single-port counterparts: each 434-by-16 state RAM uses 13 `RAMB18E1`s, each
+546-by-16 state RAM uses eight `RAMB36E1`s, and each 128-by-64 mailbox RAM uses
+two `RAMB36E1`s. Across two data, two syndrome, and two phi schedulers, that is
+52 `RAMB18E1`s and 28 `RAMB36E1`s, or 54 `RAMB36E1`-equivalents. Those figures
+also expose the fragmentation cost of the current very wide, shallow actor
+state layout; the fixed pipeline neither improves nor worsens it.
+
+The reusable DSLX storage protocol now lives in `priv/xls/lib/bram.x`, while
+`priv/xls/lib/mailbox.x` owns mailbox row types, flattened addressing, and
+frame-row reads and writes. Generated actor modules retain public type aliases
+for their state- and mailbox-RAM channels, so topology and gateway interfaces
+remain actor-qualified without reproducing the protocol records and
+constructors in every actor source. XLS still receives the same explicit
+`1R1W` channel configuration, and this refactoring does not change the memory
+layout, pipeline schedule, or measurements above.

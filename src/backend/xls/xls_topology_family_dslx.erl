@@ -24,10 +24,11 @@ Families may either instantiate one actor service per coordinate or join a
 homogeneous scheduler group. A group replaces the per-coordinate services and
 mailboxes with shared ingress, execution, and egress machinery around one
 actor implementation. Actor-machine words and mailbox frames cross separate
-one-read/write RAM boundaries; the scheduler retains only bounded queue-order
-metadata. The current backend requires both scheduler storage bindings to be
-`block_ram`; a target wrapper must connect both generated RAM channel triplets
-to storage with the declared read and write-completion protocol.
+simple-dual-port RAM boundaries, each with one read and one write port; the
+scheduler retains only bounded queue-order metadata. The current backend
+requires both scheduler storage bindings to be `block_ram`; a target wrapper
+must connect the generated RAM channel quartets to storage with the declared
+independent read- and write-channel protocol.
 
 Each compact lane relation becomes a depth-zero direct channel array. The
 explicit depth supplies the pinned block stitcher's per-channel FIFO metadata
@@ -1415,8 +1416,14 @@ scheduler_spawns(#{schedulers := Schedulers}) ->
             "_scheduled_egress_p,\n",
             "      ", Stem, "_scheduled_admit_p, ", Stem,
             "_credit_c,\n",
-            "      ", Stem, "_ram_req_out, ", Stem,
-            "_ram_resp_in, ", Stem, "_ram_wr_comp_in);\n",
+            "      ", Stem, "_ram_read_req_out, ", Stem,
+            "_ram_read_resp_in,\n",
+            "      ", Stem, "_ram_write_req_out, ", Stem,
+            "_ram_write_resp_in,\n",
+            "      ", Stem, "_mailbox_read_req_out, ", Stem,
+            "_mailbox_read_resp_in,\n",
+            "      ", Stem, "_mailbox_write_req_out, ", Stem,
+            "_mailbox_write_resp_in);\n",
             "    spawn ", Module, "::SchedulerEgressDemux<u32:",
             integer_to_list(SlotCount), ">(\n",
             "      ", Stem, "_scheduled_egress_c, ", Stem,
@@ -1433,11 +1440,22 @@ scheduler_spawns(#{schedulers := Schedulers}) ->
 scheduler_ram_arguments(#{schedulers := Schedulers}) ->
     lists:append([
         [
-            [Stem, "_ram_req_out: chan<", Module,
-                "::MachineRamReq> out"],
-            [Stem, "_ram_resp_in: chan<", Module,
-                "::MachineRamResp> in"],
-            [Stem, "_ram_wr_comp_in: chan<()> in"]
+            [Stem, "_ram_read_req_out: chan<", Module,
+                "::MachineRamReadReq> out"],
+            [Stem, "_ram_read_resp_in: chan<", Module,
+                "::MachineRamReadResp> in"],
+            [Stem, "_ram_write_req_out: chan<", Module,
+                "::MachineRamWriteReq> out"],
+            [Stem, "_ram_write_resp_in: chan<", Module,
+                "::MachineRamWriteResp> in"],
+            [Stem, "_mailbox_read_req_out: chan<", Module,
+                "::MailboxRamReadReq> out"],
+            [Stem, "_mailbox_read_resp_in: chan<", Module,
+                "::MailboxRamReadResp> in"],
+            [Stem, "_mailbox_write_req_out: chan<", Module,
+                "::MailboxRamWriteReq> out"],
+            [Stem, "_mailbox_write_resp_in: chan<", Module,
+                "::MailboxRamWriteResp> in"]
         ]
         || #{stem := Stem, module_name := Module} <- Schedulers
     ]).
@@ -1602,8 +1620,16 @@ top_proc(Spec) ->
         || #{output_name := OutputName} <- Externals],
     RamMembers = scheduler_ram_arguments(Spec),
     RamNames = lists:append([
-        [[Stem, "_ram_req_out"], [Stem, "_ram_resp_in"],
-            [Stem, "_ram_wr_comp_in"]]
+        [
+            [Stem, "_ram_read_req_out"],
+            [Stem, "_ram_read_resp_in"],
+            [Stem, "_ram_write_req_out"],
+            [Stem, "_ram_write_resp_in"],
+            [Stem, "_mailbox_read_req_out"],
+            [Stem, "_mailbox_read_resp_in"],
+            [Stem, "_mailbox_write_req_out"],
+            [Stem, "_mailbox_write_resp_in"]
+        ]
         || #{stem := Stem} <- maps:get(schedulers, Spec)
     ]),
     Names = RamNames ++
