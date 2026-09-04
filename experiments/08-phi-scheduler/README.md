@@ -15,6 +15,8 @@ The files answer four progressively narrower questions:
 4. Once the generated actor deployment uses shared, pipelined schedulers, how
    much throughput does it recover by partitioning each phi family over two or
    three executors?
+5. Is the remaining full-demo latency in the decoder, or in the simulated
+   phenomenological source network that will not exist in the real apparatus?
 
 The experiment keeps the application boundary honest: the raw and BRAM
 implementations accept the same cutoff, correction-update, and measurement
@@ -108,6 +110,34 @@ previous isolated maps of these RAM shapes gives approximately 54, 74, and 94
 does not grow; each additional phi executor needs its own very wide, shallow
 state RAM and 128-bit mailbox RAM so that the workers can operate concurrently.
 
+The decoder-only attribution graph keeps the three phi executors per plane and
+their ordinary message protocol but replaces both physical-source families
+with request-paced deterministic sources. A strict 33-round RTL bench observed
+64 X and 62 Z corrections and measured 4,048 clocks from complete step eight
+through complete step 32: 168.67 clocks per step, or 1.186 million steps per
+second at 200 MHz. Phi state reads occurred on 38.5% of aggregate shard clocks,
+versus 17.1% during the complete three-shard closeout. The physical noise/data
+protocol is absent from this lower-bound graph, but a later one-result
+lookahead showed that it was not the only cause of the complete demo's 400.5
+clocks per step.
+
+In that follow-up, each syndrome source computes one result ahead, releases it
+only when phi requests the matching step, and starts the following data round
+at the same boundary. The complete CPU/Icarus witness still agrees on all 84
+corrections and 18 final replies. Complete source announcements moved from an
+average of 105.9 clocks after the preceding status set to 37.3 clocks before
+it, demonstrating real overlap, but steady completed-step cadence changed only
+from 400.45 to 399.57 clocks.
+
+The full demo is then limited by its serialized observation traffic: 18
+diagnostic announcements, 18 statuses, and an average of 84 / 22 corrections
+per step, each carried in a five-beat routed frame over a path accepting one
+beat every two clocks. This predicts about 398.2 clocks per step. The ignored
+announcement copies should become optional, best-effort, or debug traffic in a
+deployment profile; status aggregation and an initiation interval of one beat
+are further transport optimizations. They are separate from decoder-core
+throughput and from the real apparatus, which supplies syndromes externally.
+
 ## Running the experiment
 
 The fast local checks are:
@@ -126,6 +156,7 @@ experiments/08-phi-scheduler/run_sequential_xls.sh
 experiments/08-phi-scheduler/run_bram_xls.sh
 experiments/08-phi-scheduler/run_area_matrix.sh
 experiments/08-phi-scheduler/run_shard_sweep.sh
+tools/run_phi_decoder_profile.sh
 ```
 
 The complete ERTS/VPI comparisons are:

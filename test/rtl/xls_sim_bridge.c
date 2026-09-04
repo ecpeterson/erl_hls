@@ -77,6 +77,11 @@ typedef struct {
     uint64_t egresses;
     uint64_t egress_stalls;
     uint64_t active_cycles;
+    uint64_t issue_cycles;
+    uint64_t no_issue_state_port_blocked;
+    uint64_t no_issue_egress_backpressured;
+    uint64_t no_issue_request_backpressured;
+    uint64_t no_issue_without_visible_backpressure;
     uint64_t mailbox_visit_count;
     uint64_t mailbox_visit_cycles;
     uint64_t mailbox_visit_min;
@@ -321,6 +326,15 @@ static void write_scheduler_profile(void) {
         PROFILE_VALUE("egresses", counts->egresses);
         PROFILE_VALUE("egress_stalls", counts->egress_stalls);
         PROFILE_VALUE("active_cycles", counts->active_cycles);
+        PROFILE_VALUE("issue_cycles", counts->issue_cycles);
+        PROFILE_VALUE("no_issue_state_port_blocked",
+                      counts->no_issue_state_port_blocked);
+        PROFILE_VALUE("no_issue_egress_backpressured",
+                      counts->no_issue_egress_backpressured);
+        PROFILE_VALUE("no_issue_request_backpressured",
+                      counts->no_issue_request_backpressured);
+        PROFILE_VALUE("no_issue_without_visible_backpressure",
+                      counts->no_issue_without_visible_backpressure);
         PROFILE_VALUE("mailbox_visits", counts->mailbox_visit_count);
         PROFILE_VALUE("mailbox_visit_cycles", counts->mailbox_visit_cycles);
         PROFILE_VALUE("mailbox_visit_min", printable_minimum(
@@ -696,6 +710,9 @@ static void step_scheduler_profile(scheduler_profile_t *profile) {
     int state_read_accepted;
     int mailbox_write_accepted;
     int mailbox_read_accepted;
+    int state_port_blocked = 0;
+    int request_backpressured = 0;
+    int egress_backpressured = 0;
     unsigned index;
 
     /* Commit the older visit before opening the younger one. In the 1R1W
@@ -728,6 +745,7 @@ static void step_scheduler_profile(scheduler_profile_t *profile) {
         active = 1;
     } else if (valid) {
         counts->state_request_stalls++;
+        state_port_blocked = 1;
         active = 1;
     }
 
@@ -760,6 +778,7 @@ static void step_scheduler_profile(scheduler_profile_t *profile) {
         active = 1;
     } else if (valid) {
         counts->state_request_stalls++;
+        state_port_blocked = 1;
         active = 1;
     }
     if (state_write_accepted && state_read_accepted) {
@@ -827,6 +846,7 @@ static void step_scheduler_profile(scheduler_profile_t *profile) {
             active = 1;
         } else if (valid) {
             counts->request_stalls++;
+            request_backpressured = 1;
             active = 1;
         }
     }
@@ -843,10 +863,26 @@ static void step_scheduler_profile(scheduler_profile_t *profile) {
         active = 1;
     } else if (valid) {
         counts->egress_stalls++;
+        egress_backpressured = 1;
         active = 1;
     }
     if (active)
         counts->active_cycles++;
+
+    /* These buckets are deliberately mutually exclusive. They classify the
+     * externally visible condition on clocks where the scheduler does not
+     * launch a state read; they do not claim that backpressure is necessarily
+     * the internal cause of the missing issue. */
+    if (state_read_accepted)
+        counts->issue_cycles++;
+    else if (state_port_blocked)
+        counts->no_issue_state_port_blocked++;
+    else if (egress_backpressured)
+        counts->no_issue_egress_backpressured++;
+    else if (request_backpressured)
+        counts->no_issue_request_backpressured++;
+    else
+        counts->no_issue_without_visible_backpressure++;
 }
 
 static void checkpoint_scheduler_profiles(void) {

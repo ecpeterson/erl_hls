@@ -259,7 +259,7 @@ pub proc Top {
     // Actor syndrome uses phenom_syndrome_cell output ABI order [north,east,west,south,phi].
     let (actor_2_req_p, actor_2_req_c) = chan<axis::Frame, CHANNEL_DEPTH>("actor_2_req");
     let (actor_2_admit_p, actor_2_admit_c) = chan<u1, CHANNEL_DEPTH>("actor_2_admit");
-    let (actor_2_egress_p, actor_2_egress_c) = chan<phenom_syndrome_cell::Egress, u32:3>("actor_2_egress");
+    let (actor_2_egress_p, actor_2_egress_c) = chan<phenom_syndrome_cell::Egress, u32:4>("actor_2_egress");
     spawn phenom_data_cell::Service(
       actor_0_req_c,
       actor_0_egress_p,

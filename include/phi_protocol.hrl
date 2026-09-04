@@ -66,6 +66,9 @@
     y = hls_type:zero() :: hls_nums:u16()
 }).
 
+%% Releases the retained syndrome result for this step. The source begins the
+%% following step only after consuming this request, so at most one completed
+%% result can be ahead of the decoder.
 -record(phenom_request, {
     step = hls_type:zero() :: hls_nums:u32()
 }).

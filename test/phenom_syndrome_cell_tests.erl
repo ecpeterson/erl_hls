@@ -15,6 +15,12 @@ query_entry_labels_recipient_edges_test() ->
     Cell = collecting_cell(?PRNG_SEED, 0),
     ?assertEqual(
         {Cell, [
+            {cast_if, false, phi, #phenom_anyon{
+                step = 0,
+                flags = 0,
+                x = 0,
+                y = 0
+            }},
             {cast, north, #phenom_query{
                 step = 0,
                 source = ?PHI_SOUTH_MASK
@@ -32,7 +38,7 @@ query_entry_labels_recipient_edges_test() ->
                 source = ?PHI_NORTH_MASK
             }}
         ]},
-        phenom_syndrome_cell:handle_enter(waiting, collecting, Cell)
+        phenom_syndrome_cell:handle_enter(configuring, collecting, Cell)
     ).
 
 response_order_does_not_change_parity_test() ->
@@ -61,17 +67,32 @@ response_order_does_not_change_parity_test() ->
                 Cell1
             ),
             ?assertEqual(
-                {Cell1, [{cast, phi, #phenom_anyon{
-                    step = 0,
-                    flags = ?PHENOM_PRESENT_MASK,
-                    x = ?COORD_X,
-                    y = ?COORD_Y
-                }}]},
+                {Cell1, []},
                 phenom_syndrome_cell:handle_enter(
                     collecting,
                     announcing,
                     Cell1
                 )
+            ),
+            {collecting, Released, consume} =
+                phenom_syndrome_cell:handle_cast(
+                    #phenom_request{step = 0},
+                    announcing,
+                    Cell1
+                ),
+            {_Cleared, Effects} = phenom_syndrome_cell:handle_enter(
+                announcing,
+                collecting,
+                Released
+            ),
+            ?assertMatch(
+                [{cast_if, true, phi, #phenom_anyon{
+                    step = 0,
+                    flags = ?PHENOM_PRESENT_MASK,
+                    x = ?COORD_X,
+                    y = ?COORD_Y
+                }} | _],
+                Effects
             )
         end,
         permutations(Responses)
@@ -93,14 +114,19 @@ measurement_error_appears_at_both_boundaries_test() ->
     ),
 
     {collecting, Second0, consume} = phenom_syndrome_cell:handle_cast(
-        #phenom_request{step = 1},
+        #phenom_request{step = 0},
         announcing,
         First
+    ),
+    {Second1, _Effects} = phenom_syndrome_cell:handle_enter(
+        announcing,
+        collecting,
+        Second0
     ),
     {announcing, Second, consume} = apply_responses(
         all_absent(),
         1,
-        Second0
+        Second1
     ),
     %% The second word is above the threshold. The falling edge of the prior
     %% measurement error therefore supplies this round's detection event.
@@ -201,7 +227,7 @@ invalid_configuration_and_request_steps_fail_test() ->
     ),
     Collecting = collecting_cell(?PRNG_SEED, 0),
     ?assertEqual(
-        {collecting, Collecting, fail},
+        {collecting, Collecting, postpone},
         phenom_syndrome_cell:handle_cast(
             #phenom_request{step = 0},
             collecting,
@@ -209,7 +235,7 @@ invalid_configuration_and_request_steps_fail_test() ->
         )
     ),
     ?assertEqual(
-        {collecting, Collecting, postpone},
+        {collecting, Collecting, fail},
         phenom_syndrome_cell:handle_cast(
             #phenom_request{step = 1},
             collecting,
@@ -217,7 +243,7 @@ invalid_configuration_and_request_steps_fail_test() ->
         )
     ).
 
-early_next_request_replays_after_announcement_test() ->
+early_request_replays_when_result_is_ready_test() ->
     Outputs = maps:from_list([
         {north, self()},
         {east, self()},
@@ -234,10 +260,8 @@ early_next_request_replays_after_announcement_test() ->
             ?COORD_X,
             ?COORD_Y
         ),
-        ok = phenom_syndrome_cell:offer_request(PID, 0),
         expect_query_batch(0),
-
-        ok = phenom_syndrome_cell:offer_request(PID, 1),
+        ok = phenom_syndrome_cell:offer_request(PID, 0),
         Before = phenom_syndrome_cell:runtime_info(PID),
         ?assertEqual(collecting, maps:get(phase, Before)),
         ?assertEqual(1, maps:get(postponed, Before)),
@@ -282,10 +306,9 @@ request_before_configuration_is_replayed_test() ->
         ?assertEqual(1, maps:get(postponed, Before)),
         ok = phenom_syndrome_cell:configure(PID, ?PRNG_SEED, 0),
         expect_query_batch(0),
-        ?assertEqual(
-            collecting,
-            maps:get(phase, phenom_syndrome_cell:runtime_info(PID))
-        )
+        After = phenom_syndrome_cell:runtime_info(PID),
+        ?assertEqual(collecting, maps:get(phase, After)),
+        ?assertEqual(1, maps:get(postponed, After))
     after
         stop_if_alive(PID)
     end.
@@ -341,6 +364,7 @@ cutoff_freezes_prng_after_first_quiet_round_test() ->
             ?COORD_X,
             ?COORD_Y
         ),
+        expect_query_batch(0),
         ok = phenom_syndrome_cell:noise_cutoff(PID, 1),
 
         run_round(PID, 0),
@@ -350,6 +374,7 @@ cutoff_freezes_prng_after_first_quiet_round_test() ->
             x = ?COORD_X,
             y = ?COORD_Y
         }),
+        expect_query_batch(1),
 
         run_round(PID, 1),
         expect_cast(#phenom_anyon{
@@ -358,6 +383,7 @@ cutoff_freezes_prng_after_first_quiet_round_test() ->
             x = ?COORD_X,
             y = ?COORD_Y
         }),
+        expect_query_batch(2),
 
         run_round(PID, 2),
         expect_cast(#phenom_anyon{
@@ -366,9 +392,10 @@ cutoff_freezes_prng_after_first_quiet_round_test() ->
             x = ?COORD_X,
             y = ?COORD_Y
         }),
+        expect_query_batch(3),
         Info = phenom_syndrome_cell:runtime_info(PID),
         ?assertMatch(
-            {syndrome, 2, ?PHI_ALL_DIRECTIONS, 0, 0, 0, 0, 0,
+            {syndrome, 3, 0, 0, 0, 0, 1, 0,
                 ?PRNG_FIRST, ?U32_MASK, ?COORD_X, ?COORD_Y,
                 1, 0, 1},
             maps:get(data, Info)
@@ -425,7 +452,7 @@ collecting_cell(Seed, Threshold) ->
 
 collecting_cell(Seed, Threshold, X, Y) ->
     {ok, configuring, Initial} = phenom_syndrome_cell:init([]),
-    {waiting, Configured, consume} = phenom_syndrome_cell:handle_cast(
+    {collecting, Collecting, consume} = phenom_syndrome_cell:handle_cast(
         #phenom_config{
             seed = Seed,
             threshold = Threshold,
@@ -434,11 +461,6 @@ collecting_cell(Seed, Threshold, X, Y) ->
         },
         configuring,
         Initial
-    ),
-    {collecting, Collecting, consume} = phenom_syndrome_cell:handle_cast(
-        #phenom_request{step = 0},
-        waiting,
-        Configured
     ),
     Collecting.
 
@@ -475,14 +497,13 @@ all_absent() ->
     [{north, false}, {east, false}, {west, false}, {south, false}].
 
 run_round(PID, Step) ->
-    ok = phenom_syndrome_cell:offer_request(PID, Step),
-    expect_query_batch(Step),
     lists:foreach(
         fun(Direction) ->
             ok = phenom_syndrome_cell:offer_data(PID, Step, Direction, false)
         end,
         [north, east, west, south]
-    ).
+    ),
+    ok = phenom_syndrome_cell:offer_request(PID, Step).
 
 direction_mask(north) -> ?PHI_NORTH_MASK;
 direction_mask(east) -> ?PHI_EAST_MASK;
