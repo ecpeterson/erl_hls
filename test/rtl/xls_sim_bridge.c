@@ -106,6 +106,15 @@ typedef struct {
     uint64_t mail_candidate_slot_samples;
     uint64_t entry_probe_slot_samples;
     uint64_t egress_waiter_slot_samples;
+    uint64_t pending_command_slot_samples;
+    uint64_t pending_credit_slot_samples;
+    uint64_t pending_command_activations;
+    uint64_t pending_credit_activations;
+    uint64_t mailbox_occupancy_samples;
+    uint64_t mailbox_occupied_message_samples;
+    uint64_t mailbox_nonempty_actor_samples;
+    uint64_t mailbox_peak_occupied_messages;
+    uint64_t mailbox_peak_nonempty_actors;
     uint64_t egress_busy_cycles;
     uint64_t mailbox_visit_count;
     uint64_t mailbox_visit_cycles;
@@ -165,6 +174,8 @@ typedef struct {
     vpiHandle h_mailbox_write_response_ready;
     vpiHandle h_request_valid[MAX_SCHEDULER_INPUTS];
     vpiHandle h_request_ready[MAX_SCHEDULER_INPUTS];
+    vpiHandle h_pending_valid[MAX_SCHEDULER_INPUTS];
+    vpiHandle h_pending_credit[MAX_SCHEDULER_INPUTS];
     unsigned request_input_count;
     vpiHandle h_startup_valid;
     vpiHandle h_startup_ready;
@@ -174,6 +185,7 @@ typedef struct {
     vpiHandle h_mail_candidate[MAX_SCHEDULER_ACTORS];
     vpiHandle h_entry_probe[MAX_SCHEDULER_ACTORS];
     vpiHandle h_egress_waiter[MAX_SCHEDULER_ACTORS];
+    vpiHandle h_occupied[MAX_SCHEDULER_ACTORS];
     vpiHandle h_egress_busy;
     vpiHandle h_selection_activation;
     vpiHandle h_phase_boundary;
@@ -428,6 +440,24 @@ static void write_scheduler_profile(void) {
                       counts->entry_probe_slot_samples);
         PROFILE_VALUE("egress_waiter_slot_samples",
                       counts->egress_waiter_slot_samples);
+        PROFILE_VALUE("pending_command_slot_samples",
+                      counts->pending_command_slot_samples);
+        PROFILE_VALUE("pending_credit_slot_samples",
+                      counts->pending_credit_slot_samples);
+        PROFILE_VALUE("pending_command_activations",
+                      counts->pending_command_activations);
+        PROFILE_VALUE("pending_credit_activations",
+                      counts->pending_credit_activations);
+        PROFILE_VALUE("mailbox_occupancy_samples",
+                      counts->mailbox_occupancy_samples);
+        PROFILE_VALUE("mailbox_occupied_message_samples",
+                      counts->mailbox_occupied_message_samples);
+        PROFILE_VALUE("mailbox_nonempty_actor_samples",
+                      counts->mailbox_nonempty_actor_samples);
+        PROFILE_VALUE("mailbox_peak_occupied_messages",
+                      counts->mailbox_peak_occupied_messages);
+        PROFILE_VALUE("mailbox_peak_nonempty_actors",
+                      counts->mailbox_peak_nonempty_actors);
         PROFILE_VALUE("egress_busy_cycles", counts->egress_busy_cycles);
         PROFILE_VALUE("mailbox_visits", counts->mailbox_visit_count);
         PROFILE_VALUE("mailbox_visit_cycles", counts->mailbox_visit_cycles);
@@ -731,6 +761,17 @@ static int populate_scheduler_profile(
         if (!profile->h_request_valid[index] ||
             !profile->h_request_ready[index])
             break;
+        snprintf(signal_name, sizeof(signal_name),
+                 "captured_pending_valid[%u]", index);
+        profile->h_pending_valid[index] =
+            module_signal(module, signal_name);
+        snprintf(signal_name, sizeof(signal_name),
+                 "captured_pending_tuple_idx_2[%u]", index);
+        profile->h_pending_credit[index] =
+            module_signal(module, signal_name);
+        if (!profile->h_pending_valid[index] ||
+            !profile->h_pending_credit[index])
+            break;
         profile->request_input_count++;
     }
 
@@ -752,9 +793,12 @@ static int populate_scheduler_profile(
         profile->h_entry_probe[index] = module_signal(module, signal_name);
         snprintf(signal_name, sizeof(signal_name), "egress_waiters[%u]", index);
         profile->h_egress_waiter[index] = module_signal(module, signal_name);
+        snprintf(signal_name, sizeof(signal_name), "occupied__4[%u]", index);
+        profile->h_occupied[index] = module_signal(module, signal_name);
         if (!profile->h_mail_candidate[index] ||
             !profile->h_entry_probe[index] ||
-            !profile->h_egress_waiter[index])
+            !profile->h_egress_waiter[index] ||
+            !profile->h_occupied[index])
             break;
         profile->actor_count++;
     }
@@ -869,6 +913,10 @@ static void step_scheduler_profile(scheduler_profile_t *profile) {
     unsigned mail_candidates = 0;
     unsigned entry_probes = 0;
     unsigned egress_waiters = 0;
+    unsigned pending_commands = 0;
+    unsigned pending_credits = 0;
+    unsigned occupied_messages = 0;
+    unsigned nonempty_actors = 0;
     unsigned index;
 
     state_read_valid = get_bit(profile->h_ram_read_request_valid);
@@ -910,11 +958,23 @@ static void step_scheduler_profile(scheduler_profile_t *profile) {
         }
 
         counts->selection_activations++;
+        for (index = 0; index < profile->request_input_count; index++) {
+            if (!get_bit(profile->h_pending_valid[index]))
+                continue;
+            if (get_bit(profile->h_pending_credit[index]))
+                pending_credits++;
+            else
+                pending_commands++;
+        }
         for (index = 0; index < profile->actor_count; index++) {
             int slot_ready = get_bit(profile->h_ready[index]);
+            unsigned slot_occupied = get_u32(profile->h_occupied[index]);
             mail_candidates += get_bit(profile->h_mail_candidate[index]);
             entry_probes += get_bit(profile->h_entry_probe[index]);
             egress_waiters += get_bit(profile->h_egress_waiter[index]);
+            occupied_messages += slot_occupied;
+            if (slot_occupied != 0)
+                nonempty_actors++;
             if (slot_ready) {
                 any_ready = 1;
                 if (!profile->activation_has_state_read ||
@@ -927,6 +987,19 @@ static void step_scheduler_profile(scheduler_profile_t *profile) {
         counts->mail_candidate_slot_samples += mail_candidates;
         counts->entry_probe_slot_samples += entry_probes;
         counts->egress_waiter_slot_samples += egress_waiters;
+        counts->pending_command_slot_samples += pending_commands;
+        counts->pending_credit_slot_samples += pending_credits;
+        if (pending_commands != 0)
+            counts->pending_command_activations++;
+        if (pending_credits != 0)
+            counts->pending_credit_activations++;
+        counts->mailbox_occupancy_samples++;
+        counts->mailbox_occupied_message_samples += occupied_messages;
+        counts->mailbox_nonempty_actor_samples += nonempty_actors;
+        if (occupied_messages > counts->mailbox_peak_occupied_messages)
+            counts->mailbox_peak_occupied_messages = occupied_messages;
+        if (nonempty_actors > counts->mailbox_peak_nonempty_actors)
+            counts->mailbox_peak_nonempty_actors = nonempty_actors;
         if (egress_busy)
             counts->egress_busy_cycles++;
         if (any_ready)

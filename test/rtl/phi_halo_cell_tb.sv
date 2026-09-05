@@ -28,7 +28,7 @@ module phi_halo_cell_tb;
     wire [6:0] output_valid;
     reg [6:0] output_ready = 7'b0000000;
 
-    reg [32:0] captured [0:6][0:63];
+    reg [32:0] captured [0:6][0:255];
     integer beat_count [0:6];
     integer port_index;
     integer check_port;
@@ -134,6 +134,18 @@ module phi_halo_cell_tb;
             // Fixed arrays put element zero in the most-significant bits.
             send_beat(layer_one, 1'b0);
             send_beat(layer_zero, 1'b1);
+        end
+    endtask
+
+    task automatic send_uniform_phi;
+        input [31:0] epoch;
+        input [31:0] layer_zero;
+        input [31:0] layer_one;
+        begin
+            send_phi(epoch, layer_zero, layer_one);
+            send_phi(epoch, layer_zero, layer_one);
+            send_phi(epoch, layer_zero, layer_one);
+            send_phi(epoch, layer_zero, layer_one);
         end
     endtask
 
@@ -302,6 +314,20 @@ module phi_halo_cell_tb;
         end
     endtask
 
+    task automatic advance_uniform_phi;
+        input [31:0] epoch;
+        input [31:0] neighbor_zero;
+        input [31:0] neighbor_one;
+        input integer base;
+        input [31:0] expected_zero;
+        input [31:0] expected_one;
+        begin
+            send_uniform_phi(epoch, neighbor_zero, neighbor_one);
+            expect_all_phi(
+                base, epoch + 32'd1, expected_zero, expected_one);
+        end
+    endtask
+
     initial begin : watchdog
         #5000000;
         $display("FAIL: phi cell simulation timed out");
@@ -327,13 +353,13 @@ module phi_halo_cell_tb;
         expect_all_phi(0, 32'd0, 32'd0, 32'd0);
 
         // Complete the first canonical rounded diffusion round. Repeating
-        // gathering emits [7, 11] at epoch one before another message can
+        // gathering emits [13, 19] at epoch one before another message can
         // dispatch.
         send_phi(32'd0, 32'd32, 32'd48);
         send_phi(32'd0, 32'd64, 32'd80);
         send_phi(32'd0, 32'd16, 32'd32);
         send_phi(32'd0, 32'd48, 32'd64);
-        expect_all_phi(4, 32'd1, 32'd7, 32'd11);
+        expect_all_phi(4, 32'd1, 32'd13, 32'd19);
 
         // A complete early comparison batch occupies four of the five
         // mailbox slots. Each current diffusion message must enter and leave
@@ -344,17 +370,35 @@ module phi_halo_cell_tb;
         send_phi0(32'd0, WEST_MASK, 32'd17);
         send_phi0(32'd0, SOUTH_MASK, 32'd16);
 
-        // The second rounded diffusion round produces [9, 15] and enters
-        // comparing.
+        // Advance through the remaining nonterminal rounds. The field settles
+        // at [20, 29] before the twelfth round enters comparison.
+        advance_uniform_phi(32'd1, 32'd16, 32'd32,
+                            8, 32'd15, 32'd23);
+        advance_uniform_phi(32'd2, 32'd16, 32'd32,
+                            12, 32'd17, 32'd25);
+        advance_uniform_phi(32'd3, 32'd16, 32'd32,
+                            16, 32'd18, 32'd27);
+        advance_uniform_phi(32'd4, 32'd16, 32'd32,
+                            20, 32'd19, 32'd28);
+        advance_uniform_phi(32'd5, 32'd16, 32'd32,
+                            24, 32'd20, 32'd29);
+        advance_uniform_phi(32'd6, 32'd16, 32'd32,
+                            28, 32'd20, 32'd29);
+        advance_uniform_phi(32'd7, 32'd16, 32'd32,
+                            32, 32'd20, 32'd29);
+        advance_uniform_phi(32'd8, 32'd16, 32'd32,
+                            36, 32'd20, 32'd29);
+        advance_uniform_phi(32'd9, 32'd16, 32'd32,
+                            40, 32'd20, 32'd29);
+        advance_uniform_phi(32'd10, 32'd16, 32'd32,
+                            44, 32'd20, 32'd29);
+
         // Independently stall south's wire output while the other three ports
         // complete theirs. Its transmitter retains the comparison frame, so
         // the staged inputs can still enter flipping and queue that phase's
         // frame behind it without replaying any completed port.
         output_ready[SOUTH] = 1'b0;
-        send_phi(32'd1, 32'd16, 32'd32);
-        send_phi(32'd1, 32'd16, 32'd32);
-        send_phi(32'd1, 32'd16, 32'd32);
-        send_phi(32'd1, 32'd16, 32'd32);
+        send_uniform_phi(32'd11, 32'd16, 32'd32);
 
         while (!output_valid[SOUTH])
             @(posedge clk);
@@ -366,24 +410,22 @@ module phi_halo_cell_tb;
         end
         check_south_stall = 1'b1;
 
-        wait_for_count(NORTH, 15);
-        wait_for_count(EAST, 15);
-        wait_for_count(WEST, 15);
+        wait_for_count(NORTH, 55);
+        wait_for_count(EAST, 55);
+        wait_for_count(WEST, 55);
         repeat (8) @(posedge clk);
         for (check_port = NORTH; check_port <= WEST;
                 check_port = check_port + 1) begin
-            if (beat_count[check_port] != 15) begin
+            if (beat_count[check_port] != 55) begin
                 $display("FAIL: Service replayed an accepted output");
                 $fatal(1);
             end
-            check_phi(check_port, 0, 32'd0, 32'd0, 32'd0);
-            check_phi(check_port, 4, 32'd1, 32'd7, 32'd11);
-            check_anyon(check_port, 12, 32'd0, 32'd0);
+            check_anyon(check_port, 52, 32'd0, 32'd0);
         end
-        check_phi0(NORTH, 8, 32'd0, SOUTH_MASK, 32'd9);
-        check_phi0(EAST, 8, 32'd0, WEST_MASK, 32'd9);
-        check_phi0(WEST, 8, 32'd0, EAST_MASK, 32'd9);
-        if (beat_count[SOUTH] != 8) begin
+        check_phi0(NORTH, 48, 32'd0, SOUTH_MASK, 32'd20);
+        check_phi0(EAST, 48, 32'd0, WEST_MASK, 32'd20);
+        check_phi0(WEST, 48, 32'd0, EAST_MASK, 32'd20);
+        if (beat_count[SOUTH] != 48) begin
             $display("FAIL: blocked south transferred a comparison beat");
             $fatal(1);
         end
@@ -393,15 +435,15 @@ module phi_halo_cell_tb;
         // either entry action while south catches up.
         check_south_stall = 1'b0;
         output_ready[SOUTH] = 1'b1;
-        wait_for_count(SOUTH, 15);
-        check_phi0(SOUTH, 8, 32'd0, NORTH_MASK, 32'd9);
-        check_anyon(SOUTH, 12, 32'd0, 32'd0);
+        wait_for_count(SOUTH, 55);
+        check_phi0(SOUTH, 48, 32'd0, NORTH_MASK, 32'd20);
+        check_anyon(SOUTH, 52, 32'd0, 32'd0);
         if (beat_count[CORRECTION] != 0) begin
             $display("FAIL: tails emitted a correction");
             $fatal(1);
         end
-        if (beat_count[NORTH] != 15 || beat_count[EAST] != 15 ||
-                beat_count[WEST] != 15) begin
+        if (beat_count[NORTH] != 55 || beat_count[EAST] != 55 ||
+                beat_count[WEST] != 55) begin
             $display("FAIL: completed entry replayed accepted ports");
             $fatal(1);
         end
@@ -422,38 +464,51 @@ module phi_halo_cell_tb;
         output_ready[SYNDROME] = 1'b1;
         expect_measurement_request(2, 32'd1);
         send_measurement(32'd1, 32'd0);
-        expect_all_phi(15, 32'd2, 32'd9, 32'd15);
+        expect_all_phi(55, 32'd12, 32'd20, 32'd29);
 
         // With the local anyon present, zero-valued neighbors still contribute
-        // its signed Q15.16 charge. Rounded updates produce [65544, 12] and
-        // then [114695, 3286].
-        send_phi(32'd2, 32'd0, 32'd0);
-        send_phi(32'd2, 32'd0, 32'd0);
-        send_phi(32'd2, 32'd0, 32'd0);
-        send_phi(32'd2, 32'd0, 32'd0);
-        expect_all_phi(19, 32'd3, 32'd65544, 32'd12);
-
-        send_phi(32'd3, 32'd0, 32'd0);
-        send_phi(32'd3, 32'd0, 32'd0);
-        send_phi(32'd3, 32'd0, 32'd0);
-        send_phi(32'd3, 32'd0, 32'd0);
+        // its signed Q15.16 charge. Drive eleven nonterminal rounds, then the
+        // twelfth enters comparison with layer zero equal to 139927.
+        advance_uniform_phi(32'd12, 32'd0, 32'd0,
+                            59, 32'd65551, 32'd19);
+        advance_uniform_phi(32'd13, 32'd0, 32'd0,
+                            63, 32'd98315, 32'd5474);
+        advance_uniform_phi(32'd14, 32'd0, 32'd0,
+                            67, 32'd115606, 32'd11386);
+        advance_uniform_phi(32'd15, 32'd0, 32'd0,
+                            71, 32'd125237, 32'd16276);
+        advance_uniform_phi(32'd16, 32'd0, 32'd0,
+                            75, 32'd130867, 32'd19931);
+        advance_uniform_phi(32'd17, 32'd0, 32'd0,
+                            79, 32'd134291, 32'd22532);
+        advance_uniform_phi(32'd18, 32'd0, 32'd0,
+                            83, 32'd136437, 32'd24335);
+        advance_uniform_phi(32'd19, 32'd0, 32'd0,
+                            87, 32'd137810, 32'd25565);
+        advance_uniform_phi(32'd20, 32'd0, 32'd0,
+                            91, 32'd138702, 32'd26397);
+        advance_uniform_phi(32'd21, 32'd0, 32'd0,
+                            95, 32'd139287, 32'd26957);
+        advance_uniform_phi(32'd22, 32'd0, 32'd0,
+                            99, 32'd139672, 32'd27332);
+        send_uniform_phi(32'd23, 32'd0, 32'd0);
         for (check_port = 0; check_port < 4;
                 check_port = check_port + 1)
-            wait_for_count(check_port, 27);
-        check_phi0(NORTH, 23, 32'd1, SOUTH_MASK, 32'd114695);
-        check_phi0(EAST, 23, 32'd1, WEST_MASK, 32'd114695);
-        check_phi0(WEST, 23, 32'd1, EAST_MASK, 32'd114695);
-        check_phi0(SOUTH, 23, 32'd1, NORTH_MASK, 32'd114695);
+            wait_for_count(check_port, 107);
+        check_phi0(NORTH, 103, 32'd1, SOUTH_MASK, 32'd139927);
+        check_phi0(EAST, 103, 32'd1, WEST_MASK, 32'd139927);
+        check_phi0(WEST, 103, 32'd1, EAST_MASK, 32'd139927);
+        check_phi0(SOUTH, 103, 32'd1, NORTH_MASK, 32'd139927);
 
         // The second xorshift32 result has its high bit set. East is the unique
-        // winner above the local value 114695, so its output alone carries
+        // winner above the local value 139927, so its output alone carries
         // present=1. Stall that selected frame to exercise the new data under
         // backpressure.
         output_ready[EAST] = 1'b0;
-        send_phi0(32'd1, NORTH_MASK, 32'd120000);
-        send_phi0(32'd1, EAST_MASK, 32'd130000);
-        send_phi0(32'd1, WEST_MASK, 32'd125000);
-        send_phi0(32'd1, SOUTH_MASK, 32'd115000);
+        send_phi0(32'd1, NORTH_MASK, 32'd140000);
+        send_phi0(32'd1, EAST_MASK, 32'd150000);
+        send_phi0(32'd1, WEST_MASK, 32'd145000);
+        send_phi0(32'd1, SOUTH_MASK, 32'd135000);
 
         while (!output_valid[EAST])
             @(posedge clk);
@@ -465,32 +520,32 @@ module phi_halo_cell_tb;
         end
         check_east_stall = 1'b1;
 
-        wait_for_count(NORTH, 30);
-        wait_for_count(WEST, 30);
-        wait_for_count(SOUTH, 30);
+        wait_for_count(NORTH, 110);
+        wait_for_count(WEST, 110);
+        wait_for_count(SOUTH, 110);
         repeat (8) @(posedge clk);
-        if (beat_count[EAST] != 27) begin
+        if (beat_count[EAST] != 107) begin
             $display("FAIL: blocked east transferred a selected ANYON beat");
             $fatal(1);
         end
         for (check_port = 0; check_port < 4;
                 check_port = check_port + 1) begin
-            if (check_port != EAST && beat_count[check_port] != 30) begin
+            if (check_port != EAST && beat_count[check_port] != 110) begin
                 $display("FAIL: selected ANYON entry replayed a completed port");
                 $fatal(1);
             end
             if (check_port != EAST)
-                check_anyon(check_port, 27, 32'd1, 32'd0);
+                check_anyon(check_port, 107, 32'd1, 32'd0);
         end
 
         check_east_stall = 1'b0;
         output_ready[EAST] = 1'b1;
-        wait_for_count(EAST, 30);
-        check_anyon(EAST, 27, 32'd1, 32'd1);
+        wait_for_count(EAST, 110);
+        check_anyon(EAST, 107, 32'd1, 32'd1);
         wait_for_count(CORRECTION, 4);
         check_correction(0, 32'd1, EAST_MASK);
-        if (beat_count[NORTH] != 30 || beat_count[WEST] != 30 ||
-                beat_count[SOUTH] != 30) begin
+        if (beat_count[NORTH] != 110 || beat_count[WEST] != 110 ||
+                beat_count[SOUTH] != 110) begin
             $display("FAIL: completed ports replayed while east caught up");
             $fatal(1);
         end
@@ -503,32 +558,46 @@ module phi_halo_cell_tb;
         send_anyon(32'd1, 32'd0);
         expect_measurement_request(4, 32'd2);
         send_measurement(32'd2, 32'd0);
-        expect_all_phi(30, 32'd4, 32'd114695, 32'd3286);
+        expect_all_phi(110, 32'd24, 32'd139927, 32'd27583);
 
-        // The next rounded relaxation trace is [151831, 8199] followed by
-        // [180093, 13741].
-        send_phi(32'd4, 32'd0, 32'd0);
-        send_phi(32'd4, 32'd0, 32'd0);
-        send_phi(32'd4, 32'd0, 32'd0);
-        send_phi(32'd4, 32'd0, 32'd0);
-        expect_all_phi(34, 32'd5, 32'd151831, 32'd8199);
+        // A second charged relaxation approaches the reflected two-layer
+        // fixed point, reaching [140431, 28083] after twelve rounds.
+        advance_uniform_phi(32'd24, 32'd0, 32'd0,
+                            114, 32'd140097, 32'd27751);
+        advance_uniform_phi(32'd25, 32'd0, 32'd0,
+                            118, 32'd140210, 32'd27863);
+        advance_uniform_phi(32'd26, 32'd0, 32'd0,
+                            122, 32'd140285, 32'd27938);
+        advance_uniform_phi(32'd27, 32'd0, 32'd0,
+                            126, 32'd140335, 32'd27988);
+        advance_uniform_phi(32'd28, 32'd0, 32'd0,
+                            130, 32'd140368, 32'd28021);
+        advance_uniform_phi(32'd29, 32'd0, 32'd0,
+                            134, 32'd140390, 32'd28043);
+        advance_uniform_phi(32'd30, 32'd0, 32'd0,
+                            138, 32'd140405, 32'd28058);
+        advance_uniform_phi(32'd31, 32'd0, 32'd0,
+                            142, 32'd140415, 32'd28068);
+        advance_uniform_phi(32'd32, 32'd0, 32'd0,
+                            146, 32'd140422, 32'd28074);
+        advance_uniform_phi(32'd33, 32'd0, 32'd0,
+                            150, 32'd140426, 32'd28078);
+        advance_uniform_phi(32'd34, 32'd0, 32'd0,
+                            154, 32'd140429, 32'd28081);
 
         // The third xorshift32 result is also heads. Complete an all-negative
         // signed comparison with east as the unique least-negative winner.
         // Observing east's move proves both signed ordering and that the
         // stalled step-one entry
         // advanced the generator once, not once per retry or output port.
-        send_phi(32'd5, 32'd0, 32'd0);
-        send_phi(32'd5, 32'd0, 32'd0);
-        send_phi(32'd5, 32'd0, 32'd0);
-        send_phi(32'd5, 32'd0, 32'd0);
+        send_uniform_phi(32'd35, 32'd0, 32'd0);
         for (check_port = 0; check_port < 4;
                 check_port = check_port + 1)
-            wait_for_count(check_port, 42);
-        check_phi0(NORTH, 38, 32'd2, SOUTH_MASK, 32'd180093);
-        check_phi0(EAST, 38, 32'd2, WEST_MASK, 32'd180093);
-        check_phi0(WEST, 38, 32'd2, EAST_MASK, 32'd180093);
-        check_phi0(SOUTH, 38, 32'd2, NORTH_MASK, 32'd180093);
+            wait_for_count(check_port, 162);
+        check_phi0(NORTH, 158, 32'd2, SOUTH_MASK, 32'd140431);
+        check_phi0(EAST, 158, 32'd2, WEST_MASK, 32'd140431);
+        check_phi0(WEST, 158, 32'd2, EAST_MASK, 32'd140431);
+        check_phi0(SOUTH, 158, 32'd2, NORTH_MASK, 32'd140431);
 
         send_phi0(32'd2, NORTH_MASK, 32'hfffffffc);
         send_phi0(32'd2, EAST_MASK, 32'hffffffff);
@@ -536,18 +605,18 @@ module phi_halo_cell_tb;
         send_phi0(32'd2, SOUTH_MASK, 32'hfffffffe);
         for (check_port = 0; check_port < 4;
                 check_port = check_port + 1)
-            wait_for_count(check_port, 45);
-        check_anyon(NORTH, 42, 32'd2, 32'd0);
-        check_anyon(EAST, 42, 32'd2, 32'd1);
-        check_anyon(WEST, 42, 32'd2, 32'd0);
-        check_anyon(SOUTH, 42, 32'd2, 32'd0);
+            wait_for_count(check_port, 165);
+        check_anyon(NORTH, 162, 32'd2, 32'd0);
+        check_anyon(EAST, 162, 32'd2, 32'd1);
+        check_anyon(WEST, 162, 32'd2, 32'd0);
+        check_anyon(SOUTH, 162, 32'd2, 32'd0);
         wait_for_count(CORRECTION, 8);
         check_correction(4, 32'd2, EAST_MASK);
 
         repeat (8) @(posedge clk);
         for (check_port = 0; check_port < 4;
                 check_port = check_port + 1) begin
-            if (beat_count[check_port] != 45) begin
+            if (beat_count[check_port] != 165) begin
                 $display("FAIL: unexpected output after second coin check");
                 $fatal(1);
             end

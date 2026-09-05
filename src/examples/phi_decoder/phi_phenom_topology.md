@@ -1303,27 +1303,52 @@ development runner no longer copies work into the local UTM.
 
 ### Paper-semantics audit
 
-The rate above measures the deliberately small protocol fixture, not yet the
-3D decoder evaluated by Herold et al. The paper specifies an auxiliary
-`L x L x L` torus, with `c = 10 log^2(L)` parallel field updates followed by
-one anyon update in each sequence, and reports `eta = 1/2` for its numerical
-results. The current actor instead fixes two field updates and `eta = 1/4`.
+The decoder now follows the parameters used by Herold et al. The paper
+specifies an auxiliary `L x L x L` torus, with `c = 10 log^2(L)` parallel field
+updates followed by one anyon update in each sequence, and reports
+`eta = 1/2` for its numerical results.
 See [Cellular-automaton decoders for topological quantum memories](https://arxiv.org/abs/1406.2338).
 
-For `L = 3`, the current two-element field vector can represent the complete
-third dimension without loss: reflection symmetry about the anyon plane makes
-the `z = 1` and `z = -1` values equal. The bulk recurrence must nevertheless
-count both torus neighbors. The current five-neighbor terminal-layer formula
-does not do that, and it must be replaced together with the smoothing
-coefficient. A general odd `L` implementation needs `(L + 1) / 2` stored depth
-classes under this symmetry reduction.
+For `L = 3`, a two-element field vector represents the complete third
+dimension without loss: reflection symmetry about the anyon plane makes the
+`z = 1` and `z = -1` values equal. The center recurrence is therefore
+`q + (6 phi0 + 2 phi1 + planar_sum) / 12`. A bulk representative has the
+center value on one side and its reflected bulk counterpart on the other, so
+its recurrence is `(phi0 + 7 phi1 + planar_sum) / 12`. Both paths retain the
+existing single-round, nearest-Q15.16 rounding policy. A general odd `L`
+implementation would need `(L + 1) / 2` stored depth classes under this
+symmetry reduction.
 
 The paper does not state an integer-rounding convention for `c` at very small
-`L`; natural logarithms give approximately 12.1 at `L = 3`. Whichever explicit
-rounding policy the demo adopts, two field updates are not paper-equivalent.
-This also changes the throughput target substantially. A phi actor currently
-requires `5c + 12 = 22` state visits per sequence. At `c = 12`, each existing
-three-actor shard needs at least 216 visits, and the present II=2 selector has a
-hard lower bound of 432 clocks per sequence before any egress or dependency
-waits. Correcting the decoder semantics and taking a new profile therefore
-precedes further tuning toward one million anyon-update sequences per second.
+`L`; natural logarithms give approximately 12.1 at `L = 3`. The demonstration
+explicitly rounds that prescription to twelve field updates. The deterministic
+ERTS fixture now closes at step 18 with 80 accepted corrections and a
+nonuniform final data measurement: eight commuting and ten anticommuting
+qubits. Repeated ERTS runs produce the same summary.
+
+This changes the throughput target substantially. A phi actor requires
+`5c + 12 = 72` state visits per sequence. At `c = 12`, each existing
+three-actor shard therefore needs at least 216 visits, and the II=2 selector
+has a hard lower bound of 432 clocks per sequence before egress or causal
+waits. A native RTL profile measured 12,172 clocks for steps eight through 32:
+507.17 clocks per step, or about 394.3 thousand steps per second at 200 MHz.
+The implementation is 17.4% above the visit-count floor.
+
+The same run separates ingress pressure from actor execution. Across the six
+phi schedulers, 40,458 state reads occupied 40,458 of 50,562 selection
+activations. The exclusive selection buckets were 80.1% selectable, 16.2%
+blocked only by the same-actor hazard, 3.3% waiting for egress credit, and 0.4%
+without actor work. State and mailbox RAMs accepted every request.
+
+Mailbox occupancy was sampled after retirement and the activation's one
+admission. The schedulers averaged 3.48 queued messages spread over 2.12 of
+their three actors, with a peak of eight or nine messages in an individual
+scheduler. Producer holding slots retained an average of 0.43 non-credit
+commands after admission and were nonempty on 38.7% of activations. The large
+physical-cycle request-stall count--54,766 stalls beside 42,844 accepted
+requests--mostly reflects valid inputs being held across the scheduler's
+two-clock initiation interval; it does not indicate dropped work. There is
+ample queued input, and only a modest post-admission backlog, while the actor
+executor is busy whenever the same-actor rule permits it. This profile points
+to increasing executor issue rate rather than changing the mailbox payload
+layout.
