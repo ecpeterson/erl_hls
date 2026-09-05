@@ -90,6 +90,18 @@ typedef struct {
     uint64_t selection_cycles_waiting_egress_credit;
     uint64_t selection_cycles_no_actor_work;
     uint64_t selection_cycles_internal_other;
+    uint64_t same_actor_observed_mailbox;
+    uint64_t same_actor_observed_entry;
+    uint64_t same_actor_observed_egress;
+    uint64_t same_actor_observed_internal_other;
+    uint64_t same_actor_phase_boundaries;
+    uint64_t same_actor_followups;
+    uint64_t same_actor_followup_mailbox;
+    uint64_t same_actor_followup_entry;
+    uint64_t same_actor_followup_egress;
+    uint64_t same_actor_followup_waiting_egress_credit;
+    uint64_t same_actor_followup_no_work;
+    uint64_t same_actor_followup_direct_mailbox;
     uint64_t ready_slot_samples;
     uint64_t mail_candidate_slot_samples;
     uint64_t entry_probe_slot_samples;
@@ -115,6 +127,10 @@ typedef struct {
     uint64_t state_same_address_overlaps;
     uint64_t mailbox_read_write_overlaps;
     uint64_t mailbox_same_address_overlaps;
+    uint64_t actor_state_reads[MAX_SCHEDULER_ACTORS];
+    uint64_t actor_ready_samples[MAX_SCHEDULER_ACTORS];
+    uint64_t actor_same_actor_only[MAX_SCHEDULER_ACTORS];
+    uint64_t actor_direct_mailbox_followups[MAX_SCHEDULER_ACTORS];
     uint64_t visit_start;
     uint64_t previous_write;
     uint64_t previous_state_read;
@@ -160,9 +176,13 @@ typedef struct {
     vpiHandle h_egress_waiter[MAX_SCHEDULER_ACTORS];
     vpiHandle h_egress_busy;
     vpiHandle h_selection_activation;
+    vpiHandle h_phase_boundary;
     unsigned actor_count;
     int activation_has_state_read;
     uint32_t activation_state_read_slot;
+    int same_actor_followup_pending;
+    uint32_t same_actor_followup_slot;
+    int same_actor_followup_phase_boundary;
     scheduler_counts_t counts;
     scheduler_counts_t checkpoint;
 } scheduler_profile_t;
@@ -272,6 +292,9 @@ static void reset_scheduler_profile_counts(void) {
         reset_latency_minima(&scheduler_profiles[index].checkpoint);
         scheduler_profiles[index].activation_has_state_read = 0;
         scheduler_profiles[index].activation_state_read_slot = 0;
+        scheduler_profiles[index].same_actor_followup_pending = 0;
+        scheduler_profiles[index].same_actor_followup_slot = 0;
+        scheduler_profiles[index].same_actor_followup_phase_boundary = 0;
     }
     scheduler_profile_checkpoint_valid = 0;
     scheduler_profile_checkpoint_cycle = 0;
@@ -374,6 +397,30 @@ static void write_scheduler_profile(void) {
                       counts->selection_cycles_no_actor_work);
         PROFILE_VALUE("selection_cycles_internal_other",
                       counts->selection_cycles_internal_other);
+        PROFILE_VALUE("same_actor_observed_mailbox",
+                      counts->same_actor_observed_mailbox);
+        PROFILE_VALUE("same_actor_observed_entry",
+                      counts->same_actor_observed_entry);
+        PROFILE_VALUE("same_actor_observed_egress",
+                      counts->same_actor_observed_egress);
+        PROFILE_VALUE("same_actor_observed_internal_other",
+                      counts->same_actor_observed_internal_other);
+        PROFILE_VALUE("same_actor_phase_boundaries",
+                      counts->same_actor_phase_boundaries);
+        PROFILE_VALUE("same_actor_followups",
+                      counts->same_actor_followups);
+        PROFILE_VALUE("same_actor_followup_mailbox",
+                      counts->same_actor_followup_mailbox);
+        PROFILE_VALUE("same_actor_followup_entry",
+                      counts->same_actor_followup_entry);
+        PROFILE_VALUE("same_actor_followup_egress",
+                      counts->same_actor_followup_egress);
+        PROFILE_VALUE("same_actor_followup_waiting_egress_credit",
+                      counts->same_actor_followup_waiting_egress_credit);
+        PROFILE_VALUE("same_actor_followup_no_work",
+                      counts->same_actor_followup_no_work);
+        PROFILE_VALUE("same_actor_followup_direct_mailbox",
+                      counts->same_actor_followup_direct_mailbox);
         PROFILE_VALUE("ready_slot_samples", counts->ready_slot_samples);
         PROFILE_VALUE("mail_candidate_slot_samples",
                       counts->mail_candidate_slot_samples);
@@ -414,6 +461,22 @@ static void write_scheduler_profile(void) {
                       counts->mailbox_read_write_overlaps);
         PROFILE_VALUE("mailbox_same_address_overlaps",
                       counts->mailbox_same_address_overlaps);
+        {
+            unsigned actor;
+            for (actor = 0; actor < profile->actor_count; actor++) {
+                char key[64];
+                snprintf(key, sizeof(key), "actor_%u_state_reads", actor);
+                PROFILE_VALUE(key, counts->actor_state_reads[actor]);
+                snprintf(key, sizeof(key), "actor_%u_ready_samples", actor);
+                PROFILE_VALUE(key, counts->actor_ready_samples[actor]);
+                snprintf(key, sizeof(key), "actor_%u_same_actor_only", actor);
+                PROFILE_VALUE(key, counts->actor_same_actor_only[actor]);
+                snprintf(key, sizeof(key),
+                         "actor_%u_direct_mailbox_followups", actor);
+                PROFILE_VALUE(
+                    key, counts->actor_direct_mailbox_followups[actor]);
+            }
+        }
 #undef PROFILE_VALUE
     }
     dprintf(profile_fd, "profile_complete=1\n");
@@ -657,6 +720,7 @@ static int populate_scheduler_profile(
     MODULE_SIGNAL(h_egress_ready, "_egress_out_rdy");
     MODULE_SIGNAL(h_egress_busy, "admitted_egress_busy");
     MODULE_SIGNAL(h_selection_activation, "p0_stage_done");
+    MODULE_SIGNAL(h_phase_boundary, "phase_boundary");
 #undef MODULE_SIGNAL
 
     for (index = 0; index < MAX_SCHEDULER_INPUTS; index++) {
@@ -720,6 +784,7 @@ static int populate_scheduler_profile(
         profile->h_startup_valid && profile->h_startup_ready &&
         profile->h_egress_valid && profile->h_egress_ready &&
         profile->h_egress_busy && profile->h_selection_activation &&
+        profile->h_phase_boundary &&
         profile->actor_count > 0 &&
         profile->request_input_count > 0;
 }
@@ -799,6 +864,7 @@ static void step_scheduler_profile(scheduler_profile_t *profile) {
     int no_actor_work;
     int egress_busy;
     int selection_activation;
+    int phase_boundary;
     uint32_t read_slot;
     unsigned mail_candidates = 0;
     unsigned entry_probes = 0;
@@ -814,6 +880,35 @@ static void step_scheduler_profile(scheduler_profile_t *profile) {
     egress_busy = get_bit(profile->h_egress_busy);
     selection_activation = get_bit(profile->h_selection_activation);
     if (selection_activation) {
+        /* The previous same-actor sample named the actor that was then in
+         * flight. These signals now contain that actor's post-retirement
+         * readiness, so they distinguish reusable outgoing state from a
+         * stale ready bit that disappeared when the visit completed. */
+        if (profile->same_actor_followup_pending) {
+            unsigned slot = profile->same_actor_followup_slot;
+            int mail_candidate = get_bit(profile->h_mail_candidate[slot]);
+            int entry_probe = get_bit(profile->h_entry_probe[slot]);
+            int egress_waiter = get_bit(profile->h_egress_waiter[slot]);
+
+            counts->same_actor_followups++;
+            if (entry_probe) {
+                counts->same_actor_followup_entry++;
+            } else if (egress_waiter && !egress_busy) {
+                counts->same_actor_followup_egress++;
+            } else if (egress_waiter) {
+                counts->same_actor_followup_waiting_egress_credit++;
+            } else if (mail_candidate) {
+                counts->same_actor_followup_mailbox++;
+                if (!profile->same_actor_followup_phase_boundary) {
+                    counts->same_actor_followup_direct_mailbox++;
+                    counts->actor_direct_mailbox_followups[slot]++;
+                }
+            } else {
+                counts->same_actor_followup_no_work++;
+            }
+            profile->same_actor_followup_pending = 0;
+        }
+
         counts->selection_activations++;
         for (index = 0; index < profile->actor_count; index++) {
             int slot_ready = get_bit(profile->h_ready[index]);
@@ -826,6 +921,7 @@ static void step_scheduler_profile(scheduler_profile_t *profile) {
                     profile->activation_state_read_slot != index)
                     any_selectable = 1;
                 counts->ready_slot_samples++;
+                counts->actor_ready_samples[index]++;
             }
         }
         counts->mail_candidate_slot_samples += mail_candidates;
@@ -850,6 +946,30 @@ static void step_scheduler_profile(scheduler_profile_t *profile) {
             counts->selection_cycles_no_actor_work++;
         else
             counts->selection_cycles_internal_other++;
+
+        if (same_actor_only) {
+            unsigned slot = profile->activation_state_read_slot;
+            int mail_candidate = get_bit(profile->h_mail_candidate[slot]);
+            int entry_probe = get_bit(profile->h_entry_probe[slot]);
+            int egress_waiter = get_bit(profile->h_egress_waiter[slot]);
+
+            if (entry_probe)
+                counts->same_actor_observed_entry++;
+            else if (egress_waiter && !egress_busy)
+                counts->same_actor_observed_egress++;
+            else if (mail_candidate)
+                counts->same_actor_observed_mailbox++;
+            else
+                counts->same_actor_observed_internal_other++;
+
+            phase_boundary = get_bit(profile->h_phase_boundary);
+            if (phase_boundary)
+                counts->same_actor_phase_boundaries++;
+            counts->actor_same_actor_only[slot]++;
+            profile->same_actor_followup_pending = 1;
+            profile->same_actor_followup_slot = slot;
+            profile->same_actor_followup_phase_boundary = phase_boundary;
+        }
         profile->activation_has_state_read = 0;
     }
 
@@ -892,6 +1012,8 @@ static void step_scheduler_profile(scheduler_profile_t *profile) {
     state_read_accepted = valid && ready;
     if (state_read_accepted) {
         counts->state_reads++;
+        if (read_slot < profile->actor_count)
+            counts->actor_state_reads[read_slot]++;
         if (counts->previous_state_read_valid) {
             update_latency(
                 cycle_number - counts->previous_state_read,

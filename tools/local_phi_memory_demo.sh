@@ -150,11 +150,50 @@ awk -F= '
         sub(/_selection_cycles_(same_actor_only|waiting_egress_credit|no_actor_work|internal_other)$/, "", name)
         accounted[name] += $2
     }
+    /_selection_cycles_same_actor_only=/ {
+        name = $1
+        sub(/_selection_cycles_same_actor_only$/, "", name)
+        same_actor[name] = $2
+    }
+    /_same_actor_observed_(mailbox|entry|egress|internal_other)=/ {
+        name = $1
+        sub(/_same_actor_observed_(mailbox|entry|egress|internal_other)$/, "", name)
+        same_actor_observed[name] += $2
+    }
+    /_same_actor_followups=/ {
+        name = $1
+        sub(/_same_actor_followups$/, "", name)
+        followups[name] = $2
+    }
+    /_same_actor_followup_(mailbox|entry|egress|waiting_egress_credit|no_work)=/ {
+        name = $1
+        sub(/_same_actor_followup_(mailbox|entry|egress|waiting_egress_credit|no_work)$/, "", name)
+        followup_accounted[name] += $2
+    }
+    /_same_actor_followup_mailbox=/ {
+        name = $1
+        sub(/_same_actor_followup_mailbox$/, "", name)
+        followup_mailbox[name] = $2
+    }
+    /_same_actor_followup_direct_mailbox=/ {
+        name = $1
+        sub(/_same_actor_followup_direct_mailbox$/, "", name)
+        direct_mailbox[name] = $2
+    }
     END {
         found = 0
         for (name in activations) {
             found = 1
             if (accounted[name] != activations[name])
+                exit 1
+            if (same_actor_observed[name] != same_actor[name])
+                exit 1
+            if (followup_accounted[name] != followups[name])
+                exit 1
+            if (followups[name] > same_actor[name] ||
+                    same_actor[name] - followups[name] > 1)
+                exit 1
+            if (direct_mailbox[name] > followup_mailbox[name])
                 exit 1
         }
         if (!found)
