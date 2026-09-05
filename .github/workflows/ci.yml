@@ -85,4 +85,5 @@ jobs:
             _build/xls_sim/regsvc/*.ir
             _build/xls_sim/regsvc/*.v
             _build/xls_sim/regsvc/sim/vvp.log
+            _build/xls_sim/regsvc/phi_sim/vvp.log
           if-no-files-found: ignore
