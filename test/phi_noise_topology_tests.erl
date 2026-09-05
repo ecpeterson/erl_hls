@@ -26,8 +26,6 @@ default_topology_has_six_bounded_families_test() ->
     ?assertEqual(34, length(maps:get(route_relations, Spec))),
     ?assertEqual(
         [
-            {x_announcements, out, [phenom_anyon]},
-            {z_announcements, out, [phenom_anyon]},
             {x_decoder_events, out, [phi_correction, phi_status]},
             {z_decoder_events, out, [phi_correction, phi_status]},
             {data_measurements, out, [pauli_reply]}
@@ -285,19 +283,11 @@ phi_and_syndrome_pairs_share_coordinates_test() ->
                 [{external, z_decoder_events}],
                 recipients(Plan, phi_z, Coordinates, status)
             ),
-            assert_announcement_fanout(
-                Plan,
-                syndrome_x,
-                Coordinates,
-                {phi_x, X, Y},
-                x_announcements
+            assert_phi_delivery(
+                Plan, syndrome_x, Coordinates, {phi_x, X, Y}
             ),
-            assert_announcement_fanout(
-                Plan,
-                syndrome_z,
-                Coordinates,
-                {phi_z, X, Y},
-                z_announcements
+            assert_phi_delivery(
+                Plan, syndrome_z, Coordinates, {phi_z, X, Y}
             )
         end,
         coordinates(?DISTANCE)
@@ -358,7 +348,7 @@ normalized_startup_retains_family_instance_targets_test() ->
     Startup = maps:get(startup, Plan),
     ?assertEqual(54, length(Startup)),
     Lanes = maps:get(lane_relations, Plan),
-    ?assertEqual(34, length(Lanes)),
+    ?assertEqual(32, length(Lanes)),
     ?assertEqual(
         [
             #{
@@ -506,19 +496,10 @@ cardinal_destinations(Plan, Family, Coordinates) ->
         || Port <- directions()
     ].
 
-assert_announcement_fanout(
-    Plan,
-    Family,
-    Coordinates,
-    Phi,
-    External
-) ->
+assert_phi_delivery(Plan, Family, Coordinates, Phi) ->
     Route = route(Plan, Family, Coordinates, phi),
-    ?assertEqual(queued, maps:get(delivery, Route)),
-    ?assertEqual(
-        lists:sort([{actor, Phi}, {external, External}]),
-        lists:sort(maps:get(recipients, Route))
-    ).
+    ?assertEqual(direct, maps:get(delivery, Route)),
+    ?assertEqual([{actor, Phi}], maps:get(recipients, Route)).
 
 recipients(Plan, Family, Coordinates, Port) ->
     maps:get(recipients, route(Plan, Family, Coordinates, Port)).

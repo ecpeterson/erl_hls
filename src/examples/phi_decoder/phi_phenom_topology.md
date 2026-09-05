@@ -185,7 +185,7 @@ flowchart LR
 
     Runner -->|"same calls and routed ABI"| CPU["phi_memory_cpu_fabric<br/>functional ERTS deployment"]
     CPU -->|"decoded spatial command"| CR
-    CPU -->|"encoded routes 2–6"| Runner
+    CPU -->|"encoded routes 2, 4, 6"| Runner
 
     subgraph Fabric["normalized one-fabric topology"]
         CR["control_router<br/>spatial fanout"]
@@ -193,17 +193,15 @@ flowchart LR
         PZ["phi_z"] -->|"cardinal torus"| PZ
 
         PX -->|"request"| SX["syndrome_x"]
-        SX -->|"announcement"| PX
+        SX -->|"result"| PX
         PZ -->|"request"| SZ["syndrome_z"]
-        SZ -->|"announcement"| PZ
+        SZ -->|"result"| PZ
 
         SX <-->|"queries / replies"| DE["data_even"]
         SX <-->|"queries / replies"| DO["data_odd"]
         SZ <-->|"queries / replies"| DE
         SZ <-->|"queries / replies"| DO
 
-        SX -->|"diagnostic copy"| XO["x_announcements<br/>source endpoint 3"]
-        SZ -->|"diagnostic copy"| ZO["z_announcements<br/>source endpoint 5"]
         PX -->|"correction + post-move status"| XE["x_decoder_events<br/>source endpoint 4"]
         PZ -->|"correction + post-move status"| ZE["z_decoder_events<br/>source endpoint 6"]
         DE -->|"Pauli reply"| DM["data_measurements<br/>source endpoint 2"]
@@ -218,8 +216,8 @@ flowchart LR
     end
 
     Gateway -->|"one SpatialFrame stream"| CR
-    XO & ZO & XE & ZE & DM -->|"generated channels"| Gateway
-    XO & ZO & XE & ZE & DM -. "ordinary records via<br/>CPU forwarding processes" .-> CPU
+    XE & ZE & DM -->|"generated channels"| Gateway
+    XE & ZE & DM -. "ordinary records via<br/>CPU forwarding processes" .-> CPU
 
     XE -. "map each correction<br/>to a point update" .-> Runner
     ZE -. "map each correction<br/>to a point update" .-> Runner
@@ -235,17 +233,17 @@ entries grow. PRNG seeds are deterministic, distinct, and nonzero across all
 six families. The noise seeds are deliberately mixed so the first
 distance-three syndrome plane is not spatially uniform.
 
-Each syndrome announcement carries its `{X, Y}` coordinate; the external port
-identifies the X or Z plane. Announcements are diagnostic and do not close an
-experiment. They are nevertheless lossless branches of the syndrome-to-phi
-fanout, so a runner must drain both streams continuously or it will stall the
-decoder. Each phi cell retains that coordinate and may emit one
-`phi_correction` after its four anyon-move actions for the step, followed by a
-`phi_status` reporting occupancy and propagated noise-quiet state. Correction
-and status share one plane boundary, which preserves each source cell's order
-while leaving cross-cell merge order unspecified. The plane, syndrome
-coordinate, and selected direction together identify the neighboring data-
-qubit edge; the single event stream does not mean that a phi cell is associated
+Each syndrome result carries its `{X, Y}` coordinate and is delivered only to
+the corresponding phi plane. The former external copies existed solely for
+visualization and have been removed from the lossless application boundary;
+endpoints 3 and 5 remain reserved so the boundary version does not silently
+remap its surviving streams. Each phi cell retains that coordinate and may
+emit one `phi_correction` after its four anyon-move actions for the step,
+followed by a `phi_status` reporting occupancy and propagated noise-quiet
+state. Correction and status share one plane boundary, which preserves each
+source cell's order while leaving cross-cell merge order unspecified. The
+plane, syndrome coordinate, and selected direction together identify the
+neighboring data-qubit edge; the single event stream does not mean that a phi cell is associated
 with only one data qubit.
 
 The correction action is a statically placed `cast_if`: it retains its position
@@ -368,7 +366,7 @@ partial delivery and failure semantics remain unresolved.
 
 `phi_memory_experiment` is the example-local, pure ERTS reducer for closing one
 memory experiment. It first sends a whole-grid cutoff. Every data reply then
-propagates its persistent quiet bit through the syndrome announcement and phi
+propagates its persistent quiet bit through the syndrome result and phi
 status. The reducer translates each sparse correction into a point-addressed
 `pauli_update` immediately. A complete same-step status set from both decoder
 planes closes the decoder only when every coordinate is quiet and empty.
@@ -610,15 +608,14 @@ Verilog generation on the configured build host, then compiles and runs
 `phi_noise_topology_tb.sv` with Icarus. The cost is deliberately excluded from
 the routine CI job.
 
-The distance-three bench holds one announcement stream under backpressure,
+The distance-three bench holds one decoder-event stream under backpressure,
 checks that its frame remains stable, and otherwise continuously drains every
-output. It accepts announcements in arbitrary merge order and requires every
-coordinate from both planes in steps zero through two, proving that steps zero
-and one completed everywhere. The current deterministic fixture also produces
-sparse corrections; the bench compares those as coordinate/direction sets
-rather than as one globally ordered trace. It also requires a complete status
-set after each checked step. Those sets are regression goldens for this
-fixture, not a logical-correctness or winding test.
+output. It requires every status coordinate from both planes in steps zero
+through two, proving that steps zero and one completed everywhere. The current
+deterministic fixture also produces sparse corrections; the bench compares
+those as coordinate/direction sets rather than as one globally ordered trace.
+Those sets are regression goldens for this fixture, not a logical-correctness
+or winding test.
 
 The same bench drives `control_router` over the nondegenerate physical
 coordinate space. It broadcasts a future cutoff over the full 3-by-6 data
@@ -1214,12 +1211,24 @@ every two clocks. The resulting lower bound is about 398.2 clocks per step,
 which accounts for the observation. The new run keeps that link occupied while
 the source and decoder work overlap behind it.
 
-The diagnostic announcement streams are ignored by `phi_memory_experiment`;
-they are drained only because their lossless fanout can backpressure the
-decoder. A deployment-oriented follow-up should make those copies optional,
-best-effort, or part of the debug boundary, then repeat the rate measurement.
-The remaining status traffic may eventually merit on-fabric aggregation. Even
-without changing the frame set, an initiation interval of one beat would put
-this particular 32-bit output path at roughly 199 clocks per step, just over
-one million steps per second at 200 MHz. These are transport-throughput
-projections, not timing-closure results.
+The gateway now terminates at a typed `RoutedFrame` channel. Its host-bound
+serializer is compiled as a separate one-stage, II=1 unit, while the scheduler
+core remains two-stage and II=2 for its synchronous 1R1W RAM contract. The
+complete three-shard CPU-versus-native-Icarus witness again agrees on all 84
+corrections and all 18 final data replies. With the diagnostic announcements
+still present, steady cadence improved from 399.57 to 220.46 clocks per step,
+or about 907 thousand steps per second at 200 MHz. The application output
+reported no transmit stalls.
+
+The visualization-only announcement copies have subsequently been removed
+from the lossless application topology. This reduces the same witness from 942
+frames and 4,713 observed beats to 507 frames and 2,535 beats, while retaining
+the 84 corrections, 18 replies, and per-cell status reports. It does not
+improve steady cadence: steps 8--21 average 221.69 clocks per step, or about
+902 thousand steps per second at 200 MHz. The serializer therefore removed
+the transport bound; the remaining rate is set by internal decoder/scheduler
+work. The removed events are a natural future best-effort debug source, where
+an absent observer cannot backpressure the application. The remaining status
+traffic may eventually merit on-fabric aggregation, but that higher-complexity
+work is deferred until bandwidth measurements require it. These rates are
+cycle-count projections, not timing-closure results.

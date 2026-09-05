@@ -73,6 +73,7 @@ ssh -o BatchMode=yes "$remote_host" \
 if [[ "$native_icarus" == 1 ]]; then
     rsync -a -e "ssh -o BatchMode=yes" \
         "$remote_host:$remote_stage/phi_memory_gateway.v" \
+        "$remote_host:$remote_stage/hls_fabric_host_tx.v" \
         "$remote_host:$remote_stage/hls_debug_observer.v" \
         "$remote_host:$remote_stage/hls_debug_server.v" \
         "$remote_host:$remote_stage/hls_fabric_ingress.v" \
@@ -80,6 +81,9 @@ if [[ "$native_icarus" == 1 ]]; then
         "$remote_host:$remote_stage/phi_memory_gateway-ir.time" \
         "$remote_host:$remote_stage/phi_memory_gateway-opt.time" \
         "$remote_host:$remote_stage/phi_memory_gateway-codegen.time" \
+        "$remote_host:$remote_stage/phi_memory_gateway-host-tx-ir.time" \
+        "$remote_host:$remote_stage/phi_memory_gateway-host-tx-opt.time" \
+        "$remote_host:$remote_stage/phi_memory_gateway-host-tx-codegen.time" \
         "$local_stage/"
     "$project_root/tools/local_phi_memory_demo.sh" "$local_stage"
 else

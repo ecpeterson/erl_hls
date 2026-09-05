@@ -61,6 +61,32 @@ elif [[ ! -f phi_memory_gateway.v ]]; then
     exit 1
 fi
 
+# The scheduler core is deliberately II=2 to match its one-cycle RAM reads.
+# Serialize its RoutedFrame output in a separate II=1 compilation unit so the
+# host stream can accept one beat on every clock.
+timed_output host-tx-ir hls_fabric_host_tx.ir \
+    "$xls_root/ir_converter_main" \
+    --warnings_as_errors=false \
+    --dslx_path=. \
+    --dslx_stdlib_path="$stdlib" \
+    --top=HostRoutedTx \
+    hls_fabric_router.x
+
+timed_output host-tx-opt hls_fabric_host_tx.opt.ir \
+    "$xls_root/opt_main" \
+    hls_fabric_host_tx.ir
+
+timed_output host-tx-codegen hls_fabric_host_tx.v \
+    "$xls_root/codegen_main" \
+    --pipeline_stages=1 \
+    --delay_model=unit \
+    --flop_inputs=false \
+    --flop_outputs=true \
+    --use_system_verilog=false \
+    --reset=reset \
+    --fifo_module= \
+    hls_fabric_host_tx.opt.ir
+
 # The monitor and two-endpoint debug router are small enough to regenerate on
 # every run. Reusing the expensive topology RTL must not accidentally reuse a
 # stale debug wrapper or simulation image.
@@ -150,6 +176,7 @@ iverilog-vpi xls_sim_bridge.c
     phi_memory_debug_top.v \
     hls_1r1w_ram.v \
     phi_memory_gateway.v \
+    hls_fabric_host_tx.v \
     hls_fabric_ingress.v \
     hls_fabric_egress.v \
     hls_debug_monitor.v \
@@ -242,9 +269,9 @@ wait "$sim_pid" 2>/dev/null || true
 sim_pid=
 
 {
-    wc -c phi_memory_gateway.x phi_memory_gateway.v
-    wc -l phi_memory_gateway.x phi_memory_gateway.v
-    sha256sum phi_memory_gateway.x phi_memory_gateway.v
+    wc -c phi_memory_gateway.x phi_memory_gateway.v hls_fabric_host_tx.v
+    wc -l phi_memory_gateway.x phi_memory_gateway.v hls_fabric_host_tx.v
+    sha256sum phi_memory_gateway.x phi_memory_gateway.v hls_fabric_host_tx.v
     for report in phi_memory_gateway-*.time; do
         echo
         echo "[$report]"

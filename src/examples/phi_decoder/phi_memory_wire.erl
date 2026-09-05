@@ -15,7 +15,8 @@ actor-local frames retain the current compact three-word payload.
 FPGA outputs use one source endpoint per generated external channel. Their
 actor frames are otherwise unchanged. Route identity therefore supplies the
 X/Z plane or measurement-stream identity which is intentionally absent from
-the actor records.
+the actor records. Endpoints three and five are reserved for the
+visualization-only announcement streams removed from this lossless boundary.
 
 Boundary version one is carried in the frame flags byte. Commands are ordered
 and at-most-once: transport failure aborts an experiment rather than retrying
@@ -340,13 +341,6 @@ validate_event(
         Y >= 0, Y < 2 * Distance,
         Anticommutes < 2 ->
     {ok, data_measurements, Reply};
-validate_event(
-    Stream,
-    Announcement = #phenom_anyon{x = X, y = Y, flags = Flags},
-    Distance
-) when (Stream =:= x_announcements orelse Stream =:= z_announcements),
-        X >= 0, X < Distance, Y >= 0, Y < Distance, Flags < 4 ->
-    {ok, Stream, Announcement};
 validate_event(
     Stream,
     Correction = #phi_correction{x = X, y = Y, direction = Direction},

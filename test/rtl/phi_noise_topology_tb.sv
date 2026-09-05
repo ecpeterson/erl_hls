@@ -1,7 +1,6 @@
 `timescale 1ns/1ps
 
 module phi_noise_topology_tb;
-    localparam [31:0] PHENOM_ANYON_HEADER = 32'h0300000a;
     localparam [31:0] PHI_CORRECTION_HEADER = 32'h0300000b;
     localparam [31:0] PHI_STATUS_HEADER = 32'h03000011;
     localparam [7:0] PAULI_QUERY_TAG = 8'd13;
@@ -40,14 +39,6 @@ module phi_noise_topology_tb;
     reg control_router_valid = 1'b0;
     wire control_router_ready;
 
-    reg x_announcement_ready = 1'b0;
-    wire [127:0] x_announcement;
-    wire x_announcement_valid;
-
-    wire z_announcement_ready = 1'b1;
-    wire [127:0] z_announcement;
-    wire z_announcement_valid;
-
     wire x_decoder_event_ready = 1'b1;
     wire [127:0] x_decoder_event;
     wire x_decoder_event_valid;
@@ -60,12 +51,6 @@ module phi_noise_topology_tb;
     wire [127:0] data_measurements;
     wire data_measurements_valid;
 
-    reg [8:0] x_announcements_step_0 = 9'b0;
-    reg [8:0] x_announcements_step_1 = 9'b0;
-    reg [8:0] x_announcements_step_2 = 9'b0;
-    reg [8:0] z_announcements_step_0 = 9'b0;
-    reg [8:0] z_announcements_step_1 = 9'b0;
-    reg [8:0] z_announcements_step_2 = 9'b0;
     reg [8:0] x_corrections_step_0 = 9'b0;
     reg [8:0] x_corrections_step_1 = 9'b0;
     reg [8:0] z_corrections_step_0 = 9'b0;
@@ -82,7 +67,6 @@ module phi_noise_topology_tb;
     reg second_reply_parity = 1'b0;
     integer first_reply_count = 0;
     integer second_reply_count = 0;
-    reg [127:0] stalled_x_announcement;
     integer cycle;
     integer ram_index_check;
 
@@ -131,26 +115,12 @@ module phi_noise_topology_tb;
         ._control_router_in(control_router),
         ._control_router_in_vld(control_router_valid),
         ._control_router_in_rdy(control_router_ready),
-        ._x_announcements_out_rdy(
-            x_announcement_ready
-        ),
-        ._x_announcements_out(x_announcement),
-        ._x_announcements_out_vld(
-            x_announcement_valid
-        ),
         ._x_decoder_events_out_rdy(
             x_decoder_event_ready
         ),
         ._x_decoder_events_out(x_decoder_event),
         ._x_decoder_events_out_vld(
             x_decoder_event_valid
-        ),
-        ._z_announcements_out_rdy(
-            z_announcement_ready
-        ),
-        ._z_announcements_out(z_announcement),
-        ._z_announcements_out_vld(
-            z_announcement_valid
         ),
         ._z_decoder_events_out_rdy(
             z_decoder_event_ready
@@ -355,105 +325,6 @@ module phi_noise_topology_tb;
             endcase
         end
     endfunction
-
-    task automatic record_announcement;
-        input [127:0] frame;
-        input [7:0] plane;
-        reg [31:0] step;
-        reg [31:0] flags;
-        integer x;
-        integer y;
-        integer coordinate;
-        reg [8:0] coordinate_mask;
-        begin
-            if (frame[127:96] !== PHENOM_ANYON_HEADER) begin
-                $display(
-                    "FAIL: %s announcement has malformed header %08x",
-                    plane,
-                    frame[127:96]
-                );
-                $fatal(1);
-            end
-            if ((^frame[95:0]) === 1'bx) begin
-                $display("FAIL: %s announcement has unknown payload bits", plane);
-                $fatal(1);
-            end
-            step = frame[31:0];
-            flags = frame[63:32];
-            x = frame[79:64];
-            y = frame[95:80];
-            if (flags > 32'd3 || x < 0 || x >= 3 || y < 0 || y >= 3) begin
-                $display(
-                    "FAIL: %s announcement step=%0d flags=%0d x=%0d y=%0d",
-                    plane,
-                    step,
-                    flags,
-                    x,
-                    y
-                );
-                $fatal(1);
-            end
-            coordinate = 3 * x + y;
-            coordinate_mask = 9'b1 << coordinate;
-            if (plane == "x") begin
-                case (step)
-                    32'd0: begin
-                        if ((x_announcements_step_0 & coordinate_mask) != 0) begin
-                            $display("FAIL: duplicate x step-0 coordinate %0d,%0d", x, y);
-                            $fatal(1);
-                        end
-                        x_announcements_step_0 =
-                            x_announcements_step_0 | coordinate_mask;
-                    end
-                    32'd1: begin
-                        if ((x_announcements_step_1 & coordinate_mask) != 0) begin
-                            $display("FAIL: duplicate x step-1 coordinate %0d,%0d", x, y);
-                            $fatal(1);
-                        end
-                        x_announcements_step_1 =
-                            x_announcements_step_1 | coordinate_mask;
-                    end
-                    32'd2: begin
-                        if ((x_announcements_step_2 & coordinate_mask) != 0) begin
-                            $display("FAIL: duplicate x step-2 coordinate %0d,%0d", x, y);
-                            $fatal(1);
-                        end
-                        x_announcements_step_2 =
-                            x_announcements_step_2 | coordinate_mask;
-                    end
-                    default: begin end
-                endcase
-            end else begin
-                case (step)
-                    32'd0: begin
-                        if ((z_announcements_step_0 & coordinate_mask) != 0) begin
-                            $display("FAIL: duplicate z step-0 coordinate %0d,%0d", x, y);
-                            $fatal(1);
-                        end
-                        z_announcements_step_0 =
-                            z_announcements_step_0 | coordinate_mask;
-                    end
-                    32'd1: begin
-                        if ((z_announcements_step_1 & coordinate_mask) != 0) begin
-                            $display("FAIL: duplicate z step-1 coordinate %0d,%0d", x, y);
-                            $fatal(1);
-                        end
-                        z_announcements_step_1 =
-                            z_announcements_step_1 | coordinate_mask;
-                    end
-                    32'd2: begin
-                        if ((z_announcements_step_2 & coordinate_mask) != 0) begin
-                            $display("FAIL: duplicate z step-2 coordinate %0d,%0d", x, y);
-                            $fatal(1);
-                        end
-                        z_announcements_step_2 =
-                            z_announcements_step_2 | coordinate_mask;
-                    end
-                    default: begin end
-                endcase
-            end
-        end
-    endtask
 
     task automatic record_status;
         input [127:0] frame;
@@ -713,10 +584,6 @@ module phi_noise_topology_tb;
                     $fatal(1);
                 end
             end
-            if (x_announcement_valid && x_announcement_ready)
-                record_announcement(x_announcement, "x");
-            if (z_announcement_valid && z_announcement_ready)
-                record_announcement(z_announcement, "z");
             if (x_decoder_event_valid && x_decoder_event_ready)
                 record_decoder_event(x_decoder_event, "x");
             if (z_decoder_event_valid && z_decoder_event_ready)
@@ -731,37 +598,8 @@ module phi_noise_topology_tb;
         @(negedge clk);
         reset = 1'b0;
 
-        // Stall only one observation stream. The independent plane and both
-        // sparse correction streams remain drainable while this frame waits.
-        for (cycle = 0;
-                cycle < MAX_WAIT_CYCLES &&
-                    x_announcement_valid !== 1'b1;
-                cycle = cycle + 1)
-            @(posedge clk);
-        if (x_announcement_valid !== 1'b1) begin
-            $display("FAIL: timed out waiting for first x announcement");
-            $fatal(1);
-        end
-        stalled_x_announcement = x_announcement;
-        repeat (64) begin
-            @(posedge clk);
-            if (x_announcement_valid !== 1'b1 ||
-                    x_announcement !== stalled_x_announcement) begin
-                $display("FAIL: stalled x announcement was not stable");
-                $fatal(1);
-            end
-        end
-        @(negedge clk);
-        x_announcement_ready = 1'b1;
-
         for (cycle = 0;
                 cycle < MAX_WAIT_CYCLES && !(
-                    x_announcements_step_0 === ALL_COORDINATES &&
-                    x_announcements_step_1 === ALL_COORDINATES &&
-                    x_announcements_step_2 === ALL_COORDINATES &&
-                    z_announcements_step_0 === ALL_COORDINATES &&
-                    z_announcements_step_1 === ALL_COORDINATES &&
-                    z_announcements_step_2 === ALL_COORDINATES &&
                     x_status_step_0 === ALL_COORDINATES &&
                     x_status_step_1 === ALL_COORDINATES &&
                     z_status_step_0 === ALL_COORDINATES &&
@@ -783,23 +621,6 @@ module phi_noise_topology_tb;
         // needed before checking the correction sets.
         @(negedge clk);
 
-        if (x_announcements_step_0 !== ALL_COORDINATES ||
-                x_announcements_step_1 !== ALL_COORDINATES ||
-                x_announcements_step_2 !== ALL_COORDINATES ||
-                z_announcements_step_0 !== ALL_COORDINATES ||
-                z_announcements_step_1 !== ALL_COORDINATES ||
-                z_announcements_step_2 !== ALL_COORDINATES) begin
-            $display(
-                "FAIL: incomplete announcements x0=%03x x1=%03x x2=%03x z0=%03x z1=%03x z2=%03x",
-                x_announcements_step_0,
-                x_announcements_step_1,
-                x_announcements_step_2,
-                z_announcements_step_0,
-                z_announcements_step_1,
-                z_announcements_step_2
-            );
-            $fatal(1);
-        end
         if (x_status_step_0 !== ALL_COORDINATES ||
                 x_status_step_1 !== ALL_COORDINATES ||
                 z_status_step_0 !== ALL_COORDINATES ||

@@ -47,6 +47,7 @@ iverilog \
     phi_memory_debug_top.v \
     hls_1r1w_ram.v \
     phi_memory_gateway.v \
+    hls_fabric_host_tx.v \
     hls_fabric_ingress.v \
     hls_fabric_egress.v \
     hls_debug_monitor.v \
@@ -133,9 +134,9 @@ trap - EXIT
 cd "$stage"
 {
     echo "native_icarus_seconds=$sim_elapsed"
-    wc -c phi_memory_gateway.x phi_memory_gateway.v
-    wc -l phi_memory_gateway.x phi_memory_gateway.v
-    sha256_file phi_memory_gateway.x phi_memory_gateway.v
+    wc -c phi_memory_gateway.x phi_memory_gateway.v hls_fabric_host_tx.v
+    wc -l phi_memory_gateway.x phi_memory_gateway.v hls_fabric_host_tx.v
+    sha256_file phi_memory_gateway.x phi_memory_gateway.v hls_fabric_host_tx.v
     cat "$debug_metrics"
     cat "$scheduler_profile"
 } > "$stage/phi_memory_demo.metrics"

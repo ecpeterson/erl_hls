@@ -19,10 +19,6 @@ addressed `control_router` service before supplying the next event. The runner
 is the ordinary ERTS destination; the target and rectangle inside each command
 are FPGA-local multicast selectors.
 
-The runner must continuously drain every external output, including the two
-announcement streams which this reducer otherwise ignores. Those diagnostic
-branches share lossless fanout with the decoder and can backpressure it.
-
 Sparse decoder corrections are immediately translated into point-addressed
 data-qubit Pauli updates. A complete status round from both decoder planes is a
 closeout fence only when every coordinate reports both `quiet = 1` and
@@ -51,8 +47,6 @@ wire envelope. Reset or gateway failure must abort and restart the experiment.
 -define(U32_MASK, 16#ffffffff).
 
 -type stream() ::
-    x_announcements |
-    z_announcements |
     x_decoder_events |
     z_decoder_events |
     data_measurements.
@@ -135,10 +129,6 @@ new(_Options) ->
 
 -doc "Consumes one decoded output record and returns ordered ingress work.".
 -spec event(stream(), tuple(), state()) -> result().
-event(x_announcements, #phenom_anyon{}, State) ->
-    {State, []};
-event(z_announcements, #phenom_anyon{}, State) ->
-    {State, []};
 event(x_decoder_events, Event, State) ->
     decoder_event(x, Event, State);
 event(z_decoder_events, Event, State) ->

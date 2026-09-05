@@ -221,6 +221,8 @@ cp "$project_root/test/rtl/phi_decoder_profile_tb.sv" \
     "$stage/phi_decoder_profile_tb.sv"
 cp "$project_root/test/rtl/phi_memory_bridge_tb.sv" \
     "$stage/phi_memory_bridge_tb.sv"
+cp "$project_root/test/rtl/hls_fabric_host_tx_tb.sv" \
+    "$stage/hls_fabric_host_tx_tb.sv"
 cp "$project_root/test/rtl/ordered_egress_topology_tb.sv" \
     "$stage/ordered_egress_topology_tb.sv"
 cp "$project_root/test/rtl/xls_sim_bridge.c" "$stage/xls_sim_bridge.c"

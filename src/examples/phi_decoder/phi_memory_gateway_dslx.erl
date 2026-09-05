@@ -16,6 +16,10 @@ selectors, and frame capacity come from `phi_memory_boundary`. Reusable routed
 packet ingress, activation gating, and frame transmission live in
 `hls_fabric_router.x`.
 
+The generated gateway stops at a `RoutedFrame` stream. The physical wrapper
+compiles the reusable host-bound serializer independently, allowing scheduler
+RAM latency and AXI-stream beat rate to have different initiation intervals.
+
 Malformed routes and frames are drained without actor delivery. Until the
 gateway has a typed connection-fault sideband, the host observes that rejection
 through the experiment timeout rather than an invented application reply.
@@ -284,11 +288,11 @@ top_proc(TopologyModule, Contract = #{outputs := Outputs}, RamBindings) ->
         "pub proc Top {\n",
         [["  ", Member, ";\n"] || Member <- RamMembers],
         "  routed_in: chan<axis::Beat> in;\n",
-        "  routed_out: chan<axis::Beat> out;\n\n",
+        "  routed_frame_out: chan<hls_fabric_router::RoutedFrame> out;\n\n",
         "  config(\n",
         [["      ", Member, ",\n"] || Member <- RamMembers],
         "      routed_in: chan<axis::Beat> in,\n",
-        "      routed_out: chan<axis::Beat> out\n",
+        "      routed_frame_out: chan<hls_fabric_router::RoutedFrame> out\n",
         "  ) {\n",
         "    let (boundary_beats_p, boundary_beats_c) =\n",
         "      chan<axis::Beat, u32:1>(\"boundary_beats\");\n",
@@ -302,8 +306,6 @@ top_proc(TopologyModule, Contract = #{outputs := Outputs}, RamBindings) ->
         "](\"topology_outputs\");\n",
         "    let (pre_gate_p, pre_gate_c) =\n",
         "      chan<hls_fabric_router::RoutedFrame, u32:1>(\"pre_gate\");\n",
-        "    let (egress_p, egress_c) =\n",
-        "      chan<hls_fabric_router::RoutedFrame, u32:1>(\"egress\");\n",
         "    spawn hls_fabric_router::EndpointIngress<\n",
         "      HOST_ENDPOINT, GATEWAY_ENDPOINT\n",
         "    >(routed_in, boundary_beats_p);\n",
@@ -316,11 +318,9 @@ top_proc(TopologyModule, Contract = #{outputs := Outputs}, RamBindings) ->
         topology_outputs(Contract), ");\n",
         "    spawn FrameMux(topology_outputs_c, pre_gate_p);\n",
         "    spawn hls_fabric_router::EgressGate(\n",
-        "      pre_gate_c, egress_p, arm_c);\n",
-        "    spawn hls_fabric_router::RoutedTx<HOST_ENDPOINT>(\n",
-        "      egress_c, routed_out);\n",
+        "      pre_gate_c, routed_frame_out, arm_c);\n",
         "    (", join_with(", ", RamNames ++
-            ["routed_in", "routed_out"]), ")\n",
+            ["routed_in", "routed_frame_out"]), ")\n",
         "  }\n\n",
         "  init { () }\n",
         "  next(state: ()) { state }\n",
