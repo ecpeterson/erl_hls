@@ -1403,13 +1403,45 @@ between `SharedService` and `SharedExecutor`; Yosys reports those loops during
 flattening. The explicit channel registers are therefore part of the current
 correct elastic boundary, rather than removable duplicate storage.
 
-The next general optimization should therefore target post-handler admission,
-not mailbox payload fragments or another executor lane. Today a router keeps
-one `EntryEffects` batch and returns its sole credit only after serializing the
-whole batch. A bounded two-batch window (or, equivalently, credit returned when
-the router admits a batch into a one-entry lookahead queue) would let the
-executor retire another actor while the previous effects drain. The queue must
-remain ordered and its credit must denote real storage; that preserves the
-existing no-speculation deadlock argument. Its wide batch storage has an area
-cost, so the first implementation should be a depth-two ablation with a fresh
-map before generalizing the capacity.
+The first follow-up ablation therefore targeted post-handler admission rather
+than mailbox payload fragments or another executor lane. A router keeps one
+`EntryEffects` batch and returns its sole credit only after serializing the
+whole batch. A bounded two-batch window appeared able to let the executor
+retire another actor while the previous effects drained. Because the queue had
+to remain ordered and its credit had to denote real storage, this was tested
+at depth two before attempting to generalize the capacity.
+
+### Rejected two-batch effect window
+
+That depth-two ablation does not preserve the current progress argument. The
+first implementation counted the batch retained by `SchedulerRouter` and the
+existing depth-one `ScheduledEffects` channel as two outstanding slots. It
+failed to complete decoder step eight within the 500,000-clock profile limit.
+The router originally received a new batch and attempted its first downstream
+send in one atomic activation, so a blocked first effect meant that the router
+had not actually acquired the batch and the apparent second slot was not yet
+real.
+
+A second implementation separated router admission from effect delivery. It
+first committed the incoming batch to router state, independently of the
+first destination's readiness, and only then allowed the scheduler to occupy
+the lookahead channel. This made both storage slots genuine but reached the
+same 500,000-clock timeout. After a few hundred useful state reads, the
+profiles showed no selectable actor work while inter-shard producer inputs
+remained backpressured for the rest of the run.
+
+The extra slot lets several schedulers commit another round of actor state and
+effects without reserving space in the destination mailboxes. Eventually each
+router can hold an ordered batch whose next effect targets a full producer
+path, while the destination scheduler has its own completed effect result
+waiting behind a full two-batch window. This is a cyclic backpressure wait,
+not an insufficient router register. Increasing mailbox or channel depth
+would only move the finite-buffer threshold and is not a general fix.
+
+The ablation was therefore reverted before synthesis. It would have added
+only one scheduler-state bit and reused an already-present wide channel, but
+an area figure for a design which does not make progress would be misleading.
+A future multi-batch design needs credits backed by end-to-end destination
+reservations, or a routing discipline which provably breaks these wait cycles.
+Until then the one-completed-batch rule remains part of the shared scheduler's
+deadlock discipline rather than merely a throughput knob.
