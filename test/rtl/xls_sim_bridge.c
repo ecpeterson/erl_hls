@@ -15,6 +15,7 @@
 #define PATH_SIZE 4096
 #define MAX_SCHEDULERS 32
 #define MAX_SCHEDULER_INPUTS 8
+#define MAX_SCHEDULER_ACTORS 32
 
 typedef struct {
     uint8_t bytes[BUFFER_SIZE];
@@ -82,6 +83,18 @@ typedef struct {
     uint64_t no_issue_egress_backpressured;
     uint64_t no_issue_request_backpressured;
     uint64_t no_issue_without_visible_backpressure;
+    uint64_t selection_activations;
+    uint64_t selection_cycles_any_ready;
+    uint64_t selection_cycles_selectable;
+    uint64_t selection_cycles_same_actor_only;
+    uint64_t selection_cycles_waiting_egress_credit;
+    uint64_t selection_cycles_no_actor_work;
+    uint64_t selection_cycles_internal_other;
+    uint64_t ready_slot_samples;
+    uint64_t mail_candidate_slot_samples;
+    uint64_t entry_probe_slot_samples;
+    uint64_t egress_waiter_slot_samples;
+    uint64_t egress_busy_cycles;
     uint64_t mailbox_visit_count;
     uint64_t mailbox_visit_cycles;
     uint64_t mailbox_visit_min;
@@ -141,6 +154,15 @@ typedef struct {
     vpiHandle h_startup_ready;
     vpiHandle h_egress_valid;
     vpiHandle h_egress_ready;
+    vpiHandle h_ready[MAX_SCHEDULER_ACTORS];
+    vpiHandle h_mail_candidate[MAX_SCHEDULER_ACTORS];
+    vpiHandle h_entry_probe[MAX_SCHEDULER_ACTORS];
+    vpiHandle h_egress_waiter[MAX_SCHEDULER_ACTORS];
+    vpiHandle h_egress_busy;
+    vpiHandle h_selection_activation;
+    unsigned actor_count;
+    int activation_has_state_read;
+    uint32_t activation_state_read_slot;
     scheduler_counts_t counts;
     scheduler_counts_t checkpoint;
 } scheduler_profile_t;
@@ -157,6 +179,7 @@ static char scheduler_profile_path[PATH_SIZE];
 static int scheduler_profile_enabled;
 static int scheduler_profile_started;
 static int scheduler_profile_checkpoint_valid;
+static int scheduler_profile_only;
 static uint64_t scheduler_profile_start_cycle;
 static uint64_t scheduler_profile_checkpoint_cycle;
 
@@ -247,6 +270,8 @@ static void reset_scheduler_profile_counts(void) {
                sizeof(scheduler_profiles[index].checkpoint));
         reset_latency_minima(&scheduler_profiles[index].counts);
         reset_latency_minima(&scheduler_profiles[index].checkpoint);
+        scheduler_profiles[index].activation_has_state_read = 0;
+        scheduler_profiles[index].activation_state_read_slot = 0;
     }
     scheduler_profile_checkpoint_valid = 0;
     scheduler_profile_checkpoint_cycle = 0;
@@ -335,6 +360,28 @@ static void write_scheduler_profile(void) {
                       counts->no_issue_request_backpressured);
         PROFILE_VALUE("no_issue_without_visible_backpressure",
                       counts->no_issue_without_visible_backpressure);
+        PROFILE_VALUE("selection_activations",
+                      counts->selection_activations);
+        PROFILE_VALUE("selection_cycles_any_ready",
+                      counts->selection_cycles_any_ready);
+        PROFILE_VALUE("selection_cycles_selectable",
+                      counts->selection_cycles_selectable);
+        PROFILE_VALUE("selection_cycles_same_actor_only",
+                      counts->selection_cycles_same_actor_only);
+        PROFILE_VALUE("selection_cycles_waiting_egress_credit",
+                      counts->selection_cycles_waiting_egress_credit);
+        PROFILE_VALUE("selection_cycles_no_actor_work",
+                      counts->selection_cycles_no_actor_work);
+        PROFILE_VALUE("selection_cycles_internal_other",
+                      counts->selection_cycles_internal_other);
+        PROFILE_VALUE("ready_slot_samples", counts->ready_slot_samples);
+        PROFILE_VALUE("mail_candidate_slot_samples",
+                      counts->mail_candidate_slot_samples);
+        PROFILE_VALUE("entry_probe_slot_samples",
+                      counts->entry_probe_slot_samples);
+        PROFILE_VALUE("egress_waiter_slot_samples",
+                      counts->egress_waiter_slot_samples);
+        PROFILE_VALUE("egress_busy_cycles", counts->egress_busy_cycles);
         PROFILE_VALUE("mailbox_visits", counts->mailbox_visit_count);
         PROFILE_VALUE("mailbox_visit_cycles", counts->mailbox_visit_cycles);
         PROFILE_VALUE("mailbox_visit_min", printable_minimum(
@@ -567,6 +614,8 @@ static int populate_scheduler_profile(
         snprintf(profile->name, sizeof(profile->name), "phi");
     else if (strstr(definition, "phenom_syndrome_cell"))
         snprintf(profile->name, sizeof(profile->name), "syndrome");
+    else if (strstr(definition, "phi_syndrome_replay_cell"))
+        snprintf(profile->name, sizeof(profile->name), "source");
     else
         snprintf(profile->name, sizeof(profile->name), "scheduler_%u",
                  scheduler_profile_count);
@@ -606,6 +655,8 @@ static int populate_scheduler_profile(
     MODULE_SIGNAL(h_startup_ready, "_startup_in_rdy");
     MODULE_SIGNAL(h_egress_valid, "_egress_out_vld");
     MODULE_SIGNAL(h_egress_ready, "_egress_out_rdy");
+    MODULE_SIGNAL(h_egress_busy, "admitted_egress_busy");
+    MODULE_SIGNAL(h_selection_activation, "p0_stage_done");
 #undef MODULE_SIGNAL
 
     for (index = 0; index < MAX_SCHEDULER_INPUTS; index++) {
@@ -617,6 +668,31 @@ static int populate_scheduler_profile(
             !profile->h_request_ready[index])
             break;
         profile->request_input_count++;
+    }
+
+    /* XLS retains these source-level names in the generated SharedService
+     * next-state module. They describe the post-retirement, post-admission
+     * state on which ready_selection/4 operates, so sampling them adds no
+     * ports or state to the synthesized circuit. */
+    for (index = 0; index < MAX_SCHEDULER_ACTORS; index++) {
+        snprintf(signal_name, sizeof(signal_name), "ready__%u", index + 1);
+        profile->h_ready[index] = module_signal(module, signal_name);
+        if (!profile->h_ready[index])
+            break;
+        snprintf(signal_name, sizeof(signal_name),
+                 "mail_candidates__4[%u]", index);
+        profile->h_mail_candidate[index] =
+            module_signal(module, signal_name);
+        snprintf(signal_name, sizeof(signal_name),
+                 "entry_probes__2[%u]", index);
+        profile->h_entry_probe[index] = module_signal(module, signal_name);
+        snprintf(signal_name, sizeof(signal_name), "egress_waiters[%u]", index);
+        profile->h_egress_waiter[index] = module_signal(module, signal_name);
+        if (!profile->h_mail_candidate[index] ||
+            !profile->h_entry_probe[index] ||
+            !profile->h_egress_waiter[index])
+            break;
+        profile->actor_count++;
     }
 
     reset_latency_minima(&profile->counts);
@@ -643,6 +719,8 @@ static int populate_scheduler_profile(
         profile->h_mailbox_write_response_ready &&
         profile->h_startup_valid && profile->h_startup_ready &&
         profile->h_egress_valid && profile->h_egress_ready &&
+        profile->h_egress_busy && profile->h_selection_activation &&
+        profile->actor_count > 0 &&
         profile->request_input_count > 0;
 }
 
@@ -704,6 +782,7 @@ static void name_scheduler_profiles(void) {
 static void step_scheduler_profile(scheduler_profile_t *profile) {
     scheduler_counts_t *counts = &profile->counts;
     int active = 0;
+    int state_read_valid;
     int valid;
     int ready;
     int state_write_accepted;
@@ -713,7 +792,66 @@ static void step_scheduler_profile(scheduler_profile_t *profile) {
     int state_port_blocked = 0;
     int request_backpressured = 0;
     int egress_backpressured = 0;
+    int any_ready = 0;
+    int any_selectable = 0;
+    int same_actor_only;
+    int waiting_egress_credit;
+    int no_actor_work;
+    int egress_busy;
+    int selection_activation;
+    uint32_t read_slot;
+    unsigned mail_candidates = 0;
+    unsigned entry_probes = 0;
+    unsigned egress_waiters = 0;
     unsigned index;
+
+    state_read_valid = get_bit(profile->h_ram_read_request_valid);
+    read_slot = get_u32(profile->h_ram_read_request);
+    if (state_read_valid) {
+        profile->activation_has_state_read = 1;
+        profile->activation_state_read_slot = read_slot;
+    }
+    egress_busy = get_bit(profile->h_egress_busy);
+    selection_activation = get_bit(profile->h_selection_activation);
+    if (selection_activation) {
+        counts->selection_activations++;
+        for (index = 0; index < profile->actor_count; index++) {
+            int slot_ready = get_bit(profile->h_ready[index]);
+            mail_candidates += get_bit(profile->h_mail_candidate[index]);
+            entry_probes += get_bit(profile->h_entry_probe[index]);
+            egress_waiters += get_bit(profile->h_egress_waiter[index]);
+            if (slot_ready) {
+                any_ready = 1;
+                if (!profile->activation_has_state_read ||
+                    profile->activation_state_read_slot != index)
+                    any_selectable = 1;
+                counts->ready_slot_samples++;
+            }
+        }
+        counts->mail_candidate_slot_samples += mail_candidates;
+        counts->entry_probe_slot_samples += entry_probes;
+        counts->egress_waiter_slot_samples += egress_waiters;
+        if (egress_busy)
+            counts->egress_busy_cycles++;
+        if (any_ready)
+            counts->selection_cycles_any_ready++;
+        same_actor_only = any_ready && !any_selectable;
+        waiting_egress_credit = !any_ready && egress_busy &&
+            egress_waiters != 0;
+        no_actor_work = !any_ready && mail_candidates == 0 &&
+            entry_probes == 0 && egress_waiters == 0;
+        if (any_selectable)
+            counts->selection_cycles_selectable++;
+        else if (same_actor_only)
+            counts->selection_cycles_same_actor_only++;
+        else if (waiting_egress_credit)
+            counts->selection_cycles_waiting_egress_credit++;
+        else if (no_actor_work)
+            counts->selection_cycles_no_actor_work++;
+        else
+            counts->selection_cycles_internal_other++;
+        profile->activation_has_state_read = 0;
+    }
 
     /* Commit the older visit before opening the younger one. In the 1R1W
      * pipeline both handshakes may occur on the same physical clock. */
@@ -749,7 +887,7 @@ static void step_scheduler_profile(scheduler_profile_t *profile) {
         active = 1;
     }
 
-    valid = get_bit(profile->h_ram_read_request_valid);
+    valid = state_read_valid;
     ready = get_bit(profile->h_ram_read_request_ready);
     state_read_accepted = valid && ready;
     if (state_read_accepted) {
@@ -883,6 +1021,7 @@ static void step_scheduler_profile(scheduler_profile_t *profile) {
         counts->no_issue_request_backpressured++;
     else
         counts->no_issue_without_visible_backpressure++;
+
 }
 
 static void checkpoint_scheduler_profiles(void) {
@@ -939,7 +1078,12 @@ static PLI_INT32 cb_readonly(p_cb_data cb) {
     app_armed_before = app_endpoint.output_armed;
     step_endpoint(&app_endpoint);
     step_endpoint(&debug_endpoint);
-    if (scheduler_profile_enabled &&
+    if (scheduler_profile_enabled && scheduler_profile_only &&
+        !scheduler_profile_started) {
+        reset_scheduler_profile_counts();
+        scheduler_profile_start_cycle = cycle_number;
+        scheduler_profile_started = 1;
+    } else if (scheduler_profile_enabled &&
         !app_armed_before && app_endpoint.output_armed) {
         reset_scheduler_profile_counts();
         scheduler_profile_start_cycle = cycle_number;
@@ -956,6 +1100,15 @@ static PLI_INT32 cb_readonly(p_cb_data cb) {
         } else if ((cycle_number - scheduler_profile_start_cycle) % 1000 == 0) {
             write_scheduler_profile();
         }
+    }
+    return 0;
+}
+
+static PLI_INT32 cb_end_of_sim(p_cb_data cb) {
+    (void)cb;
+    if (scheduler_profile_started) {
+        checkpoint_scheduler_profiles();
+        write_scheduler_profile();
     }
     return 0;
 }
@@ -1030,13 +1183,17 @@ static PLI_INT32 cb_start_of_sim(p_cb_data cb) {
     const char *directory = getenv("ERL_HLS_SIM_DIR");
     const char *configured_root = getenv("ERL_HLS_SIM_TOP");
     const char *app_only_value = getenv("ERL_HLS_SIM_APP_ONLY");
+    const char *profile_only_value = getenv("ERL_HLS_SIM_PROFILE_ONLY");
     const char *configured_scheduler_profile_path =
         getenv("ERL_HLS_SIM_SCHEDULER_PROFILE");
     int app_only = app_only_value && strcmp(app_only_value, "1") == 0;
     s_cb_data clock_cb;
+    s_cb_data end_cb;
     (void)cb;
 
-    if (!directory) {
+    scheduler_profile_only = profile_only_value &&
+        strcmp(profile_only_value, "1") == 0;
+    if (!directory && !scheduler_profile_only) {
         vpi_printf("xls_sim_bridge: ERL_HLS_SIM_DIR is not set\n");
         return 0;
     }
@@ -1052,13 +1209,14 @@ static PLI_INT32 cb_start_of_sim(p_cb_data cb) {
     hierarchy_root = configured_root && configured_root[0] != '\0' ?
         configured_root : "regsvc_bridge_tb";
     app_endpoint.name = "app";
-    app_endpoint.enabled = 1;
+    app_endpoint.enabled = !scheduler_profile_only;
     debug_endpoint.name = "debug";
-    debug_endpoint.enabled = !app_only;
+    debug_endpoint.enabled = !scheduler_profile_only && !app_only;
     h_clk = find_signal("clk");
     h_resetn = find_signal("resetn");
     if (!h_clk || !h_resetn ||
-        !find_endpoint_signals(&app_endpoint, "s_axis", "m_axis") ||
+        (app_endpoint.enabled &&
+         !find_endpoint_signals(&app_endpoint, "s_axis", "m_axis")) ||
         (debug_endpoint.enabled &&
          !find_endpoint_signals(&debug_endpoint, "s_dbg", "m_dbg"))) {
         vpi_printf("xls_sim_bridge: failed to find %s AXIS signals\n",
@@ -1089,7 +1247,8 @@ static PLI_INT32 cb_start_of_sim(p_cb_data cb) {
         }
     }
 
-    if (!open_endpoint_fifos(&app_endpoint, directory, "app") ||
+    if ((app_endpoint.enabled &&
+         !open_endpoint_fifos(&app_endpoint, directory, "app")) ||
         (debug_endpoint.enabled &&
          !open_endpoint_fifos(&debug_endpoint, directory, "debug"))) {
         vpi_printf("xls_sim_bridge: failed to open transport FIFOs\n");
@@ -1105,9 +1264,17 @@ static PLI_INT32 cb_start_of_sim(p_cb_data cb) {
     clock_cb.cb_rtn = cb_clk_change;
     clock_cb.obj = h_clk;
     vpi_register_cb(&clock_cb);
-    vpi_printf("xls_sim_bridge: application%s endpoint%s listening in %s\n",
-               debug_endpoint.enabled ? " and debug" : "",
-               debug_endpoint.enabled ? "s" : "", directory);
+    memset(&end_cb, 0, sizeof(end_cb));
+    end_cb.reason = cbEndOfSimulation;
+    end_cb.cb_rtn = cb_end_of_sim;
+    vpi_register_cb(&end_cb);
+    if (scheduler_profile_only) {
+        vpi_printf("xls_sim_bridge: scheduler-only profiling enabled\n");
+    } else {
+        vpi_printf("xls_sim_bridge: application%s endpoint%s listening in %s\n",
+                   debug_endpoint.enabled ? " and debug" : "",
+                   debug_endpoint.enabled ? "s" : "", directory);
+    }
     return 0;
 }
 
