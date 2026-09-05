@@ -768,7 +768,7 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
         let __1 = phase;
         let Cell_1 = (Tag::CELL, data);
         let _0 = Cell_1.1.step;
-        let _1 = _0 * 2;
+        let _1 = _0 * 12;
         let _2 = Cell_1.1.diffusion_round;
         let _3 = _1 + _2;
         let _4 = _3 & 4294967295;
@@ -796,7 +796,7 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
         let __1 = phase;
         let Cell_1 = (Tag::CELL, data);
         let _0 = Cell_1.1.step;
-        let _1 = _0 * 2;
+        let _1 = _0 * 12;
         let _2 = Cell_1.1.diffusion_round;
         let _3 = _1 + _2;
         let _4 = _3 & 4294967295;
@@ -824,7 +824,7 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
         let __1 = phase;
         let Cell_1 = (Tag::CELL, data);
         let _0 = Cell_1.1.step;
-        let _1 = _0 * 2;
+        let _1 = _0 * 12;
         let _2 = Cell_1.1.diffusion_round;
         let _3 = _1 + _2;
         let _4 = _3 & 4294967295;
@@ -852,7 +852,7 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
         let __1 = phase;
         let Cell_1 = (Tag::CELL, data);
         let _0 = Cell_1.1.step;
-        let _1 = _0 * 2;
+        let _1 = _0 * 12;
         let _2 = Cell_1.1.diffusion_round;
         let _3 = _1 + _2;
         let _4 = _3 & 4294967295;
@@ -880,7 +880,7 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
         let __1 = phase;
         let Cell_1 = (Tag::CELL, data);
         let _0 = Cell_1.1.step;
-        let _1 = _0 * 2;
+        let _1 = _0 * 12;
         let _2 = Cell_1.1.diffusion_round;
         let _3 = _1 + _2;
         let _4 = _3 & 4294967295;
@@ -1907,7 +1907,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
           let Xls_clause_1_Epoch_1 = message.epoch;
           let Xls_clause_1_Cell_1 = (Tag::CELL, data);
           let Xls_clause_1_Step_1 = data.step;
-          let _0 = Xls_clause_1_Step_1 * 2;
+          let _0 = Xls_clause_1_Step_1 * 12;
           let _1 = _0 & 4294967295;
           let _2 = Xls_clause_1_Epoch_1 == _1;
           if _2 {
@@ -1937,7 +1937,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
           let Xls_clause_1_Cell_1 = (Tag::CELL, data);
           let Xls_clause_1_Step_1 = data.step;
           let Xls_clause_1_Round_1 = data.diffusion_round;
-          let _0 = Xls_clause_1_Step_1 * 2;
+          let _0 = Xls_clause_1_Step_1 * 12;
           let _1 = _0 + Xls_clause_1_Round_1;
           let _2 = _1 & 4294967295;
           let _3 = Xls_clause_1_Epoch_1 == _2;
@@ -1971,20 +1971,20 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
               let _21 = _20[2 - u32:1];
               let Xls_clause_1_P1_1 = _21;
               let _22 = Xls_clause_1_Cell_1.1.anyon;
-              let _23 = ((Xls_clause_1_P0_1 as sN[37]) * sN[37]:18 + (Xls_clause_1_P1_1 as sN[37]) * sN[37]:2 + (Xls_clause_1_Sum0_1 as sN[37]));
+              let _23 = ((Xls_clause_1_P0_1 as sN[37]) * sN[37]:6 + (Xls_clause_1_P1_1 as sN[37]) * sN[37]:2 + (Xls_clause_1_Sum0_1 as sN[37]));
               let _24 = _23 < sN[37]:0;
               let _25 = ((if _24 { -(_23) } else { _23 }) as uN[36]);
-              let _26 = (((_25 + uN[36]:12) >> u32:3) as uN[33]);
-              let _27 = ((_26 / uN[33]:3) as sN[33]);
+              let _26 = (((_25 + uN[36]:6) >> u32:2) as uN[34]);
+              let _27 = ((_26 / uN[34]:3) as sN[33]);
               let _28 = ((if _24 { -(_27) } else { _27 }) as s64);
               let _29 = ((_22 as s64) << u32:16) + _28;
               let _30 = (if _29 > s64:2147483647 { s32:2147483647 } else if _29 < s64:-2147483648 { s32:-2147483648 } else { _29 as s32 });
               let Xls_clause_1_New0_1 = _30;
-              let _31 = ((Xls_clause_1_P0_1 as sN[37]) * sN[37]:1 + (Xls_clause_1_P1_1 as sN[37]) * sN[37]:15 + (Xls_clause_1_Sum1_1 as sN[37]));
+              let _31 = ((Xls_clause_1_P0_1 as sN[37]) * sN[37]:1 + (Xls_clause_1_P1_1 as sN[37]) * sN[37]:7 + (Xls_clause_1_Sum1_1 as sN[37]));
               let _32 = _31 < sN[37]:0;
               let _33 = ((if _32 { -(_31) } else { _31 }) as uN[36]);
-              let _34 = (((_33 + uN[36]:10) >> u32:2) as uN[34]);
-              let _35 = ((_34 / uN[34]:5) as sN[33]);
+              let _34 = (((_33 + uN[36]:6) >> u32:2) as uN[34]);
+              let _35 = ((_34 / uN[34]:3) as sN[33]);
               let _36 = ((if _32 { -(_35) } else { _35 }) as s64);
               let _37 = (if _36 > s64:2147483647 { s32:2147483647 } else if _36 < s64:-2147483648 { s32:-2147483648 } else { _36 as s32 });
               let Xls_clause_1_New1_1 = _37;
@@ -2005,7 +2005,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
               let _44 = (Tag::CELL, _43);
               let Xls_clause_1_Updated_1 = _44;
               let _45 = Xls_clause_1_Round_1 + 1;
-              let _46 = _45 == 2;
+              let _46 = _45 == 12;
               let _50 = if _46 {
                 let _47 = Cell {
                   seen_sources: 0,
@@ -2046,7 +2046,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
             let Xls_clause_2_Cell_1 = (Tag::CELL, data);
             let Xls_clause_2_Step_1 = data.step;
             let Xls_clause_2_Round_1 = data.diffusion_round;
-            let _0 = Xls_clause_2_Step_1 * 2;
+            let _0 = Xls_clause_2_Step_1 * 12;
             let _1 = _0 + Xls_clause_2_Round_1;
             let _2 = _1 + 1;
             let _3 = _2 & 4294967295;
@@ -2078,7 +2078,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
           let Xls_clause_1_Cell_1 = (Tag::CELL, data);
           let Xls_clause_1_Step_1 = data.step;
           let Xls_clause_1_Round_1 = data.diffusion_round;
-          let _0 = Xls_clause_1_Step_1 * 2;
+          let _0 = Xls_clause_1_Step_1 * 12;
           let _1 = _0 + Xls_clause_1_Round_1;
           let _2 = _1 & 4294967295;
           let _3 = Xls_clause_1_Epoch_1 == _2;
@@ -2108,7 +2108,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
           let Xls_clause_1_Cell_1 = (Tag::CELL, data);
           let Xls_clause_1_Step_1 = data.step;
           let Xls_clause_1_Round_1 = data.diffusion_round;
-          let _0 = Xls_clause_1_Step_1 * 2;
+          let _0 = Xls_clause_1_Step_1 * 12;
           let _1 = _0 + Xls_clause_1_Round_1;
           let _2 = _1 & 4294967295;
           let _3 = Xls_clause_1_Epoch_1 == _2;

@@ -71,10 +71,10 @@ cell has emitted the message needed to release the first.
 
 ## Deliberate simplifications
 
-This slice performs two diffusion rounds per anyon step. Two is the smallest
-round count which exercises same-phase re-entry and next-epoch postponement;
-it is a compile-time protocol fixture rather than a convergence policy. The
-coin is the most-significant bit of a deterministic `xorshift32` sequence.
+This distance-three slice performs twelve diffusion rounds per anyon step. The
+paper prescribes `c = 10 log^2(L)` field updates; twelve is the nearest whole
+number at `L = 3`. The coin is the most-significant bit of a deterministic
+`xorshift32` sequence.
 Each cell receives a nonzero seed before it begins, so a topology can give
 statically instantiated cells distinct reproducible streams. The paired
 syndrome input supplies nontrivial noise; its data and measurement generators
@@ -95,14 +95,16 @@ protocol meaning.
 
 ## Field arithmetic
 
-The two stored layers are a deliberately small z-depth probe. Layer zero is the
-syndrome plane and layer one uses the charge-free bulk coefficient. Values use
-the example-local signed Q15.16 `phi_field` type. Each recurrence widens its
-complete rational numerator to 64 bits, rounds once to the nearest stored value
-with ties away from zero, then saturates to the 32-bit field. For `eta = 1/4`,
-the center plane retains `3/4` of its old value and receives `1/24` of each of
-its six spatial neighbors; the terminal bulk layer retains `3/4` and receives
-`1/20` of each of its five neighbors.
+For the distance-three torus, reflection symmetry about the syndrome plane
+makes the `z = 1` and `z = -1` values equal, so the complete field needs only
+two stored layers. Values use the example-local signed Q15.16 `phi_field` type.
+Each recurrence widens its complete rational numerator to 64 bits, rounds once
+to the nearest stored value with ties away from zero, then saturates to the
+32-bit field. For the paper's `eta = 1/2`, the center plane retains `1/2` of
+its old value and receives `1/12` of each of its six spatial neighbors. The
+charge-free bulk layer receives the same coefficient from each neighbor; one
+of its two z-neighbors is the center plane and the other is its reflected bulk
+counterpart.
 """.
 
 -include("phi_protocol.hrl").
@@ -125,7 +127,10 @@ its six spatial neighbors; the terminal bulk layer retains `3/4` and receives
 -define(LAYER_COUNT, 2).
 -define(MAILBOX_CAPACITY, 5).
 -define(NEIGHBOR_COUNT, 4).
--define(DIFFUSION_ROUNDS, 2).
+%% The paper prescribes c = 10 log^2(L) field updates per anyon update. For
+%% this distance-three demonstration, rounding the real-valued prescription
+%% to the nearest whole update gives c = 12.
+-define(DIFFUSION_ROUNDS, 12).
 -define(U32_MASK, 16#ffffffff).
 -define(NO_DIRECTION, 0).
 

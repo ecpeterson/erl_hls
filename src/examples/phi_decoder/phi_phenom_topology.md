@@ -1303,20 +1303,21 @@ development runner no longer copies work into the local UTM.
 
 ### Paper-semantics audit
 
-The rate above measures the deliberately small protocol fixture, not yet the
-3D decoder evaluated by Herold et al. The paper specifies an auxiliary
-`L x L x L` torus, with `c = 10 log^2(L)` parallel field updates followed by
-one anyon update in each sequence, and reports `eta = 1/2` for its numerical
-results. The current actor instead fixes two field updates and `eta = 1/4`.
+The decoder now follows the parameters used by Herold et al. The paper
+specifies an auxiliary `L x L x L` torus, with `c = 10 log^2(L)` parallel field
+updates followed by one anyon update in each sequence, and reports
+`eta = 1/2` for its numerical results.
 See [Cellular-automaton decoders for topological quantum memories](https://arxiv.org/abs/1406.2338).
 
-For `L = 3`, the current two-element field vector can represent the complete
-third dimension without loss: reflection symmetry about the anyon plane makes
-the `z = 1` and `z = -1` values equal. The bulk recurrence must nevertheless
-count both torus neighbors. The current five-neighbor terminal-layer formula
-does not do that, and it must be replaced together with the smoothing
-coefficient. A general odd `L` implementation needs `(L + 1) / 2` stored depth
-classes under this symmetry reduction.
+For `L = 3`, a two-element field vector represents the complete third
+dimension without loss: reflection symmetry about the anyon plane makes the
+`z = 1` and `z = -1` values equal. The center recurrence is therefore
+`q + (6 phi0 + 2 phi1 + planar_sum) / 12`. A bulk representative has the
+center value on one side and its reflected bulk counterpart on the other, so
+its recurrence is `(phi0 + 7 phi1 + planar_sum) / 12`. Both paths retain the
+existing single-round, nearest-Q15.16 rounding policy. A general odd `L`
+implementation would need `(L + 1) / 2` stored depth classes under this
+symmetry reduction.
 
 The paper does not state an integer-rounding convention for `c` at very small
 `L`; natural logarithms give approximately 12.1 at `L = 3`. The demonstration
@@ -1351,7 +1352,6 @@ ample queued input, and only a modest post-admission backlog, while the actor
 executor is busy whenever the same-actor rule permits it. This profile points
 to increasing executor issue rate rather than changing the mailbox payload
 layout.
-
 ### Decoupled actor executor
 
 The actor-specific microstep is now a stateless `SharedExecutor` proc. The

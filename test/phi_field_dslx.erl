@@ -79,10 +79,10 @@ reference_and_properties() ->
     ) -> bool {
       let sum = neighbor_sum(north, east, west, south);
       let numerator =
-        (phi0 as s64) * s64:18 + (phi1 as s64) * s64:2 + sum;
+        (phi0 as s64) * s64:6 + (phi1 as s64) * s64:2 + sum;
       let expected = reference_saturate(
         ((anyon as s64) << u32:16) +
-          reference_round(numerator, s64:24, s64:12));
+          reference_round(numerator, s64:12, s64:6));
       relax_center(anyon as u32, phi0, phi1, sum) == expected
     }
 
@@ -97,9 +97,9 @@ reference_and_properties() ->
     ) -> bool {
       let sum = neighbor_sum(north, east, west, south);
       let numerator =
-        (phi0 as s64) + (phi1 as s64) * s64:15 + sum;
+        (phi0 as s64) + (phi1 as s64) * s64:7 + sum;
       let expected = reference_saturate(
-        reference_round(numerator, s64:20, s64:10));
+        reference_round(numerator, s64:12, s64:6));
       relax_bulk(phi0, phi1, sum) == expected
     }
 

@@ -51,10 +51,10 @@ fixture() ->
             request_id => 16#504849
         },
         expected_summary => #{
-            closeout_step => 21,
-            correction_count => 84,
+            closeout_step => 18,
+            correction_count => 80,
             measurement => z,
-            data_counts => #{commutes => 12, anticommutes => 6},
+            data_counts => #{commutes => 8, anticommutes => 10},
             row => #{y => 4, parity => 1}
         }
     }.
