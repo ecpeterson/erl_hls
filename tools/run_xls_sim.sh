@@ -30,6 +30,7 @@ rsync -a -e "ssh -o BatchMode=yes" \
     "$local_stage/phi_scheduler_rams.sh" \
     "$local_stage/axis.x" \
     "$local_stage/bram.x" \
+    "$local_stage/effect_window.x" \
     "$local_stage/mailbox.x" \
     "$local_stage/regsvc_core_adapter.v" \
     "$local_stage/regsvc_debug_top.v" \

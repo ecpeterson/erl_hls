@@ -8,6 +8,7 @@
 // drains the effects in source order.
 
 import axis;
+import effect_window;
 import hls_spatial_router;
 import phenom_data_cell;
 import phenom_syndrome_cell;
@@ -1125,13 +1126,17 @@ proc SchedulerStartup5 {
   }
 }
 
-// Holds one committed actor-entry batch while routing at most one
-// valid effect per activation. Credit returns only after the final
-// source-order position has been drained.
+// Routes one committed actor-entry batch in source order. A global
+// reservation may admit one lookahead batch while the active batch
+// drains; only the active batch can emit downstream effects.
 struct SchedulerRouter0State {
   active: u1,
   scheduled: phenom_data_cell::ScheduledEffects,
   index: u8,
+  window_requested: u1,
+  window_granted: u1,
+  credit_debt: u1,
+  lookahead: u1,
 }
 
 proc SchedulerRouter0 {
@@ -1140,30 +1145,46 @@ proc SchedulerRouter0 {
   to_scheduler_4: chan<phenom_syndrome_cell::ScheduledRequest> out;
   to_scheduler_5: chan<phenom_syndrome_cell::ScheduledRequest> out;
   data_measurements_out: chan<axis::Frame> out;
+  window_request_out: chan<u1> out;
+  window_grant_in: chan<u1> in;
+  window_release_out: chan<u1> out;
 
   config(
     scheduled_in: chan<phenom_data_cell::ScheduledEffects> in,
     credit_out: chan<phenom_data_cell::ScheduledRequest> out,
     to_scheduler_4: chan<phenom_syndrome_cell::ScheduledRequest> out,
     to_scheduler_5: chan<phenom_syndrome_cell::ScheduledRequest> out,
-    data_measurements_out: chan<axis::Frame> out
+    data_measurements_out: chan<axis::Frame> out,
+    window_request_out: chan<u1> out,
+    window_grant_in: chan<u1> in,
+    window_release_out: chan<u1> out
   ) {
-    (scheduled_in, credit_out, to_scheduler_4, to_scheduler_5, data_measurements_out)
+    (scheduled_in, credit_out, to_scheduler_4, to_scheduler_5, data_measurements_out, window_request_out, window_grant_in, window_release_out)
   }
 
   init { zero!<SchedulerRouter0State>() }
 
   next(state: SchedulerRouter0State) {
-    let (tok, incoming) = recv_if(
-      join(), scheduled_in, !state.active,
-      zero!<phenom_data_cell::ScheduledEffects>());
+    let state_effect_info = phenom_data_cell::scheduled_effect(state.scheduled, state.index);
+    let state_last = state.active && state_effect_info.2;
+    let can_receive = !state.active ||
+      (state_last && state.credit_debt && !state.lookahead);
+    let (receive_tok, incoming, incoming_valid) =
+      recv_if_non_blocking(
+        join(), scheduled_in, can_receive,
+        zero!<phenom_data_cell::ScheduledEffects>());
+    let (grant_tok, _grant, grant_valid) =
+      recv_if_non_blocking(
+        receive_tok, window_grant_in,
+        state.window_requested && !state.window_granted, u1:0);
+    let batch_valid = state.active || incoming_valid;
     let scheduled = if state.active {
       state.scheduled
     } else { incoming };
     let index = if state.active { state.index } else { u8:0 };
     let effect_info = phenom_data_cell::scheduled_effect(scheduled, index);
     let effect = effect_info.0;
-    let emit = effect_info.1;
+    let emit = batch_valid && effect_info.1;
     let address = scheduler_0_address(scheduled.slot);
     let routed_tok = if emit {
       match address.family as FamilyId {
@@ -1171,57 +1192,109 @@ proc SchedulerRouter0 {
         let x = address.x;
         let y = address.y;
         match effect.port {
-        phenom_data_cell::OutputPort::NORTH => send(tok, to_scheduler_5, phenom_syndrome_cell::ScheduledRequest {
+        phenom_data_cell::OutputPort::NORTH => send(grant_tok, to_scheduler_5, phenom_syndrome_cell::ScheduledRequest {
             slot: scheduler_5_slot(ScheduledAddress { family: FamilyId::SYNDROME_Z as u8, x: (if x >= u16:1 { x - u16:1 } else { x + u16:2 }), y: (if y >= u16:1 { y - u16:1 } else { y + u16:2 }) }),
             frame: effect.frame,
             ..zero!<phenom_syndrome_cell::ScheduledRequest>()
           }),
-        phenom_data_cell::OutputPort::EAST => send(tok, to_scheduler_4, phenom_syndrome_cell::ScheduledRequest {
+        phenom_data_cell::OutputPort::EAST => send(grant_tok, to_scheduler_4, phenom_syndrome_cell::ScheduledRequest {
             slot: scheduler_4_slot(ScheduledAddress { family: FamilyId::SYNDROME_X as u8, x: x, y: y }),
             frame: effect.frame,
             ..zero!<phenom_syndrome_cell::ScheduledRequest>()
           }),
-        phenom_data_cell::OutputPort::WEST => send(tok, to_scheduler_4, phenom_syndrome_cell::ScheduledRequest {
+        phenom_data_cell::OutputPort::WEST => send(grant_tok, to_scheduler_4, phenom_syndrome_cell::ScheduledRequest {
             slot: scheduler_4_slot(ScheduledAddress { family: FamilyId::SYNDROME_X as u8, x: (if x >= u16:1 { x - u16:1 } else { x + u16:2 }), y: y }),
             frame: effect.frame,
             ..zero!<phenom_syndrome_cell::ScheduledRequest>()
           }),
-        phenom_data_cell::OutputPort::SOUTH => send(tok, to_scheduler_5, phenom_syndrome_cell::ScheduledRequest {
+        phenom_data_cell::OutputPort::SOUTH => send(grant_tok, to_scheduler_5, phenom_syndrome_cell::ScheduledRequest {
             slot: scheduler_5_slot(ScheduledAddress { family: FamilyId::SYNDROME_Z as u8, x: (if x >= u16:1 { x - u16:1 } else { x + u16:2 }), y: y }),
             frame: effect.frame,
             ..zero!<phenom_syndrome_cell::ScheduledRequest>()
           }),
-        phenom_data_cell::OutputPort::MEASUREMENT => send(tok, data_measurements_out, effect.frame),
+        phenom_data_cell::OutputPort::MEASUREMENT => send(grant_tok, data_measurements_out, effect.frame),
         }
       },
-        _ => tok,
+        _ => grant_tok,
       }
-    } else { tok };
-    let last = effect_info.2;
-    let _done = send_if(
-      routed_tok, credit_out, last, phenom_data_cell::ScheduledRequest {
+    } else { grant_tok };
+    let last = batch_valid && effect_info.2;
+    let batch_continues = batch_valid && !last;
+    // Never apply a stale grant to a batch admitted in this same
+    // activation: the virtual credit could otherwise bypass back to
+    // SharedService before that batch has made egress_busy visible.
+    let grant_usable = grant_valid && state.active &&
+      !state.lookahead && batch_continues;
+    let fake_credit = grant_usable;
+    let swallow_physical = last && state.credit_debt &&
+      !state.lookahead;
+    let forward_physical = last && !swallow_physical;
+    let forward_credit = fake_credit || forward_physical;
+    let credit_tok = send_if(
+      routed_tok, credit_out, forward_credit, phenom_data_cell::ScheduledRequest {
         credit: u1:1,
         ..zero!<phenom_data_cell::ScheduledRequest>()
       });
-    if last {
-      zero!<SchedulerRouter0State>()
-    } else {
+    let carry_lookahead = last && swallow_physical &&
+      incoming_valid;
+    let release = (last && state.lookahead) ||
+      (last && state.credit_debt && !incoming_valid) ||
+      (grant_valid && !grant_usable);
+    let release_tok = send_if(
+      credit_tok, window_release_out, release, u1:1);
+    let pending_request = state.window_requested && !grant_valid;
+    let window_granted =
+      (state.window_granted || grant_usable) && !release;
+    let credit_debt =
+      (state.credit_debt || fake_credit) && !swallow_physical;
+    let next_active = carry_lookahead || batch_continues;
+    let next_lookahead = if carry_lookahead { u1:1 } else {
+      if batch_continues { state.lookahead } else { u1:0 }
+    };
+    let request = next_active && !next_lookahead &&
+      !window_granted && !credit_debt && !pending_request;
+    let _request_tok = send_if(
+      release_tok, window_request_out, request, u1:1);
+    if carry_lookahead {
+      SchedulerRouter0State {
+        active: u1:1,
+        scheduled: incoming,
+        index: u8:0,
+        window_requested: u1:0,
+        window_granted,
+        credit_debt,
+        lookahead: u1:1,
+      }
+    } else if batch_continues {
       SchedulerRouter0State {
         active: u1:1,
         scheduled,
         index: index + u8:1,
+        window_requested: pending_request || request,
+        window_granted,
+        credit_debt,
+        lookahead: state.lookahead,
+      }
+    } else {
+      SchedulerRouter0State {
+        window_requested: pending_request || request,
+        ..zero!<SchedulerRouter0State>()
       }
     }
   }
 }
 
-// Holds one committed actor-entry batch while routing at most one
-// valid effect per activation. Credit returns only after the final
-// source-order position has been drained.
+// Routes one committed actor-entry batch in source order. A global
+// reservation may admit one lookahead batch while the active batch
+// drains; only the active batch can emit downstream effects.
 struct SchedulerRouter1State {
   active: u1,
   scheduled: phenom_data_cell::ScheduledEffects,
   index: u8,
+  window_requested: u1,
+  window_granted: u1,
+  credit_debt: u1,
+  lookahead: u1,
 }
 
 proc SchedulerRouter1 {
@@ -1230,30 +1303,46 @@ proc SchedulerRouter1 {
   to_scheduler_4: chan<phenom_syndrome_cell::ScheduledRequest> out;
   to_scheduler_5: chan<phenom_syndrome_cell::ScheduledRequest> out;
   data_measurements_out: chan<axis::Frame> out;
+  window_request_out: chan<u1> out;
+  window_grant_in: chan<u1> in;
+  window_release_out: chan<u1> out;
 
   config(
     scheduled_in: chan<phenom_data_cell::ScheduledEffects> in,
     credit_out: chan<phenom_data_cell::ScheduledRequest> out,
     to_scheduler_4: chan<phenom_syndrome_cell::ScheduledRequest> out,
     to_scheduler_5: chan<phenom_syndrome_cell::ScheduledRequest> out,
-    data_measurements_out: chan<axis::Frame> out
+    data_measurements_out: chan<axis::Frame> out,
+    window_request_out: chan<u1> out,
+    window_grant_in: chan<u1> in,
+    window_release_out: chan<u1> out
   ) {
-    (scheduled_in, credit_out, to_scheduler_4, to_scheduler_5, data_measurements_out)
+    (scheduled_in, credit_out, to_scheduler_4, to_scheduler_5, data_measurements_out, window_request_out, window_grant_in, window_release_out)
   }
 
   init { zero!<SchedulerRouter1State>() }
 
   next(state: SchedulerRouter1State) {
-    let (tok, incoming) = recv_if(
-      join(), scheduled_in, !state.active,
-      zero!<phenom_data_cell::ScheduledEffects>());
+    let state_effect_info = phenom_data_cell::scheduled_effect(state.scheduled, state.index);
+    let state_last = state.active && state_effect_info.2;
+    let can_receive = !state.active ||
+      (state_last && state.credit_debt && !state.lookahead);
+    let (receive_tok, incoming, incoming_valid) =
+      recv_if_non_blocking(
+        join(), scheduled_in, can_receive,
+        zero!<phenom_data_cell::ScheduledEffects>());
+    let (grant_tok, _grant, grant_valid) =
+      recv_if_non_blocking(
+        receive_tok, window_grant_in,
+        state.window_requested && !state.window_granted, u1:0);
+    let batch_valid = state.active || incoming_valid;
     let scheduled = if state.active {
       state.scheduled
     } else { incoming };
     let index = if state.active { state.index } else { u8:0 };
     let effect_info = phenom_data_cell::scheduled_effect(scheduled, index);
     let effect = effect_info.0;
-    let emit = effect_info.1;
+    let emit = batch_valid && effect_info.1;
     let address = scheduler_1_address(scheduled.slot);
     let routed_tok = if emit {
       match address.family as FamilyId {
@@ -1261,57 +1350,109 @@ proc SchedulerRouter1 {
         let x = address.x;
         let y = address.y;
         match effect.port {
-        phenom_data_cell::OutputPort::NORTH => send(tok, to_scheduler_4, phenom_syndrome_cell::ScheduledRequest {
+        phenom_data_cell::OutputPort::NORTH => send(grant_tok, to_scheduler_4, phenom_syndrome_cell::ScheduledRequest {
             slot: scheduler_4_slot(ScheduledAddress { family: FamilyId::SYNDROME_X as u8, x: x, y: y }),
             frame: effect.frame,
             ..zero!<phenom_syndrome_cell::ScheduledRequest>()
           }),
-        phenom_data_cell::OutputPort::EAST => send(tok, to_scheduler_5, phenom_syndrome_cell::ScheduledRequest {
+        phenom_data_cell::OutputPort::EAST => send(grant_tok, to_scheduler_5, phenom_syndrome_cell::ScheduledRequest {
             slot: scheduler_5_slot(ScheduledAddress { family: FamilyId::SYNDROME_Z as u8, x: x, y: y }),
             frame: effect.frame,
             ..zero!<phenom_syndrome_cell::ScheduledRequest>()
           }),
-        phenom_data_cell::OutputPort::WEST => send(tok, to_scheduler_5, phenom_syndrome_cell::ScheduledRequest {
+        phenom_data_cell::OutputPort::WEST => send(grant_tok, to_scheduler_5, phenom_syndrome_cell::ScheduledRequest {
             slot: scheduler_5_slot(ScheduledAddress { family: FamilyId::SYNDROME_Z as u8, x: (if x >= u16:1 { x - u16:1 } else { x + u16:2 }), y: y }),
             frame: effect.frame,
             ..zero!<phenom_syndrome_cell::ScheduledRequest>()
           }),
-        phenom_data_cell::OutputPort::SOUTH => send(tok, to_scheduler_4, phenom_syndrome_cell::ScheduledRequest {
+        phenom_data_cell::OutputPort::SOUTH => send(grant_tok, to_scheduler_4, phenom_syndrome_cell::ScheduledRequest {
             slot: scheduler_4_slot(ScheduledAddress { family: FamilyId::SYNDROME_X as u8, x: x, y: (if y >= u16:2 { y - u16:2 } else { y + u16:1 }) }),
             frame: effect.frame,
             ..zero!<phenom_syndrome_cell::ScheduledRequest>()
           }),
-        phenom_data_cell::OutputPort::MEASUREMENT => send(tok, data_measurements_out, effect.frame),
+        phenom_data_cell::OutputPort::MEASUREMENT => send(grant_tok, data_measurements_out, effect.frame),
         }
       },
-        _ => tok,
+        _ => grant_tok,
       }
-    } else { tok };
-    let last = effect_info.2;
-    let _done = send_if(
-      routed_tok, credit_out, last, phenom_data_cell::ScheduledRequest {
+    } else { grant_tok };
+    let last = batch_valid && effect_info.2;
+    let batch_continues = batch_valid && !last;
+    // Never apply a stale grant to a batch admitted in this same
+    // activation: the virtual credit could otherwise bypass back to
+    // SharedService before that batch has made egress_busy visible.
+    let grant_usable = grant_valid && state.active &&
+      !state.lookahead && batch_continues;
+    let fake_credit = grant_usable;
+    let swallow_physical = last && state.credit_debt &&
+      !state.lookahead;
+    let forward_physical = last && !swallow_physical;
+    let forward_credit = fake_credit || forward_physical;
+    let credit_tok = send_if(
+      routed_tok, credit_out, forward_credit, phenom_data_cell::ScheduledRequest {
         credit: u1:1,
         ..zero!<phenom_data_cell::ScheduledRequest>()
       });
-    if last {
-      zero!<SchedulerRouter1State>()
-    } else {
+    let carry_lookahead = last && swallow_physical &&
+      incoming_valid;
+    let release = (last && state.lookahead) ||
+      (last && state.credit_debt && !incoming_valid) ||
+      (grant_valid && !grant_usable);
+    let release_tok = send_if(
+      credit_tok, window_release_out, release, u1:1);
+    let pending_request = state.window_requested && !grant_valid;
+    let window_granted =
+      (state.window_granted || grant_usable) && !release;
+    let credit_debt =
+      (state.credit_debt || fake_credit) && !swallow_physical;
+    let next_active = carry_lookahead || batch_continues;
+    let next_lookahead = if carry_lookahead { u1:1 } else {
+      if batch_continues { state.lookahead } else { u1:0 }
+    };
+    let request = next_active && !next_lookahead &&
+      !window_granted && !credit_debt && !pending_request;
+    let _request_tok = send_if(
+      release_tok, window_request_out, request, u1:1);
+    if carry_lookahead {
+      SchedulerRouter1State {
+        active: u1:1,
+        scheduled: incoming,
+        index: u8:0,
+        window_requested: u1:0,
+        window_granted,
+        credit_debt,
+        lookahead: u1:1,
+      }
+    } else if batch_continues {
       SchedulerRouter1State {
         active: u1:1,
         scheduled,
         index: index + u8:1,
+        window_requested: pending_request || request,
+        window_granted,
+        credit_debt,
+        lookahead: state.lookahead,
+      }
+    } else {
+      SchedulerRouter1State {
+        window_requested: pending_request || request,
+        ..zero!<SchedulerRouter1State>()
       }
     }
   }
 }
 
-// Holds one committed actor-entry batch while routing at most one
-// valid effect per activation. Credit returns only after the final
-// source-order position has been drained.
+// Routes one committed actor-entry batch in source order. A global
+// reservation may admit one lookahead batch while the active batch
+// drains; only the active batch can emit downstream effects.
 struct SchedulerRouter2State {
   active: u1,
   scheduled: phi_halo_cell::ScheduledEffects,
   index: u8,
+  window_requested: u1,
+  window_granted: u1,
+  credit_debt: u1,
+  lookahead: u1,
 }
 
 proc SchedulerRouter2 {
@@ -1320,30 +1461,46 @@ proc SchedulerRouter2 {
   to_scheduler_2: chan<phi_halo_cell::ScheduledRequest> out;
   to_scheduler_4: chan<phenom_syndrome_cell::ScheduledRequest> out;
   x_decoder_events_out: chan<axis::Frame> out;
+  window_request_out: chan<u1> out;
+  window_grant_in: chan<u1> in;
+  window_release_out: chan<u1> out;
 
   config(
     scheduled_in: chan<phi_halo_cell::ScheduledEffects> in,
     credit_out: chan<phi_halo_cell::ScheduledRequest> out,
     to_scheduler_2: chan<phi_halo_cell::ScheduledRequest> out,
     to_scheduler_4: chan<phenom_syndrome_cell::ScheduledRequest> out,
-    x_decoder_events_out: chan<axis::Frame> out
+    x_decoder_events_out: chan<axis::Frame> out,
+    window_request_out: chan<u1> out,
+    window_grant_in: chan<u1> in,
+    window_release_out: chan<u1> out
   ) {
-    (scheduled_in, credit_out, to_scheduler_2, to_scheduler_4, x_decoder_events_out)
+    (scheduled_in, credit_out, to_scheduler_2, to_scheduler_4, x_decoder_events_out, window_request_out, window_grant_in, window_release_out)
   }
 
   init { zero!<SchedulerRouter2State>() }
 
   next(state: SchedulerRouter2State) {
-    let (tok, incoming) = recv_if(
-      join(), scheduled_in, !state.active,
-      zero!<phi_halo_cell::ScheduledEffects>());
+    let state_effect_info = phi_halo_cell::scheduled_effect(state.scheduled, state.index);
+    let state_last = state.active && state_effect_info.2;
+    let can_receive = !state.active ||
+      (state_last && state.credit_debt && !state.lookahead);
+    let (receive_tok, incoming, incoming_valid) =
+      recv_if_non_blocking(
+        join(), scheduled_in, can_receive,
+        zero!<phi_halo_cell::ScheduledEffects>());
+    let (grant_tok, _grant, grant_valid) =
+      recv_if_non_blocking(
+        receive_tok, window_grant_in,
+        state.window_requested && !state.window_granted, u1:0);
+    let batch_valid = state.active || incoming_valid;
     let scheduled = if state.active {
       state.scheduled
     } else { incoming };
     let index = if state.active { state.index } else { u8:0 };
     let effect_info = phi_halo_cell::scheduled_effect(scheduled, index);
     let effect = effect_info.0;
-    let emit = effect_info.1;
+    let emit = batch_valid && effect_info.1;
     let address = scheduler_2_address(scheduled.slot);
     let routed_tok = if emit {
       match address.family as FamilyId {
@@ -1351,63 +1508,115 @@ proc SchedulerRouter2 {
         let x = address.x;
         let y = address.y;
         match effect.port {
-        phi_halo_cell::OutputPort::NORTH => send(tok, to_scheduler_2, phi_halo_cell::ScheduledRequest {
+        phi_halo_cell::OutputPort::NORTH => send(grant_tok, to_scheduler_2, phi_halo_cell::ScheduledRequest {
             slot: scheduler_2_slot(ScheduledAddress { family: FamilyId::PHI_X as u8, x: x, y: (if y >= u16:1 { y - u16:1 } else { y + u16:2 }) }),
             frame: effect.frame,
             ..zero!<phi_halo_cell::ScheduledRequest>()
           }),
-        phi_halo_cell::OutputPort::EAST => send(tok, to_scheduler_2, phi_halo_cell::ScheduledRequest {
+        phi_halo_cell::OutputPort::EAST => send(grant_tok, to_scheduler_2, phi_halo_cell::ScheduledRequest {
             slot: scheduler_2_slot(ScheduledAddress { family: FamilyId::PHI_X as u8, x: (if x >= u16:2 { x - u16:2 } else { x + u16:1 }), y: y }),
             frame: effect.frame,
             ..zero!<phi_halo_cell::ScheduledRequest>()
           }),
-        phi_halo_cell::OutputPort::WEST => send(tok, to_scheduler_2, phi_halo_cell::ScheduledRequest {
+        phi_halo_cell::OutputPort::WEST => send(grant_tok, to_scheduler_2, phi_halo_cell::ScheduledRequest {
             slot: scheduler_2_slot(ScheduledAddress { family: FamilyId::PHI_X as u8, x: (if x >= u16:1 { x - u16:1 } else { x + u16:2 }), y: y }),
             frame: effect.frame,
             ..zero!<phi_halo_cell::ScheduledRequest>()
           }),
-        phi_halo_cell::OutputPort::SOUTH => send(tok, to_scheduler_2, phi_halo_cell::ScheduledRequest {
+        phi_halo_cell::OutputPort::SOUTH => send(grant_tok, to_scheduler_2, phi_halo_cell::ScheduledRequest {
             slot: scheduler_2_slot(ScheduledAddress { family: FamilyId::PHI_X as u8, x: x, y: (if y >= u16:2 { y - u16:2 } else { y + u16:1 }) }),
             frame: effect.frame,
             ..zero!<phi_halo_cell::ScheduledRequest>()
           }),
-        phi_halo_cell::OutputPort::SYNDROME => send(tok, to_scheduler_4, phenom_syndrome_cell::ScheduledRequest {
+        phi_halo_cell::OutputPort::SYNDROME => send(grant_tok, to_scheduler_4, phenom_syndrome_cell::ScheduledRequest {
             slot: scheduler_4_slot(ScheduledAddress { family: FamilyId::SYNDROME_X as u8, x: x, y: y }),
             frame: effect.frame,
             ..zero!<phenom_syndrome_cell::ScheduledRequest>()
           }),
-        phi_halo_cell::OutputPort::CORRECTION => send(tok, x_decoder_events_out, effect.frame),
-        phi_halo_cell::OutputPort::STATUS => send(tok, x_decoder_events_out, effect.frame),
+        phi_halo_cell::OutputPort::CORRECTION => send(grant_tok, x_decoder_events_out, effect.frame),
+        phi_halo_cell::OutputPort::STATUS => send(grant_tok, x_decoder_events_out, effect.frame),
         }
       },
-        _ => tok,
+        _ => grant_tok,
       }
-    } else { tok };
-    let last = effect_info.2;
-    let _done = send_if(
-      routed_tok, credit_out, last, phi_halo_cell::ScheduledRequest {
+    } else { grant_tok };
+    let last = batch_valid && effect_info.2;
+    let batch_continues = batch_valid && !last;
+    // Never apply a stale grant to a batch admitted in this same
+    // activation: the virtual credit could otherwise bypass back to
+    // SharedService before that batch has made egress_busy visible.
+    let grant_usable = grant_valid && state.active &&
+      !state.lookahead && batch_continues;
+    let fake_credit = grant_usable;
+    let swallow_physical = last && state.credit_debt &&
+      !state.lookahead;
+    let forward_physical = last && !swallow_physical;
+    let forward_credit = fake_credit || forward_physical;
+    let credit_tok = send_if(
+      routed_tok, credit_out, forward_credit, phi_halo_cell::ScheduledRequest {
         credit: u1:1,
         ..zero!<phi_halo_cell::ScheduledRequest>()
       });
-    if last {
-      zero!<SchedulerRouter2State>()
-    } else {
+    let carry_lookahead = last && swallow_physical &&
+      incoming_valid;
+    let release = (last && state.lookahead) ||
+      (last && state.credit_debt && !incoming_valid) ||
+      (grant_valid && !grant_usable);
+    let release_tok = send_if(
+      credit_tok, window_release_out, release, u1:1);
+    let pending_request = state.window_requested && !grant_valid;
+    let window_granted =
+      (state.window_granted || grant_usable) && !release;
+    let credit_debt =
+      (state.credit_debt || fake_credit) && !swallow_physical;
+    let next_active = carry_lookahead || batch_continues;
+    let next_lookahead = if carry_lookahead { u1:1 } else {
+      if batch_continues { state.lookahead } else { u1:0 }
+    };
+    let request = next_active && !next_lookahead &&
+      !window_granted && !credit_debt && !pending_request;
+    let _request_tok = send_if(
+      release_tok, window_request_out, request, u1:1);
+    if carry_lookahead {
+      SchedulerRouter2State {
+        active: u1:1,
+        scheduled: incoming,
+        index: u8:0,
+        window_requested: u1:0,
+        window_granted,
+        credit_debt,
+        lookahead: u1:1,
+      }
+    } else if batch_continues {
       SchedulerRouter2State {
         active: u1:1,
         scheduled,
         index: index + u8:1,
+        window_requested: pending_request || request,
+        window_granted,
+        credit_debt,
+        lookahead: state.lookahead,
+      }
+    } else {
+      SchedulerRouter2State {
+        window_requested: pending_request || request,
+        ..zero!<SchedulerRouter2State>()
       }
     }
   }
 }
 
-// Holds one committed actor-entry batch while routing at most one
-// valid effect per activation. Credit returns only after the final
-// source-order position has been drained.
+// Routes one committed actor-entry batch in source order. A global
+// reservation may admit one lookahead batch while the active batch
+// drains; only the active batch can emit downstream effects.
 struct SchedulerRouter3State {
   active: u1,
   scheduled: phi_halo_cell::ScheduledEffects,
   index: u8,
+  window_requested: u1,
+  window_granted: u1,
+  credit_debt: u1,
+  lookahead: u1,
 }
 
 proc SchedulerRouter3 {
@@ -1416,30 +1625,46 @@ proc SchedulerRouter3 {
   to_scheduler_3: chan<phi_halo_cell::ScheduledRequest> out;
   to_scheduler_5: chan<phenom_syndrome_cell::ScheduledRequest> out;
   z_decoder_events_out: chan<axis::Frame> out;
+  window_request_out: chan<u1> out;
+  window_grant_in: chan<u1> in;
+  window_release_out: chan<u1> out;
 
   config(
     scheduled_in: chan<phi_halo_cell::ScheduledEffects> in,
     credit_out: chan<phi_halo_cell::ScheduledRequest> out,
     to_scheduler_3: chan<phi_halo_cell::ScheduledRequest> out,
     to_scheduler_5: chan<phenom_syndrome_cell::ScheduledRequest> out,
-    z_decoder_events_out: chan<axis::Frame> out
+    z_decoder_events_out: chan<axis::Frame> out,
+    window_request_out: chan<u1> out,
+    window_grant_in: chan<u1> in,
+    window_release_out: chan<u1> out
   ) {
-    (scheduled_in, credit_out, to_scheduler_3, to_scheduler_5, z_decoder_events_out)
+    (scheduled_in, credit_out, to_scheduler_3, to_scheduler_5, z_decoder_events_out, window_request_out, window_grant_in, window_release_out)
   }
 
   init { zero!<SchedulerRouter3State>() }
 
   next(state: SchedulerRouter3State) {
-    let (tok, incoming) = recv_if(
-      join(), scheduled_in, !state.active,
-      zero!<phi_halo_cell::ScheduledEffects>());
+    let state_effect_info = phi_halo_cell::scheduled_effect(state.scheduled, state.index);
+    let state_last = state.active && state_effect_info.2;
+    let can_receive = !state.active ||
+      (state_last && state.credit_debt && !state.lookahead);
+    let (receive_tok, incoming, incoming_valid) =
+      recv_if_non_blocking(
+        join(), scheduled_in, can_receive,
+        zero!<phi_halo_cell::ScheduledEffects>());
+    let (grant_tok, _grant, grant_valid) =
+      recv_if_non_blocking(
+        receive_tok, window_grant_in,
+        state.window_requested && !state.window_granted, u1:0);
+    let batch_valid = state.active || incoming_valid;
     let scheduled = if state.active {
       state.scheduled
     } else { incoming };
     let index = if state.active { state.index } else { u8:0 };
     let effect_info = phi_halo_cell::scheduled_effect(scheduled, index);
     let effect = effect_info.0;
-    let emit = effect_info.1;
+    let emit = batch_valid && effect_info.1;
     let address = scheduler_3_address(scheduled.slot);
     let routed_tok = if emit {
       match address.family as FamilyId {
@@ -1447,63 +1672,115 @@ proc SchedulerRouter3 {
         let x = address.x;
         let y = address.y;
         match effect.port {
-        phi_halo_cell::OutputPort::NORTH => send(tok, to_scheduler_3, phi_halo_cell::ScheduledRequest {
+        phi_halo_cell::OutputPort::NORTH => send(grant_tok, to_scheduler_3, phi_halo_cell::ScheduledRequest {
             slot: scheduler_3_slot(ScheduledAddress { family: FamilyId::PHI_Z as u8, x: x, y: (if y >= u16:1 { y - u16:1 } else { y + u16:2 }) }),
             frame: effect.frame,
             ..zero!<phi_halo_cell::ScheduledRequest>()
           }),
-        phi_halo_cell::OutputPort::EAST => send(tok, to_scheduler_3, phi_halo_cell::ScheduledRequest {
+        phi_halo_cell::OutputPort::EAST => send(grant_tok, to_scheduler_3, phi_halo_cell::ScheduledRequest {
             slot: scheduler_3_slot(ScheduledAddress { family: FamilyId::PHI_Z as u8, x: (if x >= u16:2 { x - u16:2 } else { x + u16:1 }), y: y }),
             frame: effect.frame,
             ..zero!<phi_halo_cell::ScheduledRequest>()
           }),
-        phi_halo_cell::OutputPort::WEST => send(tok, to_scheduler_3, phi_halo_cell::ScheduledRequest {
+        phi_halo_cell::OutputPort::WEST => send(grant_tok, to_scheduler_3, phi_halo_cell::ScheduledRequest {
             slot: scheduler_3_slot(ScheduledAddress { family: FamilyId::PHI_Z as u8, x: (if x >= u16:1 { x - u16:1 } else { x + u16:2 }), y: y }),
             frame: effect.frame,
             ..zero!<phi_halo_cell::ScheduledRequest>()
           }),
-        phi_halo_cell::OutputPort::SOUTH => send(tok, to_scheduler_3, phi_halo_cell::ScheduledRequest {
+        phi_halo_cell::OutputPort::SOUTH => send(grant_tok, to_scheduler_3, phi_halo_cell::ScheduledRequest {
             slot: scheduler_3_slot(ScheduledAddress { family: FamilyId::PHI_Z as u8, x: x, y: (if y >= u16:2 { y - u16:2 } else { y + u16:1 }) }),
             frame: effect.frame,
             ..zero!<phi_halo_cell::ScheduledRequest>()
           }),
-        phi_halo_cell::OutputPort::SYNDROME => send(tok, to_scheduler_5, phenom_syndrome_cell::ScheduledRequest {
+        phi_halo_cell::OutputPort::SYNDROME => send(grant_tok, to_scheduler_5, phenom_syndrome_cell::ScheduledRequest {
             slot: scheduler_5_slot(ScheduledAddress { family: FamilyId::SYNDROME_Z as u8, x: x, y: y }),
             frame: effect.frame,
             ..zero!<phenom_syndrome_cell::ScheduledRequest>()
           }),
-        phi_halo_cell::OutputPort::CORRECTION => send(tok, z_decoder_events_out, effect.frame),
-        phi_halo_cell::OutputPort::STATUS => send(tok, z_decoder_events_out, effect.frame),
+        phi_halo_cell::OutputPort::CORRECTION => send(grant_tok, z_decoder_events_out, effect.frame),
+        phi_halo_cell::OutputPort::STATUS => send(grant_tok, z_decoder_events_out, effect.frame),
         }
       },
-        _ => tok,
+        _ => grant_tok,
       }
-    } else { tok };
-    let last = effect_info.2;
-    let _done = send_if(
-      routed_tok, credit_out, last, phi_halo_cell::ScheduledRequest {
+    } else { grant_tok };
+    let last = batch_valid && effect_info.2;
+    let batch_continues = batch_valid && !last;
+    // Never apply a stale grant to a batch admitted in this same
+    // activation: the virtual credit could otherwise bypass back to
+    // SharedService before that batch has made egress_busy visible.
+    let grant_usable = grant_valid && state.active &&
+      !state.lookahead && batch_continues;
+    let fake_credit = grant_usable;
+    let swallow_physical = last && state.credit_debt &&
+      !state.lookahead;
+    let forward_physical = last && !swallow_physical;
+    let forward_credit = fake_credit || forward_physical;
+    let credit_tok = send_if(
+      routed_tok, credit_out, forward_credit, phi_halo_cell::ScheduledRequest {
         credit: u1:1,
         ..zero!<phi_halo_cell::ScheduledRequest>()
       });
-    if last {
-      zero!<SchedulerRouter3State>()
-    } else {
+    let carry_lookahead = last && swallow_physical &&
+      incoming_valid;
+    let release = (last && state.lookahead) ||
+      (last && state.credit_debt && !incoming_valid) ||
+      (grant_valid && !grant_usable);
+    let release_tok = send_if(
+      credit_tok, window_release_out, release, u1:1);
+    let pending_request = state.window_requested && !grant_valid;
+    let window_granted =
+      (state.window_granted || grant_usable) && !release;
+    let credit_debt =
+      (state.credit_debt || fake_credit) && !swallow_physical;
+    let next_active = carry_lookahead || batch_continues;
+    let next_lookahead = if carry_lookahead { u1:1 } else {
+      if batch_continues { state.lookahead } else { u1:0 }
+    };
+    let request = next_active && !next_lookahead &&
+      !window_granted && !credit_debt && !pending_request;
+    let _request_tok = send_if(
+      release_tok, window_request_out, request, u1:1);
+    if carry_lookahead {
+      SchedulerRouter3State {
+        active: u1:1,
+        scheduled: incoming,
+        index: u8:0,
+        window_requested: u1:0,
+        window_granted,
+        credit_debt,
+        lookahead: u1:1,
+      }
+    } else if batch_continues {
       SchedulerRouter3State {
         active: u1:1,
         scheduled,
         index: index + u8:1,
+        window_requested: pending_request || request,
+        window_granted,
+        credit_debt,
+        lookahead: state.lookahead,
+      }
+    } else {
+      SchedulerRouter3State {
+        window_requested: pending_request || request,
+        ..zero!<SchedulerRouter3State>()
       }
     }
   }
 }
 
-// Holds one committed actor-entry batch while routing at most one
-// valid effect per activation. Credit returns only after the final
-// source-order position has been drained.
+// Routes one committed actor-entry batch in source order. A global
+// reservation may admit one lookahead batch while the active batch
+// drains; only the active batch can emit downstream effects.
 struct SchedulerRouter4State {
   active: u1,
   scheduled: phenom_syndrome_cell::ScheduledEffects,
   index: u8,
+  window_requested: u1,
+  window_granted: u1,
+  credit_debt: u1,
+  lookahead: u1,
 }
 
 proc SchedulerRouter4 {
@@ -1512,30 +1789,46 @@ proc SchedulerRouter4 {
   to_scheduler_0: chan<phenom_data_cell::ScheduledRequest> out;
   to_scheduler_1: chan<phenom_data_cell::ScheduledRequest> out;
   to_scheduler_2: chan<phi_halo_cell::ScheduledRequest> out;
+  window_request_out: chan<u1> out;
+  window_grant_in: chan<u1> in;
+  window_release_out: chan<u1> out;
 
   config(
     scheduled_in: chan<phenom_syndrome_cell::ScheduledEffects> in,
     credit_out: chan<phenom_syndrome_cell::ScheduledRequest> out,
     to_scheduler_0: chan<phenom_data_cell::ScheduledRequest> out,
     to_scheduler_1: chan<phenom_data_cell::ScheduledRequest> out,
-    to_scheduler_2: chan<phi_halo_cell::ScheduledRequest> out
+    to_scheduler_2: chan<phi_halo_cell::ScheduledRequest> out,
+    window_request_out: chan<u1> out,
+    window_grant_in: chan<u1> in,
+    window_release_out: chan<u1> out
   ) {
-    (scheduled_in, credit_out, to_scheduler_0, to_scheduler_1, to_scheduler_2)
+    (scheduled_in, credit_out, to_scheduler_0, to_scheduler_1, to_scheduler_2, window_request_out, window_grant_in, window_release_out)
   }
 
   init { zero!<SchedulerRouter4State>() }
 
   next(state: SchedulerRouter4State) {
-    let (tok, incoming) = recv_if(
-      join(), scheduled_in, !state.active,
-      zero!<phenom_syndrome_cell::ScheduledEffects>());
+    let state_effect_info = phenom_syndrome_cell::scheduled_effect(state.scheduled, state.index);
+    let state_last = state.active && state_effect_info.2;
+    let can_receive = !state.active ||
+      (state_last && state.credit_debt && !state.lookahead);
+    let (receive_tok, incoming, incoming_valid) =
+      recv_if_non_blocking(
+        join(), scheduled_in, can_receive,
+        zero!<phenom_syndrome_cell::ScheduledEffects>());
+    let (grant_tok, _grant, grant_valid) =
+      recv_if_non_blocking(
+        receive_tok, window_grant_in,
+        state.window_requested && !state.window_granted, u1:0);
+    let batch_valid = state.active || incoming_valid;
     let scheduled = if state.active {
       state.scheduled
     } else { incoming };
     let index = if state.active { state.index } else { u8:0 };
     let effect_info = phenom_syndrome_cell::scheduled_effect(scheduled, index);
     let effect = effect_info.0;
-    let emit = effect_info.1;
+    let emit = batch_valid && effect_info.1;
     let address = scheduler_4_address(scheduled.slot);
     let routed_tok = if emit {
       match address.family as FamilyId {
@@ -1543,61 +1836,113 @@ proc SchedulerRouter4 {
         let x = address.x;
         let y = address.y;
         match effect.port {
-        phenom_syndrome_cell::OutputPort::NORTH => send(tok, to_scheduler_1, phenom_data_cell::ScheduledRequest {
+        phenom_syndrome_cell::OutputPort::NORTH => send(grant_tok, to_scheduler_1, phenom_data_cell::ScheduledRequest {
             slot: scheduler_1_slot(ScheduledAddress { family: FamilyId::DATA_ODD as u8, x: x, y: (if y >= u16:1 { y - u16:1 } else { y + u16:2 }) }),
             frame: effect.frame,
             ..zero!<phenom_data_cell::ScheduledRequest>()
           }),
-        phenom_syndrome_cell::OutputPort::EAST => send(tok, to_scheduler_0, phenom_data_cell::ScheduledRequest {
+        phenom_syndrome_cell::OutputPort::EAST => send(grant_tok, to_scheduler_0, phenom_data_cell::ScheduledRequest {
             slot: scheduler_0_slot(ScheduledAddress { family: FamilyId::DATA_EVEN as u8, x: (if x >= u16:2 { x - u16:2 } else { x + u16:1 }), y: y }),
             frame: effect.frame,
             ..zero!<phenom_data_cell::ScheduledRequest>()
           }),
-        phenom_syndrome_cell::OutputPort::WEST => send(tok, to_scheduler_0, phenom_data_cell::ScheduledRequest {
+        phenom_syndrome_cell::OutputPort::WEST => send(grant_tok, to_scheduler_0, phenom_data_cell::ScheduledRequest {
             slot: scheduler_0_slot(ScheduledAddress { family: FamilyId::DATA_EVEN as u8, x: x, y: y }),
             frame: effect.frame,
             ..zero!<phenom_data_cell::ScheduledRequest>()
           }),
-        phenom_syndrome_cell::OutputPort::SOUTH => send(tok, to_scheduler_1, phenom_data_cell::ScheduledRequest {
+        phenom_syndrome_cell::OutputPort::SOUTH => send(grant_tok, to_scheduler_1, phenom_data_cell::ScheduledRequest {
             slot: scheduler_1_slot(ScheduledAddress { family: FamilyId::DATA_ODD as u8, x: x, y: y }),
             frame: effect.frame,
             ..zero!<phenom_data_cell::ScheduledRequest>()
           }),
-        phenom_syndrome_cell::OutputPort::PHI => send(tok, to_scheduler_2, phi_halo_cell::ScheduledRequest {
+        phenom_syndrome_cell::OutputPort::PHI => send(grant_tok, to_scheduler_2, phi_halo_cell::ScheduledRequest {
             slot: scheduler_2_slot(ScheduledAddress { family: FamilyId::PHI_X as u8, x: x, y: y }),
             frame: effect.frame,
             ..zero!<phi_halo_cell::ScheduledRequest>()
           }),
         }
       },
-        _ => tok,
+        _ => grant_tok,
       }
-    } else { tok };
-    let last = effect_info.2;
-    let _done = send_if(
-      routed_tok, credit_out, last, phenom_syndrome_cell::ScheduledRequest {
+    } else { grant_tok };
+    let last = batch_valid && effect_info.2;
+    let batch_continues = batch_valid && !last;
+    // Never apply a stale grant to a batch admitted in this same
+    // activation: the virtual credit could otherwise bypass back to
+    // SharedService before that batch has made egress_busy visible.
+    let grant_usable = grant_valid && state.active &&
+      !state.lookahead && batch_continues;
+    let fake_credit = grant_usable;
+    let swallow_physical = last && state.credit_debt &&
+      !state.lookahead;
+    let forward_physical = last && !swallow_physical;
+    let forward_credit = fake_credit || forward_physical;
+    let credit_tok = send_if(
+      routed_tok, credit_out, forward_credit, phenom_syndrome_cell::ScheduledRequest {
         credit: u1:1,
         ..zero!<phenom_syndrome_cell::ScheduledRequest>()
       });
-    if last {
-      zero!<SchedulerRouter4State>()
-    } else {
+    let carry_lookahead = last && swallow_physical &&
+      incoming_valid;
+    let release = (last && state.lookahead) ||
+      (last && state.credit_debt && !incoming_valid) ||
+      (grant_valid && !grant_usable);
+    let release_tok = send_if(
+      credit_tok, window_release_out, release, u1:1);
+    let pending_request = state.window_requested && !grant_valid;
+    let window_granted =
+      (state.window_granted || grant_usable) && !release;
+    let credit_debt =
+      (state.credit_debt || fake_credit) && !swallow_physical;
+    let next_active = carry_lookahead || batch_continues;
+    let next_lookahead = if carry_lookahead { u1:1 } else {
+      if batch_continues { state.lookahead } else { u1:0 }
+    };
+    let request = next_active && !next_lookahead &&
+      !window_granted && !credit_debt && !pending_request;
+    let _request_tok = send_if(
+      release_tok, window_request_out, request, u1:1);
+    if carry_lookahead {
+      SchedulerRouter4State {
+        active: u1:1,
+        scheduled: incoming,
+        index: u8:0,
+        window_requested: u1:0,
+        window_granted,
+        credit_debt,
+        lookahead: u1:1,
+      }
+    } else if batch_continues {
       SchedulerRouter4State {
         active: u1:1,
         scheduled,
         index: index + u8:1,
+        window_requested: pending_request || request,
+        window_granted,
+        credit_debt,
+        lookahead: state.lookahead,
+      }
+    } else {
+      SchedulerRouter4State {
+        window_requested: pending_request || request,
+        ..zero!<SchedulerRouter4State>()
       }
     }
   }
 }
 
-// Holds one committed actor-entry batch while routing at most one
-// valid effect per activation. Credit returns only after the final
-// source-order position has been drained.
+// Routes one committed actor-entry batch in source order. A global
+// reservation may admit one lookahead batch while the active batch
+// drains; only the active batch can emit downstream effects.
 struct SchedulerRouter5State {
   active: u1,
   scheduled: phenom_syndrome_cell::ScheduledEffects,
   index: u8,
+  window_requested: u1,
+  window_granted: u1,
+  credit_debt: u1,
+  lookahead: u1,
 }
 
 proc SchedulerRouter5 {
@@ -1606,30 +1951,46 @@ proc SchedulerRouter5 {
   to_scheduler_0: chan<phenom_data_cell::ScheduledRequest> out;
   to_scheduler_1: chan<phenom_data_cell::ScheduledRequest> out;
   to_scheduler_3: chan<phi_halo_cell::ScheduledRequest> out;
+  window_request_out: chan<u1> out;
+  window_grant_in: chan<u1> in;
+  window_release_out: chan<u1> out;
 
   config(
     scheduled_in: chan<phenom_syndrome_cell::ScheduledEffects> in,
     credit_out: chan<phenom_syndrome_cell::ScheduledRequest> out,
     to_scheduler_0: chan<phenom_data_cell::ScheduledRequest> out,
     to_scheduler_1: chan<phenom_data_cell::ScheduledRequest> out,
-    to_scheduler_3: chan<phi_halo_cell::ScheduledRequest> out
+    to_scheduler_3: chan<phi_halo_cell::ScheduledRequest> out,
+    window_request_out: chan<u1> out,
+    window_grant_in: chan<u1> in,
+    window_release_out: chan<u1> out
   ) {
-    (scheduled_in, credit_out, to_scheduler_0, to_scheduler_1, to_scheduler_3)
+    (scheduled_in, credit_out, to_scheduler_0, to_scheduler_1, to_scheduler_3, window_request_out, window_grant_in, window_release_out)
   }
 
   init { zero!<SchedulerRouter5State>() }
 
   next(state: SchedulerRouter5State) {
-    let (tok, incoming) = recv_if(
-      join(), scheduled_in, !state.active,
-      zero!<phenom_syndrome_cell::ScheduledEffects>());
+    let state_effect_info = phenom_syndrome_cell::scheduled_effect(state.scheduled, state.index);
+    let state_last = state.active && state_effect_info.2;
+    let can_receive = !state.active ||
+      (state_last && state.credit_debt && !state.lookahead);
+    let (receive_tok, incoming, incoming_valid) =
+      recv_if_non_blocking(
+        join(), scheduled_in, can_receive,
+        zero!<phenom_syndrome_cell::ScheduledEffects>());
+    let (grant_tok, _grant, grant_valid) =
+      recv_if_non_blocking(
+        receive_tok, window_grant_in,
+        state.window_requested && !state.window_granted, u1:0);
+    let batch_valid = state.active || incoming_valid;
     let scheduled = if state.active {
       state.scheduled
     } else { incoming };
     let index = if state.active { state.index } else { u8:0 };
     let effect_info = phenom_syndrome_cell::scheduled_effect(scheduled, index);
     let effect = effect_info.0;
-    let emit = effect_info.1;
+    let emit = batch_valid && effect_info.1;
     let address = scheduler_5_address(scheduled.slot);
     let routed_tok = if emit {
       match address.family as FamilyId {
@@ -1637,49 +1998,97 @@ proc SchedulerRouter5 {
         let x = address.x;
         let y = address.y;
         match effect.port {
-        phenom_syndrome_cell::OutputPort::NORTH => send(tok, to_scheduler_0, phenom_data_cell::ScheduledRequest {
+        phenom_syndrome_cell::OutputPort::NORTH => send(grant_tok, to_scheduler_0, phenom_data_cell::ScheduledRequest {
             slot: scheduler_0_slot(ScheduledAddress { family: FamilyId::DATA_EVEN as u8, x: (if x >= u16:2 { x - u16:2 } else { x + u16:1 }), y: y }),
             frame: effect.frame,
             ..zero!<phenom_data_cell::ScheduledRequest>()
           }),
-        phenom_syndrome_cell::OutputPort::EAST => send(tok, to_scheduler_1, phenom_data_cell::ScheduledRequest {
+        phenom_syndrome_cell::OutputPort::EAST => send(grant_tok, to_scheduler_1, phenom_data_cell::ScheduledRequest {
             slot: scheduler_1_slot(ScheduledAddress { family: FamilyId::DATA_ODD as u8, x: (if x >= u16:2 { x - u16:2 } else { x + u16:1 }), y: y }),
             frame: effect.frame,
             ..zero!<phenom_data_cell::ScheduledRequest>()
           }),
-        phenom_syndrome_cell::OutputPort::WEST => send(tok, to_scheduler_1, phenom_data_cell::ScheduledRequest {
+        phenom_syndrome_cell::OutputPort::WEST => send(grant_tok, to_scheduler_1, phenom_data_cell::ScheduledRequest {
             slot: scheduler_1_slot(ScheduledAddress { family: FamilyId::DATA_ODD as u8, x: x, y: y }),
             frame: effect.frame,
             ..zero!<phenom_data_cell::ScheduledRequest>()
           }),
-        phenom_syndrome_cell::OutputPort::SOUTH => send(tok, to_scheduler_0, phenom_data_cell::ScheduledRequest {
+        phenom_syndrome_cell::OutputPort::SOUTH => send(grant_tok, to_scheduler_0, phenom_data_cell::ScheduledRequest {
             slot: scheduler_0_slot(ScheduledAddress { family: FamilyId::DATA_EVEN as u8, x: (if x >= u16:2 { x - u16:2 } else { x + u16:1 }), y: (if y >= u16:2 { y - u16:2 } else { y + u16:1 }) }),
             frame: effect.frame,
             ..zero!<phenom_data_cell::ScheduledRequest>()
           }),
-        phenom_syndrome_cell::OutputPort::PHI => send(tok, to_scheduler_3, phi_halo_cell::ScheduledRequest {
+        phenom_syndrome_cell::OutputPort::PHI => send(grant_tok, to_scheduler_3, phi_halo_cell::ScheduledRequest {
             slot: scheduler_3_slot(ScheduledAddress { family: FamilyId::PHI_Z as u8, x: x, y: y }),
             frame: effect.frame,
             ..zero!<phi_halo_cell::ScheduledRequest>()
           }),
         }
       },
-        _ => tok,
+        _ => grant_tok,
       }
-    } else { tok };
-    let last = effect_info.2;
-    let _done = send_if(
-      routed_tok, credit_out, last, phenom_syndrome_cell::ScheduledRequest {
+    } else { grant_tok };
+    let last = batch_valid && effect_info.2;
+    let batch_continues = batch_valid && !last;
+    // Never apply a stale grant to a batch admitted in this same
+    // activation: the virtual credit could otherwise bypass back to
+    // SharedService before that batch has made egress_busy visible.
+    let grant_usable = grant_valid && state.active &&
+      !state.lookahead && batch_continues;
+    let fake_credit = grant_usable;
+    let swallow_physical = last && state.credit_debt &&
+      !state.lookahead;
+    let forward_physical = last && !swallow_physical;
+    let forward_credit = fake_credit || forward_physical;
+    let credit_tok = send_if(
+      routed_tok, credit_out, forward_credit, phenom_syndrome_cell::ScheduledRequest {
         credit: u1:1,
         ..zero!<phenom_syndrome_cell::ScheduledRequest>()
       });
-    if last {
-      zero!<SchedulerRouter5State>()
-    } else {
+    let carry_lookahead = last && swallow_physical &&
+      incoming_valid;
+    let release = (last && state.lookahead) ||
+      (last && state.credit_debt && !incoming_valid) ||
+      (grant_valid && !grant_usable);
+    let release_tok = send_if(
+      credit_tok, window_release_out, release, u1:1);
+    let pending_request = state.window_requested && !grant_valid;
+    let window_granted =
+      (state.window_granted || grant_usable) && !release;
+    let credit_debt =
+      (state.credit_debt || fake_credit) && !swallow_physical;
+    let next_active = carry_lookahead || batch_continues;
+    let next_lookahead = if carry_lookahead { u1:1 } else {
+      if batch_continues { state.lookahead } else { u1:0 }
+    };
+    let request = next_active && !next_lookahead &&
+      !window_granted && !credit_debt && !pending_request;
+    let _request_tok = send_if(
+      release_tok, window_request_out, request, u1:1);
+    if carry_lookahead {
+      SchedulerRouter5State {
+        active: u1:1,
+        scheduled: incoming,
+        index: u8:0,
+        window_requested: u1:0,
+        window_granted,
+        credit_debt,
+        lookahead: u1:1,
+      }
+    } else if batch_continues {
       SchedulerRouter5State {
         active: u1:1,
         scheduled,
         index: index + u8:1,
+        window_requested: pending_request || request,
+        window_granted,
+        credit_debt,
+        lookahead: state.lookahead,
+      }
+    } else {
+      SchedulerRouter5State {
+        window_requested: pending_request || request,
+        ..zero!<SchedulerRouter5State>()
       }
     }
   }
@@ -1740,6 +2149,12 @@ proc SchedulerGrid {
     x_decoder_events_out: chan<axis::Frame> out,
     z_decoder_events_out: chan<axis::Frame> out
   ) {
+    let (effect_window_request_p, effect_window_request_c) =
+      chan<u1, CHANNEL_DEPTH>[u32:6]("effect_window_request");
+    let (effect_window_grant_p, effect_window_grant_c) =
+      chan<u1, CHANNEL_DEPTH>[u32:6]("effect_window_grant");
+    let (effect_window_release_p, effect_window_release_c) =
+      chan<u1, CHANNEL_DEPTH>[u32:6]("effect_window_release");
     let (external_0_buffer_p, external_0_buffer_c) =
       chan<axis::Frame, CHANNEL_DEPTH>[u32:2]("external_0_buffer");
     let (external_1_buffer_p, external_1_buffer_c) =
@@ -1788,6 +2203,9 @@ proc SchedulerGrid {
     let (scheduler_5_egress_p, scheduler_5_egress_c) =
       chan<phenom_syndrome_cell::ScheduledEffects, CHANNEL_DEPTH>("scheduler_5_egress");
     spawn SchedulerStartup5(scheduler_5_startup_p);
+    spawn effect_window::Arbiter<u32:6>(
+      effect_window_request_c, effect_window_grant_p,
+      effect_window_release_c);
     spawn phenom_data_cell::SharedService<
       u32:9, u32:4, u32:9, u32:0>(
       scheduler_0_requests_c, scheduler_0_startup_c,
@@ -1840,32 +2258,50 @@ proc SchedulerGrid {
       scheduler_0_egress_c, scheduler_0_requests_p[u32:3],
       scheduler_4_requests_p[u32:0],
       scheduler_5_requests_p[u32:0],
-      external_0_buffer_p[u32:0]);
+      external_0_buffer_p[u32:0],
+      effect_window_request_p[u32:0],
+      effect_window_grant_c[u32:0],
+      effect_window_release_p[u32:0]);
     spawn SchedulerRouter1(
       scheduler_1_egress_c, scheduler_1_requests_p[u32:3],
       scheduler_4_requests_p[u32:1],
       scheduler_5_requests_p[u32:1],
-      external_0_buffer_p[u32:1]);
+      external_0_buffer_p[u32:1],
+      effect_window_request_p[u32:1],
+      effect_window_grant_c[u32:1],
+      effect_window_release_p[u32:1]);
     spawn SchedulerRouter2(
       scheduler_2_egress_c, scheduler_2_requests_p[u32:2],
       scheduler_2_requests_p[u32:0],
       scheduler_4_requests_p[u32:2],
-      external_1_buffer_p);
+      external_1_buffer_p,
+      effect_window_request_p[u32:2],
+      effect_window_grant_c[u32:2],
+      effect_window_release_p[u32:2]);
     spawn SchedulerRouter3(
       scheduler_3_egress_c, scheduler_3_requests_p[u32:2],
       scheduler_3_requests_p[u32:0],
       scheduler_5_requests_p[u32:2],
-      external_2_buffer_p);
+      external_2_buffer_p,
+      effect_window_request_p[u32:3],
+      effect_window_grant_c[u32:3],
+      effect_window_release_p[u32:3]);
     spawn SchedulerRouter4(
       scheduler_4_egress_c, scheduler_4_requests_p[u32:4],
       scheduler_0_requests_p[u32:0],
       scheduler_1_requests_p[u32:0],
-      scheduler_2_requests_p[u32:1]);
+      scheduler_2_requests_p[u32:1],
+      effect_window_request_p[u32:4],
+      effect_window_grant_c[u32:4],
+      effect_window_release_p[u32:4]);
     spawn SchedulerRouter5(
       scheduler_5_egress_c, scheduler_5_requests_p[u32:4],
       scheduler_0_requests_p[u32:1],
       scheduler_1_requests_p[u32:1],
-      scheduler_3_requests_p[u32:1]);
+      scheduler_3_requests_p[u32:1],
+      effect_window_request_p[u32:5],
+      effect_window_grant_c[u32:5],
+      effect_window_release_p[u32:5]);
     spawn ControlDispatcher(control_router_in, scheduler_0_requests_p[u32:2], scheduler_1_requests_p[u32:2], scheduler_4_requests_p[u32:3], scheduler_5_requests_p[u32:3]);
     spawn FrameArrayMux<u32:2>(external_0_buffer_c, data_measurements_out);
     spawn FrameRelay(external_1_buffer_c, x_decoder_events_out);

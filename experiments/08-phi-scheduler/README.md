@@ -188,6 +188,25 @@ design. A safe retry needs end-to-end destination reservations or another
 provably deadlock-breaking routing policy; merely deepening the bounded FIFOs
 does not solve the general problem.
 
+A later, topology-wide reservation makes a deliberately narrower version of
+that overlap safe. One retained round-robin arbiter grants a single lookahead
+batch to one scheduler at a time. The winner borrows a credit while its current
+batch drains, repays the loan with that batch's physical credit, and keeps the
+token until its ordered lookahead drains. Persistent requests and a stable
+owner provide the contention tie-break; there is no tentative acquisition or
+rollback loop. Since the lookahead remains buffered until the older batch is
+complete, every scheduler still exposes at most one active routing dependency.
+
+The integrated router implementation completes the paper-parameter profile in
+6,398 clocks, or 266.58 clocks per decoder step, with all 63 X and 64 Z
+corrections. At 200 MHz that is about 750 thousand steps per second, 5.8%
+faster than the 6,792-clock compact-effects baseline. Its XC7 topology-core
+map reports 57,040 estimated logic cells, 64,061 flip-flops, 70,566 LUTs, and
+48 DSPs: a 0.8% cell and 0.9% LUT premium, 228 fewer flip-flops, and no added
+DSPs. A separate adapter variant was rejected because its extra wide elastic
+state both slowed the profile to 6,999 clocks and raised the map to 59,807
+cells.
+
 ## Running the experiment
 
 The fast local checks are:

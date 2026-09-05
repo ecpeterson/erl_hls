@@ -28,6 +28,7 @@ ssh -o BatchMode=yes "$remote_host" mkdir -p "$remote_stage"
 rsync -a -e "ssh -o BatchMode=yes" \
     "$local_stage/axis.x" \
     "$local_stage/bram.x" \
+    "$local_stage/effect_window.x" \
     "$local_stage/mailbox.x" \
     "$local_stage/hls_spatial_router.x" \
     "$local_stage/phi_halo_cell.x" \

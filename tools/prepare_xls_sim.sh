@@ -173,6 +173,7 @@ erl \
 
 cp "$project_root/priv/xls/lib/axis.x" "$stage/axis.x"
 cp "$project_root/priv/xls/lib/bram.x" "$stage/bram.x"
+cp "$project_root/priv/xls/lib/effect_window.x" "$stage/effect_window.x"
 cp "$project_root/priv/xls/lib/mailbox.x" "$stage/mailbox.x"
 cp "$project_root/src/examples/regsvc/regsvc_core_adapter.v" \
     "$stage/regsvc_core_adapter.v"

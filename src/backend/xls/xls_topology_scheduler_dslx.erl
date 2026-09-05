@@ -253,6 +253,7 @@ preamble(Spec = #{families := Families}) ->
         "// maps its slot to a narrow family and coordinate address, then\n",
         "// drains the effects in source order.\n\n",
         "import axis;\n",
+        "import effect_window;\n",
         case maps:get(ingresses, Spec) of
             [] -> [];
             [_] -> "import hls_spatial_router;\n"
@@ -642,20 +643,30 @@ router_proc(Spec, Scheduler = #{
         [router_destination_argument(Destination)
             || Destination <- Destinations] ++
         [router_external_argument(Spec, ExternalId)
-            || ExternalId <- ExternalIds],
+            || ExternalId <- ExternalIds] ++
+        [
+            "window_request_out: chan<u1> out",
+            "window_grant_in: chan<u1> in",
+            "window_release_out: chan<u1> out"
+        ],
     Names = ["scheduled_in", "credit_out"] ++
         [router_destination_name(maps:get(index, Destination))
             || Destination <- Destinations] ++
         [external_output_name(Spec, ExternalId)
-            || ExternalId <- ExternalIds],
+            || ExternalId <- ExternalIds] ++
+        ["window_request_out", "window_grant_in", "window_release_out"],
     [
-        "// Holds one committed actor-entry batch while routing at most one\n",
-        "// valid effect per activation. Credit returns only after the final\n",
-        "// source-order position has been drained.\n",
+        "// Routes one committed actor-entry batch in source order. A global\n",
+        "// reservation may admit one lookahead batch while the active batch\n",
+        "// drains; only the active batch can emit downstream effects.\n",
         "struct ", StateName, " {\n",
         "  active: u1,\n",
         "  scheduled: ", Module, "::ScheduledEffects,\n",
         "  index: u8,\n",
+        "  window_requested: u1,\n",
+        "  window_granted: u1,\n",
+        "  credit_debt: u1,\n",
+        "  lookahead: u1,\n",
         "}\n\n",
         "proc ", router_name(Scheduler), " {\n",
         [["  ", Member, ";\n"] || Member <- Members],
@@ -664,9 +675,20 @@ router_proc(Spec, Scheduler = #{
         "    (", join_with(", ", Names), ")\n  }\n\n",
         "  init { zero!<", StateName, ">() }\n\n",
         "  next(state: ", StateName, ") {\n",
-        "    let (tok, incoming) = recv_if(\n",
-        "      join(), scheduled_in, !state.active,\n",
-        "      zero!<", Module, "::ScheduledEffects>());\n",
+        "    let state_effect_info = ", Module,
+        "::scheduled_effect(state.scheduled, state.index);\n",
+        "    let state_last = state.active && state_effect_info.2;\n",
+        "    let can_receive = !state.active ||\n",
+        "      (state_last && state.credit_debt && !state.lookahead);\n",
+        "    let (receive_tok, incoming, incoming_valid) =\n",
+        "      recv_if_non_blocking(\n",
+        "        join(), scheduled_in, can_receive,\n",
+        "        zero!<", Module, "::ScheduledEffects>());\n",
+        "    let (grant_tok, _grant, grant_valid) =\n",
+        "      recv_if_non_blocking(\n",
+        "        receive_tok, window_grant_in,\n",
+        "        state.window_requested && !state.window_granted, u1:0);\n",
+        "    let batch_valid = state.active || incoming_valid;\n",
         "    let scheduled = if state.active {\n",
         "      state.scheduled\n",
         "    } else { incoming };\n",
@@ -674,28 +696,76 @@ router_proc(Spec, Scheduler = #{
         "    let effect_info = ", Module,
         "::scheduled_effect(scheduled, index);\n",
         "    let effect = effect_info.0;\n",
-        "    let emit = effect_info.1;\n",
+        "    let emit = batch_valid && effect_info.1;\n",
         "    let address = ", Stem, "_address(scheduled.slot);\n",
         "    let routed_tok = if emit {\n",
         "      match address.family as FamilyId {\n",
         [router_family_arm(Spec, Family) || Family <- Families],
-        "        _ => tok,\n",
+        "        _ => grant_tok,\n",
         "      }\n",
-        "    } else { tok };\n",
-        "    let last = effect_info.2;\n",
-        "    let _done = send_if(\n",
-        "      routed_tok, credit_out, last, ", Module,
+        "    } else { grant_tok };\n",
+        "    let last = batch_valid && effect_info.2;\n",
+        "    let batch_continues = batch_valid && !last;\n",
+        "    // Never apply a stale grant to a batch admitted in this same\n",
+        "    // activation: the virtual credit could otherwise bypass back to\n",
+        "    // SharedService before that batch has made egress_busy visible.\n",
+        "    let grant_usable = grant_valid && state.active &&\n",
+        "      !state.lookahead && batch_continues;\n",
+        "    let fake_credit = grant_usable;\n",
+        "    let swallow_physical = last && state.credit_debt &&\n",
+        "      !state.lookahead;\n",
+        "    let forward_physical = last && !swallow_physical;\n",
+        "    let forward_credit = fake_credit || forward_physical;\n",
+        "    let credit_tok = send_if(\n",
+        "      routed_tok, credit_out, forward_credit, ", Module,
         "::ScheduledRequest {\n",
         "        credit: u1:1,\n",
         "        ..zero!<", Module, "::ScheduledRequest>()\n",
         "      });\n",
-        "    if last {\n",
-        "      zero!<", StateName, ">()\n",
-        "    } else {\n",
+        "    let carry_lookahead = last && swallow_physical &&\n",
+        "      incoming_valid;\n",
+        "    let release = (last && state.lookahead) ||\n",
+        "      (last && state.credit_debt && !incoming_valid) ||\n",
+        "      (grant_valid && !grant_usable);\n",
+        "    let release_tok = send_if(\n",
+        "      credit_tok, window_release_out, release, u1:1);\n",
+        "    let pending_request = state.window_requested && !grant_valid;\n",
+        "    let window_granted =\n",
+        "      (state.window_granted || grant_usable) && !release;\n",
+        "    let credit_debt =\n",
+        "      (state.credit_debt || fake_credit) && !swallow_physical;\n",
+        "    let next_active = carry_lookahead || batch_continues;\n",
+        "    let next_lookahead = if carry_lookahead { u1:1 } else {\n",
+        "      if batch_continues { state.lookahead } else { u1:0 }\n",
+        "    };\n",
+        "    let request = next_active && !next_lookahead &&\n",
+        "      !window_granted && !credit_debt && !pending_request;\n",
+        "    let _request_tok = send_if(\n",
+        "      release_tok, window_request_out, request, u1:1);\n",
+        "    if carry_lookahead {\n",
+        "      ", StateName, " {\n",
+        "        active: u1:1,\n",
+        "        scheduled: incoming,\n",
+        "        index: u8:0,\n",
+        "        window_requested: u1:0,\n",
+        "        window_granted,\n",
+        "        credit_debt,\n",
+        "        lookahead: u1:1,\n",
+        "      }\n",
+        "    } else if batch_continues {\n",
         "      ", StateName, " {\n",
         "        active: u1:1,\n",
         "        scheduled,\n",
         "        index: index + u8:1,\n",
+        "        window_requested: pending_request || request,\n",
+        "        window_granted,\n",
+        "        credit_debt,\n",
+        "        lookahead: state.lookahead,\n",
+        "      }\n",
+        "    } else {\n",
+        "      ", StateName, " {\n",
+        "        window_requested: pending_request || request,\n",
+        "        ..zero!<", StateName, ">()\n",
         "      }\n",
         "    }\n",
         "  }\n",
@@ -745,7 +815,7 @@ router_route_arm(Spec, Module, Port, #{
 }) ->
     [
         "        ", Module, "::OutputPort::", uppercase(Port), " => ",
-        route_send(Spec, Recipient, "tok"),
+        route_send(Spec, Recipient, "grant_tok"),
         ",\n"
     ];
 router_route_arm(Spec, Module, Port, #{
@@ -754,8 +824,10 @@ router_route_arm(Spec, Module, Port, #{
 }) ->
     [
         "        ", Module, "::OutputPort::", uppercase(Port), " => {\n",
-        "          let left_tok = ", route_send(Spec, Left, "tok"), ";\n",
-        "          let right_tok = ", route_send(Spec, Right, "tok"), ";\n",
+        "          let left_tok = ", route_send(Spec, Left, "grant_tok"),
+        ";\n",
+        "          let right_tok = ", route_send(Spec, Right, "grant_tok"),
+        ";\n",
         "          join(left_tok, right_tok)\n",
         "        },\n"
     ].
@@ -863,8 +935,10 @@ grid_proc(Spec = #{
     [
         "proc ", grid_name(Spec), " {\n",
         config_signature(Arguments, 2),
+        effect_window_channels(Schedulers),
         [external_channel(External) || External <- Externals],
         [scheduler_channels(Scheduler) || Scheduler <- Schedulers],
+        effect_window_spawn(Schedulers),
         [scheduler_spawn(Spec, Scheduler) || Scheduler <- Schedulers],
         [router_spawn(Spec, Scheduler) || Scheduler <- Schedulers],
         control_spawn(Spec),
@@ -874,6 +948,28 @@ grid_proc(Spec = #{
         "  init { () }\n",
         "  next(state: ()) { state }\n",
         "}\n\n"
+    ].
+
+effect_window_channels(Schedulers) ->
+    Count = integer_to_list(length(Schedulers)),
+    [
+        "    let (effect_window_request_p, effect_window_request_c) =\n",
+        "      chan<u1, CHANNEL_DEPTH>[u32:", Count,
+        "](\"effect_window_request\");\n",
+        "    let (effect_window_grant_p, effect_window_grant_c) =\n",
+        "      chan<u1, CHANNEL_DEPTH>[u32:", Count,
+        "](\"effect_window_grant\");\n",
+        "    let (effect_window_release_p, effect_window_release_c) =\n",
+        "      chan<u1, CHANNEL_DEPTH>[u32:", Count,
+        "](\"effect_window_release\");\n"
+    ].
+
+effect_window_spawn(Schedulers) ->
+    [
+        "    spawn effect_window::Arbiter<u32:",
+        integer_to_list(length(Schedulers)), ">(\n",
+        "      effect_window_request_c, effect_window_grant_p,\n",
+        "      effect_window_release_c);\n"
     ].
 
 external_channel(External) ->
@@ -983,6 +1079,11 @@ router_spawn(Spec, Scheduler = #{
         ],
         [[",\n      ", external_buffer_producer(Spec, ExternalId, Source)]
             || ExternalId <- ExternalIds],
+        ",\n      effect_window_request_p[u32:",
+        integer_to_list(Source), "],\n",
+        "      effect_window_grant_c[u32:", integer_to_list(Source), "],\n",
+        "      effect_window_release_p[u32:",
+        integer_to_list(Source), "]",
         ");\n"
     ].
 
