@@ -920,7 +920,15 @@ state_machine_entry_actions_use_one_source_ordered_egress_test() ->
         )),
         ?assertNotEqual(nomatch, binary:match(
             XLS,
-            <<"older_dispatch: SharedDispatch">>
+            <<"pub proc SharedExecutor">>
+        )),
+        ?assertNotEqual(nomatch, binary:match(
+            XLS,
+            <<"in_flight: u1[ACTOR_COUNT]">>
+        )),
+        ?assertNotEqual(nomatch, binary:match(
+            XLS,
+            <<"completed: SharedExecutorResult">>
         )),
         ?assertNotEqual(nomatch, binary:match(
             XLS,
@@ -933,7 +941,7 @@ state_machine_entry_actions_use_one_source_ordered_egress_test() ->
         ?assertEqual(nomatch, binary:match(XLS, <<"SharedPhase::COLLECT">>)),
         ?assertNotEqual(nomatch, binary:match(
             XLS,
-            <<"let resolved = resolve_entry(\n">>
+            <<"let dispatched = shared_machine_dispatch(\n">>
         )),
         ?assertNotEqual(nomatch, binary:match(
             XLS,
@@ -942,7 +950,7 @@ state_machine_entry_actions_use_one_source_ordered_egress_test() ->
         )),
         ?assertNotEqual(nomatch, binary:match(
             XLS,
-            <<"(!excluded_valid || slot != excluded_slot)">>
+            <<"let selectable = ready && !in_flight[slot]">>
         )),
         ?assertNotEqual(nomatch, binary:match(
             XLS,
@@ -950,7 +958,7 @@ state_machine_entry_actions_use_one_source_ordered_egress_test() ->
         )),
         ?assertNotEqual(nomatch, binary:match(
             XLS,
-            <<"state.older_valid && resolved.effects_valid">>
+            <<"retire_valid && result.effects_valid">>
         )),
         ?assertNotEqual(nomatch, binary:match(
             XLS,

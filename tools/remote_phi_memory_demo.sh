@@ -8,10 +8,21 @@ stdlib="$xls_root/xls/dslx/stdlib"
 reuse_rtl=${ERL_HLS_PHI_DEMO_REUSE_RTL:-0}
 compile_only=${ERL_HLS_PHI_DEMO_COMPILE_ONLY:-0}
 startup_timeout=${ERL_HLS_SIM_STARTUP_TIMEOUT:-120}
+initiation_interval=${ERL_HLS_PHI_SCHEDULER_II:-1}
 cpu_witness="$stage/phi_memory_cpu_witness.term"
+
+if [[ $(uname -s) == Darwin ]]; then
+    time_arguments=(-p)
+else
+    time_arguments=(-v)
+fi
 
 if [[ ! "$startup_timeout" =~ ^[1-9][0-9]*$ ]]; then
     echo "ERL_HLS_SIM_STARTUP_TIMEOUT must be a positive integer" >&2
+    exit 1
+fi
+if [[ ! "$initiation_interval" =~ ^[1-9][0-9]*$ ]]; then
+    echo "ERL_HLS_PHI_SCHEDULER_II must be a positive integer" >&2
     exit 1
 fi
 
@@ -26,7 +37,8 @@ timed_output() {
     local label=$1
     local output=$2
     shift 2
-    /usr/bin/time -v -o "phi_memory_gateway-${label}.time" \
+    /usr/bin/time "${time_arguments[@]}" \
+        -o "phi_memory_gateway-${label}.time" \
         "$@" > "$output"
 }
 
@@ -46,7 +58,7 @@ if [[ "$reuse_rtl" != 1 ]]; then
     timed_output codegen phi_memory_gateway.v \
         "$xls_root/codegen_main" \
         --pipeline_stages=2 \
-        --worst_case_throughput=2 \
+        --worst_case_throughput="$initiation_interval" \
         --delay_model=unit \
         --flop_inputs=false \
         --flop_outputs=true \
@@ -61,9 +73,9 @@ elif [[ ! -f phi_memory_gateway.v ]]; then
     exit 1
 fi
 
-# The scheduler core is deliberately II=2 to match its one-cycle RAM reads.
-# Serialize its RoutedFrame output in a separate II=1 compilation unit so the
-# host stream can accept one beat on every clock.
+# Actor execution is decoupled from the mailbox manager, allowing the
+# scheduler core to use II=1 while preserving one-cycle RAM reads. Serialize
+# its RoutedFrame output in a separate II=1 compilation unit as before.
 timed_output host-tx-ir hls_fabric_host_tx.ir \
     "$xls_root/ir_converter_main" \
     --warnings_as_errors=false \
@@ -167,7 +179,7 @@ if [[ "$compile_only" == 1 ]]; then
 fi
 
 iverilog-vpi xls_sim_bridge.c
-/usr/bin/time -v -o phi_memory_gateway-iverilog.time \
+/usr/bin/time "${time_arguments[@]}" -o phi_memory_gateway-iverilog.time \
     iverilog \
     -g2012 \
     -s phi_memory_bridge_tb \
@@ -254,7 +266,7 @@ erlc -pa "$beam_dir" -o "$beam_dir" \
 erlc -pa "$beam_dir" -o "$beam_dir" \
     "$stage/test_src/phi_memory_bridge_tests.erl"
 
-/usr/bin/time -v -o phi_memory_gateway-sim.time \
+/usr/bin/time "${time_arguments[@]}" -o phi_memory_gateway-sim.time \
     env ERL_HLS_PHI_SIM_DIR="$sim_dir" \
     ERL_HLS_PHI_DEMO=d3 \
     ERL_HLS_PHI_CPU_WITNESS="$cpu_witness" \
@@ -271,7 +283,13 @@ sim_pid=
 {
     wc -c phi_memory_gateway.x phi_memory_gateway.v hls_fabric_host_tx.v
     wc -l phi_memory_gateway.x phi_memory_gateway.v hls_fabric_host_tx.v
-    sha256sum phi_memory_gateway.x phi_memory_gateway.v hls_fabric_host_tx.v
+    if command -v sha256sum >/dev/null 2>&1; then
+        sha256sum phi_memory_gateway.x phi_memory_gateway.v \
+            hls_fabric_host_tx.v
+    else
+        shasum -a 256 phi_memory_gateway.x phi_memory_gateway.v \
+            hls_fabric_host_tx.v
+    fi
     for report in phi_memory_gateway-*.time; do
         echo
         echo "[$report]"
