@@ -143,9 +143,9 @@ generated_multi_family_topology_retains_compact_structure_test() ->
     ?assertEqual(6, count(Generated, <<"spawn SchedulerRouter">>)),
     ?assertEqual(6, count(Generated, <<"::SharedService<">>)),
     ?assertEqual(30, count(Generated, <<"::ScheduledEffects">>)),
-    ?assertEqual(6, count(Generated, <<"scheduled.effects.values[">>)),
+    ?assertEqual(6, count(Generated, <<"::scheduled_effect(">>)),
     ?assertEqual(6, count(Generated, <<
-        "let last = index + u8:1 >= scheduled.effects.count"
+        "let last = effect_info.2"
     >>)),
     ?assertEqual(6, count(Generated, <<
         "routed_tok, credit_out, last"

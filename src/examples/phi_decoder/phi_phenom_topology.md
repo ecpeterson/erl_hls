@@ -1445,3 +1445,31 @@ A future multi-batch design needs credits backed by end-to-end destination
 reservations, or a routing discipline which provably breaks these wait cycles.
 Until then the one-completed-batch rule remains part of the shared scheduler's
 deadlock discipline rather than merely a throughput knob.
+
+### Compact scheduled effects
+
+The shared executor previously carried every entry action as a complete
+`Egress`: an eight-bit output port and a 128-bit AXI frame, repeated to the
+maximum action count. Most of those bits are static. For a given phase and
+action index, the compiler already knows the output port, message selector,
+and payload width. `EntryEffects` now carries the entered phase, the runtime
+predicate for each action, and one packed vector containing only the actual
+message payloads. The egress router reconstructs each complete frame as it
+serializes the batch. This changes neither action order nor the existing
+one-batch progress rule.
+
+For `phi_halo_cell`, the effect record shrinks from 693 to 397 bits and the
+complete executor result from 1,294 to 998 bits. The paper-parameter profile is
+cycle-identical at 6,792 measured clocks, or 283 clocks per decoder step. A
+fresh pair of out-of-context XC7 maps of that profile topology reports the
+following controlled comparison:
+
+| effect representation | estimated logic cells | flip-flops | LUT1-LUT6 | `DSP48E1` |
+| --- | ---: | ---: | ---: | ---: |
+| complete `Egress` array | 58,084 | 66,701 | 70,502 | 48 |
+| packed dynamic payloads | 56,590 | 64,289 | 69,924 | 48 |
+
+The compact form therefore removes 2,412 flip-flops (3.6%) and 1,494
+estimated logic cells (2.6%) without changing throughput. The smaller result
+also makes a future, progress-safe multi-batch window less expensive, but it
+does not itself supply the destination reservations that such a window needs.

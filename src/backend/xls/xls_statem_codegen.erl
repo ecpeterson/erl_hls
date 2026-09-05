@@ -115,12 +115,15 @@ machine_declarations(#{
     capacity := Capacity,
     output_names := OutputNames,
     max_entry_effects := MaxEntryEffects,
+    message_words := MessageWords,
+    entries := Entries,
     data_name := DataName,
     data_width := DataWidth
 }) ->
     DataStruct = record_struct_name(DataName),
     MachineBits = shared_machine_width(DataWidth),
     EffectCapacity = max(1, MaxEntryEffects),
+    EffectPayloadBits = entry_effect_payload_bits(Entries, MessageWords),
     [
         "pub enum OutputPort : u8 {\n",
         [
@@ -139,10 +142,14 @@ machine_declarations(#{
         integer_to_list(EffectCapacity), ";\n\n",
         "pub const ENTRY_EFFECT_CAPACITY = u32:",
         integer_to_list(EffectCapacity), ";\n\n",
+        "pub const ENTRY_EFFECT_PAYLOAD_BITS = u32:",
+        integer_to_list(EffectPayloadBits), ";\n\n",
+        "// Sorry: this is a hand-rolled tagged union. DSLX cannot yet express\n",
+        "// phase-indexed variants whose fields retain their message types.\n",
         "pub struct EntryEffects {\n",
-        "  count: u8,\n",
+        "  phase: u8,\n",
         "  valid: bool[", integer_to_list(EffectCapacity), "],\n",
-        "  values: Egress[", integer_to_list(EffectCapacity), "],\n",
+        "  payloads: bits[", integer_to_list(EffectPayloadBits), "],\n",
         "}\n\n",
         "type MailboxSlot = mailbox::Slot;\n\n",
         "struct Machine {\n",
@@ -328,24 +335,30 @@ machine_codec(#{data_name := DataName, data_width := DataWidth}) ->
 enter_function(#{
     data_name := DataName,
     max_entry_effects := MaxEntryEffects,
+    message_words := MessageWords,
     entries := Entries
 }) ->
     DataStruct = record_struct_name(DataName),
     EffectCapacity = max(1, MaxEntryEffects),
+    EffectPayloadBits = entry_effect_payload_bits(Entries, MessageWords),
     [
         "fn enter(old_phase: Phase, phase: Phase, data: ", DataStruct,
         ") -> (", DataStruct, ", EntryEffects) {\n",
         "  match phase {\n",
-        [entry_arm(Entry, EffectCapacity) || Entry <- Entries],
+        [entry_arm(Entry, EffectCapacity, EffectPayloadBits, MessageWords)
+            || Entry <- Entries],
         "  }\n",
-        "}\n\n"
+        "}\n\n",
+        entry_effect_count_function(Entries),
+        entry_effect_function(Entries, MessageWords),
+        scheduled_effect_function()
     ].
 
 entry_arm(#{
     phase := Phase,
     data := #{body := DataBody, result := DataResult},
     effects := Effects
-}, EffectCapacity) ->
+}, EffectCapacity, EffectPayloadBits, MessageWords) ->
     Padding = EffectCapacity - length(Effects),
     [
         "    Phase::", uppercase(Phase), " => {\n",
@@ -356,7 +369,7 @@ entry_arm(#{
         [entry_effect_binding(Index, Effect)
             || {Index, Effect} <- lists:enumerate(0, Effects)],
         "      (entered_data, EntryEffects {\n",
-        "        count: u8:", integer_to_list(length(Effects)), ",\n",
+        "        phase: Phase::", uppercase(Phase), " as u8,\n",
         "        valid: [\n",
         [
             ["          effect_", integer_to_list(Index), "_valid,\n"]
@@ -364,28 +377,116 @@ entry_arm(#{
         ],
         lists:duplicate(Padding, "          bool:false,\n"),
         "        ],\n",
-        "        values: [\n",
-        [
-            [
-                "          Egress { port: OutputPort::",
-                uppercase(maps:get(port, Effect)),
-                ", frame: effect_", integer_to_list(Index), " },\n"
-            ]
-            || {Index, Effect} <- lists:enumerate(0, Effects)
-        ],
-        lists:duplicate(Padding, "          zero!<Egress>(),\n"),
-        "        ],\n",
+        "        payloads: ", entry_payload_expression(
+            Effects, EffectPayloadBits, MessageWords), ",\n",
         "      })\n",
         "    },\n"
     ].
+
+entry_effect_count_function(Entries) ->
+    [
+        "fn entry_effect_count(effects: EntryEffects) -> u8 {\n",
+        "  match effects.phase as Phase {\n",
+        [
+            ["    Phase::", uppercase(maps:get(phase, Entry)), " => u8:",
+                integer_to_list(length(maps:get(effects, Entry))), ",\n"]
+            || Entry <- Entries
+        ],
+        "  }\n",
+        "}\n\n"
+    ].
+
+entry_effect_function(Entries, MessageWords) ->
+    [
+        "fn entry_effect(effects: EntryEffects, index: u8) -> Egress {\n",
+        "  match effects.phase as Phase {\n",
+        [entry_effect_phase_arm(Entry, MessageWords) || Entry <- Entries],
+        "  }\n",
+        "}\n\n"
+    ].
+
+entry_effect_phase_arm(#{phase := Phase, effects := []}, _MessageWords) ->
+    ["    Phase::", uppercase(Phase), " => zero!<Egress>(),\n"];
+entry_effect_phase_arm(#{phase := Phase, effects := Effects}, MessageWords) ->
+    [
+        "    Phase::", uppercase(Phase), " => match index {\n",
+        [entry_effect_index_arm(Index, Effect, Offset, MessageWords)
+            || {Index, Effect, Offset} <- effect_offsets(Effects, MessageWords)],
+        "      _ => zero!<Egress>(),\n",
+        "    },\n"
+    ].
+
+entry_effect_index_arm(Index, Effect, Offset, MessageWords) ->
+    Tag = maps:get(tag, Effect),
+    Width = maps:get(Tag, MessageWords) * 32,
+    [
+        "      u8:", integer_to_list(Index), " => Egress {\n",
+        "        port: OutputPort::", uppercase(maps:get(port, Effect)), ",\n",
+        "        frame: axis::pack(Tag::", uppercase(Tag), " as u8,\n",
+        "          effects.payloads[", integer_to_list(Offset), ":",
+        integer_to_list(Offset + Width), "]),\n",
+        "      },\n"
+    ].
+
+scheduled_effect_function() ->
+    """
+    pub fn scheduled_effect(
+        scheduled: ScheduledEffects, index: u8) -> (Egress, u1, u1) {
+      let count = entry_effect_count(scheduled.effects);
+      let emit = index < count && scheduled.effects.valid[index as u32];
+      let last = index + u8:1 >= count;
+      (entry_effect(scheduled.effects, index), emit, last)
+    }
+
+    """.
+
+%% Sorry: these offsets manually implement the physical layout of a tagged
+%% union which should belong to DSLX's type system. The Roadmap records the
+%% intended phase-specific structs and sum-type replacement.
+entry_payload_expression([], EffectPayloadBits, _MessageWords) ->
+    ["zero!<bits[", integer_to_list(EffectPayloadBits), "]>()"];
+entry_payload_expression(Effects, EffectPayloadBits, MessageWords) ->
+    lists:foldl(
+        fun({Index, Effect, Offset}, Acc) ->
+            Width = maps:get(maps:get(tag, Effect), MessageWords) * 32,
+            ["bit_slice_update(\n",
+                "          ", Acc, ",\n",
+                "          u32:", integer_to_list(Offset), ",\n",
+                "          effect_", integer_to_list(Index),
+                ".payload[0:", integer_to_list(Width), "])"]
+        end,
+        ["zero!<bits[", integer_to_list(EffectPayloadBits), "]>()"],
+        effect_offsets(Effects, MessageWords)
+    ).
+
+effect_offsets(Effects, MessageWords) ->
+    {_End, Reversed} = lists:foldl(
+        fun({Index, Effect}, {Offset, Acc}) ->
+            Width = maps:get(maps:get(tag, Effect), MessageWords) * 32,
+            {Offset + Width, [{Index, Effect, Offset} | Acc]}
+        end,
+        {0, []},
+        lists:enumerate(0, Effects)
+    ),
+    lists:reverse(Reversed).
+
+entry_effect_payload_bits(Entries, MessageWords) ->
+    max(1, lists:max([
+        lists:sum([
+            maps:get(maps:get(tag, Effect), MessageWords) * 32
+            || Effect <- maps:get(effects, Entry)
+        ])
+        || Entry <- Entries
+    ])).
 
 entry_effects_valid_function() ->
     [
         """
         fn entry_effects_valid(effects: EntryEffects) -> u1 {
+          let count = entry_effect_count(effects);
           unroll_for! (index, found):
               (u32, u1) in u32:0..ENTRY_EFFECT_CAPACITY {
-            found || (index < effects.count as u32 && effects.valid[index])
+            found || (index < count as u32 && effects.valid[index])
           }(u1:0)
         }
 
@@ -570,16 +671,17 @@ machine_entry_step() ->
     [
         "    let (entered_data, effects) = enter(\n",
         "      machine.entered_from, machine.phase, machine.data);\n",
-        "    let has_effect = machine.entry_effect_index < effects.count;\n",
-        "    let effect = effects.values[\n",
-        "      machine.entry_effect_index as u32];\n",
+        "    let effect_count = entry_effect_count(effects);\n",
+        "    let has_effect = machine.entry_effect_index < effect_count;\n",
+        "    let effect = entry_effect(\n",
+        "      effects, machine.entry_effect_index);\n",
         "    let emit_effect = has_effect && effects.valid[\n",
         "      machine.entry_effect_index as u32];\n",
         "    let can_advance = !emit_effect || egress_ready;\n",
         "    let next_effect_index = machine.entry_effect_index +\n",
         "      ((has_effect && can_advance) as u8);\n",
         "    let entry_complete = can_advance &&\n",
-        "      next_effect_index >= effects.count;\n",
+        "      next_effect_index >= effect_count;\n",
         "    let reserve = entry_complete &&\n",
         "      !machine.admission_pending &&\n",
         "      machine.occupied < MAILBOX_CAPACITY;\n",

@@ -356,10 +356,14 @@ pub const EGRESS_DEPTH = u32:4;
 
 pub const ENTRY_EFFECT_CAPACITY = u32:4;
 
+pub const ENTRY_EFFECT_PAYLOAD_BITS = u32:384;
+
+// Sorry: this is a hand-rolled tagged union. DSLX cannot yet express
+// phase-indexed variants whose fields retain their message types.
 pub struct EntryEffects {
-  count: u8,
+  phase: u8,
   valid: bool[4],
-  values: Egress[4],
+  payloads: bits[384],
 }
 
 type MailboxSlot = mailbox::Slot;
@@ -568,19 +572,14 @@ fn enter(old_phase: Phase, phase: Phase, data: Datacell) -> (Datacell, EntryEffe
         _0
       };
       (entered_data, EntryEffects {
-        count: u8:0,
+        phase: Phase::CONFIGURING as u8,
         valid: [
           bool:false,
           bool:false,
           bool:false,
           bool:false,
         ],
-        values: [
-          zero!<Egress>(),
-          zero!<Egress>(),
-          zero!<Egress>(),
-          zero!<Egress>(),
-        ],
+        payloads: zero!<bits[384]>(),
       })
     },
     Phase::COLLECTING => {
@@ -596,19 +595,14 @@ fn enter(old_phase: Phase, phase: Phase, data: Datacell) -> (Datacell, EntryEffe
         _0
       };
       (entered_data, EntryEffects {
-        count: u8:0,
+        phase: Phase::COLLECTING as u8,
         valid: [
           bool:false,
           bool:false,
           bool:false,
           bool:false,
         ],
-        values: [
-          zero!<Egress>(),
-          zero!<Egress>(),
-          zero!<Egress>(),
-          zero!<Egress>(),
-        ],
+        payloads: zero!<bits[384]>(),
       })
     },
     Phase::REPORTING => {
@@ -760,19 +754,26 @@ fn enter(old_phase: Phase, phase: Phase, data: Datacell) -> (Datacell, EntryEffe
         _9
       };
       (entered_data, EntryEffects {
-        count: u8:4,
+        phase: Phase::REPORTING as u8,
         valid: [
           effect_0_valid,
           effect_1_valid,
           effect_2_valid,
           effect_3_valid,
         ],
-        values: [
-          Egress { port: OutputPort::NORTH, frame: effect_0 },
-          Egress { port: OutputPort::EAST, frame: effect_1 },
-          Egress { port: OutputPort::WEST, frame: effect_2 },
-          Egress { port: OutputPort::SOUTH, frame: effect_3 },
-        ],
+        payloads: bit_slice_update(
+          bit_slice_update(
+          bit_slice_update(
+          bit_slice_update(
+          zero!<bits[384]>(),
+          u32:0,
+          effect_0.payload[0:96]),
+          u32:96,
+          effect_1.payload[0:96]),
+          u32:192,
+          effect_2.payload[0:96]),
+          u32:288,
+          effect_3.payload[0:96]),
       })
     },
     Phase::REPLYING => {
@@ -828,28 +829,81 @@ fn enter(old_phase: Phase, phase: Phase, data: Datacell) -> (Datacell, EntryEffe
         _6
       };
       (entered_data, EntryEffects {
-        count: u8:1,
+        phase: Phase::REPLYING as u8,
         valid: [
           effect_0_valid,
           bool:false,
           bool:false,
           bool:false,
         ],
-        values: [
-          Egress { port: OutputPort::MEASUREMENT, frame: effect_0 },
-          zero!<Egress>(),
-          zero!<Egress>(),
-          zero!<Egress>(),
-        ],
+        payloads: bit_slice_update(
+          zero!<bits[384]>(),
+          u32:0,
+          effect_0.payload[0:96]),
       })
     },
   }
 }
 
+fn entry_effect_count(effects: EntryEffects) -> u8 {
+  match effects.phase as Phase {
+    Phase::CONFIGURING => u8:0,
+    Phase::COLLECTING => u8:0,
+    Phase::REPORTING => u8:4,
+    Phase::REPLYING => u8:1,
+  }
+}
+
+fn entry_effect(effects: EntryEffects, index: u8) -> Egress {
+  match effects.phase as Phase {
+    Phase::CONFIGURING => zero!<Egress>(),
+    Phase::COLLECTING => zero!<Egress>(),
+    Phase::REPORTING => match index {
+      u8:0 => Egress {
+        port: OutputPort::NORTH,
+        frame: axis::pack(Tag::PHENOM_DATA as u8,
+          effects.payloads[0:96]),
+      },
+      u8:1 => Egress {
+        port: OutputPort::EAST,
+        frame: axis::pack(Tag::PHENOM_DATA as u8,
+          effects.payloads[96:192]),
+      },
+      u8:2 => Egress {
+        port: OutputPort::WEST,
+        frame: axis::pack(Tag::PHENOM_DATA as u8,
+          effects.payloads[192:288]),
+      },
+      u8:3 => Egress {
+        port: OutputPort::SOUTH,
+        frame: axis::pack(Tag::PHENOM_DATA as u8,
+          effects.payloads[288:384]),
+      },
+      _ => zero!<Egress>(),
+    },
+    Phase::REPLYING => match index {
+      u8:0 => Egress {
+        port: OutputPort::MEASUREMENT,
+        frame: axis::pack(Tag::PAULI_REPLY as u8,
+          effects.payloads[0:96]),
+      },
+      _ => zero!<Egress>(),
+    },
+  }
+}
+
+pub fn scheduled_effect(
+    scheduled: ScheduledEffects, index: u8) -> (Egress, u1, u1) {
+  let count = entry_effect_count(scheduled.effects);
+  let emit = index < count && scheduled.effects.valid[index as u32];
+  let last = index + u8:1 >= count;
+  (entry_effect(scheduled.effects, index), emit, last)
+}
 fn entry_effects_valid(effects: EntryEffects) -> u1 {
+  let count = entry_effect_count(effects);
   unroll_for! (index, found):
       (u32, u1) in u32:0..ENTRY_EFFECT_CAPACITY {
-    found || (index < effects.count as u32 && effects.valid[index])
+    found || (index < count as u32 && effects.valid[index])
   }(u1:0)
 }
 
@@ -1839,16 +1893,17 @@ fn machine_step(
   } else if machine.enter_pending {
     let (entered_data, effects) = enter(
       machine.entered_from, machine.phase, machine.data);
-    let has_effect = machine.entry_effect_index < effects.count;
-    let effect = effects.values[
-      machine.entry_effect_index as u32];
+    let effect_count = entry_effect_count(effects);
+    let has_effect = machine.entry_effect_index < effect_count;
+    let effect = entry_effect(
+      effects, machine.entry_effect_index);
     let emit_effect = has_effect && effects.valid[
       machine.entry_effect_index as u32];
     let can_advance = !emit_effect || egress_ready;
     let next_effect_index = machine.entry_effect_index +
       ((has_effect && can_advance) as u8);
     let entry_complete = can_advance &&
-      next_effect_index >= effects.count;
+      next_effect_index >= effect_count;
     let reserve = entry_complete &&
       !machine.admission_pending &&
       machine.occupied < MAILBOX_CAPACITY;

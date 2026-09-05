@@ -764,17 +764,23 @@ state_machine_entry_actions_use_one_source_ordered_egress_test() ->
         "-hls_phases([waiting]).\n"
         "-hls_outputs([first, second, third]).\n"
         "-hls_mailbox_capacity(1).\n"
-        "-hls_tags([message]).\n"
+        "-hls_tags([message, wide_message]).\n"
         "-record(message, {value = hls_type:zero() :: hls_nums:u32()}).\n"
+        "-record(wide_message, {\n"
+        "  low = hls_type:zero() :: hls_nums:u32(),\n"
+        "  high = hls_type:zero() :: hls_nums:u32()\n"
+        "}).\n"
         "-record(cell, {value = hls_type:zero() :: hls_nums:u32()}).\n"
         "init([]) -> {ok, waiting, #cell{}}.\n"
         "handle_enter(_Old, waiting, Cell) ->\n"
         "  {Cell, [\n"
         "    {cast, third, #message{value = 3}},\n"
-        "    {cast, first, #message{value = 1}},\n"
+        "    {cast, first, #wide_message{low = 1, high = 4}},\n"
         "    {cast, second, #message{value = 2}}\n"
         "  ]}.\n"
         "handle_cast(#message{value = Value}, waiting, Cell) ->\n"
+        "  {waiting, Cell#cell{value = Value}, consume};\n"
+        "handle_cast(#wide_message{low = Value}, waiting, Cell) ->\n"
         "  {waiting, Cell#cell{value = Value}, consume}.\n"
     >>,
     ok = file:write_file(Path, Source),
@@ -803,15 +809,15 @@ state_machine_entry_actions_use_one_source_ordered_egress_test() ->
             <<"pub struct MachineRamReadReq">>
         )),
         ?assertEqual(nomatch, binary:match(XLS, <<"fn mailbox_addr(">>)),
-        {Third, _} = binary:match(XLS, <<
-            "Egress { port: OutputPort::THIRD, frame: effect_0 }"
-        >>),
-        {First, _} = binary:match(XLS, <<
-            "Egress { port: OutputPort::FIRST, frame: effect_1 }"
-        >>),
-        {Second, _} = binary:match(XLS, <<
-            "Egress { port: OutputPort::SECOND, frame: effect_2 }"
-        >>),
+        {Third, _} = binary:match(
+            XLS, <<"port: OutputPort::THIRD">>
+        ),
+        {First, _} = binary:match(
+            XLS, <<"port: OutputPort::FIRST">>
+        ),
+        {Second, _} = binary:match(
+            XLS, <<"port: OutputPort::SECOND">>
+        ),
         ?assert(Third < First),
         ?assert(First < Second),
         ?assertNotEqual(nomatch, binary:match(
@@ -821,6 +827,22 @@ state_machine_entry_actions_use_one_source_ordered_egress_test() ->
         ?assertNotEqual(nomatch, binary:match(
             XLS,
             <<"pub const ENTRY_EFFECT_CAPACITY = u32:3;">>
+        )),
+        ?assertNotEqual(nomatch, binary:match(
+            XLS,
+            <<"pub const ENTRY_EFFECT_PAYLOAD_BITS = u32:128;">>
+        )),
+        ?assertNotEqual(nomatch, binary:match(
+            XLS,
+            <<"payloads: bits[128]">>
+        )),
+        ?assertEqual(nomatch, binary:match(
+            XLS,
+            <<"values: Egress[3]">>
+        )),
+        ?assertNotEqual(nomatch, binary:match(
+            XLS,
+            <<"effects.payloads[32:96]">>
         )),
         ?assertNotEqual(nomatch, binary:match(
             XLS,
