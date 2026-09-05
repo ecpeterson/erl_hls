@@ -176,6 +176,18 @@ A depth-zero request/result-channel variant kept the same simulated cadence,
 but formed combinational ready loops between the manager and executor. The
 depth-one channels in the measured design are required elastic cuts.
 
+The proposed two-batch effect window was also tested and rejected. Reusing the
+router's batch register plus its depth-one input channel required just one
+extra scheduler-state bit, but the three-shard decoder stopped before warmup
+step eight and timed out at 500,000 clocks. Separating router admission from
+its first downstream send made both slots physically real and produced the
+same failure. The extra committed batches can fill destination producer paths
+while those destination schedulers are themselves waiting to retire effects,
+forming a cyclic backpressure wait. No area map was retained for this invalid
+design. A safe retry needs end-to-end destination reservations or another
+provably deadlock-breaking routing policy; merely deepening the bounded FIFOs
+does not solve the general problem.
+
 ## Running the experiment
 
 The fast local checks are:
