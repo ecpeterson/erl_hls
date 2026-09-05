@@ -1169,8 +1169,8 @@ the assumed clock.
 
 This diagnostic is intentionally not a replacement for the end-to-end golden
 comparison: it supplies a different, deterministic syndrome stream and omits
-correction feedback and the final data-frame query. Run it on the configured
-XLS host and local UTM with:
+correction feedback and the final data-frame query. Run it with the native XLS
+toolchain as described below:
 
 ```sh
 tools/run_phi_decoder_profile.sh
@@ -1178,9 +1178,8 @@ tools/run_phi_decoder_profile.sh
 
 Because the real apparatus supplies syndromes externally, further work should
 not optimize the phenomenological generator merely to improve this demo's
-headline throughput. The next hardware step is timing closure of the useful
-two-shard decoder profile, followed by a decoder-only two-versus-three-shard
-area/timing choice if the placed clock falls short of the required rate.
+headline throughput. The paper-semantics audit below must be resolved before
+the measured cadence is treated as a decoder-performance target.
 
 ### One-result phenomenological lookahead
 
@@ -1232,3 +1231,79 @@ an absent observer cannot backpressure the application. The remaining status
 traffic may eventually merit on-fabric aggregation, but that higher-complexity
 work is deferred until bandwidth measurements require it. These rates are
 cycle-count projections, not timing-closure results.
+
+### Ready-selection attribution
+
+The VPI bridge can now inspect the source-level readiness signals retained in
+each generated `SharedService` next-state module. It samples them only when the
+first pipeline stage completes, so the counters describe scheduler selection
+opportunities rather than every physical clock. This is passive simulation
+instrumentation: it adds no RTL ports, registers, or synthesized logic.
+
+Each selection activation falls into exactly one bucket. `selectable` means at
+least one ready slot does not conflict with the actor already in flight;
+`same actor` means work is ready but the only eligible slot has that conflict;
+`egress credit` means all pending work is waiting for the one admitted egress;
+and `no actor work` means there is no mailbox candidate, phase-entry probe, or
+egress waiter. `internal other` retains completeness for scheduler-specific
+admission states not covered by those common cases. The profile also records
+the number of ready, mailbox-candidate, entry-probe, and egress-waiter slots
+seen across activations. Both maintained runners assert that the exclusive
+buckets sum to the activation count for every scheduler.
+
+A fresh full distance-three closeout, from the first application request to
+the final output, covered 5,151 clocks and 2,575 selection activations per
+scheduler. Aggregating the exclusive buckets by actor family gives:
+
+| family | selectable | same actor | egress credit | no actor work |
+|---|---:|---:|---:|---:|
+| data | 41.9% | 14.9% | 12.2% | 31.0% |
+| syndrome | 49.9% | 15.4% | 14.2% | 20.5% |
+| phi | 61.2% | 20.2% | 5.1% | 13.6% |
+
+The decoder-only run again measured 4,048 clocks for steps eight through 32,
+or 168.67 clocks per step. Across its six phi schedulers, 77.1% of selection
+activations were selectable, 18.0% were blocked only by the same-actor hazard,
+3.4% waited for egress credit, and 1.5% had no actor work. State and mailbox
+RAMs accepted every request, and their simultaneous read/write activity never
+targeted the same row. The dominant local optimization opportunity is therefore
+the same-actor pipeline hazard. Empty or causally blocked work is material in
+the complete phenomenological fixture, but it is not the first place to spend
+effort for a real apparatus which supplies syndromes externally.
+
+Run this profile natively with an arm64 XLS distribution:
+
+```sh
+ERL_HLS_XLS_ROOT=/path/to/xls-darwin-arm64 \
+    tools/run_phi_decoder_profile.sh
+```
+
+The stage worker remains portable to Linux for CI or as a fallback, but the
+development runner no longer copies work into the local UTM.
+
+### Paper-semantics audit
+
+The rate above measures the deliberately small protocol fixture, not yet the
+3D decoder evaluated by Herold et al. The paper specifies an auxiliary
+`L x L x L` torus, with `c = 10 log^2(L)` parallel field updates followed by
+one anyon update in each sequence, and reports `eta = 1/2` for its numerical
+results. The current actor instead fixes two field updates and `eta = 1/4`.
+See [Cellular-automaton decoders for topological quantum memories](https://arxiv.org/abs/1406.2338).
+
+For `L = 3`, the current two-element field vector can represent the complete
+third dimension without loss: reflection symmetry about the anyon plane makes
+the `z = 1` and `z = -1` values equal. The bulk recurrence must nevertheless
+count both torus neighbors. The current five-neighbor terminal-layer formula
+does not do that, and it must be replaced together with the smoothing
+coefficient. A general odd `L` implementation needs `(L + 1) / 2` stored depth
+classes under this symmetry reduction.
+
+The paper does not state an integer-rounding convention for `c` at very small
+`L`; natural logarithms give approximately 12.1 at `L = 3`. Whichever explicit
+rounding policy the demo adopts, two field updates are not paper-equivalent.
+This also changes the throughput target substantially. A phi actor currently
+requires `5c + 12 = 22` state visits per sequence. At `c = 12`, each existing
+three-actor shard needs at least 216 visits, and the present II=2 selector has a
+hard lower bound of 432 clocks per sequence before any egress or dependency
+waits. Correcting the decoder semantics and taking a new profile therefore
+precedes further tuning toward one million anyon-update sequences per second.

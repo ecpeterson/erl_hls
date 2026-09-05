@@ -2,8 +2,10 @@
 
 -include_lib("eunit/include/eunit.hrl").
 
--define(RUNNER_TIMEOUT, 600000).
 -define(DEBUG_TIMEOUT, 600000).
+-define(SMOKE_CUTOFF_STEP, 16).
+-define(SMOKE_RUNNER_TIMEOUT, 30000).
+-define(SMOKE_TEST_TIMEOUT, 60).
 
 simulated_rtl_test_() ->
     case os:getenv("ERL_HLS_PHI_SIM_DIR") of
@@ -62,20 +64,23 @@ fixture() ->
         _ ->
             Options = #{
                 distance => 1,
-                %% The synthesized actors advance while ERTS installs routes.
-                first_quiet_step => 4,
+                %% The reset-released topology can buffer several rounds
+                %% before this ingress arrives. Keep the cutoff beyond that
+                %% bounded startup lead.
+                first_quiet_step => ?SMOKE_CUTOFF_STEP,
                 line_y => 0,
                 measurement => z,
                 request_id => 16#504849
             },
             Expected = {ok, #{
-                closeout_step => 4,
+                closeout_step => ?SMOKE_CUTOFF_STEP,
                 corrections => [],
                 measurement => z,
                 data_anticommutations => [{{0, 0}, 0}, {{0, 1}, 0}],
                 row => #{y => 0, parity => 0}
             }},
-            {smoke, Options, Expected, ?RUNNER_TIMEOUT, 660}
+            {smoke, Options, Expected,
+                ?SMOKE_RUNNER_TIMEOUT, ?SMOKE_TEST_TIMEOUT}
     end.
 
 cpu_witness() ->

@@ -116,6 +116,14 @@ for scheduler in data phi syndrome; do
     grep -Eq "^${scheduler}(_[0-9]+)?_state_reads=" "$scheduler_profile"
     grep -Eq "^${scheduler}(_[0-9]+)?_mailbox_visits=" "$scheduler_profile"
     grep -Eq "^${scheduler}(_[0-9]+)?_entry_visits=" "$scheduler_profile"
+    grep -Eq "^${scheduler}(_[0-9]+)?_selection_activations=" \
+        "$scheduler_profile"
+    grep -Eq "^${scheduler}(_[0-9]+)?_selection_cycles_same_actor_only=" \
+        "$scheduler_profile"
+    grep -Eq "^${scheduler}(_[0-9]+)?_selection_cycles_waiting_egress_credit=" \
+        "$scheduler_profile"
+    grep -Eq "^${scheduler}(_[0-9]+)?_selection_cycles_no_actor_work=" \
+        "$scheduler_profile"
     grep -Eq "^${scheduler}(_[0-9]+)?_state_same_address_overlaps=0$" \
         "$scheduler_profile"
     grep -Eq "^${scheduler}(_[0-9]+)?_mailbox_same_address_overlaps=0$" \
@@ -126,6 +134,33 @@ if grep -Eq '_same_address_overlaps=[1-9][0-9]*$' "$scheduler_profile"; then
     exit 1
 fi
 grep -Eq '_state_read_write_overlaps=[1-9][0-9]*$' "$scheduler_profile"
+awk -F= '
+    /_selection_activations=/ {
+        name = $1
+        sub(/_selection_activations$/, "", name)
+        activations[name] = $2
+    }
+    /_selection_cycles_selectable=/ {
+        name = $1
+        sub(/_selection_cycles_selectable$/, "", name)
+        accounted[name] += $2
+    }
+    /_selection_cycles_(same_actor_only|waiting_egress_credit|no_actor_work|internal_other)=/ {
+        name = $1
+        sub(/_selection_cycles_(same_actor_only|waiting_egress_credit|no_actor_work|internal_other)$/, "", name)
+        accounted[name] += $2
+    }
+    END {
+        found = 0
+        for (name in activations) {
+            found = 1
+            if (accounted[name] != activations[name])
+                exit 1
+        }
+        if (!found)
+            exit 1
+    }
+' "$scheduler_profile"
 
 cleanup
 sim_pid=

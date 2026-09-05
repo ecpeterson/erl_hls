@@ -2,13 +2,29 @@
 set -euo pipefail
 export LC_ALL=C
 
-stage=${1:?usage: remote_phi_decoder_profile.sh STAGE XLS_ROOT TIMEOUT SHARDS}
-xls_root=${2:?usage: remote_phi_decoder_profile.sh STAGE XLS_ROOT TIMEOUT SHARDS}
+stage=${1:?usage: phi_decoder_profile_stage.sh STAGE XLS_ROOT TIMEOUT SHARDS}
+xls_root=${2:?usage: phi_decoder_profile_stage.sh STAGE XLS_ROOT TIMEOUT SHARDS}
+stage=$(cd "$stage" && pwd)
+xls_root=$(cd "$xls_root" && pwd)
 stage_timeout=${3:-2h}
 shard_count=${4:-3}
 scheduler_count=$((2 + 2 * shard_count))
 stdlib="$xls_root/xls/dslx/stdlib"
 . "$stage/phi_scheduler_rams.sh"
+
+if [[ $(uname -s) == Darwin ]]; then
+    time_arguments=(-p)
+else
+    time_arguments=(-v)
+fi
+
+sha256_file() {
+    if command -v sha256sum >/dev/null 2>&1; then
+        sha256sum "$@"
+    else
+        shasum -a 256 "$@"
+    fi
+}
 
 cd "$stage"
 
@@ -17,6 +33,9 @@ for artifact in \
     phi_decoder_profile.opt.ir \
     phi_decoder_profile.v \
     phi_decoder_profile.vvp \
+    phi_decoder_profile.scheduler_profile \
+    xls_sim_bridge.o \
+    xls_sim_bridge.vpi \
     phi_decoder_profile.metrics \
     phi_decoder_profile.sim.log
 do
@@ -31,7 +50,7 @@ timed_output() {
     label=$1
     output=$2
     shift 2
-    if /usr/bin/time -v -o "$label.time.new" \
+    if /usr/bin/time "${time_arguments[@]}" -o "$label.time.new" \
             timeout --signal=TERM --kill-after=5m "$stage_timeout" \
             "$@" > "$output.new"; then
         mv "$label.time.new" "$label.time"
@@ -47,7 +66,7 @@ timed_output() {
 timed_command() {
     label=$1
     shift
-    if /usr/bin/time -v -o "$label.time.new" \
+    if /usr/bin/time "${time_arguments[@]}" -o "$label.time.new" \
             timeout --signal=TERM --kill-after=5m "$stage_timeout" \
             "$@"; then
         mv "$label.time.new" "$label.time"
@@ -101,9 +120,14 @@ timed_command \
     phi_decoder_profile.v
 mv phi_decoder_profile.vvp.new phi_decoder_profile.vvp
 
-if /usr/bin/time -v -o phi_decoder_profile-vvp.time.new \
+iverilog-vpi xls_sim_bridge.c
+
+if /usr/bin/time "${time_arguments[@]}" -o phi_decoder_profile-vvp.time.new \
         timeout --signal=TERM --kill-after=5m "$stage_timeout" \
-        vvp phi_decoder_profile.vvp 2>&1 | \
+        env ERL_HLS_SIM_PROFILE_ONLY=1 \
+        ERL_HLS_SIM_TOP=phi_decoder_profile_tb \
+        ERL_HLS_SIM_SCHEDULER_PROFILE=phi_decoder_profile.scheduler_profile \
+        vvp -M "$stage" -m xls_sim_bridge phi_decoder_profile.vvp 2>&1 | \
         tee phi_decoder_profile.sim.log.new; then
     mv phi_decoder_profile-vvp.time.new phi_decoder_profile-vvp.time
     mv phi_decoder_profile.sim.log.new phi_decoder_profile.sim.log
@@ -116,19 +140,48 @@ else
     exit "$status"
 fi
 
+awk -F= '
+    /_selection_activations=/ {
+        name = $1
+        sub(/_selection_activations$/, "", name)
+        activations[name] = $2
+    }
+    /_selection_cycles_selectable=/ {
+        name = $1
+        sub(/_selection_cycles_selectable$/, "", name)
+        accounted[name] += $2
+    }
+    /_selection_cycles_(same_actor_only|waiting_egress_credit|no_actor_work|internal_other)=/ {
+        name = $1
+        sub(/_selection_cycles_(same_actor_only|waiting_egress_credit|no_actor_work|internal_other)$/, "", name)
+        accounted[name] += $2
+    }
+    END {
+        found = 0
+        for (name in activations) {
+            found = 1
+            if (accounted[name] != activations[name])
+                exit 1
+        }
+        if (!found)
+            exit 1
+    }
+' phi_decoder_profile.scheduler_profile
+
 {
     printf 'shard_count=%s\n' "$shard_count"
     printf 'scheduler_count=%s\n' "$scheduler_count"
     grep -H -E 'PROFILE_RESULT|PROFILE_ACTIVITY|PASS:' \
         phi_decoder_profile.sim.log
+    cat phi_decoder_profile.scheduler_profile
     wc -lc \
         phi_decoder_profile_topology.x \
         phi_decoder_profile.ir \
         phi_decoder_profile.opt.ir \
         phi_decoder_profile.v
-    sha256sum phi_decoder_profile_topology.x phi_decoder_profile.v
+    sha256_file phi_decoder_profile_topology.x phi_decoder_profile.v
     grep -H -E \
-        'Elapsed \(wall clock\)|Maximum resident set size' \
+        'Elapsed \(wall clock\)|Maximum resident set size|^real ' \
         phi_decoder_profile-ir.time \
         phi_decoder_profile-opt.time \
         phi_decoder_profile-codegen.time \
