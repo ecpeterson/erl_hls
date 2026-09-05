@@ -151,15 +151,20 @@ awk -F= '
         sub(/_selection_cycles_selectable$/, "", name)
         accounted[name] += $2
     }
-    /_selection_cycles_(same_actor_only|waiting_egress_credit|no_actor_work|internal_other)=/ {
+    /_selection_cycles_(executor_blocked|same_actor_only|waiting_egress_credit|no_actor_work|internal_other)=/ {
         name = $1
-        sub(/_selection_cycles_(same_actor_only|waiting_egress_credit|no_actor_work|internal_other)$/, "", name)
+        sub(/_selection_cycles_(executor_blocked|same_actor_only|waiting_egress_credit|no_actor_work|internal_other)$/, "", name)
         accounted[name] += $2
     }
     /_selection_cycles_same_actor_only=/ {
         name = $1
         sub(/_selection_cycles_same_actor_only$/, "", name)
         same_actor[name] = $2
+    }
+    /_executor_decoupled=/ {
+        name = $1
+        sub(/_executor_decoupled$/, "", name)
+        executor_decoupled[name] = $2
     }
     /_same_actor_observed_(mailbox|entry|egress|internal_other)=/ {
         name = $1
@@ -192,12 +197,19 @@ awk -F= '
             found = 1
             if (accounted[name] != activations[name])
                 exit 1
-            if (same_actor_observed[name] != same_actor[name])
+            if (occupancy_samples[name] != activations[name])
                 exit 1
+            if (executor_decoupled[name]) {
+                if (same_actor_observed[name] != 0 || followups[name] != 0)
+                    exit 1
+            } else if (same_actor_observed[name] != same_actor[name]) {
+                exit 1
+            }
             if (followup_accounted[name] != followups[name])
                 exit 1
-            if (followups[name] > same_actor[name] ||
-                    same_actor[name] - followups[name] > 1)
+            if (!executor_decoupled[name] &&
+                    (followups[name] > same_actor[name] ||
+                    same_actor[name] - followups[name] > 1))
                 exit 1
             if (direct_mailbox[name] > followup_mailbox[name])
                 exit 1

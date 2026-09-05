@@ -3,6 +3,7 @@ set -euo pipefail
 
 project_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 local_stage=${1:-"$project_root/_build/xls_sim/phi_memory_demo"}
+xls_root=${ERL_HLS_XLS_ROOT:-}
 remote_host=${ERL_HLS_REMOTE_HOST:-192.168.64.7}
 remote_root=${ERL_HLS_REMOTE_ROOT:-/home/ecpeterson/erl_hls-build}
 remote_xls=${ERL_HLS_REMOTE_XLS:-/home/ecpeterson/xls-v0.0.0-10601-g9f360fc89-linux-x64}
@@ -29,9 +30,26 @@ ERL_HLS_PHI_CPU_WITNESS="$cpu_witness" \
 test -s "$cpu_witness"
 
 ERL_HLS_PHI_BRIDGE_DISTANCE=demo \
+ERL_HLS_PHI_SHARDS="$phi_shards" \
     "$project_root/tools/prepare_xls_sim.sh" "$local_stage"
 cp "$project_root/tools/remote_phi_memory_demo.sh" \
     "$local_stage/remote_phi_memory_demo.sh"
+
+if [[ -n "$xls_root" ]]; then
+    for binary in ir_converter_main opt_main codegen_main; do
+        if [[ ! -x "$xls_root/$binary" ]]; then
+            echo "missing native XLS command: $xls_root/$binary" >&2
+            exit 1
+        fi
+    done
+    ERL_HLS_PHI_DEMO_REUSE_RTL="$reuse_rtl" \
+    ERL_HLS_PHI_DEMO_COMPILE_ONLY=1 \
+    ERL_HLS_PHI_SCHEDULER_COUNT="$scheduler_count" \
+        bash "$local_stage/remote_phi_memory_demo.sh" \
+        "$local_stage" "$xls_root"
+    "$project_root/tools/local_phi_memory_demo.sh" "$local_stage"
+    exit 0
+fi
 
 ssh -o BatchMode=yes "$remote_host" mkdir -p "$remote_stage"
 rsync -a -e "ssh -o BatchMode=yes" \

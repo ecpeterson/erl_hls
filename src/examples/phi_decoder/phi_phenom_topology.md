@@ -1319,11 +1319,97 @@ coefficient. A general odd `L` implementation needs `(L + 1) / 2` stored depth
 classes under this symmetry reduction.
 
 The paper does not state an integer-rounding convention for `c` at very small
-`L`; natural logarithms give approximately 12.1 at `L = 3`. Whichever explicit
-rounding policy the demo adopts, two field updates are not paper-equivalent.
-This also changes the throughput target substantially. A phi actor currently
-requires `5c + 12 = 22` state visits per sequence. At `c = 12`, each existing
-three-actor shard needs at least 216 visits, and the present II=2 selector has a
-hard lower bound of 432 clocks per sequence before any egress or dependency
-waits. Correcting the decoder semantics and taking a new profile therefore
-precedes further tuning toward one million anyon-update sequences per second.
+`L`; natural logarithms give approximately 12.1 at `L = 3`. The demonstration
+explicitly rounds that prescription to twelve field updates. The deterministic
+ERTS fixture now closes at step 18 with 80 accepted corrections and a
+nonuniform final data measurement: eight commuting and ten anticommuting
+qubits. Repeated ERTS runs produce the same summary.
+
+This changes the throughput target substantially. A phi actor requires
+`5c + 12 = 72` state visits per sequence. At `c = 12`, each existing
+three-actor shard therefore needs at least 216 visits, and the II=2 selector
+has a hard lower bound of 432 clocks per sequence before egress or causal
+waits. A native RTL profile measured 12,172 clocks for steps eight through 32:
+507.17 clocks per step, or about 394.3 thousand steps per second at 200 MHz.
+The implementation is 17.4% above the visit-count floor.
+
+The same run separates ingress pressure from actor execution. Across the six
+phi schedulers, 40,458 state reads occupied 40,458 of 50,562 selection
+activations. The exclusive selection buckets were 80.1% selectable, 16.2%
+blocked only by the same-actor hazard, 3.3% waiting for egress credit, and 0.4%
+without actor work. State and mailbox RAMs accepted every request.
+
+Mailbox occupancy was sampled after retirement and the activation's one
+admission. The schedulers averaged 3.48 queued messages spread over 2.12 of
+their three actors, with a peak of eight or nine messages in an individual
+scheduler. Producer holding slots retained an average of 0.43 non-credit
+commands after admission and were nonempty on 38.7% of activations. The large
+physical-cycle request-stall count--54,766 stalls beside 42,844 accepted
+requests--mostly reflects valid inputs being held across the scheduler's
+two-clock initiation interval; it does not indicate dropped work. There is
+ample queued input, and only a modest post-admission backlog, while the actor
+executor is busy whenever the same-actor rule permits it. This profile points
+to increasing executor issue rate rather than changing the mailbox payload
+layout.
+
+### Decoupled actor executor
+
+The actor-specific microstep is now a stateless `SharedExecutor` proc. The
+mailbox manager reads a selected actor's state and message, marks that actor
+in flight, and submits the complete activation to the executor. It may then
+select another actor while XLS pipelines the first activation. Returned
+results retire in order through the existing 1R1W state port; an in-flight
+bit per actor prevents a stale reread of the same state. One result skid slot
+allows the manager to continue collecting input and returned credit while an
+effect-producing result waits to retire. This changes no mailbox capacity,
+RAM port count, actor callback, or message-order rule.
+
+The isolated phi executor compiles as a two-stage II=1 pipeline. Its
+out-of-context XC7 map reports 1,477 estimated logic cells, 1,021 flip-flops,
+2,349 LUTs, and eight `DSP48E1`s. A single pipelined executor per scheduler is
+therefore sufficient to accept one distinct actor activation per clock; a
+second physical actor datapath would not improve the present issue rate.
+
+The paper-parameter decoder-only fixture now measures 6,792 clocks for steps
+eight through 32, or 283.0 clocks per step. This is about 707 thousand steps
+per second at 200 MHz and would require a 283 MHz clock for one million steps
+per second. Relative to the II=2 result above, the decoupled executor removes
+5,380 clocks, a 44.2% reduction. The complete CPU-versus-native-Icarus
+closeout also agrees on all 80 accepted corrections and all 18 final data
+replies; the latter remain nonuniform, with eight commuting and ten
+anticommuting qubits.
+
+The profile exposes a new dominant limiter. Across the six phi schedulers in
+the decoder-only run, 33,904 actor reads occupied 60.2% of 56,298 selection
+activations. Completed effect-producing results waited behind the scheduler's
+single outstanding effect batch for 33.6% of activations; 5.0% had ready work
+only for actors already in flight, and 1.2% had no actor work. The full noisy
+closeout gives the same diagnosis: 29.0% effect-result blockage, 10.8%
+in-flight-only work, and 2.1% no work. Neither state nor mailbox RAM reported
+a request stall in either run.
+
+An apples-to-apples XC7 topology-core map reports 81,195 estimated logic
+cells, 81,239 flip-flops, 104,105 LUTs, and 48 `DSP48E1`s. The preceding
+three-shard II=2 row was 59,246 cells, 44,546 flip-flops, and 81,667 LUTs. The
+complete gateway map, which additionally includes the boundary and host-facing
+machinery, reports 88,135 cells, 88,530 flip-flops, and 105,106 LUTs. The
+substantial register increase comes from carrying loaded activations and full
+result/effect values through the II=1 pipeline and its channel buffers. This
+is a throughput-first prototype, not yet a favorable area point.
+
+Changing the executor request and result channels from depth one to depth zero
+preserved the simulated cycle count, but it created combinational ready loops
+between `SharedService` and `SharedExecutor`; Yosys reports those loops during
+flattening. The explicit channel registers are therefore part of the current
+correct elastic boundary, rather than removable duplicate storage.
+
+The next general optimization should therefore target post-handler admission,
+not mailbox payload fragments or another executor lane. Today a router keeps
+one `EntryEffects` batch and returns its sole credit only after serializing the
+whole batch. A bounded two-batch window (or, equivalently, credit returned when
+the router admits a batch into a one-entry lookahead queue) would let the
+executor retire another actor while the previous effects drain. The queue must
+remain ordered and its credit must denote real storage; that preserves the
+existing no-speculation deadlock argument. Its wide batch storage has an area
+cost, so the first implementation should be a depth-two ablation with a fresh
+map before generalizing the capacity.

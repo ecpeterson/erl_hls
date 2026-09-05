@@ -17,6 +17,8 @@ The files answer four progressively narrower questions:
    three executors?
 5. Is the remaining full-demo latency in the decoder, or in the simulated
    phenomenological source network that will not exist in the real apparatus?
+6. Can the mailbox manager pipeline distinct actor activations at II=1 without
+   adding another copy of actor or mailbox state?
 
 The experiment keeps the application boundary honest: the raw and BRAM
 implementations accept the same cutoff, correction-update, and measurement
@@ -151,6 +153,28 @@ the remaining rate is internal to the decoder and shared schedulers. Endpoints
 3 and 5 remain reserved, and a future bounded debug-event path can restore the
 visualization without making it lossless application traffic. Inline status
 aggregation remains deferred.
+
+The next scheduler ablation decouples actor computation from mailbox
+ownership. One stateless two-stage `SharedExecutor` pipeline per scheduler can
+accept a distinct actor activation each clock, while in-flight bits prevent
+same-actor state hazards. With the paper's twelve field updates, the
+decoder-only fixture improves from 507.17 to 283.0 clocks per step: about 707
+thousand steps per second at 200 MHz. The complete deterministic closeout
+still agrees on all 80 corrections and 18 final measurements.
+
+The gain currently costs substantial registers. On the same topology-core
+scope as the three-shard row above, the II=1 design maps to 81,195 estimated
+logic cells, 81,239 flip-flops, 104,105 LUTs, and 48 DSPs. The complete gateway
+maps to 88,135 cells, 88,530 flip-flops, and 105,106 LUTs. Profiling also shows
+that the executor is no longer the primary limiter: 33.6% of decoder-only
+scheduler activations hold a completed effect batch behind the preceding
+batch's credit. A depth-two ordered effect-batch window is the next proposed
+ablation; mailbox payload fragmentation and a second executor datapath are not
+indicated by the current measurements.
+
+A depth-zero request/result-channel variant kept the same simulated cadence,
+but formed combinational ready loops between the manager and executor. The
+depth-one channels in the measured design are required elastic cuts.
 
 ## Running the experiment
 
