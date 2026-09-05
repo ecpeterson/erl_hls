@@ -83,7 +83,7 @@ effect_window_domains_are_weak_not_strong_components_test() ->
     ]),
     ?assertEqual(
         [[0, 1, 2, 3]],
-        xls_topology_scheduler_dslx:effect_window_domains(JoinedCycles)
+        xls_topology_effect_windows:partition(JoinedCycles, weak_components)
     ),
     DisconnectedCycles = schedulers([
         {0, [1]},
@@ -93,8 +93,8 @@ effect_window_domains_are_weak_not_strong_components_test() ->
     ]),
     ?assertEqual(
         [[0, 1], [2, 3]],
-        xls_topology_scheduler_dslx:effect_window_domains(
-            DisconnectedCycles
+        xls_topology_effect_windows:partition(
+            DisconnectedCycles, weak_components
         )
     ).
 

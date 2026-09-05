@@ -5,7 +5,7 @@
 -module(xls_topology_scheduler_dslx).
 -moduledoc false.
 
--export([emit/1, effect_window_domains/1]).
+-export([emit/1]).
 
 -spec emit(map()) -> iolist().
 emit(Spec0) ->
@@ -122,7 +122,10 @@ annotate(Spec = #{
         )
         || Scheduler <- Schedulers
     ],
-    Domains = effect_window_domains(Annotated0, WindowPartition),
+    Domains = xls_topology_effect_windows:partition(
+        Annotated0,
+        WindowPartition
+    ),
     Membership = maps:from_list([
         {SchedulerIndex0, {DomainIndex, Position}}
         || {DomainIndex, Members} <- lists:enumerate(0, Domains),
@@ -140,7 +143,6 @@ annotate(Spec = #{
         end
         || Scheduler <- Annotated0
     ],
-    ok = validate_effect_window_domains(Annotated, Domains),
     Externals = [annotate_external(External, Annotated)
         || External <- maps:get(externals, Spec)],
     Spec#{
@@ -154,104 +156,6 @@ annotate(Spec = #{
         effect_window_domains => Domains,
         externals => Externals
     }.
-
--doc false.
--spec effect_window_domains([map()]) -> [[non_neg_integer()]].
-effect_window_domains(Schedulers) ->
-    %% If an owned batch can block on a destination before releasing its
-    %% reservation, both schedulers must share one owner. The finest safe
-    %% partition is therefore weak connectivity, not directed SCCs.
-    Indices = lists:sort([maps:get(index, Scheduler)
-        || Scheduler <- Schedulers]),
-    Adjacency0 = maps:from_list([{Index, []} || Index <- Indices]),
-    Adjacency = lists:foldl(
-        fun(Scheduler, Acc0) ->
-            Source = maps:get(index, Scheduler),
-            lists:foldl(
-                fun(Destination, Acc) ->
-                    Target = maps:get(index, Destination),
-                    add_undirected_edge(Source, Target, Acc)
-                end,
-                Acc0,
-                maps:get(destinations, Scheduler)
-            )
-        end,
-        Adjacency0,
-        Schedulers
-    ),
-    connected_components(Indices, Adjacency, [], []).
-
-effect_window_domains(Schedulers, global) ->
-    [lists:sort([maps:get(index, Scheduler) || Scheduler <- Schedulers])];
-effect_window_domains(Schedulers, weak_components) ->
-    effect_window_domains(Schedulers).
-
-add_undirected_edge(Left, Right, Adjacency) ->
-    true = maps:is_key(Left, Adjacency),
-    true = maps:is_key(Right, Adjacency),
-    Adjacency#{
-        Left := lists:usort([Right | maps:get(Left, Adjacency)]),
-        Right := lists:usort([Left | maps:get(Right, Adjacency)])
-    }.
-
-connected_components([], _Adjacency, _Seen, Components) ->
-    lists:reverse(Components);
-connected_components([Index | Rest], Adjacency, Seen, Components) ->
-    case lists:member(Index, Seen) of
-        true ->
-            connected_components(Rest, Adjacency, Seen, Components);
-        false ->
-            {Members, Seen1} = connected_component(
-                [Index], Adjacency, Seen, []
-            ),
-            connected_components(
-                Rest,
-                Adjacency,
-                Seen1,
-                [lists:sort(Members) | Components]
-            )
-    end.
-
-connected_component([], _Adjacency, Seen, Members) ->
-    {Members, Seen};
-connected_component([Index | Rest], Adjacency, Seen, Members) ->
-    case lists:member(Index, Seen) of
-        true -> connected_component(Rest, Adjacency, Seen, Members);
-        false ->
-            connected_component(
-                maps:get(Index, Adjacency) ++ Rest,
-                Adjacency,
-                [Index | Seen],
-                [Index | Members]
-            )
-    end.
-
-validate_effect_window_domains(Schedulers, Domains) ->
-    SchedulerIndices = lists:sort([maps:get(index, Scheduler)
-        || Scheduler <- Schedulers]),
-    SchedulerIndices = lists:sort(lists:append(Domains)),
-    true = lists:all(fun(Members) -> Members =/= [] end, Domains),
-    DomainIndex = maps:from_list([
-        {SchedulerIndex, Domain}
-        || {Domain, Members} <- lists:enumerate(0, Domains),
-           SchedulerIndex <- Members
-    ]),
-    lists:foreach(
-        fun(Scheduler) ->
-            Source = maps:get(index, Scheduler),
-            SourceDomain = maps:get(Source, DomainIndex),
-            lists:foreach(
-                fun(Destination) ->
-                    SourceDomain = maps:get(
-                        maps:get(index, Destination), DomainIndex
-                    )
-                end,
-                maps:get(destinations, Scheduler)
-            )
-        end,
-        Schedulers
-    ),
-    ok.
 
 annotate_external(External = #{id := Id}, Schedulers) ->
     Sources = [

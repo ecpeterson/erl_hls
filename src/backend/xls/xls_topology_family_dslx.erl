@@ -804,10 +804,12 @@ validate_profile(Profile) when is_map(Profile) ->
         Groups when is_map(Groups) -> ok;
         Groups -> error({scheduler_groups, Groups})
     end,
-    case maps:get(effect_window_partition, Profile, global) of
-        global -> ok;
-        weak_components -> ok;
-        Partition -> error({effect_window_partition, Partition})
+    case Profile of
+        #{effect_window_partition := global} -> ok;
+        #{effect_window_partition := weak_components} -> ok;
+        #{effect_window_partition := Partition} ->
+            error({effect_window_partition, Partition});
+        _ -> ok
     end,
     Profile#{name := Name};
 validate_profile(Profile) ->
