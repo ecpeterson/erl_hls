@@ -2,12 +2,14 @@
 set -euo pipefail
 export LC_ALL=C
 
-stage=${1:?usage: phi_decoder_profile_stage.sh STAGE XLS_ROOT TIMEOUT SHARDS}
-xls_root=${2:?usage: phi_decoder_profile_stage.sh STAGE XLS_ROOT TIMEOUT SHARDS}
+stage=${1:?usage: phi_decoder_profile_stage.sh STAGE XLS_ROOT TIMEOUT SHARDS PIPELINE_STAGES II}
+xls_root=${2:?usage: phi_decoder_profile_stage.sh STAGE XLS_ROOT TIMEOUT SHARDS PIPELINE_STAGES II}
 stage=$(cd "$stage" && pwd)
 xls_root=$(cd "$xls_root" && pwd)
 stage_timeout=${3:-2h}
 shard_count=${4:-3}
+pipeline_stages=${5:-2}
+initiation_interval=${6:-2}
 scheduler_count=$((2 + 2 * shard_count))
 stdlib="$xls_root/xls/dslx/stdlib"
 . "$stage/phi_scheduler_rams.sh"
@@ -97,8 +99,8 @@ timed_output \
     phi_decoder_profile-codegen \
     phi_decoder_profile.v \
     "$xls_root/codegen_main" \
-    --pipeline_stages=2 \
-    --worst_case_throughput=2 \
+    --pipeline_stages="$pipeline_stages" \
+    --worst_case_throughput="$initiation_interval" \
     --delay_model=unit \
     --flop_inputs=false \
     --flop_outputs=true \
@@ -145,6 +147,11 @@ awk -F= '
         name = $1
         sub(/_selection_activations$/, "", name)
         activations[name] = $2
+    }
+    /_mailbox_occupancy_samples=/ {
+        name = $1
+        sub(/_mailbox_occupancy_samples$/, "", name)
+        occupancy_samples[name] = $2
     }
     /_selection_cycles_selectable=/ {
         name = $1
@@ -222,6 +229,8 @@ awk -F= '
 {
     printf 'shard_count=%s\n' "$shard_count"
     printf 'scheduler_count=%s\n' "$scheduler_count"
+    printf 'pipeline_stages=%s\n' "$pipeline_stages"
+    printf 'initiation_interval=%s\n' "$initiation_interval"
     grep -H -E 'PROFILE_RESULT|PROFILE_ACTIVITY|PASS:' \
         phi_decoder_profile.sim.log
     cat phi_decoder_profile.scheduler_profile

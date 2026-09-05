@@ -20,9 +20,9 @@ signed_wire_round_trip_test() ->
 
 center_recurrence_test() ->
     One = phi_field:from_integer(1),
-    ThreeQuarters = phi_field:from_ratio(3, 4),
+    OneHalf = phi_field:from_ratio(1, 2),
     ?assertEqual(
-        ThreeQuarters,
+        OneHalf,
         phi_field:relax_center(0, One, 0, 0)
     ),
     ?assertEqual(
@@ -34,7 +34,7 @@ center_recurrence_test() ->
         phi_field:relax_center(1, One, One, 4 * One)
     ),
     ?assertEqual(
-        phi_field:from_ratio(1, 24),
+        phi_field:from_ratio(1, 12),
         phi_field:relax_center(0, 0, 0, One)
     ).
 
@@ -45,18 +45,18 @@ terminal_bulk_recurrence_test() ->
         phi_field:relax_bulk(One, One, 4 * One)
     ),
     ?assertEqual(
-        phi_field:from_ratio(3, 4),
+        phi_field:from_ratio(7, 12),
         phi_field:relax_bulk(0, One, 0)
     ),
     ?assertEqual(
-        phi_field:from_ratio(-1, 20),
+        phi_field:from_ratio(-1, 12),
         phi_field:relax_bulk(0, 0, -One)
     ).
 
 negative_rounding_test() ->
-    ?assertEqual(0, phi_field:relax_bulk(0, 0, -9)),
-    ?assertEqual(-1, phi_field:relax_bulk(0, 0, -10)),
-    ?assertEqual(-1, phi_field:relax_bulk(0, 0, -11)).
+    ?assertEqual(0, phi_field:relax_bulk(0, 0, -5)),
+    ?assertEqual(-1, phi_field:relax_bulk(0, 0, -6)),
+    ?assertEqual(-1, phi_field:relax_bulk(0, 0, -7)).
 
 all_rounding_residues_match_reference_test() ->
     lists:foreach(
@@ -148,11 +148,11 @@ widened_recurrence_preserves_large_uniform_fields_test() ->
 reference_relax_center(Anyon, Phi0, Phi1, NeighborSum) ->
     saturate_s32(
         (Anyon bsl 16) +
-            round_ratio(18 * Phi0 + 2 * Phi1 + NeighborSum, 24)
+            round_ratio(6 * Phi0 + 2 * Phi1 + NeighborSum, 12)
     ).
 
 reference_relax_bulk(Phi0, Phi1, NeighborSum) ->
-    saturate_s32(round_ratio(Phi0 + 15 * Phi1 + NeighborSum, 20)).
+    saturate_s32(round_ratio(Phi0 + 7 * Phi1 + NeighborSum, 12)).
 
 round_ratio(Numerator, Denominator) when Numerator >= 0 ->
     (Numerator + Denominator div 2) div Denominator;

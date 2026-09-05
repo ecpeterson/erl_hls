@@ -1161,9 +1161,9 @@ proc SchedulerRouter0 {
       state.scheduled
     } else { incoming };
     let index = if state.active { state.index } else { u8:0 };
-    let effect = scheduled.effects.values[index as u32];
-    let emit = index < scheduled.effects.count &&
-      scheduled.effects.valid[index as u32];
+    let effect_info = phenom_data_cell::scheduled_effect(scheduled, index);
+    let effect = effect_info.0;
+    let emit = effect_info.1;
     let address = scheduler_0_address(scheduled.slot);
     let routed_tok = if emit {
       match address.family as FamilyId {
@@ -1197,7 +1197,7 @@ proc SchedulerRouter0 {
         _ => tok,
       }
     } else { tok };
-    let last = index + u8:1 >= scheduled.effects.count;
+    let last = effect_info.2;
     let _done = send_if(
       routed_tok, credit_out, last, phenom_data_cell::ScheduledRequest {
         credit: u1:1,
@@ -1251,9 +1251,9 @@ proc SchedulerRouter1 {
       state.scheduled
     } else { incoming };
     let index = if state.active { state.index } else { u8:0 };
-    let effect = scheduled.effects.values[index as u32];
-    let emit = index < scheduled.effects.count &&
-      scheduled.effects.valid[index as u32];
+    let effect_info = phenom_data_cell::scheduled_effect(scheduled, index);
+    let effect = effect_info.0;
+    let emit = effect_info.1;
     let address = scheduler_1_address(scheduled.slot);
     let routed_tok = if emit {
       match address.family as FamilyId {
@@ -1287,7 +1287,7 @@ proc SchedulerRouter1 {
         _ => tok,
       }
     } else { tok };
-    let last = index + u8:1 >= scheduled.effects.count;
+    let last = effect_info.2;
     let _done = send_if(
       routed_tok, credit_out, last, phenom_data_cell::ScheduledRequest {
         credit: u1:1,
@@ -1341,9 +1341,9 @@ proc SchedulerRouter2 {
       state.scheduled
     } else { incoming };
     let index = if state.active { state.index } else { u8:0 };
-    let effect = scheduled.effects.values[index as u32];
-    let emit = index < scheduled.effects.count &&
-      scheduled.effects.valid[index as u32];
+    let effect_info = phi_halo_cell::scheduled_effect(scheduled, index);
+    let effect = effect_info.0;
+    let emit = effect_info.1;
     let address = scheduler_2_address(scheduled.slot);
     let routed_tok = if emit {
       match address.family as FamilyId {
@@ -1383,7 +1383,7 @@ proc SchedulerRouter2 {
         _ => tok,
       }
     } else { tok };
-    let last = index + u8:1 >= scheduled.effects.count;
+    let last = effect_info.2;
     let _done = send_if(
       routed_tok, credit_out, last, phi_halo_cell::ScheduledRequest {
         credit: u1:1,
@@ -1437,9 +1437,9 @@ proc SchedulerRouter3 {
       state.scheduled
     } else { incoming };
     let index = if state.active { state.index } else { u8:0 };
-    let effect = scheduled.effects.values[index as u32];
-    let emit = index < scheduled.effects.count &&
-      scheduled.effects.valid[index as u32];
+    let effect_info = phi_halo_cell::scheduled_effect(scheduled, index);
+    let effect = effect_info.0;
+    let emit = effect_info.1;
     let address = scheduler_3_address(scheduled.slot);
     let routed_tok = if emit {
       match address.family as FamilyId {
@@ -1479,7 +1479,7 @@ proc SchedulerRouter3 {
         _ => tok,
       }
     } else { tok };
-    let last = index + u8:1 >= scheduled.effects.count;
+    let last = effect_info.2;
     let _done = send_if(
       routed_tok, credit_out, last, phi_halo_cell::ScheduledRequest {
         credit: u1:1,
@@ -1533,9 +1533,9 @@ proc SchedulerRouter4 {
       state.scheduled
     } else { incoming };
     let index = if state.active { state.index } else { u8:0 };
-    let effect = scheduled.effects.values[index as u32];
-    let emit = index < scheduled.effects.count &&
-      scheduled.effects.valid[index as u32];
+    let effect_info = phenom_syndrome_cell::scheduled_effect(scheduled, index);
+    let effect = effect_info.0;
+    let emit = effect_info.1;
     let address = scheduler_4_address(scheduled.slot);
     let routed_tok = if emit {
       match address.family as FamilyId {
@@ -1573,7 +1573,7 @@ proc SchedulerRouter4 {
         _ => tok,
       }
     } else { tok };
-    let last = index + u8:1 >= scheduled.effects.count;
+    let last = effect_info.2;
     let _done = send_if(
       routed_tok, credit_out, last, phenom_syndrome_cell::ScheduledRequest {
         credit: u1:1,
@@ -1627,9 +1627,9 @@ proc SchedulerRouter5 {
       state.scheduled
     } else { incoming };
     let index = if state.active { state.index } else { u8:0 };
-    let effect = scheduled.effects.values[index as u32];
-    let emit = index < scheduled.effects.count &&
-      scheduled.effects.valid[index as u32];
+    let effect_info = phenom_syndrome_cell::scheduled_effect(scheduled, index);
+    let effect = effect_info.0;
+    let emit = effect_info.1;
     let address = scheduler_5_address(scheduled.slot);
     let routed_tok = if emit {
       match address.family as FamilyId {
@@ -1667,7 +1667,7 @@ proc SchedulerRouter5 {
         _ => tok,
       }
     } else { tok };
-    let last = index + u8:1 >= scheduled.effects.count;
+    let last = effect_info.2;
     let _done = send_if(
       routed_tok, credit_out, last, phenom_syndrome_cell::ScheduledRequest {
         credit: u1:1,

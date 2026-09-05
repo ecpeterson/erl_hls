@@ -361,10 +361,14 @@ pub const EGRESS_DEPTH = u32:5;
 
 pub const ENTRY_EFFECT_CAPACITY = u32:5;
 
+pub const ENTRY_EFFECT_PAYLOAD_BITS = u32:384;
+
+// Sorry: this is a hand-rolled tagged union. DSLX cannot yet express
+// phase-indexed variants whose fields retain their message types.
 pub struct EntryEffects {
-  count: u8,
+  phase: u8,
   valid: bool[5],
-  values: Egress[5],
+  payloads: bits[384],
 }
 
 type MailboxSlot = mailbox::Slot;
@@ -573,7 +577,7 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
         _0
       };
       (entered_data, EntryEffects {
-        count: u8:0,
+        phase: Phase::CONFIGURING as u8,
         valid: [
           bool:false,
           bool:false,
@@ -581,13 +585,7 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
           bool:false,
           bool:false,
         ],
-        values: [
-          zero!<Egress>(),
-          zero!<Egress>(),
-          zero!<Egress>(),
-          zero!<Egress>(),
-          zero!<Egress>(),
-        ],
+        payloads: zero!<bits[384]>(),
       })
     },
     Phase::MEASURING => {
@@ -745,7 +743,7 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
         _14
       };
       (entered_data, EntryEffects {
-        count: u8:2,
+        phase: Phase::MEASURING as u8,
         valid: [
           effect_0_valid,
           effect_1_valid,
@@ -753,13 +751,13 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
           bool:false,
           bool:false,
         ],
-        values: [
-          Egress { port: OutputPort::STATUS, frame: effect_0 },
-          Egress { port: OutputPort::SYNDROME, frame: effect_1 },
-          zero!<Egress>(),
-          zero!<Egress>(),
-          zero!<Egress>(),
-        ],
+        payloads: bit_slice_update(
+          bit_slice_update(
+          zero!<bits[384]>(),
+          u32:0,
+          effect_0.payload[0:96]),
+          u32:96,
+          effect_1.payload[0:32]),
       })
     },
     Phase::GATHERING => {
@@ -768,7 +766,7 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
         let __1 = phase;
         let Cell_1 = (Tag::CELL, data);
         let _0 = Cell_1.1.step;
-        let _1 = _0 * 2;
+        let _1 = _0 * 12;
         let _2 = Cell_1.1.diffusion_round;
         let _3 = _1 + _2;
         let _4 = _3 & 4294967295;
@@ -796,7 +794,7 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
         let __1 = phase;
         let Cell_1 = (Tag::CELL, data);
         let _0 = Cell_1.1.step;
-        let _1 = _0 * 2;
+        let _1 = _0 * 12;
         let _2 = Cell_1.1.diffusion_round;
         let _3 = _1 + _2;
         let _4 = _3 & 4294967295;
@@ -824,7 +822,7 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
         let __1 = phase;
         let Cell_1 = (Tag::CELL, data);
         let _0 = Cell_1.1.step;
-        let _1 = _0 * 2;
+        let _1 = _0 * 12;
         let _2 = Cell_1.1.diffusion_round;
         let _3 = _1 + _2;
         let _4 = _3 & 4294967295;
@@ -852,7 +850,7 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
         let __1 = phase;
         let Cell_1 = (Tag::CELL, data);
         let _0 = Cell_1.1.step;
-        let _1 = _0 * 2;
+        let _1 = _0 * 12;
         let _2 = Cell_1.1.diffusion_round;
         let _3 = _1 + _2;
         let _4 = _3 & 4294967295;
@@ -880,7 +878,7 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
         let __1 = phase;
         let Cell_1 = (Tag::CELL, data);
         let _0 = Cell_1.1.step;
-        let _1 = _0 * 2;
+        let _1 = _0 * 12;
         let _2 = Cell_1.1.diffusion_round;
         let _3 = _1 + _2;
         let _4 = _3 & 4294967295;
@@ -901,7 +899,7 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
         _8
       };
       (entered_data, EntryEffects {
-        count: u8:4,
+        phase: Phase::GATHERING as u8,
         valid: [
           effect_0_valid,
           effect_1_valid,
@@ -909,13 +907,19 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
           effect_3_valid,
           bool:false,
         ],
-        values: [
-          Egress { port: OutputPort::NORTH, frame: effect_0 },
-          Egress { port: OutputPort::EAST, frame: effect_1 },
-          Egress { port: OutputPort::WEST, frame: effect_2 },
-          Egress { port: OutputPort::SOUTH, frame: effect_3 },
-          zero!<Egress>(),
-        ],
+        payloads: bit_slice_update(
+          bit_slice_update(
+          bit_slice_update(
+          bit_slice_update(
+          zero!<bits[384]>(),
+          u32:0,
+          effect_0.payload[0:96]),
+          u32:96,
+          effect_1.payload[0:96]),
+          u32:192,
+          effect_2.payload[0:96]),
+          u32:288,
+          effect_3.payload[0:96]),
       })
     },
     Phase::COMPARING => {
@@ -1062,7 +1066,7 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
         _7
       };
       (entered_data, EntryEffects {
-        count: u8:4,
+        phase: Phase::COMPARING as u8,
         valid: [
           effect_0_valid,
           effect_1_valid,
@@ -1070,13 +1074,19 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
           effect_3_valid,
           bool:false,
         ],
-        values: [
-          Egress { port: OutputPort::NORTH, frame: effect_0 },
-          Egress { port: OutputPort::EAST, frame: effect_1 },
-          Egress { port: OutputPort::WEST, frame: effect_2 },
-          Egress { port: OutputPort::SOUTH, frame: effect_3 },
-          zero!<Egress>(),
-        ],
+        payloads: bit_slice_update(
+          bit_slice_update(
+          bit_slice_update(
+          bit_slice_update(
+          zero!<bits[384]>(),
+          u32:0,
+          effect_0.payload[0:96]),
+          u32:96,
+          effect_1.payload[0:96]),
+          u32:192,
+          effect_2.payload[0:96]),
+          u32:288,
+          effect_3.payload[0:96]),
       })
     },
     Phase::FLIPPING => {
@@ -1848,7 +1858,7 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
         _32
       };
       (entered_data, EntryEffects {
-        count: u8:5,
+        phase: Phase::FLIPPING as u8,
         valid: [
           effect_0_valid,
           effect_1_valid,
@@ -1856,22 +1866,142 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
           effect_3_valid,
           effect_4_valid,
         ],
-        values: [
-          Egress { port: OutputPort::NORTH, frame: effect_0 },
-          Egress { port: OutputPort::EAST, frame: effect_1 },
-          Egress { port: OutputPort::WEST, frame: effect_2 },
-          Egress { port: OutputPort::SOUTH, frame: effect_3 },
-          Egress { port: OutputPort::CORRECTION, frame: effect_4 },
-        ],
+        payloads: bit_slice_update(
+          bit_slice_update(
+          bit_slice_update(
+          bit_slice_update(
+          bit_slice_update(
+          zero!<bits[384]>(),
+          u32:0,
+          effect_0.payload[0:64]),
+          u32:64,
+          effect_1.payload[0:64]),
+          u32:128,
+          effect_2.payload[0:64]),
+          u32:192,
+          effect_3.payload[0:64]),
+          u32:256,
+          effect_4.payload[0:96]),
       })
     },
   }
 }
 
+fn entry_effect_count(effects: EntryEffects) -> u8 {
+  match effects.phase as Phase {
+    Phase::CONFIGURING => u8:0,
+    Phase::MEASURING => u8:2,
+    Phase::GATHERING => u8:4,
+    Phase::COMPARING => u8:4,
+    Phase::FLIPPING => u8:5,
+  }
+}
+
+fn entry_effect(effects: EntryEffects, index: u8) -> Egress {
+  match effects.phase as Phase {
+    Phase::CONFIGURING => zero!<Egress>(),
+    Phase::MEASURING => match index {
+      u8:0 => Egress {
+        port: OutputPort::STATUS,
+        frame: axis::pack(Tag::PHI_STATUS as u8,
+          effects.payloads[0:96]),
+      },
+      u8:1 => Egress {
+        port: OutputPort::SYNDROME,
+        frame: axis::pack(Tag::PHENOM_REQUEST as u8,
+          effects.payloads[96:128]),
+      },
+      _ => zero!<Egress>(),
+    },
+    Phase::GATHERING => match index {
+      u8:0 => Egress {
+        port: OutputPort::NORTH,
+        frame: axis::pack(Tag::PHI as u8,
+          effects.payloads[0:96]),
+      },
+      u8:1 => Egress {
+        port: OutputPort::EAST,
+        frame: axis::pack(Tag::PHI as u8,
+          effects.payloads[96:192]),
+      },
+      u8:2 => Egress {
+        port: OutputPort::WEST,
+        frame: axis::pack(Tag::PHI as u8,
+          effects.payloads[192:288]),
+      },
+      u8:3 => Egress {
+        port: OutputPort::SOUTH,
+        frame: axis::pack(Tag::PHI as u8,
+          effects.payloads[288:384]),
+      },
+      _ => zero!<Egress>(),
+    },
+    Phase::COMPARING => match index {
+      u8:0 => Egress {
+        port: OutputPort::NORTH,
+        frame: axis::pack(Tag::PHI0 as u8,
+          effects.payloads[0:96]),
+      },
+      u8:1 => Egress {
+        port: OutputPort::EAST,
+        frame: axis::pack(Tag::PHI0 as u8,
+          effects.payloads[96:192]),
+      },
+      u8:2 => Egress {
+        port: OutputPort::WEST,
+        frame: axis::pack(Tag::PHI0 as u8,
+          effects.payloads[192:288]),
+      },
+      u8:3 => Egress {
+        port: OutputPort::SOUTH,
+        frame: axis::pack(Tag::PHI0 as u8,
+          effects.payloads[288:384]),
+      },
+      _ => zero!<Egress>(),
+    },
+    Phase::FLIPPING => match index {
+      u8:0 => Egress {
+        port: OutputPort::NORTH,
+        frame: axis::pack(Tag::ANYON_MOVE as u8,
+          effects.payloads[0:64]),
+      },
+      u8:1 => Egress {
+        port: OutputPort::EAST,
+        frame: axis::pack(Tag::ANYON_MOVE as u8,
+          effects.payloads[64:128]),
+      },
+      u8:2 => Egress {
+        port: OutputPort::WEST,
+        frame: axis::pack(Tag::ANYON_MOVE as u8,
+          effects.payloads[128:192]),
+      },
+      u8:3 => Egress {
+        port: OutputPort::SOUTH,
+        frame: axis::pack(Tag::ANYON_MOVE as u8,
+          effects.payloads[192:256]),
+      },
+      u8:4 => Egress {
+        port: OutputPort::CORRECTION,
+        frame: axis::pack(Tag::PHI_CORRECTION as u8,
+          effects.payloads[256:352]),
+      },
+      _ => zero!<Egress>(),
+    },
+  }
+}
+
+pub fn scheduled_effect(
+    scheduled: ScheduledEffects, index: u8) -> (Egress, u1, u1) {
+  let count = entry_effect_count(scheduled.effects);
+  let emit = index < count && scheduled.effects.valid[index as u32];
+  let last = index + u8:1 >= count;
+  (entry_effect(scheduled.effects, index), emit, last)
+}
 fn entry_effects_valid(effects: EntryEffects) -> u1 {
+  let count = entry_effect_count(effects);
   unroll_for! (index, found):
       (u32, u1) in u32:0..ENTRY_EFFECT_CAPACITY {
-    found || (index < effects.count as u32 && effects.valid[index])
+    found || (index < count as u32 && effects.valid[index])
   }(u1:0)
 }
 
@@ -1907,7 +2037,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
           let Xls_clause_1_Epoch_1 = message.epoch;
           let Xls_clause_1_Cell_1 = (Tag::CELL, data);
           let Xls_clause_1_Step_1 = data.step;
-          let _0 = Xls_clause_1_Step_1 * 2;
+          let _0 = Xls_clause_1_Step_1 * 12;
           let _1 = _0 & 4294967295;
           let _2 = Xls_clause_1_Epoch_1 == _1;
           if _2 {
@@ -1937,7 +2067,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
           let Xls_clause_1_Cell_1 = (Tag::CELL, data);
           let Xls_clause_1_Step_1 = data.step;
           let Xls_clause_1_Round_1 = data.diffusion_round;
-          let _0 = Xls_clause_1_Step_1 * 2;
+          let _0 = Xls_clause_1_Step_1 * 12;
           let _1 = _0 + Xls_clause_1_Round_1;
           let _2 = _1 & 4294967295;
           let _3 = Xls_clause_1_Epoch_1 == _2;
@@ -1971,20 +2101,20 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
               let _21 = _20[2 - u32:1];
               let Xls_clause_1_P1_1 = _21;
               let _22 = Xls_clause_1_Cell_1.1.anyon;
-              let _23 = ((Xls_clause_1_P0_1 as sN[37]) * sN[37]:18 + (Xls_clause_1_P1_1 as sN[37]) * sN[37]:2 + (Xls_clause_1_Sum0_1 as sN[37]));
+              let _23 = ((Xls_clause_1_P0_1 as sN[37]) * sN[37]:6 + (Xls_clause_1_P1_1 as sN[37]) * sN[37]:2 + (Xls_clause_1_Sum0_1 as sN[37]));
               let _24 = _23 < sN[37]:0;
               let _25 = ((if _24 { -(_23) } else { _23 }) as uN[36]);
-              let _26 = (((_25 + uN[36]:12) >> u32:3) as uN[33]);
-              let _27 = ((_26 / uN[33]:3) as sN[33]);
+              let _26 = (((_25 + uN[36]:6) >> u32:2) as uN[34]);
+              let _27 = ((_26 / uN[34]:3) as sN[33]);
               let _28 = ((if _24 { -(_27) } else { _27 }) as s64);
               let _29 = ((_22 as s64) << u32:16) + _28;
               let _30 = (if _29 > s64:2147483647 { s32:2147483647 } else if _29 < s64:-2147483648 { s32:-2147483648 } else { _29 as s32 });
               let Xls_clause_1_New0_1 = _30;
-              let _31 = ((Xls_clause_1_P0_1 as sN[37]) * sN[37]:1 + (Xls_clause_1_P1_1 as sN[37]) * sN[37]:15 + (Xls_clause_1_Sum1_1 as sN[37]));
+              let _31 = ((Xls_clause_1_P0_1 as sN[37]) * sN[37]:1 + (Xls_clause_1_P1_1 as sN[37]) * sN[37]:7 + (Xls_clause_1_Sum1_1 as sN[37]));
               let _32 = _31 < sN[37]:0;
               let _33 = ((if _32 { -(_31) } else { _31 }) as uN[36]);
-              let _34 = (((_33 + uN[36]:10) >> u32:2) as uN[34]);
-              let _35 = ((_34 / uN[34]:5) as sN[33]);
+              let _34 = (((_33 + uN[36]:6) >> u32:2) as uN[34]);
+              let _35 = ((_34 / uN[34]:3) as sN[33]);
               let _36 = ((if _32 { -(_35) } else { _35 }) as s64);
               let _37 = (if _36 > s64:2147483647 { s32:2147483647 } else if _36 < s64:-2147483648 { s32:-2147483648 } else { _36 as s32 });
               let Xls_clause_1_New1_1 = _37;
@@ -2005,7 +2135,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
               let _44 = (Tag::CELL, _43);
               let Xls_clause_1_Updated_1 = _44;
               let _45 = Xls_clause_1_Round_1 + 1;
-              let _46 = _45 == 2;
+              let _46 = _45 == 12;
               let _50 = if _46 {
                 let _47 = Cell {
                   seen_sources: 0,
@@ -2046,7 +2176,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
             let Xls_clause_2_Cell_1 = (Tag::CELL, data);
             let Xls_clause_2_Step_1 = data.step;
             let Xls_clause_2_Round_1 = data.diffusion_round;
-            let _0 = Xls_clause_2_Step_1 * 2;
+            let _0 = Xls_clause_2_Step_1 * 12;
             let _1 = _0 + Xls_clause_2_Round_1;
             let _2 = _1 + 1;
             let _3 = _2 & 4294967295;
@@ -2078,7 +2208,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
           let Xls_clause_1_Cell_1 = (Tag::CELL, data);
           let Xls_clause_1_Step_1 = data.step;
           let Xls_clause_1_Round_1 = data.diffusion_round;
-          let _0 = Xls_clause_1_Step_1 * 2;
+          let _0 = Xls_clause_1_Step_1 * 12;
           let _1 = _0 + Xls_clause_1_Round_1;
           let _2 = _1 & 4294967295;
           let _3 = Xls_clause_1_Epoch_1 == _2;
@@ -2108,7 +2238,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
           let Xls_clause_1_Cell_1 = (Tag::CELL, data);
           let Xls_clause_1_Step_1 = data.step;
           let Xls_clause_1_Round_1 = data.diffusion_round;
-          let _0 = Xls_clause_1_Step_1 * 2;
+          let _0 = Xls_clause_1_Step_1 * 12;
           let _1 = _0 + Xls_clause_1_Round_1;
           let _2 = _1 & 4294967295;
           let _3 = Xls_clause_1_Epoch_1 == _2;
@@ -2830,16 +2960,17 @@ fn machine_step(
   } else if machine.enter_pending {
     let (entered_data, effects) = enter(
       machine.entered_from, machine.phase, machine.data);
-    let has_effect = machine.entry_effect_index < effects.count;
-    let effect = effects.values[
-      machine.entry_effect_index as u32];
+    let effect_count = entry_effect_count(effects);
+    let has_effect = machine.entry_effect_index < effect_count;
+    let effect = entry_effect(
+      effects, machine.entry_effect_index);
     let emit_effect = has_effect && effects.valid[
       machine.entry_effect_index as u32];
     let can_advance = !emit_effect || egress_ready;
     let next_effect_index = machine.entry_effect_index +
       ((has_effect && can_advance) as u8);
     let entry_complete = can_advance &&
-      next_effect_index >= effects.count;
+      next_effect_index >= effect_count;
     let reserve = entry_complete &&
       !machine.admission_pending &&
       machine.occupied < MAILBOX_CAPACITY;

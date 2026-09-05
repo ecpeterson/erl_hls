@@ -26,4 +26,5 @@ cp "$project_root/tools/phi_decoder_profile_stage.sh" \
     "$local_stage/phi_decoder_profile_stage.sh"
 
 bash "$local_stage/phi_decoder_profile_stage.sh" \
-    "$local_stage" "$xls_root" "$stage_timeout" "$shard_count"
+    "$local_stage" "$xls_root" "$stage_timeout" "$shard_count" \
+    "$pipeline_stages" "$initiation_interval"

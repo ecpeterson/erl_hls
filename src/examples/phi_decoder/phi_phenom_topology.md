@@ -1303,20 +1303,21 @@ development runner no longer copies work into the local UTM.
 
 ### Paper-semantics audit
 
-The rate above measures the deliberately small protocol fixture, not yet the
-3D decoder evaluated by Herold et al. The paper specifies an auxiliary
-`L x L x L` torus, with `c = 10 log^2(L)` parallel field updates followed by
-one anyon update in each sequence, and reports `eta = 1/2` for its numerical
-results. The current actor instead fixes two field updates and `eta = 1/4`.
+The decoder now follows the parameters used by Herold et al. The paper
+specifies an auxiliary `L x L x L` torus, with `c = 10 log^2(L)` parallel field
+updates followed by one anyon update in each sequence, and reports
+`eta = 1/2` for its numerical results.
 See [Cellular-automaton decoders for topological quantum memories](https://arxiv.org/abs/1406.2338).
 
-For `L = 3`, the current two-element field vector can represent the complete
-third dimension without loss: reflection symmetry about the anyon plane makes
-the `z = 1` and `z = -1` values equal. The bulk recurrence must nevertheless
-count both torus neighbors. The current five-neighbor terminal-layer formula
-does not do that, and it must be replaced together with the smoothing
-coefficient. A general odd `L` implementation needs `(L + 1) / 2` stored depth
-classes under this symmetry reduction.
+For `L = 3`, a two-element field vector represents the complete third
+dimension without loss: reflection symmetry about the anyon plane makes the
+`z = 1` and `z = -1` values equal. The center recurrence is therefore
+`q + (6 phi0 + 2 phi1 + planar_sum) / 12`. A bulk representative has the
+center value on one side and its reflected bulk counterpart on the other, so
+its recurrence is `(phi0 + 7 phi1 + planar_sum) / 12`. Both paths retain the
+existing single-round, nearest-Q15.16 rounding policy. A general odd `L`
+implementation would need `(L + 1) / 2` stored depth classes under this
+symmetry reduction.
 
 The paper does not state an integer-rounding convention for `c` at very small
 `L`; natural logarithms give approximately 12.1 at `L = 3`. The demonstration
@@ -1351,7 +1352,6 @@ ample queued input, and only a modest post-admission backlog, while the actor
 executor is busy whenever the same-actor rule permits it. This profile points
 to increasing executor issue rate rather than changing the mailbox payload
 layout.
-
 ### Decoupled actor executor
 
 The actor-specific microstep is now a stateless `SharedExecutor` proc. The
@@ -1445,3 +1445,31 @@ A future multi-batch design needs credits backed by end-to-end destination
 reservations, or a routing discipline which provably breaks these wait cycles.
 Until then the one-completed-batch rule remains part of the shared scheduler's
 deadlock discipline rather than merely a throughput knob.
+
+### Compact scheduled effects
+
+The shared executor previously carried every entry action as a complete
+`Egress`: an eight-bit output port and a 128-bit AXI frame, repeated to the
+maximum action count. Most of those bits are static. For a given phase and
+action index, the compiler already knows the output port, message selector,
+and payload width. `EntryEffects` now carries the entered phase, the runtime
+predicate for each action, and one packed vector containing only the actual
+message payloads. The egress router reconstructs each complete frame as it
+serializes the batch. This changes neither action order nor the existing
+one-batch progress rule.
+
+For `phi_halo_cell`, the effect record shrinks from 693 to 397 bits and the
+complete executor result from 1,294 to 998 bits. The paper-parameter profile is
+cycle-identical at 6,792 measured clocks, or 283 clocks per decoder step. A
+fresh pair of out-of-context XC7 maps of that profile topology reports the
+following controlled comparison:
+
+| effect representation | estimated logic cells | flip-flops | LUT1-LUT6 | `DSP48E1` |
+| --- | ---: | ---: | ---: | ---: |
+| complete `Egress` array | 58,084 | 66,701 | 70,502 | 48 |
+| packed dynamic payloads | 56,590 | 64,289 | 69,924 | 48 |
+
+The compact form therefore removes 2,412 flip-flops (3.6%) and 1,494
+estimated logic cells (2.6%) without changing throughput. The smaller result
+also makes a future, progress-safe multi-batch window less expensive, but it
+does not itself supply the destination reservations that such a window needs.
