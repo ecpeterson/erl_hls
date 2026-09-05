@@ -1266,10 +1266,30 @@ or 168.67 clocks per step. Across its six phi schedulers, 77.1% of selection
 activations were selectable, 18.0% were blocked only by the same-actor hazard,
 3.4% waited for egress credit, and 1.5% had no actor work. State and mailbox
 RAMs accepted every request, and their simultaneous read/write activity never
-targeted the same row. The dominant local optimization opportunity is therefore
-the same-actor pipeline hazard. Empty or causally blocked work is material in
-the complete phenomenological fixture, but it is not the first place to spend
-effort for a real apparatus which supplies syndromes externally.
+targeted the same row.
+
+A temporal follow-up now revisits the excluded actor after its in-flight visit
+retires. The original 18.0% is not evidence that one actor monopolizes a shard:
+within each three-actor phi scheduler, per-slot state-read counts differ by only
+3.5--6.2% of their mean. Selection is ready-aware round robin, and the observed
+load is correspondingly balanced. The lone-ready periods instead arise because
+neighbor messages arrive in causal bursts and a three-slot shard can drain the
+other two queues before the current actor's next dependency arrives.
+
+The follow-up also shows that the original ready bit was sometimes only a
+conservative prediction. Of 3,058 same-actor samples, 1,966 (64.3%) still had a
+mailbox candidate after retirement, 380 (12.4%) were waiting for the shared
+egress credit, and 710 (23.2%) had no work left. Of the mailbox cases, 438
+crossed a phase boundary. The narrow state-forwarding proposal--reuse the
+outgoing machine only for a direct next mailbox dispatch--therefore applies to
+1,528 samples: 50.0% of the apparent same-actor bubbles, or 9.0% of all
+selection activations. Recovering every one would raise the selectable share
+from 77.1% to at most 86.1%, roughly an 11.7% issue-rate gain before accounting
+for new critical paths or downstream limits. This remains a useful local
+optimization, but it is not itself the missing factor of two. Empty or causally
+blocked work is material in the complete phenomenological fixture, but it is
+not the first place to spend effort for a real apparatus which supplies
+syndromes externally.
 
 Run this profile natively with an arm64 XLS distribution:
 
