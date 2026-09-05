@@ -142,13 +142,17 @@ generated_multi_family_topology_retains_compact_structure_test() ->
     ?assertEqual(6, count(Generated, <<"proc SchedulerRouter">>)),
     ?assertEqual(6, count(Generated, <<"spawn SchedulerRouter">>)),
     ?assertEqual(6, count(Generated, <<"::SharedService<">>)),
+    ?assertEqual(0, count(Generated, <<"::EffectWindowAdapter(">>)),
+    ?assertEqual(1, count(Generated, <<
+        "spawn effect_window::Arbiter<"
+    >>)),
     ?assertEqual(30, count(Generated, <<"::ScheduledEffects">>)),
-    ?assertEqual(6, count(Generated, <<"::scheduled_effect(">>)),
+    ?assertEqual(12, count(Generated, <<"::scheduled_effect(">>)),
     ?assertEqual(6, count(Generated, <<
-        "let last = effect_info.2"
+        "let last = batch_valid && effect_info.2"
     >>)),
     ?assertEqual(6, count(Generated, <<
-        "routed_tok, credit_out, last"
+        "routed_tok, credit_out, forward_credit"
     >>)),
     ?assertEqual(1, count(Generated, <<"fn scheduler_0_address(">>)),
     ?assertEqual(1, count(Generated, <<"fn scheduler_1_address(">>)),

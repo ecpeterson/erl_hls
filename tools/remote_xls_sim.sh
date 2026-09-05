@@ -31,6 +31,7 @@ vvp hls_trace_store.vvp
 for test_module in \
     axis.x \
     bram.x \
+    effect_window.x \
     mailbox.x \
     hls_debug_trace.x \
     hls_debug_observer.x \

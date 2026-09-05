@@ -1473,3 +1473,41 @@ The compact form therefore removes 2,412 flip-flops (3.6%) and 1,494
 estimated logic cells (2.6%) without changing throughput. The smaller result
 also makes a future, progress-safe multi-batch window less expensive, but it
 does not itself supply the destination reservations that such a window needs.
+
+### Globally reserved effect lookahead
+
+A conservative follow-up permits one additional completed effect batch across
+the entire topology. Each scheduler router may request the slot while draining
+a multi-effect batch. A retained round-robin arbiter records all contenders,
+chooses one owner, and does not accept another owner until the first releases
+the slot. Requests are persistent rather than speculative, so competing
+schedulers cannot repeatedly acquire and roll back symmetric tentative locks.
+
+The winning router returns one virtual effect credit to its scheduler. It then
+swallows the physical credit produced when the current batch drains, thereby
+repaying the loan, and retains the token until the ordered lookahead batch has
+also drained. The lookahead never routes concurrently with the older batch:
+it occupies the existing router-input channel until it becomes the sole active
+batch. A grant which arrives after its requesting batch has already completed
+is released unused, and cannot be applied to a newly admitted batch in that
+same activation. These rules bound the added storage to one batch, retain one
+active routing dependency per scheduler, and provide a deterministic
+contention tie-break rather than a retry loop.
+
+Putting this protocol in a separate adapter added channels and wide elastic
+state, regressed the profile to 6,999 clocks, and mapped to 59,807 estimated
+logic cells. Integrating the small ownership and credit-debt state into the
+existing scheduler router is both faster and smaller. The paper-parameter
+decoder-only fixture completes steps eight through 32 in 6,398 clocks, or
+266.58 clocks per step, while preserving all 63 X and 64 Z corrections. This
+is about 750 thousand decoder steps per second at 200 MHz, a 5.8% improvement
+over the 6,792-clock compact-effects baseline.
+
+An apples-to-apples XC7 topology-core map reports 57,040 estimated logic
+cells, 64,061 flip-flops, 70,566 LUTs, and 48 `DSP48E1`s. Relative to the
+compact-effects baseline this is 450 cells (0.8%) and 642 LUTs (0.9%) more,
+with 228 fewer mapped flip-flops and unchanged DSP use. The global token is
+intentionally conservative. A future experiment may derive independent
+reservation domains from the scheduler communication graph, but each domain
+must retain the same single-owner progress argument or replace it with real
+end-to-end destination reservations.
