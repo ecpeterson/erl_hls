@@ -9,9 +9,9 @@ with ties away from zero before the result is saturated to Q15.16.
 
 The generated recurrence uses the fact that a neighbor sum contains exactly
 four field values. Each weighted numerator therefore fits in signed 37 bits.
-Its magnitude fits in 36 unsigned bits, including the rounding offset. Powers
-of two are removed from 24 and 20 before the remaining unsigned divisions by
-3 and 5. These widths are lowering details rather than a narrower field ABI.
+Its magnitude fits in 36 unsigned bits, including the rounding offset. The
+power of two is removed from 12 before the remaining unsigned division by 3.
+These widths are lowering details rather than a narrower field ABI.
 
 The current nonnegative charge model stays far inside the representable range.
 Keeping the sign bit reserves the gauge choice in which empty cells contribute
@@ -99,13 +99,13 @@ accumulate(Sum, Value) ->
 -spec relax_center(hls_nums:u32(), field(), field(), accumulator()) -> field().
 relax_center(Anyon, Phi0, Phi1, NeighborSum0) ->
     Charge = Anyon bsl ?FRACTION_BITS,
-    Smoothed = round_ratio(18 * Phi0 + 2 * Phi1 + NeighborSum0, 24),
+    Smoothed = round_ratio(6 * Phi0 + 2 * Phi1 + NeighborSum0, 12),
     saturate_s32(Charge + Smoothed).
 
 -doc "Applies terminal bulk-plane relaxation to one four-neighbor sum.".
 -spec relax_bulk(field(), field(), accumulator()) -> field().
 relax_bulk(Phi0, Phi1, NeighborSum1) ->
-    saturate_s32(round_ratio(Phi0 + 15 * Phi1 + NeighborSum1, 20)).
+    saturate_s32(round_ratio(Phi0 + 7 * Phi1 + NeighborSum1, 12)).
 
 %% hls_type callbacks
 
@@ -127,9 +127,9 @@ transpile(accumulate, [Sum, Value], _State) ->
     ["(", Sum, " + (", Value, " as s64))"];
 transpile(relax_center, [Anyon, Phi0, Phi1, NeighborSum0], State0) ->
     State1 = weighted_numerator(
-        State0, Phi0, 18, Phi1, 2, NeighborSum0
+        State0, Phi0, 6, Phi1, 2, NeighborSum0
     ),
-    State2 = rounded_division(State1, 24, 3, 3),
+    State2 = rounded_division(State1, 12, 2, 3),
     State3 = xls_parse:instr(State2, [
         "((", Anyon, " as s64) << u32:16) + ",
         xls_parse:reference(State2)
@@ -137,9 +137,9 @@ transpile(relax_center, [Anyon, Phi0, Phi1, NeighborSum0], State0) ->
     saturated_s32(State3);
 transpile(relax_bulk, [Phi0, Phi1, NeighborSum1], State0) ->
     State1 = weighted_numerator(
-        State0, Phi0, 1, Phi1, 15, NeighborSum1
+        State0, Phi0, 1, Phi1, 7, NeighborSum1
     ),
-    State2 = rounded_division(State1, 20, 2, 5),
+    State2 = rounded_division(State1, 12, 2, 3),
     saturated_s32(State2).
 
 weighted_numerator(
