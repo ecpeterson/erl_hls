@@ -78,8 +78,26 @@ erl \
             false -> 3;
             ProfileShardText -> list_to_integer(ProfileShardText)
         end,
-        PhiDecoderProfile = phi_decoder_profile_topology_dslx:to_dslx(
-            ProfileShardCount
+        ProfileEffectWindowPartition = case os:getenv(
+            "ERL_HLS_PHI_PROFILE_EFFECT_WINDOWS"
+        ) of
+            false -> global;
+            "global" -> global;
+            "weak_components" -> weak_components;
+            PartitionText -> error({effect_window_partition, PartitionText})
+        end,
+        ProfilePlan = hls_topology:from_module(
+            phi_decoder_profile_topology
+        ),
+        ProfilePhysical =
+            (phi_decoder_profile_topology_dslx:profile(
+                ProfileShardCount
+            ))#{
+                effect_window_partition => ProfileEffectWindowPartition
+            },
+        PhiDecoderProfile = xls_topology_dslx:emit(
+            ProfilePlan,
+            ProfilePhysical
         ),
         PhiDecoderProfileTop = phi_decoder_profile_top_v:to_verilog(
             ProfileShardCount

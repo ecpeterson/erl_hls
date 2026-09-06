@@ -55,6 +55,11 @@ producer output register and therefore depends on code generation retaining
 `--flop_outputs=true`; a literal zero is a bypass adapter which leaves only
 that physical holding slot.
 
+`effect_window_partition` defaults to `global`. The experimental
+`weak_components` setting gives each weak component of the conservative
+scheduler dependency graph a separate retained lookahead reservation. It is a
+correctness-permitted maximum split, not a promise of better throughput.
+
 Family-member startup remains explicit normalized data. A family which has
 startup data must provide exactly one frame for every member. The generated
 ingress sends that frame under the actor's first admission credit, ahead of its
@@ -132,6 +137,11 @@ lower(Plan, Profile) ->
     #{
         name => maps:get(name, Physical),
         depth => maps:get(channel_depth, Physical),
+        effect_window_partition => maps:get(
+            effect_window_partition,
+            Physical,
+            global
+        ),
         schedulers => Schedulers,
         families => Families,
         width => Width,
@@ -769,7 +779,11 @@ startup_fields(Target, Fields, Values) ->
 validate_profile(Profile) when is_map(Profile) ->
     Required = lists:sort([actor_egress_depth, channel_depth, name]),
     Keys = lists:sort(maps:keys(Profile)),
-    Allowed = lists:sort([scheduler_groups | Required]),
+    Allowed = lists:sort([
+        effect_window_partition,
+        scheduler_groups
+        | Required
+    ]),
     case {Required -- Keys, Keys -- Allowed} of
         {[], []} -> ok;
         {Missing, Unknown} ->
@@ -789,6 +803,13 @@ validate_profile(Profile) when is_map(Profile) ->
     case maps:get(scheduler_groups, Profile, #{}) of
         Groups when is_map(Groups) -> ok;
         Groups -> error({scheduler_groups, Groups})
+    end,
+    case Profile of
+        #{effect_window_partition := global} -> ok;
+        #{effect_window_partition := weak_components} -> ok;
+        #{effect_window_partition := Partition} ->
+            error({effect_window_partition, Partition});
+        _ -> ok
     end,
     Profile#{name := Name};
 validate_profile(Profile) ->

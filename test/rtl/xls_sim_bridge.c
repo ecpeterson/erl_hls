@@ -16,6 +16,8 @@
 #define MAX_SCHEDULERS 32
 #define MAX_SCHEDULER_INPUTS 8
 #define MAX_SCHEDULER_ACTORS 32
+#define MAX_EFFECT_ROUTERS 32
+#define MAX_EFFECT_DOMAINS 32
 
 typedef struct {
     uint8_t bytes[BUFFER_SIZE];
@@ -203,6 +205,53 @@ typedef struct {
     scheduler_counts_t checkpoint;
 } scheduler_profile_t;
 
+typedef struct {
+    uint64_t scheduled_batches;
+    uint64_t scheduled_stalls;
+    uint64_t requests;
+    uint64_t request_stalls;
+    uint64_t request_wait_cycles;
+    uint64_t request_latencies;
+    uint64_t request_latency_cycles;
+    uint64_t request_latency_min;
+    uint64_t request_latency_max;
+    uint64_t grants;
+    uint64_t grant_stalls;
+    uint64_t releases;
+    uint64_t release_stalls;
+    uint64_t unmatched_grants;
+    uint64_t lifecycle_errors;
+} effect_router_counts_t;
+
+typedef struct {
+    char name[32];
+    char hierarchy[PATH_SIZE];
+    vpiHandle h_scheduled_valid;
+    vpiHandle h_scheduled_ready;
+    vpiHandle h_request_valid;
+    vpiHandle h_request_ready;
+    vpiHandle h_grant_valid;
+    vpiHandle h_grant_ready;
+    vpiHandle h_release_valid;
+    vpiHandle h_release_ready;
+    int request_pending;
+    uint64_t request_start;
+    int owner_held;
+    int checkpoint_request_pending;
+    int checkpoint_owner_held;
+    effect_router_counts_t counts;
+    effect_router_counts_t checkpoint;
+} effect_router_profile_t;
+
+typedef struct {
+    char name[32];
+    char hierarchy[PATH_SIZE];
+    vpiHandle h_owner_valid;
+    uint64_t owner_cycles;
+    uint64_t checkpoint_owner_cycles;
+    int checkpoint_owner;
+} effect_domain_profile_t;
+
 static vpiHandle h_clk;
 static vpiHandle h_resetn;
 static const char *hierarchy_root;
@@ -211,6 +260,20 @@ static axis_endpoint_t app_endpoint;
 static axis_endpoint_t debug_endpoint;
 static scheduler_profile_t scheduler_profiles[MAX_SCHEDULERS];
 static unsigned scheduler_profile_count;
+static effect_router_profile_t effect_router_profiles[MAX_EFFECT_ROUTERS];
+static unsigned effect_router_profile_count;
+static unsigned effect_router_candidate_count;
+static effect_domain_profile_t effect_domain_profiles[MAX_EFFECT_DOMAINS];
+static unsigned effect_domain_profile_count;
+static unsigned effect_domain_candidate_count;
+static uint64_t effect_owner_concurrency[MAX_EFFECT_DOMAINS + 1];
+static uint64_t effect_owner_concurrency_checkpoint[MAX_EFFECT_DOMAINS + 1];
+static unsigned effect_owner_peak;
+static unsigned effect_owner_peak_checkpoint;
+static uint64_t effect_request_concurrency[MAX_EFFECT_ROUTERS + 1];
+static uint64_t effect_request_concurrency_checkpoint[MAX_EFFECT_ROUTERS + 1];
+static unsigned effect_request_peak;
+static unsigned effect_request_peak_checkpoint;
 static char scheduler_profile_path[PATH_SIZE];
 static int scheduler_profile_enabled;
 static int scheduler_profile_started;
@@ -297,6 +360,10 @@ static void reset_latency_minima(scheduler_counts_t *counts) {
     counts->state_read_interval_min = UINT64_MAX;
 }
 
+static void reset_effect_router_minima(effect_router_counts_t *counts) {
+    counts->request_latency_min = UINT64_MAX;
+}
+
 static void reset_scheduler_profile_counts(void) {
     unsigned index;
     for (index = 0; index < scheduler_profile_count; index++) {
@@ -312,6 +379,35 @@ static void reset_scheduler_profile_counts(void) {
         scheduler_profiles[index].same_actor_followup_slot = 0;
         scheduler_profiles[index].same_actor_followup_phase_boundary = 0;
     }
+    for (index = 0; index < effect_router_profile_count; index++) {
+        memset(&effect_router_profiles[index].counts, 0,
+               sizeof(effect_router_profiles[index].counts));
+        memset(&effect_router_profiles[index].checkpoint, 0,
+               sizeof(effect_router_profiles[index].checkpoint));
+        reset_effect_router_minima(&effect_router_profiles[index].counts);
+        reset_effect_router_minima(
+            &effect_router_profiles[index].checkpoint);
+        effect_router_profiles[index].request_pending = 0;
+        effect_router_profiles[index].request_start = 0;
+        effect_router_profiles[index].owner_held = 0;
+        effect_router_profiles[index].checkpoint_request_pending = 0;
+        effect_router_profiles[index].checkpoint_owner_held = 0;
+    }
+    for (index = 0; index < effect_domain_profile_count; index++) {
+        effect_domain_profiles[index].owner_cycles = 0;
+        effect_domain_profiles[index].checkpoint_owner_cycles = 0;
+        effect_domain_profiles[index].checkpoint_owner = 0;
+    }
+    memset(effect_owner_concurrency, 0, sizeof(effect_owner_concurrency));
+    memset(effect_owner_concurrency_checkpoint, 0,
+           sizeof(effect_owner_concurrency_checkpoint));
+    effect_owner_peak = 0;
+    effect_owner_peak_checkpoint = 0;
+    memset(effect_request_concurrency, 0, sizeof(effect_request_concurrency));
+    memset(effect_request_concurrency_checkpoint, 0,
+           sizeof(effect_request_concurrency_checkpoint));
+    effect_request_peak = 0;
+    effect_request_peak_checkpoint = 0;
     scheduler_profile_checkpoint_valid = 0;
     scheduler_profile_checkpoint_cycle = 0;
 }
@@ -363,6 +459,14 @@ static void write_scheduler_profile(void) {
     dprintf(profile_fd, "profile_snapshot=%s\n",
             scheduler_profile_checkpoint_valid ?
                 "last_application_output" : "current");
+    dprintf(profile_fd, "effect_window_router_candidates=%u\n",
+            effect_router_candidate_count);
+    dprintf(profile_fd, "effect_window_router_count=%u\n",
+            effect_router_profile_count);
+    dprintf(profile_fd, "effect_window_domain_candidates=%u\n",
+            effect_domain_candidate_count);
+    dprintf(profile_fd, "effect_window_domain_count=%u\n",
+            effect_domain_profile_count);
 
     for (index = 0; index < scheduler_profile_count; index++) {
         scheduler_profile_t *profile = &scheduler_profiles[index];
@@ -516,6 +620,78 @@ static void write_scheduler_profile(void) {
             }
         }
 #undef PROFILE_VALUE
+    }
+    for (index = 0; index < effect_router_profile_count; index++) {
+        effect_router_profile_t *profile = &effect_router_profiles[index];
+        const effect_router_counts_t *window_counts =
+            scheduler_profile_checkpoint_valid ?
+                &profile->checkpoint : &profile->counts;
+        int request_pending = scheduler_profile_checkpoint_valid ?
+            profile->checkpoint_request_pending : profile->request_pending;
+        int owner_held = scheduler_profile_checkpoint_valid ?
+            profile->checkpoint_owner_held : profile->owner_held;
+#define WINDOW_VALUE(key, value) \
+        dprintf(profile_fd, "%s_%s=%llu\n", profile->name, key, \
+                (unsigned long long)(value))
+        WINDOW_VALUE("scheduled_batches", window_counts->scheduled_batches);
+        WINDOW_VALUE("scheduled_stalls", window_counts->scheduled_stalls);
+        WINDOW_VALUE("requests", window_counts->requests);
+        WINDOW_VALUE("request_stalls", window_counts->request_stalls);
+        WINDOW_VALUE("request_wait_cycles",
+                     window_counts->request_wait_cycles);
+        WINDOW_VALUE("request_latencies",
+                     window_counts->request_latencies);
+        WINDOW_VALUE("request_latency_cycles",
+                     window_counts->request_latency_cycles);
+        WINDOW_VALUE("request_latency_min", printable_minimum(
+            window_counts->request_latencies,
+            window_counts->request_latency_min));
+        WINDOW_VALUE("request_latency_max",
+                     window_counts->request_latency_max);
+        WINDOW_VALUE("grants", window_counts->grants);
+        WINDOW_VALUE("grant_stalls", window_counts->grant_stalls);
+        WINDOW_VALUE("releases", window_counts->releases);
+        WINDOW_VALUE("release_stalls", window_counts->release_stalls);
+        WINDOW_VALUE("unmatched_grants", window_counts->unmatched_grants);
+        WINDOW_VALUE("request_pending", request_pending);
+        WINDOW_VALUE("owner_held", owner_held);
+        WINDOW_VALUE("lifecycle_errors", window_counts->lifecycle_errors);
+#undef WINDOW_VALUE
+    }
+    for (index = 0; index < effect_domain_profile_count; index++) {
+        effect_domain_profile_t *profile = &effect_domain_profiles[index];
+        uint64_t owner_cycles = scheduler_profile_checkpoint_valid ?
+            profile->checkpoint_owner_cycles : profile->owner_cycles;
+        int owner = scheduler_profile_checkpoint_valid ?
+            profile->checkpoint_owner : get_bit(profile->h_owner_valid);
+        dprintf(profile_fd, "%s_owner_cycles=%llu\n", profile->name,
+                (unsigned long long)owner_cycles);
+        dprintf(profile_fd, "%s_owner=%d\n", profile->name, owner);
+    }
+    {
+        const uint64_t *concurrency = scheduler_profile_checkpoint_valid ?
+            effect_owner_concurrency_checkpoint : effect_owner_concurrency;
+        unsigned peak = scheduler_profile_checkpoint_valid ?
+            effect_owner_peak_checkpoint : effect_owner_peak;
+        dprintf(profile_fd, "effect_window_owner_peak=%u\n", peak);
+        for (index = 0; index <= effect_domain_profile_count; index++) {
+            dprintf(profile_fd,
+                    "effect_window_owner_concurrency_%u_cycles=%llu\n",
+                    index, (unsigned long long)concurrency[index]);
+        }
+    }
+    {
+        const uint64_t *concurrency = scheduler_profile_checkpoint_valid ?
+            effect_request_concurrency_checkpoint :
+                effect_request_concurrency;
+        unsigned peak = scheduler_profile_checkpoint_valid ?
+            effect_request_peak_checkpoint : effect_request_peak;
+        dprintf(profile_fd, "effect_window_request_pending_peak=%u\n", peak);
+        for (index = 0; index <= effect_router_profile_count; index++) {
+            dprintf(profile_fd,
+                    "effect_window_request_pending_concurrency_%u_cycles=%llu\n",
+                    index, (unsigned long long)concurrency[index]);
+        }
     }
     dprintf(profile_fd, "profile_complete=1\n");
     if (close(profile_fd) != 0 ||
@@ -854,6 +1030,63 @@ static int populate_scheduler_profile(
         profile->request_input_count > 0;
 }
 
+static int populate_effect_router_profile(
+    effect_router_profile_t *profile,
+    vpiHandle module
+) {
+    char definition[PATH_SIZE];
+    const char *definition_text = vpi_get_str(vpiDefName, module);
+    const char *full_name;
+    const char *marker;
+    char *end = NULL;
+    unsigned long scheduler_index;
+
+    snprintf(definition, sizeof(definition), "%s", definition_text);
+    marker = strstr(definition, "SchedulerRouter");
+    if (!marker)
+        return 0;
+    marker += strlen("SchedulerRouter");
+    scheduler_index = strtoul(marker, &end, 10);
+    if (end == marker)
+        return 0;
+    full_name = vpi_get_str(vpiFullName, module);
+    snprintf(profile->name, sizeof(profile->name), "window_router_%lu",
+             scheduler_index);
+    snprintf(profile->hierarchy, sizeof(profile->hierarchy), "%s", full_name);
+    profile->h_scheduled_valid = module_signal(module, "_scheduled_in_vld");
+    profile->h_scheduled_ready = module_signal(module, "_scheduled_in_rdy");
+    profile->h_request_valid =
+        module_signal(module, "_window_request_out_vld");
+    profile->h_request_ready =
+        module_signal(module, "_window_request_out_rdy");
+    profile->h_grant_valid = module_signal(module, "_window_grant_in_vld");
+    profile->h_grant_ready = module_signal(module, "_window_grant_in_rdy");
+    profile->h_release_valid =
+        module_signal(module, "_window_release_out_vld");
+    profile->h_release_ready =
+        module_signal(module, "_window_release_out_rdy");
+    reset_effect_router_minima(&profile->counts);
+    reset_effect_router_minima(&profile->checkpoint);
+    return profile->h_scheduled_valid && profile->h_scheduled_ready &&
+        profile->h_request_valid && profile->h_request_ready &&
+        profile->h_grant_valid && profile->h_grant_ready &&
+        profile->h_release_valid && profile->h_release_ready;
+}
+
+static int populate_effect_domain_profile(
+    effect_domain_profile_t *profile,
+    vpiHandle module
+) {
+    const char *full_name = vpi_get_str(vpiFullName, module);
+
+    snprintf(profile->hierarchy, sizeof(profile->hierarchy), "%s", full_name);
+    /* State.owner_valid is the first scalar in effect_window::State. The VPI
+     * profiler is intentionally tied to the checked XLS-generated RTL, just
+     * like the SharedService probes above. */
+    profile->h_owner_valid = module_signal(module, "____state_0");
+    return profile->h_owner_valid != NULL;
+}
+
 static void discover_scheduler_profiles(vpiHandle scope) {
     vpiHandle iterator = vpi_iterate(vpiModule, scope);
     vpiHandle module;
@@ -873,8 +1106,63 @@ static void discover_scheduler_profiles(vpiHandle scope) {
                     "xls_sim_bridge[profile]: incomplete scheduler at %s\n",
                     candidate.hierarchy);
             }
+        } else if (strstr(definition, "SchedulerRouter")) {
+            effect_router_candidate_count++;
+            if (effect_router_profile_count < MAX_EFFECT_ROUTERS) {
+                effect_router_profile_t candidate;
+                memset(&candidate, 0, sizeof(candidate));
+                if (populate_effect_router_profile(&candidate, module)) {
+                    effect_router_profiles[effect_router_profile_count++] =
+                        candidate;
+                } else {
+                    vpi_printf(
+                        "xls_sim_bridge[profile]: incomplete effect router at %s\n",
+                        candidate.hierarchy);
+                }
+            } else {
+                vpi_printf(
+                    "xls_sim_bridge[profile]: too many effect routers\n");
+            }
+        } else if (strstr(definition, "effect_window__Arbiter")) {
+            effect_domain_candidate_count++;
+            if (effect_domain_profile_count < MAX_EFFECT_DOMAINS) {
+                effect_domain_profile_t candidate;
+                memset(&candidate, 0, sizeof(candidate));
+                if (populate_effect_domain_profile(&candidate, module)) {
+                    effect_domain_profiles[effect_domain_profile_count++] =
+                        candidate;
+                } else {
+                    vpi_printf(
+                        "xls_sim_bridge[profile]: incomplete effect domain at %s\n",
+                        candidate.hierarchy);
+                }
+            } else {
+                vpi_printf(
+                    "xls_sim_bridge[profile]: too many effect domains\n");
+            }
         }
         discover_scheduler_profiles(module);
+    }
+}
+
+static void name_effect_router_profiles(void) {
+    unsigned index;
+    for (index = 0; index < effect_router_profile_count; index++) {
+        vpi_printf("xls_sim_bridge[profile]: found %s at %s\n",
+                   effect_router_profiles[index].name,
+                   effect_router_profiles[index].hierarchy);
+    }
+}
+
+static void name_effect_domain_profiles(void) {
+    unsigned index;
+    for (index = 0; index < effect_domain_profile_count; index++) {
+        snprintf(effect_domain_profiles[index].name,
+                 sizeof(effect_domain_profiles[index].name),
+                 "effect_window_arbiter_%u", index);
+        vpi_printf("xls_sim_bridge[profile]: found %s at %s\n",
+                   effect_domain_profiles[index].name,
+                   effect_domain_profiles[index].hierarchy);
     }
 }
 
@@ -1250,11 +1538,112 @@ static void step_scheduler_profile(scheduler_profile_t *profile) {
 
 }
 
+static void step_effect_router_profile(effect_router_profile_t *profile) {
+    effect_router_counts_t *counts = &profile->counts;
+    int scheduled_valid = get_bit(profile->h_scheduled_valid);
+    int scheduled_ready = get_bit(profile->h_scheduled_ready);
+    int request_valid = get_bit(profile->h_request_valid);
+    int request_ready = get_bit(profile->h_request_ready);
+    int grant_valid = get_bit(profile->h_grant_valid);
+    int grant_ready = get_bit(profile->h_grant_ready);
+    int release_valid = get_bit(profile->h_release_valid);
+    int release_ready = get_bit(profile->h_release_ready);
+    int scheduled = scheduled_valid && scheduled_ready;
+    int request = request_valid && request_ready;
+    int grant = grant_valid && grant_ready;
+    int release = release_valid && release_ready;
+    int next_owner_held;
+
+    if (profile->request_pending)
+        counts->request_wait_cycles++;
+    if (scheduled) {
+        counts->scheduled_batches++;
+    } else if (scheduled_valid) {
+        counts->scheduled_stalls++;
+    }
+    if (request) {
+        counts->requests++;
+        profile->request_pending = 1;
+        profile->request_start = cycle_number;
+    } else if (request_valid) {
+        counts->request_stalls++;
+    }
+    if (grant) {
+        counts->grants++;
+        if (profile->request_pending) {
+            update_latency(
+                cycle_number - profile->request_start,
+                &counts->request_latencies,
+                &counts->request_latency_cycles,
+                &counts->request_latency_min,
+                &counts->request_latency_max);
+        } else {
+            counts->unmatched_grants++;
+        }
+        profile->request_pending = 0;
+    } else if (grant_valid) {
+        counts->grant_stalls++;
+    }
+    if (release) {
+        counts->releases++;
+    } else if (release_valid) {
+        counts->release_stalls++;
+    }
+    next_owner_held = profile->owner_held + grant - release;
+    if (next_owner_held < 0 || next_owner_held > 1) {
+        counts->lifecycle_errors++;
+    } else {
+        profile->owner_held = next_owner_held;
+    }
+}
+
+static void step_effect_router_profiles(void) {
+    unsigned index;
+    unsigned owners = 0;
+    unsigned pending_requests = 0;
+
+    for (index = 0; index < effect_domain_profile_count; index++) {
+        if (get_bit(effect_domain_profiles[index].h_owner_valid)) {
+            owners++;
+            effect_domain_profiles[index].owner_cycles++;
+        }
+    }
+    for (index = 0; index < effect_router_profile_count; index++) {
+        if (effect_router_profiles[index].request_pending)
+            pending_requests++;
+    }
+    effect_owner_concurrency[owners]++;
+    if (owners > effect_owner_peak)
+        effect_owner_peak = owners;
+    effect_request_concurrency[pending_requests]++;
+    if (pending_requests > effect_request_peak)
+        effect_request_peak = pending_requests;
+    for (index = 0; index < effect_router_profile_count; index++)
+        step_effect_router_profile(&effect_router_profiles[index]);
+}
+
 static void checkpoint_scheduler_profiles(void) {
     unsigned index;
     for (index = 0; index < scheduler_profile_count; index++)
         scheduler_profiles[index].checkpoint =
             scheduler_profiles[index].counts;
+    for (index = 0; index < effect_router_profile_count; index++) {
+        effect_router_profile_t *profile = &effect_router_profiles[index];
+        profile->checkpoint = profile->counts;
+        profile->checkpoint_request_pending = profile->request_pending;
+        profile->checkpoint_owner_held = profile->owner_held;
+    }
+    for (index = 0; index < effect_domain_profile_count; index++) {
+        effect_domain_profile_t *profile = &effect_domain_profiles[index];
+        profile->checkpoint_owner_cycles = profile->owner_cycles;
+        profile->checkpoint_owner = get_bit(profile->h_owner_valid);
+    }
+    memcpy(effect_owner_concurrency_checkpoint, effect_owner_concurrency,
+           sizeof(effect_owner_concurrency_checkpoint));
+    effect_owner_peak_checkpoint = effect_owner_peak;
+    memcpy(effect_request_concurrency_checkpoint, effect_request_concurrency,
+           sizeof(effect_request_concurrency_checkpoint));
+    effect_request_peak_checkpoint = effect_request_peak;
     scheduler_profile_checkpoint_cycle = cycle_number;
     scheduler_profile_checkpoint_valid = 1;
 }
@@ -1320,6 +1709,7 @@ static PLI_INT32 cb_readonly(p_cb_data cb) {
              profile_index < scheduler_profile_count;
              profile_index++)
             step_scheduler_profile(&scheduler_profiles[profile_index]);
+        step_effect_router_profiles();
         if (app_endpoint.output_beat_number != app_output_before) {
             checkpoint_scheduler_profiles();
             write_scheduler_profile();
@@ -1427,7 +1817,13 @@ static PLI_INT32 cb_start_of_sim(p_cb_data cb) {
     memset(&app_endpoint, 0, sizeof(app_endpoint));
     memset(&debug_endpoint, 0, sizeof(debug_endpoint));
     memset(scheduler_profiles, 0, sizeof(scheduler_profiles));
+    memset(effect_router_profiles, 0, sizeof(effect_router_profiles));
+    memset(effect_domain_profiles, 0, sizeof(effect_domain_profiles));
     scheduler_profile_count = 0;
+    effect_router_profile_count = 0;
+    effect_router_candidate_count = 0;
+    effect_domain_profile_count = 0;
+    effect_domain_candidate_count = 0;
     scheduler_profile_started = 0;
     scheduler_profile_checkpoint_valid = 0;
     scheduler_profile_enabled = 0;
@@ -1465,6 +1861,8 @@ static PLI_INT32 cb_start_of_sim(p_cb_data cb) {
             scheduler_profile_enabled = 1;
             discover_scheduler_profiles(NULL);
             name_scheduler_profiles();
+            name_effect_router_profiles();
+            name_effect_domain_profiles();
             if (scheduler_profile_count == 0) {
                 vpi_printf(
                     "xls_sim_bridge[profile]: no SharedService instances found\n");

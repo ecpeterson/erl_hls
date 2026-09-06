@@ -1326,13 +1326,20 @@ ERTS fixture now closes at step 18 with 80 accepted corrections and a
 nonuniform final data measurement: eight commuting and ten anticommuting
 qubits. Repeated ERTS runs produce the same summary.
 
-This changes the throughput target substantially. A phi actor requires
-`5c + 12 = 72` state visits per sequence. At `c = 12`, each existing
-three-actor shard therefore needs at least 216 visits, and the II=2 selector
-has a hard lower bound of 432 clocks per sequence before egress or causal
-waits. A native RTL profile measured 12,172 clocks for steps eight through 32:
-507.17 clocks per step, or about 394.3 thousand steps per second at 200 MHz.
-The implementation is 17.4% above the visit-count floor.
+This changes the throughput target substantially. The Erlang actor executes
+`5c + 12 = 72` callbacks per sequence, but that is not the number of physical
+executor visits. The generated machine fuses each barrier-completing cast with
+the following enter callback. At `c = 12`, one measurement receipt, 48 field
+receipts, four comparison receipts, and four movement receipts require
+`4c + 9 = 57` visits per actor. Each existing three-actor shard therefore has
+a 171-visit issue floor. Its entry batches contain 59 serialized action
+positions per actor--two for measurement, 48 for diffusion, four for
+comparison, and five for movement--so the current single-action retirement
+path has the slightly higher floor of 177 clocks per sequence at II=1. The
+earlier II=2 selector instead had a 342-clock visit floor before egress or
+causal waits. A native RTL profile of that design measured 12,172 clocks for
+steps eight through 32: 507.17 clocks per step, or about 394.3 thousand steps
+per second at 200 MHz.
 
 The same run separates ingress pressure from actor execution. Across the six
 phi schedulers, 40,458 state reads occupied 40,458 of 50,562 selection
@@ -1507,7 +1514,69 @@ An apples-to-apples XC7 topology-core map reports 57,040 estimated logic
 cells, 64,061 flip-flops, 70,566 LUTs, and 48 `DSP48E1`s. Relative to the
 compact-effects baseline this is 450 cells (0.8%) and 642 LUTs (0.9%) more,
 with 228 fewer mapped flip-flops and unchanged DSP use. The global token is
-intentionally conservative. A future experiment may derive independent
-reservation domains from the scheduler communication graph, but each domain
-must retain the same single-owner progress argument or replace it with real
-end-to-end destination reservations.
+intentionally conservative.
+
+### Independent effect-window domains
+
+The reservation-domain experiment uses the following conservative graph
+condition. Vertices are scheduled routers and any bounded shared resource
+which can propagate backpressure. There is an edge whenever a batch owned by
+one vertex can occupy or block on capacity drained by the other before the
+owner releases its reservation. A domain labeling `d` is admissible only if
+
+```text
+(u, v) in E  =>  d(u) = d(v).
+```
+
+Consequently the finest conservative partition is the connected components
+of the underlying undirected graph--the weak components, not the strongly
+connected components. Any coarsening is also safe. Terminal outputs are
+omitted only under the explicit assumption that they eventually accept data
+and cannot re-enter the scheduled graph; a blocking shared output manager or
+RAM service would instead be another graph vertex. The compiler validates
+that every scheduler occurs exactly once and that every known destination
+edge remains within one component.
+
+The present topology IR exposes scheduler-to-scheduler dependencies only.
+This is sufficient for the measured fixtures because each state and mailbox
+RAM belongs to one scheduler, while external sinks obey the terminal-progress
+assumption above. A future shared bounded manager must first become an
+explicit incidence in this graph; the compiler must not infer independence
+across a resource it cannot see.
+
+The physical profile keeps the single global domain by default and exposes
+this finest partition as the opt-in `weak_components` mode. This avoids
+turning a correctness bound into an unmeasured scheduling policy.
+
+The decoder-only graph has two components: X source/router plus its three phi
+shards, and the corresponding Z set. The complete phenomenological topology
+remains one component because the data/noise layer joins the two planes. A
+small proc test also exercises retained contenders and verifies round-robin
+service after an owner releases the window.
+
+The D3 result is a useful negative ablation. Two domains completed the same
+63 X and 64 Z correction trace, but steps eight through 32 took 6,648 clocks,
+or 277.00 clocks per step, versus 6,398 and 266.58 with one global token. At
+200 MHz those rates are about 722 thousand and 750 thousand steps per second,
+respectively. Exact VPI-only probes show that both domains held reservations
+concurrently for 5,703 of 9,186 clocks (62.1%), while aggregate request-to-
+grant latency fell from 11.90 to 4.44 clocks. The added permission exposed a
+different collision: router input stalls rose from 311 to 745, and phi
+schedulers spent 17,646 rather than 15,846 selection cycles blocked by their
+executors. Within each plane, the three shards also became exactly aligned in
+their state-read counts. The single global token had accidentally dephased
+those symmetric bursts and thereby reduced downstream contention.
+
+An otherwise identical XC7 topology-core map is effectively unchanged:
+57,011 estimated logic cells, 64,064 flip-flops, 70,470 LUTs, and 48 DSPs,
+versus 57,040 cells, 64,061 flip-flops, 70,566 LUTs, and 48 DSPs for the global
+window. The throughput result is therefore a scheduling effect rather than an
+area penalty.
+
+This establishes that graph independence is a safety condition, not an
+optimal-throughput prescription. The finest admissible partition creates real
+overlap, but a coarser partition can schedule this small symmetric topology
+better. The profiler therefore retains per-router request, stall, grant,
+release, pending-time, and grant-latency counters, plus global owner and
+pending-request concurrency histograms, so a future deployment policy can be
+chosen from evidence rather than component count alone.

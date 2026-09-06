@@ -117,3 +117,51 @@ fn selection_respects_cursor_and_wraps_test() {
     select<u32:4>(zero!<u1[4]>(), u32:2),
     (u1:0, u32:0));
 }
+
+#[test_proc]
+proc ArbiterRetainsAndRoundRobinsTest {
+  terminator: chan<bool> out;
+  request_out: chan<u1>[u32:3] out;
+  grant_in: chan<u1>[u32:3] in;
+  release_out: chan<u1>[u32:3] out;
+
+  config(terminator: chan<bool> out) {
+    let (request_p, request_c) =
+      chan<u1, u32:1>[u32:3]("effect_window_test_request");
+    let (grant_p, grant_c) =
+      chan<u1, u32:1>[u32:3]("effect_window_test_grant");
+    let (release_p, release_c) =
+      chan<u1, u32:1>[u32:3]("effect_window_test_release");
+    spawn Arbiter<u32:3>(request_c, grant_p, release_c);
+    (terminator, request_p, grant_c, release_p)
+  }
+
+  init { () }
+
+  next(state: ()) {
+    let request_1_tok = send(join(), request_out[u32:1], u1:1);
+    let (grant_1_tok, grant_1) = recv(request_1_tok, grant_in[u32:1]);
+    assert_eq(grant_1, u1:1);
+
+    // Both requests become pending while contender one retains ownership.
+    // The cursor then chooses contender two before wrapping to zero.
+    let request_2_tok = send(grant_1_tok, request_out[u32:2], u1:1);
+    let request_0_tok = send(request_2_tok, request_out[u32:0], u1:1);
+    let (poll_2_tok, _early_2, early_2) = recv_non_blocking(
+      request_0_tok, grant_in[u32:2], u1:0);
+    let (poll_0_tok, _early_0, early_0) = recv_non_blocking(
+      poll_2_tok, grant_in[u32:0], u1:0);
+    assert_eq(early_2, false);
+    assert_eq(early_0, false);
+    let release_1_tok = send(poll_0_tok, release_out[u32:1], u1:1);
+    let (grant_2_tok, grant_2) = recv(release_1_tok, grant_in[u32:2]);
+    assert_eq(grant_2, u1:1);
+
+    let release_2_tok = send(grant_2_tok, release_out[u32:2], u1:1);
+    let (grant_0_tok, grant_0) = recv(release_2_tok, grant_in[u32:0]);
+    assert_eq(grant_0, u1:1);
+    let release_0_tok = send(grant_0_tok, release_out[u32:0], u1:1);
+    let _done = send(release_0_tok, terminator, true);
+    state
+  }
+}

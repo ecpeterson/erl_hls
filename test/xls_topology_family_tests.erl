@@ -317,6 +317,19 @@ family_backend_rejects_invalid_actor_egress_depth_test() ->
         [-1, 16#100000000, auto]
     ).
 
+family_backend_rejects_invalid_effect_window_partition_test() ->
+    Plan = hls_topology:normalize(phi_noise_topology:topology(1)),
+    Profile = phi_noise_topology_dslx:profile(),
+    ?assertError(
+        {effect_window_partition, strongly_connected_components},
+        xls_topology_dslx:emit(
+            Plan,
+            Profile#{
+                effect_window_partition => strongly_connected_components
+            }
+        )
+    ).
+
 family_backend_rejects_cross_family_selector_remap_test() ->
     Plan = hls_topology:normalize(selector_remap_topology()),
     Recipient = {family, source, {translate, [0, 0], wrap}},

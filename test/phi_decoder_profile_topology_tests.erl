@@ -29,6 +29,75 @@ three_shards_keep_source_and_decoder_counters_separate_test() ->
         [maps:get(slot_count, Group) || Group <- Groups]
     ).
 
+global_effect_window_remains_the_default_test() ->
+    Generated = iolist_to_binary(
+        phi_decoder_profile_topology_dslx:to_dslx()
+    ),
+    ?assertEqual(1, count(Generated, <<
+        "spawn effect_window::Arbiter<u32:8>"
+    >>)),
+    ?assertEqual(0, count(Generated, <<"Effect-window domain">>)).
+
+weak_component_effect_windows_follow_the_disconnected_planes_test() ->
+    Plan = hls_topology:from_module(phi_decoder_profile_topology),
+    Profile = (phi_decoder_profile_topology_dslx:profile())#{
+        effect_window_partition => weak_components
+    },
+    Generated = iolist_to_binary(xls_topology_dslx:emit(Plan, Profile)),
+    ?assertEqual(2, count(Generated, <<
+        "spawn effect_window::Arbiter<u32:4>"
+    >>)),
+    assert_contains(Generated, <<
+        "Effect-window domain 0: schedulers 0, 2, 3, 4."
+    >>),
+    assert_contains(Generated, <<
+        "Effect-window domain 1: schedulers 1, 5, 6, 7."
+    >>),
+    ?assertEqual(4, count(Generated, <<
+        "effect_window_domain_0_request_p[u32:"
+    >>)),
+    ?assertEqual(4, count(Generated, <<
+        "effect_window_domain_1_request_p[u32:"
+    >>)),
+    ?assertEqual(4, count(Generated, <<
+        "effect_window_domain_0_grant_c[u32:"
+    >>)),
+    ?assertEqual(4, count(Generated, <<
+        "effect_window_domain_1_grant_c[u32:"
+    >>)),
+    ?assertEqual(4, count(Generated, <<
+        "effect_window_domain_0_release_p[u32:"
+    >>)),
+    ?assertEqual(4, count(Generated, <<
+        "effect_window_domain_1_release_p[u32:"
+    >>)).
+
+effect_window_domains_are_weak_not_strong_components_test() ->
+    %% A one-way dependency joins two directed cycles: SCC partitioning would
+    %% incorrectly allow both sides to retain independent effect windows.
+    JoinedCycles = schedulers([
+        {0, [1]},
+        {1, [0, 2]},
+        {2, [3]},
+        {3, [2]}
+    ]),
+    ?assertEqual(
+        [[0, 1, 2, 3]],
+        xls_topology_effect_windows:partition(JoinedCycles, weak_components)
+    ),
+    DisconnectedCycles = schedulers([
+        {0, [1]},
+        {1, [0]},
+        {2, [3]},
+        {3, [2]}
+    ]),
+    ?assertEqual(
+        [[0, 1], [2, 3]],
+        xls_topology_effect_windows:partition(
+            DisconnectedCycles, weak_components
+        )
+    ).
+
 generated_profile_and_ram_shell_are_width_driven_test() ->
     Generated = iolist_to_binary(
         phi_decoder_profile_topology_dslx:to_dslx()
@@ -47,3 +116,10 @@ assert_contains(Binary, Pattern) ->
 
 count(Binary, Pattern) ->
     length(binary:matches(Binary, Pattern)).
+
+schedulers(Edges) ->
+    [#{
+        index => Source,
+        destinations => [#{index => Destination}
+            || Destination <- Destinations]
+    } || {Source, Destinations} <- Edges].

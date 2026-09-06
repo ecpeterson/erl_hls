@@ -89,6 +89,9 @@ timed_output \
     --top=Top \
     phi_decoder_profile_topology.x
 
+effect_domain_count=$(grep -c 'spawn effect_window::Arbiter<' \
+    phi_decoder_profile_topology.x)
+
 timed_output \
     phi_decoder_profile-opt \
     phi_decoder_profile.opt.ir \
@@ -142,7 +145,9 @@ else
     exit "$status"
 fi
 
-awk -F= '
+awk -F= \
+    -v expected_window_routers="$scheduler_count" \
+    -v expected_window_domains="$effect_domain_count" '
     /_selection_activations=/ {
         name = $1
         sub(/_selection_activations$/, "", name)
@@ -198,6 +203,67 @@ awk -F= '
         sub(/_same_actor_followup_direct_mailbox$/, "", name)
         direct_mailbox[name] = $2
     }
+    /^profile_observed_cycles=/ {
+        observed_cycles = $2
+    }
+    /^effect_window_router_candidates=/ {
+        window_router_candidates = $2
+    }
+    /^effect_window_router_count=/ {
+        window_router_count = $2
+    }
+    /^effect_window_domain_candidates=/ {
+        window_domain_candidates = $2
+    }
+    /^effect_window_domain_count=/ {
+        window_domain_count = $2
+    }
+    /^window_router_[0-9]+_requests=/ {
+        name = $1
+        sub(/_requests$/, "", name)
+        window_requests[name] = $2
+    }
+    /^window_router_[0-9]+_request_latencies=/ {
+        name = $1
+        sub(/_request_latencies$/, "", name)
+        window_request_latencies[name] = $2
+    }
+    /^window_router_[0-9]+_request_pending=/ {
+        name = $1
+        sub(/_request_pending$/, "", name)
+        window_request_pending[name] = $2
+    }
+    /^window_router_[0-9]+_grants=/ {
+        name = $1
+        sub(/_grants$/, "", name)
+        window_grants[name] = $2
+    }
+    /^window_router_[0-9]+_unmatched_grants=/ {
+        name = $1
+        sub(/_unmatched_grants$/, "", name)
+        window_unmatched_grants[name] = $2
+    }
+    /^window_router_[0-9]+_releases=/ {
+        name = $1
+        sub(/_releases$/, "", name)
+        window_releases[name] = $2
+    }
+    /^window_router_[0-9]+_owner_held=/ {
+        name = $1
+        sub(/_owner_held$/, "", name)
+        window_owner_held[name] = $2
+    }
+    /^window_router_[0-9]+_lifecycle_errors=/ {
+        name = $1
+        sub(/_lifecycle_errors$/, "", name)
+        window_lifecycle_errors[name] = $2
+    }
+    /^effect_window_owner_concurrency_[0-9]+_cycles=/ {
+        owner_histogram_cycles += $2
+    }
+    /^effect_window_request_pending_concurrency_[0-9]+_cycles=/ {
+        request_histogram_cycles += $2
+    }
     END {
         found = 0
         for (name in activations) {
@@ -221,7 +287,25 @@ awk -F= '
             if (direct_mailbox[name] > followup_mailbox[name])
                 exit 1
         }
-        if (!found)
+        found_window = 0
+        for (name in window_requests) {
+            found_window = 1
+            if (window_requests[name] != window_request_latencies[name] + window_request_pending[name])
+                exit 1
+            if (window_grants[name] != window_request_latencies[name] + window_unmatched_grants[name])
+                exit 1
+            if (window_grants[name] - window_releases[name] != window_owner_held[name])
+                exit 1
+            if (window_owner_held[name] < 0 || window_owner_held[name] > 1 || window_lifecycle_errors[name] != 0)
+                exit 1
+        }
+        if (!found || !found_window ||
+                window_router_candidates != expected_window_routers ||
+                window_router_count != expected_window_routers ||
+                window_domain_candidates != expected_window_domains ||
+                window_domain_count != expected_window_domains ||
+                owner_histogram_cycles != observed_cycles ||
+                request_histogram_cycles != observed_cycles)
             exit 1
     }
 ' phi_decoder_profile.scheduler_profile

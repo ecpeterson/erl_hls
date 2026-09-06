@@ -96,7 +96,11 @@ frame_array_mux() ->
 
     """.
 
-annotate(Spec = #{families := Families, schedulers := Schedulers}) ->
+annotate(Spec = #{
+    families := Families,
+    schedulers := Schedulers,
+    effect_window_partition := WindowPartition
+}) ->
     FamilyIndex = maps:from_list([
         {maps:get(id, Family), Family} || Family <- Families
     ]),
@@ -108,7 +112,7 @@ annotate(Spec = #{families := Families, schedulers := Schedulers}) ->
             || Binding <- maps:get(schedulers, Family)]}
         || Family <- Families
     ]),
-    Annotated = [
+    Annotated0 = [
         annotate_scheduler(
             Scheduler,
             Families,
@@ -117,6 +121,27 @@ annotate(Spec = #{families := Families, schedulers := Schedulers}) ->
             FamilySchedulers
         )
         || Scheduler <- Schedulers
+    ],
+    Domains = xls_topology_effect_windows:partition(
+        Annotated0,
+        WindowPartition
+    ),
+    Membership = maps:from_list([
+        {SchedulerIndex0, {DomainIndex, Position}}
+        || {DomainIndex, Members} <- lists:enumerate(0, Domains),
+           {Position, SchedulerIndex0} <- lists:enumerate(0, Members)
+    ]),
+    Annotated = [
+        begin
+            {Domain, Position} = maps:get(
+                maps:get(index, Scheduler), Membership
+            ),
+            Scheduler#{
+                effect_window_domain => Domain,
+                effect_window_position => Position
+            }
+        end
+        || Scheduler <- Annotated0
     ],
     Externals = [annotate_external(External, Annotated)
         || External <- maps:get(externals, Spec)],
@@ -128,6 +153,7 @@ annotate(Spec = #{families := Families, schedulers := Schedulers}) ->
         ]),
         family_schedulers => FamilySchedulers,
         schedulers => Annotated,
+        effect_window_domains => Domains,
         externals => Externals
     }.
 
@@ -656,7 +682,8 @@ router_proc(Spec, Scheduler = #{
             || ExternalId <- ExternalIds] ++
         ["window_request_out", "window_grant_in", "window_release_out"],
     [
-        "// Routes one committed actor-entry batch in source order. A global\n",
+        "// Routes one committed actor-entry batch in source order. A ",
+        effect_window_scope(Spec), "\n",
         "// reservation may admit one lookahead batch while the active batch\n",
         "// drains; only the active batch can emit downstream effects.\n",
         "struct ", StateName, " {\n",
@@ -927,6 +954,7 @@ positive_modulo(Value, Modulus) ->
 
 grid_proc(Spec = #{
     schedulers := Schedulers,
+    effect_window_domains := EffectWindowDomains,
     ingresses := Ingresses,
     externals := Externals
 }) ->
@@ -935,10 +963,10 @@ grid_proc(Spec = #{
     [
         "proc ", grid_name(Spec), " {\n",
         config_signature(Arguments, 2),
-        effect_window_channels(Schedulers),
+        effect_window_channels(EffectWindowDomains),
         [external_channel(External) || External <- Externals],
         [scheduler_channels(Scheduler) || Scheduler <- Schedulers],
-        effect_window_spawn(Schedulers),
+        effect_window_spawn(EffectWindowDomains),
         [scheduler_spawn(Spec, Scheduler) || Scheduler <- Schedulers],
         [router_spawn(Spec, Scheduler) || Scheduler <- Schedulers],
         control_spawn(Spec),
@@ -950,26 +978,37 @@ grid_proc(Spec = #{
         "}\n\n"
     ].
 
-effect_window_channels(Schedulers) ->
-    Count = integer_to_list(length(Schedulers)),
+effect_window_channels(Domains) ->
+    [effect_window_domain_channels(Index, Members, Domains)
+        || {Index, Members} <- lists:enumerate(0, Domains)].
+
+effect_window_domain_channels(Index, Members, Domains) ->
+    Count = integer_to_list(length(Members)),
+    Stem = effect_window_domain_stem(Index, Domains),
     [
-        "    let (effect_window_request_p, effect_window_request_c) =\n",
+        effect_window_domain_comment(Index, Members, Domains),
+        "    let (", Stem, "_request_p, ", Stem, "_request_c) =\n",
         "      chan<u1, CHANNEL_DEPTH>[u32:", Count,
-        "](\"effect_window_request\");\n",
-        "    let (effect_window_grant_p, effect_window_grant_c) =\n",
+        "](\"", Stem, "_request\");\n",
+        "    let (", Stem, "_grant_p, ", Stem, "_grant_c) =\n",
         "      chan<u1, CHANNEL_DEPTH>[u32:", Count,
-        "](\"effect_window_grant\");\n",
-        "    let (effect_window_release_p, effect_window_release_c) =\n",
+        "](\"", Stem, "_grant\");\n",
+        "    let (", Stem, "_release_p, ", Stem, "_release_c) =\n",
         "      chan<u1, CHANNEL_DEPTH>[u32:", Count,
-        "](\"effect_window_release\");\n"
+        "](\"", Stem, "_release\");\n"
     ].
 
-effect_window_spawn(Schedulers) ->
+effect_window_spawn(Domains) ->
+    [effect_window_domain_spawn(Index, Members, Domains)
+        || {Index, Members} <- lists:enumerate(0, Domains)].
+
+effect_window_domain_spawn(Index, Members, Domains) ->
+    Stem = effect_window_domain_stem(Index, Domains),
     [
         "    spawn effect_window::Arbiter<u32:",
-        integer_to_list(length(Schedulers)), ">(\n",
-        "      effect_window_request_c, effect_window_grant_p,\n",
-        "      effect_window_release_c);\n"
+        integer_to_list(length(Members)), ">(\n",
+        "      ", Stem, "_request_c, ", Stem, "_grant_p,\n",
+        "      ", Stem, "_release_c);\n"
     ].
 
 external_channel(External) ->
@@ -1057,6 +1096,8 @@ scheduler_spawn(_Spec, #{
 router_spawn(Spec, Scheduler = #{
     stem := Stem,
     index := Source,
+    effect_window_domain := WindowDomain,
+    effect_window_position := WindowPosition,
     destinations := Destinations,
     external_ids := ExternalIds
 }) ->
@@ -1079,11 +1120,15 @@ router_spawn(Spec, Scheduler = #{
         ],
         [[",\n      ", external_buffer_producer(Spec, ExternalId, Source)]
             || ExternalId <- ExternalIds],
-        ",\n      effect_window_request_p[u32:",
-        integer_to_list(Source), "],\n",
-        "      effect_window_grant_c[u32:", integer_to_list(Source), "],\n",
-        "      effect_window_release_p[u32:",
-        integer_to_list(Source), "]",
+        ",\n      ", effect_window_domain_stem(
+            WindowDomain, maps:get(effect_window_domains, Spec)),
+        "_request_p[u32:", integer_to_list(WindowPosition), "],\n",
+        "      ", effect_window_domain_stem(
+            WindowDomain, maps:get(effect_window_domains, Spec)),
+        "_grant_c[u32:", integer_to_list(WindowPosition), "],\n",
+        "      ", effect_window_domain_stem(
+            WindowDomain, maps:get(effect_window_domains, Spec)),
+        "_release_p[u32:", integer_to_list(WindowPosition), "]",
         ");\n"
     ].
 
@@ -1242,6 +1287,24 @@ control_output_name(Group) ->
 
 startup_name(#{index := Index}) ->
     ["SchedulerStartup", integer_to_list(Index)].
+
+effect_window_domain_stem(0, [_OnlyDomain]) ->
+    "effect_window";
+effect_window_domain_stem(Index, [_ | _]) ->
+    ["effect_window_domain_", integer_to_list(Index)].
+
+effect_window_domain_comment(_Index, _Members, [_OnlyDomain]) -> [];
+effect_window_domain_comment(Index, Members, [_ | _]) ->
+    [
+        "    // Effect-window domain ", integer_to_list(Index),
+        ": schedulers ", join_with(", ", [integer_to_list(Member)
+            || Member <- Members]), ".\n"
+    ].
+
+effect_window_scope(#{effect_window_domains := [_OnlyDomain]}) ->
+    "global";
+effect_window_scope(#{effect_window_domains := [_ | _]}) ->
+    "domain-".
 
 grid_name(_Spec) -> "SchedulerGrid".
 

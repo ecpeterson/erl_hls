@@ -207,6 +207,41 @@ DSPs. A separate adapter variant was rejected because its extra wide elastic
 state both slowed the profile to 6,999 clocks and raised the map to 59,807
 cells.
 
+Splitting that reservation by independent backpressure domains was also
+measured. The precise conservative rule is to put the endpoints of every
+possible bounded blocking dependency in the same domain; the finest such
+partition is the weakly connected components of the scheduler/resource graph.
+The decoder-only fixture has independent X and Z components, whereas the full
+noise topology remains connected. The global window remains the physical-
+profile default; `effect_window_partition => weak_components` selects the
+experimental split.
+
+The current IR computes those components from scheduler destinations. This is
+sound here because RAMs are private to each scheduler and terminal sinks are
+assumed eventually accepting and non-reentrant. Any future shared bounded
+manager must be represented as a graph incidence before it can participate in
+this partition.
+
+Reproduce that profile with:
+
+```sh
+ERL_HLS_PHI_PROFILE_EFFECT_WINDOWS=weak_components \
+    tools/run_phi_decoder_profile.sh
+```
+
+The two-window D3 run proves that the split creates real overlap: both domains
+had an owner in 5,703 of 9,186 clocks, and mean request-to-grant latency fell
+from 11.90 to 4.44 clocks. Nevertheless, the same trace regressed to 6,648
+measured clocks, or 277.00 clocks per step. Removing the global token aligned
+the three symmetric shards within each plane, more than doubled router input
+stalls, and increased executor-blocked selection cycles. Thus weak components
+are the finest *safe* domains, not necessarily the fastest partition; any
+coarsening remains safe and may provide useful dephasing.
+
+The split maps to 57,011 estimated logic cells, 64,064 flip-flops, 70,470
+LUTs, and 48 DSPs, effectively unchanged from the global window's 57,040,
+64,061, 70,566, and 48. The regression is scheduling rather than area.
+
 ## Running the experiment
 
 The fast local checks are:
