@@ -705,12 +705,12 @@ state_machine_init_guard_is_rejected_test() ->
 
 state_machine_entry_action_accepts_record_update_test() ->
     EnterSource =
-        "handle_enter(_OldPhase, waiting, Cell) ->\n"
+        "waiting(enter, _OldPhase, Cell) ->\n"
         "  Message = #message{},\n"
         "  {Cell, [{cast, out, Message#message{"
-        "value = Cell#cell.value}}]}.\n",
+        "value = Cell#cell.value}}]};\n",
     CastSource =
-        "handle_cast(#message{}, waiting, Cell) ->\n"
+        "waiting(cast, #message{}, Cell) ->\n"
         "  {waiting, Cell, consume}.\n",
     with_statem_fixture(
         "statem_entry_record_update_fixture",
@@ -727,12 +727,12 @@ state_machine_entry_action_accepts_record_update_test() ->
 
 state_machine_entry_action_accepts_runtime_predicate_test() ->
     EnterSource =
-        "handle_enter(_OldPhase, waiting, Cell) ->\n"
+        "waiting(enter, _OldPhase, Cell) ->\n"
         "  Enabled = Cell#cell.value =/= 0,\n"
         "  {Cell, [{cast_if, Enabled, out, #message{"
-        "value = Cell#cell.value}}]}.\n",
+        "value = Cell#cell.value}}]};\n",
     CastSource =
-        "handle_cast(#message{}, waiting, Cell) ->\n"
+        "waiting(cast, #message{}, Cell) ->\n"
         "  {waiting, Cell, consume}.\n",
     with_statem_fixture(
         "statem_conditional_entry_fixture",
@@ -772,15 +772,15 @@ state_machine_entry_actions_use_one_source_ordered_egress_test() ->
         "}).\n"
         "-record(cell, {value = hls_type:zero() :: hls_nums:u32()}).\n"
         "init([]) -> {ok, waiting, #cell{}}.\n"
-        "handle_enter(_Old, waiting, Cell) ->\n"
+        "waiting(enter, _Old, Cell) ->\n"
         "  {Cell, [\n"
         "    {cast, third, #message{value = 3}},\n"
         "    {cast, first, #wide_message{low = 1, high = 4}},\n"
         "    {cast, second, #message{value = 2}}\n"
-        "  ]}.\n"
-        "handle_cast(#message{value = Value}, waiting, Cell) ->\n"
+        "  ]};\n"
+        "waiting(cast, #message{value = Value}, Cell) ->\n"
         "  {waiting, Cell#cell{value = Value}, consume};\n"
-        "handle_cast(#wide_message{low = Value}, waiting, Cell) ->\n"
+        "waiting(cast, #wide_message{low = Value}, Cell) ->\n"
         "  {waiting, Cell#cell{value = Value}, consume}.\n"
     >>,
     ok = file:write_file(Path, Source),
@@ -1019,11 +1019,84 @@ state_machine_output_count_fits_ordered_egress_abi_test() ->
         ok = file:delete(Path)
     end.
 
+state_event_kinds_use_fixed_result_shapes_test() ->
+    EnterSource =
+        "waiting(enter, _Old, Cell) ->\n"
+        "  {Cell, [{cast, out, #message{}}]};\n",
+    CastSource =
+        "waiting(cast, #message{}, Cell) ->\n"
+        "  {waiting, Cell, postpone}.\n",
+    with_statem_fixture(
+        "state_event_kind_fixture",
+        "[waiting]",
+        EnterSource,
+        CastSource,
+        fun(XLS) ->
+            ?assertNotEqual(
+                nomatch,
+                binary:match(XLS, <<"Directive::POSTPONE, bool:0">>)
+            ),
+            ?assertNotEqual(
+                nomatch,
+                binary:match(XLS, <<"port: OutputPort::OUT">>)
+            )
+        end
+    ).
+
+state_event_filtering_preserves_cast_clause_order_test() ->
+    Source =
+        "waiting(cast, #message{value = 0}, Cell) ->\n"
+        "  {waiting, Cell#cell{value = 111111}, consume};\n"
+        "waiting(enter, _Old, Cell) -> {Cell, []};\n"
+        "waiting(cast, #message{}, Cell) ->\n"
+        "  {waiting, Cell#cell{value = 222222}, consume}.\n",
+    with_statem_fixture(
+        "state_event_clause_order_fixture",
+        "[waiting]",
+        Source,
+        "",
+        fun(XLS) ->
+            {First, _} = binary:match(XLS, <<"value: 111111">>),
+            {Second, _} = binary:match(XLS, <<"value: 222222">>),
+            ?assert(First < Second)
+        end
+    ).
+
+unsupported_state_events_are_rejected_test_() ->
+    [
+        ?_test(?assertException(error, _, with_statem_fixture(
+            "unsupported_state_surface",
+            "[waiting]",
+            "waiting(enter, _Old, Cell) -> {Cell, []};\n",
+            "waiting(" ++ Event ++ ", #message{}, Cell) -> "
+            "{waiting, Cell, consume}.\n",
+            fun(XLS) -> XLS end
+        )))
+        || Event <- [
+            "internal",
+            "{call, From}",
+            "Event"
+        ]
+    ].
+
+missing_declared_phase_callback_is_diagnosed_test() ->
+    ?assertError(
+        {missing_hls_statem_callback, absent, 3},
+        with_statem_fixture(
+            "missing_declared_phase_callback",
+            "[waiting, absent]",
+            "waiting(enter, _Old, Cell) -> {Cell, []};\n",
+            "waiting(cast, #message{}, Cell) -> "
+            "{waiting, Cell, consume}.\n",
+            fun(XLS) -> XLS end
+        )
+    ).
+
 repeat_phase_lowering_creates_an_explicit_boundary_test() ->
     CastSource =
-        "handle_cast(#message{value = 0}, waiting, Cell) ->\n"
+        "waiting(cast, #message{value = 0}, Cell) ->\n"
         "  {waiting, Cell, consume};\n"
-        "handle_cast(#message{}, waiting, Cell) ->\n"
+        "waiting(cast, #message{}, Cell) ->\n"
         "  {repeat_phase, Cell, consume}.\n",
     with_statem_fixture(
         "repeat_phase_lowering_fixture",
@@ -1072,7 +1145,7 @@ repeat_phase_lowering_creates_an_explicit_boundary_test() ->
 
 state_machine_final_if_normalizes_repeat_phase_test() ->
     CastSource =
-        "handle_cast(#message{value = Value}, waiting, Cell) ->\n"
+        "waiting(cast, #message{value = Value}, Cell) ->\n"
         "  if\n"
         "    Value =:= 0 -> {repeat_phase, Cell, consume};\n"
         "    true -> {waiting, Cell, consume}\n"
@@ -1095,7 +1168,7 @@ state_machine_final_if_normalizes_repeat_phase_test() ->
 
 state_machine_final_general_case_normalizes_each_conclusion_test() ->
     CastSource =
-        "handle_cast(#message{value = Value}, waiting, Cell) ->\n"
+        "waiting(cast, #message{value = Value}, Cell) ->\n"
         "  case Value of\n"
         "    0 -> {repeat_phase, Cell, consume};\n"
         "    1 -> {waiting, Cell, consume};\n"
@@ -1123,7 +1196,7 @@ state_machine_final_general_case_normalizes_each_conclusion_test() ->
 
 state_machine_indirect_if_result_is_rejected_test() ->
     CastSource =
-        "handle_cast(#message{value = Value}, waiting, Cell) ->\n"
+        "waiting(cast, #message{value = Value}, Cell) ->\n"
         "  Result = if\n"
         "    Value =:= 0 -> {repeat_phase, Cell, consume};\n"
         "    true -> {waiting, Cell, consume}\n"
@@ -1148,7 +1221,7 @@ repeat_phase_rejects_nonconsume_directives_test_() ->
 
 repeat_phase_is_not_a_declarable_phase_test() ->
     CastSource =
-        "handle_cast(#message{}, waiting, Cell) ->\n"
+        "waiting(cast, #message{}, Cell) ->\n"
         "  {waiting, Cell, consume}.\n",
     ?assertError(
         {reserved_hls_statem_phase, repeat_phase},
@@ -1156,6 +1229,18 @@ repeat_phase_is_not_a_declarable_phase_test() ->
             "reserved_repeat_phase_fixture",
             "[repeat_phase]",
             CastSource,
+            fun(_XLS) -> ok end
+        )
+    ).
+
+terminate_is_not_a_declarable_phase_test() ->
+    ?assertError(
+        {reserved_hls_statem_phase, terminate},
+        with_statem_fixture(
+            "reserved_terminate_phase_fixture",
+            "[terminate]",
+            "waiting(cast, #message{}, Cell) ->\n"
+            "  {waiting, Cell, consume}.\n",
             fun(_XLS) -> ok end
         )
     ).
@@ -1189,9 +1274,9 @@ non_word_aligned_state_machine_message_is_rejected_test() ->
 
 with_statem_fixture(ModuleName, Phases, CastSource, Test) ->
     EnterSource =
-        "handle_enter(_OldPhase, waiting, Cell) ->\n"
+        "waiting(enter, _OldPhase, Cell) ->\n"
         "  Message = #message{value = Cell#cell.value},\n"
-        "  {Cell, [{cast, out, Message}]}.\n",
+        "  {Cell, [{cast, out, Message}]};\n",
     with_statem_fixture(
         ModuleName,
         Phases,
@@ -1229,7 +1314,7 @@ with_statem_fixture(ModuleName, Phases, EnterSource, CastSource, Test) ->
 
 repeat_phase_rejects_directive(Directive) ->
     CastSource = io_lib:format(
-        "handle_cast(#message{}, waiting, Cell) ->~n"
+        "waiting(cast, #message{}, Cell) ->~n"
         "  {repeat_phase, Cell, ~p}.~n",
         [Directive]
     ),

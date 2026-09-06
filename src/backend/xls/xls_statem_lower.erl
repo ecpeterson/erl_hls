@@ -106,13 +106,21 @@ prepare_callbacks(Forms, Declarations) ->
     [InitClause] = xls_parse:find_function(Forms, init, 1),
     ok = validate_init_head(InitClause),
     _ = rewrite_init_result(InitClause),
-    Entries = analyze_entries(
+    Callbacks = xls_statem_callbacks:prepare(
         Forms,
+        PhaseNames
+    ),
+    Entries = analyze_entries(
+        maps:get(enter, Callbacks),
         PhaseNames,
         MessageNames,
         OutputNames
     ),
-    CastGroups = analyze_cast_groups(Forms, PhaseNames, MessageNames),
+    CastGroups = analyze_cast_groups(
+        maps:get(cast, Callbacks),
+        PhaseNames,
+        MessageNames
+    ),
     Declarations#{
         init_clause => InitClause,
         initial_phase => initial_phase(InitClause, PhaseNames),
@@ -227,8 +235,7 @@ record_fields({attribute, _Line, record, {_Name, Fields}}) ->
         || {typed_record_field, Field, Type} <- Fields
     ].
 
-analyze_entries(Forms, PhaseNames, MessageNames, OutputNames) ->
-    Clauses = xls_parse:find_function(Forms, handle_enter, 3),
+analyze_entries(Clauses, PhaseNames, MessageNames, OutputNames) ->
     Entries = [
         analyze_entry(Clause, PhaseNames, MessageNames, OutputNames)
         || Clause <- Clauses
@@ -293,8 +300,7 @@ maybe_conditional_effect(_Action, Effect) ->
 max_entry_effects(Entries) ->
     lists:max([length(maps:get(actions, Entry)) || Entry <- Entries]).
 
-analyze_cast_groups(Forms, PhaseNames, MessageNames) ->
-    Clauses = xls_parse:find_function(Forms, handle_cast, 3),
+analyze_cast_groups(Clauses, PhaseNames, MessageNames) ->
     xls_callback_lower:group_by(
         Clauses,
         fun(Clause) ->
@@ -356,7 +362,7 @@ validate_init_head({clause, Line, Patterns, Guards, _Body}) ->
     error({unsupported_hls_statem_init_head, Line, Patterns, Guards}).
 
 %%%
-%%% handle_enter/3
+%%% Phase entry
 %%%
 
 lower_entries(Entries, OutputNames, DataName, EnumAtoms) ->
@@ -543,7 +549,7 @@ literal_list(Expression, ContextLine) ->
     error({nonliteral_hls_statem_actions, ContextLine, Expression}).
 
 %%%
-%%% handle_cast/3
+%%% Cast dispatch
 %%%
 
 lower_casts(Groups, DataName, EnumAtoms) ->
@@ -602,7 +608,7 @@ lower_cast_group(
 %% `repeat_phase` is a scheduling boundary rather than a phase value. Normalize
 %% both callback result forms to one XLS product whose final bit requests the
 %% boundary. Keeping this rewrite here prevents the generic expression lowerer
-%% from having to know about hls_statem callback semantics.  The conclusion
+%% from having to know about hls_statem callback semantics. The conclusion
 %% must be the syntactically final tuple, case, or if: following an arbitrary
 %% value through local bindings would require typed expression dataflow here.
 normalize_cast_result(
@@ -696,10 +702,15 @@ validate_names(PhaseNames, MessageNames, OutputNames, DataName)
         false -> error({too_many_hls_statem_outputs,
             length(OutputNames), 255})
     end,
-    case lists:member(repeat_phase, PhaseNames) of
-        true -> error({reserved_hls_statem_phase, repeat_phase});
-        false -> ok
-    end,
+    lists:foreach(
+        fun(Phase) ->
+            case lists:member(Phase, [repeat_phase, terminate]) of
+                true -> error({reserved_hls_statem_phase, Phase});
+                false -> ok
+            end
+        end,
+        PhaseNames
+    ),
     ok = require_unique(phase, PhaseNames),
     ok = require_unique(message_tag, MessageNames),
     ok = require_unique(output, OutputNames),

@@ -51,9 +51,9 @@ fourth_query_draws_exactly_once_test() ->
 reporting_entry_labels_recipient_edges_test() ->
     Cell = cell(7, ?ALL_DIRECTIONS, ?FIRST_RANDOM + 1,
         1, ?FIRST_RANDOM, 13, 17, y, 0, 0),
-    {Cell, Actions} = phenom_data_cell:handle_enter(
+    {Cell, Actions} = phenom_data_cell:reporting(
+        enter,
         collecting,
-        reporting,
         Cell
     ),
     ?assertEqual([
@@ -69,9 +69,9 @@ first_next_step_query_starts_new_join_test() ->
     ?assertEqual(
         {collecting, cell(5, ?EAST_MASK, 123, 0,
             ?FIRST_RANDOM, 13, 17, y, 0, 0), consume},
-        phenom_data_cell:handle_cast(
+        phenom_data_cell:reporting(
+            cast,
             {phenom_query, 5, ?EAST_MASK},
-            reporting,
             Reporting
         )
     ).
@@ -133,9 +133,9 @@ configuration_rejects_zero_seed_test() ->
     Cell = cell(0, 0, 0, 0, 0, 0, 0, i, 0, 0),
     ?assertEqual(
         {configuring, Cell, fail},
-        phenom_data_cell:handle_cast(
+        phenom_data_cell:configuring(
+            cast,
             {phenom_config, 0, 123, 0, 0},
-            configuring,
             Cell
         )
     ).
@@ -193,9 +193,9 @@ measurement_query_phase_and_payload_validation_test() ->
     Reporting = controlled_cell(4, ?ALL_DIRECTIONS, 0, 0, ?FIRST_RANDOM,
         13, 17, y, 0, 0, 0, 1),
     Valid = {pauli_query, 91, x},
-    {replying, Replying, consume} = phenom_data_cell:handle_cast(
+    {replying, Replying, consume} = phenom_data_cell:reporting(
+        cast,
         Valid,
-        reporting,
         Reporting
     ),
     ?assertEqual(
@@ -206,18 +206,18 @@ measurement_query_phase_and_payload_validation_test() ->
     ?assertEqual(
         {repeat_phase, controlled_cell(4, ?ALL_DIRECTIONS, 0, 0,
             ?FIRST_RANDOM, 13, 17, y, 92, 1, 2, 1), consume},
-        phenom_data_cell:handle_cast(
+        phenom_data_cell:replying(
+            cast,
             {pauli_query, 92, z},
-            replying,
             Replying
         )
     ),
     Collecting = controlled_cell(4, 0, 0, 0, ?FIRST_RANDOM,
         13, 17, y, 0, 0, 0, 1),
     {replying, CollectingReply, consume} =
-        phenom_data_cell:handle_cast(
+        phenom_data_cell:collecting(
+            cast,
             {pauli_query, 93, x},
-            collecting,
             Collecting
         ),
     ?assertMatch(
@@ -231,7 +231,7 @@ measurement_query_phase_and_payload_validation_test() ->
         fun({Message, Phase, Cell}) ->
             ?assertMatch(
                 {Phase, Cell, fail},
-                phenom_data_cell:handle_cast(Message, Phase, Cell)
+                phenom_data_cell:Phase(cast, Message, Cell)
             )
         end,
         [
@@ -361,9 +361,9 @@ apply_queries(Sources, Cell0) ->
     Cell.
 
 query(Source, Cell) ->
-    phenom_data_cell:handle_cast(
+    phenom_data_cell:collecting(
+        cast,
         {phenom_query, 0, Source},
-        collecting,
         Cell
     ).
 

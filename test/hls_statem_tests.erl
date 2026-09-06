@@ -4,7 +4,18 @@
 
 -include_lib("eunit/include/eunit.hrl").
 
--export([init/1, handle_enter/3, handle_cast/3]).
+-export([init/1, ready/3, waiting/3]).
+
+event_kinds_dispatch_to_the_phase_function_test() ->
+    {ok, PID} = start(2),
+    try
+        receive {'$gen_cast', started} -> ok end,
+        ok = hls_statem:cast(PID, probe),
+        #{data := #{log := Log}} = hls_statem:info(PID),
+        ?assertEqual([{enter, waiting, waiting}, probe], Log)
+    after
+        stop_if_alive(PID)
+    end.
 
 initial_enter_precedes_first_cast_test() ->
     {ok, PID} = start(4),
@@ -152,18 +163,32 @@ mailbox_overflow_is_fail_stop_test() ->
         error(machine_did_not_stop_on_overflow)
     end.
 
-invalid_conclusion_is_fail_stop_test() ->
+explicit_failure_result_is_fail_stop_test() ->
     {ok, PID} = start(1),
     receive {'$gen_cast', started} -> ok end,
     unlink(PID),
     Monitor = monitor(process, PID),
-    ok = hls_statem:cast(PID, invalid_conclusion),
+    ok = hls_statem:cast(PID, fail_result),
+    receive
+        {'DOWN', Monitor, process, PID,
+                {hls_statem_failure, fail_result}} ->
+            ok
+    after 1000 ->
+        error(machine_did_not_honor_failure_result)
+    end.
+
+invalid_result_is_fail_stop_test() ->
+    {ok, PID} = start(1),
+    receive {'$gen_cast', started} -> ok end,
+    unlink(PID),
+    Monitor = monitor(process, PID),
+    ok = hls_statem:cast(PID, invalid_result),
     receive
         {'DOWN', Monitor, process, PID,
                 {{bad_hls_statem_conclusion, waiting, invalid}, _Stack}} ->
             ok
     after 1000 ->
-        error(machine_did_not_reject_invalid_conclusion)
+        error(machine_did_not_reject_invalid_result)
     end.
 
 capacity_matches_lowered_u8_bound_test() ->
@@ -253,57 +278,63 @@ init({emit, Enabled}) when is_boolean(Enabled) ->
 init(repeat_phase) ->
     {ok, repeat_phase, #{}}.
 
-handle_enter(OldPhase, waiting, Data) ->
+-spec waiting(enter, hls_statem:phase(), map()) ->
+    hls_statem:enter_result(map());
+    (cast, term(), map()) -> hls_statem:cast_result(map()).
+waiting(enter, OldPhase, Data) ->
     {log({enter, OldPhase, waiting}, Data), [
         {cast_if, maps:get(emit, Data), out, started}
     ]};
-handle_enter(OldPhase, ready, Data) ->
-    {log({enter, OldPhase, ready}, Data), [{cast, out, handled}]}.
-
-handle_cast(probe, waiting, Data) ->
+waiting(cast, probe, Data) ->
     {waiting, log(probe, Data), consume};
-handle_cast(started, waiting, Data) ->
+waiting(cast, started, Data) ->
     {waiting, log(peer_started, Data), consume};
-handle_cast(deferred, waiting, Data) ->
+waiting(cast, deferred, Data) ->
     NextData = log(deferred_waiting, Data#{
         attempts := maps:get(attempts, Data) + 1
     }),
     {waiting, NextData, postpone};
-handle_cast(data_change, waiting, Data) ->
+waiting(cast, data_change, Data) ->
     NextData = log(data_change, Data#{eligible := true}),
     {waiting, NextData, consume};
-handle_cast(same_phase_transition, waiting, Data) ->
+waiting(cast, same_phase_transition, Data) ->
     {waiting, log(same_phase_transition, Data), consume};
-handle_cast({repeat_deferred, Label}, waiting,
-        Data = #{eligible := false}) ->
+waiting(cast, {repeat_deferred, Label}, Data = #{eligible := false}) ->
     NextData = log({repeat_deferred, Label, postponed}, Data),
     {waiting, NextData, postpone};
-handle_cast({repeat_deferred, Label}, waiting,
-        Data = #{eligible := true}) ->
+waiting(cast, {repeat_deferred, Label}, Data = #{eligible := true}) ->
     NextData = log({repeat_deferred, Label, replayed}, Data),
     {waiting, NextData, consume};
-handle_cast(repeat_boundary, waiting, Data) ->
+waiting(cast, repeat_boundary, Data) ->
     NextData = log(repeat_boundary, Data#{eligible := true}),
     {repeat_phase, NextData, consume};
-handle_cast({invalid_repeat_phase, Directive}, waiting, Data) ->
+waiting(cast, {invalid_repeat_phase, Directive}, Data) ->
     {repeat_phase, Data, Directive};
-handle_cast(informational, waiting, Data) ->
+waiting(cast, informational, Data) ->
     {waiting, log(informational, Data), consume};
-handle_cast(younger, waiting, Data) ->
+waiting(cast, younger, Data) ->
     {waiting, log(younger, Data), consume};
-handle_cast(advance, waiting, Data) ->
+waiting(cast, advance, Data) ->
     {ready, log(advance, Data), consume};
-handle_cast(deferred, ready, Data) ->
+waiting(cast, block, Data) ->
+    {waiting, Data, postpone};
+waiting(cast, fail_result, Data) ->
+    {waiting, log(failed, Data), fail};
+waiting(cast, invalid_result, Data) ->
+    {waiting, Data, invalid}.
+
+-spec ready(enter, hls_statem:phase(), map()) ->
+    hls_statem:enter_result(map());
+    (cast, term(), map()) -> hls_statem:cast_result(map()).
+ready(enter, OldPhase, Data) ->
+    {log({enter, OldPhase, ready}, Data), [{cast, out, handled}]};
+ready(cast, deferred, Data) ->
     true = maps:get(eligible, Data),
     NextData = log(deferred_ready, Data#{
         attempts := maps:get(attempts, Data) + 1,
         handled := true
     }),
-    {ready, NextData, consume};
-handle_cast(block, waiting, Data) ->
-    {waiting, Data, postpone};
-handle_cast(invalid_conclusion, waiting, Data) ->
-    {waiting, Data, invalid}.
+    {ready, NextData, consume}.
 
 start(Capacity) ->
     hls_statem:start_link(

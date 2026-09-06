@@ -65,7 +65,13 @@ logical query.
     pauli_update/2,
     runtime_info/1
 ]).
--export([init/1, handle_enter/3, handle_cast/3]).
+-export([
+    configuring/3,
+    collecting/3,
+    reporting/3,
+    replying/3,
+    init/1
+]).
 
 -define(MAILBOX_CAPACITY, 5).
 -define(U16_MASK, 16#ffff).
@@ -106,10 +112,6 @@ logical query.
 }).
 
 -type phase() :: configuring | collecting | reporting | replying.
--type directive() :: consume | postpone | fail.
--type conclusion() ::
-    {phase(), #data_cell{}, directive()} |
-    {repeat_phase, #data_cell{}, consume}.
 -type neighbors() :: #{
     north := pid(),
     east := pid(),
@@ -239,43 +241,17 @@ runtime_info(PID) ->
 init([]) ->
     {ok, configuring, #data_cell{}}.
 
--spec handle_enter(phase(), phase(), #data_cell{}) ->
-    hls_statem:enter_result().
-handle_enter(_OldPhase, configuring, Cell) ->
+-spec configuring(enter, phase(), #data_cell{}) ->
+    hls_statem:enter_result(#data_cell{});
+    (cast,
+        #phenom_config{} | #phenom_query{} | #pauli_query{} |
+            #noise_cutoff{} | #pauli_update{},
+        #data_cell{}) -> hls_statem:cast_result(phase(), #data_cell{}).
+configuring(enter, _OldPhase, Cell) ->
     {Cell, []};
-handle_enter(_OldPhase, collecting, Cell) ->
-    {Cell, []};
-handle_enter(_OldPhase, reporting, Cell) ->
-    Message = #phenom_data{
-        step = Cell#data_cell.step,
-        flags = Cell#data_cell.event bor
-            (Cell#data_cell.noise_disabled bsl 1)
-    },
-    {Cell, [
-        {cast, north, Message#phenom_data{source = ?PHI_SOUTH_MASK}},
-        {cast, east, Message#phenom_data{source = ?PHI_WEST_MASK}},
-        {cast, west, Message#phenom_data{source = ?PHI_EAST_MASK}},
-        {cast, south, Message#phenom_data{source = ?PHI_NORTH_MASK}}
-    ]};
-handle_enter(_OldPhase, replying, Cell) ->
-    Reply = #pauli_reply{
-        request_id = Cell#data_cell.reply_request_id,
-        x = Cell#data_cell.x,
-        y = Cell#data_cell.y,
-        anticommutes = Cell#data_cell.reply_anticommutes
-    },
-    {Cell, [{cast, measurement, Reply}]}.
-
--spec handle_cast(
-    #phenom_config{} | #phenom_query{} | #pauli_query{} |
-        #noise_cutoff{} | #pauli_update{},
-    phase(),
-    #data_cell{}
-) ->
-    conclusion().
-handle_cast(
+configuring(
+    cast,
     #phenom_config{seed = Seed, threshold = Threshold, x = X, y = Y},
-    configuring,
     Cell
 ) when Seed > 0 ->
     Configured = Cell#data_cell{
@@ -286,28 +262,36 @@ handle_cast(
         accumulated_pauli = hls_pauli:i()
     },
     {collecting, Configured, consume};
-handle_cast(#phenom_config{}, configuring, Cell) ->
+configuring(cast, #phenom_config{}, Cell) ->
     {configuring, Cell, fail};
-handle_cast(
+configuring(
+    cast,
     #phenom_query{step = 0},
-    configuring,
     Cell
 ) ->
     {configuring, Cell, postpone};
-handle_cast(#phenom_query{}, configuring, Cell) ->
+configuring(cast, #phenom_query{}, Cell) ->
     {configuring, Cell, fail};
-handle_cast(#pauli_query{}, configuring, Cell) ->
+configuring(cast, #pauli_query{}, Cell) ->
     {configuring, Cell, fail};
-handle_cast(#noise_cutoff{}, configuring, Cell) ->
+configuring(cast, #noise_cutoff{}, Cell) ->
     {configuring, Cell, fail};
-handle_cast(#pauli_update{}, configuring, Cell) ->
-    {configuring, Cell, fail};
+configuring(cast, #pauli_update{}, Cell) ->
+    {configuring, Cell, fail}.
 
-handle_cast(
+-spec collecting(enter, phase(), #data_cell{}) ->
+    hls_statem:enter_result(#data_cell{});
+    (cast,
+        #phenom_config{} | #phenom_query{} | #pauli_query{} |
+            #noise_cutoff{} | #pauli_update{},
+        #data_cell{}) -> hls_statem:cast_result(phase(), #data_cell{}).
+collecting(enter, _OldPhase, Cell) ->
+    {Cell, []};
+collecting(
+    cast,
     #noise_cutoff{
         first_quiet_step = FirstQuietStep
     },
-    collecting,
     Cell = #data_cell{
         step = Step,
         noise_disabled = 0,
@@ -318,9 +302,9 @@ handle_cast(
         cutoff_armed = 1,
         cutoff_step = FirstQuietStep
     }, consume};
-handle_cast(#noise_cutoff{}, collecting, Cell) ->
+collecting(cast, #noise_cutoff{}, Cell) ->
     {collecting, Cell, fail};
-handle_cast(#pauli_update{pauli = Pauli}, collecting, Cell) ->
+collecting(cast, #pauli_update{pauli = Pauli}, Cell) ->
     case hls_pauli:is_pauli(Pauli) of
         true ->
             {collecting, Cell#data_cell{
@@ -332,9 +316,9 @@ handle_cast(#pauli_update{pauli = Pauli}, collecting, Cell) ->
         false ->
             {collecting, Cell, fail}
     end;
-handle_cast(
+collecting(
+    cast,
     #phenom_query{step = Step, source = Source},
-    collecting,
     Cell = #data_cell{step = Step, seen_sources = Seen}
 ) when (Source =:= ?PHI_NORTH_MASK orelse
         Source =:= ?PHI_EAST_MASK orelse
@@ -389,20 +373,20 @@ handle_cast(
             },
             {reporting, Completed, consume}
     end;
-handle_cast(
+collecting(
+    cast,
     #phenom_query{step = QueryStep},
-    collecting,
     Cell = #data_cell{step = Step}
 ) when QueryStep =:= ((Step + 1) band ?U32_MASK) ->
     {collecting, Cell, postpone};
-handle_cast(#phenom_query{}, collecting, Cell) ->
+collecting(cast, #phenom_query{}, Cell) ->
     {collecting, Cell, fail};
-handle_cast(
+collecting(
+    cast,
     #pauli_query{
         request_id = RequestId,
         measurement = Measurement
     },
-    collecting,
     Cell = #data_cell{noise_disabled = 1}
 ) ->
     case hls_pauli:is_pauli(Measurement) of
@@ -422,14 +406,32 @@ handle_cast(
         false ->
             {collecting, Cell, fail}
     end;
-handle_cast(#pauli_query{}, collecting, Cell) ->
-    {collecting, Cell, fail};
+collecting(cast, #pauli_query{}, Cell) ->
+    {collecting, Cell, fail}.
 
-handle_cast(
+-spec reporting(enter, phase(), #data_cell{}) ->
+    hls_statem:enter_result(#data_cell{});
+    (cast,
+        #phenom_config{} | #phenom_query{} | #pauli_query{} |
+            #noise_cutoff{} | #pauli_update{},
+        #data_cell{}) -> hls_statem:cast_result(phase(), #data_cell{}).
+reporting(enter, _OldPhase, Cell) ->
+    Message = #phenom_data{
+        step = Cell#data_cell.step,
+        flags = Cell#data_cell.event bor
+            (Cell#data_cell.noise_disabled bsl 1)
+    },
+    {Cell, [
+        {cast, north, Message#phenom_data{source = ?PHI_SOUTH_MASK}},
+        {cast, east, Message#phenom_data{source = ?PHI_WEST_MASK}},
+        {cast, west, Message#phenom_data{source = ?PHI_EAST_MASK}},
+        {cast, south, Message#phenom_data{source = ?PHI_NORTH_MASK}}
+    ]};
+reporting(
+    cast,
     #noise_cutoff{
         first_quiet_step = FirstQuietStep
     },
-    reporting,
     Cell = #data_cell{
         step = Step,
         noise_disabled = 0,
@@ -440,9 +442,9 @@ handle_cast(
         cutoff_armed = 1,
         cutoff_step = FirstQuietStep
     }, consume};
-handle_cast(#noise_cutoff{}, reporting, Cell) ->
+reporting(cast, #noise_cutoff{}, Cell) ->
     {reporting, Cell, fail};
-handle_cast(#pauli_update{pauli = Pauli}, reporting, Cell) ->
+reporting(cast, #pauli_update{pauli = Pauli}, Cell) ->
     case hls_pauli:is_pauli(Pauli) of
         true ->
             {reporting, Cell#data_cell{
@@ -454,9 +456,9 @@ handle_cast(#pauli_update{pauli = Pauli}, reporting, Cell) ->
         false ->
             {reporting, Cell, fail}
     end;
-handle_cast(
+reporting(
+    cast,
     #phenom_query{step = QueryStep, source = Source},
-    reporting,
     Cell = #data_cell{step = Step}
 ) when QueryStep =:= ((Step + 1) band ?U32_MASK),
        (Source =:= ?PHI_NORTH_MASK orelse
@@ -469,14 +471,14 @@ handle_cast(
         event = 0
     },
     {collecting, Collecting, consume};
-handle_cast(#phenom_query{}, reporting, Cell) ->
+reporting(cast, #phenom_query{}, Cell) ->
     {reporting, Cell, fail};
-handle_cast(
+reporting(
+    cast,
     #pauli_query{
         request_id = RequestId,
         measurement = Measurement
     },
-    reporting,
     Cell = #data_cell{noise_disabled = 1}
 ) ->
     case hls_pauli:is_pauli(Measurement) of
@@ -496,14 +498,28 @@ handle_cast(
         false ->
             {reporting, Cell, fail}
     end;
-handle_cast(#pauli_query{}, reporting, Cell) ->
-    {reporting, Cell, fail};
+reporting(cast, #pauli_query{}, Cell) ->
+    {reporting, Cell, fail}.
 
-handle_cast(#phenom_config{}, replying, Cell) ->
+-spec replying(enter, phase(), #data_cell{}) ->
+    hls_statem:enter_result(#data_cell{});
+    (cast,
+        #phenom_config{} | #phenom_query{} | #pauli_query{} |
+            #noise_cutoff{} | #pauli_update{},
+        #data_cell{}) -> hls_statem:cast_result(phase(), #data_cell{}).
+replying(enter, _OldPhase, Cell) ->
+    Reply = #pauli_reply{
+        request_id = Cell#data_cell.reply_request_id,
+        x = Cell#data_cell.x,
+        y = Cell#data_cell.y,
+        anticommutes = Cell#data_cell.reply_anticommutes
+    },
+    {Cell, [{cast, measurement, Reply}]};
+replying(cast, #phenom_config{}, Cell) ->
     {replying, Cell, fail};
-handle_cast(
+replying(
+    cast,
     #phenom_query{step = Step, source = Source},
-    replying,
     Cell = #data_cell{
         step = Step,
         seen_sources = Seen,
@@ -524,18 +540,18 @@ handle_cast(
                 event = hls_type:as(hls_nums:u32(), 0)
             }, consume}
     end;
-handle_cast(
+replying(
+    cast,
     #phenom_query{step = QueryStep},
-    replying,
     Cell = #data_cell{
         step = Step,
         reply_resume = ?REPLY_FROM_COLLECTING
     }
 ) when QueryStep =:= ((Step + 1) band ?U32_MASK) ->
     {replying, Cell, postpone};
-handle_cast(
+replying(
+    cast,
     #phenom_query{step = QueryStep, source = Source},
-    replying,
     Cell = #data_cell{
         step = Step,
         reply_resume = ?REPLY_FROM_REPORTING
@@ -551,11 +567,11 @@ handle_cast(
         event = 0
     },
     {collecting, Collecting, consume};
-handle_cast(#phenom_query{}, replying, Cell) ->
+replying(cast, #phenom_query{}, Cell) ->
     {replying, Cell, fail};
-handle_cast(#noise_cutoff{}, replying, Cell) ->
+replying(cast, #noise_cutoff{}, Cell) ->
     {replying, Cell, fail};
-handle_cast(#pauli_update{pauli = Pauli}, replying, Cell) ->
+replying(cast, #pauli_update{pauli = Pauli}, Cell) ->
     case hls_pauli:is_pauli(Pauli) of
         true ->
             {replying, Cell#data_cell{
@@ -567,12 +583,12 @@ handle_cast(#pauli_update{pauli = Pauli}, replying, Cell) ->
         false ->
             {replying, Cell, fail}
     end;
-handle_cast(
+replying(
+    cast,
     #pauli_query{
         request_id = RequestId,
         measurement = Measurement
     },
-    replying,
     Cell = #data_cell{noise_disabled = 1}
 ) ->
     case hls_pauli:is_pauli(Measurement) of
@@ -591,7 +607,7 @@ handle_cast(
         false ->
             {replying, Cell, fail}
     end;
-handle_cast(#pauli_query{}, replying, Cell) ->
+replying(cast, #pauli_query{}, Cell) ->
     {replying, Cell, fail}.
 
 source_mask(north) -> ?PHI_NORTH_MASK;

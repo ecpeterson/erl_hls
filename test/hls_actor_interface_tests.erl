@@ -245,7 +245,7 @@ interface_fixture_source(Module, Width) ->
         "-hls_outputs([out]).~n"
         "-hls_mailbox_capacity(1).~n"
         "-hls_tags([message]).~n"
-        "-export([handle_cast/3, handle_enter/3, init/1]).~n"
+        "-export([waiting/3, init/1]).~n"
         "-record(message, {~n"
         "  value = hls_type:zero() :: hls_nums:~p()~n"
         "}).~n"
@@ -253,9 +253,9 @@ interface_fixture_source(Module, Width) ->
         "  value = hls_type:zero() :: hls_nums:~p()~n"
         "}).~n"
         "init([]) -> {ok, waiting, #cell{}}.~n"
-        "handle_enter(_Old, waiting, Cell) ->~n"
-        "  {Cell, [{cast, out, #message{value = Cell#cell.value}}]}.~n"
-        "handle_cast(#message{value = Value}, waiting, Cell) ->~n"
+        "waiting(enter, _Old, Cell) ->~n"
+        "  {Cell, [{cast, out, #message{value = Cell#cell.value}}]};~n"
+        "waiting(cast, #message{value = Value}, Cell) ->~n"
         "  {waiting, Cell#cell{value = Value}, consume}.~n",
         [Module, Width, Width]
     )).
