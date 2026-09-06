@@ -32,15 +32,15 @@ source_orders_test_() ->
 
 fourth_query_draws_exactly_once_test() ->
     Initial = configured_cell(?FIRST_RANDOM),
-    {next_state, collecting, First} = query(?NORTH_MASK, Initial),
-    {next_state, collecting, Second} = query(?EAST_MASK, First),
-    {next_state, collecting, Third} = query(?WEST_MASK, Second),
+    {collecting, First, consume} = query(?NORTH_MASK, Initial),
+    {collecting, Second, consume} = query(?EAST_MASK, First),
+    {collecting, Third, consume} = query(?WEST_MASK, Second),
     ?assertMatch(
         {data_cell, 0, _, ?FIRST_RANDOM, 0, ?SEED,
             0, 0, i, 0, 0, 0, 0, 0, 0},
         Third
     ),
-    {next_state, reporting, Final} = query(?SOUTH_MASK, Third),
+    {reporting, Final, consume} = query(?SOUTH_MASK, Third),
     %% The comparison is strict: equality with the draw is not an event.
     ?assertEqual(
         cell(0, ?ALL_DIRECTIONS, ?FIRST_RANDOM,
@@ -51,7 +51,7 @@ fourth_query_draws_exactly_once_test() ->
 reporting_entry_labels_recipient_edges_test() ->
     Cell = cell(7, ?ALL_DIRECTIONS, ?FIRST_RANDOM + 1,
         1, ?FIRST_RANDOM, 13, 17, y, 0, 0),
-    {keep_state, Cell, Actions} = phenom_data_cell:reporting(
+    {Cell, Actions} = phenom_data_cell:reporting(
         enter,
         collecting,
         Cell
@@ -67,8 +67,8 @@ first_next_step_query_starts_new_join_test() ->
     Reporting = cell(4, ?ALL_DIRECTIONS, 123, 1, ?FIRST_RANDOM,
         13, 17, y, 0, 0),
     ?assertEqual(
-        {next_state, collecting, cell(5, ?EAST_MASK, 123, 0,
-            ?FIRST_RANDOM, 13, 17, y, 0, 0)},
+        {collecting, cell(5, ?EAST_MASK, 123, 0,
+            ?FIRST_RANDOM, 13, 17, y, 0, 0), consume},
         phenom_data_cell:reporting(
             cast,
             {phenom_query, 5, ?EAST_MASK},
@@ -132,7 +132,7 @@ stale_step_stops_cell_test() ->
 configuration_rejects_zero_seed_test() ->
     Cell = cell(0, 0, 0, 0, 0, 0, 0, i, 0, 0),
     ?assertEqual(
-        {stop, fail, Cell},
+        {configuring, Cell, fail},
         phenom_data_cell:configuring(
             cast,
             {phenom_config, 0, 123, 0, 0},
@@ -193,7 +193,7 @@ measurement_query_phase_and_payload_validation_test() ->
     Reporting = controlled_cell(4, ?ALL_DIRECTIONS, 0, 0, ?FIRST_RANDOM,
         13, 17, y, 0, 0, 0, 1),
     Valid = {pauli_query, 91, x},
-    {next_state, replying, Replying} = phenom_data_cell:reporting(
+    {replying, Replying, consume} = phenom_data_cell:reporting(
         cast,
         Valid,
         Reporting
@@ -205,7 +205,7 @@ measurement_query_phase_and_payload_validation_test() ->
     ),
     ?assertEqual(
         {repeat_phase, controlled_cell(4, ?ALL_DIRECTIONS, 0, 0,
-            ?FIRST_RANDOM, 13, 17, y, 92, 1, 2, 1)},
+            ?FIRST_RANDOM, 13, 17, y, 92, 1, 2, 1), consume},
         phenom_data_cell:replying(
             cast,
             {pauli_query, 92, z},
@@ -214,7 +214,7 @@ measurement_query_phase_and_payload_validation_test() ->
     ),
     Collecting = controlled_cell(4, 0, 0, 0, ?FIRST_RANDOM,
         13, 17, y, 0, 0, 0, 1),
-    {next_state, replying, CollectingReply} =
+    {replying, CollectingReply, consume} =
         phenom_data_cell:collecting(
             cast,
             {pauli_query, 93, x},
@@ -230,7 +230,7 @@ measurement_query_phase_and_payload_validation_test() ->
     lists:foreach(
         fun({Message, Phase, Cell}) ->
             ?assertMatch(
-                {stop, fail, Cell},
+                {Phase, Cell, fail},
                 phenom_data_cell:Phase(cast, Message, Cell)
             )
         end,
@@ -351,7 +351,7 @@ apply_queries(Sources, Cell0) ->
     {Phase, Cell} = lists:foldl(
         fun(Source, {_Phase, CellIn}) ->
             case query(Source, CellIn) of
-                {next_state, NextPhase, CellOut} -> {NextPhase, CellOut}
+                {NextPhase, CellOut, consume} -> {NextPhase, CellOut}
             end
         end,
         {collecting, Cell0},

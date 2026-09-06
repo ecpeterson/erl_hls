@@ -40,7 +40,7 @@ from the six phi schedulers under measurement.
     configure/5,
     offer_request/2
 ]).
--export([callback_mode/0, configuring/3, waiting/3, announcing/3, init/1]).
+-export([configuring/3, waiting/3, announcing/3, init/1]).
 
 -define(U16_MASK, 16#ffff).
 -define(U32_MASK, 16#ffffffff).
@@ -119,15 +119,12 @@ offer_request(_Pid, _Step) ->
 init([]) ->
     {ok, configuring, #source{}}.
 
-callback_mode() ->
-    [state_functions, state_enter].
-
 -spec configuring(enter, phase(), #source{}) ->
     hls_statem:enter_result(#source{});
     (cast, #phenom_config{} | #phenom_request{}, #source{}) ->
-        hls_statem:event_handler_result(phase(), #source{}).
+        hls_statem:cast_result(phase(), #source{}).
 configuring(enter, _OldPhase, Source) ->
-    {keep_state, Source, []};
+    {Source, []};
 configuring(
     cast,
     #phenom_config{seed = Seed, threshold = Threshold, x = X, y = Y},
@@ -136,26 +133,26 @@ configuring(
        Threshold >= 0, Threshold =< ?U32_MASK,
        X >= 0, X =< ?U16_MASK,
        Y >= 0, Y =< ?U16_MASK ->
-    {next_state, waiting, Source#source{
+    {waiting, Source#source{
         random_state = Seed,
         threshold = Threshold,
         x = X,
         y = Y
-    }};
+    }, consume};
 configuring(cast, #phenom_config{}, Source) ->
-    {stop, fail, Source};
+    {configuring, Source, fail};
 configuring(cast, #phenom_request{step = 0}, Source) ->
-    {next_state, configuring, Source, [postpone]};
+    {configuring, Source, postpone};
 configuring(cast, #phenom_request{}, Source) ->
-    {stop, fail, Source}.
+    {configuring, Source, fail}.
 
 -spec waiting(enter, phase(), #source{}) -> hls_statem:enter_result(#source{});
     (cast, #phenom_config{} | #phenom_request{}, #source{}) ->
-        hls_statem:event_handler_result(phase(), #source{}).
+        hls_statem:cast_result(phase(), #source{}).
 waiting(enter, _OldPhase, Source) ->
-    {keep_state, Source, []};
+    {Source, []};
 waiting(cast, #phenom_config{}, Source) ->
-    {stop, fail, Source};
+    {waiting, Source, fail};
 waiting(
     cast,
     #phenom_request{step = 0},
@@ -170,19 +167,19 @@ waiting(
         false -> hls_type:as(hls_nums:u32(), 0);
         true -> hls_type:as(hls_nums:u32(), 1)
     end,
-    {next_state, announcing, Source#source{
+    {announcing, Source#source{
         step = 0,
         random_state = NextRandom,
         previous_measurement = Measurement,
         announcement = Measurement bxor PreviousMeasurement
-    }};
+    }, consume};
 waiting(cast, #phenom_request{}, Source) ->
-    {stop, fail, Source}.
+    {waiting, Source, fail}.
 
 -spec announcing(enter, phase(), #source{}) ->
     hls_statem:enter_result(#source{});
     (cast, #phenom_config{} | #phenom_request{}, #source{}) ->
-        hls_statem:event_handler_result(phase(), #source{}).
+        hls_statem:cast_result(phase(), #source{}).
 announcing(enter, _OldPhase, Source) ->
     Event = #phenom_anyon{
         step = Source#source.step,
@@ -190,9 +187,9 @@ announcing(enter, _OldPhase, Source) ->
         x = Source#source.x,
         y = Source#source.y
     },
-    {keep_state, Source, [{cast, phi, Event}]};
+    {Source, [{cast, phi, Event}]};
 announcing(cast, #phenom_config{}, Source) ->
-    {stop, fail, Source};
+    {announcing, Source, fail};
 announcing(
     cast,
     #phenom_request{step = Step},
@@ -213,6 +210,6 @@ announcing(
         random_state = NextRandom,
         previous_measurement = Measurement,
         announcement = Measurement bxor PreviousMeasurement
-    }};
+    }, consume};
 announcing(cast, #phenom_request{}, Source) ->
-    {stop, fail, Source}.
+    {announcing, Source, fail}.

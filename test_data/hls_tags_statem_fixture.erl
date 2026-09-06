@@ -1,6 +1,6 @@
 -module(hls_tags_statem_fixture).
 
--export([init/1, callback_mode/0, waiting/3]).
+-export([init/1, waiting/3]).
 
 -hls_data(cell).
 -hls_phases([waiting]).
@@ -26,16 +26,15 @@ init([]) ->
     InitialPhase = waiting,
     {ok, InitialPhase, #cell{}}.
 
-callback_mode() ->
-    [state_functions, state_enter].
-
--spec waiting(hls_statem:event_type(), term(), #cell{}) ->
-    hls_statem:enter_result() | hls_statem:state_result().
+-spec waiting(enter, hls_statem:phase(), #cell{}) ->
+        hls_statem:enter_result(#cell{});
+    (cast, #first{} | #shared{} | #last{}, #cell{}) ->
+        hls_statem:cast_result(#cell{}).
 waiting(enter, _OldPhase, Cell) ->
-    {keep_state, Cell, [{cast, out, #first{value = Cell#cell.value}}]};
+    {Cell, [{cast, out, #first{value = Cell#cell.value}}]};
 waiting(cast, #first{value = Value}, Cell) ->
-    {next_state, waiting, Cell#cell{value = Value}};
+    {waiting, Cell#cell{value = Value}, consume};
 waiting(cast, #shared{value = Value}, Cell) ->
-    {next_state, waiting, Cell#cell{value = Value}};
+    {waiting, Cell#cell{value = Value}, consume};
 waiting(cast, #last{value = Value}, Cell) ->
-    {next_state, waiting, Cell#cell{value = Value}}.
+    {waiting, Cell#cell{value = Value}, consume}.

@@ -570,7 +570,7 @@ lower_cast_group(
     EnumAtoms
 ) ->
     Clauses = [
-        strip_dispatched_phase(Clause)
+        strip_dispatched_phase(normalize_cast_result(Clause, Phase))
         || Clause <- Clauses0
     ],
     MessageValue = [
@@ -604,6 +604,66 @@ lower_cast_group(
         body => xls_parse:print(Body),
         result => xls_parse:print(Result)
     }.
+
+%% `repeat_phase` is a scheduling boundary rather than a phase value. Normalize
+%% both callback result forms to one XLS product whose final bit requests the
+%% boundary. Keeping this rewrite here prevents the generic expression lowerer
+%% from having to know about hls_statem callback semantics. The conclusion
+%% must be the syntactically final tuple, case, or if: following an arbitrary
+%% value through local bindings would require typed expression dataflow here.
+normalize_cast_result(
+    {clause, Line, Patterns, Guards, Body0},
+    Phase
+) ->
+    {Prefix, Result0} = split_last(Body0),
+    Result = normalize_cast_result_expression(Result0, Phase),
+    {clause, Line, Patterns, Guards, Prefix ++ [Result]}.
+
+normalize_cast_result_expression(
+    {tuple, Line, [
+        {atom, _RepeatLine, repeat_phase},
+        Data,
+        {atom, _ConsumeLine, consume}
+    ]},
+    Phase
+) ->
+    {tuple, Line, [
+        {atom, Line, Phase},
+        Data,
+        {atom, Line, consume},
+        {atom, Line, true}
+    ]};
+normalize_cast_result_expression(
+    {tuple, Line, [{atom, _RepeatLine, repeat_phase} | _] = Elements},
+    _Phase
+) ->
+    error({bad_hls_statem_repeat_result, Line, Elements});
+normalize_cast_result_expression(
+    {tuple, Line, [NextPhase, Data, Directive]},
+    _Phase
+) ->
+    {tuple, Line, [
+        NextPhase,
+        Data,
+        Directive,
+        {atom, Line, false}
+    ]};
+normalize_cast_result_expression(
+    {'case', Line, Expression, Clauses},
+    Phase
+) ->
+    {'case', Line, Expression, [
+        normalize_cast_result(Clause, Phase) || Clause <- Clauses
+    ]};
+normalize_cast_result_expression(
+    {'if', Line, Clauses},
+    Phase
+) ->
+    {'if', Line, [
+        normalize_cast_result(Clause, Phase) || Clause <- Clauses
+    ]};
+normalize_cast_result_expression(Expression, _Phase) ->
+    error({unsupported_hls_statem_cast_result, Expression}).
 
 cast_key(
     {clause, Line, Patterns, _Guards, _Body},

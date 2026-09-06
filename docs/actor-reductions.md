@@ -1,7 +1,7 @@
 # Actor-owned reductions
 
 This is the working design for phase-local incast reduction. The state-function
-callback surface is the first implementation step. Reduction actions and
+callback surface is the first implementation step. Reduction directives and
 internal completion events below are proposed syntax, not implemented features.
 Update this document when that contract changes.
 
@@ -13,14 +13,13 @@ call/reply protocol. There is no separately addressed collector and no special
 sender-side delivery operation. Shared reduction RAM or an execution unit is a
 compiler placement choice.
 
-The callback mode is `callback_mode() -> [state_functions, state_enter]`.
 Each declared phase exports `Phase(EventType, Content, Data)`. For example, the
 proposed diffusion phase is:
 
 ```erlang
 gathering(enter, _OldPhase, Cell) ->
     Epoch = diffusion_epoch(Cell),
-    {keep_state, Cell, [
+    {Cell, [
         {open_reduction, diffusion, Epoch, {count, 4},
             {commutative_monoid, zero_phi_sum(), fun add_phi/2}},
         {cast, north, phi_message(Cell)},
@@ -28,8 +27,8 @@ gathering(enter, _OldPhase, Cell) ->
         {cast, west, phi_message(Cell)},
         {cast, south, phi_message(Cell)}
     ]};
-gathering(cast, #phi{epoch = Epoch, values = Values}, _Cell) ->
-    {keep_state_and_data, [{contribute, diffusion, Epoch, Values}]};
+gathering(cast, #phi{epoch = Epoch, values = Values}, Cell) ->
+    {gathering, Cell, {contribute, diffusion, Epoch, Values}};
 gathering(internal, {reduction_complete, diffusion, Epoch, Sum}, Cell) ->
     %% Relax once, then advance or repeat the diffusion phase.
     ...
@@ -38,25 +37,35 @@ gathering(internal, {reduction_complete, diffusion, Epoch, Sum}, Cell) ->
 These helper calls illustrate the design; accepting each expression in the
 lowerer is separate work. A source-aware alternative uses
 `{members, ExpectedMembers}` when opening and
-`{contribute, Name, Key, Member, Value}` when contributing. Expected membership
-is an expression, leaving room for correlators whose active participants are
-chosen at runtime. Hardware still needs a finite capacity or member universe.
-The initial implementation can require a static count or fixed-universe set.
+`{contribute, Name, Key, Member, Value}` when contributing. The contribution
+directive is a consuming cast disposition: the scheduler, rather than the
+callback body, updates the actor-owned accumulator and publishes the eventual
+internal completion event. Expected membership is an expression, leaving room
+for correlators whose active participants are chosen at runtime. Hardware still
+needs a finite capacity or member universe. The initial implementation can
+require a static count or fixed-universe set.
 
-## Event-kind normalization
+## Event-kind typing
 
 Phase-named functions organize source by actor state, but they do not erase the
 difference between event kinds. The compiler classifies each clause by
-`{Phase, EventType, Schema}` before lowering its body. It then applies an
-event-specific result normalizer and only combines clauses whose normalized
-result types agree.
+`{Phase, EventType, Schema}` before lowering its body and only combines clauses
+whose event-specific result types agree.
 
 Stage one implements `enter` and `cast`. A future `call` clause remains plainly
 identifiable from its first argument, so its reply-bearing result can be
-normalized separately from the no-reply cast result before both become arms of
-the generated actor dispatch. Timeouts and internal events can receive their
-own normalization rules in the same way. Source-level state functions therefore
-do not require every event kind to share one Erlang return tuple.
+lowered separately from the no-reply cast result before both become arms of the
+generated actor dispatch. Timeouts and internal events can receive their own
+result shapes in the same way. Source-level state functions therefore do not
+require every event kind to share one Erlang return tuple.
+
+Erlang overloads express the event/result relationship directly: an `enter`
+specification returns `hls_statem:enter_result(DataType)`, while a separate
+`cast` specification returns `hls_statem:cast_result(DataType)`. Their singleton
+first-argument types make the overload domains disjoint. A `when` specification
+cannot express this conditional relationship; it only supplies `::` subtype
+constraints for type variables. `hls_statem:callback_result/0,1` is a convenient
+union for generic contexts, but does not retain the pairing.
 
 ## Reduction semantics
 
@@ -117,7 +126,7 @@ dynamic arming, cancellation, timeouts, or arbitrary sets are synthesizable.
 
 1. Convert `hls_statem` and all examples to phase-named state functions,
    keeping runtime and generated hardware behavior intact.
-2. Add reduction actions and internal completion events to the CPU reference,
+2. Add reduction directives and internal completion events to the CPU reference,
    with permutation, skew, duplicate, key, postponement, and reset coverage.
 3. Lower one active bounded reduction per actor, instrumenting occupancy,
    completion latency, and avoided executor visits.
@@ -133,23 +142,25 @@ the abstraction.
 
 ## Stage-one callback surface
 
-Entry clauses return `{keep_state, Data}` or `{keep_state, Data, Casts}`. Cast
-clauses return `{next_state, Phase, Data}`, `{keep_state, Data}`, or their forms
-with `[]` or `[postpone]`. `keep_state_and_data` and its action-list form retain
-callback data; lowered clauses must bind the whole data value in their head
-when using it. `{stop, fail, Data}` is the bounded fail-stop result. Output
-actions remain restricted to entry, with a literal ordered list and at most
-one action per output port in lowered code.
+Entry clauses return the fixed shape `{Data, Casts}`. Cast clauses return
+`{NextPhase, Data, Directive}`, where `Directive` is `consume`, `postpone`, or
+`fail`. The fail directive installs the returned phase and data for diagnostics
+before stopping. Output actions remain restricted to entry, with a literal
+ordered list and at most one action per output port in lowered code.
 
-`{repeat_phase, Data}` is an HLS extension that consumes the current input,
-enters the current phase again, and retries postponed messages in arrival
-order. It preserves the existing hardware scheduling boundary. It is not named
-`repeat_state`, because OTP's operation does not create the phase boundary that
-releases postponed events. Ordinary same-phase `next_state` and `keep_state`
-results do not retry postponed inputs.
+The generated subset currently requires a cast conclusion to be the
+syntactically final tuple, `case`, or `if`. This is a legacy of the internal
+`repeat_phase` bit adapter, rather than a requirement introduced by phase-named
+callbacks. Removing it requires typed result dataflow or a different internal
+encoding; stage one does not widen that compiler change.
+
+`{repeat_phase, Data, consume}` is an HLS extension that consumes the current
+input, enters the current phase again, and retries postponed messages in
+arrival order. It preserves the existing hardware scheduling boundary. It is
+not named `repeat_state`, because OTP's operation does not create the phase
+boundary that releases postponed events. Returning the current phase in an
+ordinary result does not retry postponed inputs.
 
 This is a restricted callback vocabulary, not a promise of full `gen_statem`
 compatibility. Calls, timeouts, arbitrary stop reasons, `next_event`, and the
-proposed reduction actions remain outside stage one. CPU dispatch validates
-the value returned by `callback_mode/0`; lowering additionally requires the
-exact mode list to appear literally so that callback classification is static.
+proposed reduction directives remain outside stage one.

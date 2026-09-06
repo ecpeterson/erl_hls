@@ -123,7 +123,6 @@ counterpart.
     runtime_info/1
 ]).
 -export([
-    callback_mode/0,
     configuring/3,
     measuring/3,
     gathering/3,
@@ -302,42 +301,39 @@ runtime_info(PID) ->
 init([]) ->
     {ok, configuring, #cell{}}.
 
-callback_mode() ->
-    [state_functions, state_enter].
-
 -spec configuring(enter, phase(), #cell{}) -> hls_statem:enter_result(#cell{});
     (cast,
         #phi_config{} | #phi{} | #phi0{} | #anyon_move{} |
             #phenom_anyon{},
-        #cell{}) -> hls_statem:event_handler_result(phase(), #cell{}).
+        #cell{}) -> hls_statem:cast_result(phase(), #cell{}).
 configuring(enter, _OldPhase, Cell) ->
-    {keep_state, Cell, []};
+    {Cell, []};
 configuring(
     cast,
     #phi_config{seed = Seed},
     Cell
 ) when Seed > 0, Seed =< ?U32_MASK ->
-    {next_state, measuring, Cell#cell{random_state = Seed}};
+    {measuring, Cell#cell{random_state = Seed}, consume};
 configuring(cast, #phi_config{}, Cell) ->
-    {stop, fail, Cell};
+    {configuring, Cell, fail};
 configuring(cast, #phi{epoch = 0}, Cell) ->
-    {next_state, configuring, Cell, [postpone]};
+    {configuring, Cell, postpone};
 configuring(cast, #phi{}, Cell) ->
-    {stop, fail, Cell};
+    {configuring, Cell, fail};
 configuring(cast, #phenom_anyon{step = 0}, Cell) ->
-    {next_state, configuring, Cell, [postpone]};
+    {configuring, Cell, postpone};
 configuring(cast, #phenom_anyon{}, Cell) ->
-    {stop, fail, Cell};
+    {configuring, Cell, fail};
 configuring(cast, #phi0{}, Cell) ->
-    {stop, fail, Cell};
+    {configuring, Cell, fail};
 configuring(cast, #anyon_move{}, Cell) ->
-    {stop, fail, Cell}.
+    {configuring, Cell, fail}.
 
 -spec measuring(enter, phase(), #cell{}) -> hls_statem:enter_result(#cell{});
     (cast,
         #phi_config{} | #phi{} | #phi0{} | #anyon_move{} |
             #phenom_anyon{},
-        #cell{}) -> hls_statem:event_handler_result(phase(), #cell{}).
+        #cell{}) -> hls_statem:cast_result(phase(), #cell{}).
 measuring(enter, _OldPhase, Cell) ->
     CompletedStep = (Cell#cell.step - 1) band ?U32_MASK,
     Status = #phi_status{
@@ -347,12 +343,12 @@ measuring(enter, _OldPhase, Cell) ->
         flags = Cell#cell.anyon bor (Cell#cell.noise_quiet bsl 1)
     },
     Request = #phenom_request{step = Cell#cell.step},
-    {keep_state, Cell, [
+    {Cell, [
         {cast_if, Cell#cell.status_valid =:= 1, status, Status},
         {cast, syndrome, Request}
     ]};
 measuring(cast, #phi_config{}, Cell) ->
-    {stop, fail, Cell};
+    {measuring, Cell, fail};
 measuring(
     cast,
     #phenom_anyon{step = Step, flags = Flags, x = X, y = Y},
@@ -368,32 +364,32 @@ measuring(
         y = Y,
         noise_quiet = Quiet
     },
-    {next_state, gathering, Updated};
+    {gathering, Updated, consume};
 measuring(cast, #phenom_anyon{}, Cell) ->
-    {stop, fail, Cell};
+    {measuring, Cell, fail};
 measuring(
     cast,
     #phi{epoch = Epoch},
     Cell = #cell{step = Step}
 ) when Epoch =:= ((Step * ?DIFFUSION_ROUNDS) band ?U32_MASK) ->
-    {next_state, measuring, Cell, [postpone]};
+    {measuring, Cell, postpone};
 measuring(cast, #phi{}, Cell) ->
-    {stop, fail, Cell};
+    {measuring, Cell, fail};
 measuring(cast, #phi0{}, Cell) ->
-    {stop, fail, Cell};
+    {measuring, Cell, fail};
 measuring(cast, #anyon_move{}, Cell) ->
-    {stop, fail, Cell}.
+    {measuring, Cell, fail}.
 
 -spec gathering(enter, phase(), #cell{}) -> hls_statem:enter_result(#cell{});
     (cast,
         #phi_config{} | #phi{} | #phi0{} | #anyon_move{} |
             #phenom_anyon{},
-        #cell{}) -> hls_statem:event_handler_result(phase(), #cell{}).
+        #cell{}) -> hls_statem:cast_result(phase(), #cell{}).
 gathering(enter, _OldPhase, Cell) ->
     Epoch = ((Cell#cell.step * ?DIFFUSION_ROUNDS) +
         Cell#cell.diffusion_round) band ?U32_MASK,
     Message = #phi{epoch = Epoch, values = Cell#cell.phi},
-    {keep_state, Cell, [
+    {Cell, [
         {cast, north, Message},
         {cast, east, Message},
         {cast, west, Message},
@@ -421,7 +417,7 @@ gathering(
                 phi_sum = NewSum,
                 phi_received = ReceivedNext
             },
-            {next_state, gathering, Accumulated};
+            {gathering, Accumulated, consume};
         true ->
             P0 = hls_lists:nth(1, Cell#cell.phi),
             P1 = hls_lists:nth(2, Cell#cell.phi),
@@ -441,12 +437,12 @@ gathering(
                 phi_received = 0
             },
             case Round + 1 =:= ?DIFFUSION_ROUNDS of
-                false -> {repeat_phase, Updated};
-                true -> {next_state, comparing, Updated#cell{
+                false -> {repeat_phase, Updated, consume};
+                true -> {comparing, Updated#cell{
                     seen_sources = 0,
                     best_phi0 = 0,
                     best_direction = ?NO_DIRECTION
-                }}
+                }, consume}
             end
     end;
 gathering(
@@ -455,48 +451,48 @@ gathering(
     Cell = #cell{step = Step, diffusion_round = Round}
 ) when Epoch =:= ((Step * ?DIFFUSION_ROUNDS + Round + 1)
         band ?U32_MASK) ->
-    {next_state, gathering, Cell, [postpone]};
+    {gathering, Cell, postpone};
 gathering(cast, #phi{}, Cell) ->
-    {stop, fail, Cell};
+    {gathering, Cell, fail};
 gathering(
     cast,
     #phi0{step = Step},
     Cell = #cell{step = Step}
 ) ->
-    {next_state, gathering, Cell, [postpone]};
+    {gathering, Cell, postpone};
 gathering(cast, #phi0{}, Cell) ->
-    {stop, fail, Cell};
+    {gathering, Cell, fail};
 gathering(
     cast,
     #anyon_move{step = Step},
     Cell = #cell{step = Step}
 ) ->
-    {next_state, gathering, Cell, [postpone]};
+    {gathering, Cell, postpone};
 gathering(cast, #anyon_move{}, Cell) ->
-    {stop, fail, Cell};
+    {gathering, Cell, fail};
 gathering(
     cast,
     #phenom_anyon{step = EventStep},
     Cell = #cell{step = Step}
 ) when EventStep =:= ((Step + 1) band ?U32_MASK) ->
-    {next_state, gathering, Cell, [postpone]};
+    {gathering, Cell, postpone};
 gathering(cast, #phenom_anyon{}, Cell) ->
-    {stop, fail, Cell};
+    {gathering, Cell, fail};
 gathering(cast, #phi_config{}, Cell) ->
-    {stop, fail, Cell}.
+    {gathering, Cell, fail}.
 
 -spec comparing(enter, phase(), #cell{}) -> hls_statem:enter_result(#cell{});
     (cast,
         #phi_config{} | #phi{} | #phi0{} | #anyon_move{} |
             #phenom_anyon{},
-        #cell{}) -> hls_statem:event_handler_result(phase(), #cell{}).
+        #cell{}) -> hls_statem:cast_result(phase(), #cell{}).
 comparing(enter, _OldPhase, Cell) ->
     Phi0 = hls_lists:nth(1, Cell#cell.phi),
     Message = #phi0{
         step = Cell#cell.step,
         value = Phi0
     },
-    {keep_state, Cell, [
+    {Cell, [
         {cast, north, Message#phi0{source = ?PHI_SOUTH_MASK}},
         {cast, east, Message#phi0{source = ?PHI_WEST_MASK}},
         {cast, west, Message#phi0{source = ?PHI_EAST_MASK}},
@@ -533,43 +529,43 @@ comparing(
         best_direction = NewBestDirection
     },
     case NewSeen =:= ?PHI_ALL_DIRECTIONS of
-        false -> {next_state, comparing, Compared};
-        true -> {next_state, flipping, Compared}
+        false -> {comparing, Compared, consume};
+        true -> {flipping, Compared, consume}
     end;
 comparing(cast, #phi0{}, Cell) ->
-    {stop, fail, Cell};
+    {comparing, Cell, fail};
 comparing(
     cast,
     #phi{epoch = Epoch},
     Cell = #cell{step = Step, diffusion_round = Round}
 ) when Epoch =:= ((Step * ?DIFFUSION_ROUNDS + Round) band ?U32_MASK) ->
-    {next_state, comparing, Cell, [postpone]};
+    {comparing, Cell, postpone};
 comparing(cast, #phi{}, Cell) ->
-    {stop, fail, Cell};
+    {comparing, Cell, fail};
 comparing(
     cast,
     #anyon_move{step = Step},
     Cell = #cell{step = Step}
 ) ->
-    {next_state, comparing, Cell, [postpone]};
+    {comparing, Cell, postpone};
 comparing(cast, #anyon_move{}, Cell) ->
-    {stop, fail, Cell};
+    {comparing, Cell, fail};
 comparing(
     cast,
     #phenom_anyon{step = EventStep},
     Cell = #cell{step = Step}
 ) when EventStep =:= ((Step + 1) band ?U32_MASK) ->
-    {next_state, comparing, Cell, [postpone]};
+    {comparing, Cell, postpone};
 comparing(cast, #phenom_anyon{}, Cell) ->
-    {stop, fail, Cell};
+    {comparing, Cell, fail};
 comparing(cast, #phi_config{}, Cell) ->
-    {stop, fail, Cell}.
+    {comparing, Cell, fail}.
 
 -spec flipping(enter, phase(), #cell{}) -> hls_statem:enter_result(#cell{});
     (cast,
         #phi_config{} | #phi{} | #phi0{} | #anyon_move{} |
             #phenom_anyon{},
-        #cell{}) -> hls_statem:event_handler_result(phase(), #cell{}).
+        #cell{}) -> hls_statem:cast_result(phase(), #cell{}).
 flipping(enter, _OldPhase, Cell) ->
     NextRandom = hls_prng:xorshift32(Cell#cell.random_state),
     Heads = (NextRandom bsr 31) =:= 1,
@@ -604,7 +600,7 @@ flipping(enter, _OldPhase, Cell) ->
         anyon = Cell#cell.anyon bxor Present,
         random_state = NextRandom
     },
-    {keep_state, Updated, [
+    {Updated, [
         {cast, north, Message#anyon_move{present = NorthPresent}},
         {cast, east, Message#anyon_move{present = EastPresent}},
         {cast, west, Message#anyon_move{present = WestPresent}},
@@ -616,9 +612,9 @@ flipping(
     #phi{epoch = Epoch},
     Cell = #cell{step = Step, diffusion_round = Round}
 ) when Epoch =:= ((Step * ?DIFFUSION_ROUNDS + Round) band ?U32_MASK) ->
-    {next_state, flipping, Cell, [postpone]};
+    {flipping, Cell, postpone};
 flipping(cast, #phi{}, Cell) ->
-    {stop, fail, Cell};
+    {flipping, Cell, fail};
 flipping(
     cast,
     #anyon_move{step = Step, present = PresentWord},
@@ -632,7 +628,7 @@ flipping(
                 moves_received = ReceivedNext,
                 anyon = NextAnyon
             },
-            {next_state, flipping, Accumulated};
+            {flipping, Accumulated, consume};
         true ->
             Advanced = Cell#cell{
                 step = (Cell#cell.step + 1) band ?U32_MASK,
@@ -641,20 +637,20 @@ flipping(
                 anyon = NextAnyon,
                 status_valid = 1
             },
-            {next_state, measuring, Advanced}
+            {measuring, Advanced, consume}
     end;
 flipping(cast, #anyon_move{}, Cell) ->
-    {stop, fail, Cell};
+    {flipping, Cell, fail};
 flipping(
     cast,
     #phenom_anyon{step = EventStep},
     Cell = #cell{step = Step}
 ) when EventStep =:= ((Step + 1) band ?U32_MASK) ->
-    {next_state, flipping, Cell, [postpone]};
+    {flipping, Cell, postpone};
 flipping(cast, #phenom_anyon{}, Cell) ->
-    {stop, fail, Cell};
+    {flipping, Cell, fail};
 flipping(cast, #phi_config{}, Cell) ->
-    {stop, fail, Cell}.
+    {flipping, Cell, fail}.
 
 source_mask(north) -> ?PHI_NORTH_MASK;
 source_mask(east) -> ?PHI_EAST_MASK;
