@@ -249,17 +249,16 @@ private_accumulator_cannot_collide_with_reserved_wire_tags_test() ->
         [{<<"#sum{">>, <<"#error{">>}]
     ).
 
-open_reduction_cannot_install_different_actor_data_test() ->
+open_reduction_may_atomically_install_different_actor_data_test() ->
     with_mutated_fixture(
         <<"counting(enter, _OldPhase, Cell) ->\n    {Cell, [">>,
         <<"counting(enter, _OldPhase, Cell) ->\n"
           "    {Cell#cell{value = 1}, [">>,
         fun(Path) ->
-            ?assertException(
-                error,
-                {mutating_hls_statem_reduction_entry, counting, _},
-                xls_parse:actor_interface(Path)
-            )
+            _ = xls_parse:actor_interface(Path),
+            OriginalXls = iolist_to_binary(xls_parse:to_xls(?FIXTURE)),
+            Xls = iolist_to_binary(xls_parse:to_xls(Path)),
+            ?assertNotEqual(OriginalXls, Xls)
         end
     ).
 

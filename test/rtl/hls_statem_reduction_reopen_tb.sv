@@ -1,8 +1,16 @@
 `timescale 1ns/1ps
 
 module hls_statem_reduction_reopen_tb;
-    localparam integer REDUCTION_LSB = 114;
+    localparam integer DATA_LSB = 16;
+    localparam integer DATA_BITS = 128;
+    localparam integer REDUCTION_LSB = 146;
     localparam integer REDUCTION_BITS = 117;
+    localparam [DATA_BITS-1:0] ORIGINAL_DATA = {
+        32'h44444444,
+        32'h33333333,
+        32'h22222222,
+        32'h11111111
+    };
     localparam [REDUCTION_BITS-1:0] ORIGINAL_REDUCTION = {
         32'd1,          // accumulator.contributions
         32'h11223344,  // accumulator.value
@@ -16,7 +24,7 @@ module hls_statem_reduction_reopen_tb;
     reg clk = 1'b0;
     reg reset = 1'b1;
 
-    wire [230:0] result_machine;
+    wire [262:0] result_machine;
     wire result_valid;
     reg result_ready = 1'b1;
 
@@ -39,8 +47,15 @@ module hls_statem_reduction_reopen_tb;
             @(posedge clk);
         @(negedge clk);
 
-        if (result_machine[113] !== 1'b1) begin
+        if (result_machine[145] !== 1'b1) begin
             $display("FAIL: second open did not fail the shared machine");
+            $fatal(1);
+        end
+        if (result_machine[DATA_LSB +: DATA_BITS] !== ORIGINAL_DATA) begin
+            $display("FAIL: second open overwrote the original actor data");
+            $display(" expected data %h", ORIGINAL_DATA);
+            $display("      got data %h",
+                result_machine[DATA_LSB +: DATA_BITS]);
             $fatal(1);
         end
         if (result_machine[REDUCTION_LSB +: REDUCTION_BITS] !==
@@ -52,7 +67,9 @@ module hls_statem_reduction_reopen_tb;
             $fatal(1);
         end
 
-        $display("PASS: failed second open preserved original reduction");
+        $display(
+            "PASS: failed second open preserved actor and reduction state"
+        );
         $finish;
     end
 endmodule

@@ -133,8 +133,7 @@ analyze_reductions(
         Reduction#{
             phase => maps:get(phase, Entry),
             entry_clause => maps:get(clause, Entry),
-            entry_prefix => maps:get(prefix, Entry),
-            entry_data_expression => maps:get(data_expression, Entry)
+            entry_prefix => maps:get(prefix, Entry)
         }
         || Entry <- Entries,
            Reduction <- [maps:get(reduction, Entry)],
@@ -228,16 +227,9 @@ validate_reduction_open(Open = #{
     key_expression := Key,
     identity_expression := Identity,
     accumulator := Accumulator,
-    entry_data_expression := DataExpression,
     entry_clause := {clause, _Line, [_Old, _Phase, DataPattern], _Guards,
         _Body}
 }, Forms, DataName) ->
-    DataVariable = whole_record_variable(DataPattern),
-    case DataExpression of
-        {var, _DataLine, DataVariable} -> ok;
-        _ -> error({mutating_hls_statem_reduction_entry,
-            maps:get(phase, Open), DataExpression})
-    end,
     Bindings = pattern_bindings(DataPattern, DataName, data, Forms),
     ok = validate_u32_expression(Key, Bindings, [data]),
     case expression_variables(Identity) of

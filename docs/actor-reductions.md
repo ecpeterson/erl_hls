@@ -175,6 +175,8 @@ reduction is active. It may not leave the phase or execute `repeat_phase`
 until that reduction completes. Attempting either operation with an open
 reduction fails rather than silently cancelling partial work. A second open,
 including an open while a completion is still pending, also fails.
+Phase entry may update ordinary actor data while opening a reduction; hardware
+installs the new data and private reduction state atomically.
 
 These rules make the reduction lifetime a phase-local interval:
 

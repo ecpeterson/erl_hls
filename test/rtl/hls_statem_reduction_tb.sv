@@ -137,7 +137,7 @@ module hls_statem_reduction_tb;
         send_count(32'd18, 32'd6);
         wait_for_count(4);
         check_beat(0, header(OBSERVATION_TAG, 8'd3), 1'b0);
-        check_beat(1, 32'd1, 1'b0);
+        check_beat(1, 32'd31, 1'b0);
         check_beat(2, 32'd11, 1'b0);
         check_beat(3, 32'd0, 1'b1);
 
@@ -147,12 +147,12 @@ module hls_statem_reduction_tb;
         send_member(32'd18, 32'd2, 32'd2);
         wait_for_count(8);
         check_beat(4, header(OBSERVATION_TAG, 8'd3), 1'b0);
-        check_beat(5, 32'd2, 1'b0);
+        check_beat(5, 32'd32, 1'b0);
         check_beat(6, 32'd11, 1'b0);
         check_beat(7, 32'd7, 1'b1);
 
         $display(
-            "PASS: generated reductions postponed and retried a future key"
+            "PASS: reductions atomically installed entry data and open state"
         );
         $finish;
     end

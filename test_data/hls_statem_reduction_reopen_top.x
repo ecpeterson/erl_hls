@@ -2,8 +2,9 @@
 //
 // The input machine is deliberately assembled in its public MachineBits ABI:
 // it is entering COLLECTING_MEMBERS while the COUNTING reduction is still
-// OPEN.  The entry must fail, but failure must preserve the original open
-// reduction so diagnostics describe the operation that was interrupted.
+// OPEN.  The entry must fail, but failure must preserve both the ordinary
+// actor data and original open reduction so diagnostics describe the
+// operation that was interrupted.
 
 import axis;
 import hls_statem_reduction_rtl_fixture as actor;
@@ -27,9 +28,10 @@ fn pending_reopen_machine() -> actor::MachineBits {
   open_counting_reduction() ++
     u1:0 ++
     u1:1 ++
-    (u32:0 as bits[32]) ++
-    (u32:0 as bits[32]) ++
-    (u32:17 as bits[32]) ++
+    (u32:0x44444444 as bits[32]) ++
+    (u32:0x33333333 as bits[32]) ++
+    (u32:0x22222222 as bits[32]) ++
+    (u32:0x11111111 as bits[32]) ++
     (u8:0 as bits[8]) ++
     (u8:1 as bits[8])
 }

@@ -32,7 +32,8 @@
 -record(cell, {
     key = hls_type:zero() :: hls_nums:u32(),
     count_total = hls_type:zero() :: hls_nums:u32(),
-    member_total = hls_type:zero() :: hls_nums:u32()
+    member_total = hls_type:zero() :: hls_nums:u32(),
+    entries = hls_type:zero() :: hls_nums:u32()
 }).
 
 %% Private accumulator state; this record deliberately has no wire tag.
@@ -45,7 +46,7 @@ init([]) ->
     {ok, counting, #cell{key = 17}}.
 
 counting(enter, _OldPhase, Cell) ->
-    {Cell, [
+    {Cell#cell{entries = Cell#cell.entries + 1}, [
         {open_reduction, sum, Cell#cell.key, {count, 2},
             {commutative_monoid,
                 #sum{value = 0, contributions = 0}}}
@@ -73,12 +74,12 @@ counting(internal,
     {collecting_members, Cell#cell{count_total = Total}, consume}.
 
 collecting_members(enter, _OldPhase, Cell) ->
-    {Cell, [
+    {Cell#cell{entries = Cell#cell.entries + 1}, [
         {open_reduction, sum, Cell#cell.key, {members, [9, 2, 7]},
             {commutative_monoid,
                 #sum{value = 0, contributions = 0}}},
         {cast, out, #observation{
-            stage = 1,
+            stage = (Cell#cell.entries + 1) * 10 + 1,
             count_total = Cell#cell.count_total,
             member_total = 0
         }}
@@ -96,7 +97,7 @@ collecting_members(internal,
 
 done(enter, _OldPhase, Cell) ->
     {Cell, [{cast, out, #observation{
-        stage = 2,
+        stage = Cell#cell.entries * 10 + 2,
         count_total = Cell#cell.count_total,
         member_total = Cell#cell.member_total
     }}]}.

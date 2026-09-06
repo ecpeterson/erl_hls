@@ -209,7 +209,8 @@ iverilog \
 vvp hls_statem_reduction_hol.vvp
 
 # Entering another reduction-opening phase while one is already open is a
-# machine failure, but must leave the original row intact for diagnostics.
+# machine failure, but must leave the actor data and original reduction row
+# intact for diagnostics.
 "$xls_root/ir_converter_main" \
     --warnings_as_errors=false \
     --dslx_path=. \
