@@ -36,7 +36,8 @@ instances(Bindings, Clock) ->
 
 binding(Index, Group) ->
     StateWidth = xls_statem_codegen:shared_machine_width(
-        maps:get(width, maps:get(state, Group))
+        maps:get(width, maps:get(state, Group)),
+        maps:get(reduction_storage_width, Group, 0)
     ),
     SlotCount = maps:get(slot_count, Group),
     MailboxCapacity = maps:get(mailbox_capacity, Group),

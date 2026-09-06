@@ -48,6 +48,11 @@ lower(Filename, Forms, PhaseNames) ->
         DataName,
         EnumAtoms
     ),
+    Reductions = xls_statem_reduction_lower:lower_reductions(
+        maps:get(reductions, Prepared),
+        DataName,
+        EnumAtoms
+    ),
     RecordDeclarations = xls_parse:print([
         [
             xls_parse:struct_from_record(Record), "\n",
@@ -69,7 +74,8 @@ lower(Filename, Forms, PhaseNames) ->
         record_declarations => RecordDeclarations,
         init => Init,
         entries => Entries,
-        casts => Casts
+        casts => Casts,
+        reductions => Reductions
     }).
 
 prepare(Forms, PhaseNames) ->
@@ -116,16 +122,36 @@ prepare_callbacks(Forms, Declarations) ->
         MessageNames,
         OutputNames
     ),
-    CastGroups = analyze_cast_groups(
+    CastGroups0 = analyze_cast_groups(
         maps:get(cast, Callbacks),
         PhaseNames,
         MessageNames
     ),
+    InternalGroups = xls_statem_reduction_lower:analyze_internal_groups(
+        maps:get(internal, Callbacks),
+        PhaseNames
+    ),
+    {Reductions, CastGroups} = xls_statem_reduction_lower:analyze_reductions(
+        Forms,
+        Entries,
+        CastGroups0,
+        InternalGroups,
+        MessageNames,
+        maps:get(data_name, Declarations)
+    ),
+    Records = xls_statem_reduction_lower:reduction_records(
+        Forms,
+        maps:get(records, Declarations),
+        Reductions
+    ),
     Declarations#{
+        records => Records,
         init_clause => InitClause,
         initial_phase => initial_phase(InitClause, PhaseNames),
         entries => Entries,
-        cast_groups => CastGroups
+        cast_groups => CastGroups,
+        internal_groups => InternalGroups,
+        reductions => Reductions
     }.
 
 %%%
@@ -152,12 +178,16 @@ interface_from_prepared(Prepared) ->
         ),
         dispatches => dispatches(
             CastGroups,
+            maps:get(reductions, Prepared),
             maps:get(message_names, Prepared),
             maps:get(phases, Prepared)
         ),
         entry_effects => lists:append([
             interface_effects(Entry) || Entry <- Entries
-        ])
+        ]),
+        reductions => xls_statem_reduction_lower:reduction_interface(
+            maps:get(reductions, Prepared)
+        )
     }.
 
 state_summary(Records, Name) ->
@@ -261,18 +291,20 @@ analyze_entry(
             {DataExpr, ActionExpression};
         _ -> error({bad_hls_statem_enter_result, Line, Last})
     end,
+    {Reduction, Actions} = parse_entry_actions(
+        ActionList,
+        Prefix,
+        MessageNames,
+        OutputNames,
+        Line
+    ),
     #{
         phase => Phase,
         clause => Clause,
         prefix => Prefix,
         data_expression => DataExpression,
-        actions => parse_actions(
-            ActionList,
-            Prefix,
-            MessageNames,
-            OutputNames,
-            Line
-        )
+        actions => Actions,
+        reduction => Reduction
     }.
 
 order_entries(Entries, PhaseNames) ->
@@ -308,8 +340,18 @@ analyze_cast_groups(Clauses, PhaseNames, MessageNames) ->
         end
     ).
 
-dispatches(CastGroups, MessageNames, PhaseNames) ->
-    Keys = maps:from_keys([Key || {Key, _Clauses} <- CastGroups], true),
+dispatches(CastGroups, Reductions, MessageNames, PhaseNames) ->
+    ReductionKeys = case Reductions of
+        none -> [];
+        #{contributions := Contributions} -> lists:usort([
+            {maps:get(tag, Contribution), maps:get(phase, Contribution)}
+            || Contribution <- Contributions
+        ])
+    end,
+    Keys = maps:from_keys(
+        [Key || {Key, _Clauses} <- CastGroups] ++ ReductionKeys,
+        true
+    ),
     [
         #{schema => Schema, phase => Phase}
         || Schema <- MessageNames,
@@ -456,10 +498,23 @@ enter_args(DataName) ->
         ["(Tag::", uppercase(DataName), ", data)"]
     ].
 
-parse_actions(ActionList, Prefix, MessageNames, OutputNames, Line) ->
+parse_entry_actions(ActionList, Prefix, MessageNames, OutputNames, Line) ->
+    {Reduction, CastExpressions} =
+        xls_statem_reduction_lower:split_entry_actions(ActionList, Line),
+    {
+        Reduction,
+        parse_actions(
+            CastExpressions,
+            Prefix,
+            MessageNames,
+            OutputNames,
+            Line
+        )
+    }.
+
+parse_actions(ActionExpressions, Prefix, MessageNames, OutputNames, Line) ->
     %% The list shape and ports remain static. A cast_if condition controls
     %% whether its allocated ordered slot emits at runtime.
-    ActionExpressions = literal_list(ActionList, Line),
     Bindings = record_bindings(Prefix),
     Parsed = lists:map(
         fun({Order, Action}) ->
@@ -540,13 +595,6 @@ record_bindings(Expressions) ->
         #{},
         Expressions
     ).
-
-literal_list({nil, _Line}, _ContextLine) ->
-    [];
-literal_list({cons, _Line, Head, Tail}, ContextLine) ->
-    [Head | literal_list(Tail, ContextLine)];
-literal_list(Expression, ContextLine) ->
-    error({nonliteral_hls_statem_actions, ContextLine, Expression}).
 
 %%%
 %%% Cast dispatch

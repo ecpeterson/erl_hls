@@ -26,6 +26,10 @@ rsync -a -e "ssh -o BatchMode=yes" \
     "$local_stage/ordered_egress_actor.x" \
     "$local_stage/ordered_egress_topology.x" \
     "$local_stage/xls_case_fixture.x" \
+    "$local_stage/hls_statem_reduction_rtl_fixture.x" \
+    "$local_stage/hls_statem_reduction_shared_top.x" \
+    "$local_stage/hls_statem_reduction_hol_top.x" \
+    "$local_stage/hls_statem_reduction_reopen_top.x" \
     "$local_stage/phi_field_test.x" \
     "$local_stage/phi_scheduler_rams.sh" \
     "$local_stage/axis.x" \
@@ -58,6 +62,10 @@ rsync -a -e "ssh -o BatchMode=yes" \
     "$local_stage/phi_memory_bridge_tb.sv" \
     "$local_stage/hls_fabric_host_tx_tb.sv" \
     "$local_stage/ordered_egress_topology_tb.sv" \
+    "$local_stage/hls_statem_reduction_tb.sv" \
+    "$local_stage/hls_statem_reduction_hol_tb.sv" \
+    "$local_stage/hls_statem_reduction_reopen_tb.sv" \
+    "$local_stage/hls_statem_reduction_error_tb.sv" \
     "$local_stage/xls_sim_bridge.c" \
     "$local_stage/erl_src" \
     "$local_stage/test_src" \
