@@ -242,6 +242,31 @@ The split maps to 57,011 estimated logic cells, 64,064 flip-flops, 70,470
 LUTs, and 48 DSPs, effectively unchanged from the global window's 57,040,
 64,061, 70,566, and 48. The regression is scheduling rather than area.
 
+### Actor-owned barrier reductions
+
+The phi actor now replaces its diffusion, comparison, and movement scratch
+protocols with bounded actor-owned reductions while retaining ordinary unicast
+messages. The current paper-parameter CPU fixture closes at step 18 with 80
+accepted corrections and 18 final measurements, eight commuting and ten
+anticommuting; the older 84-correction figures above remain historical
+results. The native full CPU/Icarus comparison matches that witness exactly
+and takes 23 seconds of Icarus wall time.
+
+In the three-shard global-window decoder profile, steps eight through 32 take
+6,479 clocks, or 269.958 clocks per step and about 740,855 steps/s at 200 MHz.
+The pre-reduction baseline was 6,398 clocks, 266.583 clocks per step, and about
+750,234 steps/s. The actor-state RAM row shrinks from 546 to 520 bits, but phi
+state reads increase by 24.1% because contribution folding still transacts the
+full authoritative row.
+
+The corresponding XC7 topology-core map grows from 57,040 to 63,421 estimated
+logic cells, from 64,061 to 77,291 flip-flops, and from 70,566 to 78,816 LUTs;
+DSP use remains 48. The elastic fold path preserves II=1 by carrying a complete
+520-bit machine update through two depth-one channels per phi scheduler. This
+implementation therefore validates the general reduction semantics without
+improving throughput or area. A narrower accumulator store or a bulk-
+synchronous lowering is needed before this becomes a performance technique.
+
 ## Running the experiment
 
 The fast local checks are:

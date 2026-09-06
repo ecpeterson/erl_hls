@@ -59,10 +59,10 @@ module phi_noise_topology_smoke_tb;
 
     wire [31:0] phi_state_rd_addr [0:1];
     wire [31:0] phi_state_wr_addr [0:1];
-    wire [545:0] phi_state_wr_data [0:1];
+    wire [519:0] phi_state_wr_data [0:1];
     wire phi_state_wr_en [0:1];
     wire phi_state_rd_en [0:1];
-    wire [545:0] phi_state_rd_data [0:1];
+    wire [519:0] phi_state_rd_data [0:1];
     wire [31:0] phi_mailbox_rd_addr [0:1];
     wire [31:0] phi_mailbox_wr_addr [0:1];
     wire [127:0] phi_mailbox_wr_data [0:1];
@@ -200,7 +200,7 @@ module phi_noise_topology_smoke_tb;
                 .wr_en(data_state_wr_en[ram_index]), .rd_en(data_state_rd_en[ram_index]),
                 .rd_data(data_state_rd_data[ram_index])
             );
-            hls_1r1w_ram #(.WIDTH(546), .ADDRESS_WIDTH(4)) phi_state (
+            hls_1r1w_ram #(.WIDTH(520), .ADDRESS_WIDTH(4)) phi_state (
                 .clk(clk), .rd_addr(phi_state_rd_addr[ram_index][3:0]),
                 .wr_addr(phi_state_wr_addr[ram_index][3:0]),
                 .wr_data(phi_state_wr_data[ram_index]),
@@ -409,8 +409,8 @@ module phi_noise_topology_smoke_tb;
                 $display("phi[%0d] state write slot=%0d phase=%0d enter=%0d failed=%0d",
                     ram_index_trace, phi_state_wr_addr[ram_index_trace],
                     phi_state_wr_data[ram_index_trace][7:0],
-                    phi_state_wr_data[ram_index_trace][544],
-                    phi_state_wr_data[ram_index_trace][545]);
+                    phi_state_wr_data[ram_index_trace][336],
+                    phi_state_wr_data[ram_index_trace][337]);
             if (!reset && syndrome_state_wr_en[ram_index_trace])
                 $display("syndrome[%0d] state write slot=%0d phase=%0d enter=%0d failed=%0d",
                     ram_index_trace, syndrome_state_wr_addr[ram_index_trace],

@@ -879,6 +879,7 @@ static int populate_scheduler_profile(
     char definition[256];
     const char *full_name;
     unsigned index;
+    int selectable_vector_complete = 1;
     char signal_name[64];
 
     snprintf(definition, sizeof(definition), "%s",
@@ -981,6 +982,8 @@ static int populate_scheduler_profile(
                      "selectable__%u", index);
         profile->h_selectable[index] =
             module_signal(module, signal_name);
+        if (profile->h_selectable[0] && !profile->h_selectable[index])
+            selectable_vector_complete = 0;
         snprintf(signal_name, sizeof(signal_name),
                  "mail_candidates__4[%u]", index);
         profile->h_mail_candidate[index] =
@@ -1025,7 +1028,11 @@ static int populate_scheduler_profile(
         profile->h_startup_valid && profile->h_startup_ready &&
         profile->h_egress_valid && profile->h_egress_ready &&
         profile->h_egress_busy && profile->h_selection_activation &&
-        profile->h_phase_boundary &&
+        /* Newer decoupled schedulers expose per-slot selectable signals and
+         * may optimize away the legacy result-phase-boundary probe. The
+         * latter is needed only by the legacy same-actor approximation. */
+        (profile->h_selectable[0] || profile->h_phase_boundary) &&
+        selectable_vector_complete &&
         profile->actor_count > 0 &&
         profile->request_input_count > 0;
 }

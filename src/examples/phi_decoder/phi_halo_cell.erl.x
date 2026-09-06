@@ -28,6 +28,7 @@ pub enum Tag : u8 {
   NOISE_CUTOFF = u8:15,
   PAULI_UPDATE = u8:16,
   PHI_STATUS = u8:17,
+  PHI_FOLD = u8:18,
 }
 
 enum Phase : u8 {
@@ -302,14 +303,9 @@ pub fn bits_from_phistatus(s: Phistatus) -> bits[bit_count<Phistatus>()] {
 
 pub struct Cell {
   step : u32,
-  diffusion_round : u32,
+  diffusion_epoch : u32,
   phi : s32[2],
-  phi_sum : s64[2],
-  phi_received : u8,
-  seen_sources : u32,
-  best_phi0 : s32,
   best_direction : u32,
-  moves_received : u8,
   anyon : u32,
   random_state : u32,
   x : u16,
@@ -321,25 +317,103 @@ pub struct Cell {
 pub fn cell_from_bits<N: u32>(raw: bits[N]) -> Cell {
   Cell {
     step: raw[0:32] as u32,
-    diffusion_round: raw[32:64] as u32,
+    diffusion_epoch: raw[32:64] as u32,
     phi: raw[64:128] as s32[2],
-    phi_sum: raw[128:256] as s64[2],
-    phi_received: raw[256:264] as u8,
-    seen_sources: raw[264:296] as u32,
-    best_phi0: raw[296:328] as s32,
-    best_direction: raw[328:360] as u32,
-    moves_received: raw[360:368] as u8,
-    anyon: raw[368:400] as u32,
-    random_state: raw[400:432] as u32,
-    x: raw[432:448] as u16,
-    y: raw[448:464] as u16,
-    noise_quiet: raw[464:496] as u32,
-    status_valid: raw[496:528] as u32,
+    best_direction: raw[128:160] as u32,
+    anyon: raw[160:192] as u32,
+    random_state: raw[192:224] as u32,
+    x: raw[224:240] as u16,
+    y: raw[240:256] as u16,
+    noise_quiet: raw[256:288] as u32,
+    status_valid: raw[288:320] as u32,
   }
 }
 
 pub fn bits_from_cell(s: Cell) -> bits[bit_count<Cell>()] {
-  (s.status_valid as bits[32]) ++ (s.noise_quiet as bits[32]) ++ (s.y as bits[16]) ++ (s.x as bits[16]) ++ (s.random_state as bits[32]) ++ (s.anyon as bits[32]) ++ (s.moves_received as bits[8]) ++ (s.best_direction as bits[32]) ++ (s.best_phi0 as bits[32]) ++ (s.seen_sources as bits[32]) ++ (s.phi_received as bits[8]) ++ (s.phi_sum as bits[128]) ++ (s.phi as bits[64]) ++ (s.diffusion_round as bits[32]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
+  (s.status_valid as bits[32]) ++ (s.noise_quiet as bits[32]) ++ (s.y as bits[16]) ++ (s.x as bits[16]) ++ (s.random_state as bits[32]) ++ (s.anyon as bits[32]) ++ (s.best_direction as bits[32]) ++ (s.phi as bits[64]) ++ (s.diffusion_epoch as bits[32]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
+}
+
+pub struct Phifold {
+  value0 : s64,
+  value1 : s64,
+}
+
+pub fn phifold_from_bits<N: u32>(raw: bits[N]) -> Phifold {
+  Phifold {
+    value0: raw[0:64] as s64,
+    value1: raw[64:128] as s64,
+  }
+}
+
+pub fn bits_from_phifold(s: Phifold) -> bits[bit_count<Phifold>()] {
+  (s.value1 as bits[64]) ++ (s.value0 as bits[64]) ++  zero!<bits[0]>()
+}
+
+enum ReductionStatus : u2 {
+  IDLE = u2:0,
+  OPEN = u2:1,
+  COMPLETE = u2:2,
+}
+
+enum ReductionMode : u1 {
+  COUNT = u1:0,
+  MEMBERS = u1:1,
+}
+
+enum ReductionName : u8 {
+  DIFFUSION = u8:0,
+  COMPARISON = u8:1,
+  MOVEMENT = u8:2,
+}
+
+enum ReductionSite : u8 {
+  GATHERING = u8:0,
+  COMPARING = u8:1,
+  FLIPPING = u8:2,
+}
+
+type ReductionMembers = bits[4];
+
+struct ReductionState {
+  status: ReductionStatus,
+  site: ReductionSite,
+  key: u32,
+  remaining: u8,
+  seen: ReductionMembers,
+  accumulator: Phifold,
+}
+
+struct ReductionContribution {
+  valid: u1,
+  site: ReductionSite,
+  mode: ReductionMode,
+  key: u32,
+  member: u32,
+  value: Phifold,
+}
+
+enum ReductionOutcome : u3 {
+  NOT_CANDIDATE = u3:0,
+  MISMATCH = u3:1,
+  PENDING = u3:2,
+  COMPLETE = u3:3,
+  WRONG_MODE = u3:4,
+  UNEXPECTED_MEMBER = u3:5,
+  DUPLICATE_MEMBER = u3:6,
+}
+
+struct ReductionApply {
+  state: ReductionState,
+  outcome: ReductionOutcome,
+}
+
+struct ReductionDispatch {
+  reduction: ReductionState,
+  phase: Phase,
+  data: Cell,
+  directive: Directive,
+  repeat_phase: u1,
+  dispatched: u1,
 }
 
 pub enum OutputPort : u8 {
@@ -377,6 +451,7 @@ struct Machine {
   phase: Phase,
   entered_from: Phase,
   data: Cell,
+  reduction: ReductionState,
   slots: MailboxSlot[5],
   occupied: u8,
   enter_pending: u1,
@@ -391,15 +466,16 @@ struct SharedMachine {
   phase: Phase,
   entered_from: Phase,
   data: Cell,
+  reduction: ReductionState,
   enter_pending: u1,
   failed: u1,
 }
 
-pub type MachineBits = bits[546];
+pub type MachineBits = bits[520];
 
 pub type MachineRamReadReq = bram::ReadReq;
-pub type MachineRamReadResp = bram::ReadResp<u32:546>;
-pub type MachineRamWriteReq = bram::WriteReq<u32:546>;
+pub type MachineRamReadResp = bram::ReadResp<u32:520>;
+pub type MachineRamWriteReq = bram::WriteReq<u32:520>;
 pub type MachineRamWriteResp = bram::WriteResp;
 
 pub type MailboxRamReadReq = mailbox::RamReadReq;
@@ -442,6 +518,7 @@ pub struct SharedExecutorRequest {
   slot: u32,
   machine: MachineBits,
   frame: axis::Frame,
+  internal: u1,
   received: u1,
   mailbox_index: u8,
   order_index: u8,
@@ -457,6 +534,18 @@ pub struct SharedExecutorResult {
   directive: Directive,
   phase_boundary: u1,
   egress_blocked: u1,
+  received: u1,
+  mailbox_index: u8,
+  order_index: u8,
+}
+
+// A compact actor-state update crosses the fold relay; effect payloads
+// belong only to the ordinary executor path.
+struct FoldEnvelope {
+  candidate: u1,
+  slot: u32,
+  machine: MachineBits,
+  directive: Directive,
   received: u1,
   mailbox_index: u8,
   order_index: u8,
@@ -480,6 +569,15 @@ struct SharedState<ACTOR_COUNT: u32, PRODUCER_COUNT: u32> {
   next_valid: u1,
   next_slot: u32,
   in_flight: u1[ACTOR_COUNT],
+  // Completed reductions are private events and outrank mail.
+  internal_candidates: u1[ACTOR_COUNT],
+  // Fairly alternate retireable ordinary work with polling the
+  // fold relay; an acknowledgment may retire alongside ordinary
+  // work because it does not consume the state RAM write port.
+  fold_turn: u1,
+  // Mail-only actors whose head was not a contribution are skipped
+  // until the currently blocked effect-credit epoch ends.
+  blocked_probed: u1[ACTOR_COUNT],
   completed_valid: u1,
   completed: SharedExecutorResult,
   admission_cursor: u32,
@@ -499,6 +597,971 @@ struct SharedState<ACTOR_COUNT: u32, PRODUCER_COUNT: u32> {
   egress_busy: u1,
   state_write_pending: u1,
   mailbox_write_pending: u1,
+}
+
+fn reduction_state_from_bits(
+    raw: bits[182]) -> ReductionState {
+  ReductionState {
+    status: raw[0:2] as ReductionStatus,
+    site: raw[2:10] as ReductionSite,
+    key: raw[10:42] as u32,
+    remaining: raw[42:50] as u8,
+    seen: raw[50:54] as ReductionMembers,
+    accumulator: phifold_from_bits(raw[54:182]),
+  }
+}
+
+fn bits_from_reduction_state(
+    state: ReductionState) -> bits[182] {
+  bits_from_phifold(state.accumulator) ++
+    (state.seen as bits[4]) ++
+    (state.remaining as bits[8]) ++
+    (state.key as bits[32]) ++
+    (state.site as bits[8]) ++
+    (state.status as bits[2])
+}
+
+fn reduction_site_name(site: ReductionSite) -> ReductionName {
+  match site {
+    ReductionSite::GATHERING => ReductionName::DIFFUSION,
+    ReductionSite::COMPARING => ReductionName::COMPARISON,
+    ReductionSite::FLIPPING => ReductionName::MOVEMENT,
+  }
+}
+
+fn reduction_site_mode(site: ReductionSite) -> ReductionMode {
+  match site {
+    ReductionSite::GATHERING => ReductionMode::COUNT,
+    ReductionSite::COMPARING => ReductionMode::MEMBERS,
+    ReductionSite::FLIPPING => ReductionMode::COUNT,
+  }
+}
+
+fn reduction_site_population(site: ReductionSite) -> u8 {
+  match site {
+    ReductionSite::GATHERING => u8:4,
+    ReductionSite::COMPARING => u8:4,
+    ReductionSite::FLIPPING => u8:4,
+  }
+}
+
+fn reduction_member_bit(
+    site: ReductionSite, member: u32) -> ReductionMembers {
+  match (site, member) {
+    (ReductionSite::COMPARING, u32:1) =>
+      (uN[4]:1 << u32:0) as ReductionMembers,
+    (ReductionSite::COMPARING, u32:2) =>
+      (uN[4]:1 << u32:1) as ReductionMembers,
+    (ReductionSite::COMPARING, u32:4) =>
+      (uN[4]:1 << u32:2) as ReductionMembers,
+    (ReductionSite::COMPARING, u32:8) =>
+      (uN[4]:1 << u32:3) as ReductionMembers,
+    _ => zero!<ReductionMembers>(),
+  }
+}
+
+fn reduction_phase_opens(phase: Phase) -> u1 {
+  match phase {
+    Phase::GATHERING => u1:1,
+    Phase::COMPARING => u1:1,
+    Phase::FLIPPING => u1:1,
+    _ => u1:0,
+  }
+}
+
+fn reduction_open_site(
+    site: ReductionSite, key: u32, identity: Phifold) -> ReductionState {
+  ReductionState {
+    status: ReductionStatus::OPEN,
+    site,
+    key,
+    remaining: reduction_site_population(site),
+    accumulator: identity,
+    ..zero!<ReductionState>()
+  }
+}
+
+fn reduction_open(
+    old_phase: Phase, phase: Phase, data: Cell) -> ReductionState {
+  match phase {
+    Phase::GATHERING => {
+      let key = {
+        let _OldPhase_1 = old_phase;
+        let __1 = phase;
+        let Cell_1 = (Tag::CELL, data);
+        let _0 = Cell_1.1.diffusion_epoch;
+        let Epoch_1 = _0;
+        let _1 = Cell_1.1.phi;
+        let _2 = Phi {
+          epoch: Epoch_1,
+          values: _1,
+          ..zero!<Phi>()
+        };
+        let _3 = (Tag::PHI, _2, bits_from_phi(_2));
+        let Message_1 = _3;
+        let _4 = Cell_1.1.diffusion_epoch;
+        let _5 = if (bool:false) {
+            u32:0
+        } else {
+            _4
+        };
+        _5
+      };
+      let identity = {
+        let _OldPhase_1 = old_phase;
+        let __1 = phase;
+        let Cell_1 = (Tag::CELL, data);
+        let _0 = Cell_1.1.diffusion_epoch;
+        let Epoch_1 = _0;
+        let _1 = Cell_1.1.phi;
+        let _2 = Phi {
+          epoch: Epoch_1,
+          values: _1,
+          ..zero!<Phi>()
+        };
+        let _3 = (Tag::PHI, _2, bits_from_phi(_2));
+        let Message_1 = _3;
+        let _4 = Phifold {
+          value0: 0,
+          value1: 0,
+          ..zero!<Phifold>()
+        };
+        let _5 = (Tag::PHI_FOLD, _4, bits_from_phifold(_4));
+        let _6 = if (bool:false) {
+            zero!<Phifold>()
+        } else {
+            _5.1
+        };
+        _6
+      };
+      reduction_open_site(ReductionSite::GATHERING, key, identity)
+    },
+    Phase::COMPARING => {
+      let key = {
+        let _OldPhase_1 = old_phase;
+        let __1 = phase;
+        let Cell_1 = (Tag::CELL, data);
+        let _0 = Cell_1.1.phi;
+        let _1 = _0[1 - u32:1];
+        let Phi0_1 = _1;
+        let _2 = Cell_1.1.step;
+        let _3 = Phi0 {
+          step: _2,
+          value: Phi0_1,
+          ..zero!<Phi0>()
+        };
+        let _4 = (Tag::PHI0, _3, bits_from_phi0(_3));
+        let Message_1 = _4;
+        let _5 = Cell_1.1.step;
+        let _6 = if (bool:false) {
+            u32:0
+        } else {
+            _5
+        };
+        _6
+      };
+      let identity = {
+        let _OldPhase_1 = old_phase;
+        let __1 = phase;
+        let Cell_1 = (Tag::CELL, data);
+        let _0 = Cell_1.1.phi;
+        let _1 = _0[1 - u32:1];
+        let Phi0_1 = _1;
+        let _2 = Cell_1.1.step;
+        let _3 = Phi0 {
+          step: _2,
+          value: Phi0_1,
+          ..zero!<Phi0>()
+        };
+        let _4 = (Tag::PHI0, _3, bits_from_phi0(_3));
+        let Message_1 = _4;
+        let _5 = Phifold {
+          value0: 0,
+          value1: 0,
+          ..zero!<Phifold>()
+        };
+        let _6 = (Tag::PHI_FOLD, _5, bits_from_phifold(_5));
+        let _7 = if (bool:false) {
+            zero!<Phifold>()
+        } else {
+            _6.1
+        };
+        _7
+      };
+      reduction_open_site(ReductionSite::COMPARING, key, identity)
+    },
+    Phase::FLIPPING => {
+      let key = {
+        let _OldPhase_1 = old_phase;
+        let __1 = phase;
+        let Cell_1 = (Tag::CELL, data);
+        let _0 = Cell_1.1.random_state;
+        let _1 = (_0 ^ (_0 << u32:13)) & u32:0xffffffff;
+        let _2 = (_1 ^ (_1 >> u32:17)) & u32:0xffffffff;
+        let _3 = (_2 ^ (_2 << u32:5)) & u32:0xffffffff;
+        let NextRandom_1 = _3;
+        let _4 = NextRandom_1 >> 31;
+        let _5 = _4 == 1;
+        let Heads_1 = _5;
+        let _6 = Cell_1.1.anyon;
+        let _7 = _6 == 1;
+        let _8 = Cell_1.1.best_direction;
+        let _9 = _8 != 0;
+        let _10 = _9 && Heads_1;
+        let _11 = _7 && _10;
+        let Move_1 = _11;
+        let _12 = (0 as u32);
+        let Absent_1 = _12;
+        let _14 = if Move_1 {
+          let _13 = (1 as u32);
+          (_13, bool:false)
+        } else {
+          (Absent_1, bool:false)
+        };
+        let case_match_1_1 = bool:false;
+        let case_match_1_2 = _14.1;
+        let Present_1 = _14.0;
+        let _15 = Cell_1.1.best_direction;
+        let _17 = {
+          if _15 == 1 {
+            let _16 = (Present_1, Absent_1, Absent_1, Absent_1, );
+            (_16, bool:false)
+          } else {
+            if _15 == 2 {
+              let _16 = (Absent_1, Present_1, Absent_1, Absent_1, );
+              (_16, bool:false)
+            } else {
+              if _15 == 4 {
+                let _16 = (Absent_1, Absent_1, Present_1, Absent_1, );
+                (_16, bool:false)
+              } else {
+                if _15 == 8 {
+                  let _16 = (Absent_1, Absent_1, Absent_1, Present_1, );
+                  (_16, bool:false)
+                } else {
+                  let _16 = (Absent_1, Absent_1, Absent_1, Absent_1, );
+                  (_16, bool:false)
+                }
+              }
+            }
+          }
+        };
+        let case_match_2_1 = bool:false;
+        let case_match_2_2 = _17.1;
+        let NorthPresent_1 = _17.0.0;
+        let EastPresent_1 = _17.0.1;
+        let WestPresent_1 = _17.0.2;
+        let SouthPresent_1 = _17.0.3;
+        let _18 = Cell_1.1.step;
+        let _19 = Anyonmove {
+          step: _18,
+          ..zero!<Anyonmove>()
+        };
+        let _20 = (Tag::ANYON_MOVE, _19, bits_from_anyonmove(_19));
+        let Message_1 = _20;
+        let _22 = if Move_1 {
+          let _21 = Cell_1.1.best_direction;
+          (_21, bool:false)
+        } else {
+          (Absent_1, bool:false)
+        };
+        let case_match_3_1 = bool:false;
+        let case_match_3_2 = _22.1;
+        let CorrectionDirection_1 = _22.0;
+        let _23 = Cell_1.1.step;
+        let _24 = Cell_1.1.x;
+        let _25 = Cell_1.1.y;
+        let _26 = Phicorrection {
+          step: _23,
+          x: _24,
+          y: _25,
+          direction: CorrectionDirection_1,
+          ..zero!<Phicorrection>()
+        };
+        let _27 = (Tag::PHI_CORRECTION, _26, bits_from_phicorrection(_26));
+        let Correction_1 = _27;
+        let _28 = Cell_1.1.anyon;
+        let _29 = _28 ^ Present_1;
+        let _30 = Cell {
+          anyon: _29,
+          random_state: NextRandom_1,
+          ..(Cell_1).1
+        };
+        let _31 = (Tag::CELL, _30);
+        let Updated_1 = _31;
+        let _32 = Cell_1.1.step;
+        let _33 = if ((case_match_1_1 != case_match_1_2) || (case_match_2_1 != case_match_2_2) || (case_match_3_1 != case_match_3_2) || bool:false) {
+            u32:0
+        } else {
+            _32
+        };
+        _33
+      };
+      let identity = {
+        let _OldPhase_1 = old_phase;
+        let __1 = phase;
+        let Cell_1 = (Tag::CELL, data);
+        let _0 = Cell_1.1.random_state;
+        let _1 = (_0 ^ (_0 << u32:13)) & u32:0xffffffff;
+        let _2 = (_1 ^ (_1 >> u32:17)) & u32:0xffffffff;
+        let _3 = (_2 ^ (_2 << u32:5)) & u32:0xffffffff;
+        let NextRandom_1 = _3;
+        let _4 = NextRandom_1 >> 31;
+        let _5 = _4 == 1;
+        let Heads_1 = _5;
+        let _6 = Cell_1.1.anyon;
+        let _7 = _6 == 1;
+        let _8 = Cell_1.1.best_direction;
+        let _9 = _8 != 0;
+        let _10 = _9 && Heads_1;
+        let _11 = _7 && _10;
+        let Move_1 = _11;
+        let _12 = (0 as u32);
+        let Absent_1 = _12;
+        let _14 = if Move_1 {
+          let _13 = (1 as u32);
+          (_13, bool:false)
+        } else {
+          (Absent_1, bool:false)
+        };
+        let case_match_1_1 = bool:false;
+        let case_match_1_2 = _14.1;
+        let Present_1 = _14.0;
+        let _15 = Cell_1.1.best_direction;
+        let _17 = {
+          if _15 == 1 {
+            let _16 = (Present_1, Absent_1, Absent_1, Absent_1, );
+            (_16, bool:false)
+          } else {
+            if _15 == 2 {
+              let _16 = (Absent_1, Present_1, Absent_1, Absent_1, );
+              (_16, bool:false)
+            } else {
+              if _15 == 4 {
+                let _16 = (Absent_1, Absent_1, Present_1, Absent_1, );
+                (_16, bool:false)
+              } else {
+                if _15 == 8 {
+                  let _16 = (Absent_1, Absent_1, Absent_1, Present_1, );
+                  (_16, bool:false)
+                } else {
+                  let _16 = (Absent_1, Absent_1, Absent_1, Absent_1, );
+                  (_16, bool:false)
+                }
+              }
+            }
+          }
+        };
+        let case_match_2_1 = bool:false;
+        let case_match_2_2 = _17.1;
+        let NorthPresent_1 = _17.0.0;
+        let EastPresent_1 = _17.0.1;
+        let WestPresent_1 = _17.0.2;
+        let SouthPresent_1 = _17.0.3;
+        let _18 = Cell_1.1.step;
+        let _19 = Anyonmove {
+          step: _18,
+          ..zero!<Anyonmove>()
+        };
+        let _20 = (Tag::ANYON_MOVE, _19, bits_from_anyonmove(_19));
+        let Message_1 = _20;
+        let _22 = if Move_1 {
+          let _21 = Cell_1.1.best_direction;
+          (_21, bool:false)
+        } else {
+          (Absent_1, bool:false)
+        };
+        let case_match_3_1 = bool:false;
+        let case_match_3_2 = _22.1;
+        let CorrectionDirection_1 = _22.0;
+        let _23 = Cell_1.1.step;
+        let _24 = Cell_1.1.x;
+        let _25 = Cell_1.1.y;
+        let _26 = Phicorrection {
+          step: _23,
+          x: _24,
+          y: _25,
+          direction: CorrectionDirection_1,
+          ..zero!<Phicorrection>()
+        };
+        let _27 = (Tag::PHI_CORRECTION, _26, bits_from_phicorrection(_26));
+        let Correction_1 = _27;
+        let _28 = Cell_1.1.anyon;
+        let _29 = _28 ^ Present_1;
+        let _30 = Cell {
+          anyon: _29,
+          random_state: NextRandom_1,
+          ..(Cell_1).1
+        };
+        let _31 = (Tag::CELL, _30);
+        let Updated_1 = _31;
+        let _32 = Phifold {
+          value0: 0,
+          value1: 0,
+          ..zero!<Phifold>()
+        };
+        let _33 = (Tag::PHI_FOLD, _32, bits_from_phifold(_32));
+        let _34 = if ((case_match_1_1 != case_match_1_2) || (case_match_2_1 != case_match_2_2) || (case_match_3_1 != case_match_3_2) || bool:false) {
+            zero!<Phifold>()
+        } else {
+            _33.1
+        };
+        _34
+      };
+      reduction_open_site(ReductionSite::FLIPPING, key, identity)
+    },
+    _ => zero!<ReductionState>(),
+  }
+}
+
+fn reduction_contribution(
+    frame: axis::Frame, phase: Phase, data: Cell) -> ReductionContribution {
+  match frame.header.op as Tag {
+    Tag::PHI => {
+      let message = phi_from_bits(frame.payload);
+      match phase {
+        Phase::GATHERING => {
+          let built = {
+            let Xls_clause_1_Epoch_1 = message.epoch;
+            let Xls_clause_1_Values_1 = message.values;
+            let Xls_clause_1_Cell_1 = (Tag::CELL, data);
+            if Xls_clause_1_Epoch_1 == data.diffusion_epoch {
+  let _0 = (0 as u32);
+  let _1 = Xls_clause_1_Values_1[1 - u32:1];
+  let _2 = (0 + (_1 as s64));
+  let _3 = Xls_clause_1_Values_1[2 - u32:1];
+  let _4 = (0 + (_3 as s64));
+  let _5 = Phifold {
+    value0: _2,
+    value1: _4,
+    ..zero!<Phifold>()
+  };
+  let _6 = (Tag::PHI_FOLD, _5, bits_from_phifold(_5));
+  let _7 = (Xls_clause_1_Epoch_1, _0, _6, );
+  if (bool:false) {
+    (u1:0, u32:0, u32:0, zero!<Phifold>())
+  } else {
+    (u1:1, _7.0, _7.1, _7.2.1)
+  }
+} else {
+  (u1:0, u32:0, u32:0, zero!<Phifold>())
+}
+          };
+          ReductionContribution {
+            valid: built.0,
+            site: ReductionSite::GATHERING,
+            mode: ReductionMode::COUNT,
+            key: built.1,
+            member: built.2,
+            value: built.3,
+          }
+        },
+        _ => zero!<ReductionContribution>(),
+      }
+    },
+    Tag::PHI0 => {
+      let message = phi0_from_bits(frame.payload);
+      match phase {
+        Phase::COMPARING => {
+          let built = {
+            let Xls_clause_1_Step_1 = message.step;
+            let Xls_clause_1_Source_1 = message.source;
+            let Xls_clause_1_Value_1 = message.value;
+            let Xls_clause_1_Cell_1 = (Tag::CELL, data);
+            let _7 = if Xls_clause_1_Step_1 == data.step {
+              let _0 = Xls_clause_1_Source_1 == 1;
+              let _6 = if _0 {
+                (bool:1, bool:false)
+              } else {
+                let _1 = Xls_clause_1_Source_1 == 2;
+                let _5 = if _1 {
+                  (bool:1, bool:false)
+                } else {
+                  let _2 = Xls_clause_1_Source_1 == 4;
+                  let _4 = if _2 {
+                    (bool:1, bool:false)
+                  } else {
+                    let _3 = Xls_clause_1_Source_1 == 8;
+                    (_3, bool:false)
+                  };
+                  let case_match_1_1 = bool:false;
+                  let case_match_1_2 = _4.1;
+                  (_4.0, (case_match_1_1 != case_match_1_2) || bool:false)
+                };
+                let case_match_2_1 = bool:false;
+                let case_match_2_2 = _5.1;
+                (_5.0, (case_match_2_1 != case_match_2_2) || bool:false)
+              };
+              let case_match_3_1 = bool:false;
+              let case_match_3_2 = _6.1;
+              (_6.0, (case_match_3_1 != case_match_3_2) || bool:false)
+            } else {
+              (bool:0, bool:false)
+            };
+            let case_match_4_1 = bool:false;
+            let case_match_4_2 = _7.1;
+            if _7.0 {
+  let _8 = (0 + (Xls_clause_1_Value_1 as s64));
+  let _9 = (Xls_clause_1_Source_1 as s64);
+  let _10 = Phifold {
+    value0: _8,
+    value1: _9,
+    ..zero!<Phifold>()
+  };
+  let _11 = (Tag::PHI_FOLD, _10, bits_from_phifold(_10));
+  let _12 = (Xls_clause_1_Step_1, Xls_clause_1_Source_1, _11, );
+  if (bool:false) {
+    (u1:0, u32:0, u32:0, zero!<Phifold>())
+  } else {
+    (u1:1, _12.0, _12.1, _12.2.1)
+  }
+} else {
+  (u1:0, u32:0, u32:0, zero!<Phifold>())
+}
+          };
+          ReductionContribution {
+            valid: built.0,
+            site: ReductionSite::COMPARING,
+            mode: ReductionMode::MEMBERS,
+            key: built.1,
+            member: built.2,
+            value: built.3,
+          }
+        },
+        _ => zero!<ReductionContribution>(),
+      }
+    },
+    Tag::ANYON_MOVE => {
+      let message = anyonmove_from_bits(frame.payload);
+      match phase {
+        Phase::FLIPPING => {
+          let built = {
+            let Xls_clause_1_Step_1 = message.step;
+            let Xls_clause_1_PresentWord_1 = message.present;
+            let Xls_clause_1_Cell_1 = (Tag::CELL, data);
+            let _1 = if Xls_clause_1_Step_1 == data.step {
+              let _0 = Xls_clause_1_PresentWord_1 < 2;
+              (_0, bool:false)
+            } else {
+              (bool:0, bool:false)
+            };
+            let case_match_1_1 = bool:false;
+            let case_match_1_2 = _1.1;
+            if _1.0 {
+  let _2 = (0 as u32);
+  let _3 = (Xls_clause_1_PresentWord_1 as s64);
+  let _4 = Phifold {
+    value0: _3,
+    value1: 0,
+    ..zero!<Phifold>()
+  };
+  let _5 = (Tag::PHI_FOLD, _4, bits_from_phifold(_4));
+  let _6 = (Xls_clause_1_Step_1, _2, _5, );
+  if (bool:false) {
+    (u1:0, u32:0, u32:0, zero!<Phifold>())
+  } else {
+    (u1:1, _6.0, _6.1, _6.2.1)
+  }
+} else {
+  (u1:0, u32:0, u32:0, zero!<Phifold>())
+}
+          };
+          ReductionContribution {
+            valid: built.0,
+            site: ReductionSite::FLIPPING,
+            mode: ReductionMode::COUNT,
+            key: built.1,
+            member: built.2,
+            value: built.3,
+          }
+        },
+        _ => zero!<ReductionContribution>(),
+      }
+    },
+    _ => zero!<ReductionContribution>(),
+  }
+}
+
+fn reduction_reduce(
+    name: ReductionName, left: Phifold, right: Phifold) -> Phifold {
+  match name {
+    ReductionName::DIFFUSION => {
+      let Xls_clause_1_Left0_1 = left.value0;
+      let Xls_clause_1_Left1_1 = left.value1;
+      let Xls_clause_1_Right0_1 = right.value0;
+      let Xls_clause_1_Right1_1 = right.value1;
+      if bool:true {
+  let _0 = Xls_clause_1_Left0_1 + Xls_clause_1_Right0_1;
+  let _1 = Xls_clause_1_Left1_1 + Xls_clause_1_Right1_1;
+  let _2 = Phifold {
+    value0: _0,
+    value1: _1,
+    ..zero!<Phifold>()
+  };
+  let _3 = (Tag::PHI_FOLD, _2, bits_from_phifold(_2));
+  if (bool:false) {
+    zero!<Phifold>()
+  } else {
+    _3.1
+  }
+} else {
+  zero!<Phifold>()
+}
+    },
+    ReductionName::COMPARISON => {
+      let Xls_clause_1_LeftValue_1 = left.value0;
+      let Xls_clause_1_LeftMask_1 = left.value1;
+      let Xls_clause_1_RightValue_1 = right.value0;
+      let Xls_clause_1_RightMask_1 = right.value1;
+      if bool:true {
+  let _0 = (0 as s64);
+  let Xls_clause_1_Zero_1 = _0;
+  let _1 = Xls_clause_1_LeftMask_1 == 0;
+  let _3 = if _1 {
+    let _2 = Xls_clause_1_RightMask_1 == 0;
+    (_2, bool:false)
+  } else {
+    (bool:0, bool:false)
+  };
+  let case_match_1_1 = bool:false;
+  let case_match_1_2 = _3.1;
+  let _14 = if _3.0 {
+    let _4 = (Xls_clause_1_Zero_1, Xls_clause_1_Zero_1, );
+    (_4, bool:false)
+  } else {
+    let _4 = Xls_clause_1_LeftMask_1 == 0;
+    let _13 = if _4 {
+      let _5 = (Xls_clause_1_RightValue_1, Xls_clause_1_RightMask_1, );
+      (_5, bool:false)
+    } else {
+      let _5 = Xls_clause_1_RightMask_1 == 0;
+      let _12 = if _5 {
+        let _6 = (Xls_clause_1_LeftValue_1, Xls_clause_1_LeftMask_1, );
+        (_6, bool:false)
+      } else {
+        let _6 = Xls_clause_1_LeftValue_1 > Xls_clause_1_RightValue_1;
+        let _11 = if _6 {
+          let _7 = (Xls_clause_1_LeftValue_1, Xls_clause_1_LeftMask_1, );
+          (_7, bool:false)
+        } else {
+          let _7 = Xls_clause_1_RightValue_1 > Xls_clause_1_LeftValue_1;
+          let _10 = if _7 {
+            let _8 = (Xls_clause_1_RightValue_1, Xls_clause_1_RightMask_1, );
+            (_8, bool:false)
+          } else {
+            let _8 = Xls_clause_1_LeftMask_1 | Xls_clause_1_RightMask_1;
+            let _9 = (Xls_clause_1_LeftValue_1, _8, );
+            (_9, bool:false)
+          };
+          let case_match_2_1 = bool:false;
+          let case_match_2_2 = _10.1;
+          (_10.0, (case_match_2_1 != case_match_2_2) || bool:false)
+        };
+        let case_match_3_1 = bool:false;
+        let case_match_3_2 = _11.1;
+        (_11.0, (case_match_3_1 != case_match_3_2) || bool:false)
+      };
+      let case_match_4_1 = bool:false;
+      let case_match_4_2 = _12.1;
+      (_12.0, (case_match_4_1 != case_match_4_2) || bool:false)
+    };
+    let case_match_5_1 = bool:false;
+    let case_match_5_2 = _13.1;
+    (_13.0, (case_match_5_1 != case_match_5_2) || bool:false)
+  };
+  let case_match_6_1 = bool:false;
+  let case_match_6_2 = _14.1;
+  let Xls_clause_1_BestValue_1 = _14.0.0;
+  let Xls_clause_1_WinnerMask_1 = _14.0.1;
+  let _15 = Phifold {
+    value0: Xls_clause_1_BestValue_1,
+    value1: Xls_clause_1_WinnerMask_1,
+    ..zero!<Phifold>()
+  };
+  let _16 = (Tag::PHI_FOLD, _15, bits_from_phifold(_15));
+  if ((case_match_1_1 != case_match_1_2) || (case_match_6_1 != case_match_6_2) || bool:false) {
+    zero!<Phifold>()
+  } else {
+    _16.1
+  }
+} else {
+  zero!<Phifold>()
+}
+    },
+    ReductionName::MOVEMENT => {
+      let Xls_clause_1_LeftParity_1 = left.value0;
+      let Xls_clause_1_RightParity_1 = right.value0;
+      if bool:true {
+  let _0 = Xls_clause_1_LeftParity_1 ^ Xls_clause_1_RightParity_1;
+  let _1 = Phifold {
+    value0: _0,
+    value1: 0,
+    ..zero!<Phifold>()
+  };
+  let _2 = (Tag::PHI_FOLD, _1, bits_from_phifold(_1));
+  if (bool:false) {
+    zero!<Phifold>()
+  } else {
+    _2.1
+  }
+} else {
+  zero!<Phifold>()
+}
+    },
+  }
+}
+
+fn reduction_apply(
+    state: ReductionState,
+    contribution: ReductionContribution) -> ReductionApply {
+  if !contribution.valid {
+    ReductionApply {
+      state, outcome: ReductionOutcome::NOT_CANDIDATE }
+  } else if state.status != ReductionStatus::OPEN ||
+      state.site != contribution.site ||
+      state.key != contribution.key {
+    ReductionApply {
+      state, outcome: ReductionOutcome::MISMATCH }
+  } else if reduction_site_mode(state.site) != contribution.mode {
+    ReductionApply {
+      state, outcome: ReductionOutcome::WRONG_MODE }
+  } else {
+    let member_bit = reduction_member_bit(
+      state.site, contribution.member);
+    let member_mode = contribution.mode == ReductionMode::MEMBERS;
+    let unexpected = member_mode &&
+      member_bit == zero!<ReductionMembers>();
+    let duplicate = member_mode &&
+      (state.seen & member_bit) != zero!<ReductionMembers>();
+    if unexpected {
+      ReductionApply { state,
+        outcome: ReductionOutcome::UNEXPECTED_MEMBER }
+    } else if duplicate {
+      ReductionApply { state,
+        outcome: ReductionOutcome::DUPLICATE_MEMBER }
+    } else {
+      let remaining = state.remaining - u8:1;
+      let complete = remaining == u8:0;
+      let next_state = ReductionState {
+        status: if complete { ReductionStatus::COMPLETE }
+          else { ReductionStatus::OPEN },
+        remaining,
+        seen: if member_mode { state.seen | member_bit }
+          else { state.seen },
+        accumulator: reduction_reduce(
+          reduction_site_name(state.site),
+          state.accumulator, contribution.value),
+        ..state
+      };
+      ReductionApply {
+        state: next_state,
+        outcome: if complete { ReductionOutcome::COMPLETE }
+          else { ReductionOutcome::PENDING },
+      }
+    }
+  }
+}
+
+fn reduction_dispatch_completion(
+    state: ReductionState, phase: Phase, data: Cell) -> ReductionDispatch {
+  if state.status != ReductionStatus::COMPLETE {
+    ReductionDispatch { reduction: state, phase, data,
+      ..zero!<ReductionDispatch>() }
+  } else {
+    let key = state.key;
+    let accumulator: Phifold = state.accumulator;
+    match (state.site, phase) {
+      (ReductionSite::GATHERING, Phase::GATHERING) => {
+        let conclusion = {
+          let Xls_clause_1_Epoch_1 = key;
+          let Xls_clause_1_Sum0_1 = accumulator.value0;
+          let Xls_clause_1_Sum1_1 = accumulator.value1;
+          let Xls_clause_1_Cell_1 = (Tag::CELL, data);
+          let Xls_clause_1_Step_1 = data.step;
+          if Xls_clause_1_Epoch_1 == data.diffusion_epoch {
+  let _0 = Xls_clause_1_Cell_1.1.phi;
+  let _1 = _0[1 - u32:1];
+  let Xls_clause_1_P0_1 = _1;
+  let _2 = Xls_clause_1_Cell_1.1.phi;
+  let _3 = _2[2 - u32:1];
+  let Xls_clause_1_P1_1 = _3;
+  let _4 = Xls_clause_1_Cell_1.1.anyon;
+  let _5 = ((Xls_clause_1_P0_1 as sN[37]) * sN[37]:6 + (Xls_clause_1_P1_1 as sN[37]) * sN[37]:2 + (Xls_clause_1_Sum0_1 as sN[37]));
+  let _6 = _5 < sN[37]:0;
+  let _7 = ((if _6 { -(_5) } else { _5 }) as uN[36]);
+  let _8 = (((_7 + uN[36]:6) >> u32:2) as uN[34]);
+  let _9 = ((_8 / uN[34]:3) as sN[33]);
+  let _10 = ((if _6 { -(_9) } else { _9 }) as s64);
+  let _11 = ((_4 as s64) << u32:16) + _10;
+  let _12 = (if _11 > s64:2147483647 { s32:2147483647 } else if _11 < s64:-2147483648 { s32:-2147483648 } else { _11 as s32 });
+  let Xls_clause_1_New0_1 = _12;
+  let _13 = ((Xls_clause_1_P0_1 as sN[37]) * sN[37]:1 + (Xls_clause_1_P1_1 as sN[37]) * sN[37]:7 + (Xls_clause_1_Sum1_1 as sN[37]));
+  let _14 = _13 < sN[37]:0;
+  let _15 = ((if _14 { -(_13) } else { _13 }) as uN[36]);
+  let _16 = (((_15 + uN[36]:6) >> u32:2) as uN[34]);
+  let _17 = ((_16 / uN[34]:3) as sN[33]);
+  let _18 = ((if _14 { -(_17) } else { _17 }) as s64);
+  let _19 = (if _18 > s64:2147483647 { s32:2147483647 } else if _18 < s64:-2147483648 { s32:-2147483648 } else { _18 as s32 });
+  let Xls_clause_1_New1_1 = _19;
+  let _20 = Xls_clause_1_Cell_1.1.phi;
+  let _21 = update(_20, 1 - u32:1, Xls_clause_1_New0_1);
+  let Xls_clause_1_PhiFirst_1 = _21;
+  let _22 = update(Xls_clause_1_PhiFirst_1, 2 - u32:1, Xls_clause_1_New1_1);
+  let Xls_clause_1_NewPhi_1 = _22;
+  let _23 = Xls_clause_1_Epoch_1 + 1;
+  let _24 = _23 & 4294967295;
+  let Xls_clause_1_NextEpoch_1 = _24;
+  let _25 = Cell {
+    diffusion_epoch: Xls_clause_1_NextEpoch_1,
+    phi: Xls_clause_1_NewPhi_1,
+    ..(Xls_clause_1_Cell_1).1
+  };
+  let _26 = (Tag::CELL, _25);
+  let Xls_clause_1_Updated_1 = _26;
+  let _27 = Xls_clause_1_Step_1 + 1;
+  let _28 = _27 * 12;
+  let _29 = _28 & 4294967295;
+  let Xls_clause_1_NextStepEpoch_1 = _29;
+  let _30 = Xls_clause_1_NextEpoch_1 == Xls_clause_1_NextStepEpoch_1;
+  let _34 = if _30 {
+    let _31 = Cell {
+      best_direction: 0,
+      ..(Xls_clause_1_Updated_1).1
+    };
+    let _32 = (Tag::CELL, _31);
+    let _33 = (Phase::COMPARING, _32, Directive::CONSUME, bool:0, );
+    (_33, bool:false)
+  } else {
+    let _31 = (Phase::GATHERING, Xls_clause_1_Updated_1, Directive::CONSUME, bool:1, );
+    (_31, bool:false)
+  };
+  let case_match_1_1 = bool:false;
+  let case_match_1_2 = _34.1;
+  if ((case_match_1_1 != case_match_1_2) || bool:false) {
+    (phase, data, Directive::FAIL, u1:0)
+  } else {
+    (_34.0.0, _34.0.1.1, _34.0.2, _34.0.3)
+  }
+} else {
+  (phase, data, Directive::FAIL, u1:0)
+}
+        };
+        ReductionDispatch {
+          reduction: zero!<ReductionState>(),
+          phase: conclusion.0,
+          data: conclusion.1,
+          directive: conclusion.2,
+          repeat_phase: conclusion.3,
+          dispatched: u1:1,
+        }
+      },
+      (ReductionSite::COMPARING, Phase::COMPARING) => {
+        let conclusion = {
+          let Xls_clause_1_Step_1 = key;
+          let Xls_clause_1_WinnerMask_1 = accumulator.value1;
+          let Xls_clause_1_Cell_1 = (Tag::CELL, data);
+          if Xls_clause_1_Step_1 == data.step {
+  let _1 = {
+    if Xls_clause_1_WinnerMask_1 == 1 {
+      let _0 = (1 as u32);
+      (_0, bool:false)
+    } else {
+      if Xls_clause_1_WinnerMask_1 == 2 {
+        let _0 = (2 as u32);
+        (_0, bool:false)
+      } else {
+        if Xls_clause_1_WinnerMask_1 == 4 {
+          let _0 = (4 as u32);
+          (_0, bool:false)
+        } else {
+          if Xls_clause_1_WinnerMask_1 == 8 {
+            let _0 = (8 as u32);
+            (_0, bool:false)
+          } else {
+            let _0 = (0 as u32);
+            (_0, bool:false)
+          }
+        }
+      }
+    }
+  };
+  let case_match_1_1 = bool:false;
+  let case_match_1_2 = _1.1;
+  let Xls_clause_1_BestDirection_1 = _1.0;
+  let _2 = Cell {
+    best_direction: Xls_clause_1_BestDirection_1,
+    ..(Xls_clause_1_Cell_1).1
+  };
+  let _3 = (Tag::CELL, _2);
+  let _4 = (Phase::FLIPPING, _3, Directive::CONSUME, bool:0, );
+  if ((case_match_1_1 != case_match_1_2) || bool:false) {
+    (phase, data, Directive::FAIL, u1:0)
+  } else {
+    (_4.0, _4.1.1, _4.2, _4.3)
+  }
+} else {
+  (phase, data, Directive::FAIL, u1:0)
+}
+        };
+        ReductionDispatch {
+          reduction: zero!<ReductionState>(),
+          phase: conclusion.0,
+          data: conclusion.1,
+          directive: conclusion.2,
+          repeat_phase: conclusion.3,
+          dispatched: u1:1,
+        }
+      },
+      (ReductionSite::FLIPPING, Phase::FLIPPING) => {
+        let conclusion = {
+          let Xls_clause_1_Step_1 = key;
+          let Xls_clause_1_IncomingParity_1 = accumulator.value0;
+          let Xls_clause_1_Cell_1 = (Tag::CELL, data);
+          if Xls_clause_1_Step_1 == data.step {
+  let _0 = Xls_clause_1_Step_1 + 1;
+  let _1 = _0 & 4294967295;
+  let Xls_clause_1_NextStep_1 = _1;
+  let _2 = Xls_clause_1_NextStep_1 * 12;
+  let _3 = _2 & 4294967295;
+  let _4 = Xls_clause_1_Cell_1.1.anyon;
+  let _5 = (Xls_clause_1_IncomingParity_1 as u32);
+  let _6 = _4 ^ _5;
+  let _7 = Cell {
+    step: Xls_clause_1_NextStep_1,
+    diffusion_epoch: _3,
+    anyon: _6,
+    status_valid: 1,
+    ..(Xls_clause_1_Cell_1).1
+  };
+  let _8 = (Tag::CELL, _7);
+  let Xls_clause_1_Advanced_1 = _8;
+  let _9 = (Phase::MEASURING, Xls_clause_1_Advanced_1, Directive::CONSUME, bool:0, );
+  if (bool:false) {
+    (phase, data, Directive::FAIL, u1:0)
+  } else {
+    (_9.0, _9.1.1, _9.2, _9.3)
+  }
+} else {
+  (phase, data, Directive::FAIL, u1:0)
+}
+        };
+        ReductionDispatch {
+          reduction: zero!<ReductionState>(),
+          phase: conclusion.0,
+          data: conclusion.1,
+          directive: conclusion.2,
+          repeat_phase: conclusion.3,
+          dispatched: u1:1,
+        }
+      },
+      _ => ReductionDispatch {
+        reduction: zero!<ReductionState>(),
+        phase, data, directive: Directive::FAIL,
+        dispatched: u1:1,
+        ..zero!<ReductionDispatch>()
+      },
+    }
+  }
 }
 
 fn initial_machine() -> Machine {
@@ -526,6 +1589,7 @@ fn shared_machine(machine: Machine) -> SharedMachine {
     phase: machine.phase,
     entered_from: machine.entered_from,
     data: machine.data,
+    reduction: machine.reduction,
     enter_pending: machine.enter_pending,
     failed: machine.failed,
   }
@@ -539,13 +1603,15 @@ fn machine_from_bits(raw: MachineBits) -> SharedMachine {
   SharedMachine {
     phase: raw[0:8] as Phase,
     entered_from: raw[8:16] as Phase,
-    data: cell_from_bits(raw[16:544]),
-    enter_pending: raw[544:545],
-    failed: raw[545:546],
+    data: cell_from_bits(raw[16:336]),
+    enter_pending: raw[336:337],
+    failed: raw[337:338],
+    reduction: reduction_state_from_bits(raw[338:520]),
   }
 }
 
 fn bits_from_machine(machine: SharedMachine) -> MachineBits {
+  bits_from_reduction_state(machine.reduction) ++
   machine.failed ++
     machine.enter_pending ++
     bits_from_cell(machine.data) ++
@@ -765,26 +1831,22 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
         let _OldPhase_1 = old_phase;
         let __1 = phase;
         let Cell_1 = (Tag::CELL, data);
-        let _0 = Cell_1.1.step;
-        let _1 = _0 * 12;
-        let _2 = Cell_1.1.diffusion_round;
-        let _3 = _1 + _2;
-        let _4 = _3 & 4294967295;
-        let Epoch_1 = _4;
-        let _5 = Cell_1.1.phi;
-        let _6 = Phi {
+        let _0 = Cell_1.1.diffusion_epoch;
+        let Epoch_1 = _0;
+        let _1 = Cell_1.1.phi;
+        let _2 = Phi {
           epoch: Epoch_1,
-          values: _5,
+          values: _1,
           ..zero!<Phi>()
         };
-        let _7 = (Tag::PHI, _6, bits_from_phi(_6));
-        let Message_1 = _7;
-        let _8 = if (bool:false) {
+        let _3 = (Tag::PHI, _2, bits_from_phi(_2));
+        let Message_1 = _3;
+        let _4 = if (bool:false) {
             data
         } else {
             Cell_1.1
         };
-        _8
+        _4
       };
       let effect_0_valid = {
         bool:true
@@ -793,26 +1855,22 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
         let _OldPhase_1 = old_phase;
         let __1 = phase;
         let Cell_1 = (Tag::CELL, data);
-        let _0 = Cell_1.1.step;
-        let _1 = _0 * 12;
-        let _2 = Cell_1.1.diffusion_round;
-        let _3 = _1 + _2;
-        let _4 = _3 & 4294967295;
-        let Epoch_1 = _4;
-        let _5 = Cell_1.1.phi;
-        let _6 = Phi {
+        let _0 = Cell_1.1.diffusion_epoch;
+        let Epoch_1 = _0;
+        let _1 = Cell_1.1.phi;
+        let _2 = Phi {
           epoch: Epoch_1,
-          values: _5,
+          values: _1,
           ..zero!<Phi>()
         };
-        let _7 = (Tag::PHI, _6, bits_from_phi(_6));
-        let Message_1 = _7;
-        let _8 = if (bool:false) {
+        let _3 = (Tag::PHI, _2, bits_from_phi(_2));
+        let Message_1 = _3;
+        let _4 = if (bool:false) {
             zero!<axis::Frame>()
         } else {
             axis::pack(Message_1.0 as u8, Message_1.2)
         };
-        _8
+        _4
       };
       let effect_1_valid = {
         bool:true
@@ -821,26 +1879,22 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
         let _OldPhase_1 = old_phase;
         let __1 = phase;
         let Cell_1 = (Tag::CELL, data);
-        let _0 = Cell_1.1.step;
-        let _1 = _0 * 12;
-        let _2 = Cell_1.1.diffusion_round;
-        let _3 = _1 + _2;
-        let _4 = _3 & 4294967295;
-        let Epoch_1 = _4;
-        let _5 = Cell_1.1.phi;
-        let _6 = Phi {
+        let _0 = Cell_1.1.diffusion_epoch;
+        let Epoch_1 = _0;
+        let _1 = Cell_1.1.phi;
+        let _2 = Phi {
           epoch: Epoch_1,
-          values: _5,
+          values: _1,
           ..zero!<Phi>()
         };
-        let _7 = (Tag::PHI, _6, bits_from_phi(_6));
-        let Message_1 = _7;
-        let _8 = if (bool:false) {
+        let _3 = (Tag::PHI, _2, bits_from_phi(_2));
+        let Message_1 = _3;
+        let _4 = if (bool:false) {
             zero!<axis::Frame>()
         } else {
             axis::pack(Message_1.0 as u8, Message_1.2)
         };
-        _8
+        _4
       };
       let effect_2_valid = {
         bool:true
@@ -849,26 +1903,22 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
         let _OldPhase_1 = old_phase;
         let __1 = phase;
         let Cell_1 = (Tag::CELL, data);
-        let _0 = Cell_1.1.step;
-        let _1 = _0 * 12;
-        let _2 = Cell_1.1.diffusion_round;
-        let _3 = _1 + _2;
-        let _4 = _3 & 4294967295;
-        let Epoch_1 = _4;
-        let _5 = Cell_1.1.phi;
-        let _6 = Phi {
+        let _0 = Cell_1.1.diffusion_epoch;
+        let Epoch_1 = _0;
+        let _1 = Cell_1.1.phi;
+        let _2 = Phi {
           epoch: Epoch_1,
-          values: _5,
+          values: _1,
           ..zero!<Phi>()
         };
-        let _7 = (Tag::PHI, _6, bits_from_phi(_6));
-        let Message_1 = _7;
-        let _8 = if (bool:false) {
+        let _3 = (Tag::PHI, _2, bits_from_phi(_2));
+        let Message_1 = _3;
+        let _4 = if (bool:false) {
             zero!<axis::Frame>()
         } else {
             axis::pack(Message_1.0 as u8, Message_1.2)
         };
-        _8
+        _4
       };
       let effect_3_valid = {
         bool:true
@@ -877,26 +1927,22 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
         let _OldPhase_1 = old_phase;
         let __1 = phase;
         let Cell_1 = (Tag::CELL, data);
-        let _0 = Cell_1.1.step;
-        let _1 = _0 * 12;
-        let _2 = Cell_1.1.diffusion_round;
-        let _3 = _1 + _2;
-        let _4 = _3 & 4294967295;
-        let Epoch_1 = _4;
-        let _5 = Cell_1.1.phi;
-        let _6 = Phi {
+        let _0 = Cell_1.1.diffusion_epoch;
+        let Epoch_1 = _0;
+        let _1 = Cell_1.1.phi;
+        let _2 = Phi {
           epoch: Epoch_1,
-          values: _5,
+          values: _1,
           ..zero!<Phi>()
         };
-        let _7 = (Tag::PHI, _6, bits_from_phi(_6));
-        let Message_1 = _7;
-        let _8 = if (bool:false) {
+        let _3 = (Tag::PHI, _2, bits_from_phi(_2));
+        let Message_1 = _3;
+        let _4 = if (bool:false) {
             zero!<axis::Frame>()
         } else {
             axis::pack(Message_1.0 as u8, Message_1.2)
         };
-        _8
+        _4
       };
       (entered_data, EntryEffects {
         phase: Phase::GATHERING as u8,
@@ -2063,161 +3109,41 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
         },
         Phase::GATHERING => {
           let Xls_clause_1_Epoch_1 = message.epoch;
-          let Xls_clause_1_Values_1 = message.values;
           let Xls_clause_1_Cell_1 = (Tag::CELL, data);
-          let Xls_clause_1_Step_1 = data.step;
-          let Xls_clause_1_Round_1 = data.diffusion_round;
-          let _0 = Xls_clause_1_Step_1 * 12;
-          let _1 = _0 + Xls_clause_1_Round_1;
-          let _2 = _1 & 4294967295;
-          let _3 = Xls_clause_1_Epoch_1 == _2;
-          if _3 {
-            let _4 = Xls_clause_1_Values_1[1 - u32:1];
-            let Xls_clause_1_Value0_1 = _4;
-            let _5 = Xls_clause_1_Values_1[2 - u32:1];
-            let Xls_clause_1_Value1_1 = _5;
-            let _6 = Xls_clause_1_Cell_1.1.phi_sum;
-            let _7 = _6[1 - u32:1];
-            let _8 = (_7 + (Xls_clause_1_Value0_1 as s64));
-            let Xls_clause_1_Sum0_1 = _8;
-            let _9 = Xls_clause_1_Cell_1.1.phi_sum;
-            let _10 = _9[2 - u32:1];
-            let _11 = (_10 + (Xls_clause_1_Value1_1 as s64));
-            let Xls_clause_1_Sum1_1 = _11;
-            let _12 = Xls_clause_1_Cell_1.1.phi_sum;
-            let _13 = update(_12, 1 - u32:1, Xls_clause_1_Sum0_1);
-            let Xls_clause_1_SumFirst_1 = _13;
-            let _14 = update(Xls_clause_1_SumFirst_1, 2 - u32:1, Xls_clause_1_Sum1_1);
-            let Xls_clause_1_NewSum_1 = _14;
-            let _15 = Xls_clause_1_Cell_1.1.phi_received;
-            let _16 = _15 + 1;
-            let Xls_clause_1_ReceivedNext_1 = _16;
-            let _17 = Xls_clause_1_ReceivedNext_1 == 4;
-            let _51 = if _17 {
-              let _18 = Xls_clause_1_Cell_1.1.phi;
-              let _19 = _18[1 - u32:1];
-              let Xls_clause_1_P0_1 = _19;
-              let _20 = Xls_clause_1_Cell_1.1.phi;
-              let _21 = _20[2 - u32:1];
-              let Xls_clause_1_P1_1 = _21;
-              let _22 = Xls_clause_1_Cell_1.1.anyon;
-              let _23 = ((Xls_clause_1_P0_1 as sN[37]) * sN[37]:6 + (Xls_clause_1_P1_1 as sN[37]) * sN[37]:2 + (Xls_clause_1_Sum0_1 as sN[37]));
-              let _24 = _23 < sN[37]:0;
-              let _25 = ((if _24 { -(_23) } else { _23 }) as uN[36]);
-              let _26 = (((_25 + uN[36]:6) >> u32:2) as uN[34]);
-              let _27 = ((_26 / uN[34]:3) as sN[33]);
-              let _28 = ((if _24 { -(_27) } else { _27 }) as s64);
-              let _29 = ((_22 as s64) << u32:16) + _28;
-              let _30 = (if _29 > s64:2147483647 { s32:2147483647 } else if _29 < s64:-2147483648 { s32:-2147483648 } else { _29 as s32 });
-              let Xls_clause_1_New0_1 = _30;
-              let _31 = ((Xls_clause_1_P0_1 as sN[37]) * sN[37]:1 + (Xls_clause_1_P1_1 as sN[37]) * sN[37]:7 + (Xls_clause_1_Sum1_1 as sN[37]));
-              let _32 = _31 < sN[37]:0;
-              let _33 = ((if _32 { -(_31) } else { _31 }) as uN[36]);
-              let _34 = (((_33 + uN[36]:6) >> u32:2) as uN[34]);
-              let _35 = ((_34 / uN[34]:3) as sN[33]);
-              let _36 = ((if _32 { -(_35) } else { _35 }) as s64);
-              let _37 = (if _36 > s64:2147483647 { s32:2147483647 } else if _36 < s64:-2147483648 { s32:-2147483648 } else { _36 as s32 });
-              let Xls_clause_1_New1_1 = _37;
-              let _38 = Xls_clause_1_Cell_1.1.phi;
-              let _39 = update(_38, 1 - u32:1, Xls_clause_1_New0_1);
-              let Xls_clause_1_PhiFirst_1 = _39;
-              let _40 = update(Xls_clause_1_PhiFirst_1, 2 - u32:1, Xls_clause_1_New1_1);
-              let Xls_clause_1_NewPhi_1 = _40;
-              let _41 = Xls_clause_1_Round_1 + 1;
-              let _42 = zero!<s64[2]>();
-              let _43 = Cell {
-                diffusion_round: _41,
-                phi: Xls_clause_1_NewPhi_1,
-                phi_sum: _42,
-                phi_received: 0,
-                ..(Xls_clause_1_Cell_1).1
-              };
-              let _44 = (Tag::CELL, _43);
-              let Xls_clause_1_Updated_1 = _44;
-              let _45 = Xls_clause_1_Round_1 + 1;
-              let _46 = _45 == 12;
-              let _50 = if _46 {
-                let _47 = Cell {
-                  seen_sources: 0,
-                  best_phi0: 0,
-                  best_direction: 0,
-                  ..(Xls_clause_1_Updated_1).1
-                };
-                let _48 = (Tag::CELL, _47);
-                let _49 = (Phase::COMPARING, _48, Directive::CONSUME, bool:0, );
-                (_49, bool:false)
-              } else {
-                let _47 = (Phase::GATHERING, Xls_clause_1_Updated_1, Directive::CONSUME, bool:1, );
-                (_47, bool:false)
-              };
-              let case_match_1_1 = bool:false;
-              let case_match_1_2 = _50.1;
-              (_50.0, (case_match_1_1 != case_match_1_2) || bool:false)
-            } else {
-              let _18 = Cell {
-                phi_sum: Xls_clause_1_NewSum_1,
-                phi_received: Xls_clause_1_ReceivedNext_1,
-                ..(Xls_clause_1_Cell_1).1
-              };
-              let _19 = (Tag::CELL, _18);
-              let Xls_clause_1_Accumulated_1 = _19;
-              let _20 = (Phase::GATHERING, Xls_clause_1_Accumulated_1, Directive::CONSUME, bool:0, );
-              (_20, bool:false)
-            };
-            let case_match_2_1 = bool:false;
-            let case_match_2_2 = _51.1;
-            if ((case_match_2_1 != case_match_2_2) || bool:false) {
+          let Xls_clause_1_CurrentEpoch_1 = data.diffusion_epoch;
+          let _0 = Xls_clause_1_CurrentEpoch_1 + 1;
+          let _1 = _0 & 4294967295;
+          let _2 = Xls_clause_1_Epoch_1 == _1;
+          if _2 {
+            let _3 = (Phase::GATHERING, Xls_clause_1_Cell_1, Directive::POSTPONE, bool:0, );
+            if (bool:false) {
               (phase, data, Directive::FAIL, u1:0)
             } else {
-              (_51.0.0, _51.0.1.1, _51.0.2, _51.0.3)
+              (_3.0, _3.1.1, _3.2, _3.3)
             }
           } else {
-            let Xls_clause_2_Epoch_1 = message.epoch;
             let Xls_clause_2_Cell_1 = (Tag::CELL, data);
-            let Xls_clause_2_Step_1 = data.step;
-            let Xls_clause_2_Round_1 = data.diffusion_round;
-            let _0 = Xls_clause_2_Step_1 * 12;
-            let _1 = _0 + Xls_clause_2_Round_1;
-            let _2 = _1 + 1;
-            let _3 = _2 & 4294967295;
-            let _4 = Xls_clause_2_Epoch_1 == _3;
-            if _4 {
-              let _5 = (Phase::GATHERING, Xls_clause_2_Cell_1, Directive::POSTPONE, bool:0, );
+            if bool:true {
+              let _0 = (Phase::GATHERING, Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
               if (bool:false) {
                 (phase, data, Directive::FAIL, u1:0)
               } else {
-                (_5.0, _5.1.1, _5.2, _5.3)
+                (_0.0, _0.1.1, _0.2, _0.3)
               }
             } else {
-              let Xls_clause_3_Cell_1 = (Tag::CELL, data);
-              if bool:true {
-                let _0 = (Phase::GATHERING, Xls_clause_3_Cell_1, Directive::FAIL, bool:0, );
-                if (bool:false) {
-                  (phase, data, Directive::FAIL, u1:0)
-                } else {
-                  (_0.0, _0.1.1, _0.2, _0.3)
-                }
-              } else {
-                (phase, data, Directive::FAIL, u1:0)
-              }
+              (phase, data, Directive::FAIL, u1:0)
             }
           }
         },
         Phase::COMPARING => {
           let Xls_clause_1_Epoch_1 = message.epoch;
           let Xls_clause_1_Cell_1 = (Tag::CELL, data);
-          let Xls_clause_1_Step_1 = data.step;
-          let Xls_clause_1_Round_1 = data.diffusion_round;
-          let _0 = Xls_clause_1_Step_1 * 12;
-          let _1 = _0 + Xls_clause_1_Round_1;
-          let _2 = _1 & 4294967295;
-          let _3 = Xls_clause_1_Epoch_1 == _2;
-          if _3 {
-            let _4 = (Phase::COMPARING, Xls_clause_1_Cell_1, Directive::POSTPONE, bool:0, );
+          if Xls_clause_1_Epoch_1 == data.diffusion_epoch {
+            let _0 = (Phase::COMPARING, Xls_clause_1_Cell_1, Directive::POSTPONE, bool:0, );
             if (bool:false) {
               (phase, data, Directive::FAIL, u1:0)
             } else {
-              (_4.0, _4.1.1, _4.2, _4.3)
+              (_0.0, _0.1.1, _0.2, _0.3)
             }
           } else {
             let Xls_clause_2_Cell_1 = (Tag::CELL, data);
@@ -2236,18 +3162,12 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
         Phase::FLIPPING => {
           let Xls_clause_1_Epoch_1 = message.epoch;
           let Xls_clause_1_Cell_1 = (Tag::CELL, data);
-          let Xls_clause_1_Step_1 = data.step;
-          let Xls_clause_1_Round_1 = data.diffusion_round;
-          let _0 = Xls_clause_1_Step_1 * 12;
-          let _1 = _0 + Xls_clause_1_Round_1;
-          let _2 = _1 & 4294967295;
-          let _3 = Xls_clause_1_Epoch_1 == _2;
-          if _3 {
-            let _4 = (Phase::FLIPPING, Xls_clause_1_Cell_1, Directive::POSTPONE, bool:0, );
+          if Xls_clause_1_Epoch_1 == data.diffusion_epoch {
+            let _0 = (Phase::FLIPPING, Xls_clause_1_Cell_1, Directive::POSTPONE, bool:0, );
             if (bool:false) {
               (phase, data, Directive::FAIL, u1:0)
             } else {
-              (_4.0, _4.1.1, _4.2, _4.3)
+              (_0.0, _0.1.1, _0.2, _0.3)
             }
           } else {
             let Xls_clause_2_Cell_1 = (Tag::CELL, data);
@@ -2344,71 +3264,16 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
           }
         },
         Phase::FLIPPING => {
-          let Xls_clause_1_Step_1 = message.step;
-          let Xls_clause_1_PresentWord_1 = message.present;
           let Xls_clause_1_Cell_1 = (Tag::CELL, data);
-          let _1 = if Xls_clause_1_Step_1 == data.step {
-            let _0 = Xls_clause_1_PresentWord_1 < 2;
-            (_0, bool:false)
-          } else {
-            (bool:0, bool:false)
-          };
-          let case_match_1_1 = bool:false;
-          let case_match_1_2 = _1.1;
-          if _1.0 {
-            let _2 = Xls_clause_1_Cell_1.1.moves_received;
-            let _3 = _2 + 1;
-            let Xls_clause_1_ReceivedNext_1 = _3;
-            let _4 = Xls_clause_1_Cell_1.1.anyon;
-            let _5 = _4 ^ Xls_clause_1_PresentWord_1;
-            let Xls_clause_1_NextAnyon_1 = _5;
-            let _6 = Xls_clause_1_ReceivedNext_1 == 4;
-            let _13 = if _6 {
-              let _7 = Xls_clause_1_Cell_1.1.step;
-              let _8 = _7 + 1;
-              let _9 = _8 & 4294967295;
-              let _10 = Cell {
-                step: _9,
-                diffusion_round: 0,
-                moves_received: 0,
-                anyon: Xls_clause_1_NextAnyon_1,
-                status_valid: 1,
-                ..(Xls_clause_1_Cell_1).1
-              };
-              let _11 = (Tag::CELL, _10);
-              let Xls_clause_1_Advanced_1 = _11;
-              let _12 = (Phase::MEASURING, Xls_clause_1_Advanced_1, Directive::CONSUME, bool:0, );
-              (_12, bool:false)
-            } else {
-              let _7 = Cell {
-                moves_received: Xls_clause_1_ReceivedNext_1,
-                anyon: Xls_clause_1_NextAnyon_1,
-                ..(Xls_clause_1_Cell_1).1
-              };
-              let _8 = (Tag::CELL, _7);
-              let Xls_clause_1_Accumulated_1 = _8;
-              let _9 = (Phase::FLIPPING, Xls_clause_1_Accumulated_1, Directive::CONSUME, bool:0, );
-              (_9, bool:false)
-            };
-            let case_match_2_1 = bool:false;
-            let case_match_2_2 = _13.1;
-            if ((case_match_2_1 != case_match_2_2) || bool:false) {
+          if bool:true {
+            let _0 = (Phase::FLIPPING, Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
+            if (bool:false) {
               (phase, data, Directive::FAIL, u1:0)
             } else {
-              (_13.0.0, _13.0.1.1, _13.0.2, _13.0.3)
+              (_0.0, _0.1.1, _0.2, _0.3)
             }
           } else {
-            let Xls_clause_2_Cell_1 = (Tag::CELL, data);
-            if bool:true {
-              let _0 = (Phase::FLIPPING, Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
-              if (bool:false) {
-                (phase, data, Directive::FAIL, u1:0)
-              } else {
-                (_0.0, _0.1.1, _0.2, _0.3)
-              }
-            } else {
-              (phase, data, Directive::FAIL, u1:0)
-            }
+            (phase, data, Directive::FAIL, u1:0)
           }
         },
         _ => (phase, data, Directive::FAIL, u1:0),
@@ -2468,129 +3333,16 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
           }
         },
         Phase::COMPARING => {
-          let Xls_clause_1_Step_1 = message.step;
-          let Xls_clause_1_Source_1 = message.source;
-          let Xls_clause_1_Value_1 = message.value;
           let Xls_clause_1_Cell_1 = (Tag::CELL, data);
-          let Xls_clause_1_Seen_1 = data.seen_sources;
-          let Xls_clause_1_Best_1 = data.best_phi0;
-          let Xls_clause_1_BestDirection_1 = data.best_direction;
-          let _10 = if Xls_clause_1_Step_1 == data.step {
-            let _0 = Xls_clause_1_Source_1 == 1;
-            let _6 = if _0 {
-              (bool:1, bool:false)
-            } else {
-              let _1 = Xls_clause_1_Source_1 == 2;
-              let _5 = if _1 {
-                (bool:1, bool:false)
-              } else {
-                let _2 = Xls_clause_1_Source_1 == 4;
-                let _4 = if _2 {
-                  (bool:1, bool:false)
-                } else {
-                  let _3 = Xls_clause_1_Source_1 == 8;
-                  (_3, bool:false)
-                };
-                let case_match_1_1 = bool:false;
-                let case_match_1_2 = _4.1;
-                (_4.0, (case_match_1_1 != case_match_1_2) || bool:false)
-              };
-              let case_match_2_1 = bool:false;
-              let case_match_2_2 = _5.1;
-              (_5.0, (case_match_2_1 != case_match_2_2) || bool:false)
-            };
-            let case_match_3_1 = bool:false;
-            let case_match_3_2 = _6.1;
-            let _9 = if _6.0 {
-              let _7 = Xls_clause_1_Seen_1 & Xls_clause_1_Source_1;
-              let _8 = _7 == 0;
-              (_8, bool:false)
-            } else {
-              (bool:0, bool:false)
-            };
-            let case_match_4_1 = bool:false;
-            let case_match_4_2 = _9.1;
-            (_9.0, (case_match_3_1 != case_match_3_2) || (case_match_4_1 != case_match_4_2) || bool:false)
-          } else {
-            (bool:0, bool:false)
-          };
-          let case_match_5_1 = bool:false;
-          let case_match_5_2 = _10.1;
-          if _10.0 {
-            let _11 = Xls_clause_1_Seen_1 | Xls_clause_1_Source_1;
-            let Xls_clause_1_NewSeen_1 = _11;
-            let _12 = Xls_clause_1_Seen_1 == 0;
-            let _13 = Xls_clause_1_Value_1 > Xls_clause_1_Best_1;
-            let _14 = _12 || _13;
-            let _15 = if _14 {
-              (Xls_clause_1_Value_1, bool:false)
-            } else {
-              (Xls_clause_1_Best_1, bool:false)
-            };
-            let case_match_6_1 = bool:false;
-            let case_match_6_2 = _15.1;
-            let Xls_clause_1_NewBest_1 = _15.0;
-            let _16 = Xls_clause_1_Seen_1 == 0;
-            let _22 = if _16 {
-              (Xls_clause_1_Source_1, bool:false)
-            } else {
-              let _17 = Xls_clause_1_Value_1 > Xls_clause_1_Best_1;
-              let _21 = if _17 {
-                (Xls_clause_1_Source_1, bool:false)
-              } else {
-                let _18 = Xls_clause_1_Value_1 == Xls_clause_1_Best_1;
-                let _20 = if _18 {
-                  let _19 = (0 as u32);
-                  (_19, bool:false)
-                } else {
-                  (Xls_clause_1_BestDirection_1, bool:false)
-                };
-                let case_match_7_1 = bool:false;
-                let case_match_7_2 = _20.1;
-                (_20.0, (case_match_7_1 != case_match_7_2) || bool:false)
-              };
-              let case_match_8_1 = bool:false;
-              let case_match_8_2 = _21.1;
-              (_21.0, (case_match_8_1 != case_match_8_2) || bool:false)
-            };
-            let case_match_9_1 = bool:false;
-            let case_match_9_2 = _22.1;
-            let Xls_clause_1_NewBestDirection_1 = _22.0;
-            let _23 = Cell {
-              seen_sources: Xls_clause_1_NewSeen_1,
-              best_phi0: Xls_clause_1_NewBest_1,
-              best_direction: Xls_clause_1_NewBestDirection_1,
-              ..(Xls_clause_1_Cell_1).1
-            };
-            let _24 = (Tag::CELL, _23);
-            let Xls_clause_1_Compared_1 = _24;
-            let _25 = Xls_clause_1_NewSeen_1 == 15;
-            let _27 = if _25 {
-              let _26 = (Phase::FLIPPING, Xls_clause_1_Compared_1, Directive::CONSUME, bool:0, );
-              (_26, bool:false)
-            } else {
-              let _26 = (Phase::COMPARING, Xls_clause_1_Compared_1, Directive::CONSUME, bool:0, );
-              (_26, bool:false)
-            };
-            let case_match_10_1 = bool:false;
-            let case_match_10_2 = _27.1;
-            if ((case_match_10_1 != case_match_10_2) || (case_match_6_1 != case_match_6_2) || (case_match_9_1 != case_match_9_2) || bool:false) {
+          if bool:true {
+            let _0 = (Phase::COMPARING, Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
+            if (bool:false) {
               (phase, data, Directive::FAIL, u1:0)
             } else {
-              (_27.0.0, _27.0.1.1, _27.0.2, _27.0.3)
+              (_0.0, _0.1.1, _0.2, _0.3)
             }
           } else {
-            let Xls_clause_2_Cell_1 = (Tag::CELL, data);
-            if bool:true {
-              let _0 = (Phase::COMPARING, Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
-              if (bool:false) {
-                (phase, data, Directive::FAIL, u1:0)
-              } else {
-                (_0.0, _0.1.1, _0.2, _0.3)
-              }
-            } else {
-              (phase, data, Directive::FAIL, u1:0)
-            }
+            (phase, data, Directive::FAIL, u1:0)
           }
         },
         _ => (phase, data, Directive::FAIL, u1:0),
@@ -2957,6 +3709,39 @@ fn machine_step(
     egress_ready: u1) -> MachineStep {
   if machine.failed {
     MachineStep { machine, ..zero!<MachineStep>() }
+  } else if machine.reduction.status == ReductionStatus::COMPLETE {
+    let completed = reduction_dispatch_completion(
+      machine.reduction, machine.phase, machine.data);
+    let invalid_repeat = completed.repeat_phase &&
+      (completed.directive != Directive::CONSUME ||
+       completed.phase != machine.phase);
+    let effective = completed.dispatched && !invalid_repeat;
+    let phase_boundary = effective &&
+      completed.directive != Directive::FAIL &&
+      (completed.phase != machine.phase ||
+       completed.repeat_phase);
+    let failed = !completed.dispatched || invalid_repeat ||
+      (effective && completed.directive == Directive::FAIL);
+    let reserve = !failed && !machine.admission_pending &&
+      machine.occupied < MAILBOX_CAPACITY;
+    let next_machine = Machine {
+      phase: if effective { completed.phase }
+        else { machine.phase },
+      entered_from: if phase_boundary { machine.phase }
+        else { machine.entered_from },
+      data: if effective { completed.data } else { machine.data },
+      reduction: completed.reduction,
+      slots: if phase_boundary { [MailboxSlot { postponed: u1:0, ..machine.slots[0] }, MailboxSlot { postponed: u1:0, ..machine.slots[1] }, MailboxSlot { postponed: u1:0, ..machine.slots[2] }, MailboxSlot { postponed: u1:0, ..machine.slots[3] }, MailboxSlot { postponed: u1:0, ..machine.slots[4] }] } else { machine.slots },
+      enter_pending: phase_boundary && !failed,
+      admission_pending: machine.admission_pending || reserve,
+      failed,
+      ..machine
+    };
+    MachineStep {
+      machine: next_machine,
+      admission_valid: reserve,
+      ..zero!<MachineStep>()
+    }
   } else if machine.enter_pending {
     let (entered_data, effects) = enter(
       machine.entered_from, machine.phase, machine.data);
@@ -2966,7 +3751,15 @@ fn machine_step(
       effects, machine.entry_effect_index);
     let emit_effect = has_effect && effects.valid[
       machine.entry_effect_index as u32];
-    let can_advance = !emit_effect || egress_ready;
+    let opens_reduction = reduction_phase_opens(machine.phase);
+    let invalid_reduction_open = opens_reduction &&
+      machine.reduction.status != ReductionStatus::IDLE;
+    let entered_reduction = if opens_reduction {
+      reduction_open(
+        machine.entered_from, machine.phase, machine.data)
+    } else { machine.reduction };
+    let can_advance = (!emit_effect || egress_ready) &&
+      !invalid_reduction_open;
     let next_effect_index = machine.entry_effect_index +
       ((has_effect && can_advance) as u8);
     let entry_complete = can_advance &&
@@ -2976,17 +3769,23 @@ fn machine_step(
       machine.occupied < MAILBOX_CAPACITY;
     let advanced_machine = Machine {
       data: if entry_complete { entered_data } else { machine.data },
+      reduction: if entry_complete { entered_reduction }
+        else { machine.reduction },
       enter_pending: !entry_complete,
       entry_effect_index: if entry_complete {
         u8:0
       } else { next_effect_index },
       admission_pending: machine.admission_pending || reserve,
+      failed: invalid_reduction_open,
       ..machine
     };
     MachineStep {
-      machine: if can_advance { advanced_machine } else { machine },
+      machine: if can_advance || invalid_reduction_open {
+        advanced_machine
+      } else { machine },
       egress: effect,
-      egress_valid: emit_effect && can_advance,
+      egress_valid: emit_effect && can_advance &&
+        !invalid_reduction_open,
       admission_valid: reserve,
     }
   } else {
@@ -3015,16 +3814,43 @@ fn machine_step(
       let selected = if eligible_0 { u8:0 } else { if eligible_1 { u8:1 } else { if eligible_2 { u8:2 } else { if eligible_3 { u8:3 } else { if eligible_4 { u8:4 } else { u8:0 } } } } };
       let selected_frame = admitted_slots[selected as u32].frame;
       let dispatchable = found && !invalid_input;
+      let contribution = reduction_contribution(
+        selected_frame, machine.phase, machine.data);
+      let reduction_applied = reduction_apply(
+        machine.reduction, contribution);
+      let reduction_candidate = dispatchable &&
+        reduction_applied.outcome != ReductionOutcome::NOT_CANDIDATE;
+      let reduction_mismatch = reduction_candidate &&
+        reduction_applied.outcome == ReductionOutcome::MISMATCH;
+      let reduction_accepted = reduction_candidate &&
+        (reduction_applied.outcome == ReductionOutcome::PENDING ||
+         reduction_applied.outcome == ReductionOutcome::COMPLETE);
       let (next_phase, next_data, directive, repeat_phase) =
-        if dispatchable {
-          dispatch(selected_frame, machine.phase, machine.data)
-        } else {
+        if !dispatchable {
           (machine.phase, machine.data, Directive::CONSUME, u1:0)
+        } else if !reduction_candidate {
+          dispatch(selected_frame, machine.phase, machine.data)
+        } else if reduction_mismatch {
+          (machine.phase, machine.data, Directive::POSTPONE, u1:0)
+        } else if reduction_accepted {
+          (machine.phase, machine.data, Directive::CONSUME, u1:0)
+        } else {
+          (machine.phase, machine.data, Directive::FAIL, u1:0)
         };
+      let next_reduction = if reduction_accepted {
+        reduction_applied.state
+      } else { machine.reduction };
       let invalid_repeat = dispatchable && repeat_phase &&
         (directive != Directive::CONSUME ||
          next_phase != machine.phase);
-      let effective = dispatchable && !invalid_repeat;
+      let callback_effective = dispatchable && !invalid_repeat;
+      let requested_boundary = callback_effective &&
+        (next_phase != machine.phase || repeat_phase);
+      let incomplete_boundary = requested_boundary &&
+        directive != Directive::FAIL &&
+        machine.reduction.status == ReductionStatus::OPEN;
+      let effective = callback_effective &&
+        !incomplete_boundary;
       let selected_slot = admitted_slots[selected as u32];
       let postponed_slot = MailboxSlot {
         postponed: u1:1,
@@ -3084,6 +3910,7 @@ fn machine_step(
         unblocked_slots
       } else { candidate_slots };
       let failed = invalid_input || invalid_repeat ||
+        incomplete_boundary ||
         (effective && directive == Directive::FAIL);
       let admission_pending =
         machine.admission_pending && !received;
@@ -3096,6 +3923,7 @@ fn machine_step(
           machine.phase
         } else { machine.entered_from },
         data: candidate_data,
+        reduction: next_reduction,
         slots: final_slots,
         occupied: candidate_occupied,
         enter_pending: effective && phase_boundary && !failed,
@@ -3108,6 +3936,87 @@ fn machine_step(
         admission_valid: reserve,
         ..zero!<MachineStep>()
       }
+  }
+}
+
+struct ReductionMailboxStep {
+  machine: SharedMachine,
+  valid: u1,
+  directive: Directive,
+}
+
+fn shared_reduction_mailbox_step(
+    machine: SharedMachine, frame: axis::Frame, received: u1)
+    -> ReductionMailboxStep {
+  let tag_ok = (frame.header.op == (Tag::PHI as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::ANYON_MOVE as u8) && frame.header.payload_words == u8:2) || (frame.header.op == (Tag::PHI0 as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHENOM_CONFIG as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHENOM_REQUEST as u8) && frame.header.payload_words == u8:1) || (frame.header.op == (Tag::PHENOM_QUERY as u8) && frame.header.payload_words == u8:2) || (frame.header.op == (Tag::PHENOM_DATA as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHENOM_ANYON as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHI_CORRECTION as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHI_CONFIG as u8) && frame.header.payload_words == u8:1) || (frame.header.op == (Tag::PAULI_QUERY as u8) && frame.header.payload_words == u8:2) || (frame.header.op == (Tag::PAULI_REPLY as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::NOISE_CUTOFF as u8) && frame.header.payload_words == u8:1) || (frame.header.op == (Tag::PAULI_UPDATE as u8) && frame.header.payload_words == u8:1) || (frame.header.op == (Tag::PHI_STATUS as u8) && frame.header.payload_words == u8:3);
+  let contribution = reduction_contribution(
+    frame, machine.phase, machine.data);
+  let applied = reduction_apply(machine.reduction, contribution);
+  let candidate = received && tag_ok &&
+    !machine.failed && !machine.enter_pending &&
+    applied.outcome != ReductionOutcome::NOT_CANDIDATE;
+  let mismatch = candidate &&
+    applied.outcome == ReductionOutcome::MISMATCH;
+  let accepted = candidate &&
+    (applied.outcome == ReductionOutcome::PENDING ||
+     applied.outcome == ReductionOutcome::COMPLETE);
+  let failed = candidate && !mismatch && !accepted;
+  let next_machine = SharedMachine {
+    reduction: if accepted { applied.state }
+      else { machine.reduction },
+    failed: machine.failed || failed,
+    ..machine
+  };
+  ReductionMailboxStep {
+    machine: next_machine,
+    valid: candidate,
+    directive: if mismatch { Directive::POSTPONE }
+      else if accepted { Directive::CONSUME }
+      else { Directive::FAIL },
+  }
+}
+
+fn shared_machine_complete(machine: SharedMachine)
+    -> SharedDispatch {
+  let valid = !machine.failed && !machine.enter_pending &&
+    machine.reduction.status == ReductionStatus::COMPLETE;
+  if !valid {
+    SharedDispatch {
+      machine: SharedMachine { failed: u1:1, ..machine },
+      directive: Directive::FAIL,
+      dispatched: u1:1,
+      ..zero!<SharedDispatch>()
+    }
+  } else {
+    let completed = reduction_dispatch_completion(
+      machine.reduction, machine.phase, machine.data);
+    let invalid_repeat = completed.repeat_phase &&
+      (completed.directive != Directive::CONSUME ||
+       completed.phase != machine.phase);
+    let effective = completed.dispatched && !invalid_repeat;
+    let phase_boundary = effective &&
+      completed.directive != Directive::FAIL &&
+      (completed.phase != machine.phase ||
+       completed.repeat_phase);
+    let failed = !completed.dispatched || invalid_repeat ||
+      (effective && completed.directive == Directive::FAIL);
+    let next_machine = SharedMachine {
+      phase: if effective { completed.phase }
+        else { machine.phase },
+      entered_from: if phase_boundary { machine.phase }
+        else { machine.entered_from },
+      data: if effective { completed.data } else { machine.data },
+      reduction: completed.reduction,
+      enter_pending: phase_boundary && !failed,
+      failed,
+      ..machine
+    };
+    SharedDispatch {
+      machine: next_machine,
+      dispatched: completed.dispatched && !invalid_repeat,
+      directive: completed.directive,
+      phase_boundary,
+    }
   }
 }
 
@@ -3129,11 +4038,19 @@ fn shared_machine_dispatch(
     let invalid_repeat = tag_ok && repeat_phase &&
       (directive != Directive::CONSUME ||
        next_phase != machine.phase);
-    let effective = tag_ok && !invalid_repeat;
+    let callback_effective = tag_ok && !invalid_repeat;
+    let requested_boundary = callback_effective &&
+      (next_phase != machine.phase || repeat_phase);
+    let incomplete_boundary = requested_boundary &&
+      directive != Directive::FAIL &&
+      machine.reduction.status == ReductionStatus::OPEN;
+    let effective = callback_effective &&
+      !incomplete_boundary;
     let phase_changed = effective && next_phase != machine.phase;
     let phase_boundary = phase_changed ||
       (effective && repeat_phase);
     let failed = !tag_ok || invalid_repeat ||
+      incomplete_boundary ||
       (effective && directive == Directive::FAIL);
     let next_machine = SharedMachine {
       phase: if effective { next_phase } else { machine.phase },
@@ -3147,7 +4064,8 @@ fn shared_machine_dispatch(
     };
     SharedDispatch {
       machine: next_machine,
-      dispatched: tag_ok && !invalid_repeat,
+      dispatched: tag_ok && !invalid_repeat &&
+        !incomplete_boundary,
       directive,
       phase_boundary,
       ..zero!<SharedDispatch>()
@@ -3163,17 +4081,33 @@ fn shared_machine_enter(machine: SharedMachine, egress_ready: u1)
     let (entered_data, effects) = enter(
       machine.entered_from, machine.phase, machine.data);
     let effects_valid = entry_effects_valid(effects);
-    let can_advance = !effects_valid || egress_ready;
+    let opens_reduction = reduction_phase_opens(machine.phase);
+    let invalid_reduction_open = opens_reduction &&
+      machine.reduction.status != ReductionStatus::IDLE;
+    let entered_reduction = if opens_reduction {
+      reduction_open(
+        machine.entered_from, machine.phase, machine.data)
+    } else { machine.reduction };
+    let can_advance = (!effects_valid || egress_ready) &&
+      !invalid_reduction_open;
     let advanced_machine = SharedMachine {
-      data: entered_data,
+      data: if invalid_reduction_open { machine.data }
+        else { entered_data },
+      reduction: if invalid_reduction_open { machine.reduction }
+        else { entered_reduction },
       enter_pending: u1:0,
+      failed: invalid_reduction_open,
       ..machine
     };
     SharedStep {
-      machine: if can_advance { advanced_machine } else { machine },
+      machine: if can_advance || invalid_reduction_open {
+        advanced_machine
+      } else { machine },
       effects,
-      effects_valid: effects_valid && can_advance,
-      egress_blocked: effects_valid && !egress_ready,
+      effects_valid: effects_valid && can_advance &&
+        !invalid_reduction_open,
+      egress_blocked: effects_valid && !egress_ready &&
+        !invalid_reduction_open,
       ..zero!<SharedStep>()
     }
   }
@@ -3182,8 +4116,12 @@ fn shared_machine_enter(machine: SharedMachine, egress_ready: u1)
 pub fn shared_execute(request: SharedExecutorRequest) ->
     SharedExecutorResult {
   let machine = machine_from_bits(request.machine);
-  let dispatched = shared_machine_dispatch(
-    machine, request.frame, request.received);
+  let dispatched = if request.internal {
+    shared_machine_complete(machine)
+  } else {
+    shared_machine_dispatch(
+      machine, request.frame, request.received)
+  };
   let entered = shared_machine_enter(
     dispatched.machine, request.egress_ready);
   SharedExecutorResult {
@@ -3235,7 +4173,8 @@ pub proc Service {
 
   next(machine: Machine) {
     let receive_enabled = !machine.failed &&
-      !machine.enter_pending && machine.admission_pending;
+      !machine.enter_pending && machine.admission_pending &&
+      machine.reduction.status != ReductionStatus::COMPLETE;
     let (tok, frame, received) = recv_if_non_blocking(
       join(), req_in, receive_enabled, zero!<axis::Frame>());
     let stepped = machine_step(machine, frame, received, u1:1);
@@ -3247,6 +4186,142 @@ pub proc Service {
   }
 }
 
+// Reduction completion is private actor work. It takes priority over
+// that actor's entry or mailbox work, while round-robin selection across
+// distinct actors remains unchanged.
+fn reduction_ready_selection<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
+    state: SharedState<ACTOR_COUNT, PRODUCER_COUNT>,
+    cursor: u32,
+    in_flight: u1[ACTOR_COUNT]) -> (u1, u32) {
+  let (after_found, after_slot, before_found, before_slot) =
+      unroll_for! (slot, acc):
+          (u32, (u1, u32, u1, u32)) in u32:0..ACTOR_COUNT {
+    let internal_active = state.internal_candidates[slot];
+    let entry_active =
+      state.entry_probes[slot] || state.egress_waiters[slot];
+    let ready = internal_active || (!internal_active && (
+      state.entry_probes[slot] ||
+      (state.mail_candidates[slot] && !entry_active) ||
+      (state.egress_waiters[slot] && !state.egress_busy)));
+    let selectable = ready && !in_flight[slot];
+    let take_after = !acc.0 && slot >= cursor && selectable;
+    let take_before = !acc.2 && slot < cursor && selectable;
+    (
+      acc.0 || take_after,
+      if take_after { slot } else { acc.1 },
+      acc.2 || take_before,
+      if take_before { slot } else { acc.3 }
+    )
+  }((u1:0, u32:0, u1:0, u32:0));
+  (
+    after_found || before_found,
+    if after_found { after_slot } else { before_slot }
+  )
+}
+
+// While an effect-bearing result waits for credit, only mailbox heads
+// can be tested locally. Each non-contribution head is tested once per
+// blocked epoch so it cannot starve a later foldable actor.
+fn reduction_blocked_selection<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
+    state: SharedState<ACTOR_COUNT, PRODUCER_COUNT>,
+    cursor: u32,
+    in_flight: u1[ACTOR_COUNT],
+    blocked_probed: u1[ACTOR_COUNT]) -> (u1, u32) {
+  let (after_found, after_slot, before_found, before_slot) =
+      unroll_for! (slot, acc):
+          (u32, (u1, u32, u1, u32)) in u32:0..ACTOR_COUNT {
+    let mail_only = state.mail_candidates[slot] &&
+      !state.internal_candidates[slot] &&
+      !state.entry_probes[slot] &&
+      !state.egress_waiters[slot];
+    let selectable = mail_only && !in_flight[slot] &&
+      !blocked_probed[slot];
+    let take_after = !acc.0 && slot >= cursor && selectable;
+    let take_before = !acc.2 && slot < cursor && selectable;
+    (
+      acc.0 || take_after,
+      if take_after { slot } else { acc.1 },
+      acc.2 || take_before,
+      if take_before { slot } else { acc.3 }
+    )
+  }((u1:0, u32:0, u1:0, u32:0));
+  (
+    after_found || before_found,
+    if after_found { after_slot } else { before_slot }
+  )
+}
+
+fn retire_reduction_actor<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
+    state: SharedState<ACTOR_COUNT, PRODUCER_COUNT>,
+    valid: u1,
+    slot: u32,
+    machine: SharedMachine) ->
+    SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
+  let internal_candidates = if valid {
+    update(
+      state.internal_candidates,
+      slot,
+      machine.reduction.status == ReductionStatus::COMPLETE &&
+        !machine.failed)
+  } else {
+    state.internal_candidates
+  };
+  SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
+    internal_candidates,
+    ..state
+  }
+}
+
+fn shared_reduction_fold_result(
+    slot: u32,
+    machine_bits: MachineBits,
+    frame: axis::Frame,
+    received: u1,
+    mailbox_index: u8,
+    order_index: u8) -> (u1, SharedExecutorResult) {
+  let folded = shared_reduction_mailbox_step(
+    machine_from_bits(machine_bits), frame, received);
+  (
+    folded.valid,
+    SharedExecutorResult {
+      slot,
+      machine: bits_from_machine(folded.machine),
+      effects: zero!<EntryEffects>(),
+      effects_valid: u1:0,
+      dispatched: folded.valid,
+      directive: folded.directive,
+      phase_boundary: u1:0,
+      egress_blocked: u1:0,
+      received,
+      mailbox_index,
+      order_index,
+    }
+  )
+}
+
+// These two depth-one channels form an elastic boundary between the
+// mailbox/state RAM responses and SharedService's next-state logic. The
+// relay intentionally does no computation: its storage breaks the state
+// recurrence which otherwise forces the whole service above II=1.
+proc FoldRelay {
+  request_in: chan<FoldEnvelope> in;
+  result_out: chan<FoldEnvelope> out;
+
+  config(
+      request_in: chan<FoldEnvelope> in,
+      result_out: chan<FoldEnvelope> out
+  ) {
+    (request_in, result_out)
+  }
+
+  init { () }
+
+  next(state: ()) {
+    let (tok, request) = recv(join(), request_in);
+    let _done = send(tok, result_out, request);
+    state
+  }
+}
 fn free_mailbox_index<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
     state: SharedState<ACTOR_COUNT, PRODUCER_COUNT>,
     slot: u32) -> u8 {
@@ -3571,6 +4646,8 @@ pub proc SharedService<
   mailbox_write_resp_in: chan<MailboxRamWriteResp> in;
   executor_request_out: chan<SharedExecutorRequest> out;
   executor_result_in: chan<SharedExecutorResult> in;
+  fold_request_out: chan<FoldEnvelope> out;
+  fold_result_in: chan<FoldEnvelope> in;
 
   config(
       request_in: chan<ScheduledRequest>[PRODUCER_COUNT] in,
@@ -3589,7 +4666,13 @@ pub proc SharedService<
       chan<SharedExecutorRequest, u32:1>("executor_request");
     let (executor_result_p, executor_result_c) =
       chan<SharedExecutorResult, u32:1>("executor_result");
+    let (fold_request_p, fold_request_c) =
+      chan<FoldEnvelope, u32:1>("fold_request");
+    let (fold_result_p, fold_result_c) =
+      chan<FoldEnvelope, u32:1>("fold_result");
     spawn SharedExecutor(executor_request_c, executor_result_p);
+    spawn FoldRelay(fold_request_c, fold_result_p);
+
     (
       request_in,
       startup_in,
@@ -3604,6 +4687,8 @@ pub proc SharedService<
       mailbox_write_resp_in,
       executor_request_p,
       executor_result_c,
+      fold_request_p,
+      fold_result_c,
     )
   }
 
@@ -3711,24 +4796,65 @@ pub proc SharedService<
           captured_pending,
           captured_pending_valid,
           state.egress_busy);
+        // A result blocked on an unrelated effect credit does not fence a
+        // local fold: the selected actor's in-flight bit proves that no
+        // older activation for that same actor can still be outstanding.
         let buffered_can_retire = state.completed_valid &&
           (!state.completed.effects_valid || !credit_busy);
+        // On a fold-poll turn an occupied ordinary skid cannot be
+        // replaced: a candidate fold may win the RAM write below.
         let accept_executor_result =
-          !state.completed_valid || buffered_can_retire;
+          !state.completed_valid ||
+          (buffered_can_retire && !state.fold_turn);
         let (executor_result_tok, incoming_result, incoming_valid) =
           recv_if_non_blocking(
             capture_tok,
             executor_result_in,
             accept_executor_result,
             zero!<SharedExecutorResult>());
-        let result = if state.completed_valid {
+        let ordinary_result = if state.completed_valid {
           state.completed
         } else {
           incoming_result
         };
-        let result_valid = state.completed_valid || incoming_valid;
-        let retire_valid = result_valid &&
-          (!result.effects_valid || !credit_busy);
+        let ordinary_result_valid =
+          state.completed_valid || incoming_valid;
+        let ordinary_can_retire = ordinary_result_valid &&
+          (!ordinary_result.effects_valid || !credit_busy);
+        // Fairly poll a waiting fold at least every other cycle in which
+        // ordinary work can retire. A noncandidate acknowledgment needs
+        // no RAM write and can drain alongside that ordinary retirement.
+        let poll_fold = !ordinary_can_retire || state.fold_turn;
+        let (fold_result_tok, incoming_fold, incoming_fold_valid) =
+          recv_if_non_blocking(
+            executor_result_tok,
+            fold_result_in,
+            poll_fold,
+            zero!<FoldEnvelope>());
+        let fold_retire_valid = incoming_fold_valid &&
+          incoming_fold.candidate;
+        let ordinary_retire_valid = ordinary_can_retire &&
+          !fold_retire_valid;
+        let folded_result = SharedExecutorResult {
+          slot: incoming_fold.slot,
+          machine: incoming_fold.machine,
+          effects: zero!<EntryEffects>(),
+          effects_valid: u1:0,
+          dispatched: incoming_fold.candidate,
+          directive: incoming_fold.directive,
+          phase_boundary: u1:0,
+          egress_blocked: u1:0,
+          received: incoming_fold.received,
+          mailbox_index: incoming_fold.mailbox_index,
+          order_index: incoming_fold.order_index,
+        };
+        let result = if fold_retire_valid {
+          folded_result
+        } else {
+          ordinary_result
+        };
+        let retire_valid =
+          ordinary_retire_valid || fold_retire_valid;
         let resolved = SharedStep {
           machine: machine_from_bits(result.machine),
           effects: result.effects,
@@ -3745,7 +4871,7 @@ pub proc SharedService<
             (retire_valid && result.effects_valid),
           ..state
         };
-        let retired = retire_actor(
+        let retired0 = retire_actor(
           credited,
           retire_valid,
           result.slot,
@@ -3753,33 +4879,72 @@ pub proc SharedService<
           result.received,
           result.mailbox_index,
           result.order_index);
-        let retired_in_flight = if retire_valid {
-          update(retired.in_flight, result.slot, u1:0)
+        let retired = retire_reduction_actor(
+          retired0, retire_valid, result.slot, resolved.machine);
+        let ordinary_in_flight = if ordinary_retire_valid {
+          update(
+            retired.in_flight,
+            ordinary_result.slot,
+            u1:0)
         } else {
           retired.in_flight
         };
-        let completed_valid = if state.completed_valid {
-          if buffered_can_retire { incoming_valid } else { u1:1 }
+        let retired_in_flight = if incoming_fold_valid {
+          update(
+            ordinary_in_flight,
+            incoming_fold.slot,
+            u1:0)
         } else {
-          incoming_valid && !retire_valid
+          ordinary_in_flight
+        };
+        let completed_valid = if state.completed_valid {
+          if ordinary_retire_valid { incoming_valid } else { u1:1 }
+        } else {
+          incoming_valid && !ordinary_retire_valid
         };
         let completed = if state.completed_valid {
-          if buffered_can_retire { incoming_result } else { state.completed }
+          if ordinary_retire_valid {
+            incoming_result
+          } else {
+            state.completed
+          }
         } else {
           incoming_result
         };
         let completion_blocked = completed_valid &&
           completed.effects_valid && retired.egress_busy;
-        let issue_valid = state.next_valid && !completion_blocked;
+        let acknowledged_nonfold = incoming_fold_valid &&
+          !incoming_fold.candidate;
+        let blocked_probed = if !completion_blocked {
+          zero!<u1[ACTOR_COUNT]>()
+        } else if acknowledged_nonfold {
+          update(
+            state.blocked_probed,
+            incoming_fold.slot,
+            u1:1)
+        } else {
+          state.blocked_probed
+        };
         let read_slot = if state.next_valid {
           state.next_slot
         } else {
           u32:0
         };
-        let entry_active = state.entry_probes[read_slot] ||
+        let blocked_mail_only = state.mail_candidates[read_slot] &&
+          !state.internal_candidates[read_slot] &&
+          !state.entry_probes[read_slot] &&
+          !state.egress_waiters[read_slot];
+        let blocked_issue_valid = blocked_mail_only &&
+          !blocked_probed[read_slot] &&
+          !state.in_flight[read_slot];
+        let issue_valid = state.next_valid &&
+          (!completion_blocked || blocked_issue_valid);
+        let internal_active =
+          issue_valid && state.internal_candidates[read_slot];
+        let entry_active = internal_active ||
+          state.entry_probes[read_slot] ||
           state.egress_waiters[read_slot];
-        let read_mailbox =
-          issue_valid &&
+        let read_mailbox = issue_valid && !internal_active &&
           state.mail_candidates[read_slot] && !entry_active;
         let (received, order_index, mailbox_index) =
           mailbox_selection(state, read_slot);
@@ -3846,25 +5011,45 @@ pub proc SharedService<
           in_flight: issued_in_flight,
           ..admitted
         };
-        let (selected_ready, selected_slot) = ready_selection(
-          selection_state,
-          cursor,
-          issued_in_flight);
+        let (selected_ready, selected_slot) =
+          reduction_ready_selection(
+            selection_state,
+            cursor,
+            issued_in_flight);
+        let frame = axis::frame_from_bits(mailbox_response.data);
+        let (local_fold_valid, local_fold) =
+          shared_reduction_fold_result(
+            read_slot,
+            response.data,
+            frame,
+            read_mailbox && received,
+            mailbox_index,
+            order_index);
+
+        // A probe remains in flight until FoldRelay returns either its
+        // candidate result or its explicit noncandidate acknowledgment.
+        let final_in_flight = issued_in_flight;
+        let (blocked_ready, blocked_slot) =
+          reduction_blocked_selection(
+            selection_state,
+            cursor,
+            final_in_flight,
+            blocked_probed);
         let ready = if completion_blocked {
-          state.next_valid
+          blocked_ready
         } else {
           selected_ready
         };
         let next_slot = if completion_blocked {
-          state.next_slot
+          blocked_slot
         } else {
           selected_slot
         };
-        let frame = axis::frame_from_bits(mailbox_response.data);
         let executor_request = SharedExecutorRequest {
           slot: read_slot,
           machine: response.data,
           frame,
+              internal: internal_active,
           received: read_mailbox && received,
           mailbox_index,
           order_index,
@@ -3873,14 +5058,29 @@ pub proc SharedService<
         let executor_request_tok = send_if(
           join(state_done, mailbox_done),
           executor_request_out,
-          issue_valid,
+          issue_valid && !completion_blocked && !local_fold_valid,
           executor_request);
+        let fold_request = FoldEnvelope {
+          candidate: local_fold_valid,
+          slot: local_fold.slot,
+          machine: local_fold.machine,
+          directive: local_fold.directive,
+          received: local_fold.received,
+          mailbox_index: local_fold.mailbox_index,
+          order_index: local_fold.order_index,
+        };
+        let fold_request_tok = send_if(
+          join(state_done, mailbox_done),
+          fold_request_out,
+          issue_valid && read_mailbox && received &&
+            (completion_blocked || local_fold_valid),
+          fold_request);
         let scheduled = ScheduledEffects {
           slot: result.slot,
           effects: result.effects,
         };
         let egress_tok = send_if(
-          executor_result_tok,
+          fold_result_tok,
           egress_out,
           retire_valid && result.effects_valid,
           scheduled);
@@ -3906,14 +5106,21 @@ pub proc SharedService<
           state_write_tok,
           mailbox_write_tok,
           executor_request_tok,
+          fold_request_tok,
           state_completion_tok,
           mailbox_completion_tok);
         SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
           next_valid: ready,
           next_slot,
-          in_flight: issued_in_flight,
+          in_flight: final_in_flight,
           completed_valid,
           completed,
+          fold_turn: if ordinary_can_retire {
+            !state.fold_turn
+          } else {
+            u1:0
+          },
+          blocked_probed,
           cursor,
           state_write_pending: retire_valid,
           mailbox_write_pending: reservation.admission.valid,
