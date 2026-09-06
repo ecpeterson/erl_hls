@@ -9,7 +9,7 @@
 -hls_mailbox_capacity(1).
 -hls_tags([padding, message]).
 
--export([handle_cast/3, handle_enter/3, init/1]).
+-export([init/1, callback_mode/0, waiting/3]).
 
 -record(padding, {
     value = hls_type:zero() :: hls_nums:u32()
@@ -26,14 +26,18 @@
 init([]) ->
     {ok, waiting, #cell{}}.
 
-handle_enter(_OldPhase, waiting, Cell) ->
+callback_mode() ->
+    [state_functions, state_enter].
+
+-spec waiting(hls_statem:event_type(), term(), #cell{}) ->
+    hls_statem:enter_result() | hls_statem:state_result().
+waiting(enter, _OldPhase, Cell) ->
     Value = Cell#cell.value,
-    {Cell, [
+    {keep_state, Cell, [
         {cast, message_out, #message{value = Value}},
         {cast, padding_out, #padding{value = Value}}
-    ]}.
-
-handle_cast(#padding{value = Value}, waiting, Cell) ->
-    {waiting, Cell#cell{value = Value}, consume};
-handle_cast(#message{value = Value}, waiting, Cell) ->
-    {waiting, Cell#cell{value = Value}, consume}.
+    ]};
+waiting(cast, #padding{value = Value}, Cell) ->
+    {next_state, waiting, Cell#cell{value = Value}};
+waiting(cast, #message{value = Value}, Cell) ->
+    {next_state, waiting, Cell#cell{value = Value}}.

@@ -71,7 +71,7 @@ not in the paired phi actor's mailbox.
     offer_data/4,
     runtime_info/1
 ]).
--export([init/1, handle_enter/3, handle_cast/3]).
+-export([callback_mode/0, configuring/3, collecting/3, announcing/3, init/1]).
 
 -define(MAILBOX_CAPACITY, 5).
 -define(U16_MASK, 16#ffff).
@@ -102,8 +102,6 @@ not in the paired phi actor's mailbox.
 }).
 
 -type phase() :: configuring | collecting | announcing.
--type directive() :: consume | postpone | fail.
--type conclusion() :: {phase(), #syndrome{}, directive()}.
 -type outputs() :: #{
     north := pid(),
     east := pid(),
@@ -225,11 +223,51 @@ runtime_info(PID) ->
 init([]) ->
     {ok, configuring, #syndrome{}}.
 
--spec handle_enter(phase(), phase(), #syndrome{}) ->
-    hls_statem:enter_result().
-handle_enter(_OldPhase, configuring, Syndrome) ->
-    {Syndrome, []};
-handle_enter(_OldPhase, collecting, Syndrome) ->
+callback_mode() ->
+    [state_functions, state_enter].
+
+-spec configuring(hls_statem:event_type(), term(), #syndrome{}) ->
+    hls_statem:enter_result() | hls_statem:state_result().
+configuring(enter, _OldPhase, Syndrome) ->
+    {keep_state, Syndrome, []};
+configuring(
+    cast,
+    #phenom_config{seed = Seed, threshold = Threshold, x = X, y = Y},
+    Syndrome
+) when Seed > 0, Seed =< ?U32_MASK,
+       Threshold >= 0, Threshold =< ?U32_MASK,
+       X >= 0, X =< ?U16_MASK,
+       Y >= 0, Y =< ?U16_MASK ->
+    Configured = Syndrome#syndrome{
+        seen_sources = 0,
+        data_parity = 0,
+        announcement = 0,
+        data_quiet = 1,
+        announcement_quiet = 0,
+        random_state = Seed,
+        threshold = Threshold,
+        x = X,
+        y = Y
+    },
+    {next_state, collecting, Configured};
+configuring(cast, #phenom_config{}, Syndrome) ->
+    {stop, fail, Syndrome};
+configuring(
+    cast,
+    #phenom_request{step = Step},
+    Syndrome = #syndrome{step = Step}
+) ->
+    {next_state, configuring, Syndrome, [postpone]};
+configuring(cast, #phenom_request{}, Syndrome) ->
+    {stop, fail, Syndrome};
+configuring(cast, #phenom_data{}, Syndrome) ->
+    {stop, fail, Syndrome};
+configuring(cast, #noise_cutoff{}, Syndrome) ->
+    {stop, fail, Syndrome}.
+
+-spec collecting(hls_statem:event_type(), term(), #syndrome{}) ->
+    hls_statem:enter_result() | hls_statem:state_result().
+collecting(enter, _OldPhase, Syndrome) ->
     Releasing = Syndrome#syndrome.seen_sources =:= ?PHI_ALL_DIRECTIONS,
     NextStep = case Releasing of
         false -> Syndrome#syndrome.step;
@@ -250,87 +288,43 @@ handle_enter(_OldPhase, collecting, Syndrome) ->
         data_quiet = 1,
         announcement_quiet = 0
     },
-    {Cleared, [
+    {keep_state, Cleared, [
         {cast_if, Releasing, phi, Anyon},
         {cast, north, Query#phenom_query{source = ?PHI_SOUTH_MASK}},
         {cast, east, Query#phenom_query{source = ?PHI_WEST_MASK}},
         {cast, west, Query#phenom_query{source = ?PHI_EAST_MASK}},
         {cast, south, Query#phenom_query{source = ?PHI_NORTH_MASK}}
     ]};
-handle_enter(_OldPhase, announcing, Syndrome) ->
-    {Syndrome, []}.
-
--spec handle_cast(
-    #phenom_config{} | #phenom_request{} | #phenom_data{} |
-        #noise_cutoff{},
-    phase(),
-    #syndrome{}
-) -> conclusion().
-handle_cast(
-    #phenom_config{seed = Seed, threshold = Threshold, x = X, y = Y},
-    configuring,
-    Syndrome
-) when Seed > 0, Seed =< ?U32_MASK,
-       Threshold >= 0, Threshold =< ?U32_MASK,
-       X >= 0, X =< ?U16_MASK,
-       Y >= 0, Y =< ?U16_MASK ->
-    Configured = Syndrome#syndrome{
-        seen_sources = 0,
-        data_parity = 0,
-        announcement = 0,
-        data_quiet = 1,
-        announcement_quiet = 0,
-        random_state = Seed,
-        threshold = Threshold,
-        x = X,
-        y = Y
-    },
-    {collecting, Configured, consume};
-handle_cast(#phenom_config{}, configuring, Syndrome) ->
-    {configuring, Syndrome, fail};
-handle_cast(
-    #phenom_request{step = Step},
-    configuring,
-    Syndrome = #syndrome{step = Step}
-) ->
-    {configuring, Syndrome, postpone};
-handle_cast(#phenom_request{}, configuring, Syndrome) ->
-    {configuring, Syndrome, fail};
-handle_cast(#phenom_data{}, configuring, Syndrome) ->
-    {configuring, Syndrome, fail};
-handle_cast(#noise_cutoff{}, configuring, Syndrome) ->
-    {configuring, Syndrome, fail};
-
-handle_cast(#phenom_config{}, collecting, Syndrome) ->
-    {collecting, Syndrome, fail};
-handle_cast(
+collecting(cast, #phenom_config{}, Syndrome) ->
+    {stop, fail, Syndrome};
+collecting(
+    cast,
     #noise_cutoff{
         first_quiet_step = FirstQuietStep
     },
-    collecting,
     Syndrome = #syndrome{
         step = Step,
         noise_disabled = 0,
         cutoff_armed = 0
     }
 ) when FirstQuietStep >= Step ->
-    {collecting, Syndrome#syndrome{
+    {next_state, collecting, Syndrome#syndrome{
         cutoff_armed = 1,
         cutoff_step = FirstQuietStep
-    }, consume};
-handle_cast(#noise_cutoff{}, collecting, Syndrome) ->
-    {collecting, Syndrome, fail};
-handle_cast(
+    }};
+collecting(cast, #noise_cutoff{}, Syndrome) ->
+    {stop, fail, Syndrome};
+collecting(
+    cast,
     #phenom_request{step = Step},
-    collecting,
     Syndrome = #syndrome{step = Step}
 ) ->
-    {collecting, Syndrome, postpone};
-handle_cast(#phenom_request{}, collecting, Syndrome) ->
-    {collecting, Syndrome, fail};
-handle_cast(
+    {next_state, collecting, Syndrome, [postpone]};
+collecting(cast, #phenom_request{}, Syndrome) ->
+    {stop, fail, Syndrome};
+collecting(
+    cast,
     #phenom_data{step = Step, source = Source, flags = Flags},
-    collecting,
     Syndrome = #syndrome{
         step = Step,
         seen_sources = Seen,
@@ -357,7 +351,7 @@ handle_cast(
                 data_parity = NewParity,
                 data_quiet = NewDataQuiet
             },
-            {collecting, Collected, consume};
+            {next_state, collecting, Collected};
         true ->
             CutoffApplies = Syndrome#syndrome.cutoff_armed =:= 1 andalso
                 Step >= Syndrome#syndrome.cutoff_step,
@@ -393,49 +387,53 @@ handle_cast(
                     true -> hls_type:as(hls_nums:u32(), 0)
                 end
             },
-            {announcing, Complete, consume}
+            {next_state, announcing, Complete}
     end;
-handle_cast(#phenom_data{}, collecting, Syndrome) ->
-    {collecting, Syndrome, fail};
+collecting(cast, #phenom_data{}, Syndrome) ->
+    {stop, fail, Syndrome}.
 
-handle_cast(#phenom_config{}, announcing, Syndrome) ->
-    {announcing, Syndrome, fail};
-handle_cast(
+-spec announcing(hls_statem:event_type(), term(), #syndrome{}) ->
+    hls_statem:enter_result() | hls_statem:state_result().
+announcing(enter, _OldPhase, Syndrome) ->
+    {keep_state, Syndrome, []};
+announcing(cast, #phenom_config{}, Syndrome) ->
+    {stop, fail, Syndrome};
+announcing(
+    cast,
     #noise_cutoff{
         first_quiet_step = FirstQuietStep
     },
-    announcing,
     Syndrome = #syndrome{
         step = Step,
         noise_disabled = 0,
         cutoff_armed = 0
     }
 ) when FirstQuietStep > Step ->
-    {announcing, Syndrome#syndrome{
+    {next_state, announcing, Syndrome#syndrome{
         cutoff_armed = 1,
         cutoff_step = FirstQuietStep
-    }, consume};
-handle_cast(#noise_cutoff{}, announcing, Syndrome) ->
-    {announcing, Syndrome, fail};
-handle_cast(
+    }};
+announcing(cast, #noise_cutoff{}, Syndrome) ->
+    {stop, fail, Syndrome};
+announcing(
+    cast,
     #phenom_request{step = Step},
-    announcing,
     Syndrome = #syndrome{step = Step}
 ) ->
     Collecting = Syndrome#syndrome{
         data_parity = 0
     },
-    {collecting, Collecting, consume};
-handle_cast(#phenom_request{}, announcing, Syndrome) ->
-    {announcing, Syndrome, fail};
-handle_cast(
+    {next_state, collecting, Collecting};
+announcing(cast, #phenom_request{}, Syndrome) ->
+    {stop, fail, Syndrome};
+announcing(
+    cast,
     #phenom_data{step = NextStep},
-    announcing,
     Syndrome = #syndrome{step = Step}
 ) when NextStep =:= ((Step + 1) band ?U32_MASK) ->
-    {announcing, Syndrome, postpone};
-handle_cast(#phenom_data{}, announcing, Syndrome) ->
-    {announcing, Syndrome, fail}.
+    {next_state, announcing, Syndrome, [postpone]};
+announcing(cast, #phenom_data{}, Syndrome) ->
+    {stop, fail, Syndrome}.
 
 source_mask(north) -> ?PHI_NORTH_MASK;
 source_mask(east) -> ?PHI_EAST_MASK;

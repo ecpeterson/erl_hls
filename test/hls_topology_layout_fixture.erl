@@ -9,7 +9,7 @@
 -hls_mailbox_capacity(1).
 -hls_tags([message]).
 
--export([handle_cast/3, handle_enter/3, init/1]).
+-export([init/1, callback_mode/0, waiting/3]).
 
 -record(message, {
     value = hls_type:zero() :: hls_nums:u64()
@@ -22,8 +22,12 @@
 init([]) ->
     {ok, waiting, #cell{}}.
 
-handle_enter(_OldPhase, waiting, Cell) ->
-    {Cell, [{cast, out, #message{value = Cell#cell.value}}]}.
+callback_mode() ->
+    [state_functions, state_enter].
 
-handle_cast(#message{value = Value}, waiting, Cell) ->
-    {waiting, Cell#cell{value = Value}, consume}.
+-spec waiting(hls_statem:event_type(), term(), #cell{}) ->
+    hls_statem:enter_result() | hls_statem:state_result().
+waiting(enter, _OldPhase, Cell) ->
+    {keep_state, Cell, [{cast, out, #message{value = Cell#cell.value}}]};
+waiting(cast, #message{value = Value}, Cell) ->
+    {next_state, waiting, Cell#cell{value = Value}}.

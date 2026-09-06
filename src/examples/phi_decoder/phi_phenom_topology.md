@@ -870,7 +870,7 @@ throughput breakthrough.
 
 ### Batched entry effects
 
-Shared actors now compute all of one `handle_enter/3` callback's effects in a
+Shared actors now compute all of one `Phase(enter, OldPhase, Data)` callback's effects in a
 single state visit. The scheduler admits the resulting ordered batch as its
 commit point, writes the entered actor state, and may immediately choose
 another actor. A scheduler-local router retains the batch and emits at most one
@@ -917,7 +917,7 @@ previous maps, these core-only figures exclude the twelve external RAM macros.
 ### Fused dispatch and phase entry
 
 When a shared actor's message handler changes or repeats its phase, the
-scheduler now evaluates that phase's `handle_enter/3` callback during the same
+scheduler now evaluates that phase's `Phase(enter, OldPhase, Data)` callback during the same
 state visit. If the resulting entry batch is empty, or the batch sequencer can
 accept it, the handler result and entered actor state commit together. This
 removes the usual second state-memory visit between dispatch and entry. If a

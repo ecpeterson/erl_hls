@@ -15,72 +15,49 @@ postponement rules shared with the generated implementation.
 
 ## Callbacks
 
-`init/1` returns the initial phase and data:
+The callback module exports `callback_mode/0`, returning
+`[state_functions, state_enter]`, `init/1`, returning `{ok, Phase, Data}`,
+and one `Phase/3` function for each application phase.
 
-```
-{ok, Phase, Data}
-```
+Initial entry and each phase boundary invoke `Module:Phase(enter, OldPhase,
+Data)` before retrying postponed messages. Entry returns `{keep_state, Data}`
+or `{keep_state, Data, Casts}` (also `keep_state_and_data` and its action-list
+form). `OldPhase` equals `Phase` for initial entry.
 
-The initial phase is entered when the output ports are connected. Every later
-change of the phase atom also invokes `handle_enter/3` once, before postponed
-messages are retried:
+`Casts` is a bounded list of `{cast, Port, Message}` actions. A statically
+placed `{cast_if, Condition, Port, Message}` retains its ordered position but
+emits only when enabled. Ports and list shape remain static, and each port may
+occur at most once in an entry. CPU output uses ordinary `gen_server:cast/2`.
 
-```
-handle_enter(OldPhase, Phase, Data) -> {NextData, Casts}
-```
+Application input invokes `Module:Phase(cast, Message, Data)`. Supported
+results are:
 
-`OldPhase` equals `Phase` for the initial entry. `Casts` is a bounded list of
-`{cast, Port, Message}` actions. A statically placed
-`{cast_if, Condition, Port, Message}` retains its position in that ordered list
-but emits only when `Condition` is true. Ports and list shape remain static,
-and each configured port may occur at most once in an entry. On the CPU each
-enabled action is delivered with `gen_server:cast/2` to the PID configured for
-that port.
+  * `{next_state, NextPhase, NextData}` or the four-element form with `[]`
+    or `[postpone]`.
+  * `{keep_state, NextData}` or the three-element form with `[]` or `[postpone]`.
+  * `keep_state_and_data` or `{keep_state_and_data, [] | [postpone]}`.
+  * `{repeat_phase, NextData}`: consume the input, enter the current phase
+    again, then retry postponed inputs in arrival order.
+  * `{stop, fail, NextData}`: retain the current phase and returned diagnostic
+    data, then stop with `{hls_statem_failure, Message}`.
 
-Passing `{outputs, Map}` in the options to `start_link/3` connects and enters
-the initial phase immediately. A cyclic CPU topology can instead start all of
-its machines without that option and then call `connect/2` on each one. Casts
-received before connection occupy the bounded mailbox and are processed after
-initial entry.
-Disconnection is a scheduler lifecycle state separate from the callback phase;
-no application callback is dispatched while the machine is disconnected.
-The generated implementation has statically connected ports and therefore
-enters its initial phase on startup.
+Consumption is the default. Postponement retains the input until a phase
+boundary. `repeat_phase` is an HLS extension, deliberately distinct from OTP's
+`repeat_state`, which does not release postponed events. Ordinary same-phase
+`next_state` and `keep_state` results do not trigger entry or retries.
 
-`handle_cast/3` receives one application message and returns one fixed-shape
-conclusion:
+Clauses are tried in source order. A failure in a selected body does not resume
+clause search. The lowered subset requires literal `enter`/`cast` heads,
+record-shaped cast messages, and one unguarded entry clause per phase.
 
-```
-{NextPhase, NextData, Directive}
-```
+Passing `{outputs, Map}` to `start_link/3` connects and enters immediately.
+Cyclic CPU topologies can start machines disconnected, then call `connect/2`.
+Inputs received before connection occupy the bounded mailbox; no application
+callback runs until initial entry. Hardware ports are statically connected.
 
-It may instead request an explicit same-phase scheduling boundary:
-
-```
-{repeat_phase, NextData, consume}
-```
-
-This consumes the input, invokes `handle_enter(Phase, Phase, NextData)` once,
-and then retries all postponed inputs in arrival order. `repeat_phase` is a
-reserved result atom and may only be combined with `consume`. Returning the
-current phase in the ordinary conclusion does not enter it again or retry
-postponed input. This is deliberately stronger than `gen_statem`'s
-`repeat_state`: `repeat_phase` begins a new postponement generation, while
-`repeat_state` does not make postponed events eligible.
-
-Clauses for the same message record and phase are tried in source order. The
-body of the first clause whose supported head and guard sequence match is
-selected; a failure in that body does not resume the clause search.
-
-The directive determines what happens to the input:
-
-  * `consume` removes it from the bounded mailbox.
-  * `postpone` retains it until a real phase change or an explicit
-    `repeat_phase` boundary.
-  * `fail` installs the returned phase and data for diagnostics, then stops.
-
-This API borrows phase-entry and postponed-event ordering from `gen_statem`,
-but it is deliberately smaller and is not callback-compatible with OTP.
+The callback vocabulary is a restricted `gen_statem` state-functions style.
+Calls, timeouts, `next_event`, reductions, and other OTP result/action forms
+are not supported. See `docs/actor-reductions.md` for the staged reduction design.
 
 ## Postponement
 
@@ -96,7 +73,7 @@ Postponed messages retain mailbox capacity. The configured capacity must leave
 room for a message capable of advancing the phase, or the protocol can deadlock
 under backpressure. On the CPU, mailbox overflow stops the process. Missing
 callback clauses, callback exceptions, ordinary non-cast process messages,
-invalid callback results, and `fail` directives stop it as well.
+invalid callback results, and explicit failure results stop it as well.
 
 The ordinary BEAM mailbox sits in front of this bounded queue, so this module
 models scheduling semantics rather than host-side admission guarantees.
@@ -116,8 +93,8 @@ models scheduling semantics rather than host-side admission guarantees.
 -export_type([
     phase/0,
     output_port/0,
-    directive/0,
-    conclusion/0,
+    event_type/0,
+    state_result/0,
     cast_action/0,
     enter_result/0
 ]).
@@ -130,22 +107,25 @@ models scheduling semantics rather than host-side admission guarantees.
 -type lifecycle() :: disconnected | connected.
 -type output_port() :: atom().
 -type data() :: term().
--type directive() :: consume | postpone | fail.
--type conclusion() ::
-    {
-        NextPhase :: phase(),
-        NextData :: data(),
-        directive()
-    } |
-    {
-        repeat_phase,
-        NextData :: data(),
-        consume
-    }.
+-type event_type() :: enter | cast.
 -type cast_action() ::
     {cast, output_port(), term()} |
     {cast_if, boolean(), output_port(), term()}.
--type enter_result() :: {NextData :: data(), [cast_action()]}.
+-type input_actions() :: [] | [postpone].
+-type state_result() ::
+    {next_state, phase(), data()} |
+    {next_state, phase(), data(), input_actions()} |
+    {keep_state, data()} |
+    {keep_state, data(), input_actions()} |
+    keep_state_and_data |
+    {keep_state_and_data, input_actions()} |
+    {repeat_phase, data()} |
+    {stop, fail, data()}.
+-type enter_result() ::
+    {keep_state, data()} |
+    {keep_state, data(), [cast_action()]} |
+    keep_state_and_data |
+    {keep_state_and_data, [cast_action()]}.
 -type start_option() ::
     {mailbox_capacity, 1..255} |
     {outputs, #{output_port() := pid()}}.
@@ -155,8 +135,8 @@ models scheduling semantics rather than host-side admission guarantees.
     InitialPhase :: phase(),
     InitialData :: data()
 }.
--callback handle_enter(OldPhase :: phase(), phase(), data()) -> enter_result().
--callback handle_cast(term(), phase(), data()) -> conclusion().
+-callback callback_mode() -> [state_functions | state_enter].
+%% Phase-named callbacks cannot be enumerated in a behavior declaration.
 -callback terminate(term(), phase(), data()) -> term().
 
 -optional_callbacks([terminate/3]).
@@ -213,6 +193,10 @@ info(PID) ->
 %%%
 
 init({Module, Arg, Capacity, Outputs}) ->
+    case Module:callback_mode() of
+        [state_functions, state_enter] -> ok;
+        Mode -> error({unsupported_hls_statem_callback_mode, Mode})
+    end,
     {ok, Phase, Data} = Module:init(Arg),
     ok = validate_phase(Phase),
     {Lifecycle, OutputMap} = case Outputs of
@@ -338,48 +322,53 @@ process_message(
         postponed = Postponed0
     }
 ) ->
-    case Module:handle_cast(Message, Phase, Data) of
-        {repeat_phase, NextData, consume} ->
+    Result = Module:Phase(cast, Message, Data),
+    {NextPhase, NextData, Directive, Repeat} =
+        state_result(Result, Phase, Data),
+    NextRuntime = Runtime#runtime{phase = NextPhase, data = NextData},
+    case Directive of
+        fail ->
+            {stop, {hls_statem_failure, Message}, NextRuntime};
+        postpone ->
+            finish_transition(Phase, NextRuntime#runtime{
+                postponed = Postponed0#{MessageID => true}
+            });
+        consume ->
             {ok, {MessageID, Message}, Mailbox1} =
                 hls_mailbox:consume(Selection, Mailbox0),
-            finish_repeat(
-                Phase,
-                Runtime#runtime{
-                    data = NextData,
-                    mailbox = Mailbox1,
-                    postponed = maps:remove(MessageID, Postponed0)
-                }
-            );
-        {repeat_phase, _NextData, Directive} ->
-            error({bad_hls_statem_conclusion, repeat_phase, Directive});
-        {NextPhase, NextData, Directive} ->
-            ok = validate_conclusion(NextPhase, Directive),
-            NextRuntime0 = Runtime#runtime{
-                phase = NextPhase,
-                data = NextData
+            Consumed = NextRuntime#runtime{
+                mailbox = Mailbox1,
+                postponed = maps:remove(MessageID, Postponed0)
             },
-            case Directive of
-                fail ->
-                    {stop, {hls_statem_failure, Message}, NextRuntime0};
-                postpone ->
-                    finish_transition(
-                        Phase,
-                        NextRuntime0#runtime{
-                            postponed = Postponed0#{MessageID => true}
-                        }
-                    );
-                consume ->
-                    {ok, {MessageID, Message}, Mailbox1} =
-                        hls_mailbox:consume(Selection, Mailbox0),
-                    finish_transition(
-                        Phase,
-                        NextRuntime0#runtime{
-                            mailbox = Mailbox1,
-                            postponed = maps:remove(MessageID, Postponed0)
-                        }
-                    )
+            case Repeat of
+                true -> finish_repeat(Phase, Consumed);
+                false -> finish_transition(Phase, Consumed)
             end
     end.
+
+state_result({next_state, NextPhase, NextData}, Phase, Data) ->
+    state_result({next_state, NextPhase, NextData, []}, Phase, Data);
+state_result({next_state, NextPhase, NextData, Actions}, _Phase, _Data) ->
+    ok = validate_phase(NextPhase),
+    {NextPhase, NextData, input_directive(Actions), false};
+state_result({keep_state, NextData}, Phase, Data) ->
+    state_result({next_state, Phase, NextData}, Phase, Data);
+state_result({keep_state, NextData, Actions}, Phase, Data) ->
+    state_result({next_state, Phase, NextData, Actions}, Phase, Data);
+state_result(keep_state_and_data, Phase, Data) ->
+    {Phase, Data, consume, false};
+state_result({keep_state_and_data, Actions}, Phase, Data) ->
+    {Phase, Data, input_directive(Actions), false};
+state_result({repeat_phase, NextData}, Phase, _Data) ->
+    {Phase, NextData, consume, true};
+state_result({stop, fail, NextData}, Phase, _Data) ->
+    {Phase, NextData, fail, false};
+state_result(Result, _Phase, _Data) ->
+    error({bad_hls_statem_result, Result}).
+
+input_directive([]) -> consume;
+input_directive([postpone]) -> postpone;
+input_directive(Actions) -> error({bad_hls_statem_input_actions, Actions}).
 
 finish_transition(PreviousPhase, Runtime0 = #runtime{phase = Phase}) ->
     Runtime1 = case Phase =/= PreviousPhase of
@@ -406,7 +395,8 @@ enter_phase(OldPhase, Runtime = #runtime{
     data = Data,
     outputs = Outputs
 }) ->
-    {NextData, Casts} = Module:handle_enter(OldPhase, Phase, Data),
+    Result = Module:Phase(enter, OldPhase, Data),
+    {NextData, Casts} = enter_result(Result, Data),
     ok = validate_casts(Casts, Outputs),
     lists:foreach(
         fun
@@ -421,16 +411,14 @@ enter_phase(OldPhase, Runtime = #runtime{
     ),
     Runtime#runtime{data = NextData}.
 
-validate_conclusion(NextPhase, Directive)
-        when is_atom(NextPhase), NextPhase =/= repeat_phase,
-             (Directive =:= consume orelse
-              Directive =:= postpone orelse
-              Directive =:= fail) ->
-    ok;
-validate_conclusion(NextPhase, Directive) ->
-    error({bad_hls_statem_conclusion, NextPhase, Directive}).
+enter_result({keep_state, NextData}, _Data) -> {NextData, []};
+enter_result({keep_state, NextData, Casts}, _Data) -> {NextData, Casts};
+enter_result(keep_state_and_data, Data) -> {Data, []};
+enter_result({keep_state_and_data, Casts}, Data) -> {Data, Casts};
+enter_result(Result, _Data) -> error({bad_hls_statem_enter_result, Result}).
 
-validate_phase(Phase) when is_atom(Phase), Phase =/= repeat_phase ->
+validate_phase(Phase)
+        when is_atom(Phase), Phase =/= repeat_phase, Phase =/= terminate ->
     ok;
 validate_phase(Phase) ->
     error({bad_hls_statem_phase, Phase}).
