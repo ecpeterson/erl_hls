@@ -1,90 +1,23 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-local_stage=${1:?usage: run_xls_sim.sh STAGE}
+local_stage=${1:?usage: run_xls_sim.sh STAGE [XLS_ROOT]}
 project_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-remote_host=${ERL_HLS_REMOTE_HOST:-192.168.64.7}
-remote_root=${ERL_HLS_REMOTE_ROOT:-/home/ecpeterson/erl_hls-build}
-remote_xls=${ERL_HLS_REMOTE_XLS:-/home/ecpeterson/xls-v0.0.0-10601-g9f360fc89-linux-x64}
-remote_stage="$remote_root/regsvc"
+xls_root=${ERL_HLS_XLS_ROOT:-${2:-}}
+
+if [[ -z "$xls_root" ]]; then
+    echo "set ERL_HLS_XLS_ROOT or pass the native XLS root as argument 2" >&2
+    exit 1
+fi
+for binary in interpreter_main ir_converter_main opt_main codegen_main; do
+    if [[ ! -x "$xls_root/$binary" ]]; then
+        echo "missing native XLS command: $xls_root/$binary" >&2
+        exit 1
+    fi
+done
+xls_root=$(cd "$xls_root" && pwd)
 
 "$project_root/tools/prepare_xls_sim.sh" "$local_stage"
-cp "$project_root/tools/remote_xls_sim.sh" \
-    "$local_stage/remote_xls_sim.sh"
-
-ssh -o BatchMode=yes "$remote_host" mkdir -p "$remote_stage"
-rsync -a -e "ssh -o BatchMode=yes" \
-    "$local_stage/regsvc.x" \
-    "$local_stage/phi_halo_cell.x" \
-    "$local_stage/phenom_data_cell.x" \
-    "$local_stage/phenom_syndrome_cell.x" \
-    "$local_stage/phi_phenom_topology.x" \
-    "$local_stage/phi_torus_topology.x" \
-    "$local_stage/phi_noise_topology.x" \
-    "$local_stage/phi_noise_topology_smoke.x" \
-    "$local_stage/phi_memory_gateway.x" \
-    "$local_stage/ordered_egress_actor.x" \
-    "$local_stage/ordered_egress_topology.x" \
-    "$local_stage/xls_case_fixture.x" \
-    "$local_stage/phi_field_test.x" \
-    "$local_stage/phi_scheduler_rams.sh" \
-    "$local_stage/axis.x" \
-    "$local_stage/bram.x" \
-    "$local_stage/effect_window.x" \
-    "$local_stage/mailbox.x" \
-    "$local_stage/regsvc_core_adapter.v" \
-    "$local_stage/regsvc_debug_top.v" \
-    "$local_stage/phi_memory_debug_top.v" \
-    "$local_stage/hls_1r1w_ram.v" \
-    "$local_stage/hls_fabric_router.x" \
-    "$local_stage/hls_spatial_router.x" \
-    "$local_stage/hls_debug_types.x" \
-    "$local_stage/hls_debug_trace.x" \
-    "$local_stage/hls_debug_observer.x" \
-    "$local_stage/hls_debug_server.x" \
-    "$local_stage/hls_debug_tap.v" \
-    "$local_stage/hls_debug_monitor.v" \
-    "$local_stage/hls_debug_tap_tb.sv" \
-    "$local_stage/hls_trace_store.v" \
-    "$local_stage/hls_trace_store_tb.sv" \
-    "$local_stage/regsvc_pair_fixture.sv" \
-    "$local_stage/regsvc_pair_tb.sv" \
-    "$local_stage/regsvc_bridge_tb.sv" \
-    "$local_stage/phi_halo_cell_tb.sv" \
-    "$local_stage/phenom_data_cell_tb.sv" \
-    "$local_stage/phi_phenom_topology_tb.sv" \
-    "$local_stage/phi_torus_topology_tb.sv" \
-    "$local_stage/phi_noise_topology_smoke_tb.sv" \
-    "$local_stage/phi_memory_bridge_tb.sv" \
-    "$local_stage/hls_fabric_host_tx_tb.sv" \
-    "$local_stage/ordered_egress_topology_tb.sv" \
-    "$local_stage/xls_sim_bridge.c" \
-    "$local_stage/erl_src" \
-    "$local_stage/test_src" \
-    "$local_stage/remote_xls_sim.sh" \
-    "$remote_host:$remote_stage/"
-
-ssh -o BatchMode=yes "$remote_host" \
-    bash "$remote_stage/remote_xls_sim.sh" "$remote_stage" "$remote_xls"
-
-# Retrieve review artifacts only after the remote runner has generated and
-# simulated them successfully.
-# The topology DSLX is generated locally from its Erlang plan and physical
-# profile. Its regenerated RTL is brought back for review and synthesis;
-# behavioral regeneration, rather than a 500-KiB Verilog golden, is enforced
-# by the remote simulation above.
-rsync -a -e "ssh -o BatchMode=yes" \
-    --include=regsvc.v \
-    --include=phi_halo_cell.v \
-    --include=phenom_data_cell.v \
-    --include=phenom_syndrome_cell.v \
-    --include=phi_phenom_topology.v \
-    --include=phi_memory_gateway.v \
-    --include=hls_debug_observer.v \
-    --include=hls_debug_server.v \
-    --include=hls_fabric_ingress.v \
-    --include=hls_fabric_egress.v \
-    --include=hls_fabric_host_tx.v \
-    --exclude='*' \
-    "$remote_host:$remote_stage/" \
-    "$local_stage/"
+local_stage=$(cd "$local_stage" && pwd)
+# The portable stage runner is shared with CI; it executes entirely locally.
+bash "$project_root/tools/remote_xls_sim.sh" "$local_stage" "$xls_root"

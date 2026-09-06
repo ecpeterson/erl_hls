@@ -12,25 +12,25 @@ Run the Erlang-side unit and CPU-reference tests locally:
 rebar3 eunit
 ```
 
-The generated-RTL regression uses the Linux UTM instance because XLS is not
-available on macOS:
+Run generated-RTL regressions with the native XLS toolchain, Erlang, and
+Icarus Verilog:
 
 ```sh
+export ERL_HLS_XLS_ROOT="$HOME/xls-v0.0.0-10601-g9f360fc89-darwin-arm64"
 tools/xls_sim.sh
 ```
 
-This regenerates the translated DSLX from the Erlang sources, copies only the
-required inputs into `/home/ecpeterson/erl_hls-build/regsvc` on
-`192.168.64.7`, and runs XLS IR conversion, optimization, and Verilog
-generation there. It then runs a cycle-controlled two-process SystemVerilog
-routing scenario and the EUnit application scenario through a VPI bridge.
-Independent application and debug FIFO pairs carry the two physical AXI Stream
-paths. The runner does not use or modify the VM's existing `~/erl_hls`
-checkout, and finishes by checking the source-adjacent generated DSLX and the
-compact Verilog digest manifest declared in `tools/xls_goldens.sh`. Generated
-Verilog is compiled and simulated from the staging directory instead of being
-checked into the repository; GitHub Actions uploads it with the other
-diagnostics when a regression or digest check fails.
+Set the root to the installed native build on other hosts. The runner requires
+`interpreter_main`, `ir_converter_main`, `opt_main`, and `codegen_main`; it
+fails before staging if they are unavailable. The flow executes locally.
+
+The flow regenerates DSLX from Erlang, runs XLS interpretation, IR conversion,
+optimization and Verilog generation, and exercises cycle-controlled RTL and
+ERTS application scenarios through the VPI bridge. Independent application and
+debug FIFO pairs carry the two AXI Stream paths. Artifacts remain in
+`_build/xls_sim/regsvc`. The final check compares source-adjacent DSLX and the
+compact Verilog digest manifest declared in `tools/xls_goldens.sh`; generated
+Verilog is retained in the staging directory rather than checked in.
 
 After changing the translator or a translated example, refresh the checked-in
 artifacts with the same full regression:
@@ -39,8 +39,8 @@ artifacts with the same full regression:
 tools/update_xls_goldens.sh
 ```
 
-The files are copied only after the pinned remote flow and its simulations
-complete successfully.
+The files are copied only after the native flow and its simulations complete
+successfully.
 
 The phi example also includes lowerable phenomenological data- and syndrome-
 noise actors. CPU tests wire those actors to a self-periodic phi cell and run
@@ -48,11 +48,12 @@ the request/query/measurement pipeline across consecutive decoder steps. A
 local CPU deployment also runs the complete noisy distance-three closeout
 through the same routed codec, runner, and reducer used by the hardware bridge.
 The closed hardware fixture is an Erlang semantic topology plus a separate
-physical profile which generates its DSLX wrapper. The routine remote
+physical profile which generates its DSLX wrapper. The routine native
 regression closes a zero-noise distance-one experiment from ERTS through its
 generated gateway and Icarus model. The opt-in
-`tools/run_phi_memory_demo.sh` command runs the same noisy distance-three
-fixture first on ERTS and then through Icarus on the configured remote host.
+`ERL_HLS_PHI_NATIVE_ICARUS=1 tools/run_phi_memory_demo.sh` command uses the
+configured native XLS root to run the noisy distance-three fixture first on
+ERTS and then through native Icarus.
 After the common quiet/empty fence, both paths query every data qubit once in
 the configured basis (Z in this fixture), then compare the coordinate-sorted
 anticommutation bits and correction witness directly. A complementary-basis
@@ -61,16 +62,16 @@ See the
 [generated phi/noise topology](src/examples/phi_decoder/phi_phenom_topology.md) for its
 structure, checks, and current limitations.
 
-The remote host and paths can be overridden with `ERL_HLS_REMOTE_HOST`,
-`ERL_HLS_REMOTE_ROOT`, and `ERL_HLS_REMOTE_XLS`.
+`ERL_HLS_XLS_ROOT` selects the native compiler installation. Lower-level
+`tools/run_xls_sim.sh STAGE XLS_ROOT` also accepts it as its second argument.
 
 GitHub Actions runs the same generated-RTL and bridged-EUnit regressions on
 Ubuntu using a checksum-pinned XLS release. `tools/prepare_xls_sim.sh` creates
 the portable simulation staging directory; `tools/remote_xls_sim.sh` executes
-that directory on any Linux host with XLS, Erlang, and Icarus installed. The
-same remote runner invokes the XLS interpreter on `hls_debug_trace.x` and
+that directory locally on macOS or Linux with XLS, Erlang, and Icarus installed.
+The same stage runner invokes the XLS interpreter on `hls_debug_trace.x` and
 `hls_debug_observer.x`, so their `#[test]` functions run in both GitHub Actions
-and the UTM flow before the debug procs are lowered to RTL.
+and the native flow before the debug procs are lowered to RTL.
 
 The debug subsystem is divided into focused DSLX modules for shared types,
 trace storage semantics, passive observation, and response serialization, and
