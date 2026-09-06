@@ -1582,3 +1582,45 @@ better. The profiler therefore retains per-router request, stall, grant,
 release, pending-time, and grant-latency counters, plus global owner and
 pending-request concurrency histograms, so a future deployment policy can be
 chosen from evidence rather than component count alone.
+
+### Actor-local phi reductions
+
+The phi actor now expresses all three four-way barriers through the actor-
+owned reduction facility. Diffusion and movement use bounded count-four folds;
+comparison uses the fixed member universe `{north, east, west, south}`,
+preserving source identity while allowing arbitrary arrival order. Ordinary
+unicast routing and the externally visible protocol are unchanged.
+
+The complete CPU-versus-native-Icarus comparison exactly matches the current
+paper-parameter witness. It closes at step 18 with 80 accepted corrections and
+18 final data replies, of which eight commute and ten anticommute. This
+80-correction witness supersedes the older 84-correction fixture for current
+semantic checks; earlier measurements above retain 84 where they describe
+historical implementations. The native full-gateway run completed in 23
+seconds of Icarus wall time and observed 7,042 gateway clock cycles.
+
+Persistent phi callback data shrinks from 528 to 320 bits. Once the 182-bit
+bounded reduction word and scheduler metadata are included, the actor-state
+RAM row shrinks from 546 to 520 bits, or 4.8%.
+
+On the decoder-only, three-shard, global-effect-window profile, steps eight
+through 32 take 6,479 clocks: 269.958 clocks per step, or about 740,855 steps/s
+at 200 MHz. The otherwise identical pre-reduction baseline took 6,398 clocks,
+or 266.583 clocks per step and about 750,234 steps/s. Correction traffic
+remains 63 X and 64 Z events. Phi state reads rise by 24.1%, showing why
+eliminated callback visits do not become a cadence gain: each contribution
+still performs an authoritative actor/reduction-row transaction, and
+completion requires another actor visit.
+
+An apples-to-apples XC7 topology-core map reports 63,421 estimated logic
+cells, 77,291 flip-flops, 78,816 LUTs, and 48 `DSP48E1`s, versus 57,040,
+64,061, 70,566, and 48 for the pre-reduction baseline. These are increases of
+11.2%, 20.7%, and 11.7% in cells, flip-flops, and LUTs. Although each RAM row
+is narrower, the current lowering adds reducer logic and carries each full
+520-bit machine update through a two-channel elastic fold path in every phi
+scheduler so that the shared service can retain initiation interval one.
+
+This negative performance result narrows the next architectural question.
+Further gains require either accumulator storage that can absorb contributions
+without transacting the complete actor row, or a stronger bulk-synchronous
+lowering that replaces per-message visits with scheduled aggregate sweeps.

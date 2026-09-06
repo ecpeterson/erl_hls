@@ -336,19 +336,47 @@ direct service and an external-RAM shared service.
    `reduce/3`, and private completion events, with permutation, skew,
    duplicate, key, postponement, and failure coverage. This stage is complete.
 3. XLS lowers one active bounded reduction per actor, using count or a fixed
-   member universe. This stage is complete; workload-level profiling remains
-   part of the phi adoption.
-4. The phi actors adopt the mechanism and cadence and area are measured against
-   the global effect-window baseline.
+   member universe. This stage is complete.
+4. The phi actors use reductions for their four-way diffusion, comparison,
+   and movement barriers. Cadence, state width, area, and semantic equivalence
+   have been measured. This stage is complete.
 
-At twelve diffusion rounds, converting the three phi barriers is projected to
-reduce main-actor executor visits from 57 to 15 per cell-step: four diffusion
-inputs become one completion visit in each round, and the comparison and
-parity barriers each become one completion visit. The existing three-cell
-shard still has about 59 serialized outgoing action positions per cell-step,
-or a roughly 177-clock retirement floor. These are profiling hypotheses. If
-the hardware reduction does not materially move cadence toward that floor,
-profile the remaining bottleneck before extending the abstraction.
+With the paper's twelve diffusion rounds, the phi actor now uses a count-four
+reduction for each diffusion exchange, a fixed-universe
+`{north, east, west, south}` reduction for comparison, and a count-four parity
+reduction for movement. The complete CPU-versus-native-Icarus run exactly
+matches the current paper-parameter witness: it closes at step 18 with 80
+accepted corrections and 18 nonuniform final measurements, eight commuting
+and ten anticommuting.
+
+Moving the barrier scratch fields out of `#cell{}` shrinks persistent callback
+data from 528 to 320 bits. The bounded reduction state occupies 182 bits, so
+the complete actor-state RAM row falls from 546 to 520 bits--a 26-bit, 4.8%
+reduction rather than the apparent 208-bit callback-state saving.
+
+The three-shard, global-effect-window decoder profile measured steps eight
+through 32 in 6,479 clocks, or 269.958 clocks per step and about 740,855
+steps/s at 200 MHz. The corresponding pre-reduction baseline was 6,398 clocks,
+266.583 clocks per step, and about 750,234 steps/s. Thus the first reduction
+lowering regresses cadence by 1.27%. Although it removes ordinary callback-
+executor visits for incomplete barriers, phi state reads increase by 24.1%:
+every contribution still reads and rewrites the authoritative actor/reduction
+row, followed by a completion visit.
+
+An apples-to-apples XC7 topology-core map reports 63,421 estimated logic
+cells, 77,291 flip-flops, 78,816 LUTs, and 48 `DSP48E1`s. Against the same
+baseline's 57,040 cells, 64,061 flip-flops, 70,566 LUTs, and 48 DSPs, this is
+an 11.2% cell, 20.7% flip-flop, and 11.7% LUT increase. The narrower RAM row
+is outweighed by the reducer datapath, bookkeeping, and elastic fold path. In
+particular, each phi scheduler currently carries a full 520-bit machine update
+through two depth-one fold-envelope channels to break the service recurrence
+and retain initiation interval one.
+
+This result validates the abstraction and modestly compacts logical actor
+state, but it is not a throughput or area win. A useful follow-up must let
+contributions update narrower accumulator storage without transacting or
+transporting the complete actor row, or use a stronger bulk-synchronous
+lowering which replaces per-message visits with scheduled aggregate sweeps.
 
 ## General mailbox capacity
 

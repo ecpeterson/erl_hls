@@ -152,7 +152,13 @@ odd_data_error_reaches_phi_test() ->
         expect_anyon(0, 1, ?SYNDROME_X, ?SYNDROME_Y),
         await_phase(phi_halo_cell, Phi, gathering),
         #{data := PhiData} = phi_halo_cell:runtime_info(Phi),
-        ?assertEqual(1, element(11, PhiData))
+        %% Keep the private record boundary explicit: the sixth tuple element
+        %% is the named `anyon` field in the current #cell{} layout.
+        ?assertMatch(
+            {cell, _Step, _Epoch, _Phi, _Direction, 1, _Random,
+                _X, _Y, _NoiseQuiet, _StatusValid},
+            PhiData
+        )
     after
         stop_if_alive(phi_halo_cell, Phi),
         stop_if_alive(phenom_syndrome_cell, Syndrome),

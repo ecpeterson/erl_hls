@@ -13,6 +13,7 @@
 -define(PRNG_FIRST, 16#40aec71f).
 -define(PRNG_SECOND, 16#91e00c19).
 -define(DIFFUSION_ROUNDS, 12).
+-define(U32_MAX, 16#ffffffff).
 
 configuration_requires_nonzero_seed_test() ->
     {ok, configuring, Empty} = phi_halo_cell:init([]),
@@ -61,8 +62,8 @@ measurement_coordinate_reaches_correction_test() ->
         Initial
     ),
     ?assertMatch(
-        {cell, 0, 0, [0, 0], [0, 0], 0,
-            0, 0, 0, 0, 1, ?PRNG_SEED, 16#1234, 16#abcd, 0, 0},
+        {cell, 0, 0, [0, 0], 0, 1, ?PRNG_SEED,
+            16#1234, 16#abcd, 0, 0},
         Updated
     ),
     {_AfterFlip, Actions} = phi_halo_cell:flipping(
@@ -134,8 +135,7 @@ measurement_gates_diffusion_and_toggles_anyon_test() ->
         ?assertEqual(4, maps:get(postponed, Waiting)),
         ?assertEqual(4, maps:get(committed, maps:get(mailbox, Waiting))),
         ?assertMatch(
-            {cell, 0, 0, [0, 0], [0, 0], 0,
-                0, 0, 0, 0, 0, ?PRNG_SEED, 0, 0, 0, 0},
+            {cell, 0, 0, [0, 0], 0, 0, ?PRNG_SEED, 0, 0, 0, 0},
             maps:get(data, Waiting)
         ),
         assert_no_neighbor_cast(Ref),
@@ -150,8 +150,7 @@ measurement_gates_diffusion_and_toggles_anyon_test() ->
         ?assertEqual(0, maps:get(postponed, Running)),
         ?assertEqual(0, maps:get(committed, maps:get(mailbox, Running))),
         ?assertMatch(
-            {cell, 0, 1, [65536, 0], [0, 0], 0,
-                0, 0, 0, 0, 1, ?PRNG_SEED, 0, 0, 0, 0},
+            {cell, 0, 1, [65536, 0], 0, 1, ?PRNG_SEED, 0, 0, 0, 0},
             maps:get(data, Running)
         )
     after
@@ -199,7 +198,9 @@ duplicate_comparison_source_stops_cell_test() ->
         ok = phi_halo_cell:offer_phi0(PID, 0, north, 99),
         receive
             {'DOWN', Monitor, process, PID,
-                    {hls_statem_failure, {phi0, 0, ?NORTH_MASK, 99}}} ->
+                    {hls_statem_reduction_failure,
+                        {duplicate_member, ?NORTH_MASK},
+                        {phi0, 0, ?NORTH_MASK, 99}}} ->
                 ok
         after 1000 ->
             error(cell_did_not_stop_on_duplicate_comparison_source)
@@ -236,8 +237,7 @@ directional_coin_moves_test_() ->
                 Cell
             ),
             ?assertEqual(
-                {cell, 0, 2, [15, 15], [0, 0], 0,
-                    ?ALL_DIRECTIONS, 18, DirectionMask, 0, 0,
+                {cell, 0, 2, [15, 15], DirectionMask, 0,
                     ?PRNG_SECOND, 0, 0, 0, 0},
                 Updated
             ),
@@ -264,8 +264,7 @@ coin_advances_when_no_move_is_eligible_test_() ->
                 Cell
             ),
             ?assertMatch(
-                {cell, 0, 2, [15, 15], [0, 0], 0,
-                    ?ALL_DIRECTIONS, 18, Direction, 0,
+                {cell, 0, 2, [15, 15], Direction,
                     ExpectedAnyon, Random1, 0, 0, 0, 0},
                 Updated
             ),
@@ -286,9 +285,8 @@ local_departure_and_arrivals_combine_by_parity_test() ->
         Departed
     ),
     ?assertMatch(
-        {cell, 1, 0, [15, 15], [0, 0], 0,
-            ?ALL_DIRECTIONS, 18, ?EAST_MASK, 0, 1, ?PRNG_SECOND, 0, 0,
-            0, 1},
+        {cell, 1, ?DIFFUSION_ROUNDS, [15, 15], ?EAST_MASK, 1,
+            ?PRNG_SECOND, 0, 0, 0, 1},
         Advanced
     ).
 
@@ -351,8 +349,7 @@ early_phi_casts_wait_for_initial_entry_test() ->
         ?assertEqual(disconnected, maps:get(lifecycle, Before)),
         ?assertEqual(4, maps:get(committed, maps:get(mailbox, Before))),
         ?assertMatch(
-            {cell, 0, 0, [0, 0], [0, 0], 0,
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+            {cell, 0, 0, [0, 0], 0, 0, 0, 0, 0, 0, 0},
             maps:get(data, Before)),
         assert_no_neighbor_cast(Ref),
 
@@ -369,8 +366,7 @@ early_phi_casts_wait_for_initial_entry_test() ->
         ?assertEqual(gathering, maps:get(phase, After)),
         ?assertEqual(0, maps:get(committed, maps:get(mailbox, After))),
         ?assertMatch(
-            {cell, 0, 1, [5, 11], [0, 0], 0,
-                0, 0, 0, 0, 0, ?PRNG_SEED, 0, 0, 0, 0},
+            {cell, 0, 1, [5, 11], 0, 0, ?PRNG_SEED, 0, 0, 0, 0},
             maps:get(data, After))
     after
         case is_process_alive(PID) of
@@ -466,10 +462,15 @@ boolean_anyon_api_encodes_move_test() ->
         four_phi0s(PID, 0, 0),
         expect_anyon_batch(Ref, 0, none),
         ok = phi_halo_cell:offer_anyon(PID, 0, true),
+        Info = phi_halo_cell:runtime_info(PID),
         ?assertMatch(
-            {cell, 0, ?DIFFUSION_ROUNDS, [0, 0], [0, 0], 0,
-                ?ALL_DIRECTIONS, 0, 0, 1, 1, ?PRNG_FIRST, 0, 0, 0, 0},
-            maps:get(data, phi_halo_cell:runtime_info(PID))
+            {cell, 0, ?DIFFUSION_ROUNDS, [0, 0], 0, 0,
+                ?PRNG_FIRST, 0, 0, 0, 0},
+            maps:get(data, Info)
+        ),
+        ?assertMatch(
+            #{name := movement, received := 1, remaining := 3},
+            maps:get(reduction, Info)
         )
     end).
 
@@ -717,36 +718,166 @@ message_wire_abi_test() ->
     ).
 
 two_layer_relaxation_coefficients_test() ->
-    Initial = {cell, 0, 0, [40, 20], [0, 0], 0,
-        0, 0, 0, 0, 0, ?PRNG_SEED, 0, 0, 0, 0},
+    Initial = {cell, 0, 0, [40, 20], 0, 0, ?PRNG_SEED, 0, 0, 0, 0},
     Message0 = {phi, 0, [8, 12]},
-    {gathering, First, consume} =
-        phi_halo_cell:gathering(cast, Message0, Initial),
-    {gathering, Second, consume} =
-        phi_halo_cell:gathering(cast, Message0, First),
-    {gathering, Third, consume} =
-        phi_halo_cell:gathering(cast, Message0, Second),
+    RoundOneFold = fold_diffusion_messages(
+        lists:duplicate(4, Message0), Initial
+    ),
     {repeat_phase, RoundOne, consume} =
-        phi_halo_cell:gathering(cast, Message0, Third),
+        phi_halo_cell:gathering(
+            internal,
+            {reduction_complete, diffusion, 0, RoundOneFold},
+            Initial
+        ),
     ?assertEqual(
-        {cell, 0, 1, [26, 19], [0, 0], 0,
-            0, 0, 0, 0, 0, ?PRNG_SEED, 0, 0, 0, 0},
+        {cell, 0, 1, [26, 19], 0, 0, ?PRNG_SEED, 0, 0, 0, 0},
         RoundOne
     ),
 
     Message1 = {phi, 1, [8, 12]},
-    {gathering, Fifth, consume} =
-        phi_halo_cell:gathering(cast, Message1, RoundOne),
-    {gathering, Sixth, consume} =
-        phi_halo_cell:gathering(cast, Message1, Fifth),
-    {gathering, Seventh, consume} =
-        phi_halo_cell:gathering(cast, Message1, Sixth),
+    RoundTwoFold = fold_diffusion_messages(
+        lists:duplicate(4, Message1), RoundOne
+    ),
     {repeat_phase, RoundTwo, consume} =
-        phi_halo_cell:gathering(cast, Message1, Seventh),
+        phi_halo_cell:gathering(
+            internal,
+            {reduction_complete, diffusion, 1, RoundTwoFold},
+            RoundOne
+        ),
     ?assertEqual(
-        {cell, 0, 2, [19, 17], [0, 0], 0,
-            0, 0, 0, 0, 0, ?PRNG_SEED, 0, 0, 0, 0},
+        {cell, 0, 2, [19, 17], 0, 0, ?PRNG_SEED, 0, 0, 0, 0},
         RoundTwo
+    ).
+
+diffusion_epoch_and_step_wrap_at_u32_boundary_test() ->
+    %% Epoch 0 follows 16#ffffffff even when the decoder step itself does
+    %% not wrap. The early-message guard must recognize that next epoch.
+    MidStep = (?U32_MAX - 3) div ?DIFFUSION_ROUNDS,
+    MidRound = {cell, MidStep, ?U32_MAX, [0, 0], 0, 0,
+        ?PRNG_SEED, 0, 0, 0, 0},
+    ?assertEqual(
+        {gathering, MidRound, postpone},
+        phi_halo_cell:gathering(cast, {phi, 0, [0, 0]}, MidRound)
+    ),
+    {repeat_phase, WrappedEpoch, consume} = phi_halo_cell:gathering(
+        internal,
+        {reduction_complete, diffusion, ?U32_MAX, {phi_fold, 0, 0}},
+        MidRound
+    ),
+    ?assertEqual(
+        {cell, MidStep, 0, [0, 0], 0, 0,
+            ?PRNG_SEED, 0, 0, 0, 0},
+        WrappedEpoch
+    ),
+
+    %% The same epoch transition is the twelfth and final diffusion round at
+    %% step 16#ffffffff. Movement completion then wraps both counters to zero.
+    LastStep = {cell, ?U32_MAX, ?U32_MAX, [0, 0], 0, 0,
+        ?PRNG_SEED, 0, 0, 0, 0},
+    {comparing, Diffused, consume} = phi_halo_cell:gathering(
+        internal,
+        {reduction_complete, diffusion, ?U32_MAX, {phi_fold, 0, 0}},
+        LastStep
+    ),
+    ?assertEqual(
+        {cell, ?U32_MAX, 0, [0, 0], 0, 0,
+            ?PRNG_SEED, 0, 0, 0, 0},
+        Diffused
+    ),
+    {measuring, Advanced, consume} = phi_halo_cell:flipping(
+        internal,
+        {reduction_complete, movement, ?U32_MAX, {phi_fold, 1, 0}},
+        Diffused
+    ),
+    ?assertEqual(
+        {cell, 0, 0, [0, 0], 0, 1, ?PRNG_SEED, 0, 0, 0, 1},
+        Advanced
+    ).
+
+diffusion_reducer_is_commutative_associative_test() ->
+    Identity = {phi_fold, 0, 0},
+    [A, B, C] = Contributions = [
+        {phi_fold, -7, 13},
+        {phi_fold, 19, -5},
+        {phi_fold, 2, 11}
+    ],
+    ?assertEqual(
+        phi_halo_cell:reduce(diffusion, A, B),
+        phi_halo_cell:reduce(diffusion, B, A)
+    ),
+    ?assertEqual(
+        phi_halo_cell:reduce(
+            diffusion,
+            phi_halo_cell:reduce(diffusion, A, B),
+            C
+        ),
+        phi_halo_cell:reduce(
+            diffusion,
+            A,
+            phi_halo_cell:reduce(diffusion, B, C)
+        )
+    ),
+    Expected = {phi_fold, 14, 19},
+    lists:foreach(
+        fun(Ordered) ->
+            ?assertEqual(
+                Expected,
+                fold_reduction(diffusion, Identity, Ordered)
+            )
+        end,
+        permutations(Contributions)
+    ).
+
+movement_reducer_is_commutative_associative_test() ->
+    Identity = {phi_fold, 0, 0},
+    A = {phi_fold, 1, 0},
+    B = {phi_fold, 0, 0},
+    C = {phi_fold, 1, 0},
+    ?assertEqual(
+        phi_halo_cell:reduce(movement, A, B),
+        phi_halo_cell:reduce(movement, B, A)
+    ),
+    ?assertEqual(
+        phi_halo_cell:reduce(
+            movement,
+            phi_halo_cell:reduce(movement, A, B),
+            C
+        ),
+        phi_halo_cell:reduce(
+            movement,
+            A,
+            phi_halo_cell:reduce(movement, B, C)
+        )
+    ),
+    Contributions = [A, B, C, {phi_fold, 1, 0}],
+    lists:foreach(
+        fun(Ordered) ->
+            ?assertEqual(
+                {phi_fold, 1, 0},
+                fold_reduction(movement, Identity, Ordered)
+            )
+        end,
+        permutations(Contributions)
+    ).
+
+comparison_reducer_identity_and_tree_association_test() ->
+    assert_comparison_tree_fold(
+        {phi_fold, -1, ?EAST_MASK},
+        [
+            {phi_fold, -4, ?NORTH_MASK},
+            {phi_fold, -1, ?EAST_MASK},
+            {phi_fold, -3, ?WEST_MASK},
+            {phi_fold, -2, ?SOUTH_MASK}
+        ]
+    ),
+    assert_comparison_tree_fold(
+        {phi_fold, -1, ?EAST_MASK bor ?WEST_MASK},
+        [
+            {phi_fold, -(1 bsl 31), ?NORTH_MASK},
+            {phi_fold, -1, ?EAST_MASK},
+            {phi_fold, -1, ?WEST_MASK},
+            {phi_fold, -2, ?SOUTH_MASK}
+        ]
     ).
 
 repeated_diffusion_comparison_and_flipping(PID, Ref) ->
@@ -767,8 +898,8 @@ repeated_diffusion_comparison_and_flipping(PID, Ref) ->
     AfterDiffusion = phi_halo_cell:runtime_info(PID),
     ?assertEqual(comparing, maps:get(phase, AfterDiffusion)),
     ?assertMatch(
-        {cell, 0, ?DIFFUSION_ROUNDS, FinalPhi, [0, 0], 0,
-            0, 0, 0, 0, 0, ?PRNG_SEED, 0, 0, 0, 0},
+        {cell, 0, ?DIFFUSION_ROUNDS, FinalPhi, 0, 0,
+            ?PRNG_SEED, 0, 0, 0, 0},
         maps:get(data, AfterDiffusion)
     ),
 
@@ -782,9 +913,8 @@ repeated_diffusion_comparison_and_flipping(PID, Ref) ->
     AfterComparison = phi_halo_cell:runtime_info(PID),
     ?assertEqual(flipping, maps:get(phase, AfterComparison)),
     ?assertMatch(
-        {cell, 0, ?DIFFUSION_ROUNDS, FinalPhi, [0, 0], 0,
-            ?ALL_DIRECTIONS, 18, ?EAST_MASK, 0, 0, ?PRNG_FIRST, 0, 0,
-            0, 0},
+        {cell, 0, ?DIFFUSION_ROUNDS, FinalPhi, ?EAST_MASK, 0,
+            ?PRNG_FIRST, 0, 0, 0, 0},
         maps:get(data, AfterComparison)
     ),
 
@@ -800,9 +930,8 @@ repeated_diffusion_comparison_and_flipping(PID, Ref) ->
     ?assertEqual(0, maps:get(postponed, Info)),
     ?assertEqual(0, maps:get(committed, maps:get(mailbox, Info))),
     ?assertMatch(
-        {cell, 1, 0, FinalPhi, [0, 0], 0,
-            ?ALL_DIRECTIONS, 18, ?EAST_MASK, 0, 0, ?PRNG_FIRST, 0, 0,
-            0, 1},
+        {cell, 1, ?DIFFUSION_ROUNDS, FinalPhi, ?EAST_MASK, 0,
+            ?PRNG_FIRST, 0, 0, 0, 1},
         maps:get(data, Info)
     ),
     assert_no_neighbor_cast(Ref).
@@ -841,9 +970,8 @@ coin_gates_selected_anyon_output(PID, Ref) ->
     Flipping = phi_halo_cell:runtime_info(PID),
     ?assertEqual(flipping, maps:get(phase, Flipping)),
     ?assertMatch(
-        {cell, 1, ?DIFFUSION_ROUNDS, FinalPhi, [0, 0], 0,
-            ?ALL_DIRECTIONS, 13, ?EAST_MASK, 0, 0, ?PRNG_SECOND, 0, 0,
-            0, 1},
+        {cell, 1, 2 * ?DIFFUSION_ROUNDS, FinalPhi, ?EAST_MASK, 0,
+            ?PRNG_SECOND, 0, 0, 0, 1},
         maps:get(data, Flipping)
     ),
 
@@ -854,9 +982,8 @@ coin_gates_selected_anyon_output(PID, Ref) ->
         {phi, 2 * ?DIFFUSION_ROUNDS, FinalPhi}
     ),
     ?assertMatch(
-        {cell, 2, 0, FinalPhi, [0, 0], 0,
-            ?ALL_DIRECTIONS, 13, ?EAST_MASK, 0, 0, ?PRNG_SECOND, 0, 0,
-            0, 1},
+        {cell, 2, 2 * ?DIFFUSION_ROUNDS, FinalPhi, ?EAST_MASK, 0,
+            ?PRNG_SECOND, 0, 0, 0, 1},
         maps:get(data, phi_halo_cell:runtime_info(PID))
     ).
 
@@ -880,9 +1007,13 @@ staged_next_phase_messages(PID, Ref) ->
     ?assertEqual(gathering, maps:get(phase, AfterRepeat)),
     ?assertEqual(0, maps:get(postponed, AfterRepeat)),
     ?assertMatch(
-        {cell, 0, 1, RoundOnePhi, [8, 12], 1,
-            0, 0, 0, 0, 0, ?PRNG_SEED, 0, 0, 0, 0},
+        {cell, 0, 1, RoundOnePhi, 0, 0,
+            ?PRNG_SEED, 0, 0, 0, 0},
         maps:get(data, AfterRepeat)
+    ),
+    ?assertMatch(
+        #{name := diffusion, received := 1, remaining := 3},
+        maps:get(reduction, AfterRepeat)
     ),
 
     %% An early flipping message crosses two boundaries: gathering releases
@@ -906,10 +1037,13 @@ staged_next_phase_messages(PID, Ref) ->
     ?assertEqual(comparing, maps:get(phase, AfterEntry)),
     ?assertEqual(1, maps:get(postponed, AfterEntry)),
     ?assertMatch(
-        {cell, 0, ?DIFFUSION_ROUNDS, FinalPhi, [0, 0], 0,
-            ?NORTH_MASK, 14, ?NORTH_MASK, 0, 0, ?PRNG_SEED, 0, 0,
-            0, 0},
+        {cell, 0, ?DIFFUSION_ROUNDS, FinalPhi, 0, 0,
+            ?PRNG_SEED, 0, 0, 0, 0},
         maps:get(data, AfterEntry)
+    ),
+    ?assertMatch(
+        #{name := comparison, received := 1, remaining := 3},
+        maps:get(reduction, AfterEntry)
     ),
 
     offer_comparisons(PID, [
@@ -922,10 +1056,13 @@ staged_next_phase_messages(PID, Ref) ->
     ?assertEqual(flipping, maps:get(phase, AfterFlip)),
     ?assertEqual(0, maps:get(postponed, AfterFlip)),
     ?assertMatch(
-        {cell, 0, ?DIFFUSION_ROUNDS, FinalPhi, [0, 0], 0,
-            ?ALL_DIRECTIONS, 18, ?EAST_MASK, 1, 0, ?PRNG_FIRST, 0, 0,
-            0, 0},
+        {cell, 0, ?DIFFUSION_ROUNDS, FinalPhi, ?EAST_MASK, 0,
+            ?PRNG_FIRST, 0, 0, 0, 0},
         maps:get(data, AfterFlip)
+    ),
+    ?assertMatch(
+        #{name := movement, received := 1, remaining := 3},
+        maps:get(reduction, AfterFlip)
     ),
 
     %% The symmetric case occurs while this cell waits for anyon updates. The
@@ -948,10 +1085,13 @@ staged_next_phase_messages(PID, Ref) ->
     ?assertEqual(gathering, maps:get(phase, AfterGather)),
     ?assertEqual(0, maps:get(postponed, AfterGather)),
     ?assertMatch(
-        {cell, 1, 0, FinalPhi, [8, 12], 1,
-            ?ALL_DIRECTIONS, 18, ?EAST_MASK, 0, 0, ?PRNG_FIRST, 0, 0,
-            0, 1},
+        {cell, 1, ?DIFFUSION_ROUNDS, FinalPhi, ?EAST_MASK, 0,
+            ?PRNG_FIRST, 0, 0, 0, 1},
         maps:get(data, AfterGather)
+    ),
+    ?assertMatch(
+        #{name := diffusion, received := 1, remaining := 3},
+        maps:get(reduction, AfterGather)
     ).
 
 full_staged_diffusion_epoch(PID, Ref) ->
@@ -978,8 +1118,8 @@ full_staged_diffusion_epoch(PID, Ref) ->
     ?assertEqual(0, maps:get(postponed, Complete)),
     ?assertEqual(0, maps:get(committed, maps:get(mailbox, Complete))),
     ?assertMatch(
-        {cell, 0, ?DIFFUSION_ROUNDS, FinalPhi, [0, 0], 0,
-            0, 0, 0, 0, 0, ?PRNG_SEED, 0, 0, 0, 0},
+        {cell, 0, ?DIFFUSION_ROUNDS, FinalPhi, 0, 0,
+            ?PRNG_SEED, 0, 0, 0, 0},
         maps:get(data, Complete)
     ).
 
@@ -1008,9 +1148,8 @@ full_staged_comparison(PID, Ref) ->
     ?assertEqual(0, maps:get(postponed, Complete)),
     ?assertEqual(0, maps:get(committed, maps:get(mailbox, Complete))),
     ?assertMatch(
-        {cell, 0, ?DIFFUSION_ROUNDS, [0, 0], [0, 0], 0,
-            ?ALL_DIRECTIONS, 4, ?SOUTH_MASK, 0, 0, ?PRNG_FIRST, 0, 0,
-            0, 0},
+        {cell, 0, ?DIFFUSION_ROUNDS, [0, 0], ?SOUTH_MASK, 0,
+            ?PRNG_FIRST, 0, 0, 0, 0},
         maps:get(data, Complete)
     ).
 
@@ -1028,14 +1167,23 @@ comparison_order_tests(Kind, Messages, Best, BestDirection) ->
             "~p comparison order ~p",
             [Kind, [Source || {phi0, 0, Source, _Value} <- Ordered]]
         )), fun() ->
-            {flipping, Final, consume} = apply_comparisons(
+            {{flipping, Final, consume}, Fold} = apply_comparisons(
                 Ordered,
                 comparison_cell()
             ),
+            WinnerMask = lists:foldl(
+                fun
+                    ({phi0, 0, Source, Value}, Mask) when Value =:= Best ->
+                        Mask bor Source;
+                    ({phi0, 0, _Source, _Value}, Mask) -> Mask
+                end,
+                0,
+                Ordered
+            ),
+            ?assertEqual({phi_fold, Best, WinnerMask}, Fold),
             ?assertMatch(
-                {cell, 0, 2, [15, 15], [0, 0], 0,
-                    ?ALL_DIRECTIONS, Best, BestDirection, 0, 0, ?PRNG_SEED,
-                    0, 0, 0, 0},
+                {cell, 0, 2, [15, 15], BestDirection, 0,
+                    ?PRNG_SEED, 0, 0, 0, 0},
                 Final
             )
         end}
@@ -1043,13 +1191,10 @@ comparison_order_tests(Kind, Messages, Best, BestDirection) ->
     ].
 
 comparison_cell() ->
-    {cell, 0, 2, [15, 15], [0, 0], 0,
-        0, 0, 0, 0, 0, ?PRNG_SEED, 0, 0, 0, 0}.
+    {cell, 0, 2, [15, 15], 0, 0, ?PRNG_SEED, 0, 0, 0, 0}.
 
 flipping_cell(Anyon, Direction, RandomState) ->
-    {cell, 0, 2, [15, 15], [0, 0], 0,
-        ?ALL_DIRECTIONS, 18, Direction, 0, Anyon, RandomState, 0, 0,
-        0, 0}.
+    {cell, 0, 2, [15, 15], Direction, Anyon, RandomState, 0, 0, 0, 0}.
 
 comparison_messages(SourcesAndValues) ->
     [
@@ -1057,26 +1202,86 @@ comparison_messages(SourcesAndValues) ->
         || {Source, Value} <- SourcesAndValues
     ].
 
-apply_comparisons([Message], Cell) ->
-    phi_halo_cell:comparing(cast, Message, Cell);
-apply_comparisons([Message | Rest], Cell) ->
-    {comparing, Next, consume} =
-        phi_halo_cell:comparing(cast, Message, Cell),
-    apply_comparisons(Rest, Next).
+fold_diffusion_messages(Messages, Cell) ->
+    Contributions = [
+        begin
+            {gathering, Cell,
+                {contribute, diffusion, _Epoch, Contribution}} =
+                phi_halo_cell:gathering(cast, Message, Cell),
+            Contribution
+        end
+        || Message <- Messages
+    ],
+    fold_reduction(diffusion, {phi_fold, 0, 0}, Contributions).
 
-apply_anyons([Present], Cell) ->
-    phi_halo_cell:flipping(
-        cast,
-        {anyon_move, 0, present_word(Present)},
-        Cell
-    );
-apply_anyons([Present | Rest], Cell) ->
-    {flipping, Next, consume} = phi_halo_cell:flipping(
-        cast,
-        {anyon_move, 0, present_word(Present)},
+apply_comparisons(Messages, Cell) ->
+    [{phi0, Step, _, _} | _] = Messages,
+    Contributions = [
+        begin
+            {comparing, Cell,
+                {contribute, comparison, Step, _Member, Contribution}} =
+                phi_halo_cell:comparing(cast, Message, Cell),
+            Contribution
+        end
+        || Message <- Messages
+    ],
+    Fold = fold_reduction(
+        comparison,
+        {phi_fold, 0, 0},
+        Contributions
+    ),
+    Result = phi_halo_cell:comparing(
+        internal,
+        {reduction_complete, comparison, Step, Fold},
         Cell
     ),
-    apply_anyons(Rest, Next).
+    {Result, Fold}.
+
+apply_anyons(Presents, Cell) ->
+    Contributions = [
+        begin
+            {flipping, Cell,
+                {contribute, movement, 0, Contribution}} =
+                phi_halo_cell:flipping(
+                    cast,
+                    {anyon_move, 0, present_word(Present)},
+                    Cell
+                ),
+            Contribution
+        end
+        || Present <- Presents
+    ],
+    Fold = fold_reduction(movement, {phi_fold, 0, 0}, Contributions),
+    phi_halo_cell:flipping(
+        internal,
+        {reduction_complete, movement, 0, Fold},
+        Cell
+    ).
+
+fold_reduction(Name, Identity, Contributions) ->
+    lists:foldl(
+        fun(Contribution, Accumulator) ->
+            phi_halo_cell:reduce(Name, Accumulator, Contribution)
+        end,
+        Identity,
+        Contributions
+    ).
+
+assert_comparison_tree_fold(Expected, [A, B, C, D] = Contributions) ->
+    Identity = {phi_fold, 0, 0},
+    Reduce = fun(Left, Right) ->
+        phi_halo_cell:reduce(comparison, Left, Right)
+    end,
+    lists:foreach(
+        fun(Value) ->
+            ?assertEqual(Value, Reduce(Identity, Value)),
+            ?assertEqual(Value, Reduce(Value, Identity))
+        end,
+        Contributions
+    ),
+    ?assertEqual(Expected, lists:foldl(Reduce, Identity, Contributions)),
+    ?assertEqual(Expected, lists:foldr(Reduce, Identity, Contributions)),
+    ?assertEqual(Expected, Reduce(Reduce(A, B), Reduce(C, D))).
 
 permutations([]) ->
     [[]];
@@ -1223,8 +1428,7 @@ await_step(_PID, Step, 0) ->
 await_step(PID, Step, Attempts) ->
     Info = phi_halo_cell:runtime_info(PID),
     case maps:get(data, Info) of
-        {cell, CurrentStep, _Round, _Phi, _Sum, _PhiReceived,
-                _Seen, _Best, _Direction, _MovesReceived, _Anyon, _Random,
+        {cell, CurrentStep, _Epoch, _Phi, _Direction, _Anyon, _Random,
                 _X, _Y, _NoiseQuiet, _StatusValid}
                 when CurrentStep >= Step ->
             ok;
@@ -1396,7 +1600,8 @@ anyon_outputs(Step, Selected) ->
 
 expected_anyon_actions(Step, Selected, X, Y) ->
     Outputs = anyon_outputs(Step, Selected),
-    [
+    [{open_reduction, movement, Step, {count, 4},
+        {commutative_monoid, {phi_fold, 0, 0}}}] ++ [
         {cast, Port, maps:get(Port, Outputs)}
         || Port <- [north, east, west, south]
     ] ++ [{cast_if, Selected =/= none, correction, {phi_correction,

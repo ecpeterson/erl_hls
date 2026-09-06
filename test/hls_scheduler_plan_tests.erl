@@ -13,18 +13,21 @@ phi_profile_groups_homogeneous_families_test() ->
         group(phi_x, Groups),
         phi_halo_cell,
         9,
+        182,
         [{family, phi_x, 0}]
     ),
     assert_group(
         group(syndrome_z, Groups),
         phenom_syndrome_cell,
         9,
+        0,
         [{family, syndrome_z, 0}]
     ),
     assert_group(
         group(data_even, Groups),
         phenom_data_cell,
         9,
+        0,
         [{family, data_even, 0}]
     ).
 
@@ -38,18 +41,21 @@ one_shard_profile_retains_module_level_groups_test() ->
         group(phi, Groups),
         phi_halo_cell,
         18,
+        182,
         [{family, phi_x, 0}, {family, phi_z, 9}]
     ),
     assert_group(
         group(syndrome, Groups),
         phenom_syndrome_cell,
         18,
+        0,
         [{family, syndrome_x, 0}, {family, syndrome_z, 9}]
     ),
     assert_group(
         group(data, Groups),
         phenom_data_cell,
         18,
+        0,
         [{family, data_even, 0}, {family, data_odd, 9}]
     ).
 
@@ -184,12 +190,21 @@ group_spec(Members) ->
 group(Id, Groups) ->
     hd([Group || Group = #{id := GroupId} <- Groups, GroupId =:= Id]).
 
-assert_group(Group, Module, SlotCount, ExpectedMembers) ->
+assert_group(
+    Group,
+    Module,
+    SlotCount,
+    ExpectedReductionStorageWidth,
+    ExpectedMembers
+) ->
     ?assertEqual(Module, maps:get(module, Group)),
     ?assertEqual(SlotCount, maps:get(slot_count, Group)),
     ?assertEqual(5, maps:get(mailbox_capacity, Group)),
     ?assert(maps:get(width, maps:get(state, Group)) > 0),
-    ?assertEqual(0, maps:get(reduction_storage_width, Group)),
+    ?assertEqual(
+        ExpectedReductionStorageWidth,
+        maps:get(reduction_storage_width, Group)
+    ),
     ?assertEqual(round_robin, maps:get(selection, Group)),
     ?assertEqual(resumable, maps:get(effect_progress, Group)),
     ?assertEqual(none, maps:get(reservation, Group)),
