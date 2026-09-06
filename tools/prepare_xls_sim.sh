@@ -25,6 +25,7 @@ ERL_HLS_PHI_MEMORY_DEBUG_TOP_V="$stage/phi_memory_debug_top.v" \
 ERL_HLS_ORDERED_EGRESS_ACTOR_X="$stage/ordered_egress_actor.x" \
 ERL_HLS_ORDERED_EGRESS_TOPOLOGY_X="$stage/ordered_egress_topology.x" \
 ERL_HLS_CASE_FIXTURE_X="$stage/xls_case_fixture.x" \
+ERL_HLS_STATEM_REDUCTION_X="$stage/hls_statem_reduction_rtl_fixture.x" \
 ERL_HLS_PHI_FIELD_TEST_X="$stage/phi_field_test.x" \
 erl \
     -noshell \
@@ -46,6 +47,9 @@ erl \
         ),
         CaseFixture = xls_parse:to_xls(
             "test_data/xls_case_fixture.erl"
+        ),
+        ReductionFixture = xls_parse:to_xls(
+            "test_data/hls_statem_reduction_rtl_fixture.erl"
         ),
         PhiFieldTest = phi_field_dslx:to_dslx(),
         PhiPhenomTopology = phi_phenom_topology_dslx:to_dslx(),
@@ -143,6 +147,10 @@ erl \
             CaseFixture
         ),
         ok = file:write_file(
+            os:getenv("ERL_HLS_STATEM_REDUCTION_X"),
+            ReductionFixture
+        ),
+        ok = file:write_file(
             os:getenv("ERL_HLS_PHI_FIELD_TEST_X"),
             PhiFieldTest
         ),
@@ -193,6 +201,12 @@ cp "$project_root/priv/xls/lib/axis.x" "$stage/axis.x"
 cp "$project_root/priv/xls/lib/bram.x" "$stage/bram.x"
 cp "$project_root/priv/xls/lib/effect_window.x" "$stage/effect_window.x"
 cp "$project_root/priv/xls/lib/mailbox.x" "$stage/mailbox.x"
+cp "$project_root/test_data/hls_statem_reduction_shared_top.x" \
+    "$stage/hls_statem_reduction_shared_top.x"
+cp "$project_root/test_data/hls_statem_reduction_hol_top.x" \
+    "$stage/hls_statem_reduction_hol_top.x"
+cp "$project_root/test_data/hls_statem_reduction_reopen_top.x" \
+    "$stage/hls_statem_reduction_reopen_top.x"
 cp "$project_root/src/examples/regsvc/regsvc_core_adapter.v" \
     "$stage/regsvc_core_adapter.v"
 cp "$project_root/src/examples/regsvc/regsvc_debug_top.v" \
@@ -244,6 +258,14 @@ cp "$project_root/test/rtl/hls_fabric_host_tx_tb.sv" \
     "$stage/hls_fabric_host_tx_tb.sv"
 cp "$project_root/test/rtl/ordered_egress_topology_tb.sv" \
     "$stage/ordered_egress_topology_tb.sv"
+cp "$project_root/test/rtl/hls_statem_reduction_tb.sv" \
+    "$stage/hls_statem_reduction_tb.sv"
+cp "$project_root/test/rtl/hls_statem_reduction_hol_tb.sv" \
+    "$stage/hls_statem_reduction_hol_tb.sv"
+cp "$project_root/test/rtl/hls_statem_reduction_reopen_tb.sv" \
+    "$stage/hls_statem_reduction_reopen_tb.sv"
+cp "$project_root/test/rtl/hls_statem_reduction_error_tb.sv" \
+    "$stage/hls_statem_reduction_error_tb.sv"
 cp "$project_root/test/rtl/xls_sim_bridge.c" "$stage/xls_sim_bridge.c"
 cp "$project_root/tools/phi_scheduler_rams.sh" \
     "$stage/phi_scheduler_rams.sh"

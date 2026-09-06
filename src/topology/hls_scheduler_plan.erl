@@ -23,7 +23,9 @@ several executors while leaving semantic family identity and routing intact.
 Each storage choice is a required physical binding, not a hint. A backend must
 either realize the corresponding state there or reject the plan. Actor data
 and mailboxes are separate bindings because safe shared scheduling needs both
-per-instance callback state and per-instance bounded admission state.
+per-instance callback state and per-instance bounded admission state. Generated
+actor-local reduction state is included in each actor's state-storage row, but
+its width remains explicit in the normalized plan.
 
 A shared executor advances one actor by a resumable microstep. If the next
 ordered effect lacks egress credit, the actor keeps its pending-effect index
@@ -109,11 +111,14 @@ normalize_group(Id, Spec, MemberIndex) when is_map(Spec) ->
         Members0
     ),
     State = hls_actor_interface:state(Interface),
+    ReductionStorageWidth =
+        hls_actor_interface:reduction_storage_width(Interface),
     {Members, SlotCount} = assign_slots(Members0),
     #{
         id => Id,
         module => Module,
         state => State,
+        reduction_storage_width => ReductionStorageWidth,
         mailbox_capacity => Capacity,
         members => Members,
         slot_count => SlotCount,

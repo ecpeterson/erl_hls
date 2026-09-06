@@ -82,6 +82,167 @@ done
     --top=Top \
     xls_case_fixture.x > xls_case_fixture.ir
 
+# Count and fixed-universe reductions share one private accumulator row. This
+# small actor checks both modes, completion-event delivery, and a phase-entry
+# reopen without involving the much larger phi topology.
+"$xls_root/ir_converter_main" \
+    --warnings_as_errors=false \
+    --dslx_path=. \
+    --dslx_stdlib_path="$stdlib" \
+    --top=Top \
+    hls_statem_reduction_rtl_fixture.x > \
+        hls_statem_reduction_rtl_fixture.ir
+
+"$xls_root/opt_main" \
+    hls_statem_reduction_rtl_fixture.ir > \
+        hls_statem_reduction_rtl_fixture.opt.ir
+
+"$xls_root/codegen_main" \
+    --pipeline_stages=1 \
+    --delay_model=unit \
+    --flop_inputs=false \
+    --flop_outputs=true \
+    --use_system_verilog=false \
+    --reset=reset \
+    --fifo_module= \
+    hls_statem_reduction_rtl_fixture.opt.ir > \
+        hls_statem_reduction_rtl_fixture.v
+
+iverilog \
+    -g2012 \
+    -s hls_statem_reduction_tb \
+    -o hls_statem_reduction.vvp \
+    hls_statem_reduction_tb.sv \
+    hls_statem_reduction_rtl_fixture.v
+
+vvp hls_statem_reduction.vvp
+
+# Run the same protocol through the shared scheduler. Its one-actor test
+# wrapper supplies small DSLX RAM models, so this exercises SharedService's
+# private completion-ready path without adding an external-memory testbench.
+"$xls_root/ir_converter_main" \
+    --warnings_as_errors=false \
+    --dslx_path=. \
+    --dslx_stdlib_path="$stdlib" \
+    --top=Top \
+    hls_statem_reduction_shared_top.x > \
+        hls_statem_reduction_shared_top.ir
+
+"$xls_root/opt_main" \
+    hls_statem_reduction_shared_top.ir > \
+        hls_statem_reduction_shared_top.opt.ir
+
+"$xls_root/codegen_main" \
+    --pipeline_stages=2 \
+    --worst_case_throughput=2 \
+    --delay_model=unit \
+    --flop_inputs=false \
+    --flop_outputs=true \
+    --use_system_verilog=false \
+    --reset=reset \
+    --fifo_module= \
+    hls_statem_reduction_shared_top.opt.ir > \
+        hls_statem_reduction_shared_top.v
+
+iverilog \
+    -g2012 \
+    -DREDUCTION_DUT=__hls_statem_reduction_shared_top__Top_0_next \
+    -s hls_statem_reduction_tb \
+    -o hls_statem_reduction_shared.vvp \
+    hls_statem_reduction_tb.sv \
+    hls_statem_reduction_shared_top.v
+
+vvp hls_statem_reduction_shared.vvp
+
+# Definite protocol violations stop the actor in both deployment modes.  The
+# same test covers an incomplete phase boundary and a duplicate fixed member.
+for reduction_mode in direct shared; do
+    reduction_define=
+    reduction_verilog=hls_statem_reduction_rtl_fixture.v
+    if [ "$reduction_mode" = shared ]; then
+        reduction_define=-DREDUCTION_DUT=__hls_statem_reduction_shared_top__Top_0_next
+        reduction_verilog=hls_statem_reduction_shared_top.v
+    fi
+    iverilog \
+        -g2012 \
+        $reduction_define \
+        -s hls_statem_reduction_error_tb \
+        -o "hls_statem_reduction_error_${reduction_mode}.vvp" \
+        hls_statem_reduction_error_tb.sv \
+        "$reduction_verilog"
+    vvp "hls_statem_reduction_error_${reduction_mode}.vvp"
+done
+
+# A held effect-window credit may block an older executor result, but it must
+# not globally stop another actor's executor-free local contribution fold.
+"$xls_root/ir_converter_main" \
+    --warnings_as_errors=false \
+    --dslx_path=. \
+    --dslx_stdlib_path="$stdlib" \
+    --top=Top \
+    hls_statem_reduction_hol_top.x > \
+        hls_statem_reduction_hol_top.ir
+
+"$xls_root/opt_main" \
+    hls_statem_reduction_hol_top.ir > \
+        hls_statem_reduction_hol_top.opt.ir
+
+"$xls_root/codegen_main" \
+    --pipeline_stages=2 \
+    --worst_case_throughput=2 \
+    --delay_model=unit \
+    --flop_inputs=false \
+    --flop_outputs=true \
+    --use_system_verilog=false \
+    --reset=reset \
+    --fifo_module= \
+    hls_statem_reduction_hol_top.opt.ir > \
+        hls_statem_reduction_hol_top.v
+
+iverilog \
+    -g2012 \
+    -s hls_statem_reduction_hol_tb \
+    -o hls_statem_reduction_hol.vvp \
+    hls_statem_reduction_hol_tb.sv \
+    hls_statem_reduction_hol_top.v
+
+vvp hls_statem_reduction_hol.vvp
+
+# Entering another reduction-opening phase while one is already open is a
+# machine failure, but must leave the original row intact for diagnostics.
+"$xls_root/ir_converter_main" \
+    --warnings_as_errors=false \
+    --dslx_path=. \
+    --dslx_stdlib_path="$stdlib" \
+    --top=Top \
+    hls_statem_reduction_reopen_top.x > \
+        hls_statem_reduction_reopen_top.ir
+
+"$xls_root/opt_main" \
+    hls_statem_reduction_reopen_top.ir > \
+        hls_statem_reduction_reopen_top.opt.ir
+
+"$xls_root/codegen_main" \
+    --pipeline_stages=2 \
+    --worst_case_throughput=2 \
+    --delay_model=unit \
+    --flop_inputs=false \
+    --flop_outputs=true \
+    --use_system_verilog=false \
+    --reset=reset \
+    --fifo_module= \
+    hls_statem_reduction_reopen_top.opt.ir > \
+        hls_statem_reduction_reopen_top.v
+
+iverilog \
+    -g2012 \
+    -s hls_statem_reduction_reopen_tb \
+    -o hls_statem_reduction_reopen.vvp \
+    hls_statem_reduction_reopen_tb.sv \
+    hls_statem_reduction_reopen_top.v
+
+vvp hls_statem_reduction_reopen.vvp
+
 "$xls_root/ir_converter_main" \
     --warnings_as_errors=false \
     --dslx_path=. \

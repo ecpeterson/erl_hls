@@ -9,11 +9,12 @@
 
 -export([prepare/2]).
 
--type callback_kind() :: enter | cast.
+-type callback_kind() :: enter | cast | internal.
 
 -spec prepare([erl_parse:abstract_form()], [atom()]) -> #{
     enter := [erl_parse:af_clause()],
-    cast := [erl_parse:af_clause()]
+    cast := [erl_parse:af_clause()],
+    internal := [erl_parse:af_clause()]
 }.
 prepare(Forms, Phases) ->
     Classified = lists:append([
@@ -23,7 +24,8 @@ prepare(Forms, Phases) ->
     ]),
     #{
         enter => [Clause || {enter, Clause} <- Classified],
-        cast => [Clause || {cast, Clause} <- Classified]
+        cast => [Clause || {cast, Clause} <- Classified],
+        internal => [Clause || {internal, Clause} <- Classified]
     }.
 
 callback_clauses(Forms, Name, Arity) ->
@@ -53,5 +55,11 @@ prepare_clause(
 ) ->
     {cast, {clause, Line,
         [Message, {atom, Line, Phase}, Data], Guards, Body}};
+prepare_clause(
+    {clause, Line, [{atom, _EventLine, internal}, Event, Data], Guards, Body},
+    Phase
+) ->
+    {internal, {clause, Line,
+        [Event, {atom, Line, Phase}, Data], Guards, Body}};
 prepare_clause({clause, Line, Patterns, _Guards, _Body}, Phase) ->
     error({unsupported_hls_statem_state_head, Phase, Line, Patterns}).

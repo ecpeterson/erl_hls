@@ -1,9 +1,9 @@
 # Actor-owned reductions
 
 This document defines phase-local incast reduction for `hls_statem`. The CPU
-reference implements the callback contract described here. XLS/RTL lowering
-is a later stage and will initially accept a deliberately smaller, statically
-bounded subset.
+reference implements the full callback contract described here, while the
+XLS/RTL backend implements the deliberately smaller, statically bounded subset
+below.
 
 ## Ownership and source syntax
 
@@ -215,14 +215,14 @@ machine is disconnected again until its owner reconnects it. Supervising a
 connected topology and deciding which peers or epoch to restart remains a
 separate lifecycle design problem.
 
-The eventual hardware reset contract must clear mailbox and reduction state,
-including the completion latch, as one coherent reset before phase-entry casts
-become visible. It must not expose a partial pre-reset reduction after reset.
+Hardware reset clears mailbox and reduction state, including the completion
+latch, as one coherent reset before phase-entry casts become visible; it does
+not expose partial pre-reset reduction state.
 
 ## Initial XLS/RTL contract
 
-The CPU behavior above is the reference, but the first lowerer should accept
-only cases which can be proved bounded and rendered with fixed-width storage:
+The CPU behavior above is the reference, but the first lowerer accepts only
+cases which can be proved bounded and rendered with fixed-width storage:
 
 * one active reduction slot per actor, from a statically closed set of names;
 * fixed-width name, key, accumulator, value, and member representations;
@@ -261,6 +261,56 @@ Dynamic membership, cancellation, timeouts, overlapping reductions, ordered
 or noncommutative folds, and reducer effects are explicitly outside the first
 hardware contract.
 
+## First XLS/RTL realization
+
+The lowerer recognizes a deliberately closed source subset rather than trying
+to infer arbitrary callback semantics. The open must be the first literal
+entry action, contribution clauses must form the leading clauses for their
+message/phase pair, and each contribution must preserve the ordinary phase and
+callback data. Keys and fixed member labels are `u32`; the identity, values,
+and result of `reduce/3` use one private, completely constructed accumulator
+record. Unsupported shapes fail translation instead of silently taking the
+ordinary callback path.
+
+Each actor has one reduction word alongside its ordinary callback state. For
+an accumulator of width `A` and a largest fixed-member population of `M`, its
+packed layout is:
+
+```
+status[2] | site[8] | key[32] | remaining[8] |
+seen[max(1, M)] | accumulator[A]
+```
+
+`site` identifies the statically known phase/open site and thereby its name,
+mode, population, and member-to-bit mapping. Count mode leaves `seen` zero.
+The shared scheduler places this word in the same external state-RAM row as
+phase and callback data; mailbox frames and ordering metadata remain in the
+separate mailbox store.
+
+The direct service folds matching mailbox messages in its ordinary machine
+step. The shared service instead recognizes a contribution after loading the
+actor and mailbox head, folds it next to the mailbox owner, and retires it
+without visiting the pipelined callback executor. A completed word marks that
+actor in a private-ready bit set. Its completion event wins over entry or mail
+the next time the actor is selected and uses the ordinary executor for the one
+callback-data update and possible phase boundary.
+
+A scheduler-local folded-result latch arbitrates local folds with executor
+results for the single state-memory write port. A retireable executor result
+wins, but an effect-bearing result waiting for credit does not fence a fold
+from another actor. During each maximal interval in which the ordinary
+completion path remains effect-credit-blocked, the scheduler may speculatively
+read mail-only actors. A foldable head enters the folded-result latch; a
+non-contribution head is left unchanged and that actor is skipped for the rest
+of the blocked interval, so one nonfolding actor cannot starve a later foldable
+one. The skip set is cleared when the completion path is no longer blocked.
+Per-actor in-flight exclusion preserves actor-local order throughout. Reset
+writes the zero (`IDLE`) reduction word together with each actor's initial
+state. Focused native RTL tests cover count and out-of-order fixed-member
+reductions, future-key postponement and retry, incomplete phase boundaries,
+and duplicate members through both the direct service and an external-RAM
+shared service.
+
 ## Implementation stages and measurements
 
 1. Phase-named `hls_statem` callbacks preserve the previous runtime and
@@ -268,8 +318,9 @@ hardware contract.
 2. The CPU reference adds entry opens, cast contribution directives, named
    `reduce/3`, and private completion events, with permutation, skew,
    duplicate, key, postponement, and failure coverage. This stage is complete.
-3. XLS lowers one active bounded reduction per actor and instruments occupancy,
-   completion latency, and avoided executor visits.
+3. XLS lowers one active bounded reduction per actor, using count or a fixed
+   member universe. This stage is complete; workload-level profiling remains
+   part of the phi adoption.
 4. The phi actors adopt the mechanism and cadence and area are measured against
    the global effect-window baseline.
 
