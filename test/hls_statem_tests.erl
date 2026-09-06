@@ -216,6 +216,27 @@ repeat_phase_is_reserved_from_application_phases_test() ->
         process_flag(trap_exit, Previous)
     end.
 
+reduce_is_reserved_from_application_phases_test() ->
+    Previous = process_flag(trap_exit, true),
+    try
+        ?assertMatch(
+            {error, {{bad_hls_statem_phase, reduce}, _InitStack}},
+            hls_statem:start_link(
+                ?MODULE,
+                reduce,
+                [{mailbox_capacity, 1}, {outputs, #{out => self()}}]
+            )
+        ),
+        receive
+            {'EXIT', _PID, {{bad_hls_statem_phase, reduce}, _ExitStack}} ->
+                ok
+        after 0 ->
+            ok
+        end
+    after
+        process_flag(trap_exit, Previous)
+    end.
+
 outputs_may_be_connected_after_start_test() ->
     {ok, PID} = start_deferred(4),
     try
@@ -276,7 +297,9 @@ init({emit, Enabled}) when is_boolean(Enabled) ->
         log => []
     }};
 init(repeat_phase) ->
-    {ok, repeat_phase, #{}}.
+    {ok, repeat_phase, #{}};
+init(reduce) ->
+    {ok, reduce, #{}}.
 
 -spec waiting(enter, hls_statem:phase(), map()) ->
     hls_statem:enter_result(map());

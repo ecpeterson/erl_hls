@@ -19,13 +19,30 @@ The callback module exports `init/1`, returning `{ok, Phase, Data}`, and one
 `Phase/3` function for each application phase.
 
 Initial entry and each phase boundary invoke `Module:Phase(enter, OldPhase,
-Data)` before retrying postponed messages. Entry returns `{NextData, Casts}`.
+Data)` before retrying postponed messages. Entry returns `{NextData, Actions}`.
 `OldPhase` equals `Phase` for initial entry.
 
-`Casts` is a bounded list of `{cast, Port, Message}` actions. A statically
+`Actions` is a bounded list. It may begin with one
+`{open_reduction, Name, Key, Population, {commutative_monoid, Identity}}`
+action, followed by `{cast, Port, Message}` actions. A statically
 placed `{cast_if, Condition, Port, Message}` retains its ordered position but
 emits only when enabled. Ports and list shape remain static, and each port may
 occur at most once in an entry. CPU output uses ordinary `gen_server:cast/2`.
+
+An open reduction accepts either a fixed contribution count or a fixed member
+set. A cast clause contributes through the ordinary conclusion's directive:
+
+```
+{Phase, Data, {contribute, Name, Key, Value}}
+{Phase, Data, {contribute, Name, Key, Member, Value}}
+```
+
+The phase and data must be unchanged. Accepted values are combined by the
+callback module's `reduce(Name, Accumulator, Value)` function. The final value
+is delivered privately as
+`Phase(internal, {reduction_complete, Name, Key, Value}, Data)` before another
+external mailbox entry is selected. Internal handlers use the ordinary fixed
+conclusion shape, but may only consume, fail, change phase, or repeat it.
 
 Application input invokes `Module:Phase(cast, Message, Data)` and returns one
 fixed-shape conclusion:
@@ -48,8 +65,8 @@ postponed inputs in arrival order.
 deliberately distinct from OTP's `repeat_state`, which does not release
 postponed events. Returning the current phase in an ordinary conclusion does
 not trigger entry or retries.
-`repeat_phase` and `terminate` are reserved phase names; the latter would
-collide with the optional diagnostic callback at arity three.
+`repeat_phase`, `reduce`, and `terminate` are reserved phase names; the latter
+two would collide with reduction and diagnostic callbacks at arity three.
 
 An overloaded Erlang specification can preserve the relationship between the
 event kind and its result:
@@ -79,9 +96,9 @@ Inputs received before connection occupy the bounded mailbox; no application
 callback runs until initial entry. Hardware ports are statically connected.
 
 The callback vocabulary is a restricted `gen_statem` state-functions style.
-Calls, timeouts, `next_event`, reductions, and other OTP result/action forms
-are not supported. See `docs/actor-reductions.md` for the staged reduction
-design.
+Calls, timeouts, `next_event`, and other OTP result/action forms are not
+supported. See `docs/actor-reductions.md` for reduction semantics and the
+staged lowering design.
 
 ## Postponement
 
@@ -124,8 +141,17 @@ models scheduling semantics rather than host-side admission guarantees.
     callback_result/0,
     callback_result/1,
     cast_action/0,
+    entry_action/0,
+    open_reduction_action/0,
+    reduction_complete/0,
+    reduction_population/0,
+    reduction_operator/0,
+    contribution/0,
     enter_result/0,
-    enter_result/1
+    enter_result/1,
+    internal_result/0,
+    internal_result/1,
+    internal_result/2
 ]).
 
 %%%
@@ -136,11 +162,41 @@ models scheduling semantics rather than host-side admission guarantees.
 -type lifecycle() :: disconnected | connected.
 -type output_port() :: atom().
 -type data() :: term().
--type event_type() :: enter | cast.
+-type event_type() :: enter | cast | internal.
 -type cast_action() ::
     {cast, output_port(), term()} |
     {cast_if, boolean(), output_port(), term()}.
--type cast_directive() :: consume | postpone | fail.
+-type reduction_population() ::
+    {count, 1..255} |
+    {members, [term(), ...]}.
+-type reduction_operator() :: {
+    commutative_monoid,
+    Identity :: term()
+}.
+-type open_reduction_action() :: {
+    open_reduction,
+    Name :: atom(),
+    Key :: term(),
+    reduction_population(),
+    reduction_operator()
+}.
+-type entry_action() :: cast_action() | open_reduction_action().
+-type contribution() ::
+    {contribute, Name :: atom(), Key :: term(), Value :: term()} |
+    {
+        contribute,
+        Name :: atom(),
+        Key :: term(),
+        Member :: term(),
+        Value :: term()
+    }.
+-type reduction_complete() :: {
+    reduction_complete,
+    Name :: atom(),
+    Key :: term(),
+    Accumulator :: term()
+}.
+-type cast_directive() :: consume | postpone | fail | contribution().
 -type cast_result() :: cast_result(phase(), data()).
 -type cast_result(DataType) :: cast_result(phase(), DataType).
 -type cast_result(PhaseType, DataType) ::
@@ -153,11 +209,22 @@ models scheduling semantics rather than host-side admission guarantees.
 -type enter_result() :: enter_result(data()).
 -type enter_result(DataType) :: {
     NextData :: DataType,
-    Casts :: [cast_action()]
+    Actions :: [entry_action()]
 }.
+-type internal_result() :: internal_result(phase(), data()).
+-type internal_result(DataType) :: internal_result(phase(), DataType).
+-type internal_result(PhaseType, DataType) ::
+    {
+        NextPhase :: PhaseType,
+        NextData :: DataType,
+        Directive :: consume | fail
+    } |
+    {repeat_phase, NextData :: DataType, consume}.
 -type callback_result() :: callback_result(data()).
 -type callback_result(DataType) ::
-    enter_result(DataType) | cast_result(DataType).
+    enter_result(DataType) |
+    cast_result(DataType) |
+    internal_result(DataType).
 -type start_option() ::
     {mailbox_capacity, 1..255} |
     {outputs, #{output_port() := pid()}}.
@@ -172,12 +239,19 @@ models scheduling semantics rather than host-side admission guarantees.
     OldPhase :: phase(),
     Data :: DataType
 ) -> enter_result(DataType);
-    (cast, Message :: term(), Data :: DataType) -> cast_result(DataType).
+    (cast, Message :: term(), Data :: DataType) -> cast_result(DataType);
+    (internal, reduction_complete(), Data :: DataType) ->
+        internal_result(DataType).
+-callback reduce(
+    Name :: atom(),
+    Left :: Accumulator,
+    Right :: Accumulator
+) -> Accumulator when Accumulator :: term().
 -callback terminate(term(), phase(), data()) -> term().
 
 %% StateName/3 documents the dynamic callback contract. Every runtime phase
 %% needs its own Phase/3 function, but none must literally be named StateName.
--optional_callbacks([terminate/3, 'StateName'/3]).
+-optional_callbacks([reduce/3, terminate/3, 'StateName'/3]).
 
 -record(runtime, {
     module :: module(),
@@ -187,7 +261,9 @@ models scheduling semantics rather than host-side admission guarantees.
     outputs = #{} :: #{output_port() := pid()},
     mailbox :: hls_mailbox:mailbox(),
     postponed = #{} :: #{non_neg_integer() => true},
-    next_message_id = 0 :: non_neg_integer()
+    next_message_id = 0 :: non_neg_integer(),
+    reduction = none :: none | hls_reduction:reduction(),
+    internal = none :: none | reduction_complete()
 }).
 
 %%%
@@ -247,7 +323,12 @@ init({Module, Arg, Capacity, Outputs}) ->
     },
     case Lifecycle of
         disconnected -> {ok, Runtime0};
-        connected -> {ok, enter_phase(Phase, Runtime0)}
+        connected ->
+            Runtime1 = enter_phase(Phase, Runtime0),
+            case process_messages(Runtime1) of
+                {ok, Runtime2} -> {ok, Runtime2};
+                {stop, Reason, _Runtime2} -> {stop, Reason}
+            end
     end.
 
 %% Synchronous calls deliberately fail instead of masquerading as casts.
@@ -331,6 +412,9 @@ enqueue(Message, Runtime = #runtime{
             }}
     end.
 
+process_messages(Runtime = #runtime{internal = Internal})
+        when Internal =/= none ->
+    process_internal(Internal, Runtime#runtime{internal = none});
 process_messages(Runtime = #runtime{
     mailbox = Mailbox,
     postponed = Postponed
@@ -352,33 +436,185 @@ process_message(
         module = Module,
         phase = Phase,
         data = Data,
-        mailbox = Mailbox0,
         postponed = Postponed0
     }
 ) ->
     Result = Module:Phase(cast, Message, Data),
     {NextPhase, NextData, Directive, Repeat} =
         state_result(Result, Phase, Data),
+    case reduction_boundary_status(
+        Directive,
+        Repeat,
+        Phase,
+        NextPhase,
+        Runtime
+    ) of
+        {error, Status} ->
+            {stop,
+                {hls_statem_reduction_incomplete, Status, Message},
+                Runtime};
+        ok ->
+            NextRuntime = Runtime#runtime{
+                phase = NextPhase,
+                data = NextData
+            },
+            case Directive of
+                fail ->
+                    {stop, {hls_statem_failure, Message}, NextRuntime};
+                postpone ->
+                    finish_transition(Phase, NextRuntime#runtime{
+                        postponed = Postponed0#{MessageID => true}
+                    });
+                {contribute, _Name, _Key, _Value} = Contribution ->
+                    process_contribution(
+                        Contribution,
+                        Selection,
+                        {MessageID, Message},
+                        Phase,
+                        Data,
+                        NextRuntime
+                    );
+                {contribute, _Name, _Key, _Member, _Value} = Contribution ->
+                    process_contribution(
+                        Contribution,
+                        Selection,
+                        {MessageID, Message},
+                        Phase,
+                        Data,
+                        NextRuntime
+                    );
+                consume ->
+                    Consumed = consume_message(
+                        Selection,
+                        {MessageID, Message},
+                        NextRuntime
+                    ),
+                    case Repeat of
+                        true -> finish_repeat(Phase, Consumed);
+                        false -> finish_transition(Phase, Consumed)
+                    end
+            end
+    end.
+
+reduction_boundary_status(_Directive, _Repeat, _Phase, _NextPhase,
+        #runtime{reduction = none}) ->
+    ok;
+reduction_boundary_status(fail, _Repeat, _Phase, _NextPhase, _Runtime) ->
+    ok;
+reduction_boundary_status(
+    {contribute, _Name, _Key, _Value},
+    _Repeat,
+    _Phase,
+    _NextPhase,
+    _Runtime
+) ->
+    ok;
+reduction_boundary_status(
+    {contribute, _Name, _Key, _Member, _Value},
+    _Repeat,
+    _Phase,
+    _NextPhase,
+    _Runtime
+) ->
+    ok;
+reduction_boundary_status(_Directive, Repeat, Phase, NextPhase,
+        #runtime{reduction = Reduction}) ->
+    case Repeat orelse NextPhase =/= Phase of
+        true -> {error, hls_reduction:info(Reduction)};
+        false -> ok
+    end.
+
+process_internal(Event, Runtime = #runtime{
+    module = Module,
+    phase = Phase,
+    data = Data
+}) ->
+    Result = Module:Phase(internal, Event, Data),
+    {NextPhase, NextData, Directive, Repeat} =
+        internal_state_result(Result, Phase),
     NextRuntime = Runtime#runtime{phase = NextPhase, data = NextData},
     case Directive of
         fail ->
-            {stop, {hls_statem_failure, Message}, NextRuntime};
-        postpone ->
-            finish_transition(Phase, NextRuntime#runtime{
-                postponed = Postponed0#{MessageID => true}
-            });
+            {stop, {hls_statem_failure, Event}, NextRuntime};
+        consume when Repeat ->
+            finish_repeat(Phase, NextRuntime);
         consume ->
-            {ok, {MessageID, Message}, Mailbox1} =
-                hls_mailbox:consume(Selection, Mailbox0),
-            Consumed = NextRuntime#runtime{
-                mailbox = Mailbox1,
-                postponed = maps:remove(MessageID, Postponed0)
-            },
-            case Repeat of
-                true -> finish_repeat(Phase, Consumed);
-                false -> finish_transition(Phase, Consumed)
+            finish_transition(Phase, NextRuntime)
+    end.
+
+process_contribution(
+    Contribution,
+    Selection,
+    Entry = {MessageID, Message},
+    Phase,
+    Data,
+    Runtime = #runtime{
+        module = Module,
+        phase = NextPhase,
+        data = NextData,
+        reduction = Reduction,
+        postponed = Postponed
+    }
+) ->
+    case NextPhase =:= Phase andalso NextData =:= Data of
+        false ->
+            error({bad_hls_statem_contribution_state,
+                NextPhase, NextData});
+        true ->
+            case apply_contribution(Module, Contribution, Reduction) of
+                mismatch ->
+                    finish_transition(Phase, Runtime#runtime{
+                        postponed = Postponed#{MessageID => true}
+                    });
+                {pending, NextReduction} ->
+                    Consumed = consume_message(Selection, Entry, Runtime),
+                    finish_transition(Phase, Consumed#runtime{
+                        reduction = NextReduction
+                    });
+                {complete, Completion} ->
+                    Consumed = consume_message(Selection, Entry, Runtime),
+                    finish_transition(Phase, Consumed#runtime{
+                        reduction = none,
+                        internal = Completion
+                    });
+                {error, Reason} ->
+                    {stop,
+                        {hls_statem_reduction_failure, Reason, Message},
+                        Runtime}
             end
     end.
+
+apply_contribution(_Module, _Contribution, none) ->
+    mismatch;
+apply_contribution(
+    Module,
+    {contribute, Name, Key, Value},
+    Reduction
+) ->
+    hls_reduction:contribute(Module, Name, Key, Value, Reduction);
+apply_contribution(
+    Module,
+    {contribute, Name, Key, Member, Value},
+    Reduction
+) ->
+    hls_reduction:contribute(
+        Module,
+        Name,
+        Key,
+        Member,
+        Value,
+        Reduction
+    ).
+
+consume_message(Selection, Entry = {MessageID, _Message}, Runtime = #runtime{
+    mailbox = Mailbox,
+    postponed = Postponed
+}) ->
+    {ok, Entry, NextMailbox} = hls_mailbox:consume(Selection, Mailbox),
+    Runtime#runtime{
+        mailbox = NextMailbox,
+        postponed = maps:remove(MessageID, Postponed)
+    }.
 
 state_result({repeat_phase, NextData, consume}, Phase, _Data) ->
     {Phase, NextData, consume, true};
@@ -390,9 +626,20 @@ state_result({NextPhase, NextData, Directive}, _Phase, _Data) ->
 state_result(Result, _Phase, _Data) ->
     error({bad_hls_statem_result, Result}).
 
+internal_state_result({repeat_phase, NextData, consume}, Phase) ->
+    {Phase, NextData, consume, true};
+internal_state_result({repeat_phase, _NextData, Directive}, _Phase) ->
+    error({bad_hls_statem_internal_conclusion, repeat_phase, Directive});
+internal_state_result({NextPhase, NextData, Directive}, _Phase) ->
+    ok = validate_internal_conclusion(NextPhase, Directive),
+    {NextPhase, NextData, Directive, false};
+internal_state_result(Result, _Phase) ->
+    error({bad_hls_statem_internal_result, Result}).
+
 finish_transition(PreviousPhase, Runtime0 = #runtime{phase = Phase}) ->
     Runtime1 = case Phase =/= PreviousPhase of
         true ->
+            ok = require_idle_reduction(Runtime0),
             Entered = enter_phase(PreviousPhase, Runtime0),
             Entered#runtime{postponed = #{}};
         false ->
@@ -401,6 +648,7 @@ finish_transition(PreviousPhase, Runtime0 = #runtime{phase = Phase}) ->
     process_messages(Runtime1).
 
 finish_repeat(Phase, Runtime0) ->
+    ok = require_idle_reduction(Runtime0),
     Entered = enter_phase(Phase, Runtime0),
     process_messages(Entered#runtime{postponed = #{}}).
 
@@ -413,11 +661,19 @@ enter_phase(OldPhase, Runtime = #runtime{
     lifecycle = connected,
     phase = Phase,
     data = Data,
-    outputs = Outputs
+    outputs = Outputs,
+    reduction = Reduction,
+    internal = Internal
 }) ->
     Result = Module:Phase(enter, OldPhase, Data),
-    {NextData, Casts} = enter_result(Result),
-    ok = validate_casts(Casts, Outputs),
+    {NextData, Actions} = enter_result(Result),
+    {NextReduction, Casts} = prepare_entry_actions(
+        Module,
+        Actions,
+        Outputs,
+        Reduction,
+        Internal
+    ),
     lists:foreach(
         fun
             ({cast, Port, Message}) ->
@@ -429,28 +685,95 @@ enter_phase(OldPhase, Runtime = #runtime{
         end,
         Casts
     ),
-    Runtime#runtime{data = NextData}.
+    Runtime#runtime{data = NextData, reduction = NextReduction}.
 
 enter_result({NextData, Casts}) -> {NextData, Casts};
 enter_result(Result) -> error({bad_hls_statem_enter_result, Result}).
 
 validate_conclusion(NextPhase, Directive)
         when is_atom(NextPhase), NextPhase =/= repeat_phase,
-             NextPhase =/= terminate,
+             NextPhase =/= reduce, NextPhase =/= terminate,
              (Directive =:= consume orelse
               Directive =:= postpone orelse
               Directive =:= fail) ->
     ok;
+validate_conclusion(NextPhase, {contribute, Name, _Key, _Value})
+        when is_atom(NextPhase), NextPhase =/= repeat_phase,
+             NextPhase =/= reduce, NextPhase =/= terminate, is_atom(Name) ->
+    ok;
+validate_conclusion(
+    NextPhase,
+    {contribute, Name, _Key, _Member, _Value}
+)
+        when is_atom(NextPhase), NextPhase =/= repeat_phase,
+             NextPhase =/= reduce, NextPhase =/= terminate, is_atom(Name) ->
+    ok;
 validate_conclusion(NextPhase, Directive) ->
     error({bad_hls_statem_conclusion, NextPhase, Directive}).
 
+validate_internal_conclusion(NextPhase, Directive)
+        when is_atom(NextPhase), NextPhase =/= repeat_phase,
+             NextPhase =/= reduce, NextPhase =/= terminate,
+             (Directive =:= consume orelse Directive =:= fail) ->
+    ok;
+validate_internal_conclusion(NextPhase, Directive) ->
+    error({bad_hls_statem_internal_conclusion, NextPhase, Directive}).
+
 validate_phase(Phase)
-        when is_atom(Phase), Phase =/= repeat_phase, Phase =/= terminate ->
+        when is_atom(Phase), Phase =/= repeat_phase, Phase =/= reduce,
+             Phase =/= terminate ->
     ok;
 validate_phase(Phase) ->
     error({bad_hls_statem_phase, Phase}).
 
-validate_casts(Casts, Outputs) when is_list(Casts) ->
+prepare_entry_actions(Module, Actions, Outputs, Reduction, Internal)
+        when is_list(Actions) ->
+    {NextReduction, Casts} = case Actions of
+        [{open_reduction, Name, Key, Population, Operator} | Rest] ->
+            case {Reduction, Internal} of
+                {none, none} -> ok;
+                _ -> error({hls_statem_reduction_already_active,
+                    reduction_status(Reduction, Internal)})
+            end,
+            case erlang:function_exported(Module, reduce, 3) of
+                true -> ok;
+                false -> error({missing_hls_statem_callback, reduce, 3})
+            end,
+            case hls_reduction:open(
+                Name,
+                Key,
+                Population,
+                Operator
+            ) of
+                {ok, Opened} -> {Opened, Rest};
+                {error, Reason} ->
+                    error({bad_hls_statem_open_reduction, Reason})
+            end;
+        _ ->
+            {Reduction, Actions}
+    end,
+    case lists:any(
+        fun
+            ({open_reduction, _, _, _, _}) -> true;
+            (_) -> false
+        end,
+        Casts
+    ) of
+        true -> error(hls_statem_open_reduction_must_be_first);
+        false -> ok
+    end,
+    ok = validate_casts(Casts, Outputs),
+    {NextReduction, Casts};
+prepare_entry_actions(
+    _Module,
+    Actions,
+    _Outputs,
+    _Reduction,
+    _Internal
+) ->
+    error({bad_hls_statem_actions, Actions}).
+
+validate_casts(Casts, Outputs) ->
     Ports = lists:map(
         fun
             ({cast, Port, _Message}) when is_atom(Port) ->
@@ -472,9 +795,20 @@ validate_casts(Casts, Outputs) when is_list(Casts) ->
     case length(Ports) =:= length(lists:usort(Ports)) of
         true -> ok;
         false -> error({duplicate_hls_statem_ports, Ports})
-    end;
-validate_casts(Actions, _Outputs) ->
-    error({bad_hls_statem_actions, Actions}).
+    end.
+
+require_idle_reduction(#runtime{reduction = none, internal = none}) ->
+    ok;
+require_idle_reduction(#runtime{reduction = Reduction, internal = Internal}) ->
+    error({hls_statem_reduction_incomplete,
+        reduction_status(Reduction, Internal)}).
+
+reduction_status(none, none) ->
+    idle;
+reduction_status(none, {reduction_complete, Name, Key, _Accumulator}) ->
+    #{status => completion_pending, name => Name, key => Key};
+reduction_status(Reduction, none) ->
+    hls_reduction:info(Reduction).
 
 %%%
 %%% Options and diagnostics
@@ -486,7 +820,9 @@ format_info(#runtime{
     data = Data,
     outputs = Outputs,
     mailbox = Mailbox,
-    postponed = Postponed
+    postponed = Postponed,
+    reduction = Reduction,
+    internal = Internal
 }) ->
     #{
         lifecycle => Lifecycle,
@@ -495,7 +831,8 @@ format_info(#runtime{
         connected => Lifecycle =:= connected,
         outputs => output_names(Outputs),
         postponed => map_size(Postponed),
-        mailbox => hls_mailbox:info(Mailbox)
+        mailbox => hls_mailbox:info(Mailbox),
+        reduction => reduction_status(Reduction, Internal)
     }.
 
 start_options(Options) ->
