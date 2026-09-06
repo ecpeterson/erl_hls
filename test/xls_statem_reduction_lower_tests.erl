@@ -154,6 +154,20 @@ generated_reduction_dslx_uses_typed_private_storage_test() ->
         <<"fn reduction_completion(">>
     )).
 
+fold_relay_is_only_emitted_for_reduction_services_test() ->
+    ReductionXls = iolist_to_binary(xls_parse:to_xls(?FIXTURE)),
+    OrdinaryXls = iolist_to_binary(xls_parse:to_xls(
+        "test/hls_topology_layout_fixture.erl"
+    )),
+    ?assertNotEqual(nomatch, binary:match(
+        ReductionXls,
+        <<"proc FoldRelay {">>
+    )),
+    ?assertEqual(nomatch, binary:match(
+        OrdinaryXls,
+        <<"proc FoldRelay {">>
+    )).
+
 reduction_codegen_rejects_an_inconsistent_storage_width_test() ->
     ?assertError(
         {inconsistent_reduction_storage_width, 116, 117},

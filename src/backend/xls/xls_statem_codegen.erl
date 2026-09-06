@@ -148,9 +148,10 @@ reduction_internal_candidates_field(_Reductions) ->
     [
         "  // Completed reductions are private events and outrank mail.\n",
         "  internal_candidates: u1[ACTOR_COUNT],\n",
-        "  // A local mailbox fold waits here for the shared RAM write port.\n",
-        "  folded_valid: u1,\n",
-        "  folded: SharedExecutorResult,\n",
+        "  // Fairly alternate retireable ordinary work with polling the\n",
+        "  // fold relay; an acknowledgment may retire alongside ordinary\n",
+        "  // work because it does not consume the state RAM write port.\n",
+        "  fold_turn: u1,\n",
         "  // Mail-only actors whose head was not a contribution are skipped\n",
         "  // until the currently blocked effect-credit epoch ends.\n",
         "  blocked_probed: u1[ACTOR_COUNT],\n"
@@ -292,6 +293,7 @@ machine_declarations(#{
         "  mailbox_index: u8,\n",
         "  order_index: u8,\n",
         "}\n\n",
+        ?REDUCTION_SCHEDULER:shared_fold_envelope_declaration(Reductions),
         "type Admission = mailbox::Admission;\n\n",
         "enum SharedPhase : u3 {\n",
         "  BOOT = u3:0,\n",
@@ -1252,6 +1254,9 @@ shared_service(Spec) ->
       mailbox_write_resp_in: chan<MailboxRamWriteResp> in;
       executor_request_out: chan<SharedExecutorRequest> out;
       executor_result_in: chan<SharedExecutorResult> in;
+    """,
+        ?REDUCTION_SCHEDULER:shared_fold_service_fields(Reductions),
+    """
 
       config(
           request_in: chan<ScheduledRequest>[PRODUCER_COUNT] in,
@@ -1270,7 +1275,13 @@ shared_service(Spec) ->
           chan<SharedExecutorRequest, u32:1>("executor_request");
         let (executor_result_p, executor_result_c) =
           chan<SharedExecutorResult, u32:1>("executor_result");
+    """,
+        ?REDUCTION_SCHEDULER:shared_fold_config_bindings(Reductions),
+    """
         spawn SharedExecutor(executor_request_c, executor_result_p);
+    """,
+        ?REDUCTION_SCHEDULER:shared_fold_config_spawn(Reductions),
+    """
         (
           request_in,
           startup_in,
@@ -1285,6 +1296,9 @@ shared_service(Spec) ->
           mailbox_write_resp_in,
           executor_request_p,
           executor_result_c,
+    """,
+        ?REDUCTION_SCHEDULER:shared_fold_config_endpoints(Reductions),
+    """
         )
       }
 
@@ -1496,12 +1510,17 @@ shared_service(Spec) ->
         ?REDUCTION_SCHEDULER:shared_executor_send_condition(Reductions),
     """
               executor_request);
+    """,
+        ?REDUCTION_SCHEDULER:shared_fold_request_send(Reductions),
+    """
             let scheduled = ScheduledEffects {
               slot: result.slot,
               effects: result.effects,
             };
             let egress_tok = send_if(
-              executor_result_tok,
+    """,
+        ?REDUCTION_SCHEDULER:shared_retirement_token(Reductions),
+    """
               egress_out,
               retire_valid && result.effects_valid,
               scheduled);
@@ -1527,6 +1546,9 @@ shared_service(Spec) ->
               state_write_tok,
               mailbox_write_tok,
               executor_request_tok,
+    """,
+        ?REDUCTION_SCHEDULER:shared_fold_done_token(Reductions),
+    """
               state_completion_tok,
               mailbox_completion_tok);
             SharedState<ACTOR_COUNT, PRODUCER_COUNT> {

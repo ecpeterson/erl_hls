@@ -1,8 +1,10 @@
 // Three-actor SharedService harness for the reduction/effect-window HOL tests.
-// The first emitted effect batch is drained but never credited. Actor zero
-// can therefore produce a second, blocked ordinary result while actor one's
-// local reduction fold remains independent work. The third actor lets the
-// harness put a non-contribution mailbox head ahead of another local fold.
+// The first emitted effect batch is drained while its credit is held. Actor
+// zero can therefore produce a second, blocked ordinary result while actor
+// one's local reduction fold remains independent work. The third actor lets
+// the harness put a non-contribution mailbox head ahead of another local
+// fold. The testbench eventually releases the credit and checks exact output
+// recovery after the independent fold results traverse the relay.
 
 import axis;
 import hls_statem_reduction_rtl_fixture as actor;
@@ -104,25 +106,64 @@ proc MailboxRam {
 // This is harness-local routing; the actor still receives its ordinary frame.
 proc RequestMux {
   frame_in: chan<axis::Frame> in;
+  credit_in: chan<actor::ScheduledRequest> in;
   request_out: chan<actor::ScheduledRequest> out;
 
   config(
       frame_in: chan<axis::Frame> in,
+      credit_in: chan<actor::ScheduledRequest> in,
       request_out: chan<actor::ScheduledRequest> out
   ) {
-    (frame_in, request_out)
+    (frame_in, credit_in, request_out)
   }
 
   init { () }
 
   next(state: ()) {
-    let (tok, frame) = recv(join(), frame_in);
-    let request = actor::ScheduledRequest {
+    // Returning the held effect credit has priority for one activation. The
+    // frame receive is conditional, so an application frame is never consumed
+    // and dropped when both inputs are ready.
+    let (credit_tok, credit, credit_valid) = recv_if_non_blocking(
+      join(), credit_in, true, zero!<actor::ScheduledRequest>());
+    let (frame_tok, frame, frame_valid) = recv_if_non_blocking(
+      credit_tok, frame_in, !credit_valid, zero!<axis::Frame>());
+    let frame_request = actor::ScheduledRequest {
       slot: frame.header.txid as u32,
       frame,
       ..zero!<actor::ScheduledRequest>()
     };
-    let _done = send(tok, request_out, request);
+    let request = if credit_valid { credit } else { frame_request };
+    let _done = send_if(
+      frame_tok, request_out, credit_valid || frame_valid, request);
+    state
+  }
+}
+
+// The testbench releases the one deliberately held effect credit only after
+// independent local folds have traversed the relay. This turns the original
+// HOL witness into a recovery test without changing SharedService's ingress.
+proc CreditRelease {
+  release_in: chan<u1> in;
+  credit_out: chan<actor::ScheduledRequest> out;
+
+  config(
+      release_in: chan<u1> in,
+      credit_out: chan<actor::ScheduledRequest> out
+  ) {
+    (release_in, credit_out)
+  }
+
+  init { () }
+
+  next(state: ()) {
+    let (tok, _release) = recv(join(), release_in);
+    let _done = send(
+      tok,
+      credit_out,
+      actor::ScheduledRequest {
+        credit: u1:1,
+        ..zero!<actor::ScheduledRequest>()
+      });
     state
   }
 }
@@ -133,9 +174,9 @@ struct EffectState {
   index: u8,
 }
 
-// Drains the first batch so its producer can complete the channel send, but
-// intentionally withholds the effect-window credit. A second effect-bearing
-// executor result must therefore remain buffered inside SharedService.
+// Drains effect batches without returning credit itself. The testbench holds
+// the first credit through CreditRelease, so a second effect-bearing executor
+// result remains buffered inside SharedService until the liveness check.
 proc UncreditedEffectSink {
   scheduled_in: chan<actor::ScheduledEffects> in;
   frame_out: chan<axis::Frame> out;
@@ -167,12 +208,14 @@ proc UncreditedEffectSink {
 
 pub proc Top {
   ext_recv: chan<axis::Beat> in;
+  release_credit: chan<u1> in;
   out_send: chan<axis::Beat> out;
   state_read_probe: chan<u32> out;
   state_write_probe: chan<u32> out;
 
   config(
       ext_recv: chan<axis::Beat> in,
+      release_credit: chan<u1> in,
       out_send: chan<axis::Beat> out,
       state_read_probe: chan<u32> out,
       state_write_probe: chan<u32> out
@@ -184,6 +227,8 @@ pub proc Top {
       chan<actor::ScheduledRequest, u32:1>("startup");
     let (scheduled_p, scheduled_c) =
       chan<actor::ScheduledEffects, u32:1>("scheduled");
+    let (credit_p, credit_c) =
+      chan<actor::ScheduledRequest, u32:1>("credit");
     let (output_p, output_c) = chan<axis::Frame, u32:1>("output");
 
     let (state_read_req_p, state_read_req_c) =
@@ -205,7 +250,8 @@ pub proc Top {
       chan<actor::MailboxRamWriteResp, u32:1>("mail_write_resp");
 
     spawn axis::Rx(ext_recv, frame_p);
-    spawn RequestMux(frame_c, request_p[u32:0]);
+    spawn RequestMux(frame_c, credit_c, request_p[u32:0]);
+    spawn CreditRelease(release_credit, credit_p);
     spawn actor::SharedService<
       ACTOR_COUNT, PRODUCER_COUNT, u32:0, u32:0>(
         request_c,
@@ -233,7 +279,13 @@ pub proc Top {
       mail_write_resp_p);
     spawn UncreditedEffectSink(scheduled_c, output_p);
     spawn axis::Tx(output_c, out_send);
-    (ext_recv, out_send, state_read_probe, state_write_probe)
+    (
+      ext_recv,
+      release_credit,
+      out_send,
+      state_read_probe,
+      state_write_probe
+    )
   }
 
   init { () }

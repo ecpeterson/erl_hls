@@ -297,21 +297,36 @@ actor in a private-ready bit set. Its completion event wins over entry or mail
 the next time the actor is selected and uses the ordinary executor for the one
 callback-data update and possible phase boundary.
 
-A scheduler-local folded-result latch arbitrates local folds with executor
-results for the single state-memory write port. A retireable executor result
-wins, but an effect-bearing result waiting for credit does not fence a fold
-from another actor. During each maximal interval in which the ordinary
-completion path remains effect-credit-blocked, the scheduler may speculatively
-read mail-only actors. A foldable head enters the folded-result latch; a
-non-contribution head is left unchanged and that actor is skipped for the rest
-of the blocked interval, so one nonfolding actor cannot starve a later foldable
-one. The skip set is cleared when the completion path is no longer blocked.
-Per-actor in-flight exclusion preserves actor-local order throughout. Reset
-writes the zero (`IDLE`) reduction word together with each actor's initial
-state. Focused native RTL tests cover count and out-of-order fixed-member
-reductions, future-key postponement and retry, incomplete phase boundaries,
-and duplicate members through both the direct service and an external-RAM
-shared service.
+The RAM response and local fold decision do not feed scheduler state directly.
+The service sends a compact completion envelope through a depth-one request
+channel, a stateless relay, and a depth-one result channel. Until that envelope
+returns, the actor remains in flight. A fold candidate then competes for the
+single state-memory write port; a noncandidate acknowledgement instead clears
+the speculative in-flight claim and, while egress is blocked, records that the
+mailbox head has already been probed. This elastic boundary breaks the
+RAM-response-to-scheduler-state recurrence and permits a two-stage shared
+service to retain initiation interval one.
+
+A one-bit fair arbiter polls the returned-fold channel whenever no ordinary
+executor result can retire, and on alternating turns while ordinary results
+remain continuously ready. A candidate fold wins a poll turn; a noncandidate
+acknowledgement can be drained alongside an ordinary retirement. Thus an
+occupied fold-result channel waits behind at most one further ordinary
+scheduler activation, while an ordinary result also cannot be starved by a
+continuous fold stream. The two elastic slots let the service absorb a
+coincident second fold without forming a self-channel deadlock.
+
+An effect-bearing result waiting for credit does not fence a fold from another
+actor. During each maximal blocked interval, the scheduler may speculatively
+read mail-only actors. A non-contribution head is left unchanged and that actor
+is skipped for the rest of the interval, so one nonfolding actor cannot starve
+a later foldable one. The skip set is cleared when the ordinary completion path
+is no longer blocked. Per-actor in-flight exclusion preserves actor-local order
+throughout. Reset writes the zero (`IDLE`) reduction word together with each
+actor's initial state. Focused native RTL tests cover count and out-of-order
+fixed-member reductions, future-key postponement and retry, incomplete phase
+boundaries, duplicate members, and blocked local progress through both the
+direct service and an external-RAM shared service.
 
 ## Implementation stages and measurements
 

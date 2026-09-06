@@ -29,6 +29,13 @@
     shared_executor_dispatch/1,
     shared_executor_internal_request_field/1,
     shared_executor_send_condition/1,
+    shared_fold_config_bindings/1,
+    shared_fold_config_endpoints/1,
+    shared_fold_config_spawn/1,
+    shared_fold_done_token/1,
+    shared_fold_envelope_declaration/1,
+    shared_fold_request_send/1,
+    shared_fold_service_fields/1,
     shared_folded_state_fields/1,
     shared_in_flight_field/1,
     shared_issue_bindings/1,
@@ -37,6 +44,7 @@
     shared_ready_bindings/1,
     shared_ready_selection_call/1,
     shared_result_retirement_head/1,
+    shared_retirement_token/1,
     shared_service_helpers/1
 ]).
 
@@ -468,6 +476,23 @@ shared_executor_dispatch(_Reductions) ->
         "  };\n"
     ].
 
+-spec shared_fold_envelope_declaration(reductions()) -> iodata().
+shared_fold_envelope_declaration(none) -> [];
+shared_fold_envelope_declaration(_Reductions) ->
+    ["""
+    // A compact actor-state update crosses the fold relay; effect payloads
+    // belong only to the ordinary executor path.
+    struct FoldEnvelope {
+      candidate: u1,
+      slot: u32,
+      machine: MachineBits,
+      directive: Directive,
+      received: u1,
+      mailbox_index: u8,
+      order_index: u8,
+    }
+    """, "\n\n"].
+
 -spec shared_service_helpers(reductions()) -> iodata().
 shared_service_helpers(none) -> [];
 shared_service_helpers(_Reductions) ->
@@ -585,7 +610,62 @@ shared_service_helpers(_Reductions) ->
       )
     }
 
+    // These two depth-one channels form an elastic boundary between the
+    // mailbox/state RAM responses and SharedService's next-state logic. The
+    // relay intentionally does no computation: its storage breaks the state
+    // recurrence which otherwise forces the whole service above II=1.
+    proc FoldRelay {
+      request_in: chan<FoldEnvelope> in;
+      result_out: chan<FoldEnvelope> out;
+
+      config(
+          request_in: chan<FoldEnvelope> in,
+          result_out: chan<FoldEnvelope> out
+      ) {
+        (request_in, result_out)
+      }
+
+      init { () }
+
+      next(state: ()) {
+        let (tok, request) = recv(join(), request_in);
+        let _done = send(tok, result_out, request);
+        state
+      }
+    }
+
     """.
+
+-spec shared_fold_service_fields(reductions()) -> iodata().
+shared_fold_service_fields(none) -> "\n";
+shared_fold_service_fields(_Reductions) ->
+    ["\n", """
+      fold_request_out: chan<FoldEnvelope> out;
+      fold_result_in: chan<FoldEnvelope> in;
+    """, "\n"].
+
+-spec shared_fold_config_bindings(reductions()) -> iodata().
+shared_fold_config_bindings(none) -> "\n";
+shared_fold_config_bindings(_Reductions) ->
+    ["\n", """
+        let (fold_request_p, fold_request_c) =
+          chan<FoldEnvelope, u32:1>("fold_request");
+        let (fold_result_p, fold_result_c) =
+          chan<FoldEnvelope, u32:1>("fold_result");
+    """, "\n"].
+
+-spec shared_fold_config_spawn(reductions()) -> iodata().
+shared_fold_config_spawn(none) -> "\n";
+shared_fold_config_spawn(_Reductions) ->
+    "\n    spawn FoldRelay(fold_request_c, fold_result_p);\n\n".
+
+-spec shared_fold_config_endpoints(reductions()) -> iodata().
+shared_fold_config_endpoints(none) -> "\n";
+shared_fold_config_endpoints(_Reductions) ->
+    ["\n", """
+          fold_request_p,
+          fold_result_c,
+    """, "\n"].
 
 -spec shared_executor_internal_request_field(reductions()) -> iodata().
 shared_executor_internal_request_field(none) -> "\n";
@@ -626,20 +706,9 @@ shared_local_fold_bindings(_Reductions) ->
 shared_blocked_probe_bindings(none) -> [];
 shared_blocked_probe_bindings(_Reductions) ->
     ["\n", """
-            let blocked_nonfold = completion_blocked && issue_valid &&
-              !local_fold_valid;
-            let final_in_flight = if blocked_nonfold {
-              update(issued_in_flight, read_slot, u1:0)
-            } else {
-              issued_in_flight
-            };
-            let blocked_probed = if !completion_blocked {
-              zero!<u1[ACTOR_COUNT]>()
-            } else if blocked_nonfold {
-              update(state.blocked_probed, read_slot, u1:1)
-            } else {
-              state.blocked_probed
-            };
+            // A probe remains in flight until FoldRelay returns either its
+            // candidate result or its explicit noncandidate acknowledgment.
+            let final_in_flight = issued_in_flight;
             let (blocked_ready, blocked_slot) =
               reduction_blocked_selection(
                 selection_state,
@@ -680,22 +749,52 @@ shared_executor_send_condition(none) ->
 shared_executor_send_condition(_Reductions) ->
     "\n          issue_valid && !completion_blocked && !local_fold_valid,\n".
 
+-spec shared_fold_request_send(reductions()) -> iodata().
+shared_fold_request_send(none) -> "\n";
+shared_fold_request_send(_Reductions) ->
+    ["\n", """
+            let fold_request = FoldEnvelope {
+              candidate: local_fold_valid,
+              slot: local_fold.slot,
+              machine: local_fold.machine,
+              directive: local_fold.directive,
+              received: local_fold.received,
+              mailbox_index: local_fold.mailbox_index,
+              order_index: local_fold.order_index,
+            };
+            let fold_request_tok = send_if(
+              join(state_done, mailbox_done),
+              fold_request_out,
+              issue_valid && read_mailbox && received &&
+                (completion_blocked || local_fold_valid),
+              fold_request);
+    """, "\n"].
+
+-spec shared_retirement_token(reductions()) -> iodata().
+shared_retirement_token(none) ->
+    "\n          executor_result_tok,\n";
+shared_retirement_token(_Reductions) ->
+    "\n          fold_result_tok,\n".
+
+-spec shared_fold_done_token(reductions()) -> iodata().
+shared_fold_done_token(none) -> "\n";
+shared_fold_done_token(_Reductions) ->
+    "\n          fold_request_tok,\n".
+
 -spec shared_in_flight_field(reductions()) -> iodata().
 shared_in_flight_field(none) ->
     "\n          in_flight: issued_in_flight,\n";
 shared_in_flight_field(_Reductions) ->
-    "              in_flight: final_in_flight,\n".
+    "\n          in_flight: final_in_flight,\n".
 
 -spec shared_folded_state_fields(reductions()) -> iodata().
 shared_folded_state_fields(none) -> "\n";
 shared_folded_state_fields(_Reductions) ->
     ["\n", """
-              folded_valid: local_fold_valid ||
-                (state.folded_valid && !fold_retire_valid),
-              folded: if local_fold_valid {
-                local_fold
+              fold_turn: if ordinary_can_retire {
+                !state.fold_turn
               } else {
-                state.folded
+                u1:0
               },
               blocked_probed,
     """, "\n"].
@@ -763,14 +862,16 @@ shared_result_retirement_head(none) ->
     """, "\n"];
 shared_result_retirement_head(_Reductions) ->
     ["\n", """
-            // A retireable executor result wins this single RAM write port.
             // A result blocked on an unrelated effect credit does not fence a
             // local fold: the selected actor's in-flight bit proves that no
             // older activation for that same actor can still be outstanding.
             let buffered_can_retire = state.completed_valid &&
               (!state.completed.effects_valid || !credit_busy);
+            // On a fold-poll turn an occupied ordinary skid cannot be
+            // replaced: a candidate fold may win the RAM write below.
             let accept_executor_result =
-              !state.completed_valid || buffered_can_retire;
+              !state.completed_valid ||
+              (buffered_can_retire && !state.fold_turn);
             let (executor_result_tok, incoming_result, incoming_valid) =
               recv_if_non_blocking(
                 capture_tok,
@@ -784,14 +885,39 @@ shared_result_retirement_head(_Reductions) ->
             };
             let ordinary_result_valid =
               state.completed_valid || incoming_valid;
-            let ordinary_retire_valid = ordinary_result_valid &&
+            let ordinary_can_retire = ordinary_result_valid &&
               (!ordinary_result.effects_valid || !credit_busy);
-            let fold_retire_valid = state.folded_valid &&
-              !ordinary_retire_valid;
-            let result = if ordinary_retire_valid {
-              ordinary_result
+            // Fairly poll a waiting fold at least every other cycle in which
+            // ordinary work can retire. A noncandidate acknowledgment needs
+            // no RAM write and can drain alongside that ordinary retirement.
+            let poll_fold = !ordinary_can_retire || state.fold_turn;
+            let (fold_result_tok, incoming_fold, incoming_fold_valid) =
+              recv_if_non_blocking(
+                executor_result_tok,
+                fold_result_in,
+                poll_fold,
+                zero!<FoldEnvelope>());
+            let fold_retire_valid = incoming_fold_valid &&
+              incoming_fold.candidate;
+            let ordinary_retire_valid = ordinary_can_retire &&
+              !fold_retire_valid;
+            let folded_result = SharedExecutorResult {
+              slot: incoming_fold.slot,
+              machine: incoming_fold.machine,
+              effects: zero!<EntryEffects>(),
+              effects_valid: u1:0,
+              dispatched: incoming_fold.candidate,
+              directive: incoming_fold.directive,
+              phase_boundary: u1:0,
+              egress_blocked: u1:0,
+              received: incoming_fold.received,
+              mailbox_index: incoming_fold.mailbox_index,
+              order_index: incoming_fold.order_index,
+            };
+            let result = if fold_retire_valid {
+              folded_result
             } else {
-              state.folded
+              ordinary_result
             };
             let retire_valid =
               ordinary_retire_valid || fold_retire_valid;
@@ -821,18 +947,33 @@ shared_result_retirement_head(_Reductions) ->
               result.order_index);
             let retired = retire_reduction_actor(
               retired0, retire_valid, result.slot, resolved.machine);
-            let retired_in_flight = if retire_valid {
-              update(retired.in_flight, result.slot, u1:0)
+            let ordinary_in_flight = if ordinary_retire_valid {
+              update(
+                retired.in_flight,
+                ordinary_result.slot,
+                u1:0)
             } else {
               retired.in_flight
             };
+            let retired_in_flight = if incoming_fold_valid {
+              update(
+                ordinary_in_flight,
+                incoming_fold.slot,
+                u1:0)
+            } else {
+              ordinary_in_flight
+            };
             let completed_valid = if state.completed_valid {
-              if buffered_can_retire { incoming_valid } else { u1:1 }
+              if ordinary_retire_valid { incoming_valid } else { u1:1 }
             } else {
               incoming_valid && !ordinary_retire_valid
             };
             let completed = if state.completed_valid {
-              if buffered_can_retire { incoming_result } else { state.completed }
+              if ordinary_retire_valid {
+                incoming_result
+              } else {
+                state.completed
+              }
             } else {
               incoming_result
             };
@@ -855,8 +996,18 @@ shared_issue_bindings(none) ->
     """, "\n"];
 shared_issue_bindings(_Reductions) ->
     ["\n", """
-            let fold_may_issue =
-              !state.folded_valid || fold_retire_valid;
+            let acknowledged_nonfold = incoming_fold_valid &&
+              !incoming_fold.candidate;
+            let blocked_probed = if !completion_blocked {
+              zero!<u1[ACTOR_COUNT]>()
+            } else if acknowledged_nonfold {
+              update(
+                state.blocked_probed,
+                incoming_fold.slot,
+                u1:1)
+            } else {
+              state.blocked_probed
+            };
             let read_slot = if state.next_valid {
               state.next_slot
             } else {
@@ -867,9 +1018,9 @@ shared_issue_bindings(_Reductions) ->
               !state.entry_probes[read_slot] &&
               !state.egress_waiters[read_slot];
             let blocked_issue_valid = blocked_mail_only &&
-              !state.blocked_probed[read_slot] &&
+              !blocked_probed[read_slot] &&
               !state.in_flight[read_slot];
-            let issue_valid = state.next_valid && fold_may_issue &&
+            let issue_valid = state.next_valid &&
               (!completion_blocked || blocked_issue_valid);
             let internal_active =
               issue_valid && state.internal_candidates[read_slot];

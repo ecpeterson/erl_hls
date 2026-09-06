@@ -134,7 +134,7 @@ vvp hls_statem_reduction.vvp
 
 "$xls_root/codegen_main" \
     --pipeline_stages=2 \
-    --worst_case_throughput=2 \
+    --worst_case_throughput=1 \
     --delay_model=unit \
     --flop_inputs=false \
     --flop_outputs=true \
@@ -189,7 +189,7 @@ done
 
 "$xls_root/codegen_main" \
     --pipeline_stages=2 \
-    --worst_case_throughput=2 \
+    --worst_case_throughput=1 \
     --delay_model=unit \
     --flop_inputs=false \
     --flop_outputs=true \
@@ -225,7 +225,7 @@ vvp hls_statem_reduction_hol.vvp
 
 "$xls_root/codegen_main" \
     --pipeline_stages=2 \
-    --worst_case_throughput=2 \
+    --worst_case_throughput=1 \
     --delay_model=unit \
     --flop_inputs=false \
     --flop_outputs=true \

@@ -6,6 +6,7 @@ module hls_statem_reduction_hol_tb;
 `endif
     localparam [7:0] COUNT_VALUE_TAG = 8'd3;
     localparam [7:0] MEMBER_VALUE_TAG = 8'd4;
+    localparam [7:0] OBSERVATION_TAG = 8'd5;
 
     reg clk = 1'b0;
     reg reset = 1'b1;
@@ -14,6 +15,10 @@ module hls_statem_reduction_hol_tb;
     reg input_last = 1'b0;
     reg input_valid = 1'b0;
     wire input_ready;
+
+    reg release_credit = 1'b0;
+    reg release_credit_valid = 1'b0;
+    wire release_credit_ready;
 
     wire [32:0] output_beat;
     wire output_valid;
@@ -28,6 +33,7 @@ module hls_statem_reduction_hol_tb;
     reg state_read_probe_ready = 1'b1;
 
     integer output_beat_count = 0;
+    reg [32:0] captured [0:7];
     integer cycle_count = 0;
     reg watch_actor_one = 1'b0;
     reg actor_one_fold_retired = 1'b0;
@@ -42,6 +48,9 @@ module hls_statem_reduction_hol_tb;
         ._ext_recv({input_last, input_data}),
         ._ext_recv_vld(input_valid),
         ._ext_recv_rdy(input_ready),
+        ._release_credit(release_credit),
+        ._release_credit_vld(release_credit_valid),
+        ._release_credit_rdy(release_credit_ready),
         ._out_send_rdy(output_ready),
         ._out_send(output_beat),
         ._out_send_vld(output_valid),
@@ -58,8 +67,11 @@ module hls_statem_reduction_hol_tb;
     always @(posedge clk) begin
         if (!reset) begin
             cycle_count <= cycle_count + 1;
-            if (output_valid && output_ready)
+            if (output_valid && output_ready) begin
+                if (output_beat_count < 8)
+                    captured[output_beat_count] <= output_beat;
                 output_beat_count <= output_beat_count + 1;
+            end
             if (watch_actor_one && state_write_probe_valid &&
                     state_write_probe_ready && state_write_probe == 32'd1)
                 actor_one_fold_retired <= 1'b1;
@@ -99,6 +111,19 @@ module hls_statem_reduction_hol_tb;
         end
     endtask
 
+    task automatic release_effect_credit;
+        begin
+            @(negedge clk);
+            release_credit = 1'b1;
+            release_credit_valid = 1'b1;
+            while (!release_credit_ready)
+                @(posedge clk);
+            @(negedge clk);
+            release_credit = 1'b0;
+            release_credit_valid = 1'b0;
+        end
+    endtask
+
     task automatic send_count;
         input [7:0] actor;
         input [31:0] key;
@@ -131,7 +156,26 @@ module hls_statem_reduction_hol_tb;
                     cycle = cycle + 1)
                 @(posedge clk);
             if (output_beat_count < target) begin
-                $display("FAIL: first effect batch never reached its sink");
+                $display(
+                    "FAIL: timed out waiting for effect output %0d", target
+                );
+                $fatal(1);
+            end
+        end
+    endtask
+
+    task automatic check_beat;
+        input integer index;
+        input [31:0] expected_word;
+        input expected_last;
+        begin
+            if (captured[index][31:0] !== expected_word ||
+                    captured[index][32] !== expected_last) begin
+                $display(
+                    "FAIL: beat %0d expected %x/%0d, got %x/%0d",
+                    index, expected_word, expected_last,
+                    captured[index][31:0], captured[index][32]
+                );
                 $fatal(1);
             end
         end
@@ -200,8 +244,34 @@ module hls_statem_reduction_hol_tb;
             $fatal(1);
         end
 
+        // Return the credit only after both independent folds and the failed
+        // nonfold probe have crossed the relay path. Actor zero's buffered
+        // ordinary result must then retire and emit its complete second batch.
+        release_effect_credit();
+        wait_for_output_beats(8);
+        @(negedge clk);
+
+        check_beat(0, header(OBSERVATION_TAG, 8'd0, 8'd3), 1'b0);
+        check_beat(1, 32'd21, 1'b0);
+        check_beat(2, 32'd16, 1'b0);
+        check_beat(3, 32'd0, 1'b1);
+        check_beat(4, header(OBSERVATION_TAG, 8'd0, 8'd3), 1'b0);
+        check_beat(5, 32'd22, 1'b0);
+        check_beat(6, 32'd16, 1'b0);
+        check_beat(7, 32'd7, 1'b1);
+
+        // Give any duplicate batch ample time to surface after recovery.
+        repeat (200) @(posedge clk);
+        if (output_beat_count != 8) begin
+            $display(
+                "FAIL: expected exactly 8 output beats, observed %0d",
+                output_beat_count
+            );
+            $fatal(1);
+        end
+
         $display(
-            "PASS: blocked probing skipped a nonfold head and retired a later fold"
+            "PASS: relay folds progressed and held effect recovered exactly once"
         );
         $finish;
     end
