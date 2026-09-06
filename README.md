@@ -101,6 +101,15 @@ The topology-specific Verilog composition used by Icarus is kept under
 `test/rtl`; a production Vivado design can package the router and endpoint
 boundaries independently and connect them in its block design.
 
+## State-machine callbacks
+
+`hls_statem` uses phase-named `Phase(EventType, Content, Data)` callbacks with
+`callback_mode() -> [state_functions, state_enter]`. Its bounded result
+vocabulary and postponement rules live with the
+[`hls_statem` API](src/api/hls_statem.erl). The
+[actor-owned reduction design](docs/actor-reductions.md) records the planned
+phase-local reduction actions and their XLS/RTL constraints.
+
 ## Translated record defaults
 
 Every field in a private-state or wire record must have a type-directed zero

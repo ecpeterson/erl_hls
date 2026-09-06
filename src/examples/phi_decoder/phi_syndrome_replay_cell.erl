@@ -40,7 +40,7 @@ from the six phi schedulers under measurement.
     configure/5,
     offer_request/2
 ]).
--export([init/1, handle_enter/3, handle_cast/3]).
+-export([callback_mode/0, configuring/3, waiting/3, announcing/3, init/1]).
 
 -define(U16_MASK, 16#ffff).
 -define(U32_MASK, 16#ffffffff).
@@ -56,9 +56,6 @@ from the six phi schedulers under measurement.
 }).
 
 -type phase() :: configuring | waiting | announcing.
--type conclusion() ::
-    {phase(), #source{}, consume | postpone | fail} |
-    {repeat_phase, #source{}, consume}.
 
 -doc "Starts one disconnected diagnostic syndrome source.".
 -spec start_link() -> {ok, pid()}.
@@ -118,52 +115,50 @@ offer_request(Pid, Step) when Step >= 0, Step =< ?U32_MASK ->
 offer_request(_Pid, _Step) ->
     error(badarg).
 
--spec init(any()) -> {ok, configuring, #source{}}.
+-spec init(any()) -> {ok, phase(), #source{}}.
 init([]) ->
     {ok, configuring, #source{}}.
 
--spec handle_enter(phase(), phase(), #source{}) -> hls_statem:enter_result().
-handle_enter(_OldPhase, configuring, Source) ->
-    {Source, []};
-handle_enter(_OldPhase, waiting, Source) ->
-    {Source, []};
-handle_enter(_OldPhase, announcing, Source) ->
-    Event = #phenom_anyon{
-        step = Source#source.step,
-        flags = Source#source.announcement,
-        x = Source#source.x,
-        y = Source#source.y
-    },
-    {Source, [{cast, phi, Event}]}.
+callback_mode() ->
+    [state_functions, state_enter].
 
--spec handle_cast(#phenom_config{} | #phenom_request{}, phase(), #source{}) ->
-    conclusion().
-handle_cast(
+-spec configuring(enter, phase(), #source{}) ->
+    hls_statem:enter_result(#source{});
+    (cast, #phenom_config{} | #phenom_request{}, #source{}) ->
+        hls_statem:event_handler_result(phase(), #source{}).
+configuring(enter, _OldPhase, Source) ->
+    {keep_state, Source, []};
+configuring(
+    cast,
     #phenom_config{seed = Seed, threshold = Threshold, x = X, y = Y},
-    configuring,
     Source
 ) when Seed > 0, Seed =< ?U32_MASK,
        Threshold >= 0, Threshold =< ?U32_MASK,
        X >= 0, X =< ?U16_MASK,
        Y >= 0, Y =< ?U16_MASK ->
-    {waiting, Source#source{
+    {next_state, waiting, Source#source{
         random_state = Seed,
         threshold = Threshold,
         x = X,
         y = Y
-    }, consume};
-handle_cast(#phenom_config{}, configuring, Source) ->
-    {configuring, Source, fail};
-handle_cast(#phenom_request{step = 0}, configuring, Source) ->
-    {configuring, Source, postpone};
-handle_cast(#phenom_request{}, configuring, Source) ->
-    {configuring, Source, fail};
+    }};
+configuring(cast, #phenom_config{}, Source) ->
+    {stop, fail, Source};
+configuring(cast, #phenom_request{step = 0}, Source) ->
+    {next_state, configuring, Source, [postpone]};
+configuring(cast, #phenom_request{}, Source) ->
+    {stop, fail, Source}.
 
-handle_cast(#phenom_config{}, waiting, Source) ->
-    {waiting, Source, fail};
-handle_cast(
+-spec waiting(enter, phase(), #source{}) -> hls_statem:enter_result(#source{});
+    (cast, #phenom_config{} | #phenom_request{}, #source{}) ->
+        hls_statem:event_handler_result(phase(), #source{}).
+waiting(enter, _OldPhase, Source) ->
+    {keep_state, Source, []};
+waiting(cast, #phenom_config{}, Source) ->
+    {stop, fail, Source};
+waiting(
+    cast,
     #phenom_request{step = 0},
-    waiting,
     Source = #source{
         random_state = RandomState,
         threshold = Threshold,
@@ -175,20 +170,32 @@ handle_cast(
         false -> hls_type:as(hls_nums:u32(), 0);
         true -> hls_type:as(hls_nums:u32(), 1)
     end,
-    {announcing, Source#source{
+    {next_state, announcing, Source#source{
         step = 0,
         random_state = NextRandom,
         previous_measurement = Measurement,
         announcement = Measurement bxor PreviousMeasurement
-    }, consume};
-handle_cast(#phenom_request{}, waiting, Source) ->
-    {waiting, Source, fail};
+    }};
+waiting(cast, #phenom_request{}, Source) ->
+    {stop, fail, Source}.
 
-handle_cast(#phenom_config{}, announcing, Source) ->
-    {announcing, Source, fail};
-handle_cast(
+-spec announcing(enter, phase(), #source{}) ->
+    hls_statem:enter_result(#source{});
+    (cast, #phenom_config{} | #phenom_request{}, #source{}) ->
+        hls_statem:event_handler_result(phase(), #source{}).
+announcing(enter, _OldPhase, Source) ->
+    Event = #phenom_anyon{
+        step = Source#source.step,
+        flags = Source#source.announcement,
+        x = Source#source.x,
+        y = Source#source.y
+    },
+    {keep_state, Source, [{cast, phi, Event}]};
+announcing(cast, #phenom_config{}, Source) ->
+    {stop, fail, Source};
+announcing(
+    cast,
     #phenom_request{step = Step},
-    announcing,
     Source = #source{
         step = PreviousStep,
         random_state = RandomState,
@@ -206,6 +213,6 @@ handle_cast(
         random_state = NextRandom,
         previous_measurement = Measurement,
         announcement = Measurement bxor PreviousMeasurement
-    }, consume};
-handle_cast(#phenom_request{}, announcing, Source) ->
-    {announcing, Source, fail}.
+    }};
+announcing(cast, #phenom_request{}, Source) ->
+    {stop, fail, Source}.

@@ -13,7 +13,7 @@
 -hls_mailbox_capacity(1).
 -hls_tags([ordered_value]).
 
--export([handle_cast/3, handle_enter/3, init/1]).
+-export([init/1, callback_mode/0, emitting/3]).
 
 -record(ordered_value, {
     value = hls_type:zero() :: hls_nums:u32()
@@ -26,13 +26,17 @@
 init([]) ->
     {ok, emitting, #cell{}}.
 
-handle_enter(_OldPhase, emitting, Cell) ->
-    {Cell, [
+callback_mode() ->
+    [state_functions, state_enter].
+
+-spec emitting(hls_statem:event_type(), term(), #cell{}) ->
+    hls_statem:enter_result() | hls_statem:state_result().
+emitting(enter, _OldPhase, Cell) ->
+    {keep_state, Cell, [
         {cast, third, #ordered_value{value = 3}},
         {cast, first, #ordered_value{value = 1}},
         {cast, second, #ordered_value{value = 2}},
         {cast, loop, #ordered_value{value = 0}}
-    ]}.
-
-handle_cast(#ordered_value{value = Value}, emitting, Cell) ->
-    {emitting, Cell#cell{value = Value}, consume}.
+    ]};
+emitting(cast, #ordered_value{value = Value}, Cell) ->
+    {next_state, emitting, Cell#cell{value = Value}}.

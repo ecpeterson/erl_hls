@@ -870,11 +870,12 @@ throughput breakthrough.
 
 ### Batched entry effects
 
-Shared actors now compute all of one `handle_enter/3` callback's effects in a
-single state visit. The scheduler admits the resulting ordered batch as its
-commit point, writes the entered actor state, and may immediately choose
-another actor. A scheduler-local router retains the batch and emits at most one
-valid action per activation in source order. It returns the scheduler's one
+Shared actors now compute all effects from one
+`Phase(enter, OldPhase, Data)` callback in a single state visit. The scheduler
+admits the resulting ordered batch as its commit point, writes the entered
+actor state, and may immediately choose another actor. A scheduler-local router
+retains the batch and emits at most one valid action per activation in source
+order. It returns the scheduler's one
 egress credit only after the last batch position has drained. This retains the
 single-resource acquisition rule used by the deadlock argument: no actor state
 or mailbox transaction remains held while a downstream action is blocked.
@@ -917,14 +918,15 @@ previous maps, these core-only figures exclude the twelve external RAM macros.
 ### Fused dispatch and phase entry
 
 When a shared actor's message handler changes or repeats its phase, the
-scheduler now evaluates that phase's `handle_enter/3` callback during the same
-state visit. If the resulting entry batch is empty, or the batch sequencer can
-accept it, the handler result and entered actor state commit together. This
-removes the usual second state-memory visit between dispatch and entry. If a
-nonempty batch cannot be accepted, the scheduler retains the former two-visit
-fallback: it commits the phase transition with entry pending, classifies the
-actor as an egress waiter, and recomputes the pure entry callback after credit
-returns. Direct, one-service-per-actor lowering is unchanged.
+scheduler now evaluates that phase's `Phase(enter, OldPhase, Data)` callback
+during the same state visit. If the resulting entry batch is empty, or the
+batch sequencer can accept it, the handler result and entered actor state
+commit together. This removes the usual second state-memory visit between
+dispatch and entry. If a nonempty batch cannot be accepted, the scheduler
+retains the former two-visit fallback: it commits the phase transition with
+entry pending, classifies the actor as an egress waiter, and recomputes the
+pure entry callback after credit returns. Direct, one-service-per-actor
+lowering is unchanged.
 
 The complete CPU-versus-native-Icarus comparison again agrees exactly on all
 84 accepted corrections and all 18 final data-qubit replies. Relative to

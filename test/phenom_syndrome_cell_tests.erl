@@ -14,7 +14,7 @@
 query_entry_labels_recipient_edges_test() ->
     Cell = collecting_cell(?PRNG_SEED, 0),
     ?assertEqual(
-        {Cell, [
+        {keep_state, Cell, [
             {cast_if, false, phi, #phenom_anyon{
                 step = 0,
                 flags = 0,
@@ -38,7 +38,7 @@ query_entry_labels_recipient_edges_test() ->
                 source = ?PHI_NORTH_MASK
             }}
         ]},
-        phenom_syndrome_cell:handle_enter(configuring, collecting, Cell)
+        phenom_syndrome_cell:collecting(enter, configuring, Cell)
     ).
 
 response_order_does_not_change_parity_test() ->
@@ -56,7 +56,7 @@ response_order_does_not_change_parity_test() ->
                 ?COORD_X,
                 ?COORD_Y
             ),
-            {announcing, Cell1, consume} = apply_responses(
+            {next_state, announcing, Cell1} = apply_responses(
                 Permutation,
                 0,
                 Cell0
@@ -67,22 +67,22 @@ response_order_does_not_change_parity_test() ->
                 Cell1
             ),
             ?assertEqual(
-                {Cell1, []},
-                phenom_syndrome_cell:handle_enter(
+                {keep_state, Cell1, []},
+                phenom_syndrome_cell:announcing(
+                    enter,
                     collecting,
-                    announcing,
                     Cell1
                 )
             ),
-            {collecting, Released, consume} =
-                phenom_syndrome_cell:handle_cast(
+            {next_state, collecting, Released} =
+                phenom_syndrome_cell:announcing(
+                    cast,
                     #phenom_request{step = 0},
-                    announcing,
                     Cell1
                 ),
-            {_Cleared, Effects} = phenom_syndrome_cell:handle_enter(
+            {keep_state, _Cleared, Effects} = phenom_syndrome_cell:collecting(
+                enter,
                 announcing,
-                collecting,
                 Released
             ),
             ?assertMatch(
@@ -100,7 +100,7 @@ response_order_does_not_change_parity_test() ->
 
 measurement_error_appears_at_both_boundaries_test() ->
     Cell0 = collecting_cell(?PRNG_SEED, ?HALF_THRESHOLD),
-    {announcing, First, consume} = apply_responses(
+    {next_state, announcing, First} = apply_responses(
         all_absent(),
         0,
         Cell0
@@ -113,17 +113,17 @@ measurement_error_appears_at_both_boundaries_test() ->
         First
     ),
 
-    {collecting, Second0, consume} = phenom_syndrome_cell:handle_cast(
+    {next_state, collecting, Second0} = phenom_syndrome_cell:announcing(
+        cast,
         #phenom_request{step = 0},
-        announcing,
         First
     ),
-    {Second1, _Effects} = phenom_syndrome_cell:handle_enter(
+    {keep_state, Second1, _Effects} = phenom_syndrome_cell:collecting(
+        enter,
         announcing,
-        collecting,
         Second0
     ),
-    {announcing, Second, consume} = apply_responses(
+    {next_state, announcing, Second} = apply_responses(
         all_absent(),
         1,
         Second1
@@ -138,15 +138,15 @@ measurement_error_appears_at_both_boundaries_test() ->
 
 prng_advances_once_when_join_completes_test() ->
     Cell0 = collecting_cell(?PRNG_SEED, ?HALF_THRESHOLD),
-    {collecting, Cell1, consume} = offer_direct(north, false, 0, Cell0),
-    {collecting, Cell2, consume} = offer_direct(east, false, 0, Cell1),
-    {collecting, Cell3, consume} = offer_direct(west, false, 0, Cell2),
+    {next_state, collecting, Cell1} = offer_direct(north, false, 0, Cell0),
+    {next_state, collecting, Cell2} = offer_direct(east, false, 0, Cell1),
+    {next_state, collecting, Cell3} = offer_direct(west, false, 0, Cell2),
     ?assertMatch(
         {syndrome, 0, _, 0, 0, 0, 0, 0,
             ?PRNG_SEED, ?HALF_THRESHOLD, 0, 0, 0, 0, 0},
         Cell3
     ),
-    {announcing, Cell4, consume} = offer_direct(south, false, 0, Cell3),
+    {next_state, announcing, Cell4} = offer_direct(south, false, 0, Cell3),
     ?assertMatch(
         {syndrome, 0, ?PHI_ALL_DIRECTIONS, 0, 1, 1, 0, 0,
             ?PRNG_FIRST, ?HALF_THRESHOLD, 0, 0, 0, 0, 0},
@@ -155,22 +155,22 @@ prng_advances_once_when_join_completes_test() ->
 
 duplicate_invalid_and_stale_data_fail_test() ->
     Cell0 = collecting_cell(?PRNG_SEED, 0),
-    {collecting, Cell1, consume} = offer_direct(north, false, 0, Cell0),
+    {next_state, collecting, Cell1} = offer_direct(north, false, 0, Cell0),
     ?assertEqual(
-        {collecting, Cell1, fail},
+        {stop, fail, Cell1},
         offer_direct(north, true, 0, Cell1)
     ),
     lists:foreach(
         fun(Source) ->
             ?assertEqual(
-                {collecting, Cell0, fail},
-                phenom_syndrome_cell:handle_cast(
+                {stop, fail, Cell0},
+                phenom_syndrome_cell:collecting(
+                    cast,
                     #phenom_data{
                         step = 0,
                         source = Source,
                         flags = 0
                     },
-                    collecting,
                     Cell0
                 )
             )
@@ -178,26 +178,26 @@ duplicate_invalid_and_stale_data_fail_test() ->
         [0, 3, 16]
     ),
     ?assertEqual(
-        {collecting, Cell0, fail},
-        phenom_syndrome_cell:handle_cast(
+        {stop, fail, Cell0},
+        phenom_syndrome_cell:collecting(
+            cast,
             #phenom_data{
                 step = 0,
                 source = ?PHI_NORTH_MASK,
                 flags = 4
             },
-            collecting,
             Cell0
         )
     ),
     ?assertEqual(
-        {collecting, Cell0, fail},
-        phenom_syndrome_cell:handle_cast(
+        {stop, fail, Cell0},
+        phenom_syndrome_cell:collecting(
+            cast,
             #phenom_data{
                 step = 16#ffffffff,
                 source = ?PHI_NORTH_MASK,
                 flags = 0
             },
-            collecting,
             Cell0
         )
     ).
@@ -205,40 +205,40 @@ duplicate_invalid_and_stale_data_fail_test() ->
 invalid_configuration_and_request_steps_fail_test() ->
     {ok, configuring, Initial} = phenom_syndrome_cell:init([]),
     ?assertEqual(
-        {configuring, Initial, fail},
-        phenom_syndrome_cell:handle_cast(
+        {stop, fail, Initial},
+        phenom_syndrome_cell:configuring(
+            cast,
             #phenom_config{seed = 0, threshold = 0, x = 0, y = 0},
-            configuring,
             Initial
         )
     ),
     ?assertEqual(
-        {configuring, Initial, fail},
-        phenom_syndrome_cell:handle_cast(
+        {stop, fail, Initial},
+        phenom_syndrome_cell:configuring(
+            cast,
             #phenom_config{
                 seed = ?PRNG_SEED,
                 threshold = 0,
                 x = 16#10000,
                 y = 0
             },
-            configuring,
             Initial
         )
     ),
     Collecting = collecting_cell(?PRNG_SEED, 0),
     ?assertEqual(
-        {collecting, Collecting, postpone},
-        phenom_syndrome_cell:handle_cast(
+        {next_state, collecting, Collecting, [postpone]},
+        phenom_syndrome_cell:collecting(
+            cast,
             #phenom_request{step = 0},
-            collecting,
             Collecting
         )
     ),
     ?assertEqual(
-        {collecting, Collecting, fail},
-        phenom_syndrome_cell:handle_cast(
+        {stop, fail, Collecting},
+        phenom_syndrome_cell:collecting(
+            cast,
             #phenom_request{step = 1},
-            collecting,
             Collecting
         )
     ).
@@ -452,14 +452,14 @@ collecting_cell(Seed, Threshold) ->
 
 collecting_cell(Seed, Threshold, X, Y) ->
     {ok, configuring, Initial} = phenom_syndrome_cell:init([]),
-    {collecting, Collecting, consume} = phenom_syndrome_cell:handle_cast(
+    {next_state, collecting, Collecting} = phenom_syndrome_cell:configuring(
+        cast,
         #phenom_config{
             seed = Seed,
             threshold = Threshold,
             x = X,
             y = Y
         },
-        configuring,
         Initial
     ),
     Collecting.
@@ -472,7 +472,7 @@ syndrome(Step, Seen, Parity, PreviousMeasurement, Announcement, Random,
 apply_responses([Response], Step, Cell) ->
     offer_direct(Response, Step, Cell);
 apply_responses([Response | Rest], Step, Cell0) ->
-    {collecting, Cell1, consume} = offer_direct(Response, Step, Cell0),
+    {next_state, collecting, Cell1} = offer_direct(Response, Step, Cell0),
     apply_responses(Rest, Step, Cell1).
 
 offer_direct({Direction, Present}, Step, Cell) ->
@@ -483,13 +483,13 @@ offer_direct(Direction, Present, Step, Cell) ->
         false -> 0;
         true -> 1
     end,
-    phenom_syndrome_cell:handle_cast(
+    phenom_syndrome_cell:collecting(
+        cast,
         #phenom_data{
             step = Step,
             source = direction_mask(Direction),
             flags = PresentWord
         },
-        collecting,
         Cell
     ).
 

@@ -17,12 +17,12 @@
 configuration_requires_nonzero_seed_test() ->
     {ok, configuring, Empty} = phi_halo_cell:init([]),
     ?assertEqual(
-        {Empty, []},
-        phi_halo_cell:handle_enter(configuring, configuring, Empty)
+        {keep_state, Empty, []},
+        phi_halo_cell:configuring(enter, configuring, Empty)
     ),
     ?assertEqual(
-        {configuring, Empty, fail},
-        phi_halo_cell:handle_cast({phi_config, 0}, configuring, Empty)
+        {stop, fail, Empty},
+        phi_halo_cell:configuring(cast, {phi_config, 0}, Empty)
     ),
     ?assertError(badarg, phi_halo_cell:configure(self(), 0)),
     ?assertError(
@@ -50,14 +50,14 @@ coin_gates_selected_anyon_output_test() ->
 
 measurement_coordinate_reaches_correction_test() ->
     {ok, configuring, Empty} = phi_halo_cell:init([]),
-    {measuring, Initial, consume} = phi_halo_cell:handle_cast(
+    {next_state, measuring, Initial} = phi_halo_cell:configuring(
+        cast,
         {phi_config, ?PRNG_SEED},
-        configuring,
         Empty
     ),
-    {gathering, Updated, consume} = phi_halo_cell:handle_cast(
+    {next_state, gathering, Updated} = phi_halo_cell:measuring(
+        cast,
         {phenom_anyon, 0, 1, 16#1234, 16#abcd},
-        measuring,
         Initial
     ),
     ?assertMatch(
@@ -65,9 +65,9 @@ measurement_coordinate_reaches_correction_test() ->
             0, 0, 0, 0, 1, ?PRNG_SEED, 16#1234, 16#abcd, 0, 0},
         Updated
     ),
-    {_AfterFlip, Actions} = phi_halo_cell:handle_enter(
+    {keep_state, _AfterFlip, Actions} = phi_halo_cell:flipping(
+        enter,
         comparing,
-        flipping,
         Updated
     ),
     ?assertEqual(
@@ -214,10 +214,10 @@ invalid_comparison_sources_fail_test_() ->
         {iolist_to_binary(io_lib:format("source mask ~p", [Source])), fun() ->
             Cell = comparison_cell(),
             ?assertEqual(
-                {comparing, Cell, fail},
-                phi_halo_cell:handle_cast(
+                {stop, fail, Cell},
+                phi_halo_cell:comparing(
+                    cast,
                     {phi0, 0, Source, 12},
-                    comparing,
                     Cell
                 )
             )
@@ -230,9 +230,9 @@ directional_coin_moves_test_() ->
         {atom_to_binary(Direction), fun() ->
             DirectionMask = direction_mask(Direction),
             Cell = flipping_cell(1, DirectionMask, ?PRNG_FIRST),
-            {Updated, Actions} = phi_halo_cell:handle_enter(
+            {keep_state, Updated, Actions} = phi_halo_cell:flipping(
+                enter,
                 comparing,
-                flipping,
                 Cell
             ),
             ?assertEqual(
@@ -258,9 +258,9 @@ coin_advances_when_no_move_is_eligible_test_() ->
     [
         {atom_to_binary(Name), fun() ->
             Cell = flipping_cell(Anyon, Direction, Random0),
-            {Updated, Actions} = phi_halo_cell:handle_enter(
+            {keep_state, Updated, Actions} = phi_halo_cell:flipping(
+                enter,
                 comparing,
-                flipping,
                 Cell
             ),
             ?assertMatch(
@@ -276,12 +276,12 @@ coin_advances_when_no_move_is_eligible_test_() ->
 
 local_departure_and_arrivals_combine_by_parity_test() ->
     Cell = flipping_cell(1, ?EAST_MASK, ?PRNG_FIRST),
-    {Departed, _Actions} = phi_halo_cell:handle_enter(
+    {keep_state, Departed, _Actions} = phi_halo_cell:flipping(
+        enter,
         comparing,
-        flipping,
         Cell
     ),
-    {measuring, Advanced, consume} = apply_anyons(
+    {next_state, measuring, Advanced} = apply_anyons(
         [true, false, true, true],
         Departed
     ),
@@ -720,14 +720,14 @@ two_layer_relaxation_coefficients_test() ->
     Initial = {cell, 0, 0, [40, 20], [0, 0], 0,
         0, 0, 0, 0, 0, ?PRNG_SEED, 0, 0, 0, 0},
     Message0 = {phi, 0, [8, 12]},
-    {gathering, First, consume} =
-        phi_halo_cell:handle_cast(Message0, gathering, Initial),
-    {gathering, Second, consume} =
-        phi_halo_cell:handle_cast(Message0, gathering, First),
-    {gathering, Third, consume} =
-        phi_halo_cell:handle_cast(Message0, gathering, Second),
-    {repeat_phase, RoundOne, consume} =
-        phi_halo_cell:handle_cast(Message0, gathering, Third),
+    {next_state, gathering, First} =
+        phi_halo_cell:gathering(cast, Message0, Initial),
+    {next_state, gathering, Second} =
+        phi_halo_cell:gathering(cast, Message0, First),
+    {next_state, gathering, Third} =
+        phi_halo_cell:gathering(cast, Message0, Second),
+    {repeat_phase, RoundOne} =
+        phi_halo_cell:gathering(cast, Message0, Third),
     ?assertEqual(
         {cell, 0, 1, [26, 19], [0, 0], 0,
             0, 0, 0, 0, 0, ?PRNG_SEED, 0, 0, 0, 0},
@@ -735,14 +735,14 @@ two_layer_relaxation_coefficients_test() ->
     ),
 
     Message1 = {phi, 1, [8, 12]},
-    {gathering, Fifth, consume} =
-        phi_halo_cell:handle_cast(Message1, gathering, RoundOne),
-    {gathering, Sixth, consume} =
-        phi_halo_cell:handle_cast(Message1, gathering, Fifth),
-    {gathering, Seventh, consume} =
-        phi_halo_cell:handle_cast(Message1, gathering, Sixth),
-    {repeat_phase, RoundTwo, consume} =
-        phi_halo_cell:handle_cast(Message1, gathering, Seventh),
+    {next_state, gathering, Fifth} =
+        phi_halo_cell:gathering(cast, Message1, RoundOne),
+    {next_state, gathering, Sixth} =
+        phi_halo_cell:gathering(cast, Message1, Fifth),
+    {next_state, gathering, Seventh} =
+        phi_halo_cell:gathering(cast, Message1, Sixth),
+    {repeat_phase, RoundTwo} =
+        phi_halo_cell:gathering(cast, Message1, Seventh),
     ?assertEqual(
         {cell, 0, 2, [19, 17], [0, 0], 0,
             0, 0, 0, 0, 0, ?PRNG_SEED, 0, 0, 0, 0},
@@ -1028,7 +1028,7 @@ comparison_order_tests(Kind, Messages, Best, BestDirection) ->
             "~p comparison order ~p",
             [Kind, [Source || {phi0, 0, Source, _Value} <- Ordered]]
         )), fun() ->
-            {flipping, Final, consume} = apply_comparisons(
+            {next_state, flipping, Final} = apply_comparisons(
                 Ordered,
                 comparison_cell()
             ),
@@ -1058,22 +1058,22 @@ comparison_messages(SourcesAndValues) ->
     ].
 
 apply_comparisons([Message], Cell) ->
-    phi_halo_cell:handle_cast(Message, comparing, Cell);
+    phi_halo_cell:comparing(cast, Message, Cell);
 apply_comparisons([Message | Rest], Cell) ->
-    {comparing, Next, consume} =
-        phi_halo_cell:handle_cast(Message, comparing, Cell),
+    {next_state, comparing, Next} =
+        phi_halo_cell:comparing(cast, Message, Cell),
     apply_comparisons(Rest, Next).
 
 apply_anyons([Present], Cell) ->
-    phi_halo_cell:handle_cast(
+    phi_halo_cell:flipping(
+        cast,
         {anyon_move, 0, present_word(Present)},
-        flipping,
         Cell
     );
 apply_anyons([Present | Rest], Cell) ->
-    {flipping, Next, consume} = phi_halo_cell:handle_cast(
+    {next_state, flipping, Next} = phi_halo_cell:flipping(
+        cast,
         {anyon_move, 0, present_word(Present)},
-        flipping,
         Cell
     ),
     apply_anyons(Rest, Next).
