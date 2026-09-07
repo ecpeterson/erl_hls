@@ -295,6 +295,17 @@ typedef struct {
     vpiHandle h_grant_ready;
     vpiHandle h_release_valid;
     vpiHandle h_release_ready;
+    vpiHandle h_credit_valid;
+    vpiHandle h_credit_ready;
+    vpiHandle h_reduction_batch;
+    vpiHandle h_reduction_valid;
+    vpiHandle h_reduction_ready;
+    vpiHandle h_can_receive;
+    vpiHandle h_state_active;
+    vpiHandle h_state_slot;
+    vpiHandle h_state_phase;
+    vpiHandle h_state_credit_debt;
+    vpiHandle h_state_lookahead;
     int request_pending;
     uint64_t request_start;
     int owner_held;
@@ -1415,6 +1426,28 @@ static int populate_effect_router_profile(
         module_signal(module, "_window_release_out_vld");
     profile->h_release_ready =
         module_signal(module, "_window_release_out_rdy");
+    profile->h_credit_valid = module_signal(module, "_credit_out_vld");
+    profile->h_credit_ready = module_signal(module, "_credit_out_rdy");
+    profile->h_reduction_batch =
+        module_signal(module, "_phi_x_reduction_out");
+    profile->h_reduction_valid =
+        module_signal(module, "_phi_x_reduction_out_vld");
+    profile->h_reduction_ready =
+        module_signal(module, "_phi_x_reduction_out_rdy");
+    if (!profile->h_reduction_batch) {
+        profile->h_reduction_batch =
+            module_signal(module, "_phi_z_reduction_out");
+        profile->h_reduction_valid =
+            module_signal(module, "_phi_z_reduction_out_vld");
+        profile->h_reduction_ready =
+            module_signal(module, "_phi_z_reduction_out_rdy");
+    }
+    profile->h_can_receive = module_signal(module, "can_receive");
+    profile->h_state_active = module_signal(module, "____state_0");
+    profile->h_state_slot = module_signal(module, "____state_1");
+    profile->h_state_phase = module_signal(module, "____state_2");
+    profile->h_state_credit_debt = module_signal(module, "____state_8");
+    profile->h_state_lookahead = module_signal(module, "____state_9");
     reset_effect_router_minima(&profile->counts);
     reset_effect_router_minima(&profile->checkpoint);
     return profile->h_scheduled_valid && profile->h_scheduled_ready &&
@@ -2138,11 +2171,19 @@ static void step_effect_router_profile(effect_router_profile_t *profile) {
     int grant_ready = get_bit(profile->h_grant_ready);
     int release_valid = get_bit(profile->h_release_valid);
     int release_ready = get_bit(profile->h_release_ready);
+    int credit = profile->h_credit_valid && profile->h_credit_ready &&
+        get_bit(profile->h_credit_valid) &&
+        get_bit(profile->h_credit_ready);
+    int reduction_send = profile->h_reduction_valid &&
+        profile->h_reduction_ready &&
+        get_bit(profile->h_reduction_valid) &&
+        get_bit(profile->h_reduction_ready);
     int scheduled = scheduled_valid && scheduled_ready;
     int request = request_valid && request_ready;
     int grant = grant_valid && grant_ready;
     int release = release_valid && release_ready;
     int next_owner_held;
+    char wait_detail[128];
 
     if (profile->request_pending)
         counts->request_wait_cycles++;
@@ -2151,6 +2192,30 @@ static void step_effect_router_profile(effect_router_profile_t *profile) {
         trace_event(profile->name, "effects_accept", -1, "");
     } else if (scheduled_valid) {
         counts->scheduled_stalls++;
+        if (profile->h_state_active && profile->h_state_slot &&
+            profile->h_state_phase && profile->h_state_credit_debt &&
+            profile->h_state_lookahead && profile->h_can_receive) {
+            snprintf(
+                wait_detail,
+                sizeof(wait_detail),
+                "active=%d;slot=%u;phase=%u;credit_debt=%d;lookahead=%d;can_receive=%d",
+                get_bit(profile->h_state_active),
+                get_u32(profile->h_state_slot),
+                get_u32(profile->h_state_phase),
+                get_bit(profile->h_state_credit_debt),
+                get_bit(profile->h_state_lookahead),
+                get_bit(profile->h_can_receive));
+            trace_event(profile->name, "effects_wait", -1, wait_detail);
+        }
+    }
+    if (credit)
+        trace_event(profile->name, "credit_return", -1, "");
+    if (reduction_send) {
+        trace_event(
+            profile->name,
+            "reduction_send",
+            (int64_t)get_high_u32(profile->h_reduction_batch),
+            "");
     }
     if (request) {
         counts->requests++;

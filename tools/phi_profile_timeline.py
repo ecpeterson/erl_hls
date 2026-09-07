@@ -4,8 +4,10 @@
 from __future__ import annotations
 
 import argparse
+from collections import defaultdict, deque
 import csv
 import html
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -16,6 +18,14 @@ class Event:
     component: str
     event: str
     slot: int | None
+    detail: str
+
+
+@dataclass(frozen=True)
+class Dependency:
+    source: Event
+    target: Event
+    kind: str
     detail: str
 
 
@@ -37,6 +47,334 @@ COLORS = {
     "waiting_egress_credit": "var(--viz-series-3)",
     "internal_other": "var(--muted)",
 }
+
+
+def numbered_components(events: list[Event], prefix: str) -> list[str]:
+    return sorted(
+        {
+            event.component
+            for event in events
+            if event.component.startswith(prefix)
+            and event.component.removeprefix(prefix).isdigit()
+        },
+        key=lambda name: int(name.removeprefix(prefix)),
+    )
+
+
+def phi_groups(events: list[Event]) -> tuple[list[list[str]], list[str]]:
+    schedulers = numbered_components(events, "phi_")
+    planes = sorted(
+        {
+            event.component
+            for event in events
+            if event.component.startswith("phi_")
+            and event.component.endswith("_plane")
+        }
+    )
+    if not schedulers or not planes or len(schedulers) % len(planes) != 0:
+        raise SystemExit("cannot infer phi scheduler shards and planes")
+    group_size = len(schedulers) // len(planes)
+    return [
+        schedulers[index:index + group_size]
+        for index in range(0, len(schedulers), group_size)
+    ], planes
+
+
+def phi_router_map(events: list[Event], schedulers: list[str]) -> dict[str, str]:
+    routers = numbered_components(events, "window_router_")
+    if len(routers) < len(schedulers):
+        raise SystemExit("cannot map phi schedulers to effect routers")
+    return dict(zip(schedulers, routers[-len(schedulers):], strict=True))
+
+
+def parse_destination_tables(path: Path | None) -> dict[str, dict[int, list[int]]]:
+    if path is None or not path.exists():
+        return {}
+    source = path.read_text(encoding="utf-8")
+    tables = {}
+    for plane in ("x", "z"):
+        match = re.search(
+            rf"fn phi_{plane}_reduction_destinations\(source: u32\).*?"
+            rf"\{{\s*match source \{{(?P<body>.*?)\n\s*_ =>",
+            source,
+            re.DOTALL,
+        )
+        if not match:
+            continue
+        table = {}
+        for row in re.finditer(
+            r"u32:(\d+)\s*=>\s*\[([^]]+)\]", match.group("body")
+        ):
+            table[int(row.group(1))] = [
+                int(value)
+                for value in re.findall(r"u32:(\d+)", row.group(2))
+            ]
+        if table:
+            tables[plane] = table
+    return tables
+
+
+def event_site(event: Event) -> str | None:
+    return detail_fields(event.detail).get("site")
+
+
+def dependency_graph(
+    events: list[Event],
+    groups: list[list[str]],
+    planes: list[str],
+    router_map: dict[str, str],
+    destination_tables: dict[str, dict[int, list[int]]],
+) -> list[Dependency]:
+    """Infer preserved-order dependencies between observed handshakes.
+
+    The trace deliberately contains no synthetic transaction identifier.  The
+    scheduler egress FIFO and each reduction-batch channel preserve order, so
+    their handshakes can be paired exactly.  Contribution-to-aggregate edges
+    additionally use the generated static destination table.
+    """
+    dependencies: list[Dependency] = []
+    by_component: dict[str, list[Event]] = defaultdict(list)
+    for event in events:
+        by_component[event.component].append(event)
+
+    # A completion makes the matching actor selectable; the next read of that
+    # slot consumes it.  Reads and writes are paired per slot so overlapped
+    # visits remain unambiguous.
+    visit_site: dict[int, str] = {}
+    write_read: dict[int, Event] = {}
+    for scheduler in [item for group in groups for item in group]:
+        pending_completion: dict[int, deque[Event]] = defaultdict(deque)
+        pending_read: dict[int, deque[Event]] = defaultdict(deque)
+        for event in by_component[scheduler]:
+            if event.slot is None:
+                continue
+            if event.event == "aggregate_complete":
+                pending_completion[event.slot].append(event)
+            elif event.event == "state_read":
+                if pending_completion[event.slot]:
+                    completion = pending_completion[event.slot].popleft()
+                    dependencies.append(Dependency(
+                        completion, event, "completion_to_read",
+                        f"completed {event_site(completion) or 'reduction'} "
+                        f"selects actor {event.slot}",
+                    ))
+                    site = event_site(completion)
+                    if site:
+                        visit_site[id(event)] = site
+                pending_read[event.slot].append(event)
+            elif event.event == "state_write" and pending_read[event.slot]:
+                read = pending_read[event.slot].popleft()
+                dependencies.append(Dependency(
+                    read, event, "actor_visit",
+                    f"actor {event.slot} state transaction",
+                ))
+                write_read[id(event)] = read
+
+    # A state write and effect-bundle enqueue are the two retirement actions
+    # of one callback transaction.  Pair the enqueues with router accepts using
+    # the scheduler FIFO's preserved order.
+    scheduler_geometry = {
+        scheduler: (len(group), shard)
+        for group in groups
+        for shard, scheduler in enumerate(group)
+    }
+    routed_accepts: dict[str, list[tuple[Event, int | None]]] = defaultdict(list)
+    for scheduler, router in router_map.items():
+        writes_by_cycle = {
+            event.cycle: event
+            for event in by_component[scheduler]
+            if event.event == "state_write"
+        }
+        egresses = [
+            event for event in by_component[scheduler]
+            if event.event == "effects_egress"
+        ]
+        accepts = [
+            event for event in by_component[router]
+            if event.event == "effects_accept"
+        ]
+        for egress, accepted in zip(egresses, accepts):
+            write = writes_by_cycle.get(egress.cycle)
+            if write is not None:
+                dependencies.append(Dependency(
+                    write, egress, "retirement",
+                    f"actor {write.slot} retires an effect bundle",
+                ))
+            dependencies.append(Dependency(
+                egress, accepted, "egress_fifo",
+                "scheduler egress FIFO preserves bundle order",
+            ))
+            if write is None or write.slot is None:
+                source_actor = None
+            else:
+                shard_count, shard = scheduler_geometry[scheduler]
+                source_actor = write.slot * shard_count + shard
+            routed_accepts[router].append((accepted, source_actor))
+
+    # Match each reduction router's accepted bundle with that shard's next
+    # plane input handshake.  The trace's batch slot is the packed batch's
+    # final destination; the static table makes it possible to recover the
+    # source actor and all four destinations without adding profiling bits to
+    # the hardware interface.
+    batch_sources: dict[int, int] = {}
+    for group, plane in zip(groups, planes, strict=True):
+        tag = "x" if "_x_" in plane else "z"
+        table = destination_tables.get(tag, {})
+        inverse_last = {
+            destinations[-1]: source
+            for source, destinations in table.items()
+            if destinations
+        }
+        batches_by_shard: dict[int, deque[Event]] = defaultdict(deque)
+        for event in by_component[plane]:
+            if event.event != "batch_accept":
+                continue
+            fields = detail_fields(event.detail)
+            shard = int(fields.get("source", "-1"))
+            batches_by_shard[shard].append(event)
+            if event.slot in inverse_last:
+                batch_sources[id(event)] = inverse_last[event.slot]
+        for shard, scheduler in enumerate(group):
+            router = router_map[scheduler]
+            sends = [
+                event for event in by_component[router]
+                if event.event == "reduction_send"
+            ]
+            if sends:
+                unmatched_accepts = list(routed_accepts[router])
+                matched_sends: list[tuple[Event, Event, int | None]] = []
+                for sent in sends:
+                    source = inverse_last.get(sent.slot)
+                    candidates = [
+                        (index, accepted)
+                        for index, (accepted, accepted_source) in
+                        enumerate(unmatched_accepts)
+                        if accepted.cycle <= sent.cycle
+                        and (source is None or accepted_source == source)
+                    ]
+                    if not candidates:
+                        continue
+                    accepted_index, accepted = candidates[-1]
+                    unmatched_accepts.pop(accepted_index)
+                    dependencies.append(Dependency(
+                        accepted, sent, "router_dispatch",
+                        "accepted effect bundle is emitted as a reduction batch",
+                    ))
+                    matched_sends.append((accepted, sent, source))
+                unmatched_sends = list(matched_sends)
+                delivered: dict[int, Event] = {}
+                for batch in batches_by_shard[shard]:
+                    source = batch_sources.get(id(batch))
+                    candidates = [
+                        (index, sent)
+                        for index, (_accepted, sent, sent_source) in
+                        enumerate(unmatched_sends)
+                        if sent.cycle <= batch.cycle
+                        and (source is None or sent_source == source)
+                    ]
+                    if not candidates:
+                        continue
+                    sent_index, sent = candidates[-1]
+                    unmatched_sends.pop(sent_index)
+                    delivered[id(sent)] = batch
+                    dependencies.append(Dependency(
+                        sent, batch, "reduction_fifo",
+                        "reduction channel FIFO delivers the batch to the plane"
+                        if source is None else
+                        f"source actor {source} batch enters the shared plane",
+                    ))
+                for (_previous_accept, previous_send, _source), \
+                        (accepted, _send, _next_source) in zip(
+                            matched_sends, matched_sends[1:]
+                        ):
+                    previous_batch = delivered.get(id(previous_send))
+                    if (
+                        previous_batch is not None
+                        and accepted.cycle > previous_batch.cycle
+                    ):
+                        dependencies.append(Dependency(
+                            previous_batch, accepted, "router_capacity",
+                            "the plane drains the one-entry reduction FIFO",
+                        ))
+            else:
+                # Older traces predate the explicit router-output probe.  The
+                # source identity and ordered handshakes still recover the
+                # coarser router-to-plane edge.
+                unmatched = list(routed_accepts[router])
+                matched: list[tuple[Event, Event]] = []
+                for batch in batches_by_shard[shard]:
+                    source = batch_sources.get(id(batch))
+                    candidates = [
+                        (index, accepted)
+                        for index, (accepted, accepted_source) in
+                        enumerate(unmatched)
+                        if accepted.cycle <= batch.cycle
+                        and (source is None or accepted_source == source)
+                    ]
+                    if not candidates:
+                        continue
+                    accepted_index, accepted = candidates[-1]
+                    unmatched.pop(accepted_index)
+                    dependencies.append(Dependency(
+                        accepted, batch, "router_to_plane",
+                        "reduction batch enters the shared plane"
+                        if source is None else
+                        f"source actor {source} batch enters the shared plane",
+                    ))
+                    matched.append((accepted, batch))
+                for (_previous_accept, previous_batch), \
+                        (accepted, _batch) in zip(matched, matched[1:]):
+                    if accepted.cycle > previous_batch.cycle:
+                        dependencies.append(Dependency(
+                            previous_batch, accepted, "router_capacity",
+                            "the previous batch frees the router's single active slot",
+                        ))
+
+        if not table:
+            continue
+        contributions: dict[int, deque[Event]] = defaultdict(deque)
+        for event in by_component[plane]:
+            if event.event == "batch_accept":
+                source = batch_sources.get(id(event))
+                if source is not None:
+                    for destination in table[source]:
+                        contributions[destination].append(event)
+            elif event.event == "aggregate_send" and event.slot is not None:
+                shard = int(detail_fields(event.detail).get("shard", "-1"))
+                destination = event.slot * len(group) + shard
+                members = [
+                    contributions[destination].popleft()
+                    for _ in range(min(4, len(contributions[destination])))
+                ]
+                if len(members) == 4:
+                    for member in members:
+                        source = batch_sources.get(id(member))
+                        dependencies.append(Dependency(
+                            member, event, "contribution",
+                            f"source actor {source} contributes to "
+                            f"destination actor {destination}",
+                        ))
+
+    # Plane output and scheduler aggregate input are a direct handshake.
+    for group, plane in zip(groups, planes, strict=True):
+        for sent in by_component[plane]:
+            if sent.event != "aggregate_send" or sent.slot is None:
+                continue
+            shard = int(detail_fields(sent.detail).get("shard", "-1"))
+            if not 0 <= shard < len(group):
+                continue
+            receives = [
+                event for event in by_component[group[shard]]
+                if event.event == "aggregate_complete"
+                and event.cycle == sent.cycle
+                and event.slot == sent.slot
+            ]
+            if receives:
+                dependencies.append(Dependency(
+                    sent, receives[0], "aggregate_delivery",
+                    f"aggregate delivered to {group[shard]} actor {sent.slot}",
+                ))
+    return dependencies
 
 
 def parse_trace(path: Path) -> list[Event]:
@@ -400,6 +738,449 @@ def render(
     )
 
 
+def cross_shard_title(
+    scheduler: str, slot: int | None, cycle: int
+) -> str:
+    actor = "" if slot is None else f" actor {slot}"
+    return f"Phi shard causality: {scheduler}{actor} egress at clock {cycle}"
+
+
+def event_tooltip(event: Event, extra: str = "") -> str:
+    slot = "" if event.slot is None else f" actor {event.slot}"
+    detail = "" if not event.detail else f" ({event.detail})"
+    suffix = "" if not extra else f" — {extra}"
+    return (
+        f"clock {event.cycle}: {event.component} "
+        f"{event.event.replace('_', ' ')}{slot}{detail}{suffix}"
+    )
+
+
+def cross_shard_svg(
+    events: list[Event],
+    groups: list[list[str]],
+    planes: list[str],
+    router_map: dict[str, str],
+    dependencies: list[Dependency],
+    start: int,
+    end: int,
+    focus_cycle: int,
+    focus_scheduler: str,
+    width: int,
+    id_suffix: str,
+) -> str:
+    compact = width <= 400
+    medium = width <= 760
+    left = 86 if compact else 124 if medium else 164
+    right = 8 if compact else 14
+    top = 56 if compact else 62
+    scheduler_height = 54 if compact else 62
+    plane_height = 54 if compact else 62
+    panel_gap = 18
+    lane_y: dict[str, float] = {}
+    cursor = top
+    lane_specs: list[tuple[str, str, str]] = []
+    for group_index, (group, plane) in enumerate(
+        zip(groups, planes, strict=True)
+    ):
+        plane_letter = "X" if "_x_" in plane else "Z"
+        for shard, scheduler in enumerate(group):
+            lane_y[scheduler] = cursor
+            label = f"φ{scheduler.removeprefix('phi_')} {plane_letter}{shard}"
+            lane_specs.append((scheduler, label, "scheduler"))
+            cursor += scheduler_height
+        lane_y[plane] = cursor
+        lane_specs.append((plane, f"{plane_letter} reduce", "plane"))
+        cursor += plane_height
+        if group_index + 1 < len(groups):
+            cursor += panel_gap
+    height = int(cursor + 42)
+    span = max(1, end - start + 1)
+    plot_width = width - left - right
+
+    def x(cycle: float) -> float:
+        return left + (cycle - start) * plot_width / span
+
+    marker_id = f"phi-causal-arrow{id_suffix}"
+    title_id = f"phi-causal-title{id_suffix}"
+    desc_id = f"phi-causal-desc{id_suffix}"
+    svg = [
+        f'<svg viewBox="0 0 {width} {height}" role="img" '
+        f'aria-labelledby="{title_id} {desc_id}" '
+        'style="width:100%;height:auto;display:block">',
+        f'<title id="{title_id}">Cross-shard phi data dependencies</title>',
+        f'<desc id="{desc_id}">Six phi scheduler rows and two reduction planes share one clock axis. Directed arrows connect aggregate delivery, actor state transactions, effect queues, router acceptance, reduction batches, and completed aggregates.</desc>',
+        '<defs>',
+        f'<marker id="{marker_id}" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M 0 0 L 8 4 L 0 8 Z" fill="context-stroke"/></marker>',
+        '</defs>',
+        '<style>',
+        'text{fill:var(--foreground);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px}',
+        '.muted{fill:var(--muted-foreground)}',
+        '.grid{stroke:var(--border);stroke-width:1}',
+        '.baseline{stroke:var(--border);stroke-width:1}',
+        '.dependency{fill:none;stroke:var(--muted-foreground);stroke-width:1;opacity:.25}',
+        '.dependency.focus{stroke:var(--foreground);stroke-width:1.6;opacity:.82}',
+        '.contribution{stroke-dasharray:3 3}',
+        '.event{stroke:var(--background);stroke-width:1}',
+        '</style>',
+    ]
+    focus_writes = [
+        event for event in events
+        if event.component == focus_scheduler
+        and event.event == "state_write"
+        and event.cycle == focus_cycle
+    ]
+    focus_slot = focus_writes[0].slot if focus_writes else None
+    visible_title = (
+        f"φ{focus_scheduler.removeprefix('phi_')} actor "
+        f"{focus_slot} egress · clock {focus_cycle}"
+        if compact and focus_slot is not None else
+        cross_shard_title(focus_scheduler, focus_slot, focus_cycle)
+    )
+    svg.append(
+        f'<text id="{title_id}-visible" x="0" y="17" '
+        f'style="font-family:inherit;font-size:14px;font-weight:500">'
+        f'{esc(visible_title)}</text>'
+    )
+    if not compact:
+        svg.append(
+            f'<text class="muted" x="0" y="37">'
+            f'Actual handshakes; arrows follow FIFO order and static reduction destinations</text>'
+        )
+
+    tick_step = 2 if span <= 18 else 5
+    for cycle in range(start, end + 1):
+        if cycle in (start, end, focus_cycle) or cycle % tick_step == 0:
+            xpos = x(cycle + 0.5)
+            svg.append(
+                f'<line class="grid" x1="{xpos:.2f}" y1="{top - 9}" '
+                f'x2="{xpos:.2f}" y2="{height - 30}"/>'
+            )
+            svg.append(
+                f'<text class="muted" x="{xpos:.2f}" y="{height - 13}" '
+                f'text-anchor="middle">{cycle}</text>'
+            )
+    focus_x = x(focus_cycle + 0.5)
+    svg.append(
+        f'<line x1="{focus_x:.2f}" y1="{top - 9}" x2="{focus_x:.2f}" '
+        f'y2="{height - 30}" stroke="var(--foreground)" stroke-width="1" '
+        f'stroke-dasharray="3 3"/>'
+    )
+
+    all_schedulers = [item for group in groups for item in group]
+    for component, label, kind in lane_specs:
+        ypos = lane_y[component]
+        is_scheduler = kind == "scheduler"
+        baseline = ypos + (27 if compact else 29)
+        svg.append(
+            f'<text x="0" y="{baseline + 4:.2f}" '
+            f'style="font-family:inherit">{esc(label)}</text>'
+        )
+        if is_scheduler and not compact:
+            svg.append(
+                f'<text class="muted" x="{left - 7}" y="{ypos + 51:.2f}" '
+                f'text-anchor="end">router</text>'
+            )
+        svg.append(
+            f'<line class="baseline" x1="{left}" y1="{baseline:.2f}" '
+            f'x2="{width - right}" y2="{baseline:.2f}"/>'
+        )
+        if is_scheduler:
+            router_y = ypos + (44 if compact else 49)
+            svg.append(
+                f'<line class="baseline" x1="{left}" y1="{router_y:.2f}" '
+                f'x2="{width - right}" y2="{router_y:.2f}"/>'
+            )
+
+    # Thin selection strips retain scheduler context without occupying another
+    # row. They are not dependency endpoints.
+    for scheduler in all_schedulers:
+        ypos = lane_y[scheduler] + 3
+        for run_start, run_end, status in selection_runs(
+            events, scheduler, start, end
+        ):
+            xpos = x(run_start)
+            run_width = max(1.5, x(run_end + 1) - xpos)
+            svg.append(
+                f'<rect x="{xpos:.2f}" y="{ypos:.2f}" '
+                f'width="{run_width:.2f}" height="7" '
+                f'fill="{COLORS.get(status, "var(--muted)")}" opacity=".55" '
+                f'data-tooltip="{esc(scheduler)} {esc(status)}: clocks '
+                f'{run_start}–{run_end}"/>'
+            )
+        router = router_map[scheduler]
+        wait_samples = {
+            event.cycle: event.detail
+            for event in events
+            if event.component == router
+            and event.event == "effects_wait"
+            and start <= event.cycle <= end
+        }
+        if wait_samples:
+            runs = []
+            run_start = None
+            last_cycle = None
+            for cycle in sorted(wait_samples):
+                if last_cycle is None or cycle != last_cycle + 1:
+                    if run_start is not None:
+                        runs.append((run_start, last_cycle))
+                    run_start = cycle
+                last_cycle = cycle
+            if run_start is not None:
+                runs.append((run_start, last_cycle))
+            router_y = lane_y[scheduler] + (44 if compact else 49)
+            for run_start, run_end in runs:
+                svg.append(
+                    f'<rect x="{x(run_start):.2f}" y="{router_y - 4:.2f}" '
+                    f'width="{max(1.5, x(run_end + 1) - x(run_start)):.2f}" '
+                    f'height="8" fill="var(--viz-series-4)" opacity=".32" '
+                    f'data-tooltip="{esc(router)} waits for downstream capacity: '
+                    f'clocks {run_start}–{run_end}"/>'
+                )
+
+    event_positions: dict[int, tuple[float, float]] = {}
+    visible = [event for event in events if start <= event.cycle <= end]
+    scheduler_events = {
+        "aggregate_complete": (0.18, "aggregate"),
+        "state_read": (0.38, "read"),
+        "state_write": (0.60, "write"),
+        "effects_egress": (0.82, "egress"),
+    }
+    router_owner = {router: scheduler for scheduler, router in router_map.items()}
+    for event in visible:
+        if event.component in lane_y and event.component in all_schedulers:
+            if event.event not in scheduler_events:
+                continue
+            x_offset, _shape = scheduler_events[event.event]
+            event_positions[id(event)] = (
+                x(event.cycle + x_offset), lane_y[event.component] +
+                (27 if compact else 29),
+            )
+        elif event.component in router_owner and event.event in {
+            "effects_accept", "reduction_send", "credit_return",
+            "window_request", "window_grant", "window_release"
+        }:
+            scheduler = router_owner[event.component]
+            event_positions[id(event)] = (
+                x(event.cycle + {
+                    "effects_accept": 0.66,
+                    "reduction_send": 0.82,
+                    "credit_return": 0.94,
+                }.get(event.event, 0.82)), lane_y[scheduler] +
+                (44 if compact else 49),
+            )
+        elif event.component in planes and event.event in {
+            "batch_accept", "aggregate_send"
+        }:
+            event_positions[id(event)] = (
+                x(event.cycle + (0.32 if event.event == "batch_accept" else 0.72)),
+                lane_y[event.component] +
+                (20 if event.event == "batch_accept" else 40),
+            )
+
+    # Highlight the finite path from the selected egress through the four
+    # aggregate deliveries. Stop at delivery to avoid coloring the next round.
+    focus_events = {
+        id(event) for event in visible
+        if event.component == focus_scheduler
+        and event.event == "effects_egress"
+        and event.cycle == focus_cycle
+    }
+    focused_edges: set[int] = set()
+    backward_frontier = set(focus_events)
+    for _depth in range(3):
+        next_frontier = set()
+        for index, dependency in enumerate(dependencies):
+            if id(dependency.target) not in backward_frontier or \
+                    dependency.kind not in {
+                        "retirement", "actor_visit", "completion_to_read"
+                    }:
+                continue
+            focused_edges.add(index)
+            next_frontier.add(id(dependency.source))
+        backward_frontier = next_frontier
+    frontier = set(focus_events)
+    for _depth in range(5):
+        next_frontier = set()
+        for index, dependency in enumerate(dependencies):
+            if id(dependency.source) not in frontier:
+                continue
+            focused_edges.add(index)
+            if dependency.kind != "aggregate_delivery":
+                next_frontier.add(id(dependency.target))
+        frontier = next_frontier
+    focused_targets = {
+        id(dependencies[index].target) for index in focused_edges
+    }
+    for index, dependency in enumerate(dependencies):
+        if (
+            dependency.kind == "router_capacity"
+            and id(dependency.target) in focused_targets
+        ):
+            focused_edges.add(index)
+
+    # Draw dependencies behind their event marks. Curves separate same-row
+    # queues from cross-shard aggregate delivery.
+    for index, dependency in enumerate(dependencies):
+        source = event_positions.get(id(dependency.source))
+        target = event_positions.get(id(dependency.target))
+        if source is None or target is None:
+            continue
+        sx, sy = source
+        tx, ty = target
+        bend = -10 if sy == ty else (ty - sy) * 0.46
+        middle = (sx + tx) / 2
+        classes = ["dependency"]
+        if dependency.kind == "contribution":
+            classes.append("contribution")
+        if index in focused_edges:
+            classes.append("focus")
+        svg.append(
+            f'<path class="{" ".join(classes)}" '
+            f'd="M {sx:.2f} {sy:.2f} C {middle:.2f} {sy + bend:.2f}, '
+            f'{middle:.2f} {ty - bend:.2f}, {tx:.2f} {ty:.2f}" '
+            f'marker-end="url(#{marker_id})" '
+            f'data-tooltip="{esc(dependency.detail)}"/>'
+        )
+        if (
+            index in focused_edges
+            and dependency.kind in {
+                "egress_fifo", "router_dispatch", "reduction_fifo",
+                "router_to_plane"
+            }
+            and tx - sx > 28
+            and not compact
+        ):
+            delta = dependency.target.cycle - dependency.source.cycle
+            svg.append(
+                f'<text x="{middle:.2f}" y="{min(sy, ty) - 5:.2f}" '
+                f'text-anchor="middle">+{delta}</text>'
+            )
+
+    # Event marks are shape-coded so the diagram remains legible without
+    # relying on color. The focus egress receives a neutral outer ring.
+    causal_details = {
+        id(dependency.target): dependency.detail
+        for dependency in dependencies
+        if dependency.kind in {"reduction_fifo", "router_to_plane"}
+    }
+    for event in visible:
+        position = event_positions.get(id(event))
+        if position is None:
+            continue
+        xpos, ypos = position
+        color = COLORS.get(event.event, "var(--foreground)")
+        tooltip = event_tooltip(event, causal_details.get(id(event), ""))
+        if event.event == "aggregate_complete":
+            shape = (
+                f'<path d="M {xpos:.2f} {ypos - 6:.2f} L {xpos + 6:.2f} '
+                f'{ypos + 5:.2f} L {xpos - 6:.2f} {ypos + 5:.2f} Z"'
+            )
+        elif event.event in {"state_read", "batch_accept"}:
+            shape = (
+                f'<path d="M {xpos:.2f} {ypos - 6:.2f} L {xpos + 6:.2f} '
+                f'{ypos:.2f} L {xpos:.2f} {ypos + 6:.2f} L {xpos - 6:.2f} '
+                f'{ypos:.2f} Z"'
+            )
+        elif event.event in {"state_write", "window_grant"}:
+            shape = (
+                f'<rect x="{xpos - 5:.2f}" y="{ypos - 5:.2f}" '
+                f'width="10" height="10"'
+            )
+        elif event.event == "aggregate_send":
+            shape = (
+                f'<path d="M {xpos - 6:.2f} {ypos - 5:.2f} L {xpos + 6:.2f} '
+                f'{ypos - 5:.2f} L {xpos:.2f} {ypos + 6:.2f} Z"'
+            )
+        else:
+            shape = f'<circle cx="{xpos:.2f}" cy="{ypos:.2f}" r="5"'
+        fill = (
+            "var(--background)" if event.event == "effects_accept" else color
+        )
+        stroke = color if event.event == "effects_accept" else "var(--background)"
+        svg.append(
+            f'{shape} fill="{fill}" stroke="{stroke}" stroke-width="1.5" '
+            f'data-tooltip="{esc(tooltip)}"/>'
+        )
+        if id(event) in focus_events:
+            svg.append(
+                f'<circle cx="{xpos:.2f}" cy="{ypos:.2f}" r="9" fill="none" '
+                f'stroke="var(--foreground)" stroke-width="1.5"/>'
+            )
+
+    # A compact in-plot legend keeps the dependency vocabulary visible.
+    legend_y = top - (13 if compact else 15)
+    legend = (
+        [("△", "done"), ("◇", "read / batch"), ("□", "write"),
+         ("●", "egress"), ("○", "router")]
+        if not compact else
+        [("△", "done"), ("◇", "read"), ("●", "out"), ("○", "route")]
+    )
+    legend_x = left
+    for symbol, label in legend:
+        svg.append(
+            f'<text x="{legend_x}" y="{legend_y}">{symbol} {esc(label)}</text>'
+        )
+        legend_x += 76 if not compact else 55
+    svg.append('</svg>')
+    return "\n".join(svg) + "\n"
+
+
+def render_cross_shard(
+    events: list[Event],
+    groups: list[list[str]],
+    planes: list[str],
+    router_map: dict[str, str],
+    dependencies: list[Dependency],
+    focus_cycle: int,
+    focus_scheduler: str,
+    before: int,
+    after: int,
+    fragment: bool,
+) -> str:
+    start = max(0, focus_cycle - before)
+    end = focus_cycle + after
+    if not fragment:
+        return cross_shard_svg(
+            events, groups, planes, router_map, dependencies,
+            start, end, focus_cycle, focus_scheduler, 1200, "-file"
+        )
+    medium_start = max(0, focus_cycle - min(before, 5))
+    medium_end = focus_cycle + min(after, 16)
+    compact_start = max(0, focus_cycle - min(before, 3))
+    compact_end = focus_cycle + min(after, 10)
+    return (
+        '<div id="phi-cross-shard-causality">\n'
+        '<style>\n'
+        '#phi-cross-shard-causality .phi-medium,'
+        '#phi-cross-shard-causality .phi-compact{display:none}\n'
+        '@media(max-width:759px){'
+        '#phi-cross-shard-causality .phi-wide{display:none}'
+        '#phi-cross-shard-causality .phi-medium{display:block}}\n'
+        '@media(max-width:419px){'
+        '#phi-cross-shard-causality .phi-medium{display:none}'
+        '#phi-cross-shard-causality .phi-compact{display:block}}\n'
+        '</style>\n'
+        '<div class="phi-wide">\n'
+        + cross_shard_svg(
+            events, groups, planes, router_map, dependencies,
+            start, end, focus_cycle, focus_scheduler, 1024, "-wide"
+        )
+        + '</div>\n<div class="phi-medium">\n'
+        + cross_shard_svg(
+            events, groups, planes, router_map, dependencies,
+            medium_start, medium_end, focus_cycle, focus_scheduler,
+            736, "-medium"
+        )
+        + '</div>\n<div class="phi-compact">\n'
+        + cross_shard_svg(
+            events, groups, planes, router_map, dependencies,
+            compact_start, compact_end, focus_cycle, focus_scheduler,
+            360, "-compact"
+        )
+        + '</div>\n</div>\n'
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("trace", type=Path)
@@ -414,12 +1195,81 @@ def main() -> None:
     parser.add_argument("--before", type=int, default=32)
     parser.add_argument("--after", type=int, default=18)
     parser.add_argument(
+        "--focus-cycle",
+        type=int,
+        help="center an all-shards view on this clock",
+    )
+    parser.add_argument(
+        "--all-shards",
+        action="store_true",
+        help="render every phi shard and both reduction planes",
+    )
+    parser.add_argument(
+        "--dependencies",
+        action="store_true",
+        help="draw FIFO and reduction data-dependency arrows",
+    )
+    parser.add_argument(
+        "--topology",
+        type=Path,
+        help="generated DSLX topology containing reduction destinations",
+    )
+    parser.add_argument(
         "--fragment",
         action="store_true",
         help="wrap the SVG in an embeddable HTML fragment",
     )
     args = parser.parse_args()
     events = parse_trace(args.trace)
+    if args.all_shards:
+        groups, planes = phi_groups(events)
+        schedulers = [item for group in groups for item in group]
+        router_map = phi_router_map(events, schedulers)
+        topology = args.topology
+        if topology is None:
+            candidate = args.trace.parent / "phi_decoder_profile_topology.x"
+            topology = candidate if candidate.exists() else None
+        destination_tables = parse_destination_tables(topology)
+        dependencies = dependency_graph(
+            events, groups, planes, router_map, destination_tables
+        ) if args.dependencies else []
+        focus_cycle = args.focus_cycle
+        if focus_cycle is None:
+            _, _, anchor = choose_window(
+                events,
+                args.scheduler,
+                args.occurrence,
+                args.slot,
+                args.site,
+                args.before,
+                args.after,
+            )
+            later_egresses = [
+                event.cycle
+                for event in events
+                if event.component == args.scheduler
+                and event.event == "effects_egress"
+                and event.cycle >= anchor.cycle
+            ]
+            focus_cycle = (
+                later_egresses[0] if later_egresses else anchor.cycle
+            )
+        args.output.write_text(
+            render_cross_shard(
+                events,
+                groups,
+                planes,
+                router_map,
+                dependencies,
+                focus_cycle,
+                args.scheduler,
+                args.before,
+                args.after,
+                args.fragment,
+            ),
+            encoding="utf-8",
+        )
+        return
     plane = args.plane or infer_plane(events, args.scheduler)
     start, end, anchor = choose_window(
         events,

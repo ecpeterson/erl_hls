@@ -32,3 +32,7 @@ bash "$local_stage/phi_decoder_profile_stage.sh" \
 python3 "$project_root/tools/phi_profile_timeline.py" \
     "$local_stage/phi_decoder_profile.trace.csv" \
     "$local_stage/phi_decoder_profile.timeline.svg"
+python3 "$project_root/tools/phi_profile_timeline.py" \
+    "$local_stage/phi_decoder_profile.trace.csv" \
+    "$local_stage/phi_decoder_profile.causality.svg" \
+    --all-shards --dependencies --site gathering --before 8 --after 22
