@@ -20,6 +20,15 @@ if ((phi_shards > 9)); then
     exit 1
 fi
 scheduler_count=$((4 + 2 * phi_shards))
+reduction_scheduler_count=$((2 * phi_shards))
+# The unsharded plan sorts atom group IDs (data, phi, syndrome). Sharded phi
+# IDs are 3-tuples, while data/syndrome IDs are 2-tuples; Erlang term order
+# puts the shorter tuples first, so the phi range follows all four of them.
+if ((phi_shards == 1)); then
+    reduction_scheduler_first=2
+else
+    reduction_scheduler_first=4
+fi
 cpu_witness="$local_stage/phi_memory_cpu_witness.term"
 
 cd "$project_root"
@@ -45,6 +54,8 @@ if [[ -n "$xls_root" ]]; then
     ERL_HLS_PHI_DEMO_REUSE_RTL="$reuse_rtl" \
     ERL_HLS_PHI_DEMO_COMPILE_ONLY=1 \
     ERL_HLS_PHI_SCHEDULER_COUNT="$scheduler_count" \
+    ERL_HLS_PHI_REDUCTION_SCHEDULER_FIRST="$reduction_scheduler_first" \
+    ERL_HLS_PHI_REDUCTION_SCHEDULER_COUNT="$reduction_scheduler_count" \
         bash "$local_stage/remote_phi_memory_demo.sh" \
         "$local_stage" "$xls_root"
     "$project_root/tools/local_phi_memory_demo.sh" "$local_stage"
@@ -86,6 +97,8 @@ ssh -o BatchMode=yes "$remote_host" \
     env ERL_HLS_PHI_DEMO_REUSE_RTL="$reuse_rtl" \
     ERL_HLS_PHI_DEMO_COMPILE_ONLY="$native_icarus" \
     ERL_HLS_PHI_SCHEDULER_COUNT="$scheduler_count" \
+    ERL_HLS_PHI_REDUCTION_SCHEDULER_FIRST="$reduction_scheduler_first" \
+    ERL_HLS_PHI_REDUCTION_SCHEDULER_COUNT="$reduction_scheduler_count" \
     bash "$remote_stage/remote_phi_memory_demo.sh" \
     "$remote_stage" "$remote_xls"
 

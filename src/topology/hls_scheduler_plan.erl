@@ -24,8 +24,11 @@ Each storage choice is a required physical binding, not a hint. A backend must
 either realize the corresponding state there or reject the plan. Actor data
 and mailboxes are separate bindings because safe shared scheduling needs both
 per-instance callback state and per-instance bounded admission state. Generated
-actor-local reduction state is included in each actor's state-storage row, but
-its width remains explicit in the normalized plan.
+actor-local reduction state remains part of the logical actor, but a reduction-
+capable shared executor stores it in a third per-instance row instead of the
+ordinary callback-state row. Its width remains explicit in the normalized plan;
+the current XLS backend exposes an independent 1R1W RAM interface for it and
+uses the group's state-storage policy for both rows.
 
 A shared executor advances one actor by a resumable microstep. If the next
 ordered effect lacks egress credit, the actor keeps its pending-effect index

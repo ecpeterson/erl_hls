@@ -1624,3 +1624,48 @@ This negative performance result narrows the next architectural question.
 Further gains require either accumulator storage that can absorb contributions
 without transacting the complete actor row, or a stronger bulk-synchronous
 lowering that replaces per-message visits with scheduled aggregate sweeps.
+
+### Reduction sidecar ablation
+
+The next lowering separates each phi scheduler's 182-bit reduction word from
+its 338-bit main actor row. While a reduction is active, a mailbox-head sidecar
+reads the message and reduction RAM, folds a matching contribution, and writes
+the reduction RAM without fetching the main row. Only a completed reduction or
+protocol error schedules a private actor visit. A selected slot remains in
+flight through the acknowledged reduction write, preserving mailbox order.
+Fold-only reads may overlap admission to the same actor because the 1R mailbox
+head and 1W free tail are distinct physical rows; ordinary actor visits retain
+the conservative same-slot exclusion.
+
+This successfully cuts steady-state main actor reads from 42,540 to 9,186, or
+78.4%, but it does not improve cadence. The same three-shard profile takes
+7,581 clocks for steps eight through 32: 315.875 clocks per step, or about
+633,162 steps/s at 200 MHz. That is 14.5% slower in step rate than the 269.958-
+clock, 740,855-step/s actor-reduction baseline. Allowing safe fold/admission
+overlap recovered only 54 clocks from an initial 7,635-clock sidecar result.
+The remaining per-message mailbox/reduction transaction, elastic retirement,
+acknowledged write, and same-slot in-flight fence therefore dominate the
+benefit of avoiding the wide state read.
+
+The complete CPU-versus-native-Icarus witness remains exact and nontrivial:
+step 18 closes with the same 80 corrections and 18 measurements. Its measured
+application window grows from 5,908 to 6,604 clocks, or 11.8%. The difference
+from the steady-state percentage reflects startup and closeout work included
+in this shorter interval.
+
+A complete-wrapper XC7 map, including all inferred 1R1W memories, reports
+61,471 estimated logic cells, 65,660 flip-flops, 77,968 LUTs, 48 DSPs, and 70
+RAMB36 blocks. The actor-reduction baseline reports 62,731 cells, 76,508
+flip-flops, 78,066 LUTs, 48 DSPs, and 67 RAMB36 equivalents. Thus the sidecar
+is flat in logic (-2.01% cells and -0.13% LUTs), removes 14.18% of mapped
+flip-flops, and costs three RAMB36 equivalents (+4.48%) from shallow-memory
+packing. These are out-of-context inferred-memory measurements, not
+place-and-route or Fmax results.
+
+A two-shard check exposed a separate correctness bug in the pinned XLS RAM
+rewrite: its one-entry response skid loses a delayed response when a buffered
+response is popped in the same cycle that the replacement arrives. The
+three-shard timing does not trigger the defect. The design deliberately does
+not serialize its RAM traffic to compensate; a corrected XLS toolchain and a
+focused pop/push regression are required before treating other shard counts as
+validated.

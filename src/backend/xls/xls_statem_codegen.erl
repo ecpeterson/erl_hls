@@ -6,7 +6,7 @@
 -module(xls_statem_codegen).
 -moduledoc false.
 
--export([emit/1, shared_machine_width/1, shared_machine_width/2]).
+-export([emit/1, shared_machine_width/1]).
 
 -define(REDUCTION_SCHEDULER, xls_statem_reduction_scheduler_codegen).
 
@@ -143,30 +143,81 @@ reduction_copy_field(_Reductions) ->
 reduction_internal_field(none) -> [];
 reduction_internal_field(_Reductions) -> "  internal: u1,\n".
 
+reduction_executor_request_fields(none) -> [];
+reduction_executor_request_fields(_Reductions) ->
+    [
+        "  reduction: ReductionBits,\n",
+        "  reduction_error: u1,\n"
+    ].
+
+reduction_executor_result_fields(none) -> [];
+reduction_executor_result_fields(_Reductions) ->
+    [
+        "  reduction: ReductionBits,\n",
+        "  reduction_write_valid: u1,\n"
+    ].
+
+reduction_executor_machine(none) ->
+    "\n  let machine = machine_from_bits(request.machine);\n";
+reduction_executor_machine(_Reductions) ->
+    [
+        "\n  let machine = machine_with_reduction(\n",
+        "    request.machine, request.reduction);\n"
+    ].
+
+reduction_executor_result_values(none) -> "\n";
+reduction_executor_result_values(_Reductions) ->
+    [
+        "\n    reduction: bits_from_reduction_state(entered.machine.reduction),\n",
+        "    reduction_write_valid: request.internal ||\n",
+        "      request.reduction_error ||\n",
+        "      ((machine.enter_pending ||\n",
+        "        dispatched.machine.enter_pending) &&\n",
+        "       (!entered.machine.enter_pending || entered.machine.failed)),\n"
+    ].
+
+reduction_ram_declarations(none) -> [];
+reduction_ram_declarations(Reductions) ->
+    Width = xls_statem_reduction_codegen:private_width(Reductions),
+    [
+        "pub type ReductionBits = bits[", integer_to_list(Width), "];\n\n",
+        "pub type ReductionRamReadReq = bram::ReadReq;\n",
+        "pub type ReductionRamReadResp = bram::ReadResp<u32:",
+        integer_to_list(Width), ">;\n",
+        "pub type ReductionRamWriteReq = bram::WriteReq<u32:",
+        integer_to_list(Width), ">;\n",
+        "pub type ReductionRamWriteResp = bram::WriteResp;\n\n"
+    ].
+
 reduction_internal_candidates_field(none) -> [];
-reduction_internal_candidates_field(_Reductions) ->
-    [
-        "  // Completed reductions are private events and outrank mail.\n",
-        "  internal_candidates: u1[ACTOR_COUNT],\n",
-        "  // Fairly alternate retireable ordinary work with polling the\n",
-        "  // fold relay; an acknowledgment may retire alongside ordinary\n",
-        "  // work because it does not consume the state RAM write port.\n",
-        "  fold_turn: u1,\n",
-        "  // Mail-only actors whose head was not a contribution are skipped\n",
-        "  // until the currently blocked effect-credit epoch ends.\n",
-        "  blocked_probed: u1[ACTOR_COUNT],\n"
-    ].
+reduction_internal_candidates_field(Reductions) ->
+    ?REDUCTION_SCHEDULER:shared_state_fields(Reductions).
 
-reduction_decode_field(none, _Start, _End) -> [];
-reduction_decode_field(_Reductions, Start, End) ->
-    [
-        "    reduction: reduction_state_from_bits(raw[",
-        integer_to_list(Start), ":", integer_to_list(End), "]),\n"
-    ].
+shared_reduction_zero_field(none) -> [];
+shared_reduction_zero_field(_Reductions) ->
+    "    reduction: zero!<ReductionState>(),\n".
 
-reduction_encode_prefix(none) -> [];
-reduction_encode_prefix(_Reductions) ->
-    "  bits_from_reduction_state(machine.reduction) ++\n".
+shared_reduction_codec(none) -> [];
+shared_reduction_codec(_Reductions) ->
+    """
+    fn machine_with_reduction(
+        raw: MachineBits, reduction: ReductionBits) -> SharedMachine {
+      SharedMachine {
+        reduction: reduction_state_from_bits(reduction),
+        ..machine_from_bits(raw)
+      }
+    }
+
+    fn reduction_read(slot: u32) -> ReductionRamReadReq {
+      bram::read(slot)
+    }
+
+    fn reduction_write(
+        slot: u32, state: ReductionState) -> ReductionRamWriteReq {
+      bram::write(slot, bits_from_reduction_state(state))
+    }
+
+    """.
 
 machine_declarations(#{
     capacity := Capacity,
@@ -178,9 +229,8 @@ machine_declarations(#{
     data_width := DataWidth
 } = Spec) ->
     Reductions = maps:get(reductions, Spec, none),
-    ReductionWidth = xls_statem_reduction_codegen:private_width(Reductions),
     DataStruct = record_struct_name(DataName),
-    MachineBits = shared_machine_width(DataWidth, ReductionWidth),
+    MachineBits = shared_machine_width(DataWidth),
     EffectCapacity = max(1, MaxEntryEffects),
     EffectPayloadBits = entry_effect_payload_bits(Entries, MessageWords),
     [
@@ -240,6 +290,7 @@ machine_declarations(#{
         "pub type MachineRamWriteReq = bram::WriteReq<u32:",
         integer_to_list(MachineBits), ">;\n",
         "pub type MachineRamWriteResp = bram::WriteResp;\n\n",
+        reduction_ram_declarations(Reductions),
         "pub type MailboxRamReadReq = mailbox::RamReadReq;\n",
         "pub type MailboxRamReadResp = mailbox::RamReadResp;\n",
         "pub type MailboxRamWriteReq = mailbox::RamWriteReq;\n",
@@ -274,6 +325,7 @@ machine_declarations(#{
         "  slot: u32,\n",
         "  machine: MachineBits,\n",
         "  frame: axis::Frame,\n",
+        reduction_executor_request_fields(Reductions),
         reduction_internal_field(Reductions),
         "  received: u1,\n",
         "  mailbox_index: u8,\n",
@@ -283,6 +335,7 @@ machine_declarations(#{
         "pub struct SharedExecutorResult {\n",
         "  slot: u32,\n",
         "  machine: MachineBits,\n",
+        reduction_executor_result_fields(Reductions),
         "  effects: EntryEffects,\n",
         "  effects_valid: u1,\n",
         "  dispatched: u1,\n",
@@ -336,13 +389,7 @@ machine_declarations(#{
 -doc false.
 -spec shared_machine_width(non_neg_integer()) -> pos_integer().
 shared_machine_width(DataWidth) ->
-    shared_machine_width(DataWidth, 0).
-
--doc false.
--spec shared_machine_width(non_neg_integer(), non_neg_integer()) ->
-    pos_integer().
-shared_machine_width(DataWidth, ReductionWidth) ->
-    18 + DataWidth + ReductionWidth.
+    18 + DataWidth.
 
 %%%
 %%% Lowered callbacks
@@ -372,12 +419,9 @@ initial_machine(#{init := #{body := Body, result := Result}} = Spec) ->
 
 machine_codec(#{data_name := DataName, data_width := DataWidth} = Spec) ->
     Reductions = maps:get(reductions, Spec, none),
-    ReductionWidth = xls_statem_reduction_codegen:private_width(Reductions),
     DataStart = 16,
     EnterStart = DataStart + DataWidth,
     FailedStart = EnterStart + 1,
-    ReductionStart = FailedStart + 1,
-    ReductionEnd = ReductionStart + ReductionWidth,
     DataFunction = record_function_name(DataName),
     [
         "fn machine_from_bits(raw: MachineBits) -> SharedMachine {\n",
@@ -390,11 +434,10 @@ machine_codec(#{data_name := DataName, data_width := DataWidth} = Spec) ->
         integer_to_list(FailedStart), "],\n",
         "    failed: raw[", integer_to_list(FailedStart), ":",
         integer_to_list(FailedStart + 1), "],\n",
-        reduction_decode_field(Reductions, ReductionStart, ReductionEnd),
+        shared_reduction_zero_field(Reductions),
         "  }\n",
         "}\n\n",
         "fn bits_from_machine(machine: SharedMachine) -> MachineBits {\n",
-        reduction_encode_prefix(Reductions),
         "  machine.failed ++\n",
         "    machine.enter_pending ++\n",
         "    bits_from_", DataFunction, "(machine.data) ++\n",
@@ -407,7 +450,8 @@ machine_codec(#{data_name := DataName, data_width := DataWidth} = Spec) ->
         "fn machine_write(\n",
         "    slot: u32, machine: SharedMachine) -> MachineRamWriteReq {\n",
         "  bram::write(slot, bits_from_machine(machine))\n",
-        "}\n\n"
+        "}\n\n",
+        shared_reduction_codec(Reductions)
     ].
 
 enter_function(#{
@@ -852,8 +896,8 @@ shared_executor(Spec) ->
     """
     pub fn shared_execute(request: SharedExecutorRequest) ->
         SharedExecutorResult {
-      let machine = machine_from_bits(request.machine);
     """,
+      reduction_executor_machine(Reductions),
       ?REDUCTION_SCHEDULER:shared_executor_dispatch(Reductions),
     """
       let entered = shared_machine_enter(
@@ -861,6 +905,9 @@ shared_executor(Spec) ->
       SharedExecutorResult {
         slot: request.slot,
         machine: bits_from_machine(entered.machine),
+    """,
+      reduction_executor_result_values(Reductions),
+    """
         effects: entered.effects,
         effects_valid: entered.effects_valid,
         dispatched: dispatched.dispatched,
@@ -893,7 +940,8 @@ shared_executor(Spec) ->
       }
     }
 
-    """
+    """,
+    "\n"
     ].
 
 service(Spec) ->
@@ -928,7 +976,6 @@ service(Spec) ->
 shared_service(Spec) ->
     Reductions = maps:get(reductions, Spec, none),
     [
-    ?REDUCTION_SCHEDULER:shared_service_helpers(Reductions),
     """
     fn free_mailbox_index<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
         state: SharedState<ACTOR_COUNT, PRODUCER_COUNT>,
@@ -1230,7 +1277,9 @@ shared_service(Spec) ->
         cursor,
       }
     }
-
+    """,
+    ?REDUCTION_SCHEDULER:shared_service_helpers(Reductions),
+    """
     // One mailbox owner issues loaded activations to a stateless executor and
     // retires completed results. In-flight slot exclusion prevents stale
     // same-actor reads; a one-result skid slot lets credit collection continue
@@ -1270,6 +1319,9 @@ shared_service(Spec) ->
           mailbox_read_resp_in: chan<MailboxRamReadResp> in,
           mailbox_write_req_out: chan<MailboxRamWriteReq> out,
           mailbox_write_resp_in: chan<MailboxRamWriteResp> in
+    """,
+        ?REDUCTION_SCHEDULER:shared_reduction_config_parameters(Reductions),
+    """
       ) {
         let (executor_request_p, executor_request_c) =
           chan<SharedExecutorRequest, u32:1>("executor_request");
@@ -1345,7 +1397,10 @@ shared_service(Spec) ->
               capture_tok,
               ram_write_req_out,
               machine_write(state.cursor, initial_shared_machine()));
-            let (_done, _) = recv(write_tok, ram_write_resp_in);
+    """,
+        ?REDUCTION_SCHEDULER:shared_boot_reduction_io(Reductions),
+    """
+            let (_done, _) = recv(boot_write_tok, ram_write_resp_in);
             let entry_probes = update(
               state.entry_probes, state.cursor, u1:1);
             if state.cursor + u32:1 == ACTOR_COUNT {
@@ -1426,17 +1481,24 @@ shared_service(Spec) ->
             let state_read_tok = send_if(
               join(),
               ram_read_req_out,
-              issue_valid,
+    """,
+        ?REDUCTION_SCHEDULER:shared_state_read_condition(Reductions),
+    """
               machine_read(read_slot));
             let mailbox_read_tok = send_if(
               join(),
               mailbox_read_req_out,
               read_mailbox && received,
               mailbox::read(read_slot, mailbox_index, MAILBOX_DEPTH));
+    """,
+        ?REDUCTION_SCHEDULER:shared_reduction_read_io(Reductions),
+    """
             let (state_done, response) = recv_if(
               state_read_tok,
               ram_read_resp_in,
-              issue_valid,
+    """,
+        ?REDUCTION_SCHEDULER:shared_state_read_condition(Reductions),
+    """
               zero!<MachineRamReadResp>());
             let (mailbox_done, mailbox_response) = recv_if(
               mailbox_read_tok,
@@ -1447,7 +1509,9 @@ shared_service(Spec) ->
               retired,
               captured_pending,
               credit_pending_valid,
-              issue_valid,
+    """,
+        ?REDUCTION_SCHEDULER:shared_admission_exclusion_valid(Reductions),
+    """
               read_slot,
               retire_valid && resolved.machine.failed,
               result.slot);
@@ -1504,7 +1568,9 @@ shared_service(Spec) ->
               egress_ready: u1:1,
             };
             let executor_request_tok = send_if(
-              join(state_done, mailbox_done),
+    """,
+        ?REDUCTION_SCHEDULER:shared_executor_request_token(Reductions),
+    """
               executor_request_out,
     """,
         ?REDUCTION_SCHEDULER:shared_executor_send_condition(Reductions),
@@ -1529,6 +1595,9 @@ shared_service(Spec) ->
               ram_write_req_out,
               retire_valid,
               machine_write(result.slot, resolved.machine));
+    """,
+        ?REDUCTION_SCHEDULER:shared_reduction_write_io(Reductions),
+    """
             let admission_frame =
               captured_pending[reservation.admission.producer].frame;
             let mailbox_write_tok = send_if(
@@ -1572,7 +1641,8 @@ shared_service(Spec) ->
       }
     }
 
-    """
+    """,
+    "\n"
     ].
 
 tag_ok_expression(MessageNames, MessageWords) ->

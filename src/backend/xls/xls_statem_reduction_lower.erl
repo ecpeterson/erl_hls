@@ -314,7 +314,7 @@ contribution_clause(
                 _ -> error({unsupported_hls_statem_contribution_prefix,
                     Line, Prefix})
             end,
-            DataName = whole_record_variable(DataPattern),
+            DataName = contribution_data_variable(DataPattern, Line, Phase),
             #{next_phase := NextPhase, next_data := NextData} = Contribution0,
             case {NextPhase, NextData} of
                 {{atom, _NextPhaseLine, Phase},
@@ -377,8 +377,8 @@ validate_contribution(
         key_expression := Key,
         member_expression := Member,
         value_expression := Value,
-        clause := {clause, _Line,
-            [MessagePattern, _PhasePattern, DataPattern], _Guards, _Body}
+        clause := {clause, Line,
+            [MessagePattern, _PhasePattern, DataPattern], Guards, _Body}
     },
     Open = #{name := Name, population := #{mode := Mode}},
     Accumulator,
@@ -388,6 +388,13 @@ validate_contribution(
     MessageBindings = pattern_bindings(MessagePattern, Tag, message, Forms),
     DataBindings = pattern_bindings(DataPattern, DataName, data, Forms),
     Bindings = maps:merge(DataBindings, MessageBindings),
+    ok = validate_contribution_guards(
+        Guards,
+        Bindings,
+        Line,
+        Phase,
+        Tag
+    ),
     ok = validate_u32_expression(Key, Bindings, [message]),
     case Member of
         none -> ok;
@@ -693,16 +700,29 @@ bind_typed_pattern({match, _Line, Left, Right}, Type, Origin, Bindings) ->
 bind_typed_pattern(_Pattern, _Type, _Origin, Bindings) ->
     Bindings.
 
-whole_record_variable({var, _Line, Name}) when Name =/= '_' ->
-    Name;
-whole_record_variable({match, _Line, {var, _VarLine, Name}, _Pattern})
+%% A shared reduction sidecar constructs contributions without fetching the
+%% actor's application state. Keep contribution recognition independent of
+%% that state: the third callback argument may preserve the state value in the
+%% result, but it may neither destructure it nor use it to select a clause.
+contribution_data_variable({var, _Line, Name}, _ContextLine, _Phase)
         when Name =/= '_' ->
     Name;
-whole_record_variable({match, _Line, _Pattern, {var, _VarLine, Name}})
-        when Name =/= '_' ->
-    Name;
-whole_record_variable(Pattern) ->
-    error({unbound_hls_statem_data, Pattern}).
+contribution_data_variable(Pattern, ContextLine, Phase) ->
+    error({actor_dependent_hls_statem_reduction_data_pattern,
+        ContextLine, Phase, Pattern}).
+
+validate_contribution_guards(Guards, Bindings, Line, Phase, Tag) ->
+    Variables = expression_variables(Guards),
+    case [
+        Name
+        || Name <- Variables,
+           maps:get(origin, maps:get(Name, Bindings, #{}), missing) =:= data
+    ] of
+        [] -> ok;
+        ActorVariables ->
+            error({actor_dependent_hls_statem_reduction_guard,
+                Line, Phase, Tag, ActorVariables})
+    end.
 
 validate_u32_expression({integer, _Line, Value}, _Bindings, _Origins) ->
     _ = u32_literal(Value, reduction_value),

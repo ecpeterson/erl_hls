@@ -114,10 +114,7 @@ generated_reduction_dslx_uses_typed_private_storage_test() ->
     Interface = xls_parse:actor_interface(?FIXTURE),
     StateWidth = maps:get(width, hls_actor_interface:state(Interface)),
     ReductionWidth = hls_actor_interface:reduction_storage_width(Interface),
-    MachineWidth = xls_statem_codegen:shared_machine_width(
-        StateWidth,
-        ReductionWidth
-    ),
+    MachineWidth = xls_statem_codegen:shared_machine_width(StateWidth),
     Xls = iolist_to_binary(xls_parse:to_xls(?FIXTURE)),
     ?assertNotEqual(nomatch, binary:match(
         Xls,
@@ -128,6 +125,14 @@ generated_reduction_dslx_uses_typed_private_storage_test() ->
         iolist_to_binary([
             "pub type MachineBits = bits[",
             integer_to_list(MachineWidth),
+            "];"
+        ])
+    )),
+    ?assertNotEqual(nomatch, binary:match(
+        Xls,
+        iolist_to_binary([
+            "pub type ReductionBits = bits[",
+            integer_to_list(ReductionWidth),
             "];"
         ])
     )),
@@ -152,6 +157,22 @@ generated_reduction_dslx_uses_typed_private_storage_test() ->
     ?assertEqual(nomatch, binary:match(
         Xls,
         <<"fn reduction_completion(">>
+    )).
+
+generated_sidecar_projection_does_not_need_actor_data_test() ->
+    Xls = iolist_to_binary(xls_parse:to_xls(?FIXTURE)),
+    ?assertNotEqual(nomatch, binary:match(
+        Xls,
+        <<"fn reduction_site_phase(site: ReductionSite) -> Phase {">>
+    )),
+    ?assertNotEqual(nomatch, binary:match(
+        Xls,
+        <<"fn reduction_sidecar_contribution(">>
+    )),
+    ?assertNotEqual(nomatch, binary:match(
+        Xls,
+        <<"frame, reduction_site_phase(state.site),\n"
+          "      zero!<Cell>())">>
     )).
 
 fold_relay_is_only_emitted_for_reduction_services_test() ->
@@ -285,6 +306,35 @@ contribution_cannot_mutate_actor_data_test() ->
             ?assertException(
                 error,
                 {mutating_hls_statem_contribution, _, counting, _, _},
+                xls_parse:actor_interface(Path)
+            )
+        end
+    ).
+
+contribution_cannot_destructure_actor_data_test() ->
+    with_mutated_fixture(
+        <<"counting(cast, #count_value{key = Key, value = Value}, Cell)\n">>,
+        <<"counting(cast, #count_value{key = Key, value = Value},\n"
+          "        Cell = #cell{key = Key})\n">>,
+        fun(Path) ->
+            ?assertException(
+                error,
+                {actor_dependent_hls_statem_reduction_data_pattern,
+                    _, counting, _},
+                xls_parse:actor_interface(Path)
+            )
+        end
+    ).
+
+contribution_guard_cannot_read_actor_data_test() ->
+    with_mutated_fixture(
+        <<"        when Value > 0 ->">>,
+        <<"        when Value > 0, Cell#cell.value =:= 0 ->">>,
+        fun(Path) ->
+            ?assertException(
+                error,
+                {actor_dependent_hls_statem_reduction_guard,
+                    _, counting, count_value, ['Cell']},
                 xls_parse:actor_interface(Path)
             )
         end
