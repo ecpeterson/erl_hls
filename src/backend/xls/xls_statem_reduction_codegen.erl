@@ -10,6 +10,7 @@
 
 -export([
     declarations/1,
+    contribution_tags/1,
     emit/1,
     functions/1,
     private_width/1,
@@ -68,6 +69,14 @@
 -spec emit(spec()) -> iolist().
 emit(Spec) ->
     [declarations(Spec), functions(Spec)].
+
+-doc false.
+-spec contribution_tags(spec()) -> [atom()].
+contribution_tags(none) ->
+    [];
+contribution_tags(#{contributions := Contributions}) ->
+    ordered_unique([maps:get(tag, Contribution)
+        || Contribution <- Contributions]).
 
 -spec declarations(spec()) -> iolist().
 declarations(none) ->

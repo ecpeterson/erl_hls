@@ -556,6 +556,19 @@ struct FoldEnvelope {
   order_index: u8,
 }
 
+struct DirectFoldResult<ACTOR_COUNT: u32, PRODUCER_COUNT: u32> {
+  pending: ScheduledRequest[PRODUCER_COUNT],
+  pending_valid: u1[PRODUCER_COUNT],
+  reduction: ReductionBits,
+  reduction_active: u1[ACTOR_COUNT],
+  internal_candidates: u1[ACTOR_COUNT],
+  cursor: u32,
+  valid: u1,
+  slot: u32,
+  outcome: ReductionOutcome,
+}
+
+
 type Admission = mailbox::Admission;
 
 enum SharedPhase : u3 {
@@ -3933,6 +3946,10 @@ fn machine_step(
   }
 }
 
+pub fn direct_reduction_candidate(frame: axis::Frame) -> u1 {
+  ((frame.header.op == (Tag::PHI as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::ANYON_MOVE as u8) && frame.header.payload_words == u8:2) || (frame.header.op == (Tag::PHI0 as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHENOM_CONFIG as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHENOM_REQUEST as u8) && frame.header.payload_words == u8:1) || (frame.header.op == (Tag::PHENOM_QUERY as u8) && frame.header.payload_words == u8:2) || (frame.header.op == (Tag::PHENOM_DATA as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHENOM_ANYON as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHI_CORRECTION as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHI_CONFIG as u8) && frame.header.payload_words == u8:1) || (frame.header.op == (Tag::PAULI_QUERY as u8) && frame.header.payload_words == u8:2) || (frame.header.op == (Tag::PAULI_REPLY as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::NOISE_CUTOFF as u8) && frame.header.payload_words == u8:1) || (frame.header.op == (Tag::PAULI_UPDATE as u8) && frame.header.payload_words == u8:1) || (frame.header.op == (Tag::PHI_STATUS as u8) && frame.header.payload_words == u8:3)) && (frame.header.op == (Tag::PHI as u8) || frame.header.op == (Tag::PHI0 as u8) || frame.header.op == (Tag::ANYON_MOVE as u8))
+}
+
 fn shared_reduction_sidecar_step(
     state: ReductionState, frame: axis::Frame)
     -> ReductionApply {
@@ -4553,6 +4570,148 @@ fn reduction_fold_selection<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
   )
 }
 
+fn apply_reduction_writes<ACTOR_COUNT: u32>(
+    reductions: ReductionBits[ACTOR_COUNT],
+    retired_valid: u1,
+    retired_slot: u32,
+    retired_reduction: ReductionBits,
+    direct_valid: u1,
+    direct_slot: u32,
+    direct_reduction: ReductionBits) ->
+    ReductionBits[ACTOR_COUNT] {
+  unroll_for! (slot, result):
+      (u32, ReductionBits[ACTOR_COUNT]) in u32:0..ACTOR_COUNT {
+    let next = if direct_valid && direct_slot == slot {
+      direct_reduction
+    } else if retired_valid && retired_slot == slot {
+      retired_reduction
+    } else {
+      result[slot]
+    };
+    update(result, slot, next)
+  }(reductions)
+}
+
+// A sender-marked contribution can update an open actor's receptacle
+// without first becoming mailbox work when no older mailbox event is
+// selectable in the current phase. Physically queued postponed events may
+// remain: ordinary mailbox scanning already permits younger selectable
+// events to pass them. Selection uses the same round-robin producer cursor
+// as ordinary admission. A transient same-slot hazard leaves the request
+// in its producer holding slot; a semantic miss clears the hint and falls
+// through to ordinary mailbox admission.
+fn reserve_direct_reduction<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
+    state: SharedState<ACTOR_COUNT, PRODUCER_COUNT>,
+    pending: ScheduledRequest[PRODUCER_COUNT],
+    pending_valid: u1[PRODUCER_COUNT],
+    in_flight: u1[ACTOR_COUNT],
+    excluded_valid: u1,
+    excluded_slot: u32,
+    forwarded_valid: u1,
+    forwarded_slot: u32,
+    forwarded_reduction: ReductionBits) ->
+    DirectFoldResult<ACTOR_COUNT, PRODUCER_COUNT> {
+  let (after_found, after_producer, before_found, before_producer) =
+      unroll_for! (candidate, acc):
+          (u32, (u1, u32, u1, u32)) in u32:0..PRODUCER_COUNT {
+    let request = pending[candidate];
+    let valid_slot = request.slot < ACTOR_COUNT;
+    let slot = if valid_slot { request.slot } else { u32:0 };
+    let private_work = state.internal_candidates[slot] ||
+      state.reduction_errors[slot];
+    let entry_work = state.entry_probes[slot] ||
+      state.egress_waiters[slot];
+    let eligible = pending_valid[candidate] &&
+      !request.credit && request.direct_reduction && valid_slot &&
+      state.reduction_active[slot] &&
+      !state.mail_candidates[slot] &&
+      !private_work && !entry_work && !in_flight[slot] &&
+      (!excluded_valid || slot != excluded_slot);
+    let take_after = !acc.0 &&
+      candidate >= state.admission_cursor && eligible;
+    let take_before = !acc.2 &&
+      candidate < state.admission_cursor && eligible;
+    (
+      acc.0 || take_after,
+      if take_after { candidate } else { acc.1 },
+      acc.2 || take_before,
+      if take_before { candidate } else { acc.3 }
+    )
+  }((u1:0, u32:0, u1:0, u32:0));
+  let found = after_found || before_found;
+  let producer = if after_found {
+    after_producer
+  } else {
+    before_producer
+  };
+  let request = pending[producer];
+  let slot = if request.slot < ACTOR_COUNT {
+    request.slot
+  } else {
+    u32:0
+  };
+  // An actor open can retire in the same activation as its first direct
+  // contribution. Forward that newly opened word into the fold before
+  // the combined register-bank write below.
+  let reduction_bits = if forwarded_valid && slot == forwarded_slot {
+    forwarded_reduction
+  } else {
+    state.reductions[slot]
+  };
+  let reduction = reduction_state_from_bits(reduction_bits);
+  let applied = shared_reduction_sidecar_step(reduction, request.frame);
+  let direct_fold_outcome = applied.outcome;
+  let direct_fold_accepted = found &&
+    (direct_fold_outcome == ReductionOutcome::PENDING ||
+     direct_fold_outcome == ReductionOutcome::COMPLETE);
+  let complete = direct_fold_outcome == ReductionOutcome::COMPLETE;
+  let fallback = found && !direct_fold_accepted;
+  let fallback_request = ScheduledRequest {
+    direct_reduction: u1:0,
+    ..request
+  };
+  let next_pending = if fallback {
+    update(pending, producer, fallback_request)
+  } else {
+    pending
+  };
+  let next_pending_valid = if direct_fold_accepted {
+    update(pending_valid, producer, u1:0)
+  } else {
+    pending_valid
+  };
+  let reduction_active = if direct_fold_accepted {
+    update(state.reduction_active, slot, !complete)
+  } else {
+    state.reduction_active
+  };
+  let internal_candidates = if direct_fold_accepted && complete {
+    update(state.internal_candidates, slot, u1:1)
+  } else {
+    state.internal_candidates
+  };
+  let cursor = if direct_fold_accepted {
+    if producer + u32:1 == PRODUCER_COUNT {
+      u32:0
+    } else {
+      producer + u32:1
+    }
+  } else {
+    state.admission_cursor
+  };
+  DirectFoldResult<ACTOR_COUNT, PRODUCER_COUNT> {
+    pending: next_pending,
+    pending_valid: next_pending_valid,
+    reduction: bits_from_reduction_state(applied.state),
+    reduction_active,
+    internal_candidates,
+    cursor,
+    valid: direct_fold_accepted,
+    slot,
+    outcome: direct_fold_outcome,
+  }
+}
+
 fn retire_reduction_actor<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
     state: SharedState<ACTOR_COUNT, PRODUCER_COUNT>,
     valid: u1,
@@ -4993,19 +5152,9 @@ pub proc SharedService<
         } else {
           incoming_fold.reduction
         };
-        let reductions = if reduction_write_valid {
-          update(
-            metadata_retired.reductions,
-            reduction_write_slot,
-            reduction_write_bits)
-        } else {
-          metadata_retired.reductions
-        };
-        let retired = SharedState<
-            ACTOR_COUNT, PRODUCER_COUNT> {
-          reductions,
-          ..metadata_retired
-        };
+        // The authoritative receptacle write is combined below with any
+        // sender-addressed fold, after next-issue hazards are known.
+        let retired = metadata_retired;
         // The authoritative reduction word is updated in this proc state,
         // so retirement itself closes the same-slot hazard. There is no
         // external write acknowledgment to await.
@@ -5085,27 +5234,61 @@ pub proc SharedService<
           mailbox_read_resp_in,
           read_mailbox && received,
           zero!<MailboxRamReadResp>());
-        let reservation = reserve_admission(
+        let frame = axis::frame_from_bits(mailbox_response.data);
+        let direct_fold = reserve_direct_reduction(
           retired,
           captured_pending,
           credit_pending_valid,
+          retired_in_flight,
+          issue_valid,
+          read_slot,
+          reduction_write_valid,
+          reduction_write_slot,
+          reduction_write_bits);
+        // Retirement and a sender-addressed fold may update distinct
+        // receptacles in one activation. Spell the two writes as one
+        // constant-index unrolled bank so XLS does not synthesize two
+        // cascaded variable-index update networks.
+        let reductions = apply_reduction_writes(
+          retired.reductions,
+          reduction_write_valid,
+          reduction_write_slot,
+          reduction_write_bits,
+          direct_fold.valid,
+          direct_fold.slot,
+          direct_fold.reduction);
+        let direct_state = SharedState<
+            ACTOR_COUNT, PRODUCER_COUNT> {
+          reductions,
+          reduction_active: direct_fold.reduction_active,
+          internal_candidates: direct_fold.internal_candidates,
+          admission_cursor: direct_fold.cursor,
+          ..retired
+        };
+        let direct_pending = direct_fold.pending;
+        let direct_pending_valid = direct_fold.pending_valid;
+        let direct_in_flight_slots = retired_in_flight;
+        let reservation = reserve_admission(
+          direct_state,
+          direct_pending,
+          direct_pending_valid,
           actor_issue_valid,
           read_slot,
           retire_valid && resolved.machine.failed,
           result.slot);
         let admitted = SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
-          pending: captured_pending,
+          pending: direct_pending,
           pending_valid: reservation.pending_valid,
           occupied: reservation.occupied,
           order: reservation.order,
           mail_candidates: reservation.mail_candidates,
           admission_cursor: reservation.cursor,
-          ..retired
+          ..direct_state
         };
         let issued_in_flight = if issue_valid {
-          update(retired_in_flight, read_slot, u1:1)
+          update(direct_in_flight_slots, read_slot, u1:1)
         } else {
-          retired_in_flight
+          direct_in_flight_slots
         };
         let cursor = if issue_valid {
           if read_slot + u32:1 == ACTOR_COUNT {
@@ -5126,7 +5309,7 @@ pub proc SharedService<
             selection_state,
             cursor,
             issued_in_flight);
-        let frame = axis::frame_from_bits(mailbox_response.data);
+
         let local_fold = shared_reduction_fold_result(
             read_slot,
             reduction_bits,
@@ -5200,7 +5383,7 @@ pub proc SharedService<
           retire_valid,
           machine_write(result.slot, resolved.machine));
         let admission_frame =
-          captured_pending[reservation.admission.producer].frame;
+          direct_pending[reservation.admission.producer].frame;
         let mailbox_write_tok = send_if(
           join(mailbox_read_tok, egress_tok),
           mailbox_write_req_out,

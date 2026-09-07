@@ -423,6 +423,44 @@ for 3,696 flip-flops and 2,209 LUTs. That is a deliberate, modest area cost for
 removing the per-contribution synchronous-memory dependency; it is not itself
 enough to justify the design without the sender-addressed follow-up.
 
+The sender-addressed experiment adds an internal transport hint to a scheduled
+request when topology lowering can prove that its frame tag is a contribution
+for the destination actor type. This is not a protocol-visible sender action:
+the source actor still emits an ordinary cast and does not know whether the
+destination currently has a reduction open. The destination scheduler accepts
+the shortcut only when the addressed receptacle is open, no selectable older
+mail or private/entry work exists for that actor, and no same-slot transaction
+is in flight. It then checks the reduction site and key with the ordinary pure
+fold. A semantic miss clears only the hint and admits the unchanged frame to
+the bounded mailbox, preserving the ordinary error and postponement behavior.
+
+An accepted direct fold updates the register receptacle before mailbox
+admission or actor selection. It may run in the same scheduler activation as
+an unrelated ordinary fold retires. A constant-index unrolled register-bank
+update combines those two writes, and forwards a newly opened receptacle when
+an actor entry and its first contribution coincide. This avoids cascaded
+variable-index write muxes while keeping one authoritative word per actor.
+
+On the same three-shard profile, steps eight through 32 take 6,300 clocks, or
+262.5 clocks per step and about 761,905 steps/s at 200 MHz. This is 2.84%
+faster than the original 269.958-clock actor-reduction baseline and 3.25%
+faster than register receptacles alone. Roughly one third of accepted folds use
+the direct path; the remainder still use the mailbox-head sidecar. The complete
+CPU-versus-native-Icarus witness remains exact, closing at step 18 with the
+same 80 corrections and nonuniform final measurement.
+
+The speedup is not free. The complete-wrapper XC7 ABC9 map reports 73,518
+estimated logic cells, 70,013 flip-flops, 91,733 LUTs, 48 `DSP48E1`s, and 52
+`RAMB36E1`s. Against register receptacles alone, this is 14.9% more estimated
+cells, 0.9% more flip-flops, and 14.4% more LUTs, with DSP and RAM counts
+unchanged. Attribution puts nearly all of the increase in the second fold
+datapath and its receptacle write network; tag selection and safety gating add
+only about 51 cells to an isolated phi scheduler. The experiment therefore
+establishes a real cadence win over main, but remains well short of 1 MHz and
+is an expensive way to gain 2.84%. A reusable shared or pipelined reduction
+unit would need to retain the direct path's overlap without duplicating the
+full reducer in every scheduler.
+
 ## General mailbox capacity
 
 Postponed messages retain mailbox capacity. The configured capacity must

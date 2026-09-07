@@ -895,6 +895,7 @@ route_send_bindings(
         "            slot: ", maps:get(stem, Scheduler), "_slot(",
         scheduled_address(DestinationId, DestinationX, DestinationY), "),\n",
         "            frame: effect.frame,\n",
+        route_reduction_marker(Scheduler, Module),
         "            ..zero!<", Module, "::ScheduledRequest>()\n",
         "          })"
     ];
@@ -915,11 +916,13 @@ route_send_bindings(
         [
             begin
                 Group = maps:get(group, Binding),
+                Scheduler = scheduler(Spec, Group),
                 ["            u8:", integer_to_list(Group), " => send(",
                     Token, ", ", router_destination_name(Group), ", ",
                     Module, "::ScheduledRequest {\n",
                     "              slot: destination.slot,\n",
                     "              frame: effect.frame,\n",
+                    route_reduction_marker(Scheduler, Module, 14),
                     "              ..zero!<", Module,
                     "::ScheduledRequest>()\n",
                     "            }),\n"]
@@ -930,6 +933,17 @@ route_send_bindings(
         "          }\n",
         "        }"
     ].
+
+route_reduction_marker(Scheduler, Module) ->
+    route_reduction_marker(Scheduler, Module, 12).
+
+route_reduction_marker(#{reduction_storage_width := Width}, Module, Indent)
+        when Width > 0 ->
+    [lists:duplicate(Indent, $\s),
+        "direct_reduction: ", Module,
+        "::direct_reduction_candidate(effect.frame),\n"];
+route_reduction_marker(_Scheduler, _Module, _Indent) ->
+    [].
 
 translated_index(Axis, Offset, Size) ->
     Shift = positive_modulo(Offset, Size),

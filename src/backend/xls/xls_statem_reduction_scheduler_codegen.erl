@@ -27,6 +27,7 @@
     shared_blocked_probe_bindings/1,
     shared_boot_reduction_io/1,
     shared_admission_exclusion_valid/1,
+    shared_direct_reduction_bindings/1,
     shared_entry_step/1,
     shared_executor_dispatch/1,
     shared_executor_internal_request_field/1,
@@ -111,6 +112,51 @@ shared_reduction_read_io(_Reductions) ->
 
 shared_reduction_write_io(none) -> "\n";
 shared_reduction_write_io(_Reductions) -> "\n".
+
+-spec shared_direct_reduction_bindings(reductions()) -> iodata().
+shared_direct_reduction_bindings(none) ->
+    ["\n", """
+            let direct_state = retired;
+            let direct_pending = captured_pending;
+            let direct_pending_valid = credit_pending_valid;
+            let direct_in_flight_slots = retired_in_flight;
+    """, "\n"];
+shared_direct_reduction_bindings(_Reductions) ->
+    ["\n", """
+            let direct_fold = reserve_direct_reduction(
+              retired,
+              captured_pending,
+              credit_pending_valid,
+              retired_in_flight,
+              issue_valid,
+              read_slot,
+              reduction_write_valid,
+              reduction_write_slot,
+              reduction_write_bits);
+            // Retirement and a sender-addressed fold may update distinct
+            // receptacles in one activation. Spell the two writes as one
+            // constant-index unrolled bank so XLS does not synthesize two
+            // cascaded variable-index update networks.
+            let reductions = apply_reduction_writes(
+              retired.reductions,
+              reduction_write_valid,
+              reduction_write_slot,
+              reduction_write_bits,
+              direct_fold.valid,
+              direct_fold.slot,
+              direct_fold.reduction);
+            let direct_state = SharedState<
+                ACTOR_COUNT, PRODUCER_COUNT> {
+              reductions,
+              reduction_active: direct_fold.reduction_active,
+              internal_candidates: direct_fold.internal_candidates,
+              admission_cursor: direct_fold.cursor,
+              ..retired
+            };
+            let direct_pending = direct_fold.pending;
+            let direct_pending_valid = direct_fold.pending_valid;
+            let direct_in_flight_slots = retired_in_flight;
+    """, "\n"].
 
 -spec direct_after_failed(reductions(), pos_integer()) -> iodata().
 direct_after_failed(none, _Capacity) ->
@@ -310,8 +356,12 @@ shared_machine_support(Reductions, TagOk) ->
     ].
 
 shared_reduction_sidecar_step(none, _TagOk) -> [];
-shared_reduction_sidecar_step(_Reductions, TagOk) ->
+shared_reduction_sidecar_step(Reductions, TagOk) ->
     [
+        "pub fn direct_reduction_candidate(frame: axis::Frame) -> u1 {\n",
+        "  (", TagOk, ") && (",
+        direct_contribution_tag_expression(Reductions), ")\n",
+        "}\n\n",
         "fn shared_reduction_sidecar_step(\n",
         "    state: ReductionState, frame: axis::Frame)\n",
         "    -> ReductionApply {\n",
@@ -325,6 +375,13 @@ shared_reduction_sidecar_step(_Reductions, TagOk) ->
         "  }\n",
         "}\n\n"
     ].
+
+direct_contribution_tag_expression(Reductions) ->
+    Tags = xls_statem_reduction_codegen:contribution_tags(Reductions),
+    join_with(" || ", [
+        ["frame.header.op == (Tag::", uppercase(Tag), " as u8)"]
+        || Tag <- Tags
+    ]).
 
 shared_machine_complete_function(none) -> [];
 shared_machine_complete_function(_Reductions) ->
@@ -536,6 +593,19 @@ shared_fold_envelope_declaration(_Reductions) ->
       mailbox_index: u8,
       order_index: u8,
     }
+
+    struct DirectFoldResult<ACTOR_COUNT: u32, PRODUCER_COUNT: u32> {
+      pending: ScheduledRequest[PRODUCER_COUNT],
+      pending_valid: u1[PRODUCER_COUNT],
+      reduction: ReductionBits,
+      reduction_active: u1[ACTOR_COUNT],
+      internal_candidates: u1[ACTOR_COUNT],
+      cursor: u32,
+      valid: u1,
+      slot: u32,
+      outcome: ReductionOutcome,
+    }
+
     """, "\n\n"].
 
 -spec shared_service_helpers(reductions()) -> iodata().
@@ -621,6 +691,148 @@ shared_service_helpers(_Reductions) ->
         after_found || before_found,
         if after_found { after_slot } else { before_slot }
       )
+    }
+
+    fn apply_reduction_writes<ACTOR_COUNT: u32>(
+        reductions: ReductionBits[ACTOR_COUNT],
+        retired_valid: u1,
+        retired_slot: u32,
+        retired_reduction: ReductionBits,
+        direct_valid: u1,
+        direct_slot: u32,
+        direct_reduction: ReductionBits) ->
+        ReductionBits[ACTOR_COUNT] {
+      unroll_for! (slot, result):
+          (u32, ReductionBits[ACTOR_COUNT]) in u32:0..ACTOR_COUNT {
+        let next = if direct_valid && direct_slot == slot {
+          direct_reduction
+        } else if retired_valid && retired_slot == slot {
+          retired_reduction
+        } else {
+          result[slot]
+        };
+        update(result, slot, next)
+      }(reductions)
+    }
+
+    // A sender-marked contribution can update an open actor's receptacle
+    // without first becoming mailbox work when no older mailbox event is
+    // selectable in the current phase. Physically queued postponed events may
+    // remain: ordinary mailbox scanning already permits younger selectable
+    // events to pass them. Selection uses the same round-robin producer cursor
+    // as ordinary admission. A transient same-slot hazard leaves the request
+    // in its producer holding slot; a semantic miss clears the hint and falls
+    // through to ordinary mailbox admission.
+    fn reserve_direct_reduction<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
+        state: SharedState<ACTOR_COUNT, PRODUCER_COUNT>,
+        pending: ScheduledRequest[PRODUCER_COUNT],
+        pending_valid: u1[PRODUCER_COUNT],
+        in_flight: u1[ACTOR_COUNT],
+        excluded_valid: u1,
+        excluded_slot: u32,
+        forwarded_valid: u1,
+        forwarded_slot: u32,
+        forwarded_reduction: ReductionBits) ->
+        DirectFoldResult<ACTOR_COUNT, PRODUCER_COUNT> {
+      let (after_found, after_producer, before_found, before_producer) =
+          unroll_for! (candidate, acc):
+              (u32, (u1, u32, u1, u32)) in u32:0..PRODUCER_COUNT {
+        let request = pending[candidate];
+        let valid_slot = request.slot < ACTOR_COUNT;
+        let slot = if valid_slot { request.slot } else { u32:0 };
+        let private_work = state.internal_candidates[slot] ||
+          state.reduction_errors[slot];
+        let entry_work = state.entry_probes[slot] ||
+          state.egress_waiters[slot];
+        let eligible = pending_valid[candidate] &&
+          !request.credit && request.direct_reduction && valid_slot &&
+          state.reduction_active[slot] &&
+          !state.mail_candidates[slot] &&
+          !private_work && !entry_work && !in_flight[slot] &&
+          (!excluded_valid || slot != excluded_slot);
+        let take_after = !acc.0 &&
+          candidate >= state.admission_cursor && eligible;
+        let take_before = !acc.2 &&
+          candidate < state.admission_cursor && eligible;
+        (
+          acc.0 || take_after,
+          if take_after { candidate } else { acc.1 },
+          acc.2 || take_before,
+          if take_before { candidate } else { acc.3 }
+        )
+      }((u1:0, u32:0, u1:0, u32:0));
+      let found = after_found || before_found;
+      let producer = if after_found {
+        after_producer
+      } else {
+        before_producer
+      };
+      let request = pending[producer];
+      let slot = if request.slot < ACTOR_COUNT {
+        request.slot
+      } else {
+        u32:0
+      };
+      // An actor open can retire in the same activation as its first direct
+      // contribution. Forward that newly opened word into the fold before
+      // the combined register-bank write below.
+      let reduction_bits = if forwarded_valid && slot == forwarded_slot {
+        forwarded_reduction
+      } else {
+        state.reductions[slot]
+      };
+      let reduction = reduction_state_from_bits(reduction_bits);
+      let applied = shared_reduction_sidecar_step(reduction, request.frame);
+      let direct_fold_outcome = applied.outcome;
+      let direct_fold_accepted = found &&
+        (direct_fold_outcome == ReductionOutcome::PENDING ||
+         direct_fold_outcome == ReductionOutcome::COMPLETE);
+      let complete = direct_fold_outcome == ReductionOutcome::COMPLETE;
+      let fallback = found && !direct_fold_accepted;
+      let fallback_request = ScheduledRequest {
+        direct_reduction: u1:0,
+        ..request
+      };
+      let next_pending = if fallback {
+        update(pending, producer, fallback_request)
+      } else {
+        pending
+      };
+      let next_pending_valid = if direct_fold_accepted {
+        update(pending_valid, producer, u1:0)
+      } else {
+        pending_valid
+      };
+      let reduction_active = if direct_fold_accepted {
+        update(state.reduction_active, slot, !complete)
+      } else {
+        state.reduction_active
+      };
+      let internal_candidates = if direct_fold_accepted && complete {
+        update(state.internal_candidates, slot, u1:1)
+      } else {
+        state.internal_candidates
+      };
+      let cursor = if direct_fold_accepted {
+        if producer + u32:1 == PRODUCER_COUNT {
+          u32:0
+        } else {
+          producer + u32:1
+        }
+      } else {
+        state.admission_cursor
+      };
+      DirectFoldResult<ACTOR_COUNT, PRODUCER_COUNT> {
+        pending: next_pending,
+        pending_valid: next_pending_valid,
+        reduction: bits_from_reduction_state(applied.state),
+        reduction_active,
+        internal_candidates,
+        cursor,
+        valid: direct_fold_accepted,
+        slot,
+        outcome: direct_fold_outcome,
+      }
     }
 
     fn retire_reduction_actor<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
@@ -1129,19 +1341,9 @@ shared_result_retirement_head(_Reductions) ->
             } else {
               incoming_fold.reduction
             };
-            let reductions = if reduction_write_valid {
-              update(
-                metadata_retired.reductions,
-                reduction_write_slot,
-                reduction_write_bits)
-            } else {
-              metadata_retired.reductions
-            };
-            let retired = SharedState<
-                ACTOR_COUNT, PRODUCER_COUNT> {
-              reductions,
-              ..metadata_retired
-            };
+            // The authoritative receptacle write is combined below with any
+            // sender-addressed fold, after next-issue hazards are known.
+            let retired = metadata_retired;
             // The authoritative reduction word is updated in this proc state,
             // so retirement itself closes the same-slot hazard. There is no
             // external write acknowledgment to await.
@@ -1214,3 +1416,6 @@ join_with(_Separator, []) ->
     [];
 join_with(Separator, [First | Rest]) ->
     [First | [[Separator, Item] || Item <- Rest]].
+
+uppercase(Atom) ->
+    string:uppercase(atom_to_list(Atom)).

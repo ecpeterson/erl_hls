@@ -248,6 +248,23 @@ generated_phi_family_shards_use_static_destination_tables_test() ->
         [2, 3]
     ).
 
+generated_phi_routes_mark_sender_addressed_reductions_test() ->
+    Generated = iolist_to_binary(
+        phi_noise_topology_dslx:to_dslx(
+            3, 16#80000000, {phi_shards, 3}
+        )
+    ),
+    ?assertNotEqual(nomatch, binary:match(Generated, <<
+        "direct_reduction: phi_halo_cell::"
+        "direct_reduction_candidate(effect.frame)"
+    >>)),
+    ?assertEqual(nomatch, binary:match(Generated, <<
+        "direct_reduction: phenom_data_cell::"
+    >>)),
+    ?assertEqual(nomatch, binary:match(Generated, <<
+        "direct_reduction: phenom_syndrome_cell::"
+    >>)).
+
 generated_family_topology_uses_explicit_actor_egress_depth_test() ->
     Plan = hls_topology:normalize(phi_noise_topology:topology()),
     Profile = maps:remove(
