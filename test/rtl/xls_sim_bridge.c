@@ -18,6 +18,8 @@
 #define MAX_SCHEDULER_ACTORS 32
 #define MAX_EFFECT_ROUTERS 32
 #define MAX_EFFECT_DOMAINS 32
+#define MAX_REDUCTION_PLANES 8
+#define MAX_REDUCTION_PLANE_PORTS 8
 
 typedef struct {
     uint8_t bytes[BUFFER_SIZE];
@@ -159,6 +161,12 @@ typedef struct {
     uint64_t direct_reduction_completions;
     uint64_t direct_reduction_pending_slot_samples;
     uint64_t direct_reduction_pending_activations;
+    uint64_t aggregate_receives;
+    uint64_t aggregate_receive_stalls;
+    uint64_t aggregate_accepts;
+    uint64_t aggregate_completions;
+    uint64_t aggregate_errors;
+    uint64_t aggregate_pending_cycles;
     uint64_t actor_state_reads[MAX_SCHEDULER_ACTORS];
     uint64_t actor_ready_samples[MAX_SCHEDULER_ACTORS];
     uint64_t actor_same_actor_only[MAX_SCHEDULER_ACTORS];
@@ -230,6 +238,18 @@ typedef struct {
     vpiHandle h_fold_issue_valid;
     vpiHandle h_direct_fold_accepted;
     vpiHandle h_direct_fold_outcome;
+    vpiHandle h_aggregate_input;
+    vpiHandle h_aggregate_input_valid;
+    vpiHandle h_aggregate_input_ready;
+    vpiHandle h_aggregate_pending_valid;
+    vpiHandle h_aggregate_eligible;
+    vpiHandle h_aggregate_accepted;
+    vpiHandle h_aggregate_complete;
+    vpiHandle h_aggregate_error;
+    vpiHandle h_aggregate_outcome;
+    vpiHandle h_aggregate_slot;
+    vpiHandle h_aggregate_site;
+    vpiHandle h_aggregate_key;
     vpiHandle h_egress_busy;
     vpiHandle h_selection_activation;
     vpiHandle h_phase_boundary;
@@ -275,6 +295,17 @@ typedef struct {
     vpiHandle h_grant_ready;
     vpiHandle h_release_valid;
     vpiHandle h_release_ready;
+    vpiHandle h_credit_valid;
+    vpiHandle h_credit_ready;
+    vpiHandle h_reduction_batch;
+    vpiHandle h_reduction_valid;
+    vpiHandle h_reduction_ready;
+    vpiHandle h_can_receive;
+    vpiHandle h_state_active;
+    vpiHandle h_state_slot;
+    vpiHandle h_state_phase;
+    vpiHandle h_state_credit_debt;
+    vpiHandle h_state_lookahead;
     int request_pending;
     uint64_t request_start;
     int owner_held;
@@ -293,6 +324,28 @@ typedef struct {
     int checkpoint_owner;
 } effect_domain_profile_t;
 
+typedef struct {
+    uint64_t batch_accepts;
+    uint64_t batch_stalls;
+    uint64_t aggregate_sends;
+    uint64_t aggregate_stalls;
+} reduction_plane_counts_t;
+
+typedef struct {
+    char name[32];
+    char hierarchy[PATH_SIZE];
+    vpiHandle h_batch[MAX_REDUCTION_PLANE_PORTS];
+    vpiHandle h_batch_valid[MAX_REDUCTION_PLANE_PORTS];
+    vpiHandle h_batch_ready[MAX_REDUCTION_PLANE_PORTS];
+    unsigned batch_port_count;
+    vpiHandle h_aggregate[MAX_REDUCTION_PLANE_PORTS];
+    vpiHandle h_aggregate_valid[MAX_REDUCTION_PLANE_PORTS];
+    vpiHandle h_aggregate_ready[MAX_REDUCTION_PLANE_PORTS];
+    unsigned aggregate_port_count;
+    reduction_plane_counts_t counts;
+    reduction_plane_counts_t checkpoint;
+} reduction_plane_profile_t;
+
 static vpiHandle h_clk;
 static vpiHandle h_resetn;
 static const char *hierarchy_root;
@@ -307,6 +360,10 @@ static unsigned effect_router_candidate_count;
 static effect_domain_profile_t effect_domain_profiles[MAX_EFFECT_DOMAINS];
 static unsigned effect_domain_profile_count;
 static unsigned effect_domain_candidate_count;
+static reduction_plane_profile_t
+    reduction_plane_profiles[MAX_REDUCTION_PLANES];
+static unsigned reduction_plane_profile_count;
+static unsigned reduction_plane_candidate_count;
 static uint64_t effect_owner_concurrency[MAX_EFFECT_DOMAINS + 1];
 static uint64_t effect_owner_concurrency_checkpoint[MAX_EFFECT_DOMAINS + 1];
 static unsigned effect_owner_peak;
@@ -322,6 +379,7 @@ static int scheduler_profile_checkpoint_valid;
 static int scheduler_profile_only;
 static uint64_t scheduler_profile_start_cycle;
 static uint64_t scheduler_profile_checkpoint_cycle;
+static FILE *scheduler_trace_file;
 
 static size_t ring_free(const byte_ring_t *ring) {
     return BUFFER_SIZE - ring->count;
@@ -394,6 +452,54 @@ static uint32_t get_high_u32(vpiHandle signal) {
     return get_vector_u32(signal, (unsigned)(size - 32));
 }
 
+static void trace_event(
+    const char *component,
+    const char *event,
+    int64_t slot,
+    const char *detail
+) {
+    if (!scheduler_trace_file || !scheduler_profile_started)
+        return;
+    fprintf(
+        scheduler_trace_file,
+        "%llu,%s,%s,%lld,%s\n",
+        (unsigned long long)cycle_number,
+        component,
+        event,
+        (long long)slot,
+        detail ? detail : "");
+}
+
+static const char *reduction_site_name(unsigned site) {
+    switch (site) {
+    case 0:
+        return "gathering";
+    case 1:
+        return "comparing";
+    case 2:
+        return "flipping";
+    default:
+        return "unknown";
+    }
+}
+
+static void aggregate_trace_detail(
+    const scheduler_profile_t *profile,
+    char *detail,
+    size_t detail_size
+) {
+    unsigned site = profile->h_aggregate_site ?
+        get_u32(profile->h_aggregate_site) : UINT32_MAX;
+    unsigned key = profile->h_aggregate_key ?
+        get_u32(profile->h_aggregate_key) : 0;
+
+    if (site == UINT32_MAX)
+        detail[0] = '\0';
+    else
+        snprintf(detail, detail_size, "site=%s;key=%u",
+                 reduction_site_name(site), key);
+}
+
 static void reset_latency_minima(scheduler_counts_t *counts) {
     counts->mailbox_visit_min = UINT64_MAX;
     counts->entry_visit_min = UINT64_MAX;
@@ -438,6 +544,12 @@ static void reset_scheduler_profile_counts(void) {
         effect_domain_profiles[index].owner_cycles = 0;
         effect_domain_profiles[index].checkpoint_owner_cycles = 0;
         effect_domain_profiles[index].checkpoint_owner = 0;
+    }
+    for (index = 0; index < reduction_plane_profile_count; index++) {
+        memset(&reduction_plane_profiles[index].counts, 0,
+               sizeof(reduction_plane_profiles[index].counts));
+        memset(&reduction_plane_profiles[index].checkpoint, 0,
+               sizeof(reduction_plane_profiles[index].checkpoint));
     }
     memset(effect_owner_concurrency, 0, sizeof(effect_owner_concurrency));
     memset(effect_owner_concurrency_checkpoint, 0,
@@ -508,6 +620,10 @@ static void write_scheduler_profile(void) {
             effect_domain_candidate_count);
     dprintf(profile_fd, "effect_window_domain_count=%u\n",
             effect_domain_profile_count);
+    dprintf(profile_fd, "reduction_plane_candidates=%u\n",
+            reduction_plane_candidate_count);
+    dprintf(profile_fd, "reduction_plane_count=%u\n",
+            reduction_plane_profile_count);
 
     for (index = 0; index < scheduler_profile_count; index++) {
         scheduler_profile_t *profile = &scheduler_profiles[index];
@@ -683,6 +799,15 @@ static void write_scheduler_profile(void) {
                       counts->direct_reduction_pending_slot_samples);
         PROFILE_VALUE("direct_reduction_pending_activations",
                       counts->direct_reduction_pending_activations);
+        PROFILE_VALUE("aggregate_receives", counts->aggregate_receives);
+        PROFILE_VALUE("aggregate_receive_stalls",
+                      counts->aggregate_receive_stalls);
+        PROFILE_VALUE("aggregate_accepts", counts->aggregate_accepts);
+        PROFILE_VALUE("aggregate_completions",
+                      counts->aggregate_completions);
+        PROFILE_VALUE("aggregate_errors", counts->aggregate_errors);
+        PROFILE_VALUE("aggregate_pending_cycles",
+                      counts->aggregate_pending_cycles);
         {
             unsigned actor;
             for (actor = 0; actor < profile->actor_count; actor++) {
@@ -765,6 +890,21 @@ static void write_scheduler_profile(void) {
         WINDOW_VALUE("owner_held", owner_held);
         WINDOW_VALUE("lifecycle_errors", window_counts->lifecycle_errors);
 #undef WINDOW_VALUE
+    }
+    for (index = 0; index < reduction_plane_profile_count; index++) {
+        reduction_plane_profile_t *profile =
+            &reduction_plane_profiles[index];
+        const reduction_plane_counts_t *plane_counts =
+            scheduler_profile_checkpoint_valid ?
+                &profile->checkpoint : &profile->counts;
+#define PLANE_VALUE(key, value) \
+        dprintf(profile_fd, "%s_%s=%llu\n", profile->name, key, \
+                (unsigned long long)(value))
+        PLANE_VALUE("batch_accepts", plane_counts->batch_accepts);
+        PLANE_VALUE("batch_stalls", plane_counts->batch_stalls);
+        PLANE_VALUE("aggregate_sends", plane_counts->aggregate_sends);
+        PLANE_VALUE("aggregate_stalls", plane_counts->aggregate_stalls);
+#undef PLANE_VALUE
     }
     for (index = 0; index < effect_domain_profile_count; index++) {
         effect_domain_profile_t *profile = &effect_domain_profiles[index];
@@ -1076,11 +1216,21 @@ static int populate_scheduler_profile(
     MODULE_SIGNAL(h_fold_outcome, "incoming_fold_outcome__2");
     MODULE_SIGNAL(h_fold_issue_valid, "fold_issue_valid");
     MODULE_SIGNAL(h_direct_fold_accepted, "direct_fold_accepted");
-    if (!profile->h_direct_fold_accepted)
-        profile->h_direct_fold_accepted = module_signal(module, "accepted__1");
     MODULE_SIGNAL(h_direct_fold_outcome, "direct_fold_outcome");
-    if (!profile->h_direct_fold_outcome)
-        profile->h_direct_fold_outcome = module_signal(module, "applied_outcome");
+    MODULE_SIGNAL(h_aggregate_input, "_aggregate_in");
+    MODULE_SIGNAL(h_aggregate_input_valid, "_aggregate_in_vld");
+    MODULE_SIGNAL(h_aggregate_input_ready, "_aggregate_in_rdy");
+    MODULE_SIGNAL(h_aggregate_pending_valid, "aggregate_pending_valid");
+    MODULE_SIGNAL(h_aggregate_eligible, "aggregate_eligible");
+    MODULE_SIGNAL(h_aggregate_accepted, "aggregate_accepted");
+    MODULE_SIGNAL(h_aggregate_complete, "aggregate_complete");
+    MODULE_SIGNAL(h_aggregate_error, "aggregate_error");
+    MODULE_SIGNAL(h_aggregate_outcome, "applied_outcome");
+    MODULE_SIGNAL(h_aggregate_slot, "aggregate_request_slot");
+    MODULE_SIGNAL(h_aggregate_site,
+                  "aggregate_request_reduction_aggregate_site");
+    MODULE_SIGNAL(h_aggregate_key,
+                  "aggregate_request_reduction_aggregate_key");
 #undef MODULE_SIGNAL
 
     for (index = 0; index < MAX_SCHEDULER_INPUTS; index++) {
@@ -1276,6 +1426,28 @@ static int populate_effect_router_profile(
         module_signal(module, "_window_release_out_vld");
     profile->h_release_ready =
         module_signal(module, "_window_release_out_rdy");
+    profile->h_credit_valid = module_signal(module, "_credit_out_vld");
+    profile->h_credit_ready = module_signal(module, "_credit_out_rdy");
+    profile->h_reduction_batch =
+        module_signal(module, "_phi_x_reduction_out");
+    profile->h_reduction_valid =
+        module_signal(module, "_phi_x_reduction_out_vld");
+    profile->h_reduction_ready =
+        module_signal(module, "_phi_x_reduction_out_rdy");
+    if (!profile->h_reduction_batch) {
+        profile->h_reduction_batch =
+            module_signal(module, "_phi_z_reduction_out");
+        profile->h_reduction_valid =
+            module_signal(module, "_phi_z_reduction_out_vld");
+        profile->h_reduction_ready =
+            module_signal(module, "_phi_z_reduction_out_rdy");
+    }
+    profile->h_can_receive = module_signal(module, "can_receive");
+    profile->h_state_active = module_signal(module, "____state_0");
+    profile->h_state_slot = module_signal(module, "____state_1");
+    profile->h_state_phase = module_signal(module, "____state_2");
+    profile->h_state_credit_debt = module_signal(module, "____state_8");
+    profile->h_state_lookahead = module_signal(module, "____state_9");
     reset_effect_router_minima(&profile->counts);
     reset_effect_router_minima(&profile->checkpoint);
     return profile->h_scheduled_valid && profile->h_scheduled_ready &&
@@ -1298,6 +1470,55 @@ static int populate_effect_domain_profile(
     return profile->h_owner_valid != NULL;
 }
 
+static int populate_reduction_plane_profile(
+    reduction_plane_profile_t *profile,
+    vpiHandle module
+) {
+    const char *definition = vpi_get_str(vpiDefName, module);
+    const char *full_name = vpi_get_str(vpiFullName, module);
+    char signal_name[64];
+    unsigned index;
+
+    if (strstr(definition, "Phi_xReductionPlane"))
+        snprintf(profile->name, sizeof(profile->name), "phi_x_plane");
+    else if (strstr(definition, "Phi_zReductionPlane"))
+        snprintf(profile->name, sizeof(profile->name), "phi_z_plane");
+    else
+        snprintf(profile->name, sizeof(profile->name), "reduction_plane_%u",
+                 reduction_plane_profile_count);
+    snprintf(profile->hierarchy, sizeof(profile->hierarchy), "%s", full_name);
+
+    for (index = 0; index < MAX_REDUCTION_PLANE_PORTS; index++) {
+        snprintf(signal_name, sizeof(signal_name), "_batch_in__%u", index);
+        profile->h_batch[index] = module_signal(module, signal_name);
+        snprintf(signal_name, sizeof(signal_name), "_batch_in__%u_vld", index);
+        profile->h_batch_valid[index] = module_signal(module, signal_name);
+        snprintf(signal_name, sizeof(signal_name), "_batch_in__%u_rdy", index);
+        profile->h_batch_ready[index] = module_signal(module, signal_name);
+        if (!profile->h_batch[index] || !profile->h_batch_valid[index] ||
+            !profile->h_batch_ready[index])
+            break;
+        profile->batch_port_count++;
+    }
+    for (index = 0; index < MAX_REDUCTION_PLANE_PORTS; index++) {
+        snprintf(signal_name, sizeof(signal_name), "_aggregate_out_%u", index);
+        profile->h_aggregate[index] = module_signal(module, signal_name);
+        snprintf(signal_name, sizeof(signal_name),
+                 "_aggregate_out_%u_vld", index);
+        profile->h_aggregate_valid[index] = module_signal(module, signal_name);
+        snprintf(signal_name, sizeof(signal_name),
+                 "_aggregate_out_%u_rdy", index);
+        profile->h_aggregate_ready[index] = module_signal(module, signal_name);
+        if (!profile->h_aggregate[index] ||
+            !profile->h_aggregate_valid[index] ||
+            !profile->h_aggregate_ready[index])
+            break;
+        profile->aggregate_port_count++;
+    }
+    return profile->batch_port_count > 0 &&
+        profile->aggregate_port_count > 0;
+}
+
 static void discover_scheduler_profiles(vpiHandle scope) {
     vpiHandle iterator = vpi_iterate(vpiModule, scope);
     vpiHandle module;
@@ -1316,6 +1537,23 @@ static void discover_scheduler_profiles(vpiHandle scope) {
                 vpi_printf(
                     "xls_sim_bridge[profile]: incomplete scheduler at %s\n",
                     candidate.hierarchy);
+            }
+        } else if (strstr(definition, "ReductionPlane")) {
+            reduction_plane_candidate_count++;
+            if (reduction_plane_profile_count < MAX_REDUCTION_PLANES) {
+                reduction_plane_profile_t candidate;
+                memset(&candidate, 0, sizeof(candidate));
+                if (populate_reduction_plane_profile(&candidate, module)) {
+                    reduction_plane_profiles[reduction_plane_profile_count++] =
+                        candidate;
+                } else {
+                    vpi_printf(
+                        "xls_sim_bridge[profile]: incomplete reduction plane at %s\n",
+                        candidate.hierarchy);
+                }
+            } else {
+                vpi_printf(
+                    "xls_sim_bridge[profile]: too many reduction planes\n");
             }
         } else if (strstr(definition, "SchedulerRouter")) {
             effect_router_candidate_count++;
@@ -1374,6 +1612,15 @@ static void name_effect_domain_profiles(void) {
         vpi_printf("xls_sim_bridge[profile]: found %s at %s\n",
                    effect_domain_profiles[index].name,
                    effect_domain_profiles[index].hierarchy);
+    }
+}
+
+static void name_reduction_plane_profiles(void) {
+    unsigned index;
+    for (index = 0; index < reduction_plane_profile_count; index++) {
+        vpi_printf("xls_sim_bridge[profile]: found %s at %s\n",
+                   reduction_plane_profiles[index].name,
+                   reduction_plane_profiles[index].hierarchy);
     }
 }
 
@@ -1443,6 +1690,56 @@ static void step_scheduler_profile(scheduler_profile_t *profile) {
     unsigned occupied_messages = 0;
     unsigned nonempty_actors = 0;
     unsigned index;
+    char aggregate_detail[64];
+
+    aggregate_trace_detail(
+        profile, aggregate_detail, sizeof(aggregate_detail));
+
+    if (profile->h_aggregate_input_valid &&
+        profile->h_aggregate_input_ready) {
+        valid = get_bit(profile->h_aggregate_input_valid);
+        ready = get_bit(profile->h_aggregate_input_ready);
+        if (valid && ready) {
+            int64_t slot = profile->h_aggregate_input ?
+                (int64_t)get_high_u32(profile->h_aggregate_input) : -1;
+            counts->aggregate_receives++;
+            trace_event(
+                profile->name, "aggregate_receive", slot,
+                aggregate_detail);
+        } else if (valid) {
+            counts->aggregate_receive_stalls++;
+            trace_event(profile->name, "aggregate_receive_stall", -1, "");
+        }
+    }
+    if (profile->h_aggregate_pending_valid &&
+        get_bit(profile->h_aggregate_pending_valid)) {
+        counts->aggregate_pending_cycles++;
+        trace_event(profile->name, "aggregate_pending", -1, "");
+    }
+    if (profile->h_aggregate_accepted &&
+        get_bit(profile->h_aggregate_accepted)) {
+        int64_t slot = profile->h_aggregate_slot ?
+            (int64_t)get_u32(profile->h_aggregate_slot) : -1;
+        unsigned outcome = profile->h_aggregate_outcome ?
+            get_u32(profile->h_aggregate_outcome) : 0;
+        counts->aggregate_accepts++;
+        if ((profile->h_aggregate_complete &&
+             get_bit(profile->h_aggregate_complete)) || outcome == 3)
+            counts->aggregate_completions++;
+        trace_event(
+            profile->name,
+            outcome == 3 ? "aggregate_complete" : "aggregate_accept",
+            slot,
+            aggregate_detail);
+    }
+    if (profile->h_aggregate_error &&
+        get_bit(profile->h_aggregate_error)) {
+        int64_t slot = profile->h_aggregate_slot ?
+            (int64_t)get_u32(profile->h_aggregate_slot) : -1;
+        counts->aggregate_errors++;
+        trace_event(
+            profile->name, "aggregate_error", slot, aggregate_detail);
+    }
 
     if (profile->h_direct_fold_accepted &&
         profile->h_direct_fold_outcome &&
@@ -1645,6 +1942,16 @@ static void step_scheduler_profile(scheduler_profile_t *profile) {
         else
             counts->selection_cycles_internal_other++;
 
+        trace_event(
+            profile->name,
+            "selection",
+            state_read_valid ? (int64_t)read_slot : -1,
+            executor_completion_blocked ? "executor_blocked" :
+            any_selectable ? "selectable" :
+            same_actor_only ? "same_actor_only" :
+            waiting_egress_credit ? "waiting_egress_credit" :
+            no_actor_work ? "no_actor_work" : "internal_other");
+
         if (same_actor_only && !profile->h_selectable[0]) {
             unsigned slot = profile->activation_state_read_slot;
             int mail_candidate = get_bit(profile->h_mail_candidate[slot]);
@@ -1680,6 +1987,11 @@ static void step_scheduler_profile(scheduler_profile_t *profile) {
         uint64_t latency = counts->visit_open ?
             cycle_number - counts->visit_start : 0;
         counts->state_writes++;
+        trace_event(
+            profile->name,
+            "state_write",
+            (int64_t)get_high_u32(profile->h_ram_write_request),
+            "");
         if (counts->visit_open && counts->visit_has_mailbox) {
             update_latency(
                 latency,
@@ -1710,6 +2022,7 @@ static void step_scheduler_profile(scheduler_profile_t *profile) {
     state_read_accepted = valid && ready;
     if (state_read_accepted) {
         counts->state_reads++;
+        trace_event(profile->name, "state_read", read_slot, "");
         if (read_slot < profile->actor_count)
             counts->actor_state_reads[read_slot]++;
         if (counts->previous_state_read_valid) {
@@ -1820,9 +2133,11 @@ static void step_scheduler_profile(scheduler_profile_t *profile) {
     ready = get_bit(profile->h_egress_ready);
     if (valid && ready) {
         counts->egresses++;
+        trace_event(profile->name, "effects_egress", -1, "");
         active = 1;
     } else if (valid) {
         counts->egress_stalls++;
+        trace_event(profile->name, "effects_egress_stall", -1, "");
         egress_backpressured = 1;
         active = 1;
     }
@@ -1856,21 +2171,55 @@ static void step_effect_router_profile(effect_router_profile_t *profile) {
     int grant_ready = get_bit(profile->h_grant_ready);
     int release_valid = get_bit(profile->h_release_valid);
     int release_ready = get_bit(profile->h_release_ready);
+    int credit = profile->h_credit_valid && profile->h_credit_ready &&
+        get_bit(profile->h_credit_valid) &&
+        get_bit(profile->h_credit_ready);
+    int reduction_send = profile->h_reduction_valid &&
+        profile->h_reduction_ready &&
+        get_bit(profile->h_reduction_valid) &&
+        get_bit(profile->h_reduction_ready);
     int scheduled = scheduled_valid && scheduled_ready;
     int request = request_valid && request_ready;
     int grant = grant_valid && grant_ready;
     int release = release_valid && release_ready;
     int next_owner_held;
+    char wait_detail[128];
 
     if (profile->request_pending)
         counts->request_wait_cycles++;
     if (scheduled) {
         counts->scheduled_batches++;
+        trace_event(profile->name, "effects_accept", -1, "");
     } else if (scheduled_valid) {
         counts->scheduled_stalls++;
+        if (profile->h_state_active && profile->h_state_slot &&
+            profile->h_state_phase && profile->h_state_credit_debt &&
+            profile->h_state_lookahead && profile->h_can_receive) {
+            snprintf(
+                wait_detail,
+                sizeof(wait_detail),
+                "active=%d;slot=%u;phase=%u;credit_debt=%d;lookahead=%d;can_receive=%d",
+                get_bit(profile->h_state_active),
+                get_u32(profile->h_state_slot),
+                get_u32(profile->h_state_phase),
+                get_bit(profile->h_state_credit_debt),
+                get_bit(profile->h_state_lookahead),
+                get_bit(profile->h_can_receive));
+            trace_event(profile->name, "effects_wait", -1, wait_detail);
+        }
+    }
+    if (credit)
+        trace_event(profile->name, "credit_return", -1, "");
+    if (reduction_send) {
+        trace_event(
+            profile->name,
+            "reduction_send",
+            (int64_t)get_high_u32(profile->h_reduction_batch),
+            "");
     }
     if (request) {
         counts->requests++;
+        trace_event(profile->name, "window_request", -1, "");
         profile->request_pending = 1;
         profile->request_start = cycle_number;
     } else if (request_valid) {
@@ -1878,6 +2227,7 @@ static void step_effect_router_profile(effect_router_profile_t *profile) {
     }
     if (grant) {
         counts->grants++;
+        trace_event(profile->name, "window_grant", -1, "");
         if (profile->request_pending) {
             update_latency(
                 cycle_number - profile->request_start,
@@ -1894,6 +2244,7 @@ static void step_effect_router_profile(effect_router_profile_t *profile) {
     }
     if (release) {
         counts->releases++;
+        trace_event(profile->name, "window_release", -1, "");
     } else if (release_valid) {
         counts->release_stalls++;
     }
@@ -1930,6 +2281,53 @@ static void step_effect_router_profiles(void) {
         step_effect_router_profile(&effect_router_profiles[index]);
 }
 
+static void step_reduction_plane_profile(
+    reduction_plane_profile_t *profile
+) {
+    unsigned index;
+    char detail[32];
+
+    for (index = 0; index < profile->batch_port_count; index++) {
+        int valid = get_bit(profile->h_batch_valid[index]);
+        int ready = get_bit(profile->h_batch_ready[index]);
+        snprintf(detail, sizeof(detail), "source=%u", index);
+        if (valid && ready) {
+            profile->counts.batch_accepts++;
+            trace_event(
+                profile->name,
+                "batch_accept",
+                (int64_t)get_high_u32(profile->h_batch[index]),
+                detail);
+        } else if (valid) {
+            profile->counts.batch_stalls++;
+            trace_event(profile->name, "batch_stall", -1, detail);
+        }
+    }
+    for (index = 0; index < profile->aggregate_port_count; index++) {
+        int valid = get_bit(profile->h_aggregate_valid[index]);
+        int ready = get_bit(profile->h_aggregate_ready[index]);
+        snprintf(detail, sizeof(detail), "shard=%u", index);
+        if (valid && ready) {
+            profile->counts.aggregate_sends++;
+            trace_event(
+                profile->name,
+                "aggregate_send",
+                (int64_t)get_high_u32(profile->h_aggregate[index]),
+                detail);
+        } else if (valid) {
+            profile->counts.aggregate_stalls++;
+            trace_event(
+                profile->name, "aggregate_send_stall", -1, detail);
+        }
+    }
+}
+
+static void step_reduction_plane_profiles(void) {
+    unsigned index;
+    for (index = 0; index < reduction_plane_profile_count; index++)
+        step_reduction_plane_profile(&reduction_plane_profiles[index]);
+}
+
 static void checkpoint_scheduler_profiles(void) {
     unsigned index;
     for (index = 0; index < scheduler_profile_count; index++)
@@ -1946,6 +2344,9 @@ static void checkpoint_scheduler_profiles(void) {
         profile->checkpoint_owner_cycles = profile->owner_cycles;
         profile->checkpoint_owner = get_bit(profile->h_owner_valid);
     }
+    for (index = 0; index < reduction_plane_profile_count; index++)
+        reduction_plane_profiles[index].checkpoint =
+            reduction_plane_profiles[index].counts;
     memcpy(effect_owner_concurrency_checkpoint, effect_owner_concurrency,
            sizeof(effect_owner_concurrency_checkpoint));
     effect_owner_peak_checkpoint = effect_owner_peak;
@@ -2018,6 +2419,7 @@ static PLI_INT32 cb_readonly(p_cb_data cb) {
              profile_index++)
             step_scheduler_profile(&scheduler_profiles[profile_index]);
         step_effect_router_profiles();
+        step_reduction_plane_profiles();
         if (app_endpoint.output_beat_number != app_output_before) {
             checkpoint_scheduler_profiles();
             write_scheduler_profile();
@@ -2033,6 +2435,10 @@ static PLI_INT32 cb_end_of_sim(p_cb_data cb) {
     if (scheduler_profile_started) {
         checkpoint_scheduler_profiles();
         write_scheduler_profile();
+    }
+    if (scheduler_trace_file) {
+        fclose(scheduler_trace_file);
+        scheduler_trace_file = NULL;
     }
     return 0;
 }
@@ -2110,6 +2516,8 @@ static PLI_INT32 cb_start_of_sim(p_cb_data cb) {
     const char *profile_only_value = getenv("ERL_HLS_SIM_PROFILE_ONLY");
     const char *configured_scheduler_profile_path =
         getenv("ERL_HLS_SIM_SCHEDULER_PROFILE");
+    const char *configured_scheduler_trace_path =
+        getenv("ERL_HLS_SIM_SCHEDULER_TRACE");
     int app_only = app_only_value && strcmp(app_only_value, "1") == 0;
     s_cb_data clock_cb;
     s_cb_data end_cb;
@@ -2127,15 +2535,20 @@ static PLI_INT32 cb_start_of_sim(p_cb_data cb) {
     memset(scheduler_profiles, 0, sizeof(scheduler_profiles));
     memset(effect_router_profiles, 0, sizeof(effect_router_profiles));
     memset(effect_domain_profiles, 0, sizeof(effect_domain_profiles));
+    memset(reduction_plane_profiles, 0,
+           sizeof(reduction_plane_profiles));
     scheduler_profile_count = 0;
     effect_router_profile_count = 0;
     effect_router_candidate_count = 0;
     effect_domain_profile_count = 0;
     effect_domain_candidate_count = 0;
+    reduction_plane_profile_count = 0;
+    reduction_plane_candidate_count = 0;
     scheduler_profile_started = 0;
     scheduler_profile_checkpoint_valid = 0;
     scheduler_profile_enabled = 0;
     scheduler_profile_path[0] = '\0';
+    scheduler_trace_file = NULL;
     hierarchy_root = configured_root && configured_root[0] != '\0' ?
         configured_root : "regsvc_bridge_tb";
     app_endpoint.name = "app";
@@ -2171,11 +2584,24 @@ static PLI_INT32 cb_start_of_sim(p_cb_data cb) {
             name_scheduler_profiles();
             name_effect_router_profiles();
             name_effect_domain_profiles();
+            name_reduction_plane_profiles();
             if (scheduler_profile_count == 0) {
                 vpi_printf(
                     "xls_sim_bridge[profile]: no SharedService instances found\n");
                 scheduler_profile_enabled = 0;
             }
+        }
+    }
+
+    if (scheduler_profile_enabled && configured_scheduler_trace_path &&
+        configured_scheduler_trace_path[0] != '\0') {
+        scheduler_trace_file = fopen(configured_scheduler_trace_path, "w");
+        if (!scheduler_trace_file) {
+            vpi_printf("xls_sim_bridge[profile]: cannot open trace %s: %s\n",
+                       configured_scheduler_trace_path, strerror(errno));
+        } else {
+            fprintf(scheduler_trace_file,
+                    "cycle,component,event,slot,detail\n");
         }
     }
 

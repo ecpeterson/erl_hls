@@ -284,7 +284,7 @@ machine_declarations(#{
         "  egress_valid: u1,\n",
         "  admission_valid: u1,\n",
         "}\n\n",
-        "pub type ScheduledRequest = mailbox::ScheduledRequest;\n\n",
+        scheduled_request_declaration(Reductions),
         "pub struct ScheduledEffects {\n",
         "  slot: u32,\n",
         "  effects: EntryEffects,\n",
@@ -442,7 +442,7 @@ enter_function(#{
     max_entry_effects := MaxEntryEffects,
     message_words := MessageWords,
     entries := Entries
-}) ->
+} = Spec) ->
     DataStruct = record_struct_name(DataName),
     EffectCapacity = max(1, MaxEntryEffects),
     EffectPayloadBits = entry_effect_payload_bits(Entries, MessageWords),
@@ -456,8 +456,21 @@ enter_function(#{
         "}\n\n",
         entry_effect_count_function(Entries),
         entry_effect_function(Entries, MessageWords),
-        scheduled_effect_function()
+        scheduled_effect_function(Spec)
     ].
+
+scheduled_request_declaration(none) ->
+    "pub type ScheduledRequest = mailbox::ScheduledRequest;\n\n";
+scheduled_request_declaration(_Reductions) ->
+    """
+    pub type ScheduledRequest = mailbox::ScheduledRequest;
+
+    pub struct ReductionAggregateRequest {
+      slot: u32,
+      reduction_aggregate: ReductionAggregate,
+    }
+
+    """.
 
 entry_arm(#{
     phase := Phase,
@@ -533,8 +546,8 @@ entry_effect_index_arm(Index, Effect, Offset, MessageWords) ->
         "      },\n"
     ].
 
-scheduled_effect_function() ->
-    """
+scheduled_effect_function(Spec) ->
+    ["""
     pub fn scheduled_effect(
         scheduled: ScheduledEffects, index: u8) -> (Egress, u1, u1) {
       let count = entry_effect_count(scheduled.effects);
@@ -543,7 +556,47 @@ scheduled_effect_function() ->
       (entry_effect(scheduled.effects, index), emit, last)
     }
 
-    """.
+    """, scheduled_reduction_prefix_function(Spec)].
+
+scheduled_reduction_prefix_function(#{reductions := none}) -> [];
+scheduled_reduction_prefix_function(#{
+    reductions := #{opens := Opens},
+    entries := Entries
+}) ->
+    [
+        "pub fn scheduled_reduction_prefix(\n",
+        "    scheduled: ScheduledEffects) -> (u1, u8, u1) {\n",
+        "  let count = entry_effect_count(scheduled.effects);\n",
+        "  match scheduled.effects.phase as Phase {\n",
+        [scheduled_reduction_prefix_arm(Open, Entries) || Open <- Opens],
+        "    _ => (u1:0, u8:0, u1:0),\n",
+        "  }\n",
+        "}\n\n"
+    ].
+
+scheduled_reduction_prefix_arm(#{
+    phase := Phase,
+    population := #{size := Size}
+}, Entries) ->
+    [Entry] = [Candidate || Candidate = #{phase := CandidatePhase} <- Entries,
+        CandidatePhase =:= Phase],
+    Effects = maps:get(effects, Entry),
+    Prefix = lists:sublist(Effects, Size),
+    Valid = case length(Prefix) =:= Size andalso lists:all(
+            fun(Effect) -> maps:get(conditional, Effect, false) =:= false end,
+            Prefix
+        ) of
+        true -> join_with(" && ", [
+            ["scheduled.effects.valid[u32:", integer_to_list(Index), "]"]
+            || Index <- lists:seq(0, Size - 1)
+        ]);
+        false -> "u1:0"
+    end,
+    [
+        "    Phase::", uppercase(Phase), " => (", Valid, ", u8:",
+        integer_to_list(Size), ", count == u8:",
+        integer_to_list(Size), "),\n"
+    ].
 
 %% Sorry: these offsets manually implement the physical layout of a tagged
 %% union which should belong to DSLX's type system. The Roadmap records the

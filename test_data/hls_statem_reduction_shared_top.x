@@ -9,6 +9,26 @@ const ACTOR_COUNT = u32:1;
 const PRODUCER_COUNT = u32:1;
 const MAILBOX_ROWS = u32:4;
 
+// Own the optional aggregate producer without manufacturing a zero-valued
+// request. An otherwise-unused internal sender endpoint is materialized by
+// XLS as a constant producer, which would incorrectly exercise this input.
+proc AggregateIdle {
+  aggregate_out: chan<actor::ReductionAggregateRequest> out;
+
+  config(aggregate_out: chan<actor::ReductionAggregateRequest> out) {
+    (aggregate_out,)
+  }
+
+  init { () }
+
+  next(state: ()) {
+    let _done = send_if(
+      join(), aggregate_out, false,
+      zero!<actor::ReductionAggregateRequest>());
+    state
+  }
+}
+
 proc MachineRam {
   read_req_in: chan<actor::MachineRamReadReq> in;
   read_resp_out: chan<actor::MachineRamReadResp> out;
@@ -54,14 +74,17 @@ proc MailboxRam {
   read_resp_out: chan<actor::MailboxRamReadResp> out;
   write_req_in: chan<actor::MailboxRamWriteReq> in;
   write_resp_out: chan<actor::MailboxRamWriteResp> out;
+  write_probe_out: chan<u32> out;
 
   config(
       read_req_in: chan<actor::MailboxRamReadReq> in,
       read_resp_out: chan<actor::MailboxRamReadResp> out,
       write_req_in: chan<actor::MailboxRamWriteReq> in,
-      write_resp_out: chan<actor::MailboxRamWriteResp> out
+      write_resp_out: chan<actor::MailboxRamWriteResp> out,
+      write_probe_out: chan<u32> out
   ) {
-    (read_req_in, read_resp_out, write_req_in, write_resp_out)
+    (read_req_in, read_resp_out, write_req_in, write_resp_out,
+      write_probe_out)
   }
 
   init { zero!<bits[axis::FRAME_BITS][MAILBOX_ROWS]>() }
@@ -76,8 +99,10 @@ proc MailboxRam {
       read_resp_out,
       read_valid,
       actor::MailboxRamReadResp { data: rows[read_req.addr] });
+    let probe_tok = send_if(
+      response_tok, write_probe_out, write_valid, write_req.addr);
     let _done = send_if(
-      response_tok,
+      probe_tok,
       write_resp_out,
       write_valid,
       zero!<actor::MailboxRamWriteResp>());
@@ -176,10 +201,12 @@ proc EffectRouter {
 pub proc Top {
   ext_recv: chan<axis::Beat> in;
   out_send: chan<axis::Beat> out;
+  mailbox_write_probe: chan<u32> out;
 
   config(
       ext_recv: chan<axis::Beat> in,
-      out_send: chan<axis::Beat> out
+      out_send: chan<axis::Beat> out,
+      mailbox_write_probe: chan<u32> out
   ) {
     let (frame_p, frame_c) = chan<axis::Frame, u32:1>("frame");
     let (request_p, request_c) =
@@ -190,6 +217,8 @@ pub proc Top {
       chan<actor::ScheduledEffects, u32:1>("scheduled");
     let (credit_p, credit_c) =
       chan<actor::ScheduledRequest, u32:1>("credit");
+    let (aggregate_p, aggregate_c) =
+      chan<actor::ReductionAggregateRequest, u32:0>("aggregate");
     let (output_p, output_c) = chan<axis::Frame, u32:1>("output");
 
     let (state_read_req_p, state_read_req_c) =
@@ -212,6 +241,7 @@ pub proc Top {
 
     spawn axis::Rx(ext_recv, frame_p);
     spawn RequestMux(frame_c, credit_c, request_p[u32:0]);
+    spawn AggregateIdle(aggregate_p);
     spawn actor::SharedService<
       ACTOR_COUNT, PRODUCER_COUNT, u32:0, u32:0>(
         request_c,
@@ -224,7 +254,8 @@ pub proc Top {
         mail_read_req_p,
         mail_read_resp_c,
         mail_write_req_p,
-        mail_write_resp_c);
+        mail_write_resp_c,
+        aggregate_c);
     spawn MachineRam(
       state_read_req_c,
       state_read_resp_p,
@@ -234,10 +265,11 @@ pub proc Top {
       mail_read_req_c,
       mail_read_resp_p,
       mail_write_req_c,
-      mail_write_resp_p);
+      mail_write_resp_p,
+      mailbox_write_probe);
     spawn EffectRouter(scheduled_c, output_p, credit_p);
     spawn axis::Tx(output_c, out_send);
-    (ext_recv, out_send)
+    (ext_recv, out_send, mailbox_write_probe)
   }
 
   init { () }

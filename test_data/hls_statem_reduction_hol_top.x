@@ -13,6 +13,25 @@ const ACTOR_COUNT = u32:3;
 const PRODUCER_COUNT = u32:1;
 const MAILBOX_ROWS = u32:12;
 
+// Keep the optional aggregate input quiescent. Leaving its producer endpoint
+// unused makes XLS materialize a constant stream rather than an absent stream.
+proc AggregateIdle {
+  aggregate_out: chan<actor::ReductionAggregateRequest> out;
+
+  config(aggregate_out: chan<actor::ReductionAggregateRequest> out) {
+    (aggregate_out,)
+  }
+
+  init { () }
+
+  next(state: ()) {
+    let _done = send_if(
+      join(), aggregate_out, false,
+      zero!<actor::ReductionAggregateRequest>());
+    state
+  }
+}
+
 proc MachineRam {
   read_req_in: chan<actor::MachineRamReadReq> in;
   read_resp_out: chan<actor::MachineRamReadResp> out;
@@ -229,6 +248,8 @@ pub proc Top {
       chan<actor::ScheduledEffects, u32:1>("scheduled");
     let (credit_p, credit_c) =
       chan<actor::ScheduledRequest, u32:1>("credit");
+    let (aggregate_p, aggregate_c) =
+      chan<actor::ReductionAggregateRequest, u32:0>("aggregate");
     let (output_p, output_c) = chan<axis::Frame, u32:1>("output");
 
     let (state_read_req_p, state_read_req_c) =
@@ -252,6 +273,7 @@ pub proc Top {
     spawn axis::Rx(ext_recv, frame_p);
     spawn RequestMux(frame_c, credit_c, request_p[u32:0]);
     spawn CreditRelease(release_credit, credit_p);
+    spawn AggregateIdle(aggregate_p);
     spawn actor::SharedService<
       ACTOR_COUNT, PRODUCER_COUNT, u32:0, u32:0>(
         request_c,
@@ -264,7 +286,8 @@ pub proc Top {
         mail_read_req_p,
         mail_read_resp_c,
         mail_write_req_p,
-        mail_write_resp_c);
+        mail_write_resp_c,
+        aggregate_c);
     spawn MachineRam(
       state_read_req_c,
       state_read_resp_p,

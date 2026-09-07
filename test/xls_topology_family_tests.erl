@@ -147,9 +147,29 @@ generated_multi_family_topology_retains_compact_structure_test() ->
         "spawn effect_window::Arbiter<"
     >>)),
     ?assertEqual(30, count(Generated, <<"::ScheduledEffects">>)),
-    ?assertEqual(12, count(Generated, <<"::scheduled_effect(">>)),
+    %% Ordinary routers still render two effect lookups each; the two joined
+    %% reduction routers additionally materialize their four-frame prefixes.
+    ?assertEqual(20, count(Generated, <<"::scheduled_effect(">>)),
+    ?assertEqual(1, count(Generated, <<"struct Phi_xReductionBatch {">>)),
+    ?assertEqual(1, count(Generated, <<"struct Phi_zReductionBatch {">>)),
+    ?assertEqual(1, count(Generated, <<"proc Phi_xReductionPlane {">>)),
+    ?assertEqual(1, count(Generated, <<"proc Phi_zReductionPlane {">>)),
+    ?assertEqual(1, count(Generated, <<"spawn Phi_xReductionPlane(">>)),
+    ?assertEqual(1, count(Generated, <<"spawn Phi_zReductionPlane(">>)),
+    %% Destination slots travel with the batch, so each of the two planes
+    %% contains four aggregate updates rather than a nine-arm whole-array
+    %% crossbar containing four reductions per arm.
+    ?assertEqual(8, count(Generated, <<
+        "::reduction_aggregate_pair_push("
+    >>)),
+    ?assertEqual(2, count(Generated, <<
+        "destinations: u32[u32:4]"
+    >>)),
+    ?assertEqual(2, count(Generated, <<
+        "::ReductionAggregatePair[u32:9]"
+    >>)),
     ?assertEqual(6, count(Generated, <<
-        "let last = batch_valid && effect_info.2"
+        "let last = batch_valid && if reduction_batch {"
     >>)),
     ?assertEqual(6, count(Generated, <<
         "routed_tok, credit_out, forward_credit"
@@ -352,6 +372,31 @@ family_backend_rejects_invalid_effect_window_partition_test() ->
             }
         )
     ).
+
+family_backend_rejects_invalid_reduction_transport_test() ->
+    Plan = hls_topology:normalize(phi_noise_topology:topology(1)),
+    Profile = phi_noise_topology_dslx:profile(),
+    ?assertError(
+        {reduction_transport, speculative},
+        xls_topology_dslx:emit(
+            Plan,
+            Profile#{reduction_transport => speculative}
+        )
+    ).
+
+ordinary_reduction_transport_owns_idle_aggregate_endpoints_test() ->
+    Plan = hls_topology:normalize(phi_noise_topology:topology(1)),
+    Profile = phi_noise_topology_dslx:profile(),
+    Generated = iolist_to_binary(xls_topology_dslx:emit(
+        Plan,
+        Profile#{reduction_transport => ordinary}
+    )),
+    %% An unconnected internal producer becomes a constant zero producer in
+    %% XLS. Explicit never-sending procs keep the optional aggregate input
+    %% genuinely idle when this physical transport is disabled.
+    ?assertEqual(2, count(Generated, <<"proc SchedulerAggregateIdle">>)),
+    ?assertEqual(2, count(Generated, <<"spawn SchedulerAggregateIdle">>)),
+    ?assertEqual(0, count(Generated, <<"ReductionPlane {">>)).
 
 family_backend_rejects_cross_family_selector_remap_test() ->
     Plan = hls_topology:normalize(selector_remap_topology()),

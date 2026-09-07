@@ -28,3 +28,11 @@ cp "$project_root/tools/phi_decoder_profile_stage.sh" \
 bash "$local_stage/phi_decoder_profile_stage.sh" \
     "$local_stage" "$xls_root" "$stage_timeout" "$shard_count" \
     "$pipeline_stages" "$initiation_interval"
+
+python3 "$project_root/tools/phi_profile_timeline.py" \
+    "$local_stage/phi_decoder_profile.trace.csv" \
+    "$local_stage/phi_decoder_profile.timeline.svg"
+python3 "$project_root/tools/phi_profile_timeline.py" \
+    "$local_stage/phi_decoder_profile.trace.csv" \
+    "$local_stage/phi_decoder_profile.causality.svg" \
+    --all-shards --dependencies --site gathering --before 8 --after 22

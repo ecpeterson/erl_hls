@@ -23,9 +23,9 @@ module hls_statem_reduction_tb;
     reg [32:0] captured [0:7];
     integer beat_count = 0;
 `ifdef REDUCTION_SHARED
-    integer direct_fold_count = 0;
-    wire direct_fold_accepted =
-        dut.__hls_statem_reduction_rtl_fixture__SharedService_0__1_0_1_0_next_inst.direct_fold_accepted;
+    wire [31:0] mailbox_write_probe;
+    wire mailbox_write_probe_valid;
+    integer mailbox_write_count = 0;
 `endif
 
     `REDUCTION_DUT dut (
@@ -37,6 +37,11 @@ module hls_statem_reduction_tb;
         ._out_send_rdy(output_ready),
         ._out_send(output_beat),
         ._out_send_vld(output_valid)
+`ifdef REDUCTION_SHARED
+        ,._mailbox_write_probe_rdy(1'b1)
+        ,._mailbox_write_probe(mailbox_write_probe)
+        ,._mailbox_write_probe_vld(mailbox_write_probe_valid)
+`endif
     );
 
     always #5 clk = ~clk;
@@ -48,9 +53,9 @@ module hls_statem_reduction_tb;
         end
 `ifdef REDUCTION_SHARED
         if (reset)
-            direct_fold_count <= 0;
-        else if (direct_fold_accepted)
-            direct_fold_count <= direct_fold_count + 1;
+            mailbox_write_count <= 0;
+        else if (mailbox_write_probe_valid)
+            mailbox_write_count <= mailbox_write_count + 1;
 `endif
     end
 
@@ -163,8 +168,11 @@ module hls_statem_reduction_tb;
         check_beat(7, 32'd7, 1'b1);
 
 `ifdef REDUCTION_SHARED
-        if (direct_fold_count == 0) begin
-            $display("FAIL: shared reduction never used sender-addressed fold");
+        // Only the deliberately early key-18 message should fall back to the
+        // mailbox. The other six contributions must use the direct fold.
+        if (mailbox_write_count != 1) begin
+            $display("FAIL: expected one mailbox fallback, got %0d",
+                mailbox_write_count);
             $fatal(1);
         end
 `endif

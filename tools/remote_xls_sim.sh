@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-stage=$1
+stage=$(cd "$1" && pwd)
 xls_root=$2
 stdlib="$xls_root/xls/dslx/stdlib"
+scheduler_count=${ERL_HLS_PHI_SCHEDULER_COUNT:-6}
 . "$stage/phi_scheduler_rams.sh"
 
 cd "$stage"
@@ -146,6 +147,7 @@ vvp hls_statem_reduction.vvp
 
 iverilog \
     -g2012 \
+    -DREDUCTION_SHARED \
     -DREDUCTION_DUT=__hls_statem_reduction_shared_top__Top_0_next \
     -s hls_statem_reduction_tb \
     -o hls_statem_reduction_shared.vvp \
@@ -415,7 +417,9 @@ vvp phi_noise_topology_smoke.vvp
     --use_system_verilog=false \
     --reset=reset \
     --fifo_module= \
-    --ram_configurations="$(phi_scheduler_ram_configurations 6)" \
+    --ram_configurations="$(
+        phi_scheduler_ram_configurations "$scheduler_count"
+    )" \
     phi_memory_gateway.opt.ir > phi_memory_gateway.v
 
 iverilog \

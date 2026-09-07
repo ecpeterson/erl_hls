@@ -213,6 +213,394 @@ fn scheduler_5_slot(address: ScheduledAddress) -> u32 {
   }
 }
 
+struct Phi_xReductionBatch {
+  destinations: u32[u32:4],
+  frames: axis::Frame[u32:4],
+}
+
+// The batch is a physical transport optimization for one fixed,
+// statically validated prefix of independent phi_halo_cell effects.
+
+fn phi_x_reduction_destinations(source: u32)
+    -> u32[u32:4] {
+  match source {
+    u32:0 => [u32:2, u32:3, u32:6, u32:1],
+    u32:1 => [u32:0, u32:4, u32:7, u32:2],
+    u32:2 => [u32:1, u32:5, u32:8, u32:0],
+    u32:3 => [u32:5, u32:6, u32:0, u32:4],
+    u32:4 => [u32:3, u32:7, u32:1, u32:5],
+    u32:5 => [u32:4, u32:8, u32:2, u32:3],
+    u32:6 => [u32:8, u32:0, u32:3, u32:7],
+    u32:7 => [u32:6, u32:1, u32:4, u32:8],
+    u32:8 => [u32:7, u32:2, u32:5, u32:6],
+    _ => zero!<u32[u32:4]>(),
+  }
+}
+
+struct Phi_xReductionPlaneState {
+  input_cursor: u32,
+  output_cursor: u32,
+  aggregate_pairs: phi_halo_cell::ReductionAggregatePair[u32:9],
+}
+
+proc Phi_xReductionPlane {
+  batch_in: chan<Phi_xReductionBatch>[u32:1] in;
+  aggregate_out_0: chan<phi_halo_cell::ReductionAggregateRequest> out;
+
+  config(
+    batch_in: chan<Phi_xReductionBatch>[u32:1] in,
+    aggregate_out_0: chan<phi_halo_cell::ReductionAggregateRequest> out
+  ) {
+    (batch_in, aggregate_out_0)
+  }
+
+  init { zero!<Phi_xReductionPlaneState>() }
+
+  next(state: Phi_xReductionPlaneState) {
+    // Probe one row per activation. The cursor rotates even when the
+    // row is incomplete, bounding completion latency without a wide
+    // priority network over aggregate payloads.
+    let output_slot = state.output_cursor;
+    let output_ready = match output_slot {
+      u32:0 => phi_halo_cell::reduction_aggregate_ready(
+        state.aggregate_pairs[u32:0].current),
+      u32:1 => phi_halo_cell::reduction_aggregate_ready(
+        state.aggregate_pairs[u32:1].current),
+      u32:2 => phi_halo_cell::reduction_aggregate_ready(
+        state.aggregate_pairs[u32:2].current),
+      u32:3 => phi_halo_cell::reduction_aggregate_ready(
+        state.aggregate_pairs[u32:3].current),
+      u32:4 => phi_halo_cell::reduction_aggregate_ready(
+        state.aggregate_pairs[u32:4].current),
+      u32:5 => phi_halo_cell::reduction_aggregate_ready(
+        state.aggregate_pairs[u32:5].current),
+      u32:6 => phi_halo_cell::reduction_aggregate_ready(
+        state.aggregate_pairs[u32:6].current),
+      u32:7 => phi_halo_cell::reduction_aggregate_ready(
+        state.aggregate_pairs[u32:7].current),
+      u32:8 => phi_halo_cell::reduction_aggregate_ready(
+        state.aggregate_pairs[u32:8].current),
+      _ => u1:0,
+    };
+    if output_ready {
+      let _done = match output_slot {
+        u32:0 => {
+          send(
+            join(), aggregate_out_0, phi_halo_cell::ReductionAggregateRequest {
+              slot: u32:0,
+              reduction_aggregate: state.aggregate_pairs[u32:0].current,
+            })
+        },
+        u32:1 => {
+          send(
+            join(), aggregate_out_0, phi_halo_cell::ReductionAggregateRequest {
+              slot: u32:1,
+              reduction_aggregate: state.aggregate_pairs[u32:1].current,
+            })
+        },
+        u32:2 => {
+          send(
+            join(), aggregate_out_0, phi_halo_cell::ReductionAggregateRequest {
+              slot: u32:2,
+              reduction_aggregate: state.aggregate_pairs[u32:2].current,
+            })
+        },
+        u32:3 => {
+          send(
+            join(), aggregate_out_0, phi_halo_cell::ReductionAggregateRequest {
+              slot: u32:3,
+              reduction_aggregate: state.aggregate_pairs[u32:3].current,
+            })
+        },
+        u32:4 => {
+          send(
+            join(), aggregate_out_0, phi_halo_cell::ReductionAggregateRequest {
+              slot: u32:4,
+              reduction_aggregate: state.aggregate_pairs[u32:4].current,
+            })
+        },
+        u32:5 => {
+          send(
+            join(), aggregate_out_0, phi_halo_cell::ReductionAggregateRequest {
+              slot: u32:5,
+              reduction_aggregate: state.aggregate_pairs[u32:5].current,
+            })
+        },
+        u32:6 => {
+          send(
+            join(), aggregate_out_0, phi_halo_cell::ReductionAggregateRequest {
+              slot: u32:6,
+              reduction_aggregate: state.aggregate_pairs[u32:6].current,
+            })
+        },
+        u32:7 => {
+          send(
+            join(), aggregate_out_0, phi_halo_cell::ReductionAggregateRequest {
+              slot: u32:7,
+              reduction_aggregate: state.aggregate_pairs[u32:7].current,
+            })
+        },
+        u32:8 => {
+          send(
+            join(), aggregate_out_0, phi_halo_cell::ReductionAggregateRequest {
+              slot: u32:8,
+              reduction_aggregate: state.aggregate_pairs[u32:8].current,
+            })
+        },
+        _ => join(),
+      };
+      Phi_xReductionPlaneState {
+        output_cursor: if output_slot + u32:1 == u32:9 { u32:0 } else {
+          output_slot + u32:1 },
+        aggregate_pairs: update(
+          state.aggregate_pairs, output_slot,
+          phi_halo_cell::ReductionAggregatePair {
+            current: state.aggregate_pairs[output_slot].lookahead,
+            lookahead: zero!<phi_halo_cell::ReductionAggregate>(),
+          }),
+        ..state
+      }
+    } else {
+      let (tok, received, batch) =
+        unroll_for! (candidate, acc):
+            (u32, (token, u1, Phi_xReductionBatch)) in u32:0..u32:1 {
+          let (next_tok, next_batch, valid) =
+            recv_if_non_blocking(
+              acc.0, batch_in[candidate],
+              state.input_cursor == candidate,
+              zero!<Phi_xReductionBatch>());
+          (next_tok, acc.1 || valid,
+            if valid { next_batch } else { acc.2 })
+        }((join(), u1:0, zero!<Phi_xReductionBatch>()));
+      let aggregate_pairs = if received {
+        let aggregate_pairs_0 = update(
+          state.aggregate_pairs, batch.destinations[u32:0],
+          phi_halo_cell::reduction_aggregate_pair_push(
+            state.aggregate_pairs[batch.destinations[u32:0]],
+            batch.frames[u32:0]));
+        let aggregate_pairs_1 = update(
+          aggregate_pairs_0, batch.destinations[u32:1],
+          phi_halo_cell::reduction_aggregate_pair_push(
+            aggregate_pairs_0[batch.destinations[u32:1]],
+            batch.frames[u32:1]));
+        let aggregate_pairs_2 = update(
+          aggregate_pairs_1, batch.destinations[u32:2],
+          phi_halo_cell::reduction_aggregate_pair_push(
+            aggregate_pairs_1[batch.destinations[u32:2]],
+            batch.frames[u32:2]));
+        let aggregate_pairs_3 = update(
+          aggregate_pairs_2, batch.destinations[u32:3],
+          phi_halo_cell::reduction_aggregate_pair_push(
+            aggregate_pairs_2[batch.destinations[u32:3]],
+            batch.frames[u32:3]));
+        aggregate_pairs_3
+      } else { state.aggregate_pairs };
+      let _done = tok;
+      Phi_xReductionPlaneState {
+        input_cursor: if state.input_cursor + u32:1 == u32:1 { u32:0 } else {
+          state.input_cursor + u32:1 },
+        output_cursor: if output_slot + u32:1 == u32:9 { u32:0 } else {
+          output_slot + u32:1 },
+        aggregate_pairs,
+      }
+    }
+  }
+}
+
+struct Phi_zReductionBatch {
+  destinations: u32[u32:4],
+  frames: axis::Frame[u32:4],
+}
+
+// The batch is a physical transport optimization for one fixed,
+// statically validated prefix of independent phi_halo_cell effects.
+
+fn phi_z_reduction_destinations(source: u32)
+    -> u32[u32:4] {
+  match source {
+    u32:0 => [u32:2, u32:3, u32:6, u32:1],
+    u32:1 => [u32:0, u32:4, u32:7, u32:2],
+    u32:2 => [u32:1, u32:5, u32:8, u32:0],
+    u32:3 => [u32:5, u32:6, u32:0, u32:4],
+    u32:4 => [u32:3, u32:7, u32:1, u32:5],
+    u32:5 => [u32:4, u32:8, u32:2, u32:3],
+    u32:6 => [u32:8, u32:0, u32:3, u32:7],
+    u32:7 => [u32:6, u32:1, u32:4, u32:8],
+    u32:8 => [u32:7, u32:2, u32:5, u32:6],
+    _ => zero!<u32[u32:4]>(),
+  }
+}
+
+struct Phi_zReductionPlaneState {
+  input_cursor: u32,
+  output_cursor: u32,
+  aggregate_pairs: phi_halo_cell::ReductionAggregatePair[u32:9],
+}
+
+proc Phi_zReductionPlane {
+  batch_in: chan<Phi_zReductionBatch>[u32:1] in;
+  aggregate_out_0: chan<phi_halo_cell::ReductionAggregateRequest> out;
+
+  config(
+    batch_in: chan<Phi_zReductionBatch>[u32:1] in,
+    aggregate_out_0: chan<phi_halo_cell::ReductionAggregateRequest> out
+  ) {
+    (batch_in, aggregate_out_0)
+  }
+
+  init { zero!<Phi_zReductionPlaneState>() }
+
+  next(state: Phi_zReductionPlaneState) {
+    // Probe one row per activation. The cursor rotates even when the
+    // row is incomplete, bounding completion latency without a wide
+    // priority network over aggregate payloads.
+    let output_slot = state.output_cursor;
+    let output_ready = match output_slot {
+      u32:0 => phi_halo_cell::reduction_aggregate_ready(
+        state.aggregate_pairs[u32:0].current),
+      u32:1 => phi_halo_cell::reduction_aggregate_ready(
+        state.aggregate_pairs[u32:1].current),
+      u32:2 => phi_halo_cell::reduction_aggregate_ready(
+        state.aggregate_pairs[u32:2].current),
+      u32:3 => phi_halo_cell::reduction_aggregate_ready(
+        state.aggregate_pairs[u32:3].current),
+      u32:4 => phi_halo_cell::reduction_aggregate_ready(
+        state.aggregate_pairs[u32:4].current),
+      u32:5 => phi_halo_cell::reduction_aggregate_ready(
+        state.aggregate_pairs[u32:5].current),
+      u32:6 => phi_halo_cell::reduction_aggregate_ready(
+        state.aggregate_pairs[u32:6].current),
+      u32:7 => phi_halo_cell::reduction_aggregate_ready(
+        state.aggregate_pairs[u32:7].current),
+      u32:8 => phi_halo_cell::reduction_aggregate_ready(
+        state.aggregate_pairs[u32:8].current),
+      _ => u1:0,
+    };
+    if output_ready {
+      let _done = match output_slot {
+        u32:0 => {
+          send(
+            join(), aggregate_out_0, phi_halo_cell::ReductionAggregateRequest {
+              slot: u32:0,
+              reduction_aggregate: state.aggregate_pairs[u32:0].current,
+            })
+        },
+        u32:1 => {
+          send(
+            join(), aggregate_out_0, phi_halo_cell::ReductionAggregateRequest {
+              slot: u32:1,
+              reduction_aggregate: state.aggregate_pairs[u32:1].current,
+            })
+        },
+        u32:2 => {
+          send(
+            join(), aggregate_out_0, phi_halo_cell::ReductionAggregateRequest {
+              slot: u32:2,
+              reduction_aggregate: state.aggregate_pairs[u32:2].current,
+            })
+        },
+        u32:3 => {
+          send(
+            join(), aggregate_out_0, phi_halo_cell::ReductionAggregateRequest {
+              slot: u32:3,
+              reduction_aggregate: state.aggregate_pairs[u32:3].current,
+            })
+        },
+        u32:4 => {
+          send(
+            join(), aggregate_out_0, phi_halo_cell::ReductionAggregateRequest {
+              slot: u32:4,
+              reduction_aggregate: state.aggregate_pairs[u32:4].current,
+            })
+        },
+        u32:5 => {
+          send(
+            join(), aggregate_out_0, phi_halo_cell::ReductionAggregateRequest {
+              slot: u32:5,
+              reduction_aggregate: state.aggregate_pairs[u32:5].current,
+            })
+        },
+        u32:6 => {
+          send(
+            join(), aggregate_out_0, phi_halo_cell::ReductionAggregateRequest {
+              slot: u32:6,
+              reduction_aggregate: state.aggregate_pairs[u32:6].current,
+            })
+        },
+        u32:7 => {
+          send(
+            join(), aggregate_out_0, phi_halo_cell::ReductionAggregateRequest {
+              slot: u32:7,
+              reduction_aggregate: state.aggregate_pairs[u32:7].current,
+            })
+        },
+        u32:8 => {
+          send(
+            join(), aggregate_out_0, phi_halo_cell::ReductionAggregateRequest {
+              slot: u32:8,
+              reduction_aggregate: state.aggregate_pairs[u32:8].current,
+            })
+        },
+        _ => join(),
+      };
+      Phi_zReductionPlaneState {
+        output_cursor: if output_slot + u32:1 == u32:9 { u32:0 } else {
+          output_slot + u32:1 },
+        aggregate_pairs: update(
+          state.aggregate_pairs, output_slot,
+          phi_halo_cell::ReductionAggregatePair {
+            current: state.aggregate_pairs[output_slot].lookahead,
+            lookahead: zero!<phi_halo_cell::ReductionAggregate>(),
+          }),
+        ..state
+      }
+    } else {
+      let (tok, received, batch) =
+        unroll_for! (candidate, acc):
+            (u32, (token, u1, Phi_zReductionBatch)) in u32:0..u32:1 {
+          let (next_tok, next_batch, valid) =
+            recv_if_non_blocking(
+              acc.0, batch_in[candidate],
+              state.input_cursor == candidate,
+              zero!<Phi_zReductionBatch>());
+          (next_tok, acc.1 || valid,
+            if valid { next_batch } else { acc.2 })
+        }((join(), u1:0, zero!<Phi_zReductionBatch>()));
+      let aggregate_pairs = if received {
+        let aggregate_pairs_0 = update(
+          state.aggregate_pairs, batch.destinations[u32:0],
+          phi_halo_cell::reduction_aggregate_pair_push(
+            state.aggregate_pairs[batch.destinations[u32:0]],
+            batch.frames[u32:0]));
+        let aggregate_pairs_1 = update(
+          aggregate_pairs_0, batch.destinations[u32:1],
+          phi_halo_cell::reduction_aggregate_pair_push(
+            aggregate_pairs_0[batch.destinations[u32:1]],
+            batch.frames[u32:1]));
+        let aggregate_pairs_2 = update(
+          aggregate_pairs_1, batch.destinations[u32:2],
+          phi_halo_cell::reduction_aggregate_pair_push(
+            aggregate_pairs_1[batch.destinations[u32:2]],
+            batch.frames[u32:2]));
+        let aggregate_pairs_3 = update(
+          aggregate_pairs_2, batch.destinations[u32:3],
+          phi_halo_cell::reduction_aggregate_pair_push(
+            aggregate_pairs_2[batch.destinations[u32:3]],
+            batch.frames[u32:3]));
+        aggregate_pairs_3
+      } else { state.aggregate_pairs };
+      let _done = tok;
+      Phi_zReductionPlaneState {
+        input_cursor: if state.input_cursor + u32:1 == u32:1 { u32:0 } else {
+          state.input_cursor + u32:1 },
+        output_cursor: if output_slot + u32:1 == u32:9 { u32:0 } else {
+          output_slot + u32:1 },
+        aggregate_pairs,
+      }
+    }
+  }
+}
+
 proc FrameRelay {
   frame_in: chan<axis::Frame> in;
   frame_out: chan<axis::Frame> out;
@@ -1166,7 +1554,11 @@ proc SchedulerRouter0 {
 
   next(state: SchedulerRouter0State) {
     let state_effect_info = phenom_data_cell::scheduled_effect(state.scheduled, state.index);
-    let state_last = state.active && state_effect_info.2;
+    let state_reduction_prefix = (u1:0, u8:0, u1:0);
+    let state_reduction_batch = u1:0;
+    let state_last = state.active && if state_reduction_batch {
+      state_reduction_prefix.2
+    } else { state_effect_info.2 };
     let can_receive = !state.active ||
       (state_last && state.credit_debt && !state.lookahead);
     let (receive_tok, incoming, incoming_valid) =
@@ -1183,10 +1575,14 @@ proc SchedulerRouter0 {
     } else { incoming };
     let index = if state.active { state.index } else { u8:0 };
     let effect_info = phenom_data_cell::scheduled_effect(scheduled, index);
+    let reduction_prefix = (u1:0, u8:0, u1:0);
+    let reduction_batch = u1:0;
     let effect = effect_info.0;
     let emit = batch_valid && effect_info.1;
     let address = scheduler_0_address(scheduled.slot);
-    let routed_tok = if emit {
+    let routed_tok = if reduction_batch {
+      grant_tok
+    } else if emit {
       match address.family as FamilyId {
       FamilyId::DATA_EVEN => {
         let x = address.x;
@@ -1218,7 +1614,9 @@ proc SchedulerRouter0 {
         _ => grant_tok,
       }
     } else { grant_tok };
-    let last = batch_valid && effect_info.2;
+    let last = batch_valid && if reduction_batch {
+      reduction_prefix.2
+    } else { effect_info.2 };
     let batch_continues = batch_valid && !last;
     // Never apply a stale grant to a batch admitted in this same
     // activation: the virtual credit could otherwise bypass back to
@@ -1269,7 +1667,9 @@ proc SchedulerRouter0 {
       SchedulerRouter0State {
         active: u1:1,
         scheduled,
-        index: index + u8:1,
+        index: index + if reduction_batch {
+          reduction_prefix.1
+        } else { u8:1 },
         window_requested: pending_request || request,
         window_granted,
         credit_debt,
@@ -1324,7 +1724,11 @@ proc SchedulerRouter1 {
 
   next(state: SchedulerRouter1State) {
     let state_effect_info = phenom_data_cell::scheduled_effect(state.scheduled, state.index);
-    let state_last = state.active && state_effect_info.2;
+    let state_reduction_prefix = (u1:0, u8:0, u1:0);
+    let state_reduction_batch = u1:0;
+    let state_last = state.active && if state_reduction_batch {
+      state_reduction_prefix.2
+    } else { state_effect_info.2 };
     let can_receive = !state.active ||
       (state_last && state.credit_debt && !state.lookahead);
     let (receive_tok, incoming, incoming_valid) =
@@ -1341,10 +1745,14 @@ proc SchedulerRouter1 {
     } else { incoming };
     let index = if state.active { state.index } else { u8:0 };
     let effect_info = phenom_data_cell::scheduled_effect(scheduled, index);
+    let reduction_prefix = (u1:0, u8:0, u1:0);
+    let reduction_batch = u1:0;
     let effect = effect_info.0;
     let emit = batch_valid && effect_info.1;
     let address = scheduler_1_address(scheduled.slot);
-    let routed_tok = if emit {
+    let routed_tok = if reduction_batch {
+      grant_tok
+    } else if emit {
       match address.family as FamilyId {
       FamilyId::DATA_ODD => {
         let x = address.x;
@@ -1376,7 +1784,9 @@ proc SchedulerRouter1 {
         _ => grant_tok,
       }
     } else { grant_tok };
-    let last = batch_valid && effect_info.2;
+    let last = batch_valid && if reduction_batch {
+      reduction_prefix.2
+    } else { effect_info.2 };
     let batch_continues = batch_valid && !last;
     // Never apply a stale grant to a batch admitted in this same
     // activation: the virtual credit could otherwise bypass back to
@@ -1427,7 +1837,9 @@ proc SchedulerRouter1 {
       SchedulerRouter1State {
         active: u1:1,
         scheduled,
-        index: index + u8:1,
+        index: index + if reduction_batch {
+          reduction_prefix.1
+        } else { u8:1 },
         window_requested: pending_request || request,
         window_granted,
         credit_debt,
@@ -1461,6 +1873,7 @@ proc SchedulerRouter2 {
   to_scheduler_2: chan<phi_halo_cell::ScheduledRequest> out;
   to_scheduler_4: chan<phenom_syndrome_cell::ScheduledRequest> out;
   x_decoder_events_out: chan<axis::Frame> out;
+  phi_x_reduction_out: chan<Phi_xReductionBatch> out;
   window_request_out: chan<u1> out;
   window_grant_in: chan<u1> in;
   window_release_out: chan<u1> out;
@@ -1471,18 +1884,24 @@ proc SchedulerRouter2 {
     to_scheduler_2: chan<phi_halo_cell::ScheduledRequest> out,
     to_scheduler_4: chan<phenom_syndrome_cell::ScheduledRequest> out,
     x_decoder_events_out: chan<axis::Frame> out,
+    phi_x_reduction_out: chan<Phi_xReductionBatch> out,
     window_request_out: chan<u1> out,
     window_grant_in: chan<u1> in,
     window_release_out: chan<u1> out
   ) {
-    (scheduled_in, credit_out, to_scheduler_2, to_scheduler_4, x_decoder_events_out, window_request_out, window_grant_in, window_release_out)
+    (scheduled_in, credit_out, to_scheduler_2, to_scheduler_4, x_decoder_events_out, phi_x_reduction_out, window_request_out, window_grant_in, window_release_out)
   }
 
   init { zero!<SchedulerRouter2State>() }
 
   next(state: SchedulerRouter2State) {
     let state_effect_info = phi_halo_cell::scheduled_effect(state.scheduled, state.index);
-    let state_last = state.active && state_effect_info.2;
+    let state_reduction_prefix = phi_halo_cell::scheduled_reduction_prefix(state.scheduled);
+    let state_reduction_batch = state.active &&
+      state.index == u8:0 && state_reduction_prefix.0;
+    let state_last = state.active && if state_reduction_batch {
+      state_reduction_prefix.2
+    } else { state_effect_info.2 };
     let can_receive = !state.active ||
       (state_last && state.credit_debt && !state.lookahead);
     let (receive_tok, incoming, incoming_valid) =
@@ -1499,10 +1918,29 @@ proc SchedulerRouter2 {
     } else { incoming };
     let index = if state.active { state.index } else { u8:0 };
     let effect_info = phi_halo_cell::scheduled_effect(scheduled, index);
+    let reduction_prefix = phi_halo_cell::scheduled_reduction_prefix(scheduled);
+    let reduction_batch = batch_valid && index == u8:0 &&
+      reduction_prefix.0;
     let effect = effect_info.0;
     let emit = batch_valid && effect_info.1;
     let address = scheduler_2_address(scheduled.slot);
-    let routed_tok = if emit {
+    let routed_tok = if reduction_batch {
+      match address.family as FamilyId {
+        FamilyId::PHI_X => {
+          let effect_0 = phi_halo_cell::scheduled_effect(scheduled, u8:0).0;
+          let effect_1 = phi_halo_cell::scheduled_effect(scheduled, u8:1).0;
+          let effect_2 = phi_halo_cell::scheduled_effect(scheduled, u8:2).0;
+          let effect_3 = phi_halo_cell::scheduled_effect(scheduled, u8:3).0;
+          let batch = Phi_xReductionBatch {
+            destinations: phi_x_reduction_destinations((address.x as u32) * (HEIGHT as u32) +
+              address.y as u32),
+            frames: [effect_0.frame, effect_1.frame, effect_2.frame, effect_3.frame],
+          };
+          send(grant_tok, phi_x_reduction_out, batch)
+        },
+        _ => grant_tok,
+      }
+    } else if emit {
       match address.family as FamilyId {
       FamilyId::PHI_X => {
         let x = address.x;
@@ -1544,7 +1982,9 @@ proc SchedulerRouter2 {
         _ => grant_tok,
       }
     } else { grant_tok };
-    let last = batch_valid && effect_info.2;
+    let last = batch_valid && if reduction_batch {
+      reduction_prefix.2
+    } else { effect_info.2 };
     let batch_continues = batch_valid && !last;
     // Never apply a stale grant to a batch admitted in this same
     // activation: the virtual credit could otherwise bypass back to
@@ -1595,7 +2035,9 @@ proc SchedulerRouter2 {
       SchedulerRouter2State {
         active: u1:1,
         scheduled,
-        index: index + u8:1,
+        index: index + if reduction_batch {
+          reduction_prefix.1
+        } else { u8:1 },
         window_requested: pending_request || request,
         window_granted,
         credit_debt,
@@ -1629,6 +2071,7 @@ proc SchedulerRouter3 {
   to_scheduler_3: chan<phi_halo_cell::ScheduledRequest> out;
   to_scheduler_5: chan<phenom_syndrome_cell::ScheduledRequest> out;
   z_decoder_events_out: chan<axis::Frame> out;
+  phi_z_reduction_out: chan<Phi_zReductionBatch> out;
   window_request_out: chan<u1> out;
   window_grant_in: chan<u1> in;
   window_release_out: chan<u1> out;
@@ -1639,18 +2082,24 @@ proc SchedulerRouter3 {
     to_scheduler_3: chan<phi_halo_cell::ScheduledRequest> out,
     to_scheduler_5: chan<phenom_syndrome_cell::ScheduledRequest> out,
     z_decoder_events_out: chan<axis::Frame> out,
+    phi_z_reduction_out: chan<Phi_zReductionBatch> out,
     window_request_out: chan<u1> out,
     window_grant_in: chan<u1> in,
     window_release_out: chan<u1> out
   ) {
-    (scheduled_in, credit_out, to_scheduler_3, to_scheduler_5, z_decoder_events_out, window_request_out, window_grant_in, window_release_out)
+    (scheduled_in, credit_out, to_scheduler_3, to_scheduler_5, z_decoder_events_out, phi_z_reduction_out, window_request_out, window_grant_in, window_release_out)
   }
 
   init { zero!<SchedulerRouter3State>() }
 
   next(state: SchedulerRouter3State) {
     let state_effect_info = phi_halo_cell::scheduled_effect(state.scheduled, state.index);
-    let state_last = state.active && state_effect_info.2;
+    let state_reduction_prefix = phi_halo_cell::scheduled_reduction_prefix(state.scheduled);
+    let state_reduction_batch = state.active &&
+      state.index == u8:0 && state_reduction_prefix.0;
+    let state_last = state.active && if state_reduction_batch {
+      state_reduction_prefix.2
+    } else { state_effect_info.2 };
     let can_receive = !state.active ||
       (state_last && state.credit_debt && !state.lookahead);
     let (receive_tok, incoming, incoming_valid) =
@@ -1667,10 +2116,29 @@ proc SchedulerRouter3 {
     } else { incoming };
     let index = if state.active { state.index } else { u8:0 };
     let effect_info = phi_halo_cell::scheduled_effect(scheduled, index);
+    let reduction_prefix = phi_halo_cell::scheduled_reduction_prefix(scheduled);
+    let reduction_batch = batch_valid && index == u8:0 &&
+      reduction_prefix.0;
     let effect = effect_info.0;
     let emit = batch_valid && effect_info.1;
     let address = scheduler_3_address(scheduled.slot);
-    let routed_tok = if emit {
+    let routed_tok = if reduction_batch {
+      match address.family as FamilyId {
+        FamilyId::PHI_Z => {
+          let effect_0 = phi_halo_cell::scheduled_effect(scheduled, u8:0).0;
+          let effect_1 = phi_halo_cell::scheduled_effect(scheduled, u8:1).0;
+          let effect_2 = phi_halo_cell::scheduled_effect(scheduled, u8:2).0;
+          let effect_3 = phi_halo_cell::scheduled_effect(scheduled, u8:3).0;
+          let batch = Phi_zReductionBatch {
+            destinations: phi_z_reduction_destinations((address.x as u32) * (HEIGHT as u32) +
+              address.y as u32),
+            frames: [effect_0.frame, effect_1.frame, effect_2.frame, effect_3.frame],
+          };
+          send(grant_tok, phi_z_reduction_out, batch)
+        },
+        _ => grant_tok,
+      }
+    } else if emit {
       match address.family as FamilyId {
       FamilyId::PHI_Z => {
         let x = address.x;
@@ -1712,7 +2180,9 @@ proc SchedulerRouter3 {
         _ => grant_tok,
       }
     } else { grant_tok };
-    let last = batch_valid && effect_info.2;
+    let last = batch_valid && if reduction_batch {
+      reduction_prefix.2
+    } else { effect_info.2 };
     let batch_continues = batch_valid && !last;
     // Never apply a stale grant to a batch admitted in this same
     // activation: the virtual credit could otherwise bypass back to
@@ -1763,7 +2233,9 @@ proc SchedulerRouter3 {
       SchedulerRouter3State {
         active: u1:1,
         scheduled,
-        index: index + u8:1,
+        index: index + if reduction_batch {
+          reduction_prefix.1
+        } else { u8:1 },
         window_requested: pending_request || request,
         window_granted,
         credit_debt,
@@ -1818,7 +2290,11 @@ proc SchedulerRouter4 {
 
   next(state: SchedulerRouter4State) {
     let state_effect_info = phenom_syndrome_cell::scheduled_effect(state.scheduled, state.index);
-    let state_last = state.active && state_effect_info.2;
+    let state_reduction_prefix = (u1:0, u8:0, u1:0);
+    let state_reduction_batch = u1:0;
+    let state_last = state.active && if state_reduction_batch {
+      state_reduction_prefix.2
+    } else { state_effect_info.2 };
     let can_receive = !state.active ||
       (state_last && state.credit_debt && !state.lookahead);
     let (receive_tok, incoming, incoming_valid) =
@@ -1835,10 +2311,14 @@ proc SchedulerRouter4 {
     } else { incoming };
     let index = if state.active { state.index } else { u8:0 };
     let effect_info = phenom_syndrome_cell::scheduled_effect(scheduled, index);
+    let reduction_prefix = (u1:0, u8:0, u1:0);
+    let reduction_batch = u1:0;
     let effect = effect_info.0;
     let emit = batch_valid && effect_info.1;
     let address = scheduler_4_address(scheduled.slot);
-    let routed_tok = if emit {
+    let routed_tok = if reduction_batch {
+      grant_tok
+    } else if emit {
       match address.family as FamilyId {
       FamilyId::SYNDROME_X => {
         let x = address.x;
@@ -1875,7 +2355,9 @@ proc SchedulerRouter4 {
         _ => grant_tok,
       }
     } else { grant_tok };
-    let last = batch_valid && effect_info.2;
+    let last = batch_valid && if reduction_batch {
+      reduction_prefix.2
+    } else { effect_info.2 };
     let batch_continues = batch_valid && !last;
     // Never apply a stale grant to a batch admitted in this same
     // activation: the virtual credit could otherwise bypass back to
@@ -1926,7 +2408,9 @@ proc SchedulerRouter4 {
       SchedulerRouter4State {
         active: u1:1,
         scheduled,
-        index: index + u8:1,
+        index: index + if reduction_batch {
+          reduction_prefix.1
+        } else { u8:1 },
         window_requested: pending_request || request,
         window_granted,
         credit_debt,
@@ -1981,7 +2465,11 @@ proc SchedulerRouter5 {
 
   next(state: SchedulerRouter5State) {
     let state_effect_info = phenom_syndrome_cell::scheduled_effect(state.scheduled, state.index);
-    let state_last = state.active && state_effect_info.2;
+    let state_reduction_prefix = (u1:0, u8:0, u1:0);
+    let state_reduction_batch = u1:0;
+    let state_last = state.active && if state_reduction_batch {
+      state_reduction_prefix.2
+    } else { state_effect_info.2 };
     let can_receive = !state.active ||
       (state_last && state.credit_debt && !state.lookahead);
     let (receive_tok, incoming, incoming_valid) =
@@ -1998,10 +2486,14 @@ proc SchedulerRouter5 {
     } else { incoming };
     let index = if state.active { state.index } else { u8:0 };
     let effect_info = phenom_syndrome_cell::scheduled_effect(scheduled, index);
+    let reduction_prefix = (u1:0, u8:0, u1:0);
+    let reduction_batch = u1:0;
     let effect = effect_info.0;
     let emit = batch_valid && effect_info.1;
     let address = scheduler_5_address(scheduled.slot);
-    let routed_tok = if emit {
+    let routed_tok = if reduction_batch {
+      grant_tok
+    } else if emit {
       match address.family as FamilyId {
       FamilyId::SYNDROME_Z => {
         let x = address.x;
@@ -2038,7 +2530,9 @@ proc SchedulerRouter5 {
         _ => grant_tok,
       }
     } else { grant_tok };
-    let last = batch_valid && effect_info.2;
+    let last = batch_valid && if reduction_batch {
+      reduction_prefix.2
+    } else { effect_info.2 };
     let batch_continues = batch_valid && !last;
     // Never apply a stale grant to a batch admitted in this same
     // activation: the virtual credit could otherwise bypass back to
@@ -2089,7 +2583,9 @@ proc SchedulerRouter5 {
       SchedulerRouter5State {
         active: u1:1,
         scheduled,
-        index: index + u8:1,
+        index: index + if reduction_batch {
+          reduction_prefix.1
+        } else { u8:1 },
         window_requested: pending_request || request,
         window_granted,
         credit_debt,
@@ -2191,6 +2687,8 @@ proc SchedulerGrid {
       chan<phi_halo_cell::ScheduledRequest, CHANNEL_DEPTH>("scheduler_2_startup");
     let (scheduler_2_egress_p, scheduler_2_egress_c) =
       chan<phi_halo_cell::ScheduledEffects, CHANNEL_DEPTH>("scheduler_2_egress");
+    let (scheduler_2_aggregate_p, scheduler_2_aggregate_c) =
+      chan<phi_halo_cell::ReductionAggregateRequest, u32:0>("scheduler_2_aggregate");
     spawn SchedulerStartup2(scheduler_2_startup_p);
     let (scheduler_3_requests_p, scheduler_3_requests_c) =
       chan<phi_halo_cell::ScheduledRequest, CHANNEL_DEPTH>[u32:3]("scheduler_3_requests");
@@ -2198,6 +2696,8 @@ proc SchedulerGrid {
       chan<phi_halo_cell::ScheduledRequest, CHANNEL_DEPTH>("scheduler_3_startup");
     let (scheduler_3_egress_p, scheduler_3_egress_c) =
       chan<phi_halo_cell::ScheduledEffects, CHANNEL_DEPTH>("scheduler_3_egress");
+    let (scheduler_3_aggregate_p, scheduler_3_aggregate_c) =
+      chan<phi_halo_cell::ReductionAggregateRequest, u32:0>("scheduler_3_aggregate");
     spawn SchedulerStartup3(scheduler_3_startup_p);
     let (scheduler_4_requests_p, scheduler_4_requests_c) =
       chan<phenom_syndrome_cell::ScheduledRequest, CHANNEL_DEPTH>[u32:5]("scheduler_4_requests");
@@ -2213,6 +2713,10 @@ proc SchedulerGrid {
     let (scheduler_5_egress_p, scheduler_5_egress_c) =
       chan<phenom_syndrome_cell::ScheduledEffects, CHANNEL_DEPTH>("scheduler_5_egress");
     spawn SchedulerStartup5(scheduler_5_startup_p);
+    let (phi_x_reduction_batch_p, phi_x_reduction_batch_c) =
+      chan<Phi_xReductionBatch, CHANNEL_DEPTH>[u32:1]("phi_x_reduction_batch");
+    let (phi_z_reduction_batch_p, phi_z_reduction_batch_c) =
+      chan<Phi_zReductionBatch, CHANNEL_DEPTH>[u32:1]("phi_z_reduction_batch");
     spawn effect_window::Arbiter<u32:6>(
       effect_window_request_c, effect_window_grant_p,
       effect_window_release_c);
@@ -2239,7 +2743,8 @@ proc SchedulerGrid {
       scheduler_2_ram_read_req_out, scheduler_2_ram_read_resp_in,
       scheduler_2_ram_write_req_out, scheduler_2_ram_write_resp_in,
       scheduler_2_mailbox_read_req_out, scheduler_2_mailbox_read_resp_in,
-      scheduler_2_mailbox_write_req_out, scheduler_2_mailbox_write_resp_in);
+      scheduler_2_mailbox_write_req_out, scheduler_2_mailbox_write_resp_in,
+      scheduler_2_aggregate_c);
     spawn phi_halo_cell::SharedService<
       u32:9, u32:3, u32:9, u32:3>(
       scheduler_3_requests_c, scheduler_3_startup_c,
@@ -2247,7 +2752,8 @@ proc SchedulerGrid {
       scheduler_3_ram_read_req_out, scheduler_3_ram_read_resp_in,
       scheduler_3_ram_write_req_out, scheduler_3_ram_write_resp_in,
       scheduler_3_mailbox_read_req_out, scheduler_3_mailbox_read_resp_in,
-      scheduler_3_mailbox_write_req_out, scheduler_3_mailbox_write_resp_in);
+      scheduler_3_mailbox_write_req_out, scheduler_3_mailbox_write_resp_in,
+      scheduler_3_aggregate_c);
     spawn phenom_syndrome_cell::SharedService<
       u32:9, u32:5, u32:9, u32:4>(
       scheduler_4_requests_c, scheduler_4_startup_c,
@@ -2264,6 +2770,12 @@ proc SchedulerGrid {
       scheduler_5_ram_write_req_out, scheduler_5_ram_write_resp_in,
       scheduler_5_mailbox_read_req_out, scheduler_5_mailbox_read_resp_in,
       scheduler_5_mailbox_write_req_out, scheduler_5_mailbox_write_resp_in);
+    spawn Phi_xReductionPlane(
+      phi_x_reduction_batch_c,
+      scheduler_2_aggregate_p);
+    spawn Phi_zReductionPlane(
+      phi_z_reduction_batch_c,
+      scheduler_3_aggregate_p);
     spawn SchedulerRouter0(
       scheduler_0_egress_c, scheduler_0_requests_p[u32:3],
       scheduler_4_requests_p[u32:0],
@@ -2285,6 +2797,7 @@ proc SchedulerGrid {
       scheduler_2_requests_p[u32:0],
       scheduler_4_requests_p[u32:2],
       external_1_buffer_p,
+      phi_x_reduction_batch_p[u32:0],
       effect_window_request_p[u32:2],
       effect_window_grant_c[u32:2],
       effect_window_release_p[u32:2]);
@@ -2293,6 +2806,7 @@ proc SchedulerGrid {
       scheduler_3_requests_p[u32:0],
       scheduler_5_requests_p[u32:2],
       external_2_buffer_p,
+      phi_z_reduction_batch_p[u32:0],
       effect_window_request_p[u32:3],
       effect_window_grant_c[u32:3],
       effect_window_release_p[u32:3]);

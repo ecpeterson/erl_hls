@@ -131,6 +131,20 @@ declarations(Spec = #{
         "  member: u32,\n",
         "  value: ", AccumulatorType, ",\n",
         "}\n\n",
+        "pub struct ReductionAggregate {\n",
+        "  valid: u1,\n",
+        "  failed: u1,\n",
+        "  site: u8,\n",
+        "  mode: u1,\n",
+        "  key: u32,\n",
+        "  count: u8,\n",
+        "  seen: bits[", integer_to_list(MemberWidth), "],\n",
+        "  accumulator: ", AccumulatorType, ",\n",
+        "}\n\n",
+        "pub struct ReductionAggregatePair {\n",
+        "  current: ReductionAggregate,\n",
+        "  lookahead: ReductionAggregate,\n",
+        "}\n\n",
         "enum ReductionOutcome : u3 {\n",
         "  NOT_CANDIDATE = u3:0,\n",
         "  MISMATCH = u3:1,\n",
@@ -165,6 +179,7 @@ functions(Spec) ->
         open_functions(Spec),
         contribution_functions(Spec),
         reducer_function(Spec),
+        aggregate_functions(Spec),
         apply_function(),
         completion_functions(Spec)
     ].
@@ -432,6 +447,170 @@ reducer_arm(#{name := Name, body := Body, result := Result}) ->
         "      ", Result, "\n",
         "    },\n"
     ].
+
+aggregate_functions(#{
+    data := #{dslx_type := DataType},
+    contributions := Contributions
+}) ->
+    Transportable = transportable_contributions(Contributions),
+    [
+        "fn reduction_transport_contribution(frame: axis::Frame)\n",
+        "    -> ReductionContribution {\n",
+        case Transportable of
+            [] ->
+                "  zero!<ReductionContribution>()\n";
+            [_ | _] ->
+                [
+                    "  match frame.header.op as Tag {\n",
+                    [aggregate_contribution_arm(Contribution, DataType)
+                        || Contribution <- Transportable],
+                    "    _ => zero!<ReductionContribution>(),\n",
+                    "  }\n"
+                ]
+        end,
+        "}\n\n",
+        "pub fn reduction_aggregate_ready(aggregate: ReductionAggregate)\n",
+        "    -> u1 {\n",
+        "  aggregate.valid && (aggregate.failed ||\n",
+        "    aggregate.count == reduction_site_population(\n",
+        "      aggregate.site as ReductionSite))\n",
+        "}\n\n",
+        "pub fn reduction_aggregate_accepts(\n",
+        "    aggregate: ReductionAggregate, frame: axis::Frame) -> u1 {\n",
+        "  let contribution = reduction_transport_contribution(frame);\n",
+        "  let same_window = contribution.valid &&\n",
+        "    aggregate.site == contribution.site as u8 &&\n",
+        "    aggregate.mode == contribution.mode as u1 &&\n",
+        "    aggregate.key == contribution.key;\n",
+        "  !reduction_aggregate_ready(aggregate) &&\n",
+        "    contribution.valid && (!aggregate.valid || same_window)\n",
+        "}\n\n",
+        "pub fn reduction_aggregate_push(\n",
+        "    aggregate: ReductionAggregate, frame: axis::Frame)\n",
+        "    -> ReductionAggregate {\n",
+        "  let contribution = reduction_transport_contribution(frame);\n",
+        "  let member_mode = contribution.mode == ReductionMode::MEMBERS;\n",
+        "  let member_bit = reduction_member_bit(\n",
+        "    contribution.site, contribution.member);\n",
+        "  let unexpected = member_mode &&\n",
+        "    member_bit == zero!<ReductionMembers>();\n",
+        "  let duplicate = member_mode && aggregate.valid &&\n",
+        "    (aggregate.seen & member_bit) != zero!<ReductionMembers>();\n",
+        "  let same_window = !aggregate.valid ||\n",
+        "    (aggregate.site == contribution.site as u8 &&\n",
+        "     aggregate.mode == contribution.mode as u1 &&\n",
+        "     aggregate.key == contribution.key);\n",
+        "  let accepted = contribution.valid && same_window &&\n",
+        "    !unexpected && !duplicate &&\n",
+        "    !reduction_aggregate_ready(aggregate);\n",
+        "  let first = !aggregate.valid;\n",
+        "  ReductionAggregate {\n",
+        "    valid: u1:1,\n",
+        "    failed: aggregate.failed || !accepted,\n",
+        "    site: if first { contribution.site as u8 }\n",
+        "      else { aggregate.site },\n",
+        "    mode: if first { contribution.mode as u1 }\n",
+        "      else { aggregate.mode },\n",
+        "    key: if first { contribution.key } else { aggregate.key },\n",
+        "    count: if accepted { aggregate.count + u8:1 }\n",
+        "      else { aggregate.count },\n",
+        "    seen: if accepted && member_mode {\n",
+        "      aggregate.seen | member_bit\n",
+        "    } else { aggregate.seen },\n",
+        "    accumulator: if !accepted { aggregate.accumulator } else {\n",
+        "      if first { contribution.value } else {\n",
+        "        reduction_reduce(\n",
+        "          reduction_site_name(contribution.site),\n",
+        "          aggregate.accumulator, contribution.value)\n",
+        "      }\n",
+        "    },\n",
+        "  }\n",
+        "}\n\n",
+        "pub fn reduction_aggregate_pair_push(\n",
+        "    pair: ReductionAggregatePair, frame: axis::Frame)\n",
+        "    -> ReductionAggregatePair {\n",
+        "  if reduction_aggregate_accepts(pair.current, frame) {\n",
+        "    ReductionAggregatePair {\n",
+        "      current: reduction_aggregate_push(pair.current, frame),\n",
+        "      ..pair\n",
+        "    }\n",
+        "  } else {\n",
+        "    ReductionAggregatePair {\n",
+        "      lookahead: reduction_aggregate_push(pair.lookahead, frame),\n",
+        "      ..pair\n",
+        "    }\n",
+        "  }\n",
+        "}\n\n",
+        aggregate_apply_function()
+    ].
+
+transportable_contributions(Contributions) ->
+    Tags = [maps:get(tag, Contribution) || Contribution <- Contributions],
+    case length(Tags) =:= length(lists:usort(Tags)) of
+        true -> Contributions;
+        false -> []
+    end.
+
+aggregate_contribution_arm(#{tag := Tag, phase := Phase}, DataType) ->
+    [
+        "    Tag::", uppercase(Tag), " => reduction_contribution(\n",
+        "      frame, Phase::", uppercase(Phase), ", zero!<",
+        DataType, ">()),\n"
+    ].
+
+aggregate_apply_function() ->
+    """
+    fn reduction_apply_aggregate(
+        state: ReductionState, aggregate: ReductionAggregate)
+        -> ReductionApply {
+      if !aggregate.valid {
+        ReductionApply {
+          state, outcome: ReductionOutcome::NOT_CANDIDATE }
+      } else if state.status != ReductionStatus::OPEN ||
+          state.site as u8 != aggregate.site ||
+          state.key != aggregate.key {
+        ReductionApply {
+          state, outcome: ReductionOutcome::MISMATCH }
+      } else if aggregate.failed ||
+          reduction_site_mode(state.site) as u1 != aggregate.mode {
+        ReductionApply {
+          state, outcome: ReductionOutcome::WRONG_MODE }
+      } else {
+        let member_mode =
+          reduction_site_mode(state.site) == ReductionMode::MEMBERS;
+        let duplicate = member_mode &&
+          (state.seen & aggregate.seen) != zero!<ReductionMembers>();
+        let too_many = aggregate.count > state.remaining;
+        if duplicate {
+          ReductionApply { state,
+            outcome: ReductionOutcome::DUPLICATE_MEMBER }
+        } else if too_many {
+          ReductionApply { state,
+            outcome: ReductionOutcome::UNEXPECTED_MEMBER }
+        } else {
+          let remaining = state.remaining - aggregate.count;
+          let complete = remaining == u8:0;
+          let next_state = ReductionState {
+            status: if complete { ReductionStatus::COMPLETE }
+              else { ReductionStatus::OPEN },
+            remaining,
+            seen: if member_mode { state.seen | aggregate.seen }
+              else { state.seen },
+            accumulator: reduction_reduce(
+              reduction_site_name(state.site),
+              state.accumulator, aggregate.accumulator),
+            ..state
+          };
+          ReductionApply {
+            state: next_state,
+            outcome: if complete { ReductionOutcome::COMPLETE }
+              else { ReductionOutcome::PENDING },
+          }
+        }
+      }
+    }
+
+    """.
 
 apply_function() ->
     [

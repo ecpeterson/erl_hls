@@ -1,5 +1,9 @@
 # Actor-owned reductions
 
+The stable clock-level description of the phi lowering, its profiler, and the
+next completion-continuation experiment lives in
+[`phi-reduction-timing.md`](phi-reduction-timing.md).
+
 This document defines phase-local incast reduction for `hls_statem`. The CPU
 reference implements the full callback contract described here, while the
 XLS/RTL backend implements the deliberately smaller, statically bounded subset
@@ -460,6 +464,70 @@ establishes a real cadence win over main, but remains well short of 1 MHz and
 is an expensive way to gain 2.84%. A reusable shared or pipelined reduction
 unit would need to retain the direct path's overlap without duplicating the
 full reducer in every scheduler.
+
+The next transport experiment recognizes a still narrower case: every entry
+into a reducing phase begins with the same complete, unconditional set of
+direct translations to actors of the same family. The physical profile may
+select `reduction_transport => joined` only when lowering can prove that the
+contribution tags are unambiguous, each reduction population equals that
+prefix length, every prefix route is a single translated family destination,
+and all reducing phases have the same route pattern. This is deliberately a
+backend property. Source actors still produce ordinary ordered casts, and the
+CPU implementation is unchanged.
+
+Under that proof, the source router admits the complete prefix under its
+existing effect-window reservation and sends one fixed-size batch instead of
+serializing its individual frames. A family reduction plane accepts batches
+round-robin from source schedulers and folds their frames into destination-
+indexed register receptacles. Each destination has a current epoch and one
+lookahead epoch: a neighbor may reach epoch `k + 1` while another neighbor is
+still completing `k`, but it cannot reach `k + 2` before the destination has
+itself entered `k + 1`. A completed current receptacle is sent to the owning
+scheduler and the lookahead is promoted.
+
+Each batch carries its four statically derived destination slots. The plane
+therefore performs exactly four chained indexed updates. An earlier prototype
+carried only the source slot and rendered a nine-way match whose every arm
+rebuilt the complete receptacle array; although semantically equivalent, that
+shape duplicated 36 fold call sites per plane and produced an enormous RTL
+multiplexer/reducer network. Carrying the small destination vector reduces the
+two-plane generated fold call sites from 72 to eight without adding receptacle
+rows.
+
+The batch channel retains the ordinary router backpressure and effect-window
+ownership, so no batch can be partially committed. The aggregate delivery is
+not admitted to the actor mailbox and consumes no ordinary producer credit;
+its two statically bounded receptacles are its storage reservation. The
+destination scheduler remains the only writer of actor-local reduction state,
+checks the exact open site and key, and holds an aggregate which arrived before
+the actor has retired and reopened the matching window. Thus the optimization
+does not let a sender observe the destination phase or mutate its callback
+state.
+
+On the three-shard decoder cadence profile, steps eight through 32 take 6,156
+clocks, or 256.5 clocks per step and about 779,727 steps/s at 200 MHz. This is
+2.29% less step time than the sender-addressed parent's 262.5 clocks per step,
+and 4.98% less than the original 269.958-clock actor-reduction baseline. The
+full CPU-versus-native-Icarus witness remains exact and nontrivial: it closes
+at step 18 with 80 corrections, row parity one, and a nonuniform 8/10 final
+measurement.
+
+The destination-carrying form preserves exactly the same 6,156-clock cadence.
+It reduces the request-paced profile Verilog from 59,346 lines and 3.54 MB to
+52,746 lines and 2.97 MB; XLS optimization falls from 18.8 seconds to 12.4
+seconds on the native M2 toolchain. The full bridged witness completes in 24
+seconds of native Icarus time. These structural measurements replace a
+whole-core area map: the original all-row match was already visibly the wrong
+RTL shape, while the revised form removes that replicated logic directly.
+
+The modest cadence change identifies the remaining limit. Each phi actor is
+still read about 15 times per decoder step: completed reductions must publish
+their private event, and the resulting phase entries and useful handlers still
+run as actor transactions. Joined transport removes four-way send
+serialization and nearly all contribution mailbox reads, but it does not
+remove those completion and phase-boundary visits. Further work should target
+that actor lifecycle or a more explicitly bulk-synchronous region rather than
+add another contribution-side fast path.
 
 ## General mailbox capacity
 
