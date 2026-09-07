@@ -36,6 +36,7 @@ for artifact in \
     phi_decoder_profile.v \
     phi_decoder_profile.vvp \
     phi_decoder_profile.scheduler_profile \
+    phi_decoder_profile.trace.csv \
     xls_sim_bridge.o \
     xls_sim_bridge.vpi \
     phi_decoder_profile.metrics \
@@ -133,6 +134,7 @@ if /usr/bin/time "${time_arguments[@]}" -o phi_decoder_profile-vvp.time.new \
         env ERL_HLS_SIM_PROFILE_ONLY=1 \
         ERL_HLS_SIM_TOP=phi_decoder_profile_tb \
         ERL_HLS_SIM_SCHEDULER_PROFILE=phi_decoder_profile.scheduler_profile \
+        ERL_HLS_SIM_SCHEDULER_TRACE=phi_decoder_profile.trace.csv \
         vvp -M "$stage" -m xls_sim_bridge phi_decoder_profile.vvp 2>&1 | \
         tee phi_decoder_profile.sim.log.new; then
     mv phi_decoder_profile-vvp.time.new phi_decoder_profile-vvp.time
@@ -219,6 +221,42 @@ awk -F= \
     /^effect_window_domain_count=/ {
         window_domain_count = $2
     }
+    /^reduction_plane_candidates=/ {
+        reduction_plane_candidates = $2
+    }
+    /^reduction_plane_count=/ {
+        reduction_plane_count = $2
+    }
+    /_aggregate_receives=/ {
+        name = $1
+        sub(/_aggregate_receives$/, "", name)
+        aggregate_receives[name] = $2
+    }
+    /_aggregate_accepts=/ {
+        name = $1
+        sub(/_aggregate_accepts$/, "", name)
+        aggregate_accepts[name] = $2
+    }
+    /_aggregate_completions=/ {
+        name = $1
+        sub(/_aggregate_completions$/, "", name)
+        aggregate_completions[name] = $2
+    }
+    /_aggregate_errors=/ {
+        name = $1
+        sub(/_aggregate_errors$/, "", name)
+        aggregate_errors[name] = $2
+    }
+    /^phi_[xz]_plane_batch_accepts=/ {
+        name = $1
+        sub(/_batch_accepts$/, "", name)
+        plane_batch_accepts[name] = $2
+    }
+    /^phi_[xz]_plane_aggregate_sends=/ {
+        name = $1
+        sub(/_aggregate_sends$/, "", name)
+        plane_aggregate_sends[name] = $2
+    }
     /^window_router_[0-9]+_requests=/ {
         name = $1
         sub(/_requests$/, "", name)
@@ -300,11 +338,38 @@ awk -F= \
             if (window_owner_held[name] < 0 || window_owner_held[name] > 1 || window_lifecycle_errors[name] != 0)
                 exit 1
         }
+        found_aggregate = 0
+        total_aggregate_receives = 0
+        total_aggregate_accepts = 0
+        for (name in aggregate_receives) {
+            if (aggregate_receives[name] > 0) {
+                found_aggregate = 1
+                if (aggregate_receives[name] != aggregate_accepts[name] ||
+                        aggregate_accepts[name] != aggregate_completions[name] ||
+                        aggregate_errors[name] != 0)
+                    exit 1
+            }
+            total_aggregate_receives += aggregate_receives[name]
+            total_aggregate_accepts += aggregate_accepts[name]
+        }
+        found_plane = 0
+        total_plane_sends = 0
+        for (name in plane_aggregate_sends) {
+            found_plane = 1
+            if (plane_batch_accepts[name] < plane_aggregate_sends[name])
+                exit 1
+            total_plane_sends += plane_aggregate_sends[name]
+        }
         if (!found || !found_window ||
                 window_router_candidates != expected_window_routers ||
                 window_router_count != expected_window_routers ||
                 window_domain_candidates != expected_window_domains ||
                 window_domain_count != expected_window_domains ||
+                reduction_plane_candidates != 2 ||
+                reduction_plane_count != 2 ||
+                !found_aggregate || !found_plane ||
+                total_plane_sends != total_aggregate_receives ||
+                total_aggregate_receives != total_aggregate_accepts ||
                 owner_histogram_cycles != observed_cycles ||
                 request_histogram_cycles != observed_cycles)
             exit 1

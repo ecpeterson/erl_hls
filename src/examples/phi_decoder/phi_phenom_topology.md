@@ -1783,3 +1783,7 @@ Contribution mailbox traffic largely disappears, but those destination-side
 phase transitions now set the cadence. This makes a completion/phase-lifecycle
 optimization or an explicitly bulk-synchronous lowering a more promising next
 step than another send-side bypass.
+
+The maintained description of this path, its counters, and its generated
+clock timeline is now in `docs/phi-reduction-timing.md`. This section remains
+the historical result for the batching experiment.

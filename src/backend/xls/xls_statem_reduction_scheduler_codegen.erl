@@ -159,13 +159,16 @@ shared_direct_reduction_bindings(_Reductions) ->
               admission_cursor: direct_fold.cursor,
               ..retired
             };
+            // Keep these names stable for the simulation profiler. They are
+            // aliases of existing control signals, not synthesized state.
+            let aggregate_pending_valid =
+              pre_aggregate_state.aggregate_pending_valid;
             let (aggregate_tok, incoming_aggregate,
                  incoming_aggregate_valid) = recv_if_non_blocking(
               join(), aggregate_in,
-              !pre_aggregate_state.aggregate_pending_valid,
+              !aggregate_pending_valid,
               zero!<ReductionAggregateRequest>());
-            let aggregate_request = if
-                pre_aggregate_state.aggregate_pending_valid {
+            let aggregate_request = if aggregate_pending_valid {
               pre_aggregate_state.aggregate_pending
             } else {
               incoming_aggregate
@@ -173,7 +176,7 @@ shared_direct_reduction_bindings(_Reductions) ->
             let direct_state = reserve_reduction_aggregate(
               pre_aggregate_state,
               aggregate_request,
-              pre_aggregate_state.aggregate_pending_valid ||
+              aggregate_pending_valid ||
                 incoming_aggregate_valid,
               retired_in_flight,
               issue_valid,
@@ -771,19 +774,19 @@ shared_service_helpers(_Reductions) ->
       // preceding completion and repeat-phase entry. Treat that as an early
       // arrival, just as the ordinary mailbox would, rather than converting
       // benign scheduler skew into a reduction protocol failure.
-      let eligible = found && request.slot < ACTOR_COUNT &&
+      let aggregate_eligible = found && request.slot < ACTOR_COUNT &&
         state.reduction_active[slot] &&
         applied.outcome != ReductionOutcome::MISMATCH &&
         !state.mail_candidates[slot] &&
         !private_work && !entry_work && !in_flight[slot] &&
         (!excluded_valid || slot != excluded_slot);
-      let accepted = eligible &&
+      let aggregate_accepted = aggregate_eligible &&
         (applied.outcome == ReductionOutcome::PENDING ||
          applied.outcome == ReductionOutcome::COMPLETE);
-      let complete = accepted &&
+      let aggregate_complete = aggregate_accepted &&
         applied.outcome == ReductionOutcome::COMPLETE;
-      let error = eligible && !accepted;
-      let reductions = if accepted {
+      let aggregate_error = aggregate_eligible && !aggregate_accepted;
+      let reductions = if aggregate_accepted {
         update(
           state.reductions,
           slot,
@@ -791,17 +794,20 @@ shared_service_helpers(_Reductions) ->
       } else {
         state.reductions
       };
-      let reduction_active = if eligible {
-        update(state.reduction_active, slot, accepted && !complete)
+      let reduction_active = if aggregate_eligible {
+        update(
+          state.reduction_active,
+          slot,
+          aggregate_accepted && !aggregate_complete)
       } else {
         state.reduction_active
       };
-      let internal_candidates = if complete {
+      let internal_candidates = if aggregate_complete {
         update(state.internal_candidates, slot, u1:1)
       } else {
         state.internal_candidates
       };
-      let reduction_errors = if error {
+      let reduction_errors = if aggregate_error {
         update(state.reduction_errors, slot, u1:1)
       } else {
         state.reduction_errors
@@ -812,7 +818,7 @@ shared_service_helpers(_Reductions) ->
         internal_candidates,
         reduction_errors,
         aggregate_pending: request,
-        aggregate_pending_valid: found && !eligible,
+        aggregate_pending_valid: found && !aggregate_eligible,
         ..state
       }
     }

@@ -1,5 +1,9 @@
 # Actor-owned reductions
 
+The stable clock-level description of the phi lowering, its profiler, and the
+next completion-continuation experiment lives in
+[`phi-reduction-timing.md`](phi-reduction-timing.md).
+
 This document defines phase-local incast reduction for `hls_statem`. The CPU
 reference implements the full callback contract described here, while the
 XLS/RTL backend implements the deliberately smaller, statically bounded subset
