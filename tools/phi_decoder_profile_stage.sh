@@ -11,7 +11,6 @@ shard_count=${4:-3}
 pipeline_stages=${5:-2}
 initiation_interval=${6:-2}
 scheduler_count=$((2 + 2 * shard_count))
-reduction_scheduler_count=$((2 * shard_count))
 stdlib="$xls_root/xls/dslx/stdlib"
 . "$stage/phi_scheduler_rams.sh"
 
@@ -112,7 +111,7 @@ timed_output \
     --reset=reset \
     --fifo_module= \
     --ram_configurations="$(phi_scheduler_ram_configurations \
-        "$scheduler_count" 2 "$reduction_scheduler_count")" \
+        "$scheduler_count")" \
     phi_decoder_profile.opt.ir
 
 timed_command \

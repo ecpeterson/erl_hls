@@ -194,13 +194,12 @@ generated_multi_family_topology_retains_compact_structure_test() ->
     ?assertEqual(18, count(Generated, <<"::MailboxRamReadResp> in">>)),
     ?assertEqual(18, count(Generated, <<"::MailboxRamWriteReq> out">>)),
     ?assertEqual(18, count(Generated, <<"::MailboxRamWriteResp> in">>)),
-    %% The two phi schedulers carry reduction state in independent sidecars.
-    %% Each channel type occurs in Top's member and config lists and in the
-    %% SchedulerGrid config list.
-    ?assertEqual(6, count(Generated, <<"::ReductionRamReadReq> out">>)),
-    ?assertEqual(6, count(Generated, <<"::ReductionRamReadResp> in">>)),
-    ?assertEqual(6, count(Generated, <<"::ReductionRamWriteReq> out">>)),
-    ?assertEqual(6, count(Generated, <<"::ReductionRamWriteResp> in">>)),
+    %% Small reduction receptacles live inside the phi scheduler, rather than
+    %% adding a third external RAM boundary per reducing scheduler.
+    ?assertEqual(0, count(Generated, <<"::ReductionRamReadReq> out">>)),
+    ?assertEqual(0, count(Generated, <<"::ReductionRamReadResp> in">>)),
+    ?assertEqual(0, count(Generated, <<"::ReductionRamWriteReq> out">>)),
+    ?assertEqual(0, count(Generated, <<"::ReductionRamWriteResp> in">>)),
     ?assertEqual(1, count(Generated, <<"spawn FrameArrayMux<u32:2>(">>)),
     ?assertNotEqual(nomatch, binary:match(Generated, <<
         "state.packet.target == u2:0"

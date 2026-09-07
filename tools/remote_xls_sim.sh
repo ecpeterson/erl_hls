@@ -381,7 +381,7 @@ vvp phi_torus_topology.vvp
     --use_system_verilog=false \
     --reset=reset \
     --fifo_module= \
-    --ram_configurations="$(phi_scheduler_ram_configurations 6 2 2)" \
+    --ram_configurations="$(phi_scheduler_ram_configurations 6)" \
     phi_noise_topology_smoke.opt.ir > phi_noise_topology_smoke.v
 
 iverilog \
@@ -415,7 +415,7 @@ vvp phi_noise_topology_smoke.vvp
     --use_system_verilog=false \
     --reset=reset \
     --fifo_module= \
-    --ram_configurations="$(phi_scheduler_ram_configurations 6 2 2)" \
+    --ram_configurations="$(phi_scheduler_ram_configurations 6)" \
     phi_memory_gateway.opt.ir > phi_memory_gateway.v
 
 iverilog \

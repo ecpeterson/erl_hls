@@ -10,8 +10,6 @@ compile_only=${ERL_HLS_PHI_DEMO_COMPILE_ONLY:-0}
 startup_timeout=${ERL_HLS_SIM_STARTUP_TIMEOUT:-120}
 initiation_interval=${ERL_HLS_PHI_SCHEDULER_II:-1}
 scheduler_count=${ERL_HLS_PHI_SCHEDULER_COUNT:-6}
-reduction_scheduler_first=${ERL_HLS_PHI_REDUCTION_SCHEDULER_FIRST:-2}
-reduction_scheduler_count=${ERL_HLS_PHI_REDUCTION_SCHEDULER_COUNT:-2}
 cpu_witness="$stage/phi_memory_cpu_witness.term"
 
 if [[ $(uname -s) == Darwin ]]; then
@@ -69,8 +67,7 @@ if [[ "$reuse_rtl" != 1 ]]; then
         --reset=reset \
         --fifo_module= \
         --ram_configurations="$(phi_scheduler_ram_configurations \
-            "$scheduler_count" "$reduction_scheduler_first" \
-            "$reduction_scheduler_count")" \
+            "$scheduler_count")" \
         phi_memory_gateway.opt.ir
 
 elif [[ ! -f phi_memory_gateway.v ]]; then

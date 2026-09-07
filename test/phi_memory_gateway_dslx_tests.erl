@@ -42,20 +42,16 @@ gateway_forwards_independent_scheduler_ram_ports_test() ->
     ?assertEqual(12, count(Generated, <<"::MailboxRamReadResp> in">>)),
     ?assertEqual(12, count(Generated, <<"::MailboxRamWriteReq> out">>)),
     ?assertEqual(12, count(Generated, <<"::MailboxRamWriteResp> in">>)),
-    ?assertEqual(4, count(Generated, <<"::ReductionRamReadReq> out">>)),
-    ?assertEqual(4, count(Generated, <<"::ReductionRamReadResp> in">>)),
-    ?assertEqual(4, count(Generated, <<"::ReductionRamWriteReq> out">>)),
-    ?assertEqual(4, count(Generated, <<"::ReductionRamWriteResp> in">>)),
+    ?assertEqual(0, count(Generated, <<"::ReductionRamReadReq> out">>)),
+    ?assertEqual(0, count(Generated, <<"::ReductionRamReadResp> in">>)),
+    ?assertEqual(0, count(Generated, <<"::ReductionRamWriteReq> out">>)),
+    ?assertEqual(0, count(Generated, <<"::ReductionRamWriteResp> in">>)),
     ?assertEqual(4, count(Generated, <<"scheduler_0_ram_read_req_out">>)),
     ?assertEqual(4, count(Generated, <<"scheduler_0_ram_write_req_out">>)),
     ?assertEqual(4, count(Generated, <<"scheduler_0_mailbox_read_req_out">>)),
     ?assertEqual(4, count(Generated, <<"scheduler_0_mailbox_write_req_out">>)),
-    ?assertEqual(4, count(Generated,
-        <<"scheduler_2_reduction_read_req_out">>)),
-    ?assertEqual(4, count(Generated,
-        <<"scheduler_3_reduction_write_resp_in">>)),
     ?assertEqual(nomatch, binary:match(
-        Generated, <<"scheduler_0_reduction_read_req_out">>
+        Generated, <<"_reduction_read_req_out">>
     )),
     ?assertEqual(nomatch, binary:match(Generated, <<"_ram_wr_comp_in">>)),
     ?assertEqual(nomatch, binary:match(Generated, <<"_mailbox_wr_comp_in">>)).
@@ -72,36 +68,23 @@ sharded_gateway_and_wrapper_expose_every_scheduler_ram_test() ->
             Bindings = xls_scheduler_ram_v:bindings(
                 phi_noise_topology_dslx:scheduler_plan(Profile)
             ),
-            ReductionBindings = [
-                Binding
-                || Binding <- Bindings,
-                   maps:is_key(reduction_width, Binding)
-            ],
             ?assertEqual(2 * SchedulerCount, count(
                 Gateway, <<"::MachineRamReadReq> out">>
             )),
-            ?assertEqual(2 * ShardCount, length(ReductionBindings)),
-            ?assertEqual(4 * ShardCount, count(
+            ?assertEqual(0, length([
+                Binding || Binding <- Bindings,
+                    maps:is_key(reduction_width, Binding)
+            ])),
+            ?assertEqual(0, count(
                 Gateway, <<"::ReductionRamReadReq> out">>
             )),
             ?assertEqual(
-                2 * SchedulerCount + 2 * ShardCount,
+                2 * SchedulerCount,
                 count(Wrapper, <<"hls_1r1w_ram #(.WIDTH(">>)
             ),
-            lists:foreach(
-                fun(#{index := Index}) ->
-                    Stem = integer_to_binary(Index),
-                    ?assertEqual(4, count(Gateway, <<
-                        "scheduler_", Stem/binary,
-                        "_reduction_read_req_out"
-                    >>)),
-                    assert_contains(Wrapper, <<
-                        ".scheduler_", Stem/binary,
-                        "_reduction_rd_addr("
-                    >>)
-                end,
-                ReductionBindings
-            ),
+            ?assertEqual(nomatch, binary:match(
+                Wrapper, <<"_reduction_rd_addr">>
+            )),
             assert_contains(Wrapper, <<
                 "__hls_fabric_router__HostRoutedTx_0_next application_egress"
             >>),

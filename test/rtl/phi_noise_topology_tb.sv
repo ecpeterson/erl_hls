@@ -95,12 +95,6 @@ module phi_noise_topology_tb;
     wire phi_mailbox_wr_en [0:1];
     wire phi_mailbox_rd_en [0:1];
     wire [127:0] phi_mailbox_rd_data [0:1];
-    wire [31:0] phi_reduction_rd_addr [0:1];
-    wire [31:0] phi_reduction_wr_addr [0:1];
-    wire [181:0] phi_reduction_wr_data [0:1];
-    wire phi_reduction_wr_en [0:1];
-    wire phi_reduction_rd_en [0:1];
-    wire [181:0] phi_reduction_rd_data [0:1];
 
     wire [31:0] syndrome_state_rd_addr [0:1];
     wire [31:0] syndrome_state_wr_addr [0:1];
@@ -178,12 +172,6 @@ module phi_noise_topology_tb;
         .scheduler_2_mailbox_wr_en(phi_mailbox_wr_en[0]),
         .scheduler_2_mailbox_rd_en(phi_mailbox_rd_en[0]),
         .scheduler_2_mailbox_rd_data(phi_mailbox_rd_data[0]),
-        .scheduler_2_reduction_rd_addr(phi_reduction_rd_addr[0]),
-        .scheduler_2_reduction_wr_addr(phi_reduction_wr_addr[0]),
-        .scheduler_2_reduction_wr_data(phi_reduction_wr_data[0]),
-        .scheduler_2_reduction_wr_en(phi_reduction_wr_en[0]),
-        .scheduler_2_reduction_rd_en(phi_reduction_rd_en[0]),
-        .scheduler_2_reduction_rd_data(phi_reduction_rd_data[0]),
         .scheduler_3_state_rd_addr(phi_state_rd_addr[1]),
         .scheduler_3_state_wr_addr(phi_state_wr_addr[1]),
         .scheduler_3_state_wr_data(phi_state_wr_data[1]),
@@ -196,12 +184,6 @@ module phi_noise_topology_tb;
         .scheduler_3_mailbox_wr_en(phi_mailbox_wr_en[1]),
         .scheduler_3_mailbox_rd_en(phi_mailbox_rd_en[1]),
         .scheduler_3_mailbox_rd_data(phi_mailbox_rd_data[1]),
-        .scheduler_3_reduction_rd_addr(phi_reduction_rd_addr[1]),
-        .scheduler_3_reduction_wr_addr(phi_reduction_wr_addr[1]),
-        .scheduler_3_reduction_wr_data(phi_reduction_wr_data[1]),
-        .scheduler_3_reduction_wr_en(phi_reduction_wr_en[1]),
-        .scheduler_3_reduction_rd_en(phi_reduction_rd_en[1]),
-        .scheduler_3_reduction_rd_data(phi_reduction_rd_data[1]),
         .scheduler_4_state_rd_addr(syndrome_state_rd_addr[0]),
         .scheduler_4_state_wr_addr(syndrome_state_wr_addr[0]),
         .scheduler_4_state_wr_data(syndrome_state_wr_data[0]),
@@ -246,14 +228,6 @@ module phi_noise_topology_tb;
                 .wr_data(phi_state_wr_data[ram_index]),
                 .wr_en(phi_state_wr_en[ram_index]), .rd_en(phi_state_rd_en[ram_index]),
                 .rd_data(phi_state_rd_data[ram_index])
-            );
-            hls_1r1w_ram #(.WIDTH(182), .ADDRESS_WIDTH(4)) phi_reduction (
-                .clk(clk), .rd_addr(phi_reduction_rd_addr[ram_index][3:0]),
-                .wr_addr(phi_reduction_wr_addr[ram_index][3:0]),
-                .wr_data(phi_reduction_wr_data[ram_index]),
-                .wr_en(phi_reduction_wr_en[ram_index]),
-                .rd_en(phi_reduction_rd_en[ram_index]),
-                .rd_data(phi_reduction_rd_data[ram_index])
             );
             hls_1r1w_ram #(.WIDTH(434), .ADDRESS_WIDTH(4)) syndrome_state (
                 .clk(clk), .rd_addr(syndrome_state_rd_addr[ram_index][3:0]),

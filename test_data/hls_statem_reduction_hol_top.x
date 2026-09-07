@@ -62,55 +62,6 @@ proc MachineRam {
   }
 }
 
-proc ReductionRam {
-  read_req_in: chan<actor::ReductionRamReadReq> in;
-  read_resp_out: chan<actor::ReductionRamReadResp> out;
-  write_req_in: chan<actor::ReductionRamWriteReq> in;
-  write_resp_out: chan<actor::ReductionRamWriteResp> out;
-  read_probe_out: chan<u32> out;
-  write_probe_out: chan<u32> out;
-
-  config(
-      read_req_in: chan<actor::ReductionRamReadReq> in,
-      read_resp_out: chan<actor::ReductionRamReadResp> out,
-      write_req_in: chan<actor::ReductionRamWriteReq> in,
-      write_resp_out: chan<actor::ReductionRamWriteResp> out,
-      read_probe_out: chan<u32> out,
-      write_probe_out: chan<u32> out
-  ) {
-    (read_req_in, read_resp_out, write_req_in, write_resp_out,
-      read_probe_out, write_probe_out)
-  }
-
-  init { zero!<actor::ReductionBits[ACTOR_COUNT]>() }
-
-  next(rows: actor::ReductionBits[ACTOR_COUNT]) {
-    let (read_tok, read_req, read_valid) = recv_if_non_blocking(
-      join(), read_req_in, true, zero!<actor::ReductionRamReadReq>());
-    let (write_tok, write_req, write_valid) = recv_if_non_blocking(
-      read_tok, write_req_in, true, zero!<actor::ReductionRamWriteReq>());
-    let read_probe_tok = send_if(
-      write_tok, read_probe_out, read_valid, read_req.addr);
-    let response_tok = send_if(
-      read_probe_tok,
-      read_resp_out,
-      read_valid,
-      actor::ReductionRamReadResp { data: rows[read_req.addr] });
-    let probe_tok = send_if(
-      response_tok, write_probe_out, write_valid, write_req.addr);
-    let _done = send_if(
-      probe_tok,
-      write_resp_out,
-      write_valid,
-      zero!<actor::ReductionRamWriteResp>());
-    if write_valid {
-      update(rows, write_req.addr, write_req.data)
-    } else {
-      rows
-    }
-  }
-}
-
 proc MailboxRam {
   read_req_in: chan<actor::MailboxRamReadReq> in;
   read_resp_out: chan<actor::MailboxRamReadResp> out;
@@ -261,17 +212,13 @@ pub proc Top {
   out_send: chan<axis::Beat> out;
   state_read_probe: chan<u32> out;
   state_write_probe: chan<u32> out;
-  reduction_read_probe: chan<u32> out;
-  reduction_write_probe: chan<u32> out;
 
   config(
       ext_recv: chan<axis::Beat> in,
       release_credit: chan<u1> in,
       out_send: chan<axis::Beat> out,
       state_read_probe: chan<u32> out,
-      state_write_probe: chan<u32> out,
-      reduction_read_probe: chan<u32> out,
-      reduction_write_probe: chan<u32> out
+      state_write_probe: chan<u32> out
   ) {
     let (frame_p, frame_c) = chan<axis::Frame, u32:1>("frame");
     let (request_p, request_c) =
@@ -292,15 +239,6 @@ pub proc Top {
       chan<actor::MachineRamWriteReq, u32:1>("state_write_req");
     let (state_write_resp_p, state_write_resp_c) =
       chan<actor::MachineRamWriteResp, u32:1>("state_write_resp");
-
-    let (reduction_read_req_p, reduction_read_req_c) =
-      chan<actor::ReductionRamReadReq, u32:1>("reduction_read_req");
-    let (reduction_read_resp_p, reduction_read_resp_c) =
-      chan<actor::ReductionRamReadResp, u32:1>("reduction_read_resp");
-    let (reduction_write_req_p, reduction_write_req_c) =
-      chan<actor::ReductionRamWriteReq, u32:1>("reduction_write_req");
-    let (reduction_write_resp_p, reduction_write_resp_c) =
-      chan<actor::ReductionRamWriteResp, u32:1>("reduction_write_resp");
 
     let (mail_read_req_p, mail_read_req_c) =
       chan<actor::MailboxRamReadReq, u32:1>("mail_read_req");
@@ -326,11 +264,7 @@ pub proc Top {
         mail_read_req_p,
         mail_read_resp_c,
         mail_write_req_p,
-        mail_write_resp_c,
-        reduction_read_req_p,
-        reduction_read_resp_c,
-        reduction_write_req_p,
-        reduction_write_resp_c);
+        mail_write_resp_c);
     spawn MachineRam(
       state_read_req_c,
       state_read_resp_p,
@@ -338,13 +272,6 @@ pub proc Top {
       state_write_resp_p,
       state_read_probe,
       state_write_probe);
-    spawn ReductionRam(
-      reduction_read_req_c,
-      reduction_read_resp_p,
-      reduction_write_req_c,
-      reduction_write_resp_p,
-      reduction_read_probe,
-      reduction_write_probe);
     spawn MailboxRam(
       mail_read_req_c,
       mail_read_resp_p,
@@ -357,9 +284,7 @@ pub proc Top {
       release_credit,
       out_send,
       state_read_probe,
-      state_write_probe,
-      reduction_read_probe,
-      reduction_write_probe
+      state_write_probe
     )
   }
 

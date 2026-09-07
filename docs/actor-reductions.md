@@ -254,9 +254,9 @@ measurements.
 
 Accumulator and completion values are typed private data rather than public
 `hls_tags` frames. Widened sums may therefore exceed the 96-bit wire payload.
-Shared reduction RAM and any admission/completion queues also participate in
-the effect-window backpressure dependency analysis. Completion storage must
-remain reserved across downstream stalls; a later open may not overwrite an
+Reduction storage and any admission/completion queues also participate in the
+effect-window backpressure dependency analysis. Completion storage must remain
+reserved across downstream stalls; a later open may not overwrite an
 undelivered completion.
 
 Dynamic membership, cancellation, timeouts, overlapping reductions, ordered
@@ -287,21 +287,22 @@ seen[max(1, M)] | accumulator[A]
 mode, population, and member-to-bit mapping. Count mode leaves `seen` zero.
 Mailbox frames and ordering metadata remain in the separate mailbox store.
 The first shared realization packed the reduction word into the main actor-
-state row. The sidecar realization instead gives every reduction-capable
-scheduler a separate per-slot reduction RAM. For the phi actor, the main row
-is 338 bits and the reduction row is 182 bits; their logical total remains 520
-bits, but an ordinary actor-state read no longer transports the accumulator.
+state row. The sidecar realization separates it from that row. Its first
+ablation used a per-slot reduction RAM; the current realization keeps the
+small receptacle array in scheduler registers. For the phi actor, the main row
+is 338 bits and each of the three slots in a profiled scheduler owns a 182-bit
+receptacle. Ordinary actor-state reads no longer transport the accumulator.
 
 The direct service folds matching mailbox messages in its ordinary machine
 step. In the shared service, an open-reduction bit lets a mailbox-head sidecar
-read the mailbox frame and the narrow reduction row without reading the main
-actor row. It applies the pure fold and returns only the slot, updated reduction
-word, fold outcome, and mailbox/order indices. An accepted contribution is
-consumed and writes only reduction RAM. A key mismatch is postponed, while a
+read the mailbox frame and its narrow reduction receptacle without reading the
+main actor row. It applies the pure fold and returns only the slot, updated
+reduction word, fold outcome, and mailbox/order indices. An accepted
+contribution is consumed and updates only the receptacle. A key mismatch is postponed, while a
 head which is not a contribution is marked as probed and receives one ordinary
 actor visit. Completion and protocol errors likewise schedule one private actor
-visit; that visit reads main and reduction RAM in parallel and performs the
-callback-data update or failure transition.
+visit; that visit reads the main RAM and register receptacle together and
+performs the callback-data update or failure transition.
 
 This first sidecar subset cannot use callback-data fields to recognize a
 contribution: doing so would require the main actor-state read which the
@@ -313,14 +314,15 @@ future lowering can recover the former fail-fast distinction by proving the
 callback-data guard from the open-reduction key, or by sending unmatched keys
 through the ordinary actor path.
 
-The RAM response and local fold decision do not feed scheduler state directly.
+The mailbox response and local fold decision do not feed scheduler state directly.
 The service sends the narrow fold envelope through a depth-one request channel,
 a stateless relay, and a depth-one result channel. This elastic boundary breaks
-the RAM-response-to-scheduler-state recurrence. A selected slot stays in flight
-until its reduction write acknowledgement, if any, returns, so a later
-activation cannot overtake the fold or observe stale reduction state. The same
-fence, together with mailbox compaction at retirement, preserves actor-local
-mailbox order.
+the mailbox-response-to-scheduler-state recurrence. In the external-RAM
+ablation, a selected slot stayed in flight until its reduction-write
+acknowledgement. With register receptacles, retirement updates the authoritative
+word and releases the slot in the same scheduler activation. The in-flight
+fence, together with mailbox compaction at retirement, prevents a later
+activation from overtaking the fold and preserves actor-local mailbox order.
 
 A one-bit fair arbiter polls the returned-fold channel whenever no ordinary
 executor result can retire, and on alternating turns while ordinary results
@@ -339,12 +341,13 @@ eligible for one ordinary actor visit. The mark persists until that visit
 classifies the head as consumed, postponed, or failed, or until a phase or
 reduction boundary invalidates the probe. This avoids repeated probes without
 hiding the actor for an entire blocked interval.
-Reduction rows are initialized lazily: reset clears the per-slot active bits,
-which gate every sidecar read, and the first successful `open_reduction` writes
-the row before making that slot sidecar-ready. Focused native RTL tests cover
+Reduction receptacles are initialized lazily: reset clears the per-slot active
+bits, which gate every sidecar read, and the first successful
+`open_reduction` writes the word before making that slot sidecar-ready. Focused native RTL tests cover
 count and out-of-order fixed-member reductions, future-key postponement and
 retry, incomplete phase boundaries, duplicate members, and blocked local
-progress through both the direct service and an external-RAM shared service.
+progress through both the direct service and the register-resident shared
+service.
 
 ## Implementation stages and measurements
 
@@ -401,6 +404,24 @@ is not a throughput win. A useful follow-up must shorten or overlap the fold
 lifecycle, relax same-slot exclusion with proven forwarding, or use a stronger
 bulk-synchronous lowering which replaces per-message visits with scheduled
 aggregate sweeps.
+
+Keeping those narrow receptacles in scheduler registers removes the external
+reduction read, write acknowledgement, and associated same-slot wait. On the
+same three-shard profile it takes 6,505 clocks for steps eight through 32, or
+271.042 clocks per step and about 737,894 steps/s at 200 MHz. This recovers the
+BRAM sidecar's regression but remains statistically and architecturally flat
+against the original 269.958-clock actor-reduction lowering. The result isolates
+the remaining cost: contributions still enter the destination mailbox, are
+selected there, traverse the elastic fold path, and retire there. Register
+placement is therefore useful groundwork for a sender-addressed reduction plane,
+not a cadence improvement by itself.
+
+The corresponding out-of-context XC7 map reports 63,963 estimated logic
+cells, 69,356 flip-flops, 80,177 LUTs, 48 `DSP48E1`s, and 52 `RAMB36E1`s.
+Against the external-reduction-RAM sidecar this trades 18 fragmented RAM blocks
+for 3,696 flip-flops and 2,209 LUTs. That is a deliberate, modest area cost for
+removing the per-contribution synchronous-memory dependency; it is not itself
+enough to justify the design without the sender-addressed follow-up.
 
 ## General mailbox capacity
 
