@@ -48,7 +48,7 @@ module hls_statem_reduction_hol_tb;
     wire fold_retired =
         dut.__hls_statem_reduction_rtl_fixture__SharedService_0__3_0_1_0_next_inst.fold_wins;
     wire [31:0] fold_retired_slot =
-        dut.__hls_statem_reduction_rtl_fixture__SharedService_0__3_0_1_0_next_inst.incoming_fold_slot__2;
+        dut.__hls_statem_reduction_rtl_fixture__SharedService_0__3_0_1_0_next_inst.incoming_fold_slot;
     wire [2:0] fold_retired_outcome =
         dut.__hls_statem_reduction_rtl_fixture__SharedService_0__3_0_1_0_next_inst.incoming_fold_outcome__2;
 

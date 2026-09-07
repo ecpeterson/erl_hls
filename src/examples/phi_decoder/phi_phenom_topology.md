@@ -1698,3 +1698,38 @@ fragmented RAM blocks while adding 3,696 flip-flops and 2,209 LUTs. This is an
 area-for-latency trade, and the register design is only compelling if the next
 sender-addressed experiment turns the removed memory dependency into a cadence
 win.
+
+### Sender-addressed reduction plane
+
+Topology lowering now marks a scheduled request when its tag is statically a
+reduction contribution for the destination actor type. The mark is an internal
+optimization hint, not a new application action: senders still emit ordinary
+casts and remain ignorant of the destination phase. A destination scheduler
+may fold the request directly into the addressed register receptacle only when
+that reduction is open, no selectable mailbox or private/entry event precedes
+it, and no same-slot transaction is in flight. The normal site and key checks
+remain authoritative. If they reject the shortcut, the scheduler clears the
+hint and admits the original frame through the ordinary mailbox path.
+
+Direct and mailbox-head folds can overlap. The scheduler combines their
+receptacle writes through one constant-index-unrolled register bank and
+forwards a receptacle opened by an actor retirement to a same-cycle direct
+fold. On the three-shard cadence profile, 12,096 accepted contributions use
+the direct path and 21,592 use the mailbox-head sidecar. Steps eight through 32
+take 6,300 clocks, or 262.5 clocks per step and about 761,905 steps/s at 200
+MHz. That is a 2.84% rate improvement over the 269.958-clock actor-reduction
+baseline on main and a 3.25% improvement over register receptacles alone. The
+complete CPU-versus-native-Icarus witness still closes at step 18 with exactly
+80 corrections and the same nonuniform 8/10 final measurement.
+
+The complete-wrapper XC7 ABC9 map reports 73,518 estimated logic cells, 70,013
+flip-flops, 91,733 LUTs, 48 DSPs, and 52 RAMB36 blocks. Relative to the
+register-receptacle map, estimated cells rise 14.9%, flip-flops 0.9%, and LUTs
+14.4%, while DSP and RAM counts are unchanged. Isolated-scheduler attribution
+finds that tag selection and safety gating cost only about 51 cells; almost all
+of the increase is the second fold datapath and its wide indexed write logic.
+Combining the two receptacle writes recovered about 600 cells in the isolated
+phi scheduler, but the remaining 2.84% cadence gain is still expensive and far
+short of the 1 MHz target. A follow-up should seek one shared or pipelined
+reducer which preserves sender-side overlap without duplicating the reducer in
+every scheduler.

@@ -119,6 +119,7 @@ proc RequestMux {
       let request = actor::ScheduledRequest {
         slot: u32:0,
         frame,
+        direct_reduction: actor::direct_reduction_candidate(frame),
         ..zero!<actor::ScheduledRequest>()
       };
       let _done = send_if(tok, request_out, valid, request);

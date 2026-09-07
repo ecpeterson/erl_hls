@@ -119,7 +119,7 @@ register_write_does_not_force_an_acknowledgment_bubble_test() ->
     )),
     ?assertNotEqual(nomatch, binary:match(
         SharedService,
-        <<"metadata_retired.reductions">>
+        <<"let reductions = apply_reduction_writes(">>
     )).
 
 fold_probe_permits_same_slot_admission_test() ->
@@ -132,13 +132,13 @@ fold_probe_permits_same_slot_admission_test() ->
     %% actor state during retirement.
     ?assertNotEqual(nomatch, binary:match(
         SharedService,
-        <<"credit_pending_valid,\n"
+        <<"direct_pending_valid,\n"
           "          actor_issue_valid,\n"
           "          read_slot">>
     )),
     ?assertEqual(nomatch, binary:match(
         SharedService,
-        <<"credit_pending_valid,\n"
+        <<"direct_pending_valid,\n"
           "          issue_valid,\n"
           "          read_slot">>
     )),
@@ -164,6 +164,75 @@ failed_actor_disables_its_reduction_sidecar_test() ->
     ?assertNotEqual(nomatch, binary:match(
         Retirement,
         <<"!machine_failed && reduction.status == ReductionStatus::OPEN">>
+    )).
+
+sender_addressed_fold_uses_only_safe_mailbox_scan_boundary_test() ->
+    Xls = generated_xls(),
+    Candidate = declaration_block(
+        Xls,
+        <<"pub fn direct_reduction_candidate(">>
+    ),
+    Direct = declaration_block(Xls, <<"fn reserve_direct_reduction<">>),
+    SharedService = binary_from(Xls, <<"pub proc SharedService<">>),
+    FoldRelay = binary_from(Xls, <<"proc FoldRelay">>),
+    ?assertNotEqual(nomatch, binary:match(
+        Candidate,
+        <<"frame.header.op == (Tag::COUNT_VALUE as u8)">>
+    )),
+    ?assertNotEqual(nomatch, binary:match(
+        Candidate,
+        <<"frame.header.op == (Tag::MEMBER_VALUE as u8)">>
+    )),
+    %% A direct contribution may pass physically older postponed mail, just
+    %% as the ordinary mailbox scan does, but never an older event which is
+    %% selectable in the current phase.
+    ?assertNotEqual(nomatch, binary:match(
+        Direct,
+        <<"state.reduction_active[slot]">>
+    )),
+    ?assertNotEqual(nomatch, binary:match(
+        Direct,
+        <<"!state.mail_candidates[slot]">>
+    )),
+    %% A semantic miss clears only the optimization hint, leaving the original
+    %% request available to ordinary ordered mailbox admission.
+    ?assertNotEqual(nomatch, binary:match(
+        Direct,
+        <<"let fallback_request = ScheduledRequest {">>
+    )),
+    ?assertNotEqual(nomatch, binary:match(
+        Direct,
+        <<"direct_reduction: u1:0">>
+    )),
+    %% Sender-addressed traffic is folded before admission, while ordinary
+    %% mailbox-head traffic retains its existing sidecar path. The relay is
+    %% still only an elastic register and performs no reduction itself.
+    ?assertNotEqual(nomatch, binary:match(
+        SharedService,
+        <<"let direct_fold = reserve_direct_reduction(">>
+    )),
+    ?assertNotEqual(nomatch, binary:match(
+        SharedService,
+        <<"let local_fold = shared_reduction_fold_result(">>
+    )),
+    ?assertNotEqual(nomatch, binary:match(
+        SharedService,
+        <<"let reductions = apply_reduction_writes(">>
+    )),
+    %% A phase entry may open the receptacle in the same activation as its
+    %% first direct contribution arrives. The newly retired word must feed
+    %% that fold rather than the previous register-bank value.
+    ?assertNotEqual(nomatch, binary:match(
+        Direct,
+        <<"if forwarded_valid && slot == forwarded_slot">>
+    )),
+    ?assertNotEqual(nomatch, binary:match(
+        Direct,
+        <<"let applied = shared_reduction_sidecar_step(">>
+    )),
+    ?assertEqual(nomatch, binary:match(
+        FoldRelay,
+        <<"let applied = shared_reduction_sidecar_step(">>
     )).
 
 generated_xls() ->

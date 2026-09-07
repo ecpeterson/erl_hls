@@ -1511,21 +1511,25 @@ proc SchedulerRouter2 {
         phi_halo_cell::OutputPort::NORTH => send(grant_tok, to_scheduler_2, phi_halo_cell::ScheduledRequest {
             slot: scheduler_2_slot(ScheduledAddress { family: FamilyId::PHI_X as u8, x: x, y: (if y >= u16:1 { y - u16:1 } else { y + u16:2 }) }),
             frame: effect.frame,
+            direct_reduction: phi_halo_cell::direct_reduction_candidate(effect.frame),
             ..zero!<phi_halo_cell::ScheduledRequest>()
           }),
         phi_halo_cell::OutputPort::EAST => send(grant_tok, to_scheduler_2, phi_halo_cell::ScheduledRequest {
             slot: scheduler_2_slot(ScheduledAddress { family: FamilyId::PHI_X as u8, x: (if x >= u16:2 { x - u16:2 } else { x + u16:1 }), y: y }),
             frame: effect.frame,
+            direct_reduction: phi_halo_cell::direct_reduction_candidate(effect.frame),
             ..zero!<phi_halo_cell::ScheduledRequest>()
           }),
         phi_halo_cell::OutputPort::WEST => send(grant_tok, to_scheduler_2, phi_halo_cell::ScheduledRequest {
             slot: scheduler_2_slot(ScheduledAddress { family: FamilyId::PHI_X as u8, x: (if x >= u16:1 { x - u16:1 } else { x + u16:2 }), y: y }),
             frame: effect.frame,
+            direct_reduction: phi_halo_cell::direct_reduction_candidate(effect.frame),
             ..zero!<phi_halo_cell::ScheduledRequest>()
           }),
         phi_halo_cell::OutputPort::SOUTH => send(grant_tok, to_scheduler_2, phi_halo_cell::ScheduledRequest {
             slot: scheduler_2_slot(ScheduledAddress { family: FamilyId::PHI_X as u8, x: x, y: (if y >= u16:2 { y - u16:2 } else { y + u16:1 }) }),
             frame: effect.frame,
+            direct_reduction: phi_halo_cell::direct_reduction_candidate(effect.frame),
             ..zero!<phi_halo_cell::ScheduledRequest>()
           }),
         phi_halo_cell::OutputPort::SYNDROME => send(grant_tok, to_scheduler_4, phenom_syndrome_cell::ScheduledRequest {
@@ -1675,21 +1679,25 @@ proc SchedulerRouter3 {
         phi_halo_cell::OutputPort::NORTH => send(grant_tok, to_scheduler_3, phi_halo_cell::ScheduledRequest {
             slot: scheduler_3_slot(ScheduledAddress { family: FamilyId::PHI_Z as u8, x: x, y: (if y >= u16:1 { y - u16:1 } else { y + u16:2 }) }),
             frame: effect.frame,
+            direct_reduction: phi_halo_cell::direct_reduction_candidate(effect.frame),
             ..zero!<phi_halo_cell::ScheduledRequest>()
           }),
         phi_halo_cell::OutputPort::EAST => send(grant_tok, to_scheduler_3, phi_halo_cell::ScheduledRequest {
             slot: scheduler_3_slot(ScheduledAddress { family: FamilyId::PHI_Z as u8, x: (if x >= u16:2 { x - u16:2 } else { x + u16:1 }), y: y }),
             frame: effect.frame,
+            direct_reduction: phi_halo_cell::direct_reduction_candidate(effect.frame),
             ..zero!<phi_halo_cell::ScheduledRequest>()
           }),
         phi_halo_cell::OutputPort::WEST => send(grant_tok, to_scheduler_3, phi_halo_cell::ScheduledRequest {
             slot: scheduler_3_slot(ScheduledAddress { family: FamilyId::PHI_Z as u8, x: (if x >= u16:1 { x - u16:1 } else { x + u16:2 }), y: y }),
             frame: effect.frame,
+            direct_reduction: phi_halo_cell::direct_reduction_candidate(effect.frame),
             ..zero!<phi_halo_cell::ScheduledRequest>()
           }),
         phi_halo_cell::OutputPort::SOUTH => send(grant_tok, to_scheduler_3, phi_halo_cell::ScheduledRequest {
             slot: scheduler_3_slot(ScheduledAddress { family: FamilyId::PHI_Z as u8, x: x, y: (if y >= u16:2 { y - u16:2 } else { y + u16:1 }) }),
             frame: effect.frame,
+            direct_reduction: phi_halo_cell::direct_reduction_candidate(effect.frame),
             ..zero!<phi_halo_cell::ScheduledRequest>()
           }),
         phi_halo_cell::OutputPort::SYNDROME => send(grant_tok, to_scheduler_5, phenom_syndrome_cell::ScheduledRequest {
@@ -1859,6 +1867,7 @@ proc SchedulerRouter4 {
         phenom_syndrome_cell::OutputPort::PHI => send(grant_tok, to_scheduler_2, phi_halo_cell::ScheduledRequest {
             slot: scheduler_2_slot(ScheduledAddress { family: FamilyId::PHI_X as u8, x: x, y: y }),
             frame: effect.frame,
+            direct_reduction: phi_halo_cell::direct_reduction_candidate(effect.frame),
             ..zero!<phi_halo_cell::ScheduledRequest>()
           }),
         }
@@ -2021,6 +2030,7 @@ proc SchedulerRouter5 {
         phenom_syndrome_cell::OutputPort::PHI => send(grant_tok, to_scheduler_3, phi_halo_cell::ScheduledRequest {
             slot: scheduler_3_slot(ScheduledAddress { family: FamilyId::PHI_Z as u8, x: x, y: y }),
             frame: effect.frame,
+            direct_reduction: phi_halo_cell::direct_reduction_candidate(effect.frame),
             ..zero!<phi_halo_cell::ScheduledRequest>()
           }),
         }

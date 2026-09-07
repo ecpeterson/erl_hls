@@ -22,6 +22,11 @@ module hls_statem_reduction_tb;
 
     reg [32:0] captured [0:7];
     integer beat_count = 0;
+`ifdef REDUCTION_SHARED
+    integer direct_fold_count = 0;
+    wire direct_fold_accepted =
+        dut.__hls_statem_reduction_rtl_fixture__SharedService_0__1_0_1_0_next_inst.direct_fold_accepted;
+`endif
 
     `REDUCTION_DUT dut (
         .clk(clk),
@@ -41,6 +46,12 @@ module hls_statem_reduction_tb;
             captured[beat_count] <= output_beat;
             beat_count <= beat_count + 1;
         end
+`ifdef REDUCTION_SHARED
+        if (reset)
+            direct_fold_count <= 0;
+        else if (direct_fold_accepted)
+            direct_fold_count <= direct_fold_count + 1;
+`endif
     end
 
     function automatic [31:0] header;
@@ -151,6 +162,12 @@ module hls_statem_reduction_tb;
         check_beat(6, 32'd11, 1'b0);
         check_beat(7, 32'd7, 1'b1);
 
+`ifdef REDUCTION_SHARED
+        if (direct_fold_count == 0) begin
+            $display("FAIL: shared reduction never used sender-addressed fold");
+            $fatal(1);
+        end
+`endif
         $display(
             "PASS: reductions atomically installed entry data and open state"
         );

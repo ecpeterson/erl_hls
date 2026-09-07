@@ -2609,27 +2609,32 @@ pub proc SharedService<
           mailbox_read_resp_in,
           read_mailbox && received,
           zero!<MailboxRamReadResp>());
+        let frame = axis::frame_from_bits(mailbox_response.data);
+        let direct_state = retired;
+        let direct_pending = captured_pending;
+        let direct_pending_valid = credit_pending_valid;
+        let direct_in_flight_slots = retired_in_flight;
         let reservation = reserve_admission(
-          retired,
-          captured_pending,
-          credit_pending_valid,
+          direct_state,
+          direct_pending,
+          direct_pending_valid,
           issue_valid,
           read_slot,
           retire_valid && resolved.machine.failed,
           result.slot);
         let admitted = SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
-          pending: captured_pending,
+          pending: direct_pending,
           pending_valid: reservation.pending_valid,
           occupied: reservation.occupied,
           order: reservation.order,
           mail_candidates: reservation.mail_candidates,
           admission_cursor: reservation.cursor,
-          ..retired
+          ..direct_state
         };
         let issued_in_flight = if issue_valid {
-          update(retired_in_flight, read_slot, u1:1)
+          update(direct_in_flight_slots, read_slot, u1:1)
         } else {
-          retired_in_flight
+          direct_in_flight_slots
         };
         let cursor = if issue_valid {
           if read_slot + u32:1 == ACTOR_COUNT {
@@ -2659,7 +2664,7 @@ pub proc SharedService<
         } else {
           selected_slot
         };
-        let frame = axis::frame_from_bits(mailbox_response.data);
+
         let executor_request = SharedExecutorRequest {
           slot: read_slot,
           machine: response.data,
@@ -2689,7 +2694,7 @@ pub proc SharedService<
           retire_valid,
           machine_write(result.slot, resolved.machine));
         let admission_frame =
-          captured_pending[reservation.admission.producer].frame;
+          direct_pending[reservation.admission.producer].frame;
         let mailbox_write_tok = send_if(
           join(mailbox_read_tok, egress_tok),
           mailbox_write_req_out,

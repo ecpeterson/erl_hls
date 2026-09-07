@@ -154,6 +154,11 @@ typedef struct {
     uint64_t reduction_fold_duplicate_members;
     uint64_t reduction_fold_issues;
     uint64_t reduction_fold_admission_overlaps;
+    uint64_t direct_reduction_folds;
+    uint64_t direct_reduction_pending;
+    uint64_t direct_reduction_completions;
+    uint64_t direct_reduction_pending_slot_samples;
+    uint64_t direct_reduction_pending_activations;
     uint64_t actor_state_reads[MAX_SCHEDULER_ACTORS];
     uint64_t actor_ready_samples[MAX_SCHEDULER_ACTORS];
     uint64_t actor_same_actor_only[MAX_SCHEDULER_ACTORS];
@@ -204,6 +209,7 @@ typedef struct {
     vpiHandle h_request_ready[MAX_SCHEDULER_INPUTS];
     vpiHandle h_pending_valid[MAX_SCHEDULER_INPUTS];
     vpiHandle h_pending_credit[MAX_SCHEDULER_INPUTS];
+    vpiHandle h_pending_direct_reduction[MAX_SCHEDULER_INPUTS];
     unsigned request_input_count;
     vpiHandle h_startup_valid;
     vpiHandle h_startup_ready;
@@ -222,6 +228,8 @@ typedef struct {
     vpiHandle h_fold_wins;
     vpiHandle h_fold_outcome;
     vpiHandle h_fold_issue_valid;
+    vpiHandle h_direct_fold_accepted;
+    vpiHandle h_direct_fold_outcome;
     vpiHandle h_egress_busy;
     vpiHandle h_selection_activation;
     vpiHandle h_phase_boundary;
@@ -665,6 +673,16 @@ static void write_scheduler_profile(void) {
                       counts->reduction_fold_issues);
         PROFILE_VALUE("reduction_fold_admission_overlaps",
                       counts->reduction_fold_admission_overlaps);
+        PROFILE_VALUE("direct_reduction_folds",
+                      counts->direct_reduction_folds);
+        PROFILE_VALUE("direct_reduction_pending",
+                      counts->direct_reduction_pending);
+        PROFILE_VALUE("direct_reduction_completions",
+                      counts->direct_reduction_completions);
+        PROFILE_VALUE("direct_reduction_pending_slot_samples",
+                      counts->direct_reduction_pending_slot_samples);
+        PROFILE_VALUE("direct_reduction_pending_activations",
+                      counts->direct_reduction_pending_activations);
         {
             unsigned actor;
             for (actor = 0; actor < profile->actor_count; actor++) {
@@ -1057,6 +1075,12 @@ static int populate_scheduler_profile(
     MODULE_SIGNAL(h_fold_wins, "fold_wins");
     MODULE_SIGNAL(h_fold_outcome, "incoming_fold_outcome__2");
     MODULE_SIGNAL(h_fold_issue_valid, "fold_issue_valid");
+    MODULE_SIGNAL(h_direct_fold_accepted, "direct_fold_accepted");
+    if (!profile->h_direct_fold_accepted)
+        profile->h_direct_fold_accepted = module_signal(module, "accepted__1");
+    MODULE_SIGNAL(h_direct_fold_outcome, "direct_fold_outcome");
+    if (!profile->h_direct_fold_outcome)
+        profile->h_direct_fold_outcome = module_signal(module, "applied_outcome");
 #undef MODULE_SIGNAL
 
     for (index = 0; index < MAX_SCHEDULER_INPUTS; index++) {
@@ -1074,6 +1098,19 @@ static int populate_scheduler_profile(
         snprintf(signal_name, sizeof(signal_name),
                  "captured_pending_tuple_idx_2[%u]", index);
         profile->h_pending_credit[index] =
+            module_signal(module, signal_name);
+        if (!profile->h_pending_credit[index]) {
+            /* A scheduler with no reduction sites optimizes away the direct
+             * reservation pass and exposes the same request projection under
+             * the post-binding source name instead. */
+            snprintf(signal_name, sizeof(signal_name),
+                     "direct_pending_tuple_idx_2[%u]", index);
+            profile->h_pending_credit[index] =
+                module_signal(module, signal_name);
+        }
+        snprintf(signal_name, sizeof(signal_name),
+                 "captured_pending_tuple_idx_3[%u]", index);
+        profile->h_pending_direct_reduction[index] =
             module_signal(module, signal_name);
         if (!profile->h_pending_valid[index] ||
             !profile->h_pending_credit[index])
@@ -1105,9 +1142,16 @@ static int populate_scheduler_profile(
             module_signal(module, signal_name);
         if (!profile->h_mail_candidate[index]) {
             /* The reduction-sidecar retirement/admission merge adds two
-             * later projections of this vector before ready selection. */
+             * later projections of this vector before ready selection. A
+             * sender-reserved fallback row adds another pair. */
             snprintf(signal_name, sizeof(signal_name),
                      "mail_candidates__6[%u]", index);
+            profile->h_mail_candidate[index] =
+                module_signal(module, signal_name);
+        }
+        if (!profile->h_mail_candidate[index]) {
+            snprintf(signal_name, sizeof(signal_name),
+                     "mail_candidates__8[%u]", index);
             profile->h_mail_candidate[index] =
                 module_signal(module, signal_name);
         }
@@ -1121,6 +1165,11 @@ static int populate_scheduler_profile(
         if (!profile->h_occupied[index]) {
             snprintf(signal_name, sizeof(signal_name),
                      "occupied__6[%u]", index);
+            profile->h_occupied[index] = module_signal(module, signal_name);
+        }
+        if (!profile->h_occupied[index]) {
+            snprintf(signal_name, sizeof(signal_name),
+                     "occupied__8[%u]", index);
             profile->h_occupied[index] = module_signal(module, signal_name);
         }
         snprintf(signal_name, sizeof(signal_name),
@@ -1390,9 +1439,21 @@ static void step_scheduler_profile(scheduler_profile_t *profile) {
     unsigned egress_waiters = 0;
     unsigned pending_commands = 0;
     unsigned pending_credits = 0;
+    unsigned pending_direct_reductions = 0;
     unsigned occupied_messages = 0;
     unsigned nonempty_actors = 0;
     unsigned index;
+
+    if (profile->h_direct_fold_accepted &&
+        profile->h_direct_fold_outcome &&
+        get_bit(profile->h_direct_fold_accepted)) {
+        unsigned outcome = get_u32(profile->h_direct_fold_outcome);
+        counts->direct_reduction_folds++;
+        if (outcome == 2)
+            counts->direct_reduction_pending++;
+        else if (outcome == 3)
+            counts->direct_reduction_completions++;
+    }
 
     if (profile->h_fold_wins && profile->h_fold_outcome &&
         get_bit(profile->h_fold_wins)) {
@@ -1515,8 +1576,12 @@ static void step_scheduler_profile(scheduler_profile_t *profile) {
                 continue;
             if (get_bit(profile->h_pending_credit[index]))
                 pending_credits++;
-            else
+            else {
                 pending_commands++;
+                if (profile->h_pending_direct_reduction[index] &&
+                    get_bit(profile->h_pending_direct_reduction[index]))
+                    pending_direct_reductions++;
+            }
         }
         for (index = 0; index < profile->actor_count; index++) {
             int slot_ready = get_bit(profile->h_ready[index]);
@@ -1543,10 +1608,14 @@ static void step_scheduler_profile(scheduler_profile_t *profile) {
         counts->egress_waiter_slot_samples += egress_waiters;
         counts->pending_command_slot_samples += pending_commands;
         counts->pending_credit_slot_samples += pending_credits;
+        counts->direct_reduction_pending_slot_samples +=
+            pending_direct_reductions;
         if (pending_commands != 0)
             counts->pending_command_activations++;
         if (pending_credits != 0)
             counts->pending_credit_activations++;
+        if (pending_direct_reductions != 0)
+            counts->direct_reduction_pending_activations++;
         counts->mailbox_occupancy_samples++;
         counts->mailbox_occupied_message_samples += occupied_messages;
         counts->mailbox_nonempty_actor_samples += nonempty_actors;

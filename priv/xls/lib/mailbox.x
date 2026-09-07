@@ -15,6 +15,10 @@ pub struct ScheduledRequest {
   slot: u32,
   frame: axis::Frame,
   credit: u1,
+  // The sender has proved that this tag is a reduction contribution for the
+  // destination actor type. The destination still checks the open site and
+  // key before bypassing its ordinary mailbox.
+  direct_reduction: u1,
 }
 
 pub struct Admission {
