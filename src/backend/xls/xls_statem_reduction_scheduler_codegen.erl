@@ -41,6 +41,7 @@
     shared_fold_request_send/1,
     shared_fold_service_fields/1,
     shared_folded_state_fields/1,
+    shared_fast_issue_bindings/1,
     shared_in_flight_field/1,
     shared_issue_bindings/1,
     shared_local_fold_bindings/1,
@@ -112,7 +113,7 @@ shared_admission_exclusion_valid(_Reductions) ->
 shared_reduction_read_io(none) -> "\n";
 shared_reduction_read_io(_Reductions) ->
     ["\n", """
-            let reduction_bits = state.reductions[read_slot];
+            let reduction_bits = direct_state.reductions[read_slot];
     """, "\n"].
 
 shared_reduction_write_io(none) -> "\n";
@@ -133,8 +134,8 @@ shared_direct_reduction_bindings(_Reductions) ->
               captured_pending,
               credit_pending_valid,
               retired_in_flight,
-              issue_valid,
-              read_slot,
+              prior_issue_valid,
+              prior_read_slot,
               reduction_write_valid,
               reduction_write_slot,
               reduction_write_bits);
@@ -179,11 +180,70 @@ shared_direct_reduction_bindings(_Reductions) ->
               aggregate_pending_valid ||
                 incoming_aggregate_valid,
               retired_in_flight,
-              issue_valid,
-              read_slot);
+              prior_issue_valid,
+              prior_read_slot);
             let direct_pending = direct_fold.pending;
             let direct_pending_valid = direct_fold.pending_valid;
             let direct_in_flight_slots = retired_in_flight;
+    """, "\n"].
+
+-spec shared_fast_issue_bindings(reductions()) -> iodata().
+shared_fast_issue_bindings(none) -> [];
+shared_fast_issue_bindings(_Reductions) ->
+    ["\n", """
+            // The retained next slot remains the first choice. When it
+            // cannot issue, select newly visible work after retirement,
+            // direct folding, and aggregate intake, and launch its RAM read
+            // in this same activation. Keep a retiring actor excluded from
+            // this bypass because its new state is being written concurrently;
+            // a later activation may safely read it after the write response.
+            let fast_in_flight = if retire_valid {
+              update(direct_in_flight_slots, result.slot, u1:1)
+            } else {
+              direct_in_flight_slots
+            };
+            let (fast_selected_ready, fast_selected_slot) =
+              reduction_ready_selection(
+                direct_state, state.cursor, fast_in_flight);
+            let (fast_fold_ready, fast_fold_slot) =
+              reduction_fold_selection(
+                direct_state, state.cursor, fast_in_flight);
+            let fast_ready = if completion_blocked {
+              fast_fold_ready
+            } else {
+              fast_selected_ready
+            };
+            let fast_slot = if completion_blocked {
+              fast_fold_slot
+            } else {
+              fast_selected_slot
+            };
+            let fast_issue = !prior_issue_valid && fast_ready;
+            let issue_valid = prior_issue_valid || fast_issue;
+            let read_slot = if prior_issue_valid {
+              prior_read_slot
+            } else {
+              fast_slot
+            };
+            let fold_issue_valid = issue_valid &&
+              (if prior_issue_valid {
+                state.next_fold
+              } else {
+                sidecar_fold_ready(direct_state, read_slot)
+              });
+            let actor_issue_valid = issue_valid && !fold_issue_valid;
+            let internal_active = actor_issue_valid &&
+              direct_state.internal_candidates[read_slot];
+            let reduction_error_active = actor_issue_valid &&
+              direct_state.reduction_errors[read_slot];
+            let private_active = internal_active ||
+              reduction_error_active;
+            let entry_active = private_active ||
+              direct_state.entry_probes[read_slot] ||
+              direct_state.egress_waiters[read_slot];
+            let read_mailbox = issue_valid && !private_active &&
+              direct_state.mail_candidates[read_slot] &&
+              (fold_issue_valid || !entry_active);
     """, "\n"].
 
 -spec direct_after_failed(reductions(), pos_integer()) -> iodata().
@@ -1181,7 +1241,7 @@ shared_executor_internal_request_field(_Reductions) ->
                 reduction_bits
               } else {
                 bits_from_reduction_state(ReductionState {
-                  status: if state.reduction_active[read_slot] {
+                  status: if direct_state.reduction_active[read_slot] {
                     ReductionStatus::OPEN
                   } else {
                     ReductionStatus::IDLE
@@ -1507,27 +1567,13 @@ shared_issue_bindings(none) ->
     """, "\n"];
 shared_issue_bindings(_Reductions) ->
     ["\n", """
-            let read_slot = if state.next_valid {
+            let prior_read_slot = if state.next_valid {
               state.next_slot
             } else {
               u32:0
             };
-            let issue_valid = state.next_valid &&
+            let prior_issue_valid = state.next_valid &&
               (!completion_blocked || state.next_fold);
-            let fold_issue_valid = issue_valid && state.next_fold;
-            let actor_issue_valid = issue_valid && !state.next_fold;
-            let internal_active =
-              actor_issue_valid && state.internal_candidates[read_slot];
-            let reduction_error_active = actor_issue_valid &&
-              state.reduction_errors[read_slot];
-            let private_active = internal_active ||
-              reduction_error_active;
-            let entry_active = private_active ||
-              state.entry_probes[read_slot] ||
-              state.egress_waiters[read_slot];
-            let read_mailbox = issue_valid && !private_active &&
-              state.mail_candidates[read_slot] &&
-              (fold_issue_valid || !entry_active);
     """, "\n"].
 
 join_with(_Separator, []) ->

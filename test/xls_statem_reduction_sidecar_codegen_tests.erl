@@ -90,7 +90,7 @@ completion_visits_read_register_resident_reduction_state_test() ->
     )),
     ?assertNotEqual(nomatch, binary:match(
         SharedService,
-        <<"let reduction_bits = state.reductions[read_slot];">>
+        <<"let reduction_bits = direct_state.reductions[read_slot];">>
     )),
     ?assertNotEqual(nomatch, binary:match(
         SharedService,
@@ -99,6 +99,26 @@ completion_visits_read_register_resident_reduction_state_test() ->
     ?assertNotEqual(nomatch, binary:match(
         SharedService,
         <<"reduction_bits">>
+    )).
+
+newly_visible_reduction_work_can_issue_without_selection_bubble_test() ->
+    Xls = generated_xls(),
+    SharedService = binary_from(Xls, <<"pub proc SharedService<">>),
+    ?assertNotEqual(nomatch, binary:match(
+        SharedService,
+        <<"let fast_issue = !prior_issue_valid && fast_ready;">>
+    )),
+    ?assertNotEqual(nomatch, binary:match(
+        SharedService,
+        <<"let issue_valid = prior_issue_valid || fast_issue;">>
+    )),
+    ?assertNotEqual(nomatch, binary:match(
+        SharedService,
+        <<"let fast_in_flight = if retire_valid {">>
+    )),
+    ?assertNotEqual(nomatch, binary:match(
+        SharedService,
+        <<"mailbox_selection(direct_state, read_slot)">>
     )).
 
 register_write_does_not_force_an_acknowledgment_bubble_test() ->

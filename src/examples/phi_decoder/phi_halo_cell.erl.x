@@ -5444,65 +5444,21 @@ pub proc SharedService<
         };
         let completion_blocked = completed_valid &&
           completed.effects_valid && retired.egress_busy;
-        let read_slot = if state.next_valid {
+        let prior_read_slot = if state.next_valid {
           state.next_slot
         } else {
           u32:0
         };
-        let issue_valid = state.next_valid &&
+        let prior_issue_valid = state.next_valid &&
           (!completion_blocked || state.next_fold);
-        let fold_issue_valid = issue_valid && state.next_fold;
-        let actor_issue_valid = issue_valid && !state.next_fold;
-        let internal_active =
-          actor_issue_valid && state.internal_candidates[read_slot];
-        let reduction_error_active = actor_issue_valid &&
-          state.reduction_errors[read_slot];
-        let private_active = internal_active ||
-          reduction_error_active;
-        let entry_active = private_active ||
-          state.entry_probes[read_slot] ||
-          state.egress_waiters[read_slot];
-        let read_mailbox = issue_valid && !private_active &&
-          state.mail_candidates[read_slot] &&
-          (fold_issue_valid || !entry_active);
-        let (received, order_index, mailbox_index) =
-          mailbox_selection(state, read_slot);
-        let (state_completion_tok, _) = recv_if(
-          join(), ram_write_resp_in, state.state_write_pending,
-          zero!<MachineRamWriteResp>());
-        let (mailbox_completion_tok, _) = recv_if(
-          join(), mailbox_write_resp_in,
-          state.mailbox_write_pending,
-          zero!<MailboxRamWriteResp>());
-        let state_read_tok = send_if(
-          join(),
-          ram_read_req_out,
-          actor_issue_valid,
-          machine_read(read_slot));
-        let mailbox_read_tok = send_if(
-          join(),
-          mailbox_read_req_out,
-          read_mailbox && received,
-          mailbox::read(read_slot, mailbox_index, MAILBOX_DEPTH));
-        let reduction_bits = state.reductions[read_slot];
-        let (state_done, response) = recv_if(
-          state_read_tok,
-          ram_read_resp_in,
-          actor_issue_valid,
-          zero!<MachineRamReadResp>());
-        let (mailbox_done, mailbox_response) = recv_if(
-          mailbox_read_tok,
-          mailbox_read_resp_in,
-          read_mailbox && received,
-          zero!<MailboxRamReadResp>());
-        let frame = axis::frame_from_bits(mailbox_response.data);
+
         let direct_fold = reserve_direct_reduction(
           retired,
           captured_pending,
           credit_pending_valid,
           retired_in_flight,
-          issue_valid,
-          read_slot,
+          prior_issue_valid,
+          prior_read_slot,
           reduction_write_valid,
           reduction_write_slot,
           reduction_write_bits);
@@ -5547,11 +5503,96 @@ pub proc SharedService<
           aggregate_pending_valid ||
             incoming_aggregate_valid,
           retired_in_flight,
-          issue_valid,
-          read_slot);
+          prior_issue_valid,
+          prior_read_slot);
         let direct_pending = direct_fold.pending;
         let direct_pending_valid = direct_fold.pending_valid;
         let direct_in_flight_slots = retired_in_flight;
+
+        // The retained next slot remains the first choice. When it
+        // cannot issue, select newly visible work after retirement,
+        // direct folding, and aggregate intake, and launch its RAM read
+        // in this same activation. Keep a retiring actor excluded from
+        // this bypass because its new state is being written concurrently;
+        // a later activation may safely read it after the write response.
+        let fast_in_flight = if retire_valid {
+          update(direct_in_flight_slots, result.slot, u1:1)
+        } else {
+          direct_in_flight_slots
+        };
+        let (fast_selected_ready, fast_selected_slot) =
+          reduction_ready_selection(
+            direct_state, state.cursor, fast_in_flight);
+        let (fast_fold_ready, fast_fold_slot) =
+          reduction_fold_selection(
+            direct_state, state.cursor, fast_in_flight);
+        let fast_ready = if completion_blocked {
+          fast_fold_ready
+        } else {
+          fast_selected_ready
+        };
+        let fast_slot = if completion_blocked {
+          fast_fold_slot
+        } else {
+          fast_selected_slot
+        };
+        let fast_issue = !prior_issue_valid && fast_ready;
+        let issue_valid = prior_issue_valid || fast_issue;
+        let read_slot = if prior_issue_valid {
+          prior_read_slot
+        } else {
+          fast_slot
+        };
+        let fold_issue_valid = issue_valid &&
+          (if prior_issue_valid {
+            state.next_fold
+          } else {
+            sidecar_fold_ready(direct_state, read_slot)
+          });
+        let actor_issue_valid = issue_valid && !fold_issue_valid;
+        let internal_active = actor_issue_valid &&
+          direct_state.internal_candidates[read_slot];
+        let reduction_error_active = actor_issue_valid &&
+          direct_state.reduction_errors[read_slot];
+        let private_active = internal_active ||
+          reduction_error_active;
+        let entry_active = private_active ||
+          direct_state.entry_probes[read_slot] ||
+          direct_state.egress_waiters[read_slot];
+        let read_mailbox = issue_valid && !private_active &&
+          direct_state.mail_candidates[read_slot] &&
+          (fold_issue_valid || !entry_active);
+        let (received, order_index, mailbox_index) =
+          mailbox_selection(direct_state, read_slot);
+        let (state_completion_tok, _) = recv_if(
+          join(), ram_write_resp_in, state.state_write_pending,
+          zero!<MachineRamWriteResp>());
+        let (mailbox_completion_tok, _) = recv_if(
+          join(), mailbox_write_resp_in,
+          state.mailbox_write_pending,
+          zero!<MailboxRamWriteResp>());
+        let state_read_tok = send_if(
+          join(),
+          ram_read_req_out,
+          actor_issue_valid,
+          machine_read(read_slot));
+        let mailbox_read_tok = send_if(
+          join(),
+          mailbox_read_req_out,
+          read_mailbox && received,
+          mailbox::read(read_slot, mailbox_index, MAILBOX_DEPTH));
+        let reduction_bits = direct_state.reductions[read_slot];
+        let (state_done, response) = recv_if(
+          state_read_tok,
+          ram_read_resp_in,
+          actor_issue_valid,
+          zero!<MachineRamReadResp>());
+        let (mailbox_done, mailbox_response) = recv_if(
+          mailbox_read_tok,
+          mailbox_read_resp_in,
+          read_mailbox && received,
+          zero!<MailboxRamReadResp>());
+        let frame = axis::frame_from_bits(mailbox_response.data);
         let reservation = reserve_admission(
           direct_state,
           direct_pending,
@@ -5627,7 +5668,7 @@ pub proc SharedService<
             reduction_bits
           } else {
             bits_from_reduction_state(ReductionState {
-              status: if state.reduction_active[read_slot] {
+              status: if direct_state.reduction_active[read_slot] {
                 ReductionStatus::OPEN
               } else {
                 ReductionStatus::IDLE

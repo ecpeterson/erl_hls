@@ -89,6 +89,8 @@ typedef struct {
     uint64_t no_issue_without_visible_backpressure;
     uint64_t selection_activations;
     uint64_t selection_cycles_any_ready;
+    uint64_t selection_cycles_fast_issue;
+    uint64_t selection_cycles_retained_issue;
     uint64_t selection_cycles_selectable;
     uint64_t selection_cycles_executor_blocked;
     uint64_t selection_cycles_same_actor_only;
@@ -225,6 +227,8 @@ typedef struct {
     vpiHandle h_egress_ready;
     vpiHandle h_ready[MAX_SCHEDULER_ACTORS];
     vpiHandle h_selectable[MAX_SCHEDULER_ACTORS];
+    vpiHandle h_prior_issue_valid;
+    vpiHandle h_fast_ready;
     vpiHandle h_mail_candidate[MAX_SCHEDULER_ACTORS];
     vpiHandle h_entry_probe[MAX_SCHEDULER_ACTORS];
     vpiHandle h_egress_waiter[MAX_SCHEDULER_ACTORS];
@@ -666,6 +670,10 @@ static void write_scheduler_profile(void) {
                       counts->selection_activations);
         PROFILE_VALUE("selection_cycles_any_ready",
                       counts->selection_cycles_any_ready);
+        PROFILE_VALUE("selection_cycles_fast_issue",
+                      counts->selection_cycles_fast_issue);
+        PROFILE_VALUE("selection_cycles_retained_issue",
+                      counts->selection_cycles_retained_issue);
         PROFILE_VALUE("selection_cycles_selectable",
                       counts->selection_cycles_selectable);
         PROFILE_VALUE("selection_cycles_executor_blocked",
@@ -1215,6 +1223,8 @@ static int populate_scheduler_profile(
     MODULE_SIGNAL(h_fold_wins, "fold_wins");
     MODULE_SIGNAL(h_fold_outcome, "incoming_fold_outcome__2");
     MODULE_SIGNAL(h_fold_issue_valid, "fold_issue_valid");
+    MODULE_SIGNAL(h_prior_issue_valid, "prior_issue_valid");
+    MODULE_SIGNAL(h_fast_ready, "fast_ready");
     MODULE_SIGNAL(h_direct_fold_accepted, "direct_fold_accepted");
     MODULE_SIGNAL(h_direct_fold_outcome, "direct_fold_outcome");
     MODULE_SIGNAL(h_aggregate_input, "_aggregate_in");
@@ -1673,6 +1683,7 @@ static void step_scheduler_profile(scheduler_profile_t *profile) {
     int egress_backpressured = 0;
     int any_ready = 0;
     int any_selectable = 0;
+    int fast_actor_issue;
     int same_actor_only;
     int waiting_egress_credit;
     int no_actor_work;
@@ -1826,6 +1837,12 @@ static void step_scheduler_profile(scheduler_profile_t *profile) {
 
     state_read_valid = get_bit(profile->h_ram_read_request_valid);
     read_slot = get_u32(profile->h_ram_read_request);
+    state_read_accepted = state_read_valid &&
+        get_bit(profile->h_ram_read_request_ready);
+    fast_actor_issue = state_read_accepted &&
+        profile->h_prior_issue_valid && profile->h_fast_ready &&
+        !get_bit(profile->h_prior_issue_valid) &&
+        get_bit(profile->h_fast_ready);
     if (state_read_valid) {
         profile->activation_has_state_read = 1;
         profile->activation_state_read_slot = read_slot;
@@ -1931,6 +1948,10 @@ static void step_scheduler_profile(scheduler_profile_t *profile) {
             entry_probes == 0 && egress_waiters == 0;
         if (executor_completion_blocked)
             counts->selection_cycles_executor_blocked++;
+        else if (fast_actor_issue)
+            counts->selection_cycles_fast_issue++;
+        else if (state_read_accepted)
+            counts->selection_cycles_retained_issue++;
         else if (any_selectable)
             counts->selection_cycles_selectable++;
         else if (same_actor_only)
@@ -1947,6 +1968,8 @@ static void step_scheduler_profile(scheduler_profile_t *profile) {
             "selection",
             state_read_valid ? (int64_t)read_slot : -1,
             executor_completion_blocked ? "executor_blocked" :
+            fast_actor_issue ? "fast_issue" :
+            state_read_accepted ? "retained_issue" :
             any_selectable ? "selectable" :
             same_actor_only ? "same_actor_only" :
             waiting_egress_credit ? "waiting_egress_credit" :
