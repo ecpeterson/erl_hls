@@ -9,7 +9,11 @@
 import axis;
 import hls_statem_reduction_rtl_fixture as actor;
 
-fn open_counting_reduction() -> bits[117] {
+// Test-only diagnostic ABI: the independently stored reduction row occupies
+// the high bits and the ordinary machine row occupies the low bits.
+type ResultBits = bits[263];
+
+fn open_counting_reduction() -> actor::ReductionBits {
   // ReductionState is packed low-to-high as status, site, key, remaining,
   // seen, accumulator. Sum is packed as value followed by contributions.
   (u32:1 as bits[32]) ++
@@ -22,11 +26,11 @@ fn open_counting_reduction() -> bits[117] {
 }
 
 fn pending_reopen_machine() -> actor::MachineBits {
-  // SharedMachine is packed low-to-high as phase, entered_from, data,
-  // enter_pending, failed, reduction.  Phase 1 is COLLECTING_MEMBERS and
-  // phase 0 is COUNTING in this fixture.
-  open_counting_reduction() ++
-    u1:0 ++
+  // MachineBits excludes the sidecar reduction row. SharedMachine's remaining
+  // fields are packed low-to-high as phase, entered_from, data,
+  // enter_pending, and failed. Phase 1 is COLLECTING_MEMBERS and phase 0 is
+  // COUNTING in this fixture.
+  u1:0 ++
     u1:1 ++
     (u32:0x44444444 as bits[32]) ++
     (u32:0x33333333 as bits[32]) ++
@@ -37,19 +41,21 @@ fn pending_reopen_machine() -> actor::MachineBits {
 }
 
 pub proc Top {
-  result_out: chan<actor::MachineBits> out;
+  result_out: chan<ResultBits> out;
 
-  config(result_out: chan<actor::MachineBits> out) { (result_out,) }
+  config(result_out: chan<ResultBits> out) { (result_out,) }
 
   init { u1:0 }
 
   next(sent: u1) {
     let result = actor::shared_execute(actor::SharedExecutorRequest {
       machine: pending_reopen_machine(),
+      reduction: open_counting_reduction(),
       egress_ready: u1:1,
       ..zero!<actor::SharedExecutorRequest>()
     });
-    let _done = send_if(join(), result_out, !sent, result.machine);
+    let diagnostic = result.reduction ++ result.machine;
+    let _done = send_if(join(), result_out, !sent, diagnostic);
     u1:1
   }
 }

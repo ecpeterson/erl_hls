@@ -2120,6 +2120,10 @@ proc SchedulerGrid {
     scheduler_2_mailbox_read_resp_in: chan<phi_halo_cell::MailboxRamReadResp> in,
     scheduler_2_mailbox_write_req_out: chan<phi_halo_cell::MailboxRamWriteReq> out,
     scheduler_2_mailbox_write_resp_in: chan<phi_halo_cell::MailboxRamWriteResp> in,
+    scheduler_2_reduction_read_req_out: chan<phi_halo_cell::ReductionRamReadReq> out,
+    scheduler_2_reduction_read_resp_in: chan<phi_halo_cell::ReductionRamReadResp> in,
+    scheduler_2_reduction_write_req_out: chan<phi_halo_cell::ReductionRamWriteReq> out,
+    scheduler_2_reduction_write_resp_in: chan<phi_halo_cell::ReductionRamWriteResp> in,
     scheduler_3_ram_read_req_out: chan<phi_halo_cell::MachineRamReadReq> out,
     scheduler_3_ram_read_resp_in: chan<phi_halo_cell::MachineRamReadResp> in,
     scheduler_3_ram_write_req_out: chan<phi_halo_cell::MachineRamWriteReq> out,
@@ -2128,6 +2132,10 @@ proc SchedulerGrid {
     scheduler_3_mailbox_read_resp_in: chan<phi_halo_cell::MailboxRamReadResp> in,
     scheduler_3_mailbox_write_req_out: chan<phi_halo_cell::MailboxRamWriteReq> out,
     scheduler_3_mailbox_write_resp_in: chan<phi_halo_cell::MailboxRamWriteResp> in,
+    scheduler_3_reduction_read_req_out: chan<phi_halo_cell::ReductionRamReadReq> out,
+    scheduler_3_reduction_read_resp_in: chan<phi_halo_cell::ReductionRamReadResp> in,
+    scheduler_3_reduction_write_req_out: chan<phi_halo_cell::ReductionRamWriteReq> out,
+    scheduler_3_reduction_write_resp_in: chan<phi_halo_cell::ReductionRamWriteResp> in,
     scheduler_4_ram_read_req_out: chan<phenom_syndrome_cell::MachineRamReadReq> out,
     scheduler_4_ram_read_resp_in: chan<phenom_syndrome_cell::MachineRamReadResp> in,
     scheduler_4_ram_write_req_out: chan<phenom_syndrome_cell::MachineRamWriteReq> out,
@@ -2229,7 +2237,9 @@ proc SchedulerGrid {
       scheduler_2_ram_read_req_out, scheduler_2_ram_read_resp_in,
       scheduler_2_ram_write_req_out, scheduler_2_ram_write_resp_in,
       scheduler_2_mailbox_read_req_out, scheduler_2_mailbox_read_resp_in,
-      scheduler_2_mailbox_write_req_out, scheduler_2_mailbox_write_resp_in);
+      scheduler_2_mailbox_write_req_out, scheduler_2_mailbox_write_resp_in,
+      scheduler_2_reduction_read_req_out, scheduler_2_reduction_read_resp_in,
+      scheduler_2_reduction_write_req_out, scheduler_2_reduction_write_resp_in);
     spawn phi_halo_cell::SharedService<
       u32:9, u32:3, u32:9, u32:3>(
       scheduler_3_requests_c, scheduler_3_startup_c,
@@ -2237,7 +2247,9 @@ proc SchedulerGrid {
       scheduler_3_ram_read_req_out, scheduler_3_ram_read_resp_in,
       scheduler_3_ram_write_req_out, scheduler_3_ram_write_resp_in,
       scheduler_3_mailbox_read_req_out, scheduler_3_mailbox_read_resp_in,
-      scheduler_3_mailbox_write_req_out, scheduler_3_mailbox_write_resp_in);
+      scheduler_3_mailbox_write_req_out, scheduler_3_mailbox_write_resp_in,
+      scheduler_3_reduction_read_req_out, scheduler_3_reduction_read_resp_in,
+      scheduler_3_reduction_write_req_out, scheduler_3_reduction_write_resp_in);
     spawn phenom_syndrome_cell::SharedService<
       u32:9, u32:5, u32:9, u32:4>(
       scheduler_4_requests_c, scheduler_4_startup_c,
@@ -2338,6 +2350,10 @@ pub proc Top {
   scheduler_2_mailbox_read_resp_in: chan<phi_halo_cell::MailboxRamReadResp> in;
   scheduler_2_mailbox_write_req_out: chan<phi_halo_cell::MailboxRamWriteReq> out;
   scheduler_2_mailbox_write_resp_in: chan<phi_halo_cell::MailboxRamWriteResp> in;
+  scheduler_2_reduction_read_req_out: chan<phi_halo_cell::ReductionRamReadReq> out;
+  scheduler_2_reduction_read_resp_in: chan<phi_halo_cell::ReductionRamReadResp> in;
+  scheduler_2_reduction_write_req_out: chan<phi_halo_cell::ReductionRamWriteReq> out;
+  scheduler_2_reduction_write_resp_in: chan<phi_halo_cell::ReductionRamWriteResp> in;
   scheduler_3_ram_read_req_out: chan<phi_halo_cell::MachineRamReadReq> out;
   scheduler_3_ram_read_resp_in: chan<phi_halo_cell::MachineRamReadResp> in;
   scheduler_3_ram_write_req_out: chan<phi_halo_cell::MachineRamWriteReq> out;
@@ -2346,6 +2362,10 @@ pub proc Top {
   scheduler_3_mailbox_read_resp_in: chan<phi_halo_cell::MailboxRamReadResp> in;
   scheduler_3_mailbox_write_req_out: chan<phi_halo_cell::MailboxRamWriteReq> out;
   scheduler_3_mailbox_write_resp_in: chan<phi_halo_cell::MailboxRamWriteResp> in;
+  scheduler_3_reduction_read_req_out: chan<phi_halo_cell::ReductionRamReadReq> out;
+  scheduler_3_reduction_read_resp_in: chan<phi_halo_cell::ReductionRamReadResp> in;
+  scheduler_3_reduction_write_req_out: chan<phi_halo_cell::ReductionRamWriteReq> out;
+  scheduler_3_reduction_write_resp_in: chan<phi_halo_cell::ReductionRamWriteResp> in;
   scheduler_4_ram_read_req_out: chan<phenom_syndrome_cell::MachineRamReadReq> out;
   scheduler_4_ram_read_resp_in: chan<phenom_syndrome_cell::MachineRamReadResp> in;
   scheduler_4_ram_write_req_out: chan<phenom_syndrome_cell::MachineRamWriteReq> out;
@@ -2392,6 +2412,10 @@ pub proc Top {
     scheduler_2_mailbox_read_resp_in: chan<phi_halo_cell::MailboxRamReadResp> in,
     scheduler_2_mailbox_write_req_out: chan<phi_halo_cell::MailboxRamWriteReq> out,
     scheduler_2_mailbox_write_resp_in: chan<phi_halo_cell::MailboxRamWriteResp> in,
+    scheduler_2_reduction_read_req_out: chan<phi_halo_cell::ReductionRamReadReq> out,
+    scheduler_2_reduction_read_resp_in: chan<phi_halo_cell::ReductionRamReadResp> in,
+    scheduler_2_reduction_write_req_out: chan<phi_halo_cell::ReductionRamWriteReq> out,
+    scheduler_2_reduction_write_resp_in: chan<phi_halo_cell::ReductionRamWriteResp> in,
     scheduler_3_ram_read_req_out: chan<phi_halo_cell::MachineRamReadReq> out,
     scheduler_3_ram_read_resp_in: chan<phi_halo_cell::MachineRamReadResp> in,
     scheduler_3_ram_write_req_out: chan<phi_halo_cell::MachineRamWriteReq> out,
@@ -2400,6 +2424,10 @@ pub proc Top {
     scheduler_3_mailbox_read_resp_in: chan<phi_halo_cell::MailboxRamReadResp> in,
     scheduler_3_mailbox_write_req_out: chan<phi_halo_cell::MailboxRamWriteReq> out,
     scheduler_3_mailbox_write_resp_in: chan<phi_halo_cell::MailboxRamWriteResp> in,
+    scheduler_3_reduction_read_req_out: chan<phi_halo_cell::ReductionRamReadReq> out,
+    scheduler_3_reduction_read_resp_in: chan<phi_halo_cell::ReductionRamReadResp> in,
+    scheduler_3_reduction_write_req_out: chan<phi_halo_cell::ReductionRamWriteReq> out,
+    scheduler_3_reduction_write_resp_in: chan<phi_halo_cell::ReductionRamWriteResp> in,
     scheduler_4_ram_read_req_out: chan<phenom_syndrome_cell::MachineRamReadReq> out,
     scheduler_4_ram_read_resp_in: chan<phenom_syndrome_cell::MachineRamReadResp> in,
     scheduler_4_ram_write_req_out: chan<phenom_syndrome_cell::MachineRamWriteReq> out,
@@ -2446,6 +2474,10 @@ pub proc Top {
       scheduler_2_mailbox_read_resp_in,
       scheduler_2_mailbox_write_req_out,
       scheduler_2_mailbox_write_resp_in,
+      scheduler_2_reduction_read_req_out,
+      scheduler_2_reduction_read_resp_in,
+      scheduler_2_reduction_write_req_out,
+      scheduler_2_reduction_write_resp_in,
       scheduler_3_ram_read_req_out,
       scheduler_3_ram_read_resp_in,
       scheduler_3_ram_write_req_out,
@@ -2454,6 +2486,10 @@ pub proc Top {
       scheduler_3_mailbox_read_resp_in,
       scheduler_3_mailbox_write_req_out,
       scheduler_3_mailbox_write_resp_in,
+      scheduler_3_reduction_read_req_out,
+      scheduler_3_reduction_read_resp_in,
+      scheduler_3_reduction_write_req_out,
+      scheduler_3_reduction_write_resp_in,
       scheduler_4_ram_read_req_out,
       scheduler_4_ram_read_resp_in,
       scheduler_4_ram_write_req_out,
@@ -2475,7 +2511,7 @@ pub proc Top {
       x_decoder_events_out,
       z_decoder_events_out
     );
-    (scheduler_0_ram_read_req_out, scheduler_0_ram_read_resp_in, scheduler_0_ram_write_req_out, scheduler_0_ram_write_resp_in, scheduler_0_mailbox_read_req_out, scheduler_0_mailbox_read_resp_in, scheduler_0_mailbox_write_req_out, scheduler_0_mailbox_write_resp_in, scheduler_1_ram_read_req_out, scheduler_1_ram_read_resp_in, scheduler_1_ram_write_req_out, scheduler_1_ram_write_resp_in, scheduler_1_mailbox_read_req_out, scheduler_1_mailbox_read_resp_in, scheduler_1_mailbox_write_req_out, scheduler_1_mailbox_write_resp_in, scheduler_2_ram_read_req_out, scheduler_2_ram_read_resp_in, scheduler_2_ram_write_req_out, scheduler_2_ram_write_resp_in, scheduler_2_mailbox_read_req_out, scheduler_2_mailbox_read_resp_in, scheduler_2_mailbox_write_req_out, scheduler_2_mailbox_write_resp_in, scheduler_3_ram_read_req_out, scheduler_3_ram_read_resp_in, scheduler_3_ram_write_req_out, scheduler_3_ram_write_resp_in, scheduler_3_mailbox_read_req_out, scheduler_3_mailbox_read_resp_in, scheduler_3_mailbox_write_req_out, scheduler_3_mailbox_write_resp_in, scheduler_4_ram_read_req_out, scheduler_4_ram_read_resp_in, scheduler_4_ram_write_req_out, scheduler_4_ram_write_resp_in, scheduler_4_mailbox_read_req_out, scheduler_4_mailbox_read_resp_in, scheduler_4_mailbox_write_req_out, scheduler_4_mailbox_write_resp_in, scheduler_5_ram_read_req_out, scheduler_5_ram_read_resp_in, scheduler_5_ram_write_req_out, scheduler_5_ram_write_resp_in, scheduler_5_mailbox_read_req_out, scheduler_5_mailbox_read_resp_in, scheduler_5_mailbox_write_req_out, scheduler_5_mailbox_write_resp_in, control_router_in, data_measurements_out, x_decoder_events_out, z_decoder_events_out)
+    (scheduler_0_ram_read_req_out, scheduler_0_ram_read_resp_in, scheduler_0_ram_write_req_out, scheduler_0_ram_write_resp_in, scheduler_0_mailbox_read_req_out, scheduler_0_mailbox_read_resp_in, scheduler_0_mailbox_write_req_out, scheduler_0_mailbox_write_resp_in, scheduler_1_ram_read_req_out, scheduler_1_ram_read_resp_in, scheduler_1_ram_write_req_out, scheduler_1_ram_write_resp_in, scheduler_1_mailbox_read_req_out, scheduler_1_mailbox_read_resp_in, scheduler_1_mailbox_write_req_out, scheduler_1_mailbox_write_resp_in, scheduler_2_ram_read_req_out, scheduler_2_ram_read_resp_in, scheduler_2_ram_write_req_out, scheduler_2_ram_write_resp_in, scheduler_2_mailbox_read_req_out, scheduler_2_mailbox_read_resp_in, scheduler_2_mailbox_write_req_out, scheduler_2_mailbox_write_resp_in, scheduler_2_reduction_read_req_out, scheduler_2_reduction_read_resp_in, scheduler_2_reduction_write_req_out, scheduler_2_reduction_write_resp_in, scheduler_3_ram_read_req_out, scheduler_3_ram_read_resp_in, scheduler_3_ram_write_req_out, scheduler_3_ram_write_resp_in, scheduler_3_mailbox_read_req_out, scheduler_3_mailbox_read_resp_in, scheduler_3_mailbox_write_req_out, scheduler_3_mailbox_write_resp_in, scheduler_3_reduction_read_req_out, scheduler_3_reduction_read_resp_in, scheduler_3_reduction_write_req_out, scheduler_3_reduction_write_resp_in, scheduler_4_ram_read_req_out, scheduler_4_ram_read_resp_in, scheduler_4_ram_write_req_out, scheduler_4_ram_write_resp_in, scheduler_4_mailbox_read_req_out, scheduler_4_mailbox_read_resp_in, scheduler_4_mailbox_write_req_out, scheduler_4_mailbox_write_resp_in, scheduler_5_ram_read_req_out, scheduler_5_ram_read_resp_in, scheduler_5_ram_write_req_out, scheduler_5_ram_write_resp_in, scheduler_5_mailbox_read_req_out, scheduler_5_mailbox_read_resp_in, scheduler_5_mailbox_write_req_out, scheduler_5_mailbox_write_resp_in, control_router_in, data_measurements_out, x_decoder_events_out, z_decoder_events_out)
   }
 
   init { () }

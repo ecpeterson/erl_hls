@@ -139,6 +139,21 @@ typedef struct {
     uint64_t state_same_address_overlaps;
     uint64_t mailbox_read_write_overlaps;
     uint64_t mailbox_same_address_overlaps;
+    uint64_t reduction_reads;
+    uint64_t reduction_writes;
+    uint64_t reduction_request_stalls;
+    uint64_t reduction_responses;
+    uint64_t reduction_write_completions;
+    uint64_t reduction_fold_results;
+    uint64_t reduction_fold_not_candidates;
+    uint64_t reduction_fold_mismatches;
+    uint64_t reduction_fold_pending;
+    uint64_t reduction_fold_completions;
+    uint64_t reduction_fold_wrong_modes;
+    uint64_t reduction_fold_unexpected_members;
+    uint64_t reduction_fold_duplicate_members;
+    uint64_t sidecar_fold_reads;
+    uint64_t sidecar_fold_admission_overlaps;
     uint64_t actor_state_reads[MAX_SCHEDULER_ACTORS];
     uint64_t actor_ready_samples[MAX_SCHEDULER_ACTORS];
     uint64_t actor_same_actor_only[MAX_SCHEDULER_ACTORS];
@@ -175,6 +190,16 @@ typedef struct {
     vpiHandle h_mailbox_write_request;
     vpiHandle h_mailbox_write_response_valid;
     vpiHandle h_mailbox_write_response_ready;
+    vpiHandle h_reduction_read_request;
+    vpiHandle h_reduction_read_request_valid;
+    vpiHandle h_reduction_read_request_ready;
+    vpiHandle h_reduction_read_response_valid;
+    vpiHandle h_reduction_read_response_ready;
+    vpiHandle h_reduction_write_request;
+    vpiHandle h_reduction_write_request_valid;
+    vpiHandle h_reduction_write_request_ready;
+    vpiHandle h_reduction_write_response_valid;
+    vpiHandle h_reduction_write_response_ready;
     vpiHandle h_request_valid[MAX_SCHEDULER_INPUTS];
     vpiHandle h_request_ready[MAX_SCHEDULER_INPUTS];
     vpiHandle h_pending_valid[MAX_SCHEDULER_INPUTS];
@@ -190,6 +215,13 @@ typedef struct {
     vpiHandle h_entry_probe[MAX_SCHEDULER_ACTORS];
     vpiHandle h_egress_waiter[MAX_SCHEDULER_ACTORS];
     vpiHandle h_occupied[MAX_SCHEDULER_ACTORS];
+    vpiHandle h_reduction_active[MAX_SCHEDULER_ACTORS];
+    vpiHandle h_reduction_probed[MAX_SCHEDULER_ACTORS];
+    vpiHandle h_reduction_error[MAX_SCHEDULER_ACTORS];
+    vpiHandle h_internal_candidate[MAX_SCHEDULER_ACTORS];
+    vpiHandle h_fold_wins;
+    vpiHandle h_fold_outcome;
+    vpiHandle h_fold_issue_valid;
     vpiHandle h_egress_busy;
     vpiHandle h_selection_activation;
     vpiHandle h_phase_boundary;
@@ -201,6 +233,7 @@ typedef struct {
     int same_actor_followup_pending;
     uint32_t same_actor_followup_slot;
     int same_actor_followup_phase_boundary;
+    int reduction_profile_complete;
     scheduler_counts_t counts;
     scheduler_counts_t checkpoint;
 } scheduler_profile_t;
@@ -603,6 +636,34 @@ static void write_scheduler_profile(void) {
                       counts->mailbox_read_write_overlaps);
         PROFILE_VALUE("mailbox_same_address_overlaps",
                       counts->mailbox_same_address_overlaps);
+        PROFILE_VALUE("reduction_sidecar_present",
+                      profile->reduction_profile_complete);
+        PROFILE_VALUE("reduction_reads", counts->reduction_reads);
+        PROFILE_VALUE("reduction_writes", counts->reduction_writes);
+        PROFILE_VALUE("reduction_request_stalls",
+                      counts->reduction_request_stalls);
+        PROFILE_VALUE("reduction_responses", counts->reduction_responses);
+        PROFILE_VALUE("reduction_write_completions",
+                      counts->reduction_write_completions);
+        PROFILE_VALUE("reduction_fold_results",
+                      counts->reduction_fold_results);
+        PROFILE_VALUE("reduction_fold_not_candidates",
+                      counts->reduction_fold_not_candidates);
+        PROFILE_VALUE("reduction_fold_mismatches",
+                      counts->reduction_fold_mismatches);
+        PROFILE_VALUE("reduction_fold_pending",
+                      counts->reduction_fold_pending);
+        PROFILE_VALUE("reduction_fold_completions",
+                      counts->reduction_fold_completions);
+        PROFILE_VALUE("reduction_fold_wrong_modes",
+                      counts->reduction_fold_wrong_modes);
+        PROFILE_VALUE("reduction_fold_unexpected_members",
+                      counts->reduction_fold_unexpected_members);
+        PROFILE_VALUE("reduction_fold_duplicate_members",
+                      counts->reduction_fold_duplicate_members);
+        PROFILE_VALUE("sidecar_fold_reads", counts->sidecar_fold_reads);
+        PROFILE_VALUE("sidecar_fold_admission_overlaps",
+                      counts->sidecar_fold_admission_overlaps);
         {
             unsigned actor;
             for (actor = 0; actor < profile->actor_count; actor++) {
@@ -617,6 +678,34 @@ static void write_scheduler_profile(void) {
                          "actor_%u_direct_mailbox_followups", actor);
                 PROFILE_VALUE(
                     key, counts->actor_direct_mailbox_followups[actor]);
+                snprintf(key, sizeof(key),
+                         "actor_%u_terminal_occupied", actor);
+                PROFILE_VALUE(key, get_u32(profile->h_occupied[actor]));
+                snprintf(key, sizeof(key),
+                         "actor_%u_terminal_mail_candidate", actor);
+                PROFILE_VALUE(key,
+                    get_bit(profile->h_mail_candidate[actor]));
+                if (profile->h_reduction_active[actor] &&
+                    profile->h_reduction_probed[actor] &&
+                    profile->h_reduction_error[actor] &&
+                    profile->h_internal_candidate[actor]) {
+                    snprintf(key, sizeof(key),
+                             "actor_%u_terminal_reduction_active", actor);
+                    PROFILE_VALUE(key,
+                        get_bit(profile->h_reduction_active[actor]));
+                    snprintf(key, sizeof(key),
+                             "actor_%u_terminal_reduction_probed", actor);
+                    PROFILE_VALUE(key,
+                        get_bit(profile->h_reduction_probed[actor]));
+                    snprintf(key, sizeof(key),
+                             "actor_%u_terminal_reduction_error", actor);
+                    PROFILE_VALUE(key,
+                        get_bit(profile->h_reduction_error[actor]));
+                    snprintf(key, sizeof(key),
+                             "actor_%u_terminal_internal_candidate", actor);
+                    PROFILE_VALUE(key,
+                        get_bit(profile->h_internal_candidate[actor]));
+                }
             }
         }
 #undef PROFILE_VALUE
@@ -929,6 +1018,28 @@ static int populate_scheduler_profile(
                   "_mailbox_write_resp_in_vld");
     MODULE_SIGNAL(h_mailbox_write_response_ready,
                   "_mailbox_write_resp_in_rdy");
+    /* Reduction RAM ports are optional: only scheduler families with a
+     * lowered sidecar reduction expose them. */
+    MODULE_SIGNAL(h_reduction_read_request,
+                  "_reduction_read_req_out");
+    MODULE_SIGNAL(h_reduction_read_request_valid,
+                  "_reduction_read_req_out_vld");
+    MODULE_SIGNAL(h_reduction_read_request_ready,
+                  "_reduction_read_req_out_rdy");
+    MODULE_SIGNAL(h_reduction_read_response_valid,
+                  "_reduction_read_resp_in_vld");
+    MODULE_SIGNAL(h_reduction_read_response_ready,
+                  "_reduction_read_resp_in_rdy");
+    MODULE_SIGNAL(h_reduction_write_request,
+                  "_reduction_write_req_out");
+    MODULE_SIGNAL(h_reduction_write_request_valid,
+                  "_reduction_write_req_out_vld");
+    MODULE_SIGNAL(h_reduction_write_request_ready,
+                  "_reduction_write_req_out_rdy");
+    MODULE_SIGNAL(h_reduction_write_response_valid,
+                  "_reduction_write_resp_in_vld");
+    MODULE_SIGNAL(h_reduction_write_response_ready,
+                  "_reduction_write_resp_in_rdy");
     MODULE_SIGNAL(h_startup_valid, "_startup_in_vld");
     MODULE_SIGNAL(h_startup_ready, "_startup_in_rdy");
     MODULE_SIGNAL(h_egress_valid, "_egress_out_vld");
@@ -942,6 +1053,9 @@ static int populate_scheduler_profile(
         profile->h_phase_boundary = module_signal(module, "result_phase_boundary");
     MODULE_SIGNAL(h_completed_valid, "completed_valid");
     MODULE_SIGNAL(h_completed_effects_valid, "completed_effects_valid");
+    MODULE_SIGNAL(h_fold_wins, "fold_wins");
+    MODULE_SIGNAL(h_fold_outcome, "incoming_fold_outcome__2");
+    MODULE_SIGNAL(h_fold_issue_valid, "fold_issue_valid");
 #undef MODULE_SIGNAL
 
     for (index = 0; index < MAX_SCHEDULER_INPUTS; index++) {
@@ -988,6 +1102,14 @@ static int populate_scheduler_profile(
                  "mail_candidates__4[%u]", index);
         profile->h_mail_candidate[index] =
             module_signal(module, signal_name);
+        if (!profile->h_mail_candidate[index]) {
+            /* The reduction-sidecar retirement/admission merge adds two
+             * later projections of this vector before ready selection. */
+            snprintf(signal_name, sizeof(signal_name),
+                     "mail_candidates__6[%u]", index);
+            profile->h_mail_candidate[index] =
+                module_signal(module, signal_name);
+        }
         snprintf(signal_name, sizeof(signal_name),
                  "entry_probes__2[%u]", index);
         profile->h_entry_probe[index] = module_signal(module, signal_name);
@@ -995,6 +1117,27 @@ static int populate_scheduler_profile(
         profile->h_egress_waiter[index] = module_signal(module, signal_name);
         snprintf(signal_name, sizeof(signal_name), "occupied__4[%u]", index);
         profile->h_occupied[index] = module_signal(module, signal_name);
+        if (!profile->h_occupied[index]) {
+            snprintf(signal_name, sizeof(signal_name),
+                     "occupied__6[%u]", index);
+            profile->h_occupied[index] = module_signal(module, signal_name);
+        }
+        snprintf(signal_name, sizeof(signal_name),
+                 "reduction_active__3[%u]", index);
+        profile->h_reduction_active[index] =
+            module_signal(module, signal_name);
+        snprintf(signal_name, sizeof(signal_name),
+                 "reduction_probed__3[%u]", index);
+        profile->h_reduction_probed[index] =
+            module_signal(module, signal_name);
+        snprintf(signal_name, sizeof(signal_name),
+                 "reduction_errors__3[%u]", index);
+        profile->h_reduction_error[index] =
+            module_signal(module, signal_name);
+        snprintf(signal_name, sizeof(signal_name),
+                 "internal_candidates__3[%u]", index);
+        profile->h_internal_candidate[index] =
+            module_signal(module, signal_name);
         if (!profile->h_mail_candidate[index] ||
             !profile->h_entry_probe[index] ||
             !profile->h_egress_waiter[index] ||
@@ -1005,6 +1148,17 @@ static int populate_scheduler_profile(
 
     reset_latency_minima(&profile->counts);
     reset_latency_minima(&profile->checkpoint);
+    profile->reduction_profile_complete =
+        profile->h_reduction_read_request &&
+        profile->h_reduction_read_request_valid &&
+        profile->h_reduction_read_request_ready &&
+        profile->h_reduction_read_response_valid &&
+        profile->h_reduction_read_response_ready &&
+        profile->h_reduction_write_request &&
+        profile->h_reduction_write_request_valid &&
+        profile->h_reduction_write_request_ready &&
+        profile->h_reduction_write_response_valid &&
+        profile->h_reduction_write_response_ready;
     return profile->h_ram_read_request &&
         profile->h_ram_read_request_valid &&
         profile->h_ram_read_request_ready &&
@@ -1214,6 +1368,9 @@ static void step_scheduler_profile(scheduler_profile_t *profile) {
     int state_read_accepted;
     int mailbox_write_accepted;
     int mailbox_read_accepted;
+    int reduction_read_accepted = 0;
+    int reduction_write_accepted = 0;
+    int sidecar_fold_issued = 0;
     int state_port_blocked = 0;
     int request_backpressured = 0;
     int egress_backpressured = 0;
@@ -1235,6 +1392,75 @@ static void step_scheduler_profile(scheduler_profile_t *profile) {
     unsigned occupied_messages = 0;
     unsigned nonempty_actors = 0;
     unsigned index;
+
+    if (profile->h_fold_wins && profile->h_fold_outcome &&
+        get_bit(profile->h_fold_wins)) {
+        unsigned outcome = get_u32(profile->h_fold_outcome);
+        counts->reduction_fold_results++;
+        switch (outcome) {
+        case 0:
+            counts->reduction_fold_not_candidates++;
+            break;
+        case 1:
+            counts->reduction_fold_mismatches++;
+            break;
+        case 2:
+            counts->reduction_fold_pending++;
+            break;
+        case 3:
+            counts->reduction_fold_completions++;
+            break;
+        case 4:
+            counts->reduction_fold_wrong_modes++;
+            break;
+        case 5:
+            counts->reduction_fold_unexpected_members++;
+            break;
+        case 6:
+            counts->reduction_fold_duplicate_members++;
+            break;
+        default:
+            break;
+        }
+    }
+
+    if (profile->reduction_profile_complete) {
+        valid = get_bit(profile->h_reduction_read_request_valid);
+        ready = get_bit(profile->h_reduction_read_request_ready);
+        reduction_read_accepted = valid && ready;
+        if (reduction_read_accepted) {
+            counts->reduction_reads++;
+            active = 1;
+        } else if (valid) {
+            counts->reduction_request_stalls++;
+            active = 1;
+        }
+        valid = get_bit(profile->h_reduction_write_request_valid);
+        ready = get_bit(profile->h_reduction_write_request_ready);
+        reduction_write_accepted = valid && ready;
+        if (reduction_write_accepted) {
+            counts->reduction_writes++;
+            active = 1;
+        } else if (valid) {
+            counts->reduction_request_stalls++;
+            active = 1;
+        }
+        if (get_bit(profile->h_reduction_read_response_valid) &&
+            get_bit(profile->h_reduction_read_response_ready)) {
+            counts->reduction_responses++;
+            active = 1;
+        }
+        if (get_bit(profile->h_reduction_write_response_valid) &&
+            get_bit(profile->h_reduction_write_response_ready)) {
+            counts->reduction_write_completions++;
+            active = 1;
+        }
+        sidecar_fold_issued = reduction_read_accepted &&
+            profile->h_fold_issue_valid &&
+            get_bit(profile->h_fold_issue_valid);
+        if (sidecar_fold_issued)
+            counts->sidecar_fold_reads++;
+    }
 
     state_read_valid = get_bit(profile->h_ram_read_request_valid);
     read_slot = get_u32(profile->h_ram_read_request);
@@ -1462,6 +1688,8 @@ static void step_scheduler_profile(scheduler_profile_t *profile) {
     mailbox_write_accepted = valid && ready;
     if (mailbox_write_accepted) {
         counts->mailbox_writes++;
+        if (sidecar_fold_issued)
+            counts->sidecar_fold_admission_overlaps++;
         active = 1;
     } else if (valid) {
         counts->mailbox_request_stalls++;

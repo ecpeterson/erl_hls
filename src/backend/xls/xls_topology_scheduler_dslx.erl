@@ -1067,7 +1067,7 @@ scheduler_channels(Scheduler = #{
         end
     ].
 
-scheduler_spawn(_Spec, #{
+scheduler_spawn(_Spec, Scheduler = #{
     stem := Stem,
     index := Index,
     module_name := Module,
@@ -1090,8 +1090,23 @@ scheduler_spawn(_Spec, #{
         "      ", Stem, "_mailbox_read_req_out, ", Stem,
         "_mailbox_read_resp_in,\n",
         "      ", Stem, "_mailbox_write_req_out, ", Stem,
-        "_mailbox_write_resp_in);\n"
+        "_mailbox_write_resp_in",
+        reduction_spawn_arguments(Scheduler),
+        ");\n"
     ].
+
+reduction_spawn_arguments(#{
+    stem := Stem,
+    reduction_storage_width := Width
+}) when Width > 0 ->
+    [
+        ",\n      ", Stem, "_reduction_read_req_out, ", Stem,
+        "_reduction_read_resp_in,\n",
+        "      ", Stem, "_reduction_write_req_out, ", Stem,
+        "_reduction_write_resp_in"
+    ];
+reduction_spawn_arguments(_Scheduler) ->
+    [].
 
 router_spawn(Spec, Scheduler = #{
     stem := Stem,
@@ -1188,41 +1203,81 @@ top_proc(Spec = #{ingresses := Ingresses, externals := Externals}) ->
 
 ram_arguments(#{schedulers := Schedulers}) ->
     lists:append([
-        [
-            [Stem, "_ram_read_req_out: chan<", Module,
-                "::MachineRamReadReq> out"],
-            [Stem, "_ram_read_resp_in: chan<", Module,
-                "::MachineRamReadResp> in"],
-            [Stem, "_ram_write_req_out: chan<", Module,
-                "::MachineRamWriteReq> out"],
-            [Stem, "_ram_write_resp_in: chan<", Module,
-                "::MachineRamWriteResp> in"],
-            [Stem, "_mailbox_read_req_out: chan<", Module,
-                "::MailboxRamReadReq> out"],
-            [Stem, "_mailbox_read_resp_in: chan<", Module,
-                "::MailboxRamReadResp> in"],
-            [Stem, "_mailbox_write_req_out: chan<", Module,
-                "::MailboxRamWriteReq> out"],
-            [Stem, "_mailbox_write_resp_in: chan<", Module,
-                "::MailboxRamWriteResp> in"]
-        ]
-        || #{stem := Stem, module_name := Module} <- Schedulers
+        scheduler_ram_arguments(Scheduler)
+        || Scheduler <- Schedulers
     ]).
+
+scheduler_ram_arguments(Scheduler = #{
+    stem := Stem,
+    module_name := Module
+}) ->
+    [
+        [Stem, "_ram_read_req_out: chan<", Module,
+            "::MachineRamReadReq> out"],
+        [Stem, "_ram_read_resp_in: chan<", Module,
+            "::MachineRamReadResp> in"],
+        [Stem, "_ram_write_req_out: chan<", Module,
+            "::MachineRamWriteReq> out"],
+        [Stem, "_ram_write_resp_in: chan<", Module,
+            "::MachineRamWriteResp> in"],
+        [Stem, "_mailbox_read_req_out: chan<", Module,
+            "::MailboxRamReadReq> out"],
+        [Stem, "_mailbox_read_resp_in: chan<", Module,
+            "::MailboxRamReadResp> in"],
+        [Stem, "_mailbox_write_req_out: chan<", Module,
+            "::MailboxRamWriteReq> out"],
+        [Stem, "_mailbox_write_resp_in: chan<", Module,
+            "::MailboxRamWriteResp> in"]
+    ] ++ reduction_ram_arguments(Scheduler).
+
+reduction_ram_arguments(#{
+    stem := Stem,
+    module_name := Module,
+    reduction_storage_width := Width
+}) when Width > 0 ->
+    [
+        [Stem, "_reduction_read_req_out: chan<", Module,
+            "::ReductionRamReadReq> out"],
+        [Stem, "_reduction_read_resp_in: chan<", Module,
+            "::ReductionRamReadResp> in"],
+        [Stem, "_reduction_write_req_out: chan<", Module,
+            "::ReductionRamWriteReq> out"],
+        [Stem, "_reduction_write_resp_in: chan<", Module,
+            "::ReductionRamWriteResp> in"]
+    ];
+reduction_ram_arguments(_Scheduler) ->
+    [].
 
 ram_names(#{schedulers := Schedulers}) ->
     lists:append([
-        [
-            [Stem, "_ram_read_req_out"],
-            [Stem, "_ram_read_resp_in"],
-            [Stem, "_ram_write_req_out"],
-            [Stem, "_ram_write_resp_in"],
-            [Stem, "_mailbox_read_req_out"],
-            [Stem, "_mailbox_read_resp_in"],
-            [Stem, "_mailbox_write_req_out"],
-            [Stem, "_mailbox_write_resp_in"]
-        ]
-        || #{stem := Stem} <- Schedulers
+        scheduler_ram_names(Scheduler)
+        || Scheduler <- Schedulers
     ]).
+
+scheduler_ram_names(Scheduler = #{stem := Stem}) ->
+    [
+        [Stem, "_ram_read_req_out"],
+        [Stem, "_ram_read_resp_in"],
+        [Stem, "_ram_write_req_out"],
+        [Stem, "_ram_write_resp_in"],
+        [Stem, "_mailbox_read_req_out"],
+        [Stem, "_mailbox_read_resp_in"],
+        [Stem, "_mailbox_write_req_out"],
+        [Stem, "_mailbox_write_resp_in"]
+    ] ++ reduction_ram_names(Scheduler).
+
+reduction_ram_names(#{
+    stem := Stem,
+    reduction_storage_width := Width
+}) when Width > 0 ->
+    [
+        [Stem, "_reduction_read_req_out"],
+        [Stem, "_reduction_read_resp_in"],
+        [Stem, "_reduction_write_req_out"],
+        [Stem, "_reduction_write_resp_in"]
+    ];
+reduction_ram_names(_Scheduler) ->
+    [].
 
 ingress_arguments(Ingresses) ->
     [[maps:get(input_name, Ingress),

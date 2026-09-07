@@ -7,9 +7,11 @@
 Renders the repetitive Verilog boundary around scheduler-owned 1R1W RAMs.
 
 The generated XLS module exposes 32-bit addresses and one pair of state and
-mailbox ports per scheduler.  This helper derives the actual widths and depths
-from a normalized scheduler plan, then renders declarations, application port
-bindings, and `hls_1r1w_ram` instances for a surrounding Verilog shell.
+mailbox ports per scheduler.  A scheduler whose actors use a reduction also
+exposes a separate reduction-state pair.  This helper derives the actual
+widths and depths from a normalized scheduler plan, then renders declarations,
+application port bindings, and `hls_1r1w_ram` instances for a surrounding
+Verilog shell.
 """.
 
 -export([bindings/1, wires/1, application_ports/1, instances/2]).
@@ -29,31 +31,37 @@ wires(Bindings) ->
 application_ports(Bindings) ->
     [binding_application_ports(Binding) || Binding <- Bindings].
 
--doc "Instantiates one state and one mailbox RAM per scheduler.".
+-doc "Instantiates the state, mailbox, and optional reduction RAMs.".
 -spec instances([map()], iodata()) -> iolist().
 instances(Bindings, Clock) ->
     [binding_instances(Binding, Clock) || Binding <- Bindings].
 
 binding(Index, Group) ->
     StateWidth = xls_statem_codegen:shared_machine_width(
-        maps:get(width, maps:get(state, Group)),
-        maps:get(reduction_storage_width, Group, 0)
+        maps:get(width, maps:get(state, Group))
     ),
     SlotCount = maps:get(slot_count, Group),
     MailboxCapacity = maps:get(mailbox_capacity, Group),
-    #{
+    Binding = #{
         index => Index,
         state_width => StateWidth,
         state_address_width => address_width(SlotCount),
         mailbox_width => 128,
         mailbox_address_width => address_width(SlotCount * MailboxCapacity)
-    }.
+    },
+    case maps:get(reduction_storage_width, Group, 0) of
+        0 -> Binding;
+        ReductionWidth -> Binding#{
+            reduction_width => ReductionWidth,
+            reduction_address_width => address_width(SlotCount)
+        }
+    end.
 
 binding_wires(#{
     index := Index,
     state_width := StateWidth,
     mailbox_width := MailboxWidth
-}) ->
+} = Binding) ->
     Stem = stem(Index),
     [
         "    wire [31:0] ", Stem, "_state_rd_addr;\n",
@@ -71,15 +79,34 @@ binding_wires(#{
         "    wire ", Stem, "_mailbox_wr_en;\n",
         "    wire ", Stem, "_mailbox_rd_en;\n",
         "    wire [", integer_to_list(MailboxWidth - 1), ":0] ", Stem,
-        "_mailbox_rd_data;\n\n"
+        "_mailbox_rd_data;\n",
+        reduction_wires(Binding, Stem),
+        "\n"
     ].
 
-binding_application_ports(#{index := Index}) ->
+reduction_wires(#{reduction_width := Width}, Stem) ->
+    [
+        "    wire [31:0] ", Stem, "_reduction_rd_addr;\n",
+        "    wire [31:0] ", Stem, "_reduction_wr_addr;\n",
+        "    wire [", integer_to_list(Width - 1), ":0] ", Stem,
+        "_reduction_wr_data;\n",
+        "    wire ", Stem, "_reduction_wr_en;\n",
+        "    wire ", Stem, "_reduction_rd_en;\n",
+        "    wire [", integer_to_list(Width - 1), ":0] ", Stem,
+        "_reduction_rd_data;\n"
+    ];
+reduction_wires(_Binding, _Stem) ->
+    [].
+
+binding_application_ports(#{index := Index} = Binding) ->
     Stem = stem(Index),
     lists:append([
         [",\n        .", Stem, "_", Port, "(", Stem, "_", Port, ")"]
-        || Port <- ram_ports()
+        || Port <- binding_ram_ports(Binding)
     ]).
+
+binding_ram_ports(Binding) ->
+    ram_ports() ++ reduction_ram_ports(Binding).
 
 ram_ports() ->
     [
@@ -89,18 +116,35 @@ ram_ports() ->
         "mailbox_wr_en", "mailbox_rd_en", "mailbox_rd_data"
     ].
 
+reduction_ram_ports(#{reduction_width := _Width}) ->
+    [
+        "reduction_rd_addr", "reduction_wr_addr", "reduction_wr_data",
+        "reduction_wr_en", "reduction_rd_en", "reduction_rd_data"
+    ];
+reduction_ram_ports(_Binding) ->
+    [].
+
 binding_instances(#{
     index := Index,
     state_width := StateWidth,
     state_address_width := StateAddressWidth,
     mailbox_width := MailboxWidth,
     mailbox_address_width := MailboxAddressWidth
-}, Clock) ->
+} = Binding, Clock) ->
     Stem = stem(Index),
     [
         ram(Stem, "state", StateWidth, StateAddressWidth, Clock),
-        ram(Stem, "mailbox", MailboxWidth, MailboxAddressWidth, Clock)
+        ram(Stem, "mailbox", MailboxWidth, MailboxAddressWidth, Clock),
+        reduction_instance(Binding, Stem, Clock)
     ].
+
+reduction_instance(#{
+    reduction_width := Width,
+    reduction_address_width := AddressWidth
+}, Stem, Clock) ->
+    ram(Stem, "reduction", Width, AddressWidth, Clock);
+reduction_instance(_Binding, _Stem, _Clock) ->
+    [].
 
 ram(Stem, Kind, Width, AddressWidth, Clock) ->
     [

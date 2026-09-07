@@ -443,18 +443,46 @@ four_named_outputs_receive_one_cast_each_test() ->
         assert_no_neighbor_cast(Ref)
     end).
 
-invalid_diffusion_epoch_stops_cell_test() ->
-    {PID, Collectors, Ref} = start_cell(),
-    unlink(PID),
-    expect_neighbor_batch(Ref, {phi, 0, [0, 0]}),
-    Monitor = monitor(process, PID),
-    ok = phi_halo_cell:offer_phi(PID, 2, [0, 0]),
-    receive
-        {'DOWN', Monitor, process, PID, {hls_statem_failure, _Message}} -> ok
-    after 1000 ->
-        error(cell_did_not_stop_on_invalid_diffusion_epoch)
-    end,
-    stop_collectors(Ref, Collectors).
+mismatched_diffusion_epoch_is_postponed_test() ->
+    with_cell(fun(PID, Ref) ->
+        expect_neighbor_batch(Ref, {phi, 0, [0, 0]}),
+        ok = phi_halo_cell:offer_phi(PID, 2, [0, 0]),
+        Info = phi_halo_cell:runtime_info(PID),
+        ?assertEqual(gathering, maps:get(phase, Info)),
+        ?assertEqual(1, maps:get(postponed, Info)),
+        ?assertMatch(
+            #{name := diffusion, received := 0, remaining := 4},
+            maps:get(reduction, Info)
+        )
+    end).
+
+mismatched_comparison_step_is_postponed_test() ->
+    with_cell(fun(PID, Ref) ->
+        enter_comparing(PID, Ref, [0, 0], [0, 0]),
+        ok = phi_halo_cell:offer_phi0(PID, 1, north, 0),
+        Info = phi_halo_cell:runtime_info(PID),
+        ?assertEqual(comparing, maps:get(phase, Info)),
+        ?assertEqual(1, maps:get(postponed, Info)),
+        ?assertMatch(
+            #{name := comparison, received := 0, remaining := 4},
+            maps:get(reduction, Info)
+        )
+    end).
+
+mismatched_movement_step_is_postponed_test() ->
+    with_cell(fun(PID, Ref) ->
+        enter_comparing(PID, Ref, [0, 0], [0, 0]),
+        four_phi0s(PID, 0, 0),
+        expect_anyon_batch(Ref, 0, none),
+        ok = phi_halo_cell:offer_anyon(PID, 1, false),
+        Info = phi_halo_cell:runtime_info(PID),
+        ?assertEqual(flipping, maps:get(phase, Info)),
+        ?assertEqual(1, maps:get(postponed, Info)),
+        ?assertMatch(
+            #{name := movement, received := 0, remaining := 4},
+            maps:get(reduction, Info)
+        )
+    end).
 
 boolean_anyon_api_encodes_move_test() ->
     with_cell(fun(PID, Ref) ->
@@ -530,9 +558,11 @@ generated_dslx_matches_checked_in_artifact_test() ->
         byte_size(Generated) - DispatchStart
     ),
     %% Multiple clauses for a message and phase still produce one ordered
-    %% selector per {message tag, phase} pair.
+    %% selector per {message tag, phase} pair. The reduction contribution is
+    %% classified before ordinary dispatch, leaving the four ordinary message
+    %% records accepted while gathering.
     ?assertEqual(
-        5,
+        4,
         length(binary:matches(Dispatch, <<"Phase::GATHERING =>">>))
     ),
     ?assertEqual(
@@ -751,12 +781,14 @@ two_layer_relaxation_coefficients_test() ->
 
 diffusion_epoch_and_step_wrap_at_u32_boundary_test() ->
     %% Epoch 0 follows 16#ffffffff even when the decoder step itself does
-    %% not wrap. The early-message guard must recognize that next epoch.
+    %% not wrap. The callback exposes it as a contribution; the active
+    %% reduction's key comparison postpones it until the next phase boundary.
     MidStep = (?U32_MAX - 3) div ?DIFFUSION_ROUNDS,
     MidRound = {cell, MidStep, ?U32_MAX, [0, 0], 0, 0,
         ?PRNG_SEED, 0, 0, 0, 0},
-    ?assertEqual(
-        {gathering, MidRound, postpone},
+    ?assertMatch(
+        {gathering, MidRound,
+            {contribute, diffusion, 0, {phi_fold, 0, 0}}},
         phi_halo_cell:gathering(cast, {phi, 0, [0, 0]}, MidRound)
     ),
     {repeat_phase, WrappedEpoch, consume} = phi_halo_cell:gathering(

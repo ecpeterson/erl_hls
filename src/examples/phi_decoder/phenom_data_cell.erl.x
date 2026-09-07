@@ -2153,6 +2153,7 @@ pub proc SharedExecutor {
     state
   }
 }
+
 pub proc Service {
   req_in: chan<axis::Frame> in;
   egress_out: chan<Egress> out;
@@ -2583,7 +2584,8 @@ pub proc SharedService<
           capture_tok,
           ram_write_req_out,
           machine_write(state.cursor, initial_shared_machine()));
-        let (_done, _) = recv(write_tok, ram_write_resp_in);
+        let boot_write_tok = write_tok;
+        let (_done, _) = recv(boot_write_tok, ram_write_resp_in);
         let entry_probes = update(
           state.entry_probes, state.cursor, u1:1);
         if state.cursor + u32:1 == ACTOR_COUNT {
@@ -2856,6 +2858,7 @@ pub proc SharedService<
     }
   }
 }
+
 proc EgressDemux {
   egress_in: chan<Egress> in;
   north_out: chan<axis::Frame> out;

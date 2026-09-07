@@ -60,7 +60,7 @@ emit(Distance, TopologyModule, Artifact, SchedulerProfile) ->
         "import hls_spatial_router;\n",
         [["import ", Module, ";\n"]
             || Module <- lists:usort([
-                Name || {_Stem, Name} <- RamBindings
+                maps:get(module, Binding) || Binding <- RamBindings
             ])],
         "import ", atom_to_list(TopologyModule), ";\n\n",
         "const WIDTH = u16:", integer_to_list(Distance), ";\n",
@@ -329,49 +329,93 @@ top_proc(TopologyModule, Contract = #{outputs := Outputs}, RamBindings) ->
 
 scheduler_ram_members(RamBindings) ->
     lists:append([
-        [
-            [Stem, "_ram_read_req_out: chan<", Module,
-                "::MachineRamReadReq> out"],
-            [Stem, "_ram_read_resp_in: chan<", Module,
-                "::MachineRamReadResp> in"],
-            [Stem, "_ram_write_req_out: chan<", Module,
-                "::MachineRamWriteReq> out"],
-            [Stem, "_ram_write_resp_in: chan<", Module,
-                "::MachineRamWriteResp> in"],
-            [Stem, "_mailbox_read_req_out: chan<", Module,
-                "::MailboxRamReadReq> out"],
-            [Stem, "_mailbox_read_resp_in: chan<", Module,
-                "::MailboxRamReadResp> in"],
-            [Stem, "_mailbox_write_req_out: chan<", Module,
-                "::MailboxRamWriteReq> out"],
-            [Stem, "_mailbox_write_resp_in: chan<", Module,
-                "::MailboxRamWriteResp> in"]
-        ]
-        || {Stem, Module} <- RamBindings
+        begin
+            Stem = maps:get(stem, Binding),
+            Module = maps:get(module, Binding),
+            [
+                [Stem, "_ram_read_req_out: chan<", Module,
+                    "::MachineRamReadReq> out"],
+                [Stem, "_ram_read_resp_in: chan<", Module,
+                    "::MachineRamReadResp> in"],
+                [Stem, "_ram_write_req_out: chan<", Module,
+                    "::MachineRamWriteReq> out"],
+                [Stem, "_ram_write_resp_in: chan<", Module,
+                    "::MachineRamWriteResp> in"],
+                [Stem, "_mailbox_read_req_out: chan<", Module,
+                    "::MailboxRamReadReq> out"],
+                [Stem, "_mailbox_read_resp_in: chan<", Module,
+                    "::MailboxRamReadResp> in"],
+                [Stem, "_mailbox_write_req_out: chan<", Module,
+                    "::MailboxRamWriteReq> out"],
+                [Stem, "_mailbox_write_resp_in: chan<", Module,
+                    "::MailboxRamWriteResp> in"]
+            ] ++ scheduler_reduction_ram_members(Binding)
+        end
+        || Binding <- RamBindings
     ]).
+
+scheduler_reduction_ram_members(#{
+    stem := Stem,
+    module := Module,
+    reduction_storage_width := Width
+}) when Width > 0 ->
+    [
+        [Stem, "_reduction_read_req_out: chan<", Module,
+            "::ReductionRamReadReq> out"],
+        [Stem, "_reduction_read_resp_in: chan<", Module,
+            "::ReductionRamReadResp> in"],
+        [Stem, "_reduction_write_req_out: chan<", Module,
+            "::ReductionRamWriteReq> out"],
+        [Stem, "_reduction_write_resp_in: chan<", Module,
+            "::ReductionRamWriteResp> in"]
+    ];
+scheduler_reduction_ram_members(_Binding) ->
+    [].
 
 scheduler_ram_names(RamBindings) ->
     lists:append([
-        [
-            [Stem, "_ram_read_req_out"],
-            [Stem, "_ram_read_resp_in"],
-            [Stem, "_ram_write_req_out"],
-            [Stem, "_ram_write_resp_in"],
-            [Stem, "_mailbox_read_req_out"],
-            [Stem, "_mailbox_read_resp_in"],
-            [Stem, "_mailbox_write_req_out"],
-            [Stem, "_mailbox_write_resp_in"]
-        ]
-        || {Stem, _Module} <- RamBindings
+        begin
+            Stem = maps:get(stem, Binding),
+            [
+                [Stem, "_ram_read_req_out"],
+                [Stem, "_ram_read_resp_in"],
+                [Stem, "_ram_write_req_out"],
+                [Stem, "_ram_write_resp_in"],
+                [Stem, "_mailbox_read_req_out"],
+                [Stem, "_mailbox_read_resp_in"],
+                [Stem, "_mailbox_write_req_out"],
+                [Stem, "_mailbox_write_resp_in"]
+            ] ++ scheduler_reduction_ram_names(Binding)
+        end
+        || Binding <- RamBindings
     ]).
+
+scheduler_reduction_ram_names(#{
+    stem := Stem,
+    reduction_storage_width := Width
+}) when Width > 0 ->
+    [
+        [Stem, "_reduction_read_req_out"],
+        [Stem, "_reduction_read_resp_in"],
+        [Stem, "_reduction_write_req_out"],
+        [Stem, "_reduction_write_resp_in"]
+    ];
+scheduler_reduction_ram_names(_Binding) ->
+    [].
 
 scheduler_ram_bindings(SchedulerProfile) ->
     #{groups := Groups} = phi_noise_topology_dslx:scheduler_plan(
         SchedulerProfile
     ),
     [
-        {["scheduler_", integer_to_list(Index)], atom_to_list(Module)}
-        || {Index, #{module := Module}} <- lists:enumerate(0, Groups)
+        #{
+            stem => ["scheduler_", integer_to_list(Index)],
+            module => atom_to_list(Module),
+            reduction_storage_width => maps:get(
+                reduction_storage_width, Group, 0
+            )
+        }
+        || {Index, Group = #{module := Module}} <- lists:enumerate(0, Groups)
     ].
 
 boundary_constants(#{

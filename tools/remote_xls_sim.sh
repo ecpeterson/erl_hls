@@ -160,7 +160,7 @@ for reduction_mode in direct shared; do
     reduction_define=
     reduction_verilog=hls_statem_reduction_rtl_fixture.v
     if [ "$reduction_mode" = shared ]; then
-        reduction_define=-DREDUCTION_DUT=__hls_statem_reduction_shared_top__Top_0_next
+        reduction_define="-DREDUCTION_SHARED -DREDUCTION_DUT=__hls_statem_reduction_shared_top__Top_0_next"
         reduction_verilog=hls_statem_reduction_shared_top.v
     fi
     iverilog \
@@ -381,7 +381,7 @@ vvp phi_torus_topology.vvp
     --use_system_verilog=false \
     --reset=reset \
     --fifo_module= \
-    --ram_configurations="$(phi_scheduler_ram_configurations)" \
+    --ram_configurations="$(phi_scheduler_ram_configurations 6 2 2)" \
     phi_noise_topology_smoke.opt.ir > phi_noise_topology_smoke.v
 
 iverilog \
@@ -415,7 +415,7 @@ vvp phi_noise_topology_smoke.vvp
     --use_system_verilog=false \
     --reset=reset \
     --fifo_module= \
-    --ram_configurations="$(phi_scheduler_ram_configurations)" \
+    --ram_configurations="$(phi_scheduler_ram_configurations 6 2 2)" \
     phi_memory_gateway.opt.ir > phi_memory_gateway.v
 
 iverilog \

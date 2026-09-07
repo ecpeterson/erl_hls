@@ -7,9 +7,20 @@ remote_host=${ERL_HLS_REMOTE_HOST:-192.168.64.7}
 remote_root=${ERL_HLS_REMOTE_ROOT:-/home/ecpeterson/erl_hls-build}
 remote_xls=${ERL_HLS_REMOTE_XLS:-/home/ecpeterson/xls-v0.0.0-10601-g9f360fc89-linux-x64}
 stage_timeout=${ERL_HLS_D3_TIMEOUT:-2h}
+phi_shards=${ERL_HLS_PHI_SHARDS:-1}
 remote_stage="$remote_root/phi_noise_topology"
 
-"$project_root/tools/prepare_xls_sim.sh" "$local_stage"
+if [[ "$phi_shards" != 1 ]]; then
+    echo "ERL_HLS_PHI_SHARDS must be 1: the static testbench wires" \
+        "six schedulers and two phi reduction sidecars" >&2
+    exit 1
+fi
+scheduler_count=6
+reduction_scheduler_first=2
+reduction_scheduler_count=2
+
+ERL_HLS_PHI_SHARDS="$phi_shards" \
+    "$project_root/tools/prepare_xls_sim.sh" "$local_stage"
 cp "$project_root/tools/remote_phi_noise_topology_sim.sh" \
     "$local_stage/remote_phi_noise_topology_sim.sh"
 for report in \
@@ -43,6 +54,9 @@ rsync -a -e "ssh -o BatchMode=yes" \
 
 simulation_status=0
 ssh -o BatchMode=yes "$remote_host" \
+    env ERL_HLS_PHI_SCHEDULER_COUNT="$scheduler_count" \
+    ERL_HLS_PHI_REDUCTION_SCHEDULER_FIRST="$reduction_scheduler_first" \
+    ERL_HLS_PHI_REDUCTION_SCHEDULER_COUNT="$reduction_scheduler_count" \
     bash "$remote_stage/remote_phi_noise_topology_sim.sh" \
     "$remote_stage" "$remote_xls" "$stage_timeout" || simulation_status=$?
 

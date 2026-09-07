@@ -248,6 +248,15 @@ site_functions(#{opens := Opens}) ->
         ],
         "  }\n",
         "}\n\n",
+        "fn reduction_site_phase(site: ReductionSite) -> Phase {\n",
+        "  match site {\n",
+        [
+            ["    ReductionSite::", site_label(Open), " => Phase::",
+                uppercase(maps:get(phase, Open)), ",\n"]
+            || Open <- Opens
+        ],
+        "  }\n",
+        "}\n\n",
         "fn reduction_site_population(site: ReductionSite) -> u8 {\n",
         "  match site {\n",
         [
@@ -340,6 +349,17 @@ contribution_functions(#{
         [contribution_tag_arm(Tag, Contributions, AccumulatorType)
             || Tag <- Tags],
         "    _ => zero!<ReductionContribution>(),\n",
+        "  }\n",
+        "}\n\n",
+        "fn reduction_sidecar_contribution(\n",
+        "    frame: axis::Frame, state: ReductionState)\n",
+        "    -> ReductionContribution {\n",
+        "  if state.status == ReductionStatus::OPEN {\n",
+        "    reduction_contribution(\n",
+        "      frame, reduction_site_phase(state.site),\n",
+        "      zero!<", DataType, ">())\n",
+        "  } else {\n",
+        "    zero!<ReductionContribution>()\n",
         "  }\n",
         "}\n\n"
     ].

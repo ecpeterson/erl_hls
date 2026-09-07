@@ -26,10 +26,6 @@ module phi_decoder_profile_tb;
     integer x_corrections = 0;
     integer z_corrections = 0;
     integer cycle_count = 0;
-    integer source_state_reads = 0;
-    integer phi_state_reads = 0;
-    integer source_mailbox_reads = 0;
-    integer phi_mailbox_reads = 0;
     integer warmup_cycle;
     integer target_cycle;
     integer measured_cycles;
@@ -120,22 +116,6 @@ module phi_decoder_profile_tb;
     always @(posedge clk) begin
         if (resetn) begin
             cycle_count = cycle_count + 1;
-            source_state_reads = source_state_reads +
-                dut.scheduler_0_state_rd_en + dut.scheduler_1_state_rd_en;
-            phi_state_reads = phi_state_reads +
-                dut.scheduler_2_state_rd_en + dut.scheduler_3_state_rd_en +
-                dut.scheduler_4_state_rd_en + dut.scheduler_5_state_rd_en +
-                dut.scheduler_6_state_rd_en + dut.scheduler_7_state_rd_en;
-            source_mailbox_reads = source_mailbox_reads +
-                dut.scheduler_0_mailbox_rd_en +
-                dut.scheduler_1_mailbox_rd_en;
-            phi_mailbox_reads = phi_mailbox_reads +
-                dut.scheduler_2_mailbox_rd_en +
-                dut.scheduler_3_mailbox_rd_en +
-                dut.scheduler_4_mailbox_rd_en +
-                dut.scheduler_5_mailbox_rd_en +
-                dut.scheduler_6_mailbox_rd_en +
-                dut.scheduler_7_mailbox_rd_en;
             if (x_decoder_event_valid && x_decoder_event_ready)
                 record_event(x_decoder_event, 0);
             if (z_decoder_event_valid && z_decoder_event_ready)
@@ -160,6 +140,11 @@ module phi_decoder_profile_tb;
         if (cycle_count >= MAX_CYCLES) begin
             $display("FAIL: decoder did not complete warmup step %0d",
                 WARMUP_STEP);
+            $display("PROFILE_TIMEOUT cycles=%0d x_corrections=%0d z_corrections=%0d",
+                cycle_count, x_corrections, z_corrections);
+            for (index = 0; index <= WARMUP_STEP; index = index + 1)
+                $display("PROFILE_TIMEOUT_STATUS step=%0d x=%03x z=%03x",
+                    index, x_status[index], z_status[index]);
             $fatal(1);
         end
         warmup_cycle = cycle_count;
@@ -199,14 +184,8 @@ module phi_decoder_profile_tb;
             200000000.0 * (TARGET_STEP - WARMUP_STEP) / measured_cycles
         );
         $display(
-            "PROFILE_ACTIVITY total_cycles=%0d source_state_reads=%0d phi_state_reads=%0d source_mailbox_reads=%0d phi_mailbox_reads=%0d x_corrections=%0d z_corrections=%0d",
-            cycle_count,
-            source_state_reads,
-            phi_state_reads,
-            source_mailbox_reads,
-            phi_mailbox_reads,
-            x_corrections,
-            z_corrections
+            "PROFILE_ACTIVITY total_cycles=%0d x_corrections=%0d z_corrections=%0d",
+            cycle_count, x_corrections, z_corrections
         );
         $display("PASS: decoder-only request-paced profile completed");
         $finish;

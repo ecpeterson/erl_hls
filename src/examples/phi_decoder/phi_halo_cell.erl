@@ -408,7 +408,7 @@ gathering(enter, _OldPhase, Cell) ->
 gathering(
     cast,
     #phi{epoch = Epoch, values = Values},
-    Cell = #cell{diffusion_epoch = Epoch}
+    Cell
 ) ->
     {gathering, Cell,
         {contribute, diffusion, Epoch, #phi_fold{
@@ -439,14 +439,6 @@ gathering(
             best_direction = ?NO_DIRECTION
         }, consume}
     end;
-gathering(
-    cast,
-    #phi{epoch = Epoch},
-    Cell = #cell{diffusion_epoch = CurrentEpoch}
-) when Epoch =:= ((CurrentEpoch + 1) band ?U32_MASK) ->
-    {gathering, Cell, postpone};
-gathering(cast, #phi{}, Cell) ->
-    {gathering, Cell, fail};
 gathering(
     cast,
     #phi0{step = Step},
@@ -504,7 +496,7 @@ comparing(enter, _OldPhase, Cell) ->
 comparing(
     cast,
     #phi0{step = Step, source = Source, value = Value},
-    Cell = #cell{step = Step}
+    Cell
 ) when (Source =:= ?PHI_NORTH_MASK orelse
         Source =:= ?PHI_EAST_MASK orelse
         Source =:= ?PHI_WEST_MASK orelse
@@ -619,7 +611,7 @@ flipping(cast, #phi{}, Cell) ->
 flipping(
     cast,
     #anyon_move{step = Step, present = PresentWord},
-    Cell = #cell{step = Step}
+    Cell
 ) when PresentWord < 2 ->
     {flipping, Cell,
         {contribute, movement, Step, #phi_fold{

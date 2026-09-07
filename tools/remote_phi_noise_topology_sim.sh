@@ -7,6 +7,9 @@ xls_root=${2:?usage: remote_phi_noise_topology_sim.sh STAGE XLS_ROOT [TIMEOUT]}
 stage_timeout=${3:-2h}
 stdlib="$xls_root/xls/dslx/stdlib"
 . "$stage/phi_scheduler_rams.sh"
+scheduler_count=${ERL_HLS_PHI_SCHEDULER_COUNT:-6}
+reduction_scheduler_first=${ERL_HLS_PHI_REDUCTION_SCHEDULER_FIRST:-2}
+reduction_scheduler_count=${ERL_HLS_PHI_REDUCTION_SCHEDULER_COUNT:-2}
 
 cd "$stage"
 
@@ -88,7 +91,9 @@ timed_output \
     --use_system_verilog=false \
     --reset=reset \
     --fifo_module= \
-    --ram_configurations="$(phi_scheduler_ram_configurations)" \
+    --ram_configurations="$(phi_scheduler_ram_configurations \
+        "$scheduler_count" "$reduction_scheduler_first" \
+        "$reduction_scheduler_count")" \
     phi_noise_topology.opt.ir
 
 timed_command \

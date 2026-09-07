@@ -32,6 +32,14 @@ module hls_statem_reduction_hol_tb;
     wire state_read_probe_valid;
     reg state_read_probe_ready = 1'b1;
 
+    wire [31:0] reduction_write_probe;
+    wire reduction_write_probe_valid;
+    reg reduction_write_probe_ready = 1'b1;
+
+    wire [31:0] reduction_read_probe;
+    wire reduction_read_probe_valid;
+    reg reduction_read_probe_ready = 1'b1;
+
     integer output_beat_count = 0;
     reg [32:0] captured [0:7];
     integer cycle_count = 0;
@@ -59,7 +67,13 @@ module hls_statem_reduction_hol_tb;
         ._state_read_probe_vld(state_read_probe_valid),
         ._state_write_probe_rdy(state_write_probe_ready),
         ._state_write_probe(state_write_probe),
-        ._state_write_probe_vld(state_write_probe_valid)
+        ._state_write_probe_vld(state_write_probe_valid),
+        ._reduction_read_probe_rdy(reduction_read_probe_ready),
+        ._reduction_read_probe(reduction_read_probe),
+        ._reduction_read_probe_vld(reduction_read_probe_valid),
+        ._reduction_write_probe_rdy(reduction_write_probe_ready),
+        ._reduction_write_probe(reduction_write_probe),
+        ._reduction_write_probe_vld(reduction_write_probe_valid)
     );
 
     always #5 clk = ~clk;
@@ -72,14 +86,17 @@ module hls_statem_reduction_hol_tb;
                     captured[output_beat_count] <= output_beat;
                 output_beat_count <= output_beat_count + 1;
             end
-            if (watch_actor_one && state_write_probe_valid &&
-                    state_write_probe_ready && state_write_probe == 32'd1)
+            if (watch_actor_one && reduction_write_probe_valid &&
+                    reduction_write_probe_ready &&
+                    reduction_write_probe == 32'd1)
                 actor_one_fold_retired <= 1'b1;
-            if (watch_actor_one_read && state_read_probe_valid &&
-                    state_read_probe_ready && state_read_probe == 32'd1)
+            if (watch_actor_one_read && reduction_read_probe_valid &&
+                    reduction_read_probe_ready &&
+                    reduction_read_probe == 32'd1)
                 actor_one_nonfold_probed <= 1'b1;
-            if (watch_actor_two && state_write_probe_valid &&
-                    state_write_probe_ready && state_write_probe == 32'd2)
+            if (watch_actor_two && reduction_write_probe_valid &&
+                    reduction_write_probe_ready &&
+                    reduction_write_probe == 32'd2)
                 actor_two_fold_retired <= 1'b1;
         end
     end
@@ -232,7 +249,7 @@ module hls_statem_reduction_hol_tb;
         end
 
         // Enqueue the progress-making fold only after observing the failed
-        // probe. Actor one's blocked-probed bit must prevent that earlier
+        // probe. Actor one's per-head probe mark must prevent that earlier
         // head from starving actor two.
         watch_actor_two = 1'b1;
         send_count(8'd2, 32'd17, 32'd13);
