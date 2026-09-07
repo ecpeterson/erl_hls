@@ -152,8 +152,8 @@ typedef struct {
     uint64_t reduction_fold_wrong_modes;
     uint64_t reduction_fold_unexpected_members;
     uint64_t reduction_fold_duplicate_members;
-    uint64_t sidecar_fold_reads;
-    uint64_t sidecar_fold_admission_overlaps;
+    uint64_t reduction_fold_issues;
+    uint64_t reduction_fold_admission_overlaps;
     uint64_t actor_state_reads[MAX_SCHEDULER_ACTORS];
     uint64_t actor_ready_samples[MAX_SCHEDULER_ACTORS];
     uint64_t actor_same_actor_only[MAX_SCHEDULER_ACTORS];
@@ -661,9 +661,10 @@ static void write_scheduler_profile(void) {
                       counts->reduction_fold_unexpected_members);
         PROFILE_VALUE("reduction_fold_duplicate_members",
                       counts->reduction_fold_duplicate_members);
-        PROFILE_VALUE("sidecar_fold_reads", counts->sidecar_fold_reads);
-        PROFILE_VALUE("sidecar_fold_admission_overlaps",
-                      counts->sidecar_fold_admission_overlaps);
+        PROFILE_VALUE("reduction_fold_issues",
+                      counts->reduction_fold_issues);
+        PROFILE_VALUE("reduction_fold_admission_overlaps",
+                      counts->reduction_fold_admission_overlaps);
         {
             unsigned actor;
             for (actor = 0; actor < profile->actor_count; actor++) {
@@ -1370,7 +1371,7 @@ static void step_scheduler_profile(scheduler_profile_t *profile) {
     int mailbox_read_accepted;
     int reduction_read_accepted = 0;
     int reduction_write_accepted = 0;
-    int sidecar_fold_issued = 0;
+    int reduction_fold_issued = 0;
     int state_port_blocked = 0;
     int request_backpressured = 0;
     int egress_backpressured = 0;
@@ -1455,12 +1456,15 @@ static void step_scheduler_profile(scheduler_profile_t *profile) {
             counts->reduction_write_completions++;
             active = 1;
         }
-        sidecar_fold_issued = reduction_read_accepted &&
-            profile->h_fold_issue_valid &&
-            get_bit(profile->h_fold_issue_valid);
-        if (sidecar_fold_issued)
-            counts->sidecar_fold_reads++;
     }
+
+    /* A fold issue is independent of where its accumulator is stored.  The
+     * BRAM sidecar happened to issue a reduction read on the same clock, but
+     * register-resident receptacles have no external reduction-RAM request. */
+    reduction_fold_issued = profile->h_fold_issue_valid &&
+        get_bit(profile->h_fold_issue_valid);
+    if (reduction_fold_issued)
+        counts->reduction_fold_issues++;
 
     state_read_valid = get_bit(profile->h_ram_read_request_valid);
     read_slot = get_u32(profile->h_ram_read_request);
@@ -1688,8 +1692,8 @@ static void step_scheduler_profile(scheduler_profile_t *profile) {
     mailbox_write_accepted = valid && ready;
     if (mailbox_write_accepted) {
         counts->mailbox_writes++;
-        if (sidecar_fold_issued)
-            counts->sidecar_fold_admission_overlaps++;
+        if (reduction_fold_issued)
+            counts->reduction_fold_admission_overlaps++;
         active = 1;
     } else if (valid) {
         counts->mailbox_request_stalls++;

@@ -31,23 +31,16 @@ machine_and_reduction_storage_are_separate_test() ->
         <<"bits_from_reduction_state">>
     )).
 
-shared_service_exposes_a_distinct_reduction_ram_test() ->
+shared_service_keeps_small_reduction_rows_in_registers_test() ->
     Xls = generated_xls(),
+    SharedState = declaration_block(Xls, <<"struct SharedState<">>),
     SharedService = binary_from(Xls, <<"pub proc SharedService<">>),
-    lists:foreach(
-        fun(Declaration) ->
-            %% Each endpoint occurs once on the proc and once in config.
-            ?assertEqual(2, count(SharedService, Declaration))
-        end,
-        [
-            <<"reduction_read_req_out: chan<ReductionRamReadReq> out">>,
-            <<"reduction_read_resp_in: chan<ReductionRamReadResp> in">>,
-            <<"reduction_write_req_out: chan<ReductionRamWriteReq> out">>,
-            <<"reduction_write_resp_in: chan<ReductionRamWriteResp> in">>
-        ]
-    ),
-    %% The application-state and reduction-state memories must not merely be
-    %% aliases for one physical request stream.
+    ?assertNotEqual(nomatch, binary:match(
+        SharedState,
+        <<"reductions: ReductionBits[ACTOR_COUNT]">>
+    )),
+    ?assertEqual(nomatch, binary:match(SharedService, <<"ReductionRam">>)),
+    %% Ordinary application state remains on its independent external RAM.
     ?assertNotEqual(nomatch, binary:match(
         SharedService,
         <<"ram_read_req_out: chan<MachineRamReadReq> out">>
@@ -75,7 +68,7 @@ sidecar_contribution_classification_is_actor_data_independent_test() ->
     ?assertEqual(nomatch, binary:match(Sidecar, <<"data: Cell">>)),
     ?assertEqual(nomatch, binary:match(Sidecar, <<"data.">>)).
 
-fused_phase_entry_dirties_reduction_ram_test() ->
+fused_phase_entry_dirties_reduction_receptacle_test() ->
     Xls = generated_xls(),
     Executor = declaration_block(Xls, <<"pub fn shared_execute(">>),
     %% A dispatched cast may establish enter_pending and have that entry
@@ -87,7 +80,7 @@ fused_phase_entry_dirties_reduction_ram_test() ->
           "        dispatched.machine.enter_pending">>
     )).
 
-completion_visits_fetch_external_reduction_state_test() ->
+completion_visits_read_register_resident_reduction_state_test() ->
     Xls = generated_xls(),
     SharedState = declaration_block(Xls, <<"struct SharedState<">>),
     SharedService = binary_from(Xls, <<"pub proc SharedService<">>),
@@ -97,11 +90,7 @@ completion_visits_fetch_external_reduction_state_test() ->
     )),
     ?assertNotEqual(nomatch, binary:match(
         SharedService,
-        <<"reduction_read_needed = fold_issue_valid ||">>
-    )),
-    ?assertNotEqual(nomatch, binary:match(
-        SharedService,
-        <<"private_active;">>
+        <<"let reduction_bits = state.reductions[read_slot];">>
     )),
     ?assertNotEqual(nomatch, binary:match(
         SharedService,
@@ -109,10 +98,10 @@ completion_visits_fetch_external_reduction_state_test() ->
     )),
     ?assertNotEqual(nomatch, binary:match(
         SharedService,
-        <<"reduction_response.data">>
+        <<"reduction_bits">>
     )).
 
-acknowledged_write_does_not_force_a_global_fold_bubble_test() ->
+register_write_does_not_force_an_acknowledgment_bubble_test() ->
     Xls = generated_xls(),
     FoldReady = declaration_block(Xls, <<"fn sidecar_fold_ready<">>),
     SharedService = binary_from(Xls, <<"pub proc SharedService<">>),
@@ -123,6 +112,14 @@ acknowledged_write_does_not_force_a_global_fold_bubble_test() ->
     ?assertEqual(nomatch, binary:match(
         SharedService,
         <<"!state.next_fold || !state.reduction_write_pending">>
+    )),
+    ?assertEqual(nomatch, binary:match(
+        SharedService,
+        <<"reduction_write_resp_in">>
+    )),
+    ?assertNotEqual(nomatch, binary:match(
+        SharedService,
+        <<"metadata_retired.reductions">>
     )).
 
 fold_probe_permits_same_slot_admission_test() ->
@@ -185,6 +182,3 @@ declaration_block(Xls, Marker) ->
 binary_from(Binary, Marker) ->
     {Start, _Length} = binary:match(Binary, Marker),
     binary:part(Binary, Start, byte_size(Binary) - Start).
-
-count(Binary, Needle) ->
-    length(binary:matches(Binary, Needle)).

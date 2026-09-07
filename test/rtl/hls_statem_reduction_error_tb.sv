@@ -23,11 +23,10 @@ module hls_statem_reduction_error_tb;
     integer beat_count = 0;
     integer cycle;
 `ifdef REDUCTION_SHARED
-    integer reduction_write_count = 0;
-    integer writes_after_failure;
-    wire reduction_write_accepted =
-        dut.__hls_statem_reduction_rtl_fixture__SharedService_0__1_0_1_0_next_inst._reduction_write_req_out_vld &&
-        dut.__hls_statem_reduction_rtl_fixture__SharedService_0__1_0_1_0_next_inst._reduction_write_req_out_rdy;
+    integer fold_retire_count = 0;
+    integer folds_after_failure;
+    wire fold_retired =
+        dut.__hls_statem_reduction_rtl_fixture__SharedService_0__1_0_1_0_next_inst.fold_wins;
 `endif
 
     `REDUCTION_DUT dut (
@@ -47,14 +46,14 @@ module hls_statem_reduction_error_tb;
         if (reset) begin
             beat_count <= 0;
 `ifdef REDUCTION_SHARED
-            reduction_write_count <= 0;
+            fold_retire_count <= 0;
 `endif
         end else begin
             if (output_valid && output_ready)
                 beat_count <= beat_count + 1;
 `ifdef REDUCTION_SHARED
-            if (reduction_write_accepted)
-                reduction_write_count <= reduction_write_count + 1;
+            if (fold_retired)
+                fold_retire_count <= fold_retire_count + 1;
 `endif
         end
     end
@@ -176,20 +175,19 @@ module hls_statem_reduction_error_tb;
             $fatal(1);
         end
 `ifdef REDUCTION_SHARED
-        // A failed actor must disable its reduction sidecar. Otherwise a
-        // later contribution can update reduction RAM and be consumed without
-        // ever reading the failed main-state row.
-        writes_after_failure = reduction_write_count;
+        // Failure retires and disables the actor's register receptacle. A
+        // later contribution may enter the mailbox, but must not be consumed
+        // by the mailbox-head fold path without an ordinary actor visit.
+        folds_after_failure = fold_retire_count;
         send_member(32'd17, 32'd7, 32'd3);
         repeat (200) @(posedge clk);
-        if (reduction_write_count != writes_after_failure) begin
+        if (fold_retire_count != folds_after_failure) begin
             $display(
-                "FAIL: reduction sidecar remained active after actor failure"
+                "FAIL: reduction receptacle remained active after actor failure"
             );
             $fatal(1);
         end
 `endif
-
         $display(
             "PASS: incomplete boundary and duplicate member failed the actor"
         );

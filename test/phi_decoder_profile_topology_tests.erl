@@ -100,12 +100,7 @@ effect_window_domains_are_weak_not_strong_components_test() ->
 
 generated_profile_and_ram_shell_are_width_driven_test() ->
     #{groups := Groups} = phi_decoder_profile_topology_dslx:scheduler_plan(),
-    ReductionRamCount = length([
-        Group
-        || Group <- Groups,
-           maps:get(reduction_storage_width, Group, 0) > 0
-    ]),
-    ExpectedRamCount = 2 * length(Groups) + ReductionRamCount,
+    ExpectedRamCount = 2 * length(Groups),
     Generated = iolist_to_binary(
         phi_decoder_profile_topology_dslx:to_dslx()
     ),
@@ -119,6 +114,7 @@ generated_profile_and_ram_shell_are_width_driven_test() ->
         count(Wrapper, <<"hls_1r1w_ram #(.WIDTH(">>)
     ),
     assert_contains(Wrapper, <<".scheduler_7_state_rd_addr(">>),
+    ?assertEqual(nomatch, binary:match(Wrapper, <<"_reduction_rd_addr">>)),
     ?assertEqual(nomatch, binary:match(Wrapper, <<"@SCHEDULER_">>)).
 
 assert_contains(Binary, Pattern) ->

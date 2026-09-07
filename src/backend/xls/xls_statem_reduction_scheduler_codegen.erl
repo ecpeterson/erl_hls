@@ -63,6 +63,10 @@ shared_state_fields(_Reductions) ->
     """
       // A reduction contribution is consumed by the mailbox-head sidecar;
       // only completion and protocol errors become private actor work.
+      // Reduction words are deliberately register-resident: these arrays are
+      // small, and direct indexing avoids a read/write/acknowledgment trip
+      // through a shallow, badly fragmented external RAM on every fold.
+      reductions: ReductionBits[ACTOR_COUNT],
       internal_candidates: u1[ACTOR_COUNT],
       reduction_errors: u1[ACTOR_COUNT],
       reduction_active: u1[ACTOR_COUNT],
@@ -72,19 +76,15 @@ shared_state_fields(_Reductions) ->
       // Once ordinary retirement wins, a waiting sidecar result gets the
       // next contested retirement opportunity.
       fold_retire_turn: u1,
-      reduction_write_pending: u1,
-      reduction_write_slot: u32,
     """.
 
 shared_boot_reduction_io(none) ->
     "\n        let boot_write_tok = write_tok;\n";
 shared_boot_reduction_io(_Reductions) ->
     ["\n", """
-            // Reduction rows are initialized lazily.  reduction_active is
-            // reset to zero and gates every sidecar read; the actor's first
-            // open_reduction result writes the row before setting that bit.
-            // Keeping this channel out of BOOT also leaves exactly one
-            // response receive site for XLS's explicit 1R1W RAM protocol.
+            // Register-resident reduction words start at zero with SharedState.
+            // reduction_active gates their interpretation until an actor opens
+            // its first reduction.
             let boot_write_tok = write_tok;
     """, "\n"].
 
@@ -106,29 +106,11 @@ shared_admission_exclusion_valid(_Reductions) ->
 shared_reduction_read_io(none) -> "\n";
 shared_reduction_read_io(_Reductions) ->
     ["\n", """
-            let reduction_read_needed = fold_issue_valid ||
-              private_active;
-            let reduction_read_tok = send_if(
-              join(),
-              reduction_read_req_out,
-              reduction_read_needed,
-              reduction_read(read_slot));
-            let (reduction_done, reduction_response) = recv_if(
-              reduction_read_tok,
-              reduction_read_resp_in,
-              reduction_read_needed,
-              zero!<ReductionRamReadResp>());
+            let reduction_bits = state.reductions[read_slot];
     """, "\n"].
 
 shared_reduction_write_io(none) -> "\n";
-shared_reduction_write_io(_Reductions) ->
-    ["\n", """
-            let reduction_write_tok = send_if(
-              egress_tok,
-              reduction_write_req_out,
-              reduction_write_valid,
-              bram::write(reduction_write_slot, reduction_write_bits));
-    """, "\n"].
+shared_reduction_write_io(_Reductions) -> "\n".
 
 -spec direct_after_failed(reductions(), pos_integer()) -> iodata().
 direct_after_failed(none, _Capacity) ->
@@ -831,28 +813,13 @@ shared_service_helpers(_Reductions) ->
 shared_fold_service_fields(none) -> "\n";
 shared_fold_service_fields(_Reductions) ->
     ["\n", """
-      reduction_read_req_out: chan<ReductionRamReadReq> out;
-      reduction_read_resp_in: chan<ReductionRamReadResp> in;
-      reduction_write_req_out: chan<ReductionRamWriteReq> out;
-      reduction_write_resp_in: chan<ReductionRamWriteResp> in;
       fold_request_out: chan<FoldEnvelope> out;
       fold_result_in: chan<FoldEnvelope> in;
     """, "\n"].
 
 -spec shared_reduction_config_parameters(reductions()) -> iodata().
 shared_reduction_config_parameters(none) -> "\n";
-shared_reduction_config_parameters(_Reductions) ->
-    [
-        ",\n",
-        "      reduction_read_req_out: ",
-        "chan<ReductionRamReadReq> out,\n",
-        "      reduction_read_resp_in: ",
-        "chan<ReductionRamReadResp> in,\n",
-        "      reduction_write_req_out: ",
-        "chan<ReductionRamWriteReq> out,\n",
-        "      reduction_write_resp_in: ",
-        "chan<ReductionRamWriteResp> in\n"
-    ].
+shared_reduction_config_parameters(_Reductions) -> "\n".
 
 -spec shared_fold_config_bindings(reductions()) -> iodata().
 shared_fold_config_bindings(none) -> "\n";
@@ -873,10 +840,6 @@ shared_fold_config_spawn(_Reductions) ->
 shared_fold_config_endpoints(none) -> "\n";
 shared_fold_config_endpoints(_Reductions) ->
     ["\n", """
-          reduction_read_req_out,
-          reduction_read_resp_in,
-          reduction_write_req_out,
-          reduction_write_resp_in,
           fold_request_p,
           fold_result_c,
     """, "\n"].
@@ -886,7 +849,7 @@ shared_executor_internal_request_field(none) -> "\n";
 shared_executor_internal_request_field(_Reductions) ->
     ["\n", """
               reduction: if private_active {
-                reduction_response.data
+                reduction_bits
               } else {
                 bits_from_reduction_state(ReductionState {
                   status: if state.reduction_active[read_slot] {
@@ -905,7 +868,7 @@ shared_executor_internal_request_field(_Reductions) ->
 shared_executor_request_token(none) ->
     "\n          join(state_done, mailbox_done),\n";
 shared_executor_request_token(_Reductions) ->
-    "\n          join(state_done, mailbox_done, reduction_done),\n".
+    "\n          join(state_done, mailbox_done),\n".
 
 -spec shared_ready_selection_call(reductions()) -> iodata().
 shared_ready_selection_call(none) ->
@@ -929,7 +892,7 @@ shared_local_fold_bindings(_Reductions) ->
     ["\n", """
             let local_fold = shared_reduction_fold_result(
                 read_slot,
-                reduction_response.data,
+                reduction_bits,
                 frame,
                 mailbox_index,
                 order_index);
@@ -986,7 +949,7 @@ shared_fold_request_send(none) -> "\n";
 shared_fold_request_send(_Reductions) ->
     ["\n", """
             let fold_request_tok = send_if(
-              join(mailbox_done, reduction_done),
+              mailbox_done,
               fold_request_out,
               fold_issue_valid && read_mailbox && received,
               local_fold);
@@ -1003,7 +966,6 @@ shared_fold_done_token(none) -> "\n";
 shared_fold_done_token(_Reductions) ->
     ["\n", """
               fold_request_tok,
-              reduction_write_tok,
     """, "\n"].
 
 -spec shared_in_flight_field(reductions()) -> iodata().
@@ -1024,8 +986,6 @@ shared_folded_state_fields(_Reductions) ->
               } else {
                 state.fold_retire_turn
               },
-              reduction_write_pending: reduction_write_valid,
-              reduction_write_slot,
     """, "\n"].
 
 -spec shared_result_retirement_head(reductions()) -> iodata().
@@ -1091,27 +1051,6 @@ shared_result_retirement_head(none) ->
     """, "\n"];
 shared_result_retirement_head(_Reductions) ->
     ["\n", """
-            // A reduction row remains in flight until its synchronous write
-            // acknowledgment. This is the sidecar's same-slot RAW fence.
-            let (reduction_completion_tok, _) = recv_if(
-              capture_tok,
-              reduction_write_resp_in,
-              state.reduction_write_pending,
-              zero!<ReductionRamWriteResp>());
-            let acknowledged_in_flight = if state.reduction_write_pending {
-              update(
-                state.in_flight,
-                state.reduction_write_slot,
-                u1:0)
-            } else {
-              state.in_flight
-            };
-            let acknowledged = SharedState<
-                ACTOR_COUNT, PRODUCER_COUNT> {
-              in_flight: acknowledged_in_flight,
-              reduction_write_pending: u1:0,
-              ..state
-            };
             let buffered_can_retire = state.completed_valid &&
               (!state.completed.effects_valid || !credit_busy);
             let accept_executor_result =
@@ -1119,7 +1058,7 @@ shared_result_retirement_head(_Reductions) ->
               (buffered_can_retire && !state.fold_retire_turn);
             let (executor_result_tok, incoming_result, incoming_valid) =
               recv_if_non_blocking(
-                reduction_completion_tok,
+                capture_tok,
                 executor_result_in,
                 accept_executor_result,
                 zero!<SharedExecutorResult>());
@@ -1157,7 +1096,7 @@ shared_result_retirement_head(_Reductions) ->
               pending_valid: credit_pending_valid,
               egress_busy: credit_busy ||
                 (retire_valid && result.effects_valid),
-              ..acknowledged
+              ..state
             };
             let actor_retired0 = retire_actor(
               credited,
@@ -1169,7 +1108,7 @@ shared_result_retirement_head(_Reductions) ->
               result.order_index);
             let actor_retired = retire_reduction_actor(
               actor_retired0, retire_valid, result.slot, result);
-            let retired = retire_reduction_fold(
+            let metadata_retired = retire_reduction_fold(
               actor_retired,
               fold_wins,
               incoming_fold);
@@ -1190,17 +1129,30 @@ shared_result_retirement_head(_Reductions) ->
             } else {
               incoming_fold.reduction
             };
-            let actor_in_flight = if retire_valid &&
-                !actor_reduction_write {
+            let reductions = if reduction_write_valid {
+              update(
+                metadata_retired.reductions,
+                reduction_write_slot,
+                reduction_write_bits)
+            } else {
+              metadata_retired.reductions
+            };
+            let retired = SharedState<
+                ACTOR_COUNT, PRODUCER_COUNT> {
+              reductions,
+              ..metadata_retired
+            };
+            // The authoritative reduction word is updated in this proc state,
+            // so retirement itself closes the same-slot hazard. There is no
+            // external write acknowledgment to await.
+            let retired_in_flight = if retire_valid {
               update(retired.in_flight, result.slot, u1:0)
             } else {
-              retired.in_flight
-            };
-            let retired_in_flight = if fold_wins &&
-                !fold_accepted {
-              update(actor_in_flight, incoming_fold.slot, u1:0)
-            } else {
-              actor_in_flight
+              if fold_wins {
+                update(retired.in_flight, incoming_fold.slot, u1:0)
+              } else {
+                retired.in_flight
+              }
             };
             let completed_valid = if state.completed_valid {
               if retire_valid { incoming_valid } else { u1:1 }

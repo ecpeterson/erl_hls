@@ -179,15 +179,7 @@ reduction_executor_result_values(_Reductions) ->
 reduction_ram_declarations(none) -> [];
 reduction_ram_declarations(Reductions) ->
     Width = xls_statem_reduction_codegen:private_width(Reductions),
-    [
-        "pub type ReductionBits = bits[", integer_to_list(Width), "];\n\n",
-        "pub type ReductionRamReadReq = bram::ReadReq;\n",
-        "pub type ReductionRamReadResp = bram::ReadResp<u32:",
-        integer_to_list(Width), ">;\n",
-        "pub type ReductionRamWriteReq = bram::WriteReq<u32:",
-        integer_to_list(Width), ">;\n",
-        "pub type ReductionRamWriteResp = bram::WriteResp;\n\n"
-    ].
+    ["pub type ReductionBits = bits[", integer_to_list(Width), "];\n\n"].
 
 reduction_internal_candidates_field(none) -> [];
 reduction_internal_candidates_field(Reductions) ->
@@ -206,15 +198,6 @@ shared_reduction_codec(_Reductions) ->
         reduction: reduction_state_from_bits(reduction),
         ..machine_from_bits(raw)
       }
-    }
-
-    fn reduction_read(slot: u32) -> ReductionRamReadReq {
-      bram::read(slot)
-    }
-
-    fn reduction_write(
-        slot: u32, state: ReductionState) -> ReductionRamWriteReq {
-      bram::write(slot, bits_from_reduction_state(state))
     }
 
     """.

@@ -480,11 +480,6 @@ pub type MachineRamWriteResp = bram::WriteResp;
 
 pub type ReductionBits = bits[182];
 
-pub type ReductionRamReadReq = bram::ReadReq;
-pub type ReductionRamReadResp = bram::ReadResp<u32:182>;
-pub type ReductionRamWriteReq = bram::WriteReq<u32:182>;
-pub type ReductionRamWriteResp = bram::WriteResp;
-
 pub type MailboxRamReadReq = mailbox::RamReadReq;
 pub type MailboxRamReadResp = mailbox::RamReadResp;
 pub type MailboxRamWriteReq = mailbox::RamWriteReq;
@@ -581,6 +576,10 @@ struct SharedState<ACTOR_COUNT: u32, PRODUCER_COUNT: u32> {
   in_flight: u1[ACTOR_COUNT],
   // A reduction contribution is consumed by the mailbox-head sidecar;
   // only completion and protocol errors become private actor work.
+  // Reduction words are deliberately register-resident: these arrays are
+  // small, and direct indexing avoids a read/write/acknowledgment trip
+  // through a shallow, badly fragmented external RAM on every fold.
+  reductions: ReductionBits[ACTOR_COUNT],
   internal_candidates: u1[ACTOR_COUNT],
   reduction_errors: u1[ACTOR_COUNT],
   reduction_active: u1[ACTOR_COUNT],
@@ -589,9 +588,7 @@ struct SharedState<ACTOR_COUNT: u32, PRODUCER_COUNT: u32> {
   next_fold: u1,
   // Once ordinary retirement wins, a waiting sidecar result gets the
   // next contested retirement opportunity.
-  fold_retire_turn: u1,
-  reduction_write_pending: u1,
-  reduction_write_slot: u32,  completed_valid: u1,
+  fold_retire_turn: u1,  completed_valid: u1,
   completed: SharedExecutorResult,
   admission_cursor: u32,
   cursor: u32,
@@ -1652,15 +1649,6 @@ fn machine_with_reduction(
     reduction: reduction_state_from_bits(reduction),
     ..machine_from_bits(raw)
   }
-}
-
-fn reduction_read(slot: u32) -> ReductionRamReadReq {
-  bram::read(slot)
-}
-
-fn reduction_write(
-    slot: u32, state: ReductionState) -> ReductionRamWriteReq {
-  bram::write(slot, bits_from_reduction_state(state))
 }
 fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
   match phase {
@@ -4773,10 +4761,6 @@ pub proc SharedService<
   mailbox_write_resp_in: chan<MailboxRamWriteResp> in;
   executor_request_out: chan<SharedExecutorRequest> out;
   executor_result_in: chan<SharedExecutorResult> in;
-  reduction_read_req_out: chan<ReductionRamReadReq> out;
-  reduction_read_resp_in: chan<ReductionRamReadResp> in;
-  reduction_write_req_out: chan<ReductionRamWriteReq> out;
-  reduction_write_resp_in: chan<ReductionRamWriteResp> in;
   fold_request_out: chan<FoldEnvelope> out;
   fold_result_in: chan<FoldEnvelope> in;
 
@@ -4791,11 +4775,7 @@ pub proc SharedService<
       mailbox_read_req_out: chan<MailboxRamReadReq> out,
       mailbox_read_resp_in: chan<MailboxRamReadResp> in,
       mailbox_write_req_out: chan<MailboxRamWriteReq> out,
-      mailbox_write_resp_in: chan<MailboxRamWriteResp> in,
-      reduction_read_req_out: chan<ReductionRamReadReq> out,
-      reduction_read_resp_in: chan<ReductionRamReadResp> in,
-      reduction_write_req_out: chan<ReductionRamWriteReq> out,
-      reduction_write_resp_in: chan<ReductionRamWriteResp> in
+      mailbox_write_resp_in: chan<MailboxRamWriteResp> in
   ) {
     let (executor_request_p, executor_request_c) =
       chan<SharedExecutorRequest, u32:1>("executor_request");
@@ -4822,10 +4802,6 @@ pub proc SharedService<
       mailbox_write_resp_in,
       executor_request_p,
       executor_result_c,
-      reduction_read_req_out,
-      reduction_read_resp_in,
-      reduction_write_req_out,
-      reduction_write_resp_in,
       fold_request_p,
       fold_result_c,
     )
@@ -4874,11 +4850,9 @@ pub proc SharedService<
           capture_tok,
           ram_write_req_out,
           machine_write(state.cursor, initial_shared_machine()));
-        // Reduction rows are initialized lazily.  reduction_active is
-        // reset to zero and gates every sidecar read; the actor's first
-        // open_reduction result writes the row before setting that bit.
-        // Keeping this channel out of BOOT also leaves exactly one
-        // response receive site for XLS's explicit 1R1W RAM protocol.
+        // Register-resident reduction words start at zero with SharedState.
+        // reduction_active gates their interpretation until an actor opens
+        // its first reduction.
         let boot_write_tok = write_tok;
         let (_done, _) = recv(boot_write_tok, ram_write_resp_in);
         let entry_probes = update(
@@ -4941,27 +4915,6 @@ pub proc SharedService<
           captured_pending,
           captured_pending_valid,
           state.egress_busy);
-        // A reduction row remains in flight until its synchronous write
-        // acknowledgment. This is the sidecar's same-slot RAW fence.
-        let (reduction_completion_tok, _) = recv_if(
-          capture_tok,
-          reduction_write_resp_in,
-          state.reduction_write_pending,
-          zero!<ReductionRamWriteResp>());
-        let acknowledged_in_flight = if state.reduction_write_pending {
-          update(
-            state.in_flight,
-            state.reduction_write_slot,
-            u1:0)
-        } else {
-          state.in_flight
-        };
-        let acknowledged = SharedState<
-            ACTOR_COUNT, PRODUCER_COUNT> {
-          in_flight: acknowledged_in_flight,
-          reduction_write_pending: u1:0,
-          ..state
-        };
         let buffered_can_retire = state.completed_valid &&
           (!state.completed.effects_valid || !credit_busy);
         let accept_executor_result =
@@ -4969,7 +4922,7 @@ pub proc SharedService<
           (buffered_can_retire && !state.fold_retire_turn);
         let (executor_result_tok, incoming_result, incoming_valid) =
           recv_if_non_blocking(
-            reduction_completion_tok,
+            capture_tok,
             executor_result_in,
             accept_executor_result,
             zero!<SharedExecutorResult>());
@@ -5007,7 +4960,7 @@ pub proc SharedService<
           pending_valid: credit_pending_valid,
           egress_busy: credit_busy ||
             (retire_valid && result.effects_valid),
-          ..acknowledged
+          ..state
         };
         let actor_retired0 = retire_actor(
           credited,
@@ -5019,7 +4972,7 @@ pub proc SharedService<
           result.order_index);
         let actor_retired = retire_reduction_actor(
           actor_retired0, retire_valid, result.slot, result);
-        let retired = retire_reduction_fold(
+        let metadata_retired = retire_reduction_fold(
           actor_retired,
           fold_wins,
           incoming_fold);
@@ -5040,17 +4993,30 @@ pub proc SharedService<
         } else {
           incoming_fold.reduction
         };
-        let actor_in_flight = if retire_valid &&
-            !actor_reduction_write {
+        let reductions = if reduction_write_valid {
+          update(
+            metadata_retired.reductions,
+            reduction_write_slot,
+            reduction_write_bits)
+        } else {
+          metadata_retired.reductions
+        };
+        let retired = SharedState<
+            ACTOR_COUNT, PRODUCER_COUNT> {
+          reductions,
+          ..metadata_retired
+        };
+        // The authoritative reduction word is updated in this proc state,
+        // so retirement itself closes the same-slot hazard. There is no
+        // external write acknowledgment to await.
+        let retired_in_flight = if retire_valid {
           update(retired.in_flight, result.slot, u1:0)
         } else {
-          retired.in_flight
-        };
-        let retired_in_flight = if fold_wins &&
-            !fold_accepted {
-          update(actor_in_flight, incoming_fold.slot, u1:0)
-        } else {
-          actor_in_flight
+          if fold_wins {
+            update(retired.in_flight, incoming_fold.slot, u1:0)
+          } else {
+            retired.in_flight
+          }
         };
         let completed_valid = if state.completed_valid {
           if retire_valid { incoming_valid } else { u1:1 }
@@ -5108,18 +5074,7 @@ pub proc SharedService<
           mailbox_read_req_out,
           read_mailbox && received,
           mailbox::read(read_slot, mailbox_index, MAILBOX_DEPTH));
-        let reduction_read_needed = fold_issue_valid ||
-          private_active;
-        let reduction_read_tok = send_if(
-          join(),
-          reduction_read_req_out,
-          reduction_read_needed,
-          reduction_read(read_slot));
-        let (reduction_done, reduction_response) = recv_if(
-          reduction_read_tok,
-          reduction_read_resp_in,
-          reduction_read_needed,
-          zero!<ReductionRamReadResp>());
+        let reduction_bits = state.reductions[read_slot];
         let (state_done, response) = recv_if(
           state_read_tok,
           ram_read_resp_in,
@@ -5174,7 +5129,7 @@ pub proc SharedService<
         let frame = axis::frame_from_bits(mailbox_response.data);
         let local_fold = shared_reduction_fold_result(
             read_slot,
-            reduction_response.data,
+            reduction_bits,
             frame,
             mailbox_index,
             order_index);
@@ -5202,7 +5157,7 @@ pub proc SharedService<
           machine: response.data,
           frame,
           reduction: if private_active {
-            reduction_response.data
+            reduction_bits
           } else {
             bits_from_reduction_state(ReductionState {
               status: if state.reduction_active[read_slot] {
@@ -5221,12 +5176,12 @@ pub proc SharedService<
           egress_ready: u1:1,
         };
         let executor_request_tok = send_if(
-          join(state_done, mailbox_done, reduction_done),
+          join(state_done, mailbox_done),
           executor_request_out,
           actor_issue_valid,
           executor_request);
         let fold_request_tok = send_if(
-          join(mailbox_done, reduction_done),
+          mailbox_done,
           fold_request_out,
           fold_issue_valid && read_mailbox && received,
           local_fold);
@@ -5244,11 +5199,6 @@ pub proc SharedService<
           ram_write_req_out,
           retire_valid,
           machine_write(result.slot, resolved.machine));
-        let reduction_write_tok = send_if(
-          egress_tok,
-          reduction_write_req_out,
-          reduction_write_valid,
-          bram::write(reduction_write_slot, reduction_write_bits));
         let admission_frame =
           captured_pending[reservation.admission.producer].frame;
         let mailbox_write_tok = send_if(
@@ -5267,7 +5217,6 @@ pub proc SharedService<
           mailbox_write_tok,
           executor_request_tok,
           fold_request_tok,
-          reduction_write_tok,
           state_completion_tok,
           mailbox_completion_tok);
         SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
@@ -5284,8 +5233,6 @@ pub proc SharedService<
           } else {
             state.fold_retire_turn
           },
-          reduction_write_pending: reduction_write_valid,
-          reduction_write_slot,
           cursor,
           state_write_pending: retire_valid,
           mailbox_write_pending: reservation.admission.valid,

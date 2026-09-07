@@ -49,46 +49,6 @@ proc MachineRam {
   }
 }
 
-proc ReductionRam {
-  read_req_in: chan<actor::ReductionRamReadReq> in;
-  read_resp_out: chan<actor::ReductionRamReadResp> out;
-  write_req_in: chan<actor::ReductionRamWriteReq> in;
-  write_resp_out: chan<actor::ReductionRamWriteResp> out;
-
-  config(
-      read_req_in: chan<actor::ReductionRamReadReq> in,
-      read_resp_out: chan<actor::ReductionRamReadResp> out,
-      write_req_in: chan<actor::ReductionRamWriteReq> in,
-      write_resp_out: chan<actor::ReductionRamWriteResp> out
-  ) {
-    (read_req_in, read_resp_out, write_req_in, write_resp_out)
-  }
-
-  init { zero!<actor::ReductionBits[ACTOR_COUNT]>() }
-
-  next(rows: actor::ReductionBits[ACTOR_COUNT]) {
-    let (read_tok, read_req, read_valid) = recv_if_non_blocking(
-      join(), read_req_in, true, zero!<actor::ReductionRamReadReq>());
-    let (write_tok, write_req, write_valid) = recv_if_non_blocking(
-      read_tok, write_req_in, true, zero!<actor::ReductionRamWriteReq>());
-    let response_tok = send_if(
-      write_tok,
-      read_resp_out,
-      read_valid,
-      actor::ReductionRamReadResp { data: rows[read_req.addr] });
-    let _done = send_if(
-      response_tok,
-      write_resp_out,
-      write_valid,
-      zero!<actor::ReductionRamWriteResp>());
-    if write_valid {
-      update(rows, write_req.addr, write_req.data)
-    } else {
-      rows
-    }
-  }
-}
-
 proc MailboxRam {
   read_req_in: chan<actor::MailboxRamReadReq> in;
   read_resp_out: chan<actor::MailboxRamReadResp> out;
@@ -240,15 +200,6 @@ pub proc Top {
     let (state_write_resp_p, state_write_resp_c) =
       chan<actor::MachineRamWriteResp, u32:1>("state_write_resp");
 
-    let (reduction_read_req_p, reduction_read_req_c) =
-      chan<actor::ReductionRamReadReq, u32:1>("reduction_read_req");
-    let (reduction_read_resp_p, reduction_read_resp_c) =
-      chan<actor::ReductionRamReadResp, u32:1>("reduction_read_resp");
-    let (reduction_write_req_p, reduction_write_req_c) =
-      chan<actor::ReductionRamWriteReq, u32:1>("reduction_write_req");
-    let (reduction_write_resp_p, reduction_write_resp_c) =
-      chan<actor::ReductionRamWriteResp, u32:1>("reduction_write_resp");
-
     let (mail_read_req_p, mail_read_req_c) =
       chan<actor::MailboxRamReadReq, u32:1>("mail_read_req");
     let (mail_read_resp_p, mail_read_resp_c) =
@@ -272,21 +223,12 @@ pub proc Top {
         mail_read_req_p,
         mail_read_resp_c,
         mail_write_req_p,
-        mail_write_resp_c,
-        reduction_read_req_p,
-        reduction_read_resp_c,
-        reduction_write_req_p,
-        reduction_write_resp_c);
+        mail_write_resp_c);
     spawn MachineRam(
       state_read_req_c,
       state_read_resp_p,
       state_write_req_c,
       state_write_resp_p);
-    spawn ReductionRam(
-      reduction_read_req_c,
-      reduction_read_resp_p,
-      reduction_write_req_c,
-      reduction_write_resp_p);
     spawn MailboxRam(
       mail_read_req_c,
       mail_read_resp_p,

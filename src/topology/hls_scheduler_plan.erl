@@ -25,10 +25,12 @@ either realize the corresponding state there or reject the plan. Actor data
 and mailboxes are separate bindings because safe shared scheduling needs both
 per-instance callback state and per-instance bounded admission state. Generated
 actor-local reduction state remains part of the logical actor, but a reduction-
-capable shared executor stores it in a third per-instance row instead of the
-ordinary callback-state row. Its width remains explicit in the normalized plan;
-the current XLS backend exposes an independent 1R1W RAM interface for it and
-uses the group's state-storage policy for both rows.
+capable shared executor stores its small per-instance receptacles in scheduler
+registers instead of the ordinary callback-state row. Its width remains explicit
+in the normalized plan. The callback state and mailbox retain their requested
+storage bindings; reduction receptacles deliberately do not inherit the state-
+storage policy, because a synchronous read/modify/write transaction on every
+contribution defeated the purpose of bypassing an actor visit.
 
 A shared executor advances one actor by a resumable microstep. If the next
 ordered effect lacks egress credit, the actor keeps its pending-effect index

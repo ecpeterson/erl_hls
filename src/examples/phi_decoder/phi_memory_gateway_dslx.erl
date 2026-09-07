@@ -349,28 +349,10 @@ scheduler_ram_members(RamBindings) ->
                     "::MailboxRamWriteReq> out"],
                 [Stem, "_mailbox_write_resp_in: chan<", Module,
                     "::MailboxRamWriteResp> in"]
-            ] ++ scheduler_reduction_ram_members(Binding)
+            ]
         end
         || Binding <- RamBindings
     ]).
-
-scheduler_reduction_ram_members(#{
-    stem := Stem,
-    module := Module,
-    reduction_storage_width := Width
-}) when Width > 0 ->
-    [
-        [Stem, "_reduction_read_req_out: chan<", Module,
-            "::ReductionRamReadReq> out"],
-        [Stem, "_reduction_read_resp_in: chan<", Module,
-            "::ReductionRamReadResp> in"],
-        [Stem, "_reduction_write_req_out: chan<", Module,
-            "::ReductionRamWriteReq> out"],
-        [Stem, "_reduction_write_resp_in: chan<", Module,
-            "::ReductionRamWriteResp> in"]
-    ];
-scheduler_reduction_ram_members(_Binding) ->
-    [].
 
 scheduler_ram_names(RamBindings) ->
     lists:append([
@@ -385,23 +367,10 @@ scheduler_ram_names(RamBindings) ->
                 [Stem, "_mailbox_read_resp_in"],
                 [Stem, "_mailbox_write_req_out"],
                 [Stem, "_mailbox_write_resp_in"]
-            ] ++ scheduler_reduction_ram_names(Binding)
+            ]
         end
         || Binding <- RamBindings
     ]).
-
-scheduler_reduction_ram_names(#{
-    stem := Stem,
-    reduction_storage_width := Width
-}) when Width > 0 ->
-    [
-        [Stem, "_reduction_read_req_out"],
-        [Stem, "_reduction_read_resp_in"],
-        [Stem, "_reduction_write_req_out"],
-        [Stem, "_reduction_write_resp_in"]
-    ];
-scheduler_reduction_ram_names(_Binding) ->
-    [].
 
 scheduler_ram_bindings(SchedulerProfile) ->
     #{groups := Groups} = phi_noise_topology_dslx:scheduler_plan(
@@ -410,12 +379,9 @@ scheduler_ram_bindings(SchedulerProfile) ->
     [
         #{
             stem => ["scheduler_", integer_to_list(Index)],
-            module => atom_to_list(Module),
-            reduction_storage_width => maps:get(
-                reduction_storage_width, Group, 0
-            )
+            module => atom_to_list(Module)
         }
-        || {Index, Group = #{module := Module}} <- lists:enumerate(0, Groups)
+        || {Index, #{module := Module}} <- lists:enumerate(0, Groups)
     ].
 
 boundary_constants(#{

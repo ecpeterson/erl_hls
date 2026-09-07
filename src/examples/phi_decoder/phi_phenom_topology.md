@@ -1669,3 +1669,32 @@ three-shard timing does not trigger the defect. The design deliberately does
 not serialize its RAM traffic to compensate; a corrected XLS toolchain and a
 focused pop/push regression are required before treating other shard counts as
 validated.
+
+### Register-resident reduction receptacles
+
+The next storage ablation keeps each scheduler's small per-slot reduction words
+in registers while leaving callback state and mailboxes in their external 1R1W
+RAMs. A fold still uses the mailbox-head sidecar and the same elastic result
+path, but it reads the accumulator combinationally and commits the updated word
+at retirement. There is no external reduction-memory request, write
+acknowledgement, or third inferred RAM per scheduler.
+
+This recovers the external-sidecar slowdown without producing a throughput win.
+The three-shard profile takes 6,505 clocks for steps eight through 32: 271.042
+clocks per step, or about 737,894 steps/s at 200 MHz. That is 16.6% faster than
+the BRAM sidecar's 315.875 clocks per step, but 0.4% slower than the original
+actor-reduction lowering's 269.958 clocks per step. Phi state reads remain low
+because contribution folds do not fetch callback state. The nearly exact return
+to baseline shows that the BRAM round trip explained the sidecar regression,
+while merely relocating the accumulator cannot remove destination mailbox
+admission, selection, fold transport, and retirement. The next experiment must
+address contributions directly to the reduction plane before they become actor
+mailbox work.
+
+The out-of-context XC7 map reports 63,963 estimated logic cells, 69,356
+flip-flops, 80,177 LUTs, 48 `DSP48E1`s, and 52 `RAMB36E1`s. Compared with the
+external-reduction-RAM sidecar, register receptacles remove 18 shallow,
+fragmented RAM blocks while adding 3,696 flip-flops and 2,209 LUTs. This is an
+area-for-latency trade, and the register design is only compelling if the next
+sender-addressed experiment turns the removed memory dependency into a cadence
+win.
