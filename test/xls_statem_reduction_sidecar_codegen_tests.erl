@@ -173,6 +173,10 @@ sender_addressed_fold_uses_only_safe_mailbox_scan_boundary_test() ->
         <<"pub fn direct_reduction_candidate(">>
     ),
     Direct = declaration_block(Xls, <<"fn reserve_direct_reduction<">>),
+    Aggregate = declaration_block(
+        Xls,
+        <<"fn reserve_reduction_aggregate<">>
+    ),
     SharedService = binary_from(Xls, <<"pub proc SharedService<">>),
     FoldRelay = binary_from(Xls, <<"proc FoldRelay">>),
     ?assertNotEqual(nomatch, binary:match(
@@ -228,11 +232,58 @@ sender_addressed_fold_uses_only_safe_mailbox_scan_boundary_test() ->
     )),
     ?assertNotEqual(nomatch, binary:match(
         Direct,
-        <<"let applied = shared_reduction_sidecar_step(">>
+        <<"shared_reduction_sidecar_step(reduction, request.frame)">>
+    )),
+    ?assertNotEqual(nomatch, binary:match(
+        Aggregate,
+        <<"reduction_apply_aggregate(">>
+    )),
+    %% A sender-side plane can finish the next window while the destination
+    %% still retires and re-enters the preceding one. Keep that aggregate
+    %% pending until its exact site/key is open instead of failing the actor.
+    ?assertNotEqual(nomatch, binary:match(
+        Aggregate,
+        <<"applied.outcome != ReductionOutcome::MISMATCH">>
     )),
     ?assertEqual(nomatch, binary:match(
         FoldRelay,
         <<"let applied = shared_reduction_sidecar_step(">>
+    )).
+
+joined_reduction_aggregates_bypass_mailbox_storage_test() ->
+    Xls = generated_xls(),
+    AggregateRequest = declaration_block(
+        Xls,
+        <<"pub struct ReductionAggregateRequest {">>
+    ),
+    Admission = declaration_block(Xls, <<"fn reserve_admission<">>),
+    ?assertNotEqual(nomatch, binary:match(
+        Xls,
+        <<"pub type ScheduledRequest = mailbox::ScheduledRequest;">>
+    )),
+    ?assertNotEqual(nomatch, binary:match(
+        AggregateRequest,
+        <<"reduction_aggregate: ReductionAggregate">>
+    )),
+    ?assertEqual(nomatch, binary:match(
+        Admission,
+        <<"reduction_aggregate">>
+    )),
+    ?assertNotEqual(nomatch, binary:match(
+        Xls,
+        <<"pub fn reduction_aggregate_push(">>
+    )),
+    ?assertNotEqual(nomatch, binary:match(
+        Xls,
+        <<"pub struct ReductionAggregatePair {">>
+    )),
+    ?assertNotEqual(nomatch, binary:match(
+        Xls,
+        <<"pub fn reduction_aggregate_pair_push(">>
+    )),
+    ?assertNotEqual(nomatch, binary:match(
+        Xls,
+        <<"pub fn reduction_aggregate_ready(">>
     )).
 
 generated_xls() ->

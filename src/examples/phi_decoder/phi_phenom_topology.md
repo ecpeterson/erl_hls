@@ -1733,3 +1733,53 @@ phi scheduler, but the remaining 2.84% cadence gain is still expensive and far
 short of the 1 MHz target. A follow-up should seek one shared or pipelined
 reducer which preserves sender-side overlap without duplicating the reducer in
 every scheduler.
+
+### Parallel fixed-neighbor reduction batches
+
+The next ablation changes only the physical topology profile. When all
+reducing phase entries begin with the same unconditional four-neighbor cast
+prefix, lowering replaces those four serial router actions with one batch.
+Per-family reduction planes accept batches from the three source schedulers,
+fold each frame directly into its translated destination, and send one
+completed aggregate to the destination scheduler. The ordinary actor message
+format and CPU execution remain unchanged.
+
+The batch carries its four destination slots rather than only the source
+coordinate. This matters structurally: reconstructing a complete nine-row
+aggregate array in every arm of a nine-way source match generated 36 fold call
+sites per plane. Four chained destination-indexed updates generate four. Across
+both planes, that reduces fold sites from 72 to eight while retaining the same
+two receptacle rows per actor.
+
+This path does not consume destination mailbox rows or mailbox producer
+credits. Its bounded storage is two register receptacles per actor: the current
+epoch and one lookahead. The second row is necessary because one neighbor may
+emit epoch `k + 1` while a slower neighbor is still completing epoch `k`; the
+topology's causal phase order prevents a source from reaching `k + 2` before
+the destination has entered `k + 1`. The destination scheduler still checks
+the exact reduction site and key and remains the sole writer of its actor-local
+reduction state.
+
+The three-shard request-paced profile measures 6,156 clocks from step eight
+through 32, or 256.5 clocks per step and about 779,727 steps/s at 200 MHz. This
+reduces step time by 2.29% from the sender-addressed parent's 262.5 clocks and
+by 4.98% from the original 269.958-clock actor-reduction lowering. The full
+native witness also remains exact: step 18 closes with 80 corrections, parity
+one, and the same nonuniform 8/10 final measurement.
+
+The revised transport has identical cadence but shrinks the request-paced
+profile Verilog from 59,346 lines (3.54 MB) to 52,746 lines (2.97 MB), and cuts
+native XLS optimization time from 18.8 seconds to 12.4 seconds. The complete
+bridged witness takes 24 seconds in native Icarus. These RTL-generation numbers
+are the useful result here: the discarded source-match form visibly expanded
+the whole destination array and did not merit waiting for a precise full-core
+technology map.
+
+The gain is much smaller than the four-way batching might suggest. Each phi
+actor still performs about 15 state reads per decoder step—almost exactly 498
+reads over the profiled 24-step interval. Aggregate completion, private-event
+handling, and subsequent phase entry still require actor transactions.
+Contribution mailbox traffic largely disappears, but those destination-side
+phase transitions now set the cadence. This makes a completion/phase-lifecycle
+optimization or an explicitly bulk-synchronous lowering a more promising next
+step than another send-side bypass.

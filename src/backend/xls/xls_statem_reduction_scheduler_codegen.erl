@@ -73,6 +73,11 @@ shared_state_fields(_Reductions) ->
       reduction_active: u1[ACTOR_COUNT],
       // A non-contribution head is handed to the ordinary actor exactly once.
       reduction_probed: u1[ACTOR_COUNT],
+      // At most one completed sender-side aggregate waits at a scheduler.
+      // It is applied beside unrelated actor work and never occupies a
+      // mailbox row or an ordinary producer holding slot.
+      aggregate_pending: ReductionAggregateRequest,
+      aggregate_pending_valid: u1,
       next_fold: u1,
       // Once ordinary retirement wins, a waiting sidecar result gets the
       // next contested retirement opportunity.
@@ -145,14 +150,34 @@ shared_direct_reduction_bindings(_Reductions) ->
               direct_fold.valid,
               direct_fold.slot,
               direct_fold.reduction);
-            let direct_state = SharedState<
+            let pre_aggregate_state = SharedState<
                 ACTOR_COUNT, PRODUCER_COUNT> {
               reductions,
               reduction_active: direct_fold.reduction_active,
               internal_candidates: direct_fold.internal_candidates,
+              reduction_errors: direct_fold.reduction_errors,
               admission_cursor: direct_fold.cursor,
               ..retired
             };
+            let (aggregate_tok, incoming_aggregate,
+                 incoming_aggregate_valid) = recv_if_non_blocking(
+              join(), aggregate_in,
+              !pre_aggregate_state.aggregate_pending_valid,
+              zero!<ReductionAggregateRequest>());
+            let aggregate_request = if
+                pre_aggregate_state.aggregate_pending_valid {
+              pre_aggregate_state.aggregate_pending
+            } else {
+              incoming_aggregate
+            };
+            let direct_state = reserve_reduction_aggregate(
+              pre_aggregate_state,
+              aggregate_request,
+              pre_aggregate_state.aggregate_pending_valid ||
+                incoming_aggregate_valid,
+              retired_in_flight,
+              issue_valid,
+              read_slot);
             let direct_pending = direct_fold.pending;
             let direct_pending_valid = direct_fold.pending_valid;
             let direct_in_flight_slots = retired_in_flight;
@@ -600,6 +625,7 @@ shared_fold_envelope_declaration(_Reductions) ->
       reduction: ReductionBits,
       reduction_active: u1[ACTOR_COUNT],
       internal_candidates: u1[ACTOR_COUNT],
+      reduction_errors: u1[ACTOR_COUNT],
       cursor: u32,
       valid: u1,
       slot: u32,
@@ -715,6 +741,82 @@ shared_service_helpers(_Reductions) ->
       }(reductions)
     }
 
+    // A completed sender-side aggregate has its own transport path, but the
+    // owning scheduler remains the sole writer of actor reduction state. Keep
+    // the register-bank update behind a typed helper boundary: this leaves the
+    // already-large SharedService recurrence small enough for XLS to elaborate
+    // without duplicating the aggregate decision tree into every use site.
+    fn reserve_reduction_aggregate<
+        ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
+        state: SharedState<ACTOR_COUNT, PRODUCER_COUNT>,
+        request: ReductionAggregateRequest,
+        found: u1,
+        in_flight: u1[ACTOR_COUNT],
+        excluded_valid: u1,
+        excluded_slot: u32) ->
+        SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
+      let slot = if request.slot < ACTOR_COUNT {
+        request.slot
+      } else {
+        u32:0
+      };
+      let private_work = state.internal_candidates[slot] ||
+        state.reduction_errors[slot];
+      let entry_work = state.entry_probes[slot] ||
+        state.egress_waiters[slot];
+      let applied = reduction_apply_aggregate(
+        reduction_state_from_bits(state.reductions[slot]),
+        request.reduction_aggregate);
+      // A complete aggregate can outrun retirement of the destination's
+      // preceding completion and repeat-phase entry. Treat that as an early
+      // arrival, just as the ordinary mailbox would, rather than converting
+      // benign scheduler skew into a reduction protocol failure.
+      let eligible = found && request.slot < ACTOR_COUNT &&
+        state.reduction_active[slot] &&
+        applied.outcome != ReductionOutcome::MISMATCH &&
+        !state.mail_candidates[slot] &&
+        !private_work && !entry_work && !in_flight[slot] &&
+        (!excluded_valid || slot != excluded_slot);
+      let accepted = eligible &&
+        (applied.outcome == ReductionOutcome::PENDING ||
+         applied.outcome == ReductionOutcome::COMPLETE);
+      let complete = accepted &&
+        applied.outcome == ReductionOutcome::COMPLETE;
+      let error = eligible && !accepted;
+      let reductions = if accepted {
+        update(
+          state.reductions,
+          slot,
+          bits_from_reduction_state(applied.state))
+      } else {
+        state.reductions
+      };
+      let reduction_active = if eligible {
+        update(state.reduction_active, slot, accepted && !complete)
+      } else {
+        state.reduction_active
+      };
+      let internal_candidates = if complete {
+        update(state.internal_candidates, slot, u1:1)
+      } else {
+        state.internal_candidates
+      };
+      let reduction_errors = if error {
+        update(state.reduction_errors, slot, u1:1)
+      } else {
+        state.reduction_errors
+      };
+      SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
+        reductions,
+        reduction_active,
+        internal_candidates,
+        reduction_errors,
+        aggregate_pending: request,
+        aggregate_pending_valid: found && !eligible,
+        ..state
+      }
+    }
+
     // A sender-marked contribution can update an open actor's receptacle
     // without first becoming mailbox work when no older mailbox event is
     // selectable in the current phase. Physically queued postponed events may
@@ -744,8 +846,9 @@ shared_service_helpers(_Reductions) ->
           state.reduction_errors[slot];
         let entry_work = state.entry_probes[slot] ||
           state.egress_waiters[slot];
+        let reduction_request = request.direct_reduction;
         let eligible = pending_valid[candidate] &&
-          !request.credit && request.direct_reduction && valid_slot &&
+          !request.credit && reduction_request && valid_slot &&
           state.reduction_active[slot] &&
           !state.mail_candidates[slot] &&
           !private_work && !entry_work && !in_flight[slot] &&
@@ -787,6 +890,7 @@ shared_service_helpers(_Reductions) ->
       let direct_fold_accepted = found &&
         (direct_fold_outcome == ReductionOutcome::PENDING ||
          direct_fold_outcome == ReductionOutcome::COMPLETE);
+      let consumed = direct_fold_accepted;
       let complete = direct_fold_outcome == ReductionOutcome::COMPLETE;
       let fallback = found && !direct_fold_accepted;
       let fallback_request = ScheduledRequest {
@@ -798,7 +902,7 @@ shared_service_helpers(_Reductions) ->
       } else {
         pending
       };
-      let next_pending_valid = if direct_fold_accepted {
+      let next_pending_valid = if consumed {
         update(pending_valid, producer, u1:0)
       } else {
         pending_valid
@@ -813,7 +917,8 @@ shared_service_helpers(_Reductions) ->
       } else {
         state.internal_candidates
       };
-      let cursor = if direct_fold_accepted {
+      let reduction_errors = state.reduction_errors;
+      let cursor = if consumed {
         if producer + u32:1 == PRODUCER_COUNT {
           u32:0
         } else {
@@ -828,6 +933,7 @@ shared_service_helpers(_Reductions) ->
         reduction: bits_from_reduction_state(applied.state),
         reduction_active,
         internal_candidates,
+        reduction_errors,
         cursor,
         valid: direct_fold_accepted,
         slot,
@@ -1027,11 +1133,15 @@ shared_fold_service_fields(_Reductions) ->
     ["\n", """
       fold_request_out: chan<FoldEnvelope> out;
       fold_result_in: chan<FoldEnvelope> in;
+      aggregate_in: chan<ReductionAggregateRequest> in;
     """, "\n"].
 
 -spec shared_reduction_config_parameters(reductions()) -> iodata().
 shared_reduction_config_parameters(none) -> "\n";
-shared_reduction_config_parameters(_Reductions) -> "\n".
+shared_reduction_config_parameters(_Reductions) ->
+    [",\n", """
+          aggregate_in: chan<ReductionAggregateRequest> in
+    """, "\n"].
 
 -spec shared_fold_config_bindings(reductions()) -> iodata().
 shared_fold_config_bindings(none) -> "\n";
@@ -1054,6 +1164,7 @@ shared_fold_config_endpoints(_Reductions) ->
     ["\n", """
           fold_request_p,
           fold_result_c,
+          aggregate_in,
     """, "\n"].
 
 -spec shared_executor_internal_request_field(reductions()) -> iodata().
@@ -1178,6 +1289,7 @@ shared_fold_done_token(none) -> "\n";
 shared_fold_done_token(_Reductions) ->
     ["\n", """
               fold_request_tok,
+              aggregate_tok,
     """, "\n"].
 
 -spec shared_in_flight_field(reductions()) -> iodata().

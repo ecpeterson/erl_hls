@@ -125,13 +125,18 @@ lower(Plan, Profile) ->
     ),
     Routes = annotate_routes(Relations, Lanes),
     Startup = annotate_startup(maps:get(startup, Plan), FamilyIndex),
-    Families = [annotate_family_graph(
+    Families2 = [annotate_family_graph(
         with_scheduler_bindings(Family, SchedulerBindings),
         Routes,
         Lanes,
         Startup,
         Ingresses
     ) || Family <- Families1],
+    Families = annotate_reduction_transports(
+        Families2,
+        maps:get(reduction_transport, Physical, ordinary),
+        [Width, Height]
+    ),
     ok = validate_lane_ports(Families),
     ok = validate_external_lanes(Externals, Lanes),
     #{
@@ -141,6 +146,11 @@ lower(Plan, Profile) ->
             effect_window_partition,
             Physical,
             global
+        ),
+        reduction_transport => maps:get(
+            reduction_transport,
+            Physical,
+            ordinary
         ),
         schedulers => Schedulers,
         families => Families,
@@ -522,6 +532,103 @@ annotate_family_graph(Family, Routes, Lanes, Startup, Ingresses) ->
         ingress => family_ingress_binding(Family, Ingresses)
     }.
 
+annotate_reduction_transports(Families, ordinary, _Shape) ->
+    [Family#{reduction_transport => ordinary} || Family <- Families];
+annotate_reduction_transports(Families, joined, _Shape) ->
+    [annotate_joined_reduction(Family) || Family <- Families].
+
+annotate_joined_reduction(Family = #{interface := Interface}) ->
+    case maps:get(reductions, Interface, none) of
+        none ->
+            Family#{reduction_transport => ordinary};
+        Reductions ->
+            Family#{reduction_transport => joined_reduction_transport(
+                Family,
+                Reductions
+            )}
+    end.
+
+joined_reduction_transport(
+    Family = #{id := FamilyId, interface := Interface},
+    Reductions
+) ->
+    Opens = maps:get(opens, Reductions),
+    Contributions = maps:get(contributions, Reductions),
+    Tags = [maps:get(tag, Contribution) || Contribution <- Contributions],
+    length(Tags) =:= length(lists:usort(Tags)) orelse
+        error({joined_reduction_ambiguous_tags, FamilyId, Tags}),
+    OpenRoutes = [joined_reduction_open_routes(
+        Family,
+        Interface,
+        Open,
+        Contributions
+    ) || Open <- Opens],
+    [{Population, Routes} | Rest] = OpenRoutes,
+    lists:foreach(
+        fun(Other) ->
+            case Other =:= {Population, Routes} of
+                true -> ok;
+                false -> error({joined_reduction_inconsistent_prefix,
+                    FamilyId, {Population, Routes}, Other})
+            end
+        end,
+        Rest
+    ),
+    #{
+        mode => joined,
+        population => Population,
+        routes => Routes
+    }.
+
+joined_reduction_open_routes(
+    #{id := FamilyId, routes := FamilyRoutes},
+    Interface,
+    #{phase := Phase, population := #{size := Population}},
+    Contributions
+) ->
+    [#{tag := Tag}] = [Contribution || Contribution <- Contributions,
+        maps:get(phase, Contribution) =:= Phase],
+    Effects0 = [Effect || Effect <- maps:get(entry_effects, Interface),
+        maps:get(phase, Effect) =:= Phase],
+    Effects = lists:keysort(1, [
+        {maps:get(order, Effect), Effect} || Effect <- Effects0
+    ]),
+    Prefix = lists:sublist(Effects, Population),
+    length(Prefix) =:= Population orelse
+        error({joined_reduction_short_prefix,
+            FamilyId, Phase, Population, length(Prefix)}),
+    Routes = [joined_reduction_effect_route(
+        FamilyId,
+        Phase,
+        Tag,
+        Effect,
+        FamilyRoutes
+    ) || {_Order, Effect} <- Prefix],
+    {Population, Routes}.
+
+joined_reduction_effect_route(
+    FamilyId,
+    Phase,
+    Tag,
+    Effect = #{port := Port, schema := Tag},
+    FamilyRoutes
+) ->
+    maps:get(conditional, Effect, false) =:= false orelse
+        error({joined_reduction_conditional_prefix, FamilyId, Phase, Port}),
+    [Route] = [Candidate || Candidate <- FamilyRoutes,
+        maps:get(source, Candidate) =:= {FamilyId, Port}],
+    case Route of
+        #{delivery := direct,
+          recipients := [{family, FamilyId,
+              {translate, [_DX, _DY], wrap}} = Recipient]} ->
+            #{port => Port, recipient => Recipient};
+        _ ->
+            error({joined_reduction_route, FamilyId, Phase, Port, Route})
+    end;
+joined_reduction_effect_route(FamilyId, Phase, Tag, Effect, _Routes) ->
+    error({joined_reduction_prefix_schema,
+        FamilyId, Phase, Tag, Effect}).
+
 family_ingress_binding(#{id := FamilyId}, Ingresses) ->
     Matches = [
         Recipient#{
@@ -781,6 +888,7 @@ validate_profile(Profile) when is_map(Profile) ->
     Keys = lists:sort(maps:keys(Profile)),
     Allowed = lists:sort([
         effect_window_partition,
+        reduction_transport,
         scheduler_groups
         | Required
     ]),
@@ -809,6 +917,13 @@ validate_profile(Profile) when is_map(Profile) ->
         #{effect_window_partition := weak_components} -> ok;
         #{effect_window_partition := Partition} ->
             error({effect_window_partition, Partition});
+        _ -> ok
+    end,
+    case Profile of
+        #{reduction_transport := ordinary} -> ok;
+        #{reduction_transport := joined} -> ok;
+        #{reduction_transport := Transport} ->
+            error({reduction_transport, Transport});
         _ -> ok
     end,
     Profile#{name := Name};

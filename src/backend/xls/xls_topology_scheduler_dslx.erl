@@ -13,6 +13,7 @@ emit(Spec0) ->
     [
         preamble(Spec),
         address_support(Spec),
+        reduction_support(Spec),
         frame_relay(Spec),
         control_support(Spec),
         [startup_proc(Spec, Scheduler)
@@ -145,6 +146,11 @@ annotate(Spec = #{
     ],
     Externals = [annotate_external(External, Annotated)
         || External <- maps:get(externals, Spec)],
+    ReductionPlanes = annotate_reduction_planes(
+        Families,
+        maps:get(width, Spec),
+        maps:get(height, Spec)
+    ),
     Spec#{
         family_index => FamilyIndex,
         scheduler_index => maps:from_list([
@@ -154,6 +160,7 @@ annotate(Spec = #{
         family_schedulers => FamilySchedulers,
         schedulers => Annotated,
         effect_window_domains => Domains,
+        reduction_planes => ReductionPlanes,
         externals => Externals
     }.
 
@@ -225,7 +232,63 @@ annotate_scheduler(
         startup_items => Startup,
         startup_count => length(Startup),
         has_control => HasControl,
+        has_reductions => lists:any(
+            fun family_has_reductions/1,
+            MemberFamilies
+        ),
+        joined_reduction_families => [
+            Family || Family <- MemberFamilies,
+            is_joined_reduction(Family)
+        ],
         index => Index
+    }.
+
+is_joined_reduction(#{reduction_transport := #{mode := joined}}) -> true;
+is_joined_reduction(_Family) -> false.
+
+family_has_reductions(#{interface := Interface}) ->
+    maps:get(reductions, Interface, none) =/= none.
+
+annotate_reduction_planes(Families, Width, Height) ->
+    [annotate_reduction_plane(Family, Width, Height)
+        || Family <- Families,
+           is_joined_reduction(Family)].
+
+annotate_reduction_plane(
+    Family = #{id := Id, schedulers := Bindings},
+    Width,
+    Height
+) ->
+    SourceSchedulers = [maps:get(group, Binding) || Binding <- Bindings],
+    CoordinateRows = lists:append([
+        [
+            begin
+                [X, Y] = maps:get(coordinates, Instance),
+                Slot = maps:get(base_slot, Binding) +
+                    maps:get(local_index, Instance),
+                #{x => X, y => Y, group => maps:get(group, Binding),
+                    slot => Slot}
+            end
+            || Instance <- maps:get(instances, Binding)
+        ]
+        || Binding <- Bindings
+    ]),
+    Width = 1 + lists:max([maps:get(x, Row) || Row <- CoordinateRows]),
+    Height = 1 + lists:max([maps:get(y, Row) || Row <- CoordinateRows]),
+    Dense = lists:keysort(1, [
+        {maps:get(x, Row) * Height + maps:get(y, Row), Row}
+        || Row <- CoordinateRows
+    ]),
+    lists:seq(0, Width * Height - 1) =:=
+        [Index || {Index, _Row} <- Dense] orelse
+        error({joined_reduction_sparse_family, Id}),
+    Family#{
+        stem => [atom_to_list(Id), "_reduction"],
+        width => Width,
+        height => Height,
+        source_schedulers => SourceSchedulers,
+        destinations => [Row#{index => Index} || {Index, Row} <- Dense],
+        module_name => maps:get(module_name, Family)
     }.
 
 route_targets_group(Routes, MemberIds) ->
@@ -398,6 +461,234 @@ family_address_entries(#{
         {Base + Local, Family, X, Y}
         || #{coordinates := [X, Y], local_index := Local} <- Instances
     ].
+
+%% A joined reduction plane buffers one fixed source batch per scheduler and
+%% folds it into a small register bank with statically selected writes. Each
+%% destination keeps its current window plus one causally permitted lookahead
+%% window: a neighbor cannot enter k+2 before this actor has itself entered
+%% k+1. One completed aggregate stream per destination shard bypasses ordinary
+%% mailbox storage and credits; the request's slot selects the actor-local
+%% receptacle.
+reduction_support(#{reduction_planes := Planes, schedulers := Schedulers}) ->
+    [
+        [aggregate_idle_proc(Scheduler)
+            || Scheduler <- Schedulers,
+               maps:get(has_reductions, Scheduler),
+               maps:get(joined_reduction_families, Scheduler) =:= []],
+        [[reduction_batch(Plane), reduction_plane_proc(Plane)]
+            || Plane <- Planes]
+    ].
+
+aggregate_idle_proc(Scheduler = #{module_name := Module}) ->
+    Name = aggregate_idle_name(Scheduler),
+    [
+        "// Own an unused optional aggregate producer without manufacturing\n",
+        "// a zero-valued request on an ordinary reduction transport.\n",
+        "proc ", Name, " {\n",
+        "  aggregate_out: chan<", Module,
+        "::ReductionAggregateRequest> out;\n\n",
+        "  config(aggregate_out: chan<", Module,
+        "::ReductionAggregateRequest> out) {\n",
+        "    (aggregate_out,)\n",
+        "  }\n\n",
+        "  init { () }\n\n",
+        "  next(state: ()) {\n",
+        "    let _done = send_if(\n",
+        "      join(), aggregate_out, false,\n",
+        "      zero!<", Module, "::ReductionAggregateRequest>());\n",
+        "    state\n",
+        "  }\n",
+        "}\n\n"
+    ].
+
+reduction_batch(Plane = #{module_name := Module}) ->
+    Population = reduction_population(Plane),
+    [
+        "struct ", reduction_batch_name(Plane), " {\n",
+        "  destinations: u32[u32:", integer_to_list(Population), "],\n",
+        "  frames: axis::Frame[u32:", integer_to_list(Population), "],\n",
+        "}\n\n",
+        "// The batch is a physical transport optimization for one fixed,\n",
+        "// statically validated prefix of independent ", Module,
+        " effects.\n\n",
+        "fn ", reduction_destinations_name(Plane), "(source: u32)\n",
+        "    -> u32[u32:", integer_to_list(Population), "] {\n",
+        "  match source {\n",
+        [reduction_destinations_arm(Plane, Destination)
+            || Destination <- maps:get(destinations, Plane)],
+        "    _ => zero!<u32[u32:", integer_to_list(Population), "]>(),\n",
+        "  }\n",
+        "}\n\n"
+    ].
+
+reduction_plane_proc(Plane = #{
+    module_name := Module,
+    source_schedulers := Sources,
+    destinations := Destinations
+}) ->
+    SourceCount = length(Sources),
+    DestinationCount = length(Destinations),
+    State = reduction_state_name(Plane),
+    Members = [
+        ["batch_in: chan<", reduction_batch_name(Plane), ">[u32:",
+            integer_to_list(SourceCount), "] in"]
+        | [["aggregate_out_", integer_to_list(Index), ": chan<", Module,
+            "::ReductionAggregateRequest> out"]
+            || Index <- lists:seq(0, SourceCount - 1)]
+    ],
+    Names = ["batch_in" | [["aggregate_out_", integer_to_list(Index)]
+        || Index <- lists:seq(0, SourceCount - 1)]],
+    [
+        "struct ", State, " {\n",
+        "  input_cursor: u32,\n",
+        "  output_cursor: u32,\n",
+        "  aggregate_pairs: ", Module, "::ReductionAggregatePair[u32:",
+        integer_to_list(DestinationCount), "],\n",
+        "}\n\n",
+        "proc ", reduction_plane_name(Plane), " {\n",
+        [["  ", Member, ";\n"] || Member <- Members],
+        "\n",
+        config_signature(Members, 2),
+        "    (", join_with(", ", Names), ")\n",
+        "  }\n\n",
+        "  init { zero!<", State, ">() }\n\n",
+        "  next(state: ", State, ") {\n",
+        "    // Probe one row per activation. The cursor rotates even when the\n",
+        "    // row is incomplete, bounding completion latency without a wide\n",
+        "    // priority network over aggregate payloads.\n",
+        "    let output_slot = state.output_cursor;\n",
+        "    let output_ready = match output_slot {\n",
+        [reduction_output_ready_arm(Plane, Destination)
+            || Destination <- Destinations],
+        "      _ => u1:0,\n",
+        "    };\n",
+        "    if output_ready {\n",
+        "      let _done = match output_slot {\n",
+        [reduction_output_send_arm(Plane, Destination)
+            || Destination <- Destinations],
+        "        _ => join(),\n",
+        "      };\n",
+        "      ", State, " {\n",
+        "        output_cursor: if output_slot + u32:1 == u32:",
+        integer_to_list(DestinationCount), " { u32:0 } else {\n",
+        "          output_slot + u32:1 },\n",
+        "        aggregate_pairs: update(\n",
+        "          state.aggregate_pairs, output_slot,\n",
+        "          ", Module, "::ReductionAggregatePair {\n",
+        "            current: state.aggregate_pairs[output_slot].lookahead,\n",
+        "            lookahead: zero!<", Module,
+        "::ReductionAggregate>(),\n",
+        "          }),\n",
+        "        ..state\n",
+        "      }\n",
+        "    } else {\n",
+        "      let (tok, received, batch) =\n",
+        "        unroll_for! (candidate, acc):\n",
+        "            (u32, (token, u1, ", reduction_batch_name(Plane),
+        ")) in u32:0..u32:", integer_to_list(SourceCount), " {\n",
+        "          let (next_tok, next_batch, valid) =\n",
+        "            recv_if_non_blocking(\n",
+        "              acc.0, batch_in[candidate],\n",
+        "              state.input_cursor == candidate,\n",
+        "              zero!<", reduction_batch_name(Plane), ">());\n",
+        "          (next_tok, acc.1 || valid,\n",
+        "            if valid { next_batch } else { acc.2 })\n",
+        "        }((join(), u1:0, zero!<", reduction_batch_name(Plane),
+        ">()));\n",
+        "      let aggregate_pairs = if received {\n",
+        reduction_batch_updates(Plane),
+        "      } else { state.aggregate_pairs };\n",
+        "      let _done = tok;\n",
+        "      ", State, " {\n",
+        "        input_cursor: if state.input_cursor + u32:1 == u32:",
+        integer_to_list(SourceCount), " { u32:0 } else {\n",
+        "          state.input_cursor + u32:1 },\n",
+        "        output_cursor: if output_slot + u32:1 == u32:",
+        integer_to_list(DestinationCount), " { u32:0 } else {\n",
+        "          output_slot + u32:1 },\n",
+        "        aggregate_pairs,\n",
+        "      }\n",
+        "    }\n",
+        "  }\n",
+        "}\n\n"
+    ].
+
+reduction_output_ready_arm(Plane, #{index := Index}) ->
+    Module = maps:get(module_name, Plane),
+    [
+        "      u32:", integer_to_list(Index), " => ", Module,
+        "::reduction_aggregate_ready(\n",
+        "        state.aggregate_pairs[u32:", integer_to_list(Index),
+        "].current),\n"
+    ].
+
+reduction_output_send_arm(Plane, Destination = #{index := Index}) ->
+    Module = maps:get(module_name, Plane),
+    Sources = maps:get(source_schedulers, Plane),
+    Group = maps:get(group, Destination),
+    Output = source_position(Group, Sources, 0),
+    [
+        "        u32:", integer_to_list(Index), " => {\n",
+        "          send(\n",
+        "            join(), aggregate_out_", integer_to_list(Output),
+        ", ", Module, "::ReductionAggregateRequest {\n",
+        "              slot: u32:",
+        integer_to_list(maps:get(slot, Destination)), ",\n",
+        "              reduction_aggregate: state.aggregate_pairs[u32:",
+        integer_to_list(Index), "].current,\n",
+        "            })\n",
+        "        },\n"
+    ].
+
+reduction_destinations_arm(Plane, #{index := Source, x := X, y := Y}) ->
+    Routes = maps:get(routes, maps:get(reduction_transport, Plane)),
+    Destinations = [
+        begin
+            #{recipient := Recipient} = Route,
+            {family, _DestinationId,
+                {translate, [DX, DY], wrap}} = Recipient,
+            fixed_reduction_destination(Plane, X, Y, DX, DY)
+        end
+        || Route <- Routes
+    ],
+    [
+        "    u32:", integer_to_list(Source), " => [",
+        join_with(", ", [["u32:", integer_to_list(Destination)]
+            || Destination <- Destinations]),
+        "],\n"
+    ].
+
+reduction_batch_updates(Plane = #{module_name := Module}) ->
+    Population = reduction_population(Plane),
+    [
+        [
+            begin
+                Previous = case Index of
+                    0 -> "state.aggregate_pairs";
+                    _ -> ["aggregate_pairs_", integer_to_list(Index - 1)]
+                end,
+                [
+                    "        let aggregate_pairs_", integer_to_list(Index),
+                    " = update(\n",
+                    "          ", Previous,
+                    ", batch.destinations[u32:", integer_to_list(Index),
+                    "],\n",
+                    "          ", Module,
+                    "::reduction_aggregate_pair_push(\n",
+                    "            ", Previous,
+                    "[batch.destinations[u32:", integer_to_list(Index),
+                    "]],\n",
+                    "            batch.frames[u32:",
+                    integer_to_list(Index), "]));\n"
+                ]
+            end
+            || Index <- lists:seq(0, Population - 1)
+        ],
+        "        aggregate_pairs_", integer_to_list(Population - 1), "\n"
+    ].
+
+reduction_population(#{reduction_transport := #{population := Population}}) ->
+    Population.
 
 scheduled_address(Family, X, Y) ->
     [
@@ -657,6 +948,7 @@ router_proc(Spec, Scheduler = #{
     stem := Stem,
     module_name := Module,
     families := Families,
+    joined_reduction_families := ReductionFamilies,
     destinations := Destinations,
     external_ids := ExternalIds
 }) ->
@@ -670,6 +962,8 @@ router_proc(Spec, Scheduler = #{
             || Destination <- Destinations] ++
         [router_external_argument(Spec, ExternalId)
             || ExternalId <- ExternalIds] ++
+        [router_reduction_argument(Spec, Family)
+            || Family <- ReductionFamilies] ++
         [
             "window_request_out: chan<u1> out",
             "window_grant_in: chan<u1> in",
@@ -680,6 +974,8 @@ router_proc(Spec, Scheduler = #{
             || Destination <- Destinations] ++
         [external_output_name(Spec, ExternalId)
             || ExternalId <- ExternalIds] ++
+        [router_reduction_output_name(Family)
+            || Family <- ReductionFamilies] ++
         ["window_request_out", "window_grant_in", "window_release_out"],
     [
         "// Routes one committed actor-entry batch in source order. A ",
@@ -704,7 +1000,10 @@ router_proc(Spec, Scheduler = #{
         "  next(state: ", StateName, ") {\n",
         "    let state_effect_info = ", Module,
         "::scheduled_effect(state.scheduled, state.index);\n",
-        "    let state_last = state.active && state_effect_info.2;\n",
+        router_state_reduction_prefix(Module, ReductionFamilies),
+        "    let state_last = state.active && if state_reduction_batch {\n",
+        "      state_reduction_prefix.2\n",
+        "    } else { state_effect_info.2 };\n",
         "    let can_receive = !state.active ||\n",
         "      (state_last && state.credit_debt && !state.lookahead);\n",
         "    let (receive_tok, incoming, incoming_valid) =\n",
@@ -722,16 +1021,21 @@ router_proc(Spec, Scheduler = #{
         "    let index = if state.active { state.index } else { u8:0 };\n",
         "    let effect_info = ", Module,
         "::scheduled_effect(scheduled, index);\n",
+        router_reduction_prefix(Module, ReductionFamilies),
         "    let effect = effect_info.0;\n",
         "    let emit = batch_valid && effect_info.1;\n",
         "    let address = ", Stem, "_address(scheduled.slot);\n",
-        "    let routed_tok = if emit {\n",
+        "    let routed_tok = if reduction_batch {\n",
+        router_reduction_send(Spec, ReductionFamilies),
+        "    } else if emit {\n",
         "      match address.family as FamilyId {\n",
         [router_family_arm(Spec, Family) || Family <- Families],
         "        _ => grant_tok,\n",
         "      }\n",
         "    } else { grant_tok };\n",
-        "    let last = batch_valid && effect_info.2;\n",
+        "    let last = batch_valid && if reduction_batch {\n",
+        "      reduction_prefix.2\n",
+        "    } else { effect_info.2 };\n",
         "    let batch_continues = batch_valid && !last;\n",
         "    // Never apply a stale grant to a batch admitted in this same\n",
         "    // activation: the virtual credit could otherwise bypass back to\n",
@@ -783,7 +1087,9 @@ router_proc(Spec, Scheduler = #{
         "      ", StateName, " {\n",
         "        active: u1:1,\n",
         "        scheduled,\n",
-        "        index: index + u8:1,\n",
+        "        index: index + if reduction_batch {\n",
+        "          reduction_prefix.1\n",
+        "        } else { u8:1 },\n",
         "        window_requested: pending_request || request,\n",
         "        window_granted,\n",
         "        credit_debt,\n",
@@ -805,6 +1111,81 @@ router_destination_argument(#{index := Index, module_name := Module}) ->
 
 router_external_argument(Spec, ExternalId) ->
     [external_output_name(Spec, ExternalId), ": chan<axis::Frame> out"].
+
+router_reduction_argument(Spec, Family) ->
+    Plane = reduction_plane(Spec, maps:get(id, Family)),
+    [router_reduction_output_name(Family), ": chan<",
+        reduction_batch_name(Plane), "> out"].
+
+router_state_reduction_prefix(_Module, []) ->
+    [
+        "    let state_reduction_prefix = (u1:0, u8:0, u1:0);\n",
+        "    let state_reduction_batch = u1:0;\n"
+    ];
+router_state_reduction_prefix(Module, [_ | _]) ->
+    [
+        "    let state_reduction_prefix = ", Module,
+        "::scheduled_reduction_prefix(state.scheduled);\n",
+        "    let state_reduction_batch = state.active &&\n",
+        "      state.index == u8:0 && state_reduction_prefix.0;\n"
+    ].
+
+router_reduction_prefix(_Module, []) ->
+    [
+        "    let reduction_prefix = (u1:0, u8:0, u1:0);\n",
+        "    let reduction_batch = u1:0;\n"
+    ];
+router_reduction_prefix(Module, [_ | _]) ->
+    [
+        "    let reduction_prefix = ", Module,
+        "::scheduled_reduction_prefix(scheduled);\n",
+        "    let reduction_batch = batch_valid && index == u8:0 &&\n",
+        "      reduction_prefix.0;\n"
+    ].
+
+router_reduction_send(_Spec, []) ->
+    "      grant_tok\n";
+router_reduction_send(Spec, Families) ->
+    [
+        "      match address.family as FamilyId {\n",
+        [router_reduction_family_arm(Spec, Family) || Family <- Families],
+        "        _ => grant_tok,\n",
+        "      }\n"
+    ].
+
+router_reduction_family_arm(Spec, Family = #{
+    id := Id,
+    module_name := Module,
+    reduction_transport := #{routes := Routes, population := Population}
+}) ->
+    true = length(Routes) =:= Population,
+    Plane = reduction_plane(Spec, Id),
+    [
+        "        FamilyId::", uppercase(Id), " => {\n",
+        [[
+            "          let effect_", integer_to_list(Index), " = ",
+            Module, "::scheduled_effect(scheduled, u8:",
+            integer_to_list(Index), ").0;\n"
+        ] || Index <- lists:seq(0, Population - 1)],
+        "          let batch = ", reduction_batch_name(Plane), " {\n",
+        "            destinations: ", reduction_destinations_name(Plane),
+        "((address.x as u32) * (HEIGHT as u32) +\n",
+        "              address.y as u32),\n",
+        "            frames: [", join_with(", ", [
+            ["effect_", integer_to_list(Index), ".frame"]
+            || Index <- lists:seq(0, Population - 1)
+        ]), "],\n",
+        "          };\n",
+        "          send(grant_tok, ", router_reduction_output_name(Family),
+        ", batch)\n",
+        "        },\n"
+    ].
+
+fixed_reduction_destination(Spec, X, Y, DX, DY) ->
+    Width = maps:get(width, Spec),
+    Height = maps:get(height, Spec),
+    positive_modulo(X + DX, Width) * Height +
+        positive_modulo(Y + DY, Height).
 
 router_family_arm(Spec, Family = #{id := Id}) ->
     [
@@ -969,6 +1350,7 @@ positive_modulo(Value, Modulus) ->
 grid_proc(Spec = #{
     schedulers := Schedulers,
     effect_window_domains := EffectWindowDomains,
+    reduction_planes := ReductionPlanes,
     ingresses := Ingresses,
     externals := Externals
 }) ->
@@ -980,8 +1362,10 @@ grid_proc(Spec = #{
         effect_window_channels(EffectWindowDomains),
         [external_channel(External) || External <- Externals],
         [scheduler_channels(Scheduler) || Scheduler <- Schedulers],
+        [reduction_plane_channels(Plane) || Plane <- ReductionPlanes],
         effect_window_spawn(EffectWindowDomains),
         [scheduler_spawn(Spec, Scheduler) || Scheduler <- Schedulers],
+        [reduction_plane_spawn(Spec, Plane) || Plane <- ReductionPlanes],
         [router_spawn(Spec, Scheduler) || Scheduler <- Schedulers],
         control_spawn(Spec),
         [external_spawn(External) || External <- Externals],
@@ -1061,7 +1445,9 @@ external_spawn(External) ->
 scheduler_channels(Scheduler = #{
     stem := Stem,
     module_name := Module,
-    producers := Producers
+    producers := Producers,
+    has_reductions := HasReductions,
+    joined_reduction_families := ReductionFamilies
 }) ->
     ProducerCount = integer_to_list(length(Producers)),
     [
@@ -1074,11 +1460,49 @@ scheduler_channels(Scheduler = #{
         "    let (", Stem, "_egress_p, ", Stem, "_egress_c) =\n",
         "      chan<", Module, "::ScheduledEffects, CHANNEL_DEPTH>(\"",
         Stem, "_egress\");\n",
+        case HasReductions of
+            false -> [];
+            true -> [
+                "    let (", Stem, "_aggregate_p, ", Stem,
+                "_aggregate_c) =\n",
+                "      chan<", Module,
+                "::ReductionAggregateRequest, u32:0>(\"", Stem,
+                "_aggregate\");\n",
+                case ReductionFamilies of
+                    [] -> ["    spawn ", aggregate_idle_name(Scheduler),
+                        "(", Stem, "_aggregate_p);\n"];
+                    [_ | _] -> []
+                end
+            ]
+        end,
         case maps:get(startup_count, Scheduler) of
             0 -> [];
             _ -> ["    spawn ", startup_name(Scheduler), "(",
                 Stem, "_startup_p);\n"]
         end
+    ].
+
+reduction_plane_channels(#{
+    stem := Stem,
+    source_schedulers := Sources
+} = Plane) ->
+    [
+        "    let (", Stem, "_batch_p, ", Stem, "_batch_c) =\n",
+        "      chan<", reduction_batch_name(Plane),
+        ", CHANNEL_DEPTH>[u32:", integer_to_list(length(Sources)),
+        "](\"", Stem, "_batch\");\n"
+    ].
+
+reduction_plane_spawn(Spec, Plane = #{
+    stem := Stem,
+    source_schedulers := Sources
+}) ->
+    [
+        "    spawn ", reduction_plane_name(Plane), "(\n",
+        "      ", Stem, "_batch_c",
+        [[",\n      ", maps:get(stem, scheduler(Spec, Group)),
+            "_aggregate_p"] || Group <- Sources],
+        ");\n"
     ].
 
 scheduler_spawn(_Spec, #{
@@ -1087,7 +1511,8 @@ scheduler_spawn(_Spec, #{
     module_name := Module,
     slot_count := SlotCount,
     producers := Producers,
-    startup_count := StartupCount
+    startup_count := StartupCount,
+    has_reductions := HasReductions
 }) ->
     [
         "    spawn ", Module, "::SharedService<\n",
@@ -1105,6 +1530,10 @@ scheduler_spawn(_Spec, #{
         "_mailbox_read_resp_in,\n",
         "      ", Stem, "_mailbox_write_req_out, ", Stem,
         "_mailbox_write_resp_in",
+        case HasReductions of
+            false -> [];
+            true -> [",\n      ", Stem, "_aggregate_c"]
+        end,
         ");\n"
     ].
 
@@ -1113,6 +1542,7 @@ router_spawn(Spec, Scheduler = #{
     index := Source,
     effect_window_domain := WindowDomain,
     effect_window_position := WindowPosition,
+    joined_reduction_families := ReductionFamilies,
     destinations := Destinations,
     external_ids := ExternalIds
 }) ->
@@ -1135,6 +1565,19 @@ router_spawn(Spec, Scheduler = #{
         ],
         [[",\n      ", external_buffer_producer(Spec, ExternalId, Source)]
             || ExternalId <- ExternalIds],
+        [
+            begin
+                Plane = reduction_plane(Spec, maps:get(id, Family)),
+                Position = source_position(
+                    Source,
+                    maps:get(source_schedulers, Plane),
+                    0
+                ),
+                [",\n      ", maps:get(stem, Plane),
+                    "_batch_p[u32:", integer_to_list(Position), "]"]
+            end
+            || Family <- ReductionFamilies
+        ],
         ",\n      ", effect_window_domain_stem(
             WindowDomain, maps:get(effect_window_domains, Spec)),
         "_request_p[u32:", integer_to_list(WindowPosition), "],\n",
@@ -1273,6 +1716,9 @@ scheduler(Spec, Group) ->
 scheduler_module(Spec, Group) ->
     maps:get(module_name, scheduler(Spec, Group)).
 
+reduction_plane(#{reduction_planes := Planes}, Id) ->
+    hd([Plane || Plane = #{id := PlaneId} <- Planes, PlaneId =:= Id]).
+
 external_output_name(#{externals := Externals}, Id) ->
     {external, Id, External} = lists:keyfind(Id, 2, [
         {external, maps:get(id, External), External}
@@ -1311,6 +1757,24 @@ control_output_name(Group) ->
 
 startup_name(#{index := Index}) ->
     ["SchedulerStartup", integer_to_list(Index)].
+
+reduction_batch_name(#{id := Id}) ->
+    [string:titlecase(atom_to_list(Id)), "ReductionBatch"].
+
+reduction_destinations_name(#{id := Id}) ->
+    [atom_to_list(Id), "_reduction_destinations"].
+
+reduction_state_name(#{id := Id}) ->
+    [string:titlecase(atom_to_list(Id)), "ReductionPlaneState"].
+
+reduction_plane_name(#{id := Id}) ->
+    [string:titlecase(atom_to_list(Id)), "ReductionPlane"].
+
+router_reduction_output_name(#{id := Id}) ->
+    [atom_to_list(Id), "_reduction_out"].
+
+aggregate_idle_name(#{index := Index}) ->
+    ["SchedulerAggregateIdle", integer_to_list(Index)].
 
 effect_window_domain_stem(0, [_OnlyDomain]) ->
     "effect_window";
