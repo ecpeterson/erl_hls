@@ -1806,3 +1806,31 @@ destination visit does not advance the measured step boundary. Further
 ready-selection work is therefore unlikely to improve this D3 workload
 without also changing the plane/router cadence or removing actor transactions
 altogether.
+
+### Independent reduction-plane ingress and retirement
+
+The next experiment removes the plane's artificial choice between accepting a
+source batch and retiring a completed destination aggregate. Each activation
+polls one source and independently selects one ready destination in
+round-robin order, so both channel handshakes may complete in the same clock.
+There is still one register-resident aggregate bank and one state transition:
+retirement first promotes the selected destination's lookahead window, then a
+simultaneously accepted batch folds into the promoted bank. This preserves
+same-destination epoch ordering without adding a second receptacle writer.
+
+The three-shard request-paced profile passes in 3,243 clocks from steps eight
+through 32, or 135.125 clocks per step and about 1,480,111 steps/s at 200 MHz.
+That reduces step time by 47.32% and raises projected throughput by 89.82%
+relative to the 256.5-clock parent. It also nearly doubles the rate of the
+original 269.958-clock actor-reduction baseline. Each plane accepts 4,163
+batches and sends 4,158 aggregates during 4,501 observed clocks, which is only
+possible because input and output overlap. Aggregate output remains
+unstalled; input stall samples fall from 14,558 per plane to 129 on X and 127
+on Z.
+
+This is not an area-for-throughput explosion at generated-RTL scale. The
+profile Verilog shrinks slightly, from 53,712 lines and 3,028,326 bytes to
+53,338 lines and 3,022,412 bytes. The actor transaction count is unchanged at
+roughly fifteen state reads per actor per decoder step. The cadence gain comes
+from allowing the already-sharded actor pipelines to stay fed, rather than
+from eliding actor work.

@@ -25,20 +25,23 @@ nevertheless causes one ordinary actor state read, callback execution, state
 write, and effect retirement.  Consequently, batching reaches the
 approximately fifteen-visit floor without lowering that floor.
 
-The current three-shard profile measures 6,156 clocks from steps 8 through 32:
-256.5 clocks per step, or about 779,727 steps/s at a hypothetical 200 MHz.
-Each phi scheduler owns three actors.  The complete run records about 498
-state reads per actor through step 32, consistent with the fifteen callback
-transactions per steady step plus startup and closeout.
+The current three-shard profile measures 3,243 clocks from steps 8 through 32:
+135.125 clocks per step, or about 1,480,111 steps/s at a hypothetical 200 MHz.
+Each phi scheduler owns three actors.  The complete run still records about
+498 state reads per actor through step 32, consistent with the fifteen
+callback transactions per steady step plus startup and closeout.  The actor
+visit count has not fallen; the six shards and their actor pipelines overlap
+those visits much more effectively now that reduction-plane transport no
+longer spaces out aggregate completions.
 
-The scheduler now recomputes readiness after accepting an aggregate and can
-launch the newly completed actor's state read in the same activation.  Across
-the measured run this fast path issues 1,385 or 1,386 reads per phi shard;
-only five `selectable` samples per shard remain, all during startup.  The
-steady-state clock count nevertheless remains exactly 6,156.  The local
-aggregate-to-retirement latency falls by one clock, but aggregate completions
-retain the same effective three-shard cadence, so the shortened visits are
-hidden behind the reduction-plane wavefront rather than changing throughput.
+The scheduler recomputes readiness after accepting an aggregate and can launch
+the newly completed actor's state read in the same activation.  The earlier
+ready-selection-only experiment still took 6,156 clocks: shortening an actor
+visit by one clock was hidden behind the serialized reduction-plane
+wavefront.  In the current run this fast path issues 1,385 or 1,386 reads per
+phi shard and only five `selectable` samples per shard remain, all during
+startup.  Those reads now matter because input acceptance and aggregate
+retirement can advance together in the plane.
 
 ## Clock path for one completed barrier
 
@@ -55,12 +58,14 @@ For an intermediate diffusion round, retirement includes the fused
 `repeat_phase` entry: it opens the next reduction and presents the next four
 neighbor sends without a second actor visit.  A scheduler router eventually
 accepts those effects, obtains its effect-window reservation, and sends one
-four-destination batch to the plane.  The plane polls one of its three source
-ports per input opportunity.  It gives a completed output priority, folds an
-accepted batch into four current/lookahead receptacles, and polls destination
-rows round-robin until it finds a complete aggregate.  This elastic portion
-has no fixed clock distance: it depends on the other two source schedulers and
-the plane's input and output cursors.
+four-destination batch to the plane.  On every activation the plane
+independently polls one of its three source ports and selects one ready
+destination aggregate in round-robin order.  It may therefore accept one batch
+and retire one aggregate in the same clock.  Retirement is applied first to
+the single register bank, promoting that destination's lookahead window; a
+simultaneous batch is then folded into the resulting current/lookahead pairs.
+This ordering handles the case where both operations touch the same
+destination without introducing a second owner of the receptacles.
 
 The batched reduction path does not occupy the destination actor mailbox or a
 destination mailbox producer credit.  The source still owes its scheduler
@@ -69,7 +74,8 @@ arbiter still prevents inter-scheduler reservation cycles.  In the measured
 profile, aggregate output itself is not backpressured: every plane send is
 received and accepted in the same sampled clock.
 
-Clock 730 in the representative trace is a useful example of overlapped work.
+Clock 730 in the pre-duplex representative trace is a useful example of the
+old serialized plane bottleneck.
 The X plane delivers a gathering aggregate to `phi_0` actor 0 in that clock,
 but the effect egress visible on the same row is **not** caused by that new
 aggregate.  It retires the older visit to actor 2: that actor received its
@@ -96,6 +102,17 @@ contributions participate in aggregates sent to actors 7, 8, 0, and 3 at
 clocks 746, 747, 748, and 751 respectively.  The exact completion clocks also
 depend on the other three contributors and the plane's round-robin output
 cursor.
+
+The current trace has a different steady-state shape.  At clock 402, for
+example, each of the X and Z planes simultaneously accepts shard 0's batch and
+sends actor 6's completed aggregate to shard 2.  In that same clock the
+destination schedulers launch actor 6's state reads, while shard 0 retires the
+older actor 0 visits and presents their next effect batches.  Clocks 394
+through 410 repeat this pattern almost continuously: one plane batch enters
+and one aggregate leaves on every clock, rotating over the three shards and
+three actor slots.  The long FIFO-capacity arrows in the earlier visualization
+largely disappear because draining the old batch and accepting the replacement
+are no longer mutually exclusive plane activations.
 
 ## Profiler contract
 
@@ -178,9 +195,13 @@ The following counters describe the current paths:
 
 In the current run, each of the six phi schedulers receives, accepts, and
 completes 1,386 aggregates with no receive stall, pending cycle, or protocol
-error.  Each plane accepts 4,165 batches and sends 4,158 aggregates with no
-aggregate-output stall.  The 12,871 batch-stall port-clocks per plane expose
-contention at the serialized input poller, but are not 12,871 elapsed clocks.
+error.  Each plane accepts 4,163 batches and sends 4,158 aggregates with no
+aggregate-output stall.  The X and Z planes report only 129 and 127 batch-stall
+port-clocks respectively, down from 14,558 each in the serialized parent.
+Accepted batches plus sent aggregates exceed the 4,501 observed clocks per
+plane, directly confirming that the two handshakes overlap.  The generated
+profile RTL is also essentially flat: 53,338 lines and 3,022,412 bytes versus
+53,712 lines and 3,028,326 bytes for the parent.
 
 ## Candidate phase collapses
 
@@ -214,8 +235,8 @@ must remove an actor-state transaction.
    provides the clearest lower bound and exposes broad memory parallelism, but
    is the largest semantic step away from ordinary actor scheduling.
 
-The least invasive next experiment is the diffusion continuation.  It tests
-whether a generic phase-local barrier loop can remove eleven actor visits per
-step before extending the mechanism to comparison or movement.  Improving the
-plane input poller may shorten causal gaps, but cannot cross the fifteen-visit
-floor and is therefore secondary.
+Independent plane ingress and retirement crosses the immediate 1 MHz target
+without changing the fifteen-visit actor semantics.  A diffusion continuation
+remains the most direct way to lower that visit count if substantially more
+headroom is needed, but it is no longer required to demonstrate a 1 MHz D3
+decoder at a 200 MHz clock.

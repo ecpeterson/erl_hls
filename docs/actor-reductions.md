@@ -520,14 +520,25 @@ seconds of native Icarus time. These structural measurements replace a
 whole-core area map: the original all-row match was already visibly the wrong
 RTL shape, while the revised form removes that replicated logic directly.
 
-The modest cadence change identifies the remaining limit. Each phi actor is
-still read about 15 times per decoder step: completed reductions must publish
-their private event, and the resulting phase entries and useful handlers still
-run as actor transactions. Joined transport removes four-way send
-serialization and nearly all contribution mailbox reads, but it does not
-remove those completion and phase-boundary visits. Further work should target
-that actor lifecycle or a more explicitly bulk-synchronous region rather than
-add another contribution-side fast path.
+The first plane loop gave completed aggregates priority over new batches, so a
+logical activation performed one kind of transport or the other. That made the
+plane, rather than the approximately fifteen actor visits per step, the actual
+cadence limit. The current plane treats ingress and retirement as independent
+handshakes: it polls one source and round-robin selects any ready destination
+on every activation. Both may advance in one clock. Retirement first promotes
+the destination's lookahead receptacle and the input batch then folds into the
+resulting bank, preserving epoch order even when both operations address the
+same destination.
+
+On the three-shard profile this change reduces the steps-eight-through-32
+window from 6,156 to 3,243 clocks: 135.125 clocks per step, or about 1.48
+million steps/s at 200 MHz. Each plane accepts 4,163 batches and sends 4,158
+aggregates during 4,501 observed clocks, with no aggregate-output stall. The
+generated Verilog is slightly smaller than the serialized parent. Each phi
+actor is still read about fifteen times per decoder step; the gain comes from
+keeping the independent shard pipelines fed, not from weakening actor or
+reduction semantics. Actor-lifecycle fusion remains available if a future
+target requires substantially more than the present 1 MHz D3 cadence.
 
 ## General mailbox capacity
 
