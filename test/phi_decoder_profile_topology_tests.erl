@@ -38,6 +38,25 @@ global_effect_window_remains_the_default_test() ->
     >>)),
     ?assertEqual(0, count(Generated, <<"Effect-window domain">>)).
 
+three_fold_lanes_carry_the_fourth_contribution_test() ->
+    Generated = iolist_to_binary(
+        phi_decoder_profile_topology_dslx:to_dslx()
+    ),
+    assert_contains(Generated, <<"struct Phi_xReductionWork {">>),
+    assert_contains(Generated, <<"struct Phi_zReductionWork {">>),
+    ?assertEqual(6, count(Generated, <<
+        "::reduction_aggregate_pair_push("
+    >>)),
+    ?assertEqual(2, count(Generated, <<
+        "let pending_remaining = if state.pending_valid"
+    >>)),
+    ?assertEqual(2, count(Generated, <<
+        "let can_receive = !state.pending_valid"
+    >>)),
+    ?assertEqual(2, count(Generated, <<
+        "pending_cursor: if received"
+    >>)).
+
 weak_component_effect_windows_follow_the_disconnected_planes_test() ->
     Plan = hls_topology:from_module(phi_decoder_profile_topology),
     Profile = (phi_decoder_profile_topology_dslx:profile())#{

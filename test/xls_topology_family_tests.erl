@@ -156,11 +156,20 @@ generated_multi_family_topology_retains_compact_structure_test() ->
     ?assertEqual(1, count(Generated, <<"proc Phi_zReductionPlane {">>)),
     ?assertEqual(1, count(Generated, <<"spawn Phi_xReductionPlane(">>)),
     ?assertEqual(1, count(Generated, <<"spawn Phi_zReductionPlane(">>)),
-    %% Destination slots travel with the batch, so each of the two planes
-    %% contains four aggregate updates rather than a nine-arm whole-array
-    %% crossbar containing four reductions per arm.
-    ?assertEqual(8, count(Generated, <<
+    %% Destination slots travel with the batch.  Three physical fold lanes
+    %% consume the four-frame batches through one carried remainder rather
+    %% than rebuilding a nine-arm whole-array crossbar.
+    ?assertEqual(6, count(Generated, <<
         "::reduction_aggregate_pair_push("
+    >>)),
+    ?assertNotEqual(nomatch, binary:match(Generated, <<
+        "struct Phi_xReductionWork {"
+    >>)),
+    ?assertNotEqual(nomatch, binary:match(Generated, <<
+        "struct Phi_zReductionWork {"
+    >>)),
+    ?assertEqual(2, count(Generated, <<
+        "pending_cursor: if received"
     >>)),
     ?assertEqual(2, count(Generated, <<
         "destinations: u32[u32:4]"
@@ -396,6 +405,24 @@ family_backend_rejects_invalid_reduction_transport_test() ->
         xls_topology_dslx:emit(
             Plan,
             Profile#{reduction_transport => speculative}
+        )
+    ).
+
+family_backend_rejects_invalid_joined_fold_width_test() ->
+    Plan = hls_topology:normalize(phi_noise_topology:topology(1)),
+    Profile = phi_noise_topology_dslx:profile(),
+    ?assertError(
+        {reduction_transport, {joined, 0}},
+        xls_topology_dslx:emit(
+            Plan,
+            Profile#{reduction_transport => {joined, 0}}
+        )
+    ),
+    ?assertError(
+        {joined_reduction_fold_lanes, phi_x, 4, 5},
+        xls_topology_dslx:emit(
+            Plan,
+            Profile#{reduction_transport => {joined, 5}}
         )
     ).
 

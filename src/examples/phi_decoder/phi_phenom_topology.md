@@ -1834,3 +1834,31 @@ profile Verilog shrinks slightly, from 53,712 lines and 3,028,326 bytes to
 roughly fifteen state reads per actor per decoder step. The cadence gain comes
 from allowing the already-sharded actor pipelines to stay fed, rather than
 from eliding actor work.
+
+### Three-lane joined reduction plane
+
+The full four-fold plane above is itself a substantial combinational unit. A
+follow-up physical profile instantiates three fold lanes and carries the
+unprocessed suffix of one four-contribution batch between activations. The
+packing sequence consumes `3`, `1+2`, `2+1`, and `3` contributions in four
+successive clocks, so it sustains three folds per clock without serializing
+completed-aggregate retirement.
+
+The three-shard profile passes in 4,176 clocks from steps eight through 32, or
+174 clocks per step and about 1,149,425 steps/s at 200 MHz. Step time is 28.8%
+higher and projected rate 22.3% lower than the full-width design, but the rate
+remains 50.9% above the 262.5-clock sender-addressed path and clears the
+one-megastep target. The profile records 63 X and 64 Z corrections and
+completes normally.
+
+The complete bridge retains exact ERTS-versus-Icarus agreement: both runs
+close at step 18 with the same 80 corrections, nonuniform 18-cell measurement
+field, and row parity one. This provides the end-to-end semantic check while
+the longer request-paced profile supplies the steady cadence measurement.
+
+For a bounded area comparison, an isolated D2 X reduction plane maps from
+16,676 estimated XC7 logic cells and 2,024 flip-flops at four lanes to 14,468
+cells and 2,472 flip-flops at three lanes. The 13.2% logic-cell reduction
+costs 448 registers for the retained batch. This deliberately avoids another
+whole-core synthesis run: the smaller map isolates the changed process and is
+sufficient to show the direction of the trade.
