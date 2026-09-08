@@ -278,7 +278,7 @@ contribution_functions(#{
     sites := Sites
 }) ->
     Contributions = site_contributions(Sites),
-    Tags = ordered_unique([maps:get(tag, Contribution)
+    Tags = lists:uniq([maps:get(tag, Contribution)
         || {_Site, Contribution} <- Contributions]),
     [
         "fn reduction_contribution(\n",
@@ -481,18 +481,6 @@ member_site_arms(Site = #{
     ];
 member_site_arms(_Site, _MemberBits) ->
     [].
-
-ordered_unique(Values) ->
-    ordered_unique(Values, #{}, []).
-
-ordered_unique([], _Seen, Reversed) ->
-    lists:reverse(Reversed);
-ordered_unique([Value | Rest], Seen, Reversed) ->
-    case maps:is_key(Value, Seen) of
-        true -> ordered_unique(Rest, Seen, Reversed);
-        false ->
-            ordered_unique(Rest, Seen#{Value => true}, [Value | Reversed])
-    end.
 
 mode_value(count) -> "ReductionMode::COUNT";
 mode_value(members) -> "ReductionMode::MEMBERS".

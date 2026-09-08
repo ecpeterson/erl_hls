@@ -22,6 +22,16 @@
     interface_storage_width/1
 ]).
 
+-export_type([
+    expression/0,
+    type_ref/0,
+    population/0,
+    contribution/0,
+    site/0,
+    reducer/0,
+    reduction/0
+]).
+
 -type expression() :: #{
     body := iolist(),
     result := iolist()
@@ -64,16 +74,6 @@
     sites := [site(), ...],
     reducers := [reducer(), ...]
 }.
-
--export_type([
-    expression/0,
-    type_ref/0,
-    population/0,
-    contribution/0,
-    site/0,
-    reducer/0,
-    reduction/0
-]).
 
 -spec new(type_ref(), type_ref(), [site(), ...], [reducer(), ...]) ->
     reduction().
@@ -139,16 +139,18 @@ storage_width(Reduction) ->
     total_bits := pos_integer()
 }.
 layout(Reduction = #{accumulator := Accumulator}) ->
+    StatusBits = 2,
+    KeyBits = 32,
     AccumulatorBits = type_width(Accumulator),
     SiteBits = site_width(Reduction),
     RemainingBits = remaining_width(Reduction),
     MemberBits = member_width(Reduction),
-    Total = 2 + SiteBits + 32 + RemainingBits + MemberBits +
-        AccumulatorBits,
+    Total = StatusBits + SiteBits + KeyBits + RemainingBits +
+        MemberBits + AccumulatorBits,
     #{
-        status_bits => 2,
+        status_bits => StatusBits,
         site_bits => SiteBits,
-        key_bits => 32,
+        key_bits => KeyBits,
         remaining_bits => RemainingBits,
         member_bits => MemberBits,
         accumulator_bits => AccumulatorBits,
@@ -172,6 +174,8 @@ public_type_ref(Type) ->
 
 -spec interface_storage_width(map()) -> pos_integer().
 interface_storage_width(#{accumulator := Accumulator, sites := Sites}) ->
+    StatusBits = 2,
+    KeyBits = 32,
     SiteBits = unsigned_width(length(Sites) - 1),
     RemainingBits = unsigned_width(lists:max([
         maps:get(size, maps:get(population, Site)) || Site <- Sites
@@ -182,7 +186,7 @@ interface_storage_width(#{accumulator := Accumulator, sites := Sites}) ->
            Population <- [maps:get(population, Site)],
            maps:get(mode, Population) =:= members
     ]])),
-    2 + SiteBits + 32 + RemainingBits + MemberBits +
+    StatusBits + SiteBits + KeyBits + RemainingBits + MemberBits +
         type_width(Accumulator).
 
 public_site(Site) ->
@@ -202,14 +206,10 @@ validate_type_ref(_Context, #{
     fields := Fields
 }) when is_atom(Name), is_list(DslxType), is_list(Fields) ->
     lists:foreach(fun validate_field/1, Fields),
-    ok;
-validate_type_ref(Context, Type) ->
-    error({invalid_hls_statem_reduction_type, Context, Type}).
+    ok.
 
 validate_field(#{name := Name, type := _Type}) when is_atom(Name) ->
-    ok;
-validate_field(Field) ->
-    error({invalid_hls_statem_reduction_field, Field}).
+    ok.
 
 validate_sites(Sites) when is_list(Sites), Sites =/= [] ->
     IDs = [maps:get(id, Site) || Site <- Sites],
@@ -222,9 +222,7 @@ validate_sites(Sites) when is_list(Sites), Sites =/= [] ->
     Phases = [maps:get(phase, Site) || Site <- Sites],
     require_unique(reduction_phase, Phases),
     lists:foreach(fun validate_site/1, Sites),
-    ok;
-validate_sites(Sites) ->
-    error({invalid_hls_statem_reduction_sites, Sites}).
+    ok.
 
 validate_site(#{
     id := ID,
@@ -244,9 +242,7 @@ validate_site(#{
     Tags = [maps:get(tag, Contribution) || Contribution <- Contributions],
     require_unique(reduction_contribution_tag, Tags),
     lists:foreach(fun validate_contribution/1, Contributions),
-    ok;
-validate_site(Site) ->
-    error({invalid_hls_statem_reduction_site, Site}).
+    ok.
 
 validate_population(#{mode := count, size := Size})
         when is_integer(Size), Size >= 1, Size =< 255 ->
@@ -258,14 +254,10 @@ validate_population(#{mode := members, size := Size, members := Members})
             length(Members) =:= length(lists:usort(Members)) of
         true -> ok;
         false -> error({invalid_hls_statem_reduction_members, Members})
-    end;
-validate_population(Population) ->
-    error({invalid_hls_statem_reduction_population, Population}).
+    end.
 
 validate_contribution(#{tag := Tag, build := Build}) when is_atom(Tag) ->
-    validate_expression(contribution, Build);
-validate_contribution(Contribution) ->
-    error({invalid_hls_statem_reduction_contribution, Contribution}).
+    validate_expression(contribution, Build).
 
 validate_expression(_Context, #{body := Body, result := Result}) ->
     try
@@ -275,9 +267,7 @@ validate_expression(_Context, #{body := Body, result := Result}) ->
     catch
         error:badarg ->
             error({invalid_hls_statem_reduction_expression, Body, Result})
-    end;
-validate_expression(Context, Expression) ->
-    error({invalid_hls_statem_reduction_expression, Context, Expression}).
+    end.
 
 validate_reducers(Sites, Reducers) when is_list(Reducers) ->
     Names = [maps:get(name, Reducer) || Reducer <- Reducers],
@@ -288,15 +278,11 @@ validate_reducers(Sites, Reducers) when is_list(Reducers) ->
         Actual -> error({incomplete_hls_statem_reducers, Expected, Actual})
     end,
     lists:foreach(fun validate_reducer/1, Reducers),
-    ok;
-validate_reducers(_Sites, Reducers) ->
-    error({invalid_hls_statem_reduction_reducers, Reducers}).
+    ok.
 
 validate_reducer(#{name := Name, body := Body, result := Result})
         when is_atom(Name) ->
-    validate_expression(reducer, #{body => Body, result => Result});
-validate_reducer(Reducer) ->
-    error({invalid_hls_statem_reduction_reducer, Reducer}).
+    validate_expression(reducer, #{body => Body, result => Result}).
 
 require_unique(Kind, Values) ->
     case length(Values) =:= length(lists:usort(Values)) of

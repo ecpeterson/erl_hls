@@ -306,7 +306,12 @@ shared_machine_width(DataWidth) ->
 -spec shared_machine_width(non_neg_integer(), non_neg_integer()) ->
     pos_integer().
 shared_machine_width(DataWidth, ReductionWidth) ->
-    18 + DataWidth + ReductionWidth.
+    %% SharedMachine carries two u8 phase tags and its entry/failure flags.
+    PhaseBits = 8,
+    EnterPendingBits = 1,
+    FailedBits = 1,
+    2 * PhaseBits + EnterPendingBits + FailedBits + DataWidth +
+        ReductionWidth.
 
 %%%
 %%% Lowered callbacks
