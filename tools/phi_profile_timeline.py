@@ -29,25 +29,58 @@ class Dependency:
     detail: str
 
 
+BACKGROUND = "var(--background, var(--phi-background))"
+FOREGROUND = "var(--foreground, var(--phi-foreground))"
+MUTED = "var(--muted, var(--phi-muted))"
+MUTED_FOREGROUND = (
+    "var(--muted-foreground, var(--phi-muted-foreground))"
+)
+BORDER = "var(--border, var(--phi-border))"
+DESTRUCTIVE = "var(--destructive, var(--phi-destructive))"
+SERIES = {
+    index: f"var(--viz-series-{index}, var(--phi-series-{index}))"
+    for index in range(1, 7)
+}
+
+# Codex supplies the unprefixed theme variables when a figure is embedded in
+# conversation.  The private phi variables make the exact same SVG portable:
+# browsers, Quick Look, and editor previews do not need an external stylesheet.
+SVG_THEME_CSS = [
+    "svg{color-scheme:light dark;"
+    "--phi-background:#ffffff;--phi-foreground:#1f2328;"
+    "--phi-muted:#afb8c1;--phi-muted-foreground:#59636e;"
+    "--phi-border:#d0d7de;--phi-destructive:#cf222e;"
+    "--phi-series-1:#0969da;--phi-series-2:#1a7f37;"
+    "--phi-series-3:#8250df;--phi-series-4:#cf222e;"
+    "--phi-series-5:#bf8700;--phi-series-6:#bc4c00}",
+    "@media(prefers-color-scheme:dark){svg{"
+    "--phi-background:#0d1117;--phi-foreground:#f0f6fc;"
+    "--phi-muted:#6e7681;--phi-muted-foreground:#9198a1;"
+    "--phi-border:#3d444d;--phi-destructive:#ff7b72;"
+    "--phi-series-1:#58a6ff;--phi-series-2:#3fb950;"
+    "--phi-series-3:#bc8cff;--phi-series-4:#ff7b72;"
+    "--phi-series-5:#d29922;--phi-series-6:#ffa657}}",
+]
+
 COLORS = {
-    "batch_accept": "var(--viz-series-1)",
-    "aggregate_send": "var(--viz-series-2)",
-    "aggregate_receive": "var(--viz-series-3)",
-    "aggregate_accept": "var(--viz-series-4)",
-    "aggregate_complete": "var(--viz-series-4)",
-    "aggregate_pending": "var(--viz-series-6)",
-    "aggregate_error": "var(--destructive)",
-    "state_read": "var(--viz-series-5)",
-    "state_write": "var(--viz-series-5)",
-    "effects_egress": "var(--viz-series-2)",
-    "fast_issue": "var(--viz-series-2)",
-    "retained_issue": "var(--viz-series-5)",
-    "selectable": "var(--viz-series-1)",
-    "same_actor_only": "var(--viz-series-6)",
-    "executor_blocked": "var(--viz-series-4)",
-    "no_actor_work": "var(--muted)",
-    "waiting_egress_credit": "var(--viz-series-3)",
-    "internal_other": "var(--muted)",
+    "batch_accept": SERIES[1],
+    "aggregate_send": SERIES[2],
+    "aggregate_receive": SERIES[3],
+    "aggregate_accept": SERIES[4],
+    "aggregate_complete": SERIES[4],
+    "aggregate_pending": SERIES[6],
+    "aggregate_error": DESTRUCTIVE,
+    "state_read": SERIES[5],
+    "state_write": SERIES[5],
+    "effects_egress": SERIES[2],
+    "fast_issue": SERIES[2],
+    "retained_issue": SERIES[5],
+    "selectable": SERIES[1],
+    "same_actor_only": SERIES[6],
+    "executor_blocked": SERIES[4],
+    "no_actor_work": MUTED,
+    "waiting_egress_credit": SERIES[3],
+    "internal_other": MUTED,
 }
 
 
@@ -653,12 +686,14 @@ def render_svg(
         f'<title id="{title_id}">Clock-aligned phi reduction timeline</title>',
         f'<desc id="{desc_id}">Neighbor batches are folded in the reduction plane, delivered to one scheduler, accepted as a completed reduction, followed by an actor state read, state write, and new effects.</desc>',
         '<style>',
-        'text{fill:var(--foreground);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px}',
-        '.muted{fill:var(--muted-foreground)}',
-        '.grid{stroke:var(--border);stroke-width:1}',
-        '.axis{stroke:var(--foreground);stroke-width:1}',
-        '.mark{stroke:var(--background);stroke-width:1}',
+        *SVG_THEME_CSS,
+        f'text{{fill:{FOREGROUND};font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px}}',
+        f'.muted{{fill:{MUTED_FOREGROUND}}}',
+        f'.grid{{stroke:{BORDER};stroke-width:1}}',
+        f'.axis{{stroke:{FOREGROUND};stroke-width:1}}',
+        f'.mark{{stroke:{BACKGROUND};stroke-width:1}}',
         '</style>',
+        f'<rect width="100%" height="100%" fill="{BACKGROUND}"/>',
     ]
     site = detail_fields(anchor.detail).get("site", "reduction")
     title = (
@@ -702,7 +737,7 @@ def render_svg(
     ):
         xpos = x(run_start)
         run_width = max(2.0, x(run_end + 1) - xpos)
-        color = COLORS.get(status, "var(--muted)")
+        color = COLORS.get(status, MUTED)
         ypos = rows["selection"] + 10
         svg.append(
             f'<rect x="{xpos:.2f}" y="{ypos}" width="{run_width:.2f}" height="21" '
@@ -711,7 +746,7 @@ def render_svg(
         if run_width >= 62:
             label = status.replace("_", " ")
             svg.append(
-                f'<text x="{xpos + 4:.2f}" y="{ypos + 15}" fill="var(--foreground)">{esc(label)}</text>'
+                f'<text x="{xpos + 4:.2f}" y="{ypos + 15}" fill="{FOREGROUND}">{esc(label)}</text>'
             )
 
     visible = [event for event in events if start <= event.cycle <= end]
@@ -747,7 +782,7 @@ def render_svg(
         offsets[key] = ordinal + 1
         xpos = x(event.cycle + 0.5)
         ypos = rows[lane] + 20 - min(ordinal, 2) * 8
-        color = COLORS.get(event.event, "var(--foreground)")
+        color = COLORS.get(event.event, FOREGROUND)
         inherited_detail = aggregate_details.get(
             (event.cycle, event.slot), ""
         )
@@ -773,7 +808,7 @@ def render_svg(
     anchor_x = x(anchor.cycle + 0.5)
     svg.append(
         f'<line x1="{anchor_x:.2f}" y1="{top - 8}" x2="{anchor_x:.2f}" '
-        f'y2="{height - 35}" stroke="var(--foreground)" stroke-width="1" stroke-dasharray="3 3"/>'
+        f'y2="{height - 35}" stroke="{FOREGROUND}" stroke-width="1" stroke-dasharray="3 3"/>'
     )
     svg.append('</svg>')
     return "\n".join(svg) + "\n"
@@ -914,15 +949,17 @@ def cross_shard_svg(
         f'<marker id="{marker_id}" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M 0 0 L 8 4 L 0 8 Z" fill="context-stroke"/></marker>',
         '</defs>',
         '<style>',
-        'text{fill:var(--foreground);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px}',
-        '.muted{fill:var(--muted-foreground)}',
-        '.grid{stroke:var(--border);stroke-width:1}',
-        '.baseline{stroke:var(--border);stroke-width:1}',
-        '.dependency{fill:none;stroke:var(--muted-foreground);stroke-width:1;opacity:.25}',
-        '.dependency.focus{stroke:var(--foreground);stroke-width:1.6;opacity:.82}',
+        *SVG_THEME_CSS,
+        f'text{{fill:{FOREGROUND};font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px}}',
+        f'.muted{{fill:{MUTED_FOREGROUND}}}',
+        f'.grid{{stroke:{BORDER};stroke-width:1}}',
+        f'.baseline{{stroke:{BORDER};stroke-width:1}}',
+        f'.dependency{{fill:none;stroke:{MUTED_FOREGROUND};stroke-width:1;opacity:.25}}',
+        f'.dependency.focus{{stroke:{FOREGROUND};stroke-width:1.6;opacity:.82}}',
         '.contribution{stroke-dasharray:3 3}',
-        '.event{stroke:var(--background);stroke-width:1}',
+        f'.event{{stroke:{BACKGROUND};stroke-width:1}}',
         '</style>',
+        f'<rect width="100%" height="100%" fill="{BACKGROUND}"/>',
     ]
     focus_writes = [
         event for event in events
@@ -963,7 +1000,7 @@ def cross_shard_svg(
     focus_x = x(focus_cycle + 0.5)
     svg.append(
         f'<line x1="{focus_x:.2f}" y1="{top - 9}" x2="{focus_x:.2f}" '
-        f'y2="{height - 30}" stroke="var(--foreground)" stroke-width="1" '
+        f'y2="{height - 30}" stroke="{FOREGROUND}" stroke-width="1" '
         f'stroke-dasharray="3 3"/>'
     )
 
@@ -1004,7 +1041,7 @@ def cross_shard_svg(
             svg.append(
                 f'<rect x="{xpos:.2f}" y="{ypos:.2f}" '
                 f'width="{run_width:.2f}" height="7" '
-                f'fill="{COLORS.get(status, "var(--muted)")}" opacity=".55" '
+                f'fill="{COLORS.get(status, MUTED)}" opacity=".55" '
                 f'data-tooltip="{esc(scheduler)} {esc(status)}: clocks '
                 f'{run_start}–{run_end}"/>'
             )
@@ -1033,7 +1070,7 @@ def cross_shard_svg(
                 svg.append(
                     f'<rect x="{x(run_start):.2f}" y="{router_y - 4:.2f}" '
                     f'width="{max(1.5, x(run_end + 1) - x(run_start)):.2f}" '
-                    f'height="8" fill="var(--viz-series-4)" opacity=".32" '
+                    f'height="8" fill="{SERIES[4]}" opacity=".32" '
                     f'data-tooltip="{esc(router)} waits for downstream capacity: '
                     f'clocks {run_start}–{run_end}"/>'
                 )
@@ -1169,7 +1206,7 @@ def cross_shard_svg(
         if position is None:
             continue
         xpos, ypos = position
-        color = COLORS.get(event.event, "var(--foreground)")
+        color = COLORS.get(event.event, FOREGROUND)
         tooltip = event_tooltip(event, causal_details.get(id(event), ""))
         if event.event == "aggregate_complete":
             shape = (
@@ -1195,9 +1232,9 @@ def cross_shard_svg(
         else:
             shape = f'<circle cx="{xpos:.2f}" cy="{ypos:.2f}" r="5"'
         fill = (
-            "var(--background)" if event.event == "effects_accept" else color
+            BACKGROUND if event.event == "effects_accept" else color
         )
-        stroke = color if event.event == "effects_accept" else "var(--background)"
+        stroke = color if event.event == "effects_accept" else BACKGROUND
         svg.append(
             f'{shape} fill="{fill}" stroke="{stroke}" stroke-width="1.5" '
             f'data-tooltip="{esc(tooltip)}"/>'
@@ -1205,7 +1242,7 @@ def cross_shard_svg(
         if id(event) in focus_events:
             svg.append(
                 f'<circle cx="{xpos:.2f}" cy="{ypos:.2f}" r="9" fill="none" '
-                f'stroke="var(--foreground)" stroke-width="1.5"/>'
+                f'stroke="{FOREGROUND}" stroke-width="1.5"/>'
             )
 
     # A compact in-plot legend keeps the dependency vocabulary visible.
