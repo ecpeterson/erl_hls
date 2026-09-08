@@ -38,20 +38,22 @@
     init := lowered_clause(),
     entries := [entry(), ...],
     casts := [cast_clause()],
-    reductions := none | xls_statem_reduction_ir:reduction()
+    reductions := none | xls_statem_reduction_ir:reduction(),
+    shared_service := ordinary | aggregate_only
 }.
 
 -spec emit(spec()) -> iolist().
 emit(Spec) ->
+    SharedService = maps:get(shared_service, Spec, ordinary),
     [
         preamble(Spec),
         maps:get(record_declarations, Spec),
         xls_statem_reduction_codegen:declarations(
-            maps:get(reductions, Spec, none)
+            maps:get(reductions, Spec, none), SharedService
         ),
         machine_declarations(Spec),
         xls_statem_reduction_codegen:functions(
-            maps:get(reductions, Spec, none)
+            maps:get(reductions, Spec, none), SharedService
         ),
         initial_machine(Spec),
         machine_codec(Spec),
@@ -143,6 +145,7 @@ machine_declarations(#{
     data_width := DataWidth
 } = Spec) ->
     Reductions = maps:get(reductions, Spec, none),
+    SharedService = maps:get(shared_service, Spec, ordinary),
     ReductionWidth = xls_statem_reduction_codegen:private_width(Reductions),
     DataStruct = record_struct_name(DataName),
     MachineBits = shared_machine_width(DataWidth, ReductionWidth),
@@ -239,7 +242,9 @@ machine_declarations(#{
         "  slot: u32,\n",
         "  machine: MachineBits,\n",
         "  frame: axis::Frame,\n",
-        ?REDUCTION_SERVICE:shared_executor_request_field(Reductions),
+        ?REDUCTION_SERVICE:shared_executor_request_field(
+            Reductions, SharedService
+        ),
         "  received: u1,\n",
         "  mailbox_index: u8,\n",
         "  order_index: u8,\n",
@@ -274,7 +279,7 @@ machine_declarations(#{
         "  next_valid: u1,\n",
         "  next_slot: u32,\n",
         "  in_flight: u1[ACTOR_COUNT],\n",
-        ?REDUCTION_SERVICE:shared_state_fields(Reductions),
+        ?REDUCTION_SERVICE:shared_state_fields(Reductions, SharedService),
         "  completed_valid: u1,\n",
         "  completed: SharedExecutorResult,\n",
         "  admission_cursor: u32,\n",
@@ -388,7 +393,7 @@ enter_function(#{
     max_entry_effects := MaxEntryEffects,
     message_words := MessageWords,
     entries := Entries
-}) ->
+} = Spec) ->
     DataStruct = record_struct_name(DataName),
     EffectCapacity = max(1, MaxEntryEffects),
     EffectPayloadBits = entry_effect_payload_bits(Entries, MessageWords),
@@ -402,7 +407,7 @@ enter_function(#{
         "}\n\n",
         entry_effect_count_function(Entries),
         entry_effect_function(Entries, MessageWords),
-        scheduled_effect_function()
+        scheduled_effect_function(Spec)
     ].
 
 entry_arm(#{
@@ -479,8 +484,8 @@ entry_effect_index_arm(Index, Effect, Offset, MessageWords) ->
         "      },\n"
     ].
 
-scheduled_effect_function() ->
-    """
+scheduled_effect_function(Spec) ->
+    ["""
     pub fn scheduled_effect(
         scheduled: ScheduledEffects, index: u8) -> (Egress, u1, u1) {
       let count = entry_effect_count(scheduled.effects);
@@ -489,7 +494,46 @@ scheduled_effect_function() ->
       (entry_effect(scheduled.effects, index), emit, last)
     }
 
-    """.
+    """, scheduled_reduction_prefix_function(Spec)].
+
+scheduled_reduction_prefix_function(#{shared_service := aggregate_only,
+        reductions := #{sites := Sites}, entries := Entries}) ->
+    [
+        "pub fn scheduled_reduction_prefix(\n",
+        "    scheduled: ScheduledEffects) -> (u1, u8, u1) {\n",
+        "  let count = entry_effect_count(scheduled.effects);\n",
+        "  match scheduled.effects.phase as Phase {\n",
+        [scheduled_reduction_prefix_arm(Site, Entries) || Site <- Sites],
+        "    _ => (u1:0, u8:0, u1:0),\n",
+        "  }\n",
+        "}\n\n"
+    ];
+scheduled_reduction_prefix_function(_Spec) ->
+    [].
+
+scheduled_reduction_prefix_arm(#{
+    phase := Phase,
+    population := #{size := Size}
+}, Entries) ->
+    [Entry] = [Candidate || Candidate = #{phase := CandidatePhase} <- Entries,
+        CandidatePhase =:= Phase],
+    Effects = maps:get(effects, Entry),
+    Prefix = lists:sublist(Effects, Size),
+    Valid = case length(Prefix) =:= Size andalso lists:all(
+            fun(Effect) -> maps:get(conditional, Effect, false) =:= false end,
+            Prefix
+        ) of
+        true -> join_with(" && ", [
+            ["scheduled.effects.valid[u32:", integer_to_list(Index), "]"]
+            || Index <- lists:seq(0, Size - 1)
+        ]);
+        false -> "u1:0"
+    end,
+    [
+        "    Phase::", uppercase(Phase), " => (", Valid, ", u8:",
+        integer_to_list(Size), ", count == u8:",
+        integer_to_list(Size), "),\n"
+    ].
 
 %% Sorry: these offsets manually implement the physical layout of a tagged
 %% union which should belong to DSLX's type system. The Roadmap records the
@@ -757,8 +801,11 @@ shared_machine_step_function(#{
     message_words := MessageWords
 } = Spec) ->
     Reductions = maps:get(reductions, Spec, none),
+    SharedService = maps:get(shared_service, Spec, ordinary),
     [
-        ?REDUCTION_SERVICE:shared_machine_support(Reductions),
+        ?REDUCTION_SERVICE:shared_machine_support(
+            Reductions, SharedService
+        ),
         "fn shared_machine_dispatch(\n",
         "    machine: SharedMachine, frame: axis::Frame, received: u1)\n",
         "    -> SharedDispatch {\n",
@@ -769,29 +816,39 @@ shared_machine_step_function(#{
         "  } else {\n",
         "    let tag_ok = ",
         tag_ok_expression(MessageNames, MessageWords), ";\n",
-        ?REDUCTION_SERVICE:shared_dispatch_bindings(Reductions),
+        ?REDUCTION_SERVICE:shared_dispatch_bindings(
+            Reductions, SharedService
+        ),
         "    let invalid_repeat = tag_ok && repeat_phase &&\n",
         "      (directive != Directive::CONSUME ||\n",
         "       next_phase != machine.phase);\n",
-        ?REDUCTION_SERVICE:shared_dispatch_effective_binding(Reductions),
+        ?REDUCTION_SERVICE:shared_dispatch_effective_binding(
+            Reductions, SharedService
+        ),
         "    let phase_changed = effective && next_phase != machine.phase;\n",
         "    let phase_boundary = phase_changed ||\n",
         "      (effective && repeat_phase);\n",
-        ?REDUCTION_SERVICE:shared_dispatch_failed_binding(Reductions),
+        ?REDUCTION_SERVICE:shared_dispatch_failed_binding(
+            Reductions, SharedService
+        ),
         "    let next_machine = SharedMachine {\n",
         "      phase: if effective { next_phase } else { machine.phase },\n",
         "      entered_from: if phase_boundary {\n",
         "        machine.phase\n",
         "      } else { machine.entered_from },\n",
         "      data: if effective { next_data } else { machine.data },\n",
-        ?REDUCTION_SERVICE:shared_dispatch_reduction_field(Reductions),
+        ?REDUCTION_SERVICE:shared_dispatch_reduction_field(
+            Reductions, SharedService
+        ),
         "      enter_pending: effective && phase_boundary && !failed,\n",
         "      failed,\n",
         "      ..machine\n",
         "    };\n",
         "    SharedDispatch {\n",
         "      machine: next_machine,\n",
-        ?REDUCTION_SERVICE:shared_dispatch_dispatched_field(Reductions),
+        ?REDUCTION_SERVICE:shared_dispatch_dispatched_field(
+            Reductions, SharedService
+        ),
         "      directive,\n",
         "      phase_boundary,\n",
         "      ..zero!<SharedDispatch>()\n",
@@ -814,13 +871,16 @@ shared_machine_step_function(#{
 %% recurrence.
 shared_executor(Spec) ->
     Reductions = maps:get(reductions, Spec, none),
+    SharedService = maps:get(shared_service, Spec, ordinary),
     ["""
     pub fn shared_execute(request: SharedExecutorRequest) ->
         SharedExecutorResult {
       let machine = machine_from_bits(request.machine);
     """,
       "\n",
-      ?REDUCTION_SERVICE:shared_executor_dispatch(Reductions),
+      ?REDUCTION_SERVICE:shared_executor_dispatch(
+          Reductions, SharedService
+      ),
     """
       let entered = shared_machine_enter(
         dispatched.machine, request.egress_ready);
@@ -892,8 +952,9 @@ service(Spec) ->
 
 shared_service(Spec) ->
     Reductions = maps:get(reductions, Spec, none),
+    SharedService = maps:get(shared_service, Spec, ordinary),
     [
-    ?REDUCTION_SERVICE:shared_service_helpers(Reductions),
+    ?REDUCTION_SERVICE:shared_service_helpers(Reductions, SharedService),
     """
     fn free_mailbox_index<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
         state: SharedState<ACTOR_COUNT, PRODUCER_COUNT>,
@@ -1217,6 +1278,9 @@ shared_service(Spec) ->
       mailbox_read_resp_in: chan<MailboxRamReadResp> in;
       mailbox_write_req_out: chan<MailboxRamWriteReq> out;
       mailbox_write_resp_in: chan<MailboxRamWriteResp> in;
+    """,
+        ?REDUCTION_SERVICE:shared_proc_field(Reductions, SharedService),
+    """
       executor_request_out: chan<SharedExecutorRequest> out;
       executor_result_in: chan<SharedExecutorResult> in;
 
@@ -1232,6 +1296,11 @@ shared_service(Spec) ->
           mailbox_read_resp_in: chan<MailboxRamReadResp> in,
           mailbox_write_req_out: chan<MailboxRamWriteReq> out,
           mailbox_write_resp_in: chan<MailboxRamWriteResp> in
+    """,
+        ?REDUCTION_SERVICE:shared_config_parameter(
+            Reductions, SharedService
+        ),
+    """
       ) {
         let (executor_request_p, executor_request_c) =
           chan<SharedExecutorRequest, u32:1>("executor_request");
@@ -1250,6 +1319,9 @@ shared_service(Spec) ->
           mailbox_read_resp_in,
           mailbox_write_req_out,
           mailbox_write_resp_in,
+    """,
+        ?REDUCTION_SERVICE:shared_config_endpoint(Reductions, SharedService),
+    """
           executor_request_p,
           executor_result_c,
         )
@@ -1292,10 +1364,17 @@ shared_service(Spec) ->
               }
             )
           }((join(), state.pending, state.pending_valid));
+    """,
+        ?REDUCTION_SERVICE:shared_capture(Reductions, SharedService),
+    """
         match state.phase {
           SharedPhase::BOOT => {
             let write_tok = send(
-              capture_tok,
+    """,
+        "\n          ",
+        ?REDUCTION_SERVICE:shared_capture_token(Reductions, SharedService),
+        ",\n",
+    """
               ram_write_req_out,
               machine_write(state.cursor, initial_shared_machine()));
             let (_done, _) = recv(write_tok, ram_write_resp_in);
@@ -1323,7 +1402,11 @@ shared_service(Spec) ->
             }
           },
           SharedPhase::STARTUP => {
-            let (tok, request) = recv(capture_tok, startup_in);
+            let (tok, request) = recv(
+    """,
+        ?REDUCTION_SERVICE:shared_capture_token(Reductions, SharedService),
+        ", startup_in);\n",
+    """
             let physical = state.occupied[request.slot];
             let write_tok = send(
               tok,
@@ -1365,7 +1448,11 @@ shared_service(Spec) ->
               !state.completed_valid || buffered_can_retire;
             let (executor_result_tok, incoming_result, incoming_valid) =
               recv_if_non_blocking(
-                capture_tok,
+    """,
+        "\n            ",
+        ?REDUCTION_SERVICE:shared_capture_token(Reductions, SharedService),
+        ",\n",
+    """
                 executor_result_in,
                 accept_executor_result,
                 zero!<SharedExecutorResult>());
@@ -1391,10 +1478,10 @@ shared_service(Spec) ->
               pending_valid: credit_pending_valid,
               egress_busy: credit_busy ||
                 (retire_valid && result.effects_valid),
-              ..state
-            };
     """,
-            "\n",
+        "\n          ..",
+        ?REDUCTION_SERVICE:shared_state_source(Reductions, SharedService),
+        "\n        };\n",
             ?REDUCTION_SERVICE:shared_retire_binding(Reductions),
     """
             let retired_in_flight = if retire_valid {
@@ -1416,7 +1503,9 @@ shared_service(Spec) ->
               completed.effects_valid && retired.egress_busy;
     """,
             "\n",
-            ?REDUCTION_SERVICE:shared_issue_bindings(Reductions),
+            ?REDUCTION_SERVICE:shared_issue_bindings(
+                Reductions, SharedService
+            ),
     """
             let (received, order_index, mailbox_index) =
               mailbox_selection(state, read_slot);
@@ -1464,6 +1553,11 @@ shared_service(Spec) ->
               admission_cursor: reservation.cursor,
               ..retired
             };
+    """,
+            ?REDUCTION_SERVICE:shared_post_issue_state(
+                Reductions, SharedService
+            ),
+    """
             let issued_in_flight = if issue_valid {
               update(retired_in_flight, read_slot, u1:1)
             } else {
@@ -1481,11 +1575,19 @@ shared_service(Spec) ->
             let selection_state = SharedState<
                 ACTOR_COUNT, PRODUCER_COUNT> {
               in_flight: issued_in_flight,
-              ..admitted
+    """,
+            "\n          ..",
+            ?REDUCTION_SERVICE:shared_post_issue_state_name(
+                Reductions, SharedService
+            ),
+            "\n",
+    """
             };
             let (selected_ready, selected_slot) =
     """,
-            ?REDUCTION_SERVICE:shared_ready_selection_call(Reductions),
+            ?REDUCTION_SERVICE:shared_ready_selection_call(
+                Reductions, SharedService
+            ),
     """
             let ready = if completion_blocked {
               state.next_valid
@@ -1504,7 +1606,9 @@ shared_service(Spec) ->
               frame,
     """,
             "\n",
-            ?REDUCTION_SERVICE:shared_executor_request_value(Reductions),
+            ?REDUCTION_SERVICE:shared_executor_request_value(
+                Reductions, SharedService
+            ),
     """
               received: read_mailbox && received,
               mailbox_index,

@@ -90,6 +90,11 @@ lower(Plan, Profile) ->
         Plan,
         maps:get(scheduler_groups, Physical, #{})
     ),
+    ReductionPlan = hls_reduction_plan:normalize(
+        Plan,
+        SchedulerPlan,
+        maps:get(reduction_placements, Physical, #{})
+    ),
     Schedulers = annotate_schedulers(maps:get(groups, SchedulerPlan)),
     SchedulerBindings = scheduler_bindings(Schedulers),
     Families0 = require_families(maps:get(families, Plan, [])),
@@ -142,6 +147,9 @@ lower(Plan, Profile) ->
             Physical,
             global
         ),
+        reduction_plan => ReductionPlan,
+        artifact_requirements =>
+            hls_reduction_plan:artifact_requirements(ReductionPlan),
         schedulers => Schedulers,
         families => Families,
         width => Width,
@@ -781,6 +789,7 @@ validate_profile(Profile) when is_map(Profile) ->
     Keys = lists:sort(maps:keys(Profile)),
     Allowed = lists:sort([
         effect_window_partition,
+        reduction_placements,
         scheduler_groups
         | Required
     ]),
@@ -803,6 +812,10 @@ validate_profile(Profile) when is_map(Profile) ->
     case maps:get(scheduler_groups, Profile, #{}) of
         Groups when is_map(Groups) -> ok;
         Groups -> error({scheduler_groups, Groups})
+    end,
+    case maps:get(reduction_placements, Profile, #{}) of
+        Placements when is_map(Placements) -> ok;
+        Placements -> error({reduction_placements, Placements})
     end,
     case Profile of
         #{effect_window_partition := global} -> ok;

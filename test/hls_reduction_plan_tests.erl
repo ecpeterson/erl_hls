@@ -149,6 +149,39 @@ reduction_prefix_must_use_the_contribution_schema_test() ->
         source_fragment_prefix_schema
     ).
 
+selected_contribution_must_be_source_transportable_test() ->
+    Reason = assert_fixture_error(
+        hls_reduction_plan_nontransportable_fixture,
+        source_fragment_nontransportable_contribution
+    ),
+    ?assertEqual(
+        {source_fragment_nontransportable_contribution,
+            reducer, 0, message},
+        Reason
+    ).
+
+captured_contribution_must_cover_the_entire_schema_test() ->
+    Reason = assert_fixture_error(
+        hls_reduction_plan_guarded_fixture,
+        source_fragment_nonexhaustive_contribution
+    ),
+    ?assertEqual(
+        {source_fragment_nonexhaustive_contribution,
+            reducer, 0, message},
+        Reason
+    ).
+
+captured_contribution_pattern_must_be_irrefutable_test() ->
+    Reason = assert_fixture_error(
+        hls_reduction_plan_refutable_fixture,
+        source_fragment_nonexhaustive_contribution
+    ),
+    ?assertEqual(
+        {source_fragment_nonexhaustive_contribution,
+            reducer, 0, message},
+        Reason
+    ).
+
 reduction_prefix_cannot_exceed_the_population_test() ->
     assert_fixture_error(
         hls_reduction_plan_excess_fixture,

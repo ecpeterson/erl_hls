@@ -96,6 +96,15 @@ effect_window_domains_are_weak_not_strong_components_test() ->
         xls_topology_effect_windows:partition(
             DisconnectedCycles, weak_components
         )
+    ),
+    %% A bounded manager incident to both otherwise-disconnected components
+    %% is an undirected hyperedge for ownership, without becoming a router
+    %% destination in either scheduler's generated wiring.
+    ?assertEqual(
+        [[0, 1, 2, 3]],
+        xls_topology_effect_windows:partition(
+            DisconnectedCycles, weak_components, [[1, 2]]
+        )
     ).
 
 generated_profile_and_ram_shell_are_width_driven_test() ->

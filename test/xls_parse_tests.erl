@@ -17,6 +17,99 @@ non_reduction_statem_codegen_matches_checked_in_artifacts_test() ->
         Sources
     ).
 
+ordinary_shared_service_option_preserves_default_output_test() ->
+    Sources = [
+        "src/examples/regsvc/regsvc.erl",
+        "test_data/hls_statem_reduction_lower_fixture.erl"
+    ],
+    lists:foreach(fun(Source) ->
+        ?assertEqual(
+            iolist_to_binary(xls_parse:to_xls(Source)),
+            iolist_to_binary(xls_parse:to_xls(
+                Source, #{shared_service => ordinary}))
+        )
+    end, Sources).
+
+shared_service_options_are_exact_and_validated_test() ->
+    Path = "src/examples/regsvc/regsvc.erl",
+    ?assertError(
+        {invalid_xls_shared_service, speculative},
+        xls_parse:to_xls(Path, #{shared_service => speculative})
+    ),
+    ?assertError(
+        {invalid_xls_options, [extra, shared_service]},
+        xls_parse:to_xls(Path,
+            #{shared_service => ordinary, extra => true})
+    ),
+    ?assertError(
+        {invalid_xls_options, [shared_service_mode]},
+        xls_parse:to_xls(Path, #{shared_service_mode => ordinary})
+    ),
+    ?assertError(
+        {unsupported_hls_gs_shared_service, aggregate_only},
+        xls_parse:to_xls(Path, #{shared_service => aggregate_only})
+    ).
+
+aggregate_only_requires_an_actor_reduction_test() ->
+    ?assertError(
+        aggregate_only_requires_reductions,
+        xls_parse:to_xls(
+            "test_data/hls_tags_statem_fixture.erl",
+            #{shared_service => aggregate_only}
+        )
+    ).
+
+aggregate_only_emits_only_the_transport_artifact_surface_test() ->
+    Path = "test_data/hls_statem_reduction_lower_fixture.erl",
+    Ordinary = iolist_to_binary(xls_parse:to_xls(Path)),
+    AggregateOnly = iolist_to_binary(xls_parse:to_xls(
+        Path, #{shared_service => aggregate_only})),
+    ?assertEqual(nomatch,
+        binary:match(Ordinary, <<"ReductionAggregateRequest">>)),
+    ?assertEqual(nomatch,
+        binary:match(Ordinary, <<"reduction_aggregate_batch">>)),
+    ?assertNotEqual(nomatch,
+        binary:match(AggregateOnly, <<"ReductionAggregateRequest">>)),
+    ?assertNotEqual(nomatch, binary:match(AggregateOnly,
+        <<"pub fn reduction_aggregate_batch<COUNT: u32>(">>)),
+    ?assertNotEqual(nomatch, binary:match(AggregateOnly,
+        <<"fn reduction_apply_complete_aggregate(">>)),
+    ?assertNotEqual(nomatch, binary:match(AggregateOnly,
+        <<"pub fn scheduled_reduction_prefix(\n"
+          "    scheduled: ScheduledEffects) -> (u1, u8, u1)">>)).
+
+aggregate_only_uses_one_pending_receptacle_per_actor_test() ->
+    Path = "test_data/hls_statem_reduction_lower_fixture.erl",
+    AggregateOnly = iolist_to_binary(xls_parse:to_xls(
+        Path, #{shared_service => aggregate_only})),
+    ?assertNotEqual(nomatch, binary:match(AggregateOnly,
+        <<"aggregate_pending: ReductionAggregateRequest[ACTOR_COUNT]">>)),
+    ?assertNotEqual(nomatch, binary:match(AggregateOnly,
+        <<"aggregate_pending_valid: u1[ACTOR_COUNT]">>)),
+    ?assertEqual(nomatch, binary:match(AggregateOnly,
+        <<"aggregate_pending: ReductionAggregateRequest,\n">>)),
+    ?assertEqual(nomatch, binary:match(AggregateOnly,
+        <<"aggregate_pending_valid: u1,\n">>)),
+    %% Aggregate capture never waits on a different actor's receptacle. The
+    %% one-open-window causal invariant normally excludes duplicates, while a
+    %% violated invariant or invalid slot poisons the captured aggregate.
+    ?assertNotEqual(nomatch, binary:match(AggregateOnly,
+        <<"aggregate_in,\n        capture_enabled,\n">>)),
+    ?assertNotEqual(nomatch, binary:match(AggregateOnly,
+        <<"let aggregate_protocol_error = incoming_aggregate_valid">>)),
+    ?assertNotEqual(nomatch, binary:match(AggregateOnly,
+        <<"state.aggregate_pending_valid[aggregate_slot]">>)),
+    ?assertNotEqual(nomatch, binary:match(AggregateOnly,
+        <<"ReductionAggregate {\n          failed: u1:1">>)),
+    ?assertNotEqual(nomatch, binary:match(AggregateOnly,
+        <<"update(state.aggregate_pending_valid, aggregate_slot, u1:1)">>)),
+    ?assertNotEqual(nomatch, binary:match(AggregateOnly,
+        <<"let aggregate_active = state.aggregate_pending_valid[slot]">>)),
+    ?assertNotEqual(nomatch, binary:match(AggregateOnly,
+        <<"retired.aggregate_pending[read_slot]">>)),
+    ?assertNotEqual(nomatch, binary:match(AggregateOnly,
+        <<"admitted.aggregate_pending_valid, read_slot, u1:0">>)).
+
 passive_state_observation_is_not_emitted_test() ->
     Xls = iolist_to_binary(xls_parse:to_xls("src/examples/regsvc/regsvc.erl")),
 

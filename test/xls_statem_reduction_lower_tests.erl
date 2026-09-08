@@ -75,8 +75,102 @@ interface_is_closed_and_omits_derived_facts_test() ->
         ],
         reducers := [sum]
     }, Interface),
+    ?assertEqual([true, true], [
+        maps:get(source_transportable, Site)
+        || Site <- maps:get(sites, Interface)
+    ]),
+    ?assertEqual([false, true], [
+        maps:get(source_capture_total, Site)
+        || Site <- maps:get(sites, Interface)
+    ]),
     ?assertEqual(80,
         xls_statem_reduction_ir:interface_storage_width(Interface)).
+
+actor_data_dependent_applicability_is_reported_not_globally_rejected_test() ->
+    with_mutated_fixture(
+        <<"counting(cast, #count_value{key = Key, value = Value}, Cell)\n">>,
+        <<"counting(cast, #count_value{key = Key, value = Value},\n"
+          "        Cell = #cell{entries = _Entries})\n">>,
+        fun(Path) ->
+            #{reduction := #{sites := [Count | _]}} = analyze(Path),
+            [Contribution] = maps:get(contributions, Count),
+            ?assertEqual(false,
+                maps:get(source_transportable, Contribution)),
+            ?assertEqual(none, maps:get(transport, Contribution)),
+            Interface = xls_parse:actor_interface(Path),
+            [PublicCount | _] = maps:get(sites,
+                maps:get(reductions, Interface)),
+            ?assertEqual(false,
+                maps:get(source_transportable, PublicCount)),
+            ?assert(is_binary(iolist_to_binary(
+                lower(Path, #{shared_service => ordinary})))),
+            ?assertError(
+                {aggregate_only_nontransportable_contributions,
+                    [#{phase := counting, schema := count_value}]},
+                lower(Path, #{shared_service => aggregate_only})
+            )
+        end
+    ).
+
+actor_data_dependent_guard_is_not_source_transportable_test() ->
+    with_mutated_fixture(
+        <<"        when Value > 0 ->">>,
+        <<"        when Value > 0, Cell#cell.value >= 0 ->">>,
+        fun(Path) ->
+            #{reduction := #{sites := [Count | _]}} = analyze(Path),
+            [Contribution] = maps:get(contributions, Count),
+            ?assertEqual(false,
+                maps:get(source_transportable, Contribution)),
+            ?assertError(
+                {aggregate_only_nontransportable_contributions,
+                    [#{phase := counting, schema := count_value}]},
+                lower(Path, #{shared_service => aggregate_only})
+            )
+        end
+    ).
+
+guarded_contribution_fallback_is_not_total_source_capture_test() ->
+    #{reduction := #{sites := [Count | _]}, cast_groups := Ordinary} =
+        analyze(?FIXTURE),
+    [Contribution] = maps:get(contributions, Count),
+    ?assertEqual(true, maps:get(source_transportable, Contribution)),
+    ?assertEqual(false, maps:get(source_capture_total, Contribution)),
+    %% The distinction is placement-only: the ordinary fallback remains in
+    %% dispatch and both ordinary entry points still render identically.
+    ?assertMatch([{{count_value, counting}, [_]}], Ordinary),
+    {ok, Forms} = xls_parse:parse_file(?FIXTURE),
+    Phases = xls_parse:find_attribute(Forms, hls_phases),
+    ?assertEqual(
+        iolist_to_binary(xls_statem_lower:lower(?FIXTURE, Forms, Phases)),
+        iolist_to_binary(xls_statem_lower:lower(
+            ?FIXTURE, Forms, Phases, #{shared_service => ordinary}
+        ))
+    ),
+    %% The generic aggregate helper may still represent the guard miss as an
+    %% invalid contribution.  Only whole-schema source capture is forbidden.
+    ?assert(is_binary(iolist_to_binary(
+        lower(?FIXTURE, #{shared_service => aggregate_only})
+    ))).
+
+refutable_contribution_pattern_is_not_total_source_capture_test() ->
+    with_mutated_fixture(
+        <<"#count_value{key = Key, value = Value}, Cell)\n"
+          "        when Value > 0 ->">>,
+        <<"#count_value{key = Key, value = Value = 1}, Cell) ->">>,
+        fun(Path) ->
+            #{reduction := #{sites := [Count | _]},
+              cast_groups := Ordinary} = analyze(Path),
+            [Contribution] = maps:get(contributions, Count),
+            ?assertEqual(true,
+                maps:get(source_transportable, Contribution)),
+            ?assertEqual(false,
+                maps:get(source_capture_total, Contribution)),
+            ?assertMatch([{{count_value, counting}, [_]}], Ordinary),
+            ?assert(is_binary(iolist_to_binary(
+                lower(Path, #{shared_service => ordinary})
+            )))
+        end
+    ).
 
 source_locations_do_not_escape_analysis_test() ->
     Expected = maps:get(reduction, analyze(?FIXTURE)),
@@ -213,6 +307,11 @@ reducer_must_be_exported_test() ->
 analyze(Path) ->
     {Forms, Context} = context(Path),
     xls_statem_reduction_lower:analyze(Forms, Context).
+
+lower(Path, Options) ->
+    {ok, Forms} = xls_parse:parse_file(Path),
+    Phases = xls_parse:find_attribute(Forms, hls_phases),
+    xls_statem_lower:lower(Path, Forms, Phases, Options).
 
 context(Path) ->
     {ok, Forms} = xls_parse:parse_file(Path),

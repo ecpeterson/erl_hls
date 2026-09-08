@@ -25,24 +25,33 @@
     machine_encode_prefix/1,
     machine_state_copy_field/1,
     machine_state_field/1,
-    shared_dispatch_bindings/1,
-    shared_dispatch_dispatched_field/1,
-    shared_dispatch_effective_binding/1,
-    shared_dispatch_failed_binding/1,
-    shared_dispatch_reduction_field/1,
+    shared_capture/2,
+    shared_capture_token/2,
+    shared_config_endpoint/2,
+    shared_config_parameter/2,
+    shared_dispatch_bindings/2,
+    shared_dispatch_dispatched_field/2,
+    shared_dispatch_effective_binding/2,
+    shared_dispatch_failed_binding/2,
+    shared_dispatch_reduction_field/2,
     shared_entry_step/1,
-    shared_executor_dispatch/1,
-    shared_executor_request_field/1,
-    shared_executor_request_value/1,
-    shared_issue_bindings/1,
-    shared_machine_support/1,
-    shared_ready_selection_call/1,
+    shared_executor_dispatch/2,
+    shared_executor_request_field/2,
+    shared_executor_request_value/2,
+    shared_issue_bindings/2,
+    shared_machine_support/2,
+    shared_post_issue_state/2,
+    shared_post_issue_state_name/2,
+    shared_proc_field/2,
+    shared_ready_selection_call/2,
     shared_retire_binding/1,
-    shared_service_helpers/1,
-    shared_state_fields/1
+    shared_service_helpers/2,
+    shared_state_fields/2,
+    shared_state_source/2
 ]).
 
 -type reductions() :: none | xls_statem_reduction_ir:reduction().
+-type service_mode() :: ordinary | aggregate_only.
 
 %%%
 %%% Stored-state and scheduler declarations
@@ -79,21 +88,39 @@ machine_encode_prefix(none) ->
 machine_encode_prefix(_Reductions) ->
     "  bits_from_reduction_state(machine.reduction) ++\n".
 
--spec shared_state_fields(reductions()) -> iodata().
-shared_state_fields(none) ->
+-spec shared_state_fields(reductions(), service_mode()) -> iodata().
+shared_state_fields(none, _Mode) ->
     [];
-shared_state_fields(_Reductions) ->
+shared_state_fields(_Reductions, ordinary) ->
     [
         "  // Private completion events outrank entry and mailbox work for\n",
         "  // the same actor, but retain round-robin fairness across actors.\n",
         "  internal_candidates: u1[ACTOR_COUNT],\n"
+    ];
+shared_state_fields(_Reductions, aggregate_only) ->
+    [
+        "  // Private completion events outrank aggregate, entry, and\n",
+        "  // mailbox work for the same actor; actor choice stays fair.\n",
+        "  internal_candidates: u1[ACTOR_COUNT],\n",
+        "  // Each actor can have at most one completed aggregate awaiting\n",
+        "  // application: it cannot open its next reduction until this one\n",
+        "  // retires. Per-actor receptacles prevent one blocked actor from\n",
+        "  // backpressuring the reduction plane for every other actor.\n",
+        "  aggregate_pending: ReductionAggregateRequest[ACTOR_COUNT],\n",
+        "  aggregate_pending_valid: u1[ACTOR_COUNT],\n"
     ].
 
--spec shared_executor_request_field(reductions()) -> iodata().
-shared_executor_request_field(none) ->
+-spec shared_executor_request_field(reductions(), service_mode()) -> iodata().
+shared_executor_request_field(none, _Mode) ->
     [];
-shared_executor_request_field(_Reductions) ->
-    "  internal: u1,\n".
+shared_executor_request_field(_Reductions, ordinary) ->
+    "  internal: u1,\n";
+shared_executor_request_field(_Reductions, aggregate_only) ->
+    [
+        "  internal: u1,\n",
+        "  aggregate_request: ReductionAggregateRequest,\n",
+        "  aggregate_valid: u1,\n"
+    ].
 
 %%%
 %%% Direct Service
@@ -310,11 +337,11 @@ direct_receive_gate(_Reductions) ->
 %%% SharedService actor execution
 %%%
 
--spec shared_machine_support(reductions()) -> iodata().
-shared_machine_support(none) ->
+-spec shared_machine_support(reductions(), service_mode()) -> iodata().
+shared_machine_support(none, _Mode) ->
     [];
-shared_machine_support(_Reductions) ->
-    """
+shared_machine_support(_Reductions, Mode) ->
+    ["""
     fn shared_machine_complete(machine: SharedMachine) -> SharedDispatch {
       let valid = !machine.failed && !machine.enter_pending &&
         machine.reduction.status == ReductionStatus::COMPLETE;
@@ -358,10 +385,42 @@ shared_machine_support(_Reductions) ->
       }
     }
 
+    """, shared_machine_aggregate(Mode)].
+
+shared_machine_aggregate(ordinary) ->
+    [];
+shared_machine_aggregate(aggregate_only) ->
+    """
+    fn shared_machine_aggregate(
+        machine: SharedMachine,
+        request: ReductionAggregateRequest,
+        slot: u32) -> SharedDispatch {
+      let applied = reduction_apply_complete_aggregate(
+        machine.reduction, request.aggregate);
+      let accepted = !machine.failed && !machine.enter_pending &&
+        request.slot == slot &&
+        applied.outcome == ReductionOutcome::COMPLETE;
+      let next_machine = SharedMachine {
+        reduction: if accepted { applied.state } else { machine.reduction },
+        failed: !accepted,
+        ..machine
+      };
+      SharedDispatch {
+        machine: next_machine,
+        dispatched: u1:1,
+        directive: if accepted {
+          Directive::CONSUME
+        } else {
+          Directive::FAIL
+        },
+        ..zero!<SharedDispatch>()
+      }
+    }
+
     """.
 
--spec shared_dispatch_bindings(reductions()) -> iodata().
-shared_dispatch_bindings(none) ->
+-spec shared_dispatch_bindings(reductions(), service_mode()) -> iodata().
+shared_dispatch_bindings(none, _Mode) ->
     [
         "    let (next_phase, next_data, directive, repeat_phase) =\n",
         "      if tag_ok {\n",
@@ -370,7 +429,12 @@ shared_dispatch_bindings(none) ->
         "        (machine.phase, machine.data, Directive::FAIL, u1:0)\n",
         "      };\n"
     ];
-shared_dispatch_bindings(_Reductions) ->
+shared_dispatch_bindings(_Reductions, aggregate_only) ->
+    %% A source-fragment artifact receives contribution messages only through
+    %% its aggregate port. Any such frame on an ordinary mailbox is therefore
+    %% handled by the actor's ordinary dispatch table (normally as an error).
+    shared_dispatch_bindings(none, ordinary);
+shared_dispatch_bindings(_Reductions, ordinary) ->
     [
         "    let contribution = reduction_contribution(\n",
         "      frame, machine.phase, machine.data);\n",
@@ -403,10 +467,11 @@ shared_dispatch_bindings(_Reductions) ->
         "    } else { machine.reduction };\n"
     ].
 
--spec shared_dispatch_effective_binding(reductions()) -> iodata().
-shared_dispatch_effective_binding(none) ->
+-spec shared_dispatch_effective_binding(reductions(), service_mode()) ->
+    iodata().
+shared_dispatch_effective_binding(none, _Mode) ->
     "    let effective = tag_ok && !invalid_repeat;\n";
-shared_dispatch_effective_binding(_Reductions) ->
+shared_dispatch_effective_binding(_Reductions, _Mode) ->
     [
         "    let callback_effective = tag_ok && !invalid_repeat;\n",
         "    let requested_boundary = callback_effective &&\n",
@@ -418,29 +483,32 @@ shared_dispatch_effective_binding(_Reductions) ->
         "      !incomplete_boundary;\n"
     ].
 
--spec shared_dispatch_failed_binding(reductions()) -> iodata().
-shared_dispatch_failed_binding(none) ->
+-spec shared_dispatch_failed_binding(reductions(), service_mode()) -> iodata().
+shared_dispatch_failed_binding(none, _Mode) ->
     [
         "    let failed = !tag_ok || invalid_repeat ||\n",
         "      (effective && directive == Directive::FAIL);\n"
     ];
-shared_dispatch_failed_binding(_Reductions) ->
+shared_dispatch_failed_binding(_Reductions, _Mode) ->
     [
         "    let failed = !tag_ok || invalid_repeat ||\n",
         "      incomplete_boundary ||\n",
         "      (effective && directive == Directive::FAIL);\n"
     ].
 
--spec shared_dispatch_reduction_field(reductions()) -> iodata().
-shared_dispatch_reduction_field(none) ->
+-spec shared_dispatch_reduction_field(reductions(), service_mode()) -> iodata().
+shared_dispatch_reduction_field(none, _Mode) ->
     [];
-shared_dispatch_reduction_field(_Reductions) ->
+shared_dispatch_reduction_field(_Reductions, aggregate_only) ->
+    [];
+shared_dispatch_reduction_field(_Reductions, ordinary) ->
     "      reduction: next_reduction,\n".
 
--spec shared_dispatch_dispatched_field(reductions()) -> iodata().
-shared_dispatch_dispatched_field(none) ->
+-spec shared_dispatch_dispatched_field(reductions(), service_mode()) ->
+    iodata().
+shared_dispatch_dispatched_field(none, _Mode) ->
     "      dispatched: tag_ok && !invalid_repeat,\n";
-shared_dispatch_dispatched_field(_Reductions) ->
+shared_dispatch_dispatched_field(_Reductions, _Mode) ->
     [
         "      dispatched: tag_ok && !invalid_repeat &&\n",
         "        !incomplete_boundary,\n"
@@ -538,16 +606,28 @@ shared_entry_egress_blocked_field(_Reductions) ->
         "        !invalid_reduction_open,\n"
     ].
 
--spec shared_executor_dispatch(reductions()) -> iodata().
-shared_executor_dispatch(none) ->
+-spec shared_executor_dispatch(reductions(), service_mode()) -> iodata().
+shared_executor_dispatch(none, _Mode) ->
     [
         "  let dispatched = shared_machine_dispatch(\n",
         "    machine, request.frame, request.received);\n"
     ];
-shared_executor_dispatch(_Reductions) ->
+shared_executor_dispatch(_Reductions, ordinary) ->
     [
         "  let dispatched = if request.internal {\n",
         "    shared_machine_complete(machine)\n",
+        "  } else {\n",
+        "    shared_machine_dispatch(\n",
+        "      machine, request.frame, request.received)\n",
+        "  };\n"
+    ];
+shared_executor_dispatch(_Reductions, aggregate_only) ->
+    [
+        "  let dispatched = if request.internal {\n",
+        "    shared_machine_complete(machine)\n",
+        "  } else if request.aggregate_valid {\n",
+        "    shared_machine_aggregate(\n",
+        "      machine, request.aggregate_request, request.slot)\n",
         "  } else {\n",
         "    shared_machine_dispatch(\n",
         "      machine, request.frame, request.received)\n",
@@ -558,10 +638,10 @@ shared_executor_dispatch(_Reductions) ->
 %%% SharedService scheduling
 %%%
 
--spec shared_service_helpers(reductions()) -> iodata().
-shared_service_helpers(none) ->
+-spec shared_service_helpers(reductions(), service_mode()) -> iodata().
+shared_service_helpers(none, _Mode) ->
     [];
-shared_service_helpers(_Reductions) ->
+shared_service_helpers(_Reductions, ordinary) ->
     """
     fn reduction_ready_selection<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
         state: SharedState<ACTOR_COUNT, PRODUCER_COUNT>,
@@ -574,6 +654,62 @@ shared_service_helpers(_Reductions) ->
         let entry_active = state.entry_probes[slot] ||
           state.egress_waiters[slot];
         let ready = internal_active || (!internal_active && (
+          state.entry_probes[slot] ||
+          (state.mail_candidates[slot] && !entry_active) ||
+          (state.egress_waiters[slot] && !state.egress_busy)));
+        let selectable = ready && !in_flight[slot];
+        let take_after = !acc.0 && slot >= cursor && selectable;
+        let take_before = !acc.2 && slot < cursor && selectable;
+        (
+          acc.0 || take_after,
+          if take_after { slot } else { acc.1 },
+          acc.2 || take_before,
+          if take_before { slot } else { acc.3 }
+        )
+      }((u1:0, u32:0, u1:0, u32:0));
+      (
+        after_found || before_found,
+        if after_found { after_slot } else { before_slot }
+      )
+    }
+
+    fn retire_reduction_actor<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
+        state: SharedState<ACTOR_COUNT, PRODUCER_COUNT>,
+        valid: u1,
+        slot: u32,
+        machine: SharedMachine) ->
+        SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
+      let internal_candidates = if valid {
+        update(
+          state.internal_candidates,
+          slot,
+          machine.reduction.status == ReductionStatus::COMPLETE &&
+            !machine.failed)
+      } else {
+        state.internal_candidates
+      };
+      SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
+        internal_candidates,
+        ..state
+      }
+    }
+
+    """;
+shared_service_helpers(_Reductions, aggregate_only) ->
+    """
+    fn reduction_ready_selection<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
+        state: SharedState<ACTOR_COUNT, PRODUCER_COUNT>,
+        cursor: u32,
+        in_flight: u1[ACTOR_COUNT]) -> (u1, u32) {
+      let (after_found, after_slot, before_found, before_slot) =
+          unroll_for! (slot, acc):
+              (u32, (u1, u32, u1, u32)) in u32:0..ACTOR_COUNT {
+        let internal_active = state.internal_candidates[slot];
+        let aggregate_active = state.aggregate_pending_valid[slot];
+        let private_active = internal_active || aggregate_active;
+        let entry_active = private_active || state.entry_probes[slot] ||
+          state.egress_waiters[slot];
+        let ready = private_active || (!private_active && (
           state.entry_probes[slot] ||
           (state.mail_candidates[slot] && !entry_active) ||
           (state.egress_waiters[slot] && !state.egress_busy)));
@@ -636,8 +772,8 @@ shared_retire_binding(_Reductions) ->
     "            result.order_index),\n"
     "          retire_valid, result.slot, resolved.machine);\n".
 
--spec shared_issue_bindings(reductions()) -> iodata().
-shared_issue_bindings(none) ->
+-spec shared_issue_bindings(reductions(), service_mode()) -> iodata().
+shared_issue_bindings(none, _Mode) ->
     [
         "        let issue_valid = state.next_valid && !completion_blocked;\n",
         "        let read_slot = if state.next_valid {\n",
@@ -651,7 +787,7 @@ shared_issue_bindings(none) ->
         "          issue_valid &&\n",
         "          state.mail_candidates[read_slot] && !entry_active;\n"
     ];
-shared_issue_bindings(_Reductions) ->
+shared_issue_bindings(_Reductions, ordinary) ->
     [
         "        let issue_valid =\n",
         "          state.next_valid && !completion_blocked;\n",
@@ -665,27 +801,154 @@ shared_issue_bindings(_Reductions) ->
         "          state.egress_waiters[read_slot];\n",
         "        let read_mailbox = issue_valid && !internal_active &&\n",
         "          state.mail_candidates[read_slot] && !entry_active;\n"
+    ];
+shared_issue_bindings(_Reductions, aggregate_only) ->
+    [
+        "        let issue_valid =\n",
+        "          state.next_valid && !completion_blocked;\n",
+        "        let read_slot = if state.next_valid {\n",
+        "          state.next_slot\n",
+        "        } else { u32:0 };\n",
+        "        let internal_active = issue_valid &&\n",
+        "          retired.internal_candidates[read_slot];\n",
+        "        let aggregate_active = issue_valid &&\n",
+        "          !internal_active &&\n",
+        "          retired.aggregate_pending_valid[read_slot];\n",
+        "        let private_active = internal_active || aggregate_active;\n",
+        "        let entry_active = private_active ||\n",
+        "          state.entry_probes[read_slot] ||\n",
+        "          state.egress_waiters[read_slot];\n",
+        "        let read_mailbox = issue_valid && !private_active &&\n",
+        "          state.mail_candidates[read_slot] && !entry_active;\n"
     ].
 
--spec shared_ready_selection_call(reductions()) -> iodata().
-shared_ready_selection_call(none) ->
+-spec shared_ready_selection_call(reductions(), service_mode()) -> iodata().
+shared_ready_selection_call(none, _Mode) ->
     [
         " ready_selection(\n",
         "          selection_state,\n",
         "          cursor,\n",
         "          issued_in_flight);\n"
     ];
-shared_ready_selection_call(_Reductions) ->
+shared_ready_selection_call(_Reductions, _Mode) ->
     [
         " reduction_ready_selection(\n",
         "          selection_state, cursor, issued_in_flight);\n"
     ].
 
--spec shared_executor_request_value(reductions()) -> iodata().
-shared_executor_request_value(none) ->
+-spec shared_executor_request_value(reductions(), service_mode()) -> iodata().
+shared_executor_request_value(none, _Mode) ->
     [];
-shared_executor_request_value(_Reductions) ->
-    "              internal: internal_active,\n".
+shared_executor_request_value(_Reductions, ordinary) ->
+    "              internal: internal_active,\n";
+shared_executor_request_value(_Reductions, aggregate_only) ->
+    [
+        "              internal: internal_active,\n",
+        "              aggregate_request:\n",
+        "                retired.aggregate_pending[read_slot],\n",
+        "              aggregate_valid: aggregate_active,\n"
+    ].
+
+-spec shared_proc_field(reductions(), service_mode()) -> iodata().
+shared_proc_field(_Reductions, ordinary) ->
+    "\n";
+shared_proc_field(_Reductions, aggregate_only) ->
+    "\n      aggregate_in: chan<ReductionAggregateRequest> in;\n".
+
+-spec shared_config_parameter(reductions(), service_mode()) -> iodata().
+shared_config_parameter(_Reductions, ordinary) ->
+    "\n";
+shared_config_parameter(_Reductions, aggregate_only) ->
+    [
+        ",\n",
+        "          aggregate_in: chan<ReductionAggregateRequest> in\n"
+    ].
+
+-spec shared_config_endpoint(reductions(), service_mode()) -> iodata().
+shared_config_endpoint(_Reductions, ordinary) ->
+    "\n";
+shared_config_endpoint(_Reductions, aggregate_only) ->
+    "\n          aggregate_in,\n".
+
+-spec shared_capture(reductions(), service_mode()) -> iodata().
+shared_capture(_Reductions, ordinary) ->
+    "\n";
+shared_capture(_Reductions, aggregate_only) ->
+    ["\n", """
+        let (aggregate_tok, incoming_aggregate, incoming_aggregate_valid) =
+          recv_if_non_blocking(
+            capture_tok,
+            aggregate_in,
+            capture_enabled,
+            zero!<ReductionAggregateRequest>());
+        let aggregate_slot = if incoming_aggregate.slot < ACTOR_COUNT {
+          incoming_aggregate.slot
+        } else { u32:0 };
+        let aggregate_protocol_error = incoming_aggregate_valid &&
+          (incoming_aggregate.slot >= ACTOR_COUNT ||
+           state.aggregate_pending_valid[aggregate_slot]);
+        let captured_aggregate = ReductionAggregateRequest {
+          aggregate: if aggregate_protocol_error {
+            ReductionAggregate {
+              failed: u1:1,
+              ..incoming_aggregate.aggregate
+            }
+          } else {
+            incoming_aggregate.aggregate
+          },
+          ..incoming_aggregate
+        };
+        let aggregate_pending = if incoming_aggregate_valid {
+          update(
+            state.aggregate_pending, aggregate_slot, captured_aggregate)
+        } else {
+          state.aggregate_pending
+        };
+        let aggregate_pending_valid = if incoming_aggregate_valid {
+          update(state.aggregate_pending_valid, aggregate_slot, u1:1)
+        } else {
+          state.aggregate_pending_valid
+        };
+        let aggregate_state = SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
+          aggregate_pending,
+          aggregate_pending_valid,
+          ..state
+        };
+    """, "\n"].
+
+-spec shared_capture_token(reductions(), service_mode()) -> iodata().
+shared_capture_token(_Reductions, ordinary) ->
+    "capture_tok";
+shared_capture_token(_Reductions, aggregate_only) ->
+    "aggregate_tok".
+
+-spec shared_state_source(reductions(), service_mode()) -> iodata().
+shared_state_source(_Reductions, ordinary) ->
+    "state";
+shared_state_source(_Reductions, aggregate_only) ->
+    "aggregate_state".
+
+-spec shared_post_issue_state(reductions(), service_mode()) -> iodata().
+shared_post_issue_state(_Reductions, ordinary) ->
+    "\n";
+shared_post_issue_state(_Reductions, aggregate_only) ->
+    ["\n", """
+        let post_issue_state = SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
+          aggregate_pending_valid: if aggregate_active {
+            update(
+              admitted.aggregate_pending_valid, read_slot, u1:0)
+          } else {
+            admitted.aggregate_pending_valid
+          },
+          ..admitted
+        };
+    """, "\n"].
+
+-spec shared_post_issue_state_name(reductions(), service_mode()) -> iodata().
+shared_post_issue_state_name(_Reductions, ordinary) ->
+    "admitted";
+shared_post_issue_state_name(_Reductions, aggregate_only) ->
+    "post_issue_state".
 
 join_with(_Separator, []) ->
     [];
