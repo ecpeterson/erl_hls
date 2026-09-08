@@ -11,8 +11,14 @@ shard_count=${4:-3}
 pipeline_stages=${5:-2}
 initiation_interval=${6:-2}
 scheduler_count=$((2 + 2 * shard_count))
+trace_enabled=${ERL_HLS_PHI_PROFILE_TRACE:-0}
 stdlib="$xls_root/xls/dslx/stdlib"
 . "$stage/phi_scheduler_rams.sh"
+
+if [[ "$trace_enabled" != 0 && "$trace_enabled" != 1 ]]; then
+    echo "ERL_HLS_PHI_PROFILE_TRACE must be 0 or 1" >&2
+    exit 1
+fi
 
 if [[ $(uname -s) == Darwin ]]; then
     time_arguments=(-p)
@@ -36,8 +42,11 @@ for artifact in \
     phi_decoder_profile.v \
     phi_decoder_profile.vvp \
     phi_decoder_profile.scheduler_profile \
+    phi_decoder_profile.trace.csv \
     xls_sim_bridge.o \
     xls_sim_bridge.vpi \
+    phi_profile_trace.o \
+    phi_profile_trace.vpi \
     phi_decoder_profile.metrics \
     phi_decoder_profile.sim.log
 do
@@ -126,13 +135,25 @@ timed_command \
 mv phi_decoder_profile.vvp.new phi_decoder_profile.vvp
 
 iverilog-vpi xls_sim_bridge.c
+trace_environment=()
+trace_module=()
+if [[ "$trace_enabled" == 1 ]]; then
+    iverilog-vpi phi_profile_trace.c
+    trace_environment=(
+        ERL_HLS_PHI_PROFILE_SHARDS="$shard_count"
+        ERL_HLS_SIM_PHI_TRACE=phi_decoder_profile.trace.csv
+    )
+    trace_module=(-m phi_profile_trace)
+fi
 
 if /usr/bin/time "${time_arguments[@]}" -o phi_decoder_profile-vvp.time.new \
         timeout --signal=TERM --kill-after=5m "$stage_timeout" \
         env ERL_HLS_SIM_PROFILE_ONLY=1 \
         ERL_HLS_SIM_TOP=phi_decoder_profile_tb \
         ERL_HLS_SIM_SCHEDULER_PROFILE=phi_decoder_profile.scheduler_profile \
-        vvp -M "$stage" -m xls_sim_bridge phi_decoder_profile.vvp 2>&1 | \
+        "${trace_environment[@]}" \
+        vvp -M "$stage" -m xls_sim_bridge "${trace_module[@]}" \
+        phi_decoder_profile.vvp 2>&1 | \
         tee phi_decoder_profile.sim.log.new; then
     mv phi_decoder_profile-vvp.time.new phi_decoder_profile-vvp.time
     mv phi_decoder_profile.sim.log.new phi_decoder_profile.sim.log

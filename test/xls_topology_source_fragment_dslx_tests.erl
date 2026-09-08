@@ -24,6 +24,31 @@ source_fragment_profile_is_deterministic_and_opt_in_test() ->
     ?assertEqual(1, count(First, <<"proc ReducerReductionPlane {">>)),
     ?assertEqual(1, count(First, <<"struct ReducerReductionBatch {">>)).
 
+artifact_requirements_follow_the_selected_profile_test() ->
+    Plan = hls_topology:normalize(closed_topology()),
+    Base = profile(single_groups()),
+    ?assertEqual(
+        #{
+            hls_topology_source_fragment_fixture => #{
+                shared_service => ordinary
+            },
+            hls_topology_source_fixture => #{shared_service => ordinary}
+        },
+        xls_topology_dslx:artifact_requirements(Plan, Base)
+    ),
+    ?assertEqual(
+        #{
+            hls_topology_source_fragment_fixture => #{
+                shared_service => aggregate_only
+            },
+            hls_topology_source_fixture => #{shared_service => ordinary}
+        },
+        xls_topology_dslx:artifact_requirements(
+            Plan,
+            Base#{reduction_placements => #{reducer => source_fragments}}
+        )
+    ).
+
 source_fragment_router_captures_only_the_proved_prefix_test() ->
     Generated = selected(),
     ?assertNotEqual(nomatch, binary:match(Generated, <<

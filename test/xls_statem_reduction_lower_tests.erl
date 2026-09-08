@@ -86,6 +86,40 @@ interface_is_closed_and_omits_derived_facts_test() ->
     ?assertEqual(80,
         xls_statem_reduction_ir:interface_storage_width(Interface)).
 
+structural_interface_matches_closed_ir_test() ->
+    {Forms, Context} = context(?FIXTURE),
+    #{reduction := Closed, cast_groups := ClosedOrdinary} =
+        xls_statem_reduction_lower:analyze(Forms, Context),
+    #{reduction := Interface, cast_groups := InterfaceOrdinary} =
+        xls_statem_reduction_lower:analyze_interface(Forms, Context),
+    ?assertEqual(
+        xls_statem_reduction_ir:interface(Closed),
+        Interface
+    ),
+    ?assertEqual(ClosedOrdinary, InterfaceOrdinary).
+
+interface_inference_does_not_lower_reducer_expressions_test() ->
+    Helper = hls_statem_reduction_unloaded_helper,
+    ?assertEqual(false, code:is_loaded(Helper)),
+    with_mutated_fixture(
+        <<"value = Left + Right,">>,
+        <<"value = hls_statem_reduction_unloaded_helper:combine("
+          "Left, Right),">>,
+        fun(Path) ->
+            Interface = xls_parse:actor_interface(Path),
+            ?assertMatch(#{reductions := #{reducers := [sum]}}, Interface),
+            {ok, Module, Binary} = compile:file(
+                Path, [binary, debug_info]
+            ),
+            {ok, {Module, [{attributes, Attributes}]}} =
+                beam_lib:chunks(Binary, [attributes]),
+            ?assertMatch([_], proplists:get_value(
+                hls_actor_interface, Attributes
+            )),
+            ?assertEqual(false, code:is_loaded(Helper))
+        end
+    ).
+
 actor_data_dependent_applicability_is_reported_not_globally_rejected_test() ->
     with_mutated_fixture(
         <<"counting(cast, #count_value{key = Key, value = Value}, Cell)\n">>,

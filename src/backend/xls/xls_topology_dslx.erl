@@ -41,7 +41,7 @@ integer requests that literal XLS channel depth; zero is an explicit bypass
 FIFO and leaves only the producer holding slot.
 """.
 
--export([emit/2, from_module/2]).
+-export([artifact_requirements/2, emit/2, from_module/2]).
 -export_type([profile/0]).
 
 -define(U32_MAX, 16#ffffffff).
@@ -65,6 +65,14 @@ emit(Plan = #{actors := [], families := [_ | _]}, Profile) ->
     xls_topology_family_dslx:emit(Plan, Profile);
 emit(Plan, _Profile) ->
     error({invalid_topology_plan, Plan}).
+
+-doc "Returns the actor-artifact specializations selected by a family profile.".
+-spec artifact_requirements(hls_topology:plan(), profile()) ->
+    #{module() := #{shared_service := ordinary | aggregate_only}}.
+artifact_requirements(#{actors := [], families := [_ | _]} = Plan, Profile) ->
+    xls_topology_family_dslx:artifact_requirements(Plan, Profile);
+artifact_requirements(Plan, _Profile) ->
+    error({artifact_requirements_require_family_topology, Plan}).
 
 %%%
 %%% Backend lowering and validation

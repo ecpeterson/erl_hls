@@ -147,9 +147,16 @@ generated_multi_family_topology_retains_compact_structure_test() ->
         "spawn effect_window::Arbiter<"
     >>)),
     ?assertEqual(30, count(Generated, <<"::ScheduledEffects">>)),
-    ?assertEqual(12, count(Generated, <<"::scheduled_effect(">>)),
-    ?assertEqual(6, count(Generated, <<
+    %% Ordinary routers retain two effect lookups each; the two phi reduction
+    %% routers additionally materialize their four-frame captured prefixes.
+    ?assertEqual(20, count(Generated, <<"::scheduled_effect(">>)),
+    ?assertEqual(1, count(Generated, <<"proc Phi_xReductionPlane {">>)),
+    ?assertEqual(1, count(Generated, <<"proc Phi_zReductionPlane {">>)),
+    ?assertEqual(4, count(Generated, <<
         "let last = batch_valid && effect_info.2"
+    >>)),
+    ?assertEqual(2, count(Generated, <<
+        "let last = batch_valid && if reduction_batch {"
     >>)),
     ?assertEqual(6, count(Generated, <<
         "routed_tok, credit_out, forward_credit"
@@ -245,8 +252,11 @@ generated_phi_family_shards_use_static_destination_tables_test() ->
 generated_family_topology_uses_explicit_actor_egress_depth_test() ->
     Plan = hls_topology:normalize(phi_noise_topology:topology()),
     Profile = maps:remove(
-        scheduler_groups,
-        phi_noise_topology_dslx:profile()
+        reduction_placements,
+        maps:remove(
+            scheduler_groups,
+            phi_noise_topology_dslx:profile()
+        )
     ),
     lists:foreach(
         fun(Depth) ->

@@ -322,10 +322,15 @@ fail closed instead of silently accepting malformed input. After any
 already-complete internal event, an aggregate outranks entry and mailbox work
 for its actor while actor selection remains round-robin across slots. The
 scheduler performs one normal state-RAM read, validates that the aggregate
-names a fresh matching open reduction, installs the complete accumulator, and
-retires the state through the existing write path. The resulting completion
-internal event is handled by the ordinary reduction-completion path on a later
-visit.
+names a fresh matching open reduction, and applies its completion callback in
+the same executor transaction. If that callback crosses or repeats a phase,
+the following phase entry and its effect batch are fused into the transaction
+as usual. This is safe because aggregate work is already private, highest
+priority work for the selected actor: no user message could interleave between
+installing a complete accumulator and dispatching its completion event. A
+newly captured aggregate may launch that state read in the same scheduler
+activation. The bypass excludes a concurrently retiring slot, keeping
+same-address behavior outside the 1R1W RAM contract.
 
 Malformed aggregates, invalid slots, and violated fresh-window invariants fail
 closed in the actor artifact. An out-of-range source index is structurally
@@ -337,5 +342,6 @@ small round-robin mux gives every plane a bounded holding slot.
 With no selected placement, ordinary generated DSLX remains byte-for-byte
 unchanged. Selecting the placement therefore requires both the topology
 profile and the matching `aggregate_only` actor artifacts reported by
-`hls_reduction_plan:artifact_requirements/1`; a later end-to-end driver will
-make that artifact choice automatic.
+`xls_topology_dslx:artifact_requirements/2`. The simulation preparation driver
+queries every staged family topology and selects the matching actor artifact,
+rejecting incompatible requirements for a module before DSLX typechecking.

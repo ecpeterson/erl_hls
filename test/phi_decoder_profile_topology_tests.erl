@@ -29,6 +29,19 @@ three_shards_keep_source_and_decoder_counters_separate_test() ->
         [maps:get(slot_count, Group) || Group <- Groups]
     ).
 
+source_fragment_profile_specializes_only_the_phi_actor_test() ->
+    Plan = hls_topology:from_module(phi_decoder_profile_topology),
+    ?assertEqual(
+        #{
+            phi_halo_cell => #{shared_service => aggregate_only},
+            phi_syndrome_replay_cell => #{shared_service => ordinary}
+        },
+        xls_topology_dslx:artifact_requirements(
+            Plan,
+            phi_decoder_profile_topology_dslx:profile()
+        )
+    ).
+
 global_effect_window_remains_the_default_test() ->
     Generated = iolist_to_binary(
         phi_decoder_profile_topology_dslx:to_dslx()
@@ -37,6 +50,24 @@ global_effect_window_remains_the_default_test() ->
         "spawn effect_window::Arbiter<u32:8>"
     >>)),
     ?assertEqual(0, count(Generated, <<"Effect-window domain">>)).
+
+source_fragment_plane_uses_inverse_route_edge_queues_test() ->
+    Generated = iolist_to_binary(
+        phi_decoder_profile_topology_dslx:to_dslx()
+    ),
+    assert_contains(Generated, <<"proc Phi_xReductionPlane {">>),
+    assert_contains(Generated, <<"proc Phi_zReductionPlane {">>),
+    ?assertEqual(8, count(Generated, <<
+        ": Phi_xReductionFragmentQueue[u32:9]"
+    >>) + count(Generated, <<
+        ": Phi_zReductionFragmentQueue[u32:9]"
+    >>)),
+    ?assertEqual(2, count(Generated, <<
+        "::reduction_aggregate_batch<u32:4>(frames)"
+    >>)),
+    ?assertEqual(6, count(Generated, <<
+        "let reduction_batch = batch_valid && index == u8:0"
+    >>)).
 
 weak_component_effect_windows_follow_the_disconnected_planes_test() ->
     Plan = hls_topology:from_module(phi_decoder_profile_topology),

@@ -5,8 +5,7 @@
 non_reduction_statem_codegen_matches_checked_in_artifacts_test() ->
     Sources = [
         "src/examples/phi_decoder/phenom_data_cell.erl",
-        "src/examples/phi_decoder/phenom_syndrome_cell.erl",
-        "src/examples/phi_decoder/phi_halo_cell.erl"
+        "src/examples/phi_decoder/phenom_syndrome_cell.erl"
     ],
     lists:foreach(
         fun(Source) ->

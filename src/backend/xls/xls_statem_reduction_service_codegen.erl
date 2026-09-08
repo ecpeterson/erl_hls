@@ -400,20 +400,18 @@ shared_machine_aggregate(aggregate_only) ->
       let accepted = !machine.failed && !machine.enter_pending &&
         request.slot == slot &&
         applied.outcome == ReductionOutcome::COMPLETE;
-      let next_machine = SharedMachine {
-        reduction: if accepted { applied.state } else { machine.reduction },
-        failed: !accepted,
-        ..machine
-      };
-      SharedDispatch {
-        machine: next_machine,
-        dispatched: u1:1,
-        directive: if accepted {
-          Directive::CONSUME
-        } else {
-          Directive::FAIL
-        },
-        ..zero!<SharedDispatch>()
+      if accepted {
+        shared_machine_complete(SharedMachine {
+          reduction: applied.state,
+          ..machine
+        })
+      } else {
+        SharedDispatch {
+          machine: SharedMachine { failed: u1:1, ..machine },
+          dispatched: u1:1,
+          directive: Directive::FAIL,
+          ..zero!<SharedDispatch>()
+        }
       }
     }
 
@@ -804,11 +802,27 @@ shared_issue_bindings(_Reductions, ordinary) ->
     ];
 shared_issue_bindings(_Reductions, aggregate_only) ->
     [
-        "        let issue_valid =\n",
+        "        let prior_issue_valid =\n",
         "          state.next_valid && !completion_blocked;\n",
-        "        let read_slot = if state.next_valid {\n",
+        "        let prior_read_slot = if state.next_valid {\n",
         "          state.next_slot\n",
         "        } else { u32:0 };\n",
+        "        // The retained choice wins. Otherwise select work made\n",
+        "        // visible by aggregate capture or retirement and issue it\n",
+        "        // without another activation's selection bubble.\n",
+        "        let fast_in_flight = if retire_valid {\n",
+        "          update(retired_in_flight, result.slot, u1:1)\n",
+        "        } else {\n",
+        "          retired_in_flight\n",
+        "        };\n",
+        "        let (fast_ready, fast_slot) = reduction_ready_selection(\n",
+        "          retired, state.cursor, fast_in_flight);\n",
+        "        let fast_issue = !prior_issue_valid &&\n",
+        "          !completion_blocked && fast_ready;\n",
+        "        let issue_valid = prior_issue_valid || fast_issue;\n",
+        "        let read_slot = if prior_issue_valid {\n",
+        "          prior_read_slot\n",
+        "        } else { fast_slot };\n",
         "        let internal_active = issue_valid &&\n",
         "          retired.internal_candidates[read_slot];\n",
         "        let aggregate_active = issue_valid &&\n",

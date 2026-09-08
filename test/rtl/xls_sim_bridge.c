@@ -180,6 +180,7 @@ typedef struct {
     vpiHandle h_pending_valid[MAX_SCHEDULER_INPUTS];
     vpiHandle h_pending_credit[MAX_SCHEDULER_INPUTS];
     unsigned request_input_count;
+    int pending_kind_breakdown_available;
     vpiHandle h_startup_valid;
     vpiHandle h_startup_ready;
     vpiHandle h_egress_valid;
@@ -556,6 +557,8 @@ static void write_scheduler_profile(void) {
                       counts->pending_command_slot_samples);
         PROFILE_VALUE("pending_credit_slot_samples",
                       counts->pending_credit_slot_samples);
+        PROFILE_VALUE("pending_kind_breakdown_available",
+                      profile->pending_kind_breakdown_available);
         PROFILE_VALUE("pending_command_activations",
                       counts->pending_command_activations);
         PROFILE_VALUE("pending_credit_activations",
@@ -935,6 +938,9 @@ static int populate_scheduler_profile(
     MODULE_SIGNAL(h_egress_busy, "admitted_egress_busy");
     if (!profile->h_egress_busy)
         profile->h_egress_busy = module_signal(module, "retired_egress_busy");
+    if (!profile->h_egress_busy)
+        profile->h_egress_busy =
+            module_signal(module, "retired_egress_busy__1");
     MODULE_SIGNAL(h_selection_activation, "p0_stage_done");
     MODULE_SIGNAL(h_phase_boundary, "phase_boundary");
     if (!profile->h_phase_boundary)
@@ -943,6 +949,7 @@ static int populate_scheduler_profile(
     MODULE_SIGNAL(h_completed_effects_valid, "completed_effects_valid");
 #undef MODULE_SIGNAL
 
+    profile->pending_kind_breakdown_available = 1;
     for (index = 0; index < MAX_SCHEDULER_INPUTS; index++) {
         snprintf(signal_name, sizeof(signal_name), "_request_in__%u_vld", index);
         profile->h_request_valid[index] = module_signal(module, signal_name);
@@ -961,7 +968,11 @@ static int populate_scheduler_profile(
             module_signal(module, signal_name);
         if (!profile->h_pending_valid[index] ||
             !profile->h_pending_credit[index])
-            break;
+            profile->pending_kind_breakdown_available = 0;
+        /* Aggregate-only schedulers can optimize these diagnostic
+         * projections into scalar intermediates.  The request port itself
+         * remains authoritative for traffic counts, so retain the input and
+         * omit only its optional pending-kind breakdown. */
         profile->request_input_count++;
     }
 
@@ -1274,6 +1285,9 @@ static void step_scheduler_profile(scheduler_profile_t *profile) {
 
         counts->selection_activations++;
         for (index = 0; index < profile->request_input_count; index++) {
+            if (!profile->h_pending_valid[index] ||
+                !profile->h_pending_credit[index])
+                continue;
             if (!get_bit(profile->h_pending_valid[index]))
                 continue;
             if (get_bit(profile->h_pending_credit[index]))

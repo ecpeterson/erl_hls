@@ -8,6 +8,12 @@ stage_timeout=${ERL_HLS_D3_TIMEOUT:-2h}
 shard_count=${ERL_HLS_PHI_PROFILE_SHARDS:-3}
 pipeline_stages=${ERL_HLS_PHI_PROFILE_PIPELINE_STAGES:-2}
 initiation_interval=${ERL_HLS_PHI_PROFILE_II:-1}
+trace_enabled=${ERL_HLS_PHI_PROFILE_TRACE:-1}
+
+if [[ "$trace_enabled" != 0 && "$trace_enabled" != 1 ]]; then
+    echo "ERL_HLS_PHI_PROFILE_TRACE must be 0 or 1" >&2
+    exit 1
+fi
 
 if [[ -z "$xls_root" ]]; then
     echo "set ERL_HLS_XLS_ROOT or pass the native XLS root as argument 2" >&2
@@ -24,7 +30,23 @@ ERL_HLS_PHI_PROFILE_SHARDS="$shard_count" \
     "$project_root/tools/prepare_xls_sim.sh" "$local_stage"
 cp "$project_root/tools/phi_decoder_profile_stage.sh" \
     "$local_stage/phi_decoder_profile_stage.sh"
+if [[ "$trace_enabled" == 1 ]]; then
+    cp "$project_root/test/rtl/phi_profile_trace.c" \
+        "$local_stage/phi_profile_trace.c"
+fi
+rm -f -- "$local_stage/phi_decoder_profile.causality.svg"
 
-bash "$local_stage/phi_decoder_profile_stage.sh" \
+ERL_HLS_PHI_PROFILE_TRACE="$trace_enabled" \
+    bash "$local_stage/phi_decoder_profile_stage.sh" \
     "$local_stage" "$xls_root" "$stage_timeout" "$shard_count" \
     "$pipeline_stages" "$initiation_interval"
+
+if [[ "$trace_enabled" == 1 ]]; then
+    python3 "$project_root/tools/phi_profile_timeline.py" \
+        "$local_stage/phi_decoder_profile.trace.csv" \
+        "$local_stage/phi_decoder_profile.causality.svg" \
+        --topology "$local_stage/phi_decoder_profile_topology.x" \
+        --scheduler phi_0 --occurrence 100 --before 8 --after 22 \
+        --pipeline-stages "$pipeline_stages" | \
+        tee -a "$local_stage/phi_decoder_profile.metrics"
+fi

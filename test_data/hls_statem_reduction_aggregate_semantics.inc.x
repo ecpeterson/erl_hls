@@ -102,6 +102,8 @@ fn shared_machine_aggregate_validation_test() {
   let opened = reduction_open_site(
     ReductionSite::COUNTING, u32:7, zero!<Sum>());
   let machine = SharedMachine {
+    phase: Phase::COUNTING,
+    data: Cell { key: u32:7, ..zero!<Cell>() },
     reduction: opened,
     ..zero!<SharedMachine>()
   };
@@ -110,9 +112,10 @@ fn shared_machine_aggregate_validation_test() {
   assert_eq(accepted.dispatched, u1:1);
   assert_eq(accepted.directive, Directive::CONSUME);
   assert_eq(accepted.machine.failed, u1:0);
-  assert_eq(accepted.machine.reduction.status, ReductionStatus::COMPLETE);
-  assert_eq(accepted.machine.reduction.accumulator,
-    Sum { value: u32:24, contributions: u8:2 });
+  assert_eq(accepted.machine.phase, Phase::COLLECTING_MEMBERS);
+  assert_eq(accepted.machine.data.value, u32:24);
+  assert_eq(accepted.machine.enter_pending, u1:1);
+  assert_eq(accepted.machine.reduction.status, ReductionStatus::IDLE);
 
   let wrong_site_aggregate = reduction_aggregate_batch<u32:3>([
     aggregate_test_member(u32:7, u32:9, u32:2),
