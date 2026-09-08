@@ -127,10 +127,12 @@ one, so reduction storage has a single owner throughout.
 
 ## Mismatch, errors, and diagnostics
 
-A contribution whose name or key does not match the open reduction is
-postponed. A contribution received before any reduction opens is treated the
-same way. A later phase boundary or `repeat_phase` makes postponed messages
-eligible again in their original arrival order.
+After a cast clause returns a `contribute` directive, `hls_statem` compares its
+name and key with the actor's open reduction. A mismatch is automatically
+postponed by the runtime; the callback does not need a separate `postpone`
+clause for it. A contribution received before any reduction opens is treated
+the same way. A later phase boundary or `repeat_phase` makes postponed
+messages eligible again in their original arrival order.
 
 Postponed contributions retain ordinary mailbox capacity. A topology must
 leave room for the message that can open or advance the appropriate reduction,

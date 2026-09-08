@@ -435,57 +435,51 @@ process_message(
     Result = Module:Phase(cast, Message, Data),
     {NextPhase, NextData, Directive, Repeat} =
         state_result(Result, Phase, Data),
-    case reduction_boundary_status(
-        Directive,
-        Repeat,
-        Phase,
-        NextPhase,
-        Runtime
-    ) of
-        {error, Status} ->
+    NextRuntime = Runtime#runtime{
+        phase = NextPhase,
+        data = NextData
+    },
+    BoundaryStatus = reduction_boundary_status(
+        Directive, Repeat, Phase, NextPhase, Runtime
+    ),
+    case {BoundaryStatus, Directive} of
+        {{error, Status}, _} ->
             {stop,
                 {hls_statem_reduction_incomplete, Status, Message},
                 Runtime};
-        ok ->
-            NextRuntime = Runtime#runtime{
-                phase = NextPhase,
-                data = NextData
-            },
-            case Directive of
-                fail ->
-                    {stop, {hls_statem_failure, Message}, NextRuntime};
-                postpone ->
-                    finish_transition(Phase, NextRuntime#runtime{
-                        postponed = Postponed0#{MessageID => true}
-                    });
-                {contribute, _Name, _Key, _Value} = Contribution ->
-                    process_contribution(
-                        Contribution,
-                        Selection,
-                        {MessageID, Message},
-                        Phase,
-                        Data,
-                        NextRuntime
-                    );
-                {contribute, _Name, _Key, _Member, _Value} = Contribution ->
-                    process_contribution(
-                        Contribution,
-                        Selection,
-                        {MessageID, Message},
-                        Phase,
-                        Data,
-                        NextRuntime
-                    );
-                consume ->
-                    Consumed = consume_message(
-                        Selection,
-                        {MessageID, Message},
-                        NextRuntime
-                    ),
-                    case Repeat of
-                        true -> finish_repeat(Phase, Consumed);
-                        false -> finish_transition(Phase, Consumed)
-                    end
+        {ok, fail} ->
+            {stop, {hls_statem_failure, Message}, NextRuntime};
+        {ok, postpone} ->
+            finish_transition(Phase, NextRuntime#runtime{
+                postponed = Postponed0#{MessageID => true}
+            });
+        {ok, {contribute, _Name, _Key, _Value} = Contribution} ->
+            process_contribution(
+                Contribution,
+                Selection,
+                {MessageID, Message},
+                Phase,
+                Data,
+                NextRuntime
+            );
+        {ok, {contribute, _Name, _Key, _Member, _Value} = Contribution} ->
+            process_contribution(
+                Contribution,
+                Selection,
+                {MessageID, Message},
+                Phase,
+                Data,
+                NextRuntime
+            );
+        {ok, consume} ->
+            Consumed = consume_message(
+                Selection,
+                {MessageID, Message},
+                NextRuntime
+            ),
+            case Repeat of
+                true -> finish_repeat(Phase, Consumed);
+                false -> finish_transition(Phase, Consumed)
             end
     end.
 
@@ -543,39 +537,42 @@ process_contribution(
     Data,
     Runtime = #runtime{
         module = Module,
-        phase = NextPhase,
-        data = NextData,
+        phase = Phase,
+        data = Data,
         reduction = Reduction,
         postponed = Postponed
     }
 ) ->
-    case NextPhase =:= Phase andalso NextData =:= Data of
-        false ->
-            error({bad_hls_statem_contribution_state,
-                NextPhase, NextData});
-        true ->
-            case apply_contribution(Module, Contribution, Reduction) of
-                mismatch ->
-                    finish_transition(Phase, Runtime#runtime{
-                        postponed = Postponed#{MessageID => true}
-                    });
-                {pending, NextReduction} ->
-                    Consumed = consume_message(Selection, Entry, Runtime),
-                    finish_transition(Phase, Consumed#runtime{
-                        reduction = NextReduction
-                    });
-                {complete, Completion} ->
-                    Consumed = consume_message(Selection, Entry, Runtime),
-                    process_internal(
-                        Completion,
-                        Consumed#runtime{reduction = none}
-                    );
-                {error, Reason} ->
-                    {stop,
-                        {hls_statem_reduction_failure, Reason, Message},
-                        Runtime}
-            end
-    end.
+    case apply_contribution(Module, Contribution, Reduction) of
+        mismatch ->
+            finish_transition(Phase, Runtime#runtime{
+                postponed = Postponed#{MessageID => true}
+            });
+        {pending, NextReduction} ->
+            Consumed = consume_message(Selection, Entry, Runtime),
+            finish_transition(Phase, Consumed#runtime{
+                reduction = NextReduction
+            });
+        {complete, Completion} ->
+            Consumed = consume_message(Selection, Entry, Runtime),
+            process_internal(
+                Completion,
+                Consumed#runtime{reduction = none}
+            );
+        {error, Reason} ->
+            {stop,
+                {hls_statem_reduction_failure, Reason, Message},
+                Runtime}
+    end;
+process_contribution(
+    _Contribution,
+    _Selection,
+    _Entry,
+    _Phase,
+    _Data,
+    #runtime{phase = NextPhase, data = NextData}
+) ->
+    error({bad_hls_statem_contribution_state, NextPhase, NextData}).
 
 apply_contribution(_Module, _Contribution, none) ->
     mismatch;
