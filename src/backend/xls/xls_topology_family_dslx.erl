@@ -24,11 +24,14 @@ Families may either instantiate one actor service per coordinate or join a
 homogeneous scheduler group. A group replaces the per-coordinate services and
 mailboxes with shared ingress, execution, and egress machinery around one
 actor implementation. Actor-machine words and mailbox frames cross separate
-simple-dual-port RAM boundaries, each with one read and one write port; the
-scheduler retains only bounded queue-order metadata. The current backend
-requires both scheduler storage bindings to be `block_ram`; a target wrapper
-must connect the generated RAM channel quartets to storage with the declared
-independent read- and write-channel protocol.
+simple-dual-port RAM boundaries, each with one read and one write port. The
+scheduler retains bounded queue metadata and, for reduction-enabled profiles,
+small register-resident reduction state. Source-fragment profiles keep
+completed values distributed in per-edge queues until an actor-local open
+token makes the destination eligible. The
+current backend requires both scheduler storage bindings to be `block_ram`; a
+target wrapper must connect the generated RAM channel quartets to storage with
+the declared independent read- and write-channel protocol.
 
 Each compact lane relation becomes a depth-zero direct channel array. The
 explicit depth supplies the pinned block stitcher's per-channel FIFO metadata
@@ -66,7 +69,7 @@ ingress sends that frame under the actor's first admission credit, ahead of its
 first routed receive, while the actor graph and routing stay compact.
 """.
 
--export([emit/2]).
+-export([emit/2, shared_service_modes/2]).
 
 -define(U16_MAX, 16#ffff).
 -define(U16_EXTENT, 16#10000).
@@ -77,6 +80,36 @@ first routed receive, while the actor graph and routing stay compact.
 -spec emit(hls_topology:plan(), xls_topology_dslx:profile()) -> iolist().
 emit(Plan, Profile) ->
     render(lower(Plan, Profile)).
+
+-doc "Returns the one shared-service specialization required per actor module.".
+-spec shared_service_modes(
+    hls_topology:plan(), xls_topology_dslx:profile()
+) -> #{module() := ordinary | joined | aggregate_only}.
+shared_service_modes(Plan, Profile) ->
+    Spec = lower(Plan, Profile),
+    Requirements = [
+        {maps:get(module, Family), shared_service_mode(Family)}
+        || Family <- maps:get(families, Spec),
+           maps:get(schedulers, Family) =/= []
+    ],
+    lists:foldl(fun merge_shared_service_mode/2, #{}, Requirements).
+
+shared_service_mode(#{reduction_transport := ordinary}) ->
+    ordinary;
+shared_service_mode(#{reduction_transport := #{mode := joined}}) ->
+    joined;
+shared_service_mode(
+    #{reduction_transport := #{mode := source_fragments}}
+) ->
+    aggregate_only.
+
+merge_shared_service_mode({Module, Mode}, Modes) ->
+    case maps:find(Module, Modes) of
+        error -> Modes#{Module => Mode};
+        {ok, Mode} -> Modes;
+        {ok, Other} ->
+            error({mixed_shared_service_modes, Module, Other, Mode})
+    end.
 
 %%%
 %%% Validation and annotation
@@ -137,6 +170,7 @@ lower(Plan, Profile) ->
         maps:get(reduction_transport, Physical, ordinary),
         [Width, Height]
     ),
+    ok = validate_source_fragment_contribution_closure(Families, Ingresses),
     ok = validate_lane_ports(Families),
     ok = validate_external_lanes(Externals, Lanes),
     #{
@@ -537,7 +571,10 @@ annotate_reduction_transports(Families, ordinary, _Shape) ->
 annotate_reduction_transports(Families, joined, _Shape) ->
     [annotate_joined_reduction(Family, all) || Family <- Families];
 annotate_reduction_transports(Families, {joined, FoldLanes}, _Shape) ->
-    [annotate_joined_reduction(Family, FoldLanes) || Family <- Families].
+    [annotate_joined_reduction(Family, FoldLanes) || Family <- Families];
+annotate_reduction_transports(Families, source_fragments, Shape) ->
+    [annotate_source_fragment_reduction(Family, Shape)
+        || Family <- Families].
 
 annotate_joined_reduction(Family = #{interface := Interface}, FoldLanes) ->
     case maps:get(reductions, Interface, none) of
@@ -550,6 +587,282 @@ annotate_joined_reduction(Family = #{interface := Interface}, FoldLanes) ->
                 FoldLanes
             )}
     end.
+
+annotate_source_fragment_reduction(
+    Family = #{
+        id := FamilyId,
+        interface := Interface,
+        schedulers := Schedulers
+    },
+    Shape
+) ->
+    case maps:get(reductions, Interface, none) of
+        none ->
+            Family#{reduction_transport => ordinary};
+        Reductions ->
+            case Schedulers of
+                [] -> error({source_fragment_requires_scheduler, FamilyId});
+                [_ | _] -> ok
+            end,
+            Transport = joined_reduction_transport(
+                Family,
+                Reductions,
+                all
+            ),
+            ok = validate_source_fragment_captured_ports(
+                Family,
+                Reductions,
+                Transport
+            ),
+            ok = validate_source_fragment_ordinary_self_routes(
+                Family,
+                Transport
+            ),
+            Family#{reduction_transport => source_fragment_transport(
+                Family,
+                Transport,
+                Shape
+            )}
+    end.
+
+%% Source-fragment routing removes each captured output port from the
+%% ordinary graph.  The joined-prefix check proves that the leading effects
+%% are safe to batch, but port removal is wider than one effect occurrence:
+%% reject any use of such a port which would survive after that prefix.
+validate_source_fragment_captured_ports(
+    #{id := FamilyId, interface := Interface},
+    #{opens := Opens},
+    #{routes := Routes}
+) ->
+    CapturedPorts = lists:usort([
+        maps:get(port, Route) || Route <- Routes
+    ]),
+    Allowed = lists:append([
+        source_fragment_prefix_effects(Interface, Open)
+        || Open <- Opens
+    ]),
+    lists:foreach(
+        fun(Effect = #{phase := Phase, order := Order, port := Port}) ->
+            case lists:member(Port, CapturedPorts) andalso
+                    not lists:member(Effect, Allowed) of
+                true ->
+                    error({source_fragment_captured_port_outside_prefix,
+                        FamilyId, Phase, Order, Port,
+                        maps:get(schema, Effect)});
+                false ->
+                    ok
+            end
+        end,
+        maps:get(entry_effects, Interface)
+    ).
+
+source_fragment_prefix_effects(
+    Interface,
+    #{phase := Phase, population := #{size := Population}}
+) ->
+    Effects = lists:keysort(1, [
+        {maps:get(order, Effect), Effect}
+        || Effect <- maps:get(entry_effects, Interface),
+           maps:get(phase, Effect) =:= Phase
+    ]),
+    [Effect || {_Order, Effect} <- lists:sublist(Effects, Population)].
+
+%% A captured batch is admitted asynchronously from the source scheduler's
+%% ordinary egress.  Any later ordinary message from that same actor family
+%% to the same destination family could therefore overtake the batch, even
+%% when it uses a distinct port and schema.  Until the two transports share
+%% an ordering token, source-fragment families may have no such route.
+validate_source_fragment_ordinary_self_routes(
+    #{id := FamilyId, routes := Routes},
+    #{routes := CapturedRoutes}
+) ->
+    CapturedPorts = lists:usort([
+        maps:get(port, Route) || Route <- CapturedRoutes
+    ]),
+    lists:foreach(
+        fun(Route = #{source := {SourceFamilyId, Port}}) ->
+            case SourceFamilyId =:= FamilyId andalso
+                    not lists:member(Port, CapturedPorts) andalso
+                    route_targets_family(Route, FamilyId) of
+                true ->
+                    error({source_fragment_ordinary_self_route,
+                        FamilyId, Port});
+                false ->
+                    ok
+            end
+        end,
+        Routes
+    ).
+
+%% Aggregate-only schedulers rely on the batch plane being the sole physical
+%% carrier of every contribution schema.  An ordinary copy could otherwise
+%% advance the actor-local receptacle before the complete aggregate arrives,
+%% invalidating both the complete-population fast path and the depth-two edge
+%% queue proof.
+validate_source_fragment_contribution_closure(Families, Ingresses) ->
+    lists:foreach(
+        fun(Family = #{
+            reduction_transport := #{mode := source_fragments}
+        }) ->
+            validate_source_fragment_family_inputs(
+                Family,
+                Families,
+                Ingresses
+            );
+           (#{reduction_transport := _Other}) ->
+            ok
+        end,
+        Families
+    ).
+
+validate_source_fragment_family_inputs(
+    Family = #{
+        id := FamilyId,
+        interface := #{reductions := #{contributions := Contributions}},
+        reduction_transport := #{routes := CapturedRoutes}
+    },
+    Families,
+    Ingresses
+) ->
+    ContributionSchemas = lists:usort([
+        maps:get(tag, Contribution) || Contribution <- Contributions
+    ]),
+    CapturedSources = lists:usort([
+        {FamilyId, maps:get(port, Route)} || Route <- CapturedRoutes
+    ]),
+    lists:foreach(
+        fun(SourceFamily = #{interface := SourceInterface}) ->
+            lists:foreach(
+                fun(Route = #{source := Source = {_SourceId, Port}}) ->
+                    Schemas = schema_intersection(
+                        ContributionSchemas,
+                        hls_actor_interface:output_schemas(
+                            SourceInterface,
+                            Port
+                        )
+                    ),
+                    case route_targets_family(Route, FamilyId) andalso
+                            Schemas =/= [] andalso
+                            not lists:member(Source, CapturedSources) of
+                        true ->
+                            error({source_fragment_ordinary_contribution_route,
+                                FamilyId, Source, Schemas});
+                        false ->
+                            ok
+                    end
+                end,
+                maps:get(routes, SourceFamily)
+            )
+        end,
+        Families
+    ),
+    lists:foreach(
+        fun(#{id := IngressId, targets := Targets}) ->
+            lists:foreach(
+                fun(Target = #{id := TargetId, schemas := Schemas0}) ->
+                    Schemas = schema_intersection(
+                        ContributionSchemas,
+                        Schemas0
+                    ),
+                    case ingress_target_has_family(Target, FamilyId) andalso
+                            Schemas =/= [] of
+                        true ->
+                            error({source_fragment_contribution_ingress,
+                                FamilyId, IngressId, TargetId, Schemas});
+                        false ->
+                            ok
+                    end
+                end,
+                Targets
+            )
+        end,
+        Ingresses
+    ),
+    validate_source_fragment_startup(Family, ContributionSchemas).
+
+route_targets_family(#{recipients := Recipients}, FamilyId) ->
+    lists:any(
+        fun
+            ({family, RecipientId, _Placement}) -> RecipientId =:= FamilyId;
+            (_Recipient) -> false
+        end,
+        Recipients
+    ).
+
+ingress_target_has_family(#{recipients := Recipients}, FamilyId) ->
+    lists:any(
+        fun
+            (#{family := RecipientId}) -> RecipientId =:= FamilyId;
+            (_Recipient) -> false
+        end,
+        Recipients
+    ).
+
+validate_source_fragment_startup(#{startup := none}, _Schemas) ->
+    ok;
+validate_source_fragment_startup(
+    #{id := FamilyId, startup := #{items := Items}},
+    Schemas
+) ->
+    lists:foreach(
+        fun(#{coordinates := Coordinates, schema := Schema}) ->
+            case lists:member(Schema, Schemas) of
+                true ->
+                    error({source_fragment_contribution_startup,
+                        FamilyId, Coordinates, Schema});
+                false ->
+                    ok
+            end
+        end,
+        Items
+    ).
+
+schema_intersection(Left, Right) ->
+    lists:usort([Item || Item <- Left, lists:member(Item, Right)]).
+
+%% Two entries per directed edge are sufficient only when the captured
+%% reduction effects describe a closed, fixed-neighbor exchange.  Treat the
+%% route list as a multiset: at distance two, for example, east and west are
+%% distinct contribution lanes even though they induce the same permutation.
+%% The joined-reduction checks above prove that one complete lane set is
+%% emitted atomically on phase entry; the actor cannot reopen that reduction
+%% until its matching aggregate completion has been consumed.
+%%
+%% Choosing this transport is also an explicit application assertion that all
+%% actors traverse the same ordinal sequence of reduction sites/modes/keys and
+%% that a completed window may commute with ordinary mail from unrelated
+%% senders.  Arbitrary callback expressions do not presently admit a static
+%% proof of either property.  Runtime aggregate validation turns incoherent
+%% windows into an actor error, while the ordinary same-family-route check
+%% above preserves the per-sender ordering which Erlang does guarantee.
+source_fragment_transport(
+    #{id := FamilyId},
+    Transport = #{routes := Routes},
+    [Width, Height]
+) ->
+    Offsets = [
+        begin
+            {family, FamilyId, {translate, [DX, DY], wrap}} =
+                maps:get(recipient, Route),
+            {positive_modulo(DX, Width), positive_modulo(DY, Height)}
+        end
+        || Route <- Routes
+    ],
+    Counts = maps:groups_from_list(fun(Offset) -> Offset end, Offsets),
+    lists:foreach(
+        fun({DX, DY} = Offset) ->
+            Inverse = {
+                positive_modulo(-DX, Width),
+                positive_modulo(-DY, Height)
+            },
+            length(maps:get(Offset, Counts)) =:=
+                length(maps:get(Inverse, Counts, [])) orelse
+                error({source_fragment_routes_not_inverse_closed,
+                    FamilyId, Offset, Inverse, Offsets})
+        end,
+        lists:usort(Offsets)
+    ),
+    Transport#{mode := source_fragments}.
 
 joined_reduction_transport(
     Family = #{id := FamilyId, interface := Interface},
@@ -934,6 +1247,7 @@ validate_profile(Profile) when is_map(Profile) ->
     case Profile of
         #{reduction_transport := ordinary} -> ok;
         #{reduction_transport := joined} -> ok;
+        #{reduction_transport := source_fragments} -> ok;
         #{reduction_transport := {joined, FoldLanes}}
                 when is_integer(FoldLanes), FoldLanes > 0 -> ok;
         #{reduction_transport := Transport} ->
@@ -1874,6 +2188,9 @@ channel_tuple([Name]) -> ["(", Name, ",)"];
 channel_tuple(Names) -> ["(", join_with(", ", Names), ")"].
 
 uppercase(Atom) -> string:uppercase(atom_to_list(Atom)).
+
+positive_modulo(Value, Modulus) ->
+    ((Value rem Modulus) + Modulus) rem Modulus.
 
 join_tokens([Token]) -> Token;
 join_tokens([First, Second | Rest]) ->

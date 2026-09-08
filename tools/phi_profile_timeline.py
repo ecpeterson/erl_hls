@@ -29,25 +29,58 @@ class Dependency:
     detail: str
 
 
+BACKGROUND = "var(--background, var(--phi-background))"
+FOREGROUND = "var(--foreground, var(--phi-foreground))"
+MUTED = "var(--muted, var(--phi-muted))"
+MUTED_FOREGROUND = (
+    "var(--muted-foreground, var(--phi-muted-foreground))"
+)
+BORDER = "var(--border, var(--phi-border))"
+DESTRUCTIVE = "var(--destructive, var(--phi-destructive))"
+SERIES = {
+    index: f"var(--viz-series-{index}, var(--phi-series-{index}))"
+    for index in range(1, 7)
+}
+
+# Codex supplies the unprefixed theme variables when a figure is embedded in
+# conversation.  The private phi variables make the exact same SVG portable:
+# browsers, Quick Look, and editor previews do not need an external stylesheet.
+SVG_THEME_CSS = [
+    "svg{color-scheme:light dark;"
+    "--phi-background:#ffffff;--phi-foreground:#1f2328;"
+    "--phi-muted:#afb8c1;--phi-muted-foreground:#59636e;"
+    "--phi-border:#d0d7de;--phi-destructive:#cf222e;"
+    "--phi-series-1:#0969da;--phi-series-2:#1a7f37;"
+    "--phi-series-3:#8250df;--phi-series-4:#cf222e;"
+    "--phi-series-5:#bf8700;--phi-series-6:#bc4c00}",
+    "@media(prefers-color-scheme:dark){svg{"
+    "--phi-background:#0d1117;--phi-foreground:#f0f6fc;"
+    "--phi-muted:#6e7681;--phi-muted-foreground:#9198a1;"
+    "--phi-border:#3d444d;--phi-destructive:#ff7b72;"
+    "--phi-series-1:#58a6ff;--phi-series-2:#3fb950;"
+    "--phi-series-3:#bc8cff;--phi-series-4:#ff7b72;"
+    "--phi-series-5:#d29922;--phi-series-6:#ffa657}}",
+]
+
 COLORS = {
-    "batch_accept": "var(--viz-series-1)",
-    "aggregate_send": "var(--viz-series-2)",
-    "aggregate_receive": "var(--viz-series-3)",
-    "aggregate_accept": "var(--viz-series-4)",
-    "aggregate_complete": "var(--viz-series-4)",
-    "aggregate_pending": "var(--viz-series-6)",
-    "aggregate_error": "var(--destructive)",
-    "state_read": "var(--viz-series-5)",
-    "state_write": "var(--viz-series-5)",
-    "effects_egress": "var(--viz-series-2)",
-    "fast_issue": "var(--viz-series-2)",
-    "retained_issue": "var(--viz-series-5)",
-    "selectable": "var(--viz-series-1)",
-    "same_actor_only": "var(--viz-series-6)",
-    "executor_blocked": "var(--viz-series-4)",
-    "no_actor_work": "var(--muted)",
-    "waiting_egress_credit": "var(--viz-series-3)",
-    "internal_other": "var(--muted)",
+    "batch_accept": SERIES[1],
+    "aggregate_send": SERIES[2],
+    "aggregate_receive": SERIES[3],
+    "aggregate_accept": SERIES[4],
+    "aggregate_complete": SERIES[4],
+    "aggregate_pending": SERIES[6],
+    "aggregate_error": DESTRUCTIVE,
+    "state_read": SERIES[5],
+    "state_write": SERIES[5],
+    "effects_egress": SERIES[2],
+    "fast_issue": SERIES[2],
+    "retained_issue": SERIES[5],
+    "selectable": SERIES[1],
+    "same_actor_only": SERIES[6],
+    "executor_blocked": SERIES[4],
+    "no_actor_work": MUTED,
+    "waiting_egress_credit": SERIES[3],
+    "internal_other": MUTED,
 }
 
 
@@ -89,11 +122,90 @@ def phi_router_map(events: list[Event], schedulers: list[str]) -> dict[str, str]
     return dict(zip(schedulers, routers[-len(schedulers):], strict=True))
 
 
-def parse_destination_tables(path: Path | None) -> dict[str, dict[int, list[int]]]:
+def source_fragment_destination_table(
+    source: str, plane: str
+) -> dict[int, list[int]] | None:
+    """Invert the generated source-fragment plane's per-destination heads.
+
+    A source-fragment plane stores one FIFO bank per reduction lane.  Its
+    `pop_sources` table says which source head each lane consumes for a given
+    destination.  Inverting every lane permutation recovers the same stable
+    source-to-destinations metadata emitted explicitly by the older
+    joined transport, without adding any hardware solely for profiling.
+    """
+    marker = f"struct Phi_{plane}ReductionFragmentQueue"
+    if marker not in source:
+        return None
+    match = re.search(
+        rf"proc Phi_{plane}ReductionPlane\s*\{{.*?"
+        rf"let pop_sources = match output_slot \{{(?P<body>.*?)\n\s*_ =>",
+        source,
+        re.DOTALL,
+    )
+    if not match:
+        raise SystemExit(
+            f"cannot parse source-fragment destinations for phi {plane}"
+        )
+    inverse = {}
+    for row in re.finditer(
+        r"u32:(\d+)\s*=>\s*\[([^]]+)\]", match.group("body")
+    ):
+        inverse[int(row.group(1))] = [
+            int(value) for value in re.findall(r"u32:(\d+)", row.group(2))
+        ]
+    if not inverse:
+        raise SystemExit(
+            f"empty source-fragment destination table for phi {plane}"
+        )
+    populations = {len(sources) for sources in inverse.values()}
+    if len(populations) != 1:
+        raise SystemExit(
+            f"ragged source-fragment destination table for phi {plane}"
+        )
+    population = populations.pop()
+    actor_count = len(inverse)
+    expected = set(range(actor_count))
+    destinations = {
+        source_actor: [None] * population
+        for source_actor in range(actor_count)
+    }
+    for destination, sources in inverse.items():
+        if destination not in expected:
+            raise SystemExit(
+                f"sparse source-fragment destinations for phi {plane}"
+            )
+        for lane, source_actor in enumerate(sources):
+            if source_actor not in expected:
+                raise SystemExit(
+                    f"invalid source-fragment source for phi {plane}"
+                )
+            if destinations[source_actor][lane] is not None:
+                raise SystemExit(
+                    f"non-bijective source-fragment lane for phi {plane}"
+                )
+            destinations[source_actor][lane] = destination
+    if any(
+        destination is None
+        for rows in destinations.values()
+        for destination in rows
+    ):
+        raise SystemExit(
+            f"incomplete source-fragment destinations for phi {plane}"
+        )
+    return {
+        source_actor: [int(destination) for destination in rows]
+        for source_actor, rows in destinations.items()
+    }
+
+
+def parse_reduction_topology(
+    path: Path | None,
+) -> tuple[dict[str, dict[int, list[int]]], set[str]]:
     if path is None or not path.exists():
-        return {}
+        return {}, set()
     source = path.read_text(encoding="utf-8")
     tables = {}
+    source_fragment_planes = set()
     for plane in ("x", "z"):
         match = re.search(
             rf"fn phi_{plane}_reduction_destinations\(source: u32\).*?"
@@ -101,19 +213,27 @@ def parse_destination_tables(path: Path | None) -> dict[str, dict[int, list[int]
             source,
             re.DOTALL,
         )
-        if not match:
-            continue
-        table = {}
-        for row in re.finditer(
-            r"u32:(\d+)\s*=>\s*\[([^]]+)\]", match.group("body")
-        ):
-            table[int(row.group(1))] = [
-                int(value)
-                for value in re.findall(r"u32:(\d+)", row.group(2))
-            ]
-        if table:
-            tables[plane] = table
-    return tables
+        if match:
+            table = {}
+            for row in re.finditer(
+                r"u32:(\d+)\s*=>\s*\[([^]]+)\]", match.group("body")
+            ):
+                table[int(row.group(1))] = [
+                    int(value)
+                    for value in re.findall(r"u32:(\d+)", row.group(2))
+                ]
+            if table:
+                tables[plane] = table
+        fragment_table = source_fragment_destination_table(source, plane)
+        if fragment_table is not None:
+            tables[plane] = fragment_table
+            source_fragment_planes.add(plane)
+    return tables, source_fragment_planes
+
+
+def parse_destination_tables(path: Path | None) -> dict[str, dict[int, list[int]]]:
+    """Retain the original table-only helper for callers outside this tool."""
+    return parse_reduction_topology(path)[0]
 
 
 def event_site(event: Event) -> str | None:
@@ -126,6 +246,7 @@ def dependency_graph(
     planes: list[str],
     router_map: dict[str, str],
     destination_tables: dict[str, dict[int, list[int]]],
+    source_fragment_planes: set[str] | None = None,
 ) -> list[Dependency]:
     """Infer preserved-order dependencies between observed handshakes.
 
@@ -135,6 +256,7 @@ def dependency_graph(
     additionally use the generated static destination table.
     """
     dependencies: list[Dependency] = []
+    source_fragment_planes = source_fragment_planes or set()
     by_component: dict[str, list[Event]] = defaultdict(list)
     for event in events:
         by_component[event.component].append(event)
@@ -222,6 +344,7 @@ def dependency_graph(
     for group, plane in zip(groups, planes, strict=True):
         tag = "x" if "_x_" in plane else "z"
         table = destination_tables.get(tag, {})
+        source_fragment = tag in source_fragment_planes
         inverse_last = {
             destinations[-1]: source
             for source, destinations in table.items()
@@ -234,7 +357,9 @@ def dependency_graph(
             fields = detail_fields(event.detail)
             shard = int(fields.get("source", "-1"))
             batches_by_shard[shard].append(event)
-            if event.slot in inverse_last:
+            if source_fragment and event.slot is not None:
+                batch_sources[id(event)] = event.slot
+            elif event.slot in inverse_last:
                 batch_sources[id(event)] = inverse_last[event.slot]
         for shard, scheduler in enumerate(group):
             router = router_map[scheduler]
@@ -246,7 +371,10 @@ def dependency_graph(
                 unmatched_accepts = list(routed_accepts[router])
                 matched_sends: list[tuple[Event, Event, int | None]] = []
                 for sent in sends:
-                    source = inverse_last.get(sent.slot)
+                    source = (
+                        sent.slot if source_fragment
+                        else inverse_last.get(sent.slot)
+                    )
                     candidates = [
                         (index, accepted)
                         for index, (accepted, accepted_source) in
@@ -334,21 +462,23 @@ def dependency_graph(
 
         if not table:
             continue
-        contributions: dict[int, deque[Event]] = defaultdict(deque)
+        population = len(next(iter(table.values())))
+        contributions: dict[tuple[int, int], deque[Event]] = defaultdict(deque)
         for event in by_component[plane]:
             if event.event == "batch_accept":
                 source = batch_sources.get(id(event))
                 if source is not None:
-                    for destination in table[source]:
-                        contributions[destination].append(event)
+                    for lane, destination in enumerate(table[source]):
+                        contributions[(destination, lane)].append(event)
             elif event.event == "aggregate_send" and event.slot is not None:
                 shard = int(detail_fields(event.detail).get("shard", "-1"))
                 destination = event.slot * len(group) + shard
                 members = [
-                    contributions[destination].popleft()
-                    for _ in range(min(4, len(contributions[destination])))
+                    contributions[(destination, lane)].popleft()
+                    for lane in range(population)
+                    if contributions[(destination, lane)]
                 ]
-                if len(members) == 4:
+                if len(members) == population:
                     for member in members:
                         source = batch_sources.get(id(member))
                         dependencies.append(Dependency(
@@ -549,18 +679,21 @@ def render_svg(
     title_id = f"phi-timeline-title{id_suffix}"
     desc_id = f"phi-timeline-desc{id_suffix}"
     svg = [
-        f'<svg viewBox="0 0 {width} {height}" role="img" '
+        f'<svg xmlns="http://www.w3.org/2000/svg" '
+        f'viewBox="0 0 {width} {height}" role="img" '
         f'aria-labelledby="{title_id} {desc_id}" '
         'style="width:100%;height:auto;display:block">',
         f'<title id="{title_id}">Clock-aligned phi reduction timeline</title>',
         f'<desc id="{desc_id}">Neighbor batches are folded in the reduction plane, delivered to one scheduler, accepted as a completed reduction, followed by an actor state read, state write, and new effects.</desc>',
         '<style>',
-        'text{fill:var(--foreground);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px}',
-        '.muted{fill:var(--muted-foreground)}',
-        '.grid{stroke:var(--border);stroke-width:1}',
-        '.axis{stroke:var(--foreground);stroke-width:1}',
-        '.mark{stroke:var(--background);stroke-width:1}',
+        *SVG_THEME_CSS,
+        f'text{{fill:{FOREGROUND};font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px}}',
+        f'.muted{{fill:{MUTED_FOREGROUND}}}',
+        f'.grid{{stroke:{BORDER};stroke-width:1}}',
+        f'.axis{{stroke:{FOREGROUND};stroke-width:1}}',
+        f'.mark{{stroke:{BACKGROUND};stroke-width:1}}',
         '</style>',
+        f'<rect width="100%" height="100%" fill="{BACKGROUND}"/>',
     ]
     site = detail_fields(anchor.detail).get("site", "reduction")
     title = (
@@ -604,7 +737,7 @@ def render_svg(
     ):
         xpos = x(run_start)
         run_width = max(2.0, x(run_end + 1) - xpos)
-        color = COLORS.get(status, "var(--muted)")
+        color = COLORS.get(status, MUTED)
         ypos = rows["selection"] + 10
         svg.append(
             f'<rect x="{xpos:.2f}" y="{ypos}" width="{run_width:.2f}" height="21" '
@@ -613,7 +746,7 @@ def render_svg(
         if run_width >= 62:
             label = status.replace("_", " ")
             svg.append(
-                f'<text x="{xpos + 4:.2f}" y="{ypos + 15}" fill="var(--foreground)">{esc(label)}</text>'
+                f'<text x="{xpos + 4:.2f}" y="{ypos + 15}" fill="{FOREGROUND}">{esc(label)}</text>'
             )
 
     visible = [event for event in events if start <= event.cycle <= end]
@@ -649,7 +782,7 @@ def render_svg(
         offsets[key] = ordinal + 1
         xpos = x(event.cycle + 0.5)
         ypos = rows[lane] + 20 - min(ordinal, 2) * 8
-        color = COLORS.get(event.event, "var(--foreground)")
+        color = COLORS.get(event.event, FOREGROUND)
         inherited_detail = aggregate_details.get(
             (event.cycle, event.slot), ""
         )
@@ -675,7 +808,7 @@ def render_svg(
     anchor_x = x(anchor.cycle + 0.5)
     svg.append(
         f'<line x1="{anchor_x:.2f}" y1="{top - 8}" x2="{anchor_x:.2f}" '
-        f'y2="{height - 35}" stroke="var(--foreground)" stroke-width="1" stroke-dasharray="3 3"/>'
+        f'y2="{height - 35}" stroke="{FOREGROUND}" stroke-width="1" stroke-dasharray="3 3"/>'
     )
     svg.append('</svg>')
     return "\n".join(svg) + "\n"
@@ -806,7 +939,8 @@ def cross_shard_svg(
     title_id = f"phi-causal-title{id_suffix}"
     desc_id = f"phi-causal-desc{id_suffix}"
     svg = [
-        f'<svg viewBox="0 0 {width} {height}" role="img" '
+        f'<svg xmlns="http://www.w3.org/2000/svg" '
+        f'viewBox="0 0 {width} {height}" role="img" '
         f'aria-labelledby="{title_id} {desc_id}" '
         'style="width:100%;height:auto;display:block">',
         f'<title id="{title_id}">Cross-shard phi data dependencies</title>',
@@ -815,15 +949,17 @@ def cross_shard_svg(
         f'<marker id="{marker_id}" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M 0 0 L 8 4 L 0 8 Z" fill="context-stroke"/></marker>',
         '</defs>',
         '<style>',
-        'text{fill:var(--foreground);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px}',
-        '.muted{fill:var(--muted-foreground)}',
-        '.grid{stroke:var(--border);stroke-width:1}',
-        '.baseline{stroke:var(--border);stroke-width:1}',
-        '.dependency{fill:none;stroke:var(--muted-foreground);stroke-width:1;opacity:.25}',
-        '.dependency.focus{stroke:var(--foreground);stroke-width:1.6;opacity:.82}',
+        *SVG_THEME_CSS,
+        f'text{{fill:{FOREGROUND};font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px}}',
+        f'.muted{{fill:{MUTED_FOREGROUND}}}',
+        f'.grid{{stroke:{BORDER};stroke-width:1}}',
+        f'.baseline{{stroke:{BORDER};stroke-width:1}}',
+        f'.dependency{{fill:none;stroke:{MUTED_FOREGROUND};stroke-width:1;opacity:.25}}',
+        f'.dependency.focus{{stroke:{FOREGROUND};stroke-width:1.6;opacity:.82}}',
         '.contribution{stroke-dasharray:3 3}',
-        '.event{stroke:var(--background);stroke-width:1}',
+        f'.event{{stroke:{BACKGROUND};stroke-width:1}}',
         '</style>',
+        f'<rect width="100%" height="100%" fill="{BACKGROUND}"/>',
     ]
     focus_writes = [
         event for event in events
@@ -864,7 +1000,7 @@ def cross_shard_svg(
     focus_x = x(focus_cycle + 0.5)
     svg.append(
         f'<line x1="{focus_x:.2f}" y1="{top - 9}" x2="{focus_x:.2f}" '
-        f'y2="{height - 30}" stroke="var(--foreground)" stroke-width="1" '
+        f'y2="{height - 30}" stroke="{FOREGROUND}" stroke-width="1" '
         f'stroke-dasharray="3 3"/>'
     )
 
@@ -905,7 +1041,7 @@ def cross_shard_svg(
             svg.append(
                 f'<rect x="{xpos:.2f}" y="{ypos:.2f}" '
                 f'width="{run_width:.2f}" height="7" '
-                f'fill="{COLORS.get(status, "var(--muted)")}" opacity=".55" '
+                f'fill="{COLORS.get(status, MUTED)}" opacity=".55" '
                 f'data-tooltip="{esc(scheduler)} {esc(status)}: clocks '
                 f'{run_start}–{run_end}"/>'
             )
@@ -934,7 +1070,7 @@ def cross_shard_svg(
                 svg.append(
                     f'<rect x="{x(run_start):.2f}" y="{router_y - 4:.2f}" '
                     f'width="{max(1.5, x(run_end + 1) - x(run_start)):.2f}" '
-                    f'height="8" fill="var(--viz-series-4)" opacity=".32" '
+                    f'height="8" fill="{SERIES[4]}" opacity=".32" '
                     f'data-tooltip="{esc(router)} waits for downstream capacity: '
                     f'clocks {run_start}–{run_end}"/>'
                 )
@@ -1070,7 +1206,7 @@ def cross_shard_svg(
         if position is None:
             continue
         xpos, ypos = position
-        color = COLORS.get(event.event, "var(--foreground)")
+        color = COLORS.get(event.event, FOREGROUND)
         tooltip = event_tooltip(event, causal_details.get(id(event), ""))
         if event.event == "aggregate_complete":
             shape = (
@@ -1096,9 +1232,9 @@ def cross_shard_svg(
         else:
             shape = f'<circle cx="{xpos:.2f}" cy="{ypos:.2f}" r="5"'
         fill = (
-            "var(--background)" if event.event == "effects_accept" else color
+            BACKGROUND if event.event == "effects_accept" else color
         )
-        stroke = color if event.event == "effects_accept" else "var(--background)"
+        stroke = color if event.event == "effects_accept" else BACKGROUND
         svg.append(
             f'{shape} fill="{fill}" stroke="{stroke}" stroke-width="1.5" '
             f'data-tooltip="{esc(tooltip)}"/>'
@@ -1106,7 +1242,7 @@ def cross_shard_svg(
         if id(event) in focus_events:
             svg.append(
                 f'<circle cx="{xpos:.2f}" cy="{ypos:.2f}" r="9" fill="none" '
-                f'stroke="var(--foreground)" stroke-width="1.5"/>'
+                f'stroke="{FOREGROUND}" stroke-width="1.5"/>'
             )
 
     # A compact in-plot legend keeps the dependency vocabulary visible.
@@ -1231,9 +1367,11 @@ def main() -> None:
         if topology is None:
             candidate = args.trace.parent / "phi_decoder_profile_topology.x"
             topology = candidate if candidate.exists() else None
-        destination_tables = parse_destination_tables(topology)
+        destination_tables, source_fragment_planes = \
+            parse_reduction_topology(topology)
         dependencies = dependency_graph(
-            events, groups, planes, router_map, destination_tables
+            events, groups, planes, router_map, destination_tables,
+            source_fragment_planes,
         ) if args.dependencies else []
         focus_cycle = args.focus_cycle
         if focus_cycle is None:

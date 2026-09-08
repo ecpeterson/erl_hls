@@ -487,12 +487,12 @@ scheduler and the lookahead is promoted.
 
 Each batch carries its four statically derived destination slots. The plane
 therefore performs exactly four chained indexed updates. An earlier prototype
-carried only the source slot and rendered a nine-way match whose every arm
-rebuilt the complete receptacle array; although semantically equivalent, that
-shape duplicated 36 fold call sites per plane and produced an enormous RTL
-multiplexer/reducer network. Carrying the small destination vector reduces the
-two-plane generated fold call sites from 72 to eight without adding receptacle
-rows.
+of this destination-indexed representation carried only the source slot and
+rendered a nine-way match whose every arm rebuilt the complete receptacle
+array; although semantically equivalent, that shape duplicated 36 fold call
+sites per plane and produced an enormous RTL multiplexer/reducer network.
+Carrying the small destination vector reduces the two-plane generated fold
+call sites from 72 to eight without adding receptacle rows.
 
 The batch channel retains the ordinary router backpressure and effect-window
 ownership, so no batch can be partially committed. The aggregate delivery is
@@ -523,12 +523,12 @@ RTL shape, while the revised form removes that replicated logic directly.
 The first plane loop gave completed aggregates priority over new batches, so a
 logical activation performed one kind of transport or the other. That made the
 plane, rather than the approximately fifteen actor visits per step, the actual
-cadence limit. The current plane treats ingress and retirement as independent
-handshakes: it polls one source and round-robin selects any ready destination
-on every activation. Both may advance in one clock. Retirement first promotes
-the destination's lookahead receptacle and the input batch then folds into the
-resulting bank, preserving epoch order even when both operations address the
-same destination.
+cadence limit. The duplex destination-indexed plane treats ingress and
+retirement as independent handshakes: it polls one source and round-robin
+selects any ready destination on every activation. Both may advance in one
+clock. Retirement first promotes the destination's lookahead receptacle and
+the input batch then folds into the resulting bank, preserving epoch order
+even when both operations address the same destination.
 
 On the three-shard profile this change reduces the steps-eight-through-32
 window from 6,156 to 3,243 clocks: 135.125 clocks per step, or about 1.48
@@ -551,8 +551,157 @@ back some of the full-width plane's area.
 
 The comparable isolated D2 X-plane map falls from 16,676 to 14,468 estimated
 logic cells (13.2%) while flip-flops rise from 2,024 to 2,472 for the retained
-batch. This small exact map is the current fold-width attribution; a full
+batch. This small exact map is the predecessor fold-width attribution; a full
 joined-core map is too expensive to be a useful iteration tool.
+
+### Source-fragment reduction plane
+
+The selected successor transposes the storage rather than updating a wide
+destination-indexed aggregate array. A joined batch carries its source actor
+slot and one frame for each of the four captured routes. Route lane `i` owns a
+bank indexed by source actor, and each bank entry is a two-deep FIFO containing
+a current frame and one lookahead frame. For destination `d`, compile-time
+inverse-route tables identify the four source entries whose heads belong to
+`d`. The plane may retire `d` when all four heads are valid; it reads and pops
+them together, computes the completed aggregate with one four-frame fold, and
+sends that aggregate to the scheduler which owns `d`.
+
+This layout retains the overlap that mattered in the duplex plane without its
+multiwrite accumulator crossbar. A successful activation may retire one
+destination and atomically admit one source batch. Every lane bank then has at
+most one logical dequeue and one logical enqueue. The register implementation
+applies pop before push with constant-index decoded updates, so an old head can
+contribute to the outgoing aggregate while the same entry accepts its
+replacement. Because a dequeue currently promotes lookahead in the popped row
+while an enqueue may update another row, a future RAM lowering must split
+nonmoving payload banks from narrow head/valid metadata, or otherwise
+arbitrate the two row updates. The present layout is BRAM-oriented, not already
+a literal 1R1W RAM interface. It nevertheless avoids the variable-indexed
+four-write receptacle update. A single pending-batch slot makes admission
+all-or-nothing when any of the four edge queues is full; it never commits a
+partial batch.
+
+The depth bound depends on a property proved while annotating the topology.
+Let each captured route lane be a bijection `r` on the finite actor set, and
+require the multiset of lanes to contain the inverse `r^-1` with matching
+multiplicity. Each actor atomically emits exactly one complete lane set on
+entering a reduction window, and cannot enter the next window until it has
+consumed one fragment from every inverse lane. Consider the queue for source
+`s` on lane `r`, whose destination is `d = r(s)`. Before `s` can emit window
+`k + 2`, it must receive `d`'s window-`k + 1` fragment on the inverse lane.
+Actor `d` could not emit that fragment before completing its own window `k`,
+which required and retired `s`'s window-`k` fragment. Thus `s` can be at most
+two unretired windows ahead on this directed edge: `k + 1` at the head and
+`k + 2` as lookahead. A depth-two queue is therefore sufficient. Without
+bijectivity, inverse closure, atomic complete batches, or the wait-for-
+aggregate phase boundary, this proof does not apply and the transport is
+rejected.
+
+The plane deliberately does not pop a complete value merely because all four
+heads are present. Each actor's own source batch mints a one-bit open-window
+token when that batch is freshly accepted. Destination `d` is eligible only
+when its token and all four inverse-route heads are present. Retirement pops
+the heads and clears the token; if the same activation accepts `d`'s next
+source batch, clear-before-set semantics mint the next token. Complete but
+early values therefore remain distributed in the existing edge queues rather
+than moving into two wide aggregate payload banks per actor.
+
+This is also the liveness mechanism. If actor A is closed, its complete heads
+do not block the ready scan from choosing actor B. B's aggregate may let B
+advance and emit the batch that opens A; A then becomes eligible without any
+global FIFO ordering between their completed values. The scheduler keeps only
+one scalar aggregate skid for bounded state/egress hazards after a plane
+handshake. A retained pending source batch does not mint a token repeatedly:
+minting uses the fresh channel-receive valid bit. The one-bit representation
+is sound because the actor protocol permits only one outstanding reduction
+window per actor.
+
+The plane changes only the physical carrier. Its open token prevents a
+coherent aggregate from arriving before the actor's matching window. The
+destination scheduler still checks the open reduction site and key and owns
+all actor state; a mismatch after the token has opened is therefore a definite
+transport/protocol error, not an early arrival to postpone. Such an error is
+applied as soon as the target slot is free of private entry/egress, in-flight,
+and same-slot RAM hazards.
+Unrelated ordinary mail deliberately does not gate application. Source
+effect-window ownership and returned credit also remain unchanged. Output
+backpressure can stall a whole proc activation, as for the preceding plane,
+but when the output handshake succeeds the same activation may accept a batch;
+no extra phase is inserted between the pop and push.
+
+Selecting `source_fragments` additionally asserts two protocol properties
+which the compiler cannot derive from arbitrary callback expressions. First,
+all actors in the family traverse one coherent sequence of reduction sites,
+modes, and keys: the `k`th batch on every captured lane belongs to the `k`th
+window at its destination. The plane checks each completed batch and converts
+a violated assertion into a destination reduction error, but it cannot undo a
+batch after folding mismatched windows together. Second, completed reduction
+traffic may commute with ordinary messages from unrelated senders while the
+window is open. Captured contributions have no surviving ordinary same-family
+route, so this does not violate Erlang's per-sender signal ordering. The
+destination scheduler gives a matching aggregate private-event priority even
+when ordinary mail is present; otherwise a sustained unrelated stream could
+starve a completed barrier forever. A malformed or mixed-window aggregate is
+an internal transport-contract violation and takes the same private-priority
+fail-stop path rather than waiting behind ordinary mail. These are semantic
+obligations of this explicit transport mode, not properties of reductions in
+general.
+
+The aggregate-only lowering currently enforces transport closure at record-
+schema granularity. A record used as a reduction contribution may not enter
+that family through an uncaptured ordinary route, a topology ingress, or a
+startup message. Some phase-exclusive uses could be safe in principle, but
+proving that would require cross-actor phase analysis which the compiler does
+not perform. The conservative rule makes the source-fragment batch plane the
+only physical carrier of every contribution schema.
+
+Alternatives considered were a destination-banked read-modify-write plane,
+which needs partition queues, RAW forwarding, and bank arbitration; a global
+ping-pong superstep buffer, which introduces a family-wide barrier and tail
+bubbles; and per-destination reducers or a combining network, which replicate
+reducers, FIFOs, or routing. Source fragments were selected because wrapped
+translations reduce to static inverse lookup and the hot operation is one
+small four-frame aggregate rather than a wide variable-index update.
+
+The first isolated D2 X-plane XC7 ABC9 map reports 5,082 estimated logic cells
+and 5,583 flip-flops. The predecessor three-lane destination plane reported
+14,468 cells and 2,472 flip-flops; the full-width destination plane reported
+16,676 cells and 2,024 flip-flops. Source fragments therefore reduce estimated
+logic cells by 64.9% versus three lanes and 69.5% versus full width, while the
+register-resident queue payloads increase the flip-flop count.
+
+The D3 request-paced profile is cadence-identical to the three-lane
+destination plane: steps 8 through 32 take 4,176 clocks, or 174 clocks per
+step and about 1.149 million steps/s at 200 MHz. Each plane accepts 4,163
+batches and sends 4,158 aggregates, with no aggregate-output stalls; each phi
+shard accepts and completes 1,386 aggregates without a protocol error. An
+exact topology-core XC7 ABC9 map reports 79,463 estimated logic cells, 76,675
+flip-flops, 92,340 LUTs, and 48 `DSP48E1`s. The pre-reduction main baseline is
+57,040 cells, 64,061 flip-flops, 70,566 LUTs, and the same 48 DSPs. Thus the
+source-fragment design pays 39.3% more estimated cells, 19.7% more
+flip-flops, and 30.9% more LUTs for a 53.2% projected-rate increase. This is a
+real area premium, but the complete map terminates normally and is far from
+the earlier destination-crossbar explosion. It is also within 1.2% of the
+predecessor source-fragment map in every logic metric; replacing the wide
+completed-value banks did not conceal another synthesis blow-up.
+
+A replay of every D3 plane handshake found that the defensive scalar pending
+batch was never occupied. All 7,722 reported input stalls per plane are
+round-robin *port-clock* samples on the two unselected valid source ports, not
+capacity failures. Accepted batches arrive zero or two clocks after their
+router sends, and no queue exceeds the proved depth of two.
+
+The final full-device D3 witness also preserves exact CPU-versus-native-
+Icarus equivalence. Both substrates close at step 18 with 80 corrections, the
+same nonuniform 18-cell measurement field (eight commuting and ten
+anticommuting results), and row parity one. Native Icarus runs the compiled
+witness in 21 seconds. Specializing the actor artifact to its one physical
+transport mode reduces the profile topology's native XLS DSLX-to-IR
+conversion from approximately 1,574 seconds to 39 seconds; the larger full
+noise-and-decoder gateway converts in 148 seconds. The abandoned
+actor-wide completed-value-bank formulation did not reach IR after seven
+hours; that was a parametric elaboration pathology, not a hardware area
+measurement.
 
 ## General mailbox capacity
 

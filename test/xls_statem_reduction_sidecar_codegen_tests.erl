@@ -187,7 +187,7 @@ failed_actor_disables_its_reduction_sidecar_test() ->
     )).
 
 sender_addressed_fold_uses_only_safe_mailbox_scan_boundary_test() ->
-    Xls = generated_xls(),
+    Xls = generated_xls(joined),
     Candidate = declaration_block(
         Xls,
         <<"pub fn direct_reduction_candidate(">>
@@ -237,7 +237,11 @@ sender_addressed_fold_uses_only_safe_mailbox_scan_boundary_test() ->
     )),
     ?assertNotEqual(nomatch, binary:match(
         SharedService,
-        <<"let local_fold = shared_reduction_fold_result(">>
+        <<"reserve_direct_reduction(\n">>
+    )),
+    ?assertNotEqual(nomatch, binary:match(
+        SharedService,
+        <<"let local_fold = shared_reduction_fold_result(\n">>
     )),
     ?assertNotEqual(nomatch, binary:match(
         SharedService,
@@ -270,8 +274,157 @@ sender_addressed_fold_uses_only_safe_mailbox_scan_boundary_test() ->
         <<"let applied = shared_reduction_sidecar_step(">>
     )).
 
-joined_reduction_aggregates_bypass_mailbox_storage_test() ->
+aggregate_only_specialization_disables_local_fold_datapaths_test() ->
+    Xls = generated_xls(aggregate_only),
+    SharedService = binary_from(Xls, <<"pub proc SharedService<">>),
+    ?assertEqual(nomatch, binary:match(
+        Xls,
+        <<"AGGREGATE_ONLY: u1">>
+    )),
+    ?assertEqual(nomatch, binary:match(
+        Xls,
+        <<"proc FoldRelay {">>
+    )),
+    ?assertEqual(nomatch, binary:match(
+        Xls,
+        <<"struct FoldEnvelope {">>
+    )),
+    ?assertEqual(nomatch, binary:match(
+        Xls,
+        <<"fn shared_reduction_fold_result(">>
+    )),
+    ?assertEqual(nomatch, binary:match(
+        Xls,
+        <<"fn reserve_direct_reduction<">>
+    )),
+    ?assertNotEqual(nomatch, binary:match(
+        SharedService,
+        <<"aggregate_in: chan<ReductionAggregateRequest> in">>
+    )),
+    ?assertNotEqual(nomatch, binary:match(
+        SharedService,
+        <<"reserve_complete_reduction_aggregate<">>
+    )).
+
+aggregate_only_specialization_installs_complete_accumulator_test() ->
+    Xls = generated_xls(aggregate_only),
+    FastApply = declaration_block(
+        Xls,
+        <<"fn reduction_apply_complete_aggregate(\n">>
+    ),
+    Aggregate = declaration_block(
+        Xls,
+        <<"fn reserve_complete_reduction_aggregate<">>
+    ),
+    ?assertNotEqual(nomatch, binary:match(
+        FastApply,
+        <<"accumulator: aggregate.accumulator">>
+    )),
+    ?assertEqual(nomatch, binary:match(
+        FastApply,
+        <<"reduction_reduce(">>
+    )),
+    ?assertNotEqual(nomatch, binary:match(
+        Aggregate,
+        <<"let applied = reduction_apply_complete_aggregate(">>
+    )).
+
+aggregate_only_uses_one_scalar_skid_without_payload_banks_test() ->
+    Xls = generated_xls(aggregate_only),
+    SharedState = declaration_block(Xls, <<"struct SharedState<">>),
+    SharedService = binary_from(Xls, <<"pub proc SharedService<">>),
+    ?assertNotEqual(nomatch, binary:match(
+        SharedState,
+        <<"aggregate_pending: ReductionAggregateRequest">>
+    )),
+    ?assertNotEqual(nomatch, binary:match(
+        SharedState,
+        <<"aggregate_pending_valid: u1">>
+    )),
+    ?assertEqual(nomatch, binary:match(
+        Xls,
+        <<"aggregate_bank_">>
+    )),
+    ?assertNotEqual(nomatch, binary:match(
+        SharedService,
+        <<"recv_if_non_blocking(\n"
+          "          join(), aggregate_in,\n"
+          "          !aggregate_pending_valid">>
+    )).
+
+aggregate_only_completion_commutes_with_ordinary_mail_test() ->
+    Xls = generated_xls(aggregate_only),
+    Complete = declaration_block(
+        Xls,
+        <<"fn reserve_complete_reduction_aggregate<">>
+    ),
+    %% `source_fragments` forbids an ordinary same-family route beside the
+    %% captured contribution lanes.  Mail from an unrelated sender therefore
+    %% has no per-sender ordering relation with the completed aggregate, and
+    %% must not be able to starve it indefinitely.
+    ?assertEqual(nomatch, binary:match(
+        Complete,
+        <<"!state.mail_candidates[slot]">>
+    )).
+
+ready_selection_does_not_carry_full_shared_state_test() ->
     Xls = generated_xls(),
+    Metadata = declaration_block(
+        Xls,
+        <<"struct ReductionReadyMetadata<">>
+    ),
+    Selection = declaration_block(
+        Xls,
+        <<"fn reduction_ready_selection<">>
+    ),
+    ?assertNotEqual(nomatch, binary:match(
+        Metadata,
+        <<"internal_candidates: u1[ACTOR_COUNT]">>
+    )),
+    ?assertEqual(nomatch, binary:match(
+        Selection,
+        <<"SharedState<">>
+    )),
+    ?assertNotEqual(nomatch, binary:match(
+        Selection,
+        <<"metadata: ReductionReadyMetadata<ACTOR_COUNT>">>
+    )).
+
+failed_aggregate_waits_only_for_target_hazards_test() ->
+    Xls = generated_xls(joined),
+    Aggregate = declaration_block(
+        Xls,
+        <<"fn reserve_reduction_aggregate<">>
+    ),
+    %% An intact aggregate from a future window remains pending until the
+    %% actor opens the matching site/key.  A sender-marked malformed aggregate
+    %% can never become coherent, so once the target slot is hazard-free it
+    %% must be consumed into the actor's terminal reduction-error path.
+    ?assertNotEqual(nomatch, binary:match(
+        Aggregate,
+        <<"let aggregate_hazard_free = found && request.slot < ACTOR_COUNT">>
+    )),
+    ?assertNotEqual(nomatch, binary:match(
+        Aggregate,
+        <<"let coherent_open = state.reduction_active[slot] &&\n"
+          "    applied.outcome != ReductionOutcome::MISMATCH;">>
+    )),
+    ?assertNotEqual(nomatch, binary:match(
+        Aggregate,
+        <<"(aggregate_failed || coherent_open)">>
+    )),
+    ?assertNotEqual(nomatch, binary:match(
+        Aggregate,
+        <<"let aggregate_accepted = aggregate_eligible &&\n"
+          "    !aggregate_failed">>
+    )),
+    ?assertNotEqual(nomatch, binary:match(
+        Aggregate,
+        <<"let aggregate_error = aggregate_eligible && !aggregate_accepted;">>
+    )).
+
+joined_reduction_aggregates_bypass_mailbox_storage_test() ->
+    Xls = generated_xls(joined),
     AggregateRequest = declaration_block(
         Xls,
         <<"pub struct ReductionAggregateRequest {">>
@@ -308,6 +461,11 @@ joined_reduction_aggregates_bypass_mailbox_storage_test() ->
 
 generated_xls() ->
     iolist_to_binary(xls_parse:to_xls(?FIXTURE)).
+
+generated_xls(Mode) ->
+    iolist_to_binary(xls_parse:to_xls(
+        ?FIXTURE, #{shared_service_mode => Mode}
+    )).
 
 width_declaration(Name, Width) ->
     iolist_to_binary([

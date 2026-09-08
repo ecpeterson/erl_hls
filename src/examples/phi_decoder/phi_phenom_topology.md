@@ -1862,3 +1862,60 @@ cells and 2,472 flip-flops at three lanes. The 13.2% logic-cell reduction
 costs 448 registers for the retained batch. This deliberately avoids another
 whole-core synthesis run: the smaller map isolates the changed process and is
 sufficient to show the direction of the trade.
+
+### Source-fragment reduction plane
+
+The destination-indexed plane's four variable-indexed accumulator writes are
+replaced by four route-lane banks indexed by source actor. Each edge has a
+current and lookahead fragment. Compile-time inverse-route tables select the
+four heads for one destination, which are popped and reduced together. A
+source batch can enter in the same activation, with pop-before-push semantics
+when an edge is both consumed and replaced. Inverse-closed bijective routes,
+atomic complete batches, and the actor's wait-for-aggregate phase order prove
+that depth two is sufficient. The actor's own freshly accepted source batch
+also mints a one-bit open token. A destination is selected only when that bit
+and all inverse-route heads are present; retirement clears the bit. Complete
+early values stay in the edge queues, so no actor-indexed aggregate payload
+banks or global completed-value FIFO are required, and a closed actor cannot
+head-of-line block a causally relevant peer.
+
+The D3 profile remains at 4,176 clocks for steps eight through 32, or 174
+clocks per step and about 1,149,425 steps/s at 200 MHz. Each plane accepts
+4,163 batches and sends 4,158 aggregates without an output stall; every phi
+shard completes 1,386 aggregates without an error. Trace replay found no
+capacity-blocked admission and no use of the defensive pending-batch slot.
+
+Unlike the earlier destination-crossbar experiments, the complete
+topology-core XC7 ABC9 map terminates normally. It reports 79,463 estimated
+logic cells, 76,675 flip-flops, 92,340 LUTs, and 48 DSPs, versus 57,040,
+64,061, 70,566, and 48 for the pre-reduction main baseline. The resulting
+39.3% cell and 19.7% register premiums buy a 53.2% projected-rate increase
+over that baseline and retain the one-megastep target. The queue payloads are
+register-resident in this experiment. Their constant-index decoded updates
+avoid a variable-indexed multiwrite crossbar; a future BRAM lowering would
+need nonmoving payload banks and narrow head/valid metadata because a dequeue
+and enqueue may currently update different source rows.
+
+The source-fragment transport is deliberately closed at record-schema
+granularity: contribution records cannot also enter an aggregate-only family
+through ordinary routes, control ingress, or startup. Phase-exclusive cases
+could be safe, but recognizing them would require cross-actor phase analysis
+which this backend does not yet attempt. The opt-in mode further asserts one
+coherent ordinal sequence of reduction site, mode, and key across actors, and
+allows a completed aggregate to commute past ordinary messages from unrelated
+senders. The ordinary same-family route ban preserves per-sender ordering. A
+matching aggregate therefore gets private-event priority even while ordinary
+mail is present; a malformed or mixed-window aggregate gets the same priority
+and fails the generated transport rather than waiting indefinitely.
+
+The final full D3 CPU-versus-native-Icarus witness agrees exactly. Both sides
+close at step 18 with 80 corrections, a nonuniform 18-cell measurement field
+split eight commuting to ten anticommuting, and row parity one. Native Icarus
+simulation takes 21 seconds. Specializing the imported actor artifact to its
+aggregate-only transport brings native XLS DSLX-to-IR conversion down to
+about 39 seconds for the decoder profile and 148 seconds for the larger full
+noise-and-decoder gateway. The superseded scalar source-fragment map was 78,654 cells,
+76,657 flip-flops, and 91,227 LUTs, so the new formulation is within 1.2% in
+each logic metric while avoiding the prior 1,574-second elaboration. A trial
+with actor-indexed completed-value banks never reached IR after seven hours;
+that was frontend parametric elaboration, not a synthesis or area result.

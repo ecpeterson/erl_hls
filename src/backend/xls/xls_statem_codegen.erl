@@ -38,11 +38,13 @@
     init := lowered_clause(),
     entries := [entry(), ...],
     casts := [cast_clause()],
-    reductions := none | map()
+    reductions := none | map(),
+    shared_service_mode := ordinary | joined | aggregate_only
 }.
 
 -spec emit(spec()) -> iolist().
 emit(Spec) ->
+    ok = validate_shared_service_mode(Spec),
     [
         preamble(Spec),
         maps:get(record_declarations, Spec),
@@ -66,6 +68,18 @@ emit(Spec) ->
         egress_demux(Spec),
         top(Spec)
     ].
+
+validate_shared_service_mode(Spec) ->
+    Reductions = maps:get(reductions, Spec, none),
+    Mode = maps:get(shared_service_mode, Spec, ordinary),
+    case {Reductions, Mode} of
+        {none, ordinary} -> ok;
+        {none, _} -> error({shared_service_mode_without_reductions, Mode});
+        {_, ordinary} -> ok;
+        {_, joined} -> ok;
+        {_, aggregate_only} -> ok;
+        {_, _} -> error({invalid_shared_service_mode, Mode})
+    end.
 
 %%%
 %%% Module declarations
@@ -181,9 +195,9 @@ reduction_ram_declarations(Reductions) ->
     Width = xls_statem_reduction_codegen:private_width(Reductions),
     ["pub type ReductionBits = bits[", integer_to_list(Width), "];\n\n"].
 
-reduction_internal_candidates_field(none) -> [];
-reduction_internal_candidates_field(Reductions) ->
-    ?REDUCTION_SCHEDULER:shared_state_fields(Reductions).
+reduction_internal_candidates_field(none, _Mode) -> [];
+reduction_internal_candidates_field(Reductions, Mode) ->
+    ?REDUCTION_SCHEDULER:shared_state_fields(Reductions, Mode).
 
 shared_reduction_zero_field(none) -> [];
 shared_reduction_zero_field(_Reductions) ->
@@ -212,6 +226,7 @@ machine_declarations(#{
     data_width := DataWidth
 } = Spec) ->
     Reductions = maps:get(reductions, Spec, none),
+    SharedServiceMode = maps:get(shared_service_mode, Spec, ordinary),
     DataStruct = record_struct_name(DataName),
     MachineBits = shared_machine_width(DataWidth),
     EffectCapacity = max(1, MaxEntryEffects),
@@ -329,7 +344,9 @@ machine_declarations(#{
         "  mailbox_index: u8,\n",
         "  order_index: u8,\n",
         "}\n\n",
-        ?REDUCTION_SCHEDULER:shared_fold_envelope_declaration(Reductions),
+        ?REDUCTION_SCHEDULER:shared_fold_envelope_declaration(
+            Reductions, SharedServiceMode
+        ),
         "type Admission = mailbox::Admission;\n\n",
         "enum SharedPhase : u3 {\n",
         "  BOOT = u3:0,\n",
@@ -346,7 +363,7 @@ machine_declarations(#{
         "  next_valid: u1,\n",
         "  next_slot: u32,\n",
         "  in_flight: u1[ACTOR_COUNT],\n",
-        reduction_internal_candidates_field(Reductions),
+        reduction_internal_candidates_field(Reductions, SharedServiceMode),
         "  completed_valid: u1,\n",
         "  completed: SharedExecutorResult,\n",
         "  admission_cursor: u32,\n",
@@ -864,10 +881,12 @@ shared_machine_step_function(#{
     message_words := MessageWords
 } = Spec) ->
     Reductions = maps:get(reductions, Spec, none),
+    SharedServiceMode = maps:get(shared_service_mode, Spec, ordinary),
     [
         ?REDUCTION_SCHEDULER:shared_machine_support(
             Reductions,
-            tag_ok_expression(MessageNames, MessageWords)
+            tag_ok_expression(MessageNames, MessageWords),
+            SharedServiceMode
         ),
         "fn shared_machine_dispatch(\n",
         "    machine: SharedMachine, frame: axis::Frame, received: u1)\n",
@@ -1011,6 +1030,7 @@ service(Spec) ->
 
 shared_service(Spec) ->
     Reductions = maps:get(reductions, Spec, none),
+    Mode = maps:get(shared_service_mode, Spec, ordinary),
     [
     """
     fn free_mailbox_index<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
@@ -1314,13 +1334,21 @@ shared_service(Spec) ->
       }
     }
     """,
-    ?REDUCTION_SCHEDULER:shared_service_helpers(Reductions),
+    ?REDUCTION_SCHEDULER:shared_service_helpers(Reductions, Mode),
+    shared_service_proc(Reductions, Mode),
+    "\n"
+    ].
+
+shared_service_proc(Reductions, Mode) ->
+    [
     """
     // One mailbox owner issues loaded activations to a stateless executor and
     // retires completed results. In-flight slot exclusion prevents stale
     // same-actor reads; a one-result skid slot lets credit collection continue
     // when an effect batch temporarily blocks retirement.
-    pub proc SharedService<
+    """,
+        "\npub proc SharedService<\n",
+    """
         ACTOR_COUNT: u32,
         PRODUCER_COUNT: u32,
         STARTUP_COUNT: u32,
@@ -1340,7 +1368,7 @@ shared_service(Spec) ->
       executor_request_out: chan<SharedExecutorRequest> out;
       executor_result_in: chan<SharedExecutorResult> in;
     """,
-        ?REDUCTION_SCHEDULER:shared_fold_service_fields(Reductions),
+        ?REDUCTION_SCHEDULER:shared_fold_service_fields(Reductions, Mode),
     """
 
       config(
@@ -1356,7 +1384,9 @@ shared_service(Spec) ->
           mailbox_write_req_out: chan<MailboxRamWriteReq> out,
           mailbox_write_resp_in: chan<MailboxRamWriteResp> in
     """,
-        ?REDUCTION_SCHEDULER:shared_reduction_config_parameters(Reductions),
+        ?REDUCTION_SCHEDULER:shared_reduction_config_parameters(
+            Reductions, Mode
+        ),
     """
       ) {
         let (executor_request_p, executor_request_c) =
@@ -1364,11 +1394,11 @@ shared_service(Spec) ->
         let (executor_result_p, executor_result_c) =
           chan<SharedExecutorResult, u32:1>("executor_result");
     """,
-        ?REDUCTION_SCHEDULER:shared_fold_config_bindings(Reductions),
+        ?REDUCTION_SCHEDULER:shared_fold_config_bindings(Reductions, Mode),
     """
         spawn SharedExecutor(executor_request_c, executor_result_p);
     """,
-        ?REDUCTION_SCHEDULER:shared_fold_config_spawn(Reductions),
+        ?REDUCTION_SCHEDULER:shared_fold_config_spawn(Reductions, Mode),
     """
         (
           request_in,
@@ -1385,7 +1415,7 @@ shared_service(Spec) ->
           executor_request_p,
           executor_result_c,
     """,
-        ?REDUCTION_SCHEDULER:shared_fold_config_endpoints(Reductions),
+        ?REDUCTION_SCHEDULER:shared_fold_config_endpoints(Reductions, Mode),
     """
         )
       }
@@ -1498,14 +1528,16 @@ shared_service(Spec) ->
               captured_pending_valid,
               state.egress_busy);
     """,
-        ?REDUCTION_SCHEDULER:shared_result_retirement_head(Reductions),
+        ?REDUCTION_SCHEDULER:shared_result_retirement_head(Reductions, Mode),
     """
             let completion_blocked = completed_valid &&
               completed.effects_valid && retired.egress_busy;
     """,
-        ?REDUCTION_SCHEDULER:shared_issue_bindings(Reductions),
-        ?REDUCTION_SCHEDULER:shared_direct_reduction_bindings(Reductions),
-        ?REDUCTION_SCHEDULER:shared_fast_issue_bindings(Reductions),
+        ?REDUCTION_SCHEDULER:shared_issue_bindings(Reductions, Mode),
+        ?REDUCTION_SCHEDULER:shared_direct_reduction_bindings(
+            Reductions, Mode
+        ),
+        ?REDUCTION_SCHEDULER:shared_fast_issue_bindings(Reductions, Mode),
     """
             let (received, order_index, mailbox_index) =
               mailbox_selection(direct_state, read_slot);
@@ -1584,12 +1616,12 @@ shared_service(Spec) ->
             };
             let (selected_ready, selected_slot) =
     """,
-        ?REDUCTION_SCHEDULER:shared_ready_selection_call(Reductions),
+        ?REDUCTION_SCHEDULER:shared_ready_selection_call(Reductions, Mode),
         ?REDUCTION_SCHEDULER:shared_ready_bindings(Reductions),
     """
     """,
-        ?REDUCTION_SCHEDULER:shared_local_fold_bindings(Reductions),
-        ?REDUCTION_SCHEDULER:shared_blocked_probe_bindings(Reductions),
+        ?REDUCTION_SCHEDULER:shared_local_fold_bindings(Reductions, Mode),
+        ?REDUCTION_SCHEDULER:shared_blocked_probe_bindings(Reductions, Mode),
     """
             let executor_request = SharedExecutorRequest {
               slot: read_slot,
@@ -1615,7 +1647,7 @@ shared_service(Spec) ->
     """
               executor_request);
     """,
-        ?REDUCTION_SCHEDULER:shared_fold_request_send(Reductions),
+        ?REDUCTION_SCHEDULER:shared_fold_request_send(Reductions, Mode),
     """
             let scheduled = ScheduledEffects {
               slot: result.slot,
@@ -1623,7 +1655,7 @@ shared_service(Spec) ->
             };
             let egress_tok = send_if(
     """,
-        ?REDUCTION_SCHEDULER:shared_retirement_token(Reductions),
+        ?REDUCTION_SCHEDULER:shared_retirement_token(Reductions, Mode),
     """
               egress_out,
               retire_valid && result.effects_valid,
@@ -1654,7 +1686,7 @@ shared_service(Spec) ->
               mailbox_write_tok,
               executor_request_tok,
     """,
-        ?REDUCTION_SCHEDULER:shared_fold_done_token(Reductions),
+        ?REDUCTION_SCHEDULER:shared_fold_done_token(Reductions, Mode),
     """
               state_completion_tok,
               mailbox_completion_tok);
@@ -1667,7 +1699,7 @@ shared_service(Spec) ->
               completed_valid,
               completed,
     """,
-        ?REDUCTION_SCHEDULER:shared_folded_state_fields(Reductions),
+        ?REDUCTION_SCHEDULER:shared_folded_state_fields(Reductions, Mode),
     """
               cursor,
               state_write_pending: retire_valid,
@@ -1679,8 +1711,7 @@ shared_service(Spec) ->
       }
     }
 
-    """,
-    "\n"
+    """
     ].
 
 tag_ok_expression(MessageNames, MessageWords) ->

@@ -22,6 +22,32 @@ ordered_gs_clauses_share_one_tag_arm_test() ->
     ?assertEqual(1, length(binary:matches(Xls, <<"Tag::SET =>">>))),
     ?assertEqual(1, length(binary:matches(Xls, <<"Tag::BULK_GET =>">>))).
 
+shared_service_options_reject_unknown_modes_and_keys_test() ->
+    Path = "src/examples/regsvc/regsvc.erl",
+    ?assertError(
+        {invalid_shared_service_mode, speculative},
+        xls_parse:to_xls(
+            Path,
+            #{shared_service_mode => speculative}
+        )
+    ),
+    ?assertError(
+        {invalid_xls_options, [extra, shared_service_mode]},
+        xls_parse:to_xls(
+            Path,
+            #{shared_service_mode => ordinary, extra => true}
+        )
+    ).
+
+gen_server_lowering_rejects_reduction_service_modes_test() ->
+    ?assertError(
+        {unsupported_hls_gs_shared_service_mode, joined},
+        xls_parse:to_xls(
+            "src/examples/regsvc/regsvc.erl",
+            #{shared_service_mode => joined}
+        )
+    ).
+
 repeated_hls_tags_follow_include_expanded_source_order_test() ->
     Path = "test_data/hls_tags_fixture.erl",
     Xls = iolist_to_binary(xls_parse:to_xls(Path)),
