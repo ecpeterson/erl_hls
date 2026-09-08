@@ -505,11 +505,22 @@ aggregate_idle_proc(Scheduler = #{module_name := Module}) ->
 
 reduction_batch(Plane = #{module_name := Module}) ->
     Population = reduction_population(Plane),
+    FoldLanes = reduction_fold_lanes(Plane),
     [
         "struct ", reduction_batch_name(Plane), " {\n",
         "  destinations: u32[u32:", integer_to_list(Population), "],\n",
         "  frames: axis::Frame[u32:", integer_to_list(Population), "],\n",
         "}\n\n",
+        case FoldLanes < Population of
+            true -> [
+                "struct ", reduction_work_name(Plane), " {\n",
+                "  valid: u1,\n",
+                "  destination: u32,\n",
+                "  frame: axis::Frame,\n",
+                "}\n\n"
+            ];
+            false -> []
+        end,
         "// The batch is a physical transport optimization for one fixed,\n",
         "// statically validated prefix of independent ", Module,
         " effects.\n\n",
@@ -530,6 +541,9 @@ reduction_plane_proc(Plane = #{
 }) ->
     SourceCount = length(Sources),
     DestinationCount = length(Destinations),
+    Population = reduction_population(Plane),
+    FoldLanes = reduction_fold_lanes(Plane),
+    Buffered = FoldLanes < Population,
     State = reduction_state_name(Plane),
     Members = [
         ["batch_in: chan<", reduction_batch_name(Plane), ">[u32:",
@@ -546,6 +560,14 @@ reduction_plane_proc(Plane = #{
         "  output_cursor: u32,\n",
         "  aggregate_pairs: ", Module, "::ReductionAggregatePair[u32:",
         integer_to_list(DestinationCount), "],\n",
+        case Buffered of
+            true -> [
+                "  pending_valid: u1,\n",
+                "  pending_cursor: u32,\n",
+                "  pending_batch: ", reduction_batch_name(Plane), ",\n"
+            ];
+            false -> []
+        end,
         "}\n\n",
         "proc ", reduction_plane_name(Plane), " {\n",
         [["  ", Member, ";\n"] || Member <- Members],
@@ -592,6 +614,7 @@ reduction_plane_proc(Plane = #{
         "    // Independent tokens allow the generated pipeline to overlap the\n",
         "    // two handshakes while the single state update below remains the\n",
         "    // only owner of the aggregate-pair bank.\n",
+        reduction_pending_capacity(Plane),
         "    let (input_tok, received, batch) =\n",
         "      unroll_for! (candidate, acc):\n",
         "          (u32, (token, u1, ", reduction_batch_name(Plane),
@@ -599,7 +622,7 @@ reduction_plane_proc(Plane = #{
         "        let (next_tok, next_batch, valid) =\n",
         "          recv_if_non_blocking(\n",
         "            acc.0, batch_in[candidate],\n",
-        "            state.input_cursor == candidate,\n",
+        reduction_input_condition(Plane),
         "            zero!<", reduction_batch_name(Plane), ">());\n",
         "        (next_tok, acc.1 || valid,\n",
         "          if valid { next_batch } else { acc.2 })\n",
@@ -616,19 +639,16 @@ reduction_plane_proc(Plane = #{
         "::ReductionAggregate>(),\n",
         "        })\n",
         "    } else { state.aggregate_pairs };\n",
-        "    let aggregate_pairs = if received {\n",
-        reduction_batch_updates(Plane, "retired_pairs"),
-        "    } else { retired_pairs };\n",
+        reduction_plane_updates(Plane, "retired_pairs"),
         "    let _done = join(output_tok, input_tok);\n",
         "    ", State, " {\n",
-        "      input_cursor: if state.input_cursor + u32:1 == u32:",
-        integer_to_list(SourceCount), " { u32:0 } else {\n",
-        "        state.input_cursor + u32:1 },\n",
+        reduction_input_cursor(Plane, SourceCount),
         "      output_cursor: if !output_ready { state.output_cursor\n",
         "      } else if output_slot + u32:1 == u32:",
         integer_to_list(DestinationCount), " { u32:0 } else {\n",
         "        output_slot + u32:1 },\n",
         "      aggregate_pairs,\n",
+        reduction_pending_state(Plane),
         "    }\n",
         "  }\n",
         "}\n\n"
@@ -670,6 +690,153 @@ reduction_destinations_arm(Plane, #{index := Source, x := X, y := Y}) ->
         "],\n"
     ].
 
+reduction_pending_capacity(Plane) ->
+    Population = reduction_population(Plane),
+    FoldLanes = reduction_fold_lanes(Plane),
+    case FoldLanes < Population of
+        false -> [];
+        true -> [
+            "    let pending_remaining = if state.pending_valid {\n",
+            "      u32:", integer_to_list(Population),
+            " - state.pending_cursor\n",
+            "    } else { u32:0 };\n",
+            "    let can_receive = !state.pending_valid ||\n",
+            "      pending_remaining < u32:",
+            integer_to_list(FoldLanes), ";\n"
+        ]
+    end.
+
+reduction_input_condition(Plane) ->
+    case reduction_fold_lanes(Plane) < reduction_population(Plane) of
+        false -> "            state.input_cursor == candidate,\n";
+        true -> [
+            "            can_receive &&\n",
+            "              state.input_cursor == candidate,\n"
+        ]
+    end.
+
+reduction_plane_updates(Plane, Base) ->
+    Population = reduction_population(Plane),
+    FoldLanes = reduction_fold_lanes(Plane),
+    case FoldLanes < Population of
+        false -> [
+            "    let aggregate_pairs = if received {\n",
+            reduction_batch_updates(Plane, Base),
+            "    } else { retired_pairs };\n"
+        ];
+        true -> [
+            [reduction_work(Plane, Index)
+                || Index <- lists:seq(0, FoldLanes - 1)],
+            reduction_work_updates(Plane, Base),
+            "    let aggregate_pairs = aggregate_pairs_",
+            integer_to_list(FoldLanes - 1), ";\n"
+        ]
+    end.
+
+reduction_work(Plane, Index) ->
+    Work = reduction_work_name(Plane),
+    IndexText = integer_to_list(Index),
+    [
+        "    let work_", IndexText,
+        "_from_pending = state.pending_valid &&\n",
+        "      u32:", IndexText, " < pending_remaining;\n",
+        "    let work_", IndexText,
+        "_from_received = received &&\n",
+        "      u32:", IndexText, " >= pending_remaining;\n",
+        "    let work_", IndexText, "_pending_index =\n",
+        "      if work_", IndexText, "_from_pending {\n",
+        "        state.pending_cursor + u32:", IndexText,
+        "\n      } else { u32:0 };\n",
+        "    let work_", IndexText, "_received_index =\n",
+        "      if work_", IndexText, "_from_received {\n",
+        "        u32:", IndexText,
+        " - pending_remaining\n",
+        "      } else { u32:0 };\n",
+        "    let work_", IndexText, " = ", Work, " {\n",
+        "      valid: work_", IndexText, "_from_pending ||\n",
+        "        work_", IndexText, "_from_received,\n",
+        "      destination: if work_", IndexText,
+        "_from_pending {\n",
+        "        state.pending_batch.destinations[",
+        "work_", IndexText, "_pending_index]\n",
+        "      } else if work_", IndexText, "_from_received {\n",
+        "        batch.destinations[work_", IndexText,
+        "_received_index]\n",
+        "      } else { u32:0 },\n",
+        "      frame: if work_", IndexText, "_from_pending {\n",
+        "        state.pending_batch.frames[work_", IndexText,
+        "_pending_index]\n",
+        "      } else if work_", IndexText, "_from_received {\n",
+        "        batch.frames[work_", IndexText,
+        "_received_index]\n",
+        "      } else { zero!<axis::Frame>() },\n",
+        "    };\n"
+    ].
+
+reduction_work_updates(Plane = #{module_name := Module}, Base) ->
+    FoldLanes = reduction_fold_lanes(Plane),
+    [
+        begin
+            Previous = case Index of
+                0 -> Base;
+                _ -> ["aggregate_pairs_", integer_to_list(Index - 1)]
+            end,
+            IndexText = integer_to_list(Index),
+            [
+                "    let aggregate_pairs_", IndexText,
+                " = if work_", IndexText, ".valid {\n",
+                "      update(\n",
+                "        ", Previous, ", work_", IndexText,
+                ".destination,\n",
+                "        ", Module,
+                "::reduction_aggregate_pair_push(\n",
+                "          ", Previous, "[work_", IndexText,
+                ".destination],\n",
+                "          work_", IndexText, ".frame))\n",
+                "    } else { ", Previous, " };\n"
+            ]
+        end
+        || Index <- lists:seq(0, FoldLanes - 1)
+    ].
+
+reduction_input_cursor(Plane, SourceCount) ->
+    Advance = [
+        "if state.input_cursor + u32:1 == u32:",
+        integer_to_list(SourceCount), " { u32:0 } else {\n",
+        "        state.input_cursor + u32:1 }"
+    ],
+    case reduction_fold_lanes(Plane) < reduction_population(Plane) of
+        false -> ["      input_cursor: ", Advance, ",\n"];
+        true -> [
+            "      input_cursor: if !can_receive { state.input_cursor\n",
+            "      } else { ", Advance, " },\n"
+        ]
+    end.
+
+reduction_pending_state(Plane) ->
+    FoldLanes = reduction_fold_lanes(Plane),
+    case FoldLanes < reduction_population(Plane) of
+        false -> [];
+        true -> [
+            "      pending_valid: if received { u1:1 } else {\n",
+            "        state.pending_valid && pending_remaining > u32:",
+            integer_to_list(FoldLanes), "\n",
+            "      },\n",
+            "      pending_cursor: if received {\n",
+            "        u32:", integer_to_list(FoldLanes),
+            " - pending_remaining\n",
+            "      } else if state.pending_valid &&\n",
+            "          pending_remaining > u32:",
+            integer_to_list(FoldLanes), " {\n",
+            "        state.pending_cursor + u32:",
+            integer_to_list(FoldLanes), "\n",
+            "      } else { u32:0 },\n",
+            "      pending_batch: if received { batch } else {\n",
+            "        state.pending_batch\n",
+            "      },\n"
+        ]
+    end.
+
 reduction_batch_updates(Plane = #{module_name := Module}, Base) ->
     Population = reduction_population(Plane),
     [
@@ -701,6 +868,9 @@ reduction_batch_updates(Plane = #{module_name := Module}, Base) ->
 
 reduction_population(#{reduction_transport := #{population := Population}}) ->
     Population.
+
+reduction_fold_lanes(#{reduction_transport := #{fold_lanes := FoldLanes}}) ->
+    FoldLanes.
 
 scheduled_address(Family, X, Y) ->
     [
@@ -1772,6 +1942,9 @@ startup_name(#{index := Index}) ->
 
 reduction_batch_name(#{id := Id}) ->
     [string:titlecase(atom_to_list(Id)), "ReductionBatch"].
+
+reduction_work_name(#{id := Id}) ->
+    [string:titlecase(atom_to_list(Id)), "ReductionWork"].
 
 reduction_destinations_name(#{id := Id}) ->
     [atom_to_list(Id), "_reduction_destinations"].

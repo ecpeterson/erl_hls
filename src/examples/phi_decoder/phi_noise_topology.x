@@ -218,6 +218,12 @@ struct Phi_xReductionBatch {
   frames: axis::Frame[u32:4],
 }
 
+struct Phi_xReductionWork {
+  valid: u1,
+  destination: u32,
+  frame: axis::Frame,
+}
+
 // The batch is a physical transport optimization for one fixed,
 // statically validated prefix of independent phi_halo_cell effects.
 
@@ -241,6 +247,9 @@ struct Phi_xReductionPlaneState {
   input_cursor: u32,
   output_cursor: u32,
   aggregate_pairs: phi_halo_cell::ReductionAggregatePair[u32:9],
+  pending_valid: u1,
+  pending_cursor: u32,
+  pending_batch: Phi_xReductionBatch,
 }
 
 proc Phi_xReductionPlane {
@@ -350,13 +359,19 @@ proc Phi_xReductionPlane {
     // Independent tokens allow the generated pipeline to overlap the
     // two handshakes while the single state update below remains the
     // only owner of the aggregate-pair bank.
+    let pending_remaining = if state.pending_valid {
+      u32:4 - state.pending_cursor
+    } else { u32:0 };
+    let can_receive = !state.pending_valid ||
+      pending_remaining < u32:3;
     let (input_tok, received, batch) =
       unroll_for! (candidate, acc):
           (u32, (token, u1, Phi_xReductionBatch)) in u32:0..u32:1 {
         let (next_tok, next_batch, valid) =
           recv_if_non_blocking(
             acc.0, batch_in[candidate],
-            state.input_cursor == candidate,
+            can_receive &&
+              state.input_cursor == candidate,
             zero!<Phi_xReductionBatch>());
         (next_tok, acc.1 || valid,
           if valid { next_batch } else { acc.2 })
@@ -371,37 +386,127 @@ proc Phi_xReductionPlane {
           lookahead: zero!<phi_halo_cell::ReductionAggregate>(),
         })
     } else { state.aggregate_pairs };
-    let aggregate_pairs = if received {
-        let aggregate_pairs_0 = update(
-          retired_pairs, batch.destinations[u32:0],
-          phi_halo_cell::reduction_aggregate_pair_push(
-            retired_pairs[batch.destinations[u32:0]],
-            batch.frames[u32:0]));
-        let aggregate_pairs_1 = update(
-          aggregate_pairs_0, batch.destinations[u32:1],
-          phi_halo_cell::reduction_aggregate_pair_push(
-            aggregate_pairs_0[batch.destinations[u32:1]],
-            batch.frames[u32:1]));
-        let aggregate_pairs_2 = update(
-          aggregate_pairs_1, batch.destinations[u32:2],
-          phi_halo_cell::reduction_aggregate_pair_push(
-            aggregate_pairs_1[batch.destinations[u32:2]],
-            batch.frames[u32:2]));
-        let aggregate_pairs_3 = update(
-          aggregate_pairs_2, batch.destinations[u32:3],
-          phi_halo_cell::reduction_aggregate_pair_push(
-            aggregate_pairs_2[batch.destinations[u32:3]],
-            batch.frames[u32:3]));
-        aggregate_pairs_3
+    let work_0_from_pending = state.pending_valid &&
+      u32:0 < pending_remaining;
+    let work_0_from_received = received &&
+      u32:0 >= pending_remaining;
+    let work_0_pending_index =
+      if work_0_from_pending {
+        state.pending_cursor + u32:0
+      } else { u32:0 };
+    let work_0_received_index =
+      if work_0_from_received {
+        u32:0 - pending_remaining
+      } else { u32:0 };
+    let work_0 = Phi_xReductionWork {
+      valid: work_0_from_pending ||
+        work_0_from_received,
+      destination: if work_0_from_pending {
+        state.pending_batch.destinations[work_0_pending_index]
+      } else if work_0_from_received {
+        batch.destinations[work_0_received_index]
+      } else { u32:0 },
+      frame: if work_0_from_pending {
+        state.pending_batch.frames[work_0_pending_index]
+      } else if work_0_from_received {
+        batch.frames[work_0_received_index]
+      } else { zero!<axis::Frame>() },
+    };
+    let work_1_from_pending = state.pending_valid &&
+      u32:1 < pending_remaining;
+    let work_1_from_received = received &&
+      u32:1 >= pending_remaining;
+    let work_1_pending_index =
+      if work_1_from_pending {
+        state.pending_cursor + u32:1
+      } else { u32:0 };
+    let work_1_received_index =
+      if work_1_from_received {
+        u32:1 - pending_remaining
+      } else { u32:0 };
+    let work_1 = Phi_xReductionWork {
+      valid: work_1_from_pending ||
+        work_1_from_received,
+      destination: if work_1_from_pending {
+        state.pending_batch.destinations[work_1_pending_index]
+      } else if work_1_from_received {
+        batch.destinations[work_1_received_index]
+      } else { u32:0 },
+      frame: if work_1_from_pending {
+        state.pending_batch.frames[work_1_pending_index]
+      } else if work_1_from_received {
+        batch.frames[work_1_received_index]
+      } else { zero!<axis::Frame>() },
+    };
+    let work_2_from_pending = state.pending_valid &&
+      u32:2 < pending_remaining;
+    let work_2_from_received = received &&
+      u32:2 >= pending_remaining;
+    let work_2_pending_index =
+      if work_2_from_pending {
+        state.pending_cursor + u32:2
+      } else { u32:0 };
+    let work_2_received_index =
+      if work_2_from_received {
+        u32:2 - pending_remaining
+      } else { u32:0 };
+    let work_2 = Phi_xReductionWork {
+      valid: work_2_from_pending ||
+        work_2_from_received,
+      destination: if work_2_from_pending {
+        state.pending_batch.destinations[work_2_pending_index]
+      } else if work_2_from_received {
+        batch.destinations[work_2_received_index]
+      } else { u32:0 },
+      frame: if work_2_from_pending {
+        state.pending_batch.frames[work_2_pending_index]
+      } else if work_2_from_received {
+        batch.frames[work_2_received_index]
+      } else { zero!<axis::Frame>() },
+    };
+    let aggregate_pairs_0 = if work_0.valid {
+      update(
+        retired_pairs, work_0.destination,
+        phi_halo_cell::reduction_aggregate_pair_push(
+          retired_pairs[work_0.destination],
+          work_0.frame))
     } else { retired_pairs };
+    let aggregate_pairs_1 = if work_1.valid {
+      update(
+        aggregate_pairs_0, work_1.destination,
+        phi_halo_cell::reduction_aggregate_pair_push(
+          aggregate_pairs_0[work_1.destination],
+          work_1.frame))
+    } else { aggregate_pairs_0 };
+    let aggregate_pairs_2 = if work_2.valid {
+      update(
+        aggregate_pairs_1, work_2.destination,
+        phi_halo_cell::reduction_aggregate_pair_push(
+          aggregate_pairs_1[work_2.destination],
+          work_2.frame))
+    } else { aggregate_pairs_1 };
+    let aggregate_pairs = aggregate_pairs_2;
     let _done = join(output_tok, input_tok);
     Phi_xReductionPlaneState {
-      input_cursor: if state.input_cursor + u32:1 == u32:1 { u32:0 } else {
-        state.input_cursor + u32:1 },
+      input_cursor: if !can_receive { state.input_cursor
+      } else { if state.input_cursor + u32:1 == u32:1 { u32:0 } else {
+        state.input_cursor + u32:1 } },
       output_cursor: if !output_ready { state.output_cursor
       } else if output_slot + u32:1 == u32:9 { u32:0 } else {
         output_slot + u32:1 },
       aggregate_pairs,
+      pending_valid: if received { u1:1 } else {
+        state.pending_valid && pending_remaining > u32:3
+      },
+      pending_cursor: if received {
+        u32:3 - pending_remaining
+      } else if state.pending_valid &&
+          pending_remaining > u32:3 {
+        state.pending_cursor + u32:3
+      } else { u32:0 },
+      pending_batch: if received { batch } else {
+        state.pending_batch
+      },
     }
   }
 }
@@ -409,6 +514,12 @@ proc Phi_xReductionPlane {
 struct Phi_zReductionBatch {
   destinations: u32[u32:4],
   frames: axis::Frame[u32:4],
+}
+
+struct Phi_zReductionWork {
+  valid: u1,
+  destination: u32,
+  frame: axis::Frame,
 }
 
 // The batch is a physical transport optimization for one fixed,
@@ -434,6 +545,9 @@ struct Phi_zReductionPlaneState {
   input_cursor: u32,
   output_cursor: u32,
   aggregate_pairs: phi_halo_cell::ReductionAggregatePair[u32:9],
+  pending_valid: u1,
+  pending_cursor: u32,
+  pending_batch: Phi_zReductionBatch,
 }
 
 proc Phi_zReductionPlane {
@@ -543,13 +657,19 @@ proc Phi_zReductionPlane {
     // Independent tokens allow the generated pipeline to overlap the
     // two handshakes while the single state update below remains the
     // only owner of the aggregate-pair bank.
+    let pending_remaining = if state.pending_valid {
+      u32:4 - state.pending_cursor
+    } else { u32:0 };
+    let can_receive = !state.pending_valid ||
+      pending_remaining < u32:3;
     let (input_tok, received, batch) =
       unroll_for! (candidate, acc):
           (u32, (token, u1, Phi_zReductionBatch)) in u32:0..u32:1 {
         let (next_tok, next_batch, valid) =
           recv_if_non_blocking(
             acc.0, batch_in[candidate],
-            state.input_cursor == candidate,
+            can_receive &&
+              state.input_cursor == candidate,
             zero!<Phi_zReductionBatch>());
         (next_tok, acc.1 || valid,
           if valid { next_batch } else { acc.2 })
@@ -564,37 +684,127 @@ proc Phi_zReductionPlane {
           lookahead: zero!<phi_halo_cell::ReductionAggregate>(),
         })
     } else { state.aggregate_pairs };
-    let aggregate_pairs = if received {
-        let aggregate_pairs_0 = update(
-          retired_pairs, batch.destinations[u32:0],
-          phi_halo_cell::reduction_aggregate_pair_push(
-            retired_pairs[batch.destinations[u32:0]],
-            batch.frames[u32:0]));
-        let aggregate_pairs_1 = update(
-          aggregate_pairs_0, batch.destinations[u32:1],
-          phi_halo_cell::reduction_aggregate_pair_push(
-            aggregate_pairs_0[batch.destinations[u32:1]],
-            batch.frames[u32:1]));
-        let aggregate_pairs_2 = update(
-          aggregate_pairs_1, batch.destinations[u32:2],
-          phi_halo_cell::reduction_aggregate_pair_push(
-            aggregate_pairs_1[batch.destinations[u32:2]],
-            batch.frames[u32:2]));
-        let aggregate_pairs_3 = update(
-          aggregate_pairs_2, batch.destinations[u32:3],
-          phi_halo_cell::reduction_aggregate_pair_push(
-            aggregate_pairs_2[batch.destinations[u32:3]],
-            batch.frames[u32:3]));
-        aggregate_pairs_3
+    let work_0_from_pending = state.pending_valid &&
+      u32:0 < pending_remaining;
+    let work_0_from_received = received &&
+      u32:0 >= pending_remaining;
+    let work_0_pending_index =
+      if work_0_from_pending {
+        state.pending_cursor + u32:0
+      } else { u32:0 };
+    let work_0_received_index =
+      if work_0_from_received {
+        u32:0 - pending_remaining
+      } else { u32:0 };
+    let work_0 = Phi_zReductionWork {
+      valid: work_0_from_pending ||
+        work_0_from_received,
+      destination: if work_0_from_pending {
+        state.pending_batch.destinations[work_0_pending_index]
+      } else if work_0_from_received {
+        batch.destinations[work_0_received_index]
+      } else { u32:0 },
+      frame: if work_0_from_pending {
+        state.pending_batch.frames[work_0_pending_index]
+      } else if work_0_from_received {
+        batch.frames[work_0_received_index]
+      } else { zero!<axis::Frame>() },
+    };
+    let work_1_from_pending = state.pending_valid &&
+      u32:1 < pending_remaining;
+    let work_1_from_received = received &&
+      u32:1 >= pending_remaining;
+    let work_1_pending_index =
+      if work_1_from_pending {
+        state.pending_cursor + u32:1
+      } else { u32:0 };
+    let work_1_received_index =
+      if work_1_from_received {
+        u32:1 - pending_remaining
+      } else { u32:0 };
+    let work_1 = Phi_zReductionWork {
+      valid: work_1_from_pending ||
+        work_1_from_received,
+      destination: if work_1_from_pending {
+        state.pending_batch.destinations[work_1_pending_index]
+      } else if work_1_from_received {
+        batch.destinations[work_1_received_index]
+      } else { u32:0 },
+      frame: if work_1_from_pending {
+        state.pending_batch.frames[work_1_pending_index]
+      } else if work_1_from_received {
+        batch.frames[work_1_received_index]
+      } else { zero!<axis::Frame>() },
+    };
+    let work_2_from_pending = state.pending_valid &&
+      u32:2 < pending_remaining;
+    let work_2_from_received = received &&
+      u32:2 >= pending_remaining;
+    let work_2_pending_index =
+      if work_2_from_pending {
+        state.pending_cursor + u32:2
+      } else { u32:0 };
+    let work_2_received_index =
+      if work_2_from_received {
+        u32:2 - pending_remaining
+      } else { u32:0 };
+    let work_2 = Phi_zReductionWork {
+      valid: work_2_from_pending ||
+        work_2_from_received,
+      destination: if work_2_from_pending {
+        state.pending_batch.destinations[work_2_pending_index]
+      } else if work_2_from_received {
+        batch.destinations[work_2_received_index]
+      } else { u32:0 },
+      frame: if work_2_from_pending {
+        state.pending_batch.frames[work_2_pending_index]
+      } else if work_2_from_received {
+        batch.frames[work_2_received_index]
+      } else { zero!<axis::Frame>() },
+    };
+    let aggregate_pairs_0 = if work_0.valid {
+      update(
+        retired_pairs, work_0.destination,
+        phi_halo_cell::reduction_aggregate_pair_push(
+          retired_pairs[work_0.destination],
+          work_0.frame))
     } else { retired_pairs };
+    let aggregate_pairs_1 = if work_1.valid {
+      update(
+        aggregate_pairs_0, work_1.destination,
+        phi_halo_cell::reduction_aggregate_pair_push(
+          aggregate_pairs_0[work_1.destination],
+          work_1.frame))
+    } else { aggregate_pairs_0 };
+    let aggregate_pairs_2 = if work_2.valid {
+      update(
+        aggregate_pairs_1, work_2.destination,
+        phi_halo_cell::reduction_aggregate_pair_push(
+          aggregate_pairs_1[work_2.destination],
+          work_2.frame))
+    } else { aggregate_pairs_1 };
+    let aggregate_pairs = aggregate_pairs_2;
     let _done = join(output_tok, input_tok);
     Phi_zReductionPlaneState {
-      input_cursor: if state.input_cursor + u32:1 == u32:1 { u32:0 } else {
-        state.input_cursor + u32:1 },
+      input_cursor: if !can_receive { state.input_cursor
+      } else { if state.input_cursor + u32:1 == u32:1 { u32:0 } else {
+        state.input_cursor + u32:1 } },
       output_cursor: if !output_ready { state.output_cursor
       } else if output_slot + u32:1 == u32:9 { u32:0 } else {
         output_slot + u32:1 },
       aggregate_pairs,
+      pending_valid: if received { u1:1 } else {
+        state.pending_valid && pending_remaining > u32:3
+      },
+      pending_cursor: if received {
+        u32:3 - pending_remaining
+      } else if state.pending_valid &&
+          pending_remaining > u32:3 {
+        state.pending_cursor + u32:3
+      } else { u32:0 },
+      pending_batch: if received { batch } else {
+        state.pending_batch
+      },
     }
   }
 }

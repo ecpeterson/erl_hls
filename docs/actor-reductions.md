@@ -540,6 +540,20 @@ keeping the independent shard pipelines fed, not from weakening actor or
 reduction semantics. Actor-lifecycle fusion remains available if a future
 target requires substantially more than the present 1 MHz D3 cadence.
 
+The joined transport also accepts a bounded physical fold width. With
+`{joined, 3}`, a plane retains the unfinished suffix of one four-contribution
+batch and sustains three folds per clock. Aggregate retirement remains
+independent, so this changes the fold datapath without restoring the old
+ingress-versus-retirement serialization. The D3 profile measures 4,176 clocks
+from steps eight through 32, or 174 clocks per step and about 1.149 million
+steps/s at 200 MHz. Thus it remains above the one-megastep target while giving
+back some of the full-width plane's area.
+
+The comparable isolated D2 X-plane map falls from 16,676 to 14,468 estimated
+logic cells (13.2%) while flip-flops rise from 2,024 to 2,472 for the retained
+batch. This small exact map is the current fold-width attribution; a full
+joined-core map is too expensive to be a useful iteration tool.
+
 ## General mailbox capacity
 
 Postponed messages retain mailbox capacity. The configured capacity must

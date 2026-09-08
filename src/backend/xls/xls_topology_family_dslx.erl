@@ -535,22 +535,26 @@ annotate_family_graph(Family, Routes, Lanes, Startup, Ingresses) ->
 annotate_reduction_transports(Families, ordinary, _Shape) ->
     [Family#{reduction_transport => ordinary} || Family <- Families];
 annotate_reduction_transports(Families, joined, _Shape) ->
-    [annotate_joined_reduction(Family) || Family <- Families].
+    [annotate_joined_reduction(Family, all) || Family <- Families];
+annotate_reduction_transports(Families, {joined, FoldLanes}, _Shape) ->
+    [annotate_joined_reduction(Family, FoldLanes) || Family <- Families].
 
-annotate_joined_reduction(Family = #{interface := Interface}) ->
+annotate_joined_reduction(Family = #{interface := Interface}, FoldLanes) ->
     case maps:get(reductions, Interface, none) of
         none ->
             Family#{reduction_transport => ordinary};
         Reductions ->
             Family#{reduction_transport => joined_reduction_transport(
                 Family,
-                Reductions
+                Reductions,
+                FoldLanes
             )}
     end.
 
 joined_reduction_transport(
     Family = #{id := FamilyId, interface := Interface},
-    Reductions
+    Reductions,
+    RequestedFoldLanes
 ) ->
     Opens = maps:get(opens, Reductions),
     Contributions = maps:get(contributions, Reductions),
@@ -574,9 +578,17 @@ joined_reduction_transport(
         end,
         Rest
     ),
+    FoldLanes = case RequestedFoldLanes of
+        all -> Population;
+        Lanes when is_integer(Lanes), Lanes > 0, Lanes =< Population ->
+            Lanes;
+        Lanes -> error({joined_reduction_fold_lanes,
+            FamilyId, Population, Lanes})
+    end,
     #{
         mode => joined,
         population => Population,
+        fold_lanes => FoldLanes,
         routes => Routes
     }.
 
@@ -922,6 +934,8 @@ validate_profile(Profile) when is_map(Profile) ->
     case Profile of
         #{reduction_transport := ordinary} -> ok;
         #{reduction_transport := joined} -> ok;
+        #{reduction_transport := {joined, FoldLanes}}
+                when is_integer(FoldLanes), FoldLanes > 0 -> ok;
         #{reduction_transport := Transport} ->
             error({reduction_transport, Transport});
         _ -> ok

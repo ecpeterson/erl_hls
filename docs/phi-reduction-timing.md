@@ -25,8 +25,9 @@ nevertheless causes one ordinary actor state read, callback execution, state
 write, and effect retirement.  Consequently, batching reaches the
 approximately fifteen-visit floor without lowering that floor.
 
-The current three-shard profile measures 3,243 clocks from steps 8 through 32:
-135.125 clocks per step, or about 1,480,111 steps/s at a hypothetical 200 MHz.
+The current three-shard, three-fold-lane profile measures 4,176 clocks from
+steps 8 through 32: 174 clocks per step, or about 1,149,425 steps/s at a
+hypothetical 200 MHz.
 Each phi scheduler owns three actors.  The complete run still records about
 498 state reads per actor through step 32, consistent with the fifteen
 callback transactions per steady step plus startup and closeout.  The actor
@@ -42,6 +43,36 @@ wavefront.  In the current run this fast path issues 1,385 or 1,386 reads per
 phi shard and only five `selectable` samples per shard remain, all during
 startup.  Those reads now matter because input acceptance and aggregate
 retirement can advance together in the plane.
+
+## Fold width and area trade
+
+`reduction_transport => {joined, FoldLanes}` sets the number of contribution
+folds physically instantiated in each plane.  A full four-lane plane consumes
+one four-message batch per clock.  The current three-lane plane retains one
+batch and carries its unprocessed suffix into later activations.  Across four
+clocks it consumes three batches: the successive activations fold `3`, `1+2`,
+`2+1`, and `3` contributions.  Aggregate retirement remains an independent
+same-clock handshake.
+
+The full-width profile is the faster reference point: 3,243 measured clocks,
+135.125 clocks per step, and about 1,480,111 steps/s at 200 MHz.  Reducing the
+plane to three lanes takes 4,176 clocks, or 174 clocks per step.  It remains
+14.9% above the one-megastep target while retaining the same actor protocol,
+63 X corrections, 64 Z corrections, and completed profile closeout.
+
+The complete D3 bridge also passes the CPU-versus-Icarus witness unchanged:
+both substrates close at step 18 with the same 80-entry correction set, the
+same nonuniform 18-entry data-measurement field, and row parity one.  This is
+the end-to-end semantic check; the 24-step request-paced profile above is the
+cadence measurement.
+
+An exact isolated d=2 XC7 ABC9 map provides the inexpensive area comparison.
+One four-lane X plane maps to 16,676 estimated logic cells and 2,024
+flip-flops; the otherwise identical three-lane plane maps to 14,468 cells and
+2,472 flip-flops.  This is 13.2% fewer cells in exchange for the batch carry
+and its control, a measured 448-flip-flop or 22.1% increase.  It is an isolated
+process map, not a complete part-fit result, but it directly attributes the
+fold-width trade without attempting the prohibitively large whole-core map.
 
 ## Clock path for one completed barrier
 
@@ -103,7 +134,7 @@ clocks 746, 747, 748, and 751 respectively.  The exact completion clocks also
 depend on the other three contributors and the plane's round-robin output
 cursor.
 
-The current trace has a different steady-state shape.  At clock 402, for
+The full-width trace has a different steady-state shape.  At clock 402, for
 example, each of the X and Z planes simultaneously accepts shard 0's batch and
 sends actor 6's completed aggregate to shard 2.  In that same clock the
 destination schedulers launch actor 6's state reads, while shard 0 retires the
@@ -193,7 +224,7 @@ The following counters describe the current paths:
   for the decoupled executor.  The scheduler-wide `same_actor_only` bucket is
   still a valid physical hazard count.
 
-In the current run, each of the six phi schedulers receives, accepts, and
+In the full-width run, each of the six phi schedulers receives, accepts, and
 completes 1,386 aggregates with no receive stall, pending cycle, or protocol
 error.  Each plane accepts 4,163 batches and sends 4,158 aggregates with no
 aggregate-output stall.  The X and Z planes report only 129 and 127 batch-stall
@@ -202,6 +233,12 @@ Accepted batches plus sent aggregates exceed the 4,501 observed clocks per
 plane, directly confirming that the two handshakes overlap.  The generated
 profile RTL is also essentially flat: 53,338 lines and 3,022,412 bytes versus
 53,712 lines and 3,028,326 bytes for the parent.
+
+The three-lane run accepts 4,162 batches and sends 4,158 aggregates in 5,814
+observed clocks, again with no aggregate-output stall.  Its 11,299 input-stall
+port-clocks per plane mostly record the intentional carry cycles on each of
+the three polled producer ports; they are not 11,299 distinct elapsed clocks.
+The generated RTL is 52,962 lines and 2,975,030 bytes.
 
 ## Candidate phase collapses
 
