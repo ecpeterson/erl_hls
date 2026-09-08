@@ -212,16 +212,47 @@ semantics.
 Hardware support should preserve one semantic path and add placement as an
 optimization:
 
-1. Derive reduction metadata in a topology analysis pass rather than spreading
-   ad hoc inspection through scheduler code generation.
-2. Permit a source-fragment placement only when the topology proves that each
+1. Permit a source-fragment placement only when the topology proves that each
    ordinary sender can address the unique destination reduction instance.
    Aggregate fragments then reach the destination through a private typed
    event; the public message protocol remains unchanged.
-3. Keep optimized admission and effect issue generic scheduler mechanisms, not
+2. Keep optimized admission and effect issue generic scheduler mechanisms, not
    phi-specific modes.
 
 The initial hardware subset retains one active bounded reduction per actor and
 fixed compile-time population shapes. Dynamic participant sets may later fit
 the same source syntax, but require explicit capacity, arming, cancellation,
 and completion rules before they are synthesizable.
+
+## Source-fragment placement analysis
+
+`hls_reduction_plan:normalize/3` is the topology-only boundary for the first
+optimized placement. Its third argument explicitly selects families with
+`#{Family => source_fragments}`; omission leaves the canonical actor-local
+path in place. The result describes selected families, their ordered fragment
+translations and inverses, the scheduler groups which cover them, and whether
+each shared actor module will eventually need an `ordinary` or
+`aggregate_only` service artifact. It does not allocate channels, RAM, slots,
+or generated names.
+
+Selection succeeds only after the normalized topology and scheduler plan show
+all of the following:
+
+- the two-dimensional reducing family is completely scheduler-owned;
+- every site has one unambiguous contribution schema and the same complete,
+  unconditional, population-sized entry-effect prefix;
+- every prefix effect is a direct wrapped translation back into that family;
+- captured ports have no other use, and no uncaptured self-route can overtake
+  their batch;
+- ordinary relations, ingress, and startup cannot carry a contribution into
+  the selected family; and
+- the translation multiset is inverse-closed, including multiplicity when
+  distinct ports alias on a size-two dimension.
+
+Under those assumptions, these facts bound each source fragment to two
+reduction windows. The structural analysis alone does not prove that all
+actors traverse coherent name/key/site windows, nor that a completed aggregate
+can commute with unrelated ordinary mail. Those remain visible
+`semantic_assumptions` in the plan until a stronger analysis or source contract
+can discharge them. A later backend stage may consume this plan; the planner
+itself changes no runtime or hardware behavior.
