@@ -466,7 +466,9 @@ family_address_entries(#{
 %% folds it into a small register bank with statically selected writes. Each
 %% destination keeps its current window plus one causally permitted lookahead
 %% window: a neighbor cannot enter k+2 before this actor has itself entered
-%% k+1. One completed aggregate stream per destination shard bypasses ordinary
+%% k+1. Ingress and completed-aggregate retirement are independent work in one
+%% activation; retirement is applied first when both touch the same receptacle.
+%% One completed aggregate stream per destination shard bypasses ordinary
 %% mailbox storage and credits; the request's slot selects the actor-local
 %% receptacle.
 reduction_support(#{reduction_planes := Planes, schedulers := Schedulers}) ->
@@ -553,73 +555,83 @@ reduction_plane_proc(Plane = #{
         "  }\n\n",
         "  init { zero!<", State, ">() }\n\n",
         "  next(state: ", State, ") {\n",
-        "    // Probe one row per activation. The cursor rotates even when the\n",
-        "    // row is incomplete, bounding completion latency without a wide\n",
-        "    // priority network over aggregate payloads.\n",
-        "    let output_slot = state.output_cursor;\n",
-        "    let output_ready = match output_slot {\n",
-        [reduction_output_ready_arm(Plane, Destination)
-            || Destination <- Destinations],
-        "      _ => u1:0,\n",
-        "    };\n",
-        "    if output_ready {\n",
-        "      let _done = match output_slot {\n",
+        "    // Materialize only one ready bit per destination; the payloads\n",
+        "    // remain in their register-resident aggregate pairs. Selecting\n",
+        "    // any ready row avoids spending activations scanning incomplete\n",
+        "    // destinations.\n",
+        "    let ready_slots = unroll_for! (candidate, ready):\n",
+        "        (u32, u1[u32:", integer_to_list(DestinationCount),
+        "]) in u32:0..u32:", integer_to_list(DestinationCount), " {\n",
+        "      update(ready, candidate, ", Module,
+        "::reduction_aggregate_ready(\n",
+        "        state.aggregate_pairs[candidate].current))\n",
+        "    }(zero!<u1[u32:", integer_to_list(DestinationCount), "]>());\n",
+        "    let (output_ready, output_slot) =\n",
+        "      unroll_for! (offset, selected):\n",
+        "          (u32, (u1, u32)) in u32:0..u32:",
+        integer_to_list(DestinationCount), " {\n",
+        "        let unwrapped = state.output_cursor + offset;\n",
+        "        let candidate = if unwrapped < u32:",
+        integer_to_list(DestinationCount), " { unwrapped } else {\n",
+        "          unwrapped - u32:", integer_to_list(DestinationCount),
+        " };\n",
+        "        let take = !selected.0 && ready_slots[candidate];\n",
+        "        (selected.0 || take,\n",
+        "          if take { candidate } else { selected.1 })\n",
+        "      }((u1:0, u32:0));\n",
+        "    let output_tok = if output_ready {\n",
+        "      match output_slot {\n",
         [reduction_output_send_arm(Plane, Destination)
             || Destination <- Destinations],
         "        _ => join(),\n",
-        "      };\n",
-        "      ", State, " {\n",
-        "        output_cursor: if output_slot + u32:1 == u32:",
-        integer_to_list(DestinationCount), " { u32:0 } else {\n",
-        "          output_slot + u32:1 },\n",
-        "        aggregate_pairs: update(\n",
-        "          state.aggregate_pairs, output_slot,\n",
-        "          ", Module, "::ReductionAggregatePair {\n",
-        "            current: state.aggregate_pairs[output_slot].lookahead,\n",
-        "            lookahead: zero!<", Module,
-        "::ReductionAggregate>(),\n",
-        "          }),\n",
-        "        ..state\n",
         "      }\n",
         "    } else {\n",
-        "      let (tok, received, batch) =\n",
-        "        unroll_for! (candidate, acc):\n",
-        "            (u32, (token, u1, ", reduction_batch_name(Plane),
+        "      join()\n",
+        "    };\n",
+        "    // Input polling proceeds independently of aggregate retirement.\n",
+        "    // Independent tokens allow the generated pipeline to overlap the\n",
+        "    // two handshakes while the single state update below remains the\n",
+        "    // only owner of the aggregate-pair bank.\n",
+        "    let (input_tok, received, batch) =\n",
+        "      unroll_for! (candidate, acc):\n",
+        "          (u32, (token, u1, ", reduction_batch_name(Plane),
         ")) in u32:0..u32:", integer_to_list(SourceCount), " {\n",
-        "          let (next_tok, next_batch, valid) =\n",
-        "            recv_if_non_blocking(\n",
-        "              acc.0, batch_in[candidate],\n",
-        "              state.input_cursor == candidate,\n",
-        "              zero!<", reduction_batch_name(Plane), ">());\n",
-        "          (next_tok, acc.1 || valid,\n",
-        "            if valid { next_batch } else { acc.2 })\n",
-        "        }((join(), u1:0, zero!<", reduction_batch_name(Plane),
+        "        let (next_tok, next_batch, valid) =\n",
+        "          recv_if_non_blocking(\n",
+        "            acc.0, batch_in[candidate],\n",
+        "            state.input_cursor == candidate,\n",
+        "            zero!<", reduction_batch_name(Plane), ">());\n",
+        "        (next_tok, acc.1 || valid,\n",
+        "          if valid { next_batch } else { acc.2 })\n",
+        "      }((join(), u1:0, zero!<", reduction_batch_name(Plane),
         ">()));\n",
-        "      let aggregate_pairs = if received {\n",
-        reduction_batch_updates(Plane),
-        "      } else { state.aggregate_pairs };\n",
-        "      let _done = tok;\n",
-        "      ", State, " {\n",
-        "        input_cursor: if state.input_cursor + u32:1 == u32:",
+        "    // Retire first. A same-cycle next-window contribution is then\n",
+        "    // classified against the promoted lookahead aggregate.\n",
+        "    let retired_pairs = if output_ready {\n",
+        "      update(\n",
+        "        state.aggregate_pairs, output_slot,\n",
+        "        ", Module, "::ReductionAggregatePair {\n",
+        "          current: state.aggregate_pairs[output_slot].lookahead,\n",
+        "          lookahead: zero!<", Module,
+        "::ReductionAggregate>(),\n",
+        "        })\n",
+        "    } else { state.aggregate_pairs };\n",
+        "    let aggregate_pairs = if received {\n",
+        reduction_batch_updates(Plane, "retired_pairs"),
+        "    } else { retired_pairs };\n",
+        "    let _done = join(output_tok, input_tok);\n",
+        "    ", State, " {\n",
+        "      input_cursor: if state.input_cursor + u32:1 == u32:",
         integer_to_list(SourceCount), " { u32:0 } else {\n",
-        "          state.input_cursor + u32:1 },\n",
-        "        output_cursor: if output_slot + u32:1 == u32:",
+        "        state.input_cursor + u32:1 },\n",
+        "      output_cursor: if !output_ready { state.output_cursor\n",
+        "      } else if output_slot + u32:1 == u32:",
         integer_to_list(DestinationCount), " { u32:0 } else {\n",
-        "          output_slot + u32:1 },\n",
-        "        aggregate_pairs,\n",
-        "      }\n",
+        "        output_slot + u32:1 },\n",
+        "      aggregate_pairs,\n",
         "    }\n",
         "  }\n",
         "}\n\n"
-    ].
-
-reduction_output_ready_arm(Plane, #{index := Index}) ->
-    Module = maps:get(module_name, Plane),
-    [
-        "      u32:", integer_to_list(Index), " => ", Module,
-        "::reduction_aggregate_ready(\n",
-        "        state.aggregate_pairs[u32:", integer_to_list(Index),
-        "].current),\n"
     ].
 
 reduction_output_send_arm(Plane, Destination = #{index := Index}) ->
@@ -658,13 +670,13 @@ reduction_destinations_arm(Plane, #{index := Source, x := X, y := Y}) ->
         "],\n"
     ].
 
-reduction_batch_updates(Plane = #{module_name := Module}) ->
+reduction_batch_updates(Plane = #{module_name := Module}, Base) ->
     Population = reduction_population(Plane),
     [
         [
             begin
                 Previous = case Index of
-                    0 -> "state.aggregate_pairs";
+                    0 -> Base;
                     _ -> ["aggregate_pairs_", integer_to_list(Index - 1)]
                 end,
                 [

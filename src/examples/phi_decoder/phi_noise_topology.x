@@ -257,33 +257,27 @@ proc Phi_xReductionPlane {
   init { zero!<Phi_xReductionPlaneState>() }
 
   next(state: Phi_xReductionPlaneState) {
-    // Probe one row per activation. The cursor rotates even when the
-    // row is incomplete, bounding completion latency without a wide
-    // priority network over aggregate payloads.
-    let output_slot = state.output_cursor;
-    let output_ready = match output_slot {
-      u32:0 => phi_halo_cell::reduction_aggregate_ready(
-        state.aggregate_pairs[u32:0].current),
-      u32:1 => phi_halo_cell::reduction_aggregate_ready(
-        state.aggregate_pairs[u32:1].current),
-      u32:2 => phi_halo_cell::reduction_aggregate_ready(
-        state.aggregate_pairs[u32:2].current),
-      u32:3 => phi_halo_cell::reduction_aggregate_ready(
-        state.aggregate_pairs[u32:3].current),
-      u32:4 => phi_halo_cell::reduction_aggregate_ready(
-        state.aggregate_pairs[u32:4].current),
-      u32:5 => phi_halo_cell::reduction_aggregate_ready(
-        state.aggregate_pairs[u32:5].current),
-      u32:6 => phi_halo_cell::reduction_aggregate_ready(
-        state.aggregate_pairs[u32:6].current),
-      u32:7 => phi_halo_cell::reduction_aggregate_ready(
-        state.aggregate_pairs[u32:7].current),
-      u32:8 => phi_halo_cell::reduction_aggregate_ready(
-        state.aggregate_pairs[u32:8].current),
-      _ => u1:0,
-    };
-    if output_ready {
-      let _done = match output_slot {
+    // Materialize only one ready bit per destination; the payloads
+    // remain in their register-resident aggregate pairs. Selecting
+    // any ready row avoids spending activations scanning incomplete
+    // destinations.
+    let ready_slots = unroll_for! (candidate, ready):
+        (u32, u1[u32:9]) in u32:0..u32:9 {
+      update(ready, candidate, phi_halo_cell::reduction_aggregate_ready(
+        state.aggregate_pairs[candidate].current))
+    }(zero!<u1[u32:9]>());
+    let (output_ready, output_slot) =
+      unroll_for! (offset, selected):
+          (u32, (u1, u32)) in u32:0..u32:9 {
+        let unwrapped = state.output_cursor + offset;
+        let candidate = if unwrapped < u32:9 { unwrapped } else {
+          unwrapped - u32:9 };
+        let take = !selected.0 && ready_slots[candidate];
+        (selected.0 || take,
+          if take { candidate } else { selected.1 })
+      }((u1:0, u32:0));
+    let output_tok = if output_ready {
+      match output_slot {
         u32:0 => {
           send(
             join(), aggregate_out_0, phi_halo_cell::ReductionAggregateRequest {
@@ -348,35 +342,40 @@ proc Phi_xReductionPlane {
             })
         },
         _ => join(),
-      };
-      Phi_xReductionPlaneState {
-        output_cursor: if output_slot + u32:1 == u32:9 { u32:0 } else {
-          output_slot + u32:1 },
-        aggregate_pairs: update(
-          state.aggregate_pairs, output_slot,
-          phi_halo_cell::ReductionAggregatePair {
-            current: state.aggregate_pairs[output_slot].lookahead,
-            lookahead: zero!<phi_halo_cell::ReductionAggregate>(),
-          }),
-        ..state
       }
     } else {
-      let (tok, received, batch) =
-        unroll_for! (candidate, acc):
-            (u32, (token, u1, Phi_xReductionBatch)) in u32:0..u32:1 {
-          let (next_tok, next_batch, valid) =
-            recv_if_non_blocking(
-              acc.0, batch_in[candidate],
-              state.input_cursor == candidate,
-              zero!<Phi_xReductionBatch>());
-          (next_tok, acc.1 || valid,
-            if valid { next_batch } else { acc.2 })
-        }((join(), u1:0, zero!<Phi_xReductionBatch>()));
-      let aggregate_pairs = if received {
+      join()
+    };
+    // Input polling proceeds independently of aggregate retirement.
+    // Independent tokens allow the generated pipeline to overlap the
+    // two handshakes while the single state update below remains the
+    // only owner of the aggregate-pair bank.
+    let (input_tok, received, batch) =
+      unroll_for! (candidate, acc):
+          (u32, (token, u1, Phi_xReductionBatch)) in u32:0..u32:1 {
+        let (next_tok, next_batch, valid) =
+          recv_if_non_blocking(
+            acc.0, batch_in[candidate],
+            state.input_cursor == candidate,
+            zero!<Phi_xReductionBatch>());
+        (next_tok, acc.1 || valid,
+          if valid { next_batch } else { acc.2 })
+      }((join(), u1:0, zero!<Phi_xReductionBatch>()));
+    // Retire first. A same-cycle next-window contribution is then
+    // classified against the promoted lookahead aggregate.
+    let retired_pairs = if output_ready {
+      update(
+        state.aggregate_pairs, output_slot,
+        phi_halo_cell::ReductionAggregatePair {
+          current: state.aggregate_pairs[output_slot].lookahead,
+          lookahead: zero!<phi_halo_cell::ReductionAggregate>(),
+        })
+    } else { state.aggregate_pairs };
+    let aggregate_pairs = if received {
         let aggregate_pairs_0 = update(
-          state.aggregate_pairs, batch.destinations[u32:0],
+          retired_pairs, batch.destinations[u32:0],
           phi_halo_cell::reduction_aggregate_pair_push(
-            state.aggregate_pairs[batch.destinations[u32:0]],
+            retired_pairs[batch.destinations[u32:0]],
             batch.frames[u32:0]));
         let aggregate_pairs_1 = update(
           aggregate_pairs_0, batch.destinations[u32:1],
@@ -394,15 +393,15 @@ proc Phi_xReductionPlane {
             aggregate_pairs_2[batch.destinations[u32:3]],
             batch.frames[u32:3]));
         aggregate_pairs_3
-      } else { state.aggregate_pairs };
-      let _done = tok;
-      Phi_xReductionPlaneState {
-        input_cursor: if state.input_cursor + u32:1 == u32:1 { u32:0 } else {
-          state.input_cursor + u32:1 },
-        output_cursor: if output_slot + u32:1 == u32:9 { u32:0 } else {
-          output_slot + u32:1 },
-        aggregate_pairs,
-      }
+    } else { retired_pairs };
+    let _done = join(output_tok, input_tok);
+    Phi_xReductionPlaneState {
+      input_cursor: if state.input_cursor + u32:1 == u32:1 { u32:0 } else {
+        state.input_cursor + u32:1 },
+      output_cursor: if !output_ready { state.output_cursor
+      } else if output_slot + u32:1 == u32:9 { u32:0 } else {
+        output_slot + u32:1 },
+      aggregate_pairs,
     }
   }
 }
@@ -451,33 +450,27 @@ proc Phi_zReductionPlane {
   init { zero!<Phi_zReductionPlaneState>() }
 
   next(state: Phi_zReductionPlaneState) {
-    // Probe one row per activation. The cursor rotates even when the
-    // row is incomplete, bounding completion latency without a wide
-    // priority network over aggregate payloads.
-    let output_slot = state.output_cursor;
-    let output_ready = match output_slot {
-      u32:0 => phi_halo_cell::reduction_aggregate_ready(
-        state.aggregate_pairs[u32:0].current),
-      u32:1 => phi_halo_cell::reduction_aggregate_ready(
-        state.aggregate_pairs[u32:1].current),
-      u32:2 => phi_halo_cell::reduction_aggregate_ready(
-        state.aggregate_pairs[u32:2].current),
-      u32:3 => phi_halo_cell::reduction_aggregate_ready(
-        state.aggregate_pairs[u32:3].current),
-      u32:4 => phi_halo_cell::reduction_aggregate_ready(
-        state.aggregate_pairs[u32:4].current),
-      u32:5 => phi_halo_cell::reduction_aggregate_ready(
-        state.aggregate_pairs[u32:5].current),
-      u32:6 => phi_halo_cell::reduction_aggregate_ready(
-        state.aggregate_pairs[u32:6].current),
-      u32:7 => phi_halo_cell::reduction_aggregate_ready(
-        state.aggregate_pairs[u32:7].current),
-      u32:8 => phi_halo_cell::reduction_aggregate_ready(
-        state.aggregate_pairs[u32:8].current),
-      _ => u1:0,
-    };
-    if output_ready {
-      let _done = match output_slot {
+    // Materialize only one ready bit per destination; the payloads
+    // remain in their register-resident aggregate pairs. Selecting
+    // any ready row avoids spending activations scanning incomplete
+    // destinations.
+    let ready_slots = unroll_for! (candidate, ready):
+        (u32, u1[u32:9]) in u32:0..u32:9 {
+      update(ready, candidate, phi_halo_cell::reduction_aggregate_ready(
+        state.aggregate_pairs[candidate].current))
+    }(zero!<u1[u32:9]>());
+    let (output_ready, output_slot) =
+      unroll_for! (offset, selected):
+          (u32, (u1, u32)) in u32:0..u32:9 {
+        let unwrapped = state.output_cursor + offset;
+        let candidate = if unwrapped < u32:9 { unwrapped } else {
+          unwrapped - u32:9 };
+        let take = !selected.0 && ready_slots[candidate];
+        (selected.0 || take,
+          if take { candidate } else { selected.1 })
+      }((u1:0, u32:0));
+    let output_tok = if output_ready {
+      match output_slot {
         u32:0 => {
           send(
             join(), aggregate_out_0, phi_halo_cell::ReductionAggregateRequest {
@@ -542,35 +535,40 @@ proc Phi_zReductionPlane {
             })
         },
         _ => join(),
-      };
-      Phi_zReductionPlaneState {
-        output_cursor: if output_slot + u32:1 == u32:9 { u32:0 } else {
-          output_slot + u32:1 },
-        aggregate_pairs: update(
-          state.aggregate_pairs, output_slot,
-          phi_halo_cell::ReductionAggregatePair {
-            current: state.aggregate_pairs[output_slot].lookahead,
-            lookahead: zero!<phi_halo_cell::ReductionAggregate>(),
-          }),
-        ..state
       }
     } else {
-      let (tok, received, batch) =
-        unroll_for! (candidate, acc):
-            (u32, (token, u1, Phi_zReductionBatch)) in u32:0..u32:1 {
-          let (next_tok, next_batch, valid) =
-            recv_if_non_blocking(
-              acc.0, batch_in[candidate],
-              state.input_cursor == candidate,
-              zero!<Phi_zReductionBatch>());
-          (next_tok, acc.1 || valid,
-            if valid { next_batch } else { acc.2 })
-        }((join(), u1:0, zero!<Phi_zReductionBatch>()));
-      let aggregate_pairs = if received {
+      join()
+    };
+    // Input polling proceeds independently of aggregate retirement.
+    // Independent tokens allow the generated pipeline to overlap the
+    // two handshakes while the single state update below remains the
+    // only owner of the aggregate-pair bank.
+    let (input_tok, received, batch) =
+      unroll_for! (candidate, acc):
+          (u32, (token, u1, Phi_zReductionBatch)) in u32:0..u32:1 {
+        let (next_tok, next_batch, valid) =
+          recv_if_non_blocking(
+            acc.0, batch_in[candidate],
+            state.input_cursor == candidate,
+            zero!<Phi_zReductionBatch>());
+        (next_tok, acc.1 || valid,
+          if valid { next_batch } else { acc.2 })
+      }((join(), u1:0, zero!<Phi_zReductionBatch>()));
+    // Retire first. A same-cycle next-window contribution is then
+    // classified against the promoted lookahead aggregate.
+    let retired_pairs = if output_ready {
+      update(
+        state.aggregate_pairs, output_slot,
+        phi_halo_cell::ReductionAggregatePair {
+          current: state.aggregate_pairs[output_slot].lookahead,
+          lookahead: zero!<phi_halo_cell::ReductionAggregate>(),
+        })
+    } else { state.aggregate_pairs };
+    let aggregate_pairs = if received {
         let aggregate_pairs_0 = update(
-          state.aggregate_pairs, batch.destinations[u32:0],
+          retired_pairs, batch.destinations[u32:0],
           phi_halo_cell::reduction_aggregate_pair_push(
-            state.aggregate_pairs[batch.destinations[u32:0]],
+            retired_pairs[batch.destinations[u32:0]],
             batch.frames[u32:0]));
         let aggregate_pairs_1 = update(
           aggregate_pairs_0, batch.destinations[u32:1],
@@ -588,15 +586,15 @@ proc Phi_zReductionPlane {
             aggregate_pairs_2[batch.destinations[u32:3]],
             batch.frames[u32:3]));
         aggregate_pairs_3
-      } else { state.aggregate_pairs };
-      let _done = tok;
-      Phi_zReductionPlaneState {
-        input_cursor: if state.input_cursor + u32:1 == u32:1 { u32:0 } else {
-          state.input_cursor + u32:1 },
-        output_cursor: if output_slot + u32:1 == u32:9 { u32:0 } else {
-          output_slot + u32:1 },
-        aggregate_pairs,
-      }
+    } else { retired_pairs };
+    let _done = join(output_tok, input_tok);
+    Phi_zReductionPlaneState {
+      input_cursor: if state.input_cursor + u32:1 == u32:1 { u32:0 } else {
+        state.input_cursor + u32:1 },
+      output_cursor: if !output_ready { state.output_cursor
+      } else if output_slot + u32:1 == u32:9 { u32:0 } else {
+        output_slot + u32:1 },
+      aggregate_pairs,
     }
   }
 }

@@ -168,6 +168,21 @@ generated_multi_family_topology_retains_compact_structure_test() ->
     ?assertEqual(2, count(Generated, <<
         "::ReductionAggregatePair[u32:9]"
     >>)),
+    %% Aggregate retirement and batch intake are independent handshakes in
+    %% one plane activation.  The single state update retires first, then
+    %% folds a simultaneously received batch into the promoted windows.
+    ?assertEqual(2, count(Generated, <<
+        "let ready_slots = unroll_for!"
+    >>)),
+    ?assertEqual(2, count(Generated, <<
+        "let (input_tok, received, batch) ="
+    >>)),
+    ?assertEqual(2, count(Generated, <<
+        "let retired_pairs = if output_ready {"
+    >>)),
+    ?assertEqual(2, count(Generated, <<
+        "let _done = join(output_tok, input_tok);"
+    >>)),
     ?assertEqual(6, count(Generated, <<
         "let last = batch_valid && if reduction_batch {"
     >>)),
