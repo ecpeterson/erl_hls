@@ -206,6 +206,40 @@ unsupported_interface_inference_does_not_narrow_cpu_compilation_test() ->
         hls_actor_interface:from_module(Module)
     ).
 
+reduction_interface_survives_parse_transform_test() ->
+    Module = hls_statem_reduction_lower_fixture,
+    Path = "test_data/hls_statem_reduction_lower_fixture.erl",
+    _ = code:purge(Module),
+    _ = code:delete(Module),
+    {ok, Module, Binary} = compile:file(Path, [binary, debug_info]),
+    {module, Module} = code:load_binary(Module, Path, Binary),
+    try
+        Interface = hls_actor_interface:from_module(Module),
+        ?assertEqual(xls_parse:actor_interface(Path), Interface),
+        ?assertEqual(80,
+            hls_actor_interface:reduction_storage_width(Interface)),
+        Topology = #{actors => [#{
+            id => reducer,
+            module => Module,
+            mailbox_capacity => 4
+        }], families => []},
+        #{groups := [Group]} = hls_scheduler_plan:normalize(
+            Topology,
+            #{reducer => #{
+                members => [{actor, reducer}],
+                state_storage => block_ram,
+                mailbox_storage => block_ram
+            }}
+        ),
+        ?assertEqual(80, maps:get(reduction_storage_width, Group)),
+        [Binding] = xls_scheduler_ram_v:bindings(#{groups => [Group]}),
+        ?assertEqual(170, maps:get(state_width, Binding)),
+        ?assertEqual(128, maps:get(mailbox_width, Binding))
+    after
+        true = code:delete(Module),
+        _ = code:purge(Module)
+    end.
+
 schema_fields(Interface, Name) ->
     [
         {maps:get(name, Field), element(3, maps:get(type, Field))}

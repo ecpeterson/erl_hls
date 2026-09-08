@@ -24,9 +24,10 @@ The summary also carries the callback-state layout. Its packed width is derived
 when queried, after custom `hls_type` modules are available; computing it while
 the actor's parse transform runs would make compilation depend on incidental
 source order. This is the state which a shared scheduler may place in generated
-memory. Mailbox slots, phase, postponement, admission, and pending effects
-remain scheduler state and are deliberately not folded into the callback
-record.
+memory. Bounded actor-local reduction state is reported separately, then
+colocated in the same scheduler RAM row without becoming a callback-record
+field. Mailbox slots, phase, postponement, admission, and pending effects
+remain scheduler state and are deliberately not folded into that record.
 
 This is internal compiler data for the phi topology experiment, not a stable
 application behavior or a general Erlang protocol description.
@@ -39,6 +40,7 @@ application behavior or a general Erlang protocol description.
     initial_effects/1,
     max_entry_effects/1,
     output_schemas/2,
+    reduction_storage_width/1,
     schema/2,
     state/1
 ]).
@@ -149,6 +151,17 @@ state(Summary) ->
         || Field <- maps:get(fields, State)
     ])}.
 
+-spec reduction_storage_width(summary()) -> non_neg_integer().
+-doc "Returns the derived packed actor-local reduction width, or zero.".
+reduction_storage_width(Summary) ->
+    case maps:get(reductions, Summary, none) of
+        none -> 0;
+        Reduction when is_map(Reduction) ->
+            xls_statem_reduction_ir:interface_storage_width(Reduction);
+        Reduction ->
+            error({invalid_hls_actor_reduction_interface, Reduction})
+    end.
+
 validate(Module, Summary = #{
     version := 1,
     module := Module,
@@ -168,6 +181,7 @@ validate(Module, Summary = #{
     ok = require_unique(interface_phase, Phases),
     ok = require_unique(interface_output, Outputs),
     ok = validate_state(State),
+    _ = reduction_storage_width(Summary),
     SchemaNames = [maps:get(name, Schema) || Schema <- Schemas],
     Selectors = [maps:get(selector, Schema) || Schema <- Schemas],
     ok = require_unique(interface_schema, SchemaNames),

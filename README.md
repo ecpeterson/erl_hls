@@ -108,8 +108,9 @@ Entry and cast clauses have separate fixed result shapes; overloaded Erlang
 specifications can preserve the relationship between each event kind and its
 result. Its bounded result vocabulary and postponement rules live with the
 [`hls_statem` API](src/api/hls_statem.erl). The
-[actor-owned reduction design](docs/actor-reductions.md) records the planned
-phase-local reduction actions and their XLS/RTL constraints.
+[actor-owned reduction design](docs/actor-reductions.md) records the
+phase-local reduction actions, canonical CPU/XLS semantics, and constraints on
+future optimized placement.
 
 ## Translated record defaults
 
