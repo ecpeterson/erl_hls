@@ -40,6 +40,8 @@ COLORS = {
     "state_read": "var(--viz-series-5)",
     "state_write": "var(--viz-series-5)",
     "effects_egress": "var(--viz-series-2)",
+    "fast_issue": "var(--viz-series-2)",
+    "retained_issue": "var(--viz-series-5)",
     "selectable": "var(--viz-series-1)",
     "same_actor_only": "var(--viz-series-6)",
     "executor_blocked": "var(--viz-series-4)",

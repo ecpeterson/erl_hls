@@ -31,6 +31,15 @@ Each phi scheduler owns three actors.  The complete run records about 498
 state reads per actor through step 32, consistent with the fifteen callback
 transactions per steady step plus startup and closeout.
 
+The scheduler now recomputes readiness after accepting an aggregate and can
+launch the newly completed actor's state read in the same activation.  Across
+the measured run this fast path issues 1,385 or 1,386 reads per phi shard;
+only five `selectable` samples per shard remain, all during startup.  The
+steady-state clock count nevertheless remains exactly 6,156.  The local
+aggregate-to-retirement latency falls by one clock, but aggregate completions
+retain the same effective three-shard cadence, so the shortened visits are
+hidden behind the reduction-plane wavefront rather than changing throughput.
+
 ## Clock path for one completed barrier
 
 The trace records handshakes at the VPI sampling edge.  For an aggregate that
@@ -38,10 +47,9 @@ can be accepted immediately, the destination-side path is:
 
 | relative clock | observed event |
 |---:|---|
-| `t` | the reduction plane sends the aggregate; the destination scheduler receives and validates it, marks the actor's private completion ready, and selects the actor |
-| `t + 1` | the actor-state RAM read is accepted; the actor is now the sole in-flight actor for that slot |
-| `t + 2` | the executor dispatches the completion callback; another visit to the same slot remains hazardous |
-| `t + 3` | retirement writes actor state and presents the callback's entry/effect batch; a different ready actor may be selected in the same clock |
+| `t` | the reduction plane sends the aggregate; the destination scheduler receives and validates it, marks the actor's private completion ready, and accepts its actor-state RAM read in the same clock |
+| `t + 1` | the executor dispatches the completion callback; another visit to the same slot remains hazardous |
+| `t + 2` | retirement writes actor state and presents the callback's entry/effect batch; a different ready actor may be selected in the same clock |
 
 For an intermediate diffusion round, retirement includes the fused
 `repeat_phase` entry: it opens the next reduction and presents the next four
@@ -155,6 +163,11 @@ The following counters describe the current paths:
   become causal only when correlated with plane and aggregate events: `no
   actor work` says that the scheduler has no local candidate, not why its
   neighbors have not completed an aggregate.
+  `fast_issue` means newly visible work launched a read without occupying the
+  retained-next-slot register; `retained_issue` means that register launched
+  the read normally.  `selectable` is now reserved for a ready alternative on
+  a clock with no accepted state read, rather than also counting successful
+  issues.
 * Sidecar reduction-RAM counters and direct-reduction-fold counters correctly
   read zero in this profile because those older paths are bypassed.  Historical
   profiles which called aggregate acceptance a `direct_reduction_fold` used a

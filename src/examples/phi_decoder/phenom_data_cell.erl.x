@@ -2716,8 +2716,13 @@ pub proc SharedService<
         let read_mailbox =
           issue_valid &&
           state.mail_candidates[read_slot] && !entry_active;
+
+        let direct_state = retired;
+        let direct_pending = captured_pending;
+        let direct_pending_valid = credit_pending_valid;
+        let direct_in_flight_slots = retired_in_flight;
         let (received, order_index, mailbox_index) =
-          mailbox_selection(state, read_slot);
+          mailbox_selection(direct_state, read_slot);
         let (state_completion_tok, _) = recv_if(
           join(), ram_write_resp_in, state.state_write_pending,
           zero!<MachineRamWriteResp>());
@@ -2746,10 +2751,6 @@ pub proc SharedService<
           read_mailbox && received,
           zero!<MailboxRamReadResp>());
         let frame = axis::frame_from_bits(mailbox_response.data);
-        let direct_state = retired;
-        let direct_pending = captured_pending;
-        let direct_pending_valid = credit_pending_valid;
-        let direct_in_flight_slots = retired_in_flight;
         let reservation = reserve_admission(
           direct_state,
           direct_pending,

@@ -1504,9 +1504,11 @@ shared_service(Spec) ->
               completed.effects_valid && retired.egress_busy;
     """,
         ?REDUCTION_SCHEDULER:shared_issue_bindings(Reductions),
+        ?REDUCTION_SCHEDULER:shared_direct_reduction_bindings(Reductions),
+        ?REDUCTION_SCHEDULER:shared_fast_issue_bindings(Reductions),
     """
             let (received, order_index, mailbox_index) =
-              mailbox_selection(state, read_slot);
+              mailbox_selection(direct_state, read_slot);
             let (state_completion_tok, _) = recv_if(
               join(), ram_write_resp_in, state.state_write_pending,
               zero!<MachineRamWriteResp>());
@@ -1542,9 +1544,6 @@ shared_service(Spec) ->
               read_mailbox && received,
               zero!<MailboxRamReadResp>());
             let frame = axis::frame_from_bits(mailbox_response.data);
-    """,
-        ?REDUCTION_SCHEDULER:shared_direct_reduction_bindings(Reductions),
-    """
             let reservation = reserve_admission(
               direct_state,
               direct_pending,

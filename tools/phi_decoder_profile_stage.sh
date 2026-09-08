@@ -161,9 +161,9 @@ awk -F= \
         sub(/_mailbox_occupancy_samples$/, "", name)
         occupancy_samples[name] = $2
     }
-    /_selection_cycles_selectable=/ {
+    /_selection_cycles_(fast_issue|retained_issue|selectable)=/ {
         name = $1
-        sub(/_selection_cycles_selectable$/, "", name)
+        sub(/_selection_cycles_(fast_issue|retained_issue|selectable)$/, "", name)
         accounted[name] += $2
     }
     /_selection_cycles_(executor_blocked|same_actor_only|waiting_egress_credit|no_actor_work|internal_other)=/ {

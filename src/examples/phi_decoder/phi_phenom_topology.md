@@ -1787,3 +1787,22 @@ step than another send-side bypass.
 The maintained description of this path, its counters, and its generated
 clock timeline is now in `docs/phi-reduction-timing.md`. This section remains
 the historical result for the batching experiment.
+
+### Same-activation ready selection
+
+A follow-up scheduler experiment selects from the post-retirement,
+post-reduction state and launches a newly completed actor's state read in the
+same activation. In the representative wave, the aggregate-to-read edge moves
+from clocks 707→708 to 707→707, and the matching retirement moves from clock
+710 to 709. The full request-paced profile nevertheless remains exactly 6,156
+clocks, or 256.5 clocks per step. Each phi shard takes the new fast issue path
+about 1,386 times, leaving only five startup `selectable` samples, with no
+same-address state-RAM overlaps. The generated Verilog grows from 52,746 to
+53,712 lines because the late ready scan is duplicated.
+
+This result separates actor latency from decoder throughput. The reduction
+plane retains the same effective aggregate cadence, so a one-clock-shorter
+destination visit does not advance the measured step boundary. Further
+ready-selection work is therefore unlikely to improve this D3 workload
+without also changing the plane/router cadence or removing actor transactions
+altogether.
