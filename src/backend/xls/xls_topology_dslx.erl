@@ -41,7 +41,7 @@ integer requests that literal XLS channel depth; zero is an explicit bypass
 FIFO and leaves only the producer holding slot.
 """.
 
--export([emit/2, from_module/2]).
+-export([emit/2, from_module/2, shared_service_modes/2]).
 -export_type([profile/0]).
 
 -define(U32_MAX, 16#ffffffff).
@@ -65,6 +65,14 @@ emit(Plan = #{actors := [], families := [_ | _]}, Profile) ->
     xls_topology_family_dslx:emit(Plan, Profile);
 emit(Plan, _Profile) ->
     error({invalid_topology_plan, Plan}).
+
+-doc "Returns topology-selected shared-service specializations by module.".
+-spec shared_service_modes(hls_topology:plan(), profile()) ->
+    #{module() := ordinary | joined | aggregate_only}.
+shared_service_modes(#{actors := [], families := [_ | _]} = Plan, Profile) ->
+    xls_topology_family_dslx:shared_service_modes(Plan, Profile);
+shared_service_modes(Plan, _Profile) ->
+    error({shared_service_modes_require_family_topology, Plan}).
 
 %%%
 %%% Backend lowering and validation

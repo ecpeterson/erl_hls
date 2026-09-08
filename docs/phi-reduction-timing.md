@@ -1,9 +1,9 @@
 # Phi reduction timing
 
-This note is the stable description of the current distance-three phi timing
-path.  The historical measurements and rejected experiments remain in
-`src/examples/phi_decoder/phi_phenom_topology.md`; this file describes the
-present implementation and the profiler used to change it.
+This note is the stable description of the current fully measured
+distance-three phi timing path and the profiler used to change it. Historical
+measurements and rejected experiments remain in
+`src/examples/phi_decoder/phi_phenom_topology.md`.
 
 ## Semantic work per actor and step
 
@@ -25,9 +25,10 @@ nevertheless causes one ordinary actor state read, callback execution, state
 write, and effect retirement.  Consequently, batching reaches the
 approximately fifteen-visit floor without lowering that floor.
 
-The current three-shard, three-fold-lane profile measures 4,176 clocks from
-steps 8 through 32: 174 clocks per step, or about 1,149,425 steps/s at a
-hypothetical 200 MHz.
+The current D3 profile uses three shards and the source-fragment plane. It
+measures 4,176 clocks from steps 8 through 32: 174 clocks per step, or about
+1,149,425 steps/s at a hypothetical 200 MHz. This happens to be identical to
+the predecessor three-fold-lane destination-indexed result.
 Each phi scheduler owns three actors.  The complete run still records about
 498 state reads per actor through step 32, consistent with the fifteen
 callback transactions per steady step plus startup and closeout.  The actor
@@ -47,12 +48,12 @@ retirement can advance together in the plane.
 ## Fold width and area trade
 
 `reduction_transport => {joined, FoldLanes}` sets the number of contribution
-folds physically instantiated in each plane.  A full four-lane plane consumes
-one four-message batch per clock.  The current three-lane plane retains one
-batch and carries its unprocessed suffix into later activations.  Across four
-clocks it consumes three batches: the successive activations fold `3`, `1+2`,
-`2+1`, and `3` contributions.  Aggregate retirement remains an independent
-same-clock handshake.
+folds physically instantiated in each destination-indexed plane. A full
+four-lane plane consumes one four-message batch per clock. The measured
+three-lane plane retains one batch and carries its unprocessed suffix into
+later activations. Across four clocks it consumes three batches: the successive
+activations fold `3`, `1+2`, `2+1`, and `3` contributions. Aggregate retirement
+remains an independent same-clock handshake.
 
 The full-width profile is the faster reference point: 3,243 measured clocks,
 135.125 clocks per step, and about 1,480,111 steps/s at 200 MHz.  Reducing the
@@ -74,7 +75,119 @@ and its control, a measured 448-flip-flop or 22.1% increase.  It is an isolated
 process map, not a complete part-fit result, but it directly attributes the
 fold-width trade without attempting the prohibitively large whole-core map.
 
-## Clock path for one completed barrier
+## Source-fragment plane
+
+The next experiment replaces destination-indexed current/lookahead aggregates
+with four source-indexed lane banks. Each `(lane, source)` entry is a two-deep
+fragment FIFO. A destination is ready when the four entries selected by the
+compile-time inverse-route table all have heads; retirement pops those heads
+and reduces them once. One source batch may be admitted in the same successful
+activation. Consequently each lane bank performs at most one logical dequeue
+and one logical enqueue rather than a wide variable-indexed four-write update.
+The register implementation uses constant-index decoded updates and applies
+pop before push. Because the popped row currently promotes its lookahead while
+an enqueue may update another row, a future RAM lowering must separate
+nonmoving payload banks from narrow head/valid metadata, or otherwise
+arbitrate the two row updates. The current layout is BRAM-oriented, not already
+a literal 1R1W interface.
+
+The topology check requires every captured route lane to be a bijection and
+the lane multiset to be inverse-closed. Since an actor cannot emit its next
+complete batch before consuming the previous aggregate, a source cannot emit
+window `k + 2` until its reciprocal neighbor has consumed that source's window
+`k` fragment. At most two windows can therefore occupy a directed edge. The
+complete invariant and depth-two proof are in `docs/actor-reductions.md`.
+
+Completed values now remain distributed in those edge queues until their
+destination is ready. Each actor's own source batch doubles as an open-window
+token: the plane records one bit for that actor only when the batch is freshly
+accepted, and a destination can retire an aggregate only when its token and
+all four inverse-route heads are present. Retirement clears the token while a
+same-clock newly accepted batch may set it again. Thus an early complete value
+does not enter an actor-indexed aggregate payload bank and cannot head-of-line
+block an eligible peer; the destination scan simply ignores the closed actor
+and selects another ready one. The scheduler retains one scalar aggregate
+skid slot only for transient state/egress hazards.
+
+The one-bit token relies on the actor protocol's single-outstanding-window
+rule: an actor cannot emit another source batch before consuming the aggregate
+for the current window. Token minting is tied to the channel handshake rather
+than the plane's retained pending batch, so backpressure cannot mint the same
+window twice. This representation removes the dual wide arrays whose nested
+parametric updates caused XLS elaboration to diverge before IR generation.
+
+This optimization also requires contribution transport to be closed at
+record-schema granularity. No contribution record may reach an aggregate-only
+family through an uncaptured ordinary route, a topology ingress, or startup.
+The compiler does not yet perform the cross-actor phase analysis that could
+prove narrower phase-exclusive exceptions, so it deliberately rejects them.
+The explicit `source_fragments` profile also promises that every actor follows
+the same ordinal sequence of reduction site/mode/key windows, and that a
+completed window may commute past ordinary mail from unrelated senders. The
+first promise makes inverse-lane FIFO heads one coherent batch; the second lets
+the scheduler apply that batch even while ordinary mail is present, avoiding
+an otherwise unbounded starvation mode. The ordinary same-family route ban
+preserves Erlang's per-sender ordering guarantee. A malformed/mixed-window
+aggregate is a generated-transport violation and takes the same private,
+fail-stop priority.
+
+The isolated D2 X-plane attribution is:
+
+| reduction plane | estimated logic cells | flip-flops |
+|---|---:|---:|
+| full-width destination RMW | 16,676 | 2,024 |
+| three-lane destination RMW | 14,468 | 2,472 |
+| source fragments | 5,082 | 5,583 |
+
+The source-fragment plane uses 64.9% fewer estimated cells than the three-lane
+plane and 69.5% fewer than the full-width plane. Its explicit fragment queues
+raise the register count. The complete D3 profile retains the three-lane
+cadence: 4,176 measured clocks, 174 clocks per step, and about 1.149 million
+steps/s at 200 MHz. Both planes accept 4,163 batches and send 4,158 aggregates;
+all six phi shards accept and complete 1,386 aggregates without an error.
+The profile regression now requires discovery of all eight schedulers in the
+topology (six phi shards and two replay sources), while the causal diagram
+deliberately displays only the six phi shards.
+
+An apples-to-apples D3 topology-core map gives the cost of retaining that
+overlap without the old multiwrite crossbar:
+
+| design | estimated logic cells | flip-flops | LUT1-LUT6 | `DSP48E1` |
+|---|---:|---:|---:|---:|
+| pre-reduction main baseline | 57,040 | 64,061 | 70,566 | 48 |
+| source fragments | 79,463 | 76,675 | 92,340 | 48 |
+
+The increases are 39.3% in estimated cells, 19.7% in flip-flops, and 30.9% in
+LUTs; DSP use is unchanged. The map completed in 5 minutes 6 seconds with a
+3.29 GiB peak on the native M2 toolchain. This is a substantial but bounded
+premium rather than the earlier non-terminating area explosion. Relative to
+main's 266.583 clocks per step, the branch reduces step time by 34.7% and
+raises projected throughput by 53.2%.
+
+The predecessor scalar source-fragment map was 78,654 cells, 76,657
+flip-flops, and 91,227 LUTs. The open-token/single-mode formulation is only
+1.0%, 0.03%, and 1.2% larger respectively. More importantly, DSLX-to-IR now
+takes about 39 seconds rather than 1,574 seconds. An abandoned formulation
+with two actor-indexed completed-value banks failed to produce IR after seven
+hours: nested parametric array projections caused frontend elaboration to
+explode before synthesis, so that run supplied no evidence about hardware
+area.
+
+A full trace replay confirms that the scalar pending-batch slot never fills
+and that no lane/source queue exceeds depth two. The 7,722 input-stall samples
+per plane are exactly the valid, unselected source ports seen by the
+round-robin poller: they are port-clocks, not blocked admissions. Each accepted
+batch follows its router send by zero or two clocks.
+
+The final full-device D3 witness passes exact CPU-versus-native-Icarus
+comparison. Both runs close at step 18 with 80 corrections, the same
+nonuniform 18-cell field (eight commuting and ten anticommuting measurements),
+and row parity one. Native Icarus simulation takes 21 seconds. With the actor
+module specialized to the aggregate-only physical transport used here, native
+XLS DSLX-to-IR conversion takes about 39 seconds for the decoder profile and
+148 seconds for the larger full noise-and-decoder gateway.
+
+## Clock path for the current D3 run
 
 The trace records handshakes at the VPI sampling edge.  For an aggregate that
 can be accepted immediately, the destination-side path is:
@@ -87,16 +200,15 @@ can be accepted immediately, the destination-side path is:
 
 For an intermediate diffusion round, retirement includes the fused
 `repeat_phase` entry: it opens the next reduction and presents the next four
-neighbor sends without a second actor visit.  A scheduler router eventually
-accepts those effects, obtains its effect-window reservation, and sends one
-four-destination batch to the plane.  On every activation the plane
-independently polls one of its three source ports and selects one ready
-destination aggregate in round-robin order.  It may therefore accept one batch
-and retire one aggregate in the same clock.  Retirement is applied first to
-the single register bank, promoting that destination's lookahead window; a
-simultaneous batch is then folded into the resulting current/lookahead pairs.
-This ordering handles the case where both operations touch the same
-destination without introducing a second owner of the receptacles.
+neighbor sends without a second actor visit. A scheduler router eventually
+accepts those effects, obtains its effect-window reservation, and atomically
+sends the four route-lane fragments to the plane. On every activation the
+plane independently polls one of its three source ports and selects one ready
+destination in round-robin order. It may accept one source batch and retire
+one destination aggregate in the same clock. Retirement pops the four
+compile-time inverse-route heads before a simultaneous admission pushes into
+the same source-indexed banks. This ordering makes a same-entry operation a
+read-before-write pop-plus-push.
 
 The batched reduction path does not occupy the destination actor mailbox or a
 destination mailbox producer credit.  The source still owes its scheduler
@@ -105,8 +217,8 @@ arbiter still prevents inter-scheduler reservation cycles.  In the measured
 profile, aggregate output itself is not backpressured: every plane send is
 received and accepted in the same sampled clock.
 
-Clock 730 in the pre-duplex representative trace is a useful example of the
-old serialized plane bottleneck.
+Clock 730 in the pre-duplex representative trace remains a useful historical
+example of the old serialized plane bottleneck.
 The X plane delivers a gathering aggregate to `phi_0` actor 0 in that clock,
 but the effect egress visible on the same row is **not** caused by that new
 aggregate.  It retires the older visit to actor 2: that actor received its

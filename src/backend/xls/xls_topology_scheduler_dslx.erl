@@ -186,7 +186,7 @@ annotate_scheduler(
         maps:get(maps:get(id, SourceFamily), FamilySchedulers)
         || SourceFamily <- Families,
            route_targets_group(
-               maps:get(routes, SourceFamily),
+               ordinary_routes(SourceFamily),
                MemberIds
            )
     ])),
@@ -207,7 +207,7 @@ annotate_scheduler(
     Destinations = lists:usort(lists:append([
         maps:get(DestinationId, FamilySchedulers)
         || Family <- MemberFamilies,
-           Route <- maps:get(routes, Family),
+           Route <- ordinary_routes(Family),
            {family, DestinationId, _} <- maps:get(recipients, Route)
     ])),
     Externals = lists:usort([
@@ -243,7 +243,27 @@ annotate_scheduler(
         index => Index
     }.
 
+%% A source-fragment batch is the sole physical carrier for the statically
+%% proved reduction prefix.  Keeping those same relations in the ordinary
+%% scheduler graph would manufacture idle producer channels, request holding
+%% slots, and destination ports even though the router skips the effects.
+ordinary_routes(Family = #{
+    id := Id,
+    reduction_transport := #{mode := source_fragments, routes := Captured}
+}) ->
+    CapturedPorts = [maps:get(port, Route) || Route <- Captured],
+    [Route || Route <- maps:get(routes, Family),
+        begin
+            {SourceId, Port} = maps:get(source, Route),
+            SourceId =/= Id orelse not lists:member(Port, CapturedPorts)
+        end];
+ordinary_routes(Family) ->
+    maps:get(routes, Family).
+
 is_joined_reduction(#{reduction_transport := #{mode := joined}}) -> true;
+is_joined_reduction(
+    #{reduction_transport := #{mode := source_fragments}}
+) -> true;
 is_joined_reduction(_Family) -> false.
 
 family_has_reductions(#{interface := Interface}) ->
@@ -462,43 +482,106 @@ family_address_entries(#{
         || #{coordinates := [X, Y], local_index := Local} <- Instances
     ].
 
-%% A joined reduction plane buffers one fixed source batch per scheduler and
-%% folds it into a small register bank with statically selected writes. Each
-%% destination keeps its current window plus one causally permitted lookahead
-%% window: a neighbor cannot enter k+2 before this actor has itself entered
-%% k+1. Ingress and completed-aggregate retirement are independent work in one
-%% activation; retirement is applied first when both touch the same receptacle.
-%% One completed aggregate stream per destination shard bypasses ordinary
-%% mailbox storage and credits; the request's slot selects the actor-local
-%% receptacle.
-reduction_support(#{reduction_planes := Planes, schedulers := Schedulers}) ->
+%% Reduction support dispatches both destination-indexed joined planes and the
+%% source-fragment specialization. The former fold admitted batches into small
+%% destination register banks. The latter queues one fragment per static route
+%% and withholds a complete aggregate until the destination actor's own batch
+%% proves that its matching receptacle is open. In both modes the completed
+%% stream bypasses ordinary mailbox storage and credits, and a request slot
+%% identifies the destination actor.
+reduction_support(
+    Spec = #{reduction_planes := Planes, schedulers := Schedulers}
+) ->
     [
-        [aggregate_idle_proc(Scheduler)
+        [aggregate_array_mux_proc(Spec, Scheduler)
             || Scheduler <- Schedulers,
-               maps:get(has_reductions, Scheduler),
-               maps:get(joined_reduction_families, Scheduler) =:= []],
-        [[reduction_batch(Plane), reduction_plane_proc(Plane)]
-            || Plane <- Planes]
+               length(scheduler_reduction_planes(Spec, Scheduler)) > 1],
+        [reduction_plane_support(Plane) || Plane <- Planes]
     ].
 
-aggregate_idle_proc(Scheduler = #{module_name := Module}) ->
-    Name = aggregate_idle_name(Scheduler),
+reduction_plane_support(
+    Plane = #{reduction_transport := #{mode := source_fragments}}
+) ->
+    [fragment_batch(Plane), fragment_plane_proc(Plane)];
+reduction_plane_support(Plane) ->
+    [reduction_batch(Plane), reduction_plane_proc(Plane)].
+
+%% A homogeneous scheduler may own multiple reducing families. Their planes
+%% have the same aggregate request type, but they remain independent
+%% producers. Buffer one request per plane and choose a ready plane in
+%% round-robin order so an idle plane neither stalls nor starves another.
+aggregate_array_mux_proc(Spec, Scheduler = #{module_name := Module}) ->
+    Planes = scheduler_reduction_planes(Spec, Scheduler),
+    Count = length(Planes),
+    CountText = integer_to_list(Count),
+    State = aggregate_array_mux_state_name(Scheduler),
+    Name = aggregate_array_mux_name(Scheduler),
     [
-        "// Own an unused optional aggregate producer without manufacturing\n",
-        "// a zero-valued request on an ordinary reduction transport.\n",
+        "struct ", State, " {\n",
+        "  cursor: u32,\n",
+        "  valid: u1[u32:", CountText, "],\n",
+        "  values: ", Module,
+        "::ReductionAggregateRequest[u32:", CountText, "],\n",
+        "}\n\n",
         "proc ", Name, " {\n",
+        "  aggregate_in: chan<", Module,
+        "::ReductionAggregateRequest>[u32:", CountText, "] in;\n",
         "  aggregate_out: chan<", Module,
         "::ReductionAggregateRequest> out;\n\n",
-        "  config(aggregate_out: chan<", Module,
-        "::ReductionAggregateRequest> out) {\n",
-        "    (aggregate_out,)\n",
+        "  config(\n",
+        "      aggregate_in: chan<", Module,
+        "::ReductionAggregateRequest>[u32:", CountText, "] in,\n",
+        "      aggregate_out: chan<", Module,
+        "::ReductionAggregateRequest> out\n",
+        "  ) {\n",
+        "    (aggregate_in, aggregate_out)\n",
         "  }\n\n",
-        "  init { () }\n\n",
-        "  next(state: ()) {\n",
+        "  init { zero!<", State, ">() }\n\n",
+        "  next(state: ", State, ") {\n",
+        "    let (recv_tok, available, values) =\n",
+        "      unroll_for! (candidate, acc):\n",
+        "          (u32, (token, u1[u32:", CountText, "], ", Module,
+        "::ReductionAggregateRequest[u32:", CountText,
+        "])) in u32:0..u32:", CountText, " {\n",
+        "        let (next_tok, incoming, received) =\n",
+        "          recv_if_non_blocking(\n",
+        "            acc.0, aggregate_in[candidate],\n",
+        "            !acc.1[candidate],\n",
+        "            zero!<", Module,
+        "::ReductionAggregateRequest>());\n",
+        "        (\n",
+        "          next_tok,\n",
+        "          update(acc.1, candidate,\n",
+        "            acc.1[candidate] || received),\n",
+        "          update(acc.2, candidate,\n",
+        "            if received { incoming } else { acc.2[candidate] })\n",
+        "        )\n",
+        "      }((join(), state.valid, state.values));\n",
+        "    let (selected, selected_index) =\n",
+        "      unroll_for! (offset, choice):\n",
+        "          (u32, (u1, u32)) in u32:0..u32:", CountText,
+        " {\n",
+        "        let unwrapped = state.cursor + offset;\n",
+        "        let candidate = if unwrapped < u32:", CountText,
+        " { unwrapped\n",
+        "          } else { unwrapped - u32:", CountText, " };\n",
+        "        let take = !choice.0 && available[candidate];\n",
+        "        (choice.0 || take,\n",
+        "          if take { candidate } else { choice.1 })\n",
+        "      }((u1:0, u32:0));\n",
         "    let _done = send_if(\n",
-        "      join(), aggregate_out, false,\n",
-        "      zero!<", Module, "::ReductionAggregateRequest>());\n",
-        "    state\n",
+        "      recv_tok, aggregate_out, selected, values[selected_index]);\n",
+        "    let valid = if selected {\n",
+        "      update(available, selected_index, u1:0)\n",
+        "    } else { available };\n",
+        "    ", State, " {\n",
+        "      cursor: if !selected { state.cursor\n",
+        "        } else if selected_index + u32:1 == u32:", CountText,
+        " { u32:0\n",
+        "        } else { selected_index + u32:1 },\n",
+        "      valid,\n",
+        "      values,\n",
+        "    }\n",
         "  }\n",
         "}\n\n"
     ].
@@ -532,6 +615,338 @@ reduction_batch(Plane = #{module_name := Module}) ->
         "    _ => zero!<u32[u32:", integer_to_list(Population), "]>(),\n",
         "  }\n",
         "}\n\n"
+    ].
+
+%% A source-fragment plane transposes the reduction state.  Each statically
+%% proved route owns a depth-two FIFO bank indexed by source actor.  One batch
+%% pushes once into every bank, while one completed destination pops once from
+%% every bank at the inverse-route addresses.  This register implementation
+%% uses constant-index decoded updates and never requires a multiwrite
+%% accumulator crossbar.  A future RAM lowering must account for lookahead
+%% promotion in the popped row and a possibly distinct enqueue row.
+fragment_batch(Plane) ->
+    Population = reduction_population(Plane),
+    Queue = fragment_queue_name(Plane),
+    Batch = reduction_batch_name(Plane),
+    [
+        "struct ", Batch, " {\n",
+        "  source: u32,\n",
+        "  frames: axis::Frame[u32:",
+        integer_to_list(Population), "],\n",
+        "}\n\n",
+        "struct ", Queue, " {\n",
+        "  current_valid: u1,\n",
+        "  current: axis::Frame,\n",
+        "  lookahead_valid: u1,\n",
+        "  lookahead: axis::Frame,\n",
+        "}\n\n",
+        "fn ", fragment_pop_name(Plane), "(queue: ", Queue,
+        ") -> ", Queue, " {\n",
+        "  ", Queue, " {\n",
+        "    current_valid: queue.lookahead_valid,\n",
+        "    current: if queue.lookahead_valid { queue.lookahead\n",
+        "      } else { queue.current },\n",
+        "    lookahead_valid: u1:0,\n",
+        "    lookahead: queue.lookahead,\n",
+        "  }\n",
+        "}\n\n",
+        "fn ", fragment_push_name(Plane), "(\n",
+        "    queue: ", Queue, ", frame: axis::Frame) -> ", Queue,
+        " {\n",
+        "  if !queue.current_valid {\n",
+        "    ", Queue, " { current_valid: u1:1, current: frame,\n",
+        "      ..queue }\n",
+        "  } else {\n",
+        "    ", Queue, " { lookahead_valid: u1:1, lookahead: frame,\n",
+        "      ..queue }\n",
+        "  }\n",
+        "}\n\n",
+        "fn ", fragment_after_pop_name(Plane), "(\n",
+        "    queue: ", Queue, ", pop: u1) -> ", Queue, " {\n",
+        "  if pop { ", fragment_pop_name(Plane), "(queue)\n",
+        "  } else { queue }\n",
+        "}\n\n",
+        "fn ", fragment_update_bank_name(Plane), "<COUNT: u32>(\n",
+        "    bank: ", Queue, "[COUNT],\n",
+        "    pop_valid: u1, pop_source: u32,\n",
+        "    push_valid: u1, push_source: u32,\n",
+        "    push_frame: axis::Frame) -> ", Queue, "[COUNT] {\n",
+        "  unroll_for! (source, result):\n",
+        "      (u32, ", Queue, "[COUNT]) in u32:0..COUNT {\n",
+        "    let queue = result[source];\n",
+        "    let popped = if pop_valid && pop_source == source {\n",
+        "      ", fragment_pop_name(Plane), "(queue)\n",
+        "    } else { queue };\n",
+        "    let pushed = if push_valid && push_source == source {\n",
+        "      ", fragment_push_name(Plane), "(popped, push_frame)\n",
+        "    } else { popped };\n",
+        "    update(result, source, pushed)\n",
+        "  }(bank)\n",
+        "}\n\n"
+    ].
+
+fragment_plane_proc(Plane = #{
+    module_name := Module,
+    source_schedulers := Sources,
+    destinations := Destinations
+}) ->
+    SourceCount = length(Sources),
+    ActorCount = length(Destinations),
+    Population = reduction_population(Plane),
+    State = reduction_state_name(Plane),
+    Queue = fragment_queue_name(Plane),
+    Batch = reduction_batch_name(Plane),
+    Inverse = fragment_inverse_sources(Plane),
+    Members = [
+        ["batch_in: chan<", Batch, ">[u32:",
+            integer_to_list(SourceCount), "] in"]
+        | [["aggregate_out_", integer_to_list(Index), ": chan<", Module,
+            "::ReductionAggregateRequest> out"]
+            || Index <- lists:seq(0, SourceCount - 1)]
+    ],
+    Names = ["batch_in" | [["aggregate_out_", integer_to_list(Index)]
+        || Index <- lists:seq(0, SourceCount - 1)]],
+    [
+        "struct ", State, " {\n",
+        "  input_cursor: u32,\n",
+        "  output_cursor: u32,\n",
+        "  // A source batch is emitted by the same entry transaction that\n",
+        "  // opens that actor's reduction window. Retain that narrow fact\n",
+        "  // here so a completed aggregate stays in the existing fragment\n",
+        "  // queues until its destination can semantically consume it.\n",
+        "  open_tokens: u1[u32:", integer_to_list(ActorCount), "],\n",
+        [["  bank_", integer_to_list(Lane), ": ", Queue, "[u32:",
+            integer_to_list(ActorCount), "],\n"]
+            || Lane <- lists:seq(0, Population - 1)],
+        "  pending_valid: u1,\n",
+        "  pending_batch: ", Batch, ",\n",
+        "}\n\n",
+        "proc ", reduction_plane_name(Plane), " {\n",
+        [["  ", Member, ";\n"] || Member <- Members],
+        "\n",
+        config_signature(Members, 2),
+        "    (", join_with(", ", Names), ")\n",
+        "  }\n\n",
+        "  init { zero!<", State, ">() }\n\n",
+        "  next(state: ", State, ") {\n",
+        "    // Route translations are permutations. A destination is ready\n",
+        "    // exactly when it has opened this reduction window and all of\n",
+        "    // its inverse-route edge queues have heads. Keeping an early\n",
+        "    // aggregate distributed here avoids a second wide destination\n",
+        "    // queue without allowing one actor to hide another.\n",
+        "    let ready_slots = [\n",
+        [fragment_ready_row(Plane, SourcesForDestination, Index,
+            ActorCount)
+            || {Index, SourcesForDestination} <-
+                lists:enumerate(0, Inverse)],
+        "    ];\n",
+        "    let (output_ready, output_slot) =\n",
+        "      unroll_for! (offset, selected):\n",
+        "          (u32, (u1, u32)) in u32:0..u32:",
+        integer_to_list(ActorCount), " {\n",
+        "        let unwrapped = state.output_cursor + offset;\n",
+        "        let candidate = if unwrapped < u32:",
+        integer_to_list(ActorCount), " { unwrapped } else {\n",
+        "          unwrapped - u32:", integer_to_list(ActorCount),
+        " };\n",
+        "        let take = !selected.0 && ready_slots[candidate];\n",
+        "        (selected.0 || take,\n",
+        "          if take { candidate } else { selected.1 })\n",
+        "      }((u1:0, u32:0));\n",
+        "    let pop_sources = match output_slot {\n",
+        [fragment_inverse_arm(SourcesForDestination, Index)
+            || {Index, SourcesForDestination} <-
+                lists:enumerate(0, Inverse)],
+        "      _ => zero!<u32[u32:", integer_to_list(Population),
+        "]>(),\n",
+        "    };\n",
+        "    let frames = match output_slot {\n",
+        [fragment_frames_arm(Plane, SourcesForDestination, Index)
+            || {Index, SourcesForDestination} <-
+                lists:enumerate(0, Inverse)],
+        "      _ => zero!<axis::Frame[u32:",
+        integer_to_list(Population), "]>(),\n",
+        "    };\n",
+        "    let aggregate = ", Module,
+        "::reduction_aggregate_batch<u32:",
+        integer_to_list(Population), ">(frames);\n",
+        "    let output_tok = if output_ready {\n",
+        "      match output_slot {\n",
+        [fragment_output_send_arm(Plane, Destination)
+            || Destination <- Destinations],
+        "        _ => join(),\n",
+        "      }\n",
+        "    } else { join() };\n",
+        "    // Intake is an independent handshake. A single holding slot\n",
+        "    // makes atomic all-bank admission lossless under unusual skew.\n",
+        "    let (input_tok, received, incoming) =\n",
+        "      unroll_for! (candidate, acc):\n",
+        "          (u32, (token, u1, ", Batch,
+        ")) in u32:0..u32:", integer_to_list(SourceCount), " {\n",
+        "        let (next_tok, next_batch, valid) =\n",
+        "          recv_if_non_blocking(\n",
+        "            acc.0, batch_in[candidate],\n",
+        "            !state.pending_valid &&\n",
+        "              state.input_cursor == candidate,\n",
+        "            zero!<", Batch, ">());\n",
+        "        (next_tok, acc.1 || valid,\n",
+        "          if valid { next_batch } else { acc.2 })\n",
+        "      }((join(), u1:0, zero!<", Batch, ">()));\n",
+        "    let work_valid = state.pending_valid || received;\n",
+        "    let work = if state.pending_valid {\n",
+        "      state.pending_batch\n",
+        "    } else { incoming };\n",
+        "    // Batch sources are generated from validated dense actor\n",
+        "    // coordinates and are therefore an internal in-range invariant.\n",
+        "    // Retaining a violated batch is intentional fail-stop behavior:\n",
+        "    // there is no trustworthy destination actor to charge with it.\n",
+        "    let source_valid = work.source < u32:",
+        integer_to_list(ActorCount), ";\n",
+        "    let push_source = if source_valid { work.source\n",
+        "      } else { u32:0 };\n",
+        "    // Clear-before-set lets retirement of one window overlap receipt\n",
+        "    // of the same actor's next opening batch without losing either\n",
+        "    // event. Mark receipt, rather than completed bank insertion, so\n",
+        "    // a temporarily held batch cannot form a capacity/token cycle.\n",
+        "    let open_tokens_after_output = if output_ready {\n",
+        "      update(state.open_tokens, output_slot, u1:0)\n",
+        "    } else { state.open_tokens };\n",
+        "    let incoming_source_valid = received &&\n",
+        "      incoming.source < u32:", integer_to_list(ActorCount), ";\n",
+        "    let open_tokens = if incoming_source_valid {\n",
+        "      update(open_tokens_after_output, incoming.source, u1:1)\n",
+        "    } else { open_tokens_after_output };\n",
+        [fragment_capacity_binding(Plane, Lane)
+            || Lane <- lists:seq(0, Population - 1)],
+        "    let can_insert = work_valid && source_valid",
+        [[" && capacity_", integer_to_list(Lane)]
+            || Lane <- lists:seq(0, Population - 1)],
+        ";\n",
+        [fragment_bank_binding(Plane, Lane)
+            || Lane <- lists:seq(0, Population - 1)],
+        "    let _done = join(output_tok, input_tok);\n",
+        "    ", State, " {\n",
+        "      input_cursor: if state.pending_valid {\n",
+        "        state.input_cursor\n",
+        "      } else if state.input_cursor + u32:1 == u32:",
+        integer_to_list(SourceCount), " { u32:0 } else {\n",
+        "        state.input_cursor + u32:1 },\n",
+        "      output_cursor: if !output_ready { state.output_cursor\n",
+        "      } else if output_slot + u32:1 == u32:",
+        integer_to_list(ActorCount), " { u32:0 } else {\n",
+        "        output_slot + u32:1 },\n",
+        "      open_tokens,\n",
+        [["      bank_", integer_to_list(Lane), ",\n"]
+            || Lane <- lists:seq(0, Population - 1)],
+        "      pending_valid: work_valid && !can_insert,\n",
+        "      pending_batch: if work_valid && !can_insert { work\n",
+        "        } else { state.pending_batch },\n",
+        "    }\n",
+        "  }\n",
+        "}\n\n"
+    ].
+
+fragment_ready_row(_Plane, Sources, Index, Count) ->
+    [
+        "      state.open_tokens[u32:", integer_to_list(Index), "] && ",
+        join_with(" && ", [
+            ["state.bank_", integer_to_list(Lane), "[u32:",
+                integer_to_list(Source), "].current_valid"]
+            || {Lane, Source} <- lists:enumerate(0, Sources)
+        ]),
+        separator(Index, Count), "\n"
+    ].
+
+fragment_inverse_arm(Sources, Index) ->
+    [
+        "      u32:", integer_to_list(Index), " => [",
+        join_with(", ", [["u32:", integer_to_list(Source)]
+            || Source <- Sources]),
+        "],\n"
+    ].
+
+fragment_frames_arm(_Plane, Sources, Index) ->
+    [
+        "      u32:", integer_to_list(Index), " => [",
+        join_with(", ", [
+            ["state.bank_", integer_to_list(Lane), "[u32:",
+                integer_to_list(Source), "].current"]
+            || {Lane, Source} <- lists:enumerate(0, Sources)
+        ]),
+        "],\n"
+    ].
+
+fragment_output_send_arm(Plane, Destination = #{index := Index}) ->
+    Module = maps:get(module_name, Plane),
+    Sources = maps:get(source_schedulers, Plane),
+    Group = maps:get(group, Destination),
+    Output = source_position(Group, Sources, 0),
+    [
+        "        u32:", integer_to_list(Index), " => send(\n",
+        "          join(), aggregate_out_", integer_to_list(Output),
+        ", ", Module, "::ReductionAggregateRequest {\n",
+        "            slot: u32:",
+        integer_to_list(maps:get(slot, Destination)), ",\n",
+        "            reduction_aggregate: aggregate,\n",
+        "          }),\n"
+    ].
+
+fragment_capacity_binding(Plane, Lane) ->
+    Index = integer_to_list(Lane),
+    [
+        "    let queue_", Index, " = state.bank_", Index,
+        "[push_source];\n",
+        "    let after_pop_", Index, " = ",
+        fragment_after_pop_name(Plane), "(\n",
+        "      queue_", Index, ", output_ready &&\n",
+        "        pop_sources[u32:", Index, "] == push_source);\n",
+        "    let capacity_", Index,
+        " = !after_pop_", Index, ".lookahead_valid;\n"
+    ].
+
+fragment_bank_binding(Plane, Lane) ->
+    Index = integer_to_list(Lane),
+    [
+        "    let bank_", Index, " = ",
+        fragment_update_bank_name(Plane), "(\n",
+        "      state.bank_", Index, ", output_ready,\n",
+        "      pop_sources[u32:", Index, "], can_insert, push_source,\n",
+        "      work.frames[u32:", Index, "]);\n"
+    ].
+
+fragment_inverse_sources(Plane = #{destinations := Destinations}) ->
+    Population = reduction_population(Plane),
+    Routes = maps:get(routes, maps:get(reduction_transport, Plane)),
+    LaneMaps = [
+        begin
+            {_Family, _Destination,
+                {translate, [DX, DY], wrap}} = maps:get(recipient, Route),
+            Pairs = [
+                begin
+                    Source = maps:get(index, Row),
+                    Destination = fixed_reduction_destination(
+                        Plane,
+                        maps:get(x, Row),
+                        maps:get(y, Row),
+                        DX,
+                        DY
+                    ),
+                    {Destination, Source}
+                end
+                || Row <- Destinations
+            ],
+            length(Pairs) =:= maps:size(maps:from_list(Pairs)) orelse
+                error({source_fragment_non_bijective_route,
+                    maps:get(id, Plane), Lane, Pairs}),
+            maps:from_list(Pairs)
+        end
+        || {Lane, Route} <- lists:enumerate(0, Routes)
+    ],
+    ActorCount = length(Destinations),
+    Population = length(LaneMaps),
+    [
+        [maps:get(Destination, LaneMap) || LaneMap <- LaneMaps]
+        || Destination <- lists:seq(0, ActorCount - 1)
     ].
 
 reduction_plane_proc(Plane = #{
@@ -1338,6 +1753,36 @@ router_reduction_send(Spec, Families) ->
 router_reduction_family_arm(Spec, Family = #{
     id := Id,
     module_name := Module,
+    reduction_transport := #{
+        mode := source_fragments,
+        routes := Routes,
+        population := Population
+    }
+}) ->
+    true = length(Routes) =:= Population,
+    Plane = reduction_plane(Spec, Id),
+    [
+        "        FamilyId::", uppercase(Id), " => {\n",
+        [[
+            "          let effect_", integer_to_list(Index), " = ",
+            Module, "::scheduled_effect(scheduled, u8:",
+            integer_to_list(Index), ").0;\n"
+        ] || Index <- lists:seq(0, Population - 1)],
+        "          let batch = ", reduction_batch_name(Plane), " {\n",
+        "            source: (address.x as u32) *\n",
+        "              (HEIGHT as u32) + address.y as u32,\n",
+        "            frames: [", join_with(", ", [
+            ["effect_", integer_to_list(Index), ".frame"]
+            || Index <- lists:seq(0, Population - 1)
+        ]), "],\n",
+        "          };\n",
+        "          send(grant_tok, ", router_reduction_output_name(Family),
+        ", batch)\n",
+        "        },\n"
+    ];
+router_reduction_family_arm(Spec, Family = #{
+    id := Id,
+    module_name := Module,
     reduction_transport := #{routes := Routes, population := Population}
 }) ->
     true = length(Routes) =:= Population,
@@ -1380,7 +1825,7 @@ router_family_routes(Spec, Family) ->
     Module = maps:get(module_name, Family),
     RouteIndex = maps:from_list([
         {Port, Route}
-        || Route <- maps:get(routes, Family),
+        || Route <- ordinary_routes(Family),
            {_Family, Port} <- [maps:get(source, Route)]
     ]),
     [
@@ -1388,15 +1833,24 @@ router_family_routes(Spec, Family) ->
         "        let y = address.y;\n",
         "        match effect.port {\n",
         [
-            router_route_arm(
-                Spec,
-                Module,
-                Port,
-                maps:get(Port, RouteIndex)
-            )
+            case maps:find(Port, RouteIndex) of
+                {ok, Route} ->
+                    router_route_arm(Spec, Module, Port, Route);
+                error ->
+                    router_captured_route_arm(Module, Port)
+            end
             || Port <- maps:get(outputs, Family)
         ],
         "        }\n"
+    ].
+
+%% The batch arm above consumes every effect in a statically captured
+%% reduction prefix.  Retain exhaustive OutputPort matching without keeping
+%% the captured ordinary destination channel alive.
+router_captured_route_arm(Module, Port) ->
+    [
+        "        ", Module, "::OutputPort::", uppercase(Port),
+        " => grant_tok,\n"
     ].
 
 router_route_arm(Spec, Module, Port, #{
@@ -1543,9 +1997,12 @@ grid_proc(Spec = #{
         config_signature(Arguments, 2),
         effect_window_channels(EffectWindowDomains),
         [external_channel(External) || External <- Externals],
-        [scheduler_channels(Scheduler) || Scheduler <- Schedulers],
+        [scheduler_channels(Spec, Scheduler) || Scheduler <- Schedulers],
         [reduction_plane_channels(Plane) || Plane <- ReductionPlanes],
         effect_window_spawn(EffectWindowDomains),
+        [aggregate_array_mux_spawn(Spec, Scheduler)
+            || Scheduler <- Schedulers,
+               length(scheduler_reduction_planes(Spec, Scheduler)) > 1],
         [scheduler_spawn(Spec, Scheduler) || Scheduler <- Schedulers],
         [reduction_plane_spawn(Spec, Plane) || Plane <- ReductionPlanes],
         [router_spawn(Spec, Scheduler) || Scheduler <- Schedulers],
@@ -1624,14 +2081,14 @@ external_spawn(External) ->
             ]
     end.
 
-scheduler_channels(Scheduler = #{
+scheduler_channels(Spec, Scheduler = #{
     stem := Stem,
     module_name := Module,
     producers := Producers,
-    has_reductions := HasReductions,
     joined_reduction_families := ReductionFamilies
 }) ->
     ProducerCount = integer_to_list(length(Producers)),
+    ReductionPlanes = scheduler_reduction_planes(Spec, Scheduler),
     [
         "    let (", Stem, "_requests_p, ", Stem, "_requests_c) =\n",
         "      chan<", Module, "::ScheduledRequest, CHANNEL_DEPTH>",
@@ -1642,18 +2099,24 @@ scheduler_channels(Scheduler = #{
         "    let (", Stem, "_egress_p, ", Stem, "_egress_c) =\n",
         "      chan<", Module, "::ScheduledEffects, CHANNEL_DEPTH>(\"",
         Stem, "_egress\");\n",
-        case HasReductions of
-            false -> [];
-            true -> [
+        case ReductionFamilies of
+            [] -> [];
+            [_ | _] -> [
                 "    let (", Stem, "_aggregate_p, ", Stem,
                 "_aggregate_c) =\n",
                 "      chan<", Module,
                 "::ReductionAggregateRequest, u32:0>(\"", Stem,
                 "_aggregate\");\n",
-                case ReductionFamilies of
-                    [] -> ["    spawn ", aggregate_idle_name(Scheduler),
-                        "(", Stem, "_aggregate_p);\n"];
-                    [_ | _] -> []
+                case ReductionPlanes of
+                    [_, _ | _] -> [
+                        "    let (", Stem, "_aggregate_sources_p, ",
+                        Stem, "_aggregate_sources_c) =\n",
+                        "      chan<", Module,
+                        "::ReductionAggregateRequest, u32:0>[u32:",
+                        integer_to_list(length(ReductionPlanes)), "](",
+                        "\"", Stem, "_aggregate_sources\");\n"
+                    ];
+                    _ -> []
                 end
             ]
         end,
@@ -1662,6 +2125,13 @@ scheduler_channels(Scheduler = #{
             _ -> ["    spawn ", startup_name(Scheduler), "(",
                 Stem, "_startup_p);\n"]
         end
+    ].
+
+aggregate_array_mux_spawn(_Spec, Scheduler = #{stem := Stem}) ->
+    [
+        "    spawn ", aggregate_array_mux_name(Scheduler), "(\n",
+        "      ", Stem, "_aggregate_sources_c, ", Stem,
+        "_aggregate_p);\n"
     ].
 
 reduction_plane_channels(#{
@@ -1682,8 +2152,8 @@ reduction_plane_spawn(Spec, Plane = #{
     [
         "    spawn ", reduction_plane_name(Plane), "(\n",
         "      ", Stem, "_batch_c",
-        [[",\n      ", maps:get(stem, scheduler(Spec, Group)),
-            "_aggregate_p"] || Group <- Sources],
+        [[",\n      ", reduction_aggregate_producer(Spec, Plane, Group)]
+            || Group <- Sources],
         ");\n"
     ].
 
@@ -1694,14 +2164,15 @@ scheduler_spawn(_Spec, #{
     slot_count := SlotCount,
     producers := Producers,
     startup_count := StartupCount,
-    has_reductions := HasReductions
+    joined_reduction_families := ReductionFamilies
 }) ->
     [
         "    spawn ", Module, "::SharedService<\n",
         "      u32:", integer_to_list(SlotCount), ", u32:",
         integer_to_list(length(Producers)), ", u32:",
         integer_to_list(StartupCount), ", u32:",
-        integer_to_list(Index), ">(\n",
+        integer_to_list(Index),
+        ">(\n",
         "      ", Stem, "_requests_c, ", Stem, "_startup_c,\n",
         "      ", Stem, "_egress_p,\n",
         "      ", Stem, "_ram_read_req_out, ", Stem,
@@ -1712,9 +2183,9 @@ scheduler_spawn(_Spec, #{
         "_mailbox_read_resp_in,\n",
         "      ", Stem, "_mailbox_write_req_out, ", Stem,
         "_mailbox_write_resp_in",
-        case HasReductions of
-            false -> [];
-            true -> [",\n      ", Stem, "_aggregate_c"]
+        case ReductionFamilies of
+            [] -> [];
+            [_ | _] -> [",\n      ", Stem, "_aggregate_c"]
         end,
         ");\n"
     ].
@@ -1946,6 +2417,21 @@ reduction_batch_name(#{id := Id}) ->
 reduction_work_name(#{id := Id}) ->
     [string:titlecase(atom_to_list(Id)), "ReductionWork"].
 
+fragment_queue_name(#{id := Id}) ->
+    [string:titlecase(atom_to_list(Id)), "ReductionFragmentQueue"].
+
+fragment_pop_name(#{id := Id}) ->
+    [atom_to_list(Id), "_reduction_fragment_pop"].
+
+fragment_push_name(#{id := Id}) ->
+    [atom_to_list(Id), "_reduction_fragment_push"].
+
+fragment_after_pop_name(#{id := Id}) ->
+    [atom_to_list(Id), "_reduction_fragment_after_pop"].
+
+fragment_update_bank_name(#{id := Id}) ->
+    [atom_to_list(Id), "_reduction_fragment_update_bank"].
+
 reduction_destinations_name(#{id := Id}) ->
     [atom_to_list(Id), "_reduction_destinations"].
 
@@ -1958,8 +2444,32 @@ reduction_plane_name(#{id := Id}) ->
 router_reduction_output_name(#{id := Id}) ->
     [atom_to_list(Id), "_reduction_out"].
 
-aggregate_idle_name(#{index := Index}) ->
-    ["SchedulerAggregateIdle", integer_to_list(Index)].
+aggregate_array_mux_name(#{index := Index}) ->
+    ["SchedulerAggregateArrayMux", integer_to_list(Index)].
+
+aggregate_array_mux_state_name(#{index := Index}) ->
+    ["SchedulerAggregateArrayMuxState", integer_to_list(Index)].
+
+scheduler_reduction_planes(#{reduction_planes := Planes}, #{index := Group}) ->
+    [Plane || Plane <- Planes,
+        lists:member(Group, maps:get(source_schedulers, Plane))].
+
+reduction_aggregate_producer(Spec, Plane, Group) ->
+    Scheduler = scheduler(Spec, Group),
+    Stem = maps:get(stem, Scheduler),
+    case scheduler_reduction_planes(Spec, Scheduler) of
+        [Plane] -> [Stem, "_aggregate_p"];
+        Planes ->
+            Position = reduction_plane_position(
+                maps:get(id, Plane), Planes, 0
+            ),
+            [Stem, "_aggregate_sources_p[u32:",
+                integer_to_list(Position), "]"]
+    end.
+
+reduction_plane_position(Id, [#{id := Id} | _], Position) -> Position;
+reduction_plane_position(Id, [_ | Rest], Position) ->
+    reduction_plane_position(Id, Rest, Position + 1).
 
 effect_window_domain_stem(0, [_OnlyDomain]) ->
     "effect_window";

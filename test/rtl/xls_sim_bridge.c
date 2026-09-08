@@ -260,6 +260,8 @@ typedef struct {
     vpiHandle h_completed_valid;
     vpiHandle h_completed_effects_valid;
     unsigned actor_count;
+    int derived_actor_ready;
+    int aggregate_accept_is_complete;
     int activation_has_state_read;
     uint32_t activation_state_read_slot;
     int same_actor_followup_pending;
@@ -358,6 +360,7 @@ static axis_endpoint_t app_endpoint;
 static axis_endpoint_t debug_endpoint;
 static scheduler_profile_t scheduler_profiles[MAX_SCHEDULERS];
 static unsigned scheduler_profile_count;
+static unsigned scheduler_profile_candidate_count;
 static effect_router_profile_t effect_router_profiles[MAX_EFFECT_ROUTERS];
 static unsigned effect_router_profile_count;
 static unsigned effect_router_candidate_count;
@@ -616,6 +619,10 @@ static void write_scheduler_profile(void) {
     dprintf(profile_fd, "profile_snapshot=%s\n",
             scheduler_profile_checkpoint_valid ?
                 "last_application_output" : "current");
+    dprintf(profile_fd, "scheduler_profile_candidates=%u\n",
+            scheduler_profile_candidate_count);
+    dprintf(profile_fd, "scheduler_profile_count=%u\n",
+            scheduler_profile_count);
     dprintf(profile_fd, "effect_window_router_candidates=%u\n",
             effect_router_candidate_count);
     dprintf(profile_fd, "effect_window_router_count=%u\n",
@@ -1225,6 +1232,8 @@ static int populate_scheduler_profile(
     MODULE_SIGNAL(h_fold_issue_valid, "fold_issue_valid");
     MODULE_SIGNAL(h_prior_issue_valid, "prior_issue_valid");
     MODULE_SIGNAL(h_fast_ready, "fast_ready");
+    if (!profile->h_fast_ready)
+        profile->h_fast_ready = module_signal(module, "fast_selected_ready");
     MODULE_SIGNAL(h_direct_fold_accepted, "direct_fold_accepted");
     MODULE_SIGNAL(h_direct_fold_outcome, "direct_fold_outcome");
     MODULE_SIGNAL(h_aggregate_input, "_aggregate_in");
@@ -1272,9 +1281,11 @@ static int populate_scheduler_profile(
                  "captured_pending_tuple_idx_3[%u]", index);
         profile->h_pending_direct_reduction[index] =
             module_signal(module, signal_name);
-        if (!profile->h_pending_valid[index] ||
-            !profile->h_pending_credit[index])
-            break;
+        /* Aggregate-only schedulers can optimize the captured-request
+         * projection into scalar intermediates.  The external request port
+         * remains authoritative for traffic counts; omit only the optional
+         * pending-kind breakdown when those source-level vectors disappear.
+         */
         profile->request_input_count++;
     }
 
@@ -1285,8 +1296,6 @@ static int populate_scheduler_profile(
     for (index = 0; index < MAX_SCHEDULER_ACTORS; index++) {
         snprintf(signal_name, sizeof(signal_name), "ready__%u", index + 1);
         profile->h_ready[index] = module_signal(module, signal_name);
-        if (!profile->h_ready[index])
-            break;
         if (index == 0)
             snprintf(signal_name, sizeof(signal_name), "selectable");
         else
@@ -1294,8 +1303,6 @@ static int populate_scheduler_profile(
                      "selectable__%u", index);
         profile->h_selectable[index] =
             module_signal(module, signal_name);
-        if (profile->h_selectable[0] && !profile->h_selectable[index])
-            selectable_vector_complete = 0;
         snprintf(signal_name, sizeof(signal_name),
                  "mail_candidates__4[%u]", index);
         profile->h_mail_candidate[index] =
@@ -1353,8 +1360,27 @@ static int populate_scheduler_profile(
             !profile->h_egress_waiter[index] ||
             !profile->h_occupied[index])
             break;
+        /* Only slots proved to exist by the stable mailbox metadata belong
+         * to the selectable vector.  Looking one slot past ACTOR_COUNT is
+         * how this loop finds its end; do not let that absent sentinel make
+         * an otherwise complete ordinary scheduler look incomplete. */
+        if (!profile->h_selectable[index])
+            selectable_vector_complete = 0;
         profile->actor_count++;
     }
+
+    /* In an aggregate-only specialization, actor_ready()'s local vector is
+     * folded directly into the selectable expressions.  The later scalar
+     * `ready` signal describes the selected RAM issue and must not be mistaken
+     * for actor zero's readiness.  Reconstruct the per-actor value from the
+     * scheduling metadata when the explicit ready__N vector is absent. */
+    profile->derived_actor_ready =
+        profile->actor_count > 0 && !profile->h_ready[0];
+    profile->aggregate_accept_is_complete =
+        profile->derived_actor_ready &&
+        profile->h_aggregate_input_valid &&
+        !profile->h_aggregate_complete &&
+        !profile->h_aggregate_outcome;
 
     reset_latency_minima(&profile->counts);
     reset_latency_minima(&profile->checkpoint);
@@ -1397,6 +1423,7 @@ static int populate_scheduler_profile(
          * latter is needed only by the legacy same-actor approximation. */
         (profile->h_selectable[0] || profile->h_phase_boundary) &&
         selectable_vector_complete &&
+        (profile->h_ready[0] || profile->derived_actor_ready) &&
         profile->actor_count > 0 &&
         profile->request_input_count > 0;
 }
@@ -1540,6 +1567,7 @@ static void discover_scheduler_profiles(vpiHandle scope) {
         if (strstr(definition, "SharedService") &&
             scheduler_profile_count < MAX_SCHEDULERS) {
             scheduler_profile_t candidate;
+            scheduler_profile_candidate_count++;
             memset(&candidate, 0, sizeof(candidate));
             if (populate_scheduler_profile(&candidate, module)) {
                 scheduler_profiles[scheduler_profile_count++] = candidate;
@@ -1665,6 +1693,51 @@ static void name_scheduler_profiles(void) {
     }
 }
 
+static int scheduler_actor_ready(
+    const scheduler_profile_t *profile,
+    unsigned slot,
+    int egress_busy
+) {
+    int internal_candidate;
+    int reduction_error;
+    int private_work;
+    int entry_probe;
+    int egress_waiter;
+    int entry_work;
+    int mail_candidate;
+    int reduction_active;
+    int reduction_probed;
+    int ordinary_mail;
+
+    if (profile->h_ready[slot])
+        return get_bit(profile->h_ready[slot]);
+
+    internal_candidate = profile->h_internal_candidate[slot] &&
+        get_bit(profile->h_internal_candidate[slot]);
+    reduction_error = profile->h_reduction_error[slot] &&
+        get_bit(profile->h_reduction_error[slot]);
+    private_work = internal_candidate || reduction_error;
+    entry_probe = get_bit(profile->h_entry_probe[slot]);
+    egress_waiter = get_bit(profile->h_egress_waiter[slot]);
+    entry_work = entry_probe || egress_waiter;
+    mail_candidate = get_bit(profile->h_mail_candidate[slot]);
+    reduction_active = profile->h_reduction_active[slot] &&
+        get_bit(profile->h_reduction_active[slot]);
+    /* aggregate_only constant-folds reduction_probed away because every
+     * physical mail head is ordinary actor work.  Treating the missing probe
+     * as true reproduces that specialization while retaining the ordinary
+     * reducing scheduler's active-and-unprobed exclusion. */
+    reduction_probed = !profile->h_reduction_probed[slot] ||
+        get_bit(profile->h_reduction_probed[slot]);
+    ordinary_mail = mail_candidate &&
+        (!reduction_active || reduction_probed);
+
+    return private_work || (!private_work &&
+        (entry_probe ||
+         (ordinary_mail && !entry_work) ||
+         (egress_waiter && !egress_busy)));
+}
+
 static void step_scheduler_profile(scheduler_profile_t *profile) {
     scheduler_counts_t *counts = &profile->counts;
     int active = 0;
@@ -1734,12 +1807,14 @@ static void step_scheduler_profile(scheduler_profile_t *profile) {
         unsigned outcome = profile->h_aggregate_outcome ?
             get_u32(profile->h_aggregate_outcome) : 0;
         counts->aggregate_accepts++;
-        if ((profile->h_aggregate_complete &&
-             get_bit(profile->h_aggregate_complete)) || outcome == 3)
+        int complete = profile->aggregate_accept_is_complete ||
+            (profile->h_aggregate_complete &&
+             get_bit(profile->h_aggregate_complete)) || outcome == 3;
+        if (complete)
             counts->aggregate_completions++;
         trace_event(
             profile->name,
-            outcome == 3 ? "aggregate_complete" : "aggregate_accept",
+            complete ? "aggregate_complete" : "aggregate_accept",
             slot,
             aggregate_detail);
     }
@@ -1859,7 +1934,8 @@ static void step_scheduler_profile(scheduler_profile_t *profile) {
          * actor's post-retirement readiness and support the forwarding
          * diagnostic below. A decoupled executor can have several actors in
          * flight, so its profile deliberately skips that legacy follow-up. */
-        if (profile->same_actor_followup_pending) {
+        if (profile->same_actor_followup_pending &&
+            !profile->h_completed_valid) {
             unsigned slot = profile->same_actor_followup_slot;
             int mail_candidate = get_bit(profile->h_mail_candidate[slot]);
             int entry_probe = get_bit(profile->h_entry_probe[slot]);
@@ -1886,6 +1962,9 @@ static void step_scheduler_profile(scheduler_profile_t *profile) {
 
         counts->selection_activations++;
         for (index = 0; index < profile->request_input_count; index++) {
+            if (!profile->h_pending_valid[index] ||
+                !profile->h_pending_credit[index])
+                continue;
             if (!get_bit(profile->h_pending_valid[index]))
                 continue;
             if (get_bit(profile->h_pending_credit[index]))
@@ -1898,7 +1977,8 @@ static void step_scheduler_profile(scheduler_profile_t *profile) {
             }
         }
         for (index = 0; index < profile->actor_count; index++) {
-            int slot_ready = get_bit(profile->h_ready[index]);
+            int slot_ready = scheduler_actor_ready(
+                profile, index, egress_busy);
             unsigned slot_occupied = get_u32(profile->h_occupied[index]);
             mail_candidates += get_bit(profile->h_mail_candidate[index]);
             entry_probes += get_bit(profile->h_entry_probe[index]);
@@ -1975,7 +2055,8 @@ static void step_scheduler_profile(scheduler_profile_t *profile) {
             waiting_egress_credit ? "waiting_egress_credit" :
             no_actor_work ? "no_actor_work" : "internal_other");
 
-        if (same_actor_only && !profile->h_selectable[0]) {
+        if (same_actor_only && !profile->h_selectable[0] &&
+            !profile->h_completed_valid) {
             unsigned slot = profile->activation_state_read_slot;
             int mail_candidate = get_bit(profile->h_mail_candidate[slot]);
             int entry_probe = get_bit(profile->h_entry_probe[slot]);
@@ -2561,6 +2642,7 @@ static PLI_INT32 cb_start_of_sim(p_cb_data cb) {
     memset(reduction_plane_profiles, 0,
            sizeof(reduction_plane_profiles));
     scheduler_profile_count = 0;
+    scheduler_profile_candidate_count = 0;
     effect_router_profile_count = 0;
     effect_router_candidate_count = 0;
     effect_domain_profile_count = 0;

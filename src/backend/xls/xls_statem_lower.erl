@@ -7,7 +7,7 @@
 -module(xls_statem_lower).
 -moduledoc false.
 
--export([interface/2, lower/3]).
+-export([interface/2, lower/3, lower/4]).
 
 -type interface() :: map().
 
@@ -19,6 +19,15 @@ interface(Forms, PhaseNames) ->
 -spec lower(file:filename(), [erl_parse:abstract_form()], [atom(), ...]) ->
     iolist().
 lower(Filename, Forms, PhaseNames) ->
+    lower(Filename, Forms, PhaseNames, ordinary).
+
+-spec lower(
+    file:filename(),
+    [erl_parse:abstract_form()],
+    [atom(), ...],
+    ordinary | joined | aggregate_only
+) -> iolist().
+lower(Filename, Forms, PhaseNames, SharedServiceMode) ->
     Declarations = declarations(Forms, PhaseNames),
     MessageNames = maps:get(message_names, Declarations),
     MessageWords = maps:from_list([
@@ -75,7 +84,8 @@ lower(Filename, Forms, PhaseNames) ->
         init => Init,
         entries => Entries,
         casts => Casts,
-        reductions => Reductions
+        reductions => Reductions,
+        shared_service_mode => SharedServiceMode
     }).
 
 prepare(Forms, PhaseNames) ->

@@ -33,18 +33,6 @@ erl \
     -pa "$project_root/_build/test/lib/erl_hls/test" \
     -eval '
         Regsvc = xls_parse:to_xls("src/examples/regsvc/regsvc.erl"),
-        PhiHalo = xls_parse:to_xls(
-            "src/examples/phi_decoder/phi_halo_cell.erl"
-        ),
-        PhenomData = xls_parse:to_xls(
-            "src/examples/phi_decoder/phenom_data_cell.erl"
-        ),
-        PhenomSyndrome = xls_parse:to_xls(
-            "src/examples/phi_decoder/phenom_syndrome_cell.erl"
-        ),
-        PhiSyndromeReplay = xls_parse:to_xls(
-            "src/examples/phi_decoder/phi_syndrome_replay_cell.erl"
-        ),
         CaseFixture = xls_parse:to_xls(
             "test_data/xls_case_fixture.erl"
         ),
@@ -99,6 +87,55 @@ erl \
             ))#{
                 effect_window_partition => ProfileEffectWindowPartition
             },
+        ProfileModes = xls_topology_dslx:shared_service_modes(
+            ProfilePlan,
+            ProfilePhysical
+        ),
+        %% Actor translation and topology rendering are separate APIs. Fail
+        %% here, rather than much later in DSLX typechecking, if another
+        %% staged topology starts requiring a different SharedService shape
+        %% for the same imported actor module.
+        NoiseModeMaps = [
+            xls_topology_dslx:shared_service_modes(
+                hls_topology:normalize(phi_noise_topology:topology(
+                    PhiNoiseDistance,
+                    PhiNoiseRate
+                )),
+                phi_noise_topology_dslx:profile(SchedulerProfile)
+            ),
+            xls_topology_dslx:shared_service_modes(
+                hls_topology:normalize(phi_noise_topology:topology(1, 0)),
+                phi_noise_topology_dslx:profile()
+            )
+        ],
+        ModeMaps = [ProfileModes | NoiseModeMaps],
+        ModeFor = fun(Module) ->
+            Modes = lists:usort([
+                maps:get(Module, Map)
+                || Map <- ModeMaps,
+                   maps:is_key(Module, Map)
+            ]),
+            case Modes of
+                [Mode] -> Mode;
+                _ -> error({mixed_staged_shared_service_modes, Module, Modes})
+            end
+        end,
+        PhenomData = xls_parse:to_xls(
+            "src/examples/phi_decoder/phenom_data_cell.erl",
+            #{shared_service_mode => ModeFor(phenom_data_cell)}
+        ),
+        PhenomSyndrome = xls_parse:to_xls(
+            "src/examples/phi_decoder/phenom_syndrome_cell.erl",
+            #{shared_service_mode => ModeFor(phenom_syndrome_cell)}
+        ),
+        PhiHalo = xls_parse:to_xls(
+            "src/examples/phi_decoder/phi_halo_cell.erl",
+            #{shared_service_mode => ModeFor(phi_halo_cell)}
+        ),
+        PhiSyndromeReplay = xls_parse:to_xls(
+            "src/examples/phi_decoder/phi_syndrome_replay_cell.erl",
+            #{shared_service_mode => ModeFor(phi_syndrome_replay_cell)}
+        ),
         PhiDecoderProfile = xls_topology_dslx:emit(
             ProfilePlan,
             ProfilePhysical

@@ -49,7 +49,7 @@ profile(ShardCount) ->
         name => phi_noise_topology,
         channel_depth => 1,
         actor_egress_depth => burst,
-        reduction_transport => {joined, 3},
+        reduction_transport => source_fragments,
         scheduler_groups => scheduler_groups(ShardCount)
     }.
 

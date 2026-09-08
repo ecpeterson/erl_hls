@@ -177,11 +177,18 @@ generated_sidecar_projection_does_not_need_actor_data_test() ->
 
 fold_relay_is_only_emitted_for_reduction_services_test() ->
     ReductionXls = iolist_to_binary(xls_parse:to_xls(?FIXTURE)),
+    AggregateOnlyXls = iolist_to_binary(xls_parse:to_xls(
+        ?FIXTURE, #{shared_service_mode => aggregate_only}
+    )),
     OrdinaryXls = iolist_to_binary(xls_parse:to_xls(
         "test/hls_topology_layout_fixture.erl"
     )),
     ?assertNotEqual(nomatch, binary:match(
         ReductionXls,
+        <<"proc FoldRelay {">>
+    )),
+    ?assertEqual(nomatch, binary:match(
+        AggregateOnlyXls,
         <<"proc FoldRelay {">>
     )),
     ?assertEqual(nomatch, binary:match(

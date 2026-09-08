@@ -11,6 +11,7 @@ shard_count=${4:-3}
 pipeline_stages=${5:-2}
 initiation_interval=${6:-2}
 scheduler_count=$((2 + 2 * shard_count))
+profiled_phi_scheduler_count=$((2 * shard_count))
 stdlib="$xls_root/xls/dslx/stdlib"
 . "$stage/phi_scheduler_rams.sh"
 
@@ -150,6 +151,9 @@ fi
 
 awk -F= \
     -v expected_window_routers="$scheduler_count" \
+    -v expected_scheduler_candidates="$scheduler_count" \
+    -v expected_profiled_schedulers="$scheduler_count" \
+    -v expected_profiled_phi_schedulers="$profiled_phi_scheduler_count" \
     -v expected_window_domains="$effect_domain_count" '
     /_selection_activations=/ {
         name = $1
@@ -208,6 +212,12 @@ awk -F= \
     }
     /^profile_observed_cycles=/ {
         observed_cycles = $2
+    }
+    /^scheduler_profile_candidates=/ {
+        scheduler_profile_candidates = $2
+    }
+    /^scheduler_profile_count=/ {
+        scheduler_profile_count = $2
     }
     /^effect_window_router_candidates=/ {
         window_router_candidates = $2
@@ -305,8 +315,11 @@ awk -F= \
     }
     END {
         found = 0
+        profiled_phi_schedulers = 0
         for (name in activations) {
             found = 1
+            if (name ~ /^phi_[0-9]+$/)
+                profiled_phi_schedulers++
             if (accounted[name] != activations[name])
                 exit 1
             if (occupancy_samples[name] != activations[name])
@@ -361,6 +374,9 @@ awk -F= \
             total_plane_sends += plane_aggregate_sends[name]
         }
         if (!found || !found_window ||
+                scheduler_profile_candidates != expected_scheduler_candidates ||
+                scheduler_profile_count != expected_profiled_schedulers ||
+                profiled_phi_schedulers != expected_profiled_phi_schedulers ||
                 window_router_candidates != expected_window_routers ||
                 window_router_count != expected_window_routers ||
                 window_domain_candidates != expected_window_domains ||
@@ -379,6 +395,9 @@ awk -F= \
 {
     printf 'shard_count=%s\n' "$shard_count"
     printf 'scheduler_count=%s\n' "$scheduler_count"
+    printf 'profiled_scheduler_count=%s\n' "$scheduler_count"
+    printf 'profiled_phi_scheduler_count=%s\n' \
+        "$profiled_phi_scheduler_count"
     printf 'pipeline_stages=%s\n' "$pipeline_stages"
     printf 'initiation_interval=%s\n' "$initiation_interval"
     grep -H -E 'PROFILE_RESULT|PROFILE_ACTIVITY|PASS:' \

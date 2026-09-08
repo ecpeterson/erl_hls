@@ -89,11 +89,90 @@ def phi_router_map(events: list[Event], schedulers: list[str]) -> dict[str, str]
     return dict(zip(schedulers, routers[-len(schedulers):], strict=True))
 
 
-def parse_destination_tables(path: Path | None) -> dict[str, dict[int, list[int]]]:
+def source_fragment_destination_table(
+    source: str, plane: str
+) -> dict[int, list[int]] | None:
+    """Invert the generated source-fragment plane's per-destination heads.
+
+    A source-fragment plane stores one FIFO bank per reduction lane.  Its
+    `pop_sources` table says which source head each lane consumes for a given
+    destination.  Inverting every lane permutation recovers the same stable
+    source-to-destinations metadata emitted explicitly by the older
+    joined transport, without adding any hardware solely for profiling.
+    """
+    marker = f"struct Phi_{plane}ReductionFragmentQueue"
+    if marker not in source:
+        return None
+    match = re.search(
+        rf"proc Phi_{plane}ReductionPlane\s*\{{.*?"
+        rf"let pop_sources = match output_slot \{{(?P<body>.*?)\n\s*_ =>",
+        source,
+        re.DOTALL,
+    )
+    if not match:
+        raise SystemExit(
+            f"cannot parse source-fragment destinations for phi {plane}"
+        )
+    inverse = {}
+    for row in re.finditer(
+        r"u32:(\d+)\s*=>\s*\[([^]]+)\]", match.group("body")
+    ):
+        inverse[int(row.group(1))] = [
+            int(value) for value in re.findall(r"u32:(\d+)", row.group(2))
+        ]
+    if not inverse:
+        raise SystemExit(
+            f"empty source-fragment destination table for phi {plane}"
+        )
+    populations = {len(sources) for sources in inverse.values()}
+    if len(populations) != 1:
+        raise SystemExit(
+            f"ragged source-fragment destination table for phi {plane}"
+        )
+    population = populations.pop()
+    actor_count = len(inverse)
+    expected = set(range(actor_count))
+    destinations = {
+        source_actor: [None] * population
+        for source_actor in range(actor_count)
+    }
+    for destination, sources in inverse.items():
+        if destination not in expected:
+            raise SystemExit(
+                f"sparse source-fragment destinations for phi {plane}"
+            )
+        for lane, source_actor in enumerate(sources):
+            if source_actor not in expected:
+                raise SystemExit(
+                    f"invalid source-fragment source for phi {plane}"
+                )
+            if destinations[source_actor][lane] is not None:
+                raise SystemExit(
+                    f"non-bijective source-fragment lane for phi {plane}"
+                )
+            destinations[source_actor][lane] = destination
+    if any(
+        destination is None
+        for rows in destinations.values()
+        for destination in rows
+    ):
+        raise SystemExit(
+            f"incomplete source-fragment destinations for phi {plane}"
+        )
+    return {
+        source_actor: [int(destination) for destination in rows]
+        for source_actor, rows in destinations.items()
+    }
+
+
+def parse_reduction_topology(
+    path: Path | None,
+) -> tuple[dict[str, dict[int, list[int]]], set[str]]:
     if path is None or not path.exists():
-        return {}
+        return {}, set()
     source = path.read_text(encoding="utf-8")
     tables = {}
+    source_fragment_planes = set()
     for plane in ("x", "z"):
         match = re.search(
             rf"fn phi_{plane}_reduction_destinations\(source: u32\).*?"
@@ -101,19 +180,27 @@ def parse_destination_tables(path: Path | None) -> dict[str, dict[int, list[int]
             source,
             re.DOTALL,
         )
-        if not match:
-            continue
-        table = {}
-        for row in re.finditer(
-            r"u32:(\d+)\s*=>\s*\[([^]]+)\]", match.group("body")
-        ):
-            table[int(row.group(1))] = [
-                int(value)
-                for value in re.findall(r"u32:(\d+)", row.group(2))
-            ]
-        if table:
-            tables[plane] = table
-    return tables
+        if match:
+            table = {}
+            for row in re.finditer(
+                r"u32:(\d+)\s*=>\s*\[([^]]+)\]", match.group("body")
+            ):
+                table[int(row.group(1))] = [
+                    int(value)
+                    for value in re.findall(r"u32:(\d+)", row.group(2))
+                ]
+            if table:
+                tables[plane] = table
+        fragment_table = source_fragment_destination_table(source, plane)
+        if fragment_table is not None:
+            tables[plane] = fragment_table
+            source_fragment_planes.add(plane)
+    return tables, source_fragment_planes
+
+
+def parse_destination_tables(path: Path | None) -> dict[str, dict[int, list[int]]]:
+    """Retain the original table-only helper for callers outside this tool."""
+    return parse_reduction_topology(path)[0]
 
 
 def event_site(event: Event) -> str | None:
@@ -126,6 +213,7 @@ def dependency_graph(
     planes: list[str],
     router_map: dict[str, str],
     destination_tables: dict[str, dict[int, list[int]]],
+    source_fragment_planes: set[str] | None = None,
 ) -> list[Dependency]:
     """Infer preserved-order dependencies between observed handshakes.
 
@@ -135,6 +223,7 @@ def dependency_graph(
     additionally use the generated static destination table.
     """
     dependencies: list[Dependency] = []
+    source_fragment_planes = source_fragment_planes or set()
     by_component: dict[str, list[Event]] = defaultdict(list)
     for event in events:
         by_component[event.component].append(event)
@@ -222,6 +311,7 @@ def dependency_graph(
     for group, plane in zip(groups, planes, strict=True):
         tag = "x" if "_x_" in plane else "z"
         table = destination_tables.get(tag, {})
+        source_fragment = tag in source_fragment_planes
         inverse_last = {
             destinations[-1]: source
             for source, destinations in table.items()
@@ -234,7 +324,9 @@ def dependency_graph(
             fields = detail_fields(event.detail)
             shard = int(fields.get("source", "-1"))
             batches_by_shard[shard].append(event)
-            if event.slot in inverse_last:
+            if source_fragment and event.slot is not None:
+                batch_sources[id(event)] = event.slot
+            elif event.slot in inverse_last:
                 batch_sources[id(event)] = inverse_last[event.slot]
         for shard, scheduler in enumerate(group):
             router = router_map[scheduler]
@@ -246,7 +338,10 @@ def dependency_graph(
                 unmatched_accepts = list(routed_accepts[router])
                 matched_sends: list[tuple[Event, Event, int | None]] = []
                 for sent in sends:
-                    source = inverse_last.get(sent.slot)
+                    source = (
+                        sent.slot if source_fragment
+                        else inverse_last.get(sent.slot)
+                    )
                     candidates = [
                         (index, accepted)
                         for index, (accepted, accepted_source) in
@@ -334,21 +429,23 @@ def dependency_graph(
 
         if not table:
             continue
-        contributions: dict[int, deque[Event]] = defaultdict(deque)
+        population = len(next(iter(table.values())))
+        contributions: dict[tuple[int, int], deque[Event]] = defaultdict(deque)
         for event in by_component[plane]:
             if event.event == "batch_accept":
                 source = batch_sources.get(id(event))
                 if source is not None:
-                    for destination in table[source]:
-                        contributions[destination].append(event)
+                    for lane, destination in enumerate(table[source]):
+                        contributions[(destination, lane)].append(event)
             elif event.event == "aggregate_send" and event.slot is not None:
                 shard = int(detail_fields(event.detail).get("shard", "-1"))
                 destination = event.slot * len(group) + shard
                 members = [
-                    contributions[destination].popleft()
-                    for _ in range(min(4, len(contributions[destination])))
+                    contributions[(destination, lane)].popleft()
+                    for lane in range(population)
+                    if contributions[(destination, lane)]
                 ]
-                if len(members) == 4:
+                if len(members) == population:
                     for member in members:
                         source = batch_sources.get(id(member))
                         dependencies.append(Dependency(
@@ -549,7 +646,8 @@ def render_svg(
     title_id = f"phi-timeline-title{id_suffix}"
     desc_id = f"phi-timeline-desc{id_suffix}"
     svg = [
-        f'<svg viewBox="0 0 {width} {height}" role="img" '
+        f'<svg xmlns="http://www.w3.org/2000/svg" '
+        f'viewBox="0 0 {width} {height}" role="img" '
         f'aria-labelledby="{title_id} {desc_id}" '
         'style="width:100%;height:auto;display:block">',
         f'<title id="{title_id}">Clock-aligned phi reduction timeline</title>',
@@ -806,7 +904,8 @@ def cross_shard_svg(
     title_id = f"phi-causal-title{id_suffix}"
     desc_id = f"phi-causal-desc{id_suffix}"
     svg = [
-        f'<svg viewBox="0 0 {width} {height}" role="img" '
+        f'<svg xmlns="http://www.w3.org/2000/svg" '
+        f'viewBox="0 0 {width} {height}" role="img" '
         f'aria-labelledby="{title_id} {desc_id}" '
         'style="width:100%;height:auto;display:block">',
         f'<title id="{title_id}">Cross-shard phi data dependencies</title>',
@@ -1231,9 +1330,11 @@ def main() -> None:
         if topology is None:
             candidate = args.trace.parent / "phi_decoder_profile_topology.x"
             topology = candidate if candidate.exists() else None
-        destination_tables = parse_destination_tables(topology)
+        destination_tables, source_fragment_planes = \
+            parse_reduction_topology(topology)
         dependencies = dependency_graph(
-            events, groups, planes, router_map, destination_tables
+            events, groups, planes, router_map, destination_tables,
+            source_fragment_planes,
         ) if args.dependencies else []
         focus_cycle = args.focus_cycle
         if focus_cycle is None:

@@ -156,41 +156,50 @@ generated_multi_family_topology_retains_compact_structure_test() ->
     ?assertEqual(1, count(Generated, <<"proc Phi_zReductionPlane {">>)),
     ?assertEqual(1, count(Generated, <<"spawn Phi_xReductionPlane(">>)),
     ?assertEqual(1, count(Generated, <<"spawn Phi_zReductionPlane(">>)),
-    %% Destination slots travel with the batch.  Three physical fold lanes
-    %% consume the four-frame batches through one carried remainder rather
-    %% than rebuilding a nine-arm whole-array crossbar.
-    ?assertEqual(6, count(Generated, <<
-        "::reduction_aggregate_pair_push("
+    %% Each captured route owns a source-indexed depth-two edge queue.  A
+    %% destination consumes the four inverse-route heads with one aggregate
+    %% fold rather than updating a destination-wide combinational crossbar.
+    ?assertEqual(1, count(Generated, <<
+        "struct Phi_xReductionFragmentQueue {"
     >>)),
-    ?assertNotEqual(nomatch, binary:match(Generated, <<
-        "struct Phi_xReductionWork {"
-    >>)),
-    ?assertNotEqual(nomatch, binary:match(Generated, <<
-        "struct Phi_zReductionWork {"
+    ?assertEqual(1, count(Generated, <<
+        "struct Phi_zReductionFragmentQueue {"
     >>)),
     ?assertEqual(2, count(Generated, <<
-        "pending_cursor: if received"
+        "  current_valid: u1,\n"
+        "  current: axis::Frame,\n"
+        "  lookahead_valid: u1,\n"
+        "  lookahead: axis::Frame,"
+    >>)),
+    ?assertEqual(8, count(Generated, <<
+        ": Phi_xReductionFragmentQueue[u32:9]"
+    >>) + count(Generated, <<
+        ": Phi_zReductionFragmentQueue[u32:9]"
     >>)),
     ?assertEqual(2, count(Generated, <<
-        "destinations: u32[u32:4]"
-    >>)),
-    ?assertEqual(2, count(Generated, <<
-        "::ReductionAggregatePair[u32:9]"
+        "::reduction_aggregate_batch<u32:4>(frames)"
     >>)),
     %% Aggregate retirement and batch intake are independent handshakes in
-    %% one plane activation.  The single state update retires first, then
-    %% folds a simultaneously received batch into the promoted windows.
+    %% one plane activation. Admission is atomic across all four banks; a
+    %% single holding slot preserves a batch if its
+    %% four atomic edge-queue writes cannot yet proceed.
     ?assertEqual(2, count(Generated, <<
-        "let ready_slots = unroll_for!"
+        "let ready_slots = ["
     >>)),
     ?assertEqual(2, count(Generated, <<
-        "let (input_tok, received, batch) ="
+        "let (input_tok, received, incoming) ="
     >>)),
     ?assertEqual(2, count(Generated, <<
-        "let retired_pairs = if output_ready {"
+        "pending_valid: u1"
+    >>)),
+    ?assertEqual(2, count(Generated, <<
+        "let work_valid = state.pending_valid || received;"
     >>)),
     ?assertEqual(2, count(Generated, <<
         "let _done = join(output_tok, input_tok);"
+    >>)),
+    ?assertEqual(2, count(Generated, <<
+        "let can_insert = work_valid && source_valid && capacity_0 &&"
     >>)),
     ?assertEqual(6, count(Generated, <<
         "let last = batch_valid && if reduction_batch {"
@@ -198,6 +207,25 @@ generated_multi_family_topology_retains_compact_structure_test() ->
     ?assertEqual(6, count(Generated, <<
         "routed_tok, credit_out, forward_credit"
     >>)),
+    %% The source-fragment batch is the sole carrier for the four reduction
+    %% routes.  Pruning their ordinary producer ports leaves each phi shard
+    %% with only syndrome input plus its returned egress credit.
+    ?assertEqual(2, count(Generated, <<
+        "phi_halo_cell::SharedService<\n"
+        "      u32:9, u32:2, u32:9"
+    >>)),
+    lists:foreach(
+        fun(Port) ->
+            Needle = iolist_to_binary([
+                "phi_halo_cell::OutputPort::", Port, " => grant_tok"
+            ]),
+            ?assertEqual(2, count(Generated, Needle))
+        end,
+        ["NORTH", "EAST", "WEST", "SOUTH"]
+    ),
+    %% SharedService mode is selected when each actor module is generated,
+    %% rather than retained as a topology-time generic which forces XLS to
+    %% elaborate every dormant reduction path.
     ?assertEqual(1, count(Generated, <<"fn scheduler_0_address(">>)),
     ?assertEqual(1, count(Generated, <<"fn scheduler_1_address(">>)),
     ?assertEqual(1, count(Generated, <<"fn scheduler_2_address(">>)),
@@ -268,7 +296,61 @@ generated_one_shard_topology_retains_single_external_lanes_test() ->
     ),
     ?assertEqual(3, count(Generated, <<"::SharedService<">>)),
     ?assertEqual(0, count(Generated, <<"proc FrameArrayMux">>)),
-    ?assertEqual(0, count(Generated, <<"spawn FrameArrayMux">>)).
+    ?assertEqual(0, count(Generated, <<"spawn FrameArrayMux">>)),
+    ?assertEqual(1, count(Generated,
+        <<"proc SchedulerAggregateArrayMux">>)),
+    ?assertEqual(1, count(Generated,
+        <<"spawn SchedulerAggregateArrayMux">>)).
+
+generated_multi_plane_scheduler_arbitrates_typed_aggregates_test() ->
+    Generated = iolist_to_binary(
+        phi_noise_topology_dslx:to_dslx(3, 16#80000000, 1)
+    ),
+    ?assertNotEqual(nomatch, binary:match(Generated, <<
+        "aggregate_in: chan<phi_halo_cell::"
+        "ReductionAggregateRequest>[u32:2] in"
+    >>)),
+    ?assertNotEqual(nomatch, binary:match(Generated, <<
+        "chan<phi_halo_cell::ReductionAggregateRequest, "
+        "u32:0>[u32:2](\"scheduler_1_aggregate_sources\")"
+    >>)),
+    ?assertNotEqual(nomatch, binary:match(Generated, <<
+        "scheduler_1_aggregate_sources_c, scheduler_1_aggregate_p"
+    >>)),
+    ?assertNotEqual(nomatch, binary:match(Generated, <<
+        "spawn Phi_xReductionPlane(\n"
+        "      phi_x_reduction_batch_c,\n"
+        "      scheduler_1_aggregate_sources_p[u32:0])"
+    >>)),
+    ?assertNotEqual(nomatch, binary:match(Generated, <<
+        "spawn Phi_zReductionPlane(\n"
+        "      phi_z_reduction_batch_c,\n"
+        "      scheduler_1_aggregate_sources_p[u32:1])"
+    >>)),
+    %% Selection starts at the cursor and advances after each successful
+    %% transfer; empty planes are bypassed rather than consuming turns.
+    ?assertNotEqual(nomatch, binary:match(Generated, <<
+        "let unwrapped = state.cursor + offset;"
+    >>)),
+    ?assertNotEqual(nomatch, binary:match(Generated, <<
+        "let take = !choice.0 && available[candidate];"
+    >>)).
+
+generated_single_plane_scheduler_keeps_direct_aggregate_channel_test() ->
+    Generated = iolist_to_binary(phi_noise_topology_dslx:to_dslx()),
+    ?assertEqual(0, count(Generated,
+        <<"proc SchedulerAggregateArrayMux">>)),
+    ?assertEqual(0, count(Generated, <<"_aggregate_sources_">>)),
+    ?assertNotEqual(nomatch, binary:match(Generated, <<
+        "spawn Phi_xReductionPlane(\n"
+        "      phi_x_reduction_batch_c,\n"
+        "      scheduler_2_aggregate_p)"
+    >>)),
+    ?assertNotEqual(nomatch, binary:match(Generated, <<
+        "spawn Phi_zReductionPlane(\n"
+        "      phi_z_reduction_batch_c,\n"
+        "      scheduler_3_aggregate_p)"
+    >>)).
 
 generated_phi_family_shards_use_static_destination_tables_test() ->
     lists:foreach(
@@ -311,10 +393,10 @@ generated_phi_routes_mark_sender_addressed_reductions_test() ->
 
 generated_family_topology_uses_explicit_actor_egress_depth_test() ->
     Plan = hls_topology:normalize(phi_noise_topology:topology()),
-    Profile = maps:remove(
+    Profile = (maps:remove(
         scheduler_groups,
         phi_noise_topology_dslx:profile()
-    ),
+    ))#{reduction_transport := ordinary},
     lists:foreach(
         fun(Depth) ->
             Generated = iolist_to_binary(xls_topology_dslx:emit(
@@ -408,6 +490,122 @@ family_backend_rejects_invalid_reduction_transport_test() ->
         )
     ).
 
+source_fragment_transport_rejects_captured_port_after_prefix_test() ->
+    Plan = hls_topology:normalize(
+        source_fragment_captured_port_topology()
+    ),
+    ?assertError(
+        {source_fragment_captured_port_outside_prefix,
+            reducer, reporting, 0, north, notice},
+        xls_topology_dslx:emit(
+            Plan,
+            source_fragment_profile([reducer])
+        )
+    ).
+
+source_fragment_transport_rejects_ordinary_contribution_route_test() ->
+    Plan = hls_topology:normalize(
+        source_fragment_ordinary_contributor_topology()
+    ),
+    ?assertError(
+        {source_fragment_ordinary_contribution_route,
+            reducer, {source, out}, [message]},
+        xls_topology_dslx:emit(
+            Plan,
+            source_fragment_profile([reducer, source])
+        )
+    ).
+
+source_fragment_transport_rejects_contribution_ingress_test() ->
+    Plan = hls_topology:normalize(
+        source_fragment_contribution_ingress_topology()
+    ),
+    ?assertError(
+        {source_fragment_contribution_ingress,
+            reducer, contributions, values, [message]},
+        xls_topology_dslx:emit(
+            Plan,
+            source_fragment_profile([reducer, source])
+        )
+    ).
+
+source_fragment_transport_rejects_contribution_startup_test() ->
+    Plan = hls_topology:normalize(
+        source_fragment_contribution_startup_topology()
+    ),
+    ?assertError(
+        {source_fragment_contribution_startup,
+            reducer, [0, 0], message},
+        xls_topology_dslx:emit(
+            Plan,
+            source_fragment_profile([reducer, source])
+        )
+    ).
+
+source_fragment_transport_rejects_direct_reducer_test() ->
+    Plan = hls_topology:normalize(
+        source_fragment_closed_topology()
+    ),
+    ?assertError(
+        {source_fragment_requires_scheduler, reducer},
+        xls_topology_dslx:emit(
+            Plan,
+            source_fragment_profile([source])
+        )
+    ).
+
+source_fragment_transport_rejects_ordinary_self_route_test() ->
+    Plan = hls_topology:normalize(
+        source_fragment_ordinary_self_route_topology()
+    ),
+    ?assertError(
+        {source_fragment_ordinary_self_route, reducer, report},
+        xls_topology_dslx:emit(
+            Plan,
+            source_fragment_profile([reducer, source])
+        )
+    ).
+
+source_fragment_transport_allows_external_report_route_test() ->
+    Plan = hls_topology:normalize(source_fragment_closed_topology()),
+    Generated = iolist_to_binary(xls_topology_dslx:emit(
+        Plan,
+        source_fragment_profile([reducer, source])
+    )),
+    ?assertNotEqual(nomatch, binary:match(Generated, <<
+        "reports_out: chan<axis::Frame> out"
+    >>)).
+
+source_fragment_transport_rejects_non_inverse_closed_routes_test() ->
+    Spec = phi_noise_topology:topology(3),
+    Relations = [
+        case Relation of
+            {{phi_x, north}, _Recipients} ->
+                %% Remove north's inverse without violating the more general
+                %% joined-prefix requirement that every contribution follows
+                %% one direct, wrapped self-family translation.
+                {{phi_x, north}, [
+                    {family, phi_x, {translate, [0, 0], wrap}}
+                ]};
+            _ ->
+                Relation
+        end
+        || Relation <- maps:get(route_relations, Spec)
+    ],
+    Plan = hls_topology:normalize(Spec#{route_relations := Relations}),
+    try xls_topology_dslx:emit(
+            Plan,
+            phi_noise_topology_dslx:profile()
+        ) of
+        _ -> ?assert(false)
+    catch
+        error:{source_fragment_routes_not_inverse_closed,
+                phi_x, Offset, Inverse, Offsets} ->
+            ?assertEqual({0, 1}, Offset),
+            ?assertEqual({0, 2}, Inverse),
+            ?assertEqual([{0, 0}, {1, 0}, {2, 0}, {0, 1}], Offsets)
+    end.
+
 family_backend_rejects_invalid_joined_fold_width_test() ->
     Plan = hls_topology:normalize(phi_noise_topology:topology(1)),
     Profile = phi_noise_topology_dslx:profile(),
@@ -426,18 +624,53 @@ family_backend_rejects_invalid_joined_fold_width_test() ->
         )
     ).
 
-ordinary_reduction_transport_owns_idle_aggregate_endpoints_test() ->
+shared_service_modes_follow_physical_reduction_transport_test() ->
+    Plan = hls_topology:normalize(phi_noise_topology:topology(1)),
+    Profile = phi_noise_topology_dslx:profile(),
+    ?assertEqual(
+        #{
+            phenom_data_cell => ordinary,
+            phenom_syndrome_cell => ordinary,
+            phi_halo_cell => aggregate_only
+        },
+        xls_topology_dslx:shared_service_modes(Plan, Profile)
+    ),
+    ?assertEqual(
+        #{
+            phenom_data_cell => ordinary,
+            phenom_syndrome_cell => ordinary,
+            phi_halo_cell => joined
+        },
+        xls_topology_dslx:shared_service_modes(
+            Plan,
+            Profile#{reduction_transport => joined}
+        )
+    ),
+    ?assertEqual(
+        #{
+            phenom_data_cell => ordinary,
+            phenom_syndrome_cell => ordinary,
+            phi_halo_cell => ordinary
+        },
+        xls_topology_dslx:shared_service_modes(
+            Plan,
+            Profile#{reduction_transport => ordinary}
+        )
+    ).
+
+ordinary_reduction_transport_omits_aggregate_endpoints_test() ->
     Plan = hls_topology:normalize(phi_noise_topology:topology(1)),
     Profile = phi_noise_topology_dslx:profile(),
     Generated = iolist_to_binary(xls_topology_dslx:emit(
         Plan,
         Profile#{reduction_transport => ordinary}
     )),
-    %% An unconnected internal producer becomes a constant zero producer in
-    %% XLS. Explicit never-sending procs keep the optional aggregate input
-    %% genuinely idle when this physical transport is disabled.
-    ?assertEqual(2, count(Generated, <<"proc SchedulerAggregateIdle">>)),
-    ?assertEqual(2, count(Generated, <<"spawn SchedulerAggregateIdle">>)),
+    %% Mode-specialized actor artifacts no longer expose an aggregate input
+    %% when this transport is disabled, so the topology needs neither a
+    %% never-sending producer nor a dormant aggregate channel.
+    ?assertEqual(0, count(Generated, <<"proc SchedulerAggregateIdle">>)),
+    ?assertEqual(0, count(Generated, <<"spawn SchedulerAggregateIdle">>)),
+    ?assertEqual(0, count(Generated, <<"ReductionAggregateRequest">>)),
     ?assertEqual(0, count(Generated, <<"ReductionPlane {">>)).
 
 family_backend_rejects_cross_family_selector_remap_test() ->
@@ -704,6 +937,127 @@ external_fixture_topology(Externals, Relations) ->
         routes => [],
         route_relations => Relations,
         startup => []
+    }.
+
+source_fragment_captured_port_topology() ->
+    #{
+        version => 1,
+        ingresses => [],
+        actors => #{},
+        families => #{
+            reducer => #{
+                module => hls_topology_source_fragment_port_fixture,
+                shape => [2, 2]
+            }
+        },
+        externals => [{reports, out, [notice]}],
+        routes => [],
+        route_relations => [
+            {{reducer, north}, [
+                {family, reducer, {translate, [0, -1], wrap}}
+            ]},
+            {{reducer, south}, [
+                {family, reducer, {translate, [0, 1], wrap}}
+            ]},
+            {{reducer, report}, [{external, reports}]}
+        ],
+        startup => []
+    }.
+
+source_fragment_ordinary_contributor_topology() ->
+    Spec = source_fragment_closed_topology(),
+    Spec#{route_relations := [
+        case Relation of
+            {{source, out}, _Recipients} ->
+                {{source, out}, queued, [
+                    {family, reducer, {translate, [0, 0], wrap}},
+                    {external, messages}
+                ]};
+            _ ->
+                Relation
+        end
+        || Relation <- maps:get(route_relations, Spec)
+    ]}.
+
+source_fragment_contribution_ingress_topology() ->
+    Spec = source_fragment_closed_topology(),
+    Spec#{ingresses := [
+        {contributions, {rectangle, [2, 2]}, [
+            {values, [message], [
+                {family, reducer, {embed, [1, 1], [0, 0]}}
+            ]}
+        ]}
+    ]}.
+
+source_fragment_contribution_startup_topology() ->
+    Spec = source_fragment_closed_topology(),
+    Spec#{startup := [
+        {{reducer, X, Y}, [{message, 0}]}
+        || X <- lists:seq(0, 1),
+           Y <- lists:seq(0, 1)
+    ]}.
+
+source_fragment_ordinary_self_route_topology() ->
+    Spec = source_fragment_closed_topology(),
+    Spec#{route_relations := [
+        case Relation of
+            {{reducer, report}, _Recipients} ->
+                {{reducer, report}, [
+                    {family, reducer, {translate, [0, 0], wrap}}
+                ]};
+            _ ->
+                Relation
+        end
+        || Relation <- maps:get(route_relations, Spec)
+    ]}.
+
+source_fragment_closed_topology() ->
+    #{
+        version => 1,
+        ingresses => [],
+        actors => #{},
+        families => #{
+            reducer => #{
+                module => hls_topology_source_fragment_fixture,
+                shape => [2, 2]
+            },
+            source => #{
+                module => hls_topology_source_fixture,
+                shape => [2, 2]
+            }
+        },
+        externals => [
+            {messages, out, [message]},
+            {reports, out, [notice]}
+        ],
+        routes => [],
+        route_relations => [
+            {{reducer, north}, [
+                {family, reducer, {translate, [0, -1], wrap}}
+            ]},
+            {{reducer, south}, [
+                {family, reducer, {translate, [0, 1], wrap}}
+            ]},
+            {{reducer, report}, [{external, reports}]},
+            {{source, out}, [{external, messages}]}
+        ],
+        startup => []
+    }.
+
+source_fragment_profile(Families) ->
+    #{
+        name => source_fragment_validation,
+        channel_depth => 1,
+        actor_egress_depth => burst,
+        reduction_transport => source_fragments,
+        scheduler_groups => maps:from_list([
+            {Family, #{
+                members => [{family, Family}],
+                state_storage => block_ram,
+                mailbox_storage => block_ram
+            }}
+            || Family <- Families
+        ])
     }.
 
 scrub_dimensions(Generated, Value) ->

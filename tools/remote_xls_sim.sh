@@ -351,19 +351,11 @@ iverilog \
 
 vvp phi_torus_topology.vvp
 
-# Elaborate the checked distance-three graph to IR so distinct cross-family
-# shifts and wrapping are accepted by the pinned XLS build. The opt-in
-# run_phi_noise_topology_sim.sh handles full distance-three RTL simulation;
-# this routine regression keeps the cheaper distance-one smoke below.
-"$xls_root/ir_converter_main" \
-    --warnings_as_errors=false \
-    --dslx_path=. \
-    --dslx_stdlib_path="$stdlib" \
-    --top=Top \
-    phi_noise_topology.x > phi_noise_topology.ir
-
-# This distance-one graph exercises all six family types, per-instance
-# startup, and the syndrome-to-phi result paths through generated RTL.
+# A clean distance-three source-fragment elaboration is intentionally opt-in:
+# tools/run_phi_noise_topology_sim.sh and tools/run_phi_decoder_profile.sh own
+# that coverage because conversion alone can exceed the routine CI timeout.
+# This distance-one graph exercises all six family types, per-instance startup,
+# and the syndrome-to-phi result paths through generated RTL.
 "$xls_root/ir_converter_main" \
     --warnings_as_errors=false \
     --dslx_path=. \

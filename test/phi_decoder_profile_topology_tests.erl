@@ -38,23 +38,31 @@ global_effect_window_remains_the_default_test() ->
     >>)),
     ?assertEqual(0, count(Generated, <<"Effect-window domain">>)).
 
-three_fold_lanes_carry_the_fourth_contribution_test() ->
+source_fragment_plane_uses_inverse_route_edge_queues_test() ->
     Generated = iolist_to_binary(
         phi_decoder_profile_topology_dslx:to_dslx()
     ),
-    assert_contains(Generated, <<"struct Phi_xReductionWork {">>),
-    assert_contains(Generated, <<"struct Phi_zReductionWork {">>),
-    ?assertEqual(6, count(Generated, <<
-        "::reduction_aggregate_pair_push("
+    assert_contains(Generated, <<"struct Phi_xReductionFragmentQueue {">>),
+    assert_contains(Generated, <<"struct Phi_zReductionFragmentQueue {">>),
+    ?assertEqual(8, count(Generated, <<
+        ": Phi_xReductionFragmentQueue[u32:9]"
+    >>) + count(Generated, <<
+        ": Phi_zReductionFragmentQueue[u32:9]"
     >>)),
     ?assertEqual(2, count(Generated, <<
-        "let pending_remaining = if state.pending_valid"
+        "::reduction_aggregate_batch<u32:4>(frames)"
     >>)),
     ?assertEqual(2, count(Generated, <<
-        "let can_receive = !state.pending_valid"
+        "let (input_tok, received, incoming) ="
     >>)),
     ?assertEqual(2, count(Generated, <<
-        "pending_cursor: if received"
+        "pending_valid: u1"
+    >>)),
+    ?assertEqual(2, count(Generated, <<
+        "let work_valid = state.pending_valid || received;"
+    >>)),
+    ?assertEqual(2, count(Generated, <<
+        "let _done = join(output_tok, input_tok);"
     >>)).
 
 weak_component_effect_windows_follow_the_disconnected_planes_test() ->

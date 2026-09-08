@@ -34,7 +34,7 @@ concatenates every block in include-expanded source order. That order is part
 of the wire ABI: appending a block preserves existing tag values, while
 prepending or moving one can renumber them. Every entry must be a unique atom.
 """.
--export([actor_interface/1, to_xls/1]).
+-export([actor_interface/1, to_xls/1, to_xls/2]).
 %% Internal API shared by the actor-specific lowerers while this module is
 %% split into smaller compiler passes.
 -export([
@@ -76,10 +76,33 @@ prepending or moving one can renumber them. Every entry must be a unique atom.
 -spec to_xls(string()) -> iolist().
 -doc "Transpiles a supported Erlang actor module to a corresponding XLS module.".
 to_xls(Filename) ->
+    to_xls(Filename, #{shared_service_mode => ordinary}).
+
+-spec to_xls(string(), #{shared_service_mode =>
+    ordinary | joined | aggregate_only}) -> iolist().
+-doc "Transpiles an actor with an explicitly selected shared-service shape.".
+to_xls(Filename, Options) when is_map(Options) ->
+    Mode = shared_service_mode(Options),
     {ok, Forms} = parse_file(Filename),
     case find_optional_attribute(Forms, hls_phases) of
-        none -> to_xls_gs(Filename, Forms);
-        {ok, PhaseNames} -> to_xls_statem(Filename, Forms, PhaseNames)
+        none when Mode =:= ordinary -> to_xls_gs(Filename, Forms);
+        none -> error({unsupported_hls_gs_shared_service_mode, Mode});
+        {ok, PhaseNames} ->
+            to_xls_statem(Filename, Forms, PhaseNames, Mode)
+    end.
+
+shared_service_mode(Options) ->
+    case Options of
+        #{shared_service_mode := Mode} when Mode =:= ordinary;
+                Mode =:= joined; Mode =:= aggregate_only ->
+            case maps:keys(Options) of
+                [shared_service_mode] -> Mode;
+                Keys -> error({invalid_xls_options, Keys})
+            end;
+        #{shared_service_mode := Mode} ->
+            error({invalid_shared_service_mode, Mode});
+        _ ->
+            error({invalid_xls_options, maps:keys(Options)})
     end.
 
 -spec actor_interface(file:filename()) -> map().
@@ -206,7 +229,12 @@ to_xls_gs(Filename, Forms) ->
     print(Emitted).
 
 to_xls_statem(Filename, Forms, PhaseNames) ->
-    xls_statem_lower:lower(Filename, Forms, PhaseNames).
+    to_xls_statem(Filename, Forms, PhaseNames, ordinary).
+
+to_xls_statem(Filename, Forms, PhaseNames, SharedServiceMode) ->
+    xls_statem_lower:lower(
+        Filename, Forms, PhaseNames, SharedServiceMode
+    ).
 
 %% We employ a limited IR with three kinds of objects:
 %%  + static objects which admit expression in terms of the XLS runtime,

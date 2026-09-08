@@ -533,7 +533,10 @@ generated_dslx_matches_checked_in_artifact_test() ->
         "src/examples/phi_decoder/phi_halo_cell.erl.x"
     ),
     Generated = iolist_to_binary(
-        xls_parse:to_xls("src/examples/phi_decoder/phi_halo_cell.erl")
+        xls_parse:to_xls(
+            "src/examples/phi_decoder/phi_halo_cell.erl",
+            #{shared_service_mode => aggregate_only}
+        )
     ),
     ?assertEqual(Expected, Generated),
     ?assertNotEqual(
