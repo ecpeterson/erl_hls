@@ -279,7 +279,8 @@ prove_fragments(FamilyId, Shape, Pattern) ->
             false -> error({source_fragment_non_normalized_offset, FamilyId, Offset, Normal})
         end,
         Inverse = normalize_offset(negate(Offset), Shape),
-        Residues = [positive_mod(D + I, Size) || {D, I, Size} <- zip3(Offset, Inverse, Shape)],
+        Residues = [positive_mod(D + I, Size)
+            || {D, I, Size} <- lists:zip3(Offset, Inverse, Shape)],
         case Residues =:= [0, 0] of
             true -> ok;
             false -> error({source_fragment_non_bijective_translation,
@@ -314,8 +315,6 @@ canonical_offset(Value, Size) ->
     Residue = positive_mod(Value, Size),
     case Residue > Size div 2 of true -> Residue - Size; false -> Residue end.
 positive_mod(Value, Modulus) -> ((Value rem Modulus) + Modulus) rem Modulus.
-zip3([A | As], [B | Bs], [C | Cs]) -> [{A, B, C} | zip3(As, Bs, Cs)];
-zip3([], [], []) -> [].
 
 scheduled_groups(FamilyId, Module, Scheduler) ->
     References = lists:append([[{maps:get(id, Group), maps:get(reference, Member)}
