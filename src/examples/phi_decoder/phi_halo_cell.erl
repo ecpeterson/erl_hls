@@ -38,10 +38,13 @@ meanings:
 Phi messages carry a wrapping diffusion epoch in their first `u32` word. The
 cell derives that epoch from its decoder step and diffusion round, so repeated
 diffusion does not widen the 96-bit phi frame. Messages for the next diffusion
-epoch or phase may arrive early. They are postponed until the phase changes or
-is explicitly repeated, then retried in their original arrival order. Partial
-sums, receive masks, and receive counts are ordinary data changes and do not
-themselves retry a postponed message.
+epoch or phase may arrive early. Each cell stores the absolute diffusion epoch
+and advances it once per completed round. Early messages are postponed until
+the phase changes or is explicitly repeated, then retried in their original
+arrival order. Partial sums, receive masks, and receive counts live in
+actor-owned reduction state and do not themselves retry a postponed message.
+Their completion events perform the one ordinary actor-state update at each
+barrier.
 
 The generated module exposes seven separately backpressured output ports:
 `north`, `east`, `west`, and `south` for the decoder mesh, `syndrome` for its
@@ -128,7 +131,8 @@ counterpart.
     gathering/3,
     comparing/3,
     flipping/3,
-    init/1
+    init/1,
+    reduce/3
 ]).
 
 -define(LAYER_COUNT, 2).
@@ -161,22 +165,24 @@ counterpart.
 
 -record(cell, {
     step = hls_type:zero() :: hls_nums:u32(),
-    diffusion_round = hls_type:zero() :: hls_nums:u32(),
+    diffusion_epoch = hls_type:zero() :: hls_nums:u32(),
     phi = hls_type:zero() ::
         hls_lists:list(phi_field:field(), ?LAYER_COUNT),
-    phi_sum = hls_type:zero() ::
-        hls_lists:list(hls_nums:s64(), ?LAYER_COUNT),
-    phi_received = hls_type:zero() :: hls_nums:u8(),
-    seen_sources = hls_type:zero() :: hls_nums:u32(),
-    best_phi0 = hls_type:zero() :: phi_field:field(),
     best_direction = hls_type:zero() :: hls_nums:u32(),
-    moves_received = hls_type:zero() :: hls_nums:u8(),
     anyon = hls_type:zero() :: hls_nums:u32(),
     random_state = hls_type:zero() :: hls_nums:u32(),
     x = hls_type:zero() :: hls_nums:u16(),
     y = hls_type:zero() :: hls_nums:u16(),
     noise_quiet = hls_type:zero() :: hls_nums:u32(),
     status_valid = hls_type:zero() :: hls_nums:u32()
+}).
+
+%% Private actor state shared by the three barrier reductions. `value0` and
+%% `value1` hold widened layer sums during diffusion, maximum and winner mask
+%% during comparison, and incoming parity in `value0` during movement.
+-record(phi_fold, {
+    value0 = hls_type:zero() :: hls_nums:s64(),
+    value1 = hls_type:zero() :: hls_nums:s64()
 }).
 
 -type phase() :: configuring | measuring | gathering | comparing | flipping.
@@ -384,12 +390,16 @@ measuring(cast, #anyon_move{}, Cell) ->
     (cast,
         #phi_config{} | #phi{} | #phi0{} | #anyon_move{} |
             #phenom_anyon{},
-        #cell{}) -> hls_statem:cast_result(phase(), #cell{}).
+        #cell{}) -> hls_statem:cast_result(phase(), #cell{});
+    (internal, hls_statem:reduction_complete(), #cell{}) ->
+        hls_statem:internal_result(phase(), #cell{}).
 gathering(enter, _OldPhase, Cell) ->
-    Epoch = ((Cell#cell.step * ?DIFFUSION_ROUNDS) +
-        Cell#cell.diffusion_round) band ?U32_MASK,
+    Epoch = Cell#cell.diffusion_epoch,
     Message = #phi{epoch = Epoch, values = Cell#cell.phi},
     {Cell, [
+        {open_reduction, diffusion, Cell#cell.diffusion_epoch,
+            {count, ?NEIGHBOR_COUNT},
+            {commutative_monoid, #phi_fold{value0 = 0, value1 = 0}}},
         {cast, north, Message},
         {cast, east, Message},
         {cast, west, Message},
@@ -398,62 +408,37 @@ gathering(enter, _OldPhase, Cell) ->
 gathering(
     cast,
     #phi{epoch = Epoch, values = Values},
-    Cell = #cell{step = Step, diffusion_round = Round}
-) when Epoch =:= ((Step * ?DIFFUSION_ROUNDS + Round) band ?U32_MASK) ->
-    Value0 = hls_lists:nth(1, Values),
-    Value1 = hls_lists:nth(2, Values),
-    Sum0 = phi_field:accumulate(
-        hls_lists:nth(1, Cell#cell.phi_sum), Value0
-    ),
-    Sum1 = phi_field:accumulate(
-        hls_lists:nth(2, Cell#cell.phi_sum), Value1
-    ),
-    SumFirst = hls_lists:set(1, Cell#cell.phi_sum, Sum0),
-    NewSum = hls_lists:set(2, SumFirst, Sum1),
-    ReceivedNext = Cell#cell.phi_received + 1,
-    case ReceivedNext =:= ?NEIGHBOR_COUNT of
-        false ->
-            Accumulated = Cell#cell{
-                phi_sum = NewSum,
-                phi_received = ReceivedNext
-            },
-            {gathering, Accumulated, consume};
-        true ->
-            P0 = hls_lists:nth(1, Cell#cell.phi),
-            P1 = hls_lists:nth(2, Cell#cell.phi),
-            New0 = phi_field:relax_center(
-                Cell#cell.anyon, P0, P1, Sum0
-            ),
-            New1 = phi_field:relax_bulk(P0, P1, Sum1),
-            PhiFirst = hls_lists:set(1, Cell#cell.phi, New0),
-            NewPhi = hls_lists:set(2, PhiFirst, New1),
-            Updated = Cell#cell{
-                diffusion_round = Round + 1,
-                phi = NewPhi,
-                phi_sum = hls_lists:new(
-                    hls_nums:s64(),
-                    ?LAYER_COUNT
-                ),
-                phi_received = 0
-            },
-            case Round + 1 =:= ?DIFFUSION_ROUNDS of
-                false -> {repeat_phase, Updated, consume};
-                true -> {comparing, Updated#cell{
-                    seen_sources = 0,
-                    best_phi0 = 0,
-                    best_direction = ?NO_DIRECTION
-                }, consume}
-            end
-    end;
+    Cell
+) ->
+    {gathering, Cell,
+        {contribute, diffusion, Epoch, #phi_fold{
+            value0 = phi_field:accumulate(0, hls_lists:nth(1, Values)),
+            value1 = phi_field:accumulate(0, hls_lists:nth(2, Values))
+        }}};
 gathering(
-    cast,
-    #phi{epoch = Epoch},
-    Cell = #cell{step = Step, diffusion_round = Round}
-) when Epoch =:= ((Step * ?DIFFUSION_ROUNDS + Round + 1)
-        band ?U32_MASK) ->
-    {gathering, Cell, postpone};
-gathering(cast, #phi{}, Cell) ->
-    {gathering, Cell, fail};
+    internal,
+    {reduction_complete, diffusion, Epoch,
+        #phi_fold{value0 = Sum0, value1 = Sum1}},
+    Cell = #cell{step = Step, diffusion_epoch = Epoch}
+) ->
+    P0 = hls_lists:nth(1, Cell#cell.phi),
+    P1 = hls_lists:nth(2, Cell#cell.phi),
+    New0 = phi_field:relax_center(Cell#cell.anyon, P0, P1, Sum0),
+    New1 = phi_field:relax_bulk(P0, P1, Sum1),
+    PhiFirst = hls_lists:set(1, Cell#cell.phi, New0),
+    NewPhi = hls_lists:set(2, PhiFirst, New1),
+    NextEpoch = (Epoch + 1) band ?U32_MASK,
+    Updated = Cell#cell{
+        diffusion_epoch = NextEpoch,
+        phi = NewPhi
+    },
+    NextStepEpoch = ((Step + 1) * ?DIFFUSION_ROUNDS) band ?U32_MASK,
+    case NextEpoch =:= NextStepEpoch of
+        false -> {repeat_phase, Updated, consume};
+        true -> {comparing, Updated#cell{
+            best_direction = ?NO_DIRECTION
+        }, consume}
+    end;
 gathering(
     cast,
     #phi0{step = Step},
@@ -485,7 +470,9 @@ gathering(cast, #phi_config{}, Cell) ->
     (cast,
         #phi_config{} | #phi{} | #phi0{} | #anyon_move{} |
             #phenom_anyon{},
-        #cell{}) -> hls_statem:cast_result(phase(), #cell{}).
+        #cell{}) -> hls_statem:cast_result(phase(), #cell{});
+    (internal, hls_statem:reduction_complete(), #cell{}) ->
+        hls_statem:internal_result(phase(), #cell{}).
 comparing(enter, _OldPhase, Cell) ->
     Phi0 = hls_lists:nth(1, Cell#cell.phi),
     Message = #phi0{
@@ -493,6 +480,14 @@ comparing(enter, _OldPhase, Cell) ->
         value = Phi0
     },
     {Cell, [
+        {open_reduction, comparison, Cell#cell.step,
+            {members, [
+                ?PHI_NORTH_MASK,
+                ?PHI_EAST_MASK,
+                ?PHI_WEST_MASK,
+                ?PHI_SOUTH_MASK
+            ]},
+            {commutative_monoid, #phi_fold{value0 = 0, value1 = 0}}},
         {cast, north, Message#phi0{source = ?PHI_SOUTH_MASK}},
         {cast, east, Message#phi0{source = ?PHI_WEST_MASK}},
         {cast, west, Message#phi0{source = ?PHI_EAST_MASK}},
@@ -501,44 +496,32 @@ comparing(enter, _OldPhase, Cell) ->
 comparing(
     cast,
     #phi0{step = Step, source = Source, value = Value},
-    Cell = #cell{
-        step = Step,
-        seen_sources = Seen,
-        best_phi0 = Best,
-        best_direction = BestDirection
-    }
-) when (Source =:= ?PHI_NORTH_MASK orelse
-        Source =:= ?PHI_EAST_MASK orelse
-        Source =:= ?PHI_WEST_MASK orelse
-        Source =:= ?PHI_SOUTH_MASK),
-       Seen band Source =:= 0 ->
-    NewSeen = Seen bor Source,
-    NewBest = case Seen =:= 0 orelse Value > Best of
-        true -> Value;
-        false -> Best
+    Cell
+) ->
+    {comparing, Cell,
+        {contribute, comparison, Step, Source, #phi_fold{
+            value0 = phi_field:accumulate(0, Value),
+            value1 = hls_type:as(hls_nums:s64(), Source)
+        }}};
+comparing(
+    internal,
+    {reduction_complete, comparison, Step,
+        #phi_fold{value1 = WinnerMask}},
+    Cell = #cell{step = Step}
+) ->
+    BestDirection = case WinnerMask of
+        ?PHI_NORTH_MASK -> hls_type:as(hls_nums:u32(), ?PHI_NORTH_MASK);
+        ?PHI_EAST_MASK -> hls_type:as(hls_nums:u32(), ?PHI_EAST_MASK);
+        ?PHI_WEST_MASK -> hls_type:as(hls_nums:u32(), ?PHI_WEST_MASK);
+        ?PHI_SOUTH_MASK -> hls_type:as(hls_nums:u32(), ?PHI_SOUTH_MASK);
+        _ -> hls_type:as(hls_nums:u32(), ?NO_DIRECTION)
     end,
-    NewBestDirection = if
-        Seen =:= 0 -> Source;
-        Value > Best -> Source;
-        Value =:= Best -> hls_type:as(hls_nums:u32(), ?NO_DIRECTION);
-        true -> BestDirection
-    end,
-    Compared = Cell#cell{
-        seen_sources = NewSeen,
-        best_phi0 = NewBest,
-        best_direction = NewBestDirection
-    },
-    case NewSeen =:= ?PHI_ALL_DIRECTIONS of
-        false -> {comparing, Compared, consume};
-        true -> {flipping, Compared, consume}
-    end;
-comparing(cast, #phi0{}, Cell) ->
-    {comparing, Cell, fail};
+    {flipping, Cell#cell{best_direction = BestDirection}, consume};
 comparing(
     cast,
     #phi{epoch = Epoch},
-    Cell = #cell{step = Step, diffusion_round = Round}
-) when Epoch =:= ((Step * ?DIFFUSION_ROUNDS + Round) band ?U32_MASK) ->
+    Cell = #cell{diffusion_epoch = Epoch}
+) ->
     {comparing, Cell, postpone};
 comparing(cast, #phi{}, Cell) ->
     {comparing, Cell, fail};
@@ -565,7 +548,9 @@ comparing(cast, #phi_config{}, Cell) ->
     (cast,
         #phi_config{} | #phi{} | #phi0{} | #anyon_move{} |
             #phenom_anyon{},
-        #cell{}) -> hls_statem:cast_result(phase(), #cell{}).
+        #cell{}) -> hls_statem:cast_result(phase(), #cell{});
+    (internal, hls_statem:reduction_complete(), #cell{}) ->
+        hls_statem:internal_result(phase(), #cell{}).
 flipping(enter, _OldPhase, Cell) ->
     NextRandom = hls_prng:xorshift32(Cell#cell.random_state),
     Heads = (NextRandom bsr 31) =:= 1,
@@ -601,6 +586,9 @@ flipping(enter, _OldPhase, Cell) ->
         random_state = NextRandom
     },
     {Updated, [
+        {open_reduction, movement, Cell#cell.step,
+            {count, ?NEIGHBOR_COUNT},
+            {commutative_monoid, #phi_fold{value0 = 0, value1 = 0}}},
         {cast, north, Message#anyon_move{present = NorthPresent}},
         {cast, east, Message#anyon_move{present = EastPresent}},
         {cast, west, Message#anyon_move{present = WestPresent}},
@@ -610,37 +598,50 @@ flipping(enter, _OldPhase, Cell) ->
 flipping(
     cast,
     #phi{epoch = Epoch},
-    Cell = #cell{step = Step, diffusion_round = Round}
-) when Epoch =:= ((Step * ?DIFFUSION_ROUNDS + Round) band ?U32_MASK) ->
+    Cell = #cell{diffusion_epoch = Epoch}
+) ->
     {flipping, Cell, postpone};
 flipping(cast, #phi{}, Cell) ->
     {flipping, Cell, fail};
 flipping(
     cast,
     #anyon_move{step = Step, present = PresentWord},
+    Cell
+) ->
+    {flipping, Cell,
+        {contribute, movement, Step, #phi_fold{
+            value0 = hls_type:as(
+                hls_nums:s64(), PresentWord band ?PHENOM_PRESENT_MASK
+            ),
+            value1 = hls_type:as(
+                hls_nums:s64(),
+                case PresentWord < 2 of
+                    true -> 0;
+                    false -> 1
+                end
+            )
+        }}};
+flipping(
+    internal,
+    {reduction_complete, movement, Step,
+        #phi_fold{value0 = IncomingParity, value1 = Invalid}},
     Cell = #cell{step = Step}
-) when PresentWord < 2 ->
-    ReceivedNext = Cell#cell.moves_received + 1,
-    NextAnyon = Cell#cell.anyon bxor PresentWord,
-    case ReceivedNext =:= ?NEIGHBOR_COUNT of
+) ->
+    case Invalid =:= 0 of
         false ->
-            Accumulated = Cell#cell{
-                moves_received = ReceivedNext,
-                anyon = NextAnyon
-            },
-            {flipping, Accumulated, consume};
+            {flipping, Cell, fail};
         true ->
+            NextStep = (Step + 1) band ?U32_MASK,
             Advanced = Cell#cell{
-                step = (Cell#cell.step + 1) band ?U32_MASK,
-                diffusion_round = 0,
-                moves_received = 0,
-                anyon = NextAnyon,
+                step = NextStep,
+                diffusion_epoch =
+                    (NextStep * ?DIFFUSION_ROUNDS) band ?U32_MASK,
+                anyon = Cell#cell.anyon bxor
+                    hls_type:as(hls_nums:u32(), IncomingParity),
                 status_valid = 1
             },
             {measuring, Advanced, consume}
     end;
-flipping(cast, #anyon_move{}, Cell) ->
-    {flipping, Cell, fail};
 flipping(
     cast,
     #phenom_anyon{step = EventStep},
@@ -651,6 +652,42 @@ flipping(cast, #phenom_anyon{}, Cell) ->
     {flipping, Cell, fail};
 flipping(cast, #phi_config{}, Cell) ->
     {flipping, Cell, fail}.
+
+-spec reduce(
+    diffusion | comparison | movement,
+    #phi_fold{},
+    #phi_fold{}
+) -> #phi_fold{}.
+reduce(
+    diffusion,
+    #phi_fold{value0 = Left0, value1 = Left1},
+    #phi_fold{value0 = Right0, value1 = Right1}
+) ->
+    #phi_fold{value0 = Left0 + Right0, value1 = Left1 + Right1};
+reduce(
+    comparison,
+    #phi_fold{value0 = LeftValue, value1 = LeftMask},
+    #phi_fold{value0 = RightValue, value1 = RightMask}
+) ->
+    Zero = hls_type:as(hls_nums:s64(), 0),
+    {BestValue, WinnerMask} = if
+        LeftMask =:= 0, RightMask =:= 0 -> {Zero, Zero};
+        LeftMask =:= 0 -> {RightValue, RightMask};
+        RightMask =:= 0 -> {LeftValue, LeftMask};
+        LeftValue > RightValue -> {LeftValue, LeftMask};
+        RightValue > LeftValue -> {RightValue, RightMask};
+        true -> {LeftValue, LeftMask bor RightMask}
+    end,
+    #phi_fold{value0 = BestValue, value1 = WinnerMask};
+reduce(
+    movement,
+    #phi_fold{value0 = LeftParity, value1 = LeftInvalid},
+    #phi_fold{value0 = RightParity, value1 = RightInvalid}
+) ->
+    #phi_fold{
+        value0 = LeftParity bxor RightParity,
+        value1 = LeftInvalid bor RightInvalid
+    }.
 
 source_mask(north) -> ?PHI_NORTH_MASK;
 source_mask(east) -> ?PHI_EAST_MASK;

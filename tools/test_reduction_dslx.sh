@@ -14,6 +14,7 @@ aggregate_generated="$test_stage/hls_statem_reduction_aggregate_fixture.x"
 fragment_topology="$test_stage/hls_topology_source_fragment_topology.x"
 fragment_sharded="$test_stage/hls_topology_source_fragment_sharded.x"
 fragment_muxed="$test_stage/hls_topology_source_fragment_muxed.x"
+fragment_population="$test_stage/hls_topology_source_fragment_population.x"
 ERL_HLS_REDUCTION_TEST_X="$generated" erl \
     -noshell \
     -pa "$project_root/_build/test/lib/erl_hls/ebin" \
@@ -54,6 +55,8 @@ cat "$project_root/test_data/hls_statem_reduction_aggregate_semantics.inc.x" \
     >> "$aggregate_generated"
 cat "$project_root/test_data/hls_topology_source_fragment_semantics.inc.x" \
     >> "$fragment_topology"
+cat "$project_root/test_data/hls_topology_source_fragment_population_semantics.inc.x" \
+    >> "$fragment_population"
 
 "$xls_root/interpreter_main" \
     --compare=jit \
@@ -75,6 +78,13 @@ cat "$project_root/test_data/hls_topology_source_fragment_semantics.inc.x" \
     --dslx_path="$test_stage:$project_root/priv/xls/lib" \
     --dslx_stdlib_path="$xls_root/xls/dslx/stdlib" \
     "$fragment_topology"
+
+"$xls_root/interpreter_main" \
+    --compare=jit \
+    --warnings_as_errors=false \
+    --dslx_path="$test_stage:$project_root/priv/xls/lib" \
+    --dslx_stdlib_path="$xls_root/xls/dslx/stdlib" \
+    "$fragment_population"
 
 "$xls_root/ir_converter_main" \
     --top=ReductionSharedCompileTop \
@@ -106,4 +116,12 @@ cat "$project_root/test_data/hls_topology_source_fragment_semantics.inc.x" \
     --dslx_path="$test_stage:$project_root/priv/xls/lib" \
     --dslx_stdlib_path="$xls_root/xls/dslx/stdlib" \
     "$fragment_muxed" \
+    >/dev/null
+
+"$xls_root/ir_converter_main" \
+    --top=SchedulerGrid \
+    --warnings_as_errors=false \
+    --dslx_path="$test_stage:$project_root/priv/xls/lib" \
+    --dslx_stdlib_path="$xls_root/xls/dslx/stdlib" \
+    "$fragment_population" \
     >/dev/null

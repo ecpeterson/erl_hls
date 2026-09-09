@@ -266,6 +266,548 @@ proc FrameArrayMux<INPUT_COUNT: u32> {
     }
   }
 }
+struct Phi_xReductionBatch {
+  source: u32,
+  frames: axis::Frame[u32:4],
+}
+
+struct Phi_xReductionFragmentQueue {
+  current_valid: u1,
+  current: axis::Frame,
+  lookahead_valid: u1,
+  lookahead: axis::Frame,
+}
+
+// Fragment 0 (north) uses inverse fragment 3 at offset [0, 1].
+// Fragment 1 (east) uses inverse fragment 2 at offset [-1, 0].
+// Fragment 2 (west) uses inverse fragment 1 at offset [1, 0].
+// Fragment 3 (south) uses inverse fragment 0 at offset [0, -1].
+fn phi_x_reduction_fragment_pop(queue: Phi_xReductionFragmentQueue) -> Phi_xReductionFragmentQueue {
+  Phi_xReductionFragmentQueue {
+    current_valid: queue.lookahead_valid,
+    current: if queue.lookahead_valid { queue.lookahead
+      } else { queue.current },
+    lookahead_valid: u1:0,
+    lookahead: queue.lookahead,
+  }
+}
+
+fn phi_x_reduction_fragment_push(
+    queue: Phi_xReductionFragmentQueue, frame: axis::Frame) -> Phi_xReductionFragmentQueue {
+  if !queue.current_valid {
+    Phi_xReductionFragmentQueue { current_valid: u1:1, current: frame,
+      ..queue }
+  } else {
+    Phi_xReductionFragmentQueue { lookahead_valid: u1:1, lookahead: frame,
+      ..queue }
+  }
+}
+
+fn phi_x_reduction_fragment_after_pop(
+    queue: Phi_xReductionFragmentQueue, pop: u1) -> Phi_xReductionFragmentQueue {
+  if pop { phi_x_reduction_fragment_pop(queue)
+  } else { queue }
+}
+
+fn phi_x_reduction_fragment_update_bank<COUNT: u32>(
+    bank: Phi_xReductionFragmentQueue[COUNT],
+    pop_valid: u1, pop_source: u32,
+    push_valid: u1, push_source: u32,
+    push_frame: axis::Frame) -> Phi_xReductionFragmentQueue[COUNT] {
+  let after_pop = if pop_valid {
+    update(bank, pop_source,
+      phi_x_reduction_fragment_pop(bank[pop_source]))
+  } else { bank };
+  if push_valid {
+    update(after_pop, push_source,
+      phi_x_reduction_fragment_push(
+        after_pop[push_source], push_frame))
+  } else { after_pop }
+}
+
+struct Phi_xReductionPlaneState {
+  input_cursor: u32,
+  output_cursor: u32,
+  open_tokens: u1[u32:9],
+  bank_0: Phi_xReductionFragmentQueue[u32:9],
+  bank_1: Phi_xReductionFragmentQueue[u32:9],
+  bank_2: Phi_xReductionFragmentQueue[u32:9],
+  bank_3: Phi_xReductionFragmentQueue[u32:9],
+  pending_valid: u1,
+  pending_batch: Phi_xReductionBatch,
+}
+
+proc Phi_xReductionPlane {
+  batch_in: chan<Phi_xReductionBatch>[u32:1] in;
+  aggregate_out_0: chan<phi_halo_cell::ReductionAggregateRequest> out;
+
+  config(
+    batch_in: chan<Phi_xReductionBatch>[u32:1] in,
+    aggregate_out_0: chan<phi_halo_cell::ReductionAggregateRequest> out
+  ) {
+    (batch_in, aggregate_out_0)
+  }
+
+  init { zero!<Phi_xReductionPlaneState>() }
+
+  next(state: Phi_xReductionPlaneState) {
+    let ready_slots = [
+      state.open_tokens[u32:0] && state.bank_0[u32:1].current_valid && state.bank_1[u32:6].current_valid && state.bank_2[u32:3].current_valid && state.bank_3[u32:2].current_valid,
+      state.open_tokens[u32:1] && state.bank_0[u32:2].current_valid && state.bank_1[u32:7].current_valid && state.bank_2[u32:4].current_valid && state.bank_3[u32:0].current_valid,
+      state.open_tokens[u32:2] && state.bank_0[u32:0].current_valid && state.bank_1[u32:8].current_valid && state.bank_2[u32:5].current_valid && state.bank_3[u32:1].current_valid,
+      state.open_tokens[u32:3] && state.bank_0[u32:4].current_valid && state.bank_1[u32:0].current_valid && state.bank_2[u32:6].current_valid && state.bank_3[u32:5].current_valid,
+      state.open_tokens[u32:4] && state.bank_0[u32:5].current_valid && state.bank_1[u32:1].current_valid && state.bank_2[u32:7].current_valid && state.bank_3[u32:3].current_valid,
+      state.open_tokens[u32:5] && state.bank_0[u32:3].current_valid && state.bank_1[u32:2].current_valid && state.bank_2[u32:8].current_valid && state.bank_3[u32:4].current_valid,
+      state.open_tokens[u32:6] && state.bank_0[u32:7].current_valid && state.bank_1[u32:3].current_valid && state.bank_2[u32:0].current_valid && state.bank_3[u32:8].current_valid,
+      state.open_tokens[u32:7] && state.bank_0[u32:8].current_valid && state.bank_1[u32:4].current_valid && state.bank_2[u32:1].current_valid && state.bank_3[u32:6].current_valid,
+      state.open_tokens[u32:8] && state.bank_0[u32:6].current_valid && state.bank_1[u32:5].current_valid && state.bank_2[u32:2].current_valid && state.bank_3[u32:7].current_valid
+    ];
+    let (output_ready, output_slot) =
+      unroll_for! (offset, selected):
+          (u32, (u1, u32)) in u32:0..u32:9 {
+        let unwrapped = state.output_cursor + offset;
+        let candidate = if unwrapped < u32:9 { unwrapped } else {
+          unwrapped - u32:9 };
+        let take = !selected.0 && ready_slots[candidate];
+        (selected.0 || take,
+          if take { candidate } else { selected.1 })
+      }((u1:0, u32:0));
+    let pop_sources = match output_slot {
+      u32:0 => [u32:1, u32:6, u32:3, u32:2],
+      u32:1 => [u32:2, u32:7, u32:4, u32:0],
+      u32:2 => [u32:0, u32:8, u32:5, u32:1],
+      u32:3 => [u32:4, u32:0, u32:6, u32:5],
+      u32:4 => [u32:5, u32:1, u32:7, u32:3],
+      u32:5 => [u32:3, u32:2, u32:8, u32:4],
+      u32:6 => [u32:7, u32:3, u32:0, u32:8],
+      u32:7 => [u32:8, u32:4, u32:1, u32:6],
+      u32:8 => [u32:6, u32:5, u32:2, u32:7],
+      _ => zero!<u32[u32:4]>(),
+    };
+    let frames = match output_slot {
+      u32:0 => [state.bank_0[u32:1].current, state.bank_1[u32:6].current, state.bank_2[u32:3].current, state.bank_3[u32:2].current],
+      u32:1 => [state.bank_0[u32:2].current, state.bank_1[u32:7].current, state.bank_2[u32:4].current, state.bank_3[u32:0].current],
+      u32:2 => [state.bank_0[u32:0].current, state.bank_1[u32:8].current, state.bank_2[u32:5].current, state.bank_3[u32:1].current],
+      u32:3 => [state.bank_0[u32:4].current, state.bank_1[u32:0].current, state.bank_2[u32:6].current, state.bank_3[u32:5].current],
+      u32:4 => [state.bank_0[u32:5].current, state.bank_1[u32:1].current, state.bank_2[u32:7].current, state.bank_3[u32:3].current],
+      u32:5 => [state.bank_0[u32:3].current, state.bank_1[u32:2].current, state.bank_2[u32:8].current, state.bank_3[u32:4].current],
+      u32:6 => [state.bank_0[u32:7].current, state.bank_1[u32:3].current, state.bank_2[u32:0].current, state.bank_3[u32:8].current],
+      u32:7 => [state.bank_0[u32:8].current, state.bank_1[u32:4].current, state.bank_2[u32:1].current, state.bank_3[u32:6].current],
+      u32:8 => [state.bank_0[u32:6].current, state.bank_1[u32:5].current, state.bank_2[u32:2].current, state.bank_3[u32:7].current],
+      _ => zero!<axis::Frame[u32:4]>(),
+    };
+    let aggregate = phi_halo_cell::reduction_aggregate_batch<u32:4>(frames);
+    let output_tok = if output_ready {
+      match output_slot {
+        u32:0 => send(
+          join(), aggregate_out_0, phi_halo_cell::ReductionAggregateRequest {
+            slot: u32:0,
+            aggregate,
+          }),
+        u32:1 => send(
+          join(), aggregate_out_0, phi_halo_cell::ReductionAggregateRequest {
+            slot: u32:1,
+            aggregate,
+          }),
+        u32:2 => send(
+          join(), aggregate_out_0, phi_halo_cell::ReductionAggregateRequest {
+            slot: u32:2,
+            aggregate,
+          }),
+        u32:3 => send(
+          join(), aggregate_out_0, phi_halo_cell::ReductionAggregateRequest {
+            slot: u32:3,
+            aggregate,
+          }),
+        u32:4 => send(
+          join(), aggregate_out_0, phi_halo_cell::ReductionAggregateRequest {
+            slot: u32:4,
+            aggregate,
+          }),
+        u32:5 => send(
+          join(), aggregate_out_0, phi_halo_cell::ReductionAggregateRequest {
+            slot: u32:5,
+            aggregate,
+          }),
+        u32:6 => send(
+          join(), aggregate_out_0, phi_halo_cell::ReductionAggregateRequest {
+            slot: u32:6,
+            aggregate,
+          }),
+        u32:7 => send(
+          join(), aggregate_out_0, phi_halo_cell::ReductionAggregateRequest {
+            slot: u32:7,
+            aggregate,
+          }),
+        u32:8 => send(
+          join(), aggregate_out_0, phi_halo_cell::ReductionAggregateRequest {
+            slot: u32:8,
+            aggregate,
+          }),
+        _ => join(),
+      }
+    } else { join() };
+    // Input and output handshakes are independent. The scalar
+    // pending batch makes all fragment-bank insertion atomic.
+    let (input_tok, received, incoming) =
+      unroll_for! (candidate, acc):
+          (u32, (token, u1, Phi_xReductionBatch)) in u32:0..u32:1 {
+        let (next_tok, next_batch, valid) =
+          recv_if_non_blocking(
+            acc.0, batch_in[candidate],
+            !state.pending_valid &&
+              state.input_cursor == candidate,
+            zero!<Phi_xReductionBatch>());
+        (next_tok, acc.1 || valid,
+          if valid { next_batch } else { acc.2 })
+      }((join(), u1:0, zero!<Phi_xReductionBatch>()));
+    let work_valid = state.pending_valid || received;
+    let work = if state.pending_valid {
+      state.pending_batch
+    } else { incoming };
+    let source_valid = work.source < u32:9;
+    let push_source = if source_valid { work.source
+      } else { u32:0 };
+    // An actor cannot reopen before its current aggregate retires,
+    // so one token bit is sufficient. Clear before set keeps the
+    // conservative same-cycle update well-defined.
+    let open_tokens_after_output = if output_ready {
+      update(state.open_tokens, output_slot, u1:0)
+    } else { state.open_tokens };
+    let incoming_source_valid = received &&
+      incoming.source < u32:9;
+    let open_tokens = if incoming_source_valid {
+      update(open_tokens_after_output, incoming.source, u1:1)
+    } else { open_tokens_after_output };
+    let queue_0 = state.bank_0[push_source];
+    let after_pop_0 = phi_x_reduction_fragment_after_pop(
+      queue_0, output_ready &&
+        pop_sources[u32:0] == push_source);
+    let capacity_0 = !after_pop_0.lookahead_valid;
+    let queue_1 = state.bank_1[push_source];
+    let after_pop_1 = phi_x_reduction_fragment_after_pop(
+      queue_1, output_ready &&
+        pop_sources[u32:1] == push_source);
+    let capacity_1 = !after_pop_1.lookahead_valid;
+    let queue_2 = state.bank_2[push_source];
+    let after_pop_2 = phi_x_reduction_fragment_after_pop(
+      queue_2, output_ready &&
+        pop_sources[u32:2] == push_source);
+    let capacity_2 = !after_pop_2.lookahead_valid;
+    let queue_3 = state.bank_3[push_source];
+    let after_pop_3 = phi_x_reduction_fragment_after_pop(
+      queue_3, output_ready &&
+        pop_sources[u32:3] == push_source);
+    let capacity_3 = !after_pop_3.lookahead_valid;
+    let can_insert = work_valid && source_valid && capacity_0 && capacity_1 && capacity_2 && capacity_3;
+    let bank_0 = phi_x_reduction_fragment_update_bank(
+      state.bank_0, output_ready,
+      pop_sources[u32:0], can_insert, push_source,
+      work.frames[u32:0]);
+    let bank_1 = phi_x_reduction_fragment_update_bank(
+      state.bank_1, output_ready,
+      pop_sources[u32:1], can_insert, push_source,
+      work.frames[u32:1]);
+    let bank_2 = phi_x_reduction_fragment_update_bank(
+      state.bank_2, output_ready,
+      pop_sources[u32:2], can_insert, push_source,
+      work.frames[u32:2]);
+    let bank_3 = phi_x_reduction_fragment_update_bank(
+      state.bank_3, output_ready,
+      pop_sources[u32:3], can_insert, push_source,
+      work.frames[u32:3]);
+    let _done = join(output_tok, input_tok);
+    Phi_xReductionPlaneState {
+      input_cursor: if state.pending_valid {
+        state.input_cursor
+      } else if state.input_cursor + u32:1 == u32:1 { u32:0 } else {
+        state.input_cursor + u32:1 },
+      output_cursor: if !output_ready { state.output_cursor
+      } else if output_slot + u32:1 == u32:9 { u32:0 } else {
+        output_slot + u32:1 },
+      open_tokens,
+      bank_0,
+      bank_1,
+      bank_2,
+      bank_3,
+      pending_valid: work_valid && !can_insert,
+      pending_batch: if work_valid && !can_insert { work
+        } else { state.pending_batch },
+    }
+  }
+}
+
+struct Phi_zReductionBatch {
+  source: u32,
+  frames: axis::Frame[u32:4],
+}
+
+struct Phi_zReductionFragmentQueue {
+  current_valid: u1,
+  current: axis::Frame,
+  lookahead_valid: u1,
+  lookahead: axis::Frame,
+}
+
+// Fragment 0 (north) uses inverse fragment 3 at offset [0, 1].
+// Fragment 1 (east) uses inverse fragment 2 at offset [-1, 0].
+// Fragment 2 (west) uses inverse fragment 1 at offset [1, 0].
+// Fragment 3 (south) uses inverse fragment 0 at offset [0, -1].
+fn phi_z_reduction_fragment_pop(queue: Phi_zReductionFragmentQueue) -> Phi_zReductionFragmentQueue {
+  Phi_zReductionFragmentQueue {
+    current_valid: queue.lookahead_valid,
+    current: if queue.lookahead_valid { queue.lookahead
+      } else { queue.current },
+    lookahead_valid: u1:0,
+    lookahead: queue.lookahead,
+  }
+}
+
+fn phi_z_reduction_fragment_push(
+    queue: Phi_zReductionFragmentQueue, frame: axis::Frame) -> Phi_zReductionFragmentQueue {
+  if !queue.current_valid {
+    Phi_zReductionFragmentQueue { current_valid: u1:1, current: frame,
+      ..queue }
+  } else {
+    Phi_zReductionFragmentQueue { lookahead_valid: u1:1, lookahead: frame,
+      ..queue }
+  }
+}
+
+fn phi_z_reduction_fragment_after_pop(
+    queue: Phi_zReductionFragmentQueue, pop: u1) -> Phi_zReductionFragmentQueue {
+  if pop { phi_z_reduction_fragment_pop(queue)
+  } else { queue }
+}
+
+fn phi_z_reduction_fragment_update_bank<COUNT: u32>(
+    bank: Phi_zReductionFragmentQueue[COUNT],
+    pop_valid: u1, pop_source: u32,
+    push_valid: u1, push_source: u32,
+    push_frame: axis::Frame) -> Phi_zReductionFragmentQueue[COUNT] {
+  let after_pop = if pop_valid {
+    update(bank, pop_source,
+      phi_z_reduction_fragment_pop(bank[pop_source]))
+  } else { bank };
+  if push_valid {
+    update(after_pop, push_source,
+      phi_z_reduction_fragment_push(
+        after_pop[push_source], push_frame))
+  } else { after_pop }
+}
+
+struct Phi_zReductionPlaneState {
+  input_cursor: u32,
+  output_cursor: u32,
+  open_tokens: u1[u32:9],
+  bank_0: Phi_zReductionFragmentQueue[u32:9],
+  bank_1: Phi_zReductionFragmentQueue[u32:9],
+  bank_2: Phi_zReductionFragmentQueue[u32:9],
+  bank_3: Phi_zReductionFragmentQueue[u32:9],
+  pending_valid: u1,
+  pending_batch: Phi_zReductionBatch,
+}
+
+proc Phi_zReductionPlane {
+  batch_in: chan<Phi_zReductionBatch>[u32:1] in;
+  aggregate_out_0: chan<phi_halo_cell::ReductionAggregateRequest> out;
+
+  config(
+    batch_in: chan<Phi_zReductionBatch>[u32:1] in,
+    aggregate_out_0: chan<phi_halo_cell::ReductionAggregateRequest> out
+  ) {
+    (batch_in, aggregate_out_0)
+  }
+
+  init { zero!<Phi_zReductionPlaneState>() }
+
+  next(state: Phi_zReductionPlaneState) {
+    let ready_slots = [
+      state.open_tokens[u32:0] && state.bank_0[u32:1].current_valid && state.bank_1[u32:6].current_valid && state.bank_2[u32:3].current_valid && state.bank_3[u32:2].current_valid,
+      state.open_tokens[u32:1] && state.bank_0[u32:2].current_valid && state.bank_1[u32:7].current_valid && state.bank_2[u32:4].current_valid && state.bank_3[u32:0].current_valid,
+      state.open_tokens[u32:2] && state.bank_0[u32:0].current_valid && state.bank_1[u32:8].current_valid && state.bank_2[u32:5].current_valid && state.bank_3[u32:1].current_valid,
+      state.open_tokens[u32:3] && state.bank_0[u32:4].current_valid && state.bank_1[u32:0].current_valid && state.bank_2[u32:6].current_valid && state.bank_3[u32:5].current_valid,
+      state.open_tokens[u32:4] && state.bank_0[u32:5].current_valid && state.bank_1[u32:1].current_valid && state.bank_2[u32:7].current_valid && state.bank_3[u32:3].current_valid,
+      state.open_tokens[u32:5] && state.bank_0[u32:3].current_valid && state.bank_1[u32:2].current_valid && state.bank_2[u32:8].current_valid && state.bank_3[u32:4].current_valid,
+      state.open_tokens[u32:6] && state.bank_0[u32:7].current_valid && state.bank_1[u32:3].current_valid && state.bank_2[u32:0].current_valid && state.bank_3[u32:8].current_valid,
+      state.open_tokens[u32:7] && state.bank_0[u32:8].current_valid && state.bank_1[u32:4].current_valid && state.bank_2[u32:1].current_valid && state.bank_3[u32:6].current_valid,
+      state.open_tokens[u32:8] && state.bank_0[u32:6].current_valid && state.bank_1[u32:5].current_valid && state.bank_2[u32:2].current_valid && state.bank_3[u32:7].current_valid
+    ];
+    let (output_ready, output_slot) =
+      unroll_for! (offset, selected):
+          (u32, (u1, u32)) in u32:0..u32:9 {
+        let unwrapped = state.output_cursor + offset;
+        let candidate = if unwrapped < u32:9 { unwrapped } else {
+          unwrapped - u32:9 };
+        let take = !selected.0 && ready_slots[candidate];
+        (selected.0 || take,
+          if take { candidate } else { selected.1 })
+      }((u1:0, u32:0));
+    let pop_sources = match output_slot {
+      u32:0 => [u32:1, u32:6, u32:3, u32:2],
+      u32:1 => [u32:2, u32:7, u32:4, u32:0],
+      u32:2 => [u32:0, u32:8, u32:5, u32:1],
+      u32:3 => [u32:4, u32:0, u32:6, u32:5],
+      u32:4 => [u32:5, u32:1, u32:7, u32:3],
+      u32:5 => [u32:3, u32:2, u32:8, u32:4],
+      u32:6 => [u32:7, u32:3, u32:0, u32:8],
+      u32:7 => [u32:8, u32:4, u32:1, u32:6],
+      u32:8 => [u32:6, u32:5, u32:2, u32:7],
+      _ => zero!<u32[u32:4]>(),
+    };
+    let frames = match output_slot {
+      u32:0 => [state.bank_0[u32:1].current, state.bank_1[u32:6].current, state.bank_2[u32:3].current, state.bank_3[u32:2].current],
+      u32:1 => [state.bank_0[u32:2].current, state.bank_1[u32:7].current, state.bank_2[u32:4].current, state.bank_3[u32:0].current],
+      u32:2 => [state.bank_0[u32:0].current, state.bank_1[u32:8].current, state.bank_2[u32:5].current, state.bank_3[u32:1].current],
+      u32:3 => [state.bank_0[u32:4].current, state.bank_1[u32:0].current, state.bank_2[u32:6].current, state.bank_3[u32:5].current],
+      u32:4 => [state.bank_0[u32:5].current, state.bank_1[u32:1].current, state.bank_2[u32:7].current, state.bank_3[u32:3].current],
+      u32:5 => [state.bank_0[u32:3].current, state.bank_1[u32:2].current, state.bank_2[u32:8].current, state.bank_3[u32:4].current],
+      u32:6 => [state.bank_0[u32:7].current, state.bank_1[u32:3].current, state.bank_2[u32:0].current, state.bank_3[u32:8].current],
+      u32:7 => [state.bank_0[u32:8].current, state.bank_1[u32:4].current, state.bank_2[u32:1].current, state.bank_3[u32:6].current],
+      u32:8 => [state.bank_0[u32:6].current, state.bank_1[u32:5].current, state.bank_2[u32:2].current, state.bank_3[u32:7].current],
+      _ => zero!<axis::Frame[u32:4]>(),
+    };
+    let aggregate = phi_halo_cell::reduction_aggregate_batch<u32:4>(frames);
+    let output_tok = if output_ready {
+      match output_slot {
+        u32:0 => send(
+          join(), aggregate_out_0, phi_halo_cell::ReductionAggregateRequest {
+            slot: u32:0,
+            aggregate,
+          }),
+        u32:1 => send(
+          join(), aggregate_out_0, phi_halo_cell::ReductionAggregateRequest {
+            slot: u32:1,
+            aggregate,
+          }),
+        u32:2 => send(
+          join(), aggregate_out_0, phi_halo_cell::ReductionAggregateRequest {
+            slot: u32:2,
+            aggregate,
+          }),
+        u32:3 => send(
+          join(), aggregate_out_0, phi_halo_cell::ReductionAggregateRequest {
+            slot: u32:3,
+            aggregate,
+          }),
+        u32:4 => send(
+          join(), aggregate_out_0, phi_halo_cell::ReductionAggregateRequest {
+            slot: u32:4,
+            aggregate,
+          }),
+        u32:5 => send(
+          join(), aggregate_out_0, phi_halo_cell::ReductionAggregateRequest {
+            slot: u32:5,
+            aggregate,
+          }),
+        u32:6 => send(
+          join(), aggregate_out_0, phi_halo_cell::ReductionAggregateRequest {
+            slot: u32:6,
+            aggregate,
+          }),
+        u32:7 => send(
+          join(), aggregate_out_0, phi_halo_cell::ReductionAggregateRequest {
+            slot: u32:7,
+            aggregate,
+          }),
+        u32:8 => send(
+          join(), aggregate_out_0, phi_halo_cell::ReductionAggregateRequest {
+            slot: u32:8,
+            aggregate,
+          }),
+        _ => join(),
+      }
+    } else { join() };
+    // Input and output handshakes are independent. The scalar
+    // pending batch makes all fragment-bank insertion atomic.
+    let (input_tok, received, incoming) =
+      unroll_for! (candidate, acc):
+          (u32, (token, u1, Phi_zReductionBatch)) in u32:0..u32:1 {
+        let (next_tok, next_batch, valid) =
+          recv_if_non_blocking(
+            acc.0, batch_in[candidate],
+            !state.pending_valid &&
+              state.input_cursor == candidate,
+            zero!<Phi_zReductionBatch>());
+        (next_tok, acc.1 || valid,
+          if valid { next_batch } else { acc.2 })
+      }((join(), u1:0, zero!<Phi_zReductionBatch>()));
+    let work_valid = state.pending_valid || received;
+    let work = if state.pending_valid {
+      state.pending_batch
+    } else { incoming };
+    let source_valid = work.source < u32:9;
+    let push_source = if source_valid { work.source
+      } else { u32:0 };
+    // An actor cannot reopen before its current aggregate retires,
+    // so one token bit is sufficient. Clear before set keeps the
+    // conservative same-cycle update well-defined.
+    let open_tokens_after_output = if output_ready {
+      update(state.open_tokens, output_slot, u1:0)
+    } else { state.open_tokens };
+    let incoming_source_valid = received &&
+      incoming.source < u32:9;
+    let open_tokens = if incoming_source_valid {
+      update(open_tokens_after_output, incoming.source, u1:1)
+    } else { open_tokens_after_output };
+    let queue_0 = state.bank_0[push_source];
+    let after_pop_0 = phi_z_reduction_fragment_after_pop(
+      queue_0, output_ready &&
+        pop_sources[u32:0] == push_source);
+    let capacity_0 = !after_pop_0.lookahead_valid;
+    let queue_1 = state.bank_1[push_source];
+    let after_pop_1 = phi_z_reduction_fragment_after_pop(
+      queue_1, output_ready &&
+        pop_sources[u32:1] == push_source);
+    let capacity_1 = !after_pop_1.lookahead_valid;
+    let queue_2 = state.bank_2[push_source];
+    let after_pop_2 = phi_z_reduction_fragment_after_pop(
+      queue_2, output_ready &&
+        pop_sources[u32:2] == push_source);
+    let capacity_2 = !after_pop_2.lookahead_valid;
+    let queue_3 = state.bank_3[push_source];
+    let after_pop_3 = phi_z_reduction_fragment_after_pop(
+      queue_3, output_ready &&
+        pop_sources[u32:3] == push_source);
+    let capacity_3 = !after_pop_3.lookahead_valid;
+    let can_insert = work_valid && source_valid && capacity_0 && capacity_1 && capacity_2 && capacity_3;
+    let bank_0 = phi_z_reduction_fragment_update_bank(
+      state.bank_0, output_ready,
+      pop_sources[u32:0], can_insert, push_source,
+      work.frames[u32:0]);
+    let bank_1 = phi_z_reduction_fragment_update_bank(
+      state.bank_1, output_ready,
+      pop_sources[u32:1], can_insert, push_source,
+      work.frames[u32:1]);
+    let bank_2 = phi_z_reduction_fragment_update_bank(
+      state.bank_2, output_ready,
+      pop_sources[u32:2], can_insert, push_source,
+      work.frames[u32:2]);
+    let bank_3 = phi_z_reduction_fragment_update_bank(
+      state.bank_3, output_ready,
+      pop_sources[u32:3], can_insert, push_source,
+      work.frames[u32:3]);
+    let _done = join(output_tok, input_tok);
+    Phi_zReductionPlaneState {
+      input_cursor: if state.pending_valid {
+        state.input_cursor
+      } else if state.input_cursor + u32:1 == u32:1 { u32:0 } else {
+        state.input_cursor + u32:1 },
+      output_cursor: if !output_ready { state.output_cursor
+      } else if output_slot + u32:1 == u32:9 { u32:0 } else {
+        output_slot + u32:1 },
+      open_tokens,
+      bank_0,
+      bank_1,
+      bank_2,
+      bank_3,
+      pending_valid: work_valid && !can_insert,
+      pending_batch: if work_valid && !can_insert { work
+        } else { state.pending_batch },
+    }
+  }
+}
+
 enum ControlFamily : u8 {
   DATA_EVEN = u8:0,
   DATA_ODD = u8:1,
@@ -1458,9 +2000,9 @@ struct SchedulerRouter2State {
 proc SchedulerRouter2 {
   scheduled_in: chan<phi_halo_cell::ScheduledEffects> in;
   credit_out: chan<phi_halo_cell::ScheduledRequest> out;
-  to_scheduler_2: chan<phi_halo_cell::ScheduledRequest> out;
   to_scheduler_4: chan<phenom_syndrome_cell::ScheduledRequest> out;
   x_decoder_events_out: chan<axis::Frame> out;
+  phi_x_reduction_out: chan<Phi_xReductionBatch> out;
   window_request_out: chan<u1> out;
   window_grant_in: chan<u1> in;
   window_release_out: chan<u1> out;
@@ -1468,21 +2010,26 @@ proc SchedulerRouter2 {
   config(
     scheduled_in: chan<phi_halo_cell::ScheduledEffects> in,
     credit_out: chan<phi_halo_cell::ScheduledRequest> out,
-    to_scheduler_2: chan<phi_halo_cell::ScheduledRequest> out,
     to_scheduler_4: chan<phenom_syndrome_cell::ScheduledRequest> out,
     x_decoder_events_out: chan<axis::Frame> out,
+    phi_x_reduction_out: chan<Phi_xReductionBatch> out,
     window_request_out: chan<u1> out,
     window_grant_in: chan<u1> in,
     window_release_out: chan<u1> out
   ) {
-    (scheduled_in, credit_out, to_scheduler_2, to_scheduler_4, x_decoder_events_out, window_request_out, window_grant_in, window_release_out)
+    (scheduled_in, credit_out, to_scheduler_4, x_decoder_events_out, phi_x_reduction_out, window_request_out, window_grant_in, window_release_out)
   }
 
   init { zero!<SchedulerRouter2State>() }
 
   next(state: SchedulerRouter2State) {
     let state_effect_info = phi_halo_cell::scheduled_effect(state.scheduled, state.index);
-    let state_last = state.active && state_effect_info.2;
+    let state_reduction_prefix = phi_halo_cell::scheduled_reduction_prefix(state.scheduled);
+    let state_reduction_batch = state.active &&
+      state.index == u8:0 && state_reduction_prefix.0;
+    let state_last = state.active &&
+      if state_reduction_batch { state_reduction_prefix.2
+      } else { state_effect_info.2 };
     let can_receive = !state.active ||
       (state_last && state.credit_debt && !state.lookahead);
     let (receive_tok, incoming, incoming_valid) =
@@ -1499,35 +2046,37 @@ proc SchedulerRouter2 {
     } else { incoming };
     let index = if state.active { state.index } else { u8:0 };
     let effect_info = phi_halo_cell::scheduled_effect(scheduled, index);
+    let reduction_prefix = phi_halo_cell::scheduled_reduction_prefix(scheduled);
+    let reduction_batch = batch_valid && index == u8:0 &&
+      reduction_prefix.0;
     let effect = effect_info.0;
     let emit = batch_valid && effect_info.1;
     let address = scheduler_2_address(scheduled.slot);
-    let routed_tok = if emit {
+    let routed_tok = if reduction_batch {
+      match address.family as FamilyId {
+        FamilyId::PHI_X => {
+          let effect_0 = phi_halo_cell::scheduled_effect(scheduled, u8:0).0;
+          let effect_1 = phi_halo_cell::scheduled_effect(scheduled, u8:1).0;
+          let effect_2 = phi_halo_cell::scheduled_effect(scheduled, u8:2).0;
+          let effect_3 = phi_halo_cell::scheduled_effect(scheduled, u8:3).0;
+          let batch = Phi_xReductionBatch {
+            source: (address.x as u32) * u32:3 + address.y as u32,
+            frames: [effect_0.frame, effect_1.frame, effect_2.frame, effect_3.frame],
+          };
+          send(grant_tok, phi_x_reduction_out, batch)
+        },
+        _ => grant_tok,
+      }
+    } else if emit {
       match address.family as FamilyId {
       FamilyId::PHI_X => {
         let x = address.x;
         let y = address.y;
         match effect.port {
-        phi_halo_cell::OutputPort::NORTH => send(grant_tok, to_scheduler_2, phi_halo_cell::ScheduledRequest {
-            slot: scheduler_2_slot(ScheduledAddress { family: FamilyId::PHI_X as u8, x: x, y: (if y >= u16:1 { y - u16:1 } else { y + u16:2 }) }),
-            frame: effect.frame,
-            ..zero!<phi_halo_cell::ScheduledRequest>()
-          }),
-        phi_halo_cell::OutputPort::EAST => send(grant_tok, to_scheduler_2, phi_halo_cell::ScheduledRequest {
-            slot: scheduler_2_slot(ScheduledAddress { family: FamilyId::PHI_X as u8, x: (if x >= u16:2 { x - u16:2 } else { x + u16:1 }), y: y }),
-            frame: effect.frame,
-            ..zero!<phi_halo_cell::ScheduledRequest>()
-          }),
-        phi_halo_cell::OutputPort::WEST => send(grant_tok, to_scheduler_2, phi_halo_cell::ScheduledRequest {
-            slot: scheduler_2_slot(ScheduledAddress { family: FamilyId::PHI_X as u8, x: (if x >= u16:1 { x - u16:1 } else { x + u16:2 }), y: y }),
-            frame: effect.frame,
-            ..zero!<phi_halo_cell::ScheduledRequest>()
-          }),
-        phi_halo_cell::OutputPort::SOUTH => send(grant_tok, to_scheduler_2, phi_halo_cell::ScheduledRequest {
-            slot: scheduler_2_slot(ScheduledAddress { family: FamilyId::PHI_X as u8, x: x, y: (if y >= u16:2 { y - u16:2 } else { y + u16:1 }) }),
-            frame: effect.frame,
-            ..zero!<phi_halo_cell::ScheduledRequest>()
-          }),
+        phi_halo_cell::OutputPort::NORTH => grant_tok,
+        phi_halo_cell::OutputPort::EAST => grant_tok,
+        phi_halo_cell::OutputPort::WEST => grant_tok,
+        phi_halo_cell::OutputPort::SOUTH => grant_tok,
         phi_halo_cell::OutputPort::SYNDROME => send(grant_tok, to_scheduler_4, phenom_syndrome_cell::ScheduledRequest {
             slot: scheduler_4_slot(ScheduledAddress { family: FamilyId::SYNDROME_X as u8, x: x, y: y }),
             frame: effect.frame,
@@ -1540,7 +2089,9 @@ proc SchedulerRouter2 {
         _ => grant_tok,
       }
     } else { grant_tok };
-    let last = batch_valid && effect_info.2;
+    let last = batch_valid && if reduction_batch {
+      reduction_prefix.2
+    } else { effect_info.2 };
     let batch_continues = batch_valid && !last;
     // Never apply a stale grant to a batch admitted in this same
     // activation: the virtual credit could otherwise bypass back to
@@ -1591,7 +2142,7 @@ proc SchedulerRouter2 {
       SchedulerRouter2State {
         active: u1:1,
         scheduled,
-        index: index + u8:1,
+        index: index + if reduction_batch { u8:4 } else { u8:1 },
         window_requested: pending_request || request,
         window_granted,
         credit_debt,
@@ -1622,9 +2173,9 @@ struct SchedulerRouter3State {
 proc SchedulerRouter3 {
   scheduled_in: chan<phi_halo_cell::ScheduledEffects> in;
   credit_out: chan<phi_halo_cell::ScheduledRequest> out;
-  to_scheduler_3: chan<phi_halo_cell::ScheduledRequest> out;
   to_scheduler_5: chan<phenom_syndrome_cell::ScheduledRequest> out;
   z_decoder_events_out: chan<axis::Frame> out;
+  phi_z_reduction_out: chan<Phi_zReductionBatch> out;
   window_request_out: chan<u1> out;
   window_grant_in: chan<u1> in;
   window_release_out: chan<u1> out;
@@ -1632,21 +2183,26 @@ proc SchedulerRouter3 {
   config(
     scheduled_in: chan<phi_halo_cell::ScheduledEffects> in,
     credit_out: chan<phi_halo_cell::ScheduledRequest> out,
-    to_scheduler_3: chan<phi_halo_cell::ScheduledRequest> out,
     to_scheduler_5: chan<phenom_syndrome_cell::ScheduledRequest> out,
     z_decoder_events_out: chan<axis::Frame> out,
+    phi_z_reduction_out: chan<Phi_zReductionBatch> out,
     window_request_out: chan<u1> out,
     window_grant_in: chan<u1> in,
     window_release_out: chan<u1> out
   ) {
-    (scheduled_in, credit_out, to_scheduler_3, to_scheduler_5, z_decoder_events_out, window_request_out, window_grant_in, window_release_out)
+    (scheduled_in, credit_out, to_scheduler_5, z_decoder_events_out, phi_z_reduction_out, window_request_out, window_grant_in, window_release_out)
   }
 
   init { zero!<SchedulerRouter3State>() }
 
   next(state: SchedulerRouter3State) {
     let state_effect_info = phi_halo_cell::scheduled_effect(state.scheduled, state.index);
-    let state_last = state.active && state_effect_info.2;
+    let state_reduction_prefix = phi_halo_cell::scheduled_reduction_prefix(state.scheduled);
+    let state_reduction_batch = state.active &&
+      state.index == u8:0 && state_reduction_prefix.0;
+    let state_last = state.active &&
+      if state_reduction_batch { state_reduction_prefix.2
+      } else { state_effect_info.2 };
     let can_receive = !state.active ||
       (state_last && state.credit_debt && !state.lookahead);
     let (receive_tok, incoming, incoming_valid) =
@@ -1663,35 +2219,37 @@ proc SchedulerRouter3 {
     } else { incoming };
     let index = if state.active { state.index } else { u8:0 };
     let effect_info = phi_halo_cell::scheduled_effect(scheduled, index);
+    let reduction_prefix = phi_halo_cell::scheduled_reduction_prefix(scheduled);
+    let reduction_batch = batch_valid && index == u8:0 &&
+      reduction_prefix.0;
     let effect = effect_info.0;
     let emit = batch_valid && effect_info.1;
     let address = scheduler_3_address(scheduled.slot);
-    let routed_tok = if emit {
+    let routed_tok = if reduction_batch {
+      match address.family as FamilyId {
+        FamilyId::PHI_Z => {
+          let effect_0 = phi_halo_cell::scheduled_effect(scheduled, u8:0).0;
+          let effect_1 = phi_halo_cell::scheduled_effect(scheduled, u8:1).0;
+          let effect_2 = phi_halo_cell::scheduled_effect(scheduled, u8:2).0;
+          let effect_3 = phi_halo_cell::scheduled_effect(scheduled, u8:3).0;
+          let batch = Phi_zReductionBatch {
+            source: (address.x as u32) * u32:3 + address.y as u32,
+            frames: [effect_0.frame, effect_1.frame, effect_2.frame, effect_3.frame],
+          };
+          send(grant_tok, phi_z_reduction_out, batch)
+        },
+        _ => grant_tok,
+      }
+    } else if emit {
       match address.family as FamilyId {
       FamilyId::PHI_Z => {
         let x = address.x;
         let y = address.y;
         match effect.port {
-        phi_halo_cell::OutputPort::NORTH => send(grant_tok, to_scheduler_3, phi_halo_cell::ScheduledRequest {
-            slot: scheduler_3_slot(ScheduledAddress { family: FamilyId::PHI_Z as u8, x: x, y: (if y >= u16:1 { y - u16:1 } else { y + u16:2 }) }),
-            frame: effect.frame,
-            ..zero!<phi_halo_cell::ScheduledRequest>()
-          }),
-        phi_halo_cell::OutputPort::EAST => send(grant_tok, to_scheduler_3, phi_halo_cell::ScheduledRequest {
-            slot: scheduler_3_slot(ScheduledAddress { family: FamilyId::PHI_Z as u8, x: (if x >= u16:2 { x - u16:2 } else { x + u16:1 }), y: y }),
-            frame: effect.frame,
-            ..zero!<phi_halo_cell::ScheduledRequest>()
-          }),
-        phi_halo_cell::OutputPort::WEST => send(grant_tok, to_scheduler_3, phi_halo_cell::ScheduledRequest {
-            slot: scheduler_3_slot(ScheduledAddress { family: FamilyId::PHI_Z as u8, x: (if x >= u16:1 { x - u16:1 } else { x + u16:2 }), y: y }),
-            frame: effect.frame,
-            ..zero!<phi_halo_cell::ScheduledRequest>()
-          }),
-        phi_halo_cell::OutputPort::SOUTH => send(grant_tok, to_scheduler_3, phi_halo_cell::ScheduledRequest {
-            slot: scheduler_3_slot(ScheduledAddress { family: FamilyId::PHI_Z as u8, x: x, y: (if y >= u16:2 { y - u16:2 } else { y + u16:1 }) }),
-            frame: effect.frame,
-            ..zero!<phi_halo_cell::ScheduledRequest>()
-          }),
+        phi_halo_cell::OutputPort::NORTH => grant_tok,
+        phi_halo_cell::OutputPort::EAST => grant_tok,
+        phi_halo_cell::OutputPort::WEST => grant_tok,
+        phi_halo_cell::OutputPort::SOUTH => grant_tok,
         phi_halo_cell::OutputPort::SYNDROME => send(grant_tok, to_scheduler_5, phenom_syndrome_cell::ScheduledRequest {
             slot: scheduler_5_slot(ScheduledAddress { family: FamilyId::SYNDROME_Z as u8, x: x, y: y }),
             frame: effect.frame,
@@ -1704,7 +2262,9 @@ proc SchedulerRouter3 {
         _ => grant_tok,
       }
     } else { grant_tok };
-    let last = batch_valid && effect_info.2;
+    let last = batch_valid && if reduction_batch {
+      reduction_prefix.2
+    } else { effect_info.2 };
     let batch_continues = batch_valid && !last;
     // Never apply a stale grant to a batch admitted in this same
     // activation: the virtual credit could otherwise bypass back to
@@ -1755,7 +2315,7 @@ proc SchedulerRouter3 {
       SchedulerRouter3State {
         active: u1:1,
         scheduled,
-        index: index + u8:1,
+        index: index + if reduction_batch { u8:4 } else { u8:1 },
         window_requested: pending_request || request,
         window_granted,
         credit_debt,
@@ -2176,18 +2736,22 @@ proc SchedulerGrid {
       chan<phenom_data_cell::ScheduledEffects, CHANNEL_DEPTH>("scheduler_1_egress");
     spawn SchedulerStartup1(scheduler_1_startup_p);
     let (scheduler_2_requests_p, scheduler_2_requests_c) =
-      chan<phi_halo_cell::ScheduledRequest, CHANNEL_DEPTH>[u32:3]("scheduler_2_requests");
+      chan<phi_halo_cell::ScheduledRequest, CHANNEL_DEPTH>[u32:2]("scheduler_2_requests");
     let (scheduler_2_startup_p, scheduler_2_startup_c) =
       chan<phi_halo_cell::ScheduledRequest, CHANNEL_DEPTH>("scheduler_2_startup");
     let (scheduler_2_egress_p, scheduler_2_egress_c) =
       chan<phi_halo_cell::ScheduledEffects, CHANNEL_DEPTH>("scheduler_2_egress");
+    let (scheduler_2_aggregate_p, scheduler_2_aggregate_c) =
+      chan<phi_halo_cell::ReductionAggregateRequest, u32:0>("scheduler_2_aggregate");
     spawn SchedulerStartup2(scheduler_2_startup_p);
     let (scheduler_3_requests_p, scheduler_3_requests_c) =
-      chan<phi_halo_cell::ScheduledRequest, CHANNEL_DEPTH>[u32:3]("scheduler_3_requests");
+      chan<phi_halo_cell::ScheduledRequest, CHANNEL_DEPTH>[u32:2]("scheduler_3_requests");
     let (scheduler_3_startup_p, scheduler_3_startup_c) =
       chan<phi_halo_cell::ScheduledRequest, CHANNEL_DEPTH>("scheduler_3_startup");
     let (scheduler_3_egress_p, scheduler_3_egress_c) =
       chan<phi_halo_cell::ScheduledEffects, CHANNEL_DEPTH>("scheduler_3_egress");
+    let (scheduler_3_aggregate_p, scheduler_3_aggregate_c) =
+      chan<phi_halo_cell::ReductionAggregateRequest, u32:0>("scheduler_3_aggregate");
     spawn SchedulerStartup3(scheduler_3_startup_p);
     let (scheduler_4_requests_p, scheduler_4_requests_c) =
       chan<phenom_syndrome_cell::ScheduledRequest, CHANNEL_DEPTH>[u32:5]("scheduler_4_requests");
@@ -2203,6 +2767,10 @@ proc SchedulerGrid {
     let (scheduler_5_egress_p, scheduler_5_egress_c) =
       chan<phenom_syndrome_cell::ScheduledEffects, CHANNEL_DEPTH>("scheduler_5_egress");
     spawn SchedulerStartup5(scheduler_5_startup_p);
+    let (phi_x_reduction_batch_p, phi_x_reduction_batch_c) =
+      chan<Phi_xReductionBatch, CHANNEL_DEPTH>[u32:1]("phi_x_reduction_batch");
+    let (phi_z_reduction_batch_p, phi_z_reduction_batch_c) =
+      chan<Phi_zReductionBatch, CHANNEL_DEPTH>[u32:1]("phi_z_reduction_batch");
     spawn effect_window::Arbiter<u32:6>(
       effect_window_request_c, effect_window_grant_p,
       effect_window_release_c);
@@ -2223,21 +2791,23 @@ proc SchedulerGrid {
       scheduler_1_mailbox_read_req_out, scheduler_1_mailbox_read_resp_in,
       scheduler_1_mailbox_write_req_out, scheduler_1_mailbox_write_resp_in);
     spawn phi_halo_cell::SharedService<
-      u32:9, u32:3, u32:9, u32:2>(
+      u32:9, u32:2, u32:9, u32:2>(
       scheduler_2_requests_c, scheduler_2_startup_c,
       scheduler_2_egress_p,
       scheduler_2_ram_read_req_out, scheduler_2_ram_read_resp_in,
       scheduler_2_ram_write_req_out, scheduler_2_ram_write_resp_in,
       scheduler_2_mailbox_read_req_out, scheduler_2_mailbox_read_resp_in,
-      scheduler_2_mailbox_write_req_out, scheduler_2_mailbox_write_resp_in);
+      scheduler_2_mailbox_write_req_out, scheduler_2_mailbox_write_resp_in,
+      scheduler_2_aggregate_c);
     spawn phi_halo_cell::SharedService<
-      u32:9, u32:3, u32:9, u32:3>(
+      u32:9, u32:2, u32:9, u32:3>(
       scheduler_3_requests_c, scheduler_3_startup_c,
       scheduler_3_egress_p,
       scheduler_3_ram_read_req_out, scheduler_3_ram_read_resp_in,
       scheduler_3_ram_write_req_out, scheduler_3_ram_write_resp_in,
       scheduler_3_mailbox_read_req_out, scheduler_3_mailbox_read_resp_in,
-      scheduler_3_mailbox_write_req_out, scheduler_3_mailbox_write_resp_in);
+      scheduler_3_mailbox_write_req_out, scheduler_3_mailbox_write_resp_in,
+      scheduler_3_aggregate_c);
     spawn phenom_syndrome_cell::SharedService<
       u32:9, u32:5, u32:9, u32:4>(
       scheduler_4_requests_c, scheduler_4_startup_c,
@@ -2254,6 +2824,12 @@ proc SchedulerGrid {
       scheduler_5_ram_write_req_out, scheduler_5_ram_write_resp_in,
       scheduler_5_mailbox_read_req_out, scheduler_5_mailbox_read_resp_in,
       scheduler_5_mailbox_write_req_out, scheduler_5_mailbox_write_resp_in);
+    spawn Phi_xReductionPlane(
+      phi_x_reduction_batch_c,
+      scheduler_2_aggregate_p);
+    spawn Phi_zReductionPlane(
+      phi_z_reduction_batch_c,
+      scheduler_3_aggregate_p);
     spawn SchedulerRouter0(
       scheduler_0_egress_c, scheduler_0_requests_p[u32:3],
       scheduler_4_requests_p[u32:0],
@@ -2271,18 +2847,18 @@ proc SchedulerGrid {
       effect_window_grant_c[u32:1],
       effect_window_release_p[u32:1]);
     spawn SchedulerRouter2(
-      scheduler_2_egress_c, scheduler_2_requests_p[u32:2],
-      scheduler_2_requests_p[u32:0],
+      scheduler_2_egress_c, scheduler_2_requests_p[u32:1],
       scheduler_4_requests_p[u32:2],
       external_1_buffer_p,
+      phi_x_reduction_batch_p[u32:0],
       effect_window_request_p[u32:2],
       effect_window_grant_c[u32:2],
       effect_window_release_p[u32:2]);
     spawn SchedulerRouter3(
-      scheduler_3_egress_c, scheduler_3_requests_p[u32:2],
-      scheduler_3_requests_p[u32:0],
+      scheduler_3_egress_c, scheduler_3_requests_p[u32:1],
       scheduler_5_requests_p[u32:2],
       external_2_buffer_p,
+      phi_z_reduction_batch_p[u32:0],
       effect_window_request_p[u32:3],
       effect_window_grant_c[u32:3],
       effect_window_release_p[u32:3]);
@@ -2290,7 +2866,7 @@ proc SchedulerGrid {
       scheduler_4_egress_c, scheduler_4_requests_p[u32:4],
       scheduler_0_requests_p[u32:0],
       scheduler_1_requests_p[u32:0],
-      scheduler_2_requests_p[u32:1],
+      scheduler_2_requests_p[u32:0],
       effect_window_request_p[u32:4],
       effect_window_grant_c[u32:4],
       effect_window_release_p[u32:4]);
@@ -2298,7 +2874,7 @@ proc SchedulerGrid {
       scheduler_5_egress_c, scheduler_5_requests_p[u32:4],
       scheduler_0_requests_p[u32:1],
       scheduler_1_requests_p[u32:1],
-      scheduler_3_requests_p[u32:1],
+      scheduler_3_requests_p[u32:0],
       effect_window_request_p[u32:5],
       effect_window_grant_c[u32:5],
       effect_window_release_p[u32:5]);

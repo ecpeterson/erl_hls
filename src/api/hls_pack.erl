@@ -145,9 +145,10 @@ record_width_expression(Forms, Tag, Line) ->
 actor_interface_attributes(Forms, ModuleAttr) ->
     case xls_parse:find_optional_attribute(Forms, hls_phases) of
         {ok, PhaseNames} ->
-            %% Interface inference is deliberately no stricter than explicit
-            %% DSLX lowering. A CPU-valid actor outside that subset must retain
-            %% the compilation behavior it had before summaries existed; a
+            %% Interface inference validates only the structurally observable
+            %% HLS subset; lowering callback expressions to DSLX happens later.
+            %% A CPU-valid actor outside the structural subset must retain the
+            %% compilation behavior it had before summaries existed, and a
             %% topology which selects it will report the missing summary.
             try xls_statem_lower:interface(Forms, PhaseNames) of
                 Interface ->

@@ -66,7 +66,7 @@ ingress sends that frame under the actor's first admission credit, ahead of its
 first routed receive, while the actor graph and routing stay compact.
 """.
 
--export([emit/2]).
+-export([artifact_requirements/2, emit/2]).
 
 -define(U16_MAX, 16#ffff).
 -define(U16_EXTENT, 16#10000).
@@ -77,6 +77,13 @@ first routed receive, while the actor graph and routing stay compact.
 -spec emit(hls_topology:plan(), xls_topology_dslx:profile()) -> iolist().
 emit(Plan, Profile) ->
     render(lower(Plan, Profile)).
+
+-doc "Returns the actor-artifact specializations selected by a profile.".
+-spec artifact_requirements(
+    hls_topology:plan(), xls_topology_dslx:profile()
+) -> #{module() := #{shared_service := ordinary | aggregate_only}}.
+artifact_requirements(Plan, Profile) ->
+    maps:get(artifact_requirements, lower(Plan, Profile)).
 
 %%%
 %%% Validation and annotation

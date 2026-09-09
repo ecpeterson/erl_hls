@@ -189,7 +189,11 @@ assert_group(Group, Module, SlotCount, ExpectedMembers) ->
     ?assertEqual(SlotCount, maps:get(slot_count, Group)),
     ?assertEqual(5, maps:get(mailbox_capacity, Group)),
     ?assert(maps:get(width, maps:get(state, Group)) > 0),
-    ?assertEqual(0, maps:get(reduction_storage_width, Group)),
+    Interface = hls_actor_interface:from_module(Module),
+    ?assertEqual(
+        hls_actor_interface:reduction_storage_width(Interface),
+        maps:get(reduction_storage_width, Group)
+    ),
     ?assertEqual(round_robin, maps:get(selection, Group)),
     ?assertEqual(resumable, maps:get(effect_progress, Group)),
     ?assertEqual(none, maps:get(reservation, Group)),

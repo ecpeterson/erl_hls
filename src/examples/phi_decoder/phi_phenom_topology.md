@@ -1582,3 +1582,36 @@ better. The profiler therefore retains per-router request, stall, grant,
 release, pending-time, and grant-latency counters, plus global owner and
 pending-request concurrency histograms, so a future deployment policy can be
 chosen from evidence rather than component count alone.
+
+### Clean source-fragment reduction profile
+
+The source-fragment reduction path was reimplemented from `main` around three
+small interfaces: topology planning proves and describes the fixed inverse
+routes, the topology renderer owns the fragment queues and reduction planes,
+and an `aggregate_only` actor artifact accepts their completed aggregates. The
+CPU actor still receives ordinary casts and owns the canonical reduction
+semantics; the special transport is private to generated hardware.
+
+For a completed aggregate, the shared executor now validates and installs the
+accumulator, dispatches the reduction-completion callback, and performs the
+resulting phase entry in one actor-state visit. Newly visible aggregate work
+can launch its RAM read in the same scheduler activation, except when that
+would read the slot currently being written. These two details avoid both an
+extra actor transaction and a one-clock selection bubble without changing the
+1R1W RAM contract.
+
+The native distance-three request-paced profile measures 4,176 clocks from
+complete step 8 through complete step 32: 174 clocks per decoder step, or
+about 1,149,425 steps/s at 200 MHz. Equivalently, a 174 MHz clock sustains one
+million steps/s. The six phi shards perform 8,958 state reads over the full
+run, while both planes preserve the expected 63 X and 64 Z corrections. This
+matches the effective clock rate of PR #66 while using the cleanly separated
+planner, renderer, and actor-artifact interfaces.
+
+`tools/run_phi_decoder_profile.sh` now records a clock-stamped VPI trace and
+renders `phi_decoder_profile.causality.svg`. The standalone SVG places all six
+phi scheduler shards and both source-fragment planes on one clock axis. Solid
+arrows follow observed ordered handshakes and actor-state dependencies; dashed
+arrows reconstruct the four compile-time contribution routes from the
+generated topology. It embeds light and dark colors, so it remains readable
+when opened directly rather than depending on an editor stylesheet.

@@ -1,14 +1,16 @@
 %%%% xls_statem_reduction_lower
 %%%%
-%%%% Recognizes the bounded actor-reduction callback contract.  Erlang forms
-%%%% remain private to this pass; the returned reduction value is the closed,
-%%%% typed IR in xls_statem_reduction_ir.
+%%%% Recognizes the bounded actor-reduction callback contract. Erlang forms
+%%%% remain private to this pass. Full lowering returns the closed, typed IR in
+%%%% xls_statem_reduction_ir; parse-transform interface inference stops at a
+%%%% structural public summary so it does not execute application transpilers.
 
 -module(xls_statem_reduction_lower).
 -moduledoc false.
 
 -export([
     analyze/2,
+    analyze_interface/2,
     internal_groups/2,
     split_entry_actions/2
 ]).
@@ -48,6 +50,70 @@ internal_groups(Clauses, Phases) ->
 }.
 analyze(Forms, #{
     phases := Phases,
+    data_name := DataName
+} = Context) ->
+    case analyze_source(Forms, Context) of
+        #{reduction := none, cast_groups := OrdinaryCastGroups} ->
+            #{reduction => none, cast_groups => OrdinaryCastGroups};
+        #{reduction := Source, cast_groups := OrdinaryCastGroups} ->
+            AccumulatorName = maps:get(accumulator_name, Source),
+            AccumulatorRecord = maps:get(accumulator_record, Source),
+            EnumAtoms = enum_atoms(Phases),
+            DataType = type_ref(Forms, DataName),
+            AccumulatorType = type_ref(AccumulatorRecord),
+            Sites = close_sites(
+                maps:get(opens, Source),
+                maps:get(contributions, Source),
+                maps:get(completions, Source),
+                DataName,
+                AccumulatorName,
+                AccumulatorType,
+                EnumAtoms
+            ),
+            ClosedReducers = [close_reducer(
+                Reducer,
+                DataName,
+                AccumulatorName,
+                AccumulatorType,
+                EnumAtoms
+            ) || Reducer <- maps:get(reducers, Source)],
+            Reduction = xls_statem_reduction_ir:new(
+                DataType,
+                AccumulatorType,
+                Sites,
+                ClosedReducers
+            ),
+            %% Assert the central boundary of this pass: source forms are
+            %% consumed here, while only printable expressions escape.
+            ok = assert_closed(Reduction),
+            #{
+                reduction => Reduction,
+                cast_groups => OrdinaryCastGroups
+            }
+    end;
+analyze(_Forms, Context) ->
+    error({invalid_hls_statem_reduction_context, Context}).
+
+-spec analyze_interface([erl_parse:abstract_form()], map()) -> #{
+    reduction := none | map(),
+    cast_groups := list()
+}.
+analyze_interface(Forms, Context) ->
+    case analyze_source(Forms, Context) of
+        #{reduction := none, cast_groups := OrdinaryCastGroups} ->
+            #{reduction => none, cast_groups => OrdinaryCastGroups};
+        #{reduction := Source, cast_groups := OrdinaryCastGroups} ->
+            #{
+                reduction => source_interface(Source),
+                cast_groups => OrdinaryCastGroups
+            }
+    end.
+
+%% Interface inference runs inside hls_pack while the source tree is still
+%% being compiled. Keep it structural: validating and describing a reduction
+%% must not execute hls_type transpilers or the DSLX expression renderer.
+analyze_source(Forms, #{
+    phases := _Phases,
     entries := Entries,
     cast_groups := CastGroups,
     internal_groups := InternalGroups,
@@ -97,40 +163,19 @@ analyze(Forms, #{
                 AccumulatorName,
                 AccumulatorRecord
             ),
-            EnumAtoms = enum_atoms(Phases),
-            DataType = type_ref(Forms, DataName),
-            AccumulatorType = type_ref(AccumulatorRecord),
-            Sites = close_sites(
-                ValidOpens,
-                Contributions,
-                Completions,
-                DataName,
-                AccumulatorName,
-                AccumulatorType,
-                EnumAtoms
-            ),
-            ClosedReducers = [close_reducer(
-                Reducer,
-                DataName,
-                AccumulatorName,
-                AccumulatorType,
-                EnumAtoms
-            ) || Reducer <- Reducers],
-            Reduction = xls_statem_reduction_ir:new(
-                DataType,
-                AccumulatorType,
-                Sites,
-                ClosedReducers
-            ),
-            %% Assert the central boundary of this pass: source forms are
-            %% consumed here, while only printable expressions escape.
-            ok = assert_closed(Reduction),
             #{
-                reduction => Reduction,
+                reduction => #{
+                    accumulator_name => AccumulatorName,
+                    accumulator_record => AccumulatorRecord,
+                    opens => ValidOpens,
+                    contributions => Contributions,
+                    completions => Completions,
+                    reducers => Reducers
+                },
                 cast_groups => OrdinaryCastGroups
             }
     end;
-analyze(_Forms, Context) ->
+analyze_source(_Forms, Context) ->
     error({invalid_hls_statem_reduction_context, Context}).
 
 %%%
@@ -613,6 +658,58 @@ validate_u32_pattern({integer, _Line, Value}) ->
     ok;
 validate_u32_pattern(Pattern) ->
     error({unsupported_hls_statem_reduction_key_pattern, Pattern}).
+
+%%%
+%%% Structural interface
+%%%
+
+source_interface(#{
+    accumulator_record := AccumulatorRecord,
+    opens := Opens,
+    contributions := Contributions,
+    reducers := Reducers
+}) ->
+    Accumulator = maps:with([name, fields], type_ref(AccumulatorRecord)),
+    #{
+        accumulator => Accumulator,
+        sites => [source_interface_site(Open, Contributions)
+            || Open <- Opens],
+        reducers => [maps:get(name, Reducer) || Reducer <- Reducers]
+    }.
+
+source_interface_site(#{
+    id := Site,
+    phase := Phase,
+    name := Name,
+    population := Population
+}, Contributions) ->
+    SiteContributions = [Contribution
+        || Contribution <- Contributions,
+           maps:get(site, Contribution) =:= Site],
+    Groups = xls_callback_lower:group_by(
+        SiteContributions,
+        fun(Contribution) -> maps:get(tag, Contribution) end
+    ),
+    #{
+        id => Site,
+        phase => Phase,
+        name => Name,
+        population => Population,
+        contributions => [Tag || {Tag, _Group} <- Groups],
+        source_transportable => lists:all(
+            fun({_Tag, Group}) ->
+                lists:all(fun(Contribution) ->
+                    maps:get(source_transportable, Contribution)
+                end, Group)
+            end,
+            Groups
+        ),
+        source_capture_total => lists:all(
+            fun({_Tag, Group}) -> lists:any(fun source_capture_total/1, Group)
+            end,
+            Groups
+        )
+    }.
 
 %%%
 %%% Closing into typed IR

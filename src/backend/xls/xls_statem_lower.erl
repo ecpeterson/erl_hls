@@ -14,7 +14,7 @@
 -spec interface([erl_parse:abstract_form()], [atom(), ...]) -> interface().
 -doc "Summarizes the statically dispatched and emitted hls_statem schemas.".
 interface(Forms, PhaseNames) ->
-    interface_from_prepared(prepare(Forms, PhaseNames)).
+    interface_from_prepared(prepare_interface(Forms, PhaseNames)).
 
 -spec lower(file:filename(), [erl_parse:abstract_form()], [atom(), ...]) ->
     iolist().
@@ -133,8 +133,8 @@ validate_shared_service(aggregate_only, #{sites := Sites}) ->
             Duplicates})
     end.
 
-prepare(Forms, PhaseNames) ->
-    prepare_callbacks(Forms, declarations(Forms, PhaseNames)).
+prepare_interface(Forms, PhaseNames) ->
+    prepare_callbacks(Forms, declarations(Forms, PhaseNames), interface).
 
 declarations(Forms, PhaseNames) ->
     MessageNames = xls_parse:find_tags(Forms),
@@ -161,6 +161,9 @@ declarations(Forms, PhaseNames) ->
     }.
 
 prepare_callbacks(Forms, Declarations) ->
+    prepare_callbacks(Forms, Declarations, closed).
+
+prepare_callbacks(Forms, Declarations, ReductionMode) ->
     PhaseNames = maps:get(phases, Declarations),
     MessageNames = maps:get(message_names, Declarations),
     OutputNames = maps:get(output_names, Declarations),
@@ -186,28 +189,42 @@ prepare_callbacks(Forms, Declarations) ->
         maps:get(internal, Callbacks),
         PhaseNames
     ),
-    Analysis = xls_statem_reduction_lower:analyze(Forms, #{
+    ReductionContext = #{
         phases => PhaseNames,
         entries => Entries,
         cast_groups => CastGroups0,
         internal_groups => InternalGroups,
         message_names => MessageNames,
         data_name => maps:get(data_name, Declarations)
-    }),
-    Reductions = maps:get(reduction, Analysis),
-    CastGroups = maps:get(cast_groups, Analysis),
-    Records = reduction_records(
+    },
+    ReductionSlots = prepare_reduction_slots(
+        ReductionMode,
         Forms,
-        maps:get(records, Declarations),
-        Reductions
+        ReductionContext,
+        maps:get(records, Declarations)
     ),
-    Declarations#{
-        records => Records,
+    maps:merge(Declarations#{
         init_clause => InitClause,
         initial_phase => initial_phase(InitClause, PhaseNames),
-        entries => Entries,
+        entries => Entries
+    }, ReductionSlots).
+
+prepare_reduction_slots(closed, Forms, Context, Records) ->
+    #{reduction := Reduction, cast_groups := CastGroups} =
+        xls_statem_reduction_lower:analyze(Forms, Context),
+    #{
+        records => reduction_records(Forms, Records, Reduction),
         cast_groups => CastGroups,
-        reductions => Reductions
+        reductions => Reduction,
+        reduction_interface => reduction_interface(Reduction)
+    };
+prepare_reduction_slots(interface, Forms, Context, Records) ->
+    #{reduction := ReductionInterface, cast_groups := CastGroups} =
+        xls_statem_reduction_lower:analyze_interface(Forms, Context),
+    #{
+        records => reduction_records(Forms, Records, ReductionInterface),
+        cast_groups => CastGroups,
+        reduction_interface => ReductionInterface
     }.
 
 reduction_records(_Forms, Records, none) ->
@@ -223,7 +240,7 @@ reduction_records(Forms, Records, Reduction) ->
 interface_from_prepared(Prepared) ->
     Entries = maps:get(entries, Prepared),
     CastGroups = maps:get(cast_groups, Prepared),
-    Reductions = maps:get(reductions, Prepared),
+    ReductionInterface = maps:get(reduction_interface, Prepared),
     Base = #{
         version => 1,
         module => maps:get(module, Prepared),
@@ -245,13 +262,13 @@ interface_from_prepared(Prepared) ->
                 maps:get(message_names, Prepared),
                 maps:get(phases, Prepared)
             ),
-            reduction_dispatches(Reductions)
+            reduction_dispatches(ReductionInterface)
         ),
         entry_effects => lists:append([
             interface_effects(Entry) || Entry <- Entries
         ])
     },
-    case reduction_interface(Reductions) of
+    case ReductionInterface of
         none -> Base;
         Interface -> Base#{reductions => Interface}
     end.
@@ -263,10 +280,9 @@ reduction_interface(Reduction) ->
 reduction_dispatches(none) -> [];
 reduction_dispatches(#{sites := Sites}) ->
     lists:usort([
-        #{schema => maps:get(tag, Contribution),
-            phase => maps:get(phase, Site)}
+        #{schema => Tag, phase => maps:get(phase, Site)}
         || Site <- Sites,
-           Contribution <- maps:get(contributions, Site)
+           Tag <- maps:get(contributions, Site)
     ]).
 
 append_new_dispatches(Dispatches, Additional) ->

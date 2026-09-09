@@ -49,6 +49,10 @@ profile(ShardCount) ->
         name => phi_noise_topology,
         channel_depth => 1,
         actor_egress_depth => burst,
+        reduction_placements => #{
+            phi_x => source_fragments,
+            phi_z => source_fragments
+        },
         scheduler_groups => scheduler_groups(ShardCount)
     }.
 

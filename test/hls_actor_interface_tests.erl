@@ -94,13 +94,29 @@ phi_interface_records_protocol_facts_test() ->
             phi_config
         ))
     ),
-    #{name := cell, fields := StateFields, width := 528} =
+    #{name := cell, fields := StateFields, width := 320} =
         hls_actor_interface:state(Interface),
     ?assertEqual(
-        [step, diffusion_round, phi, phi_sum, phi_received, seen_sources,
-            best_phi0, best_direction, moves_received, anyon, random_state,
+        [step, diffusion_epoch, phi, best_direction, anyon, random_state,
             x, y, noise_quiet, status_valid],
         [maps:get(name, Field) || Field <- StateFields]
+    ),
+    ?assertEqual(171,
+        hls_actor_interface:reduction_storage_width(Interface)),
+    #{sites := ReductionSites} = maps:get(reductions, Interface),
+    ?assertEqual(
+        [
+            {diffusion, count, 4, true},
+            {comparison, members, 4, true},
+            {movement, count, 4, true}
+        ],
+        [
+            {maps:get(name, Site),
+                maps:get(mode, maps:get(population, Site)),
+                maps:get(size, maps:get(population, Site)),
+                maps:get(source_capture_total, Site)}
+            || Site <- ReductionSites
+        ]
     ).
 
 phenomenological_interfaces_are_distinct_test() ->

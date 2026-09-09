@@ -192,12 +192,25 @@ reduction_sites_must_have_one_route_pattern_test() ->
     Spec = four_lane_topology(hls_reduction_plan_inconsistent_fixture),
     assert_spec_error(Spec, source_fragment_inconsistent_site).
 
-reduction_sites_must_have_one_population_test() ->
+equal_size_count_and_member_sites_share_one_source_fragment_plane_test() ->
     Spec = two_lane_topology(
         hls_reduction_plan_population_fixture,
         [3, 3]
     ),
-    assert_spec_error(Spec, source_fragment_inconsistent_site).
+    Topology = hls_topology:normalize(Spec),
+    Scheduler = scheduler_plan(Topology, [reducer]),
+    Plan = hls_reduction_plan:normalize(
+        Topology, Scheduler, #{reducer => source_fragments}
+    ),
+    [Placement] = maps:get(placements, Plan),
+    ?assertEqual(2, maps:get(population, Placement)),
+    ?assertEqual(
+        [
+            #{mode => count, size => 2},
+            #{mode => members, size => 2, members => [0, 1]}
+        ],
+        [maps:get(population, Site) || Site <- maps:get(sites, Placement)]
+    ).
 
 captured_route_must_not_cross_families_test() ->
     Spec0 = closed_topology(hls_topology_source_fragment_fixture, [3, 3]),

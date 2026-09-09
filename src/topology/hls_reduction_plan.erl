@@ -174,16 +174,22 @@ require_unique_schemas(FamilyId, Sites) ->
 
 common_pattern(FamilyId, [First | Rest]) ->
     Population = maps:get(population, First),
-    Expected = {Population, maps:get(pattern, First)},
+    PopulationSize = maps:get(size, Population),
+    %% The plane layout depends on cardinality and routes. Count/member
+    %% semantics remain site-local in the aggregate carried to the actor.
+    Expected = {PopulationSize, maps:get(pattern, First)},
     lists:foreach(fun(Site) ->
-        Actual = {maps:get(population, Site), maps:get(pattern, Site)},
+        Actual = {
+            maps:get(size, maps:get(population, Site)),
+            maps:get(pattern, Site)
+        },
         case Actual =:= Expected of
             true -> ok;
             false -> error({source_fragment_inconsistent_site, FamilyId,
                 maps:get(id, First), Expected, maps:get(id, Site), Actual})
         end
     end, Rest),
-    {maps:get(size, Population), maps:get(pattern, First)}.
+    {PopulationSize, maps:get(pattern, First)}.
 
 validate_port_uses(FamilyId, Interface, Captured, Ports) ->
     Keys = maps:from_list([{{maps:get(phase, E), maps:get(order, E)}, true}

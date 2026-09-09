@@ -32,18 +32,6 @@ erl \
     -pa "$project_root/_build/test/lib/erl_hls/test" \
     -eval '
         Regsvc = xls_parse:to_xls("src/examples/regsvc/regsvc.erl"),
-        PhiHalo = xls_parse:to_xls(
-            "src/examples/phi_decoder/phi_halo_cell.erl"
-        ),
-        PhenomData = xls_parse:to_xls(
-            "src/examples/phi_decoder/phenom_data_cell.erl"
-        ),
-        PhenomSyndrome = xls_parse:to_xls(
-            "src/examples/phi_decoder/phenom_syndrome_cell.erl"
-        ),
-        PhiSyndromeReplay = xls_parse:to_xls(
-            "src/examples/phi_decoder/phi_syndrome_replay_cell.erl"
-        ),
         CaseFixture = xls_parse:to_xls(
             "test_data/xls_case_fixture.erl"
         ),
@@ -66,14 +54,18 @@ erl \
             false -> 2;
             ShardText -> {phi_shards, list_to_integer(ShardText)}
         end,
-        PhiNoiseTopology = phi_noise_topology_dslx:to_dslx(
-            PhiNoiseDistance,
-            PhiNoiseRate,
+        PhiNoisePlan = hls_topology:normalize(
+            phi_noise_topology:topology(PhiNoiseDistance, PhiNoiseRate)
+        ),
+        PhiNoisePhysical = phi_noise_topology_dslx:profile(
             SchedulerProfile
         ),
         %% The routine D1 closeout fixture disables random injection so empty
         %% decoder planes let the ERTS witness terminate deterministically.
-        PhiNoiseTopologySmoke = phi_noise_topology_dslx:to_dslx(1, 0),
+        PhiNoiseSmokePlan = hls_topology:normalize(
+            phi_noise_topology:topology(1, 0)
+        ),
+        PhiNoiseSmokePhysical = phi_noise_topology_dslx:profile(),
         ProfileShardCount = case os:getenv("ERL_HLS_PHI_PROFILE_SHARDS") of
             false -> 3;
             ProfileShardText -> list_to_integer(ProfileShardText)
@@ -95,6 +87,58 @@ erl \
             ))#{
                 effect_window_partition => ProfileEffectWindowPartition
             },
+        ArtifactRequirementMaps = [
+            xls_topology_dslx:artifact_requirements(
+                ProfilePlan,
+                ProfilePhysical
+            ),
+            xls_topology_dslx:artifact_requirements(
+                PhiNoisePlan,
+                PhiNoisePhysical
+            ),
+            xls_topology_dslx:artifact_requirements(
+                PhiNoiseSmokePlan,
+                PhiNoiseSmokePhysical
+            )
+        ],
+        SharedServiceFor = fun(Module) ->
+            Modes = lists:usort([
+                Mode
+                || Requirements <- ArtifactRequirementMaps,
+                   #{shared_service := Mode} <- [
+                       maps:get(Module, Requirements, none)
+                   ]
+            ]),
+            case Modes of
+                [] -> ordinary;
+                [Mode] -> Mode;
+                _ -> error({mixed_staged_actor_artifacts, Module, Modes})
+            end
+        end,
+        PhiHalo = xls_parse:to_xls(
+            "src/examples/phi_decoder/phi_halo_cell.erl",
+            #{shared_service => SharedServiceFor(phi_halo_cell)}
+        ),
+        PhenomData = xls_parse:to_xls(
+            "src/examples/phi_decoder/phenom_data_cell.erl",
+            #{shared_service => SharedServiceFor(phenom_data_cell)}
+        ),
+        PhenomSyndrome = xls_parse:to_xls(
+            "src/examples/phi_decoder/phenom_syndrome_cell.erl",
+            #{shared_service => SharedServiceFor(phenom_syndrome_cell)}
+        ),
+        PhiSyndromeReplay = xls_parse:to_xls(
+            "src/examples/phi_decoder/phi_syndrome_replay_cell.erl",
+            #{shared_service => SharedServiceFor(phi_syndrome_replay_cell)}
+        ),
+        PhiNoiseTopology = xls_topology_dslx:emit(
+            PhiNoisePlan,
+            PhiNoisePhysical
+        ),
+        PhiNoiseTopologySmoke = xls_topology_dslx:emit(
+            PhiNoiseSmokePlan,
+            PhiNoiseSmokePhysical
+        ),
         PhiDecoderProfile = xls_topology_dslx:emit(
             ProfilePlan,
             ProfilePhysical

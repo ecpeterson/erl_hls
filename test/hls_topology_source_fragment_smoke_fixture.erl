@@ -7,13 +7,18 @@
 -export([write/1]).
 
 -define(ACTOR, hls_topology_source_fragment_fixture).
+-define(POPULATION_ACTOR, hls_reduction_plan_population_fixture).
 
 write(Stage) ->
     Artifacts = [
         {"hls_topology_source_fragment_fixture.x", actor()},
         {"hls_topology_source_fragment_topology.x", topology(single)},
         {"hls_topology_source_fragment_sharded.x", topology(sharded)},
-        {"hls_topology_source_fragment_muxed.x", topology(muxed)}
+        {"hls_topology_source_fragment_muxed.x", topology(muxed)},
+        {"hls_reduction_plan_population_fixture.x", population_actor()},
+        {"hls_topology_source_fixture.x", source_actor()},
+        {"hls_topology_source_fragment_population.x",
+            population_topology()}
     ],
     lists:foreach(fun({Name, Contents}) ->
         ok = file:write_file(filename:join(Stage, Name), Contents)
@@ -25,6 +30,55 @@ actor() ->
         "test/hls_topology_source_fragment_fixture.erl",
         #{shared_service => aggregate_only}
     ).
+
+population_actor() ->
+    xls_parse:to_xls(
+        "test/hls_reduction_plan_population_fixture.erl",
+        #{shared_service => aggregate_only}
+    ).
+
+source_actor() ->
+    xls_parse:to_xls("test/hls_topology_source_fixture.erl").
+
+population_topology() ->
+    Topology = hls_topology:normalize(#{
+        version => 1,
+        ingresses => [],
+        actors => #{},
+        families => #{
+            reducer => #{
+                module => ?POPULATION_ACTOR,
+                shape => [3, 3]
+            },
+            source => #{
+                module => hls_topology_source_fixture,
+                shape => [3, 3]
+            }
+        },
+        externals => [{messages, out, [message]}],
+        routes => [],
+        route_relations => [
+            {{reducer, north}, [
+                {family, reducer, {translate, [0, -1], wrap}}
+            ]},
+            {{reducer, south}, [
+                {family, reducer, {translate, [0, 1], wrap}}
+            ]},
+            {{source, out}, [{external, messages}]}
+        ],
+        startup => []
+    }),
+    Profile = #{
+        name => source_fragment_population_semantics,
+        channel_depth => 1,
+        actor_egress_depth => burst,
+        scheduler_groups => #{
+            reducer => group([{family, reducer}]),
+            source => group([{family, source}])
+        },
+        reduction_placements => #{reducer => source_fragments}
+    },
+    xls_topology_dslx:emit(Topology, Profile).
 
 topology(single) ->
     emit(
