@@ -370,7 +370,7 @@ validate_contribution(
         member_expression := Member,
         value_expression := Value,
         clause := {clause, _Line,
-            [MessagePattern, _PhasePattern, DataPattern], _Guards, _Body}
+            [MessagePattern, _PhasePattern, DataPattern], Guards, _Body}
     },
     Open = #{name := Name, population := #{mode := Mode}},
     Accumulator,
@@ -397,7 +397,11 @@ validate_contribution(
         [message],
         {hls_statem_reduction_value, Phase, Tag}
     ),
-    Contribution#{site => maps:get(id, Open)};
+    Contribution#{
+        site => maps:get(id, Open),
+        source_transportable => source_transportable(
+            MessagePattern, DataPattern, Guards)
+    };
 validate_contribution(Contribution, Open, _Accumulator, _Forms, _DataName) ->
     error({hls_statem_reduction_contribution_mismatch,
         public_contribution(Contribution), public_open(Open)}).
@@ -722,8 +726,109 @@ close_contribution_group(Tag, Contributions, DataName, AccumulatorType,
         Failure,
         EnumAtoms
     ),
+    SourceTransportable = lists:all(fun(Contribution) ->
+        maps:get(source_transportable, Contribution)
+    end, Contributions),
+    %% A source-side plane captures the whole message schema, so merely being
+    %% able to evaluate each contribution away from actor state is not enough:
+    %% at least one contributing clause must accept every value of that schema.
+    %% Keep this fact separate from transportability because ordinary actor
+    %% dispatch can legitimately retain a partial contribution and fallback.
+    SourceCaptureTotal = lists:any(fun source_capture_total/1, Contributions),
+    Transport = case SourceTransportable of
+        true -> close_transport_contribution_group(
+            Tag, Contributions, DataName, AccumulatorType, EnumAtoms);
+        false -> none
+    end,
     %% The owning site already fixes name, phase, and population mode.
-    #{tag => Tag, build => lowered(Body, Result)}.
+    #{
+        tag => Tag,
+        build => lowered(Body, Result),
+        source_transportable => SourceTransportable,
+        source_capture_total => SourceCaptureTotal,
+        transport => Transport
+    }.
+
+source_capture_total(#{
+    tag := Tag,
+    clause := {clause, _Line, [Message | _Patterns], [], _Body}
+}) ->
+    case schema_record_pattern(Message, Tag) of
+        true -> element(1, irrefutable_pattern(Message, #{}));
+        false -> false
+    end;
+source_capture_total(_Contribution) ->
+    false.
+
+%% This intentionally recognizes a conservative subset of irrefutable Erlang
+%% record patterns.  Omitted record fields are wildcards; explicit fields may
+%% bind fresh variables (including through aliases), but literals and repeated
+%% variables constrain the accepted value and therefore cannot justify routing
+%% every message of the schema away from the ordinary mailbox.
+schema_record_pattern({record, _Line, Tag, _Fields}, Tag) ->
+    true;
+schema_record_pattern({match, _Line, Left, Right}, Tag) ->
+    schema_record_pattern(Left, Tag) orelse schema_record_pattern(Right, Tag);
+schema_record_pattern(_Pattern, _Tag) ->
+    false.
+
+irrefutable_pattern({var, _Line, '_'}, Bound) ->
+    {true, Bound};
+irrefutable_pattern({var, _Line, Name}, Bound) ->
+    case maps:is_key(Name, Bound) of
+        true -> {false, Bound};
+        false -> {true, Bound#{Name => true}}
+    end;
+irrefutable_pattern({match, _Line, Left, Right}, Bound0) ->
+    case irrefutable_pattern(Left, Bound0) of
+        {true, Bound1} -> irrefutable_pattern(Right, Bound1);
+        {false, Bound1} -> {false, Bound1}
+    end;
+irrefutable_pattern({record, _Line, _Tag, Fields}, Bound) ->
+    irrefutable_record_fields(Fields, Bound);
+irrefutable_pattern(_Pattern, Bound) ->
+    {false, Bound}.
+
+irrefutable_record_fields([], Bound) ->
+    {true, Bound};
+irrefutable_record_fields([
+    {record_field, _Line, {var, _FieldLine, '_'},
+        {var, _ValueLine, '_'}} | Rest
+], Bound) ->
+    irrefutable_record_fields(Rest, Bound);
+irrefutable_record_fields([
+    {record_field, _Line, {atom, _FieldLine, _Field}, Value} | Rest
+], Bound0) ->
+    case irrefutable_pattern(Value, Bound0) of
+        {true, Bound1} -> irrefutable_record_fields(Rest, Bound1);
+        {false, Bound1} -> {false, Bound1}
+    end;
+irrefutable_record_fields(_Fields, Bound) ->
+    {false, Bound}.
+
+close_transport_contribution_group(Tag, Contributions, DataName,
+        AccumulatorType, EnumAtoms) ->
+    Clauses = [rewrite_transport_contribution_clause(Contribution)
+        || Contribution <- Contributions],
+    MessageValue = [
+        "(Tag::", uppercase(Tag), ", message, bits_from_",
+        record_function_name(Tag), "(message))"
+    ],
+    Arguments = [
+        xls_pattern_lower:record_argument(Tag, "message", MessageValue)
+    ],
+    Failure = ["(u1:0, u32:0, u32:0, zero!<",
+        maps:get(dslx_type, AccumulatorType), ">())"],
+    {Body, Result} = xls_callback_lower:lower(
+        Clauses,
+        Arguments,
+        DataName,
+        fun(R) -> ["(u1:1, ", R, ".0, ", R, ".1, ", R, ".2.1)"] end,
+        Failure,
+        Failure,
+        EnumAtoms
+    ),
+    lowered(Body, Result).
 
 rewrite_contribution_clause(#{
     clause := Clause0,
@@ -731,14 +836,26 @@ rewrite_contribution_clause(#{
     member_expression := Member0,
     value_expression := Value
 }) ->
+    Candidate = contribution_candidate(Key, Member0, Value),
+    strip_dispatched_phase(replace_body(Clause0, [Candidate])).
+
+rewrite_transport_contribution_clause(#{
+    clause := {clause, Line, [Message, _Phase, _Data], Guards, _Body},
+    key_expression := Key,
+    member_expression := Member,
+    value_expression := Value
+}) ->
+    {clause, Line, [Message], Guards,
+        [contribution_candidate(Key, Member, Value)]}.
+
+contribution_candidate(Key, Member0, Value) ->
     Member = case Member0 of
         none -> typed_u32_expression({integer, element(2, Key), 0});
         _ -> typed_u32_expression(Member0)
     end,
-    Candidate = {tuple, element(2, Key), [
+    {tuple, element(2, Key), [
         typed_u32_expression(Key), Member, Value
-    ]},
-    strip_dispatched_phase(replace_body(Clause0, [Candidate])).
+    ]}.
 
 close_completion(#{clauses := Clauses0}, Phase, DataName,
         AccumulatorName, EnumAtoms) ->
@@ -931,6 +1048,15 @@ whole_record_variable({match, _Line, {var, _VarLine, Name}, _Pattern})
 whole_record_variable({match, _Line, _Pattern, {var, _VarLine, Name}})
         when Name =/= '_' -> Name;
 whole_record_variable(Pattern) -> error({unbound_hls_statem_data, Pattern}).
+
+source_transportable(MessagePattern, {var, _Line, DataVariable}, Guards)
+        when DataVariable =/= '_' ->
+    MessageVariables = expression_variables(MessagePattern),
+    GuardVariables = expression_variables(Guards),
+    not lists:member(DataVariable, MessageVariables) andalso
+        not lists:member(DataVariable, GuardVariables);
+source_transportable(_MessagePattern, _DataPattern, _Guards) ->
+    false.
 
 validate_u32_expression({integer, _Line, Value}, _Bindings, _Origins) ->
     _ = u32_literal(Value, reduction_value),

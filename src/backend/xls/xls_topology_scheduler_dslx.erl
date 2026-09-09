@@ -9,11 +9,12 @@
 
 -spec emit(map()) -> iolist().
 emit(Spec0) ->
-    Spec = annotate(Spec0),
+    Spec = annotate(xls_topology_source_fragment_dslx:prepare(Spec0)),
     [
         preamble(Spec),
         address_support(Spec),
         frame_relay(Spec),
+        xls_topology_source_fragment_dslx:support(Spec),
         control_support(Spec),
         [startup_proc(Spec, Scheduler)
             || Scheduler <- maps:get(schedulers, Spec)],
@@ -122,9 +123,16 @@ annotate(Spec = #{
         )
         || Scheduler <- Schedulers
     ],
+    %% Source-fragment routing is pruned from the ordinary route graph before
+    %% this annotation pass.  Its bounded plane can nevertheless propagate
+    %% backpressure between every scheduler incident to that plane, so those
+    %% schedulers must remain in one effect-window ownership domain.
+    PlaneIncidences = [maps:get(source_schedulers, Plane)
+        || Plane <- maps:get(source_fragment_planes, Spec, [])],
     Domains = xls_topology_effect_windows:partition(
         Annotated0,
-        WindowPartition
+        WindowPartition,
+        PlaneIncidences
     ),
     Membership = maps:from_list([
         {SchedulerIndex0, {DomainIndex, Position}}
@@ -670,6 +678,9 @@ router_proc(Spec, Scheduler = #{
             || Destination <- Destinations] ++
         [router_external_argument(Spec, ExternalId)
             || ExternalId <- ExternalIds] ++
+        xls_topology_source_fragment_dslx:router_arguments(
+            Spec, Scheduler
+        ) ++
         [
             "window_request_out: chan<u1> out",
             "window_grant_in: chan<u1> in",
@@ -680,6 +691,9 @@ router_proc(Spec, Scheduler = #{
             || Destination <- Destinations] ++
         [external_output_name(Spec, ExternalId)
             || ExternalId <- ExternalIds] ++
+        xls_topology_source_fragment_dslx:router_argument_names(
+            Spec, Scheduler
+        ) ++
         ["window_request_out", "window_grant_in", "window_release_out"],
     [
         "// Routes one committed actor-entry batch in source order. A ",
@@ -704,7 +718,9 @@ router_proc(Spec, Scheduler = #{
         "  next(state: ", StateName, ") {\n",
         "    let state_effect_info = ", Module,
         "::scheduled_effect(state.scheduled, state.index);\n",
-        "    let state_last = state.active && state_effect_info.2;\n",
+        xls_topology_source_fragment_dslx:router_state_bindings(
+            Spec, Scheduler
+        ),
         "    let can_receive = !state.active ||\n",
         "      (state_last && state.credit_debt && !state.lookahead);\n",
         "    let (receive_tok, incoming, incoming_valid) =\n",
@@ -722,16 +738,14 @@ router_proc(Spec, Scheduler = #{
         "    let index = if state.active { state.index } else { u8:0 };\n",
         "    let effect_info = ", Module,
         "::scheduled_effect(scheduled, index);\n",
+        xls_topology_source_fragment_dslx:router_batch_bindings(
+            Spec, Scheduler
+        ),
         "    let effect = effect_info.0;\n",
         "    let emit = batch_valid && effect_info.1;\n",
         "    let address = ", Stem, "_address(scheduled.slot);\n",
-        "    let routed_tok = if emit {\n",
-        "      match address.family as FamilyId {\n",
-        [router_family_arm(Spec, Family) || Family <- Families],
-        "        _ => grant_tok,\n",
-        "      }\n",
-        "    } else { grant_tok };\n",
-        "    let last = batch_valid && effect_info.2;\n",
+        router_send_binding(Spec, Scheduler, Families),
+        router_last_binding(Spec, Scheduler),
         "    let batch_continues = batch_valid && !last;\n",
         "    // Never apply a stale grant to a batch admitted in this same\n",
         "    // activation: the virtual credit could otherwise bypass back to\n",
@@ -783,7 +797,11 @@ router_proc(Spec, Scheduler = #{
         "      ", StateName, " {\n",
         "        active: u1:1,\n",
         "        scheduled,\n",
-        "        index: index + u8:1,\n",
+        "        index: index + ",
+        xls_topology_source_fragment_dslx:router_index_step(
+            Spec, Scheduler
+        ),
+        ",\n",
         "        window_requested: pending_request || request,\n",
         "        window_granted,\n",
         "        credit_debt,\n",
@@ -806,6 +824,46 @@ router_destination_argument(#{index := Index, module_name := Module}) ->
 router_external_argument(Spec, ExternalId) ->
     [external_output_name(Spec, ExternalId), ": chan<axis::Frame> out"].
 
+router_send_binding(Spec, Scheduler, Families) ->
+    case xls_topology_source_fragment_dslx:router_arguments(
+            Spec, Scheduler) of
+        [] ->
+            [
+                "    let routed_tok = if emit {\n",
+                "      match address.family as FamilyId {\n",
+                [router_family_arm(Spec, Family) || Family <- Families],
+                "        _ => grant_tok,\n",
+                "      }\n",
+                "    } else { grant_tok };\n"
+            ];
+        [_ | _] ->
+            [
+                "    let routed_tok = if reduction_batch {\n",
+                xls_topology_source_fragment_dslx:router_send(
+                    Spec, Scheduler
+                ),
+                "    } else if emit {\n",
+                "      match address.family as FamilyId {\n",
+                [router_family_arm(Spec, Family) || Family <- Families],
+                "        _ => grant_tok,\n",
+                "      }\n",
+                "    } else { grant_tok };\n"
+            ]
+    end.
+
+router_last_binding(Spec, Scheduler) ->
+    case xls_topology_source_fragment_dslx:router_arguments(
+            Spec, Scheduler) of
+        [] ->
+            "    let last = batch_valid && effect_info.2;\n";
+        [_ | _] ->
+            [
+                "    let last = batch_valid && if reduction_batch {\n",
+                "      reduction_prefix.2\n",
+                "    } else { effect_info.2 };\n"
+            ]
+    end.
+
 router_family_arm(Spec, Family = #{id := Id}) ->
     [
         "      FamilyId::", uppercase(Id), " => {\n",
@@ -824,17 +882,24 @@ router_family_routes(Spec, Family) ->
         "        let x = address.x;\n",
         "        let y = address.y;\n",
         "        match effect.port {\n",
-        [
-            router_route_arm(
-                Spec,
-                Module,
-                Port,
-                maps:get(Port, RouteIndex)
-            )
-            || Port <- maps:get(outputs, Family)
-        ],
+        [router_port_arm(Spec, Family, Module, Port, RouteIndex)
+            || Port <- maps:get(outputs, Family)],
         "        }\n"
     ].
+
+router_port_arm(Spec, Family, Module, Port, RouteIndex) ->
+    case maps:find(Port, RouteIndex) of
+        {ok, Route} ->
+            router_route_arm(Spec, Module, Port, Route);
+        error ->
+            true = xls_topology_source_fragment_dslx:captured_port(
+                Family, Port
+            ),
+            [
+                "        ", Module, "::OutputPort::", uppercase(Port),
+                " => grant_tok,\n"
+            ]
+    end.
 
 router_route_arm(Spec, Module, Port, #{
     delivery := direct,
@@ -965,9 +1030,12 @@ grid_proc(Spec = #{
         config_signature(Arguments, 2),
         effect_window_channels(EffectWindowDomains),
         [external_channel(External) || External <- Externals],
-        [scheduler_channels(Scheduler) || Scheduler <- Schedulers],
+        [scheduler_channels(Spec, Scheduler) || Scheduler <- Schedulers],
+        xls_topology_source_fragment_dslx:plane_channels(Spec),
         effect_window_spawn(EffectWindowDomains),
+        xls_topology_source_fragment_dslx:aggregate_mux_spawns(Spec),
         [scheduler_spawn(Spec, Scheduler) || Scheduler <- Schedulers],
+        xls_topology_source_fragment_dslx:plane_spawns(Spec),
         [router_spawn(Spec, Scheduler) || Scheduler <- Schedulers],
         control_spawn(Spec),
         [external_spawn(External) || External <- Externals],
@@ -1044,7 +1112,7 @@ external_spawn(External) ->
             ]
     end.
 
-scheduler_channels(Scheduler = #{
+scheduler_channels(Spec, Scheduler = #{
     stem := Stem,
     module_name := Module,
     producers := Producers
@@ -1060,6 +1128,9 @@ scheduler_channels(Scheduler = #{
         "    let (", Stem, "_egress_p, ", Stem, "_egress_c) =\n",
         "      chan<", Module, "::ScheduledEffects, CHANNEL_DEPTH>(\"",
         Stem, "_egress\");\n",
+        xls_topology_source_fragment_dslx:scheduler_channels(
+            Spec, Scheduler
+        ),
         case maps:get(startup_count, Scheduler) of
             0 -> [];
             _ -> ["    spawn ", startup_name(Scheduler), "(",
@@ -1067,7 +1138,7 @@ scheduler_channels(Scheduler = #{
         end
     ].
 
-scheduler_spawn(_Spec, #{
+scheduler_spawn(Spec, Scheduler = #{
     stem := Stem,
     index := Index,
     module_name := Module,
@@ -1090,7 +1161,11 @@ scheduler_spawn(_Spec, #{
         "      ", Stem, "_mailbox_read_req_out, ", Stem,
         "_mailbox_read_resp_in,\n",
         "      ", Stem, "_mailbox_write_req_out, ", Stem,
-        "_mailbox_write_resp_in);\n"
+        "_mailbox_write_resp_in",
+        xls_topology_source_fragment_dslx:scheduler_service_argument(
+            Spec, Scheduler
+        ),
+        ");\n"
     ].
 
 router_spawn(Spec, Scheduler = #{
@@ -1120,6 +1195,11 @@ router_spawn(Spec, Scheduler = #{
         ],
         [[",\n      ", external_buffer_producer(Spec, ExternalId, Source)]
             || ExternalId <- ExternalIds],
+        [[",\n      ", Argument]
+            || Argument <-
+                xls_topology_source_fragment_dslx:router_spawn_arguments(
+                    Spec, Scheduler
+                )],
         ",\n      ", effect_window_domain_stem(
             WindowDomain, maps:get(effect_window_domains, Spec)),
         "_request_p[u32:", integer_to_list(WindowPosition), "],\n",

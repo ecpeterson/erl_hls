@@ -7,7 +7,7 @@
 -module(xls_statem_lower).
 -moduledoc false.
 
--export([interface/2, lower/3]).
+-export([interface/2, lower/3, lower/4]).
 
 -type interface() :: map().
 
@@ -19,6 +19,17 @@ interface(Forms, PhaseNames) ->
 -spec lower(file:filename(), [erl_parse:abstract_form()], [atom(), ...]) ->
     iolist().
 lower(Filename, Forms, PhaseNames) ->
+    lower(Filename, Forms, PhaseNames, #{shared_service => ordinary}).
+
+-spec lower(
+    file:filename(),
+    [erl_parse:abstract_form()],
+    [atom(), ...],
+    #{shared_service := ordinary | aggregate_only}
+) -> iolist().
+lower(Filename, Forms, PhaseNames, Options0) ->
+    Options = validate_options(Options0),
+    SharedService = maps:get(shared_service, Options),
     Declarations = declarations(Forms, PhaseNames),
     MessageNames = maps:get(message_names, Declarations),
     MessageWords = maps:from_list([
@@ -49,6 +60,7 @@ lower(Filename, Forms, PhaseNames) ->
         EnumAtoms
     ),
     Reductions = maps:get(reductions, Prepared),
+    ok = validate_shared_service(SharedService, Reductions),
     RecordDeclarations = xls_parse:print([
         [
             xls_parse:struct_from_record(Record), "\n",
@@ -71,8 +83,55 @@ lower(Filename, Forms, PhaseNames) ->
         init => Init,
         entries => Entries,
         casts => Casts,
-        reductions => Reductions
+        reductions => Reductions,
+        shared_service => SharedService
     }).
+
+validate_options(Options) when is_map(Options) ->
+    case lists:sort(maps:keys(Options)) of
+        [shared_service] ->
+            case maps:get(shared_service, Options) of
+                Mode when Mode =:= ordinary; Mode =:= aggregate_only ->
+                    Options;
+                Mode ->
+                    error({invalid_xls_shared_service, Mode})
+            end;
+        Keys ->
+            error({invalid_xls_options, Keys})
+    end;
+validate_options(Options) ->
+    error({invalid_xls_options, Options}).
+
+validate_shared_service(ordinary, _Reductions) ->
+    ok;
+validate_shared_service(aggregate_only, none) ->
+    error(aggregate_only_requires_reductions);
+validate_shared_service(aggregate_only, #{sites := Sites}) ->
+    %% Aggregate-only is a low-level actor artifact: a future topology may
+    %% classify a partial schema upstream and send its fallback messages on the
+    %% ordinary request port.  Whole-schema capture is therefore proved by the
+    %% source-fragment planner, while this boundary only requires that the
+    %% aggregate contribution itself can be evaluated without actor state.
+    Contributions = [{maps:get(phase, Site), Contribution}
+        || Site <- Sites,
+           Contribution <- maps:get(contributions, Site)],
+    Nontransportable = [
+        #{phase => Phase, schema => maps:get(tag, Contribution)}
+        || {Phase, Contribution} <- Contributions,
+           maps:get(source_transportable, Contribution) =:= false
+    ],
+    case Nontransportable of
+        [] -> ok;
+        _ -> error({aggregate_only_nontransportable_contributions,
+            Nontransportable})
+    end,
+    Tags = [maps:get(tag, Contribution)
+        || {_Phase, Contribution} <- Contributions],
+    case duplicate_values(Tags) of
+        [] -> ok;
+        Duplicates -> error({aggregate_only_ambiguous_contribution_schemas,
+            Duplicates})
+    end.
 
 prepare(Forms, PhaseNames) ->
     prepare_callbacks(Forms, declarations(Forms, PhaseNames)).
@@ -826,6 +885,17 @@ require_unique(Kind, Values) ->
     case length(Values) =:= length(lists:usort(Values)) of
         true -> ok;
         false -> error({duplicate_hls_statem_declaration, Kind, Values})
+    end.
+
+duplicate_values(Values) ->
+    duplicate_values(Values, #{}, #{}).
+
+duplicate_values([], _Seen, Duplicates) ->
+    lists:sort(maps:keys(Duplicates));
+duplicate_values([Value | Rest], Seen, Duplicates) ->
+    case maps:is_key(Value, Seen) of
+        true -> duplicate_values(Rest, Seen, Duplicates#{Value => true});
+        false -> duplicate_values(Rest, Seen#{Value => true}, Duplicates)
     end.
 
 require_declared(Kind, Value, Values) when is_list(Values) ->

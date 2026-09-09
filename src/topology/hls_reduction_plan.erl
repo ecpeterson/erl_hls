@@ -7,7 +7,11 @@
 Builds placement facts for the explicitly selected source-fragment reduction
 subset from normalized logical plans and public actor summaries.
 
-The structural proof establishes a complete, fixed, inverse-closed exchange.
+The structural proof establishes a complete, fixed, inverse-closed exchange
+and requires every captured schema to have a message-only, exhaustive
+contribution dispatch. Guarded or refutable contributions may remain in an
+ordinary actor, but their same-schema fallback cannot be routed through a
+whole-schema source-fragment plane.
 It cannot derive two application properties from callback expressions: actors
 must traverse coherent reduction windows, and completion may commute with
 unrelated mail. Each placement therefore reports those properties as
@@ -87,10 +91,22 @@ require_reductions(FamilyId, Interface) ->
     end.
 
 analyze_site(FamilyId, #{id := Id, phase := Phase, name := Name,
-        population := Population, contributions := Contributions}, Interface, Topology) ->
+        population := Population, contributions := Contributions,
+        source_transportable := SourceTransportable} = Site,
+        Interface, Topology) ->
     Schema = case Contributions of
         [Only] -> Only;
         _ -> error({source_fragment_site_contributions, FamilyId, Id, Contributions})
+    end,
+    case SourceTransportable of
+        true -> ok;
+        false -> error({source_fragment_nontransportable_contribution,
+            FamilyId, Id, Schema})
+    end,
+    case maps:get(source_capture_total, Site, false) of
+        true -> ok;
+        false -> error({source_fragment_nonexhaustive_contribution,
+            FamilyId, Id, Schema})
     end,
     Size = maps:get(size, Population),
     Effects = phase_effects(FamilyId, Phase, Interface),

@@ -51,7 +51,10 @@
     #{mode := members, size := 1..255, members := [0..16#ffffffff]}.
 -type contribution() :: #{
     tag := atom(),
-    build := expression()
+    build := expression(),
+    source_transportable := boolean(),
+    source_capture_total := boolean(),
+    transport := none | expression()
 }.
 -type site() :: #{
     id := non_neg_integer(),
@@ -190,13 +193,20 @@ interface_storage_width(#{accumulator := Accumulator, sites := Sites}) ->
         type_width(Accumulator).
 
 public_site(Site) ->
+    Contributions = maps:get(contributions, Site),
     #{
         id => maps:get(id, Site),
         phase => maps:get(phase, Site),
         name => maps:get(name, Site),
         population => maps:get(population, Site),
         contributions => [maps:get(tag, Contribution)
-            || Contribution <- maps:get(contributions, Site)]
+            || Contribution <- Contributions],
+        source_transportable => lists:all(fun(Contribution) ->
+            maps:get(source_transportable, Contribution)
+        end, Contributions),
+        source_capture_total => lists:all(fun(Contribution) ->
+            maps:get(source_capture_total, Contribution)
+        end, Contributions)
     }.
 
 validate_type_ref(_Context, #{
@@ -256,7 +266,22 @@ validate_population(#{mode := members, size := Size, members := Members})
         false -> error({invalid_hls_statem_reduction_members, Members})
     end.
 
-validate_contribution(#{tag := Tag, build := Build}) when is_atom(Tag) ->
+validate_contribution(#{
+    tag := Tag,
+    build := Build,
+    source_transportable := true,
+    source_capture_total := SourceCaptureTotal,
+    transport := Transport
+}) when is_atom(Tag), is_boolean(SourceCaptureTotal) ->
+    ok = validate_expression(contribution, Build),
+    validate_expression(transport_contribution, Transport);
+validate_contribution(#{
+    tag := Tag,
+    build := Build,
+    source_transportable := false,
+    source_capture_total := SourceCaptureTotal,
+    transport := none
+}) when is_atom(Tag), is_boolean(SourceCaptureTotal) ->
     validate_expression(contribution, Build).
 
 validate_expression(_Context, #{body := Body, result := Result}) ->

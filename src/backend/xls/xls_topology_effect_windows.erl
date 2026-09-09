@@ -5,26 +5,39 @@
 -module(xls_topology_effect_windows).
 -moduledoc false.
 
--export([partition/2]).
+-export([partition/2, partition/3]).
 
 -type policy() :: global | weak_components.
 -type scheduler_index() :: non_neg_integer().
 -type domain() :: [scheduler_index()].
 
 -spec partition([map()], policy()) -> [domain()].
-partition(Schedulers, global) ->
-    validate(Schedulers, [scheduler_indices(Schedulers)]);
-partition(Schedulers, weak_components) ->
-    validate(Schedulers, weak_components(Schedulers)).
+partition(Schedulers, Policy) ->
+    partition(Schedulers, Policy, []).
 
--spec weak_components([map()]) -> [domain()].
-weak_components(Schedulers) ->
+-doc "Partitions schedulers while treating each incidence list as one edge.".
+-spec partition([map()], policy(), [[scheduler_index()]]) -> [domain()].
+partition(Schedulers, global, Incidences) ->
+    validate(
+        Schedulers,
+        Incidences,
+        [scheduler_indices(Schedulers)]
+    );
+partition(Schedulers, weak_components, Incidences) ->
+    validate(
+        Schedulers,
+        Incidences,
+        weak_components(Schedulers, Incidences)
+    ).
+
+-spec weak_components([map()], [[scheduler_index()]]) -> [domain()].
+weak_components(Schedulers, Incidences) ->
     %% If an owned batch can block on a destination before releasing its
     %% reservation, both schedulers must share one owner. The finest safe
     %% partition is therefore weak connectivity, not directed SCCs.
     Indices = scheduler_indices(Schedulers),
     Adjacency0 = maps:from_list([{Index, []} || Index <- Indices]),
-    Adjacency = lists:foldl(
+    RouteAdjacency = lists:foldl(
         fun(Scheduler, Acc0) ->
             Source = maps:get(index, Scheduler),
             lists:foldl(
@@ -39,7 +52,25 @@ weak_components(Schedulers) ->
         Adjacency0,
         Schedulers
     ),
+    %% A bounded manager shared by several schedulers creates the same
+    %% backpressure dependency as ordinary routed effects.  Model each
+    %% manager's incidence set as an undirected hyperedge.  A star is enough
+    %% to induce its weak component without manufacturing wiring edges.
+    Adjacency = lists:foldl(
+        fun add_incidence/2,
+        RouteAdjacency,
+        Incidences
+    ),
     connected_components(Indices, Adjacency, [], []).
+
+add_incidence([], Adjacency) ->
+    Adjacency;
+add_incidence([Root | Members], Adjacency) ->
+    lists:foldl(
+        fun(Member, Acc) -> add_undirected_edge(Root, Member, Acc) end,
+        Adjacency,
+        Members
+    ).
 
 scheduler_indices(Schedulers) ->
     lists:sort([maps:get(index, Scheduler) || Scheduler <- Schedulers]).
@@ -84,7 +115,7 @@ connected_component([Index | Rest], Adjacency, Seen, Members) ->
             )
     end.
 
-validate(Schedulers, Domains) ->
+validate(Schedulers, Incidences, Domains) ->
     SchedulerIndices = scheduler_indices(Schedulers),
     SchedulerIndices = lists:sort(lists:append(Domains)),
     true = lists:all(fun(Members) -> Members =/= [] end, Domains),
@@ -107,5 +138,17 @@ validate(Schedulers, Domains) ->
             )
         end,
         Schedulers
+    ),
+    lists:foreach(
+        fun
+            ([]) -> ok;
+            ([First | Rest]) ->
+                Domain = maps:get(First, DomainIndex),
+                lists:foreach(
+                    fun(Index) -> Domain = maps:get(Index, DomainIndex) end,
+                    Rest
+                )
+        end,
+        Incidences
     ),
     Domains.
