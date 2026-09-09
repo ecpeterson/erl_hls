@@ -48,6 +48,7 @@ lower(Filename, Forms, PhaseNames) ->
         DataName,
         EnumAtoms
     ),
+    Reductions = maps:get(reductions, Prepared),
     RecordDeclarations = xls_parse:print([
         [
             xls_parse:struct_from_record(Record), "\n",
@@ -69,7 +70,8 @@ lower(Filename, Forms, PhaseNames) ->
         record_declarations => RecordDeclarations,
         init => Init,
         entries => Entries,
-        casts => Casts
+        casts => Casts,
+        reductions => Reductions
     }).
 
 prepare(Forms, PhaseNames) ->
@@ -116,17 +118,44 @@ prepare_callbacks(Forms, Declarations) ->
         MessageNames,
         OutputNames
     ),
-    CastGroups = analyze_cast_groups(
+    CastGroups0 = analyze_cast_groups(
         maps:get(cast, Callbacks),
         PhaseNames,
         MessageNames
     ),
+    InternalGroups = xls_statem_reduction_lower:internal_groups(
+        maps:get(internal, Callbacks),
+        PhaseNames
+    ),
+    Analysis = xls_statem_reduction_lower:analyze(Forms, #{
+        phases => PhaseNames,
+        entries => Entries,
+        cast_groups => CastGroups0,
+        internal_groups => InternalGroups,
+        message_names => MessageNames,
+        data_name => maps:get(data_name, Declarations)
+    }),
+    Reductions = maps:get(reduction, Analysis),
+    CastGroups = maps:get(cast_groups, Analysis),
+    Records = reduction_records(
+        Forms,
+        maps:get(records, Declarations),
+        Reductions
+    ),
     Declarations#{
+        records => Records,
         init_clause => InitClause,
         initial_phase => initial_phase(InitClause, PhaseNames),
         entries => Entries,
-        cast_groups => CastGroups
+        cast_groups => CastGroups,
+        reductions => Reductions
     }.
+
+reduction_records(_Forms, Records, none) ->
+    Records;
+reduction_records(Forms, Records, Reduction) ->
+    Name = maps:get(name, maps:get(accumulator, Reduction)),
+    Records ++ [xls_parse:find_record(Forms, Name)].
 
 %%%
 %%% Actor interface analysis
@@ -135,7 +164,8 @@ prepare_callbacks(Forms, Declarations) ->
 interface_from_prepared(Prepared) ->
     Entries = maps:get(entries, Prepared),
     CastGroups = maps:get(cast_groups, Prepared),
-    #{
+    Reductions = maps:get(reductions, Prepared),
+    Base = #{
         version => 1,
         module => maps:get(module, Prepared),
         phases => maps:get(phases, Prepared),
@@ -150,15 +180,42 @@ interface_from_prepared(Prepared) ->
             maps:get(records, Prepared),
             maps:get(message_names, Prepared)
         ),
-        dispatches => dispatches(
-            CastGroups,
-            maps:get(message_names, Prepared),
-            maps:get(phases, Prepared)
+        dispatches => append_new_dispatches(
+            dispatches(
+                CastGroups,
+                maps:get(message_names, Prepared),
+                maps:get(phases, Prepared)
+            ),
+            reduction_dispatches(Reductions)
         ),
         entry_effects => lists:append([
             interface_effects(Entry) || Entry <- Entries
         ])
-    }.
+    },
+    case reduction_interface(Reductions) of
+        none -> Base;
+        Interface -> Base#{reductions => Interface}
+    end.
+
+reduction_interface(none) -> none;
+reduction_interface(Reduction) ->
+    xls_statem_reduction_ir:interface(Reduction).
+
+reduction_dispatches(none) -> [];
+reduction_dispatches(#{sites := Sites}) ->
+    lists:usort([
+        #{schema => maps:get(tag, Contribution),
+            phase => maps:get(phase, Site)}
+        || Site <- Sites,
+           Contribution <- maps:get(contributions, Site)
+    ]).
+
+append_new_dispatches(Dispatches, Additional) ->
+    Dispatches ++ [
+        Dispatch
+        || Dispatch <- Additional,
+           not lists:member(Dispatch, Dispatches)
+    ].
 
 state_summary(Records, Name) ->
     [Record] = [
@@ -261,19 +318,43 @@ analyze_entry(
             {DataExpr, ActionExpression};
         _ -> error({bad_hls_statem_enter_result, Line, Last})
     end,
+    {Reduction, CastActionList} = split_entry_action_expression(
+        ActionList, Line),
     #{
         phase => Phase,
         clause => Clause,
         prefix => Prefix,
         data_expression => DataExpression,
+        reduction => Reduction,
         actions => parse_actions(
-            ActionList,
+            CastActionList,
             Prefix,
             MessageNames,
             OutputNames,
             Line
         )
     }.
+
+%% Reduction opens are deliberately part of the statically inspectable HLS
+%% subset.  Preserve the older failure point for a computed action list so
+%% that CPU-only hls_statem modules can still compile while interface
+%% inference reports that their action shape is unsupported.
+split_entry_action_expression(ActionList = {nil, _}, Line) ->
+    split_literal_entry_actions(ActionList, Line);
+split_entry_action_expression(ActionList = {cons, _, _, _}, Line) ->
+    split_literal_entry_actions(ActionList, Line);
+split_entry_action_expression(ActionList, _Line) ->
+    {none, ActionList}.
+
+split_literal_entry_actions(ActionList, Line) ->
+    {Reduction, CastActions} =
+        xls_statem_reduction_lower:split_entry_actions(ActionList, Line),
+    {Reduction, list_expression(CastActions, Line)}.
+
+list_expression([], Line) ->
+    {nil, Line};
+list_expression([Head | Tail], Line) ->
+    {cons, Line, Head, list_expression(Tail, Line)}.
 
 order_entries(Entries, PhaseNames) ->
     EntryIndex = maps:from_list([
@@ -704,7 +785,7 @@ validate_names(PhaseNames, MessageNames, OutputNames, DataName)
     end,
     lists:foreach(
         fun(Phase) ->
-            case lists:member(Phase, [repeat_phase, terminate]) of
+            case lists:member(Phase, [repeat_phase, reduce, terminate]) of
                 true -> error({reserved_hls_statem_phase, Phase});
                 false -> ok
             end

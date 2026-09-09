@@ -5,8 +5,9 @@ messages. They let an actor describe a commutative, associative fold without
 requiring every accepted contribution to update the actor's ordinary data or
 run a visible state transition.
 
-The CPU reference implements the contract below. XLS lowering is staged
-separately; until that lands, a module using these actions is CPU-only.
+The CPU reference and the canonical XLS lowering implement the contract below.
+Optimized placement is staged separately: the canonical hardware path keeps
+contributions as ordinary mailbox messages and reduction state actor-local.
 
 ## Ownership and addressing
 
@@ -168,24 +169,59 @@ The singleton first-argument types make the overload domains disjoint. A
 generic `hls_statem:callback_result/0,1` union is also available, but does not
 preserve the event/result relationship.
 
-## Hardware-lowering plan
+## Canonical XLS lowering
+
+The first hardware realization deliberately follows the CPU semantics rather
+than choosing a special transport. The generated actor stores one bounded
+reduction record beside its callback data. A shared scheduler packs both into
+the actor's existing state-RAM row; a direct actor holds both in registers.
+Partial contributions use the ordinary dispatch, mailbox, and state-retirement
+paths.
+
+Completion is a private internal event, not a mailbox entry. Once the last
+contribution makes the reduction complete, a direct service dispatches that
+event before receiving another message. A shared scheduler records the actor
+as an internal candidate and gives that event priority over entry or mailbox
+work for the same actor while retaining round-robin choice among actors. The
+completion callback clears the private reduction record and then follows the
+ordinary phase-boundary, repeat, and failure rules.
+
+The generated subset supports one active count or fixed-member reduction per
+actor. All sites in one actor currently share one private accumulator-record
+type, and each reduction name has exactly one unguarded `reduce/3` clause.
+Population shapes, contribution clauses, reducer results, and completion
+clauses are checked statically. A contribution with the wrong name/key is
+postponed; duplicate or unexpected fixed members fail the actor.
+Leaving or repeating a phase with an incomplete reduction also fails.
+The canonical XLS subset currently represents reduction keys and fixed member
+identities as `hls_nums:u32()` values even though the CPU contract permits any
+exact Erlang term.
+
+This first lowering also requires the open to appear first in a literal entry
+action list. Its population and accumulator identity must be written there as
+a literal population tuple and a complete literal record; helper calls such as
+`zero_phi_sum()` in the CPU-oriented example above are not yet inspected.
+Contribution directives must be the direct final result of a leading group of
+clauses for that message and phase, must retain the callback phase and data,
+and must construct a complete accumulator record from message fields. These
+are restrictions of the current static analysis, not additional CPU
+semantics.
+
+## Hardware-lowering roadmap
 
 Hardware support should preserve one semantic path and add placement as an
 optimization:
 
-1. Recognize and type-check the open, contribution, reducer, and completion
-   clauses. Lower them first as ordinary actor execution so unsupported
-   optimizations cannot change correctness.
-2. Derive reduction metadata in a topology analysis pass rather than spreading
+1. Derive reduction metadata in a topology analysis pass rather than spreading
    ad hoc inspection through scheduler code generation.
-3. Permit a source-fragment placement only when the topology proves that each
+2. Permit a source-fragment placement only when the topology proves that each
    ordinary sender can address the unique destination reduction instance.
    Aggregate fragments then reach the destination through a private typed
    event; the public message protocol remains unchanged.
-4. Keep optimized admission and effect issue generic scheduler mechanisms, not
+3. Keep optimized admission and effect issue generic scheduler mechanisms, not
    phi-specific modes.
 
-The initial hardware subset will retain one active bounded reduction per actor
-and fixed compile-time population shapes. Dynamic participant sets may later
-fit the same source syntax, but require explicit capacity, arming,
-cancellation, and completion rules before they are synthesizable.
+The initial hardware subset retains one active bounded reduction per actor and
+fixed compile-time population shapes. Dynamic participant sets may later fit
+the same source syntax, but require explicit capacity, arming, cancellation,
+and completion rules before they are synthesizable.

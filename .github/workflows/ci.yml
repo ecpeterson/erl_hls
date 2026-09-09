@@ -60,6 +60,9 @@ jobs:
       - name: Run Erlang tests
         run: rebar3 eunit
 
+      - name: Run generated reduction semantics
+        run: bash tools/test_reduction_dslx.sh "$RUNNER_TEMP/xls"
+
       - name: Run specialized phi RTL regressions
         run: |
           experiments/08-phi-scheduler/run_raw_rtl.sh

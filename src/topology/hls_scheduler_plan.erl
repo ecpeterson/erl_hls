@@ -21,9 +21,11 @@ distinction. Family partitions divide the row-major logical instances among
 several executors while leaving semantic family identity and routing intact.
 
 Each storage choice is a required physical binding, not a hint. A backend must
-either realize the corresponding state there or reject the plan. Actor data
-and mailboxes are separate bindings because safe shared scheduling needs both
-per-instance callback state and per-instance bounded admission state.
+either realize the corresponding state there or reject the plan. Actor data,
+actor-local reduction state, and mailboxes remain distinct in the compiler's
+logical interface; reduction state is packed alongside actor data in the same
+per-instance state row. Mailboxes are a separate binding because safe shared
+scheduling also needs per-instance bounded admission state.
 
 A shared executor advances one actor by a resumable microstep. If the next
 ordered effect lacks egress credit, the actor keeps its pending-effect index
@@ -109,11 +111,14 @@ normalize_group(Id, Spec, MemberIndex) when is_map(Spec) ->
         Members0
     ),
     State = hls_actor_interface:state(Interface),
+    ReductionStorageWidth =
+        hls_actor_interface:reduction_storage_width(Interface),
     {Members, SlotCount} = assign_slots(Members0),
     #{
         id => Id,
         module => Module,
         state => State,
+        reduction_storage_width => ReductionStorageWidth,
         mailbox_capacity => Capacity,
         members => Members,
         slot_count => SlotCount,

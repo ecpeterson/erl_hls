@@ -2,6 +2,21 @@
 
 -include_lib("eunit/include/eunit.hrl").
 
+non_reduction_statem_codegen_matches_checked_in_artifacts_test() ->
+    Sources = [
+        "src/examples/phi_decoder/phenom_data_cell.erl",
+        "src/examples/phi_decoder/phenom_syndrome_cell.erl",
+        "src/examples/phi_decoder/phi_halo_cell.erl"
+    ],
+    lists:foreach(
+        fun(Source) ->
+            {ok, Expected} = file:read_file(Source ++ ".x"),
+            Generated = iolist_to_binary(xls_parse:to_xls(Source)),
+            ?assertEqual(Expected, Generated)
+        end,
+        Sources
+    ).
+
 passive_state_observation_is_not_emitted_test() ->
     Xls = iolist_to_binary(xls_parse:to_xls("src/examples/regsvc/regsvc.erl")),
 
