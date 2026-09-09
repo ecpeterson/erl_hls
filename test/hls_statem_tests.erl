@@ -194,20 +194,24 @@ invalid_result_is_fail_stop_test() ->
 capacity_matches_lowered_u8_bound_test() ->
     ?assertError(badarg, start(256)).
 
-repeat_phase_is_reserved_from_application_phases_test() ->
+reserved_application_phases_test_() ->
+    [?_test(reserved_application_phase(Phase))
+        || Phase <- [repeat_phase, reduce, terminate]].
+
+reserved_application_phase(Phase) ->
     Previous = process_flag(trap_exit, true),
     try
         ?assertMatch(
-            {error, {{bad_hls_statem_phase, repeat_phase}, _InitStack}},
+            {error, {{bad_hls_statem_phase, Phase}, _InitStack}},
             hls_statem:start_link(
                 ?MODULE,
-                repeat_phase,
+                Phase,
                 [{mailbox_capacity, 1}, {outputs, #{out => self()}}]
             )
         ),
         receive
             {'EXIT', _PID,
-                {{bad_hls_statem_phase, repeat_phase}, _ExitStack}} ->
+                {{bad_hls_statem_phase, Phase}, _ExitStack}} ->
                 ok
         after 0 ->
             ok
@@ -275,8 +279,9 @@ init({emit, Enabled}) when is_boolean(Enabled) ->
         handled => false,
         log => []
     }};
-init(repeat_phase) ->
-    {ok, repeat_phase, #{}}.
+init(Phase) when Phase =:= repeat_phase; Phase =:= reduce;
+        Phase =:= terminate ->
+    {ok, Phase, #{}}.
 
 -spec waiting(enter, hls_statem:phase(), map()) ->
     hls_statem:enter_result(map());
