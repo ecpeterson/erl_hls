@@ -1024,8 +1024,7 @@ state_machine_entry_actions_use_one_source_ordered_egress_test() ->
         )),
         ?assertNotEqual(nomatch, binary:match(
             XLS,
-            <<"fn free_mailbox_index<ACTOR_COUNT: u32, "
-              "PRODUCER_COUNT: u32>">>
+            <<"let reservation = mailbox::reserve_admission(">>
         )),
         ?assertNotEqual(nomatch, binary:match(
             XLS,
@@ -1061,7 +1060,7 @@ state_machine_entry_actions_use_one_source_ordered_egress_test() ->
         )),
         ?assertNotEqual(nomatch, binary:match(
             XLS,
-            <<"admission: Admission">>
+            <<"reservation.admission.valid">>
         )),
         ?assertNotEqual(nomatch, binary:match(
             XLS,

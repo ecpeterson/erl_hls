@@ -993,15 +993,24 @@ static int populate_scheduler_profile(
         profile->h_selectable[index] =
             module_signal(module, signal_name);
         snprintf(signal_name, sizeof(signal_name),
-                 "mail_candidates__4[%u]", index);
+                 "retired_mail_candidates__1[%u]", index);
         profile->h_mail_candidate[index] =
             module_signal(module, signal_name);
+        /* Ordinary mailbox admission preserves the retired_ projection name;
+         * reduction-aware retirement adds another candidate-array version. */
+        if (!profile->h_mail_candidate[index]) {
+            snprintf(signal_name, sizeof(signal_name),
+                     "retired_mail_candidates__2[%u]", index);
+            profile->h_mail_candidate[index] =
+                module_signal(module, signal_name);
+        }
         snprintf(signal_name, sizeof(signal_name),
                  "entry_probes__2[%u]", index);
         profile->h_entry_probe[index] = module_signal(module, signal_name);
         snprintf(signal_name, sizeof(signal_name), "egress_waiters[%u]", index);
         profile->h_egress_waiter[index] = module_signal(module, signal_name);
-        snprintf(signal_name, sizeof(signal_name), "occupied__4[%u]", index);
+        snprintf(signal_name, sizeof(signal_name),
+                 "retired_occupied__1[%u]", index);
         profile->h_occupied[index] = module_signal(module, signal_name);
         if (!profile->h_mail_candidate[index] ||
             !profile->h_entry_probe[index] ||

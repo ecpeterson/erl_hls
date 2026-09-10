@@ -457,8 +457,6 @@ pub struct SharedExecutorResult {
   order_index: u8,
 }
 
-type Admission = mailbox::Admission;
-
 enum SharedPhase : u3 {
   BOOT = u3:0,
   STARTUP = u3:1,
@@ -2180,63 +2178,6 @@ pub proc Service {
   }
 }
 
-fn free_mailbox_index<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
-    state: SharedState<ACTOR_COUNT, PRODUCER_COUNT>,
-    slot: u32) -> u8 {
-  let (_found, selected) = unroll_for! (candidate, acc):
-      (u32, (u1, u8)) in
-      u32:0..MAILBOX_DEPTH {
-    let used = unroll_for! (position, found):
-        (u32, u1) in u32:0..MAILBOX_DEPTH {
-      found || (
-        position < state.occupied[slot] as u32 &&
-        state.order[slot][position] == candidate as u8)
-    }(u1:0);
-    let take = !acc.0 && !used;
-    (
-      acc.0 || take,
-      if take { candidate as u8 } else { acc.1 }
-    )
-  }((u1:0, u8:0));
-  selected
-}
-
-fn mailbox_selection<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
-    state: SharedState<ACTOR_COUNT, PRODUCER_COUNT>,
-    slot: u32) -> (u1, u8, u8) {
-  unroll_for! (position, acc):
-      (u32, (u1, u8, u8)) in
-      u32:0..MAILBOX_DEPTH {
-    let physical = state.order[slot][position];
-    let take = !acc.0 &&
-      position < state.occupied[slot] as u32 &&
-      !state.postponed[slot][physical as u32];
-    (
-      acc.0 || take,
-      if take { position as u8 } else { acc.1 },
-      if take { physical } else { acc.2 }
-    )
-  }((u1:0, u8:0, u8:0))
-}
-
-fn compact_order(
-    row: u8[MAILBOX_DEPTH],
-    selected: u8,
-    occupied: u8) -> u8[MAILBOX_DEPTH] {
-  unroll_for! (position, result):
-      (u32, u8[MAILBOX_DEPTH]) in
-      u32:0..MAILBOX_DEPTH {
-    let value = if position < selected as u32 {
-      row[position]
-    } else if position + u32:1 < occupied as u32 {
-      row[position + u32:1]
-    } else {
-      u8:0
-    };
-    update(result, position, value)
-  }(zero!<u8[MAILBOX_DEPTH]>())
-}
-
 // Finds the first selectable actor at or after the round-robin cursor.
 // An in-flight actor is excluded until its executor result has retired and
 // made the next state visible to a later activation.
@@ -2292,7 +2233,7 @@ fn retire_actor<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
   } else {
     state.occupied
   };
-  let compacted = compact_order(
+  let compacted = mailbox::compact_order(
     state.order[slot], order_index, old_count);
   let order = if consumed {
     update(state.order, slot, compacted)
@@ -2313,14 +2254,8 @@ fn retire_actor<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
   } else {
     state.postponed
   };
-  let metadata_state = SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
-    occupied,
-    order,
-    postponed,
-    ..state
-  };
-  let (mail_remaining, _, _) =
-    mailbox_selection(metadata_state, slot);
+  let (mail_remaining, _, _) = mailbox::select(
+    order[slot], occupied[slot], postponed[slot]);
   let mail_candidates = if valid {
     update(
       state.mail_candidates,
@@ -2355,129 +2290,6 @@ fn retire_actor<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
     entry_probes,
     egress_waiters,
     ..state
-  }
-}
-
-// Returned batch credits represent completed effect batches, so they
-// update scheduler metadata without carrying another actor context.
-fn collect_credit<PRODUCER_COUNT: u32>(
-    pending: ScheduledRequest[PRODUCER_COUNT],
-    pending_valid: u1[PRODUCER_COUNT],
-    egress_busy: u1) -> (u1[PRODUCER_COUNT], u1) {
-  let (credit_found, credit_producer) =
-    unroll_for! (candidate, acc):
-        (u32, (u1, u32)) in u32:0..PRODUCER_COUNT {
-      let take = !acc.0 && pending_valid[candidate] &&
-        pending[candidate].credit;
-      (acc.0 || take, if take { candidate } else { acc.1 })
-    }((u1:0, u32:0));
-  let remaining = if credit_found {
-    update(pending_valid, credit_producer, u1:0)
-  } else {
-    pending_valid
-  };
-  (remaining, egress_busy && !credit_found)
-}
-
-struct AdmissionResult<ACTOR_COUNT: u32, PRODUCER_COUNT: u32> {
-  pending_valid: u1[PRODUCER_COUNT],
-  occupied: u8[ACTOR_COUNT],
-  order: u8[MAILBOX_DEPTH][ACTOR_COUNT],
-  mail_candidates: u1[ACTOR_COUNT],
-  admission: Admission,
-  cursor: u32,
-}
-
-// Reserves one producer frame against metadata that already includes the
-// older sealed activation. The younger address is unresolved and stalls
-// only same-address admission for this interval.
-fn reserve_admission<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
-    state: SharedState<ACTOR_COUNT, PRODUCER_COUNT>,
-    pending: ScheduledRequest[PRODUCER_COUNT],
-    pending_valid: u1[PRODUCER_COUNT],
-    excluded_valid: u1,
-    excluded_slot: u32,
-    failed_valid: u1,
-    failed_slot: u32) ->
-    AdmissionResult<ACTOR_COUNT, PRODUCER_COUNT> {
-  let (after_found, after_producer, before_found, before_producer) =
-      unroll_for! (candidate, acc):
-          (u32, (u1, u32, u1, u32)) in u32:0..PRODUCER_COUNT {
-    let request = pending[candidate];
-    let slot = request.slot;
-    let eligible = pending_valid[candidate] && !request.credit &&
-      slot < ACTOR_COUNT &&
-      state.occupied[slot] < MAILBOX_CAPACITY &&
-      (!excluded_valid || slot != excluded_slot) &&
-      (!failed_valid || slot != failed_slot);
-    let take_after = !acc.0 &&
-      candidate >= state.admission_cursor && eligible;
-    let take_before = !acc.2 &&
-      candidate < state.admission_cursor && eligible;
-    (
-      acc.0 || take_after,
-      if take_after { candidate } else { acc.1 },
-      acc.2 || take_before,
-      if take_before { candidate } else { acc.3 }
-    )
-  }((u1:0, u32:0, u1:0, u32:0));
-  let found = after_found || before_found;
-  let producer = if after_found {
-    after_producer
-  } else {
-    before_producer
-  };
-  let request = pending[producer];
-  let slot = if request.slot < ACTOR_COUNT {
-    request.slot
-  } else {
-    u32:0
-  };
-  let physical = free_mailbox_index(state, slot);
-  let old_count = state.occupied[slot];
-  let occupied = if found {
-    update(state.occupied, slot, old_count + u8:1)
-  } else {
-    state.occupied
-  };
-  let row = update(
-    state.order[slot], old_count as u32, physical);
-  let order = if found {
-    update(state.order, slot, row)
-  } else {
-    state.order
-  };
-  let mail_candidates = if found {
-    update(state.mail_candidates, slot, u1:1)
-  } else {
-    state.mail_candidates
-  };
-  let remaining = if found {
-    update(pending_valid, producer, u1:0)
-  } else {
-    pending_valid
-  };
-  let cursor = if found {
-    if producer + u32:1 == PRODUCER_COUNT {
-      u32:0
-    } else {
-      producer + u32:1
-    }
-  } else {
-    state.admission_cursor
-  };
-  AdmissionResult<ACTOR_COUNT, PRODUCER_COUNT> {
-    pending_valid: remaining,
-    occupied,
-    order,
-    mail_candidates,
-    admission: Admission {
-      valid: found,
-      producer,
-      slot,
-      physical,
-    },
-    cursor,
   }
 }
 
@@ -2640,7 +2452,7 @@ pub proc SharedService<
         }
       },
       SharedPhase::RUN => {
-        let (credit_pending_valid, credit_busy) = collect_credit(
+        let (credit_pending_valid, credit_busy) = mailbox::collect_credit(
           captured_pending,
           captured_pending_valid,
           state.egress_busy);
@@ -2715,7 +2527,9 @@ pub proc SharedService<
           issue_valid &&
           state.mail_candidates[read_slot] && !entry_active;
         let (received, order_index, mailbox_index) =
-          mailbox_selection(state, read_slot);
+          mailbox::select(
+            state.order[read_slot], state.occupied[read_slot],
+            state.postponed[read_slot]);
         let (state_completion_tok, _) = recv_if(
           join(), ram_write_resp_in, state.state_write_pending,
           zero!<MachineRamWriteResp>());
@@ -2743,8 +2557,11 @@ pub proc SharedService<
           mailbox_read_resp_in,
           read_mailbox && received,
           zero!<MailboxRamReadResp>());
-        let reservation = reserve_admission(
-          retired,
+        let reservation = mailbox::reserve_admission(
+          retired.occupied,
+          retired.order,
+          retired.mail_candidates,
+          retired.admission_cursor,
           captured_pending,
           credit_pending_valid,
           issue_valid,

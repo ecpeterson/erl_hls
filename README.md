@@ -112,6 +112,8 @@ result. Its bounded result vocabulary and postponement rules live with the
 phase-local reduction actions, canonical CPU/XLS semantics, and constraints on
 future optimized placement.
 
+Shared-scheduler mailbox bookkeeping lives in [`priv/xls/lib/mailbox.x`](priv/xls/lib/mailbox.x): queue selection and compaction, physical-slot reservation, and effect-credit collection. These pure functions are parameterized by mailbox depth, actor count, and producer count; generated actor modules pass their queue metadata and retain ownership of RAM operations, callback execution, and retirement. The library's DSLX tests run directly in `tools/remote_xls_sim.sh`, including postponement, full queues, admission exclusions, round-robin wrap, and credit return.
+
 ## Translated record defaults
 
 Every field in a private-state or wire record must have a type-directed zero
