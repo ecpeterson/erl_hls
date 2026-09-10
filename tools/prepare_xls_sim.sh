@@ -306,10 +306,13 @@ for source in \
     "$project_root/src/api/hls_gs.erl" \
     "$project_root/src/runtime/hls_debug.erl" \
     "$project_root/src/api/hls_lists.erl" \
+    "$project_root/src/api/hls_fixed.erl" \
+    "$project_root/src/api/hls_vec.erl" \
     "$project_root/src/api/hls_nums.erl" \
     "$project_root/src/api/hls_type.erl" \
     "$project_root/src/examples/regsvc/regsvc.erl" \
     "$project_root/src/examples/phi_decoder/hls_pauli.erl" \
+    "$project_root/src/examples/phi_decoder/phi_field.erl" \
     "$project_root/src/examples/phi_decoder/phenom_data_cell.erl" \
     "$project_root/src/examples/phi_decoder/phenom_syndrome_cell.erl" \
     "$project_root/src/examples/phi_decoder/phi_halo_cell.erl" \
