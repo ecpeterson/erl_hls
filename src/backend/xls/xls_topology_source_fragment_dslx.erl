@@ -141,14 +141,14 @@ router_argument_names(Spec, Scheduler) ->
 router_state_bindings(Spec, Scheduler = #{module_name := Module}) ->
     case scheduler_planes(Spec, Scheduler) of
         [] ->
-            "    let state_last = state.active && state_effect_info.2;\n";
+            "    let state_last = state.control.active && state_effect_info.2;\n";
         [_ | _] ->
             [
                 "    let state_reduction_prefix = ", Module,
                 "::scheduled_reduction_prefix(state.scheduled);\n",
-                "    let state_reduction_batch = state.active &&\n",
+                "    let state_reduction_batch = state.control.active &&\n",
                 "      state.index == u8:0 && state_reduction_prefix.0;\n",
-                "    let state_last = state.active &&\n",
+                "    let state_last = state.control.active &&\n",
                 "      if state_reduction_batch { state_reduction_prefix.2\n",
                 "      } else { state_effect_info.2 };\n"
             ]
