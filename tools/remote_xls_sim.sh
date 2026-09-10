@@ -33,6 +33,7 @@ for test_module in \
     bram.x \
     effect_window.x \
     frame_transport.x \
+    frame_queue.x \
     mailbox.x \
     hls_debug_trace.x \
     hls_debug_observer.x \

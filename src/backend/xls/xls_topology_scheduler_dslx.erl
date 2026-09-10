@@ -218,6 +218,10 @@ preamble(Spec = #{families := Families}) ->
             _ -> "import frame_transport;\n"
         end,
         "import effect_window;\n",
+        case maps:get(source_fragment_planes, Spec, []) of
+            [] -> [];
+            [_ | _] -> "import frame_queue;\n"
+        end,
         case maps:get(ingresses, Spec) of
             [] -> [];
             [_] -> "import hls_spatial_router;\n"

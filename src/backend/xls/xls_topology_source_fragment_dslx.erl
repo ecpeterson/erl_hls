@@ -250,61 +250,13 @@ support(Spec) ->
     ].
 
 fragment_declarations(Plane = #{fragments := Fragments}) ->
-    Queue = queue_name(Plane),
-    Batch = batch_name(Plane),
     Population = maps:get(population, Plane),
     [
-        "struct ", Batch, " {\n",
+        "struct ", batch_name(Plane), " {\n",
         "  source: u32,\n",
         "  frames: axis::Frame[u32:", integer_to_list(Population), "],\n",
         "}\n\n",
-        "struct ", Queue, " {\n",
-        "  current_valid: u1,\n",
-        "  current: axis::Frame,\n",
-        "  lookahead_valid: u1,\n",
-        "  lookahead: axis::Frame,\n",
-        "}\n\n",
-        [fragment_comment(Fragment) || Fragment <- Fragments],
-        "fn ", pop_name(Plane), "(queue: ", Queue, ") -> ", Queue,
-        " {\n",
-        "  ", Queue, " {\n",
-        "    current_valid: queue.lookahead_valid,\n",
-        "    current: if queue.lookahead_valid { queue.lookahead\n",
-        "      } else { queue.current },\n",
-        "    lookahead_valid: u1:0,\n",
-        "    lookahead: queue.lookahead,\n",
-        "  }\n",
-        "}\n\n",
-        "fn ", push_name(Plane), "(\n",
-        "    queue: ", Queue, ", frame: axis::Frame) -> ", Queue, " {\n",
-        "  if !queue.current_valid {\n",
-        "    ", Queue, " { current_valid: u1:1, current: frame,\n",
-        "      ..queue }\n",
-        "  } else {\n",
-        "    ", Queue, " { lookahead_valid: u1:1, lookahead: frame,\n",
-        "      ..queue }\n",
-        "  }\n",
-        "}\n\n",
-        "fn ", after_pop_name(Plane), "(\n",
-        "    queue: ", Queue, ", pop: u1) -> ", Queue, " {\n",
-        "  if pop { ", pop_name(Plane), "(queue)\n",
-        "  } else { queue }\n",
-        "}\n\n",
-        "fn ", update_bank_name(Plane), "<COUNT: u32>(\n",
-        "    bank: ", Queue, "[COUNT],\n",
-        "    pop_valid: u1, pop_source: u32,\n",
-        "    push_valid: u1, push_source: u32,\n",
-        "    push_frame: axis::Frame) -> ", Queue, "[COUNT] {\n",
-        "  let after_pop = if pop_valid {\n",
-        "    update(bank, pop_source,\n",
-        "      ", pop_name(Plane), "(bank[pop_source]))\n",
-        "  } else { bank };\n",
-        "  if push_valid {\n",
-        "    update(after_pop, push_source,\n",
-        "      ", push_name(Plane), "(\n",
-        "        after_pop[push_source], push_frame))\n",
-        "  } else { after_pop }\n",
-        "}\n\n"
+        [fragment_comment(Fragment) || Fragment <- Fragments]
     ].
 
 fragment_comment(#{ordinal := Ordinal, port := Port,
@@ -326,7 +278,7 @@ fragment_plane_proc(Plane = #{
     ActorCount = length(Destinations),
     Population = maps:get(population, Plane),
     State = state_name(Plane),
-    Queue = queue_name(Plane),
+    Queue = "frame_queue::Queue",
     Batch = batch_name(Plane),
     InverseRows = inverse_rows(Plane),
     Members = [
@@ -427,12 +379,12 @@ fragment_plane_proc(Plane = #{
         "    let open_tokens = if incoming_source_valid {\n",
         "      update(open_tokens_after_output, incoming.source, u1:1)\n",
         "    } else { open_tokens_after_output };\n",
-        [capacity_binding(Plane, Fragment) || Fragment <- Fragments],
+        [capacity_binding(Fragment) || Fragment <- Fragments],
         "    let can_insert = work_valid && source_valid",
         [[" && capacity_", integer_to_list(maps:get(ordinal, Fragment))]
             || Fragment <- Fragments],
         ";\n",
-        [bank_binding(Plane, Fragment) || Fragment <- Fragments],
+        [bank_binding(Fragment) || Fragment <- Fragments],
         "    let _done = join(output_tok, input_tok);\n",
         "    ", State, " {\n",
         "      input_cursor: if state.pending_valid {\n",
@@ -516,22 +468,22 @@ output_arm(Plane, Destination = #{index := Index, group := Group}) ->
         "          }),\n"
     ].
 
-capacity_binding(Plane, #{ordinal := Ordinal}) ->
+capacity_binding(#{ordinal := Ordinal}) ->
     Index = integer_to_list(Ordinal),
     [
         "    let queue_", Index, " = state.bank_", Index,
         "[push_source];\n",
-        "    let after_pop_", Index, " = ", after_pop_name(Plane), "(\n",
+        "    let after_pop_", Index, " = frame_queue::after_pop(\n",
         "      queue_", Index, ", output_ready &&\n",
         "        pop_sources[u32:", Index, "] == push_source);\n",
         "    let capacity_", Index,
         " = !after_pop_", Index, ".lookahead_valid;\n"
     ].
 
-bank_binding(Plane, #{ordinal := Ordinal}) ->
+bank_binding(#{ordinal := Ordinal}) ->
     Index = integer_to_list(Ordinal),
     [
-        "    let bank_", Index, " = ", update_bank_name(Plane), "(\n",
+        "    let bank_", Index, " = frame_queue::update_bank(\n",
         "      state.bank_", Index, ", output_ready,\n",
         "      pop_sources[u32:", Index,
         "], can_insert, push_source,\n",
@@ -721,9 +673,6 @@ positive_modulo(Value, Modulus) ->
 batch_name(#{id := Id}) ->
     [string:titlecase(atom_to_list(Id)), "ReductionBatch"].
 
-queue_name(#{id := Id}) ->
-    [string:titlecase(atom_to_list(Id)), "ReductionFragmentQueue"].
-
 state_name(#{id := Id}) ->
     [string:titlecase(atom_to_list(Id)), "ReductionPlaneState"].
 
@@ -733,17 +682,7 @@ plane_name(#{id := Id}) ->
 batch_output_name(#{id := Id}) ->
     [atom_to_list(Id), "_reduction_out"].
 
-pop_name(#{id := Id}) ->
-    [atom_to_list(Id), "_reduction_fragment_pop"].
 
-push_name(#{id := Id}) ->
-    [atom_to_list(Id), "_reduction_fragment_push"].
-
-after_pop_name(#{id := Id}) ->
-    [atom_to_list(Id), "_reduction_fragment_after_pop"].
-
-update_bank_name(#{id := Id}) ->
-    [atom_to_list(Id), "_reduction_fragment_update_bank"].
 
 mux_name(#{index := Index}) ->
     ["SchedulerAggregateArrayMux", integer_to_list(Index)].

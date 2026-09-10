@@ -10,6 +10,7 @@
 import axis;
 import frame_transport;
 import effect_window;
+import frame_queue;
 import hls_spatial_router;
 import phenom_data_cell;
 import phenom_syndrome_cell;
@@ -219,68 +220,18 @@ struct Phi_xReductionBatch {
   frames: axis::Frame[u32:4],
 }
 
-struct Phi_xReductionFragmentQueue {
-  current_valid: u1,
-  current: axis::Frame,
-  lookahead_valid: u1,
-  lookahead: axis::Frame,
-}
-
 // Fragment 0 (north) uses inverse fragment 3 at offset [0, 1].
 // Fragment 1 (east) uses inverse fragment 2 at offset [-1, 0].
 // Fragment 2 (west) uses inverse fragment 1 at offset [1, 0].
 // Fragment 3 (south) uses inverse fragment 0 at offset [0, -1].
-fn phi_x_reduction_fragment_pop(queue: Phi_xReductionFragmentQueue) -> Phi_xReductionFragmentQueue {
-  Phi_xReductionFragmentQueue {
-    current_valid: queue.lookahead_valid,
-    current: if queue.lookahead_valid { queue.lookahead
-      } else { queue.current },
-    lookahead_valid: u1:0,
-    lookahead: queue.lookahead,
-  }
-}
-
-fn phi_x_reduction_fragment_push(
-    queue: Phi_xReductionFragmentQueue, frame: axis::Frame) -> Phi_xReductionFragmentQueue {
-  if !queue.current_valid {
-    Phi_xReductionFragmentQueue { current_valid: u1:1, current: frame,
-      ..queue }
-  } else {
-    Phi_xReductionFragmentQueue { lookahead_valid: u1:1, lookahead: frame,
-      ..queue }
-  }
-}
-
-fn phi_x_reduction_fragment_after_pop(
-    queue: Phi_xReductionFragmentQueue, pop: u1) -> Phi_xReductionFragmentQueue {
-  if pop { phi_x_reduction_fragment_pop(queue)
-  } else { queue }
-}
-
-fn phi_x_reduction_fragment_update_bank<COUNT: u32>(
-    bank: Phi_xReductionFragmentQueue[COUNT],
-    pop_valid: u1, pop_source: u32,
-    push_valid: u1, push_source: u32,
-    push_frame: axis::Frame) -> Phi_xReductionFragmentQueue[COUNT] {
-  let after_pop = if pop_valid {
-    update(bank, pop_source,
-      phi_x_reduction_fragment_pop(bank[pop_source]))
-  } else { bank };
-  if push_valid {
-    update(after_pop, push_source,
-      phi_x_reduction_fragment_push(
-        after_pop[push_source], push_frame))
-  } else { after_pop }
-}
-
 struct Phi_xReductionPlaneState {
   input_cursor: u32,
   output_cursor: u32,
   open_tokens: u1[u32:9],
-  bank_0: Phi_xReductionFragmentQueue[u32:9],
-  bank_1: Phi_xReductionFragmentQueue[u32:9],
-  bank_2: Phi_xReductionFragmentQueue[u32:9],
-  bank_3: Phi_xReductionFragmentQueue[u32:9],
+  bank_0: frame_queue::Queue[u32:9],
+  bank_1: frame_queue::Queue[u32:9],
+  bank_2: frame_queue::Queue[u32:9],
+  bank_3: frame_queue::Queue[u32:9],
   pending_valid: u1,
   pending_batch: Phi_xReductionBatch,
 }
@@ -428,39 +379,39 @@ proc Phi_xReductionPlane {
       update(open_tokens_after_output, incoming.source, u1:1)
     } else { open_tokens_after_output };
     let queue_0 = state.bank_0[push_source];
-    let after_pop_0 = phi_x_reduction_fragment_after_pop(
+    let after_pop_0 = frame_queue::after_pop(
       queue_0, output_ready &&
         pop_sources[u32:0] == push_source);
     let capacity_0 = !after_pop_0.lookahead_valid;
     let queue_1 = state.bank_1[push_source];
-    let after_pop_1 = phi_x_reduction_fragment_after_pop(
+    let after_pop_1 = frame_queue::after_pop(
       queue_1, output_ready &&
         pop_sources[u32:1] == push_source);
     let capacity_1 = !after_pop_1.lookahead_valid;
     let queue_2 = state.bank_2[push_source];
-    let after_pop_2 = phi_x_reduction_fragment_after_pop(
+    let after_pop_2 = frame_queue::after_pop(
       queue_2, output_ready &&
         pop_sources[u32:2] == push_source);
     let capacity_2 = !after_pop_2.lookahead_valid;
     let queue_3 = state.bank_3[push_source];
-    let after_pop_3 = phi_x_reduction_fragment_after_pop(
+    let after_pop_3 = frame_queue::after_pop(
       queue_3, output_ready &&
         pop_sources[u32:3] == push_source);
     let capacity_3 = !after_pop_3.lookahead_valid;
     let can_insert = work_valid && source_valid && capacity_0 && capacity_1 && capacity_2 && capacity_3;
-    let bank_0 = phi_x_reduction_fragment_update_bank(
+    let bank_0 = frame_queue::update_bank(
       state.bank_0, output_ready,
       pop_sources[u32:0], can_insert, push_source,
       work.frames[u32:0]);
-    let bank_1 = phi_x_reduction_fragment_update_bank(
+    let bank_1 = frame_queue::update_bank(
       state.bank_1, output_ready,
       pop_sources[u32:1], can_insert, push_source,
       work.frames[u32:1]);
-    let bank_2 = phi_x_reduction_fragment_update_bank(
+    let bank_2 = frame_queue::update_bank(
       state.bank_2, output_ready,
       pop_sources[u32:2], can_insert, push_source,
       work.frames[u32:2]);
-    let bank_3 = phi_x_reduction_fragment_update_bank(
+    let bank_3 = frame_queue::update_bank(
       state.bank_3, output_ready,
       pop_sources[u32:3], can_insert, push_source,
       work.frames[u32:3]);
@@ -490,68 +441,18 @@ struct Phi_zReductionBatch {
   frames: axis::Frame[u32:4],
 }
 
-struct Phi_zReductionFragmentQueue {
-  current_valid: u1,
-  current: axis::Frame,
-  lookahead_valid: u1,
-  lookahead: axis::Frame,
-}
-
 // Fragment 0 (north) uses inverse fragment 3 at offset [0, 1].
 // Fragment 1 (east) uses inverse fragment 2 at offset [-1, 0].
 // Fragment 2 (west) uses inverse fragment 1 at offset [1, 0].
 // Fragment 3 (south) uses inverse fragment 0 at offset [0, -1].
-fn phi_z_reduction_fragment_pop(queue: Phi_zReductionFragmentQueue) -> Phi_zReductionFragmentQueue {
-  Phi_zReductionFragmentQueue {
-    current_valid: queue.lookahead_valid,
-    current: if queue.lookahead_valid { queue.lookahead
-      } else { queue.current },
-    lookahead_valid: u1:0,
-    lookahead: queue.lookahead,
-  }
-}
-
-fn phi_z_reduction_fragment_push(
-    queue: Phi_zReductionFragmentQueue, frame: axis::Frame) -> Phi_zReductionFragmentQueue {
-  if !queue.current_valid {
-    Phi_zReductionFragmentQueue { current_valid: u1:1, current: frame,
-      ..queue }
-  } else {
-    Phi_zReductionFragmentQueue { lookahead_valid: u1:1, lookahead: frame,
-      ..queue }
-  }
-}
-
-fn phi_z_reduction_fragment_after_pop(
-    queue: Phi_zReductionFragmentQueue, pop: u1) -> Phi_zReductionFragmentQueue {
-  if pop { phi_z_reduction_fragment_pop(queue)
-  } else { queue }
-}
-
-fn phi_z_reduction_fragment_update_bank<COUNT: u32>(
-    bank: Phi_zReductionFragmentQueue[COUNT],
-    pop_valid: u1, pop_source: u32,
-    push_valid: u1, push_source: u32,
-    push_frame: axis::Frame) -> Phi_zReductionFragmentQueue[COUNT] {
-  let after_pop = if pop_valid {
-    update(bank, pop_source,
-      phi_z_reduction_fragment_pop(bank[pop_source]))
-  } else { bank };
-  if push_valid {
-    update(after_pop, push_source,
-      phi_z_reduction_fragment_push(
-        after_pop[push_source], push_frame))
-  } else { after_pop }
-}
-
 struct Phi_zReductionPlaneState {
   input_cursor: u32,
   output_cursor: u32,
   open_tokens: u1[u32:9],
-  bank_0: Phi_zReductionFragmentQueue[u32:9],
-  bank_1: Phi_zReductionFragmentQueue[u32:9],
-  bank_2: Phi_zReductionFragmentQueue[u32:9],
-  bank_3: Phi_zReductionFragmentQueue[u32:9],
+  bank_0: frame_queue::Queue[u32:9],
+  bank_1: frame_queue::Queue[u32:9],
+  bank_2: frame_queue::Queue[u32:9],
+  bank_3: frame_queue::Queue[u32:9],
   pending_valid: u1,
   pending_batch: Phi_zReductionBatch,
 }
@@ -699,39 +600,39 @@ proc Phi_zReductionPlane {
       update(open_tokens_after_output, incoming.source, u1:1)
     } else { open_tokens_after_output };
     let queue_0 = state.bank_0[push_source];
-    let after_pop_0 = phi_z_reduction_fragment_after_pop(
+    let after_pop_0 = frame_queue::after_pop(
       queue_0, output_ready &&
         pop_sources[u32:0] == push_source);
     let capacity_0 = !after_pop_0.lookahead_valid;
     let queue_1 = state.bank_1[push_source];
-    let after_pop_1 = phi_z_reduction_fragment_after_pop(
+    let after_pop_1 = frame_queue::after_pop(
       queue_1, output_ready &&
         pop_sources[u32:1] == push_source);
     let capacity_1 = !after_pop_1.lookahead_valid;
     let queue_2 = state.bank_2[push_source];
-    let after_pop_2 = phi_z_reduction_fragment_after_pop(
+    let after_pop_2 = frame_queue::after_pop(
       queue_2, output_ready &&
         pop_sources[u32:2] == push_source);
     let capacity_2 = !after_pop_2.lookahead_valid;
     let queue_3 = state.bank_3[push_source];
-    let after_pop_3 = phi_z_reduction_fragment_after_pop(
+    let after_pop_3 = frame_queue::after_pop(
       queue_3, output_ready &&
         pop_sources[u32:3] == push_source);
     let capacity_3 = !after_pop_3.lookahead_valid;
     let can_insert = work_valid && source_valid && capacity_0 && capacity_1 && capacity_2 && capacity_3;
-    let bank_0 = phi_z_reduction_fragment_update_bank(
+    let bank_0 = frame_queue::update_bank(
       state.bank_0, output_ready,
       pop_sources[u32:0], can_insert, push_source,
       work.frames[u32:0]);
-    let bank_1 = phi_z_reduction_fragment_update_bank(
+    let bank_1 = frame_queue::update_bank(
       state.bank_1, output_ready,
       pop_sources[u32:1], can_insert, push_source,
       work.frames[u32:1]);
-    let bank_2 = phi_z_reduction_fragment_update_bank(
+    let bank_2 = frame_queue::update_bank(
       state.bank_2, output_ready,
       pop_sources[u32:2], can_insert, push_source,
       work.frames[u32:2]);
-    let bank_3 = phi_z_reduction_fragment_update_bank(
+    let bank_3 = frame_queue::update_bank(
       state.bank_3, output_ready,
       pop_sources[u32:3], can_insert, push_source,
       work.frames[u32:3]);

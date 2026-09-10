@@ -7,23 +7,6 @@ fn source_fragment_test_frame(value: u32) -> axis::Frame {
       hls_topology_source_fragment_fixture::Message { value }))
 }
 
-#[test]
-fn source_fragment_full_queue_pop_push_test() {
-  let first = source_fragment_test_frame(u32:1);
-  let second = source_fragment_test_frame(u32:2);
-  let third = source_fragment_test_frame(u32:3);
-  let queued = reducer_reduction_fragment_push(
-    reducer_reduction_fragment_push(
-      zero!<ReducerReductionFragmentQueue>(), first),
-    second);
-  let updated = reducer_reduction_fragment_update_bank<u32:1>(
-    [queued], u1:1, u32:0, u1:1, u32:0, third)[u32:0];
-  assert_eq(updated.current_valid, u1:1);
-  assert_eq(updated.current, second);
-  assert_eq(updated.lookahead_valid, u1:1);
-  assert_eq(updated.lookahead, third);
-}
-
 #[test_proc]
 proc SourceFragmentTransposeTest {
   terminator: chan<bool> out;
