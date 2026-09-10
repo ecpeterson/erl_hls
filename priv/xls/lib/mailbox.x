@@ -237,6 +237,65 @@ pub fn reserve_admission<ACTOR_COUNT: u32, PRODUCER_COUNT: u32, DEPTH: u32>(
   }
 }
 
+
+// A transient projection of scheduler metadata for the retirement transition.
+pub struct Metadata<ACTOR_COUNT: u32, DEPTH: u32> {
+  occupied: u8[ACTOR_COUNT],
+  order: u8[DEPTH][ACTOR_COUNT],
+  postponed: u1[DEPTH][ACTOR_COUNT],
+  mail_candidates: u1[ACTOR_COUNT],
+  entry_probes: u1[ACTOR_COUNT],
+  egress_waiters: u1[ACTOR_COUNT],
+}
+
+// The actor wrapper resolves its directive to mutually exclusive consume and
+// postpone flags. Queue indices identify that completed activation's message.
+pub struct Retirement {
+  valid: u1,
+  consume: u1,
+  postpone: u1,
+  phase_boundary: u1,
+  failed: u1,
+  enter_pending: u1,
+  egress_blocked: u1,
+}
+
+pub fn retire<ACTOR_COUNT: u32, DEPTH: u32>(
+    metadata: Metadata<ACTOR_COUNT, DEPTH>, slot: u32,
+    order_index: u8, mailbox_index: u8, outcome: Retirement)
+    -> Metadata<ACTOR_COUNT, DEPTH> {
+  if !outcome.valid { metadata } else {
+    let old_count = metadata.occupied[slot];
+    let occupied = if outcome.consume {
+      update(metadata.occupied, slot, old_count - u8:1)
+    } else { metadata.occupied };
+    let order = if outcome.consume {
+      update(metadata.order, slot,
+        compact_order(metadata.order[slot], order_index, old_count))
+    } else { metadata.order };
+    // A phase boundary clears every postponed message, including the selected
+    // one. Otherwise only an explicit postponement changes the bitmap.
+    let postponed_row = if outcome.phase_boundary {
+      zero!<u1[DEPTH]>()
+    } else if outcome.postpone {
+      update(metadata.postponed[slot], mailbox_index as u32, u1:1)
+    } else { metadata.postponed[slot] };
+    let postponed = update(metadata.postponed, slot, postponed_row);
+    let (mail_remaining, _, _) = select(order[slot], occupied[slot], postponed_row);
+    Metadata<ACTOR_COUNT, DEPTH> {
+      occupied,
+      order,
+      postponed,
+      mail_candidates: update(metadata.mail_candidates, slot,
+        mail_remaining && !outcome.failed),
+      entry_probes: update(metadata.entry_probes, slot,
+        outcome.enter_pending && !outcome.egress_blocked && !outcome.failed),
+      egress_waiters: update(metadata.egress_waiters, slot,
+        outcome.enter_pending && outcome.egress_blocked && !outcome.failed),
+    }
+  }
+}
+
 #[test]
 fn rows_are_slot_major_and_hold_one_frame_test() {
   let frame = axis::pack(u8:13, u32:0x12345678);
@@ -370,4 +429,62 @@ fn credit_collection_releases_one_batch_without_consuming_messages_test() {
   assert_eq((remaining, busy), ([false, true, true], false));
   assert_eq(collect_credit(pending, remaining, busy),
             ([false, true, false], false));
+}
+
+#[test]
+fn retirement_preserves_queue_order_across_a_phase_boundary_test() {
+  let metadata = Metadata<u32:2, u32:3> {
+    occupied: [u8:3, u8:1],
+    order: [[u8:2, u8:0, u8:1], [u8:1, u8:0, u8:0]],
+    postponed: [[false, false, true], [false, false, false]],
+    mail_candidates: [true, true],
+    ..zero!<Metadata<u32:2, u32:3>>()
+  };
+  let retired = retire(metadata, u32:0, u8:1, u8:0, Retirement {
+    valid: true, consume: true, phase_boundary: true, ..zero!<Retirement>() });
+  assert_eq(retired.occupied, [u8:2, u8:1]);
+  assert_eq(retired.order, [[u8:2, u8:1, u8:0], metadata.order[u32:1]]);
+  assert_eq(retired.postponed, zero!<u1[3][2]>());
+  assert_eq(retired.mail_candidates, [true, true]);
+  assert_eq(select(retired.order[u32:0], u8:2, retired.postponed[u32:0]),
+    (true, u8:0, u8:2));
+}
+
+#[test]
+fn postponement_and_entry_credit_update_candidates_together_test() {
+  let metadata = Metadata<u32:1, u32:2> {
+    occupied: [u8:1], order: [[u8:1, u8:0]], mail_candidates: [true],
+    ..zero!<Metadata<u32:1, u32:2>>()
+  };
+  let postponed = retire(metadata, u32:0, u8:0, u8:1, Retirement {
+    valid: true, postpone: true, enter_pending: true, egress_blocked: true,
+    ..zero!<Retirement>() });
+  assert_eq(postponed.occupied, metadata.occupied);
+  assert_eq(postponed.order, metadata.order);
+  assert_eq(postponed.postponed, [[false, true]]);
+  assert_eq(postponed.mail_candidates, [false]);
+  assert_eq(postponed.entry_probes, [false]);
+  assert_eq(postponed.egress_waiters, [true]);
+  let resumed = retire(postponed, u32:0, u8:0, u8:1, Retirement {
+    valid: true, phase_boundary: true, enter_pending: true, ..zero!<Retirement>() });
+  assert_eq(resumed.postponed, [[false, false]]);
+  assert_eq(resumed.mail_candidates, [true]);
+  assert_eq(resumed.entry_probes, [true]);
+  assert_eq(resumed.egress_waiters, [false]);
+}
+
+#[test]
+fn failed_or_absent_retirements_cannot_reactivate_actors_test() {
+  let metadata = Metadata<u32:1, u32:1> {
+    occupied: [u8:1], mail_candidates: [true], entry_probes: [true],
+    egress_waiters: [true], ..zero!<Metadata<u32:1, u32:1>>() };
+  assert_eq(retire(metadata, u32:99, u8:99, u8:99, zero!<Retirement>()), metadata);
+  let failed = retire(metadata, u32:0, u8:0, u8:0, Retirement {
+    valid: true, failed: true, enter_pending: true, egress_blocked: true,
+    ..zero!<Retirement>() });
+  assert_eq(failed.mail_candidates, [false]);
+  assert_eq(failed.entry_probes, [false]);
+  assert_eq(failed.egress_waiters, [false]);
+  assert_eq(failed.occupied, metadata.occupied);
+  assert_eq(failed.order, metadata.order);
 }

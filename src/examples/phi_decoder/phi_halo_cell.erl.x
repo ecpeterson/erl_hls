@@ -4376,8 +4376,7 @@ fn ready_selection<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
     }, state.egress_busy, in_flight, cursor)
 }
 
-// Projects a completed executor activation into scheduler metadata. Its
-// RAM write may share the RUN activation with a distinct actor's read.
+// Translate actor-specific results into the shared metadata transition.
 fn retire_actor<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
     state: SharedState<ACTOR_COUNT, PRODUCER_COUNT>,
     valid: u1,
@@ -4386,75 +4385,33 @@ fn retire_actor<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
     received: u1,
     mailbox_index: u8,
     order_index: u8) -> SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
-  let consumed = valid && received && stepped.dispatched &&
-    stepped.directive == Directive::CONSUME;
-  let should_postpone = valid && received && stepped.dispatched &&
-    stepped.directive == Directive::POSTPONE;
-  let old_count = state.occupied[slot];
-  let occupied = if valid {
-    update(
-      state.occupied,
-      slot,
-      if consumed { old_count - u8:1 } else { old_count })
-  } else {
-    state.occupied
-  };
-  let compacted = mailbox::compact_order(
-    state.order[slot], order_index, old_count);
-  let order = if consumed {
-    update(state.order, slot, compacted)
-  } else {
-    state.order
-  };
-  let marked = update(
-    state.postponed[slot], mailbox_index as u32, u1:1);
-  let postponed_row = if stepped.phase_boundary {
-    zero!<u1[MAILBOX_DEPTH]>()
-  } else if should_postpone {
-    marked
-  } else {
-    state.postponed[slot]
-  };
-  let postponed = if valid {
-    update(state.postponed, slot, postponed_row)
-  } else {
-    state.postponed
-  };
-  let (mail_remaining, _, _) = mailbox::select(
-    order[slot], occupied[slot], postponed[slot]);
-  let mail_candidates = if valid {
-    update(
-      state.mail_candidates,
-      slot,
-      mail_remaining && !stepped.machine.failed)
-  } else {
-    state.mail_candidates
-  };
-  let entry_probes = if valid {
-    update(
-      state.entry_probes,
-      slot,
-      stepped.machine.enter_pending &&
-        !stepped.egress_blocked && !stepped.machine.failed)
-  } else {
-    state.entry_probes
-  };
-  let egress_waiters = if valid {
-    update(
-      state.egress_waiters,
-      slot,
-      stepped.machine.enter_pending &&
-        stepped.egress_blocked && !stepped.machine.failed)
-  } else {
-    state.egress_waiters
-  };
+  let metadata = mailbox::retire(
+    mailbox::Metadata<ACTOR_COUNT, MAILBOX_DEPTH> {
+      occupied: state.occupied,
+      order: state.order,
+      postponed: state.postponed,
+      mail_candidates: state.mail_candidates,
+      entry_probes: state.entry_probes,
+      egress_waiters: state.egress_waiters,
+    }, slot, order_index, mailbox_index,
+    mailbox::Retirement {
+      valid,
+      consume: received && stepped.dispatched &&
+        stepped.directive == Directive::CONSUME,
+      postpone: received && stepped.dispatched &&
+        stepped.directive == Directive::POSTPONE,
+      phase_boundary: stepped.phase_boundary,
+      failed: stepped.machine.failed,
+      enter_pending: stepped.machine.enter_pending,
+      egress_blocked: stepped.egress_blocked,
+    });
   SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
-    occupied,
-    order,
-    postponed,
-    mail_candidates,
-    entry_probes,
-    egress_waiters,
+    occupied: metadata.occupied,
+    order: metadata.order,
+    postponed: metadata.postponed,
+    mail_candidates: metadata.mail_candidates,
+    entry_probes: metadata.entry_probes,
+    egress_waiters: metadata.egress_waiters,
     ..state
   }
 }
