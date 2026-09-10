@@ -159,7 +159,7 @@ def discover_components(
 
 
 def fragment_destination_table(source: str, plane: str) -> dict[int, list[int]]:
-    marker = f"struct Phi_{plane}ReductionFragmentQueue"
+    marker = f"proc Phi_{plane}ReductionPlane"
     if marker not in source:
         raise SystemExit(
             f"topology has no source-fragment reduction plane for phi {plane}"

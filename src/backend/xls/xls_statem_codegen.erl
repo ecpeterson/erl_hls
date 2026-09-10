@@ -87,7 +87,8 @@ preamble(#{
         "// overwritten the next time it is generated.\n\n",
         "import axis;\n",
         "import bram;\n",
-        "import mailbox;\n\n",
+        "import mailbox;\n",
+        "import scheduler;\n\n",
         "const MAILBOX_CAPACITY = u8:", integer_to_list(Capacity), ";\n",
         "const MAILBOX_DEPTH = u32:", integer_to_list(Capacity), ";\n\n",
         "pub enum Tag : u8 {\n",
@@ -263,7 +264,6 @@ machine_declarations(#{
         "  mailbox_index: u8,\n",
         "  order_index: u8,\n",
         "}\n\n",
-        "type Admission = mailbox::Admission;\n\n",
         "enum SharedPhase : u3 {\n",
         "  BOOT = u3:0,\n",
         "  STARTUP = u3:1,\n",
@@ -956,97 +956,20 @@ shared_service(Spec) ->
     [
     ?REDUCTION_SERVICE:shared_service_helpers(Reductions, SharedService),
     """
-    fn free_mailbox_index<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
-        state: SharedState<ACTOR_COUNT, PRODUCER_COUNT>,
-        slot: u32) -> u8 {
-      let (_found, selected) = unroll_for! (candidate, acc):
-          (u32, (u1, u8)) in
-          u32:0..MAILBOX_DEPTH {
-        let used = unroll_for! (position, found):
-            (u32, u1) in u32:0..MAILBOX_DEPTH {
-          found || (
-            position < state.occupied[slot] as u32 &&
-            state.order[slot][position] == candidate as u8)
-        }(u1:0);
-        let take = !acc.0 && !used;
-        (
-          acc.0 || take,
-          if take { candidate as u8 } else { acc.1 }
-        )
-      }((u1:0, u8:0));
-      selected
-    }
-
-    fn mailbox_selection<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
-        state: SharedState<ACTOR_COUNT, PRODUCER_COUNT>,
-        slot: u32) -> (u1, u8, u8) {
-      unroll_for! (position, acc):
-          (u32, (u1, u8, u8)) in
-          u32:0..MAILBOX_DEPTH {
-        let physical = state.order[slot][position];
-        let take = !acc.0 &&
-          position < state.occupied[slot] as u32 &&
-          !state.postponed[slot][physical as u32];
-        (
-          acc.0 || take,
-          if take { position as u8 } else { acc.1 },
-          if take { physical } else { acc.2 }
-        )
-      }((u1:0, u8:0, u8:0))
-    }
-
-    fn compact_order(
-        row: u8[MAILBOX_DEPTH],
-        selected: u8,
-        occupied: u8) -> u8[MAILBOX_DEPTH] {
-      unroll_for! (position, result):
-          (u32, u8[MAILBOX_DEPTH]) in
-          u32:0..MAILBOX_DEPTH {
-        let value = if position < selected as u32 {
-          row[position]
-        } else if position + u32:1 < occupied as u32 {
-          row[position + u32:1]
-        } else {
-          u8:0
-        };
-        update(result, position, value)
-      }(zero!<u8[MAILBOX_DEPTH]>())
-    }
-
-    // Finds the first selectable actor at or after the round-robin cursor.
-    // An in-flight actor is excluded until its executor result has retired and
-    // made the next state visible to a later activation.
     fn ready_selection<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
         state: SharedState<ACTOR_COUNT, PRODUCER_COUNT>,
         cursor: u32,
         in_flight: u1[ACTOR_COUNT]) -> (u1, u32) {
-      let (after_found, after_slot, before_found, before_slot) =
-          unroll_for! (slot, acc):
-              (u32, (u1, u32, u1, u32)) in u32:0..ACTOR_COUNT {
-        let entry_active =
-          state.entry_probes[slot] || state.egress_waiters[slot];
-        let ready =
-          state.entry_probes[slot] ||
-          (state.mail_candidates[slot] && !entry_active) ||
-          (state.egress_waiters[slot] && !state.egress_busy);
-        let selectable = ready && !in_flight[slot];
-        let take_after = !acc.0 && slot >= cursor && selectable;
-        let take_before = !acc.2 && slot < cursor && selectable;
-        (
-          acc.0 || take_after,
-          if take_after { slot } else { acc.1 },
-          acc.2 || take_before,
-          if take_before { slot } else { acc.3 }
-        )
-      }((u1:0, u32:0, u1:0, u32:0));
-      (
-        after_found || before_found,
-        if after_found { after_slot } else { before_slot }
-      )
+      scheduler::select(
+        scheduler::Candidates<ACTOR_COUNT> {
+          entry: state.entry_probes,
+          mail: state.mail_candidates,
+          egress: state.egress_waiters,
+          ..zero!<scheduler::Candidates<ACTOR_COUNT>>()
+        }, state.egress_busy, in_flight, cursor)
     }
 
-    // Projects a completed executor activation into scheduler metadata. Its
-    // RAM write may share the RUN activation with a distinct actor's read.
+    // Translate actor-specific results into the shared metadata transition.
     fn retire_actor<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
         state: SharedState<ACTOR_COUNT, PRODUCER_COUNT>,
         valid: u1,
@@ -1055,205 +978,34 @@ shared_service(Spec) ->
         received: u1,
         mailbox_index: u8,
         order_index: u8) -> SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
-      let consumed = valid && received && stepped.dispatched &&
-        stepped.directive == Directive::CONSUME;
-      let should_postpone = valid && received && stepped.dispatched &&
-        stepped.directive == Directive::POSTPONE;
-      let old_count = state.occupied[slot];
-      let occupied = if valid {
-        update(
-          state.occupied,
-          slot,
-          if consumed { old_count - u8:1 } else { old_count })
-      } else {
-        state.occupied
-      };
-      let compacted = compact_order(
-        state.order[slot], order_index, old_count);
-      let order = if consumed {
-        update(state.order, slot, compacted)
-      } else {
-        state.order
-      };
-      let marked = update(
-        state.postponed[slot], mailbox_index as u32, u1:1);
-      let postponed_row = if stepped.phase_boundary {
-        zero!<u1[MAILBOX_DEPTH]>()
-      } else if should_postpone {
-        marked
-      } else {
-        state.postponed[slot]
-      };
-      let postponed = if valid {
-        update(state.postponed, slot, postponed_row)
-      } else {
-        state.postponed
-      };
-      let metadata_state = SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
-        occupied,
-        order,
-        postponed,
-        ..state
-      };
-      let (mail_remaining, _, _) =
-        mailbox_selection(metadata_state, slot);
-      let mail_candidates = if valid {
-        update(
-          state.mail_candidates,
-          slot,
-          mail_remaining && !stepped.machine.failed)
-      } else {
-        state.mail_candidates
-      };
-      let entry_probes = if valid {
-        update(
-          state.entry_probes,
-          slot,
-          stepped.machine.enter_pending &&
-            !stepped.egress_blocked && !stepped.machine.failed)
-      } else {
-        state.entry_probes
-      };
-      let egress_waiters = if valid {
-        update(
-          state.egress_waiters,
-          slot,
-          stepped.machine.enter_pending &&
-            stepped.egress_blocked && !stepped.machine.failed)
-      } else {
-        state.egress_waiters
-      };
+      let metadata = mailbox::retire(
+        mailbox::Metadata<ACTOR_COUNT, MAILBOX_DEPTH> {
+          occupied: state.occupied,
+          order: state.order,
+          postponed: state.postponed,
+          mail_candidates: state.mail_candidates,
+          entry_probes: state.entry_probes,
+          egress_waiters: state.egress_waiters,
+        }, slot, order_index, mailbox_index,
+        mailbox::Retirement {
+          valid,
+          consume: received && stepped.dispatched &&
+            stepped.directive == Directive::CONSUME,
+          postpone: received && stepped.dispatched &&
+            stepped.directive == Directive::POSTPONE,
+          phase_boundary: stepped.phase_boundary,
+          failed: stepped.machine.failed,
+          enter_pending: stepped.machine.enter_pending,
+          egress_blocked: stepped.egress_blocked,
+        });
       SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
-        occupied,
-        order,
-        postponed,
-        mail_candidates,
-        entry_probes,
-        egress_waiters,
+        occupied: metadata.occupied,
+        order: metadata.order,
+        postponed: metadata.postponed,
+        mail_candidates: metadata.mail_candidates,
+        entry_probes: metadata.entry_probes,
+        egress_waiters: metadata.egress_waiters,
         ..state
-      }
-    }
-
-    // Returned batch credits represent completed effect batches, so they
-    // update scheduler metadata without carrying another actor context.
-    fn collect_credit<PRODUCER_COUNT: u32>(
-        pending: ScheduledRequest[PRODUCER_COUNT],
-        pending_valid: u1[PRODUCER_COUNT],
-        egress_busy: u1) -> (u1[PRODUCER_COUNT], u1) {
-      let (credit_found, credit_producer) =
-        unroll_for! (candidate, acc):
-            (u32, (u1, u32)) in u32:0..PRODUCER_COUNT {
-          let take = !acc.0 && pending_valid[candidate] &&
-            pending[candidate].credit;
-          (acc.0 || take, if take { candidate } else { acc.1 })
-        }((u1:0, u32:0));
-      let remaining = if credit_found {
-        update(pending_valid, credit_producer, u1:0)
-      } else {
-        pending_valid
-      };
-      (remaining, egress_busy && !credit_found)
-    }
-
-    struct AdmissionResult<ACTOR_COUNT: u32, PRODUCER_COUNT: u32> {
-      pending_valid: u1[PRODUCER_COUNT],
-      occupied: u8[ACTOR_COUNT],
-      order: u8[MAILBOX_DEPTH][ACTOR_COUNT],
-      mail_candidates: u1[ACTOR_COUNT],
-      admission: Admission,
-      cursor: u32,
-    }
-
-    // Reserves one producer frame against metadata that already includes the
-    // older sealed activation. The younger address is unresolved and stalls
-    // only same-address admission for this interval.
-    fn reserve_admission<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
-        state: SharedState<ACTOR_COUNT, PRODUCER_COUNT>,
-        pending: ScheduledRequest[PRODUCER_COUNT],
-        pending_valid: u1[PRODUCER_COUNT],
-        excluded_valid: u1,
-        excluded_slot: u32,
-        failed_valid: u1,
-        failed_slot: u32) ->
-        AdmissionResult<ACTOR_COUNT, PRODUCER_COUNT> {
-      let (after_found, after_producer, before_found, before_producer) =
-          unroll_for! (candidate, acc):
-              (u32, (u1, u32, u1, u32)) in u32:0..PRODUCER_COUNT {
-        let request = pending[candidate];
-        let slot = request.slot;
-        let eligible = pending_valid[candidate] && !request.credit &&
-          slot < ACTOR_COUNT &&
-          state.occupied[slot] < MAILBOX_CAPACITY &&
-          (!excluded_valid || slot != excluded_slot) &&
-          (!failed_valid || slot != failed_slot);
-        let take_after = !acc.0 &&
-          candidate >= state.admission_cursor && eligible;
-        let take_before = !acc.2 &&
-          candidate < state.admission_cursor && eligible;
-        (
-          acc.0 || take_after,
-          if take_after { candidate } else { acc.1 },
-          acc.2 || take_before,
-          if take_before { candidate } else { acc.3 }
-        )
-      }((u1:0, u32:0, u1:0, u32:0));
-      let found = after_found || before_found;
-      let producer = if after_found {
-        after_producer
-      } else {
-        before_producer
-      };
-      let request = pending[producer];
-      let slot = if request.slot < ACTOR_COUNT {
-        request.slot
-      } else {
-        u32:0
-      };
-      let physical = free_mailbox_index(state, slot);
-      let old_count = state.occupied[slot];
-      let occupied = if found {
-        update(state.occupied, slot, old_count + u8:1)
-      } else {
-        state.occupied
-      };
-      let row = update(
-        state.order[slot], old_count as u32, physical);
-      let order = if found {
-        update(state.order, slot, row)
-      } else {
-        state.order
-      };
-      let mail_candidates = if found {
-        update(state.mail_candidates, slot, u1:1)
-      } else {
-        state.mail_candidates
-      };
-      let remaining = if found {
-        update(pending_valid, producer, u1:0)
-      } else {
-        pending_valid
-      };
-      let cursor = if found {
-        if producer + u32:1 == PRODUCER_COUNT {
-          u32:0
-        } else {
-          producer + u32:1
-        }
-      } else {
-        state.admission_cursor
-      };
-      AdmissionResult<ACTOR_COUNT, PRODUCER_COUNT> {
-        pending_valid: remaining,
-        occupied,
-        order,
-        mail_candidates,
-        admission: Admission {
-          valid: found,
-          producer,
-          slot,
-          physical,
-        },
-        cursor,
       }
     }
 
@@ -1438,7 +1190,7 @@ shared_service(Spec) ->
             }
           },
           SharedPhase::RUN => {
-            let (credit_pending_valid, credit_busy) = collect_credit(
+            let (credit_pending_valid, credit_busy) = mailbox::collect_credit(
               captured_pending,
               captured_pending_valid,
               state.egress_busy);
@@ -1508,7 +1260,9 @@ shared_service(Spec) ->
             ),
     """
             let (received, order_index, mailbox_index) =
-              mailbox_selection(state, read_slot);
+              mailbox::select(
+                state.order[read_slot], state.occupied[read_slot],
+                state.postponed[read_slot]);
             let (state_completion_tok, _) = recv_if(
               join(), ram_write_resp_in, state.state_write_pending,
               zero!<MachineRamWriteResp>());
@@ -1536,8 +1290,11 @@ shared_service(Spec) ->
               mailbox_read_resp_in,
               read_mailbox && received,
               zero!<MailboxRamReadResp>());
-            let reservation = reserve_admission(
-              retired,
+            let reservation = mailbox::reserve_admission(
+              retired.occupied,
+              retired.order,
+              retired.mail_candidates,
+              retired.admission_cursor,
               captured_pending,
               credit_pending_valid,
               issue_valid,

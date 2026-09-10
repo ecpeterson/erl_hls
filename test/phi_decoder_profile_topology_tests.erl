@@ -57,12 +57,7 @@ source_fragment_plane_uses_inverse_route_edge_queues_test() ->
     ),
     assert_contains(Generated, <<"proc Phi_xReductionPlane {">>),
     assert_contains(Generated, <<"proc Phi_zReductionPlane {">>),
-    ?assertEqual(8, count(Generated, <<
-        ": Phi_xReductionFragmentQueue[u32:9]"
-    >>) + count(Generated, <<
-        ": Phi_zReductionFragmentQueue[u32:9]"
-    >>)),
-    ?assertEqual(2, count(Generated, <<
+    ?assertEqual(8, count(Generated, <<": frame_queue::Queue[u32:9]">>)),    ?assertEqual(2, count(Generated, <<
         "::reduction_aggregate_batch<u32:4>(frames)"
     >>)),
     ?assertEqual(6, count(Generated, <<

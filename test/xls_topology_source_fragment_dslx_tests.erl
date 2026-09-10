@@ -88,17 +88,13 @@ source_fragment_router_captures_only_the_proved_prefix_test() ->
 
 source_fragment_plane_uses_inverse_depth_two_queues_test() ->
     Generated = selected(),
+    ?assertNotEqual(nomatch, binary:match(Generated,
+        <<"import frame_queue;">>)),
     ?assertNotEqual(nomatch, binary:match(Generated, <<
-        "current_valid: u1,\n"
-        "  current: axis::Frame,\n"
-        "  lookahead_valid: u1,\n"
-        "  lookahead: axis::Frame"
+        "bank_0: frame_queue::Queue[u32:9]"
     >>)),
     ?assertNotEqual(nomatch, binary:match(Generated, <<
-        "bank_0: ReducerReductionFragmentQueue[u32:9]"
-    >>)),
-    ?assertNotEqual(nomatch, binary:match(Generated, <<
-        "bank_1: ReducerReductionFragmentQueue[u32:9]"
+        "bank_1: frame_queue::Queue[u32:9]"
     >>)),
     ?assertNotEqual(nomatch, binary:match(Generated, <<
         "Fragment 0 (north) uses inverse fragment 1 at offset [0, 1]."
@@ -113,7 +109,7 @@ source_fragment_plane_uses_inverse_depth_two_queues_test() ->
         " && state.bank_1[u32:2].current_valid"
     >>)),
     ?assertNotEqual(nomatch, binary:match(Generated, <<
-        "let after_pop_0 = reducer_reduction_fragment_after_pop("
+        "let after_pop_0 = frame_queue::after_pop("
     >>)),
     ?assertNotEqual(nomatch, binary:match(Generated, <<
         "let capacity_0 = !after_pop_0.lookahead_valid;"

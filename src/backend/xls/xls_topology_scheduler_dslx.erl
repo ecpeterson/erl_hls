@@ -13,7 +13,6 @@ emit(Spec0) ->
     [
         preamble(Spec),
         address_support(Spec),
-        frame_relay(Spec),
         xls_topology_source_fragment_dslx:support(Spec),
         control_support(Spec),
         [startup_proc(Spec, Scheduler)
@@ -23,79 +22,6 @@ emit(Spec0) ->
         grid_proc(Spec),
         top_proc(Spec)
     ].
-
-frame_relay(#{externals := []}) -> [];
-frame_relay(#{externals := Externals}) ->
-    [
-        """
-        proc FrameRelay {
-          frame_in: chan<axis::Frame> in;
-          frame_out: chan<axis::Frame> out;
-
-          config(
-              frame_in: chan<axis::Frame> in,
-              frame_out: chan<axis::Frame> out
-          ) {
-            (frame_in, frame_out)
-          }
-
-          init { () }
-
-          next(state: ()) {
-            let (tok, frame) = recv(join(), frame_in);
-            let _done = send(tok, frame_out, frame);
-            state
-          }
-        }
-
-        """,
-        case lists:any(
-            fun(#{source_schedulers := Sources}) -> length(Sources) > 1 end,
-            Externals
-        ) of
-            false -> [];
-            true -> frame_array_mux()
-        end
-    ].
-
-frame_array_mux() ->
-    """
-    proc FrameArrayMux<INPUT_COUNT: u32> {
-      frame_in: chan<axis::Frame>[INPUT_COUNT] in;
-      frame_out: chan<axis::Frame> out;
-
-      config(
-          frame_in: chan<axis::Frame>[INPUT_COUNT] in,
-          frame_out: chan<axis::Frame> out
-      ) {
-        (frame_in, frame_out)
-      }
-
-      init { u32:0 }
-
-      next(cursor: u32) {
-        let (tok, received, frame) =
-          unroll_for! (candidate, acc):
-              (u32, (token, u1, axis::Frame)) in u32:0..INPUT_COUNT {
-            let selected = cursor == candidate;
-            let (next_tok, next_frame, valid) = recv_if_non_blocking(
-              acc.0, frame_in[candidate], selected, zero!<axis::Frame>());
-            (
-              next_tok,
-              acc.1 | valid,
-              if valid { next_frame } else { acc.2 }
-            )
-          }((join(), u1:0, zero!<axis::Frame>()));
-        let _done = send_if(tok, frame_out, received, frame);
-        if cursor + u32:1 == INPUT_COUNT {
-          u32:0
-        } else {
-          cursor + u32:1
-        }
-      }
-    }
-
-    """.
 
 annotate(Spec = #{
     families := Families,
@@ -287,7 +213,15 @@ preamble(Spec = #{families := Families}) ->
         "// maps its slot to a narrow family and coordinate address, then\n",
         "// drains the effects in source order.\n\n",
         "import axis;\n",
+        case maps:get(externals, Spec) of
+            [] -> [];
+            _ -> "import frame_transport;\n"
+        end,
         "import effect_window;\n",
+        case maps:get(source_fragment_planes, Spec, []) of
+            [] -> [];
+            [_ | _] -> "import frame_queue;\n"
+        end,
         case maps:get(ingresses, Spec) of
             [] -> [];
             [_] -> "import hls_spatial_router;\n"
@@ -701,13 +635,9 @@ router_proc(Spec, Scheduler = #{
         "// reservation may admit one lookahead batch while the active batch\n",
         "// drains; only the active batch can emit downstream effects.\n",
         "struct ", StateName, " {\n",
-        "  active: u1,\n",
+        "  control: effect_window::ClientState,\n",
         "  scheduled: ", Module, "::ScheduledEffects,\n",
         "  index: u8,\n",
-        "  window_requested: u1,\n",
-        "  window_granted: u1,\n",
-        "  credit_debt: u1,\n",
-        "  lookahead: u1,\n",
         "}\n\n",
         "proc ", router_name(Scheduler), " {\n",
         [["  ", Member, ";\n"] || Member <- Members],
@@ -721,8 +651,8 @@ router_proc(Spec, Scheduler = #{
         xls_topology_source_fragment_dslx:router_state_bindings(
             Spec, Scheduler
         ),
-        "    let can_receive = !state.active ||\n",
-        "      (state_last && state.credit_debt && !state.lookahead);\n",
+        "    let can_receive = effect_window::can_receive(\n",
+        "      state.control, state_last);\n",
         "    let (receive_tok, incoming, incoming_valid) =\n",
         "      recv_if_non_blocking(\n",
         "        join(), scheduled_in, can_receive,\n",
@@ -730,12 +660,13 @@ router_proc(Spec, Scheduler = #{
         "    let (grant_tok, _grant, grant_valid) =\n",
         "      recv_if_non_blocking(\n",
         "        receive_tok, window_grant_in,\n",
-        "        state.window_requested && !state.window_granted, u1:0);\n",
-        "    let batch_valid = state.active || incoming_valid;\n",
-        "    let scheduled = if state.active {\n",
+        "        state.control.window_requested &&\n",
+        "          !state.control.window_granted, u1:0);\n",
+        "    let batch_valid = state.control.active || incoming_valid;\n",
+        "    let scheduled = if state.control.active {\n",
         "      state.scheduled\n",
         "    } else { incoming };\n",
-        "    let index = if state.active { state.index } else { u8:0 };\n",
+        "    let index = if state.control.active { state.index } else { u8:0 };\n",
         "    let effect_info = ", Module,
         "::scheduled_effect(scheduled, index);\n",
         xls_topology_source_fragment_dslx:router_batch_bindings(
@@ -746,73 +677,37 @@ router_proc(Spec, Scheduler = #{
         "    let address = ", Stem, "_address(scheduled.slot);\n",
         router_send_binding(Spec, Scheduler, Families),
         router_last_binding(Spec, Scheduler),
-        "    let batch_continues = batch_valid && !last;\n",
-        "    // Never apply a stale grant to a batch admitted in this same\n",
-        "    // activation: the virtual credit could otherwise bypass back to\n",
-        "    // SharedService before that batch has made egress_busy visible.\n",
-        "    let grant_usable = grant_valid && state.active &&\n",
-        "      !state.lookahead && batch_continues;\n",
-        "    let fake_credit = grant_usable;\n",
-        "    let swallow_physical = last && state.credit_debt &&\n",
-        "      !state.lookahead;\n",
-        "    let forward_physical = last && !swallow_physical;\n",
-        "    let forward_credit = fake_credit || forward_physical;\n",
+        "    let transition = effect_window::advance_client(\n",
+        "      state.control, incoming_valid, grant_valid, last);\n",
+        "    let forward_credit = transition.forward_credit;\n",
         "    let credit_tok = send_if(\n",
         "      routed_tok, credit_out, forward_credit, ", Module,
         "::ScheduledRequest {\n",
         "        credit: u1:1,\n",
         "        ..zero!<", Module, "::ScheduledRequest>()\n",
         "      });\n",
-        "    let carry_lookahead = last && swallow_physical &&\n",
-        "      incoming_valid;\n",
-        "    let release = (last && state.lookahead) ||\n",
-        "      (last && state.credit_debt && !incoming_valid) ||\n",
-        "      (grant_valid && !grant_usable);\n",
+        "    let release = transition.release;\n",
         "    let release_tok = send_if(\n",
         "      credit_tok, window_release_out, release, u1:1);\n",
-        "    let pending_request = state.window_requested && !grant_valid;\n",
-        "    let window_granted =\n",
-        "      (state.window_granted || grant_usable) && !release;\n",
-        "    let credit_debt =\n",
-        "      (state.credit_debt || fake_credit) && !swallow_physical;\n",
-        "    let next_active = carry_lookahead || batch_continues;\n",
-        "    let next_lookahead = if carry_lookahead { u1:1 } else {\n",
-        "      if batch_continues { state.lookahead } else { u1:0 }\n",
-        "    };\n",
-        "    let request = next_active && !next_lookahead &&\n",
-        "      !window_granted && !credit_debt && !pending_request;\n",
         "    let _request_tok = send_if(\n",
-        "      release_tok, window_request_out, request, u1:1);\n",
-        "    if carry_lookahead {\n",
+        "      release_tok, window_request_out, transition.request, u1:1);\n",
+        "    let updated = ", StateName, " {\n",
+        "      control: transition.state,\n",
+        "      ..zero!<", StateName, ">()\n",
+        "    };\n",
+        "    if transition.carry_lookahead {\n",
+        "      ", StateName, " { scheduled: incoming, ..updated }\n",
+        "    } else if transition.batch_continues {\n",
         "      ", StateName, " {\n",
-        "        active: u1:1,\n",
-        "        scheduled: incoming,\n",
-        "        index: u8:0,\n",
-        "        window_requested: u1:0,\n",
-        "        window_granted,\n",
-        "        credit_debt,\n",
-        "        lookahead: u1:1,\n",
-        "      }\n",
-        "    } else if batch_continues {\n",
-        "      ", StateName, " {\n",
-        "        active: u1:1,\n",
         "        scheduled,\n",
         "        index: index + ",
         xls_topology_source_fragment_dslx:router_index_step(
             Spec, Scheduler
         ),
         ",\n",
-        "        window_requested: pending_request || request,\n",
-        "        window_granted,\n",
-        "        credit_debt,\n",
-        "        lookahead: state.lookahead,\n",
+        "        ..updated\n",
         "      }\n",
-        "    } else {\n",
-        "      ", StateName, " {\n",
-        "        window_requested: pending_request || request,\n",
-        "        ..zero!<", StateName, ">()\n",
-        "      }\n",
-        "    }\n",
+        "    } else { updated }\n",
         "  }\n",
         "}\n\n"
     ].
@@ -1101,12 +996,12 @@ external_spawn(External) ->
     case maps:get(source_schedulers, External) of
         [_] ->
             [
-                "    spawn FrameRelay(", Stem, "_c, ",
+                "    spawn frame_transport::FrameRelay(", Stem, "_c, ",
                 maps:get(output_name, External), ");\n"
             ];
         Sources ->
             [
-                "    spawn FrameArrayMux<u32:",
+                "    spawn frame_transport::FrameArrayMux<u32:",
                 integer_to_list(length(Sources)), ">(", Stem, "_c, ",
                 maps:get(output_name, External), ");\n"
             ]

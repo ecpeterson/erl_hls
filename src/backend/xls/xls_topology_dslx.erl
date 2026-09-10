@@ -522,7 +522,6 @@ render(Spec) ->
     ),
     [
         preamble(Spec, FinalGraph),
-        relay_proc(Externals),
         actor_router_procs(
             Actors,
             maps:get(routes, FinalGraph),
@@ -663,7 +662,7 @@ external_egress(External, Depth, Graph) ->
     ),
     Code = [
         MuxCode,
-        "    spawn FrameRelay(", Root, ", ",
+        "    spawn frame_transport::FrameRelay(", Root, ", ",
         maps:get(output_name, External), ");\n"
     ],
     {Code, Graph}.
@@ -742,6 +741,10 @@ preamble(Spec, Graph) ->
         "target startup frames before\n",
         "// receiving that target's first routed frame.\n\n",
         "import axis;\n",
+        case maps:get(externals, Spec) of
+            [] -> [];
+            _ -> "import frame_transport;\n"
+        end,
         [["import ", Module, ";\n"] || Module <- Modules],
         "\n",
         "const CHANNEL_DEPTH = u32:", integer_to_list(maps:get(depth, Spec)),
@@ -756,29 +759,6 @@ preamble(Spec, Graph) ->
             ]
         end
     ].
-
-relay_proc([]) -> [];
-relay_proc(_Externals) ->
-    ["""
-    proc FrameRelay {
-      frame_in: chan<axis::Frame> in;
-      frame_out: chan<axis::Frame> out;
-
-      config(frame_in: chan<axis::Frame> in,
-             frame_out: chan<axis::Frame> out) {
-        (frame_in, frame_out)
-      }
-
-      init { () }
-
-      next(state: ()) {
-        let (tok, frame) = recv(join(), frame_in);
-        send(tok, frame_out, frame);
-        state
-      }
-    }
-
-    """, "\n"].
 
 actor_router_procs(Actors, Routes, Lanes) ->
     [

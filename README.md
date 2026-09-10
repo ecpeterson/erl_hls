@@ -112,6 +112,16 @@ result. Its bounded result vocabulary and postponement rules live with the
 phase-local reduction actions, canonical CPU/XLS semantics, and constraints on
 future optimized placement.
 
+Shared actor-runtime and topology algorithms live in checked DSLX libraries. Generated modules supply actor-specific records, callback outcomes, routing tables, and channel wiring:
+
+- [`mailbox.x`](priv/xls/lib/mailbox.x): mailbox selection, admission reservation, effect-credit collection, and retirement metadata.
+- [`frame_transport.x`](priv/xls/lib/frame_transport.x): frame relays and array/grid multiplexers, parameterized by lane counts and channel depth.
+- [`frame_queue.x`](priv/xls/lib/frame_queue.x): two-frame source-fragment queues and simultaneous bank pop/push.
+- [`scheduler.x`](priv/xls/lib/scheduler.x) and [`arbitration.x`](priv/xls/lib/arbitration.x): actor eligibility and shared round-robin selection.
+- [`effect_window.x`](priv/xls/lib/effect_window.x): lookahead ownership arbitration and router-side credit/reservation transitions.
+
+The libraries have direct DSLX tests, run explicitly by `tools/remote_xls_sim.sh`. These cover queue order and capacity, postponement and retirement, scheduling fairness and exclusion, transport backpressure, and the lookahead-credit lifecycle. `tools/prepare_xls_sim.sh` stages all library modules.
+
 ## Translated record defaults
 
 Every field in a private-state or wire record must have a type-directed zero

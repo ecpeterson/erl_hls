@@ -9,7 +9,7 @@ generated_family_topology_is_compact_test() ->
     ?assertEqual(4, count(Generated,
         <<"chan<axis::Frame, u32:0>[TORUS_HEIGHT][TORUS_WIDTH]">>
     )),
-    ?assertEqual(4, count(Generated, <<"unroll_for! (">>)),
+    ?assertEqual(2, count(Generated, <<"unroll_for! (">>)),
     ?assertEqual(1, count(Generated, <<"proc FamilyIngress<">>)),
     ?assertEqual(1, count(Generated, <<"spawn FamilyIngress<">>)),
     ?assertEqual(0, count(Generated, <<"spawn axis::FrameMux2(">>)),
@@ -40,41 +40,25 @@ generated_two_by_two_router_preserves_alias_lanes_test() ->
         "lane_3_c[(x + TORUS_WIDTH - u32:1) % TORUS_WIDTH][y]"
     >>)).
 
-generated_external_merge_uses_static_channel_sites_test() ->
+generated_external_merge_uses_shared_transport_test() ->
     Generated = generated(phi_torus_topology:topology(3, 3)),
+    ?assertNotEqual(nomatch, binary:match(Generated,
+        <<"import frame_transport;">>)),
     ?assertNotEqual(nomatch, binary:match(Generated, <<
-        "frame_in[candidate],\n          selected,"
-    >>)),
-    ?assertNotEqual(nomatch, binary:match(Generated, <<
-        "cursor == candidate"
-    >>)),
-    ?assertEqual(nomatch, binary:match(Generated, <<"frame_in[cursor]">>)),
-    ?assertNotEqual(nomatch, binary:match(Generated, <<
-        "spawn FrameArrayMux<GRID_HEIGHT>(frame_in[x], column_p[x])"
-    >>)),
-    ?assertNotEqual(nomatch, binary:match(Generated, <<
-        "spawn FrameArrayMux<GRID_WIDTH>(column_c, frame_out)"
-    >>)),
-    ?assertNotEqual(nomatch, binary:match(Generated, <<
-        "spawn FrameGridMux<TORUS_WIDTH, TORUS_HEIGHT>("
-    >>)),
-    ?assertNotEqual(nomatch, binary:match(Generated, <<
-        "frame_in: chan<axis::Frame>[GRID_HEIGHT][GRID_WIDTH] in"
-    >>)),
-    ?assertEqual(nomatch, binary:match(Generated, <<
-        "chan<axis::Frame>[GRID_WIDTH][GRID_HEIGHT]"
+        "spawn frame_transport::FrameGridMux<"
+        "TORUS_WIDTH, TORUS_HEIGHT, CHANNEL_DEPTH>("
     >>)).
 
 generated_external_merges_distinct_source_families_test() ->
     Generated = generated(shared_external_topology()),
     ?assertEqual(2, count(Generated, <<"spawn FamilyNode">>)),
     ?assertEqual(4, count(Generated, <<
-        "spawn FrameGridMux<TORUS_WIDTH, TORUS_HEIGHT>("
+        "spawn frame_transport::FrameGridMux<TORUS_WIDTH, TORUS_HEIGHT, CHANNEL_DEPTH>("
     >>)),
     ?assertEqual(2, count(Generated, <<
         "chan<axis::Frame, CHANNEL_DEPTH>[u32:2]"
     >>)),
-    ?assertEqual(2, count(Generated, <<"spawn FrameArrayMux<u32:2>(">>)),
+    ?assertEqual(2, count(Generated, <<"spawn frame_transport::FrameArrayMux<u32:2>(">>)),
     ?assertNotEqual(nomatch, binary:match(Generated, <<
         "external_0_lanes_p[u32:0]"
     >>)),
@@ -201,7 +185,7 @@ generated_multi_family_topology_retains_compact_structure_test() ->
     ?assertEqual(18, count(Generated, <<"::MailboxRamReadResp> in">>)),
     ?assertEqual(18, count(Generated, <<"::MailboxRamWriteReq> out">>)),
     ?assertEqual(18, count(Generated, <<"::MailboxRamWriteResp> in">>)),
-    ?assertEqual(1, count(Generated, <<"spawn FrameArrayMux<u32:2>(">>)),
+    ?assertEqual(1, count(Generated, <<"spawn frame_transport::FrameArrayMux<u32:2>(">>)),
     ?assertNotEqual(nomatch, binary:match(Generated, <<
         "state.packet.target == u2:0"
     >>)),
@@ -225,7 +209,7 @@ generated_one_shard_topology_retains_single_external_lanes_test() ->
     ),
     ?assertEqual(3, count(Generated, <<"::SharedService<">>)),
     ?assertEqual(0, count(Generated, <<"proc FrameArrayMux">>)),
-    ?assertEqual(0, count(Generated, <<"spawn FrameArrayMux">>)).
+    ?assertEqual(0, count(Generated, <<"spawn frame_transport::FrameArrayMux">>)).
 
 generated_phi_family_shards_use_static_destination_tables_test() ->
     lists:foreach(

@@ -30,8 +30,12 @@ vvp hls_trace_store.vvp
 # keep every test-bearing DSLX module explicit here.
 for test_module in \
     axis.x \
+    arbitration.x \
+    scheduler.x \
     bram.x \
     effect_window.x \
+    frame_transport.x \
+    frame_queue.x \
     mailbox.x \
     hls_debug_trace.x \
     hls_debug_observer.x \

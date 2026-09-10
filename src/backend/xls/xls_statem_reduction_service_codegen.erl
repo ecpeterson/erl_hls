@@ -639,36 +639,27 @@ shared_executor_dispatch(_Reductions, aggregate_only) ->
 -spec shared_service_helpers(reductions(), service_mode()) -> iodata().
 shared_service_helpers(none, _Mode) ->
     [];
-shared_service_helpers(_Reductions, ordinary) ->
-    """
+shared_service_helpers(_Reductions, Mode) ->
+    ["""
     fn reduction_ready_selection<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
         state: SharedState<ACTOR_COUNT, PRODUCER_COUNT>,
         cursor: u32,
         in_flight: u1[ACTOR_COUNT]) -> (u1, u32) {
-      let (after_found, after_slot, before_found, before_slot) =
-          unroll_for! (slot, acc):
-              (u32, (u1, u32, u1, u32)) in u32:0..ACTOR_COUNT {
-        let internal_active = state.internal_candidates[slot];
-        let entry_active = state.entry_probes[slot] ||
-          state.egress_waiters[slot];
-        let ready = internal_active || (!internal_active && (
-          state.entry_probes[slot] ||
-          (state.mail_candidates[slot] && !entry_active) ||
-          (state.egress_waiters[slot] && !state.egress_busy)));
-        let selectable = ready && !in_flight[slot];
-        let take_after = !acc.0 && slot >= cursor && selectable;
-        let take_before = !acc.2 && slot < cursor && selectable;
-        (
-          acc.0 || take_after,
-          if take_after { slot } else { acc.1 },
-          acc.2 || take_before,
-          if take_before { slot } else { acc.3 }
-        )
-      }((u1:0, u32:0, u1:0, u32:0));
-      (
-        after_found || before_found,
-        if after_found { after_slot } else { before_slot }
-      )
+      scheduler::select(
+        scheduler::Candidates<ACTOR_COUNT> {
+          entry: state.entry_probes,
+          mail: state.mail_candidates,
+          egress: state.egress_waiters,
+          internal: state.internal_candidates,
+    """, "\n",
+    case Mode of
+        ordinary -> [];
+        aggregate_only ->
+            "      aggregate: state.aggregate_pending_valid,\n"
+    end,
+    """
+          ..zero!<scheduler::Candidates<ACTOR_COUNT>>()
+        }, state.egress_busy, in_flight, cursor)
     }
 
     fn retire_reduction_actor<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
@@ -692,63 +683,7 @@ shared_service_helpers(_Reductions, ordinary) ->
       }
     }
 
-    """;
-shared_service_helpers(_Reductions, aggregate_only) ->
-    """
-    fn reduction_ready_selection<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
-        state: SharedState<ACTOR_COUNT, PRODUCER_COUNT>,
-        cursor: u32,
-        in_flight: u1[ACTOR_COUNT]) -> (u1, u32) {
-      let (after_found, after_slot, before_found, before_slot) =
-          unroll_for! (slot, acc):
-              (u32, (u1, u32, u1, u32)) in u32:0..ACTOR_COUNT {
-        let internal_active = state.internal_candidates[slot];
-        let aggregate_active = state.aggregate_pending_valid[slot];
-        let private_active = internal_active || aggregate_active;
-        let entry_active = private_active || state.entry_probes[slot] ||
-          state.egress_waiters[slot];
-        let ready = private_active || (!private_active && (
-          state.entry_probes[slot] ||
-          (state.mail_candidates[slot] && !entry_active) ||
-          (state.egress_waiters[slot] && !state.egress_busy)));
-        let selectable = ready && !in_flight[slot];
-        let take_after = !acc.0 && slot >= cursor && selectable;
-        let take_before = !acc.2 && slot < cursor && selectable;
-        (
-          acc.0 || take_after,
-          if take_after { slot } else { acc.1 },
-          acc.2 || take_before,
-          if take_before { slot } else { acc.3 }
-        )
-      }((u1:0, u32:0, u1:0, u32:0));
-      (
-        after_found || before_found,
-        if after_found { after_slot } else { before_slot }
-      )
-    }
-
-    fn retire_reduction_actor<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
-        state: SharedState<ACTOR_COUNT, PRODUCER_COUNT>,
-        valid: u1,
-        slot: u32,
-        machine: SharedMachine) ->
-        SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
-      let internal_candidates = if valid {
-        update(
-          state.internal_candidates,
-          slot,
-          machine.reduction.status == ReductionStatus::COMPLETE &&
-            !machine.failed)
-      } else {
-        state.internal_candidates
-      };
-      SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
-        internal_candidates,
-        ..state
-      }
-    }
-
-    """.
+    """].
 
 -spec shared_retire_binding(reductions()) -> iodata().
 shared_retire_binding(none) ->

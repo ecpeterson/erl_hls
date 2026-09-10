@@ -167,6 +167,7 @@ else
 fi
 
 awk -F= \
+    -v expected_schedulers="$scheduler_count" \
     -v expected_window_routers="$scheduler_count" \
     -v expected_window_domains="$effect_domain_count" '
     /_selection_activations=/ {
@@ -288,7 +289,7 @@ awk -F= \
     END {
         found = 0
         for (name in activations) {
-            found = 1
+            found++
             if (accounted[name] != activations[name])
                 exit 1
             if (occupancy_samples[name] != activations[name])
@@ -308,6 +309,11 @@ awk -F= \
             if (direct_mailbox[name] > followup_mailbox[name])
                 exit 1
         }
+        if (found != expected_schedulers) {
+            printf "incomplete scheduler profile: found %d, expected %d\n", \
+                found, expected_schedulers > "/dev/stderr"
+            exit 1
+        }
         found_window = 0
         for (name in window_requests) {
             found_window = 1
@@ -320,7 +326,7 @@ awk -F= \
             if (window_owner_held[name] < 0 || window_owner_held[name] > 1 || window_lifecycle_errors[name] != 0)
                 exit 1
         }
-        if (!found || !found_window ||
+        if (!found_window ||
                 window_router_candidates != expected_window_routers ||
                 window_router_count != expected_window_routers ||
                 window_domain_candidates != expected_window_domains ||
