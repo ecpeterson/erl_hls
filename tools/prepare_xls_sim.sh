@@ -25,6 +25,7 @@ ERL_HLS_PHI_MEMORY_DEBUG_TOP_V="$stage/phi_memory_debug_top.v" \
 ERL_HLS_ORDERED_EGRESS_ACTOR_X="$stage/ordered_egress_actor.x" \
 ERL_HLS_ORDERED_EGRESS_TOPOLOGY_X="$stage/ordered_egress_topology.x" \
 ERL_HLS_CASE_FIXTURE_X="$stage/xls_case_fixture.x" \
+ERL_HLS_COMPANION_FIXTURE_X="$stage/hls_companion_gs_fixture.x" \
 ERL_HLS_PHI_FIELD_TEST_X="$stage/phi_field_test.x" \
 erl \
     -noshell \
@@ -36,6 +37,9 @@ erl \
             "test_data/xls_case_fixture.erl"
         ),
         PhiFieldTest = phi_field_dslx:to_dslx(),
+        CompanionFixture = xls_parse:to_xls(
+            "test_data/hls_companion_gs_fixture.erl"
+        ),
         PhiPhenomTopology = phi_phenom_topology_dslx:to_dslx(),
         PhiTorusTopology = phi_torus_topology_dslx:to_dslx(),
         #{
@@ -191,6 +195,10 @@ erl \
             PhiFieldTest
         ),
         ok = file:write_file(
+            os:getenv("ERL_HLS_COMPANION_FIXTURE_X"),
+            CompanionFixture
+        ),
+        ok = file:write_file(
             os:getenv("ERL_HLS_PHI_PHENOM_TOPOLOGY_X"),
             PhiPhenomTopology
         ),
@@ -234,6 +242,7 @@ erl \
     '
 
 cp "$project_root"/priv/xls/lib/*.x "$stage/"
+cp "$project_root/src/examples/phi_decoder/phi_field.x" "$stage/phi_field.x"
 cp "$project_root/src/examples/regsvc/regsvc_core_adapter.v" \
     "$stage/regsvc_core_adapter.v"
 cp "$project_root/src/examples/regsvc/regsvc_debug_top.v" \

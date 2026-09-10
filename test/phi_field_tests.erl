@@ -3,9 +3,9 @@
 -include_lib("eunit/include/eunit.hrl").
 
 type_and_conversion_test() ->
-    Type = phi_field:field(),
+    Type = phi_field:scalar(),
     ?assertEqual(32, hls_type:width(Type)),
-    ?assertEqual("s32", hls_type:print_type(Type)),
+    ?assertEqual("phi_field::Scalar", hls_type:print_type(Type)),
     ?assertEqual(0, hls_type:zero(Type)),
     ?assertEqual(65536, phi_field:from_integer(1)),
     ?assertEqual(-32768, phi_field:from_ratio(-1, 2)),
@@ -13,10 +13,25 @@ type_and_conversion_test() ->
     ?assertError(badarg, phi_field:from_integer(32768)).
 
 signed_wire_round_trip_test() ->
-    Type = phi_field:field(),
+    Type = phi_field:scalar(),
     Packed = hls_type:pack(-16#1234567, Type),
     ?assertEqual(<<16#f_edcba99:32/little-unsigned-integer>>, Packed),
     ?assertEqual({-16#1234567, <<>>}, hls_type:unpack(Packed, Type)).
+
+composite_field_test() ->
+    Type = phi_field:field(),
+    ?assertEqual(64, hls_type:width(Type)),
+    ?assertEqual([0, 0], hls_type:zero(Type)),
+    ?assertEqual("phi_field::Field", hls_type:print_type(Type)),
+    Values = [65536, -32768],
+    Packed = <<-32768:32/signed-little, 65536:32/signed-little>>,
+    ?assertEqual(Packed, hls_type:pack(Values, Type)),
+    ?assertEqual({Values, <<>>}, hls_type:unpack(Packed, Type)),
+    ?assertError(badarg, hls_type:pack([65536], Type)),
+    ?assertEqual(
+        [reference_relax_center(1, 65536, -32768, 100),
+         reference_relax_bulk(65536, -32768, -100)],
+        phi_field:relax(1, Values, 100, -100)).
 
 center_recurrence_test() ->
     One = phi_field:from_integer(1),

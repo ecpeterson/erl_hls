@@ -44,14 +44,13 @@
 
 -record(phi, {
     epoch = hls_type:zero() :: hls_nums:u32(),
-    values = hls_type:zero() ::
-        hls_lists:list(phi_field:field(), 2)
+    values = hls_type:zero() :: phi_field:field()
 }).
 
 -record(phi0, {
     step = hls_type:zero() :: hls_nums:u32(),
     source = hls_type:zero() :: hls_nums:u32(),
-    value = hls_type:zero() :: phi_field:field()
+    value = hls_type:zero() :: phi_field:scalar()
 }).
 
 -record(anyon_move, {

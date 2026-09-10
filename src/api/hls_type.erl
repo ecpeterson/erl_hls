@@ -51,6 +51,17 @@ XLS expression.
 %% TODO: might need to supply clause state for anonymous variables
 -callback transpile(FnName :: atom(), XLSArgs :: [xls_parse:ir()], State :: xls_parse:clause_state()) -> xls_parse:ir().
 
+-doc """
+Declares the DSLX modules used by this provider's types and expressions.
+
+The compiler discovers providers in include-expanded remote types and calls,
+including nested type arguments, and emits each import once. Providers without
+companions can omit this callback. Modules must be available on the DSLX import
+path; their own transitive imports are resolved by XLS.
+""".
+-callback dslx_imports() -> [atom()].
+-optional_callbacks([dslx_imports/0]).
+
 -doc "Builds an empty Erlang instance of this type.".
 -callback zero(TypeName :: atom(), Args :: [arg()]) -> any().
 

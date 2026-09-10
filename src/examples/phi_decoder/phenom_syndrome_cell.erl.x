@@ -6,6 +6,7 @@ import axis;
 import bram;
 import mailbox;
 import scheduler;
+import phi_field;
 
 const MAILBOX_CAPACITY = u8:5;
 const MAILBOX_DEPTH = u32:5;
@@ -45,13 +46,13 @@ pub enum Directive : u2 {
 
 pub struct Phi {
   epoch : u32,
-  values : s32[2],
+  values : phi_field::Field,
 }
 
 pub fn phi_from_bits<N: u32>(raw: bits[N]) -> Phi {
   Phi {
     epoch: raw[0:32] as u32,
-    values: raw[32:96] as s32[2],
+    values: raw[32:96] as phi_field::Field,
   }
 }
 
@@ -78,14 +79,14 @@ pub fn bits_from_anyonmove(s: Anyonmove) -> bits[bit_count<Anyonmove>()] {
 pub struct Phi0 {
   step : u32,
   source : u32,
-  value : s32,
+  value : phi_field::Scalar,
 }
 
 pub fn phi0_from_bits<N: u32>(raw: bits[N]) -> Phi0 {
   Phi0 {
     step: raw[0:32] as u32,
     source: raw[32:64] as u32,
-    value: raw[64:96] as s32,
+    value: raw[64:96] as phi_field::Scalar,
   }
 }
 
