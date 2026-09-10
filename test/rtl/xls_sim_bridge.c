@@ -193,15 +193,9 @@ typedef struct {
     vpiHandle h_occupied[MAX_SCHEDULER_ACTORS];
     vpiHandle h_egress_busy;
     vpiHandle h_selection_activation;
-    vpiHandle h_phase_boundary;
     vpiHandle h_completed_valid;
     vpiHandle h_completed_effects_valid;
     unsigned actor_count;
-    int activation_has_state_read;
-    uint32_t activation_state_read_slot;
-    int same_actor_followup_pending;
-    uint32_t same_actor_followup_slot;
-    int same_actor_followup_phase_boundary;
     scheduler_counts_t counts;
     scheduler_counts_t checkpoint;
 } scheduler_profile_t;
@@ -374,11 +368,6 @@ static void reset_scheduler_profile_counts(void) {
                sizeof(scheduler_profiles[index].checkpoint));
         reset_latency_minima(&scheduler_profiles[index].counts);
         reset_latency_minima(&scheduler_profiles[index].checkpoint);
-        scheduler_profiles[index].activation_has_state_read = 0;
-        scheduler_profiles[index].activation_state_read_slot = 0;
-        scheduler_profiles[index].same_actor_followup_pending = 0;
-        scheduler_profiles[index].same_actor_followup_slot = 0;
-        scheduler_profiles[index].same_actor_followup_phase_boundary = 0;
     }
     for (index = 0; index < effect_router_profile_count; index++) {
         memset(&effect_router_profiles[index].counts, 0,
@@ -942,9 +931,6 @@ static int populate_scheduler_profile(
         profile->h_egress_busy =
             module_signal(module, "retired_egress_busy__1");
     MODULE_SIGNAL(h_selection_activation, "p0_stage_done");
-    MODULE_SIGNAL(h_phase_boundary, "phase_boundary");
-    if (!profile->h_phase_boundary)
-        profile->h_phase_boundary = module_signal(module, "result_phase_boundary");
     MODULE_SIGNAL(h_completed_valid, "completed_valid");
     MODULE_SIGNAL(h_completed_effects_valid, "completed_effects_valid");
 #undef MODULE_SIGNAL
@@ -976,10 +962,12 @@ static int populate_scheduler_profile(
         profile->request_input_count++;
     }
 
-    /* XLS retains these source-level names in the generated SharedService
-     * next-state module. They describe the post-retirement, post-admission
-     * state on which ready_selection operates, so sampling them adds no
-     * ports or state to the synthesized circuit. */
+    /* XLS retains these source-level names in the SharedService next-state
+     * module. The named ready/selectable pair samples aggregate fast-path
+     * selection or ordinary next-activation selection, as appropriate.
+     * The other projections describe retirement and admission metadata.
+     * Require both probes instead of guessing exclusion from RAM traffic.
+     * Sampling adds no synthesized ports or state. */
     for (index = 0; index < MAX_SCHEDULER_ACTORS; index++) {
         snprintf(signal_name, sizeof(signal_name), "ready__%u", index + 1);
         profile->h_ready[index] = module_signal(module, signal_name);
@@ -990,8 +978,7 @@ static int populate_scheduler_profile(
         else
             snprintf(signal_name, sizeof(signal_name),
                      "selectable__%u", index);
-        profile->h_selectable[index] =
-            module_signal(module, signal_name);
+        profile->h_selectable[index] = module_signal(module, signal_name);
         snprintf(signal_name, sizeof(signal_name),
                  "retired_mail_candidates__1[%u]", index);
         profile->h_mail_candidate[index] =
@@ -1005,14 +992,16 @@ static int populate_scheduler_profile(
                 module_signal(module, signal_name);
         }
         snprintf(signal_name, sizeof(signal_name),
-                 "entry_probes__2[%u]", index);
+                 "metadata_entry_probes[%u]", index);
         profile->h_entry_probe[index] = module_signal(module, signal_name);
-        snprintf(signal_name, sizeof(signal_name), "egress_waiters[%u]", index);
+        snprintf(signal_name, sizeof(signal_name),
+                 "metadata_egress_waiters[%u]", index);
         profile->h_egress_waiter[index] = module_signal(module, signal_name);
         snprintf(signal_name, sizeof(signal_name),
                  "retired_occupied__1[%u]", index);
         profile->h_occupied[index] = module_signal(module, signal_name);
-        if (!profile->h_mail_candidate[index] ||
+        if (!profile->h_selectable[index] ||
+            !profile->h_mail_candidate[index] ||
             !profile->h_entry_probe[index] ||
             !profile->h_egress_waiter[index] ||
             !profile->h_occupied[index])
@@ -1045,7 +1034,6 @@ static int populate_scheduler_profile(
         profile->h_startup_valid && profile->h_startup_ready &&
         profile->h_egress_valid && profile->h_egress_ready &&
         profile->h_egress_busy && profile->h_selection_activation &&
-        profile->h_phase_boundary &&
         profile->actor_count > 0 &&
         profile->request_input_count > 0;
 }
@@ -1238,7 +1226,6 @@ static void step_scheduler_profile(scheduler_profile_t *profile) {
     int egress_busy;
     int selection_activation;
     int executor_completion_blocked;
-    int phase_boundary;
     uint32_t read_slot;
     unsigned mail_candidates = 0;
     unsigned entry_probes = 0;
@@ -1251,10 +1238,6 @@ static void step_scheduler_profile(scheduler_profile_t *profile) {
 
     state_read_valid = get_bit(profile->h_ram_read_request_valid);
     read_slot = get_u32(profile->h_ram_read_request);
-    if (state_read_valid) {
-        profile->activation_has_state_read = 1;
-        profile->activation_state_read_slot = read_slot;
-    }
     egress_busy = get_bit(profile->h_egress_busy);
     executor_completion_blocked =
         profile->h_completed_valid && profile->h_completed_effects_valid &&
@@ -1262,36 +1245,6 @@ static void step_scheduler_profile(scheduler_profile_t *profile) {
         get_bit(profile->h_completed_effects_valid) && egress_busy;
     selection_activation = get_bit(profile->h_selection_activation);
     if (selection_activation) {
-        /* In the legacy two-stage scheduler, the previous same-actor sample
-         * named the one actor then in flight. These signals contain that
-         * actor's post-retirement readiness and support the forwarding
-         * diagnostic below. A decoupled executor can have several actors in
-         * flight, so its profile deliberately skips that legacy follow-up. */
-        if (profile->same_actor_followup_pending) {
-            unsigned slot = profile->same_actor_followup_slot;
-            int mail_candidate = get_bit(profile->h_mail_candidate[slot]);
-            int entry_probe = get_bit(profile->h_entry_probe[slot]);
-            int egress_waiter = get_bit(profile->h_egress_waiter[slot]);
-
-            counts->same_actor_followups++;
-            if (entry_probe) {
-                counts->same_actor_followup_entry++;
-            } else if (egress_waiter && !egress_busy) {
-                counts->same_actor_followup_egress++;
-            } else if (egress_waiter) {
-                counts->same_actor_followup_waiting_egress_credit++;
-            } else if (mail_candidate) {
-                counts->same_actor_followup_mailbox++;
-                if (!profile->same_actor_followup_phase_boundary) {
-                    counts->same_actor_followup_direct_mailbox++;
-                    counts->actor_direct_mailbox_followups[slot]++;
-                }
-            } else {
-                counts->same_actor_followup_no_work++;
-            }
-            profile->same_actor_followup_pending = 0;
-        }
-
         counts->selection_activations++;
         for (index = 0; index < profile->request_input_count; index++) {
             if (!profile->h_pending_valid[index] ||
@@ -1315,10 +1268,7 @@ static void step_scheduler_profile(scheduler_profile_t *profile) {
                 nonempty_actors++;
             if (slot_ready) {
                 any_ready = 1;
-                if (profile->h_selectable[0] ?
-                    get_bit(profile->h_selectable[index]) :
-                    (!profile->activation_has_state_read ||
-                     profile->activation_state_read_slot != index))
+                if (get_bit(profile->h_selectable[index]))
                     any_selectable = 1;
                 counts->ready_slot_samples++;
                 counts->actor_ready_samples[index]++;
@@ -1361,31 +1311,6 @@ static void step_scheduler_profile(scheduler_profile_t *profile) {
             counts->selection_cycles_no_actor_work++;
         else
             counts->selection_cycles_internal_other++;
-
-        if (same_actor_only && !profile->h_selectable[0]) {
-            unsigned slot = profile->activation_state_read_slot;
-            int mail_candidate = get_bit(profile->h_mail_candidate[slot]);
-            int entry_probe = get_bit(profile->h_entry_probe[slot]);
-            int egress_waiter = get_bit(profile->h_egress_waiter[slot]);
-
-            if (entry_probe)
-                counts->same_actor_observed_entry++;
-            else if (egress_waiter && !egress_busy)
-                counts->same_actor_observed_egress++;
-            else if (mail_candidate)
-                counts->same_actor_observed_mailbox++;
-            else
-                counts->same_actor_observed_internal_other++;
-
-            phase_boundary = get_bit(profile->h_phase_boundary);
-            if (phase_boundary)
-                counts->same_actor_phase_boundaries++;
-            counts->actor_same_actor_only[slot]++;
-            profile->same_actor_followup_pending = 1;
-            profile->same_actor_followup_slot = slot;
-            profile->same_actor_followup_phase_boundary = phase_boundary;
-        }
-        profile->activation_has_state_read = 0;
     }
 
     /* Commit the older visit before opening the younger one. In the 1R1W

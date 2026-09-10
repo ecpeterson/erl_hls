@@ -16,7 +16,7 @@ pub struct Candidates<COUNT: u32> {
 pub fn select<COUNT: u32>(
     candidates: Candidates<COUNT>, egress_busy: u1,
     in_flight: u1[COUNT], cursor: u32) -> (u1, u32) {
-  let selectable = unroll_for! (slot, result):
+  let eligible = unroll_for! (slot, result):
       (u32, u1[COUNT]) in u32:0..COUNT {
     let private_active = candidates.internal[slot] || candidates.aggregate[slot];
     let entry_active = private_active || candidates.entry[slot] || candidates.egress[slot];
@@ -24,9 +24,10 @@ pub fn select<COUNT: u32>(
       candidates.entry[slot] ||
       (candidates.mail[slot] && !entry_active) ||
       (candidates.egress[slot] && !egress_busy)));
-    update(result, slot, ready && !in_flight[slot])
+    let selectable = ready && !in_flight[slot]; // Paired with ready for profiling.
+    update(result, slot, selectable)
   }(zero!<u1[COUNT]>());
-  arbitration::select(selectable, cursor)
+  arbitration::select(eligible, cursor)
 }
 
 #[test]
