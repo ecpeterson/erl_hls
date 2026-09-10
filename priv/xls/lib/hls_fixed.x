@@ -40,8 +40,8 @@ fn saturation_and_signed_rounding_test() {
 
 #[test]
 fn all_small_signed_inputs_match_wide_division_test() {
-  for (bits, _): (u32, ()) in u32:0..u32:256 {
-    let value = (bits as s8) as s32;
+  for (raw, _): (u32, ()) in u32:0..u32:256 {
+    let value = (raw as s8) as s32;
     let reference = if value < s32:0 { (value - s32:6) / s32:12 }
                     else { (value + s32:6) / s32:12 };
     assert_eq(round_ratio<u32:12>(value as s8), reference as s8);
