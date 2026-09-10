@@ -103,7 +103,7 @@ aggregate_only_uses_one_pending_receptacle_per_actor_test() ->
     ?assertNotEqual(nomatch, binary:match(AggregateOnly,
         <<"update(state.aggregate_pending_valid, aggregate_slot, u1:1)">>)),
     ?assertNotEqual(nomatch, binary:match(AggregateOnly,
-        <<"let aggregate_active = state.aggregate_pending_valid[slot]">>)),
+        <<"aggregate: state.aggregate_pending_valid,">>)),
     ?assertNotEqual(nomatch, binary:match(AggregateOnly,
         <<"retired.aggregate_pending[read_slot]">>)),
     ?assertNotEqual(nomatch, binary:match(AggregateOnly,
@@ -1078,7 +1078,7 @@ state_machine_entry_actions_use_one_source_ordered_egress_test() ->
         )),
         ?assertNotEqual(nomatch, binary:match(
             XLS,
-            <<"let selectable = ready && !in_flight[slot]">>
+            <<"}, state.egress_busy, in_flight, cursor)">>
         )),
         ?assertNotEqual(nomatch, binary:match(
             XLS,

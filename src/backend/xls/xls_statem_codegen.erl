@@ -87,7 +87,8 @@ preamble(#{
         "// overwritten the next time it is generated.\n\n",
         "import axis;\n",
         "import bram;\n",
-        "import mailbox;\n\n",
+        "import mailbox;\n",
+        "import scheduler;\n\n",
         "const MAILBOX_CAPACITY = u8:", integer_to_list(Capacity), ";\n",
         "const MAILBOX_DEPTH = u32:", integer_to_list(Capacity), ";\n\n",
         "pub enum Tag : u8 {\n",
@@ -955,36 +956,17 @@ shared_service(Spec) ->
     [
     ?REDUCTION_SERVICE:shared_service_helpers(Reductions, SharedService),
     """
-    // Finds the first selectable actor at or after the round-robin cursor.
-    // An in-flight actor is excluded until its executor result has retired and
-    // made the next state visible to a later activation.
     fn ready_selection<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
         state: SharedState<ACTOR_COUNT, PRODUCER_COUNT>,
         cursor: u32,
         in_flight: u1[ACTOR_COUNT]) -> (u1, u32) {
-      let (after_found, after_slot, before_found, before_slot) =
-          unroll_for! (slot, acc):
-              (u32, (u1, u32, u1, u32)) in u32:0..ACTOR_COUNT {
-        let entry_active =
-          state.entry_probes[slot] || state.egress_waiters[slot];
-        let ready =
-          state.entry_probes[slot] ||
-          (state.mail_candidates[slot] && !entry_active) ||
-          (state.egress_waiters[slot] && !state.egress_busy);
-        let selectable = ready && !in_flight[slot];
-        let take_after = !acc.0 && slot >= cursor && selectable;
-        let take_before = !acc.2 && slot < cursor && selectable;
-        (
-          acc.0 || take_after,
-          if take_after { slot } else { acc.1 },
-          acc.2 || take_before,
-          if take_before { slot } else { acc.3 }
-        )
-      }((u1:0, u32:0, u1:0, u32:0));
-      (
-        after_found || before_found,
-        if after_found { after_slot } else { before_slot }
-      )
+      scheduler::select(
+        scheduler::Candidates<ACTOR_COUNT> {
+          entry: state.entry_probes,
+          mail: state.mail_candidates,
+          egress: state.egress_waiters,
+          ..zero!<scheduler::Candidates<ACTOR_COUNT>>()
+        }, state.egress_busy, in_flight, cursor)
     }
 
     // Projects a completed executor activation into scheduler metadata. Its
