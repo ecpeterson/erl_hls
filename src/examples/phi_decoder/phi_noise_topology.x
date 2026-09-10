@@ -8,6 +8,7 @@
 // drains the effects in source order.
 
 import axis;
+import frame_transport;
 import effect_window;
 import hls_spatial_router;
 import phenom_data_cell;
@@ -213,59 +214,6 @@ fn scheduler_5_slot(address: ScheduledAddress) -> u32 {
   }
 }
 
-proc FrameRelay {
-  frame_in: chan<axis::Frame> in;
-  frame_out: chan<axis::Frame> out;
-
-  config(
-      frame_in: chan<axis::Frame> in,
-      frame_out: chan<axis::Frame> out
-  ) {
-    (frame_in, frame_out)
-  }
-
-  init { () }
-
-  next(state: ()) {
-    let (tok, frame) = recv(join(), frame_in);
-    let _done = send(tok, frame_out, frame);
-    state
-  }
-}
-proc FrameArrayMux<INPUT_COUNT: u32> {
-  frame_in: chan<axis::Frame>[INPUT_COUNT] in;
-  frame_out: chan<axis::Frame> out;
-
-  config(
-      frame_in: chan<axis::Frame>[INPUT_COUNT] in,
-      frame_out: chan<axis::Frame> out
-  ) {
-    (frame_in, frame_out)
-  }
-
-  init { u32:0 }
-
-  next(cursor: u32) {
-    let (tok, received, frame) =
-      unroll_for! (candidate, acc):
-          (u32, (token, u1, axis::Frame)) in u32:0..INPUT_COUNT {
-        let selected = cursor == candidate;
-        let (next_tok, next_frame, valid) = recv_if_non_blocking(
-          acc.0, frame_in[candidate], selected, zero!<axis::Frame>());
-        (
-          next_tok,
-          acc.1 | valid,
-          if valid { next_frame } else { acc.2 }
-        )
-      }((join(), u1:0, zero!<axis::Frame>()));
-    let _done = send_if(tok, frame_out, received, frame);
-    if cursor + u32:1 == INPUT_COUNT {
-      u32:0
-    } else {
-      cursor + u32:1
-    }
-  }
-}
 struct Phi_xReductionBatch {
   source: u32,
   frames: axis::Frame[u32:4],
@@ -2879,9 +2827,9 @@ proc SchedulerGrid {
       effect_window_grant_c[u32:5],
       effect_window_release_p[u32:5]);
     spawn ControlDispatcher(control_router_in, scheduler_0_requests_p[u32:2], scheduler_1_requests_p[u32:2], scheduler_4_requests_p[u32:3], scheduler_5_requests_p[u32:3]);
-    spawn FrameArrayMux<u32:2>(external_0_buffer_c, data_measurements_out);
-    spawn FrameRelay(external_1_buffer_c, x_decoder_events_out);
-    spawn FrameRelay(external_2_buffer_c, z_decoder_events_out);
+    spawn frame_transport::FrameArrayMux<u32:2>(external_0_buffer_c, data_measurements_out);
+    spawn frame_transport::FrameRelay(external_1_buffer_c, x_decoder_events_out);
+    spawn frame_transport::FrameRelay(external_2_buffer_c, z_decoder_events_out);
     ()
   }
 

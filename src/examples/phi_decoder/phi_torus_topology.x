@@ -7,6 +7,7 @@
 // Scalar external streams use fair polling over statically indexed family lanes.
 
 import axis;
+import frame_transport;
 import phi_halo_cell;
 
 const CHANNEL_DEPTH = u32:1;
@@ -85,61 +86,6 @@ proc FamilyRouter {
   }
 }
 
-proc FrameArrayMux<INPUT_COUNT: u32> {
-  frame_in: chan<axis::Frame>[INPUT_COUNT] in;
-  frame_out: chan<axis::Frame> out;
-
-  config(
-      frame_in: chan<axis::Frame>[INPUT_COUNT] in,
-      frame_out: chan<axis::Frame> out
-  ) {
-    (frame_in, frame_out)
-  }
-
-  init { u32:0 }
-
-  next(cursor: u32) {
-    let (tok, received, frame) =
-      unroll_for! (candidate, acc):
-          (u32, (token, u1, axis::Frame)) in u32:0..INPUT_COUNT {
-        let selected = cursor == candidate;
-        let (next_tok, next_frame, valid) = recv_if_non_blocking(
-          acc.0,
-          frame_in[candidate],
-          selected,
-          zero!<axis::Frame>());
-        (
-          next_tok,
-          acc.1 | valid,
-          if valid { next_frame } else { acc.2 }
-        )
-      }((join(), u1:0, zero!<axis::Frame>()));
-    let _done = send_if(tok, frame_out, received, frame);
-    if cursor + u32:1 == INPUT_COUNT {
-      u32:0
-    } else {
-      cursor + u32:1
-    }
-  }
-}
-
-proc FrameGridMux<GRID_WIDTH: u32, GRID_HEIGHT: u32> {
-  config(
-      frame_in: chan<axis::Frame>[GRID_HEIGHT][GRID_WIDTH] in,
-      frame_out: chan<axis::Frame> out
-  ) {
-    let (column_p, column_c) =
-      chan<axis::Frame, CHANNEL_DEPTH>[GRID_WIDTH]("grid_column");
-    unroll_for! (x, _): (u32, ()) in u32:0..GRID_WIDTH {
-      spawn FrameArrayMux<GRID_HEIGHT>(frame_in[x], column_p[x]);
-    }(());
-    spawn FrameArrayMux<GRID_WIDTH>(column_c, frame_out);
-    ()
-  }
-
-  init { () }
-  next(state: ()) { state }
-}
 // Retains one mailbox credit while polling one input per activation.
 proc FamilyIngress<X: u32, Y: u32> {
   incoming_0: chan<axis::Frame> in;
@@ -245,8 +191,8 @@ proc FamilyTorus<TORUS_WIDTH: u32, TORUS_HEIGHT: u32> {
         );
       }(())
     }(());
-    spawn FrameGridMux<TORUS_WIDTH, TORUS_HEIGHT>(lane_0_c, decoder_events_out);
-    spawn FrameGridMux<TORUS_WIDTH, TORUS_HEIGHT>(lane_1_c, syndrome_requests_out);
+    spawn frame_transport::FrameGridMux<TORUS_WIDTH, TORUS_HEIGHT, CHANNEL_DEPTH>(lane_0_c, decoder_events_out);
+    spawn frame_transport::FrameGridMux<TORUS_WIDTH, TORUS_HEIGHT, CHANNEL_DEPTH>(lane_1_c, syndrome_requests_out);
     ()
   }
 

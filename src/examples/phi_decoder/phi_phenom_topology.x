@@ -11,6 +11,7 @@
 // receiving that target's first routed frame.
 
 import axis;
+import frame_transport;
 import phenom_data_cell;
 import phenom_syndrome_cell;
 import phi_halo_cell;
@@ -19,24 +20,6 @@ const CHANNEL_DEPTH = u32:1;
 
 // 1 queued fanout route(s) complete at actor-egress acceptance;
 // their source router subsequently waits for every lane queue.
-
-proc FrameRelay {
-  frame_in: chan<axis::Frame> in;
-  frame_out: chan<axis::Frame> out;
-
-  config(frame_in: chan<axis::Frame> in,
-         frame_out: chan<axis::Frame> out) {
-    (frame_in, frame_out)
-  }
-
-  init { () }
-
-  next(state: ()) {
-    let (tok, frame) = recv(join(), frame_in);
-    send(tok, frame_out, frame);
-    state
-  }
-}
 
 proc ActorRouter0 {
   egress_in: chan<phenom_data_cell::Egress> in;
@@ -296,9 +279,9 @@ pub proc Top {
     let (startup_2_prefix_p, startup_2_prefix_c) = chan<axis::Frame, CHANNEL_DEPTH>("startup_2_prefix");
     spawn StartupPrefix2(actor_2_ingress_mux_0_0_c, startup_2_prefix_p);
     spawn axis::ReservedFrame(startup_2_prefix_c, actor_2_req_p, actor_2_admit_c);
-    spawn FrameRelay(actor_2_lane_7_c, announcement_out);
-    spawn FrameRelay(actor_0_lane_1_c, data_measurements_out);
-    spawn FrameRelay(actor_1_lane_4_c, decoder_events_out);
+    spawn frame_transport::FrameRelay(actor_2_lane_7_c, announcement_out);
+    spawn frame_transport::FrameRelay(actor_0_lane_1_c, data_measurements_out);
+    spawn frame_transport::FrameRelay(actor_1_lane_4_c, decoder_events_out);
 
     (announcement_out, data_measurements_out, decoder_events_out)
   }

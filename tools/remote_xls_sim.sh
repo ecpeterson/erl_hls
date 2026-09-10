@@ -32,6 +32,7 @@ for test_module in \
     axis.x \
     bram.x \
     effect_window.x \
+    frame_transport.x \
     mailbox.x \
     hls_debug_trace.x \
     hls_debug_observer.x \

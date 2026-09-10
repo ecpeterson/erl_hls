@@ -867,7 +867,6 @@ render(Spec) ->
         preamble(Spec),
         startup_support(maps:get(families, Spec)),
         family_routers(Spec),
-        frame_grid_mux(maps:get(externals, Spec)),
         control_support(Spec),
         family_ingresses(Spec),
         family_nodes(Spec),
@@ -892,6 +891,10 @@ preamble(Spec) ->
         "// Scalar external streams use fair polling over statically indexed ",
         "family lanes.\n\n",
         "import axis;\n",
+        case maps:get(externals, Spec) of
+            [] -> [];
+            _ -> "import frame_transport;\n"
+        end,
         case maps:get(ingresses, Spec) of
             [] -> [];
             [_] -> "import hls_spatial_router;\n"
@@ -993,70 +996,6 @@ family_lane_selected(Lane) ->
 
 family_lane_token(Lane) ->
     [maps:get(stem, Lane), "_tok"].
-
-frame_grid_mux([]) -> [];
-frame_grid_mux(_Externals) ->
-    %% DSLX writes array dimensions from inner to outer. Consequently
-    %% `[GRID_HEIGHT][GRID_WIDTH]` has `GRID_WIDTH` outer elements and
-    %% supports the coordinate order `frame_in[x][y]` used below.
-    """
-    proc FrameArrayMux<INPUT_COUNT: u32> {
-      frame_in: chan<axis::Frame>[INPUT_COUNT] in;
-      frame_out: chan<axis::Frame> out;
-
-      config(
-          frame_in: chan<axis::Frame>[INPUT_COUNT] in,
-          frame_out: chan<axis::Frame> out
-      ) {
-        (frame_in, frame_out)
-      }
-
-      init { u32:0 }
-
-      next(cursor: u32) {
-        let (tok, received, frame) =
-          unroll_for! (candidate, acc):
-              (u32, (token, u1, axis::Frame)) in u32:0..INPUT_COUNT {
-            let selected = cursor == candidate;
-            let (next_tok, next_frame, valid) = recv_if_non_blocking(
-              acc.0,
-              frame_in[candidate],
-              selected,
-              zero!<axis::Frame>());
-            (
-              next_tok,
-              acc.1 | valid,
-              if valid { next_frame } else { acc.2 }
-            )
-          }((join(), u1:0, zero!<axis::Frame>()));
-        let _done = send_if(tok, frame_out, received, frame);
-        if cursor + u32:1 == INPUT_COUNT {
-          u32:0
-        } else {
-          cursor + u32:1
-        }
-      }
-    }
-
-    proc FrameGridMux<GRID_WIDTH: u32, GRID_HEIGHT: u32> {
-      config(
-          frame_in: chan<axis::Frame>[GRID_HEIGHT][GRID_WIDTH] in,
-          frame_out: chan<axis::Frame> out
-      ) {
-        let (column_p, column_c) =
-          chan<axis::Frame, CHANNEL_DEPTH>[GRID_WIDTH]("grid_column");
-        unroll_for! (x, _): (u32, ()) in u32:0..GRID_WIDTH {
-          spawn FrameArrayMux<GRID_HEIGHT>(frame_in[x], column_p[x]);
-        }(());
-        spawn FrameArrayMux<GRID_WIDTH>(column_c, frame_out);
-        ()
-      }
-
-      init { () }
-      next(state: ()) { state }
-    }
-
-    """.
 
 control_support(#{ingresses := []}) -> [];
 control_support(Spec = #{ingresses := [Ingress]}) ->
@@ -1629,7 +1568,7 @@ external_merge_spawn(External, Lanes) ->
 
 external_merge_spawn(_External, [#{stem := Stem}], OutputName) ->
     [
-        "    spawn FrameGridMux<TORUS_WIDTH, TORUS_HEIGHT>(",
+        "    spawn frame_transport::FrameGridMux<TORUS_WIDTH, TORUS_HEIGHT, CHANNEL_DEPTH>(",
         Stem, "_c, ", OutputName,
         ");\n"
     ];
@@ -1644,13 +1583,13 @@ external_merge_spawn(External, Lanes = [_, _ | _], OutputName) ->
         "\"", Stem, "\");\n",
         [
             [
-                "    spawn FrameGridMux<TORUS_WIDTH, TORUS_HEIGHT>(",
+                "    spawn frame_transport::FrameGridMux<TORUS_WIDTH, TORUS_HEIGHT, CHANNEL_DEPTH>(",
                 maps:get(stem, Lane), "_c, ", Stem, "_p[u32:",
                 integer_to_list(Index), "]);\n"
             ]
             || {Index, Lane} <- lists:enumerate(0, Lanes)
         ],
-        "    spawn FrameArrayMux<", CountLiteral, ">(", Stem, "_c, ",
+        "    spawn frame_transport::FrameArrayMux<", CountLiteral, ">(", Stem, "_c, ",
         OutputName, ");\n"
     ].
 

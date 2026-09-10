@@ -13,7 +13,6 @@ emit(Spec0) ->
     [
         preamble(Spec),
         address_support(Spec),
-        frame_relay(Spec),
         xls_topology_source_fragment_dslx:support(Spec),
         control_support(Spec),
         [startup_proc(Spec, Scheduler)
@@ -23,79 +22,6 @@ emit(Spec0) ->
         grid_proc(Spec),
         top_proc(Spec)
     ].
-
-frame_relay(#{externals := []}) -> [];
-frame_relay(#{externals := Externals}) ->
-    [
-        """
-        proc FrameRelay {
-          frame_in: chan<axis::Frame> in;
-          frame_out: chan<axis::Frame> out;
-
-          config(
-              frame_in: chan<axis::Frame> in,
-              frame_out: chan<axis::Frame> out
-          ) {
-            (frame_in, frame_out)
-          }
-
-          init { () }
-
-          next(state: ()) {
-            let (tok, frame) = recv(join(), frame_in);
-            let _done = send(tok, frame_out, frame);
-            state
-          }
-        }
-
-        """,
-        case lists:any(
-            fun(#{source_schedulers := Sources}) -> length(Sources) > 1 end,
-            Externals
-        ) of
-            false -> [];
-            true -> frame_array_mux()
-        end
-    ].
-
-frame_array_mux() ->
-    """
-    proc FrameArrayMux<INPUT_COUNT: u32> {
-      frame_in: chan<axis::Frame>[INPUT_COUNT] in;
-      frame_out: chan<axis::Frame> out;
-
-      config(
-          frame_in: chan<axis::Frame>[INPUT_COUNT] in,
-          frame_out: chan<axis::Frame> out
-      ) {
-        (frame_in, frame_out)
-      }
-
-      init { u32:0 }
-
-      next(cursor: u32) {
-        let (tok, received, frame) =
-          unroll_for! (candidate, acc):
-              (u32, (token, u1, axis::Frame)) in u32:0..INPUT_COUNT {
-            let selected = cursor == candidate;
-            let (next_tok, next_frame, valid) = recv_if_non_blocking(
-              acc.0, frame_in[candidate], selected, zero!<axis::Frame>());
-            (
-              next_tok,
-              acc.1 | valid,
-              if valid { next_frame } else { acc.2 }
-            )
-          }((join(), u1:0, zero!<axis::Frame>()));
-        let _done = send_if(tok, frame_out, received, frame);
-        if cursor + u32:1 == INPUT_COUNT {
-          u32:0
-        } else {
-          cursor + u32:1
-        }
-      }
-    }
-
-    """.
 
 annotate(Spec = #{
     families := Families,
@@ -287,6 +213,10 @@ preamble(Spec = #{families := Families}) ->
         "// maps its slot to a narrow family and coordinate address, then\n",
         "// drains the effects in source order.\n\n",
         "import axis;\n",
+        case maps:get(externals, Spec) of
+            [] -> [];
+            _ -> "import frame_transport;\n"
+        end,
         "import effect_window;\n",
         case maps:get(ingresses, Spec) of
             [] -> [];
@@ -1101,12 +1031,12 @@ external_spawn(External) ->
     case maps:get(source_schedulers, External) of
         [_] ->
             [
-                "    spawn FrameRelay(", Stem, "_c, ",
+                "    spawn frame_transport::FrameRelay(", Stem, "_c, ",
                 maps:get(output_name, External), ");\n"
             ];
         Sources ->
             [
-                "    spawn FrameArrayMux<u32:",
+                "    spawn frame_transport::FrameArrayMux<u32:",
                 integer_to_list(length(Sources)), ">(", Stem, "_c, ",
                 maps:get(output_name, External), ");\n"
             ]
