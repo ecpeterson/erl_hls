@@ -22,7 +22,7 @@ fingerprint_test() ->
 iterative_sink_test() ->
     M = fixture(),
     Q = query_fun(#{0 => 1, 1 => 1, 2 => 1, 3 => 3, 4 => 1}, #{}),
-    {ok, R} = hls_topology_wait:trace(M, Q, [0], #{}),
+    {ok, R} = hls_topology_wait:inspect_waits(M, Q, [0], #{}),
     ?assertEqual([0, 1, 2], lists:sort(maps:get(reobserved_blocked, R))),
     %% Unrelated progressing channel 3 is never queried.
     ?assertEqual([0, 1, 2, 4], lists:usort([Id || #{id := Id} <- maps:get(observations, R)])),
@@ -32,10 +32,10 @@ iterative_sink_test() ->
 
 transient_and_budget_test() ->
     M = fixture(),
-    {ok, R} = hls_topology_wait:trace(M, query_fun(#{0 => 1, 1 => 1, 2 => 1, 4 => 1}, #{2 => 3}), [0], #{}),
+    {ok, R} = hls_topology_wait:inspect_waits(M, query_fun(#{0 => 1, 1 => 1, 2 => 1, 4 => 1}, #{2 => 3}), [0], #{}),
     ?assertEqual([2], maps:get(changed_resources, R)),
     ?assertNot(lists:member(2, maps:get(reobserved_blocked, R))),
-    {ok, Bounded} = hls_topology_wait:trace(M, query_fun(#{0 => 1, 1 => 1, 2 => 1, 4 => 1}, #{}), [0], #{max_queries => 2}),
+    {ok, Bounded} = hls_topology_wait:inspect_waits(M, query_fun(#{0 => 1, 1 => 1, 2 => 1, 4 => 1}, #{}), [0], #{max_queries => 2}),
     ?assert(maps:get(truncated, Bounded)),
     ?assertEqual(2, length(maps:get(observations, Bounded))).
 
@@ -44,22 +44,22 @@ cycle_and_clock_test() ->
     [P0, P1, P2, P3] = maps:get(<<"probes">>, M),
     Cyclic = M#{<<"probes">> := [P0, P1, P2#{<<"endpoints">> := [endpoint(<<"actor">>, <<"producer">>),
         endpoint(<<"source">>, <<"consumer">>)]}, P3]},
-    {ok, R} = hls_topology_wait:trace(Cyclic, query_fun(#{0 => 1, 1 => 1, 2 => 1, 4 => 1}, #{}), [0], #{}),
+    {ok, R} = hls_topology_wait:inspect_waits(Cyclic, query_fun(#{0 => 1, 1 => 1, 2 => 1, 4 => 1}, #{}), [0], #{}),
     ?assertEqual([[0, 1, 2]], maps:get(candidate_cycles, R)),
-    ?assertEqual({error, observation_clock_regressed}, hls_topology_wait:trace(M,
+    ?assertEqual({error, observation_clock_regressed}, hls_topology_wait:inspect_waits(M,
         fun(Id) -> {ok, #{id => Id, cycle => 0, value => 1}} end, [0], #{})),
-    ?assertEqual({error, disconnected}, hls_topology_wait:trace(M,
+    ?assertEqual({error, disconnected}, hls_topology_wait:inspect_waits(M,
         fun(_) -> {error, disconnected} end, [0], #{})),
-    ?assertEqual({error, {unknown_resources, [99]}}, hls_topology_wait:trace(M,
+    ?assertEqual({error, {unknown_resources, [99]}}, hls_topology_wait:inspect_waits(M,
         fun(_) -> error(unexpected_query) end, [99], #{})).
 
 ambiguous_and_internal_wait_test() ->
     M = fixture(),
     [P0 | Rest] = maps:get(<<"probes">>, M),
-    {ok, R} = hls_topology_wait:trace(M#{<<"probes">> := [P0#{<<"constant_handshake">> := true} | Rest]},
+    {ok, R} = hls_topology_wait:inspect_waits(M#{<<"probes">> := [P0#{<<"constant_handshake">> := true} | Rest]},
         query_fun(#{0 => 1}, #{}), [0], #{}),
     ?assertMatch([#{kind := ambiguous}], maps:get(edges, R)),
-    {ok, Internal} = hls_topology_wait:trace(M, query_fun(#{0 => 1, 1 => 1, 2 => 0, 4 => 1}, #{}), [0], #{}),
+    {ok, Internal} = hls_topology_wait:inspect_waits(M, query_fun(#{0 => 1, 1 => 1, 2 => 0, 4 => 1}, #{}), [0], #{}),
     ?assertEqual([], maps:get(candidate_cycles, Internal)),
     ?assertNot(lists:any(fun(#{kind := K}) -> K =:= external_sink end, maps:get(edges, Internal))).
 

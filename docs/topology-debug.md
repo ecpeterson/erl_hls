@@ -54,8 +54,8 @@ Manifest = json:decode(Bytes),
 {ok, Debug} = hls_debug:start_link(undefined, {fabric, DebugFabric, 2}),
 {ok, Session} = hls_topology_debug:open(Debug, Manifest),
 {ok, Sample} = hls_topology_debug:query(Session, ResourceId),
-{ok, Report} = hls_topology_debug:trace(Session, [ResourceId], #{max_queries => 1024}),
-ok = hls_topology_debug:write_trace(Session, [ResourceId], #{}, "wait.json").
+{ok, Report} = hls_topology_debug:inspect_waits(Session, [ResourceId], #{max_queries => 1024}),
+ok = hls_topology_debug:write_wait_report(Session, [ResourceId], #{}, "wait.json").
 ```
 
 `open/2` checks the embedded fingerprint and catalog counts against the supplied manifest. A query returns its resource ID, observation cycle, and value; channels also have boolean `valid`/`ready` fields, and FIFOs have `occupancy`/`free_slots`. A mismatched resource ID or impossible FIFO occupancy is rejected. Queries use a ten-second timeout; after a transport timeout or reset, establish a fresh transport session before continuing a diagnosis.
@@ -67,7 +67,7 @@ python3 tools/topology_debug_report.py manifest.json --find scheduler_0
 python3 tools/topology_debug_report.py manifest.json wait.json
 ```
 
-The trace starts at the supplied FIFO or channel IDs. For a FIFO it queries its push/pop boundaries. When a channel is valid but not ready, it follows its unique consumer. At a FIFO it reads occupancy and follows the pop channel; at another component it probes that component's outgoing channels as possible dependencies. An external consumer terminates that branch. Visited resources are queried once during exploration and once again during recheck. The budget reserves space for those rechecks and explicitly reports truncated exploration.
+The inspection starts at the supplied FIFO or channel IDs. For a FIFO it queries its push/pop boundaries. When a channel is valid but not ready, it follows its unique consumer. At a FIFO it reads occupancy and follows the pop channel; at another component it probes that component's outgoing channels as possible dependencies. An external consumer terminates that branch. Visited resources are queried once during exploration and once again during recheck. The budget reserves space for those rechecks and explicitly reports truncated exploration.
 
 Reports distinguish external sinks, ambiguous connections, candidate blocked outputs, changed resources, and cyclic groups of channels blocked on both visits. Unrelated progressing components need not be queried. The same host walker is used with the live debug client and with deterministic test providers.
 

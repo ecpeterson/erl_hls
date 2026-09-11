@@ -3,7 +3,7 @@
 
 Takes the same RTL/top/clock/reset arguments as topology_debug.py. The test
 compares original and instrumented application outputs every cycle, blocks the
-first external sink, then releases it after the host has traced its queues.
+first external sink, then releases it after the host has inspected its wait chain.
 """
 import argparse
 import json

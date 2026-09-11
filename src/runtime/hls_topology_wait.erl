@@ -1,10 +1,10 @@
 -module(hls_topology_wait).
 -moduledoc "Bounded host-side exploration of candidate backpressure dependencies.".
--export([trace/4]).
+-export([inspect_waits/4]).
 
 %% Query is injected so simulation, live hardware and deterministic fixtures
 %% exercise the same adaptive walk. All maps come from a verified manifest.
-trace(Manifest = #{<<"probes">> := Probes, <<"resources">> := Resources}, Query, Seeds, Options) ->
+inspect_waits(Manifest = #{<<"probes">> := Probes, <<"resources">> := Resources}, Query, Seeds, Options) ->
     #{max_queries := Max} = maps:merge(#{max_queries => 1024}, Options),
     case maps:keys(Options) -- [max_queries] of [] -> ok; Keys -> error({options, Keys}) end,
     true = is_integer(Max) andalso Max >= 2,

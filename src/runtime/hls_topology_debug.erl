@@ -4,12 +4,12 @@ Passive current-state queries for generated topologies.
 
 Open a session with the manifest emitted alongside the instrumented RTL and an
 `hls_debug` client registered at endpoint 2. Queries observe one resource at a
-clock edge without involving application processes. `trace/3` follows blocked
+clock edge without involving application processes. `inspect_waits/3` follows blocked
 channels, reads encountered FIFO occupancies, then rechecks its observations.
 Repeated observations suggest a stable wait; they do not prove continuous
 blocking between queries or establish an actor's semantic next dependency.
 """.
--export([open/2, info/1, query/2, trace/3, write_trace/4]).
+-export([open/2, info/1, query/2, inspect_waits/3, write_wait_report/4]).
 -export([decode_info/1, decode_observation/2, manifest_fingerprint/1]).
 
 -define(TIMEOUT, 10000).
@@ -67,11 +67,11 @@ decode_observation(<<Id:32/little, Cycle:64/little, Value:32/little>>,
 decode_observation(_, _) -> {error, malformed_topology_observation}.
 
 -doc "Follows channel/FIFO IDs with a bounded query budget, then rechecks the visited resources.".
-trace(Session = #{manifest := Manifest}, Seeds, Options) ->
-    hls_topology_wait:trace(Manifest, fun(Id) -> query(Session, Id) end, Seeds, Options).
+inspect_waits(Session = #{manifest := Manifest}, Seeds, Options) ->
+    hls_topology_wait:inspect_waits(Manifest, fun(Id) -> query(Session, Id) end, Seeds, Options).
 
-write_trace(Session, Seeds, Options, OutputPath) ->
-    case trace(Session, Seeds, Options) of
+write_wait_report(Session, Seeds, Options, OutputPath) ->
+    case inspect_waits(Session, Seeds, Options) of
         {ok, Report} -> file:write_file(OutputPath, json:encode(Report));
         Error -> Error
     end.

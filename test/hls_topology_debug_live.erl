@@ -14,19 +14,19 @@ run(Stage) ->
         {error, topology_manifest_mismatch} = hls_topology_debug:open(Client,
             Manifest#{<<"fingerprint">> := <<"wrong build">>}),
         %% Discovery scan chooses genuinely full hardware queues. The follow-up
-        %% trace itself is adaptive and must reach the injected external sink.
+        %% inspection itself is adaptive and must reach the injected external sink.
         Queues = [Q || Q = #{<<"kind">> := <<"fifo">>} <- maps:get(<<"resources">>, Manifest)],
         Seeds = [Id || #{<<"id">> := Id, <<"capacity">> := Capacity} <- Queues,
             begin {ok, #{value := Occupancy}} = hls_topology_debug:query(Session, Id), Occupancy =:= Capacity end],
         true = Seeds =/= [],
-        {ok, Report} = hls_topology_debug:trace(Session, Seeds, #{max_queries => 2048}),
+        {ok, Report} = hls_topology_debug:inspect_waits(Session, Seeds, #{max_queries => 2048}),
         true = lists:any(fun(#{kind := K, channel := Id}) ->
             K =:= external_sink andalso lists:member(Id, maps:get(reobserved_blocked, Report))
         end, maps:get(edges, Report)),
         ok = file:write_file(filename:join(Stage, "blocked.json"), json:encode(Report)),
         ok = file:write_file(filename:join(Stage, "release"), <<>>),
         ok = await_release(Stage, 1000),
-        {ok, Recovered} = hls_topology_debug:trace(Session, Seeds, #{max_queries => 2048}),
+        {ok, Recovered} = hls_topology_debug:inspect_waits(Session, Seeds, #{max_queries => 2048}),
         ok = file:write_file(filename:join(Stage, "recovered.json"), json:encode(Recovered)),
         false = lists:any(fun(#{kind := K, channel := Id}) ->
             K =:= external_sink andalso lists:member(Id, maps:get(reobserved_blocked, Recovered))
