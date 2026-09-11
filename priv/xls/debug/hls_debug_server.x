@@ -17,6 +17,7 @@ const TRACE_HEADER_WORDS = (bit_count<TraceReplyHeader>() / u32:32) as u8;
 
 struct DebugState {
     active: u1,
+    draining: u1,
     reply_tag: debug::ReplyTag,
     response_words: u8,
     response_index: u8,
@@ -26,7 +27,8 @@ struct DebugState {
 }
 
 fn valid_empty_request(request: debug::Beat) -> u1 {
-    request.keep == u4:0xf && request.tlast && request.word[0:8] == u8:0
+    request.keep == u4:0xf && request.tlast &&
+    request.word[0:8] == u8:0 && request.word[16:24] == u8:0
 }
 
 fn reply_tag_for_request(request: debug::Beat) -> debug::ReplyTag {
@@ -38,6 +40,19 @@ fn reply_tag_for_request(request: debug::Beat) -> debug::ReplyTag {
             debug::RequestTag::GET_TRACE => debug::ReplyTag::TRACE,
             _ => debug::ReplyTag::ERROR,
         }
+    }
+}
+
+// Only TLAST ends a rejected packet: payload words may resemble headers, and
+// the declared length may itself be wrong. Reset aborts an unterminated packet.
+fn accept_request(state: DebugState, request: debug::Beat) -> DebugState {
+    DebugState {
+        active: request.tlast,
+        draining: !request.tlast,
+        reply_tag: if state.draining { debug::ReplyTag::ERROR }
+                   else { reply_tag_for_request(request) },
+        txid: if state.draining { state.txid } else { request.word[8:16] },
+        ..zero!<DebugState>()
     }
 }
 
@@ -75,7 +90,7 @@ fn trace_event_is_pending(state: DebugState) -> u1 {
 }
 
 fn trace_event_read_needed(state: DebugState) -> u1 {
-    state.reply_tag == debug::ReplyTag::TRACE &&
+    state.active && state.reply_tag == debug::ReplyTag::TRACE &&
     state.response_index > TRACE_HEADER_WORDS &&
     trace_word_index(state)[0:1] == u1:0 &&
     !trace_event_is_pending(state)
@@ -173,59 +188,54 @@ pub proc DebugServer {
     init { zero!<DebugState>() }
 
     next(state: DebugState) {
-        let (tok_response, response) = if state.active {
-            (join(), state)
-        } else {
+        if !state.active {
             let (tok_request, request) = recv(join(), request_in);
-            let reply_tag = reply_tag_for_request(request);
-            let tok_snapshot_request = send(
+            let response = accept_request(state, request);
+            // Invalid requests neither query Observer nor release a trace bank.
+            let needs_snapshot = response.active &&
+                response.reply_tag != debug::ReplyTag::ERROR;
+            let tok_snapshot_request = send_if(
                 tok_request,
                 snapshot_request_out,
-                snapshot_request_for_reply(reply_tag));
-            let (tok_snapshot, snapshot) = recv(
+                needs_snapshot,
+                snapshot_request_for_reply(response.reply_tag));
+            let (_, snapshot) = recv_if(
                 tok_snapshot_request,
-                snapshot_in);
-            (
-                tok_snapshot,
-                DebugState {
-                    active: u1:1,
-                    reply_tag,
-                    response_words: response_words(reply_tag, snapshot),
-                    response_index: u8:0,
-                    txid: request.word[8:16],
-                    snapshot,
-                    trace_event: u64:0,
-                },
-            )
-        };
-
-        let read_needed = trace_event_read_needed(response);
-        let tok_read_request = send_if(
-            tok_response,
-            trace_read_request_out,
-            read_needed,
-            trace_read(response));
-        let (tok_read_response, trace_event) = recv_if(
-            tok_read_request,
-            trace_read_response_in,
-            read_needed,
-            u64:0);
-        let response_with_event = if read_needed {
-            DebugState { trace_event, ..response }
-        } else {
-            response
-        };
-
-        let beat = response_beat(response_with_event);
-        send(tok_read_response, response_out, beat);
-
-        if beat.tlast {
-            zero!<DebugState>()
-        } else {
+                snapshot_in,
+                needs_snapshot,
+                zero!<debug::MonitorState>());
             DebugState {
-                response_index:
-                    response_with_event.response_index + u8:1,
-                ..response_with_event
+                response_words: response_words(response.reply_tag, snapshot),
+                snapshot,
+                ..response
+            }
+        } else {
+            let read_needed = trace_event_read_needed(state);
+            let tok_read_request = send_if(
+                join(),
+                trace_read_request_out,
+                read_needed,
+                trace_read(state));
+            let (tok_read_response, trace_event) = recv_if(
+                tok_read_request,
+                trace_read_response_in,
+                read_needed,
+                u64:0);
+            let response = if read_needed {
+                DebugState { trace_event, ..state }
+            } else {
+                state
+            };
+
+            let beat = response_beat(response);
+            send(tok_read_response, response_out, beat);
+            if beat.tlast {
+                zero!<DebugState>()
+            } else {
+                DebugState {
+                    response_index: response.response_index + u8:1,
+                    ..response
+                }
             }
         }
     }

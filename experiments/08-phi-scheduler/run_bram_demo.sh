@@ -52,6 +52,7 @@ cp "$local_stage/test_src/phi_memory_bridge_tests.P" \
     "$local_stage/test_src/phi_memory_bridge_tests.erl"
 cp "$experiment_root/phi_memory_raw_bridge_tb.sv" \
     "$local_stage/phi_memory_raw_bridge_tb.sv"
+cp "$project_root/test/rtl/xls_sim_axis.h" "$local_stage/xls_sim_axis.h"
 cp "$project_root/test/rtl/xls_sim_bridge.c" \
     "$local_stage/xls_sim_bridge.c"
 cp "$experiment_root/remote_bram_demo.sh" \
@@ -64,6 +65,7 @@ rsync -a -e "ssh -o BatchMode=yes" \
     "$local_stage/phi_memory_bram_top.sv" \
     "$local_stage/phi_memory_raw_bridge_tb.sv" \
     "$local_stage/xls_sim_bridge.c" \
+    "$local_stage/xls_sim_axis.h" \
     "$cpu_witness" \
     "$local_stage/erl_src" \
     "$local_stage/test_src" \

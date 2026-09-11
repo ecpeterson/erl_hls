@@ -23,6 +23,7 @@ rsync -a -e "ssh -o BatchMode=yes" \
     "$local_stage/hls_debug_tap.v" \
     "$local_stage/hls_debug_monitor.v" \
     "$local_stage/hls_debug_tap_tb.sv" \
+    "$local_stage/hls_debug_server_tb.sv" \
     "$local_stage/hls_trace_store.v" \
     "$local_stage/hls_trace_store_tb.sv" \
     "$local_stage/regsvc_pair_fixture.sv" \
@@ -37,6 +38,7 @@ rsync -a -e "ssh -o BatchMode=yes" \
     "$local_stage/hls_fabric_host_tx_tb.sv" \
     "$local_stage/ordered_egress_topology_tb.sv" \
     "$local_stage/xls_sim_bridge.c" \
+    "$local_stage/xls_sim_axis.h" \
     "$local_stage/erl_src" \
     "$local_stage/test_src" \
     "$local_stage/remote_xls_sim.sh" \

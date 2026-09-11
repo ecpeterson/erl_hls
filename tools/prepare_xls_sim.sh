@@ -301,6 +301,8 @@ cp "$project_root/test/rtl/hls_fabric_host_tx_tb.sv" \
 cp "$project_root/test/rtl/ordered_egress_topology_tb.sv" \
     "$stage/ordered_egress_topology_tb.sv"
 cp "$project_root/test/rtl/xls_sim_bridge.c" "$stage/xls_sim_bridge.c"
+cp "$project_root/test/rtl/xls_sim_axis.h" "$stage/xls_sim_axis.h"
+cp "$project_root/test/rtl/debug/hls_debug_server_tb.sv" "$stage/hls_debug_server_tb.sv"
 cp "$project_root/tools/phi_scheduler_rams.sh" \
     "$stage/phi_scheduler_rams.sh"
 
