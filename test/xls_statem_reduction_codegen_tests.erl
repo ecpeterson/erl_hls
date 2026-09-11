@@ -140,6 +140,7 @@ site(ID, Phase, Population, Tag) ->
         phase => Phase,
         name => sum,
         population => Population,
+        opens_conditionally => false,
         contributions => [#{
             tag => Tag,
             build => expression(

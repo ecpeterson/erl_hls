@@ -246,11 +246,7 @@ plane, syndrome coordinate, and selected direction together identify the
 neighboring data-qubit edge; the single event stream does not mean that a phi cell is associated
 with only one data qubit.
 
-The correction action is a statically placed `cast_if`: it retains its position
-in the ordered entry-effect list, but its move predicate suppresses the frame
-when no correction was applied. This matches the reference implementation's
-sparse correction behavior, so traffic scales with corrections rather than
-physical qubits and steps.
+The correction branch constructs a `phi_correction` only when a move is applied, after the four neighbor actions. Traffic scales with corrections rather than physical qubits and steps.
 
 Each data actor retains one cumulative projective Pauli containing both
 physical errors and applied decoder corrections. The current binary noise event

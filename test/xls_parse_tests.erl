@@ -858,8 +858,9 @@ state_machine_entry_action_accepts_runtime_predicate_test() ->
     EnterSource =
         "waiting(enter, _OldPhase, Cell) ->\n"
         "  Enabled = Cell#cell.value =/= 0,\n"
-        "  {Cell, [{cast_if, Enabled, out, #message{"
-        "value = Cell#cell.value}}]};\n",
+        "  Actions = case Enabled of true -> [{cast, out, #message{"
+        "value = Cell#cell.value}}]; false -> [] end,\n"
+        "  {Cell, Actions};\n",
     CastSource =
         "waiting(cast, #message{}, Cell) ->\n"
         "  {waiting, Cell, consume}.\n",
@@ -875,7 +876,7 @@ state_machine_entry_action_accepts_runtime_predicate_test() ->
             ),
             ?assertNotEqual(
                 nomatch,
-                binary:match(XLS, <<"emit_effect = has_effect &&">>)
+                binary:match(XLS, <<"egress_valid: has_effect && can_advance">>)
             ),
             ?assertNotEqual(
                 nomatch,
@@ -981,7 +982,7 @@ state_machine_entry_actions_use_one_source_ordered_egress_test() ->
         %% scheduler instead commits one complete ordered batch per entry.
         ?assertEqual(1, length(binary:matches(
             XLS,
-            <<"egress_valid: emit_effect && can_advance">>
+            <<"egress_valid: has_effect && can_advance">>
         ))),
         ?assertNotEqual(nomatch, binary:match(
             XLS,

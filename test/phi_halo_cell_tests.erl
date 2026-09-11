@@ -1675,8 +1675,11 @@ expected_anyon_actions(Step, Selected, X, Y) ->
         {commutative_monoid, {phi_fold, 0, 0}}}] ++ [
         {cast, Port, maps:get(Port, Outputs)}
         || Port <- [north, east, west, south]
-    ] ++ [{cast_if, Selected =/= none, correction, {phi_correction,
-        Step, X, Y, correction_direction(Selected)}}].
+    ] ++ case Selected of
+        none -> [];
+        _ -> [{cast, correction, {phi_correction,
+            Step, X, Y, correction_direction(Selected)}}]
+    end.
 
 correction_direction(none) -> 0;
 correction_direction(Direction) -> direction_mask(Direction).

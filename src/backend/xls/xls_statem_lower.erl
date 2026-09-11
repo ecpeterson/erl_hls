@@ -50,8 +50,7 @@ lower(Filename, Forms, PhaseNames, Options0) ->
     Init = lower_init(maps:get(init_clause, Prepared), DataName, EnumAtoms),
     Entries = lower_entries(
         maps:get(entries, Prepared),
-        OutputNames,
-        DataName,
+        Prepared#{message_words => MessageWords},
         EnumAtoms
     ),
     Casts = lower_casts(
@@ -243,7 +242,7 @@ interface_from_prepared(Prepared) ->
     CastGroups = maps:get(cast_groups, Prepared),
     ReductionInterface = maps:get(reduction_interface, Prepared),
     Base = #{
-        version => 1,
+        version => 2,
         module => maps:get(module, Prepared),
         phases => maps:get(phases, Prepared),
         initial_phase => maps:get(initial_phase, Prepared),
@@ -382,55 +381,13 @@ analyze_entries(Clauses, PhaseNames, MessageNames, OutputNames) ->
     end.
 
 analyze_entry(
-    Clause = {clause, Line, Patterns, Guards, Body},
+    Clause = {clause, Line, Patterns, Guards, _Body},
     PhaseNames,
     MessageNames,
     OutputNames
 ) ->
     Phase = entry_phase(Line, Patterns, Guards, PhaseNames),
-    {Prefix, Last} = split_last(Body),
-    {DataExpression, ActionList} = case Last of
-        {tuple, _TupleLine, [DataExpr, ActionExpression]} ->
-            {DataExpr, ActionExpression};
-        _ -> error({bad_hls_statem_enter_result, Line, Last})
-    end,
-    {Reduction, CastActionList} = split_entry_action_expression(
-        ActionList, Line),
-    #{
-        phase => Phase,
-        clause => Clause,
-        prefix => Prefix,
-        data_expression => DataExpression,
-        reduction => Reduction,
-        actions => parse_actions(
-            CastActionList,
-            Prefix,
-            MessageNames,
-            OutputNames,
-            Line
-        )
-    }.
-
-%% Reduction opens are deliberately part of the statically inspectable HLS
-%% subset.  Preserve the older failure point for a computed action list so
-%% that CPU-only hls_statem modules can still compile while interface
-%% inference reports that their action shape is unsupported.
-split_entry_action_expression(ActionList = {nil, _}, Line) ->
-    split_literal_entry_actions(ActionList, Line);
-split_entry_action_expression(ActionList = {cons, _, _, _}, Line) ->
-    split_literal_entry_actions(ActionList, Line);
-split_entry_action_expression(ActionList, _Line) ->
-    {none, ActionList}.
-
-split_literal_entry_actions(ActionList, Line) ->
-    {Reduction, CastActions} =
-        xls_statem_reduction_lower:split_entry_actions(ActionList, Line),
-    {Reduction, list_expression(CastActions, Line)}.
-
-list_expression([], Line) ->
-    {nil, Line};
-list_expression([Head | Tail], Line) ->
-    {cons, Line, Head, list_expression(Tail, Line)}.
+    (xls_statem_entry:analyze(Clause, MessageNames, OutputNames))#{phase => Phase}.
 
 order_entries(Entries, PhaseNames) ->
     EntryIndex = maps:from_list([
@@ -438,24 +395,11 @@ order_entries(Entries, PhaseNames) ->
     ]),
     [maps:get(Phase, EntryIndex) || Phase <- PhaseNames].
 
-interface_effects(#{phase := Phase, actions := Actions}) ->
-    [
-        maybe_conditional_effect(Action, #{
-            phase => Phase,
-            order => maps:get(order, Action),
-            port => maps:get(port, Action),
-            schema => maps:get(tag, Action)
-        })
-        || Action <- Actions
-    ].
-
-maybe_conditional_effect(#{condition := _Condition}, Effect) ->
-    Effect#{conditional => true};
-maybe_conditional_effect(_Action, Effect) ->
-    Effect.
+interface_effects(#{phase := Phase} = Entry) ->
+    [Effect#{phase => Phase} || Effect <- xls_statem_entry:effects(Entry)].
 
 max_entry_effects(Entries) ->
-    lists:max([length(maps:get(actions, Entry)) || Entry <- Entries]).
+    lists:max([xls_statem_entry:max_effects(Entry) || Entry <- Entries]).
 
 analyze_cast_groups(Clauses, PhaseNames, MessageNames) ->
     xls_callback_lower:group_by(
@@ -522,161 +466,53 @@ validate_init_head({clause, Line, Patterns, Guards, _Body}) ->
 %%% Phase entry
 %%%
 
-lower_entries(Entries, OutputNames, DataName, EnumAtoms) ->
-    [
-        lower_entry(Entry, OutputNames, DataName, EnumAtoms)
-        || Entry <- Entries
-    ].
-
-lower_entry(
-    #{
-        phase := Phase,
-        clause := Clause0,
-        prefix := Prefix,
-        data_expression := DataExpression,
-        reduction := Reduction,
-        actions := OrderedActions
-    },
-    OutputNames,
-    DataName,
-    EnumAtoms
-) ->
-    Clause = strip_dispatched_phase(Clause0),
-    %% Erlang evaluates the returned data, then the action list from left to
-    %% right. Keep every value in that one expression: even a disabled cast_if
-    %% evaluates its message, and a failure anywhere invalidates the entry.
-    EntryExpression = {tuple, 0, [
-        DataExpression,
-        entry_reduction_expression(Reduction),
-        {tuple, 0, [
-            {tuple, 0, [maps:get(condition, Action, {atom, 0, true}), Message]}
-            || Action = #{message := Message} <- OrderedActions
-        ]}
-    ]},
-    Outcome = xls_parse:clause_outcome(
-        replace_body(Clause, Prefix ++ [EntryExpression]),
-        enter_args(DataName), DataName, EnumAtoms),
-    true = length(OrderedActions) =< length(OutputNames),
-    #{
-        phase => Phase,
-        evaluation => maps:map(fun(_Key, Value) -> xls_parse:print(Value) end,
-            Outcome),
-        opens_reduction => Reduction =/= none,
-        effects => [
-            #{port => Port, tag => Tag,
-                conditional => maps:is_key(condition, Action)}
-            || Action = #{port := Port, tag := Tag} <- OrderedActions
-        ]
-    }.
-
-entry_reduction_expression(none) ->
-    {tuple, 0, []};
-entry_reduction_expression(#{key_expression := Key,
-        identity_expression := Identity}) ->
-    %% Give literal keys the same explicit width as record-field keys.
-    TypedKey = {call, 0,
-        {remote, 0, {atom, 0, hls_type}, {atom, 0, as}},
-        [{call, 0, {remote, 0, {atom, 0, hls_nums}, {atom, 0, u32}}, []}, Key]},
-    {tuple, 0, [TypedKey, Identity]}.
+%% TODO(XLS sum types): leaf constructors could return native tagged-tuple
+%% variants through case/if, replacing layout interning and the xls_map bridge
+%% to a hand-packed EntryOutcome. Named action segments could then rejoin at
+%% their bindings instead of copying the continuation into each alternative.
+%% Retain the entry plan's bounded alternatives,
+%% evaluation order, failure predicate, and conservative interface analysis.
+lower_entries(Entries, Prepared, EnumAtoms) ->
+    #{data_name := DataName, message_words := MessageWords,
+        reductions := Reductions} = Prepared,
+    {Layouts, {LayoutCount, _}} = lists:mapfoldl(
+        fun(#{phase := Phase, variants := Variants}, Index) ->
+            lists:mapfoldl(fun(Variant = #{actions := Actions}, {Next, Seen}) ->
+                Key = {Phase, Actions},
+                case maps:find(Key, Seen) of
+                    {ok, Layout} ->
+                        {Variant#{layout => Layout, phase => Phase}, {Next, Seen}};
+                    error when Next < 256 ->
+                        {Variant#{layout => Next, phase => Phase},
+                            {Next + 1, Seen#{Key => Next}}};
+                    error -> error({too_many_hls_statem_entry_layouts, 256})
+                end
+            end, Index, Variants)
+        end, {0, #{}}, Entries),
+    true = LayoutCount > 0,
+    AllLayouts = lists:append(Layouts),
+    PayloadBits = max(1, lists:max([lists:sum([
+        maps:get(Tag, MessageWords) * 32 || #{tag := Tag} <- Actions])
+        || #{actions := Actions} <- AllLayouts])),
+    [begin
+        Clause = xls_statem_entry:map_leaves(strip_dispatched_phase(Program),
+            fun(Id, Value) ->
+                Variant = lists:nth(Id + 1, EntryLayouts),
+                {xls_map, 0, Value, fun(R) ->
+                    xls_statem_codegen:entry_value(R, Variant,
+                        PayloadBits, MessageWords, Reductions)
+                end}
+            end),
+        Outcome = xls_parse:clause_outcome(Clause, enter_args(DataName),
+            DataName, EnumAtoms),
+        #{phase => Phase, layouts => lists:uniq([
+                maps:with([phase, layout, actions], Layout) || Layout <- EntryLayouts]),
+            evaluation => maps:map(fun(_Key, V) -> xls_parse:print(V) end, Outcome)}
+    end || {#{phase := Phase, program := Program}, EntryLayouts} <-
+        lists:zip(Entries, Layouts)].
 
 enter_args(DataName) ->
-    [
-        "old_phase",
-        "phase",
-        ["(Tag::", uppercase(DataName), ", data)"]
-    ].
-
-parse_actions(ActionList, Prefix, MessageNames, OutputNames, Line) ->
-    %% The list shape and ports remain static. A cast_if condition controls
-    %% whether its allocated ordered slot emits at runtime.
-    ActionExpressions = literal_list(ActionList, Line),
-    Bindings = record_bindings(Prefix),
-    Parsed = lists:map(
-        fun({Order, Action}) ->
-            (parse_action(
-                Action,
-                Bindings,
-                MessageNames,
-                OutputNames,
-                Line
-            ))#{order => Order}
-        end,
-        lists:enumerate(0, ActionExpressions)
-    ),
-    Ports = [maps:get(port, Action) || Action <- Parsed],
-    ok = require_unique(entry_output, Ports),
-    Parsed.
-
-parse_action(
-    {tuple, _TupleLine, [
-        {atom, _CastLine, cast},
-        {atom, _PortLine, Port},
-        Message
-    ]},
-    Bindings,
-    MessageNames,
-    OutputNames,
-    _Line
-) ->
-    require_declared(entry_output, Port, OutputNames),
-    Tag = message_tag(Message, Bindings),
-    require_declared(entry_message, Tag, MessageNames),
-    #{port => Port, tag => Tag, message => Message};
-parse_action(
-    {tuple, _TupleLine, [
-        {atom, _CastLine, cast_if},
-        Condition,
-        {atom, _PortLine, Port},
-        Message
-    ]},
-    Bindings,
-    MessageNames,
-    OutputNames,
-    _Line
-) ->
-    require_declared(entry_output, Port, OutputNames),
-    Tag = message_tag(Message, Bindings),
-    require_declared(entry_message, Tag, MessageNames),
-    #{
-        port => Port,
-        tag => Tag,
-        message => Message,
-        condition => Condition
-    };
-parse_action(Action, _Bindings, _MessageNames, _OutputNames, Line) ->
-    error({bad_hls_statem_entry_action, Line, Action}).
-
-message_tag({record, _Line, Tag, _Fields}, _Bindings) ->
-    Tag;
-message_tag({record, _Line, _Base, Tag, _Fields}, _Bindings) ->
-    Tag;
-message_tag({var, _Line, Name}, Bindings) ->
-    case maps:find(Name, Bindings) of
-        {ok, Tag} -> Tag;
-        error -> error({unknown_hls_statem_action_message_type, Name})
-    end;
-message_tag(Message, _Bindings) ->
-    error({unsupported_hls_statem_action_message, Message}).
-
-record_bindings(Expressions) ->
-    lists:foldl(
-        fun
-            ({match, _Line, {var, _VarLine, Name},
-                    {record, _RecordLine, Tag, _Fields}}, Bindings) ->
-                Bindings#{Name => Tag};
-            (_Expression, Bindings) ->
-                Bindings
-        end,
-        #{},
-        Expressions
-    ).
-
-literal_list({nil, _Line}, _ContextLine) ->
-    [];
-literal_list({cons, _Line, Head, Tail}, ContextLine) ->
-    [Head | literal_list(Tail, ContextLine)];
-literal_list(Expression, ContextLine) ->
-    error({nonliteral_hls_statem_actions, ContextLine, Expression}).
+    ["old_phase", "phase", ["(Tag::", uppercase(DataName), ", data)"]].
 
 %%%
 %%% Cast dispatch
@@ -911,9 +747,6 @@ strip_dispatched_phase({clause, Line, [First, Phase, Third], Guards, Body}) ->
 
 dispatched_phase_variable({atom, Line, _Phase}) ->
     {var, Line, '_'}.
-
-replace_body({clause, Line, Patterns, Guards, _Body}, Body) ->
-    {clause, Line, Patterns, Guards, Body}.
 
 split_last(List) ->
     {lists:droplast(List), lists:last(List)}.

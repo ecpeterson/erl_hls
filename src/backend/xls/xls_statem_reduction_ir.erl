@@ -62,6 +62,7 @@
     phase := atom(),
     name := atom(),
     population := population(),
+    opens_conditionally := boolean(),
     contributions := [contribution(), ...],
     completion := expression()
 }.
@@ -198,6 +199,7 @@ public_site(Site) ->
         phase => maps:get(phase, Site),
         name => maps:get(name, Site),
         population => maps:get(population, Site),
+        opens_conditionally => maps:get(opens_conditionally, Site),
         contributions => [maps:get(tag, Contribution)
             || Contribution <- Contributions],
         source_transportable => lists:all(fun(Contribution) ->
@@ -239,8 +241,9 @@ validate_site(#{
     name := Name,
     population := Population,
     contributions := Contributions,
-    completion := Completion
-}) when is_integer(ID), ID >= 0, is_atom(Phase), is_atom(Name),
+    completion := Completion,
+    opens_conditionally := OpensConditionally
+}) when is_boolean(OpensConditionally), is_integer(ID), ID >= 0, is_atom(Phase), is_atom(Name),
         is_list(Contributions), Contributions =/= [] ->
     ok = validate_population(Population),
     ok = validate_expression(completion, Completion),

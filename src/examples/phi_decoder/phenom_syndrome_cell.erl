@@ -273,18 +273,18 @@ configuring(cast, #noise_cutoff{}, Syndrome) ->
             #noise_cutoff{},
         #syndrome{}) -> hls_statem:cast_result(phase(), #syndrome{}).
 collecting(enter, _OldPhase, Syndrome) ->
-    Releasing = Syndrome#syndrome.seen_sources =:= ?PHI_ALL_DIRECTIONS,
-    NextStep = case Releasing of
-        false -> Syndrome#syndrome.step;
-        true -> (Syndrome#syndrome.step + 1) band ?U32_MASK
+    {NextStep, Announcements} = case Syndrome#syndrome.seen_sources of
+        ?PHI_ALL_DIRECTIONS ->
+            {(Syndrome#syndrome.step + 1) band ?U32_MASK,
+                [{cast, phi, #phenom_anyon{
+                    step = Syndrome#syndrome.step,
+                    flags = Syndrome#syndrome.announcement bor
+                        (Syndrome#syndrome.announcement_quiet bsl 1),
+                    x = Syndrome#syndrome.x,
+                    y = Syndrome#syndrome.y
+                }}]};
+        _ -> {Syndrome#syndrome.step, []}
     end,
-    Anyon = #phenom_anyon{
-        step = Syndrome#syndrome.step,
-        flags = Syndrome#syndrome.announcement bor
-            (Syndrome#syndrome.announcement_quiet bsl 1),
-        x = Syndrome#syndrome.x,
-        y = Syndrome#syndrome.y
-    },
     Query = #phenom_query{step = NextStep},
     Cleared = Syndrome#syndrome{
         step = NextStep,
@@ -293,8 +293,7 @@ collecting(enter, _OldPhase, Syndrome) ->
         data_quiet = 1,
         announcement_quiet = 0
     },
-    {Cleared, [
-        {cast_if, Releasing, phi, Anyon},
+    {Cleared, Announcements ++ [
         {cast, north, Query#phenom_query{source = ?PHI_SOUTH_MASK}},
         {cast, east, Query#phenom_query{source = ?PHI_WEST_MASK}},
         {cast, west, Query#phenom_query{source = ?PHI_EAST_MASK}},
@@ -362,20 +361,16 @@ collecting(
                 Step >= Syndrome#syndrome.cutoff_step,
             NoiseDisabled = Syndrome#syndrome.noise_disabled =:= 1 orelse
                 CutoffApplies,
-            NoiseDisabledWord = case NoiseDisabled of
-                false -> hls_type:as(hls_nums:u32(), 0);
-                true -> hls_type:as(hls_nums:u32(), 1)
-            end,
-            NextRandom = case NoiseDisabled of
-                true -> RandomState;
-                false -> hls_prng:xorshift32(RandomState)
-            end,
-            Measurement = case NoiseDisabled of
-                true -> hls_type:as(hls_nums:u32(), 0);
-                false -> case NextRandom < Threshold of
-                    false -> hls_type:as(hls_nums:u32(), 0);
-                    true -> hls_type:as(hls_nums:u32(), 1)
-                end
+            {NoiseDisabledWord, NextRandom, Measurement} = case NoiseDisabled of
+                true -> {hls_type:as(hls_nums:u32(), 1), RandomState,
+                    hls_type:as(hls_nums:u32(), 0)};
+                false ->
+                    Sample = hls_prng:xorshift32(RandomState),
+                    Hit = if
+                        Sample < Threshold -> hls_type:as(hls_nums:u32(), 1);
+                        true -> hls_type:as(hls_nums:u32(), 0)
+                    end,
+                    {hls_type:as(hls_nums:u32(), 0), Sample, Hit}
             end,
             Detection = NewParity bxor Measurement bxor PreviousMeasurement,
             Complete = Syndrome#syndrome{

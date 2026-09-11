@@ -361,10 +361,9 @@ pub const ENTRY_EFFECT_CAPACITY = u32:4;
 pub const ENTRY_EFFECT_PAYLOAD_BITS = u32:384;
 
 // Sorry: this is a hand-rolled tagged union. DSLX cannot yet express
-// phase-indexed variants whose fields retain their message types.
+// entry variants whose fields retain their message types.
 pub struct EntryEffects {
-  phase: u8,
-  valid: bool[4],
+  layout: u8,
   payloads: bits[384],
 }
 
@@ -569,55 +568,47 @@ fn enter(old_phase: Phase, phase: Phase, data: Datacell) -> EntryOutcome {
       let _OldPhase_1 = old_phase;
       let __1 = phase;
       let Cell_1 = (Tag::DATA_CELL, data);
+      let Xls_entry_0_1 = Cell_1;
       let _0 = ();
       let _1 = ();
-      let _2 = (Cell_1, _0, _1, );
-      if bool:false {
-        EntryOutcome { data, failed: true, ..zero!<EntryOutcome>() }
-      } else {
+      let _2 = (Xls_entry_0_1, _0, _1, );
+      let _3 = {
         let evaluated = _2;
         EntryOutcome {
           data: evaluated.0.1,
           failed: false,
           effects: EntryEffects {
-            phase: Phase::CONFIGURING as u8,
-            valid: [
-              bool:false,
-              bool:false,
-              bool:false,
-              bool:false,
-            ],
+            layout: u8:0,
             payloads: zero!<bits[384]>(),
           },
         }
-      }
+      };
+      if bool:false {
+        EntryOutcome { data, failed: true, ..zero!<EntryOutcome>() }
+      } else { _3 }
     },
     Phase::COLLECTING => {
       let _OldPhase_1 = old_phase;
       let __1 = phase;
       let Cell_1 = (Tag::DATA_CELL, data);
+      let Xls_entry_0_1 = Cell_1;
       let _0 = ();
       let _1 = ();
-      let _2 = (Cell_1, _0, _1, );
-      if bool:false {
-        EntryOutcome { data, failed: true, ..zero!<EntryOutcome>() }
-      } else {
+      let _2 = (Xls_entry_0_1, _0, _1, );
+      let _3 = {
         let evaluated = _2;
         EntryOutcome {
           data: evaluated.0.1,
           failed: false,
           effects: EntryEffects {
-            phase: Phase::COLLECTING as u8,
-            valid: [
-              bool:false,
-              bool:false,
-              bool:false,
-              bool:false,
-            ],
+            layout: u8:1,
             payloads: zero!<bits[384]>(),
           },
         }
-      }
+      };
+      if bool:false {
+        EntryOutcome { data, failed: true, ..zero!<EntryOutcome>() }
+      } else { _3 }
     },
     Phase::REPORTING => {
       let _OldPhase_1 = old_phase;
@@ -635,72 +626,68 @@ fn enter(old_phase: Phase, phase: Phase, data: Datacell) -> EntryOutcome {
       };
       let _6 = (Tag::PHENOM_DATA, _5, bits_from_phenomdata(_5));
       let Message_1 = _6;
-      let _7 = ();
-      let _8 = Phenomdata {
+      let Xls_entry_0_1 = Cell_1;
+      let _7 = Phenomdata {
         source: 8,
         ..(Message_1).1
       };
-      let _9 = (Tag::PHENOM_DATA, _8, bits_from_phenomdata(_8));
-      let _10 = (bool:1, _9, );
-      let _11 = Phenomdata {
+      let _8 = (Tag::PHENOM_DATA, _7, bits_from_phenomdata(_7));
+      let Xls_entry_1_1 = _8;
+      let _9 = Phenomdata {
         source: 4,
         ..(Message_1).1
       };
-      let _12 = (Tag::PHENOM_DATA, _11, bits_from_phenomdata(_11));
-      let _13 = (bool:1, _12, );
-      let _14 = Phenomdata {
+      let _10 = (Tag::PHENOM_DATA, _9, bits_from_phenomdata(_9));
+      let Xls_entry_2_1 = _10;
+      let _11 = Phenomdata {
         source: 2,
         ..(Message_1).1
       };
-      let _15 = (Tag::PHENOM_DATA, _14, bits_from_phenomdata(_14));
-      let _16 = (bool:1, _15, );
-      let _17 = Phenomdata {
+      let _12 = (Tag::PHENOM_DATA, _11, bits_from_phenomdata(_11));
+      let Xls_entry_3_1 = _12;
+      let _13 = Phenomdata {
         source: 1,
         ..(Message_1).1
       };
-      let _18 = (Tag::PHENOM_DATA, _17, bits_from_phenomdata(_17));
-      let _19 = (bool:1, _18, );
-      let _20 = (_10, _13, _16, _19, );
-      let _21 = (Cell_1, _7, _20, );
-      if bool:false {
-        EntryOutcome { data, failed: true, ..zero!<EntryOutcome>() }
-      } else {
-        let evaluated = _21;
-        let effect_0 = axis::pack(
-          evaluated.2.0.1.0 as u8, evaluated.2.0.1.2);
-        let effect_1 = axis::pack(
-          evaluated.2.1.1.0 as u8, evaluated.2.1.1.2);
-        let effect_2 = axis::pack(
-          evaluated.2.2.1.0 as u8, evaluated.2.2.1.2);
-        let effect_3 = axis::pack(
-          evaluated.2.3.1.0 as u8, evaluated.2.3.1.2);
+      let _14 = (Tag::PHENOM_DATA, _13, bits_from_phenomdata(_13));
+      let Xls_entry_4_1 = _14;
+      let _15 = ();
+      let _16 = (Xls_entry_1_1, Xls_entry_2_1, Xls_entry_3_1, Xls_entry_4_1, );
+      let _17 = (Xls_entry_0_1, _15, _16, );
+      let _18 = {
+        let evaluated = _17;
+              let effect_0 = axis::pack(
+                evaluated.2.0.0 as u8, evaluated.2.0.2);
+              let effect_1 = axis::pack(
+                evaluated.2.1.0 as u8, evaluated.2.1.2);
+              let effect_2 = axis::pack(
+                evaluated.2.2.0 as u8, evaluated.2.2.2);
+              let effect_3 = axis::pack(
+                evaluated.2.3.0 as u8, evaluated.2.3.2);
         EntryOutcome {
           data: evaluated.0.1,
           failed: false,
           effects: EntryEffects {
-            phase: Phase::REPORTING as u8,
-            valid: [
-              evaluated.2.0.0,
-              evaluated.2.1.0,
-              evaluated.2.2.0,
-              evaluated.2.3.0,
-            ],
+            layout: u8:2,
             payloads: bit_slice_update(
-          bit_slice_update(
-          bit_slice_update(
-          bit_slice_update(
-          zero!<bits[384]>(),
-          u32:0,
-          effect_0.payload[0:96]),
-          u32:96,
-          effect_1.payload[0:96]),
-          u32:192,
-          effect_2.payload[0:96]),
-          u32:288,
-          effect_3.payload[0:96]),
+                bit_slice_update(
+                bit_slice_update(
+                bit_slice_update(
+                zero!<bits[384]>(),
+                u32:0,
+                effect_0.payload[0:96]),
+                u32:96,
+                effect_1.payload[0:96]),
+                u32:192,
+                effect_2.payload[0:96]),
+                u32:288,
+                effect_3.payload[0:96]),
           },
         }
-      }
+      };
+      if bool:false {
+        EntryOutcome { data, failed: true, ..zero!<EntryOutcome>() }
+      } else { _18 }
     },
     Phase::REPLYING => {
       let _OldPhase_1 = old_phase;
@@ -719,52 +706,49 @@ fn enter(old_phase: Phase, phase: Phase, data: Datacell) -> EntryOutcome {
       };
       let _5 = (Tag::PAULI_REPLY, _4, bits_from_paulireply(_4));
       let Reply_1 = _5;
+      let Xls_entry_0_1 = Cell_1;
+      let Xls_entry_1_1 = Reply_1;
       let _6 = ();
-      let _7 = (bool:1, Reply_1, );
-      let _8 = (_7, );
-      let _9 = (Cell_1, _6, _8, );
-      if bool:false {
-        EntryOutcome { data, failed: true, ..zero!<EntryOutcome>() }
-      } else {
-        let evaluated = _9;
-        let effect_0 = axis::pack(
-          evaluated.2.0.1.0 as u8, evaluated.2.0.1.2);
+      let _7 = (Xls_entry_1_1, );
+      let _8 = (Xls_entry_0_1, _6, _7, );
+      let _9 = {
+        let evaluated = _8;
+              let effect_0 = axis::pack(
+                evaluated.2.0.0 as u8, evaluated.2.0.2);
         EntryOutcome {
           data: evaluated.0.1,
           failed: false,
           effects: EntryEffects {
-            phase: Phase::REPLYING as u8,
-            valid: [
-              evaluated.2.0.0,
-              bool:false,
-              bool:false,
-              bool:false,
-            ],
+            layout: u8:3,
             payloads: bit_slice_update(
-          zero!<bits[384]>(),
-          u32:0,
-          effect_0.payload[0:96]),
+                zero!<bits[384]>(),
+                u32:0,
+                effect_0.payload[0:96]),
           },
         }
-      }
+      };
+      if bool:false {
+        EntryOutcome { data, failed: true, ..zero!<EntryOutcome>() }
+      } else { _9 }
     },
   }
 }
 
 fn entry_effect_count(effects: EntryEffects) -> u8 {
-  match effects.phase as Phase {
-    Phase::CONFIGURING => u8:0,
-    Phase::COLLECTING => u8:0,
-    Phase::REPORTING => u8:4,
-    Phase::REPLYING => u8:1,
+  match effects.layout {
+    u8:0 => u8:0,
+    u8:1 => u8:0,
+    u8:2 => u8:4,
+    u8:3 => u8:1,
+    _ => u8:0,
   }
 }
 
 fn entry_effect(effects: EntryEffects, index: u8) -> Egress {
-  match effects.phase as Phase {
-    Phase::CONFIGURING => zero!<Egress>(),
-    Phase::COLLECTING => zero!<Egress>(),
-    Phase::REPORTING => match index {
+  match effects.layout {
+    u8:0 => zero!<Egress>(),
+    u8:1 => zero!<Egress>(),
+    u8:2 => match index {
       u8:0 => Egress {
         port: OutputPort::NORTH,
         frame: axis::pack(Tag::PHENOM_DATA as u8,
@@ -787,7 +771,7 @@ fn entry_effect(effects: EntryEffects, index: u8) -> Egress {
       },
       _ => zero!<Egress>(),
     },
-    Phase::REPLYING => match index {
+    u8:3 => match index {
       u8:0 => Egress {
         port: OutputPort::MEASUREMENT,
         frame: axis::pack(Tag::PAULI_REPLY as u8,
@@ -795,22 +779,19 @@ fn entry_effect(effects: EntryEffects, index: u8) -> Egress {
       },
       _ => zero!<Egress>(),
     },
+    _ => zero!<Egress>(),
   }
 }
 
 pub fn scheduled_effect(
     scheduled: ScheduledEffects, index: u8) -> (Egress, u1, u1) {
   let count = entry_effect_count(scheduled.effects);
-  let emit = index < count && scheduled.effects.valid[index as u32];
+  let emit = index < count;
   let last = index + u8:1 >= count;
   (entry_effect(scheduled.effects, index), emit, last)
 }
 fn entry_effects_valid(effects: EntryEffects) -> u1 {
-  let count = entry_effect_count(effects);
-  unroll_for! (index, found):
-      (u32, u1) in u32:0..ENTRY_EFFECT_CAPACITY {
-    found || (index < count as u32 && effects.valid[index])
-  }(u1:0)
+  entry_effect_count(effects) != u8:0
 }
 
 fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacell, Directive, u1) {
@@ -973,7 +954,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
             let _11 = Xls_clause_1_Seen_1 | Xls_clause_1_Source_1;
             let Xls_clause_1_NewSeen_1 = _11;
             let _12 = Xls_clause_1_NewSeen_1 == 15;
-            let _42 = if _12 {
+            let _41 = if _12 {
               let _13 = Xls_clause_1_Cell_1.1.cutoff_armed;
               let _14 = _13 == 1;
               let _17 = if _14 {
@@ -996,85 +977,75 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
               let case_match_7_1 = bool:false;
               let case_match_7_2 = _20.1;
               let Xls_clause_1_NoiseDisabled_1 = _20.0;
-              let _22 = if Xls_clause_1_NoiseDisabled_1 {
+              let _31 = if Xls_clause_1_NoiseDisabled_1 {
                 let _21 = (1 as u32);
-                (_21, bool:false)
+                let _22 = Xls_clause_1_Cell_1.1.random_state;
+                let _23 = (0 as u32);
+                let _24 = (_21, _22, _23, );
+                (_24, bool:false)
               } else {
-                let _21 = (0 as u32);
-                (_21, bool:false)
-              };
-              let case_match_8_1 = bool:false;
-              let case_match_8_2 = _22.1;
-              let Xls_clause_1_NoiseDisabledWord_1 = _22.0;
-              let _27 = if Xls_clause_1_NoiseDisabled_1 {
-                let _23 = Xls_clause_1_Cell_1.1.random_state;
-                (_23, bool:false)
-              } else {
-                let _23 = Xls_clause_1_Cell_1.1.random_state;
-                let _24 = (_23 ^ (_23 << u32:13)) & u32:0xffffffff;
-                let _25 = (_24 ^ (_24 >> u32:17)) & u32:0xffffffff;
-                let _26 = (_25 ^ (_25 << u32:5)) & u32:0xffffffff;
-                (_26, bool:false)
+                let _21 = Xls_clause_1_Cell_1.1.random_state;
+                let _22 = (_21 ^ (_21 << u32:13)) & u32:0xffffffff;
+                let _23 = (_22 ^ (_22 >> u32:17)) & u32:0xffffffff;
+                let _24 = (_23 ^ (_23 << u32:5)) & u32:0xffffffff;
+                let Xls_clause_1_Sample_1 = _24;
+                let _25 = Xls_clause_1_Cell_1.1.threshold;
+                let _26 = Xls_clause_1_Sample_1 < _25;
+                let _28 = if _26 {
+                  let _27 = (1 as u32);
+                  (_27, bool:false)
+                } else {
+                  let _27 = (0 as u32);
+                  (_27, bool:false)
+                };
+                let case_match_8_1 = bool:false;
+                let case_match_8_2 = _28.1;
+                let Xls_clause_1_Hit_1 = _28.0;
+                let _29 = (0 as u32);
+                let _30 = (_29, Xls_clause_1_Sample_1, Xls_clause_1_Hit_1, );
+                (_30, (case_match_8_1 != case_match_8_2) || bool:false)
               };
               let case_match_9_1 = bool:false;
-              let case_match_9_2 = _27.1;
-              let Xls_clause_1_NextRandom_1 = _27.0;
-              let _32 = if Xls_clause_1_NoiseDisabled_1 {
-                let _28 = (0 as u32);
-                (_28, bool:false)
-              } else {
-                let _28 = Xls_clause_1_Cell_1.1.threshold;
-                let _29 = Xls_clause_1_NextRandom_1 < _28;
-                let _31 = if _29 {
-                  let _30 = (1 as u32);
-                  (_30, bool:false)
-                } else {
-                  let _30 = (0 as u32);
-                  (_30, bool:false)
-                };
-                let case_match_10_1 = bool:false;
-                let case_match_10_2 = _31.1;
-                (_31.0, (case_match_10_1 != case_match_10_2) || bool:false)
-              };
-              let case_match_11_1 = bool:false;
-              let case_match_11_2 = _32.1;
-              let Xls_clause_1_Event_1 = _32.0;
-              let _36 = {
+              let case_match_9_2 = _31.1;
+              let Xls_clause_1_NoiseDisabledWord_1 = _31.0.0;
+              let Xls_clause_1_NextRandom_1 = _31.0.1;
+              let Xls_clause_1_Event_1 = _31.0.2;
+              let _35 = {
                 if Xls_clause_1_Event_1 == 1 {
-                  let _33 = Xls_clause_1_Cell_1.1.accumulated_pauli;
-                  let _34 = u32:3;
-                  let _35 = (_33 ^ _34);
-                  (_35, bool:false)
+                  let _32 = Xls_clause_1_Cell_1.1.accumulated_pauli;
+                  let _33 = u32:3;
+                  let _34 = (_32 ^ _33);
+                  (_34, bool:false)
                 } else {
-                  let _33 = Xls_clause_1_Cell_1.1.accumulated_pauli;
-                  (_33, bool:false)
+                  let _32 = Xls_clause_1_Cell_1.1.accumulated_pauli;
+                  (_32, bool:false)
                 }
               };
-              let case_match_12_1 = bool:false;
-              let case_match_12_2 = _36.1;
-              let Xls_clause_1_AccumulatedPauli_1 = _36.0;
-              let _38 = if Xls_clause_1_CutoffApplies_1 {
-                let _37 = (0 as u32);
-                (_37, bool:false)
+              let case_match_10_1 = bool:false;
+              let case_match_10_2 = _35.1;
+              let Xls_clause_1_AccumulatedPauli_1 = _35.0;
+              let _37 = if Xls_clause_1_CutoffApplies_1 {
+                let _36 = (0 as u32);
+                (_36, bool:false)
               } else {
-                let _37 = Xls_clause_1_Cell_1.1.cutoff_armed;
-                (_37, bool:false)
+                let _36 = Xls_clause_1_Cell_1.1.cutoff_armed;
+                (_36, bool:false)
               };
-              let case_match_13_1 = bool:false;
-              let case_match_13_2 = _38.1;
-              let _39 = Datacell {
+              let case_match_11_1 = bool:false;
+              let case_match_11_2 = _37.1;
+              let _38 = Datacell {
                 seen_sources: Xls_clause_1_NewSeen_1,
                 event: Xls_clause_1_Event_1,
                 random_state: Xls_clause_1_NextRandom_1,
                 accumulated_pauli: Xls_clause_1_AccumulatedPauli_1,
                 noise_disabled: Xls_clause_1_NoiseDisabledWord_1,
-                cutoff_armed: _38.0,
+                cutoff_armed: _37.0,
                 ..(Xls_clause_1_Cell_1).1
               };
-              let _40 = (Tag::DATA_CELL, _39);
-              let Xls_clause_1_Completed_1 = _40;
-              let _41 = (Phase::REPORTING, Xls_clause_1_Completed_1, Directive::CONSUME, bool:0, );
-              (_41, (case_match_11_1 != case_match_11_2) || (case_match_12_1 != case_match_12_2) || (case_match_13_1 != case_match_13_2) || (case_match_6_1 != case_match_6_2) || (case_match_7_1 != case_match_7_2) || (case_match_8_1 != case_match_8_2) || (case_match_9_1 != case_match_9_2) || bool:false)
+              let _39 = (Tag::DATA_CELL, _38);
+              let Xls_clause_1_Completed_1 = _39;
+              let _40 = (Phase::REPORTING, Xls_clause_1_Completed_1, Directive::CONSUME, bool:0, );
+              (_40, (case_match_10_1 != case_match_10_2) || (case_match_11_1 != case_match_11_2) || (case_match_6_1 != case_match_6_2) || (case_match_7_1 != case_match_7_2) || (case_match_9_1 != case_match_9_2) || bool:false)
             } else {
               let _13 = Datacell {
                 seen_sources: Xls_clause_1_NewSeen_1,
@@ -1084,12 +1055,12 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
               let _15 = (Phase::COLLECTING, _14, Directive::CONSUME, bool:0, );
               (_15, bool:false)
             };
-            let case_match_14_1 = bool:false;
-            let case_match_14_2 = _42.1;
-            if ((case_match_14_1 != case_match_14_2) || bool:false) {
+            let case_match_12_1 = bool:false;
+            let case_match_12_2 = _41.1;
+            if ((case_match_12_1 != case_match_12_2) || bool:false) {
               (phase, data, Directive::FAIL, u1:0)
             } else {
-              (_42.0.0, _42.0.1.1, _42.0.2, _42.0.3)
+              (_41.0.0, _41.0.1.1, _41.0.2, _41.0.3)
             }
           } else {
             let Xls_clause_2_QueryStep_1 = message.step;
@@ -1816,10 +1787,8 @@ fn machine_step(
     let has_effect = machine.entry_effect_index < effect_count;
     let effect = entry_effect(
       effects, machine.entry_effect_index);
-    let emit_effect = has_effect && effects.valid[
-      machine.entry_effect_index as u32];
     let entry_failed = outcome.failed;
-    let can_advance = !entry_failed && (!emit_effect || egress_ready);
+    let can_advance = !entry_failed && (!has_effect || egress_ready);
     let next_effect_index = machine.entry_effect_index +
       ((has_effect && can_advance) as u8);
     let entry_complete = can_advance &&
@@ -1841,7 +1810,7 @@ fn machine_step(
       machine: if can_advance || entry_failed { advanced_machine }
         else { machine },
       egress: effect,
-      egress_valid: emit_effect && can_advance,
+      egress_valid: has_effect && can_advance,
       admission_valid: reserve,
     }
   } else {

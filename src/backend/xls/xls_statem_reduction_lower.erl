@@ -680,7 +680,8 @@ source_interface_site(#{
     id := Site,
     phase := Phase,
     name := Name,
-    population := Population
+    population := Population,
+    opens_conditionally := OpensConditionally
 }, Contributions) ->
     SiteContributions = [Contribution
         || Contribution <- Contributions,
@@ -694,6 +695,7 @@ source_interface_site(#{
         phase => Phase,
         name => Name,
         population => Population,
+        opens_conditionally => OpensConditionally,
         contributions => [Tag || {Tag, _Group} <- Groups],
         source_transportable => lists:all(
             fun({_Tag, Group}) ->
@@ -740,6 +742,7 @@ close_site(Open, Contributions, Completion, DataName, AccumulatorName,
         phase => maps:get(phase, Open),
         name => maps:get(name, Open),
         population => maps:get(population, Open),
+        opens_conditionally => maps:get(opens_conditionally, Open),
         contributions => [
             close_contribution_group(
                 Tag,

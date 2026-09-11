@@ -80,3 +80,37 @@ fn invalid_reopen_preserves_existing_reduction_test() {
   assert_eq(shared.machine.data, machine.data);
   assert_eq(shared.machine.reduction, machine.reduction);
 }
+
+#[test]
+fn optional_open_depends_on_the_selected_entry_branch_test() {
+  let machine = Machine { phase: Phase::OPTIONAL, entered_from: Phase::OPTIONAL,
+    data: Cell { value: u32:0 }, ..initial_machine() };
+  let existing = reduction_open_site(ReductionSite::OPTIONAL, u32:9, Sum { value: u32:7 });
+  let machine = Machine { reduction: existing, ..machine };
+  let skipped = machine_step(machine, zero!<axis::Frame>(), false, false);
+  assert_eq(skipped.machine.failed, false);
+  assert_eq(skipped.machine.enter_pending, false);
+  assert_eq(skipped.machine.reduction, existing);
+  assert_eq(skipped.machine.data.value, u32:10);
+  assert_eq(skipped.egress_valid, false);
+  let shared = shared_execute(SharedExecutorRequest {
+    machine: bits_from_machine(shared_machine(machine)), egress_ready: false,
+    ..zero!<SharedExecutorRequest>()
+  });
+  assert_eq(machine_from_bits(shared.machine), shared_machine(skipped.machine));
+  assert_eq(shared.effects_valid, false);
+  assert_eq(shared.egress_blocked, false);
+  let opening = Machine { data: Cell { value: u32:1 }, ..machine };
+  let rejected = machine_step(opening, zero!<axis::Frame>(), false, false);
+  assert_eq(rejected.machine.failed, true);
+  assert_eq(rejected.machine.reduction, existing);
+  assert_eq(rejected.egress_valid, false);
+  let opening = Machine { reduction: zero!<ReductionState>(), ..opening };
+  let blocked = machine_step(opening, zero!<axis::Frame>(), false, false);
+  assert_eq(blocked.machine, opening);
+  let accepted = machine_step(opening, zero!<axis::Frame>(), false, true);
+  assert_eq(accepted.machine.failed, false);
+  assert_eq(accepted.machine.reduction.key, u32:1);
+  assert_eq(accepted.machine.reduction.status, ReductionStatus::OPEN);
+  assert_eq(accepted.egress_valid, true);
+}

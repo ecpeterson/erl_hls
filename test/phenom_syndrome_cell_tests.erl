@@ -15,12 +15,6 @@ query_entry_labels_recipient_edges_test() ->
     Cell = collecting_cell(?PRNG_SEED, 0),
     ?assertEqual(
         {Cell, [
-            {cast_if, false, phi, #phenom_anyon{
-                step = 0,
-                flags = 0,
-                x = 0,
-                y = 0
-            }},
             {cast, north, #phenom_query{
                 step = 0,
                 source = ?PHI_SOUTH_MASK
@@ -86,7 +80,7 @@ response_order_does_not_change_parity_test() ->
                 Released
             ),
             ?assertMatch(
-                [{cast_if, true, phi, #phenom_anyon{
+                [{cast, phi, #phenom_anyon{
                     step = 0,
                     flags = ?PHENOM_PRESENT_MASK,
                     x = ?COORD_X,

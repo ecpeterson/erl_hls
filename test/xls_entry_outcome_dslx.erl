@@ -2,19 +2,14 @@
 -export([write/1]).
 
 phases() ->
-    [prefix, data, condition, message, disabled, skipped, shared_values, empty].
+    [prefix, data, condition, message, precomputed, skipped, shared_values, empty].
 
 %% The expected final data and ordered emissions come from the compiled BEAM
 %% callback. A raised badmatch yields no entry result and no action list.
 oracle(Phase, Value) ->
     try xls_entry_outcome_fixture:Phase(enter, Phase, {cell, Value}) of
         {{cell, Next}, Actions} ->
-            Effects = lists:filtermap(fun
-                ({cast, Port, {value, Payload}}) -> {true, {Port, Payload}};
-                ({cast_if, true, Port, {value, Payload}}) ->
-                    {true, {Port, Payload}};
-                ({cast_if, false, _Port, _Message}) -> false
-            end, Actions),
+            Effects = [{Port, Payload} || {cast, Port, {value, Payload}} <- Actions],
             {false, Next, Effects}
     catch
         error:{badmatch, _} -> {true, Value, []}
@@ -44,7 +39,7 @@ write(Stage) ->
 expected(Phase, Value, Ready) ->
     {Failed, Next, Effects} = oracle(Phase, Value),
     %% Account only for externally accepted frames. The direct actor retires
-    %% one allocated slot per ready/disabled cycle; the shared actor commits
+    %% one output per ready cycle; the shared actor commits
     %% its complete batch in one activation when space is reserved.
     {Pending, Data, Accepted} = case {Failed, Effects, Ready} of
         {true, _, _} -> {false, Value, []};

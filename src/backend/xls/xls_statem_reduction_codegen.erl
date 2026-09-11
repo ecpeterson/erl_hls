@@ -254,20 +254,9 @@ site_functions(Spec = #{sites := Sites}) ->
     ].
 
 open_functions(#{
-    accumulator := #{dslx_type := AccumulatorType},
-    sites := Sites
+    accumulator := #{dslx_type := AccumulatorType}
 }) ->
     [
-        "fn reduction_phase_opens(phase: Phase) -> u1 {\n",
-        "  match phase {\n",
-        [
-            ["    Phase::", uppercase(maps:get(phase, Site)),
-                " => u1:1,\n"]
-            || Site <- Sites
-        ],
-        "    _ => u1:0,\n",
-        "  }\n",
-        "}\n\n",
         "fn reduction_open_site(\n",
         "    site: ReductionSite, key: u32, identity: ", AccumulatorType,
         ") -> ReductionState {\n",
