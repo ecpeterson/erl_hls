@@ -811,11 +811,23 @@ fn reduction_open(
         let Heads_1 = _5;
         let _6 = Cell_1.1.anyon;
         let _7 = _6 == 1;
-        let _8 = Cell_1.1.best_direction;
-        let _9 = _8 != 0;
-        let _10 = _9 && Heads_1;
-        let _11 = _7 && _10;
-        let Move_1 = _11;
+        let _11 = if _7 {
+          let _8 = Cell_1.1.best_direction;
+          let _9 = _8 != 0;
+          let _10 = if _9 {
+            (Heads_1, bool:false)
+          } else {
+            (bool:0, bool:false)
+          };
+          let case_match_1_1 = bool:false;
+          let case_match_1_2 = _10.1;
+          (_10.0, (case_match_1_1 != case_match_1_2) || bool:false)
+        } else {
+          (bool:0, bool:false)
+        };
+        let case_match_2_1 = bool:false;
+        let case_match_2_2 = _11.1;
+        let Move_1 = _11.0;
         let _12 = (0 as u32);
         let Absent_1 = _12;
         let _14 = if Move_1 {
@@ -824,8 +836,8 @@ fn reduction_open(
         } else {
           (Absent_1, bool:false)
         };
-        let case_match_1_1 = bool:false;
-        let case_match_1_2 = _14.1;
+        let case_match_3_1 = bool:false;
+        let case_match_3_2 = _14.1;
         let Present_1 = _14.0;
         let _15 = Cell_1.1.best_direction;
         let _17 = {
@@ -852,8 +864,8 @@ fn reduction_open(
             }
           }
         };
-        let case_match_2_1 = bool:false;
-        let case_match_2_2 = _17.1;
+        let case_match_4_1 = bool:false;
+        let case_match_4_2 = _17.1;
         let NorthPresent_1 = _17.0.0;
         let EastPresent_1 = _17.0.1;
         let WestPresent_1 = _17.0.2;
@@ -871,8 +883,8 @@ fn reduction_open(
         } else {
           (Absent_1, bool:false)
         };
-        let case_match_3_1 = bool:false;
-        let case_match_3_2 = _22.1;
+        let case_match_5_1 = bool:false;
+        let case_match_5_2 = _22.1;
         let CorrectionDirection_1 = _22.0;
         let _23 = Cell_1.1.step;
         let _24 = Cell_1.1.x;
@@ -896,7 +908,7 @@ fn reduction_open(
         let _31 = (Tag::CELL, _30);
         let Updated_1 = _31;
         let _32 = Cell_1.1.step;
-        let _33 = if ((case_match_1_1 != case_match_1_2) || (case_match_2_1 != case_match_2_2) || (case_match_3_1 != case_match_3_2) || bool:false) {
+        let _33 = if ((case_match_2_1 != case_match_2_2) || (case_match_3_1 != case_match_3_2) || (case_match_4_1 != case_match_4_2) || (case_match_5_1 != case_match_5_2) || bool:false) {
             u32:0
         } else {
             _32
@@ -917,11 +929,23 @@ fn reduction_open(
         let Heads_1 = _5;
         let _6 = Cell_1.1.anyon;
         let _7 = _6 == 1;
-        let _8 = Cell_1.1.best_direction;
-        let _9 = _8 != 0;
-        let _10 = _9 && Heads_1;
-        let _11 = _7 && _10;
-        let Move_1 = _11;
+        let _11 = if _7 {
+          let _8 = Cell_1.1.best_direction;
+          let _9 = _8 != 0;
+          let _10 = if _9 {
+            (Heads_1, bool:false)
+          } else {
+            (bool:0, bool:false)
+          };
+          let case_match_1_1 = bool:false;
+          let case_match_1_2 = _10.1;
+          (_10.0, (case_match_1_1 != case_match_1_2) || bool:false)
+        } else {
+          (bool:0, bool:false)
+        };
+        let case_match_2_1 = bool:false;
+        let case_match_2_2 = _11.1;
+        let Move_1 = _11.0;
         let _12 = (0 as u32);
         let Absent_1 = _12;
         let _14 = if Move_1 {
@@ -930,8 +954,8 @@ fn reduction_open(
         } else {
           (Absent_1, bool:false)
         };
-        let case_match_1_1 = bool:false;
-        let case_match_1_2 = _14.1;
+        let case_match_3_1 = bool:false;
+        let case_match_3_2 = _14.1;
         let Present_1 = _14.0;
         let _15 = Cell_1.1.best_direction;
         let _17 = {
@@ -958,8 +982,8 @@ fn reduction_open(
             }
           }
         };
-        let case_match_2_1 = bool:false;
-        let case_match_2_2 = _17.1;
+        let case_match_4_1 = bool:false;
+        let case_match_4_2 = _17.1;
         let NorthPresent_1 = _17.0.0;
         let EastPresent_1 = _17.0.1;
         let WestPresent_1 = _17.0.2;
@@ -977,8 +1001,8 @@ fn reduction_open(
         } else {
           (Absent_1, bool:false)
         };
-        let case_match_3_1 = bool:false;
-        let case_match_3_2 = _22.1;
+        let case_match_5_1 = bool:false;
+        let case_match_5_2 = _22.1;
         let CorrectionDirection_1 = _22.0;
         let _23 = Cell_1.1.step;
         let _24 = Cell_1.1.x;
@@ -1007,7 +1031,7 @@ fn reduction_open(
           ..zero!<Phifold>()
         };
         let _33 = (Tag::PHI_FOLD, _32, bits_from_phifold(_32));
-        let _34 = if ((case_match_1_1 != case_match_1_2) || (case_match_2_1 != case_match_2_2) || (case_match_3_1 != case_match_3_2) || bool:false) {
+        let _34 = if ((case_match_2_1 != case_match_2_2) || (case_match_3_1 != case_match_3_2) || (case_match_4_1 != case_match_4_2) || (case_match_5_1 != case_match_5_2) || bool:false) {
             zero!<Phifold>()
         } else {
             _33.1
@@ -2323,11 +2347,23 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
         let Heads_1 = _5;
         let _6 = Cell_1.1.anyon;
         let _7 = _6 == 1;
-        let _8 = Cell_1.1.best_direction;
-        let _9 = _8 != 0;
-        let _10 = _9 && Heads_1;
-        let _11 = _7 && _10;
-        let Move_1 = _11;
+        let _11 = if _7 {
+          let _8 = Cell_1.1.best_direction;
+          let _9 = _8 != 0;
+          let _10 = if _9 {
+            (Heads_1, bool:false)
+          } else {
+            (bool:0, bool:false)
+          };
+          let case_match_1_1 = bool:false;
+          let case_match_1_2 = _10.1;
+          (_10.0, (case_match_1_1 != case_match_1_2) || bool:false)
+        } else {
+          (bool:0, bool:false)
+        };
+        let case_match_2_1 = bool:false;
+        let case_match_2_2 = _11.1;
+        let Move_1 = _11.0;
         let _12 = (0 as u32);
         let Absent_1 = _12;
         let _14 = if Move_1 {
@@ -2336,8 +2372,8 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
         } else {
           (Absent_1, bool:false)
         };
-        let case_match_1_1 = bool:false;
-        let case_match_1_2 = _14.1;
+        let case_match_3_1 = bool:false;
+        let case_match_3_2 = _14.1;
         let Present_1 = _14.0;
         let _15 = Cell_1.1.best_direction;
         let _17 = {
@@ -2364,8 +2400,8 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
             }
           }
         };
-        let case_match_2_1 = bool:false;
-        let case_match_2_2 = _17.1;
+        let case_match_4_1 = bool:false;
+        let case_match_4_2 = _17.1;
         let NorthPresent_1 = _17.0.0;
         let EastPresent_1 = _17.0.1;
         let WestPresent_1 = _17.0.2;
@@ -2383,8 +2419,8 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
         } else {
           (Absent_1, bool:false)
         };
-        let case_match_3_1 = bool:false;
-        let case_match_3_2 = _22.1;
+        let case_match_5_1 = bool:false;
+        let case_match_5_2 = _22.1;
         let CorrectionDirection_1 = _22.0;
         let _23 = Cell_1.1.step;
         let _24 = Cell_1.1.x;
@@ -2407,7 +2443,7 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
         };
         let _31 = (Tag::CELL, _30);
         let Updated_1 = _31;
-        let _32 = if ((case_match_1_1 != case_match_1_2) || (case_match_2_1 != case_match_2_2) || (case_match_3_1 != case_match_3_2) || bool:false) {
+        let _32 = if ((case_match_2_1 != case_match_2_2) || (case_match_3_1 != case_match_3_2) || (case_match_4_1 != case_match_4_2) || (case_match_5_1 != case_match_5_2) || bool:false) {
             data
         } else {
             Updated_1.1
@@ -2431,11 +2467,23 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
         let Heads_1 = _5;
         let _6 = Cell_1.1.anyon;
         let _7 = _6 == 1;
-        let _8 = Cell_1.1.best_direction;
-        let _9 = _8 != 0;
-        let _10 = _9 && Heads_1;
-        let _11 = _7 && _10;
-        let Move_1 = _11;
+        let _11 = if _7 {
+          let _8 = Cell_1.1.best_direction;
+          let _9 = _8 != 0;
+          let _10 = if _9 {
+            (Heads_1, bool:false)
+          } else {
+            (bool:0, bool:false)
+          };
+          let case_match_1_1 = bool:false;
+          let case_match_1_2 = _10.1;
+          (_10.0, (case_match_1_1 != case_match_1_2) || bool:false)
+        } else {
+          (bool:0, bool:false)
+        };
+        let case_match_2_1 = bool:false;
+        let case_match_2_2 = _11.1;
+        let Move_1 = _11.0;
         let _12 = (0 as u32);
         let Absent_1 = _12;
         let _14 = if Move_1 {
@@ -2444,8 +2492,8 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
         } else {
           (Absent_1, bool:false)
         };
-        let case_match_1_1 = bool:false;
-        let case_match_1_2 = _14.1;
+        let case_match_3_1 = bool:false;
+        let case_match_3_2 = _14.1;
         let Present_1 = _14.0;
         let _15 = Cell_1.1.best_direction;
         let _17 = {
@@ -2472,8 +2520,8 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
             }
           }
         };
-        let case_match_2_1 = bool:false;
-        let case_match_2_2 = _17.1;
+        let case_match_4_1 = bool:false;
+        let case_match_4_2 = _17.1;
         let NorthPresent_1 = _17.0.0;
         let EastPresent_1 = _17.0.1;
         let WestPresent_1 = _17.0.2;
@@ -2491,8 +2539,8 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
         } else {
           (Absent_1, bool:false)
         };
-        let case_match_3_1 = bool:false;
-        let case_match_3_2 = _22.1;
+        let case_match_5_1 = bool:false;
+        let case_match_5_2 = _22.1;
         let CorrectionDirection_1 = _22.0;
         let _23 = Cell_1.1.step;
         let _24 = Cell_1.1.x;
@@ -2520,7 +2568,7 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
           ..(Message_1).1
         };
         let _33 = (Tag::ANYON_MOVE, _32, bits_from_anyonmove(_32));
-        let _34 = if ((case_match_1_1 != case_match_1_2) || (case_match_2_1 != case_match_2_2) || (case_match_3_1 != case_match_3_2) || bool:false) {
+        let _34 = if ((case_match_2_1 != case_match_2_2) || (case_match_3_1 != case_match_3_2) || (case_match_4_1 != case_match_4_2) || (case_match_5_1 != case_match_5_2) || bool:false) {
             zero!<axis::Frame>()
         } else {
             axis::pack(_33.0 as u8, _33.2)
@@ -2544,11 +2592,23 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
         let Heads_1 = _5;
         let _6 = Cell_1.1.anyon;
         let _7 = _6 == 1;
-        let _8 = Cell_1.1.best_direction;
-        let _9 = _8 != 0;
-        let _10 = _9 && Heads_1;
-        let _11 = _7 && _10;
-        let Move_1 = _11;
+        let _11 = if _7 {
+          let _8 = Cell_1.1.best_direction;
+          let _9 = _8 != 0;
+          let _10 = if _9 {
+            (Heads_1, bool:false)
+          } else {
+            (bool:0, bool:false)
+          };
+          let case_match_1_1 = bool:false;
+          let case_match_1_2 = _10.1;
+          (_10.0, (case_match_1_1 != case_match_1_2) || bool:false)
+        } else {
+          (bool:0, bool:false)
+        };
+        let case_match_2_1 = bool:false;
+        let case_match_2_2 = _11.1;
+        let Move_1 = _11.0;
         let _12 = (0 as u32);
         let Absent_1 = _12;
         let _14 = if Move_1 {
@@ -2557,8 +2617,8 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
         } else {
           (Absent_1, bool:false)
         };
-        let case_match_1_1 = bool:false;
-        let case_match_1_2 = _14.1;
+        let case_match_3_1 = bool:false;
+        let case_match_3_2 = _14.1;
         let Present_1 = _14.0;
         let _15 = Cell_1.1.best_direction;
         let _17 = {
@@ -2585,8 +2645,8 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
             }
           }
         };
-        let case_match_2_1 = bool:false;
-        let case_match_2_2 = _17.1;
+        let case_match_4_1 = bool:false;
+        let case_match_4_2 = _17.1;
         let NorthPresent_1 = _17.0.0;
         let EastPresent_1 = _17.0.1;
         let WestPresent_1 = _17.0.2;
@@ -2604,8 +2664,8 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
         } else {
           (Absent_1, bool:false)
         };
-        let case_match_3_1 = bool:false;
-        let case_match_3_2 = _22.1;
+        let case_match_5_1 = bool:false;
+        let case_match_5_2 = _22.1;
         let CorrectionDirection_1 = _22.0;
         let _23 = Cell_1.1.step;
         let _24 = Cell_1.1.x;
@@ -2633,7 +2693,7 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
           ..(Message_1).1
         };
         let _33 = (Tag::ANYON_MOVE, _32, bits_from_anyonmove(_32));
-        let _34 = if ((case_match_1_1 != case_match_1_2) || (case_match_2_1 != case_match_2_2) || (case_match_3_1 != case_match_3_2) || bool:false) {
+        let _34 = if ((case_match_2_1 != case_match_2_2) || (case_match_3_1 != case_match_3_2) || (case_match_4_1 != case_match_4_2) || (case_match_5_1 != case_match_5_2) || bool:false) {
             zero!<axis::Frame>()
         } else {
             axis::pack(_33.0 as u8, _33.2)
@@ -2657,11 +2717,23 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
         let Heads_1 = _5;
         let _6 = Cell_1.1.anyon;
         let _7 = _6 == 1;
-        let _8 = Cell_1.1.best_direction;
-        let _9 = _8 != 0;
-        let _10 = _9 && Heads_1;
-        let _11 = _7 && _10;
-        let Move_1 = _11;
+        let _11 = if _7 {
+          let _8 = Cell_1.1.best_direction;
+          let _9 = _8 != 0;
+          let _10 = if _9 {
+            (Heads_1, bool:false)
+          } else {
+            (bool:0, bool:false)
+          };
+          let case_match_1_1 = bool:false;
+          let case_match_1_2 = _10.1;
+          (_10.0, (case_match_1_1 != case_match_1_2) || bool:false)
+        } else {
+          (bool:0, bool:false)
+        };
+        let case_match_2_1 = bool:false;
+        let case_match_2_2 = _11.1;
+        let Move_1 = _11.0;
         let _12 = (0 as u32);
         let Absent_1 = _12;
         let _14 = if Move_1 {
@@ -2670,8 +2742,8 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
         } else {
           (Absent_1, bool:false)
         };
-        let case_match_1_1 = bool:false;
-        let case_match_1_2 = _14.1;
+        let case_match_3_1 = bool:false;
+        let case_match_3_2 = _14.1;
         let Present_1 = _14.0;
         let _15 = Cell_1.1.best_direction;
         let _17 = {
@@ -2698,8 +2770,8 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
             }
           }
         };
-        let case_match_2_1 = bool:false;
-        let case_match_2_2 = _17.1;
+        let case_match_4_1 = bool:false;
+        let case_match_4_2 = _17.1;
         let NorthPresent_1 = _17.0.0;
         let EastPresent_1 = _17.0.1;
         let WestPresent_1 = _17.0.2;
@@ -2717,8 +2789,8 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
         } else {
           (Absent_1, bool:false)
         };
-        let case_match_3_1 = bool:false;
-        let case_match_3_2 = _22.1;
+        let case_match_5_1 = bool:false;
+        let case_match_5_2 = _22.1;
         let CorrectionDirection_1 = _22.0;
         let _23 = Cell_1.1.step;
         let _24 = Cell_1.1.x;
@@ -2746,7 +2818,7 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
           ..(Message_1).1
         };
         let _33 = (Tag::ANYON_MOVE, _32, bits_from_anyonmove(_32));
-        let _34 = if ((case_match_1_1 != case_match_1_2) || (case_match_2_1 != case_match_2_2) || (case_match_3_1 != case_match_3_2) || bool:false) {
+        let _34 = if ((case_match_2_1 != case_match_2_2) || (case_match_3_1 != case_match_3_2) || (case_match_4_1 != case_match_4_2) || (case_match_5_1 != case_match_5_2) || bool:false) {
             zero!<axis::Frame>()
         } else {
             axis::pack(_33.0 as u8, _33.2)
@@ -2770,11 +2842,23 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
         let Heads_1 = _5;
         let _6 = Cell_1.1.anyon;
         let _7 = _6 == 1;
-        let _8 = Cell_1.1.best_direction;
-        let _9 = _8 != 0;
-        let _10 = _9 && Heads_1;
-        let _11 = _7 && _10;
-        let Move_1 = _11;
+        let _11 = if _7 {
+          let _8 = Cell_1.1.best_direction;
+          let _9 = _8 != 0;
+          let _10 = if _9 {
+            (Heads_1, bool:false)
+          } else {
+            (bool:0, bool:false)
+          };
+          let case_match_1_1 = bool:false;
+          let case_match_1_2 = _10.1;
+          (_10.0, (case_match_1_1 != case_match_1_2) || bool:false)
+        } else {
+          (bool:0, bool:false)
+        };
+        let case_match_2_1 = bool:false;
+        let case_match_2_2 = _11.1;
+        let Move_1 = _11.0;
         let _12 = (0 as u32);
         let Absent_1 = _12;
         let _14 = if Move_1 {
@@ -2783,8 +2867,8 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
         } else {
           (Absent_1, bool:false)
         };
-        let case_match_1_1 = bool:false;
-        let case_match_1_2 = _14.1;
+        let case_match_3_1 = bool:false;
+        let case_match_3_2 = _14.1;
         let Present_1 = _14.0;
         let _15 = Cell_1.1.best_direction;
         let _17 = {
@@ -2811,8 +2895,8 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
             }
           }
         };
-        let case_match_2_1 = bool:false;
-        let case_match_2_2 = _17.1;
+        let case_match_4_1 = bool:false;
+        let case_match_4_2 = _17.1;
         let NorthPresent_1 = _17.0.0;
         let EastPresent_1 = _17.0.1;
         let WestPresent_1 = _17.0.2;
@@ -2830,8 +2914,8 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
         } else {
           (Absent_1, bool:false)
         };
-        let case_match_3_1 = bool:false;
-        let case_match_3_2 = _22.1;
+        let case_match_5_1 = bool:false;
+        let case_match_5_2 = _22.1;
         let CorrectionDirection_1 = _22.0;
         let _23 = Cell_1.1.step;
         let _24 = Cell_1.1.x;
@@ -2859,7 +2943,7 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
           ..(Message_1).1
         };
         let _33 = (Tag::ANYON_MOVE, _32, bits_from_anyonmove(_32));
-        let _34 = if ((case_match_1_1 != case_match_1_2) || (case_match_2_1 != case_match_2_2) || (case_match_3_1 != case_match_3_2) || bool:false) {
+        let _34 = if ((case_match_2_1 != case_match_2_2) || (case_match_3_1 != case_match_3_2) || (case_match_4_1 != case_match_4_2) || (case_match_5_1 != case_match_5_2) || bool:false) {
             zero!<axis::Frame>()
         } else {
             axis::pack(_33.0 as u8, _33.2)
@@ -2880,11 +2964,23 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
         let Heads_1 = _5;
         let _6 = Cell_1.1.anyon;
         let _7 = _6 == 1;
-        let _8 = Cell_1.1.best_direction;
-        let _9 = _8 != 0;
-        let _10 = _9 && Heads_1;
-        let _11 = _7 && _10;
-        let Move_1 = _11;
+        let _11 = if _7 {
+          let _8 = Cell_1.1.best_direction;
+          let _9 = _8 != 0;
+          let _10 = if _9 {
+            (Heads_1, bool:false)
+          } else {
+            (bool:0, bool:false)
+          };
+          let case_match_1_1 = bool:false;
+          let case_match_1_2 = _10.1;
+          (_10.0, (case_match_1_1 != case_match_1_2) || bool:false)
+        } else {
+          (bool:0, bool:false)
+        };
+        let case_match_2_1 = bool:false;
+        let case_match_2_2 = _11.1;
+        let Move_1 = _11.0;
         let _12 = (0 as u32);
         let Absent_1 = _12;
         let _14 = if Move_1 {
@@ -2893,8 +2989,8 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
         } else {
           (Absent_1, bool:false)
         };
-        let case_match_1_1 = bool:false;
-        let case_match_1_2 = _14.1;
+        let case_match_3_1 = bool:false;
+        let case_match_3_2 = _14.1;
         let Present_1 = _14.0;
         let _15 = Cell_1.1.best_direction;
         let _17 = {
@@ -2921,8 +3017,8 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
             }
           }
         };
-        let case_match_2_1 = bool:false;
-        let case_match_2_2 = _17.1;
+        let case_match_4_1 = bool:false;
+        let case_match_4_2 = _17.1;
         let NorthPresent_1 = _17.0.0;
         let EastPresent_1 = _17.0.1;
         let WestPresent_1 = _17.0.2;
@@ -2940,8 +3036,8 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
         } else {
           (Absent_1, bool:false)
         };
-        let case_match_3_1 = bool:false;
-        let case_match_3_2 = _22.1;
+        let case_match_5_1 = bool:false;
+        let case_match_5_2 = _22.1;
         let CorrectionDirection_1 = _22.0;
         let _23 = Cell_1.1.step;
         let _24 = Cell_1.1.x;
@@ -2964,7 +3060,7 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
         };
         let _31 = (Tag::CELL, _30);
         let Updated_1 = _31;
-        let _32 = if ((case_match_1_1 != case_match_1_2) || (case_match_2_1 != case_match_2_2) || (case_match_3_1 != case_match_3_2) || bool:false) {
+        let _32 = if ((case_match_2_1 != case_match_2_2) || (case_match_3_1 != case_match_3_2) || (case_match_4_1 != case_match_4_2) || (case_match_5_1 != case_match_5_2) || bool:false) {
             bool:false
         } else {
             Move_1
@@ -2985,11 +3081,23 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
         let Heads_1 = _5;
         let _6 = Cell_1.1.anyon;
         let _7 = _6 == 1;
-        let _8 = Cell_1.1.best_direction;
-        let _9 = _8 != 0;
-        let _10 = _9 && Heads_1;
-        let _11 = _7 && _10;
-        let Move_1 = _11;
+        let _11 = if _7 {
+          let _8 = Cell_1.1.best_direction;
+          let _9 = _8 != 0;
+          let _10 = if _9 {
+            (Heads_1, bool:false)
+          } else {
+            (bool:0, bool:false)
+          };
+          let case_match_1_1 = bool:false;
+          let case_match_1_2 = _10.1;
+          (_10.0, (case_match_1_1 != case_match_1_2) || bool:false)
+        } else {
+          (bool:0, bool:false)
+        };
+        let case_match_2_1 = bool:false;
+        let case_match_2_2 = _11.1;
+        let Move_1 = _11.0;
         let _12 = (0 as u32);
         let Absent_1 = _12;
         let _14 = if Move_1 {
@@ -2998,8 +3106,8 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
         } else {
           (Absent_1, bool:false)
         };
-        let case_match_1_1 = bool:false;
-        let case_match_1_2 = _14.1;
+        let case_match_3_1 = bool:false;
+        let case_match_3_2 = _14.1;
         let Present_1 = _14.0;
         let _15 = Cell_1.1.best_direction;
         let _17 = {
@@ -3026,8 +3134,8 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
             }
           }
         };
-        let case_match_2_1 = bool:false;
-        let case_match_2_2 = _17.1;
+        let case_match_4_1 = bool:false;
+        let case_match_4_2 = _17.1;
         let NorthPresent_1 = _17.0.0;
         let EastPresent_1 = _17.0.1;
         let WestPresent_1 = _17.0.2;
@@ -3045,8 +3153,8 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
         } else {
           (Absent_1, bool:false)
         };
-        let case_match_3_1 = bool:false;
-        let case_match_3_2 = _22.1;
+        let case_match_5_1 = bool:false;
+        let case_match_5_2 = _22.1;
         let CorrectionDirection_1 = _22.0;
         let _23 = Cell_1.1.step;
         let _24 = Cell_1.1.x;
@@ -3069,7 +3177,7 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> (Cell, EntryEffects) {
         };
         let _31 = (Tag::CELL, _30);
         let Updated_1 = _31;
-        let _32 = if ((case_match_1_1 != case_match_1_2) || (case_match_2_1 != case_match_2_2) || (case_match_3_1 != case_match_3_2) || bool:false) {
+        let _32 = if ((case_match_2_1 != case_match_2_2) || (case_match_3_1 != case_match_3_2) || (case_match_4_1 != case_match_4_2) || (case_match_5_1 != case_match_5_2) || bool:false) {
             zero!<axis::Frame>()
         } else {
             axis::pack(Correction_1.0 as u8, Correction_1.2)

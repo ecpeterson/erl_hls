@@ -399,6 +399,28 @@ boolean_case_preserves_branch_badmatches_test() ->
     ),
     ?assertNotEqual(nomatch, binary:match(XLS, <<"case_match_">>)).
 
+short_circuit_evaluates_left_once_test_() ->
+    [?_assertEqual(1, length(binary:matches(
+        lower_expression_clause(
+            "probe(Value, Right) -> (Value + 1 =:= 2) " ++
+                Operator ++ " Right.",
+            ["value", "right"]
+        ), <<"Value_1 + 1">>))) || Operator <- ["andalso", "orelse"]].
+
+short_circuit_rhs_bindings_stay_in_their_branch_test_() ->
+    [?_test(begin
+        XLS = lower_expression_clause(
+            "probe(Left, Right) -> Left " ++ Operator ++ " "
+                "((Bound = Right) =:= false).", ["left", "right"]),
+        {Branch, _} = binary:match(XLS, BranchPrefix),
+        {Binding, _} = binary:match(XLS, <<"let Bound_1 = Right_1;">>),
+        ?assert(Branch < Binding),
+        ?assertEqual(1, length(binary:matches(XLS, <<"let Bound_1">>)))
+    end) || {Operator, BranchPrefix} <- [
+        {"andalso", <<"if Left_1 {">>},
+        {"orelse", <<"} else {">>}
+    ]].
+
 hls_type_as_preserves_the_host_value_and_emits_a_dslx_cast_test() ->
     ?assertEqual(0, hls_type:as(hls_nums:u32(), 0)),
     Clause = parse_clause(
