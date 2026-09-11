@@ -132,7 +132,7 @@ unpack(<<Value:8/signed-little-integer,    Rest/binary>>, s8,      []) -> {Value
 unpack(<<Value:16/signed-little-integer,   Rest/binary>>, s16,     []) -> {Value, Rest};
 unpack(<<Value:32/signed-little-integer,   Rest/binary>>, s32,     []) -> {Value, Rest};
 unpack(<<Value:64/signed-little-integer,   Rest/binary>>, s64,     []) -> {Value, Rest};
-unpack(<<Value:16/little-float,            Rest/binary>>, float16, []) -> {Value, Rest};
+unpack(Packed, float16, []) -> hls_codec:unpack_float16(Packed);
 unpack(<<Value:32/little-float,            Rest/binary>>, float32, []) -> {Value, Rest};
 unpack(<<Value:64/little-float,            Rest/binary>>, float64, []) -> {Value, Rest}.
 

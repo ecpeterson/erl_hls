@@ -9,11 +9,40 @@ binary16_exhaustive_wire_round_trip_test() ->
             16#7c00 -> ?assertError(function_clause, hls_type:unpack(Bytes, Type));
             _ ->
                 {Value, <<42>>} = hls_type:unpack(<<Bytes/binary, 42>>, Type),
+                ?assertEqual(half_reference(Bits), Value),
                 ?assertEqual(Bytes, hls_type:pack(Value, Type)),
                 ?assertEqual(Bytes, hls_type:pack_exact(Value, Type)),
                 ?assertEqual(Value, hls_type:normalize(Type, Value))
         end
     end, lists:seq(0, 65535)).
+
+%% An arithmetic reference checks decoded magnitudes independently of the
+%% codec's bit construction. Every finite binary16 value is exact in binary64.
+half_reference(Bits) ->
+    Fraction = Bits band 16#3ff,
+    Magnitude = case (Bits bsr 10) band 16#1f of
+        0 -> Fraction / (1 bsl 24);
+        Exponent -> (1024 + Fraction) * math:pow(2, Exponent - 25)
+    end,
+    case Bits bsr 15 of 0 -> Magnitude; 1 -> -Magnitude end.
+
+binary16_all_rounding_boundaries_test_() ->
+    {timeout, 30, fun() ->
+        Type = hls_nums:float16(),
+        lists:foreach(fun(LowerBits) ->
+            UpperBits = LowerBits + 1,
+            Midpoint = (half_reference(LowerBits) + half_reference(UpperBits)) / 2,
+            <<MiddleBits:64>> = <<Midpoint:64/float>>,
+            <<Below:64/float>> = <<(MiddleBits - 1):64>>,
+            <<Above:64/float>> = <<(MiddleBits + 1):64>>,
+            EvenBits = case LowerBits band 1 of 0 -> LowerBits; 1 -> UpperBits end,
+            lists:foreach(fun({Value, ExpectedBits}) ->
+                ?assertEqual(<<ExpectedBits:16/little>>, hls_type:pack(Value, Type)),
+                ?assertEqual(<<(ExpectedBits bor 16#8000):16/little>>,
+                    hls_type:pack(-Value, Type))
+            end, [{Below, LowerBits}, {Midpoint, EvenBits}, {Above, UpperBits}])
+        end, lists:seq(0, 16#7bfe))
+    end}.
 
 wide_formats_wire_round_trip_test_() ->
     [wire_patterns(hls_nums:float32(), 32, 8, 23),

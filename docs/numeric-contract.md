@@ -21,7 +21,7 @@ The laws permit normalization, but do not specify which normalization is appropr
 | `hls_nums:u8/u16/u32/u64/uN` | Preserve integers in the unsigned range; reject overflow and negative values. | `hls_nums:wrap(T, Value)` reduces modulo `2^Width`. |
 | `hls_nums:s8/s16/s32/s64` | Preserve integers in the signed range; reject overflow. | `hls_nums:wrap(T, Value)` reduces modulo `2^Width`, then interprets the sign bit. |
 | `hls_fixed:signed(Width, FractionBits)` | Preserve in-range raw scaled integers; reject overflow. | `hls_fixed:wrap/2` wraps the raw integer; `saturate/2` clamps it. Neither changes the fractional scale. |
-| `hls_nums:float16/float32` | Round to IEEE binary16/binary32 using the VM's float encoding, including ties to even and gradual underflow; reject results that encode infinity. | `hls_type:normalize/2` exposes the rounded host value; `pack_exact/2` rejects any change to the original term. |
+| `hls_nums:float16/float32` | Round to IEEE binary16/binary32, including ties to even and gradual underflow; reject results that encode infinity. | `hls_type:normalize/2` exposes the rounded host value; `pack_exact/2` rejects any change to the original term. |
 | `hls_nums:float64` | Preserve finite binary64 floats, including signed zero and subnormals. Integer inputs undergo ERTS's integer-to-binary64 conversion. | `pack_exact/2` rejects integer-to-float coercion as well as any other term change. |
 
 All float codecs continue to accept integer inputs through the VM's binary64 conversion before encoding. This can lose integer precision before narrowing, and excessively large integers are rejected. For example, normalizing `(1 bsl 53) + 1` as `float64` produces `9007199254740992.0`. Use `pack_exact/2` when coercion is unwanted. Bignum storage itself is never a reason to reject an integer: an in-range `u64` or `uN(96)` value remains valid regardless of how ERTS stores it.
@@ -61,6 +61,8 @@ Packing an invalid integer, malformed collection, or overflowing float raises `b
 
 ## Finite floats and exceptional encodings
 
+Binary16 encoding rounds directly from binary64 bits, and decoding reconstructs the exact binary64 value. This small wire codec avoids OTP 28.0.2's fallback conversion defects, which the Linux CI exposed: decoding and repacking the subnormal pattern `0x0002` produced `0x0001`, and a binary64 value just above a binary16 rounding tie could round down. The native half-float path on Apple Silicon passed those same tests. Binary32/binary64 continue to use the VM codecs. No arithmetic emulator or alternative live-value representation is introduced.
+
 [ERTS uses binary64 live floats and does not support live infinity or NaN](https://www.erlang.org/docs/28/system/data_types.html#float). Its bit syntax can nevertheless produce narrow infinity when a finite input overflows: encoding `65520.0` as binary16 produces the infinity pattern. The codecs reject that result so a successful pack is always decodable.
 
 Rounding to the largest finite value remains valid: binary16 packing accepts `65519.0` and normalizes it to `65504.0`. Underflow to signed zero is also valid. Both signed zeros and finite subnormals retain their wire bits. Applications that require exact values can select `pack_exact/2`; applications that require infinity/NaN payloads need an explicit bit-level representation instead of an ERTS float.
@@ -85,7 +87,7 @@ An exact execution reference should evaluate typed operations with their declare
 
 ## Executable coverage
 
-- `hls_float_tests` checks every binary16 encoding: all 63,488 finite encodings repack exactly, and all 2,048 nonfinite encodings are rejected. Binary32/binary64 tests cover every exponent, both signs, fraction boundaries, and deterministic additional bit patterns.
+- `hls_float_tests` checks every binary16 encoding against an independent arithmetic decoding reference: all 63,488 finite encodings repack exactly, and all 2,048 nonfinite encodings are rejected. It also checks every midpoint between adjacent finite binary16 magnitudes, both signs, and the immediately neighboring binary64 values. Binary32/binary64 tests cover every exponent, both signs, fraction boundaries, and deterministic additional bit patterns.
 - Float tests cover rounding ties and adjacent values, both overflow signs, finite rounding at the overflow threshold, subnormals, signed underflow, numeric coercion, recursive normalization, and exact-packing rejection.
 - Integer/fixed-point tests cover checked boundaries, intentional wrapping of large bignums, idempotence, wire agreement, scale preservation, and the distinction between saturation and wrapping.
 - `hls_numeric_dslx` lowers actual Erlang wrapping expressions and compares their XLS results with BEAM values. `hls_numeric_semantics.inc.x` records the integer-division and float-cancellation counterexamples and verifies XLS's subnormal behavior. The simulation preparation and CI runner include these tests.
