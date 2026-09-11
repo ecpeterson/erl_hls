@@ -1070,14 +1070,26 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
             let _42 = if _12 {
               let _13 = Xls_clause_1_Cell_1.1.cutoff_armed;
               let _14 = _13 == 1;
-              let _15 = Xls_clause_1_Cell_1.1.cutoff_step;
-              let _16 = Xls_clause_1_Step_1 >= _15;
-              let _17 = _14 && _16;
-              let Xls_clause_1_CutoffApplies_1 = _17;
+              let _17 = if _14 {
+                let _15 = Xls_clause_1_Cell_1.1.cutoff_step;
+                let _16 = Xls_clause_1_Step_1 >= _15;
+                (_16, bool:false)
+              } else {
+                (bool:0, bool:false)
+              };
+              let case_match_6_1 = bool:false;
+              let case_match_6_2 = _17.1;
+              let Xls_clause_1_CutoffApplies_1 = _17.0;
               let _18 = Xls_clause_1_Cell_1.1.noise_disabled;
               let _19 = _18 == 1;
-              let _20 = _19 || Xls_clause_1_CutoffApplies_1;
-              let Xls_clause_1_NoiseDisabled_1 = _20;
+              let _20 = if _19 {
+                (bool:1, bool:false)
+              } else {
+                (Xls_clause_1_CutoffApplies_1, bool:false)
+              };
+              let case_match_7_1 = bool:false;
+              let case_match_7_2 = _20.1;
+              let Xls_clause_1_NoiseDisabled_1 = _20.0;
               let _22 = if Xls_clause_1_NoiseDisabled_1 {
                 let _21 = (1 as u32);
                 (_21, bool:false)
@@ -1085,8 +1097,8 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
                 let _21 = (0 as u32);
                 (_21, bool:false)
               };
-              let case_match_6_1 = bool:false;
-              let case_match_6_2 = _22.1;
+              let case_match_8_1 = bool:false;
+              let case_match_8_2 = _22.1;
               let Xls_clause_1_NoiseDisabledWord_1 = _22.0;
               let _27 = if Xls_clause_1_NoiseDisabled_1 {
                 let _23 = Xls_clause_1_Cell_1.1.random_state;
@@ -1098,8 +1110,8 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
                 let _26 = (_25 ^ (_25 << u32:5)) & u32:0xffffffff;
                 (_26, bool:false)
               };
-              let case_match_7_1 = bool:false;
-              let case_match_7_2 = _27.1;
+              let case_match_9_1 = bool:false;
+              let case_match_9_2 = _27.1;
               let Xls_clause_1_NextRandom_1 = _27.0;
               let _32 = if Xls_clause_1_NoiseDisabled_1 {
                 let _28 = (0 as u32);
@@ -1114,12 +1126,12 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
                   let _30 = (0 as u32);
                   (_30, bool:false)
                 };
-                let case_match_8_1 = bool:false;
-                let case_match_8_2 = _31.1;
-                (_31.0, (case_match_8_1 != case_match_8_2) || bool:false)
+                let case_match_10_1 = bool:false;
+                let case_match_10_2 = _31.1;
+                (_31.0, (case_match_10_1 != case_match_10_2) || bool:false)
               };
-              let case_match_9_1 = bool:false;
-              let case_match_9_2 = _32.1;
+              let case_match_11_1 = bool:false;
+              let case_match_11_2 = _32.1;
               let Xls_clause_1_Event_1 = _32.0;
               let _36 = {
                 if Xls_clause_1_Event_1 == 1 {
@@ -1132,8 +1144,8 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
                   (_33, bool:false)
                 }
               };
-              let case_match_10_1 = bool:false;
-              let case_match_10_2 = _36.1;
+              let case_match_12_1 = bool:false;
+              let case_match_12_2 = _36.1;
               let Xls_clause_1_AccumulatedPauli_1 = _36.0;
               let _38 = if Xls_clause_1_CutoffApplies_1 {
                 let _37 = (0 as u32);
@@ -1142,8 +1154,8 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
                 let _37 = Xls_clause_1_Cell_1.1.cutoff_armed;
                 (_37, bool:false)
               };
-              let case_match_11_1 = bool:false;
-              let case_match_11_2 = _38.1;
+              let case_match_13_1 = bool:false;
+              let case_match_13_2 = _38.1;
               let _39 = Datacell {
                 seen_sources: Xls_clause_1_NewSeen_1,
                 event: Xls_clause_1_Event_1,
@@ -1156,7 +1168,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
               let _40 = (Tag::DATA_CELL, _39);
               let Xls_clause_1_Completed_1 = _40;
               let _41 = (Phase::REPORTING, Xls_clause_1_Completed_1, Directive::CONSUME, bool:0, );
-              (_41, (case_match_10_1 != case_match_10_2) || (case_match_11_1 != case_match_11_2) || (case_match_6_1 != case_match_6_2) || (case_match_7_1 != case_match_7_2) || (case_match_9_1 != case_match_9_2) || bool:false)
+              (_41, (case_match_11_1 != case_match_11_2) || (case_match_12_1 != case_match_12_2) || (case_match_13_1 != case_match_13_2) || (case_match_6_1 != case_match_6_2) || (case_match_7_1 != case_match_7_2) || (case_match_8_1 != case_match_8_2) || (case_match_9_1 != case_match_9_2) || bool:false)
             } else {
               let _13 = Datacell {
                 seen_sources: Xls_clause_1_NewSeen_1,
@@ -1166,9 +1178,9 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
               let _15 = (Phase::COLLECTING, _14, Directive::CONSUME, bool:0, );
               (_15, bool:false)
             };
-            let case_match_12_1 = bool:false;
-            let case_match_12_2 = _42.1;
-            if ((case_match_12_1 != case_match_12_2) || bool:false) {
+            let case_match_14_1 = bool:false;
+            let case_match_14_2 = _42.1;
+            if ((case_match_14_1 != case_match_14_2) || bool:false) {
               (phase, data, Directive::FAIL, u1:0)
             } else {
               (_42.0.0, _42.0.1.1, _42.0.2, _42.0.3)

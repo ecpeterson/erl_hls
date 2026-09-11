@@ -33,6 +33,7 @@ for test_module in \
     hls_fixed.x \
     hls_vec.x \
     hls_numeric_test.x \
+    xls_short_circuit_test.x \
     arbitration.x \
     scheduler.x \
     bram.x \

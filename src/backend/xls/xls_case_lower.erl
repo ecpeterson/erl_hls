@@ -308,21 +308,9 @@ lower_boolean_case(Condition, Clauses, State0) ->
     },
     TrueState = lower_expressions(TrueBody, BranchBase),
     FalseState = lower_expressions(FalseBody, BranchBase),
-    AnonymousCounter = erlang:max(
-        TrueState#clause_state.anonymous_counter,
-        FalseState#clause_state.anonymous_counter
-    ),
-    CaseMatchCounter = erlang:max(
-        TrueState#clause_state.match_counter,
-        FalseState#clause_state.match_counter
-    ) + 1,
     BaseCounters = BranchBase#clause_state.named_counters,
-    MergedState = ConditionState#clause_state{
-        anonymous_counter = AnonymousCounter,
-        match_counter = CaseMatchCounter,
-        reference = none
-    },
-    CaseState = xls_parse:instr(MergedState, [
+    MergedState = merge_states(ConditionState, [TrueState, FalseState]),
+    finish_case(MergedState#clause_state{reference = none}, [
         "if ", xls_parse:reference(ConditionState), " {\n",
         xls_parse_io:indent(xls_parse:print(
             lists:reverse(TrueState#clause_state.statements)
@@ -342,22 +330,7 @@ lower_boolean_case(Condition, Clauses, State0) ->
             BaseCounters
         ), ")\n",
         "}"
-    ]),
-    CaseReference = xls_parse:reference(CaseState),
-    MatchBase = "case_match_" ++ integer_to_list(CaseMatchCounter),
-    {ExpectedName, ExpectedState} = xls_parse:uniquify(CaseState, MatchBase),
-    {ActualName, ActualState} = xls_parse:uniquify(
-        ExpectedState,
-        MatchBase
-    ),
-    ActualState#clause_state{
-        reference = [CaseReference, ".0"],
-        statements = [
-            ["let ", ActualName, " = ", CaseReference, ".1;\n"],
-            ["let ", ExpectedName, " = bool:false;\n"]
-            | ActualState#clause_state.statements
-        ]
-    }.
+    ]).
 
 boolean_case_bodies(Clauses) ->
     case lists:foldl(

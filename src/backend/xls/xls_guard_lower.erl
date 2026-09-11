@@ -18,7 +18,7 @@ condition([], Conditions, _Line) ->
 condition(Guards, [], Line) ->
     predicate(Guards, Line);
 condition(Guards, Conditions, Line) ->
-    lazy_conjunction(Line, conjunction(Conditions), predicate(Guards, Line)).
+    {op, Line, 'andalso', conjunction(Conditions), predicate(Guards, Line)}.
 
 -spec predicate([[erl_parse:abstract_expression()]], erl_anno:location()) ->
     erl_parse:abstract_expression().
@@ -29,7 +29,7 @@ predicate([Expressions], _Line) when Expressions =/= [] ->
         end,
         Expressions
     ),
-    rewrite_short_circuit(sequence(Expressions));
+    sequence(Expressions);
 predicate(Guards, Line) ->
     error({unsupported_xls_guard_sequences, Line, Guards}).
 
@@ -87,41 +87,6 @@ sequence([Expression]) ->
 sequence([Expression | Rest]) ->
     {op, expression_line(Expression), 'andalso',
         Expression, sequence(Rest)}.
-
-rewrite_short_circuit({op, Line, 'andalso', Left, Right}) ->
-    {'case', Line, rewrite_short_circuit(Left), [
-        {clause, Line, [{atom, Line, true}], [], [
-            rewrite_short_circuit(Right)
-        ]},
-        {clause, Line, [{atom, Line, false}], [], [
-            {atom, Line, false}
-        ]}
-    ]};
-rewrite_short_circuit({op, Line, 'orelse', Left, Right}) ->
-    {'case', Line, rewrite_short_circuit(Left), [
-        {clause, Line, [{atom, Line, true}], [], [
-            {atom, Line, true}
-        ]},
-        {clause, Line, [{atom, Line, false}], [], [
-            rewrite_short_circuit(Right)
-        ]}
-    ]};
-rewrite_short_circuit(Tuple) when is_tuple(Tuple) ->
-    list_to_tuple([
-        rewrite_short_circuit(Element) || Element <- tuple_to_list(Tuple)
-    ]);
-rewrite_short_circuit(List) when is_list(List) ->
-    [rewrite_short_circuit(Element) || Element <- List];
-rewrite_short_circuit(Term) ->
-    Term.
-
-lazy_conjunction(Line, Left, Right) ->
-    {'case', Line, Left, [
-        {clause, Line, [{atom, Line, true}], [], [Right]},
-        {clause, Line, [{atom, Line, false}], [], [
-            {atom, Line, false}
-        ]}
-    ]}.
 
 conjunction([]) ->
     "bool:true";

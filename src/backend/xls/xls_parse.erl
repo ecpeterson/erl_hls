@@ -22,6 +22,15 @@ Bindings made inside a `case` or `if` arm remain local to that arm. The lowerer
 does not yet make a variable available after the expression merely because
 every arm binds it.
 
+Boolean `andalso` and `orelse` expressions use the same conditional lowering
+in guards and ordinary bodies. The left operand is evaluated once; only the
+selected right operand contributes its value or match failure. Left-operand
+bindings remain available afterwards, while right-operand bindings stay local
+to that branch. Both operands must have Boolean XLS types; Erlang's more
+general non-Boolean right-operand results are not supported. This preserves
+selection semantics in generated hardware, not a guarantee that combinational
+logic in an unselected branch stops switching.
+
 State-machine phase-entry action lists remain statically shaped. An action may
 be `{cast_if, Condition, Port, Message}` to suppress that statically allocated
 effect at runtime, but neither its port nor its position in the ordered action
@@ -351,6 +360,16 @@ statement_from_statement({integer, _L, Integer}, State) ->
 %% Preserve signed literals for width-directed conversions such as wrap/2.
 statement_from_statement({op, _L, '-', {integer, _IntegerLine, Integer}}, State) ->
     reference(State, {static, integer, -Integer});
+statement_from_statement({op, Line, 'andalso', Left, Right}, State) ->
+    xls_case_lower:lower(Line, Left, [
+        {clause, Line, [{atom, Line, true}], [], [Right]},
+        {clause, Line, [{atom, Line, false}], [], [{atom, Line, false}]}
+    ], State);
+statement_from_statement({op, Line, 'orelse', Left, Right}, State) ->
+    xls_case_lower:lower(Line, Left, [
+        {clause, Line, [{atom, Line, true}], [], [{atom, Line, true}]},
+        {clause, Line, [{atom, Line, false}], [], [Right]}
+    ], State);
 statement_from_statement(X, State) when is_tuple(X) andalso op == element(1, X) ->
     [op, _L, Op | Args] = tuple_to_list(X),
     {BwdArgRefs, IntermediateState} = lists:foldl(
@@ -783,9 +802,7 @@ op('=<', [Left, Right]) -> [Left, " <= ", Right];
 op('>', [Left, Right]) -> [Left, " > ", Right];
 op('>=', [Left, Right]) -> [Left, " >= ", Right];
 op('=:=', [Left, Right]) -> [Left, " == ", Right];
-op('=/=', [Left, Right]) -> [Left, " != ", Right];
-op('andalso', [Left, Right]) -> [Left, " && ", Right];
-op('orelse', [Left, Right]) -> [Left, " || ", Right].
+op('=/=', [Left, Right]) -> [Left, " != ", Right].
 
 %%%
 %%% Search / selection tools
