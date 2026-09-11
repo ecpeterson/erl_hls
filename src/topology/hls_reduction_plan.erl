@@ -92,7 +92,8 @@ require_reductions(FamilyId, Interface) ->
 
 analyze_site(FamilyId, #{id := Id, phase := Phase, name := Name,
         population := Population, contributions := Contributions,
-        source_transportable := SourceTransportable} = Site,
+        source_transportable := SourceTransportable,
+        opens_conditionally := OpensConditionally} = Site,
         Interface, Topology) ->
     Schema = case Contributions of
         [Only] -> Only;
@@ -108,7 +109,7 @@ analyze_site(FamilyId, #{id := Id, phase := Phase, name := Name,
         false -> error({source_fragment_nonexhaustive_contribution,
             FamilyId, Id, Schema})
     end,
-    case maps:get(opens_conditionally, Site, false) of
+    case OpensConditionally of
         false -> ok;
         true -> error({source_fragment_conditional_open, FamilyId, Id})
     end,
