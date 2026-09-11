@@ -534,6 +534,7 @@ lower_entry(
         clause := Clause0,
         prefix := Prefix,
         data_expression := DataExpression,
+        reduction := Reduction,
         actions := OrderedActions
     },
     OutputNames,
@@ -541,70 +542,42 @@ lower_entry(
     EnumAtoms
 ) ->
     Clause = strip_dispatched_phase(Clause0),
-    DataClause = replace_body(Clause, Prefix ++ [DataExpression]),
-    {DataBody, DataResult} = xls_parse:branch_from_clause(
-        DataClause,
-        enter_args(DataName),
-        DataName,
-        fun(R) -> [R, ".1"] end,
-        "data",
-        EnumAtoms
-    ),
-    Effects = [
-        lower_entry_effect(
-            Clause,
-            Prefix,
-            Action,
-            DataName,
-            EnumAtoms
-        )
-        || Action <- OrderedActions
-    ],
-    true = length(Effects) =< length(OutputNames),
+    %% Erlang evaluates the returned data, then the action list from left to
+    %% right. Keep every value in that one expression: even a disabled cast_if
+    %% evaluates its message, and a failure anywhere invalidates the entry.
+    EntryExpression = {tuple, 0, [
+        DataExpression,
+        entry_reduction_expression(Reduction),
+        {tuple, 0, [
+            {tuple, 0, [maps:get(condition, Action, {atom, 0, true}), Message]}
+            || Action = #{message := Message} <- OrderedActions
+        ]}
+    ]},
+    Outcome = xls_parse:clause_outcome(
+        replace_body(Clause, Prefix ++ [EntryExpression]),
+        enter_args(DataName), DataName, EnumAtoms),
+    true = length(OrderedActions) =< length(OutputNames),
     #{
         phase => Phase,
-        data => lowered(DataBody, DataResult),
-        effects => Effects
+        evaluation => maps:map(fun(_Key, Value) -> xls_parse:print(Value) end,
+            Outcome),
+        opens_reduction => Reduction =/= none,
+        effects => [
+            #{port => Port, tag => Tag,
+                conditional => maps:is_key(condition, Action)}
+            || Action = #{port := Port, tag := Tag} <- OrderedActions
+        ]
     }.
 
-lower_entry_effect(Clause, Prefix,
-        Action = #{message := Message, port := Port, tag := Tag}, DataName,
-        EnumAtoms) ->
-    MessageClause = replace_body(Clause, Prefix ++ [Message]),
-    {Body, Result} = xls_parse:branch_from_clause(
-        MessageClause,
-        enter_args(DataName),
-        DataName,
-        fun(R) -> ["axis::pack(", R, ".0 as u8, ", R, ".2)"] end,
-        "zero!<axis::Frame>()",
-        EnumAtoms
-    ),
-    (lowered(Body, Result))#{
-        port => Port,
-        tag => Tag,
-        valid => lower_effect_condition(
-            Action,
-            Clause,
-            Prefix,
-            DataName,
-            EnumAtoms
-        )
-    }.
-
-lower_effect_condition(
-        #{condition := Condition}, Clause, Prefix, DataName, EnumAtoms) ->
-    ConditionClause = replace_body(Clause, Prefix ++ [Condition]),
-    {Body, Result} = xls_parse:branch_from_clause(
-        ConditionClause,
-        enter_args(DataName),
-        DataName,
-        fun(R) -> R end,
-        "bool:false",
-        EnumAtoms
-    ),
-    lowered(Body, Result);
-lower_effect_condition(_Action, _Clause, _Prefix, _DataName, _EnumAtoms) ->
-    lowered([], "bool:true").
+entry_reduction_expression(none) ->
+    {tuple, 0, []};
+entry_reduction_expression(#{key_expression := Key,
+        identity_expression := Identity}) ->
+    %% Give literal keys the same explicit width as record-field keys.
+    TypedKey = {call, 0,
+        {remote, 0, {atom, 0, hls_type}, {atom, 0, as}},
+        [{call, 0, {remote, 0, {atom, 0, hls_nums}, {atom, 0, u32}}, []}, Key]},
+    {tuple, 0, [TypedKey, Identity]}.
 
 enter_args(DataName) ->
     [

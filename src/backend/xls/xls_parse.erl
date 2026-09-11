@@ -34,7 +34,9 @@ logic in an unselected branch stops switching.
 State-machine phase-entry action lists remain statically shaped. An action may
 be `{cast_if, Condition, Port, Message}` to suppress that statically allocated
 effect at runtime, but neither its port nor its position in the ordered action
-list is dynamic.
+list is dynamic. The full entry expression is lowered once with one combined
+match-failure predicate. The state-machine backend commits its data, reduction
+open, and effects only from a successful outcome.
 
 ## Wire tags
 
@@ -50,6 +52,7 @@ prepending or moving one can renumber them. Every entry must be a unique atom.
     bitsfromstruct_from_record/1,
     branch_from_clause/4,
     branch_from_clause/6,
+    clause_outcome/4,
     find_attribute/2,
     find_optional_attribute/2,
     find_tags/1,
@@ -301,7 +304,33 @@ branch_from_clause(
     Failure,
     EnumAtoms
 ) ->
-    {clause, _1, ArgPatterns, _2, Body} = Clause,
+    ComputeState = lower_clause(Clause, ArgVals, StateName, EnumAtoms),
+    OutState = instr(ComputeState, [
+        "if (", mismatch_expression(
+            ComputeState#clause_state.named_counters,
+            #{}
+        ), ") {\n",
+        "    ", Failure, "\n",
+        "} else {\n",
+        "    ", Postprocessor(reference(ComputeState)), "\n",
+        "}"
+    ]),
+    {lists:reverse(OutState#clause_state.statements), OutState#clause_state.reference}.
+
+%% Keep the computed value and its failure predicate together. Consumers may
+%% commit a compound result only when the whole callback has succeeded.
+-spec clause_outcome(erl_parse:af_clause(), [printable()], atom(), map()) ->
+    #{body := printable(), result := printable(), failed := printable()}.
+clause_outcome(Clause, ArgVals, StateName, EnumAtoms) ->
+    State = lower_clause(Clause, ArgVals, StateName, EnumAtoms),
+    #{
+        body => lists:reverse(State#clause_state.statements),
+        result => reference(State),
+        failed => mismatch_expression(State#clause_state.named_counters, #{})
+    }.
+
+lower_clause({clause, _Line, ArgPatterns, _Guards, Body},
+        ArgVals, StateName, EnumAtoms) ->
     InjectMatch = fun
         F({{match, LineNo, LHS, RHS}, Arg}) ->
             {match, LineNo, LHS, F({RHS, Arg})};
@@ -312,28 +341,12 @@ branch_from_clause(
         [{nil, _L}] -> Body;
         _ -> lists:map(InjectMatch, lists:zip(ArgPatterns, ArgVals)) ++ Body
     end,
-    ComputeState = lists:foldl(
+    lists:foldl(
         fun(Statement, State) ->
             statement_from_statement(Statement, State#clause_state{reference = none})
         end,
         #clause_state{state_name = StateName, enum_atoms = EnumAtoms}, BigBody
-    ),
-
-    OutState = instr(ComputeState, [
-        "if (", mismatch_expression(
-            ComputeState#clause_state.named_counters,
-            #{}
-        ), ") {\n",
-        "    ", Failure, "\n",
-        "} else {\n",
-            %% TODO: it would be preferable to branch on the REPLY/NOREPLY tag,
-            %% but we have to wait for the XLS type system to allow tagged sums,
-            %% so that {reply, Reply, State} unifies with {noreply, State}.
-        "    ", Postprocessor(reference(ComputeState)), "\n",
-        "}"
-    ]),
-
-    {lists:reverse(OutState#clause_state.statements), OutState#clause_state.reference}.
+    ).
 
 -spec statement_from_statement(erl_parse:abstract_expression(), clause_state()) -> clause_state().
 -doc """

@@ -140,8 +140,6 @@ site(ID, Phase, Population, Tag) ->
         phase => Phase,
         name => sum,
         population => Population,
-        key => expression("u32:7"),
-        identity => expression("zero!<SumValue>()"),
         contributions => [#{
             tag => Tag,
             build => expression(

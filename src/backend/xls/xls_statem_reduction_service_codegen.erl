@@ -13,10 +13,6 @@
     direct_dispatch_bindings/1,
     direct_effective_binding/1,
     direct_entry_bindings/1,
-    direct_entry_can_advance/1,
-    direct_entry_egress_valid/1,
-    direct_entry_failed_field/1,
-    direct_entry_machine_selection/1,
     direct_entry_reduction_field/1,
     direct_failed_binding/1,
     direct_reduction_field/1,
@@ -267,27 +263,19 @@ direct_reduction_field(_Reductions) ->
     "        reduction: next_reduction,\n".
 
 -spec direct_entry_bindings(reductions()) -> iodata().
-direct_entry_bindings(none) ->
-    [];
-direct_entry_bindings(_Reductions) ->
+direct_entry_bindings(Reductions) ->
+    entry_bindings(Reductions).
+
+entry_bindings(none) ->
+    "    let entry_failed = outcome.failed;\n";
+entry_bindings(_Reductions) ->
     [
         "    let opens_reduction = reduction_phase_opens(machine.phase);\n",
-        "    let invalid_reduction_open =\n",
-        "      opens_reduction &&\n",
-        "      machine.reduction.status != ReductionStatus::IDLE;\n",
+        "    let entry_failed = outcome.failed || (opens_reduction &&\n",
+        "      machine.reduction.status != ReductionStatus::IDLE);\n",
         "    let entered_reduction = if opens_reduction {\n",
-        "      reduction_open(\n",
-        "        machine.entered_from, machine.phase, machine.data)\n",
+        "      outcome.reduction\n",
         "    } else { machine.reduction };\n"
-    ].
-
--spec direct_entry_can_advance(reductions()) -> iodata().
-direct_entry_can_advance(none) ->
-    "    let can_advance = !emit_effect || egress_ready;\n";
-direct_entry_can_advance(_Reductions) ->
-    [
-        "    let can_advance = (!emit_effect || egress_ready) &&\n",
-        "      !invalid_reduction_open;\n"
     ].
 
 -spec direct_entry_reduction_field(reductions()) -> iodata().
@@ -297,31 +285,6 @@ direct_entry_reduction_field(_Reductions) ->
     [
         "      reduction: if entry_complete { entered_reduction }\n",
         "        else { machine.reduction },\n"
-    ].
-
--spec direct_entry_failed_field(reductions()) -> iodata().
-direct_entry_failed_field(none) ->
-    [];
-direct_entry_failed_field(_Reductions) ->
-    "      failed: invalid_reduction_open,\n".
-
--spec direct_entry_machine_selection(reductions()) -> iodata().
-direct_entry_machine_selection(none) ->
-    "      machine: if can_advance { advanced_machine } else { machine },\n";
-direct_entry_machine_selection(_Reductions) ->
-    [
-        "      machine: if can_advance || invalid_reduction_open {\n",
-        "        advanced_machine\n",
-        "      } else { machine },\n"
-    ].
-
--spec direct_entry_egress_valid(reductions()) -> iodata().
-direct_entry_egress_valid(none) ->
-    "      egress_valid: emit_effect && can_advance,\n";
-direct_entry_egress_valid(_Reductions) ->
-    [
-        "      egress_valid: emit_effect && can_advance &&\n",
-        "        !invalid_reduction_open,\n"
     ].
 
 -spec direct_receive_gate(reductions()) -> iodata().
@@ -515,93 +478,35 @@ shared_dispatch_dispatched_field(_Reductions, _Mode) ->
 -spec shared_entry_step(reductions()) -> iodata().
 shared_entry_step(Reductions) ->
     [
-        "    let (entered_data, effects) = enter(\n",
+        "    let outcome = enter(\n",
         "      machine.entered_from, machine.phase, machine.data);\n",
+        "    let effects = outcome.effects;\n",
         "    let effects_valid = entry_effects_valid(effects);\n",
-        shared_entry_bindings(Reductions),
-        shared_entry_can_advance(Reductions),
+        entry_bindings(Reductions),
+        "    let can_advance = !entry_failed && (!effects_valid || egress_ready);\n",
         "    let advanced_machine = SharedMachine {\n",
-        shared_entry_data_field(Reductions),
+        "      data: if entry_failed { machine.data } else { outcome.data },\n",
         shared_entry_reduction_field(Reductions),
         "      enter_pending: u1:0,\n",
-        shared_entry_failed_field(Reductions),
+        "      failed: entry_failed,\n",
         "      ..machine\n",
         "    };\n",
         "    SharedStep {\n",
-        shared_entry_machine_field(Reductions),
+        "      machine: if can_advance || entry_failed { advanced_machine }\n",
+        "        else { machine },\n",
         "      effects,\n",
-        shared_entry_effects_valid_field(Reductions),
-        shared_entry_egress_blocked_field(Reductions),
+        "      effects_valid: effects_valid && can_advance,\n",
+        "      egress_blocked: effects_valid && !egress_ready && !entry_failed,\n",
         "      ..zero!<SharedStep>()\n",
         "    }\n"
-    ].
-
-shared_entry_bindings(none) ->
-    [];
-shared_entry_bindings(_Reductions) ->
-    [
-        "    let opens_reduction = reduction_phase_opens(machine.phase);\n",
-        "    let invalid_reduction_open =\n",
-        "      opens_reduction &&\n",
-        "      machine.reduction.status != ReductionStatus::IDLE;\n",
-        "    let entered_reduction = if opens_reduction {\n",
-        "      reduction_open(\n",
-        "        machine.entered_from, machine.phase, machine.data)\n",
-        "    } else { machine.reduction };\n"
-    ].
-
-shared_entry_can_advance(none) ->
-    "    let can_advance = !effects_valid || egress_ready;\n";
-shared_entry_can_advance(_Reductions) ->
-    [
-        "    let can_advance = (!effects_valid || egress_ready) &&\n",
-        "      !invalid_reduction_open;\n"
-    ].
-
-shared_entry_data_field(none) ->
-    "      data: entered_data,\n";
-shared_entry_data_field(_Reductions) ->
-    [
-        "      data: if invalid_reduction_open { machine.data }\n",
-        "        else { entered_data },\n"
     ].
 
 shared_entry_reduction_field(none) ->
     [];
 shared_entry_reduction_field(_Reductions) ->
     [
-        "      reduction: if invalid_reduction_open { machine.reduction }\n",
+        "      reduction: if entry_failed { machine.reduction }\n",
         "        else { entered_reduction },\n"
-    ].
-
-shared_entry_failed_field(none) ->
-    [];
-shared_entry_failed_field(_Reductions) ->
-    "      failed: invalid_reduction_open,\n".
-
-shared_entry_machine_field(none) ->
-    "      machine: if can_advance { advanced_machine } else { machine },\n";
-shared_entry_machine_field(_Reductions) ->
-    [
-        "      machine: if can_advance || invalid_reduction_open {\n",
-        "        advanced_machine\n",
-        "      } else { machine },\n"
-    ].
-
-shared_entry_effects_valid_field(none) ->
-    "      effects_valid: effects_valid && can_advance,\n";
-shared_entry_effects_valid_field(_Reductions) ->
-    [
-        "      effects_valid: effects_valid && can_advance &&\n",
-        "        !invalid_reduction_open,\n"
-    ].
-
-shared_entry_egress_blocked_field(none) ->
-    "      egress_blocked: effects_valid && !egress_ready,\n";
-shared_entry_egress_blocked_field(_Reductions) ->
-    [
-        "      egress_blocked: effects_valid && !egress_ready &&\n",
-        "        !invalid_reduction_open,\n"
     ].
 
 -spec shared_executor_dispatch(reductions(), service_mode()) -> iodata().

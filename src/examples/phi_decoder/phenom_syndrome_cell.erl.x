@@ -367,6 +367,12 @@ pub struct EntryEffects {
   payloads: bits[352],
 }
 
+struct EntryOutcome {
+  data: Syndrome,
+  effects: EntryEffects,
+  failed: bool,
+}
+
 type MailboxSlot = mailbox::Slot;
 
 struct Machine {
@@ -556,481 +562,142 @@ fn machine_write(
   bram::write(slot, bits_from_machine(machine))
 }
 
-fn enter(old_phase: Phase, phase: Phase, data: Syndrome) -> (Syndrome, EntryEffects) {
+fn enter(old_phase: Phase, phase: Phase, data: Syndrome) -> EntryOutcome {
   match phase {
     Phase::CONFIGURING => {
-      let entered_data = {
-        let _OldPhase_1 = old_phase;
-        let __1 = phase;
-        let Syndrome_1 = (Tag::SYNDROME, data);
-        let _0 = if (bool:false) {
-            data
-        } else {
-            Syndrome_1.1
-        };
-        _0
-      };
-      (entered_data, EntryEffects {
-        phase: Phase::CONFIGURING as u8,
-        valid: [
-          bool:false,
-          bool:false,
-          bool:false,
-          bool:false,
-          bool:false,
-        ],
-        payloads: zero!<bits[352]>(),
-      })
+      let _OldPhase_1 = old_phase;
+      let __1 = phase;
+      let Syndrome_1 = (Tag::SYNDROME, data);
+      let _0 = ();
+      let _1 = ();
+      let _2 = (Syndrome_1, _0, _1, );
+      if bool:false {
+        EntryOutcome { data, failed: true, ..zero!<EntryOutcome>() }
+      } else {
+        let evaluated = _2;
+        EntryOutcome {
+          data: evaluated.0.1,
+          failed: false,
+          effects: EntryEffects {
+            phase: Phase::CONFIGURING as u8,
+            valid: [
+              bool:false,
+              bool:false,
+              bool:false,
+              bool:false,
+              bool:false,
+            ],
+            payloads: zero!<bits[352]>(),
+          },
+        }
+      }
     },
     Phase::COLLECTING => {
-      let entered_data = {
-        let _OldPhase_1 = old_phase;
-        let __1 = phase;
-        let Syndrome_1 = (Tag::SYNDROME, data);
-        let _0 = Syndrome_1.1.seen_sources;
-        let _1 = _0 == 15;
-        let Releasing_1 = _1;
-        let _5 = if Releasing_1 {
-          let _2 = Syndrome_1.1.step;
-          let _3 = _2 + 1;
-          let _4 = _3 & 4294967295;
-          (_4, bool:false)
-        } else {
-          let _2 = Syndrome_1.1.step;
-          (_2, bool:false)
-        };
-        let case_match_1_1 = bool:false;
-        let case_match_1_2 = _5.1;
-        let NextStep_1 = _5.0;
-        let _6 = Syndrome_1.1.step;
-        let _7 = Syndrome_1.1.announcement;
-        let _8 = Syndrome_1.1.announcement_quiet;
-        let _9 = _8 << 1;
-        let _10 = _7 | _9;
-        let _11 = Syndrome_1.1.x;
-        let _12 = Syndrome_1.1.y;
-        let _13 = Phenomanyon {
-          step: _6,
-          flags: _10,
-          x: _11,
-          y: _12,
-          ..zero!<Phenomanyon>()
-        };
-        let _14 = (Tag::PHENOM_ANYON, _13, bits_from_phenomanyon(_13));
-        let Anyon_1 = _14;
-        let _15 = Phenomquery {
-          step: NextStep_1,
-          ..zero!<Phenomquery>()
-        };
-        let _16 = (Tag::PHENOM_QUERY, _15, bits_from_phenomquery(_15));
-        let Query_1 = _16;
-        let _17 = Syndrome {
-          step: NextStep_1,
-          seen_sources: 0,
-          announcement: 0,
-          data_quiet: 1,
-          announcement_quiet: 0,
-          ..(Syndrome_1).1
-        };
-        let _18 = (Tag::SYNDROME, _17);
-        let Cleared_1 = _18;
-        let _19 = if ((case_match_1_1 != case_match_1_2) || bool:false) {
-            data
-        } else {
-            Cleared_1.1
-        };
-        _19
+      let _OldPhase_1 = old_phase;
+      let __1 = phase;
+      let Syndrome_1 = (Tag::SYNDROME, data);
+      let _0 = Syndrome_1.1.seen_sources;
+      let _1 = _0 == 15;
+      let Releasing_1 = _1;
+      let _5 = if Releasing_1 {
+        let _2 = Syndrome_1.1.step;
+        let _3 = _2 + 1;
+        let _4 = _3 & 4294967295;
+        (_4, bool:false)
+      } else {
+        let _2 = Syndrome_1.1.step;
+        (_2, bool:false)
       };
-      let effect_0_valid = {
-        let _OldPhase_1 = old_phase;
-        let __1 = phase;
-        let Syndrome_1 = (Tag::SYNDROME, data);
-        let _0 = Syndrome_1.1.seen_sources;
-        let _1 = _0 == 15;
-        let Releasing_1 = _1;
-        let _5 = if Releasing_1 {
-          let _2 = Syndrome_1.1.step;
-          let _3 = _2 + 1;
-          let _4 = _3 & 4294967295;
-          (_4, bool:false)
-        } else {
-          let _2 = Syndrome_1.1.step;
-          (_2, bool:false)
-        };
-        let case_match_1_1 = bool:false;
-        let case_match_1_2 = _5.1;
-        let NextStep_1 = _5.0;
-        let _6 = Syndrome_1.1.step;
-        let _7 = Syndrome_1.1.announcement;
-        let _8 = Syndrome_1.1.announcement_quiet;
-        let _9 = _8 << 1;
-        let _10 = _7 | _9;
-        let _11 = Syndrome_1.1.x;
-        let _12 = Syndrome_1.1.y;
-        let _13 = Phenomanyon {
-          step: _6,
-          flags: _10,
-          x: _11,
-          y: _12,
-          ..zero!<Phenomanyon>()
-        };
-        let _14 = (Tag::PHENOM_ANYON, _13, bits_from_phenomanyon(_13));
-        let Anyon_1 = _14;
-        let _15 = Phenomquery {
-          step: NextStep_1,
-          ..zero!<Phenomquery>()
-        };
-        let _16 = (Tag::PHENOM_QUERY, _15, bits_from_phenomquery(_15));
-        let Query_1 = _16;
-        let _17 = Syndrome {
-          step: NextStep_1,
-          seen_sources: 0,
-          announcement: 0,
-          data_quiet: 1,
-          announcement_quiet: 0,
-          ..(Syndrome_1).1
-        };
-        let _18 = (Tag::SYNDROME, _17);
-        let Cleared_1 = _18;
-        let _19 = if ((case_match_1_1 != case_match_1_2) || bool:false) {
-            bool:false
-        } else {
-            Releasing_1
-        };
-        _19
+      let case_match_1_1 = bool:false;
+      let case_match_1_2 = _5.1;
+      let NextStep_1 = _5.0;
+      let _6 = Syndrome_1.1.step;
+      let _7 = Syndrome_1.1.announcement;
+      let _8 = Syndrome_1.1.announcement_quiet;
+      let _9 = _8 << 1;
+      let _10 = _7 | _9;
+      let _11 = Syndrome_1.1.x;
+      let _12 = Syndrome_1.1.y;
+      let _13 = Phenomanyon {
+        step: _6,
+        flags: _10,
+        x: _11,
+        y: _12,
+        ..zero!<Phenomanyon>()
       };
-      let effect_0 = {
-        let _OldPhase_1 = old_phase;
-        let __1 = phase;
-        let Syndrome_1 = (Tag::SYNDROME, data);
-        let _0 = Syndrome_1.1.seen_sources;
-        let _1 = _0 == 15;
-        let Releasing_1 = _1;
-        let _5 = if Releasing_1 {
-          let _2 = Syndrome_1.1.step;
-          let _3 = _2 + 1;
-          let _4 = _3 & 4294967295;
-          (_4, bool:false)
-        } else {
-          let _2 = Syndrome_1.1.step;
-          (_2, bool:false)
-        };
-        let case_match_1_1 = bool:false;
-        let case_match_1_2 = _5.1;
-        let NextStep_1 = _5.0;
-        let _6 = Syndrome_1.1.step;
-        let _7 = Syndrome_1.1.announcement;
-        let _8 = Syndrome_1.1.announcement_quiet;
-        let _9 = _8 << 1;
-        let _10 = _7 | _9;
-        let _11 = Syndrome_1.1.x;
-        let _12 = Syndrome_1.1.y;
-        let _13 = Phenomanyon {
-          step: _6,
-          flags: _10,
-          x: _11,
-          y: _12,
-          ..zero!<Phenomanyon>()
-        };
-        let _14 = (Tag::PHENOM_ANYON, _13, bits_from_phenomanyon(_13));
-        let Anyon_1 = _14;
-        let _15 = Phenomquery {
-          step: NextStep_1,
-          ..zero!<Phenomquery>()
-        };
-        let _16 = (Tag::PHENOM_QUERY, _15, bits_from_phenomquery(_15));
-        let Query_1 = _16;
-        let _17 = Syndrome {
-          step: NextStep_1,
-          seen_sources: 0,
-          announcement: 0,
-          data_quiet: 1,
-          announcement_quiet: 0,
-          ..(Syndrome_1).1
-        };
-        let _18 = (Tag::SYNDROME, _17);
-        let Cleared_1 = _18;
-        let _19 = if ((case_match_1_1 != case_match_1_2) || bool:false) {
-            zero!<axis::Frame>()
-        } else {
-            axis::pack(Anyon_1.0 as u8, Anyon_1.2)
-        };
-        _19
+      let _14 = (Tag::PHENOM_ANYON, _13, bits_from_phenomanyon(_13));
+      let Anyon_1 = _14;
+      let _15 = Phenomquery {
+        step: NextStep_1,
+        ..zero!<Phenomquery>()
       };
-      let effect_1_valid = {
-        bool:true
+      let _16 = (Tag::PHENOM_QUERY, _15, bits_from_phenomquery(_15));
+      let Query_1 = _16;
+      let _17 = Syndrome {
+        step: NextStep_1,
+        seen_sources: 0,
+        announcement: 0,
+        data_quiet: 1,
+        announcement_quiet: 0,
+        ..(Syndrome_1).1
       };
-      let effect_1 = {
-        let _OldPhase_1 = old_phase;
-        let __1 = phase;
-        let Syndrome_1 = (Tag::SYNDROME, data);
-        let _0 = Syndrome_1.1.seen_sources;
-        let _1 = _0 == 15;
-        let Releasing_1 = _1;
-        let _5 = if Releasing_1 {
-          let _2 = Syndrome_1.1.step;
-          let _3 = _2 + 1;
-          let _4 = _3 & 4294967295;
-          (_4, bool:false)
-        } else {
-          let _2 = Syndrome_1.1.step;
-          (_2, bool:false)
-        };
-        let case_match_1_1 = bool:false;
-        let case_match_1_2 = _5.1;
-        let NextStep_1 = _5.0;
-        let _6 = Syndrome_1.1.step;
-        let _7 = Syndrome_1.1.announcement;
-        let _8 = Syndrome_1.1.announcement_quiet;
-        let _9 = _8 << 1;
-        let _10 = _7 | _9;
-        let _11 = Syndrome_1.1.x;
-        let _12 = Syndrome_1.1.y;
-        let _13 = Phenomanyon {
-          step: _6,
-          flags: _10,
-          x: _11,
-          y: _12,
-          ..zero!<Phenomanyon>()
-        };
-        let _14 = (Tag::PHENOM_ANYON, _13, bits_from_phenomanyon(_13));
-        let Anyon_1 = _14;
-        let _15 = Phenomquery {
-          step: NextStep_1,
-          ..zero!<Phenomquery>()
-        };
-        let _16 = (Tag::PHENOM_QUERY, _15, bits_from_phenomquery(_15));
-        let Query_1 = _16;
-        let _17 = Syndrome {
-          step: NextStep_1,
-          seen_sources: 0,
-          announcement: 0,
-          data_quiet: 1,
-          announcement_quiet: 0,
-          ..(Syndrome_1).1
-        };
-        let _18 = (Tag::SYNDROME, _17);
-        let Cleared_1 = _18;
-        let _19 = Phenomquery {
-          source: 8,
-          ..(Query_1).1
-        };
-        let _20 = (Tag::PHENOM_QUERY, _19, bits_from_phenomquery(_19));
-        let _21 = if ((case_match_1_1 != case_match_1_2) || bool:false) {
-            zero!<axis::Frame>()
-        } else {
-            axis::pack(_20.0 as u8, _20.2)
-        };
-        _21
+      let _18 = (Tag::SYNDROME, _17);
+      let Cleared_1 = _18;
+      let _19 = ();
+      let _20 = (Releasing_1, Anyon_1, );
+      let _21 = Phenomquery {
+        source: 8,
+        ..(Query_1).1
       };
-      let effect_2_valid = {
-        bool:true
+      let _22 = (Tag::PHENOM_QUERY, _21, bits_from_phenomquery(_21));
+      let _23 = (bool:1, _22, );
+      let _24 = Phenomquery {
+        source: 4,
+        ..(Query_1).1
       };
-      let effect_2 = {
-        let _OldPhase_1 = old_phase;
-        let __1 = phase;
-        let Syndrome_1 = (Tag::SYNDROME, data);
-        let _0 = Syndrome_1.1.seen_sources;
-        let _1 = _0 == 15;
-        let Releasing_1 = _1;
-        let _5 = if Releasing_1 {
-          let _2 = Syndrome_1.1.step;
-          let _3 = _2 + 1;
-          let _4 = _3 & 4294967295;
-          (_4, bool:false)
-        } else {
-          let _2 = Syndrome_1.1.step;
-          (_2, bool:false)
-        };
-        let case_match_1_1 = bool:false;
-        let case_match_1_2 = _5.1;
-        let NextStep_1 = _5.0;
-        let _6 = Syndrome_1.1.step;
-        let _7 = Syndrome_1.1.announcement;
-        let _8 = Syndrome_1.1.announcement_quiet;
-        let _9 = _8 << 1;
-        let _10 = _7 | _9;
-        let _11 = Syndrome_1.1.x;
-        let _12 = Syndrome_1.1.y;
-        let _13 = Phenomanyon {
-          step: _6,
-          flags: _10,
-          x: _11,
-          y: _12,
-          ..zero!<Phenomanyon>()
-        };
-        let _14 = (Tag::PHENOM_ANYON, _13, bits_from_phenomanyon(_13));
-        let Anyon_1 = _14;
-        let _15 = Phenomquery {
-          step: NextStep_1,
-          ..zero!<Phenomquery>()
-        };
-        let _16 = (Tag::PHENOM_QUERY, _15, bits_from_phenomquery(_15));
-        let Query_1 = _16;
-        let _17 = Syndrome {
-          step: NextStep_1,
-          seen_sources: 0,
-          announcement: 0,
-          data_quiet: 1,
-          announcement_quiet: 0,
-          ..(Syndrome_1).1
-        };
-        let _18 = (Tag::SYNDROME, _17);
-        let Cleared_1 = _18;
-        let _19 = Phenomquery {
-          source: 4,
-          ..(Query_1).1
-        };
-        let _20 = (Tag::PHENOM_QUERY, _19, bits_from_phenomquery(_19));
-        let _21 = if ((case_match_1_1 != case_match_1_2) || bool:false) {
-            zero!<axis::Frame>()
-        } else {
-            axis::pack(_20.0 as u8, _20.2)
-        };
-        _21
+      let _25 = (Tag::PHENOM_QUERY, _24, bits_from_phenomquery(_24));
+      let _26 = (bool:1, _25, );
+      let _27 = Phenomquery {
+        source: 2,
+        ..(Query_1).1
       };
-      let effect_3_valid = {
-        bool:true
+      let _28 = (Tag::PHENOM_QUERY, _27, bits_from_phenomquery(_27));
+      let _29 = (bool:1, _28, );
+      let _30 = Phenomquery {
+        source: 1,
+        ..(Query_1).1
       };
-      let effect_3 = {
-        let _OldPhase_1 = old_phase;
-        let __1 = phase;
-        let Syndrome_1 = (Tag::SYNDROME, data);
-        let _0 = Syndrome_1.1.seen_sources;
-        let _1 = _0 == 15;
-        let Releasing_1 = _1;
-        let _5 = if Releasing_1 {
-          let _2 = Syndrome_1.1.step;
-          let _3 = _2 + 1;
-          let _4 = _3 & 4294967295;
-          (_4, bool:false)
-        } else {
-          let _2 = Syndrome_1.1.step;
-          (_2, bool:false)
-        };
-        let case_match_1_1 = bool:false;
-        let case_match_1_2 = _5.1;
-        let NextStep_1 = _5.0;
-        let _6 = Syndrome_1.1.step;
-        let _7 = Syndrome_1.1.announcement;
-        let _8 = Syndrome_1.1.announcement_quiet;
-        let _9 = _8 << 1;
-        let _10 = _7 | _9;
-        let _11 = Syndrome_1.1.x;
-        let _12 = Syndrome_1.1.y;
-        let _13 = Phenomanyon {
-          step: _6,
-          flags: _10,
-          x: _11,
-          y: _12,
-          ..zero!<Phenomanyon>()
-        };
-        let _14 = (Tag::PHENOM_ANYON, _13, bits_from_phenomanyon(_13));
-        let Anyon_1 = _14;
-        let _15 = Phenomquery {
-          step: NextStep_1,
-          ..zero!<Phenomquery>()
-        };
-        let _16 = (Tag::PHENOM_QUERY, _15, bits_from_phenomquery(_15));
-        let Query_1 = _16;
-        let _17 = Syndrome {
-          step: NextStep_1,
-          seen_sources: 0,
-          announcement: 0,
-          data_quiet: 1,
-          announcement_quiet: 0,
-          ..(Syndrome_1).1
-        };
-        let _18 = (Tag::SYNDROME, _17);
-        let Cleared_1 = _18;
-        let _19 = Phenomquery {
-          source: 2,
-          ..(Query_1).1
-        };
-        let _20 = (Tag::PHENOM_QUERY, _19, bits_from_phenomquery(_19));
-        let _21 = if ((case_match_1_1 != case_match_1_2) || bool:false) {
-            zero!<axis::Frame>()
-        } else {
-            axis::pack(_20.0 as u8, _20.2)
-        };
-        _21
-      };
-      let effect_4_valid = {
-        bool:true
-      };
-      let effect_4 = {
-        let _OldPhase_1 = old_phase;
-        let __1 = phase;
-        let Syndrome_1 = (Tag::SYNDROME, data);
-        let _0 = Syndrome_1.1.seen_sources;
-        let _1 = _0 == 15;
-        let Releasing_1 = _1;
-        let _5 = if Releasing_1 {
-          let _2 = Syndrome_1.1.step;
-          let _3 = _2 + 1;
-          let _4 = _3 & 4294967295;
-          (_4, bool:false)
-        } else {
-          let _2 = Syndrome_1.1.step;
-          (_2, bool:false)
-        };
-        let case_match_1_1 = bool:false;
-        let case_match_1_2 = _5.1;
-        let NextStep_1 = _5.0;
-        let _6 = Syndrome_1.1.step;
-        let _7 = Syndrome_1.1.announcement;
-        let _8 = Syndrome_1.1.announcement_quiet;
-        let _9 = _8 << 1;
-        let _10 = _7 | _9;
-        let _11 = Syndrome_1.1.x;
-        let _12 = Syndrome_1.1.y;
-        let _13 = Phenomanyon {
-          step: _6,
-          flags: _10,
-          x: _11,
-          y: _12,
-          ..zero!<Phenomanyon>()
-        };
-        let _14 = (Tag::PHENOM_ANYON, _13, bits_from_phenomanyon(_13));
-        let Anyon_1 = _14;
-        let _15 = Phenomquery {
-          step: NextStep_1,
-          ..zero!<Phenomquery>()
-        };
-        let _16 = (Tag::PHENOM_QUERY, _15, bits_from_phenomquery(_15));
-        let Query_1 = _16;
-        let _17 = Syndrome {
-          step: NextStep_1,
-          seen_sources: 0,
-          announcement: 0,
-          data_quiet: 1,
-          announcement_quiet: 0,
-          ..(Syndrome_1).1
-        };
-        let _18 = (Tag::SYNDROME, _17);
-        let Cleared_1 = _18;
-        let _19 = Phenomquery {
-          source: 1,
-          ..(Query_1).1
-        };
-        let _20 = (Tag::PHENOM_QUERY, _19, bits_from_phenomquery(_19));
-        let _21 = if ((case_match_1_1 != case_match_1_2) || bool:false) {
-            zero!<axis::Frame>()
-        } else {
-            axis::pack(_20.0 as u8, _20.2)
-        };
-        _21
-      };
-      (entered_data, EntryEffects {
-        phase: Phase::COLLECTING as u8,
-        valid: [
-          effect_0_valid,
-          effect_1_valid,
-          effect_2_valid,
-          effect_3_valid,
-          effect_4_valid,
-        ],
-        payloads: bit_slice_update(
+      let _31 = (Tag::PHENOM_QUERY, _30, bits_from_phenomquery(_30));
+      let _32 = (bool:1, _31, );
+      let _33 = (_20, _23, _26, _29, _32, );
+      let _34 = (Cleared_1, _19, _33, );
+      if (case_match_1_1 != case_match_1_2) || bool:false {
+        EntryOutcome { data, failed: true, ..zero!<EntryOutcome>() }
+      } else {
+        let evaluated = _34;
+        let effect_0 = axis::pack(
+          evaluated.2.0.1.0 as u8, evaluated.2.0.1.2);
+        let effect_1 = axis::pack(
+          evaluated.2.1.1.0 as u8, evaluated.2.1.1.2);
+        let effect_2 = axis::pack(
+          evaluated.2.2.1.0 as u8, evaluated.2.2.1.2);
+        let effect_3 = axis::pack(
+          evaluated.2.3.1.0 as u8, evaluated.2.3.1.2);
+        let effect_4 = axis::pack(
+          evaluated.2.4.1.0 as u8, evaluated.2.4.1.2);
+        EntryOutcome {
+          data: evaluated.0.1,
+          failed: false,
+          effects: EntryEffects {
+            phase: Phase::COLLECTING as u8,
+            valid: [
+              evaluated.2.0.0,
+              evaluated.2.1.0,
+              evaluated.2.2.0,
+              evaluated.2.3.0,
+              evaluated.2.4.0,
+            ],
+            payloads: bit_slice_update(
           bit_slice_update(
           bit_slice_update(
           bit_slice_update(
@@ -1046,31 +713,37 @@ fn enter(old_phase: Phase, phase: Phase, data: Syndrome) -> (Syndrome, EntryEffe
           effect_3.payload[0:64]),
           u32:288,
           effect_4.payload[0:64]),
-      })
+          },
+        }
+      }
     },
     Phase::ANNOUNCING => {
-      let entered_data = {
-        let _OldPhase_1 = old_phase;
-        let __1 = phase;
-        let Syndrome_1 = (Tag::SYNDROME, data);
-        let _0 = if (bool:false) {
-            data
-        } else {
-            Syndrome_1.1
-        };
-        _0
-      };
-      (entered_data, EntryEffects {
-        phase: Phase::ANNOUNCING as u8,
-        valid: [
-          bool:false,
-          bool:false,
-          bool:false,
-          bool:false,
-          bool:false,
-        ],
-        payloads: zero!<bits[352]>(),
-      })
+      let _OldPhase_1 = old_phase;
+      let __1 = phase;
+      let Syndrome_1 = (Tag::SYNDROME, data);
+      let _0 = ();
+      let _1 = ();
+      let _2 = (Syndrome_1, _0, _1, );
+      if bool:false {
+        EntryOutcome { data, failed: true, ..zero!<EntryOutcome>() }
+      } else {
+        let evaluated = _2;
+        EntryOutcome {
+          data: evaluated.0.1,
+          failed: false,
+          effects: EntryEffects {
+            phase: Phase::ANNOUNCING as u8,
+            valid: [
+              bool:false,
+              bool:false,
+              bool:false,
+              bool:false,
+              bool:false,
+            ],
+            payloads: zero!<bits[352]>(),
+          },
+        }
+      }
     },
   }
 }
@@ -1767,15 +1440,17 @@ fn machine_step(
   if machine.failed {
     MachineStep { machine, ..zero!<MachineStep>() }
   } else if machine.enter_pending {
-    let (entered_data, effects) = enter(
+    let outcome = enter(
       machine.entered_from, machine.phase, machine.data);
+    let effects = outcome.effects;
     let effect_count = entry_effect_count(effects);
     let has_effect = machine.entry_effect_index < effect_count;
     let effect = entry_effect(
       effects, machine.entry_effect_index);
     let emit_effect = has_effect && effects.valid[
       machine.entry_effect_index as u32];
-    let can_advance = !emit_effect || egress_ready;
+    let entry_failed = outcome.failed;
+    let can_advance = !entry_failed && (!emit_effect || egress_ready);
     let next_effect_index = machine.entry_effect_index +
       ((has_effect && can_advance) as u8);
     let entry_complete = can_advance &&
@@ -1784,16 +1459,18 @@ fn machine_step(
       !machine.admission_pending &&
       machine.occupied < MAILBOX_CAPACITY;
     let advanced_machine = Machine {
-      data: if entry_complete { entered_data } else { machine.data },
-      enter_pending: !entry_complete,
+      data: if entry_complete { outcome.data } else { machine.data },
+      enter_pending: !entry_complete && !entry_failed,
       entry_effect_index: if entry_complete {
         u8:0
       } else { next_effect_index },
       admission_pending: machine.admission_pending || reserve,
+      failed: entry_failed,
       ..machine
     };
     MachineStep {
-      machine: if can_advance { advanced_machine } else { machine },
+      machine: if can_advance || entry_failed { advanced_machine }
+        else { machine },
       egress: effect,
       egress_valid: emit_effect && can_advance,
       admission_valid: reserve,
@@ -1969,20 +1646,24 @@ fn shared_machine_enter(machine: SharedMachine, egress_ready: u1)
   if machine.failed || !machine.enter_pending {
     SharedStep { machine, ..zero!<SharedStep>() }
   } else {
-    let (entered_data, effects) = enter(
+    let outcome = enter(
       machine.entered_from, machine.phase, machine.data);
+    let effects = outcome.effects;
     let effects_valid = entry_effects_valid(effects);
-    let can_advance = !effects_valid || egress_ready;
+    let entry_failed = outcome.failed;
+    let can_advance = !entry_failed && (!effects_valid || egress_ready);
     let advanced_machine = SharedMachine {
-      data: entered_data,
+      data: if entry_failed { machine.data } else { outcome.data },
       enter_pending: u1:0,
+      failed: entry_failed,
       ..machine
     };
     SharedStep {
-      machine: if can_advance { advanced_machine } else { machine },
+      machine: if can_advance || entry_failed { advanced_machine }
+        else { machine },
       effects,
       effects_valid: effects_valid && can_advance,
-      egress_blocked: effects_valid && !egress_ready,
+      egress_blocked: effects_valid && !egress_ready && !entry_failed,
       ..zero!<SharedStep>()
     }
   }

@@ -2,7 +2,8 @@
 %%%%
 %%%% Closed, typed description of actor-local reductions.  Source syntax and
 %%%% locations are deliberately absent: consumers see only values that are
-%%%% sufficient to render or summarize the reduction implementation.
+%%%% sufficient to render or summarize the reduction implementation. Opening
+%%%% values belong to the containing entry outcome, not separate evaluators.
 
 -module(xls_statem_reduction_ir).
 -moduledoc false.
@@ -61,8 +62,6 @@
     phase := atom(),
     name := atom(),
     population := population(),
-    key := expression(),
-    identity := expression(),
     contributions := [contribution(), ...],
     completion := expression()
 }.
@@ -239,15 +238,11 @@ validate_site(#{
     phase := Phase,
     name := Name,
     population := Population,
-    key := Key,
-    identity := Identity,
     contributions := Contributions,
     completion := Completion
 }) when is_integer(ID), ID >= 0, is_atom(Phase), is_atom(Name),
         is_list(Contributions), Contributions =/= [] ->
     ok = validate_population(Population),
-    ok = validate_expression(key, Key),
-    ok = validate_expression(identity, Identity),
     ok = validate_expression(completion, Completion),
     Tags = [maps:get(tag, Contribution) || Contribution <- Contributions],
     require_unique(reduction_contribution_tag, Tags),

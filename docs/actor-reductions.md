@@ -193,6 +193,9 @@ Population shapes, contribution clauses, reducer results, and completion
 clauses are checked statically. A contribution with the wrong name/key is
 postponed; duplicate or unexpected fixed members fail the actor.
 Leaving or repeating a phase with an incomplete reduction also fails.
+
+The opening key and identity are evaluated with the entry's data and cast actions in one [entry outcome](entry-outcomes.md). A supported match failure anywhere in that callback prevents both the open and every cast in that entry. An invalid reopen likewise preserves the previous data and reduction state and fails the actor, even when egress is stalled.
+
 The canonical XLS subset currently represents reduction keys and fixed member
 identities as `hls_nums:u32()` values even though the CPU contract permits any
 exact Erlang term.
