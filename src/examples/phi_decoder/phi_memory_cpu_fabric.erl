@@ -27,7 +27,7 @@ supervised deployment.
 
 -include("phi_protocol.hrl").
 
--export([start_link/2, stop/1]).
+-export([start_link/2, stop/1, debug_targets/1]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2]).
 
 -define(FABRIC_RX, '$hls_fabric_frame').
@@ -56,6 +56,9 @@ start_link(Distance, NoiseRate) ->
 stop(Pid) ->
     gen_server:stop(Pid).
 
+-doc "Returns scoped CPU debug targets indexed by logical topology identity.".
+debug_targets(Pid) -> gen_server:call(Pid, debug_targets).
+
 init({Distance, NoiseRate}) ->
     Plan = hls_topology:normalize(
         phi_noise_topology:topology(Distance, NoiseRate)
@@ -71,6 +74,10 @@ init({Distance, NoiseRate}) ->
         forwarders = Forwarders
     }}.
 
+handle_call(debug_targets, _From, State = #state{plan = Plan, actors = Actors}) ->
+    Processes = maps:from_list([{{family, Family, Coordinates}, Pid} ||
+        #{family := Family, coordinates := Coordinates, pid := Pid} <- maps:values(Actors)]),
+    {reply, hls_debug_topology:cpu(Plan, Processes), State};
 handle_call(
     {register_route, Route, Owner},
     _From,

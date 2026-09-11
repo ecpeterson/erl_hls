@@ -145,7 +145,7 @@ models scheduling semantics rather than host-side admission guarantees.
 
 -behavior(gen_server).
 
--export([start_link/3, connect/2, stop/1, cast/2, info/1]).
+-export([start_link/3, connect/2, stop/1, cast/2, info/1, info/2]).
 -export([
     init/1,
     handle_call/3,
@@ -319,8 +319,11 @@ cast(PID, Message) ->
 
 -doc "Returns the lifecycle, phase, callback data, and queue counters.".
 -spec info(pid()) -> map().
-info(PID) ->
-    format_info(sys:get_state(PID)).
+info(PID) -> info(PID, 5000).
+
+-spec info(pid(), timeout()) -> map().
+info(PID, Timeout) ->
+    format_info(sys:get_state(PID, Timeout)).
 
 %%%
 %%% gen_server callbacks

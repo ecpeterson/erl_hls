@@ -1,8 +1,20 @@
 -module(hls_debug).
+-moduledoc """
+Scoped inspection and the routed hardware debug client.
+
+`info/2,3` reads process-style items from explicit actor, resource, or boundary
+handles (see `docs/debug-targets.md`). `inspect_waits/2` explores current waits;
+`get_trace/1,2` drains recorded events at an explicitly selected boundary.
+
+The low-level PID forms of `get_counters`, `get_trace`, and `query` address a
+client started by this module, not an application PID. In `info`, a bare PID
+always means native BEAM process information, including a proxy's own queue.
+""".
 
 -behavior(gen_server).
 
 -export([start_link/2, stop/1, query/4]).
+-export([info/2, info/3, inspect_waits/2]).
 -export([get_counters/1, get_counters/2, get_trace/1, get_trace/2]).
 -export([init/1, handle_call/3, handle_cast/2, terminate/2]).
 
@@ -44,17 +56,27 @@ start_link(Module, {fabric, Broker, PeerEndpoint}) ->
 stop(Pid) ->
     gen_server:stop(Pid).
 
-get_counters(Pid) ->
-    gen_server:call(Pid, get_counters).
+-doc "Inspects a scoped target using process_info-style items and result tuples.".
+-spec info(hls_debug_target:target(), atom() | [atom()]) -> term().
+info(Target, Items) -> info(Target, Items, 5000).
 
-get_counters(Pid, Timeout) ->
-    gen_server:call(Pid, get_counters, Timeout).
+-spec info(hls_debug_target:target(), atom() | [atom()], timeout()) -> term().
+info(Target, Items, Timeout) -> hls_debug_target:info(Target, Items, Timeout).
 
-get_trace(Pid) ->
-    gen_server:call(Pid, get_trace).
+-doc "Explores and rechecks a topology resource's candidate wait dependencies.".
+inspect_waits(Target, Options) -> hls_debug_target:inspect_waits(Target, Options).
 
-get_trace(Pid, Timeout) ->
-    gen_server:call(Pid, get_trace, Timeout).
+get_counters(Target) -> get_counters(Target, 5000).
+get_counters(Pid, Timeout) when is_pid(Pid) ->
+    gen_server:call(Pid, get_counters, Timeout);
+get_counters(Target, Timeout) ->
+    hls_debug_target:collect(Target, get_counters, Timeout).
+
+get_trace(Target) -> get_trace(Target, 5000).
+get_trace(Pid, Timeout) when is_pid(Pid) ->
+    gen_server:call(Pid, get_trace, Timeout);
+get_trace(Target, Timeout) ->
+    hls_debug_target:collect(Target, get_trace, Timeout).
 
 -doc "Sends a word-aligned management request and returns its raw reply payload.".
 -spec query(pid(), 1..127, binary(), timeout()) ->

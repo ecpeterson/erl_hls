@@ -61,6 +61,8 @@ The Icarus VPI bridge exposes the application and debug streams as independent n
 
 The generated-RTL regression starts this client alongside `hls_gs`, runs the same application scenario as the CPU reference test, and queries the resulting counter and trace snapshots from Erlang. The deterministic SystemVerilog test separately checks the stronger availability case in which application output is held under backpressure while both supported debug queries complete. It also verifies that the reserved `0x02` request returns error code 1, along with exact two-event ordering and trace-bank overlap. The bridged EUnit scenario checks odd trace counts, a full 64-event bank, overflow accounting, and drain-on-read behavior.
 
+[Scoped debug targets](debug-targets.md) combine process-style current-state inspection with explicitly selected boundary counter/trace operations. Shared-topology actors expose placement and related boundaries; an actor-level counter or trace request is rejected instead of returning shared traffic under that actor's name. The phi-memory bridged regression exercises the scoped monitor interface around a generated shared-scheduler topology.
+
 The raw `hls_debug:query/4` API sends a word-aligned management payload and returns the reply payload, correlating both the transaction identifier and reply tag. [Topology queries](topology-debug.md) use this API on their own routed endpoint.
 
 ## Checked simulation transport

@@ -313,6 +313,7 @@ for source in \
     "$project_root/src/runtime/hls_fabric.erl" \
     "$project_root/src/api/hls_gs.erl" \
     "$project_root/src/runtime/hls_debug.erl" \
+    "$project_root/src/runtime/hls_debug_target.erl" \
     "$project_root/src/api/hls_lists.erl" \
     "$project_root/src/runtime/hls_codec.erl" \
     "$project_root/src/api/hls_fixed.erl" \

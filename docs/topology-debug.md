@@ -44,7 +44,7 @@ Keep `manifest.json` with that exact bitstream. Its SHA-256 fingerprint covers t
 
 For a top with an active-high `reset` and `clk`, those are the defaults. `--clock`, `--reset`, and `--reset-active-low` describe the application's existing control ports; the caller must supply the correct reset polarity. All original top-level inputs and outputs are preserved.
 
-## Query and follow a wait
+## Query and inspect waits
 
 The live hardware adapter needs to supply the same routed debug stream that the FIFO transport supplies in simulation. Use its `hls_fabric` broker at endpoint 2:
 
@@ -57,6 +57,8 @@ Manifest = json:decode(Bytes),
 {ok, Report} = hls_topology_debug:inspect_waits(Session, [ResourceId], #{max_queries => 1024}),
 ok = hls_topology_debug:write_wait_report(Session, [ResourceId], #{}, "wait.json").
 ```
+
+The [common inspection interface](debug-targets.md) accepts a target selected with `hls_topology_debug:resource(Session, ResourceId)`. It supports `hls_debug:info(Target, Items)` and single-seed `hls_debug:inspect_waits(Target, Options)`. Physical FIFO occupancy remains distinct from an actor's mailbox depth.
 
 `open/2` checks the embedded fingerprint and catalog counts against the supplied manifest. A query returns its resource ID, observation cycle, and value; channels also have boolean `valid`/`ready` fields, and FIFOs have `occupancy`/`free_slots`. A mismatched resource ID or impossible FIFO occupancy is rejected. Queries use a ten-second timeout; after a transport timeout or reset, establish a fresh transport session before continuing a diagnosis.
 
