@@ -44,9 +44,7 @@ FIFO and leaves only the producer holding slot.
 -export([artifact_requirements/2, emit/2, from_module/2]).
 -export_type([profile/0]).
 
--define(U32_MAX, 16#ffffffff).
-
--type profile() :: map().
+-type profile() :: xls_topology_profile:profile().
 
 -define(MAX_PAYLOAD_BITS, 96).
 
@@ -84,11 +82,11 @@ lower(Plan = #{
         route_relations := [],
         lane_relations := []
     }, Profile) ->
-    Physical = validate_profile(Profile, Plan),
-    Actors = annotate_actors(
-        maps:get(actors, Plan),
-        maps:get(actor_egress_depth, Physical)
-    ),
+    #{name := Name, channel_depth := Depth,
+        actor_egress_depth := EgressDepth} =
+        xls_topology_profile:normalize(Profile, scalar),
+    ok = validate_lanes(Plan),
+    Actors = annotate_actors(maps:get(actors, Plan), EgressDepth),
     Externals = annotate_externals(maps:get(externals, Plan)),
     ActorIndex = maps:from_list([
         {maps:get(id, Actor), Actor} || Actor <- Actors
@@ -103,8 +101,8 @@ lower(Plan = #{
     ),
     Startup = pack_startup(maps:get(startup, Plan), ActorIndex),
     #{
-        name => maps:get(name, Physical),
-        depth => maps:get(channel_depth, Physical),
+        name => Name,
+        depth => Depth,
         actors => Actors,
         externals => Externals,
         routes => Routes,
@@ -112,34 +110,13 @@ lower(Plan = #{
         startup => Startup
     }.
 
-validate_profile(Profile, Plan) when is_map(Profile) ->
-    Required = lists:sort([actor_egress_depth, channel_depth, name]),
-    Keys = lists:sort(maps:keys(Profile)),
-    case {Required -- Keys, Keys -- Required} of
-        {[], []} -> ok;
-        {Missing, Unknown} ->
-            error({invalid_dslx_profile_keys, Missing, Unknown})
-    end,
-    Name = identifier(maps:get(name, Profile), topology_name),
-    case maps:get(channel_depth, Profile) of
-        Depth when is_integer(Depth), Depth > 0, Depth =< ?U32_MAX -> ok;
-        Depth -> error({invalid_dslx_channel_depth, Depth})
-    end,
-    case maps:get(actor_egress_depth, Profile) of
-        burst -> ok;
-        EgressDepth when is_integer(EgressDepth),
-                EgressDepth >= 0, EgressDepth =< ?U32_MAX -> ok;
-        EgressDepth -> error({egress_depth, EgressDepth})
-    end,
-    RealizedLanes = derive_realized_lanes(maps:get(routes, Plan)),
+validate_lanes(Plan = #{routes := Routes}) ->
+    RealizedLanes = derive_realized_lanes(Routes),
     case maps:get(lanes, Plan, '$missing') of
         RealizedLanes -> ok;
         CachedLanes -> error({inconsistent_dslx_plan_lanes,
             RealizedLanes, CachedLanes})
-    end,
-    Profile#{name := Name};
-validate_profile(Profile, _Plan) ->
-    error({invalid_dslx_profile, Profile}).
+    end.
 
 derive_realized_lanes(Routes) ->
     LanePorts = lists:foldl(
@@ -185,11 +162,13 @@ annotate_actors(Actors, EgressDepth) ->
 
 annotate_actor(Index, Actor, Interfaces, EgressDepth) ->
     Module = maps:get(module, Actor),
-    ModuleName = identifier(Module, {actor_module, maps:get(id, Actor)}),
+    ModuleName = xls_topology_profile:identifier(
+        Module, {actor_module, maps:get(id, Actor)}),
     Outputs = maps:get(outputs, Actor),
     lists:foreach(
         fun(Port) ->
-            _ = identifier(Port, {actor_output, maps:get(id, Actor)})
+            _ = xls_topology_profile:identifier(
+                Port, {actor_output, maps:get(id, Actor)})
         end,
         Outputs
     ),
@@ -199,22 +178,17 @@ annotate_actor(Index, Actor, Interfaces, EgressDepth) ->
         module_name => ModuleName,
         stem => ["actor_", integer_to_list(Index)],
         egress_channel => ["actor_", integer_to_list(Index), "_egress"],
-        egress_depth => egress_depth(
+        egress_depth => xls_topology_profile:egress_depth(
             EgressDepth,
             maps:get(Module, Interfaces)
         )
     }.
 
-egress_depth(burst, Interface) ->
-    max(0, hls_actor_interface:max_entry_effects(Interface) - 1);
-egress_depth(Depth, _Interface) ->
-    Depth.
-
 annotate_externals(Externals) ->
     [
         External#{
             index => Index,
-            output_name => [identifier(
+            output_name => [xls_topology_profile:identifier(
                 maps:get(id, External),
                 external_id
             ), "_out"],
@@ -477,27 +451,6 @@ pack_startup_message(Target, Index, Module, Message)
     end;
 pack_startup_message(Target, Index, _Module, Message) ->
     error({invalid_startup_message, Target, Index, Message}).
-
-identifier(Name, Context) when is_atom(Name) ->
-    identifier(atom_to_list(Name), Context);
-identifier(Name, Context) when is_list(Name) ->
-    case re:run(Name, "^[a-z][a-z0-9_]*$", [{capture, none}]) of
-        match ->
-            case lists:member(Name, reserved_identifiers()) of
-                true -> error({reserved_dslx_identifier, Context, Name});
-                false -> Name
-            end;
-        nomatch -> error({invalid_dslx_identifier, Context, Name})
-    end;
-identifier(Name, Context) ->
-    error({invalid_dslx_identifier, Context, Name}).
-
-reserved_identifiers() ->
-    [
-        "as", "const", "else", "enum", "fn", "for", "if", "import",
-        "in", "let", "match", "proc", "pub", "spawn", "struct",
-        "type", "while"
-    ].
 
 %%%
 %%% Physical graph construction

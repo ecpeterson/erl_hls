@@ -92,24 +92,23 @@ artifact_requirements(Plan, Profile) ->
 lower(Plan, Profile) ->
     ok = require_empty(actors, Plan),
     ok = require_empty(routes, Plan),
-    Physical = validate_profile(Profile),
-    SchedulerPlan = hls_scheduler_plan:normalize(
-        Plan,
-        maps:get(scheduler_groups, Physical, #{})
-    ),
+    #{
+        name := Name,
+        channel_depth := Depth,
+        actor_egress_depth := EgressDepth,
+        scheduler_groups := Groups,
+        reduction_placements := Placements,
+        effect_window_partition := WindowPartition
+    } = xls_topology_profile:normalize(Profile, family),
+    SchedulerPlan = hls_scheduler_plan:normalize(Plan, Groups),
     ReductionPlan = hls_reduction_plan:normalize(
-        Plan,
-        SchedulerPlan,
-        maps:get(reduction_placements, Physical, #{})
+        Plan, SchedulerPlan, Placements
     ),
     Schedulers = annotate_schedulers(maps:get(groups, SchedulerPlan)),
     SchedulerBindings = scheduler_bindings(Schedulers),
     Families0 = require_families(maps:get(families, Plan, [])),
     [Width, Height] = require_common_shape(Families0),
-    Families1 = annotate_families(
-        Families0,
-        maps:get(actor_egress_depth, Physical)
-    ),
+    Families1 = annotate_families(Families0, EgressDepth),
     FamilyIndex = index_by_id(Families1),
     Ingresses = annotate_ingresses(
         maps:get(ingresses, Plan, []),
@@ -147,13 +146,9 @@ lower(Plan, Profile) ->
     ok = validate_lane_ports(Families),
     ok = validate_external_lanes(Externals, Lanes),
     #{
-        name => maps:get(name, Physical),
-        depth => maps:get(channel_depth, Physical),
-        effect_window_partition => maps:get(
-            effect_window_partition,
-            Physical,
-            global
-        ),
+        name => Name,
+        depth => Depth,
+        effect_window_partition => WindowPartition,
         reduction_plan => ReductionPlan,
         artifact_requirements =>
             hls_reduction_plan:artifact_requirements(ReductionPlan),
@@ -179,7 +174,8 @@ annotate_scheduler(Index, Group = #{
     Group#{
         index => Index,
         stem => ["scheduler_", integer_to_list(Index)],
-        module_name => identifier(maps:get(module, Group), scheduler_module)
+        module_name => xls_topology_profile:identifier(
+            maps:get(module, Group), scheduler_module)
     };
 annotate_scheduler(_Index, #{
     id := Id,
@@ -255,18 +251,15 @@ annotate_families(Families, EgressDepth) ->
             Interface = hls_actor_interface:from_module(Module),
             Family#{
                 index => Index,
-                module_name => identifier(Module, family_module),
+                module_name => xls_topology_profile:identifier(
+                    Module, family_module),
                 interface => Interface,
-                egress_depth => egress_depth(EgressDepth, Interface)
+                egress_depth => xls_topology_profile:egress_depth(
+                    EgressDepth, Interface)
             }
         end
         || {Index, Family} <- lists:enumerate(0, Families)
     ].
-
-egress_depth(burst, Interface) ->
-    max(0, hls_actor_interface:max_entry_effects(Interface) - 1);
-egress_depth(Depth, _Interface) ->
-    Depth.
 
 annotate_ingresses([], _FamilyIndex) -> [];
 annotate_ingresses([Ingress = #{
@@ -283,7 +276,7 @@ annotate_ingresses([Ingress = #{
     Recipients = ingress_recipients(AnnotatedTargets),
     [Ingress#{
         index => 0,
-        input_name => [identifier(Id, ingress_id), "_in"],
+        input_name => [xls_topology_profile:identifier(Id, ingress_id), "_in"],
         targets => AnnotatedTargets,
         recipients => Recipients
     }];
@@ -297,7 +290,8 @@ annotate_ingress_target(
     Target = #{id := Id, schemas := Schemas, recipients := Recipients},
     FamilyIndex
 ) ->
-    TargetName = string:uppercase(identifier(Id, ingress_target)),
+    TargetName = string:uppercase(
+        xls_topology_profile:identifier(Id, ingress_target)),
     Encodings = lists:usort([
         begin
             #{interface := Interface} = maps:get(FamilyId, FamilyIndex),
@@ -439,7 +433,7 @@ annotate_externals(Externals) ->
             end,
             External#{
                 index => Index,
-                output_name => [identifier(
+                output_name => [xls_topology_profile:identifier(
                     maps:get(id, External),
                     external_id
                 ), "_out"]
@@ -782,71 +776,6 @@ startup_fields(_Target, Fields, Values)
     [Field#{value => Value} || {Field, Value} <- lists:zip(Fields, Values)];
 startup_fields(Target, Fields, Values) ->
     error({invalid_startup_fields, Target, length(Fields), length(Values)}).
-
-validate_profile(Profile) when is_map(Profile) ->
-    Required = lists:sort([actor_egress_depth, channel_depth, name]),
-    Keys = lists:sort(maps:keys(Profile)),
-    Allowed = lists:sort([
-        effect_window_partition,
-        reduction_placements,
-        scheduler_groups
-        | Required
-    ]),
-    case {Required -- Keys, Keys -- Allowed} of
-        {[], []} -> ok;
-        {Missing, Unknown} ->
-            error({invalid_dslx_profile_keys, Missing, Unknown})
-    end,
-    Name = identifier(maps:get(name, Profile), topology_name),
-    case maps:get(channel_depth, Profile) of
-        Depth when is_integer(Depth), Depth > 0, Depth =< ?U32_MAX -> ok;
-        Depth -> error({invalid_dslx_channel_depth, Depth})
-    end,
-    case maps:get(actor_egress_depth, Profile) of
-        burst -> ok;
-        EgressDepth when is_integer(EgressDepth),
-                EgressDepth >= 0, EgressDepth =< ?U32_MAX -> ok;
-        EgressDepth -> error({egress_depth, EgressDepth})
-    end,
-    case maps:get(scheduler_groups, Profile, #{}) of
-        Groups when is_map(Groups) -> ok;
-        Groups -> error({scheduler_groups, Groups})
-    end,
-    case maps:get(reduction_placements, Profile, #{}) of
-        Placements when is_map(Placements) -> ok;
-        Placements -> error({reduction_placements, Placements})
-    end,
-    case Profile of
-        #{effect_window_partition := global} -> ok;
-        #{effect_window_partition := weak_components} -> ok;
-        #{effect_window_partition := Partition} ->
-            error({effect_window_partition, Partition});
-        _ -> ok
-    end,
-    Profile#{name := Name};
-validate_profile(Profile) ->
-    error({invalid_dslx_profile, Profile}).
-
-identifier(Name, Context) when is_atom(Name) ->
-    identifier(atom_to_list(Name), Context);
-identifier(Name, Context) when is_list(Name) ->
-    case re:run(Name, "^[a-z][a-z0-9_]*$", [{capture, none}]) of
-        match ->
-            case lists:member(Name, reserved_identifiers()) of
-                true -> error({reserved_dslx_identifier, Context, Name});
-                false -> Name
-            end;
-        nomatch -> error({invalid_dslx_identifier, Context, Name})
-    end;
-identifier(Name, Context) ->
-    error({invalid_dslx_identifier, Context, Name}).
-
-reserved_identifiers() ->
-    [
-        "as", "const", "else", "enum", "fn", "for", "if", "import",
-        "in", "let", "match", "proc", "pub", "spawn", "struct",
-        "type", "while"
-    ].
 
 %%%
 %%% Rendering
