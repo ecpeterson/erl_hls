@@ -86,10 +86,9 @@ are separate actors.
 An outgoing move toggles the local anyon before incoming moves are combined by
 parity. Consequently, simultaneous arrivals and departures produce the same
 occupancy regardless of message order. Like the reference phi implementation,
-this fixture emits a correction only when a move occurs. Its statically placed
-`cast_if` action retains source order while a runtime predicate suppresses the
-unused effect, so correction traffic scales with applied moves rather than
-physical qubits and steps.
+this fixture constructs and emits a correction only in the selected move
+branch, after the four neighbor messages. Correction traffic scales with
+applied moves rather than physical qubits and steps.
 
 A fuller decoder needs a configurable diffusion stopping rule and richer
 noise/measurement configuration. Those additions should preserve the four
@@ -338,18 +337,17 @@ configuring(cast, #anyon_move{}, Cell) ->
             #phenom_anyon{},
         #cell{}) -> hls_statem:cast_result(phase(), #cell{}).
 measuring(enter, _OldPhase, Cell) ->
-    CompletedStep = (Cell#cell.step - 1) band ?U32_MASK,
-    Status = #phi_status{
-        step = CompletedStep,
-        x = Cell#cell.x,
-        y = Cell#cell.y,
-        flags = Cell#cell.anyon bor (Cell#cell.noise_quiet bsl 1)
-    },
-    Request = #phenom_request{step = Cell#cell.step},
-    {Cell, [
-        {cast_if, Cell#cell.status_valid =:= 1, status, Status},
-        {cast, syndrome, Request}
-    ]};
+    {Cell, (case Cell#cell.status_valid =:= 1 of
+        true ->
+            Status = #phi_status{
+                step = (Cell#cell.step - 1) band ?U32_MASK,
+                x = Cell#cell.x,
+                y = Cell#cell.y,
+                flags = Cell#cell.anyon bor (Cell#cell.noise_quiet bsl 1)
+            },
+            [{cast, status, Status}];
+        false -> []
+    end) ++ [{cast, syndrome, #phenom_request{step = Cell#cell.step}}]};
 measuring(cast, #phi_config{}, Cell) ->
     {measuring, Cell, fail};
 measuring(
@@ -563,16 +561,6 @@ flipping(enter, _OldPhase, Cell) ->
             _ -> {Absent, Absent, Absent, Absent}
         end,
     Message = #anyon_move{step = Cell#cell.step},
-    CorrectionDirection = case Move of
-        false -> Absent;
-        true -> Cell#cell.best_direction
-    end,
-    Correction = #phi_correction{
-        step = Cell#cell.step,
-        x = Cell#cell.x,
-        y = Cell#cell.y,
-        direction = CorrectionDirection
-    },
     Updated = Cell#cell{
         anyon = Cell#cell.anyon bxor Present,
         random_state = NextRandom
@@ -584,8 +572,16 @@ flipping(enter, _OldPhase, Cell) ->
         {cast, north, Message#anyon_move{present = NorthPresent}},
         {cast, east, Message#anyon_move{present = EastPresent}},
         {cast, west, Message#anyon_move{present = WestPresent}},
-        {cast, south, Message#anyon_move{present = SouthPresent}},
-        {cast_if, Move, correction, Correction}
+        {cast, south, Message#anyon_move{present = SouthPresent}}
+        | case Move of
+            true -> [{cast, correction, #phi_correction{
+                step = Cell#cell.step,
+                x = Cell#cell.x,
+                y = Cell#cell.y,
+                direction = Cell#cell.best_direction
+            }}];
+            false -> []
+        end
     ]};
 flipping(
     cast,

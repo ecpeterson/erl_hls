@@ -278,13 +278,6 @@ collecting(enter, _OldPhase, Syndrome) ->
         false -> Syndrome#syndrome.step;
         true -> (Syndrome#syndrome.step + 1) band ?U32_MASK
     end,
-    Anyon = #phenom_anyon{
-        step = Syndrome#syndrome.step,
-        flags = Syndrome#syndrome.announcement bor
-            (Syndrome#syndrome.announcement_quiet bsl 1),
-        x = Syndrome#syndrome.x,
-        y = Syndrome#syndrome.y
-    },
     Query = #phenom_query{step = NextStep},
     Cleared = Syndrome#syndrome{
         step = NextStep,
@@ -293,8 +286,16 @@ collecting(enter, _OldPhase, Syndrome) ->
         data_quiet = 1,
         announcement_quiet = 0
     },
-    {Cleared, [
-        {cast_if, Releasing, phi, Anyon},
+    {Cleared, (case Releasing of
+        true -> [{cast, phi, #phenom_anyon{
+            step = Syndrome#syndrome.step,
+            flags = Syndrome#syndrome.announcement bor
+                (Syndrome#syndrome.announcement_quiet bsl 1),
+            x = Syndrome#syndrome.x,
+            y = Syndrome#syndrome.y
+        }}];
+        false -> []
+    end) ++ [
         {cast, north, Query#phenom_query{source = ?PHI_SOUTH_MASK}},
         {cast, east, Query#phenom_query{source = ?PHI_WEST_MASK}},
         {cast, west, Query#phenom_query{source = ?PHI_EAST_MASK}},

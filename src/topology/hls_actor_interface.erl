@@ -4,7 +4,7 @@
 
 -module(hls_actor_interface).
 -moduledoc """
-Reads the narrow, version-1 interface summary emitted by `hls_pack` for an
+Reads the narrow, version-2 interface summary emitted by `hls_pack` for an
 `hls_statem` module.
 
 When the compiling source remains available, the query re-derives the summary
@@ -14,8 +14,12 @@ generator; source-less deployed beams use their validated embedded summary.
 
 The summary records only facts already required by the current lowerer:
 message record layouts and local selectors, phase-specific cast dispatch, and
-source-ordered phase-entry effects. Predicate-bearing effects are marked
-conditional but remain part of the conservative output-schema union. A
+source-ordered phase-entry effects. Alternatives form a conservative union by
+position, port, and schema; more than one effect may describe a position, but
+only the selected alternative occupies it. An effect is unconditional only
+when every path has that port and schema at that position and no path uses a
+predicate-bearing action there. Batch capacity is the largest path, not the
+size of this union. A
 dispatch means that the generated actor has a callback group for that schema
 and phase; it does not claim that every payload passes the group's patterns and
 guards.
@@ -119,15 +123,8 @@ initial_effects(Summary) ->
 -spec max_entry_effects(summary()) -> non_neg_integer().
 -doc "Returns the largest source-ordered effect list of any phase entry.".
 max_entry_effects(Summary) ->
-    Effects = maps:get(entry_effects, Summary),
-    lists:max([
-        length([
-            Effect
-            || Effect <- Effects,
-               maps:get(phase, Effect) =:= Phase
-        ])
-        || Phase <- maps:get(phases, Summary)
-    ]).
+    lists:max([0 | [Order + 1
+        || #{order := Order} <- maps:get(entry_effects, Summary)]]).
 
 -spec schema(summary(), atom()) -> map().
 -doc "Looks up one public message schema by record name.".
@@ -163,7 +160,7 @@ reduction_storage_width(Summary) ->
     end.
 
 validate(Module, Summary = #{
-    version := 1,
+    version := 2,
     module := Module,
     phases := Phases,
     initial_phase := InitialPhase,
@@ -204,7 +201,7 @@ validate(Module, Summary = #{
         Effects
     ),
     Summary;
-validate(Module, #{version := Version}) when Version =/= 1 ->
+validate(Module, #{version := Version}) when Version =/= 2 ->
     error({unsupported_hls_actor_interface_version, Module, Version});
 validate(Module, Summary) ->
     error({invalid_hls_actor_interface, Module, Summary}).

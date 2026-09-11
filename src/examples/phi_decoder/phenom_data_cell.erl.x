@@ -361,9 +361,9 @@ pub const ENTRY_EFFECT_CAPACITY = u32:4;
 pub const ENTRY_EFFECT_PAYLOAD_BITS = u32:384;
 
 // Sorry: this is a hand-rolled tagged union. DSLX cannot yet express
-// phase-indexed variants whose fields retain their message types.
+// entry variants whose fields retain their message types.
 pub struct EntryEffects {
-  phase: u8,
+  layout: u8,
   valid: bool[4],
   payloads: bits[384],
 }
@@ -569,18 +569,17 @@ fn enter(old_phase: Phase, phase: Phase, data: Datacell) -> EntryOutcome {
       let _OldPhase_1 = old_phase;
       let __1 = phase;
       let Cell_1 = (Tag::DATA_CELL, data);
+      let Xls_entry_0_1 = Cell_1;
       let _0 = ();
       let _1 = ();
-      let _2 = (Cell_1, _0, _1, );
-      if bool:false {
-        EntryOutcome { data, failed: true, ..zero!<EntryOutcome>() }
-      } else {
+      let _2 = (Xls_entry_0_1, _0, _1, );
+      let _3 = {
         let evaluated = _2;
         EntryOutcome {
           data: evaluated.0.1,
           failed: false,
           effects: EntryEffects {
-            phase: Phase::CONFIGURING as u8,
+            layout: u8:0,
             valid: [
               bool:false,
               bool:false,
@@ -590,24 +589,26 @@ fn enter(old_phase: Phase, phase: Phase, data: Datacell) -> EntryOutcome {
             payloads: zero!<bits[384]>(),
           },
         }
-      }
+      };
+      if bool:false {
+        EntryOutcome { data, failed: true, ..zero!<EntryOutcome>() }
+      } else { _3 }
     },
     Phase::COLLECTING => {
       let _OldPhase_1 = old_phase;
       let __1 = phase;
       let Cell_1 = (Tag::DATA_CELL, data);
+      let Xls_entry_0_1 = Cell_1;
       let _0 = ();
       let _1 = ();
-      let _2 = (Cell_1, _0, _1, );
-      if bool:false {
-        EntryOutcome { data, failed: true, ..zero!<EntryOutcome>() }
-      } else {
+      let _2 = (Xls_entry_0_1, _0, _1, );
+      let _3 = {
         let evaluated = _2;
         EntryOutcome {
           data: evaluated.0.1,
           failed: false,
           effects: EntryEffects {
-            phase: Phase::COLLECTING as u8,
+            layout: u8:1,
             valid: [
               bool:false,
               bool:false,
@@ -617,7 +618,10 @@ fn enter(old_phase: Phase, phase: Phase, data: Datacell) -> EntryOutcome {
             payloads: zero!<bits[384]>(),
           },
         }
-      }
+      };
+      if bool:false {
+        EntryOutcome { data, failed: true, ..zero!<EntryOutcome>() }
+      } else { _3 }
     },
     Phase::REPORTING => {
       let _OldPhase_1 = old_phase;
@@ -635,50 +639,53 @@ fn enter(old_phase: Phase, phase: Phase, data: Datacell) -> EntryOutcome {
       };
       let _6 = (Tag::PHENOM_DATA, _5, bits_from_phenomdata(_5));
       let Message_1 = _6;
-      let _7 = ();
-      let _8 = Phenomdata {
+      let Xls_entry_0_1 = Cell_1;
+      let _7 = Phenomdata {
         source: 8,
         ..(Message_1).1
       };
-      let _9 = (Tag::PHENOM_DATA, _8, bits_from_phenomdata(_8));
-      let _10 = (bool:1, _9, );
-      let _11 = Phenomdata {
+      let _8 = (Tag::PHENOM_DATA, _7, bits_from_phenomdata(_7));
+      let _9 = (bool:1, _8, );
+      let Xls_entry_1_1 = _9;
+      let _10 = Phenomdata {
         source: 4,
         ..(Message_1).1
       };
-      let _12 = (Tag::PHENOM_DATA, _11, bits_from_phenomdata(_11));
-      let _13 = (bool:1, _12, );
-      let _14 = Phenomdata {
+      let _11 = (Tag::PHENOM_DATA, _10, bits_from_phenomdata(_10));
+      let _12 = (bool:1, _11, );
+      let Xls_entry_2_1 = _12;
+      let _13 = Phenomdata {
         source: 2,
         ..(Message_1).1
       };
-      let _15 = (Tag::PHENOM_DATA, _14, bits_from_phenomdata(_14));
-      let _16 = (bool:1, _15, );
-      let _17 = Phenomdata {
+      let _14 = (Tag::PHENOM_DATA, _13, bits_from_phenomdata(_13));
+      let _15 = (bool:1, _14, );
+      let Xls_entry_3_1 = _15;
+      let _16 = Phenomdata {
         source: 1,
         ..(Message_1).1
       };
-      let _18 = (Tag::PHENOM_DATA, _17, bits_from_phenomdata(_17));
-      let _19 = (bool:1, _18, );
-      let _20 = (_10, _13, _16, _19, );
-      let _21 = (Cell_1, _7, _20, );
-      if bool:false {
-        EntryOutcome { data, failed: true, ..zero!<EntryOutcome>() }
-      } else {
+      let _17 = (Tag::PHENOM_DATA, _16, bits_from_phenomdata(_16));
+      let _18 = (bool:1, _17, );
+      let Xls_entry_4_1 = _18;
+      let _19 = ();
+      let _20 = (Xls_entry_1_1, Xls_entry_2_1, Xls_entry_3_1, Xls_entry_4_1, );
+      let _21 = (Xls_entry_0_1, _19, _20, );
+      let _22 = {
         let evaluated = _21;
-        let effect_0 = axis::pack(
-          evaluated.2.0.1.0 as u8, evaluated.2.0.1.2);
-        let effect_1 = axis::pack(
-          evaluated.2.1.1.0 as u8, evaluated.2.1.1.2);
-        let effect_2 = axis::pack(
-          evaluated.2.2.1.0 as u8, evaluated.2.2.1.2);
-        let effect_3 = axis::pack(
-          evaluated.2.3.1.0 as u8, evaluated.2.3.1.2);
+              let effect_0 = axis::pack(
+                evaluated.2.0.1.0 as u8, evaluated.2.0.1.2);
+              let effect_1 = axis::pack(
+                evaluated.2.1.1.0 as u8, evaluated.2.1.1.2);
+              let effect_2 = axis::pack(
+                evaluated.2.2.1.0 as u8, evaluated.2.2.1.2);
+              let effect_3 = axis::pack(
+                evaluated.2.3.1.0 as u8, evaluated.2.3.1.2);
         EntryOutcome {
           data: evaluated.0.1,
           failed: false,
           effects: EntryEffects {
-            phase: Phase::REPORTING as u8,
+            layout: u8:2,
             valid: [
               evaluated.2.0.0,
               evaluated.2.1.0,
@@ -686,21 +693,24 @@ fn enter(old_phase: Phase, phase: Phase, data: Datacell) -> EntryOutcome {
               evaluated.2.3.0,
             ],
             payloads: bit_slice_update(
-          bit_slice_update(
-          bit_slice_update(
-          bit_slice_update(
-          zero!<bits[384]>(),
-          u32:0,
-          effect_0.payload[0:96]),
-          u32:96,
-          effect_1.payload[0:96]),
-          u32:192,
-          effect_2.payload[0:96]),
-          u32:288,
-          effect_3.payload[0:96]),
+                bit_slice_update(
+                bit_slice_update(
+                bit_slice_update(
+                zero!<bits[384]>(),
+                u32:0,
+                effect_0.payload[0:96]),
+                u32:96,
+                effect_1.payload[0:96]),
+                u32:192,
+                effect_2.payload[0:96]),
+                u32:288,
+                effect_3.payload[0:96]),
           },
         }
-      }
+      };
+      if bool:false {
+        EntryOutcome { data, failed: true, ..zero!<EntryOutcome>() }
+      } else { _22 }
     },
     Phase::REPLYING => {
       let _OldPhase_1 = old_phase;
@@ -719,21 +729,21 @@ fn enter(old_phase: Phase, phase: Phase, data: Datacell) -> EntryOutcome {
       };
       let _5 = (Tag::PAULI_REPLY, _4, bits_from_paulireply(_4));
       let Reply_1 = _5;
-      let _6 = ();
-      let _7 = (bool:1, Reply_1, );
-      let _8 = (_7, );
-      let _9 = (Cell_1, _6, _8, );
-      if bool:false {
-        EntryOutcome { data, failed: true, ..zero!<EntryOutcome>() }
-      } else {
+      let Xls_entry_0_1 = Cell_1;
+      let _6 = (bool:1, Reply_1, );
+      let Xls_entry_1_1 = _6;
+      let _7 = ();
+      let _8 = (Xls_entry_1_1, );
+      let _9 = (Xls_entry_0_1, _7, _8, );
+      let _10 = {
         let evaluated = _9;
-        let effect_0 = axis::pack(
-          evaluated.2.0.1.0 as u8, evaluated.2.0.1.2);
+              let effect_0 = axis::pack(
+                evaluated.2.0.1.0 as u8, evaluated.2.0.1.2);
         EntryOutcome {
           data: evaluated.0.1,
           failed: false,
           effects: EntryEffects {
-            phase: Phase::REPLYING as u8,
+            layout: u8:3,
             valid: [
               evaluated.2.0.0,
               bool:false,
@@ -741,30 +751,34 @@ fn enter(old_phase: Phase, phase: Phase, data: Datacell) -> EntryOutcome {
               bool:false,
             ],
             payloads: bit_slice_update(
-          zero!<bits[384]>(),
-          u32:0,
-          effect_0.payload[0:96]),
+                zero!<bits[384]>(),
+                u32:0,
+                effect_0.payload[0:96]),
           },
         }
-      }
+      };
+      if bool:false {
+        EntryOutcome { data, failed: true, ..zero!<EntryOutcome>() }
+      } else { _10 }
     },
   }
 }
 
 fn entry_effect_count(effects: EntryEffects) -> u8 {
-  match effects.phase as Phase {
-    Phase::CONFIGURING => u8:0,
-    Phase::COLLECTING => u8:0,
-    Phase::REPORTING => u8:4,
-    Phase::REPLYING => u8:1,
+  match effects.layout {
+    u8:0 => u8:0,
+    u8:1 => u8:0,
+    u8:2 => u8:4,
+    u8:3 => u8:1,
+    _ => u8:0,
   }
 }
 
 fn entry_effect(effects: EntryEffects, index: u8) -> Egress {
-  match effects.phase as Phase {
-    Phase::CONFIGURING => zero!<Egress>(),
-    Phase::COLLECTING => zero!<Egress>(),
-    Phase::REPORTING => match index {
+  match effects.layout {
+    u8:0 => zero!<Egress>(),
+    u8:1 => zero!<Egress>(),
+    u8:2 => match index {
       u8:0 => Egress {
         port: OutputPort::NORTH,
         frame: axis::pack(Tag::PHENOM_DATA as u8,
@@ -787,7 +801,7 @@ fn entry_effect(effects: EntryEffects, index: u8) -> Egress {
       },
       _ => zero!<Egress>(),
     },
-    Phase::REPLYING => match index {
+    u8:3 => match index {
       u8:0 => Egress {
         port: OutputPort::MEASUREMENT,
         frame: axis::pack(Tag::PAULI_REPLY as u8,
@@ -795,6 +809,7 @@ fn entry_effect(effects: EntryEffects, index: u8) -> Egress {
       },
       _ => zero!<Egress>(),
     },
+    _ => zero!<Egress>(),
   }
 }
 

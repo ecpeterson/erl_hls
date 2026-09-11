@@ -108,6 +108,10 @@ analyze_site(FamilyId, #{id := Id, phase := Phase, name := Name,
         false -> error({source_fragment_nonexhaustive_contribution,
             FamilyId, Id, Schema})
     end,
+    case maps:get(opens_conditionally, Site, false) of
+        false -> ok;
+        true -> error({source_fragment_conditional_open, FamilyId, Id})
+    end,
     Size = maps:get(size, Population),
     Effects = phase_effects(FamilyId, Phase, Interface),
     Prefix = require_prefix(FamilyId, Phase, Schema, Size, Effects),
@@ -115,17 +119,18 @@ analyze_site(FamilyId, #{id := Id, phase := Phase, name := Name,
     #{id => Id, phase => Phase, name => Name, population => Population,
       contribution_schema => Schema, pattern => Pattern, captured => Prefix}.
 
-phase_effects(FamilyId, Phase, Interface) ->
+phase_effects(_FamilyId, Phase, Interface) ->
     Effects = [Effect || Effect <- maps:get(entry_effects, Interface),
         maps:get(phase, Effect) =:= Phase],
-    Orders = [maps:get(order, Effect) || Effect <- Effects],
-    case duplicates(Orders) of
-        [] -> lists:sort(fun(A, B) -> maps:get(order, A) < maps:get(order, B) end, Effects);
-        Ds -> error({source_fragment_duplicate_effect_orders, FamilyId, Phase, Ds})
-    end.
+    lists:sort(fun(A, B) -> maps:get(order, A) < maps:get(order, B) end, Effects).
 
 require_prefix(FamilyId, Phase, Schema, Size, Effects) ->
-    Prefix = lists:sublist(Effects, Size),
+    Prefix = [E || E = #{order := Order} <- Effects, Order < Size],
+    Orders = [maps:get(order, Effect) || Effect <- Prefix],
+    case duplicates(Orders) of
+        [] -> ok;
+        Ds -> error({source_fragment_duplicate_effect_orders, FamilyId, Phase, Ds})
+    end,
     case length(Prefix) of
         Size -> ok;
         Actual -> error({source_fragment_short_prefix, FamilyId, Phase, Size, Actual})
@@ -133,8 +138,9 @@ require_prefix(FamilyId, Phase, Schema, Size, Effects) ->
     lists:foreach(fun({Ordinal, Effect}) ->
         prefix_effect(FamilyId, Phase, Ordinal, Schema, Effect)
     end, lists:enumerate(0, Prefix)),
-    case lists:nthtail(Size, Effects) of
-        [#{schema := Schema} | _] ->
+    case [E || E = #{order := Order, schema := Tag} <- Effects,
+            Order =:= Size, Tag =:= Schema] of
+        [_ | _] ->
             error({source_fragment_excess_prefix, FamilyId, Phase, Schema, Size});
         _ -> ok
     end,

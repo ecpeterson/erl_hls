@@ -270,7 +270,7 @@ entry_bindings(none) ->
     "    let entry_failed = outcome.failed;\n";
 entry_bindings(_Reductions) ->
     [
-        "    let opens_reduction = reduction_phase_opens(machine.phase);\n",
+        "    let opens_reduction = outcome.reduction.status != ReductionStatus::IDLE;\n",
         "    let entry_failed = outcome.failed || (opens_reduction &&\n",
         "      machine.reduction.status != ReductionStatus::IDLE);\n",
         "    let entered_reduction = if opens_reduction {\n",

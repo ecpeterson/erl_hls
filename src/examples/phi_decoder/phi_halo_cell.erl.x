@@ -455,9 +455,9 @@ pub const ENTRY_EFFECT_CAPACITY = u32:5;
 pub const ENTRY_EFFECT_PAYLOAD_BITS = u32:384;
 
 // Sorry: this is a hand-rolled tagged union. DSLX cannot yet express
-// phase-indexed variants whose fields retain their message types.
+// entry variants whose fields retain their message types.
 pub struct EntryEffects {
-  phase: u8,
+  layout: u8,
   valid: bool[5],
   payloads: bits[384],
 }
@@ -670,15 +670,6 @@ fn reduction_member_bit(
     (ReductionSite::COMPARING, u32:8) =>
       (uN[4]:1 << u32:3) as ReductionMembers,
     _ => zero!<ReductionMembers>(),
-  }
-}
-
-fn reduction_phase_opens(phase: Phase) -> u1 {
-  match phase {
-    Phase::GATHERING => u1:1,
-    Phase::COMPARING => u1:1,
-    Phase::FLIPPING => u1:1,
-    _ => u1:0,
   }
 }
 
@@ -1482,19 +1473,18 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> EntryOutcome {
       let _OldPhase_1 = old_phase;
       let __1 = phase;
       let Cell_1 = (Tag::CELL, data);
+      let Xls_entry_0_1 = Cell_1;
       let _0 = ();
       let _1 = ();
-      let _2 = (Cell_1, _0, _1, );
-      if bool:false {
-        EntryOutcome { data, failed: true, ..zero!<EntryOutcome>() }
-      } else {
+      let _2 = (Xls_entry_0_1, _0, _1, );
+      let _3 = {
         let evaluated = _2;
         EntryOutcome {
           data: evaluated.0.1,
           reduction: zero!<ReductionState>(),
           failed: false,
           effects: EntryEffects {
-            phase: Phase::CONFIGURING as u8,
+            layout: u8:0,
             valid: [
               bool:false,
               bool:false,
@@ -1505,76 +1495,123 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> EntryOutcome {
             payloads: zero!<bits[384]>(),
           },
         }
-      }
+      };
+      if bool:false {
+        EntryOutcome { data, failed: true, ..zero!<EntryOutcome>() }
+      } else { _3 }
     },
     Phase::MEASURING => {
       let _OldPhase_1 = old_phase;
       let __1 = phase;
       let Cell_1 = (Tag::CELL, data);
-      let _0 = Cell_1.1.step;
-      let _1 = _0 - 1;
-      let _2 = _1 & 4294967295;
-      let CompletedStep_1 = _2;
-      let _3 = Cell_1.1.x;
-      let _4 = Cell_1.1.y;
-      let _5 = Cell_1.1.anyon;
-      let _6 = Cell_1.1.noise_quiet;
-      let _7 = _6 << 1;
-      let _8 = _5 | _7;
-      let _9 = Phistatus {
-        step: CompletedStep_1,
-        x: _3,
-        y: _4,
-        flags: _8,
-        ..zero!<Phistatus>()
-      };
-      let _10 = (Tag::PHI_STATUS, _9, bits_from_phistatus(_9));
-      let Status_1 = _10;
-      let _11 = Cell_1.1.step;
-      let _12 = Phenomrequest {
-        step: _11,
-        ..zero!<Phenomrequest>()
-      };
-      let _13 = (Tag::PHENOM_REQUEST, _12, bits_from_phenomrequest(_12));
-      let Request_1 = _13;
-      let _14 = ();
-      let _15 = Cell_1.1.status_valid;
-      let _16 = _15 == 1;
-      let _17 = (_16, Status_1, );
-      let _18 = (bool:1, Request_1, );
-      let _19 = (_17, _18, );
-      let _20 = (Cell_1, _14, _19, );
-      if bool:false {
-        EntryOutcome { data, failed: true, ..zero!<EntryOutcome>() }
+      let Xls_entry_0_1 = Cell_1;
+      let _0 = Cell_1.1.status_valid;
+      let _1 = _0 == 1;
+      let _22 = if _1 {
+        let _2 = Cell_1.1.step;
+        let _3 = _2 - 1;
+        let _4 = _3 & 4294967295;
+        let _5 = Cell_1.1.x;
+        let _6 = Cell_1.1.y;
+        let _7 = Cell_1.1.anyon;
+        let _8 = Cell_1.1.noise_quiet;
+        let _9 = _8 << 1;
+        let _10 = _7 | _9;
+        let _11 = Phistatus {
+          step: _4,
+          x: _5,
+          y: _6,
+          flags: _10,
+          ..zero!<Phistatus>()
+        };
+        let _12 = (Tag::PHI_STATUS, _11, bits_from_phistatus(_11));
+        let Status_1 = _12;
+        let _13 = (bool:1, Status_1, );
+        let Xls_entry_1_1 = _13;
+        let _14 = Cell_1.1.step;
+        let _15 = Phenomrequest {
+          step: _14,
+          ..zero!<Phenomrequest>()
+        };
+        let _16 = (Tag::PHENOM_REQUEST, _15, bits_from_phenomrequest(_15));
+        let _17 = (bool:1, _16, );
+        let Xls_entry_2_1 = _17;
+        let _18 = ();
+        let _19 = (Xls_entry_1_1, Xls_entry_2_1, );
+        let _20 = (Xls_entry_0_1, _18, _19, );
+        let _21 = {
+          let evaluated = _20;
+                let effect_0 = axis::pack(
+                  evaluated.2.0.1.0 as u8, evaluated.2.0.1.2);
+                let effect_1 = axis::pack(
+                  evaluated.2.1.1.0 as u8, evaluated.2.1.1.2);
+          EntryOutcome {
+            data: evaluated.0.1,
+            reduction: zero!<ReductionState>(),
+            failed: false,
+            effects: EntryEffects {
+              layout: u8:1,
+              valid: [
+                evaluated.2.0.0,
+                evaluated.2.1.0,
+                bool:false,
+                bool:false,
+                bool:false,
+              ],
+              payloads: bit_slice_update(
+                  bit_slice_update(
+                  zero!<bits[384]>(),
+                  u32:0,
+                  effect_0.payload[0:96]),
+                  u32:96,
+                  effect_1.payload[0:32]),
+            },
+          }
+        };
+        (_21, bool:false)
       } else {
-        let evaluated = _20;
-        let effect_0 = axis::pack(
-          evaluated.2.0.1.0 as u8, evaluated.2.0.1.2);
-        let effect_1 = axis::pack(
-          evaluated.2.1.1.0 as u8, evaluated.2.1.1.2);
-        EntryOutcome {
-          data: evaluated.0.1,
-          reduction: zero!<ReductionState>(),
-          failed: false,
-          effects: EntryEffects {
-            phase: Phase::MEASURING as u8,
-            valid: [
-              evaluated.2.0.0,
-              evaluated.2.1.0,
-              bool:false,
-              bool:false,
-              bool:false,
-            ],
-            payloads: bit_slice_update(
-          bit_slice_update(
-          zero!<bits[384]>(),
-          u32:0,
-          effect_0.payload[0:96]),
-          u32:96,
-          effect_1.payload[0:32]),
-          },
-        }
-      }
+        let _2 = Cell_1.1.step;
+        let _3 = Phenomrequest {
+          step: _2,
+          ..zero!<Phenomrequest>()
+        };
+        let _4 = (Tag::PHENOM_REQUEST, _3, bits_from_phenomrequest(_3));
+        let _5 = (bool:1, _4, );
+        let Xls_entry_3_1 = _5;
+        let _6 = ();
+        let _7 = (Xls_entry_3_1, );
+        let _8 = (Xls_entry_0_1, _6, _7, );
+        let _9 = {
+          let evaluated = _8;
+                let effect_0 = axis::pack(
+                  evaluated.2.0.1.0 as u8, evaluated.2.0.1.2);
+          EntryOutcome {
+            data: evaluated.0.1,
+            reduction: zero!<ReductionState>(),
+            failed: false,
+            effects: EntryEffects {
+              layout: u8:2,
+              valid: [
+                evaluated.2.0.0,
+                bool:false,
+                bool:false,
+                bool:false,
+                bool:false,
+              ],
+              payloads: bit_slice_update(
+                  zero!<bits[384]>(),
+                  u32:0,
+                  effect_0.payload[0:32]),
+            },
+          }
+        };
+        (_9, bool:false)
+      };
+      let case_match_1_1 = bool:false;
+      let case_match_1_2 = _22.1;
+      if (case_match_1_1 != case_match_1_2) || bool:false {
+        EntryOutcome { data, failed: true, ..zero!<EntryOutcome>() }
+      } else { _22.0 }
     },
     Phase::GATHERING => {
       let _OldPhase_1 = old_phase;
@@ -1590,6 +1627,7 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> EntryOutcome {
       };
       let _3 = (Tag::PHI, _2, bits_from_phi(_2));
       let Message_1 = _3;
+      let Xls_entry_0_1 = Cell_1;
       let _4 = Cell_1.1.diffusion_epoch;
       let _5 = (_4 as u32);
       let _6 = Phifold {
@@ -1599,30 +1637,33 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> EntryOutcome {
       };
       let _7 = (Tag::PHI_FOLD, _6, bits_from_phifold(_6));
       let _8 = (_5, _7, );
+      let Xls_entry_1_1 = _8;
       let _9 = (bool:1, Message_1, );
+      let Xls_entry_2_1 = _9;
       let _10 = (bool:1, Message_1, );
+      let Xls_entry_3_1 = _10;
       let _11 = (bool:1, Message_1, );
+      let Xls_entry_4_1 = _11;
       let _12 = (bool:1, Message_1, );
-      let _13 = (_9, _10, _11, _12, );
-      let _14 = (Cell_1, _8, _13, );
-      if bool:false {
-        EntryOutcome { data, failed: true, ..zero!<EntryOutcome>() }
-      } else {
+      let Xls_entry_5_1 = _12;
+      let _13 = (Xls_entry_2_1, Xls_entry_3_1, Xls_entry_4_1, Xls_entry_5_1, );
+      let _14 = (Xls_entry_0_1, Xls_entry_1_1, _13, );
+      let _15 = {
         let evaluated = _14;
-        let effect_0 = axis::pack(
-          evaluated.2.0.1.0 as u8, evaluated.2.0.1.2);
-        let effect_1 = axis::pack(
-          evaluated.2.1.1.0 as u8, evaluated.2.1.1.2);
-        let effect_2 = axis::pack(
-          evaluated.2.2.1.0 as u8, evaluated.2.2.1.2);
-        let effect_3 = axis::pack(
-          evaluated.2.3.1.0 as u8, evaluated.2.3.1.2);
+              let effect_0 = axis::pack(
+                evaluated.2.0.1.0 as u8, evaluated.2.0.1.2);
+              let effect_1 = axis::pack(
+                evaluated.2.1.1.0 as u8, evaluated.2.1.1.2);
+              let effect_2 = axis::pack(
+                evaluated.2.2.1.0 as u8, evaluated.2.2.1.2);
+              let effect_3 = axis::pack(
+                evaluated.2.3.1.0 as u8, evaluated.2.3.1.2);
         EntryOutcome {
           data: evaluated.0.1,
           reduction: reduction_open_site(ReductionSite::GATHERING, evaluated.1.0, evaluated.1.1.1),
           failed: false,
           effects: EntryEffects {
-            phase: Phase::GATHERING as u8,
+            layout: u8:3,
             valid: [
               evaluated.2.0.0,
               evaluated.2.1.0,
@@ -1631,21 +1672,24 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> EntryOutcome {
               bool:false,
             ],
             payloads: bit_slice_update(
-          bit_slice_update(
-          bit_slice_update(
-          bit_slice_update(
-          zero!<bits[384]>(),
-          u32:0,
-          effect_0.payload[0:96]),
-          u32:96,
-          effect_1.payload[0:96]),
-          u32:192,
-          effect_2.payload[0:96]),
-          u32:288,
-          effect_3.payload[0:96]),
+                bit_slice_update(
+                bit_slice_update(
+                bit_slice_update(
+                zero!<bits[384]>(),
+                u32:0,
+                effect_0.payload[0:96]),
+                u32:96,
+                effect_1.payload[0:96]),
+                u32:192,
+                effect_2.payload[0:96]),
+                u32:288,
+                effect_3.payload[0:96]),
           },
         }
-      }
+      };
+      if bool:false {
+        EntryOutcome { data, failed: true, ..zero!<EntryOutcome>() }
+      } else { _15 }
     },
     Phase::COMPARING => {
       let _OldPhase_1 = old_phase;
@@ -1662,6 +1706,7 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> EntryOutcome {
       };
       let _4 = (Tag::PHI0, _3, bits_from_phi0(_3));
       let Message_1 = _4;
+      let Xls_entry_0_1 = Cell_1;
       let _5 = Cell_1.1.step;
       let _6 = (_5 as u32);
       let _7 = Phifold {
@@ -1671,50 +1716,53 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> EntryOutcome {
       };
       let _8 = (Tag::PHI_FOLD, _7, bits_from_phifold(_7));
       let _9 = (_6, _8, );
+      let Xls_entry_1_1 = _9;
       let _10 = Phi0 {
         source: 8,
         ..(Message_1).1
       };
       let _11 = (Tag::PHI0, _10, bits_from_phi0(_10));
       let _12 = (bool:1, _11, );
+      let Xls_entry_2_1 = _12;
       let _13 = Phi0 {
         source: 4,
         ..(Message_1).1
       };
       let _14 = (Tag::PHI0, _13, bits_from_phi0(_13));
       let _15 = (bool:1, _14, );
+      let Xls_entry_3_1 = _15;
       let _16 = Phi0 {
         source: 2,
         ..(Message_1).1
       };
       let _17 = (Tag::PHI0, _16, bits_from_phi0(_16));
       let _18 = (bool:1, _17, );
+      let Xls_entry_4_1 = _18;
       let _19 = Phi0 {
         source: 1,
         ..(Message_1).1
       };
       let _20 = (Tag::PHI0, _19, bits_from_phi0(_19));
       let _21 = (bool:1, _20, );
-      let _22 = (_12, _15, _18, _21, );
-      let _23 = (Cell_1, _9, _22, );
-      if bool:false {
-        EntryOutcome { data, failed: true, ..zero!<EntryOutcome>() }
-      } else {
+      let Xls_entry_5_1 = _21;
+      let _22 = (Xls_entry_2_1, Xls_entry_3_1, Xls_entry_4_1, Xls_entry_5_1, );
+      let _23 = (Xls_entry_0_1, Xls_entry_1_1, _22, );
+      let _24 = {
         let evaluated = _23;
-        let effect_0 = axis::pack(
-          evaluated.2.0.1.0 as u8, evaluated.2.0.1.2);
-        let effect_1 = axis::pack(
-          evaluated.2.1.1.0 as u8, evaluated.2.1.1.2);
-        let effect_2 = axis::pack(
-          evaluated.2.2.1.0 as u8, evaluated.2.2.1.2);
-        let effect_3 = axis::pack(
-          evaluated.2.3.1.0 as u8, evaluated.2.3.1.2);
+              let effect_0 = axis::pack(
+                evaluated.2.0.1.0 as u8, evaluated.2.0.1.2);
+              let effect_1 = axis::pack(
+                evaluated.2.1.1.0 as u8, evaluated.2.1.1.2);
+              let effect_2 = axis::pack(
+                evaluated.2.2.1.0 as u8, evaluated.2.2.1.2);
+              let effect_3 = axis::pack(
+                evaluated.2.3.1.0 as u8, evaluated.2.3.1.2);
         EntryOutcome {
           data: evaluated.0.1,
           reduction: reduction_open_site(ReductionSite::COMPARING, evaluated.1.0, evaluated.1.1.1),
           failed: false,
           effects: EntryEffects {
-            phase: Phase::COMPARING as u8,
+            layout: u8:4,
             valid: [
               evaluated.2.0.0,
               evaluated.2.1.0,
@@ -1723,21 +1771,24 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> EntryOutcome {
               bool:false,
             ],
             payloads: bit_slice_update(
-          bit_slice_update(
-          bit_slice_update(
-          bit_slice_update(
-          zero!<bits[384]>(),
-          u32:0,
-          effect_0.payload[0:96]),
-          u32:96,
-          effect_1.payload[0:96]),
-          u32:192,
-          effect_2.payload[0:96]),
-          u32:288,
-          effect_3.payload[0:96]),
+                bit_slice_update(
+                bit_slice_update(
+                bit_slice_update(
+                zero!<bits[384]>(),
+                u32:0,
+                effect_0.payload[0:96]),
+                u32:96,
+                effect_1.payload[0:96]),
+                u32:192,
+                effect_2.payload[0:96]),
+                u32:288,
+                effect_3.payload[0:96]),
           },
         }
-      }
+      };
+      if bool:false {
+        EntryOutcome { data, failed: true, ..zero!<EntryOutcome>() }
+      } else { _24 }
     },
     Phase::FLIPPING => {
       let _OldPhase_1 = old_phase;
@@ -1819,136 +1870,186 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> EntryOutcome {
       };
       let _20 = (Tag::ANYON_MOVE, _19, bits_from_anyonmove(_19));
       let Message_1 = _20;
-      let _22 = if Move_1 {
-        let _21 = Cell_1.1.best_direction;
-        (_21, bool:false)
-      } else {
-        (Absent_1, bool:false)
-      };
-      let case_match_5_1 = bool:false;
-      let case_match_5_2 = _22.1;
-      let CorrectionDirection_1 = _22.0;
-      let _23 = Cell_1.1.step;
-      let _24 = Cell_1.1.x;
-      let _25 = Cell_1.1.y;
-      let _26 = Phicorrection {
-        step: _23,
-        x: _24,
-        y: _25,
-        direction: CorrectionDirection_1,
-        ..zero!<Phicorrection>()
-      };
-      let _27 = (Tag::PHI_CORRECTION, _26, bits_from_phicorrection(_26));
-      let Correction_1 = _27;
-      let _28 = Cell_1.1.anyon;
-      let _29 = _28 ^ Present_1;
-      let _30 = Cell {
-        anyon: _29,
+      let _21 = Cell_1.1.anyon;
+      let _22 = _21 ^ Present_1;
+      let _23 = Cell {
+        anyon: _22,
         random_state: NextRandom_1,
         ..(Cell_1).1
       };
-      let _31 = (Tag::CELL, _30);
-      let Updated_1 = _31;
-      let _32 = Cell_1.1.step;
-      let _33 = (_32 as u32);
-      let _34 = Phifold {
+      let _24 = (Tag::CELL, _23);
+      let Updated_1 = _24;
+      let Xls_entry_0_1 = Updated_1;
+      let _25 = Cell_1.1.step;
+      let _26 = (_25 as u32);
+      let _27 = Phifold {
         value0: 0,
         value1: 0,
         ..zero!<Phifold>()
       };
-      let _35 = (Tag::PHI_FOLD, _34, bits_from_phifold(_34));
-      let _36 = (_33, _35, );
-      let _37 = Anyonmove {
+      let _28 = (Tag::PHI_FOLD, _27, bits_from_phifold(_27));
+      let _29 = (_26, _28, );
+      let Xls_entry_1_1 = _29;
+      let _30 = Anyonmove {
         present: NorthPresent_1,
         ..(Message_1).1
       };
-      let _38 = (Tag::ANYON_MOVE, _37, bits_from_anyonmove(_37));
-      let _39 = (bool:1, _38, );
-      let _40 = Anyonmove {
+      let _31 = (Tag::ANYON_MOVE, _30, bits_from_anyonmove(_30));
+      let _32 = (bool:1, _31, );
+      let Xls_entry_2_1 = _32;
+      let _33 = Anyonmove {
         present: EastPresent_1,
         ..(Message_1).1
       };
-      let _41 = (Tag::ANYON_MOVE, _40, bits_from_anyonmove(_40));
-      let _42 = (bool:1, _41, );
-      let _43 = Anyonmove {
+      let _34 = (Tag::ANYON_MOVE, _33, bits_from_anyonmove(_33));
+      let _35 = (bool:1, _34, );
+      let Xls_entry_3_1 = _35;
+      let _36 = Anyonmove {
         present: WestPresent_1,
         ..(Message_1).1
       };
-      let _44 = (Tag::ANYON_MOVE, _43, bits_from_anyonmove(_43));
-      let _45 = (bool:1, _44, );
-      let _46 = Anyonmove {
+      let _37 = (Tag::ANYON_MOVE, _36, bits_from_anyonmove(_36));
+      let _38 = (bool:1, _37, );
+      let Xls_entry_4_1 = _38;
+      let _39 = Anyonmove {
         present: SouthPresent_1,
         ..(Message_1).1
       };
-      let _47 = (Tag::ANYON_MOVE, _46, bits_from_anyonmove(_46));
-      let _48 = (bool:1, _47, );
-      let _49 = (Move_1, Correction_1, );
-      let _50 = (_39, _42, _45, _48, _49, );
-      let _51 = (Updated_1, _36, _50, );
+      let _40 = (Tag::ANYON_MOVE, _39, bits_from_anyonmove(_39));
+      let _41 = (bool:1, _40, );
+      let Xls_entry_5_1 = _41;
+      let _52 = if Move_1 {
+        let _42 = Cell_1.1.step;
+        let _43 = Cell_1.1.x;
+        let _44 = Cell_1.1.y;
+        let _45 = Cell_1.1.best_direction;
+        let _46 = Phicorrection {
+          step: _42,
+          x: _43,
+          y: _44,
+          direction: _45,
+          ..zero!<Phicorrection>()
+        };
+        let _47 = (Tag::PHI_CORRECTION, _46, bits_from_phicorrection(_46));
+        let _48 = (bool:1, _47, );
+        let Xls_entry_6_1 = _48;
+        let _49 = (Xls_entry_2_1, Xls_entry_3_1, Xls_entry_4_1, Xls_entry_5_1, Xls_entry_6_1, );
+        let _50 = (Xls_entry_0_1, Xls_entry_1_1, _49, );
+        let _51 = {
+          let evaluated = _50;
+                let effect_0 = axis::pack(
+                  evaluated.2.0.1.0 as u8, evaluated.2.0.1.2);
+                let effect_1 = axis::pack(
+                  evaluated.2.1.1.0 as u8, evaluated.2.1.1.2);
+                let effect_2 = axis::pack(
+                  evaluated.2.2.1.0 as u8, evaluated.2.2.1.2);
+                let effect_3 = axis::pack(
+                  evaluated.2.3.1.0 as u8, evaluated.2.3.1.2);
+                let effect_4 = axis::pack(
+                  evaluated.2.4.1.0 as u8, evaluated.2.4.1.2);
+          EntryOutcome {
+            data: evaluated.0.1,
+            reduction: reduction_open_site(ReductionSite::FLIPPING, evaluated.1.0, evaluated.1.1.1),
+            failed: false,
+            effects: EntryEffects {
+              layout: u8:5,
+              valid: [
+                evaluated.2.0.0,
+                evaluated.2.1.0,
+                evaluated.2.2.0,
+                evaluated.2.3.0,
+                evaluated.2.4.0,
+              ],
+              payloads: bit_slice_update(
+                  bit_slice_update(
+                  bit_slice_update(
+                  bit_slice_update(
+                  bit_slice_update(
+                  zero!<bits[384]>(),
+                  u32:0,
+                  effect_0.payload[0:64]),
+                  u32:64,
+                  effect_1.payload[0:64]),
+                  u32:128,
+                  effect_2.payload[0:64]),
+                  u32:192,
+                  effect_3.payload[0:64]),
+                  u32:256,
+                  effect_4.payload[0:96]),
+            },
+          }
+        };
+        (_51, bool:false)
+      } else {
+        let _42 = (Xls_entry_2_1, Xls_entry_3_1, Xls_entry_4_1, Xls_entry_5_1, );
+        let _43 = (Xls_entry_0_1, Xls_entry_1_1, _42, );
+        let _44 = {
+          let evaluated = _43;
+                let effect_0 = axis::pack(
+                  evaluated.2.0.1.0 as u8, evaluated.2.0.1.2);
+                let effect_1 = axis::pack(
+                  evaluated.2.1.1.0 as u8, evaluated.2.1.1.2);
+                let effect_2 = axis::pack(
+                  evaluated.2.2.1.0 as u8, evaluated.2.2.1.2);
+                let effect_3 = axis::pack(
+                  evaluated.2.3.1.0 as u8, evaluated.2.3.1.2);
+          EntryOutcome {
+            data: evaluated.0.1,
+            reduction: reduction_open_site(ReductionSite::FLIPPING, evaluated.1.0, evaluated.1.1.1),
+            failed: false,
+            effects: EntryEffects {
+              layout: u8:6,
+              valid: [
+                evaluated.2.0.0,
+                evaluated.2.1.0,
+                evaluated.2.2.0,
+                evaluated.2.3.0,
+                bool:false,
+              ],
+              payloads: bit_slice_update(
+                  bit_slice_update(
+                  bit_slice_update(
+                  bit_slice_update(
+                  zero!<bits[384]>(),
+                  u32:0,
+                  effect_0.payload[0:64]),
+                  u32:64,
+                  effect_1.payload[0:64]),
+                  u32:128,
+                  effect_2.payload[0:64]),
+                  u32:192,
+                  effect_3.payload[0:64]),
+            },
+          }
+        };
+        (_44, bool:false)
+      };
+      let case_match_5_1 = bool:false;
+      let case_match_5_2 = _52.1;
       if (case_match_2_1 != case_match_2_2) || (case_match_3_1 != case_match_3_2) || (case_match_4_1 != case_match_4_2) || (case_match_5_1 != case_match_5_2) || bool:false {
         EntryOutcome { data, failed: true, ..zero!<EntryOutcome>() }
-      } else {
-        let evaluated = _51;
-        let effect_0 = axis::pack(
-          evaluated.2.0.1.0 as u8, evaluated.2.0.1.2);
-        let effect_1 = axis::pack(
-          evaluated.2.1.1.0 as u8, evaluated.2.1.1.2);
-        let effect_2 = axis::pack(
-          evaluated.2.2.1.0 as u8, evaluated.2.2.1.2);
-        let effect_3 = axis::pack(
-          evaluated.2.3.1.0 as u8, evaluated.2.3.1.2);
-        let effect_4 = axis::pack(
-          evaluated.2.4.1.0 as u8, evaluated.2.4.1.2);
-        EntryOutcome {
-          data: evaluated.0.1,
-          reduction: reduction_open_site(ReductionSite::FLIPPING, evaluated.1.0, evaluated.1.1.1),
-          failed: false,
-          effects: EntryEffects {
-            phase: Phase::FLIPPING as u8,
-            valid: [
-              evaluated.2.0.0,
-              evaluated.2.1.0,
-              evaluated.2.2.0,
-              evaluated.2.3.0,
-              evaluated.2.4.0,
-            ],
-            payloads: bit_slice_update(
-          bit_slice_update(
-          bit_slice_update(
-          bit_slice_update(
-          bit_slice_update(
-          zero!<bits[384]>(),
-          u32:0,
-          effect_0.payload[0:64]),
-          u32:64,
-          effect_1.payload[0:64]),
-          u32:128,
-          effect_2.payload[0:64]),
-          u32:192,
-          effect_3.payload[0:64]),
-          u32:256,
-          effect_4.payload[0:96]),
-          },
-        }
-      }
+      } else { _52.0 }
     },
   }
 }
 
 fn entry_effect_count(effects: EntryEffects) -> u8 {
-  match effects.phase as Phase {
-    Phase::CONFIGURING => u8:0,
-    Phase::MEASURING => u8:2,
-    Phase::GATHERING => u8:4,
-    Phase::COMPARING => u8:4,
-    Phase::FLIPPING => u8:5,
+  match effects.layout {
+    u8:0 => u8:0,
+    u8:1 => u8:2,
+    u8:2 => u8:1,
+    u8:3 => u8:4,
+    u8:4 => u8:4,
+    u8:5 => u8:5,
+    u8:6 => u8:4,
+    _ => u8:0,
   }
 }
 
 fn entry_effect(effects: EntryEffects, index: u8) -> Egress {
-  match effects.phase as Phase {
-    Phase::CONFIGURING => zero!<Egress>(),
-    Phase::MEASURING => match index {
+  match effects.layout {
+    u8:0 => zero!<Egress>(),
+    u8:1 => match index {
       u8:0 => Egress {
         port: OutputPort::STATUS,
         frame: axis::pack(Tag::PHI_STATUS as u8,
@@ -1961,7 +2062,15 @@ fn entry_effect(effects: EntryEffects, index: u8) -> Egress {
       },
       _ => zero!<Egress>(),
     },
-    Phase::GATHERING => match index {
+    u8:2 => match index {
+      u8:0 => Egress {
+        port: OutputPort::SYNDROME,
+        frame: axis::pack(Tag::PHENOM_REQUEST as u8,
+          effects.payloads[0:32]),
+      },
+      _ => zero!<Egress>(),
+    },
+    u8:3 => match index {
       u8:0 => Egress {
         port: OutputPort::NORTH,
         frame: axis::pack(Tag::PHI as u8,
@@ -1984,7 +2093,7 @@ fn entry_effect(effects: EntryEffects, index: u8) -> Egress {
       },
       _ => zero!<Egress>(),
     },
-    Phase::COMPARING => match index {
+    u8:4 => match index {
       u8:0 => Egress {
         port: OutputPort::NORTH,
         frame: axis::pack(Tag::PHI0 as u8,
@@ -2007,7 +2116,7 @@ fn entry_effect(effects: EntryEffects, index: u8) -> Egress {
       },
       _ => zero!<Egress>(),
     },
-    Phase::FLIPPING => match index {
+    u8:5 => match index {
       u8:0 => Egress {
         port: OutputPort::NORTH,
         frame: axis::pack(Tag::ANYON_MOVE as u8,
@@ -2035,6 +2144,30 @@ fn entry_effect(effects: EntryEffects, index: u8) -> Egress {
       },
       _ => zero!<Egress>(),
     },
+    u8:6 => match index {
+      u8:0 => Egress {
+        port: OutputPort::NORTH,
+        frame: axis::pack(Tag::ANYON_MOVE as u8,
+          effects.payloads[0:64]),
+      },
+      u8:1 => Egress {
+        port: OutputPort::EAST,
+        frame: axis::pack(Tag::ANYON_MOVE as u8,
+          effects.payloads[64:128]),
+      },
+      u8:2 => Egress {
+        port: OutputPort::WEST,
+        frame: axis::pack(Tag::ANYON_MOVE as u8,
+          effects.payloads[128:192]),
+      },
+      u8:3 => Egress {
+        port: OutputPort::SOUTH,
+        frame: axis::pack(Tag::ANYON_MOVE as u8,
+          effects.payloads[192:256]),
+      },
+      _ => zero!<Egress>(),
+    },
+    _ => zero!<Egress>(),
   }
 }
 
@@ -2048,10 +2181,11 @@ pub fn scheduled_effect(
 pub fn scheduled_reduction_prefix(
     scheduled: ScheduledEffects) -> (u1, u8, u1) {
   let count = entry_effect_count(scheduled.effects);
-  match scheduled.effects.phase as Phase {
-    Phase::GATHERING => (scheduled.effects.valid[u32:0] && scheduled.effects.valid[u32:1] && scheduled.effects.valid[u32:2] && scheduled.effects.valid[u32:3], u8:4, count == u8:4),
-    Phase::COMPARING => (scheduled.effects.valid[u32:0] && scheduled.effects.valid[u32:1] && scheduled.effects.valid[u32:2] && scheduled.effects.valid[u32:3], u8:4, count == u8:4),
-    Phase::FLIPPING => (scheduled.effects.valid[u32:0] && scheduled.effects.valid[u32:1] && scheduled.effects.valid[u32:2] && scheduled.effects.valid[u32:3], u8:4, count == u8:4),
+  match scheduled.effects.layout {
+    u8:3 => (scheduled.effects.valid[u32:0] && scheduled.effects.valid[u32:1] && scheduled.effects.valid[u32:2] && scheduled.effects.valid[u32:3], u8:4, count == u8:4),
+    u8:4 => (scheduled.effects.valid[u32:0] && scheduled.effects.valid[u32:1] && scheduled.effects.valid[u32:2] && scheduled.effects.valid[u32:3], u8:4, count == u8:4),
+    u8:5 => (scheduled.effects.valid[u32:0] && scheduled.effects.valid[u32:1] && scheduled.effects.valid[u32:2] && scheduled.effects.valid[u32:3], u8:4, count == u8:4),
+    u8:6 => (scheduled.effects.valid[u32:0] && scheduled.effects.valid[u32:1] && scheduled.effects.valid[u32:2] && scheduled.effects.valid[u32:3], u8:4, count == u8:4),
     _ => (u1:0, u8:0, u1:0),
   }
 }
@@ -2711,7 +2845,7 @@ fn machine_step(
       effects, machine.entry_effect_index);
     let emit_effect = has_effect && effects.valid[
       machine.entry_effect_index as u32];
-    let opens_reduction = reduction_phase_opens(machine.phase);
+    let opens_reduction = outcome.reduction.status != ReductionStatus::IDLE;
     let entry_failed = outcome.failed || (opens_reduction &&
       machine.reduction.status != ReductionStatus::IDLE);
     let entered_reduction = if opens_reduction {
@@ -3022,7 +3156,7 @@ fn shared_machine_enter(machine: SharedMachine, egress_ready: u1)
       machine.entered_from, machine.phase, machine.data);
     let effects = outcome.effects;
     let effects_valid = entry_effects_valid(effects);
-    let opens_reduction = reduction_phase_opens(machine.phase);
+    let opens_reduction = outcome.reduction.status != ReductionStatus::IDLE;
     let entry_failed = outcome.failed || (opens_reduction &&
       machine.reduction.status != ReductionStatus::IDLE);
     let entered_reduction = if opens_reduction {

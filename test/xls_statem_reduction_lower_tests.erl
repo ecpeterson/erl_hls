@@ -358,7 +358,7 @@ context(Path) ->
     EntryClauses = [Clause || {enter, Clause} <- Prepared],
     CastClauses = [Clause || {cast, Clause} <- Prepared],
     InternalClauses = [Clause || {internal, Clause} <- Prepared],
-    Entries = [entry(Clause) || Clause <- EntryClauses],
+    Entries = [entry(Clause, Forms) || Clause <- EntryClauses],
     CastGroups = xls_callback_lower:group_by(
         CastClauses,
         fun cast_key/1
@@ -388,24 +388,13 @@ prepare_clause({clause, Line,
         [Event, {atom, Line, Phase}, Data], Guards, Body}}.
 
 entry(Clause = {clause, _Line,
-        [_OldPhase, {atom, _PhaseLine, Phase}, _Data], _Guards, Body}) ->
-    {Prefix, {tuple, TupleLine, [DataExpression, Actions]}} = split_last(Body),
-    {Reduction, _Casts} =
-        xls_statem_reduction_lower:split_entry_actions(Actions, TupleLine),
-    #{
-        phase => Phase,
-        clause => Clause,
-        prefix => Prefix,
-        data_expression => DataExpression,
-        reduction => Reduction
-    }.
+        [_OldPhase, {atom, _PhaseLine, Phase}, _Data], _Guards, _Body}, Forms) ->
+    (xls_statem_entry:analyze(Clause, xls_parse:find_tags(Forms),
+        xls_parse:find_attribute(Forms, hls_outputs)))#{phase => Phase}.
 
 cast_key({clause, _Line,
         [Message, {atom, _PhaseLine, Phase}, _Data], _Guards, _Body}) ->
     {xls_pattern_lower:record_pattern_name(Message), Phase}.
-
-split_last(List) ->
-    {lists:droplast(List), lists:last(List)}.
 
 expression(Source) ->
     {ok, Tokens, _} = erl_scan:string(Source ++ "."),

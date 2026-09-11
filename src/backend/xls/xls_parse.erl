@@ -31,12 +31,13 @@ general non-Boolean right-operand results are not supported. This preserves
 selection semantics in generated hardware, not a guarantee that combinational
 logic in an unselected branch stops switching.
 
-State-machine phase-entry action lists remain statically shaped. An action may
-be `{cast_if, Condition, Port, Message}` to suppress that statically allocated
-effect at runtime, but neither its port nor its position in the ordered action
-list is dynamic. The full entry expression is lowered once with one combined
-match-failure predicate. The state-machine backend commits its data, reduction
-open, and effects only from a successful outcome.
+State-machine entries accept nested `case`/`if` choices of the complete result
+or bounded action-list segments, including literal lists, cons tails, and `++`.
+Branches may select different ports, schemas, and list lengths. The entry
+normalizer packs each selected leaf into one typed outcome before expression
+control flow rejoins; the backend commits its data, optional reduction open,
+and effects only if the complete callback succeeds. A `cast_if` still evaluates
+its payload eagerly. See `docs/entry-outcomes.md` for the bounded source subset.
 
 ## Wire tags
 
@@ -353,6 +354,14 @@ lower_clause({clause, _Line, ArgPatterns, _Guards, Body},
 Main transpiler workhorse.  Recursively converts a complex `erl_parse`
 expression into a sequence of simple emitted XLS expressions.
 """.
+%% Private normalization nodes, introduced after source analysis. Mapping a
+%% selected value into a common backend type lets case arms retain different
+%% source shapes without moving their computations across a branch boundary.
+statement_from_statement({xls_map, _Line, Expression, Render}, State) ->
+    Evaluated = statement_from_statement(Expression, State),
+    instr(Evaluated#clause_state{reference = none}, Render(reference(Evaluated)));
+statement_from_statement({block, _Line, Expressions}, State) ->
+    lower_expression_sequence(Expressions, State);
 statement_from_statement(String, State) when is_list(String) ->
     reference(State, String);
 statement_from_statement({atom, _L, true}, State) ->

@@ -360,9 +360,9 @@ pub const ENTRY_EFFECT_CAPACITY = u32:5;
 pub const ENTRY_EFFECT_PAYLOAD_BITS = u32:352;
 
 // Sorry: this is a hand-rolled tagged union. DSLX cannot yet express
-// phase-indexed variants whose fields retain their message types.
+// entry variants whose fields retain their message types.
 pub struct EntryEffects {
-  phase: u8,
+  layout: u8,
   valid: bool[5],
   payloads: bits[352],
 }
@@ -568,18 +568,17 @@ fn enter(old_phase: Phase, phase: Phase, data: Syndrome) -> EntryOutcome {
       let _OldPhase_1 = old_phase;
       let __1 = phase;
       let Syndrome_1 = (Tag::SYNDROME, data);
+      let Xls_entry_0_1 = Syndrome_1;
       let _0 = ();
       let _1 = ();
-      let _2 = (Syndrome_1, _0, _1, );
-      if bool:false {
-        EntryOutcome { data, failed: true, ..zero!<EntryOutcome>() }
-      } else {
+      let _2 = (Xls_entry_0_1, _0, _1, );
+      let _3 = {
         let evaluated = _2;
         EntryOutcome {
           data: evaluated.0.1,
           failed: false,
           effects: EntryEffects {
-            phase: Phase::CONFIGURING as u8,
+            layout: u8:0,
             valid: [
               bool:false,
               bool:false,
@@ -590,7 +589,10 @@ fn enter(old_phase: Phase, phase: Phase, data: Syndrome) -> EntryOutcome {
             payloads: zero!<bits[352]>(),
           },
         }
-      }
+      };
+      if bool:false {
+        EntryOutcome { data, failed: true, ..zero!<EntryOutcome>() }
+      } else { _3 }
     },
     Phase::COLLECTING => {
       let _OldPhase_1 = old_phase;
@@ -611,29 +613,13 @@ fn enter(old_phase: Phase, phase: Phase, data: Syndrome) -> EntryOutcome {
       let case_match_1_1 = bool:false;
       let case_match_1_2 = _5.1;
       let NextStep_1 = _5.0;
-      let _6 = Syndrome_1.1.step;
-      let _7 = Syndrome_1.1.announcement;
-      let _8 = Syndrome_1.1.announcement_quiet;
-      let _9 = _8 << 1;
-      let _10 = _7 | _9;
-      let _11 = Syndrome_1.1.x;
-      let _12 = Syndrome_1.1.y;
-      let _13 = Phenomanyon {
-        step: _6,
-        flags: _10,
-        x: _11,
-        y: _12,
-        ..zero!<Phenomanyon>()
-      };
-      let _14 = (Tag::PHENOM_ANYON, _13, bits_from_phenomanyon(_13));
-      let Anyon_1 = _14;
-      let _15 = Phenomquery {
+      let _6 = Phenomquery {
         step: NextStep_1,
         ..zero!<Phenomquery>()
       };
-      let _16 = (Tag::PHENOM_QUERY, _15, bits_from_phenomquery(_15));
-      let Query_1 = _16;
-      let _17 = Syndrome {
+      let _7 = (Tag::PHENOM_QUERY, _6, bits_from_phenomquery(_6));
+      let Query_1 = _7;
+      let _8 = Syndrome {
         step: NextStep_1,
         seen_sources: 0,
         announcement: 0,
@@ -641,98 +627,195 @@ fn enter(old_phase: Phase, phase: Phase, data: Syndrome) -> EntryOutcome {
         announcement_quiet: 0,
         ..(Syndrome_1).1
       };
-      let _18 = (Tag::SYNDROME, _17);
-      let Cleared_1 = _18;
-      let _19 = ();
-      let _20 = (Releasing_1, Anyon_1, );
-      let _21 = Phenomquery {
-        source: 8,
-        ..(Query_1).1
-      };
-      let _22 = (Tag::PHENOM_QUERY, _21, bits_from_phenomquery(_21));
-      let _23 = (bool:1, _22, );
-      let _24 = Phenomquery {
-        source: 4,
-        ..(Query_1).1
-      };
-      let _25 = (Tag::PHENOM_QUERY, _24, bits_from_phenomquery(_24));
-      let _26 = (bool:1, _25, );
-      let _27 = Phenomquery {
-        source: 2,
-        ..(Query_1).1
-      };
-      let _28 = (Tag::PHENOM_QUERY, _27, bits_from_phenomquery(_27));
-      let _29 = (bool:1, _28, );
-      let _30 = Phenomquery {
-        source: 1,
-        ..(Query_1).1
-      };
-      let _31 = (Tag::PHENOM_QUERY, _30, bits_from_phenomquery(_30));
-      let _32 = (bool:1, _31, );
-      let _33 = (_20, _23, _26, _29, _32, );
-      let _34 = (Cleared_1, _19, _33, );
-      if (case_match_1_1 != case_match_1_2) || bool:false {
-        EntryOutcome { data, failed: true, ..zero!<EntryOutcome>() }
+      let _9 = (Tag::SYNDROME, _8);
+      let Cleared_1 = _9;
+      let Xls_entry_0_1 = Cleared_1;
+      let _36 = if Releasing_1 {
+        let _10 = Syndrome_1.1.step;
+        let _11 = Syndrome_1.1.announcement;
+        let _12 = Syndrome_1.1.announcement_quiet;
+        let _13 = _12 << 1;
+        let _14 = _11 | _13;
+        let _15 = Syndrome_1.1.x;
+        let _16 = Syndrome_1.1.y;
+        let _17 = Phenomanyon {
+          step: _10,
+          flags: _14,
+          x: _15,
+          y: _16,
+          ..zero!<Phenomanyon>()
+        };
+        let _18 = (Tag::PHENOM_ANYON, _17, bits_from_phenomanyon(_17));
+        let _19 = (bool:1, _18, );
+        let Xls_entry_1_1 = _19;
+        let _20 = Phenomquery {
+          source: 8,
+          ..(Query_1).1
+        };
+        let _21 = (Tag::PHENOM_QUERY, _20, bits_from_phenomquery(_20));
+        let _22 = (bool:1, _21, );
+        let Xls_entry_2_1 = _22;
+        let _23 = Phenomquery {
+          source: 4,
+          ..(Query_1).1
+        };
+        let _24 = (Tag::PHENOM_QUERY, _23, bits_from_phenomquery(_23));
+        let _25 = (bool:1, _24, );
+        let Xls_entry_3_1 = _25;
+        let _26 = Phenomquery {
+          source: 2,
+          ..(Query_1).1
+        };
+        let _27 = (Tag::PHENOM_QUERY, _26, bits_from_phenomquery(_26));
+        let _28 = (bool:1, _27, );
+        let Xls_entry_4_1 = _28;
+        let _29 = Phenomquery {
+          source: 1,
+          ..(Query_1).1
+        };
+        let _30 = (Tag::PHENOM_QUERY, _29, bits_from_phenomquery(_29));
+        let _31 = (bool:1, _30, );
+        let Xls_entry_5_1 = _31;
+        let _32 = ();
+        let _33 = (Xls_entry_1_1, Xls_entry_2_1, Xls_entry_3_1, Xls_entry_4_1, Xls_entry_5_1, );
+        let _34 = (Xls_entry_0_1, _32, _33, );
+        let _35 = {
+          let evaluated = _34;
+                let effect_0 = axis::pack(
+                  evaluated.2.0.1.0 as u8, evaluated.2.0.1.2);
+                let effect_1 = axis::pack(
+                  evaluated.2.1.1.0 as u8, evaluated.2.1.1.2);
+                let effect_2 = axis::pack(
+                  evaluated.2.2.1.0 as u8, evaluated.2.2.1.2);
+                let effect_3 = axis::pack(
+                  evaluated.2.3.1.0 as u8, evaluated.2.3.1.2);
+                let effect_4 = axis::pack(
+                  evaluated.2.4.1.0 as u8, evaluated.2.4.1.2);
+          EntryOutcome {
+            data: evaluated.0.1,
+            failed: false,
+            effects: EntryEffects {
+              layout: u8:1,
+              valid: [
+                evaluated.2.0.0,
+                evaluated.2.1.0,
+                evaluated.2.2.0,
+                evaluated.2.3.0,
+                evaluated.2.4.0,
+              ],
+              payloads: bit_slice_update(
+                  bit_slice_update(
+                  bit_slice_update(
+                  bit_slice_update(
+                  bit_slice_update(
+                  zero!<bits[352]>(),
+                  u32:0,
+                  effect_0.payload[0:96]),
+                  u32:96,
+                  effect_1.payload[0:64]),
+                  u32:160,
+                  effect_2.payload[0:64]),
+                  u32:224,
+                  effect_3.payload[0:64]),
+                  u32:288,
+                  effect_4.payload[0:64]),
+            },
+          }
+        };
+        (_35, bool:false)
       } else {
-        let evaluated = _34;
-        let effect_0 = axis::pack(
-          evaluated.2.0.1.0 as u8, evaluated.2.0.1.2);
-        let effect_1 = axis::pack(
-          evaluated.2.1.1.0 as u8, evaluated.2.1.1.2);
-        let effect_2 = axis::pack(
-          evaluated.2.2.1.0 as u8, evaluated.2.2.1.2);
-        let effect_3 = axis::pack(
-          evaluated.2.3.1.0 as u8, evaluated.2.3.1.2);
-        let effect_4 = axis::pack(
-          evaluated.2.4.1.0 as u8, evaluated.2.4.1.2);
-        EntryOutcome {
-          data: evaluated.0.1,
-          failed: false,
-          effects: EntryEffects {
-            phase: Phase::COLLECTING as u8,
-            valid: [
-              evaluated.2.0.0,
-              evaluated.2.1.0,
-              evaluated.2.2.0,
-              evaluated.2.3.0,
-              evaluated.2.4.0,
-            ],
-            payloads: bit_slice_update(
-          bit_slice_update(
-          bit_slice_update(
-          bit_slice_update(
-          bit_slice_update(
-          zero!<bits[352]>(),
-          u32:0,
-          effect_0.payload[0:96]),
-          u32:96,
-          effect_1.payload[0:64]),
-          u32:160,
-          effect_2.payload[0:64]),
-          u32:224,
-          effect_3.payload[0:64]),
-          u32:288,
-          effect_4.payload[0:64]),
-          },
-        }
-      }
+        let _10 = Phenomquery {
+          source: 8,
+          ..(Query_1).1
+        };
+        let _11 = (Tag::PHENOM_QUERY, _10, bits_from_phenomquery(_10));
+        let _12 = (bool:1, _11, );
+        let Xls_entry_6_1 = _12;
+        let _13 = Phenomquery {
+          source: 4,
+          ..(Query_1).1
+        };
+        let _14 = (Tag::PHENOM_QUERY, _13, bits_from_phenomquery(_13));
+        let _15 = (bool:1, _14, );
+        let Xls_entry_7_1 = _15;
+        let _16 = Phenomquery {
+          source: 2,
+          ..(Query_1).1
+        };
+        let _17 = (Tag::PHENOM_QUERY, _16, bits_from_phenomquery(_16));
+        let _18 = (bool:1, _17, );
+        let Xls_entry_8_1 = _18;
+        let _19 = Phenomquery {
+          source: 1,
+          ..(Query_1).1
+        };
+        let _20 = (Tag::PHENOM_QUERY, _19, bits_from_phenomquery(_19));
+        let _21 = (bool:1, _20, );
+        let Xls_entry_9_1 = _21;
+        let _22 = ();
+        let _23 = (Xls_entry_6_1, Xls_entry_7_1, Xls_entry_8_1, Xls_entry_9_1, );
+        let _24 = (Xls_entry_0_1, _22, _23, );
+        let _25 = {
+          let evaluated = _24;
+                let effect_0 = axis::pack(
+                  evaluated.2.0.1.0 as u8, evaluated.2.0.1.2);
+                let effect_1 = axis::pack(
+                  evaluated.2.1.1.0 as u8, evaluated.2.1.1.2);
+                let effect_2 = axis::pack(
+                  evaluated.2.2.1.0 as u8, evaluated.2.2.1.2);
+                let effect_3 = axis::pack(
+                  evaluated.2.3.1.0 as u8, evaluated.2.3.1.2);
+          EntryOutcome {
+            data: evaluated.0.1,
+            failed: false,
+            effects: EntryEffects {
+              layout: u8:2,
+              valid: [
+                evaluated.2.0.0,
+                evaluated.2.1.0,
+                evaluated.2.2.0,
+                evaluated.2.3.0,
+                bool:false,
+              ],
+              payloads: bit_slice_update(
+                  bit_slice_update(
+                  bit_slice_update(
+                  bit_slice_update(
+                  zero!<bits[352]>(),
+                  u32:0,
+                  effect_0.payload[0:64]),
+                  u32:64,
+                  effect_1.payload[0:64]),
+                  u32:128,
+                  effect_2.payload[0:64]),
+                  u32:192,
+                  effect_3.payload[0:64]),
+            },
+          }
+        };
+        (_25, bool:false)
+      };
+      let case_match_2_1 = bool:false;
+      let case_match_2_2 = _36.1;
+      if (case_match_1_1 != case_match_1_2) || (case_match_2_1 != case_match_2_2) || bool:false {
+        EntryOutcome { data, failed: true, ..zero!<EntryOutcome>() }
+      } else { _36.0 }
     },
     Phase::ANNOUNCING => {
       let _OldPhase_1 = old_phase;
       let __1 = phase;
       let Syndrome_1 = (Tag::SYNDROME, data);
+      let Xls_entry_0_1 = Syndrome_1;
       let _0 = ();
       let _1 = ();
-      let _2 = (Syndrome_1, _0, _1, );
-      if bool:false {
-        EntryOutcome { data, failed: true, ..zero!<EntryOutcome>() }
-      } else {
+      let _2 = (Xls_entry_0_1, _0, _1, );
+      let _3 = {
         let evaluated = _2;
         EntryOutcome {
           data: evaluated.0.1,
           failed: false,
           effects: EntryEffects {
-            phase: Phase::ANNOUNCING as u8,
+            layout: u8:3,
             valid: [
               bool:false,
               bool:false,
@@ -743,23 +826,28 @@ fn enter(old_phase: Phase, phase: Phase, data: Syndrome) -> EntryOutcome {
             payloads: zero!<bits[352]>(),
           },
         }
-      }
+      };
+      if bool:false {
+        EntryOutcome { data, failed: true, ..zero!<EntryOutcome>() }
+      } else { _3 }
     },
   }
 }
 
 fn entry_effect_count(effects: EntryEffects) -> u8 {
-  match effects.phase as Phase {
-    Phase::CONFIGURING => u8:0,
-    Phase::COLLECTING => u8:5,
-    Phase::ANNOUNCING => u8:0,
+  match effects.layout {
+    u8:0 => u8:0,
+    u8:1 => u8:5,
+    u8:2 => u8:4,
+    u8:3 => u8:0,
+    _ => u8:0,
   }
 }
 
 fn entry_effect(effects: EntryEffects, index: u8) -> Egress {
-  match effects.phase as Phase {
-    Phase::CONFIGURING => zero!<Egress>(),
-    Phase::COLLECTING => match index {
+  match effects.layout {
+    u8:0 => zero!<Egress>(),
+    u8:1 => match index {
       u8:0 => Egress {
         port: OutputPort::PHI,
         frame: axis::pack(Tag::PHENOM_ANYON as u8,
@@ -787,7 +875,31 @@ fn entry_effect(effects: EntryEffects, index: u8) -> Egress {
       },
       _ => zero!<Egress>(),
     },
-    Phase::ANNOUNCING => zero!<Egress>(),
+    u8:2 => match index {
+      u8:0 => Egress {
+        port: OutputPort::NORTH,
+        frame: axis::pack(Tag::PHENOM_QUERY as u8,
+          effects.payloads[0:64]),
+      },
+      u8:1 => Egress {
+        port: OutputPort::EAST,
+        frame: axis::pack(Tag::PHENOM_QUERY as u8,
+          effects.payloads[64:128]),
+      },
+      u8:2 => Egress {
+        port: OutputPort::WEST,
+        frame: axis::pack(Tag::PHENOM_QUERY as u8,
+          effects.payloads[128:192]),
+      },
+      u8:3 => Egress {
+        port: OutputPort::SOUTH,
+        frame: axis::pack(Tag::PHENOM_QUERY as u8,
+          effects.payloads[192:256]),
+      },
+      _ => zero!<Egress>(),
+    },
+    u8:3 => zero!<Egress>(),
+    _ => zero!<Egress>(),
   }
 }
 

@@ -24,10 +24,18 @@ Data)` before retrying postponed messages. Entry returns `{NextData, Actions}`.
 
 `Actions` is a bounded list. It may begin with one
 `{open_reduction, Name, Key, Population, {commutative_monoid, Identity}}`
-action, followed by `{cast, Port, Message}` actions. A statically
-placed `{cast_if, Condition, Port, Message}` retains its ordered position but
-emits only when enabled. Ports and list shape remain static, and each port may
-occur at most once in an entry. CPU output uses ordinary `gen_server:cast/2`.
+action, followed by `{cast, Port, Message}` actions. Nested `case` and `if`
+expressions can choose the complete result or an action-list segment; bounded
+segments may use literal cons cells and `++`. Only the selected branch is
+semantically evaluated. Ports and schemas are static within each alternative,
+and each port may occur at most once along a selected path. CPU output uses
+ordinary `gen_server:cast/2`.
+
+`{cast_if, Condition, Port, Message}` remains an eager, predicate-bearing action:
+it retains an allocated slot even when disabled. Use ordinary branching when a
+skipped payload must not be evaluated. XLS limits an entry to 256 expanded
+paths and an actor to 256 layouts. Computed list variables, recursive list
+construction, and dynamic ports are outside this bounded subset.
 
 The complete entry callback must succeed before its actions can be emitted.
 A disabled `cast_if` still evaluates its condition and message. In XLS, a

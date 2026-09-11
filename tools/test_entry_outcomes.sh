@@ -13,22 +13,26 @@ rebar3 as test compile
 ERL_HLS_ENTRY_STAGE="$stage" erl -noshell \
     -pa "$project_root/_build/test/lib/erl_hls/ebin" \
     -pa "$project_root/_build/test/lib/erl_hls/test" \
-    -eval 'ok = xls_entry_outcome_dslx:write(os:getenv("ERL_HLS_ENTRY_STAGE")), halt().'
+    -eval 'Stage = os:getenv("ERL_HLS_ENTRY_STAGE"), ok = xls_entry_outcome_dslx:write(Stage), ok = xls_entry_branch_dslx:write(Stage), halt().'
 
-for fixture in xls_entry_outcome xls_entry_reduction xls_entry_reduction_aggregate; do
+for fixture in xls_entry_outcome xls_entry_branch xls_entry_reduction xls_entry_reduction_aggregate; do
     "$xls_root/interpreter_main" --compare=jit --warnings_as_errors=false \
         --dslx_path="$project_root/priv/xls/lib" \
         --dslx_stdlib_path="$xls_root/xls/dslx/stdlib" \
         "$stage/$fixture.x"
 done
 
-"$xls_root/ir_converter_main" --top=entry_probe --warnings_as_errors=false \
-    --dslx_path="$project_root/priv/xls/lib" \
-    --dslx_stdlib_path="$xls_root/xls/dslx/stdlib" \
-    "$stage/xls_entry_outcome.x" > "$stage/entry_probe.ir"
-"$xls_root/opt_main" "$stage/entry_probe.ir" > "$stage/entry_probe.opt.ir"
-"$xls_root/codegen_main" --generator=combinational --module_name=entry_probe \
-    --use_system_verilog=false "$stage/entry_probe.opt.ir" > "$stage/entry_probe.v"
-iverilog -g2012 -s xls_entry_outcome_tb -o "$stage/entry_probe.vvp" \
-    "$stage/xls_entry_outcome_tb.sv" "$stage/entry_probe.v"
-vvp "$stage/entry_probe.vvp"
+for fixture in xls_entry_outcome xls_entry_branch; do
+    top=entry_probe
+    if [[ "$fixture" == xls_entry_branch ]]; then top=entry_cycle_probe; fi
+    "$xls_root/ir_converter_main" --top="$top" --warnings_as_errors=false \
+        --dslx_path="$project_root/priv/xls/lib" \
+        --dslx_stdlib_path="$xls_root/xls/dslx/stdlib" \
+        "$stage/$fixture.x" > "$stage/$fixture.ir"
+    "$xls_root/opt_main" "$stage/$fixture.ir" > "$stage/$fixture.opt.ir"
+    "$xls_root/codegen_main" --generator=combinational --module_name="$top" \
+        --use_system_verilog=false "$stage/$fixture.opt.ir" > "$stage/$fixture.v"
+    iverilog -g2012 -s "${fixture}_tb" -o "$stage/$fixture.vvp" \
+        "$stage/${fixture}_tb.sv" "$stage/$fixture.v"
+    vvp "$stage/$fixture.vvp"
+done

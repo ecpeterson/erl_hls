@@ -131,11 +131,34 @@ interleaved_scheduler_partitions_cover_one_placement_test() ->
         maps:get(scheduler_groups, Placement)
     ).
 
+branching_suffix_does_not_invalidate_source_capture_test() ->
+    Module = hls_reduction_plan_branch_fixture,
+    Spec = closed_topology(Module, [3, 3]),
+    Topology = hls_topology:normalize(Spec#{route_relations =>
+        maps:get(route_relations, Spec) ++
+            [{{reducer, alternate}, [{external, reports}]}]}),
+    Plan = hls_reduction_plan:normalize(Topology,
+        scheduler_plan(Topology, [reducer, source]), #{reducer => source_fragments}),
+    [Placement] = maps:get(placements, Plan),
+    ?assertEqual([north, south], [maps:get(port, F)
+        || F <- maps:get(fragments, Placement)]),
+    ?assertEqual(3, hls_actor_interface:max_entry_effects(
+        hls_actor_interface:from_module(Module))),
+    %% Exercise both layout arms in the aggregate artifact's prefix renderer.
+    Generated = iolist_to_binary(xls_parse:to_xls(
+        "test/hls_reduction_plan_branch_fixture.erl", #{shared_service => aggregate_only})),
+    ?assertNotEqual(nomatch, binary:match(Generated,
+        <<"match scheduled.effects.layout">>)).
+
 reduction_prefix_must_have_the_complete_population_test() ->
     assert_fixture_error(
         hls_reduction_plan_short_fixture,
         source_fragment_short_prefix
     ).
+
+reduction_open_must_be_unconditional_for_source_capture_test() ->
+    assert_fixture_error(hls_reduction_plan_optional_fixture,
+        source_fragment_conditional_open).
 
 reduction_prefix_must_be_unconditional_test() ->
     assert_fixture_error(

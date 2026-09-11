@@ -112,6 +112,8 @@ result. Its bounded result vocabulary and postponement rules live with the
 phase-local reduction actions, canonical CPU/XLS semantics, and constraints on
 future optimized placement.
 
+Phase-entry callbacks can use ordinary `case`/`if` branches to select bounded action lists with different lengths, ports, and schemas. Only selected payload expressions contribute values or failures. Shared storage follows the largest alternative, and topology inference checks the union of possible outputs. The [entry contract](docs/entry-outcomes.md) describes source restrictions, reduction opens, and direct/shared commit behavior. Run `bash tools/test_entry_outcomes.sh XLS_ROOT` for BEAM-derived DSLX/JIT and RTL comparisons.
+
 Shared actor-runtime and topology algorithms live in checked DSLX libraries. Generated modules supply actor-specific records, callback outcomes, routing tables, and channel wiring:
 
 - [`mailbox.x`](priv/xls/lib/mailbox.x): mailbox selection, admission reservation, effect-credit collection, and retirement metadata.

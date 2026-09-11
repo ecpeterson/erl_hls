@@ -6,7 +6,7 @@
 -module(xls_statem_codegen).
 -moduledoc false.
 
--export([emit/1, shared_machine_width/1, shared_machine_width/2]).
+-export([emit/1, shared_machine_width/1, shared_machine_width/2, entry_value/6]).
 
 -define(REDUCTION_SERVICE, xls_statem_reduction_service_codegen).
 
@@ -17,8 +17,7 @@
 -type entry() :: #{
     phase := atom(),
     evaluation := #{body := iodata(), result := iodata(), failed := iodata()},
-    opens_reduction := boolean(),
-    effects := [map()]
+    layouts := [map()]
 }.
 -type cast_clause() :: #{
     tag := atom(),
@@ -174,9 +173,9 @@ machine_declarations(#{
         "pub const ENTRY_EFFECT_PAYLOAD_BITS = u32:",
         integer_to_list(EffectPayloadBits), ";\n\n",
         "// Sorry: this is a hand-rolled tagged union. DSLX cannot yet express\n",
-        "// phase-indexed variants whose fields retain their message types.\n",
+        "// entry variants whose fields retain their message types.\n",
         "pub struct EntryEffects {\n",
-        "  phase: u8,\n",
+        "  layout: u8,\n",
         "  valid: bool[", integer_to_list(EffectCapacity), "],\n",
         "  payloads: bits[", integer_to_list(EffectPayloadBits), "],\n",
         "}\n\n",
@@ -395,101 +394,97 @@ machine_codec(#{data_name := DataName, data_width := DataWidth} = Spec) ->
         "}\n\n"
     ].
 
-enter_function(#{
-    data_name := DataName,
-    max_entry_effects := MaxEntryEffects,
-    message_words := MessageWords,
-    entries := Entries
-} = Spec) ->
-    DataStruct = record_struct_name(DataName),
-    EffectCapacity = max(1, MaxEntryEffects),
-    EffectPayloadBits = entry_effect_payload_bits(Entries, MessageWords),
-    Reductions = maps:get(reductions, Spec, none),
+enter_function(#{data_name := DataName, entries := Entries,
+        message_words := MessageWords} = Spec) ->
+    Layouts = entry_layouts(Entries),
     [
-        "fn enter(old_phase: Phase, phase: Phase, data: ", DataStruct,
+        "fn enter(old_phase: Phase, phase: Phase, data: ", record_struct_name(DataName),
         ") -> EntryOutcome {\n",
         "  match phase {\n",
-        [entry_arm(Entry, EffectCapacity, EffectPayloadBits, MessageWords, Reductions)
-            || Entry <- Entries],
+        [entry_arm(Entry) || Entry <- Entries],
         "  }\n",
         "}\n\n",
-        entry_effect_count_function(Entries),
-        entry_effect_function(Entries, MessageWords),
+        entry_effect_count_function(Layouts),
+        entry_effect_function(Layouts, MessageWords),
         scheduled_effect_function(Spec)
     ].
 
-entry_arm(#{
-    phase := Phase,
-    evaluation := #{body := Body, result := Result, failed := Failed},
-    opens_reduction := OpensReduction,
-    effects := Effects
-}, EffectCapacity, EffectPayloadBits, MessageWords, Reductions) ->
-    Padding = EffectCapacity - length(Effects),
+entry_arm(#{phase := Phase,
+        evaluation := #{body := Body, result := Result, failed := Failed}}) ->
     [
         "    Phase::", uppercase(Phase), " => {\n",
         xls_parse_io:indent(Body, 6),
         "      if ", Failed, " {\n",
         "        EntryOutcome { data, failed: true, ..zero!<EntryOutcome>() }\n",
-        "      } else {\n",
-        "        let evaluated = ", Result, ";\n",
-        [entry_effect_binding(Index)
-            || {Index, _Effect} <- lists:enumerate(0, Effects)],
-        "        EntryOutcome {\n",
-        "          data: evaluated.0.1,\n",
-        entry_reduction_field(Reductions, OpensReduction, Phase),
-        "          failed: false,\n",
-        "          effects: EntryEffects {\n",
-        "            phase: Phase::", uppercase(Phase), " as u8,\n",
-        "            valid: [\n",
-        [
-            ["              evaluated.2.", integer_to_list(Index), ".0,\n"]
-            || {Index, _Effect} <- lists:enumerate(0, Effects)
-        ],
-        lists:duplicate(Padding, "              bool:false,\n"),
-        "            ],\n",
-        "            payloads: ", entry_payload_expression(
-            Effects, EffectPayloadBits, MessageWords), ",\n",
-        "          },\n",
-        "        }\n",
-        "      }\n",
+        "      } else { ", Result, " }\n",
         "    },\n"
     ].
 
-entry_reduction_field(none, false, _Phase) ->
-    [];
-entry_reduction_field(_Reductions, false, _Phase) ->
-    "          reduction: zero!<ReductionState>(),\n";
-entry_reduction_field(_Reductions, true, Phase) ->
-    ["          reduction: reduction_open_site(ReductionSite::",
-        uppercase(Phase), ", evaluated.1.0, evaluated.1.1.1),\n"].
+%% Each selected source leaf becomes the same typed value before control flow
+%% rejoins. The expression lowerer still owns branch-local failure predicates.
+-spec entry_value(iodata(), map(), pos_integer(), pos_integer(), map(),
+    none | map()) -> iodata().
+entry_value(Result, #{phase := Phase, layout := Layout,
+        actions := Effects, reduction := Reduction}, Capacity, PayloadBits,
+        MessageWords, Reductions) ->
+    [
+        "{\n",
+        "  let evaluated = ", Result, ";\n",
+        [entry_effect_binding(Index) || {Index, _} <- lists:enumerate(0, Effects)],
+        "  EntryOutcome {\n",
+        "    data: evaluated.0.1,\n",
+        entry_reduction_field(Reductions, Reduction =/= none, Phase),
+        "    failed: false,\n",
+        "    effects: EntryEffects {\n",
+        "      layout: u8:", integer_to_list(Layout), ",\n",
+        "      valid: [\n",
+        [["        evaluated.2.", integer_to_list(Index), ".0,\n"]
+            || {Index, _} <- lists:enumerate(0, Effects)],
+        lists:duplicate(Capacity - length(Effects), "        bool:false,\n"),
+        "      ],\n",
+        "      payloads: ", entry_payload_expression(Effects, PayloadBits, MessageWords), ",\n",
+        "    },\n",
+        "  }\n",
+        "}"
+    ].
 
-entry_effect_count_function(Entries) ->
+entry_reduction_field(none, false, _Phase) -> [];
+entry_reduction_field(_Reductions, false, _Phase) ->
+    "    reduction: zero!<ReductionState>(),\n";
+entry_reduction_field(_Reductions, true, Phase) ->
+    ["    reduction: reduction_open_site(ReductionSite::", uppercase(Phase),
+        ", evaluated.1.0, evaluated.1.1.1),\n"].
+
+entry_layouts(Entries) ->
+    lists:append([Layouts || #{layouts := Layouts} <- Entries]).
+
+entry_effect_count_function(Layouts) ->
     [
         "fn entry_effect_count(effects: EntryEffects) -> u8 {\n",
-        "  match effects.phase as Phase {\n",
-        [
-            ["    Phase::", uppercase(maps:get(phase, Entry)), " => u8:",
-                integer_to_list(length(maps:get(effects, Entry))), ",\n"]
-            || Entry <- Entries
-        ],
+        "  match effects.layout {\n",
+        [["    u8:", integer_to_list(Layout), " => u8:",
+            integer_to_list(length(Actions)), ",\n"]
+            || #{layout := Layout, actions := Actions} <- Layouts],
+        "    _ => u8:0,\n",
         "  }\n",
         "}\n\n"
     ].
 
-entry_effect_function(Entries, MessageWords) ->
+entry_effect_function(Layouts, MessageWords) ->
     [
         "fn entry_effect(effects: EntryEffects, index: u8) -> Egress {\n",
-        "  match effects.phase as Phase {\n",
-        [entry_effect_phase_arm(Entry, MessageWords) || Entry <- Entries],
+        "  match effects.layout {\n",
+        [entry_effect_layout_arm(Layout, MessageWords) || Layout <- Layouts],
+        "    _ => zero!<Egress>(),\n",
         "  }\n",
         "}\n\n"
     ].
 
-entry_effect_phase_arm(#{phase := Phase, effects := []}, _MessageWords) ->
-    ["    Phase::", uppercase(Phase), " => zero!<Egress>(),\n"];
-entry_effect_phase_arm(#{phase := Phase, effects := Effects}, MessageWords) ->
+entry_effect_layout_arm(#{layout := Layout, actions := []}, _MessageWords) ->
+    ["    u8:", integer_to_list(Layout), " => zero!<Egress>(),\n"];
+entry_effect_layout_arm(#{layout := Layout, actions := Effects}, MessageWords) ->
     [
-        "    Phase::", uppercase(Phase), " => match index {\n",
+        "    u8:", integer_to_list(Layout), " => match index {\n",
         [entry_effect_index_arm(Index, Effect, Offset, MessageWords)
             || {Index, Effect, Offset} <- effect_offsets(Effects, MessageWords)],
         "      _ => zero!<Egress>(),\n",
@@ -526,42 +521,36 @@ scheduled_reduction_prefix_function(#{shared_service := aggregate_only,
         "pub fn scheduled_reduction_prefix(\n",
         "    scheduled: ScheduledEffects) -> (u1, u8, u1) {\n",
         "  let count = entry_effect_count(scheduled.effects);\n",
-        "  match scheduled.effects.phase as Phase {\n",
-        [scheduled_reduction_prefix_arm(Site, Entries) || Site <- Sites],
+        "  match scheduled.effects.layout {\n",
+        [scheduled_reduction_prefix_arm(Site, Layout)
+            || Site = #{phase := Phase} <- Sites,
+                Layout = #{phase := LayoutPhase} <- entry_layouts(Entries),
+                LayoutPhase =:= Phase],
         "    _ => (u1:0, u8:0, u1:0),\n",
         "  }\n",
         "}\n\n"
     ];
-scheduled_reduction_prefix_function(_Spec) ->
-    [].
+scheduled_reduction_prefix_function(_Spec) -> [].
 
-scheduled_reduction_prefix_arm(#{
-    phase := Phase,
-    population := #{size := Size}
-}, Entries) ->
-    [Entry] = [Candidate || Candidate = #{phase := CandidatePhase} <- Entries,
-        CandidatePhase =:= Phase],
-    Effects = maps:get(effects, Entry),
+scheduled_reduction_prefix_arm(#{population := #{size := Size}},
+        #{layout := Layout, actions := Effects}) ->
     Prefix = lists:sublist(Effects, Size),
     Valid = case length(Prefix) =:= Size andalso lists:all(
-            fun(Effect) -> maps:get(conditional, Effect, false) =:= false end,
-            Prefix
-        ) of
+            fun(#{conditional := Conditional}) -> not Conditional end, Prefix) of
         true -> join_with(" && ", [
             ["scheduled.effects.valid[u32:", integer_to_list(Index), "]"]
-            || Index <- lists:seq(0, Size - 1)
-        ]);
+            || Index <- lists:seq(0, Size - 1)]);
         false -> "u1:0"
     end,
-    [
-        "    Phase::", uppercase(Phase), " => (", Valid, ", u8:",
-        integer_to_list(Size), ", count == u8:",
-        integer_to_list(Size), "),\n"
-    ].
+    ["    u8:", integer_to_list(Layout), " => (", Valid, ", u8:",
+        integer_to_list(Size), ", count == u8:", integer_to_list(Size), "),\n"].
 
-%% Sorry: these offsets manually implement the physical layout of a tagged
-%% union which should belong to DSLX's type system. The Roadmap records the
-%% intended phase-specific structs and sum-type replacement.
+%% TODO(XLS sum types): replace layout IDs, effect_offsets/2, and the raw-bit
+%% payload codecs with a sum of typed ordered-message tuples. Keep storage at
+%% the widest alternative (including its tag), not the sum of alternatives.
+%% Then entry_effect/2 can pattern-match typed payloads instead of slicing bits.
+%% Bounded path analysis and the topology's unconditional-prefix proof remain
+%% necessary. See Roadmap.md, "XLS complaints".
 entry_payload_expression([], EffectPayloadBits, _MessageWords) ->
     ["zero!<bits[", integer_to_list(EffectPayloadBits), "]>()"];
 entry_payload_expression(Effects, EffectPayloadBits, MessageWords) ->
@@ -593,9 +582,9 @@ entry_effect_payload_bits(Entries, MessageWords) ->
     max(1, lists:max([
         lists:sum([
             maps:get(maps:get(tag, Effect), MessageWords) * 32
-            || Effect <- maps:get(effects, Entry)
+            || Effect <- maps:get(actions, Layout)
         ])
-        || Entry <- Entries
+        || Layout <- entry_layouts(Entries)
     ])).
 
 entry_effects_valid_function() ->
