@@ -1,6 +1,7 @@
 -module(hls_nums).
 -moduledoc """
-
+Byte-aligned numeric types. Integer packing rejects values outside the declared
+signed or unsigned range instead of silently truncating them.
 """.
 
 -behavior(hls_type).
@@ -86,16 +87,12 @@ transpile(uN, [{static, integer, Width}], State) ->
 transpile(Type, [], State) ->
     xls_parse:reference(State, {phantom, type, ?MODULE:Type()}).
 
-pack(Value, u8,  []) -> <<Value:8/unsigned-little-integer>>;
-pack(Value, u16, []) -> <<Value:16/unsigned-little-integer>>;
-pack(Value, u32, []) -> <<Value:32/unsigned-little-integer>>;
-pack(Value, u64, []) -> <<Value:64/unsigned-little-integer>>;
-pack(Value, uN, [Width]) when is_integer(Width), Width > 0,
-        Width rem 8 =:= 0 -> <<Value:Width/unsigned-little-integer>>;
-pack(Value, s8,  []) -> <<Value:8/signed-little-integer>>;
-pack(Value, s16, []) -> <<Value:16/signed-little-integer>>;
-pack(Value, s32, []) -> <<Value:32/signed-little-integer>>;
-pack(Value, s64, []) -> <<Value:64/signed-little-integer>>;
+pack(Value, Type, Args) when Type =:= u8; Type =:= u16; Type =:= u32;
+        Type =:= u64; Type =:= uN ->
+    hls_codec:pack_integer(Value, width(Type, Args), unsigned);
+pack(Value, Type, Args) when Type =:= s8; Type =:= s16; Type =:= s32;
+        Type =:= s64 ->
+    hls_codec:pack_integer(Value, width(Type, Args), signed);
 pack(Value, float16, []) -> <<Value:16/little-float>>;
 pack(Value, float32, []) -> <<Value:32/little-float>>;
 pack(Value, float64, []) -> <<Value:64/little-float>>.

@@ -23,11 +23,12 @@ signed(Width, FractionBits) when is_integer(Width), Width > 0,
 
 -spec from_integer(hls_type:descriptor(), integer()) -> integer().
 from_integer({hls_type, ?MODULE, signed, [Width, FractionBits]}, Value) ->
-    checked(Value bsl FractionBits, Width).
+    hls_codec:checked_integer(Value bsl FractionBits, Width, signed).
 
 -spec from_ratio(hls_type:descriptor(), integer(), pos_integer()) -> integer().
 from_ratio({hls_type, ?MODULE, signed, [Width, FractionBits]}, Numerator, Denominator) ->
-    checked(round_ratio(Numerator bsl FractionBits, Denominator), Width).
+    hls_codec:checked_integer(
+        round_ratio(Numerator bsl FractionBits, Denominator), Width, signed).
 
 -spec to_float(hls_type:descriptor(), integer()) -> float().
 to_float({hls_type, ?MODULE, signed, [_Width, FractionBits]}, Value) ->
@@ -46,10 +47,6 @@ round_ratio(Numerator, Denominator) when Denominator > 0 ->
 round_ratio(_Numerator, _Denominator) ->
     error(badarg).
 
-checked(Value, Width) when is_integer(Value),
-        Value >= -(1 bsl (Width - 1)), Value < (1 bsl (Width - 1)) -> Value;
-checked(_Value, _Width) -> error(badarg).
-
 %% Source type annotations construct descriptors without calling signed/2.
 width(signed, [Width, FractionBits]) ->
     _ = signed(Width, FractionBits),
@@ -57,8 +54,7 @@ width(signed, [Width, FractionBits]) ->
 zero(signed, [_Width, _FractionBits]) -> 0.
 
 pack(Value, signed, [Width, _FractionBits]) ->
-    Checked = checked(Value, Width),
-    <<Checked:Width/signed-little-integer>>.
+    hls_codec:pack_integer(Value, Width, signed).
 
 unpack(Packed, signed, [Width, _FractionBits]) ->
     <<Value:Width/signed-little-integer, Rest/binary>> = Packed,

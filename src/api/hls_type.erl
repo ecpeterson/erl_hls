@@ -35,7 +35,10 @@
 %%% hls_type behavior
 %%%
 
--doc "Packs a `Value` according to a type `Descriptor`.".
+-doc """
+Packs a value into a binary of exactly the bit width returned by `width/2`.
+Providers must reject values outside their type's range or shape.
+""".
 -callback pack(Value :: any(), atom(), [any()]) -> binary().
 
 -doc """
@@ -114,8 +117,21 @@ transpile(as, [{phantom, type, Descriptor}, Value], _State) ->
 width(#hls_type{module = Module, name = Name, args = Args}) ->
     Module:width(Name, Args).
 
-pack(Value, {hls_type, Module, Name, Args}) ->
-    Module:pack(Value, Name, Args).
+-doc """
+Packs a host value, checking the provider's binary against its declared width.
+Built-in integers reject overflow and fixed-size collections require exact
+lengths. Generated record packers use this boundary for each field, including
+fields in topology startup messages. Valid wire representations are unchanged.
+""".
+-spec pack(term(), descriptor()) -> binary().
+pack(Value, Descriptor = #hls_type{module = Module, name = Name, args = Args}) ->
+    Width = width(Descriptor),
+    case Module:pack(Value, Name, Args) of
+        Packed when is_binary(Packed), bit_size(Packed) =:= Width -> Packed;
+        Packed when is_binary(Packed) ->
+            error({invalid_packed_width, Descriptor, Width, bit_size(Packed)});
+        _Invalid -> error({invalid_packed_value, Descriptor})
+    end.
 
 unpack(Binary, {hls_type, Module, Name, Args}) ->
     Module:unpack(Binary, Name, Args).

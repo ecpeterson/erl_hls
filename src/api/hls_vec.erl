@@ -36,9 +36,7 @@ width(vector, [Subtype, Size]) ->
     hls_type:width(Subtype) * Size.
 zero(vector, Args) -> hls_lists:zero(list, Args).
 print_type(vector, Args) -> hls_lists:print_type(list, Args).
-pack(Values, vector, [Subtype, Size]) when length(Values) =:= Size ->
-    hls_lists:pack(Values, list, [Subtype, Size]);
-pack(_Values, vector, [_Subtype, _Size]) -> error(badarg).
+pack(Values, vector, Args) -> hls_lists:pack(Values, list, Args).
 unpack(Packed, vector, Args) -> hls_lists:unpack(Packed, list, Args).
 dslx_imports() -> [hls_vec].
 
