@@ -329,39 +329,13 @@ top_proc(TopologyModule, Contract = #{outputs := Outputs}, RamBindings) ->
 
 scheduler_ram_members(RamBindings) ->
     lists:append([
-        [
-            [Stem, "_ram_read_req_out: chan<", Module,
-                "::MachineRamReadReq> out"],
-            [Stem, "_ram_read_resp_in: chan<", Module,
-                "::MachineRamReadResp> in"],
-            [Stem, "_ram_write_req_out: chan<", Module,
-                "::MachineRamWriteReq> out"],
-            [Stem, "_ram_write_resp_in: chan<", Module,
-                "::MachineRamWriteResp> in"],
-            [Stem, "_mailbox_read_req_out: chan<", Module,
-                "::MailboxRamReadReq> out"],
-            [Stem, "_mailbox_read_resp_in: chan<", Module,
-                "::MailboxRamReadResp> in"],
-            [Stem, "_mailbox_write_req_out: chan<", Module,
-                "::MailboxRamWriteReq> out"],
-            [Stem, "_mailbox_write_resp_in: chan<", Module,
-                "::MailboxRamWriteResp> in"]
-        ]
+        xls_scheduler_ram_dslx:parameters([Stem, "_"], [Module, "::"])
         || {Stem, Module} <- RamBindings
     ]).
 
 scheduler_ram_names(RamBindings) ->
     lists:append([
-        [
-            [Stem, "_ram_read_req_out"],
-            [Stem, "_ram_read_resp_in"],
-            [Stem, "_ram_write_req_out"],
-            [Stem, "_ram_write_resp_in"],
-            [Stem, "_mailbox_read_req_out"],
-            [Stem, "_mailbox_read_resp_in"],
-            [Stem, "_mailbox_write_req_out"],
-            [Stem, "_mailbox_write_resp_in"]
-        ]
+        xls_scheduler_ram_dslx:names([Stem, "_"])
         || {Stem, _Module} <- RamBindings
     ]).
 
