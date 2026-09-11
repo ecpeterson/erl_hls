@@ -953,6 +953,8 @@ service(Spec) ->
 shared_service(Spec) ->
     Reductions = maps:get(reductions, Spec, none),
     SharedService = maps:get(shared_service, Spec, ordinary),
+    RamParameters = xls_scheduler_ram_dslx:parameters([], []),
+    RamNames = xls_scheduler_ram_dslx:names([]),
     [
     ?REDUCTION_SERVICE:shared_service_helpers(Reductions, SharedService),
     """
@@ -1022,15 +1024,9 @@ shared_service(Spec) ->
       request_in: chan<ScheduledRequest>[PRODUCER_COUNT] in;
       startup_in: chan<ScheduledRequest> in;
       egress_out: chan<ScheduledEffects> out;
-      ram_read_req_out: chan<MachineRamReadReq> out;
-      ram_read_resp_in: chan<MachineRamReadResp> in;
-      ram_write_req_out: chan<MachineRamWriteReq> out;
-      ram_write_resp_in: chan<MachineRamWriteResp> in;
-      mailbox_read_req_out: chan<MailboxRamReadReq> out;
-      mailbox_read_resp_in: chan<MailboxRamReadResp> in;
-      mailbox_write_req_out: chan<MailboxRamWriteReq> out;
-      mailbox_write_resp_in: chan<MailboxRamWriteResp> in;
     """,
+        "\n", lists:join("\n", [["  ", Parameter, ";"]
+            || Parameter <- RamParameters]),
         ?REDUCTION_SERVICE:shared_proc_field(Reductions, SharedService),
     """
       executor_request_out: chan<SharedExecutorRequest> out;
@@ -1040,15 +1036,9 @@ shared_service(Spec) ->
           request_in: chan<ScheduledRequest>[PRODUCER_COUNT] in,
           startup_in: chan<ScheduledRequest> in,
           egress_out: chan<ScheduledEffects> out,
-          ram_read_req_out: chan<MachineRamReadReq> out,
-          ram_read_resp_in: chan<MachineRamReadResp> in,
-          ram_write_req_out: chan<MachineRamWriteReq> out,
-          ram_write_resp_in: chan<MachineRamWriteResp> in,
-          mailbox_read_req_out: chan<MailboxRamReadReq> out,
-          mailbox_read_resp_in: chan<MailboxRamReadResp> in,
-          mailbox_write_req_out: chan<MailboxRamWriteReq> out,
-          mailbox_write_resp_in: chan<MailboxRamWriteResp> in
     """,
+        "\n", lists:join(",\n", [["      ", Parameter]
+            || Parameter <- RamParameters]),
         ?REDUCTION_SERVICE:shared_config_parameter(
             Reductions, SharedService
         ),
@@ -1063,15 +1053,9 @@ shared_service(Spec) ->
           request_in,
           startup_in,
           egress_out,
-          ram_read_req_out,
-          ram_read_resp_in,
-          ram_write_req_out,
-          ram_write_resp_in,
-          mailbox_read_req_out,
-          mailbox_read_resp_in,
-          mailbox_write_req_out,
-          mailbox_write_resp_in,
     """,
+        "\n", lists:join("\n", [["      ", Name, ","]
+            || Name <- RamNames]),
         ?REDUCTION_SERVICE:shared_config_endpoint(Reductions, SharedService),
     """
           executor_request_p,

@@ -196,25 +196,17 @@ scheduler_bindings(Schedulers) ->
         end,
         #{},
         [{Id, #{
-            group => maps:get(index, Scheduler),
-            stem => maps:get(stem, Scheduler),
+            group => Group,
             base_slot => BaseSlot,
-            slot_count => maps:get(slot_count, Scheduler),
-            instances => maps:get(instances, Member),
-            reference => maps:get(reference, Member)
+            instances => Instances
         }}
-        || Scheduler <- Schedulers,
-           Member = #{kind := family, id := Id, base_slot := BaseSlot} <-
-               maps:get(members, Scheduler)]
+        || #{index := Group, members := Members} <- Schedulers,
+           #{kind := family, id := Id, base_slot := BaseSlot,
+               instances := Instances} <- Members]
     ).
 
 with_scheduler_bindings(Family = #{id := Id}, Bindings) ->
-    case maps:get(Id, Bindings, []) of
-        [] -> Family#{scheduler => direct, schedulers => []};
-        [Binding] -> Family#{scheduler => Binding, schedulers => [Binding]};
-        [_ | _] = FamilyBindings ->
-            Family#{scheduler => sharded, schedulers => FamilyBindings}
-    end.
+    Family#{schedulers => maps:get(Id, Bindings, [])}.
 
 require_empty(Field, Plan) ->
     case maps:get(Field, Plan, '$missing') of
@@ -862,7 +854,9 @@ reserved_identifiers() ->
 
 render(Spec = #{schedulers := [_ | _]}) ->
     xls_topology_scheduler_dslx:emit(Spec);
-render(Spec) ->
+%% Scheduled plans use the group renderer above. The remaining renderer owns
+%% only per-coordinate actor services and never emits scheduler RAM plumbing.
+render(Spec = #{schedulers := []}) ->
     [
         preamble(Spec),
         startup_support(maps:get(families, Spec)),
@@ -1272,10 +1266,9 @@ family_node(Spec, Family) ->
         || Index <- lists:seq(0, InputCount - 1)],
     Outputs = [[lane_output(Lane), ": chan<axis::Frame> out"]
         || Lane <- OutboundLanes],
-    SchedulerMembers = node_scheduler_members(Family),
     [
         "proc ", node_name(Spec, Family), node_parametrics(Family), " {\n",
-        config_signature(Inputs ++ Outputs ++ SchedulerMembers, 2),
+        config_signature(Inputs ++ Outputs, 2),
         node_body(Spec, Family, InputCount, OutboundLanes),
         "    ()\n  }\n\n",
         "  init { () }\n",
@@ -1283,18 +1276,7 @@ family_node(Spec, Family) ->
         "}\n\n"
     ].
 
-node_scheduler_members(#{scheduler := direct}) -> [];
-node_scheduler_members(#{
-    scheduler := #{group := _},
-    module_name := Module
-}) ->
-    [
-        "actor_req_out: chan<axis::Frame> out",
-        "actor_admit_in: chan<u1> in",
-        ["actor_egress_in: chan<", Module, "::Egress> in"]
-    ].
-
-node_body(Spec, Family = #{scheduler := direct}, InputCount, OutboundLanes) ->
+node_body(Spec, Family, InputCount, OutboundLanes) ->
     Module = maps:get(module_name, Family),
     [
         "    let (actor_req_p, actor_req_c) =\n",
@@ -1317,42 +1299,25 @@ node_body(Spec, Family = #{scheduler := direct}, InputCount, OutboundLanes) ->
             || Index <- lists:seq(0, InputCount - 1)
         ] ++ ["actor_req_p", "actor_admit_c"]),
         ");\n"
-    ];
-node_body(Spec, Family = #{scheduler := #{group := _}}, InputCount,
-        OutboundLanes) ->
-    [
-        "    spawn ", router_name(Spec, Family), "(actor_egress_in",
-        [[", ", lane_output(Lane)] || Lane <- OutboundLanes],
-        ");\n",
-        "    spawn ", ingress_name(Spec, Family),
-        ingress_specialization(Family), "(",
-        join_with(", ", [
-            incoming_name(Index)
-            || Index <- lists:seq(0, InputCount - 1)
-        ] ++ ["actor_req_out", "actor_admit_in"]),
-        ");\n"
     ].
 
 family_grid(Spec) ->
     Lanes = maps:get(lanes, Spec),
     Externals = maps:get(externals, Spec),
     IngressArguments = ingress_arguments(Spec),
-    RamArguments = scheduler_ram_arguments(Spec),
     [
         "proc ", grid_name(Spec),
         "<TORUS_WIDTH: u32, TORUS_HEIGHT: u32> {\n",
         config_signature(
-            RamArguments ++ IngressArguments ++
+            IngressArguments ++
                 [[OutputName, ": chan<axis::Frame> out"]
                 || #{output_name := OutputName} <- Externals],
             2
         ),
         [lane_array(Lane) || Lane <- Lanes],
         control_channels(Spec),
-        scheduler_channels(Spec),
         [family_spawn(Spec, Family)
             || Family <- maps:get(families, Spec)],
-        scheduler_spawns(Spec),
         control_spawns(Spec),
         [external_merge_spawn(External, Lanes) || External <- Externals],
         "    ()\n  }\n\n",
@@ -1360,96 +1325,6 @@ family_grid(Spec) ->
         "  next(state: ()) { state }\n",
         "}\n\n"
     ].
-
-scheduler_channels(#{schedulers := Schedulers}) ->
-    [scheduler_channel_bank(Scheduler) || Scheduler <- Schedulers].
-
-scheduler_channel_bank(#{
-    stem := Stem,
-    module_name := Module,
-    slot_count := SlotCount
-}) ->
-    Count = ["u32:", integer_to_list(SlotCount)],
-    [
-        "    let (", Stem, "_req_p, ", Stem, "_req_c) =\n",
-        "      chan<axis::Frame, CHANNEL_DEPTH>[", Count, "]",
-        "(\"", Stem, "_req\");\n",
-        "    let (", Stem, "_admit_p, ", Stem, "_admit_c) =\n",
-        "      chan<u1, CHANNEL_DEPTH>[", Count, "]",
-        "(\"", Stem, "_admit\");\n",
-        "    let (", Stem, "_egress_p, ", Stem, "_egress_c) =\n",
-        "      chan<", Module, "::Egress, u32:1>[", Count, "]",
-        "(\"", Stem, "_egress\");\n",
-        "    let (", Stem, "_request_p, ", Stem, "_request_c) =\n",
-        "      chan<", Module, "::ScheduledRequest, u32:1>(\"",
-        Stem, "_request\");\n",
-        "    let (", Stem, "_scheduled_egress_p, ", Stem,
-        "_scheduled_egress_c) =\n",
-        "      chan<", Module, "::ScheduledEgress, u32:1>(\"",
-        Stem, "_scheduled_egress\");\n",
-        "    let (", Stem, "_scheduled_admit_p, ", Stem,
-        "_scheduled_admit_c) =\n",
-        "      chan<", Module, "::ScheduledAdmission, u32:1>(\"",
-        Stem, "_scheduled_admit\");\n",
-        "    let (", Stem, "_credit_p, ", Stem, "_credit_c) =\n",
-        "      chan<u1, u32:1>(\"", Stem, "_credit\");\n"
-    ].
-
-scheduler_spawns(#{schedulers := Schedulers}) ->
-    [
-        [
-            "    spawn ", Module, "::SchedulerRequestMux<u32:",
-            integer_to_list(SlotCount), ">(\n",
-            "      ", Stem, "_req_c, ", Stem, "_request_p);\n",
-            "    spawn ", Module, "::SharedService<u32:",
-            integer_to_list(SlotCount), ">(\n",
-            "      ", Stem, "_request_c, ", Stem,
-            "_scheduled_egress_p,\n",
-            "      ", Stem, "_scheduled_admit_p, ", Stem,
-            "_credit_c,\n",
-            "      ", Stem, "_ram_read_req_out, ", Stem,
-            "_ram_read_resp_in,\n",
-            "      ", Stem, "_ram_write_req_out, ", Stem,
-            "_ram_write_resp_in,\n",
-            "      ", Stem, "_mailbox_read_req_out, ", Stem,
-            "_mailbox_read_resp_in,\n",
-            "      ", Stem, "_mailbox_write_req_out, ", Stem,
-            "_mailbox_write_resp_in);\n",
-            "    spawn ", Module, "::SchedulerEgressDemux<u32:",
-            integer_to_list(SlotCount), ">(\n",
-            "      ", Stem, "_scheduled_egress_c, ", Stem,
-            "_egress_p, ", Stem, "_credit_p);\n",
-            "    spawn ", Module, "::SchedulerAdmissionDemux<u32:",
-            integer_to_list(SlotCount), ">(\n",
-            "      ", Stem, "_scheduled_admit_c, ", Stem,
-            "_admit_p);\n"
-        ]
-        || #{stem := Stem, module_name := Module, slot_count := SlotCount} <-
-               Schedulers
-    ].
-
-scheduler_ram_arguments(#{schedulers := Schedulers}) ->
-    lists:append([
-        [
-            [Stem, "_ram_read_req_out: chan<", Module,
-                "::MachineRamReadReq> out"],
-            [Stem, "_ram_read_resp_in: chan<", Module,
-                "::MachineRamReadResp> in"],
-            [Stem, "_ram_write_req_out: chan<", Module,
-                "::MachineRamWriteReq> out"],
-            [Stem, "_ram_write_resp_in: chan<", Module,
-                "::MachineRamWriteResp> in"],
-            [Stem, "_mailbox_read_req_out: chan<", Module,
-                "::MailboxRamReadReq> out"],
-            [Stem, "_mailbox_read_resp_in: chan<", Module,
-                "::MailboxRamReadResp> in"],
-            [Stem, "_mailbox_write_req_out: chan<", Module,
-                "::MailboxRamWriteReq> out"],
-            [Stem, "_mailbox_write_resp_in: chan<", Module,
-                "::MailboxRamWriteResp> in"]
-        ]
-        || #{stem := Stem, module_name := Module} <- Schedulers
-    ]).
 
 control_channels(#{ingresses := []}) -> [];
 control_channels(Spec = #{ingresses := [#{recipients := Recipients}]}) ->
@@ -1524,24 +1399,10 @@ node_spawn_arguments(Family) ->
     Arguments =
         [family_lane_consumer(Lane) || Lane <- InboundLanes] ++
         control_consumer(Family) ++
-        [[maps:get(stem, Lane), "_p[x][y]"] || Lane <- OutboundLanes] ++
-        scheduler_node_arguments(Family),
+        [[maps:get(stem, Lane), "_p[x][y]"] || Lane <- OutboundLanes],
     [
         ["          ", Argument, separator(Index, length(Arguments)), "\n"]
         || {Index, Argument} <- lists:enumerate(0, Arguments)
-    ].
-
-scheduler_node_arguments(#{scheduler := direct}) -> [];
-scheduler_node_arguments(#{scheduler := #{
-    stem := Stem,
-    base_slot := BaseSlot
-}}) ->
-    Slot = ["(u32:", integer_to_list(BaseSlot),
-        " + x * TORUS_HEIGHT + y)"],
-    [
-        [Stem, "_req_p[", Slot, "]"],
-        [Stem, "_admit_c[", Slot, "]"],
-        [Stem, "_egress_c[", Slot, "]"]
     ].
 
 control_consumer(#{ingress := none}) -> [];
@@ -1609,30 +1470,15 @@ top_proc(Spec) ->
         || #{input_name := InputName} <- Ingresses],
     ExternalMembers = [[OutputName, ": chan<axis::Frame> out"]
         || #{output_name := OutputName} <- Externals],
-    RamMembers = scheduler_ram_arguments(Spec),
-    RamNames = lists:append([
-        [
-            [Stem, "_ram_read_req_out"],
-            [Stem, "_ram_read_resp_in"],
-            [Stem, "_ram_write_req_out"],
-            [Stem, "_ram_write_resp_in"],
-            [Stem, "_mailbox_read_req_out"],
-            [Stem, "_mailbox_read_resp_in"],
-            [Stem, "_mailbox_write_req_out"],
-            [Stem, "_mailbox_write_resp_in"]
-        ]
-        || #{stem := Stem} <- maps:get(schedulers, Spec)
-    ]),
-    Names = RamNames ++
-        [InputName || #{input_name := InputName} <- Ingresses] ++
+    Names = [InputName || #{input_name := InputName} <- Ingresses] ++
         [OutputName || #{output_name := OutputName} <- Externals],
     [
         "pub proc Top {\n",
         [["  ", Member, ";\n"]
-            || Member <- RamMembers ++ IngressMembers ++ ExternalMembers],
+            || Member <- IngressMembers ++ ExternalMembers],
         "\n",
         config_signature(
-            RamMembers ++ IngressMembers ++ ExternalMembers,
+            IngressMembers ++ ExternalMembers,
             2
         ),
         "    spawn ", grid_name(Spec), "<WIDTH, HEIGHT>(",
