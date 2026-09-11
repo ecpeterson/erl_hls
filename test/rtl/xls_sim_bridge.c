@@ -1835,10 +1835,12 @@ static int open_endpoint_fifos(
 static PLI_INT32 cb_start_of_sim(p_cb_data cb) {
     const char *directory = getenv("ERL_HLS_SIM_DIR");
     const char *configured_root = getenv("ERL_HLS_SIM_TOP");
+    const char *debug_only_value = getenv("ERL_HLS_SIM_DEBUG_ONLY");
     const char *app_only_value = getenv("ERL_HLS_SIM_APP_ONLY");
     const char *profile_only_value = getenv("ERL_HLS_SIM_PROFILE_ONLY");
     const char *configured_scheduler_profile_path =
         getenv("ERL_HLS_SIM_SCHEDULER_PROFILE");
+    int debug_only = debug_only_value && strcmp(debug_only_value, "1") == 0;
     int app_only = app_only_value && strcmp(app_only_value, "1") == 0;
     s_cb_data clock_cb;
     s_cb_data end_cb;
@@ -1846,6 +1848,10 @@ static PLI_INT32 cb_start_of_sim(p_cb_data cb) {
 
     scheduler_profile_only = profile_only_value &&
         strcmp(profile_only_value, "1") == 0;
+    if ((app_only + debug_only + scheduler_profile_only) > 1) {
+        bridge_fail("APP_ONLY, DEBUG_ONLY and PROFILE_ONLY are mutually exclusive");
+        return 0;
+    }
     if (!directory && !scheduler_profile_only) {
         bridge_fail("ERL_HLS_SIM_DIR is not set");
         return 0;
@@ -1868,7 +1874,7 @@ static PLI_INT32 cb_start_of_sim(p_cb_data cb) {
     hierarchy_root = configured_root && configured_root[0] != '\0' ?
         configured_root : "regsvc_bridge_tb";
     app_endpoint.name = "app";
-    app_endpoint.enabled = !scheduler_profile_only;
+    app_endpoint.enabled = !scheduler_profile_only && !debug_only;
     debug_endpoint.name = "debug";
     debug_endpoint.enabled = !scheduler_profile_only && !app_only;
     h_clk = require_signal("clk", 1);
@@ -1929,6 +1935,8 @@ static PLI_INT32 cb_start_of_sim(p_cb_data cb) {
     vpi_register_cb(&end_cb);
     if (scheduler_profile_only) {
         vpi_printf("xls_sim_bridge: scheduler-only profiling enabled\n");
+    } else if (debug_only) {
+        vpi_printf("xls_sim_bridge: debug endpoint listening in %s\n", directory);
     } else {
         vpi_printf("xls_sim_bridge: application%s endpoint%s listening in %s\n",
                    debug_endpoint.enabled ? " and debug" : "",

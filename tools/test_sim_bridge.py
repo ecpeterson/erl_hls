@@ -84,7 +84,7 @@ def check(name, source, expected=None, library=STAGE, env_changes=None):
     run(["iverilog", "-g2012", "-s", "bridge_tb", "-o", "tb.vvp", "tb.sv"],
         directory, directory / "compile.log")
     env = {**os.environ, "ERL_HLS_SIM_DIR": str(directory), "ERL_HLS_SIM_TOP": "bridge_tb"}
-    for key in ("ERL_HLS_SIM_APP_ONLY", "ERL_HLS_SIM_PROFILE_ONLY", "ERL_HLS_SIM_SCHEDULER_PROFILE"):
+    for key in ("ERL_HLS_SIM_APP_ONLY", "ERL_HLS_SIM_DEBUG_ONLY", "ERL_HLS_SIM_PROFILE_ONLY", "ERL_HLS_SIM_SCHEDULER_PROFILE"):
         env.pop(key, None)
     for key, value in (env_changes or {}).items():
         if value is None:
@@ -164,6 +164,9 @@ check("no_directory", fixture(""), "ERL_HLS_SIM_DIR is not set", env_changes={"E
 check("bad_directory", fixture(""), "failed to open transport FIFOs", env_changes={"ERL_HLS_SIM_DIR": str(STAGE / "absent" / "path")})
 check("app_only", fixture("", missing="s_dbg_tkeep"), env_changes={"ERL_HLS_SIM_APP_ONLY": "1"})
 check("profile_only", fixture("", missing="s_axis_tkeep"), env_changes={"ERL_HLS_SIM_PROFILE_ONLY": "1", "ERL_HLS_SIM_DIR": None})
+check("debug_only", fixture("", missing="s_axis_tkeep"), env_changes={"ERL_HLS_SIM_DEBUG_ONLY": "1"})
+check("conflicting_modes", fixture(""), "mutually exclusive", env_changes={"ERL_HLS_SIM_DEBUG_ONLY": "1", "ERL_HLS_SIM_APP_ONLY": "1"})
+check("debug_profile_conflict", fixture(""), "mutually exclusive", env_changes={"ERL_HLS_SIM_DEBUG_ONLY": "1", "ERL_HLS_SIM_PROFILE_ONLY": "1"})
 for operation in ("read", "write"):
     library = STAGE / f"fail_{operation}"
     build_bridge(library, operation)
