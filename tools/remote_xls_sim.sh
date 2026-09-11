@@ -30,6 +30,8 @@ vvp hls_trace_store.vvp
 # keep every test-bearing DSLX module explicit here.
 for test_module in \
     axis.x \
+    hls_fixed.x \
+    hls_vec.x \
     arbitration.x \
     scheduler.x \
     bram.x \
@@ -47,15 +49,18 @@ do
         "$test_module"
 done
 
-# This generated fixture also contains randomized equivalence properties for
-# the narrowed fixed-point lowering. A fixed seed makes failures reproducible.
-"$xls_root/interpreter_main" \
-    --dslx_path=. \
-    --dslx_stdlib_path="$stdlib" \
-    --evaluator=ir-interpreter \
-    --run_quickcheck_when_interpreting \
-    --seed=1 \
-    phi_field_test.x
+# The companion owns the arithmetic properties; the generated fixture checks
+# its public functions against BEAM vectors. Keep the random seed reproducible.
+for test_module in phi_field.x phi_field_test.x
+do
+    "$xls_root/interpreter_main" \
+        --dslx_path=. \
+        --dslx_stdlib_path="$stdlib" \
+        --evaluator=ir-interpreter \
+        --run_quickcheck_when_interpreting \
+        --seed=1 \
+        "$test_module"
+done
 
 "$xls_root/ir_converter_main" \
     --warnings_as_errors=false \
@@ -85,6 +90,14 @@ done
     --dslx_stdlib_path="$stdlib" \
     --top=Top \
     xls_case_fixture.x > xls_case_fixture.ir
+
+# Companion-provided record types and function calls through the hls_gs path.
+"$xls_root/ir_converter_main" \
+    --warnings_as_errors=false \
+    --dslx_path=. \
+    --dslx_stdlib_path="$stdlib" \
+    --top=Top \
+    hls_companion_gs_fixture.x > hls_companion_gs_fixture.ir
 
 "$xls_root/ir_converter_main" \
     --warnings_as_errors=false \

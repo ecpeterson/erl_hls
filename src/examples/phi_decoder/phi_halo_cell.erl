@@ -100,7 +100,8 @@ protocol meaning.
 
 For the distance-three torus, reflection symmetry about the syndrome plane
 makes the `z = 1` and `z = -1` values equal, so the complete field needs only
-two stored layers. Values use the example-local signed Q15.16 `phi_field` type.
+two stored layers. `phi_field` composes a fixed-size vector of signed Q15.16
+scalars and owns the coupled layer recurrence.
 Each recurrence widens its complete rational numerator to 64 bits, rounds once
 to the nearest stored value with ties away from zero, then saturates to the
 32-bit field. For the paper's `eta = 1/2`, the center plane retains `1/2` of
@@ -135,7 +136,6 @@ counterpart.
     reduce/3
 ]).
 
--define(LAYER_COUNT, 2).
 -define(MAILBOX_CAPACITY, 5).
 -define(NEIGHBOR_COUNT, 4).
 %% The paper prescribes c = 10 log^2(L) field updates per anyon update. For
@@ -152,8 +152,6 @@ counterpart.
 -hls_mailbox_capacity(?MAILBOX_CAPACITY).
 -compile({parse_transform, hls_pack}).
 
-%% TODO: Replace the two-element hls_lists values with hls_vec once vector
-%% arithmetic is part of the lowerable library.
 %% TODO: Replace the fixed diffusion count with the decoder's stopping rule.
 %% TODO: Choose the deployment boundary for applied corrections: either route
 %% each move to its neighboring data-qubit actor in PL, or translate the
@@ -166,8 +164,7 @@ counterpart.
 -record(cell, {
     step = hls_type:zero() :: hls_nums:u32(),
     diffusion_epoch = hls_type:zero() :: hls_nums:u32(),
-    phi = hls_type:zero() ::
-        hls_lists:list(phi_field:field(), ?LAYER_COUNT),
+    phi = hls_type:zero() :: phi_field:field(),
     best_direction = hls_type:zero() :: hls_nums:u32(),
     anyon = hls_type:zero() :: hls_nums:u32(),
     random_state = hls_type:zero() :: hls_nums:u32(),
@@ -244,12 +241,12 @@ configure(_PID, _Seed) ->
     error(badarg).
 
 -doc "Offers one neighbor phi value for diffusion `Epoch` to a cell.".
--spec offer_phi(pid(), hls_nums:u32(), [phi_field:field()]) -> ok.
+-spec offer_phi(pid(), hls_nums:u32(), phi_field:field()) -> ok.
 offer_phi(PID, Epoch, Values) ->
     hls_statem:cast(PID, #phi{epoch = Epoch, values = Values}).
 
 -doc "Offers one final phi0 value from `Source` as seen by the cell.".
--spec offer_phi0(pid(), hls_nums:u32(), direction(), phi_field:field()) -> ok.
+-spec offer_phi0(pid(), hls_nums:u32(), direction(), phi_field:scalar()) -> ok.
 offer_phi0(PID, Step, Source, Value) ->
     SourceMask = source_mask(Source),
     hls_statem:cast(PID, #phi0{
@@ -412,8 +409,8 @@ gathering(
 ) ->
     {gathering, Cell,
         {contribute, diffusion, Epoch, #phi_fold{
-            value0 = phi_field:accumulate(0, hls_lists:nth(1, Values)),
-            value1 = phi_field:accumulate(0, hls_lists:nth(2, Values))
+            value0 = phi_field:accumulate(0, hls_vec:nth(1, Values)),
+            value1 = phi_field:accumulate(0, hls_vec:nth(2, Values))
         }}};
 gathering(
     internal,
@@ -421,12 +418,7 @@ gathering(
         #phi_fold{value0 = Sum0, value1 = Sum1}},
     Cell = #cell{step = Step, diffusion_epoch = Epoch}
 ) ->
-    P0 = hls_lists:nth(1, Cell#cell.phi),
-    P1 = hls_lists:nth(2, Cell#cell.phi),
-    New0 = phi_field:relax_center(Cell#cell.anyon, P0, P1, Sum0),
-    New1 = phi_field:relax_bulk(P0, P1, Sum1),
-    PhiFirst = hls_lists:set(1, Cell#cell.phi, New0),
-    NewPhi = hls_lists:set(2, PhiFirst, New1),
+    NewPhi = phi_field:relax(Cell#cell.anyon, Cell#cell.phi, Sum0, Sum1),
     NextEpoch = (Epoch + 1) band ?U32_MASK,
     Updated = Cell#cell{
         diffusion_epoch = NextEpoch,
@@ -474,7 +466,7 @@ gathering(cast, #phi_config{}, Cell) ->
     (internal, hls_statem:reduction_complete(), #cell{}) ->
         hls_statem:internal_result(phase(), #cell{}).
 comparing(enter, _OldPhase, Cell) ->
-    Phi0 = hls_lists:nth(1, Cell#cell.phi),
+    Phi0 = hls_vec:nth(1, Cell#cell.phi),
     Message = #phi0{
         step = Cell#cell.step,
         value = Phi0

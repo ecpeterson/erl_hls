@@ -6,6 +6,8 @@ import axis;
 import bram;
 import mailbox;
 import scheduler;
+import hls_vec;
+import phi_field;
 
 const MAILBOX_CAPACITY = u8:5;
 const MAILBOX_DEPTH = u32:5;
@@ -48,13 +50,13 @@ pub enum Directive : u2 {
 
 pub struct Phi {
   epoch : u32,
-  values : s32[2],
+  values : phi_field::Field,
 }
 
 pub fn phi_from_bits<N: u32>(raw: bits[N]) -> Phi {
   Phi {
     epoch: raw[0:32] as u32,
-    values: raw[32:96] as s32[2],
+    values: raw[32:96] as phi_field::Field,
   }
 }
 
@@ -81,14 +83,14 @@ pub fn bits_from_anyonmove(s: Anyonmove) -> bits[bit_count<Anyonmove>()] {
 pub struct Phi0 {
   step : u32,
   source : u32,
-  value : s32,
+  value : phi_field::Scalar,
 }
 
 pub fn phi0_from_bits<N: u32>(raw: bits[N]) -> Phi0 {
   Phi0 {
     step: raw[0:32] as u32,
     source: raw[32:64] as u32,
-    value: raw[64:96] as s32,
+    value: raw[64:96] as phi_field::Scalar,
   }
 }
 
@@ -305,7 +307,7 @@ pub fn bits_from_phistatus(s: Phistatus) -> bits[bit_count<Phistatus>()] {
 pub struct Cell {
   step : u32,
   diffusion_epoch : u32,
-  phi : s32[2],
+  phi : phi_field::Field,
   best_direction : u32,
   anyon : u32,
   random_state : u32,
@@ -319,7 +321,7 @@ pub fn cell_from_bits<N: u32>(raw: bits[N]) -> Cell {
   Cell {
     step: raw[0:32] as u32,
     diffusion_epoch: raw[32:64] as u32,
-    phi: raw[64:128] as s32[2],
+    phi: raw[64:128] as phi_field::Field,
     best_direction: raw[128:160] as u32,
     anyon: raw[160:192] as u32,
     random_state: raw[192:224] as u32,
@@ -1032,9 +1034,9 @@ fn reduction_contribution(
             if bool:true {
   let _0 = (0 as u32);
   let _1 = Xls_clause_1_Values_1[1 - u32:1];
-  let _2 = (0 + (_1 as s64));
+  let _2 = phi_field::accumulate(0, _1);
   let _3 = Xls_clause_1_Values_1[2 - u32:1];
-  let _4 = (0 + (_3 as s64));
+  let _4 = phi_field::accumulate(0, _3);
   let _5 = Phifold {
     value0: _2,
     value1: _4,
@@ -1072,7 +1074,7 @@ fn reduction_contribution(
             let Xls_clause_1_Value_1 = message.value;
             let Xls_clause_1_Cell_1 = (Tag::CELL, data);
             if bool:true {
-  let _0 = (0 + (Xls_clause_1_Value_1 as s64));
+  let _0 = phi_field::accumulate(0, Xls_clause_1_Value_1);
   let _1 = (Xls_clause_1_Source_1 as s64);
   let _2 = Phifold {
     value0: _0,
@@ -1296,9 +1298,9 @@ fn reduction_transport_contribution(
         if bool:true {
   let _0 = (0 as u32);
   let _1 = Xls_clause_1_Values_1[1 - u32:1];
-  let _2 = (0 + (_1 as s64));
+  let _2 = phi_field::accumulate(0, _1);
   let _3 = Xls_clause_1_Values_1[2 - u32:1];
-  let _4 = (0 + (_3 as s64));
+  let _4 = phi_field::accumulate(0, _3);
   let _5 = Phifold {
     value0: _2,
     value1: _4,
@@ -1330,7 +1332,7 @@ fn reduction_transport_contribution(
         let Xls_clause_1_Source_1 = message.source;
         let Xls_clause_1_Value_1 = message.value;
         if bool:true {
-  let _0 = (0 + (Xls_clause_1_Value_1 as s64));
+  let _0 = phi_field::accumulate(0, Xls_clause_1_Value_1);
   let _1 = (Xls_clause_1_Source_1 as s64);
   let _2 = Phifold {
     value0: _0,
@@ -1565,68 +1567,43 @@ fn reduction_dispatch_completion(
           let Xls_clause_1_Cell_1 = (Tag::CELL, data);
           let Xls_clause_1_Step_1 = data.step;
           if Xls_clause_1_Epoch_1 == data.diffusion_epoch {
-  let _0 = Xls_clause_1_Cell_1.1.phi;
-  let _1 = _0[1 - u32:1];
-  let Xls_clause_1_P0_1 = _1;
-  let _2 = Xls_clause_1_Cell_1.1.phi;
-  let _3 = _2[2 - u32:1];
-  let Xls_clause_1_P1_1 = _3;
-  let _4 = Xls_clause_1_Cell_1.1.anyon;
-  let _5 = ((Xls_clause_1_P0_1 as sN[37]) * sN[37]:6 + (Xls_clause_1_P1_1 as sN[37]) * sN[37]:2 + (Xls_clause_1_Sum0_1 as sN[37]));
-  let _6 = _5 < sN[37]:0;
-  let _7 = ((if _6 { -(_5) } else { _5 }) as uN[36]);
-  let _8 = (((_7 + uN[36]:6) >> u32:2) as uN[34]);
-  let _9 = ((_8 / uN[34]:3) as sN[33]);
-  let _10 = ((if _6 { -(_9) } else { _9 }) as s64);
-  let _11 = ((_4 as s64) << u32:16) + _10;
-  let _12 = (if _11 > s64:2147483647 { s32:2147483647 } else if _11 < s64:-2147483648 { s32:-2147483648 } else { _11 as s32 });
-  let Xls_clause_1_New0_1 = _12;
-  let _13 = ((Xls_clause_1_P0_1 as sN[37]) * sN[37]:1 + (Xls_clause_1_P1_1 as sN[37]) * sN[37]:7 + (Xls_clause_1_Sum1_1 as sN[37]));
-  let _14 = _13 < sN[37]:0;
-  let _15 = ((if _14 { -(_13) } else { _13 }) as uN[36]);
-  let _16 = (((_15 + uN[36]:6) >> u32:2) as uN[34]);
-  let _17 = ((_16 / uN[34]:3) as sN[33]);
-  let _18 = ((if _14 { -(_17) } else { _17 }) as s64);
-  let _19 = (if _18 > s64:2147483647 { s32:2147483647 } else if _18 < s64:-2147483648 { s32:-2147483648 } else { _18 as s32 });
-  let Xls_clause_1_New1_1 = _19;
-  let _20 = Xls_clause_1_Cell_1.1.phi;
-  let _21 = update(_20, 1 - u32:1, Xls_clause_1_New0_1);
-  let Xls_clause_1_PhiFirst_1 = _21;
-  let _22 = update(Xls_clause_1_PhiFirst_1, 2 - u32:1, Xls_clause_1_New1_1);
-  let Xls_clause_1_NewPhi_1 = _22;
-  let _23 = Xls_clause_1_Epoch_1 + 1;
-  let _24 = _23 & 4294967295;
-  let Xls_clause_1_NextEpoch_1 = _24;
-  let _25 = Cell {
+  let _0 = Xls_clause_1_Cell_1.1.anyon;
+  let _1 = Xls_clause_1_Cell_1.1.phi;
+  let _2 = phi_field::relax(_0, _1, Xls_clause_1_Sum0_1, Xls_clause_1_Sum1_1);
+  let Xls_clause_1_NewPhi_1 = _2;
+  let _3 = Xls_clause_1_Epoch_1 + 1;
+  let _4 = _3 & 4294967295;
+  let Xls_clause_1_NextEpoch_1 = _4;
+  let _5 = Cell {
     diffusion_epoch: Xls_clause_1_NextEpoch_1,
     phi: Xls_clause_1_NewPhi_1,
     ..(Xls_clause_1_Cell_1).1
   };
-  let _26 = (Tag::CELL, _25);
-  let Xls_clause_1_Updated_1 = _26;
-  let _27 = Xls_clause_1_Step_1 + 1;
-  let _28 = _27 * 12;
-  let _29 = _28 & 4294967295;
-  let Xls_clause_1_NextStepEpoch_1 = _29;
-  let _30 = Xls_clause_1_NextEpoch_1 == Xls_clause_1_NextStepEpoch_1;
-  let _34 = if _30 {
-    let _31 = Cell {
+  let _6 = (Tag::CELL, _5);
+  let Xls_clause_1_Updated_1 = _6;
+  let _7 = Xls_clause_1_Step_1 + 1;
+  let _8 = _7 * 12;
+  let _9 = _8 & 4294967295;
+  let Xls_clause_1_NextStepEpoch_1 = _9;
+  let _10 = Xls_clause_1_NextEpoch_1 == Xls_clause_1_NextStepEpoch_1;
+  let _14 = if _10 {
+    let _11 = Cell {
       best_direction: 0,
       ..(Xls_clause_1_Updated_1).1
     };
-    let _32 = (Tag::CELL, _31);
-    let _33 = (Phase::COMPARING, _32, Directive::CONSUME, bool:0, );
-    (_33, bool:false)
+    let _12 = (Tag::CELL, _11);
+    let _13 = (Phase::COMPARING, _12, Directive::CONSUME, bool:0, );
+    (_13, bool:false)
   } else {
-    let _31 = (Phase::GATHERING, Xls_clause_1_Updated_1, Directive::CONSUME, bool:1, );
-    (_31, bool:false)
+    let _11 = (Phase::GATHERING, Xls_clause_1_Updated_1, Directive::CONSUME, bool:1, );
+    (_11, bool:false)
   };
   let case_match_1_1 = bool:false;
-  let case_match_1_2 = _34.1;
+  let case_match_1_2 = _14.1;
   if ((case_match_1_1 != case_match_1_2) || bool:false) {
     (phase, data, Directive::FAIL, u1:0)
   } else {
-    (_34.0.0, _34.0.1.1, _34.0.2, _34.0.3)
+    (_14.0.0, _14.0.1.1, _14.0.2, _14.0.3)
   }
 } else {
   (phase, data, Directive::FAIL, u1:0)

@@ -18,14 +18,7 @@ cp "$experiment_root/remote_area_matrix.sh" \
 
 ssh -o BatchMode=yes "$remote_host" mkdir -p "$remote_stage"
 rsync -a -e "ssh -o BatchMode=yes" \
-    "$local_stage/axis.x" \
-    "$local_stage/bram.x" \
-    "$local_stage/mailbox.x" \
-    "$local_stage/hls_spatial_router.x" \
-    "$local_stage/phi_halo_cell.x" \
-    "$local_stage/phenom_data_cell.x" \
-    "$local_stage/phenom_syndrome_cell.x" \
-    "$local_stage/phi_noise_d2.x" \
+    "$local_stage"/*.x \
     "$local_stage/remote_area_matrix.sh" \
     "$remote_host:$remote_stage/"
 ssh -o BatchMode=yes "$remote_host" \

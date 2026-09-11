@@ -1,201 +1,83 @@
 -module(phi_field).
 -moduledoc """
-Signed Q15.16 arithmetic for the phi-decoder example.
+Two-layer phi fields composed from fixed-size vectors of signed Q15.16 scalars.
 
-A field value is stored as a signed 32-bit integer with sixteen fractional
-bits. The BEAM and generated representations are identical; conversion helpers
-exist only for tests and host-side inspection. Diffusion rounds to nearest
-with ties away from zero before the result is saturated to Q15.16.
+The BEAM representation is a pair of scaled integers in a list; DSLX uses an
+s32[2] array with the same wire order. Scalar conversions, checked packing,
+rounding, and saturation belong to hls_fixed; vector shape and weighted sums
+belong to hls_vec. This module owns the decoder's two-layer recurrence.
 
-The generated recurrence uses the fact that a neighbor sum contains exactly
-four field values. Each weighted numerator therefore fits in signed 37 bits.
-Its magnitude fits in 36 unsigned bits, including the rounding offset. The
-power of two is removed from 12 before the remaining unsigned division by 3.
-These widths are lowering details rather than a narrower field ABI.
+Each neighbor sum contains exactly four scalars. The weighted numerator fits
+in signed 37 bits even though the actor stores its accumulator in s64. These
+bounds are part of the recurrence contract, not a narrower field ABI.
 
-The current nonnegative charge model stays far inside the representable range.
-Keeping the sign bit reserves the gauge choice in which empty cells contribute
-a small negative background without changing the field ABI later.
-
-The demo's present field range is far from overflow. Saturation prevents a
-long-running uniform gauge mode from wrapping across the sign boundary; a
-realistic experiment profile must still validate its field range and decide
-whether gauge recentering is preferable.
+Saturation prevents a long-running uniform gauge mode from wrapping across
+the sign boundary. Each experiment must still validate its numerical range
+and decide whether gauge recentering is preferable.
 """.
-
 -behavior(hls_type).
+-export([scalar/0, field/0, from_integer/1, from_ratio/2, to_float/1,
+    accumulate/2, relax/4, relax_center/4, relax_bulk/3]).
+-export([width/2, zero/2, transpile/3, pack/3, unpack/3, print_type/2,
+    dslx_imports/0]).
+-export_type([scalar/0, field/0, accumulator/0]).
 
--export([
-    field/0,
-    from_integer/1,
-    from_ratio/2,
-    to_float/1,
-    accumulate/2,
-    relax_center/4,
-    relax_bulk/3
-]).
--export([width/2, zero/2, transpile/3, pack/3, unpack/3, print_type/2]).
--export_type([field/0, accumulator/0]).
+-type scalar() :: hls_fixed:signed(32, 16).
+-type field() :: hls_vec:vector(scalar(), 2).
+-type accumulator() :: -(4 bsl 31)..(4 * ((1 bsl 31) - 1)).
 
--define(FRACTION_BITS, 16).
--define(SCALE, (1 bsl ?FRACTION_BITS)).
--define(S32_BITS, 32).
--define(S32_SIGN, (1 bsl (?S32_BITS - 1))).
--define(S32_MIN, (-?S32_SIGN)).
--define(S32_MAX, (?S32_SIGN - 1)).
--define(MIN_NEIGHBOR_SUM, (4 * ?S32_MIN)).
--define(MAX_NEIGHBOR_SUM, (4 * ?S32_MAX)).
--define(NUMERATOR_BITS, 37).
--define(MAGNITUDE_BITS, 36).
--define(QUOTIENT_BITS, 33).
--define(MIN_REPRESENTABLE_INTEGER, (-(1 bsl 15))).
--define(MAX_REPRESENTABLE_INTEGER, ((1 bsl 15) - 1)).
+scalar() -> {hls_type, ?MODULE, scalar, []}.
+field() -> {hls_type, ?MODULE, field, []}.
 
--type field() :: hls_nums:s32().
--type accumulator() :: ?MIN_NEIGHBOR_SUM..?MAX_NEIGHBOR_SUM.
+component_type(scalar) -> hls_fixed:signed(32, 16);
+component_type(field) -> hls_vec:vector(component_type(scalar), 2).
 
--doc "Returns the custom signed Q15.16 type descriptor.".
--spec field() -> {hls_type, module(), field, []}.
-field() ->
-    {hls_type, ?MODULE, ?FUNCTION_NAME, []}.
+-spec from_integer(integer()) -> scalar().
+from_integer(Value) -> hls_fixed:from_integer(component_type(scalar), Value).
 
--doc "Encodes an exactly representable integer as Q15.16.".
--spec from_integer(integer()) -> field().
-from_integer(Value)
-        when Value >= ?MIN_REPRESENTABLE_INTEGER,
-             Value =< ?MAX_REPRESENTABLE_INTEGER ->
-    Value bsl ?FRACTION_BITS;
-from_integer(_Value) ->
-    error(badarg).
+-spec from_ratio(integer(), pos_integer()) -> scalar().
+from_ratio(Numerator, Denominator) ->
+    hls_fixed:from_ratio(component_type(scalar), Numerator, Denominator).
 
--doc "Rounds a rational value to the nearest Q15.16 value.".
--spec from_ratio(integer(), pos_integer()) -> field().
-from_ratio(Numerator, Denominator) when Denominator > 0 ->
-    Scaled = round_ratio(Numerator * ?SCALE, Denominator),
-    case Scaled >= -?S32_SIGN andalso Scaled < ?S32_SIGN of
-        true -> Scaled;
-        false -> error(badarg)
-    end;
-from_ratio(_Numerator, _Denominator) ->
-    error(badarg).
+-spec to_float(scalar()) -> float().
+to_float(Value) -> hls_fixed:to_float(component_type(scalar), Value).
 
--doc "Converts a Q15.16 value to a BEAM float for inspection.".
--spec to_float(field()) -> float().
-to_float(Value) ->
-    Value / ?SCALE.
+%% At most four scalar contributions fit in the diffusion accumulator.
+-spec accumulate(accumulator(), scalar()) -> accumulator().
+accumulate(Sum, Value) -> Sum + Value.
 
--doc """
-Adds one field value to a widened diffusion accumulator.
+-spec relax(hls_nums:u32(), field(), accumulator(), accumulator()) -> field().
+relax(Anyon, [Phi0, Phi1], Sum0, Sum1) ->
+    [relax_center(Anyon, Phi0, Phi1, Sum0), relax_bulk(Phi0, Phi1, Sum1)].
 
-The accumulator begins at zero and receives at most four `field()` values.
-Its bounded type is the contract which justifies the narrower generated
-arithmetic even though the actor stores it in an `s64` register.
-""".
--spec accumulate(accumulator(), field()) -> accumulator().
-accumulate(Sum, Value) ->
-    Sum + Value.
+-spec relax_center(hls_nums:u32(), scalar(), scalar(), accumulator()) -> scalar().
+relax_center(Anyon, Phi0, Phi1, NeighborSum) ->
+    Numerator = hls_vec:dot(hls_nums:s64(), [Phi0, Phi1], [6, 2]) + NeighborSum,
+    hls_fixed:saturate(component_type(scalar),
+        (Anyon bsl 16) + hls_fixed:round_ratio(Numerator, 12)).
 
--doc "Applies center-plane relaxation to one four-neighbor sum.".
--spec relax_center(hls_nums:u32(), field(), field(), accumulator()) -> field().
-relax_center(Anyon, Phi0, Phi1, NeighborSum0) ->
-    Charge = Anyon bsl ?FRACTION_BITS,
-    Smoothed = round_ratio(6 * Phi0 + 2 * Phi1 + NeighborSum0, 12),
-    saturate_s32(Charge + Smoothed).
+-spec relax_bulk(scalar(), scalar(), accumulator()) -> scalar().
+relax_bulk(Phi0, Phi1, NeighborSum) ->
+    Numerator = hls_vec:dot(hls_nums:s64(), [Phi0, Phi1], [1, 7]) + NeighborSum,
+    hls_fixed:saturate(component_type(scalar), hls_fixed:round_ratio(Numerator, 12)).
 
--doc "Applies terminal bulk-plane relaxation to one four-neighbor sum.".
--spec relax_bulk(field(), field(), accumulator()) -> field().
-relax_bulk(Phi0, Phi1, NeighborSum1) ->
-    saturate_s32(round_ratio(Phi0 + 7 * Phi1 + NeighborSum1, 12)).
+width(Type, []) -> hls_type:width(component_type(Type)).
+zero(Type, []) -> hls_type:zero(component_type(Type)).
+pack(Value, Type, []) -> hls_type:pack(Value, component_type(Type)).
+unpack(Packed, Type, []) -> hls_type:unpack(Packed, component_type(Type)).
+print_type(scalar, []) -> "phi_field::Scalar";
+print_type(field, []) -> "phi_field::Field".
+dslx_imports() -> [phi_field].
 
-%% hls_type callbacks
-
-width(field, []) -> 32.
-
-zero(field, []) -> 0.
-
-pack(Value, field, []) ->
-    <<Value:32/signed-little-integer>>.
-
-unpack(<<Value:32/signed-little-integer, Rest/binary>>, field, []) ->
-    {Value, Rest}.
-
-print_type(field, []) -> "s32".
-
+transpile(scalar, [], State) ->
+    xls_parse:reference(State, {phantom, type, scalar()});
 transpile(field, [], State) ->
     xls_parse:reference(State, {phantom, type, field()});
 transpile(accumulate, [Sum, Value], _State) ->
-    ["(", Sum, " + (", Value, " as s64))"];
-transpile(relax_center, [Anyon, Phi0, Phi1, NeighborSum0], State0) ->
-    State1 = weighted_numerator(
-        State0, Phi0, 6, Phi1, 2, NeighborSum0
-    ),
-    State2 = rounded_division(State1, 12, 2, 3),
-    State3 = xls_parse:instr(State2, [
-        "((", Anyon, " as s64) << u32:16) + ",
-        xls_parse:reference(State2)
-    ]),
-    saturated_s32(State3);
-transpile(relax_bulk, [Phi0, Phi1, NeighborSum1], State0) ->
-    State1 = weighted_numerator(
-        State0, Phi0, 1, Phi1, 7, NeighborSum1
-    ),
-    State2 = rounded_division(State1, 12, 2, 3),
-    saturated_s32(State2).
-
-weighted_numerator(
-        State, Phi0, Phi0Weight, Phi1, Phi1Weight, NeighborSum
-) ->
-    Type = xls_nums:signed_type(?NUMERATOR_BITS),
-    xls_parse:instr(State, ["((", Phi0, " as ", Type, ") * ", Type, ":",
-        integer_to_list(Phi0Weight), " + (", Phi1, " as ", Type,
-        ") * ", Type, ":", integer_to_list(Phi1Weight), " + (",
-        NeighborSum, " as ", Type, "))"]).
-
-rounded_division(State0, Denominator, FactorShift, OddDivisor) ->
-    SignedNumerator = xls_nums:signed_type(?NUMERATOR_BITS),
-    MagnitudeType = xls_nums:unsigned_type(?MAGNITUDE_BITS),
-    DividendBits = ?MAGNITUDE_BITS - FactorShift,
-    DividendType = xls_nums:unsigned_type(DividendBits),
-    SignedQuotient = xls_nums:signed_type(?QUOTIENT_BITS),
-    Numerator = xls_parse:reference(State0),
-    State1 = xls_parse:instr(State0, [
-        Numerator, " < ", SignedNumerator, ":0"
-    ]),
-    Negative = xls_parse:reference(State1),
-    State2 = xls_parse:instr(State1, [
-        "((if ", Negative, " { -(", Numerator, ") } else { ",
-        Numerator, " }) as ", MagnitudeType, ")"
-    ]),
-    Magnitude = xls_parse:reference(State2),
-    State3 = xls_parse:instr(State2, [
-        "(((", Magnitude, " + ", MagnitudeType, ":",
-        integer_to_list(Denominator div 2), ") >> u32:",
-        integer_to_list(FactorShift), ") as ", DividendType, ")"
-    ]),
-    RoundedDividend = xls_parse:reference(State3),
-    State4 = xls_parse:instr(State3, [
-        "((", RoundedDividend, " / ", DividendType, ":",
-        integer_to_list(OddDivisor), ") as ", SignedQuotient, ")"
-    ]),
-    Quotient = xls_parse:reference(State4),
-    xls_parse:instr(State4, [
-        "((if ", Negative, " { -(", Quotient, ") } else { ",
-        Quotient, " }) as s64)"
-    ]).
-
-saturated_s32(State) ->
-    Value = xls_parse:reference(State),
-    xls_parse:instr(State, [
-        "(if ", Value, " > s64:2147483647 { s32:2147483647 } ",
-        "else if ", Value, " < s64:-2147483648 { s32:-2147483648 } ",
-        "else { ", Value, " as s32 })"
-    ]).
-
-round_ratio(Numerator, Denominator) when Numerator >= 0 ->
-    (Numerator + Denominator div 2) div Denominator;
-round_ratio(Numerator, Denominator) ->
-    -round_ratio(-Numerator, Denominator).
-
-saturate_s32(Value) when Value > ?S32_MAX -> ?S32_MAX;
-saturate_s32(Value) when Value < ?S32_MIN -> ?S32_MIN;
-saturate_s32(Value) -> Value.
+    ["phi_field::accumulate(", Sum, ", ", Value, ")"];
+transpile(relax, [Anyon, Field, Sum0, Sum1], _State) ->
+    ["phi_field::relax(", Anyon, ", ", Field, ", ", Sum0, ", ", Sum1, ")"];
+transpile(relax_center, [Anyon, Phi0, Phi1, NeighborSum], _State) ->
+    ["phi_field::relax_center(", Anyon, ", ", Phi0, ", ", Phi1, ", ", NeighborSum, ")"];
+transpile(relax_bulk, [Phi0, Phi1, NeighborSum], _State) ->
+    ["phi_field::relax_bulk(", Phi0, ", ", Phi1, ", ", NeighborSum, ")"].

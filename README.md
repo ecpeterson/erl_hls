@@ -122,6 +122,16 @@ Shared actor-runtime and topology algorithms live in checked DSLX libraries. Gen
 
 The libraries have direct DSLX tests, run explicitly by `tools/remote_xls_sim.sh`. These cover queue order and capacity, postponement and retirement, scheduling fairness and exclusion, transport backpressure, and the lookahead-credit lifecycle. `tools/prepare_xls_sim.sh` stages all library modules.
 
+## Composable numeric types and DSLX companions
+
+`hls_fixed:signed(Width, FractionBits)` describes a signed fixed-point scalar stored as a scaled integer. Width includes the sign bit and is byte-aligned. Host conversion and packing reject out-of-range values; `saturate/2` clamps explicitly, and `round_ratio/2` rounds integer division to nearest with ties away from zero. Lowered `round_ratio/2` takes a positive static `u32` divisor. [`hls_fixed.x`](priv/xls/lib/hls_fixed.x) implements the parametric arithmetic on the raw signed integers; scaling remains part of the declared type contract.
+
+`hls_vec:vector(ElementType, Size)` describes a fixed-size homogeneous vector with one-based indexing. It packs exactly `Size` elements in the existing array wire order. `dot(AccumulatorType, Left, Right)` widens signed elements before multiplication and addition; every intermediate sum must fit the declared accumulator. It operates on raw integers, so fixed-point products retain their combined fractional scale until explicitly rescaled. [`hls_vec.x`](priv/xls/lib/hls_vec.x) owns the DSLX dot product; array indexing and update use DSLX's native operations.
+
+For example, `hls_vec:vector(hls_fixed:signed(16, 8), 3)` is a three-element Q7.8 vector. The phi example now names its Q15.16 scalar `phi_field:scalar()` and its two-layer vector `phi_field:field()`. The actor calls `phi_field:relax/4` for the coupled update. These types preserve the previous raw values and wire layout, while rejecting malformed lengths and out-of-range packed scalars.
+
+Type providers can export the optional `hls_type` callback `dslx_imports/0`, returning module-name atoms such as `[phi_field]`. The compiler collects declarations from include-expanded remote types and calls, including nested type arguments, and emits sorted, deduplicated companion imports for both `hls_gs` and `hls_statem`. A provider's `print_type/2` and `transpile/3` can then refer to public companion types and functions. The companion files must be on XLS's import path; XLS resolves their transitive imports. The example's [`phi_field.x`](src/examples/phi_decoder/phi_field.x) sits beside its BEAM implementation and is copied into simulation stages. Remote runners transfer the staged DSLX set together.
+
 ## Translated record defaults
 
 Every field in a private-state or wire record must have a type-directed zero

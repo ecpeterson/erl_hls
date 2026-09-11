@@ -71,6 +71,7 @@ lower(Filename, Forms, PhaseNames, Options0) ->
     ]),
     xls_statem_codegen:emit(#{
         source => Filename,
+        imports => xls_dslx_imports:from_forms(Forms),
         capacity => Capacity,
         phases => PhaseNames,
         message_names => MessageNames,
