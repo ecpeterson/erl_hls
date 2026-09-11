@@ -31,14 +31,14 @@ semantically evaluated. Ports and schemas are static within each alternative,
 and each port may occur at most once along a selected path. CPU output uses
 ordinary `gen_server:cast/2`.
 
-`{cast_if, Condition, Port, Message}` remains an eager, predicate-bearing action:
-it retains an allocated slot even when disabled. Use ordinary branching when a
-skipped payload must not be evaluated. XLS limits an entry to 256 expanded
-paths and an actor to 256 layouts. Computed list variables, recursive list
-construction, and dynamic ports are outside this bounded subset.
+Segments may be named with ordinary variable bindings, including tuple
+bindings that choose state values and actions together using fresh variables
+or `_`. Refutable segment-binding patterns are unsupported. XLS limits an entry
+to 256 expanded paths and an actor to 256 layouts. Recursive list construction,
+function-produced lists, and dynamic ports are outside this bounded subset.
 
 The complete entry callback must succeed before its actions can be emitted.
-A disabled `cast_if` still evaluates its condition and message. In XLS, a
+A named segment is evaluated at its binding, even if omitted later. In XLS, a
 supported match failure anywhere in the callback preserves the incoming entry
 data and reduction state, emits no effects from that entry, and latches the
 actor's existing failed state until reset. Earlier successful entries are not
@@ -186,9 +186,7 @@ models scheduling semantics rather than host-side admission guarantees.
 -type output_port() :: atom().
 -type data() :: term().
 -type event_type() :: enter | cast | internal.
--type cast_action() ::
-    {cast, output_port(), term()} |
-    {cast_if, boolean(), output_port(), term()}.
+-type cast_action() :: {cast, output_port(), term()}.
 -type reduction_population() ::
     {count, 1..255} |
     {members, [term(), ...]}.
@@ -686,11 +684,7 @@ enter_phase(OldPhase, Runtime = #runtime{
     lists:foreach(
         fun
             ({cast, Port, Message}) ->
-                gen_server:cast(maps:get(Port, Outputs), Message);
-            ({cast_if, true, Port, Message}) ->
-                gen_server:cast(maps:get(Port, Outputs), Message);
-            ({cast_if, false, _Port, _Message}) ->
-                ok
+                gen_server:cast(maps:get(Port, Outputs), Message)
         end,
         Casts
     ),
@@ -785,12 +779,6 @@ validate_casts(Casts, Outputs) ->
     Ports = lists:map(
         fun
             ({cast, Port, _Message}) when is_atom(Port) ->
-                case maps:is_key(Port, Outputs) of
-                    true -> Port;
-                    false -> error({unknown_hls_statem_output, Port})
-                end;
-            ({cast_if, Enabled, Port, _Message})
-                    when is_boolean(Enabled), is_atom(Port) ->
                 case maps:is_key(Port, Outputs) of
                     true -> Port;
                     false -> error({unknown_hls_statem_output, Port})

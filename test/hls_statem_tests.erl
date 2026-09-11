@@ -287,9 +287,10 @@ init(Phase) when Phase =:= repeat_phase; Phase =:= reduce;
     hls_statem:enter_result(map());
     (cast, term(), map()) -> hls_statem:cast_result(map()).
 waiting(enter, OldPhase, Data) ->
-    {log({enter, OldPhase, waiting}, Data), [
-        {cast_if, maps:get(emit, Data), out, started}
-    ]};
+    {log({enter, OldPhase, waiting}, Data), case maps:get(emit, Data) of
+        true -> [{cast, out, started}];
+        false -> []
+    end};
 waiting(cast, probe, Data) ->
     {waiting, log(probe, Data), consume};
 waiting(cast, started, Data) ->

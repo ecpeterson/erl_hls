@@ -6,7 +6,7 @@
 -module(xls_statem_codegen).
 -moduledoc false.
 
--export([emit/1, shared_machine_width/1, shared_machine_width/2, entry_value/6]).
+-export([emit/1, shared_machine_width/1, shared_machine_width/2, entry_value/5]).
 
 -define(REDUCTION_SERVICE, xls_statem_reduction_service_codegen).
 
@@ -176,7 +176,6 @@ machine_declarations(#{
         "// entry variants whose fields retain their message types.\n",
         "pub struct EntryEffects {\n",
         "  layout: u8,\n",
-        "  valid: bool[", integer_to_list(EffectCapacity), "],\n",
         "  payloads: bits[", integer_to_list(EffectPayloadBits), "],\n",
         "}\n\n",
         "struct EntryOutcome {\n",
@@ -422,10 +421,10 @@ entry_arm(#{phase := Phase,
 
 %% Each selected source leaf becomes the same typed value before control flow
 %% rejoins. The expression lowerer still owns branch-local failure predicates.
--spec entry_value(iodata(), map(), pos_integer(), pos_integer(), map(),
+-spec entry_value(iodata(), map(), pos_integer(), map(),
     none | map()) -> iodata().
 entry_value(Result, #{phase := Phase, layout := Layout,
-        actions := Effects, reduction := Reduction}, Capacity, PayloadBits,
+        actions := Effects, reduction := Reduction}, PayloadBits,
         MessageWords, Reductions) ->
     [
         "{\n",
@@ -437,11 +436,6 @@ entry_value(Result, #{phase := Phase, layout := Layout,
         "    failed: false,\n",
         "    effects: EntryEffects {\n",
         "      layout: u8:", integer_to_list(Layout), ",\n",
-        "      valid: [\n",
-        [["        evaluated.2.", integer_to_list(Index), ".0,\n"]
-            || {Index, _} <- lists:enumerate(0, Effects)],
-        lists:duplicate(Capacity - length(Effects), "        bool:false,\n"),
-        "      ],\n",
         "      payloads: ", entry_payload_expression(Effects, PayloadBits, MessageWords), ",\n",
         "    },\n",
         "  }\n",
@@ -508,7 +502,7 @@ scheduled_effect_function(Spec) ->
     pub fn scheduled_effect(
         scheduled: ScheduledEffects, index: u8) -> (Egress, u1, u1) {
       let count = entry_effect_count(scheduled.effects);
-      let emit = index < count && scheduled.effects.valid[index as u32];
+      let emit = index < count;
       let last = index + u8:1 >= count;
       (entry_effect(scheduled.effects, index), emit, last)
     }
@@ -534,12 +528,8 @@ scheduled_reduction_prefix_function(_Spec) -> [].
 
 scheduled_reduction_prefix_arm(#{population := #{size := Size}},
         #{layout := Layout, actions := Effects}) ->
-    Prefix = lists:sublist(Effects, Size),
-    Valid = case length(Prefix) =:= Size andalso lists:all(
-            fun(#{conditional := Conditional}) -> not Conditional end, Prefix) of
-        true -> join_with(" && ", [
-            ["scheduled.effects.valid[u32:", integer_to_list(Index), "]"]
-            || Index <- lists:seq(0, Size - 1)]);
+    Valid = case length(Effects) >= Size of
+        true -> "u1:1";
         false -> "u1:0"
     end,
     ["    u8:", integer_to_list(Layout), " => (", Valid, ", u8:",
@@ -591,11 +581,7 @@ entry_effects_valid_function() ->
     [
         """
         fn entry_effects_valid(effects: EntryEffects) -> u1 {
-          let count = entry_effect_count(effects);
-          unroll_for! (index, found):
-              (u32, u1) in u32:0..ENTRY_EFFECT_CAPACITY {
-            found || (index < count as u32 && effects.valid[index])
-          }(u1:0)
+          entry_effect_count(effects) != u8:0
         }
 
         """,
@@ -603,7 +589,7 @@ entry_effects_valid_function() ->
     ].
 
 entry_effect_binding(Index) ->
-    Reference = ["evaluated.2.", integer_to_list(Index), ".1"],
+    Reference = ["evaluated.2.", integer_to_list(Index)],
     [
         "        let effect_", integer_to_list(Index), " = axis::pack(\n",
         "          ", Reference, ".0 as u8, ", Reference, ".2);\n"
@@ -771,10 +757,8 @@ machine_entry_step(Reductions) ->
         "    let has_effect = machine.entry_effect_index < effect_count;\n",
         "    let effect = entry_effect(\n",
         "      effects, machine.entry_effect_index);\n",
-        "    let emit_effect = has_effect && effects.valid[\n",
-        "      machine.entry_effect_index as u32];\n",
         ?REDUCTION_SERVICE:direct_entry_bindings(Reductions),
-        "    let can_advance = !entry_failed && (!emit_effect || egress_ready);\n",
+        "    let can_advance = !entry_failed && (!has_effect || egress_ready);\n",
         "    let next_effect_index = machine.entry_effect_index +\n",
         "      ((has_effect && can_advance) as u8);\n",
         "    let entry_complete = can_advance &&\n",
@@ -797,7 +781,7 @@ machine_entry_step(Reductions) ->
         "      machine: if can_advance || entry_failed { advanced_machine }\n",
         "        else { machine },\n",
         "      egress: effect,\n",
-        "      egress_valid: emit_effect && can_advance,\n",
+        "      egress_valid: has_effect && can_advance,\n",
         "      admission_valid: reserve,\n",
         "    }\n"
     ].

@@ -337,7 +337,7 @@ configuring(cast, #anyon_move{}, Cell) ->
             #phenom_anyon{},
         #cell{}) -> hls_statem:cast_result(phase(), #cell{}).
 measuring(enter, _OldPhase, Cell) ->
-    {Cell, (case Cell#cell.status_valid =:= 1 of
+    Reports = case Cell#cell.status_valid =:= 1 of
         true ->
             Status = #phi_status{
                 step = (Cell#cell.step - 1) band ?U32_MASK,
@@ -347,7 +347,8 @@ measuring(enter, _OldPhase, Cell) ->
             },
             [{cast, status, Status}];
         false -> []
-    end) ++ [{cast, syndrome, #phenom_request{step = Cell#cell.step}}]};
+    end,
+    {Cell, Reports ++ [{cast, syndrome, #phenom_request{step = Cell#cell.step}}]};
 measuring(cast, #phi_config{}, Cell) ->
     {measuring, Cell, fail};
 measuring(
@@ -543,14 +544,18 @@ comparing(cast, #phi_config{}, Cell) ->
         hls_statem:internal_result(phase(), #cell{}).
 flipping(enter, _OldPhase, Cell) ->
     NextRandom = hls_prng:xorshift32(Cell#cell.random_state),
-    Heads = (NextRandom bsr 31) =:= 1,
-    Move = Cell#cell.anyon =:= 1 andalso
-        Cell#cell.best_direction =/= ?NO_DIRECTION andalso
-        Heads,
     Absent = hls_type:as(hls_nums:u32(), 0),
-    Present = case Move of
-        false -> Absent;
-        true -> hls_type:as(hls_nums:u32(), 1)
+    {Present, Corrections} = if
+        Cell#cell.anyon =:= 1,
+        Cell#cell.best_direction =/= ?NO_DIRECTION,
+        (NextRandom bsr 31) =:= 1 ->
+            {hls_type:as(hls_nums:u32(), 1), [{cast, correction, #phi_correction{
+                step = Cell#cell.step,
+                x = Cell#cell.x,
+                y = Cell#cell.y,
+                direction = Cell#cell.best_direction
+            }}]};
+        true -> {Absent, []}
     end,
     {NorthPresent, EastPresent, WestPresent, SouthPresent} =
         case Cell#cell.best_direction of
@@ -573,15 +578,7 @@ flipping(enter, _OldPhase, Cell) ->
         {cast, east, Message#anyon_move{present = EastPresent}},
         {cast, west, Message#anyon_move{present = WestPresent}},
         {cast, south, Message#anyon_move{present = SouthPresent}}
-        | case Move of
-            true -> [{cast, correction, #phi_correction{
-                step = Cell#cell.step,
-                x = Cell#cell.x,
-                y = Cell#cell.y,
-                direction = Cell#cell.best_direction
-            }}];
-            false -> []
-        end
+        | Corrections
     ]};
 flipping(
     cast,

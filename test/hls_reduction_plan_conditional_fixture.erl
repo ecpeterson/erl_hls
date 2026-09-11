@@ -20,8 +20,11 @@ gathering(enter, _OldPhase, Cell) ->
     {Cell, [
         {open_reduction, sum, 0, {count, 2},
             {commutative_monoid, #sum{value = 0}}},
-        {cast_if, Cell#cell.value =:= 0, north, Message},
         {cast, south, Message}
+        | case Cell#cell.value =:= 0 of
+            true -> [{cast, north, Message}];
+            false -> []
+        end
     ]};
 gathering(cast, #message{value = Value}, Cell) ->
     {gathering, Cell, {contribute, sum, 0, #sum{value = Value}}};

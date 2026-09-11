@@ -2,7 +2,8 @@
 -export([write/1]).
 
 phases() ->
-    [choice, nested, tail, appended, selected_failure, prefix_failure].
+    [choice, nested, tail, appended, selected_failure, prefix_failure,
+        bound, bound_tail, bound_tuple, discarded].
 
 %% The expected final data and ordered emissions come from the compiled BEAM
 %% callback. A raised badmatch yields no entry result and no action list.

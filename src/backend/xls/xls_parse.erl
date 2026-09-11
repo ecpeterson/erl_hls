@@ -36,8 +36,10 @@ or bounded action-list segments, including literal lists, cons tails, and `++`.
 Branches may select different ports, schemas, and list lengths. The entry
 normalizer packs each selected leaf into one typed outcome before expression
 control flow rejoins; the backend commits its data, optional reduction open,
-and effects only if the complete callback succeeds. A `cast_if` still evaluates
-its payload eagerly. See `docs/entry-outcomes.md` for the bounded source subset.
+and effects only if the complete callback succeeds. Segments may be named,
+aliased, and bound alongside ordinary values through tuple destructuring.
+They evaluate at their binding, even if omitted later. See
+`docs/entry-outcomes.md` for the bounded source subset.
 
 ## Wire tags
 

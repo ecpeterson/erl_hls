@@ -64,8 +64,7 @@ fn observe_shared(phase: Phase, value: u32, ready: u16) -> EntryObservation {
     let observed = for (index, observed): (u32, EntryObservation)
         in u32:0..ENTRY_EFFECT_CAPACITY {
       observe_effect(observed, entry_effect(result.effects, index as u8),
-        result.effects_valid && index < entry_effect_count(result.effects) as u32
-        && result.effects.valid[index])
+        result.effects_valid && index < entry_effect_count(result.effects) as u32)
     }(observed);
     (machine_from_bits(result.machine), observed)
   }((machine, zero!<EntryObservation>()));
@@ -111,8 +110,7 @@ pub fn entry_cycle_probe(shared: bool, phase: u8, value: u32,
     let observed = for (i, observed): (u32, EntryObservation)
         in u32:0..ENTRY_EFFECT_CAPACITY {
       observe_effect(observed, entry_effect(result.effects, i as u8),
-        result.effects_valid && i < entry_effect_count(result.effects) as u32
-        && result.effects.valid[i])
+        result.effects_valid && i < entry_effect_count(result.effects) as u32)
     }(zero!<EntryObservation>());
     let next = machine_from_bits(result.machine);
     (Machine { data: next.data, enter_pending: next.enter_pending,

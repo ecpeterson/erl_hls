@@ -18,7 +18,7 @@
 analyze(Clause = {clause, Line, Patterns, Guards, Body}, Messages, Outputs) ->
     State0 = #{next_variable => 0, used => variables(Clause), variants => [],
         messages => Messages, outputs => Outputs},
-    {Program, State} = body(Body, #{}, fun result/3, State0),
+    {Program, State} = body(Body, bound_names(Patterns, #{}), fun result/3, State0),
     Variants = lists:reverse(maps:get(variants, State)),
     #{clause => Clause, program => {clause, Line, Patterns, Guards, Program},
         variants => Variants, reduction => common_reduction(Variants)}.
@@ -28,36 +28,47 @@ analyze(Clause = {clause, Line, Patterns, Guards, Body}, Messages, Outputs) ->
 %% those needed by a later list tail, without evaluating a branch twice.
 result({tuple, Line, [Data, Actions]}, Bindings, State0) ->
     {DataVar, State1} = fresh(State0),
-    {Program, State} = actions(Actions, Bindings,
-        #{data => DataVar, reduction => none, reduction_value => {tuple, Line, []},
-            actions => [], values => []}, fun finish/2, State1),
+    {Program, State} = segment(Actions, Bindings, fun(Items, NextState) ->
+        Acc = lists:foldl(fun append_action/2,
+            #{data => DataVar, reduction => none, reduction_value => {tuple, Line, []},
+                actions => [], values => []}, Items),
+        finish(Acc, NextState)
+    end, State1),
     {{block, Line, [{match, Line, DataVar, Data}, Program]}, State};
 result(Expression, Bindings, State) ->
     branch(Expression, Bindings, fun result/3, State,
         bad_hls_statem_enter_result).
 
-actions({nil, _Line}, _Bindings, Acc, Continue, State) ->
-    Continue(Acc, State);
-actions({cons, Line, Head, Tail}, Bindings, Acc0, Continue, State0) ->
-    {Value, Acc1} = action(Head, Bindings, Acc0, State0),
+%% Capture payloads when a list is constructed, even if a later branch omits
+%% it. Named segments contain descriptors and references to evaluated values;
+%% using a segment never re-evaluates its original expressions.
+segment({nil, _Line}, _Bindings, Continue, State) ->
+    Continue([], State);
+segment({cons, Line, Head, Tail}, Bindings, Continue, State0) ->
+    {Descriptor, Value} = action(Head, Bindings, State0),
     {Variable, State1} = fresh(State0),
-    Acc = case maps:get(kind, Acc1) of
-        reduction -> maps:remove(kind, Acc1#{reduction_value => Variable});
-        cast -> maps:remove(kind, Acc1#{values => maps:get(values, Acc1) ++ [Variable]})
-    end,
-    {Rest, State} = actions(Tail, Bindings, Acc, Continue, State1),
+    {Rest, State} = segment(Tail, Bindings, fun(Items, NextState) ->
+        Continue([{Descriptor, Variable} | Items], NextState)
+    end, State1),
     {{block, Line, [{match, Line, Variable, Value}, Rest]}, State};
-actions({op, _Line, '++', Left, Right}, Bindings, Acc, Continue, State) ->
-    actions(Left, Bindings, Acc, fun(NextAcc, NextState) ->
-        actions(Right, Bindings, NextAcc, Continue, NextState)
+segment({op, _Line, '++', Left, Right}, Bindings, Continue, State) ->
+    segment(Left, Bindings, fun(LeftItems, NextState) ->
+        segment(Right, Bindings, fun(RightItems, LastState) ->
+            Continue(LeftItems ++ RightItems, LastState)
+        end, NextState)
     end, State);
-actions(Expression, Bindings, Acc, Continue, State) ->
+segment({var, _, Name} = Expression, Bindings, Continue, State) ->
+    case maps:find(Name, Bindings) of
+        {ok, {segment, Items}} -> Continue(Items, State);
+        _ -> error({nonliteral_hls_statem_actions, element(2, Expression), Expression})
+    end;
+segment(Expression, Bindings, Continue, State) ->
     branch(Expression, Bindings, fun(Arm, ArmBindings, ArmState) ->
-        actions(Arm, ArmBindings, Acc, Continue, ArmState)
+        segment(Arm, ArmBindings, Continue, ArmState)
     end, State, nonliteral_hls_statem_actions).
 
 action({tuple, Line, [{atom, _, open_reduction} | _]} = Open,
-        _Bindings, #{reduction := none, actions := []} = Acc, _State) ->
+        _Bindings, _State) ->
     {Reduction, []} = xls_statem_reduction_lower:split_entry_actions(
         {cons, Line, Open, {nil, Line}}, Line),
     #{key_expression := Key, identity_expression := Identity} = Reduction,
@@ -65,31 +76,29 @@ action({tuple, Line, [{atom, _, open_reduction} | _]} = Open,
         {remote, Line, {atom, Line, hls_type}, {atom, Line, as}},
         [{call, Line, {remote, Line, {atom, Line, hls_nums},
             {atom, Line, u32}}, []}, Key]},
-    {{tuple, Line, [TypedKey, Identity]},
-        Acc#{kind => reduction, reduction => Reduction}};
-action({tuple, Line, [{atom, _, open_reduction} | _]}, _Bindings, _Acc, _State) ->
-    error({hls_statem_open_reduction_must_be_first, Line});
-action({tuple, Line, [{atom, _, cast}, {atom, _, Port}, Message]},
-        Bindings, Acc, State) ->
-    cast(Port, Message, {atom, Line, true}, false, Line, Bindings, Acc, State);
-action({tuple, Line, [{atom, _, cast_if}, Condition, {atom, _, Port}, Message]},
-        Bindings, Acc, State) ->
-    cast(Port, Message, Condition, true, Line, Bindings, Acc, State);
-action(Action, _Bindings, _Acc, _State) ->
-    error({bad_hls_statem_entry_action, element(2, Action), Action}).
-
-cast(Port, Message, Condition, Conditional, Line, Bindings,
-        #{actions := Actions} = Acc, #{messages := Messages, outputs := Outputs}) ->
+    {{reduction, Line, Reduction}, {tuple, Line, [TypedKey, Identity]}};
+action({tuple, _Line, [{atom, _, cast}, {atom, _, Port}, Message]},
+        Bindings, #{messages := Messages, outputs := Outputs}) ->
     declared(entry_output, Port, Outputs),
     Tag = message_tag(Message, Bindings),
     declared(entry_message, Tag, Messages),
+    {#{port => Port, tag => Tag}, Message};
+action(Action, _Bindings, _State) ->
+    error({bad_hls_statem_entry_action, element(2, Action), Action}).
+
+append_action({{reduction, _Line, Reduction}, Value},
+        #{reduction := none, actions := []} = Acc) ->
+    Acc#{reduction => Reduction, reduction_value => Value};
+append_action({{reduction, Line, _Reduction}, _Value}, _Acc) ->
+    error({hls_statem_open_reduction_must_be_first, Line});
+append_action({#{port := Port} = Effect, Value},
+        #{actions := Actions, values := Values} = Acc) ->
     case lists:any(fun(#{port := P}) -> P =:= Port end, Actions) of
         true -> error({duplicate_hls_statem_declaration, entry_output,
             [maps:get(port, A) || A <- Actions] ++ [Port]});
         false -> ok
     end,
-    Effect = #{port => Port, tag => Tag, conditional => Conditional},
-    {{tuple, Line, [Condition, Message]}, Acc#{kind => cast, actions => Actions ++ [Effect]}}.
+    Acc#{actions => Actions ++ [Effect], values => Values ++ [Value]}.
 
 finish(#{data := Data, reduction := Reduction, reduction_value := ReductionValue,
         actions := Actions, values := Values}, #{variants := Variants} = State) ->
@@ -116,26 +125,133 @@ branch(Expression, _Bindings, _Continue, _State, Error) ->
 
 clauses(Clauses, Bindings, Continue, State) ->
     lists:mapfoldl(fun({clause, Line, Patterns, Guards, Body}, Acc) ->
-        {Program, Next} = body(Body, Bindings, Continue, Acc),
+        {Program, Next} = body(Body, bound_names(Patterns, Bindings), Continue, Acc),
         {{clause, Line, Patterns, Guards, Program}, Next}
     end, State, Clauses).
 
-body(Body, Bindings, Continue, State0) ->
-    {Prefix, [Last]} = lists:split(length(Body) - 1, Body),
-    Local = lists:foldl(fun record_binding/2, Bindings, Prefix),
-    {Result, State} = Continue(Last, Local, State0),
-    {Prefix ++ [Result], State}.
+body([Last], Bindings, Continue, State0) ->
+    {Result, State} = Continue(Last, Bindings, State0),
+    {[Result], State};
+body([{match, _, Pattern, Expression} = First | Rest], Bindings, Continue, State0) ->
+    case contains_segment(Expression, Bindings) of
+        true ->
+            validate_binding_pattern(Pattern, Bindings),
+            {Program, State} = bind(Pattern, Expression, Bindings,
+                fun(Local, NextState) ->
+                    {Tail, LastState} = body(Rest, Local, Continue, NextState),
+                    {{block, 0, Tail}, LastState}
+                end, State0),
+            {[Program], State};
+        false -> ordinary_body(First, Rest, Bindings, Continue, State0)
+    end;
+body([First | Rest], Bindings, Continue, State) ->
+    ordinary_body(First, Rest, Bindings, Continue, State).
+
+ordinary_body(First, Rest, Bindings, Continue, State0) ->
+    {Tail, State} = body(Rest, record_binding(First, Bindings), Continue, State0),
+    {[First | Tail], State}.
+
+%% Bind bounded segments, including tuple destructuring alongside ordinary
+%% values. Push the continuation into choices instead of requiring XLS to
+%% join differently sized lists. Each tuple field still evaluates in order.
+bind(Pattern, {'case', _, _, _} = Expression, Bindings, Continue, State) ->
+    bind_branch(Pattern, Expression, Bindings, Continue, State);
+bind(Pattern, {'if', _, _} = Expression, Bindings, Continue, State) ->
+    bind_branch(Pattern, Expression, Bindings, Continue, State);
+bind(Pattern, {block, _, _} = Expression, Bindings, Continue, State) ->
+    bind_branch(Pattern, Expression, Bindings, Continue, State);
+bind({tuple, _, Patterns}, {tuple, _, Expressions}, Bindings, Continue, State)
+        when length(Patterns) =:= length(Expressions) ->
+    bind_fields(lists:zip(Patterns, Expressions), Bindings, Continue, State);
+bind(Pattern, Expression, Bindings, Continue, State0) ->
+    case contains_segment(Expression, Bindings) of
+        true ->
+            segment(Expression, Bindings, fun(Items, NextState) ->
+                case Pattern of
+                    {var, _, '_'} -> Continue(Bindings, NextState);
+                    {var, _, Name} when not is_map_key(Name, Bindings) ->
+                        Continue(Bindings#{Name => {segment, Items}}, NextState);
+                    _ -> error({unsupported_hls_statem_action_binding, Pattern})
+                end
+            end, State0);
+        false ->
+            Match = {match, 0, Pattern, Expression},
+            {Rest, State} = Continue(record_binding(Match, Bindings), State0),
+            {{block, 0, [Match, Rest]}, State}
+    end.
+
+bind_branch(Pattern, Expression, Bindings, Continue, State) ->
+    branch(Expression, Bindings, fun(Arm, Local, NextState) ->
+        bind(Pattern, Arm, Local, Continue, NextState)
+    end, State, unsupported_hls_statem_action_binding).
+
+bind_fields([], Bindings, Continue, State) -> Continue(Bindings, State);
+bind_fields([{Pattern, Expression} | Rest], Bindings, Continue, State) ->
+    bind(Pattern, Expression, Bindings, fun(Local, NextState) ->
+        bind_fields(Rest, Local, Continue, NextState)
+    end, State).
+
+%% Refutable tuple patterns would have to match after all fields evaluate.
+%% Segment bindings accept only fresh variables/tuples, so decomposing the
+%% binding cannot introduce an earlier failure or treat list equality as aliasing.
+validate_binding_pattern(Pattern, Bindings) ->
+    binding_names(Pattern, Bindings),
+    ok.
+
+binding_names({var, _, '_'}, Bindings) -> Bindings;
+binding_names({var, _, Name}, Bindings) when not is_map_key(Name, Bindings) ->
+    Bindings#{Name => ordinary};
+binding_names({tuple, _, Patterns}, Bindings) ->
+    lists:foldl(fun binding_names/2, Bindings, Patterns);
+binding_names(Pattern, _Bindings) ->
+    error({unsupported_hls_statem_action_binding, Pattern}).
+
+bound_names(Pattern, Bindings) ->
+    maps:merge(maps:map(fun(_Name, _Used) -> ordinary end, variables(Pattern)), Bindings).
+
+contains_segment({nil, _}, _Bindings) -> true;
+contains_segment({cons, _, {tuple, _, [{atom, _, Kind} | _]}, _}, _Bindings)
+        when Kind =:= cast; Kind =:= open_reduction -> true;
+contains_segment({op, _, '++', Left, Right}, Bindings) ->
+    contains_segment(Left, Bindings) orelse contains_segment(Right, Bindings);
+contains_segment({tuple, _, Fields}, Bindings) ->
+    lists:any(fun(Field) -> contains_segment(Field, Bindings) end, Fields);
+contains_segment({var, _, Name}, Bindings) ->
+    case maps:find(Name, Bindings) of
+        {ok, {segment, _}} -> true;
+        _ -> false
+    end;
+contains_segment({'case', _, _, Clauses}, Bindings) ->
+    contains_segment_arms(Clauses, Bindings);
+contains_segment({'if', _, Clauses}, Bindings) ->
+    contains_segment_arms(Clauses, Bindings);
+contains_segment({block, _, Body}, Bindings) ->
+    lists:any(fun(Expression) -> contains_segment(Expression, Bindings) end, Body);
+contains_segment({match, _, _Pattern, Expression}, Bindings) ->
+    contains_segment(Expression, Bindings);
+contains_segment(_Expression, _Bindings) -> false.
+
+contains_segment_arms(Clauses, Bindings) ->
+    lists:any(fun({clause, _, _, _, Body}) ->
+        contains_segment({block, 0, Body}, Bindings)
+    end, Clauses).
 
 record_binding({match, _, {var, _, Name}, Expression}, Bindings) ->
     case record_tag(Expression, Bindings) of
-        unknown -> Bindings;
-        Tag -> Bindings#{Name => Tag}
+        unknown -> Bindings#{Name => ordinary};
+        Tag -> Bindings#{Name => {record, Tag}}
     end;
+record_binding({match, _, Pattern, _Expression}, Bindings) ->
+    bound_names(Pattern, Bindings);
 record_binding(_Expression, Bindings) -> Bindings.
 
 record_tag({record, _, Tag, _}, _Bindings) -> Tag;
 record_tag({record, _, _, Tag, _}, _Bindings) -> Tag;
-record_tag({var, _, Name}, Bindings) -> maps:get(Name, Bindings, unknown);
+record_tag({var, _, Name}, Bindings) ->
+    case maps:find(Name, Bindings) of
+        {ok, {record, Tag}} -> Tag;
+        _ -> unknown
+    end;
 record_tag(_Expression, _Bindings) -> unknown.
 
 message_tag(Message, Bindings) ->
@@ -175,12 +291,10 @@ effects(#{variants := Variants}) ->
     Keys = lists:usort([{Order, Port, Tag}
         || {Order, #{port := Port, tag := Tag}} <- Occurrences]),
     [begin
-        Matches = [Conditional || {O, #{port := P, tag := T,
-            conditional := Conditional}} <- Occurrences,
+        Matches = [ok || {O, #{port := P, tag := T}} <- Occurrences,
             {O, P, T} =:= {Order, Port, Tag}],
         Effect = #{order => Order, port => Port, schema => Tag},
-        case length(Matches) =:= length(Variants) andalso
-                not lists:member(true, Matches) of
+        case length(Matches) =:= length(Variants) of
             true -> Effect;
             false -> Effect#{conditional => true}
         end

@@ -336,22 +336,16 @@ collecting(
                 Step >= Cell#data_cell.cutoff_step,
             NoiseDisabled = Cell#data_cell.noise_disabled =:= 1 orelse
                 CutoffApplies,
-            NoiseDisabledWord = case NoiseDisabled of
-                false -> hls_type:as(hls_nums:u32(), 0);
-                true -> hls_type:as(hls_nums:u32(), 1)
-            end,
-            NextRandom = case NoiseDisabled of
-                true -> Cell#data_cell.random_state;
-                false -> hls_prng:xorshift32(
-                    Cell#data_cell.random_state
-                )
-            end,
-            Event = case NoiseDisabled of
-                true -> hls_type:as(hls_nums:u32(), 0);
-                false -> case NextRandom < Cell#data_cell.threshold of
-                    false -> hls_type:as(hls_nums:u32(), 0);
-                    true -> hls_type:as(hls_nums:u32(), 1)
-                end
+            {NoiseDisabledWord, NextRandom, Event} = case NoiseDisabled of
+                true -> {hls_type:as(hls_nums:u32(), 1), Cell#data_cell.random_state,
+                    hls_type:as(hls_nums:u32(), 0)};
+                false ->
+                    Sample = hls_prng:xorshift32(Cell#data_cell.random_state),
+                    Hit = if
+                        Sample < Cell#data_cell.threshold -> hls_type:as(hls_nums:u32(), 1);
+                        true -> hls_type:as(hls_nums:u32(), 0)
+                    end,
+                    {hls_type:as(hls_nums:u32(), 0), Sample, Hit}
             end,
             AccumulatedPauli = case Event of
                 1 -> hls_pauli:multiply(

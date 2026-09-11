@@ -468,12 +468,13 @@ validate_init_head({clause, Line, Patterns, Guards, _Body}) ->
 
 %% TODO(XLS sum types): leaf constructors could return native tagged-tuple
 %% variants through case/if, replacing layout interning and the xls_map bridge
-%% to a hand-packed EntryOutcome. Retain the entry plan's bounded alternatives,
+%% to a hand-packed EntryOutcome. Named action segments could then rejoin at
+%% their bindings instead of copying the continuation into each alternative.
+%% Retain the entry plan's bounded alternatives,
 %% evaluation order, failure predicate, and conservative interface analysis.
 lower_entries(Entries, Prepared, EnumAtoms) ->
     #{data_name := DataName, message_words := MessageWords,
         reductions := Reductions} = Prepared,
-    Capacity = max(1, max_entry_effects(Entries)),
     {Layouts, {LayoutCount, _}} = lists:mapfoldl(
         fun(#{phase := Phase, variants := Variants}, Index) ->
             lists:mapfoldl(fun(Variant = #{actions := Actions}, {Next, Seen}) ->
@@ -498,7 +499,7 @@ lower_entries(Entries, Prepared, EnumAtoms) ->
             fun(Id, Value) ->
                 Variant = lists:nth(Id + 1, EntryLayouts),
                 {xls_map, 0, Value, fun(R) ->
-                    xls_statem_codegen:entry_value(R, Variant, Capacity,
+                    xls_statem_codegen:entry_value(R, Variant,
                         PayloadBits, MessageWords, Reductions)
                 end}
             end),

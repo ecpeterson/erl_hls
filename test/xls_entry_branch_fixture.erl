@@ -4,13 +4,15 @@
 -compile({parse_transform, hls_pack}).
 
 -hls_data(cell).
--hls_phases([choice, nested, tail, appended, selected_failure, prefix_failure]).
+-hls_phases([choice, nested, tail, appended, selected_failure, prefix_failure,
+    bound, bound_tail, bound_tuple, discarded]).
 -hls_outputs([first, second, third]).
 -hls_mailbox_capacity(1).
 -hls_tags([small, wide]).
 
 -export([init/1, choice/3, nested/3, tail/3, appended/3,
-    selected_failure/3, prefix_failure/3]).
+    selected_failure/3, prefix_failure/3, bound/3, bound_tail/3,
+    bound_tuple/3, discarded/3]).
 
 -record(cell, {value = hls_type:zero() :: hls_nums:u32()}).
 -record(small, {value = hls_type:zero() :: hls_nums:u32()}).
@@ -95,3 +97,52 @@ prefix_failure(enter, _OldPhase, Cell) ->
     {Cell, if Cell#cell.value < 2 -> []; true ->
         [{cast, first, #wide{value = 230, check = 231}}]
     end}.
+
+%% One choice binds the new state and a variable-length, heterogeneous batch.
+bound(enter, _OldPhase, Cell) ->
+    {Next, Actions} = case Cell#cell.value of
+        0 -> {Cell#cell{value = 30}, []};
+        1 ->
+            Message = #wide{value = 31, check = 301},
+            {Cell#cell{value = 31}, [{cast, first, Message}]};
+        _ -> {Cell#cell{value = 32}, [
+            {cast, second, #small{value = 32}},
+            {cast, third, #small{value = 33}}
+        ]}
+    end,
+    Alias = Actions,
+    {Next, Alias}.
+
+%% Branch-local segment aliases compose with later choices and common heads.
+bound_tail(enter, _OldPhase, Cell) ->
+    Tail = case Cell#cell.value band 1 of
+        0 ->
+            Local = [{cast, first, #small{value = 40}}],
+            Local;
+        _ ->
+            Message = #wide{value = 41, check = 401},
+            [{cast, second, Message}]
+    end,
+    Selected = if Cell#cell.value < 4 -> Tail; true -> [] end,
+    {Cell, [{cast, third, #small{value = 42}} | Selected]}.
+
+%% Nested tuple destructuring and two independently named list fields.
+bound_tuple(enter, _OldPhase, Cell) ->
+    {{Next, Before}, After} = if
+        Cell#cell.value < 2 ->
+            true = Cell#cell.value =/= 0,
+            {{Cell#cell{value = 50}, [{cast, second, #small{value = 51}}]}, []};
+        true ->
+            {{Cell#cell{value = 52}, []}, [{cast, first, #wide{value = 53, check = 501}}]}
+    end,
+    {Next, Before ++ [{cast, third, #small{value = 54}}] ++ After}.
+
+%% Discarding an evaluated segment does not discard its match-failure check.
+discarded(enter, _OldPhase, Cell) ->
+    _ = case Cell#cell.value of
+        0 ->
+            true = false,
+            [{cast, first, #small{value = 60}}];
+        _ -> []
+    end,
+    {Cell#cell{value = 61}, [{cast, third, #small{value = 62}}]}.
