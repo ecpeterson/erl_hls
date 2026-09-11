@@ -56,8 +56,12 @@ pub proc Arbiter<CONTENDER_COUNT: u32> {
         (next_tok, acc.1 || received)
       }((request_tok, u1:0));
     let retained_owner = state.owner_valid && !released;
-    let (winner_valid, winner) = arbitration::select(captured_pending, state.cursor);
-    let grant_valid = !retained_owner && winner_valid;
+    // Grants depend only on the registered ownership/request snapshot. A new
+    // request or an owner's release becomes eligible in a later activation.
+    // Otherwise a client returning an unusable grant can feed release (or a
+    // new request) combinationally back into the same grant decision.
+    let (winner_valid, winner) = arbitration::select(state.pending, state.cursor);
+    let grant_valid = !state.owner_valid && winner_valid;
     let _grant_tok = unroll_for! (contender, tok):
         (u32, token) in u32:0..CONTENDER_COUNT {
       send_if(
