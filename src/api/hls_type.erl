@@ -5,7 +5,9 @@
 -export([
     as/2,
     descriptor/1,
+    normalize/2,
     pack/2,
+    pack_exact/2,
     print_type/1,
     unpack/2,
     width/1,
@@ -35,7 +37,13 @@
 %%% hls_type behavior
 %%%
 
--doc "Packs a `Value` according to a type `Descriptor`.".
+-doc """
+Packs a value into a binary of exactly the bit width returned by `width/2`.
+Each provider defines its accepted domain and normalization policy. Every
+successful pack must unpack completely and repack to identical bytes; repeated
+normalization must preserve the decoded value. Reject invalid shapes and values
+outside that domain. These are codec laws, not arithmetic equivalence laws.
+""".
 -callback pack(Value :: any(), atom(), [any()]) -> binary().
 
 -doc """
@@ -107,15 +115,56 @@ as(_Descriptor, Value) ->
     Value.
 
 transpile(as, [{phantom, type, Descriptor}, Value], _State) ->
-    ["(", Value, " as ", print_type(Descriptor), ")"].
+    ["(", Value, " as ", print_type(Descriptor), ")"];
+transpile(Operation, _Args, _State) when Operation =:= normalize;
+        Operation =:= pack_exact ->
+    error({host_only_type_operation, Operation}).
 
 -spec width(descriptor()) -> integer().
 -doc "". 
 width(#hls_type{module = Module, name = Name, args = Args}) ->
     Module:width(Name, Args).
 
-pack(Value, {hls_type, Module, Name, Args}) ->
-    Module:pack(Value, Name, Args).
+-doc """
+Packs a host value, checking the provider's binary against its declared width.
+Built-in integers reject overflow and fixed-size collections require exact
+lengths. Floats round to the selected IEEE binary format and reject nonfinite
+results. Generated record packers use this boundary for each field, including
+fields in topology startup messages. See docs/numeric-contract.md.
+""".
+-spec pack(term(), descriptor()) -> binary().
+pack(Value, Descriptor = #hls_type{module = Module, name = Name, args = Args}) ->
+    Width = width(Descriptor),
+    case Module:pack(Value, Name, Args) of
+        Packed when is_binary(Packed), bit_size(Packed) =:= Width -> Packed;
+        Packed when is_binary(Packed) ->
+            error({invalid_packed_width, Descriptor, Width, bit_size(Packed)});
+        _Invalid -> error({invalid_packed_value, Descriptor})
+    end.
+
+-doc """
+Returns the host value obtained by packing and unpacking at the declared type.
+This exposes wire rounding without introducing a new live-value representation.
+It works recursively for collections and is a host-only operation. Integer
+overflow is still an error; use the numeric provider's wrap/2 to request wrapping.
+""".
+-spec normalize(descriptor(), term()) -> term().
+normalize(Descriptor, Value) ->
+    {Normalized, <<>>} = unpack(pack(Value, Descriptor), Descriptor),
+    Normalized.
+
+-doc """
+Packs only if unpacking preserves the original Erlang term exactly (=:=).
+This host-only check rejects float rounding and integer-to-float coercion,
+including inside collections. Ordinary pack/2 follows the provider's policy.
+""".
+-spec pack_exact(term(), descriptor()) -> binary().
+pack_exact(Value, Descriptor) ->
+    Packed = pack(Value, Descriptor),
+    case unpack(Packed, Descriptor) of
+        {Value, <<>>} -> Packed;
+        {_Normalized, <<>>} -> error({inexact_packing, Descriptor})
+    end.
 
 unpack(Binary, {hls_type, Module, Name, Args}) ->
     Module:unpack(Binary, Name, Args).

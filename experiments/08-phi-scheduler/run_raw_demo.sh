@@ -22,6 +22,7 @@ for source in \
     "$project_root/src/runtime/hls_fabric.erl" \
     "$project_root/src/api/hls_gs.erl" \
     "$project_root/src/api/hls_lists.erl" \
+    "$project_root/src/runtime/hls_codec.erl" \
     "$project_root/src/api/hls_nums.erl" \
     "$project_root/src/api/hls_type.erl" \
     "$project_root/src/examples/phi_decoder/hls_pauli.erl" \

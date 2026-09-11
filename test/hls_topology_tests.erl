@@ -488,6 +488,16 @@ dslx_backend_rejects_unpacked_startup_data_test() ->
         )
     ).
 
+dslx_backend_rejects_out_of_range_startup_fields_test() ->
+    Spec = phi_phenom_topology:topology(),
+    lists:foreach(fun(Message) ->
+        Plan = hls_topology:normalize(Spec#{startup := [{data, [Message]}]}),
+        ?assertError({cannot_pack_startup_message, data, 0, error, badarg},
+            xls_topology_dslx:emit(Plan, phi_phenom_topology_dslx:profile()))
+    end, [{phenom_config, -1, 0, 0, 0},
+        {phenom_config, 0, 1 bsl 32, 0, 0},
+        {phenom_config, 0, 0, 65536, 0}]).
+
 generated_topology_matches_checked_in_artifact_test() ->
     {ok, Expected} = file:read_file(
         "src/examples/phi_decoder/phi_phenom_topology.x"

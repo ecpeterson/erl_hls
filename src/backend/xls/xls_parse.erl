@@ -348,6 +348,9 @@ statement_from_statement({var, _L, Atom}, State) ->
     reference(State, get_name(State, Atom));
 statement_from_statement({integer, _L, Integer}, State) ->
     reference(State, {static, integer, Integer});
+%% Preserve signed literals for width-directed conversions such as wrap/2.
+statement_from_statement({op, _L, '-', {integer, _IntegerLine, Integer}}, State) ->
+    reference(State, {static, integer, -Integer});
 statement_from_statement(X, State) when is_tuple(X) andalso op == element(1, X) ->
     [op, _L, Op | Args] = tuple_to_list(X),
     {BwdArgRefs, IntermediateState} = lists:foldl(

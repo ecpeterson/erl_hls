@@ -85,7 +85,7 @@ transpile(array_slice, [{phantom, type, OldDescriptor}, List, {static, integer, 
     ["array_slice(", List, ", u32:", integer_to_list(Start - 1),
         ", zero!<", hls_type:print_type(NewDescriptor), ">() )"].
 
-pack(List, list, [ElementType, _Length]) ->
+pack(List, list, [ElementType, Length]) when length(List) =:= Length ->
     %% XLS casts array element zero to the most-significant bits, while the AXIS
     %% serializer sends the least-significant word first. Accumulate in reverse
     %% wire order so the XLS side can use a zero-cost array/bit cast, then
@@ -94,7 +94,8 @@ pack(List, list, [ElementType, _Length]) ->
         fun(Element, Acc) -> [hls_type:pack(Element, ElementType) | Acc] end,
         [],
         List
-    )).
+    ));
+pack(_List, list, [_ElementType, _Length]) -> error(badarg).
 
 unpack(Packed, list, [ElementType, Length]) ->
     {Rest, Backwards} = lists:foldl(

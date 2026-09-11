@@ -3,12 +3,13 @@
 Signed, byte-aligned fixed-point values represented by scaled BEAM integers.
 
 `signed(Width, FractionBits)` includes the sign bit in Width. Packing and
-conversion reject overflow; `saturate/2` explicitly clamps it. Rational
+conversion reject overflow; `saturate/2` explicitly clamps it and `wrap/2`
+wraps the raw scaled integer without changing its fractional scale. Rational
 conversion and integer division round to nearest, with ties away from zero.
 """.
 -behavior(hls_type).
 -export([signed/2, from_integer/2, from_ratio/3, to_float/2, saturate/2,
-    round_ratio/2]).
+    round_ratio/2, wrap/2]).
 -export([width/2, zero/2, pack/3, unpack/3, print_type/2, transpile/3,
     dslx_imports/0]).
 -export_type([signed/2]).
@@ -23,11 +24,12 @@ signed(Width, FractionBits) when is_integer(Width), Width > 0,
 
 -spec from_integer(hls_type:descriptor(), integer()) -> integer().
 from_integer({hls_type, ?MODULE, signed, [Width, FractionBits]}, Value) ->
-    checked(Value bsl FractionBits, Width).
+    hls_codec:checked_integer(Value bsl FractionBits, Width, signed).
 
 -spec from_ratio(hls_type:descriptor(), integer(), pos_integer()) -> integer().
 from_ratio({hls_type, ?MODULE, signed, [Width, FractionBits]}, Numerator, Denominator) ->
-    checked(round_ratio(Numerator bsl FractionBits, Denominator), Width).
+    hls_codec:checked_integer(
+        round_ratio(Numerator bsl FractionBits, Denominator), Width, signed).
 
 -spec to_float(hls_type:descriptor(), integer()) -> float().
 to_float({hls_type, ?MODULE, signed, [_Width, FractionBits]}, Value) ->
@@ -38,6 +40,14 @@ saturate({hls_type, ?MODULE, signed, [Width, _FractionBits]}, Value) ->
     Limit = 1 bsl (Width - 1),
     max(-Limit, min(Limit - 1, Value)).
 
+-doc """
+Wraps a raw scaled integer at the target width; no rescaling is performed.
+The XLS cast preserves the same low bits and interprets them as signed.
+""".
+-spec wrap(hls_type:descriptor(), integer()) -> integer().
+wrap(Type = {hls_type, ?MODULE, signed, _}, Value) ->
+    hls_codec:wrap_integer(Value, hls_type:width(Type), signed).
+
 -spec round_ratio(integer(), pos_integer()) -> integer().
 round_ratio(Numerator, Denominator) when Denominator > 0, Numerator >= 0 ->
     (Numerator + Denominator div 2) div Denominator;
@@ -46,10 +56,6 @@ round_ratio(Numerator, Denominator) when Denominator > 0 ->
 round_ratio(_Numerator, _Denominator) ->
     error(badarg).
 
-checked(Value, Width) when is_integer(Value),
-        Value >= -(1 bsl (Width - 1)), Value < (1 bsl (Width - 1)) -> Value;
-checked(_Value, _Width) -> error(badarg).
-
 %% Source type annotations construct descriptors without calling signed/2.
 width(signed, [Width, FractionBits]) ->
     _ = signed(Width, FractionBits),
@@ -57,8 +63,7 @@ width(signed, [Width, FractionBits]) ->
 zero(signed, [_Width, _FractionBits]) -> 0.
 
 pack(Value, signed, [Width, _FractionBits]) ->
-    Checked = checked(Value, Width),
-    <<Checked:Width/signed-little-integer>>.
+    hls_codec:pack_integer(Value, Width, signed).
 
 unpack(Packed, signed, [Width, _FractionBits]) ->
     <<Value:Width/signed-little-integer, Rest/binary>> = Packed,
@@ -67,6 +72,11 @@ unpack(Packed, signed, [Width, _FractionBits]) ->
 print_type(signed, [Width, _FractionBits]) -> xls_nums:signed_type(Width).
 dslx_imports() -> [hls_fixed].
 
+transpile(wrap, [{phantom, type, Type = {hls_type, ?MODULE, signed, _}},
+        {static, integer, Value}], _State) ->
+    [hls_type:print_type(Type), ":", integer_to_list(wrap(Type, Value))];
+transpile(wrap, [{phantom, type, Type = {hls_type, ?MODULE, signed, _}}, Value], State) ->
+    hls_type:transpile(as, [{phantom, type, Type}, Value], State);
 transpile(signed, [{static, integer, Width}, {static, integer, FractionBits}], State) ->
     xls_parse:reference(State, {phantom, type, signed(Width, FractionBits)});
 transpile(saturate, [{phantom, type, Type}, Value], _State) ->

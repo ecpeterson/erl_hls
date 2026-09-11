@@ -295,6 +295,14 @@ family_backend_rejects_partial_family_startup_test() ->
         )
     ).
 
+family_backend_rejects_out_of_range_startup_fields_test() ->
+    Spec = phi_torus_topology:topology(1, 1),
+    lists:foreach(fun(Seed) ->
+        ?assertError(badarg, generated(Spec#{startup := [
+            {{phi, 0, 0}, [{phi_config, Seed}]}
+        ]}))
+    end, [-1, 1 bsl 32]).
+
 family_backend_rejects_invalid_actor_egress_depth_test() ->
     Plan = hls_topology:normalize(phi_noise_topology:topology(1)),
     Profile = phi_noise_topology_dslx:profile(),

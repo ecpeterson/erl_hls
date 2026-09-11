@@ -2,6 +2,70 @@
 
 -include_lib("eunit/include/eunit.hrl").
 
+explicit_wrapping_test() ->
+    Types = [hls_nums:u8(), hls_nums:u16(), hls_nums:u32(), hls_nums:u64(),
+        hls_nums:s8(), hls_nums:s16(), hls_nums:s32(), hls_nums:s64()] ++
+        [hls_nums:uN(Width) || Width <- [24, 40, 96]],
+    lists:foreach(fun(Type) ->
+        Width = hls_type:width(Type),
+        Values = [-1, 0, 1, 1 bsl (Width - 1), 1 bsl Width,
+            (1 bsl 1000) + 129, -(1 bsl 1000) - 129],
+        lists:foreach(fun(Value) ->
+            Wrapped = hls_nums:wrap(Type, Value),
+            ?assertEqual(Wrapped, hls_nums:wrap(Type, Wrapped)),
+            ?assertEqual(<<Value:Width/little>>, hls_type:pack_exact(Wrapped, Type))
+        end, Values)
+    end, Types),
+    ?assertEqual(-128, hls_nums:wrap(hls_nums:s8(), 128)),
+    ?assertEqual(255, hls_nums:wrap(hls_nums:u8(), -1)),
+    ?assertError(function_clause, hls_nums:wrap(hls_nums:float32(), 1)).
+
+wrapping_polynomials_and_division_test() ->
+    Type = hls_nums:u8(),
+    lists:foreach(fun({X, Y}) ->
+        FinalOnly = hls_nums:wrap(Type, X * Y + X - Y),
+        EachOperation = hls_nums:wrap(Type,
+            hls_nums:wrap(Type, hls_nums:wrap(Type, X) * hls_nums:wrap(Type, Y)) +
+            hls_nums:wrap(Type, X) - hls_nums:wrap(Type, Y)),
+        ?assertEqual(FinalOnly, EachOperation)
+    end, [{X, Y} || X <- [-1000, -1, 0, 255, 1 bsl 100],
+        Y <- [-257, 0, 1, 256, 1 bsl 120]]),
+    ?assertEqual(128, hls_nums:wrap(Type, (255 + 1) div 2)),
+    ?assertEqual(0, hls_nums:wrap(Type, 255 + 1) div 2).
+
+integer_boundaries_test_() ->
+    Unsigned = [{hls_nums:u8(), 8}, {hls_nums:u16(), 16},
+        {hls_nums:u32(), 32}, {hls_nums:u64(), 64}] ++
+        [{hls_nums:uN(Width), Width} || Width <- [24, 40, 96]],
+    Signed = [{hls_nums:s8(), 8}, {hls_nums:s16(), 16},
+        {hls_nums:s32(), 32}, {hls_nums:s64(), 64}],
+    [integer_boundaries(Type, Width, 0, (1 bsl Width) - 1)
+        || {Type, Width} <- Unsigned] ++
+    [integer_boundaries(Type, Width, -(1 bsl (Width - 1)),
+        (1 bsl (Width - 1)) - 1) || {Type, Width} <- Signed].
+
+integer_boundaries(Type, Width, Minimum, Maximum) ->
+    {lists:flatten(hls_type:print_type(Type)), fun() ->
+        lists:foreach(fun(Value) ->
+            Packed = hls_type:pack(Value, Type),
+            ?assertEqual(Width, bit_size(Packed)),
+            ?assertEqual({Value, <<42>>},
+                hls_type:unpack(<<Packed/binary, 42>>, Type))
+        end, [Minimum, Maximum, 0, 1]),
+        lists:foreach(fun(Value) ->
+            ?assertError(badarg, hls_type:pack(Value, Type))
+        end, [Minimum - 1, Maximum + 1, 1 bsl (Width + 1),
+            0.0, 1.0, invalid, <<0>>, [0]])
+    end}.
+
+numeric_wire_bytes_test() ->
+    ?assertEqual(<<255>>, hls_type:pack(255, hls_nums:u8())),
+    ?assertEqual(<<254, 255>>, hls_type:pack(-2, hls_nums:s16())),
+    ?assertEqual(<<0, 60>>, hls_type:pack(1.0, hls_nums:float16())),
+    ?assertEqual(<<0, 0, 128, 63>>, hls_type:pack(1.0, hls_nums:float32())),
+    ?assertEqual(<<0, 0, 0, 0, 0, 0, 240, 63>>,
+        hls_type:pack(1.0, hls_nums:float64())).
+
 variable_unsigned_type_test() ->
     Type = hls_nums:uN(96),
     ?assertEqual(96, hls_type:width(Type)),
@@ -54,3 +118,24 @@ transformed_record_supports_variable_width_fields_and_lists_test() ->
         {Message, <<>>},
         hls_variable_width_pack_fixture:unpack(message, Packed)
     ).
+
+transformed_record_rejects_invalid_fields_test() ->
+    Valid = {message, 16#abcdef, [1, 16#654321], 16#ab, 16#1020304050},
+    lists:foreach(fun(Message) ->
+        ?assertError(badarg, hls_variable_width_pack_fixture:pack(Message))
+    end, [
+        setelement(2, Valid, 1 bsl 24),
+        setelement(2, Valid, -1),
+        setelement(3, Valid, [1]),
+        setelement(3, Valid, [1, 2, 3]),
+        setelement(3, Valid, [1, 1 bsl 24]),
+        setelement(4, Valid, 256),
+        setelement(5, Valid, 1 bsl 40)
+    ]).
+
+transformed_record_rejects_invalid_shapes_test() ->
+    lists:foreach(fun(Message) ->
+        ?assertError(function_clause,
+            hls_variable_width_pack_fixture:pack(Message))
+    end, [not_a_record, {}, {unknown, 0, [0, 0], 0, 0},
+        {message, 0, [0, 0], 0}, {message, 0, [0, 0], 0, 0, extra}]).
