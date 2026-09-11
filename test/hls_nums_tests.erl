@@ -2,6 +2,37 @@
 
 -include_lib("eunit/include/eunit.hrl").
 
+explicit_wrapping_test() ->
+    Types = [hls_nums:u8(), hls_nums:u16(), hls_nums:u32(), hls_nums:u64(),
+        hls_nums:s8(), hls_nums:s16(), hls_nums:s32(), hls_nums:s64()] ++
+        [hls_nums:uN(Width) || Width <- [24, 40, 96]],
+    lists:foreach(fun(Type) ->
+        Width = hls_type:width(Type),
+        Values = [-1, 0, 1, 1 bsl (Width - 1), 1 bsl Width,
+            (1 bsl 1000) + 129, -(1 bsl 1000) - 129],
+        lists:foreach(fun(Value) ->
+            Wrapped = hls_nums:wrap(Type, Value),
+            ?assertEqual(Wrapped, hls_nums:wrap(Type, Wrapped)),
+            ?assertEqual(<<Value:Width/little>>, hls_type:pack_exact(Wrapped, Type))
+        end, Values)
+    end, Types),
+    ?assertEqual(-128, hls_nums:wrap(hls_nums:s8(), 128)),
+    ?assertEqual(255, hls_nums:wrap(hls_nums:u8(), -1)),
+    ?assertError(function_clause, hls_nums:wrap(hls_nums:float32(), 1)).
+
+wrapping_polynomials_and_division_test() ->
+    Type = hls_nums:u8(),
+    lists:foreach(fun({X, Y}) ->
+        FinalOnly = hls_nums:wrap(Type, X * Y + X - Y),
+        EachOperation = hls_nums:wrap(Type,
+            hls_nums:wrap(Type, hls_nums:wrap(Type, X) * hls_nums:wrap(Type, Y)) +
+            hls_nums:wrap(Type, X) - hls_nums:wrap(Type, Y)),
+        ?assertEqual(FinalOnly, EachOperation)
+    end, [{X, Y} || X <- [-1000, -1, 0, 255, 1 bsl 100],
+        Y <- [-257, 0, 1, 256, 1 bsl 120]]),
+    ?assertEqual(128, hls_nums:wrap(Type, (255 + 1) div 2)),
+    ?assertEqual(0, hls_nums:wrap(Type, 255 + 1) div 2).
+
 integer_boundaries_test_() ->
     Unsigned = [{hls_nums:u8(), 8}, {hls_nums:u16(), 16},
         {hls_nums:u32(), 32}, {hls_nums:u64(), 64}] ++

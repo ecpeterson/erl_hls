@@ -32,6 +32,7 @@ for test_module in \
     axis.x \
     hls_fixed.x \
     hls_vec.x \
+    hls_numeric_test.x \
     arbitration.x \
     scheduler.x \
     bram.x \

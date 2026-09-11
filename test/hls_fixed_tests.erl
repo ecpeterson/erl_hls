@@ -1,6 +1,16 @@
 -module(hls_fixed_tests).
 -include_lib("eunit/include/eunit.hrl").
 
+explicit_wrapping_preserves_fractional_scale_test() ->
+    Type = hls_fixed:signed(16, 8),
+    Raw = hls_fixed:from_integer(Type, 1) + (1 bsl 1000),
+    ?assertError(badarg, hls_type:pack(Raw, Type)),
+    ?assertEqual(256, hls_fixed:wrap(Type, Raw)),
+    ?assertEqual(1.0, hls_fixed:to_float(Type, hls_fixed:wrap(Type, Raw))),
+    ?assertEqual(-32768, hls_fixed:wrap(Type, 32768)),
+    ?assertEqual(32767, hls_fixed:saturate(Type, 32768)),
+    ?assertEqual(<<0, 128>>, hls_type:pack_exact(hls_fixed:wrap(Type, 32768), Type)).
+
 formats_and_conversion_test() ->
     lists:foreach(fun({Width, Fraction}) ->
         Type = hls_fixed:signed(Width, Fraction),

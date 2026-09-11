@@ -1,7 +1,10 @@
 -module(hls_nums).
 -moduledoc """
 Byte-aligned numeric types. Integer packing rejects values outside the declared
-signed or unsigned range instead of silently truncating them.
+signed or unsigned range; wrap/2 explicitly requests modular conversion.
+Float packing rounds to binary16/32/64 and rejects nonfinite results. Live
+values remain ordinary BEAM numbers. See docs/numeric-contract.md for the
+normalization laws and the distinction from XLS arithmetic semantics.
 """.
 
 -behavior(hls_type).
@@ -10,6 +13,7 @@ signed or unsigned range instead of silently truncating them.
 -export([u8/0, s8/0, u16/0, s16/0, u32/0, s32/0, u64/0, s64/0, uN/1]).
 -export_type([u8/0, s8/0, u16/0, s16/0, u32/0, s32/0, u64/0, s64/0, uN/1]).
 -export([float64/0, float32/0, float16/0]).                         % floats
+-export([wrap/2]).
 -export_type([float64/0, float32/0, float16/0]).
 
 %%% unsigned integers
@@ -51,6 +55,20 @@ float16() -> {hls_type, ?MODULE, ?FUNCTION_NAME, []}.
 float32() -> {hls_type, ?MODULE, ?FUNCTION_NAME, []}.
 float64() -> {hls_type, ?MODULE, ?FUNCTION_NAME, []}.
 
+-doc """
+Reduces an integer modulo 2^Width and interprets it with the target signedness.
+Accepts arbitrary BEAM integers. On XLS this is an explicit integer cast; the
+input expression must already have sufficient width for its intended value.
+""".
+-spec wrap(hls_type:descriptor(), integer()) -> integer().
+wrap({hls_type, ?MODULE, Name, Args}, Value) ->
+    hls_codec:wrap_integer(Value, width(Name, Args), signedness(Name)).
+
+signedness(Type) when Type =:= u8; Type =:= u16; Type =:= u32;
+        Type =:= u64; Type =:= uN -> unsigned;
+signedness(Type) when Type =:= s8; Type =:= s16; Type =:= s32;
+        Type =:= s64 -> signed.
+
 width(u8,      []) -> 8;
 width(u16,     []) -> 16;
 width(u32,     []) -> 32;
@@ -79,6 +97,9 @@ zero(float16, []) -> 0.0;
 zero(float32, []) -> 0.0;
 zero(float64, []) -> 0.0 .
 
+transpile(wrap, [{phantom, type, Type = {hls_type, ?MODULE, Name, _}}, Value], State) ->
+    _ = signedness(Name),
+    wrap_expression(Type, Value, State);
 transpile(uN, [{static, integer, Width}], State) ->
     xls_parse:reference(
         State,
@@ -87,15 +108,17 @@ transpile(uN, [{static, integer, Width}], State) ->
 transpile(Type, [], State) ->
     xls_parse:reference(State, {phantom, type, ?MODULE:Type()}).
 
-pack(Value, Type, Args) when Type =:= u8; Type =:= u16; Type =:= u32;
-        Type =:= u64; Type =:= uN ->
-    hls_codec:pack_integer(Value, width(Type, Args), unsigned);
-pack(Value, Type, Args) when Type =:= s8; Type =:= s16; Type =:= s32;
-        Type =:= s64 ->
-    hls_codec:pack_integer(Value, width(Type, Args), signed);
-pack(Value, float16, []) -> <<Value:16/little-float>>;
-pack(Value, float32, []) -> <<Value:32/little-float>>;
-pack(Value, float64, []) -> <<Value:64/little-float>>.
+%% A literal has no source width from which to cast. Normalize it before giving
+%% it the target type so an out-of-range literal never reaches the DSLX parser.
+wrap_expression(Type, {static, integer, Value}, _State) ->
+    [hls_type:print_type(Type), ":", integer_to_list(wrap(Type, Value))];
+wrap_expression(Type, Value, State) ->
+    hls_type:transpile(as, [{phantom, type, Type}, Value], State).
+
+pack(Value, Type, []) when Type =:= float16; Type =:= float32; Type =:= float64 ->
+    hls_codec:pack_float(Value, width(Type, []));
+pack(Value, Type, Args) ->
+    hls_codec:pack_integer(Value, width(Type, Args), signedness(Type)).
 
 unpack(<<Value:8/unsigned-little-integer,  Rest/binary>>, u8,      []) -> {Value, Rest};
 unpack(<<Value:16/unsigned-little-integer, Rest/binary>>, u16,     []) -> {Value, Rest};
