@@ -40,7 +40,7 @@ Successful hardware entries retain ordered effect completion: the direct
 service commits entry data and a new reduction after its last allocated effect
 slot; shared execution commits them when its whole effect batch is accepted.
 Both paths defer mailbox dispatch until entry finishes. See
-`docs/entry-outcomes.md` for the compiler boundary and regression coverage.
+`docs/entry-outcomes.md` for the entry execution contract and test procedure.
 
 An open reduction accepts either a fixed contribution count or a fixed member
 set. A cast clause contributes through the ordinary conclusion's directive:
