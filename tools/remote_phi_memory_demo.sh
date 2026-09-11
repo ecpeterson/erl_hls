@@ -251,6 +251,7 @@ erlc -pa "$beam_dir" -o "$beam_dir" \
     "$stage/erl_src/hls_gs.erl" \
     "$stage/erl_src/hls_debug.erl" \
     "$stage/erl_src/hls_lists.erl" \
+    "$stage/erl_src/hls_codec.erl" \
     "$stage/erl_src/hls_nums.erl" \
     "$stage/erl_src/hls_pauli.erl"
 erlc -pa "$beam_dir" -o "$beam_dir" \
