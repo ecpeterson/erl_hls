@@ -254,7 +254,6 @@ site_functions(Spec = #{sites := Sites}) ->
     ].
 
 open_functions(#{
-    data := #{dslx_type := DataType},
     accumulator := #{dslx_type := AccumulatorType},
     sites := Sites
 }) ->
@@ -281,34 +280,7 @@ open_functions(#{
         "    ..zero!<ReductionState>()\n",
         "  }\n",
         "}\n\n",
-        "fn reduction_open(\n",
-        "    old_phase: Phase, phase: Phase, data: ", DataType,
-        ") -> ReductionState {\n",
-        "  match phase {\n",
-        [open_arm(Site) || Site <- Sites],
-        "    _ => zero!<ReductionState>(),\n",
-        "  }\n",
-        "}\n\n"
-    ].
-
-open_arm(Site = #{
-    phase := Phase,
-    key := #{body := KeyBody, result := KeyResult},
-    identity := #{body := IdentityBody, result := IdentityResult}
-}) ->
-    [
-        "    Phase::", uppercase(Phase), " => {\n",
-        "      let key = {\n",
-        xls_parse_io:indent(KeyBody, 8),
-        "        ", KeyResult, "\n",
-        "      };\n",
-        "      let identity = {\n",
-        xls_parse_io:indent(IdentityBody, 8),
-        "        ", IdentityResult, "\n",
-        "      };\n",
-        "      reduction_open_site(ReductionSite::", site_label(Site),
-        ", key, identity)\n",
-        "    },\n"
+        "\n"
     ].
 
 contribution_functions(#{

@@ -871,7 +871,7 @@ state_machine_entry_action_accepts_runtime_predicate_test() ->
         fun(XLS) ->
             ?assertNotEqual(
                 nomatch,
-                binary:match(XLS, <<"effect_0_valid">>)
+                binary:match(XLS, <<"evaluated.2.0.0">>)
             ),
             ?assertNotEqual(
                 nomatch,
@@ -1026,7 +1026,7 @@ state_machine_entry_actions_use_one_source_ordered_egress_test() ->
         )),
         ?assertNotEqual(nomatch, binary:match(
             XLS,
-            <<"machine: if can_advance { advanced_machine } else { machine }">>
+            <<"machine: if can_advance || entry_failed { advanced_machine }">>
         )),
         ?assertNotEqual(nomatch, binary:match(
             XLS,

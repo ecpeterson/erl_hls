@@ -60,6 +60,9 @@ jobs:
       - name: Run Erlang tests
         run: rebar3 eunit
 
+      - name: Compare entry outcomes with BEAM and simulate RTL
+        run: bash tools/test_entry_outcomes.sh "$RUNNER_TEMP/xls"
+
       - name: Run generated reduction semantics
         run: bash tools/test_reduction_dslx.sh "$RUNNER_TEMP/xls"
 
@@ -85,6 +88,10 @@ jobs:
         with:
           name: xls-simulation-diagnostics
           path: |
+            _build/entry_outcomes/*.x
+            _build/entry_outcomes/*.ir
+            _build/entry_outcomes/*.v
+            _build/entry_outcomes/*.sv
             _build/xls_sim/regsvc/*.ir
             _build/xls_sim/regsvc/*.v
             _build/xls_sim/regsvc/sim/vvp.log

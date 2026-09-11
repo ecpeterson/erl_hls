@@ -16,7 +16,8 @@
 }.
 -type entry() :: #{
     phase := atom(),
-    data := lowered_clause(),
+    evaluation := #{body := iodata(), result := iodata(), failed := iodata()},
+    opens_reduction := boolean(),
     effects := [map()]
 }.
 -type cast_clause() :: #{
@@ -178,6 +179,12 @@ machine_declarations(#{
         "  phase: u8,\n",
         "  valid: bool[", integer_to_list(EffectCapacity), "],\n",
         "  payloads: bits[", integer_to_list(EffectPayloadBits), "],\n",
+        "}\n\n",
+        "struct EntryOutcome {\n",
+        "  data: ", DataStruct, ",\n",
+        "  effects: EntryEffects,\n",
+        ?REDUCTION_SERVICE:machine_state_field(Reductions),
+        "  failed: bool,\n",
         "}\n\n",
         "type MailboxSlot = mailbox::Slot;\n\n",
         "struct Machine {\n",
@@ -397,11 +404,12 @@ enter_function(#{
     DataStruct = record_struct_name(DataName),
     EffectCapacity = max(1, MaxEntryEffects),
     EffectPayloadBits = entry_effect_payload_bits(Entries, MessageWords),
+    Reductions = maps:get(reductions, Spec, none),
     [
         "fn enter(old_phase: Phase, phase: Phase, data: ", DataStruct,
-        ") -> (", DataStruct, ", EntryEffects) {\n",
+        ") -> EntryOutcome {\n",
         "  match phase {\n",
-        [entry_arm(Entry, EffectCapacity, EffectPayloadBits, MessageWords)
+        [entry_arm(Entry, EffectCapacity, EffectPayloadBits, MessageWords, Reductions)
             || Entry <- Entries],
         "  }\n",
         "}\n\n",
@@ -412,32 +420,48 @@ enter_function(#{
 
 entry_arm(#{
     phase := Phase,
-    data := #{body := DataBody, result := DataResult},
+    evaluation := #{body := Body, result := Result, failed := Failed},
+    opens_reduction := OpensReduction,
     effects := Effects
-}, EffectCapacity, EffectPayloadBits, MessageWords) ->
+}, EffectCapacity, EffectPayloadBits, MessageWords, Reductions) ->
     Padding = EffectCapacity - length(Effects),
     [
         "    Phase::", uppercase(Phase), " => {\n",
-        "      let entered_data = {\n",
-        xls_parse_io:indent(DataBody, 8),
-        "        ", DataResult, "\n",
-        "      };\n",
-        [entry_effect_binding(Index, Effect)
-            || {Index, Effect} <- lists:enumerate(0, Effects)],
-        "      (entered_data, EntryEffects {\n",
-        "        phase: Phase::", uppercase(Phase), " as u8,\n",
-        "        valid: [\n",
+        xls_parse_io:indent(Body, 6),
+        "      if ", Failed, " {\n",
+        "        EntryOutcome { data, failed: true, ..zero!<EntryOutcome>() }\n",
+        "      } else {\n",
+        "        let evaluated = ", Result, ";\n",
+        [entry_effect_binding(Index)
+            || {Index, _Effect} <- lists:enumerate(0, Effects)],
+        "        EntryOutcome {\n",
+        "          data: evaluated.0.1,\n",
+        entry_reduction_field(Reductions, OpensReduction, Phase),
+        "          failed: false,\n",
+        "          effects: EntryEffects {\n",
+        "            phase: Phase::", uppercase(Phase), " as u8,\n",
+        "            valid: [\n",
         [
-            ["          effect_", integer_to_list(Index), "_valid,\n"]
+            ["              evaluated.2.", integer_to_list(Index), ".0,\n"]
             || {Index, _Effect} <- lists:enumerate(0, Effects)
         ],
-        lists:duplicate(Padding, "          bool:false,\n"),
-        "        ],\n",
-        "        payloads: ", entry_payload_expression(
+        lists:duplicate(Padding, "              bool:false,\n"),
+        "            ],\n",
+        "            payloads: ", entry_payload_expression(
             Effects, EffectPayloadBits, MessageWords), ",\n",
-        "      })\n",
+        "          },\n",
+        "        }\n",
+        "      }\n",
         "    },\n"
     ].
+
+entry_reduction_field(none, false, _Phase) ->
+    [];
+entry_reduction_field(_Reductions, false, _Phase) ->
+    "          reduction: zero!<ReductionState>(),\n";
+entry_reduction_field(_Reductions, true, Phase) ->
+    ["          reduction: reduction_open_site(ReductionSite::",
+        uppercase(Phase), ", evaluated.1.0, evaluated.1.1.1),\n"].
 
 entry_effect_count_function(Entries) ->
     [
@@ -589,20 +613,11 @@ entry_effects_valid_function() ->
         "\n"
     ].
 
-entry_effect_binding(Index, #{
-    body := Body,
-    result := Result,
-    valid := #{body := ValidBody, result := ValidResult}
-}) ->
+entry_effect_binding(Index) ->
+    Reference = ["evaluated.2.", integer_to_list(Index), ".1"],
     [
-        "      let effect_", integer_to_list(Index), "_valid = {\n",
-        xls_parse_io:indent(ValidBody, 8),
-        "        ", ValidResult, "\n",
-        "      };\n",
-        "      let effect_", integer_to_list(Index), " = {\n",
-        xls_parse_io:indent(Body, 8),
-        "        ", Result, "\n",
-        "      };\n"
+        "        let effect_", integer_to_list(Index), " = axis::pack(\n",
+        "          ", Reference, ".0 as u8, ", Reference, ".2);\n"
     ].
 
 dispatch_function(#{
@@ -760,8 +775,9 @@ machine_step_function(#{
 
 machine_entry_step(Reductions) ->
     [
-        "    let (entered_data, effects) = enter(\n",
+        "    let outcome = enter(\n",
         "      machine.entered_from, machine.phase, machine.data);\n",
+        "    let effects = outcome.effects;\n",
         "    let effect_count = entry_effect_count(effects);\n",
         "    let has_effect = machine.entry_effect_index < effect_count;\n",
         "    let effect = entry_effect(\n",
@@ -769,7 +785,7 @@ machine_entry_step(Reductions) ->
         "    let emit_effect = has_effect && effects.valid[\n",
         "      machine.entry_effect_index as u32];\n",
         ?REDUCTION_SERVICE:direct_entry_bindings(Reductions),
-        ?REDUCTION_SERVICE:direct_entry_can_advance(Reductions),
+        "    let can_advance = !entry_failed && (!emit_effect || egress_ready);\n",
         "    let next_effect_index = machine.entry_effect_index +\n",
         "      ((has_effect && can_advance) as u8);\n",
         "    let entry_complete = can_advance &&\n",
@@ -778,20 +794,21 @@ machine_entry_step(Reductions) ->
         "      !machine.admission_pending &&\n",
         "      machine.occupied < MAILBOX_CAPACITY;\n",
         "    let advanced_machine = Machine {\n",
-        "      data: if entry_complete { entered_data } else { machine.data },\n",
+        "      data: if entry_complete { outcome.data } else { machine.data },\n",
         ?REDUCTION_SERVICE:direct_entry_reduction_field(Reductions),
-        "      enter_pending: !entry_complete,\n",
+        "      enter_pending: !entry_complete && !entry_failed,\n",
         "      entry_effect_index: if entry_complete {\n",
         "        u8:0\n",
         "      } else { next_effect_index },\n",
         "      admission_pending: machine.admission_pending || reserve,\n",
-        ?REDUCTION_SERVICE:direct_entry_failed_field(Reductions),
+        "      failed: entry_failed,\n",
         "      ..machine\n",
         "    };\n",
         "    MachineStep {\n",
-        ?REDUCTION_SERVICE:direct_entry_machine_selection(Reductions),
+        "      machine: if can_advance || entry_failed { advanced_machine }\n",
+        "        else { machine },\n",
         "      egress: effect,\n",
-        ?REDUCTION_SERVICE:direct_entry_egress_valid(Reductions),
+        "      egress_valid: emit_effect && can_advance,\n",
         "      admission_valid: reserve,\n",
         "    }\n"
     ].

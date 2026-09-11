@@ -29,6 +29,19 @@ placed `{cast_if, Condition, Port, Message}` retains its ordered position but
 emits only when enabled. Ports and list shape remain static, and each port may
 occur at most once in an entry. CPU output uses ordinary `gen_server:cast/2`.
 
+The complete entry callback must succeed before its actions can be emitted.
+A disabled `cast_if` still evaluates its condition and message. In XLS, a
+supported match failure anywhere in the callback preserves the incoming entry
+data and reduction state, emits no effects from that entry, and latches the
+actor's existing failed state until reset. Earlier successful entries are not
+rolled back. The CPU runtime instead terminates on the callback exception.
+
+Successful hardware entries retain ordered effect completion: the direct
+service commits entry data and a new reduction after its last allocated effect
+slot; shared execution commits them when its whole effect batch is accepted.
+Both paths defer mailbox dispatch until entry finishes. See
+`docs/entry-outcomes.md` for the compiler boundary and regression coverage.
+
 An open reduction accepts either a fixed contribution count or a fixed member
 set. A cast clause contributes through the ordinary conclusion's directive:
 

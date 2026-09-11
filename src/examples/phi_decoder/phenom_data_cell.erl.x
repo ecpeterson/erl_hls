@@ -368,6 +368,12 @@ pub struct EntryEffects {
   payloads: bits[384],
 }
 
+struct EntryOutcome {
+  data: Datacell,
+  effects: EntryEffects,
+  failed: bool,
+}
+
 type MailboxSlot = mailbox::Slot;
 
 struct Machine {
@@ -557,211 +563,129 @@ fn machine_write(
   bram::write(slot, bits_from_machine(machine))
 }
 
-fn enter(old_phase: Phase, phase: Phase, data: Datacell) -> (Datacell, EntryEffects) {
+fn enter(old_phase: Phase, phase: Phase, data: Datacell) -> EntryOutcome {
   match phase {
     Phase::CONFIGURING => {
-      let entered_data = {
-        let _OldPhase_1 = old_phase;
-        let __1 = phase;
-        let Cell_1 = (Tag::DATA_CELL, data);
-        let _0 = if (bool:false) {
-            data
-        } else {
-            Cell_1.1
-        };
-        _0
-      };
-      (entered_data, EntryEffects {
-        phase: Phase::CONFIGURING as u8,
-        valid: [
-          bool:false,
-          bool:false,
-          bool:false,
-          bool:false,
-        ],
-        payloads: zero!<bits[384]>(),
-      })
+      let _OldPhase_1 = old_phase;
+      let __1 = phase;
+      let Cell_1 = (Tag::DATA_CELL, data);
+      let _0 = ();
+      let _1 = ();
+      let _2 = (Cell_1, _0, _1, );
+      if bool:false {
+        EntryOutcome { data, failed: true, ..zero!<EntryOutcome>() }
+      } else {
+        let evaluated = _2;
+        EntryOutcome {
+          data: evaluated.0.1,
+          failed: false,
+          effects: EntryEffects {
+            phase: Phase::CONFIGURING as u8,
+            valid: [
+              bool:false,
+              bool:false,
+              bool:false,
+              bool:false,
+            ],
+            payloads: zero!<bits[384]>(),
+          },
+        }
+      }
     },
     Phase::COLLECTING => {
-      let entered_data = {
-        let _OldPhase_1 = old_phase;
-        let __1 = phase;
-        let Cell_1 = (Tag::DATA_CELL, data);
-        let _0 = if (bool:false) {
-            data
-        } else {
-            Cell_1.1
-        };
-        _0
-      };
-      (entered_data, EntryEffects {
-        phase: Phase::COLLECTING as u8,
-        valid: [
-          bool:false,
-          bool:false,
-          bool:false,
-          bool:false,
-        ],
-        payloads: zero!<bits[384]>(),
-      })
+      let _OldPhase_1 = old_phase;
+      let __1 = phase;
+      let Cell_1 = (Tag::DATA_CELL, data);
+      let _0 = ();
+      let _1 = ();
+      let _2 = (Cell_1, _0, _1, );
+      if bool:false {
+        EntryOutcome { data, failed: true, ..zero!<EntryOutcome>() }
+      } else {
+        let evaluated = _2;
+        EntryOutcome {
+          data: evaluated.0.1,
+          failed: false,
+          effects: EntryEffects {
+            phase: Phase::COLLECTING as u8,
+            valid: [
+              bool:false,
+              bool:false,
+              bool:false,
+              bool:false,
+            ],
+            payloads: zero!<bits[384]>(),
+          },
+        }
+      }
     },
     Phase::REPORTING => {
-      let entered_data = {
-        let _OldPhase_1 = old_phase;
-        let __1 = phase;
-        let Cell_1 = (Tag::DATA_CELL, data);
-        let _0 = Cell_1.1.step;
-        let _1 = Cell_1.1.event;
-        let _2 = Cell_1.1.noise_disabled;
-        let _3 = _2 << 1;
-        let _4 = _1 | _3;
-        let _5 = Phenomdata {
-          step: _0,
-          flags: _4,
-          ..zero!<Phenomdata>()
-        };
-        let _6 = (Tag::PHENOM_DATA, _5, bits_from_phenomdata(_5));
-        let Message_1 = _6;
-        let _7 = if (bool:false) {
-            data
-        } else {
-            Cell_1.1
-        };
-        _7
+      let _OldPhase_1 = old_phase;
+      let __1 = phase;
+      let Cell_1 = (Tag::DATA_CELL, data);
+      let _0 = Cell_1.1.step;
+      let _1 = Cell_1.1.event;
+      let _2 = Cell_1.1.noise_disabled;
+      let _3 = _2 << 1;
+      let _4 = _1 | _3;
+      let _5 = Phenomdata {
+        step: _0,
+        flags: _4,
+        ..zero!<Phenomdata>()
       };
-      let effect_0_valid = {
-        bool:true
+      let _6 = (Tag::PHENOM_DATA, _5, bits_from_phenomdata(_5));
+      let Message_1 = _6;
+      let _7 = ();
+      let _8 = Phenomdata {
+        source: 8,
+        ..(Message_1).1
       };
-      let effect_0 = {
-        let _OldPhase_1 = old_phase;
-        let __1 = phase;
-        let Cell_1 = (Tag::DATA_CELL, data);
-        let _0 = Cell_1.1.step;
-        let _1 = Cell_1.1.event;
-        let _2 = Cell_1.1.noise_disabled;
-        let _3 = _2 << 1;
-        let _4 = _1 | _3;
-        let _5 = Phenomdata {
-          step: _0,
-          flags: _4,
-          ..zero!<Phenomdata>()
-        };
-        let _6 = (Tag::PHENOM_DATA, _5, bits_from_phenomdata(_5));
-        let Message_1 = _6;
-        let _7 = Phenomdata {
-          source: 8,
-          ..(Message_1).1
-        };
-        let _8 = (Tag::PHENOM_DATA, _7, bits_from_phenomdata(_7));
-        let _9 = if (bool:false) {
-            zero!<axis::Frame>()
-        } else {
-            axis::pack(_8.0 as u8, _8.2)
-        };
-        _9
+      let _9 = (Tag::PHENOM_DATA, _8, bits_from_phenomdata(_8));
+      let _10 = (bool:1, _9, );
+      let _11 = Phenomdata {
+        source: 4,
+        ..(Message_1).1
       };
-      let effect_1_valid = {
-        bool:true
+      let _12 = (Tag::PHENOM_DATA, _11, bits_from_phenomdata(_11));
+      let _13 = (bool:1, _12, );
+      let _14 = Phenomdata {
+        source: 2,
+        ..(Message_1).1
       };
-      let effect_1 = {
-        let _OldPhase_1 = old_phase;
-        let __1 = phase;
-        let Cell_1 = (Tag::DATA_CELL, data);
-        let _0 = Cell_1.1.step;
-        let _1 = Cell_1.1.event;
-        let _2 = Cell_1.1.noise_disabled;
-        let _3 = _2 << 1;
-        let _4 = _1 | _3;
-        let _5 = Phenomdata {
-          step: _0,
-          flags: _4,
-          ..zero!<Phenomdata>()
-        };
-        let _6 = (Tag::PHENOM_DATA, _5, bits_from_phenomdata(_5));
-        let Message_1 = _6;
-        let _7 = Phenomdata {
-          source: 4,
-          ..(Message_1).1
-        };
-        let _8 = (Tag::PHENOM_DATA, _7, bits_from_phenomdata(_7));
-        let _9 = if (bool:false) {
-            zero!<axis::Frame>()
-        } else {
-            axis::pack(_8.0 as u8, _8.2)
-        };
-        _9
+      let _15 = (Tag::PHENOM_DATA, _14, bits_from_phenomdata(_14));
+      let _16 = (bool:1, _15, );
+      let _17 = Phenomdata {
+        source: 1,
+        ..(Message_1).1
       };
-      let effect_2_valid = {
-        bool:true
-      };
-      let effect_2 = {
-        let _OldPhase_1 = old_phase;
-        let __1 = phase;
-        let Cell_1 = (Tag::DATA_CELL, data);
-        let _0 = Cell_1.1.step;
-        let _1 = Cell_1.1.event;
-        let _2 = Cell_1.1.noise_disabled;
-        let _3 = _2 << 1;
-        let _4 = _1 | _3;
-        let _5 = Phenomdata {
-          step: _0,
-          flags: _4,
-          ..zero!<Phenomdata>()
-        };
-        let _6 = (Tag::PHENOM_DATA, _5, bits_from_phenomdata(_5));
-        let Message_1 = _6;
-        let _7 = Phenomdata {
-          source: 2,
-          ..(Message_1).1
-        };
-        let _8 = (Tag::PHENOM_DATA, _7, bits_from_phenomdata(_7));
-        let _9 = if (bool:false) {
-            zero!<axis::Frame>()
-        } else {
-            axis::pack(_8.0 as u8, _8.2)
-        };
-        _9
-      };
-      let effect_3_valid = {
-        bool:true
-      };
-      let effect_3 = {
-        let _OldPhase_1 = old_phase;
-        let __1 = phase;
-        let Cell_1 = (Tag::DATA_CELL, data);
-        let _0 = Cell_1.1.step;
-        let _1 = Cell_1.1.event;
-        let _2 = Cell_1.1.noise_disabled;
-        let _3 = _2 << 1;
-        let _4 = _1 | _3;
-        let _5 = Phenomdata {
-          step: _0,
-          flags: _4,
-          ..zero!<Phenomdata>()
-        };
-        let _6 = (Tag::PHENOM_DATA, _5, bits_from_phenomdata(_5));
-        let Message_1 = _6;
-        let _7 = Phenomdata {
-          source: 1,
-          ..(Message_1).1
-        };
-        let _8 = (Tag::PHENOM_DATA, _7, bits_from_phenomdata(_7));
-        let _9 = if (bool:false) {
-            zero!<axis::Frame>()
-        } else {
-            axis::pack(_8.0 as u8, _8.2)
-        };
-        _9
-      };
-      (entered_data, EntryEffects {
-        phase: Phase::REPORTING as u8,
-        valid: [
-          effect_0_valid,
-          effect_1_valid,
-          effect_2_valid,
-          effect_3_valid,
-        ],
-        payloads: bit_slice_update(
+      let _18 = (Tag::PHENOM_DATA, _17, bits_from_phenomdata(_17));
+      let _19 = (bool:1, _18, );
+      let _20 = (_10, _13, _16, _19, );
+      let _21 = (Cell_1, _7, _20, );
+      if bool:false {
+        EntryOutcome { data, failed: true, ..zero!<EntryOutcome>() }
+      } else {
+        let evaluated = _21;
+        let effect_0 = axis::pack(
+          evaluated.2.0.1.0 as u8, evaluated.2.0.1.2);
+        let effect_1 = axis::pack(
+          evaluated.2.1.1.0 as u8, evaluated.2.1.1.2);
+        let effect_2 = axis::pack(
+          evaluated.2.2.1.0 as u8, evaluated.2.2.1.2);
+        let effect_3 = axis::pack(
+          evaluated.2.3.1.0 as u8, evaluated.2.3.1.2);
+        EntryOutcome {
+          data: evaluated.0.1,
+          failed: false,
+          effects: EntryEffects {
+            phase: Phase::REPORTING as u8,
+            valid: [
+              evaluated.2.0.0,
+              evaluated.2.1.0,
+              evaluated.2.2.0,
+              evaluated.2.3.0,
+            ],
+            payloads: bit_slice_update(
           bit_slice_update(
           bit_slice_update(
           bit_slice_update(
@@ -774,73 +698,55 @@ fn enter(old_phase: Phase, phase: Phase, data: Datacell) -> (Datacell, EntryEffe
           effect_2.payload[0:96]),
           u32:288,
           effect_3.payload[0:96]),
-      })
+          },
+        }
+      }
     },
     Phase::REPLYING => {
-      let entered_data = {
-        let _OldPhase_1 = old_phase;
-        let __1 = phase;
-        let Cell_1 = (Tag::DATA_CELL, data);
-        let _0 = Cell_1.1.reply_request_id;
-        let _1 = Cell_1.1.x;
-        let _2 = Cell_1.1.y;
-        let _3 = Cell_1.1.reply_anticommutes;
-        let _4 = Paulireply {
-          request_id: _0,
-          x: _1,
-          y: _2,
-          anticommutes: _3,
-          ..zero!<Paulireply>()
-        };
-        let _5 = (Tag::PAULI_REPLY, _4, bits_from_paulireply(_4));
-        let Reply_1 = _5;
-        let _6 = if (bool:false) {
-            data
-        } else {
-            Cell_1.1
-        };
-        _6
+      let _OldPhase_1 = old_phase;
+      let __1 = phase;
+      let Cell_1 = (Tag::DATA_CELL, data);
+      let _0 = Cell_1.1.reply_request_id;
+      let _1 = Cell_1.1.x;
+      let _2 = Cell_1.1.y;
+      let _3 = Cell_1.1.reply_anticommutes;
+      let _4 = Paulireply {
+        request_id: _0,
+        x: _1,
+        y: _2,
+        anticommutes: _3,
+        ..zero!<Paulireply>()
       };
-      let effect_0_valid = {
-        bool:true
-      };
-      let effect_0 = {
-        let _OldPhase_1 = old_phase;
-        let __1 = phase;
-        let Cell_1 = (Tag::DATA_CELL, data);
-        let _0 = Cell_1.1.reply_request_id;
-        let _1 = Cell_1.1.x;
-        let _2 = Cell_1.1.y;
-        let _3 = Cell_1.1.reply_anticommutes;
-        let _4 = Paulireply {
-          request_id: _0,
-          x: _1,
-          y: _2,
-          anticommutes: _3,
-          ..zero!<Paulireply>()
-        };
-        let _5 = (Tag::PAULI_REPLY, _4, bits_from_paulireply(_4));
-        let Reply_1 = _5;
-        let _6 = if (bool:false) {
-            zero!<axis::Frame>()
-        } else {
-            axis::pack(Reply_1.0 as u8, Reply_1.2)
-        };
-        _6
-      };
-      (entered_data, EntryEffects {
-        phase: Phase::REPLYING as u8,
-        valid: [
-          effect_0_valid,
-          bool:false,
-          bool:false,
-          bool:false,
-        ],
-        payloads: bit_slice_update(
+      let _5 = (Tag::PAULI_REPLY, _4, bits_from_paulireply(_4));
+      let Reply_1 = _5;
+      let _6 = ();
+      let _7 = (bool:1, Reply_1, );
+      let _8 = (_7, );
+      let _9 = (Cell_1, _6, _8, );
+      if bool:false {
+        EntryOutcome { data, failed: true, ..zero!<EntryOutcome>() }
+      } else {
+        let evaluated = _9;
+        let effect_0 = axis::pack(
+          evaluated.2.0.1.0 as u8, evaluated.2.0.1.2);
+        EntryOutcome {
+          data: evaluated.0.1,
+          failed: false,
+          effects: EntryEffects {
+            phase: Phase::REPLYING as u8,
+            valid: [
+              evaluated.2.0.0,
+              bool:false,
+              bool:false,
+              bool:false,
+            ],
+            payloads: bit_slice_update(
           zero!<bits[384]>(),
           u32:0,
           effect_0.payload[0:96]),
-      })
+          },
+        }
+      }
     },
   }
 }
@@ -1903,15 +1809,17 @@ fn machine_step(
   if machine.failed {
     MachineStep { machine, ..zero!<MachineStep>() }
   } else if machine.enter_pending {
-    let (entered_data, effects) = enter(
+    let outcome = enter(
       machine.entered_from, machine.phase, machine.data);
+    let effects = outcome.effects;
     let effect_count = entry_effect_count(effects);
     let has_effect = machine.entry_effect_index < effect_count;
     let effect = entry_effect(
       effects, machine.entry_effect_index);
     let emit_effect = has_effect && effects.valid[
       machine.entry_effect_index as u32];
-    let can_advance = !emit_effect || egress_ready;
+    let entry_failed = outcome.failed;
+    let can_advance = !entry_failed && (!emit_effect || egress_ready);
     let next_effect_index = machine.entry_effect_index +
       ((has_effect && can_advance) as u8);
     let entry_complete = can_advance &&
@@ -1920,16 +1828,18 @@ fn machine_step(
       !machine.admission_pending &&
       machine.occupied < MAILBOX_CAPACITY;
     let advanced_machine = Machine {
-      data: if entry_complete { entered_data } else { machine.data },
-      enter_pending: !entry_complete,
+      data: if entry_complete { outcome.data } else { machine.data },
+      enter_pending: !entry_complete && !entry_failed,
       entry_effect_index: if entry_complete {
         u8:0
       } else { next_effect_index },
       admission_pending: machine.admission_pending || reserve,
+      failed: entry_failed,
       ..machine
     };
     MachineStep {
-      machine: if can_advance { advanced_machine } else { machine },
+      machine: if can_advance || entry_failed { advanced_machine }
+        else { machine },
       egress: effect,
       egress_valid: emit_effect && can_advance,
       admission_valid: reserve,
@@ -2105,20 +2015,24 @@ fn shared_machine_enter(machine: SharedMachine, egress_ready: u1)
   if machine.failed || !machine.enter_pending {
     SharedStep { machine, ..zero!<SharedStep>() }
   } else {
-    let (entered_data, effects) = enter(
+    let outcome = enter(
       machine.entered_from, machine.phase, machine.data);
+    let effects = outcome.effects;
     let effects_valid = entry_effects_valid(effects);
-    let can_advance = !effects_valid || egress_ready;
+    let entry_failed = outcome.failed;
+    let can_advance = !entry_failed && (!effects_valid || egress_ready);
     let advanced_machine = SharedMachine {
-      data: entered_data,
+      data: if entry_failed { machine.data } else { outcome.data },
       enter_pending: u1:0,
+      failed: entry_failed,
       ..machine
     };
     SharedStep {
-      machine: if can_advance { advanced_machine } else { machine },
+      machine: if can_advance || entry_failed { advanced_machine }
+        else { machine },
       effects,
       effects_valid: effects_valid && can_advance,
-      egress_blocked: effects_valid && !egress_ready,
+      egress_blocked: effects_valid && !egress_ready && !entry_failed,
       ..zero!<SharedStep>()
     }
   }

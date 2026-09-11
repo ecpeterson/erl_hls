@@ -234,8 +234,7 @@ collect_opens(Entries) ->
     [
         Open#{
             phase => maps:get(phase, Entry),
-            entry_clause => maps:get(clause, Entry),
-            entry_prefix => maps:get(prefix, Entry)
+            entry_clause => maps:get(clause, Entry)
         }
         || Entry <- Entries,
            Open <- [maps:get(reduction, Entry, none)],
@@ -741,22 +740,6 @@ close_site(Open, Contributions, Completion, DataName, AccumulatorName,
         phase => maps:get(phase, Open),
         name => maps:get(name, Open),
         population => maps:get(population, Open),
-        key => lower_open_expression(
-            Open,
-            typed_u32_expression(maps:get(key_expression, Open)),
-            DataName,
-            fun(R) -> R end,
-            "u32:0",
-            EnumAtoms
-        ),
-        identity => lower_open_expression(
-            Open,
-            maps:get(identity_expression, Open),
-            DataName,
-            fun(R) -> [R, ".1"] end,
-            ["zero!<", maps:get(dslx_type, AccumulatorType), ">()"],
-            EnumAtoms
-        ),
         contributions => [
             close_contribution_group(
                 Tag,
@@ -778,22 +761,6 @@ close_site(Open, Contributions, Completion, DataName, AccumulatorName,
             EnumAtoms
         )
     }.
-
-lower_open_expression(Open, Expression, DataName, Postprocessor, Failure,
-        EnumAtoms) ->
-    Clause0 = maps:get(entry_clause, Open),
-    Clause = strip_dispatched_phase(Clause0),
-    Body = maps:get(entry_prefix, Open) ++ [Expression],
-    ExpressionClause = replace_body(Clause, Body),
-    {LoweredBody, Result} = xls_parse:branch_from_clause(
-        ExpressionClause,
-        enter_args(DataName),
-        DataName,
-        Postprocessor,
-        Failure,
-        EnumAtoms
-    ),
-    lowered(LoweredBody, Result).
 
 close_contribution_group(Tag, Contributions, DataName, AccumulatorType,
         EnumAtoms) ->
@@ -1296,9 +1263,6 @@ replace_body({clause, Line, Patterns, Guards, _Body}, Body) ->
     {clause, Line, Patterns, Guards, Body}.
 
 split_last(List) -> {lists:droplast(List), lists:last(List)}.
-
-enter_args(DataName) ->
-    ["old_phase", "phase", ["(Tag::", uppercase(DataName), ", data)"]].
 
 lowered(Body, Result) ->
     #{body => xls_parse:print(Body), result => xls_parse:print(Result)}.
