@@ -135,6 +135,8 @@ timed_command \
 mv phi_decoder_profile.vvp.new phi_decoder_profile.vvp
 
 iverilog-vpi xls_sim_bridge.c
+# Bash 3.2 treats empty arrays as unset under nounset. Use the conditional
+# expansions below for both optional argument lists.
 trace_environment=()
 trace_module=()
 if [[ "$trace_enabled" == 1 ]]; then
@@ -151,8 +153,8 @@ if /usr/bin/time "${time_arguments[@]}" -o phi_decoder_profile-vvp.time.new \
         env ERL_HLS_SIM_PROFILE_ONLY=1 \
         ERL_HLS_SIM_TOP=phi_decoder_profile_tb \
         ERL_HLS_SIM_SCHEDULER_PROFILE=phi_decoder_profile.scheduler_profile \
-        "${trace_environment[@]}" \
-        vvp -M "$stage" -m xls_sim_bridge "${trace_module[@]}" \
+        ${trace_environment[@]+"${trace_environment[@]}"} \
+        vvp -M "$stage" -m xls_sim_bridge ${trace_module[@]+"${trace_module[@]}"} \
         phi_decoder_profile.vvp 2>&1 | \
         tee phi_decoder_profile.sim.log.new; then
     mv phi_decoder_profile-vvp.time.new phi_decoder_profile-vvp.time
