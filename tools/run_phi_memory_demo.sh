@@ -62,6 +62,7 @@ rsync -a -e "ssh -o BatchMode=yes" \
     "$local_stage/phi_memory_bridge_tb.sv" \
     "$local_stage/phi_scheduler_rams.sh" \
     "$local_stage/xls_sim_bridge.c" \
+    "$local_stage/xls_sim_axis.h" \
     "$cpu_witness" \
     "$local_stage/erl_src" \
     "$local_stage/test_src" \

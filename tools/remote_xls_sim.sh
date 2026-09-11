@@ -358,6 +358,10 @@ vvp ordered_egress_topology.vvp
     --fifo_module= \
     hls_debug_server.opt.ir > hls_debug_server.v
 
+iverilog -g2012 -s hls_debug_server_tb -o hls_debug_server.vvp \
+    hls_debug_server_tb.sv hls_debug_server.v
+vvp hls_debug_server.vvp
+
 "$xls_root/ir_converter_main" \
     --warnings_as_errors=false \
     --dslx_path=. \
@@ -497,6 +501,19 @@ cleanup() {
 }
 trap cleanup EXIT
 
+stop_sim() {
+    local log=$1 status=0
+    kill "$sim_pid" 2>/dev/null || true
+    wait "$sim_pid" 2>/dev/null || status=$?
+    sim_pid=
+    # SIGTERM is the normal shutdown of these continuously clocked benches.
+    # Preserve a prior VPI failure instead of masking it during cleanup.
+    if [[ "$status" != 0 && "$status" != 143 ]]; then
+        cat "$log"
+        return "$status"
+    fi
+}
+
 ERL_HLS_SIM_DIR="$sim_dir" \
     vvp -M "$stage" -m xls_sim_bridge regsvc_bridge.vvp \
     >"$sim_dir/vvp.log" 2>&1 &
@@ -551,9 +568,7 @@ ERL_HLS_SIM_DIR="$sim_dir" erl \
     -pa "$beam_dir" \
     -eval 'case eunit:test(regsvc_cpu_tests, [verbose]) of ok -> halt(0); error -> halt(1) end.'
 
-kill "$sim_pid" 2>/dev/null || true
-wait "$sim_pid" 2>/dev/null || true
-sim_pid=
+stop_sim "$sim_dir/vvp.log"
 
 phi_sim_dir="$stage/phi_sim"
 mkdir -p "$phi_sim_dir"
@@ -615,3 +630,5 @@ ERL_HLS_PHI_SIM_DIR="$phi_sim_dir" erl \
     -noshell \
     -pa "$beam_dir" \
     -eval 'case eunit:test(phi_memory_bridge_tests, [verbose]) of ok -> halt(0); error -> halt(1) end.'
+
+stop_sim "$phi_sim_dir/vvp.log"

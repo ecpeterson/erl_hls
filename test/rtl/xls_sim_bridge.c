@@ -3,6 +3,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <stdint.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -10,6 +11,7 @@
 #include <unistd.h>
 
 #include "vpi_user.h"
+#include "xls_sim_axis.h"
 
 #define BUFFER_SIZE 65536
 #define PATH_SIZE 4096
@@ -38,9 +40,12 @@ typedef struct {
     vpiHandle h_s_valid;
     vpiHandle h_s_ready;
     vpiHandle h_s_last;
+    vpiHandle h_s_keep;
     vpiHandle h_m_data;
     vpiHandle h_m_valid;
     vpiHandle h_m_ready;
+    vpiHandle h_m_last;
+    vpiHandle h_m_keep;
     int fd_host_to_sim;
     int fd_sim_to_host;
     byte_ring_t input_bytes;
@@ -48,9 +53,8 @@ typedef struct {
     uint32_t s_data;
     int s_valid;
     int s_last;
-    int s_ready_sample;
-    uint32_t m_data_sample;
-    int m_valid_sample;
+    axis_sample_t s_sample, m_sample;
+    axis_monitor_t s_monitor, m_monitor;
     int m_ready;
     /* Remaining payload words after the inner four-byte frame header. */
     unsigned input_payload_words;
@@ -251,6 +255,8 @@ static vpiHandle h_clk;
 static vpiHandle h_resetn;
 static const char *hierarchy_root;
 static uint64_t cycle_number;
+static int bridge_failed;
+
 static axis_endpoint_t app_endpoint;
 static axis_endpoint_t debug_endpoint;
 static scheduler_profile_t scheduler_profiles[MAX_SCHEDULERS];
@@ -276,6 +282,62 @@ static int scheduler_profile_checkpoint_valid;
 static int scheduler_profile_only;
 static uint64_t scheduler_profile_start_cycle;
 static uint64_t scheduler_profile_checkpoint_cycle;
+
+static void bridge_fail(const char *format, ...) {
+    va_list args;
+    if (bridge_failed) return;
+    bridge_failed = 1;
+    vpi_printf("xls_sim_bridge: FAIL cycle=%llu: ",
+               (unsigned long long)cycle_number);
+    va_start(args, format);
+    vpi_vprintf(format, args);
+    va_end(args);
+    vpi_printf("\n");
+    /* vpiFinish's argument controls diagnostics, not the process exit code. */
+    vpip_set_return_value(1);
+    vpi_control(vpiFinish, 1);
+}
+
+static axis_value_t sample_value(vpiHandle signal) {
+    s_vpi_value value = { .format = vpiVectorVal };
+    vpi_get_value(signal, &value);
+    return (axis_value_t) { value.value.vector[0].aval,
+                            value.value.vector[0].bval };
+}
+
+static void sample_endpoint(axis_endpoint_t *endpoint) {
+    if (!endpoint->enabled) return;
+#define SAMPLE(direction) endpoint->direction##_sample = (axis_sample_t) { \
+    sample_value(endpoint->h_##direction##_data), \
+    sample_value(endpoint->h_##direction##_keep), \
+    sample_value(endpoint->h_##direction##_last), \
+    sample_value(endpoint->h_##direction##_valid), \
+    sample_value(endpoint->h_##direction##_ready) }
+    SAMPLE(s);
+    SAMPLE(m);
+#undef SAMPLE
+}
+
+static void check_endpoint(axis_endpoint_t *endpoint, int finishing) {
+    if (!endpoint->enabled || bridge_failed) return;
+    const char *error = finishing ? axis_finish(&endpoint->s_monitor) :
+        axis_check(&endpoint->s_monitor, endpoint->s_sample);
+    if (error) bridge_fail("%s host->DUT: %s", endpoint->name, error);
+    error = finishing ? axis_finish(&endpoint->m_monitor) :
+        axis_check(&endpoint->m_monitor, endpoint->m_sample);
+    if (error) bridge_fail("%s DUT->host: %s", endpoint->name, error);
+    if (finishing && (endpoint->s_valid || endpoint->input_bytes.count ||
+                      endpoint->output_bytes.count))
+        bridge_fail("%s: simulation ended with pending FIFO bytes", endpoint->name);
+}
+
+static void check_reset_boundary(axis_endpoint_t *endpoint) {
+    if (!endpoint->enabled) return;
+    if (axis_finish(&endpoint->s_monitor) || axis_finish(&endpoint->m_monitor) ||
+        endpoint->s_valid || endpoint->input_bytes.count || endpoint->output_bytes.count)
+        bridge_fail("%s: reset interrupted transport; restart simulation and FIFOs",
+                    endpoint->name);
+}
 
 static size_t ring_free(const byte_ring_t *ring) {
     return BUFFER_SIZE - ring->count;
@@ -724,7 +786,7 @@ static void pump_input(axis_endpoint_t *endpoint) {
         } else if (count == 0 || errno == EAGAIN || errno == EWOULDBLOCK) {
             return;
         } else if (errno != EINTR) {
-            vpi_printf("xls_sim_bridge[%s]: input FIFO read failed: %s\n",
+            bridge_fail("%s input FIFO read failed: %s",
                        endpoint->name, strerror(errno));
             return;
         }
@@ -755,7 +817,7 @@ static void pump_output(axis_endpoint_t *endpoint) {
             (endpoint->output_bytes.head + (size_t)written) % BUFFER_SIZE;
         endpoint->output_bytes.count -= (size_t)written;
     } else if (written < 0 && errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR) {
-        vpi_printf("xls_sim_bridge[%s]: output FIFO write failed: %s\n",
+        bridge_fail("%s output FIFO write failed: %s",
                    endpoint->name, strerror(errno));
     }
 }
@@ -794,8 +856,10 @@ static void reset_endpoint(axis_endpoint_t *endpoint) {
     endpoint->s_data = 0;
     endpoint->s_valid = 0;
     endpoint->s_last = 0;
-    endpoint->m_data_sample = 0;
-    endpoint->m_valid_sample = 0;
+    endpoint->s_sample = (axis_sample_t) {0};
+    endpoint->m_sample = (axis_sample_t) {0};
+    endpoint->s_monitor = (axis_monitor_t) {0};
+    endpoint->m_monitor = (axis_monitor_t) {0};
     endpoint->m_ready = 1;
     endpoint->input_payload_words = 0;
     endpoint->input_phase = INPUT_ROUTE_HEADER;
@@ -803,10 +867,10 @@ static void reset_endpoint(axis_endpoint_t *endpoint) {
 }
 
 static void step_endpoint(axis_endpoint_t *endpoint) {
-    if (!endpoint->enabled)
+    if (!endpoint->enabled || bridge_failed)
         return;
 
-    if (endpoint->s_valid && endpoint->s_ready_sample) {
+    if (endpoint->s_sample.valid.value && endpoint->s_sample.ready.value) {
         vpi_printf("xls_sim_bridge[%s]: cycle=%llu accepted input beat %u\n",
                    endpoint->name, (unsigned long long)cycle_number,
                    endpoint->input_beat_number);
@@ -815,20 +879,20 @@ static void step_endpoint(axis_endpoint_t *endpoint) {
         endpoint->s_last = 0;
     }
 
-    if (endpoint->m_valid_sample && endpoint->m_ready) {
+    if (endpoint->m_sample.valid.value && endpoint->m_sample.ready.value) {
         if (endpoint->output_armed) {
             vpi_printf(
                 "xls_sim_bridge[%s]: cycle=%llu output beat %u data=%08x\n",
                 endpoint->name, (unsigned long long)cycle_number,
-                ++endpoint->output_beat_number, endpoint->m_data_sample);
+                ++endpoint->output_beat_number, endpoint->m_sample.data.value);
             if (ring_free(&endpoint->output_bytes) >= 4)
-                ring_push_word(&endpoint->output_bytes, endpoint->m_data_sample);
+                ring_push_word(&endpoint->output_bytes, endpoint->m_sample.data.value);
             else
-                vpi_printf("xls_sim_bridge[%s]: internal output buffer overflow\n",
+                bridge_fail("%s internal output buffer overflow",
                            endpoint->name);
         } else {
             vpi_printf("xls_sim_bridge[%s]: discarded pre-request output %08x\n",
-                       endpoint->name, endpoint->m_data_sample);
+                       endpoint->name, endpoint->m_sample.data.value);
         }
     }
 
@@ -841,6 +905,7 @@ static void apply_drives(axis_endpoint_t *endpoint) {
     if (!endpoint->enabled)
         return;
     put_u32(endpoint->h_s_data, endpoint->s_data);
+    put_u32(endpoint->h_s_keep, 0xf);
     put_bit(endpoint->h_s_valid, endpoint->s_valid);
     put_bit(endpoint->h_s_last, endpoint->s_last);
     put_bit(endpoint->h_m_ready, endpoint->m_ready);
@@ -1598,6 +1663,7 @@ static void checkpoint_scheduler_profiles(void) {
 
 static PLI_INT32 cb_readwrite(p_cb_data cb) {
     (void)cb;
+    if (bridge_failed) return 0;
     apply_drives(&app_endpoint);
     apply_drives(&debug_endpoint);
     return 0;
@@ -1608,26 +1674,26 @@ static PLI_INT32 cb_readonly(p_cb_data cb) {
     unsigned app_output_before;
     int app_armed_before;
     (void)cb;
-    if (!get_bit(h_clk)) {
-        if (app_endpoint.enabled) {
-            app_endpoint.s_ready_sample = get_bit(app_endpoint.h_s_ready);
-            app_endpoint.m_data_sample = get_u32(app_endpoint.h_m_data);
-            app_endpoint.m_valid_sample = get_bit(app_endpoint.h_m_valid);
-        }
-        if (debug_endpoint.enabled) {
-            debug_endpoint.s_ready_sample = get_bit(debug_endpoint.h_s_ready);
-            debug_endpoint.m_data_sample = get_u32(debug_endpoint.h_m_data);
-            debug_endpoint.m_valid_sample = get_bit(debug_endpoint.h_m_valid);
-        }
-        return 0;
-    }
+    if (bridge_failed) return 0;
+    if (!get_bit(h_clk)) return 0;
 
     pump_input(&app_endpoint);
     pump_input(&debug_endpoint);
     pump_output(&app_endpoint);
     pump_output(&debug_endpoint);
 
-    if (!get_bit(h_resetn)) {
+    axis_value_t resetn = sample_value(h_resetn);
+    if (resetn.unknown) {
+        bridge_fail("unknown resetn");
+        return 0;
+    }
+    if (!resetn.value) {
+        // Initial reset permits queued startup input. A later reset cannot
+        // resynchronize partially delivered byte streams: require a fresh run.
+        if (cycle_number) {
+            check_reset_boundary(&app_endpoint);
+            check_reset_boundary(&debug_endpoint);
+        }
         cycle_number = 0;
         reset_endpoint(&app_endpoint);
         reset_endpoint(&debug_endpoint);
@@ -1637,6 +1703,9 @@ static PLI_INT32 cb_readonly(p_cb_data cb) {
     }
 
     cycle_number++;
+    check_endpoint(&app_endpoint, 0);
+    check_endpoint(&debug_endpoint, 0);
+    if (bridge_failed) return 0;
     app_output_before = app_endpoint.output_beat_number;
     app_armed_before = app_endpoint.output_armed;
     step_endpoint(&app_endpoint);
@@ -1670,6 +1739,8 @@ static PLI_INT32 cb_readonly(p_cb_data cb) {
 
 static PLI_INT32 cb_end_of_sim(p_cb_data cb) {
     (void)cb;
+    check_endpoint(&app_endpoint, 1);
+    check_endpoint(&debug_endpoint, 1);
     if (scheduler_profile_started) {
         checkpoint_scheduler_profiles();
         write_scheduler_profile();
@@ -1679,6 +1750,13 @@ static PLI_INT32 cb_end_of_sim(p_cb_data cb) {
 
 static PLI_INT32 cb_clk_change(p_cb_data cb) {
     (void)cb;
+    if (bridge_failed) return 0;
+    // Capture the accepting edge before nonblocking RTL register updates.
+    // A falling-edge snapshot misses changes in the second half of a cycle.
+    if (get_bit(h_clk)) {
+        sample_endpoint(&app_endpoint);
+        sample_endpoint(&debug_endpoint);
+    }
     schedule_sync_cb(cbReadOnlySynch, cb_readonly);
     schedule_sync_cb(cbReadWriteSynch, cb_readwrite);
     return 0;
@@ -1690,27 +1768,38 @@ static vpiHandle find_signal(const char *name) {
     return vpi_handle_by_name((PLI_BYTE8 *)path, NULL);
 }
 
+static vpiHandle require_signal(const char *name, int width) {
+    vpiHandle signal = find_signal(name);
+    if (!signal)
+        bridge_fail("missing signal %s.%s", hierarchy_root, name);
+    else if (vpi_get(vpiSize, signal) != width)
+        bridge_fail("signal %s.%s must be %d bits (got %d)",
+                    hierarchy_root, name, width, vpi_get(vpiSize, signal));
+    return signal;
+}
+
 static int find_endpoint_signals(
     axis_endpoint_t *endpoint,
     const char *s_prefix,
     const char *m_prefix
 ) {
     char name[128];
-#define FIND(handle, prefix, suffix) do { \
+#define FIND(handle, prefix, suffix, width) do { \
     snprintf(name, sizeof(name), "%s_%s", prefix, suffix); \
-    endpoint->handle = find_signal(name); \
+    endpoint->handle = require_signal(name, width); \
 } while (0)
-    FIND(h_s_data, s_prefix, "tdata");
-    FIND(h_s_valid, s_prefix, "tvalid");
-    FIND(h_s_ready, s_prefix, "tready");
-    FIND(h_s_last, s_prefix, "tlast");
-    FIND(h_m_data, m_prefix, "tdata");
-    FIND(h_m_valid, m_prefix, "tvalid");
-    FIND(h_m_ready, m_prefix, "tready");
+    FIND(h_s_data, s_prefix, "tdata", 32);
+    FIND(h_s_valid, s_prefix, "tvalid", 1);
+    FIND(h_s_ready, s_prefix, "tready", 1);
+    FIND(h_s_last, s_prefix, "tlast", 1);
+    FIND(h_s_keep, s_prefix, "tkeep", 4);
+    FIND(h_m_data, m_prefix, "tdata", 32);
+    FIND(h_m_valid, m_prefix, "tvalid", 1);
+    FIND(h_m_ready, m_prefix, "tready", 1);
+    FIND(h_m_last, m_prefix, "tlast", 1);
+    FIND(h_m_keep, m_prefix, "tkeep", 4);
 #undef FIND
-    return endpoint->h_s_data && endpoint->h_s_valid && endpoint->h_s_ready &&
-           endpoint->h_s_last && endpoint->h_m_data && endpoint->h_m_valid &&
-           endpoint->h_m_ready;
+    return !bridge_failed;
 }
 
 static int open_fifo(const char *path) {
@@ -1758,7 +1847,7 @@ static PLI_INT32 cb_start_of_sim(p_cb_data cb) {
     scheduler_profile_only = profile_only_value &&
         strcmp(profile_only_value, "1") == 0;
     if (!directory && !scheduler_profile_only) {
-        vpi_printf("xls_sim_bridge: ERL_HLS_SIM_DIR is not set\n");
+        bridge_fail("ERL_HLS_SIM_DIR is not set");
         return 0;
     }
 
@@ -1782,15 +1871,13 @@ static PLI_INT32 cb_start_of_sim(p_cb_data cb) {
     app_endpoint.enabled = !scheduler_profile_only;
     debug_endpoint.name = "debug";
     debug_endpoint.enabled = !scheduler_profile_only && !app_only;
-    h_clk = find_signal("clk");
-    h_resetn = find_signal("resetn");
-    if (!h_clk || !h_resetn ||
+    h_clk = require_signal("clk", 1);
+    h_resetn = require_signal("resetn", 1);
+    if (bridge_failed ||
         (app_endpoint.enabled &&
          !find_endpoint_signals(&app_endpoint, "s_axis", "m_axis")) ||
         (debug_endpoint.enabled &&
          !find_endpoint_signals(&debug_endpoint, "s_dbg", "m_dbg"))) {
-        vpi_printf("xls_sim_bridge: failed to find %s AXIS signals\n",
-                   hierarchy_root);
         return 0;
     }
 
@@ -1823,7 +1910,7 @@ static PLI_INT32 cb_start_of_sim(p_cb_data cb) {
          !open_endpoint_fifos(&app_endpoint, directory, "app")) ||
         (debug_endpoint.enabled &&
          !open_endpoint_fifos(&debug_endpoint, directory, "debug"))) {
-        vpi_printf("xls_sim_bridge: failed to open transport FIFOs\n");
+        bridge_fail("failed to open transport FIFOs");
         return 0;
     }
 
