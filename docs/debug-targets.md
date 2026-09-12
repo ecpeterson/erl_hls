@@ -31,12 +31,12 @@ The phi-memory CPU fabric exposes its logical actor bindings directly:
 
 ```erlang
 Catalog = phi_memory_cpu_fabric:debug_targets(Fabric),
-Ids = hls_debug_topology:actors(Catalog),
-{ok, Actor} = hls_debug_topology:actor(Catalog, {family, phi_x, [0, 0]}),
+Ids = hls_debug_catalog:actors(Catalog),
+{ok, Actor} = hls_debug_catalog:actor(Catalog, {family, phi_x, [0, 0]}),
 hls_debug:info(Actor, [identity, placement, message_queue_len, postponed]).
 ```
 
-A different CPU launcher can use `hls_debug_topology:cpu(Plan, Processes)`, where `Plan` is the normalized topology and `Processes` maps every `{actor, Id}` or `{family, Id, Coordinates}` to its `hls_statem` PID. Missing or extra bindings are rejected. These bindings explicitly name reference actors; a transport proxy is not an actor binding. Handles belong to that process incarnation and must be reacquired after a restart.
+A different CPU launcher can use `hls_debug_catalog:cpu(Plan, Processes)`, where `Plan` is the normalized topology and `Processes` maps every `{actor, Id}` or `{family, Id, Coordinates}` to its `hls_statem` PID. Missing or extra bindings are rejected. These bindings explicitly name reference actors; a transport proxy is not an actor binding. Handles belong to that process incarnation and must be reacquired after a restart.
 
 ## Shared hardware actors and monitored boundaries
 
@@ -44,9 +44,9 @@ A different CPU launcher can use `hls_debug_topology:cpu(Plan, Processes)`, wher
 Plan = hls_topology:from_module(phi_noise_topology),
 Profile = phi_noise_topology_dslx:profile(),
 Boundary = {boundary, DebugClient, {phi_memory_gateway, host_stream}},
-Catalog = hls_debug_topology:hardware(
+Catalog = hls_debug_catalog:hardware(
     Plan, maps:get(scheduler_groups, Profile), [Boundary]),
-{ok, Actor} = hls_debug_topology:actor(Catalog, {family, phi_x, [0, 0]}),
+{ok, Actor} = hls_debug_catalog:actor(Catalog, {family, phi_x, [0, 0]}),
 hls_debug:info(Actor, [identity, placement, mailbox_capacity, boundaries]),
 {ok, Counters} = hls_debug:get_counters(Boundary),
 {ok, Events} = hls_debug:get_trace(Boundary).

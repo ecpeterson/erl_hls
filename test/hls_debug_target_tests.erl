@@ -47,9 +47,9 @@ shared_boundary_requires_explicit_selection_test() ->
     try
         Boundary = {boundary, Client, host_stream},
         Plan = hls_topology:from_module(phi_decoder_profile_topology),
-        Catalog = hls_debug_topology:hardware(Plan,
+        Catalog = hls_debug_catalog:hardware(Plan,
             maps:get(scheduler_groups, phi_decoder_profile_topology_dslx:profile()), [Boundary]),
-        {ok, Actor} = hls_debug_topology:actor(Catalog, {family, phi_x, [0, 0]}),
+        {ok, Actor} = hls_debug_catalog:actor(Catalog, {family, phi_x, [0, 0]}),
         {scope, Scope} = hls_debug:info(Actor, scope),
         ?assertEqual({error, {unsupported_operation, Scope, get_trace}}, hls_debug:get_trace(Actor)),
         ?assertEqual({error, {unsupported_operation, Scope, get_counters}}, hls_debug:get_counters(Actor)),

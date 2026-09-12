@@ -1,4 +1,4 @@
--module(hls_debug_topology).
+-module(hls_debug_catalog).
 -moduledoc """
 Logical actor targets derived from the normalized topology and scheduler plan.
 

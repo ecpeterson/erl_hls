@@ -77,7 +77,7 @@ init({Distance, NoiseRate}) ->
 handle_call(debug_targets, _From, State = #state{plan = Plan, actors = Actors}) ->
     Processes = maps:from_list([{{family, Family, Coordinates}, Pid} ||
         #{family := Family, coordinates := Coordinates, pid := Pid} <- maps:values(Actors)]),
-    {reply, hls_debug_topology:cpu(Plan, Processes), State};
+    {reply, hls_debug_catalog:cpu(Plan, Processes), State};
 handle_call(
     {register_route, Route, Owner},
     _From,
