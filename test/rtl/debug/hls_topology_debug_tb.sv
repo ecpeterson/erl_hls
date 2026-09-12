@@ -115,7 +115,7 @@ module hls_topology_debug_tb;
     initial begin
         repeat (5) @(negedge clk); reset = 0;
         empty(8'h10); response(8'h90,13);
-        if (reply[0] != 2 || reply[1] != RESOURCES || reply[2] != 2 || reply[3] != 1 || reply[4] != 1)
+        if (reply[0] != 3 || reply[1] != RESOURCES || reply[2] != 2 || reply[3] != 1 || reply[4] != 1)
             $fatal(1, "manifest geometry");
         for (i=0;i<8;i=i+1) if (reply[5+i] !== HASH[i*32+:32]) $fatal(1,"manifest hash");
         for (i=0;i<RESOURCES;i=i+1) query(i,8'h91);

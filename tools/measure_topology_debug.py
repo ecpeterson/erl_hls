@@ -39,7 +39,7 @@ def main():
     body = {k: v for k, v in manifest.items() if k != 'fingerprint'}
     canonical = json.dumps(body, sort_keys=True, ensure_ascii=False, separators=(',', ':')).encode()
     fingerprint = hashlib.sha256(canonical).hexdigest()
-    if manifest['schema'] != 2 or manifest['fingerprint'] != fingerprint:
+    if manifest['schema'] != 3 or manifest['fingerprint'] != fingerprint:
         raise ValueError('corrupt or unsupported manifest')
     hierarchy = json.loads((args.instrumented / 'hierarchy.json').read_text())
     flat = json.loads((args.instrumented / 'flat.json').read_text())['modules'][manifest['top']]

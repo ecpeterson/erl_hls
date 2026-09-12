@@ -36,7 +36,7 @@ fn observe_direct(phase: Phase, value: u32, ready: u16) -> EntryObservation {
       observe_effect(observed, stepped.egress, stepped.egress_valid))
   }((machine, zero!<EntryObservation>()));
   EntryObservation {
-    failed: machine.failed,
+    failed: hls_failure::failed(machine.failure),
     pending: machine.enter_pending,
     data: machine.data.value,
     ..observed
@@ -65,7 +65,7 @@ fn observe_shared(phase: Phase, value: u32, ready: u16) -> EntryObservation {
     (machine_from_bits(result.machine), observed)
   }((machine, zero!<EntryObservation>()));
   EntryObservation {
-    failed: machine.failed,
+    failed: hls_failure::failed(machine.failure),
     pending: machine.enter_pending,
     data: machine.data.value,
     ..observed
@@ -98,9 +98,9 @@ fn failing_entry_preserves_the_preceding_cast_transition_test() {
   assert_eq(dispatched.machine.phase, Phase::MESSAGE);
   assert_eq(dispatched.machine.data.value, u32:0);
   assert_eq(dispatched.machine.occupied, u8:0);
-  assert_eq(dispatched.machine.failed, false);
+  assert_eq(hls_failure::failed(dispatched.machine.failure), false);
   let failed = machine_step(dispatched.machine, zero!<axis::Frame>(), false, false);
-  assert_eq(failed.machine.failed, true);
+  assert_eq(hls_failure::failed(failed.machine.failure), true);
   assert_eq(failed.machine.phase, Phase::MESSAGE);
   assert_eq(failed.machine.data.value, u32:0);
   assert_eq(failed.egress_valid, false);

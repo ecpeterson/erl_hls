@@ -51,20 +51,17 @@ hardware(Plan, SchedulerSpecs, Boundaries) ->
 
 -doc "Binds shared actors to committed-state snapshots in a verified topology debug session.".
 hardware(Plan, Specs, Boundaries, Session = #{manifest := Manifest}) ->
-    Projection = xls_scheduler_debug:projection(Plan, Specs),
-    case maps:get(<<"actor_projection">>, Manifest, none) of
-        Projection -> ok;
-        _ -> error(actor_projection_mismatch)
-    end,
+    Projection = maps:get(<<"actor_projection">>, Manifest, none),
+    ok = xls_scheduler_debug:validate(Plan, Specs, Projection),
     #{<<"resources">> := Resources, <<"fingerprint">> := Hash} = Manifest,
     ActorResources = [R || R = #{<<"kind">> := <<"actor">>} <- Resources],
     ByKey = maps:from_list([{maps:get(<<"key">>, R), R} || R <- ActorResources]),
-    Expected = [A#{<<"bank">> => Index, <<"phases">> => Phases, <<"module">> => Module} ||
+    Expected = [A#{<<"bank">> => Index, <<"phases">> => Phases, <<"module">> => Module, <<"failures">> => Failures, <<"width">> => 26} ||
         #{<<"index">> := Index, <<"phases">> := Phases, <<"module">> := Module,
-            <<"actors">> := Actors} <- maps:get(<<"banks">>, Projection), A <- Actors],
+            <<"actors">> := Actors, <<"failures">> := Failures} <- maps:get(<<"banks">>, Projection), A <- Actors],
     case length(ActorResources) =:= map_size(ByKey) andalso
             lists:sort(Expected) =:= lists:sort([maps:with(
-                [<<"key">>, <<"name">>, <<"slot">>, <<"bank">>, <<"phases">>, <<"module">>], R)
+                [<<"key">>, <<"name">>, <<"slot">>, <<"bank">>, <<"phases">>, <<"module">>, <<"failures">>, <<"width">>], R)
                 || R <- ActorResources]) of
         true -> ok;
         false -> error(actor_resources_mismatch)

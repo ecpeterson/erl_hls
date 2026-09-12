@@ -13,7 +13,7 @@ inspect(Session, Stage, Moment) ->
             Observations = [begin
                 {ok, Actor} = hls_debug_catalog:actor(Catalog, Id),
                 Snapshot = hls_debug:info(Actor,
-                    [identity, placement, phase, initialized, enter_pending, failed, cycle], 10000),
+                    [identity, placement, phase, initialized, enter_pending, failed, failure, cycle], 10000),
                 Values = maps:from_list(Snapshot),
                 true = maps:get(initialized, Values),
                 check(Kind, Moment, Id, Values),
@@ -25,8 +25,23 @@ inspect(Session, Stage, Moment) ->
             io:format("PASS: ~p scoped actor snapshots (~p, ~p)~n", [length(Ids), Kind, Moment])
     end.
 
-check(small, _, {family, cell, [0, 0]}, #{phase := active, failed := true, enter_pending := false}) -> ok;
-check(small, released, {family, cell, [1, 0]}, #{phase := active, failed := false, enter_pending := false}) -> ok;
-check(small, blocked, {family, cell, [1, 0]}, #{phase := active, failed := false}) -> ok;
-check(phi, _, _, #{failed := false}) -> ok;
+check(small, _, {family, cell, [Slot, 0]}, #{phase := Phase, failed := true,
+        enter_pending := false, failure := #{kind := Kind, file := File, line := Line}})
+        when Slot =/= 1, Slot =/= 7 ->
+    Expected = case Slot of
+        0 -> {active, case_clause, <<"hls_actor_debug_helpers.hrl">>, 7};
+        2 -> {active, match_failure, <<"hls_actor_debug_fixture.erl">>, 28};
+        3 -> {boot, case_clause, <<"hls_actor_debug_helpers.hrl">>, 7};
+        4 -> {boot, explicit_fail, <<"hls_actor_debug_fixture.erl">>, 20};
+        5 -> {boot, function_clause, <<"hls_actor_debug_fixture.erl">>, 16};
+        6 -> {active, if_clause, <<"hls_actor_debug_helpers.hrl">>, 11}
+    end,
+    Expected = {Phase, Kind, File, Line},
+    ok;
+check(small, released, {family, cell, [Slot, 0]},
+        #{phase := active, failed := false, failure := none, enter_pending := false})
+        when Slot =:= 1; Slot =:= 7 -> ok;
+check(small, blocked, {family, cell, [Slot, 0]}, #{phase := active, failed := false, failure := none})
+        when Slot =:= 1; Slot =:= 7 -> ok;
+check(phi, _, _, #{failed := false, failure := none}) -> ok;
 check(Kind, Moment, Id, Snapshot) -> error({actor_snapshot, Kind, Moment, Id, Snapshot}).

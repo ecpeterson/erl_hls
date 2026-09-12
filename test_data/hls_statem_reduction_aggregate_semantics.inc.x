@@ -111,7 +111,7 @@ fn shared_machine_aggregate_validation_test() {
   let accepted = shared_machine_aggregate(machine, request, u32:0);
   assert_eq(accepted.dispatched, u1:1);
   assert_eq(accepted.directive, Directive::CONSUME);
-  assert_eq(accepted.machine.failed, u1:0);
+  assert_eq(hls_failure::failed(accepted.machine.failure), u1:0);
   assert_eq(accepted.machine.phase, Phase::COLLECTING_MEMBERS);
   assert_eq(accepted.machine.data.value, u32:24);
   assert_eq(accepted.machine.enter_pending, u1:1);
@@ -130,7 +130,7 @@ fn shared_machine_aggregate_validation_test() {
     },
     u32:0);
   assert_eq(wrong_site.directive, Directive::FAIL);
-  assert_eq(wrong_site.machine.failed, u1:1);
+  assert_eq(hls_failure::failed(wrong_site.machine.failure), u1:1);
 
   let wrong_key_aggregate = reduction_aggregate_batch<u32:2>([
     aggregate_test_count(u32:8, u32:11),
@@ -144,16 +144,16 @@ fn shared_machine_aggregate_validation_test() {
     },
     u32:0);
   assert_eq(wrong_key.directive, Directive::FAIL);
-  assert_eq(wrong_key.machine.failed, u1:1);
+  assert_eq(hls_failure::failed(wrong_key.machine.failure), u1:1);
 
   let enter_pending = shared_machine_aggregate(
     SharedMachine { enter_pending: u1:1, ..machine }, request, u32:0);
   assert_eq(enter_pending.directive, Directive::FAIL);
-  assert_eq(enter_pending.machine.failed, u1:1);
+  assert_eq(hls_failure::failed(enter_pending.machine.failure), u1:1);
 
   let stale = shared_machine_aggregate(accepted.machine, request, u32:0);
   assert_eq(stale.directive, Directive::FAIL);
-  assert_eq(stale.machine.failed, u1:1);
+  assert_eq(hls_failure::failed(stale.machine.failure), u1:1);
 }
 
 #[test]

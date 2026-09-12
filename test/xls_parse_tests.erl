@@ -262,7 +262,7 @@ guard_orelse_keeps_rhs_in_false_branch_test() ->
         nomatch,
         binary:match(XLS, <<
             "if _0 {\n"
-            "  (bool:1, hls_failure::Kind::NONE)\n"
+            "  (bool:1, hls_failure::NONE)\n"
             "} else {\n"
             "  let _1 = Xls_clause_1_Value_1 == 1;"
         >>)
@@ -322,21 +322,17 @@ selected_body_badmatch_does_not_try_later_clause_test() ->
         <<
             "let Xls_clause_1_State_1 = (Tag::STATE, data);\n"
             "if message.value == 0 {\n"
-            "  if ((hls_failure::check(bool:0 != bool:true, hls_failure::Kind::MATCH_FAILURE)) != hls_failure::Kind::NONE) {\n"
+            "  if ((hls_failure::check(bool:0 != bool:true, hls_failure::MATCH_FAILURE)) != hls_failure::NONE) {\n"
             "    body_failure\n"
             "  } else {\n"
             "    Xls_clause_1_State_1\n"
             "  }\n"
             "} else {\n"
             "  let Xls_clause_2_State_1 = (Tag::STATE, data);\n"
-            "  if bool:true {\n"
-            "    if (bool:false) {\n"
-            "      body_failure\n"
-            "    } else {\n"
-            "      Xls_clause_2_State_1\n"
-            "    }\n"
+            "  if (bool:false) {\n"
+            "    body_failure\n"
             "  } else {\n"
-            "    no_clause\n"
+            "    Xls_clause_2_State_1\n"
             "  }\n"
             "}"
         >>,
@@ -393,7 +389,7 @@ boolean_case_preserves_branch_badmatches_test() ->
             <<"Value_1 != bool:true">>
         )
     ),
-    ?assertNotEqual(nomatch, binary:match(XLS, <<"hls_failure::Kind::NONE">>)).
+    ?assertNotEqual(nomatch, binary:match(XLS, <<"hls_failure::NONE">>)).
 
 short_circuit_evaluates_left_once_test_() ->
     [?_assertEqual(1, length(binary:matches(
@@ -512,13 +508,13 @@ selected_general_case_body_badmatch_does_not_fall_through_test() ->
         ["value"]
     ),
     ?assertNotEqual(nomatch, binary:match(XLS, <<" != bool:true">>)),
-    ?assertNotEqual(nomatch, binary:match(XLS, <<"hls_failure::Kind::NONE">>)),
+    ?assertNotEqual(nomatch, binary:match(XLS, <<"hls_failure::NONE">>)),
     ?assertNotEqual(
         nomatch,
         binary:match(XLS, <<
-            "(1, hls_failure::check(bool:0 != bool:true, hls_failure::Kind::MATCH_FAILURE))\n"
+            "(1, hls_failure::check(bool:0 != bool:true, hls_failure::MATCH_FAILURE))\n"
             "  } else {\n"
-            "    (2, hls_failure::Kind::NONE)"
+            "    (2, hls_failure::NONE)"
         >>)
     ).
 
@@ -558,12 +554,12 @@ homogeneous_record_case_supports_aliases_fields_and_guards_test() ->
 general_case_without_fallback_carries_failure_test() ->
     XLS = lower_expression_clause(
         "probe(Value) -> case Value of 0 -> 1; 1 -> 2 end.", ["value"]),
-    ?assertNotEqual(nomatch, binary:match(XLS, <<"hls_failure::Kind::CASE_CLAUSE">>)).
+    ?assertNotEqual(nomatch, binary:match(XLS, <<"hls_failure::CASE_CLAUSE">>)).
 
 guarded_general_case_fallback_carries_failure_test() ->
     XLS = lower_expression_clause(
         "probe(Value) -> case Value of 0 -> 1; Fallback when Fallback >= 0 -> 2 end.", ["value"]),
-    ?assertNotEqual(nomatch, binary:match(XLS, <<"hls_failure::Kind::CASE_CLAUSE">>)).
+    ?assertNotEqual(nomatch, binary:match(XLS, <<"hls_failure::CASE_CLAUSE">>)).
 
 nonfinal_general_case_fallback_is_rejected_test() ->
     Clause = parse_clause(
@@ -702,13 +698,13 @@ selected_if_body_badmatch_reaches_body_failure_test() ->
         "{Result, State}."
     ),
     ?assertNotEqual(nomatch, binary:match(XLS, <<" != bool:true">>)),
-    ?assertNotEqual(nomatch, binary:match(XLS, <<"hls_failure::Kind::NONE">>)),
+    ?assertNotEqual(nomatch, binary:match(XLS, <<"hls_failure::NONE">>)),
     ?assertNotEqual(nomatch, binary:match(XLS, <<"body_failure">>)).
 
 if_without_true_fallback_carries_failure_test() ->
     XLS = lower_expression_clause(
         "probe(Value) -> if Value =:= 0 -> Value end.", ["value"]),
-    ?assertNotEqual(nomatch, binary:match(XLS, <<"hls_failure::Kind::IF_CLAUSE">>)).
+    ?assertNotEqual(nomatch, binary:match(XLS, <<"hls_failure::IF_CLAUSE">>)).
 
 if_guard_alternatives_are_rejected_test() ->
     Clause = parse_clause(
@@ -777,7 +773,7 @@ hls_gs_callback_bodies_accept_general_case_test() ->
         binary:match(XLS, <<"Request_1.0 == Tag::QUERY">>)
     ),
     ?assertNotEqual(nomatch, binary:match(XLS, <<"Original_1 < 8">>)),
-    ?assertNotEqual(nomatch, binary:match(XLS, <<"hls_failure::Kind::NONE">>)).
+    ?assertNotEqual(nomatch, binary:match(XLS, <<"hls_failure::NONE">>)).
 
 state_machine_init_argument_is_rejected_test() ->
     assert_bad_init_head(

@@ -1,6 +1,6 @@
 # Phase-entry outcomes
 
-An `hls_statem` entry callback returns `{NextData, Actions}`. The complete callback must succeed before any action can be emitted. XLS combines the returned data, ordered effects, optional reduction key/identity, and selected failure predicate in a typed `EntryOutcome`.
+An `hls_statem` entry callback returns `{NextData, Actions}`. The complete callback must succeed before any action can be emitted. XLS combines the returned data, ordered effects, optional reduction key/identity, and selected failure code in a typed `EntryOutcome`.
 
 An unselected `andalso`, `orelse`, `case`, or `if` expression branch contributes no failure.
 
@@ -42,7 +42,7 @@ The outcome is combinational: an entry can be recomputed from unchanged incoming
 
 ## Failure scope
 
-Hardware latches failure until reset; ERTS terminates with an Erlang exception. Hardware failure carries no exception packet, source location, or first-failure reason. Earlier successful entries are not rolled back. A cast that successfully transitions into a failing entry has already selected the new phase and incoming entry data; those values are preserved.
+Hardware latches failure until reset; ERTS terminates with an Erlang exception. The committed code retains the first selected reason and source location, available through verified shared-actor debug queries; it does not emit an exception packet. Earlier successful entries are not rolled back. A cast that successfully transitions into a failing entry has already selected the new phase and incoming entry data; those values are preserved.
 
 This contract covers supported matches, `case_clause`, and `if_clause` failures. It does not cover general Erlang exceptions or arithmetic-domain errors. Entry heads and action lists must belong to the bounded subset; a missing branch invalidates the entry just as a failed match does. See [control-flow failures](control-flow.md). Initialization and reset do not follow the entry contract.
 

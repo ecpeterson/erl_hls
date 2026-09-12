@@ -97,7 +97,7 @@ semantics(statem) ->
     "  assert_eq(m.entered_from, Phase::BOOT);\n"
     "  assert_eq(m.data, Cell {value: u32:42, default: u32:0});\n"
     "  assert_eq(m.enter_pending, u1:1);\n"
-    "  assert_eq(m.failed, u1:0);\n"
+    "  assert_eq(m.failure, hls_failure::NONE);\n"
     "  assert_eq(initial_shared_machine(), shared_machine(m));\n"
     "}\n".
 

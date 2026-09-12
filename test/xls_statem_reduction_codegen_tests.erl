@@ -153,7 +153,7 @@ site(ID, Phase, Population, Tag) ->
             )
         }],
         completion => expression(
-            "(phase, data, Directive::CONSUME, u1:0)"
+            "(phase, data, Directive::CONSUME, u1:0, hls_failure::NONE)"
         )
     }.
 
