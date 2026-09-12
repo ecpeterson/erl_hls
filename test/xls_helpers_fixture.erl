@@ -10,7 +10,16 @@
 
 %% Separate BEAM oracles and separate XLS compilation inputs. All
 %% intermediate integers in the generated tests stay inside their types.
+%% Typed groups keep XLS from formatting a single deeply nested 30-arm
+%% conditional during constant analysis; each group retains an ordered case.
 factored(Mode, X, Y) ->
+    if Mode < 10 -> factored_low(Mode, X, Y);
+        Mode < 20 -> factored_middle(Mode, X, Y);
+        true -> factored_high(Mode, X, Y)
+    end.
+
+-spec factored_low(hls_nums:u8(), hls_nums:u32(), hls_nums:u32()) -> hls_nums:u32().
+factored_low(Mode, X, Y) ->
     case Mode of
         0 -> add(add(X, Y), add(Y, X));
         1 -> equal(X, Y);
@@ -25,6 +34,12 @@ factored(Mode, X, Y) ->
         7 -> Report = report(update(#cell{value = X}, Y)), Report#report.value;
         8 -> pair_value({X, Y});
         9 -> constant() + constant(X);
+        _ -> hls_nums:wrap(hls_nums:u32(), 0)
+    end.
+
+-spec factored_middle(hls_nums:u8(), hls_nums:u32(), hls_nums:u32()) -> hls_nums:u32().
+factored_middle(Mode, X, Y) ->
+    case Mode of
         10 ->
             Fixed = hls_fixed:wrap(hls_fixed:signed(32, 16), X),
             hls_type:as(hls_nums:u32(), fixed_double(Fixed));
@@ -62,6 +77,12 @@ factored(Mode, X, Y) ->
         19 ->
             case X < Y of true -> Value = X; false -> Value = Y end,
             Value = X, Value;
+        _ -> hls_nums:wrap(hls_nums:u32(), 0)
+    end.
+
+-spec factored_high(hls_nums:u8(), hls_nums:u32(), hls_nums:u32()) -> hls_nums:u32().
+factored_high(Mode, X, Y) ->
+    case Mode of
         20 ->
             case X < Y of true -> X = Y; false -> Y end,
             X;
@@ -106,6 +127,13 @@ factored(Mode, X, Y) ->
     end.
 
 inline(Mode, X, Y) ->
+    if Mode < 10 -> inline_low(Mode, X, Y);
+        Mode < 20 -> inline_middle(Mode, X, Y);
+        true -> inline_high(Mode, X, Y)
+    end.
+
+-spec inline_low(hls_nums:u8(), hls_nums:u32(), hls_nums:u32()) -> hls_nums:u32().
+inline_low(Mode, X, Y) ->
     case Mode of
         0 -> (X + Y) + (Y + X);
         1 -> X = Y, X;
@@ -121,6 +149,12 @@ inline(Mode, X, Y) ->
             Report = #report{value = Updated#cell.value}, Report#report.value;
         8 -> {First, Second} = {X, Y}, First + Second;
         9 -> hls_nums:wrap(hls_nums:u32(), 17) + X;
+        _ -> hls_nums:wrap(hls_nums:u32(), 0)
+    end.
+
+-spec inline_middle(hls_nums:u8(), hls_nums:u32(), hls_nums:u32()) -> hls_nums:u32().
+inline_middle(Mode, X, Y) ->
+    case Mode of
         10 ->
             Fixed = hls_fixed:wrap(hls_fixed:signed(32, 16), X),
             hls_type:as(hls_nums:u32(), Fixed + Fixed);
@@ -146,6 +180,12 @@ inline(Mode, X, Y) ->
             false -> X + Y
         end;
         19 -> Value = case X < Y of true -> X; false -> Y end, Value = X, Value;
+        _ -> hls_nums:wrap(hls_nums:u32(), 0)
+    end.
+
+-spec inline_high(hls_nums:u8(), hls_nums:u32(), hls_nums:u32()) -> hls_nums:u32().
+inline_high(Mode, X, Y) ->
+    case Mode of
         20 -> case X < Y of true -> X = Y; false -> Y end, X;
         21 -> case X < Y of true -> true = (X =:= 0), Y; false -> X end;
         22 -> case X < Y of true -> X + 1; false -> Y + 2 end;
