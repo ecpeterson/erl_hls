@@ -37,7 +37,8 @@
     entries := [entry(), ...],
     casts := [cast_clause()],
     reductions := none | xls_statem_reduction_ir:reduction(),
-    shared_service := ordinary | aggregate_only
+    shared_service := ordinary | aggregate_only,
+    mailbox_debug => boolean()
 }.
 
 -spec emit(spec()) -> iolist().

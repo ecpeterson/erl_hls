@@ -140,6 +140,10 @@ jobs:
             _build/actor-debug/**/manifest.json
             _build/actor-debug/**/blocked.txt
             _build/actor-debug/**/recovered.txt
+            _build/mailbox-debug/**/actors-*.term
+            _build/mailbox-debug/**/manifest.json
+            _build/mailbox-debug/**/blocked.txt
+            _build/mailbox-debug/**/recovered.txt
           if-no-files-found: ignore
 
       - name: Query an instrumented generated topology under backpressure

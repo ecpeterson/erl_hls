@@ -81,7 +81,7 @@ emit(Plan, Profile) ->
 -doc "Returns the actor-artifact specializations selected by a profile.".
 -spec artifact_requirements(
     hls_topology:plan(), xls_topology_dslx:profile()
-) -> #{module() := #{shared_service := ordinary | aggregate_only}}.
+) -> #{module() := #{shared_service := ordinary | aggregate_only, mailbox_debug => boolean()}}.
 artifact_requirements(Plan, Profile) ->
     maps:get(artifact_requirements, lower(Plan, Profile)).
 

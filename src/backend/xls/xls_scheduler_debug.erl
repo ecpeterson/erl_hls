@@ -1,5 +1,5 @@
 -module(xls_scheduler_debug).
--moduledoc "Compiler-owned projections of committed shared-actor state RAM writes.".
+-moduledoc "Compiler-owned projections of shared-actor state writes and scheduler metadata.".
 -export([projection/3, projection/4, validate/3, actor_key/1]).
 
 %% Emit beside the RTL generated from this exact plan. The instrumentation tool

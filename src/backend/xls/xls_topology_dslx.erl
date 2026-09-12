@@ -66,7 +66,7 @@ emit(Plan, _Profile) ->
 
 -doc "Returns the actor-artifact specializations selected by a family profile.".
 -spec artifact_requirements(hls_topology:plan(), profile()) ->
-    #{module() := #{shared_service := ordinary | aggregate_only}}.
+    #{module() := #{shared_service := ordinary | aggregate_only, mailbox_debug => boolean()}}.
 artifact_requirements(#{actors := [], families := [_ | _]} = Plan, Profile) ->
     xls_topology_family_dslx:artifact_requirements(Plan, Profile);
 artifact_requirements(Plan, _Profile) ->

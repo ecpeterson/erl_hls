@@ -57,9 +57,20 @@ def main():
     rtl = root / 'priv/rtl/debug'
     yosys = args.yosys
     (stage / 'yosys-version.txt').write_bytes(subprocess.check_output([yosys, '-V']))
+    modes = ['physical']
+    if any('mailbox' in bank for bank in banks):
+        modes.append('actor_state')
+    modes.append('actors')
     results = []
-    for mode in ('physical', 'actors'):
-        selected = banks if mode == 'actors' else []
+    for mode in modes:
+        selected = banks if mode != 'physical' else []
+        if mode == 'actor_state':
+            # Hold the query protocol and observed application fixed while
+            # measuring just the pre-existing phase/failure retention path.
+            selected = [{k: v for k, v in bank.items() if k != 'mailbox'}
+                        for bank in banks]
+            for bank in selected:
+                bank['taps'] = bank['taps'][:1 + bank['address_width'] + 25]
         count = len(physical) + sum(b['slots'] for b in selected)
         lines = ['module measured(input wire clk, reset,',
                  f'input wire [{len(all_bits) - 1}:0] observed,',
@@ -102,7 +113,7 @@ def main():
             (stage / 'results.json').write_text(json.dumps(results, indent=2) + '\n')
             print(row, flush=True)
     summary = {}
-    for mode in ('physical', 'actors'):
+    for mode in modes:
         rows = [r for r in results if r['mode'] == mode]
         summary[mode] = {k: distribution([r[k] for r in rows]) for k in ('LUT', 'FF', 'BRAM')}
     (stage / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')

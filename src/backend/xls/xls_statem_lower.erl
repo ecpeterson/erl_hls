@@ -26,7 +26,7 @@ lower(Filename, Forms, PhaseNames) ->
     file:filename(),
     [erl_parse:abstract_form()],
     [atom(), ...],
-    #{shared_service := ordinary | aggregate_only}
+    #{shared_service := ordinary | aggregate_only, mailbox_debug => boolean()}
 ) -> iolist().
 lower(Filename, Forms0, PhaseNames, Options0) ->
     {SourceForms, Sites} = xls_failure_sites:prepare(Forms0),
