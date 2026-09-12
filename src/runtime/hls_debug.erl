@@ -30,8 +30,8 @@ always means native BEAM process information, including a proxy's own queue.
 -define(DEBUG_ERROR, 16#ff).
 -define(FABRIC_RX, '$hls_fabric_frame').
 
--define(TRACE_VERSION, 1).
--define(TRACE_RECORD_WORDS, 2).
+-define(TRACE_VERSION, 2).
+-define(TRACE_RECORD_WORDS, 3).
 -define(TRACE_APPLICATION_RX, 1).
 -define(TRACE_APPLICATION_TX, 2).
 
@@ -150,17 +150,21 @@ write_frame(
     ).
 
 decode_reply(?DEBUG_COUNTERS, <<
-    Version:32/little-unsigned-integer,
+    5:32/little-unsigned-integer,
     Cycles:32/little-unsigned-integer,
     AppRxBeats:32/little-unsigned-integer,
     AppRxFrames:32/little-unsigned-integer,
     AppRxStalls:32/little-unsigned-integer,
     AppTxBeats:32/little-unsigned-integer,
     AppTxFrames:32/little-unsigned-integer,
-    AppTxStalls:32/little-unsigned-integer
->>, _Module) ->
+    AppTxStalls:32/little-unsigned-integer,
+    ObservationDrops:32/little-unsigned-integer,
+    Framing:32/little-unsigned-integer
+>>, _Module) when Framing < 64 ->
     {ok, #{
-        version => Version,
+        version => 5,
+        observation_drops => ObservationDrops,
+        framing => decode_framing(Framing),
         cycles => Cycles,
         app_rx_beats => AppRxBeats,
         app_rx_frames => AppRxFrames,
@@ -184,14 +188,16 @@ decode_trace_reply(<<
     Count:32/little-unsigned-integer,
     Dropped:32/little-unsigned-integer,
     ObservationDrops:32/little-unsigned-integer,
+    Framing:32/little-unsigned-integer,
     Records/binary
->> = Payload) ->
+>> = Payload) when Framing < 64 ->
     Trace = #{
         version => Version,
         record_words => RecordWords,
         count => Count,
         dropped => Dropped,
         observation_drops => ObservationDrops,
+        framing => decode_framing(Framing),
         raw => Payload
     },
     ExpectedBytes = Count * ?TRACE_RECORD_WORDS * 4,
@@ -218,6 +224,7 @@ decode_trace_events(<<>>, Acc) ->
     lists:reverse(Acc);
 decode_trace_events(<<
     Cycle:32/little-unsigned-integer,
+    Destination:16/little, Source:16/little,
     Op:8,
     TxID:8,
     Flags:8,
@@ -226,6 +233,8 @@ decode_trace_events(<<
 >>, Acc) ->
     Event = #{
         cycle => Cycle,
+        route => case Flags band 2 of 0 -> none; 2 -> {Source, Destination} end,
+        observation_gap => Flags band 4 =/= 0,
         kind => trace_kind(KindCode),
         kind_code => KindCode,
         flags => Flags,
@@ -237,3 +246,13 @@ decode_trace_events(<<
 trace_kind(?TRACE_APPLICATION_RX) -> application_rx;
 trace_kind(?TRACE_APPLICATION_TX) -> application_tx;
 trace_kind(Code) -> {unknown, Code}.
+
+%% These states describe header recognition, not application execution.
+decode_framing(Word) ->
+    #{rx => frame_phase(Word band 3), tx => frame_phase((Word bsr 2) band 3),
+        rx_gap_pending => Word band 16 =/= 0, tx_gap_pending => Word band 32 =/= 0}.
+
+frame_phase(0) -> boundary;
+frame_phase(1) -> header;
+frame_phase(2) -> payload;
+frame_phase(3) -> unsynchronized.

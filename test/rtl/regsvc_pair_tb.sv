@@ -198,18 +198,18 @@ module regsvc_pair_tb;
                 $fatal(1);
             end
             receive_debug_beat(observed_word, 1'b0);
-            if (observed_word !== header(8'h83, debug_txid, 8'd9)) begin
+            if (observed_word !== header(8'h83, debug_txid, 8'd12)) begin
                 $display("FAIL: malformed debug trace header: %08x",
                          observed_word);
                 $fatal(1);
             end
             receive_debug_beat(observed_word, 1'b0);
-            if (observed_word !== 32'd1) begin
+            if (observed_word !== 32'd2) begin
                 $display("FAIL: unexpected trace version %0d", observed_word);
                 $fatal(1);
             end
             receive_debug_beat(observed_word, 1'b0);
-            if (observed_word !== 32'd2) begin
+            if (observed_word !== 32'd3) begin
                 $display("FAIL: unexpected trace record width %0d", observed_word);
                 $fatal(1);
             end
@@ -230,11 +230,15 @@ module regsvc_pair_tb;
                 $fatal(1);
             end
             receive_debug_beat(observed_word, 1'b0);
+            if (observed_word >= 64) $fatal(1, "invalid framing status");
+            receive_debug_beat(observed_word, 1'b0);
             if (observed_word == 32'd0) begin
                 $display("FAIL: application RX trace timestamp was zero");
                 $fatal(1);
             end
             rx_cycle = observed_word;
+            receive_debug_beat(observed_word, 1'b0);
+            if (observed_word !== 0) $fatal(1, "local trace unexpectedly carried a route");
             receive_debug_beat(observed_word, 1'b0);
             if (observed_word !== {8'h01, 8'h00, app_txid, 8'd5}) begin
                 $display("FAIL: malformed application RX trace event %08x",
@@ -247,6 +251,8 @@ module regsvc_pair_tb;
                 $fatal(1);
             end
             tx_cycle = observed_word;
+            receive_debug_beat(observed_word, 1'b0);
+            if (observed_word !== 0) $fatal(1, "local trace unexpectedly carried a route");
             receive_debug_beat(observed_word, 1'b1);
             if (observed_word !== {8'h02, 8'h00, app_txid, 8'd7}) begin
                 $display("FAIL: malformed application TX trace event %08x",
@@ -273,18 +279,18 @@ module regsvc_pair_tb;
                 $fatal(1);
             end
             receive_debug_beat(observed_word, 1'b0);
-            if (observed_word !== header(8'h83, debug_txid, 8'd7)) begin
+            if (observed_word !== header(8'h83, debug_txid, 8'd9)) begin
                 $display("FAIL: malformed debug trace header: %08x",
                          observed_word);
                 $fatal(1);
             end
             receive_debug_beat(observed_word, 1'b0);
-            if (observed_word !== 32'd1) begin
+            if (observed_word !== 32'd2) begin
                 $display("FAIL: unexpected trace version %0d", observed_word);
                 $fatal(1);
             end
             receive_debug_beat(observed_word, 1'b0);
-            if (observed_word !== 32'd2) begin
+            if (observed_word !== 32'd3) begin
                 $display("FAIL: unexpected trace record width %0d", observed_word);
                 $fatal(1);
             end
@@ -305,10 +311,14 @@ module regsvc_pair_tb;
                 $fatal(1);
             end
             receive_debug_beat(observed_word, 1'b0);
+            if (observed_word >= 64) $fatal(1, "invalid framing status");
+            receive_debug_beat(observed_word, 1'b0);
             if (observed_word == 32'd0) begin
                 $display("FAIL: application trace timestamp was zero");
                 $fatal(1);
             end
+            receive_debug_beat(observed_word, 1'b0);
+            if (observed_word !== 0) $fatal(1, "local trace unexpectedly carried a route");
             receive_debug_beat(observed_word, 1'b1);
             if (observed_word !== event_metadata) begin
                 $display("FAIL: malformed application trace event %08x",
@@ -389,25 +399,22 @@ module regsvc_pair_tb;
             $fatal(1);
         end
         receive_debug_beat(observed_word, 1'b0);
-        if (observed_word !== header(8'h81, 8'h55, 8'd8)) begin
+        if (observed_word !== header(8'h81, 8'h55, 8'd10)) begin
             $display("FAIL: malformed debug counters header: %08x", observed_word);
             $fatal(1);
         end
-        for (index = 0; index < 8; index = index + 1) begin
-            receive_debug_beat(observed_word, index == 7);
-            if (index == 0 && observed_word !== 32'd4) begin
+        for (index = 0; index < 10; index = index + 1) begin
+            receive_debug_beat(observed_word, index == 9);
+            if (index == 0 && observed_word !== 32'd5) begin
                 $display("FAIL: unexpected debug protocol version %0d",
                          observed_word);
                 $fatal(1);
             end
-        end
-        if (observed_word == 32'd0) begin
-            $display("FAIL: blocked routed reply produced no endpoint TX stalls");
-            $fatal(1);
+            if (index == 7 && observed_word == 32'd0)
+                $fatal(1, "blocked routed reply produced no endpoint TX stalls");
         end
 
-        // The former passive full-state read is deliberately not part of
-        // protocol version 4. Keep its old tag reserved and verify that stale
+        // Tag 0x02 is reserved. Verify that unsupported
         // clients receive a bounded error instead of a state snapshot.
         send_reserved_state_request(first_endpoint, 8'h57);
         receive_debug_beat(observed_word, 1'b0);

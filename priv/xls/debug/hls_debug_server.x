@@ -1,6 +1,7 @@
 // Request validation and serialization for the debug endpoint.
 
 import hls_debug_trace as trace;
+import hls_debug_framing as framing;
 import hls_debug_types as debug;
 
 struct TraceReplyHeader {
@@ -9,9 +10,10 @@ struct TraceReplyHeader {
     count: u32,
     dropped: u32,
     observation_drops: u32,
+    framing: u32,
 }
 
-const COUNTER_WORDS = ((bit_count<debug::Counters>() / u32:32) as u8) + u8:1;
+const COUNTER_WORDS = ((bit_count<debug::Counters>() / u32:32) as u8) + u8:3;
 const TRACE_RECORD_WORDS = (debug::TRACE_EVENT_BITS / u32:32) as u8;
 const TRACE_HEADER_WORDS = (bit_count<TraceReplyHeader>() / u32:32) as u8;
 
@@ -23,7 +25,9 @@ struct DebugState {
     response_index: u8,
     txid: u8,
     snapshot: debug::MonitorState,
-    trace_event: u64,
+    trace_event: debug::TraceBits,
+    trace_index: debug::TraceCount,
+    trace_word: u2,
 }
 
 fn valid_empty_request(request: debug::Beat) -> u1 {
@@ -75,29 +79,21 @@ fn response_words(reply_tag: debug::ReplyTag,
     }
 }
 
-fn trace_word_index(state: DebugState) -> u8 {
-    state.response_index - (TRACE_HEADER_WORDS + u8:1)
-}
-
-fn trace_event_index(state: DebugState) -> debug::TraceCount {
-    (trace_word_index(state) >> u8:1) as debug::TraceCount
-}
-
 fn trace_event_is_pending(state: DebugState) -> u1 {
     state.snapshot.trace.pending_valid &&
-    trace_event_index(state) ==
+    state.trace_index ==
         state.snapshot.trace.count - debug::TraceCount:1
 }
 
 fn trace_event_read_needed(state: DebugState) -> u1 {
     state.active && state.reply_tag == debug::ReplyTag::TRACE &&
     state.response_index > TRACE_HEADER_WORDS &&
-    trace_word_index(state)[0:1] == u1:0 &&
+    state.trace_word == u2:0 &&
     !trace_event_is_pending(state)
 }
 
 fn trace_read(state: DebugState) -> debug::TraceRead {
-    let event_index = trace_event_index(state);
+    let event_index = state.trace_index;
     debug::TraceRead {
         address: trace::address(state.snapshot.trace.bank, event_index),
         high: event_index[0:1],
@@ -112,14 +108,14 @@ fn response_trace_payload(state: DebugState) -> u32 {
         u8:2 => state.snapshot.trace.count as u32,
         u8:3 => state.snapshot.trace.drops,
         u8:4 => state.snapshot.tap_drops,
+        u8:5 => framing::status(state.snapshot.rx, state.snapshot.tx),
         _ => {
-            let word_index = trace_word_index(state);
             if trace_event_is_pending(state) {
                 trace::event_bits(state.snapshot.trace.pending_event)[
-                    (word_index[0:1] as u32) * u32:32+:u32]
+                    (state.trace_word as u32) * u32:32+:u32]
             } else {
                 state.trace_event[
-                    (word_index[0:1] as u32) * u32:32+:u32]
+                    (state.trace_word as u32) * u32:32+:u32]
             }
         },
     }
@@ -136,6 +132,8 @@ fn response_payload(state: DebugState) -> u32 {
             u8:6 => state.snapshot.counters.app_tx_beats,
             u8:7 => state.snapshot.counters.app_tx_frames,
             u8:8 => state.snapshot.counters.app_tx_stall_cycles,
+            u8:9 => state.snapshot.tap_drops,
+            u8:10 => framing::status(state.snapshot.rx, state.snapshot.tx),
             _ => u32:0,
         },
         debug::ReplyTag::TRACE => response_trace_payload(state),
@@ -167,14 +165,14 @@ pub proc DebugServer {
     snapshot_request_out: chan<debug::RequestTag> out;
     snapshot_in: chan<debug::MonitorState> in;
     trace_read_request_out: chan<debug::TraceRead> out;
-    trace_read_response_in: chan<u64> in;
+    trace_read_response_in: chan<debug::TraceBits> in;
 
     config(request_in: chan<debug::Beat> in,
            response_out: chan<debug::Beat> out,
            snapshot_request_out: chan<debug::RequestTag> out,
            snapshot_in: chan<debug::MonitorState> in,
            trace_read_request_out: chan<debug::TraceRead> out,
-           trace_read_response_in: chan<u64> in) {
+           trace_read_response_in: chan<debug::TraceBits> in) {
         (
             request_in,
             response_out,
@@ -220,7 +218,7 @@ pub proc DebugServer {
                 tok_read_request,
                 trace_read_response_in,
                 read_needed,
-                u64:0);
+                debug::TraceBits:0);
             let response = if read_needed {
                 DebugState { trace_event, ..state }
             } else {
@@ -232,8 +230,18 @@ pub proc DebugServer {
             if beat.tlast {
                 zero!<DebugState>()
             } else {
+                // Traverse the three-word records directly. Dividing an
+                // absolute reply index by three infers unnecessary arithmetic
+                // in this sequential serializer.
+                let event_word = response.reply_tag == debug::ReplyTag::TRACE &&
+                    response.response_index > TRACE_HEADER_WORDS;
+                let event_done = event_word && response.trace_word == u2:2;
                 DebugState {
                     response_index: response.response_index + u8:1,
+                    trace_word: if event_done { u2:0 } else {
+                        response.trace_word + event_word as u2
+                    },
+                    trace_index: response.trace_index + event_done as debug::TraceCount,
                     ..response
                 }
             }

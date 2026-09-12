@@ -68,7 +68,7 @@ GitHub Actions runs the same generated-RTL and bridged-EUnit regressions on
 Ubuntu using a checksum-pinned XLS release. `tools/prepare_xls_sim.sh` creates
 the portable simulation staging directory; `tools/remote_xls_sim.sh` executes
 that directory on any Linux host with XLS, Erlang, and Icarus installed. The
-same remote runner invokes the XLS interpreter on `hls_debug_trace.x` and
+same remote runner invokes the XLS interpreter on `hls_debug_framing.x`, `hls_debug_trace.x`, and
 `hls_debug_observer.x`, so their `#[test]` functions run in both GitHub Actions
 and the UTM flow before the debug procs are lowered to RTL.
 
@@ -77,7 +77,7 @@ trace storage semantics, passive observation, and response serialization, and
 is lowered beside the application. A small passive RTL tap keeps
 instrumentation ready signals out of the application datapath. The shared
 EUnit scenario queries counters and a bounded frame trace from Erlang,
-including trace overflow and drain behavior. Packed application state is not
+including trace overflow and drain behavior. The [routed loss regression](docs/debug-protocol.md#diagnosing-generated-applications) diagnoses injected sampling gaps through `hls_debug`, with VPI limited to the public debug transport. Packed application state is not
 mirrored into the passive debug path. The SystemVerilog scenario additionally
 proves that routed debug access remains available while application output is
 backpressured and that the reserved former state-query tag is rejected. See the

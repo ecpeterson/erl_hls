@@ -28,8 +28,8 @@ pub enum TraceKind : u8 {
     APPLICATION_TX = 2,
 }
 
-pub const DEBUG_VERSION = u32:4;
-pub const TRACE_VERSION = u32:1;
+pub const DEBUG_VERSION = u32:5;
+pub const TRACE_VERSION = u32:2;
 pub const TRACE_DEPTH = u32:64;
 pub const TRACE_COUNT_BITS = std::clog2(TRACE_DEPTH + u32:1);
 pub const TRACE_ROW_COUNT = TRACE_DEPTH / u32:2;
@@ -44,6 +44,8 @@ pub struct Beat { keep: u4, tlast: u1, word: u32 }
 pub struct StreamObservation { data: u32, tlast: u1, ready: u1, valid: u1 }
 
 pub struct Observation {
+    routed: u1,
+    gap: u1,
     tap_drops: u32,
     tx: StreamObservation,
     rx: StreamObservation,
@@ -54,9 +56,10 @@ pub struct Observation {
 // distribution context without changing how the buffer is drained.
 pub struct TraceMetadata { kind: TraceKind, flags: u8, txid: u8, op: u8 }
 
-pub struct TraceEvent { cycle: u32, metadata: TraceMetadata }
+pub struct TraceEvent { cycle: u32, route: u32, metadata: TraceMetadata }
 
 pub const TRACE_EVENT_BITS = bit_count<TraceEvent>();
+pub type TraceBits = bits[TRACE_EVENT_BITS];
 pub type TraceRow = bits[TRACE_EVENT_BITS * u32:2];
 
 // Complete event pairs live in an external 1R1W RAM. A possible odd final
@@ -84,10 +87,13 @@ pub struct Counters {
     app_tx_stall_cycles: u32,
 }
 
+pub enum FramePhase : u2 { BOUNDARY = 0, HEADER = 1, PAYLOAD = 2, UNSYNC = 3 }
+pub struct FrameState { phase: FramePhase, route: u32, gap_pending: u1 }
+
 pub struct MonitorState {
     counters: Counters,
     tap_drops: u32,
-    app_rx_in_frame: u1,
-    app_tx_in_frame: u1,
+    rx: FrameState,
+    tx: FrameState,
     trace: TraceBuffer,
 }

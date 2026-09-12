@@ -115,7 +115,7 @@ debug_scenario_(Pid, DebugPid) ->
     [
         ?_test(begin
             {ok, Counters} = hls_debug:get_counters(DebugPid),
-            ?assertEqual(4, maps:get(version, Counters)),
+            ?assertEqual(5, maps:get(version, Counters)),
             ?assert(maps:get(cycles, Counters) > 0),
             ?assertEqual(21, maps:get(app_rx_beats, Counters)),
             ?assertEqual(7, maps:get(app_rx_frames, Counters)),
@@ -126,8 +126,8 @@ debug_scenario_(Pid, DebugPid) ->
         ?_test(begin
             {ok, Trace} = hls_debug:get_trace(DebugPid),
             Events = maps:get(events, Trace),
-            ?assertEqual(1, maps:get(version, Trace)),
-            ?assertEqual(2, maps:get(record_words, Trace)),
+            ?assertEqual(2, maps:get(version, Trace)),
+            ?assertEqual(3, maps:get(record_words, Trace)),
             ?assertEqual(11, maps:get(count, Trace)),
             ?assertEqual(11, length(Events)),
             ?assertEqual(0, maps:get(dropped, Trace)),
@@ -153,7 +153,9 @@ debug_scenario_(Pid, DebugPid) ->
                 || Event <- Events
             ]),
             ?assert(lists:all(
-                fun(Event) -> maps:get(cycle, Event) > 0 end,
+                fun(#{cycle := Cycle, route := Route, observation_gap := Gap}) ->
+                    Cycle > 0 andalso Route =:= none andalso Gap =:= false
+                end,
                 Events
             )),
             Cycles = [maps:get(cycle, Event) || Event <- Events],
@@ -268,7 +270,7 @@ routed_debug_scenario_(DebugPid) ->
     [
         ?_test(begin
             {ok, Counters} = hls_debug:get_counters(DebugPid),
-            ?assertEqual(4, maps:get(version, Counters)),
+            ?assertEqual(5, maps:get(version, Counters)),
             ?assertEqual(8, maps:get(app_rx_beats, Counters)),
             ?assertEqual(3, maps:get(app_rx_frames, Counters)),
             ?assertEqual(4, maps:get(app_tx_beats, Counters)),

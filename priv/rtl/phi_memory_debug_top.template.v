@@ -100,7 +100,7 @@ module phi_memory_debug_top (
         ._shared_out_rdy(m_dbg_tready)
     );
 
-    hls_debug_monitor debug_monitor (
+    hls_debug_monitor #(.ROUTED(1)) debug_monitor (
         .aclk(aclk),
         .aresetn(aresetn),
         .app_rx_tdata(s_axis_tdata),

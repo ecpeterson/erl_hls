@@ -1,7 +1,7 @@
 `timescale 1ns/1ps
 
 module hls_debug_tap_tb;
-    localparam integer OBSERVATION_BITS = 32 + 2 * (32 + 3);
+    localparam integer OBSERVATION_BITS = 2 + 32 + 2 * (32 + 3);
 
     reg clk = 1'b0;
     reg resetn = 1'b0;
@@ -27,7 +27,7 @@ module hls_debug_tap_tb;
     wire [31:0] observed_tx_data = observation_data[69:38];
     wire [31:0] observation_drops = observation_data[101:70];
 
-    hls_debug_tap dut (
+    hls_debug_tap #(.ROUTED(1)) dut (
         .aclk(clk),
         .aresetn(resetn),
         .app_rx_tvalid(app_rx_valid),
@@ -69,7 +69,7 @@ module hls_debug_tap_tb;
         app_tx_ready = 1'b1;
         app_tx_valid = 1'b1;
         #1;
-        if (!observed_rx_valid || observed_rx_ready || !observed_rx_last ||
+        if (!observation_data[103] || !observed_rx_valid || observed_rx_ready || !observed_rx_last ||
                 observed_rx_data !== 32'h11223344 ||
                 !observed_tx_valid || !observed_tx_ready || observed_tx_last ||
                 observed_tx_data !== 32'haabbccdd) begin
@@ -87,7 +87,7 @@ module hls_debug_tap_tb;
         @(posedge clk);
         @(negedge clk);
 
-        if (observation_drops !== 32'd3) begin
+        if (observation_drops !== 32'd3 || !observation_data[102]) begin
             $display("FAIL: tap did not count blocked observations");
             $fatal(1);
         end
@@ -95,7 +95,7 @@ module hls_debug_tap_tb;
         observation_ready = 1'b1;
         @(posedge clk);
         @(negedge clk);
-        if (observation_drops !== 32'd3) begin
+        if (observation_drops !== 32'd3 || observation_data[102]) begin
             $display("FAIL: tap changed its drop count while ready");
             $fatal(1);
         end
