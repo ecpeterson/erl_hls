@@ -424,6 +424,21 @@ struct ReductionContribution {
   value: Phifold,
 }
 
+pub struct ReductionAggregate {
+  valid: u1,
+  failed: u1,
+  site: uN[2],
+  key: u32,
+  count: uN[3],
+  seen: bits[4],
+  accumulator: Phifold,
+}
+
+pub struct ReductionAggregateRequest {
+  slot: u32,
+  aggregate: ReductionAggregate,
+}
+
 enum ReductionOutcome : u3 {
   NOT_CANDIDATE = u3:0,
   MISMATCH = u3:1,
@@ -557,6 +572,8 @@ pub struct SharedExecutorRequest {
   machine: MachineBits,
   frame: axis::Frame,
   internal: u1,
+  aggregate_request: ReductionAggregateRequest,
+  aggregate_valid: u1,
   received: u1,
   mailbox_index: u8,
   order_index: u8,
@@ -593,9 +610,15 @@ struct SharedState<ACTOR_COUNT: u32, PRODUCER_COUNT: u32> {
   next_valid: u1,
   next_slot: u32,
   in_flight: u1[ACTOR_COUNT],
-  // Private completion events outrank entry and mailbox work for
-  // the same actor, but retain round-robin fairness across actors.
+  // Private completion events outrank aggregate, entry, and
+  // mailbox work for the same actor; actor choice stays fair.
   internal_candidates: u1[ACTOR_COUNT],
+  // Each actor can have at most one completed aggregate awaiting
+  // application: it cannot open its next reduction until this one
+  // retires. Per-actor receptacles prevent one blocked actor from
+  // backpressuring the reduction plane for every other actor.
+  aggregate_pending: ReductionAggregateRequest[ACTOR_COUNT],
+  aggregate_pending_valid: u1[ACTOR_COUNT],
   completed_valid: u1,
   completed: SharedExecutorResult,
   admission_cursor: u32,
@@ -916,6 +939,206 @@ if (bool:false) {
   _3.1
 }
     },
+  }
+}
+
+fn reduction_transport_contribution(
+    frame: axis::Frame) -> ReductionContribution {
+  match frame.header.op as Tag {
+    Tag::PHI => {
+      let message = phi_from_bits(frame.payload);
+      let built = {
+        let Xls_clause_1_Epoch_1 = message.epoch;
+        let Xls_clause_1_Values_1 = message.values;
+        let _0 = (0 as u32);
+let _1 = Xls_clause_1_Values_1[1 - u32:1];
+let _2 = phi_field::accumulate(0, _1);
+let _3 = Xls_clause_1_Values_1[2 - u32:1];
+let _4 = phi_field::accumulate(0, _3);
+let _5 = Phifold {
+  value0: _2,
+  value1: _4,
+  ..zero!<Phifold>()
+};
+let _6 = (Tag::PHI_FOLD, _5, bits_from_phifold(_5));
+let _7 = (Xls_clause_1_Epoch_1, _0, _6, );
+if (bool:false) {
+  (u1:0, u32:0, u32:0, zero!<Phifold>())
+} else {
+  (u1:1, _7.0, _7.1, _7.2.1)
+}
+      };
+      ReductionContribution {
+        valid: built.0,
+        site: ReductionSite::GATHERING,
+        key: built.1,
+        member: built.2,
+        value: built.3,
+      }
+    },
+    Tag::PHI0 => {
+      let message = phi0_from_bits(frame.payload);
+      let built = {
+        let Xls_clause_1_Step_1 = message.step;
+        let Xls_clause_1_Source_1 = message.source;
+        let Xls_clause_1_Value_1 = message.value;
+        let _0 = phi_field::accumulate(0, Xls_clause_1_Value_1);
+let _1 = (Xls_clause_1_Source_1 as s64);
+let _2 = Phifold {
+  value0: _0,
+  value1: _1,
+  ..zero!<Phifold>()
+};
+let _3 = (Tag::PHI_FOLD, _2, bits_from_phifold(_2));
+let _4 = (Xls_clause_1_Step_1, Xls_clause_1_Source_1, _3, );
+if (bool:false) {
+  (u1:0, u32:0, u32:0, zero!<Phifold>())
+} else {
+  (u1:1, _4.0, _4.1, _4.2.1)
+}
+      };
+      ReductionContribution {
+        valid: built.0,
+        site: ReductionSite::COMPARING,
+        key: built.1,
+        member: built.2,
+        value: built.3,
+      }
+    },
+    Tag::ANYON_MOVE => {
+      let message = anyonmove_from_bits(frame.payload);
+      let built = {
+        let Xls_clause_1_Step_1 = message.step;
+        let Xls_clause_1_PresentWord_1 = message.present;
+        let _0 = (0 as u32);
+let _1 = Xls_clause_1_PresentWord_1 & 1;
+let _2 = (_1 as s64);
+let _3 = Xls_clause_1_PresentWord_1 < 2;
+let _4 = if _3 {
+  (0, hls_failure::NONE)
+} else {
+  (1, hls_failure::NONE)
+};
+let _5 = (_4.0 as s64);
+let _6 = Phifold {
+  value0: _2,
+  value1: _5,
+  ..zero!<Phifold>()
+};
+let _7 = (Tag::PHI_FOLD, _6, bits_from_phifold(_6));
+let _8 = (Xls_clause_1_Step_1, _0, _7, );
+if ((_4.1) != hls_failure::NONE) {
+  (u1:0, u32:0, u32:0, zero!<Phifold>())
+} else {
+  (u1:1, _8.0, _8.1, _8.2.1)
+}
+      };
+      ReductionContribution {
+        valid: built.0,
+        site: ReductionSite::FLIPPING,
+        key: built.1,
+        member: built.2,
+        value: built.3,
+      }
+    },
+    _ => zero!<ReductionContribution>(),
+  }
+}
+
+fn reduction_aggregate_expected_members(
+    site: ReductionSite) -> ReductionMembers {
+  match site {
+    ReductionSite::GATHERING => zero!<ReductionMembers>(),
+    ReductionSite::COMPARING => uN[4]:15 as ReductionMembers,
+    ReductionSite::FLIPPING => zero!<ReductionMembers>(),
+  }
+}
+
+fn reduction_aggregate_push(
+    aggregate: ReductionAggregate, frame: axis::Frame)
+    -> ReductionAggregate {
+  let contribution = reduction_transport_contribution(frame);
+  let first = !aggregate.valid;
+  let member_mode = reduction_site_mode(contribution.site) ==
+    ReductionMode::MEMBERS;
+  let member_bit = reduction_member_bit(
+    contribution.site, contribution.member);
+  let same_window = first ||
+    (aggregate.site == contribution.site as uN[2] &&
+     aggregate.key == contribution.key);
+  let within_population = aggregate.count <
+    reduction_site_population(contribution.site);
+  let unexpected = member_mode &&
+    member_bit == zero!<ReductionMembers>();
+  let duplicate = member_mode && !first &&
+    (aggregate.seen & member_bit) != zero!<ReductionMembers>();
+  let accepted = !aggregate.failed && contribution.valid &&
+    same_window && within_population && !unexpected && !duplicate;
+  ReductionAggregate {
+    valid: u1:1,
+    failed: aggregate.failed || !accepted,
+    site: if first { contribution.site as uN[2] } else { aggregate.site },
+    key: if first { contribution.key } else { aggregate.key },
+    count: if accepted {
+      aggregate.count + ReductionRemaining:1
+    } else { aggregate.count },
+    seen: if accepted && member_mode {
+      aggregate.seen | member_bit
+    } else { aggregate.seen },
+    accumulator: if !accepted { aggregate.accumulator } else {
+      if first { contribution.value } else {
+        reduction_reduce(
+          reduction_site_name(contribution.site),
+          aggregate.accumulator, contribution.value)
+      }
+    },
+  }
+}
+
+pub fn reduction_aggregate_batch<COUNT: u32>(
+    frames: axis::Frame[COUNT]) -> ReductionAggregate {
+  unroll_for! (index, aggregate):
+      (u32, ReductionAggregate) in u32:0..COUNT {
+    reduction_aggregate_push(aggregate, frames[index])
+  }(zero!<ReductionAggregate>())
+}
+
+fn reduction_apply_complete_aggregate(
+    state: ReductionState, aggregate: ReductionAggregate)
+    -> ReductionApply {
+  if !aggregate.valid {
+    ReductionApply {
+      state, outcome: ReductionOutcome::NOT_CANDIDATE }
+  } else if state.status != ReductionStatus::OPEN ||
+      state.site as uN[2] != aggregate.site ||
+      state.key != aggregate.key {
+    ReductionApply { state, outcome: ReductionOutcome::MISMATCH }
+  } else {
+    let population = reduction_site_population(state.site);
+    let fresh = state.remaining == population &&
+      state.seen == zero!<ReductionMembers>();
+    let full = aggregate.count == population;
+    let member_mode = reduction_site_mode(state.site) ==
+      ReductionMode::MEMBERS;
+    let members_ok = aggregate.seen ==
+      reduction_aggregate_expected_members(state.site);
+    if aggregate.failed || !fresh || !full {
+      ReductionApply { state, outcome: ReductionOutcome::MISMATCH }
+    } else if !members_ok {
+      ReductionApply { state,
+        outcome: ReductionOutcome::UNEXPECTED_MEMBER }
+    } else {
+      let next_state = ReductionState {
+        status: ReductionStatus::COMPLETE,
+        remaining: ReductionRemaining:0,
+        seen: if member_mode { aggregate.seen }
+          else { state.seen },
+        accumulator: aggregate.accumulator,
+        ..state
+      };
+      ReductionApply {
+        state: next_state, outcome: ReductionOutcome::COMPLETE }
+    }
   }
 }
 
@@ -1927,6 +2150,18 @@ pub fn scheduled_effect(
   let last = index + u8:1 >= count;
   (entry_effect(scheduled.effects, index), emit, last)
 }
+pub fn scheduled_reduction_prefix(
+    scheduled: ScheduledEffects) -> (u1, u8, u1) {
+  let count = entry_effect_count(scheduled.effects);
+  match scheduled.effects.layout {
+    u8:3 => (u1:1, u8:4, count == u8:4),
+    u8:4 => (u1:1, u8:4, count == u8:4),
+    u8:5 => (u1:1, u8:4, count == u8:4),
+    u8:6 => (u1:1, u8:4, count == u8:4),
+    _ => (u1:0, u8:0, u1:0),
+  }
+}
+
 fn entry_effects_valid(effects: EntryEffects) -> u1 {
   entry_effect_count(effects) != u8:0
 }
@@ -2746,6 +2981,32 @@ fn shared_machine_complete(machine: SharedMachine) -> SharedDispatch {
     }
   }
 }
+fn shared_machine_aggregate(
+    machine: SharedMachine,
+    request: ReductionAggregateRequest,
+    slot: u32) -> SharedDispatch {
+  let applied = reduction_apply_complete_aggregate(
+    machine.reduction, request.aggregate);
+  let accepted = !hls_failure::failed(machine.failure) && !machine.enter_pending &&
+    request.slot == slot &&
+    applied.outcome == ReductionOutcome::COMPLETE;
+  if accepted {
+    shared_machine_complete(SharedMachine {
+      reduction: applied.state,
+      ..machine
+    })
+  } else {
+    SharedDispatch {
+      machine: SharedMachine {
+        failure: hls_failure::first(machine.failure, hls_failure::REDUCTION_PROTOCOL),
+        ..machine
+      },
+      dispatched: u1:1,
+      directive: Directive::FAIL,
+      ..zero!<SharedDispatch>()
+    }
+  }
+}
 fn shared_machine_dispatch(
     machine: SharedMachine, frame: axis::Frame, received: u1)
     -> SharedDispatch {
@@ -2755,32 +3016,12 @@ fn shared_machine_dispatch(
     SharedDispatch { machine, ..zero!<SharedDispatch>() }
   } else {
     let tag_ok = (frame.header.op == (Tag::PHI as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::ANYON_MOVE as u8) && frame.header.payload_words == u8:2) || (frame.header.op == (Tag::PHI0 as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHENOM_CONFIG as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHENOM_REQUEST as u8) && frame.header.payload_words == u8:1) || (frame.header.op == (Tag::PHENOM_QUERY as u8) && frame.header.payload_words == u8:2) || (frame.header.op == (Tag::PHENOM_DATA as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHENOM_ANYON as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHI_CORRECTION as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHI_CONFIG as u8) && frame.header.payload_words == u8:1) || (frame.header.op == (Tag::PAULI_QUERY as u8) && frame.header.payload_words == u8:2) || (frame.header.op == (Tag::PAULI_REPLY as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::NOISE_CUTOFF as u8) && frame.header.payload_words == u8:1) || (frame.header.op == (Tag::PAULI_UPDATE as u8) && frame.header.payload_words == u8:1) || (frame.header.op == (Tag::PHI_STATUS as u8) && frame.header.payload_words == u8:3);
-    let contribution = reduction_contribution(
-      frame, machine.phase, machine.data);
-    let reduction_applied = reduction_apply(
-      machine.reduction, contribution);
-    let reduction_candidate = tag_ok &&
-      reduction_applied.outcome != ReductionOutcome::NOT_CANDIDATE;
-    let reduction_mismatch = reduction_candidate &&
-      reduction_applied.outcome == ReductionOutcome::MISMATCH;
-    let reduction_accepted = reduction_candidate &&
-      (reduction_applied.outcome == ReductionOutcome::PENDING ||
-       reduction_applied.outcome == ReductionOutcome::COMPLETE);
     let (next_phase, next_data, directive, repeat_phase, dispatch_failure) =
-      if !tag_ok {
-        (machine.phase, machine.data, Directive::FAIL, u1:0, hls_failure::REDUCTION_PROTOCOL)
-      } else if !reduction_candidate {
+      if tag_ok {
         dispatch(frame, machine.phase, machine.data)
-      } else if reduction_mismatch {
-        (machine.phase, machine.data, Directive::POSTPONE, u1:0, hls_failure::NONE)
-      } else if reduction_accepted {
-        (machine.phase, machine.data, Directive::CONSUME, u1:0, hls_failure::NONE)
       } else {
         (machine.phase, machine.data, Directive::FAIL, u1:0, hls_failure::REDUCTION_PROTOCOL)
       };
-    let next_reduction = if reduction_accepted {
-      reduction_applied.state
-    } else { machine.reduction };
     let invalid_repeat = tag_ok && repeat_phase &&
       (directive != Directive::CONSUME ||
        next_phase != machine.phase);
@@ -2803,7 +3044,6 @@ fn shared_machine_dispatch(
         machine.phase
       } else { machine.entered_from },
       data: if effective { next_data } else { machine.data },
-      reduction: next_reduction,
       enter_pending: effective && phase_boundary && !failed,
       failure,
       ..machine
@@ -2861,6 +3101,9 @@ pub fn shared_execute(request: SharedExecutorRequest) ->
   let machine = machine_from_bits(request.machine);
   let dispatched = if request.internal {
     shared_machine_complete(machine)
+  } else if request.aggregate_valid {
+    shared_machine_aggregate(
+      machine, request.aggregate_request, request.slot)
   } else {
     shared_machine_dispatch(
       machine, request.frame, request.received)
@@ -2939,6 +3182,7 @@ fn reduction_ready_selection<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
       mail: state.mail_candidates,
       egress: state.egress_waiters,
       internal: state.internal_candidates,
+      aggregate: state.aggregate_pending_valid,
       ..zero!<scheduler::Candidates<ACTOR_COUNT>>()
     }, state.egress_busy, in_flight, cursor)
 }
@@ -3037,6 +3281,7 @@ pub proc SharedService<
   mailbox_read_resp_in: chan<MailboxRamReadResp> in;
   mailbox_write_req_out: chan<MailboxRamWriteReq> out;
   mailbox_write_resp_in: chan<MailboxRamWriteResp> in;
+      aggregate_in: chan<ReductionAggregateRequest> in;
   executor_request_out: chan<SharedExecutorRequest> out;
   executor_result_in: chan<SharedExecutorResult> in;
 
@@ -3051,7 +3296,8 @@ pub proc SharedService<
       mailbox_read_req_out: chan<MailboxRamReadReq> out,
       mailbox_read_resp_in: chan<MailboxRamReadResp> in,
       mailbox_write_req_out: chan<MailboxRamWriteReq> out,
-      mailbox_write_resp_in: chan<MailboxRamWriteResp> in
+      mailbox_write_resp_in: chan<MailboxRamWriteResp> in,
+          aggregate_in: chan<ReductionAggregateRequest> in
   ) {
     let (executor_request_p, executor_request_c) =
       chan<SharedExecutorRequest, u32:1>("executor_request");
@@ -3070,6 +3316,7 @@ pub proc SharedService<
       mailbox_read_resp_in,
       mailbox_write_req_out,
       mailbox_write_resp_in,
+          aggregate_in,
       executor_request_p,
       executor_result_c,
     )
@@ -3112,10 +3359,49 @@ pub proc SharedService<
           }
         )
       }((join(), state.pending, state.pending_valid));
+    let (aggregate_tok, incoming_aggregate, incoming_aggregate_valid) =
+      recv_if_non_blocking(
+        capture_tok,
+        aggregate_in,
+        capture_enabled,
+        zero!<ReductionAggregateRequest>());
+    let aggregate_slot = if incoming_aggregate.slot < ACTOR_COUNT {
+      incoming_aggregate.slot
+    } else { u32:0 };
+    let aggregate_protocol_error = incoming_aggregate_valid &&
+      (incoming_aggregate.slot >= ACTOR_COUNT ||
+       state.aggregate_pending_valid[aggregate_slot]);
+    let captured_aggregate = ReductionAggregateRequest {
+      aggregate: if aggregate_protocol_error {
+        ReductionAggregate {
+          failed: u1:1,
+          ..incoming_aggregate.aggregate
+        }
+      } else {
+        incoming_aggregate.aggregate
+      },
+      ..incoming_aggregate
+    };
+    let aggregate_pending = if incoming_aggregate_valid {
+      update(
+        state.aggregate_pending, aggregate_slot, captured_aggregate)
+    } else {
+      state.aggregate_pending
+    };
+    let aggregate_pending_valid = if incoming_aggregate_valid {
+      update(state.aggregate_pending_valid, aggregate_slot, u1:1)
+    } else {
+      state.aggregate_pending_valid
+    };
+    let aggregate_state = SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
+      aggregate_pending,
+      aggregate_pending_valid,
+      ..state
+    };
     match state.phase {
       SharedPhase::BOOT => {
         let write_tok = send(
-          capture_tok,
+          aggregate_tok,
           ram_write_req_out,
           machine_write(state.cursor, initial_shared_machine()));
         let (_done, _) = recv(write_tok, ram_write_resp_in);
@@ -3143,7 +3429,7 @@ pub proc SharedService<
         }
       },
       SharedPhase::STARTUP => {
-        let (tok, request) = recv(capture_tok, startup_in);
+        let (tok, request) = recv(aggregate_tok, startup_in);
         let physical = state.occupied[request.slot];
         let write_tok = send(
           tok,
@@ -3185,7 +3471,7 @@ pub proc SharedService<
           !state.completed_valid || buffered_can_retire;
         let (executor_result_tok, incoming_result, incoming_valid) =
           recv_if_non_blocking(
-            capture_tok,
+            aggregate_tok,
             executor_result_in,
             accept_executor_result,
             zero!<SharedExecutorResult>());
@@ -3211,7 +3497,7 @@ pub proc SharedService<
           pending_valid: credit_pending_valid,
           egress_busy: credit_busy ||
             (retire_valid && result.effects_valid),
-          ..state
+          ..aggregate_state
         };
         let retired = retire_reduction_actor(
           retire_actor(
@@ -3236,17 +3522,37 @@ pub proc SharedService<
         };
         let completion_blocked = completed_valid &&
           completed.effects_valid && retired.egress_busy;
-        let issue_valid =
+        let prior_issue_valid =
           state.next_valid && !completion_blocked;
-        let read_slot = if state.next_valid {
+        let prior_read_slot = if state.next_valid {
           state.next_slot
         } else { u32:0 };
+        // The retained choice wins. Otherwise select work made
+        // visible by aggregate capture or retirement and issue it
+        // without another activation's selection bubble.
+        let fast_in_flight = if retire_valid {
+          update(retired_in_flight, result.slot, u1:1)
+        } else {
+          retired_in_flight
+        };
+        let (fast_ready, fast_slot) = reduction_ready_selection(
+          retired, state.cursor, fast_in_flight);
+        let fast_issue = !prior_issue_valid &&
+          !completion_blocked && fast_ready;
+        let issue_valid = prior_issue_valid || fast_issue;
+        let read_slot = if prior_issue_valid {
+          prior_read_slot
+        } else { fast_slot };
         let internal_active = issue_valid &&
-          state.internal_candidates[read_slot];
-        let entry_active = internal_active ||
+          retired.internal_candidates[read_slot];
+        let aggregate_active = issue_valid &&
+          !internal_active &&
+          retired.aggregate_pending_valid[read_slot];
+        let private_active = internal_active || aggregate_active;
+        let entry_active = private_active ||
           state.entry_probes[read_slot] ||
           state.egress_waiters[read_slot];
-        let read_mailbox = issue_valid && !internal_active &&
+        let read_mailbox = issue_valid && !private_active &&
           state.mail_candidates[read_slot] && !entry_active;
         let (received, order_index, mailbox_index) =
           mailbox::select(
@@ -3299,6 +3605,15 @@ pub proc SharedService<
           admission_cursor: reservation.cursor,
           ..retired
         };
+    let post_issue_state = SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
+      aggregate_pending_valid: if aggregate_active {
+        update(
+          admitted.aggregate_pending_valid, read_slot, u1:0)
+      } else {
+        admitted.aggregate_pending_valid
+      },
+      ..admitted
+    };
         let issued_in_flight = if issue_valid {
           update(retired_in_flight, read_slot, u1:1)
         } else {
@@ -3316,7 +3631,7 @@ pub proc SharedService<
         let selection_state = SharedState<
             ACTOR_COUNT, PRODUCER_COUNT> {
           in_flight: issued_in_flight,
-          ..admitted
+          ..post_issue_state
         };
         let (selected_ready, selected_slot) = reduction_ready_selection(
           selection_state, cursor, issued_in_flight);
@@ -3336,6 +3651,9 @@ pub proc SharedService<
           machine: response.data,
           frame,
               internal: internal_active,
+              aggregate_request:
+                retired.aggregate_pending[read_slot],
+              aggregate_valid: aggregate_active,
           received: read_mailbox && received,
           mailbox_index,
           order_index,
