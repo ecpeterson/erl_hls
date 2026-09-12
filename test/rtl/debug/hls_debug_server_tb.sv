@@ -13,7 +13,7 @@ module hls_debug_server_tb;
     wire timing = $test$plusargs("timing");
     wire [7:0] snapshot_request;
     wire snapshot_request_valid;
-    reg [362:0] snapshot = 0;
+    reg [462:0] snapshot = 0;
     reg snapshot_valid = 0;
     wire snapshot_ready;
     wire trace_read_valid;
@@ -32,7 +32,7 @@ module hls_debug_server_tb;
         ._snapshot_request_out_rdy(!snapshot_valid),
         ._snapshot_in(snapshot), ._snapshot_in_vld(snapshot_valid), ._snapshot_in_rdy(snapshot_ready),
         ._trace_read_request_out(), ._trace_read_request_out_vld(trace_read_valid),
-        ._trace_read_request_out_rdy(1'b1), ._trace_read_response_in(64'b0),
+        ._trace_read_request_out_rdy(1'b1), ._trace_read_response_in(96'b0),
         ._trace_read_response_in_vld(1'b0), ._trace_read_response_in_rdy()
     );
 
@@ -62,9 +62,9 @@ module hls_debug_server_tb;
             if (snapshot_request_valid && !snapshot_valid) begin
                 snapshots = snapshots + 1;
                 // One odd pending trace event, so no external trace RAM read is needed.
-                snapshot <= {224'd0, 32'd0, 2'd0, 1'b0,
+                snapshot <= {224'd0, 32'd0, 70'd0, 1'b0,
                     (trace_available ? 7'd1 : 7'd0), 32'd0,
-                    trace_available, 64'h12345678_01020304};
+                    trace_available, 96'h12345678_00010002_01020304};
                 snapshot_valid <= 1;
                 if (snapshot_request == 8'h03) begin
                     drains = drains + 1;
@@ -108,9 +108,9 @@ module hls_debug_server_tb;
     task automatic counters(input [7:0] txid);
         begin
             send_beat({8'h01, 8'd0, txid, 8'd0}, 1, 4'hf);
-            expect_word({8'h81, 8'd0, txid, 8'd8}, 0);
-            expect_word(4, 0);
-            repeat (6) expect_word(0, 0);
+            expect_word({8'h81, 8'd0, txid, 8'd10}, 0);
+            expect_word(5, 0);
+            repeat (8) expect_word(0, 0);
             expect_word(0, 1);
         end
     endtask
@@ -118,14 +118,16 @@ module hls_debug_server_tb;
     task automatic trace_reply(input [7:0] txid, input present);
         begin
             send_beat({8'h03, 8'd0, txid, 8'd0}, 1, 4'hf);
-            expect_word({8'h83, 8'd0, txid, (present ? 8'd7 : 8'd5)}, 0);
-            expect_word(1, 0);
+            expect_word({8'h83, 8'd0, txid, (present ? 8'd9 : 8'd6)}, 0);
             expect_word(2, 0);
+            expect_word(3, 0);
             expect_word(present ? 1 : 0, 0);
+            expect_word(0, 0);
             expect_word(0, 0);
             expect_word(0, !present);
             if (present) begin
                 expect_word(32'h12345678, 0);
+                expect_word(32'h00010002, 0);
                 expect_word(32'h01020304, 1);
             end
         end

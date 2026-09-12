@@ -62,8 +62,8 @@ shared_boundary_requires_explicit_selection_test() ->
         spawn_link(fun() -> Parent ! {trace, hls_debug:get_trace(Boundary)} end),
         [{{0, 1}, {3, Tx, 0}, <<>>}] = phi_memory_fabric_fixture:await_sends(Fabric, 1, 1000),
         ok = phi_memory_fabric_fixture:deliver(Fabric, {1, 0}, {16#83, Tx, 0},
-            <<1:32/little, 2:32/little, 1:32/little, 0:32/little, 0:32/little,
-                123:32/little, 7:8, 42:8, 1:8, 1:8>>),
+            <<2:32/little, 3:32/little, 1:32/little, 0:32/little, 0:32/little, 0:32/little,
+                123:32/little, 0:32/little, 7:8, 42:8, 1:8, 1:8>>),
         receive {trace, {ok, Trace}} ->
             ?assertEqual(#{kind => boundary, id => host_stream}, maps:get(scope, Trace)),
             ?assertMatch([#{cycle := 123, kind := application_rx, tx_id := 42}], maps:get(events, Trace))

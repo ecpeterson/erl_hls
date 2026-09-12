@@ -10,7 +10,8 @@ pub fn event_metadata(event: debug::TraceEvent) -> u32 {
 }
 
 pub fn event_bits(event: debug::TraceEvent) -> bits[debug::TRACE_EVENT_BITS] {
-    ((event_metadata(event) as u64) << u64:32) | event.cycle as u64
+    ((event_metadata(event) as debug::TraceBits) << u32:64) |
+        ((event.route as debug::TraceBits) << u32:32) | event.cycle as debug::TraceBits
 }
 
 pub fn address(bank: u1, event_index: debug::TraceCount)
@@ -65,6 +66,7 @@ pub fn append(trace: debug::TraceBuffer, event: debug::TraceEvent, enabled: u1,
 fn event_pair_shares_one_row_test() {
     let first = debug::TraceEvent {
         cycle: u32:7,
+        route: u32:0,
         metadata: debug::TraceMetadata {
             kind: debug::TraceKind::APPLICATION_RX,
             flags: u8:0,
@@ -74,6 +76,7 @@ fn event_pair_shares_one_row_test() {
     };
     let second = debug::TraceEvent {
         cycle: u32:7,
+        route: u32:0,
         metadata: debug::TraceMetadata {
             kind: debug::TraceKind::APPLICATION_TX,
             flags: u8:1,

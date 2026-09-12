@@ -1,11 +1,8 @@
 // Passive application observation and coherent snapshot capture.
 
 import hls_debug_trace as trace;
+import hls_debug_framing as framing;
 import hls_debug_types as debug;
-
-fn next_in_frame(in_frame: u1, valid: u1, ready: u1, tlast: u1) -> u1 {
-    if valid && ready { !tlast } else { in_frame }
-}
 
 pub fn apply_observation(state: debug::MonitorState,
                          observation: debug::Observation)
@@ -14,33 +11,20 @@ pub fn apply_observation(state: debug::MonitorState,
     let app_tx_accepted = observation.tx.valid && observation.tx.ready;
     let dropped_observations = observation.tap_drops - state.tap_drops;
     let cycle = state.counters.cycles + u32:1 + dropped_observations;
-    let rx_event = debug::TraceEvent {
-        cycle,
-        metadata: debug::TraceMetadata {
-            kind: debug::TraceKind::APPLICATION_RX,
-            flags: observation.rx.tlast as u8,
-            txid: observation.rx.data[8:16],
-            op: observation.rx.data[24:32],
-        },
-    };
-    let tx_event = debug::TraceEvent {
-        cycle,
-        metadata: debug::TraceMetadata {
-            kind: debug::TraceKind::APPLICATION_TX,
-            flags: observation.tx.tlast as u8,
-            txid: observation.tx.data[8:16],
-            op: observation.tx.data[24:32],
-        },
-    };
+    let gap = observation.gap;
+    let (rx, rx_event, rx_header) = framing::observe(state.rx, observation.rx,
+        observation.routed, gap, cycle, debug::TraceKind::APPLICATION_RX);
+    let (tx, tx_event, tx_header) = framing::observe(state.tx, observation.tx,
+        observation.routed, gap, cycle, debug::TraceKind::APPLICATION_TX);
     let (after_rx, rx_write) = trace::append(
         state.trace,
         rx_event,
-        app_rx_accepted && !state.app_rx_in_frame,
+        rx_header,
         zero!<debug::TraceWrite>());
     let (after_tx, trace_write) = trace::append(
         after_rx,
         tx_event,
-        app_tx_accepted && !state.app_tx_in_frame,
+        tx_header,
         rx_write);
 
     (
@@ -63,16 +47,8 @@ pub fn apply_observation(state: debug::MonitorState,
                     (observation.tx.valid && !observation.tx.ready) as u32,
             },
             tap_drops: observation.tap_drops,
-            app_rx_in_frame: next_in_frame(
-                state.app_rx_in_frame,
-                observation.rx.valid,
-                observation.rx.ready,
-                observation.rx.tlast),
-            app_tx_in_frame: next_in_frame(
-                state.app_tx_in_frame,
-                observation.tx.valid,
-                observation.tx.ready,
-                observation.tx.tlast),
+            rx: framing::retained(rx, rx_header && state.trace.count < debug::TRACE_DEPTH as debug::TraceCount),
+            tx: framing::retained(tx, tx_header && after_rx.count < debug::TRACE_DEPTH as debug::TraceCount),
             trace: after_tx,
         },
         trace_write,
@@ -113,6 +89,7 @@ fn dropped_observations_advance_cycle_test() {
     };
     let observation = debug::Observation {
         tap_drops: u32:12,
+        gap: u1:1,
         ..zero!<debug::Observation>()
     };
     let (observed, write) = apply_observation(initial, observation);
@@ -120,6 +97,34 @@ fn dropped_observations_advance_cycle_test() {
     assert_eq(observed.counters.cycles, u32:16);
     assert_eq(observed.tap_drops, u32:12);
     assert_eq(write.valid, u1:0);
+}
+
+#[test]
+fn wrapping_counters_do_not_hide_observation_loss_test() {
+    let initial = debug::MonitorState {
+        counters: debug::Counters { cycles: u32:0xfffffffe, ..zero!<debug::Counters>() },
+        tap_drops: u32:0xffffffff,
+        ..zero!<debug::MonitorState>()
+    };
+    let observation = debug::Observation {
+        gap: u1:1, tap_drops: u32:1,
+        rx: debug::StreamObservation {
+            data: u32:0x07004400, valid: u1:1, ready: u1:1, tlast: u1:0,
+        },
+        ..zero!<debug::Observation>()
+    };
+    let (wrapped, _) = apply_observation(initial, observation);
+    assert_eq(wrapped.counters.cycles, u32:1);
+    assert_eq(wrapped.trace.count, debug::TraceCount:0);
+    assert_eq(wrapped.rx.phase, debug::FramePhase::UNSYNC);
+    // Exactly 2^32 missed cycles produce the same drop counter, but the tap's
+    // separate gap bit must still suppress the apparent local header.
+    let (full_wrap, _) = apply_observation(initial,
+        debug::Observation { tap_drops: initial.tap_drops, ..observation });
+    assert_eq(full_wrap.counters.cycles, u32:0xffffffff);
+    assert_eq(full_wrap.trace.count, debug::TraceCount:0);
+    assert_eq(full_wrap.rx.gap_pending, u1:1);
+    assert_eq(full_wrap.tx.phase, debug::FramePhase::UNSYNC);
 }
 
 // Observer is its own top-level proc so XLS schedules it for one observation

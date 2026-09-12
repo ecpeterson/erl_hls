@@ -262,6 +262,7 @@ cp "$project_root/priv/xls/debug/hls_debug_types.x" \
     "$stage/hls_debug_types.x"
 cp "$project_root/priv/xls/debug/hls_debug_trace.x" \
     "$stage/hls_debug_trace.x"
+cp "$project_root/priv/xls/debug/hls_debug_framing.x" "$stage/hls_debug_framing.x"
 cp "$project_root/priv/xls/debug/hls_debug_observer.x" \
     "$stage/hls_debug_observer.x"
 cp "$project_root/priv/xls/debug/hls_debug_server.x" \

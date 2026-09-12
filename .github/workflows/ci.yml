@@ -88,6 +88,19 @@ jobs:
           XLS_ROOT: ${{ runner.temp }}/xls
         run: bash tools/remote_xls_sim.sh "$PWD/_build/xls_sim/regsvc" "$XLS_ROOT"
 
+      - name: Diagnose dropped observations through the debug endpoint
+        run: python3 tools/test_debug_trace_integration.py _build/xls_sim/regsvc
+
+      - name: Upload decoded debug observations
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: debug-observation-reports
+          path: |
+            _build/debug-trace-integration/*.log
+            _build/debug-trace-integration/trace_*.term
+          if-no-files-found: ignore
+
       - name: Query an instrumented generated topology under backpressure
         run: |
           python3 tools/test_topology_debug_integration.py \

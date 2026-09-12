@@ -1,7 +1,8 @@
 module hls_debug_tap #(
+    parameter integer ROUTED = 0,
     parameter integer STREAM_OBSERVATION_BITS = 32 + 3,
     parameter integer OBSERVATION_BITS =
-        32 + 2 * STREAM_OBSERVATION_BITS
+        2 + 32 + 2 * STREAM_OBSERVATION_BITS
 ) (
     input  wire                  aclk,
     input  wire                  aresetn,
@@ -18,15 +19,24 @@ module hls_debug_tap #(
     input  wire                  observation_ready
 );
     reg [31:0] observation_drops;
+    // Independent of the wrapping drop counter: even 2^32 missed cycles must
+    // invalidate framing on the next accepted sample.
+    reg observation_gap;
 
     always @(posedge aclk) begin
-        if (!aresetn)
+        if (!aresetn) begin
             observation_drops <= 32'd0;
-        else if (!observation_ready)
-            observation_drops <= observation_drops + 32'd1;
+            observation_gap <= 1'b0;
+        end else begin
+            observation_gap <= !observation_ready;
+            if (!observation_ready)
+                observation_drops <= observation_drops + 32'd1;
+        end
     end
 
     assign observation_data = {
+        (ROUTED != 0),
+        observation_gap,
         observation_drops,
         app_tx_tdata,
         app_tx_tlast,

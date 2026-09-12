@@ -21,7 +21,7 @@ simulated_rtl_test_() ->
                         Actual = phi_memory_runner:await(Runner),
                         ok = verify(Mode, Actual),
                         ?assertEqual(Expected, Actual),
-                        ok = maybe_verify_debug(Debug)
+                        ok = maybe_verify_debug(Debug, Options)
                     end)}
                 end}
     end.
@@ -103,20 +103,18 @@ verify(smoke, {ok, #{data_anticommutations := DataAnticommutations}}) ->
 verify(smoke, Result) ->
     error({smoke_result, Result}).
 
-maybe_verify_debug(undefined) ->
+maybe_verify_debug(undefined, _Options) ->
     ok;
-maybe_verify_debug(Client) ->
+maybe_verify_debug(Client, #{distance := Distance}) ->
     Debug = {boundary, Client, {phi_memory_gateway, host_stream}},
-    {scope, Scope} = hls_debug:info(Debug, scope),
-    verify_debug(Debug).
+    verify_debug(Debug, phi_memory_boundary:contract(Distance)).
 
-verify_debug(Client) ->
-    Debug = {boundary, Client, {phi_memory_gateway, host_stream}},
+verify_debug(Debug, Contract) ->
     {scope, Scope} = hls_debug:info(Debug, scope),
     {ok, Counters} = hls_debug:get_counters(Debug, ?DEBUG_TIMEOUT),
     ?assertEqual(Scope, maps:get(scope, Counters)),
     io:format("PHI_DEBUG_COUNTERS: ~p~n", [Counters]),
-    ?assertEqual(4, maps:get(version, Counters)),
+    ?assertEqual(5, maps:get(version, Counters)),
     ?assert(maps:get(cycles, Counters) > 0),
     ?assert(maps:get(app_rx_beats, Counters) > 0),
     ?assert(maps:get(app_rx_frames, Counters) > 0),
@@ -124,8 +122,8 @@ verify_debug(Client) ->
     ?assert(maps:get(app_tx_frames, Counters) > 0),
     {ok, Trace} = hls_debug:get_trace(Debug, ?DEBUG_TIMEOUT),
     ?assertEqual(Scope, maps:get(scope, Trace)),
-    ?assertEqual(1, maps:get(version, Trace)),
-    ?assertEqual(2, maps:get(record_words, Trace)),
+    ?assertEqual(2, maps:get(version, Trace)),
+    ?assertEqual(3, maps:get(record_words, Trace)),
     ?assertEqual(0, maps:get(observation_drops, Trace)),
     ?assert(maps:get(count, Trace) > 0),
     ?assert(lists:any(
@@ -136,8 +134,31 @@ verify_debug(Client) ->
         fun(#{kind := Kind}) -> Kind =:= application_tx end,
         maps:get(events, Trace)
     )),
+    ok = verify_trace_headers(maps:get(events, Trace), Contract),
     ok = maybe_write_debug_metrics(Counters, Trace),
     ok.
+
+verify_trace_headers(Events, Contract = #{
+    host_endpoint := Host,
+    ingress := #{targets := Targets},
+    outputs := Outputs
+}) ->
+    ControlRoute = phi_memory_wire:control_route(Contract),
+    Allowed = [
+        {application_rx, ControlRoute, Selector}
+        || #{schemas := Schemas} <- Targets,
+           #{selector := Selector} <- Schemas
+    ] ++ [
+        {application_tx, {Endpoint, Host}, Selector}
+        || #{endpoint := Endpoint, schemas := Schemas} <- Outputs,
+           #{selector := Selector} <- Schemas
+    ],
+    lists:foreach(fun(#{kind := Kind, route := Route, op := Op,
+                       tx_id := TxID, observation_gap := Gap}) ->
+        ?assert(lists:member({Kind, Route, Op}, Allowed)),
+        ?assertEqual(0, TxID),
+        ?assertEqual(false, Gap)
+    end, Events).
 
 maybe_write_debug_metrics(Counters, Trace) ->
     case os:getenv("ERL_HLS_PHI_DEBUG_METRICS") of
@@ -145,7 +166,7 @@ maybe_write_debug_metrics(Counters, Trace) ->
             ok;
         Path ->
             TraceSummary = maps:with(
-                [version, count, dropped, observation_drops],
+                [version, count, dropped, observation_drops, events],
                 Trace
             ),
             Metrics = #{counters => Counters, trace => TraceSummary},

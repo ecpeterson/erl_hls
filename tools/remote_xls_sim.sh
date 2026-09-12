@@ -41,6 +41,7 @@ for test_module in \
     frame_transport.x \
     frame_queue.x \
     mailbox.x \
+    hls_debug_framing.x \
     hls_debug_trace.x \
     hls_debug_observer.x \
     hls_spatial_router.x
