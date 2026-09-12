@@ -4,7 +4,7 @@
 
 -module(hls_actor_interface).
 -moduledoc """
-Reads the narrow, version-2 interface summary emitted by `hls_pack` for an
+Reads the narrow, version-3 interface summary emitted by `hls_pack` for an
 `hls_statem` module.
 
 When the compiling source remains available, the query re-derives the summary
@@ -32,7 +32,7 @@ dispatch means that the generated actor has a callback group for that schema
 and phase; it does not claim that every payload passes the group's patterns and
 guards.
 
-The summary also carries the callback-state layout. Its packed width is derived
+The summary also carries the failure source map and callback-state layout. Its packed width is derived
 when queried, after custom `hls_type` modules are available; computing it while
 the actor's parse transform runs would make compilation depend on incidental
 source order. This is the state which a shared scheduler may place in generated
@@ -175,7 +175,7 @@ reduction_storage_width(Summary) ->
     end.
 
 validate(Module, Summary = #{
-    version := 2,
+    version := 3,
     module := Module,
     phases := Phases,
     initial_phase := InitialPhase,
@@ -184,7 +184,8 @@ validate(Module, Summary = #{
     state := State,
     schemas := Schemas,
     dispatches := Dispatches,
-    entry_effects := Effects
+    entry_effects := Effects,
+    failure_sites := Sites
 }) when is_list(Phases), is_list(Outputs),
         is_integer(Capacity), Capacity > 0,
         is_list(Schemas), is_list(Dispatches), is_list(Effects) ->
@@ -193,6 +194,7 @@ validate(Module, Summary = #{
     ok = require_unique(interface_phase, Phases),
     ok = require_unique(interface_output, Outputs),
     ok = validate_state(State),
+    ok = xls_failure_sites:validate(Sites),
     _ = reduction_storage_width(Summary),
     SchemaNames = [maps:get(name, Schema) || Schema <- Schemas],
     Selectors = [maps:get(selector, Schema) || Schema <- Schemas],
@@ -216,7 +218,7 @@ validate(Module, Summary = #{
         Effects
     ),
     Summary;
-validate(Module, #{version := Version}) when Version =/= 2 ->
+validate(Module, #{version := Version}) when Version =/= 3 ->
     error({unsupported_hls_actor_interface_version, Module, Version});
 validate(Module, Summary) ->
     error({invalid_hls_actor_interface, Module, Summary}).

@@ -14,19 +14,21 @@ projection(Plan, Specs) ->
     Banks = [bank(Index, Group, maps:get(Module, Interfaces), Placements) ||
         {Index, Group = #{module := Module}} <- lists:enumerate(0, Groups)],
     %% Normalize JSON keys/strings once for exact host-side manifest comparison.
-    json:decode(iolist_to_binary(json:encode(#{schema => 1,
+    json:decode(iolist_to_binary(json:encode(#{schema => 2,
         binding => digest({Plan, Scheduler}), banks => Banks}))).
 
 bank(Index, #{module := Module, slot_count := Slots, state := #{width := DataWidth},
         reduction_storage_width := ReductionWidth, state_storage := block_ram},
-        #{phases := Phases}, Placements) ->
+        #{phases := Phases, failure_sites := Sites}, Placements) ->
     Layout = xls_statem_codegen:shared_machine_layout(DataWidth, ReductionWidth),
-    Fields = maps:with([phase, enter_pending, failed], Layout),
+    Fields = maps:with([phase, enter_pending, failure], Layout),
     Entries = lists:keysort(1, [{Slot, #{key => actor_key(Id), slot => Slot,
         name => iolist_to_binary(io_lib:format("~p", [Id]))}} ||
         {Id, #{index := I, slot := Slot}} <- maps:to_list(Placements), I =:= Index]),
     #{index => Index, ram => iolist_to_binary(["scheduler_", integer_to_list(Index), "_state"]),
         slots => Slots, width => maps:get(width, Layout), fields => Fields,
+        failures => maps:from_list([{integer_to_binary(Code), maps:remove(code, Site)} ||
+            Site = #{code := Code} <- [#{code => C, kind => K} || {C, K} <- xls_failure_sites:generic()] ++ Sites]),
         module => atom_to_binary(Module), phases => [atom_to_binary(P) || P <- Phases], actors => [A || {_, A} <- Entries]};
 bank(Index, _Group, _Interface, _Placements) ->
     error({debug_requires_state_ram, Index}).

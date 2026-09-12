@@ -90,7 +90,7 @@ lower_chain(
     Selected = [
         lists:reverse(BodyState#clause_state.statements),
         "if (", BodyMismatch, ") {\n",
-        xls_parse_io:indent(xls_parse:print(BodyFailure(xls_parse:failure_kind(BodyState))), 2),
+        xls_parse_io:indent(xls_parse:print(BodyFailure(xls_parse:failure_code(BodyState))), 2),
         "} else {\n",
         xls_parse_io:indent(xls_parse:print(
             Postprocessor(BodyState#clause_state.reference)

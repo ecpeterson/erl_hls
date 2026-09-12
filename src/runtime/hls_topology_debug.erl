@@ -25,7 +25,7 @@ open(Pid, Manifest) ->
     case info(Pid) of
         {ok, #{fingerprint := Hash, resources := Count, channels := Channels, queues := Queues, actors := Actors}} ->
             case Manifest of
-                #{<<"schema">> := 2, <<"fingerprint">> := Hash,
+                #{<<"schema">> := 3, <<"fingerprint">> := Hash,
                   <<"resources">> := Resources, <<"probes">> := Probes}
                         when length(Resources) =:= Count, length(Probes) =:= Channels ->
                     case manifest_fingerprint(Manifest) =:= Hash andalso
@@ -59,9 +59,9 @@ resource(Session = #{resources := Resources}, Id) when Id >= 0, Id < tuple_size(
     {ok, {resource, Session, Id}};
 resource(_, Id) -> {error, {unknown_resource, Id}}.
 
-decode_info(<<2:32/little, Count:32/little, Channels:32/little, Queues:32/little,
+decode_info(<<3:32/little, Count:32/little, Channels:32/little, Queues:32/little,
         Actors:32/little, Hash:32/binary>>) when Channels > 0, Count =:= Channels + Queues + Actors ->
-    {ok, #{schema => 2, resources => Count, channels => Channels, queues => Queues, actors => Actors,
+    {ok, #{schema => 3, resources => Count, channels => Channels, queues => Queues, actors => Actors,
         fingerprint => string:lowercase(binary:encode_hex(Hash))}};
 decode_info(_) -> {error, unsupported_topology_info}.
 
@@ -73,20 +73,38 @@ decode_observation(<<Id:32/little, Cycle:64/little, Value:32/little>>,
             {ok, Sample#{valid => Value band 1 =/= 0, ready => Value band 2 =/= 0}};
         #{<<"kind">> := <<"fifo">>, <<"capacity">> := Capacity} when Value =< Capacity ->
             {ok, Sample#{occupancy => Value, free_slots => Capacity-Value}};
-        #{<<"kind">> := <<"actor">>, <<"phases">> := Phases} ->
-            actor_observation(Sample, Phases);
+        #{<<"kind">> := <<"actor">>, <<"phases">> := Phases, <<"failures">> := Failures} ->
+            actor_observation(Sample, Phases, Failures);
         _ -> {error, invalid_resource_value}
     end;
 decode_observation(_, _) -> {error, malformed_topology_observation}.
 
-actor_observation(Sample = #{value := 0}, _Phases) ->
+actor_observation(Sample = #{value := 0}, _Phases, _Failures) ->
     {ok, Sample#{initialized => false, phase => undefined,
-        enter_pending => undefined, failed => undefined}};
-actor_observation(Sample = #{value := Value}, Phases)
-        when Value band 1024 =/= 0, Value band 255 < length(Phases) ->
-    {ok, Sample#{initialized => true, phase => lists:nth((Value band 255)+1, Phases),
-        enter_pending => Value band 256 =/= 0, failed => Value band 512 =/= 0}};
-actor_observation(_, _) -> {error, invalid_resource_value}.
+        enter_pending => undefined, failed => undefined, failure => undefined}};
+actor_observation(Sample = #{value := Value}, Phases, Failures)
+        when Value band (1 bsl 25) =/= 0, Value band 255 < length(Phases) ->
+    Code = (Value bsr 9) band 65535,
+    case failure_details(Code, Failures) of
+        {ok, Failure} ->
+            {ok, Sample#{initialized => true, phase => lists:nth((Value band 255)+1, Phases),
+                enter_pending => Value band 256 =/= 0, failed => Code =/= 0, failure => Failure}};
+        error -> {error, invalid_failure_code}
+    end;
+actor_observation(_, _, _) -> {error, invalid_resource_value}.
+
+failure_details(0, _) -> {ok, none};
+failure_details(Code, Failures) ->
+    case maps:find(integer_to_binary(Code), Failures) of
+        {ok, #{<<"kind">> := Kind} = Origin} ->
+            Detail = #{code => Code, kind => Kind},
+            case Origin of
+                #{<<"file">> := File, <<"line">> := Line} ->
+                    {ok, Detail#{file => File, line => Line}};
+                _ -> {ok, Detail}
+            end;
+        error -> error
+    end.
 
 -doc "Follows channel/FIFO IDs with a bounded query budget, then rechecks the visited resources.".
 inspect_waits(Session = #{manifest := Manifest}, Seeds, Options) ->

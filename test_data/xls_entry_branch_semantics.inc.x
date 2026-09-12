@@ -40,7 +40,7 @@ fn observe_direct(phase: Phase, value: u32, ready: u16) -> EntryObservation {
       observe_effect(observed, stepped.egress, stepped.egress_valid))
   }((machine, zero!<EntryObservation>()));
   EntryObservation {
-    failed: machine.failed,
+    failed: hls_failure::failed(machine.failure),
     pending: machine.enter_pending,
     data: machine.data.value,
     ..observed
@@ -69,7 +69,7 @@ fn observe_shared(phase: Phase, value: u32, ready: u16) -> EntryObservation {
     (machine_from_bits(result.machine), observed)
   }((machine, zero!<EntryObservation>()));
   EntryObservation {
-    failed: machine.failed,
+    failed: hls_failure::failed(machine.failure),
     pending: machine.enter_pending,
     data: machine.data.value,
     ..observed
@@ -100,7 +100,7 @@ pub fn entry_cycle_probe(shared: bool, phase: u8, value: u32,
     pending: bool, failed: bool, index: u8, ready: bool) -> bits[314] {
   let machine = Machine {
     phase: phase as Phase, entered_from: phase as Phase, data: Cell { value },
-    enter_pending: pending, failed, entry_effect_index: index, ..initial_machine()
+    enter_pending: pending, failure: hls_failure::check(failed, hls_failure::INTERNAL), entry_effect_index: index, ..initial_machine()
   };
   let (next, observed) = if shared {
     let result = shared_execute(SharedExecutorRequest {
@@ -114,13 +114,13 @@ pub fn entry_cycle_probe(shared: bool, phase: u8, value: u32,
     }(zero!<EntryObservation>());
     let next = machine_from_bits(result.machine);
     (Machine { data: next.data, enter_pending: next.enter_pending,
-      failed: next.failed, ..machine }, observed)
+      failure: next.failure, ..machine }, observed)
   } else {
     let result = machine_step(machine, zero!<axis::Frame>(), false, ready);
     (result.machine, observe_effect(zero!<EntryObservation>(),
       result.egress, result.egress_valid))
   };
   next.entry_effect_index ++ observation_bits(EntryObservation {
-    failed: next.failed, pending: next.enter_pending, data: next.data.value, ..observed
+    failed: hls_failure::failed(next.failure), pending: next.enter_pending, data: next.data.value, ..observed
   })
 }

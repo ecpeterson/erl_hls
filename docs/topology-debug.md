@@ -58,11 +58,11 @@ ok = file:write_file("actors.json", json:encode(xls_scheduler_debug:projection(P
 
 Add `--actor-projection actors.json` to the instrumentation command. If the shell containing the `scheduler_N_state` RAM instances is below the selected top, supply its instance path with `--actor-root outer.decoder`. The exporter binds to the `hls_1r1w_ram` write ports, checks their widths, common clock, and actual accepted-write logic, and uses the compiler's packed-field offsets. It rejects missing banks, duplicate identities, incomplete slot maps, and invalid field layouts. Register-backed state is not supported. Ungrouped actors retain metadata-only targets.
 
-The projection records each actor's opaque identity key, scheduler slot, module, and phase codebook. Its binding digest covers the normalized topology and scheduler plan, including initialization and interleaved family placement. Keep the projection with its generated RTL: interface checks cannot prove that an arbitrary width-compatible RTL file implements the supplied semantic plan. The endpoint's manifest fingerprint then covers both the supplied projection and the exact RTL sources.
+The projection records each actor's opaque identity key, scheduler slot, module, phase codebook, and failure source map. Its binding digest covers the normalized topology and scheduler plan, including initialization and interleaved family placement. Keep the projection with its generated RTL: interface checks cannot prove that an arbitrary width-compatible RTL file implements the supplied semantic plan. The endpoint's manifest fingerprint then covers both the supplied projection and the exact RTL sources.
 
-Each snapshot updates on an accepted state-RAM write. It stores `phase`, `enter_pending`, and `failed`; `initialized` becomes true on the first such write after reset. Until then the three state fields are `undefined`, even though the unreset application RAM may contain old values. A later write replaces the snapshot; no history is retained. No extra RAM read port, request, reservation, or application backpressure is introduced.
+Each snapshot updates on an accepted state-RAM write. It copies `phase`, `enter_pending`, and the sixteen-bit `failure` code from the committed BRAM row into registers; `initialized` becomes true on the first such write after reset. Until then the state fields are `undefined`, even though the unreset application RAM may contain old values. A later write replaces the snapshot; no history is retained. No extra RAM read port, request, reservation, or application backpressure is introduced.
 
-A sampled actor word has phase in bits 0–7, entry-pending in bit 8, failure in bit 9, and initialized in bit 10. The other bits are zero. A query returns the snapshot from before its sampling edge, so a simultaneous application write becomes visible to later queries. The returned `cycle` dates the observation, not the last commit. A stalled executor can retain a newer in-flight state; a failure is visible only after its state write commits. `enter_pending = false` does not mean the actor is idle or its mailbox empty. Snapshots identify failed actors and committed phases alongside physical wait probes, but do not identify the source location or reason for a failure.
+A sampled actor word has phase in bits 0–7, entry-pending in bit 8, failure code in bits 9–24, and initialized in bit 25. The other bits are zero. A query returns the snapshot from before its sampling edge, so a simultaneous application write becomes visible to later queries. The returned `cycle` dates the observation, not the last commit. A stalled executor can retain a newer in-flight state; a failure is visible only after its state write commits. `enter_pending = false` does not mean the actor is idle or its mailbox empty. Queries derive `failed` from the code and decode `failure` against the manifest: `none` for zero, otherwise a reason plus file and line when a source expression is responsible. Unknown codes are rejected. No filenames, source-map tables, or execution history are stored on the device.
 
 ## Query and inspect waits
 
@@ -95,13 +95,13 @@ Reports distinguish external sinks, ambiguous connections, candidate blocked out
 
 A query samples its value and timestamp together before the accepting clock edge's application state updates. The held reply stays immutable until consumed. Different queries observe different edges. Repeated equal values do not prove that a queue stayed full between visits, and the interval between observations is not a measured stall age. A cyclic group of repeatedly blocked channels is a candidate for investigation, not proof of deadlock: wiring alone does not identify the exact continuation or arbitration condition that an actor requires. The 64-bit timestamp resets with the application and wraps after `2^64` cycles; the walker rejects nonincreasing observations, but a reset followed by a sufficiently long gap can escape that check.
 
-## Inner query protocol, schema 2
+## Inner query protocol, schema 3
 
 All words are little-endian. Request flags are zero and all beats have full keep. Replies preserve the request transaction ID. The outer single-endpoint router accepts `{source:16, destination:16}` as a route word and returns `{2:16, source:16}` before the reply header.
 
 | Operation | Request payload | Reply payload |
 | --- | --- | --- |
-| `INFO` `0x10` → `0x90` | Empty | Schema `2`, resource count, channel count, FIFO count, actor count, 32 fingerprint bytes (13 words total) |
+| `INFO` `0x10` → `0x90` | Empty | Schema `3`, resource count, channel count, FIFO count, actor count, 32 fingerprint bytes (13 words total) |
 | `QUERY` `0x11` → `0x91` | Resource ID (1 word) | Resource ID, cycle low, cycle high, value (4 words) |
 | Error `0xff` | — | Code `1`: malformed/unsupported request; code `2`: out-of-range resource ID |
 
@@ -122,7 +122,7 @@ python3 tools/test_topology_debug_integration.py \
 
 It runs the Erlang client against a real Icarus/FIFO/VPI endpoint, identifies full queues, follows the external stall, and checks recovery after releasing the sink. It compares the original and diagnostic application outputs at every cycle and independently checks every FIFO occupancy with a transfer scoreboard. The same runner accepts the D3 wrapper arguments above. D3 has two sinks, so one can progress while the selected sink is blocked. CI regenerates and exercises the ordered-egress topology with its pinned XLS release.
 
-`bash tools/test_actor_debug.sh XLS_ROOT` generates a two-actor topology in two pipeline schedules. Public scoped queries identify its deliberately failed actor while a healthy neighbor is blocked, then verify the neighbor after release. Snapshot RTL tests cover slot isolation, disabled and unused-address writes, and reset. The integration runner accepts `--actor-projection actors.json --actor-test phi` for the D3 profile and checks all 36 actors before and after release.
+`bash tools/test_actor_debug.sh XLS_ROOT` generates an eight-actor topology in two pipeline schedules. Public scoped queries identify failures in included helpers, an earlier bad match, explicit `fail`, and unmatched callbacks while healthy neighbors are blocked, then verify them after release. Snapshot RTL tests cover slot isolation, disabled and unused-address writes, and reset. The integration runner accepts `--actor-projection actors.json --actor-test phi` for the D3 profile and checks all 36 actors before and after release.
 
 ## Measure diagnostic logic
 
@@ -131,6 +131,6 @@ python3 tools/measure_topology_debug.py "$stage/topology-debug" \
   --stage "$stage/debug-area" --yosys /path/to/yosys --seeds 5
 ```
 
-This compares physical-only queries with physical queries plus actor snapshots, using the supplied projection. It makes application observations unconstrained inputs while retaining aliases and constants discovered during elaboration. Both cases use schema 2 and the same manifest constant. The unchanged outer route adapter is excluded. It runs `synth_xilinx -flatten -abc9 -arch xc7 -noiopad` after scrambling internal names with matched seeds, retaining the generated Verilog, Yosys scripts/logs, individual LUT/FF/BRAM counts, and best/mean/population-variance/worst summaries.
+This compares physical-only queries with physical queries plus actor snapshots, using the supplied projection. It makes application observations unconstrained inputs while retaining aliases and constants discovered during elaboration. Both cases use schema 3 and the same manifest constant. The unchanged outer route adapter is excluded. It runs `synth_xilinx -flatten -abc9 -arch xc7 -noiopad` after scrambling internal names with matched seeds, retaining the generated Verilog, Yosys scripts/logs, individual LUT/FF/BRAM counts, and best/mean/population-variance/worst summaries.
 
 The result isolates diagnostic logic cost at its observation boundary. It does not measure complete-application area or placed/routed timing, and application-specific invariants can allow further optimization. Seed variation measures mapping sensitivity, not an unbiased statistical population. Changes to probe fanout still require timing qualification in the integrated design.

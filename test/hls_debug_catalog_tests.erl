@@ -44,10 +44,10 @@ exact_actor_placement_and_binding_validation_test() ->
 snapshot_projection_binding_test() ->
     {Plan, Specs} = hls_actor_debug_dslx:fixture(phi),
     Projection = #{<<"banks">> := Banks} = xls_scheduler_debug:projection(Plan, Specs),
-    Raw = [A#{<<"kind">> => <<"actor">>, <<"width">> => 11, <<"bank">> => Index,
-        <<"module">> => Module, <<"phases">> => Phases} ||
+    Raw = [A#{<<"kind">> => <<"actor">>, <<"width">> => 26, <<"bank">> => Index,
+        <<"module">> => Module, <<"phases">> => Phases, <<"failures">> => Failures} ||
         #{<<"index">> := Index, <<"module">> := Module, <<"phases">> := Phases,
-            <<"actors">> := Actors} <- Banks, A <- Actors],
+            <<"actors">> := Actors, <<"failures">> := Failures} <- Banks, A <- Actors],
     Resources = [R#{<<"id">> => Id} || {Id, R} <- lists:enumerate(0, Raw)],
     Manifest = #{<<"actor_projection">> => Projection, <<"resources">> => Resources,
         <<"fingerprint">> => <<"fixture">>},
@@ -68,5 +68,7 @@ snapshot_projection_binding_test() ->
     [First | Rest] = Resources,
     Bad = Manifest#{<<"resources">> := [First#{<<"slot">> := 99} | Rest]},
     ?assertError(actor_resources_mismatch, hls_debug_catalog:hardware(Plan, Specs, [], Session#{manifest := Bad})),
+    WrongOrigin = Manifest#{<<"resources">> := [First#{<<"failures">> := #{}} | Rest]},
+    ?assertError(actor_resources_mismatch, hls_debug_catalog:hardware(Plan, Specs, [], Session#{manifest := WrongOrigin})),
     Duplicate = Manifest#{<<"resources">> := [First | Resources]},
     ?assertError(actor_resources_mismatch, hls_debug_catalog:hardware(Plan, Specs, [], Session#{manifest := Duplicate})).

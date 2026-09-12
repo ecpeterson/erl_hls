@@ -4,7 +4,7 @@ fn configured_actor_matches_beam() {
   let machine = initial_machine();
   assert_eq(MAILBOX_CAPACITY, EXPECTED_CAPACITY);
   assert_eq(bits_from_cell(machine.data) as u64, EXPECTED_INITIAL);
-  assert_eq(machine.failed, u1:0);
+  assert_eq(hls_failure::failed(machine.failure), u1:0);
   for (i, ()): (u32, ()) in u32:0..array_size(INPUTS) {
     let message = Message { value: INPUTS[i] as Word };
     let packed = bits_from_message(message);

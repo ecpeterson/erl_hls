@@ -14,7 +14,8 @@
 -spec interface([erl_parse:abstract_form()], [atom(), ...]) -> interface().
 -doc "Summarizes the statically dispatched and emitted hls_statem schemas.".
 interface(Forms, PhaseNames) ->
-    interface_from_prepared(prepare_interface(Forms, PhaseNames)).
+    {_, Sites} = xls_failure_sites:prepare(Forms),
+    (interface_from_prepared(prepare_interface(Forms, PhaseNames)))#{failure_sites => Sites}.
 
 -spec lower(file:filename(), [erl_parse:abstract_form()], [atom(), ...]) ->
     iolist().
@@ -28,7 +29,8 @@ lower(Filename, Forms, PhaseNames) ->
     #{shared_service := ordinary | aggregate_only}
 ) -> iolist().
 lower(Filename, Forms0, PhaseNames, Options0) ->
-    {Forms, Helpers} = xls_helpers:prepare(Forms0,
+    {SourceForms, Sites} = xls_failure_sites:prepare(Forms0),
+    {Forms, Helpers} = xls_helpers:prepare(SourceForms,
         [{init, 1} | [{Phase, 3} || Phase <- PhaseNames]]),
     Options = validate_options(Options0),
     SharedService = maps:get(shared_service, Options),
@@ -72,6 +74,7 @@ lower(Filename, Forms0, PhaseNames, Options0) ->
     ]),
     xls_statem_codegen:emit(#{
         source => Filename,
+        failure_sites => Sites,
         imports => xls_dslx_imports:from_forms(Forms),
         capacity => Capacity,
         phases => PhaseNames,
@@ -244,7 +247,7 @@ interface_from_prepared(Prepared) ->
     CastGroups = maps:get(cast_groups, Prepared),
     ReductionInterface = maps:get(reduction_interface, Prepared),
     Base = #{
-        version => 2,
+        version => 3,
         module => maps:get(module, Prepared),
         phases => maps:get(phases, Prepared),
         initial_phase => maps:get(initial_phase, Prepared),
@@ -541,16 +544,17 @@ lower_cast_group(
             ["(Tag::", uppercase(DataName), ", data)"]
         )
     ],
-    Failure = "(phase, data, Directive::FAIL, u1:0)",
+    Failure = fun(Code) -> ["(phase, data, Directive::FAIL, u1:0, ", Code, ")"] end,
+    [{clause, FirstLine, _, _, _} | _] = Clauses,
     {Body, Result} = xls_callback_lower:lower(
         Clauses,
         Arguments,
         DataName,
         fun(R) -> [
-            "(", R, ".0, ", R, ".1.1, ", R, ".2, ", R, ".3)"
+            "(", R, ".0, ", R, ".1.1, ", R, ".2, ", R, ".3, ", R, ".4)"
         ] end,
+        Failure(xls_failure_sites:at(function_clause, FirstLine)),
         Failure,
-        fun(_Kind) -> Failure end,
         EnumAtoms
     ),
     #{
@@ -586,7 +590,8 @@ normalize_cast_result_expression(
         {atom, Line, Phase},
         Data,
         {atom, Line, consume},
-        {atom, Line, true}
+        {atom, Line, true},
+        {xls_map, 0, {atom, 0, false}, fun(_) -> "hls_failure::NONE" end}
     ]};
 normalize_cast_result_expression(
     {tuple, Line, [{atom, _RepeatLine, repeat_phase} | _] = Elements},
@@ -597,12 +602,12 @@ normalize_cast_result_expression(
     {tuple, Line, [NextPhase, Data, Directive]},
     _Phase
 ) ->
-    {tuple, Line, [
-        NextPhase,
-        Data,
-        Directive,
-        {atom, Line, false}
-    ]};
+    Result = {tuple, Line, [NextPhase, Data, Directive, {atom, Line, false}]},
+    {xls_map, Line, Result, fun(R) ->
+        ["(", R, ".0, ", R, ".1, ", R, ".2, ", R, ".3, ",
+            "hls_failure::check(", R, ".2 == Directive::FAIL, ",
+            xls_failure_sites:at(explicit_fail, Line), "))"]
+    end};
 normalize_cast_result_expression(
     {'case', Line, Expression, Clauses},
     Phase
