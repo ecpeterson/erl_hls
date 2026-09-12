@@ -20,8 +20,8 @@ callback_arms(Forms, StateName) ->
     CastGroups = callback_groups(Forms, handle_cast),
     ok = validate_groups(CallGroups, CastGroups, DeclaredTags),
     [
-        [callback_arm(call, Group, StateName) || Group <- CallGroups],
-        [callback_arm(cast, Group, StateName) || Group <- CastGroups],
+        [callback_arm(call, Group, StateName, Forms) || Group <- CallGroups],
+        [callback_arm(cast, Group, StateName, Forms) || Group <- CastGroups],
         "\n_ => {\n",
         xls_parse_io:indent(failure("ERROR_FUNCTION_CLAUSE", StateName), 2),
         "}\n"
@@ -47,7 +47,7 @@ validate_groups(CallGroups, CastGroups, DeclaredTags) ->
         Ambiguous -> error({ambiguous_hls_gs_callback_tags, Ambiguous})
     end.
 
-callback_arm(Kind, {Tag, Clauses}, StateName) ->
+callback_arm(Kind, {Tag, Clauses}, StateName, Forms) ->
     Arguments = [
         xls_pattern_lower:record_argument(
             Tag,
@@ -72,10 +72,15 @@ callback_arm(Kind, {Tag, Clauses}, StateName) ->
     ),
     [
         "\nTag::", uppercase(Tag), " => {\n",
-        "  let request = ", record_function_name(Tag),
+        "  if frame.header.payload_words != u8:",
+        integer_to_list(xls_parse:message_words(Forms, Tag)), " {\n",
+        "    (axis::pack(Tag::ERROR as u8, ERROR_REQUEST_LENGTH), state_record)\n",
+        "  } else {\n",
+        "    let request = ", record_function_name(Tag),
         "_from_bits(frame.payload);\n",
-        xls_parse_io:indent(xls_parse:print(Body), 2),
-        xls_parse_io:indent(xls_parse:print(Result), 2),
+        xls_parse_io:indent(xls_parse:print(Body), 4),
+        xls_parse_io:indent(xls_parse:print(Result), 4),
+        "  }\n",
         "},\n"
     ].
 

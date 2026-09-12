@@ -9,6 +9,7 @@ const REPLY = u1:1;
 const OK = u1:0;
 const ERROR_FUNCTION_CLAUSE = u32:1;
 const ERROR_MATCH_FAILURE = u32:2;
+const ERROR_REQUEST_LENGTH = u32:3;
 
 const MAX_PAYLOAD = u32:3;
 
@@ -172,166 +173,182 @@ proc Service {
     let (resp, new_state) = match frame.header.op as Tag {
 
 Tag::PING => {
-  let request = ping_from_bits(frame.payload);
-  let Xls_clause_1_Value_1 = request.value;
-  let Xls_clause_1_State_1 = state_record;
-  if bool:true {
-    let _0 = Ack {
-      value: Xls_clause_1_Value_1,
-      ..zero!<Ack>()
-    };
-    let _1 = (Tag::ACK, _0, bits_from_ack(_0));
-    let _2 = (REPLY, _1, Xls_clause_1_State_1, );
-    if (bool:false) {
-      let s = zero!<State>();
-      (axis::pack(Tag::ERROR as u8, ERROR_MATCH_FAILURE), (Tag::STATE, s))
-    } else {
-      (axis::pack(_2.1.0 as u8, _2.1.2), _2.2)
-    }
+  if frame.header.payload_words != u8:1 {
+    (axis::pack(Tag::ERROR as u8, ERROR_REQUEST_LENGTH), state_record)
   } else {
-    let s = zero!<State>();
-    (axis::pack(Tag::ERROR as u8, ERROR_FUNCTION_CLAUSE), (Tag::STATE, s))
-  }
-},
-
-Tag::GET => {
-  let request = get_from_bits(frame.payload);
-  let Xls_clause_1_Register_1 = request.register;
-  let Xls_clause_1_State_1 = state_record;
-  let _0 = Xls_clause_1_Register_1 < 16;
-  if _0 {
-    let _1 = Xls_clause_1_Register_1 + 1;
-    let _2 = Xls_clause_1_State_1.1.registers;
-    let _3 = _2[_1 - u32:1];
-    let Xls_clause_1_Value_1 = _3;
-    let _4 = Read {
-      value: Xls_clause_1_Value_1,
-      ..zero!<Read>()
-    };
-    let _5 = (Tag::READ, _4, bits_from_read(_4));
-    let _6 = (REPLY, _5, Xls_clause_1_State_1, );
-    if (bool:false) {
-      let s = zero!<State>();
-      (axis::pack(Tag::ERROR as u8, ERROR_MATCH_FAILURE), (Tag::STATE, s))
-    } else {
-      (axis::pack(_6.1.0 as u8, _6.1.2), _6.2)
-    }
-  } else {
-    let s = zero!<State>();
-    (axis::pack(Tag::ERROR as u8, ERROR_FUNCTION_CLAUSE), (Tag::STATE, s))
-  }
-},
-
-Tag::BULK_GET => {
-  let request = bulkget_from_bits(frame.payload);
-  let Xls_clause_1_State_1 = state_record;
-  if request.count == 0 {
-    let _0 = Bulkread {
-      ..zero!<Bulkread>()
-    };
-    let _1 = (Tag::BULK_READ, _0, bits_from_bulkread(_0));
-    let _2 = (REPLY, _1, Xls_clause_1_State_1, );
-    if (bool:false) {
-      let s = zero!<State>();
-      (axis::pack(Tag::ERROR as u8, ERROR_MATCH_FAILURE), (Tag::STATE, s))
-    } else {
-      (axis::pack(_2.1.0 as u8, _2.1.2), _2.2)
-    }
-  } else {
-    let Xls_clause_2_Start_1 = request.start;
-    let Xls_clause_2_Count_1 = request.count;
-    let Xls_clause_2_State_1 = state_record;
-    let _0 = Xls_clause_2_Count_1 > 0;
-    let _5 = if _0 {
-      let _1 = Xls_clause_2_Count_1 <= 3;
-      let _4 = if _1 {
-        let _2 = Xls_clause_2_Start_1 + Xls_clause_2_Count_1;
-        let _3 = _2 <= 16;
-        (_3, bool:false)
-      } else {
-        (bool:0, bool:false)
+    let request = ping_from_bits(frame.payload);
+    let Xls_clause_1_Value_1 = request.value;
+    let Xls_clause_1_State_1 = state_record;
+    if bool:true {
+      let _0 = Ack {
+        value: Xls_clause_1_Value_1,
+        ..zero!<Ack>()
       };
-      (_4.0, (_4.1) || bool:false)
-    } else {
-      (bool:0, bool:false)
-    };
-    if _5.0 {
-      let _6 = Xls_clause_2_State_1.1.registers;
-      let _7 = Xls_clause_2_Start_1 + 1;
-      let _8 = _6 as bits[512];
-      let _9 = _8 << ((_7 - u32:1) * 32);
-      let _10 = _9 & (all_ones!<bits[512]>() << (512 - (Xls_clause_2_Count_1 * 32)));
-      let _11 = _10 as u32[16];
-      let Xls_clause_2_Sublist_1 = _11;
-      let _12 = array_slice(Xls_clause_2_Sublist_1, u32:0, zero!<u32[3]>() );
-      let Xls_clause_2_Trim_1 = _12;
-      let _13 = Bulkread {
-        values: Xls_clause_2_Trim_1,
-        ..zero!<Bulkread>()
-      };
-      let _14 = (Tag::BULK_READ, _13, bits_from_bulkread(_13));
-      let _15 = (REPLY, _14, Xls_clause_2_State_1, );
+      let _1 = (Tag::ACK, _0, bits_from_ack(_0));
+      let _2 = (REPLY, _1, Xls_clause_1_State_1, );
       if (bool:false) {
         let s = zero!<State>();
         (axis::pack(Tag::ERROR as u8, ERROR_MATCH_FAILURE), (Tag::STATE, s))
       } else {
-        (axis::pack(_15.1.0 as u8, _15.1.2), _15.2)
+        (axis::pack(_2.1.0 as u8, _2.1.2), _2.2)
       }
     } else {
       let s = zero!<State>();
       (axis::pack(Tag::ERROR as u8, ERROR_FUNCTION_CLAUSE), (Tag::STATE, s))
+    }
+  }
+},
+
+Tag::GET => {
+  if frame.header.payload_words != u8:1 {
+    (axis::pack(Tag::ERROR as u8, ERROR_REQUEST_LENGTH), state_record)
+  } else {
+    let request = get_from_bits(frame.payload);
+    let Xls_clause_1_Register_1 = request.register;
+    let Xls_clause_1_State_1 = state_record;
+    let _0 = Xls_clause_1_Register_1 < 16;
+    if _0 {
+      let _1 = Xls_clause_1_Register_1 + 1;
+      let _2 = Xls_clause_1_State_1.1.registers;
+      let _3 = _2[_1 - u32:1];
+      let Xls_clause_1_Value_1 = _3;
+      let _4 = Read {
+        value: Xls_clause_1_Value_1,
+        ..zero!<Read>()
+      };
+      let _5 = (Tag::READ, _4, bits_from_read(_4));
+      let _6 = (REPLY, _5, Xls_clause_1_State_1, );
+      if (bool:false) {
+        let s = zero!<State>();
+        (axis::pack(Tag::ERROR as u8, ERROR_MATCH_FAILURE), (Tag::STATE, s))
+      } else {
+        (axis::pack(_6.1.0 as u8, _6.1.2), _6.2)
+      }
+    } else {
+      let s = zero!<State>();
+      (axis::pack(Tag::ERROR as u8, ERROR_FUNCTION_CLAUSE), (Tag::STATE, s))
+    }
+  }
+},
+
+Tag::BULK_GET => {
+  if frame.header.payload_words != u8:2 {
+    (axis::pack(Tag::ERROR as u8, ERROR_REQUEST_LENGTH), state_record)
+  } else {
+    let request = bulkget_from_bits(frame.payload);
+    let Xls_clause_1_State_1 = state_record;
+    if request.count == 0 {
+      let _0 = Bulkread {
+        ..zero!<Bulkread>()
+      };
+      let _1 = (Tag::BULK_READ, _0, bits_from_bulkread(_0));
+      let _2 = (REPLY, _1, Xls_clause_1_State_1, );
+      if (bool:false) {
+        let s = zero!<State>();
+        (axis::pack(Tag::ERROR as u8, ERROR_MATCH_FAILURE), (Tag::STATE, s))
+      } else {
+        (axis::pack(_2.1.0 as u8, _2.1.2), _2.2)
+      }
+    } else {
+      let Xls_clause_2_Start_1 = request.start;
+      let Xls_clause_2_Count_1 = request.count;
+      let Xls_clause_2_State_1 = state_record;
+      let _0 = Xls_clause_2_Count_1 > 0;
+      let _5 = if _0 {
+        let _1 = Xls_clause_2_Count_1 <= 3;
+        let _4 = if _1 {
+          let _2 = Xls_clause_2_Start_1 + Xls_clause_2_Count_1;
+          let _3 = _2 <= 16;
+          (_3, bool:false)
+        } else {
+          (bool:0, bool:false)
+        };
+        (_4.0, (_4.1) || bool:false)
+      } else {
+        (bool:0, bool:false)
+      };
+      if _5.0 {
+        let _6 = Xls_clause_2_State_1.1.registers;
+        let _7 = Xls_clause_2_Start_1 + 1;
+        let _8 = _6 as bits[512];
+        let _9 = _8 << ((_7 - u32:1) * 32);
+        let _10 = _9 & (all_ones!<bits[512]>() << (512 - (Xls_clause_2_Count_1 * 32)));
+        let _11 = _10 as u32[16];
+        let Xls_clause_2_Sublist_1 = _11;
+        let _12 = array_slice(Xls_clause_2_Sublist_1, u32:0, zero!<u32[3]>() );
+        let Xls_clause_2_Trim_1 = _12;
+        let _13 = Bulkread {
+          values: Xls_clause_2_Trim_1,
+          ..zero!<Bulkread>()
+        };
+        let _14 = (Tag::BULK_READ, _13, bits_from_bulkread(_13));
+        let _15 = (REPLY, _14, Xls_clause_2_State_1, );
+        if (bool:false) {
+          let s = zero!<State>();
+          (axis::pack(Tag::ERROR as u8, ERROR_MATCH_FAILURE), (Tag::STATE, s))
+        } else {
+          (axis::pack(_15.1.0 as u8, _15.1.2), _15.2)
+        }
+      } else {
+        let s = zero!<State>();
+        (axis::pack(Tag::ERROR as u8, ERROR_FUNCTION_CLAUSE), (Tag::STATE, s))
+      }
     }
   }
 },
 
 Tag::SET => {
-  let request = set_from_bits(frame.payload);
-  let Xls_clause_1_Mask_1 = request.mask;
-  let Xls_clause_1_State_1 = state_record;
-  let _0 = Xls_clause_1_Mask_1 == 0;
-  if _0 {
-    let _1 = (NOREPLY, Xls_clause_1_State_1, );
-    if (bool:false) {
-      let s = zero!<State>();
-      (axis::pack(Tag::ERROR as u8, ERROR_MATCH_FAILURE), (Tag::STATE, s))
-    } else {
-      (zero!<axis::Frame>(), _1.1)
-    }
+  if frame.header.payload_words != u8:3 {
+    (axis::pack(Tag::ERROR as u8, ERROR_REQUEST_LENGTH), state_record)
   } else {
-    let Xls_clause_2_Register_1 = request.register;
-    let Xls_clause_2_Value_1 = request.value;
-    let Xls_clause_2_Mask_1 = request.mask;
-    let Xls_clause_2_State_1 = state_record;
-    let _0 = Xls_clause_2_Register_1 < 16;
+    let request = set_from_bits(frame.payload);
+    let Xls_clause_1_Mask_1 = request.mask;
+    let Xls_clause_1_State_1 = state_record;
+    let _0 = Xls_clause_1_Mask_1 == 0;
     if _0 {
-      let _1 = Xls_clause_2_Register_1 + 1;
-      let _2 = Xls_clause_2_State_1.1.registers;
-      let _3 = _2[_1 - u32:1];
-      let Xls_clause_2_OldValue_1 = _3;
-      let _4 = !Xls_clause_2_Mask_1;
-      let _5 = Xls_clause_2_OldValue_1 & _4;
-      let _6 = Xls_clause_2_Value_1 & Xls_clause_2_Mask_1;
-      let _7 = _5 | _6;
-      let Xls_clause_2_NewValue_1 = _7;
-      let _8 = Xls_clause_2_Register_1 + 1;
-      let _9 = Xls_clause_2_State_1.1.registers;
-      let _10 = update(_9, _8 - u32:1, Xls_clause_2_NewValue_1);
-      let Xls_clause_2_NewRegisters_1 = _10;
-      let _11 = State {
-        registers: Xls_clause_2_NewRegisters_1,
-        ..(Xls_clause_2_State_1).1
-      };
-      let _12 = (Tag::STATE, _11);
-      let _13 = (NOREPLY, _12, );
+      let _1 = (NOREPLY, Xls_clause_1_State_1, );
       if (bool:false) {
         let s = zero!<State>();
         (axis::pack(Tag::ERROR as u8, ERROR_MATCH_FAILURE), (Tag::STATE, s))
       } else {
-        (zero!<axis::Frame>(), _13.1)
+        (zero!<axis::Frame>(), _1.1)
       }
     } else {
-      let s = zero!<State>();
-      (axis::pack(Tag::ERROR as u8, ERROR_FUNCTION_CLAUSE), (Tag::STATE, s))
+      let Xls_clause_2_Register_1 = request.register;
+      let Xls_clause_2_Value_1 = request.value;
+      let Xls_clause_2_Mask_1 = request.mask;
+      let Xls_clause_2_State_1 = state_record;
+      let _0 = Xls_clause_2_Register_1 < 16;
+      if _0 {
+        let _1 = Xls_clause_2_Register_1 + 1;
+        let _2 = Xls_clause_2_State_1.1.registers;
+        let _3 = _2[_1 - u32:1];
+        let Xls_clause_2_OldValue_1 = _3;
+        let _4 = !Xls_clause_2_Mask_1;
+        let _5 = Xls_clause_2_OldValue_1 & _4;
+        let _6 = Xls_clause_2_Value_1 & Xls_clause_2_Mask_1;
+        let _7 = _5 | _6;
+        let Xls_clause_2_NewValue_1 = _7;
+        let _8 = Xls_clause_2_Register_1 + 1;
+        let _9 = Xls_clause_2_State_1.1.registers;
+        let _10 = update(_9, _8 - u32:1, Xls_clause_2_NewValue_1);
+        let Xls_clause_2_NewRegisters_1 = _10;
+        let _11 = State {
+          registers: Xls_clause_2_NewRegisters_1,
+          ..(Xls_clause_2_State_1).1
+        };
+        let _12 = (Tag::STATE, _11);
+        let _13 = (NOREPLY, _12, );
+        if (bool:false) {
+          let s = zero!<State>();
+          (axis::pack(Tag::ERROR as u8, ERROR_MATCH_FAILURE), (Tag::STATE, s))
+        } else {
+          (zero!<axis::Frame>(), _13.1)
+        }
+      } else {
+        let s = zero!<State>();
+        (axis::pack(Tag::ERROR as u8, ERROR_FUNCTION_CLAUSE), (Tag::STATE, s))
+      }
     }
   }
 },

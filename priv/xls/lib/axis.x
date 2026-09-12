@@ -56,47 +56,62 @@ pub fn bits_from_frame(frame: Frame) -> bits[bit_count<Frame>()] {
   frame.payload ++ bits_from_header(frame.header)
 }
 
-struct RxState {
-  payload: bits[FRAME_BITS],
-  words_seen: u8,
-}
-
-pub proc Rx {
-  axis_in: chan<Beat> in;
-  instr_out: chan<Frame> out;
-
-  config(axis_in: chan<Beat> in, instr_out: chan<Frame> out) {
-    (axis_in, instr_out)
-  }
-
-  init { zero!<RxState>() }
-
-  next(state: RxState) {
-    let (tok, beat) = recv(join(), axis_in);
-    let payload = bit_slice_update(state.payload, state.words_seen * 32, beat.word);
-    let words_seen = state.words_seen + u8:1;
-
-    if beat.tlast {
-      send(tok, instr_out, frame_from_bits(payload));
-      zero!<RxState>()
-    } else {
-      RxState { payload, words_seen }
-    }
-  }
-}
-
 struct RxStateN<PAYLOAD_WORDS: u32> {
   active: u1,
   header: Header,
   payload: bits[PAYLOAD_WORDS * u32:32],
-  payload_words_seen: u32,
-  overflow: u1,
+  payload_words_seen: u8,
+  rejected: u1,
 }
 
-// Assembles a frame with a statically selected payload capacity. Unlike the
-// original actor Rx above, this boundary-oriented receiver checks that TLAST
-// agrees with the declared payload length. A malformed packet is fully drained
-// and emits no application frame, so the next packet starts in sync.
+// All raw receivers share this transition. Rejected packets drain to the real
+// TLAST, even if their contents resemble a new header. Without termination,
+// recovery requires a link reset; no finite length counter can infer a boundary.
+// Beat carries complete words only: physical adapters must require TKEEP=0xf.
+fn receive_step<PAYLOAD_WORDS: u32>(
+    state: RxStateN<PAYLOAD_WORDS>, beat: Beat
+) -> (FrameN<PAYLOAD_WORDS>, bool, RxStateN<PAYLOAD_WORDS>) {
+  let (frame, valid, next_state) = if !state.active {
+    let header = header_from_bits(beat.word);
+    let frame = FrameN<PAYLOAD_WORDS> {
+      header,
+      payload: zero!<bits[PAYLOAD_WORDS * u32:32]>(),
+    };
+    let valid = beat.tlast && header.payload_words == u8:0;
+    let rejected = header.payload_words == u8:0 ||
+      header.payload_words as u32 > PAYLOAD_WORDS;
+    (frame, valid, RxStateN<PAYLOAD_WORDS> {
+      active: u1:1,
+      header,
+      rejected,
+      ..zero!<RxStateN<PAYLOAD_WORDS>>()
+    })
+  } else {
+    // Only accepted lengths enter assembly. Once rejected, both the count and
+    // payload stop advancing, so arbitrarily long packets cannot wrap valid.
+    let accept_word = !state.rejected &&
+      state.payload_words_seen < state.header.payload_words;
+    let payload = if accept_word {
+      bit_slice_update(state.payload,
+        state.payload_words_seen as u32 * u32:32, beat.word)
+    } else { state.payload };
+    let payload_words_seen = state.payload_words_seen + accept_word as u8;
+    let complete = payload_words_seen == state.header.payload_words;
+    let rejected = !accept_word || beat.tlast != complete;
+    (FrameN<PAYLOAD_WORDS> { header: state.header, payload },
+      beat.tlast && !rejected,
+      RxStateN<PAYLOAD_WORDS> {
+        payload, payload_words_seen, rejected, ..state
+      })
+  };
+  let next_state = if beat.tlast {
+    zero!<RxStateN<PAYLOAD_WORDS>>()
+  } else { next_state };
+  (frame, valid, next_state)
+}
+
+// Assembles a frame with a statically selected payload capacity, checking that
+// TLAST agrees with the declared length. Rejected packets emit no Frame.
 //
 // TODO: Report rejection on a typed protocol-fault sideband. Its connection
 // owner should close or advance the session; a distribution adapter may then
@@ -116,68 +131,32 @@ pub proc RxN<PAYLOAD_WORDS: u32> {
 
   next(state: RxStateN<PAYLOAD_WORDS>) {
     let (tok, beat) = recv(join(), axis_in);
-    let (frame, valid, next_state) = if !state.active {
-      let header = header_from_bits(beat.word);
-      let frame = FrameN<PAYLOAD_WORDS> {
-        header,
-        payload: zero!<bits[PAYLOAD_WORDS * u32:32]>(),
-      };
-      let valid = beat.tlast && header.payload_words == u8:0;
-      let next_state = if beat.tlast {
-        zero!<RxStateN<PAYLOAD_WORDS>>()
-      } else {
-        RxStateN<PAYLOAD_WORDS> {
-          active: u1:1,
-          header,
-          ..zero!<RxStateN<PAYLOAD_WORDS>>()
-        }
-      };
-      (frame, valid, next_state)
-    } else {
-      let within_capacity =
-        state.payload_words_seen < PAYLOAD_WORDS;
-      let payload = if within_capacity {
-        bit_slice_update(
-          state.payload,
-          state.payload_words_seen * u32:32,
-          beat.word)
-      } else {
-        state.payload
-      };
-      let payload_words_seen = state.payload_words_seen + u32:1;
-      let overflow = state.overflow || !within_capacity;
-      let frame = FrameN<PAYLOAD_WORDS> {
-        header: state.header,
-        payload,
-      };
-      let valid = beat.tlast && !overflow &&
-        payload_words_seen == state.header.payload_words as u32;
-      let next_state = if beat.tlast {
-        zero!<RxStateN<PAYLOAD_WORDS>>()
-      } else {
-        RxStateN<PAYLOAD_WORDS> {
-          active: state.active,
-          header: state.header,
-          payload,
-          payload_words_seen,
-          overflow,
-        }
-      };
-      (frame, valid, next_state)
-    };
+    let (frame, valid, next_state) = receive_step(state, beat);
     let _done = send_if(tok, instr_out, valid, frame);
     next_state
   }
 }
 
+pub proc Rx {
+  config(axis_in: chan<Beat> in, instr_out: chan<Frame> out) {
+    spawn RxN<MAX_PAYLOAD>(axis_in, instr_out);
+  }
+
+  init { () }
+  next(state: ()) { state }
+}
+
 struct ReservedRxState {
   admitted: u1,
-  rx: RxState,
+  rx: RxStateN<MAX_PAYLOAD>,
 }
 
 // Receives one admission credit in its own activation before accepting the
 // first beat of a frame. The consumer retains that credit until the assembled
 // Frame is delivered, so a bounded mailbox reserves capacity before assembly.
+// Rejected packets retain that reservation for the next valid frame; they
+// neither deliver a message nor consume another credit. Reset the link and
+// credit owner together when abandoning an unterminated packet.
 pub proc ReservedRx {
   axis_in: chan<Beat> in;
   instr_out: chan<Frame> out;
@@ -197,17 +176,9 @@ pub proc ReservedRx {
       ReservedRxState { admitted: u1:1, ..state }
     } else {
       let (tok, beat) = recv(join(), axis_in);
-      let payload = bit_slice_update(
-        state.rx.payload, state.rx.words_seen * 32, beat.word);
-      let words_seen = state.rx.words_seen + u8:1;
-
-      if beat.tlast {
-        send(tok, instr_out, frame_from_bits(payload));
-        zero!<ReservedRxState>()
-      } else {
-        let rx = RxState { payload, words_seen };
-        ReservedRxState { rx, ..state }
-      }
+      let (frame, valid, rx) = receive_step(state.rx, beat);
+      send_if(tok, instr_out, valid, frame);
+      ReservedRxState { admitted: !valid, rx }
     }
   }
 }
@@ -472,4 +443,64 @@ pub fn pack<N: u32>(op: u8, payload: bits[N]) -> Frame {
     header: Header { op, payload_words, ..zero!<Header>() },
     payload: payload as bits[PAYLOAD_BITS]
   }
+}
+
+#[test]
+fn receive_length_matrix() {
+  // All early, exact, late, empty and oversized combinations near capacity.
+  for (declared, ()): (u32, ()) in u32:0..u32:6 {
+    for (actual, ()): (u32, ()) in u32:0..u32:6 {
+      let header = Header {
+        payload_words: declared as u8, txid: u8:19,
+        flags: u8:42, op: u8:7,
+      };
+      let (frame, valid, state) = receive_step(zero!<RxStateN<u32:3>>(),
+        Beat { tlast: actual == u32:0, word: bits_from_header(header) });
+      assert_eq(valid, actual == u32:0 && declared == u32:0);
+      let (frame, valid, state) = for (i, acc):
+          (u32, (FrameN<u32:3>, bool, RxStateN<u32:3>)) in u32:0..u32:5 {
+        if i < actual {
+          let next = receive_step(acc.2,
+            Beat { tlast: i + u32:1 == actual, word: i + u32:1 });
+          assert_eq(next.1,
+            i + u32:1 == actual && actual == declared && actual <= u32:3);
+          next
+        } else { acc }
+      }((frame, valid, state));
+      assert_eq(valid, actual == declared && actual <= u32:3);
+      assert_eq(state, zero!<RxStateN<u32:3>>());
+      if valid {
+        assert_eq(frame.header, header);
+        let expected = match actual {
+          u32:0 => bits[96]:0,
+          u32:1 => u32:0 ++ u32:0 ++ u32:1,
+          u32:2 => u32:0 ++ u32:2 ++ u32:1,
+          _ => u32:3 ++ u32:2 ++ u32:1,
+        };
+        assert_eq(frame.payload, expected);
+      } else { () }
+    }(())
+  }(())
+}
+
+#[test]
+fn receive_wire_limit_and_empty_capacity() {
+  let header = Header { payload_words: u8:255, ..zero!<Header>() };
+  let (_, valid, state) = receive_step(zero!<RxStateN<u32:255>>(),
+    Beat { tlast: false, word: bits_from_header(header) });
+  assert_eq(valid, false);
+  let (frame, valid, state) = for (i, (_, _, state)):
+      (u32, (FrameN<u32:255>, bool, RxStateN<u32:255>)) in u32:0..u32:255 {
+    receive_step(state, Beat { tlast: i == u32:254, word: i + u32:1 })
+  }((zero!<FrameN<u32:255>>(), false, state));
+  assert_eq(valid, true);
+  assert_eq(state, zero!<RxStateN<u32:255>>());
+  for (i, ()): (u32, ()) in u32:0..u32:255 {
+    assert_eq(frame.payload[i * u32:32 +: u32], i + u32:1)
+  }(());
+  let (frame, valid, state) = receive_step(zero!<RxStateN<u32:0>>(),
+    Beat { tlast: true, word: u32:0 });
+  assert_eq(valid, true);
+  assert_eq(frame, zero!<FrameN<u32:0>>());
+  assert_eq(state, zero!<RxStateN<u32:0>>());
 }

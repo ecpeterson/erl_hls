@@ -78,6 +78,15 @@ jobs:
       - name: Compare entry outcomes with BEAM and simulate RTL
         run: bash tools/test_entry_outcomes.sh "$RUNNER_TEMP/xls"
 
+      - name: Check application framing and admission conservation
+        run: bash tools/test_application_frames.sh "$RUNNER_TEMP/xls"
+
+      - name: Inspect admitted receive backpressure through the debug endpoint
+        run: |
+          python3 tools/test_topology_debug_integration.py \
+            --top application_frames --stage _build/application_frames/debug \
+            _build/application_frames/DebugTop-p2-ii1.v
+
       - name: Compare typed helpers with BEAM and inline RTL
         run: bash tools/test_helpers.sh "$RUNNER_TEMP/xls"
 
@@ -151,6 +160,7 @@ jobs:
             _build/entry_outcomes/*.ir
             _build/entry_outcomes/*.v
             _build/entry_outcomes/*.sv
+            _build/application_frames/**
             _build/initialization/**
             _build/helpers/**
             _build/xls_sim/regsvc/*.ir

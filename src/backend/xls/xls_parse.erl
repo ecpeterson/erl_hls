@@ -77,6 +77,7 @@ prepending or moving one can renumber them. Every entry must be a unique atom.
     find_tags/1,
     find_function/3,
     find_record/2,
+    message_words/2,
     outcome_value/1,
     print/1,
     record_field_name/1,
@@ -171,6 +172,7 @@ to_xls_gs(Filename, Forms0) ->
         end,
         [StateName | PublicStructNames]
     ),
+    _ = [message_words(Forms, Name) || Name <- PublicStructNames],
 
     Emitted = ["// ", Filename, ".x\n",
     """
@@ -186,6 +188,7 @@ to_xls_gs(Filename, Forms0) ->
     const OK = u1:0;
     const ERROR_FUNCTION_CLAUSE = u32:1;
     const ERROR_MATCH_FAILURE = u32:2;
+    const ERROR_REQUEST_LENGTH = u32:3;
 
 
     """,
@@ -706,6 +709,15 @@ bitsfromstruct_from_record(_RecordForm = {attribute, _L, record, {NameAtom, Fiel
             [" zero!<bits[0]>()\n"], Fields
         )],
     "}\n"].
+
+-spec message_words([erl_parse:abstract_form()], atom()) -> 0..3.
+message_words(Forms, Name) ->
+    Width = record_width(find_record(Forms, Name)),
+    case Width rem 32 of
+        0 when Width =< 96 -> Width div 32;
+        0 -> error({xls_message_too_wide, Name, Width, 96});
+        _ -> error({xls_message_not_word_aligned, Name, Width, 32})
+    end.
 
 -spec record_width(erl_parse:af_record_decl()) -> non_neg_integer().
 -doc "Calculates the packed width of an Erlang record's XLS struct.".
