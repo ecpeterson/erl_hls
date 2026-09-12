@@ -2,7 +2,7 @@
 
 -behavior(gen_server).
 
--export([start_link/2, stop/1]).
+-export([start_link/2, stop/1, query/4]).
 -export([get_counters/1, get_counters/2, get_trace/1, get_trace/2]).
 -export([init/1, handle_call/3, handle_cast/2, terminate/2]).
 
@@ -30,7 +30,7 @@
         LocalEndpoint :: 0..65535,
         PeerEndpoint :: 0..65535
     },
-    pending = #{} :: #{0..255 => gen_server:from()},
+    pending = #{} :: #{0..255 => {gen_server:from(), byte(), decoded | raw}},
     tx_id = 0 :: 0..255
 }).
 
@@ -56,6 +56,14 @@ get_trace(Pid) ->
 get_trace(Pid, Timeout) ->
     gen_server:call(Pid, get_trace, Timeout).
 
+-doc "Sends a word-aligned management request and returns its raw reply payload.".
+-spec query(pid(), 1..127, binary(), timeout()) ->
+    {ok, binary()} | {error, term()}.
+query(Pid, Tag, Payload, Timeout)
+        when Tag > 0, Tag < 128, byte_size(Payload) rem 4 =:= 0,
+             byte_size(Payload) =< 1020 ->
+    gen_server:call(Pid, {query, Tag, Payload}, Timeout).
+
 init({Module, {fabric, Broker, LocalEndpoint, PeerEndpoint}}) ->
     ok = hls_fabric:register_route(
         Broker,
@@ -68,14 +76,16 @@ init({Module, {fabric, Broker, LocalEndpoint, PeerEndpoint}}) ->
     }}.
 
 handle_call(get_counters, From, State) ->
-    request(?DEBUG_GET_COUNTERS, From, State);
+    request(?DEBUG_GET_COUNTERS, <<>>, decoded, From, State);
 handle_call(get_trace, From, State) ->
-    request(?DEBUG_GET_TRACE, From, State).
+    request(?DEBUG_GET_TRACE, <<>>, decoded, From, State);
+handle_call({query, Tag, Payload}, From, State) ->
+    request(Tag, Payload, raw, From, State).
 
-request(Tag, From, State = #state{tx_id = TxID, pending = Pending}) ->
-    ok = write_frame(State, Tag, TxID, <<>>),
+request(Tag, Payload, Decode, From, State = #state{tx_id = TxID, pending = Pending}) ->
+    ok = write_frame(State, Tag, TxID, Payload),
     {noreply, State#state{
-        pending = Pending#{TxID => From},
+        pending = Pending#{TxID => {From, Tag bor 16#80, Decode}},
         tx_id = (TxID + 1) rem 256
     }}.
 
@@ -83,9 +93,21 @@ handle_cast(
     {?FABRIC_RX, _Route, {Tag, TxID, _Flags}, Payload},
     State = #state{module = Module, pending = Pending}
 ) ->
-    {From, NewPending} = maps:take(TxID, Pending),
-    gen_server:reply(From, decode_reply(Tag, Payload, Module)),
-    {noreply, State#state{pending = NewPending}}.
+    case maps:take(TxID, Pending) of
+        {{From, Expected, Decode}, NewPending} ->
+            Reply = case {Tag, Decode} of
+                {?DEBUG_ERROR, _} -> decode_reply(Tag, Payload, Module);
+                {Expected, raw} -> {ok, Payload};
+                {Expected, decoded} -> decode_reply(Tag, Payload, Module);
+                _ -> {error, {unexpected_reply, Tag, Payload}}
+            end,
+            gen_server:reply(From, Reply),
+            {noreply, State#state{pending = NewPending}};
+        error ->
+            %% A stale or unsolicited reply owns no current query.
+            {noreply, State}
+    end.
+
 
 terminate(_Reason, _State) ->
     %% Route ownership is monitored by hls_fabric, so cleanup also occurs for

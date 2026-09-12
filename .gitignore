@@ -8,3 +8,5 @@ _build
 /src/examples/phi_decoder/phi_halo_cell.v
 /src/examples/phi_decoder/phenom_data_cell.v
 /src/examples/phi_decoder/phenom_syndrome_cell.v
+
+__pycache__/
