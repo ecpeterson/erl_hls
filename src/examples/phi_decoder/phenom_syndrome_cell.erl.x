@@ -500,8 +500,7 @@ struct SharedState<ACTOR_COUNT: u32, PRODUCER_COUNT: u32> {
   mailbox_write_pending: u1,
 }
 
-// Source init/1, line 223.
-fn initial_machine_outcome() -> (bool, Machine) {
+fn initial_machine_outcome() -> (bool, Machine) {  // L223
   let _0 = Syndrome {
     ..zero!<Syndrome>()
   };
@@ -565,7 +564,6 @@ fn enter(old_phase: Phase, phase: Phase, data: Syndrome) -> EntryOutcome {
   match phase {
     Phase::CONFIGURING => {
       let _OldPhase_1 = old_phase;
-      let __1 = phase;
       let Syndrome_1 = (Tag::SYNDROME, data);
       let Xls_entry_0_1 = Syndrome_1;
       let _0 = ();
@@ -588,7 +586,6 @@ fn enter(old_phase: Phase, phase: Phase, data: Syndrome) -> EntryOutcome {
     },
     Phase::COLLECTING => {
       let _OldPhase_1 = old_phase;
-      let __1 = phase;
       let Syndrome_1 = (Tag::SYNDROME, data);
       let _0 = Syndrome_1.1.seen_sources;
       let _29 = {
@@ -783,7 +780,6 @@ fn enter(old_phase: Phase, phase: Phase, data: Syndrome) -> EntryOutcome {
     },
     Phase::ANNOUNCING => {
       let _OldPhase_1 = old_phase;
-      let __1 = phase;
       let Syndrome_1 = (Tag::SYNDROME, data);
       let Xls_entry_0_1 = Syndrome_1;
       let _0 = ();

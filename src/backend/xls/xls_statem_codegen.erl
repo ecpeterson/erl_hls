@@ -32,6 +32,7 @@
     data_name := atom(),
     data_width := pos_integer(),
     record_declarations := iodata(),
+    helper_functions := iodata(),
     init := xls_init:lowered(),
     entries := [entry(), ...],
     casts := [cast_clause()],
@@ -45,6 +46,7 @@ emit(Spec) ->
     [
         preamble(Spec),
         maps:get(record_declarations, Spec),
+        maps:get(helper_functions, Spec),
         xls_statem_reduction_codegen:declarations(
             maps:get(reductions, Spec, none), SharedService
         ),

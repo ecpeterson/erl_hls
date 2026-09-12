@@ -1402,8 +1402,7 @@ fn reduction_dispatch_completion(
   }
 }
 
-// Source init/1, line 303.
-fn initial_machine_outcome() -> (bool, Machine) {
+fn initial_machine_outcome() -> (bool, Machine) {  // L303
   let _0 = Cell {
     ..zero!<Cell>()
   };
@@ -1470,7 +1469,6 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> EntryOutcome {
   match phase {
     Phase::CONFIGURING => {
       let _OldPhase_1 = old_phase;
-      let __1 = phase;
       let Cell_1 = (Tag::CELL, data);
       let Xls_entry_0_1 = Cell_1;
       let _0 = ();
@@ -1494,7 +1492,6 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> EntryOutcome {
     },
     Phase::MEASURING => {
       let _OldPhase_1 = old_phase;
-      let __1 = phase;
       let Cell_1 = (Tag::CELL, data);
       let _0 = Cell_1.1.status_valid;
       let _1 = _0 == 1;
@@ -1591,7 +1588,6 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> EntryOutcome {
     },
     Phase::GATHERING => {
       let _OldPhase_1 = old_phase;
-      let __1 = phase;
       let Cell_1 = (Tag::CELL, data);
       let _0 = Cell_1.1.diffusion_epoch;
       let Epoch_1 = _0;
@@ -1658,7 +1654,6 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> EntryOutcome {
     },
     Phase::COMPARING => {
       let _OldPhase_1 = old_phase;
-      let __1 = phase;
       let Cell_1 = (Tag::CELL, data);
       let _0 = Cell_1.1.phi;
       let _1 = _0[1 - u32:1];
@@ -1746,7 +1741,6 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> EntryOutcome {
     },
     Phase::FLIPPING => {
       let _OldPhase_1 = old_phase;
-      let __1 = phase;
       let Cell_1 = (Tag::CELL, data);
       let _0 = Cell_1.1.random_state;
       let _1 = (_0 ^ (_0 << u32:13)) & u32:0xffffffff;

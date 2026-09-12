@@ -142,6 +142,8 @@ Type providers can export the optional `hls_type` callback `dslx_imports/0`, ret
 
 ## Translated record defaults
 
+Actor expressions can call [typed local helpers](docs/local-helpers.md). The compiler emits the reachable definition graph as DSLX functions, preserving match failures across calls; XLS inlines the functions. Helpers can factor numeric and record calculations without introducing scheduler boundaries.
+
 Both actor forms use a checked compile-time `init([])` value for cold start and hardware reset. Nonzero values belong in the initializer; record defaults remain type-directed zero. Shared schedulers repopulate actor RAM before dispatching startup messages. The [initialization contract](docs/initialization.md) describes the supported source subset, CPU and proxy behavior, and reset tests.
 
 Every field in a private-state or wire record must have a type-directed zero

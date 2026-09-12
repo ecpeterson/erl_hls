@@ -18,7 +18,7 @@
 }).
 
 init([]) ->
-    Base = hls_nums:wrap(hls_nums:u32(), 41),
+    Base = initial_value(),
     Expected = hls_nums:wrap(hls_nums:u32(), 41),
     Expected = Base,
     Value = case Base of
@@ -35,3 +35,6 @@ handle_call(#query{}, State) ->
 
 handle_cast(#change{value = Value}, State) ->
     {noreply, State#ledger{value = Value}}.
+
+-spec initial_value() -> hls_nums:u32().
+initial_value() -> hls_nums:wrap(hls_nums:u32(), 41).

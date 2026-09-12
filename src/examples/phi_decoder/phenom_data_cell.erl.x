@@ -341,6 +341,31 @@ pub fn bits_from_datacell(s: Datacell) -> bits[bit_count<Datacell>()] {
   (s.cutoff_step as bits[32]) ++ (s.cutoff_armed as bits[32]) ++ (s.noise_disabled as bits[32]) ++ (s.reply_resume as bits[32]) ++ (s.reply_anticommutes as bits[32]) ++ (s.reply_request_id as bits[32]) ++ (s.accumulated_pauli as bits[32]) ++ (s.y as bits[16]) ++ (s.x as bits[16]) ++ (s.random_state as bits[32]) ++ (s.event as bits[32]) ++ (s.threshold as bits[32]) ++ (s.seen_sources as bits[32]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
 }
 
+fn hls_local_prepare_reply__3(argument_1: (Tag, Datacell), argument_2: u32, argument_3: u32) -> ((Tag, Datacell), bool) {  // L583
+  let Cell_1 = argument_1;
+  let RequestId_1 = argument_2;
+  let Measurement_1 = argument_3;
+  let _0 = Cell_1.1.accumulated_pauli;
+  let _1 = ((((_0 >> u32:1) & Measurement_1) ^ (_0 & (Measurement_1 >> u32:1))) & u32:1) == u32:1;
+  let Anticommutes_1 = _1;
+  let _3 = if Anticommutes_1 {
+    let _2 = (1 as u32);
+    (_2, bool:false)
+  } else {
+    let _2 = (0 as u32);
+    (_2, bool:false)
+  };
+  let case_match_1_1 = bool:false;
+  let case_match_1_2 = _3.1;
+  let _4 = Datacell {
+    reply_request_id: RequestId_1,
+    reply_anticommutes: _3.0,
+    ..(Cell_1).1
+  };
+  let _5 = (Tag::DATA_CELL, _4);
+  (_5, (case_match_1_1 != case_match_1_2) || bool:false)
+}
+
 pub enum OutputPort : u8 {
   NORTH = u8:0,
   EAST = u8:1,
@@ -501,8 +526,7 @@ struct SharedState<ACTOR_COUNT: u32, PRODUCER_COUNT: u32> {
   mailbox_write_pending: u1,
 }
 
-// Source init/1, line 241.
-fn initial_machine_outcome() -> (bool, Machine) {
+fn initial_machine_outcome() -> (bool, Machine) {  // L241
   let _0 = Datacell {
     ..zero!<Datacell>()
   };
@@ -566,7 +590,6 @@ fn enter(old_phase: Phase, phase: Phase, data: Datacell) -> EntryOutcome {
   match phase {
     Phase::CONFIGURING => {
       let _OldPhase_1 = old_phase;
-      let __1 = phase;
       let Cell_1 = (Tag::DATA_CELL, data);
       let Xls_entry_0_1 = Cell_1;
       let _0 = ();
@@ -589,7 +612,6 @@ fn enter(old_phase: Phase, phase: Phase, data: Datacell) -> EntryOutcome {
     },
     Phase::COLLECTING => {
       let _OldPhase_1 = old_phase;
-      let __1 = phase;
       let Cell_1 = (Tag::DATA_CELL, data);
       let Xls_entry_0_1 = Cell_1;
       let _0 = ();
@@ -612,7 +634,6 @@ fn enter(old_phase: Phase, phase: Phase, data: Datacell) -> EntryOutcome {
     },
     Phase::REPORTING => {
       let _OldPhase_1 = old_phase;
-      let __1 = phase;
       let Cell_1 = (Tag::DATA_CELL, data);
       let _0 = Cell_1.1.step;
       let _1 = Cell_1.1.event;
@@ -691,7 +712,6 @@ fn enter(old_phase: Phase, phase: Phase, data: Datacell) -> EntryOutcome {
     },
     Phase::REPLYING => {
       let _OldPhase_1 = old_phase;
-      let __1 = phase;
       let Cell_1 = (Tag::DATA_CELL, data);
       let _0 = Cell_1.1.reply_request_id;
       let _1 = Cell_1.1.x;
@@ -1384,38 +1404,28 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
           let Xls_clause_1_Cell_1 = (Tag::DATA_CELL, data);
           if data.noise_disabled == 1 {
             let _0 = (Xls_clause_1_Measurement_1 <= u32:3);
-            let _8 = if _0 {
-              let _1 = Xls_clause_1_Cell_1.1.accumulated_pauli;
-              let _2 = ((((_1 >> u32:1) & Xls_clause_1_Measurement_1) ^ (_1 & (Xls_clause_1_Measurement_1 >> u32:1))) & u32:1) == u32:1;
-              let _4 = if _2 {
-                let _3 = (1 as u32);
-                (_3, bool:false)
-              } else {
-                let _3 = (0 as u32);
-                (_3, bool:false)
-              };
-              let case_match_1_1 = bool:false;
-              let case_match_1_2 = _4.1;
-              let _5 = Datacell {
-                reply_request_id: Xls_clause_1_RequestId_1,
-                reply_anticommutes: _4.0,
+            let _5 = if _0 {
+              let _1 = hls_local_prepare_reply__3(Xls_clause_1_Cell_1, Xls_clause_1_RequestId_1, Xls_clause_1_Measurement_1);
+              let call_match_1_1 = bool:false;
+              let call_match_1_2 = _1.1;
+              let Xls_clause_1_Replying_1 = _1.0;
+              let _2 = Datacell {
                 reply_resume: 1,
-                ..(Xls_clause_1_Cell_1).1
+                ..(Xls_clause_1_Replying_1).1
               };
-              let _6 = (Tag::DATA_CELL, _5);
-              let Xls_clause_1_Replying_1 = _6;
-              let _7 = (Phase::REPLYING, Xls_clause_1_Replying_1, Directive::CONSUME, bool:0, );
-              (_7, (case_match_1_1 != case_match_1_2) || bool:false)
+              let _3 = (Tag::DATA_CELL, _2);
+              let _4 = (Phase::REPLYING, _3, Directive::CONSUME, bool:0, );
+              (_4, (call_match_1_1 != call_match_1_2) || bool:false)
             } else {
               let _1 = (Phase::COLLECTING, Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
               (_1, bool:false)
             };
             let case_match_2_1 = bool:false;
-            let case_match_2_2 = _8.1;
+            let case_match_2_2 = _5.1;
             if ((case_match_2_1 != case_match_2_2) || bool:false) {
               (phase, data, Directive::FAIL, u1:0)
             } else {
-              (_8.0.0, _8.0.1.1, _8.0.2, _8.0.3)
+              (_5.0.0, _5.0.1.1, _5.0.2, _5.0.3)
             }
           } else {
             let Xls_clause_2_Cell_1 = (Tag::DATA_CELL, data);
@@ -1437,38 +1447,28 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
           let Xls_clause_1_Cell_1 = (Tag::DATA_CELL, data);
           if data.noise_disabled == 1 {
             let _0 = (Xls_clause_1_Measurement_1 <= u32:3);
-            let _8 = if _0 {
-              let _1 = Xls_clause_1_Cell_1.1.accumulated_pauli;
-              let _2 = ((((_1 >> u32:1) & Xls_clause_1_Measurement_1) ^ (_1 & (Xls_clause_1_Measurement_1 >> u32:1))) & u32:1) == u32:1;
-              let _4 = if _2 {
-                let _3 = (1 as u32);
-                (_3, bool:false)
-              } else {
-                let _3 = (0 as u32);
-                (_3, bool:false)
-              };
-              let case_match_1_1 = bool:false;
-              let case_match_1_2 = _4.1;
-              let _5 = Datacell {
-                reply_request_id: Xls_clause_1_RequestId_1,
-                reply_anticommutes: _4.0,
+            let _5 = if _0 {
+              let _1 = hls_local_prepare_reply__3(Xls_clause_1_Cell_1, Xls_clause_1_RequestId_1, Xls_clause_1_Measurement_1);
+              let call_match_1_1 = bool:false;
+              let call_match_1_2 = _1.1;
+              let Xls_clause_1_Replying_1 = _1.0;
+              let _2 = Datacell {
                 reply_resume: 2,
-                ..(Xls_clause_1_Cell_1).1
+                ..(Xls_clause_1_Replying_1).1
               };
-              let _6 = (Tag::DATA_CELL, _5);
-              let Xls_clause_1_Replying_1 = _6;
-              let _7 = (Phase::REPLYING, Xls_clause_1_Replying_1, Directive::CONSUME, bool:0, );
-              (_7, (case_match_1_1 != case_match_1_2) || bool:false)
+              let _3 = (Tag::DATA_CELL, _2);
+              let _4 = (Phase::REPLYING, _3, Directive::CONSUME, bool:0, );
+              (_4, (call_match_1_1 != call_match_1_2) || bool:false)
             } else {
               let _1 = (Phase::REPORTING, Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
               (_1, bool:false)
             };
             let case_match_2_1 = bool:false;
-            let case_match_2_2 = _8.1;
+            let case_match_2_2 = _5.1;
             if ((case_match_2_1 != case_match_2_2) || bool:false) {
               (phase, data, Directive::FAIL, u1:0)
             } else {
-              (_8.0.0, _8.0.1.1, _8.0.2, _8.0.3)
+              (_5.0.0, _5.0.1.1, _5.0.2, _5.0.3)
             }
           } else {
             let Xls_clause_2_Cell_1 = (Tag::DATA_CELL, data);
@@ -1490,37 +1490,23 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
           let Xls_clause_1_Cell_1 = (Tag::DATA_CELL, data);
           if data.noise_disabled == 1 {
             let _0 = (Xls_clause_1_Measurement_1 <= u32:3);
-            let _8 = if _0 {
-              let _1 = Xls_clause_1_Cell_1.1.accumulated_pauli;
-              let _2 = ((((_1 >> u32:1) & Xls_clause_1_Measurement_1) ^ (_1 & (Xls_clause_1_Measurement_1 >> u32:1))) & u32:1) == u32:1;
-              let _4 = if _2 {
-                let _3 = (1 as u32);
-                (_3, bool:false)
-              } else {
-                let _3 = (0 as u32);
-                (_3, bool:false)
-              };
-              let case_match_1_1 = bool:false;
-              let case_match_1_2 = _4.1;
-              let _5 = Datacell {
-                reply_request_id: Xls_clause_1_RequestId_1,
-                reply_anticommutes: _4.0,
-                ..(Xls_clause_1_Cell_1).1
-              };
-              let _6 = (Tag::DATA_CELL, _5);
-              let Xls_clause_1_Replying_1 = _6;
-              let _7 = (Phase::REPLYING, Xls_clause_1_Replying_1, Directive::CONSUME, bool:1, );
-              (_7, (case_match_1_1 != case_match_1_2) || bool:false)
+            let _3 = if _0 {
+              let _1 = hls_local_prepare_reply__3(Xls_clause_1_Cell_1, Xls_clause_1_RequestId_1, Xls_clause_1_Measurement_1);
+              let call_match_1_1 = bool:false;
+              let call_match_1_2 = _1.1;
+              let Xls_clause_1_Replying_1 = _1.0;
+              let _2 = (Phase::REPLYING, Xls_clause_1_Replying_1, Directive::CONSUME, bool:1, );
+              (_2, (call_match_1_1 != call_match_1_2) || bool:false)
             } else {
               let _1 = (Phase::REPLYING, Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
               (_1, bool:false)
             };
             let case_match_2_1 = bool:false;
-            let case_match_2_2 = _8.1;
+            let case_match_2_2 = _3.1;
             if ((case_match_2_1 != case_match_2_2) || bool:false) {
               (phase, data, Directive::FAIL, u1:0)
             } else {
-              (_8.0.0, _8.0.1.1, _8.0.2, _8.0.3)
+              (_3.0.0, _3.0.1.1, _3.0.2, _3.0.3)
             }
           } else {
             let Xls_clause_2_Cell_1 = (Tag::DATA_CELL, data);

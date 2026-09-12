@@ -27,7 +27,9 @@ lower(Filename, Forms, PhaseNames) ->
     [atom(), ...],
     #{shared_service := ordinary | aggregate_only}
 ) -> iolist().
-lower(Filename, Forms, PhaseNames, Options0) ->
+lower(Filename, Forms0, PhaseNames, Options0) ->
+    {Forms, Helpers} = xls_helpers:prepare(Forms0,
+        [{init, 1} | [{Phase, 3} || Phase <- PhaseNames]]),
     Options = validate_options(Options0),
     SharedService = maps:get(shared_service, Options),
     Declarations = declarations(Forms, PhaseNames),
@@ -80,6 +82,7 @@ lower(Filename, Forms, PhaseNames, Options0) ->
         data_name => DataName,
         data_width => DataWidth,
         record_declarations => RecordDeclarations,
+        helper_functions => xls_helpers:emit(Helpers, DataName, EnumAtoms),
         init => Init,
         entries => Entries,
         casts => Casts,
