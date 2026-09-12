@@ -18,7 +18,7 @@ import subprocess
 import topology_debug_actors as actors
 
 
-SCHEMA = 3
+SCHEMA = 4
 FIFO = re.compile(r"fifo_for_depth_(\d+)_ty_.*_with_bypass(?:_register_push)?(?:___\d+)?$")
 PORT_PAIRS = (("_vld", "_rdy"), ("_valid", "_ready"), ("_tvalid", "_tready"))
 
@@ -185,7 +185,7 @@ def export_probes(flat_design, top, resources, output_top, banks=()):
     """Only add an output alias. No cell, memory, or application port is edited."""
     module = flat_design["modules"][top]
     outputs = {"hls_probe_values": [bit for resource in resources for bit in
-               resource["bits"] + ["0"]*(32-resource["width"])]}
+               resource["bits"] + ["0"]*(64-resource["width"])]}
     if banks:
         outputs["hls_actor_writes"] = [bit for bank in banks for bit in bank["taps"]]
     for name, bits in outputs.items():
@@ -229,9 +229,9 @@ def debug_wrapper(ports, application_top, resources, channels, fingerprint, cloc
     return ("// Generated passive topology debug wrapper. Application ports are unchanged.\n"
             "module hls_debug_application (\n" +
             ",\n".join(declaration(*port) for port in declarations + debug) + "\n);\n" +
-            f"wire [{32*resources-1}:0] probe_values;\n" + tap_wire +
+            f"wire [{64*resources-1}:0] probe_values;\n" + tap_wire +
             f"{application_top} application (" + ", ".join(connections) +
-            f", .hls_probe_values(probe_values[0 +: {32*physical_count}])" + tap_port + ");\n" +
+            f", .hls_probe_values(probe_values[0 +: {64*physical_count}])" + tap_port + ");\n" +
             actors.wrapper(banks, physical_count, clock, reset, active_low) +
             "wire [31:0] request_data, response_data;\n"
             "wire [3:0] request_keep, response_keep;\n"

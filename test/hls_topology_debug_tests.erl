@@ -5,7 +5,7 @@ actor_observation_test() ->
     R = #{<<"id">> => 7, <<"kind">> => <<"actor">>, <<"width">> => 26,
         <<"phases">> => [<<"boot">>, <<"active">>],
         <<"failures">> => #{<<"1">> => #{<<"kind">> => <<"function_clause">>}}},
-    Decode = fun(V) -> hls_topology_debug:decode_observation(<<7:32/little, 99:64/little, V:32/little>>, R) end,
+    Decode = fun(V) -> hls_topology_debug:decode_observation(<<7:32/little, 99:64/little, V:64/little>>, R) end,
     ?assertMatch({ok, #{initialized := false, phase := undefined, failed := undefined}}, Decode(0)),
     ?assertMatch({ok, #{initialized := true, phase := <<"active">>, failed := true,
         enter_pending := false, cycle := 99}}, Decode((1 bsl 25)+512+1)),
@@ -15,21 +15,21 @@ actor_observation_test() ->
     ?assertMatch({error, _}, Decode(2048)).
 
 info_geometry_test() ->
-    ?assertMatch({ok, #{schema := 3, channels := 3, queues := 2, actors := 4}},
-        hls_topology_debug:decode_info(<<3:32/little, 9:32/little, 3:32/little, 2:32/little, 4:32/little, 0:256>>)),
+    ?assertMatch({ok, #{schema := 4, channels := 3, queues := 2, actors := 4}},
+        hls_topology_debug:decode_info(<<4:32/little, 9:32/little, 3:32/little, 2:32/little, 4:32/little, 0:256>>)),
     ?assertMatch({error, _}, hls_topology_debug:decode_info(
-        <<3:32/little, 9:32/little, 3:32/little, 2:32/little, 5:32/little, 0:256>>)).
+        <<4:32/little, 9:32/little, 3:32/little, 2:32/little, 5:32/little, 0:256>>)).
 
 observation_test() ->
     R = #{<<"id">> => 4, <<"kind">> => <<"fifo">>, <<"width">> => 2, <<"capacity">> => 2},
     ?assertMatch({ok, #{occupancy := 2, free_slots := 0, cycle := 99}},
-        hls_topology_debug:decode_observation(<<4:32/little, 99:64/little, 2:32/little>>, R)),
+        hls_topology_debug:decode_observation(<<4:32/little, 99:64/little, 2:64/little>>, R)),
     ?assertMatch({error, invalid_resource_value},
-        hls_topology_debug:decode_observation(<<4:32/little, 99:64/little, 3:32/little>>, R)),
+        hls_topology_debug:decode_observation(<<4:32/little, 99:64/little, 3:64/little>>, R)),
     ?assertMatch({error, _},
-        hls_topology_debug:decode_observation(<<5:32/little, 99:64/little, 2:32/little>>, R)),
+        hls_topology_debug:decode_observation(<<5:32/little, 99:64/little, 2:64/little>>, R)),
     ?assertMatch({error, _},
-        hls_topology_debug:decode_observation(<<4:32/little, 99:64/little, 4:32/little>>, R)).
+        hls_topology_debug:decode_observation(<<4:32/little, 99:64/little, 4:64/little>>, R)).
 
 fingerprint_test() ->
     %% Python json.dumps(..., sort_keys=True, ensure_ascii=False, separators=(",", ":")).
@@ -113,7 +113,7 @@ actor_failure_origin_decode_test() ->
         <<"phases">> => [<<"boot">>], <<"failures">> => #{
             <<"276">> => #{<<"kind">> => <<"case_clause">>, <<"file">> => <<"helper.hrl">>, <<"line">> => 7}}},
     Decode = fun(Code) -> hls_topology_debug:decode_observation(
-        <<0:32/little, 9:64/little, ((1 bsl 25) bor (Code bsl 9)):32/little>>, Resource) end,
+        <<0:32/little, 9:64/little, ((1 bsl 25) bor (Code bsl 9)):64/little>>, Resource) end,
     ?assertMatch({ok, #{failed := true, failure := #{code := 276, kind := <<"case_clause">>,
         file := <<"helper.hrl">>, line := 7}}}, Decode(276)),
     ?assertMatch({ok, #{failed := false, failure := none}}, Decode(0)),

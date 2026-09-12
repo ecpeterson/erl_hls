@@ -6,19 +6,30 @@ inspect(Session, Stage, Moment) ->
     case file:read_file(filename:join(Stage, "actor-test")) of
         {error, enoent} -> ok;
         {ok, Bytes} ->
-            Kind = case Bytes of <<"small">> -> small; <<"phi">> -> phi end,
+            Kind = case Bytes of <<"small">> -> small; <<"phi">> -> phi; <<"mailbox">> -> mailbox end,
             {Plan, Specs} = hls_actor_debug_dslx:fixture(Kind),
             Catalog = hls_debug_catalog:hardware(Plan, Specs, [], Session),
             Ids = hls_debug_catalog:actors(Catalog),
             Observations = [begin
                 {ok, Actor} = hls_debug_catalog:actor(Catalog, Id),
+                {capabilities, #{info := Fields}} = hls_debug:info(Actor, capabilities),
+                MailboxFields = [mailbox_initialized, message_queue_len, postponed, free_slots, reserved,
+                    in_flight, mail_candidate, entry_candidate, waiting_for_egress, egress_busy, scheduler_phase],
                 Snapshot = hls_debug:info(Actor,
-                    [identity, placement, phase, initialized, enter_pending, failed, failure, cycle], 10000),
+                    [identity, placement, phase, initialized, enter_pending, failed, failure, cycle] ++
+                        [F || F <- MailboxFields, lists:member(F, Fields)], 10000),
                 Values = maps:from_list(Snapshot),
                 true = maps:get(initialized, Values),
                 check(Kind, Moment, Id, Values),
+                check_mailbox(Actor, Values),
                 Values#{identity := iolist_to_binary(io_lib:format("~p", [Id]))}
             end || Id <- Ids],
+            case {Kind, Moment} of
+                {mailbox, blocked} ->
+                    true = lists:any(fun(#{message_queue_len := N, postponed := P}) -> N =:= 2 andalso P =:= 2 end, Observations),
+                    true = lists:any(fun(#{egress_busy := Busy, waiting_for_egress := Waiting}) -> Busy andalso Waiting end, Observations);
+                _ -> ok
+            end,
             %% Placement contains arbitrary Erlang IDs; retain a native term report.
             ok = file:write_file(filename:join(Stage, "actors-" ++ atom_to_list(Moment) ++ ".term"),
                 io_lib:format("~p.~n", [Observations])),
@@ -43,5 +54,19 @@ check(small, released, {family, cell, [Slot, 0]},
         when Slot =:= 1; Slot =:= 7 -> ok;
 check(small, blocked, {family, cell, [Slot, 0]}, #{phase := active, failed := false, failure := none})
         when Slot =:= 1; Slot =:= 7 -> ok;
+check(mailbox, released, {family, consumer, _}, #{phase := done, failed := false,
+        message_queue_len := 0, postponed := 0}) -> ok;
+check(mailbox, blocked, {family, producer, _}, #{phase := Phase, failed := false})
+        when Phase =:= boot; Phase =:= producer -> ok;
+check(mailbox, released, {family, producer, _}, #{phase := producer, failed := false}) -> ok;
+check(mailbox, blocked, {family, consumer, _}, #{phase := waiting, failed := false}) -> ok;
 check(phi, _, _, #{failed := false, failure := none}) -> ok;
 check(Kind, Moment, Id, Snapshot) -> error({actor_snapshot, Kind, Moment, Id, Snapshot}).
+
+check_mailbox(Actor, #{mailbox_initialized := true, message_queue_len := N,
+        free_slots := Free, reserved := 0, postponed := Postponed}) ->
+    {mailbox_capacity, Capacity} = hls_debug:info(Actor, mailbox_capacity),
+    true = N + Free =:= Capacity,
+    true = Postponed =< N;
+check_mailbox(_, #{mailbox_initialized := false}) -> error(mailbox_not_initialized);
+check_mailbox(_, _) -> ok.

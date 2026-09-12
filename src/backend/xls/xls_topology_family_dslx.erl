@@ -98,9 +98,14 @@ lower(Plan, Profile) ->
         actor_egress_depth := EgressDepth,
         scheduler_groups := Groups,
         reduction_placements := Placements,
-        effect_window_partition := WindowPartition
+        effect_window_partition := WindowPartition,
+        mailbox_debug := MailboxDebug
     } = xls_topology_profile:normalize(Profile, family),
     SchedulerPlan = hls_scheduler_plan:normalize(Plan, Groups),
+    case {MailboxDebug, maps:get(groups, SchedulerPlan)} of
+        {true, []} -> error(mailbox_debug_requires_shared_schedulers);
+        _ -> ok
+    end,
     ReductionPlan = hls_reduction_plan:normalize(
         Plan, SchedulerPlan, Placements
     ),
@@ -149,9 +154,15 @@ lower(Plan, Profile) ->
         name => Name,
         depth => Depth,
         effect_window_partition => WindowPartition,
+        mailbox_debug => MailboxDebug,
         reduction_plan => ReductionPlan,
         artifact_requirements =>
-            hls_reduction_plan:artifact_requirements(ReductionPlan),
+            maps:map(fun(_, Requirement) ->
+                case MailboxDebug of
+                    true -> Requirement#{mailbox_debug => true};
+                    false -> Requirement
+                end
+            end, hls_reduction_plan:artifact_requirements(ReductionPlan)),
         schedulers => Schedulers,
         families => Families,
         width => Width,

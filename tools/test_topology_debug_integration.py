@@ -59,7 +59,7 @@ def testbench(args, ports, manifest):
     queues = [q for q in manifest["resources"] if q["kind"] == "fifo"]
     for q in queues:
         lines.append(f"integer occupancy_{q['id']}=0;")
-        base, push, pop = (32*q[k] for k in ("id", "push", "pop"))
+        base, push, pop = (64*q[k] for k in ("id", "push", "pop"))
         checks.append(f"if(dut.probe_values[{base}+:32] !== occupancy_{q['id']}) "
                       f"$fatal(1, \"FIFO occupancy conservation failed: {q['id']}\");")
         checks.append(f"occupancy_{q['id']} = occupancy_{q['id']} + "
@@ -163,5 +163,5 @@ if __name__ == "__main__":
     parser.add_argument("--yosys", default="yosys")
     parser.add_argument("--actor-projection", type=Path)
     parser.add_argument("--actor-root", default="")
-    parser.add_argument("--actor-test", choices=("small", "phi"))
+    parser.add_argument("--actor-test", choices=("small", "phi", "mailbox"))
     run(parser.parse_args())

@@ -36,6 +36,7 @@ for test_module in \
     xls_short_circuit_test.x \
     arbitration.x \
     scheduler.x \
+    scheduler_observation.x \
     bram.x \
     effect_window.x \
     frame_transport.x \

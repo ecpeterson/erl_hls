@@ -4,13 +4,16 @@
 // query observes the snapshot from before this edge's write.
 module hls_actor_snapshot #(
     parameter integer SLOTS = 1,
-    parameter integer ADDRESS_WIDTH = 1
+    parameter integer ADDRESS_WIDTH = 1,
+    parameter integer MAILBOX = 0
 ) (
     input wire clk, reset,
     input wire write_enable,
     input wire [ADDRESS_WIDTH-1:0] write_address,
     input wire [24:0] write_value, // {failure[15:0], enter_pending, phase[7:0]}
-    output wire [SLOTS*32-1:0] values
+    input wire mailbox_valid,
+    input wire [SLOTS*24-1:0] mailbox_values,
+    output wire [SLOTS*64-1:0] values
 );
     genvar slot;
     generate for (slot = 0; slot < SLOTS; slot = slot + 1) begin: actor
@@ -20,6 +23,17 @@ module hls_actor_snapshot #(
             else if (write_enable && write_address == slot)
                 snapshot <= {1'b1, write_value};
         end
-        assign values[slot*32 +: 32] = {6'b0, snapshot};
+        assign values[slot*64 +: 32] = {6'b0, snapshot};
+        if (MAILBOX) begin: metadata
+            reg [23:0] retained;
+            always @(posedge clk) begin
+                if (reset) retained <= 0;
+                else if (mailbox_valid)
+                    retained <= mailbox_values[slot*24 +: 24];
+            end
+            assign values[slot*64+32 +: 32] = {8'b0, retained};
+        end else begin: no_metadata
+            assign values[slot*64+32 +: 32] = 0;
+        end
     end endgenerate
 endmodule

@@ -56,12 +56,13 @@ hardware(Plan, Specs, Boundaries, Session = #{manifest := Manifest}) ->
     #{<<"resources">> := Resources, <<"fingerprint">> := Hash} = Manifest,
     ActorResources = [R || R = #{<<"kind">> := <<"actor">>} <- Resources],
     ByKey = maps:from_list([{maps:get(<<"key">>, R), R} || R <- ActorResources]),
-    Expected = [A#{<<"bank">> => Index, <<"phases">> => Phases, <<"module">> => Module, <<"failures">> => Failures, <<"width">> => 26} ||
+    Expected = [maps:merge(A#{<<"bank">> => Index, <<"phases">> => Phases, <<"module">> => Module,
+        <<"failures">> => Failures}, observation_fields(Bank)) ||
         #{<<"index">> := Index, <<"phases">> := Phases, <<"module">> := Module,
-            <<"actors">> := Actors, <<"failures">> := Failures} <- maps:get(<<"banks">>, Projection), A <- Actors],
+            <<"actors">> := Actors, <<"failures">> := Failures} = Bank <- maps:get(<<"banks">>, Projection), A <- Actors],
     case length(ActorResources) =:= map_size(ByKey) andalso
             lists:sort(Expected) =:= lists:sort([maps:with(
-                [<<"key">>, <<"name">>, <<"slot">>, <<"bank">>, <<"phases">>, <<"module">>, <<"failures">>, <<"width">>], R)
+                [<<"key">>, <<"name">>, <<"slot">>, <<"bank">>, <<"phases">>, <<"module">>, <<"failures">>, <<"width">>, <<"mailbox_capacity">>], R)
                 || R <- ActorResources]) of
         true -> ok;
         false -> error(actor_resources_mismatch)
@@ -69,13 +70,19 @@ hardware(Plan, Specs, Boundaries, Session = #{manifest := Manifest}) ->
     Catalog = #{actors := Targets} = hardware(Plan, Specs, Boundaries),
     Catalog#{actors := maps:map(fun(Id, {actor, Metadata, none}) ->
         case maps:find(xls_scheduler_debug:actor_key(Id), ByKey) of
-            {ok, #{<<"id">> := ResourceId}} ->
+            {ok, #{<<"id">> := ResourceId} = Resource} ->
                 {actor, Metadata#{observation => #{kind => committed_state,
+                    mailbox => case maps:is_key(<<"mailbox_capacity">>, Resource) of
+                        true -> scheduler_step; false -> unavailable end,
                     fingerprint => Hash, resource => ResourceId}},
                     {actor_snapshot, Session, ResourceId}};
             error -> {actor, Metadata, none}
         end
     end, Targets)}.
+
+observation_fields(#{<<"mailbox">> := #{<<"capacity">> := Capacity}}) ->
+    #{<<"width">> => 56, <<"mailbox_capacity">> => Capacity};
+observation_fields(_) -> #{<<"width">> => 26}.
 
 -spec actors(map()) -> [actor_id()].
 actors(#{actors := Actors}) -> lists:sort(maps:keys(Actors)).
