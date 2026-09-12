@@ -14,10 +14,11 @@ import subprocess
 import time
 
 import topology_debug as topology
+import topology_debug_report as reporting
 
 ROOT = Path(__file__).resolve().parents[1]
 DEBUG_RTL = [ROOT / "priv/rtl/debug" / name for name in
-             ("hls_debug_frame_rx.v", "hls_debug_route.v", "hls_topology_debug.v")]
+             ("hls_debug_frame_rx.v", "hls_debug_route.v", "hls_topology_debug.v", "hls_actor_snapshot.v")]
 
 
 def testbench(args, ports, manifest):
@@ -88,8 +89,14 @@ def run(args):
     instrumented = json.loads((stage / "instrumented.json").read_text())["modules"][args.output_top]
     instrumented["ports"].pop("hls_probe_values")
     instrumented["netnames"].pop("hls_probe_values")
+    for section in ("ports", "netnames"):
+        instrumented[section].pop("hls_actor_writes", None)
     assert instrumented == flat["modules"][args.top], "instrumentation modified application cells/ports"
     del flat, instrumented
+    if getattr(args, "actor_test", None):
+        (stage / "actor-test").write_text(args.actor_test)
+    else:
+        (stage / "actor-test").unlink(missing_ok=True)
     for name in ("release", "released", "done", "debug_tx", "debug_rx"):
         (stage / name).unlink(missing_ok=True)
     for name in ("xls_sim_bridge.c", "xls_sim_axis.h"):
@@ -138,6 +145,9 @@ def run(args):
                 sim.terminate()
                 sim.wait(timeout=10)
     assert "PASS: original/instrumented" in (stage / "simulation.log").read_text()
+    for name in ("blocked", "recovered"):
+        report = json.loads((stage / f"{name}.json").read_text())
+        (stage / f"{name}.txt").write_text(reporting.text_report(manifest, report))
     print(f"PASS: {manifest['top']} structural and cycle-by-cycle noninterference")
 
 
@@ -151,4 +161,7 @@ if __name__ == "__main__":
     parser.add_argument("--output-top", default="hls_instrumented_application")
     parser.add_argument("--stage", type=Path, required=True)
     parser.add_argument("--yosys", default="yosys")
+    parser.add_argument("--actor-projection", type=Path)
+    parser.add_argument("--actor-root", default="")
+    parser.add_argument("--actor-test", choices=("small", "phi"))
     run(parser.parse_args())

@@ -28,7 +28,7 @@ module hls_topology_debug_tb;
     wire request_last, request_valid, request_ready;
     wire response_last, response_valid, response_ready;
     hls_debug_route route (.*);
-    hls_topology_debug #(.RESOURCES(RESOURCES), .CHANNELS(2), .FINGERPRINT(HASH)) dut (
+    hls_topology_debug #(.RESOURCES(RESOURCES), .CHANNELS(2), .ACTORS(1), .FINGERPRINT(HASH)) dut (
         .clk(clk), .reset(reset), .probe_values(probe_values),
         .s_data(request_data), .s_keep(request_keep), .s_last(request_last),
         .s_valid(request_valid), .s_ready(request_ready),
@@ -114,10 +114,10 @@ module hls_topology_debug_tb;
     integer i, saved_cycle;
     initial begin
         repeat (5) @(negedge clk); reset = 0;
-        empty(8'h10); response(8'h90,12);
-        if (reply[0] != 1 || reply[1] != RESOURCES || reply[2] != 2 || reply[3] != 2)
+        empty(8'h10); response(8'h90,13);
+        if (reply[0] != 2 || reply[1] != RESOURCES || reply[2] != 2 || reply[3] != 1 || reply[4] != 1)
             $fatal(1, "manifest geometry");
-        for (i=0;i<8;i=i+1) if (reply[4+i] !== HASH[i*32+:32]) $fatal(1,"manifest hash");
+        for (i=0;i<8;i=i+1) if (reply[5+i] !== HASH[i*32+:32]) $fatal(1,"manifest hash");
         for (i=0;i<RESOURCES;i=i+1) query(i,8'h91);
         query(RESOURCES,8'hff); if(reply[0] != 2) $fatal(1,"invalid query ID");
         query(32'hffffffff,8'hff); if(reply[0] != 2) $fatal(1,"overflow query ID");

@@ -13,10 +13,11 @@ run(Stage) ->
         {ok, Session} = hls_topology_debug:open(Client, Manifest),
         {error, topology_manifest_mismatch} = hls_topology_debug:open(Client,
             Manifest#{<<"fingerprint">> := <<"wrong build">>}),
+        ok = hls_actor_debug_live:inspect(Session, Stage, blocked),
         %% Discovery scan chooses genuinely full hardware queues. The follow-up
         %% inspection itself is adaptive and must reach the injected external sink.
         Queues = [Q || Q = #{<<"kind">> := <<"fifo">>} <- maps:get(<<"resources">>, Manifest)],
-        Seeds = [Id || #{<<"id">> := Id, <<"capacity">> := Capacity} <- Queues,
+        Full = [Id || #{<<"id">> := Id, <<"capacity">> := Capacity} <- Queues,
             begin
                 {ok, Target} = hls_topology_debug:resource(Session, Id),
                 [{occupancy, Occupancy}, {free_slots, Free}, {cycle, _}] =
@@ -24,6 +25,15 @@ run(Stage) ->
                 true = Occupancy + Free =:= Capacity,
                 Occupancy =:= Capacity
             end],
+        %% A single blocked frame may remain in an XLS output register without
+        %% filling a FIFO. Its external ready/valid boundary is still observable.
+        Seeds = case Full of
+            [] -> [Id || #{<<"id">> := Id, <<"endpoints">> := Endpoints} <- maps:get(<<"probes">>, Manifest),
+                lists:any(fun(E) -> maps:get(<<"external">>, E, false) andalso
+                    maps:get(<<"role">>, E) =:= <<"consumer">> end, Endpoints),
+                {ok, #{value := 1}} <- [hls_topology_debug:query(Session, Id)]];
+            _ -> Full
+        end,
         true = Seeds =/= [],
         {ok, FirstQueue} = hls_topology_debug:resource(Session, hd(Seeds)),
         {ok, #{schema := 1}} = hls_debug:inspect_waits(FirstQueue, #{max_queries => 32}),
@@ -39,7 +49,8 @@ run(Stage) ->
         false = lists:any(fun(#{kind := K, channel := Id}) ->
             K =:= external_sink andalso lists:member(Id, maps:get(reobserved_blocked, Recovered))
         end, maps:get(edges, Recovered)),
-        io:format("PASS: ~p full FIFO seeds, ~p adaptive queries; external stall found and release observed~n",
+        ok = hls_actor_debug_live:inspect(Session, Stage, released),
+        io:format("PASS: ~p blocked seeds, ~p adaptive queries; external stall found and release observed~n",
             [length(Seeds), length(maps:get(observations, Report))]),
         ok
     after

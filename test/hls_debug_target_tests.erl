@@ -92,3 +92,26 @@ resource_items_use_one_hardware_sample_test() ->
         after 1000 -> error(no_sample) end,
         ?assertEqual(1, length(phi_memory_fabric_fixture:sends(Fabric)))
     after hls_debug:stop(Client), phi_memory_fabric_fixture:stop(Fabric) end.
+
+actor_items_use_one_hardware_sample_test() ->
+    {ok, Fabric} = phi_memory_fabric_fixture:start_link(),
+    {ok, Client} = hls_debug:start_link(undefined, {fabric, Fabric, 2}),
+    try
+        R = #{<<"kind">> => <<"actor">>, <<"id">> => 0, <<"name">> => <<"actor">>,
+            <<"phases">> => [<<"boot">>, <<"active">>], <<"width">> => 11},
+        Session = #{client => Client, resources => {R}, manifest => #{<<"fingerprint">> => <<"fixture">>}},
+        Target = {actor, #{scope => #{kind => actor}}, {actor_snapshot, Session, 0}},
+        Parent = self(),
+        spawn_link(fun() -> Parent ! {sample, hls_debug:info(Target,
+            [phase, initialized, enter_pending, failed, cycle])} end),
+        [{{0, 2}, {16#11, Tx, 0}, <<0:32/little>>}] = phi_memory_fabric_fixture:await_sends(Fabric, 1, 1000),
+        ok = phi_memory_fabric_fixture:deliver(Fabric, {2, 0}, {16#91, Tx, 0},
+            <<0:32/little, 33:64/little, (1024+512+1):32/little>>),
+        receive {sample, Values} ->
+            ?assertEqual([{phase, active}, {initialized, true}, {enter_pending, false},
+                {failed, true}, {cycle, 33}], Values)
+        after 1000 -> error(no_sample) end,
+        {ok, Resource} = hls_topology_debug:resource(Session, 0),
+        ?assertMatch({error, {unsupported_operation, _, inspect_waits}}, hls_debug:inspect_waits(Resource, #{})),
+        ?assertEqual(1, length(phi_memory_fabric_fixture:sends(Fabric)))
+    after hls_debug:stop(Client), phi_memory_fabric_fixture:stop(Fabric) end.

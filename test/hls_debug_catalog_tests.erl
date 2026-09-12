@@ -40,3 +40,33 @@ exact_actor_placement_and_binding_validation_test() ->
     {ok, Actor} = hls_debug_catalog:actor(Catalog, Id),
     ?assertEqual({placement, #{kind => direct}}, hls_debug:info(Actor, placement)),
     ?assertError({process_bindings, _, []}, hls_debug_catalog:cpu(Plan, #{})).
+
+snapshot_projection_binding_test() ->
+    {Plan, Specs} = hls_actor_debug_dslx:fixture(phi),
+    Projection = #{<<"banks">> := Banks} = xls_scheduler_debug:projection(Plan, Specs),
+    Raw = [A#{<<"kind">> => <<"actor">>, <<"width">> => 11, <<"bank">> => Index,
+        <<"module">> => Module, <<"phases">> => Phases} ||
+        #{<<"index">> := Index, <<"module">> := Module, <<"phases">> := Phases,
+            <<"actors">> := Actors} <- Banks, A <- Actors],
+    Resources = [R#{<<"id">> => Id} || {Id, R} <- lists:enumerate(0, Raw)],
+    Manifest = #{<<"actor_projection">> => Projection, <<"resources">> => Resources,
+        <<"fingerprint">> => <<"fixture">>},
+    Session = #{manifest => Manifest, resources => list_to_tuple(Resources)},
+    Catalog = hls_debug_catalog:hardware(Plan, Specs, [], Session),
+    lists:foreach(fun(Id) ->
+        {ok, Actor} = hls_debug_catalog:actor(Catalog, Id),
+        [{placement, #{index := Bank, slot := Slot}}, {observation, #{resource := ResourceId}},
+            {capabilities, #{info := Fields, trace := false, counters := false, inspect_waits := false}}] =
+            hls_debug:info(Actor, [placement, observation, capabilities]),
+        #{<<"bank">> := Bank, <<"slot">> := Slot, <<"key">> := Key} = lists:nth(ResourceId+1, Resources),
+        ?assertEqual(xls_scheduler_debug:actor_key(Id), Key),
+        ?assertEqual([], [phase, initialized, enter_pending, failed, cycle] -- Fields),
+        ?assertNot(lists:member(message_queue_len, Fields))
+    end, hls_debug_catalog:actors(Catalog)),
+    Wrong = maps:get(scheduler_groups, phi_decoder_profile_topology_dslx:profile(2)),
+    ?assertError(actor_projection_mismatch, hls_debug_catalog:hardware(Plan, Wrong, [], Session)),
+    [First | Rest] = Resources,
+    Bad = Manifest#{<<"resources">> := [First#{<<"slot">> := 99} | Rest]},
+    ?assertError(actor_resources_mismatch, hls_debug_catalog:hardware(Plan, Specs, [], Session#{manifest := Bad})),
+    Duplicate = Manifest#{<<"resources">> := [First | Resources]},
+    ?assertError(actor_resources_mismatch, hls_debug_catalog:hardware(Plan, Specs, [], Session#{manifest := Duplicate})).

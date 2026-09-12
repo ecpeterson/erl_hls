@@ -1,6 +1,24 @@
 -module(hls_topology_debug_tests).
 -include_lib("eunit/include/eunit.hrl").
 
+actor_observation_test() ->
+    R = #{<<"id">> => 7, <<"kind">> => <<"actor">>, <<"width">> => 11,
+        <<"phases">> => [<<"boot">>, <<"active">>]},
+    Decode = fun(V) -> hls_topology_debug:decode_observation(<<7:32/little, 99:64/little, V:32/little>>, R) end,
+    ?assertMatch({ok, #{initialized := false, phase := undefined, failed := undefined}}, Decode(0)),
+    ?assertMatch({ok, #{initialized := true, phase := <<"active">>, failed := true,
+        enter_pending := false, cycle := 99}}, Decode(1024+512+1)),
+    ?assertMatch({ok, #{phase := <<"boot">>, failed := false, enter_pending := true}}, Decode(1024+256)),
+    ?assertEqual({error, invalid_resource_value}, Decode(1)),
+    ?assertEqual({error, invalid_resource_value}, Decode(1024+2)),
+    ?assertMatch({error, _}, Decode(2048)).
+
+info_geometry_test() ->
+    ?assertMatch({ok, #{schema := 2, channels := 3, queues := 2, actors := 4}},
+        hls_topology_debug:decode_info(<<2:32/little, 9:32/little, 3:32/little, 2:32/little, 4:32/little, 0:256>>)),
+    ?assertMatch({error, _}, hls_topology_debug:decode_info(
+        <<2:32/little, 9:32/little, 3:32/little, 2:32/little, 5:32/little, 0:256>>)).
+
 observation_test() ->
     R = #{<<"id">> => 4, <<"kind">> => <<"fifo">>, <<"width">> => 2, <<"capacity">> => 2},
     ?assertMatch({ok, #{occupancy := 2, free_slots := 0, cycle := 99}},

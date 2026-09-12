@@ -4,6 +4,7 @@
 module hls_topology_debug #(
     parameter integer RESOURCES = 1,
     parameter integer CHANNELS = 1,
+    parameter integer ACTORS = 0,
     // Byte zero of the SHA-256 manifest fingerprint occupies bits [7:0].
     parameter [255:0] FINGERPRINT = 0
 ) (
@@ -27,7 +28,7 @@ module hls_topology_debug #(
     wire malformed, request_valid;
     wire [7:0] operation = request[31:24];
     wire [7:0] words = request[7:0];
-    wire [7:0] reply_count = reply_tag == (INFO | 8'h80) ? 12 :
+    wire [7:0] reply_count = reply_tag == (INFO | 8'h80) ? 13 :
         reply_tag == (QUERY | 8'h80) ? 4 : 1;
 
     hls_debug_frame_rx #(.MAX_WORDS(1)) receiver (
@@ -46,11 +47,12 @@ module hls_topology_debug #(
             m_data = {reply_tag, 8'd0, reply_txid, reply_count};
         else if (reply_tag == (INFO | 8'h80)) begin
             case (reply_index)
-                1: m_data = 1; // protocol/manifest schema
+                1: m_data = 2; // protocol/manifest schema
                 2: m_data = RESOURCES;
                 3: m_data = CHANNELS;
-                4: m_data = RESOURCES - CHANNELS;
-                default: m_data = FINGERPRINT[(reply_index-5)*32 +: 32];
+                4: m_data = RESOURCES - CHANNELS - ACTORS;
+                5: m_data = ACTORS;
+                default: m_data = FINGERPRINT[(reply_index-6)*32 +: 32];
             endcase
         end else m_data = observation[(reply_index-1)*32 +: 32];
     end

@@ -15,8 +15,10 @@ from pathlib import Path
 import re
 import subprocess
 
+import topology_debug_actors as actors
 
-SCHEMA = 1
+
+SCHEMA = 2
 FIFO = re.compile(r"fifo_for_depth_(\d+)_ty_.*_with_bypass(?:_register_push)?(?:___\d+)?$")
 PORT_PAIRS = (("_vld", "_rdy"), ("_valid", "_ready"), ("_tvalid", "_tready"))
 
@@ -179,16 +181,18 @@ def resources_for(probes, queues):
     return resources
 
 
-def export_probes(flat_design, top, resources, output_top):
+def export_probes(flat_design, top, resources, output_top, banks=()):
     """Only add an output alias. No cell, memory, or application port is edited."""
     module = flat_design["modules"][top]
-    name = "hls_probe_values"
-    if name in module["ports"] or name in module["netnames"]:
-        raise ValueError(f"reserved probe name already exists: {name}")
-    bits = [bit for resource in resources for bit in
-            resource["bits"] + ["0"]*(32-resource["width"])]
-    module["ports"][name] = {"direction": "output", "bits": bits}
-    module["netnames"][name] = {"hide_name": 0, "bits": bits, "attributes": {}}
+    outputs = {"hls_probe_values": [bit for resource in resources for bit in
+               resource["bits"] + ["0"]*(32-resource["width"])]}
+    if banks:
+        outputs["hls_actor_writes"] = [bit for bank in banks for bit in bank["taps"]]
+    for name, bits in outputs.items():
+        if name in module["ports"] or name in module["netnames"]:
+            raise ValueError(f"reserved probe name already exists: {name}")
+        module["ports"][name] = {"direction": "output", "bits": bits}
+        module["netnames"][name] = {"hide_name": 0, "bits": bits, "attributes": {}}
     return {"creator": flat_design.get("creator", ""), "modules": {output_top: module}}
 
 
@@ -204,7 +208,7 @@ def yosys_run(yosys, script, stage, name):
                        stderr=subprocess.STDOUT, check=True)
 
 
-def debug_wrapper(ports, application_top, resources, channels, fingerprint, clock, reset, active_low):
+def debug_wrapper(ports, application_top, resources, channels, fingerprint, clock, reset, active_low, banks=()):
     debug = [("input", 32, "s_dbg_tdata"), ("input", 4, "s_dbg_tkeep"),
              ("input", 1, "s_dbg_tlast"), ("input", 1, "s_dbg_tvalid"),
              ("output", 1, "s_dbg_tready"), ("output", 32, "m_dbg_tdata"),
@@ -216,13 +220,19 @@ def debug_wrapper(ports, application_top, resources, channels, fingerprint, cloc
     def declaration(direction, width, name):
         return f"    {direction} wire [{width-1}:0] \\{name} "
     connections = [f".\\{name} (\\{name} )" for name in ports]
+    actor_count = sum(bank["slots"] for bank in banks)
+    physical_count = resources - actor_count
+    taps_width = sum(len(bank["taps"]) for bank in banks)
+    tap_wire = f"wire [{taps_width-1}:0] actor_writes;\n" if banks else ""
+    tap_port = ", .hls_actor_writes(actor_writes)" if banks else ""
     hash_literal = int.from_bytes(bytes.fromhex(fingerprint), "little")
     return ("// Generated passive topology debug wrapper. Application ports are unchanged.\n"
             "module hls_debug_application (\n" +
             ",\n".join(declaration(*port) for port in declarations + debug) + "\n);\n" +
-            f"wire [{32*resources-1}:0] probe_values;\n" +
+            f"wire [{32*resources-1}:0] probe_values;\n" + tap_wire +
             f"{application_top} application (" + ", ".join(connections) +
-            ", .hls_probe_values(probe_values));\n" +
+            f", .hls_probe_values(probe_values[0 +: {32*physical_count}])" + tap_port + ");\n" +
+            actors.wrapper(banks, physical_count, clock, reset, active_low) +
             "wire [31:0] request_data, response_data;\n"
             "wire [3:0] request_keep, response_keep;\n"
             "wire request_last, request_valid, request_ready;\n"
@@ -237,7 +247,7 @@ def debug_wrapper(ports, application_top, resources, channels, fingerprint, cloc
             "    .request_valid(request_valid), .request_ready(request_ready),\n"
             "    .response_data(response_data), .response_keep(response_keep), .response_last(response_last),\n"
             "    .response_valid(response_valid), .response_ready(response_ready));\n" +
-            f"hls_topology_debug #(.RESOURCES({resources}), .CHANNELS({channels}),\n" +
+            f"hls_topology_debug #(.RESOURCES({resources}), .CHANNELS({channels}), .ACTORS({actor_count}),\n" +
             f"    .FINGERPRINT(256'h{hash_literal:064x})) debug (\n" +
             f"    .clk(\\{clock} ), .reset({'!' if active_low else ''}\\{reset} ), .probe_values(probe_values),\n"
             "    .s_data(request_data), .s_keep(request_keep), .s_last(request_last),\n"
@@ -262,6 +272,14 @@ def instrument(args):
     probes = discover(hierarchy, flat, args.top, args.clock)
     queues, unsupported = fifo_resources(hierarchy, flat, args.top, probes)
     resources = resources_for(probes, queues)
+    physical = list(resources)
+    banks, projection = [], None
+    if getattr(args, "actor_projection", None):
+        projection = json.loads(args.actor_projection.read_text())
+        root = args.actor_root.split(".") if args.actor_root else []
+        banks = actors.discover(projection, root, hierarchy, flat["modules"][args.top],
+                                args.top, flat_bit(flat["modules"][args.top], (), args.clock))
+        resources.extend(actors.resources(banks, len(resources)))
     ports = dict(flat["modules"][args.top]["ports"])
     for control in (args.clock, args.reset):
         if control not in ports or ports[control]["direction"] != "input" or len(ports[control]["bits"]) != 1:
@@ -271,17 +289,20 @@ def instrument(args):
                 "resources": resources, "unsupported_queues": unsupported,
                 "sources": [{"name": path.name, "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
                             for path in files], "probes": probes}
+    if banks:
+        manifest["actor_projection"] = projection
+        manifest["actor_root"] = root
     canonical = json.dumps(manifest, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode()
     manifest["fingerprint"] = hashlib.sha256(canonical).hexdigest()
     (stage / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
     (stage / "debug_top.v").write_text(debug_wrapper(
         ports, args.output_top, len(resources), len(probes), manifest["fingerprint"],
-        args.clock, args.reset, args.reset_active_low))
-    exported = export_probes(flat, args.top, resources, args.output_top)
+        args.clock, args.reset, args.reset_active_low, banks))
+    exported = export_probes(flat, args.top, physical, args.output_top, banks)
     (stage / "instrumented.json").write_text(json.dumps(exported))
     yosys_run(args.yosys, f"read_json {quote(stage / 'instrumented.json')}\n" +
               f"opt_clean -purge\nwrite_verilog -noattr {quote(stage / 'instrumented.v')}\n", stage, "export")
-    print(f"Exported {len(probes)} channels, {len(queues)} FIFO occupancies; manifest {manifest['fingerprint']}")
+    print(f"Exported {len(probes)} channels, {len(queues)} FIFO occupancies, {len(resources)-len(physical)} actors; manifest {manifest['fingerprint']}")
 
 
 def main():
@@ -294,6 +315,8 @@ def main():
     parser.add_argument("--reset", default="reset")
     parser.add_argument("--reset-active-low", action="store_true")
     parser.add_argument("--yosys", default="yosys")
+    parser.add_argument("--actor-projection", type=Path)
+    parser.add_argument("--actor-root", default="", help="instance path of the shell containing scheduler RAMs")
     instrument(parser.parse_args())
 
 

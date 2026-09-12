@@ -23,14 +23,17 @@ info(Pid) ->
 -spec open(pid(), map()) -> {ok, map()} | {error, term()}.
 open(Pid, Manifest) ->
     case info(Pid) of
-        {ok, #{fingerprint := Hash, resources := Count, channels := Channels}} ->
+        {ok, #{fingerprint := Hash, resources := Count, channels := Channels, queues := Queues, actors := Actors}} ->
             case Manifest of
-                #{<<"schema">> := 1, <<"fingerprint">> := Hash,
+                #{<<"schema">> := 2, <<"fingerprint">> := Hash,
                   <<"resources">> := Resources, <<"probes">> := Probes}
                         when length(Resources) =:= Count, length(Probes) =:= Channels ->
                     case manifest_fingerprint(Manifest) =:= Hash andalso
                             [maps:get(<<"id">>, R) || R <- Resources] =:= lists:seq(0, Count-1) andalso
-                            [maps:get(<<"id">>, P) || P <- Probes] =:= lists:seq(0, Channels-1) of
+                            [maps:get(<<"id">>, P) || P <- Probes] =:= lists:seq(0, Channels-1) andalso
+                            [maps:get(<<"kind">>, R) || R <- Resources] =:=
+                                lists:duplicate(Channels, <<"channel">>) ++
+                                lists:duplicate(Queues, <<"fifo">>) ++ lists:duplicate(Actors, <<"actor">>) of
                         true -> {ok, #{client => Pid, manifest => Manifest,
                             resources => list_to_tuple(Resources)}};
                         false -> {error, corrupt_topology_manifest}
@@ -56,9 +59,9 @@ resource(Session = #{resources := Resources}, Id) when Id >= 0, Id < tuple_size(
     {ok, {resource, Session, Id}};
 resource(_, Id) -> {error, {unknown_resource, Id}}.
 
-decode_info(<<1:32/little, Count:32/little, Channels:32/little, Queues:32/little,
-        Hash:32/binary>>) when Channels > 0, Count =:= Channels + Queues ->
-    {ok, #{schema => 1, resources => Count, channels => Channels, queues => Queues,
+decode_info(<<2:32/little, Count:32/little, Channels:32/little, Queues:32/little,
+        Actors:32/little, Hash:32/binary>>) when Channels > 0, Count =:= Channels + Queues + Actors ->
+    {ok, #{schema => 2, resources => Count, channels => Channels, queues => Queues, actors => Actors,
         fingerprint => string:lowercase(binary:encode_hex(Hash))}};
 decode_info(_) -> {error, unsupported_topology_info}.
 
@@ -70,9 +73,20 @@ decode_observation(<<Id:32/little, Cycle:64/little, Value:32/little>>,
             {ok, Sample#{valid => Value band 1 =/= 0, ready => Value band 2 =/= 0}};
         #{<<"kind">> := <<"fifo">>, <<"capacity">> := Capacity} when Value =< Capacity ->
             {ok, Sample#{occupancy => Value, free_slots => Capacity-Value}};
+        #{<<"kind">> := <<"actor">>, <<"phases">> := Phases} ->
+            actor_observation(Sample, Phases);
         _ -> {error, invalid_resource_value}
     end;
 decode_observation(_, _) -> {error, malformed_topology_observation}.
+
+actor_observation(Sample = #{value := 0}, _Phases) ->
+    {ok, Sample#{initialized => false, phase => undefined,
+        enter_pending => undefined, failed => undefined}};
+actor_observation(Sample = #{value := Value}, Phases)
+        when Value band 1024 =/= 0, Value band 255 < length(Phases) ->
+    {ok, Sample#{initialized => true, phase => lists:nth((Value band 255)+1, Phases),
+        enter_pending => Value band 256 =/= 0, failed => Value band 512 =/= 0}};
+actor_observation(_, _) -> {error, invalid_resource_value}.
 
 -doc "Follows channel/FIFO IDs with a bounded query budget, then rechecks the visited resources.".
 inspect_waits(Session = #{manifest := Manifest}, Seeds, Options) ->
