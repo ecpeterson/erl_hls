@@ -60,6 +60,9 @@ jobs:
       - name: Run Erlang tests
         run: rebar3 eunit
 
+      - name: Compare macro-configured actors with BEAM
+        run: bash tools/test_source_context.sh "$RUNNER_TEMP/xls"
+
       - name: Fault-inject the VPI transport
         run: python3 tools/test_sim_bridge.py
 

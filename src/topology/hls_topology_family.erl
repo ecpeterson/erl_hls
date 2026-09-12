@@ -20,25 +20,30 @@ stable logical services, not actor generations. Router acceptance is a bounded
 network handoff rather than an atomic multicast admission guarantee.
 """.
 
--export([normalize/2, routes_for_instance/3]).
+-export([normalize/3, routes_for_instance/3]).
 
--spec normalize(map(), fun((map(), map()) -> map())) -> map().
+-spec normalize(map(), [module()], fun((map(), map(), map()) -> map())) -> map().
 normalize(
     Spec = #{
         actors := ActorSpecs,
         families := FamilySpecs,
         route_relations := RelationSpecs
     },
+    ActorModules,
     NormalizeExact
 ) ->
-    Families = normalize_families(FamilySpecs),
+    Declarations = normalize_families(FamilySpecs),
+    Interfaces = hls_actor_interface:from_modules(ActorModules ++
+        [Module || #{module := Module} <- Declarations]),
+    Families = [family_summary(Family, maps:get(Module, Interfaces))
+        || Family = #{module := Module} <- Declarations],
     FamilyIndex = index_by_id(Families),
     ok = reject_family_namespace_collisions(Families),
     ok = reject_actor_family_collisions(
         ActorSpecs,
         FamilyIndex
     ),
-    Exact = #{externals := Externals} = NormalizeExact(Spec, FamilyIndex),
+    Exact = #{externals := Externals} = NormalizeExact(Spec, FamilyIndex, Interfaces),
     ExternalIndex = index_by_id(Externals),
     Relations = normalize_route_relations(
         RelationSpecs,
@@ -105,7 +110,6 @@ normalize_family(Id, Spec) when is_map(Spec) ->
         false -> error({invalid_family_module, Id, Module})
     end,
     ok = validate_shape(Id, Shape),
-    Interface = hls_actor_interface:from_module(Module),
     #{
         id => Id,
         module => Module,
@@ -114,13 +118,15 @@ normalize_family(Id, Spec) when is_map(Spec) ->
             fun(Size, Count) -> Size * Count end,
             1,
             Shape
-        ),
-        outputs => maps:get(outputs, Interface),
-        mailbox_capacity => maps:get(mailbox_capacity, Interface),
-        interface => Interface
+        )
     };
 normalize_family(Id, Spec) ->
     error({invalid_family_spec, Id, Spec}).
+
+family_summary(Family, Interface = #{outputs := Outputs,
+        mailbox_capacity := Capacity}) ->
+    Family#{outputs => Outputs, mailbox_capacity => Capacity,
+        interface => Interface}.
 
 %%%
 %%% Rectangle-addressed ingress

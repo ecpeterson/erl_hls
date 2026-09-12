@@ -245,10 +245,12 @@ require_externals([_ | _] = Externals) -> Externals;
 require_externals([]) -> error({unsupported_dslx_family_external_count, 0}).
 
 annotate_families(Families, EgressDepth) ->
+    Interfaces = hls_actor_interface:from_modules(
+        [Module || #{module := Module} <- Families]),
     [
         begin
             Module = maps:get(module, Family),
-            Interface = hls_actor_interface:from_module(Module),
+            Interface = maps:get(Module, Interfaces),
             Family#{
                 index => Index,
                 module_name => xls_topology_profile:identifier(

@@ -115,10 +115,15 @@ normalize(Spec) ->
 
 normalize_current(Spec) ->
     ok = validate_top_level(Spec),
-    hls_topology_family:normalize(Spec, fun normalize_exact_sections/2).
+    ActorPairs = normalize_actors(maps:get(actors, Spec)),
+    hls_topology_family:normalize(Spec, [M || {_Id, M} <- ActorPairs],
+        fun(Current, FamilyIndex, Interfaces) ->
+            Actors = [actor_summary(Id, Module, maps:get(Module, Interfaces))
+                || {Id, Module} <- ActorPairs],
+            normalize_exact_sections(Current, FamilyIndex, Actors)
+        end).
 
-normalize_exact_sections(Spec, FamilyIndex) ->
-    Actors = normalize_actors(maps:get(actors, Spec)),
+normalize_exact_sections(Spec, FamilyIndex, Actors) ->
     ActorIndex = maps:from_list([
         {maps:get(id, Actor), Actor} || Actor <- Actors
     ]),
@@ -178,17 +183,10 @@ validate_top_level(_Spec) ->
     error({invalid_topology, expected_map}).
 
 normalize_actors(Specs) when is_map(Specs) ->
-    Pairs = [normalize_actor_entry(Id, Module)
-        || {Id, Module} <- maps:to_list(Specs)],
-    normalize_actor_pairs(Pairs);
+    lists:sort([normalize_actor_entry(Id, Module)
+        || {Id, Module} <- maps:to_list(Specs)]);
 normalize_actors(Specs) ->
     error({invalid_topology_field, actors, Specs}).
-
-normalize_actor_pairs(Pairs) ->
-    sort_by(
-        fun(Actor) -> maps:get(id, Actor) end,
-        [actor_summary(Id, Module) || {Id, Module} <- Pairs]
-    ).
 
 normalize_actor_entry(Id, Module) when is_atom(Module) ->
     ok = validate_id(Id),
@@ -196,23 +194,10 @@ normalize_actor_entry(Id, Module) when is_atom(Module) ->
 normalize_actor_entry(Id, Module) ->
     error({invalid_actor_module, Id, Module}).
 
-actor_summary(Id, Module) ->
-    case code:ensure_loaded(Module) of
-        {module, Module} ->
-            Interface = hls_actor_interface:from_module(Module),
-            #{
-                id => Id,
-                module => Module,
-                outputs => maps:get(outputs, Interface),
-                mailbox_capacity => maps:get(
-                    mailbox_capacity,
-                    Interface
-                ),
-                interface => Interface
-            };
-        {error, Reason} ->
-            error({topology_actor_unavailable, Id, Module, Reason})
-    end.
+actor_summary(Id, Module, Interface = #{outputs := Outputs,
+        mailbox_capacity := Capacity}) ->
+    #{id => Id, module => Module, outputs => Outputs,
+        mailbox_capacity => Capacity, interface => Interface}.
 
 normalize_externals(Specs) when is_list(Specs) ->
     Externals = [normalize_external(Spec) || Spec <- Specs],
