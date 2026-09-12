@@ -12,8 +12,6 @@ pipeline_stages=${5:-2}
 initiation_interval=${6:-2}
 scheduler_count=$((2 + 2 * shard_count))
 trace_enabled=${ERL_HLS_PHI_PROFILE_TRACE:-0}
-stdlib="$xls_root/xls/dslx/stdlib"
-. "$stage/phi_scheduler_rams.sh"
 
 if [[ "$trace_enabled" != 0 && "$trace_enabled" != 1 ]]; then
     echo "ERL_HLS_PHI_PROFILE_TRACE must be 0 or 1" >&2
@@ -57,23 +55,6 @@ for label in ir opt codegen iverilog vvp; do
     rm -f -- "$report" "$report.new" "$report.failed"
 done
 
-timed_output() {
-    label=$1
-    output=$2
-    shift 2
-    if /usr/bin/time "${time_arguments[@]}" -o "$label.time.new" \
-            timeout --signal=TERM --kill-after=5m "$stage_timeout" \
-            "$@" > "$output.new"; then
-        mv "$label.time.new" "$label.time"
-        mv "$output.new" "$output"
-    else
-        status=$?
-        [[ ! -e "$label.time.new" ]] || mv "$label.time.new" "$label.time.failed"
-        [[ ! -e "$output.new" ]] || mv "$output.new" "$output.failed"
-        return "$status"
-    fi
-}
-
 timed_command() {
     label=$1
     shift
@@ -88,39 +69,10 @@ timed_command() {
     fi
 }
 
-timed_output \
-    phi_decoder_profile-ir \
-    phi_decoder_profile.ir \
-    "$xls_root/ir_converter_main" \
-    --warnings_as_errors=false \
-    --dslx_path=. \
-    --dslx_stdlib_path="$stdlib" \
-    --top=Top \
-    phi_decoder_profile_topology.x
-
+bash "$stage/compile_phi_decoder_profile.sh" "$stage" "$xls_root" \
+    "$stage_timeout" "$shard_count" "$pipeline_stages" "$initiation_interval"
 effect_domain_count=$(grep -c 'spawn effect_window::Arbiter<' \
     phi_decoder_profile_topology.x)
-
-timed_output \
-    phi_decoder_profile-opt \
-    phi_decoder_profile.opt.ir \
-    "$xls_root/opt_main" \
-    phi_decoder_profile.ir
-
-timed_output \
-    phi_decoder_profile-codegen \
-    phi_decoder_profile.v \
-    "$xls_root/codegen_main" \
-    --pipeline_stages="$pipeline_stages" \
-    --worst_case_throughput="$initiation_interval" \
-    --delay_model=unit \
-    --flop_inputs=false \
-    --flop_outputs=true \
-    --use_system_verilog=false \
-    --reset=reset \
-    --fifo_module= \
-    --ram_configurations="$(phi_scheduler_ram_configurations "$scheduler_count")" \
-    phi_decoder_profile.opt.ir
 
 timed_command \
     phi_decoder_profile-iverilog \
