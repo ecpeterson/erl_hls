@@ -786,8 +786,6 @@ fn reduction_contribution(
   } else {
     (1, bool:false)
   };
-  let case_match_1_1 = bool:false;
-  let case_match_1_2 = _4.1;
   let _5 = (_4.0 as s64);
   let _6 = Phifold {
     value0: _2,
@@ -796,7 +794,7 @@ fn reduction_contribution(
   };
   let _7 = (Tag::PHI_FOLD, _6, bits_from_phifold(_6));
   let _8 = (Xls_clause_1_Step_1, _0, _7, );
-  if ((case_match_1_1 != case_match_1_2) || bool:false) {
+  if ((_4.1) || bool:false) {
     (u1:0, u32:0, u32:0, zero!<Phifold>())
   } else {
     (u1:1, _8.0, _8.1, _8.2.1)
@@ -861,8 +859,6 @@ fn reduction_reduce(
   } else {
     (bool:0, bool:false)
   };
-  let case_match_1_1 = bool:false;
-  let case_match_1_2 = _3.1;
   let _14 = if _3.0 {
     let _4 = (Xls_clause_1_Zero_1, Xls_clause_1_Zero_1, );
     (_4, bool:false)
@@ -891,24 +887,14 @@ fn reduction_reduce(
             let _9 = (Xls_clause_1_LeftValue_1, _8, );
             (_9, bool:false)
           };
-          let case_match_2_1 = bool:false;
-          let case_match_2_2 = _10.1;
-          (_10.0, (case_match_2_1 != case_match_2_2) || bool:false)
+          (_10.0, (_10.1) || bool:false)
         };
-        let case_match_3_1 = bool:false;
-        let case_match_3_2 = _11.1;
-        (_11.0, (case_match_3_1 != case_match_3_2) || bool:false)
+        (_11.0, (_11.1) || bool:false)
       };
-      let case_match_4_1 = bool:false;
-      let case_match_4_2 = _12.1;
-      (_12.0, (case_match_4_1 != case_match_4_2) || bool:false)
+      (_12.0, (_12.1) || bool:false)
     };
-    let case_match_5_1 = bool:false;
-    let case_match_5_2 = _13.1;
-    (_13.0, (case_match_5_1 != case_match_5_2) || bool:false)
+    (_13.0, (_13.1) || bool:false)
   };
-  let case_match_6_1 = bool:false;
-  let case_match_6_2 = _14.1;
   let Xls_clause_1_BestValue_1 = _14.0.0;
   let Xls_clause_1_WinnerMask_1 = _14.0.1;
   let _15 = Phifold {
@@ -917,7 +903,7 @@ fn reduction_reduce(
     ..zero!<Phifold>()
   };
   let _16 = (Tag::PHI_FOLD, _15, bits_from_phifold(_15));
-  if ((case_match_1_1 != case_match_1_2) || (case_match_6_1 != case_match_6_2) || bool:false) {
+  if ((_3.1) || (_14.1) || bool:false) {
     zero!<Phifold>()
   } else {
     _16.1
@@ -1038,8 +1024,6 @@ fn reduction_transport_contribution(
   } else {
     (1, bool:false)
   };
-  let case_match_1_1 = bool:false;
-  let case_match_1_2 = _4.1;
   let _5 = (_4.0 as s64);
   let _6 = Phifold {
     value0: _2,
@@ -1048,7 +1032,7 @@ fn reduction_transport_contribution(
   };
   let _7 = (Tag::PHI_FOLD, _6, bits_from_phifold(_6));
   let _8 = (Xls_clause_1_Step_1, _0, _7, );
-  if ((case_match_1_1 != case_match_1_2) || bool:false) {
+  if ((_4.1) || bool:false) {
     (u1:0, u32:0, u32:0, zero!<Phifold>())
   } else {
     (u1:1, _8.0, _8.1, _8.2.1)
@@ -1263,9 +1247,7 @@ fn reduction_dispatch_completion(
     let _11 = (Phase::GATHERING, Xls_clause_1_Updated_1, Directive::CONSUME, bool:1, );
     (_11, bool:false)
   };
-  let case_match_1_1 = bool:false;
-  let case_match_1_2 = _14.1;
-  if ((case_match_1_1 != case_match_1_2) || bool:false) {
+  if ((_14.1) || bool:false) {
     (phase, data, Directive::FAIL, u1:0)
   } else {
     (_14.0.0, _14.0.1.1, _14.0.2, _14.0.3)
@@ -1313,8 +1295,6 @@ fn reduction_dispatch_completion(
       }
     }
   };
-  let case_match_1_1 = bool:false;
-  let case_match_1_2 = _1.1;
   let Xls_clause_1_BestDirection_1 = _1.0;
   let _2 = Cell {
     best_direction: Xls_clause_1_BestDirection_1,
@@ -1322,7 +1302,7 @@ fn reduction_dispatch_completion(
   };
   let _3 = (Tag::CELL, _2);
   let _4 = (Phase::FLIPPING, _3, Directive::CONSUME, bool:0, );
-  if ((case_match_1_1 != case_match_1_2) || bool:false) {
+  if ((_1.1) || bool:false) {
     (phase, data, Directive::FAIL, u1:0)
   } else {
     (_4.0, _4.1.1, _4.2, _4.3)
@@ -1372,9 +1352,7 @@ fn reduction_dispatch_completion(
     let _1 = (Phase::FLIPPING, Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
     (_1, bool:false)
   };
-  let case_match_1_1 = bool:false;
-  let case_match_1_2 = _11.1;
-  if ((case_match_1_1 != case_match_1_2) || bool:false) {
+  if ((_11.1) || bool:false) {
     (phase, data, Directive::FAIL, u1:0)
   } else {
     (_11.0.0, _11.0.1.1, _11.0.2, _11.0.3)
@@ -1580,9 +1558,7 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> EntryOutcome {
         };
         (_8, bool:false)
       };
-      let case_match_1_1 = bool:false;
-      let case_match_1_2 = _20.1;
-      if (case_match_1_1 != case_match_1_2) || bool:false {
+      if (_20.1) || bool:false {
         EntryOutcome { data, failed: true, ..zero!<EntryOutcome>() }
       } else { _20.0 }
     },
@@ -1761,14 +1737,10 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> EntryOutcome {
         } else {
           (bool:0, bool:false)
         };
-        let case_match_1_1 = bool:false;
-        let case_match_1_2 = _11.1;
-        (_11.0, (case_match_1_1 != case_match_1_2) || bool:false)
+        (_11.0, (_11.1) || bool:false)
       } else {
         (bool:0, bool:false)
       };
-      let case_match_2_1 = bool:false;
-      let case_match_2_2 = _12.1;
       let _46 = if _12.0 {
         let _13 = (1 as u32);
         let Present_1 = _13;
@@ -1810,8 +1782,6 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> EntryOutcome {
             }
           }
         };
-        let case_match_3_1 = bool:false;
-        let case_match_3_2 = _22.1;
         let NorthPresent_1 = _22.0.0;
         let EastPresent_1 = _22.0.1;
         let WestPresent_1 = _22.0.2;
@@ -1906,7 +1876,7 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> EntryOutcome {
             },
           }
         };
-        (_45, (case_match_3_1 != case_match_3_2) || bool:false)
+        (_45, (_22.1) || bool:false)
       } else {
         let Present_1 = Absent_1;
         let _13 = Cell_1.1.best_direction;
@@ -1934,8 +1904,6 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> EntryOutcome {
             }
           }
         };
-        let case_match_3_1 = bool:false;
-        let case_match_3_2 = _15.1;
         let NorthPresent_1 = _15.0.0;
         let EastPresent_1 = _15.0.1;
         let WestPresent_1 = _15.0.2;
@@ -2025,11 +1993,9 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> EntryOutcome {
             },
           }
         };
-        (_38, (case_match_3_1 != case_match_3_2) || bool:false)
+        (_38, (_15.1) || bool:false)
       };
-      let case_match_4_1 = bool:false;
-      let case_match_4_2 = _46.1;
-      if (case_match_2_1 != case_match_2_2) || (case_match_4_1 != case_match_4_2) || bool:false {
+      if (_12.1) || (_46.1) || bool:false {
         EntryOutcome { data, failed: true, ..zero!<EntryOutcome>() }
       } else { _46.0 }
     },
@@ -2510,32 +2476,22 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
                   } else {
                     (bool:0, bool:false)
                   };
-                  let case_match_1_1 = bool:false;
-                  let case_match_1_2 = _5.1;
-                  (_5.0, (case_match_1_1 != case_match_1_2) || bool:false)
+                  (_5.0, (_5.1) || bool:false)
                 } else {
                   (bool:0, bool:false)
                 };
-                let case_match_2_1 = bool:false;
-                let case_match_2_2 = _6.1;
-                (_6.0, (case_match_2_1 != case_match_2_2) || bool:false)
+                (_6.0, (_6.1) || bool:false)
               } else {
                 (bool:0, bool:false)
               };
-              let case_match_3_1 = bool:false;
-              let case_match_3_2 = _7.1;
-              (_7.0, (case_match_3_1 != case_match_3_2) || bool:false)
+              (_7.0, (_7.1) || bool:false)
             } else {
               (bool:0, bool:false)
             };
-            let case_match_4_1 = bool:false;
-            let case_match_4_2 = _8.1;
-            (_8.0, (case_match_4_1 != case_match_4_2) || bool:false)
+            (_8.0, (_8.1) || bool:false)
           } else {
             (bool:0, bool:false)
           };
-          let case_match_5_1 = bool:false;
-          let case_match_5_2 = _9.1;
           if _9.0 {
             let _10 = Xls_clause_1_Flags_1 & 1;
             let Xls_clause_1_Present_1 = _10;
@@ -2679,8 +2635,6 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
           } else {
             (bool:0, bool:false)
           };
-          let case_match_1_1 = bool:false;
-          let case_match_1_2 = _2.1;
           if _2.0 {
             let _3 = Cell {
               random_state: Xls_clause_1_Seed_1,

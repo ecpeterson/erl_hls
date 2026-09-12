@@ -35,7 +35,7 @@ equiv_status -assert
 EOF
 "${YOSYS:-yosys}" -Q -T -s "$stage/equivalence.ys" > "$stage/equivalence.log"
 echo "PASS: factored/inline RTL equivalence for all input bits"
-for kind in wrong_argument wrong_result; do
+for kind in wrong_argument wrong_result wrong_join; do
     if "$xls_root/ir_converter_main" --top=root "${options[@]}" \
             "$stage/$kind.x" > "$stage/$kind.ir" 2> "$stage/$kind.log"; then
         echo "XLS accepted $kind helper" >&2; exit 1

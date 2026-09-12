@@ -251,14 +251,10 @@ Tag::BULK_GET => {
       } else {
         (bool:0, bool:false)
       };
-      let case_match_1_1 = bool:false;
-      let case_match_1_2 = _4.1;
-      (_4.0, (case_match_1_1 != case_match_1_2) || bool:false)
+      (_4.0, (_4.1) || bool:false)
     } else {
       (bool:0, bool:false)
     };
-    let case_match_2_1 = bool:false;
-    let case_match_2_2 = _5.1;
     if _5.0 {
       let _6 = Xls_clause_2_State_1.1.registers;
       let _7 = Xls_clause_2_Start_1 + 1;

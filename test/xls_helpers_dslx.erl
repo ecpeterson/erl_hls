@@ -9,7 +9,7 @@ write(Stage) ->
         [[xls_parse:struct_from_record(Record),
             xls_parse:bitsfromstruct_from_record(Record)]
             || Record = {attribute, _, record, _} <- Forms]],
-    Cases = [{M, X, Y} || M <- lists:seq(0, 13),
+    Cases = [{M, X, Y} || M <- lists:seq(0, 29),
         X <- [0, 1, 2, 3, 7, 8, 15, 1000], Y <- [0, 1, 2, 3, 7, 8, 15, 1000]],
     Expected = [{Case, expected(Case)} || Case <- Cases],
     ok = file:write_file(filename:join(Stage, "helpers.x"), [Declarations,
@@ -73,6 +73,9 @@ write_rejections(Stage, Base) ->
         {"wrong_argument", ["root(X) -> narrow(X).",
             "-spec narrow(hls_nums:u8()) -> hls_nums:u32().",
             "narrow(X) -> hls_type:as(hls_nums:u32(), X)."]},
+        {"wrong_join", ["root(X) -> case X =:= 0 of "
+            "true -> Joined = hls_nums:wrap(hls_nums:u16(), X), X; "
+            "false -> Joined = X, X end, Joined."]},
         {"wrong_result", ["root(X) -> narrow(X).",
             "-spec narrow(hls_nums:u32()) -> hls_nums:u8().", "narrow(X) -> X."]}
     ]).

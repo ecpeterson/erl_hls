@@ -772,9 +772,7 @@ fn enter(old_phase: Phase, phase: Phase, data: Syndrome) -> EntryOutcome {
           (_17, bool:false)
         }
       };
-      let case_match_1_1 = bool:false;
-      let case_match_1_2 = _29.1;
-      if (case_match_1_1 != case_match_1_2) || bool:false {
+      if (_29.1) || bool:false {
         EntryOutcome { data, failed: true, ..zero!<EntryOutcome>() }
       } else { _29.0 }
     },
@@ -931,44 +929,30 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
                       } else {
                         (bool:0, bool:false)
                       };
-                      let case_match_1_1 = bool:false;
-                      let case_match_1_2 = _8.1;
-                      (_8.0, (case_match_1_1 != case_match_1_2) || bool:false)
+                      (_8.0, (_8.1) || bool:false)
                     } else {
                       (bool:0, bool:false)
                     };
-                    let case_match_2_1 = bool:false;
-                    let case_match_2_2 = _9.1;
-                    (_9.0, (case_match_2_1 != case_match_2_2) || bool:false)
+                    (_9.0, (_9.1) || bool:false)
                   } else {
                     (bool:0, bool:false)
                   };
-                  let case_match_3_1 = bool:false;
-                  let case_match_3_2 = _10.1;
-                  (_10.0, (case_match_3_1 != case_match_3_2) || bool:false)
+                  (_10.0, (_10.1) || bool:false)
                 } else {
                   (bool:0, bool:false)
                 };
-                let case_match_4_1 = bool:false;
-                let case_match_4_2 = _11.1;
-                (_11.0, (case_match_4_1 != case_match_4_2) || bool:false)
+                (_11.0, (_11.1) || bool:false)
               } else {
                 (bool:0, bool:false)
               };
-              let case_match_5_1 = bool:false;
-              let case_match_5_2 = _12.1;
-              (_12.0, (case_match_5_1 != case_match_5_2) || bool:false)
+              (_12.0, (_12.1) || bool:false)
             } else {
               (bool:0, bool:false)
             };
-            let case_match_6_1 = bool:false;
-            let case_match_6_2 = _13.1;
-            (_13.0, (case_match_6_1 != case_match_6_2) || bool:false)
+            (_13.0, (_13.1) || bool:false)
           } else {
             (bool:0, bool:false)
           };
-          let case_match_7_1 = bool:false;
-          let case_match_7_2 = _14.1;
           if _14.0 {
             let _15 = Syndrome {
               seen_sources: 0,
@@ -1165,16 +1149,10 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
                   let _3 = Xls_clause_1_Source_1 == 8;
                   (_3, bool:false)
                 };
-                let case_match_1_1 = bool:false;
-                let case_match_1_2 = _4.1;
-                (_4.0, (case_match_1_1 != case_match_1_2) || bool:false)
+                (_4.0, (_4.1) || bool:false)
               };
-              let case_match_2_1 = bool:false;
-              let case_match_2_2 = _5.1;
-              (_5.0, (case_match_2_1 != case_match_2_2) || bool:false)
+              (_5.0, (_5.1) || bool:false)
             };
-            let case_match_3_1 = bool:false;
-            let case_match_3_2 = _6.1;
             let _11 = if _6.0 {
               let _7 = Xls_clause_1_Seen_1 & Xls_clause_1_Source_1;
               let _8 = _7 == 0;
@@ -1184,20 +1162,14 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
               } else {
                 (bool:0, bool:false)
               };
-              let case_match_4_1 = bool:false;
-              let case_match_4_2 = _10.1;
-              (_10.0, (case_match_4_1 != case_match_4_2) || bool:false)
+              (_10.0, (_10.1) || bool:false)
             } else {
               (bool:0, bool:false)
             };
-            let case_match_5_1 = bool:false;
-            let case_match_5_2 = _11.1;
-            (_11.0, (case_match_3_1 != case_match_3_2) || (case_match_5_1 != case_match_5_2) || bool:false)
+            (_11.0, (_6.1) || (_11.1) || bool:false)
           } else {
             (bool:0, bool:false)
           };
-          let case_match_6_1 = bool:false;
-          let case_match_6_2 = _12.1;
           if _12.0 {
             let _13 = Xls_clause_1_Flags_1 & 1;
             let Xls_clause_1_Present_1 = _13;
@@ -1222,8 +1194,6 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
               } else {
                 (bool:0, bool:false)
               };
-              let case_match_7_1 = bool:false;
-              let case_match_7_2 = _25.1;
               let Xls_clause_1_CutoffApplies_1 = _25.0;
               let _26 = Xls_clause_1_Syndrome_1.1.noise_disabled;
               let _27 = _26 == 1;
@@ -1232,8 +1202,6 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
               } else {
                 (Xls_clause_1_CutoffApplies_1, bool:false)
               };
-              let case_match_8_1 = bool:false;
-              let case_match_8_2 = _28.1;
               let Xls_clause_1_NoiseDisabled_1 = _28.0;
               let _37 = if Xls_clause_1_NoiseDisabled_1 {
                 let _29 = (1 as u32);
@@ -1253,15 +1221,11 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
                   let _33 = (0 as u32);
                   (_33, bool:false)
                 };
-                let case_match_9_1 = bool:false;
-                let case_match_9_2 = _34.1;
                 let Xls_clause_1_Hit_1 = _34.0;
                 let _35 = (0 as u32);
                 let _36 = (_35, Xls_clause_1_Sample_1, Xls_clause_1_Hit_1, );
-                (_36, (case_match_9_1 != case_match_9_2) || bool:false)
+                (_36, (_34.1) || bool:false)
               };
-              let case_match_10_1 = bool:false;
-              let case_match_10_2 = _37.1;
               let Xls_clause_1_NoiseDisabledWord_1 = _37.0.0;
               let Xls_clause_1_NextRandom_1 = _37.0.1;
               let Xls_clause_1_Measurement_1 = _37.0.2;
@@ -1276,8 +1240,6 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
                 let _41 = Xls_clause_1_Syndrome_1.1.cutoff_armed;
                 (_41, bool:false)
               };
-              let case_match_11_1 = bool:false;
-              let case_match_11_2 = _42.1;
               let _43 = Syndrome {
                 seen_sources: Xls_clause_1_NewSeen_1,
                 data_parity: Xls_clause_1_NewParity_1,
@@ -1293,7 +1255,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
               let _44 = (Tag::SYNDROME, _43);
               let Xls_clause_1_Complete_1 = _44;
               let _45 = (Phase::ANNOUNCING, Xls_clause_1_Complete_1, Directive::CONSUME, bool:0, );
-              (_45, (case_match_10_1 != case_match_10_2) || (case_match_11_1 != case_match_11_2) || (case_match_7_1 != case_match_7_2) || (case_match_8_1 != case_match_8_2) || bool:false)
+              (_45, (_25.1) || (_28.1) || (_37.1) || (_42.1) || bool:false)
             } else {
               let _21 = Syndrome {
                 seen_sources: Xls_clause_1_NewSeen_1,
@@ -1306,9 +1268,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
               let _23 = (Phase::COLLECTING, Xls_clause_1_Collected_1, Directive::CONSUME, bool:0, );
               (_23, bool:false)
             };
-            let case_match_12_1 = bool:false;
-            let case_match_12_2 = _46.1;
-            if ((case_match_12_1 != case_match_12_2) || bool:false) {
+            if ((_46.1) || bool:false) {
               (phase, data, Directive::FAIL, u1:0)
             } else {
               (_46.0.0, _46.0.1.1, _46.0.2, _46.0.3)
@@ -1414,8 +1374,6 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
           } else {
             (bool:0, bool:false)
           };
-          let case_match_1_1 = bool:false;
-          let case_match_1_2 = _1.1;
           if _1.0 {
             let _2 = Syndrome {
               cutoff_armed: 1,
@@ -1453,8 +1411,6 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
           } else {
             (bool:0, bool:false)
           };
-          let case_match_1_1 = bool:false;
-          let case_match_1_2 = _1.1;
           if _1.0 {
             let _2 = Syndrome {
               cutoff_armed: 1,

@@ -18,9 +18,13 @@ subset as a callback guard, including comma-separated tests and `andalso` or
 control flow is rejected until generated code has a typed representation for
 Erlang's `case_clause` and `if_clause` failures.
 
-Bindings made inside a `case` or `if` arm remain local to that arm. The lowerer
-does not yet make a variable available after the expression merely because
-every arm binds it.
+A new variable bound in every `case` or `if` arm is available after the
+expression, including bindings introduced by case patterns and nested
+branches. Each exported value must have the same XLS type in every arm.
+Names used only inside an arm stay local and need not agree in type across
+arms. Reading or matching a name bound in only some arms is rejected with
+the use location and the originating join location. Matching an already-bound
+variable checks equality; it never replaces that variable's original value.
 
 Boolean `andalso` and `orelse` expressions use the same conditional lowering
 in guards and ordinary bodies. The left operand is evaluated once; only the
@@ -61,17 +65,19 @@ prepending or moving one can renumber them. Every entry must be a unique atom.
 %% Internal API shared by the actor-specific lowerers while this module is
 %% split into smaller compiler passes.
 -export([
+    bind/4,
     bitsfromstruct_from_record/1,
     branch_from_clause/4,
     branch_from_clause/6,
     clause_outcome/4,
+    failure_expression/1,
+    find_binding/3,
     find_attribute/2,
     find_optional_attribute/2,
     find_tags/1,
     find_function/3,
     find_record/2,
-    mismatch_expression/2,
-    outcome_value/2,
+    outcome_value/1,
     print/1,
     record_field_name/1,
     record_width/1,
@@ -79,7 +85,6 @@ prepending or moving one can renumber them. Every entry must be a unique atom.
     statement_from_statement/2,
     struct_from_record/1,
     structfrombits_from_record/1,
-    uniquify/2,
     validate_record_defaults/1
 ]).
 -export([
@@ -316,10 +321,7 @@ branch_from_clause(
 ) ->
     ComputeState = lower_clause(Clause, ArgVals, StateName, EnumAtoms),
     OutState = instr(ComputeState, [
-        "if (", mismatch_expression(
-            ComputeState#clause_state.named_counters,
-            #{}
-        ), ") {\n",
+        "if (", failure_expression(ComputeState), ") {\n",
         "    ", Failure, "\n",
         "} else {\n",
         "    ", Postprocessor(reference(ComputeState)), "\n",
@@ -336,7 +338,7 @@ clause_outcome(Clause, ArgVals, StateName, EnumAtoms) ->
     #{
         body => lists:reverse(State#clause_state.statements),
         result => reference(State),
-        failed => mismatch_expression(State#clause_state.named_counters, #{})
+        failed => failure_expression(State)
     }.
 
 lower_clause({clause, _Line, ArgPatterns, _Guards, Body},
@@ -355,7 +357,8 @@ lower_clause({clause, _Line, ArgPatterns, _Guards, Body},
         fun(Statement, State) ->
             statement_from_statement(Statement, State#clause_state{reference = none})
         end,
-        #clause_state{state_name = StateName, enum_atoms = EnumAtoms}, BigBody
+        #clause_state{state_name = StateName, enum_atoms = EnumAtoms},
+        xls_var_scope:annotate(BigBody)
     ).
 
 -spec statement_from_statement(erl_parse:abstract_expression(), clause_state()) -> clause_state().
@@ -366,6 +369,9 @@ expression into a sequence of simple emitted XLS expressions.
 %% Private normalization nodes, introduced after source analysis. Mapping a
 %% selected value into a common backend type lets case arms retain different
 %% source shapes without moving their computations across a branch boundary.
+statement_from_statement({xls_live, _Line, Live, Expression}, State) ->
+    Lowered = statement_from_statement(Expression, State#clause_state{live_bindings = Live}),
+    Lowered#clause_state{live_bindings = State#clause_state.live_bindings};
 statement_from_statement({xls_map, _Line, Expression, Render}, State) ->
     Evaluated = statement_from_statement(Expression, State),
     instr(Evaluated#clause_state{reference = none}, Render(reference(Evaluated)));
@@ -384,8 +390,11 @@ statement_from_statement({atom, _L, Atom}, State = #clause_state{
         State,
         maps:get(Atom, EnumAtoms, string:uppercase(atom_to_list(Atom)))
     );
-statement_from_statement({var, _L, Atom}, State) ->
-    reference(State, get_name(State, Atom));
+statement_from_statement({var, Line, Name}, State) ->
+    case find_binding(Name, Line, State) of
+        {ok, Value} -> reference(State, Value);
+        error -> error({unbound_xls_variable, Line, Name})
+    end;
 statement_from_statement({integer, _L, Integer}, State) ->
     reference(State, {static, integer, Integer});
 %% Preserve signed literals for width-directed conversions such as wrap/2.
@@ -462,7 +471,7 @@ statement_from_statement({'case', Line, Condition, Clauses}, State) ->
 statement_from_statement({xls_helper_call, _Line, Name, Args}, State) ->
     {References, ArgState} = lower_arguments(Args, State),
     CallState = instr(ArgState, [Name, "(", lists:join(", ", References), ")"]),
-    outcome_value(CallState, "call_match_");
+    outcome_value(CallState);
 statement_from_statement({call, _L, MF, Args}, State) ->
     {remote, _1, {atom, _2, Module}, {atom, _3, FAtom}} = MF,
     {References, ArgState} = lower_arguments(Args, State),
@@ -483,18 +492,12 @@ lower_arguments(Args, State) ->
         {reference(Next), Next}
     end, State, Args).
 
-%% Expressions returning (value, failed) join the callback's existing match
-%% bookkeeping. Case selection keeps these flags local to the selected arm.
--spec outcome_value(clause_state(), string()) -> clause_state().
-outcome_value(State, Prefix) ->
+%% A selected outcome contributes one explicit failure predicate. Its value
+%% and any exported bindings remain separate from that bookkeeping.
+-spec outcome_value(clause_state()) -> clause_state().
+outcome_value(State) ->
     Value = reference(State),
-    Counter = State#clause_state.match_counter + 1,
-    Base = Prefix ++ integer_to_list(Counter),
-    {Expected, State1} = uniquify(State#clause_state{match_counter = Counter}, Base),
-    {Actual, State2} = uniquify(State1, Base),
-    State2#clause_state{reference = [Value, ".0"], statements = [
-        ["let ", Actual, " = ", Value, ".1;\n"],
-        ["let ", Expected, " = bool:false;\n"] | State2#clause_state.statements]}.
+    reference(add_failure([Value, ".1"], State), [Value, ".0"]).
 
 %% `if` clauses are guard-only and therefore need no pattern projection.  The
 %% supported form is exhaustive: a final literal `true` clause supplies the
@@ -546,33 +549,33 @@ lower_expression_sequence(Expressions, State0) ->
         Expressions
     ).
 
--spec mismatch_expression(map(), map()) -> printable().
-mismatch_expression(Counters, Baseline) ->
-    [
-        [
-            [
-                "(", counter_name(Key), "_1 != ", counter_name(Key), "_",
-                integer_to_list(Index), ") || "
-            ]
-            || Index <- rebound_indexes(
-                maps:get(Key, Baseline, 0),
-                Final
-            )
-        ]
-        || Key := Final <- Counters
-    ] ++ ["bool:false"].
+-spec failure_expression(clause_state()) -> printable().
+failure_expression(#clause_state{failures = Failures}) ->
+    [["(", Failure, ") || "] || Failure <- lists:reverse(Failures)] ++ ["bool:false"].
 
-rebound_indexes(Baseline, Final) ->
-    First = erlang:max(2, Baseline + 1),
-    case First =< Final of
-        true -> lists:seq(First, Final);
-        false -> []
+add_failure(Failure, State = #clause_state{failures = Failures}) ->
+    State#clause_state{failures = [Failure | Failures]}.
+
+%% A partially bound name stays unsafe even if a later expression attempts to
+%% bind it again. Keep the originating join for a useful source diagnostic.
+-spec find_binding(atom(), erl_anno:location(), clause_state()) ->
+    {ok, printable()} | error.
+find_binding(Name, Line, #clause_state{bindings = Bindings, unsafe_bindings = Unsafe}) ->
+    case maps:find(Name, Unsafe) of
+        {ok, Origin} -> error({unsafe_xls_variable, Line, Name, Origin});
+        error -> maps:find(Name, Bindings)
     end.
 
-counter_name(Key) when is_atom(Key) ->
-    atom_to_list(Key);
-counter_name(Key) ->
-    Key.
+-spec bind(atom(), erl_anno:location(), printable(), clause_state()) -> clause_state().
+bind(Name, Line, Value, State) ->
+    Previous = find_binding(Name, Line, State),
+    {Emitted, Named} = uniquify(State, Name),
+    Bound = instr(Named, Emitted, Value),
+    Next = case Previous of
+        {ok, Existing} -> add_failure([Existing, " != ", Emitted], Bound);
+        error -> Bound#clause_state{bindings = (Bound#clause_state.bindings)#{Name => Emitted}}
+    end,
+    reference(Next, Value).
 
 -spec record_value(atom(), ir(), clause_state()) -> iolist().
 record_value(NameAtom, Struct, #clause_state{state_name = NameAtom}) ->
@@ -590,13 +593,8 @@ accessors into the RHS being assigned to slots inside of the LHS.
 """.
 destructure_lhs({var, _L, '_'}, State) ->
     State;
-destructure_lhs({var, _L, NameAtom}, State) ->
-    %% TODO: need to record time-order data to report correct error
-    %% TODO: also want to report eg line number on error, other present state
-    {Name, NewState} = uniquify(State, NameAtom),
-    RHS = NewState#clause_state.reference,
-    Bind = ["let ", Name, " = ", RHS, ";\n"],
-    NewState#clause_state{statements = [Bind | NewState#clause_state.statements]};
+destructure_lhs({var, Line, Name}, State) ->
+    bind(Name, Line, reference(State), State);
 destructure_lhs({record, _L, _Atom, Slots}, State) ->
     RecordRef = State#clause_state.reference,
     IntermediateState = lists:foldl(
@@ -623,29 +621,8 @@ destructure_lhs({tuple, _L, Slots}, State) ->
     IntermediateState#clause_state{reference = TupleRef};
 %% constant cases
 destructure_lhs({atom, _L, Atom}, State) when Atom == true orelse Atom == false ->
-    EncodedValue = case Atom of
-        true -> "bool:1";
-        false -> "bool:0"
-    end,
-    #clause_state{match_counter = OldMatchCounter} = State,
-    MatchCounter = OldMatchCounter + 1,
-    CounterState = State#clause_state{match_counter = MatchCounter},
-
-    BaseName = "static_match_" ++ integer_to_list(MatchCounter),
-    {StaticName, StaticState} = uniquify(CounterState, BaseName),
-    {RHSName, RHSState} = uniquify(StaticState, BaseName),
-
-    RHSValue = RHSState#clause_state.reference,
-
-    RHSState#clause_state{
-        reference = RHSName,
-        statements = [
-            ["let ", RHSName, " = ", RHSValue, " ;\n"],
-            ["let ", StaticName, " = ", EncodedValue, " ;\n"]
-            | CounterState#clause_state.statements
-    ]}.
-%% TODO: tuple
-%% TODO: badmatch on constant
+    add_failure([reference(State), " != bool:", atom_to_list(Atom)], State).
+%% TODO: badmatch on other constants
 
 %%%
 %%% Erlang record / XLS struct munging.
@@ -784,14 +761,6 @@ is_zero_default(_Default) ->
 -spec anonymous_variable(clause_state()) -> {clause_state(), VarName :: string()}.
 anonymous_variable(State = #clause_state{anonymous_counter = Counter}) ->
     {State#clause_state{anonymous_counter = Counter + 1}, [$_ | integer_to_list(Counter)]}.
-
--spec get_name(clause_state(), atom()) -> string().
--doc "Maps Erlang variable names onto emitted XLS names.".
-get_name(_State, Name) ->
-    %% The suffix avoids collisions with names hard-coded into the template
-    %% (e.g., state and request). DSLX identifiers are case-sensitive, so keep
-    %% the Erlang spelling instead of conflating variables such as Foo and FOO.
-    atom_to_list(Name) ++ "_1".
 
 -spec uniquify(clause_state(), atom() | string()) ->
     {string(), clause_state()}.

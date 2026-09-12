@@ -52,7 +52,7 @@ record_pattern_name(Pattern) ->
 ) -> {xls_parse:clause_state(), [xls_parse:printable()]}.
 lower(Patterns, Arguments, State)
         when length(Patterns) =:= length(Arguments) ->
-    Context0 = #{state => State, bindings => #{}, conditions => []},
+    Context0 = #{state => State, conditions => []},
     Context1 = lists:foldl(
         fun({Pattern, Argument}, Context) ->
             compile_pattern(Pattern, Argument, Context)
@@ -70,8 +70,8 @@ lower(Patterns, Arguments, _State) ->
 
 compile_pattern({var, _Line, '_'}, _Subject, Context) ->
     Context;
-compile_pattern({var, _Line, Name}, Subject, Context) ->
-    bind_or_compare(Name, maps:get(value, Subject), Context);
+compile_pattern({var, Line, Name}, Subject, Context) ->
+    bind_or_compare(Name, Line, maps:get(value, Subject), Context);
 compile_pattern({match, _Line, Left, Right}, Subject, Context0) ->
     Context1 = compile_pattern(Left, Subject, Context0),
     compile_pattern(Right, Subject, Context1);
@@ -127,30 +127,10 @@ compile_pattern({atom, _Line, Atom}, Subject,
 compile_pattern(Pattern, _Subject, _Context) ->
     error({unsupported_xls_pattern, Pattern}).
 
-bind_or_compare(Name, Value,
-        Context = #{state := State, bindings := Bindings}) ->
-    case maps:find(Name, Bindings) of
-        {ok, Bound} ->
-            add_condition([Bound, " == ", Value], Context);
-        error ->
-            case prebound_name(Name, State) of
-                {ok, Bound} ->
-                    add_condition([Bound, " == ", Value], Context);
-                error ->
-                    {EmittedName, State1} = xls_parse:uniquify(State, Name),
-                    State2 = xls_parse:instr(State1, EmittedName, Value),
-                    Context#{
-                        state := State2,
-                        bindings := Bindings#{Name => EmittedName}
-                    }
-            end
-    end.
-
-prebound_name(Name, #clause_state{named_counters = Counters}) ->
-    Base = atom_to_list(Name),
-    case maps:is_key(Base, Counters) of
-        true -> {ok, Base ++ "_1"};
-        false -> error
+bind_or_compare(Name, Line, Value, Context = #{state := State}) ->
+    case xls_parse:find_binding(Name, Line, State) of
+        {ok, Bound} -> add_condition([Bound, " == ", Value], Context);
+        error -> Context#{state := xls_parse:bind(Name, Line, Value, State)}
     end.
 
 add_condition(Condition, Context = #{conditions := Conditions}) ->

@@ -84,12 +84,9 @@ lower_chain(
     GuardReference = GuardState#clause_state.reference,
     HeadBody = lists:reverse(GuardState#clause_state.statements),
 
-    BodyBase = GuardState#clause_state{statements = [], reference = none},
-    BodyState = lower_expressions(Body, BodyBase),
-    BodyMismatch = xls_parse:mismatch_expression(
-        BodyState#clause_state.named_counters,
-        GuardState#clause_state.named_counters
-    ),
+    BodyBase = GuardState#clause_state{statements = [], reference = none, failures = []},
+    BodyState = lower_expressions(xls_var_scope:annotate(Body), BodyBase),
+    BodyMismatch = xls_parse:failure_expression(BodyState),
     Selected = [
         lists:reverse(BodyState#clause_state.statements),
         "if (", BodyMismatch, ") {\n",
