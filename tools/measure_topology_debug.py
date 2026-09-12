@@ -82,9 +82,9 @@ def main():
             bits = r['bits'] + ['0'] * (64 - r['width'])
             lines.append(f"assign probe_values[{64 * r['id']}+:64] = {vector(bits)};")
         if selected:
-            taps = [b for bank in banks for b in bank['taps']]
+            taps = [b for bank in selected for b in bank['taps']]
             lines.append(f'wire [{len(taps) - 1}:0] actor_writes = {vector(taps)};')
-            lines.append(actors.wrapper(banks, len(physical), 'clk', 'reset', False))
+            lines.append(actors.wrapper(selected, len(physical), 'clk', 'reset', False))
         fingerprint = int.from_bytes(bytes.fromhex(manifest['fingerprint']), 'little')
         lines.append(f"hls_topology_debug #(.RESOURCES({count}), .CHANNELS({len(manifest['probes'])}), "
                      f".ACTORS({count - len(physical)}), .FINGERPRINT(256'h{fingerprint:x})) controller (.*);")
