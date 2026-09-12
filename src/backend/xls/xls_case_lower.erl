@@ -3,7 +3,7 @@
 %%%% Lowers expression-level Erlang case clauses.  The exact two-arm Boolean
 %%%% form keeps its compact renderer; other supported cases become a
 %%%% source-ordered chain whose selected arm carries both its value and any
-%%%% body badmatch.
+%%%% body badmatch, plus the bindings needed after the join.
 
 -module(xls_case_lower).
 -moduledoc false.
@@ -20,7 +20,7 @@
 ) -> xls_parse:clause_state().
 lower(Line, Condition, Clauses, State) ->
     case boolean_only(Clauses) of
-        true -> lower_boolean_case(Condition, Clauses, State);
+        true -> lower_boolean_case(Line, Condition, Clauses, State);
         false -> lower_ordered_case(Line, Condition, Clauses, State)
     end.
 
@@ -47,28 +47,11 @@ lower_ordered_case(Line, Condition, Clauses0, State0) ->
         _ ->
             xls_pattern_lower:value_argument(Subject)
     end,
-    BranchBase = ConditionState#clause_state{
-        statements = [],
-        reference = none
-    },
-    {Head, Result, BranchState} = lower_chain(
-        Clauses,
-        Argument,
-        Subject,
-        BranchBase
-    ),
-    MergedState = ConditionState#clause_state{
-        anonymous_counter = BranchState#clause_state.anonymous_counter,
-        match_counter = BranchState#clause_state.match_counter,
-        reference = none
-    },
-    finish_case(
-        MergedState,
-        ["{\n", xls_parse_io:indent(
-            xls_parse:print([Head, Result]),
-            2
-        ), "}"]
-    ).
+    BranchBase = branch_base(ConditionState),
+    Branches = [lower_branch(Clause, Argument, Subject, BranchBase) || Clause <- Clauses],
+    join(Line, ConditionState, Branches, fun(Exports) ->
+        ["{\n", xls_parse_io:indent(xls_parse:print(render_chain(Branches, Exports)), 2), "}"]
+    end).
 
 normalize_clause({clause, Line, [Pattern], Guards, Body})
         when Body =/= [] ->
@@ -109,15 +92,12 @@ validate_nonfinal_fallbacks([_Clause | Rest], State) ->
 
 fallback_pattern({var, _Line, '_'}, _State) ->
     true;
-fallback_pattern({var, _Line, Name}, State) ->
-    not variable_is_bound(Name, State);
+fallback_pattern({var, Line, Name}, State) ->
+    xls_parse:find_binding(Name, Line, State) =:= error;
 fallback_pattern({match, _Line, Left, Right}, State) ->
     fallback_pattern(Left, State) andalso fallback_pattern(Right, State);
 fallback_pattern(_Pattern, _State) ->
     false.
-
-variable_is_bound(Name, #clause_state{named_counters = Counters}) ->
-    maps:get(atom_to_list(Name), Counters, 0) > 0.
 
 case_shape(Clauses) ->
     lists:foldl(
@@ -161,60 +141,22 @@ merge_shape(Shape, Shape, _Line) ->
 merge_shape(Left, Right, Line) ->
     error({incompatible_xls_case_pattern_shapes, Line, Left, Right}).
 
-lower_chain([
-    {Line, Pattern, Guards, Body} | Rest
-], Argument, Subject, BranchBase) ->
-    {PatternState, PatternConditions0} = xls_pattern_lower:lower(
-        [Pattern],
-        [Argument],
-        BranchBase
-    ),
-    PatternConditions = record_tag_condition(Pattern, Subject) ++
-        PatternConditions0,
-    Guard = xls_guard_lower:condition(Guards, PatternConditions, Line),
-    GuardState = xls_parse:statement_from_statement(
-        Guard,
-        PatternState#clause_state{reference = none}
-    ),
-    Head = lists:reverse(GuardState#clause_state.statements),
-    BodyBase = GuardState#clause_state{statements = [], reference = none},
-    BodyState = lower_expressions(Body, BodyBase),
-    Selected = [
-        lists:reverse(BodyState#clause_state.statements),
-        "(", xls_parse:reference(BodyState), ", ",
-        xls_parse:mismatch_expression(
-            BodyState#clause_state.named_counters,
-            GuardState#clause_state.named_counters
-        ), ")"
-    ],
-    case Rest of
-        [] ->
-            {Head, Selected, merge_states(
-                BranchBase,
-                [GuardState, BodyState]
-            )};
-        _ ->
-            {NextHead, NextResult, NextState} = lower_chain(
-                Rest,
-                Argument,
-                Subject,
-                BranchBase
-            ),
-            Result = [
-                "if ", xls_parse:reference(GuardState), " {\n",
-                xls_parse_io:indent(xls_parse:print(Selected), 2),
-                "} else {\n",
-                xls_parse_io:indent(
-                    xls_parse:print([NextHead, NextResult]),
-                    2
-                ),
-                "}"
-            ],
-            {Head, Result, merge_states(
-                BranchBase,
-                [GuardState, BodyState, NextState]
-            )}
-    end.
+lower_branch({Line, Pattern, Guards, Body}, Argument, Subject, BranchBase) ->
+    {PatternState, Conditions} = xls_pattern_lower:lower([Pattern], [Argument], BranchBase),
+    Guard = xls_guard_lower:condition(Guards,
+        record_tag_condition(Pattern, Subject) ++ Conditions, Line),
+    GuardState = xls_parse:statement_from_statement(Guard, PatternState#clause_state{reference = none}),
+    #{head => lists:reverse(GuardState#clause_state.statements),
+        guard => xls_parse:reference(GuardState),
+        state => lower_expressions(Body, branch_base(GuardState))}.
+
+render_chain([#{head := Head, state := State}], Exports) ->
+    [Head, selected(State, Exports)];
+render_chain([#{head := Head, guard := Guard, state := State} | Rest], Exports) ->
+    [Head, "if ", Guard, " {\n",
+        xls_parse_io:indent(xls_parse:print(selected(State, Exports)), 2),
+        "} else {\n",
+        xls_parse_io:indent(xls_parse:print(render_chain(Rest, Exports)), 2), "}"].
 
 record_tag_condition(Pattern, Subject) ->
     case top_record_name(Pattern) of
@@ -247,18 +189,39 @@ lower_expressions(Expressions, State0) ->
         Expressions
     ).
 
-merge_states(Base, States) ->
-    Base#clause_state{
-        anonymous_counter = lists:max([
-            State#clause_state.anonymous_counter || State <- [Base | States]
-        ]),
-        match_counter = lists:max([
-            State#clause_state.match_counter || State <- [Base | States]
-        ])
-    }.
+branch_base(State) ->
+    State#clause_state{statements = [], reference = none, failures = []}.
 
-finish_case(State, Expression) ->
-    xls_parse:outcome_value(xls_parse:instr(State, Expression), "case_match_").
+%% Every arm returns the expression value, its own failure flag, and the
+%% same ordered set of new bindings. Pre-existing names retain their original
+%% value; matching them inside an arm contributes only to that arm's failure.
+join(Line, Base = #clause_state{bindings = Bound, unsafe_bindings = Unsafe}, Branches, Render) ->
+    States = [State || #{state := State} <- Branches],
+    BindingSets = [S#clause_state.bindings || S <- States],
+    Common = lists:foldl(fun(Bindings, Acc) -> maps:intersect(Acc, Bindings) end,
+        hd(BindingSets), tl(BindingSets)),
+    Exports = lists:sort(maps:keys(maps:intersect(Base#clause_state.live_bindings,
+        maps:without(maps:keys(Bound), Common)))),
+    AllNames = lists:usort(lists:append([maps:keys(S#clause_state.bindings) ++
+        maps:keys(S#clause_state.unsafe_bindings) || S <- States])),
+    Partial = AllNames -- maps:keys(Common),
+    Merged = Base#clause_state{
+        anonymous_counter = lists:max([S#clause_state.anonymous_counter || S <- States]),
+        unsafe_bindings = maps:merge(maps:from_list([{Name, Line} || Name <- Partial]), Unsafe)},
+    Outcome = xls_parse:instr(Merged, Render(Exports)),
+    Result = xls_parse:reference(Outcome),
+    Joined = lists:foldl(fun({Index, Name}, Acc) ->
+        xls_parse:bind(Name, Line, [Result, ".2.", integer_to_list(Index)], Acc)
+    end, Outcome, lists:enumerate(0, Exports)),
+    xls_parse:outcome_value(xls_parse:reference(Joined, Result)).
+
+selected(State = #clause_state{bindings = Bindings}, Exports) ->
+    [lists:reverse(State#clause_state.statements),
+        "(", xls_parse:reference(State), ", ", xls_parse:failure_expression(State),
+        case Exports of
+            [] -> [];
+            _ -> [", (", [[maps:get(Name, Bindings), ", "] || Name <- Exports], ")"]
+        end, ")"].
 
 %%%
 %%% Exact Boolean case
@@ -276,41 +239,18 @@ boolean_only(Clauses) ->
         Clauses
     ).
 
-lower_boolean_case(Condition, Clauses, State0) ->
+lower_boolean_case(Line, Condition, Clauses, State0) ->
     {TrueBody, FalseBody} = boolean_case_bodies(Clauses),
-    ConditionState = xls_parse:statement_from_statement(
-        Condition,
-        State0#clause_state{reference = none}
-    ),
-    BranchBase = ConditionState#clause_state{
-        statements = [],
-        reference = none
-    },
+    ConditionState = xls_parse:statement_from_statement(Condition, State0#clause_state{reference = none}),
+    BranchBase = branch_base(ConditionState),
     TrueState = lower_expressions(TrueBody, BranchBase),
     FalseState = lower_expressions(FalseBody, BranchBase),
-    BaseCounters = BranchBase#clause_state.named_counters,
-    MergedState = merge_states(ConditionState, [TrueState, FalseState]),
-    finish_case(MergedState#clause_state{reference = none}, [
-        "if ", xls_parse:reference(ConditionState), " {\n",
-        xls_parse_io:indent(xls_parse:print(
-            lists:reverse(TrueState#clause_state.statements)
-        ), 2),
-        "  (", xls_parse:reference(TrueState), ", ",
-        xls_parse:mismatch_expression(
-            TrueState#clause_state.named_counters,
-            BaseCounters
-        ), ")\n",
-        "} else {\n",
-        xls_parse_io:indent(xls_parse:print(
-            lists:reverse(FalseState#clause_state.statements)
-        ), 2),
-        "  (", xls_parse:reference(FalseState), ", ",
-        xls_parse:mismatch_expression(
-            FalseState#clause_state.named_counters,
-            BaseCounters
-        ), ")\n",
-        "}"
-    ]).
+    join(Line, ConditionState, [#{state => TrueState}, #{state => FalseState}], fun(Exports) ->
+        ["if ", xls_parse:reference(ConditionState), " {\n",
+            xls_parse_io:indent(xls_parse:print(selected(TrueState, Exports)), 2),
+            "} else {\n",
+            xls_parse_io:indent(xls_parse:print(selected(FalseState, Exports)), 2), "}"]
+    end).
 
 boolean_case_bodies(Clauses) ->
     case lists:foldl(

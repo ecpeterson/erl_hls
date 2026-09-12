@@ -24,7 +24,11 @@ init([]) ->
     Base = hls_nums:wrap(hls_nums:u32(), 41),
     Expected = hls_nums:wrap(hls_nums:u32(), 41),
     Expected = Base,
-    {ok, boot, #cell{value = Base + 1}}.
+    case Base > 0 of
+        true -> Initial = Base + 1;
+        false -> Initial = hls_nums:wrap(hls_nums:u32(), 0)
+    end,
+    {ok, boot, #cell{value = Initial}}.
 
 unused(enter, _OldPhase, Cell) -> {Cell, []}.
 

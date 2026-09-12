@@ -20,7 +20,10 @@ init([]) ->
 
 prefix(enter, _OldPhase, Cell) ->
     nonzero(Cell#cell.value),
-    Value = Cell#cell.value + 10,
+    if
+        Cell#cell.value band 1 =:= 0 -> Value = Cell#cell.value + 10;
+        true -> Value = 10 + Cell#cell.value
+    end,
     {Cell#cell{value = Value}, [
         {cast, third, #value{value = Value}},
         {cast, first, #value{value = Value + 1}}

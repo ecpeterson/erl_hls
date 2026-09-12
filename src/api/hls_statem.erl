@@ -117,8 +117,10 @@ Clauses are tried in source order. A failure in a selected body does not resume
 clause search. The lowered subset requires literal `enter`/`cast` heads,
 record-shaped cast messages, and one unguarded entry clause per phase. A cast
 conclusion must currently be the clause's final tuple, `case`, or `if`; the
-pre-existing `repeat_phase` adapter cannot yet follow a result through a local
-binding or helper call.
+`repeat_phase` adapter cannot yet follow a result through a local binding or
+helper call. Ordinary values bound in every `case`/`if` arm are available after
+the expression when their XLS types agree. A later match against such a name
+checks equality, and only the selected arm contributes match failures.
 
 Passing `{outputs, Map}` to `start_link/3` connects and enters immediately.
 Cyclic CPU topologies can start machines disconnected, then call `connect/2`.

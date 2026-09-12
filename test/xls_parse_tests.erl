@@ -322,9 +322,7 @@ selected_body_badmatch_does_not_try_later_clause_test() ->
         <<
             "let Xls_clause_1_State_1 = (Tag::STATE, data);\n"
             "if message.value == 0 {\n"
-            "  let static_match_1_1 = bool:1 ;\n"
-            "  let static_match_1_2 = bool:0 ;\n"
-            "  if ((static_match_1_1 != static_match_1_2) || "
+            "  if ((bool:0 != bool:true) || "
                 "bool:false) {\n"
             "    body_failure\n"
             "  } else {\n"
@@ -393,10 +391,10 @@ boolean_case_preserves_branch_badmatches_test() ->
         nomatch,
         binary:match(
             XLS,
-            <<"static_match_1_1 != static_match_1_2">>
+            <<"Value_1 != bool:true">>
         )
     ),
-    ?assertNotEqual(nomatch, binary:match(XLS, <<"case_match_">>)).
+    ?assertNotEqual(nomatch, binary:match(XLS, <<".1) || bool:false">>)).
 
 short_circuit_evaluates_left_once_test_() ->
     [?_assertEqual(1, length(binary:matches(
@@ -514,18 +512,18 @@ selected_general_case_body_badmatch_does_not_fall_through_test() ->
         "_ -> 2 end.",
         ["value"]
     ),
-    ?assertNotEqual(nomatch, binary:match(XLS, <<"static_match_">>)),
-    ?assertNotEqual(nomatch, binary:match(XLS, <<"case_match_">>)),
+    ?assertNotEqual(nomatch, binary:match(XLS, <<" != bool:true">>)),
+    ?assertNotEqual(nomatch, binary:match(XLS, <<".1) || bool:false">>)),
     ?assertNotEqual(
         nomatch,
         binary:match(XLS, <<
-            "(1, (static_match_1_1 != static_match_1_2) || bool:false)\n"
+            "(1, (bool:0 != bool:true) || bool:false)\n"
             "  } else {\n"
             "    (2, bool:false)"
         >>)
     ).
 
-general_case_bindings_are_local_to_each_arm_test() ->
+unused_general_case_bindings_stay_in_their_arms_test() ->
     XLS = lower_expression_clause(
         "probe(Value) -> case Value of "
         "0 -> Choice = 1, Choice; "
@@ -679,7 +677,7 @@ duplicate_boolean_case_arm_is_rejected_test() ->
         )
     ).
 
-case_preservation_keeps_bookkeeping_names_distinct_test() ->
+case_failure_uses_no_synthetic_erlang_bindings_test() ->
     Clause = parse_clause(
         "probe(Condition, Case_match_1) -> "
         "case Condition of true -> 1; false -> 2 end."
@@ -694,7 +692,7 @@ case_preservation_keeps_bookkeeping_names_distinct_test() ->
     ),
     XLS = iolist_to_binary(xls_parse:print([Body, Result])),
     ?assertNotEqual(nomatch, binary:match(XLS, <<"Case_match_1_1">>)),
-    ?assertNotEqual(nomatch, binary:match(XLS, <<"case_match_1_1">>)).
+    ?assertEqual(nomatch, binary:match(XLS, <<"let case_match_">>)).
 
 if_clauses_preserve_source_order_and_comma_guards_test() ->
     XLS = lower_expression_clause(
@@ -711,7 +709,7 @@ if_clauses_preserve_source_order_and_comma_guards_test() ->
     ?assert(Second < Third),
     ?assertEqual(nomatch, binary:match(XLS, <<" && ">>)).
 
-if_branch_bindings_are_local_test() ->
+unused_if_bindings_stay_in_their_arms_test() ->
     XLS = lower_expression_clause(
         "probe(Value) -> if "
         "Value > 0 -> Choice = Value + 1, Choice; "
@@ -729,8 +727,8 @@ selected_if_body_badmatch_reaches_body_failure_test() ->
         "true -> Value + 1 end, "
         "{Result, State}."
     ),
-    ?assertNotEqual(nomatch, binary:match(XLS, <<"static_match_">>)),
-    ?assertNotEqual(nomatch, binary:match(XLS, <<"case_match_">>)),
+    ?assertNotEqual(nomatch, binary:match(XLS, <<" != bool:true">>)),
+    ?assertNotEqual(nomatch, binary:match(XLS, <<".1) || bool:false">>)),
     ?assertNotEqual(nomatch, binary:match(XLS, <<"body_failure">>)).
 
 if_without_true_fallback_is_rejected_test() ->
@@ -817,7 +815,7 @@ hls_gs_callback_bodies_accept_general_case_test() ->
         binary:match(XLS, <<"Request_1.0 == Tag::QUERY">>)
     ),
     ?assertNotEqual(nomatch, binary:match(XLS, <<"Original_1 < 8">>)),
-    ?assertNotEqual(nomatch, binary:match(XLS, <<"case_match_">>)).
+    ?assertNotEqual(nomatch, binary:match(XLS, <<".1) || bool:false">>)).
 
 state_machine_init_argument_is_rejected_test() ->
     assert_bad_init_head(
