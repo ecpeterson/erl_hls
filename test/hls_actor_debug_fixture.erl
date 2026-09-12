@@ -23,7 +23,7 @@ boot(cast, #configure{value = Value}, Cell) when Value =/= 5 ->
 active(enter, _, Cell) ->
     %% Independent failure origins coexist with healthy, backpressured actors.
     Value = case Cell#cell.value of
-        0 -> included_outer(0);
+        0 -> case included_outer(0) of 1 -> hls_type:as(hls_nums:u32(), 1) end;
         2 ->
             true = Cell#cell.value =:= 0,
             included_outer(0);
