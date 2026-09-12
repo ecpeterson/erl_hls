@@ -35,7 +35,7 @@ lower(Filename, Forms0, PhaseNames, Options0) ->
     Declarations = declarations(Forms, PhaseNames),
     MessageNames = maps:get(message_names, Declarations),
     MessageWords = maps:from_list([
-        {Name, message_words(Forms, Name)} || Name <- MessageNames
+        {Name, xls_parse:message_words(Forms, Name)} || Name <- MessageNames
     ]),
     Prepared = prepare_callbacks(Forms, Declarations),
     OutputNames = maps:get(output_names, Prepared),
@@ -687,14 +687,6 @@ validate_capacity(Capacity)
     ok;
 validate_capacity(Capacity) ->
     error({invalid_hls_mailbox_capacity, Capacity}).
-
-message_words(Forms, Name) ->
-    Width = xls_parse:record_width(xls_parse:find_record(Forms, Name)),
-    case Width rem 32 of
-        0 when Width =< 96 -> Width div 32;
-        0 -> error({xls_message_too_wide, Name, Width, 96});
-        _ -> error({xls_message_not_word_aligned, Name, Width, 32})
-    end.
 
 require_unique(Kind, Values) ->
     case length(Values) =:= length(lists:usort(Values)) of

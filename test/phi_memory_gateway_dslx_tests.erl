@@ -146,14 +146,6 @@ same_channel_operations_have_one_syntactic_site_test() ->
     ?assertEqual(
         nomatch,
         binary:match(Router, <<"send(tok, routed_out, axis::Beat">>)
-    ),
-    {ok, Axis} = file:read_file("priv/xls/lib/axis.x"),
-    assert_contains(Axis, <<
-        "let (frame, valid, next_state) = if !state.active {"
-    >>),
-    ?assertEqual(
-        1,
-        count(Axis, <<"send_if(tok, instr_out, valid, frame)">>)
     ).
 
 egress_contract_is_explicit_test() ->

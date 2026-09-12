@@ -70,6 +70,7 @@ stop(PID) ->
 -define(FABRIC_RX, '$hls_fabric_frame').
 -define(ERROR_FUNCTION_CLAUSE, 1).
 -define(ERROR_MATCH_FAILURE, 2).
+-define(ERROR_REQUEST_LENGTH, 3).
 
 -record(header, {
     tag :: 0..255,
@@ -185,6 +186,7 @@ unpack_reply(Module, Tag, Payload) ->
 
 error_reason(?ERROR_FUNCTION_CLAUSE) -> function_clause;
 error_reason(?ERROR_MATCH_FAILURE) -> match_failure;
+error_reason(?ERROR_REQUEST_LENGTH) -> request_length;
 error_reason(ErrorCode) -> {unknown_error, ErrorCode}.
 
 %%%

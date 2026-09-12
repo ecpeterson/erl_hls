@@ -101,6 +101,8 @@ The topology-specific Verilog composition used by Icarus is kept under
 `test/rtl`; a production Vivado design can package the router and endpoint
 boundaries independently and connect them in its block design.
 
+Application receivers validate declared length, capacity, and `TLAST` before delivering a frame. Rejected packets drain to their actual boundary, retaining any mailbox admission reservation for the next valid message. The [receive framing contract](docs/application-framing.md) describes recovery, service schema checks, and the full-word input requirement. Run `bash tools/test_application_frames.sh XLS_ROOT` for the malformed-packet and credit-conservation regressions.
+
 ## State-machine callbacks
 
 `hls_statem` uses phase-named `Phase(EventType, Content, Data)` callbacks.
