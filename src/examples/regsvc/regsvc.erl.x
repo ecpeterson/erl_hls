@@ -143,6 +143,19 @@ pub fn bits_from_state(s: State) -> bits[bit_count<State>()] {
   (s.registers as bits[512]) ++  zero!<bits[0]>()
 }
 
+// Source init/1, line 93.
+fn initial_state_outcome() -> (bool, State) {
+  let _0 = State {
+    ..zero!<State>()
+  };
+  let _1 = (Tag::STATE, _0);
+  (bool:false, _1.1)
+}
+const INITIAL_STATE = initial_state_outcome();
+const_assert!(!INITIAL_STATE.0);
+
+fn initial_state() -> State { INITIAL_STATE.1 }
+
 proc Service {
   req_in:   chan<axis::Frame> in;
   resp_out: chan<axis::Frame> out;
@@ -150,7 +163,7 @@ proc Service {
     (req_in, resp_out)
   }
 
-  init { zero!<State>() }
+  init { initial_state() }
 
   next(state: State) {
     let (tok1, frame) = recv(join(), req_in);
@@ -328,11 +341,10 @@ Tag::SET => {
   }
 },
 
-    _ => {
-      let s = zero!<State>();
-      (axis::pack(Tag::ERROR as u8, ERROR_FUNCTION_CLAUSE),
-       (Tag::STATE, s))
-    }
+_ => {
+  let s = zero!<State>();
+  (axis::pack(Tag::ERROR as u8, ERROR_FUNCTION_CLAUSE), (Tag::STATE, s))
+}
 
     };
 

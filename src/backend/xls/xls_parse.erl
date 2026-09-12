@@ -180,6 +180,7 @@ to_xls_gs(Filename, Forms) ->
     struct_from_record(StateRecord), "\n",
     structfrombits_from_record(StateRecord), "\n",
     bitsfromstruct_from_record(StateRecord), "\n",
+    xls_gs_lower:initial_state(Forms, StateName),
     """
     proc Service {
       req_in:   chan<axis::Frame> in;
@@ -188,8 +189,7 @@ to_xls_gs(Filename, Forms) ->
     ["  config(req_in: chan<axis::Frame> in, resp_out: chan<axis::Frame> out) {\n",
      "    (req_in, resp_out)\n",
      "  }\n\n"],
-    % TODO: actually look at the code here and do nontrivial init
-    ["  init { zero!<", StateStructName, ">() }\n\n"],
+    "  init { initial_state() }\n\n",
     ["  next(state: ", StateStructName, ") {\n",
     """
         let (tok1, frame) = recv(join(), req_in);
@@ -203,12 +203,6 @@ to_xls_gs(Filename, Forms) ->
     """],
     xls_gs_lower:callback_arms(Forms, StateName),
     """
-
-        _ => {
-          let s = zero!<State>();
-          (axis::pack(Tag::ERROR as u8, ERROR_FUNCTION_CLAUSE),
-           (Tag::STATE, s))
-        }
 
         };
 
@@ -831,12 +825,6 @@ op('=/=', [Left, Right]) -> [Left, " != ", Right].
 %%%
 %%% Search / selection tools
 %%%
-
--spec init([erl_parse:abstract_form()]) -> erl_parse:af_clause().
--doc "Picks out the init/1 function from the set of Forms.".
-init(Forms) ->
-    [Value] = find_function(Forms, init, 1),
-    [Value].
 
 -spec state([erl_parse:abstract_form()]) -> atom().
 -doc "Finds the record name which carries an actor's rich data value.".

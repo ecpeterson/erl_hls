@@ -1,13 +1,17 @@
 %%%% xls_gs_lower
 %%%%
-%%%% Groups hls_gs callback clauses by their wire tag and lowers each group to
-%%%% one source-ordered selector. The legacy service template remains in
-%%%% xls_parse; Erlang callback forms do not leak into that template.
+%%%% Lowers hls_gs initialization and groups callback clauses by wire tag.
+%%%% Erlang forms stay outside the service template in xls_parse.
 
 -module(xls_gs_lower).
 -moduledoc false.
 
--export([callback_arms/2]).
+-export([initial_state/2, callback_arms/2]).
+
+initial_state(Forms, StateName) ->
+    Clause = xls_init:clause(Forms, hls_gs),
+    Init = xls_init:lower(Clause, StateName, fun(R) -> [R, ".1"] end, #{}),
+    xls_init:emit("initial_state", record_struct_name(StateName), Init).
 
 -spec callback_arms([erl_parse:abstract_form()], atom()) -> iolist().
 callback_arms(Forms, StateName) ->
@@ -17,7 +21,10 @@ callback_arms(Forms, StateName) ->
     ok = validate_groups(CallGroups, CastGroups, DeclaredTags),
     [
         [callback_arm(call, Group, StateName) || Group <- CallGroups],
-        [callback_arm(cast, Group, StateName) || Group <- CastGroups]
+        [callback_arm(cast, Group, StateName) || Group <- CastGroups],
+        "\n_ => {\n",
+        xls_parse_io:indent(failure("ERROR_FUNCTION_CLAUSE", StateName), 2),
+        "}\n"
     ].
 
 callback_groups(Forms, Function) ->

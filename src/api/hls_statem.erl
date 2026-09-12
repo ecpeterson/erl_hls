@@ -18,6 +18,13 @@ postponement rules shared with the generated implementation.
 The callback module exports `init/1`, returning `{ok, Phase, Data}`, and one
 `Phase/3` function for each application phase.
 
+Translation requires a single unguarded `init([])` clause with a final
+`{ok, Phase, Data}` tuple. XLS checks the initializer at compile time, including
+supported match failures. Direct actors and shared-scheduler RAM population
+use the same checked phase and data at cold start and reset. Topology startup
+messages remain ordinary inputs, dispatched after initial entry; they do not
+replace `init/1`. See `docs/initialization.md` for the full contract.
+
 Initial entry and each phase boundary invoke `Module:Phase(enter, OldPhase,
 Data)` before retrying postponed messages. Entry returns `{NextData, Actions}`.
 `OldPhase` equals `Phase` for initial entry.
