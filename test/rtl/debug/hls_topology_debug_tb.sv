@@ -5,6 +5,8 @@ module hls_topology_debug_tb;
     reg clk = 0, reset = 1;
     always #5 clk = ~clk;
     reg [RESOURCES*64-1:0] probe_values = 0;
+    wire [31:0] probe_address;
+    wire [63:0] probe_value = probe_values[probe_address*64 +: 64];
     reg [31:0] s_data = 0;
     reg [3:0] s_keep = 15;
     reg s_last = 0, s_valid = 0;
@@ -29,7 +31,7 @@ module hls_topology_debug_tb;
     wire response_last, response_valid, response_ready;
     hls_debug_route route (.*);
     hls_topology_debug #(.RESOURCES(RESOURCES), .CHANNELS(2), .ACTORS(1), .FINGERPRINT(HASH)) dut (
-        .clk(clk), .reset(reset), .probe_values(probe_values),
+        .clk(clk), .reset(reset), .probe_address(probe_address), .probe_value(probe_value),
         .s_data(request_data), .s_keep(request_keep), .s_last(request_last),
         .s_valid(request_valid), .s_ready(request_ready),
         .m_data(response_data), .m_keep(response_keep), .m_last(response_last),

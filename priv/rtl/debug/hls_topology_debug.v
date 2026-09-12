@@ -9,7 +9,10 @@ module hls_topology_debug #(
     parameter [255:0] FINGERPRINT = 0
 ) (
     input wire clk, reset,
-    input wire [RESOURCES*64-1:0] probe_values,
+    // Combinational query port: the wrapper selects a physical observation or
+    // a row in an actor snapshot bank. Capture still takes one sampling edge.
+    output wire [31:0] probe_address,
+    input wire [63:0] probe_value,
     input wire [31:0] s_data,
     input wire [3:0] s_keep,
     input wire s_last, s_valid,
@@ -25,6 +28,7 @@ module hls_topology_debug #(
     reg [159:0] observation;
     reg [63:0] cycle;
     wire [31:0] request, resource_id;
+    assign probe_address = resource_id;
     wire malformed, request_valid;
     wire [7:0] operation = request[31:24];
     wire [7:0] words = request[7:0];
@@ -76,7 +80,7 @@ module hls_topology_debug #(
                 if (!malformed && operation == INFO && words == 0) begin
                     // INFO is immutable and read directly from parameters.
                 end else if (!malformed && operation == QUERY && words == 1 && resource_id < RESOURCES) begin
-                    observation <= {probe_values[resource_id*64 +: 64], cycle, resource_id};
+                    observation <= {probe_value, cycle, resource_id};
                 end else begin
                     reply_tag <= ERROR;
                     observation <= !malformed && operation == QUERY && words == 1 ? 2 : 1;
