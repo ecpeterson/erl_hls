@@ -62,6 +62,14 @@ The projection records each actor's opaque identity key, scheduler slot, module,
 
 Each snapshot updates on an accepted state-RAM write. It copies `phase`, `enter_pending`, and the sixteen-bit `failure` code from the committed BRAM row into registers; `initialized` becomes true on the first such write after reset. Until then the state fields are `undefined`, even though the unreset application RAM may contain old values. A later write replaces the snapshot; no history is retained. No extra RAM read port, request, reservation, or application backpressure is introduced.
 
+```mermaid
+flowchart LR
+    Scheduler -->|complete committed machine| BRAM[Actor state BRAM]
+    Scheduler -->|same accepted write: phase, entry flag, code| Shadow[Snapshot registers: 26 bits per actor]
+    Shadow -->|one 32-bit query word| Host[hls_debug on the host]
+    Compiler -->|file/line/reason source map| Host
+```
+
 A sampled actor word has phase in bits 0–7, entry-pending in bit 8, failure code in bits 9–24, and initialized in bit 25. The other bits are zero. A query returns the snapshot from before its sampling edge, so a simultaneous application write becomes visible to later queries. The returned `cycle` dates the observation, not the last commit. A stalled executor can retain a newer in-flight state; a failure is visible only after its state write commits. `enter_pending = false` does not mean the actor is idle or its mailbox empty. Queries derive `failed` from the code and decode `failure` against the manifest: `none` for zero, otherwise a reason plus file and line when a source expression is responsible. Unknown codes are rejected. No filenames, source-map tables, or execution history are stored on the device.
 
 ## Query and inspect waits
