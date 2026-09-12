@@ -15,7 +15,7 @@
 -doc "Summarizes the statically dispatched and emitted hls_statem schemas.".
 interface(Forms, PhaseNames) ->
     {_, Sites} = xls_failure_sites:prepare(Forms),
-    (interface_from_prepared(prepare_interface(Forms, PhaseNames)))#{failure_sites => Sites}.
+    (interface_from_prepared(prepare_interface(Forms, PhaseNames)))#{failure_origins => Sites}.
 
 -spec lower(file:filename(), [erl_parse:abstract_form()], [atom(), ...]) ->
     iolist().

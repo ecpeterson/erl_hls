@@ -43,7 +43,7 @@ exact_actor_placement_and_binding_validation_test() ->
 
 snapshot_projection_binding_test() ->
     {Plan, Specs} = hls_actor_debug_dslx:fixture(phi),
-    Projection = #{<<"banks">> := Banks} = xls_scheduler_debug:projection(Plan, Specs),
+    Projection = #{<<"banks">> := Banks} = hls_actor_debug_dslx:projection(phi),
     Raw = [A#{<<"kind">> => <<"actor">>, <<"width">> => 26, <<"bank">> => Index,
         <<"module">> => Module, <<"phases">> => Phases, <<"failures">> => Failures} ||
         #{<<"index">> := Index, <<"module">> := Module, <<"phases">> := Phases,
@@ -63,6 +63,16 @@ snapshot_projection_binding_test() ->
         ?assertEqual([], [phase, initialized, enter_pending, failed, cycle] -- Fields),
         ?assertNot(lists:member(message_queue_len, Fields))
     end, hls_debug_catalog:actors(Catalog)),
+    [Bank | OtherBanks] = Banks,
+    Failures = maps:get(<<"failures">>, Bank),
+    [{Code, Origin} | _] = [{C, O} || {C, O = #{<<"file">> := _}} <- maps:to_list(Failures)],
+    lists:foreach(fun(BadFailures) ->
+        BadProjection = Projection#{<<"banks">> :=
+            [Bank#{<<"failures">> := BadFailures} | OtherBanks]},
+        ?assertError(actor_projection_mismatch,
+            xls_scheduler_debug:validate(Plan, Specs, BadProjection))
+    end, [Failures#{Code := Origin#{<<"file">> := <<"absent.erl">>}},
+        (maps:remove(Code, Failures))#{<<"65535">> => Origin}]),
     Wrong = maps:get(scheduler_groups, phi_decoder_profile_topology_dslx:profile(2)),
     ?assertError(actor_projection_mismatch, hls_debug_catalog:hardware(Plan, Wrong, [], Session)),
     [First | Rest] = Resources,

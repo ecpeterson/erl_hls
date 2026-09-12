@@ -51,11 +51,8 @@ hardware(Plan, SchedulerSpecs, Boundaries) ->
 
 -doc "Binds shared actors to committed-state snapshots in a verified topology debug session.".
 hardware(Plan, Specs, Boundaries, Session = #{manifest := Manifest}) ->
-    Projection = xls_scheduler_debug:projection(Plan, Specs),
-    case maps:get(<<"actor_projection">>, Manifest, none) of
-        Projection -> ok;
-        _ -> error(actor_projection_mismatch)
-    end,
+    Projection = maps:get(<<"actor_projection">>, Manifest, none),
+    ok = xls_scheduler_debug:validate(Plan, Specs, Projection),
     #{<<"resources">> := Resources, <<"fingerprint">> := Hash} = Manifest,
     ActorResources = [R || R = #{<<"kind">> := <<"actor">>} <- Resources],
     ByKey = maps:from_list([{maps:get(<<"key">>, R), R} || R <- ActorResources]),

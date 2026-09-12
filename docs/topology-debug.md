@@ -52,13 +52,20 @@ Emit a projection alongside the DSLX and RTL from the same normalized topology a
 
 ```erlang
 Plan = hls_topology:from_module(phi_decoder_profile_topology),
-Specs = maps:get(scheduler_groups, phi_decoder_profile_topology_dslx:profile()),
-ok = file:write_file("actors.json", json:encode(xls_scheduler_debug:projection(Plan, Specs))).
+Profile = phi_decoder_profile_topology_dslx:profile(),
+Specs = maps:get(scheduler_groups, Profile),
+Modules = maps:keys(xls_topology_dslx:artifact_requirements(Plan, Profile)),
+Artifacts = maps:from_list([{M, begin
+    {ok, Dslx} = file:read_file(atom_to_list(M) ++ ".x"),
+    Dslx
+end} || M <- Modules]),
+ok = file:write_file("actors.json",
+    json:encode(xls_scheduler_debug:projection(Plan, Specs, Artifacts))).
 ```
 
 Add `--actor-projection actors.json` to the instrumentation command. If the shell containing the `scheduler_N_state` RAM instances is below the selected top, supply its instance path with `--actor-root outer.decoder`. The exporter binds to the `hls_1r1w_ram` write ports, checks their widths, common clock, and actual accepted-write logic, and uses the compiler's packed-field offsets. It rejects missing banks, duplicate identities, incomplete slot maps, and invalid field layouts. Register-backed state is not supported. Ungrouped actors retain metadata-only targets.
 
-The projection records each actor's opaque identity key, scheduler slot, module, phase codebook, and failure source map. Its binding digest covers the normalized topology and scheduler plan, including initialization and interleaved family placement. Keep the projection with its generated RTL: interface checks cannot prove that an arbitrary width-compatible RTL file implements the supplied semantic plan. The endpoint's manifest fingerprint then covers both the supplied projection and the exact RTL sources.
+Supply the exact actor DSLX artifacts used by XLS, including their selected service specialization. The projection verifies their failure-code declarations and records each actor's opaque identity key, scheduler slot, module, phase codebook, and compact failure source map. At runtime, binding checks canonical numbering and source origins against the structural BEAM inventory without lowering expressions or running application transpilers. The manifest determines which origins survived lowering; it is part of the trusted compiler output, not a source-independent proof of behavior. Its binding digest covers the normalized topology and scheduler plan, including initialization and interleaved family placement. Keep the projection with its generated RTL: interface checks cannot prove that an arbitrary width-compatible RTL file implements the supplied semantic plan. The endpoint's manifest fingerprint then covers both the supplied projection and the exact RTL sources.
 
 Each snapshot updates on an accepted state-RAM write. It copies `phase`, `enter_pending`, and the sixteen-bit `failure` code from the committed BRAM row into registers; `initialized` becomes true on the first such write after reset. Until then the state fields are `undefined`, even though the unreset application RAM may contain old values. A later write replaces the snapshot; no history is retained. No extra RAM read port, request, reservation, or application backpressure is introduced.
 

@@ -16,12 +16,8 @@ include_origins_and_real_annotations_test() ->
         line := 7, kind := case_clause} <- Sites]),
     ?assertMatch([_], [S || S = #{file := <<"hls_actor_debug_fixture.erl">>,
         line := 28, kind := match_failure} <- Sites]),
-    Codes = [Code || #{code := Code} <- Sites],
-    ?assertEqual(length(Codes), length(lists:usort(Codes))),
-    lists:foreach(fun(#{code := Code, kind := Kind}) ->
-        ?assert(Code >= 16 andalso Code =< 65535),
-        ?assertEqual(Kind, proplists:get_value(Code band 15, xls_failure_sites:generic()))
-    end, Sites).
+    ok = xls_failure_sites:validate_origins(Sites).
+
 
 absolute_source_spelling_keeps_codebook_test() ->
     Source = "test/hls_actor_debug_fixture.erl",
@@ -60,8 +56,8 @@ unused_sites_are_not_declared_test() ->
     Other = [Name, "_suffix"],
     ?assertEqual(iolist_to_binary(Other),
         iolist_to_binary(xls_failure_sites:emit(Sites, Other))),
-    #{code := Code} = hd([S || S = #{kind := function_clause,
-        file := <<"hls_actor_debug_helpers.hrl">>, line := 6} <- Sites]),
+    [#{code := Code}] = xls_failure_sites:allocate(Sites, Name),
+    ?assertEqual(17, Code),
     Emitted = iolist_to_binary(xls_failure_sites:emit(Sites, Name)),
     Expected = iolist_to_binary(["const ", Name, " = u16:", integer_to_list(Code), ";"]),
     ?assertMatch({_, _}, binary:match(Emitted, Expected)).
@@ -74,12 +70,55 @@ generated_failure_declarations_test_() ->
         Body = re:replace(Source, <<"^const ", Pattern/binary, " =[^\\n]*\\n">>,
             <<>>, [global, multiline, {return, binary}]),
         References = captures(Body, <<"\\b(", Pattern/binary, ")\\b">>, []),
-        ?assertEqual(lists:usort(Declarations), lists:usort(References))
+        ?assertEqual(lists:usort(Declarations), lists:usort(References)),
+        {ok, Forms} = xls_parse:parse_file(File),
+        {_, Origins} = xls_failure_sites:prepare(Forms),
+        Sites = xls_failure_sites:from_artifact(Origins, Source),
+        ?assertEqual(lists:seq(1, length(Sites)), [C bsr 4 || #{code := C} <- Sites]),
+        lists:foreach(fun(#{code := C, kind := K}) ->
+            ?assertEqual(K, proplists:get_value(C band 15, xls_failure_sites:generic()))
+        end, Sites)
     end} || File <- ["src/examples/regsvc/regsvc.erl",
         "src/examples/phi_decoder/phenom_data_cell.erl",
         "src/examples/phi_decoder/phenom_syndrome_cell.erl",
         "src/examples/phi_decoder/phi_halo_cell.erl",
         "test/hls_actor_debug_fixture.erl"]].
+
+capacity_applies_only_to_retained_sites_test() ->
+    %% A large CPU-only inventory cannot exhaust the hardware namespace.
+    Forms = [{attribute, 1, file, {"large.erl", 1}},
+        {function, 1, cpu_only, 0, [{clause, 1, [], [],
+            [{tuple, L, [{atom, L, a}, {atom, L, b}, {atom, L, c}]}
+                || L <- lists:seq(1, 5000)]}]}],
+    {_, Origins} = xls_failure_sites:prepare(Forms),
+    ?assert(length(Origins) > 4095),
+    Name = fun(L) -> [xls_failure_sites:at(explicit_fail,
+        erl_anno:set_file("large.erl", erl_anno:new(L))), "\n"] end,
+    ?assertMatch([#{code := 22, line := 5000}],
+        xls_failure_sites:allocate(Origins, Name(5000))),
+    Full = xls_failure_sites:allocate(Origins, [Name(L) || L <- lists:seq(1, 4095)]),
+    ?assertEqual(65526, maps:get(code, lists:last(Full))),
+    ?assertError({failure_site_capacity, 4096, 4095},
+        xls_failure_sites:allocate(Origins, [Name(L) || L <- lists:seq(1, 4096)])).
+
+artifact_declarations_must_agree_with_codebook_test() ->
+    {ok, Forms} = xls_parse:parse_file("test/hls_actor_debug_fixture.erl"),
+    {_, Origins} = xls_failure_sites:prepare(Forms),
+    Source = iolist_to_binary(xls_parse:to_xls("test/hls_actor_debug_fixture.erl")),
+    Bad = re:replace(Source, <<"= u16:[0-9]+;">>, <<"= u16:65535;">>, [{return, binary}]),
+    ?assertError(failure_codebook_mismatch, xls_failure_sites:from_artifact(Origins, Bad)),
+    Unknown = xls_failure_sites:at(case_clause,
+        erl_anno:set_file("absent.erl", erl_anno:new(1))),
+    ?assertError({unknown_failure_sites, [_]}, xls_failure_sites:allocate(Origins, Unknown)).
+
+specializations_use_their_own_artifact_codebook_test() ->
+    File = "src/examples/phi_decoder/phi_halo_cell.erl",
+    {ok, Forms} = xls_parse:parse_file(File),
+    {_, Origins} = xls_failure_sites:prepare(Forms),
+    lists:foreach(fun(Mode) ->
+        Text = xls_parse:to_xls(File, #{shared_service => Mode}),
+        ?assertMatch([_ | _], xls_failure_sites:from_artifact(Origins, Text))
+    end, [ordinary, aggregate_only]).
 
 captures(Source, Pattern, Options) ->
     case re:run(Source, Pattern, [global, {capture, [1], binary} | Options]) of

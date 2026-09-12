@@ -1,6 +1,6 @@
 -module(xls_failure_sites).
 -moduledoc "Compact failure codes and source maps shared by lowering and debug bindings.".
--export([prepare/1, at/2, emit/2, generic/0, validate/1]).
+-export([prepare/1, at/2, emit/2, allocate/2, from_artifact/2, number/1, generic/0, validate_origins/1]).
 
 %% Codes 1..15 describe failures without a source location; zero is success.
 %% The low four bits retain the reason; the upper twelve identify a source
@@ -27,15 +27,8 @@ prepare(Forms = [{attribute, _, file, {Main, _}} | _]) ->
     Origins = lists:usort(lists:append([sites(F) || F = {function, _, _, _, _} <- Annotated])),
     Names = [iolist_to_binary(constant(Origin)) || Origin <- Origins],
     true = length(Names) =:= length(lists:usort(Names)),
-    case length(Origins) =< 4095 of
-        true -> ok;
-        false -> error({failure_site_capacity, length(Origins), 4095})
-    end,
-    Source = [begin
-        {Reason, Kind} = lists:keyfind(Kind, 2, generic()),
-        #{code => (Site bsl 4) bor Reason, kind => Kind, file => list_to_binary(File), line => Line}
-    end || {Site, {File, Line, Kind}} <- lists:enumerate(Origins)],
-    {Annotated, Source}.
+    {Annotated, [#{kind => Kind, file => list_to_binary(File), line => Line}
+        || {File, Line, Kind} <- Origins]}.
 
 sites({match, _, Pattern, Value}) -> pattern_sites(Pattern) ++ sites(Value);
 sites({'case', Line, Subject, Clauses}) -> [origin(case_clause, Line) | sites([Subject, Clauses])];
@@ -72,40 +65,78 @@ constant({File, Line, Kind}) ->
     ["XLS_FAILURE_SITE_", string:uppercase(atom_to_list(Kind)), "_", Hash,
         "_L", integer_to_list(Line)].
 
-%% The source inventory also covers CPU-only functions, irrefutable patterns,
-%% and exhaustive branches. Only declare symbols surviving callback lowering;
-%% keep their allocated codes unchanged, independent of renderer simplifications.
-emit(Sites, Body) ->
+%% Allocate only after lowering has eliminated unused candidates. The same
+%% artifact text supplies both declarations and the debug projection's codebook.
+allocate(Origins, Body) ->
     Used = case re:run(iolist_to_binary(Body),
             "\\bXLS_FAILURE_SITE_[A-Z_]+_[0-9A-F]{8}_L[0-9]+\\b",
             [global, {capture, first, binary}]) of
         {match, Matches} -> maps:from_keys([Name || [Name] <- Matches], true);
         nomatch -> #{}
     end,
-    Declarations = [["const ", Name, " = u16:",
+    Selected = [Origin || Origin = #{file := File, line := Line, kind := Kind} <- Origins,
+        is_map_key(iolist_to_binary(constant({binary_to_list(File), Line, Kind})), Used)],
+    %% Fail at this boundary if a lowerer creates a symbol absent from the
+    %% inventory, rather than emitting a dangling reference or partial codebook.
+    case length(Selected) =:= map_size(Used) of
+        true -> number(Selected);
+        false -> error({unknown_failure_sites, maps:keys(Used) --
+            [iolist_to_binary(constant({binary_to_list(F), L, K}))
+                || #{file := F, line := L, kind := K} <- Selected]})
+    end.
+
+%% Verify the numeric declarations as well as the symbolic references. This
+%% rejects a stale or hand-edited artifact before it can label debug responses.
+from_artifact(Origins, Dslx) ->
+    Sites = allocate(Origins, Dslx),
+    Actual = case re:run(iolist_to_binary(Dslx),
+            "^const (XLS_FAILURE_SITE_[A-Z_]+_[0-9A-F]{8}_L[0-9]+) = u16:([0-9]+);",
+            [global, multiline, {capture, [1, 2], binary}]) of
+        {match, Matches} -> lists:sort(Matches);
+        nomatch -> []
+    end,
+    Expected = lists:sort([[iolist_to_binary(constant({binary_to_list(F), L, K})),
+        integer_to_binary(C)] || #{file := F, line := L, kind := K, code := C} <- Sites]),
+    case Actual =:= Expected of
+        true -> Sites;
+        false -> error(failure_codebook_mismatch)
+    end.
+
+number(Origins) ->
+    Ordered = lists:sort([{F, L, K} || #{file := F, line := L, kind := K} <- Origins]),
+    case length(Ordered) =< 4095 of
+        true -> ok;
+        false -> error({failure_site_capacity, length(Ordered), 4095})
+    end,
+    [begin
+        {Reason, Kind} = lists:keyfind(Kind, 2, generic()),
+        #{code => (Index bsl 4) bor Reason, kind => Kind, file => File, line => Line}
+    end || {Index, {File, Line, Kind}} <- lists:enumerate(Ordered)].
+
+emit(Origins, Body) ->
+    Declarations = [["const ", constant({binary_to_list(File), Line, Kind}), " = u16:",
         integer_to_list(Code), "; // ", binary_to_list(File), ":L", integer_to_list(Line), "\n"]
-        || #{code := Code, file := File, line := Line, kind := Kind} <- Sites,
-           Name <- [constant({binary_to_list(File), Line, Kind})],
-           is_map_key(iolist_to_binary(Name), Used)],
+        || #{code := Code, file := File, line := Line, kind := Kind} <- allocate(Origins, Body)],
     [Declarations, Body].
 
 relative(Base, File) -> relative_parts(filename:split(Base), filename:split(File)).
 relative_parts([Same | Base], [Same | File]) -> relative_parts(Base, File);
 relative_parts(Base, File) -> filename:join(lists:duplicate(length(Base), "..") ++ File).
 
-%% Validate embedded BEAM metadata before it participates in a debug binding.
-validate(Sites) when is_list(Sites) ->
-    Codes = [validate_site(Site) || Site <- Sites],
-    case length(Codes) =:= length(lists:usort(Codes)) of
+%% This structural inventory is embedded while compiling BEAM, before type
+%% providers are necessarily available. It carries no hardware code allocation.
+validate_origins(Origins) when is_list(Origins) ->
+    lists:foreach(fun validate_origin/1, Origins),
+    case length(Origins) =:= length(lists:usort(Origins)) of
         true -> ok;
-        false -> error(duplicate_failure_code)
+        false -> error(duplicate_failure_origin)
     end.
 
-validate_site(#{code := Code, kind := Kind, file := File, line := Line})
-        when is_integer(Code), Code >= 16, Code =< 65535,
-             is_binary(File), byte_size(File) > 0, is_integer(Line), Line > 0 ->
-    case lists:keyfind(Code band 15, 1, generic()) of
-        {_, Kind} -> Code;
-        _ -> error({failure_code_kind, Code, Kind})
+validate_origin(#{kind := Kind, file := File, line := Line} = Origin)
+        when map_size(Origin) =:= 3, is_binary(File), byte_size(File) > 0,
+             is_integer(Line), Line > 0 ->
+    case lists:keymember(Kind, 2, generic()) of
+        true -> ok;
+        false -> error({failure_kind, Kind})
     end;
-validate_site(Site) -> error({failure_site, Site}).
+validate_origin(Origin) -> error({failure_origin, Origin}).

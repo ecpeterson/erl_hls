@@ -45,18 +45,18 @@ pub enum Directive : u2 {
   FAIL = u2:2,
 }
 
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L255 = u16:902; // phenom_syndrome_cell.erl:L255
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L263 = u16:1030; // phenom_syndrome_cell.erl:L263
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L265 = u16:1078; // phenom_syndrome_cell.erl:L265
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L267 = u16:1126; // phenom_syndrome_cell.erl:L267
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L303 = u16:1414; // phenom_syndrome_cell.erl:L303
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L320 = u16:1590; // phenom_syndrome_cell.erl:L320
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L328 = u16:1718; // phenom_syndrome_cell.erl:L328
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L393 = u16:2486; // phenom_syndrome_cell.erl:L393
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L404 = u16:2566; // phenom_syndrome_cell.erl:L404
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L421 = u16:2742; // phenom_syndrome_cell.erl:L421
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L432 = u16:2886; // phenom_syndrome_cell.erl:L432
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L440 = u16:3014; // phenom_syndrome_cell.erl:L440
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L255 = u16:22; // phenom_syndrome_cell.erl:L255
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L263 = u16:38; // phenom_syndrome_cell.erl:L263
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L265 = u16:54; // phenom_syndrome_cell.erl:L265
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L267 = u16:70; // phenom_syndrome_cell.erl:L267
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L303 = u16:86; // phenom_syndrome_cell.erl:L303
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L320 = u16:102; // phenom_syndrome_cell.erl:L320
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L328 = u16:118; // phenom_syndrome_cell.erl:L328
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L393 = u16:134; // phenom_syndrome_cell.erl:L393
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L404 = u16:150; // phenom_syndrome_cell.erl:L404
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L421 = u16:166; // phenom_syndrome_cell.erl:L421
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L432 = u16:182; // phenom_syndrome_cell.erl:L432
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L440 = u16:198; // phenom_syndrome_cell.erl:L440
 pub struct Phi {
   epoch : u32,
   values : phi_field::Field,
