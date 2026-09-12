@@ -13,7 +13,8 @@ fn configured_actor_matches_beam() {
       header: axis::Header { op: Tag::MESSAGE as u8, ..zero!<axis::Header>() },
       payload: packed as bits[96],
     };
-    let (phase, cell, directive, repeat_phase) = dispatch(frame, Phase::WAITING, machine.data);
+    let (phase, cell, directive, repeat_phase, failure) = dispatch(frame, Phase::WAITING, machine.data);
+    assert_eq(failure, hls_failure::NONE);
     assert_eq(phase, Phase::WAITING);
     assert_eq(bits_from_cell(cell) as u64, EXPECTED[i]);
     assert_eq(directive, Directive::CONSUME);
