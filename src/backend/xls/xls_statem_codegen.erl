@@ -6,7 +6,7 @@
 -module(xls_statem_codegen).
 -moduledoc false.
 
--export([emit/1, shared_machine_width/1, shared_machine_width/2, entry_value/5]).
+-export([emit/1, shared_machine_width/1, shared_machine_width/2, shared_machine_layout/2, entry_value/5]).
 
 -define(REDUCTION_SERVICE, xls_statem_reduction_service_codegen).
 
@@ -314,12 +314,16 @@ shared_machine_width(DataWidth) ->
 -spec shared_machine_width(non_neg_integer(), non_neg_integer()) ->
     pos_integer().
 shared_machine_width(DataWidth, ReductionWidth) ->
-    %% SharedMachine carries two u8 phase tags and its entry/failure flags.
-    PhaseBits = 8,
-    EnterPendingBits = 1,
-    FailedBits = 1,
-    2 * PhaseBits + EnterPendingBits + FailedBits + DataWidth +
-        ReductionWidth.
+    maps:get(width, shared_machine_layout(DataWidth, ReductionWidth)).
+
+%% Low-to-high packed RAM layout, shared by the codec and passive debug taps.
+-spec shared_machine_layout(non_neg_integer(), non_neg_integer()) -> map().
+shared_machine_layout(DataWidth, ReductionWidth) ->
+    {Width, Fields} = lists:foldl(fun({Name, Bits}, {Offset, Acc}) ->
+        {Offset + Bits, Acc#{Name => #{offset => Offset, width => Bits}}}
+    end, {0, #{}}, [{phase, 8}, {entered_from, 8}, {data, DataWidth},
+        {enter_pending, 1}, {failed, 1}, {reduction, ReductionWidth}]),
+    Fields#{width => Width}.
 
 %%%
 %%% Lowered callbacks
@@ -347,11 +351,9 @@ initial_machine(#{init := Init} = Spec) ->
 machine_codec(#{data_name := DataName, data_width := DataWidth} = Spec) ->
     Reductions = maps:get(reductions, Spec, none),
     ReductionWidth = xls_statem_reduction_codegen:private_width(Reductions),
-    DataStart = 16,
-    EnterStart = DataStart + DataWidth,
-    FailedStart = EnterStart + 1,
-    ReductionStart = FailedStart + 1,
-    ReductionEnd = ReductionStart + ReductionWidth,
+    #{data := #{offset := DataStart}, enter_pending := #{offset := EnterStart},
+        failed := #{offset := FailedStart}, reduction := #{offset := ReductionStart},
+        width := ReductionEnd} = shared_machine_layout(DataWidth, ReductionWidth),
     DataFunction = record_function_name(DataName),
     [
         "fn machine_from_bits(raw: MachineBits) -> SharedMachine {\n",

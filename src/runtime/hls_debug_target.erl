@@ -5,7 +5,7 @@
 
 -type target() :: pid() | {hls_statem, pid()} |
     {resource, map(), non_neg_integer()} | {boundary, pid(), term()} |
-    {actor, map(), none | {hls_statem, pid()}}.
+    {actor, map(), none | {hls_statem, pid()} | {actor_snapshot, map(), non_neg_integer()}}.
 
 %% A list requests one provider snapshot. Metadata-only requests do not contact
 %% the target. CPU state and its front-end BEAM queue have separate observations.
@@ -47,9 +47,15 @@ collect(Target, Operation, _Timeout) ->
     {Metadata, _, _} = describe(Target),
     {error, {unsupported_operation, maps:get(scope, Metadata), Operation}}.
 
-inspect_waits({resource, Session, Id}, Options) ->
-    hls_topology_debug:inspect_waits(Session, [Id], Options);
+inspect_waits({resource, Session, Id} = Target, Options) ->
+    case is_resource(Target) of
+        true -> hls_topology_debug:inspect_waits(Session, [Id], Options);
+        false -> unsupported_wait(Target)
+    end;
 inspect_waits(Target, _Options) ->
+    unsupported_wait(Target).
+
+unsupported_wait(Target) ->
     {Metadata, _, _} = describe(Target),
     {error, {unsupported_operation, maps:get(scope, Metadata), inspect_waits}}.
 
@@ -59,8 +65,7 @@ describe(Pid) when is_pid(Pid) ->
 describe({hls_statem, Pid}) ->
     {#{scope => #{kind => cpu_actor, pid => Pid}}, statem_fields(), {statem, Pid}};
 describe({actor, Metadata, Provider}) ->
-    Fields = case Provider of none -> []; {hls_statem, _} -> statem_fields() end,
-    Source = case Provider of none -> none; {hls_statem, Pid} -> {statem, Pid} end,
+    {Fields, Source} = actor_provider(Provider),
     {Metadata, Fields, Source};
 describe({boundary, _Client, Id}) ->
     {#{scope => #{kind => boundary, id => Id}}, [], none};
@@ -70,7 +75,8 @@ describe({resource, Session = #{resources := Resources, manifest := Manifest}, I
     #{<<"kind">> := Kind, <<"name">> := Name} = Resource,
     Fields = case Kind of
         <<"fifo">> -> [occupancy, free_slots];
-        <<"channel">> -> [valid, ready]
+        <<"channel">> -> [valid, ready];
+        <<"actor">> -> actor_fields()
     end,
     Metadata = #{scope => #{kind => topology_resource,
         fingerprint => maps:get(<<"fingerprint">>, Manifest), id => Id},
@@ -85,7 +91,20 @@ statem_fields() ->
     [message_queue_len, mailbox_capacity, free_slots, reserved, postponed,
         phase, lifecycle, beam_message_queue_len].
 
+actor_fields() -> [initialized, phase, enter_pending, failed].
+
+actor_provider(none) -> {[], none};
+actor_provider({hls_statem, Pid}) -> {statem_fields(), {statem, Pid}};
+actor_provider({actor_snapshot, _, _} = Provider) -> {[cycle | actor_fields()], Provider}.
+
 observe(_Provider, [], _Timeout) -> {ok, #{}};
+observe({actor_snapshot, Session, Id}, Fields, Timeout) ->
+    case observe({resource, Session, Id}, Fields, Timeout) of
+        {ok, Snapshot = #{phase := Phase}} when is_binary(Phase) ->
+            %% Catalog binding already checked the codebook against loaded actors.
+            {ok, Snapshot#{phase := binary_to_existing_atom(Phase)}};
+        Other -> Other
+    end;
 observe({beam, Pid}, Fields, _Timeout) ->
     case erlang:process_info(Pid, Fields) of
         undefined -> undefined;
@@ -126,5 +145,6 @@ observe({statem, Pid}, Fields, Timeout) ->
 
 is_boundary({boundary, _, _}) -> true;
 is_boundary(_) -> false.
-is_resource({resource, _, _}) -> true;
+is_resource({resource, #{resources := Resources}, Id}) ->
+    maps:get(<<"kind">>, element(Id+1, Resources)) =/= <<"actor">>;
 is_resource(_) -> false.

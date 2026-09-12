@@ -8,7 +8,8 @@ inspect_waits(Manifest = #{<<"probes">> := Probes, <<"resources">> := Resources}
     #{max_queries := Max} = maps:merge(#{max_queries => 1024}, Options),
     case maps:keys(Options) -- [max_queries] of [] -> ok; Keys -> error({options, Keys}) end,
     true = is_integer(Max) andalso Max >= 2,
-    Catalog = maps:from_list([{maps:get(<<"id">>, R), R} || R <- Resources]),
+    Catalog = maps:from_list([{maps:get(<<"id">>, R), R} || R <- Resources,
+        maps:get(<<"kind">>, R) =/= <<"actor">>]),
     Unknown = Seeds -- maps:keys(Catalog),
     case Unknown of
         [] ->

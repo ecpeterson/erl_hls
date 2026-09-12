@@ -10,7 +10,7 @@ def validate(manifest, report):
     body = {key: value for key, value in manifest.items() if key != "fingerprint"}
     digest = hashlib.sha256(json.dumps(body, sort_keys=True, ensure_ascii=False,
                                        separators=(",", ":")).encode()).hexdigest()
-    if manifest.get("schema") != 1 or report.get("schema") != 1:
+    if manifest.get("schema") != 2 or report.get("schema") != 1:
         raise ValueError("unsupported topology schema")
     if manifest.get("fingerprint") != digest or report.get("fingerprint") != digest:
         raise ValueError("manifest/report fingerprint mismatch")

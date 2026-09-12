@@ -6,6 +6,7 @@
 | --- | --- | --- |
 | BEAM PID | `message_queue_len`, `status`, `reductions`, `memory` | Native process information; for an `hls_gs` hardware proxy this describes the host proxy. |
 | `{hls_statem, Pid}` or a bound CPU actor | `message_queue_len`, `mailbox_capacity`, `free_slots`, `reserved`, `postponed`, `phase`, `lifecycle`, `beam_message_queue_len` | The reference actor's bounded mailbox and scheduler state, with its front-end BEAM queue reported separately. |
+| Hardware actor with a verified snapshot binding | `phase`, `enter_pending`, `failed`, `initialized`, `cycle`, `observation`, plus the metadata below | Last committed shared-actor state. Queries do not wait for the actor or scheduler. |
 | Bound hardware actor | `identity`, `module`, `placement`, `mailbox_capacity`, `boundaries` | The supplied build plan's logical identity, physical placement, declared capacity, and related monitored boundaries. Live actor mailbox occupancy is not available. |
 | Physical topology resource | `name`, `resource_kind`, `cycle`, `value`; FIFO `capacity`, `occupancy`, `free_slots`; channel `valid`, `ready` | One passive FPGA resource sample. A physical FIFO can carry a frame, a credit, or an internal request; its occupancy is not an actor's mailbox depth. |
 | `{boundary, DebugClient, Id}` | `scope`, `capabilities` | An explicitly named monitored interface supporting `get_counters` and `get_trace`. |
@@ -53,6 +54,18 @@ hls_debug:info(Actor, [identity, placement, mailbox_capacity, boundaries]),
 ```
 
 Shared placements identify the scheduler group ID, its generated zero-based index, and the actor's slot within it. Interleaved families use the normalized scheduler plan's member instances and local indices; they do not assume that a logical row-major index equals a physical slot. Ungrouped actors have direct placement. The supplied plan and explicitly related boundary handles are host declarations, not a bitstream identity check. They do not associate generated signal names or physical resource IDs with logical actors. Physical resource sessions independently verify the RTL manifest fingerprint.
+
+To inspect committed shared-actor state, generate a diagnostic build with [actor projections](topology-debug.md#shared-actor-snapshots), open its verified topology session, and pass that session as the fourth catalog argument:
+
+```erlang
+Catalog = hls_debug_catalog:hardware(Plan, Specs, [Boundary], Session),
+{ok, Actor} = hls_debug_catalog:actor(Catalog, {family, phi_x, [0, 0]}),
+hls_debug:info(Actor, [identity, placement, initialized, phase, enter_pending, failed, cycle]).
+```
+
+This binding checks the complete compiler projection against the manifest, including phase names and scheduler slots. A different plan, shard count, or actor-resource map is rejected before querying. `phase` is the actor's Erlang phase atom, also used by CPU inspection. Low-level actor resources return the manifest's binary phase name. Multiple fields in one call share a single sample. `initialized = false` gives `undefined` for phase and flags. CPU failures ordinarily terminate the process, so CPU targets do not advertise a persistent hardware failure latch.
+
+`observation` identifies the committed-state resource and its manifest fingerprint. The snapshot can lag an in-flight callback and its timestamp dates the query rather than the last state write. It does not report mailbox depth, failure reason, source location, event history, or how long a state has persisted. After reset, acquire a fresh transport session and catalog. Counters, traces, and physical wait inspection retain their separate scopes.
 
 The phi-memory monitor observes the routed host application stream around the whole gateway. Requests can be distributed to many embedded actors, and internal actor traffic does not pass through that boundary. Its counters count accepted stream beats/frames and stalled cycles; its routed trace records accepted inner application headers with their source/destination endpoints. After missed observations it suppresses headers until an accepted `TLAST` restores framing, and reports that loss through framing status and event gap flags. Neither measures actor activations, scheduler utilization, or all messages delivered to an actor. Operation tags and 8-bit transaction IDs are not globally unique actor identities. Several actors may therefore list the same related boundary.
 

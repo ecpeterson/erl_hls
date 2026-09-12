@@ -42,7 +42,7 @@ space can be consumed by requests that depend on a later release. Those remain
 topology-level channel-dependency and reserved-progress obligations.
 """.
 
--export([normalize/2]).
+-export([normalize/2, placements/1]).
 -export_type([plan/0, spec/0]).
 
 -type storage() :: registers | block_ram.
@@ -308,3 +308,19 @@ require_unique(Kind, Values) ->
         [] -> ok;
         Duplicates -> error({duplicate, Kind, lists:usort(Duplicates)})
     end.
+
+-doc "Maps logical actor identities to generated scheduler indices and RAM slots.".
+-spec placements(plan()) -> #{term() => map()}.
+placements(#{groups := Groups}) ->
+    maps:from_list(lists:append([group_placements(Group, Index) ||
+        {Index, Group} <- lists:enumerate(0, Groups)])).
+
+group_placements(#{id := GroupId, members := Members}, Index) ->
+    [{instance_id(Member, Instance), #{kind => scheduler, id => GroupId,
+        index => Index, slot => Base + Local}} ||
+        Member = #{base_slot := Base, instances := Instances} <- Members,
+        Instance = #{local_index := Local} <- Instances].
+
+instance_id(#{kind := actor, id := Id}, _) -> {actor, Id};
+instance_id(#{kind := family, id := Id}, #{coordinates := Coordinates}) ->
+    {family, Id, Coordinates}.

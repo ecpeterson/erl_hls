@@ -5,11 +5,11 @@ Logical actor targets derived from the normalized topology and scheduler plan.
 CPU bindings name actual hls_statem processes. Hardware bindings describe
 placement and related monitored boundaries; they do not infer mailbox state
 from a scheduler's transport FIFOs or attribute shared events to one actor.
-Boundary targets must explicitly describe the monitored interface, not an
-actor behind it. These host bindings do not attest to a bitstream's identity.
-Physical resource sessions independently verify their RTL manifest fingerprint.
+Boundary targets explicitly describe the monitored interface. hardware/3 is
+metadata-only; hardware/4 additionally binds committed-state snapshots through
+a verified session and checks the compiler projection against its manifest.
 """.
--export([cpu/2, hardware/3, actors/1, actor/2, boundaries/1]).
+-export([cpu/2, hardware/3, hardware/4, actors/1, actor/2, boundaries/1]).
 -export_type([actor_id/0]).
 
 -type actor_id() :: {actor, term()} | {family, term(), [non_neg_integer()]}.
@@ -34,9 +34,8 @@ cpu(Plan, Processes) ->
 -spec hardware(hls_topology:plan(), hls_scheduler_plan:spec(),
     [{boundary, pid(), term()}]) -> map().
 hardware(Plan, SchedulerSpecs, Boundaries) ->
-    #{groups := Groups} = hls_scheduler_plan:normalize(Plan, SchedulerSpecs),
-    Placements = maps:from_list(lists:append([
-        group_placements(Group, Index) || {Index, Group} <- lists:enumerate(0, Groups)])),
+    Scheduler = hls_scheduler_plan:normalize(Plan, SchedulerSpecs),
+    Placements = hls_scheduler_plan:placements(Scheduler),
     Logical = logical_actors(Plan),
     BoundaryIds = [Id || {boundary, _Client, Id} <- Boundaries],
     case BoundaryIds -- lists:usort(BoundaryIds) of
@@ -49,6 +48,37 @@ hardware(Plan, SchedulerSpecs, Boundaries) ->
             boundaries => Boundaries}, none}
     end, Logical),
     #{actors => Targets, boundaries => Boundaries}.
+
+-doc "Binds shared actors to committed-state snapshots in a verified topology debug session.".
+hardware(Plan, Specs, Boundaries, Session = #{manifest := Manifest}) ->
+    Projection = xls_scheduler_debug:projection(Plan, Specs),
+    case maps:get(<<"actor_projection">>, Manifest, none) of
+        Projection -> ok;
+        _ -> error(actor_projection_mismatch)
+    end,
+    #{<<"resources">> := Resources, <<"fingerprint">> := Hash} = Manifest,
+    ActorResources = [R || R = #{<<"kind">> := <<"actor">>} <- Resources],
+    ByKey = maps:from_list([{maps:get(<<"key">>, R), R} || R <- ActorResources]),
+    Expected = [A#{<<"bank">> => Index, <<"phases">> => Phases, <<"module">> => Module} ||
+        #{<<"index">> := Index, <<"phases">> := Phases, <<"module">> := Module,
+            <<"actors">> := Actors} <- maps:get(<<"banks">>, Projection), A <- Actors],
+    case length(ActorResources) =:= map_size(ByKey) andalso
+            lists:sort(Expected) =:= lists:sort([maps:with(
+                [<<"key">>, <<"name">>, <<"slot">>, <<"bank">>, <<"phases">>, <<"module">>], R)
+                || R <- ActorResources]) of
+        true -> ok;
+        false -> error(actor_resources_mismatch)
+    end,
+    Catalog = #{actors := Targets} = hardware(Plan, Specs, Boundaries),
+    Catalog#{actors := maps:map(fun(Id, {actor, Metadata, none}) ->
+        case maps:find(xls_scheduler_debug:actor_key(Id), ByKey) of
+            {ok, #{<<"id">> := ResourceId}} ->
+                {actor, Metadata#{observation => #{kind => committed_state,
+                    fingerprint => Hash, resource => ResourceId}},
+                    {actor_snapshot, Session, ResourceId}};
+            error -> {actor, Metadata, none}
+        end
+    end, Targets)}.
 
 -spec actors(map()) -> [actor_id()].
 actors(#{actors := Actors}) -> lists:sort(maps:keys(Actors)).
@@ -72,13 +102,3 @@ instances(#{actors := Actors, families := Families}) ->
     [{{family, Id, [X, Y]}, Module, Capacity} ||
         #{id := Id, module := Module, mailbox_capacity := Capacity, shape := [Width, Height]} <- Families,
         X <- lists:seq(0, Width-1), Y <- lists:seq(0, Height-1)].
-
-group_placements(#{id := GroupId, members := Members}, Index) ->
-    [{instance_id(Member, Instance), #{kind => scheduler, id => GroupId,
-        index => Index, slot => Base + Local}} ||
-        Member = #{base_slot := Base, instances := Instances} <- Members,
-        Instance = #{local_index := Local} <- Instances].
-
-instance_id(#{kind := actor, id := Id}, _) -> {actor, Id};
-instance_id(#{kind := family, id := Id}, #{coordinates := Coordinates}) ->
-    {family, Id, Coordinates}.

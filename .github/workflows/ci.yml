@@ -103,6 +103,9 @@ jobs:
             _build/initialization/init_shared_2.v \
             _build/initialization/init_shared_wrapper.v priv/rtl/hls_1r1w_ram.v
 
+      - name: Diagnose shared actor failures through scoped debug queries
+        run: bash tools/test_actor_debug.sh "$RUNNER_TEMP/xls"
+
       - name: Run generated reduction semantics
         run: bash tools/test_reduction_dslx.sh "$RUNNER_TEMP/xls"
 
@@ -165,6 +168,7 @@ jobs:
             _build/entry_outcomes/*.sv
             _build/application_frames/**
             _build/initialization/**
+            _build/actor-debug/**
             _build/helpers/**
             _build/control_failures/**
             _build/xls_sim/regsvc/*.ir
