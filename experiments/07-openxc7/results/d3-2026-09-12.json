@@ -1,0 +1,3873 @@
+{
+  "mapping": {
+    "assembled_cells": {
+      "BUFG": 1,
+      "CARRY4": 2625,
+      "DSP48E1": 144,
+      "FDRE": 79904,
+      "IBUF": 1,
+      "INV": 2011,
+      "LUT1": 8,
+      "LUT2": 14793,
+      "LUT3": 24311,
+      "LUT4": 22949,
+      "LUT5": 32265,
+      "LUT6": 31332,
+      "MUXF7": 74,
+      "MUXF8": 23,
+      "OBUF": 1,
+      "RAMB18E1": 90,
+      "RAMB36E1": 22
+    },
+    "assembly": {
+      "inputs": {
+        "files": {
+          "${REPO}/_build/d3-physical-timing/core-stub.v": "f3cf8dc20313f1ee1afab73a032c5fea70b7e7c15821ac151c6efde256d220a2",
+          "${REPO}/_build/d3-physical-timing/core.json": "78d20a4639b9bd62388c15dd2e5d285245acf1fbba5b02a0c92755c6a644448b",
+          "${REPO}/experiments/07-openxc7/.apio/packages/oss-cad-suite/BUILD-INFO.json": "b509fbcf8adf9e4f8359d8c89ed179bacb3aa7c9557d830ba80936b907c3db85",
+          "${REPO}/experiments/07-openxc7/.apio/packages/oss-cad-suite/bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+          "${REPO}/experiments/07-openxc7/.apio/packages/oss-cad-suite/libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+          "${REPO}/experiments/07-openxc7/.apio/packages/oss-cad-suite/libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d",
+          "${REPO}/experiments/07-openxc7/phi_timing_harness.v": "939d82bcb62599e9bd64e8e68d0e8b0911799d75c0360cbff30ee63e4d2c6733"
+        },
+        "script": "read_verilog -lib core-stub.v\nread_verilog \"${REPO}/experiments/07-openxc7/phi_timing_harness.v\"\nsynth_xilinx -flatten -abc9 -nosrl -family xc7 -top phi_timing_harness\ndesign -stash harness\nread_json core.json\nread_verilog -lib -nowb -overwrite +/xilinx/cells_sim.v +/xilinx/cells_xtra.v\ndesign -copy-from harness phi_timing_harness\nhierarchy -check -top phi_timing_harness\nflatten\nopt_clean\ncheck -assert\nscc -expect 0\ntee -o mapped-stat.json stat -json\nwrite_json mapped.json\n"
+      },
+      "outputs": {
+        "mapped-stat.json": "98ebe748c8ba0d3a79f5bda8c56ae7903f198f757459699090197c25e8732879",
+        "mapped.json": "320efa1fddd42af96db2b6998cd87b64a734ffe863c71a1abc562d9fbe94ebf1"
+      }
+    },
+    "core": {
+      "imported_from": "map-core-initial.ys: successfully executed prefix through write_json; later interface export is independent",
+      "inputs": {
+        "files": {
+          "${REPO}/_build/d3-physical-timing/rtl/hls_1r1w_ram.v": "13e12a7561df37e150c3e727c43f9e5234b74bb9741fc969185c12948b2583e8",
+          "${REPO}/_build/d3-physical-timing/rtl/phi_decoder_profile.v": "bd22f34785e1ee3df3eabf20abba6a92f422e9f0221b6eeb5822033a4ab0be6d",
+          "${REPO}/_build/d3-physical-timing/rtl/phi_decoder_profile_top.v": "9f2d3002550acae5d4cfb50a71f70058729ed8130885890ba8d497a2dfb54c63",
+          "${REPO}/experiments/07-openxc7/.apio/packages/oss-cad-suite/BUILD-INFO.json": "b509fbcf8adf9e4f8359d8c89ed179bacb3aa7c9557d830ba80936b907c3db85",
+          "${REPO}/experiments/07-openxc7/.apio/packages/oss-cad-suite/bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+          "${REPO}/experiments/07-openxc7/.apio/packages/oss-cad-suite/libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+          "${REPO}/experiments/07-openxc7/.apio/packages/oss-cad-suite/libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d"
+        },
+        "script": "read_verilog -sv \"${REPO}/_build/d3-physical-timing/rtl/phi_decoder_profile.v\" \"${REPO}/_build/d3-physical-timing/rtl/phi_decoder_profile_top.v\" \"${REPO}/_build/d3-physical-timing/rtl/hls_1r1w_ram.v\"\nhierarchy -check -top phi_decoder_profile_top\nsynth_xilinx -flatten -abc9 -family xc7 -noiopad -noclkbuf -top phi_decoder_profile_top\ncheck -assert\nscc -expect 0\ntee -o core-stat.json stat -json\nwrite_json core.json\n"
+      },
+      "outputs": {
+        "core-stat.json": "0b99ae1e1ffdd3d90f07e2be921a93b6b991e9ba8dcff4091cec4d0e9c7ca7c4",
+        "core.json": "78d20a4639b9bd62388c15dd2e5d285245acf1fbba5b02a0c92755c6a644448b"
+      }
+    },
+    "decoder_cells": {
+      "CARRY4": 2625,
+      "DSP48E1": 144,
+      "FDRE": 79578,
+      "INV": 2010,
+      "LUT1": 8,
+      "LUT2": 14749,
+      "LUT3": 24310,
+      "LUT4": 22929,
+      "LUT5": 32264,
+      "LUT6": 31301,
+      "MUXF7": 74,
+      "MUXF8": 23,
+      "RAMB18E1": 90,
+      "RAMB36E1": 22
+    },
+    "netlist_sha256": "320efa1fddd42af96db2b6998cd87b64a734ffe863c71a1abc562d9fbe94ebf1",
+    "retained_decoder_cells": 210127,
+    "single_global_clock": true,
+    "timing_coverage": {
+      "combinational_dsps_with_coarse_delay": 144,
+      "design_wide_clock_validated": false,
+      "omitted_sequential_primitives": {
+        "RAMB18E1": 90,
+        "RAMB36E1": 22
+      }
+    }
+  },
+  "measurement_date": "2026-09-12",
+  "part": "xc7z100ffg900-2",
+  "path_notation": "${REPO} replaces the source checkout path in this archived copy; digests refer to the original, unmodified files.",
+  "placement_repair": {
+    "1": [
+      "Info: post-place repair: relocated 40607 stranded cluster(s)/cell(s) to valid bels"
+    ],
+    "2": [
+      "Info: post-place repair: relocated 40650 stranded cluster(s)/cell(s) to valid bels"
+    ],
+    "3": [
+      "Info: post-place repair: relocated 40745 stranded cluster(s)/cell(s) to valid bels"
+    ]
+  },
+  "profile_build": {
+    "profile": {
+      "delay_model": "unit",
+      "flop_inputs": false,
+      "flop_outputs": true,
+      "height": 3,
+      "initiation_interval": 1,
+      "pipeline_stages": 2,
+      "shards_per_plane": 3,
+      "width": 3
+    },
+    "ram_configuration": "93f48d245aec55f733300dda4f5b558f9bff20a30e6d98a76f38c87f1fb47602",
+    "rtl": {
+      "hls_1r1w_ram.v": "13e12a7561df37e150c3e727c43f9e5234b74bb9741fc969185c12948b2583e8",
+      "phi_decoder_profile.v": "bd22f34785e1ee3df3eabf20abba6a92f422e9f0221b6eeb5822033a4ab0be6d",
+      "phi_decoder_profile_top.v": "9f2d3002550acae5d4cfb50a71f70058729ed8130885890ba8d497a2dfb54c63"
+    },
+    "schema": 1,
+    "sources": {
+      "arbitration.x": "76f9a3fe9ae3b8e9261960428f689e9bcd64ef8723fcc351e65aaf26f2e615a3",
+      "axis.x": "692d09839e8a05ca8d3e597270cf1b9eab584f812c353a68c8efb3998ebdbaed",
+      "bram.x": "8dd43b778fc9b61a5967ed5202c164563835ec90cd85e40bb0cf0b2b409e7cdf",
+      "effect_window.x": "a6450a77190293db0256eb3dccba26abb99008bd808243e860f0b72e8c9b8d81",
+      "frame_queue.x": "938dbaa621cc9973d505a915859c1e16e055271989929b774f874bf318a3614a",
+      "frame_transport.x": "3523c8ed1ff99bb4e09c75cf62c9999fdeb46ae8fa0cec654fb8c2a9e1a6f8a9",
+      "hls_companion_gs_fixture.x": "6a5b734efd8595675a7a2784f024b7bb567b1a3a8c1da2a38ca9f79e921e22af",
+      "hls_debug_framing.x": "3aad6b34dc150945749e9acc326cf1e3a73469731078154f28a43153f9bc0098",
+      "hls_debug_observer.x": "30b1b679f80a9efbc73877090af9879f0c10d6fc0f2823afab9b8d863e6518b1",
+      "hls_debug_server.x": "545125175d59232a00e68fee9883b237ff488c3d22ea61a84d1aec87bfb1b1db",
+      "hls_debug_trace.x": "c51b46c19d9b0ff9883111a3dcd09b428e1d86850ca922e26403b334ecc0e54d",
+      "hls_debug_types.x": "8a57396f9f5c2665db164b885b379b807de6272d3078e41e0e061c993d7c9176",
+      "hls_fabric_router.x": "47beed81304b0f61ea4acd4819cf51949af91e7b560e1c4701607767ea767d44",
+      "hls_fixed.x": "a3ff6655b5cca3984d736b57712e57e5976ab6196c709742aa26850537c88902",
+      "hls_numeric_test.x": "969582e40b7e537390b08430dfb6295330c665f0874dc9601414f3505157f613",
+      "hls_spatial_router.x": "3cca4008525b6831a825db8af3286df5b3d28f06bb6c505f75e06fb0fc42b6f5",
+      "hls_vec.x": "c66c888c606ce7bc3e7b1c526cd1216e571f23fc6712f719df14dc6f5d82e5e6",
+      "mailbox.x": "52322c984a6679e1f8127b9cbd39edcf796f85f6002954dd9af430b5c16e2503",
+      "ordered_egress_actor.x": "19db74983b0d3e6a26df15287998c7ce7f1111a61932c0833371b606feab5b5e",
+      "ordered_egress_topology.x": "d9f06f091b5e03b8ff7e03d86703a008fc798385e56b5d8eb704bde39cac5a44",
+      "phenom_data_cell.x": "feb7fea63b9debadf3ab3dc8bf838b7c70541a75cc16f3d296af3f502e426124",
+      "phenom_syndrome_cell.x": "d0506e5d8977b58547e60b7c893065b9920df6fa83f1f48738f7e36ec89c5846",
+      "phi_decoder_profile_topology.x": "98c988702ec8d1a78ecd73f37fd57e7d9bd745e58c7b5fb2035a23dde59861bf",
+      "phi_field.x": "7e35e2901be89e4f9b148e8d8c47d0a05581e6206070c25e8d2dc5d02828f84b",
+      "phi_field_test.x": "8f6adaaeb4636166922624ae6064814684790b21d8d6979f6ed715e14176342a",
+      "phi_halo_cell.x": "a4985dfc48a9e30cafbcb4ee36dad373f62fafd81ebfe6e5b17330ba68112ad6",
+      "phi_memory_gateway.x": "416cf35d1be05526c637139caba74b8a0f5d68c67a9dffa9d0615617ad3dc4f7",
+      "phi_noise_topology.x": "37ed375808d1d8b1a7de6d7865e6448ea3942946b7b62e6c2bfdedee1f6e84fa",
+      "phi_noise_topology_smoke.x": "6fc036093c4d2493fe1a40dfc8e640f83252f89629328b14d82b3da22c135ab2",
+      "phi_phenom_topology.x": "5bd78193313021ac40045a0704e16e7e25400a3a231453648a3aa9f9dfbaf155",
+      "phi_syndrome_replay_cell.x": "576236dfbb33a894cec3e9d8a0f4dbee7884840dadbaa91016d647fa3c6c9abb",
+      "phi_torus_topology.x": "33cb8eced0785e3d08c4ee82d94cdb58fc27facc01d6883017b2e4a9f0865693",
+      "regsvc.x": "61d6676800ed36d8c0a80205cb500914df93d936899503c90f115e2c5eaa88f7",
+      "scheduler.x": "e7ab85c1f981c56fab222ed0a0d5731ac63a44fb18dfa534cd4f0fedd2b2ad7f",
+      "xls_case_fixture.x": "e376de80803531bb6fe47eb9385a59b594c7620223f372f064960aee0f8000cc",
+      "xls_short_circuit_test.x": "4ad09e20d7cdf2e0fde6506f6c1ac3d8685ffcb7528fdda4e528e06b5caa7647"
+    },
+    "stdlib": {
+      "xls/dslx/stdlib/abs_diff.x": "9006b878c3762aeea72bc42be9a012cd0c050a78364a1c09ea4f547e06059eae",
+      "xls/dslx/stdlib/acm_random.x": "47093ca764f983b34adaeb0f694b2a3b711815eb8beeba656d3a39ed157f7ac7",
+      "xls/dslx/stdlib/apfloat.x": "5bbc79dd7842baa26ae467f5a9240ab98a5f5776b4749eb4e73dd1171b8bae8d",
+      "xls/dslx/stdlib/bfloat16.x": "c810ed761142c429a68f0b80559b92c6cbfe087ccd11bead091151d2ff49ee37",
+      "xls/dslx/stdlib/fixed_point.x": "20aede1704d2cdbe515de083d05cb44c8d279aac5fcf5f52d7dc768193d1c631",
+      "xls/dslx/stdlib/float32.x": "2dbc3bd4c5045fb1b8765b293457d6cca1ba338ca1bd5763b2957d11b0a7d84a",
+      "xls/dslx/stdlib/float64.x": "186e40914bdcd0be7c478e6c85204cfa9858b660a8a1dcfffab20e3e4d1ba071",
+      "xls/dslx/stdlib/float_instances.x": "4c89968e94e045c51c354b8f18507f727b0b85b8dcd01b0af69db25314f314cd",
+      "xls/dslx/stdlib/hfloat16.x": "767b0b70354aa15437f689898a0dd168eba47161e999382adcbdc150b6df4243",
+      "xls/dslx/stdlib/lza.x": "6717f61514829d52e9ead876d42e5dc33cd0c48069506137bb2a1dee98b066ac",
+      "xls/dslx/stdlib/round.x": "ac1093df45b238fb0cf867010a9887856d6cf380d17cb5b61c69a47af77c89a0",
+      "xls/dslx/stdlib/std.x": "888583e31552728f6f594c9bb454173b5d8a2d55df2acdee0bd4e2e15d7f1ffa",
+      "xls/dslx/stdlib/tests/float32_downcast_test.x": "20e81a55ba42a7849b2ac274811e4bb457a8b2eb501f4b304b543925e80fe0ab",
+      "xls/dslx/stdlib/tests/float32_upcast_test.x": "dbff7cea87d189c915623e1d4d4274049e7a5779d7b03060e91201073da27b54",
+      "xls/dslx/stdlib/tests/round_tests.x": "5f9b66ad008155f4829db2424f34cc125363f80a789d4057c1433d56fa05632b",
+      "xls/dslx/stdlib/tests/umul_instances.x": "06f7b95e669477fc30e86f9e1d32637b09cfe1fa8f9cb8ea4b351645c1b1bc91"
+    },
+    "tools": {
+      "codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162",
+      "ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+      "opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c"
+    }
+  },
+  "repository_revision": "26ae5cae82acca1ecc32e8fa21e77a1e62445db3",
+  "route_inputs": {
+    "chipdb": "2ef82752ac28960b0de6ceb24b56e26896eacc7545992d1a5e2bf80c45f26a9d",
+    "frequency": 100,
+    "netlist": "320efa1fddd42af96db2b6998cd87b64a734ffe863c71a1abc562d9fbe94ebf1",
+    "nextpnr": {
+      "${REPO}/experiments/07-openxc7/.apio/packages/openxc7/BUILD-INFO.json": "a213a512ebf6bd5e312bd4b81cadabad5acedd6abd36f9eef5857768bb028f34",
+      "${REPO}/experiments/07-openxc7/.apio/packages/openxc7/bin/nextpnr-xilinx": "ba480c5dc3780a38b4553ccb33aa6348cd36c1eae0bdd2beefd24821a29d240b",
+      "${REPO}/experiments/07-openxc7/.apio/packages/openxc7/libexec/nextpnr-xilinx": "5eadea52e7f601302aed7833d3fbc63820c38805e7c11701a81ba43c4b281cd5"
+    },
+    "part": "xc7z100ffg900-2",
+    "router": "router2",
+    "xdc": "1b07e91cf2ba78549b3049cb09a4512a28feb55ee17c0544fad75664c28fecc0"
+  },
+  "route_outputs": {
+    "1": {
+      "nextpnr.json": "120706052b74dfebedc1993f1a14767437927e128c64ab83b6db672c646e2405",
+      "nextpnr.log": "b086856c4ff88712605cdbdc5b8674f8256913184ebc7fc5e106997d2f652fa5"
+    },
+    "2": {
+      "nextpnr.json": "dd92bfcd0cdcf5a00c66b7378ed5c3454669529208975c5b33b9eb0323592be7",
+      "nextpnr.log": "81ba32c78d42019563ce612b38c2a2cc8006f174d3837170fa5079049b7160a4"
+    },
+    "3": {
+      "nextpnr.json": "e5b109ea1947cb6693ed92f44f2ccfb8d234608013f398c7bd4b7c31c37096ee",
+      "nextpnr.log": "e4ffe77c61578f8f3411bcc2e1752bc30b70f5fff4ae7754d9f631545bbd7564"
+    }
+  },
+  "runs": [
+    {
+      "achieved_mhz": 13.1,
+      "clock": "decoder.aclk",
+      "critical_path": {
+        "logic_ns": 7.3,
+        "routing_ns": 69.1,
+        "text": "Info: Critical path report for clock 'decoder.aclk' (posedge -> posedge):\nInfo: curr total\nInfo:  0.1  0.1  Source $flatten\\decoder.$auto$ff.cc:337:slice$179748.Q\nInfo:  1.2  1.3    Net decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_decoder_profile_topology__Phi_xReductionPlane_0_next_inst.____state_1[1] budget 0.000000 ns (308,233) -> (308,245)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$not$aiger4630336$3077.A2\nInfo:  0.1  1.4  Source $flatten\\decoder.$abc$4630337$lut$not$aiger4630336$3077.O6\nInfo:  1.3  2.7    Net $flatten\\decoder.$abc$4630337$aiger4630336$3077b budget 0.000000 ns (308,245) -> (288,245)\nInfo:                Sink $flatten\\decoder.$abc$4630337$aiger4630336$3077b$LUT$2962.A5\nInfo:  0.1  2.8  Source $flatten\\decoder.$abc$4630337$aiger4630336$3077b$LUT$2962.O6\nInfo:  0.0  2.8    Net $flatten\\decoder.$abc$4630337$aiger4630336$3077b$legal$2961 budget -15.139000 ns (288,245) -> (288,245)\nInfo:                Sink $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$95086.genblk1.slice[0].genblk1.carry4.S0\nInfo:  0.5  3.3  Source $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$95086.genblk1.slice[0].genblk1.carry4.CO3\nInfo:  0.1  3.4    Net $flatten\\decoder.$abc$4630337$aiger4630336$127988 budget -6.992000 ns (288,245) -> (288,244)\nInfo:                Sink $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$95086.genblk1.slice[1].genblk1.carry4.CIN\nInfo:  0.1  3.5  Source $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$95086.genblk1.slice[1].genblk1.carry4.CO3\nInfo:  0.1  3.6    Net $flatten\\decoder.$abc$4630337$aiger4630336$127996 budget -5.736000 ns (288,244) -> (288,243)\nInfo:                Sink $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$95086.genblk1.slice[2].genblk1.carry4.CIN\nInfo:  0.1  3.8  Source $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$95086.genblk1.slice[2].genblk1.carry4.CO3\nInfo:  0.1  3.9    Net $flatten\\decoder.$abc$4630337$aiger4630336$128004 budget -5.008000 ns (288,243) -> (288,242)\nInfo:                Sink $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$95086.genblk1.slice[3].genblk1.carry4.CIN\nInfo:  0.1  4.0  Source $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$95086.genblk1.slice[3].genblk1.carry4.CO3\nInfo:  0.1  4.1    Net $flatten\\decoder.$abc$4630337$aiger4630336$128012 budget -5.007000 ns (288,242) -> (288,241)\nInfo:                Sink $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$95086.genblk1.slice[4].genblk1.carry4.CIN\nInfo:  0.1  4.2  Source $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$95086.genblk1.slice[4].genblk1.carry4.CO3\nInfo:  0.1  4.3    Net $flatten\\decoder.$abc$4630337$aiger4630336$128020 budget -4.391000 ns (288,241) -> (288,240)\nInfo:                Sink $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$95086.genblk1.slice[5].genblk1.carry4.CIN\nInfo:  0.1  4.4  Source $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$95086.genblk1.slice[5].genblk1.carry4.CO3\nInfo:  0.1  4.5    Net $flatten\\decoder.$abc$4630337$aiger4630336$128028 budget -3.966000 ns (288,240) -> (288,239)\nInfo:                Sink $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$95086.genblk1.slice[6].genblk1.carry4.CIN\nInfo:  0.1  4.7  Source $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$95086.genblk1.slice[6].genblk1.carry4.CO3\nInfo:  0.1  4.8    Net $flatten\\decoder.$abc$4630337$aiger4630336$128036 budget -3.557000 ns (288,239) -> (288,238)\nInfo:                Sink $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$95086.genblk1.slice[7].genblk1.carry4.CIN\nInfo:  0.2  5.0  Source $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$95086.genblk1.slice[7].genblk1.carry4.O0\nInfo:  1.4  6.4    Net $flatten\\decoder.$techmap4744470$abc$4630337$lut$aiger4630336$282839.A[3] budget 0.000000 ns (288,238) -> (295,247)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$282839.A1\nInfo:  0.1  6.5  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$282839.O6\nInfo:  1.5  8.0    Net $flatten\\decoder.$abc$4630337$aiger4630336$282839 budget 0.000000 ns (295,247) -> (288,235)\nInfo:                Sink $flatten\\decoder.$abc$4630337$aiger4630336$282839$LUT$25322.A2\nInfo:  0.1  8.1  Source $flatten\\decoder.$abc$4630337$aiger4630336$282839$LUT$25322.O6\nInfo:  0.0  8.1    Net $flatten\\decoder.$abc$4630337$aiger4630336$282839$legal$25321 budget -3.946000 ns (288,235) -> (288,235)\nInfo:                Sink $flatten\\decoder.\\application.\\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\\__phi_decoder_profile_topology__Phi_xReductionPlane_0_next_inst.$lt$${REPO}/_build/d3-physical-timing/rtl/phi_decoder_profile.v:20605$25618.genblk1.slice[1].genblk1.carry4.S1\nInfo:  0.6  8.7  Source $flatten\\decoder.\\application.\\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\\__phi_decoder_profile_topology__Phi_xReductionPlane_0_next_inst.$lt$${REPO}/_build/d3-physical-timing/rtl/phi_decoder_profile.v:20605$25618.genblk1.slice[1].genblk1.carry4.O2\nInfo:  2.0 10.7    Net $flatten\\decoder.$techmap4652069$abc$4630337$lut$aiger4630336$282863.A[3] budget 0.000000 ns (288,235) -> (303,253)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$282863.A3\nInfo:  0.1 10.8  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$282863.O6\nInfo:  1.5 12.3    Net $flatten\\decoder.$techmap4652071$abc$4630337$lut$aiger4630336$282868.A[1] budget 0.000000 ns (303,253) -> (308,239)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$282868.A3\nInfo:  0.1 12.4  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$282868.O6\nInfo:  1.0 13.4    Net $flatten\\decoder.$techmap4652072$abc$4630337$lut$aiger4630336$282869.A[1] budget 0.000000 ns (308,239) -> (309,245)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$282869.A1\nInfo:  0.1 13.6  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$282869.O6\nInfo:  0.4 14.0    Net $flatten\\decoder.$techmap4652073$abc$4630337$lut$aiger4630336$282875.A[4] budget 0.000000 ns (309,245) -> (308,246)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$282875.A5\nInfo:  0.1 14.1  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$282875.O6\nInfo:  0.8 14.9    Net $flatten\\decoder.$techmap4652074$abc$4630337$lut$aiger4630336$282882.A[5] budget 0.000000 ns (308,246) -> (305,240)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$282882.A6\nInfo:  0.1 15.0  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$282882.O6\nInfo:  0.6 15.6    Net $flatten\\decoder.$techmap4652075$abc$4630337$lut$aiger4630336$282883.A[1] budget 0.000000 ns (305,240) -> (303,242)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$282883.A2\nInfo:  0.1 15.7  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$282883.O6\nInfo:  0.3 16.0    Net $flatten\\decoder.$techmap4652077$abc$4630337$lut$aiger4630336$282892.A[5] budget 0.000000 ns (303,242) -> (303,242)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$282892.A6\nInfo:  0.1 16.1  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$282892.O6\nInfo:  0.3 16.4    Net $flatten\\decoder.$techmap4652080$abc$4630337$lut$aiger4630336$282909.A[5] budget 0.000000 ns (303,242) -> (303,242)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$282909.A6\nInfo:  0.1 16.5  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$282909.O6\nInfo:  0.9 17.5    Net $flatten\\decoder.$techmap4652081$abc$4630337$lut$aiger4630336$282910.A[0] budget 0.000000 ns (303,242) -> (298,250)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$282910.A1\nInfo:  0.1 17.6  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$282910.O6\nInfo:  1.1 18.7    Net $flatten\\decoder.$techmap4652104$abc$4630337$lut$aiger4630336$283015.A[1] budget 0.000000 ns (298,250) -> (303,245)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$283015.A5\nInfo:  0.1 18.8  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$283015.O6\nInfo:  1.0 19.9    Net $flatten\\decoder.$techmap4652119$abc$4630337$lut$aiger4630336$283117.A[1] budget 0.000000 ns (303,245) -> (298,249)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$283117.A3\nInfo:  0.1 20.0  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$283117.O6\nInfo:  0.7 20.7    Net $flatten\\decoder.$techmap4652137$abc$4630337$lut$aiger4630336$283225.A[1] budget 0.000000 ns (298,249) -> (303,249)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$283225.A4\nInfo:  0.1 20.8  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$283225.O6\nInfo:  0.5 21.3    Net $flatten\\decoder.$techmap4652155$abc$4630337$lut$aiger4630336$283333.A[1] budget 0.000000 ns (303,249) -> (305,249)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$283333.A1\nInfo:  0.1 21.4  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$283333.O6\nInfo:  0.2 21.6    Net $flatten\\decoder.$techmap4652169$abc$4630337$lut$aiger4630336$283430.A[1] budget 0.000000 ns (305,249) -> (305,249)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$283430.A1\nInfo:  0.1 21.7  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$283430.O6\nInfo:  0.7 22.4    Net $flatten\\decoder.$techmap4652187$abc$4630337$lut$aiger4630336$283532.A[1] budget 0.000000 ns (305,249) -> (303,251)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$283532.A2\nInfo:  0.1 22.6  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$283532.O6\nInfo:  0.7 23.3    Net $flatten\\decoder.$techmap4652200$auto$abc9_ops.cc:1613:reintegrate$4642245.A[4] budget 0.000000 ns (303,251) -> (305,249)\nInfo:                Sink $flatten\\decoder.$auto$abc9_ops.cc:1613:reintegrate$4642245.A1\nInfo:  0.1 23.4  Source $flatten\\decoder.$auto$abc9_ops.cc:1613:reintegrate$4642245.O6\nInfo:  1.0 24.4    Net $flatten\\decoder.$techmap4673109$abc$4630337$lut$aiger4630336$283659.A[0] budget 0.000000 ns (305,249) -> (305,243)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$283625.A4\nInfo:  0.1 24.5  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$283625.O6\nInfo:  1.1 25.6    Net $flatten\\decoder.$techmap4673140$abc$4630337$lut$aiger4630336$283722.A[0] budget 0.000000 ns (305,243) -> (305,233)\nInfo:                Sink $flatten\\decoder.$techmap4673140$abc$4630337$lut$aiger4630336$283722.A[0]$LUT$24928.A1\nInfo:  0.1 25.8  Source $flatten\\decoder.$techmap4673140$abc$4630337$lut$aiger4630336$283722.A[0]$LUT$24928.O6\nInfo:  0.0 25.8    Net $flatten\\decoder.$techmap4673140$abc$4630337$lut$aiger4630336$283722.A[0]$legal$24927 budget -1.849000 ns (305,233) -> (305,233)\nInfo:                Sink $flatten\\decoder.\\application.\\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\\__phi_decoder_profile_topology__Phi_xReductionPlane_0_next_inst.$gt$${REPO}/_build/d3-physical-timing/rtl/phi_decoder_profile.v:20699$27274.genblk1.slice[0].genblk1.carry4.S0\nInfo:  0.5 26.3  Source $flatten\\decoder.\\application.\\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\\__phi_decoder_profile_topology__Phi_xReductionPlane_0_next_inst.$gt$${REPO}/_build/d3-physical-timing/rtl/phi_decoder_profile.v:20699$27274.genblk1.slice[0].genblk1.carry4.CO3\nInfo:  0.1 26.4    Net $flatten\\decoder.$abc$4630337$aiger4630336$136180 budget -1.309000 ns (305,233) -> (305,232)\nInfo:                Sink $flatten\\decoder.\\application.\\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\\__phi_decoder_profile_topology__Phi_xReductionPlane_0_next_inst.$gt$${REPO}/_build/d3-physical-timing/rtl/phi_decoder_profile.v:20699$27274.genblk1.slice[1].genblk1.carry4.CIN\nInfo:  0.2 26.6  Source $flatten\\decoder.\\application.\\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\\__phi_decoder_profile_topology__Phi_xReductionPlane_0_next_inst.$gt$${REPO}/_build/d3-physical-timing/rtl/phi_decoder_profile.v:20699$27274.genblk1.slice[1].genblk1.carry4.O2\nInfo:  1.5 28.1    Net $flatten\\decoder.$techmap4673101$abc$4630337$lut$aiger4630336$283657.A[1] budget 0.000000 ns (305,232) -> (305,250)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$283691.A5\nInfo:  0.1 28.3  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$283691.O6\nInfo:  4.9 33.1    Net $flatten\\decoder.$techmap4673121$abc$4630337$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_decoder_profile_topology__Phi_xReductionPlane_0_next_inst.and_181248.A[0] budget 0.000000 ns (305,250) -> (260,155)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$283703.A3\nInfo:  0.1 33.3  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$283703.O6\nInfo:  3.6 36.9    Net $flatten\\decoder.$techmap4673126$abc$4630337$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_decoder_profile_topology__Phi_xReductionPlane_0_next_inst.and_181246.A[0] budget 0.000000 ns (260,155) -> (295,228)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_decoder_profile_topology__Phi_xReductionPlane_0_next_inst.and_181246.A1\nInfo:  0.1 37.0  Source $flatten\\decoder.$abc$4630337$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_decoder_profile_topology__Phi_xReductionPlane_0_next_inst.and_181246.O6\nInfo: 17.8 54.8    Net decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_decoder_profile_topology__Phi_xReductionPlane_0_next_inst.and_181246 budget 0.000000 ns (295,228) -> (305,6)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$302164.A5\nInfo:  0.1 54.9  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$302164.O6\nInfo:  0.3 55.2    Net $flatten\\decoder.$techmap4679817$abc$4630337$lut$aiger4630336$302176.A[4] budget 0.000000 ns (305,6) -> (305,6)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$302176.A5\nInfo:  0.1 55.3  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$302176.O6\nInfo:  0.5 55.9    Net $flatten\\decoder.$techmap4679820$abc$4630337$lut$aiger4630336$302187.A[4] budget 0.000000 ns (305,6) -> (305,5)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$302187.A2\nInfo:  0.1 56.0  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$302187.O6\nInfo:  1.9 57.8    Net $flatten\\decoder.$techmap4679841$abc$4630337$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_decoder_profile_topology__Phi_xReductionPlane_0_next_inst.eq_180864.A[4] budget 0.000000 ns (305,5) -> (295,25)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_decoder_profile_topology__Phi_xReductionPlane_0_next_inst.eq_180864.A1\nInfo:  0.1 58.0  Source $flatten\\decoder.$abc$4630337$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_decoder_profile_topology__Phi_xReductionPlane_0_next_inst.eq_180864.O6\nInfo:  2.0 60.0    Net decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_decoder_profile_topology__Phi_xReductionPlane_0_next_inst.eq_180864 budget 0.000000 ns (295,25) -> (265,60)\nInfo:                Sink $flatten\\decoder.$auto$abc9_ops.cc:1613:reintegrate$4638542.A2\nInfo:  0.1 60.1  Source $flatten\\decoder.$auto$abc9_ops.cc:1613:reintegrate$4638542.O6\nInfo:  6.7 66.8    Net decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_decoder_profile_topology__Phi_xReductionPlane_0_next_inst.contribution_valid__3 budget 0.000000 ns (265,60) -> (84,148)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$349812.A3\nInfo:  0.1 66.9  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$349812.O6\nInfo:  5.3 72.2    Net $flatten\\decoder.$techmap4745808$abc$4630337$lut$aiger4630336$349820.A[2] budget 0.000000 ns (84,148) -> (151,247)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$349820.A2\nInfo:  0.1 72.4  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$349820.O6\nInfo:  0.2 72.5    Net $flatten\\decoder.$techmap4745926$abc$4630337$lut$aiger4630336$349916.A[4] budget 0.000000 ns (151,247) -> (151,247)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$349916.A1\nInfo:  0.1 72.6  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$349916.O6\nInfo:  1.3 73.9    Net $flatten\\decoder.$techmap4746616$abc$4630337$lut$aiger4630336$350136.A[4] budget 0.000000 ns (151,247) -> (148,235)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$350136.A2\nInfo:  0.1 74.1  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$350136.O6\nInfo:  2.0 76.1    Net $flatten\\decoder.$techmap4747657$abc$4630337$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_decoder_profile_topology__Phi_xReductionPlane_0_next_inst.eq_181245.A[3] budget 0.000000 ns (148,235) -> (142,204)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_decoder_profile_topology__Phi_xReductionPlane_0_next_inst.eq_181245.A1\nInfo:  0.1 76.2  Source $flatten\\decoder.$abc$4630337$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_decoder_profile_topology__Phi_xReductionPlane_0_next_inst.eq_181245.O6\nInfo:  0.0 76.2    Net decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_decoder_profile_topology__Phi_xReductionPlane_0_next_inst.eq_181245 budget -1.228000 ns (142,204) -> (142,204)\nInfo:                Sink $flatten\\decoder.$auto$ff.cc:337:slice$180194.D\nInfo:  0.1 76.3  Setup $flatten\\decoder.$auto$ff.cc:337:slice$180194.D\nInfo: 7.3 ns logic, 69.1 ns routing"
+      },
+      "critical_path_clock": "decoder.aclk",
+      "seed": 1,
+      "target_mhz": 100.0,
+      "utilization": {
+        "BSCAN": {
+          "available": 4,
+          "used": 0
+        },
+        "BUFGCTRL": {
+          "available": 32,
+          "used": 1
+        },
+        "BUFGCTRL_CE0INV": {
+          "available": 32,
+          "used": 0
+        },
+        "BUFGCTRL_CE1INV": {
+          "available": 32,
+          "used": 0
+        },
+        "BUFGCTRL_IGNORE0INV": {
+          "available": 32,
+          "used": 0
+        },
+        "BUFGCTRL_IGNORE1INV": {
+          "available": 32,
+          "used": 0
+        },
+        "BUFGCTRL_S0INV": {
+          "available": 32,
+          "used": 0
+        },
+        "BUFGCTRL_S1INV": {
+          "available": 32,
+          "used": 0
+        },
+        "BUFG_BUFG": {
+          "available": 32,
+          "used": 0
+        },
+        "BUFHCE_BUFHCE": {
+          "available": 168,
+          "used": 0
+        },
+        "BUFHCE_CEINV": {
+          "available": 168,
+          "used": 0
+        },
+        "BUFIO_BUFIO": {
+          "available": 32,
+          "used": 0
+        },
+        "CARRY4": {
+          "available": 69350,
+          "used": 2631
+        },
+        "DCIRESET_DCIRESET": {
+          "available": 1,
+          "used": 0
+        },
+        "DNA_PORT_DNA_PORT": {
+          "available": 1,
+          "used": 0
+        },
+        "DSP48E1_ALUMODE0INV": {
+          "available": 2020,
+          "used": 0
+        },
+        "DSP48E1_ALUMODE1INV": {
+          "available": 2020,
+          "used": 0
+        },
+        "DSP48E1_ALUMODE2INV": {
+          "available": 2020,
+          "used": 0
+        },
+        "DSP48E1_ALUMODE3INV": {
+          "available": 2020,
+          "used": 0
+        },
+        "DSP48E1_CARRYININV": {
+          "available": 2020,
+          "used": 0
+        },
+        "DSP48E1_CLKINV": {
+          "available": 2020,
+          "used": 0
+        },
+        "DSP48E1_DSP48E1": {
+          "available": 2020,
+          "used": 144
+        },
+        "DSP48E1_INMODE0INV": {
+          "available": 2020,
+          "used": 0
+        },
+        "DSP48E1_INMODE1INV": {
+          "available": 2020,
+          "used": 0
+        },
+        "DSP48E1_INMODE2INV": {
+          "available": 2020,
+          "used": 0
+        },
+        "DSP48E1_INMODE3INV": {
+          "available": 2020,
+          "used": 0
+        },
+        "DSP48E1_INMODE4INV": {
+          "available": 2020,
+          "used": 0
+        },
+        "DSP48E1_OPMODE0INV": {
+          "available": 2020,
+          "used": 0
+        },
+        "DSP48E1_OPMODE1INV": {
+          "available": 2020,
+          "used": 0
+        },
+        "DSP48E1_OPMODE2INV": {
+          "available": 2020,
+          "used": 0
+        },
+        "DSP48E1_OPMODE3INV": {
+          "available": 2020,
+          "used": 0
+        },
+        "DSP48E1_OPMODE4INV": {
+          "available": 2020,
+          "used": 0
+        },
+        "DSP48E1_OPMODE5INV": {
+          "available": 2020,
+          "used": 0
+        },
+        "DSP48E1_OPMODE6INV": {
+          "available": 2020,
+          "used": 0
+        },
+        "EFUSE_USR_EFUSE_USR": {
+          "available": 1,
+          "used": 0
+        },
+        "FIFO18E1_FIFO18E1": {
+          "available": 755,
+          "used": 0
+        },
+        "FIFO18E1_RDCLKINV": {
+          "available": 755,
+          "used": 0
+        },
+        "FIFO18E1_RDENINV": {
+          "available": 755,
+          "used": 0
+        },
+        "FIFO18E1_RDRCLKINV": {
+          "available": 755,
+          "used": 0
+        },
+        "FIFO18E1_RSTINV": {
+          "available": 755,
+          "used": 0
+        },
+        "FIFO18E1_RSTREGINV": {
+          "available": 755,
+          "used": 0
+        },
+        "FIFO18E1_WRCLKINV": {
+          "available": 755,
+          "used": 0
+        },
+        "FIFO18E1_WRENINV": {
+          "available": 755,
+          "used": 0
+        },
+        "FRAME_ECC_FRAME_ECC": {
+          "available": 1,
+          "used": 0
+        },
+        "HARD0": {
+          "available": 2568,
+          "used": 0
+        },
+        "ICAP_ICAP": {
+          "available": 2,
+          "used": 0
+        },
+        "IDELAYCTRL_IDELAYCTRL": {
+          "available": 8,
+          "used": 0
+        },
+        "IDELAYE2_CINV": {
+          "available": 250,
+          "used": 0
+        },
+        "IDELAYE2_DATAININV": {
+          "available": 250,
+          "used": 0
+        },
+        "IDELAYE2_IDATAININV": {
+          "available": 250,
+          "used": 0
+        },
+        "IDELAYE2_IDELAYE2": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE2_CE1USED": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE2_CLKBINV": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE2_CLKINV": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE2_D2OBYP_SEL": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE2_D2OFFBYP_SEL": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE2_DINV": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE2_IDELMUX": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE2_IFF": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE2_IFFDELMUX": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE2_IFFMUX": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE2_IMUX": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE2_REVUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE2_SRUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE3_CE1USED": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE3_CLKBINV": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE3_CLKINV": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE3_D2OBYP_SEL": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE3_D2OFFBYP_SEL": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE3_DINV": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE3_IDELMUXE3": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE3_IFF": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE3_IFFDELMUXE3": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE3_IFFMUX": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE3_IMUX": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE3_REVUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE3_SRUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE3_ZHOLD_DELAY": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE3_ZHOLD_FABRIC_INV": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE3_ZHOLD_IFF_INV": {
+          "available": 250,
+          "used": 0
+        },
+        "INVERTER": {
+          "available": 192,
+          "used": 0
+        },
+        "IOB18M_DCITERMDISABLE_SEL": {
+          "available": 72,
+          "used": 0
+        },
+        "IOB18M_DIFFI_INUSED": {
+          "available": 72,
+          "used": 0
+        },
+        "IOB18M_DIFFO_OUTUSED": {
+          "available": 72,
+          "used": 0
+        },
+        "IOB18M_IBUFDISABLE_SEL": {
+          "available": 72,
+          "used": 0
+        },
+        "IOB18M_INBUF_DCIEN": {
+          "available": 72,
+          "used": 0
+        },
+        "IOB18M_IUSED": {
+          "available": 72,
+          "used": 0
+        },
+        "IOB18M_OUSED": {
+          "available": 72,
+          "used": 0
+        },
+        "IOB18M_OUTBUF_DCIEN": {
+          "available": 72,
+          "used": 0
+        },
+        "IOB18M_O_OUTUSED": {
+          "available": 72,
+          "used": 0
+        },
+        "IOB18M_TERM_OVERRIDE": {
+          "available": 72,
+          "used": 0
+        },
+        "IOB18M_TUSED": {
+          "available": 72,
+          "used": 0
+        },
+        "IOB18M_T_OUTUSED": {
+          "available": 72,
+          "used": 0
+        },
+        "IOB18S_DCITERMDISABLE_SEL": {
+          "available": 72,
+          "used": 0
+        },
+        "IOB18S_DIFFI_INUSED": {
+          "available": 72,
+          "used": 0
+        },
+        "IOB18S_DIFFO_INUSED": {
+          "available": 72,
+          "used": 0
+        },
+        "IOB18S_IBUFDISABLE_SEL": {
+          "available": 72,
+          "used": 0
+        },
+        "IOB18S_INBUF_DCIEN": {
+          "available": 72,
+          "used": 0
+        },
+        "IOB18S_IUSED": {
+          "available": 72,
+          "used": 0
+        },
+        "IOB18S_OINMUX": {
+          "available": 72,
+          "used": 0
+        },
+        "IOB18S_OUTBUF_DCIEN": {
+          "available": 72,
+          "used": 0
+        },
+        "IOB18S_OUTMUX": {
+          "available": 72,
+          "used": 0
+        },
+        "IOB18S_TERM_OVERRIDE": {
+          "available": 72,
+          "used": 0
+        },
+        "IOB18S_TINMUX": {
+          "available": 72,
+          "used": 0
+        },
+        "IOB18_DCITERMDISABLE_SEL": {
+          "available": 150,
+          "used": 0
+        },
+        "IOB18_DIFFI_INUSED": {
+          "available": 150,
+          "used": 0
+        },
+        "IOB18_IBUFDISABLE_SEL": {
+          "available": 150,
+          "used": 0
+        },
+        "IOB18_INBUF_DCIEN": {
+          "available": 150,
+          "used": 1
+        },
+        "IOB18_IUSED": {
+          "available": 150,
+          "used": 0
+        },
+        "IOB18_OUSED": {
+          "available": 150,
+          "used": 0
+        },
+        "IOB18_OUTBUF_DCIEN": {
+          "available": 150,
+          "used": 1
+        },
+        "IOB18_TERM_OVERRIDE": {
+          "available": 150,
+          "used": 0
+        },
+        "IOB18_TUSED": {
+          "available": 150,
+          "used": 0
+        },
+        "IOB33M_DIFFI_INUSED": {
+          "available": 120,
+          "used": 0
+        },
+        "IOB33M_DIFFO_OUTUSED": {
+          "available": 120,
+          "used": 0
+        },
+        "IOB33M_IBUFDISABLE_SEL": {
+          "available": 120,
+          "used": 0
+        },
+        "IOB33M_INBUF_EN": {
+          "available": 120,
+          "used": 0
+        },
+        "IOB33M_INTERMDISABLE_SEL": {
+          "available": 120,
+          "used": 0
+        },
+        "IOB33M_IUSED": {
+          "available": 120,
+          "used": 0
+        },
+        "IOB33M_OUSED": {
+          "available": 120,
+          "used": 0
+        },
+        "IOB33M_OUTBUF": {
+          "available": 120,
+          "used": 0
+        },
+        "IOB33M_O_OUTUSED": {
+          "available": 120,
+          "used": 0
+        },
+        "IOB33M_TERM_OVERRIDE": {
+          "available": 120,
+          "used": 0
+        },
+        "IOB33M_TUSED": {
+          "available": 120,
+          "used": 0
+        },
+        "IOB33M_T_OUTUSED": {
+          "available": 120,
+          "used": 0
+        },
+        "IOB33S_DIFFI_INUSED": {
+          "available": 120,
+          "used": 0
+        },
+        "IOB33S_DIFFO_INUSED": {
+          "available": 120,
+          "used": 0
+        },
+        "IOB33S_IBUFDISABLE_SEL": {
+          "available": 120,
+          "used": 0
+        },
+        "IOB33S_INBUF_EN": {
+          "available": 120,
+          "used": 0
+        },
+        "IOB33S_INTERMDISABLE_SEL": {
+          "available": 120,
+          "used": 0
+        },
+        "IOB33S_IUSED": {
+          "available": 120,
+          "used": 0
+        },
+        "IOB33S_OINMUX": {
+          "available": 120,
+          "used": 0
+        },
+        "IOB33S_OUTBUF": {
+          "available": 120,
+          "used": 0
+        },
+        "IOB33S_OUTMUX": {
+          "available": 120,
+          "used": 0
+        },
+        "IOB33S_TERM_OVERRIDE": {
+          "available": 120,
+          "used": 0
+        },
+        "IOB33S_TINMUX": {
+          "available": 120,
+          "used": 0
+        },
+        "IOB33_DIFFI_INUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "IOB33_IBUFDISABLE_SEL": {
+          "available": 250,
+          "used": 0
+        },
+        "IOB33_INBUF_EN": {
+          "available": 250,
+          "used": 0
+        },
+        "IOB33_INTERMDISABLE_SEL": {
+          "available": 250,
+          "used": 0
+        },
+        "IOB33_IUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "IOB33_OUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "IOB33_OUTBUF": {
+          "available": 250,
+          "used": 0
+        },
+        "IOB33_TERM_OVERRIDE": {
+          "available": 250,
+          "used": 0
+        },
+        "IOB33_TUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "ISERDESE2_CLKBINV": {
+          "available": 250,
+          "used": 0
+        },
+        "ISERDESE2_CLKDIVINV": {
+          "available": 250,
+          "used": 0
+        },
+        "ISERDESE2_CLKDIVPINV": {
+          "available": 250,
+          "used": 0
+        },
+        "ISERDESE2_CLKINV": {
+          "available": 250,
+          "used": 0
+        },
+        "ISERDESE2_DINV": {
+          "available": 250,
+          "used": 0
+        },
+        "ISERDESE2_ISERDESE2": {
+          "available": 250,
+          "used": 0
+        },
+        "ISERDESE2_OCLKBINV": {
+          "available": 250,
+          "used": 0
+        },
+        "ISERDESE2_OCLKINV": {
+          "available": 250,
+          "used": 0
+        },
+        "MMCME2_ADV_CLKINSELINV": {
+          "available": 8,
+          "used": 0
+        },
+        "MMCME2_ADV_MMCME2_ADV": {
+          "available": 8,
+          "used": 0
+        },
+        "MMCME2_ADV_PSENINV": {
+          "available": 8,
+          "used": 0
+        },
+        "MMCME2_ADV_PSINCDECINV": {
+          "available": 8,
+          "used": 0
+        },
+        "MMCME2_ADV_PWRDWNINV": {
+          "available": 8,
+          "used": 0
+        },
+        "MMCME2_ADV_RSTINV": {
+          "available": 8,
+          "used": 0
+        },
+        "NULLMUX": {
+          "available": 784,
+          "used": 0
+        },
+        "OLOGICE2_CLKINV": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE2_D1INV": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE2_D2INV": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE2_MISR": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE2_O1USED": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE2_OCEUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE2_OFBUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE2_OMUX": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE2_OQUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE2_OREVUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE2_OSRUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE2_OUTFF": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE2_T1INV": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE2_T1USED": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE2_T2INV": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE2_TCEUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE2_TFBUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE2_TFF": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE2_TMUX": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE2_TQUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE2_TREVUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE2_TSRUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE3_CLKINV": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE3_D1INV": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE3_D2INV": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE3_MISR": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE3_O1USED": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE3_OCEUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE3_OFBUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE3_OMUX": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE3_OQUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE3_OREVUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE3_OSRUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE3_OUTFF": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE3_T1INV": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE3_T1USED": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE3_T2INV": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE3_TCEUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE3_TFBUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE3_TFF": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE3_TMUX": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE3_TQUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE3_TREVUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE3_TSRUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "OSERDESE2_CLKBINV": {
+          "available": 250,
+          "used": 0
+        },
+        "OSERDESE2_CLKDIVBINV": {
+          "available": 250,
+          "used": 0
+        },
+        "OSERDESE2_CLKDIVFBINV": {
+          "available": 250,
+          "used": 0
+        },
+        "OSERDESE2_CLKDIVFINV": {
+          "available": 250,
+          "used": 0
+        },
+        "OSERDESE2_CLKDIVINV": {
+          "available": 250,
+          "used": 0
+        },
+        "OSERDESE2_CLKINV": {
+          "available": 250,
+          "used": 0
+        },
+        "OSERDESE2_D1INV": {
+          "available": 250,
+          "used": 0
+        },
+        "OSERDESE2_D2INV": {
+          "available": 250,
+          "used": 0
+        },
+        "OSERDESE2_D3INV": {
+          "available": 250,
+          "used": 0
+        },
+        "OSERDESE2_D4INV": {
+          "available": 250,
+          "used": 0
+        },
+        "OSERDESE2_D5INV": {
+          "available": 250,
+          "used": 0
+        },
+        "OSERDESE2_D6INV": {
+          "available": 250,
+          "used": 0
+        },
+        "OSERDESE2_D7INV": {
+          "available": 250,
+          "used": 0
+        },
+        "OSERDESE2_D8INV": {
+          "available": 250,
+          "used": 0
+        },
+        "OSERDESE2_OSERDESE2": {
+          "available": 250,
+          "used": 0
+        },
+        "OSERDESE2_T1INV": {
+          "available": 250,
+          "used": 0
+        },
+        "OSERDESE2_T2INV": {
+          "available": 250,
+          "used": 0
+        },
+        "OSERDESE2_T3INV": {
+          "available": 250,
+          "used": 0
+        },
+        "OSERDESE2_T4INV": {
+          "available": 250,
+          "used": 0
+        },
+        "PAD": {
+          "available": 784,
+          "used": 2
+        },
+        "PLLE2_ADV_CLKINSELINV": {
+          "available": 8,
+          "used": 0
+        },
+        "PLLE2_ADV_PLLE2_ADV": {
+          "available": 8,
+          "used": 0
+        },
+        "PLLE2_ADV_PWRDWNINV": {
+          "available": 8,
+          "used": 0
+        },
+        "PLLE2_ADV_RSTINV": {
+          "available": 8,
+          "used": 0
+        },
+        "PS7_PS7": {
+          "available": 1,
+          "used": 0
+        },
+        "PSEUDO_GND": {
+          "available": 128845,
+          "used": 1
+        },
+        "PSEUDO_VCC": {
+          "available": 128845,
+          "used": 1
+        },
+        "PULL_OR_KEEP1": {
+          "available": 784,
+          "used": 0
+        },
+        "RAMB18E1_CLKARDCLKINV": {
+          "available": 1510,
+          "used": 0
+        },
+        "RAMB18E1_CLKBWRCLKINV": {
+          "available": 1510,
+          "used": 0
+        },
+        "RAMB18E1_ENARDENINV": {
+          "available": 1510,
+          "used": 0
+        },
+        "RAMB18E1_ENBWRENINV": {
+          "available": 1510,
+          "used": 0
+        },
+        "RAMB18E1_RAMB18E1": {
+          "available": 1510,
+          "used": 90
+        },
+        "RAMB18E1_REGCLKARDRCLKINV": {
+          "available": 1510,
+          "used": 0
+        },
+        "RAMB18E1_REGCLKBINV": {
+          "available": 1510,
+          "used": 0
+        },
+        "RAMB18E1_RSTRAMARSTRAMINV": {
+          "available": 1510,
+          "used": 0
+        },
+        "RAMB18E1_RSTRAMBINV": {
+          "available": 1510,
+          "used": 0
+        },
+        "RAMB18E1_RSTREGARSTREGINV": {
+          "available": 1510,
+          "used": 0
+        },
+        "RAMB18E1_RSTREGBINV": {
+          "available": 1510,
+          "used": 0
+        },
+        "RAMB36E1_CLKARDCLKLINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMB36E1_CLKARDCLKUINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMB36E1_CLKBWRCLKLINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMB36E1_CLKBWRCLKUINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMB36E1_ENARDENLINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMB36E1_ENARDENUINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMB36E1_ENBWRENLINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMB36E1_ENBWRENUINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMB36E1_RAMB36E1": {
+          "available": 755,
+          "used": 22
+        },
+        "RAMB36E1_REGCLKARDRCLKLINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMB36E1_REGCLKARDRCLKUINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMB36E1_REGCLKBLINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMB36E1_REGCLKBUINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMB36E1_RSTRAMARSTRAMLINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMB36E1_RSTRAMARSTRAMUINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMB36E1_RSTRAMBLINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMB36E1_RSTRAMBUINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMB36E1_RSTREGARSTREGLINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMB36E1_RSTREGARSTREGUINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMB36E1_RSTREGBLINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMB36E1_RSTREGBUINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMBFIFO36E1_CLKARDCLKLINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMBFIFO36E1_CLKARDCLKUINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMBFIFO36E1_CLKBWRCLKLINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMBFIFO36E1_CLKBWRCLKUINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMBFIFO36E1_ENARDENLINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMBFIFO36E1_ENARDENUINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMBFIFO36E1_ENBWRENLINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMBFIFO36E1_ENBWRENUINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMBFIFO36E1_RAMBFIFO36E1": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMBFIFO36E1_REGCLKARDRCLKLINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMBFIFO36E1_REGCLKARDRCLKUINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMBFIFO36E1_REGCLKBLINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMBFIFO36E1_REGCLKBUINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMBFIFO36E1_RSTRAMARSTRAMLRSTINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMBFIFO36E1_RSTRAMARSTRAMUINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMBFIFO36E1_RSTRAMBLINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMBFIFO36E1_RSTRAMBUINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMBFIFO36E1_RSTREGARSTREGLINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMBFIFO36E1_RSTREGARSTREGUINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMBFIFO36E1_RSTREGBLINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMBFIFO36E1_RSTREGBUINV": {
+          "available": 755,
+          "used": 0
+        },
+        "SELMUX2_1": {
+          "available": 209050,
+          "used": 97
+        },
+        "SLICE_FFX": {
+          "available": 554800,
+          "used": 79904
+        },
+        "SLICE_LUTX": {
+          "available": 554800,
+          "used": 141566
+        },
+        "STARTUP_STARTUP": {
+          "available": 1,
+          "used": 0
+        },
+        "USR_ACCESS_USR_ACCESS": {
+          "available": 1,
+          "used": 0
+        }
+      },
+      "warnings": {
+        "Unconnected port ACOUT": {
+          "count": 1440,
+          "example": "Warning: Port ACOUT22 connected to net $flatten\\decoder.$abc$4630337$aiger4630336$127785 on cell $flatten\\decoder.\\application.\\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\\__phi_halo_cell__SharedService_0__3_2_2_3_next_inst.\\__phi_halo_cell__SharedExecutor_0_next_inst.$mul$${REPO}/_build/d3-physical-timing/rtl/phi_decoder_profile.v:5558$7222.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.sliceA.last.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mul_sliceB_last has no connections"
+        },
+        "Unconnected port BCOUT": {
+          "count": 2592,
+          "example": "Warning: Port BCOUT0 connected to net $flatten\\decoder.$abc$4630337$aiger4630336$126959 on cell $flatten\\decoder.\\application.\\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\\__phi_halo_cell__SharedService_0__3_2_2_3_next_inst.\\__phi_halo_cell__SharedExecutor_0_next_inst.$mul$${REPO}/_build/d3-physical-timing/rtl/phi_decoder_profile.v:5558$7222.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.sliceA.last.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.sliceB[0].mul has no connections"
+        },
+        "Unconnected port CARRYCASCOUT": {
+          "count": 144,
+          "example": "Warning: Port CARRYCASCOUT connected to net $flatten\\decoder.$abc$4630337$aiger4630336$126977 on cell $flatten\\decoder.\\application.\\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\\__phi_halo_cell__SharedService_0__3_2_2_3_next_inst.\\__phi_halo_cell__SharedExecutor_0_next_inst.$mul$${REPO}/_build/d3-physical-timing/rtl/phi_decoder_profile.v:5558$7222.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.sliceA.last.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.sliceB[0].mul has no connections"
+        },
+        "Unconnected port PCOUT": {
+          "count": 2304,
+          "example": "Warning: Port PCOUT22 connected to net $flatten\\decoder.$abc$4630337$aiger4630336$127890 on cell $flatten\\decoder.\\application.\\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\\__phi_halo_cell__SharedService_0__3_2_2_3_next_inst.\\__phi_halo_cell__SharedExecutor_0_next_inst.$mul$${REPO}/_build/d3-physical-timing/rtl/phi_decoder_profile.v:5558$7222.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.sliceA.last.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mul_sliceB_last has no connections"
+        }
+      }
+    },
+    {
+      "achieved_mhz": 14.11,
+      "clock": "decoder.aclk",
+      "critical_path": {
+        "logic_ns": 5.9,
+        "routing_ns": 65.0,
+        "text": "Info: Critical path report for clock 'decoder.aclk' (posedge -> posedge):\nInfo: curr total\nInfo:  0.1  0.1  Source $flatten\\decoder.$auto$ff.cc:337:slice$179753.Q\nInfo:  2.0  2.1    Net decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_decoder_profile_topology__Phi_xReductionPlane_0_next_inst.____state_1[6] budget 0.000000 ns (63,173) -> (54,198)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$282550.A2\nInfo:  0.1  2.2  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$282550.O6\nInfo:  1.5  3.7    Net $flatten\\decoder.$abc$4630337$aiger4630336$282550 budget 0.000000 ns (54,198) -> (43,205)\nInfo:                Sink $flatten\\decoder.$abc$4630337$aiger4630336$282550$LUT$25244.A4\nInfo:  0.1  3.8  Source $flatten\\decoder.$abc$4630337$aiger4630336$282550$LUT$25244.O6\nInfo:  0.0  3.8    Net $flatten\\decoder.$abc$4630337$aiger4630336$282550$legal$25243 budget -10.195000 ns (43,205) -> (43,205)\nInfo:                Sink $flatten\\decoder.\\application.\\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\\__phi_decoder_profile_topology__Phi_xReductionPlane_0_next_inst.$lt$${REPO}/_build/d3-physical-timing/rtl/phi_decoder_profile.v:20594$25578.genblk1.slice[0].genblk1.carry4.S1\nInfo:  0.5  4.3  Source $flatten\\decoder.\\application.\\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\\__phi_decoder_profile_topology__Phi_xReductionPlane_0_next_inst.$lt$${REPO}/_build/d3-physical-timing/rtl/phi_decoder_profile.v:20594$25578.genblk1.slice[0].genblk1.carry4.CO3\nInfo:  0.1  4.5    Net $flatten\\decoder.$abc$4630337$aiger4630336$129332 budget -9.805000 ns (43,205) -> (43,204)\nInfo:                Sink $flatten\\decoder.\\application.\\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\\__phi_decoder_profile_topology__Phi_xReductionPlane_0_next_inst.$lt$${REPO}/_build/d3-physical-timing/rtl/phi_decoder_profile.v:20594$25578.genblk1.slice[1].genblk1.carry4.CIN\nInfo:  0.2  4.7  Source $flatten\\decoder.\\application.\\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\\__phi_decoder_profile_topology__Phi_xReductionPlane_0_next_inst.$lt$${REPO}/_build/d3-physical-timing/rtl/phi_decoder_profile.v:20594$25578.genblk1.slice[1].genblk1.carry4.O2\nInfo:  2.4  7.1    Net $flatten\\decoder.$techmap4652000$abc$4630337$lut$aiger4630336$282564.A[4] budget 0.000000 ns (43,204) -> (57,171)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$282571.A3\nInfo:  0.1  7.2  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$282571.O6\nInfo:  1.5  8.8    Net $flatten\\decoder.$techmap4652003$abc$4630337$lut$aiger4630336$282574.A[3] budget 0.000000 ns (57,171) -> (54,191)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$282574.A5\nInfo:  0.1  8.9  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$282574.O6\nInfo:  0.6  9.6    Net $flatten\\decoder.$techmap4652009$abc$4630337$lut$aiger4630336$282596.A[3] budget 0.000000 ns (54,191) -> (63,194)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$282596.A4\nInfo:  0.1  9.7  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$282596.O6\nInfo:  0.9 10.6    Net $flatten\\decoder.$techmap4652011$abc$4630337$lut$aiger4630336$282605.A[1] budget 0.000000 ns (63,194) -> (64,199)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$282605.A1\nInfo:  0.1 10.7  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$282605.O6\nInfo:  0.4 11.2    Net $flatten\\decoder.$techmap4652017$abc$4630337$lut$aiger4630336$282632.A[5] budget 0.000000 ns (64,199) -> (64,198)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$282632.A6\nInfo:  0.1 11.3  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$282632.O6\nInfo:  0.5 11.8    Net $flatten\\decoder.$techmap4652020$abc$4630337$lut$aiger4630336$282648.A[5] budget 0.000000 ns (64,198) -> (64,198)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$282648.A6\nInfo:  0.1 11.9  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$282648.O6\nInfo:  1.3 13.2    Net $flatten\\decoder.$techmap4652025$abc$4630337$lut$aiger4630336$282663.A[3] budget 0.000000 ns (64,198) -> (53,202)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$282663.A1\nInfo:  0.1 13.4  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$282663.O6\nInfo:  0.8 14.2    Net $flatten\\decoder.$techmap4652036$abc$4630337$lut$aiger4630336$282689.A[5] budget 0.000000 ns (53,202) -> (64,198)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$282689.A6\nInfo:  0.1 14.3  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$282689.O6\nInfo:  1.2 15.4    Net $flatten\\decoder.$techmap4661794$auto$abc9_ops.cc:1613:reintegrate$4640799.A[1] budget 0.000000 ns (64,198) -> (53,206)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$282809.A1\nInfo:  0.1 15.6  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$282809.O6\nInfo:  1.5 17.1    Net $flatten\\decoder.$techmap4652081$abc$4630337$lut$aiger4630336$282910.A[1] budget 0.000000 ns (53,206) -> (63,198)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$282910.A1\nInfo:  0.1 17.2  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$282910.O6\nInfo:  1.1 18.3    Net $flatten\\decoder.$techmap4652104$abc$4630337$lut$aiger4630336$283015.A[1] budget 0.000000 ns (63,198) -> (53,200)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$283015.A3\nInfo:  0.1 18.4  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$283015.O6\nInfo:  1.1 19.5    Net $flatten\\decoder.$techmap4652119$abc$4630337$lut$aiger4630336$283117.A[1] budget 0.000000 ns (53,200) -> (63,198)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$283117.A1\nInfo:  0.1 19.6  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$283117.O6\nInfo:  0.8 20.4    Net $flatten\\decoder.$techmap4652137$abc$4630337$lut$aiger4630336$283225.A[1] budget 0.000000 ns (63,198) -> (63,194)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$283225.A4\nInfo:  0.1 20.5  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$283225.O6\nInfo:  0.2 20.7    Net $flatten\\decoder.$techmap4652155$abc$4630337$lut$aiger4630336$283333.A[1] budget 0.000000 ns (63,194) -> (63,194)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$283333.A4\nInfo:  0.1 20.8  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$283333.O6\nInfo:  1.4 22.2    Net $flatten\\decoder.$techmap4652169$abc$4630337$lut$aiger4630336$283430.A[1] budget 0.000000 ns (63,194) -> (53,199)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$283430.A4\nInfo:  0.1 22.3  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$283430.O6\nInfo:  0.6 22.9    Net $flatten\\decoder.$techmap4652187$abc$4630337$lut$aiger4630336$283532.A[1] budget 0.000000 ns (53,199) -> (50,199)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$283532.A3\nInfo:  0.1 23.0  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$283532.O6\nInfo:  1.3 24.3    Net $flatten\\decoder.$techmap4652200$auto$abc9_ops.cc:1613:reintegrate$4642245.A[4] budget 0.000000 ns (50,199) -> (57,192)\nInfo:                Sink $flatten\\decoder.$auto$abc9_ops.cc:1613:reintegrate$4642245.A2\nInfo:  0.1 24.5  Source $flatten\\decoder.$auto$abc9_ops.cc:1613:reintegrate$4642245.O6\nInfo:  1.2 25.7    Net $flatten\\decoder.$techmap4673109$abc$4630337$lut$aiger4630336$283659.A[0] budget 0.000000 ns (57,192) -> (54,201)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$283625.A2\nInfo:  0.1 25.8  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$283625.O6\nInfo:  2.0 27.8    Net $flatten\\decoder.$techmap4673140$abc$4630337$lut$aiger4630336$283722.A[0] budget 0.000000 ns (54,201) -> (64,175)\nInfo:                Sink $flatten\\decoder.$techmap4673140$abc$4630337$lut$aiger4630336$283722.A[0]$LUT$24928.A4\nInfo:  0.1 28.0  Source $flatten\\decoder.$techmap4673140$abc$4630337$lut$aiger4630336$283722.A[0]$LUT$24928.O6\nInfo:  0.0 28.0    Net $flatten\\decoder.$techmap4673140$abc$4630337$lut$aiger4630336$283722.A[0]$legal$24927 budget -1.711000 ns (64,175) -> (64,175)\nInfo:                Sink $flatten\\decoder.\\application.\\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\\__phi_decoder_profile_topology__Phi_xReductionPlane_0_next_inst.$gt$${REPO}/_build/d3-physical-timing/rtl/phi_decoder_profile.v:20699$27274.genblk1.slice[0].genblk1.carry4.S0\nInfo:  0.5 28.4  Source $flatten\\decoder.\\application.\\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\\__phi_decoder_profile_topology__Phi_xReductionPlane_0_next_inst.$gt$${REPO}/_build/d3-physical-timing/rtl/phi_decoder_profile.v:20699$27274.genblk1.slice[0].genblk1.carry4.CO3\nInfo:  0.1 28.6    Net $flatten\\decoder.$abc$4630337$aiger4630336$136180 budget -1.171000 ns (64,175) -> (64,174)\nInfo:                Sink $flatten\\decoder.\\application.\\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\\__phi_decoder_profile_topology__Phi_xReductionPlane_0_next_inst.$gt$${REPO}/_build/d3-physical-timing/rtl/phi_decoder_profile.v:20699$27274.genblk1.slice[1].genblk1.carry4.CIN\nInfo:  0.2 28.8  Source $flatten\\decoder.\\application.\\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\\__phi_decoder_profile_topology__Phi_xReductionPlane_0_next_inst.$gt$${REPO}/_build/d3-physical-timing/rtl/phi_decoder_profile.v:20699$27274.genblk1.slice[1].genblk1.carry4.O2\nInfo:  1.4 30.1    Net $flatten\\decoder.$techmap4673101$abc$4630337$lut$aiger4630336$283657.A[1] budget 0.000000 ns (64,174) -> (64,192)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$283657.A5\nInfo:  0.1 30.3  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$283657.O6\nInfo:  1.6 31.9    Net $flatten\\decoder.$techmap4673102$abc$4630337$lut$aiger4630336$283658.A[1] budget 0.000000 ns (64,192) -> (53,203)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$283658.A4\nInfo:  0.1 32.0  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$283658.O6\nInfo:  1.0 33.0    Net $flatten\\decoder.$techmap4673110$abc$4630337$lut$aiger4630336$283660.A[1] budget 0.000000 ns (53,203) -> (63,193)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$283660.A2\nInfo:  0.1 33.1  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$283660.O6\nInfo:  0.6 33.7    Net $flatten\\decoder.$techmap4681055$auto$abc9_ops.cc:1613:reintegrate$4638330.A[2] budget 0.000000 ns (63,193) -> (64,192)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$283664.A4\nInfo:  0.1 33.8  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$283664.O6\nInfo:  5.1 38.9    Net $flatten\\decoder.$techmap4673118$abc$4630337$lut$aiger4630336$284007.A[3] budget 0.000000 ns (64,192) -> (171,121)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$283677.A5\nInfo:  0.1 39.0  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$283677.O6\nInfo:  4.7 43.7    Net $flatten\\decoder.$techmap4674705$abc$4630337$lut$aiger4630336$283694.A[3] budget 0.000000 ns (171,121) -> (151,223)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$283694.A2\nInfo:  0.1 43.9  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$283694.O6\nInfo:  1.9 45.8    Net $flatten\\decoder.$techmap4674708$abc$4630337$lut$aiger4630336$283711.A[2] budget 0.000000 ns (151,223) -> (151,186)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$283711.A5\nInfo:  0.1 45.9  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$283711.O6\nInfo:  3.2 49.1    Net $flatten\\decoder.$techmap4674709$abc$4630337$lut$aiger4630336$283713.A[2] budget 0.000000 ns (151,186) -> (64,203)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$283713.A4\nInfo:  0.1 49.2  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$283713.O6\nInfo:  1.1 50.3    Net $flatten\\decoder.$techmap4674710$abc$4630337$lut$aiger4630336$283718.A[2] budget 0.000000 ns (64,203) -> (57,199)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$283914.A1\nInfo:  0.1 50.4  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$283914.O6\nInfo:  1.1 51.6    Net $flatten\\decoder.$techmap4674716$abc$4630337$lut$aiger4630336$283922.A[3] budget 0.000000 ns (57,199) -> (64,203)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$283922.A1\nInfo:  0.1 51.7  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$283922.O6\nInfo:  1.0 52.7    Net $flatten\\decoder.$techmap4674725$abc$4630337$lut$aiger4630336$283954.A[5] budget 0.000000 ns (64,203) -> (64,183)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$283954.A6\nInfo:  0.1 52.8  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$283954.O6\nInfo:  7.1 59.9    Net $flatten\\decoder.$techmap4685675$auto$abc9_ops.cc:1613:reintegrate$4637137.A[5] budget 0.000000 ns (64,183) -> (185,53)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$309411.A3\nInfo:  0.1 60.0  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$309411.O6\nInfo: 10.6 70.6    Net $flatten\\decoder.$techmap4674764$auto$abc9_ops.cc:1613:reintegrate$4638932.A[5] budget 0.000000 ns (185,53) -> (272,254)\nInfo:                Sink $flatten\\decoder.$auto$abc9_ops.cc:1613:reintegrate$4631122.A4\nInfo:  0.1 70.7  Source $flatten\\decoder.$auto$abc9_ops.cc:1613:reintegrate$4631122.O6\nInfo:  0.0 70.8    Net decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_decoder_profile_topology__Phi_xReductionPlane_0_next_inst.bank_0_tuple_idx_1_tuple_idx_1[6][80] budget -1.325000 ns (272,254) -> (272,254)\nInfo:                Sink $flatten\\decoder.$auto$ff.cc:337:slice$176066.D\nInfo:  0.1 70.9  Setup $flatten\\decoder.$auto$ff.cc:337:slice$176066.D\nInfo: 5.9 ns logic, 65.0 ns routing"
+      },
+      "critical_path_clock": "decoder.aclk",
+      "seed": 2,
+      "target_mhz": 100.0,
+      "utilization": {
+        "BSCAN": {
+          "available": 4,
+          "used": 0
+        },
+        "BUFGCTRL": {
+          "available": 32,
+          "used": 1
+        },
+        "BUFGCTRL_CE0INV": {
+          "available": 32,
+          "used": 0
+        },
+        "BUFGCTRL_CE1INV": {
+          "available": 32,
+          "used": 0
+        },
+        "BUFGCTRL_IGNORE0INV": {
+          "available": 32,
+          "used": 0
+        },
+        "BUFGCTRL_IGNORE1INV": {
+          "available": 32,
+          "used": 0
+        },
+        "BUFGCTRL_S0INV": {
+          "available": 32,
+          "used": 0
+        },
+        "BUFGCTRL_S1INV": {
+          "available": 32,
+          "used": 0
+        },
+        "BUFG_BUFG": {
+          "available": 32,
+          "used": 0
+        },
+        "BUFHCE_BUFHCE": {
+          "available": 168,
+          "used": 0
+        },
+        "BUFHCE_CEINV": {
+          "available": 168,
+          "used": 0
+        },
+        "BUFIO_BUFIO": {
+          "available": 32,
+          "used": 0
+        },
+        "CARRY4": {
+          "available": 69350,
+          "used": 2631
+        },
+        "DCIRESET_DCIRESET": {
+          "available": 1,
+          "used": 0
+        },
+        "DNA_PORT_DNA_PORT": {
+          "available": 1,
+          "used": 0
+        },
+        "DSP48E1_ALUMODE0INV": {
+          "available": 2020,
+          "used": 0
+        },
+        "DSP48E1_ALUMODE1INV": {
+          "available": 2020,
+          "used": 0
+        },
+        "DSP48E1_ALUMODE2INV": {
+          "available": 2020,
+          "used": 0
+        },
+        "DSP48E1_ALUMODE3INV": {
+          "available": 2020,
+          "used": 0
+        },
+        "DSP48E1_CARRYININV": {
+          "available": 2020,
+          "used": 0
+        },
+        "DSP48E1_CLKINV": {
+          "available": 2020,
+          "used": 0
+        },
+        "DSP48E1_DSP48E1": {
+          "available": 2020,
+          "used": 144
+        },
+        "DSP48E1_INMODE0INV": {
+          "available": 2020,
+          "used": 0
+        },
+        "DSP48E1_INMODE1INV": {
+          "available": 2020,
+          "used": 0
+        },
+        "DSP48E1_INMODE2INV": {
+          "available": 2020,
+          "used": 0
+        },
+        "DSP48E1_INMODE3INV": {
+          "available": 2020,
+          "used": 0
+        },
+        "DSP48E1_INMODE4INV": {
+          "available": 2020,
+          "used": 0
+        },
+        "DSP48E1_OPMODE0INV": {
+          "available": 2020,
+          "used": 0
+        },
+        "DSP48E1_OPMODE1INV": {
+          "available": 2020,
+          "used": 0
+        },
+        "DSP48E1_OPMODE2INV": {
+          "available": 2020,
+          "used": 0
+        },
+        "DSP48E1_OPMODE3INV": {
+          "available": 2020,
+          "used": 0
+        },
+        "DSP48E1_OPMODE4INV": {
+          "available": 2020,
+          "used": 0
+        },
+        "DSP48E1_OPMODE5INV": {
+          "available": 2020,
+          "used": 0
+        },
+        "DSP48E1_OPMODE6INV": {
+          "available": 2020,
+          "used": 0
+        },
+        "EFUSE_USR_EFUSE_USR": {
+          "available": 1,
+          "used": 0
+        },
+        "FIFO18E1_FIFO18E1": {
+          "available": 755,
+          "used": 0
+        },
+        "FIFO18E1_RDCLKINV": {
+          "available": 755,
+          "used": 0
+        },
+        "FIFO18E1_RDENINV": {
+          "available": 755,
+          "used": 0
+        },
+        "FIFO18E1_RDRCLKINV": {
+          "available": 755,
+          "used": 0
+        },
+        "FIFO18E1_RSTINV": {
+          "available": 755,
+          "used": 0
+        },
+        "FIFO18E1_RSTREGINV": {
+          "available": 755,
+          "used": 0
+        },
+        "FIFO18E1_WRCLKINV": {
+          "available": 755,
+          "used": 0
+        },
+        "FIFO18E1_WRENINV": {
+          "available": 755,
+          "used": 0
+        },
+        "FRAME_ECC_FRAME_ECC": {
+          "available": 1,
+          "used": 0
+        },
+        "HARD0": {
+          "available": 2568,
+          "used": 0
+        },
+        "ICAP_ICAP": {
+          "available": 2,
+          "used": 0
+        },
+        "IDELAYCTRL_IDELAYCTRL": {
+          "available": 8,
+          "used": 0
+        },
+        "IDELAYE2_CINV": {
+          "available": 250,
+          "used": 0
+        },
+        "IDELAYE2_DATAININV": {
+          "available": 250,
+          "used": 0
+        },
+        "IDELAYE2_IDATAININV": {
+          "available": 250,
+          "used": 0
+        },
+        "IDELAYE2_IDELAYE2": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE2_CE1USED": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE2_CLKBINV": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE2_CLKINV": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE2_D2OBYP_SEL": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE2_D2OFFBYP_SEL": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE2_DINV": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE2_IDELMUX": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE2_IFF": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE2_IFFDELMUX": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE2_IFFMUX": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE2_IMUX": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE2_REVUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE2_SRUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE3_CE1USED": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE3_CLKBINV": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE3_CLKINV": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE3_D2OBYP_SEL": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE3_D2OFFBYP_SEL": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE3_DINV": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE3_IDELMUXE3": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE3_IFF": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE3_IFFDELMUXE3": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE3_IFFMUX": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE3_IMUX": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE3_REVUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE3_SRUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE3_ZHOLD_DELAY": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE3_ZHOLD_FABRIC_INV": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE3_ZHOLD_IFF_INV": {
+          "available": 250,
+          "used": 0
+        },
+        "INVERTER": {
+          "available": 192,
+          "used": 0
+        },
+        "IOB18M_DCITERMDISABLE_SEL": {
+          "available": 72,
+          "used": 0
+        },
+        "IOB18M_DIFFI_INUSED": {
+          "available": 72,
+          "used": 0
+        },
+        "IOB18M_DIFFO_OUTUSED": {
+          "available": 72,
+          "used": 0
+        },
+        "IOB18M_IBUFDISABLE_SEL": {
+          "available": 72,
+          "used": 0
+        },
+        "IOB18M_INBUF_DCIEN": {
+          "available": 72,
+          "used": 0
+        },
+        "IOB18M_IUSED": {
+          "available": 72,
+          "used": 0
+        },
+        "IOB18M_OUSED": {
+          "available": 72,
+          "used": 0
+        },
+        "IOB18M_OUTBUF_DCIEN": {
+          "available": 72,
+          "used": 0
+        },
+        "IOB18M_O_OUTUSED": {
+          "available": 72,
+          "used": 0
+        },
+        "IOB18M_TERM_OVERRIDE": {
+          "available": 72,
+          "used": 0
+        },
+        "IOB18M_TUSED": {
+          "available": 72,
+          "used": 0
+        },
+        "IOB18M_T_OUTUSED": {
+          "available": 72,
+          "used": 0
+        },
+        "IOB18S_DCITERMDISABLE_SEL": {
+          "available": 72,
+          "used": 0
+        },
+        "IOB18S_DIFFI_INUSED": {
+          "available": 72,
+          "used": 0
+        },
+        "IOB18S_DIFFO_INUSED": {
+          "available": 72,
+          "used": 0
+        },
+        "IOB18S_IBUFDISABLE_SEL": {
+          "available": 72,
+          "used": 0
+        },
+        "IOB18S_INBUF_DCIEN": {
+          "available": 72,
+          "used": 0
+        },
+        "IOB18S_IUSED": {
+          "available": 72,
+          "used": 0
+        },
+        "IOB18S_OINMUX": {
+          "available": 72,
+          "used": 0
+        },
+        "IOB18S_OUTBUF_DCIEN": {
+          "available": 72,
+          "used": 0
+        },
+        "IOB18S_OUTMUX": {
+          "available": 72,
+          "used": 0
+        },
+        "IOB18S_TERM_OVERRIDE": {
+          "available": 72,
+          "used": 0
+        },
+        "IOB18S_TINMUX": {
+          "available": 72,
+          "used": 0
+        },
+        "IOB18_DCITERMDISABLE_SEL": {
+          "available": 150,
+          "used": 0
+        },
+        "IOB18_DIFFI_INUSED": {
+          "available": 150,
+          "used": 0
+        },
+        "IOB18_IBUFDISABLE_SEL": {
+          "available": 150,
+          "used": 0
+        },
+        "IOB18_INBUF_DCIEN": {
+          "available": 150,
+          "used": 1
+        },
+        "IOB18_IUSED": {
+          "available": 150,
+          "used": 0
+        },
+        "IOB18_OUSED": {
+          "available": 150,
+          "used": 0
+        },
+        "IOB18_OUTBUF_DCIEN": {
+          "available": 150,
+          "used": 1
+        },
+        "IOB18_TERM_OVERRIDE": {
+          "available": 150,
+          "used": 0
+        },
+        "IOB18_TUSED": {
+          "available": 150,
+          "used": 0
+        },
+        "IOB33M_DIFFI_INUSED": {
+          "available": 120,
+          "used": 0
+        },
+        "IOB33M_DIFFO_OUTUSED": {
+          "available": 120,
+          "used": 0
+        },
+        "IOB33M_IBUFDISABLE_SEL": {
+          "available": 120,
+          "used": 0
+        },
+        "IOB33M_INBUF_EN": {
+          "available": 120,
+          "used": 0
+        },
+        "IOB33M_INTERMDISABLE_SEL": {
+          "available": 120,
+          "used": 0
+        },
+        "IOB33M_IUSED": {
+          "available": 120,
+          "used": 0
+        },
+        "IOB33M_OUSED": {
+          "available": 120,
+          "used": 0
+        },
+        "IOB33M_OUTBUF": {
+          "available": 120,
+          "used": 0
+        },
+        "IOB33M_O_OUTUSED": {
+          "available": 120,
+          "used": 0
+        },
+        "IOB33M_TERM_OVERRIDE": {
+          "available": 120,
+          "used": 0
+        },
+        "IOB33M_TUSED": {
+          "available": 120,
+          "used": 0
+        },
+        "IOB33M_T_OUTUSED": {
+          "available": 120,
+          "used": 0
+        },
+        "IOB33S_DIFFI_INUSED": {
+          "available": 120,
+          "used": 0
+        },
+        "IOB33S_DIFFO_INUSED": {
+          "available": 120,
+          "used": 0
+        },
+        "IOB33S_IBUFDISABLE_SEL": {
+          "available": 120,
+          "used": 0
+        },
+        "IOB33S_INBUF_EN": {
+          "available": 120,
+          "used": 0
+        },
+        "IOB33S_INTERMDISABLE_SEL": {
+          "available": 120,
+          "used": 0
+        },
+        "IOB33S_IUSED": {
+          "available": 120,
+          "used": 0
+        },
+        "IOB33S_OINMUX": {
+          "available": 120,
+          "used": 0
+        },
+        "IOB33S_OUTBUF": {
+          "available": 120,
+          "used": 0
+        },
+        "IOB33S_OUTMUX": {
+          "available": 120,
+          "used": 0
+        },
+        "IOB33S_TERM_OVERRIDE": {
+          "available": 120,
+          "used": 0
+        },
+        "IOB33S_TINMUX": {
+          "available": 120,
+          "used": 0
+        },
+        "IOB33_DIFFI_INUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "IOB33_IBUFDISABLE_SEL": {
+          "available": 250,
+          "used": 0
+        },
+        "IOB33_INBUF_EN": {
+          "available": 250,
+          "used": 0
+        },
+        "IOB33_INTERMDISABLE_SEL": {
+          "available": 250,
+          "used": 0
+        },
+        "IOB33_IUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "IOB33_OUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "IOB33_OUTBUF": {
+          "available": 250,
+          "used": 0
+        },
+        "IOB33_TERM_OVERRIDE": {
+          "available": 250,
+          "used": 0
+        },
+        "IOB33_TUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "ISERDESE2_CLKBINV": {
+          "available": 250,
+          "used": 0
+        },
+        "ISERDESE2_CLKDIVINV": {
+          "available": 250,
+          "used": 0
+        },
+        "ISERDESE2_CLKDIVPINV": {
+          "available": 250,
+          "used": 0
+        },
+        "ISERDESE2_CLKINV": {
+          "available": 250,
+          "used": 0
+        },
+        "ISERDESE2_DINV": {
+          "available": 250,
+          "used": 0
+        },
+        "ISERDESE2_ISERDESE2": {
+          "available": 250,
+          "used": 0
+        },
+        "ISERDESE2_OCLKBINV": {
+          "available": 250,
+          "used": 0
+        },
+        "ISERDESE2_OCLKINV": {
+          "available": 250,
+          "used": 0
+        },
+        "MMCME2_ADV_CLKINSELINV": {
+          "available": 8,
+          "used": 0
+        },
+        "MMCME2_ADV_MMCME2_ADV": {
+          "available": 8,
+          "used": 0
+        },
+        "MMCME2_ADV_PSENINV": {
+          "available": 8,
+          "used": 0
+        },
+        "MMCME2_ADV_PSINCDECINV": {
+          "available": 8,
+          "used": 0
+        },
+        "MMCME2_ADV_PWRDWNINV": {
+          "available": 8,
+          "used": 0
+        },
+        "MMCME2_ADV_RSTINV": {
+          "available": 8,
+          "used": 0
+        },
+        "NULLMUX": {
+          "available": 784,
+          "used": 0
+        },
+        "OLOGICE2_CLKINV": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE2_D1INV": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE2_D2INV": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE2_MISR": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE2_O1USED": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE2_OCEUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE2_OFBUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE2_OMUX": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE2_OQUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE2_OREVUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE2_OSRUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE2_OUTFF": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE2_T1INV": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE2_T1USED": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE2_T2INV": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE2_TCEUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE2_TFBUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE2_TFF": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE2_TMUX": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE2_TQUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE2_TREVUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE2_TSRUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE3_CLKINV": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE3_D1INV": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE3_D2INV": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE3_MISR": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE3_O1USED": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE3_OCEUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE3_OFBUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE3_OMUX": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE3_OQUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE3_OREVUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE3_OSRUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE3_OUTFF": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE3_T1INV": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE3_T1USED": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE3_T2INV": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE3_TCEUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE3_TFBUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE3_TFF": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE3_TMUX": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE3_TQUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE3_TREVUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE3_TSRUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "OSERDESE2_CLKBINV": {
+          "available": 250,
+          "used": 0
+        },
+        "OSERDESE2_CLKDIVBINV": {
+          "available": 250,
+          "used": 0
+        },
+        "OSERDESE2_CLKDIVFBINV": {
+          "available": 250,
+          "used": 0
+        },
+        "OSERDESE2_CLKDIVFINV": {
+          "available": 250,
+          "used": 0
+        },
+        "OSERDESE2_CLKDIVINV": {
+          "available": 250,
+          "used": 0
+        },
+        "OSERDESE2_CLKINV": {
+          "available": 250,
+          "used": 0
+        },
+        "OSERDESE2_D1INV": {
+          "available": 250,
+          "used": 0
+        },
+        "OSERDESE2_D2INV": {
+          "available": 250,
+          "used": 0
+        },
+        "OSERDESE2_D3INV": {
+          "available": 250,
+          "used": 0
+        },
+        "OSERDESE2_D4INV": {
+          "available": 250,
+          "used": 0
+        },
+        "OSERDESE2_D5INV": {
+          "available": 250,
+          "used": 0
+        },
+        "OSERDESE2_D6INV": {
+          "available": 250,
+          "used": 0
+        },
+        "OSERDESE2_D7INV": {
+          "available": 250,
+          "used": 0
+        },
+        "OSERDESE2_D8INV": {
+          "available": 250,
+          "used": 0
+        },
+        "OSERDESE2_OSERDESE2": {
+          "available": 250,
+          "used": 0
+        },
+        "OSERDESE2_T1INV": {
+          "available": 250,
+          "used": 0
+        },
+        "OSERDESE2_T2INV": {
+          "available": 250,
+          "used": 0
+        },
+        "OSERDESE2_T3INV": {
+          "available": 250,
+          "used": 0
+        },
+        "OSERDESE2_T4INV": {
+          "available": 250,
+          "used": 0
+        },
+        "PAD": {
+          "available": 784,
+          "used": 2
+        },
+        "PLLE2_ADV_CLKINSELINV": {
+          "available": 8,
+          "used": 0
+        },
+        "PLLE2_ADV_PLLE2_ADV": {
+          "available": 8,
+          "used": 0
+        },
+        "PLLE2_ADV_PWRDWNINV": {
+          "available": 8,
+          "used": 0
+        },
+        "PLLE2_ADV_RSTINV": {
+          "available": 8,
+          "used": 0
+        },
+        "PS7_PS7": {
+          "available": 1,
+          "used": 0
+        },
+        "PSEUDO_GND": {
+          "available": 128845,
+          "used": 1
+        },
+        "PSEUDO_VCC": {
+          "available": 128845,
+          "used": 1
+        },
+        "PULL_OR_KEEP1": {
+          "available": 784,
+          "used": 0
+        },
+        "RAMB18E1_CLKARDCLKINV": {
+          "available": 1510,
+          "used": 0
+        },
+        "RAMB18E1_CLKBWRCLKINV": {
+          "available": 1510,
+          "used": 0
+        },
+        "RAMB18E1_ENARDENINV": {
+          "available": 1510,
+          "used": 0
+        },
+        "RAMB18E1_ENBWRENINV": {
+          "available": 1510,
+          "used": 0
+        },
+        "RAMB18E1_RAMB18E1": {
+          "available": 1510,
+          "used": 90
+        },
+        "RAMB18E1_REGCLKARDRCLKINV": {
+          "available": 1510,
+          "used": 0
+        },
+        "RAMB18E1_REGCLKBINV": {
+          "available": 1510,
+          "used": 0
+        },
+        "RAMB18E1_RSTRAMARSTRAMINV": {
+          "available": 1510,
+          "used": 0
+        },
+        "RAMB18E1_RSTRAMBINV": {
+          "available": 1510,
+          "used": 0
+        },
+        "RAMB18E1_RSTREGARSTREGINV": {
+          "available": 1510,
+          "used": 0
+        },
+        "RAMB18E1_RSTREGBINV": {
+          "available": 1510,
+          "used": 0
+        },
+        "RAMB36E1_CLKARDCLKLINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMB36E1_CLKARDCLKUINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMB36E1_CLKBWRCLKLINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMB36E1_CLKBWRCLKUINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMB36E1_ENARDENLINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMB36E1_ENARDENUINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMB36E1_ENBWRENLINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMB36E1_ENBWRENUINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMB36E1_RAMB36E1": {
+          "available": 755,
+          "used": 22
+        },
+        "RAMB36E1_REGCLKARDRCLKLINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMB36E1_REGCLKARDRCLKUINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMB36E1_REGCLKBLINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMB36E1_REGCLKBUINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMB36E1_RSTRAMARSTRAMLINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMB36E1_RSTRAMARSTRAMUINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMB36E1_RSTRAMBLINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMB36E1_RSTRAMBUINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMB36E1_RSTREGARSTREGLINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMB36E1_RSTREGARSTREGUINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMB36E1_RSTREGBLINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMB36E1_RSTREGBUINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMBFIFO36E1_CLKARDCLKLINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMBFIFO36E1_CLKARDCLKUINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMBFIFO36E1_CLKBWRCLKLINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMBFIFO36E1_CLKBWRCLKUINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMBFIFO36E1_ENARDENLINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMBFIFO36E1_ENARDENUINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMBFIFO36E1_ENBWRENLINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMBFIFO36E1_ENBWRENUINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMBFIFO36E1_RAMBFIFO36E1": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMBFIFO36E1_REGCLKARDRCLKLINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMBFIFO36E1_REGCLKARDRCLKUINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMBFIFO36E1_REGCLKBLINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMBFIFO36E1_REGCLKBUINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMBFIFO36E1_RSTRAMARSTRAMLRSTINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMBFIFO36E1_RSTRAMARSTRAMUINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMBFIFO36E1_RSTRAMBLINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMBFIFO36E1_RSTRAMBUINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMBFIFO36E1_RSTREGARSTREGLINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMBFIFO36E1_RSTREGARSTREGUINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMBFIFO36E1_RSTREGBLINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMBFIFO36E1_RSTREGBUINV": {
+          "available": 755,
+          "used": 0
+        },
+        "SELMUX2_1": {
+          "available": 209050,
+          "used": 97
+        },
+        "SLICE_FFX": {
+          "available": 554800,
+          "used": 79904
+        },
+        "SLICE_LUTX": {
+          "available": 554800,
+          "used": 141566
+        },
+        "STARTUP_STARTUP": {
+          "available": 1,
+          "used": 0
+        },
+        "USR_ACCESS_USR_ACCESS": {
+          "available": 1,
+          "used": 0
+        }
+      },
+      "warnings": {
+        "Unconnected port ACOUT": {
+          "count": 1440,
+          "example": "Warning: Port ACOUT22 connected to net $flatten\\decoder.$abc$4630337$aiger4630336$127785 on cell $flatten\\decoder.\\application.\\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\\__phi_halo_cell__SharedService_0__3_2_2_3_next_inst.\\__phi_halo_cell__SharedExecutor_0_next_inst.$mul$${REPO}/_build/d3-physical-timing/rtl/phi_decoder_profile.v:5558$7222.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.sliceA.last.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mul_sliceB_last has no connections"
+        },
+        "Unconnected port BCOUT": {
+          "count": 2592,
+          "example": "Warning: Port BCOUT0 connected to net $flatten\\decoder.$abc$4630337$aiger4630336$126959 on cell $flatten\\decoder.\\application.\\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\\__phi_halo_cell__SharedService_0__3_2_2_3_next_inst.\\__phi_halo_cell__SharedExecutor_0_next_inst.$mul$${REPO}/_build/d3-physical-timing/rtl/phi_decoder_profile.v:5558$7222.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.sliceA.last.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.sliceB[0].mul has no connections"
+        },
+        "Unconnected port CARRYCASCOUT": {
+          "count": 144,
+          "example": "Warning: Port CARRYCASCOUT connected to net $flatten\\decoder.$abc$4630337$aiger4630336$126977 on cell $flatten\\decoder.\\application.\\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\\__phi_halo_cell__SharedService_0__3_2_2_3_next_inst.\\__phi_halo_cell__SharedExecutor_0_next_inst.$mul$${REPO}/_build/d3-physical-timing/rtl/phi_decoder_profile.v:5558$7222.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.sliceA.last.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.sliceB[0].mul has no connections"
+        },
+        "Unconnected port PCOUT": {
+          "count": 2304,
+          "example": "Warning: Port PCOUT22 connected to net $flatten\\decoder.$abc$4630337$aiger4630336$127890 on cell $flatten\\decoder.\\application.\\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\\__phi_halo_cell__SharedService_0__3_2_2_3_next_inst.\\__phi_halo_cell__SharedExecutor_0_next_inst.$mul$${REPO}/_build/d3-physical-timing/rtl/phi_decoder_profile.v:5558$7222.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.sliceA.last.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mul_sliceB_last has no connections"
+        }
+      }
+    },
+    {
+      "achieved_mhz": 13.92,
+      "clock": "decoder.aclk",
+      "critical_path": {
+        "logic_ns": 7.8,
+        "routing_ns": 64.0,
+        "text": "Info: Critical path report for clock 'decoder.aclk' (posedge -> posedge):\nInfo: curr total\nInfo:  0.1  0.1  Source $flatten\\decoder.$auto$ff.cc:337:slice$204211.Q\nInfo:  0.5  0.6    Net decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_decoder_profile_topology__Phi_zReductionPlane_0_next_inst.____state_1[0] budget 0.000000 ns (74,231) -> (79,232)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$not$aiger4630336$262.A1\nInfo:  0.1  0.8  Source $flatten\\decoder.$abc$4630337$lut$not$aiger4630336$262.O6\nInfo:  1.4  2.2    Net $flatten\\decoder.$abc$4630337$aiger4630336$262b budget 0.000000 ns (79,232) -> (84,200)\nInfo:                Sink $flatten\\decoder.$abc$4630337$aiger4630336$262b$LUT$5256.A1\nInfo:  0.1  2.3  Source $flatten\\decoder.$abc$4630337$aiger4630336$262b$LUT$5256.O6\nInfo:  0.0  2.3    Net $flatten\\decoder.$abc$4630337$aiger4630336$262b$legal$5255 budget -11.927000 ns (84,200) -> (84,200)\nInfo:                Sink $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$95173.genblk1.slice[0].genblk1.carry4.S0\nInfo:  0.5  2.8  Source $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$95173.genblk1.slice[0].genblk1.carry4.CO3\nInfo:  0.1  2.9    Net $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$95173.genblk1.slice[0].genblk1.carry4$carry$27748 budget -10.601000 ns (84,200) -> (84,199)\nInfo:                Sink $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$95173.genblk1.slice[0].genblk1.carry4$split$27747.CIN\nInfo:  0.1  3.0  Source $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$95173.genblk1.slice[0].genblk1.carry4$split$27747.CO3\nInfo:  0.1  3.1    Net $flatten\\decoder.$abc$4630337$aiger4630336$129572 budget -6.552000 ns (84,199) -> (84,198)\nInfo:                Sink $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$95173.genblk1.slice[1].genblk1.carry4.CIN\nInfo:  0.1  3.2  Source $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$95173.genblk1.slice[1].genblk1.carry4.CO3\nInfo:  0.1  3.4    Net $flatten\\decoder.$abc$4630337$aiger4630336$129580 budget -5.764000 ns (84,198) -> (84,197)\nInfo:                Sink $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$95173.genblk1.slice[2].genblk1.carry4.CIN\nInfo:  0.1  3.5  Source $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$95173.genblk1.slice[2].genblk1.carry4.CO3\nInfo:  0.1  3.6    Net $flatten\\decoder.$abc$4630337$aiger4630336$129588 budget -4.976000 ns (84,197) -> (84,196)\nInfo:                Sink $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$95173.genblk1.slice[3].genblk1.carry4.CIN\nInfo:  0.1  3.7  Source $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$95173.genblk1.slice[3].genblk1.carry4.CO3\nInfo:  0.1  3.8    Net $flatten\\decoder.$abc$4630337$aiger4630336$129596 budget -3.504000 ns (84,196) -> (84,195)\nInfo:                Sink $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$95173.genblk1.slice[4].genblk1.carry4.CIN\nInfo:  0.1  3.9  Source $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$95173.genblk1.slice[4].genblk1.carry4.CO3\nInfo:  0.1  4.0    Net $flatten\\decoder.$abc$4630337$aiger4630336$129604 budget -3.504000 ns (84,195) -> (84,194)\nInfo:                Sink $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$95173.genblk1.slice[5].genblk1.carry4.CIN\nInfo:  0.1  4.2  Source $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$95173.genblk1.slice[5].genblk1.carry4.CO3\nInfo:  0.1  4.3    Net $flatten\\decoder.$abc$4630337$aiger4630336$129612 budget -3.184000 ns (84,194) -> (84,193)\nInfo:                Sink $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$95173.genblk1.slice[6].genblk1.carry4.CIN\nInfo:  0.1  4.4  Source $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$95173.genblk1.slice[6].genblk1.carry4.CO3\nInfo:  0.1  4.5    Net $flatten\\decoder.$abc$4630337$aiger4630336$129620 budget -2.874000 ns (84,193) -> (84,192)\nInfo:                Sink $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$95173.genblk1.slice[7].genblk1.carry4.CIN\nInfo:  0.3  4.8  Source $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$95173.genblk1.slice[7].genblk1.carry4.O3\nInfo:  2.0  6.8    Net $flatten\\decoder.$techmap4758048$abc$4630337$lut$aiger4630336$293773.A[4] budget 0.000000 ns (84,192) -> (79,225)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$293773.A4\nInfo:  0.1  7.0  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$293773.O6\nInfo:  1.8  8.8    Net $flatten\\decoder.$abc$4630337$aiger4630336$293773 budget 0.000000 ns (79,225) -> (87,203)\nInfo:                Sink $flatten\\decoder.$abc$4630337$aiger4630336$293773$LUT$26010.A2\nInfo:  0.1  8.9  Source $flatten\\decoder.$abc$4630337$aiger4630336$293773$LUT$26010.O6\nInfo:  0.0  8.9    Net $flatten\\decoder.$abc$4630337$aiger4630336$293773$legal$26009 budget -3.264000 ns (87,203) -> (87,203)\nInfo:                Sink $flatten\\decoder.\\application.\\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\\__phi_decoder_profile_topology__Phi_zReductionPlane_0_next_inst.$lt$${REPO}/_build/d3-physical-timing/rtl/phi_decoder_profile.v:23320$29416.genblk1.slice[1].genblk1.carry4.S1\nInfo:  0.6  9.5  Source $flatten\\decoder.\\application.\\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\\__phi_decoder_profile_topology__Phi_zReductionPlane_0_next_inst.$lt$${REPO}/_build/d3-physical-timing/rtl/phi_decoder_profile.v:23320$29416.genblk1.slice[1].genblk1.carry4.O2\nInfo:  1.9 11.4    Net $flatten\\decoder.$techmap4652764$abc$4630337$lut$aiger4630336$293795.A[2] budget 0.000000 ns (87,203) -> (79,228)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$293881.A1\nInfo:  0.1 11.5  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$293881.O6\nInfo:  0.6 12.1    Net $flatten\\decoder.$techmap4652786$abc$4630337$lut$aiger4630336$293882.A[1] budget 0.000000 ns (79,228) -> (77,232)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$293882.A2\nInfo:  0.1 12.3  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$293882.O6\nInfo:  0.8 13.0    Net $flatten\\decoder.$techmap4652788$abc$4630337$lut$aiger4630336$293893.A[5] budget 0.000000 ns (77,232) -> (84,228)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$293893.A6\nInfo:  0.1 13.1  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$293893.O6\nInfo:  0.6 13.8    Net $flatten\\decoder.$techmap4652789$abc$4630337$lut$aiger4630336$293902.A[5] budget 0.000000 ns (84,228) -> (84,228)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$293902.A6\nInfo:  0.1 13.9  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$293902.O6\nInfo:  0.4 14.3    Net $flatten\\decoder.$techmap4652790$abc$4630337$lut$aiger4630336$293911.A[5] budget 0.000000 ns (84,228) -> (84,228)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$293911.A6\nInfo:  0.1 14.5  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$293911.O6\nInfo:  0.8 15.2    Net $flatten\\decoder.$techmap4652791$abc$4630337$lut$aiger4630336$293919.A[5] budget 0.000000 ns (84,228) -> (74,225)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$293919.A6\nInfo:  0.1 15.4  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$293919.O6\nInfo:  1.2 16.6    Net $flatten\\decoder.$techmap4652792$abc$4630337$lut$aiger4630336$293920.A[0] budget 0.000000 ns (74,225) -> (74,211)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$293920.A4\nInfo:  0.1 16.7  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$293920.O6\nInfo:  1.6 18.3    Net $flatten\\decoder.$techmap4652793$abc$4630337$lut$aiger4630336$293921.A[0] budget 0.000000 ns (74,211) -> (84,221)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$293921.A2\nInfo:  0.1 18.4  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$293921.O6\nInfo:  0.9 19.2    Net $flatten\\decoder.$techmap4652810$abc$4630337$lut$aiger4630336$294020.A[1] budget 0.000000 ns (84,221) -> (79,223)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$294020.A1\nInfo:  0.1 19.4  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$294020.O6\nInfo:  1.3 20.6    Net $flatten\\decoder.$techmap4652828$abc$4630337$lut$aiger4630336$294124.A[1] budget 0.000000 ns (79,223) -> (74,215)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$294124.A4\nInfo:  0.1 20.8  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$294124.O6\nInfo:  1.0 21.8    Net $flatten\\decoder.$techmap4652844$abc$4630337$lut$aiger4630336$294225.A[1] budget 0.000000 ns (74,215) -> (79,219)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$294225.A3\nInfo:  0.1 21.9  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$294225.O6\nInfo:  0.2 22.1    Net $flatten\\decoder.$techmap4652862$abc$4630337$lut$aiger4630336$294335.A[1] budget 0.000000 ns (79,219) -> (79,219)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$294335.A5\nInfo:  0.1 22.2  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$294335.O6\nInfo:  0.9 23.1    Net $flatten\\decoder.$techmap4652884$abc$4630337$lut$aiger4630336$294438.A[1] budget 0.000000 ns (79,219) -> (74,216)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$294438.A2\nInfo:  0.1 23.2  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$294438.O6\nInfo:  1.0 24.2    Net $flatten\\decoder.$techmap4652903$abc$4630337$lut$aiger4630336$294532.A[1] budget 0.000000 ns (74,216) -> (79,220)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$294532.A4\nInfo:  0.1 24.4  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$294532.O6\nInfo:  1.1 25.5    Net $flatten\\decoder.$techmap4652918$auto$abc9_ops.cc:1613:reintegrate$4642057.A[4] budget 0.000000 ns (79,220) -> (74,215)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$294610.A2\nInfo:  0.1 25.6  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$294610.O6\nInfo:  0.7 26.3    Net $flatten\\decoder.$techmap4652936$auto$abc9_ops.cc:1613:reintegrate$4642055.A[3] budget 0.000000 ns (74,215) -> (73,217)\nInfo:                Sink $flatten\\decoder.$auto$abc9_ops.cc:1613:reintegrate$4642055.A4\nInfo:  0.1 26.4  Source $flatten\\decoder.$auto$abc9_ops.cc:1613:reintegrate$4642055.O6\nInfo:  1.2 27.7    Net $flatten\\decoder.$techmap4673560$abc$4630337$lut$aiger4630336$299086.A[0] budget 0.000000 ns (73,217) -> (74,229)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$299047.A4\nInfo:  0.1 27.8  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$299047.O6\nInfo:  1.3 29.1    Net $flatten\\decoder.$techmap4673565$abc$4630337$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_decoder_profile_topology__Phi_zReductionPlane_0_next_inst.and_182716.A[0] budget 0.000000 ns (74,229) -> (87,226)\nInfo:                Sink $flatten\\decoder.$techmap4673565$abc$4630337$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_decoder_profile_topology__Phi_zReductionPlane_0_next_inst.and_182716.A[0]$LUT$25646.A5\nInfo:  0.1 29.2  Source $flatten\\decoder.$techmap4673565$abc$4630337$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_decoder_profile_topology__Phi_zReductionPlane_0_next_inst.and_182716.A[0]$LUT$25646.O6\nInfo:  0.0 29.2    Net $flatten\\decoder.$techmap4673565$abc$4630337$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_decoder_profile_topology__Phi_zReductionPlane_0_next_inst.and_182716.A[0]$legal$25645 budget -1.785000 ns (87,226) -> (87,226)\nInfo:                Sink $flatten\\decoder.\\application.\\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\\__phi_decoder_profile_topology__Phi_zReductionPlane_0_next_inst.$gt$${REPO}/_build/d3-physical-timing/rtl/phi_decoder_profile.v:23415$31074.genblk1.slice[0].genblk1.carry4.S0\nInfo:  0.5 29.7  Source $flatten\\decoder.\\application.\\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\\__phi_decoder_profile_topology__Phi_zReductionPlane_0_next_inst.$gt$${REPO}/_build/d3-physical-timing/rtl/phi_decoder_profile.v:23415$31074.genblk1.slice[0].genblk1.carry4.CO3\nInfo:  0.1 29.8    Net $flatten\\decoder.$abc$4630337$aiger4630336$136164 budget -1.245000 ns (87,226) -> (87,225)\nInfo:                Sink $flatten\\decoder.\\application.\\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\\__phi_decoder_profile_topology__Phi_zReductionPlane_0_next_inst.$gt$${REPO}/_build/d3-physical-timing/rtl/phi_decoder_profile.v:23415$31074.genblk1.slice[1].genblk1.carry4.CIN\nInfo:  0.2 30.1  Source $flatten\\decoder.\\application.\\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\\__phi_decoder_profile_topology__Phi_zReductionPlane_0_next_inst.$gt$${REPO}/_build/d3-physical-timing/rtl/phi_decoder_profile.v:23415$31074.genblk1.slice[1].genblk1.carry4.O2\nInfo:  1.0 31.1    Net $flatten\\decoder.$techmap4673560$abc$4630337$lut$aiger4630336$299086.A[1] budget 0.000000 ns (87,225) -> (87,233)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$299048.A3\nInfo:  0.1 31.2  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$299048.O6\nInfo:  0.9 32.1    Net $flatten\\decoder.$techmap4673564$abc$4630337$lut$aiger4630336$299049.A[1] budget 0.000000 ns (87,233) -> (84,230)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$299049.A5\nInfo:  0.1 32.2  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$299049.O6\nInfo:  0.6 32.8    Net $flatten\\decoder.$techmap4673565$abc$4630337$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_decoder_profile_topology__Phi_zReductionPlane_0_next_inst.and_182716.A[1] budget 0.000000 ns (84,230) -> (87,230)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$299060.A3\nInfo:  0.1 32.9  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$299060.O6\nInfo:  0.2 33.1    Net $flatten\\decoder.$techmap4673606$abc$4630337$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_decoder_profile_topology__Phi_zReductionPlane_0_next_inst.and_182717.A[1] budget 0.000000 ns (87,230) -> (87,230)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$299061.A5\nInfo:  0.1 33.2  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$299061.O6\nInfo:  1.1 34.3    Net $flatten\\decoder.$techmap4673645$abc$4630337$lut$aiger4630336$299062.A[1] budget 0.000000 ns (87,230) -> (77,232)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$299062.A1\nInfo:  0.1 34.4  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$299062.O6\nInfo:  8.8 43.2    Net $flatten\\decoder.$techmap4673648$abc$4630337$lut$aiger4630336$299352.A[3] budget 0.000000 ns (77,232) -> (253,73)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$299063.A5\nInfo:  0.1 43.3  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$299063.O6\nInfo:  2.1 45.4    Net $flatten\\decoder.$techmap4673659$abc$4630337$lut$aiger4630336$299380.A[2] budget 0.000000 ns (253,73) -> (245,105)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$299075.A4\nInfo:  0.1 45.5  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$299075.O6\nInfo:  0.6 46.2    Net $flatten\\decoder.$techmap4673977$abc$4630337$lut$aiger4630336$299092.A[3] budget 0.000000 ns (245,105) -> (245,103)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$299092.A1\nInfo:  0.1 46.3  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$299092.O6\nInfo:  0.7 47.0    Net $flatten\\decoder.$techmap4673978$abc$4630337$lut$aiger4630336$299094.A[1] budget 0.000000 ns (245,103) -> (243,105)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$299094.A5\nInfo:  0.1 47.1  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$299094.O6\nInfo:  5.1 52.3    Net $flatten\\decoder.$techmap4673988$abc$4630337$lut$aiger4630336$301551.A[4] budget 0.000000 ns (243,105) -> (120,170)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$299096.A3\nInfo:  0.1 52.4  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$299096.O6\nInfo:  0.7 53.1    Net $flatten\\decoder.$techmap4674600$auto$abc9_ops.cc:1613:reintegrate$4638942.A[3] budget 0.000000 ns (120,170) -> (123,171)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$299278.A3\nInfo:  0.1 53.2  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$299278.O6\nInfo:  0.6 53.8    Net $flatten\\decoder.$techmap4674009$abc$4630337$lut$aiger4630336$299284.A[4] budget 0.000000 ns (123,171) -> (120,171)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$299284.A4\nInfo:  0.1 53.9  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$299284.O6\nInfo:  0.2 54.1    Net $flatten\\decoder.$techmap4674010$abc$4630337$lut$aiger4630336$299291.A[4] budget 0.000000 ns (120,171) -> (120,171)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$299291.A3\nInfo:  0.1 54.2  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$299291.O6\nInfo:  1.0 55.2    Net $flatten\\decoder.$techmap4674017$abc$4630337$lut$aiger4630336$299334.A[5] budget 0.000000 ns (120,171) -> (120,157)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$299334.A6\nInfo:  0.1 55.3  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$299334.O6\nInfo:  6.5 61.8    Net $flatten\\decoder.$techmap4685895$auto$abc9_ops.cc:1613:reintegrate$4637081.A[5] budget 0.000000 ns (120,157) -> (250,51)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut$aiger4630336$301603.A3\nInfo:  0.1 61.9  Source $flatten\\decoder.$abc$4630337$lut$aiger4630336$301603.O6\nInfo:  9.7 71.6    Net $flatten\\decoder.$techmap4674025$auto$abc9_ops.cc:1613:reintegrate$4638984.A[3] budget 0.000000 ns (250,51) -> (151,280)\nInfo:                Sink $flatten\\decoder.$abc$4630337$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_decoder_profile_topology__Phi_zReductionPlane_0_next_inst.bank_3_tuple_idx_1_tuple_idx_1[0][29].A5\nInfo:  0.1 71.7  Source $flatten\\decoder.$abc$4630337$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_decoder_profile_topology__Phi_zReductionPlane_0_next_inst.bank_3_tuple_idx_1_tuple_idx_1[0][29].O6\nInfo:  0.0 71.7    Net decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_decoder_profile_topology__Phi_zReductionPlane_0_next_inst.bank_3_tuple_idx_1_tuple_idx_1[0][29] budget -1.303000 ns (151,280) -> (151,280)\nInfo:                Sink $flatten\\decoder.$auto$ff.cc:337:slice$204276.D\nInfo:  0.1 71.8  Setup $flatten\\decoder.$auto$ff.cc:337:slice$204276.D\nInfo: 7.8 ns logic, 64.0 ns routing"
+      },
+      "critical_path_clock": "decoder.aclk",
+      "seed": 3,
+      "target_mhz": 100.0,
+      "utilization": {
+        "BSCAN": {
+          "available": 4,
+          "used": 0
+        },
+        "BUFGCTRL": {
+          "available": 32,
+          "used": 1
+        },
+        "BUFGCTRL_CE0INV": {
+          "available": 32,
+          "used": 0
+        },
+        "BUFGCTRL_CE1INV": {
+          "available": 32,
+          "used": 0
+        },
+        "BUFGCTRL_IGNORE0INV": {
+          "available": 32,
+          "used": 0
+        },
+        "BUFGCTRL_IGNORE1INV": {
+          "available": 32,
+          "used": 0
+        },
+        "BUFGCTRL_S0INV": {
+          "available": 32,
+          "used": 0
+        },
+        "BUFGCTRL_S1INV": {
+          "available": 32,
+          "used": 0
+        },
+        "BUFG_BUFG": {
+          "available": 32,
+          "used": 0
+        },
+        "BUFHCE_BUFHCE": {
+          "available": 168,
+          "used": 0
+        },
+        "BUFHCE_CEINV": {
+          "available": 168,
+          "used": 0
+        },
+        "BUFIO_BUFIO": {
+          "available": 32,
+          "used": 0
+        },
+        "CARRY4": {
+          "available": 69350,
+          "used": 2631
+        },
+        "DCIRESET_DCIRESET": {
+          "available": 1,
+          "used": 0
+        },
+        "DNA_PORT_DNA_PORT": {
+          "available": 1,
+          "used": 0
+        },
+        "DSP48E1_ALUMODE0INV": {
+          "available": 2020,
+          "used": 0
+        },
+        "DSP48E1_ALUMODE1INV": {
+          "available": 2020,
+          "used": 0
+        },
+        "DSP48E1_ALUMODE2INV": {
+          "available": 2020,
+          "used": 0
+        },
+        "DSP48E1_ALUMODE3INV": {
+          "available": 2020,
+          "used": 0
+        },
+        "DSP48E1_CARRYININV": {
+          "available": 2020,
+          "used": 0
+        },
+        "DSP48E1_CLKINV": {
+          "available": 2020,
+          "used": 0
+        },
+        "DSP48E1_DSP48E1": {
+          "available": 2020,
+          "used": 144
+        },
+        "DSP48E1_INMODE0INV": {
+          "available": 2020,
+          "used": 0
+        },
+        "DSP48E1_INMODE1INV": {
+          "available": 2020,
+          "used": 0
+        },
+        "DSP48E1_INMODE2INV": {
+          "available": 2020,
+          "used": 0
+        },
+        "DSP48E1_INMODE3INV": {
+          "available": 2020,
+          "used": 0
+        },
+        "DSP48E1_INMODE4INV": {
+          "available": 2020,
+          "used": 0
+        },
+        "DSP48E1_OPMODE0INV": {
+          "available": 2020,
+          "used": 0
+        },
+        "DSP48E1_OPMODE1INV": {
+          "available": 2020,
+          "used": 0
+        },
+        "DSP48E1_OPMODE2INV": {
+          "available": 2020,
+          "used": 0
+        },
+        "DSP48E1_OPMODE3INV": {
+          "available": 2020,
+          "used": 0
+        },
+        "DSP48E1_OPMODE4INV": {
+          "available": 2020,
+          "used": 0
+        },
+        "DSP48E1_OPMODE5INV": {
+          "available": 2020,
+          "used": 0
+        },
+        "DSP48E1_OPMODE6INV": {
+          "available": 2020,
+          "used": 0
+        },
+        "EFUSE_USR_EFUSE_USR": {
+          "available": 1,
+          "used": 0
+        },
+        "FIFO18E1_FIFO18E1": {
+          "available": 755,
+          "used": 0
+        },
+        "FIFO18E1_RDCLKINV": {
+          "available": 755,
+          "used": 0
+        },
+        "FIFO18E1_RDENINV": {
+          "available": 755,
+          "used": 0
+        },
+        "FIFO18E1_RDRCLKINV": {
+          "available": 755,
+          "used": 0
+        },
+        "FIFO18E1_RSTINV": {
+          "available": 755,
+          "used": 0
+        },
+        "FIFO18E1_RSTREGINV": {
+          "available": 755,
+          "used": 0
+        },
+        "FIFO18E1_WRCLKINV": {
+          "available": 755,
+          "used": 0
+        },
+        "FIFO18E1_WRENINV": {
+          "available": 755,
+          "used": 0
+        },
+        "FRAME_ECC_FRAME_ECC": {
+          "available": 1,
+          "used": 0
+        },
+        "HARD0": {
+          "available": 2568,
+          "used": 0
+        },
+        "ICAP_ICAP": {
+          "available": 2,
+          "used": 0
+        },
+        "IDELAYCTRL_IDELAYCTRL": {
+          "available": 8,
+          "used": 0
+        },
+        "IDELAYE2_CINV": {
+          "available": 250,
+          "used": 0
+        },
+        "IDELAYE2_DATAININV": {
+          "available": 250,
+          "used": 0
+        },
+        "IDELAYE2_IDATAININV": {
+          "available": 250,
+          "used": 0
+        },
+        "IDELAYE2_IDELAYE2": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE2_CE1USED": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE2_CLKBINV": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE2_CLKINV": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE2_D2OBYP_SEL": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE2_D2OFFBYP_SEL": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE2_DINV": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE2_IDELMUX": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE2_IFF": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE2_IFFDELMUX": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE2_IFFMUX": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE2_IMUX": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE2_REVUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE2_SRUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE3_CE1USED": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE3_CLKBINV": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE3_CLKINV": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE3_D2OBYP_SEL": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE3_D2OFFBYP_SEL": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE3_DINV": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE3_IDELMUXE3": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE3_IFF": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE3_IFFDELMUXE3": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE3_IFFMUX": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE3_IMUX": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE3_REVUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE3_SRUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE3_ZHOLD_DELAY": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE3_ZHOLD_FABRIC_INV": {
+          "available": 250,
+          "used": 0
+        },
+        "ILOGICE3_ZHOLD_IFF_INV": {
+          "available": 250,
+          "used": 0
+        },
+        "INVERTER": {
+          "available": 192,
+          "used": 0
+        },
+        "IOB18M_DCITERMDISABLE_SEL": {
+          "available": 72,
+          "used": 0
+        },
+        "IOB18M_DIFFI_INUSED": {
+          "available": 72,
+          "used": 0
+        },
+        "IOB18M_DIFFO_OUTUSED": {
+          "available": 72,
+          "used": 0
+        },
+        "IOB18M_IBUFDISABLE_SEL": {
+          "available": 72,
+          "used": 0
+        },
+        "IOB18M_INBUF_DCIEN": {
+          "available": 72,
+          "used": 0
+        },
+        "IOB18M_IUSED": {
+          "available": 72,
+          "used": 0
+        },
+        "IOB18M_OUSED": {
+          "available": 72,
+          "used": 0
+        },
+        "IOB18M_OUTBUF_DCIEN": {
+          "available": 72,
+          "used": 0
+        },
+        "IOB18M_O_OUTUSED": {
+          "available": 72,
+          "used": 0
+        },
+        "IOB18M_TERM_OVERRIDE": {
+          "available": 72,
+          "used": 0
+        },
+        "IOB18M_TUSED": {
+          "available": 72,
+          "used": 0
+        },
+        "IOB18M_T_OUTUSED": {
+          "available": 72,
+          "used": 0
+        },
+        "IOB18S_DCITERMDISABLE_SEL": {
+          "available": 72,
+          "used": 0
+        },
+        "IOB18S_DIFFI_INUSED": {
+          "available": 72,
+          "used": 0
+        },
+        "IOB18S_DIFFO_INUSED": {
+          "available": 72,
+          "used": 0
+        },
+        "IOB18S_IBUFDISABLE_SEL": {
+          "available": 72,
+          "used": 0
+        },
+        "IOB18S_INBUF_DCIEN": {
+          "available": 72,
+          "used": 0
+        },
+        "IOB18S_IUSED": {
+          "available": 72,
+          "used": 0
+        },
+        "IOB18S_OINMUX": {
+          "available": 72,
+          "used": 0
+        },
+        "IOB18S_OUTBUF_DCIEN": {
+          "available": 72,
+          "used": 0
+        },
+        "IOB18S_OUTMUX": {
+          "available": 72,
+          "used": 0
+        },
+        "IOB18S_TERM_OVERRIDE": {
+          "available": 72,
+          "used": 0
+        },
+        "IOB18S_TINMUX": {
+          "available": 72,
+          "used": 0
+        },
+        "IOB18_DCITERMDISABLE_SEL": {
+          "available": 150,
+          "used": 0
+        },
+        "IOB18_DIFFI_INUSED": {
+          "available": 150,
+          "used": 0
+        },
+        "IOB18_IBUFDISABLE_SEL": {
+          "available": 150,
+          "used": 0
+        },
+        "IOB18_INBUF_DCIEN": {
+          "available": 150,
+          "used": 1
+        },
+        "IOB18_IUSED": {
+          "available": 150,
+          "used": 0
+        },
+        "IOB18_OUSED": {
+          "available": 150,
+          "used": 0
+        },
+        "IOB18_OUTBUF_DCIEN": {
+          "available": 150,
+          "used": 1
+        },
+        "IOB18_TERM_OVERRIDE": {
+          "available": 150,
+          "used": 0
+        },
+        "IOB18_TUSED": {
+          "available": 150,
+          "used": 0
+        },
+        "IOB33M_DIFFI_INUSED": {
+          "available": 120,
+          "used": 0
+        },
+        "IOB33M_DIFFO_OUTUSED": {
+          "available": 120,
+          "used": 0
+        },
+        "IOB33M_IBUFDISABLE_SEL": {
+          "available": 120,
+          "used": 0
+        },
+        "IOB33M_INBUF_EN": {
+          "available": 120,
+          "used": 0
+        },
+        "IOB33M_INTERMDISABLE_SEL": {
+          "available": 120,
+          "used": 0
+        },
+        "IOB33M_IUSED": {
+          "available": 120,
+          "used": 0
+        },
+        "IOB33M_OUSED": {
+          "available": 120,
+          "used": 0
+        },
+        "IOB33M_OUTBUF": {
+          "available": 120,
+          "used": 0
+        },
+        "IOB33M_O_OUTUSED": {
+          "available": 120,
+          "used": 0
+        },
+        "IOB33M_TERM_OVERRIDE": {
+          "available": 120,
+          "used": 0
+        },
+        "IOB33M_TUSED": {
+          "available": 120,
+          "used": 0
+        },
+        "IOB33M_T_OUTUSED": {
+          "available": 120,
+          "used": 0
+        },
+        "IOB33S_DIFFI_INUSED": {
+          "available": 120,
+          "used": 0
+        },
+        "IOB33S_DIFFO_INUSED": {
+          "available": 120,
+          "used": 0
+        },
+        "IOB33S_IBUFDISABLE_SEL": {
+          "available": 120,
+          "used": 0
+        },
+        "IOB33S_INBUF_EN": {
+          "available": 120,
+          "used": 0
+        },
+        "IOB33S_INTERMDISABLE_SEL": {
+          "available": 120,
+          "used": 0
+        },
+        "IOB33S_IUSED": {
+          "available": 120,
+          "used": 0
+        },
+        "IOB33S_OINMUX": {
+          "available": 120,
+          "used": 0
+        },
+        "IOB33S_OUTBUF": {
+          "available": 120,
+          "used": 0
+        },
+        "IOB33S_OUTMUX": {
+          "available": 120,
+          "used": 0
+        },
+        "IOB33S_TERM_OVERRIDE": {
+          "available": 120,
+          "used": 0
+        },
+        "IOB33S_TINMUX": {
+          "available": 120,
+          "used": 0
+        },
+        "IOB33_DIFFI_INUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "IOB33_IBUFDISABLE_SEL": {
+          "available": 250,
+          "used": 0
+        },
+        "IOB33_INBUF_EN": {
+          "available": 250,
+          "used": 0
+        },
+        "IOB33_INTERMDISABLE_SEL": {
+          "available": 250,
+          "used": 0
+        },
+        "IOB33_IUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "IOB33_OUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "IOB33_OUTBUF": {
+          "available": 250,
+          "used": 0
+        },
+        "IOB33_TERM_OVERRIDE": {
+          "available": 250,
+          "used": 0
+        },
+        "IOB33_TUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "ISERDESE2_CLKBINV": {
+          "available": 250,
+          "used": 0
+        },
+        "ISERDESE2_CLKDIVINV": {
+          "available": 250,
+          "used": 0
+        },
+        "ISERDESE2_CLKDIVPINV": {
+          "available": 250,
+          "used": 0
+        },
+        "ISERDESE2_CLKINV": {
+          "available": 250,
+          "used": 0
+        },
+        "ISERDESE2_DINV": {
+          "available": 250,
+          "used": 0
+        },
+        "ISERDESE2_ISERDESE2": {
+          "available": 250,
+          "used": 0
+        },
+        "ISERDESE2_OCLKBINV": {
+          "available": 250,
+          "used": 0
+        },
+        "ISERDESE2_OCLKINV": {
+          "available": 250,
+          "used": 0
+        },
+        "MMCME2_ADV_CLKINSELINV": {
+          "available": 8,
+          "used": 0
+        },
+        "MMCME2_ADV_MMCME2_ADV": {
+          "available": 8,
+          "used": 0
+        },
+        "MMCME2_ADV_PSENINV": {
+          "available": 8,
+          "used": 0
+        },
+        "MMCME2_ADV_PSINCDECINV": {
+          "available": 8,
+          "used": 0
+        },
+        "MMCME2_ADV_PWRDWNINV": {
+          "available": 8,
+          "used": 0
+        },
+        "MMCME2_ADV_RSTINV": {
+          "available": 8,
+          "used": 0
+        },
+        "NULLMUX": {
+          "available": 784,
+          "used": 0
+        },
+        "OLOGICE2_CLKINV": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE2_D1INV": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE2_D2INV": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE2_MISR": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE2_O1USED": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE2_OCEUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE2_OFBUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE2_OMUX": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE2_OQUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE2_OREVUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE2_OSRUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE2_OUTFF": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE2_T1INV": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE2_T1USED": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE2_T2INV": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE2_TCEUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE2_TFBUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE2_TFF": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE2_TMUX": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE2_TQUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE2_TREVUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE2_TSRUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE3_CLKINV": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE3_D1INV": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE3_D2INV": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE3_MISR": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE3_O1USED": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE3_OCEUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE3_OFBUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE3_OMUX": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE3_OQUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE3_OREVUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE3_OSRUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE3_OUTFF": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE3_T1INV": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE3_T1USED": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE3_T2INV": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE3_TCEUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE3_TFBUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE3_TFF": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE3_TMUX": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE3_TQUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE3_TREVUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "OLOGICE3_TSRUSED": {
+          "available": 250,
+          "used": 0
+        },
+        "OSERDESE2_CLKBINV": {
+          "available": 250,
+          "used": 0
+        },
+        "OSERDESE2_CLKDIVBINV": {
+          "available": 250,
+          "used": 0
+        },
+        "OSERDESE2_CLKDIVFBINV": {
+          "available": 250,
+          "used": 0
+        },
+        "OSERDESE2_CLKDIVFINV": {
+          "available": 250,
+          "used": 0
+        },
+        "OSERDESE2_CLKDIVINV": {
+          "available": 250,
+          "used": 0
+        },
+        "OSERDESE2_CLKINV": {
+          "available": 250,
+          "used": 0
+        },
+        "OSERDESE2_D1INV": {
+          "available": 250,
+          "used": 0
+        },
+        "OSERDESE2_D2INV": {
+          "available": 250,
+          "used": 0
+        },
+        "OSERDESE2_D3INV": {
+          "available": 250,
+          "used": 0
+        },
+        "OSERDESE2_D4INV": {
+          "available": 250,
+          "used": 0
+        },
+        "OSERDESE2_D5INV": {
+          "available": 250,
+          "used": 0
+        },
+        "OSERDESE2_D6INV": {
+          "available": 250,
+          "used": 0
+        },
+        "OSERDESE2_D7INV": {
+          "available": 250,
+          "used": 0
+        },
+        "OSERDESE2_D8INV": {
+          "available": 250,
+          "used": 0
+        },
+        "OSERDESE2_OSERDESE2": {
+          "available": 250,
+          "used": 0
+        },
+        "OSERDESE2_T1INV": {
+          "available": 250,
+          "used": 0
+        },
+        "OSERDESE2_T2INV": {
+          "available": 250,
+          "used": 0
+        },
+        "OSERDESE2_T3INV": {
+          "available": 250,
+          "used": 0
+        },
+        "OSERDESE2_T4INV": {
+          "available": 250,
+          "used": 0
+        },
+        "PAD": {
+          "available": 784,
+          "used": 2
+        },
+        "PLLE2_ADV_CLKINSELINV": {
+          "available": 8,
+          "used": 0
+        },
+        "PLLE2_ADV_PLLE2_ADV": {
+          "available": 8,
+          "used": 0
+        },
+        "PLLE2_ADV_PWRDWNINV": {
+          "available": 8,
+          "used": 0
+        },
+        "PLLE2_ADV_RSTINV": {
+          "available": 8,
+          "used": 0
+        },
+        "PS7_PS7": {
+          "available": 1,
+          "used": 0
+        },
+        "PSEUDO_GND": {
+          "available": 128845,
+          "used": 1
+        },
+        "PSEUDO_VCC": {
+          "available": 128845,
+          "used": 1
+        },
+        "PULL_OR_KEEP1": {
+          "available": 784,
+          "used": 0
+        },
+        "RAMB18E1_CLKARDCLKINV": {
+          "available": 1510,
+          "used": 0
+        },
+        "RAMB18E1_CLKBWRCLKINV": {
+          "available": 1510,
+          "used": 0
+        },
+        "RAMB18E1_ENARDENINV": {
+          "available": 1510,
+          "used": 0
+        },
+        "RAMB18E1_ENBWRENINV": {
+          "available": 1510,
+          "used": 0
+        },
+        "RAMB18E1_RAMB18E1": {
+          "available": 1510,
+          "used": 90
+        },
+        "RAMB18E1_REGCLKARDRCLKINV": {
+          "available": 1510,
+          "used": 0
+        },
+        "RAMB18E1_REGCLKBINV": {
+          "available": 1510,
+          "used": 0
+        },
+        "RAMB18E1_RSTRAMARSTRAMINV": {
+          "available": 1510,
+          "used": 0
+        },
+        "RAMB18E1_RSTRAMBINV": {
+          "available": 1510,
+          "used": 0
+        },
+        "RAMB18E1_RSTREGARSTREGINV": {
+          "available": 1510,
+          "used": 0
+        },
+        "RAMB18E1_RSTREGBINV": {
+          "available": 1510,
+          "used": 0
+        },
+        "RAMB36E1_CLKARDCLKLINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMB36E1_CLKARDCLKUINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMB36E1_CLKBWRCLKLINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMB36E1_CLKBWRCLKUINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMB36E1_ENARDENLINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMB36E1_ENARDENUINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMB36E1_ENBWRENLINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMB36E1_ENBWRENUINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMB36E1_RAMB36E1": {
+          "available": 755,
+          "used": 22
+        },
+        "RAMB36E1_REGCLKARDRCLKLINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMB36E1_REGCLKARDRCLKUINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMB36E1_REGCLKBLINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMB36E1_REGCLKBUINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMB36E1_RSTRAMARSTRAMLINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMB36E1_RSTRAMARSTRAMUINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMB36E1_RSTRAMBLINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMB36E1_RSTRAMBUINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMB36E1_RSTREGARSTREGLINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMB36E1_RSTREGARSTREGUINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMB36E1_RSTREGBLINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMB36E1_RSTREGBUINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMBFIFO36E1_CLKARDCLKLINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMBFIFO36E1_CLKARDCLKUINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMBFIFO36E1_CLKBWRCLKLINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMBFIFO36E1_CLKBWRCLKUINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMBFIFO36E1_ENARDENLINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMBFIFO36E1_ENARDENUINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMBFIFO36E1_ENBWRENLINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMBFIFO36E1_ENBWRENUINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMBFIFO36E1_RAMBFIFO36E1": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMBFIFO36E1_REGCLKARDRCLKLINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMBFIFO36E1_REGCLKARDRCLKUINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMBFIFO36E1_REGCLKBLINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMBFIFO36E1_REGCLKBUINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMBFIFO36E1_RSTRAMARSTRAMLRSTINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMBFIFO36E1_RSTRAMARSTRAMUINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMBFIFO36E1_RSTRAMBLINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMBFIFO36E1_RSTRAMBUINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMBFIFO36E1_RSTREGARSTREGLINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMBFIFO36E1_RSTREGARSTREGUINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMBFIFO36E1_RSTREGBLINV": {
+          "available": 755,
+          "used": 0
+        },
+        "RAMBFIFO36E1_RSTREGBUINV": {
+          "available": 755,
+          "used": 0
+        },
+        "SELMUX2_1": {
+          "available": 209050,
+          "used": 97
+        },
+        "SLICE_FFX": {
+          "available": 554800,
+          "used": 79904
+        },
+        "SLICE_LUTX": {
+          "available": 554800,
+          "used": 141566
+        },
+        "STARTUP_STARTUP": {
+          "available": 1,
+          "used": 0
+        },
+        "USR_ACCESS_USR_ACCESS": {
+          "available": 1,
+          "used": 0
+        }
+      },
+      "warnings": {
+        "Unconnected port ACOUT": {
+          "count": 1440,
+          "example": "Warning: Port ACOUT22 connected to net $flatten\\decoder.$abc$4630337$aiger4630336$127785 on cell $flatten\\decoder.\\application.\\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\\__phi_halo_cell__SharedService_0__3_2_2_3_next_inst.\\__phi_halo_cell__SharedExecutor_0_next_inst.$mul$${REPO}/_build/d3-physical-timing/rtl/phi_decoder_profile.v:5558$7222.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.sliceA.last.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mul_sliceB_last has no connections"
+        },
+        "Unconnected port BCOUT": {
+          "count": 2592,
+          "example": "Warning: Port BCOUT0 connected to net $flatten\\decoder.$abc$4630337$aiger4630336$126959 on cell $flatten\\decoder.\\application.\\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\\__phi_halo_cell__SharedService_0__3_2_2_3_next_inst.\\__phi_halo_cell__SharedExecutor_0_next_inst.$mul$${REPO}/_build/d3-physical-timing/rtl/phi_decoder_profile.v:5558$7222.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.sliceA.last.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.sliceB[0].mul has no connections"
+        },
+        "Unconnected port CARRYCASCOUT": {
+          "count": 144,
+          "example": "Warning: Port CARRYCASCOUT connected to net $flatten\\decoder.$abc$4630337$aiger4630336$126977 on cell $flatten\\decoder.\\application.\\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\\__phi_halo_cell__SharedService_0__3_2_2_3_next_inst.\\__phi_halo_cell__SharedExecutor_0_next_inst.$mul$${REPO}/_build/d3-physical-timing/rtl/phi_decoder_profile.v:5558$7222.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.sliceA.last.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.sliceB[0].mul has no connections"
+        },
+        "Unconnected port PCOUT": {
+          "count": 2304,
+          "example": "Warning: Port PCOUT22 connected to net $flatten\\decoder.$abc$4630337$aiger4630336$127890 on cell $flatten\\decoder.\\application.\\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\\__phi_halo_cell__SharedService_0__3_2_2_3_next_inst.\\__phi_halo_cell__SharedExecutor_0_next_inst.$mul$${REPO}/_build/d3-physical-timing/rtl/phi_decoder_profile.v:5558$7222.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.sliceA.last.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mul_sliceB_last has no connections"
+        }
+      }
+    }
+  ],
+  "schema": 1,
+  "statistics": {
+    "best_mhz": 14.11,
+    "mean_mhz": 13.709999999999999,
+    "samples": 3,
+    "variance_mhz_squared": 0.19206666666666666,
+    "worst_mhz": 13.1
+  },
+  "target_mhz": 100,
+  "timing_model": "Partial-path estimate from pinned openXC7: BRAM and registered DSP timing are excluded; flip-flop setup/hold/clock-to-Q use fixed 0.1 ns values; shared zynq7 tables do not select a speed grade. This is not a design-wide maximum clock or vendor signoff.",
+  "tool_packages": {
+    "openxc7": {
+      "build-repo": "FPGAwars/tools-openxc7",
+      "build-time": "2026-08-20 15:21:52 UTC",
+      "build-workflow": "build-pre-release",
+      "commit": "4643d2ecfd6569bad2ae7963b17d90687363af6e",
+      "description": "openXC7 toolchain for Xilinx 7-series FPGAs",
+      "file-name": "apio-openxc7-darwin-arm64-20260820.tgz",
+      "nextpnr-xilinx-revision": "68aeeb39f92e39bfb239c7e4a44dd93451fc1889",
+      "package-name": "openxc7",
+      "release-tag": "2026-08-20",
+      "target-platform": "darwin-arm64",
+      "workflow-run-id": "32385069237",
+      "workflow-run-number": "34",
+      "yosys-release-tag": "2026-03-24"
+    },
+    "oss-cad-suite": {
+      "build-repo": "FPGAwars/tools-oss-cad-suite",
+      "build-time": "2026-08-19 01:22:42 UTC",
+      "build-workflow": "build-pre-release",
+      "commit": "b246ed025634562f953daccef0c9d2f7995d30c3",
+      "description": "Yosys tools for Apio",
+      "file-name": "apio-oss-cad-suite-darwin-arm64-20260819.tgz",
+      "package-name": "oss-cad-suite",
+      "release-tag": "2026-08-19",
+      "target-platform": "darwin-arm64",
+      "workflow-run-id": "32204692242",
+      "workflow-run-number": "231",
+      "yosys-release-tag": "2026-03-24"
+    }
+  },
+  "validation": {
+    "benchmark_tests": {
+      "failures": 0,
+      "tests": 8
+    },
+    "ci": "https://github.com/ecpeterson/erl_hls/actions/runs/34672726878",
+    "eunit": {
+      "failures": 0,
+      "tests": 698
+    },
+    "harness": {
+      "coordinates_per_plane": 9,
+      "correction_records": {
+        "x": 63,
+        "z": 64
+      },
+      "cycles_per_step": 175.958333,
+      "last_step": 32,
+      "stalled_output_cycles": {
+        "x": 103,
+        "z": 124
+      },
+      "warmup_step": 8
+    },
+    "public_debug": {
+      "blocked_queries": 98,
+      "channels": 254,
+      "fifo_occupancies": 88,
+      "full_fifo_seeds": 10,
+      "output_equivalence_cycles": 3200,
+      "recovered_queries": 66,
+      "recovered_reobserved_blocked_channels": 0,
+      "reobserved_blocked_channels": 12,
+      "sink": "x_decoder_event",
+      "sink_channel": 27
+    }
+  },
+  "validation_artifacts": {
+    "debug/blocked.json": "429f2fd01870e0fb4ec6b127eec3c7e9c7c2ae37129ce1029b8a763143cea7b5",
+    "debug/manifest.json": "79b6ce7ca06cffd98298a2fc164b9041fa4ae2a003e9de9a5f40743269574bed",
+    "debug/recovered.json": "a0f223e90595baeb92a24cd81e645827fa4d1824d3d13d05c659949fa02f5305",
+    "simulate.console": "b4e87f5936d399f707543ab2ddf9728cdf40de205e2b31bfc89a8f83b45b79ed",
+    "timing-tests-final.log": "136db4442bd40c7860859c6cc0d9ea9d09984651cad601100fa6ee6d19253a04"
+  },
+  "yosys_version": "Yosys 0.63+173 (git sha1 66306a8ca-dirty, aarch64-apple-darwin23.5-clang++ 18.1.8 -fPIC -O3)"
+}

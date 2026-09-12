@@ -4,6 +4,8 @@ This benchmark maps and routes the decoder-only D3 workload on `xc7z100ffg900-2`
 
 The selected fabric has room for a large decoder experiment, and the installed Project X-Ray data contains its exact package. The two-pin harness assigns an MRCC clock input and an activity output within bank 33. These are compile-harness constraints, not a board pinout. The runner produces no bitstream.
 
+The [2026-09-12 D3 baseline](results/d3-2026-09-12.md) records the measured seed distribution, resource counts, critical-path findings, and validation results.
+
 ## Measurement limits
 
 **The reported MHz is a partial-path estimate, not a safe clock for the complete decoder.** The pinned nextpnr implementation has these timing-model limitations:
