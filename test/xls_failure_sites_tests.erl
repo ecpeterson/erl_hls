@@ -50,3 +50,39 @@ beam_reports_the_same_selected_origins_test() ->
 beam_kind({case_clause, _}) -> case_clause;
 beam_kind({badmatch, _}) -> match_failure;
 beam_kind(if_clause) -> if_clause.
+
+unused_sites_are_not_declared_test() ->
+    {ok, Forms} = xls_parse:parse_file("test/hls_actor_debug_fixture.erl"),
+    {Prepared, Sites} = xls_failure_sites:prepare(Forms),
+    [{clause, Anno, _, _, _}] = xls_parse:find_function(Prepared, included_inner, 1),
+    Name = iolist_to_binary(xls_failure_sites:at(function_clause, Anno)),
+    %% A longer identifier must not accidentally keep this site's declaration.
+    Other = [Name, "_suffix"],
+    ?assertEqual(iolist_to_binary(Other),
+        iolist_to_binary(xls_failure_sites:emit(Sites, Other))),
+    #{code := Code} = hd([S || S = #{kind := function_clause,
+        file := <<"hls_actor_debug_helpers.hrl">>, line := 6} <- Sites]),
+    Emitted = iolist_to_binary(xls_failure_sites:emit(Sites, Name)),
+    Expected = iolist_to_binary(["const ", Name, " = u16:", integer_to_list(Code), ";"]),
+    ?assertMatch({_, _}, binary:match(Emitted, Expected)).
+
+generated_failure_declarations_test_() ->
+    [{File, fun() ->
+        Source = iolist_to_binary(xls_parse:to_xls(File)),
+        Pattern = <<"XLS_FAILURE_SITE_[A-Z_]+_[0-9A-F]{8}_L[0-9]+">>,
+        Declarations = captures(Source, <<"^const (", Pattern/binary, ") =">>, [multiline]),
+        Body = re:replace(Source, <<"^const ", Pattern/binary, " =[^\\n]*\\n">>,
+            <<>>, [global, multiline, {return, binary}]),
+        References = captures(Body, <<"\\b(", Pattern/binary, ")\\b">>, []),
+        ?assertEqual(lists:usort(Declarations), lists:usort(References))
+    end} || File <- ["src/examples/regsvc/regsvc.erl",
+        "src/examples/phi_decoder/phenom_data_cell.erl",
+        "src/examples/phi_decoder/phenom_syndrome_cell.erl",
+        "src/examples/phi_decoder/phi_halo_cell.erl",
+        "test/hls_actor_debug_fixture.erl"]].
+
+captures(Source, Pattern, Options) ->
+    case re:run(Source, Pattern, [global, {capture, [1], binary} | Options]) of
+        {match, Matches} -> [Name || [Name] <- Matches];
+        nomatch -> []
+    end.

@@ -1,6 +1,6 @@
 -module(xls_failure_sites).
 -moduledoc "Compact failure codes and source maps shared by lowering and debug bindings.".
--export([prepare/1, at/2, emit/1, generic/0, validate/1]).
+-export([prepare/1, at/2, emit/2, generic/0, validate/1]).
 
 %% Codes 1..15 describe failures without a source location; zero is success.
 %% The low four bits retain the reason; the upper twelve identify a source
@@ -72,10 +72,22 @@ constant({File, Line, Kind}) ->
     ["XLS_FAILURE_SITE_", string:uppercase(atom_to_list(Kind)), "_", Hash,
         "_L", integer_to_list(Line)].
 
-emit(Sites) ->
-    [["const ", constant({binary_to_list(File), Line, Kind}), " = u16:",
+%% The source inventory also covers CPU-only functions, irrefutable patterns,
+%% and exhaustive branches. Only declare symbols surviving callback lowering;
+%% keep their allocated codes unchanged, independent of renderer simplifications.
+emit(Sites, Body) ->
+    Used = case re:run(iolist_to_binary(Body),
+            "\\bXLS_FAILURE_SITE_[A-Z_]+_[0-9A-F]{8}_L[0-9]+\\b",
+            [global, {capture, first, binary}]) of
+        {match, Matches} -> maps:from_keys([Name || [Name] <- Matches], true);
+        nomatch -> #{}
+    end,
+    Declarations = [["const ", Name, " = u16:",
         integer_to_list(Code), "; // ", binary_to_list(File), ":L", integer_to_list(Line), "\n"]
-        || #{code := Code, file := File, line := Line, kind := Kind} <- Sites].
+        || #{code := Code, file := File, line := Line, kind := Kind} <- Sites,
+           Name <- [constant({binary_to_list(File), Line, Kind})],
+           is_map_key(iolist_to_binary(Name), Used)],
+    [Declarations, Body].
 
 relative(Base, File) -> relative_parts(filename:split(Base), filename:split(File)).
 relative_parts([Same | Base], [Same | File]) -> relative_parts(Base, File);

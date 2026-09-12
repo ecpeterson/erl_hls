@@ -45,206 +45,18 @@ pub enum Directive : u2 {
   FAIL = u2:2,
 }
 
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_8D795B60_L120 = u16:17; // phenom_syndrome_cell.erl:L120
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_8D795B60_L129 = u16:33; // phenom_syndrome_cell.erl:L129
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L129 = u16:50; // phenom_syndrome_cell.erl:L129
-const XLS_FAILURE_SITE_CASE_CLAUSE_8D795B60_L130 = u16:68; // phenom_syndrome_cell.erl:L130
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_8D795B60_L131 = u16:81; // phenom_syndrome_cell.erl:L131
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L131 = u16:98; // phenom_syndrome_cell.erl:L131
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L132 = u16:114; // phenom_syndrome_cell.erl:L132
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_8D795B60_L137 = u16:129; // phenom_syndrome_cell.erl:L137
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L137 = u16:146; // phenom_syndrome_cell.erl:L137
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_8D795B60_L143 = u16:161; // phenom_syndrome_cell.erl:L143
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L143 = u16:178; // phenom_syndrome_cell.erl:L143
-const XLS_FAILURE_SITE_CASE_CLAUSE_8D795B60_L144 = u16:196; // phenom_syndrome_cell.erl:L144
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_8D795B60_L145 = u16:209; // phenom_syndrome_cell.erl:L145
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L145 = u16:226; // phenom_syndrome_cell.erl:L145
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_8D795B60_L146 = u16:241; // phenom_syndrome_cell.erl:L146
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L146 = u16:258; // phenom_syndrome_cell.erl:L146
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_8D795B60_L150 = u16:273; // phenom_syndrome_cell.erl:L150
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L150 = u16:290; // phenom_syndrome_cell.erl:L150
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_8D795B60_L155 = u16:305; // phenom_syndrome_cell.erl:L155
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L155 = u16:322; // phenom_syndrome_cell.erl:L155
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_8D795B60_L166 = u16:337; // phenom_syndrome_cell.erl:L166
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L166 = u16:354; // phenom_syndrome_cell.erl:L166
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_8D795B60_L177 = u16:369; // phenom_syndrome_cell.erl:L177
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L177 = u16:386; // phenom_syndrome_cell.erl:L177
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_8D795B60_L182 = u16:401; // phenom_syndrome_cell.erl:L182
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L182 = u16:418; // phenom_syndrome_cell.erl:L182
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_8D795B60_L187 = u16:433; // phenom_syndrome_cell.erl:L187
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L187 = u16:450; // phenom_syndrome_cell.erl:L187
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_8D795B60_L192 = u16:465; // phenom_syndrome_cell.erl:L192
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L192 = u16:482; // phenom_syndrome_cell.erl:L192
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_8D795B60_L195 = u16:497; // phenom_syndrome_cell.erl:L195
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L195 = u16:514; // phenom_syndrome_cell.erl:L195
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_8D795B60_L200 = u16:529; // phenom_syndrome_cell.erl:L200
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L200 = u16:546; // phenom_syndrome_cell.erl:L200
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L202 = u16:562; // phenom_syndrome_cell.erl:L202
-const XLS_FAILURE_SITE_CASE_CLAUSE_8D795B60_L203 = u16:580; // phenom_syndrome_cell.erl:L203
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L203 = u16:594; // phenom_syndrome_cell.erl:L203
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_8D795B60_L204 = u16:609; // phenom_syndrome_cell.erl:L204
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L204 = u16:626; // phenom_syndrome_cell.erl:L204
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_8D795B60_L205 = u16:641; // phenom_syndrome_cell.erl:L205
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L205 = u16:658; // phenom_syndrome_cell.erl:L205
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_8D795B60_L215 = u16:673; // phenom_syndrome_cell.erl:L215
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L215 = u16:690; // phenom_syndrome_cell.erl:L215
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_8D795B60_L223 = u16:705; // phenom_syndrome_cell.erl:L223
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L224 = u16:726; // phenom_syndrome_cell.erl:L224
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_8D795B60_L232 = u16:737; // phenom_syndrome_cell.erl:L232
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L232 = u16:754; // phenom_syndrome_cell.erl:L232
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_8D795B60_L234 = u16:769; // phenom_syndrome_cell.erl:L234
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L235 = u16:786; // phenom_syndrome_cell.erl:L235
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L236 = u16:802; // phenom_syndrome_cell.erl:L236
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L237 = u16:818; // phenom_syndrome_cell.erl:L237
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L242 = u16:834; // phenom_syndrome_cell.erl:L242
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L253 = u16:854; // phenom_syndrome_cell.erl:L253
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_8D795B60_L254 = u16:865; // phenom_syndrome_cell.erl:L254
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L254 = u16:882; // phenom_syndrome_cell.erl:L254
 const XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L255 = u16:902; // phenom_syndrome_cell.erl:L255
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_8D795B60_L256 = u16:913; // phenom_syndrome_cell.erl:L256
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L257 = u16:930; // phenom_syndrome_cell.erl:L257
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L258 = u16:946; // phenom_syndrome_cell.erl:L258
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L259 = u16:962; // phenom_syndrome_cell.erl:L259
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L261 = u16:982; // phenom_syndrome_cell.erl:L261
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_8D795B60_L262 = u16:993; // phenom_syndrome_cell.erl:L262
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L262 = u16:1010; // phenom_syndrome_cell.erl:L262
 const XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L263 = u16:1030; // phenom_syndrome_cell.erl:L263
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_8D795B60_L264 = u16:1041; // phenom_syndrome_cell.erl:L264
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L264 = u16:1058; // phenom_syndrome_cell.erl:L264
 const XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L265 = u16:1078; // phenom_syndrome_cell.erl:L265
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_8D795B60_L266 = u16:1089; // phenom_syndrome_cell.erl:L266
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L266 = u16:1106; // phenom_syndrome_cell.erl:L266
 const XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L267 = u16:1126; // phenom_syndrome_cell.erl:L267
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_8D795B60_L275 = u16:1137; // phenom_syndrome_cell.erl:L275
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L275 = u16:1154; // phenom_syndrome_cell.erl:L275
-const XLS_FAILURE_SITE_CASE_CLAUSE_8D795B60_L276 = u16:1172; // phenom_syndrome_cell.erl:L276
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L276 = u16:1186; // phenom_syndrome_cell.erl:L276
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_8D795B60_L277 = u16:1201; // phenom_syndrome_cell.erl:L277
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L277 = u16:1218; // phenom_syndrome_cell.erl:L277
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L279 = u16:1238; // phenom_syndrome_cell.erl:L279
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_8D795B60_L286 = u16:1249; // phenom_syndrome_cell.erl:L286
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L286 = u16:1266; // phenom_syndrome_cell.erl:L286
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L288 = u16:1282; // phenom_syndrome_cell.erl:L288
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L289 = u16:1298; // phenom_syndrome_cell.erl:L289
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L297 = u16:1318; // phenom_syndrome_cell.erl:L297
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L298 = u16:1334; // phenom_syndrome_cell.erl:L298
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L299 = u16:1350; // phenom_syndrome_cell.erl:L299
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L300 = u16:1366; // phenom_syndrome_cell.erl:L300
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_8D795B60_L302 = u16:1377; // phenom_syndrome_cell.erl:L302
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L302 = u16:1394; // phenom_syndrome_cell.erl:L302
 const XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L303 = u16:1414; // phenom_syndrome_cell.erl:L303
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_8D795B60_L304 = u16:1425; // phenom_syndrome_cell.erl:L304
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L305 = u16:1442; // phenom_syndrome_cell.erl:L305
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L307 = u16:1458; // phenom_syndrome_cell.erl:L307
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L309 = u16:1474; // phenom_syndrome_cell.erl:L309
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L310 = u16:1490; // phenom_syndrome_cell.erl:L310
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L311 = u16:1506; // phenom_syndrome_cell.erl:L311
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L312 = u16:1522; // phenom_syndrome_cell.erl:L312
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L315 = u16:1542; // phenom_syndrome_cell.erl:L315
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_8D795B60_L319 = u16:1553; // phenom_syndrome_cell.erl:L319
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L319 = u16:1570; // phenom_syndrome_cell.erl:L319
 const XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L320 = u16:1590; // phenom_syndrome_cell.erl:L320
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_8D795B60_L321 = u16:1601; // phenom_syndrome_cell.erl:L321
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L322 = u16:1618; // phenom_syndrome_cell.erl:L322
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L323 = u16:1634; // phenom_syndrome_cell.erl:L323
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L324 = u16:1650; // phenom_syndrome_cell.erl:L324
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L326 = u16:1670; // phenom_syndrome_cell.erl:L326
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_8D795B60_L327 = u16:1681; // phenom_syndrome_cell.erl:L327
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L327 = u16:1698; // phenom_syndrome_cell.erl:L327
 const XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L328 = u16:1718; // phenom_syndrome_cell.erl:L328
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_8D795B60_L329 = u16:1729; // phenom_syndrome_cell.erl:L329
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L330 = u16:1746; // phenom_syndrome_cell.erl:L330
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L331 = u16:1762; // phenom_syndrome_cell.erl:L331
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L332 = u16:1778; // phenom_syndrome_cell.erl:L332
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L333 = u16:1794; // phenom_syndrome_cell.erl:L333
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L334 = u16:1810; // phenom_syndrome_cell.erl:L334
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L335 = u16:1826; // phenom_syndrome_cell.erl:L335
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L336 = u16:1842; // phenom_syndrome_cell.erl:L336
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L337 = u16:1858; // phenom_syndrome_cell.erl:L337
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L338 = u16:1874; // phenom_syndrome_cell.erl:L338
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L346 = u16:1890; // phenom_syndrome_cell.erl:L346
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L347 = u16:1906; // phenom_syndrome_cell.erl:L347
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L348 = u16:1922; // phenom_syndrome_cell.erl:L348
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L349 = u16:1938; // phenom_syndrome_cell.erl:L349
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L350 = u16:1954; // phenom_syndrome_cell.erl:L350
-const XLS_FAILURE_SITE_CASE_CLAUSE_8D795B60_L351 = u16:1972; // phenom_syndrome_cell.erl:L351
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_8D795B60_L352 = u16:1985; // phenom_syndrome_cell.erl:L352
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L352 = u16:2002; // phenom_syndrome_cell.erl:L352
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L353 = u16:2018; // phenom_syndrome_cell.erl:L353
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L358 = u16:2038; // phenom_syndrome_cell.erl:L358
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_8D795B60_L359 = u16:2049; // phenom_syndrome_cell.erl:L359
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L359 = u16:2066; // phenom_syndrome_cell.erl:L359
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L360 = u16:2082; // phenom_syndrome_cell.erl:L360
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L362 = u16:2098; // phenom_syndrome_cell.erl:L362
-const XLS_FAILURE_SITE_CASE_CLAUSE_8D795B60_L364 = u16:2116; // phenom_syndrome_cell.erl:L364
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L364 = u16:2130; // phenom_syndrome_cell.erl:L364
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L365 = u16:2150; // phenom_syndrome_cell.erl:L365
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_8D795B60_L365 = u16:2161; // phenom_syndrome_cell.erl:L365
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L365 = u16:2178; // phenom_syndrome_cell.erl:L365
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_8D795B60_L367 = u16:2193; // phenom_syndrome_cell.erl:L367
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L367 = u16:2210; // phenom_syndrome_cell.erl:L367
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L368 = u16:2226; // phenom_syndrome_cell.erl:L368
-const XLS_FAILURE_SITE_IF_CLAUSE_8D795B60_L369 = u16:2245; // phenom_syndrome_cell.erl:L369
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L369 = u16:2258; // phenom_syndrome_cell.erl:L369
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_8D795B60_L370 = u16:2273; // phenom_syndrome_cell.erl:L370
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_8D795B60_L371 = u16:2289; // phenom_syndrome_cell.erl:L371
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L373 = u16:2310; // phenom_syndrome_cell.erl:L373
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L375 = u16:2322; // phenom_syndrome_cell.erl:L375
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L376 = u16:2338; // phenom_syndrome_cell.erl:L376
-const XLS_FAILURE_SITE_CASE_CLAUSE_8D795B60_L385 = u16:2356; // phenom_syndrome_cell.erl:L385
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_8D795B60_L386 = u16:2369; // phenom_syndrome_cell.erl:L386
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L386 = u16:2386; // phenom_syndrome_cell.erl:L386
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_8D795B60_L387 = u16:2401; // phenom_syndrome_cell.erl:L387
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L387 = u16:2418; // phenom_syndrome_cell.erl:L387
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L390 = u16:2438; // phenom_syndrome_cell.erl:L390
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_8D795B60_L392 = u16:2449; // phenom_syndrome_cell.erl:L392
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L392 = u16:2466; // phenom_syndrome_cell.erl:L392
 const XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L393 = u16:2486; // phenom_syndrome_cell.erl:L393
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_8D795B60_L401 = u16:2497; // phenom_syndrome_cell.erl:L401
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L401 = u16:2514; // phenom_syndrome_cell.erl:L401
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_8D795B60_L403 = u16:2529; // phenom_syndrome_cell.erl:L403
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L403 = u16:2546; // phenom_syndrome_cell.erl:L403
 const XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L404 = u16:2566; // phenom_syndrome_cell.erl:L404
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_8D795B60_L405 = u16:2577; // phenom_syndrome_cell.erl:L405
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L406 = u16:2594; // phenom_syndrome_cell.erl:L406
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L408 = u16:2610; // phenom_syndrome_cell.erl:L408
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L410 = u16:2626; // phenom_syndrome_cell.erl:L410
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L411 = u16:2642; // phenom_syndrome_cell.erl:L411
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L412 = u16:2658; // phenom_syndrome_cell.erl:L412
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L413 = u16:2674; // phenom_syndrome_cell.erl:L413
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L416 = u16:2694; // phenom_syndrome_cell.erl:L416
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_8D795B60_L420 = u16:2705; // phenom_syndrome_cell.erl:L420
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L420 = u16:2722; // phenom_syndrome_cell.erl:L420
 const XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L421 = u16:2742; // phenom_syndrome_cell.erl:L421
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_8D795B60_L422 = u16:2753; // phenom_syndrome_cell.erl:L422
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L423 = u16:2770; // phenom_syndrome_cell.erl:L423
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L424 = u16:2786; // phenom_syndrome_cell.erl:L424
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L425 = u16:2802; // phenom_syndrome_cell.erl:L425
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L427 = u16:2818; // phenom_syndrome_cell.erl:L427
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L430 = u16:2838; // phenom_syndrome_cell.erl:L430
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_8D795B60_L431 = u16:2849; // phenom_syndrome_cell.erl:L431
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L431 = u16:2866; // phenom_syndrome_cell.erl:L431
 const XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L432 = u16:2886; // phenom_syndrome_cell.erl:L432
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_8D795B60_L433 = u16:2897; // phenom_syndrome_cell.erl:L433
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L434 = u16:2914; // phenom_syndrome_cell.erl:L434
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L435 = u16:2930; // phenom_syndrome_cell.erl:L435
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L436 = u16:2946; // phenom_syndrome_cell.erl:L436
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L438 = u16:2966; // phenom_syndrome_cell.erl:L438
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_8D795B60_L439 = u16:2977; // phenom_syndrome_cell.erl:L439
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L439 = u16:2994; // phenom_syndrome_cell.erl:L439
 const XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L440 = u16:3014; // phenom_syndrome_cell.erl:L440
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_8D795B60_L442 = u16:3025; // phenom_syndrome_cell.erl:L442
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L442 = u16:3042; // phenom_syndrome_cell.erl:L442
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_8D795B60_L443 = u16:3057; // phenom_syndrome_cell.erl:L443
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L443 = u16:3074; // phenom_syndrome_cell.erl:L443
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_8D795B60_L444 = u16:3089; // phenom_syndrome_cell.erl:L444
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L444 = u16:3106; // phenom_syndrome_cell.erl:L444
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_8D795B60_L445 = u16:3121; // phenom_syndrome_cell.erl:L445
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L445 = u16:3138; // phenom_syndrome_cell.erl:L445
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_8D795B60_L446 = u16:3153; // phenom_syndrome_cell.erl:L446
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L446 = u16:3170; // phenom_syndrome_cell.erl:L446
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_8D795B60_L448 = u16:3185; // phenom_syndrome_cell.erl:L448
-const XLS_FAILURE_SITE_MATCH_FAILURE_8D795B60_L448 = u16:3202; // phenom_syndrome_cell.erl:L448
 pub struct Phi {
   epoch : u32,
   values : phi_field::Field,
@@ -1170,7 +982,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
             let _16 = (Tag::SYNDROME, _15);
             let Xls_clause_1_Configured_1 = _16;
             let _17 = (Phase::COLLECTING, Xls_clause_1_Configured_1, Directive::CONSUME, bool:0, );
-            let _18 = (_17.0, _17.1, _17.2, _17.3, hls_failure::check(_17.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L253));
+            let _18 = (_17.0, _17.1, _17.2, _17.3, hls_failure::NONE);
             if (bool:false) {
               (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
@@ -1178,45 +990,33 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
             }
           } else {
             let Xls_clause_2_Syndrome_1 = (Tag::SYNDROME, data);
-            if bool:true {
-              let _0 = (Phase::CONFIGURING, Xls_clause_2_Syndrome_1, Directive::FAIL, bool:0, );
-              let _1 = (_0.0, _0.1, _0.2, _0.3, hls_failure::check(_0.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L255));
-              if (bool:false) {
-                (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-              } else {
-                (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-              }
+            let _0 = (Phase::CONFIGURING, Xls_clause_2_Syndrome_1, Directive::FAIL, bool:0, );
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L255);
+            if (bool:false) {
+              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
-              (phase, data, Directive::FAIL, u1:0, XLS_FAILURE_SITE_FUNCTION_CLAUSE_8D795B60_L234)
+              (_1.0, _1.1.1, _1.2, _1.3, _1.4)
             }
           }
         },
         Phase::COLLECTING => {
           let Xls_clause_1_Syndrome_1 = (Tag::SYNDROME, data);
-          if bool:true {
-            let _0 = (Phase::COLLECTING, Xls_clause_1_Syndrome_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, hls_failure::check(_0.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L303));
-            if (bool:false) {
-              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-            } else {
-              (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-            }
+          let _0 = (Phase::COLLECTING, Xls_clause_1_Syndrome_1, Directive::FAIL, bool:0, );
+          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L303);
+          if (bool:false) {
+            (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
           } else {
-            (phase, data, Directive::FAIL, u1:0, XLS_FAILURE_SITE_FUNCTION_CLAUSE_8D795B60_L302)
+            (_1.0, _1.1.1, _1.2, _1.3, _1.4)
           }
         },
         Phase::ANNOUNCING => {
           let Xls_clause_1_Syndrome_1 = (Tag::SYNDROME, data);
-          if bool:true {
-            let _0 = (Phase::ANNOUNCING, Xls_clause_1_Syndrome_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, hls_failure::check(_0.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L404));
-            if (bool:false) {
-              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-            } else {
-              (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-            }
+          let _0 = (Phase::ANNOUNCING, Xls_clause_1_Syndrome_1, Directive::FAIL, bool:0, );
+          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L404);
+          if (bool:false) {
+            (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
           } else {
-            (phase, data, Directive::FAIL, u1:0, XLS_FAILURE_SITE_FUNCTION_CLAUSE_8D795B60_L403)
+            (_1.0, _1.1.1, _1.2, _1.3, _1.4)
           }
         },
         _ => (phase, data, Directive::FAIL, u1:0, hls_failure::INVALID_MESSAGE),
@@ -1230,7 +1030,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
           let Xls_clause_1_Syndrome_1 = (Tag::SYNDROME, data);
           if Xls_clause_1_Step_1 == data.step {
             let _0 = (Phase::CONFIGURING, Xls_clause_1_Syndrome_1, Directive::POSTPONE, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, hls_failure::check(_0.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L261));
+            let _1 = (_0.0, _0.1, _0.2, _0.3, hls_failure::NONE);
             if (bool:false) {
               (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
@@ -1238,16 +1038,12 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
             }
           } else {
             let Xls_clause_2_Syndrome_1 = (Tag::SYNDROME, data);
-            if bool:true {
-              let _0 = (Phase::CONFIGURING, Xls_clause_2_Syndrome_1, Directive::FAIL, bool:0, );
-              let _1 = (_0.0, _0.1, _0.2, _0.3, hls_failure::check(_0.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L263));
-              if (bool:false) {
-                (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-              } else {
-                (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-              }
+            let _0 = (Phase::CONFIGURING, Xls_clause_2_Syndrome_1, Directive::FAIL, bool:0, );
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L263);
+            if (bool:false) {
+              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
-              (phase, data, Directive::FAIL, u1:0, XLS_FAILURE_SITE_FUNCTION_CLAUSE_8D795B60_L256)
+              (_1.0, _1.1.1, _1.2, _1.3, _1.4)
             }
           }
         },
@@ -1256,7 +1052,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
           let Xls_clause_1_Syndrome_1 = (Tag::SYNDROME, data);
           if Xls_clause_1_Step_1 == data.step {
             let _0 = (Phase::COLLECTING, Xls_clause_1_Syndrome_1, Directive::POSTPONE, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, hls_failure::check(_0.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L326));
+            let _1 = (_0.0, _0.1, _0.2, _0.3, hls_failure::NONE);
             if (bool:false) {
               (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
@@ -1264,16 +1060,12 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
             }
           } else {
             let Xls_clause_2_Syndrome_1 = (Tag::SYNDROME, data);
-            if bool:true {
-              let _0 = (Phase::COLLECTING, Xls_clause_2_Syndrome_1, Directive::FAIL, bool:0, );
-              let _1 = (_0.0, _0.1, _0.2, _0.3, hls_failure::check(_0.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L328));
-              if (bool:false) {
-                (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-              } else {
-                (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-              }
+            let _0 = (Phase::COLLECTING, Xls_clause_2_Syndrome_1, Directive::FAIL, bool:0, );
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L328);
+            if (bool:false) {
+              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
-              (phase, data, Directive::FAIL, u1:0, XLS_FAILURE_SITE_FUNCTION_CLAUSE_8D795B60_L321)
+              (_1.0, _1.1.1, _1.2, _1.3, _1.4)
             }
           }
         },
@@ -1288,7 +1080,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
             let _1 = (Tag::SYNDROME, _0);
             let Xls_clause_1_Collecting_1 = _1;
             let _2 = (Phase::COLLECTING, Xls_clause_1_Collecting_1, Directive::CONSUME, bool:0, );
-            let _3 = (_2.0, _2.1, _2.2, _2.3, hls_failure::check(_2.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L430));
+            let _3 = (_2.0, _2.1, _2.2, _2.3, hls_failure::NONE);
             if (bool:false) {
               (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
@@ -1296,16 +1088,12 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
             }
           } else {
             let Xls_clause_2_Syndrome_1 = (Tag::SYNDROME, data);
-            if bool:true {
-              let _0 = (Phase::ANNOUNCING, Xls_clause_2_Syndrome_1, Directive::FAIL, bool:0, );
-              let _1 = (_0.0, _0.1, _0.2, _0.3, hls_failure::check(_0.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L432));
-              if (bool:false) {
-                (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-              } else {
-                (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-              }
+            let _0 = (Phase::ANNOUNCING, Xls_clause_2_Syndrome_1, Directive::FAIL, bool:0, );
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L432);
+            if (bool:false) {
+              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
-              (phase, data, Directive::FAIL, u1:0, XLS_FAILURE_SITE_FUNCTION_CLAUSE_8D795B60_L422)
+              (_1.0, _1.1.1, _1.2, _1.3, _1.4)
             }
           }
         },
@@ -1323,16 +1111,12 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
       match phase {
         Phase::CONFIGURING => {
           let Xls_clause_1_Syndrome_1 = (Tag::SYNDROME, data);
-          if bool:true {
-            let _0 = (Phase::CONFIGURING, Xls_clause_1_Syndrome_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, hls_failure::check(_0.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L265));
-            if (bool:false) {
-              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-            } else {
-              (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-            }
+          let _0 = (Phase::CONFIGURING, Xls_clause_1_Syndrome_1, Directive::FAIL, bool:0, );
+          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L265);
+          if (bool:false) {
+            (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
           } else {
-            (phase, data, Directive::FAIL, u1:0, XLS_FAILURE_SITE_FUNCTION_CLAUSE_8D795B60_L264)
+            (_1.0, _1.1.1, _1.2, _1.3, _1.4)
           }
         },
         Phase::COLLECTING => {
@@ -1469,7 +1253,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
               let _44 = (Tag::SYNDROME, _43);
               let Xls_clause_1_Complete_1 = _44;
               let _45 = (Phase::ANNOUNCING, Xls_clause_1_Complete_1, Directive::CONSUME, bool:0, );
-              let _46 = (_45.0, _45.1, _45.2, _45.3, hls_failure::check(_45.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L390));
+              let _46 = (_45.0, _45.1, _45.2, _45.3, hls_failure::NONE);
               (_46, hls_failure::first(_25.1, hls_failure::first(_28.1, hls_failure::first(_37.1, _42.1))))
             } else {
               let _21 = Syndrome {
@@ -1481,7 +1265,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
               let _22 = (Tag::SYNDROME, _21);
               let Xls_clause_1_Collected_1 = _22;
               let _23 = (Phase::COLLECTING, Xls_clause_1_Collected_1, Directive::CONSUME, bool:0, );
-              let _24 = (_23.0, _23.1, _23.2, _23.3, hls_failure::check(_23.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L358));
+              let _24 = (_23.0, _23.1, _23.2, _23.3, hls_failure::NONE);
               (_24, hls_failure::NONE)
             };
             if ((_47.1) != hls_failure::NONE) {
@@ -1491,16 +1275,12 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
             }
           } else {
             let Xls_clause_2_Syndrome_1 = (Tag::SYNDROME, data);
-            if bool:true {
-              let _0 = (Phase::COLLECTING, Xls_clause_2_Syndrome_1, Directive::FAIL, bool:0, );
-              let _1 = (_0.0, _0.1, _0.2, _0.3, hls_failure::check(_0.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L393));
-              if (bool:false) {
-                (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-              } else {
-                (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-              }
+            let _0 = (Phase::COLLECTING, Xls_clause_2_Syndrome_1, Directive::FAIL, bool:0, );
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L393);
+            if (bool:false) {
+              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
-              (phase, data, Directive::FAIL, u1:0, XLS_FAILURE_SITE_FUNCTION_CLAUSE_8D795B60_L329)
+              (_1.0, _1.1.1, _1.2, _1.3, _1.4)
             }
           }
         },
@@ -1513,7 +1293,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
           let _2 = Xls_clause_1_NextStep_1 == _1;
           if _2 {
             let _3 = (Phase::ANNOUNCING, Xls_clause_1_Syndrome_1, Directive::POSTPONE, bool:0, );
-            let _4 = (_3.0, _3.1, _3.2, _3.3, hls_failure::check(_3.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L438));
+            let _4 = (_3.0, _3.1, _3.2, _3.3, hls_failure::NONE);
             if (bool:false) {
               (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
@@ -1521,16 +1301,12 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
             }
           } else {
             let Xls_clause_2_Syndrome_1 = (Tag::SYNDROME, data);
-            if bool:true {
-              let _0 = (Phase::ANNOUNCING, Xls_clause_2_Syndrome_1, Directive::FAIL, bool:0, );
-              let _1 = (_0.0, _0.1, _0.2, _0.3, hls_failure::check(_0.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L440));
-              if (bool:false) {
-                (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-              } else {
-                (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-              }
+            let _0 = (Phase::ANNOUNCING, Xls_clause_2_Syndrome_1, Directive::FAIL, bool:0, );
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L440);
+            if (bool:false) {
+              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
-              (phase, data, Directive::FAIL, u1:0, XLS_FAILURE_SITE_FUNCTION_CLAUSE_8D795B60_L433)
+              (_1.0, _1.1.1, _1.2, _1.3, _1.4)
             }
           }
         },
@@ -1572,16 +1348,12 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
       match phase {
         Phase::CONFIGURING => {
           let Xls_clause_1_Syndrome_1 = (Tag::SYNDROME, data);
-          if bool:true {
-            let _0 = (Phase::CONFIGURING, Xls_clause_1_Syndrome_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, hls_failure::check(_0.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L267));
-            if (bool:false) {
-              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-            } else {
-              (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-            }
+          let _0 = (Phase::CONFIGURING, Xls_clause_1_Syndrome_1, Directive::FAIL, bool:0, );
+          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L267);
+          if (bool:false) {
+            (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
           } else {
-            (phase, data, Directive::FAIL, u1:0, XLS_FAILURE_SITE_FUNCTION_CLAUSE_8D795B60_L266)
+            (_1.0, _1.1.1, _1.2, _1.3, _1.4)
           }
         },
         Phase::COLLECTING => {
@@ -1602,7 +1374,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
             };
             let _3 = (Tag::SYNDROME, _2);
             let _4 = (Phase::COLLECTING, _3, Directive::CONSUME, bool:0, );
-            let _5 = (_4.0, _4.1, _4.2, _4.3, hls_failure::check(_4.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L315));
+            let _5 = (_4.0, _4.1, _4.2, _4.3, hls_failure::NONE);
             if (bool:false) {
               (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
@@ -1610,16 +1382,12 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
             }
           } else {
             let Xls_clause_2_Syndrome_1 = (Tag::SYNDROME, data);
-            if bool:true {
-              let _0 = (Phase::COLLECTING, Xls_clause_2_Syndrome_1, Directive::FAIL, bool:0, );
-              let _1 = (_0.0, _0.1, _0.2, _0.3, hls_failure::check(_0.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L320));
-              if (bool:false) {
-                (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-              } else {
-                (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-              }
+            let _0 = (Phase::COLLECTING, Xls_clause_2_Syndrome_1, Directive::FAIL, bool:0, );
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L320);
+            if (bool:false) {
+              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
-              (phase, data, Directive::FAIL, u1:0, XLS_FAILURE_SITE_FUNCTION_CLAUSE_8D795B60_L304)
+              (_1.0, _1.1.1, _1.2, _1.3, _1.4)
             }
           }
         },
@@ -1641,7 +1409,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
             };
             let _3 = (Tag::SYNDROME, _2);
             let _4 = (Phase::ANNOUNCING, _3, Directive::CONSUME, bool:0, );
-            let _5 = (_4.0, _4.1, _4.2, _4.3, hls_failure::check(_4.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L416));
+            let _5 = (_4.0, _4.1, _4.2, _4.3, hls_failure::NONE);
             if (bool:false) {
               (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
@@ -1649,16 +1417,12 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
             }
           } else {
             let Xls_clause_2_Syndrome_1 = (Tag::SYNDROME, data);
-            if bool:true {
-              let _0 = (Phase::ANNOUNCING, Xls_clause_2_Syndrome_1, Directive::FAIL, bool:0, );
-              let _1 = (_0.0, _0.1, _0.2, _0.3, hls_failure::check(_0.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L421));
-              if (bool:false) {
-                (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-              } else {
-                (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-              }
+            let _0 = (Phase::ANNOUNCING, Xls_clause_2_Syndrome_1, Directive::FAIL, bool:0, );
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L421);
+            if (bool:false) {
+              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
-              (phase, data, Directive::FAIL, u1:0, XLS_FAILURE_SITE_FUNCTION_CLAUSE_8D795B60_L405)
+              (_1.0, _1.1.1, _1.2, _1.3, _1.4)
             }
           }
         },

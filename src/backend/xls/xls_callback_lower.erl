@@ -106,13 +106,16 @@ lower_chain(
         BodyFailure,
         EnumAtoms
     ),
-    Result = [
-        "if ", GuardReference, " {\n",
-        xls_parse_io:indent(xls_parse:print(Selected), 2),
-        "} else {\n",
-        xls_parse_io:indent(xls_parse:print([NextBody, NextResult]), 2),
-        "}"
-    ],
+    Result = case GuardReference of
+        "bool:true" -> Selected;
+        _ -> [
+            "if ", GuardReference, " {\n",
+            xls_parse_io:indent(xls_parse:print(Selected), 2),
+            "} else {\n",
+            xls_parse_io:indent(xls_parse:print([NextBody, NextResult]), 2),
+            "}"
+        ]
+    end,
     {HeadBody, Result}.
 
 %%%

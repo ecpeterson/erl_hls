@@ -43,9 +43,7 @@
 -spec emit(spec()) -> iolist().
 emit(Spec) ->
     SharedService = maps:get(shared_service, Spec, ordinary),
-    [
-        preamble(Spec),
-        xls_failure_sites:emit(maps:get(failure_sites, Spec, [])),
+    Body = [
         maps:get(record_declarations, Spec),
         maps:get(helper_functions, Spec),
         xls_statem_reduction_codegen:declarations(
@@ -67,7 +65,8 @@ emit(Spec) ->
         shared_service(Spec),
         egress_demux(Spec),
         top(Spec)
-    ].
+    ],
+    [preamble(Spec), xls_failure_sites:emit(maps:get(failure_sites, Spec, []), Body)].
 
 %%%
 %%% Module declarations

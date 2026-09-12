@@ -49,339 +49,34 @@ pub enum Directive : u2 {
   FAIL = u2:2,
 }
 
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L202 = u16:17; // phi_halo_cell.erl:L202
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L211 = u16:33; // phi_halo_cell.erl:L211
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L211 = u16:50; // phi_halo_cell.erl:L211
-const XLS_FAILURE_SITE_CASE_CLAUSE_76CA4A82_L212 = u16:68; // phi_halo_cell.erl:L212
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L213 = u16:81; // phi_halo_cell.erl:L213
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L213 = u16:98; // phi_halo_cell.erl:L213
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L214 = u16:114; // phi_halo_cell.erl:L214
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L219 = u16:129; // phi_halo_cell.erl:L219
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L219 = u16:146; // phi_halo_cell.erl:L219
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L225 = u16:161; // phi_halo_cell.erl:L225
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L225 = u16:178; // phi_halo_cell.erl:L225
-const XLS_FAILURE_SITE_CASE_CLAUSE_76CA4A82_L226 = u16:196; // phi_halo_cell.erl:L226
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L227 = u16:209; // phi_halo_cell.erl:L227
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L227 = u16:226; // phi_halo_cell.erl:L227
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L228 = u16:241; // phi_halo_cell.erl:L228
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L228 = u16:258; // phi_halo_cell.erl:L228
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L232 = u16:273; // phi_halo_cell.erl:L232
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L232 = u16:290; // phi_halo_cell.erl:L232
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L237 = u16:305; // phi_halo_cell.erl:L237
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L237 = u16:322; // phi_halo_cell.erl:L237
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L239 = u16:337; // phi_halo_cell.erl:L239
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L239 = u16:354; // phi_halo_cell.erl:L239
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L244 = u16:369; // phi_halo_cell.erl:L244
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L244 = u16:386; // phi_halo_cell.erl:L244
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L249 = u16:401; // phi_halo_cell.erl:L249
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L249 = u16:418; // phi_halo_cell.erl:L249
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L250 = u16:434; // phi_halo_cell.erl:L250
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L259 = u16:449; // phi_halo_cell.erl:L259
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L259 = u16:466; // phi_halo_cell.erl:L259
-const XLS_FAILURE_SITE_CASE_CLAUSE_76CA4A82_L260 = u16:484; // phi_halo_cell.erl:L260
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L260 = u16:498; // phi_halo_cell.erl:L260
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L261 = u16:513; // phi_halo_cell.erl:L261
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L261 = u16:530; // phi_halo_cell.erl:L261
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L262 = u16:545; // phi_halo_cell.erl:L262
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L262 = u16:562; // phi_halo_cell.erl:L262
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L268 = u16:577; // phi_halo_cell.erl:L268
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L268 = u16:594; // phi_halo_cell.erl:L268
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L279 = u16:609; // phi_halo_cell.erl:L279
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L279 = u16:626; // phi_halo_cell.erl:L279
-const XLS_FAILURE_SITE_CASE_CLAUSE_76CA4A82_L282 = u16:644; // phi_halo_cell.erl:L282
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L282 = u16:658; // phi_halo_cell.erl:L282
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L283 = u16:673; // phi_halo_cell.erl:L283
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L283 = u16:690; // phi_halo_cell.erl:L283
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L284 = u16:705; // phi_halo_cell.erl:L284
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L284 = u16:722; // phi_halo_cell.erl:L284
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L295 = u16:737; // phi_halo_cell.erl:L295
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L295 = u16:754; // phi_halo_cell.erl:L295
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L303 = u16:769; // phi_halo_cell.erl:L303
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L304 = u16:790; // phi_halo_cell.erl:L304
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L311 = u16:801; // phi_halo_cell.erl:L311
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L311 = u16:818; // phi_halo_cell.erl:L311
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L313 = u16:833; // phi_halo_cell.erl:L313
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L314 = u16:850; // phi_halo_cell.erl:L314
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L315 = u16:866; // phi_halo_cell.erl:L315
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L316 = u16:882; // phi_halo_cell.erl:L316
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L318 = u16:902; // phi_halo_cell.erl:L318
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L319 = u16:913; // phi_halo_cell.erl:L319
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L319 = u16:930; // phi_halo_cell.erl:L319
 const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L320 = u16:950; // phi_halo_cell.erl:L320
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L321 = u16:961; // phi_halo_cell.erl:L321
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L321 = u16:978; // phi_halo_cell.erl:L321
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L322 = u16:998; // phi_halo_cell.erl:L322
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L323 = u16:1009; // phi_halo_cell.erl:L323
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L323 = u16:1026; // phi_halo_cell.erl:L323
 const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L324 = u16:1046; // phi_halo_cell.erl:L324
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L325 = u16:1057; // phi_halo_cell.erl:L325
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L325 = u16:1074; // phi_halo_cell.erl:L325
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L326 = u16:1094; // phi_halo_cell.erl:L326
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L327 = u16:1105; // phi_halo_cell.erl:L327
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L327 = u16:1122; // phi_halo_cell.erl:L327
 const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L328 = u16:1142; // phi_halo_cell.erl:L328
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L329 = u16:1153; // phi_halo_cell.erl:L329
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L329 = u16:1170; // phi_halo_cell.erl:L329
 const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L330 = u16:1190; // phi_halo_cell.erl:L330
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L331 = u16:1201; // phi_halo_cell.erl:L331
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L331 = u16:1218; // phi_halo_cell.erl:L331
 const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L332 = u16:1238; // phi_halo_cell.erl:L332
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L339 = u16:1249; // phi_halo_cell.erl:L339
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L339 = u16:1266; // phi_halo_cell.erl:L339
-const XLS_FAILURE_SITE_CASE_CLAUSE_76CA4A82_L340 = u16:1284; // phi_halo_cell.erl:L340
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L340 = u16:1298; // phi_halo_cell.erl:L340
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L341 = u16:1313; // phi_halo_cell.erl:L341
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L341 = u16:1330; // phi_halo_cell.erl:L341
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L342 = u16:1346; // phi_halo_cell.erl:L342
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L348 = u16:1366; // phi_halo_cell.erl:L348
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L349 = u16:1377; // phi_halo_cell.erl:L349
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L349 = u16:1394; // phi_halo_cell.erl:L349
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L351 = u16:1414; // phi_halo_cell.erl:L351
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L352 = u16:1425; // phi_halo_cell.erl:L352
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L352 = u16:1442; // phi_halo_cell.erl:L352
 const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L353 = u16:1462; // phi_halo_cell.erl:L353
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L354 = u16:1473; // phi_halo_cell.erl:L354
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L355 = u16:1490; // phi_halo_cell.erl:L355
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L356 = u16:1506; // phi_halo_cell.erl:L356
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L357 = u16:1522; // phi_halo_cell.erl:L357
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L361 = u16:1538; // phi_halo_cell.erl:L361
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L362 = u16:1554; // phi_halo_cell.erl:L362
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L363 = u16:1570; // phi_halo_cell.erl:L363
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L369 = u16:1590; // phi_halo_cell.erl:L369
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L370 = u16:1601; // phi_halo_cell.erl:L370
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L370 = u16:1618; // phi_halo_cell.erl:L370
 const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L371 = u16:1638; // phi_halo_cell.erl:L371
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L372 = u16:1649; // phi_halo_cell.erl:L372
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L373 = u16:1666; // phi_halo_cell.erl:L373
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L374 = u16:1682; // phi_halo_cell.erl:L374
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L375 = u16:1698; // phi_halo_cell.erl:L375
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L377 = u16:1718; // phi_halo_cell.erl:L377
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L378 = u16:1729; // phi_halo_cell.erl:L378
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L378 = u16:1746; // phi_halo_cell.erl:L378
 const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L379 = u16:1766; // phi_halo_cell.erl:L379
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L380 = u16:1777; // phi_halo_cell.erl:L380
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L380 = u16:1794; // phi_halo_cell.erl:L380
 const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L381 = u16:1814; // phi_halo_cell.erl:L381
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L382 = u16:1825; // phi_halo_cell.erl:L382
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L382 = u16:1842; // phi_halo_cell.erl:L382
 const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L383 = u16:1862; // phi_halo_cell.erl:L383
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L392 = u16:1873; // phi_halo_cell.erl:L392
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L392 = u16:1890; // phi_halo_cell.erl:L392
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L393 = u16:1906; // phi_halo_cell.erl:L393
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L394 = u16:1922; // phi_halo_cell.erl:L394
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L399 = u16:1942; // phi_halo_cell.erl:L399
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L400 = u16:1958; // phi_halo_cell.erl:L400
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L401 = u16:1974; // phi_halo_cell.erl:L401
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L402 = u16:1990; // phi_halo_cell.erl:L402
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L404 = u16:2001; // phi_halo_cell.erl:L404
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L405 = u16:2018; // phi_halo_cell.erl:L405
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L406 = u16:2034; // phi_halo_cell.erl:L406
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L407 = u16:2050; // phi_halo_cell.erl:L407
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L409 = u16:2070; // phi_halo_cell.erl:L409
 const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L414 = u16:2081; // phi_halo_cell.erl:L414
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L415 = u16:2098; // phi_halo_cell.erl:L415
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L416 = u16:2114; // phi_halo_cell.erl:L416
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L417 = u16:2130; // phi_halo_cell.erl:L417
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L418 = u16:2146; // phi_halo_cell.erl:L418
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L420 = u16:2162; // phi_halo_cell.erl:L420
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L421 = u16:2178; // phi_halo_cell.erl:L421
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L422 = u16:2194; // phi_halo_cell.erl:L422
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L426 = u16:2210; // phi_halo_cell.erl:L426
-const XLS_FAILURE_SITE_CASE_CLAUSE_76CA4A82_L427 = u16:2228; // phi_halo_cell.erl:L427
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L428 = u16:2246; // phi_halo_cell.erl:L428
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L428 = u16:2257; // phi_halo_cell.erl:L428
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L428 = u16:2274; // phi_halo_cell.erl:L428
 const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L429 = u16:2294; // phi_halo_cell.erl:L429
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L429 = u16:2305; // phi_halo_cell.erl:L429
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L429 = u16:2322; // phi_halo_cell.erl:L429
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L433 = u16:2337; // phi_halo_cell.erl:L433
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L434 = u16:2354; // phi_halo_cell.erl:L434
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L435 = u16:2370; // phi_halo_cell.erl:L435
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L436 = u16:2386; // phi_halo_cell.erl:L436
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L438 = u16:2406; // phi_halo_cell.erl:L438
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L439 = u16:2417; // phi_halo_cell.erl:L439
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L439 = u16:2434; // phi_halo_cell.erl:L439
 const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L440 = u16:2454; // phi_halo_cell.erl:L440
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L441 = u16:2465; // phi_halo_cell.erl:L441
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L442 = u16:2482; // phi_halo_cell.erl:L442
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L443 = u16:2498; // phi_halo_cell.erl:L443
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L444 = u16:2514; // phi_halo_cell.erl:L444
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L446 = u16:2534; // phi_halo_cell.erl:L446
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L447 = u16:2545; // phi_halo_cell.erl:L447
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L447 = u16:2562; // phi_halo_cell.erl:L447
 const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L448 = u16:2582; // phi_halo_cell.erl:L448
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L449 = u16:2593; // phi_halo_cell.erl:L449
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L450 = u16:2610; // phi_halo_cell.erl:L450
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L451 = u16:2626; // phi_halo_cell.erl:L451
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L452 = u16:2642; // phi_halo_cell.erl:L452
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L454 = u16:2662; // phi_halo_cell.erl:L454
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L455 = u16:2673; // phi_halo_cell.erl:L455
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L455 = u16:2690; // phi_halo_cell.erl:L455
 const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L456 = u16:2710; // phi_halo_cell.erl:L456
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L457 = u16:2721; // phi_halo_cell.erl:L457
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L457 = u16:2738; // phi_halo_cell.erl:L457
 const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L458 = u16:2758; // phi_halo_cell.erl:L458
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L467 = u16:2769; // phi_halo_cell.erl:L467
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L467 = u16:2786; // phi_halo_cell.erl:L467
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L468 = u16:2802; // phi_halo_cell.erl:L468
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L469 = u16:2818; // phi_halo_cell.erl:L469
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L482 = u16:2838; // phi_halo_cell.erl:L482
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L483 = u16:2854; // phi_halo_cell.erl:L483
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L484 = u16:2870; // phi_halo_cell.erl:L484
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L485 = u16:2886; // phi_halo_cell.erl:L485
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L487 = u16:2897; // phi_halo_cell.erl:L487
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L488 = u16:2914; // phi_halo_cell.erl:L488
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L489 = u16:2930; // phi_halo_cell.erl:L489
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L490 = u16:2946; // phi_halo_cell.erl:L490
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L492 = u16:2966; // phi_halo_cell.erl:L492
 const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L497 = u16:2977; // phi_halo_cell.erl:L497
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L498 = u16:2994; // phi_halo_cell.erl:L498
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L499 = u16:3010; // phi_halo_cell.erl:L499
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L500 = u16:3026; // phi_halo_cell.erl:L500
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L501 = u16:3042; // phi_halo_cell.erl:L501
-const XLS_FAILURE_SITE_CASE_CLAUSE_76CA4A82_L503 = u16:3060; // phi_halo_cell.erl:L503
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L503 = u16:3074; // phi_halo_cell.erl:L503
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L504 = u16:3089; // phi_halo_cell.erl:L504
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L504 = u16:3106; // phi_halo_cell.erl:L504
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L505 = u16:3121; // phi_halo_cell.erl:L505
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L505 = u16:3138; // phi_halo_cell.erl:L505
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L506 = u16:3153; // phi_halo_cell.erl:L506
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L506 = u16:3170; // phi_halo_cell.erl:L506
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L507 = u16:3185; // phi_halo_cell.erl:L507
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L507 = u16:3202; // phi_halo_cell.erl:L507
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L508 = u16:3217; // phi_halo_cell.erl:L508
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L508 = u16:3234; // phi_halo_cell.erl:L508
 const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L510 = u16:3254; // phi_halo_cell.erl:L510
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L511 = u16:3265; // phi_halo_cell.erl:L511
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L512 = u16:3282; // phi_halo_cell.erl:L512
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L513 = u16:3298; // phi_halo_cell.erl:L513
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L514 = u16:3314; // phi_halo_cell.erl:L514
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L516 = u16:3334; // phi_halo_cell.erl:L516
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L517 = u16:3345; // phi_halo_cell.erl:L517
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L517 = u16:3362; // phi_halo_cell.erl:L517
 const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L518 = u16:3382; // phi_halo_cell.erl:L518
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L519 = u16:3393; // phi_halo_cell.erl:L519
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L520 = u16:3410; // phi_halo_cell.erl:L520
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L521 = u16:3426; // phi_halo_cell.erl:L521
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L522 = u16:3442; // phi_halo_cell.erl:L522
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L524 = u16:3462; // phi_halo_cell.erl:L524
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L525 = u16:3473; // phi_halo_cell.erl:L525
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L525 = u16:3490; // phi_halo_cell.erl:L525
 const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L526 = u16:3510; // phi_halo_cell.erl:L526
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L527 = u16:3521; // phi_halo_cell.erl:L527
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L528 = u16:3538; // phi_halo_cell.erl:L528
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L529 = u16:3554; // phi_halo_cell.erl:L529
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L530 = u16:3570; // phi_halo_cell.erl:L530
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L532 = u16:3590; // phi_halo_cell.erl:L532
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L533 = u16:3601; // phi_halo_cell.erl:L533
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L533 = u16:3618; // phi_halo_cell.erl:L533
 const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L534 = u16:3638; // phi_halo_cell.erl:L534
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L535 = u16:3649; // phi_halo_cell.erl:L535
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L535 = u16:3666; // phi_halo_cell.erl:L535
 const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L536 = u16:3686; // phi_halo_cell.erl:L536
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L545 = u16:3697; // phi_halo_cell.erl:L545
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L545 = u16:3714; // phi_halo_cell.erl:L545
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L546 = u16:3730; // phi_halo_cell.erl:L546
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L547 = u16:3746; // phi_halo_cell.erl:L547
-const XLS_FAILURE_SITE_IF_CLAUSE_76CA4A82_L548 = u16:3765; // phi_halo_cell.erl:L548
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L548 = u16:3778; // phi_halo_cell.erl:L548
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L549 = u16:3793; // phi_halo_cell.erl:L549
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L552 = u16:3814; // phi_halo_cell.erl:L552
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L558 = u16:3825; // phi_halo_cell.erl:L558
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L560 = u16:3842; // phi_halo_cell.erl:L560
-const XLS_FAILURE_SITE_CASE_CLAUSE_76CA4A82_L561 = u16:3860; // phi_halo_cell.erl:L561
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L562 = u16:3873; // phi_halo_cell.erl:L562
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L562 = u16:3890; // phi_halo_cell.erl:L562
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L563 = u16:3905; // phi_halo_cell.erl:L563
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L563 = u16:3922; // phi_halo_cell.erl:L563
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L564 = u16:3937; // phi_halo_cell.erl:L564
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L564 = u16:3954; // phi_halo_cell.erl:L564
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L565 = u16:3969; // phi_halo_cell.erl:L565
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L565 = u16:3986; // phi_halo_cell.erl:L565
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L566 = u16:4001; // phi_halo_cell.erl:L566
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L566 = u16:4018; // phi_halo_cell.erl:L566
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L568 = u16:4034; // phi_halo_cell.erl:L568
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L569 = u16:4050; // phi_halo_cell.erl:L569
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L577 = u16:4070; // phi_halo_cell.erl:L577
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L578 = u16:4086; // phi_halo_cell.erl:L578
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L579 = u16:4102; // phi_halo_cell.erl:L579
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L580 = u16:4118; // phi_halo_cell.erl:L580
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L583 = u16:4129; // phi_halo_cell.erl:L583
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L584 = u16:4146; // phi_halo_cell.erl:L584
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L585 = u16:4162; // phi_halo_cell.erl:L585
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L586 = u16:4178; // phi_halo_cell.erl:L586
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L588 = u16:4198; // phi_halo_cell.erl:L588
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L589 = u16:4209; // phi_halo_cell.erl:L589
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L589 = u16:4226; // phi_halo_cell.erl:L589
 const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L590 = u16:4246; // phi_halo_cell.erl:L590
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L591 = u16:4257; // phi_halo_cell.erl:L591
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L592 = u16:4274; // phi_halo_cell.erl:L592
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L593 = u16:4290; // phi_halo_cell.erl:L593
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L594 = u16:4306; // phi_halo_cell.erl:L594
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L596 = u16:4326; // phi_halo_cell.erl:L596
-const XLS_FAILURE_SITE_CASE_CLAUSE_76CA4A82_L603 = u16:4340; // phi_halo_cell.erl:L603
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L604 = u16:4353; // phi_halo_cell.erl:L604
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L604 = u16:4370; // phi_halo_cell.erl:L604
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L605 = u16:4385; // phi_halo_cell.erl:L605
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L605 = u16:4402; // phi_halo_cell.erl:L605
 const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L609 = u16:4417; // phi_halo_cell.erl:L609
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L610 = u16:4434; // phi_halo_cell.erl:L610
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L611 = u16:4450; // phi_halo_cell.erl:L611
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L612 = u16:4466; // phi_halo_cell.erl:L612
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L613 = u16:4482; // phi_halo_cell.erl:L613
-const XLS_FAILURE_SITE_CASE_CLAUSE_76CA4A82_L615 = u16:4500; // phi_halo_cell.erl:L615
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L616 = u16:4513; // phi_halo_cell.erl:L616
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L616 = u16:4530; // phi_halo_cell.erl:L616
 const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L617 = u16:4550; // phi_halo_cell.erl:L617
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L618 = u16:4561; // phi_halo_cell.erl:L618
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L618 = u16:4578; // phi_halo_cell.erl:L618
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L619 = u16:4594; // phi_halo_cell.erl:L619
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L620 = u16:4610; // phi_halo_cell.erl:L620
 const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L628 = u16:4630; // phi_halo_cell.erl:L628
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L630 = u16:4641; // phi_halo_cell.erl:L630
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L631 = u16:4658; // phi_halo_cell.erl:L631
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L632 = u16:4674; // phi_halo_cell.erl:L632
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L633 = u16:4690; // phi_halo_cell.erl:L633
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L635 = u16:4710; // phi_halo_cell.erl:L635
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L636 = u16:4721; // phi_halo_cell.erl:L636
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L636 = u16:4738; // phi_halo_cell.erl:L636
 const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L637 = u16:4758; // phi_halo_cell.erl:L637
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L638 = u16:4769; // phi_halo_cell.erl:L638
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L638 = u16:4786; // phi_halo_cell.erl:L638
 const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L639 = u16:4806; // phi_halo_cell.erl:L639
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L646 = u16:4817; // phi_halo_cell.erl:L646
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L647 = u16:4834; // phi_halo_cell.erl:L647
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L648 = u16:4850; // phi_halo_cell.erl:L648
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L649 = u16:4866; // phi_halo_cell.erl:L649
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L652 = u16:4881; // phi_halo_cell.erl:L652
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L653 = u16:4898; // phi_halo_cell.erl:L653
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L654 = u16:4914; // phi_halo_cell.erl:L654
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L655 = u16:4930; // phi_halo_cell.erl:L655
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L657 = u16:4946; // phi_halo_cell.erl:L657
-const XLS_FAILURE_SITE_IF_CLAUSE_76CA4A82_L658 = u16:4965; // phi_halo_cell.erl:L658
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L658 = u16:4978; // phi_halo_cell.erl:L658
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L659 = u16:4993; // phi_halo_cell.erl:L659
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L660 = u16:5009; // phi_halo_cell.erl:L660
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L661 = u16:5025; // phi_halo_cell.erl:L661
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L662 = u16:5041; // phi_halo_cell.erl:L662
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L663 = u16:5057; // phi_halo_cell.erl:L663
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L664 = u16:5073; // phi_halo_cell.erl:L664
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L667 = u16:5089; // phi_halo_cell.erl:L667
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L668 = u16:5106; // phi_halo_cell.erl:L668
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L669 = u16:5122; // phi_halo_cell.erl:L669
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L670 = u16:5138; // phi_halo_cell.erl:L670
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L677 = u16:5153; // phi_halo_cell.erl:L677
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L677 = u16:5170; // phi_halo_cell.erl:L677
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L678 = u16:5185; // phi_halo_cell.erl:L678
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L678 = u16:5202; // phi_halo_cell.erl:L678
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L679 = u16:5217; // phi_halo_cell.erl:L679
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L679 = u16:5234; // phi_halo_cell.erl:L679
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L680 = u16:5249; // phi_halo_cell.erl:L680
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L680 = u16:5266; // phi_halo_cell.erl:L680
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L681 = u16:5281; // phi_halo_cell.erl:L681
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L681 = u16:5298; // phi_halo_cell.erl:L681
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L683 = u16:5313; // phi_halo_cell.erl:L683
-const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L683 = u16:5330; // phi_halo_cell.erl:L683
 pub struct Phi {
   epoch : u32,
   values : phi_field::Field,
@@ -729,21 +424,6 @@ struct ReductionContribution {
   value: Phifold,
 }
 
-pub struct ReductionAggregate {
-  valid: u1,
-  failed: u1,
-  site: uN[2],
-  key: u32,
-  count: uN[3],
-  seen: bits[4],
-  accumulator: Phifold,
-}
-
-pub struct ReductionAggregateRequest {
-  slot: u32,
-  aggregate: ReductionAggregate,
-}
-
 enum ReductionOutcome : u3 {
   NOT_CANDIDATE = u3:0,
   MISMATCH = u3:1,
@@ -877,8 +557,6 @@ pub struct SharedExecutorRequest {
   machine: MachineBits,
   frame: axis::Frame,
   internal: u1,
-  aggregate_request: ReductionAggregateRequest,
-  aggregate_valid: u1,
   received: u1,
   mailbox_index: u8,
   order_index: u8,
@@ -915,15 +593,9 @@ struct SharedState<ACTOR_COUNT: u32, PRODUCER_COUNT: u32> {
   next_valid: u1,
   next_slot: u32,
   in_flight: u1[ACTOR_COUNT],
-  // Private completion events outrank aggregate, entry, and
-  // mailbox work for the same actor; actor choice stays fair.
+  // Private completion events outrank entry and mailbox work for
+  // the same actor, but retain round-robin fairness across actors.
   internal_candidates: u1[ACTOR_COUNT],
-  // Each actor can have at most one completed aggregate awaiting
-  // application: it cannot open its next reduction until this one
-  // retires. Per-actor receptacles prevent one blocked actor from
-  // backpressuring the reduction plane for every other actor.
-  aggregate_pending: ReductionAggregateRequest[ACTOR_COUNT],
-  aggregate_pending_valid: u1[ACTOR_COUNT],
   completed_valid: u1,
   completed: SharedExecutorResult,
   admission_cursor: u32,
@@ -1031,26 +703,22 @@ fn reduction_contribution(
             let Xls_clause_1_Epoch_1 = message.epoch;
             let Xls_clause_1_Values_1 = message.values;
             let Xls_clause_1_Cell_1 = (Tag::CELL, data);
-            if bool:true {
-  let _0 = (0 as u32);
-  let _1 = Xls_clause_1_Values_1[1 - u32:1];
-  let _2 = phi_field::accumulate(0, _1);
-  let _3 = Xls_clause_1_Values_1[2 - u32:1];
-  let _4 = phi_field::accumulate(0, _3);
-  let _5 = Phifold {
-    value0: _2,
-    value1: _4,
-    ..zero!<Phifold>()
-  };
-  let _6 = (Tag::PHI_FOLD, _5, bits_from_phifold(_5));
-  let _7 = (Xls_clause_1_Epoch_1, _0, _6, );
-  if (bool:false) {
-    (u1:0, u32:0, u32:0, zero!<Phifold>())
-  } else {
-    (u1:1, _7.0, _7.1, _7.2.1)
-  }
-} else {
+            let _0 = (0 as u32);
+let _1 = Xls_clause_1_Values_1[1 - u32:1];
+let _2 = phi_field::accumulate(0, _1);
+let _3 = Xls_clause_1_Values_1[2 - u32:1];
+let _4 = phi_field::accumulate(0, _3);
+let _5 = Phifold {
+  value0: _2,
+  value1: _4,
+  ..zero!<Phifold>()
+};
+let _6 = (Tag::PHI_FOLD, _5, bits_from_phifold(_5));
+let _7 = (Xls_clause_1_Epoch_1, _0, _6, );
+if (bool:false) {
   (u1:0, u32:0, u32:0, zero!<Phifold>())
+} else {
+  (u1:1, _7.0, _7.1, _7.2.1)
 }
           };
           ReductionContribution {
@@ -1073,23 +741,19 @@ fn reduction_contribution(
             let Xls_clause_1_Source_1 = message.source;
             let Xls_clause_1_Value_1 = message.value;
             let Xls_clause_1_Cell_1 = (Tag::CELL, data);
-            if bool:true {
-  let _0 = phi_field::accumulate(0, Xls_clause_1_Value_1);
-  let _1 = (Xls_clause_1_Source_1 as s64);
-  let _2 = Phifold {
-    value0: _0,
-    value1: _1,
-    ..zero!<Phifold>()
-  };
-  let _3 = (Tag::PHI_FOLD, _2, bits_from_phifold(_2));
-  let _4 = (Xls_clause_1_Step_1, Xls_clause_1_Source_1, _3, );
-  if (bool:false) {
-    (u1:0, u32:0, u32:0, zero!<Phifold>())
-  } else {
-    (u1:1, _4.0, _4.1, _4.2.1)
-  }
-} else {
+            let _0 = phi_field::accumulate(0, Xls_clause_1_Value_1);
+let _1 = (Xls_clause_1_Source_1 as s64);
+let _2 = Phifold {
+  value0: _0,
+  value1: _1,
+  ..zero!<Phifold>()
+};
+let _3 = (Tag::PHI_FOLD, _2, bits_from_phifold(_2));
+let _4 = (Xls_clause_1_Step_1, Xls_clause_1_Source_1, _3, );
+if (bool:false) {
   (u1:0, u32:0, u32:0, zero!<Phifold>())
+} else {
+  (u1:1, _4.0, _4.1, _4.2.1)
 }
           };
           ReductionContribution {
@@ -1111,31 +775,27 @@ fn reduction_contribution(
             let Xls_clause_1_Step_1 = message.step;
             let Xls_clause_1_PresentWord_1 = message.present;
             let Xls_clause_1_Cell_1 = (Tag::CELL, data);
-            if bool:true {
-  let _0 = (0 as u32);
-  let _1 = Xls_clause_1_PresentWord_1 & 1;
-  let _2 = (_1 as s64);
-  let _3 = Xls_clause_1_PresentWord_1 < 2;
-  let _4 = if _3 {
-    (0, hls_failure::NONE)
-  } else {
-    (1, hls_failure::NONE)
-  };
-  let _5 = (_4.0 as s64);
-  let _6 = Phifold {
-    value0: _2,
-    value1: _5,
-    ..zero!<Phifold>()
-  };
-  let _7 = (Tag::PHI_FOLD, _6, bits_from_phifold(_6));
-  let _8 = (Xls_clause_1_Step_1, _0, _7, );
-  if ((_4.1) != hls_failure::NONE) {
-    (u1:0, u32:0, u32:0, zero!<Phifold>())
-  } else {
-    (u1:1, _8.0, _8.1, _8.2.1)
-  }
+            let _0 = (0 as u32);
+let _1 = Xls_clause_1_PresentWord_1 & 1;
+let _2 = (_1 as s64);
+let _3 = Xls_clause_1_PresentWord_1 < 2;
+let _4 = if _3 {
+  (0, hls_failure::NONE)
 } else {
+  (1, hls_failure::NONE)
+};
+let _5 = (_4.0 as s64);
+let _6 = Phifold {
+  value0: _2,
+  value1: _5,
+  ..zero!<Phifold>()
+};
+let _7 = (Tag::PHI_FOLD, _6, bits_from_phifold(_6));
+let _8 = (Xls_clause_1_Step_1, _0, _7, );
+if ((_4.1) != hls_failure::NONE) {
   (u1:0, u32:0, u32:0, zero!<Phifold>())
+} else {
+  (u1:1, _8.0, _8.1, _8.2.1)
 }
           };
           ReductionContribution {
@@ -1161,22 +821,18 @@ fn reduction_reduce(
       let Xls_clause_1_Left1_1 = left.value1;
       let Xls_clause_1_Right0_1 = right.value0;
       let Xls_clause_1_Right1_1 = right.value1;
-      if bool:true {
-  let _0 = Xls_clause_1_Left0_1 + Xls_clause_1_Right0_1;
-  let _1 = Xls_clause_1_Left1_1 + Xls_clause_1_Right1_1;
-  let _2 = Phifold {
-    value0: _0,
-    value1: _1,
-    ..zero!<Phifold>()
-  };
-  let _3 = (Tag::PHI_FOLD, _2, bits_from_phifold(_2));
-  if (bool:false) {
-    zero!<Phifold>()
-  } else {
-    _3.1
-  }
-} else {
+      let _0 = Xls_clause_1_Left0_1 + Xls_clause_1_Right0_1;
+let _1 = Xls_clause_1_Left1_1 + Xls_clause_1_Right1_1;
+let _2 = Phifold {
+  value0: _0,
+  value1: _1,
+  ..zero!<Phifold>()
+};
+let _3 = (Tag::PHI_FOLD, _2, bits_from_phifold(_2));
+if (bool:false) {
   zero!<Phifold>()
+} else {
+  _3.1
 }
     },
     ReductionName::COMPARISON => {
@@ -1184,65 +840,61 @@ fn reduction_reduce(
       let Xls_clause_1_LeftMask_1 = left.value1;
       let Xls_clause_1_RightValue_1 = right.value0;
       let Xls_clause_1_RightMask_1 = right.value1;
-      if bool:true {
-  let _0 = (0 as s64);
-  let Xls_clause_1_Zero_1 = _0;
-  let _5 = {
+      let _0 = (0 as s64);
+let Xls_clause_1_Zero_1 = _0;
+let _5 = {
+  let _1 = Xls_clause_1_LeftMask_1 == 0;
+  let _3 = if _1 {
+    let _2 = Xls_clause_1_RightMask_1 == 0;
+    (_2, hls_failure::NONE)
+  } else {
+    (bool:0, hls_failure::NONE)
+  };
+  if _3.0 {
+    let _4 = (Xls_clause_1_Zero_1, Xls_clause_1_Zero_1, );
+    (_4, hls_failure::NONE)
+  } else {
     let _1 = Xls_clause_1_LeftMask_1 == 0;
-    let _3 = if _1 {
-      let _2 = Xls_clause_1_RightMask_1 == 0;
+    if _1 {
+      let _2 = (Xls_clause_1_RightValue_1, Xls_clause_1_RightMask_1, );
       (_2, hls_failure::NONE)
     } else {
-      (bool:0, hls_failure::NONE)
-    };
-    if _3.0 {
-      let _4 = (Xls_clause_1_Zero_1, Xls_clause_1_Zero_1, );
-      (_4, hls_failure::NONE)
-    } else {
-      let _1 = Xls_clause_1_LeftMask_1 == 0;
+      let _1 = Xls_clause_1_RightMask_1 == 0;
       if _1 {
-        let _2 = (Xls_clause_1_RightValue_1, Xls_clause_1_RightMask_1, );
+        let _2 = (Xls_clause_1_LeftValue_1, Xls_clause_1_LeftMask_1, );
         (_2, hls_failure::NONE)
       } else {
-        let _1 = Xls_clause_1_RightMask_1 == 0;
+        let _1 = Xls_clause_1_LeftValue_1 > Xls_clause_1_RightValue_1;
         if _1 {
           let _2 = (Xls_clause_1_LeftValue_1, Xls_clause_1_LeftMask_1, );
           (_2, hls_failure::NONE)
         } else {
-          let _1 = Xls_clause_1_LeftValue_1 > Xls_clause_1_RightValue_1;
+          let _1 = Xls_clause_1_RightValue_1 > Xls_clause_1_LeftValue_1;
           if _1 {
-            let _2 = (Xls_clause_1_LeftValue_1, Xls_clause_1_LeftMask_1, );
+            let _2 = (Xls_clause_1_RightValue_1, Xls_clause_1_RightMask_1, );
             (_2, hls_failure::NONE)
           } else {
-            let _1 = Xls_clause_1_RightValue_1 > Xls_clause_1_LeftValue_1;
-            if _1 {
-              let _2 = (Xls_clause_1_RightValue_1, Xls_clause_1_RightMask_1, );
-              (_2, hls_failure::NONE)
-            } else {
-              let _1 = Xls_clause_1_LeftMask_1 | Xls_clause_1_RightMask_1;
-              let _2 = (Xls_clause_1_LeftValue_1, _1, );
-              (_2, hls_failure::NONE)
-            }
+            let _1 = Xls_clause_1_LeftMask_1 | Xls_clause_1_RightMask_1;
+            let _2 = (Xls_clause_1_LeftValue_1, _1, );
+            (_2, hls_failure::NONE)
           }
         }
       }
     }
-  };
-  let Xls_clause_1_BestValue_1 = _5.0.0;
-  let Xls_clause_1_WinnerMask_1 = _5.0.1;
-  let _6 = Phifold {
-    value0: Xls_clause_1_BestValue_1,
-    value1: Xls_clause_1_WinnerMask_1,
-    ..zero!<Phifold>()
-  };
-  let _7 = (Tag::PHI_FOLD, _6, bits_from_phifold(_6));
-  if ((_5.1) != hls_failure::NONE) {
-    zero!<Phifold>()
-  } else {
-    _7.1
   }
-} else {
+};
+let Xls_clause_1_BestValue_1 = _5.0.0;
+let Xls_clause_1_WinnerMask_1 = _5.0.1;
+let _6 = Phifold {
+  value0: Xls_clause_1_BestValue_1,
+  value1: Xls_clause_1_WinnerMask_1,
+  ..zero!<Phifold>()
+};
+let _7 = (Tag::PHI_FOLD, _6, bits_from_phifold(_6));
+if ((_5.1) != hls_failure::NONE) {
   zero!<Phifold>()
+} else {
+  _7.1
 }
     },
     ReductionName::MOVEMENT => {
@@ -1250,236 +902,20 @@ fn reduction_reduce(
       let Xls_clause_1_LeftInvalid_1 = left.value1;
       let Xls_clause_1_RightParity_1 = right.value0;
       let Xls_clause_1_RightInvalid_1 = right.value1;
-      if bool:true {
-  let _0 = Xls_clause_1_LeftParity_1 ^ Xls_clause_1_RightParity_1;
-  let _1 = Xls_clause_1_LeftInvalid_1 | Xls_clause_1_RightInvalid_1;
-  let _2 = Phifold {
-    value0: _0,
-    value1: _1,
-    ..zero!<Phifold>()
-  };
-  let _3 = (Tag::PHI_FOLD, _2, bits_from_phifold(_2));
-  if (bool:false) {
-    zero!<Phifold>()
-  } else {
-    _3.1
-  }
-} else {
+      let _0 = Xls_clause_1_LeftParity_1 ^ Xls_clause_1_RightParity_1;
+let _1 = Xls_clause_1_LeftInvalid_1 | Xls_clause_1_RightInvalid_1;
+let _2 = Phifold {
+  value0: _0,
+  value1: _1,
+  ..zero!<Phifold>()
+};
+let _3 = (Tag::PHI_FOLD, _2, bits_from_phifold(_2));
+if (bool:false) {
   zero!<Phifold>()
-}
-    },
-  }
-}
-
-fn reduction_transport_contribution(
-    frame: axis::Frame) -> ReductionContribution {
-  match frame.header.op as Tag {
-    Tag::PHI => {
-      let message = phi_from_bits(frame.payload);
-      let built = {
-        let Xls_clause_1_Epoch_1 = message.epoch;
-        let Xls_clause_1_Values_1 = message.values;
-        if bool:true {
-  let _0 = (0 as u32);
-  let _1 = Xls_clause_1_Values_1[1 - u32:1];
-  let _2 = phi_field::accumulate(0, _1);
-  let _3 = Xls_clause_1_Values_1[2 - u32:1];
-  let _4 = phi_field::accumulate(0, _3);
-  let _5 = Phifold {
-    value0: _2,
-    value1: _4,
-    ..zero!<Phifold>()
-  };
-  let _6 = (Tag::PHI_FOLD, _5, bits_from_phifold(_5));
-  let _7 = (Xls_clause_1_Epoch_1, _0, _6, );
-  if (bool:false) {
-    (u1:0, u32:0, u32:0, zero!<Phifold>())
-  } else {
-    (u1:1, _7.0, _7.1, _7.2.1)
-  }
 } else {
-  (u1:0, u32:0, u32:0, zero!<Phifold>())
+  _3.1
 }
-      };
-      ReductionContribution {
-        valid: built.0,
-        site: ReductionSite::GATHERING,
-        key: built.1,
-        member: built.2,
-        value: built.3,
-      }
     },
-    Tag::PHI0 => {
-      let message = phi0_from_bits(frame.payload);
-      let built = {
-        let Xls_clause_1_Step_1 = message.step;
-        let Xls_clause_1_Source_1 = message.source;
-        let Xls_clause_1_Value_1 = message.value;
-        if bool:true {
-  let _0 = phi_field::accumulate(0, Xls_clause_1_Value_1);
-  let _1 = (Xls_clause_1_Source_1 as s64);
-  let _2 = Phifold {
-    value0: _0,
-    value1: _1,
-    ..zero!<Phifold>()
-  };
-  let _3 = (Tag::PHI_FOLD, _2, bits_from_phifold(_2));
-  let _4 = (Xls_clause_1_Step_1, Xls_clause_1_Source_1, _3, );
-  if (bool:false) {
-    (u1:0, u32:0, u32:0, zero!<Phifold>())
-  } else {
-    (u1:1, _4.0, _4.1, _4.2.1)
-  }
-} else {
-  (u1:0, u32:0, u32:0, zero!<Phifold>())
-}
-      };
-      ReductionContribution {
-        valid: built.0,
-        site: ReductionSite::COMPARING,
-        key: built.1,
-        member: built.2,
-        value: built.3,
-      }
-    },
-    Tag::ANYON_MOVE => {
-      let message = anyonmove_from_bits(frame.payload);
-      let built = {
-        let Xls_clause_1_Step_1 = message.step;
-        let Xls_clause_1_PresentWord_1 = message.present;
-        if bool:true {
-  let _0 = (0 as u32);
-  let _1 = Xls_clause_1_PresentWord_1 & 1;
-  let _2 = (_1 as s64);
-  let _3 = Xls_clause_1_PresentWord_1 < 2;
-  let _4 = if _3 {
-    (0, hls_failure::NONE)
-  } else {
-    (1, hls_failure::NONE)
-  };
-  let _5 = (_4.0 as s64);
-  let _6 = Phifold {
-    value0: _2,
-    value1: _5,
-    ..zero!<Phifold>()
-  };
-  let _7 = (Tag::PHI_FOLD, _6, bits_from_phifold(_6));
-  let _8 = (Xls_clause_1_Step_1, _0, _7, );
-  if ((_4.1) != hls_failure::NONE) {
-    (u1:0, u32:0, u32:0, zero!<Phifold>())
-  } else {
-    (u1:1, _8.0, _8.1, _8.2.1)
-  }
-} else {
-  (u1:0, u32:0, u32:0, zero!<Phifold>())
-}
-      };
-      ReductionContribution {
-        valid: built.0,
-        site: ReductionSite::FLIPPING,
-        key: built.1,
-        member: built.2,
-        value: built.3,
-      }
-    },
-    _ => zero!<ReductionContribution>(),
-  }
-}
-
-fn reduction_aggregate_expected_members(
-    site: ReductionSite) -> ReductionMembers {
-  match site {
-    ReductionSite::GATHERING => zero!<ReductionMembers>(),
-    ReductionSite::COMPARING => uN[4]:15 as ReductionMembers,
-    ReductionSite::FLIPPING => zero!<ReductionMembers>(),
-  }
-}
-
-fn reduction_aggregate_push(
-    aggregate: ReductionAggregate, frame: axis::Frame)
-    -> ReductionAggregate {
-  let contribution = reduction_transport_contribution(frame);
-  let first = !aggregate.valid;
-  let member_mode = reduction_site_mode(contribution.site) ==
-    ReductionMode::MEMBERS;
-  let member_bit = reduction_member_bit(
-    contribution.site, contribution.member);
-  let same_window = first ||
-    (aggregate.site == contribution.site as uN[2] &&
-     aggregate.key == contribution.key);
-  let within_population = aggregate.count <
-    reduction_site_population(contribution.site);
-  let unexpected = member_mode &&
-    member_bit == zero!<ReductionMembers>();
-  let duplicate = member_mode && !first &&
-    (aggregate.seen & member_bit) != zero!<ReductionMembers>();
-  let accepted = !aggregate.failed && contribution.valid &&
-    same_window && within_population && !unexpected && !duplicate;
-  ReductionAggregate {
-    valid: u1:1,
-    failed: aggregate.failed || !accepted,
-    site: if first { contribution.site as uN[2] } else { aggregate.site },
-    key: if first { contribution.key } else { aggregate.key },
-    count: if accepted {
-      aggregate.count + ReductionRemaining:1
-    } else { aggregate.count },
-    seen: if accepted && member_mode {
-      aggregate.seen | member_bit
-    } else { aggregate.seen },
-    accumulator: if !accepted { aggregate.accumulator } else {
-      if first { contribution.value } else {
-        reduction_reduce(
-          reduction_site_name(contribution.site),
-          aggregate.accumulator, contribution.value)
-      }
-    },
-  }
-}
-
-pub fn reduction_aggregate_batch<COUNT: u32>(
-    frames: axis::Frame[COUNT]) -> ReductionAggregate {
-  unroll_for! (index, aggregate):
-      (u32, ReductionAggregate) in u32:0..COUNT {
-    reduction_aggregate_push(aggregate, frames[index])
-  }(zero!<ReductionAggregate>())
-}
-
-fn reduction_apply_complete_aggregate(
-    state: ReductionState, aggregate: ReductionAggregate)
-    -> ReductionApply {
-  if !aggregate.valid {
-    ReductionApply {
-      state, outcome: ReductionOutcome::NOT_CANDIDATE }
-  } else if state.status != ReductionStatus::OPEN ||
-      state.site as uN[2] != aggregate.site ||
-      state.key != aggregate.key {
-    ReductionApply { state, outcome: ReductionOutcome::MISMATCH }
-  } else {
-    let population = reduction_site_population(state.site);
-    let fresh = state.remaining == population &&
-      state.seen == zero!<ReductionMembers>();
-    let full = aggregate.count == population;
-    let member_mode = reduction_site_mode(state.site) ==
-      ReductionMode::MEMBERS;
-    let members_ok = aggregate.seen ==
-      reduction_aggregate_expected_members(state.site);
-    if aggregate.failed || !fresh || !full {
-      ReductionApply { state, outcome: ReductionOutcome::MISMATCH }
-    } else if !members_ok {
-      ReductionApply { state,
-        outcome: ReductionOutcome::UNEXPECTED_MEMBER }
-    } else {
-      let next_state = ReductionState {
-        status: ReductionStatus::COMPLETE,
-        remaining: ReductionRemaining:0,
-        seen: if member_mode { aggregate.seen }
-          else { state.seen },
-        accumulator: aggregate.accumulator,
-        ..state
-      };
-      ReductionApply {
-        state: next_state, outcome: ReductionOutcome::COMPLETE }
-    }
   }
 }
 
@@ -2491,18 +1927,6 @@ pub fn scheduled_effect(
   let last = index + u8:1 >= count;
   (entry_effect(scheduled.effects, index), emit, last)
 }
-pub fn scheduled_reduction_prefix(
-    scheduled: ScheduledEffects) -> (u1, u8, u1) {
-  let count = entry_effect_count(scheduled.effects);
-  match scheduled.effects.layout {
-    u8:3 => (u1:1, u8:4, count == u8:4),
-    u8:4 => (u1:1, u8:4, count == u8:4),
-    u8:5 => (u1:1, u8:4, count == u8:4),
-    u8:6 => (u1:1, u8:4, count == u8:4),
-    _ => (u1:0, u8:0, u1:0),
-  }
-}
-
 fn entry_effects_valid(effects: EntryEffects) -> u1 {
   entry_effect_count(effects) != u8:0
 }
@@ -2516,7 +1940,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
           let Xls_clause_1_Cell_1 = (Tag::CELL, data);
           if message.epoch == 0 {
             let _0 = (Phase::CONFIGURING, Xls_clause_1_Cell_1, Directive::POSTPONE, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, hls_failure::check(_0.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L322));
+            let _1 = (_0.0, _0.1, _0.2, _0.3, hls_failure::NONE);
             if (bool:false) {
               (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
@@ -2524,16 +1948,12 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
             }
           } else {
             let Xls_clause_2_Cell_1 = (Tag::CELL, data);
-            if bool:true {
-              let _0 = (Phase::CONFIGURING, Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
-              let _1 = (_0.0, _0.1, _0.2, _0.3, hls_failure::check(_0.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L324));
-              if (bool:false) {
-                (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-              } else {
-                (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-              }
+            let _0 = (Phase::CONFIGURING, Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L324);
+            if (bool:false) {
+              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
-              (phase, data, Directive::FAIL, u1:0, XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L321)
+              (_1.0, _1.1.1, _1.2, _1.3, _1.4)
             }
           }
         },
@@ -2546,7 +1966,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
           let _2 = Xls_clause_1_Epoch_1 == _1;
           if _2 {
             let _3 = (Phase::MEASURING, Xls_clause_1_Cell_1, Directive::POSTPONE, bool:0, );
-            let _4 = (_3.0, _3.1, _3.2, _3.3, hls_failure::check(_3.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L377));
+            let _4 = (_3.0, _3.1, _3.2, _3.3, hls_failure::NONE);
             if (bool:false) {
               (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
@@ -2554,16 +1974,12 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
             }
           } else {
             let Xls_clause_2_Cell_1 = (Tag::CELL, data);
-            if bool:true {
-              let _0 = (Phase::MEASURING, Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
-              let _1 = (_0.0, _0.1, _0.2, _0.3, hls_failure::check(_0.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L379));
-              if (bool:false) {
-                (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-              } else {
-                (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-              }
+            let _0 = (Phase::MEASURING, Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L379);
+            if (bool:false) {
+              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
-              (phase, data, Directive::FAIL, u1:0, XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L372)
+              (_1.0, _1.1.1, _1.2, _1.3, _1.4)
             }
           }
         },
@@ -2572,7 +1988,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
           let Xls_clause_1_Cell_1 = (Tag::CELL, data);
           if Xls_clause_1_Epoch_1 == data.diffusion_epoch {
             let _0 = (Phase::COMPARING, Xls_clause_1_Cell_1, Directive::POSTPONE, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, hls_failure::check(_0.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L516));
+            let _1 = (_0.0, _0.1, _0.2, _0.3, hls_failure::NONE);
             if (bool:false) {
               (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
@@ -2580,16 +1996,12 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
             }
           } else {
             let Xls_clause_2_Cell_1 = (Tag::CELL, data);
-            if bool:true {
-              let _0 = (Phase::COMPARING, Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
-              let _1 = (_0.0, _0.1, _0.2, _0.3, hls_failure::check(_0.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L518));
-              if (bool:false) {
-                (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-              } else {
-                (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-              }
+            let _0 = (Phase::COMPARING, Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L518);
+            if (bool:false) {
+              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
-              (phase, data, Directive::FAIL, u1:0, XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L511)
+              (_1.0, _1.1.1, _1.2, _1.3, _1.4)
             }
           }
         },
@@ -2598,7 +2010,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
           let Xls_clause_1_Cell_1 = (Tag::CELL, data);
           if Xls_clause_1_Epoch_1 == data.diffusion_epoch {
             let _0 = (Phase::FLIPPING, Xls_clause_1_Cell_1, Directive::POSTPONE, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, hls_failure::check(_0.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L588));
+            let _1 = (_0.0, _0.1, _0.2, _0.3, hls_failure::NONE);
             if (bool:false) {
               (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
@@ -2606,16 +2018,12 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
             }
           } else {
             let Xls_clause_2_Cell_1 = (Tag::CELL, data);
-            if bool:true {
-              let _0 = (Phase::FLIPPING, Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
-              let _1 = (_0.0, _0.1, _0.2, _0.3, hls_failure::check(_0.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L590));
-              if (bool:false) {
-                (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-              } else {
-                (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-              }
+            let _0 = (Phase::FLIPPING, Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L590);
+            if (bool:false) {
+              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
-              (phase, data, Directive::FAIL, u1:0, XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L583)
+              (_1.0, _1.1.1, _1.2, _1.3, _1.4)
             }
           }
         },
@@ -2627,30 +2035,22 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
       match phase {
         Phase::CONFIGURING => {
           let Xls_clause_1_Cell_1 = (Tag::CELL, data);
-          if bool:true {
-            let _0 = (Phase::CONFIGURING, Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, hls_failure::check(_0.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L332));
-            if (bool:false) {
-              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-            } else {
-              (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-            }
+          let _0 = (Phase::CONFIGURING, Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
+          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L332);
+          if (bool:false) {
+            (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
           } else {
-            (phase, data, Directive::FAIL, u1:0, XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L331)
+            (_1.0, _1.1.1, _1.2, _1.3, _1.4)
           }
         },
         Phase::MEASURING => {
           let Xls_clause_1_Cell_1 = (Tag::CELL, data);
-          if bool:true {
-            let _0 = (Phase::MEASURING, Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, hls_failure::check(_0.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L383));
-            if (bool:false) {
-              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-            } else {
-              (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-            }
+          let _0 = (Phase::MEASURING, Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
+          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L383);
+          if (bool:false) {
+            (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
           } else {
-            (phase, data, Directive::FAIL, u1:0, XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L382)
+            (_1.0, _1.1.1, _1.2, _1.3, _1.4)
           }
         },
         Phase::GATHERING => {
@@ -2658,7 +2058,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
           let Xls_clause_1_Cell_1 = (Tag::CELL, data);
           if Xls_clause_1_Step_1 == data.step {
             let _0 = (Phase::GATHERING, Xls_clause_1_Cell_1, Directive::POSTPONE, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, hls_failure::check(_0.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L446));
+            let _1 = (_0.0, _0.1, _0.2, _0.3, hls_failure::NONE);
             if (bool:false) {
               (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
@@ -2666,16 +2066,12 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
             }
           } else {
             let Xls_clause_2_Cell_1 = (Tag::CELL, data);
-            if bool:true {
-              let _0 = (Phase::GATHERING, Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
-              let _1 = (_0.0, _0.1, _0.2, _0.3, hls_failure::check(_0.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L448));
-              if (bool:false) {
-                (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-              } else {
-                (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-              }
+            let _0 = (Phase::GATHERING, Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L448);
+            if (bool:false) {
+              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
-              (phase, data, Directive::FAIL, u1:0, XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L441)
+              (_1.0, _1.1.1, _1.2, _1.3, _1.4)
             }
           }
         },
@@ -2684,7 +2080,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
           let Xls_clause_1_Cell_1 = (Tag::CELL, data);
           if Xls_clause_1_Step_1 == data.step {
             let _0 = (Phase::COMPARING, Xls_clause_1_Cell_1, Directive::POSTPONE, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, hls_failure::check(_0.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L524));
+            let _1 = (_0.0, _0.1, _0.2, _0.3, hls_failure::NONE);
             if (bool:false) {
               (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
@@ -2692,16 +2088,12 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
             }
           } else {
             let Xls_clause_2_Cell_1 = (Tag::CELL, data);
-            if bool:true {
-              let _0 = (Phase::COMPARING, Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
-              let _1 = (_0.0, _0.1, _0.2, _0.3, hls_failure::check(_0.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L526));
-              if (bool:false) {
-                (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-              } else {
-                (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-              }
+            let _0 = (Phase::COMPARING, Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L526);
+            if (bool:false) {
+              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
-              (phase, data, Directive::FAIL, u1:0, XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L519)
+              (_1.0, _1.1.1, _1.2, _1.3, _1.4)
             }
           }
         },
@@ -2713,30 +2105,22 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
       match phase {
         Phase::CONFIGURING => {
           let Xls_clause_1_Cell_1 = (Tag::CELL, data);
-          if bool:true {
-            let _0 = (Phase::CONFIGURING, Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, hls_failure::check(_0.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L330));
-            if (bool:false) {
-              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-            } else {
-              (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-            }
+          let _0 = (Phase::CONFIGURING, Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
+          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L330);
+          if (bool:false) {
+            (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
           } else {
-            (phase, data, Directive::FAIL, u1:0, XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L329)
+            (_1.0, _1.1.1, _1.2, _1.3, _1.4)
           }
         },
         Phase::MEASURING => {
           let Xls_clause_1_Cell_1 = (Tag::CELL, data);
-          if bool:true {
-            let _0 = (Phase::MEASURING, Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, hls_failure::check(_0.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L381));
-            if (bool:false) {
-              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-            } else {
-              (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-            }
+          let _0 = (Phase::MEASURING, Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
+          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L381);
+          if (bool:false) {
+            (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
           } else {
-            (phase, data, Directive::FAIL, u1:0, XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L380)
+            (_1.0, _1.1.1, _1.2, _1.3, _1.4)
           }
         },
         Phase::GATHERING => {
@@ -2744,7 +2128,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
           let Xls_clause_1_Cell_1 = (Tag::CELL, data);
           if Xls_clause_1_Step_1 == data.step {
             let _0 = (Phase::GATHERING, Xls_clause_1_Cell_1, Directive::POSTPONE, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, hls_failure::check(_0.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L438));
+            let _1 = (_0.0, _0.1, _0.2, _0.3, hls_failure::NONE);
             if (bool:false) {
               (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
@@ -2752,16 +2136,12 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
             }
           } else {
             let Xls_clause_2_Cell_1 = (Tag::CELL, data);
-            if bool:true {
-              let _0 = (Phase::GATHERING, Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
-              let _1 = (_0.0, _0.1, _0.2, _0.3, hls_failure::check(_0.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L440));
-              if (bool:false) {
-                (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-              } else {
-                (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-              }
+            let _0 = (Phase::GATHERING, Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L440);
+            if (bool:false) {
+              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
-              (phase, data, Directive::FAIL, u1:0, XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L433)
+              (_1.0, _1.1.1, _1.2, _1.3, _1.4)
             }
           }
         },
@@ -2799,7 +2179,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
           let Xls_clause_1_Cell_1 = (Tag::CELL, data);
           if message.step == 0 {
             let _0 = (Phase::CONFIGURING, Xls_clause_1_Cell_1, Directive::POSTPONE, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, hls_failure::check(_0.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L326));
+            let _1 = (_0.0, _0.1, _0.2, _0.3, hls_failure::NONE);
             if (bool:false) {
               (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
@@ -2807,16 +2187,12 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
             }
           } else {
             let Xls_clause_2_Cell_1 = (Tag::CELL, data);
-            if bool:true {
-              let _0 = (Phase::CONFIGURING, Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
-              let _1 = (_0.0, _0.1, _0.2, _0.3, hls_failure::check(_0.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L328));
-              if (bool:false) {
-                (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-              } else {
-                (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-              }
+            let _0 = (Phase::CONFIGURING, Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L328);
+            if (bool:false) {
+              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
-              (phase, data, Directive::FAIL, u1:0, XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L325)
+              (_1.0, _1.1.1, _1.2, _1.3, _1.4)
             }
           }
         },
@@ -2874,7 +2250,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
             let _16 = (Tag::CELL, _15);
             let Xls_clause_1_Updated_1 = _16;
             let _17 = (Phase::GATHERING, Xls_clause_1_Updated_1, Directive::CONSUME, bool:0, );
-            let _18 = (_17.0, _17.1, _17.2, _17.3, hls_failure::check(_17.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L369));
+            let _18 = (_17.0, _17.1, _17.2, _17.3, hls_failure::NONE);
             if (bool:false) {
               (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
@@ -2882,16 +2258,12 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
             }
           } else {
             let Xls_clause_2_Cell_1 = (Tag::CELL, data);
-            if bool:true {
-              let _0 = (Phase::MEASURING, Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
-              let _1 = (_0.0, _0.1, _0.2, _0.3, hls_failure::check(_0.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L371));
-              if (bool:false) {
-                (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-              } else {
-                (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-              }
+            let _0 = (Phase::MEASURING, Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L371);
+            if (bool:false) {
+              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
-              (phase, data, Directive::FAIL, u1:0, XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L354)
+              (_1.0, _1.1.1, _1.2, _1.3, _1.4)
             }
           }
         },
@@ -2904,7 +2276,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
           let _2 = Xls_clause_1_EventStep_1 == _1;
           if _2 {
             let _3 = (Phase::GATHERING, Xls_clause_1_Cell_1, Directive::POSTPONE, bool:0, );
-            let _4 = (_3.0, _3.1, _3.2, _3.3, hls_failure::check(_3.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L454));
+            let _4 = (_3.0, _3.1, _3.2, _3.3, hls_failure::NONE);
             if (bool:false) {
               (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
@@ -2912,16 +2284,12 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
             }
           } else {
             let Xls_clause_2_Cell_1 = (Tag::CELL, data);
-            if bool:true {
-              let _0 = (Phase::GATHERING, Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
-              let _1 = (_0.0, _0.1, _0.2, _0.3, hls_failure::check(_0.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L456));
-              if (bool:false) {
-                (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-              } else {
-                (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-              }
+            let _0 = (Phase::GATHERING, Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L456);
+            if (bool:false) {
+              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
-              (phase, data, Directive::FAIL, u1:0, XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L449)
+              (_1.0, _1.1.1, _1.2, _1.3, _1.4)
             }
           }
         },
@@ -2934,7 +2302,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
           let _2 = Xls_clause_1_EventStep_1 == _1;
           if _2 {
             let _3 = (Phase::COMPARING, Xls_clause_1_Cell_1, Directive::POSTPONE, bool:0, );
-            let _4 = (_3.0, _3.1, _3.2, _3.3, hls_failure::check(_3.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L532));
+            let _4 = (_3.0, _3.1, _3.2, _3.3, hls_failure::NONE);
             if (bool:false) {
               (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
@@ -2942,16 +2310,12 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
             }
           } else {
             let Xls_clause_2_Cell_1 = (Tag::CELL, data);
-            if bool:true {
-              let _0 = (Phase::COMPARING, Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
-              let _1 = (_0.0, _0.1, _0.2, _0.3, hls_failure::check(_0.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L534));
-              if (bool:false) {
-                (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-              } else {
-                (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-              }
+            let _0 = (Phase::COMPARING, Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L534);
+            if (bool:false) {
+              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
-              (phase, data, Directive::FAIL, u1:0, XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L527)
+              (_1.0, _1.1.1, _1.2, _1.3, _1.4)
             }
           }
         },
@@ -2964,7 +2328,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
           let _2 = Xls_clause_1_EventStep_1 == _1;
           if _2 {
             let _3 = (Phase::FLIPPING, Xls_clause_1_Cell_1, Directive::POSTPONE, bool:0, );
-            let _4 = (_3.0, _3.1, _3.2, _3.3, hls_failure::check(_3.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L635));
+            let _4 = (_3.0, _3.1, _3.2, _3.3, hls_failure::NONE);
             if (bool:false) {
               (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
@@ -2972,16 +2336,12 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
             }
           } else {
             let Xls_clause_2_Cell_1 = (Tag::CELL, data);
-            if bool:true {
-              let _0 = (Phase::FLIPPING, Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
-              let _1 = (_0.0, _0.1, _0.2, _0.3, hls_failure::check(_0.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L637));
-              if (bool:false) {
-                (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-              } else {
-                (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-              }
+            let _0 = (Phase::FLIPPING, Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L637);
+            if (bool:false) {
+              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
-              (phase, data, Directive::FAIL, u1:0, XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L630)
+              (_1.0, _1.1.1, _1.2, _1.3, _1.4)
             }
           }
         },
@@ -3014,7 +2374,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
             };
             let _4 = (Tag::CELL, _3);
             let _5 = (Phase::MEASURING, _4, Directive::CONSUME, bool:0, );
-            let _6 = (_5.0, _5.1, _5.2, _5.3, hls_failure::check(_5.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L318));
+            let _6 = (_5.0, _5.1, _5.2, _5.3, hls_failure::NONE);
             if (bool:false) {
               (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
@@ -3022,73 +2382,53 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
             }
           } else {
             let Xls_clause_2_Cell_1 = (Tag::CELL, data);
-            if bool:true {
-              let _0 = (Phase::CONFIGURING, Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
-              let _1 = (_0.0, _0.1, _0.2, _0.3, hls_failure::check(_0.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L320));
-              if (bool:false) {
-                (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-              } else {
-                (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-              }
+            let _0 = (Phase::CONFIGURING, Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L320);
+            if (bool:false) {
+              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
-              (phase, data, Directive::FAIL, u1:0, XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L313)
+              (_1.0, _1.1.1, _1.2, _1.3, _1.4)
             }
           }
         },
         Phase::MEASURING => {
           let Xls_clause_1_Cell_1 = (Tag::CELL, data);
-          if bool:true {
-            let _0 = (Phase::MEASURING, Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, hls_failure::check(_0.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L353));
-            if (bool:false) {
-              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-            } else {
-              (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-            }
+          let _0 = (Phase::MEASURING, Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
+          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L353);
+          if (bool:false) {
+            (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
           } else {
-            (phase, data, Directive::FAIL, u1:0, XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L352)
+            (_1.0, _1.1.1, _1.2, _1.3, _1.4)
           }
         },
         Phase::GATHERING => {
           let Xls_clause_1_Cell_1 = (Tag::CELL, data);
-          if bool:true {
-            let _0 = (Phase::GATHERING, Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, hls_failure::check(_0.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L458));
-            if (bool:false) {
-              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-            } else {
-              (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-            }
+          let _0 = (Phase::GATHERING, Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
+          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L458);
+          if (bool:false) {
+            (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
           } else {
-            (phase, data, Directive::FAIL, u1:0, XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L457)
+            (_1.0, _1.1.1, _1.2, _1.3, _1.4)
           }
         },
         Phase::COMPARING => {
           let Xls_clause_1_Cell_1 = (Tag::CELL, data);
-          if bool:true {
-            let _0 = (Phase::COMPARING, Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, hls_failure::check(_0.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L536));
-            if (bool:false) {
-              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-            } else {
-              (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-            }
+          let _0 = (Phase::COMPARING, Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
+          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L536);
+          if (bool:false) {
+            (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
           } else {
-            (phase, data, Directive::FAIL, u1:0, XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L535)
+            (_1.0, _1.1.1, _1.2, _1.3, _1.4)
           }
         },
         Phase::FLIPPING => {
           let Xls_clause_1_Cell_1 = (Tag::CELL, data);
-          if bool:true {
-            let _0 = (Phase::FLIPPING, Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, hls_failure::check(_0.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L639));
-            if (bool:false) {
-              (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
-            } else {
-              (_1.0, _1.1.1, _1.2, _1.3, _1.4)
-            }
+          let _0 = (Phase::FLIPPING, Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
+          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L639);
+          if (bool:false) {
+            (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
           } else {
-            (phase, data, Directive::FAIL, u1:0, XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L638)
+            (_1.0, _1.1.1, _1.2, _1.3, _1.4)
           }
         },
         _ => (phase, data, Directive::FAIL, u1:0, hls_failure::INVALID_MESSAGE),
@@ -3406,32 +2746,6 @@ fn shared_machine_complete(machine: SharedMachine) -> SharedDispatch {
     }
   }
 }
-fn shared_machine_aggregate(
-    machine: SharedMachine,
-    request: ReductionAggregateRequest,
-    slot: u32) -> SharedDispatch {
-  let applied = reduction_apply_complete_aggregate(
-    machine.reduction, request.aggregate);
-  let accepted = !hls_failure::failed(machine.failure) && !machine.enter_pending &&
-    request.slot == slot &&
-    applied.outcome == ReductionOutcome::COMPLETE;
-  if accepted {
-    shared_machine_complete(SharedMachine {
-      reduction: applied.state,
-      ..machine
-    })
-  } else {
-    SharedDispatch {
-      machine: SharedMachine {
-        failure: hls_failure::first(machine.failure, hls_failure::REDUCTION_PROTOCOL),
-        ..machine
-      },
-      dispatched: u1:1,
-      directive: Directive::FAIL,
-      ..zero!<SharedDispatch>()
-    }
-  }
-}
 fn shared_machine_dispatch(
     machine: SharedMachine, frame: axis::Frame, received: u1)
     -> SharedDispatch {
@@ -3441,12 +2755,32 @@ fn shared_machine_dispatch(
     SharedDispatch { machine, ..zero!<SharedDispatch>() }
   } else {
     let tag_ok = (frame.header.op == (Tag::PHI as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::ANYON_MOVE as u8) && frame.header.payload_words == u8:2) || (frame.header.op == (Tag::PHI0 as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHENOM_CONFIG as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHENOM_REQUEST as u8) && frame.header.payload_words == u8:1) || (frame.header.op == (Tag::PHENOM_QUERY as u8) && frame.header.payload_words == u8:2) || (frame.header.op == (Tag::PHENOM_DATA as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHENOM_ANYON as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHI_CORRECTION as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHI_CONFIG as u8) && frame.header.payload_words == u8:1) || (frame.header.op == (Tag::PAULI_QUERY as u8) && frame.header.payload_words == u8:2) || (frame.header.op == (Tag::PAULI_REPLY as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::NOISE_CUTOFF as u8) && frame.header.payload_words == u8:1) || (frame.header.op == (Tag::PAULI_UPDATE as u8) && frame.header.payload_words == u8:1) || (frame.header.op == (Tag::PHI_STATUS as u8) && frame.header.payload_words == u8:3);
+    let contribution = reduction_contribution(
+      frame, machine.phase, machine.data);
+    let reduction_applied = reduction_apply(
+      machine.reduction, contribution);
+    let reduction_candidate = tag_ok &&
+      reduction_applied.outcome != ReductionOutcome::NOT_CANDIDATE;
+    let reduction_mismatch = reduction_candidate &&
+      reduction_applied.outcome == ReductionOutcome::MISMATCH;
+    let reduction_accepted = reduction_candidate &&
+      (reduction_applied.outcome == ReductionOutcome::PENDING ||
+       reduction_applied.outcome == ReductionOutcome::COMPLETE);
     let (next_phase, next_data, directive, repeat_phase, dispatch_failure) =
-      if tag_ok {
+      if !tag_ok {
+        (machine.phase, machine.data, Directive::FAIL, u1:0, hls_failure::REDUCTION_PROTOCOL)
+      } else if !reduction_candidate {
         dispatch(frame, machine.phase, machine.data)
+      } else if reduction_mismatch {
+        (machine.phase, machine.data, Directive::POSTPONE, u1:0, hls_failure::NONE)
+      } else if reduction_accepted {
+        (machine.phase, machine.data, Directive::CONSUME, u1:0, hls_failure::NONE)
       } else {
         (machine.phase, machine.data, Directive::FAIL, u1:0, hls_failure::REDUCTION_PROTOCOL)
       };
+    let next_reduction = if reduction_accepted {
+      reduction_applied.state
+    } else { machine.reduction };
     let invalid_repeat = tag_ok && repeat_phase &&
       (directive != Directive::CONSUME ||
        next_phase != machine.phase);
@@ -3469,6 +2803,7 @@ fn shared_machine_dispatch(
         machine.phase
       } else { machine.entered_from },
       data: if effective { next_data } else { machine.data },
+      reduction: next_reduction,
       enter_pending: effective && phase_boundary && !failed,
       failure,
       ..machine
@@ -3526,9 +2861,6 @@ pub fn shared_execute(request: SharedExecutorRequest) ->
   let machine = machine_from_bits(request.machine);
   let dispatched = if request.internal {
     shared_machine_complete(machine)
-  } else if request.aggregate_valid {
-    shared_machine_aggregate(
-      machine, request.aggregate_request, request.slot)
   } else {
     shared_machine_dispatch(
       machine, request.frame, request.received)
@@ -3607,7 +2939,6 @@ fn reduction_ready_selection<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
       mail: state.mail_candidates,
       egress: state.egress_waiters,
       internal: state.internal_candidates,
-      aggregate: state.aggregate_pending_valid,
       ..zero!<scheduler::Candidates<ACTOR_COUNT>>()
     }, state.egress_busy, in_flight, cursor)
 }
@@ -3706,7 +3037,6 @@ pub proc SharedService<
   mailbox_read_resp_in: chan<MailboxRamReadResp> in;
   mailbox_write_req_out: chan<MailboxRamWriteReq> out;
   mailbox_write_resp_in: chan<MailboxRamWriteResp> in;
-      aggregate_in: chan<ReductionAggregateRequest> in;
   executor_request_out: chan<SharedExecutorRequest> out;
   executor_result_in: chan<SharedExecutorResult> in;
 
@@ -3721,8 +3051,7 @@ pub proc SharedService<
       mailbox_read_req_out: chan<MailboxRamReadReq> out,
       mailbox_read_resp_in: chan<MailboxRamReadResp> in,
       mailbox_write_req_out: chan<MailboxRamWriteReq> out,
-      mailbox_write_resp_in: chan<MailboxRamWriteResp> in,
-          aggregate_in: chan<ReductionAggregateRequest> in
+      mailbox_write_resp_in: chan<MailboxRamWriteResp> in
   ) {
     let (executor_request_p, executor_request_c) =
       chan<SharedExecutorRequest, u32:1>("executor_request");
@@ -3741,7 +3070,6 @@ pub proc SharedService<
       mailbox_read_resp_in,
       mailbox_write_req_out,
       mailbox_write_resp_in,
-          aggregate_in,
       executor_request_p,
       executor_result_c,
     )
@@ -3784,49 +3112,10 @@ pub proc SharedService<
           }
         )
       }((join(), state.pending, state.pending_valid));
-    let (aggregate_tok, incoming_aggregate, incoming_aggregate_valid) =
-      recv_if_non_blocking(
-        capture_tok,
-        aggregate_in,
-        capture_enabled,
-        zero!<ReductionAggregateRequest>());
-    let aggregate_slot = if incoming_aggregate.slot < ACTOR_COUNT {
-      incoming_aggregate.slot
-    } else { u32:0 };
-    let aggregate_protocol_error = incoming_aggregate_valid &&
-      (incoming_aggregate.slot >= ACTOR_COUNT ||
-       state.aggregate_pending_valid[aggregate_slot]);
-    let captured_aggregate = ReductionAggregateRequest {
-      aggregate: if aggregate_protocol_error {
-        ReductionAggregate {
-          failed: u1:1,
-          ..incoming_aggregate.aggregate
-        }
-      } else {
-        incoming_aggregate.aggregate
-      },
-      ..incoming_aggregate
-    };
-    let aggregate_pending = if incoming_aggregate_valid {
-      update(
-        state.aggregate_pending, aggregate_slot, captured_aggregate)
-    } else {
-      state.aggregate_pending
-    };
-    let aggregate_pending_valid = if incoming_aggregate_valid {
-      update(state.aggregate_pending_valid, aggregate_slot, u1:1)
-    } else {
-      state.aggregate_pending_valid
-    };
-    let aggregate_state = SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
-      aggregate_pending,
-      aggregate_pending_valid,
-      ..state
-    };
     match state.phase {
       SharedPhase::BOOT => {
         let write_tok = send(
-          aggregate_tok,
+          capture_tok,
           ram_write_req_out,
           machine_write(state.cursor, initial_shared_machine()));
         let (_done, _) = recv(write_tok, ram_write_resp_in);
@@ -3854,7 +3143,7 @@ pub proc SharedService<
         }
       },
       SharedPhase::STARTUP => {
-        let (tok, request) = recv(aggregate_tok, startup_in);
+        let (tok, request) = recv(capture_tok, startup_in);
         let physical = state.occupied[request.slot];
         let write_tok = send(
           tok,
@@ -3896,7 +3185,7 @@ pub proc SharedService<
           !state.completed_valid || buffered_can_retire;
         let (executor_result_tok, incoming_result, incoming_valid) =
           recv_if_non_blocking(
-            aggregate_tok,
+            capture_tok,
             executor_result_in,
             accept_executor_result,
             zero!<SharedExecutorResult>());
@@ -3922,7 +3211,7 @@ pub proc SharedService<
           pending_valid: credit_pending_valid,
           egress_busy: credit_busy ||
             (retire_valid && result.effects_valid),
-          ..aggregate_state
+          ..state
         };
         let retired = retire_reduction_actor(
           retire_actor(
@@ -3947,37 +3236,17 @@ pub proc SharedService<
         };
         let completion_blocked = completed_valid &&
           completed.effects_valid && retired.egress_busy;
-        let prior_issue_valid =
+        let issue_valid =
           state.next_valid && !completion_blocked;
-        let prior_read_slot = if state.next_valid {
+        let read_slot = if state.next_valid {
           state.next_slot
         } else { u32:0 };
-        // The retained choice wins. Otherwise select work made
-        // visible by aggregate capture or retirement and issue it
-        // without another activation's selection bubble.
-        let fast_in_flight = if retire_valid {
-          update(retired_in_flight, result.slot, u1:1)
-        } else {
-          retired_in_flight
-        };
-        let (fast_ready, fast_slot) = reduction_ready_selection(
-          retired, state.cursor, fast_in_flight);
-        let fast_issue = !prior_issue_valid &&
-          !completion_blocked && fast_ready;
-        let issue_valid = prior_issue_valid || fast_issue;
-        let read_slot = if prior_issue_valid {
-          prior_read_slot
-        } else { fast_slot };
         let internal_active = issue_valid &&
-          retired.internal_candidates[read_slot];
-        let aggregate_active = issue_valid &&
-          !internal_active &&
-          retired.aggregate_pending_valid[read_slot];
-        let private_active = internal_active || aggregate_active;
-        let entry_active = private_active ||
+          state.internal_candidates[read_slot];
+        let entry_active = internal_active ||
           state.entry_probes[read_slot] ||
           state.egress_waiters[read_slot];
-        let read_mailbox = issue_valid && !private_active &&
+        let read_mailbox = issue_valid && !internal_active &&
           state.mail_candidates[read_slot] && !entry_active;
         let (received, order_index, mailbox_index) =
           mailbox::select(
@@ -4030,15 +3299,6 @@ pub proc SharedService<
           admission_cursor: reservation.cursor,
           ..retired
         };
-    let post_issue_state = SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
-      aggregate_pending_valid: if aggregate_active {
-        update(
-          admitted.aggregate_pending_valid, read_slot, u1:0)
-      } else {
-        admitted.aggregate_pending_valid
-      },
-      ..admitted
-    };
         let issued_in_flight = if issue_valid {
           update(retired_in_flight, read_slot, u1:1)
         } else {
@@ -4056,7 +3316,7 @@ pub proc SharedService<
         let selection_state = SharedState<
             ACTOR_COUNT, PRODUCER_COUNT> {
           in_flight: issued_in_flight,
-          ..post_issue_state
+          ..admitted
         };
         let (selected_ready, selected_slot) = reduction_ready_selection(
           selection_state, cursor, issued_in_flight);
@@ -4076,9 +3336,6 @@ pub proc SharedService<
           machine: response.data,
           frame,
               internal: internal_active,
-              aggregate_request:
-                retired.aggregate_pending[read_slot],
-              aggregate_valid: aggregate_active,
           received: read_mailbox && received,
           mailbox_index,
           order_index,

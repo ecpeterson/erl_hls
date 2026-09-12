@@ -605,8 +605,7 @@ normalize_cast_result_expression(
     Result = {tuple, Line, [NextPhase, Data, Directive, {atom, Line, false}]},
     {xls_map, Line, Result, fun(R) ->
         ["(", R, ".0, ", R, ".1, ", R, ".2, ", R, ".3, ",
-            "hls_failure::check(", R, ".2 == Directive::FAIL, ",
-            xls_failure_sites:at(explicit_fail, Line), "))"]
+            cast_failure(Directive, Line, R), ")"]
     end};
 normalize_cast_result_expression(
     {'case', Line, Expression, Clauses},
@@ -624,6 +623,15 @@ normalize_cast_result_expression(
     ]};
 normalize_cast_result_expression(Expression, _Phase) ->
     error({unsupported_hls_statem_cast_result, Expression}).
+
+cast_failure({atom, _, Directive}, _Line, _Result)
+        when Directive =:= consume; Directive =:= postpone ->
+    "hls_failure::NONE";
+cast_failure({atom, _, fail}, Line, _Result) ->
+    xls_failure_sites:at(explicit_fail, Line);
+cast_failure(_Directive, Line, Result) ->
+    ["hls_failure::check(", Result, ".2 == Directive::FAIL, ",
+        xls_failure_sites:at(explicit_fail, Line), ")"].
 
 cast_key(
     {clause, Line, Patterns, _Guards, _Body},
