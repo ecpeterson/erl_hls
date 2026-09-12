@@ -43,11 +43,11 @@ exact_actor_placement_and_binding_validation_test() ->
 
 snapshot_projection_binding_test() ->
     {Plan, Specs} = hls_actor_debug_dslx:fixture(phi),
-    Projection = #{<<"banks">> := Banks} = xls_scheduler_debug:projection(Plan, Specs),
-    Raw = [A#{<<"kind">> => <<"actor">>, <<"width">> => 11, <<"bank">> => Index,
-        <<"module">> => Module, <<"phases">> => Phases} ||
+    Projection = #{<<"banks">> := Banks} = hls_actor_debug_dslx:projection(phi),
+    Raw = [A#{<<"kind">> => <<"actor">>, <<"width">> => 26, <<"bank">> => Index,
+        <<"module">> => Module, <<"phases">> => Phases, <<"failures">> => Failures} ||
         #{<<"index">> := Index, <<"module">> := Module, <<"phases">> := Phases,
-            <<"actors">> := Actors} <- Banks, A <- Actors],
+            <<"actors">> := Actors, <<"failures">> := Failures} <- Banks, A <- Actors],
     Resources = [R#{<<"id">> => Id} || {Id, R} <- lists:enumerate(0, Raw)],
     Manifest = #{<<"actor_projection">> => Projection, <<"resources">> => Resources,
         <<"fingerprint">> => <<"fixture">>},
@@ -63,10 +63,22 @@ snapshot_projection_binding_test() ->
         ?assertEqual([], [phase, initialized, enter_pending, failed, cycle] -- Fields),
         ?assertNot(lists:member(message_queue_len, Fields))
     end, hls_debug_catalog:actors(Catalog)),
+    [Bank | OtherBanks] = Banks,
+    Failures = maps:get(<<"failures">>, Bank),
+    [{Code, Origin} | _] = [{C, O} || {C, O = #{<<"file">> := _}} <- maps:to_list(Failures)],
+    lists:foreach(fun(BadFailures) ->
+        BadProjection = Projection#{<<"banks">> :=
+            [Bank#{<<"failures">> := BadFailures} | OtherBanks]},
+        ?assertError(actor_projection_mismatch,
+            xls_scheduler_debug:validate(Plan, Specs, BadProjection))
+    end, [Failures#{Code := Origin#{<<"file">> := <<"absent.erl">>}},
+        (maps:remove(Code, Failures))#{<<"65535">> => Origin}]),
     Wrong = maps:get(scheduler_groups, phi_decoder_profile_topology_dslx:profile(2)),
     ?assertError(actor_projection_mismatch, hls_debug_catalog:hardware(Plan, Wrong, [], Session)),
     [First | Rest] = Resources,
     Bad = Manifest#{<<"resources">> := [First#{<<"slot">> := 99} | Rest]},
     ?assertError(actor_resources_mismatch, hls_debug_catalog:hardware(Plan, Specs, [], Session#{manifest := Bad})),
+    WrongOrigin = Manifest#{<<"resources">> := [First#{<<"failures">> := #{}} | Rest]},
+    ?assertError(actor_resources_mismatch, hls_debug_catalog:hardware(Plan, Specs, [], Session#{manifest := WrongOrigin})),
     Duplicate = Manifest#{<<"resources">> := [First | Resources]},
     ?assertError(actor_resources_mismatch, hls_debug_catalog:hardware(Plan, Specs, [], Session#{manifest := Duplicate})).

@@ -16,7 +16,10 @@ rejected_aggregate_still_dispatches_failure_test() ->
     ?assertNotEqual(nomatch, binary:match(Support,
         <<"} else {\n"
           "    SharedDispatch {\n"
-          "      machine: SharedMachine { failed: u1:1, ..machine },\n"
+          "      machine: SharedMachine {\n"
+          "        failure: hls_failure::first(machine.failure, hls_failure::REDUCTION_PROTOCOL),\n"
+          "        ..machine\n"
+          "      },\n"
           "      dispatched: u1:1,\n"
           "      directive: Directive::FAIL">>)).
 

@@ -91,7 +91,7 @@ statem_fields() ->
     [message_queue_len, mailbox_capacity, free_slots, reserved, postponed,
         phase, lifecycle, beam_message_queue_len].
 
-actor_fields() -> [initialized, phase, enter_pending, failed].
+actor_fields() -> [initialized, phase, enter_pending, failed, failure].
 
 actor_provider(none) -> {[], none};
 actor_provider({hls_statem, Pid}) -> {statem_fields(), {statem, Pid}};
@@ -102,7 +102,8 @@ observe({actor_snapshot, Session, Id}, Fields, Timeout) ->
     case observe({resource, Session, Id}, Fields, Timeout) of
         {ok, Snapshot = #{phase := Phase}} when is_binary(Phase) ->
             %% Catalog binding already checked the codebook against loaded actors.
-            {ok, Snapshot#{phase := binary_to_existing_atom(Phase)}};
+            {ok, Snapshot#{phase := binary_to_existing_atom(Phase),
+                failure := actor_failure(maps:get(failure, Snapshot))}};
         Other -> Other
     end;
 observe({beam, Pid}, Fields, _Timeout) ->
@@ -148,3 +149,6 @@ is_boundary(_) -> false.
 is_resource({resource, #{resources := Resources}, Id}) ->
     maps:get(<<"kind">>, element(Id+1, Resources)) =/= <<"actor">>;
 is_resource(_) -> false.
+
+actor_failure(Failure = #{kind := Kind}) -> Failure#{kind := binary_to_existing_atom(Kind)};
+actor_failure(none) -> none.

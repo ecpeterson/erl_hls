@@ -43,8 +43,7 @@
 -spec emit(spec()) -> iolist().
 emit(Spec) ->
     SharedService = maps:get(shared_service, Spec, ordinary),
-    [
-        preamble(Spec),
+    Body = [
         maps:get(record_declarations, Spec),
         maps:get(helper_functions, Spec),
         xls_statem_reduction_codegen:declarations(
@@ -66,7 +65,8 @@ emit(Spec) ->
         shared_service(Spec),
         egress_demux(Spec),
         top(Spec)
-    ].
+    ],
+    [preamble(Spec), xls_failure_sites:emit(maps:get(failure_sites, Spec, []), Body)].
 
 %%%
 %%% Module declarations
@@ -180,7 +180,7 @@ machine_declarations(#{
         "  data: ", DataStruct, ",\n",
         "  effects: EntryEffects,\n",
         ?REDUCTION_SERVICE:machine_state_field(Reductions),
-        "  failed: bool,\n",
+        "  failure: hls_failure::Code,\n",
         "}\n\n",
         "type MailboxSlot = mailbox::Slot;\n\n",
         "struct Machine {\n",
@@ -195,7 +195,7 @@ machine_declarations(#{
         "  // Reserves one queue slot for the frame being assembled.\n",
         "  admission_pending: u1,\n",
         "  // A failed service ignores input until reset.\n",
-        "  failed: u1,\n",
+        "  failure: hls_failure::Code,\n",
         "}\n\n",
         "struct SharedMachine {\n",
         "  phase: Phase,\n",
@@ -203,7 +203,7 @@ machine_declarations(#{
         "  data: ", DataStruct, ",\n",
         ?REDUCTION_SERVICE:machine_state_field(Reductions),
         "  enter_pending: u1,\n",
-        "  failed: u1,\n",
+        "  failure: hls_failure::Code,\n",
         "}\n\n",
         "pub type MachineBits = bits[", integer_to_list(MachineBits), "];\n\n",
         "pub type MachineRamReadReq = bram::ReadReq;\n",
@@ -322,7 +322,7 @@ shared_machine_layout(DataWidth, ReductionWidth) ->
     {Width, Fields} = lists:foldl(fun({Name, Bits}, {Offset, Acc}) ->
         {Offset + Bits, Acc#{Name => #{offset => Offset, width => Bits}}}
     end, {0, #{}}, [{phase, 8}, {entered_from, 8}, {data, DataWidth},
-        {enter_pending, 1}, {failed, 1}, {reduction, ReductionWidth}]),
+        {enter_pending, 1}, {failure, 16}, {reduction, ReductionWidth}]),
     Fields#{width => Width}.
 
 %%%
@@ -340,7 +340,7 @@ initial_machine(#{init := Init} = Spec) ->
         "    data: machine.data,\n",
         ?REDUCTION_SERVICE:machine_state_copy_field(Reductions),
         "    enter_pending: machine.enter_pending,\n",
-        "    failed: machine.failed,\n",
+        "    failure: machine.failure,\n",
         "  }\n",
         "}\n\n",
         "fn initial_shared_machine() -> SharedMachine {\n",
@@ -352,7 +352,7 @@ machine_codec(#{data_name := DataName, data_width := DataWidth} = Spec) ->
     Reductions = maps:get(reductions, Spec, none),
     ReductionWidth = xls_statem_reduction_codegen:private_width(Reductions),
     #{data := #{offset := DataStart}, enter_pending := #{offset := EnterStart},
-        failed := #{offset := FailedStart}, reduction := #{offset := ReductionStart},
+        failure := #{offset := FailureStart}, reduction := #{offset := ReductionStart},
         width := ReductionEnd} = shared_machine_layout(DataWidth, ReductionWidth),
     DataFunction = record_function_name(DataName),
     [
@@ -363,9 +363,9 @@ machine_codec(#{data_name := DataName, data_width := DataWidth} = Spec) ->
         "    data: ", DataFunction, "_from_bits(raw[",
         integer_to_list(DataStart), ":", integer_to_list(EnterStart), "]),\n",
         "    enter_pending: raw[", integer_to_list(EnterStart), ":",
-        integer_to_list(FailedStart), "],\n",
-        "    failed: raw[", integer_to_list(FailedStart), ":",
-        integer_to_list(FailedStart + 1), "],\n",
+        integer_to_list(FailureStart), "],\n",
+        "    failure: raw[", integer_to_list(FailureStart), ":",
+        integer_to_list(FailureStart + 16), "],\n",
         ?REDUCTION_SERVICE:machine_decode_field(
             Reductions,
             ReductionStart,
@@ -375,7 +375,7 @@ machine_codec(#{data_name := DataName, data_width := DataWidth} = Spec) ->
         "}\n\n",
         "fn bits_from_machine(machine: SharedMachine) -> MachineBits {\n",
         ?REDUCTION_SERVICE:machine_encode_prefix(Reductions),
-        "  machine.failed ++\n",
+        "  machine.failure ++\n",
         "    machine.enter_pending ++\n",
         "    bits_from_", DataFunction, "(machine.data) ++\n",
         "    (machine.entered_from as bits[8]) ++\n",
@@ -406,12 +406,12 @@ enter_function(#{data_name := DataName, entries := Entries,
     ].
 
 entry_arm(#{phase := Phase,
-        evaluation := #{body := Body, result := Result, failed := Failed}}) ->
+        evaluation := #{body := Body, result := Result, failed := Failed, failure := Failure}}) ->
     [
         "    Phase::", uppercase(Phase), " => {\n",
         xls_parse_io:indent(Body, 6),
         "      if ", Failed, " {\n",
-        "        EntryOutcome { data, failed: true, ..zero!<EntryOutcome>() }\n",
+        "        EntryOutcome { data, failure: ", Failure, ", ..zero!<EntryOutcome>() }\n",
         "      } else { ", Result, " }\n",
         "    },\n"
     ].
@@ -430,7 +430,7 @@ entry_value(Result, #{phase := Phase, layout := Layout,
         "  EntryOutcome {\n",
         "    data: evaluated.0.1,\n",
         entry_reduction_field(Reductions, Reduction =/= none, Phase),
-        "    failed: false,\n",
+        "    failure: hls_failure::NONE,\n",
         "    effects: EntryEffects {\n",
         "      layout: u8:", integer_to_list(Layout), ",\n",
         "      payloads: ", entry_payload_expression(Effects, PayloadBits, MessageWords), ",\n",
@@ -600,10 +600,10 @@ dispatch_function(#{
     DataStruct = record_struct_name(DataName),
     [
         "fn dispatch(frame: axis::Frame, phase: Phase, data: ", DataStruct,
-        ") -> (Phase, ", DataStruct, ", Directive, u1) {\n",
+        ") -> (Phase, ", DataStruct, ", Directive, u1, hls_failure::Code) {\n",
         "  match frame.header.op as Tag {\n",
         [dispatch_tag_arm(Name, Casts) || Name <- MessageNames],
-        "    _ => (phase, data, Directive::FAIL, u1:0),\n",
+        "    _ => (phase, data, Directive::FAIL, u1:0, hls_failure::INVALID_MESSAGE),\n",
         "  }\n",
         "}\n\n"
     ].
@@ -616,7 +616,7 @@ dispatch_tag_arm(Tag, Casts) ->
         "_from_bits(frame.payload);\n",
         "      match phase {\n",
         [dispatch_phase_arm(Cast) || Cast <- TagCasts],
-        "        _ => (phase, data, Directive::FAIL, u1:0),\n",
+        "        _ => (phase, data, Directive::FAIL, u1:0, hls_failure::INVALID_MESSAGE),\n",
         "      }\n",
         "    },\n"
     ].
@@ -655,7 +655,7 @@ machine_step_function(#{
         "fn machine_step(\n",
         "    machine: Machine, frame: axis::Frame, received: u1,\n",
         "    egress_ready: u1) -> MachineStep {\n",
-        "  if machine.failed {\n",
+        "  if hls_failure::failed(machine.failure) {\n",
         "    MachineStep { machine, ..zero!<MachineStep>() }\n",
         ?REDUCTION_SERVICE:direct_after_failed(Reductions, Capacity),
         machine_entry_step(Reductions),
@@ -733,7 +733,7 @@ machine_step_function(#{
         "        occupied: candidate_occupied,\n",
         "        enter_pending: effective && phase_boundary && !failed,\n",
         "        admission_pending: admission_pending || reserve,\n",
-        "        failed,\n",
+        "        failure,\n",
         "        ..machine\n",
         "      };\n",
         "      MachineStep {\n",
@@ -771,7 +771,7 @@ machine_entry_step(Reductions) ->
         "        u8:0\n",
         "      } else { next_effect_index },\n",
         "      admission_pending: machine.admission_pending || reserve,\n",
-        "      failed: entry_failed,\n",
+        "      failure: entry_failure,\n",
         "      ..machine\n",
         "    };\n",
         "    MachineStep {\n",
@@ -796,7 +796,7 @@ shared_machine_step_function(#{
         "fn shared_machine_dispatch(\n",
         "    machine: SharedMachine, frame: axis::Frame, received: u1)\n",
         "    -> SharedDispatch {\n",
-        "  if machine.failed {\n",
+        "  if hls_failure::failed(machine.failure) {\n",
         "    SharedDispatch { machine, ..zero!<SharedDispatch>() }\n",
         "  } else if machine.enter_pending || !received {\n",
         "    SharedDispatch { machine, ..zero!<SharedDispatch>() }\n",
@@ -828,7 +828,7 @@ shared_machine_step_function(#{
             Reductions, SharedService
         ),
         "      enter_pending: effective && phase_boundary && !failed,\n",
-        "      failed,\n",
+        "      failure,\n",
         "      ..machine\n",
         "    };\n",
         "    SharedDispatch {\n",
@@ -844,7 +844,7 @@ shared_machine_step_function(#{
         "}\n\n",
         "fn shared_machine_enter(machine: SharedMachine, egress_ready: u1)\n",
         "    -> SharedStep {\n",
-        "  if machine.failed || !machine.enter_pending {\n",
+        "  if hls_failure::failed(machine.failure) || !machine.enter_pending {\n",
         "    SharedStep { machine, ..zero!<SharedStep>() }\n",
         "  } else {\n",
         ?REDUCTION_SERVICE:shared_entry_step(Reductions),
@@ -922,7 +922,7 @@ service(Spec) ->
         "  }\n\n",
         "  init { initial_machine() }\n\n",
         "  next(machine: Machine) {\n",
-        "    let receive_enabled = !machine.failed &&\n",
+        "    let receive_enabled = !hls_failure::failed(machine.failure) &&\n",
         "      !machine.enter_pending && machine.admission_pending",
         ?REDUCTION_SERVICE:direct_receive_gate(Reductions), ";\n",
         "    let (tok, frame, received) = recv_if_non_blocking(\n",
@@ -983,7 +983,7 @@ shared_service(Spec) ->
           postpone: received && stepped.dispatched &&
             stepped.directive == Directive::POSTPONE,
           phase_boundary: stepped.phase_boundary,
-          failed: stepped.machine.failed,
+          failed: hls_failure::failed(stepped.machine.failure),
           enter_pending: stepped.machine.enter_pending,
           egress_blocked: stepped.egress_blocked,
         });
@@ -1270,7 +1270,7 @@ shared_service(Spec) ->
               credit_pending_valid,
               issue_valid,
               read_slot,
-              retire_valid && resolved.machine.failed,
+              retire_valid && hls_failure::failed(resolved.machine.failure),
               result.slot);
             let admitted = SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
               pending: captured_pending,

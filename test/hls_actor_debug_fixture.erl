@@ -13,10 +13,25 @@
 
 init([]) -> {ok, boot, #cell{}}.
 boot(enter, _, Cell) -> {Cell, []};
-boot(cast, #configure{value = Value}, Cell) ->
+boot(cast, #configure{value = 3}, Cell) ->
+    Value = included_outer(0),
+    {active, Cell#cell{value = Value}, consume};
+boot(cast, #configure{value = 4}, Cell) ->
+    {boot, Cell, fail};
+boot(cast, #configure{value = Value}, Cell) when Value =/= 5 ->
     {active, Cell#cell{value = Value}, consume}.
 active(enter, _, Cell) ->
-    %% Slot zero fails while its healthy neighbor emits a blocked report.
-    Value = case Cell#cell.value of 1 -> Cell#cell.value end,
+    %% Independent failure origins coexist with healthy, backpressured actors.
+    Value = case Cell#cell.value of
+        0 -> case included_outer(0) of 1 -> hls_type:as(hls_nums:u32(), 1) end;
+        2 ->
+            true = Cell#cell.value =:= 0,
+            included_outer(0);
+        6 -> included_if(Cell#cell.value);
+        7 -> if Cell#cell.value =:= 7 -> hls_type:as(hls_nums:u32(), 1); true -> included_outer(0) end;
+        1 -> Cell#cell.value
+    end,
     {Cell, [{cast, out, #report{value = Value}}]};
 active(cast, #configure{}, Cell) -> {active, Cell, consume}.
+
+-include("hls_actor_debug_helpers.hrl").

@@ -165,6 +165,6 @@ emit_helper(#{name := Name, clause := Clause = {clause, Line, _, _, _},
         xls_parse:clause_outcome(Clause, Arguments, DataName, EnumAtoms),
     ["fn ", Name, "(", lists:join(", ", [[A, ": ", T]
         || {A, T} <- lists:zip(Arguments, Types)]), ") -> (", Type,
-        ", hls_failure::Kind) {  // L", integer_to_list(erl_anno:line(Line)), "\n",
+        ", hls_failure::Code) {  // L", integer_to_list(erl_anno:line(Line)), "\n",
         xls_parse_io:indent(xls_parse:print([Body,
             "(", Result, ", ", Failure, ")"]), 2), "}\n\n"].

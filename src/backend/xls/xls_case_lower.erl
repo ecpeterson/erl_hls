@@ -21,7 +21,7 @@
 lower(Line, Condition, Clauses, State) ->
     case boolean_only(Clauses) of
         true -> lower_boolean_case(Line, Condition, Clauses, State);
-        false -> lower_ordered_case(Line, Condition, Clauses, State, "CASE_CLAUSE")
+        false -> lower_ordered_case(Line, Condition, Clauses, State, case_clause)
     end.
 
 %%%
@@ -49,8 +49,10 @@ lower_ordered_case(Line, Condition, Clauses0, State0, FailureKind) ->
     end,
     BranchBase = branch_base(ConditionState),
     Branches = [lower_branch(Clause, Argument, Subject, BranchBase) || Clause <- Clauses],
+    Failure = xls_failure_sites:at(FailureKind, Line),
     join(Line, ConditionState, Branches, fun(Exports) ->
-        ["{\n", xls_parse_io:indent(xls_parse:print(render_chain(Branches, Exports, FailureKind)), 2), "}"]
+        ["{\n", xls_parse_io:indent(
+            xls_parse:print(render_chain(Branches, Exports, Failure)), 2), "}"]
     end).
 
 normalize_clause({clause, Line, [Pattern], Guards, Body})
@@ -71,8 +73,8 @@ validate_nonfinal_fallbacks([
 validate_nonfinal_fallbacks([_Clause | Rest], State, Kind) ->
     validate_nonfinal_fallbacks(Rest, State, Kind).
 
-fallback_error("CASE_CLAUSE") -> nonfinal_xls_case_fallback;
-fallback_error("IF_CLAUSE") -> nonfinal_xls_if_fallback.
+fallback_error(case_clause) -> nonfinal_xls_case_fallback;
+fallback_error(if_clause) -> nonfinal_xls_if_fallback.
 
 fallback_pattern({var, _Line, '_'}, _State) ->
     true;
@@ -139,9 +141,9 @@ lower_branch({Line, Pattern, Guards, Body}, Argument, Subject, BranchBase) ->
 %% precedence over any body failure and consumers discard the whole outcome.
 render_chain([#{head := Head, guard := "bool:true", state := State}], Exports, _Kind) ->
     [Head, selected(State, Exports)];
-render_chain([#{head := Head, guard := Guard, state := State}], Exports, Kind) ->
-    Failure = ["if ", Guard, " { ", xls_parse:failure_kind(State),
-        " } else { hls_failure::Kind::", Kind, " }"],
+render_chain([#{head := Head, guard := Guard, state := State}], Exports, Code) ->
+    Failure = ["if ", Guard, " { ", xls_parse:failure_code(State),
+        " } else { ", Code, " }"],
     [Head, selected(State, Exports, Failure)];
 render_chain([#{head := Head, guard := Guard, state := State} | Rest], Exports, Kind) ->
     [Head, "if ", Guard, " {\n",
@@ -154,7 +156,7 @@ render_chain([#{head := Head, guard := Guard, state := State} | Rest], Exports, 
     xls_parse:clause_state()) -> xls_parse:clause_state().
 lower_if(Line, Clauses, State) ->
     Normalized = [if_clause(Clause) || Clause <- Clauses],
-    lower_ordered_case(Line, "()", Normalized, State, "IF_CLAUSE").
+    lower_ordered_case(Line, "()", Normalized, State, if_clause).
 
 if_clause({clause, Line, [], Guards, Body}) when Body =/= [] ->
     Predicate = xls_guard_lower:predicate(Guards, Line),
@@ -221,7 +223,7 @@ join(Line, Base = #clause_state{bindings = Bound, unsafe_bindings = Unsafe}, Bra
     xls_parse:outcome_value(xls_parse:reference(Joined, Result)).
 
 selected(State, Exports) ->
-    selected(State, Exports, xls_parse:failure_kind(State)).
+    selected(State, Exports, xls_parse:failure_code(State)).
 
 selected(State = #clause_state{bindings = Bindings}, Exports, Failure) ->
     [lists:reverse(State#clause_state.statements),

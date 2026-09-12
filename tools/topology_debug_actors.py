@@ -39,8 +39,8 @@ def check_write_contract(module):
 
 
 def discover(projection, root, hierarchy, flat, top, clock_bit):
-    if projection.get("schema") != 1 or not projection.get("banks"):
-        raise ValueError("expected a nonempty scheduler projection, schema 1")
+    if projection.get("schema") != 2 or not projection.get("banks"):
+        raise ValueError("expected a nonempty scheduler projection, schema 2")
     module = hierarchy["modules"][top]
     for instance in root:
         module = hierarchy["modules"][module["cells"][instance]["type"]]
@@ -49,7 +49,7 @@ def discover(projection, root, hierarchy, flat, top, clock_bit):
         if bank["index"] != index:
             raise ValueError("scheduler bank indices must be contiguous")
         slots, width = bank["slots"], bank["width"]
-        if type(slots) is not int or slots < 1 or type(width) is not int or width < 18:
+        if type(slots) is not int or slots < 1 or type(width) is not int or width < 33:
             raise ValueError("invalid scheduler RAM dimensions")
         address_width = max(1, (slots - 1).bit_length())
         path = (*root, bank["ram"])
@@ -69,13 +69,13 @@ def discover(projection, root, hierarchy, flat, top, clock_bit):
             raise ValueError("state RAM is in a different clock domain")
         fields = bank["fields"]
         selected = []
-        for name, size in (("phase", 8), ("enter_pending", 1), ("failed", 1)):
+        for name, size in (("phase", 8), ("enter_pending", 1), ("failure", 16)):
             field = fields[name]
             offset = field["offset"]
             if field["width"] != size or type(offset) is not int or not 0 <= offset <= width-size:
                 raise ValueError(f"invalid actor field: {name}")
             selected.extend(range(offset, offset+size))
-        if len(set(selected)) != 10:
+        if len(set(selected)) != 25:
             raise ValueError("overlapping actor fields")
         phases = bank["phases"]
         if not 1 <= len(phases) <= 256 or len(set(phases)) != len(phases) or not all(isinstance(p, str) for p in phases):
@@ -93,8 +93,8 @@ def discover(projection, root, hierarchy, flat, top, clock_bit):
 
 
 def resources(banks, first_id):
-    return [dict(actor, id=first_id+i, kind="actor", width=11, bank=bank["index"],
-                 module=bank["module"], phases=bank["phases"])
+    return [dict(actor, id=first_id+i, kind="actor", width=26, bank=bank["index"],
+                 module=bank["module"], phases=bank["phases"], failures=bank["failures"])
             for i, (bank, actor) in enumerate((bank, actor) for bank in banks for actor in bank["actors"])]
 
 
@@ -108,7 +108,7 @@ def wrapper(banks, first_id, clock, reset, active_low):
                      f".reset({'!' if active_low else ''}\\{reset} ), "
                      f".write_enable(actor_writes[{offset}]), "
                      f".write_address(actor_writes[{offset+1} +: {address_width}]), "
-                     f".write_value(actor_writes[{offset+1+address_width} +: 10]), "
+                     f".write_value(actor_writes[{offset+1+address_width} +: 25]), "
                      f".values(probe_values[{resource*32} +: {bank['slots']*32}]));\n")
         offset += len(bank["taps"])
         resource += bank["slots"]

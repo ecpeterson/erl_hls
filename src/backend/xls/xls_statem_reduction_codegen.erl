@@ -101,6 +101,7 @@ declarations(Spec = #{
         "  data: ", DataType, ",\n",
         "  directive: Directive,\n",
         "  repeat_phase: u1,\n",
+        "  failure: hls_failure::Code,\n",
         "  dispatched: u1,\n",
         "}\n\n"
     ].
@@ -607,6 +608,7 @@ completion_function(#{
         "      _ => ReductionDispatch {\n",
         "        reduction: zero!<ReductionState>(),\n",
         "        phase, data, directive: Directive::FAIL,\n",
+        "        failure: hls_failure::REDUCTION_PROTOCOL,\n",
         "        dispatched: u1:1,\n",
         "        ..zero!<ReductionDispatch>()\n",
         "      },\n",
@@ -632,6 +634,7 @@ completion_arm(Site = #{
         "          data: conclusion.1,\n",
         "          directive: conclusion.2,\n",
         "          repeat_phase: conclusion.3,\n",
+        "          failure: conclusion.4,\n",
         "          dispatched: u1:1,\n",
         "        }\n",
         "      },\n"

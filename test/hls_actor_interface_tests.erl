@@ -249,7 +249,7 @@ reduction_interface_survives_parse_transform_test() ->
         ),
         ?assertEqual(80, maps:get(reduction_storage_width, Group)),
         [Binding] = xls_scheduler_ram_v:bindings(#{groups => [Group]}),
-        ?assertEqual(170, maps:get(state_width, Binding)),
+        ?assertEqual(185, maps:get(state_width, Binding)),
         ?assertEqual(128, maps:get(mailbox_width, Binding))
     after
         true = code:delete(Module),

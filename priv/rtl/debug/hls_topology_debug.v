@@ -47,7 +47,7 @@ module hls_topology_debug #(
             m_data = {reply_tag, 8'd0, reply_txid, reply_count};
         else if (reply_tag == (INFO | 8'h80)) begin
             case (reply_index)
-                1: m_data = 2; // protocol/manifest schema
+                1: m_data = 3; // protocol/manifest schema
                 2: m_data = RESOURCES;
                 3: m_data = CHANNELS;
                 4: m_data = RESOURCES - CHANNELS - ACTORS;

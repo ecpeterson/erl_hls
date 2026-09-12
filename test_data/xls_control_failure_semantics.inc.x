@@ -2,5 +2,5 @@
 // values are intentionally masked: the compiler promises no value on failure.
 pub fn control_probe(mode: u32, x: u32, y: u32) -> bits[35] {
     let (value, failure) = hls_local_evaluate__3(mode, x, y);
-    (failure as u3) ++ (if failure == hls_failure::Kind::NONE { value } else { u32:0 })
+    (hls_failure::kind(failure) as u3) ++ (if failure == hls_failure::NONE { value } else { u32:0 })
 }

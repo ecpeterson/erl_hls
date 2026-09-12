@@ -44,7 +44,7 @@ fn reduction_direct_machine_test() {
   // A contribution for another key waits in the ordinary mailbox.
   let mismatched = machine_step(
     entered, reduction_test_count(u32:1, u32:99), u1:1, u1:1).machine;
-  assert_eq(mismatched.failed, u1:0);
+  assert_eq(hls_failure::failed(mismatched.failure), u1:0);
   assert_eq(mismatched.occupied, u8:1);
   assert_eq(mismatched.slots[0].postponed, u1:1);
   assert_eq(mismatched.reduction.remaining, ReductionRemaining:2);
@@ -78,7 +78,7 @@ fn reduction_direct_machine_test() {
     reduction_test_member(u32:0, u32:7, u32:8),
     u1:1,
     u1:1).machine;
-  assert_eq(duplicate.failed, u1:1);
+  assert_eq(hls_failure::failed(duplicate.failure), u1:1);
 }
 
 #[test]
@@ -191,7 +191,7 @@ fn reduction_shared_priority_and_layout_test() {
     retired,
     u1:1,
     u32:2,
-    SharedMachine { failed: u1:1, ..completed });
+    SharedMachine { failure: hls_failure::REDUCTION_PROTOCOL, ..completed });
   assert_eq(cleared.internal_candidates, [u1:0, u1:0, u1:0]);
 }
 

@@ -76,25 +76,26 @@ class DiscoveryTests(unittest.TestCase):
                 {"modules": {"top": {"netnames": nets}}}, "top", "clk")
 
     def test_actor_projection_binding(self):
-        bank = {"index": 0, "ram": "scheduler_0_state", "slots": 2, "width": 50,
+        bank = {"index": 0, "ram": "scheduler_0_state", "slots": 2, "width": 65,
                 "fields": {"phase": {"offset": 0, "width": 8},
                            "enter_pending": {"offset": 48, "width": 1},
-                           "failed": {"offset": 49, "width": 1}},
+                           "failure": {"offset": 49, "width": 16}},
+                "failures": {"16": {"kind": "case_clause", "file": "fixture.erl", "line": 20}},
                 "module": "fixture", "phases": ["boot", "active"],
                 "actors": [{"slot": i, "key": str(i)*64, "name": str(i)} for i in range(2)]}
-        projection = {"schema": 1, "banks": [bank]}
+        projection = {"schema": 2, "banks": [bank]}
         ports = {"clk": {"bits": [1], "direction": "input"},
                  "wr_en": {"bits": [2], "direction": "input"},
                  "wr_addr": {"bits": [3], "direction": "input"},
-                 "wr_data": {"bits": list(range(10, 60)), "direction": "input"}}
+                 "wr_data": {"bits": list(range(10, 75)), "direction": "input"}}
         hierarchy = {"modules": {"top": {"cells": {"shell": {"type": "shell"}}},
             "shell": {"cells": {"scheduler_0_state": {"type": "ram"}}},
             "ram": {"ports": ports, "attributes": {"hdlname": "hls_1r1w_ram"}}}}
         hierarchy["modules"]["ram"]["cells"] = {
             "write": {"type": "$memwr_v2", "parameters": {"CLK_ENABLE": "1", "CLK_POLARITY": "1", "MEMID": "memory"},
-                      "connections": {"CLK": [1], "ADDR": [3], "DATA": list(range(10,60)), "EN": [70]*50}},
-            "enable": {"type": "$mux", "connections": {"S": [2], "Y": [70]*50, "A": ["0"]*50, "B": ["1"]*50}}}
-        hierarchy["modules"]["ram"]["memories"] = {"memory": {"width": 50, "size": 2, "start_offset": 0}}
+                      "connections": {"CLK": [1], "ADDR": [3], "DATA": list(range(10,75)), "EN": [90]*65}},
+            "enable": {"type": "$mux", "connections": {"S": [2], "Y": [90]*65, "A": ["0"]*65, "B": ["1"]*65}}}
+        hierarchy["modules"]["ram"]["memories"] = {"memory": {"width": 65, "size": 2, "start_offset": 0}}
         flat = {"netnames": {"shell.scheduler_0_state."+k: {"bits": p["bits"]} for k,p in ports.items()}}
         def discover(p=projection, f=flat, h=hierarchy):
             return topology.actors.discover(p, ["shell"], h, f, "top", 1)
@@ -102,13 +103,13 @@ class DiscoveryTests(unittest.TestCase):
         escaped = copy.deepcopy(hierarchy)
         escaped["modules"]["ram"]["attributes"]["hdlname"] = "\\hls_1r1w_ram"
         self.assertEqual(discover(h=escaped), banks)
-        self.assertEqual(banks[0]["taps"], [2, 3, *range(10, 18), 58, 59])
+        self.assertEqual(banks[0]["taps"], [2, 3, *range(10, 18), *range(58, 75)])
         resources = topology.actors.resources(banks, 5)
         self.assertEqual([r["id"] for r in resources], [5, 6])
         for mutation, message in [
-            (lambda b: b.update(width=51), "port mismatch"),
-            (lambda b: b["fields"]["failed"].update(offset=50), "invalid actor field"),
-            (lambda b: b["fields"]["failed"].update(offset=0), "overlapping"),
+            (lambda b: b.update(width=66), "port mismatch"),
+            (lambda b: b["fields"]["failure"].update(offset=65), "invalid actor field"),
+            (lambda b: b["fields"]["failure"].update(offset=0), "overlapping"),
             (lambda b: b["actors"][1].update(slot=0), "slots"),
             (lambda b: b["actors"][1].update(key="0"*64), "duplicate"),
             (lambda b: b.update(phases=["boot", "boot"]), "codebook")]:
@@ -126,7 +127,7 @@ class DiscoveryTests(unittest.TestCase):
             discover(h=bad)
 
         bad = copy.deepcopy(hierarchy)
-        bad["modules"]["ram"]["cells"]["enable"]["connections"]["A"] = ["1"]*50
+        bad["modules"]["ram"]["cells"]["enable"]["connections"]["A"] = ["1"]*65
         with self.assertRaisesRegex(ValueError, "accepted-write"):
             discover(h=bad)
         bad = copy.deepcopy(hierarchy)

@@ -27,7 +27,7 @@ lower(Clause = {clause, Line, _, _, _}, DataName, Postprocess, EnumAtoms) ->
     #{body := Body, result := Result, failed := Failed} =
         xls_parse:clause_outcome(Clause, [], DataName, EnumAtoms),
     #{
-        line => Line,
+        line => erl_anno:line(Line),
         body => xls_parse:print(Body),
         result => xls_parse:print(Postprocess(Result)),
         failed => xls_parse:print(Failed)

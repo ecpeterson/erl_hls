@@ -139,8 +139,9 @@ direct_after_failed(_Reductions, Capacity) ->
         "      completed.directive != Directive::FAIL &&\n",
         "      (completed.phase != machine.phase ||\n",
         "       completed.repeat_phase);\n",
-        "    let failed = !completed.dispatched || invalid_repeat ||\n",
-        "      (effective && completed.directive == Directive::FAIL);\n",
+        "    let failure = hls_failure::completion(\n",
+        "      completed.dispatched, invalid_repeat, completed.failure);\n",
+        "    let failed = hls_failure::failed(failure);\n",
         "    let reserve = !failed && !machine.admission_pending &&\n",
         "      machine.occupied < MAILBOX_CAPACITY;\n",
         "    let next_machine = Machine {\n",
@@ -155,7 +156,7 @@ direct_after_failed(_Reductions, Capacity) ->
         " } else { machine.slots },\n",
         "      enter_pending: phase_boundary && !failed,\n",
         "      admission_pending: machine.admission_pending || reserve,\n",
-        "      failed,\n",
+        "      failure,\n",
         "      ..machine\n",
         "    };\n",
         "    MachineStep {\n",
@@ -185,12 +186,12 @@ direct_unblocked_slots(Capacity, Slots) ->
 -spec direct_dispatch_bindings(reductions()) -> iodata().
 direct_dispatch_bindings(none) ->
     [
-        "      let (next_phase, next_data, directive, repeat_phase) =\n",
+        "      let (next_phase, next_data, directive, repeat_phase, dispatch_failure) =\n",
         "        if dispatchable {\n",
         "          dispatch(selected_frame, machine.phase, machine.data)\n",
         "        } else {\n",
         "          (machine.phase, machine.data, ",
-        "Directive::CONSUME, u1:0)\n",
+        "Directive::CONSUME, u1:0, hls_failure::NONE)\n",
         "        };\n"
     ];
 direct_dispatch_bindings(_Reductions) ->
@@ -208,20 +209,20 @@ direct_dispatch_bindings(_Reductions) ->
         "        (reduction_applied.outcome == ReductionOutcome::PENDING ||\n",
         "         reduction_applied.outcome == ",
         "ReductionOutcome::COMPLETE);\n",
-        "      let (next_phase, next_data, directive, repeat_phase) =\n",
+        "      let (next_phase, next_data, directive, repeat_phase, dispatch_failure) =\n",
         "        if !dispatchable {\n",
         "          (machine.phase, machine.data, ",
-        "Directive::CONSUME, u1:0)\n",
+        "Directive::CONSUME, u1:0, hls_failure::NONE)\n",
         "        } else if !reduction_candidate {\n",
         "          dispatch(selected_frame, machine.phase, machine.data)\n",
         "        } else if reduction_mismatch {\n",
         "          (machine.phase, machine.data, ",
-        "Directive::POSTPONE, u1:0)\n",
+        "Directive::POSTPONE, u1:0, hls_failure::NONE)\n",
         "        } else if reduction_accepted {\n",
         "          (machine.phase, machine.data, ",
-        "Directive::CONSUME, u1:0)\n",
+        "Directive::CONSUME, u1:0, hls_failure::NONE)\n",
         "        } else {\n",
-        "          (machine.phase, machine.data, Directive::FAIL, u1:0)\n",
+        "          (machine.phase, machine.data, Directive::FAIL, u1:0, hls_failure::REDUCTION_PROTOCOL)\n",
         "        };\n",
         "      let next_reduction = if reduction_accepted {\n",
         "        reduction_applied.state\n",
@@ -244,16 +245,12 @@ direct_effective_binding(_Reductions) ->
     ].
 
 -spec direct_failed_binding(reductions()) -> iodata().
-direct_failed_binding(none) ->
+direct_failed_binding(Reductions) ->
     [
-        "      let failed = invalid_input || invalid_repeat ||\n",
-        "        (effective && directive == Directive::FAIL);\n"
-    ];
-direct_failed_binding(_Reductions) ->
-    [
-        "      let failed = invalid_input || invalid_repeat ||\n",
-        "        incomplete_boundary ||\n",
-        "        (effective && directive == Directive::FAIL);\n"
+        "      let failure = hls_failure::dispatch(invalid_input, invalid_repeat, ",
+        case Reductions of none -> "false"; _ -> "incomplete_boundary" end,
+        ", effective, dispatch_failure);\n",
+        "      let failed = hls_failure::failed(failure);\n"
     ].
 
 -spec direct_reduction_field(reductions()) -> iodata().
@@ -267,12 +264,15 @@ direct_entry_bindings(Reductions) ->
     entry_bindings(Reductions).
 
 entry_bindings(none) ->
-    "    let entry_failed = outcome.failed;\n";
+    "    let entry_failure = outcome.failure;\n"
+    "    let entry_failed = hls_failure::failed(entry_failure);\n";
 entry_bindings(_Reductions) ->
     [
         "    let opens_reduction = outcome.reduction.status != ReductionStatus::IDLE;\n",
-        "    let entry_failed = outcome.failed || (opens_reduction &&\n",
-        "      machine.reduction.status != ReductionStatus::IDLE);\n",
+        "    let entry_failure = hls_failure::first(outcome.failure,\n",
+        "      hls_failure::check(opens_reduction &&\n",
+        "        machine.reduction.status != ReductionStatus::IDLE, hls_failure::REDUCTION_PROTOCOL));\n",
+        "    let entry_failed = hls_failure::failed(entry_failure);\n",
         "    let entered_reduction = if opens_reduction {\n",
         "      outcome.reduction\n",
         "    } else { machine.reduction };\n"
@@ -306,11 +306,14 @@ shared_machine_support(none, _Mode) ->
 shared_machine_support(_Reductions, Mode) ->
     ["""
     fn shared_machine_complete(machine: SharedMachine) -> SharedDispatch {
-      let valid = !machine.failed && !machine.enter_pending &&
+      let valid = !hls_failure::failed(machine.failure) && !machine.enter_pending &&
         machine.reduction.status == ReductionStatus::COMPLETE;
       if !valid {
         SharedDispatch {
-          machine: SharedMachine { failed: u1:1, ..machine },
+          machine: SharedMachine {
+            failure: hls_failure::first(machine.failure, hls_failure::REDUCTION_PROTOCOL),
+            ..machine
+          },
           directive: Directive::FAIL,
           dispatched: u1:1,
           ..zero!<SharedDispatch>()
@@ -325,8 +328,9 @@ shared_machine_support(_Reductions, Mode) ->
         let phase_boundary = effective &&
           completed.directive != Directive::FAIL &&
           (completed.phase != machine.phase || completed.repeat_phase);
-        let failed = !completed.dispatched || invalid_repeat ||
-          (effective && completed.directive == Directive::FAIL);
+        let failure = hls_failure::completion(
+          completed.dispatched, invalid_repeat, completed.failure);
+        let failed = hls_failure::failed(failure);
         let next_machine = SharedMachine {
           phase: if effective { completed.phase } else { machine.phase },
           entered_from: if phase_boundary {
@@ -335,7 +339,7 @@ shared_machine_support(_Reductions, Mode) ->
           data: if effective { completed.data } else { machine.data },
           reduction: completed.reduction,
           enter_pending: phase_boundary && !failed,
-          failed,
+          failure,
           ..machine
         };
         SharedDispatch {
@@ -360,7 +364,7 @@ shared_machine_aggregate(aggregate_only) ->
         slot: u32) -> SharedDispatch {
       let applied = reduction_apply_complete_aggregate(
         machine.reduction, request.aggregate);
-      let accepted = !machine.failed && !machine.enter_pending &&
+      let accepted = !hls_failure::failed(machine.failure) && !machine.enter_pending &&
         request.slot == slot &&
         applied.outcome == ReductionOutcome::COMPLETE;
       if accepted {
@@ -370,7 +374,10 @@ shared_machine_aggregate(aggregate_only) ->
         })
       } else {
         SharedDispatch {
-          machine: SharedMachine { failed: u1:1, ..machine },
+          machine: SharedMachine {
+            failure: hls_failure::first(machine.failure, hls_failure::REDUCTION_PROTOCOL),
+            ..machine
+          },
           dispatched: u1:1,
           directive: Directive::FAIL,
           ..zero!<SharedDispatch>()
@@ -383,11 +390,11 @@ shared_machine_aggregate(aggregate_only) ->
 -spec shared_dispatch_bindings(reductions(), service_mode()) -> iodata().
 shared_dispatch_bindings(none, _Mode) ->
     [
-        "    let (next_phase, next_data, directive, repeat_phase) =\n",
+        "    let (next_phase, next_data, directive, repeat_phase, dispatch_failure) =\n",
         "      if tag_ok {\n",
         "        dispatch(frame, machine.phase, machine.data)\n",
         "      } else {\n",
-        "        (machine.phase, machine.data, Directive::FAIL, u1:0)\n",
+        "        (machine.phase, machine.data, Directive::FAIL, u1:0, hls_failure::REDUCTION_PROTOCOL)\n",
         "      };\n"
     ];
 shared_dispatch_bindings(_Reductions, aggregate_only) ->
@@ -409,19 +416,19 @@ shared_dispatch_bindings(_Reductions, ordinary) ->
         "    let reduction_accepted = reduction_candidate &&\n",
         "      (reduction_applied.outcome == ReductionOutcome::PENDING ||\n",
         "       reduction_applied.outcome == ReductionOutcome::COMPLETE);\n",
-        "    let (next_phase, next_data, directive, repeat_phase) =\n",
+        "    let (next_phase, next_data, directive, repeat_phase, dispatch_failure) =\n",
         "      if !tag_ok {\n",
-        "        (machine.phase, machine.data, Directive::FAIL, u1:0)\n",
+        "        (machine.phase, machine.data, Directive::FAIL, u1:0, hls_failure::REDUCTION_PROTOCOL)\n",
         "      } else if !reduction_candidate {\n",
         "        dispatch(frame, machine.phase, machine.data)\n",
         "      } else if reduction_mismatch {\n",
         "        (machine.phase, machine.data, ",
-        "Directive::POSTPONE, u1:0)\n",
+        "Directive::POSTPONE, u1:0, hls_failure::NONE)\n",
         "      } else if reduction_accepted {\n",
         "        (machine.phase, machine.data, ",
-        "Directive::CONSUME, u1:0)\n",
+        "Directive::CONSUME, u1:0, hls_failure::NONE)\n",
         "      } else {\n",
-        "        (machine.phase, machine.data, Directive::FAIL, u1:0)\n",
+        "        (machine.phase, machine.data, Directive::FAIL, u1:0, hls_failure::REDUCTION_PROTOCOL)\n",
         "      };\n",
         "    let next_reduction = if reduction_accepted {\n",
         "      reduction_applied.state\n",
@@ -445,16 +452,12 @@ shared_dispatch_effective_binding(_Reductions, _Mode) ->
     ].
 
 -spec shared_dispatch_failed_binding(reductions(), service_mode()) -> iodata().
-shared_dispatch_failed_binding(none, _Mode) ->
+shared_dispatch_failed_binding(Reductions, _Mode) ->
     [
-        "    let failed = !tag_ok || invalid_repeat ||\n",
-        "      (effective && directive == Directive::FAIL);\n"
-    ];
-shared_dispatch_failed_binding(_Reductions, _Mode) ->
-    [
-        "    let failed = !tag_ok || invalid_repeat ||\n",
-        "      incomplete_boundary ||\n",
-        "      (effective && directive == Directive::FAIL);\n"
+        "    let failure = hls_failure::dispatch(!tag_ok, invalid_repeat, ",
+        case Reductions of none -> "false"; _ -> "incomplete_boundary" end,
+        ", effective, dispatch_failure);\n",
+        "    let failed = hls_failure::failed(failure);\n"
     ].
 
 -spec shared_dispatch_reduction_field(reductions(), service_mode()) -> iodata().
@@ -488,7 +491,7 @@ shared_entry_step(Reductions) ->
         "      data: if entry_failed { machine.data } else { outcome.data },\n",
         shared_entry_reduction_field(Reductions),
         "      enter_pending: u1:0,\n",
-        "      failed: entry_failed,\n",
+        "      failure: entry_failure,\n",
         "      ..machine\n",
         "    };\n",
         "    SharedStep {\n",
@@ -578,7 +581,7 @@ shared_service_helpers(_Reductions, Mode) ->
           state.internal_candidates,
           slot,
           machine.reduction.status == ReductionStatus::COMPLETE &&
-            !machine.failed)
+            !hls_failure::failed(machine.failure))
       } else {
         state.internal_candidates
       };

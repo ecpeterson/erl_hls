@@ -90,13 +90,13 @@ callbacks(call, StateName) ->
             ["(axis::pack(", R, ".1.0 as u8, ", R, ".1.2), ", R, ".2)"]
         end,
         failure("ERROR_FUNCTION_CLAUSE", StateName),
-        fun(Kind) -> failure(["(", Kind, ") as u32"], StateName) end
+        fun(Kind) -> failure(["hls_failure::kind(", Kind, ") as u32"], StateName) end
     };
 callbacks(cast, StateName) ->
     {
         fun(R) -> ["(zero!<axis::Frame>(), ", R, ".1)"] end,
         failure("ERROR_FUNCTION_CLAUSE", StateName),
-        fun(Kind) -> failure(["(", Kind, ") as u32"], StateName) end
+        fun(Kind) -> failure(["hls_failure::kind(", Kind, ") as u32"], StateName) end
     }.
 
 failure(Code, StateName) ->

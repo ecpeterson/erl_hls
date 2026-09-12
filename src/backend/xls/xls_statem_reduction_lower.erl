@@ -948,15 +948,16 @@ close_completion(#{clauses := Clauses0}, Phase, DataName,
             ["(Tag::", uppercase(DataName), ", data)"]
         )
     ],
-    Failure = "(phase, data, Directive::FAIL, u1:0)",
+    Failure = fun(Code) -> ["(phase, data, Directive::FAIL, u1:0, ", Code, ")"] end,
+    [{clause, FirstLine, _, _, _} | _] = Clauses,
     {Body, Result} = xls_callback_lower:lower(
         Clauses,
         Arguments,
         DataName,
         fun(R) -> ["(", R, ".0, ", R, ".1.1, ", R, ".2, ",
-            R, ".3)"] end,
+            R, ".3, ", R, ".4)"] end,
+        Failure(xls_failure_sites:at(function_clause, FirstLine)),
         Failure,
-        fun(_Kind) -> Failure end,
         EnumAtoms
     ),
     lowered(Body, Result).
@@ -985,7 +986,8 @@ normalize_internal_result_expression({tuple, Line, [
 ]}, Phase) ->
     {tuple, Line, [
         {atom, Line, Phase}, Data, {atom, Line, consume},
-        {atom, Line, true}
+        {atom, Line, true},
+        {xls_map, 0, {atom, 0, false}, fun(_) -> "hls_failure::NONE" end}
     ]};
 normalize_internal_result_expression(
     {tuple, Line, [{atom, _RepeatLine, repeat_phase} | _] = Elements},
@@ -994,7 +996,12 @@ normalize_internal_result_expression(
     error({bad_hls_statem_repeat_result, Line, Elements});
 normalize_internal_result_expression({tuple, Line, [Phase, Data, Directive]},
         _CurrentPhase) ->
-    {tuple, Line, [Phase, Data, Directive, {atom, Line, false}]};
+    Result = {tuple, Line, [Phase, Data, Directive, {atom, Line, false}]},
+    {xls_map, Line, Result, fun(R) ->
+        ["(", R, ".0, ", R, ".1, ", R, ".2, ", R, ".3, ",
+            "hls_failure::check(", R, ".2 == Directive::FAIL, ",
+            xls_failure_sites:at(explicit_fail, Line), "))"]
+    end};
 normalize_internal_result_expression({'case', Line, Expression, Clauses},
         Phase) ->
     {'case', Line, Expression, [
