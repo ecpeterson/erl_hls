@@ -19,7 +19,7 @@ init([]) ->
     {ok, prefix, #cell{}}.
 
 prefix(enter, _OldPhase, Cell) ->
-    true = Cell#cell.value =/= 0,
+    nonzero(Cell#cell.value),
     Value = Cell#cell.value + 10,
     {Cell#cell{value = Value}, [
         {cast, third, #value{value = Value}},
@@ -29,10 +29,7 @@ prefix(cast, #value{value = Value}, Cell) ->
     {message, Cell#cell{value = Value}, consume}.
 
 data(enter, _OldPhase, Cell) ->
-    {case Cell#cell.value =/= 0 of
-        true -> Cell#cell{value = Cell#cell.value + 10};
-        false -> true = false, Cell
-    end, [{cast, first, #value{value = 11}}]}.
+    {advance(Cell), [{cast, first, #value{value = 11}}]}.
 
 condition(enter, _OldPhase, Cell) ->
     {Cell#cell{value = Cell#cell.value + 10}, [
@@ -46,18 +43,12 @@ condition(enter, _OldPhase, Cell) ->
 message(enter, _OldPhase, Cell) ->
     {Cell#cell{value = Cell#cell.value + 10}, [
         {cast, third, #value{value = 11}},
-        {cast, first, #value{value = case Cell#cell.value =/= 0 of
-            true -> Cell#cell.value;
-            false -> true = false, Cell#cell.value
-        end}}
+        {cast, first, #value{value = nonzero(Cell#cell.value)}}
     ]}.
 
 %% Constructing a named segment evaluates it even when it is later omitted.
 precomputed(enter, _OldPhase, Cell) ->
-    Optional = [{cast, first, #value{value = case Cell#cell.value =/= 0 of
-        true -> Cell#cell.value;
-        false -> true = false, Cell#cell.value
-    end}}],
+    Optional = [{cast, first, #value{value = nonzero(Cell#cell.value)}}],
     {Cell#cell{value = Cell#cell.value + 10}, [
         {cast, third, #value{value = 11}}
         | case false of true -> Optional; false -> [] end
@@ -92,3 +83,9 @@ shared_values(enter, _OldPhase, Cell) ->
 empty(enter, _OldPhase, Cell) ->
     true = Cell#cell.value =/= 0,
     {Cell#cell{value = Cell#cell.value + 10}, []}.
+
+-spec nonzero(hls_nums:u32()) -> hls_nums:u32().
+nonzero(Value) -> true = Value =/= 0, Value.
+
+-spec advance(#cell{}) -> #cell{}.
+advance(Cell) -> Cell#cell{value = nonzero(Cell#cell.value) + 10}.

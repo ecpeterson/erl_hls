@@ -41,8 +41,8 @@ emit(Name, Type, #{line := Line, body := Body, result := Result,
         failed := Failed}) ->
     Constant = string:uppercase(Name),
     [
-        "// Source init/1, line ", integer_to_list(Line), ".\n",
-        "fn ", Name, "_outcome() -> (bool, ", Type, ") {\n",
+        "fn ", Name, "_outcome() -> (bool, ", Type, ") {  // L",
+        integer_to_list(Line), "\n",
         xls_parse_io:indent(Body, 2),
         xls_parse_io:indent(["(", Failed, ", ", Result, ")"], 2),
         "}\n",

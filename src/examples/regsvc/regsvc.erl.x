@@ -143,8 +143,7 @@ pub fn bits_from_state(s: State) -> bits[bit_count<State>()] {
   (s.registers as bits[512]) ++  zero!<bits[0]>()
 }
 
-// Source init/1, line 93.
-fn initial_state_outcome() -> (bool, State) {
+fn initial_state_outcome() -> (bool, State) {  // L93
   let _0 = State {
     ..zero!<State>()
   };

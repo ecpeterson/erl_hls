@@ -31,16 +31,24 @@ unused(enter, _OldPhase, Cell) -> {Cell, []}.
 %% Initial entry precedes startup-message dispatch. Its data update must be
 %% visible to configuration, while the initial phase remains quiescent.
 boot(enter, _OldPhase, Cell) ->
-    {Cell#cell{value = Cell#cell.value + 1}, []};
+    {add_offset(Cell, 1), []};
 boot(cast, #configure{offset = Offset}, Cell) ->
-    {active, Cell#cell{value = Cell#cell.value + Offset}, consume}.
+    {active, add_offset(Cell, Offset), consume}.
 
 active(enter, OldPhase, Cell) ->
-    From = case OldPhase of
-        boot -> hls_nums:wrap(hls_nums:u32(), 7);
-        _ -> hls_nums:wrap(hls_nums:u32(), 0)
-    end,
+    From = marker(OldPhase =:= boot),
     {Cell, [{cast, out, #report{value = Cell#cell.value,
         default = Cell#cell.default, old_phase = From}}]};
 active(cast, #configure{offset = Offset}, Cell) ->
     {repeat_phase, Cell#cell{value = Offset}, consume}.
+
+-spec add_offset(#cell{}, hls_nums:u32()) -> #cell{}.
+add_offset(Cell, Offset) ->
+    Cell#cell{value = Cell#cell.value + Offset}.
+
+-spec marker(boolean()) -> hls_nums:u32().
+marker(IsBoot) ->
+    case IsBoot of
+        true -> hls_nums:wrap(hls_nums:u32(), 7);
+        false -> hls_nums:wrap(hls_nums:u32(), 0)
+    end.

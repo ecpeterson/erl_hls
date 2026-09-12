@@ -41,6 +41,15 @@ aliased, and bound alongside ordinary values through tuple destructuring.
 They evaluate at their binding, even if omitted later. See
 `docs/entry-outcomes.md` for the bounded source subset.
 
+## Local helpers
+
+Initializers and callbacks may call local pure helpers with concrete `-spec`
+types. Only reachable helpers are translated, each as a DSLX function carrying
+its result and match-failure flag. The definition graph must be acyclic; XLS
+inlines the calls. Helpers currently have one unguarded clause with distinct
+variable parameters (or `_`), and use the same expression subset as callbacks.
+See `docs/local-helpers.md` for types, call semantics, and structural limits.
+
 ## Wire tags
 
 An actor may declare more than one `-hls_tags([...])` attribute. The compiler
@@ -62,6 +71,7 @@ prepending or moving one can renumber them. Every entry must be a unique atom.
     find_function/3,
     find_record/2,
     mismatch_expression/2,
+    outcome_value/2,
     print/1,
     record_field_name/1,
     record_width/1,
@@ -133,7 +143,9 @@ actor_interface(Filename) ->
             error({unsupported_hls_actor_interface, Filename, hls_gs})
     end.
 
-to_xls_gs(Filename, Forms) ->
+to_xls_gs(Filename, Forms0) ->
+    {Forms, Helpers} = xls_helpers:prepare(Forms0,
+        [{init, 1}, {handle_call, 2}, {handle_cast, 2}]),
     PublicStructNames = find_tags(Forms),
     StateName = state(Forms),
     StateRecord = find_record(Forms, StateName),
@@ -180,6 +192,7 @@ to_xls_gs(Filename, Forms) ->
     struct_from_record(StateRecord), "\n",
     structfrombits_from_record(StateRecord), "\n",
     bitsfromstruct_from_record(StateRecord), "\n",
+    xls_helpers:emit(Helpers, StateName, #{}),
     xls_gs_lower:initial_state(Forms, StateName),
     """
     proc Service {
@@ -446,17 +459,14 @@ statement_from_statement({'if', Line, Clauses}, State) ->
     lower_if(Line, Clauses, State);
 statement_from_statement({'case', Line, Condition, Clauses}, State) ->
     xls_case_lower:lower(Line, Condition, Clauses, State);
+statement_from_statement({xls_helper_call, _Line, Name, Args}, State) ->
+    {References, ArgState} = lower_arguments(Args, State),
+    CallState = instr(ArgState, [Name, "(", lists:join(", ", References), ")"]),
+    outcome_value(CallState, "call_match_");
 statement_from_statement({call, _L, MF, Args}, State) ->
     {remote, _1, {atom, _2, Module}, {atom, _3, FAtom}} = MF,
-
-    {BwdArgRefs, ArgState} = lists:foldl(
-        fun(Arg, {ArgRefs, ThisState}) ->
-            NewState = statement_from_statement(Arg, ThisState#clause_state{reference = none}),
-            {[NewState#clause_state.reference | ArgRefs], NewState}
-        end,
-        {[], State}, Args
-    ),
-    case Module:transpile(FAtom, lists:reverse(BwdArgRefs), ArgState) of
+    {References, ArgState} = lower_arguments(Args, State),
+    case Module:transpile(FAtom, References, ArgState) of
         X = #clause_state{} -> X;
         X -> instr(ArgState, X)
     end;
@@ -466,6 +476,25 @@ statement_from_statement({record_field, _L, Object, _RecordAtom, {atom, _LL, Slo
 statement_from_statement({match, _L, LHS, RHS}, State) ->
     RHSState = statement_from_statement(RHS, State),
     destructure_lhs(LHS, RHSState).
+
+lower_arguments(Args, State) ->
+    lists:mapfoldl(fun(Arg, Acc) ->
+        Next = statement_from_statement(Arg, Acc#clause_state{reference = none}),
+        {reference(Next), Next}
+    end, State, Args).
+
+%% Expressions returning (value, failed) join the callback's existing match
+%% bookkeeping. Case selection keeps these flags local to the selected arm.
+-spec outcome_value(clause_state(), string()) -> clause_state().
+outcome_value(State, Prefix) ->
+    Value = reference(State),
+    Counter = State#clause_state.match_counter + 1,
+    Base = Prefix ++ integer_to_list(Counter),
+    {Expected, State1} = uniquify(State#clause_state{match_counter = Counter}, Base),
+    {Actual, State2} = uniquify(State1, Base),
+    State2#clause_state{reference = [Value, ".0"], statements = [
+        ["let ", Actual, " = ", Value, ".1;\n"],
+        ["let ", Expected, " = bool:false;\n"] | State2#clause_state.statements]}.
 
 %% `if` clauses are guard-only and therefore need no pattern projection.  The
 %% supported form is exhaustive: a final literal `true` clause supplies the
@@ -559,6 +588,8 @@ record_value(NameAtom, Struct, _State) ->
 Converts an assignment from an opaque RHS to a structured LHS into a sequence of
 accessors into the RHS being assigned to slots inside of the LHS.
 """.
+destructure_lhs({var, _L, '_'}, State) ->
+    State;
 destructure_lhs({var, _L, NameAtom}, State) ->
     %% TODO: need to record time-order data to report correct error
     %% TODO: also want to report eg line number on error, other present state

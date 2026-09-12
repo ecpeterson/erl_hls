@@ -385,18 +385,10 @@ collecting(
 ) ->
     case hls_pauli:is_pauli(Measurement) of
         true ->
-            Replying = Cell#data_cell{
-                reply_request_id = RequestId,
-                reply_anticommutes = case hls_pauli:anticommutes(
-                    Cell#data_cell.accumulated_pauli,
-                    Measurement
-                ) of
-                    false -> hls_type:as(hls_nums:u32(), 0);
-                    true -> hls_type:as(hls_nums:u32(), 1)
-                end,
+            Replying = prepare_reply(Cell, RequestId, Measurement),
+            {replying, Replying#data_cell{
                 reply_resume = ?REPLY_FROM_COLLECTING
-            },
-            {replying, Replying, consume};
+            }, consume};
         false ->
             {collecting, Cell, fail}
     end;
@@ -477,18 +469,10 @@ reporting(
 ) ->
     case hls_pauli:is_pauli(Measurement) of
         true ->
-            Replying = Cell#data_cell{
-                reply_request_id = RequestId,
-                reply_anticommutes = case hls_pauli:anticommutes(
-                    Cell#data_cell.accumulated_pauli,
-                    Measurement
-                ) of
-                    false -> hls_type:as(hls_nums:u32(), 0);
-                    true -> hls_type:as(hls_nums:u32(), 1)
-                end,
+            Replying = prepare_reply(Cell, RequestId, Measurement),
+            {replying, Replying#data_cell{
                 reply_resume = ?REPLY_FROM_REPORTING
-            },
-            {replying, Replying, consume};
+            }, consume};
         false ->
             {reporting, Cell, fail}
     end;
@@ -587,22 +571,24 @@ replying(
 ) ->
     case hls_pauli:is_pauli(Measurement) of
         true ->
-            Replying = Cell#data_cell{
-                reply_request_id = RequestId,
-                reply_anticommutes = case hls_pauli:anticommutes(
-                    Cell#data_cell.accumulated_pauli,
-                    Measurement
-                ) of
-                    false -> hls_type:as(hls_nums:u32(), 0);
-                    true -> hls_type:as(hls_nums:u32(), 1)
-                end
-            },
+            Replying = prepare_reply(Cell, RequestId, Measurement),
             {repeat_phase, Replying, consume};
         false ->
             {replying, Cell, fail}
     end;
 replying(cast, #pauli_query{}, Cell) ->
     {replying, Cell, fail}.
+
+-spec prepare_reply(#data_cell{}, hls_nums:u32(), hls_pauli:pauli()) -> #data_cell{}.
+prepare_reply(Cell, RequestId, Measurement) ->
+    Anticommutes = hls_pauli:anticommutes(Cell#data_cell.accumulated_pauli, Measurement),
+    Cell#data_cell{
+        reply_request_id = RequestId,
+        reply_anticommutes = case Anticommutes of
+            false -> hls_type:as(hls_nums:u32(), 0);
+            true -> hls_type:as(hls_nums:u32(), 1)
+        end
+    }.
 
 source_mask(north) -> ?PHI_NORTH_MASK;
 source_mask(east) -> ?PHI_EAST_MASK;

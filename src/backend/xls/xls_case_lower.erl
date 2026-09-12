@@ -257,28 +257,8 @@ merge_states(Base, States) ->
         ])
     }.
 
-finish_case(State0, Expression) ->
-    CaseState = xls_parse:instr(State0, Expression),
-    CaseReference = xls_parse:reference(CaseState),
-    MatchCounter = CaseState#clause_state.match_counter + 1,
-    MatchBase = "case_match_" ++ integer_to_list(MatchCounter),
-    CounterState = CaseState#clause_state{match_counter = MatchCounter},
-    {ExpectedName, ExpectedState} = xls_parse:uniquify(
-        CounterState,
-        MatchBase
-    ),
-    {ActualName, ActualState} = xls_parse:uniquify(
-        ExpectedState,
-        MatchBase
-    ),
-    ActualState#clause_state{
-        reference = [CaseReference, ".0"],
-        statements = [
-            ["let ", ActualName, " = ", CaseReference, ".1;\n"],
-            ["let ", ExpectedName, " = bool:false;\n"]
-            | ActualState#clause_state.statements
-        ]
-    }.
+finish_case(State, Expression) ->
+    xls_parse:outcome_value(xls_parse:instr(State, Expression), "case_match_").
 
 %%%
 %%% Exact Boolean case
