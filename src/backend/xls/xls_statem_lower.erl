@@ -550,7 +550,7 @@ lower_cast_group(
             "(", R, ".0, ", R, ".1.1, ", R, ".2, ", R, ".3)"
         ] end,
         Failure,
-        Failure,
+        fun(_Kind) -> Failure end,
         EnumAtoms
     ),
     #{

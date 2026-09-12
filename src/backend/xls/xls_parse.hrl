@@ -9,6 +9,7 @@
     bindings = #{} :: #{atom() => xls_parse:printable()},
     unsafe_bindings = #{} :: #{atom() => erl_anno:location()},
     live_bindings = #{} :: #{atom() => true},
+    %% hls_failure::Kind expressions in reverse evaluation order.
     failures = [] :: [xls_parse:printable()],
     statements = [] :: xls_parse:printable(),
     reference = none :: none | xls_parse:ir(),

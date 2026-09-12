@@ -49,7 +49,7 @@ These value joins do not extend the structural callback vocabulary. Complete cas
 
 Every argument is evaluated before the helper body, including arguments bound to `_`. Failures in unused arguments or ignored helper results still fail the selected callback. A helper in an unselected `case`/`if` arm or short-circuit operand contributes no failure. Helper parameters and local bindings have their own function scope.
 
-Generated functions return `(value, failed)`. The caller incorporates `failed` into the callback's existing match-failure accounting. State-machine data and effects commit only if the complete callback succeeds; a failing initializer rejects conversion. This is the current callback failure model, rather than a general Erlang exception object or stack trace.
+Generated functions return `(value, hls_failure::Kind)`. The caller retains the first selected failure across argument evaluation, the helper body, and later expressions; a helper's `case_clause` or `if_clause` remains distinct from a match failure. State-machine data and effects commit only if the complete callback succeeds; a failing initializer rejects conversion. See [control-flow failures](control-flow.md) for reporting and limits.
 
 The compiler emits each reachable helper once, in dependency order, using a name that preserves the source spelling and distinguishes arities. XLS requires callees to be declared first, so direct and mutual recursion are diagnosed while ordering the graph. XLS performs function inlining and optimization; a helper call does not request a separately scheduled hardware unit, add a clock boundary, or promise resource sharing.
 

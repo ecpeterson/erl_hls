@@ -32,7 +32,7 @@ group_by(Items, KeyFun) ->
     atom(),
     fun((xls_parse:printable()) -> xls_parse:printable()),
     xls_parse:printable(),
-    xls_parse:printable(),
+    fun((xls_parse:printable()) -> xls_parse:printable()),
     #{atom() => xls_parse:printable()}
 ) -> {xls_parse:printable(), xls_parse:printable()}.
 lower(Clauses0, Arguments, StateName, Postprocessor,
@@ -90,7 +90,7 @@ lower_chain(
     Selected = [
         lists:reverse(BodyState#clause_state.statements),
         "if (", BodyMismatch, ") {\n",
-        xls_parse_io:indent(xls_parse:print(BodyFailure), 2),
+        xls_parse_io:indent(xls_parse:print(BodyFailure(xls_parse:failure_kind(BodyState))), 2),
         "} else {\n",
         xls_parse_io:indent(xls_parse:print(
             Postprocessor(BodyState#clause_state.reference)

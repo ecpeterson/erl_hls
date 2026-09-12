@@ -20,7 +20,7 @@ to_dslx() ->
         255, 256, 65536, (1 bsl 100) + 129],
     {ok, Semantics} = file:read_file("test_data/hls_numeric_semantics.inc.x"),
     [
-        "import float32;\nimport float64;\nimport hfloat16;\n",
+        "import hls_failure;\nimport float32;\nimport float64;\nimport hfloat16;\n",
         [function(Name, "value: sN[128]", Type, "Value", Expression, ["value"])
             || {Name, Expression, Type, _Wrap} <- Formats],
         function("negative_literal", "", hls_nums:u8(), "",

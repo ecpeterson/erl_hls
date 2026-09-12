@@ -4,7 +4,7 @@
 %%%% remain calls: XLS owns inlining. Its parser requires callees before
 %%%% callers, so dependency ordering also diagnoses recursive definitions.
 %%%% Specs give each helper a concrete value type; its second result carries
-%%%% failure through the same selected-outcome path used by case expressions.
+%%%% failure kind through the same selected-outcome path used by case expressions.
 
 -module(xls_helpers).
 -moduledoc false.
@@ -161,10 +161,10 @@ emit(Helpers, DataName, EnumAtoms) ->
 emit_helper(#{name := Name, clause := Clause = {clause, Line, _, _, _},
         arguments := Types, result := Type}, DataName, EnumAtoms) ->
     Arguments = ["argument_" ++ integer_to_list(I) || I <- lists:seq(1, length(Types))],
-    #{body := Body, result := Result, failed := Failed} =
+    #{body := Body, result := Result, failure := Failure} =
         xls_parse:clause_outcome(Clause, Arguments, DataName, EnumAtoms),
     ["fn ", Name, "(", lists:join(", ", [[A, ": ", T]
         || {A, T} <- lists:zip(Arguments, Types)]), ") -> (", Type,
-        ", bool) {  // L", integer_to_list(erl_anno:line(Line)), "\n",
+        ", hls_failure::Kind) {  // L", integer_to_list(erl_anno:line(Line)), "\n",
         xls_parse_io:indent(xls_parse:print([Body,
-            "(", Result, ", ", Failed, ")"]), 2), "}\n\n"].
+            "(", Result, ", ", Failure, ")"]), 2), "}\n\n"].

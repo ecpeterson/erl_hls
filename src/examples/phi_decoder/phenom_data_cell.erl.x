@@ -6,6 +6,7 @@ import axis;
 import bram;
 import mailbox;
 import scheduler;
+import hls_failure;
 import phi_field;
 
 const MAILBOX_CAPACITY = u8:5;
@@ -341,7 +342,7 @@ pub fn bits_from_datacell(s: Datacell) -> bits[bit_count<Datacell>()] {
   (s.cutoff_step as bits[32]) ++ (s.cutoff_armed as bits[32]) ++ (s.noise_disabled as bits[32]) ++ (s.reply_resume as bits[32]) ++ (s.reply_anticommutes as bits[32]) ++ (s.reply_request_id as bits[32]) ++ (s.accumulated_pauli as bits[32]) ++ (s.y as bits[16]) ++ (s.x as bits[16]) ++ (s.random_state as bits[32]) ++ (s.event as bits[32]) ++ (s.threshold as bits[32]) ++ (s.seen_sources as bits[32]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
 }
 
-fn hls_local_prepare_reply__3(argument_1: (Tag, Datacell), argument_2: u32, argument_3: u32) -> ((Tag, Datacell), bool) {  // L585
+fn hls_local_prepare_reply__3(argument_1: (Tag, Datacell), argument_2: u32, argument_3: u32) -> ((Tag, Datacell), hls_failure::Kind) {  // L585
   let Cell_1 = argument_1;
   let RequestId_1 = argument_2;
   let Measurement_1 = argument_3;
@@ -350,10 +351,10 @@ fn hls_local_prepare_reply__3(argument_1: (Tag, Datacell), argument_2: u32, argu
   let Anticommutes_1 = _1;
   let _3 = if Anticommutes_1 {
     let _2 = (1 as u32);
-    (_2, bool:false)
+    (_2, hls_failure::Kind::NONE)
   } else {
     let _2 = (0 as u32);
-    (_2, bool:false)
+    (_2, hls_failure::Kind::NONE)
   };
   let _4 = Datacell {
     reply_request_id: RequestId_1,
@@ -361,7 +362,7 @@ fn hls_local_prepare_reply__3(argument_1: (Tag, Datacell), argument_2: u32, argu
     ..(Cell_1).1
   };
   let _5 = (Tag::DATA_CELL, _4);
-  (_5, (_3.1) || bool:false)
+  (_5, _3.1)
 }
 
 pub enum OutputPort : u8 {
@@ -930,33 +931,33 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
           let _10 = if Xls_clause_1_Step_1 == data.step {
             let _0 = Xls_clause_1_Source_1 == 1;
             let _6 = if _0 {
-              (bool:1, bool:false)
+              (bool:1, hls_failure::Kind::NONE)
             } else {
               let _1 = Xls_clause_1_Source_1 == 2;
               let _5 = if _1 {
-                (bool:1, bool:false)
+                (bool:1, hls_failure::Kind::NONE)
               } else {
                 let _2 = Xls_clause_1_Source_1 == 4;
                 let _4 = if _2 {
-                  (bool:1, bool:false)
+                  (bool:1, hls_failure::Kind::NONE)
                 } else {
                   let _3 = Xls_clause_1_Source_1 == 8;
-                  (_3, bool:false)
+                  (_3, hls_failure::Kind::NONE)
                 };
-                (_4.0, (_4.1) || bool:false)
+                (_4.0, _4.1)
               };
-              (_5.0, (_5.1) || bool:false)
+              (_5.0, _5.1)
             };
             let _9 = if _6.0 {
               let _7 = Xls_clause_1_Seen_1 & Xls_clause_1_Source_1;
               let _8 = _7 == 0;
-              (_8, bool:false)
+              (_8, hls_failure::Kind::NONE)
             } else {
-              (bool:0, bool:false)
+              (bool:0, hls_failure::Kind::NONE)
             };
-            (_9.0, (_6.1) || (_9.1) || bool:false)
+            (_9.0, hls_failure::first(_6.1, _9.1))
           } else {
-            (bool:0, bool:false)
+            (bool:0, hls_failure::Kind::NONE)
           };
           if _10.0 {
             let _11 = Xls_clause_1_Seen_1 | Xls_clause_1_Source_1;
@@ -968,17 +969,17 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
               let _17 = if _14 {
                 let _15 = Xls_clause_1_Cell_1.1.cutoff_step;
                 let _16 = Xls_clause_1_Step_1 >= _15;
-                (_16, bool:false)
+                (_16, hls_failure::Kind::NONE)
               } else {
-                (bool:0, bool:false)
+                (bool:0, hls_failure::Kind::NONE)
               };
               let Xls_clause_1_CutoffApplies_1 = _17.0;
               let _18 = Xls_clause_1_Cell_1.1.noise_disabled;
               let _19 = _18 == 1;
               let _20 = if _19 {
-                (bool:1, bool:false)
+                (bool:1, hls_failure::Kind::NONE)
               } else {
-                (Xls_clause_1_CutoffApplies_1, bool:false)
+                (Xls_clause_1_CutoffApplies_1, hls_failure::Kind::NONE)
               };
               let Xls_clause_1_NoiseDisabled_1 = _20.0;
               let _30 = if Xls_clause_1_NoiseDisabled_1 {
@@ -988,7 +989,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
                 let Xls_clause_1_NextRandom_1 = _22;
                 let _23 = (0 as u32);
                 let Xls_clause_1_Event_1 = _23;
-                (_23, bool:false, (Xls_clause_1_Event_1, Xls_clause_1_NextRandom_1, Xls_clause_1_NoiseDisabledWord_1, ))
+                (_23, hls_failure::Kind::NONE, (Xls_clause_1_Event_1, Xls_clause_1_NextRandom_1, Xls_clause_1_NoiseDisabledWord_1, ))
               } else {
                 let _21 = (0 as u32);
                 let Xls_clause_1_NoiseDisabledWord_1 = _21;
@@ -997,17 +998,19 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
                 let _24 = (_23 ^ (_23 >> u32:17)) & u32:0xffffffff;
                 let _25 = (_24 ^ (_24 << u32:5)) & u32:0xffffffff;
                 let Xls_clause_1_NextRandom_1 = _25;
-                let _26 = Xls_clause_1_Cell_1.1.threshold;
-                let _27 = Xls_clause_1_NextRandom_1 < _26;
-                let _29 = if _27 {
-                  let _28 = (1 as u32);
-                  (_28, bool:false)
-                } else {
-                  let _28 = (0 as u32);
-                  (_28, bool:false)
+                let _29 = {
+                  let _26 = Xls_clause_1_Cell_1.1.threshold;
+                  let _27 = Xls_clause_1_NextRandom_1 < _26;
+                  if _27 {
+                    let _28 = (1 as u32);
+                    (_28, hls_failure::Kind::NONE)
+                  } else {
+                    let _26 = (0 as u32);
+                    (_26, hls_failure::Kind::NONE)
+                  }
                 };
                 let Xls_clause_1_Event_1 = _29.0;
-                (_29.0, (_29.1) || bool:false, (Xls_clause_1_Event_1, Xls_clause_1_NextRandom_1, Xls_clause_1_NoiseDisabledWord_1, ))
+                (_29.0, _29.1, (Xls_clause_1_Event_1, Xls_clause_1_NextRandom_1, Xls_clause_1_NoiseDisabledWord_1, ))
               };
               let Xls_clause_1_Event_1 = _30.2.0;
               let Xls_clause_1_NextRandom_1 = _30.2.1;
@@ -1017,19 +1020,19 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
                   let _31 = Xls_clause_1_Cell_1.1.accumulated_pauli;
                   let _32 = u32:3;
                   let _33 = (_31 ^ _32);
-                  (_33, bool:false)
+                  (_33, hls_failure::Kind::NONE)
                 } else {
                   let _31 = Xls_clause_1_Cell_1.1.accumulated_pauli;
-                  (_31, bool:false)
+                  (_31, hls_failure::Kind::NONE)
                 }
               };
               let Xls_clause_1_AccumulatedPauli_1 = _34.0;
               let _36 = if Xls_clause_1_CutoffApplies_1 {
                 let _35 = (0 as u32);
-                (_35, bool:false)
+                (_35, hls_failure::Kind::NONE)
               } else {
                 let _35 = Xls_clause_1_Cell_1.1.cutoff_armed;
-                (_35, bool:false)
+                (_35, hls_failure::Kind::NONE)
               };
               let _37 = Datacell {
                 seen_sources: Xls_clause_1_NewSeen_1,
@@ -1043,7 +1046,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
               let _38 = (Tag::DATA_CELL, _37);
               let Xls_clause_1_Completed_1 = _38;
               let _39 = (Phase::REPORTING, Xls_clause_1_Completed_1, Directive::CONSUME, bool:0, );
-              (_39, (_17.1) || (_20.1) || (_30.1) || (_34.1) || (_36.1) || bool:false)
+              (_39, hls_failure::first(_17.1, hls_failure::first(_20.1, hls_failure::first(_30.1, hls_failure::first(_34.1, _36.1)))))
             } else {
               let _13 = Datacell {
                 seen_sources: Xls_clause_1_NewSeen_1,
@@ -1051,9 +1054,9 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
               };
               let _14 = (Tag::DATA_CELL, _13);
               let _15 = (Phase::COLLECTING, _14, Directive::CONSUME, bool:0, );
-              (_15, bool:false)
+              (_15, hls_failure::Kind::NONE)
             };
-            if ((_40.1) || bool:false) {
+            if ((_40.1) != hls_failure::Kind::NONE) {
               (phase, data, Directive::FAIL, u1:0)
             } else {
               (_40.0.0, _40.0.1.1, _40.0.2, _40.0.3)
@@ -1098,26 +1101,26 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
           let _10 = if _2 {
             let _3 = Xls_clause_1_Source_1 == 1;
             let _9 = if _3 {
-              (bool:1, bool:false)
+              (bool:1, hls_failure::Kind::NONE)
             } else {
               let _4 = Xls_clause_1_Source_1 == 2;
               let _8 = if _4 {
-                (bool:1, bool:false)
+                (bool:1, hls_failure::Kind::NONE)
               } else {
                 let _5 = Xls_clause_1_Source_1 == 4;
                 let _7 = if _5 {
-                  (bool:1, bool:false)
+                  (bool:1, hls_failure::Kind::NONE)
                 } else {
                   let _6 = Xls_clause_1_Source_1 == 8;
-                  (_6, bool:false)
+                  (_6, hls_failure::Kind::NONE)
                 };
-                (_7.0, (_7.1) || bool:false)
+                (_7.0, _7.1)
               };
-              (_8.0, (_8.1) || bool:false)
+              (_8.0, _8.1)
             };
-            (_9.0, (_9.1) || bool:false)
+            (_9.0, _9.1)
           } else {
-            (bool:0, bool:false)
+            (bool:0, hls_failure::Kind::NONE)
           };
           if _10.0 {
             let _11 = Datacell {
@@ -1156,33 +1159,33 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
           let _10 = if (Xls_clause_1_Step_1 == data.step && data.reply_resume == 1) {
             let _0 = Xls_clause_1_Source_1 == 1;
             let _6 = if _0 {
-              (bool:1, bool:false)
+              (bool:1, hls_failure::Kind::NONE)
             } else {
               let _1 = Xls_clause_1_Source_1 == 2;
               let _5 = if _1 {
-                (bool:1, bool:false)
+                (bool:1, hls_failure::Kind::NONE)
               } else {
                 let _2 = Xls_clause_1_Source_1 == 4;
                 let _4 = if _2 {
-                  (bool:1, bool:false)
+                  (bool:1, hls_failure::Kind::NONE)
                 } else {
                   let _3 = Xls_clause_1_Source_1 == 8;
-                  (_3, bool:false)
+                  (_3, hls_failure::Kind::NONE)
                 };
-                (_4.0, (_4.1) || bool:false)
+                (_4.0, _4.1)
               };
-              (_5.0, (_5.1) || bool:false)
+              (_5.0, _5.1)
             };
             let _9 = if _6.0 {
               let _7 = Xls_clause_1_Seen_1 & Xls_clause_1_Source_1;
               let _8 = _7 == 0;
-              (_8, bool:false)
+              (_8, hls_failure::Kind::NONE)
             } else {
-              (bool:0, bool:false)
+              (bool:0, hls_failure::Kind::NONE)
             };
-            (_9.0, (_6.1) || (_9.1) || bool:false)
+            (_9.0, hls_failure::first(_6.1, _9.1))
           } else {
-            (bool:0, bool:false)
+            (bool:0, hls_failure::Kind::NONE)
           };
           if _10.0 {
             let _11 = Xls_clause_1_Seen_1 | Xls_clause_1_Source_1;
@@ -1197,7 +1200,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
               };
               let _15 = (Tag::DATA_CELL, _14);
               let _16 = (Phase::REPORTING, _15, Directive::CONSUME, bool:0, );
-              (_16, bool:false)
+              (_16, hls_failure::Kind::NONE)
             } else {
               let _13 = Datacell {
                 seen_sources: Xls_clause_1_NewSeen_1,
@@ -1205,9 +1208,9 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
               };
               let _14 = (Tag::DATA_CELL, _13);
               let _15 = (Phase::REPLYING, _14, Directive::CONSUME, bool:0, );
-              (_15, bool:false)
+              (_15, hls_failure::Kind::NONE)
             };
-            if ((_17.1) || bool:false) {
+            if ((_17.1) != hls_failure::Kind::NONE) {
               (phase, data, Directive::FAIL, u1:0)
             } else {
               (_17.0.0, _17.0.1.1, _17.0.2, _17.0.3)
@@ -1220,9 +1223,9 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
               let _0 = Xls_clause_2_Step_1 + 1;
               let _1 = _0 & 4294967295;
               let _2 = Xls_clause_2_QueryStep_1 == _1;
-              (_2, bool:false)
+              (_2, hls_failure::Kind::NONE)
             } else {
-              (bool:0, bool:false)
+              (bool:0, hls_failure::Kind::NONE)
             };
             if _3.0 {
               let _4 = (Phase::REPLYING, Xls_clause_2_Cell_1, Directive::POSTPONE, bool:0, );
@@ -1243,30 +1246,30 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
                 let _10 = if _2 {
                   let _3 = Xls_clause_3_Source_1 == 1;
                   let _9 = if _3 {
-                    (bool:1, bool:false)
+                    (bool:1, hls_failure::Kind::NONE)
                   } else {
                     let _4 = Xls_clause_3_Source_1 == 2;
                     let _8 = if _4 {
-                      (bool:1, bool:false)
+                      (bool:1, hls_failure::Kind::NONE)
                     } else {
                       let _5 = Xls_clause_3_Source_1 == 4;
                       let _7 = if _5 {
-                        (bool:1, bool:false)
+                        (bool:1, hls_failure::Kind::NONE)
                       } else {
                         let _6 = Xls_clause_3_Source_1 == 8;
-                        (_6, bool:false)
+                        (_6, hls_failure::Kind::NONE)
                       };
-                      (_7.0, (_7.1) || bool:false)
+                      (_7.0, _7.1)
                     };
-                    (_8.0, (_8.1) || bool:false)
+                    (_8.0, _8.1)
                   };
-                  (_9.0, (_9.1) || bool:false)
+                  (_9.0, _9.1)
                 } else {
-                  (bool:0, bool:false)
+                  (bool:0, hls_failure::Kind::NONE)
                 };
-                (_10.0, (_10.1) || bool:false)
+                (_10.0, _10.1)
               } else {
-                (bool:0, bool:false)
+                (bool:0, hls_failure::Kind::NONE)
               };
               if _11.0 {
                 let _12 = Datacell {
@@ -1357,12 +1360,12 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
               };
               let _3 = (Tag::DATA_CELL, _2);
               let _4 = (Phase::REPLYING, _3, Directive::CONSUME, bool:0, );
-              (_4, (_1.1) || bool:false)
+              (_4, _1.1)
             } else {
               let _1 = (Phase::COLLECTING, Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
-              (_1, bool:false)
+              (_1, hls_failure::Kind::NONE)
             };
-            if ((_5.1) || bool:false) {
+            if ((_5.1) != hls_failure::Kind::NONE) {
               (phase, data, Directive::FAIL, u1:0)
             } else {
               (_5.0.0, _5.0.1.1, _5.0.2, _5.0.3)
@@ -1396,12 +1399,12 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
               };
               let _3 = (Tag::DATA_CELL, _2);
               let _4 = (Phase::REPLYING, _3, Directive::CONSUME, bool:0, );
-              (_4, (_1.1) || bool:false)
+              (_4, _1.1)
             } else {
               let _1 = (Phase::REPORTING, Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
-              (_1, bool:false)
+              (_1, hls_failure::Kind::NONE)
             };
-            if ((_5.1) || bool:false) {
+            if ((_5.1) != hls_failure::Kind::NONE) {
               (phase, data, Directive::FAIL, u1:0)
             } else {
               (_5.0.0, _5.0.1.1, _5.0.2, _5.0.3)
@@ -1430,12 +1433,12 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
               let _1 = hls_local_prepare_reply__3(Xls_clause_1_Cell_1, Xls_clause_1_RequestId_1, Xls_clause_1_Measurement_1);
               let Xls_clause_1_Replying_1 = _1.0;
               let _2 = (Phase::REPLYING, Xls_clause_1_Replying_1, Directive::CONSUME, bool:1, );
-              (_2, (_1.1) || bool:false)
+              (_2, _1.1)
             } else {
               let _1 = (Phase::REPLYING, Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
-              (_1, bool:false)
+              (_1, hls_failure::Kind::NONE)
             };
-            if ((_3.1) || bool:false) {
+            if ((_3.1) != hls_failure::Kind::NONE) {
               (phase, data, Directive::FAIL, u1:0)
             } else {
               (_3.0.0, _3.0.1.1, _3.0.2, _3.0.3)
@@ -1485,9 +1488,9 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
           let Xls_clause_1_Step_1 = data.step;
           let _1 = if (data.noise_disabled == 0 && data.cutoff_armed == 0) {
             let _0 = Xls_clause_1_FirstQuietStep_1 >= Xls_clause_1_Step_1;
-            (_0, bool:false)
+            (_0, hls_failure::Kind::NONE)
           } else {
-            (bool:0, bool:false)
+            (bool:0, hls_failure::Kind::NONE)
           };
           if _1.0 {
             let _2 = Datacell {
@@ -1522,9 +1525,9 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
           let Xls_clause_1_Step_1 = data.step;
           let _1 = if (data.noise_disabled == 0 && data.cutoff_armed == 0) {
             let _0 = Xls_clause_1_FirstQuietStep_1 > Xls_clause_1_Step_1;
-            (_0, bool:false)
+            (_0, hls_failure::Kind::NONE)
           } else {
-            (bool:0, bool:false)
+            (bool:0, hls_failure::Kind::NONE)
           };
           if _1.0 {
             let _2 = Datacell {
@@ -1599,12 +1602,12 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
               };
               let _4 = (Tag::DATA_CELL, _3);
               let _5 = (Phase::COLLECTING, _4, Directive::CONSUME, bool:0, );
-              (_5, bool:false)
+              (_5, hls_failure::Kind::NONE)
             } else {
               let _1 = (Phase::COLLECTING, Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
-              (_1, bool:false)
+              (_1, hls_failure::Kind::NONE)
             };
-            if ((_6.1) || bool:false) {
+            if ((_6.1) != hls_failure::Kind::NONE) {
               (phase, data, Directive::FAIL, u1:0)
             } else {
               (_6.0.0, _6.0.1.1, _6.0.2, _6.0.3)
@@ -1627,12 +1630,12 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
               };
               let _4 = (Tag::DATA_CELL, _3);
               let _5 = (Phase::REPORTING, _4, Directive::CONSUME, bool:0, );
-              (_5, bool:false)
+              (_5, hls_failure::Kind::NONE)
             } else {
               let _1 = (Phase::REPORTING, Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
-              (_1, bool:false)
+              (_1, hls_failure::Kind::NONE)
             };
-            if ((_6.1) || bool:false) {
+            if ((_6.1) != hls_failure::Kind::NONE) {
               (phase, data, Directive::FAIL, u1:0)
             } else {
               (_6.0.0, _6.0.1.1, _6.0.2, _6.0.3)
@@ -1655,12 +1658,12 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
               };
               let _4 = (Tag::DATA_CELL, _3);
               let _5 = (Phase::REPLYING, _4, Directive::CONSUME, bool:0, );
-              (_5, bool:false)
+              (_5, hls_failure::Kind::NONE)
             } else {
               let _1 = (Phase::REPLYING, Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
-              (_1, bool:false)
+              (_1, hls_failure::Kind::NONE)
             };
-            if ((_6.1) || bool:false) {
+            if ((_6.1) != hls_failure::Kind::NONE) {
               (phase, data, Directive::FAIL, u1:0)
             } else {
               (_6.0.0, _6.0.1.1, _6.0.2, _6.0.3)

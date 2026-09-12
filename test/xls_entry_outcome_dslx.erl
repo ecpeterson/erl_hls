@@ -2,7 +2,7 @@
 -export([write/1]).
 
 phases() ->
-    [prefix, data, condition, message, precomputed, skipped, shared_values, empty].
+    [prefix, data, condition, message, precomputed, skipped, shared_values, empty, noncase, nonif, nonsegment, nonguarded, nonunused].
 
 %% The expected final data and ordered emissions come from the compiled BEAM
 %% callback. A raised badmatch yields no entry result and no action list.
@@ -12,7 +12,9 @@ oracle(Phase, Value) ->
             Effects = [{Port, Payload} || {cast, Port, {value, Payload}} <- Actions],
             {false, Next, Effects}
     catch
-        error:{badmatch, _} -> {true, Value, []}
+        error:{badmatch, _} -> {true, Value, []};
+        error:{case_clause, _} -> {true, Value, []};
+        error:if_clause -> {true, Value, []}
     end.
 
 write(Stage) ->

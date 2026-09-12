@@ -790,7 +790,7 @@ close_contribution_group(Tag, Contributions, DataName, AccumulatorType,
         DataName,
         fun(R) -> ["(u1:1, ", R, ".0, ", R, ".1, ", R, ".2.1)"] end,
         Failure,
-        Failure,
+        fun(_Kind) -> Failure end,
         EnumAtoms
     ),
     SourceTransportable = lists:all(fun(Contribution) ->
@@ -892,7 +892,7 @@ close_transport_contribution_group(Tag, Contributions, DataName,
         DataName,
         fun(R) -> ["(u1:1, ", R, ".0, ", R, ".1, ", R, ".2.1)"] end,
         Failure,
-        Failure,
+        fun(_Kind) -> Failure end,
         EnumAtoms
     ),
     lowered(Body, Result).
@@ -956,7 +956,7 @@ close_completion(#{clauses := Clauses0}, Phase, DataName,
         fun(R) -> ["(", R, ".0, ", R, ".1.1, ", R, ".2, ",
             R, ".3)"] end,
         Failure,
-        Failure,
+        fun(_Kind) -> Failure end,
         EnumAtoms
     ),
     lowered(Body, Result).
@@ -1037,7 +1037,7 @@ close_reducer(#{name := Name, clause := {clause, Line, [
         DataName,
         fun(R) -> [R, ".1"] end,
         Failure,
-        Failure,
+        fun(_Kind) -> Failure end,
         EnumAtoms
     ),
     #{

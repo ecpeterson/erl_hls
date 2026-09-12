@@ -78,6 +78,9 @@ jobs:
       - name: Compare entry outcomes with BEAM and simulate RTL
         run: bash tools/test_entry_outcomes.sh "$RUNNER_TEMP/xls"
 
+      - name: Compare control-flow failures with BEAM and routed RTL
+        run: bash tools/test_control_failures.sh "$RUNNER_TEMP/xls"
+
       - name: Check application framing and admission conservation
         run: bash tools/test_application_frames.sh "$RUNNER_TEMP/xls"
 
@@ -163,6 +166,7 @@ jobs:
             _build/application_frames/**
             _build/initialization/**
             _build/helpers/**
+            _build/control_failures/**
             _build/xls_sim/regsvc/*.ir
             _build/xls_sim/regsvc/*.v
             _build/xls_sim/regsvc/sim/vvp.log

@@ -6,6 +6,7 @@ import axis;
 import bram;
 import mailbox;
 import scheduler;
+import hls_failure;
 import hls_vec;
 import phi_field;
 
@@ -782,9 +783,9 @@ fn reduction_contribution(
   let _2 = (_1 as s64);
   let _3 = Xls_clause_1_PresentWord_1 < 2;
   let _4 = if _3 {
-    (0, bool:false)
+    (0, hls_failure::Kind::NONE)
   } else {
-    (1, bool:false)
+    (1, hls_failure::Kind::NONE)
   };
   let _5 = (_4.0 as s64);
   let _6 = Phifold {
@@ -794,7 +795,7 @@ fn reduction_contribution(
   };
   let _7 = (Tag::PHI_FOLD, _6, bits_from_phifold(_6));
   let _8 = (Xls_clause_1_Step_1, _0, _7, );
-  if ((_4.1) || bool:false) {
+  if ((_4.1) != hls_failure::Kind::NONE) {
     (u1:0, u32:0, u32:0, zero!<Phifold>())
   } else {
     (u1:1, _8.0, _8.1, _8.2.1)
@@ -852,61 +853,59 @@ fn reduction_reduce(
       if bool:true {
   let _0 = (0 as s64);
   let Xls_clause_1_Zero_1 = _0;
-  let _1 = Xls_clause_1_LeftMask_1 == 0;
-  let _3 = if _1 {
-    let _2 = Xls_clause_1_RightMask_1 == 0;
-    (_2, bool:false)
-  } else {
-    (bool:0, bool:false)
-  };
-  let _14 = if _3.0 {
-    let _4 = (Xls_clause_1_Zero_1, Xls_clause_1_Zero_1, );
-    (_4, bool:false)
-  } else {
-    let _4 = Xls_clause_1_LeftMask_1 == 0;
-    let _13 = if _4 {
-      let _5 = (Xls_clause_1_RightValue_1, Xls_clause_1_RightMask_1, );
-      (_5, bool:false)
+  let _5 = {
+    let _1 = Xls_clause_1_LeftMask_1 == 0;
+    let _3 = if _1 {
+      let _2 = Xls_clause_1_RightMask_1 == 0;
+      (_2, hls_failure::Kind::NONE)
     } else {
-      let _5 = Xls_clause_1_RightMask_1 == 0;
-      let _12 = if _5 {
-        let _6 = (Xls_clause_1_LeftValue_1, Xls_clause_1_LeftMask_1, );
-        (_6, bool:false)
-      } else {
-        let _6 = Xls_clause_1_LeftValue_1 > Xls_clause_1_RightValue_1;
-        let _11 = if _6 {
-          let _7 = (Xls_clause_1_LeftValue_1, Xls_clause_1_LeftMask_1, );
-          (_7, bool:false)
-        } else {
-          let _7 = Xls_clause_1_RightValue_1 > Xls_clause_1_LeftValue_1;
-          let _10 = if _7 {
-            let _8 = (Xls_clause_1_RightValue_1, Xls_clause_1_RightMask_1, );
-            (_8, bool:false)
-          } else {
-            let _8 = Xls_clause_1_LeftMask_1 | Xls_clause_1_RightMask_1;
-            let _9 = (Xls_clause_1_LeftValue_1, _8, );
-            (_9, bool:false)
-          };
-          (_10.0, (_10.1) || bool:false)
-        };
-        (_11.0, (_11.1) || bool:false)
-      };
-      (_12.0, (_12.1) || bool:false)
+      (bool:0, hls_failure::Kind::NONE)
     };
-    (_13.0, (_13.1) || bool:false)
+    if _3.0 {
+      let _4 = (Xls_clause_1_Zero_1, Xls_clause_1_Zero_1, );
+      (_4, hls_failure::Kind::NONE)
+    } else {
+      let _1 = Xls_clause_1_LeftMask_1 == 0;
+      if _1 {
+        let _2 = (Xls_clause_1_RightValue_1, Xls_clause_1_RightMask_1, );
+        (_2, hls_failure::Kind::NONE)
+      } else {
+        let _1 = Xls_clause_1_RightMask_1 == 0;
+        if _1 {
+          let _2 = (Xls_clause_1_LeftValue_1, Xls_clause_1_LeftMask_1, );
+          (_2, hls_failure::Kind::NONE)
+        } else {
+          let _1 = Xls_clause_1_LeftValue_1 > Xls_clause_1_RightValue_1;
+          if _1 {
+            let _2 = (Xls_clause_1_LeftValue_1, Xls_clause_1_LeftMask_1, );
+            (_2, hls_failure::Kind::NONE)
+          } else {
+            let _1 = Xls_clause_1_RightValue_1 > Xls_clause_1_LeftValue_1;
+            if _1 {
+              let _2 = (Xls_clause_1_RightValue_1, Xls_clause_1_RightMask_1, );
+              (_2, hls_failure::Kind::NONE)
+            } else {
+              let _1 = Xls_clause_1_LeftMask_1 | Xls_clause_1_RightMask_1;
+              let _2 = (Xls_clause_1_LeftValue_1, _1, );
+              (_2, hls_failure::Kind::NONE)
+            }
+          }
+        }
+      }
+    }
   };
-  let Xls_clause_1_BestValue_1 = _14.0.0;
-  let Xls_clause_1_WinnerMask_1 = _14.0.1;
-  let _15 = Phifold {
+  let Xls_clause_1_BestValue_1 = _5.0.0;
+  let Xls_clause_1_WinnerMask_1 = _5.0.1;
+  let _6 = Phifold {
     value0: Xls_clause_1_BestValue_1,
     value1: Xls_clause_1_WinnerMask_1,
     ..zero!<Phifold>()
   };
-  let _16 = (Tag::PHI_FOLD, _15, bits_from_phifold(_15));
-  if ((_3.1) || (_14.1) || bool:false) {
+  let _7 = (Tag::PHI_FOLD, _6, bits_from_phifold(_6));
+  if ((_5.1) != hls_failure::Kind::NONE) {
     zero!<Phifold>()
   } else {
-    _16.1
+    _7.1
   }
 } else {
   zero!<Phifold>()
@@ -1020,9 +1019,9 @@ fn reduction_transport_contribution(
   let _2 = (_1 as s64);
   let _3 = Xls_clause_1_PresentWord_1 < 2;
   let _4 = if _3 {
-    (0, bool:false)
+    (0, hls_failure::Kind::NONE)
   } else {
-    (1, bool:false)
+    (1, hls_failure::Kind::NONE)
   };
   let _5 = (_4.0 as s64);
   let _6 = Phifold {
@@ -1032,7 +1031,7 @@ fn reduction_transport_contribution(
   };
   let _7 = (Tag::PHI_FOLD, _6, bits_from_phifold(_6));
   let _8 = (Xls_clause_1_Step_1, _0, _7, );
-  if ((_4.1) || bool:false) {
+  if ((_4.1) != hls_failure::Kind::NONE) {
     (u1:0, u32:0, u32:0, zero!<Phifold>())
   } else {
     (u1:1, _8.0, _8.1, _8.2.1)
@@ -1242,12 +1241,12 @@ fn reduction_dispatch_completion(
     };
     let _12 = (Tag::CELL, _11);
     let _13 = (Phase::COMPARING, _12, Directive::CONSUME, bool:0, );
-    (_13, bool:false)
+    (_13, hls_failure::Kind::NONE)
   } else {
     let _11 = (Phase::GATHERING, Xls_clause_1_Updated_1, Directive::CONSUME, bool:1, );
-    (_11, bool:false)
+    (_11, hls_failure::Kind::NONE)
   };
-  if ((_14.1) || bool:false) {
+  if ((_14.1) != hls_failure::Kind::NONE) {
     (phase, data, Directive::FAIL, u1:0)
   } else {
     (_14.0.0, _14.0.1.1, _14.0.2, _14.0.3)
@@ -1274,22 +1273,22 @@ fn reduction_dispatch_completion(
   let _1 = {
     if Xls_clause_1_WinnerMask_1 == 1 {
       let _0 = (1 as u32);
-      (_0, bool:false)
+      (_0, hls_failure::Kind::NONE)
     } else {
       if Xls_clause_1_WinnerMask_1 == 2 {
         let _0 = (2 as u32);
-        (_0, bool:false)
+        (_0, hls_failure::Kind::NONE)
       } else {
         if Xls_clause_1_WinnerMask_1 == 4 {
           let _0 = (4 as u32);
-          (_0, bool:false)
+          (_0, hls_failure::Kind::NONE)
         } else {
           if Xls_clause_1_WinnerMask_1 == 8 {
             let _0 = (8 as u32);
-            (_0, bool:false)
+            (_0, hls_failure::Kind::NONE)
           } else {
             let _0 = (0 as u32);
-            (_0, bool:false)
+            (_0, hls_failure::Kind::NONE)
           }
         }
       }
@@ -1302,7 +1301,7 @@ fn reduction_dispatch_completion(
   };
   let _3 = (Tag::CELL, _2);
   let _4 = (Phase::FLIPPING, _3, Directive::CONSUME, bool:0, );
-  if ((_1.1) || bool:false) {
+  if ((_1.1) != hls_failure::Kind::NONE) {
     (phase, data, Directive::FAIL, u1:0)
   } else {
     (_4.0, _4.1.1, _4.2, _4.3)
@@ -1347,12 +1346,12 @@ fn reduction_dispatch_completion(
     let _9 = (Tag::CELL, _8);
     let Xls_clause_1_Advanced_1 = _9;
     let _10 = (Phase::MEASURING, Xls_clause_1_Advanced_1, Directive::CONSUME, bool:0, );
-    (_10, bool:false)
+    (_10, hls_failure::Kind::NONE)
   } else {
     let _1 = (Phase::FLIPPING, Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
-    (_1, bool:false)
+    (_1, hls_failure::Kind::NONE)
   };
-  if ((_11.1) || bool:false) {
+  if ((_11.1) != hls_failure::Kind::NONE) {
     (phase, data, Directive::FAIL, u1:0)
   } else {
     (_11.0.0, _11.0.1.1, _11.0.2, _11.0.3)
@@ -1526,7 +1525,7 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> EntryOutcome {
             },
           }
         };
-        (_19, bool:false)
+        (_19, hls_failure::Kind::NONE)
       } else {
         let Xls_entry_3_1 = Cell_1;
         let _2 = Cell_1.1.step;
@@ -1556,9 +1555,9 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> EntryOutcome {
             },
           }
         };
-        (_8, bool:false)
+        (_8, hls_failure::Kind::NONE)
       };
-      if (_20.1) || bool:false {
+      if (_20.1) != hls_failure::Kind::NONE {
         EntryOutcome { data, failed: true, ..zero!<EntryOutcome>() }
       } else { _20.0 }
     },
@@ -1725,277 +1724,279 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> EntryOutcome {
       let NextRandom_1 = _3;
       let _4 = (0 as u32);
       let Absent_1 = _4;
-      let _5 = Cell_1.1.anyon;
-      let _6 = _5 == 1;
-      let _12 = if _6 {
-        let _7 = Cell_1.1.best_direction;
-        let _8 = _7 != 0;
-        let _11 = if _8 {
-          let _9 = NextRandom_1 >> 31;
-          let _10 = _9 == 1;
-          (_10, bool:false)
+      let _46 = {
+        let _5 = Cell_1.1.anyon;
+        let _6 = _5 == 1;
+        let _12 = if _6 {
+          let _7 = Cell_1.1.best_direction;
+          let _8 = _7 != 0;
+          let _11 = if _8 {
+            let _9 = NextRandom_1 >> 31;
+            let _10 = _9 == 1;
+            (_10, hls_failure::Kind::NONE)
+          } else {
+            (bool:0, hls_failure::Kind::NONE)
+          };
+          (_11.0, _11.1)
         } else {
-          (bool:0, bool:false)
+          (bool:0, hls_failure::Kind::NONE)
         };
-        (_11.0, (_11.1) || bool:false)
-      } else {
-        (bool:0, bool:false)
-      };
-      let _46 = if _12.0 {
-        let _13 = (1 as u32);
-        let Present_1 = _13;
-        let _14 = Cell_1.1.step;
-        let _15 = Cell_1.1.x;
-        let _16 = Cell_1.1.y;
-        let _17 = Cell_1.1.best_direction;
-        let _18 = Phicorrection {
-          step: _14,
-          x: _15,
-          y: _16,
-          direction: _17,
-          ..zero!<Phicorrection>()
-        };
-        let _19 = (Tag::PHI_CORRECTION, _18, bits_from_phicorrection(_18));
-        let Xls_entry_0_1 = _19;
-        let _20 = Cell_1.1.best_direction;
-        let _22 = {
-          if _20 == 1 {
-            let _21 = (Present_1, Absent_1, Absent_1, Absent_1, );
-            (_21, bool:false)
-          } else {
-            if _20 == 2 {
-              let _21 = (Absent_1, Present_1, Absent_1, Absent_1, );
-              (_21, bool:false)
+        if _12.0 {
+          let _13 = (1 as u32);
+          let Present_1 = _13;
+          let _14 = Cell_1.1.step;
+          let _15 = Cell_1.1.x;
+          let _16 = Cell_1.1.y;
+          let _17 = Cell_1.1.best_direction;
+          let _18 = Phicorrection {
+            step: _14,
+            x: _15,
+            y: _16,
+            direction: _17,
+            ..zero!<Phicorrection>()
+          };
+          let _19 = (Tag::PHI_CORRECTION, _18, bits_from_phicorrection(_18));
+          let Xls_entry_0_1 = _19;
+          let _20 = Cell_1.1.best_direction;
+          let _22 = {
+            if _20 == 1 {
+              let _21 = (Present_1, Absent_1, Absent_1, Absent_1, );
+              (_21, hls_failure::Kind::NONE)
             } else {
-              if _20 == 4 {
-                let _21 = (Absent_1, Absent_1, Present_1, Absent_1, );
-                (_21, bool:false)
+              if _20 == 2 {
+                let _21 = (Absent_1, Present_1, Absent_1, Absent_1, );
+                (_21, hls_failure::Kind::NONE)
               } else {
-                if _20 == 8 {
-                  let _21 = (Absent_1, Absent_1, Absent_1, Present_1, );
-                  (_21, bool:false)
+                if _20 == 4 {
+                  let _21 = (Absent_1, Absent_1, Present_1, Absent_1, );
+                  (_21, hls_failure::Kind::NONE)
                 } else {
-                  let _21 = (Absent_1, Absent_1, Absent_1, Absent_1, );
-                  (_21, bool:false)
+                  if _20 == 8 {
+                    let _21 = (Absent_1, Absent_1, Absent_1, Present_1, );
+                    (_21, hls_failure::Kind::NONE)
+                  } else {
+                    let _21 = (Absent_1, Absent_1, Absent_1, Absent_1, );
+                    (_21, hls_failure::Kind::NONE)
+                  }
                 }
               }
             }
-          }
-        };
-        let NorthPresent_1 = _22.0.0;
-        let EastPresent_1 = _22.0.1;
-        let WestPresent_1 = _22.0.2;
-        let SouthPresent_1 = _22.0.3;
-        let _23 = Cell_1.1.step;
-        let _24 = Anyonmove {
-          step: _23,
-          ..zero!<Anyonmove>()
-        };
-        let _25 = (Tag::ANYON_MOVE, _24, bits_from_anyonmove(_24));
-        let Message_1 = _25;
-        let _26 = Cell_1.1.anyon;
-        let _27 = _26 ^ Present_1;
-        let _28 = Cell {
-          anyon: _27,
-          random_state: NextRandom_1,
-          ..(Cell_1).1
-        };
-        let _29 = (Tag::CELL, _28);
-        let Updated_1 = _29;
-        let Xls_entry_1_1 = Updated_1;
-        let _30 = Cell_1.1.step;
-        let _31 = (_30 as u32);
-        let _32 = Phifold {
-          value0: 0,
-          value1: 0,
-          ..zero!<Phifold>()
-        };
-        let _33 = (Tag::PHI_FOLD, _32, bits_from_phifold(_32));
-        let _34 = (_31, _33, );
-        let Xls_entry_2_1 = _34;
-        let _35 = Anyonmove {
-          present: NorthPresent_1,
-          ..(Message_1).1
-        };
-        let _36 = (Tag::ANYON_MOVE, _35, bits_from_anyonmove(_35));
-        let Xls_entry_3_1 = _36;
-        let _37 = Anyonmove {
-          present: EastPresent_1,
-          ..(Message_1).1
-        };
-        let _38 = (Tag::ANYON_MOVE, _37, bits_from_anyonmove(_37));
-        let Xls_entry_4_1 = _38;
-        let _39 = Anyonmove {
-          present: WestPresent_1,
-          ..(Message_1).1
-        };
-        let _40 = (Tag::ANYON_MOVE, _39, bits_from_anyonmove(_39));
-        let Xls_entry_5_1 = _40;
-        let _41 = Anyonmove {
-          present: SouthPresent_1,
-          ..(Message_1).1
-        };
-        let _42 = (Tag::ANYON_MOVE, _41, bits_from_anyonmove(_41));
-        let Xls_entry_6_1 = _42;
-        let _43 = (Xls_entry_3_1, Xls_entry_4_1, Xls_entry_5_1, Xls_entry_6_1, Xls_entry_0_1, );
-        let _44 = (Xls_entry_1_1, Xls_entry_2_1, _43, );
-        let _45 = {
-          let evaluated = _44;
-                let effect_0 = axis::pack(
-                  evaluated.2.0.0 as u8, evaluated.2.0.2);
-                let effect_1 = axis::pack(
-                  evaluated.2.1.0 as u8, evaluated.2.1.2);
-                let effect_2 = axis::pack(
-                  evaluated.2.2.0 as u8, evaluated.2.2.2);
-                let effect_3 = axis::pack(
-                  evaluated.2.3.0 as u8, evaluated.2.3.2);
-                let effect_4 = axis::pack(
-                  evaluated.2.4.0 as u8, evaluated.2.4.2);
-          EntryOutcome {
-            data: evaluated.0.1,
-            reduction: reduction_open_site(ReductionSite::FLIPPING, evaluated.1.0, evaluated.1.1.1),
-            failed: false,
-            effects: EntryEffects {
-              layout: u8:5,
-              payloads: bit_slice_update(
-                  bit_slice_update(
-                  bit_slice_update(
-                  bit_slice_update(
-                  bit_slice_update(
-                  zero!<bits[384]>(),
-                  u32:0,
-                  effect_0.payload[0:64]),
-                  u32:64,
-                  effect_1.payload[0:64]),
-                  u32:128,
-                  effect_2.payload[0:64]),
-                  u32:192,
-                  effect_3.payload[0:64]),
-                  u32:256,
-                  effect_4.payload[0:96]),
-            },
-          }
-        };
-        (_45, (_22.1) || bool:false)
-      } else {
-        let Present_1 = Absent_1;
-        let _13 = Cell_1.1.best_direction;
-        let _15 = {
-          if _13 == 1 {
-            let _14 = (Present_1, Absent_1, Absent_1, Absent_1, );
-            (_14, bool:false)
-          } else {
-            if _13 == 2 {
-              let _14 = (Absent_1, Present_1, Absent_1, Absent_1, );
-              (_14, bool:false)
+          };
+          let NorthPresent_1 = _22.0.0;
+          let EastPresent_1 = _22.0.1;
+          let WestPresent_1 = _22.0.2;
+          let SouthPresent_1 = _22.0.3;
+          let _23 = Cell_1.1.step;
+          let _24 = Anyonmove {
+            step: _23,
+            ..zero!<Anyonmove>()
+          };
+          let _25 = (Tag::ANYON_MOVE, _24, bits_from_anyonmove(_24));
+          let Message_1 = _25;
+          let _26 = Cell_1.1.anyon;
+          let _27 = _26 ^ Present_1;
+          let _28 = Cell {
+            anyon: _27,
+            random_state: NextRandom_1,
+            ..(Cell_1).1
+          };
+          let _29 = (Tag::CELL, _28);
+          let Updated_1 = _29;
+          let Xls_entry_1_1 = Updated_1;
+          let _30 = Cell_1.1.step;
+          let _31 = (_30 as u32);
+          let _32 = Phifold {
+            value0: 0,
+            value1: 0,
+            ..zero!<Phifold>()
+          };
+          let _33 = (Tag::PHI_FOLD, _32, bits_from_phifold(_32));
+          let _34 = (_31, _33, );
+          let Xls_entry_2_1 = _34;
+          let _35 = Anyonmove {
+            present: NorthPresent_1,
+            ..(Message_1).1
+          };
+          let _36 = (Tag::ANYON_MOVE, _35, bits_from_anyonmove(_35));
+          let Xls_entry_3_1 = _36;
+          let _37 = Anyonmove {
+            present: EastPresent_1,
+            ..(Message_1).1
+          };
+          let _38 = (Tag::ANYON_MOVE, _37, bits_from_anyonmove(_37));
+          let Xls_entry_4_1 = _38;
+          let _39 = Anyonmove {
+            present: WestPresent_1,
+            ..(Message_1).1
+          };
+          let _40 = (Tag::ANYON_MOVE, _39, bits_from_anyonmove(_39));
+          let Xls_entry_5_1 = _40;
+          let _41 = Anyonmove {
+            present: SouthPresent_1,
+            ..(Message_1).1
+          };
+          let _42 = (Tag::ANYON_MOVE, _41, bits_from_anyonmove(_41));
+          let Xls_entry_6_1 = _42;
+          let _43 = (Xls_entry_3_1, Xls_entry_4_1, Xls_entry_5_1, Xls_entry_6_1, Xls_entry_0_1, );
+          let _44 = (Xls_entry_1_1, Xls_entry_2_1, _43, );
+          let _45 = {
+            let evaluated = _44;
+                  let effect_0 = axis::pack(
+                    evaluated.2.0.0 as u8, evaluated.2.0.2);
+                  let effect_1 = axis::pack(
+                    evaluated.2.1.0 as u8, evaluated.2.1.2);
+                  let effect_2 = axis::pack(
+                    evaluated.2.2.0 as u8, evaluated.2.2.2);
+                  let effect_3 = axis::pack(
+                    evaluated.2.3.0 as u8, evaluated.2.3.2);
+                  let effect_4 = axis::pack(
+                    evaluated.2.4.0 as u8, evaluated.2.4.2);
+            EntryOutcome {
+              data: evaluated.0.1,
+              reduction: reduction_open_site(ReductionSite::FLIPPING, evaluated.1.0, evaluated.1.1.1),
+              failed: false,
+              effects: EntryEffects {
+                layout: u8:5,
+                payloads: bit_slice_update(
+                    bit_slice_update(
+                    bit_slice_update(
+                    bit_slice_update(
+                    bit_slice_update(
+                    zero!<bits[384]>(),
+                    u32:0,
+                    effect_0.payload[0:64]),
+                    u32:64,
+                    effect_1.payload[0:64]),
+                    u32:128,
+                    effect_2.payload[0:64]),
+                    u32:192,
+                    effect_3.payload[0:64]),
+                    u32:256,
+                    effect_4.payload[0:96]),
+              },
+            }
+          };
+          (_45, _22.1)
+        } else {
+          let Present_1 = Absent_1;
+          let _5 = Cell_1.1.best_direction;
+          let _7 = {
+            if _5 == 1 {
+              let _6 = (Present_1, Absent_1, Absent_1, Absent_1, );
+              (_6, hls_failure::Kind::NONE)
             } else {
-              if _13 == 4 {
-                let _14 = (Absent_1, Absent_1, Present_1, Absent_1, );
-                (_14, bool:false)
+              if _5 == 2 {
+                let _6 = (Absent_1, Present_1, Absent_1, Absent_1, );
+                (_6, hls_failure::Kind::NONE)
               } else {
-                if _13 == 8 {
-                  let _14 = (Absent_1, Absent_1, Absent_1, Present_1, );
-                  (_14, bool:false)
+                if _5 == 4 {
+                  let _6 = (Absent_1, Absent_1, Present_1, Absent_1, );
+                  (_6, hls_failure::Kind::NONE)
                 } else {
-                  let _14 = (Absent_1, Absent_1, Absent_1, Absent_1, );
-                  (_14, bool:false)
+                  if _5 == 8 {
+                    let _6 = (Absent_1, Absent_1, Absent_1, Present_1, );
+                    (_6, hls_failure::Kind::NONE)
+                  } else {
+                    let _6 = (Absent_1, Absent_1, Absent_1, Absent_1, );
+                    (_6, hls_failure::Kind::NONE)
+                  }
                 }
               }
             }
-          }
-        };
-        let NorthPresent_1 = _15.0.0;
-        let EastPresent_1 = _15.0.1;
-        let WestPresent_1 = _15.0.2;
-        let SouthPresent_1 = _15.0.3;
-        let _16 = Cell_1.1.step;
-        let _17 = Anyonmove {
-          step: _16,
-          ..zero!<Anyonmove>()
-        };
-        let _18 = (Tag::ANYON_MOVE, _17, bits_from_anyonmove(_17));
-        let Message_1 = _18;
-        let _19 = Cell_1.1.anyon;
-        let _20 = _19 ^ Present_1;
-        let _21 = Cell {
-          anyon: _20,
-          random_state: NextRandom_1,
-          ..(Cell_1).1
-        };
-        let _22 = (Tag::CELL, _21);
-        let Updated_1 = _22;
-        let Xls_entry_7_1 = Updated_1;
-        let _23 = Cell_1.1.step;
-        let _24 = (_23 as u32);
-        let _25 = Phifold {
-          value0: 0,
-          value1: 0,
-          ..zero!<Phifold>()
-        };
-        let _26 = (Tag::PHI_FOLD, _25, bits_from_phifold(_25));
-        let _27 = (_24, _26, );
-        let Xls_entry_8_1 = _27;
-        let _28 = Anyonmove {
-          present: NorthPresent_1,
-          ..(Message_1).1
-        };
-        let _29 = (Tag::ANYON_MOVE, _28, bits_from_anyonmove(_28));
-        let Xls_entry_9_1 = _29;
-        let _30 = Anyonmove {
-          present: EastPresent_1,
-          ..(Message_1).1
-        };
-        let _31 = (Tag::ANYON_MOVE, _30, bits_from_anyonmove(_30));
-        let Xls_entry_10_1 = _31;
-        let _32 = Anyonmove {
-          present: WestPresent_1,
-          ..(Message_1).1
-        };
-        let _33 = (Tag::ANYON_MOVE, _32, bits_from_anyonmove(_32));
-        let Xls_entry_11_1 = _33;
-        let _34 = Anyonmove {
-          present: SouthPresent_1,
-          ..(Message_1).1
-        };
-        let _35 = (Tag::ANYON_MOVE, _34, bits_from_anyonmove(_34));
-        let Xls_entry_12_1 = _35;
-        let _36 = (Xls_entry_9_1, Xls_entry_10_1, Xls_entry_11_1, Xls_entry_12_1, );
-        let _37 = (Xls_entry_7_1, Xls_entry_8_1, _36, );
-        let _38 = {
-          let evaluated = _37;
-                let effect_0 = axis::pack(
-                  evaluated.2.0.0 as u8, evaluated.2.0.2);
-                let effect_1 = axis::pack(
-                  evaluated.2.1.0 as u8, evaluated.2.1.2);
-                let effect_2 = axis::pack(
-                  evaluated.2.2.0 as u8, evaluated.2.2.2);
-                let effect_3 = axis::pack(
-                  evaluated.2.3.0 as u8, evaluated.2.3.2);
-          EntryOutcome {
-            data: evaluated.0.1,
-            reduction: reduction_open_site(ReductionSite::FLIPPING, evaluated.1.0, evaluated.1.1.1),
-            failed: false,
-            effects: EntryEffects {
-              layout: u8:6,
-              payloads: bit_slice_update(
-                  bit_slice_update(
-                  bit_slice_update(
-                  bit_slice_update(
-                  zero!<bits[384]>(),
-                  u32:0,
-                  effect_0.payload[0:64]),
-                  u32:64,
-                  effect_1.payload[0:64]),
-                  u32:128,
-                  effect_2.payload[0:64]),
-                  u32:192,
-                  effect_3.payload[0:64]),
-            },
-          }
-        };
-        (_38, (_15.1) || bool:false)
+          };
+          let NorthPresent_1 = _7.0.0;
+          let EastPresent_1 = _7.0.1;
+          let WestPresent_1 = _7.0.2;
+          let SouthPresent_1 = _7.0.3;
+          let _8 = Cell_1.1.step;
+          let _9 = Anyonmove {
+            step: _8,
+            ..zero!<Anyonmove>()
+          };
+          let _10 = (Tag::ANYON_MOVE, _9, bits_from_anyonmove(_9));
+          let Message_1 = _10;
+          let _11 = Cell_1.1.anyon;
+          let _12 = _11 ^ Present_1;
+          let _13 = Cell {
+            anyon: _12,
+            random_state: NextRandom_1,
+            ..(Cell_1).1
+          };
+          let _14 = (Tag::CELL, _13);
+          let Updated_1 = _14;
+          let Xls_entry_7_1 = Updated_1;
+          let _15 = Cell_1.1.step;
+          let _16 = (_15 as u32);
+          let _17 = Phifold {
+            value0: 0,
+            value1: 0,
+            ..zero!<Phifold>()
+          };
+          let _18 = (Tag::PHI_FOLD, _17, bits_from_phifold(_17));
+          let _19 = (_16, _18, );
+          let Xls_entry_8_1 = _19;
+          let _20 = Anyonmove {
+            present: NorthPresent_1,
+            ..(Message_1).1
+          };
+          let _21 = (Tag::ANYON_MOVE, _20, bits_from_anyonmove(_20));
+          let Xls_entry_9_1 = _21;
+          let _22 = Anyonmove {
+            present: EastPresent_1,
+            ..(Message_1).1
+          };
+          let _23 = (Tag::ANYON_MOVE, _22, bits_from_anyonmove(_22));
+          let Xls_entry_10_1 = _23;
+          let _24 = Anyonmove {
+            present: WestPresent_1,
+            ..(Message_1).1
+          };
+          let _25 = (Tag::ANYON_MOVE, _24, bits_from_anyonmove(_24));
+          let Xls_entry_11_1 = _25;
+          let _26 = Anyonmove {
+            present: SouthPresent_1,
+            ..(Message_1).1
+          };
+          let _27 = (Tag::ANYON_MOVE, _26, bits_from_anyonmove(_26));
+          let Xls_entry_12_1 = _27;
+          let _28 = (Xls_entry_9_1, Xls_entry_10_1, Xls_entry_11_1, Xls_entry_12_1, );
+          let _29 = (Xls_entry_7_1, Xls_entry_8_1, _28, );
+          let _30 = {
+            let evaluated = _29;
+                  let effect_0 = axis::pack(
+                    evaluated.2.0.0 as u8, evaluated.2.0.2);
+                  let effect_1 = axis::pack(
+                    evaluated.2.1.0 as u8, evaluated.2.1.2);
+                  let effect_2 = axis::pack(
+                    evaluated.2.2.0 as u8, evaluated.2.2.2);
+                  let effect_3 = axis::pack(
+                    evaluated.2.3.0 as u8, evaluated.2.3.2);
+            EntryOutcome {
+              data: evaluated.0.1,
+              reduction: reduction_open_site(ReductionSite::FLIPPING, evaluated.1.0, evaluated.1.1.1),
+              failed: false,
+              effects: EntryEffects {
+                layout: u8:6,
+                payloads: bit_slice_update(
+                    bit_slice_update(
+                    bit_slice_update(
+                    bit_slice_update(
+                    zero!<bits[384]>(),
+                    u32:0,
+                    effect_0.payload[0:64]),
+                    u32:64,
+                    effect_1.payload[0:64]),
+                    u32:128,
+                    effect_2.payload[0:64]),
+                    u32:192,
+                    effect_3.payload[0:64]),
+              },
+            }
+          };
+          (_30, _7.1)
+        }
       };
-      if (_12.1) || (_46.1) || bool:false {
+      if (_46.1) != hls_failure::Kind::NONE {
         EntryOutcome { data, failed: true, ..zero!<EntryOutcome>() }
       } else { _46.0 }
     },
@@ -2472,25 +2473,25 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
                   let _3 = Xls_clause_1_Y_1 >= 0;
                   let _5 = if _3 {
                     let _4 = Xls_clause_1_Y_1 <= 65535;
-                    (_4, bool:false)
+                    (_4, hls_failure::Kind::NONE)
                   } else {
-                    (bool:0, bool:false)
+                    (bool:0, hls_failure::Kind::NONE)
                   };
-                  (_5.0, (_5.1) || bool:false)
+                  (_5.0, _5.1)
                 } else {
-                  (bool:0, bool:false)
+                  (bool:0, hls_failure::Kind::NONE)
                 };
-                (_6.0, (_6.1) || bool:false)
+                (_6.0, _6.1)
               } else {
-                (bool:0, bool:false)
+                (bool:0, hls_failure::Kind::NONE)
               };
-              (_7.0, (_7.1) || bool:false)
+              (_7.0, _7.1)
             } else {
-              (bool:0, bool:false)
+              (bool:0, hls_failure::Kind::NONE)
             };
-            (_8.0, (_8.1) || bool:false)
+            (_8.0, _8.1)
           } else {
-            (bool:0, bool:false)
+            (bool:0, hls_failure::Kind::NONE)
           };
           if _9.0 {
             let _10 = Xls_clause_1_Flags_1 & 1;
@@ -2631,9 +2632,9 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
           let _0 = Xls_clause_1_Seed_1 > 0;
           let _2 = if _0 {
             let _1 = Xls_clause_1_Seed_1 <= 4294967295;
-            (_1, bool:false)
+            (_1, hls_failure::Kind::NONE)
           } else {
-            (bool:0, bool:false)
+            (bool:0, hls_failure::Kind::NONE)
           };
           if _2.0 {
             let _3 = Cell {
