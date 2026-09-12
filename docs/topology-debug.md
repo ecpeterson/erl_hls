@@ -100,7 +100,7 @@ The output describes the metadata entering a scheduler step, after the preceding
 | `egress_busy` | The scheduler's shared effect batch has not returned its completion credit; this is shared by every actor in the group |
 | `scheduler_phase` | `boot`, `startup`, or `run`, independently of the actor's application phase |
 
-`mailbox_initialized` is false until the first metadata sample after reset; mailbox fields are then `undefined`. Requests waiting in producer registers or upstream FIFOs do not yet own mailbox slots and are excluded from these counts. Reservations and partially accepted work *between* scheduler boundaries are not reported. The CPU runtime exposes the same committed/postponed/free-slot accounting between callbacks.
+Until the first metadata sample after reset, `mailbox_initialized` is false and mailbox fields are `undefined`. Requests waiting in producer registers or upstream FIFOs do not yet own mailbox slots and are excluded from these counts. Reservations and partially accepted work *between* scheduler boundaries are not reported. The CPU runtime exposes the same committed/postponed/free-slot accounting between callbacks.
 
 Actor-state RAM writes and scheduler metadata have separate publication boundaries. A query samples their retained copies on one edge; it does **not** make their underlying commits atomic. In particular, do not infer that a phase change and a mailbox count happened together. `cycle` dates the query, not either publication. Use physical ready/valid probes to investigate a stalled scheduler step; repeated unchanged metadata alone does not establish a deadlock or its duration.
 
