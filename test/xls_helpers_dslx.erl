@@ -15,12 +15,21 @@ write(Stage) ->
     ok = file:write_file(filename:join(Stage, "helpers.x"), [Declarations,
         xls_helpers:emit(Helpers, cell, #{}),
         [function(Name, Forms) || Name <- [factored, inline]],
-        "#[test]\nfn matches_beam() {\n",
-        [io_lib:format("  assert_eq(~s(u8:~p, u32:~p, u32:~p), bits[33]:~p);\n",
-            [Name, M, X, Y, Value]) || {{M, X, Y}, Value} <- Expected,
-            Name <- ["factored", "inline"]], "}\n"]),
+        [beam_test(Mode, [Case || Case = {{M, _, _}, _} <- Expected, M =:= Mode])
+            || Mode <- lists:seq(0, 29)]]),
     ok = file:write_file(filename:join(Stage, "helpers_tb.sv"), testbench(Expected)),
     write_rejections(Stage, Forms0).
+
+%% Bound the interpreter/JIT compilation unit as the vector suite grows.
+%% Each mode keeps the full input grid and reports its own failing assertion.
+beam_test(Mode, Cases) ->
+    [io_lib:format("#[test]\nfn matches_beam_~p() {\n  let cases = [\n", [Mode]),
+        [io_lib:format("    (u32:~p, u32:~p, bits[33]:~p),\n", [X, Y, Value])
+            || {{_, X, Y}, Value} <- Cases],
+        io_lib:format("  ];\n  for (i, ()): (u32, ()) in u32:0..u32:~p {\n"
+            "    let (x, y, expected) = cases[i];\n", [length(Cases)]),
+        [io_lib:format("    assert_eq(~s(u8:~p, x, y), expected);\n", [Name, Mode])
+            || Name <- ["factored", "inline"]], "  } (())\n}\n"].
 
 function(Name, Forms) ->
     [Clause] = xls_parse:find_function(Forms, Name, 3),
