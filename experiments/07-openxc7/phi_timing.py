@@ -2,6 +2,7 @@
 """Map and route the generated D3 decoder profile on the pinned native openXC7 flow."""
 import argparse
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import json
 import math
@@ -288,7 +289,15 @@ def report(args, binaries, mapping):
     lines += ["", f"Mean {s['mean_mhz']:.2f} MHz; population variance {s['variance_mhz_squared']:.4f} MHz²; best {s['best_mhz']:.2f} MHz; worst {s['worst_mhz']:.2f} MHz.", "",
               f"All {mapping['retained_decoder_cells']:,} mapped decoder cells survive harness assembly; sequential cells use one BUFG.", "",
               "Excluded sequential primitive timing: `" + json.dumps(mapping["timing_coverage"]["omitted_sequential_primitives"], sort_keys=True) + "`.", "",
-              "Physical utilization is in `report.json`. nextpnr's SLICE_LUTX denominator counts O5/O6 BELs, not physical LUT packages."]
+              "| Mapped primitive | Decoder | With harness |", "| --- | ---: | ---: |"]
+    groups = {"LUT1–LUT6": [f"LUT{i}" for i in range(1, 7)], "INV": ["INV"],
+              "Flip-flops": [k for k in mapping["assembled_cells"] if k.startswith("FD")],
+              "CARRY4": ["CARRY4"], "DSP48E1": ["DSP48E1"],
+              "RAMB18E1": ["RAMB18E1"], "RAMB36E1": ["RAMB36E1"]}
+    for label, kinds in groups.items():
+        counts = [sum(mapping[column].get(k, 0) for k in kinds) for column in ("decoder_cells", "assembled_cells")]
+        lines.append(f"| {label} | {counts[0]:,} | {counts[1]:,} |")
+    lines += ["", "Physical utilization is in `report.json`. nextpnr's SLICE_LUTX denominator counts O5/O6 BELs, not physical LUT packages."]
     for r in runs:
         lines += ["", f"## Seed {r['seed']} critical path", "", "```text", r["critical_path"]["text"], "```",
                   "", "Warnings (full text in the route log):", ""]
@@ -298,32 +307,37 @@ def report(args, binaries, mapping):
     print(json.dumps(summary["statistics"], indent=2))
 
 
+def route_seed(seed, args, binary, key):
+    run = args.stage / f"seed-{seed}"
+    run.mkdir(exist_ok=True)
+    stamp = run / "completed.json"
+    expected = {**key, "seed": seed}
+    if completion_valid(run, expected):
+        print(f"Using verified seed {seed}", flush=True)
+        return
+    stamp.unlink(missing_ok=True)
+    print(f"Routing seed {seed}", flush=True)
+    command([binary, "--chipdb", args.stage / "device/chipdb/xc7z100ffg900.bin",
+             "--json", args.stage / "mapped.json", "--xdc", args.stage / "timing.xdc",
+             "--freq", args.frequency, "--seed", seed, "--router", "router2",
+             "--timing-allow-fail", "--report", run / "nextpnr.json", "--log", run / "nextpnr.log"],
+            run, "route")
+    save(stamp, {"inputs": expected,
+                 "outputs": {name: sha(run / name) for name in ("nextpnr.json", "nextpnr.log")}})
+
+
 def route(args, binaries, mapping):
     env = dict(os.environ, ERL_HLS_OPENXC7_BUILD_ROOT=str(args.stage / "device"))
     command(["bash", "-c", 'set -euo pipefail; source "$1"; prepare_openxc7; make_chipdb "$2"',
              "bash", HERE / "openxc7_common.sh", PART], args.stage, "device", env)
-    chipdb = args.stage / "device/chipdb/xc7z100ffg900.bin"
     xdc = args.stage / "timing.xdc"
     xdc.write_text("# Compile-harness pins, not a board assignment.\n"
                    "set_property -dict {PACKAGE_PIN F5 IOSTANDARD LVCMOS18} [get_ports clock]\n"
                    "set_property -dict {PACKAGE_PIN A2 IOSTANDARD LVCMOS18} [get_ports activity]\n"
                    f"create_clock -period {1000/args.frequency:.9f} [get_ports clock]\n")
     key = route_key(args, binaries, mapping)
-    for seed in args.seeds:
-        run = args.stage / f"seed-{seed}"
-        run.mkdir(exist_ok=True)
-        stamp = run / "completed.json"
-        expected = {**key, "seed": seed}
-        if completion_valid(run, expected):
-            print(f"Using verified seed {seed}", flush=True)
-            continue
-        stamp.unlink(missing_ok=True)
-        command([binaries["nextpnr"], "--chipdb", chipdb, "--json", args.stage / "mapped.json",
-                 "--xdc", xdc, "--freq", args.frequency, "--seed", seed, "--router", "router2",
-                 "--timing-allow-fail", "--report", run / "nextpnr.json", "--log", run / "nextpnr.log"],
-                run, "route")
-        save(stamp, {"inputs": expected,
-                     "outputs": {name: sha(run / name) for name in ("nextpnr.json", "nextpnr.log")}})
+    with ThreadPoolExecutor(max_workers=min(args.jobs, len(args.seeds))) as pool:
+        list(pool.map(lambda seed: route_seed(seed, args, binaries["nextpnr"], key), args.seeds))
 
 
 def main():
@@ -331,14 +345,15 @@ def main():
     parser.add_argument("rtl", type=Path, help="prepared, compiled decoder-profile RTL directory")
     parser.add_argument("--stage", type=Path, required=True)
     parser.add_argument("--seeds", type=int, nargs="+", default=[1, 2, 3])
+    parser.add_argument("--jobs", type=int, default=1, help="maximum concurrent place-and-route processes")
     parser.add_argument("--frequency", type=float, default=100)
     parser.add_argument("--phase", choices=("all", "simulate", "map", "route", "report"), default="all")
     args = parser.parse_args()
-    if args.frequency <= 0 or not math.isfinite(args.frequency) or len(set(args.seeds)) != len(args.seeds) or min(args.seeds) < 1:
-        parser.error("frequency must be positive and seeds must be unique positive integers")
+    if args.jobs < 1 or args.frequency <= 0 or not math.isfinite(args.frequency) or len(set(args.seeds)) != len(args.seeds) or min(args.seeds) < 1:
+        parser.error("jobs/frequency must be positive and seeds must be unique positive integers")
     args.rtl, args.stage = args.rtl.resolve(), args.stage.resolve()
     args.stage.mkdir(parents=True, exist_ok=True)
-    apio = Path(os.environ.get("ERL_HLS_APIO_HOME", HERE / ".apio"))
+    apio = Path(os.environ.get("ERL_HLS_APIO_HOME", HERE / ".apio")).resolve()
     binaries = {"yosys": apio / "packages/oss-cad-suite/bin/yosys", "nextpnr": apio / "packages/openxc7/bin/nextpnr-xilinx"}
     load_profile(args.rtl)
     if args.phase in ("all", "simulate"):

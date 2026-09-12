@@ -16,6 +16,8 @@ The first two points follow directly from [the pinned nextpnr timing implementat
 
 Use the results to compare modeled paths, routing costs, congestion, and seed sensitivity under this exact toolchain. Do not multiply the partial-path MHz by simulated cycles per step to claim deployed throughput. Design-wide timing requires a backend with the missing sequential models and calibrated device timing, plus appropriate clock and I/O constraints. Hold timing, board interfaces, and silicon validation remain separate qualifications.
 
+Check coverage before comparing frequencies: moving registers into a DSP can remove its paths from this backend's timing analysis. A higher reported MHz accompanied by newly excluded paths does not establish an improvement.
+
 ## Run
 
 From the repository root, with the experiment packages installed and `ERL_HLS_XLS_ROOT` pointing to native XLS binaries:
@@ -30,7 +32,7 @@ python3 experiments/07-openxc7/phi_timing.py "$rtl" --stage "$stage"
 
 The compilation helper runs DSLX conversion, optimization, and RTL generation without installing private-state VPI hooks. It records compiler/stdlib/source hashes, RAM configuration, pipeline settings, and the final RTL hashes in `phi_decoder_profile.build.json`. Failed compilation does not publish a completed manifest. The physical runner verifies the workload parameters and RTL hashes before using them.
 
-The default physical run requests 100 MHz and routes seeds 1, 2, and 3 sequentially. Change them with `--frequency` and `--seeds`. Phases `simulate`, `map`, `route`, and `report` can be invoked separately; `all` is the default. Core mapping, harness mapping, the chip database, and completed routes are cached against their inputs. A changed report or partial rerun cannot masquerade as a completed route. Use separate stage directories for comparisons whose artifacts should coexist.
+The default physical run requests 100 MHz and routes seeds 1, 2, and 3 sequentially. Change them with `--frequency` and `--seeds`; use `--jobs` to overlap independent seeds when memory permits. Phases `simulate`, `map`, `route`, and `report` can be invoked separately; `all` is the default. Core mapping, harness mapping, the chip database, and completed routes are cached against their inputs. A changed report or partial rerun cannot masquerade as a completed route. Use separate stage directories for comparisons whose artifacts should coexist, and run only one writer against a stage directory.
 
 The first large-device database generation and synthesis take substantially longer than the small counter experiment. The generated chip database alone is about 637 MiB. Route sequentially on memory-limited hosts; the benchmark does not require building XLS or LLVM.
 
