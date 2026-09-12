@@ -117,4 +117,4 @@ actor_failure_origin_decode_test() ->
     ?assertMatch({ok, #{failed := true, failure := #{code := 276, kind := <<"case_clause">>,
         file := <<"helper.hrl">>, line := 7}}}, Decode(276)),
     ?assertMatch({ok, #{failed := false, failure := none}}, Decode(0)),
-    ?assertEqual({error, invalid_failure_code}, Decode(277)).
+    ?assertEqual({error, {invalid_failure_code, 277}}, Decode(277)).

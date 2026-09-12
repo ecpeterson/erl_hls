@@ -89,7 +89,7 @@ actor_observation(Sample = #{value := Value}, Phases, Failures)
         {ok, Failure} ->
             {ok, Sample#{initialized => true, phase => lists:nth((Value band 255)+1, Phases),
                 enter_pending => Value band 256 =/= 0, failed => Code =/= 0, failure => Failure}};
-        error -> {error, invalid_failure_code}
+        error -> {error, {invalid_failure_code, Code}}
     end;
 actor_observation(_, _, _) -> {error, invalid_resource_value}.
 
