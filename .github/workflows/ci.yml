@@ -66,6 +66,9 @@ jobs:
       - name: Check topology query protocol and discovery
         run: python3 tools/test_topology_debug.py
 
+      - name: Check physical timing reports and artifact provenance
+        run: python3 experiments/07-openxc7/test_phi_timing.py
+
       - name: Check effect-window handshakes and combinational loops
         run: bash tools/test_effect_window.sh "$RUNNER_TEMP/xls"
 

@@ -349,3 +349,5 @@ erlc -pa "$project_root/_build/test/lib/erl_hls/ebin" \
     -P -o "$stage/test_src" "$project_root/test/phi_memory_bridge_tests.erl"
 cp "$stage/test_src/phi_memory_bridge_tests.P" \
     "$stage/test_src/phi_memory_bridge_tests.erl"
+
+cp "$project_root/tools/compile_phi_decoder_profile.sh" "$stage/compile_phi_decoder_profile.sh"
