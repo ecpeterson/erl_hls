@@ -30,3 +30,23 @@ absolute_source_spelling_keeps_codebook_test() ->
     {_, Expected} = xls_failure_sites:prepare(Relative),
     {_, Actual} = xls_failure_sites:prepare(Absolute),
     ?assertEqual(Expected, Actual).
+
+beam_reports_the_same_selected_origins_test() ->
+    {ok, Forms} = xls_parse:parse_file("test/hls_actor_debug_fixture.erl"),
+    {_, Sites} = xls_failure_sites:prepare(Forms),
+    lists:foreach(fun({Value, Kind}) ->
+        try hls_actor_debug_fixture:active(enter, boot, {cell, Value}) of
+            _ -> error(expected_failure)
+        catch error:Reason:Stack ->
+            ?assertEqual(Kind, beam_kind(Reason)),
+            {hls_actor_debug_fixture, _, _, Location} = hd(Stack),
+            File = list_to_binary(filename:basename(proplists:get_value(file, Location))),
+            Line = proplists:get_value(line, Location),
+            ?assertMatch([_], [Site || Site = #{file := F, line := L, kind := K} <- Sites,
+                {F, L, K} =:= {File, Line, Kind}])
+        end
+    end, [{0, case_clause}, {2, match_failure}, {6, if_clause}]).
+
+beam_kind({case_clause, _}) -> case_clause;
+beam_kind({badmatch, _}) -> match_failure;
+beam_kind(if_clause) -> if_clause.
