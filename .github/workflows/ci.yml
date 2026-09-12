@@ -75,6 +75,16 @@ jobs:
       - name: Compare entry outcomes with BEAM and simulate RTL
         run: bash tools/test_entry_outcomes.sh "$RUNNER_TEMP/xls"
 
+      - name: Check initialization and reset against BEAM
+        run: bash tools/test_initialization.sh "$RUNNER_TEMP/xls"
+
+      - name: Inspect startup backpressure through the debug endpoint
+        run: |
+          python3 tools/test_topology_debug_integration.py \
+            --top init_shared_wrapper --stage _build/initialization/debug \
+            _build/initialization/init_shared_2.v \
+            _build/initialization/init_shared_wrapper.v priv/rtl/hls_1r1w_ram.v
+
       - name: Run generated reduction semantics
         run: bash tools/test_reduction_dslx.sh "$RUNNER_TEMP/xls"
 
@@ -135,6 +145,7 @@ jobs:
             _build/entry_outcomes/*.ir
             _build/entry_outcomes/*.v
             _build/entry_outcomes/*.sv
+            _build/initialization/**
             _build/xls_sim/regsvc/*.ir
             _build/xls_sim/regsvc/*.v
             _build/xls_sim/regsvc/sim/vvp.log

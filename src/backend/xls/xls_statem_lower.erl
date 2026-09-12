@@ -167,8 +167,7 @@ prepare_callbacks(Forms, Declarations, ReductionMode) ->
     PhaseNames = maps:get(phases, Declarations),
     MessageNames = maps:get(message_names, Declarations),
     OutputNames = maps:get(output_names, Declarations),
-    [InitClause] = xls_parse:find_function(Forms, init, 1),
-    ok = validate_init_head(InitClause),
+    InitClause = xls_init:clause(Forms, hls_statem),
     _ = rewrite_init_result(InitClause),
     Callbacks = xls_statem_callbacks:prepare(
         Forms,
@@ -433,15 +432,7 @@ lower_init(Clause0, DataName, EnumAtoms) ->
         "  ..zero!<Machine>()\n",
         "}"
     ] end,
-    {Body, Result} = xls_parse:branch_from_clause(
-        Clause,
-        [],
-        DataName,
-        Postprocessor,
-        "zero!<Machine>()",
-        EnumAtoms
-    ),
-    lowered(Body, Result).
+    xls_init:lower(Clause, DataName, Postprocessor, EnumAtoms).
 
 rewrite_init_result({clause, Line, Patterns, Guards, Body0}) ->
     {Prefix, Last} = split_last(Body0),
@@ -456,11 +447,6 @@ rewrite_init_result({clause, Line, Patterns, Guards, Body0}) ->
         _ ->
             error({bad_hls_statem_init_result, Line, Last})
     end.
-
-validate_init_head({clause, _Line, [{nil, _PatternLine}], [], _Body}) ->
-    ok;
-validate_init_head({clause, Line, Patterns, Guards, _Body}) ->
-    error({unsupported_hls_statem_init_head, Line, Patterns, Guards}).
 
 %%%
 %%% Phase entry
@@ -750,12 +736,6 @@ dispatched_phase_variable({atom, Line, _Phase}) ->
 
 split_last(List) ->
     {lists:droplast(List), lists:last(List)}.
-
-lowered(Body, Result) ->
-    #{
-        body => xls_parse:print(Body),
-        result => xls_parse:print(Result)
-    }.
 
 uppercase(Atom) ->
     string:uppercase(atom_to_list(Atom)).

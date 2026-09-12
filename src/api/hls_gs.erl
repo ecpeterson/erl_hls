@@ -9,6 +9,14 @@ whose supported head and guard sequence match is selected. An input record tag
 handled by the server must belong exclusively to either `handle_call/2` or
 `handle_cast/2`, because the generated request header does not otherwise
 encode which callback family should receive it.
+
+Hardware translation requires one unguarded `init([])` clause returning the
+state record. Its supported pure expressions are evaluated and checked by XLS
+at compile time; a match failure rejects conversion. Cold start and hardware
+reset use that value. A fabric proxy accepts only `[]` as its initializer
+argument and does not reset the device when it starts. CPU adapters still pass
+their argument to the callback. See `docs/initialization.md` for the shared
+initialization and reset contract.
 """.
 
 -export([start_link/2, start_link/3, stop/1]).
@@ -71,21 +79,22 @@ stop(PID) ->
 }).
 
 init({Module, Arg, Options}) ->
-    GS = case transport(Options) of
-        cpu ->
-            #state{state = Module:init(Arg), module = Module};
-        {fabric, Broker, LocalEndpoint, PeerEndpoint} ->
+    case {transport(Options), Arg} of
+        {cpu, _} ->
+            {ok, #state{state = Module:init(Arg), module = Module}};
+        {{fabric, Broker, LocalEndpoint, PeerEndpoint}, []} ->
             ok = hls_fabric:register_route(
                 Broker,
                 {PeerEndpoint, LocalEndpoint},
                 self()
             ),
-            #state{
+            {ok, #state{
                 module = Module,
                 fabric = {Broker, LocalEndpoint, PeerEndpoint}
-            }
-    end,
-    {ok, GS}.
+            }};
+        {{fabric, _Broker, _LocalEndpoint, _PeerEndpoint}, _} ->
+            {stop, {unsupported_hls_init_argument, Arg}}
+    end.
 
 handle_call(
     Message,

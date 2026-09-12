@@ -119,8 +119,7 @@ passive_state_observation_is_not_emitted_test() ->
     ?assertMatch({_, _}, binary:match(Xls, <<"let state_record = (Tag::STATE, state);">>)),
     ?assertMatch({_, _}, binary:match(Xls, <<"new_state.1">>)),
 
-    ?assertEqual(nomatch, binary:match(Xls, <<"state_out">>)),
-    ?assertEqual(nomatch, binary:match(Xls, <<"ext_state">>)).
+    ?assertEqual(nomatch, re:run(Xls, <<"\\b(state_out|ext_state)\\b">>)).
 
 ordered_gs_clauses_share_one_tag_arm_test() ->
     Xls = iolist_to_binary(xls_parse:to_xls("src/examples/regsvc/regsvc.erl")),
@@ -1480,7 +1479,7 @@ assert_bad_init_head(ModuleName, InitSource) ->
     try
         ?assertException(
             error,
-            {unsupported_hls_statem_init_head, _, _, _},
+            {unsupported_hls_init_head, hls_statem, _, _, _},
             xls_parse:to_xls(Path)
         )
     after

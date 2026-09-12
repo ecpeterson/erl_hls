@@ -10,10 +10,6 @@
 
 -define(REDUCTION_SERVICE, xls_statem_reduction_service_codegen).
 
--type lowered_clause() :: #{
-    body := iodata(),
-    result := iodata()
-}.
 -type entry() :: #{
     phase := atom(),
     evaluation := #{body := iodata(), result := iodata(), failed := iodata()},
@@ -36,7 +32,7 @@
     data_name := atom(),
     data_width := pos_integer(),
     record_declarations := iodata(),
-    init := lowered_clause(),
+    init := xls_init:lowered(),
     entries := [entry(), ...],
     casts := [cast_clause()],
     reductions := none | xls_statem_reduction_ir:reduction(),
@@ -327,13 +323,10 @@ shared_machine_width(DataWidth, ReductionWidth) ->
 %%% Lowered callbacks
 %%%
 
-initial_machine(#{init := #{body := Body, result := Result}} = Spec) ->
+initial_machine(#{init := Init} = Spec) ->
     Reductions = maps:get(reductions, Spec, none),
     [
-        "fn initial_machine() -> Machine {\n",
-        Body,
-        "  ", Result, "\n",
-        "}\n\n",
+        xls_init:emit("initial_machine", "Machine", Init),
         "fn shared_machine(machine: Machine) -> SharedMachine {\n",
         "  SharedMachine {\n",
         "    phase: machine.phase,\n",

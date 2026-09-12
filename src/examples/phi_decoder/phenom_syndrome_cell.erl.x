@@ -500,25 +500,25 @@ struct SharedState<ACTOR_COUNT: u32, PRODUCER_COUNT: u32> {
   mailbox_write_pending: u1,
 }
 
-fn initial_machine() -> Machine {
-let _0 = Syndrome {
-  ..zero!<Syndrome>()
-};
-let _1 = (Tag::SYNDROME, _0);
-let _2 = (Phase::CONFIGURING, _1, );
-let _3 = if (bool:false) {
-    zero!<Machine>()
-} else {
-    Machine {
-  phase: _2.0,
-  entered_from: _2.0,
-  data: _2.1.1,
-  enter_pending: u1:1,
-  ..zero!<Machine>()
+// Source init/1, line 223.
+fn initial_machine_outcome() -> (bool, Machine) {
+  let _0 = Syndrome {
+    ..zero!<Syndrome>()
+  };
+  let _1 = (Tag::SYNDROME, _0);
+  let _2 = (Phase::CONFIGURING, _1, );
+  (bool:false, Machine {
+    phase: _2.0,
+    entered_from: _2.0,
+    data: _2.1.1,
+    enter_pending: u1:1,
+    ..zero!<Machine>()
+  })
 }
-};
-  _3
-}
+const INITIAL_MACHINE = initial_machine_outcome();
+const_assert!(!INITIAL_MACHINE.0);
+
+fn initial_machine() -> Machine { INITIAL_MACHINE.1 }
 
 fn shared_machine(machine: Machine) -> SharedMachine {
   SharedMachine {
