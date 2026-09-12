@@ -5,7 +5,7 @@ write(Stage) ->
     {ok, Forms0} = epp:parse_file("test/xls_helpers_fixture.erl", [], []),
     {Forms, Helpers} = xls_helpers:prepare(Forms0, [{factored, 3}, {inline, 3}]),
     Declarations = ["enum Tag : u8 { CELL = 0, REPORT = 1 }\n",
-        xls_dslx_imports:emit([], xls_dslx_imports:from_forms(Forms)),
+        xls_dslx_imports:emit([hls_failure], xls_dslx_imports:from_forms(Forms)),
         [[xls_parse:struct_from_record(Record),
             xls_parse:bitsfromstruct_from_record(Record)]
             || Record = {attribute, _, record, _} <- Forms]],
@@ -75,7 +75,7 @@ write_rejections(Stage, Base) ->
         #{body := Body, result := Value, failed := Failed} =
             xls_parse:clause_outcome(Clause, ["x"], cell, #{}),
         ok = file:write_file(filename:join(Stage, Kind ++ ".x"), [
-            xls_helpers:emit(Helpers, cell, #{}),
+            "import hls_failure;\n", xls_helpers:emit(Helpers, cell, #{}),
             "pub fn root(x: u32) -> (u32, bool) {\n",
             xls_parse:print([Body, "(", Value, ", ", Failed, ")\n"]), "}\n"])
     end, [

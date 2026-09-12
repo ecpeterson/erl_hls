@@ -5,7 +5,8 @@
 %% selected RHS. A Boolean result alone would miss erroneous callback failure.
 to_dslx() ->
     {ok, Forms} = epp:parse_file("test/xls_short_circuit_fixture.erl", [], []),
-    [function(Name, Clause) || {function, _, Name, 3, [Clause]} <- Forms].
+    ["import hls_failure;\n",
+        [function(Name, Clause) || {function, _, Name, 3, [Clause]} <- Forms]].
 
 function(Name, Clause) ->
     {Body, Result} = xls_parse:branch_from_clause(

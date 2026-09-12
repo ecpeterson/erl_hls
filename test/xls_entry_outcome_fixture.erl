@@ -4,13 +4,13 @@
 -compile({parse_transform, hls_pack}).
 
 -hls_data(cell).
--hls_phases([prefix, data, condition, message, precomputed, skipped, shared_values, empty]).
+-hls_phases([prefix, data, condition, message, precomputed, skipped, shared_values, empty, noncase, nonif, nonsegment, nonguarded, nonunused]).
 -hls_outputs([first, second, third]).
 -hls_mailbox_capacity(1).
 -hls_tags([value]).
 
 -export([init/1, prefix/3, data/3, condition/3, message/3,
-    precomputed/3, skipped/3, shared_values/3, empty/3]).
+    precomputed/3, skipped/3, shared_values/3, empty/3, noncase/3, nonif/3, nonsegment/3, nonguarded/3, nonunused/3]).
 
 -record(value, {value = hls_type:zero() :: hls_nums:u32()}).
 -record(cell, {value = hls_type:zero() :: hls_nums:u32()}).
@@ -92,3 +92,32 @@ nonzero(Value) -> true = Value =/= 0, Value.
 
 -spec advance(#cell{}) -> #cell{}.
 advance(Cell) -> Cell#cell{value = nonzero(Cell#cell.value) + 10}.
+
+%% No matching arm invalidates even the effects computed before the choice.
+noncase(enter, _OldPhase, Cell) ->
+    case Cell#cell.value of
+        0 -> {Cell#cell{value = 10}, []};
+        1 -> {Cell#cell{value = 11}, [{cast, first, #value{value = 12}}]}
+    end.
+
+nonif(enter, _OldPhase, Cell) ->
+    if Cell#cell.value < 2 ->
+        {Cell#cell{value = 10}, [{cast, second, #value{value = 13}}]}
+    end.
+
+nonsegment(enter, _OldPhase, Cell) ->
+    {Cell#cell{value = 20}, [{cast, third, #value{value = 14}} |
+        if Cell#cell.value =:= 0 -> [];
+            Cell#cell.value =:= 1 -> [{cast, first, #value{value = 15}}]
+        end]}.
+
+nonguarded(enter, _OldPhase, Cell) ->
+    Next = case Cell#cell.value of Value when Value < 2 -> Value + 10 end,
+    {Cell#cell{value = Next}, [{cast, first, #value{value = Next}}]}.
+
+nonunused(enter, _OldPhase, Cell) ->
+    Unused = case Cell#cell.value of
+        0 -> [{cast, first, #value{value = 17}}];
+        1 -> []
+    end,
+    {Cell#cell{value = 30}, case false of true -> Unused; false -> [] end}.

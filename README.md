@@ -146,7 +146,9 @@ Type providers can export the optional `hls_type` callback `dslx_imports/0`, ret
 
 Source translation accepts explicit include paths, macro definitions, and Erlang feature options. Topology interface checks reuse the context captured when the actor's BEAM was compiled, and resolve each distinct actor module once per planning pass. See the [source-context contract](docs/source-context.md) for configured builds, stale-source diagnostics, and the compiler-scaling benchmark.
 
-Actor expressions can call [typed local helpers](docs/local-helpers.md). The compiler emits the reachable definition graph as DSLX functions, preserving match failures across calls; XLS inlines the functions. Helpers can factor numeric and record calculations without introducing scheduler boundaries. In both helpers and callbacks, variables bound in every `case`/`if` arm are available afterward; joined values must have a common XLS type.
+Actor expressions can call [typed local helpers](docs/local-helpers.md). The compiler emits the reachable definition graph as DSLX functions, preserving the first selected failure across calls; XLS inlines the functions. Helpers can factor numeric and record calculations without introducing scheduler boundaries. In both helpers and callbacks, variables bound in every `case`/`if` arm are available afterward; joined values must have a common XLS type.
+
+A `case` or `if` may omit its catch-all clause. Missing branches carry typed `case_clause`/`if_clause` failures through expressions and helpers, suppressing a failed entry's entire effect list. See [control flow and failures](docs/control-flow.md) for callback reporting and `bash tools/test_control_failures.sh XLS_ROOT` for BEAM/RTL conformance tests.
 
 Both actor forms use a checked compile-time `init([])` value for cold start and hardware reset. Nonzero values belong in the initializer; record defaults remain type-directed zero. Shared schedulers repopulate actor RAM before dispatching startup messages. The [initialization contract](docs/initialization.md) describes the supported source subset, CPU and proxy behavior, and reset tests.
 

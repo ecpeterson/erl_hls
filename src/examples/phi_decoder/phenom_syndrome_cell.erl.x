@@ -6,6 +6,7 @@ import axis;
 import bram;
 import mailbox;
 import scheduler;
+import hls_failure;
 import phi_field;
 
 const MAILBOX_CAPACITY = u8:5;
@@ -690,7 +691,7 @@ fn enter(old_phase: Phase, phase: Phase, data: Syndrome) -> EntryOutcome {
               },
             }
           };
-          (_28, bool:false)
+          (_28, hls_failure::Kind::NONE)
         } else {
           let _1 = Syndrome_1.1.step;
           let NextStep_1 = _1;
@@ -769,10 +770,10 @@ fn enter(old_phase: Phase, phase: Phase, data: Syndrome) -> EntryOutcome {
               },
             }
           };
-          (_17, bool:false)
+          (_17, hls_failure::Kind::NONE)
         }
       };
-      if (_29.1) || bool:false {
+      if (_29.1) != hls_failure::Kind::NONE {
         EntryOutcome { data, failed: true, ..zero!<EntryOutcome>() }
       } else { _29.0 }
     },
@@ -925,33 +926,33 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
                       let _6 = Xls_clause_1_Y_1 >= 0;
                       let _8 = if _6 {
                         let _7 = Xls_clause_1_Y_1 <= 65535;
-                        (_7, bool:false)
+                        (_7, hls_failure::Kind::NONE)
                       } else {
-                        (bool:0, bool:false)
+                        (bool:0, hls_failure::Kind::NONE)
                       };
-                      (_8.0, (_8.1) || bool:false)
+                      (_8.0, _8.1)
                     } else {
-                      (bool:0, bool:false)
+                      (bool:0, hls_failure::Kind::NONE)
                     };
-                    (_9.0, (_9.1) || bool:false)
+                    (_9.0, _9.1)
                   } else {
-                    (bool:0, bool:false)
+                    (bool:0, hls_failure::Kind::NONE)
                   };
-                  (_10.0, (_10.1) || bool:false)
+                  (_10.0, _10.1)
                 } else {
-                  (bool:0, bool:false)
+                  (bool:0, hls_failure::Kind::NONE)
                 };
-                (_11.0, (_11.1) || bool:false)
+                (_11.0, _11.1)
               } else {
-                (bool:0, bool:false)
+                (bool:0, hls_failure::Kind::NONE)
               };
-              (_12.0, (_12.1) || bool:false)
+              (_12.0, _12.1)
             } else {
-              (bool:0, bool:false)
+              (bool:0, hls_failure::Kind::NONE)
             };
-            (_13.0, (_13.1) || bool:false)
+            (_13.0, _13.1)
           } else {
-            (bool:0, bool:false)
+            (bool:0, hls_failure::Kind::NONE)
           };
           if _14.0 {
             let _15 = Syndrome {
@@ -1136,39 +1137,39 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
           let _12 = if Xls_clause_1_Step_1 == data.step {
             let _0 = Xls_clause_1_Source_1 == 1;
             let _6 = if _0 {
-              (bool:1, bool:false)
+              (bool:1, hls_failure::Kind::NONE)
             } else {
               let _1 = Xls_clause_1_Source_1 == 2;
               let _5 = if _1 {
-                (bool:1, bool:false)
+                (bool:1, hls_failure::Kind::NONE)
               } else {
                 let _2 = Xls_clause_1_Source_1 == 4;
                 let _4 = if _2 {
-                  (bool:1, bool:false)
+                  (bool:1, hls_failure::Kind::NONE)
                 } else {
                   let _3 = Xls_clause_1_Source_1 == 8;
-                  (_3, bool:false)
+                  (_3, hls_failure::Kind::NONE)
                 };
-                (_4.0, (_4.1) || bool:false)
+                (_4.0, _4.1)
               };
-              (_5.0, (_5.1) || bool:false)
+              (_5.0, _5.1)
             };
             let _11 = if _6.0 {
               let _7 = Xls_clause_1_Seen_1 & Xls_clause_1_Source_1;
               let _8 = _7 == 0;
               let _10 = if _8 {
                 let _9 = Xls_clause_1_Flags_1 < 4;
-                (_9, bool:false)
+                (_9, hls_failure::Kind::NONE)
               } else {
-                (bool:0, bool:false)
+                (bool:0, hls_failure::Kind::NONE)
               };
-              (_10.0, (_10.1) || bool:false)
+              (_10.0, _10.1)
             } else {
-              (bool:0, bool:false)
+              (bool:0, hls_failure::Kind::NONE)
             };
-            (_11.0, (_6.1) || (_11.1) || bool:false)
+            (_11.0, hls_failure::first(_6.1, _11.1))
           } else {
-            (bool:0, bool:false)
+            (bool:0, hls_failure::Kind::NONE)
           };
           if _12.0 {
             let _13 = Xls_clause_1_Flags_1 & 1;
@@ -1190,41 +1191,43 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
               let _25 = if _22 {
                 let _23 = Xls_clause_1_Syndrome_1.1.cutoff_step;
                 let _24 = Xls_clause_1_Step_1 >= _23;
-                (_24, bool:false)
+                (_24, hls_failure::Kind::NONE)
               } else {
-                (bool:0, bool:false)
+                (bool:0, hls_failure::Kind::NONE)
               };
               let Xls_clause_1_CutoffApplies_1 = _25.0;
               let _26 = Xls_clause_1_Syndrome_1.1.noise_disabled;
               let _27 = _26 == 1;
               let _28 = if _27 {
-                (bool:1, bool:false)
+                (bool:1, hls_failure::Kind::NONE)
               } else {
-                (Xls_clause_1_CutoffApplies_1, bool:false)
+                (Xls_clause_1_CutoffApplies_1, hls_failure::Kind::NONE)
               };
               let Xls_clause_1_NoiseDisabled_1 = _28.0;
               let _37 = if Xls_clause_1_NoiseDisabled_1 {
                 let _29 = (1 as u32);
                 let _30 = (0 as u32);
                 let _31 = (_29, Xls_clause_1_RandomState_1, _30, );
-                (_31, bool:false)
+                (_31, hls_failure::Kind::NONE)
               } else {
                 let _29 = (Xls_clause_1_RandomState_1 ^ (Xls_clause_1_RandomState_1 << u32:13)) & u32:0xffffffff;
                 let _30 = (_29 ^ (_29 >> u32:17)) & u32:0xffffffff;
                 let _31 = (_30 ^ (_30 << u32:5)) & u32:0xffffffff;
                 let Xls_clause_1_Sample_1 = _31;
-                let _32 = Xls_clause_1_Sample_1 < Xls_clause_1_Threshold_1;
-                let _34 = if _32 {
-                  let _33 = (1 as u32);
-                  (_33, bool:false)
-                } else {
-                  let _33 = (0 as u32);
-                  (_33, bool:false)
+                let _34 = {
+                  let _32 = Xls_clause_1_Sample_1 < Xls_clause_1_Threshold_1;
+                  if _32 {
+                    let _33 = (1 as u32);
+                    (_33, hls_failure::Kind::NONE)
+                  } else {
+                    let _32 = (0 as u32);
+                    (_32, hls_failure::Kind::NONE)
+                  }
                 };
                 let Xls_clause_1_Hit_1 = _34.0;
                 let _35 = (0 as u32);
                 let _36 = (_35, Xls_clause_1_Sample_1, Xls_clause_1_Hit_1, );
-                (_36, (_34.1) || bool:false)
+                (_36, _34.1)
               };
               let Xls_clause_1_NoiseDisabledWord_1 = _37.0.0;
               let Xls_clause_1_NextRandom_1 = _37.0.1;
@@ -1235,10 +1238,10 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
               let _40 = Xls_clause_1_NewDataQuiet_1 & Xls_clause_1_NoiseDisabledWord_1;
               let _42 = if Xls_clause_1_CutoffApplies_1 {
                 let _41 = (0 as u32);
-                (_41, bool:false)
+                (_41, hls_failure::Kind::NONE)
               } else {
                 let _41 = Xls_clause_1_Syndrome_1.1.cutoff_armed;
-                (_41, bool:false)
+                (_41, hls_failure::Kind::NONE)
               };
               let _43 = Syndrome {
                 seen_sources: Xls_clause_1_NewSeen_1,
@@ -1255,7 +1258,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
               let _44 = (Tag::SYNDROME, _43);
               let Xls_clause_1_Complete_1 = _44;
               let _45 = (Phase::ANNOUNCING, Xls_clause_1_Complete_1, Directive::CONSUME, bool:0, );
-              (_45, (_25.1) || (_28.1) || (_37.1) || (_42.1) || bool:false)
+              (_45, hls_failure::first(_25.1, hls_failure::first(_28.1, hls_failure::first(_37.1, _42.1))))
             } else {
               let _21 = Syndrome {
                 seen_sources: Xls_clause_1_NewSeen_1,
@@ -1266,9 +1269,9 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
               let _22 = (Tag::SYNDROME, _21);
               let Xls_clause_1_Collected_1 = _22;
               let _23 = (Phase::COLLECTING, Xls_clause_1_Collected_1, Directive::CONSUME, bool:0, );
-              (_23, bool:false)
+              (_23, hls_failure::Kind::NONE)
             };
-            if ((_46.1) || bool:false) {
+            if ((_46.1) != hls_failure::Kind::NONE) {
               (phase, data, Directive::FAIL, u1:0)
             } else {
               (_46.0.0, _46.0.1.1, _46.0.2, _46.0.3)
@@ -1370,9 +1373,9 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
           let Xls_clause_1_Step_1 = data.step;
           let _1 = if (data.noise_disabled == 0 && data.cutoff_armed == 0) {
             let _0 = Xls_clause_1_FirstQuietStep_1 >= Xls_clause_1_Step_1;
-            (_0, bool:false)
+            (_0, hls_failure::Kind::NONE)
           } else {
-            (bool:0, bool:false)
+            (bool:0, hls_failure::Kind::NONE)
           };
           if _1.0 {
             let _2 = Syndrome {
@@ -1407,9 +1410,9 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
           let Xls_clause_1_Step_1 = data.step;
           let _1 = if (data.noise_disabled == 0 && data.cutoff_armed == 0) {
             let _0 = Xls_clause_1_FirstQuietStep_1 > Xls_clause_1_Step_1;
-            (_0, bool:false)
+            (_0, hls_failure::Kind::NONE)
           } else {
-            (bool:0, bool:false)
+            (bool:0, hls_failure::Kind::NONE)
           };
           if _1.0 {
             let _2 = Syndrome {

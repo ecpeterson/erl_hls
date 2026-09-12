@@ -3,12 +3,12 @@
 // written the next time it is generated. Better to modify the Erlang input.
 
 import axis;
+import hls_failure;
 
 const NOREPLY = u1:0;  // some standard erlang tokens
 const REPLY = u1:1;
 const OK = u1:0;
 const ERROR_FUNCTION_CLAUSE = u32:1;
-const ERROR_MATCH_FAILURE = u32:2;
 const ERROR_REQUEST_LENGTH = u32:3;
 
 const MAX_PAYLOAD = u32:3;
@@ -188,7 +188,7 @@ Tag::PING => {
       let _2 = (REPLY, _1, Xls_clause_1_State_1, );
       if (bool:false) {
         let s = zero!<State>();
-        (axis::pack(Tag::ERROR as u8, ERROR_MATCH_FAILURE), (Tag::STATE, s))
+        (axis::pack(Tag::ERROR as u8, (hls_failure::Kind::NONE) as u32), (Tag::STATE, s))
       } else {
         (axis::pack(_2.1.0 as u8, _2.1.2), _2.2)
       }
@@ -220,7 +220,7 @@ Tag::GET => {
       let _6 = (REPLY, _5, Xls_clause_1_State_1, );
       if (bool:false) {
         let s = zero!<State>();
-        (axis::pack(Tag::ERROR as u8, ERROR_MATCH_FAILURE), (Tag::STATE, s))
+        (axis::pack(Tag::ERROR as u8, (hls_failure::Kind::NONE) as u32), (Tag::STATE, s))
       } else {
         (axis::pack(_6.1.0 as u8, _6.1.2), _6.2)
       }
@@ -245,7 +245,7 @@ Tag::BULK_GET => {
       let _2 = (REPLY, _1, Xls_clause_1_State_1, );
       if (bool:false) {
         let s = zero!<State>();
-        (axis::pack(Tag::ERROR as u8, ERROR_MATCH_FAILURE), (Tag::STATE, s))
+        (axis::pack(Tag::ERROR as u8, (hls_failure::Kind::NONE) as u32), (Tag::STATE, s))
       } else {
         (axis::pack(_2.1.0 as u8, _2.1.2), _2.2)
       }
@@ -259,13 +259,13 @@ Tag::BULK_GET => {
         let _4 = if _1 {
           let _2 = Xls_clause_2_Start_1 + Xls_clause_2_Count_1;
           let _3 = _2 <= 16;
-          (_3, bool:false)
+          (_3, hls_failure::Kind::NONE)
         } else {
-          (bool:0, bool:false)
+          (bool:0, hls_failure::Kind::NONE)
         };
-        (_4.0, (_4.1) || bool:false)
+        (_4.0, _4.1)
       } else {
-        (bool:0, bool:false)
+        (bool:0, hls_failure::Kind::NONE)
       };
       if _5.0 {
         let _6 = Xls_clause_2_State_1.1.registers;
@@ -285,7 +285,7 @@ Tag::BULK_GET => {
         let _15 = (REPLY, _14, Xls_clause_2_State_1, );
         if (bool:false) {
           let s = zero!<State>();
-          (axis::pack(Tag::ERROR as u8, ERROR_MATCH_FAILURE), (Tag::STATE, s))
+          (axis::pack(Tag::ERROR as u8, (hls_failure::Kind::NONE) as u32), (Tag::STATE, s))
         } else {
           (axis::pack(_15.1.0 as u8, _15.1.2), _15.2)
         }
@@ -309,7 +309,7 @@ Tag::SET => {
       let _1 = (NOREPLY, Xls_clause_1_State_1, );
       if (bool:false) {
         let s = zero!<State>();
-        (axis::pack(Tag::ERROR as u8, ERROR_MATCH_FAILURE), (Tag::STATE, s))
+        (axis::pack(Tag::ERROR as u8, (hls_failure::Kind::NONE) as u32), (Tag::STATE, s))
       } else {
         (zero!<axis::Frame>(), _1.1)
       }
@@ -341,7 +341,7 @@ Tag::SET => {
         let _13 = (NOREPLY, _12, );
         if (bool:false) {
           let s = zero!<State>();
-          (axis::pack(Tag::ERROR as u8, ERROR_MATCH_FAILURE), (Tag::STATE, s))
+          (axis::pack(Tag::ERROR as u8, (hls_failure::Kind::NONE) as u32), (Tag::STATE, s))
         } else {
           (zero!<axis::Frame>(), _13.1)
         }

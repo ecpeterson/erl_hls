@@ -11,12 +11,12 @@ Transforms supported Erlang actor modules into corresponding XLS modules.
 
 Callback bodies may use source-ordered `case` and `if` expressions. Supported
 `case` patterns include literals, variables, aliases, tuples, and homogeneous
-records. A general `case` must end in an unguarded catch-all clause. Each
-clause accepts one guard sequence from the same side-effect-free expression
+records. Each clause accepts one guard sequence from the same side-effect-free expression
 subset as a callback guard, including comma-separated tests and `andalso` or
-`orelse`. An `if` must similarly end in a literal `true` clause. Nonexhaustive
-control flow is rejected until generated code has a typed representation for
-Erlang's `case_clause` and `if_clause` failures.
+`orelse`. A missing match raises a selected `case_clause` or `if_clause`
+failure; catch-all clauses are optional. The first selected expression failure
+is retained through nested branches and helpers. See `docs/control-flow.md`
+for failure reporting and the bounded hardware contract.
 
 A new variable bound in every `case` or `if` arm is available after the
 expression, including bindings introduced by case patterns and nested
@@ -49,7 +49,7 @@ They evaluate at their binding, even if omitted later. See
 
 Initializers and callbacks may call local pure helpers with concrete `-spec`
 types. Only reachable helpers are translated, each as a DSLX function carrying
-its result and match-failure flag. The definition graph must be acyclic; XLS
+its result and failure kind. The definition graph must be acyclic; XLS
 inlines the calls. Helpers currently have one unguarded clause with distinct
 variable parameters (or `_`), and use the same expression subset as callbacks.
 See `docs/local-helpers.md` for types, call semantics, and structural limits.
@@ -71,6 +71,7 @@ prepending or moving one can renumber them. Every entry must be a unique atom.
     branch_from_clause/6,
     clause_outcome/4,
     failure_expression/1,
+    failure_kind/1,
     find_binding/3,
     find_attribute/2,
     find_optional_attribute/2,
@@ -180,14 +181,13 @@ to_xls_gs(Filename, Forms0) ->
     // written the next time it is generated. Better to modify the Erlang input.
 
     """,
-    "\n", xls_dslx_imports:emit([axis], xls_dslx_imports:from_forms(Forms)),
+    "\n", xls_dslx_imports:emit([axis, hls_failure], xls_dslx_imports:from_forms(Forms)),
     """
 
     const NOREPLY = u1:0;  // some standard erlang tokens
     const REPLY = u1:1;
     const OK = u1:0;
     const ERROR_FUNCTION_CLAUSE = u32:1;
-    const ERROR_MATCH_FAILURE = u32:2;
     const ERROR_REQUEST_LENGTH = u32:3;
 
 
@@ -310,19 +310,13 @@ print({static, integer, Integer}) ->
 ) -> {printable(), string()}.
 -doc "Processes an Erlang clause from handle_*/2 into XLS.".
 branch_from_clause(Clause, ArgVals, StateName, Postprocessor) ->
+    ComputeState = lower_clause(Clause, ArgVals, StateName, #{}),
     Failure = [
         "let s = zero!<State>();\n",
-        "    (axis::pack(Tag::ERROR as u8, ERROR_MATCH_FAILURE), ",
+        "    (axis::pack(Tag::ERROR as u8, (", failure_kind(ComputeState), ") as u32), ",
         "(Tag::STATE, s))"
     ],
-    branch_from_clause(
-        Clause,
-        ArgVals,
-        StateName,
-        Postprocessor,
-        Failure,
-        #{}
-    ).
+    branch_from_state(ComputeState, Postprocessor, Failure).
 
 branch_from_clause(
     Clause,
@@ -333,6 +327,9 @@ branch_from_clause(
     EnumAtoms
 ) ->
     ComputeState = lower_clause(Clause, ArgVals, StateName, EnumAtoms),
+    branch_from_state(ComputeState, Postprocessor, Failure).
+
+branch_from_state(ComputeState, Postprocessor, Failure) ->
     OutState = instr(ComputeState, [
         "if (", failure_expression(ComputeState), ") {\n",
         "    ", Failure, "\n",
@@ -342,16 +339,17 @@ branch_from_clause(
     ]),
     {lists:reverse(OutState#clause_state.statements), OutState#clause_state.reference}.
 
-%% Keep the computed value and its failure predicate together. Consumers may
+%% Keep the computed value and its selected failure together. Consumers may
 %% commit a compound result only when the whole callback has succeeded.
 -spec clause_outcome(erl_parse:af_clause(), [printable()], atom(), map()) ->
-    #{body := printable(), result := printable(), failed := printable()}.
+    #{body := printable(), result := printable(), failed := printable(), failure := printable()}.
 clause_outcome(Clause, ArgVals, StateName, EnumAtoms) ->
     State = lower_clause(Clause, ArgVals, StateName, EnumAtoms),
     #{
         body => lists:reverse(State#clause_state.statements),
         result => reference(State),
-        failed => failure_expression(State)
+        failed => failure_expression(State),
+        failure => failure_kind(State)
     }.
 
 lower_clause({clause, _Line, ArgPatterns, _Guards, Body},
@@ -478,7 +476,7 @@ statement_from_statement({record, _L, ToUpdate, NameAtom, UpdateFields}, State) 
     ]),
     instr(SecondState, record_value(NameAtom, reference(SecondState), SecondState));
 statement_from_statement({'if', Line, Clauses}, State) ->
-    lower_if(Line, Clauses, State);
+    xls_case_lower:lower_if(Line, Clauses, State);
 statement_from_statement({'case', Line, Condition, Clauses}, State) ->
     xls_case_lower:lower(Line, Condition, Clauses, State);
 statement_from_statement({xls_helper_call, _Line, Name, Args}, State) ->
@@ -505,50 +503,12 @@ lower_arguments(Args, State) ->
         {reference(Next), Next}
     end, State, Args).
 
-%% A selected outcome contributes one explicit failure predicate. Its value
+%% A selected outcome contributes one explicit failure kind. Its value
 %% and any exported bindings remain separate from that bookkeeping.
 -spec outcome_value(clause_state()) -> clause_state().
 outcome_value(State) ->
     Value = reference(State),
     reference(add_failure([Value, ".1"], State), [Value, ".0"]).
-
-%% `if` clauses are guard-only and therefore need no pattern projection.  The
-%% supported form is exhaustive: a final literal `true` clause supplies the
-%% value and XLS type for the otherwise branch.  Earlier clauses become nested
-%% boolean cases, reusing their binding joins and selected failure predicates.
-%% A nonexhaustive Erlang `if` raises `if_clause`; representing that path needs
-%% a typed exception carrier and is deliberately left for a later extension.
-lower_if(Line, Clauses, State) ->
-    Normalized = [normalize_if_clause(Clause) || Clause <- Clauses],
-    case lists:reverse(Normalized) of
-        [{_FallbackLine, {atom, _TrueLine, true}, Fallback} | Reversed] ->
-            Prefix = lists:reverse(Reversed),
-            case [ClauseLine || {ClauseLine, {atom, _, true}, _} <- Prefix] of
-                [] ->
-                    lower_expression_sequence(
-                        nested_if_cases(Prefix, Fallback),
-                        State
-                    );
-                [CatchallLine | _] ->
-                    error({nonfinal_xls_if_fallback, CatchallLine})
-            end;
-        _ ->
-            error({missing_xls_if_fallback, Line})
-    end.
-
-normalize_if_clause({clause, Line, [], Guards, Body}) when Body =/= [] ->
-    {Line, xls_guard_lower:predicate(Guards, Line), Body};
-normalize_if_clause(Clause) ->
-    error({unsupported_xls_if_clause, Clause}).
-
-nested_if_cases([], Fallback) ->
-    Fallback;
-nested_if_cases([{Line, Predicate, Body} | Rest], Fallback) ->
-    [{'case', Line, Predicate, [
-        {clause, Line, [{atom, Line, true}], [], Body},
-        {clause, Line, [{atom, Line, false}], [],
-            nested_if_cases(Rest, Fallback)}
-    ]}].
 
 lower_expression_sequence(Expressions, State0) ->
     lists:foldl(
@@ -563,8 +523,22 @@ lower_expression_sequence(Expressions, State0) ->
     ).
 
 -spec failure_expression(clause_state()) -> printable().
-failure_expression(#clause_state{failures = Failures}) ->
-    [["(", Failure, ") || "] || Failure <- lists:reverse(Failures)] ++ ["bool:false"].
+failure_expression(#clause_state{failures = []}) -> "bool:false";
+failure_expression(State) ->
+    ["(", failure_kind(State), ") != hls_failure::Kind::NONE"].
+
+%% The list is stored in reverse evaluation order. A later failed computation
+%% cannot replace an earlier failure, even if its placeholder value is used.
+-spec failure_kind(clause_state()) -> printable().
+failure_kind(#clause_state{failures = []}) -> "hls_failure::Kind::NONE";
+failure_kind(#clause_state{failures = [Last | Earlier]}) ->
+    lists:foldl(fun(Failure, Later) ->
+        ["hls_failure::first(", Failure, ", ", Later, ")"]
+    end, Last, Earlier).
+
+add_match_failure(Predicate, State) ->
+    add_failure(["hls_failure::check(", Predicate,
+        ", hls_failure::Kind::MATCH_FAILURE)"], State).
 
 add_failure(Failure, State = #clause_state{failures = Failures}) ->
     State#clause_state{failures = [Failure | Failures]}.
@@ -585,7 +559,7 @@ bind(Name, Line, Value, State) ->
     {Emitted, Named} = uniquify(State, Name),
     Bound = instr(Named, Emitted, Value),
     Next = case Previous of
-        {ok, Existing} -> add_failure([Existing, " != ", Emitted], Bound);
+        {ok, Existing} -> add_match_failure([Existing, " != ", Emitted], Bound);
         error -> Bound#clause_state{bindings = (Bound#clause_state.bindings)#{Name => Emitted}}
     end,
     reference(Next, Value).
@@ -634,7 +608,7 @@ destructure_lhs({tuple, _L, Slots}, State) ->
     IntermediateState#clause_state{reference = TupleRef};
 %% constant cases
 destructure_lhs({atom, _L, Atom}, State) when Atom == true orelse Atom == false ->
-    add_failure([reference(State), " != bool:", atom_to_list(Atom)], State).
+    add_match_failure([reference(State), " != bool:", atom_to_list(Atom)], State).
 %% TODO: badmatch on other constants
 
 %%%
