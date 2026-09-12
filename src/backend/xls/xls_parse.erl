@@ -502,7 +502,7 @@ outcome_value(State) ->
 %% `if` clauses are guard-only and therefore need no pattern projection.  The
 %% supported form is exhaustive: a final literal `true` clause supplies the
 %% value and XLS type for the otherwise branch.  Earlier clauses become nested
-%% boolean cases, reusing their branch-local binding and badmatch bookkeeping.
+%% boolean cases, reusing their binding joins and selected failure predicates.
 %% A nonexhaustive Erlang `if` raises `if_clause`; representing that path needs
 %% a typed exception carrier and is deliberately left for a later extension.
 lower_if(Line, Clauses, State) ->

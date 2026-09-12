@@ -27,12 +27,12 @@ iverilog -g2012 -s helpers_tb -o "$stage/helpers.vvp" \
 vvp "$stage/helpers.vvp"
 cat > "$stage/equivalence.ys" <<EOF
 read_verilog "$stage/factored.v" "$stage/inline.v"
-proc
-equiv_make factored inline helper_equivalence
-hierarchy -top helper_equivalence
-equiv_simple
-equiv_status -assert
+miter -equiv -flatten factored inline helper_equivalence
+prep -top helper_equivalence
+sat -verify -prove trigger 0 -show-inputs -show-outputs
 EOF
+# Compare observable results; generated temporary names need not denote the
+# same intermediate calculation in the two implementations.
 "${YOSYS:-yosys}" -Q -T -s "$stage/equivalence.ys" > "$stage/equivalence.log"
 echo "PASS: factored/inline RTL equivalence for all input bits"
 for kind in wrong_argument wrong_result wrong_join; do

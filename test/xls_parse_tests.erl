@@ -523,7 +523,7 @@ selected_general_case_body_badmatch_does_not_fall_through_test() ->
         >>)
     ).
 
-general_case_bindings_are_local_to_each_arm_test() ->
+unused_general_case_bindings_stay_in_their_arms_test() ->
     XLS = lower_expression_clause(
         "probe(Value) -> case Value of "
         "0 -> Choice = 1, Choice; "
@@ -677,7 +677,7 @@ duplicate_boolean_case_arm_is_rejected_test() ->
         )
     ).
 
-case_preservation_keeps_bookkeeping_names_distinct_test() ->
+case_failure_uses_no_synthetic_erlang_bindings_test() ->
     Clause = parse_clause(
         "probe(Condition, Case_match_1) -> "
         "case Condition of true -> 1; false -> 2 end."
@@ -709,7 +709,7 @@ if_clauses_preserve_source_order_and_comma_guards_test() ->
     ?assert(Second < Third),
     ?assertEqual(nomatch, binary:match(XLS, <<" && ">>)).
 
-if_branch_bindings_are_local_test() ->
+unused_if_bindings_stay_in_their_arms_test() ->
     XLS = lower_expression_clause(
         "probe(Value) -> if "
         "Value > 0 -> Choice = Value + 1, Choice; "
