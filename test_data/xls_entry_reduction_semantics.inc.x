@@ -70,12 +70,12 @@ fn invalid_reopen_preserves_existing_reduction_test() {
     ..initial_machine()
   };
   let direct = machine_step(machine, zero!<axis::Frame>(), false, true);
-  assert_eq(hls_failure::failed(direct.machine.failure), true);
+  assert_eq(direct.machine.failure, hls_failure::REDUCTION_PROTOCOL);
   assert_eq(direct.egress_valid, false);
   assert_eq(direct.machine.data, machine.data);
   assert_eq(direct.machine.reduction, machine.reduction);
   let shared = shared_machine_enter(shared_machine(machine), true);
-  assert_eq(hls_failure::failed(shared.machine.failure), true);
+  assert_eq(shared.machine.failure, hls_failure::REDUCTION_PROTOCOL);
   assert_eq(shared.effects_valid, false);
   assert_eq(shared.machine.data, machine.data);
   assert_eq(shared.machine.reduction, machine.reduction);
@@ -113,4 +113,23 @@ fn optional_open_depends_on_the_selected_entry_branch_test() {
   assert_eq(accepted.machine.reduction.key, u32:1);
   assert_eq(accepted.machine.reduction.status, ReductionStatus::OPEN);
   assert_eq(accepted.egress_valid, true);
+}
+
+#[test]
+fn selected_expression_failure_precedes_reduction_reopen_test() {
+  let machine = Machine {
+    data: Cell { value: u32:0 },
+    reduction: reduction_open_site(ReductionSite::GATHERING, u32:99,
+      Sum { value: u32:17 }),
+    ..initial_machine()
+  };
+  let direct = machine_step(machine, zero!<axis::Frame>(), false, true);
+  let shared = shared_machine_enter(shared_machine(machine), true);
+  assert_eq(hls_failure::kind(direct.machine.failure), hls_failure::Kind::MATCH_FAILURE);
+  assert_eq(direct.machine.failure > u16:15, true);
+  assert_eq(shared.machine.failure, direct.machine.failure);
+  assert_eq(direct.machine.reduction, machine.reduction);
+  assert_eq(shared.machine.reduction, machine.reduction);
+  assert_eq(direct.egress_valid, false);
+  assert_eq(shared.effects_valid, false);
 }
