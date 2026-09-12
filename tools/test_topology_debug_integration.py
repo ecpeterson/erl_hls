@@ -14,6 +14,7 @@ import subprocess
 import time
 
 import topology_debug as topology
+import topology_debug_report as reporting
 
 ROOT = Path(__file__).resolve().parents[1]
 DEBUG_RTL = [ROOT / "priv/rtl/debug" / name for name in
@@ -144,6 +145,9 @@ def run(args):
                 sim.terminate()
                 sim.wait(timeout=10)
     assert "PASS: original/instrumented" in (stage / "simulation.log").read_text()
+    for name in ("blocked", "recovered"):
+        report = json.loads((stage / f"{name}.json").read_text())
+        (stage / f"{name}.txt").write_text(reporting.text_report(manifest, report))
     print(f"PASS: {manifest['top']} structural and cycle-by-cycle noninterference")
 
 

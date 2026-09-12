@@ -123,3 +123,14 @@ python3 tools/test_topology_debug_integration.py \
 It runs the Erlang client against a real Icarus/FIFO/VPI endpoint, identifies full queues, follows the external stall, and checks recovery after releasing the sink. It compares the original and diagnostic application outputs at every cycle and independently checks every FIFO occupancy with a transfer scoreboard. The same runner accepts the D3 wrapper arguments above. D3 has two sinks, so one can progress while the selected sink is blocked. CI regenerates and exercises the ordered-egress topology with its pinned XLS release.
 
 `bash tools/test_actor_debug.sh XLS_ROOT` generates a two-actor topology in two pipeline schedules. Public scoped queries identify its deliberately failed actor while a healthy neighbor is blocked, then verify the neighbor after release. Snapshot RTL tests cover slot isolation, disabled and unused-address writes, and reset. The integration runner accepts `--actor-projection actors.json --actor-test phi` for the D3 profile and checks all 36 actors before and after release.
+
+## Measure diagnostic logic
+
+```sh
+python3 tools/measure_topology_debug.py "$stage/topology-debug" \
+  --stage "$stage/debug-area" --yosys /path/to/yosys --seeds 5
+```
+
+This compares physical-only queries with physical queries plus actor snapshots, using the supplied projection. It makes application observations unconstrained inputs while retaining aliases and constants discovered during elaboration. Both cases use schema 2 and the same manifest constant. The unchanged outer route adapter is excluded. It runs `synth_xilinx -flatten -abc9 -arch xc7 -noiopad` after scrambling internal names with matched seeds, retaining the generated Verilog, Yosys scripts/logs, individual LUT/FF/BRAM counts, and best/mean/population-variance/worst summaries.
+
+The result isolates diagnostic logic cost at its observation boundary. It does not measure complete-application area or placed/routed timing, and application-specific invariants can allow further optimization. Seed variation measures mapping sensitivity, not an unbiased statistical population. Changes to probe fanout still require timing qualification in the integrated design.

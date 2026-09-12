@@ -54,7 +54,7 @@ def discover(projection, root, hierarchy, flat, top, clock_bit):
         address_width = max(1, (slots - 1).bit_length())
         path = (*root, bank["ram"])
         ram = hierarchy["modules"][module["cells"][bank["ram"]]["type"]]
-        if ram.get("attributes", {}).get("hdlname") != "hls_1r1w_ram":
+        if ram.get("attributes", {}).get("hdlname", "").removeprefix("\\") != "hls_1r1w_ram":
             raise ValueError(f"unsupported state RAM at {'.'.join(path)}")
         check_write_contract(ram)
         expected = {"clk": ("input", 1), "wr_en": ("input", 1),

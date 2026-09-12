@@ -99,6 +99,9 @@ class DiscoveryTests(unittest.TestCase):
         def discover(p=projection, f=flat, h=hierarchy):
             return topology.actors.discover(p, ["shell"], h, f, "top", 1)
         banks = discover()
+        escaped = copy.deepcopy(hierarchy)
+        escaped["modules"]["ram"]["attributes"]["hdlname"] = "\\hls_1r1w_ram"
+        self.assertEqual(discover(h=escaped), banks)
         self.assertEqual(banks[0]["taps"], [2, 3, *range(10, 18), 58, 59])
         resources = topology.actors.resources(banks, 5)
         self.assertEqual([r["id"] for r in resources], [5, 6])

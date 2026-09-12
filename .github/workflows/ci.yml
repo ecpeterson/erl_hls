@@ -133,6 +133,10 @@ jobs:
           path: |
             _build/debug-trace-integration/*.log
             _build/debug-trace-integration/trace_*.term
+            _build/actor-debug/**/actors-*.term
+            _build/actor-debug/**/manifest.json
+            _build/actor-debug/**/blocked.txt
+            _build/actor-debug/**/recovered.txt
           if-no-files-found: ignore
 
       - name: Query an instrumented generated topology under backpressure
