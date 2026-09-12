@@ -15,7 +15,7 @@ Expressions and helpers carry their value with a sixteen-bit `hls_failure::Code`
 | Consumer | Failure behavior |
 | --- | --- |
 | Hardware initializer | Reject compilation through the initializer's constant assertion. |
-| `hls_gs` hardware callback | Return the first failure code in an error frame and zero callback state. The proxy decodes `match_failure` (2), `case_clause` (4), and `if_clause` (5). |
+| `hls_gs` hardware callback | Return the first failure reason in an error frame and zero callback state; the source-site bits stay internal. The proxy decodes `match_failure` (2), `case_clause` (4), and `if_clause` (5). |
 | `hls_statem` cast, reduction-completion handler, or entry | Retain the selected failure code. A failed entry preserves incoming data/reduction state and emits no effects, including any computed prefix. |
 | ERTS | Raise the usual Erlang exception. |
 
