@@ -9,7 +9,7 @@ channels, reads encountered FIFO occupancies, then rechecks its observations.
 Repeated observations suggest a stable wait; they do not prove continuous
 blocking between queries or establish an actor's semantic next dependency.
 """.
--export([open/2, info/1, query/2, inspect_waits/3, write_wait_report/4]).
+-export([open/2, info/1, query/2, query/3, resource/2, inspect_waits/3, write_wait_report/4]).
 -export([decode_info/1, decode_observation/2, manifest_fingerprint/1]).
 
 -define(TIMEOUT, 10000).
@@ -41,12 +41,20 @@ open(Pid, Manifest) ->
     end.
 
 -spec query(map(), non_neg_integer()) -> {ok, map()} | {error, term()}.
-query(#{client := Pid, resources := Resources}, Id) when Id >= 0, Id < tuple_size(Resources) ->
-    case hls_debug:query(Pid, 16#11, <<Id:32/little>>, ?TIMEOUT) of
+query(Session, Id) -> query(Session, Id, ?TIMEOUT).
+
+-spec query(map(), non_neg_integer(), timeout()) -> {ok, map()} | {error, term()}.
+query(#{client := Pid, resources := Resources}, Id, Timeout) when Id >= 0, Id < tuple_size(Resources) ->
+    case hls_debug:query(Pid, 16#11, <<Id:32/little>>, Timeout) of
         {ok, Bytes} -> decode_observation(Bytes, element(Id+1, Resources));
         Error -> Error
     end;
-query(_, Id) -> {error, {unknown_resource, Id}}.
+query(_, Id, _) -> {error, {unknown_resource, Id}}.
+
+-doc "Selects a physical resource for the common hls_debug inspection interface.".
+resource(Session = #{resources := Resources}, Id) when Id >= 0, Id < tuple_size(Resources) ->
+    {ok, {resource, Session, Id}};
+resource(_, Id) -> {error, {unknown_resource, Id}}.
 
 decode_info(<<1:32/little, Count:32/little, Channels:32/little, Queues:32/little,
         Hash:32/binary>>) when Channels > 0, Count =:= Channels + Queues ->

@@ -105,11 +105,16 @@ verify(smoke, Result) ->
 
 maybe_verify_debug(undefined) ->
     ok;
-maybe_verify_debug(Debug) ->
+maybe_verify_debug(Client) ->
+    Debug = {boundary, Client, {phi_memory_gateway, host_stream}},
+    {scope, Scope} = hls_debug:info(Debug, scope),
     verify_debug(Debug).
 
-verify_debug(Debug) ->
+verify_debug(Client) ->
+    Debug = {boundary, Client, {phi_memory_gateway, host_stream}},
+    {scope, Scope} = hls_debug:info(Debug, scope),
     {ok, Counters} = hls_debug:get_counters(Debug, ?DEBUG_TIMEOUT),
+    ?assertEqual(Scope, maps:get(scope, Counters)),
     io:format("PHI_DEBUG_COUNTERS: ~p~n", [Counters]),
     ?assertEqual(4, maps:get(version, Counters)),
     ?assert(maps:get(cycles, Counters) > 0),
@@ -118,6 +123,7 @@ verify_debug(Debug) ->
     ?assert(maps:get(app_tx_beats, Counters) > 0),
     ?assert(maps:get(app_tx_frames, Counters) > 0),
     {ok, Trace} = hls_debug:get_trace(Debug, ?DEBUG_TIMEOUT),
+    ?assertEqual(Scope, maps:get(scope, Trace)),
     ?assertEqual(1, maps:get(version, Trace)),
     ?assertEqual(2, maps:get(record_words, Trace)),
     ?assertEqual(0, maps:get(observation_drops, Trace)),

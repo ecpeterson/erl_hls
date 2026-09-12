@@ -17,8 +17,16 @@ run(Stage) ->
         %% inspection itself is adaptive and must reach the injected external sink.
         Queues = [Q || Q = #{<<"kind">> := <<"fifo">>} <- maps:get(<<"resources">>, Manifest)],
         Seeds = [Id || #{<<"id">> := Id, <<"capacity">> := Capacity} <- Queues,
-            begin {ok, #{value := Occupancy}} = hls_topology_debug:query(Session, Id), Occupancy =:= Capacity end],
+            begin
+                {ok, Target} = hls_topology_debug:resource(Session, Id),
+                [{occupancy, Occupancy}, {free_slots, Free}, {cycle, _}] =
+                    hls_debug:info(Target, [occupancy, free_slots, cycle], 10000),
+                true = Occupancy + Free =:= Capacity,
+                Occupancy =:= Capacity
+            end],
         true = Seeds =/= [],
+        {ok, FirstQueue} = hls_topology_debug:resource(Session, hd(Seeds)),
+        {ok, #{schema := 1}} = hls_debug:inspect_waits(FirstQueue, #{max_queries => 32}),
         {ok, Report} = hls_topology_debug:inspect_waits(Session, Seeds, #{max_queries => 2048}),
         true = lists:any(fun(#{kind := K, channel := Id}) ->
             K =:= external_sink andalso lists:member(Id, maps:get(reobserved_blocked, Report))
