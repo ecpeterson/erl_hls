@@ -61,7 +61,7 @@ concatenates every block in include-expanded source order. That order is part
 of the wire ABI: appending a block preserves existing tag values, while
 prepending or moving one can renumber them. Every entry must be a unique atom.
 """.
--export([actor_interface/1, to_xls/1, to_xls/2]).
+-export([actor_interface/1, actor_interface/2, to_xls/1, to_xls/2]).
 %% Internal API shared by the actor-specific lowerers while this module is
 %% split into smaller compiler passes.
 -export([
@@ -108,30 +108,34 @@ prepending or moving one can renumber them. Every entry must be a unique atom.
 to_xls(Filename) ->
     to_xls(Filename, #{shared_service => ordinary}).
 
--spec to_xls(string(), #{shared_service := ordinary | aggregate_only}) ->
+-spec to_xls(string(), #{shared_service => ordinary | aggregate_only,
+    source_options => [hls_source:option()] | hls_source:context()}) ->
     iolist().
--doc "Transpiles an actor with an explicitly selected shared-service artifact.".
+-doc "Transpiles an actor with preprocessing options and a shared-service artifact mode.".
 to_xls(Filename, Options0) ->
     Options = validate_xls_options(Options0),
     Mode = maps:get(shared_service, Options),
-    {ok, Forms} = parse_file(Filename),
+    {ok, Forms} = parse_file(Filename, maps:get(source_options, Options)),
     case find_optional_attribute(Forms, hls_phases) of
         none when Mode =:= ordinary -> to_xls_gs(Filename, Forms);
         none -> error({unsupported_hls_gs_shared_service, Mode});
         {ok, PhaseNames} ->
-            to_xls_statem(Filename, Forms, PhaseNames, Options)
+            to_xls_statem(Filename, Forms, PhaseNames,
+                maps:with([shared_service], Options))
     end.
 
 validate_xls_options(Options) when is_map(Options) ->
-    case lists:sort(maps:keys(Options)) of
-        [shared_service] ->
-            case maps:get(shared_service, Options) of
+    Keys = lists:sort(maps:keys(Options)),
+    case Keys -- [shared_service, source_options] of
+        [] ->
+            case maps:get(shared_service, Options, ordinary) of
                 Mode when Mode =:= ordinary; Mode =:= aggregate_only ->
-                    Options;
+                    #{shared_service => Mode,
+                        source_options => maps:get(source_options, Options, [])};
                 Mode ->
                     error({invalid_xls_shared_service, Mode})
             end;
-        Keys ->
+        _ ->
             error({invalid_xls_options, Keys})
     end;
 validate_xls_options(Options) ->
@@ -140,7 +144,13 @@ validate_xls_options(Options) ->
 -spec actor_interface(file:filename()) -> map().
 -doc "Returns the include-expanded interface inferred for one hls_statem file.".
 actor_interface(Filename) ->
-    {ok, Forms} = parse_file(Filename),
+    actor_interface(Filename, []).
+
+-spec actor_interface(file:filename(), [hls_source:option()] |
+    hls_source:context()) -> map().
+-doc "Infers an interface using explicit preprocessing options or a captured context.".
+actor_interface(Filename, SourceOptions) ->
+    {ok, Forms} = parse_file(Filename, SourceOptions),
     case find_optional_attribute(Forms, hls_phases) of
         {ok, PhaseNames} ->
             xls_statem_lower:interface(Forms, PhaseNames);
@@ -957,25 +967,23 @@ find_spec(Forms, F, A) ->
 %%% Other utilities
 %%%
 
--spec parse_file(string()) -> [erl_parse:abstract_form()].
+-spec parse_file(string()) -> {ok, [erl_parse:abstract_form()]}.
 -doc "Helper routine for reading an entire .erl source file into memory.".
 parse_file(Filename) ->
-    {ok, Epp} = epp:open([
-        {name, Filename},
-        {includes, include_paths(Filename)}
-    ]),
-    try
-        {ok, epp:parse_file(Epp)}
-    after
-        epp:close(Epp),
-        err
-    end.
+    parse_file(Filename, []).
 
-include_paths(Filename) ->
-    SourceDirectory = filename:dirname(Filename),
-    case code:lib_dir(erl_hls, include) of
+parse_file(Filename, Context) when is_map(Context) ->
+    {ok, hls_source:read(Filename, Context)};
+parse_file(Filename, Options) ->
+    Context = hls_source:options(Filename, Options),
+    #{includes := Includes} = Context,
+    {ok, hls_source:read(Filename,
+        Context#{includes := Includes ++ application_includes()})}.
+
+application_includes() ->
+    case code:lib_dir(erl_hls) of
         {error, bad_name} ->
-            [SourceDirectory, filename:absname("include")];
-        ApplicationInclude ->
-            [SourceDirectory, ApplicationInclude]
+            [filename:absname("include")];
+        Application ->
+            [filename:join(Application, "include")]
     end.

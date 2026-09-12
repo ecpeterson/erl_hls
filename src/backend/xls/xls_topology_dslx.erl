@@ -151,12 +151,8 @@ derive_realized_lanes(Routes) ->
 
 
 annotate_actors(Actors, EgressDepth) ->
-    Interfaces = maps:from_list([
-        {Module, hls_actor_interface:from_module(Module)}
-        || Module <- lists:usort([
-            maps:get(module, Actor) || Actor <- Actors
-        ])
-    ]),
+    Interfaces = hls_actor_interface:from_modules(
+        [Module || #{module := Module} <- Actors]),
     [annotate_actor(Index, Actor, Interfaces, EgressDepth)
         || {Index, Actor} <- lists:enumerate(0, Actors)].
 

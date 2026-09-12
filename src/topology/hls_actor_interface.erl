@@ -8,9 +8,17 @@ Reads the narrow, version-2 interface summary emitted by `hls_pack` for an
 `hls_statem` module.
 
 When the compiling source remains available, the query re-derives the summary
-with the current analyzer and rejects a stale beam. This keeps incremental
+with the current analyzer and the captured build directory, include paths,
+macros, and feature options, and rejects a stale beam. This keeps incremental
 builds from silently mixing old interface facts with a newer topology
 generator; source-less deployed beams use their validated embedded summary.
+Deterministic builds omit source context and use that same embedded-summary
+path. The check compares interface facts, not complete callback behavior or an
+artifact hash. See `docs/source-context.md` for compilation inputs and limits.
+
+`from_modules/1` resolves each distinct module once into a caller-owned map.
+Planning passes use this map across instances, families, or scheduler groups;
+no interface cache survives the pass. A later pass rereads current sources.
 
 The summary records only facts already required by the current lowerer:
 message record layouts and local selectors, phase-specific cast dispatch, and
@@ -41,6 +49,7 @@ application behavior or a general Erlang protocol description.
     dispatched_schemas/1,
     dispatched_schemas/2,
     from_module/1,
+    from_modules/1,
     initial_effects/1,
     max_entry_effects/1,
     output_schemas/2,
@@ -66,7 +75,7 @@ from_module(Module) when is_atom(Module) ->
             ) of
                 [Summary] when is_map(Summary) ->
                     Validated = validate(Module, Summary),
-                    verify_current_source(Module, Validated);
+                    verify_current_source(Module, Validated, Attributes);
                 '$missing' ->
                     error({missing_hls_actor_interface, Module});
                 Value ->
@@ -78,6 +87,12 @@ from_module(Module) when is_atom(Module) ->
     end;
 from_module(Module) ->
     error({invalid_hls_actor_module, Module}).
+
+-spec from_modules([module()]) -> #{module() => summary()}.
+-doc "Reads each distinct module once for a planning pass; retains no global cache.".
+from_modules(Modules) ->
+    maps:from_list([{Module, from_module(Module)}
+        || Module <- lists:usort(Modules)]).
 
 -spec dispatched_schemas(summary()) -> [atom()].
 -doc "Returns schemas with at least one phase-specific cast dispatch.".
@@ -230,16 +245,21 @@ validate_behavior(Module, Attributes) ->
         false -> error({not_an_hls_statem_actor, Module})
     end.
 
-verify_current_source(Module, Summary) ->
+verify_current_source(Module, Summary, Attributes) ->
     CompileInfo = Module:module_info(compile),
     case proplists:get_value(source, CompileInfo, '$missing') of
         Source0 when is_list(Source0); is_binary(Source0) ->
             Source = filename(Source0),
             case filelib:is_regular(Source) of
                 true ->
+                    Context = case proplists:get_value(
+                            hls_source_context, Attributes) of
+                        [Captured] when is_map(Captured) -> Captured;
+                        _ -> error({missing_hls_source_context, Module})
+                    end,
                     Current = validate(
                         Module,
-                        xls_parse:actor_interface(Source)
+                        xls_parse:actor_interface(Source, Context)
                     ),
                     case Current =:= Summary of
                         true -> Summary;

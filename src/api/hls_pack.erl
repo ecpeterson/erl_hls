@@ -23,13 +23,17 @@ calls_from_types({remote_type, Anno, [Module, Name, Args]}) ->
     };
 calls_from_types(X) -> X.
 
-parse_transform(Forms, _Options) ->
+parse_transform(Forms, Options) ->
     [FileAttr, ModuleAttr | TailForms] = Forms,
     {BodyForms, EOFForm} = {lists:droplast(TailForms), lists:last(TailForms)},
 
     PublicStructNames = xls_parse:find_tags(Forms),
     StateName = xls_parse:state(Forms),
     InterfaceAttributes = actor_interface_attributes(Forms, ModuleAttr),
+    SourceAttributes = case InterfaceAttributes of
+        [] -> [];
+        [_] -> hls_source:capture(Forms, Options)
+    end,
     SerializableStructNames = [StateName | PublicStructNames],
     RewrittenBodyForms = rewrite_record_defaults(
         BodyForms, SerializableStructNames
@@ -110,7 +114,7 @@ parse_transform(Forms, _Options) ->
 
     EmittedForms =
         [FileAttr, ModuleAttr, ExportAttr] ++
-        InterfaceAttributes ++
+        InterfaceAttributes ++ SourceAttributes ++
         RewrittenBodyForms ++
         [
             PackForm,

@@ -445,8 +445,7 @@ validate_selections(Requested, FamilyIndex) ->
     end, lists:sort(maps:to_list(Requested))).
 
 module_interfaces(Families) ->
-    maps:from_list([{Module, hls_actor_interface:from_module(Module)}
-        || Module <- lists:usort([maps:get(module, Family) || Family <- Families])]).
+    hls_actor_interface:from_modules([Module || #{module := Module} <- Families]).
 
 family_module(FamilyId, Topology) ->
     [#{module := Module}] = [Family || Family <- maps:get(families, Topology),

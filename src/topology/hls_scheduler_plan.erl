@@ -65,10 +65,14 @@ topology-level channel-dependency and reserved-progress obligations.
 normalize(Topology = #{actors := _, families := _}, Specs)
         when is_map(Specs) ->
     MemberIndex = member_index(Topology),
-    Groups = [
+    Declarations = [
         normalize_group(Id, Group, MemberIndex)
         || {Id, Group} <- lists:sort(maps:to_list(Specs))
     ],
+    Interfaces = hls_actor_interface:from_modules(
+        [Module || #{module := Module} <- Declarations]),
+    Groups = [layout_group(Group, maps:get(Module, Interfaces))
+        || Group = #{module := Module} <- Declarations],
     Grouped = lists:append([
         [member_reference(Member) || Member <- maps:get(members, Group)]
         || Group <- Groups
@@ -102,7 +106,12 @@ normalize_group(Id, Spec, MemberIndex) when is_map(Spec) ->
         [Only] -> Only;
         _ -> error({heterogeneous_group, Id, Modules})
     end,
-    Interface = hls_actor_interface:from_module(Module),
+    #{id => Id, module => Module, members => Members0,
+        state_storage => StateStorage, mailbox_storage => MailboxStorage};
+normalize_group(Id, _Spec, _MemberIndex) ->
+    error({scheduler_group, Id}).
+
+layout_group(Group = #{members := Members0}, Interface) ->
     Capacity = maps:get(mailbox_capacity, Interface),
     true = lists:all(
         fun(#{mailbox_capacity := MemberCapacity}) ->
@@ -114,9 +123,7 @@ normalize_group(Id, Spec, MemberIndex) when is_map(Spec) ->
     ReductionStorageWidth =
         hls_actor_interface:reduction_storage_width(Interface),
     {Members, SlotCount} = assign_slots(Members0),
-    #{
-        id => Id,
-        module => Module,
+    Group#{
         state => State,
         reduction_storage_width => ReductionStorageWidth,
         mailbox_capacity => Capacity,
@@ -125,12 +132,8 @@ normalize_group(Id, Spec, MemberIndex) when is_map(Spec) ->
         selection => round_robin,
         effect_progress => resumable,
         reservation => none,
-        blocked => yield,
-        state_storage => StateStorage,
-        mailbox_storage => MailboxStorage
-    };
-normalize_group(Id, _Spec, _MemberIndex) ->
-    error({scheduler_group, Id}).
+        blocked => yield
+    }.
 
 validate_keys(Id, Spec) ->
     Required = [mailbox_storage, members, state_storage],
