@@ -39,7 +39,7 @@ def main():
     body = {k: v for k, v in manifest.items() if k != 'fingerprint'}
     canonical = json.dumps(body, sort_keys=True, ensure_ascii=False, separators=(',', ':')).encode()
     fingerprint = hashlib.sha256(canonical).hexdigest()
-    if manifest['schema'] != 3 or manifest['fingerprint'] != fingerprint:
+    if manifest['schema'] != 4 or manifest['fingerprint'] != fingerprint:
         raise ValueError('corrupt or unsupported manifest')
     hierarchy = json.loads((args.instrumented / 'hierarchy.json').read_text())
     flat = json.loads((args.instrumented / 'flat.json').read_text())['modules'][manifest['top']]
@@ -57,23 +57,34 @@ def main():
     rtl = root / 'priv/rtl/debug'
     yosys = args.yosys
     (stage / 'yosys-version.txt').write_bytes(subprocess.check_output([yosys, '-V']))
+    modes = ['physical']
+    if any('mailbox' in bank for bank in banks):
+        modes.append('actor_state')
+    modes.append('actors')
     results = []
-    for mode in ('physical', 'actors'):
-        selected = banks if mode == 'actors' else []
+    for mode in modes:
+        selected = banks if mode != 'physical' else []
+        if mode == 'actor_state':
+            # Hold the query protocol and observed application fixed while
+            # measuring just the pre-existing phase/failure retention path.
+            selected = [{k: v for k, v in bank.items() if k != 'mailbox'}
+                        for bank in banks]
+            for bank in selected:
+                bank['taps'] = bank['taps'][:1 + bank['address_width'] + 25]
         count = len(physical) + sum(b['slots'] for b in selected)
         lines = ['module measured(input wire clk, reset,',
                  f'input wire [{len(all_bits) - 1}:0] observed,',
                  'input wire [31:0] s_data, input wire [3:0] s_keep, input wire s_last,s_valid,',
                  'output wire s_ready, output wire [31:0] m_data, output wire [3:0] m_keep,',
                  'output wire m_last,m_valid, input wire m_ready);',
-                 f'wire [{count * 32 - 1}:0] probe_values;']
+                 f'wire [{count * 64 - 1}:0] probe_values;']
         for r in physical:
-            bits = r['bits'] + ['0'] * (32 - r['width'])
-            lines.append(f"assign probe_values[{32 * r['id']}+:32] = {vector(bits)};")
+            bits = r['bits'] + ['0'] * (64 - r['width'])
+            lines.append(f"assign probe_values[{64 * r['id']}+:64] = {vector(bits)};")
         if selected:
-            taps = [b for bank in banks for b in bank['taps']]
+            taps = [b for bank in selected for b in bank['taps']]
             lines.append(f'wire [{len(taps) - 1}:0] actor_writes = {vector(taps)};')
-            lines.append(actors.wrapper(banks, len(physical), 'clk', 'reset', False))
+            lines.append(actors.wrapper(selected, len(physical), 'clk', 'reset', False))
         fingerprint = int.from_bytes(bytes.fromhex(manifest['fingerprint']), 'little')
         lines.append(f"hls_topology_debug #(.RESOURCES({count}), .CHANNELS({len(manifest['probes'])}), "
                      f".ACTORS({count - len(physical)}), .FINGERPRINT(256'h{fingerprint:x})) controller (.*);")
@@ -102,7 +113,7 @@ def main():
             (stage / 'results.json').write_text(json.dumps(results, indent=2) + '\n')
             print(row, flush=True)
     summary = {}
-    for mode in ('physical', 'actors'):
+    for mode in modes:
         rows = [r for r in results if r['mode'] == mode]
         summary[mode] = {k: distribution([r[k] for r in rows]) for k in ('LUT', 'FF', 'BRAM')}
     (stage / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')

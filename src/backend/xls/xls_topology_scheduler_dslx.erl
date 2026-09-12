@@ -918,7 +918,7 @@ grid_proc(Spec = #{
     ingresses := Ingresses,
     externals := Externals
 }) ->
-    Arguments = ram_arguments(Spec) ++ ingress_arguments(Ingresses) ++
+    Arguments = ram_arguments(Spec) ++ xls_scheduler_observation:arguments(Spec) ++ ingress_arguments(Ingresses) ++
         external_arguments(Externals),
     [
         "proc ", grid_name(Spec), " {\n",
@@ -1054,6 +1054,7 @@ scheduler_spawn(Spec, Scheduler = #{
         xls_topology_source_fragment_dslx:scheduler_service_argument(
             Spec, Scheduler
         ),
+        xls_scheduler_observation:spawn_argument(Spec, Stem),
         ");\n"
     ].
 
@@ -1138,9 +1139,9 @@ producer_index(Spec, Group, Producer) ->
 %%%
 
 top_proc(Spec = #{ingresses := Ingresses, externals := Externals}) ->
-    Arguments = ram_arguments(Spec) ++ ingress_arguments(Ingresses) ++
+    Arguments = ram_arguments(Spec) ++ xls_scheduler_observation:arguments(Spec) ++ ingress_arguments(Ingresses) ++
         external_arguments(Externals),
-    Names = ram_names(Spec) ++ ingress_names(Ingresses) ++
+    Names = ram_names(Spec) ++ xls_scheduler_observation:names(Spec) ++ ingress_names(Ingresses) ++
         external_names(Externals),
     [
         "pub proc Top {\n",

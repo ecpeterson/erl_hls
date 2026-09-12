@@ -16,6 +16,7 @@
     channel_depth := 1..?U32_MAX,
     actor_egress_depth := egress_policy(),
     scheduler_groups => map(),
+    mailbox_debug => boolean(),
     reduction_placements => map(),
     effect_window_partition => global | weak_components
 }.
@@ -43,7 +44,7 @@ normalize(Profile, _Backend) ->
 
 optional_keys(scalar) -> [];
 optional_keys(family) ->
-    [effect_window_partition, reduction_placements, scheduler_groups].
+    [effect_window_partition, reduction_placements, scheduler_groups, mailbox_debug].
 
 validate_channel_depth(Depth)
         when is_integer(Depth), Depth > 0, Depth =< ?U32_MAX -> ok;
@@ -65,6 +66,7 @@ normalize_options(Profile, family) ->
         _ -> error({effect_window_partition, Partition})
     end,
     Profile#{
+        mailbox_debug => xls_scheduler_observation:enabled(Profile),
         scheduler_groups => Groups,
         reduction_placements => Placements,
         effect_window_partition => Partition

@@ -1,6 +1,6 @@
 -module(xls_scheduler_debug).
--moduledoc "Compiler-owned projections of committed shared-actor state RAM writes.".
--export([projection/3, validate/3, actor_key/1]).
+-moduledoc "Compiler-owned projections of shared-actor state writes and scheduler metadata.".
+-export([projection/3, projection/4, validate/3, actor_key/1]).
 
 %% Emit beside the RTL generated from this exact plan. The instrumentation tool
 %% checks RAM interfaces and fingerprints this document with the RTL sources.
@@ -10,7 +10,12 @@
 -spec projection(hls_topology:plan(), hls_scheduler_plan:spec(),
     #{module() => iodata()}) -> map().
 projection(Plan, Specs, Artifacts) ->
-    build(Plan, Specs, fun(Module, Origins) ->
+    projection(Plan, Specs, Artifacts, #{}).
+
+-spec projection(hls_topology:plan(), hls_scheduler_plan:spec(),
+    #{module() => iodata()}, #{mailbox_debug => boolean()}) -> map().
+projection(Plan, Specs, Artifacts, Options) ->
+    build(Plan, Specs, xls_scheduler_observation:enabled(Options), fun(Module, Origins) ->
         xls_failure_sites:from_artifact(Origins, maps:get(Module, Artifacts))
     end).
 
@@ -20,7 +25,8 @@ projection(Plan, Specs, Artifacts) ->
 -spec validate(hls_topology:plan(), hls_scheduler_plan:spec(), map()) -> ok.
 validate(Plan, Specs, Projection = #{<<"banks">> := Banks}) ->
     ByModule = maps:from_list([{M, Fs} || #{<<"module">> := M, <<"failures">> := Fs} <- Banks]),
-    Expected = build(Plan, Specs, fun(Module, Origins) ->
+    MailboxDebug = lists:any(fun(B) -> is_map_key(<<"mailbox">>, B) end, Banks),
+    Expected = build(Plan, Specs, MailboxDebug, fun(Module, Origins) ->
         Values = maps:from_keys(maps:values(maps:get(atom_to_binary(Module), ByModule, #{})), true),
         xls_failure_sites:number([O || O <- Origins, is_map_key(json_value(O), Values)])
     end),
@@ -30,17 +36,23 @@ validate(Plan, Specs, Projection = #{<<"banks">> := Banks}) ->
     end;
 validate(_Plan, _Specs, _Projection) -> error(actor_projection_mismatch).
 
-build(Plan, Specs, Codebook) ->
+build(Plan, Specs, MailboxDebug, Codebook) ->
     Scheduler = #{groups := Groups} = hls_scheduler_plan:normalize(Plan, Specs),
     Placements = hls_scheduler_plan:placements(Scheduler),
     Interfaces = hls_actor_interface:from_modules([M || #{module := M} <- Groups]),
     Codebooks = maps:map(fun(Module, #{failure_origins := Origins}) ->
         Codebook(Module, Origins)
     end, Interfaces),
-    Banks = [bank(Index, Group, maps:get(Module, Interfaces), Placements, maps:get(Module, Codebooks)) ||
+    Banks = [with_mailbox(MailboxDebug, Group,
+        bank(Index, Group, maps:get(Module, Interfaces), Placements, maps:get(Module, Codebooks))) ||
         {Index, Group = #{module := Module}} <- lists:enumerate(0, Groups)],
     %% Normalize JSON keys/strings once for exact host-side manifest comparison.
     json_value(#{schema => 2, binding => digest({Plan, Scheduler}), banks => Banks}).
+
+with_mailbox(false, _Group, Bank) -> Bank;
+with_mailbox(true, #{mailbox_capacity := Capacity}, Bank = #{index := Index}) ->
+    Bank#{mailbox => #{capacity => Capacity, width => 24,
+        port => iolist_to_binary(["_scheduler_", integer_to_list(Index), "_mailbox_debug_out"])}}.
 
 bank(Index, #{module := Module, slot_count := Slots, state := #{width := DataWidth},
         reduction_storage_width := ReductionWidth, state_storage := block_ram},

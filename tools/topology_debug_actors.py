@@ -88,12 +88,36 @@ def discover(projection, root, hierarchy, flat, top, clock_bit):
                 raise ValueError("invalid or duplicate actor identity")
             keys.add(key)
         taps = bits("wr_en") + bits("wr_addr") + [bits("wr_data")[i] for i in selected]
+        mailbox = bank.get("mailbox")
+        if mailbox:
+            port = mailbox["port"]
+            if mailbox["width"] != 24 or not 1 <= mailbox["capacity"] <= 255:
+                raise ValueError("invalid mailbox projection")
+            matches = [(name, cell) for name, cell in module["cells"].items()
+                       if port in cell.get("connections", {})]
+            if len(matches) != 1:
+                raise ValueError("expected one generated mailbox observation output")
+            name, cell = matches[0]
+            app = hierarchy["modules"][cell["type"]]
+            for signal, direction, size in ((port, "output", 24*slots),
+                    (port+"_vld", "output", 1), (port+"_rdy", "input", 1)):
+                description = app["ports"][signal]
+                if description["direction"] != direction or len(description["bits"]) != size:
+                    raise ValueError("mailbox observation port mismatch")
+            if cell["connections"][port+"_rdy"] != ["1"]:
+                raise ValueError("mailbox observation output must always be ready")
+            def observed(signal):
+                return flat["netnames"][".".join((*root, name, signal))]["bits"]
+            if observed("clk") != [clock_bit]:
+                raise ValueError("mailbox observation clock mismatch")
+            taps += observed(port+"_vld") + observed(port)
         banks.append(dict(bank, path=list(path), address_width=address_width, taps=taps))
     return banks
 
 
 def resources(banks, first_id):
-    return [dict(actor, id=first_id+i, kind="actor", width=26, bank=bank["index"],
+    return [dict(actor, id=first_id+i, kind="actor", width=56 if "mailbox" in bank else 26, bank=bank["index"],
+                 **({"mailbox_capacity": bank["mailbox"]["capacity"]} if "mailbox" in bank else {}),
                  module=bank["module"], phases=bank["phases"], failures=bank["failures"])
             for i, (bank, actor) in enumerate((bank, actor) for bank in banks for actor in bank["actors"])]
 
@@ -103,13 +127,18 @@ def wrapper(banks, first_id, clock, reset, active_low):
     lines = []
     for bank in banks:
         address_width = bank["address_width"]
-        lines.append(f"hls_actor_snapshot #(.SLOTS({bank['slots']}), .ADDRESS_WIDTH({address_width})) "
+        mailbox_offset = offset + 1 + address_width + 25
+        mailbox_valid = f"actor_writes[{mailbox_offset}]" if "mailbox" in bank else "1'b0"
+        mailbox_values = f"actor_writes[{mailbox_offset+1} +: {24*bank['slots']}]" if "mailbox" in bank else "'0"
+        lines.append(f"hls_actor_snapshot #(.SLOTS({bank['slots']}), .ADDRESS_WIDTH({address_width}), "
+                     f".MAILBOX({int('mailbox' in bank)})) "
                      f"snapshot_{bank['index']} (.clk(\\{clock} ), "
                      f".reset({'!' if active_low else ''}\\{reset} ), "
                      f".write_enable(actor_writes[{offset}]), "
                      f".write_address(actor_writes[{offset+1} +: {address_width}]), "
                      f".write_value(actor_writes[{offset+1+address_width} +: 25]), "
-                     f".values(probe_values[{resource*32} +: {bank['slots']*32}]));\n")
+                     f".mailbox_valid({mailbox_valid}), .mailbox_values({mailbox_values}), "
+                     f".values(probe_values[{resource*64} +: {bank['slots']*64}]));\n")
         offset += len(bank["taps"])
         resource += bank["slots"]
     return "".join(lines)

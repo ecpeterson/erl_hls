@@ -86,7 +86,7 @@ resource_items_use_one_hardware_sample_test() ->
         spawn_link(fun() -> Parent ! {sample, hls_debug:info(Target, [cycle, occupancy, free_slots, capacity, occupancy])} end),
         [{{0, 2}, {16#11, Tx, 0}, <<0:32/little>>}] = phi_memory_fabric_fixture:await_sends(Fabric, 1, 1000),
         ok = phi_memory_fabric_fixture:deliver(Fabric, {2, 0}, {16#91, Tx, 0},
-            <<0:32/little, 33:64/little, 3:32/little>>),
+            <<0:32/little, 33:64/little, 3:64/little>>),
         receive {sample, Values} ->
             ?assertEqual([{cycle, 33}, {occupancy, 3}, {free_slots, 1}, {capacity, 4}, {occupancy, 3}], Values)
         after 1000 -> error(no_sample) end,
@@ -98,19 +98,20 @@ actor_items_use_one_hardware_sample_test() ->
     {ok, Client} = hls_debug:start_link(undefined, {fabric, Fabric, 2}),
     try
         R = #{<<"kind">> => <<"actor">>, <<"id">> => 0, <<"name">> => <<"actor">>,
-            <<"phases">> => [<<"boot">>, <<"active">>], <<"width">> => 26,
+            <<"phases">> => [<<"boot">>, <<"active">>], <<"width">> => 56, <<"mailbox_capacity">> => 3,
             <<"failures">> => #{<<"1">> => #{<<"kind">> => <<"function_clause">>}}},
         Session = #{client => Client, resources => {R}, manifest => #{<<"fingerprint">> => <<"fixture">>}},
         Target = {actor, #{scope => #{kind => actor}}, {actor_snapshot, Session, 0}},
         Parent = self(),
         spawn_link(fun() -> Parent ! {sample, hls_debug:info(Target,
-            [phase, initialized, enter_pending, failed, failure, cycle])} end),
+            [phase, initialized, enter_pending, failed, failure, cycle, message_queue_len, postponed, free_slots])} end),
         [{{0, 2}, {16#11, Tx, 0}, <<0:32/little>>}] = phi_memory_fabric_fixture:await_sends(Fabric, 1, 1000),
         ok = phi_memory_fabric_fixture:deliver(Fabric, {2, 0}, {16#91, Tx, 0},
-            <<0:32/little, 33:64/little, ((1 bsl 25)+512+1):32/little>>),
+            <<0:32/little, 33:64/little, ((1 bsl 25)+512+1):32/little, 16#c00102:32/little>>),
         receive {sample, Values} ->
             ?assertEqual([{phase, active}, {initialized, true}, {enter_pending, false},
-                {failed, true}, {failure, #{code => 1, kind => function_clause}}, {cycle, 33}], Values)
+                {failed, true}, {failure, #{code => 1, kind => function_clause}}, {cycle, 33},
+                {message_queue_len, 2}, {postponed, 1}, {free_slots, 1}], Values)
         after 1000 -> error(no_sample) end,
         {ok, Resource} = hls_topology_debug:resource(Session, 0),
         ?assertMatch({error, {unsupported_operation, _, inspect_waits}}, hls_debug:inspect_waits(Resource, #{})),

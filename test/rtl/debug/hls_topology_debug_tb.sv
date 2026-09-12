@@ -4,7 +4,7 @@ module hls_topology_debug_tb;
     localparam [255:0] HASH = 256'hffeeddccbbaa998877665544332211000123456789abcdef1122334455667788;
     reg clk = 0, reset = 1;
     always #5 clk = ~clk;
-    reg [RESOURCES*32-1:0] probe_values = 0;
+    reg [RESOURCES*64-1:0] probe_values = 0;
     reg [31:0] s_data = 0;
     reg [3:0] s_keep = 15;
     reg s_last = 0, s_valid = 0;
@@ -16,7 +16,7 @@ module hls_topology_debug_tb;
     reg hold_reply = 0;
     integer cycle = 0, consumed = 0, written = 0;
     reg [36:0] received [0:4095];
-    reg [RESOURCES*32-1:0] expected [0:19999];
+    reg [RESOURCES*64-1:0] expected [0:19999];
     reg stalled = 0;
     reg [36:0] held;
     reg [31:0] reply [0:254];
@@ -34,7 +34,7 @@ module hls_topology_debug_tb;
         .s_valid(request_valid), .s_ready(request_ready),
         .m_data(response_data), .m_keep(response_keep), .m_last(response_last),
         .m_valid(response_valid), .m_ready(response_ready));
-    always @(negedge clk) probe_values = {32'(cycle*4+3),32'(cycle*4+2),32'(cycle*4+1),32'(cycle*4)};
+    always @(negedge clk) probe_values = {{32'h98765432,32'(cycle*4+3)},{32'hffffffff,32'(cycle*4+2)},64'(cycle*4+1),64'(cycle*4)};
 
     always @(negedge clk) m_ready = !reset && !hold_reply && cycle % 7 >= 2;
     always @(posedge clk) begin
@@ -99,10 +99,10 @@ module hls_topology_debug_tb;
             route_header();
             beat({8'h11,8'd0,txid,8'd1},0,15);
             beat(id,1,15);
-            response(tag, tag == 8'h91 ? 4 : 1);
+            response(tag, tag == 8'h91 ? 5 : 1);
             if (tag == 8'h91) begin
                 if (reply[0] != id || reply[2] != 0) $fatal(1,"query identity/clock");
-                if (reply[3] !== expected[reply[1]][id*32 +: 32])
+                if ({reply[4],reply[3]} !== expected[reply[1]][id*64 +: 64])
                     $fatal(1,"query was not sampled atomically at its reported edge");
             end
         end
@@ -115,7 +115,7 @@ module hls_topology_debug_tb;
     initial begin
         repeat (5) @(negedge clk); reset = 0;
         empty(8'h10); response(8'h90,13);
-        if (reply[0] != 3 || reply[1] != RESOURCES || reply[2] != 2 || reply[3] != 1 || reply[4] != 1)
+        if (reply[0] != 4 || reply[1] != RESOURCES || reply[2] != 2 || reply[3] != 1 || reply[4] != 1)
             $fatal(1, "manifest geometry");
         for (i=0;i<8;i=i+1) if (reply[5+i] !== HASH[i*32+:32]) $fatal(1,"manifest hash");
         for (i=0;i<RESOURCES;i=i+1) query(i,8'h91);
@@ -139,8 +139,8 @@ module hls_topology_debug_tb;
         saved_cycle = cycle;
         repeat (40) @(negedge clk);
         if (cycle < saved_cycle+40 || s_ready) $fatal(1,"reply stall ownership");
-        hold_reply = 0; response(8'h91,4);
-        if(reply[3] !== expected[reply[1]][64+:32]) $fatal(1,"stalled reply was resampled");
+        hold_reply = 0; response(8'h91,5);
+        if({reply[4],reply[3]} !== expected[reply[1]][128+:64]) $fatal(1,"stalled reply was resampled");
         // Reset abandons a partial request and permits a fresh routed packet.
         route_header(); beat({8'h11,8'd0,txid,8'd1},0,15);
         reset = 1; repeat (5) @(negedge clk); reset = 0;

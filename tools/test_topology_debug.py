@@ -38,7 +38,7 @@ class DiscoveryTests(unittest.TestCase):
         original = copy.deepcopy(module)
         exported = topology.export_probes({"modules": {"top": module}}, "top",
             [{"bits": [4, 5], "width": 2}], "instrumented")["modules"]["instrumented"]
-        self.assertEqual(exported["ports"].pop("hls_probe_values")["bits"], [4, 5] + ["0"]*30)
+        self.assertEqual(exported["ports"].pop("hls_probe_values")["bits"], [4, 5] + ["0"]*62)
         exported["netnames"].pop("hls_probe_values")
         self.assertEqual(exported, original)
 
@@ -134,6 +134,28 @@ class DiscoveryTests(unittest.TestCase):
         bad["modules"]["ram"]["cells"]["write"]["parameters"]["CLK_POLARITY"] = "0"
         with self.assertRaisesRegex(ValueError, "write clock"):
             discover(h=bad)
+
+        # The semantic output belongs to the generator and must be permanently
+        # ready. A query cannot own this handshake or stall scheduler progress.
+        bank["mailbox"] = {"capacity": 3, "width": 24, "port": "_scheduler_0_mailbox_debug_out"}
+        port = bank["mailbox"]["port"]
+        connections = {port: list(range(100, 148)), port+"_vld": [148],
+                       port+"_rdy": ["1"], "clk": [1]}
+        hierarchy["modules"]["shell"]["cells"]["application"] = {"type": "application", "connections": connections}
+        hierarchy["modules"]["application"] = {"ports": {
+            name: {"bits": bits, "direction": "input" if name in ("clk", port+"_rdy") else "output"}
+            for name, bits in connections.items()}}
+        flat["netnames"].update({"shell.application."+name: {"bits": bits} for name, bits in connections.items()})
+        observed = discover()
+        self.assertEqual(observed[0]["taps"][-49:], [148, *range(100, 148)])
+        self.assertEqual(topology.actors.resources(observed, 5)[0]["mailbox_capacity"], 3)
+        connections[port+"_rdy"] = [55]
+        with self.assertRaisesRegex(ValueError, "always be ready"):
+            discover()
+        connections[port+"_rdy"] = ["1"]
+        flat["netnames"]["shell.application.clk"]["bits"] = [99]
+        with self.assertRaisesRegex(ValueError, "clock mismatch"):
+            discover()
 
     def test_snapshot_rtl(self):
         with tempfile.TemporaryDirectory() as stage:

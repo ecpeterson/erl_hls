@@ -9,7 +9,7 @@ module hls_topology_debug #(
     parameter [255:0] FINGERPRINT = 0
 ) (
     input wire clk, reset,
-    input wire [RESOURCES*32-1:0] probe_values,
+    input wire [RESOURCES*64-1:0] probe_values,
     input wire [31:0] s_data,
     input wire [3:0] s_keep,
     input wire s_last, s_valid,
@@ -22,14 +22,14 @@ module hls_topology_debug #(
     localparam [7:0] INFO = 8'h10, QUERY = 8'h11, ERROR = 8'hff;
     reg sending;
     reg [7:0] reply_tag, reply_txid, reply_index;
-    reg [127:0] observation;
+    reg [159:0] observation;
     reg [63:0] cycle;
     wire [31:0] request, resource_id;
     wire malformed, request_valid;
     wire [7:0] operation = request[31:24];
     wire [7:0] words = request[7:0];
     wire [7:0] reply_count = reply_tag == (INFO | 8'h80) ? 13 :
-        reply_tag == (QUERY | 8'h80) ? 4 : 1;
+        reply_tag == (QUERY | 8'h80) ? 5 : 1;
 
     hls_debug_frame_rx #(.MAX_WORDS(1)) receiver (
         .clk(clk), .reset(reset),
@@ -47,7 +47,7 @@ module hls_topology_debug #(
             m_data = {reply_tag, 8'd0, reply_txid, reply_count};
         else if (reply_tag == (INFO | 8'h80)) begin
             case (reply_index)
-                1: m_data = 3; // protocol/manifest schema
+                1: m_data = 4; // protocol/manifest schema
                 2: m_data = RESOURCES;
                 3: m_data = CHANNELS;
                 4: m_data = RESOURCES - CHANNELS - ACTORS;
@@ -76,7 +76,7 @@ module hls_topology_debug #(
                 if (!malformed && operation == INFO && words == 0) begin
                     // INFO is immutable and read directly from parameters.
                 end else if (!malformed && operation == QUERY && words == 1 && resource_id < RESOURCES) begin
-                    observation <= {probe_values[resource_id*32 +: 32], cycle, resource_id};
+                    observation <= {probe_values[resource_id*64 +: 64], cycle, resource_id};
                 end else begin
                     reply_tag <= ERROR;
                     observation <= !malformed && operation == QUERY && words == 1 ? 2 : 1;

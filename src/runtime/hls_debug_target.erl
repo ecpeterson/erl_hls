@@ -76,13 +76,14 @@ describe({resource, Session = #{resources := Resources, manifest := Manifest}, I
     Fields = case Kind of
         <<"fifo">> -> [occupancy, free_slots];
         <<"channel">> -> [valid, ready];
-        <<"actor">> -> actor_fields()
+        <<"actor">> -> resource_actor_fields(Resource)
     end,
     Metadata = #{scope => #{kind => topology_resource,
         fingerprint => maps:get(<<"fingerprint">>, Manifest), id => Id},
         resource_kind => Kind, name => Name},
     WithCapacity = case Resource of
         #{<<"capacity">> := Capacity} -> Metadata#{capacity => Capacity};
+        #{<<"mailbox_capacity">> := Capacity} -> Metadata#{mailbox_capacity => Capacity};
         _ -> Metadata
     end,
     {WithCapacity, [cycle, value | Fields], {resource, Session, Id}}.
@@ -93,9 +94,15 @@ statem_fields() ->
 
 actor_fields() -> [initialized, phase, enter_pending, failed, failure].
 
+resource_actor_fields(#{<<"mailbox_capacity">> := _}) ->
+    actor_fields() ++ [mailbox_initialized, message_queue_len, postponed, reserved, free_slots,
+        in_flight, mail_candidate, entry_candidate, waiting_for_egress, egress_busy, scheduler_phase];
+resource_actor_fields(_) -> actor_fields().
+
 actor_provider(none) -> {[], none};
 actor_provider({hls_statem, Pid}) -> {statem_fields(), {statem, Pid}};
-actor_provider({actor_snapshot, _, _} = Provider) -> {[cycle | actor_fields()], Provider}.
+actor_provider({actor_snapshot, #{resources := Resources}, Id} = Provider) ->
+    {[cycle | resource_actor_fields(element(Id+1, Resources))], Provider}.
 
 observe(_Provider, [], _Timeout) -> {ok, #{}};
 observe({actor_snapshot, Session, Id}, Fields, Timeout) ->

@@ -25,7 +25,7 @@ open(Pid, Manifest) ->
     case info(Pid) of
         {ok, #{fingerprint := Hash, resources := Count, channels := Channels, queues := Queues, actors := Actors}} ->
             case Manifest of
-                #{<<"schema">> := 3, <<"fingerprint">> := Hash,
+                #{<<"schema">> := 4, <<"fingerprint">> := Hash,
                   <<"resources">> := Resources, <<"probes">> := Probes}
                         when length(Resources) =:= Count, length(Probes) =:= Channels ->
                     case manifest_fingerprint(Manifest) =:= Hash andalso
@@ -59,13 +59,13 @@ resource(Session = #{resources := Resources}, Id) when Id >= 0, Id < tuple_size(
     {ok, {resource, Session, Id}};
 resource(_, Id) -> {error, {unknown_resource, Id}}.
 
-decode_info(<<3:32/little, Count:32/little, Channels:32/little, Queues:32/little,
+decode_info(<<4:32/little, Count:32/little, Channels:32/little, Queues:32/little,
         Actors:32/little, Hash:32/binary>>) when Channels > 0, Count =:= Channels + Queues + Actors ->
-    {ok, #{schema => 3, resources => Count, channels => Channels, queues => Queues, actors => Actors,
+    {ok, #{schema => 4, resources => Count, channels => Channels, queues => Queues, actors => Actors,
         fingerprint => string:lowercase(binary:encode_hex(Hash))}};
 decode_info(_) -> {error, unsupported_topology_info}.
 
-decode_observation(<<Id:32/little, Cycle:64/little, Value:32/little>>,
+decode_observation(<<Id:32/little, Cycle:64/little, Value:64/little>>,
         #{<<"id">> := Id, <<"width">> := Width} = Resource) when Value bsr Width =:= 0 ->
     Sample = #{id => Id, cycle => Cycle, value => Value},
     case Resource of
@@ -74,7 +74,10 @@ decode_observation(<<Id:32/little, Cycle:64/little, Value:32/little>>,
         #{<<"kind">> := <<"fifo">>, <<"capacity">> := Capacity} when Value =< Capacity ->
             {ok, Sample#{occupancy => Value, free_slots => Capacity-Value}};
         #{<<"kind">> := <<"actor">>, <<"phases">> := Phases, <<"failures">> := Failures} ->
-            actor_observation(Sample, Phases, Failures);
+            case actor_observation(Sample#{value := Value band 16#ffffffff}, Phases, Failures) of
+                {ok, Actor} -> mailbox_observation(Actor#{value := Value}, Resource);
+                Error -> Error
+            end;
         _ -> {error, invalid_resource_value}
     end;
 decode_observation(_, _) -> {error, malformed_topology_observation}.
@@ -83,7 +86,7 @@ actor_observation(Sample = #{value := 0}, _Phases, _Failures) ->
     {ok, Sample#{initialized => false, phase => undefined,
         enter_pending => undefined, failed => undefined, failure => undefined}};
 actor_observation(Sample = #{value := Value}, Phases, Failures)
-        when Value band (1 bsl 25) =/= 0, Value band 255 < length(Phases) ->
+        when Value bsr 26 =:= 0, Value band (1 bsl 25) =/= 0, Value band 255 < length(Phases) ->
     Code = (Value bsr 9) band 65535,
     case failure_details(Code, Failures) of
         {ok, Failure} ->
@@ -92,6 +95,30 @@ actor_observation(Sample = #{value := Value}, Phases, Failures)
         error -> {error, {invalid_failure_code, Code}}
     end;
 actor_observation(_, _, _) -> {error, invalid_resource_value}.
+
+mailbox_observation(Sample = #{value := Value}, #{<<"mailbox_capacity">> := Capacity}) ->
+    Word = Value bsr 32,
+    Count = Word band 255,
+    Postponed = (Word bsr 8) band 255,
+    Phase = (Word bsr 21) band 3,
+    case Word of
+        0 -> {ok, (maps:merge(Sample, maps:from_keys(
+            [message_queue_len, postponed, free_slots, reserved, in_flight,
+             mail_candidate, entry_candidate, waiting_for_egress, egress_busy, scheduler_phase], undefined)))#{
+                mailbox_initialized => false}};
+        _ when Word band (1 bsl 23) =/= 0, Phase < 3,
+                Count =< Capacity, Postponed =< Count ->
+            {ok, Sample#{mailbox_initialized => true, message_queue_len => Count,
+                postponed => Postponed, free_slots => Capacity-Count, reserved => 0,
+                in_flight => Word band (1 bsl 16) =/= 0,
+                mail_candidate => Word band (1 bsl 17) =/= 0,
+                entry_candidate => Word band (1 bsl 18) =/= 0,
+                waiting_for_egress => Word band (1 bsl 19) =/= 0,
+                egress_busy => Word band (1 bsl 20) =/= 0,
+                scheduler_phase => element(Phase+1, {boot, startup, run})}};
+        _ -> {error, invalid_mailbox_observation}
+    end;
+mailbox_observation(Sample, _Resource) -> {ok, Sample}.
 
 failure_details(0, _) -> {ok, none};
 failure_details(Code, Failures) ->

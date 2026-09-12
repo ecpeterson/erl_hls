@@ -106,6 +106,9 @@ jobs:
       - name: Diagnose shared actor failures through scoped debug queries
         run: bash tools/test_actor_debug.sh "$RUNNER_TEMP/xls"
 
+      - name: Inspect postponed mailboxes and recovery through scoped debug queries
+        run: bash tools/test_actor_debug.sh "$RUNNER_TEMP/xls" _build/mailbox-debug mailbox
+
       - name: Run generated reduction semantics
         run: bash tools/test_reduction_dslx.sh "$RUNNER_TEMP/xls"
 
@@ -137,6 +140,10 @@ jobs:
             _build/actor-debug/**/manifest.json
             _build/actor-debug/**/blocked.txt
             _build/actor-debug/**/recovered.txt
+            _build/mailbox-debug/**/actors-*.term
+            _build/mailbox-debug/**/manifest.json
+            _build/mailbox-debug/**/blocked.txt
+            _build/mailbox-debug/**/recovered.txt
           if-no-files-found: ignore
 
       - name: Query an instrumented generated topology under backpressure
@@ -173,6 +180,7 @@ jobs:
             _build/application_frames/**
             _build/initialization/**
             _build/actor-debug/**
+            _build/mailbox-debug/**
             _build/helpers/**
             _build/control_failures/**
             _build/xls_sim/regsvc/*.ir
