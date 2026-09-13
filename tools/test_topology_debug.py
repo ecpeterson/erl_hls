@@ -7,11 +7,19 @@ import tempfile
 import unittest
 
 import topology_debug as topology
+from measure_topology_debug import cell_counts
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 class DiscoveryTests(unittest.TestCase):
+    def test_area_includes_distributed_ram(self):
+        counts = cell_counts({'LUT6': 3, 'LUT2': 1, 'RAM32M': 2, 'RAM64X1D': 1,
+                              'FDRE': 7, 'RAMB18E1': 1})
+        self.assertEqual(counts, {'LUT': 14, 'LUT_logic': 4, 'LUT_RAM': 10, 'FF': 7, 'RAMB18': 1, 'RAMB36': 0})
+        with self.assertRaisesRegex(ValueError, 'unaccounted distributed RAM'):
+            cell_counts({'RAM_UNKNOWN': 1})
+
     def test_channel_contract(self):
         module = {"ports": {"msg_valid": {"direction": "output", "bits": [1]},
                             "msg_ready": {"direction": "input", "bits": [2]}}}
@@ -165,6 +173,51 @@ class DiscoveryTests(unittest.TestCase):
                 str(ROOT / "priv/rtl/debug/hls_actor_snapshot.v")], check=True)
             result = subprocess.run(["vvp", exe], capture_output=True, text=True, check=True, timeout=30)
             self.assertIn("PASS: committed writes", result.stdout)
+
+    def test_generated_bank_selection(self):
+        # Mixed banks cross both physical/actor and low-address wrap boundaries.
+        # Distinct data at every global ID detects aliasing and bank overlap.
+        banks, offset, resource = [], 0, 5
+        setup = ['for(i=0;i<5;i=i+1) begin probe_values[i*64+:64]=i+100; expected[i]=i+100; end']
+        for index, slots, mailbox in ((0, 3, True), (1, 9, False), (2, 1, True)):
+            aw = max(1, (slots-1).bit_length())
+            width = 1 + aw + 25 + (1 + 24*slots if mailbox else 0)
+            bank = {'index': index, 'slots': slots, 'address_width': aw, 'taps': [0]*width}
+            if mailbox:
+                bank['mailbox'] = {}
+            banks.append(bank)
+            for slot in range(slots):
+                state = 1000 + resource + slot
+                metadata = 2000 + resource + slot if mailbox else 0
+                setup += [f'@(negedge clk); actor_writes=0; actor_writes[{offset}]=1;',
+                          f'actor_writes[{offset+1}+:{aw}]={slot}; actor_writes[{offset+1+aw}+:25]={state};',
+                          f'expected[{resource+slot}]={{32\'d{metadata}, 32\'d{(1 << 25) + state}}};']
+                if mailbox:
+                    setup += [f'actor_writes[{offset+1+aw+25}]=1;']
+                    setup += [f'actor_writes[{offset+1+aw+26+24*j}+:24]={2000+resource+j};'
+                              for j in range(slots)]
+                setup += ['@(posedge clk); #1;']
+            offset += width
+            resource += slots
+        bench = ['module selector_tb; reg clk=0,reset=1; always #5 clk=~clk;',
+                 'reg [31:0] address; reg [319:0] probe_values;',
+                 f'reg [{offset-1}:0] actor_writes=0; reg [63:0] expected[0:{resource-1}]; integer i;',
+                 topology.actors.wrapper(banks, 5, 'clk', 'reset', False),
+                 'assign probe_address=address;',
+                 'initial begin repeat(2) @(negedge clk); reset=0;', *setup,
+                 '@(negedge clk); actor_writes=0;',
+                 f'for(i=0;i<{resource};i=i+1) begin address=i; #1;',
+                 'if(probe_value !== expected[i]) $fatal(1,"wrong resource %0d",i); end',
+                 f'address={resource}; #1; if(probe_value !== 0) $fatal(1,"end of catalog");',
+                 "address=32'hfffffff9; #1; if(probe_value !== 0) $fatal(1,\"high-ID alias\");",
+                 '$display("PASS: generated bank selection"); $finish; end endmodule']
+        with tempfile.TemporaryDirectory() as stage:
+            source, exe = Path(stage) / 'selector.sv', Path(stage) / 'selector.vvp'
+            source.write_text('\n'.join(bench))
+            subprocess.run(['iverilog', '-g2012', '-s', 'selector_tb', '-o', str(exe), str(source),
+                            str(ROOT / 'priv/rtl/debug/hls_actor_snapshot.v')], check=True)
+            result = subprocess.run(['vvp', str(exe)], capture_output=True, text=True, check=True, timeout=30)
+            self.assertIn('PASS: generated bank selection', result.stdout)
 
     def test_rtl_protocol(self):
         with tempfile.TemporaryDirectory() as stage:

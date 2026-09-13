@@ -229,7 +229,7 @@ def debug_wrapper(ports, application_top, resources, channels, fingerprint, cloc
     return ("// Generated passive topology debug wrapper. Application ports are unchanged.\n"
             "module hls_debug_application (\n" +
             ",\n".join(declaration(*port) for port in declarations + debug) + "\n);\n" +
-            f"wire [{64*resources-1}:0] probe_values;\n" + tap_wire +
+            f"wire [{64*physical_count-1}:0] probe_values;\n" + tap_wire +
             f"{application_top} application (" + ", ".join(connections) +
             f", .hls_probe_values(probe_values[0 +: {64*physical_count}])" + tap_port + ");\n" +
             actors.wrapper(banks, physical_count, clock, reset, active_low) +
@@ -249,7 +249,8 @@ def debug_wrapper(ports, application_top, resources, channels, fingerprint, cloc
             "    .response_valid(response_valid), .response_ready(response_ready));\n" +
             f"hls_topology_debug #(.RESOURCES({resources}), .CHANNELS({channels}), .ACTORS({actor_count}),\n" +
             f"    .FINGERPRINT(256'h{hash_literal:064x})) debug (\n" +
-            f"    .clk(\\{clock} ), .reset({'!' if active_low else ''}\\{reset} ), .probe_values(probe_values),\n"
+            f"    .clk(\\{clock} ), .reset({'!' if active_low else ''}\\{reset} ),\n"
+            "    .probe_address(probe_address), .probe_value(probe_value),\n"
             "    .s_data(request_data), .s_keep(request_keep), .s_last(request_last),\n"
             "    .s_valid(request_valid), .s_ready(request_ready),\n"
             "    .m_data(response_data), .m_keep(response_keep), .m_last(response_last),\n"

@@ -123,14 +123,27 @@ def resources(banks, first_id):
 
 
 def wrapper(banks, first_id, clock, reset, active_low):
+    """Select physical probes or one row per actor bank at the query address.
+
+    Keeping actor rows behind an indexed read port permits memory inference;
+    exporting every row as a separate wire would turn the store into registers.
+    """
     offset, resource = 0, first_id
-    lines = []
+    lines = ["wire [31:0] probe_address;\nwire [63:0] probe_value;\n"]
+    selected = [f"(probe_address < 32'd{first_id} ? probe_values[probe_address*64 +: 64] : 64'b0)"]
     for bank in banks:
+        index, slots = bank["index"], bank["slots"]
         address_width = bank["address_width"]
         mailbox_offset = offset + 1 + address_width + 25
         mailbox_valid = f"actor_writes[{mailbox_offset}]" if "mailbox" in bank else "1'b0"
         mailbox_values = f"actor_writes[{mailbox_offset+1} +: {24*bank['slots']}]" if "mailbox" in bank else "'0"
-        lines.append(f"hls_actor_snapshot #(.SLOTS({bank['slots']}), .ADDRESS_WIDTH({address_width}), "
+        # Decode the full resource ID, but subtract only the low row-address
+        # bits. A 32-bit subtract per bank needlessly lengthens the query path.
+        row_base = resource % (1 << address_width)
+        lines.append(f"wire [{address_width-1}:0] actor_address_{index} = "
+                     f"probe_address[{address_width-1}:0] - {address_width}'d{row_base};\n"
+                     f"wire [63:0] actor_value_{index};\n"
+                     f"hls_actor_snapshot #(.SLOTS({slots}), .ADDRESS_WIDTH({address_width}), "
                      f".MAILBOX({int('mailbox' in bank)})) "
                      f"snapshot_{bank['index']} (.clk(\\{clock} ), "
                      f".reset({'!' if active_low else ''}\\{reset} ), "
@@ -138,7 +151,11 @@ def wrapper(banks, first_id, clock, reset, active_low):
                      f".write_address(actor_writes[{offset+1} +: {address_width}]), "
                      f".write_value(actor_writes[{offset+1+address_width} +: 25]), "
                      f".mailbox_valid({mailbox_valid}), .mailbox_values({mailbox_values}), "
-                     f".values(probe_values[{resource*64} +: {bank['slots']*64}]));\n")
+                     f".read_address(actor_address_{index}), "
+                     f".value(actor_value_{index}));\n")
+        selected.append(f"(probe_address >= 32'd{resource} && probe_address < 32'd{resource+slots} "
+                        f"? actor_value_{index} : 64'b0)")
         offset += len(bank["taps"])
         resource += bank["slots"]
+    lines.append("assign probe_value = " + " |\n    ".join(selected) + ";\n")
     return "".join(lines)
