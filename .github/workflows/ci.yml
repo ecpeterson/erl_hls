@@ -84,6 +84,9 @@ jobs:
       - name: Compare control-flow failures with BEAM and routed RTL
         run: bash tools/test_control_failures.sh "$RUNNER_TEMP/xls"
 
+      - name: Compare typed floats with BEAM, JIT, and routed RTL
+        run: bash tools/test_float_arithmetic.sh "$RUNNER_TEMP/xls"
+
       - name: Check application framing and admission conservation
         run: bash tools/test_application_frames.sh "$RUNNER_TEMP/xls"
 
@@ -187,6 +190,7 @@ jobs:
             _build/mailbox-debug/**
             _build/helpers/**
             _build/control_failures/**
+            _build/typed-float/**
             _build/xls_sim/regsvc/*.ir
             _build/xls_sim/regsvc/*.v
             _build/xls_sim/regsvc/sim/vvp.log

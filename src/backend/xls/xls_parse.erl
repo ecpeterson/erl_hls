@@ -290,7 +290,7 @@ to_xls_statem(Filename, Forms, PhaseNames, Options) ->
 %% "Closed" IR generally only contains static objects and snippets; phantoms
 %% appear temporarily during code generation, e.g., when "passing" the "result"
 %% of an Erlang type constructor to XLS's `zero!`.
--type static() :: {static, integer, integer()}.
+-type static() :: {static, integer, integer()} | {static, float, float()}.
 -type phantom() :: {phantom, type, hls_type:descriptor()}.
 -type printable() :: [printable()] | string() | static().
 -type ir() :: [ir()] | string() | phantom() | static().
@@ -301,7 +301,9 @@ print(List) when is_list(List) ->
 print(Char) when is_integer(Char) ->
     Char;
 print({static, integer, Integer}) ->
-    integer_to_list(Integer).
+    integer_to_list(Integer);
+print({static, float, Value}) ->
+    error({untyped_float_literal, Value, {use, hls_float, literal, 2}}).
 %% NOTE: We deliberately fail through on (unprintable!) phantom objects.
 
 -doc """
@@ -415,6 +417,12 @@ statement_from_statement({var, Line, Name}, State) ->
     end;
 statement_from_statement({integer, _L, Integer}, State) ->
     reference(State, {static, integer, Integer});
+statement_from_statement({float, _L, Float}, State) ->
+    reference(State, {static, float, Float});
+statement_from_statement({op, _L, '+', {float, _FloatLine, Float}}, State) ->
+    reference(State, {static, float, Float});
+statement_from_statement({op, _L, '-', {float, _FloatLine, Float}}, State) ->
+    reference(State, {static, float, -Float});
 %% Preserve signed literals for width-directed conversions such as wrap/2.
 statement_from_statement({op, _L, '-', {integer, _IntegerLine, Integer}}, State) ->
     reference(State, {static, integer, -Integer});
@@ -490,11 +498,17 @@ statement_from_statement({xls_helper_call, _Line, Name, Args}, State) ->
     {References, ArgState} = lower_arguments(Args, State),
     CallState = instr(ArgState, [Name, "(", lists:join(", ", References), ")"]),
     outcome_value(CallState);
-statement_from_statement({call, _L, MF, Args}, State) ->
+statement_from_statement({call, Line, MF, Args}, State) ->
     {remote, _1, {atom, _2, Module}, {atom, _3, FAtom}} = MF,
     {References, ArgState} = lower_arguments(Args, State),
     case Module:transpile(FAtom, References, ArgState) of
         X = #clause_state{} -> X;
+        {fallible, Kind, Expression} ->
+            Evaluated = instr(ArgState, Expression),
+            Value = reference(Evaluated),
+            Checked = add_failure(["hls_failure::check(", Value, ".1, ",
+                xls_failure_sites:at(Kind, Line), ")"], Evaluated),
+            reference(Checked, [Value, ".0"]);
         X -> instr(ArgState, X)
     end;
 statement_from_statement({record_field, _L, Object, _RecordAtom, {atom, _LL, SlotAtom}}, State) ->
@@ -662,15 +676,9 @@ structfrombits_from_record(RecordForm) ->
             Slot = record_field_name(Field),
             Descriptor = hls_type:descriptor(Type),
             NextOffset = Offset + hls_type:width(Descriptor),
-            Line = io_lib:format(
-                "    ~w: raw[~w:~w] as ~s,~n",
-                [
-                    Slot,
-                    Offset,
-                    NextOffset,
-                    hls_type:print_type(Descriptor)
-                ]
-            ),
+            Bits = io_lib:format("raw[~w:~w]", [Offset, NextOffset]),
+            Line = ["    ", atom_to_list(Slot), ": ",
+                hls_type:dslx_from_bits(Descriptor, Bits), ",\n"],
             {[Line | Body], NextOffset}
         end,
         {[], 0}, Fields
@@ -687,7 +695,8 @@ bitsfromstruct_from_record(_RecordForm = {attribute, _L, record, {NameAtom, Fiel
         ["  ", lists:foldl(
             fun({typed_record_field, Field, Type}, Body) ->
                 Slot = record_field_name(Field),
-                Line = io_lib:format("(s.~w as bits[~w]) ++ ", [Slot, hls_type:width(hls_type:descriptor(Type))]),
+                Line = ["(", hls_type:dslx_to_bits(hls_type:descriptor(Type),
+                    ["s.", atom_to_list(Slot)]), ") ++ "],
                 [Line | Body]  % implicit lists:reverse with this join order
             end,
             [" zero!<bits[0]>()\n"], Fields

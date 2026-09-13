@@ -3,6 +3,7 @@
 -export_type([list/2]).
 -export([new/2, sublist/4, nth/2, set/3, array_slice/4]).
 -export([zero/2, transpile/3, pack/3, unpack/3, width/2, print_type/2]).
+-export([dslx_codec/2]).
 -behavior(hls_type).
 
 %% TODO: the module interface should probably closely match that of XLS, so that
@@ -68,7 +69,7 @@ transpile(sublist, [Descriptor, List, Start, Count], State1) ->
     SmallSize = hls_type:width(Subtype),
     BigSize = hls_type:width(Type),
 
-    State2 = xls_parse:instr(State1, [List, " as bits[", integer_to_list(BigSize), "]"]),
+    State2 = xls_parse:instr(State1, hls_type:dslx_to_bits(Type, List)),
     %% XLS casts array element zero to the most-significant bits. Move Start to
     %% that position, then retain Count elements at the top and clear the tail.
     State3 = xls_parse:instr(State2, [xls_parse:reference(State2), " << ((", Start, " - u32:1) * ", integer_to_list(SmallSize), ")"]),
@@ -78,7 +79,7 @@ transpile(sublist, [Descriptor, List, Start, Count], State1) ->
         integer_to_list(BigSize), " - (", Count, " * ",
         integer_to_list(SmallSize), ")))"
     ]),
-    xls_parse:instr(State4, [xls_parse:reference(State4), " as ", hls_type:print_type(Type)]);
+    xls_parse:instr(State4, hls_type:dslx_from_bits(Type, xls_parse:reference(State4)));
 transpile(array_slice, [{phantom, type, OldDescriptor}, List, {static, integer, Start}, {static, integer, Length}], _State) ->
     {hls_type, hls_lists, list, [Subtype, _OldLength]} = OldDescriptor,
     NewDescriptor = list(Subtype, Length),
@@ -114,3 +115,28 @@ print_type(list, [Subtype, Count]) ->
 
 width(list, [Subtype, Count]) ->
     hls_type:width(Subtype) * Count.
+
+dslx_codec(list, [Subtype, Count]) ->
+    case hls_type:dslx_codec(Subtype) of
+        bit_cast -> bit_cast;
+        _ ->
+            BitsType = ["bits[", integer_to_list(hls_type:width(Subtype)), "]"],
+            ArrayType = print_type(list, [Subtype, Count]),
+            {fun(Bits) ->
+                codec_map([Bits, " as ", BitsType, "[", integer_to_list(Count), "]"],
+                    ArrayType, Count, fun(V) -> hls_type:dslx_from_bits(Subtype, V) end)
+             end,
+             fun(Values) ->
+                ["(", codec_map(Values, [BitsType, "[", integer_to_list(Count), "]"],
+                    Count, fun(V) -> hls_type:dslx_to_bits(Subtype, V) end),
+                    ") as bits[", integer_to_list(hls_type:width(Subtype) * Count), "]"]
+             end}
+    end.
+
+%% Bind input before entering the loop so recursively nested codecs may reuse
+%% these local names without capturing an enclosing array's index.
+codec_map(Input, OutputType, Count, Convert) ->
+    ["{ let codec_input = ", Input, "; for (codec_index, codec_output): (u32, ",
+        OutputType, ") in u32:0..u32:", integer_to_list(Count),
+        " { update(codec_output, codec_index, ", Convert("codec_input[codec_index]"),
+        ") } (zero!<", OutputType, ">()) }"].

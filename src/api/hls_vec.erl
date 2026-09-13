@@ -13,6 +13,7 @@ type. Fixed-point products retain their combined scale; no rescaling is implicit
 -export([vector/2, nth/2, set/3, dot/3]).
 -export([width/2, zero/2, pack/3, unpack/3, print_type/2, transpile/3, dslx_imports/0]).
 -export_type([vector/2]).
+-export([dslx_codec/2]).
 
 -type vector(Element, Size) :: [Element] | {no_return(), Size}.
 
@@ -39,6 +40,7 @@ print_type(vector, Args) -> hls_lists:print_type(list, Args).
 pack(Values, vector, Args) -> hls_lists:pack(Values, list, Args).
 unpack(Packed, vector, Args) -> hls_lists:unpack(Packed, list, Args).
 dslx_imports() -> [hls_vec].
+dslx_codec(vector, Args) -> hls_lists:dslx_codec(list, Args).
 
 transpile(vector, [{phantom, type, Subtype}, {static, integer, Size}], State) ->
     xls_parse:reference(State, {phantom, type, vector(Subtype, Size)});

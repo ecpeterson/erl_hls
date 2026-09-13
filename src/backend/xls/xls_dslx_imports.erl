@@ -7,13 +7,15 @@
 %% Walking type arguments also finds providers nested inside hls_lists:list/2.
 -spec from_forms([erl_parse:abstract_form()]) -> [atom()].
 from_forms(Forms) ->
-    Providers = lists:usort(providers(Forms)),
-    lists:usort(lists:append([imports(Module) || Module <- Providers])).
+    Uses = providers(Forms),
+    Providers = lists:usort([Module || {Module, _Name} <- Uses]),
+    lists:usort(lists:append([imports(Module,
+        lists:usort([Name || {M, Name} <- Uses, M =:= Module])) || Module <- Providers])).
 
-providers({remote_type, _, [{atom, _, Module}, _Name, Args]}) ->
-    [Module | providers(Args)];
-providers({call, _, {remote, _, {atom, _, Module}, _Name}, Args}) ->
-    [Module | providers(Args)];
+providers({remote_type, _, [{atom, _, Module}, {atom, _, Name}, Args]}) ->
+    [{Module, Name} | providers(Args)];
+providers({call, _, {remote, _, {atom, _, Module}, {atom, _, Name}}, Args}) ->
+    [{Module, Name} | providers(Args)];
 providers(Tuple) when is_tuple(Tuple) ->
     providers(tuple_to_list(Tuple));
 providers(List) when is_list(List) ->
@@ -21,11 +23,15 @@ providers(List) when is_list(List) ->
 providers(_) ->
     [].
 
-imports(Module) ->
+imports(Module, Names) ->
     _ = code:ensure_loaded(Module),
-    case erlang:function_exported(Module, dslx_imports, 0) of
-        true -> validate(Module, Module:dslx_imports());
-        false -> []
+    case erlang:function_exported(Module, dslx_imports, 1) of
+        true -> validate(Module, Module:dslx_imports(Names));
+        false ->
+            case erlang:function_exported(Module, dslx_imports, 0) of
+                true -> validate(Module, Module:dslx_imports());
+                false -> []
+            end
     end.
 
 validate(Provider, Imports) when is_list(Imports) ->

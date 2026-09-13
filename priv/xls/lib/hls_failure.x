@@ -14,6 +14,7 @@ pub enum Kind : u4 {
     REDUCTION_PROTOCOL = 10,
     INVALID_EFFECT = 11,
     INTERNAL = 12,
+    BADARITH = 13,
 }
 
 // Zero is success. Codes 1..15 are generic reasons; source-located codes are
@@ -33,6 +34,7 @@ pub const REDUCTION_MISMATCH = Code:9;
 pub const REDUCTION_PROTOCOL = Code:10;
 pub const INVALID_EFFECT = Code:11;
 pub const INTERNAL = Code:12;
+pub const BADARITH = Code:13;
 
 pub fn first(earlier: Code, later: Code) -> Code {
     if earlier != NONE { earlier } else { later }
