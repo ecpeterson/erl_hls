@@ -77,7 +77,8 @@ ordinary(First, Rest, Bindings, Continue, State0) ->
 %% Keep ordinary aliases as real bindings so later matches still check equality;
 %% control atoms and nested products remain visible to callback analysis.
 bind_product({var, _, '_'}, _Value, Bindings) -> {[], Bindings};
-bind_product({var, _, Name}, {atom, _, _} = Value, Bindings) ->
+bind_product({var, _, Name}, {atom, _, Atom} = Value, Bindings)
+        when Atom =/= true, Atom =/= false ->
     {[], Bindings#{Name => Value}};
 bind_product({var, _, Name}, {tuple, _, _} = Value, Bindings) ->
     {[], Bindings#{Name => Value}};

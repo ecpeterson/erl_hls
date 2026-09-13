@@ -63,6 +63,8 @@ fresh_products_capture_fields_before_destructuring_test() ->
         "{Phase, Data, consume}"),
     equivalent("Result = {boot, stamp(data, 1)}, "
         "{Phase, Data} = Result, Data = stamp(match, 2), {Phase, Data, consume}"),
+    equivalent("{Phase, Flag} = {boot, true}, "
+        "Flag = stamp(match, false), {Phase, Flag, consume}"),
     equivalent("{Phase, Data} = {boot, Phase = stamp(match, active)}, "
         "{Phase, Data, consume}").
 
