@@ -20,6 +20,7 @@ test -s "$cpu_witness"
 # files for its own OTP release. This stages no generated XLS source or RTL.
 for source in \
     "$project_root/src/runtime/hls_fabric.erl" \
+    "$project_root/src/runtime/hls_fabric_io.erl" \
     "$project_root/src/runtime/hls_fabric_client.erl" \
     "$project_root/src/api/hls_gs.erl" \
     "$project_root/src/api/hls_lists.erl" \
