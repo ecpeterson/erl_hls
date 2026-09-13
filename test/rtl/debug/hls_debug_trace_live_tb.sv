@@ -41,7 +41,7 @@ module hls_debug_trace_live_tb;
         .s_dbg_tvalid(request_valid),.s_dbg_tready(request_ready),
         .m_dbg_tdata(response_data),.m_dbg_tkeep(response_keep),.m_dbg_tlast(response_last),
         .m_dbg_tvalid(response_valid),.m_dbg_tready(response_ready));
-    hls_debug_route #(.ENDPOINT(1)) route (
+    hls_debug_route #(.ENDPOINTS(1)) route (
         .clk(clk),.reset(!resetn),
         .s_data(s_dbg_tdata),.s_keep(s_dbg_tkeep),.s_valid(s_dbg_tvalid),.s_ready(s_dbg_tready),.s_last(s_dbg_tlast),
         .m_data(m_dbg_tdata),.m_keep(m_dbg_tkeep),.m_valid(m_dbg_tvalid),.m_ready(m_dbg_tready),.m_last(m_dbg_tlast),

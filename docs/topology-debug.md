@@ -46,6 +46,36 @@ Keep `manifest.json` with that exact bitstream. Its SHA-256 fingerprint covers t
 
 For a top with an active-high `reset` and `clk`, those are the defaults. `--clock`, `--reset`, and `--reset-active-low` describe the application's existing control ports; the caller must supply the correct reset polarity. All original top-level inputs and outputs are preserved.
 
+## Shared counter/trace and query transport
+
+Add `--monitor-rx s_axis --monitor-tx m_axis --monitor-routed` to the instrumentation command to attach a passive boundary monitor to a pair of 32-bit application streams. Each prefix must expose `tdata`, `tvalid`, `tready`, and `tlast` with the input/output directions of an AXIS receiver or sender. Omit `--monitor-routed` for frames without outer route words. The selected boundary and endpoint are included in the manifest fingerprint. Probe discovery runs on the application before either debug service is attached.
+
+The generated `hls_debug_application` exposes one debug stream pair:
+
+| Destination endpoint | Service | Host API |
+| --- | --- | --- |
+| 1 | Boundary counters and recorded application headers | `hls_debug:get_counters/1,2`, `get_trace/1,2` on a boundary handle |
+| 2 | Physical queue/handshake and committed actor/mailbox queries | `hls_topology_debug:open/2`, scoped `hls_debug:info/2,3` and `inspect_waits/2` |
+
+Two `hls_debug` clients register those peer endpoints with the same `hls_fabric` broker. The router retains the request's service and return address until the reply's accepted `TLAST`. Partial route words and unknown destinations are drained; partial request words reach the selected service for protocol validation. Queries are serialized across services, including a trace drain. A blocked debug reader delays all later replies; it cannot stop application execution, actor observation updates, or boundary capture. Trace capacity and overflow semantics remain those of the [counter/trace protocol](debug-protocol.md). A permanently incomplete request or unread reply requires transport recovery/reset; there is no router timeout.
+
+Compile the generated wrapper with `hls_debug_route.v`, `hls_debug_frame_rx.v`, `hls_topology_debug.v`, `hls_actor_snapshot.v`, and, when a boundary is selected, `hls_debug_monitor.v`, `hls_debug_tap.v`, `hls_trace_store.v`, and the generated XLS `hls_debug_observer.v` / `hls_debug_server.v`.
+
+### Complete D3 phi-memory fixture
+
+```sh
+python3 tools/build_phi_debug.py "$XLS_ROOT" --stage _build/phi-debug --yosys "$YOSYS"
+python3 tools/test_phi_debug.py _build/phi-debug --stage _build/phi-debug/live
+python3 tools/measure_phi_debug.py _build/phi-debug --stage _build/phi-debug/area \
+  --yosys "$YOSYS" --seeds 5 --jobs 2
+```
+
+The build uses the deterministic `phi_memory_demo` workload at distance three, with three shared executors per phi plane, mailbox observations enabled, and one monitor on the actual routed host boundary. It retains separately compiled production and observed applications, their DSLX/IR/RTL and build provenance. `debug/debug_top.v` is the composed deployment shell; `debug/instrumented.v` contains its application and passive aliases. The application-only Verilog renderer is `phi_memory_debug_top_v:application(Profile, Options)`; `phi_memory_gateway_dslx:to_dslx/3` forwards the optional observation channels through the gateway. The monitor-only demo renderer shares the same application body.
+
+The live test holds the application output, queries actor and queue state, follows full queues to the external sink, and then blocks a trace reply while releasing the application. It checks the D3 result against ERTS and compares production and fully instrumented application outputs on every clock. The host uses the public clients and catalog; VPI only carries external stream words. Reports include decoded observations and output recovery cycles under that host schedule.
+
+The measurement maps both complete designs with Yosys `synth_xilinx -abc9 -arch xc7`, excluding I/O pads and clock buffers. It includes compiler-generated observation logic, shared routing, all query resources, and one boundary monitor. Distributed RAM consumes LUTs in the reported totals; BRAM and DSP are separate. The report retains source snapshots, commands, logs, and best/mean/population-variance/worst statistics. These are synthesis area estimates; they do not establish placed timing, power, or the cost of adding further monitored boundaries.
+
 ## Shared-actor snapshots
 
 Emit a projection alongside the DSLX and RTL from the same normalized topology and scheduler specification:

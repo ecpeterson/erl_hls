@@ -74,6 +74,19 @@ sharded_gateway_and_wrapper_expose_every_scheduler_ram_test() ->
         [1, 2, 3]
     ).
 
+mailbox_observation_gateway_test() ->
+    Profile = {phi_shards, 3},
+    Plain = iolist_to_binary(phi_memory_gateway_dslx:to_dslx(3, Profile)),
+    ?assertEqual(Plain, iolist_to_binary(phi_memory_gateway_dslx:to_dslx(3, Profile, #{mailbox_debug => false}))),
+    Observed = iolist_to_binary(phi_memory_gateway_dslx:to_dslx(3, Profile, #{mailbox_debug => true})),
+    ?assertEqual(0, count(Plain, <<"_mailbox_debug_out">>)),
+    %% Every bank has one member, config parameter, spawn argument and tuple result.
+    ?assertEqual(40, count(Observed, <<"_mailbox_debug_out">>)),
+    Shell = phi_memory_debug_top_v:application(Profile, #{mailbox_debug => true}),
+    ?assertEqual(10, count(Shell, <<"_mailbox_debug_out_rdy(1'b1)">>)),
+    ?assertEqual(nomatch, binary:match(Shell, <<"s_dbg_tdata">>)),
+    ?assertEqual(nomatch, binary:match(Shell, <<"@">>)).
+
 smoke_gateway_imports_distance_one_staging_topology_test() ->
     Generated = generated(1),
     ?assertMatch(<<"// phi_memory_gateway_smoke.x\n", _/binary>>, Generated),

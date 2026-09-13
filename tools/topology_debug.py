@@ -16,6 +16,7 @@ import re
 import subprocess
 
 import topology_debug_actors as actors
+import topology_debug_services as services
 
 
 SCHEMA = 4
@@ -208,7 +209,7 @@ def yosys_run(yosys, script, stage, name):
                        stderr=subprocess.STDOUT, check=True)
 
 
-def debug_wrapper(ports, application_top, resources, channels, fingerprint, clock, reset, active_low, banks=()):
+def debug_wrapper(ports, application_top, resources, channels, fingerprint, clock, reset, active_low, banks=(), monitor=None):
     debug = [("input", 32, "s_dbg_tdata"), ("input", 4, "s_dbg_tkeep"),
              ("input", 1, "s_dbg_tlast"), ("input", 1, "s_dbg_tvalid"),
              ("output", 1, "s_dbg_tready"), ("output", 32, "m_dbg_tdata"),
@@ -225,7 +226,6 @@ def debug_wrapper(ports, application_top, resources, channels, fingerprint, cloc
     taps_width = sum(len(bank["taps"]) for bank in banks)
     tap_wire = f"wire [{taps_width-1}:0] actor_writes;\n" if banks else ""
     tap_port = ", .hls_actor_writes(actor_writes)" if banks else ""
-    hash_literal = int.from_bytes(bytes.fromhex(fingerprint), "little")
     return ("// Generated passive topology debug wrapper. Application ports are unchanged.\n"
             "module hls_debug_application (\n" +
             ",\n".join(declaration(*port) for port in declarations + debug) + "\n);\n" +
@@ -233,28 +233,8 @@ def debug_wrapper(ports, application_top, resources, channels, fingerprint, cloc
             f"{application_top} application (" + ", ".join(connections) +
             f", .hls_probe_values(probe_values[0 +: {64*physical_count}])" + tap_port + ");\n" +
             actors.wrapper(banks, physical_count, clock, reset, active_low) +
-            "wire [31:0] request_data, response_data;\n"
-            "wire [3:0] request_keep, response_keep;\n"
-            "wire request_last, request_valid, request_ready;\n"
-            "wire response_last, response_valid, response_ready;\n"
-            "hls_debug_route #(.ENDPOINT(2)) route (\n"
-            f"    .clk(\\{clock} ), .reset({'!' if active_low else ''}\\{reset} ),\n"
-            "    .s_data(s_dbg_tdata), .s_keep(s_dbg_tkeep), .s_last(s_dbg_tlast),\n"
-            "    .s_valid(s_dbg_tvalid), .s_ready(s_dbg_tready),\n"
-            "    .m_data(m_dbg_tdata), .m_keep(m_dbg_tkeep), .m_last(m_dbg_tlast),\n"
-            "    .m_valid(m_dbg_tvalid), .m_ready(m_dbg_tready),\n"
-            "    .request_data(request_data), .request_keep(request_keep), .request_last(request_last),\n"
-            "    .request_valid(request_valid), .request_ready(request_ready),\n"
-            "    .response_data(response_data), .response_keep(response_keep), .response_last(response_last),\n"
-            "    .response_valid(response_valid), .response_ready(response_ready));\n" +
-            f"hls_topology_debug #(.RESOURCES({resources}), .CHANNELS({channels}), .ACTORS({actor_count}),\n" +
-            f"    .FINGERPRINT(256'h{hash_literal:064x})) debug (\n" +
-            f"    .clk(\\{clock} ), .reset({'!' if active_low else ''}\\{reset} ),\n"
-            "    .probe_address(probe_address), .probe_value(probe_value),\n"
-            "    .s_data(request_data), .s_keep(request_keep), .s_last(request_last),\n"
-            "    .s_valid(request_valid), .s_ready(request_ready),\n"
-            "    .m_data(response_data), .m_keep(response_keep), .m_last(response_last),\n"
-            "    .m_valid(response_valid), .m_ready(response_ready));\nendmodule\n")
+            services.wrapper(resources, channels, actor_count, fingerprint, clock, reset, active_low, monitor) +
+            "endmodule\n")
 
 
 def instrument(args):
@@ -285,11 +265,15 @@ def instrument(args):
     for control in (args.clock, args.reset):
         if control not in ports or ports[control]["direction"] != "input" or len(ports[control]["bits"]) != 1:
             raise ValueError(f"expected one-bit input {control}")
+    monitor = services.boundary(ports, getattr(args, "monitor_rx", None),
+                                getattr(args, "monitor_tx", None), getattr(args, "monitor_routed", False))
     manifest = {"schema": SCHEMA, "top": args.top, "clock": args.clock,
                 "reset": args.reset, "reset_active_low": args.reset_active_low,
                 "resources": resources, "unsupported_queues": unsupported,
                 "sources": [{"name": path.name, "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
                             for path in files], "probes": probes}
+    if monitor:
+        manifest["boundary_monitor"] = monitor
     if banks:
         manifest["actor_projection"] = projection
         manifest["actor_root"] = root
@@ -298,7 +282,7 @@ def instrument(args):
     (stage / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
     (stage / "debug_top.v").write_text(debug_wrapper(
         ports, args.output_top, len(resources), len(probes), manifest["fingerprint"],
-        args.clock, args.reset, args.reset_active_low, banks))
+        args.clock, args.reset, args.reset_active_low, banks, monitor))
     exported = export_probes(flat, args.top, physical, args.output_top, banks)
     (stage / "instrumented.json").write_text(json.dumps(exported))
     yosys_run(args.yosys, f"read_json {quote(stage / 'instrumented.json')}\n" +
@@ -318,6 +302,9 @@ def main():
     parser.add_argument("--yosys", default="yosys")
     parser.add_argument("--actor-projection", type=Path)
     parser.add_argument("--actor-root", default="", help="instance path of the shell containing scheduler RAMs")
+    parser.add_argument("--monitor-rx", help="32-bit AXIS input prefix (e.g. s_axis); endpoint 1")
+    parser.add_argument("--monitor-tx", help="32-bit AXIS output prefix (e.g. m_axis)")
+    parser.add_argument("--monitor-routed", action="store_true", help="application frames include route words")
     instrument(parser.parse_args())
 
 

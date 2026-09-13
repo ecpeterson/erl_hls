@@ -25,7 +25,7 @@ gateway has a typed connection-fault sideband, the host observes that rejection
 through the experiment timeout rather than an invented application reply.
 """.
 
--export([to_dslx/0, to_dslx/1, to_dslx/2]).
+-export([to_dslx/0, to_dslx/1, to_dslx/2, to_dslx/3]).
 
 -doc "Generates the checked distance-three gateway.".
 -spec to_dslx() -> iolist().
@@ -48,7 +48,14 @@ to_dslx(3, SchedulerProfile) ->
 to_dslx(_Distance, _SchedulerProfile) ->
     error(badarg).
 
+-doc "Forwards optional completed-mailbox observations through the gateway.".
+to_dslx(3, SchedulerProfile, Options) ->
+    emit(3, phi_noise_topology, phi_memory_gateway, SchedulerProfile, Options).
+
 emit(Distance, TopologyModule, Artifact, SchedulerProfile) ->
+    emit(Distance, TopologyModule, Artifact, SchedulerProfile, #{}).
+
+emit(Distance, TopologyModule, Artifact, SchedulerProfile, Options) ->
     Contract = phi_memory_boundary:contract(Distance),
     RamBindings = scheduler_ram_bindings(SchedulerProfile),
     [
@@ -65,16 +72,16 @@ emit(Distance, TopologyModule, Artifact, SchedulerProfile) ->
         "import ", atom_to_list(TopologyModule), ";\n\n",
         "const WIDTH = u16:", integer_to_list(Distance), ";\n",
         "const HEIGHT = u16:", integer_to_list(Distance), ";\n",
-        body(TopologyModule, Contract, RamBindings)
+        body(TopologyModule, Contract, RamBindings, observation_spec(SchedulerProfile, Options))
     ].
 
-body(TopologyModule, Contract, RamBindings) ->
+body(TopologyModule, Contract, RamBindings, Observation) ->
     [
         boundary_declarations(Contract),
         boundary_policy(Contract),
         spatial_ingress(), "\n",
         frame_mux(Contract),
-        top_proc(TopologyModule, Contract, RamBindings)
+        top_proc(TopologyModule, Contract, RamBindings, Observation)
     ].
 
 boundary_declarations(Contract) ->
@@ -280,10 +287,10 @@ frame_mux(Contract = #{outputs := Outputs}) ->
         "}\n\n"
     ].
 
-top_proc(TopologyModule, Contract = #{outputs := Outputs}, RamBindings) ->
+top_proc(TopologyModule, Contract = #{outputs := Outputs}, RamBindings, Observation) ->
     OutputCount = length(Outputs),
-    RamMembers = scheduler_ram_members(RamBindings),
-    RamNames = scheduler_ram_names(RamBindings),
+    RamMembers = scheduler_ram_members(RamBindings) ++ xls_scheduler_observation:arguments(Observation),
+    RamNames = scheduler_ram_names(RamBindings) ++ xls_scheduler_observation:names(Observation),
     [
         "pub proc Top {\n",
         [["  ", Member, ";\n"] || Member <- RamMembers],
@@ -326,6 +333,11 @@ top_proc(TopologyModule, Contract = #{outputs := Outputs}, RamBindings) ->
         "  next(state: ()) { state }\n",
         "}\n"
     ].
+
+observation_spec(Profile, Options) ->
+    #{groups := Groups} = phi_noise_topology_dslx:scheduler_plan(Profile),
+    Options#{schedulers => [#{stem => ["scheduler_", integer_to_list(I)], slot_count => Slots}
+        || {I, #{slot_count := Slots}} <- lists:enumerate(0, Groups)]}.
 
 scheduler_ram_members(RamBindings) ->
     lists:append([
