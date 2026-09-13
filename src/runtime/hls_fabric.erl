@@ -3,6 +3,8 @@
 Owns one routed frame transport and dispatches replies to Erlang proxy
 processes by their registered return route. Application and debug paths use
 separate instances so their queues and failure domains remain independent.
+Routes are retired when their owners exit and cannot be re-registered in the
+same broker session. See `docs/host-transactions.md` for recovery requirements.
 
 The complete route is delivered to its registered owner as transport metadata.
 It can distinguish several unsolicited streams owned by one proxy, but is not
@@ -22,7 +24,7 @@ queue before this transport can claim end-to-end admission.
 -behavior(gen_server).
 
 -export([start_link/2, stop/1]).
--export([register_route/3, send/4]).
+-export([register_route/3, send/4, client_info/1]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2]).
 
 -define(RX_FRAME, '$hls_fabric_frame').
@@ -52,7 +54,7 @@ queue before this transport can claim end-to-end admission.
 -record(state, {
     fd :: file:io_device(),
     listener :: pid(),
-    routes = #{} :: #{route() => #route_owner{}}
+    routes = #{} :: #{route() => #route_owner{} | retired}
 }).
 
 start_link(WritePath, ReadPath) ->
@@ -68,6 +70,11 @@ register_route(Pid, Route, Owner) ->
 -spec send(pid(), route(), header(), binary()) -> ok | {error, term()}.
 send(Pid, Route, Header, Payload) ->
     gen_server:call(Pid, {send, Route, Header, Payload}).
+
+-doc "Returns local transaction occupancy for an hls_gs or hls_debug proxy; a CPU hls_gs returns none.".
+-spec client_info(pid()) -> map() | none.
+client_info(Pid) ->
+    gen_server:call(Pid, '$hls_fabric_info').
 
 init({WritePath, ReadPath}) ->
     {ok, FDWrite} = file:open(WritePath, [write, raw, binary]),
@@ -89,6 +96,8 @@ handle_call(
     case {valid_route(Route), Routes} of
         {true, #{Route := #route_owner{pid = Owner}}} ->
             {reply, ok, State};
+        {true, #{Route := retired}} ->
+            {reply, {error, {route_retired, Route}}, State};
         {true, #{Route := #route_owner{
             pid = Existing,
             monitor = OldMonitor
@@ -98,13 +107,8 @@ handle_call(
                     {reply, {error, {route_in_use, Route, Existing}}, State};
                 false ->
                     demonitor(OldMonitor, [flush]),
-                    Monitor = monitor(process, Owner),
-                    RouteOwner = #route_owner{
-                        pid = Owner,
-                        monitor = Monitor
-                    },
-                    {reply, ok, State#state{
-                        routes = Routes#{Route => RouteOwner}
+                    {reply, {error, {route_retired, Route}}, State#state{
+                        routes = Routes#{Route => retired}
                     }}
             end;
         {true, _} ->
@@ -124,7 +128,13 @@ handle_call(
     Frame = #frame{route = Route, header = Header, payload = Payload},
     case encode_frame(Frame) of
         {ok, EncodedFrame} ->
-            {reply, file:write(FD, EncodedFrame), State};
+            case file:write(FD, EncodedFrame) of
+                ok -> {reply, ok, State};
+                {error, Reason} ->
+                    %% The stream may now contain part of a frame. No route
+                    %% can safely append more work to this transport.
+                    {stop, {write_failed, Reason}, {error, Reason}, State}
+            end;
         {error, _Reason} = Error ->
             {reply, Error, State}
     end;
@@ -151,9 +161,13 @@ handle_info(
     {'DOWN', Monitor, process, Owner, _Reason},
     State = #state{routes = Routes}
 ) ->
-    NewRoutes = maps:filter(
-        fun(_Route, #route_owner{pid = Pid, monitor = Ref}) ->
-            Pid =/= Owner orelse Ref =/= Monitor
+    %% A successor must not receive replies issued to a previous owner's IDs.
+    %% Reclaiming routes requires a transport/device drain or reset fence.
+    NewRoutes = maps:map(
+        fun
+            (_Route, #route_owner{pid = Pid, monitor = Ref})
+                    when Pid =:= Owner, Ref =:= Monitor -> retired;
+            (_Route, Entry) -> Entry
         end,
         Routes
     ),

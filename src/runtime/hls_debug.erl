@@ -9,6 +9,9 @@ handles (see `docs/debug-targets.md`). `inspect_waits/2` explores current waits;
 The low-level PID forms of `get_counters`, `get_trace`, and `query` address a
 client started by this module, not an application PID. In `info`, a bare PID
 always means native BEAM process information, including a proxy's own queue.
+
+A client owns 256 transaction slots. Timeouts do not cancel device work; see
+`docs/host-transactions.md` for admission, failure, and session recovery.
 """.
 
 -behavior(gen_server).
@@ -16,7 +19,7 @@ always means native BEAM process information, including a proxy's own queue.
 -export([start_link/2, stop/1, query/4]).
 -export([info/2, info/3, inspect_waits/2]).
 -export([get_counters/1, get_counters/2, get_trace/1, get_trace/2]).
--export([init/1, handle_call/3, handle_cast/2, terminate/2]).
+-export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2]).
 
 %% Host-to-FPGA requests occupy the low half of the tag space.
 -define(DEBUG_GET_COUNTERS, 16#01).
@@ -37,13 +40,7 @@ always means native BEAM process information, including a proxy's own queue.
 
 -record(state, {
     module = undefined :: module() | undefined,
-    fabric :: {
-        Broker :: pid(),
-        LocalEndpoint :: 0..65535,
-        PeerEndpoint :: 0..65535
-    },
-    pending = #{} :: #{0..255 => {gen_server:from(), byte(), decoded | raw}},
-    tx_id = 0 :: 0..255
+    fabric :: hls_fabric_client:state()
 }).
 
 start_link(Module, {fabric, Broker, PeerEndpoint}) ->
@@ -87,15 +84,13 @@ query(Pid, Tag, Payload, Timeout)
     gen_server:call(Pid, {query, Tag, Payload}, Timeout).
 
 init({Module, {fabric, Broker, LocalEndpoint, PeerEndpoint}}) ->
-    ok = hls_fabric:register_route(
-        Broker,
-        {PeerEndpoint, LocalEndpoint},
-        self()
-    ),
-    {ok, #state{
-        module = Module,
-        fabric = {Broker, LocalEndpoint, PeerEndpoint}
-    }}.
+    case hls_fabric_client:new(Broker, LocalEndpoint, PeerEndpoint, 256) of
+        {ok, Client} -> {ok, #state{module = Module, fabric = Client}};
+        {error, Reason} -> {stop, Reason}
+    end.
+
+handle_call('$hls_fabric_info', _From, State = #state{fabric = Client}) ->
+    {reply, hls_fabric_client:info(Client), State};
 
 handle_call(get_counters, From, State) ->
     request(?DEBUG_GET_COUNTERS, <<>>, decoded, From, State);
@@ -104,50 +99,29 @@ handle_call(get_trace, From, State) ->
 handle_call({query, Tag, Payload}, From, State) ->
     request(Tag, Payload, raw, From, State).
 
-request(Tag, Payload, Decode, From, State = #state{tx_id = TxID, pending = Pending}) ->
-    ok = write_frame(State, Tag, TxID, Payload),
-    {noreply, State#state{
-        pending = Pending#{TxID => {From, Tag bor 16#80, Decode}},
-        tx_id = (TxID + 1) rem 256
-    }}.
+request(Tag, Payload, Decode, From, State = #state{fabric = Client, module = Module}) ->
+    Context = {Tag bor 16#80, Decode, Module},
+    Next = hls_fabric_client:request(Tag, Payload, Context, From, Client),
+    {noreply, State#state{fabric = Next}}.
 
-handle_cast(
-    {?FABRIC_RX, _Route, {Tag, TxID, _Flags}, Payload},
-    State = #state{module = Module, pending = Pending}
-) ->
-    case maps:take(TxID, Pending) of
-        {{From, Expected, Decode}, NewPending} ->
-            Reply = case {Tag, Decode} of
-                {?DEBUG_ERROR, _} -> decode_reply(Tag, Payload, Module);
-                {Expected, raw} -> {ok, Payload};
-                {Expected, decoded} -> decode_reply(Tag, Payload, Module);
-                _ -> {error, {unexpected_reply, Tag, Payload}}
-            end,
-            gen_server:reply(From, Reply),
-            {noreply, State#state{pending = NewPending}};
-        error ->
-            %% A stale or unsolicited reply owns no current query.
-            {noreply, State}
-    end.
+handle_cast({?FABRIC_RX, Route, Header, Payload}, State = #state{fabric = Client}) ->
+    Next = hls_fabric_client:receive_frame(Route, Header, Payload, fun response/3, Client),
+    {noreply, State#state{fabric = Next}}.
 
+response(?DEBUG_ERROR, Payload, {_Expected, _Decode, Module}) ->
+    {reply, decode_reply(?DEBUG_ERROR, Payload, Module)};
+response(Expected, Payload, {Expected, raw, _Module}) -> {reply, {ok, Payload}};
+response(Expected, Payload, {Expected, decoded, Module}) ->
+    {reply, decode_reply(Expected, Payload, Module)};
+response(_Tag, _Payload, _Context) -> ignore.
+
+handle_info({'DOWN', _, process, _, _} = Down, State = #state{fabric = Client}) ->
+    {noreply, State#state{fabric = hls_fabric_client:down(Down, Client)}};
+handle_info(_Message, State) -> {noreply, State}.
 
 terminate(_Reason, _State) ->
-    %% Route ownership is monitored by hls_fabric, so cleanup also occurs for
-    %% exits which bypass terminate/2 or coincide with broker failure.
+    %% hls_fabric retires the return route even for exits bypassing terminate/2.
     ok.
-
-write_frame(
-    #state{fabric = {Broker, LocalEndpoint, PeerEndpoint}},
-    Tag,
-    TxID,
-    Payload
-) ->
-    hls_fabric:send(
-        Broker,
-        {LocalEndpoint, PeerEndpoint},
-        {Tag, TxID, 0},
-        Payload
-    ).
 
 decode_reply(?DEBUG_COUNTERS, <<
     5:32/little-unsigned-integer,

@@ -312,6 +312,7 @@ cp "$project_root/tools/phi_scheduler_rams.sh" \
 # BEAM files instead of loading BEAM files produced by the development host.
 for source in \
     "$project_root/src/runtime/hls_fabric.erl" \
+    "$project_root/src/runtime/hls_fabric_client.erl" \
     "$project_root/src/api/hls_gs.erl" \
     "$project_root/src/runtime/hls_debug.erl" \
     "$project_root/src/runtime/hls_debug_target.erl" \

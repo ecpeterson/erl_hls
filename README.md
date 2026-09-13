@@ -94,6 +94,8 @@ shared stream. A 32-bit source/destination envelope precedes the existing
 application or debug frame, and arbitration retains a selected endpoint through
 `TLAST`. On the Erlang side, one `hls_fabric` process owns each physical stream
 while distinct `hls_gs` proxy PIDs retain the ordinary `gen_server`-style API.
+[Host transaction ownership](docs/host-transactions.md) defines bounded call
+admission, timeout behavior, local inspection, and session recovery.
 The regression checks isolated process state, concurrent calls, complete-frame
 arbitration under backpressure, and debug access while application output is
 blocked. Fabric endpoint addresses are transport identifiers, not Erlang PIDs.
