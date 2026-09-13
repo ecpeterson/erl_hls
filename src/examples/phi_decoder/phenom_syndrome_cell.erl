@@ -348,14 +348,13 @@ collecting(
     NewSeen = Seen bor Source,
     NewParity = Parity bxor Present,
     NewDataQuiet = Syndrome#syndrome.data_quiet band Quiet,
-    case NewSeen =:= ?PHI_ALL_DIRECTIONS of
-        false ->
-            Collected = Syndrome#syndrome{
-                seen_sources = NewSeen,
-                data_parity = NewParity,
-                data_quiet = NewDataQuiet
-            },
-            {collecting, Collected, consume};
+    Collected = Syndrome#syndrome{
+        seen_sources = NewSeen,
+        data_parity = NewParity,
+        data_quiet = NewDataQuiet
+    },
+    {NextPhase, NextSyndrome} = case NewSeen =:= ?PHI_ALL_DIRECTIONS of
+        false -> {collecting, Collected};
         true ->
             CutoffApplies = Syndrome#syndrome.cutoff_armed =:= 1 andalso
                 Step >= Syndrome#syndrome.cutoff_step,
@@ -373,12 +372,9 @@ collecting(
                     {hls_type:as(hls_nums:u32(), 0), Sample, Hit}
             end,
             Detection = NewParity bxor Measurement bxor PreviousMeasurement,
-            Complete = Syndrome#syndrome{
-                seen_sources = NewSeen,
-                data_parity = NewParity,
+            Complete = Collected#syndrome{
                 previous_measurement = Measurement,
                 announcement = Detection,
-                data_quiet = NewDataQuiet,
                 announcement_quiet = NewDataQuiet band NoiseDisabledWord,
                 random_state = NextRandom,
                 noise_disabled = NoiseDisabledWord,
@@ -387,8 +383,9 @@ collecting(
                     true -> hls_type:as(hls_nums:u32(), 0)
                 end
             },
-            {announcing, Complete, consume}
-    end;
+            {announcing, Complete}
+    end,
+    {NextPhase, NextSyndrome, consume};
 collecting(cast, #phenom_data{}, Syndrome) ->
     {collecting, Syndrome, fail}.
 

@@ -326,28 +326,24 @@ collecting(
         Source =:= ?PHI_SOUTH_MASK),
        Seen band Source =:= 0 ->
     NewSeen = Seen bor Source,
-    case NewSeen =:= ?PHI_ALL_DIRECTIONS of
-        false ->
-            {collecting, Cell#data_cell{
-                seen_sources = NewSeen
-            }, consume};
+    Collected = Cell#data_cell{seen_sources = NewSeen},
+    {NextPhase, NextCell} = case NewSeen =:= ?PHI_ALL_DIRECTIONS of
+        false -> {collecting, Collected};
         true ->
             CutoffApplies = Cell#data_cell.cutoff_armed =:= 1 andalso
                 Step >= Cell#data_cell.cutoff_step,
             NoiseDisabled = Cell#data_cell.noise_disabled =:= 1 orelse
                 CutoffApplies,
-            case NoiseDisabled of
-                true ->
-                    NoiseDisabledWord = hls_type:as(hls_nums:u32(), 1),
-                    NextRandom = Cell#data_cell.random_state,
-                    Event = hls_type:as(hls_nums:u32(), 0);
+            {NoiseDisabledWord, NextRandom, Event} = case NoiseDisabled of
+                true -> {hls_type:as(hls_nums:u32(), 1), Cell#data_cell.random_state,
+                    hls_type:as(hls_nums:u32(), 0)};
                 false ->
-                    NoiseDisabledWord = hls_type:as(hls_nums:u32(), 0),
-                    NextRandom = hls_prng:xorshift32(Cell#data_cell.random_state),
-                    Event = if
-                        NextRandom < Cell#data_cell.threshold -> hls_type:as(hls_nums:u32(), 1);
+                    Sample = hls_prng:xorshift32(Cell#data_cell.random_state),
+                    Hit = if
+                        Sample < Cell#data_cell.threshold -> hls_type:as(hls_nums:u32(), 1);
                         true -> hls_type:as(hls_nums:u32(), 0)
-                    end
+                    end,
+                    {hls_type:as(hls_nums:u32(), 0), Sample, Hit}
             end,
             AccumulatedPauli = case Event of
                 1 -> hls_pauli:multiply(
@@ -356,8 +352,7 @@ collecting(
                 );
                 _ -> Cell#data_cell.accumulated_pauli
             end,
-            Completed = Cell#data_cell{
-                seen_sources = NewSeen,
+            Completed = Collected#data_cell{
                 event = Event,
                 random_state = NextRandom,
                 accumulated_pauli = AccumulatedPauli,
@@ -367,8 +362,9 @@ collecting(
                     true -> hls_type:as(hls_nums:u32(), 0)
                 end
             },
-            {reporting, Completed, consume}
-    end;
+            {reporting, Completed}
+    end,
+    {NextPhase, NextCell, consume};
 collecting(
     cast,
     #phenom_query{step = QueryStep},

@@ -60,23 +60,23 @@ const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L379 = u16:134; // phi_halo_cell.e
 const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L381 = u16:150; // phi_halo_cell.erl:L381
 const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L383 = u16:166; // phi_halo_cell.erl:L383
 const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L414 = u16:177; // phi_halo_cell.erl:L414
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L429 = u16:198; // phi_halo_cell.erl:L429
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L440 = u16:214; // phi_halo_cell.erl:L440
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L448 = u16:230; // phi_halo_cell.erl:L448
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L456 = u16:246; // phi_halo_cell.erl:L456
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L458 = u16:262; // phi_halo_cell.erl:L458
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L497 = u16:273; // phi_halo_cell.erl:L497
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L510 = u16:294; // phi_halo_cell.erl:L510
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L518 = u16:310; // phi_halo_cell.erl:L518
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L526 = u16:326; // phi_halo_cell.erl:L526
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L534 = u16:342; // phi_halo_cell.erl:L534
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L536 = u16:358; // phi_halo_cell.erl:L536
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L590 = u16:374; // phi_halo_cell.erl:L590
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L609 = u16:385; // phi_halo_cell.erl:L609
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L617 = u16:406; // phi_halo_cell.erl:L617
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L628 = u16:422; // phi_halo_cell.erl:L628
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L637 = u16:438; // phi_halo_cell.erl:L637
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L639 = u16:454; // phi_halo_cell.erl:L639
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L431 = u16:198; // phi_halo_cell.erl:L431
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L439 = u16:214; // phi_halo_cell.erl:L439
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L447 = u16:230; // phi_halo_cell.erl:L447
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L455 = u16:246; // phi_halo_cell.erl:L455
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L457 = u16:262; // phi_halo_cell.erl:L457
+const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L496 = u16:273; // phi_halo_cell.erl:L496
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L509 = u16:294; // phi_halo_cell.erl:L509
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L517 = u16:310; // phi_halo_cell.erl:L517
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L525 = u16:326; // phi_halo_cell.erl:L525
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L533 = u16:342; // phi_halo_cell.erl:L533
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L535 = u16:358; // phi_halo_cell.erl:L535
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L589 = u16:374; // phi_halo_cell.erl:L589
+const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L608 = u16:385; // phi_halo_cell.erl:L608
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L616 = u16:406; // phi_halo_cell.erl:L616
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L627 = u16:422; // phi_halo_cell.erl:L627
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L636 = u16:438; // phi_halo_cell.erl:L636
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L638 = u16:454; // phi_halo_cell.erl:L638
 pub struct Phi {
   epoch : u32,
   values : phi_field::Field,
@@ -1233,12 +1233,15 @@ fn reduction_dispatch_completion(
       ..(Xls_clause_1_Updated_1).1
     };
     let _12 = (Tag::CELL, _11);
-    let _13 = (Phase::COMPARING, _12, Directive::CONSUME, bool:0, );
-    let _14 = (_13.0, _13.1, _13.2, _13.3, hls_failure::check(_13.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L429));
+    let Xls_clause_1_Xls_result_0_1 = _12;
+    let Xls_clause_1_NextCell_1 = Xls_clause_1_Xls_result_0_1;
+    let _13 = (Phase::COMPARING, Xls_clause_1_NextCell_1, Directive::CONSUME, bool:0, );
+    let _14 = (_13.0, _13.1, _13.2, _13.3, hls_failure::check(_13.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L431));
     (_14, hls_failure::NONE)
   } else {
+    let Xls_clause_1_NextCell_1 = Xls_clause_1_Updated_1;
     let _11 = hls_failure::NONE;
-    let _12 = (Phase::GATHERING, Xls_clause_1_Updated_1, Directive::CONSUME, bool:1, _11, );
+    let _12 = (Phase::GATHERING, Xls_clause_1_NextCell_1, Directive::CONSUME, bool:1, _11, );
     (_12, hls_failure::NONE)
   };
   if ((_15.1) != hls_failure::NONE) {
@@ -1297,14 +1300,14 @@ fn reduction_dispatch_completion(
   };
   let _3 = (Tag::CELL, _2);
   let _4 = (Phase::FLIPPING, _3, Directive::CONSUME, bool:0, );
-  let _5 = (_4.0, _4.1, _4.2, _4.3, hls_failure::check(_4.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L510));
+  let _5 = (_4.0, _4.1, _4.2, _4.3, hls_failure::check(_4.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L509));
   if ((_1.1) != hls_failure::NONE) {
     (phase, data, Directive::FAIL, u1:0, _1.1)
   } else {
     (_5.0, _5.1.1, _5.2, _5.3, _5.4)
   }
 } else {
-  (phase, data, Directive::FAIL, u1:0, XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L497)
+  (phase, data, Directive::FAIL, u1:0, XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L496)
 }
         };
         ReductionDispatch {
@@ -1344,11 +1347,11 @@ fn reduction_dispatch_completion(
     let _9 = (Tag::CELL, _8);
     let Xls_clause_1_Advanced_1 = _9;
     let _10 = (Phase::MEASURING, Xls_clause_1_Advanced_1, Directive::CONSUME, bool:0, );
-    let _11 = (_10.0, _10.1, _10.2, _10.3, hls_failure::check(_10.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L628));
+    let _11 = (_10.0, _10.1, _10.2, _10.3, hls_failure::check(_10.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L627));
     (_11, hls_failure::NONE)
   } else {
     let _1 = (Phase::FLIPPING, Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
-    let _2 = (_1.0, _1.1, _1.2, _1.3, hls_failure::check(_1.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L617));
+    let _2 = (_1.0, _1.1, _1.2, _1.3, hls_failure::check(_1.2 == Directive::FAIL, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L616));
     (_2, hls_failure::NONE)
   };
   if ((_12.1) != hls_failure::NONE) {
@@ -1357,7 +1360,7 @@ fn reduction_dispatch_completion(
     (_12.0.0, _12.0.1.1, _12.0.2, _12.0.3, _12.0.4)
   }
 } else {
-  (phase, data, Directive::FAIL, u1:0, XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L609)
+  (phase, data, Directive::FAIL, u1:0, XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L608)
 }
         };
         ReductionDispatch {
@@ -2232,7 +2235,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
           } else {
             let Xls_clause_2_Cell_1 = (Tag::CELL, data);
             let _0 = (Phase::COMPARING, Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L518);
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L517);
             if (bool:false) {
               (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
@@ -2254,7 +2257,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
           } else {
             let Xls_clause_2_Cell_1 = (Tag::CELL, data);
             let _0 = (Phase::FLIPPING, Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L590);
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L589);
             if (bool:false) {
               (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
@@ -2302,7 +2305,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
           } else {
             let Xls_clause_2_Cell_1 = (Tag::CELL, data);
             let _0 = (Phase::GATHERING, Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L448);
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L447);
             if (bool:false) {
               (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
@@ -2324,7 +2327,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
           } else {
             let Xls_clause_2_Cell_1 = (Tag::CELL, data);
             let _0 = (Phase::COMPARING, Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L526);
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L525);
             if (bool:false) {
               (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
@@ -2372,7 +2375,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
           } else {
             let Xls_clause_2_Cell_1 = (Tag::CELL, data);
             let _0 = (Phase::GATHERING, Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L440);
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L439);
             if (bool:false) {
               (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
@@ -2520,7 +2523,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
           } else {
             let Xls_clause_2_Cell_1 = (Tag::CELL, data);
             let _0 = (Phase::GATHERING, Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L456);
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L455);
             if (bool:false) {
               (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
@@ -2546,7 +2549,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
           } else {
             let Xls_clause_2_Cell_1 = (Tag::CELL, data);
             let _0 = (Phase::COMPARING, Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L534);
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L533);
             if (bool:false) {
               (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
@@ -2572,7 +2575,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
           } else {
             let Xls_clause_2_Cell_1 = (Tag::CELL, data);
             let _0 = (Phase::FLIPPING, Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L637);
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L636);
             if (bool:false) {
               (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
@@ -2639,7 +2642,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
         Phase::GATHERING => {
           let Xls_clause_1_Cell_1 = (Tag::CELL, data);
           let _0 = (Phase::GATHERING, Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
-          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L458);
+          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L457);
           if (bool:false) {
             (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
           } else {
@@ -2649,7 +2652,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
         Phase::COMPARING => {
           let Xls_clause_1_Cell_1 = (Tag::CELL, data);
           let _0 = (Phase::COMPARING, Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
-          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L536);
+          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L535);
           if (bool:false) {
             (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
           } else {
@@ -2659,7 +2662,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
         Phase::FLIPPING => {
           let Xls_clause_1_Cell_1 = (Tag::CELL, data);
           let _0 = (Phase::FLIPPING, Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
-          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L639);
+          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L638);
           if (bool:false) {
             (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
           } else {

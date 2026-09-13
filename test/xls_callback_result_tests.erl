@@ -56,6 +56,16 @@ constructor_origins_survive_aliases_test() ->
     Results = xls_callback_result:results(Clause),
     ?assertMatch([{tuple, 2, _}, {tuple, 3, _}], Results).
 
+fresh_products_capture_fields_before_destructuring_test() ->
+    equivalent("{Phase, {Data, _}} = case stamp(choice, true) of "
+        "true -> {repeat_phase, {stamp(first, 1), stamp(second, 2)}}; "
+        "false -> {active, {0, 0}} end, stamp(after_choice, Data), "
+        "{Phase, Data, consume}"),
+    equivalent("Result = {boot, stamp(data, 1)}, "
+        "{Phase, Data} = Result, Data = stamp(match, 2), {Phase, Data, consume}"),
+    equivalent("{Phase, Data} = {boot, Phase = stamp(match, active)}, "
+        "{Phase, Data, consume}").
+
 structural_rebinding_is_rejected_test() ->
     ?assertException(error, {unsupported_callback_result_binding, _},
         normalize(clause("Result = {ok, boot, 1}, Result = {ok, boot, 2}, Result"))).

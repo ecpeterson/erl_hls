@@ -33,6 +33,20 @@ normalize(Clause = {clause, Line, Patterns, Guards, Body}, Leaf) ->
 body([Last], Bindings, Continue, State) ->
     {Result, Next} = choice(Last, Bindings, Continue, State),
     {[Result], Next};
+body([{match, Line, {tuple, _, _} = Pattern, Expression} = First | Rest],
+        Bindings, Continue, State = #{needed := Needed}) ->
+    case maps:size(maps:with(maps:keys(variables(Pattern)), Needed)) > 0
+            andalso structural(Expression, Bindings)
+            andalso fresh_pattern(Pattern, bound_after(Expression, Bindings)) of
+        true ->
+            {Program, Next} = capture(Expression, Bindings, fun(Value, Evaluated, Acc) ->
+                {Matches, Local} = bind_product(Pattern, Value, Evaluated),
+                {Tail, LastState} = body(Rest, Local, Continue, Acc),
+                {{block, Line, Matches ++ Tail}, LastState}
+            end, State),
+            {[Program], Next};
+        false -> ordinary(First, Rest, Bindings, Continue, State)
+    end;
 body([{match, Line, {var, _, Name}, Expression} = First | Rest],
         Bindings, Continue, State = #{needed := Needed})
         when Name =:= '_'; not is_map_key(Name, Bindings) ->
@@ -58,6 +72,41 @@ ordinary(First, Rest, Bindings, Continue, State0) ->
     Expression = expand(First, Bindings),
     {Tail, State} = body(Rest, bound_after(First, Bindings), Continue, State0),
     {[Expression | Tail], State}.
+
+%% Decompose only fresh product patterns, after every RHS field has evaluated.
+%% Keep ordinary aliases as real bindings so later matches still check equality;
+%% control atoms and nested products remain visible to callback analysis.
+bind_product({var, _, '_'}, _Value, Bindings) -> {[], Bindings};
+bind_product({var, _, Name}, {atom, _, _} = Value, Bindings) ->
+    {[], Bindings#{Name => Value}};
+bind_product({var, _, Name}, {tuple, _, _} = Value, Bindings) ->
+    {[], Bindings#{Name => Value}};
+bind_product({var, Line, Name} = Pattern, Value, Bindings) ->
+    {[{match, Line, Pattern, Value}], Bindings#{Name => ordinary}};
+bind_product({tuple, _, Patterns}, {tuple, _, Values}, Bindings)
+        when length(Patterns) =:= length(Values) ->
+    {Matches, Local} = lists:mapfoldl(fun({Pattern, Value}, Acc) ->
+        bind_product(Pattern, Value, Acc)
+    end, Bindings, lists:zip(Patterns, Values)),
+    {lists:append(Matches), Local};
+bind_product(Pattern, _Value, _Bindings) ->
+    error({unsupported_callback_result_binding, Pattern}).
+
+fresh_pattern(Pattern, Bindings) ->
+    case fresh_names(Pattern, Bindings) of
+        false -> false;
+        _Names -> true
+    end.
+
+fresh_names({var, _, '_'}, Names) -> Names;
+fresh_names({var, _, Name}, Names) when not is_map_key(Name, Names) ->
+    Names#{Name => ordinary};
+fresh_names({tuple, _, Patterns}, Names) ->
+    lists:foldl(fun
+        (_, false) -> false;
+        (Pattern, Acc) -> fresh_names(Pattern, Acc)
+    end, Names, Patterns);
+fresh_names(_, _Names) -> false.
 
 %% Follow result fields/aliases backwards, leaving unrelated product-valued
 %% computations (including refutable matches) to ordinary expression lowering.
