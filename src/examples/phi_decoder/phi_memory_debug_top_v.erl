@@ -26,6 +26,7 @@ to_verilog(Profile) ->
     render("phi_memory_debug_top.template.v", Profile, #{}).
 
 -doc "Renders only the application, ready for topology_debug.py to attach all debug services.".
+-spec application(1 | 2 | {phi_shards, pos_integer()}, map()) -> binary().
 application(Profile, Options) ->
     render("phi_memory_top.template.v", Profile, Options).
 

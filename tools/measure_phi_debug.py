@@ -6,7 +6,7 @@ debug transport, compiler-generated samples and one boundary monitor. LUT RAM
 is included in LUT totals. No placement/routing or power estimate is implied.
 """
 import argparse
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import hashlib
 import json
 from pathlib import Path
@@ -23,6 +23,8 @@ def measure(args):
     build, stage = args.build.resolve(), args.stage.resolve()
     validate(build)
     stage.mkdir(parents=True, exist_ok=True)
+    for name in ("results.json", "summary.json", "failures.json"):
+        (stage / name).unlink(missing_ok=True)
     snapshot = stage / "sources"
     snapshot.mkdir(exist_ok=True)
     # Snapshot once: every seed consumes identical inputs, even during local work.
@@ -66,11 +68,24 @@ def measure(args):
         return row
 
     jobs = [(mode, seed) for seed in range(1, args.seeds+1) for mode in ("production", "all")]
-    rows = []
+    rows, failures = [], []
     with ThreadPoolExecutor(max_workers=args.jobs) as pool:
-        for row in pool.map(run, jobs):
+        pending = {pool.submit(run, job): job for job in jobs}
+        for future in as_completed(pending):
+            try:
+                row = future.result()
+            except subprocess.CalledProcessError as error:
+                failure = {"mode": pending[future][0], "seed": pending[future][1],
+                           "returncode": error.returncode}
+                failures.append(failure)
+                print(json.dumps({"failed": failure}), flush=True)
+                (stage / "failures.json").write_text(json.dumps(failures, indent=2) + "\n")
+                continue
             rows.append(row)
+            rows.sort(key=lambda row: (row["seed"], row["mode"]))
             (stage / "results.json").write_text(json.dumps(rows, indent=2) + "\n")
+    if failures:
+        raise RuntimeError(f"synthesis failed for {failures}; completed measurements are retained")
     summary = {mode: {key: distribution([row[key] for row in rows if row["mode"] == mode])
                      for key in rows[0] if key not in ("mode", "seed")} for mode in ("production", "all")}
     (stage / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
@@ -83,7 +98,7 @@ if __name__ == "__main__":
     parser.add_argument("--stage", type=Path, default=Path("_build/phi-debug/area"))
     parser.add_argument("--yosys", default="yosys")
     parser.add_argument("--seeds", type=int, default=5)
-    parser.add_argument("--jobs", type=int, default=1, help="concurrent full designs; 2 fits a 16 GiB host")
+    parser.add_argument("--jobs", type=int, default=1, help="concurrent full designs; increase only with memory headroom")
     args = parser.parse_args()
     if args.seeds < 1 or args.jobs < 1:
         parser.error("seeds and jobs must be positive")

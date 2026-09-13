@@ -49,6 +49,7 @@ to_dslx(_Distance, _SchedulerProfile) ->
     error(badarg).
 
 -doc "Forwards optional completed-mailbox observations through the gateway.".
+-spec to_dslx(3, 1 | 2 | {phi_shards, pos_integer()}, map()) -> iolist().
 to_dslx(3, SchedulerProfile, Options) ->
     emit(3, phi_noise_topology, phi_memory_gateway, SchedulerProfile, Options).
 

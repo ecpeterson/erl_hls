@@ -67,7 +67,7 @@ Compile the generated wrapper with `hls_debug_route.v`, `hls_debug_frame_rx.v`, 
 python3 tools/build_phi_debug.py "$XLS_ROOT" --stage _build/phi-debug --yosys "$YOSYS"
 python3 tools/test_phi_debug.py _build/phi-debug --stage _build/phi-debug/live
 python3 tools/measure_phi_debug.py _build/phi-debug --stage _build/phi-debug/area \
-  --yosys "$YOSYS" --seeds 5 --jobs 2
+  --yosys "$YOSYS" --seeds 5 --jobs 1
 ```
 
 The build uses the deterministic `phi_memory_demo` workload at distance three, with one shared executor per actor family (six schedulers, 54 actors), mailbox observations enabled, and one monitor on the actual routed host boundary. It retains separately compiled production and observed applications, their DSLX/IR/RTL and build provenance. `debug/debug_top.v` is the composed deployment shell; `debug/instrumented.v` contains its application and passive aliases. The application-only Verilog renderer is `phi_memory_debug_top_v:application(Profile, Options)`; `phi_memory_gateway_dslx:to_dslx/3` forwards the optional observation channels through the gateway. The monitor-only demo renderer shares the same application body.
@@ -76,7 +76,9 @@ The live test holds the application output, queries actor and queue state, follo
 
 The production reference retains normal fail-stop actor execution and its machine-state failure field. The comparison isolates optional observation channels, query snapshots and transport, counters, and trace collection. It does not measure a hypothetical compiler that replaces diagnostic failure codes with a single failed bit.
 
-The measurement maps both complete designs with Yosys `synth_xilinx -abc9 -arch xc7`, excluding I/O pads and clock buffers. It includes compiler-generated observation logic, shared routing, all query resources, and one boundary monitor. Distributed RAM consumes LUTs in the reported totals; BRAM and DSP are separate. The report retains source snapshots, commands, logs, and best/mean/population-variance/worst statistics. These are synthesis area estimates; they do not establish placed timing, power, or the cost of adding further monitored boundaries.
+The measurement maps both complete designs with Yosys `synth_xilinx -abc9 -arch xc7`, excluding I/O pads and clock buffers. It includes compiler-generated observation logic, shared routing, all query resources, and one boundary monitor. Distributed RAM consumes LUTs in the reported totals; BRAM and DSP are separate. The report retains source snapshots, commands, logs, and best/mean/population-variance/worst statistics. Increase `--jobs` only with memory headroom; failed jobs are reported as they complete, and successful measurements remain available. These are synthesis area estimates; they do not establish placed timing, power, or the cost of adding further monitored boundaries.
+
+The [archived D3 measurement](../experiments/07-openxc7/results/phi-memory-debug-2026-09-13.md) includes five-seed area distributions, the public-interface stall diagnosis, and production/instrumented cycle comparison.
 
 ## Shared-actor snapshots
 
