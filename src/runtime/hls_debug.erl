@@ -104,8 +104,8 @@ request(Tag, Payload, Decode, From, State = #state{fabric = Client, module = Mod
     Next = hls_fabric_client:request(Tag, Payload, Context, From, Client),
     {noreply, State#state{fabric = Next}}.
 
-handle_cast({?FABRIC_RX, Route, Header, Payload}, State = #state{fabric = Client}) ->
-    Next = hls_fabric_client:receive_frame(Route, Header, Payload, fun response/3, Client),
+handle_cast({?FABRIC_RX, Receipt, Route, Header, Payload}, State = #state{fabric = Client}) ->
+    Next = hls_fabric_client:receive_frame(Receipt, Route, Header, Payload, fun response/3, Client),
     {noreply, State#state{fabric = Next}}.
 
 response(?DEBUG_ERROR, Payload, {_Expected, _Decode, Module}) ->
@@ -115,9 +115,8 @@ response(Expected, Payload, {Expected, decoded, Module}) ->
     {reply, decode_reply(Expected, Payload, Module)};
 response(_Tag, _Payload, _Context) -> ignore.
 
-handle_info({'DOWN', _, process, _, _} = Down, State = #state{fabric = Client}) ->
-    {noreply, State#state{fabric = hls_fabric_client:down(Down, Client)}};
-handle_info(_Message, State) -> {noreply, State}.
+handle_info(Message, State = #state{fabric = Client}) ->
+    {noreply, State#state{fabric = hls_fabric_client:handle_info(Message, Client)}}.
 
 terminate(_Reason, _State) ->
     %% hls_fabric retires the return route even for exits bypassing terminate/2.

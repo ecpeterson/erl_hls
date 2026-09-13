@@ -19,7 +19,7 @@ cutoff_is_the_activation_boundary_test() ->
             Contract
         ),
         ?assertEqual(
-            {error, inactive},
+            {error, {not_sent, inactive}},
             hls_fabric:send(Fabric, Route, Header, Payload)
         )
     after

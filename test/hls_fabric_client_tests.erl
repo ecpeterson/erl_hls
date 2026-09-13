@@ -30,7 +30,8 @@ saturation(Kind, Client, Fabric) ->
                 %% Neither consumes a call slot, even with all slots occupied.
                 [gen_server:cast(Client, {set, 0, V, 0}) || V <- lists:seq(1, 300)],
                 ?assertMatch(#{pending := Capacity}, hls_fabric:client_info(Client)),
-                Casts = lists:nthtail(length(All), phi_memory_fabric_fixture:sends(Fabric)),
+                AfterCasts = phi_memory_fabric_fixture:await_sends(Fabric, length(All) + 300, 5000),
+                Casts = lists:nthtail(length(All), AfterCasts),
                 ?assertEqual(300, length(Casts)),
                 ?assert(lists:all(fun({_, {_, Tx, _}, _}) -> Tx =:= 255 end, Casts)),
                 deliver(Fabric, 1, 255, <<1:32/little>>),
@@ -51,8 +52,8 @@ reply_validation(Kind, Client, Fabric) ->
     Ignored = maps:get(ignored_replies, hls_fabric:client_info(Client)),
     %% Wrong route, reserved flags, unknown tag, and an unowned ID must not
     %% consume the real request. The broker normally filters wrong routes.
-    gen_server:cast(Client, {'$hls_fabric_frame', {2, 0}, {reply_tag(Kind), Tx, 0}, <<44:32/little>>}),
-    gen_server:cast(Client, {'$hls_fabric_frame', {1, 0}, {reply_tag(Kind), Tx, 1}, <<44:32/little>>}),
+    gen_server:cast(Client, {'$hls_fabric_frame', make_ref(), {2, 0}, {reply_tag(Kind), Tx, 0}, <<44:32/little>>}),
+    gen_server:cast(Client, {'$hls_fabric_frame', make_ref(), {1, 0}, {reply_tag(Kind), Tx, 1}, <<44:32/little>>}),
     deliver(Fabric, 126, Tx, <<44:32/little>>),
     deliver(Fabric, reply_tag(Kind), (Tx + 1) rem capacity(Kind), <<44:32/little>>),
     case Kind of
@@ -151,11 +152,54 @@ broker_dies_during_send_test_() ->
         exit(Fabric, kill),
         [receive {result, Ref, Result} ->
             Ref ! finish,
-            ?assertMatch({error, {transport_down, {send_failed, {killed, _}}}}, Result)
+            ?assertMatch({error, {transport_down, killed}}, Result)
         after 1000 -> error(send_did_not_fail) end || Ref <- [First, Sending]],
         ?assertMatch(#{pending := 0, available := 0, status := {down, _}},
             hls_fabric:client_info(Client))
     end) end} || Kind <- [application, debug]].
+
+not_sent_preserves_other_ownership_test_() ->
+    [{atom_to_list(Kind), fun() -> with_client(Kind, fun(Client, Fabric) ->
+        {First, Frame} = send_one(Kind, Client, Fabric, 1, infinity),
+        phi_memory_fabric_fixture:fail_next_send(Fabric, {not_sent, tx_limit}),
+        ?assertEqual({error, {not_sent, tx_limit}}, call(Kind, Client, 2, 1000)),
+        ?assertMatch(#{status := up, pending := 1, rejected_requests := 1}, hls_fabric:client_info(Client)),
+        {Next, NextFrame} = send_one(Kind, Client, Fabric, 3, infinity),
+        reply(Kind, Fabric, NextFrame),
+        reply(Kind, Fabric, Frame),
+        expect(First, success(Kind, 1)),
+        expect(Next, success(Kind, 3)),
+        ?assertMatch(#{status := up, pending := 0}, hls_fabric:client_info(Client))
+    end) end} || Kind <- [application, debug]].
+
+reply_before_write_completion_test_() ->
+    [{atom_to_list(Kind), fun() -> with_client(Kind, fun(Client, Fabric) ->
+        phi_memory_fabric_fixture:hold_next_send(Fabric),
+        {First, Frame} = send_one(Kind, Client, Fabric, 1, infinity),
+        reply(Kind, Fabric, Frame),
+        expect(First, success(Kind, 1)),
+        ?assertMatch(#{status := up, pending := 0, transmitting := 1}, hls_fabric:client_info(Client)),
+        {Next, NextFrame} = send_one(Kind, Client, Fabric, 2, infinity),
+        phi_memory_fabric_fixture:release_sends(Fabric),
+        reply(Kind, Fabric, NextFrame),
+        expect(Next, success(Kind, 2)),
+        ?assertMatch(#{status := up, pending := 0, transmitting := 0}, synced_info(Client, Fabric))
+    end) end} || Kind <- [application, debug]].
+
+cast_overload_is_observable_test() ->
+    with_client(application, fun(Client, Fabric) ->
+        phi_memory_fabric_fixture:hold_sends(Fabric),
+        {First, _} = send_one(application, Client, Fabric, 1, infinity),
+        #{transmit_capacity := Capacity} = hls_fabric:client_info(Client),
+        [gen_server:cast(Client, {set, 0, I, 0}) || I <- lists:seq(1, Capacity)],
+        expect(First, {error, {transport_down, {cast_not_sent, tx_limit}}}),
+        ?assertMatch(#{status := {down, {cast_not_sent, tx_limit}}, pending := 0, transmitting := 0},
+            hls_fabric:client_info(Client)),
+        ?assertEqual(Capacity, length(phi_memory_fabric_fixture:await_sends(Fabric, Capacity, 1000))),
+        gen_server:cast(Client, {set, 0, 999, 0}),
+        ?assertMatch(#{status := {down, _}}, hls_fabric:client_info(Client)),
+        ?assertEqual(Capacity, length(phi_memory_fabric_fixture:sends(Fabric)))
+    end).
 
 cpu_info_test() ->
     {ok, Client} = regsvc:start_link(),

@@ -22,7 +22,7 @@ retired_route_test() ->
         ok = file:write(Read, [frame(Route, {129, 0, 0}, <<1:32/little>>),
             frame({8, 0}, {129, 0, 0}, <<2:32/little>>)]),
         receive {'$gen_cast', Message} ->
-            ?assertEqual({'$hls_fabric_frame', {8, 0}, {129, 0, 0}, <<2:32/little>>}, Message)
+            ?assertMatch({'$hls_fabric_frame', _, {8, 0}, {129, 0, 0}, <<2:32/little>>}, Message)
         after 1000 -> error(no_frame) end
     end).
 
@@ -32,11 +32,11 @@ frame_io_test() ->
         Payload = <<0:8160>>, % maximum 255-word frame
         ok = hls_fabric:send(Fabric, {0, 5}, {127, 255, 0}, Payload),
         ?assertEqual({ok, frame({0, 5}, {127, 255, 0}, Payload)}, file:read_file(WritePath)),
-        ?assertEqual({error, {unaligned_payload, 1}},
+        ?assertEqual({error, {not_sent, {unaligned_payload, 1}}},
             hls_fabric:send(Fabric, {0, 5}, {1, 0, 0}, <<1>>)),
         ok = file:write(Read, frame({5, 0}, {255, 255, 0}, <<1:32/little>>)),
         receive {'$gen_cast', Message} ->
-            ?assertEqual({'$hls_fabric_frame', {5, 0}, {255, 255, 0}, <<1:32/little>>}, Message)
+            ?assertMatch({'$hls_fabric_frame', _, {5, 0}, {255, 255, 0}, <<1:32/little>>}, Message)
         after 1000 -> error(no_frame) end
     end).
 

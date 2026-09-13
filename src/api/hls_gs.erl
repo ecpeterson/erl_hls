@@ -113,10 +113,10 @@ handle_cast(
     {noreply, NewState} = Module:handle_cast(Message, State),
     {noreply, GS#state{state = NewState}};
 handle_cast(
-    {?FABRIC_RX, Route, Header, Payload},
+    {?FABRIC_RX, Receipt, Route, Header, Payload},
     GS = #state{fabric = Client}
 ) ->
-    Next = hls_fabric_client:receive_frame(Route, Header, Payload, fun decode_reply/3, Client),
+    Next = hls_fabric_client:receive_frame(Receipt, Route, Header, Payload, fun decode_reply/3, Client),
     {noreply, GS#state{fabric = Next}};
 handle_cast(Message, GS = #state{module = Module, fabric = Client}) ->
     Tag = Module:pack_tag(element(1, Message)),
@@ -124,9 +124,9 @@ handle_cast(Message, GS = #state{module = Module, fabric = Client}) ->
     Next = hls_fabric_client:cast(Tag, ?CAST_TX_ID, Payload, Client),
     {noreply, GS#state{fabric = Next}}.
 
-handle_info({'DOWN', _, process, _, _} = Down, GS = #state{fabric = Client})
+handle_info(Message, GS = #state{fabric = Client})
         when Client =/= none ->
-    {noreply, GS#state{fabric = hls_fabric_client:down(Down, Client)}};
+    {noreply, GS#state{fabric = hls_fabric_client:handle_info(Message, Client)}};
 handle_info(_Message, GS) -> {noreply, GS}.
 
 decode_reply(TagID, Payload, Module) ->

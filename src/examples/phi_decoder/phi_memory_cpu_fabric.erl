@@ -108,22 +108,24 @@ handle_call(
         {false, _} ->
             {reply, {error, {invalid_route, Route}}, State}
     end;
-handle_call(
-    {send, Route, Header, Payload},
-    _From,
-    State = #state{boundary = Boundary}
-) ->
+handle_call({send, Route, Header, Payload, Deadline}, _From, State) ->
+    case Deadline =/= infinity andalso Deadline =< erlang:monotonic_time(millisecond) of
+        true -> {reply, {error, {not_sent, timeout}}, State};
+        false -> send_command(Route, Header, Payload, State)
+    end;
+handle_call(Request, _From, State) ->
+    {reply, {error, {invalid_request, Request}}, State}.
+
+send_command(Route, Header, Payload, State = #state{boundary = Boundary}) ->
     case phi_memory_wire:decode_command(Route, Header, Payload, Boundary) of
         {ok, Command} ->
             case dispatch_command(Command, State) of
                 {ok, NextState} -> {reply, ok, NextState};
-                {error, Reason} -> {reply, {error, Reason}, State}
+                {error, Reason} -> {reply, {error, {not_sent, Reason}}, State}
             end;
-        {error, _Reason} = Error ->
-            {reply, Error, State}
-    end;
-handle_call(Request, _From, State) ->
-    {reply, {error, {invalid_request, Request}}, State}.
+        {error, Reason} ->
+            {reply, {error, {not_sent, Reason}}, State}
+    end.
 
 handle_cast(_Message, State) ->
     {noreply, State}.
@@ -138,7 +140,7 @@ handle_info(
                 #{Route := #route_owner{pid = Owner}} ->
                     gen_server:cast(
                         Owner,
-                        {?FABRIC_RX, Route, Header, Payload}
+                        {?FABRIC_RX, make_ref(), Route, Header, Payload}
                     );
                 _ ->
                     ok
