@@ -24,7 +24,7 @@ A direct service starts from the checked state. A shared scheduler first writes 
 
 Startup messages supply per-instance configuration after this common initializer. A topology target with startup messages must have an initial phase entry that emits no effects. Shared schedulers buffer their configured startup prefix before normal scheduling; those frames still pass through the actor's ordinary callbacks after initial entry. The initializer must therefore produce a usable initial phase and data independently of startup traffic.
 
-The CPU adapters invoke the source `init/1` with the argument passed to `start_link`. CPU-only use can retain argument forms outside the hardware subset. A hardware-backed `hls_gs` proxy requires `[]` and rejects any other argument before registering its fabric route. Starting or restarting a proxy attaches to the existing hardware state; it does not run a remote initializer or reset the device.
+The CPU adapters invoke the source `init/1` with the argument passed to `start_link`. CPU-only use can retain argument forms outside the hardware subset. A hardware-backed `hls_gs` proxy requires `[]` and rejects any other argument before registering its fabric route. Starting a proxy attaches to the existing hardware state; it does not run a remote initializer or reset the device. A return route is retired when its proxy exits, so attaching a successor requires a new, clean fabric session; see [host transaction ownership](host-transactions.md).
 
 ## Reset
 

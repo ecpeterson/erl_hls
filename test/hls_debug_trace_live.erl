@@ -39,17 +39,15 @@ run(Fabric, Stage) ->
         ExpectedFull = events(Full),
         phase(Stage, 7),
         [{application_rx, 16#82, true}] = events(trace(Boundary, Stage, 7)),
-        ok
-    after hls_debug:stop(Client) end,
-    % Reset is explicit and quiescent. Replace the debug client; the idle
-    % byte transport remains open with no outstanding physical transfers.
-    phase(Stage, 8),
-    {ok, NextClient} = hls_debug:start_link(undefined, {fabric, Fabric, 1}),
-    try
-        Fresh = trace({boundary, NextClient, injected_streams}, Stage, 8),
+        %% The fixture proves quiescence before reset: every debug operation
+        %% and physical transfer has completed. Keep the idle client/transport;
+        %% stopping the client would retire its route in this broker session.
+        #{status := up, pending := 0} = hls_fabric:client_info(Client),
+        phase(Stage, 8),
+        Fresh = trace(Boundary, Stage, 8),
         0 = maps:get(observation_drops, Fresh),
         [{application_rx, 16#90, false}, {application_tx, 16#90, false}] = events(Fresh)
-    after hls_debug:stop(NextClient) end,
+    after hls_debug:stop(Client) end,
     file:write_file(filename:join(Stage, "phase_9"), <<>>),
     io:format("PASS: routed headers, loss detection, per-stream resynchronization, overflow and reset diagnosed through hls_debug~n"),
     ok.

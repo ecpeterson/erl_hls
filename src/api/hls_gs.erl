@@ -17,10 +17,14 @@ reset use that value. A fabric proxy accepts only `[]` as its initializer
 argument and does not reset the device when it starts. CPU adapters still pass
 their argument to the callback. See `docs/initialization.md` for the shared
 initialization and reset contract.
+
+Fabric calls have 255 transaction slots; casts use a reserved ID. Timeouts do
+not cancel device work. See `docs/host-transactions.md` for ownership, failure,
+inspection, and session recovery.
 """.
 
 -export([start_link/2, start_link/3, stop/1]).
--export([init/1, handle_call/3, handle_cast/2, terminate/2, code_change/3]).
+-export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 -export([generic_unpack/2]).
 -behavior(gen_server).
 
@@ -41,13 +45,7 @@ initialization and reset contract.
 
 -record(state, {
     module :: module(),
-    fabric = none :: none | {
-        Broker :: pid(),
-        LocalEndpoint :: 0..65535,
-        PeerEndpoint :: 0..65535
-    },
-    pending = #{} :: #{0..255 => gen_server:from()},
-    tx_id = 0 :: 0..255,
+    fabric = none :: none | hls_fabric_client:state(),
     state :: state()
 }).
 
@@ -75,31 +73,26 @@ stop(PID) ->
 -define(ERROR_IF_CLAUSE, 5).
 -define(ERROR_BADARITH, 13).
 
--record(header, {
-    tag :: 0..255,
-    tx_id :: 0..255,
-    flags = 0 :: 0..255
-    % implicit payload length
-}).
+%% Failed casts can emit ERROR replies. Never lend their ID to a call.
+-define(CAST_TX_ID, 255).
 
 init({Module, Arg, Options}) ->
     case {transport(Options), Arg} of
         {cpu, _} ->
             {ok, #state{state = Module:init(Arg), module = Module}};
         {{fabric, Broker, LocalEndpoint, PeerEndpoint}, []} ->
-            ok = hls_fabric:register_route(
-                Broker,
-                {PeerEndpoint, LocalEndpoint},
-                self()
-            ),
-            {ok, #state{
-                module = Module,
-                fabric = {Broker, LocalEndpoint, PeerEndpoint}
-            }};
+            case hls_fabric_client:new(Broker, LocalEndpoint, PeerEndpoint, ?CAST_TX_ID) of
+                {ok, Client} -> {ok, #state{module = Module, fabric = Client}};
+                {error, Reason} -> {stop, Reason}
+            end;
         {{fabric, _Broker, _LocalEndpoint, _PeerEndpoint}, _} ->
             {stop, {unsupported_hls_init_argument, Arg}}
     end.
 
+handle_call('$hls_fabric_info', _From, GS = #state{fabric = none}) ->
+    {reply, none, GS};
+handle_call('$hls_fabric_info', _From, GS = #state{fabric = Client}) ->
+    {reply, hls_fabric_client:info(Client), GS};
 handle_call(
     Message,
     _From,
@@ -107,15 +100,11 @@ handle_call(
 ) ->
     {reply, Reply, NewState} = Module:handle_call(Message, State),
     {reply, Reply, GS#state{state = NewState}};
-handle_call(Message, From, GS = #state{module = Module}) ->
-    Tag = element(1, Message),
-    Header = #header{tag = Module:pack_tag(Tag), tx_id = GS#state.tx_id},
+handle_call(Message, From, GS = #state{module = Module, fabric = Client}) ->
+    Tag = Module:pack_tag(element(1, Message)),
     Payload = Module:pack(Message),
-    ok = transmit(GS, Header, Payload),
-    {noreply, GS#state{
-        tx_id = (GS#state.tx_id + 1) rem 256,
-        pending = (GS#state.pending)#{GS#state.tx_id => From}
-    }}.
+    Next = hls_fabric_client:request(Tag, Payload, Module, From, Client),
+    {noreply, GS#state{fabric = Next}}.
 
 handle_cast(
     Message,
@@ -124,30 +113,35 @@ handle_cast(
     {noreply, NewState} = Module:handle_cast(Message, State),
     {noreply, GS#state{state = NewState}};
 handle_cast(
-    {?FABRIC_RX, _Route, {Tag, TxID, Flags}, Payload},
-    GS = #state{module = Module, fabric = {_Broker, _Local, _Peer}}
+    {?FABRIC_RX, Route, Header, Payload},
+    GS = #state{fabric = Client}
 ) ->
-    Header = #header{tag = Tag, tx_id = TxID, flags = Flags},
-    handle_reply(Header, Payload, Module, GS);
-handle_cast(Message, GS = #state{module = Module}) ->
-    Tag = element(1, Message),
-    Header = #header{tag = Module:pack_tag(Tag), tx_id = GS#state.tx_id},
+    Next = hls_fabric_client:receive_frame(Route, Header, Payload, fun decode_reply/3, Client),
+    {noreply, GS#state{fabric = Next}};
+handle_cast(Message, GS = #state{module = Module, fabric = Client}) ->
+    Tag = Module:pack_tag(element(1, Message)),
     Payload = Module:pack(Message),
-    ok = transmit(GS, Header, Payload),
-    {noreply, GS#state{
-        tx_id = (GS#state.tx_id + 1) rem 256
-    }}.
+    Next = hls_fabric_client:cast(Tag, ?CAST_TX_ID, Payload, Client),
+    {noreply, GS#state{fabric = Next}}.
 
-handle_reply(Header, Payload, Module, GS) ->
-    {From, NewPending} = maps:take(Header#header.tx_id, GS#state.pending),
-    Tag = Module:unpack_tag(Header#header.tag),
-    {Reply, << >>} = unpack_reply(Module, Tag, Payload),
-    gen_server:reply(From, Reply),
-    {noreply, GS#state{pending = NewPending}}.
+handle_info({'DOWN', _, process, _, _} = Down, GS = #state{fabric = Client})
+        when Client =/= none ->
+    {noreply, GS#state{fabric = hls_fabric_client:down(Down, Client)}};
+handle_info(_Message, GS) -> {noreply, GS}.
+
+decode_reply(TagID, Payload, Module) ->
+    %% hls_gs permits any declared record; there is no per-request reply
+    %% schema. Unknown tags and invalid payloads cannot retire a transaction.
+    try
+        Tag = Module:unpack_tag(TagID),
+        {Reply, <<>>} = unpack_reply(Module, Tag, Payload),
+        {reply, Reply}
+    catch
+        error:_ -> ignore
+    end.
 
 terminate(_Reason, _State) ->
-    %% hls_fabric monitors each registered owner and removes its return route
-    %% on every kind of exit, including exits which do not run terminate/2.
+    %% hls_fabric retires the return route even for exits bypassing terminate/2.
     ok.
 
 code_change(_OldVsn, GS, _Extra) ->
@@ -156,18 +150,6 @@ code_change(_OldVsn, GS, _Extra) ->
 %%%
 %%% Helper
 %%%
-
-transmit(
-    #state{fabric = {Broker, LocalEndpoint, PeerEndpoint}},
-    Header,
-    Payload
-) ->
-    hls_fabric:send(
-        Broker,
-        {LocalEndpoint, PeerEndpoint},
-        {Header#header.tag, Header#header.tx_id, Header#header.flags},
-        Payload
-    ).
 
 transport(Options) ->
     case lists:keyfind(fabric, 1, Options) of

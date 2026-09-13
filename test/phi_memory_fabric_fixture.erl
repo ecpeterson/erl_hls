@@ -8,6 +8,9 @@
     route_owners/1,
     sends/1,
     await_sends/3,
+    fail_next_send/2,
+    hold_next_send/1,
+    client_info/2,
     deliver/4
 ]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2]).
@@ -34,6 +37,11 @@ sends(Pid) ->
 await_sends(Pid, Count, Timeout) ->
     gen_server:call(Pid, {await_sends, Count}, Timeout).
 
+fail_next_send(Pid, Reason) -> gen_server:call(Pid, {fail_next_send, Reason}).
+hold_next_send(Pid) -> gen_server:call(Pid, hold_next_send).
+
+client_info(Pid, Route) -> gen_server:call(Pid, {client_info, Route}).
+
 -doc "Delivers one routed frame to its registered owner.".
 -spec deliver(pid(), tuple(), tuple(), binary()) -> ok | {error, route}.
 deliver(Pid, Route, Header, Payload) ->
@@ -56,6 +64,21 @@ handle_call(
             {reply, ok, State#{routes := Routes#{Route => Owner}}}
     end;
 handle_call(
+    {send, _Route, _Header, _Payload},
+    _From,
+    State = #{send_error := Reason}
+) ->
+    {reply, {error, Reason}, maps:remove(send_error, State)};
+handle_call({fail_next_send, Reason}, _From, State) ->
+    {reply, ok, State#{send_error => Reason}};
+handle_call(hold_next_send, _From, State) ->
+    {reply, ok, State#{hold_send => true}};
+handle_call({send, Route, Header, Payload}, _From,
+        State = #{sends := Sends, waiters := Waiters, hold_send := true}) ->
+    UpdatedSends = [{Route, Header, Payload} | Sends],
+    RemainingWaiters = reply_waiters(UpdatedSends, Waiters),
+    {noreply, maps:remove(hold_send, State#{sends := UpdatedSends, waiters := RemainingWaiters})};
+handle_call(
     {send, Route, Header, Payload},
     _From,
     State = #{sends := Sends, waiters := Waiters}
@@ -65,6 +88,8 @@ handle_call(
     {reply, ok, State#{sends := UpdatedSends, waiters := RemainingWaiters}};
 handle_call(route_owners, _From, State = #{routes := Routes}) ->
     {reply, Routes, State};
+handle_call({client_info, Route}, _From, State = #{routes := Routes}) ->
+    {reply, hls_fabric:client_info(maps:get(Route, Routes)), State};
 handle_call(sends, _From, State = #{sends := Sends}) ->
     {reply, lists:reverse(Sends), State};
 handle_call(

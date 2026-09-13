@@ -82,7 +82,8 @@ simulated_rtl_test_() ->
                         debug_scenario_(PidOne, DebugPidOne) ++
                         routed_pair_scenario_(PidOne, PidTwo) ++
                         routed_debug_scenario_(DebugPidTwo) ++
-                        rtl_error_scenario_(PidOne)
+                        rtl_error_scenario_(PidOne) ++
+                        transaction_scenario_(PidOne, DebugPidOne)
                 end}
     end.
 
@@ -96,6 +97,40 @@ target_test_(Start, Scenario) ->
             regsvc:stop(Pid)
         end,
         fun(Pid) -> Scenario(Pid) end}.
+
+transaction_scenario_(Pid, DebugPid) ->
+    [{timeout, 60, ?_test(begin
+        {ok, _} = hls_debug:get_trace(DebugPid),
+        %% Cross the application ID space twice through the real frame bridge.
+        %% Asynchronous requests let one caller own many distinct reply slots;
+        %% interleaved casts must not steal any of them.
+        lists:foreach(fun(Round) ->
+            Requests = [begin
+                Value = Round * 1000 + I,
+                Request = gen_server:send_request(Pid, {ping, Value}),
+                ok = regsvc:set(Pid, 0, I, 0),
+                {Value, Request}
+            end || I <- lists:seq(1, 200)],
+            [?assertEqual({reply, {ack, Value}}, gen_server:wait_response(Request, 30000))
+                || {Value, Request} <- Requests]
+        end, lists:seq(1, 3)),
+        %% A cast rejected by RTL has an error reply, isolated on ID 255.
+        Ignored = maps:get(ignored_replies, hls_fabric:client_info(Pid)),
+        ok = regsvc:set(Pid, 16, 0, 1),
+        ?assertEqual(123, regsvc:ping(Pid, 123)),
+        ?assertMatch(#{status := up, pending := 0, available := 255},
+            hls_fabric:client_info(Pid)),
+        ?assertEqual(Ignored + 1, maps:get(ignored_replies, hls_fabric:client_info(Pid))),
+        DebugRequests = [gen_server:send_request(DebugPid, get_counters) || _ <- lists:seq(1, 32)],
+        [?assertMatch({reply, {ok, #{version := 5, observation_drops := 0}}},
+            gen_server:wait_response(Request, 30000)) || Request <- DebugRequests],
+        {ok, Trace} = hls_debug:get_trace(DebugPid),
+        ?assert(lists:any(fun(#{kind := Kind, tx_id := Tx}) ->
+            Kind =:= application_rx andalso Tx =:= 255
+        end, maps:get(events, Trace))),
+        ?assertMatch(#{status := up, pending := 0, available := 256},
+            hls_fabric:client_info(DebugPid))
+    end)}].
 
 scenario_(Pid) ->
     [
@@ -135,15 +170,15 @@ debug_scenario_(Pid, DebugPid) ->
             ?assertEqual([
                 {application_rx, 0, 5},
                 {application_tx, 0, 7},
-                {application_rx, 1, 3},
+                {application_rx, 255, 3},
+                {application_rx, 1, 4},
+                {application_tx, 1, 8},
+                {application_rx, 255, 3},
                 {application_rx, 2, 4},
                 {application_tx, 2, 8},
-                {application_rx, 3, 3},
-                {application_rx, 4, 4},
-                {application_tx, 4, 8},
-                {application_rx, 5, 3},
-                {application_rx, 6, 6},
-                {application_tx, 6, 9}
+                {application_rx, 255, 3},
+                {application_rx, 3, 6},
+                {application_tx, 3, 9}
             ], [
                 {
                     maps:get(kind, Event),
@@ -188,7 +223,7 @@ debug_scenario_(Pid, DebugPid) ->
                         {application_tx, TxID, 7}
                     ]
                 end,
-                lists:seq(7, 38)
+                lists:seq(4, 35)
             ), [
                 {
                     maps:get(kind, Event),
