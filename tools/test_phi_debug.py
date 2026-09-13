@@ -14,9 +14,7 @@ import subprocess
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
-SUPPORT = [ROOT / "priv/rtl/debug" / name for name in (
-    "hls_debug_frame_rx.v", "hls_debug_route.v", "hls_topology_debug.v", "hls_actor_snapshot.v",
-    "hls_debug_monitor.v", "hls_debug_tap.v", "hls_trace_store.v")]
+from topology_debug_services import rtl_files
 
 
 def run(build, stage):
@@ -25,6 +23,7 @@ def run(build, stage):
                  "application_complete", "app_tx", "app_rx", "debug_tx", "debug_rx"):
         (stage / name).unlink(missing_ok=True)
     shutil.copy(build / "debug/manifest.json", stage)
+    shutil.copy(build / "fixture.json", stage)
     for name in ("xls_sim_bridge.c", "xls_sim_axis.h"):
         shutil.copy(ROOT / "test/rtl" / name, stage)
     # Alias-only instrumentation must not alter the observed application's cells.
@@ -39,7 +38,7 @@ def run(build, stage):
                build / "debug/instrumented.v", build / "production/phi_memory_top.v",
                build / "production/phi_memory_gateway.v", build / "production/hls_1r1w_ram.v",
                *[build / "support" / f"{name}.v" for name in (
-                   "hls_fabric_router", "hls_debug_observer", "hls_debug_server")], *SUPPORT]
+                   "hls_fabric_router", "hls_debug_observer", "hls_debug_server")], *rtl_files(monitor=True)]
     with (stage / "compile.log").open("w") as log:
         for command in (["iverilog-vpi", "xls_sim_bridge.c"],
                         ["iverilog", "-g2012", "-s", "hls_phi_debug_live_tb", "-o", "test.vvp", *map(str, sources)]):

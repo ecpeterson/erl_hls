@@ -47,8 +47,8 @@ def build(args):
         out.mkdir(parents=True, exist_ok=True)
         subprocess.run(["erl", "-noshell", "-pa", str(ROOT / "_build/test/lib/erl_hls/ebin"),
                         str(ROOT / "_build/test/lib/erl_hls/test"), "-eval",
-                        '[Dir, Flag] = init:get_plain_arguments(), ok = hls_phi_debug_dslx:write(Dir, Flag =:= "true"), halt().',
-                        "-extra", str(out), str(mode == "observed").lower()], cwd=ROOT, check=True)
+                        '[Dir, Flag, Shards] = init:get_plain_arguments(), ok = hls_phi_debug_dslx:write(Dir, Flag =:= "true", list_to_integer(Shards)), halt().',
+                        "-extra", str(out), str(mode == "observed").lower(), str(args.shards)], cwd=ROOT, check=True)
         for source in [*ROOT.glob("priv/xls/lib/*.x"), *ROOT.glob("priv/xls/fabric/*.x"),
                        ROOT / "src/examples/phi_decoder/phi_field.x", ROOT / "priv/rtl/hls_1r1w_ram.v"]:
             shutil.copy(source, out)
@@ -57,6 +57,7 @@ def build(args):
                                         "phi-ram-config", str(banks)], cwd=ROOT, text=True).strip()
         print(f"Building {mode}: {banks} scheduler banks", flush=True)
         compile_dslx(xls, out, "phi_memory_gateway", "Top", 2, rams=rams)
+    (stage / "fixture.json").write_text(json.dumps({"shards": args.shards}) + "\n")
     support = stage / "support"
     support.mkdir(exist_ok=True)
     for source in [*ROOT.glob("priv/xls/debug/*.x"), *ROOT.glob("priv/xls/fabric/*.x"), *ROOT.glob("priv/xls/lib/*.x")]:
@@ -79,4 +80,6 @@ if __name__ == "__main__":
     parser.add_argument("xls", type=Path)
     parser.add_argument("--stage", type=Path, default=Path("_build/phi-debug"))
     parser.add_argument("--yosys", default="yosys")
+    parser.add_argument("--shards", type=int, choices=range(1, 10), default=1,
+                        help="executors per phi plane; the standard D3 deployment uses one")
     build(parser.parse_args())

@@ -15,7 +15,7 @@ import subprocess
 
 from measure_topology_debug import cell_counts, distribution
 from topology_debug import quote, yosys_run
-from test_phi_debug import SUPPORT
+from topology_debug_services import rtl_files
 
 
 def measure(args):
@@ -24,8 +24,9 @@ def measure(args):
     snapshot = stage / "sources"
     snapshot.mkdir(exist_ok=True)
     # Snapshot once: every seed consumes identical inputs, even during local work.
+    support = rtl_files(monitor=True)
     files = [build / "debug/instrumented.json", build / "debug/debug_top.v",
-             build / "debug/manifest.json", *SUPPORT,
+             build / "debug/manifest.json", *support,
              *[build / "production" / name for name in ("phi_memory_top.v", "phi_memory_gateway.v", "hls_1r1w_ram.v")],
              *[build / "support" / f"{name}.v" for name in ("hls_fabric_router", "hls_debug_observer", "hls_debug_server")]]
     for source in files:
@@ -48,7 +49,7 @@ def measure(args):
             top = "phi_memory_top"
         else:
             script = f"read_json {quote(snapshot / 'instrumented.json')}\n"
-            services = [snapshot / "debug_top.v", *[snapshot / p.name for p in SUPPORT],
+            services = [snapshot / "debug_top.v", *[snapshot / p.name for p in support],
                         snapshot / "hls_debug_observer.v", snapshot / "hls_debug_server.v"]
             script += "read_verilog -sv " + " ".join(map(quote, services)) + "\n"
             top = "hls_debug_application"

@@ -1,5 +1,14 @@
 """Compose passive observation services behind one routed debug transport."""
 import re
+from pathlib import Path
+
+
+def rtl_files(monitor=False):
+    root = Path(__file__).resolve().parents[1] / "priv/rtl/debug"
+    names = ["hls_debug_frame_rx.v", "hls_debug_route.v", "hls_topology_debug.v", "hls_actor_snapshot.v"]
+    if monitor:
+        names += ["hls_debug_monitor.v", "hls_debug_tap.v", "hls_trace_store.v"]
+    return [root / name for name in names]
 
 
 def boundary(ports, rx, tx, routed):
