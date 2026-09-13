@@ -61,7 +61,7 @@ Packing an invalid integer, malformed collection, or overflowing float raises `b
 
 ## Finite floats and exceptional encodings
 
-Binary16 encoding rounds directly from binary64 bits, and decoding reconstructs the exact binary64 value. This small wire codec avoids OTP 28.0.2's fallback conversion defects, which the Linux CI exposed: decoding and repacking the subnormal pattern `0x0002` produced `0x0001`, and a binary64 value just above a binary16 rounding tie could round down. The native half-float path on Apple Silicon passed those same tests. Binary32/binary64 continue to use the VM codecs. No arithmetic emulator or alternative live-value representation is introduced.
+Binary16 encoding rounds directly from binary64 bits, and decoding reconstructs the exact binary64 value. This small wire codec avoids OTP 28.0.2's fallback conversion defects, which the Linux CI exposed: decoding and repacking the subnormal pattern `0x0002` produced `0x0001`, and a binary64 value just above a binary16 rounding tie could round down. The native half-float path on Apple Silicon passed those same tests. Binary32/binary64 continue to use the VM codecs. The wire codec is independent of the explicit arithmetic operations below; both use ordinary BEAM floats as live values.
 
 [ERTS uses binary64 live floats and does not support live infinity or NaN](https://www.erlang.org/docs/28/system/data_types.html#float). Its bit syntax can nevertheless produce narrow infinity when a finite input overflows: encoding `65520.0` as binary16 produces the infinity pattern. The codecs reject that result so a successful pack is always decodable.
 
@@ -77,11 +77,33 @@ Floating-point rounding also depends on its schedule. Binary64 evaluation of `(1
 
 XLS's [floating-point add/subtract and multiply](https://google.github.io/xls/floating_point/#apfloataddsub) also flush subnormal inputs and outputs to zero and do not report exception flags. That differs from the finite subnormal encodings supported by our codecs. Selecting `float64` does not by itself eliminate this difference. Nor is evaluating every operation in binary64 and then narrowing a universal exact emulator: double rounding and operations such as fused multiply-add need their own treatment.
 
-The generic Erlang-to-DSLX compiler does not yet provide complete floating-point expression lowering: it lacks qualified float type emission and typed dispatch to XLS's arithmetic library. Host codecs and normalization are useful independently, and the handwritten FMAC experiment already calls that library directly. This PR's float reference tests exercise the XLS library explicitly; they are not evidence that an arbitrary float-bearing Erlang actor can be translated.
+## Explicit floating-point operations
+
+`hls_float` provides `add/3`, `sub/3`, `mul/3`, `eq/3`, and `lt/3`. Their first argument selects `hls_nums:float16()`, `float32()`, or `float64()`. The remaining arguments and the result are ordinary BEAM floats (Booleans for comparisons). Each call is a precision boundary:
+
+```erlang
+Sum = hls_float:add(hls_nums:float32(), X,
+    hls_float:literal(hls_nums:float32(), 1.0)),
+Delta = hls_float:sub(hls_nums:float32(), Sum, X).
+```
+
+For `X = 16777216.0`, `Delta` is positive zero on both targets. Multiplication followed by addition is two separately rounded operations; it is never implicitly fused.
+
+The CPU implementation first normalizes operands to the declared format using its codec, then flushes subnormal operands to zero with their sign preserved. It computes addition, subtraction, and multiplication using exact integer significands and binary exponents, rounds once to nearest with ties to even, and flushes subnormal results to signed zero. Rounding can promote a value immediately below the minimum normal to that normal. The exact intermediate avoids binary64 double rounding and retains all 106 significand bits of a binary64 product before rounding.
+
+The XLS implementation calls the corresponding `apfloat` operations with explicit exponent and fraction widths. Float fields and helper signatures use qualified `apfloat::APFloat` structs. Record and nested list/vector codecs flatten and reconstruct these structs without changing their bit patterns, including signed zeros and subnormals. Ordinary integer-only providers retain their direct bit casts and do not import the floating-point library.
+
+`hls_float:literal(T, Number)` supplies a typed compile-time constant in translated code and codec normalization on BEAM. It preserves finite subnormals; flushing happens when an arithmetic operation consumes the value. Its value argument must be a literal in translated code. Runtime format conversion is not implemented: an XLS variable passed to an operation must already have that operation's precision. XLS rejects a mismatched float format or an integer passed in its place. Bare float literals must be given a type with `literal/2`; ordinary `+`, `-`, and `*` do not implement floating-point arithmetic on XLS structs.
+
+`eq/3` and `lt/3` compare the normalized, flushed values numerically. In particular, positive and negative zero compare equal, and neither is less than the other. This differs from Erlang's strict `=:=`, which distinguishes their signs in OTP 27 and later. Use these explicit comparisons when controlling an actor from a numerical result.
+
+Overflow raises `badarith` on BEAM. In hardware, a nonfinite operand or result produces a source-located `badarith` failure code. The compiler propagates that failure through helpers and selected branches with the same first-failure rule as other expressions; an unselected operation cannot fail the callback. Failure payloads are placeholders. Existing actor failure policy applies: a GS service returns a typed error reply and clears its state, while state-machine schedulers retain their existing failure handling. A wire pass-through or storage operation does not validate arbitrary nonfinite bit patterns; those remain outside the host codec contract.
+
+There is no floating-point division, fused multiply-add, implicit mixed-format conversion, or general float operator inference. These need separate arithmetic policies and agreement tests. The explicit operations provide exact agreement at the declared rounding points; they do not establish an error bound for an approximate algorithm.
 
 ## Extending arithmetic support
 
-The intended bridge keeps ordinary ERTS values while declaring the places where precision changes. The compiler can later infer necessary conversions and eliminate redundant ones. Modular polynomial regions can often defer normalization; division and comparisons need attention to the particular widths. Fixed-point multiplication must account for the combined fractional scale, and `hls_vec:dot/3` requires a sufficiently wide accumulator before any subsequent wrapping or saturation.
+Explicit operations keep ordinary ERTS values while declaring the places where precision changes. The compiler can later infer necessary conversions and eliminate redundant ones. Modular polynomial regions can often defer normalization; division and comparisons need attention to the particular widths. Fixed-point multiplication must account for the combined fractional scale, and `hls_vec:dot/3` requires a sufficiently wide accumulator before any subsequent wrapping or saturation.
 
 An exact execution reference should evaluate typed operations with their declared intermediate widths and float policies, using the XLS interpreter/JIT where practical. Ordinary ERTS execution remains useful for algorithm development. Approximate numerical kernels can instead declare error tolerances over specified inputs and an explicit rounding schedule. Actor control, routing, and protocol observations still require exact agreement. A tolerance on one arithmetic operation is not automatically a bound on a complete computation.
 
@@ -91,3 +113,4 @@ An exact execution reference should evaluate typed operations with their declare
 - Float tests cover rounding ties and adjacent values, both overflow signs, finite rounding at the overflow threshold, subnormals, signed underflow, numeric coercion, recursive normalization, and exact-packing rejection.
 - Integer/fixed-point tests cover checked boundaries, intentional wrapping of large bignums, idempotence, wire agreement, scale preservation, and the distinction between saturation and wrapping.
 - `hls_numeric_dslx` lowers actual Erlang wrapping expressions and compares their XLS results with BEAM values. `hls_numeric_semantics.inc.x` records the integer-division and float-cancellation counterexamples and verifies XLS's subnormal behavior. The simulation preparation and CI runner include these tests.
+- `tools/test_float_arithmetic.sh` lowers real Erlang operations for binary16/32/64, compares selected cases with the DSLX interpreter and JIT, and replays boundary and deterministic bit-pattern corpora through optimized generated RTL. Macro-configured actors exercise public message packing, nested vector codecs, initialization, overflow errors, unselected overflow, recovery, and stalled replies.

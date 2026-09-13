@@ -23,6 +23,13 @@ providers_without_companions_test() ->
     Forms = [form("probe() -> hls_type:zero(hls_nums:u32()).")],
     ?assertEqual([], xls_dslx_imports:from_forms(Forms)).
 
+float_imports_follow_actual_uses_test() ->
+    Forms = [form("-type values() :: hls_vec:vector(hls_nums:float32(), 2)."),
+        form("probe() -> hls_nums:u32().")],
+    ?assertEqual([apfloat, hls_vec], xls_dslx_imports:from_forms(Forms)),
+    ?assertEqual([apfloat, hls_float], xls_dslx_imports:from_forms([
+        form("probe() -> hls_float:literal(hls_nums:float64(), 0.1).")])).
+
 deterministic_unique_imports_test() ->
     with_imports([zeta, axis, 'math.fixed', alpha, alpha], fun() ->
         Forms = [form("probe() -> xls_dslx_imports_tests:probe(phi_field:scalar()).")],

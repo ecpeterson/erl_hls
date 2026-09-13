@@ -21,7 +21,7 @@ proxy_decodes_control_failures_test() ->
                 {xls_control_failure_fixture:pack_tag(error), Tx, 0}, <<Code:32/little>>),
             receive {reply, Reply} -> ?assertEqual({error, {remote_error, Reason}}, Reply)
             after 1000 -> error(no_reply) end
-        end, [{1, 2, match_failure}, {2, 4, case_clause}, {3, 5, if_clause}])
+        end, [{1, 2, match_failure}, {2, 4, case_clause}, {3, 5, if_clause}, {4, 13, badarith}])
     after
         hls_gs:stop(Proxy),
         phi_memory_fabric_fixture:stop(Fabric)

@@ -9,6 +9,7 @@ normalization laws and the distinction from XLS arithmetic semantics.
 
 -behavior(hls_type).
 -export([width/2, zero/2, transpile/3, pack/3, unpack/3, print_type/2]).  % hls_type callbacks
+-export([dslx_imports/1, dslx_codec/2]).
 
 -export([u8/0, s8/0, u16/0, s16/0, u32/0, s32/0, u64/0, s64/0, uN/1]).
 -export_type([u8/0, s8/0, u16/0, s16/0, u32/0, s32/0, u64/0, s64/0, uN/1]).
@@ -146,6 +147,21 @@ print_type(s8,      []) -> "s8";
 print_type(s16,     []) -> "s16";
 print_type(s32,     []) -> "s32";
 print_type(s64,     []) -> "s64";
-print_type(float16, []) -> "float16";
-print_type(float32, []) -> "float32";
-print_type(float64, []) -> "float64".
+print_type(Type, []) when Type =:= float16; Type =:= float32; Type =:= float64 ->
+    {E, F} = hls_float:format({hls_type, ?MODULE, Type, []}),
+    ["apfloat::APFloat<u32:", integer_to_list(E), ", u32:", integer_to_list(F), ">"].
+
+dslx_imports(Names) ->
+    case lists:any(fun(Name) ->
+            Name =:= float16 orelse Name =:= float32 orelse Name =:= float64
+        end, Names) of
+        true -> [apfloat];
+        false -> []
+    end.
+
+dslx_codec(Type, []) when Type =:= float16; Type =:= float32; Type =:= float64 ->
+    {E, F} = hls_float:format({hls_type, ?MODULE, Type, []}),
+    {fun(Bits) -> ["apfloat::unflatten<u32:", integer_to_list(E), ", u32:",
+        integer_to_list(F), ">(", Bits, ")"] end,
+     fun(Value) -> ["apfloat::flatten(", Value, ")"] end};
+dslx_codec(_Type, _Args) -> bit_cast.

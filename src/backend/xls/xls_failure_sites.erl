@@ -11,7 +11,7 @@ generic() ->
     [{1, function_clause}, {2, match_failure}, {3, request_length},
         {4, case_clause}, {5, if_clause}, {6, explicit_fail},
         {7, invalid_message}, {8, invalid_repeat}, {9, reduction_mismatch},
-        {10, reduction_protocol}, {11, invalid_effect}, {12, internal}].
+        {10, reduction_protocol}, {11, invalid_effect}, {12, internal}, {13, badarith}].
 
 %% epp emits integer line annotations and file attributes at include boundaries.
 %% Attach that enclosing file once; lowering then preserves the source origin
@@ -36,6 +36,10 @@ sites({'if', Line, Clauses}) -> [origin(if_clause, Line) | sites(Clauses)];
 sites({clause, Line, Patterns, Guards, Body}) ->
     [origin(function_clause, Line) | pattern_sites(Patterns) ++ sites([Guards, Body])];
 sites({tuple, Line, [A, B, C]}) -> [origin(explicit_fail, Line) | sites([A, B, C])];
+sites({call, Line, {remote, _, {atom, _, hls_float}, {atom, _, Operation}}, Args})
+        when Operation =:= add; Operation =:= sub; Operation =:= mul;
+             Operation =:= eq; Operation =:= lt ->
+    [origin(badarith, Line) | sites(Args)];
 sites(Tuple) when is_tuple(Tuple) -> sites(tuple_to_list(Tuple));
 sites(List) when is_list(List) -> lists:append([sites(X) || X <- List]);
 sites(_) -> [].

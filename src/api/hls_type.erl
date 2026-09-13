@@ -5,6 +5,9 @@
 -export([
     as/2,
     descriptor/1,
+    dslx_codec/1,
+    dslx_from_bits/2,
+    dslx_to_bits/2,
     normalize/2,
     pack/2,
     pack_exact/2,
@@ -54,10 +57,13 @@ an `hls_gs` instance's `unpack/2`.
 
 -doc """
 Converts an Erlang call with XLS embodiments of its arguments to an equivalent
-XLS expression.
+XLS expression. A `fallible` result renders `(value, failed: bool)`; the compiler
+attaches the call's source location and propagates its registered failure kind.
 """.
 %% TODO: might need to supply clause state for anonymous variables
--callback transpile(FnName :: atom(), XLSArgs :: [xls_parse:ir()], State :: xls_parse:clause_state()) -> xls_parse:ir().
+-callback transpile(FnName :: atom(), XLSArgs :: [xls_parse:ir()], State :: xls_parse:clause_state()) ->
+    xls_parse:ir() | xls_parse:clause_state() |
+    {fallible, atom(), xls_parse:ir()}.
 
 -doc """
 Declares the DSLX modules used by this provider's types and expressions.
@@ -65,10 +71,23 @@ Declares the DSLX modules used by this provider's types and expressions.
 The compiler discovers providers in include-expanded remote types and calls,
 including nested type arguments, and emits each import once. Providers without
 companions can omit this callback. Modules must be available on the DSLX import
-path; their own transitive imports are resolved by XLS.
+path; their own transitive imports are resolved by XLS. The optional one-argument
+form takes precedence and receives the sorted names used from the provider,
+allowing types such as integers to avoid importing unrelated float companions.
 """.
 -callback dslx_imports() -> [atom()].
--optional_callbacks([dslx_imports/0]).
+-doc "Declares imports for the provider names actually used in the source.".
+-callback dslx_imports([atom()]) -> [atom()].
+
+-doc """
+Describes wire conversion for a type whose DSLX value cannot use a bit cast.
+The two functions render from-bits and to-bits expressions respectively.
+Collections compose their element codecs. Omission means ordinary bit casts.
+""".
+-callback dslx_codec(atom(), [arg()]) -> bit_cast |
+    {fun((xls_parse:printable()) -> xls_parse:printable()),
+     fun((xls_parse:printable()) -> xls_parse:printable())}.
+-optional_callbacks([dslx_imports/0, dslx_imports/1, dslx_codec/2]).
 
 -doc "Builds an empty Erlang instance of this type.".
 -callback zero(TypeName :: atom(), Args :: [arg()]) -> any().
@@ -171,6 +190,25 @@ unpack(Binary, {hls_type, Module, Name, Args}) ->
 
 print_type({hls_type, Module, Name, Args}) ->
     Module:print_type(Name, Args).
+
+dslx_codec({hls_type, Module, Name, Args}) ->
+    _ = code:ensure_loaded(Module),
+    case erlang:function_exported(Module, dslx_codec, 2) of
+        true -> Module:dslx_codec(Name, Args);
+        false -> bit_cast
+    end.
+
+dslx_from_bits(Type, Bits) ->
+    case dslx_codec(Type) of
+        bit_cast -> [Bits, " as ", print_type(Type)];
+        {Decode, _Encode} -> Decode(Bits)
+    end.
+
+dslx_to_bits(Type, Value) ->
+    case dslx_codec(Type) of
+        bit_cast -> [Value, " as bits[", integer_to_list(width(Type)), "]"];
+        {_Decode, Encode} -> Encode(Value)
+    end.
 
 %%%
 %%% 
