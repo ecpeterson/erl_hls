@@ -15,7 +15,7 @@ include_origins_and_real_annotations_test() ->
     ?assertMatch([_], [S || S = #{file := <<"hls_actor_debug_helpers.hrl">>,
         line := 7, kind := case_clause} <- Sites]),
     ?assertMatch([_], [S || S = #{file := <<"hls_actor_debug_fixture.erl">>,
-        line := 28, kind := match_failure} <- Sites]),
+        line := 30, kind := match_failure} <- Sites]),
     ok = xls_failure_sites:validate_origins(Sites).
 
 

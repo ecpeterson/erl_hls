@@ -94,6 +94,24 @@ tuple_binding_evaluates_fields_before_the_continuation_test() ->
         "true -> {stamp(data, 1), [{cast, first, #small{value = stamp(payload, 2)}}]}; "
         "false -> {0, []} end, stamp(suffix, 0), {Next, Actions}" )).
 
+whole_result_aliases_capture_fields_once_test() ->
+    ?assertEqual([data, payload, between], evaluation_order(
+        "Result = {stamp(data, 1), [{cast, first, #small{value = stamp(payload, 2)}}]}, "
+        "Alias = Result, stamp(between, 0), Alias")),
+    ?assertEqual([choice, data, payload, suffix], evaluation_order(
+        "Result = case stamp(choice, true) of "
+        "true -> Local = {stamp(data, 1), [{cast, first, #small{value = stamp(payload, 2)}}]}, Local; "
+        "false -> {0, []} end, {Next, Actions} = Result, "
+        "stamp(suffix, 0), {Next, Actions}" )).
+
+discarding_a_whole_result_keeps_its_evaluation_test() ->
+    ?assertEqual([data, payload, choice], evaluation_order(
+        "Result = {stamp(data, 1), [{cast, first, #small{value = stamp(payload, 2)}}]}, "
+        "case stamp(choice, false) of true -> Result; false -> {0, []} end" )),
+    ?assertEqual([data, payload], evaluation_order(
+        "_ = {stamp(data, 1), [{cast, first, #small{value = stamp(payload, 2)}}]}, "
+        "{0, []}" )).
+
 reduction_must_precede_every_cast_on_its_path_test() ->
     ?assertException(error, {hls_statem_open_reduction_must_be_first, _},
         analyze("{Cell, [{cast, first, #small{}}] ++ [" ++ open("1") ++ "]}")),

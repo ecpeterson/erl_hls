@@ -6,7 +6,7 @@ An unselected `andalso`, `orelse`, `case`, or `if` expression branch contributes
 
 ## Branching and storage
 
-An entry may choose its complete `{NextData, Actions}` result or an action-list segment with nested `case`/`if` expressions. Arms may contain local computations and return different ports, message schemas, or list lengths. Lists must be built from literal cons cells, `[]`, and `++` over supported segments. Segments may be named and aliased, and tuple destructuring may bind ordinary values and segments together using fresh variables or `_`. Refutable patterns in these segment bindings are unsupported. Recursive list construction, function-produced lists, dynamic ports, and matching an already-bound segment are rejected. Each port may occur once per selected path.
+An entry may choose its complete `{NextData, Actions}` result or an action-list segment with nested `case`/`if` expressions. Complete results and segments may be named and aliased; returning a named result uses the data and payloads captured when it was constructed. Arms may contain local computations and return different ports, message schemas, or list lengths. Lists must be built from literal cons cells, `[]`, and `++` over supported segments. Tuple destructuring may bind ordinary values and segments together using fresh variables or `_`, including from a named result. Refutable patterns in these segment bindings are unsupported. Recursive list construction, function-produced lists, dynamic ports, and matching an already-bound segment are rejected. Each port may occur once per selected path. See the shared [callback result binding rules](local-helpers.md#callback-result-bindings).
 
 ```erlang
 running(enter, _OldPhase, Data) ->

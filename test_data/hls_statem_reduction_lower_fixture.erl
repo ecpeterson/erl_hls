@@ -54,7 +54,8 @@ counting(internal,
         {reduction_complete, sum, Key,
             #sum{value = Value, contributions = 2}},
         Cell = #cell{key = Key}) ->
-    {collecting_members, Cell#cell{value = Value}, consume}.
+    Result = {collecting_members, Cell#cell{value = Value}, consume},
+    Result.
 
 collecting_members(enter, _OldPhase, Cell) ->
     {Cell, [
@@ -71,7 +72,12 @@ collecting_members(internal,
         {reduction_complete, sum, Key,
             #sum{value = Value, contributions = 3}},
         Cell = #cell{key = Key}) ->
-    {counting, Cell#cell{value = Value}, consume}.
+    Result = case Value of
+        0 -> {counting, Cell#cell{value = 0}, consume};
+        _ -> {counting, Cell#cell{value = Value}, consume}
+    end,
+    Alias = Result,
+    Alias.
 
 reduce(sum,
         #sum{value = Left, contributions = LeftCount},

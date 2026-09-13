@@ -17,7 +17,9 @@ boot(cast, #configure{value = 3}, Cell) ->
     Value = included_outer(0),
     {active, Cell#cell{value = Value}, consume};
 boot(cast, #configure{value = 4}, Cell) ->
-    {boot, Cell, fail};
+    Result = {boot, Cell, fail},
+    Alias = Result,
+    Alias;
 boot(cast, #configure{value = Value}, Cell) when Value =/= 5 ->
     {active, Cell#cell{value = Value}, consume}.
 active(enter, _, Cell) ->

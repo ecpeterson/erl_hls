@@ -549,13 +549,13 @@ validate_completion_clause(
         ]},
         _Phase,
         _Data
-    ], _Guards, Body},
+    ], _Guards, _Body},
     Accumulator
 ) ->
     ok = validate_u32_pattern(KeyPattern),
     ok = validate_accumulator_pattern(AccumulatorPattern, Accumulator),
-    {_Prefix, Result} = split_last(Body),
-    ok = validate_internal_result(Result, Line),
+    lists:foreach(fun(Result) -> validate_internal_result(Result, Line) end,
+        xls_callback_result:results(Clause)),
     Clause.
 
 validate_internal_result({tuple, _Line, [
@@ -570,16 +570,6 @@ validate_internal_result({tuple, _Line, [
 ]}, _ContextLine)
         when Phase =/= repeat_phase,
              (Directive =:= consume orelse Directive =:= fail) -> ok;
-validate_internal_result({'case', _Line, _Expression, Clauses}, ContextLine) ->
-    lists:foreach(fun({clause, _ClauseLine, _Patterns, _Guards, Body}) ->
-        {_Prefix, Result} = split_last(Body),
-        validate_internal_result(Result, ContextLine)
-    end, Clauses);
-validate_internal_result({'if', _Line, Clauses}, ContextLine) ->
-    lists:foreach(fun({clause, _ClauseLine, _Patterns, _Guards, Body}) ->
-        {_Prefix, Result} = split_last(Body),
-        validate_internal_result(Result, ContextLine)
-    end, Clauses);
 validate_internal_result(Result, ContextLine) ->
     error({unsupported_hls_statem_internal_result, ContextLine, Result}).
 
@@ -974,12 +964,10 @@ flatten_completion_clause({clause, Line, [
 ], Guards, Body}) ->
     {clause, Line, [Key, Accumulator, Phase, Data], Guards, Body}.
 
-normalize_internal_result(
-    {clause, Line, Patterns, Guards, Body0}, Phase
-) ->
-    {Prefix, Result0} = split_last(Body0),
-    Result = normalize_internal_result_expression(Result0, Phase),
-    {clause, Line, Patterns, Guards, Prefix ++ [Result]}.
+normalize_internal_result(Clause, Phase) ->
+    xls_callback_result:map(Clause, fun(Result) ->
+        normalize_internal_result_expression(Result, Phase)
+    end).
 
 normalize_internal_result_expression({tuple, Line, [
     {atom, _RepeatLine, repeat_phase}, Data, {atom, _ConsumeLine, consume}
@@ -1002,15 +990,6 @@ normalize_internal_result_expression({tuple, Line, [Phase, Data, Directive]},
             "hls_failure::check(", R, ".2 == Directive::FAIL, ",
             xls_failure_sites:at(explicit_fail, Line), "))"]
     end};
-normalize_internal_result_expression({'case', Line, Expression, Clauses},
-        Phase) ->
-    {'case', Line, Expression, [
-        normalize_internal_result(Clause, Phase) || Clause <- Clauses
-    ]};
-normalize_internal_result_expression({'if', Line, Clauses}, Phase) ->
-    {'if', Line, [
-        normalize_internal_result(Clause, Phase) || Clause <- Clauses
-    ]};
 normalize_internal_result_expression(Expression, _Phase) ->
     error({unsupported_hls_statem_internal_result, Expression}).
 

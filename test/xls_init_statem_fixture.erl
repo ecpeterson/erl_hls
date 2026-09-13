@@ -28,7 +28,12 @@ init([]) ->
         true -> Initial = Base + 1;
         false -> Initial = hls_nums:wrap(hls_nums:u32(), 0)
     end,
-    {ok, boot, #cell{value = Initial}}.
+    Result = case Initial > 0 of
+        true -> {ok, boot, #cell{value = Initial}};
+        false -> {ok, boot, #cell{}}
+    end,
+    Alias = Result,
+    Alias.
 
 unused(enter, _OldPhase, Cell) -> {Cell, []}.
 
@@ -37,14 +42,19 @@ unused(enter, _OldPhase, Cell) -> {Cell, []}.
 boot(enter, _OldPhase, Cell) ->
     {add_offset(Cell, 1), []};
 boot(cast, #configure{offset = Offset}, Cell) ->
-    {active, add_offset(Cell, Offset), consume}.
+    Result = {active, add_offset(Cell, Offset), consume},
+    Result.
 
 active(enter, OldPhase, Cell) ->
     From = marker(OldPhase =:= boot),
     {Cell, [{cast, out, #report{value = Cell#cell.value,
         default = Cell#cell.default, old_phase = From}}]};
 active(cast, #configure{offset = Offset}, Cell) ->
-    {repeat_phase, Cell#cell{value = Offset}, consume}.
+    Result = if
+        Offset =/= 0 -> {repeat_phase, Cell#cell{value = Offset}, consume};
+        true -> {repeat_phase, Cell#cell{value = 0}, consume}
+    end,
+    Result.
 
 -spec add_offset(#cell{}, hls_nums:u32()) -> #cell{}.
 add_offset(Cell, Offset) ->

@@ -1278,7 +1278,7 @@ state_machine_final_general_case_normalizes_each_conclusion_test() ->
         end
     ).
 
-state_machine_indirect_if_result_is_rejected_test() ->
+state_machine_indirect_if_result_is_supported_test() ->
     CastSource =
         "waiting(cast, #message{value = Value}, Cell) ->\n"
         "  Result = if\n"
@@ -1286,16 +1286,33 @@ state_machine_indirect_if_result_is_rejected_test() ->
         "    true -> {waiting, Cell, consume}\n"
         "  end,\n"
         "  Result.\n",
-    ?assertException(
-        error,
-        {unsupported_hls_statem_cast_result, {var, _, 'Result'}},
-        with_statem_fixture(
+    with_statem_fixture(
             "statem_indirect_if_fixture",
             "[waiting]",
             CastSource,
-            fun(_XLS) -> ok end
-        )
-    ).
+            fun(XLS) ->
+                ?assertMatch({_, _}, binary:match(XLS, <<"Directive::CONSUME, bool:1">>)),
+                ?assertMatch({_, _}, binary:match(XLS, <<"Directive::CONSUME, bool:0">>))
+            end
+        ).
+
+state_machine_bound_result_requires_a_constructor_in_every_arm_test() ->
+    ?assertException(error, {unsupported_hls_statem_cast_result, {tuple, _, [_, _]}},
+        with_statem_fixture("statem_bad_bound_shape_fixture", "[waiting]",
+            "waiting(cast, #message{value = Value}, Cell) ->\n"
+            "  Result = case Value of\n"
+            "    0 -> {repeat_phase, Cell, consume};\n"
+            "    _ -> {waiting, Cell}\n"
+            "  end, Result.\n", fun(_) -> ok end)).
+
+discarded_fail_constructor_does_not_fail_the_callback_test() ->
+    with_statem_fixture("statem_discarded_fail_fixture", "[waiting]",
+        "waiting(cast, #message{}, Cell) ->\n"
+        "  _ = {waiting, Cell, fail},\n"
+        "  Result = {waiting, Cell, consume}, Result.\n",
+        fun(XLS) ->
+            ?assertEqual(nomatch, binary:match(XLS, <<"XLS_FAILURE_SITE_EXPLICIT_FAIL">>))
+        end).
 
 repeat_phase_rejects_nonconsume_directives_test_() ->
     [
