@@ -424,12 +424,11 @@ gathering(
         phi = NewPhi
     },
     NextStepEpoch = ((Step + 1) * ?DIFFUSION_ROUNDS) band ?U32_MASK,
-    case NextEpoch =:= NextStepEpoch of
-        false -> {repeat_phase, Updated, consume};
-        true -> {comparing, Updated#cell{
-            best_direction = ?NO_DIRECTION
-        }, consume}
-    end;
+    {NextPhase, NextCell} = case NextEpoch =:= NextStepEpoch of
+        false -> {repeat_phase, Updated};
+        true -> {comparing, Updated#cell{best_direction = ?NO_DIRECTION}}
+    end,
+    {NextPhase, NextCell, consume};
 gathering(
     cast,
     #phi0{step = Step},

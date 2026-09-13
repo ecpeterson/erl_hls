@@ -23,7 +23,7 @@ init([]) -> {ok, choice, #cell{}}.
 
 %% Different schemas and ports at the same position; differing list lengths.
 choice(enter, _OldPhase, Cell) ->
-    case Cell#cell.value of
+    Result = case Cell#cell.value of
         0 -> {Cell, []};
         1 ->
             Message = #small{value = 11},
@@ -39,7 +39,9 @@ choice(enter, _OldPhase, Cell) ->
                 {cast, first, #small{value = 15}},
                 {cast, third, #wide{value = 16, check = 104}}
             ]}
-    end;
+    end,
+    Alias = Result,
+    Alias;
 choice(cast, #wide{value = Value}, Cell) ->
     {choice, Cell#cell{value = Value}, consume}.
 
@@ -100,7 +102,7 @@ prefix_failure(enter, _OldPhase, Cell) ->
 
 %% One choice binds the new state and a variable-length, heterogeneous batch.
 bound(enter, _OldPhase, Cell) ->
-    {Next, Actions} = case Cell#cell.value of
+    Result = case Cell#cell.value of
         0 -> {Cell#cell{value = 30}, []};
         1 ->
             Message = #wide{value = 31, check = 301},
@@ -110,8 +112,9 @@ bound(enter, _OldPhase, Cell) ->
             {cast, third, #small{value = 33}}
         ]}
     end,
-    Alias = Actions,
-    {Next, Alias}.
+    {Next, Actions} = Result,
+    Outcome = {Next, Actions},
+    Outcome.
 
 %% Branch-local segment aliases compose with later choices and common heads.
 bound_tail(enter, _OldPhase, Cell) ->

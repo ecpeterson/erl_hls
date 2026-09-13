@@ -43,7 +43,24 @@ Every exported value must have one XLS type across its arms. Use explicit provid
 
 Matching an exported or previously bound variable checks equality and preserves its original value. A failed match contributes to the selected callback's failure flag, including when the branch expression's result is discarded. A name bound in only some arms is unsafe to read or match afterward; the diagnostic includes the use location and originating branch location. Right operands of `andalso` and `orelse` cannot export a definitely bound variable because they may be skipped.
 
-These value joins do not extend the structural callback vocabulary. Complete cast conclusions must still be final tuples or final `case`/`if` expressions, and action-list bindings follow the separate [entry contract](entry-outcomes.md).
+## Callback result bindings
+
+State-machine initializers, ordinary cast callbacks, reduction-completion handlers, and entries can name and alias their complete result tuples. A result binding can select constructors with nested `case`/`if` or `begin` blocks, including arm-local computations and aliases. Each returned alternative must expose the callback's required shape: `{ok, Phase, Data}`, `{NextPhase, Data, Directive}`, or `{NextData, Actions}`. This is structural analysis of local constructors; a helper-produced complete result or an opaque tuple-valued input remains unsupported. Helpers can compute the fields as described above. Reduction contribution callbacks and reducers retain their existing structural rules.
+
+```erlang
+running(cast, #request{value = Value}, Data) ->
+    Result = case Value > 0 of
+        true -> {repeat_phase, update_data(Data, Value), consume};
+        false -> {running, Data, fail}
+    end,
+    Result.
+```
+
+Fields are evaluated once, in source order, when the tuple is constructed. Returning or aliasing that tuple uses its captured values. A later branch that discards it cannot discard an earlier selected expression failure. An explicit `fail` directive takes effect only when its conclusion is returned; its source location identifies the original tuple constructor. `repeat_phase` still requires `consume` and schedules a fresh entry into the current phase.
+
+Structural result bindings use fresh variables or fixed tuple patterns of fresh variables and `_`. For example, `{NextPhase, NextData} = case ... end, {NextPhase, NextData, consume}` separates transition selection from the common directive, including when an arm selects `repeat_phase`. Every right-hand-side field is evaluated before destructuring. Ordinary data fields retain their bindings and later equality checks; refutable matching of a structural control value remains unsupported. Action segments follow the [entry contract](entry-outcomes.md). Bind the result of a choice with `Result = case ... end`; defining the result variable separately in each arm and returning it afterward is outside this structural subset. Ordinary typed value joins and their equality checks retain the rules above.
+
+The compiler carries the continuation into structural alternatives so callback control tags and differently shaped entry batches need no common Erlang-value representation in XLS. Expansion is limited to 256 result paths per callback, in addition to entry path/layout limits. These bindings introduce no actor state or scheduling boundary, but branching can duplicate combinational expressions before XLS optimization. Native tagged sums in XLS could allow more of these continuations to rejoin without duplication.
 
 ## Evaluation and generated code
 

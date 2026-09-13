@@ -41,7 +41,7 @@ check(small, _, {family, cell, [Slot, 0]}, #{phase := Phase, failed := true,
         when Slot =/= 1, Slot =/= 7 ->
     Expected = case Slot of
         0 -> {active, case_clause, <<"hls_actor_debug_helpers.hrl">>, 7};
-        2 -> {active, match_failure, <<"hls_actor_debug_fixture.erl">>, 28};
+        2 -> {active, match_failure, <<"hls_actor_debug_fixture.erl">>, 30};
         3 -> {boot, case_clause, <<"hls_actor_debug_helpers.hrl">>, 7};
         4 -> {boot, explicit_fail, <<"hls_actor_debug_fixture.erl">>, 20};
         5 -> {boot, function_clause, <<"hls_actor_debug_fixture.erl">>, 16};

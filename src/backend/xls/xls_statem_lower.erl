@@ -310,39 +310,18 @@ state_summary(Records, Name) ->
         fields => record_fields(Record)
     }.
 
-initial_phase({clause, _Line, _Patterns, _Guards, Body}, PhaseNames) ->
-    {Prefix, Result} = split_last(Body),
-    Phase = case Result of
-        {tuple, _TupleLine, [
-            {atom, _OkLine, ok},
-            PhaseExpression,
-            _Data
-        ]} ->
-            resolve_static_atom(PhaseExpression, Prefix);
+initial_phase(Clause, PhaseNames) ->
+    Phases = lists:usort([case Result of
+        {tuple, _, [{atom, _, ok}, {atom, _, Phase}, _Data]} -> Phase;
         _ -> unknown
-    end,
-    case Phase of
-        unknown -> unknown;
-        _ ->
-            require_declared(initial_phase, Phase, PhaseNames),
-            Phase
+    end || Result <- xls_callback_result:results(Clause)]),
+    [require_declared(initial_phase, Phase, PhaseNames)
+        || Phase <- Phases, Phase =/= unknown],
+    case Phases of
+        [Phase] when Phase =/= unknown ->
+            Phase;
+        _ -> unknown
     end.
-
-resolve_static_atom({atom, _Line, Value}, _Prefix) ->
-    Value;
-resolve_static_atom({var, _Line, Name}, Prefix) ->
-    case [
-        Value
-        || {match, _MatchLine,
-                {var, _VarLine, Name0},
-                {atom, _AtomLine, Value}} <- Prefix,
-           Name0 =:= Name
-    ] of
-        [Value] -> Value;
-        _ -> unknown
-    end;
-resolve_static_atom(_Expression, _Prefix) ->
-    unknown.
 
 schema_summaries(Records, MessageNames) ->
     RecordIndex = maps:from_list([
@@ -441,19 +420,16 @@ lower_init(Clause0, DataName, EnumAtoms) ->
     ] end,
     xls_init:lower(Clause, DataName, Postprocessor, EnumAtoms).
 
-rewrite_init_result({clause, Line, Patterns, Guards, Body0}) ->
-    {Prefix, Last} = split_last(Body0),
-    case Last of
-        {tuple, TupleLine, [
+rewrite_init_result(Clause) ->
+    xls_callback_result:map(Clause, fun
+        ({tuple, TupleLine, [
             {atom, _OkLine, ok},
             Phase,
             Data
-        ]} ->
-            {clause, Line, Patterns, Guards,
-                Prefix ++ [{tuple, TupleLine, [Phase, Data]}]};
-        _ ->
-            error({bad_hls_statem_init_result, Line, Last})
-    end.
+        ]}) -> {tuple, TupleLine, [Phase, Data]};
+        (Expression) ->
+            error({bad_hls_statem_init_result, element(2, Expression), Expression})
+    end).
 
 %%%
 %%% Phase entry
@@ -568,16 +544,12 @@ lower_cast_group(
 %% `repeat_phase` is a scheduling boundary rather than a phase value. Normalize
 %% both callback result forms to one XLS product whose final bit requests the
 %% boundary. Keeping this rewrite here prevents the generic expression lowerer
-%% from having to know about hls_statem callback semantics. The conclusion
-%% must be the syntactically final tuple, case, or if: following an arbitrary
-%% value through local bindings would require typed expression dataflow here.
-normalize_cast_result(
-    {clause, Line, Patterns, Guards, Body0},
-    Phase
-) ->
-    {Prefix, Result0} = split_last(Body0),
-    Result = normalize_cast_result_expression(Result0, Phase),
-    {clause, Line, Patterns, Guards, Prefix ++ [Result]}.
+%% from having to know about hls_statem callback semantics. The shared result
+%% normalizer exposes constructors through aliases and structural choices.
+normalize_cast_result(Clause, Phase) ->
+    xls_callback_result:map(Clause, fun(Result) ->
+        normalize_cast_result_expression(Result, Phase)
+    end).
 
 normalize_cast_result_expression(
     {tuple, Line, [
@@ -608,20 +580,6 @@ normalize_cast_result_expression(
         ["(", R, ".0, ", R, ".1, ", R, ".2, ", R, ".3, ",
             cast_failure(Directive, Line, R), ")"]
     end};
-normalize_cast_result_expression(
-    {'case', Line, Expression, Clauses},
-    Phase
-) ->
-    {'case', Line, Expression, [
-        normalize_cast_result(Clause, Phase) || Clause <- Clauses
-    ]};
-normalize_cast_result_expression(
-    {'if', Line, Clauses},
-    Phase
-) ->
-    {'if', Line, [
-        normalize_cast_result(Clause, Phase) || Clause <- Clauses
-    ]};
 normalize_cast_result_expression(Expression, _Phase) ->
     error({unsupported_hls_statem_cast_result, Expression}).
 
@@ -742,9 +700,6 @@ strip_dispatched_phase({clause, Line, [First, Phase, Third], Guards, Body}) ->
 
 dispatched_phase_variable({atom, Line, _Phase}) ->
     {var, Line, '_'}.
-
-split_last(List) ->
-    {lists:droplast(List), lists:last(List)}.
 
 uppercase(Atom) ->
     string:uppercase(atom_to_list(Atom)).

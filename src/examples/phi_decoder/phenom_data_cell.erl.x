@@ -53,20 +53,20 @@ const XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L278 = u16:70; // phenom_data_cell
 const XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L280 = u16:86; // phenom_data_cell.erl:L280
 const XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L306 = u16:102; // phenom_data_cell.erl:L306
 const XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L317 = u16:118; // phenom_data_cell.erl:L317
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L379 = u16:134; // phenom_data_cell.erl:L379
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L395 = u16:150; // phenom_data_cell.erl:L395
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L398 = u16:166; // phenom_data_cell.erl:L398
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L434 = u16:182; // phenom_data_cell.erl:L434
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L445 = u16:198; // phenom_data_cell.erl:L445
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L463 = u16:214; // phenom_data_cell.erl:L463
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L479 = u16:230; // phenom_data_cell.erl:L479
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L482 = u16:246; // phenom_data_cell.erl:L482
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L499 = u16:262; // phenom_data_cell.erl:L499
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L551 = u16:278; // phenom_data_cell.erl:L551
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L553 = u16:294; // phenom_data_cell.erl:L553
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L564 = u16:310; // phenom_data_cell.erl:L564
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L579 = u16:326; // phenom_data_cell.erl:L579
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L582 = u16:342; // phenom_data_cell.erl:L582
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L375 = u16:134; // phenom_data_cell.erl:L375
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L391 = u16:150; // phenom_data_cell.erl:L391
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L394 = u16:166; // phenom_data_cell.erl:L394
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L430 = u16:182; // phenom_data_cell.erl:L430
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L441 = u16:198; // phenom_data_cell.erl:L441
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L459 = u16:214; // phenom_data_cell.erl:L459
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L475 = u16:230; // phenom_data_cell.erl:L475
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L478 = u16:246; // phenom_data_cell.erl:L478
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L495 = u16:262; // phenom_data_cell.erl:L495
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L547 = u16:278; // phenom_data_cell.erl:L547
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L549 = u16:294; // phenom_data_cell.erl:L549
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L560 = u16:310; // phenom_data_cell.erl:L560
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L575 = u16:326; // phenom_data_cell.erl:L575
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L578 = u16:342; // phenom_data_cell.erl:L578
 pub struct Phi {
   epoch : u32,
   values : phi_field::Field,
@@ -363,7 +363,7 @@ pub fn bits_from_datacell(s: Datacell) -> bits[bit_count<Datacell>()] {
   (s.cutoff_step as bits[32]) ++ (s.cutoff_armed as bits[32]) ++ (s.noise_disabled as bits[32]) ++ (s.reply_resume as bits[32]) ++ (s.reply_anticommutes as bits[32]) ++ (s.reply_request_id as bits[32]) ++ (s.accumulated_pauli as bits[32]) ++ (s.y as bits[16]) ++ (s.x as bits[16]) ++ (s.random_state as bits[32]) ++ (s.event as bits[32]) ++ (s.threshold as bits[32]) ++ (s.seen_sources as bits[32]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
 }
 
-fn hls_local_prepare_reply__3(argument_1: (Tag, Datacell), argument_2: u32, argument_3: u32) -> ((Tag, Datacell), hls_failure::Code) {  // L585
+fn hls_local_prepare_reply__3(argument_1: (Tag, Datacell), argument_2: u32, argument_3: u32) -> ((Tag, Datacell), hls_failure::Code) {  // L581
   let Cell_1 = argument_1;
   let RequestId_1 = argument_2;
   let Measurement_1 = argument_3;
@@ -897,7 +897,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
         Phase::REPLYING => {
           let Xls_clause_1_Cell_1 = (Tag::DATA_CELL, data);
           let _0 = (Phase::REPLYING, Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
-          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L499);
+          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L495);
           if (bool:false) {
             (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
           } else {
@@ -976,106 +976,106 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
           if _10.0 {
             let _11 = Xls_clause_1_Seen_1 | Xls_clause_1_Source_1;
             let Xls_clause_1_NewSeen_1 = _11;
-            let _12 = Xls_clause_1_NewSeen_1 == 15;
-            let _41 = if _12 {
-              let _13 = Xls_clause_1_Cell_1.1.cutoff_armed;
-              let _14 = _13 == 1;
-              let _17 = if _14 {
-                let _15 = Xls_clause_1_Cell_1.1.cutoff_step;
-                let _16 = Xls_clause_1_Step_1 >= _15;
-                (_16, hls_failure::NONE)
+            let _12 = Datacell {
+              seen_sources: Xls_clause_1_NewSeen_1,
+              ..(Xls_clause_1_Cell_1).1
+            };
+            let _13 = (Tag::DATA_CELL, _12);
+            let Xls_clause_1_Collected_1 = _13;
+            let _14 = Xls_clause_1_NewSeen_1 == 15;
+            let _44 = if _14 {
+              let _15 = Xls_clause_1_Cell_1.1.cutoff_armed;
+              let _16 = _15 == 1;
+              let _19 = if _16 {
+                let _17 = Xls_clause_1_Cell_1.1.cutoff_step;
+                let _18 = Xls_clause_1_Step_1 >= _17;
+                (_18, hls_failure::NONE)
               } else {
                 (bool:0, hls_failure::NONE)
               };
-              let Xls_clause_1_CutoffApplies_1 = _17.0;
-              let _18 = Xls_clause_1_Cell_1.1.noise_disabled;
-              let _19 = _18 == 1;
-              let _20 = if _19 {
+              let Xls_clause_1_CutoffApplies_1 = _19.0;
+              let _20 = Xls_clause_1_Cell_1.1.noise_disabled;
+              let _21 = _20 == 1;
+              let _22 = if _21 {
                 (bool:1, hls_failure::NONE)
               } else {
                 (Xls_clause_1_CutoffApplies_1, hls_failure::NONE)
               };
-              let Xls_clause_1_NoiseDisabled_1 = _20.0;
-              let _30 = if Xls_clause_1_NoiseDisabled_1 {
-                let _21 = (1 as u32);
-                let Xls_clause_1_NoiseDisabledWord_1 = _21;
-                let _22 = Xls_clause_1_Cell_1.1.random_state;
-                let Xls_clause_1_NextRandom_1 = _22;
-                let _23 = (0 as u32);
-                let Xls_clause_1_Event_1 = _23;
-                (_23, hls_failure::NONE, (Xls_clause_1_Event_1, Xls_clause_1_NextRandom_1, Xls_clause_1_NoiseDisabledWord_1, ))
+              let Xls_clause_1_NoiseDisabled_1 = _22.0;
+              let _33 = if Xls_clause_1_NoiseDisabled_1 {
+                let _23 = (1 as u32);
+                let _24 = Xls_clause_1_Cell_1.1.random_state;
+                let _25 = (0 as u32);
+                let _26 = (_23, _24, _25, );
+                (_26, hls_failure::NONE)
               } else {
-                let _21 = (0 as u32);
-                let Xls_clause_1_NoiseDisabledWord_1 = _21;
-                let _22 = Xls_clause_1_Cell_1.1.random_state;
-                let _23 = (_22 ^ (_22 << u32:13)) & u32:0xffffffff;
-                let _24 = (_23 ^ (_23 >> u32:17)) & u32:0xffffffff;
-                let _25 = (_24 ^ (_24 << u32:5)) & u32:0xffffffff;
-                let Xls_clause_1_NextRandom_1 = _25;
-                let _29 = {
-                  let _26 = Xls_clause_1_Cell_1.1.threshold;
-                  let _27 = Xls_clause_1_NextRandom_1 < _26;
-                  if _27 {
-                    let _28 = (1 as u32);
-                    (_28, hls_failure::NONE)
+                let _23 = Xls_clause_1_Cell_1.1.random_state;
+                let _24 = (_23 ^ (_23 << u32:13)) & u32:0xffffffff;
+                let _25 = (_24 ^ (_24 >> u32:17)) & u32:0xffffffff;
+                let _26 = (_25 ^ (_25 << u32:5)) & u32:0xffffffff;
+                let Xls_clause_1_Sample_1 = _26;
+                let _30 = {
+                  let _27 = Xls_clause_1_Cell_1.1.threshold;
+                  let _28 = Xls_clause_1_Sample_1 < _27;
+                  if _28 {
+                    let _29 = (1 as u32);
+                    (_29, hls_failure::NONE)
                   } else {
-                    let _26 = (0 as u32);
-                    (_26, hls_failure::NONE)
+                    let _27 = (0 as u32);
+                    (_27, hls_failure::NONE)
                   }
                 };
-                let Xls_clause_1_Event_1 = _29.0;
-                (_29.0, _29.1, (Xls_clause_1_Event_1, Xls_clause_1_NextRandom_1, Xls_clause_1_NoiseDisabledWord_1, ))
+                let Xls_clause_1_Hit_1 = _30.0;
+                let _31 = (0 as u32);
+                let _32 = (_31, Xls_clause_1_Sample_1, Xls_clause_1_Hit_1, );
+                (_32, _30.1)
               };
-              let Xls_clause_1_Event_1 = _30.2.0;
-              let Xls_clause_1_NextRandom_1 = _30.2.1;
-              let Xls_clause_1_NoiseDisabledWord_1 = _30.2.2;
-              let _34 = {
+              let Xls_clause_1_NoiseDisabledWord_1 = _33.0.0;
+              let Xls_clause_1_NextRandom_1 = _33.0.1;
+              let Xls_clause_1_Event_1 = _33.0.2;
+              let _37 = {
                 if Xls_clause_1_Event_1 == 1 {
-                  let _31 = Xls_clause_1_Cell_1.1.accumulated_pauli;
-                  let _32 = u32:3;
-                  let _33 = (_31 ^ _32);
-                  (_33, hls_failure::NONE)
+                  let _34 = Xls_clause_1_Cell_1.1.accumulated_pauli;
+                  let _35 = u32:3;
+                  let _36 = (_34 ^ _35);
+                  (_36, hls_failure::NONE)
                 } else {
-                  let _31 = Xls_clause_1_Cell_1.1.accumulated_pauli;
-                  (_31, hls_failure::NONE)
+                  let _34 = Xls_clause_1_Cell_1.1.accumulated_pauli;
+                  (_34, hls_failure::NONE)
                 }
               };
-              let Xls_clause_1_AccumulatedPauli_1 = _34.0;
-              let _36 = if Xls_clause_1_CutoffApplies_1 {
-                let _35 = (0 as u32);
-                (_35, hls_failure::NONE)
+              let Xls_clause_1_AccumulatedPauli_1 = _37.0;
+              let _39 = if Xls_clause_1_CutoffApplies_1 {
+                let _38 = (0 as u32);
+                (_38, hls_failure::NONE)
               } else {
-                let _35 = Xls_clause_1_Cell_1.1.cutoff_armed;
-                (_35, hls_failure::NONE)
+                let _38 = Xls_clause_1_Cell_1.1.cutoff_armed;
+                (_38, hls_failure::NONE)
               };
-              let _37 = Datacell {
-                seen_sources: Xls_clause_1_NewSeen_1,
+              let _40 = Datacell {
                 event: Xls_clause_1_Event_1,
                 random_state: Xls_clause_1_NextRandom_1,
                 accumulated_pauli: Xls_clause_1_AccumulatedPauli_1,
                 noise_disabled: Xls_clause_1_NoiseDisabledWord_1,
-                cutoff_armed: _36.0,
-                ..(Xls_clause_1_Cell_1).1
+                cutoff_armed: _39.0,
+                ..(Xls_clause_1_Collected_1).1
               };
-              let _38 = (Tag::DATA_CELL, _37);
-              let Xls_clause_1_Completed_1 = _38;
-              let _39 = (Phase::REPORTING, Xls_clause_1_Completed_1, Directive::CONSUME, bool:0, );
-              let _40 = (_39.0, _39.1, _39.2, _39.3, hls_failure::NONE);
-              (_40, hls_failure::first(_17.1, hls_failure::first(_20.1, hls_failure::first(_30.1, hls_failure::first(_34.1, _36.1)))))
+              let _41 = (Tag::DATA_CELL, _40);
+              let Xls_clause_1_Completed_1 = _41;
+              let Xls_clause_1_NextCell_1 = Xls_clause_1_Completed_1;
+              let _42 = (Phase::REPORTING, Xls_clause_1_NextCell_1, Directive::CONSUME, bool:0, );
+              let _43 = (_42.0, _42.1, _42.2, _42.3, hls_failure::NONE);
+              (_43, hls_failure::first(_19.1, hls_failure::first(_22.1, hls_failure::first(_33.1, hls_failure::first(_37.1, _39.1)))))
             } else {
-              let _13 = Datacell {
-                seen_sources: Xls_clause_1_NewSeen_1,
-                ..(Xls_clause_1_Cell_1).1
-              };
-              let _14 = (Tag::DATA_CELL, _13);
-              let _15 = (Phase::COLLECTING, _14, Directive::CONSUME, bool:0, );
+              let Xls_clause_1_NextCell_1 = Xls_clause_1_Collected_1;
+              let _15 = (Phase::COLLECTING, Xls_clause_1_NextCell_1, Directive::CONSUME, bool:0, );
               let _16 = (_15.0, _15.1, _15.2, _15.3, hls_failure::NONE);
               (_16, hls_failure::NONE)
             };
-            if ((_41.1) != hls_failure::NONE) {
-              (phase, data, Directive::FAIL, u1:0, _41.1)
+            if ((_44.1) != hls_failure::NONE) {
+              (phase, data, Directive::FAIL, u1:0, _44.1)
             } else {
-              (_41.0.0, _41.0.1.1, _41.0.2, _41.0.3, _41.0.4)
+              (_44.0.0, _44.0.1.1, _44.0.2, _44.0.3, _44.0.4)
             }
           } else {
             let Xls_clause_2_QueryStep_1 = message.step;
@@ -1095,7 +1095,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
             } else {
               let Xls_clause_3_Cell_1 = (Tag::DATA_CELL, data);
               let _0 = (Phase::COLLECTING, Xls_clause_3_Cell_1, Directive::FAIL, bool:0, );
-              let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L379);
+              let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L375);
               if (bool:false) {
                 (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
               } else {
@@ -1155,7 +1155,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
           } else {
             let Xls_clause_2_Cell_1 = (Tag::DATA_CELL, data);
             let _0 = (Phase::REPORTING, Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L463);
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L459);
             if (bool:false) {
               (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
@@ -1305,7 +1305,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
               } else {
                 let Xls_clause_4_Cell_1 = (Tag::DATA_CELL, data);
                 let _0 = (Phase::REPLYING, Xls_clause_4_Cell_1, Directive::FAIL, bool:0, );
-                let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L551);
+                let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L547);
                 if (bool:false) {
                   (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
                 } else {
@@ -1374,7 +1374,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
               (_5, _1.1)
             } else {
               let _1 = (Phase::COLLECTING, Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
-              let _2 = (_1.0, _1.1, _1.2, _1.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L395);
+              let _2 = (_1.0, _1.1, _1.2, _1.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L391);
               (_2, hls_failure::NONE)
             };
             if ((_6.1) != hls_failure::NONE) {
@@ -1385,7 +1385,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
           } else {
             let Xls_clause_2_Cell_1 = (Tag::DATA_CELL, data);
             let _0 = (Phase::COLLECTING, Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L398);
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L394);
             if (bool:false) {
               (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
@@ -1412,7 +1412,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
               (_5, _1.1)
             } else {
               let _1 = (Phase::REPORTING, Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
-              let _2 = (_1.0, _1.1, _1.2, _1.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L479);
+              let _2 = (_1.0, _1.1, _1.2, _1.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L475);
               (_2, hls_failure::NONE)
             };
             if ((_6.1) != hls_failure::NONE) {
@@ -1423,7 +1423,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
           } else {
             let Xls_clause_2_Cell_1 = (Tag::DATA_CELL, data);
             let _0 = (Phase::REPORTING, Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L482);
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L478);
             if (bool:false) {
               (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
@@ -1445,7 +1445,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
               (_3, _1.1)
             } else {
               let _1 = (Phase::REPLYING, Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
-              let _2 = (_1.0, _1.1, _1.2, _1.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L579);
+              let _2 = (_1.0, _1.1, _1.2, _1.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L575);
               (_2, hls_failure::NONE)
             };
             if ((_4.1) != hls_failure::NONE) {
@@ -1456,7 +1456,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
           } else {
             let Xls_clause_2_Cell_1 = (Tag::DATA_CELL, data);
             let _0 = (Phase::REPLYING, Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L582);
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L578);
             if (bool:false) {
               (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
@@ -1548,7 +1548,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
           } else {
             let Xls_clause_2_Cell_1 = (Tag::DATA_CELL, data);
             let _0 = (Phase::REPORTING, Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L434);
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L430);
             if (bool:false) {
               (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
@@ -1559,7 +1559,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
         Phase::REPLYING => {
           let Xls_clause_1_Cell_1 = (Tag::DATA_CELL, data);
           let _0 = (Phase::REPLYING, Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
-          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L553);
+          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L549);
           if (bool:false) {
             (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
           } else {
@@ -1625,7 +1625,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
             (_6, hls_failure::NONE)
           } else {
             let _1 = (Phase::REPORTING, Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
-            let _2 = (_1.0, _1.1, _1.2, _1.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L445);
+            let _2 = (_1.0, _1.1, _1.2, _1.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L441);
             (_2, hls_failure::NONE)
           };
           if ((_7.1) != hls_failure::NONE) {
@@ -1651,7 +1651,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
             (_6, hls_failure::NONE)
           } else {
             let _1 = (Phase::REPLYING, Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
-            let _2 = (_1.0, _1.1, _1.2, _1.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L564);
+            let _2 = (_1.0, _1.1, _1.2, _1.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L560);
             (_2, hls_failure::NONE)
           };
           if ((_7.1) != hls_failure::NONE) {

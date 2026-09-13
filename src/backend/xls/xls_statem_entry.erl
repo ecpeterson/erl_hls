@@ -15,7 +15,9 @@
     variants := [variant(), ...], reduction := none | map()}.
 
 -spec analyze(erl_parse:af_clause(), [atom()], [atom()]) -> plan().
-analyze(Clause = {clause, Line, Patterns, Guards, Body}, Messages, Outputs) ->
+analyze(Clause, Messages, Outputs) ->
+    {clause, Line, Patterns, Guards, Body} =
+        xls_callback_result:map(Clause, fun(Value) -> Value end),
     State0 = #{next_variable => 0, used => variables(Clause), variants => [],
         messages => Messages, outputs => Outputs},
     {Program, State} = body(Body, bound_names(Patterns, #{}), fun result/3, State0),
