@@ -83,8 +83,10 @@ module hls_phi_debug_live_tb;
         while(!debug_valid) @(negedge clk);
         ack("reply_held");
         app_released=1;release_cycle=cycles;
-        repeat(50000) @(negedge clk);
-        if(!held_outputs) $fatal(1,"application made no progress with debug reply blocked");
+        // More than a trace bank's worth of real traffic must pass while the
+        // trace response is held. Bound simulated time as well as host time.
+        while(held_outputs<512 && cycles-release_cycle<10000) @(negedge clk);
+        if(held_outputs<512) $fatal(1,"application stopped progressing with debug reply blocked");
         debug_released=1;ack("debug_released");
         await_command("done");
         fd=$fopen("application.json","w");

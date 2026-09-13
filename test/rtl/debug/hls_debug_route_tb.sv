@@ -9,7 +9,7 @@ module hls_debug_route_tb;
     wire [31:0] m_data;
     wire [3:0] m_keep;
     wire m_last, m_valid;
-    reg m_ready=0;
+    reg m_ready=0, allow_replies=1;
     wire [31:0] request_data;
     wire [3:0] request_keep;
     wire request_last;
@@ -26,7 +26,7 @@ module hls_debug_route_tb;
     always @(negedge clk) begin
         cycle=cycle+1;
         request_ready={cycle%5!=0,cycle%3!=0,cycle%7!=0};
-        m_ready=cycle%4==0 || cycle%4==1;
+        m_ready=allow_replies && (cycle%4==0 || cycle%4==1);
     end
     always @(posedge clk) begin
         if(reset) begin
@@ -84,19 +84,25 @@ module hls_debug_route_tb;
                 $fatal(1,"reply mismatch: got %h expected %h",{m_last,m_keep,m_data},{last,keep,data});
         end
     endtask
+    task automatic request(input [15:0] endpoint,input [15:0] source);
+        begin
+            send({source,endpoint},15,0);
+            send(32'h12345678,15,0);
+            send(32'h90abcdef,5,1); // TKEEP reaches the service unchanged.
+        end
+    endtask
+    task automatic reply(input integer index,input [15:0] endpoint,input [15:0] source);
+        begin
+            receive_word({endpoint,source},15,0);
+            receive_word(32'h81000000+index,15,0);
+            receive_word(32'h12345678^32'h90abcdef^10,3,1);
+        end
+    endtask
     task automatic transaction(input integer index,input [15:0] endpoint,input [15:0] source);
         begin
             fork
-                begin
-                    send({source,endpoint},15,0);
-                    send(32'h12345678,15,0);
-                    send(32'h90abcdef,5,1); // TKEEP reaches the service unchanged.
-                end
-                begin
-                    receive_word({endpoint,source},15,0);
-                    receive_word(32'h81000000+index,15,0);
-                    receive_word(32'h12345678^32'h90abcdef^10,3,1);
-                end
+                request(endpoint,source);
+                reply(index,endpoint,source);
             join
         end
     endtask
@@ -113,12 +119,25 @@ module hls_debug_route_tb;
             transaction(1,1,16'hff00+n);
             transaction(2,9,16'hab00+n);
         end
-        if(requests!=300 || replies!=300) $fatal(1,"lost reply");
+        // Hold a different destination/source at the input before the first
+        // reply drains. It must not change that reply's service or return route.
+        fork
+            begin request(2,16'h1234);request(9,16'habcd);end
+            begin reply(0,2,16'h1234);reply(2,9,16'habcd);end
+        join
+        if(requests!=302 || replies!=302) $fatal(1,"lost reply");
         // Reset a partly delivered request and recover on a different endpoint.
         send(32'h12340002,15,0);send(32'h11111111,15,0);
         @(negedge clk); reset=1;
         repeat(3) @(negedge clk);reset=0;
         transaction(1,1,16'h789a);
+        // Reset also abandons a stalled reply, including its old return route.
+        @(negedge clk);allow_replies=0;
+        request(9,16'hfedc);
+        while(!m_valid) @(negedge clk);
+        @(negedge clk);reset=1;
+        repeat(3) @(negedge clk);reset=0;allow_replies=1;
+        transaction(0,2,16'h0123);
         $display("PASS: shared debug frame ownership, routes, keep, stalls and reset");$finish;
     end
     initial begin #1000000; $fatal(1,"timeout");end

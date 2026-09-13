@@ -1,16 +1,12 @@
 -module(hls_phi_debug_dslx).
 -moduledoc "Complete D3 phi-memory fixture for cumulative debug cost and live diagnostics.".
--export([fixture/0, fixture/1, write/2, write/3]).
-
-fixture() -> fixture(1).
+-export([fixture/1, write/3]).
 
 fixture(Shards) ->
     #{distance := Distance, noise_rate := Rate} = phi_memory_demo:fixture(),
     Plan = hls_topology:normalize(phi_noise_topology:topology(Distance, Rate)),
     Profile = phi_noise_topology_dslx:profile({phi_shards, Shards}),
     {Plan, Profile}.
-
-write(Stage, Enabled) -> write(Stage, Enabled, 1).
 
 write(Stage, Enabled, Shards) ->
     {Plan, Profile} = fixture(Shards),

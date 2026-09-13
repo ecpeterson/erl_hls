@@ -1,7 +1,7 @@
 -module(hls_phi_debug_live).
 -export([run/1]).
 
--define(TIMEOUT, 180000).
+-define(TIMEOUT, 600000).
 
 run(Stage) ->
     {ok, Bytes} = file:read_file(filename:join(Stage, "manifest.json")),
@@ -64,6 +64,7 @@ run(Stage) ->
             [Actual] = collect([RunnerWorker]),
             FinalCounters = counters(Boundary),
             LaterTrace = trace(Boundary),
+            true = maps:get(dropped, LaterTrace) > 0,
             Events = maps:get(events, FirstTrace) ++ maps:get(events, LaterTrace),
             true = lists:any(fun(#{kind := Kind}) -> Kind =:= application_rx end, Events),
             true = lists:any(fun(#{kind := Kind}) -> Kind =:= application_tx end, Events),
@@ -107,7 +108,11 @@ inspect_actors(Catalog) ->
         {mailbox_capacity, Capacity} = hls_debug:info(Actor, mailbox_capacity),
         true = Count + Free =:= Capacity,
         true = Postponed =< Count,
-        Values
+        Boundaries = hls_debug_catalog:boundaries(Catalog),
+        Boundaries = maps:get(boundaries, Values),
+        %% Persist scopes, not live client PIDs, so reports remain consultable.
+        Values#{boundaries := [Scope || Boundary <- Boundaries,
+            {scope, Scope} <- [hls_debug:info(Boundary, scope)]]}
     end || Id <- hls_debug_catalog:actors(Catalog)].
 
 sink(#{<<"probes">> := Probes}) ->

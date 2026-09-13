@@ -246,6 +246,7 @@ jobs:
           path: |
             _build/phi-debug/**/*.log
             _build/phi-debug/**/*.build.json
+            _build/phi-debug/**/*.v
             _build/phi-debug/**/manifest.json
             _build/phi-debug/live/*.json
             _build/phi-debug/live/*.term

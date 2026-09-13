@@ -39,6 +39,28 @@ def compile_dslx(xls, stage, module, top, stages, ii=1, rams=None):
     }, indent=2) + "\n")
 
 
+def validate(build):
+    """Reject stale compiler outputs or a manifest detached from its source RTL."""
+    for directory, modules in (("production", ["phi_memory_gateway"]), ("observed", ["phi_memory_gateway"]),
+                               ("support", ["hls_fabric_router", "hls_debug_observer", "hls_debug_server"])):
+        stage = build / directory
+        for module in modules:
+            metadata = json.loads((stage / f"{module}.build.json").read_text())
+            for name, expected in (metadata["sources"] | metadata["outputs"]).items():
+                if hashlib.sha256((stage / name).read_bytes()).hexdigest() != expected:
+                    raise ValueError(f"stale build input/output: {stage / name}")
+    manifest = json.loads((build / "debug/manifest.json").read_text())
+    candidates = {p.name: p for directory in ("observed", "support") for p in (build / directory).glob("*.v")}
+    for source in manifest["sources"]:
+        path = candidates[source["name"]]
+        if hashlib.sha256(path.read_bytes()).hexdigest() != source["sha256"]:
+            raise ValueError(f"manifest source mismatch: {path}")
+    fingerprint = manifest.pop("fingerprint")
+    canonical = json.dumps(manifest, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode()
+    if hashlib.sha256(canonical).hexdigest() != fingerprint:
+        raise ValueError("manifest fingerprint mismatch")
+
+
 def build(args):
     stage, xls = args.stage.resolve(), args.xls.resolve()
     subprocess.run(["rebar3", "as", "test", "compile"], cwd=ROOT, check=True)

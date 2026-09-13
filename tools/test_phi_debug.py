@@ -15,12 +15,15 @@ import time
 
 ROOT = Path(__file__).resolve().parents[1]
 from topology_debug_services import rtl_files
+from build_phi_debug import validate
 
 
 def run(build, stage):
+    validate(build)
     stage.mkdir(parents=True, exist_ok=True)
     for name in ("block", "blocked", "hold_debug", "debug_held", "reply_held", "debug_released", "done",
-                 "application_complete", "app_tx", "app_rx", "debug_tx", "debug_rx"):
+                 "application_complete", "app_tx", "app_rx", "debug_tx", "debug_rx",
+                 "debug.term", "actors-blocked.term", "blocked.json", "recovered.json", "application.json"):
         (stage / name).unlink(missing_ok=True)
     shutil.copy(build / "debug/manifest.json", stage)
     shutil.copy(build / "fixture.json", stage)
@@ -69,7 +72,10 @@ def run(build, stage):
                 sim.terminate()
                 sim.wait(timeout=10)
     print((stage / "host.log").read_text(), end="")
-    print((stage / "simulation.log").read_text(), end="")
+    for line in (stage / "simulation.log").read_text().splitlines():
+        if line.startswith("PASS:"):
+            print(line)
+    print(f"Saved public observations and simulator diagnostics in {stage}")
 
 
 if __name__ == "__main__":

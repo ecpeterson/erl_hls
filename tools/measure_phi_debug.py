@@ -16,10 +16,12 @@ import subprocess
 from measure_topology_debug import cell_counts, distribution
 from topology_debug import quote, yosys_run
 from topology_debug_services import rtl_files
+from build_phi_debug import validate
 
 
 def measure(args):
     build, stage = args.build.resolve(), args.stage.resolve()
+    validate(build)
     stage.mkdir(parents=True, exist_ok=True)
     snapshot = stage / "sources"
     snapshot.mkdir(exist_ok=True)
