@@ -73,6 +73,18 @@ Scoped counter/trace results include `scope => #{kind => boundary, id => Id}`. B
 
 The low-level `hls_debug:get_counters(DebugClient)` and `get_trace(DebugClient)` forms still accept a debug-client PID. That PID is a protocol client, not an application process. Use scoped targets in application-facing tooling. For native process event collection and statistics, use ERTS tracing or [`sys:statistics` and `sys:trace`](https://www.erlang.org/doc/apps/stdlib/sys.html); hardware boundary events and counters do not claim those semantics. Inspecting a CPU actor does not enable a recorder or install tracing flags.
 
+The [complete phi-memory build](topology-debug.md#complete-d3-phi-memory-fixture) provides both services on one debug transport. Open two clients on the same broker, then bind the boundary and verified query session into one catalog:
+
+```erlang
+{ok, MonitorClient} = hls_debug:start_link(undefined, {fabric, DebugFabric, 1}),
+{ok, QueryClient} = hls_debug:start_link(undefined, {fabric, DebugFabric, 2}),
+{ok, Session} = hls_topology_debug:open(QueryClient, Manifest),
+Boundary = {boundary, MonitorClient, {phi_memory_gateway, host_stream}},
+Catalog = hls_debug_catalog:hardware(Plan, Specs, [Boundary], Session).
+```
+
+The broker can queue requests from both clients. A blocked trace reply holds the shared debug transport until its last word is accepted; it does not pause application execution or passive capture. Selecting the actor's related boundary still returns whole-gateway counters/events.
+
 ## Physical queues and current waits
 
 ```erlang

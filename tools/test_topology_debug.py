@@ -8,11 +8,36 @@ import unittest
 
 import topology_debug as topology
 from measure_topology_debug import cell_counts
+import topology_debug_services as services
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 class DiscoveryTests(unittest.TestCase):
+    def test_boundary_contract(self):
+        ports = {}
+        for prefix, direction in (("rx", "input"), ("tx", "output")):
+            for suffix, width in (("tdata", 32), ("tvalid", 1), ("tlast", 1), ("tready", 1)):
+                d = ("output" if direction == "input" else "input") if suffix == "tready" else direction
+                ports[f"{prefix}_{suffix}"] = {"direction": d, "bits": list(range(width))}
+        self.assertEqual(services.boundary(ports, "rx", "tx", True),
+                         {"endpoint": 1, "rx": "rx", "tx": "tx", "routed": True})
+        self.assertIsNone(services.boundary(ports, None, None, False))
+        for rx, tx, routed in ((None, None, True), ("rx", None, False), ("rx", "rx", True), ("tx", "rx", True)):
+            with self.assertRaises(ValueError):
+                services.boundary(ports, rx, tx, routed)
+        ports["rx_tdata"]["bits"].pop()
+        with self.assertRaisesRegex(ValueError, "32-bit input rx_tdata"):
+            services.boundary(ports, "rx", "tx", True)
+
+    def test_shared_debug_route(self):
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "test.vvp"
+            subprocess.run(["iverilog", "-g2012", "-s", "hls_debug_route_tb", "-o", str(target),
+                            str(ROOT / "test/rtl/debug/hls_debug_route_tb.sv"),
+                            str(ROOT / "priv/rtl/debug/hls_debug_route.v")], check=True)
+            subprocess.run(["vvp", str(target)], check=True, timeout=30)
+
     def test_area_includes_distributed_ram(self):
         counts = cell_counts({'LUT6': 3, 'LUT2': 1, 'RAM32M': 2, 'RAM64X1D': 1,
                               'FDRE': 7, 'RAMB18E1': 1})

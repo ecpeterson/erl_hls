@@ -1,0 +1,2062 @@
+{
+  "schema": 1,
+  "date": "2026-09-13",
+  "source_revision": "46ce95c5632800135a83f9024e82f024f37890d3",
+  "workload": {
+    "name": "phi_memory_demo",
+    "distance": 3,
+    "shards_per_phi_plane": 1,
+    "scheduler_banks": 6,
+    "actors": 54,
+    "channels": 217,
+    "fifos": 75,
+    "boundary_monitors": 1,
+    "manifest": "9f581d0e7f103b61549335a021c93c133bd3918620c4c3a23bd647b279818198",
+    "gateway_pipeline_stages": 2,
+    "gateway_ii": 1,
+    "delay_model": "unit",
+    "ram_read_latency": 1
+  },
+  "scope": {
+    "production": "Normal fail-stop execution and machine-state failure codes retained; optional observation channels and services absent",
+    "all": "Production behavior plus mailbox observation channels, actor snapshots, physical probes, shared debug routing, one routed boundary counter/trace monitor",
+    "excluded": [
+      "I/O pads",
+      "clock buffers",
+      "placement/routing",
+      "power",
+      "extra monitored boundaries",
+      "counterfactual one-bit actor failure representation"
+    ]
+  },
+  "prediction": {
+    "extra_LUT": [
+      3000,
+      5000
+    ],
+    "extra_FF": [
+      2000,
+      3000
+    ],
+    "extra_RAMB36": 3,
+    "application_cycle_change": 0
+  },
+  "area_provenance": {
+    "sources": {
+      "hls_debug_route.v": "7f1f1dfb3a282a963811fd2e99991e789eeec5e38260ecace06a05d3f4cef287",
+      "hls_debug_frame_rx.v": "e689f254b14ebab341b936c30c9a90db7888b8f1bdf68a99ef8ef71aa90bae55",
+      "phi_memory_gateway.v": "861255efba71c632310127b3c09339ff087935f908e83025e4a580b75301aca3",
+      "instrumented.json": "2816e68cf2437de753e0b0a87e2068584ee025913521f840a267299c1e111c4e",
+      "hls_debug_monitor.v": "611f21d9365b3f0c8dfaa7157e51576198f22f8e68ee80279ad3fc5a345ea8d5",
+      "hls_1r1w_ram.v": "13e12a7561df37e150c3e727c43f9e5234b74bb9741fc969185c12948b2583e8",
+      "hls_debug_server.v": "55450c967b8af406f43bc93e6713fc997e0f9382dd6c4dacdd6eaf0a45338095",
+      "production.json": "42bb4489c5a1560fce04515908275ccb71d36fa503f9ed3abc2691f5d74a6b8c",
+      "hls_trace_store.v": "5c47a9f7f16b3f7756e3970c745e6c05a77485c5a1159766bd8e403856cb7eed",
+      "phi_memory_top.v": "e8a518f98f1d5465d5d0a0ae6fe8b30ccee547f361fd183edc5079a2df305d37",
+      "hls_fabric_router.v": "19be5e6be49ead3e16df52aa103cc2b52f925cfdc463d35dbe35a2f8cd117836",
+      "hls_topology_debug.v": "6054ddc3593ec7d3d682154b84a837ee44ed32cf86822a5de07530f6733dce1a",
+      "manifest.json": "b442dd1c17f5be6567bce6b9fd9835f6b77c8f36032b9e4b3fc79e13b1312d6d",
+      "hls_debug_tap.v": "15670f74ae87b25b284e23b53c821155fa83cda8f3587bdf68e62527adf7e4dd",
+      "hls_debug_observer.v": "d0f150d2d61b9232803dd7362dde5866497eaa64470c99ce7376f10c27a69181",
+      "debug_top.v": "25c57d28bfe3248b52e5f4b8fa2a0aca7aef7b726666c7be390605fb91228f89",
+      "hls_actor_snapshot.v": "7b3ddccd71720280ebb204187a34a7d90f0d44ebeee7f6effab89b30748bbbba"
+    },
+    "yosys": "Yosys 0.63+173 (git sha1 66306a8ca-dirty, aarch64-apple-darwin23.5-clang++ 18.1.8 -fPIC -O3)",
+    "seeds": 5,
+    "flow": "opt; memory_collect; scramble; synth_xilinx -abc9 -arch xc7 -noiopad -noclkbuf; check; scc"
+  },
+  "area_tool_sha256": {
+    "bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+    "libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+    "libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d"
+  },
+  "compiler_builds": {
+    "observed/phi_memory_gateway.build.json": {
+      "commands": [
+        [
+          ".ir",
+          [
+            "${REPO}/_build/mailbox-extraction/xls/ir_converter_main",
+            "--warnings_as_errors=false",
+            "--dslx_path=.",
+            "--dslx_stdlib_path=${REPO}/_build/mailbox-extraction/xls/xls/dslx/stdlib",
+            "--top=Top",
+            "phi_memory_gateway.x"
+          ]
+        ],
+        [
+          ".opt.ir",
+          [
+            "${REPO}/_build/mailbox-extraction/xls/opt_main",
+            "phi_memory_gateway.ir"
+          ]
+        ],
+        [
+          ".v",
+          [
+            "${REPO}/_build/mailbox-extraction/xls/codegen_main",
+            "--pipeline_stages=2",
+            "--worst_case_throughput=1",
+            "--delay_model=unit",
+            "--use_system_verilog=false",
+            "--reset=reset",
+            "--fifo_module=",
+            "--flop_inputs=false",
+            "--flop_outputs=true",
+            "--ram_configurations=scheduler_0_state:1R1W:_scheduler_0_ram_read_req_out:_scheduler_0_ram_read_resp_in:_scheduler_0_ram_write_req_out:_scheduler_0_ram_write_resp_in,scheduler_0_mailbox:1R1W:_scheduler_0_mailbox_read_req_out:_scheduler_0_mailbox_read_resp_in:_scheduler_0_mailbox_write_req_out:_scheduler_0_mailbox_write_resp_in,scheduler_1_state:1R1W:_scheduler_1_ram_read_req_out:_scheduler_1_ram_read_resp_in:_scheduler_1_ram_write_req_out:_scheduler_1_ram_write_resp_in,scheduler_1_mailbox:1R1W:_scheduler_1_mailbox_read_req_out:_scheduler_1_mailbox_read_resp_in:_scheduler_1_mailbox_write_req_out:_scheduler_1_mailbox_write_resp_in,scheduler_2_state:1R1W:_scheduler_2_ram_read_req_out:_scheduler_2_ram_read_resp_in:_scheduler_2_ram_write_req_out:_scheduler_2_ram_write_resp_in,scheduler_2_mailbox:1R1W:_scheduler_2_mailbox_read_req_out:_scheduler_2_mailbox_read_resp_in:_scheduler_2_mailbox_write_req_out:_scheduler_2_mailbox_write_resp_in,scheduler_3_state:1R1W:_scheduler_3_ram_read_req_out:_scheduler_3_ram_read_resp_in:_scheduler_3_ram_write_req_out:_scheduler_3_ram_write_resp_in,scheduler_3_mailbox:1R1W:_scheduler_3_mailbox_read_req_out:_scheduler_3_mailbox_read_resp_in:_scheduler_3_mailbox_write_req_out:_scheduler_3_mailbox_write_resp_in,scheduler_4_state:1R1W:_scheduler_4_ram_read_req_out:_scheduler_4_ram_read_resp_in:_scheduler_4_ram_write_req_out:_scheduler_4_ram_write_resp_in,scheduler_4_mailbox:1R1W:_scheduler_4_mailbox_read_req_out:_scheduler_4_mailbox_read_resp_in:_scheduler_4_mailbox_write_req_out:_scheduler_4_mailbox_write_resp_in,scheduler_5_state:1R1W:_scheduler_5_ram_read_req_out:_scheduler_5_ram_read_resp_in:_scheduler_5_ram_write_req_out:_scheduler_5_ram_write_resp_in,scheduler_5_mailbox:1R1W:_scheduler_5_mailbox_read_req_out:_scheduler_5_mailbox_read_resp_in:_scheduler_5_mailbox_write_req_out:_scheduler_5_mailbox_write_resp_in",
+            "phi_memory_gateway.opt.ir"
+          ]
+        ]
+      ],
+      "tools": {
+        "ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+        "opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c",
+        "codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162"
+      },
+      "sources": {
+        "scheduler_observation.x": "7c01db596893e73678cb6eb220430127d4d2235ed09eebf530ca0efb778d8263",
+        "hls_failure.x": "fdf82b553042a347dd6f6ccb7fa3f79c12c72c811fd273bc9153f2aee707cb29",
+        "phenom_syndrome_cell.x": "bd6ecf877ae0b9ccecf1fff72eb7e048641547a487351ec127edaa55569990c3",
+        "phi_memory_gateway.x": "53f44ecec52af93695b607408a5910966e6b9efce9216e72d4d764d50caaaa50",
+        "hls_vec.x": "c66c888c606ce7bc3e7b1c526cd1216e571f23fc6712f719df14dc6f5d82e5e6",
+        "hls_spatial_router.x": "3cca4008525b6831a825db8af3286df5b3d28f06bb6c505f75e06fb0fc42b6f5",
+        "frame_queue.x": "938dbaa621cc9973d505a915859c1e16e055271989929b774f874bf318a3614a",
+        "hls_fabric_router.x": "47beed81304b0f61ea4acd4819cf51949af91e7b560e1c4701607767ea767d44",
+        "phi_field.x": "7e35e2901be89e4f9b148e8d8c47d0a05581e6206070c25e8d2dc5d02828f84b",
+        "hls_fixed.x": "a3ff6655b5cca3984d736b57712e57e5976ab6196c709742aa26850537c88902",
+        "effect_window.x": "a6450a77190293db0256eb3dccba26abb99008bd808243e860f0b72e8c9b8d81",
+        "bram.x": "8dd43b778fc9b61a5967ed5202c164563835ec90cd85e40bb0cf0b2b409e7cdf",
+        "axis.x": "ed6ef54ac090be9f5d125f7dead74effce2fa085b3a547ca65f6b55014ad22f6",
+        "frame_transport.x": "3523c8ed1ff99bb4e09c75cf62c9999fdeb46ae8fa0cec654fb8c2a9e1a6f8a9",
+        "phi_noise_topology.x": "f776d7f876bd8aa80691208bb4cb46acbddf71dc52a41889e9b8748544462791",
+        "scheduler.x": "e7ab85c1f981c56fab222ed0a0d5731ac63a44fb18dfa534cd4f0fedd2b2ad7f",
+        "phenom_data_cell.x": "ec39f3a6bd30563a8324504ef4a2c02d34f003bafdaf1823d9c19defdc5c4cb1",
+        "arbitration.x": "76f9a3fe9ae3b8e9261960428f689e9bcd64ef8723fcc351e65aaf26f2e615a3",
+        "mailbox.x": "52322c984a6679e1f8127b9cbd39edcf796f85f6002954dd9af430b5c16e2503",
+        "phi_halo_cell.x": "00bc627932aee0aae6bef78ded057d6ecff511bdf47210331475807db5d3690c"
+      },
+      "stdlib": {
+        "xls/dslx/stdlib/bfloat16.x": "c810ed761142c429a68f0b80559b92c6cbfe087ccd11bead091151d2ff49ee37",
+        "xls/dslx/stdlib/float_instances.x": "4c89968e94e045c51c354b8f18507f727b0b85b8dcd01b0af69db25314f314cd",
+        "xls/dslx/stdlib/hfloat16.x": "767b0b70354aa15437f689898a0dd168eba47161e999382adcbdc150b6df4243",
+        "xls/dslx/stdlib/lza.x": "6717f61514829d52e9ead876d42e5dc33cd0c48069506137bb2a1dee98b066ac",
+        "xls/dslx/stdlib/float64.x": "186e40914bdcd0be7c478e6c85204cfa9858b660a8a1dcfffab20e3e4d1ba071",
+        "xls/dslx/stdlib/fixed_point.x": "20aede1704d2cdbe515de083d05cb44c8d279aac5fcf5f52d7dc768193d1c631",
+        "xls/dslx/stdlib/std.x": "888583e31552728f6f594c9bb454173b5d8a2d55df2acdee0bd4e2e15d7f1ffa",
+        "xls/dslx/stdlib/abs_diff.x": "9006b878c3762aeea72bc42be9a012cd0c050a78364a1c09ea4f547e06059eae",
+        "xls/dslx/stdlib/apfloat.x": "5bbc79dd7842baa26ae467f5a9240ab98a5f5776b4749eb4e73dd1171b8bae8d",
+        "xls/dslx/stdlib/round.x": "ac1093df45b238fb0cf867010a9887856d6cf380d17cb5b61c69a47af77c89a0",
+        "xls/dslx/stdlib/acm_random.x": "47093ca764f983b34adaeb0f694b2a3b711815eb8beeba656d3a39ed157f7ac7",
+        "xls/dslx/stdlib/float32.x": "2dbc3bd4c5045fb1b8765b293457d6cca1ba338ca1bd5763b2957d11b0a7d84a",
+        "xls/dslx/stdlib/tests/float32_upcast_test.x": "dbff7cea87d189c915623e1d4d4274049e7a5779d7b03060e91201073da27b54",
+        "xls/dslx/stdlib/tests/float32_downcast_test.x": "20e81a55ba42a7849b2ac274811e4bb457a8b2eb501f4b304b543925e80fe0ab",
+        "xls/dslx/stdlib/tests/round_tests.x": "5f9b66ad008155f4829db2424f34cc125363f80a789d4057c1433d56fa05632b",
+        "xls/dslx/stdlib/tests/umul_instances.x": "06f7b95e669477fc30e86f9e1d32637b09cfe1fa8f9cb8ea4b351645c1b1bc91"
+      },
+      "outputs": {
+        "phi_memory_gateway.ir": "78526f6481a83c25def7be9209e13ceede6a1592dafe518201c3be6c4aab5360",
+        "phi_memory_gateway.opt.ir": "345c306b570f686edfc543b7eec1f095e3fdce5774a8facf9f1057ef9c638b4e",
+        "phi_memory_gateway.v": "4144f95537e274c5a44e1a7e0abff1769cc9c44a487433c63306d5b30dc1204b"
+      }
+    },
+    "production/phi_memory_gateway.build.json": {
+      "commands": [
+        [
+          ".ir",
+          [
+            "${REPO}/_build/mailbox-extraction/xls/ir_converter_main",
+            "--warnings_as_errors=false",
+            "--dslx_path=.",
+            "--dslx_stdlib_path=${REPO}/_build/mailbox-extraction/xls/xls/dslx/stdlib",
+            "--top=Top",
+            "phi_memory_gateway.x"
+          ]
+        ],
+        [
+          ".opt.ir",
+          [
+            "${REPO}/_build/mailbox-extraction/xls/opt_main",
+            "phi_memory_gateway.ir"
+          ]
+        ],
+        [
+          ".v",
+          [
+            "${REPO}/_build/mailbox-extraction/xls/codegen_main",
+            "--pipeline_stages=2",
+            "--worst_case_throughput=1",
+            "--delay_model=unit",
+            "--use_system_verilog=false",
+            "--reset=reset",
+            "--fifo_module=",
+            "--flop_inputs=false",
+            "--flop_outputs=true",
+            "--ram_configurations=scheduler_0_state:1R1W:_scheduler_0_ram_read_req_out:_scheduler_0_ram_read_resp_in:_scheduler_0_ram_write_req_out:_scheduler_0_ram_write_resp_in,scheduler_0_mailbox:1R1W:_scheduler_0_mailbox_read_req_out:_scheduler_0_mailbox_read_resp_in:_scheduler_0_mailbox_write_req_out:_scheduler_0_mailbox_write_resp_in,scheduler_1_state:1R1W:_scheduler_1_ram_read_req_out:_scheduler_1_ram_read_resp_in:_scheduler_1_ram_write_req_out:_scheduler_1_ram_write_resp_in,scheduler_1_mailbox:1R1W:_scheduler_1_mailbox_read_req_out:_scheduler_1_mailbox_read_resp_in:_scheduler_1_mailbox_write_req_out:_scheduler_1_mailbox_write_resp_in,scheduler_2_state:1R1W:_scheduler_2_ram_read_req_out:_scheduler_2_ram_read_resp_in:_scheduler_2_ram_write_req_out:_scheduler_2_ram_write_resp_in,scheduler_2_mailbox:1R1W:_scheduler_2_mailbox_read_req_out:_scheduler_2_mailbox_read_resp_in:_scheduler_2_mailbox_write_req_out:_scheduler_2_mailbox_write_resp_in,scheduler_3_state:1R1W:_scheduler_3_ram_read_req_out:_scheduler_3_ram_read_resp_in:_scheduler_3_ram_write_req_out:_scheduler_3_ram_write_resp_in,scheduler_3_mailbox:1R1W:_scheduler_3_mailbox_read_req_out:_scheduler_3_mailbox_read_resp_in:_scheduler_3_mailbox_write_req_out:_scheduler_3_mailbox_write_resp_in,scheduler_4_state:1R1W:_scheduler_4_ram_read_req_out:_scheduler_4_ram_read_resp_in:_scheduler_4_ram_write_req_out:_scheduler_4_ram_write_resp_in,scheduler_4_mailbox:1R1W:_scheduler_4_mailbox_read_req_out:_scheduler_4_mailbox_read_resp_in:_scheduler_4_mailbox_write_req_out:_scheduler_4_mailbox_write_resp_in,scheduler_5_state:1R1W:_scheduler_5_ram_read_req_out:_scheduler_5_ram_read_resp_in:_scheduler_5_ram_write_req_out:_scheduler_5_ram_write_resp_in,scheduler_5_mailbox:1R1W:_scheduler_5_mailbox_read_req_out:_scheduler_5_mailbox_read_resp_in:_scheduler_5_mailbox_write_req_out:_scheduler_5_mailbox_write_resp_in",
+            "phi_memory_gateway.opt.ir"
+          ]
+        ]
+      ],
+      "tools": {
+        "ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+        "opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c",
+        "codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162"
+      },
+      "sources": {
+        "scheduler_observation.x": "7c01db596893e73678cb6eb220430127d4d2235ed09eebf530ca0efb778d8263",
+        "hls_failure.x": "fdf82b553042a347dd6f6ccb7fa3f79c12c72c811fd273bc9153f2aee707cb29",
+        "phenom_syndrome_cell.x": "9ed08c3e233b290b0507eaeaacd89dd9e97fa6be6994d02933fd70105676aad8",
+        "phi_memory_gateway.x": "1ddd9059add34ba7b285abec53c583e2d4eed6012a22f47fa9cadef4f15fcfae",
+        "hls_vec.x": "c66c888c606ce7bc3e7b1c526cd1216e571f23fc6712f719df14dc6f5d82e5e6",
+        "hls_spatial_router.x": "3cca4008525b6831a825db8af3286df5b3d28f06bb6c505f75e06fb0fc42b6f5",
+        "frame_queue.x": "938dbaa621cc9973d505a915859c1e16e055271989929b774f874bf318a3614a",
+        "hls_fabric_router.x": "47beed81304b0f61ea4acd4819cf51949af91e7b560e1c4701607767ea767d44",
+        "phi_field.x": "7e35e2901be89e4f9b148e8d8c47d0a05581e6206070c25e8d2dc5d02828f84b",
+        "hls_fixed.x": "a3ff6655b5cca3984d736b57712e57e5976ab6196c709742aa26850537c88902",
+        "effect_window.x": "a6450a77190293db0256eb3dccba26abb99008bd808243e860f0b72e8c9b8d81",
+        "bram.x": "8dd43b778fc9b61a5967ed5202c164563835ec90cd85e40bb0cf0b2b409e7cdf",
+        "axis.x": "ed6ef54ac090be9f5d125f7dead74effce2fa085b3a547ca65f6b55014ad22f6",
+        "frame_transport.x": "3523c8ed1ff99bb4e09c75cf62c9999fdeb46ae8fa0cec654fb8c2a9e1a6f8a9",
+        "phi_noise_topology.x": "37ed375808d1d8b1a7de6d7865e6448ea3942946b7b62e6c2bfdedee1f6e84fa",
+        "scheduler.x": "e7ab85c1f981c56fab222ed0a0d5731ac63a44fb18dfa534cd4f0fedd2b2ad7f",
+        "phenom_data_cell.x": "54ab10638788fbabde85ab1ad074ae6009a1accefecea4e189bd19330c21d608",
+        "arbitration.x": "76f9a3fe9ae3b8e9261960428f689e9bcd64ef8723fcc351e65aaf26f2e615a3",
+        "mailbox.x": "52322c984a6679e1f8127b9cbd39edcf796f85f6002954dd9af430b5c16e2503",
+        "phi_halo_cell.x": "8af270c34f439c99335fcdf6ace24e2df7f5693a0b2ec1c2c85fafcfeaf51637"
+      },
+      "stdlib": {
+        "xls/dslx/stdlib/bfloat16.x": "c810ed761142c429a68f0b80559b92c6cbfe087ccd11bead091151d2ff49ee37",
+        "xls/dslx/stdlib/float_instances.x": "4c89968e94e045c51c354b8f18507f727b0b85b8dcd01b0af69db25314f314cd",
+        "xls/dslx/stdlib/hfloat16.x": "767b0b70354aa15437f689898a0dd168eba47161e999382adcbdc150b6df4243",
+        "xls/dslx/stdlib/lza.x": "6717f61514829d52e9ead876d42e5dc33cd0c48069506137bb2a1dee98b066ac",
+        "xls/dslx/stdlib/float64.x": "186e40914bdcd0be7c478e6c85204cfa9858b660a8a1dcfffab20e3e4d1ba071",
+        "xls/dslx/stdlib/fixed_point.x": "20aede1704d2cdbe515de083d05cb44c8d279aac5fcf5f52d7dc768193d1c631",
+        "xls/dslx/stdlib/std.x": "888583e31552728f6f594c9bb454173b5d8a2d55df2acdee0bd4e2e15d7f1ffa",
+        "xls/dslx/stdlib/abs_diff.x": "9006b878c3762aeea72bc42be9a012cd0c050a78364a1c09ea4f547e06059eae",
+        "xls/dslx/stdlib/apfloat.x": "5bbc79dd7842baa26ae467f5a9240ab98a5f5776b4749eb4e73dd1171b8bae8d",
+        "xls/dslx/stdlib/round.x": "ac1093df45b238fb0cf867010a9887856d6cf380d17cb5b61c69a47af77c89a0",
+        "xls/dslx/stdlib/acm_random.x": "47093ca764f983b34adaeb0f694b2a3b711815eb8beeba656d3a39ed157f7ac7",
+        "xls/dslx/stdlib/float32.x": "2dbc3bd4c5045fb1b8765b293457d6cca1ba338ca1bd5763b2957d11b0a7d84a",
+        "xls/dslx/stdlib/tests/float32_upcast_test.x": "dbff7cea87d189c915623e1d4d4274049e7a5779d7b03060e91201073da27b54",
+        "xls/dslx/stdlib/tests/float32_downcast_test.x": "20e81a55ba42a7849b2ac274811e4bb457a8b2eb501f4b304b543925e80fe0ab",
+        "xls/dslx/stdlib/tests/round_tests.x": "5f9b66ad008155f4829db2424f34cc125363f80a789d4057c1433d56fa05632b",
+        "xls/dslx/stdlib/tests/umul_instances.x": "06f7b95e669477fc30e86f9e1d32637b09cfe1fa8f9cb8ea4b351645c1b1bc91"
+      },
+      "outputs": {
+        "phi_memory_gateway.ir": "161d2f610627d3ce64075a3667071b7464f9f18e26401fc31649f467e510f26c",
+        "phi_memory_gateway.opt.ir": "5a73109fc4bf6471d6bf50f194ca2dc39124f80d3d512113962c4aa4de1ae2d3",
+        "phi_memory_gateway.v": "861255efba71c632310127b3c09339ff087935f908e83025e4a580b75301aca3"
+      }
+    },
+    "support/hls_debug_observer.build.json": {
+      "commands": [
+        [
+          ".ir",
+          [
+            "${REPO}/_build/mailbox-extraction/xls/ir_converter_main",
+            "--warnings_as_errors=false",
+            "--dslx_path=.",
+            "--dslx_stdlib_path=${REPO}/_build/mailbox-extraction/xls/xls/dslx/stdlib",
+            "--top=Observer",
+            "hls_debug_observer.x"
+          ]
+        ],
+        [
+          ".opt.ir",
+          [
+            "${REPO}/_build/mailbox-extraction/xls/opt_main",
+            "hls_debug_observer.ir"
+          ]
+        ],
+        [
+          ".v",
+          [
+            "${REPO}/_build/mailbox-extraction/xls/codegen_main",
+            "--pipeline_stages=2",
+            "--worst_case_throughput=1",
+            "--delay_model=unit",
+            "--use_system_verilog=false",
+            "--reset=reset",
+            "--fifo_module=",
+            "hls_debug_observer.opt.ir"
+          ]
+        ]
+      ],
+      "tools": {
+        "ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+        "opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c",
+        "codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162"
+      },
+      "sources": {
+        "hls_debug_framing.x": "3aad6b34dc150945749e9acc326cf1e3a73469731078154f28a43153f9bc0098",
+        "scheduler_observation.x": "7c01db596893e73678cb6eb220430127d4d2235ed09eebf530ca0efb778d8263",
+        "hls_failure.x": "fdf82b553042a347dd6f6ccb7fa3f79c12c72c811fd273bc9153f2aee707cb29",
+        "hls_vec.x": "c66c888c606ce7bc3e7b1c526cd1216e571f23fc6712f719df14dc6f5d82e5e6",
+        "hls_debug_server.x": "545125175d59232a00e68fee9883b237ff488c3d22ea61a84d1aec87bfb1b1db",
+        "hls_spatial_router.x": "3cca4008525b6831a825db8af3286df5b3d28f06bb6c505f75e06fb0fc42b6f5",
+        "frame_queue.x": "938dbaa621cc9973d505a915859c1e16e055271989929b774f874bf318a3614a",
+        "hls_debug_types.x": "8a57396f9f5c2665db164b885b379b807de6272d3078e41e0e061c993d7c9176",
+        "hls_fabric_router.x": "47beed81304b0f61ea4acd4819cf51949af91e7b560e1c4701607767ea767d44",
+        "hls_fixed.x": "a3ff6655b5cca3984d736b57712e57e5976ab6196c709742aa26850537c88902",
+        "effect_window.x": "a6450a77190293db0256eb3dccba26abb99008bd808243e860f0b72e8c9b8d81",
+        "bram.x": "8dd43b778fc9b61a5967ed5202c164563835ec90cd85e40bb0cf0b2b409e7cdf",
+        "axis.x": "ed6ef54ac090be9f5d125f7dead74effce2fa085b3a547ca65f6b55014ad22f6",
+        "frame_transport.x": "3523c8ed1ff99bb4e09c75cf62c9999fdeb46ae8fa0cec654fb8c2a9e1a6f8a9",
+        "hls_debug_observer.x": "30b1b679f80a9efbc73877090af9879f0c10d6fc0f2823afab9b8d863e6518b1",
+        "scheduler.x": "e7ab85c1f981c56fab222ed0a0d5731ac63a44fb18dfa534cd4f0fedd2b2ad7f",
+        "hls_debug_trace.x": "c51b46c19d9b0ff9883111a3dcd09b428e1d86850ca922e26403b334ecc0e54d",
+        "arbitration.x": "76f9a3fe9ae3b8e9261960428f689e9bcd64ef8723fcc351e65aaf26f2e615a3",
+        "mailbox.x": "52322c984a6679e1f8127b9cbd39edcf796f85f6002954dd9af430b5c16e2503"
+      },
+      "stdlib": {
+        "xls/dslx/stdlib/bfloat16.x": "c810ed761142c429a68f0b80559b92c6cbfe087ccd11bead091151d2ff49ee37",
+        "xls/dslx/stdlib/float_instances.x": "4c89968e94e045c51c354b8f18507f727b0b85b8dcd01b0af69db25314f314cd",
+        "xls/dslx/stdlib/hfloat16.x": "767b0b70354aa15437f689898a0dd168eba47161e999382adcbdc150b6df4243",
+        "xls/dslx/stdlib/lza.x": "6717f61514829d52e9ead876d42e5dc33cd0c48069506137bb2a1dee98b066ac",
+        "xls/dslx/stdlib/float64.x": "186e40914bdcd0be7c478e6c85204cfa9858b660a8a1dcfffab20e3e4d1ba071",
+        "xls/dslx/stdlib/fixed_point.x": "20aede1704d2cdbe515de083d05cb44c8d279aac5fcf5f52d7dc768193d1c631",
+        "xls/dslx/stdlib/std.x": "888583e31552728f6f594c9bb454173b5d8a2d55df2acdee0bd4e2e15d7f1ffa",
+        "xls/dslx/stdlib/abs_diff.x": "9006b878c3762aeea72bc42be9a012cd0c050a78364a1c09ea4f547e06059eae",
+        "xls/dslx/stdlib/apfloat.x": "5bbc79dd7842baa26ae467f5a9240ab98a5f5776b4749eb4e73dd1171b8bae8d",
+        "xls/dslx/stdlib/round.x": "ac1093df45b238fb0cf867010a9887856d6cf380d17cb5b61c69a47af77c89a0",
+        "xls/dslx/stdlib/acm_random.x": "47093ca764f983b34adaeb0f694b2a3b711815eb8beeba656d3a39ed157f7ac7",
+        "xls/dslx/stdlib/float32.x": "2dbc3bd4c5045fb1b8765b293457d6cca1ba338ca1bd5763b2957d11b0a7d84a",
+        "xls/dslx/stdlib/tests/float32_upcast_test.x": "dbff7cea87d189c915623e1d4d4274049e7a5779d7b03060e91201073da27b54",
+        "xls/dslx/stdlib/tests/float32_downcast_test.x": "20e81a55ba42a7849b2ac274811e4bb457a8b2eb501f4b304b543925e80fe0ab",
+        "xls/dslx/stdlib/tests/round_tests.x": "5f9b66ad008155f4829db2424f34cc125363f80a789d4057c1433d56fa05632b",
+        "xls/dslx/stdlib/tests/umul_instances.x": "06f7b95e669477fc30e86f9e1d32637b09cfe1fa8f9cb8ea4b351645c1b1bc91"
+      },
+      "outputs": {
+        "hls_debug_observer.ir": "bdec4469f597f5a7cf2a170ed87120b984af677ccf6c212f2e2cf7a2f98deb7f",
+        "hls_debug_observer.opt.ir": "9349b78652f18f932d35773cdf1eabe2b8a418d5d429c798f6bb15499d3bcf10",
+        "hls_debug_observer.v": "d0f150d2d61b9232803dd7362dde5866497eaa64470c99ce7376f10c27a69181"
+      }
+    },
+    "support/hls_debug_server.build.json": {
+      "commands": [
+        [
+          ".ir",
+          [
+            "${REPO}/_build/mailbox-extraction/xls/ir_converter_main",
+            "--warnings_as_errors=false",
+            "--dslx_path=.",
+            "--dslx_stdlib_path=${REPO}/_build/mailbox-extraction/xls/xls/dslx/stdlib",
+            "--top=DebugServer",
+            "hls_debug_server.x"
+          ]
+        ],
+        [
+          ".opt.ir",
+          [
+            "${REPO}/_build/mailbox-extraction/xls/opt_main",
+            "hls_debug_server.ir"
+          ]
+        ],
+        [
+          ".v",
+          [
+            "${REPO}/_build/mailbox-extraction/xls/codegen_main",
+            "--pipeline_stages=3",
+            "--worst_case_throughput=2",
+            "--delay_model=unit",
+            "--use_system_verilog=false",
+            "--reset=reset",
+            "--fifo_module=",
+            "hls_debug_server.opt.ir"
+          ]
+        ]
+      ],
+      "tools": {
+        "ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+        "opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c",
+        "codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162"
+      },
+      "sources": {
+        "hls_debug_framing.x": "3aad6b34dc150945749e9acc326cf1e3a73469731078154f28a43153f9bc0098",
+        "scheduler_observation.x": "7c01db596893e73678cb6eb220430127d4d2235ed09eebf530ca0efb778d8263",
+        "hls_failure.x": "fdf82b553042a347dd6f6ccb7fa3f79c12c72c811fd273bc9153f2aee707cb29",
+        "hls_vec.x": "c66c888c606ce7bc3e7b1c526cd1216e571f23fc6712f719df14dc6f5d82e5e6",
+        "hls_debug_server.x": "545125175d59232a00e68fee9883b237ff488c3d22ea61a84d1aec87bfb1b1db",
+        "hls_spatial_router.x": "3cca4008525b6831a825db8af3286df5b3d28f06bb6c505f75e06fb0fc42b6f5",
+        "frame_queue.x": "938dbaa621cc9973d505a915859c1e16e055271989929b774f874bf318a3614a",
+        "hls_debug_types.x": "8a57396f9f5c2665db164b885b379b807de6272d3078e41e0e061c993d7c9176",
+        "hls_fabric_router.x": "47beed81304b0f61ea4acd4819cf51949af91e7b560e1c4701607767ea767d44",
+        "hls_fixed.x": "a3ff6655b5cca3984d736b57712e57e5976ab6196c709742aa26850537c88902",
+        "effect_window.x": "a6450a77190293db0256eb3dccba26abb99008bd808243e860f0b72e8c9b8d81",
+        "bram.x": "8dd43b778fc9b61a5967ed5202c164563835ec90cd85e40bb0cf0b2b409e7cdf",
+        "axis.x": "ed6ef54ac090be9f5d125f7dead74effce2fa085b3a547ca65f6b55014ad22f6",
+        "frame_transport.x": "3523c8ed1ff99bb4e09c75cf62c9999fdeb46ae8fa0cec654fb8c2a9e1a6f8a9",
+        "hls_debug_observer.x": "30b1b679f80a9efbc73877090af9879f0c10d6fc0f2823afab9b8d863e6518b1",
+        "scheduler.x": "e7ab85c1f981c56fab222ed0a0d5731ac63a44fb18dfa534cd4f0fedd2b2ad7f",
+        "hls_debug_trace.x": "c51b46c19d9b0ff9883111a3dcd09b428e1d86850ca922e26403b334ecc0e54d",
+        "arbitration.x": "76f9a3fe9ae3b8e9261960428f689e9bcd64ef8723fcc351e65aaf26f2e615a3",
+        "mailbox.x": "52322c984a6679e1f8127b9cbd39edcf796f85f6002954dd9af430b5c16e2503"
+      },
+      "stdlib": {
+        "xls/dslx/stdlib/bfloat16.x": "c810ed761142c429a68f0b80559b92c6cbfe087ccd11bead091151d2ff49ee37",
+        "xls/dslx/stdlib/float_instances.x": "4c89968e94e045c51c354b8f18507f727b0b85b8dcd01b0af69db25314f314cd",
+        "xls/dslx/stdlib/hfloat16.x": "767b0b70354aa15437f689898a0dd168eba47161e999382adcbdc150b6df4243",
+        "xls/dslx/stdlib/lza.x": "6717f61514829d52e9ead876d42e5dc33cd0c48069506137bb2a1dee98b066ac",
+        "xls/dslx/stdlib/float64.x": "186e40914bdcd0be7c478e6c85204cfa9858b660a8a1dcfffab20e3e4d1ba071",
+        "xls/dslx/stdlib/fixed_point.x": "20aede1704d2cdbe515de083d05cb44c8d279aac5fcf5f52d7dc768193d1c631",
+        "xls/dslx/stdlib/std.x": "888583e31552728f6f594c9bb454173b5d8a2d55df2acdee0bd4e2e15d7f1ffa",
+        "xls/dslx/stdlib/abs_diff.x": "9006b878c3762aeea72bc42be9a012cd0c050a78364a1c09ea4f547e06059eae",
+        "xls/dslx/stdlib/apfloat.x": "5bbc79dd7842baa26ae467f5a9240ab98a5f5776b4749eb4e73dd1171b8bae8d",
+        "xls/dslx/stdlib/round.x": "ac1093df45b238fb0cf867010a9887856d6cf380d17cb5b61c69a47af77c89a0",
+        "xls/dslx/stdlib/acm_random.x": "47093ca764f983b34adaeb0f694b2a3b711815eb8beeba656d3a39ed157f7ac7",
+        "xls/dslx/stdlib/float32.x": "2dbc3bd4c5045fb1b8765b293457d6cca1ba338ca1bd5763b2957d11b0a7d84a",
+        "xls/dslx/stdlib/tests/float32_upcast_test.x": "dbff7cea87d189c915623e1d4d4274049e7a5779d7b03060e91201073da27b54",
+        "xls/dslx/stdlib/tests/float32_downcast_test.x": "20e81a55ba42a7849b2ac274811e4bb457a8b2eb501f4b304b543925e80fe0ab",
+        "xls/dslx/stdlib/tests/round_tests.x": "5f9b66ad008155f4829db2424f34cc125363f80a789d4057c1433d56fa05632b",
+        "xls/dslx/stdlib/tests/umul_instances.x": "06f7b95e669477fc30e86f9e1d32637b09cfe1fa8f9cb8ea4b351645c1b1bc91"
+      },
+      "outputs": {
+        "hls_debug_server.ir": "359500e3fec8ee71c101b6512320c41d4f1ca76492f45e277fac8345ef481ca8",
+        "hls_debug_server.opt.ir": "8b7684e1895f34caf84fb42d5d0366aaeb2be833a74825d6b43c938404da6452",
+        "hls_debug_server.v": "55450c967b8af406f43bc93e6713fc997e0f9382dd6c4dacdd6eaf0a45338095"
+      }
+    },
+    "support/hls_fabric_router.build.json": {
+      "commands": [
+        [
+          ".ir",
+          [
+            "${REPO}/_build/mailbox-extraction/xls/ir_converter_main",
+            "--warnings_as_errors=false",
+            "--dslx_path=.",
+            "--dslx_stdlib_path=${REPO}/_build/mailbox-extraction/xls/xls/dslx/stdlib",
+            "--top=HostRoutedTx",
+            "hls_fabric_router.x"
+          ]
+        ],
+        [
+          ".opt.ir",
+          [
+            "${REPO}/_build/mailbox-extraction/xls/opt_main",
+            "hls_fabric_router.ir"
+          ]
+        ],
+        [
+          ".v",
+          [
+            "${REPO}/_build/mailbox-extraction/xls/codegen_main",
+            "--pipeline_stages=1",
+            "--worst_case_throughput=1",
+            "--delay_model=unit",
+            "--use_system_verilog=false",
+            "--reset=reset",
+            "--fifo_module=",
+            "hls_fabric_router.opt.ir"
+          ]
+        ]
+      ],
+      "tools": {
+        "ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+        "opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c",
+        "codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162"
+      },
+      "sources": {
+        "hls_debug_framing.x": "3aad6b34dc150945749e9acc326cf1e3a73469731078154f28a43153f9bc0098",
+        "scheduler_observation.x": "7c01db596893e73678cb6eb220430127d4d2235ed09eebf530ca0efb778d8263",
+        "hls_failure.x": "fdf82b553042a347dd6f6ccb7fa3f79c12c72c811fd273bc9153f2aee707cb29",
+        "hls_vec.x": "c66c888c606ce7bc3e7b1c526cd1216e571f23fc6712f719df14dc6f5d82e5e6",
+        "hls_debug_server.x": "545125175d59232a00e68fee9883b237ff488c3d22ea61a84d1aec87bfb1b1db",
+        "hls_spatial_router.x": "3cca4008525b6831a825db8af3286df5b3d28f06bb6c505f75e06fb0fc42b6f5",
+        "frame_queue.x": "938dbaa621cc9973d505a915859c1e16e055271989929b774f874bf318a3614a",
+        "hls_debug_types.x": "8a57396f9f5c2665db164b885b379b807de6272d3078e41e0e061c993d7c9176",
+        "hls_fabric_router.x": "47beed81304b0f61ea4acd4819cf51949af91e7b560e1c4701607767ea767d44",
+        "hls_fixed.x": "a3ff6655b5cca3984d736b57712e57e5976ab6196c709742aa26850537c88902",
+        "effect_window.x": "a6450a77190293db0256eb3dccba26abb99008bd808243e860f0b72e8c9b8d81",
+        "bram.x": "8dd43b778fc9b61a5967ed5202c164563835ec90cd85e40bb0cf0b2b409e7cdf",
+        "axis.x": "ed6ef54ac090be9f5d125f7dead74effce2fa085b3a547ca65f6b55014ad22f6",
+        "frame_transport.x": "3523c8ed1ff99bb4e09c75cf62c9999fdeb46ae8fa0cec654fb8c2a9e1a6f8a9",
+        "hls_debug_observer.x": "30b1b679f80a9efbc73877090af9879f0c10d6fc0f2823afab9b8d863e6518b1",
+        "scheduler.x": "e7ab85c1f981c56fab222ed0a0d5731ac63a44fb18dfa534cd4f0fedd2b2ad7f",
+        "hls_debug_trace.x": "c51b46c19d9b0ff9883111a3dcd09b428e1d86850ca922e26403b334ecc0e54d",
+        "arbitration.x": "76f9a3fe9ae3b8e9261960428f689e9bcd64ef8723fcc351e65aaf26f2e615a3",
+        "mailbox.x": "52322c984a6679e1f8127b9cbd39edcf796f85f6002954dd9af430b5c16e2503"
+      },
+      "stdlib": {
+        "xls/dslx/stdlib/bfloat16.x": "c810ed761142c429a68f0b80559b92c6cbfe087ccd11bead091151d2ff49ee37",
+        "xls/dslx/stdlib/float_instances.x": "4c89968e94e045c51c354b8f18507f727b0b85b8dcd01b0af69db25314f314cd",
+        "xls/dslx/stdlib/hfloat16.x": "767b0b70354aa15437f689898a0dd168eba47161e999382adcbdc150b6df4243",
+        "xls/dslx/stdlib/lza.x": "6717f61514829d52e9ead876d42e5dc33cd0c48069506137bb2a1dee98b066ac",
+        "xls/dslx/stdlib/float64.x": "186e40914bdcd0be7c478e6c85204cfa9858b660a8a1dcfffab20e3e4d1ba071",
+        "xls/dslx/stdlib/fixed_point.x": "20aede1704d2cdbe515de083d05cb44c8d279aac5fcf5f52d7dc768193d1c631",
+        "xls/dslx/stdlib/std.x": "888583e31552728f6f594c9bb454173b5d8a2d55df2acdee0bd4e2e15d7f1ffa",
+        "xls/dslx/stdlib/abs_diff.x": "9006b878c3762aeea72bc42be9a012cd0c050a78364a1c09ea4f547e06059eae",
+        "xls/dslx/stdlib/apfloat.x": "5bbc79dd7842baa26ae467f5a9240ab98a5f5776b4749eb4e73dd1171b8bae8d",
+        "xls/dslx/stdlib/round.x": "ac1093df45b238fb0cf867010a9887856d6cf380d17cb5b61c69a47af77c89a0",
+        "xls/dslx/stdlib/acm_random.x": "47093ca764f983b34adaeb0f694b2a3b711815eb8beeba656d3a39ed157f7ac7",
+        "xls/dslx/stdlib/float32.x": "2dbc3bd4c5045fb1b8765b293457d6cca1ba338ca1bd5763b2957d11b0a7d84a",
+        "xls/dslx/stdlib/tests/float32_upcast_test.x": "dbff7cea87d189c915623e1d4d4274049e7a5779d7b03060e91201073da27b54",
+        "xls/dslx/stdlib/tests/float32_downcast_test.x": "20e81a55ba42a7849b2ac274811e4bb457a8b2eb501f4b304b543925e80fe0ab",
+        "xls/dslx/stdlib/tests/round_tests.x": "5f9b66ad008155f4829db2424f34cc125363f80a789d4057c1433d56fa05632b",
+        "xls/dslx/stdlib/tests/umul_instances.x": "06f7b95e669477fc30e86f9e1d32637b09cfe1fa8f9cb8ea4b351645c1b1bc91"
+      },
+      "outputs": {
+        "hls_fabric_router.ir": "e8a7dc284c0b677fa5e6f5d4ae8004920f7adf519f9bdfa44c4cda86f634527c",
+        "hls_fabric_router.opt.ir": "d40330e45cd17a8ae493fa2ccb830946245e203d9c33c46db2c82e3100ed239f",
+        "hls_fabric_router.v": "19be5e6be49ead3e16df52aa103cc2b52f925cfdc463d35dbe35a2f8cd117836"
+      }
+    }
+  },
+  "rows": [
+    {
+      "mode": "production",
+      "seed": 1,
+      "LUT": 125306,
+      "LUT_logic": 125306,
+      "LUT_RAM": 0,
+      "FF": 67774,
+      "RAMB18": 82,
+      "RAMB36": 12,
+      "DSP": 48,
+      "BRAM18_equivalent": 106
+    },
+    {
+      "mode": "all",
+      "seed": 1,
+      "LUT": 130630,
+      "LUT_logic": 130510,
+      "LUT_RAM": 120,
+      "FF": 70259,
+      "RAMB18": 82,
+      "RAMB36": 15,
+      "DSP": 48,
+      "BRAM18_equivalent": 112
+    },
+    {
+      "mode": "production",
+      "seed": 2,
+      "LUT": 125972,
+      "LUT_logic": 125972,
+      "LUT_RAM": 0,
+      "FF": 67774,
+      "RAMB18": 82,
+      "RAMB36": 12,
+      "DSP": 48,
+      "BRAM18_equivalent": 106
+    },
+    {
+      "mode": "all",
+      "seed": 2,
+      "LUT": 131467,
+      "LUT_logic": 131347,
+      "LUT_RAM": 120,
+      "FF": 70259,
+      "RAMB18": 82,
+      "RAMB36": 15,
+      "DSP": 48,
+      "BRAM18_equivalent": 112
+    },
+    {
+      "mode": "production",
+      "seed": 3,
+      "LUT": 127156,
+      "LUT_logic": 127156,
+      "LUT_RAM": 0,
+      "FF": 67774,
+      "RAMB18": 82,
+      "RAMB36": 12,
+      "DSP": 48,
+      "BRAM18_equivalent": 106
+    },
+    {
+      "mode": "all",
+      "seed": 3,
+      "LUT": 129737,
+      "LUT_logic": 129617,
+      "LUT_RAM": 120,
+      "FF": 70259,
+      "RAMB18": 82,
+      "RAMB36": 15,
+      "DSP": 48,
+      "BRAM18_equivalent": 112
+    },
+    {
+      "mode": "production",
+      "seed": 4,
+      "LUT": 126483,
+      "LUT_logic": 126483,
+      "LUT_RAM": 0,
+      "FF": 67774,
+      "RAMB18": 82,
+      "RAMB36": 12,
+      "DSP": 48,
+      "BRAM18_equivalent": 106
+    },
+    {
+      "mode": "all",
+      "seed": 4,
+      "LUT": 131889,
+      "LUT_logic": 131769,
+      "LUT_RAM": 120,
+      "FF": 70259,
+      "RAMB18": 82,
+      "RAMB36": 15,
+      "DSP": 48,
+      "BRAM18_equivalent": 112
+    },
+    {
+      "mode": "production",
+      "seed": 5,
+      "LUT": 125978,
+      "LUT_logic": 125978,
+      "LUT_RAM": 0,
+      "FF": 67774,
+      "RAMB18": 82,
+      "RAMB36": 12,
+      "DSP": 48,
+      "BRAM18_equivalent": 106
+    },
+    {
+      "mode": "all",
+      "seed": 5,
+      "LUT": 130554,
+      "LUT_logic": 130434,
+      "LUT_RAM": 120,
+      "FF": 70259,
+      "RAMB18": 82,
+      "RAMB36": 15,
+      "DSP": 48,
+      "BRAM18_equivalent": 112
+    }
+  ],
+  "summary": {
+    "production": {
+      "LUT": {
+        "best": 125306,
+        "mean": 126179,
+        "variance": 378464.8,
+        "worst": 127156
+      },
+      "LUT_logic": {
+        "best": 125306,
+        "mean": 126179,
+        "variance": 378464.8,
+        "worst": 127156
+      },
+      "LUT_RAM": {
+        "best": 0,
+        "mean": 0,
+        "variance": 0,
+        "worst": 0
+      },
+      "FF": {
+        "best": 67774,
+        "mean": 67774,
+        "variance": 0,
+        "worst": 67774
+      },
+      "RAMB18": {
+        "best": 82,
+        "mean": 82,
+        "variance": 0,
+        "worst": 82
+      },
+      "RAMB36": {
+        "best": 12,
+        "mean": 12,
+        "variance": 0,
+        "worst": 12
+      },
+      "DSP": {
+        "best": 48,
+        "mean": 48,
+        "variance": 0,
+        "worst": 48
+      },
+      "BRAM18_equivalent": {
+        "best": 106,
+        "mean": 106,
+        "variance": 0,
+        "worst": 106
+      }
+    },
+    "all": {
+      "LUT": {
+        "best": 129737,
+        "mean": 130855.4,
+        "variance": 566969.84,
+        "worst": 131889
+      },
+      "LUT_logic": {
+        "best": 129617,
+        "mean": 130735.4,
+        "variance": 566969.84,
+        "worst": 131769
+      },
+      "LUT_RAM": {
+        "best": 120,
+        "mean": 120,
+        "variance": 0,
+        "worst": 120
+      },
+      "FF": {
+        "best": 70259,
+        "mean": 70259,
+        "variance": 0,
+        "worst": 70259
+      },
+      "RAMB18": {
+        "best": 82,
+        "mean": 82,
+        "variance": 0,
+        "worst": 82
+      },
+      "RAMB36": {
+        "best": 15,
+        "mean": 15,
+        "variance": 0,
+        "worst": 15
+      },
+      "DSP": {
+        "best": 48,
+        "mean": 48,
+        "variance": 0,
+        "worst": 48
+      },
+      "BRAM18_equivalent": {
+        "best": 112,
+        "mean": 112,
+        "variance": 0,
+        "worst": 112
+      }
+    }
+  },
+  "runs": [
+    {
+      "mode": "production",
+      "seed": 1,
+      "cells": {
+        "$scopeinfo": 133,
+        "CARRY4": 1699,
+        "DSP48E1": 48,
+        "FDRE": 67774,
+        "INV": 767,
+        "LUT1": 49,
+        "LUT2": 12556,
+        "LUT3": 32660,
+        "LUT4": 23252,
+        "LUT5": 30719,
+        "LUT6": 26070,
+        "MUXF7": 117,
+        "MUXF8": 37,
+        "RAMB18E1": 82,
+        "RAMB36E1": 12
+      },
+      "script": "read_json \"${REPO}/_build/composed-debug/area/sources/production.json\"\nhierarchy -check -top phi_memory_top\nproc\nflatten\nopt\nmemory_collect\nrename -scramble-name -seed 1\nsynth_xilinx -flatten -abc9 -arch xc7 -noiopad -noclkbuf -top phi_memory_top\ncheck -assert\nscc -expect 0\ntee -o \"${REPO}/_build/composed-debug/area/production-1.json\" stat -json -tech xilinx\n",
+      "digests": {
+        ".ys": "abce931fd320d0baa12143442d8e63f61dc85f62d59bc6bf078e319e3fda3e2f",
+        ".json": "cf8bde0011497f3e8b7bd3150d9b410a346db69d3984914f6ecc62dcf3ada98c",
+        ".log": "51304f344d65eff5607f948c88089a21dd5dbda7b0dd5bed53555fc7d1c0c42a"
+      },
+      "warnings": {
+        "Warning: found logic loop in module phi_memory_top:": 141
+      },
+      "final_check_problems": 0,
+      "final_sccs": 0
+    },
+    {
+      "mode": "all",
+      "seed": 1,
+      "cells": {
+        "$scopeinfo": 149,
+        "CARRY4": 2086,
+        "DSP48E1": 48,
+        "FDRE": 70255,
+        "FDSE": 4,
+        "INV": 802,
+        "LUT1": 36,
+        "LUT2": 13513,
+        "LUT3": 29604,
+        "LUT4": 22915,
+        "LUT5": 32991,
+        "LUT6": 31451,
+        "MUXF7": 101,
+        "MUXF8": 37,
+        "RAM32M": 30,
+        "RAMB18E1": 82,
+        "RAMB36E1": 15
+      },
+      "script": "read_json \"${REPO}/_build/composed-debug/area/sources/instrumented.json\"\nread_verilog -sv \"${REPO}/_build/composed-debug/area/sources/debug_top.v\" \"${REPO}/_build/composed-debug/area/sources/hls_debug_frame_rx.v\" \"${REPO}/_build/composed-debug/area/sources/hls_debug_route.v\" \"${REPO}/_build/composed-debug/area/sources/hls_topology_debug.v\" \"${REPO}/_build/composed-debug/area/sources/hls_actor_snapshot.v\" \"${REPO}/_build/composed-debug/area/sources/hls_debug_monitor.v\" \"${REPO}/_build/composed-debug/area/sources/hls_debug_tap.v\" \"${REPO}/_build/composed-debug/area/sources/hls_trace_store.v\" \"${REPO}/_build/composed-debug/area/sources/hls_debug_observer.v\" \"${REPO}/_build/composed-debug/area/sources/hls_debug_server.v\"\nhierarchy -check -top hls_debug_application\nproc\nflatten\nopt\nmemory_collect\nrename -scramble-name -seed 1\nsynth_xilinx -flatten -abc9 -arch xc7 -noiopad -noclkbuf -top hls_debug_application\ncheck -assert\nscc -expect 0\ntee -o \"${REPO}/_build/composed-debug/area/all-1.json\" stat -json -tech xilinx\n",
+      "digests": {
+        ".ys": "1bfa0358a5fd2282d663808e9471fb2991785cf73d1b532d89e3026776af2952",
+        ".json": "638bbb29e5b991138995394bf6fedea0679a4a203db334bd68d72e99eeb06169",
+        ".log": "72563d36bbe43866ec18a70cf4738e0857e1d5d5c6e51ff72ea76ac1fe29edc7"
+      },
+      "warnings": {
+        "Warning: found logic loop in module hls_debug_application:": 123
+      },
+      "final_check_problems": 0,
+      "final_sccs": 0
+    },
+    {
+      "mode": "production",
+      "seed": 2,
+      "cells": {
+        "$scopeinfo": 133,
+        "CARRY4": 1685,
+        "DSP48E1": 48,
+        "FDRE": 67774,
+        "INV": 761,
+        "LUT1": 36,
+        "LUT2": 12748,
+        "LUT3": 32517,
+        "LUT4": 21948,
+        "LUT5": 31036,
+        "LUT6": 27687,
+        "MUXF7": 130,
+        "MUXF8": 37,
+        "RAMB18E1": 82,
+        "RAMB36E1": 12
+      },
+      "script": "read_json \"${REPO}/_build/composed-debug/area/sources/production.json\"\nhierarchy -check -top phi_memory_top\nproc\nflatten\nopt\nmemory_collect\nrename -scramble-name -seed 2\nsynth_xilinx -flatten -abc9 -arch xc7 -noiopad -noclkbuf -top phi_memory_top\ncheck -assert\nscc -expect 0\ntee -o \"${REPO}/_build/composed-debug/area/production-2.json\" stat -json -tech xilinx\n",
+      "digests": {
+        ".ys": "fdfc1fa689e285e6e35243ccb4d78403024885b746c98fddaf5ac0feb36124d9",
+        ".json": "c14e77ff142be7854a1638c09ec90d787005c284a9bf044c0f322df0fbb7b5dd",
+        ".log": "f3d1ea8cb804ce1b7426d21c0cb65f251ab209cb0463dd4578cbf815b61f3403"
+      },
+      "warnings": {
+        "Warning: found logic loop in module phi_memory_top:": 178
+      },
+      "final_check_problems": 0,
+      "final_sccs": 0
+    },
+    {
+      "mode": "all",
+      "seed": 2,
+      "cells": {
+        "$scopeinfo": 149,
+        "CARRY4": 2078,
+        "DSP48E1": 48,
+        "FDRE": 70255,
+        "FDSE": 4,
+        "INV": 792,
+        "LUT1": 14,
+        "LUT2": 13517,
+        "LUT3": 33136,
+        "LUT4": 22844,
+        "LUT5": 34316,
+        "LUT6": 27520,
+        "MUXF7": 101,
+        "MUXF8": 28,
+        "RAM32M": 30,
+        "RAMB18E1": 82,
+        "RAMB36E1": 15
+      },
+      "script": "read_json \"${REPO}/_build/composed-debug/area/sources/instrumented.json\"\nread_verilog -sv \"${REPO}/_build/composed-debug/area/sources/debug_top.v\" \"${REPO}/_build/composed-debug/area/sources/hls_debug_frame_rx.v\" \"${REPO}/_build/composed-debug/area/sources/hls_debug_route.v\" \"${REPO}/_build/composed-debug/area/sources/hls_topology_debug.v\" \"${REPO}/_build/composed-debug/area/sources/hls_actor_snapshot.v\" \"${REPO}/_build/composed-debug/area/sources/hls_debug_monitor.v\" \"${REPO}/_build/composed-debug/area/sources/hls_debug_tap.v\" \"${REPO}/_build/composed-debug/area/sources/hls_trace_store.v\" \"${REPO}/_build/composed-debug/area/sources/hls_debug_observer.v\" \"${REPO}/_build/composed-debug/area/sources/hls_debug_server.v\"\nhierarchy -check -top hls_debug_application\nproc\nflatten\nopt\nmemory_collect\nrename -scramble-name -seed 2\nsynth_xilinx -flatten -abc9 -arch xc7 -noiopad -noclkbuf -top hls_debug_application\ncheck -assert\nscc -expect 0\ntee -o \"${REPO}/_build/composed-debug/area/all-2.json\" stat -json -tech xilinx\n",
+      "digests": {
+        ".ys": "19cb9bc089319fdf811a7310ee0068f26326fe43d28a1ec1e7ced10664638ad7",
+        ".json": "4134cb44c90180d484ecef521b0cffbe0ea99adcffdd61d6f9501cabff726323",
+        ".log": "b5696decd63405f59c09304bc9f4f79ea967526a3a810148326b9f89a873b6f4"
+      },
+      "warnings": {
+        "Warning: found logic loop in module hls_debug_application:": 158
+      },
+      "final_check_problems": 0,
+      "final_sccs": 0
+    },
+    {
+      "mode": "production",
+      "seed": 3,
+      "cells": {
+        "$scopeinfo": 133,
+        "CARRY4": 1691,
+        "DSP48E1": 48,
+        "FDRE": 67774,
+        "INV": 775,
+        "LUT1": 52,
+        "LUT2": 13097,
+        "LUT3": 34592,
+        "LUT4": 21689,
+        "LUT5": 32141,
+        "LUT6": 25585,
+        "MUXF7": 161,
+        "MUXF8": 56,
+        "RAMB18E1": 82,
+        "RAMB36E1": 12
+      },
+      "script": "read_json \"${REPO}/_build/composed-debug/area/sources/production.json\"\nhierarchy -check -top phi_memory_top\nproc\nflatten\nopt\nmemory_collect\nrename -scramble-name -seed 3\nsynth_xilinx -flatten -abc9 -arch xc7 -noiopad -noclkbuf -top phi_memory_top\ncheck -assert\nscc -expect 0\ntee -o \"${REPO}/_build/composed-debug/area/production-3.json\" stat -json -tech xilinx\n",
+      "digests": {
+        ".ys": "1365a03d28c7c4e64c9350d30da900cdaaab469e93106c066df2df141c51530c",
+        ".json": "c02b4658657f4c7ef0534c29fccbfe877637ee60b5bd0c7417db440532664959",
+        ".log": "458e45c11bba1f933b0ced38b8a8c1ce2fef90edcd3070b91a8b821cc32c70f6"
+      },
+      "warnings": {
+        "Warning: found logic loop in module phi_memory_top:": 141
+      },
+      "final_check_problems": 0,
+      "final_sccs": 0
+    },
+    {
+      "mode": "all",
+      "seed": 3,
+      "cells": {
+        "$scopeinfo": 149,
+        "CARRY4": 2083,
+        "DSP48E1": 48,
+        "FDRE": 70255,
+        "FDSE": 4,
+        "INV": 802,
+        "LUT1": 26,
+        "LUT2": 13455,
+        "LUT3": 32308,
+        "LUT4": 23047,
+        "LUT5": 34352,
+        "LUT6": 26429,
+        "MUXF7": 60,
+        "MUXF8": 17,
+        "RAM32M": 30,
+        "RAMB18E1": 82,
+        "RAMB36E1": 15
+      },
+      "script": "read_json \"${REPO}/_build/composed-debug/area/sources/instrumented.json\"\nread_verilog -sv \"${REPO}/_build/composed-debug/area/sources/debug_top.v\" \"${REPO}/_build/composed-debug/area/sources/hls_debug_frame_rx.v\" \"${REPO}/_build/composed-debug/area/sources/hls_debug_route.v\" \"${REPO}/_build/composed-debug/area/sources/hls_topology_debug.v\" \"${REPO}/_build/composed-debug/area/sources/hls_actor_snapshot.v\" \"${REPO}/_build/composed-debug/area/sources/hls_debug_monitor.v\" \"${REPO}/_build/composed-debug/area/sources/hls_debug_tap.v\" \"${REPO}/_build/composed-debug/area/sources/hls_trace_store.v\" \"${REPO}/_build/composed-debug/area/sources/hls_debug_observer.v\" \"${REPO}/_build/composed-debug/area/sources/hls_debug_server.v\"\nhierarchy -check -top hls_debug_application\nproc\nflatten\nopt\nmemory_collect\nrename -scramble-name -seed 3\nsynth_xilinx -flatten -abc9 -arch xc7 -noiopad -noclkbuf -top hls_debug_application\ncheck -assert\nscc -expect 0\ntee -o \"${REPO}/_build/composed-debug/area/all-3.json\" stat -json -tech xilinx\n",
+      "digests": {
+        ".ys": "dfac283164f28f966f527f4eb581f523f402e5f6c75f720fba1fdb9c9c6fb689",
+        ".json": "e667df10c238d098b20b6e9a7c3508422dc7c78716c7fb978fae25d6f1f2134b",
+        ".log": "04fc5a466154d28ee6f980d784b1ff33ba72f5de897c98fdc98662c989d5c24e"
+      },
+      "warnings": {
+        "Warning: found logic loop in module hls_debug_application:": 125
+      },
+      "final_check_problems": 0,
+      "final_sccs": 0
+    },
+    {
+      "mode": "production",
+      "seed": 4,
+      "cells": {
+        "$scopeinfo": 133,
+        "CARRY4": 1707,
+        "DSP48E1": 48,
+        "FDRE": 67774,
+        "INV": 768,
+        "LUT1": 51,
+        "LUT2": 12244,
+        "LUT3": 32144,
+        "LUT4": 23165,
+        "LUT5": 34410,
+        "LUT6": 24469,
+        "MUXF7": 112,
+        "MUXF8": 39,
+        "RAMB18E1": 82,
+        "RAMB36E1": 12
+      },
+      "script": "read_json \"${REPO}/_build/composed-debug/area/sources/production.json\"\nhierarchy -check -top phi_memory_top\nproc\nflatten\nopt\nmemory_collect\nrename -scramble-name -seed 4\nsynth_xilinx -flatten -abc9 -arch xc7 -noiopad -noclkbuf -top phi_memory_top\ncheck -assert\nscc -expect 0\ntee -o \"${REPO}/_build/composed-debug/area/production-4.json\" stat -json -tech xilinx\n",
+      "digests": {
+        ".ys": "558588e57ea840e306140cd726387696cc702e3cc850fc45d94979ca1f6200f4",
+        ".json": "297c722a30e00a684ff660033cb871b165facfa30f06cfd9b836ff96e125c986",
+        ".log": "abb505335bc465c5dd19fcacbeb90427d188c60d39b734003e65788500a444c4"
+      },
+      "warnings": {
+        "Warning: found logic loop in module phi_memory_top:": 141
+      },
+      "final_check_problems": 0,
+      "final_sccs": 0
+    },
+    {
+      "mode": "all",
+      "seed": 4,
+      "cells": {
+        "$scopeinfo": 149,
+        "CARRY4": 2081,
+        "DSP48E1": 48,
+        "FDRE": 70255,
+        "FDSE": 4,
+        "INV": 802,
+        "LUT1": 14,
+        "LUT2": 14076,
+        "LUT3": 34295,
+        "LUT4": 22258,
+        "LUT5": 32417,
+        "LUT6": 28709,
+        "MUXF7": 81,
+        "MUXF8": 23,
+        "RAM32M": 30,
+        "RAMB18E1": 82,
+        "RAMB36E1": 15
+      },
+      "script": "read_json \"${REPO}/_build/composed-debug/area/sources/instrumented.json\"\nread_verilog -sv \"${REPO}/_build/composed-debug/area/sources/debug_top.v\" \"${REPO}/_build/composed-debug/area/sources/hls_debug_frame_rx.v\" \"${REPO}/_build/composed-debug/area/sources/hls_debug_route.v\" \"${REPO}/_build/composed-debug/area/sources/hls_topology_debug.v\" \"${REPO}/_build/composed-debug/area/sources/hls_actor_snapshot.v\" \"${REPO}/_build/composed-debug/area/sources/hls_debug_monitor.v\" \"${REPO}/_build/composed-debug/area/sources/hls_debug_tap.v\" \"${REPO}/_build/composed-debug/area/sources/hls_trace_store.v\" \"${REPO}/_build/composed-debug/area/sources/hls_debug_observer.v\" \"${REPO}/_build/composed-debug/area/sources/hls_debug_server.v\"\nhierarchy -check -top hls_debug_application\nproc\nflatten\nopt\nmemory_collect\nrename -scramble-name -seed 4\nsynth_xilinx -flatten -abc9 -arch xc7 -noiopad -noclkbuf -top hls_debug_application\ncheck -assert\nscc -expect 0\ntee -o \"${REPO}/_build/composed-debug/area/all-4.json\" stat -json -tech xilinx\n",
+      "digests": {
+        ".ys": "46558a7ec3dfdd751f5ead09fcb4325d70bd717150757848b873731201b11b23",
+        ".json": "1b9ad194c2b569aa058c0afd4ea570a63450dda58e8a1f87ddf4aa3451cc4338",
+        ".log": "c350b015612149a3dd699deebef0814290373dc1ea723f4ac4e7e08e4dde624b"
+      },
+      "warnings": {
+        "Warning: found logic loop in module hls_debug_application:": 162
+      },
+      "final_check_problems": 0,
+      "final_sccs": 0
+    },
+    {
+      "mode": "production",
+      "seed": 5,
+      "cells": {
+        "$scopeinfo": 133,
+        "CARRY4": 1699,
+        "DSP48E1": 48,
+        "FDRE": 67774,
+        "INV": 785,
+        "LUT1": 54,
+        "LUT2": 12364,
+        "LUT3": 33056,
+        "LUT4": 21520,
+        "LUT5": 31626,
+        "LUT6": 27358,
+        "MUXF7": 114,
+        "MUXF8": 39,
+        "RAMB18E1": 82,
+        "RAMB36E1": 12
+      },
+      "script": "read_json \"${REPO}/_build/composed-debug/area/sources/production.json\"\nhierarchy -check -top phi_memory_top\nproc\nflatten\nopt\nmemory_collect\nrename -scramble-name -seed 5\nsynth_xilinx -flatten -abc9 -arch xc7 -noiopad -noclkbuf -top phi_memory_top\ncheck -assert\nscc -expect 0\ntee -o \"${REPO}/_build/composed-debug/area/production-5.json\" stat -json -tech xilinx\n",
+      "digests": {
+        ".ys": "add77172ef710fab51ee7209275e68c8e3a19269e796558115d87bd5303ceb6a",
+        ".json": "fe9df45e8fb799c167ea4a53175c8b7ee038bc914c197f2c10b01d742639495c",
+        ".log": "8cf37246108006786424f7ae996934a7c0693bdc1ad894537140a4eab909d039"
+      },
+      "warnings": {
+        "Warning: found logic loop in module phi_memory_top:": 141
+      },
+      "final_check_problems": 0,
+      "final_sccs": 0
+    },
+    {
+      "mode": "all",
+      "seed": 5,
+      "cells": {
+        "$scopeinfo": 149,
+        "CARRY4": 2080,
+        "DSP48E1": 48,
+        "FDRE": 70255,
+        "FDSE": 4,
+        "INV": 802,
+        "LUT1": 18,
+        "LUT2": 13843,
+        "LUT3": 30872,
+        "LUT4": 23242,
+        "LUT5": 33464,
+        "LUT6": 28995,
+        "MUXF7": 70,
+        "MUXF8": 22,
+        "RAM32M": 30,
+        "RAMB18E1": 82,
+        "RAMB36E1": 15
+      },
+      "script": "read_json \"${REPO}/_build/composed-debug/area/sources/instrumented.json\"\nread_verilog -sv \"${REPO}/_build/composed-debug/area/sources/debug_top.v\" \"${REPO}/_build/composed-debug/area/sources/hls_debug_frame_rx.v\" \"${REPO}/_build/composed-debug/area/sources/hls_debug_route.v\" \"${REPO}/_build/composed-debug/area/sources/hls_topology_debug.v\" \"${REPO}/_build/composed-debug/area/sources/hls_actor_snapshot.v\" \"${REPO}/_build/composed-debug/area/sources/hls_debug_monitor.v\" \"${REPO}/_build/composed-debug/area/sources/hls_debug_tap.v\" \"${REPO}/_build/composed-debug/area/sources/hls_trace_store.v\" \"${REPO}/_build/composed-debug/area/sources/hls_debug_observer.v\" \"${REPO}/_build/composed-debug/area/sources/hls_debug_server.v\"\nhierarchy -check -top hls_debug_application\nproc\nflatten\nopt\nmemory_collect\nrename -scramble-name -seed 5\nsynth_xilinx -flatten -abc9 -arch xc7 -noiopad -noclkbuf -top hls_debug_application\ncheck -assert\nscc -expect 0\ntee -o \"${REPO}/_build/composed-debug/area/all-5.json\" stat -json -tech xilinx\n",
+      "digests": {
+        ".ys": "3563b535083accfb29191eaa0a56148cbadcb8cf37a68e4cd234b60a69bf38fb",
+        ".json": "94cfb88dcbbef4ca7c9a1cd2f3710b4856f6c5152967e052c3a2a65539f06cc4",
+        ".log": "eef8bc02188babfefa22bd9d75f287072dcb55f6d260a82742233a3ca42fd2ab"
+      },
+      "warnings": {
+        "Warning: found logic loop in module hls_debug_application:": 137
+      },
+      "final_check_problems": 0,
+      "final_sccs": 0
+    }
+  ],
+  "ci": {
+    "run": "https://github.com/ecpeterson/erl_hls/actions/runs/34749616515",
+    "jobs": {
+      "test": "success",
+      "complete-debug": "success"
+    },
+    "source_revision": "46ce95c",
+    "application_cycles_compared": 11839,
+    "application_beats_while_debug_blocked": 512,
+    "integration_log_sha256": "98c266da69c93c376a1fb58e8c7419efdffadde75a0b4faf645dd92befeadf2d"
+  },
+  "interrupted_mapping": {
+    "mode": "production",
+    "seed": 2,
+    "returncode": -6,
+    "failed_log_sha256": "71edb661c20f2170670ddfa09184502189380b1552a01aa886345cf816630ca5",
+    "crash": {
+      "exception": {
+        "codes": "0x0000000000000000, 0x0000000000000000",
+        "rawCodes": [
+          0,
+          0
+        ],
+        "type": "EXC_CRASH",
+        "signal": "SIGABRT"
+      },
+      "termination": {
+        "flags": 0,
+        "code": 6,
+        "namespace": "SIGNAL",
+        "indicator": "Abort trap: 6",
+        "byProc": "yosys",
+        "byPid": 83378
+      },
+      "asi": {
+        "libsystem_c.dylib": [
+          "abort() called"
+        ]
+      },
+      "triggered_frames": [
+        {
+          "imageOffset": 38376,
+          "symbol": "__pthread_kill",
+          "symbolLocation": 8,
+          "imageIndex": 6
+        },
+        {
+          "imageOffset": 26840,
+          "symbol": "pthread_kill",
+          "symbolLocation": 296,
+          "imageIndex": 7
+        },
+        {
+          "imageOffset": 493124,
+          "symbol": "abort",
+          "symbolLocation": 148,
+          "imageIndex": 8
+        },
+        {
+          "imageOffset": 55872,
+          "symbol": "malloc_vreport",
+          "symbolLocation": 892,
+          "imageIndex": 9
+        },
+        {
+          "imageOffset": 70284,
+          "symbol": "malloc_report",
+          "symbolLocation": 64,
+          "imageIndex": 9
+        },
+        {
+          "imageOffset": 91720,
+          "symbol": "___BUG_IN_CLIENT_OF_LIBMALLOC_POINTER_BEING_FREED_WAS_NOT_ALLOCATED",
+          "symbolLocation": 76,
+          "imageIndex": 9
+        },
+        {
+          "imageOffset": 2788596,
+          "symbol": "Yosys::hashlib::dict<std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char>>, int, Yosys::hashlib::hash_ops<std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char>>>>::do_rehash()",
+          "symbolLocation": 120,
+          "imageIndex": 0
+        },
+        {
+          "imageOffset": 2788432,
+          "symbol": "Yosys::hashlib::dict<std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char>>, int, Yosys::hashlib::hash_ops<std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char>>>>::do_insert(std::__1::pair<std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char>>, int>&&, unsigned int const&)",
+          "symbolLocation": 272,
+          "imageIndex": 0
+        },
+        {
+          "imageOffset": 2738648,
+          "symbol": "Yosys::hashlib::dict<std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char>>, int, Yosys::hashlib::hash_ops<std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char>>>>::operator[](std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char>> const&)",
+          "symbolLocation": 432,
+          "imageIndex": 0
+        },
+        {
+          "imageOffset": 8013820,
+          "symbol": "std::__1::__function::__func<(anonymous namespace)::fixup_unused_cells_and_mems((anonymous namespace)::CellAnalysis&, (anonymous namespace)::MemAnalysis&, (anonymous namespace)::CellTraversal&, Yosys::AnalysisContext&, Yosys::CleanRunContext&)::$_0, std::__1::allocator<(anonymous namespace)::fixup_unused_cells_and_mems((anonymous namespace)::CellAnalysis&, (anonymous namespace)::MemAnalysis&, (anonymous namespace)::CellTraversal&, Yosys::AnalysisContext&, Yosys::CleanRunContext&)::$_0>, void (Yosys::ParallelDispatchThreadPool::RunCtx const&)>::operator()(Yosys::ParallelDispatchThreadPool::RunCtx const&)",
+          "symbolLocation": 2596,
+          "imageIndex": 0
+        },
+        {
+          "imageOffset": 1872080,
+          "symbol": "Yosys::ParallelDispatchThreadPool::run(std::__1::function<void (Yosys::ParallelDispatchThreadPool::RunCtx const&)>, int)",
+          "symbolLocation": 164,
+          "imageIndex": 0
+        },
+        {
+          "imageOffset": 7983120,
+          "symbol": "Yosys::rmunused_module_cells(Yosys::RTLIL::Module*, Yosys::ParallelDispatchThreadPool::Subpool&, Yosys::CleanRunContext&)",
+          "symbolLocation": 5976,
+          "imageIndex": 0
+        },
+        {
+          "imageOffset": 8095704,
+          "symbol": "(anonymous namespace)::rmunused_module(Yosys::RTLIL::Module*, bool, Yosys::CleanRunContext&)",
+          "symbolLocation": 344,
+          "imageIndex": 0
+        },
+        {
+          "imageOffset": 8094792,
+          "symbol": "(anonymous namespace)::OptCleanPass::execute(std::__1::vector<std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char>>, std::__1::allocator<std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char>>>>, Yosys::RTLIL::Design*)",
+          "symbolLocation": 1136,
+          "imageIndex": 0
+        },
+        {
+          "imageOffset": 220308,
+          "symbol": "Yosys::Pass::call(Yosys::RTLIL::Design*, std::__1::vector<std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char>>, std::__1::allocator<std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char>>>>)",
+          "symbolLocation": 1604,
+          "imageIndex": 0
+        },
+        {
+          "imageOffset": 217304,
+          "symbol": "Yosys::Pass::call(Yosys::RTLIL::Design*, std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char>>)",
+          "symbolLocation": 2832,
+          "imageIndex": 0
+        }
+      ]
+    }
+  },
+  "functional": {
+    "application": {
+      "cycles": 11840,
+      "release_cycle": 7898,
+      "last_output": 11400,
+      "recovery_cycles": 3502,
+      "rx_beats": 411,
+      "tx_beats": 2515,
+      "tx_beats_while_debug_blocked": 512
+    },
+    "public_observations": {
+      "counters": {
+        "blocked": {
+          "version": 5,
+          "app_rx_frames": 1,
+          "app_tx_stall_cycles": 5036,
+          "app_tx_beats": 0,
+          "observation_drops": 0,
+          "app_rx_beats": 5,
+          "app_rx_stall_cycles": 0,
+          "app_tx_frames": 0,
+          "cycles": 5323,
+          "framing": {
+            "rx": "boundary",
+            "rx_gap_pending": false,
+            "tx": "boundary",
+            "tx_gap_pending": false
+          }
+        },
+        "final": {
+          "version": 5,
+          "app_rx_frames": 82,
+          "app_tx_stall_cycles": 7611,
+          "app_tx_beats": 2248,
+          "observation_drops": 0,
+          "app_rx_beats": 411,
+          "app_rx_stall_cycles": 1105,
+          "app_tx_frames": 449,
+          "cycles": 11365,
+          "framing": {
+            "rx": "boundary",
+            "rx_gap_pending": false,
+            "tx": "payload",
+            "tx_gap_pending": false
+          }
+        },
+        "during": {
+          "version": 5,
+          "app_rx_frames": 18,
+          "app_tx_stall_cycles": 7611,
+          "app_tx_beats": 534,
+          "observation_drops": 0,
+          "app_rx_beats": 90,
+          "app_rx_stall_cycles": 0,
+          "app_tx_frames": 106,
+          "cycles": 8762,
+          "framing": {
+            "rx": "boundary",
+            "rx_gap_pending": false,
+            "tx": "payload",
+            "tx_gap_pending": false
+          }
+        }
+      },
+      "witness": {
+        "row": {
+          "y": 4,
+          "parity": 1
+        },
+        "measurement": "z",
+        "closeout_step": 18,
+        "corrections": 80,
+        "final_data_qubits": 18
+      },
+      "traces": {
+        "first_trace": {
+          "count": 1,
+          "version": 2,
+          "dropped": 0,
+          "observation_drops": 0,
+          "framing": {
+            "rx": "boundary",
+            "rx_gap_pending": false,
+            "tx": "boundary",
+            "tx_gap_pending": false
+          },
+          "record_words": 3
+        },
+        "later_trace": {
+          "count": 64,
+          "version": 2,
+          "dropped": 472,
+          "observation_drops": 0,
+          "framing": {
+            "rx": "boundary",
+            "rx_gap_pending": false,
+            "tx": "boundary",
+            "tx_gap_pending": false
+          },
+          "record_words": 3
+        }
+      }
+    },
+    "blocked_waits": {
+      "reobserved_blocked": [
+        134,
+        152,
+        182,
+        185,
+        35,
+        193,
+        37,
+        180,
+        188,
+        10,
+        3,
+        36,
+        38,
+        4,
+        216
+      ],
+      "edges": [
+        {
+          "next": [],
+          "kind": "ambiguous",
+          "channel": 134
+        },
+        {
+          "next": [],
+          "kind": "ambiguous",
+          "channel": 152
+        },
+        {
+          "next": [
+            178,
+            179,
+            181,
+            183,
+            184,
+            185
+          ],
+          "kind": "component",
+          "channel": 182,
+          "endpoint": [
+            "application",
+            "__phi_noise_topology__Top_0_next_inst",
+            "__phi_noise_topology__SchedulerGrid_0_next_inst",
+            "__phi_noise_topology__SchedulerRouter2_0_next_inst"
+          ]
+        },
+        {
+          "next": [
+            35
+          ],
+          "queue": 249,
+          "kind": "fifo",
+          "channel": 185
+        },
+        {
+          "next": [
+            36
+          ],
+          "kind": "component",
+          "channel": 35,
+          "endpoint": [
+            "application",
+            "__phi_noise_topology__Top_0_next_inst",
+            "__phi_noise_topology__SchedulerGrid_0_next_inst",
+            "__frame_transport__FrameRelay_0_next_inst"
+          ]
+        },
+        {
+          "next": [
+            37
+          ],
+          "queue": 250,
+          "kind": "fifo",
+          "channel": 193
+        },
+        {
+          "next": [
+            38
+          ],
+          "kind": "component",
+          "channel": 37,
+          "endpoint": [
+            "application",
+            "__phi_noise_topology__Top_0_next_inst",
+            "__phi_noise_topology__SchedulerGrid_0_next_inst",
+            "__frame_transport__FrameRelay_0_next_inst_1"
+          ]
+        },
+        {
+          "next": [
+            178,
+            179,
+            181,
+            183,
+            184,
+            185
+          ],
+          "kind": "component",
+          "channel": 180,
+          "endpoint": [
+            "application",
+            "__phi_noise_topology__Top_0_next_inst",
+            "__phi_noise_topology__SchedulerGrid_0_next_inst",
+            "__phi_noise_topology__SchedulerRouter2_0_next_inst"
+          ]
+        },
+        {
+          "next": [
+            186,
+            187,
+            189,
+            191,
+            192,
+            193
+          ],
+          "kind": "component",
+          "channel": 188,
+          "endpoint": [
+            "application",
+            "__phi_noise_topology__Top_0_next_inst",
+            "__phi_noise_topology__SchedulerGrid_0_next_inst",
+            "__phi_noise_topology__SchedulerRouter3_0_next_inst"
+          ]
+        },
+        {
+          "next": [
+            3
+          ],
+          "queue": 291,
+          "kind": "fifo",
+          "channel": 10
+        },
+        {
+          "next": [
+            4
+          ],
+          "kind": "component",
+          "channel": 3,
+          "endpoint": [
+            "application",
+            "__hls_fabric_router__EgressGate_0_next_inst"
+          ]
+        },
+        {
+          "next": [],
+          "kind": "ambiguous",
+          "channel": 36
+        },
+        {
+          "next": [],
+          "kind": "ambiguous",
+          "channel": 38
+        },
+        {
+          "next": [
+            216
+          ],
+          "kind": "component",
+          "channel": 4,
+          "endpoint": [
+            "application_egress",
+            "__hls_fabric_router__RoutedTx_0__0_next_inst"
+          ]
+        },
+        {
+          "next": [],
+          "kind": "external_sink",
+          "channel": 216,
+          "endpoint": "m_axis"
+        }
+      ],
+      "fingerprint": "9f581d0e7f103b61549335a021c93c133bd3918620c4c3a23bd647b279818198",
+      "schema": 1,
+      "truncated": false,
+      "candidate_cycles": [],
+      "changed_resources": [],
+      "observations": [
+        {
+          "id": 226,
+          "value": 1,
+          "cycle": 6924,
+          "occupancy": 1,
+          "free_slots": 0
+        },
+        {
+          "id": 228,
+          "value": 1,
+          "cycle": 6936,
+          "occupancy": 1,
+          "free_slots": 0
+        },
+        {
+          "id": 231,
+          "value": 1,
+          "cycle": 6948,
+          "occupancy": 1,
+          "free_slots": 0
+        },
+        {
+          "id": 249,
+          "value": 1,
+          "cycle": 6960,
+          "occupancy": 1,
+          "free_slots": 0
+        },
+        {
+          "id": 250,
+          "value": 1,
+          "cycle": 6972,
+          "occupancy": 1,
+          "free_slots": 0
+        },
+        {
+          "id": 265,
+          "value": 1,
+          "cycle": 6984,
+          "occupancy": 1,
+          "free_slots": 0
+        },
+        {
+          "id": 269,
+          "value": 1,
+          "cycle": 6996,
+          "occupancy": 1,
+          "free_slots": 0
+        },
+        {
+          "id": 291,
+          "value": 1,
+          "cycle": 7008,
+          "occupancy": 1,
+          "free_slots": 0
+        },
+        {
+          "id": 118,
+          "value": 0,
+          "cycle": 7020,
+          "ready": false,
+          "valid": false
+        },
+        {
+          "id": 134,
+          "value": 1,
+          "cycle": 7032,
+          "ready": false,
+          "valid": true
+        },
+        {
+          "id": 136,
+          "value": 0,
+          "cycle": 7044,
+          "ready": false,
+          "valid": false
+        },
+        {
+          "id": 152,
+          "value": 1,
+          "cycle": 7056,
+          "ready": false,
+          "valid": true
+        },
+        {
+          "id": 16,
+          "value": 0,
+          "cycle": 7068,
+          "ready": false,
+          "valid": false
+        },
+        {
+          "id": 182,
+          "value": 1,
+          "cycle": 7080,
+          "ready": false,
+          "valid": true
+        },
+        {
+          "id": 185,
+          "value": 1,
+          "cycle": 7092,
+          "ready": false,
+          "valid": true
+        },
+        {
+          "id": 35,
+          "value": 1,
+          "cycle": 7104,
+          "ready": false,
+          "valid": true
+        },
+        {
+          "id": 193,
+          "value": 1,
+          "cycle": 7116,
+          "ready": false,
+          "valid": true
+        },
+        {
+          "id": 37,
+          "value": 1,
+          "cycle": 7128,
+          "ready": false,
+          "valid": true
+        },
+        {
+          "id": 120,
+          "value": 0,
+          "cycle": 7140,
+          "ready": false,
+          "valid": false
+        },
+        {
+          "id": 180,
+          "value": 1,
+          "cycle": 7152,
+          "ready": false,
+          "valid": true
+        },
+        {
+          "id": 138,
+          "value": 0,
+          "cycle": 7164,
+          "ready": false,
+          "valid": false
+        },
+        {
+          "id": 188,
+          "value": 1,
+          "cycle": 7176,
+          "ready": false,
+          "valid": true
+        },
+        {
+          "id": 10,
+          "value": 1,
+          "cycle": 7188,
+          "ready": false,
+          "valid": true
+        },
+        {
+          "id": 3,
+          "value": 1,
+          "cycle": 7200,
+          "ready": false,
+          "valid": true
+        },
+        {
+          "id": 178,
+          "value": 2,
+          "cycle": 7212,
+          "ready": true,
+          "valid": false
+        },
+        {
+          "id": 179,
+          "value": 2,
+          "cycle": 7224,
+          "ready": true,
+          "valid": false
+        },
+        {
+          "id": 181,
+          "value": 2,
+          "cycle": 7236,
+          "ready": true,
+          "valid": false
+        },
+        {
+          "id": 183,
+          "value": 2,
+          "cycle": 7248,
+          "ready": true,
+          "valid": false
+        },
+        {
+          "id": 184,
+          "value": 2,
+          "cycle": 7260,
+          "ready": true,
+          "valid": false
+        },
+        {
+          "id": 36,
+          "value": 1,
+          "cycle": 7272,
+          "ready": false,
+          "valid": true
+        },
+        {
+          "id": 38,
+          "value": 1,
+          "cycle": 7284,
+          "ready": false,
+          "valid": true
+        },
+        {
+          "id": 186,
+          "value": 2,
+          "cycle": 7296,
+          "ready": true,
+          "valid": false
+        },
+        {
+          "id": 187,
+          "value": 2,
+          "cycle": 7308,
+          "ready": true,
+          "valid": false
+        },
+        {
+          "id": 189,
+          "value": 2,
+          "cycle": 7320,
+          "ready": true,
+          "valid": false
+        },
+        {
+          "id": 191,
+          "value": 2,
+          "cycle": 7332,
+          "ready": true,
+          "valid": false
+        },
+        {
+          "id": 192,
+          "value": 2,
+          "cycle": 7344,
+          "ready": true,
+          "valid": false
+        },
+        {
+          "id": 4,
+          "value": 1,
+          "cycle": 7356,
+          "ready": false,
+          "valid": true
+        },
+        {
+          "id": 216,
+          "value": 1,
+          "cycle": 7368,
+          "ready": false,
+          "valid": true
+        },
+        {
+          "id": 226,
+          "value": 1,
+          "cycle": 7380,
+          "occupancy": 1,
+          "free_slots": 0
+        },
+        {
+          "id": 228,
+          "value": 1,
+          "cycle": 7392,
+          "occupancy": 1,
+          "free_slots": 0
+        },
+        {
+          "id": 231,
+          "value": 1,
+          "cycle": 7404,
+          "occupancy": 1,
+          "free_slots": 0
+        },
+        {
+          "id": 249,
+          "value": 1,
+          "cycle": 7416,
+          "occupancy": 1,
+          "free_slots": 0
+        },
+        {
+          "id": 250,
+          "value": 1,
+          "cycle": 7428,
+          "occupancy": 1,
+          "free_slots": 0
+        },
+        {
+          "id": 265,
+          "value": 1,
+          "cycle": 7440,
+          "occupancy": 1,
+          "free_slots": 0
+        },
+        {
+          "id": 269,
+          "value": 1,
+          "cycle": 7452,
+          "occupancy": 1,
+          "free_slots": 0
+        },
+        {
+          "id": 291,
+          "value": 1,
+          "cycle": 7464,
+          "occupancy": 1,
+          "free_slots": 0
+        },
+        {
+          "id": 118,
+          "value": 0,
+          "cycle": 7476,
+          "ready": false,
+          "valid": false
+        },
+        {
+          "id": 134,
+          "value": 1,
+          "cycle": 7488,
+          "ready": false,
+          "valid": true
+        },
+        {
+          "id": 136,
+          "value": 0,
+          "cycle": 7500,
+          "ready": false,
+          "valid": false
+        },
+        {
+          "id": 152,
+          "value": 1,
+          "cycle": 7512,
+          "ready": false,
+          "valid": true
+        },
+        {
+          "id": 16,
+          "value": 0,
+          "cycle": 7524,
+          "ready": false,
+          "valid": false
+        },
+        {
+          "id": 182,
+          "value": 1,
+          "cycle": 7536,
+          "ready": false,
+          "valid": true
+        },
+        {
+          "id": 185,
+          "value": 1,
+          "cycle": 7548,
+          "ready": false,
+          "valid": true
+        },
+        {
+          "id": 35,
+          "value": 1,
+          "cycle": 7560,
+          "ready": false,
+          "valid": true
+        },
+        {
+          "id": 193,
+          "value": 1,
+          "cycle": 7572,
+          "ready": false,
+          "valid": true
+        },
+        {
+          "id": 37,
+          "value": 1,
+          "cycle": 7584,
+          "ready": false,
+          "valid": true
+        },
+        {
+          "id": 120,
+          "value": 0,
+          "cycle": 7596,
+          "ready": false,
+          "valid": false
+        },
+        {
+          "id": 180,
+          "value": 1,
+          "cycle": 7608,
+          "ready": false,
+          "valid": true
+        },
+        {
+          "id": 138,
+          "value": 0,
+          "cycle": 7620,
+          "ready": false,
+          "valid": false
+        },
+        {
+          "id": 188,
+          "value": 1,
+          "cycle": 7632,
+          "ready": false,
+          "valid": true
+        },
+        {
+          "id": 10,
+          "value": 1,
+          "cycle": 7644,
+          "ready": false,
+          "valid": true
+        },
+        {
+          "id": 3,
+          "value": 1,
+          "cycle": 7656,
+          "ready": false,
+          "valid": true
+        },
+        {
+          "id": 178,
+          "value": 2,
+          "cycle": 7668,
+          "ready": true,
+          "valid": false
+        },
+        {
+          "id": 179,
+          "value": 2,
+          "cycle": 7680,
+          "ready": true,
+          "valid": false
+        },
+        {
+          "id": 181,
+          "value": 2,
+          "cycle": 7692,
+          "ready": true,
+          "valid": false
+        },
+        {
+          "id": 183,
+          "value": 2,
+          "cycle": 7704,
+          "ready": true,
+          "valid": false
+        },
+        {
+          "id": 184,
+          "value": 2,
+          "cycle": 7716,
+          "ready": true,
+          "valid": false
+        },
+        {
+          "id": 36,
+          "value": 1,
+          "cycle": 7728,
+          "ready": false,
+          "valid": true
+        },
+        {
+          "id": 38,
+          "value": 1,
+          "cycle": 7740,
+          "ready": false,
+          "valid": true
+        },
+        {
+          "id": 186,
+          "value": 2,
+          "cycle": 7752,
+          "ready": true,
+          "valid": false
+        },
+        {
+          "id": 187,
+          "value": 2,
+          "cycle": 7764,
+          "ready": true,
+          "valid": false
+        },
+        {
+          "id": 189,
+          "value": 2,
+          "cycle": 7776,
+          "ready": true,
+          "valid": false
+        },
+        {
+          "id": 191,
+          "value": 2,
+          "cycle": 7788,
+          "ready": true,
+          "valid": false
+        },
+        {
+          "id": 192,
+          "value": 2,
+          "cycle": 7800,
+          "ready": true,
+          "valid": false
+        },
+        {
+          "id": 4,
+          "value": 1,
+          "cycle": 7812,
+          "ready": false,
+          "valid": true
+        },
+        {
+          "id": 216,
+          "value": 1,
+          "cycle": 7824,
+          "ready": false,
+          "valid": true
+        }
+      ]
+    },
+    "recovered_waits": {
+      "reobserved_blocked": [],
+      "edges": [],
+      "fingerprint": "9f581d0e7f103b61549335a021c93c133bd3918620c4c3a23bd647b279818198",
+      "schema": 1,
+      "truncated": false,
+      "candidate_cycles": [],
+      "changed_resources": [
+        216
+      ],
+      "observations": [
+        {
+          "id": 216,
+          "value": 3,
+          "cycle": 11796,
+          "ready": true,
+          "valid": true
+        },
+        {
+          "id": 216,
+          "value": 2,
+          "cycle": 11808,
+          "ready": true,
+          "valid": false
+        }
+      ]
+    },
+    "artifacts": {
+      "fixture.json": "e0181a0d450e5ba417159c8f82acdd68bd6d714b484f1170159e543358e97dd6",
+      "summary.json": "fe8aaf18da3fbe6acc809c7cb3fe10ecb9115cce502af1b1cdab0e91fcad8001",
+      "blocked.json": "8735fc50892da019bfcb890f6b017ba446fff82374d1f231e88022ff42d76404",
+      "recovered.json": "2cf490727f23c19f1ecc7501c7bb31ee81378aed1b362ad61e1df59e64df2030",
+      "debug.term": "5e80c90a0b83c43f0d24f022cc6c7650c7a737b013ef2b9b9606b7629ea9becf",
+      "compile.log": "83cc70193f30b1880a37c3a91015d4666219787824209276260d9a7f5f97d780",
+      "manifest.json": "b442dd1c17f5be6567bce6b9fd9835f6b77c8f36032b9e4b3fc79e13b1312d6d",
+      "application.json": "9b6ab115129c7bacb8ede41a03fa197c585318a288775d7799d7e6cc2fce7c2c",
+      "actors-blocked.term": "bc87aedbc9d280a3bcf76e68b5f395ab7c52d1d32a7f8eb5943a1524d3acb0db",
+      "host.log": "33192831733d8063735463c9fa812e37e7c4c071552786e6b1d184120f1cabca",
+      "simulation.log": "c8b460495fd30022e9a23f3fb02a66b237f16eab10d6c92007a4e417d2fc16c9"
+    }
+  },
+  "run_notes": [
+    "Two mapping workers. Production seed 2 initially aborted in Yosys opt_clean with an invalid free, before name scrambling. Its successful retry used identical frozen sources, script, and tool invocation; the remaining interrupted sweep was completed from those same snapshots.",
+    "Warnings are retained by exact message; intermediate loop warnings occur in both variants. Final check -assert and scc -expect 0 pass for every archived mapping.",
+    "Best means the smallest count; variance is population variance in squared primitive counts. Five exploratory name-scramble seeds are not a confidence interval.",
+    "Functional cycle totals depend on host scheduling. Recovery ends at the latest output when the testbench notices host witness completion, polled every 100 clocks; it is not cycles per application step.",
+    "Counters, traces, and final testbench totals are separate observations taken at different cycles.",
+    "Paths use ${REPO}; all digests identify original unmodified bytes."
+  ]
+}
