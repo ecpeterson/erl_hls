@@ -10,6 +10,8 @@
     await_sends/3,
     fail_next_send/2,
     hold_next_send/1,
+    hold_sends/1,
+    release_sends/1,
     client_info/2,
     deliver/4
 ]).
@@ -39,6 +41,8 @@ await_sends(Pid, Count, Timeout) ->
 
 fail_next_send(Pid, Reason) -> gen_server:call(Pid, {fail_next_send, Reason}).
 hold_next_send(Pid) -> gen_server:call(Pid, hold_next_send).
+hold_sends(Pid) -> gen_server:call(Pid, hold_sends).
+release_sends(Pid) -> gen_server:call(Pid, release_sends).
 
 client_info(Pid, Route) -> gen_server:call(Pid, {client_info, Route}).
 
@@ -48,7 +52,7 @@ deliver(Pid, Route, Header, Payload) ->
     gen_server:call(Pid, {deliver, Route, Header, Payload}).
 
 init([]) ->
-    {ok, #{routes => #{}, sends => [], waiters => []}}.
+    {ok, #{routes => #{}, sends => [], waiters => [], held => []}}.
 
 handle_call(
     {register_route, Route, Owner},
@@ -64,7 +68,7 @@ handle_call(
             {reply, ok, State#{routes := Routes#{Route => Owner}}}
     end;
 handle_call(
-    {send, _Route, _Header, _Payload},
+    {send, _Route, _Header, _Payload, _Deadline},
     _From,
     State = #{send_error := Reason}
 ) ->
@@ -72,14 +76,20 @@ handle_call(
 handle_call({fail_next_send, Reason}, _From, State) ->
     {reply, ok, State#{send_error => Reason}};
 handle_call(hold_next_send, _From, State) ->
-    {reply, ok, State#{hold_send => true}};
-handle_call({send, Route, Header, Payload}, _From,
-        State = #{sends := Sends, waiters := Waiters, hold_send := true}) ->
+    {reply, ok, State#{hold_send => once}};
+handle_call(hold_sends, _From, State) ->
+    {reply, ok, State#{hold_send => always}};
+handle_call(release_sends, _From, State = #{held := Held}) ->
+    [gen_server:reply(From, ok) || From <- lists:reverse(Held)],
+    {reply, ok, maps:remove(hold_send, State#{held := []})};
+handle_call({send, Route, Header, Payload, _Deadline}, From,
+        State = #{sends := Sends, waiters := Waiters, hold_send := Mode, held := Held}) ->
     UpdatedSends = [{Route, Header, Payload} | Sends],
     RemainingWaiters = reply_waiters(UpdatedSends, Waiters),
-    {noreply, maps:remove(hold_send, State#{sends := UpdatedSends, waiters := RemainingWaiters})};
+    Updated = State#{sends := UpdatedSends, waiters := RemainingWaiters, held := [From | Held]},
+    {noreply, case Mode of once -> maps:remove(hold_send, Updated); always -> Updated end};
 handle_call(
-    {send, Route, Header, Payload},
+    {send, Route, Header, Payload, _Deadline},
     _From,
     State = #{sends := Sends, waiters := Waiters}
 ) ->
@@ -112,7 +122,7 @@ handle_call(
         #{Route := Owner} ->
             gen_server:cast(
                 Owner,
-                {'$hls_fabric_frame', Route, Header, Payload}
+                {'$hls_fabric_frame', make_ref(), Route, Header, Payload}
             ),
             {reply, ok, State};
         #{} ->

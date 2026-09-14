@@ -22,6 +22,7 @@ test -s "$cpu_witness"
 
 for source in \
     "$project_root/src/runtime/hls_fabric.erl" \
+    "$project_root/src/runtime/hls_fabric_io.erl" \
     "$project_root/src/runtime/hls_fabric_client.erl" \
     "$project_root/src/api/hls_gs.erl" \
     "$project_root/src/api/hls_lists.erl" \

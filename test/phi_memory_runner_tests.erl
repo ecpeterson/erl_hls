@@ -166,6 +166,24 @@ fabric_exit_aborts_experiment_test() ->
         stop(Runner, Fabric)
     end.
 
+later_write_keeps_deadline_and_fabric_monitor_live_test_() ->
+    [{atom_to_list(Failure), fun() ->
+        {Fabric, Runner} = start_runner(case Failure of timeout -> 100; broker_down -> 1000 end),
+        try
+            phi_memory_fabric_fixture:await_sends(Fabric, 1, 1000),
+            phi_memory_fabric_fixture:hold_next_send(Fabric),
+            ok = deliver(Fabric, x_decoder_events, #phi_correction{
+                step = ?CUTOFF_STEP, x = 0, y = 0, direction = ?PHI_NORTH_MASK}),
+            phi_memory_fabric_fixture:await_sends(Fabric, 2, 1000),
+            case Failure of
+                timeout -> ?assertEqual({error, timeout}, phi_memory_runner:await(Runner));
+                broker_down ->
+                    phi_memory_fabric_fixture:stop(Fabric),
+                    ?assertEqual({error, {fabric_down, normal}}, phi_memory_runner:await(Runner))
+            end
+        after stop(Runner, Fabric) end
+    end} || Failure <- [timeout, broker_down]].
+
 start_runner(Timeout) ->
     {ok, Fabric} = phi_memory_fabric_fixture:start_link(),
     {ok, Runner} = phi_memory_runner:start_link(Fabric, options(), Timeout),
