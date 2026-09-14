@@ -200,38 +200,27 @@ fn reduction_shared_priority_and_layout_test() {
 pub proc ReductionSharedCompileTop {
   config() {
     let (request_p, request_c) =
-      #[channel(depth=1, bypass=true, register_push_outputs=true)]
-      chan<ScheduledRequest>[u32:1]("request");
+      chan<ScheduledRequest, u32:1>[u32:1]("request");
     let (startup_p, startup_c) =
-      #[channel(depth=1, bypass=true, register_push_outputs=true)]
-      chan<ScheduledRequest>("startup");
+      chan<ScheduledRequest, u32:1>("startup");
     let (egress_p, egress_c) =
-      #[channel(depth=1, bypass=true, register_push_outputs=true)]
-      chan<ScheduledEffects>("egress");
+      chan<ScheduledEffects, u32:1>("egress");
     let (machine_read_req_p, machine_read_req_c) =
-      #[channel(depth=1, bypass=true, register_push_outputs=true)]
-      chan<MachineRamReadReq>("machine_read_req");
+      chan<MachineRamReadReq, u32:1>("machine_read_req");
     let (machine_read_resp_p, machine_read_resp_c) =
-      #[channel(depth=1, bypass=true, register_push_outputs=true)]
-      chan<MachineRamReadResp>("machine_read_resp");
+      chan<MachineRamReadResp, u32:1>("machine_read_resp");
     let (machine_write_req_p, machine_write_req_c) =
-      #[channel(depth=1, bypass=true, register_push_outputs=true)]
-      chan<MachineRamWriteReq>("machine_write_req");
+      chan<MachineRamWriteReq, u32:1>("machine_write_req");
     let (machine_write_resp_p, machine_write_resp_c) =
-      #[channel(depth=1, bypass=true, register_push_outputs=true)]
-      chan<MachineRamWriteResp>("machine_write_resp");
+      chan<MachineRamWriteResp, u32:1>("machine_write_resp");
     let (mailbox_read_req_p, mailbox_read_req_c) =
-      #[channel(depth=1, bypass=true, register_push_outputs=true)]
-      chan<MailboxRamReadReq>("mailbox_read_req");
+      chan<MailboxRamReadReq, u32:1>("mailbox_read_req");
     let (mailbox_read_resp_p, mailbox_read_resp_c) =
-      #[channel(depth=1, bypass=true, register_push_outputs=true)]
-      chan<MailboxRamReadResp>("mailbox_read_resp");
+      chan<MailboxRamReadResp, u32:1>("mailbox_read_resp");
     let (mailbox_write_req_p, mailbox_write_req_c) =
-      #[channel(depth=1, bypass=true, register_push_outputs=true)]
-      chan<MailboxRamWriteReq>("mailbox_write_req");
+      chan<MailboxRamWriteReq, u32:1>("mailbox_write_req");
     let (mailbox_write_resp_p, mailbox_write_resp_c) =
-      #[channel(depth=1, bypass=true, register_push_outputs=true)]
-      chan<MailboxRamWriteResp>("mailbox_write_resp");
+      chan<MailboxRamWriteResp, u32:1>("mailbox_write_resp");
     spawn SharedService<u32:2, u32:1, u32:0, u32:0>(
       request_c,
       startup_c,

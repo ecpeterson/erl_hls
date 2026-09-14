@@ -1369,7 +1369,7 @@ allows the manager to continue collecting input and returned credit while an
 effect-producing result waits to retire. This changes no mailbox capacity,
 RAM port count, actor callback, or message-order rule.
 
-The manager publishes each next selection through a registered channel after its state and mailbox writes. Every subsequent RAM read waits for that selection, including a reduction's fast issue path. This [publication boundary](../../../docs/initialization.md#shared-ram-publication) preserves read-before-write RAM semantics when XLS moves combinational selection and metadata updates between pipeline stages.
+The manager carries a token from its state and mailbox writes to the following activation's RAM reads, including a reduction's fast issue path. This [RAM ordering dependency](../../../docs/initialization.md#shared-ram-ordering) preserves read-before-write RAM semantics when XLS moves combinational selection and metadata updates between pipeline stages.
 
 The isolated phi executor compiles as a two-stage II=1 pipeline. Its
 out-of-context XC7 map reports 1,477 estimated logic cells, 1,021 flip-flops,

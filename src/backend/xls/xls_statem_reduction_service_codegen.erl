@@ -616,9 +616,9 @@ shared_retire_binding(_Reductions) ->
 -spec shared_issue_bindings(reductions(), service_mode()) -> iodata().
 shared_issue_bindings(none, _Mode) ->
     [
-        "        let issue_valid = prior_valid && !completion_blocked;\n",
-        "        let read_slot = if prior_valid {\n",
-        "          prior_slot\n",
+        "        let issue_valid = state.next_valid && !completion_blocked;\n",
+        "        let read_slot = if state.next_valid {\n",
+        "          state.next_slot\n",
         "        } else {\n",
         "          u32:0\n",
         "        };\n",
@@ -631,9 +631,9 @@ shared_issue_bindings(none, _Mode) ->
 shared_issue_bindings(_Reductions, ordinary) ->
     [
         "        let issue_valid =\n",
-        "          prior_valid && !completion_blocked;\n",
-        "        let read_slot = if prior_valid {\n",
-        "          prior_slot\n",
+        "          state.next_valid && !completion_blocked;\n",
+        "        let read_slot = if state.next_valid {\n",
+        "          state.next_slot\n",
         "        } else { u32:0 };\n",
         "        let internal_active = issue_valid &&\n",
         "          state.internal_candidates[read_slot];\n",
@@ -646,9 +646,9 @@ shared_issue_bindings(_Reductions, ordinary) ->
 shared_issue_bindings(_Reductions, aggregate_only) ->
     [
         "        let prior_issue_valid =\n",
-        "          prior_valid && !completion_blocked;\n",
-        "        let prior_read_slot = if prior_valid {\n",
-        "          prior_slot\n",
+        "          state.next_valid && !completion_blocked;\n",
+        "        let prior_read_slot = if state.next_valid {\n",
+        "          state.next_slot\n",
         "        } else { u32:0 };\n",
         "        // The retained choice wins. Otherwise select work made\n",
         "        // visible by aggregate capture or retirement and issue it\n",
