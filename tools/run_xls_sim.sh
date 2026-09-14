@@ -16,6 +16,7 @@ ssh -o BatchMode=yes "$remote_host" mkdir -p "$remote_stage"
 rsync -a -e "ssh -o BatchMode=yes" \
     "$local_stage"/*.x \
     "$local_stage/phi_scheduler_rams.sh" \
+    "$local_stage/compile_xls.py" \
     "$local_stage/regsvc_core_adapter.v" \
     "$local_stage/regsvc_debug_top.v" \
     "$local_stage/phi_memory_debug_top.v" \

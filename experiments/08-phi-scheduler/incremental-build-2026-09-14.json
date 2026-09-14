@@ -1,0 +1,197 @@
+{
+  "application_revision": "3a3aea50767f8b8f52faa01d33b0e2157b4aad5c",
+  "build_manifest": {
+    "artifacts": {
+      "phi_decoder_profile.ir": "67995a11b8d31532dc30d1d8e37029487f5cac39d80ca4c84d9d9e479bd990c1",
+      "phi_decoder_profile.opt.ir": "4aa62e420dbd390ab93fb0ac0893f7a5f07fdf967c8aa4310b9eb60e756334cb",
+      "phi_decoder_profile.v": "b3a4638da826d56f1822e30b6acc085c81b90d0c10f3da2ca5c89c63c95625ea"
+    },
+    "assets": {
+      "hls_1r1w_ram.v": "13e12a7561df37e150c3e727c43f9e5234b74bb9741fc969185c12948b2583e8",
+      "phi_decoder_profile_top.v": "c39e5c0296a6cb9c3d631a1d8035ff3bdee514fe51f889988a72eb7f1a42bec4",
+      "phi_scheduler_rams.sh": "93f48d245aec55f733300dda4f5b558f9bff20a30e6d98a76f38c87f1fb47602"
+    },
+    "options": {
+      "codegen": [
+        "--pipeline_stages=2",
+        "--delay_model=unit",
+        "--flop_inputs=false",
+        "--flop_outputs=true",
+        "--use_system_verilog=false",
+        "--reset=reset",
+        "--fifo_module=",
+        "--worst_case_throughput=1",
+        "--ram_configurations=scheduler_0_state:1R1W:_scheduler_0_ram_read_req_out:_scheduler_0_ram_read_resp_in:_scheduler_0_ram_write_req_out:_scheduler_0_ram_write_resp_in,scheduler_0_mailbox:1R1W:_scheduler_0_mailbox_read_req_out:_scheduler_0_mailbox_read_resp_in:_scheduler_0_mailbox_write_req_out:_scheduler_0_mailbox_write_resp_in,scheduler_1_state:1R1W:_scheduler_1_ram_read_req_out:_scheduler_1_ram_read_resp_in:_scheduler_1_ram_write_req_out:_scheduler_1_ram_write_resp_in,scheduler_1_mailbox:1R1W:_scheduler_1_mailbox_read_req_out:_scheduler_1_mailbox_read_resp_in:_scheduler_1_mailbox_write_req_out:_scheduler_1_mailbox_write_resp_in,scheduler_2_state:1R1W:_scheduler_2_ram_read_req_out:_scheduler_2_ram_read_resp_in:_scheduler_2_ram_write_req_out:_scheduler_2_ram_write_resp_in,scheduler_2_mailbox:1R1W:_scheduler_2_mailbox_read_req_out:_scheduler_2_mailbox_read_resp_in:_scheduler_2_mailbox_write_req_out:_scheduler_2_mailbox_write_resp_in,scheduler_3_state:1R1W:_scheduler_3_ram_read_req_out:_scheduler_3_ram_read_resp_in:_scheduler_3_ram_write_req_out:_scheduler_3_ram_write_resp_in,scheduler_3_mailbox:1R1W:_scheduler_3_mailbox_read_req_out:_scheduler_3_mailbox_read_resp_in:_scheduler_3_mailbox_write_req_out:_scheduler_3_mailbox_write_resp_in,scheduler_4_state:1R1W:_scheduler_4_ram_read_req_out:_scheduler_4_ram_read_resp_in:_scheduler_4_ram_write_req_out:_scheduler_4_ram_write_resp_in,scheduler_4_mailbox:1R1W:_scheduler_4_mailbox_read_req_out:_scheduler_4_mailbox_read_resp_in:_scheduler_4_mailbox_write_req_out:_scheduler_4_mailbox_write_resp_in,scheduler_5_state:1R1W:_scheduler_5_ram_read_req_out:_scheduler_5_ram_read_resp_in:_scheduler_5_ram_write_req_out:_scheduler_5_ram_write_resp_in,scheduler_5_mailbox:1R1W:_scheduler_5_mailbox_read_req_out:_scheduler_5_mailbox_read_resp_in:_scheduler_5_mailbox_write_req_out:_scheduler_5_mailbox_write_resp_in,scheduler_6_state:1R1W:_scheduler_6_ram_read_req_out:_scheduler_6_ram_read_resp_in:_scheduler_6_ram_write_req_out:_scheduler_6_ram_write_resp_in,scheduler_6_mailbox:1R1W:_scheduler_6_mailbox_read_req_out:_scheduler_6_mailbox_read_resp_in:_scheduler_6_mailbox_write_req_out:_scheduler_6_mailbox_write_resp_in,scheduler_7_state:1R1W:_scheduler_7_ram_read_req_out:_scheduler_7_ram_read_resp_in:_scheduler_7_ram_write_req_out:_scheduler_7_ram_write_resp_in,scheduler_7_mailbox:1R1W:_scheduler_7_mailbox_read_req_out:_scheduler_7_mailbox_read_resp_in:_scheduler_7_mailbox_write_req_out:_scheduler_7_mailbox_write_resp_in"
+      ],
+      "top": "Top"
+    },
+    "profile": {
+      "delay_model": "unit",
+      "flop_inputs": false,
+      "flop_outputs": true,
+      "height": 3,
+      "initiation_interval": 1,
+      "pipeline_stages": 2,
+      "shards_per_plane": 3,
+      "width": 3
+    },
+    "ram_configuration": "93f48d245aec55f733300dda4f5b558f9bff20a30e6d98a76f38c87f1fb47602",
+    "recipe": 1,
+    "rtl": {
+      "hls_1r1w_ram.v": "13e12a7561df37e150c3e727c43f9e5234b74bb9741fc969185c12948b2583e8",
+      "phi_decoder_profile.v": "b3a4638da826d56f1822e30b6acc085c81b90d0c10f3da2ca5c89c63c95625ea",
+      "phi_decoder_profile_top.v": "c39e5c0296a6cb9c3d631a1d8035ff3bdee514fe51f889988a72eb7f1a42bec4"
+    },
+    "schema": 1,
+    "sources": {
+      "arbitration.x": "8df5bb59310352e9981f8593010218dbc2349b60405406dfeb39cff66986bc48",
+      "axis.x": "ed6ef54ac090be9f5d125f7dead74effce2fa085b3a547ca65f6b55014ad22f6",
+      "bram.x": "8dd43b778fc9b61a5967ed5202c164563835ec90cd85e40bb0cf0b2b409e7cdf",
+      "effect_window.x": "a6450a77190293db0256eb3dccba26abb99008bd808243e860f0b72e8c9b8d81",
+      "frame_queue.x": "938dbaa621cc9973d505a915859c1e16e055271989929b774f874bf318a3614a",
+      "frame_transport.x": "3523c8ed1ff99bb4e09c75cf62c9999fdeb46ae8fa0cec654fb8c2a9e1a6f8a9",
+      "hls_companion_gs_fixture.x": "8d099fff517227bbae9c7504cd07a22ea22b39dd75811f69433c086194649dfb",
+      "hls_debug_framing.x": "3aad6b34dc150945749e9acc326cf1e3a73469731078154f28a43153f9bc0098",
+      "hls_debug_observer.x": "30b1b679f80a9efbc73877090af9879f0c10d6fc0f2823afab9b8d863e6518b1",
+      "hls_debug_server.x": "545125175d59232a00e68fee9883b237ff488c3d22ea61a84d1aec87bfb1b1db",
+      "hls_debug_trace.x": "c51b46c19d9b0ff9883111a3dcd09b428e1d86850ca922e26403b334ecc0e54d",
+      "hls_debug_types.x": "8a57396f9f5c2665db164b885b379b807de6272d3078e41e0e061c993d7c9176",
+      "hls_fabric_router.x": "47beed81304b0f61ea4acd4819cf51949af91e7b560e1c4701607767ea767d44",
+      "hls_failure.x": "539e3978e2146432d397cb0f57f65df60c8879e7a5b19c883c08c4992980c620",
+      "hls_fixed.x": "a3ff6655b5cca3984d736b57712e57e5976ab6196c709742aa26850537c88902",
+      "hls_float.x": "1882c965143004e7dd70cac139cf1ee41d17199f0877e374a280cebfb6204c26",
+      "hls_numeric_test.x": "5ce91a2701a6bbdffdd3fe50cca240d057c88d135f67298fbb3de1ed41a22150",
+      "hls_spatial_router.x": "3cca4008525b6831a825db8af3286df5b3d28f06bb6c505f75e06fb0fc42b6f5",
+      "hls_vec.x": "c66c888c606ce7bc3e7b1c526cd1216e571f23fc6712f719df14dc6f5d82e5e6",
+      "mailbox.x": "52322c984a6679e1f8127b9cbd39edcf796f85f6002954dd9af430b5c16e2503",
+      "ordered_egress_actor.x": "61fe3768f4fe1fc84c4dd99ad9ec2ec02c77ce81dd779bcc543b3caaa243c705",
+      "ordered_egress_topology.x": "d9f06f091b5e03b8ff7e03d86703a008fc798385e56b5d8eb704bde39cac5a44",
+      "phenom_data_cell.x": "674005e26657f1579af0c9d9b1e9749f14dd8ccb50956ba0fc61e762641044ab",
+      "phenom_syndrome_cell.x": "9e16c8ea6942a78faa62b35ba9e9017f3f5b5bc978b4161541c43197410889d8",
+      "phi_decoder_profile_topology.x": "dac44d696f0865ec33cba992d6bf5ee887687a4ac273bb9e1fbc5ba81939e7a6",
+      "phi_field.x": "7e35e2901be89e4f9b148e8d8c47d0a05581e6206070c25e8d2dc5d02828f84b",
+      "phi_field_test.x": "8f6adaaeb4636166922624ae6064814684790b21d8d6979f6ed715e14176342a",
+      "phi_halo_cell.x": "ccdf8393ec6ac09174dff80e0d6805fc25adf2a344c987f6d33b3b44b3e538ab",
+      "phi_memory_gateway.x": "416cf35d1be05526c637139caba74b8a0f5d68c67a9dffa9d0615617ad3dc4f7",
+      "phi_noise_topology.x": "1c4d5ffe946af7b95539600d2301324f8d5ecc6a66c43dd136ff87c353b0490c",
+      "phi_noise_topology_smoke.x": "60f08c13efa15dc204f29dcb5f687c632fa544f9683c5c6f82c785115edf4bd7",
+      "phi_phenom_topology.x": "5bd78193313021ac40045a0704e16e7e25400a3a231453648a3aa9f9dfbaf155",
+      "phi_syndrome_replay_cell.x": "a9f8501108104ff663e853e796aa674489b7c5bfb0e9b2deb7a3bfa1aedc1955",
+      "phi_torus_topology.x": "33cb8eced0785e3d08c4ee82d94cdb58fc27facc01d6883017b2e4a9f0865693",
+      "regsvc.x": "9ba6b523ba9599c91e49f909ca251616db4588a8413dc6d43b390bcf11de63d5",
+      "scheduler.x": "e7ab85c1f981c56fab222ed0a0d5731ac63a44fb18dfa534cd4f0fedd2b2ad7f",
+      "scheduler_observation.x": "7c01db596893e73678cb6eb220430127d4d2235ed09eebf530ca0efb778d8263",
+      "xls_case_fixture.x": "5dc4f5bbc8b13600fbd1fbb9859dfce87bf9e997b55081c97eb5b4312dd108f8",
+      "xls_short_circuit_test.x": "eb3987f21f728bece437c83ae51cb65efd10ff2ad0683a71b4490a64caaead5b"
+    },
+    "stages": {
+      "codegen": "2feb196b5d138083a239263452853df29a0235131125e815b5dee5cc0bd7c109",
+      "ir": "c06afeb745cb352105c1c175b7e252f4d26c745a47d1f49cd3e5bb2a5c29a0de",
+      "opt": "a480db8a4967caf40c8bbfefd34639d2a8e7acb9af01677082270e1ec8565fc1"
+    },
+    "stdlib": {
+      "xls/dslx/stdlib/abs_diff.x": "9006b878c3762aeea72bc42be9a012cd0c050a78364a1c09ea4f547e06059eae",
+      "xls/dslx/stdlib/acm_random.x": "47093ca764f983b34adaeb0f694b2a3b711815eb8beeba656d3a39ed157f7ac7",
+      "xls/dslx/stdlib/apfloat.x": "5bbc79dd7842baa26ae467f5a9240ab98a5f5776b4749eb4e73dd1171b8bae8d",
+      "xls/dslx/stdlib/bfloat16.x": "c810ed761142c429a68f0b80559b92c6cbfe087ccd11bead091151d2ff49ee37",
+      "xls/dslx/stdlib/fixed_point.x": "20aede1704d2cdbe515de083d05cb44c8d279aac5fcf5f52d7dc768193d1c631",
+      "xls/dslx/stdlib/float32.x": "2dbc3bd4c5045fb1b8765b293457d6cca1ba338ca1bd5763b2957d11b0a7d84a",
+      "xls/dslx/stdlib/float64.x": "186e40914bdcd0be7c478e6c85204cfa9858b660a8a1dcfffab20e3e4d1ba071",
+      "xls/dslx/stdlib/float_instances.x": "4c89968e94e045c51c354b8f18507f727b0b85b8dcd01b0af69db25314f314cd",
+      "xls/dslx/stdlib/hfloat16.x": "767b0b70354aa15437f689898a0dd168eba47161e999382adcbdc150b6df4243",
+      "xls/dslx/stdlib/lza.x": "6717f61514829d52e9ead876d42e5dc33cd0c48069506137bb2a1dee98b066ac",
+      "xls/dslx/stdlib/round.x": "ac1093df45b238fb0cf867010a9887856d6cf380d17cb5b61c69a47af77c89a0",
+      "xls/dslx/stdlib/std.x": "888583e31552728f6f594c9bb454173b5d8a2d55df2acdee0bd4e2e15d7f1ffa",
+      "xls/dslx/stdlib/tests/float32_downcast_test.x": "20e81a55ba42a7849b2ac274811e4bb457a8b2eb501f4b304b543925e80fe0ab",
+      "xls/dslx/stdlib/tests/float32_upcast_test.x": "dbff7cea87d189c915623e1d4d4274049e7a5779d7b03060e91201073da27b54",
+      "xls/dslx/stdlib/tests/round_tests.x": "5f9b66ad008155f4829db2424f34cc125363f80a789d4057c1433d56fa05632b",
+      "xls/dslx/stdlib/tests/umul_instances.x": "06f7b95e669477fc30e86f9e1d32637b09cfe1fa8f9cb8ea4b351645c1b1bc91"
+    },
+    "tools": {
+      "codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162",
+      "ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+      "opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c"
+    }
+  },
+  "cold": {
+    "elapsed_seconds": 573.5979920830578,
+    "samples": 1,
+    "stages": {
+      "codegen": {
+        "elapsed_seconds": 167.352770333644,
+        "max_rss_bytes": 373522432,
+        "returncode": 0,
+        "system_seconds": 0.5391509999999999,
+        "user_seconds": 166.786435
+      },
+      "ir": {
+        "elapsed_seconds": 130.0597125417553,
+        "max_rss_bytes": 494796800,
+        "returncode": 0,
+        "system_seconds": 0.6772739999999999,
+        "user_seconds": 129.118854
+      },
+      "opt": {
+        "elapsed_seconds": 275.2031380417757,
+        "max_rss_bytes": 442531840,
+        "returncode": 0,
+        "system_seconds": 1.208114,
+        "user_seconds": 273.053746
+      }
+    }
+  },
+  "host": "Apple Silicon, macOS, 16 GiB RAM",
+  "measurement": "Runner elapsed time from source snapshot through publication; no synthesis or routing",
+  "previous_build_comparison": {
+    "hls_1r1w_ram.v": {
+      "identical": true,
+      "new_sha256": "13e12a7561df37e150c3e727c43f9e5234b74bb9741fc969185c12948b2583e8",
+      "previous_sha256": "13e12a7561df37e150c3e727c43f9e5234b74bb9741fc969185c12948b2583e8"
+    },
+    "phi_decoder_profile.ir": {
+      "identical": true,
+      "new_sha256": "67995a11b8d31532dc30d1d8e37029487f5cac39d80ca4c84d9d9e479bd990c1",
+      "previous_sha256": "67995a11b8d31532dc30d1d8e37029487f5cac39d80ca4c84d9d9e479bd990c1"
+    },
+    "phi_decoder_profile.opt.ir": {
+      "identical": false,
+      "new_sha256": "4aa62e420dbd390ab93fb0ac0893f7a5f07fdf967c8aa4310b9eb60e756334cb",
+      "previous_sha256": "b13dd033cea49370a0a51f41e2a5ac50adc679df673032fcdd18b305a84d204b"
+    },
+    "phi_decoder_profile.v": {
+      "identical": true,
+      "new_sha256": "b3a4638da826d56f1822e30b6acc085c81b90d0c10f3da2ca5c89c63c95625ea",
+      "previous_sha256": "b3a4638da826d56f1822e30b6acc085c81b90d0c10f3da2ca5c89c63c95625ea"
+    },
+    "phi_decoder_profile_top.v": {
+      "identical": true,
+      "new_sha256": "c39e5c0296a6cb9c3d631a1d8035ff3bdee514fe51f889988a72eb7f1a42bec4",
+      "previous_sha256": "c39e5c0296a6cb9c3d631a1d8035ff3bdee514fe51f889988a72eb7f1a42bec4"
+    }
+  },
+  "schema": 1,
+  "validation": {
+    "public_profile_cycles_per_step": 175.958333,
+    "public_profile_log_sha256": "4bd4a78e478a9ce82c5f201bb8ad72023a8cfb202711099fffda1c232d42b5d3",
+    "public_profile_x_stalls": 103,
+    "public_profile_z_stalls": 124,
+    "request_paced_cycles_per_step": 174,
+    "request_paced_log_sha256": "9b4136ddbdc295645ea1a5e6700eb6376f069127191ae52bcf461c5c961611c0",
+    "x_corrections": 63,
+    "z_corrections": 64
+  },
+  "warm": {
+    "best_seconds": 0.6527219587005675,
+    "compiled_stages": 0,
+    "elapsed_seconds": [
+      0.6695873327553272,
+      0.6655958327464759,
+      0.6527219587005675
+    ],
+    "mean_seconds": 0.6626350414007902,
+    "population_variance_seconds_squared": 5.178994969750423e-05,
+    "samples": 3,
+    "worst_seconds": 0.6695873327553272
+  },
+  "workload": "D3 decoder-only, three scheduler shards per plane, two XLS pipeline stages, II=1"
+}

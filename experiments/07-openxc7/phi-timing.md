@@ -41,15 +41,16 @@ Check coverage before comparing frequencies: moving registers into a DSP can rem
 From the repository root, with the experiment packages installed and `ERL_HLS_XLS_ROOT` pointing to native XLS binaries:
 
 ```sh
-rtl="$PWD/_build/d3-physical-timing/rtl"
+inputs="$PWD/_build/d3-physical-timing/inputs"
 stage="$PWD/_build/d3-physical-timing"
-ERL_HLS_PHI_PROFILE_SHARDS=3 bash tools/prepare_xls_sim.sh "$rtl"
-bash tools/compile_phi_decoder_profile.sh "$rtl" "$ERL_HLS_XLS_ROOT"
+ERL_HLS_PHI_PROFILE_SHARDS=3 bash tools/prepare_xls_sim.sh "$inputs"
+bash tools/compile_phi_decoder_profile.sh "$inputs" "$ERL_HLS_XLS_ROOT"
+rtl=$(cd "$inputs/compiled" && pwd -P)
 python3 experiments/07-openxc7/phi_timing.py "$rtl" --stage "$stage" --phase simulate
 python3 experiments/07-openxc7/phi_timing.py "$rtl" --stage "$stage"
 ```
 
-The compilation helper runs DSLX conversion, optimization, and RTL generation without installing private-state VPI hooks. It records compiler/stdlib/source hashes, RAM configuration, pipeline settings, and the final RTL hashes in `phi_decoder_profile.build.json`. Failed compilation does not publish a completed manifest. The physical runner verifies the workload parameters and RTL hashes before using them.
+The [incremental compilation helper](../../docs/incremental-xls-builds.md) reuses checked conversion, optimization, and RTL-generation stages without installing private-state VPI hooks. It atomically publishes the completed profile bundle at `inputs/compiled`; pin that directory before simulation or measurement. It records compiler/stdlib/source hashes, RAM configuration, pipeline settings, and the final RTL hashes in `phi_decoder_profile.build.json`. Failed compilation keeps the previous successful bundle selected and retains diagnostics for the failed attempt. The physical runner verifies the workload parameters and RTL hashes before using them.
 
 The default phase is `map`: it maps the core and harness without launching simulation or routing. The command above runs simulation explicitly first. Invoke `--phase route` to request physical timing; it requests 100 MHz and routes seeds 1 and 2 sequentially. Change those settings with `--frequency` and `--seeds`; `--phase all` explicitly runs simulation, mapping, and routing. Use `--jobs` to overlap independent seeds when memory permits, accounting for jobs in other stage directories too. Keep one or two large jobs active on a 16 GB host and check memory before increasing concurrency.
 

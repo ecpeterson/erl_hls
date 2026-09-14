@@ -12,8 +12,7 @@ Run the Erlang-side unit and CPU-reference tests locally:
 rebar3 eunit
 ```
 
-The generated-RTL regression uses the Linux UTM instance because XLS is not
-available on macOS:
+The generated-RTL regression wrapper uses the configured Linux host:
 
 ```sh
 tools/xls_sim.sh
@@ -63,6 +62,8 @@ structure, checks, and current limitations.
 
 The remote host and paths can be overridden with `ERL_HLS_REMOTE_HOST`,
 `ERL_HLS_REMOTE_ROOT`, and `ERL_HLS_REMOTE_XLS`.
+
+XLS also runs natively on Apple Silicon. The [incremental build runner](docs/incremental-xls-builds.md) shares checked conversion, optimization, and codegen stages between the `regsvc` regression and decoder-profile helper, preserves the last successful artifact bundle after failed rebuilds, and reports which stages actually ran. The guide includes native commands and cache/failure checks.
 
 GitHub Actions runs the same generated-RTL and bridged-EUnit regressions on
 Ubuntu using a checksum-pinned XLS release. `tools/prepare_xls_sim.sh` creates

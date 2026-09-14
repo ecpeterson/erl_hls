@@ -35,9 +35,6 @@ sha256_file() {
 cd "$stage"
 
 for artifact in \
-    phi_decoder_profile.ir \
-    phi_decoder_profile.opt.ir \
-    phi_decoder_profile.v \
     phi_decoder_profile.vvp \
     phi_decoder_profile.scheduler_profile \
     phi_decoder_profile.trace.csv \
@@ -50,7 +47,7 @@ for artifact in \
 do
     rm -f -- "$artifact" "$artifact.new" "$artifact.failed"
 done
-for label in ir opt codegen iverilog vvp; do
+for label in iverilog vvp; do
     report="phi_decoder_profile-$label.time"
     rm -f -- "$report" "$report.new" "$report.failed"
 done
@@ -71,8 +68,9 @@ timed_command() {
 
 bash "$stage/compile_phi_decoder_profile.sh" "$stage" "$xls_root" \
     "$stage_timeout" "$shard_count" "$pipeline_stages" "$initiation_interval"
+compiled=$(cd "$stage/compiled" && pwd -P)
 effect_domain_count=$(grep -c 'spawn effect_window::Arbiter<' \
-    phi_decoder_profile_topology.x)
+    "$compiled/sources/phi_decoder_profile_topology.x")
 
 timed_command \
     phi_decoder_profile-iverilog \
@@ -81,9 +79,9 @@ timed_command \
     -s phi_decoder_profile_tb \
     -o phi_decoder_profile.vvp.new \
     phi_decoder_profile_tb.sv \
-    phi_decoder_profile_top.v \
-    hls_1r1w_ram.v \
-    phi_decoder_profile.v
+    "$compiled/phi_decoder_profile_top.v" \
+    "$compiled/hls_1r1w_ram.v" \
+    "$compiled/phi_decoder_profile.v"
 mv phi_decoder_profile.vvp.new phi_decoder_profile.vvp
 
 iverilog-vpi xls_sim_bridge.c
@@ -300,16 +298,14 @@ awk -F= \
         phi_decoder_profile.sim.log
     cat phi_decoder_profile.scheduler_profile
     wc -lc \
-        phi_decoder_profile_topology.x \
-        phi_decoder_profile.ir \
-        phi_decoder_profile.opt.ir \
-        phi_decoder_profile.v
-    sha256_file phi_decoder_profile_topology.x phi_decoder_profile.v
+        "$compiled/sources/phi_decoder_profile_topology.x" \
+        "$compiled/phi_decoder_profile.ir" \
+        "$compiled/phi_decoder_profile.opt.ir" \
+        "$compiled/phi_decoder_profile.v"
+    sha256_file "$compiled/sources/phi_decoder_profile_topology.x" "$compiled/phi_decoder_profile.v"
+    cat "$stage/compiled.run.json"
     grep -H -E \
         'Elapsed \(wall clock\)|Maximum resident set size|^real ' \
-        phi_decoder_profile-ir.time \
-        phi_decoder_profile-opt.time \
-        phi_decoder_profile-codegen.time \
         phi_decoder_profile-iverilog.time \
         phi_decoder_profile-vvp.time
 } > phi_decoder_profile.metrics.new
