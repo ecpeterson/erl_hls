@@ -185,29 +185,41 @@ fn aggregate_receptacles_remain_ready_behind_egress_test() {
 pub proc ReductionAggregateSharedCompileTop {
   config() {
     let (request_p, request_c) =
-      chan<ScheduledRequest, u32:1>[u32:1]("request");
+      #[channel(depth=1, bypass=true, register_push_outputs=true)]
+      chan<ScheduledRequest>[u32:1]("request");
     let (startup_p, startup_c) =
-      chan<ScheduledRequest, u32:1>("startup");
+      #[channel(depth=1, bypass=true, register_push_outputs=true)]
+      chan<ScheduledRequest>("startup");
     let (egress_p, egress_c) =
-      chan<ScheduledEffects, u32:1>("egress");
+      #[channel(depth=1, bypass=true, register_push_outputs=true)]
+      chan<ScheduledEffects>("egress");
     let (machine_read_req_p, machine_read_req_c) =
-      chan<MachineRamReadReq, u32:1>("machine_read_req");
+      #[channel(depth=1, bypass=true, register_push_outputs=true)]
+      chan<MachineRamReadReq>("machine_read_req");
     let (machine_read_resp_p, machine_read_resp_c) =
-      chan<MachineRamReadResp, u32:1>("machine_read_resp");
+      #[channel(depth=1, bypass=true, register_push_outputs=true)]
+      chan<MachineRamReadResp>("machine_read_resp");
     let (machine_write_req_p, machine_write_req_c) =
-      chan<MachineRamWriteReq, u32:1>("machine_write_req");
+      #[channel(depth=1, bypass=true, register_push_outputs=true)]
+      chan<MachineRamWriteReq>("machine_write_req");
     let (machine_write_resp_p, machine_write_resp_c) =
-      chan<MachineRamWriteResp, u32:1>("machine_write_resp");
+      #[channel(depth=1, bypass=true, register_push_outputs=true)]
+      chan<MachineRamWriteResp>("machine_write_resp");
     let (mailbox_read_req_p, mailbox_read_req_c) =
-      chan<MailboxRamReadReq, u32:1>("mailbox_read_req");
+      #[channel(depth=1, bypass=true, register_push_outputs=true)]
+      chan<MailboxRamReadReq>("mailbox_read_req");
     let (mailbox_read_resp_p, mailbox_read_resp_c) =
-      chan<MailboxRamReadResp, u32:1>("mailbox_read_resp");
+      #[channel(depth=1, bypass=true, register_push_outputs=true)]
+      chan<MailboxRamReadResp>("mailbox_read_resp");
     let (mailbox_write_req_p, mailbox_write_req_c) =
-      chan<MailboxRamWriteReq, u32:1>("mailbox_write_req");
+      #[channel(depth=1, bypass=true, register_push_outputs=true)]
+      chan<MailboxRamWriteReq>("mailbox_write_req");
     let (mailbox_write_resp_p, mailbox_write_resp_c) =
-      chan<MailboxRamWriteResp, u32:1>("mailbox_write_resp");
+      #[channel(depth=1, bypass=true, register_push_outputs=true)]
+      chan<MailboxRamWriteResp>("mailbox_write_resp");
     let (aggregate_p, aggregate_c) =
-      chan<ReductionAggregateRequest, u32:1>("aggregate");
+      #[channel(depth=1, bypass=true, register_push_outputs=true)]
+      chan<ReductionAggregateRequest>("aggregate");
     spawn SharedService<u32:2, u32:1, u32:0, u32:0>(
       request_c,
       startup_c,

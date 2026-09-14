@@ -38,6 +38,26 @@ The default physical run requests 100 MHz and routes seeds 1, 2, and 3 sequentia
 
 The first large-device database generation and synthesis take substantially longer than the small counter experiment. The generated chip database alone is about 637 MiB. Route sequentially on memory-limited hosts; the benchmark does not require building XLS or LLVM.
 
+## Compare compiler changes
+
+Preserve separately compiled baseline and candidate directories. A strict public-interface comparison drives both designs with identical independent sink stalls and a mid-run reset:
+
+```sh
+python3 experiments/07-openxc7/phi_timing.py "$candidate" \
+    --reference "$baseline" --stage "$comparison" --phase compare
+```
+
+This requires matching workload, compiler, standard library, and RAM configuration. It checks output-valid timing and every valid payload, including values held while a sink is blocked. It rejects unknown outputs and requires progress after reset. Use this stronger comparison when a change should preserve cycle timing; the ordinary harness remains appropriate for changes that intentionally alter scheduling.
+
+To measure sensitivity to synthesis naming order, map five matched signal-name seeds for each version:
+
+```sh
+python3 experiments/07-openxc7/measure_phi_mapping.py "$baseline" "$candidate" \
+    --stage "$mapping" --jobs 2
+```
+
+The script scrambles internal signal names with `rename -scramble-name -seed` before the same XC7 core mapping flow, retaining the scripts, logs, resource counts, input fingerprints, and output hashes. `results.json` gives best, mean, population variance, and worst resource counts and ABC9 delay over seeds 1–5. These names are not stimulus seeds. ABC9 delay is a mapping estimate, separate from routed timing; neither it nor three placement seeds establishes a statistical confidence interval or timing signoff. Run the physical runner separately for each version to compare routed paths and timing coverage.
+
 ## Harness and checks
 
 The application is synthesized out of context with `synth_xilinx -flatten -abc9 -family xc7 -noiopad -noclkbuf`. The small harness is mapped separately, and the mapped decoder is then restored without another application synthesis pass. The assembly check requires the same multiset of decoder primitive types and parameters, plus a single global clock buffer feeding its active sequential clocks. This detects pruning or an accidental second clock; it is not a formal wiring-equivalence proof.

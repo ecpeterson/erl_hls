@@ -48,7 +48,7 @@ ordinary_shared_service_has_no_fast_issue_path_test() ->
             reduction, ordinary)),
     ?assertEqual(nomatch, binary:match(Ordinary, <<"fast_issue">>)),
     ?assertNotEqual(nomatch, binary:match(Ordinary,
-        <<"state.next_valid && !completion_blocked">>)).
+        <<"prior_valid && !completion_blocked">>)).
 
 aggregate_only_support() ->
     iolist_to_binary(

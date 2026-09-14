@@ -31,7 +31,9 @@ options=(--warnings_as_errors=false --dslx_path="$stage:$project_root/priv/xls/l
 "$xls_root/ir_converter_main" --top=Top "${options[@]}" "$stage/actor_debug.x" > "$stage/actor_debug.ir"
 "$xls_root/opt_main" "$stage/actor_debug.ir" > "$stage/actor_debug.opt.ir"
 source tools/phi_scheduler_rams.sh
-for stages in 2 3; do
+stages_to_test=(2 3)
+[[ "$kind" != mailbox ]] || stages_to_test+=(4)
+for stages in "${stages_to_test[@]}"; do
     "$xls_root/codegen_main" --pipeline_stages="$stages" --delay_model=unit \
         --flop_inputs=false --flop_outputs=true --use_system_verilog=false --reset=reset \
         --fifo_module= --module_name=actor_debug --ram_configurations="$(phi_scheduler_ram_configurations "$scheduler_count")" \

@@ -931,7 +931,8 @@ state_machine_entry_actions_use_one_source_ordered_egress_test() ->
         )),
         ?assertNotEqual(nomatch, binary:match(
             XLS,
-            <<"chan<Egress, EGRESS_DEPTH>(\"egress\")">>
+            <<"#[channel(depth=3, bypass=true, register_push_outputs=true)]\n"
+              "      chan<Egress>(\"egress\")">>
         )),
         %% The direct service keeps resumable per-effect progression. A shared
         %% scheduler instead commits one complete ordered batch per entry.
