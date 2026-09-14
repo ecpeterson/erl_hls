@@ -316,7 +316,8 @@ def report(args, binaries, mapping):
              "| Seed | Partial-path MHz | Logic ns | Routing ns |", "| --- | ---: | ---: | ---: |"]
     lines += [f"| {r['seed']} | {r['achieved_mhz']:.2f} | {r['critical_path']['logic_ns']:.2f} | {r['critical_path']['routing_ns']:.2f} |" for r in runs]
     s = summary["statistics"]
-    lines += ["", f"Mean {s['mean_mhz']:.2f} MHz; population variance {s['variance_mhz_squared']:.4f} MHz²; best {s['best_mhz']:.2f} MHz; worst {s['worst_mhz']:.2f} MHz.", "",
+    lines += ["", f"{s['samples']} seeds: mean {s['mean_mhz']:.2f} MHz; population variance {s['variance_mhz_squared']:.4f} MHz²; best {s['best_mhz']:.2f} MHz; worst {s['worst_mhz']:.2f} MHz.", "",
+              "These are descriptive statistics, not a confidence interval. One seed does not measure seed sensitivity; its population variance is zero by definition.", "",
               f"All {mapping['retained_decoder_cells']:,} mapped decoder cells survive harness assembly; sequential cells use one BUFG.", "",
               "Excluded sequential primitive timing: `" + json.dumps(mapping["timing_coverage"]["omitted_sequential_primitives"], sort_keys=True) + "`.", "",
               "| Mapped primitive | Decoder | With harness |", "| --- | ---: | ---: |"]
@@ -374,10 +375,12 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("rtl", type=Path, help="prepared, compiled decoder-profile RTL directory")
     parser.add_argument("--stage", type=Path, required=True)
-    parser.add_argument("--seeds", type=int, nargs="+", default=[1, 2, 3])
+    parser.add_argument("--seeds", type=int, nargs="+", default=[1, 2],
+                        help="placement seeds (default: 1 2); used only by route/report/all")
     parser.add_argument("--jobs", type=int, default=1, help="maximum concurrent place-and-route processes")
     parser.add_argument("--frequency", type=float, default=100)
-    parser.add_argument("--phase", choices=("all", "simulate", "compare", "map", "route", "report"), default="all")
+    parser.add_argument("--phase", choices=("all", "simulate", "compare", "map", "route", "report"), default="map",
+                        help="default: map; simulation and place-and-route are explicit phases")
     parser.add_argument("--reference", type=Path, help="baseline RTL directory for the compare phase")
     args = parser.parse_args()
     if args.phase == "compare" and args.reference is None:

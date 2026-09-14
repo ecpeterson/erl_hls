@@ -6,6 +6,22 @@ The selected fabric has room for a large decoder experiment, and the installed P
 
 The [2026-09-12 D3 baseline](results/d3-2026-09-12.md) records the measured seed distribution, resource counts, critical-path findings, and validation results. The [2026-09-14 arbitration and RAM-ordering comparison](results/d3-arbitration-2026-09-14.md) compares fresh main and the changed design with that earlier measurement: LUT use falls while routed timing becomes more sensitive to placement seed.
 
+## Choose the probe budget
+
+Start with the cheapest measurement that answers the PR's question. Run focused correctness checks and D3 throughput before the large synthesis or routing jobs, and measure the final candidate after those checks pass. Use small representative fixtures while comparing implementations. A change that leaves the generated RTL identical can reuse its verified measurements.
+
+| Question | Initial probe | When to spend more |
+| --- | --- | --- |
+| Does the change preserve behavior and throughput? | Focused regressions, public-interface simulation, and D3 cycles/step | Expand workloads or pipeline stages when they exercise the changed path. Placement seeds do not add functional coverage. |
+| Does mapped area change? | Two matched signal-name seeds, 1 and 2 | Expand to seeds 1–5 when the effect is small relative to the observed spread, changes sign, or needs stronger evidence. |
+| Does physical timing or routability change? | Opt-in routing of matched seeds 1 and 2, after functional and mapping checks | Add seed 3 or a larger predefined set when the result could change an engineering decision or support a timing claim. A mixed result can remain inconclusive. |
+
+These defaults require four synthesis runs instead of ten, and four physical runs instead of six for a fresh baseline/candidate pair: 60% and 33% fewer runs, respectively. Runtime does not scale exactly with count; congestion can make one seed much slower than the others. Reuse completed baseline measurements only when their RTL, workload, tools, constraints, and timing coverage match the intended comparison.
+
+The September 14 comparison illustrates the distinction. Its first two synthesis seeds give a 5.74% mean LUT reduction, close to the five-seed result of 5.71%. Physical seed 1 improves modeled frequency by 11.83%, while seed 2 regresses by 10.06%; those two already justify reporting mixed timing. Seed 3 regresses by 6.03% and takes 121 congestion iterations, versus 4 and 19 for the first two. One favorable route would have been misleading, but the third was not necessary to discover the tradeoff. This is evidence for a cheaper screening policy, not proof that two seeds always suffice.
+
+Keep every requested seed in the result, including failed or interrupted runs in the discussion; do not substitute easier seeds or silently drop slow ones. An incomplete route has no usable frequency. Choose any extension before inspecting its new results and include the entire set in the report. Report the sample count, individual results, mean, population variance, best, and worst. These small, deliberately selected sets describe sensitivity rather than establish confidence intervals. A one-seed smoke check is allowed with `--seeds 1`, but its zero population variance says nothing about seed sensitivity.
+
 ## Measurement limits
 
 **The reported MHz is a partial-path estimate, not a safe clock for the complete decoder.** The pinned nextpnr implementation has these timing-model limitations:
@@ -29,12 +45,15 @@ rtl="$PWD/_build/d3-physical-timing/rtl"
 stage="$PWD/_build/d3-physical-timing"
 ERL_HLS_PHI_PROFILE_SHARDS=3 bash tools/prepare_xls_sim.sh "$rtl"
 bash tools/compile_phi_decoder_profile.sh "$rtl" "$ERL_HLS_XLS_ROOT"
+python3 experiments/07-openxc7/phi_timing.py "$rtl" --stage "$stage" --phase simulate
 python3 experiments/07-openxc7/phi_timing.py "$rtl" --stage "$stage"
 ```
 
 The compilation helper runs DSLX conversion, optimization, and RTL generation without installing private-state VPI hooks. It records compiler/stdlib/source hashes, RAM configuration, pipeline settings, and the final RTL hashes in `phi_decoder_profile.build.json`. Failed compilation does not publish a completed manifest. The physical runner verifies the workload parameters and RTL hashes before using them.
 
-The default physical run requests 100 MHz and routes seeds 1, 2, and 3 sequentially. Change them with `--frequency` and `--seeds`; use `--jobs` to overlap independent seeds when memory permits. Phases `simulate`, `map`, `route`, and `report` can be invoked separately; `all` is the default. Core mapping, harness mapping, the chip database, and completed routes are cached against their inputs. A changed report or partial rerun cannot masquerade as a completed route. Use separate stage directories for comparisons whose artifacts should coexist, and run only one writer against a stage directory.
+The default phase is `map`: it maps the core and harness without launching simulation or routing. The command above runs simulation explicitly first. Invoke `--phase route` to request physical timing; it requests 100 MHz and routes seeds 1 and 2 sequentially. Change those settings with `--frequency` and `--seeds`; `--phase all` explicitly runs simulation, mapping, and routing. Use `--jobs` to overlap independent seeds when memory permits, accounting for jobs in other stage directories too. Keep one or two large jobs active on a 16 GB host and check memory before increasing concurrency.
+
+Core mapping, harness mapping, the chip database, and completed routes are cached against their inputs. Extend a run in the same stage directory with `--phase route --seeds 1 2 3` to reuse verified seeds 1 and 2 and compute only seed 3. Report regeneration requires the intended seed list too: `--phase report --seeds 1 2 3`. A changed report or partial rerun cannot masquerade as a completed route. Use separate stage directories for comparisons whose artifacts should coexist, and run only one writer against a stage directory.
 
 The first large-device database generation and synthesis take substantially longer than the small counter experiment. The generated chip database alone is about 637 MiB. Route sequentially on memory-limited hosts; the benchmark does not require building XLS or LLVM.
 
@@ -49,14 +68,25 @@ python3 experiments/07-openxc7/phi_timing.py "$candidate" \
 
 This requires matching workload, compiler, standard library, and RAM configuration. It checks output-valid timing and every valid payload, including values held while a sink is blocked. It rejects unknown outputs and requires progress after reset. Use this stronger comparison when a change should preserve cycle timing; the ordinary harness remains appropriate for changes that intentionally alter scheduling.
 
-To measure sensitivity to synthesis naming order, map five matched signal-name seeds for each version:
+To screen sensitivity to synthesis naming order, map two matched signal-name seeds for each version:
 
 ```sh
 python3 experiments/07-openxc7/measure_phi_mapping.py "$baseline" "$candidate" \
     --stage "$mapping" --jobs 2
 ```
 
-The script scrambles internal signal names with `rename -scramble-name -seed` before the same XC7 core mapping flow, retaining the scripts, logs, resource counts, input fingerprints, and output hashes. `results.json` gives best, mean, population variance, and worst resource counts and ABC9 delay over seeds 1–5. These names are not stimulus seeds. ABC9 delay is a mapping estimate, separate from routed timing; neither it nor three placement seeds establishes a statistical confidence interval or timing signoff. Run the physical runner separately for each version to compare routed paths and timing coverage.
+The script scrambles internal signal names with `rename -scramble-name -seed` before the same XC7 core mapping flow, retaining the scripts, logs, resource counts, input fingerprints, and output hashes. `results.json` identifies the requested seeds and gives individual results plus best, mean, population variance, and worst resource counts and ABC9 delay. These names are not stimulus seeds. If more samples are needed, repeat the command in the same stage directory with `--seeds 1 2 3 4 5`; verified completed mappings are reused. ABC9 delay is a mapping estimate, separate from routed timing.
+
+When the question warrants physical measurement, run the physical runner separately for each version with the same placement seeds and constraints:
+
+```sh
+python3 experiments/07-openxc7/phi_timing.py "$baseline" \
+    --stage "$baseline_physical" --phase route
+python3 experiments/07-openxc7/phi_timing.py "$candidate" \
+    --stage "$candidate_physical" --phase route
+```
+
+Check timing coverage and individual paired results as well as the distributions. A mapping improvement does not imply a routing improvement.
 
 ## Harness and checks
 
@@ -80,7 +110,7 @@ This check compares original and instrumented public outputs cycle by cycle, blo
 
 ## Reports and regression checks
 
-`report.md` and `report.json` retain each seed's modeled critical path, logic/routing delay split, clock aliases, warnings, primitive coverage, and raw utilization, together with the mean, population variance, best, and worst partial-path MHz. Three seeds give an exploratory distribution, not a confidence interval. The detailed path comes from the final clock report in the nextpnr log because this pinned version leaves its JSON `critical_paths` array empty. A clock alias is accepted only when the log has an unambiguous single clock.
+`report.md` and `report.json` retain each seed's modeled critical path, logic/routing delay split, clock aliases, warnings, primitive coverage, and raw utilization, together with the sample count, mean, population variance, best, and worst partial-path MHz. The detailed path comes from the final clock report in the nextpnr log because this pinned version leaves its JSON `critical_paths` array empty. A clock alias is accepted only when the log has an unambiguous single clock.
 
 `core-stat.json` and `mapped-stat.json` retain Yosys resource counts. nextpnr's `SLICE_LUTX` denominator counts separately addressable O5/O6 BELs, not physical LUT packages; do not present that ratio as physical LUT utilization. Compiler, netlist, chip-database, XDC, tool, and per-route output hashes identify the measurement inputs.
 

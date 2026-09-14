@@ -23,7 +23,8 @@ def main():
     parser.add_argument("baseline", type=Path)
     parser.add_argument("candidate", type=Path)
     parser.add_argument("--stage", type=Path, required=True)
-    parser.add_argument("--seeds", type=int, nargs="+", default=[1, 2, 3, 4, 5])
+    parser.add_argument("--seeds", type=int, nargs="+", default=[1, 2],
+                        help="matched signal-name seeds (default: 1 2); expand only when needed")
     parser.add_argument("--jobs", type=int, default=2)
     args = parser.parse_args()
     if args.jobs < 1 or min(args.seeds) < 1 or len(set(args.seeds)) != len(args.seeds):
@@ -70,7 +71,10 @@ def main():
     keys = ("LUT", "LUT_logic", "LUT_RAM", "FF", "RAMB18", "RAMB36", "DSP", "CARRY4", "mapping_delay_ps")
     summary = {name: {key: distribution([r[key] for r in rows if r["variant"] == name])
                       for key in keys} for name in stages}
-    save(stage / "results.json", {"samples": rows, "summary": summary})
+    save(stage / "results.json", {"seeds": args.seeds, "samples": rows, "summary": summary})
+    print(f"{len(args.seeds)} matched signal-name seeds; descriptive statistics, not a confidence interval.")
+    if len(args.seeds) == 1:
+        print("One seed does not measure seed sensitivity; its population variance is zero by definition.")
     print(json.dumps(summary, indent=2), flush=True)
 
 
