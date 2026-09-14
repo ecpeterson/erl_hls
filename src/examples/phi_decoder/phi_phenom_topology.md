@@ -831,8 +831,8 @@ latent while either entry bit is set, and egress waiters become selectable
 together when the shared credit returns. Servicing one waiter consumes the
 credit and makes the others temporarily unselectable again.
 
-Selection is fair and work-conserving. Two statically unrolled priority passes
-find the first selectable slot at or after the round-robin cursor, falling back
+Selection is fair and work-conserving. The shared `arbitration` library masks
+and priority-encodes selectable slots at or after the cursor, falling back
 to the first selectable slot before it. This avoids both an empty cyclic scan
 and the large dynamic-index mux synthesized by an earlier rotated-mask
 implementation. Entry execution either completes, remains a probe for its next

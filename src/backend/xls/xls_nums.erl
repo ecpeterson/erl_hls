@@ -5,11 +5,20 @@
 -module(xls_nums).
 
 -export([
+    index_type/1,
     packed_unsigned_literal/1,
     signed_type/1,
     unsigned_literal/2,
     unsigned_type/1
 ]).
+
+-doc "Prints the smallest unsigned DSLX type for an index into Count elements.".
+-spec index_type(pos_integer()) -> iolist().
+index_type(Count) when Count > 0 ->
+    unsigned_type(index_width(Count - 1, 0)).
+
+index_width(0, Width) -> max(1, Width);
+index_width(Value, Width) -> index_width(Value bsr 1, Width + 1).
 
 -doc "Prints the DSLX type for a signed value of the given width.".
 -spec signed_type(pos_integer()) -> iolist().

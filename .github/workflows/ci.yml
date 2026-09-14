@@ -78,6 +78,9 @@ jobs:
       - name: Check effect-window handshakes and combinational loops
         run: bash tools/test_effect_window.sh "$RUNNER_TEMP/xls"
 
+      - name: Prove round-robin selection and grant fairness
+        run: python3 tools/test_arbitration.py "$RUNNER_TEMP/xls"
+
       - name: Compare entry outcomes with BEAM and simulate RTL
         run: bash tools/test_entry_outcomes.sh "$RUNNER_TEMP/xls"
 
@@ -187,6 +190,7 @@ jobs:
             _build/initialization/**
             _build/actor-debug/**
             _build/actor-snapshot-formal/**
+            _build/arbitration/**
             _build/mailbox-debug/**
             _build/helpers/**
             _build/control_failures/**

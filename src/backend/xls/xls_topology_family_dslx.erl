@@ -1078,7 +1078,7 @@ family_ingress(Spec, Family = #{inbound_lanes := InboundLanes}) ->
     end,
     InputNames = [incoming_name(Index)
         || Index <- lists:seq(0, InputCount - 1)],
-    CursorType = xls_nums:unsigned_type(cursor_width(InputCount)),
+    CursorType = xls_nums:index_type(InputCount),
     InputMembers = [
         [Name, ": chan<axis::Frame> in"] || Name <- InputNames
     ],
@@ -1182,13 +1182,6 @@ select_received_frame([Index]) -> frame_name(Index);
 select_received_frame([Index | Rest]) ->
     ["if ", valid_name(Index), " { ", frame_name(Index),
         " } else { ", select_received_frame(Rest), " }"].
-
-cursor_width(InputCount) ->
-    cursor_width(InputCount - 1, 0).
-
-cursor_width(0, 0) -> 1;
-cursor_width(0, Width) -> Width;
-cursor_width(Value, Width) -> cursor_width(Value bsr 1, Width + 1).
 
 cursor_literal(CursorType, Value) ->
     [CursorType, ":", integer_to_list(Value)].

@@ -11,6 +11,7 @@ import axis;
 import frame_transport;
 import effect_window;
 import frame_queue;
+import arbitration;
 import hls_spatial_router;
 import phenom_data_cell;
 import phenom_syndrome_cell;
@@ -225,8 +226,8 @@ struct Phi_xReductionBatch {
 // Fragment 2 (west) uses inverse fragment 1 at offset [1, 0].
 // Fragment 3 (south) uses inverse fragment 0 at offset [0, -1].
 struct Phi_xReductionPlaneState {
-  input_cursor: u32,
-  output_cursor: u32,
+  input_cursor: u1,
+  output_cursor: u4,
   open_tokens: u1[u32:9],
   bank_0: frame_queue::Queue[u32:9],
   bank_1: frame_queue::Queue[u32:9],
@@ -261,16 +262,9 @@ proc Phi_xReductionPlane {
       state.open_tokens[u32:7] && state.bank_0[u32:8].current_valid && state.bank_1[u32:4].current_valid && state.bank_2[u32:1].current_valid && state.bank_3[u32:6].current_valid,
       state.open_tokens[u32:8] && state.bank_0[u32:6].current_valid && state.bank_1[u32:5].current_valid && state.bank_2[u32:2].current_valid && state.bank_3[u32:7].current_valid
     ];
-    let (output_ready, output_slot) =
-      unroll_for! (offset, selected):
-          (u32, (u1, u32)) in u32:0..u32:9 {
-        let unwrapped = state.output_cursor + offset;
-        let candidate = if unwrapped < u32:9 { unwrapped } else {
-          unwrapped - u32:9 };
-        let take = !selected.0 && ready_slots[candidate];
-        (selected.0 || take,
-          if take { candidate } else { selected.1 })
-      }((u1:0, u32:0));
+    let (output_ready, output_index) = arbitration::select(
+      ready_slots, state.output_cursor);
+    let output_slot = output_index as u32;
     let pop_sources = match output_slot {
       u32:0 => [u32:1, u32:6, u32:3, u32:2],
       u32:1 => [u32:2, u32:7, u32:4, u32:0],
@@ -355,7 +349,7 @@ proc Phi_xReductionPlane {
           recv_if_non_blocking(
             acc.0, batch_in[candidate],
             !state.pending_valid &&
-              state.input_cursor == candidate,
+              state.input_cursor as u32 == candidate,
             zero!<Phi_xReductionBatch>());
         (next_tok, acc.1 || valid,
           if valid { next_batch } else { acc.2 })
@@ -417,13 +411,10 @@ proc Phi_xReductionPlane {
       work.frames[u32:3]);
     let _done = join(output_tok, input_tok);
     Phi_xReductionPlaneState {
-      input_cursor: if state.pending_valid {
-        state.input_cursor
-      } else if state.input_cursor + u32:1 == u32:1 { u32:0 } else {
-        state.input_cursor + u32:1 },
+      input_cursor: if state.pending_valid { state.input_cursor
+      } else { arbitration::successor<u32:1>(state.input_cursor) },
       output_cursor: if !output_ready { state.output_cursor
-      } else if output_slot + u32:1 == u32:9 { u32:0 } else {
-        output_slot + u32:1 },
+      } else { arbitration::successor<u32:9>(output_index) },
       open_tokens,
       bank_0,
       bank_1,
@@ -446,8 +437,8 @@ struct Phi_zReductionBatch {
 // Fragment 2 (west) uses inverse fragment 1 at offset [1, 0].
 // Fragment 3 (south) uses inverse fragment 0 at offset [0, -1].
 struct Phi_zReductionPlaneState {
-  input_cursor: u32,
-  output_cursor: u32,
+  input_cursor: u1,
+  output_cursor: u4,
   open_tokens: u1[u32:9],
   bank_0: frame_queue::Queue[u32:9],
   bank_1: frame_queue::Queue[u32:9],
@@ -482,16 +473,9 @@ proc Phi_zReductionPlane {
       state.open_tokens[u32:7] && state.bank_0[u32:8].current_valid && state.bank_1[u32:4].current_valid && state.bank_2[u32:1].current_valid && state.bank_3[u32:6].current_valid,
       state.open_tokens[u32:8] && state.bank_0[u32:6].current_valid && state.bank_1[u32:5].current_valid && state.bank_2[u32:2].current_valid && state.bank_3[u32:7].current_valid
     ];
-    let (output_ready, output_slot) =
-      unroll_for! (offset, selected):
-          (u32, (u1, u32)) in u32:0..u32:9 {
-        let unwrapped = state.output_cursor + offset;
-        let candidate = if unwrapped < u32:9 { unwrapped } else {
-          unwrapped - u32:9 };
-        let take = !selected.0 && ready_slots[candidate];
-        (selected.0 || take,
-          if take { candidate } else { selected.1 })
-      }((u1:0, u32:0));
+    let (output_ready, output_index) = arbitration::select(
+      ready_slots, state.output_cursor);
+    let output_slot = output_index as u32;
     let pop_sources = match output_slot {
       u32:0 => [u32:1, u32:6, u32:3, u32:2],
       u32:1 => [u32:2, u32:7, u32:4, u32:0],
@@ -576,7 +560,7 @@ proc Phi_zReductionPlane {
           recv_if_non_blocking(
             acc.0, batch_in[candidate],
             !state.pending_valid &&
-              state.input_cursor == candidate,
+              state.input_cursor as u32 == candidate,
             zero!<Phi_zReductionBatch>());
         (next_tok, acc.1 || valid,
           if valid { next_batch } else { acc.2 })
@@ -638,13 +622,10 @@ proc Phi_zReductionPlane {
       work.frames[u32:3]);
     let _done = join(output_tok, input_tok);
     Phi_zReductionPlaneState {
-      input_cursor: if state.pending_valid {
-        state.input_cursor
-      } else if state.input_cursor + u32:1 == u32:1 { u32:0 } else {
-        state.input_cursor + u32:1 },
+      input_cursor: if state.pending_valid { state.input_cursor
+      } else { arbitration::successor<u32:1>(state.input_cursor) },
       output_cursor: if !output_ready { state.output_cursor
-      } else if output_slot + u32:1 == u32:9 { u32:0 } else {
-        output_slot + u32:1 },
+      } else { arbitration::successor<u32:9>(output_index) },
       open_tokens,
       bank_0,
       bank_1,

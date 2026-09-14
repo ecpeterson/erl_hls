@@ -220,7 +220,7 @@ preamble(Spec = #{families := Families}) ->
         "import effect_window;\n",
         case maps:get(source_fragment_planes, Spec, []) of
             [] -> [];
-            [_ | _] -> "import frame_queue;\n"
+            [_ | _] -> "import frame_queue;\nimport arbitration;\n"
         end,
         case maps:get(ingresses, Spec) of
             [] -> [];
