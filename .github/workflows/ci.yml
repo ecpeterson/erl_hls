@@ -72,6 +72,9 @@ jobs:
       - name: Check bounded actor snapshot equivalence
         run: python3 tools/test_actor_snapshot_formal.py
 
+      - name: Check incremental compilation, failure recovery, and regsvc RTL identity
+        run: python3 tools/test_compile_xls.py --xls-root "$RUNNER_TEMP/xls"
+
       - name: Check physical timing reports and artifact provenance
         run: python3 experiments/07-openxc7/test_phi_timing.py
 

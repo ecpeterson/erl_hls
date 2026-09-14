@@ -352,4 +352,6 @@ erlc -pa "$project_root/_build/test/lib/erl_hls/ebin" \
 cp "$stage/test_src/phi_memory_bridge_tests.P" \
     "$stage/test_src/phi_memory_bridge_tests.erl"
 
-cp "$project_root/tools/compile_phi_decoder_profile.sh" "$stage/compile_phi_decoder_profile.sh"
+for helper in compile_xls.py compile_phi_decoder_profile.py compile_phi_decoder_profile.sh; do
+    cp "$project_root/tools/$helper" "$stage/$helper"
+done

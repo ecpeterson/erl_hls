@@ -19,10 +19,11 @@ if [[ "$kind" == phi ]]; then
     cp priv/xls/lib/*.x priv/xls/fabric/*.x src/examples/phi_decoder/phi_field.x "$stage/"
     cp tools/phi_scheduler_rams.sh priv/rtl/hls_1r1w_ram.v "$stage/"
     bash tools/compile_phi_decoder_profile.sh "$stage" "$xls_root" 2h 3 2 1
+    compiled=$(cd "$stage/compiled" && pwd -P)
     python3 tools/test_topology_debug_integration.py --yosys "${YOSYS:-yosys}" \
         --top phi_decoder_profile_top --clock aclk --reset aresetn --reset-active-low \
         --stage "$stage/debug" --actor-projection "$stage/phi-actors.json" --actor-test phi \
-        "$stage/phi_decoder_profile.v" "$stage/phi_decoder_profile_top.v" "$stage/hls_1r1w_ram.v"
+        "$compiled/phi_decoder_profile.v" "$compiled/phi_decoder_profile_top.v" "$compiled/hls_1r1w_ram.v"
     exit 0
 fi
 scheduler_count=$(python3 -c 'import json,sys; print(len(json.load(open(sys.argv[1]))["banks"]))' "$stage/small-actors.json")

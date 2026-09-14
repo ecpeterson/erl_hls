@@ -22,15 +22,16 @@ Optional generated scheduler outputs expose completed-step mailbox metadata as d
 
 ## Generate a diagnostic build
 
-Use the same generated RTL and RAM shell as the intended application. For example, after generating the D3 decoder profile into `$stage`:
+Use the same generated RTL and RAM shell as the intended application. For example, after generating the D3 decoder profile into `$stage`, pin its completed artifact bundle:
 
 ```sh
+compiled=$(cd "$stage/compiled" && pwd -P)
 python3 tools/topology_debug.py \
   --top phi_decoder_profile_top --clock aclk \
   --reset aresetn --reset-active-low \
   --stage "$stage/topology-debug" \
-  "$stage/phi_decoder_profile.v" "$stage/phi_decoder_profile_top.v" \
-  priv/rtl/hls_1r1w_ram.v
+  "$compiled/phi_decoder_profile.v" "$compiled/phi_decoder_profile_top.v" \
+  "$compiled/hls_1r1w_ram.v"
 ```
 
 Yosys must be on `PATH`, or supplied with `--yosys`. Compile `topology-debug/instrumented.v`, `topology-debug/debug_top.v`, and these support modules, using `hls_debug_application` as the diagnostic top:

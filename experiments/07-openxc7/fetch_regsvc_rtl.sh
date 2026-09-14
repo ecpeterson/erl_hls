@@ -46,6 +46,7 @@ manifest_inputs=(
     hls_trace_store.v
     regsvc_pair_fixture.sv
     remote_xls_sim.sh
+    compile_xls.py
 )
 
 local_stage=

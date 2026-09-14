@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-stage=$1
-xls_root=$2
+script_root=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+stage=$(cd "$1" && pwd)
+xls_root=$(cd "$2" && pwd)
 stdlib="$xls_root/xls/dslx/stdlib"
 . "$stage/phi_scheduler_rams.sh"
 
@@ -66,24 +67,13 @@ do
         "$test_module"
 done
 
-"$xls_root/ir_converter_main" \
-    --warnings_as_errors=false \
-    --dslx_path=. \
-    --dslx_stdlib_path="$stdlib" \
-    --top=Top \
-    regsvc.x > regsvc.ir
-
-"$xls_root/opt_main" regsvc.ir > regsvc.opt.ir
-
-"$xls_root/codegen_main" \
-    --pipeline_stages=1 \
-    --delay_model=unit \
-    --flop_inputs=false \
-    --flop_outputs=true \
-    --use_system_verilog=false \
-    --reset=reset \
-    --fifo_module= \
-    regsvc.opt.ir > regsvc.v
+python3 "$script_root/compile_xls.py" \
+    "$stage/regsvc.x" "$xls_root" --output "$stage/regsvc-build"
+regsvc_build=$(cd "$stage/regsvc-build" && pwd -P)
+# Export the single RTL file consumed by this multi-service simulation/package.
+# The compiler's IR, logs, and manifest remain together in the pinned release.
+cp "$regsvc_build/regsvc.v" regsvc.v.new
+mv regsvc.v.new regsvc.v
 
 # Compile-only conformance coverage for tuple and homogeneous-record case
 # patterns in an hls_gs callback. The phi simulation below covers integer

@@ -45,7 +45,7 @@ if [[ "$trace_enabled" == 1 ]]; then
     python3 "$project_root/tools/phi_profile_timeline.py" \
         "$local_stage/phi_decoder_profile.trace.csv" \
         "$local_stage/phi_decoder_profile.causality.svg" \
-        --topology "$local_stage/phi_decoder_profile_topology.x" \
+        --topology "$local_stage/compiled/sources/phi_decoder_profile_topology.x" \
         --scheduler phi_0 --occurrence 100 --before 8 --after 22 \
         --pipeline-stages "$pipeline_stages" | \
         tee -a "$local_stage/phi_decoder_profile.metrics"
