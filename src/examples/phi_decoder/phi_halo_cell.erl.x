@@ -3266,7 +3266,9 @@ fn retire_actor<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
 // One mailbox owner issues loaded activations to a stateless executor and
 // retires completed results. In-flight slot exclusion prevents stale
 // same-actor reads; a one-result skid slot lets credit collection continue
-// when an effect batch temporarily blocks retirement.
+// when an effect batch temporarily blocks retirement. A token carried
+// beside the metadata orders each activation's RAM writes before the next
+// activation's reads, independently of metadata pipeline placement.
 pub proc SharedService<
     ACTOR_COUNT: u32,
     PRODUCER_COUNT: u32,
@@ -3326,14 +3328,15 @@ pub proc SharedService<
   }
 
   init {
-    SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
+    (join(), SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
       instance_id: INSTANCE_ID,
       phase: SharedPhase::BOOT,
       ..zero!<SharedState<ACTOR_COUNT, PRODUCER_COUNT>>()
-    }
+    })
   }
 
-  next(state: SharedState<ACTOR_COUNT, PRODUCER_COUNT>) {
+  next(prior: (token, SharedState<ACTOR_COUNT, PRODUCER_COUNT>)) {
+    let (memory_tok, state) = prior;
     let capture_enabled = state.phase == SharedPhase::RUN;
     let (capture_tok, captured_pending, captured_pending_valid) =
       unroll_for! (producer, acc):
@@ -3361,7 +3364,7 @@ pub proc SharedService<
             acc.2
           }
         )
-      }((join(), state.pending, state.pending_valid));
+      }((memory_tok, state.pending, state.pending_valid));
     let (aggregate_tok, incoming_aggregate, incoming_aggregate_valid) =
       recv_if_non_blocking(
         capture_tok,
@@ -3410,7 +3413,7 @@ pub proc SharedService<
         let (_done, _) = recv(write_tok, ram_write_resp_in);
         let entry_probes = update(
           state.entry_probes, state.cursor, u1:1);
-        if state.cursor + u32:1 == ACTOR_COUNT {
+        let next_state = if state.cursor + u32:1 == ACTOR_COUNT {
           SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
             phase: if STARTUP_COUNT == u32:0 {
               SharedPhase::RUN
@@ -3429,7 +3432,8 @@ pub proc SharedService<
             entry_probes,
             ..state
           }
-        }
+        };
+        (write_tok, next_state)
       },
       SharedPhase::STARTUP => {
         let (tok, request) = recv(aggregate_tok, startup_in);
@@ -3448,7 +3452,7 @@ pub proc SharedService<
         let mail_candidates = update(
           state.mail_candidates, request.slot, u1:1);
         let startup_seen = state.startup_seen + u32:1;
-        SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
+        let next_state = SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
           phase: if startup_seen == STARTUP_COUNT {
             SharedPhase::RUN
           } else {
@@ -3461,7 +3465,8 @@ pub proc SharedService<
           order,
           mail_candidates,
           ..state
-        }
+        };
+        (write_tok, next_state)
       },
       SharedPhase::RUN => {
         let (credit_pending_valid, credit_busy) = mailbox::collect_credit(
@@ -3569,12 +3574,12 @@ pub proc SharedService<
           state.mailbox_write_pending,
           zero!<MailboxRamWriteResp>());
         let state_read_tok = send_if(
-          join(),
+          memory_tok,
           ram_read_req_out,
           issue_valid,
           machine_read(read_slot));
         let mailbox_read_tok = send_if(
-          join(),
+          memory_tok,
           mailbox_read_req_out,
           read_mailbox && received,
           mailbox::read(read_slot, mailbox_index, MAILBOX_DEPTH));
@@ -3700,7 +3705,7 @@ pub proc SharedService<
           executor_request_tok,
           state_completion_tok,
           mailbox_completion_tok);
-        SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
+        let next_state = SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
           next_valid: ready,
           next_slot,
           in_flight: issued_in_flight,
@@ -3710,7 +3715,8 @@ pub proc SharedService<
           state_write_pending: retire_valid,
           mailbox_write_pending: reservation.admission.valid,
           ..selection_state
-        }
+        };
+        (join(state_write_tok, mailbox_write_tok), next_state)
       },
     }
   }

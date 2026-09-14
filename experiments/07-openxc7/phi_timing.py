@@ -73,6 +73,36 @@ def simulate(args):
     print((args.stage / "simulate.console").read_text(), end="")
 
 
+def compare(args):
+    baseline = args.reference.resolve()
+    builds = {"baseline": load_profile(baseline), "candidate": load_profile(args.rtl)}
+    for key in ("profile", "tools", "stdlib", "ram_configuration"):
+        if builds["baseline"][key] != builds["candidate"][key]:
+            raise ValueError(f"comparison requires matching {key}")
+    if sha(baseline / "hls_1r1w_ram.v") != sha(args.rtl / "hls_1r1w_ram.v"):
+        raise ValueError("comparison requires the same RAM implementation")
+    # Namespace only module identifiers so both complete implementations can
+    # coexist. The common RAM module still has independent storage per instance.
+    reference = "\n".join((baseline / name).read_text() for name in
+                          ("phi_decoder_profile.v", "phi_decoder_profile_top.v"))
+    names = set(re.findall(r"(?m)^module\s+(\w+)\s*\(", reference))
+    if CORE not in names:
+        raise ValueError("missing reference top")
+    pattern = r"\b(?:" + "|".join(map(re.escape, sorted(names))) + r")\b"
+    reference = re.sub(pattern, lambda match: "baseline_" + match[0], reference)
+    ref = args.stage / "reference.v"
+    ref.write_text(reference)
+    command(["iverilog", "-g2012", "-s", "phi_compare_tb", "-o", args.stage / "compare.vvp",
+             HERE / "phi_compare_tb.sv", ref,
+             *[args.rtl / name for name in ("phi_decoder_profile.v", "phi_decoder_profile_top.v", "hls_1r1w_ram.v")]],
+            args.stage, "compare-compile")
+    command(["vvp", args.stage / "compare.vvp"], args.stage, "compare")
+    save(args.stage / "comparison.json", {"builds": builds,
+         "testbench_sha256": sha(HERE / "phi_compare_tb.sv"),
+         "console_sha256": sha(args.stage / "compare.console")})
+    print((args.stage / "compare.console").read_text(), end="")
+
+
 def load_profile(rtl):
     build = json.loads((rtl / "phi_decoder_profile.build.json").read_text())
     expected = {"width": 3, "height": 3, "shards_per_plane": 3,
@@ -286,7 +316,8 @@ def report(args, binaries, mapping):
              "| Seed | Partial-path MHz | Logic ns | Routing ns |", "| --- | ---: | ---: | ---: |"]
     lines += [f"| {r['seed']} | {r['achieved_mhz']:.2f} | {r['critical_path']['logic_ns']:.2f} | {r['critical_path']['routing_ns']:.2f} |" for r in runs]
     s = summary["statistics"]
-    lines += ["", f"Mean {s['mean_mhz']:.2f} MHz; population variance {s['variance_mhz_squared']:.4f} MHz²; best {s['best_mhz']:.2f} MHz; worst {s['worst_mhz']:.2f} MHz.", "",
+    lines += ["", f"{s['samples']} seeds: mean {s['mean_mhz']:.2f} MHz; population variance {s['variance_mhz_squared']:.4f} MHz²; best {s['best_mhz']:.2f} MHz; worst {s['worst_mhz']:.2f} MHz.", "",
+              "These are descriptive statistics, not a confidence interval. One seed does not measure seed sensitivity; its population variance is zero by definition.", "",
               f"All {mapping['retained_decoder_cells']:,} mapped decoder cells survive harness assembly; sequential cells use one BUFG.", "",
               "Excluded sequential primitive timing: `" + json.dumps(mapping["timing_coverage"]["omitted_sequential_primitives"], sort_keys=True) + "`.", "",
               "| Mapped primitive | Decoder | With harness |", "| --- | ---: | ---: |"]
@@ -344,11 +375,16 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("rtl", type=Path, help="prepared, compiled decoder-profile RTL directory")
     parser.add_argument("--stage", type=Path, required=True)
-    parser.add_argument("--seeds", type=int, nargs="+", default=[1, 2, 3])
+    parser.add_argument("--seeds", type=int, nargs="+", default=[1, 2],
+                        help="placement seeds (default: 1 2); used only by route/report/all")
     parser.add_argument("--jobs", type=int, default=1, help="maximum concurrent place-and-route processes")
     parser.add_argument("--frequency", type=float, default=100)
-    parser.add_argument("--phase", choices=("all", "simulate", "map", "route", "report"), default="all")
+    parser.add_argument("--phase", choices=("all", "simulate", "compare", "map", "route", "report"), default="map",
+                        help="default: map; simulation and place-and-route are explicit phases")
+    parser.add_argument("--reference", type=Path, help="baseline RTL directory for the compare phase")
     args = parser.parse_args()
+    if args.phase == "compare" and args.reference is None:
+        parser.error("compare requires --reference")
     if args.jobs < 1 or args.frequency <= 0 or not math.isfinite(args.frequency) or len(set(args.seeds)) != len(args.seeds) or min(args.seeds) < 1:
         parser.error("jobs/frequency must be positive and seeds must be unique positive integers")
     args.rtl, args.stage = args.rtl.resolve(), args.stage.resolve()
@@ -356,6 +392,9 @@ def main():
     apio = Path(os.environ.get("ERL_HLS_APIO_HOME", HERE / ".apio")).resolve()
     binaries = {"yosys": apio / "packages/oss-cad-suite/bin/yosys", "nextpnr": apio / "packages/openxc7/bin/nextpnr-xilinx"}
     load_profile(args.rtl)
+    if args.phase == "compare":
+        compare(args)
+        return
     if args.phase in ("all", "simulate"):
         simulate(args)
     if args.phase == "simulate":

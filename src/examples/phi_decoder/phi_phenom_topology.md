@@ -831,8 +831,8 @@ latent while either entry bit is set, and egress waiters become selectable
 together when the shared credit returns. Servicing one waiter consumes the
 credit and makes the others temporarily unselectable again.
 
-Selection is fair and work-conserving. Two statically unrolled priority passes
-find the first selectable slot at or after the round-robin cursor, falling back
+Selection is fair and work-conserving. The shared `arbitration` library masks
+and priority-encodes selectable slots at or after the cursor, falling back
 to the first selectable slot before it. This avoids both an empty cyclic scan
 and the large dynamic-index mux synthesized by an earlier rotated-mask
 implementation. Entry execution either completes, remains a probe for its next
@@ -1368,6 +1368,8 @@ bit per actor prevents a stale reread of the same state. One result skid slot
 allows the manager to continue collecting input and returned credit while an
 effect-producing result waits to retire. This changes no mailbox capacity,
 RAM port count, actor callback, or message-order rule.
+
+The manager carries a token from its state and mailbox writes to the following activation's RAM reads, including a reduction's fast issue path. This [RAM ordering dependency](../../../docs/initialization.md#shared-ram-ordering) preserves read-before-write RAM semantics when XLS moves combinational selection and metadata updates between pipeline stages.
 
 The isolated phi executor compiles as a two-stage II=1 pipeline. Its
 out-of-context XC7 map reports 1,477 estimated logic cells, 1,021 flip-flops,

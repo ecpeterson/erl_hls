@@ -342,6 +342,32 @@ the plane retains such a batch rather than silently corrupting another queue.
 Where more than one selected family feeds the same homogeneous scheduler, a
 small round-robin mux gives every plane a bounded holding slot.
 
+The planes, aggregate muxes, actor schedulers, and effect-window arbiters share
+`arbitration::select`. It chooses the first eligible index at or after the
+cursor, wrapping to the first eligible index when necessary. An empty set
+returns `(false, 0)`. The implementation masks the request bits at the cursor
+and priority-encodes the selected region; readiness is an independent reduction
+of the request bits. It does not rotate through dynamically indexed candidates.
+
+Plane input/output cursors and aggregate-mux cursors use the smallest unsigned
+type which can represent their population, with one bit for a singleton.
+`arbitration::successor` compares with the last legal index before incrementing,
+so power-of-two populations do not require an extra bit to represent the count.
+The output cursor advances after a selected activation commits; downstream
+backpressure cannot skip that choice. The input cursor retains its existing
+polling policy and pauses while the plane holds a pending batch.
+
+`tools/test_arbitration.py XLS_ROOT` proves the generated combinational RTL
+against an independent circular scan for populations 1, 2, 3, 4, 9, 16, 17,
+and 32, using both minimal and 32-bit cursors. Every request mask, legal cursor,
+and acceptance choice is symbolic. The proof checks the exact winner, empty
+result, cursor bounds, and cursor retention without acceptance. It also proves
+that a continuously eligible contender is either selected or moves strictly
+closer after each accepted competing grant. Consequently it wins within at most
+N accepted grants; this is not a wall-clock latency bound when consumers stall
+or eligibility is intermittent. Generated plane simulations additionally check
+fragment transposition and successive reduction windows under backpressure.
+
 With no selected placement, ordinary generated DSLX remains byte-for-byte
 unchanged. Selecting the placement therefore requires both the topology
 profile and the matching `aggregate_only` actor artifacts reported by

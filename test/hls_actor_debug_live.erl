@@ -18,21 +18,24 @@ inspect(Session, Stage, Moment) ->
                 Snapshot = hls_debug:info(Actor,
                     [identity, placement, phase, initialized, enter_pending, failed, failure, cycle] ++
                         [F || F <- MailboxFields, lists:member(F, Fields)], 10000),
-                Values = maps:from_list(Snapshot),
-                true = maps:get(initialized, Values),
-                check(Kind, Moment, Id, Values),
-                check_mailbox(Actor, Values),
-                Values#{identity := iolist_to_binary(io_lib:format("~p", [Id]))}
+                {Id, Actor, maps:from_list(Snapshot)}
             end || Id <- Ids],
+            %% Preserve every public snapshot before checking expectations, so
+            %% failures retain the other actors' state in the CI artifacts.
+            Values = [V || {_, _, V} <- Observations],
+            ok = file:write_file(filename:join(Stage, "actors-" ++ atom_to_list(Moment) ++ ".term"),
+                io_lib:format("~p.~n", [Values])),
+            lists:foreach(fun({Id, Actor, Snapshot}) ->
+                true = maps:get(initialized, Snapshot),
+                check(Kind, Moment, Id, Snapshot),
+                check_mailbox(Actor, Snapshot)
+            end, Observations),
             case {Kind, Moment} of
                 {mailbox, blocked} ->
-                    true = lists:any(fun(#{message_queue_len := N, postponed := P}) -> N =:= 2 andalso P =:= 2 end, Observations),
-                    true = lists:any(fun(#{egress_busy := Busy, waiting_for_egress := Waiting}) -> Busy andalso Waiting end, Observations);
+                    true = lists:any(fun(#{message_queue_len := N, postponed := P}) -> N =:= 2 andalso P =:= 2 end, Values),
+                    true = lists:any(fun(#{egress_busy := Busy, waiting_for_egress := Waiting}) -> Busy andalso Waiting end, Values);
                 _ -> ok
             end,
-            %% Placement contains arbitrary Erlang IDs; retain a native term report.
-            ok = file:write_file(filename:join(Stage, "actors-" ++ atom_to_list(Moment) ++ ".term"),
-                io_lib:format("~p.~n", [Observations])),
             io:format("PASS: ~p scoped actor snapshots (~p, ~p)~n", [length(Ids), Kind, Moment])
     end.
 

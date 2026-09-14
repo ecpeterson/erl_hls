@@ -23,3 +23,9 @@ unsigned_literal_uses_canonical_dslx_type_test() ->
 signed_type_uses_canonical_dslx_type_test() ->
     ?assertEqual("s32", xls_nums:signed_type(32)),
     ?assertEqual("sN[37]", lists:flatten(xls_nums:signed_type(37))).
+
+index_types_cover_singletons_and_power_of_two_boundaries_test() ->
+    [?assertEqual(Type, lists:flatten(xls_nums:index_type(Count)))
+        || {Count, Type} <- [{1, "u1"}, {2, "u1"}, {3, "u2"}, {4, "u2"},
+            {9, "u4"}, {255, "u8"}, {256, "u8"}, {257, "uN[9]"},
+            {65536, "u16"}, {65537, "uN[17]"}]].

@@ -26,6 +26,16 @@ Startup messages supply per-instance configuration after this common initializer
 
 The CPU adapters invoke the source `init/1` with the argument passed to `start_link`. CPU-only use can retain argument forms outside the hardware subset. A hardware-backed `hls_gs` proxy requires `[]` and rejects any other argument before registering its fabric route. Starting a proxy attaches to the existing hardware state; it does not run a remote initializer or reset the device. A return route is retired when its proxy exits, so attaching a successor requires a new, clean fabric session; see [host transaction ownership](host-transactions.md).
 
+## Shared RAM ordering
+
+The production 1R1W RAM returns the old row when a read and write address the same row on one clock. Queue metadata becoming eligible is therefore insufficient to authorize a read of a newly admitted message or retired actor state.
+
+Each shared scheduler carries an XLS token beside its metadata in proc state. Initialization and startup return the token from their RAM write; normal scheduling returns the join of its state and mailbox write tokens. The following activation starts RAM reads from that token. This explicit dependency orders writes before subsequent reads even when XLS places metadata updates earlier in its pipeline.
+
+Tokens have no payload bits; this is a scheduling constraint, with no additional request queue or RAM port. At II=1, XLS must place the write-to-next-read recurrence within one initiation interval, so consecutive activations can still issue on consecutive clocks. RAM responses and actor execution remain pipelined. In-flight actor exclusion and mailbox admission rules prevent a conflicting same-row read and write within one activation. The physical schedule can affect area and timing, which must be measured for the chosen pipeline depth.
+
+`tools/test_actor_debug.sh XLS_ROOT STAGE mailbox` exercises postponement, backpressure, and recovery at two, three, and four XLS stages through scoped `hls_debug:info` queries. It saves all actor snapshots before checking expectations, including when a check fails.
+
 ## Reset
 
 Hardware reset starts a new execution: direct actor state is restored, scheduler metadata is cleared, shared actor RAM is repopulated, and topology startup producers restart. The physical state and mailbox RAM arrays need not be cleared; initialization and empty-mailbox metadata keep stale contents from becoming live state. The checked initializer is a constant, so reset repeats its value rather than executing host code.

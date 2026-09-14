@@ -90,6 +90,10 @@ source_fragment_plane_uses_inverse_depth_two_queues_test() ->
     Generated = selected(),
     ?assertNotEqual(nomatch, binary:match(Generated,
         <<"import frame_queue;">>)),
+    ?assertNotEqual(nomatch, binary:match(Generated, <<"  input_cursor: u1,">>)),
+    ?assertNotEqual(nomatch, binary:match(Generated, <<"  output_cursor: u4,">>)),
+    ?assertNotEqual(nomatch, binary:match(Generated,
+        <<"arbitration::successor<u32:9>(output_index)">>)),
     ?assertNotEqual(nomatch, binary:match(Generated, <<
         "bank_0: frame_queue::Queue[u32:9]"
     >>)),
@@ -232,11 +236,12 @@ multiple_planes_share_one_scheduler_through_a_fair_typed_mux_test() ->
     ?assertEqual(1, count(Generated, <<
         "proc SchedulerAggregateArrayMux0 {"
     >>)),
+    ?assertNotEqual(nomatch, binary:match(Generated, <<"  cursor: u1,">>)),
     ?assertNotEqual(nomatch, binary:match(Generated, <<
         "valid: u1[u32:2]"
     >>)),
     ?assertNotEqual(nomatch, binary:match(Generated, <<
-        "let unwrapped = state.cursor + offset;"
+        "let (selected, selected_index) = arbitration::select("
     >>)),
     ?assertNotEqual(nomatch, binary:match(Generated, <<
         "scheduler_0_aggregate_sources_c, scheduler_0_aggregate_p"

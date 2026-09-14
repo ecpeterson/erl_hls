@@ -20,7 +20,7 @@ import topology_debug_services as services
 
 
 SCHEMA = 4
-FIFO = re.compile(r"fifo_for_depth_(\d+)_ty_.*_with_bypass(?:_register_push)?(?:___\d+)?$")
+FIFO = re.compile(r"fifo_for_depth_(\d+)_ty_.*_(?:with|no)_bypass(?:_register_push)?(?:___\d+)?$")
 PORT_PAIRS = (("_vld", "_rdy"), ("_valid", "_ready"), ("_tvalid", "_tready"))
 
 
@@ -128,8 +128,8 @@ def discover(hierarchy, flat_design, top, clock):
 def fifo_resources(hierarchy, flat_design, top, probes):
     """Read the existing XLS FIFO slots register; never count transfers again.
 
-    This adapter deliberately supports only the checked, unregistered-pop XLS
-    FIFO shape. A different implementation remains a handshake-only vertex.
+    This adapter supports the checked, unregistered-pop XLS FIFO shapes, with
+    and without bypass. Other implementations remain handshake-only vertices.
     Validate the full comparator and register instead of trusting a name alone.
     """
     flat = flat_design["modules"][top]

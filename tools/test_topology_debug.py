@@ -88,12 +88,17 @@ class DiscoveryTests(unittest.TestCase):
         nets["fifo.slots"] = {"bits": [7, 8]}
         flat = {"modules": {"top": {"netnames": nets}}}
         probes = [{"id": 0, "valid_bit": 2, "ready_bit": 3}, {"id": 1, "valid_bit": 4, "ready_bit": 5}]
-        queues, unsupported = topology.fifo_resources(hierarchy, flat, "top", probes)
-        self.assertEqual(queues[0]["capacity"], 2)
-        self.assertEqual(unsupported, [])
-        fifo["cells"]["full"]["connections"]["B"] = ["1", "1"]
-        with self.assertRaisesRegex(ValueError, "unrecognized XLS FIFO occupancy"):
-            topology.fifo_resources(hierarchy, flat, "top", probes)
+        for variant in (name, name.replace("with_bypass", "no_bypass")):
+            with self.subTest(variant=variant):
+                hierarchy["modules"]["top"]["cells"]["fifo"]["type"] = variant
+                hierarchy["modules"][variant] = fifo
+                fifo["cells"]["full"]["connections"]["B"] = ["0", "1"]
+                queues, unsupported = topology.fifo_resources(hierarchy, flat, "top", probes)
+                self.assertEqual(queues[0]["capacity"], 2)
+                self.assertEqual(unsupported, [])
+                fifo["cells"]["full"]["connections"]["B"] = ["1", "1"]
+                with self.assertRaisesRegex(ValueError, "unrecognized XLS FIFO occupancy"):
+                    topology.fifo_resources(hierarchy, flat, "top", probes)
 
     def test_clock_domain_rejected(self):
         ports = {"clk": {"bits": [1], "direction": "input"},
