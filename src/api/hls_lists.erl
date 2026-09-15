@@ -66,9 +66,9 @@ zero(list, [Subtype, Count]) ->
 transpile(list, [{phantom, type, Subtype}, {static, integer, Count}], State) ->
     xls_parse:reference(State, {phantom, type, list(Subtype, Count)});
 transpile(nth, [Index, List], _State) ->
-    checked_call("nth", [index(Index), List]);
+    checked_element(Index, List, "collection_values[collection_index]");
 transpile(set, [Index, List, Value], _State) ->
-    checked_call("set", [index(Index), List, Value]);
+    checked_element(Index, List, ["update(collection_values, collection_index, ", Value, ")"]);
 transpile(new, [Subtype, Count], State) ->
     NewState = transpile(list, [Subtype, Count], State),
     transpile(zero, [xls_parse:reference(NewState)], NewState);
@@ -76,23 +76,37 @@ transpile(zero, [{phantom, type, {hls_type, hls_lists, list, [Subtype, Count]}}]
     %% NOTE: Here we enforce that the arguments to `new/2` are static.
     ["zero!<", print_type(list, [Subtype, Count]), ">()"];
 transpile(sublist, [Descriptor, List, Start, Count], _State) ->
-    checked_slice_call("sublist", Descriptor, List, [index(Start), index(Count)]);
+    checked_slice_call(sublist, Descriptor, List, Start, Count);
 transpile(array_slice, [Descriptor, List, Start, {static, integer, Length}], _State)
         when Length > 0 ->
-    checked_slice_call(["slice<u32:", integer_to_list(Length), ">"],
-        Descriptor, List, [index(Start)]);
+    checked_slice_call({array_slice, Length}, Descriptor, List, Start, {static, integer, Length});
 transpile(array_slice, [_Descriptor, _List, _Start, {static, integer, 0}], _State) ->
     error(empty_xls_collection);
 transpile(array_slice, [_Descriptor, _List, _Start, Length], _State) ->
     error({invalid_array_slice_length, Length}).
 
-checked_call(Name, Args) ->
-    {fallible, badarg, ["hls_lists::", Name, "(", lists:join(", ", Args), ")"]}.
+%% Keep element types at the call site: XLS currently emits invalid IR names
+%% for type-generic functions instantiated with parameterized structs (including
+%% APFloat, also nested in arrays). Bounds arithmetic lives in the static module.
+checked_element(Index, List, Result) ->
+    {fallible, badarg, ["{ let collection_values = ", List, "; ",
+        "let (collection_index, collection_invalid) = hls_lists::checked_index<",
+        "{array_size(collection_values)}>(", index(Index), "); (", Result,
+        ", collection_invalid) }"]}.
 
-checked_slice_call(Name, {phantom, type, Type = {hls_type, ?MODULE, list, _}}, List, Args) ->
-    {fallible, badarg, Call} = checked_call(Name, ["slice_values" | Args]),
-    {fallible, badarg, ["{ let slice_values: ", hls_type:print_type(Type), " = ",
-        List, "; ", Call, " }"]}.
+checked_slice_call(Operation, {phantom, type, Type = {hls_type, ?MODULE, list, [Subtype, Size]}},
+        List, Start, Count) ->
+    OutputSize = case Operation of sublist -> Size; {array_slice, Length} -> Length end,
+    OutputType = print_type(list, [Subtype, OutputSize]),
+    {fallible, badarg, ["{ let slice_values: ", hls_type:print_type(Type), " = ", List,
+        "; let (slice_start, slice_mask, slice_invalid) = hls_lists::slice_bounds<u32:",
+        integer_to_list(Size), ", u32:", integer_to_list(OutputSize), ">(",
+        index(Start), ", ", index(Count), "); ",
+        "let sliced = array_slice(slice_values, slice_start, zero!<", OutputType, ">()); ",
+        "let selected = for (i, result): (u32, ", OutputType, ") in u32:0..u32:",
+        integer_to_list(OutputSize), " { update(result, i, if slice_mask[i] { sliced[i] } ",
+        "else { zero!<", hls_type:print_type(Subtype), ">() }) } (zero!<", OutputType,
+        ">()); (selected, slice_invalid) }"]}.
 
 %% Preserve a literal's full value before checking bounds. Dynamic expressions
 %% keep their inferred integer width and signedness too.

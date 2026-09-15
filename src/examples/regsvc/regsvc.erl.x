@@ -211,7 +211,7 @@ Tag::GET => {
     if _0 {
       let _1 = Xls_clause_1_Register_1 + 1;
       let _2 = Xls_clause_1_State_1.1.registers;
-      let _3 = hls_lists::nth(_1, _2);
+      let _3 = { let collection_values = _2; let (collection_index, collection_invalid) = hls_lists::checked_index<{array_size(collection_values)}>(_1); (collection_values[collection_index], collection_invalid) };
       let Xls_clause_1_Value_1 = _3.0;
       let _4 = Read {
         value: Xls_clause_1_Value_1,
@@ -271,9 +271,9 @@ Tag::BULK_GET => {
       if _5.0 {
         let _6 = Xls_clause_2_State_1.1.registers;
         let _7 = Xls_clause_2_Start_1 + 1;
-        let _8 = { let slice_values: u32[16] = _6; hls_lists::sublist(slice_values, _7, Xls_clause_2_Count_1) };
+        let _8 = { let slice_values: u32[16] = _6; let (slice_start, slice_mask, slice_invalid) = hls_lists::slice_bounds<u32:16, u32:16>(_7, Xls_clause_2_Count_1); let sliced = array_slice(slice_values, slice_start, zero!<u32[16]>()); let selected = for (i, result): (u32, u32[16]) in u32:0..u32:16 { update(result, i, if slice_mask[i] { sliced[i] } else { zero!<u32>() }) } (zero!<u32[16]>()); (selected, slice_invalid) };
         let Xls_clause_2_Sublist_1 = _8.0;
-        let _9 = { let slice_values: u32[16] = Xls_clause_2_Sublist_1; hls_lists::slice<u32:3>(slice_values, u32:1) };
+        let _9 = { let slice_values: u32[16] = Xls_clause_2_Sublist_1; let (slice_start, slice_mask, slice_invalid) = hls_lists::slice_bounds<u32:16, u32:3>(u32:1, u32:3); let sliced = array_slice(slice_values, slice_start, zero!<u32[3]>()); let selected = for (i, result): (u32, u32[3]) in u32:0..u32:3 { update(result, i, if slice_mask[i] { sliced[i] } else { zero!<u32>() }) } (zero!<u32[3]>()); (selected, slice_invalid) };
         let Xls_clause_2_Trim_1 = _9.0;
         let _10 = Bulkread {
           values: Xls_clause_2_Trim_1,
@@ -320,7 +320,7 @@ Tag::SET => {
       if _0 {
         let _1 = Xls_clause_2_Register_1 + 1;
         let _2 = Xls_clause_2_State_1.1.registers;
-        let _3 = hls_lists::nth(_1, _2);
+        let _3 = { let collection_values = _2; let (collection_index, collection_invalid) = hls_lists::checked_index<{array_size(collection_values)}>(_1); (collection_values[collection_index], collection_invalid) };
         let Xls_clause_2_OldValue_1 = _3.0;
         let _4 = !Xls_clause_2_Mask_1;
         let _5 = Xls_clause_2_OldValue_1 & _4;
@@ -329,7 +329,7 @@ Tag::SET => {
         let Xls_clause_2_NewValue_1 = _7;
         let _8 = Xls_clause_2_Register_1 + 1;
         let _9 = Xls_clause_2_State_1.1.registers;
-        let _10 = hls_lists::set(_8, _9, Xls_clause_2_NewValue_1);
+        let _10 = { let collection_values = _9; let (collection_index, collection_invalid) = hls_lists::checked_index<{array_size(collection_values)}>(_8); (update(collection_values, collection_index, Xls_clause_2_NewValue_1), collection_invalid) };
         let Xls_clause_2_NewRegisters_1 = _10.0;
         let _11 = State {
           registers: Xls_clause_2_NewRegisters_1,

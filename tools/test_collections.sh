@@ -13,9 +13,9 @@ erl -noshell -pa _build/test/lib/erl_hls/ebin _build/test/lib/erl_hls/test \
 options=(--warnings_as_errors=false --dslx_path="$project_root/priv/xls/lib"
     --dslx_stdlib_path="$xls_root/xls/dslx/stdlib")
 "$xls_root/interpreter_main" --compare=jit "${options[@]}" priv/xls/lib/hls_lists.x
-"$xls_root/interpreter_main" --compare=jit "${options[@]}" test_data/hls_collections_semantics.x
+"$xls_root/interpreter_main" --compare=jit "${options[@]}" "$stage/constant.x"
 "$xls_root/ir_converter_main" --top=constant_probe "${options[@]}" \
-    test_data/hls_collections_semantics.x > "$stage/constant.ir"
+    "$stage/constant.x" > "$stage/constant.ir"
 "$xls_root/opt_main" "$stage/constant.ir" > "$stage/constant.opt.ir"
 "$xls_root/codegen_main" --generator=combinational --module_name=constant_probe \
     --use_system_verilog=false "$stage/constant.opt.ir" > "$stage/constant.v"

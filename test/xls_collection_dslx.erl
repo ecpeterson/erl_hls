@@ -4,6 +4,7 @@
 %% Every result comes from lowering an Erlang call; BEAM supplies its oracle.
 %% Exhaust all eight-bit start/count pairs, including signed negative values.
 write(Stage) ->
+    ok = file:write_file(filename:join(Stage, "constant.x"), constant()),
     lists:foreach(fun({Sign, Width}) ->
         Prefix = filename:join(Stage, atom_to_list(Sign) ++ integer_to_list(Width)),
         Bounds = boundaries(Width),
@@ -16,8 +17,8 @@ write(Stage) ->
         Text = ["import hls_lists;\nimport hls_failure;\n",
             [function(Sign, Width, Op) || Op <- [nth, set, sublist, array_slice]],
             io_lib:format("pub fn probe(index: uN[~p], count: uN[~p], values: u24, value: u8) -> bits[88] {\n"
-                " nth(index, count, values, value) ++ set(index, count, values, value) ++\n"
-                " sublist(index, count, values, value) ++ array_slice(index, count, values, value)\n}\n",
+                " probe_nth(index, count, values, value) ++ probe_set(index, count, values, value) ++\n"
+                " probe_sublist(index, count, values, value) ++ probe_array_slice(index, count, values, value)\n}\n",
                 [Width, Width]),
             "#[test]\nfn beam_boundaries() {\nlet cases = [\n",
             [io_lib:format("(uN[~p]:~p, uN[~p]:~p, u24:~p, u8:~p, bits[88]:~p),\n",
@@ -44,7 +45,7 @@ function(Sign, Width, Op) ->
         [["(index as ", Integer, ")"], ["(count as ", Integer, ")"],
          "(values as u8[3])", "value"], state, #{}),
     Bits = hls_type:width(OutType),
-    [io_lib:format("fn ~s(index: uN[~p], count: uN[~p], values: u24, value: u8) -> bits[~p] {\n",
+    [io_lib:format("fn probe_~s(index: uN[~p], count: uN[~p], values: u24, value: u8) -> bits[~p] {\n",
         [Op, Width, Width, Bits+4]), xls_parse:print(Body),
         "let code = ", xls_parse:print(Failure), ";\n",
         "let result = if code != hls_failure::NONE { zero!<", hls_type:print_type(OutType),
@@ -84,3 +85,19 @@ boundaries(Width) ->
     Values = lists:usort([0, 1, 2, 3, 4, 5, 7, Mask bsr 1, (Mask bsr 1)+1, Mask-1, Mask] ++
         [V || V <- [1 bsl 32, (1 bsl 32)+1, (1 bsl 32)+3], V =< Mask]),
     [{I, C} || I <- Values, C <- Values].
+
+constant() ->
+    Source = "probe(V, New) -> {hls_lists:nth(2, V), hls_lists:set(2, V, New), "
+        "hls_lists:sublist(hls_lists:list(hls_nums:u32(), 3), V, 2, 1), "
+        "hls_lists:array_slice(hls_lists:list(hls_nums:u32(), 3), V, 2, 2)}.",
+    {ok, Tokens, _} = erl_scan:string(Source),
+    {ok, {function, _, _, _, [Clause]}} = erl_parse:parse_form(Tokens),
+    #{body := Body, result := Result, failure := Failure} =
+        xls_parse:clause_outcome(Clause, ["values", "replacement"], state, #{}),
+    ["import hls_lists;\nimport hls_failure;\n",
+        "pub fn constant_probe(values: u32[3], replacement: u32) -> ",
+        "((u32, u32[3], u32[3], u32[2]), u16) {\n", xls_parse:print(Body),
+        "(", xls_parse:print(Result), ", ", xls_parse:print(Failure), ")\n}\n",
+        "#[test]\nfn constant_accesses() {\n",
+        "assert_eq(constant_probe(u32[3]:[10, 20, 30], u32:99), ",
+        "((u32:20, u32[3]:[10, 99, 30], u32[3]:[20, 0, 0], u32[2]:[20, 30]), u16:0));\n}\n"].

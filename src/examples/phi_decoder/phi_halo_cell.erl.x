@@ -733,9 +733,9 @@ fn reduction_contribution(
             let Xls_clause_1_Values_1 = message.values;
             let Xls_clause_1_Cell_1 = (Tag::CELL, data);
             let _0 = (0 as u32);
-let _1 = hls_lists::nth(u32:1, Xls_clause_1_Values_1);
+let _1 = { let collection_values = Xls_clause_1_Values_1; let (collection_index, collection_invalid) = hls_lists::checked_index<{array_size(collection_values)}>(u32:1); (collection_values[collection_index], collection_invalid) };
 let _2 = phi_field::accumulate(0, _1.0);
-let _3 = hls_lists::nth(u32:2, Xls_clause_1_Values_1);
+let _3 = { let collection_values = Xls_clause_1_Values_1; let (collection_index, collection_invalid) = hls_lists::checked_index<{array_size(collection_values)}>(u32:2); (collection_values[collection_index], collection_invalid) };
 let _4 = phi_field::accumulate(0, _3.0);
 let _5 = Phifold {
   value0: _2,
@@ -957,9 +957,9 @@ fn reduction_transport_contribution(
         let Xls_clause_1_Epoch_1 = message.epoch;
         let Xls_clause_1_Values_1 = message.values;
         let _0 = (0 as u32);
-let _1 = hls_lists::nth(u32:1, Xls_clause_1_Values_1);
+let _1 = { let collection_values = Xls_clause_1_Values_1; let (collection_index, collection_invalid) = hls_lists::checked_index<{array_size(collection_values)}>(u32:1); (collection_values[collection_index], collection_invalid) };
 let _2 = phi_field::accumulate(0, _1.0);
-let _3 = hls_lists::nth(u32:2, Xls_clause_1_Values_1);
+let _3 = { let collection_values = Xls_clause_1_Values_1; let (collection_index, collection_invalid) = hls_lists::checked_index<{array_size(collection_values)}>(u32:2); (collection_values[collection_index], collection_invalid) };
 let _4 = phi_field::accumulate(0, _3.0);
 let _5 = Phifold {
   value0: _2,
@@ -1659,7 +1659,7 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> EntryOutcome {
       let _OldPhase_1 = old_phase;
       let Cell_1 = (Tag::CELL, data);
       let _0 = Cell_1.1.phi;
-      let _1 = hls_lists::nth(u32:1, _0);
+      let _1 = { let collection_values = _0; let (collection_index, collection_invalid) = hls_lists::checked_index<{array_size(collection_values)}>(u32:1); (collection_values[collection_index], collection_invalid) };
       let Phi0_1 = _1.0;
       let _2 = Cell_1.1.step;
       let _3 = Phi0 {

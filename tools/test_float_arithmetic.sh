@@ -16,6 +16,12 @@ for width in 16 32 64; do
     name="float$width"
     "$xls_root/interpreter_main" --compare=jit "${options[@]}" "$stage/$name.x"
     "$xls_root/interpreter_main" --compare=jit "${options[@]}" "$stage/${name}_actor.x"
+    # Exercise typed collection lowering through serialized IR as well as JIT:
+    # generic helpers instantiated with APFloat used to produce invalid IR names.
+    "$xls_root/ir_converter_main" --top=slice "${options[@]}" "$stage/$name.x" > "$stage/${name}_slice.ir"
+    "$xls_root/opt_main" "$stage/${name}_slice.ir" > "$stage/${name}_slice.opt.ir"
+    "$xls_root/codegen_main" --generator=combinational --use_system_verilog=false \
+        "$stage/${name}_slice.opt.ir" > "$stage/${name}_slice.v"
     for target in probe actor; do
         if [[ $target == probe ]]; then source="$name"; top=probe;
         else source="${name}_actor"; top=Top; fi
