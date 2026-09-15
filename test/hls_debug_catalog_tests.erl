@@ -44,10 +44,14 @@ exact_actor_placement_and_binding_validation_test() ->
 snapshot_projection_binding_test() ->
     {Plan, Specs} = hls_actor_debug_dslx:fixture(phi),
     Projection = #{<<"banks">> := Banks} = hls_actor_debug_dslx:projection(phi),
-    Raw = [A#{<<"kind">> => <<"actor">>, <<"width">> => 26, <<"bank">> => Index,
-        <<"module">> => Module, <<"phases">> => Phases, <<"failures">> => Failures} ||
+    Raw = [maps:merge(A#{<<"kind">> => <<"actor">>, <<"width">> => 26, <<"bank">> => Index,
+        <<"module">> => Module, <<"phases">> => Phases, <<"failures">> => Failures},
+        case Bank of
+            #{<<"reduction">> := R = #{<<"width">> := W}} -> #{<<"reduction">> => R, <<"width">> => 56+W};
+            _ -> #{}
+        end) ||
         #{<<"index">> := Index, <<"module">> := Module, <<"phases">> := Phases,
-            <<"actors">> := Actors, <<"failures">> := Failures} <- Banks, A <- Actors],
+            <<"actors">> := Actors, <<"failures">> := Failures} = Bank <- Banks, A <- Actors],
     Resources = [R#{<<"id">> => Id} || {Id, R} <- lists:enumerate(0, Raw)],
     Manifest = #{<<"actor_projection">> => Projection, <<"resources">> => Resources,
         <<"fingerprint">> => <<"fixture">>},

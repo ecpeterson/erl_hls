@@ -16,7 +16,7 @@ inspect(Session, Stage, Moment) ->
                 MailboxFields = [mailbox_initialized, message_queue_len, postponed, free_slots, reserved,
                     in_flight, mail_candidate, entry_candidate, waiting_for_egress, egress_busy, scheduler_phase],
                 Snapshot = hls_debug:info(Actor,
-                    [identity, placement, phase, initialized, enter_pending, failed, failure, cycle] ++
+                    [identity, placement, phase, initialized, enter_pending, failed, failure, reduction, cycle] ++
                         [F || F <- MailboxFields, lists:member(F, Fields)], 10000),
                 {Id, Actor, maps:from_list(Snapshot)}
             end || Id <- Ids],
@@ -75,16 +75,29 @@ check(mailbox, blocked, {family, producer, _}, #{phase := Phase, failed := false
         when Phase =:= boot; Phase =:= producer -> ok;
 check(mailbox, released, {family, producer, _}, #{phase := producer, failed := false}) -> ok;
 check(mailbox, blocked, {family, consumer, _}, #{phase := waiting, failed := false}) -> ok;
-check(Placement, _, {family, cell, [1, 0]}, #{phase := done, failed := false, failure := none})
+check(Placement, blocked, {family, cell, [Slot, 0]}, #{phase := boot, failed := false, reduction := idle})
+        when (Placement =:= reduction orelse Placement =:= aggregate), Slot >= 2 -> ok;
+check(reduction, blocked, {family, cell, [Slot, 0]}, #{phase := gathering, failed := false, failure := none,
+        reduction := #{status := open, phase := gathering, name := sum, key := 0,
+            remaining := 1, received := 2, population := {count, 3}, failure := Failure}}) ->
+    case Slot of
+        0 -> #{kind := badarith, file := <<"hls_reduction_failure_fixture.erl">>, line := 47} = Failure;
+        1 -> none = Failure
+    end,
+    ok;
+check(aggregate, blocked, {family, cell, [Slot, 0]}, #{phase := gathering, failed := false, failure := none,
+        reduction := #{status := open, remaining := 3, received := 0, failure := none}}) when Slot < 2 -> ok;
+check(Placement, released, {family, cell, [1, 0]}, #{phase := done, failed := false, failure := none, reduction := idle})
         when Placement =:= reduction; Placement =:= aggregate -> ok;
-check(Placement, _, {family, cell, [Slot, 0]}, #{phase := gathering, failed := true,
-        enter_pending := false, failure := #{kind := Kind, file := <<"hls_reduction_failure_fixture.erl">>, line := Line}})
+check(Placement, released, {family, cell, [Slot, 0]}, #{phase := gathering, failed := true,
+        enter_pending := false, failure := Failure = #{kind := Kind, file := <<"hls_reduction_failure_fixture.erl">>, line := Line},
+        reduction := #{status := complete, remaining := 0, received := 3, failure := Failure}})
         when Placement =:= reduction; Placement =:= aggregate ->
     Expected = case Slot of
-        0 -> {badarith, 45};
-        2 -> {case_clause, 46};
-        3 -> {match_failure, 47};
-        4 -> {if_clause, 53}
+        0 -> {badarith, 47};
+        2 -> {case_clause, 48};
+        3 -> {match_failure, 49};
+        4 -> {if_clause, 55}
     end,
     Expected = {Kind, Line},
     ok;

@@ -28,6 +28,9 @@ fixture(mailbox) ->
         startup => [{{F, I, 0}, [{configure, Role}]} || {F, Role} <- [{producer, 0}, {consumer, 1}], I <- lists:seq(0, 2)]}),
     {Plan, maps:from_list([{F, #{members => [{family, F}], state_storage => block_ram,
         mailbox_storage => block_ram}} || F <- Families])};
+fixture(direct_reduction) ->
+    {Plan, _Specs} = fixture(reduction),
+    {Plan, #{}};
 fixture(Kind) when Kind =:= reduction; Kind =:= aggregate ->
     Plan = hls_topology:normalize(#{version => 1, actors => #{},
         families => #{cell => #{module => hls_reduction_failure_fixture, shape => [5, 1]}},
@@ -37,7 +40,7 @@ fixture(Kind) when Kind =:= reduction; Kind =:= aggregate ->
         route_relations => [{{cell, out}, [{external, reports}]} | [
             {{cell, Port}, [{family, cell, {translate, [Offset, 0], wrap}}]}
             || {Port, Offset} <- [{left, -1}, {middle, 0}, {right, 1}]]],
-        startup => [{{cell, I, 0}, [{configure, I}]} || I <- lists:seq(0, 4)]}),
+        startup => []}),
     {Plan, #{cells => #{members => [{family, cell}],
         state_storage => block_ram, mailbox_storage => block_ram}}};
 fixture(phi) ->
@@ -51,6 +54,7 @@ artifacts(Kind, Options) ->
         small -> {"test", #{hls_actor_debug_fixture => #{}}};
         mailbox -> {"test", #{hls_mailbox_debug_fixture => #{}}};
         reduction -> {"test", #{hls_reduction_failure_fixture => #{}}};
+        direct_reduction -> {"test", #{hls_reduction_failure_fixture => #{}}};
         aggregate -> {"test", #{hls_reduction_failure_fixture => #{shared_service => aggregate_only}}};
         phi ->
             {Plan, _} = fixture(phi),
@@ -96,10 +100,22 @@ write(Kind, Stage, Options0) ->
         false -> {[], []};
         true -> {xls_scheduler_observation:wires(Scheduler), xls_scheduler_observation:ports(Scheduler)}
     end,
-    {ok, Template} = file:read_file("test/rtl/xls_init_topology.template.v"),
+    TemplateFile = case Kind of
+        K when K =:= reduction; K =:= aggregate; K =:= direct_reduction ->
+            "test/rtl/hls_reduction_debug.template.v";
+        _ -> "test/rtl/xls_init_topology.template.v"
+    end,
+    {ok, Template} = file:read_file(TemplateFile),
+    Configure = case Kind of
+        C when C =:= reduction; C =:= aggregate; C =:= direct_reduction ->
+            #{selector := Selector} = hls_actor_interface:schema(
+                hls_actor_interface:from_module(hls_reduction_failure_fixture), configure),
+            integer_to_list(Selector);
+        _ -> []
+    end,
     Wrapper = lists:foldl(fun({Pattern, Replacement}, Text) ->
         binary:replace(Text, Pattern, iolist_to_binary(Replacement), [global])
-    end, Template, [{<<"@NAME@">>, "actor_debug"},
+    end, Template, [{<<"@NAME@">>, "actor_debug"}, {<<"@CONFIGURE@">>, Configure},
         {<<"@WIRES@">>, [xls_scheduler_ram_v:wires(Bindings), DebugWires]},
         {<<"@PORTS@">>, [xls_scheduler_ram_v:application_ports(Bindings), DebugPorts]},
         {<<"@RAMS@">>, xls_scheduler_ram_v:instances(Bindings, "clk")}]),

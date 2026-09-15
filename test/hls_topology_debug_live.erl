@@ -34,13 +34,25 @@ run(Stage) ->
                 {ok, #{value := 1}} <- [hls_topology_debug:query(Session, Id)]];
             _ -> Full
         end,
-        true = Seeds =/= [],
-        {ok, FirstQueue} = hls_topology_debug:resource(Session, hd(Seeds)),
-        {ok, #{schema := 1}} = hls_debug:inspect_waits(FirstQueue, #{max_queries => 32}),
+        Withheld = case file:read_file(filename:join(Stage, "actor-test")) of
+            {ok, <<"reduction">>} -> true;
+            {ok, <<"aggregate">>} -> true;
+            _ -> false
+        end,
+        case Withheld of
+            true ->
+                %% No actor has completed yet, so there is no output stall to
+                %% follow. Repeat the public inspection before releasing peers.
+                ok = hls_actor_debug_live:inspect(Session, Stage, blocked);
+            false ->
+                {ok, FirstQueue} = hls_topology_debug:resource(Session, hd(Seeds)),
+                {ok, #{schema := 1}} = hls_debug:inspect_waits(FirstQueue, #{max_queries => 32})
+        end,
         {ok, Report} = hls_topology_debug:inspect_waits(Session, Seeds, #{max_queries => 2048}),
-        true = lists:any(fun(#{kind := K, channel := Id}) ->
+        HasSink = lists:any(fun(#{kind := K, channel := Id}) ->
             K =:= external_sink andalso lists:member(Id, maps:get(reobserved_blocked, Report))
         end, maps:get(edges, Report)),
+        true = Withheld orelse HasSink,
         ok = file:write_file(filename:join(Stage, "blocked.json"), json:encode(Report)),
         ok = file:write_file(filename:join(Stage, "release"), <<>>),
         ok = await_release(Stage, 1000),
@@ -50,8 +62,12 @@ run(Stage) ->
             K =:= external_sink andalso lists:member(Id, maps:get(reobserved_blocked, Recovered))
         end, maps:get(edges, Recovered)),
         ok = hls_actor_debug_live:inspect(Session, Stage, released),
-        io:format("PASS: ~p blocked seeds, ~p adaptive queries; external stall found and release observed~n",
-            [length(Seeds), length(maps:get(observations, Report))]),
+        Diagnosis = case Withheld of
+            true -> "partial reductions inspected and withheld participants released";
+            false -> "external stall found and release observed"
+        end,
+        io:format("PASS: ~p blocked seeds, ~p adaptive queries; ~s~n",
+            [length(Seeds), length(maps:get(observations, Report)), Diagnosis]),
         ok
     after
         hls_debug:stop(Client),

@@ -12,7 +12,7 @@ module hls_topology_debug #(
     // Combinational query port: the wrapper selects a physical observation or
     // a row in an actor snapshot bank. Capture still takes one sampling edge.
     output wire [31:0] probe_address,
-    input wire [63:0] probe_value,
+    input wire [127:0] probe_value,
     input wire [31:0] s_data,
     input wire [3:0] s_keep,
     input wire s_last, s_valid,
@@ -25,7 +25,7 @@ module hls_topology_debug #(
     localparam [7:0] INFO = 8'h10, QUERY = 8'h11, ERROR = 8'hff;
     reg sending;
     reg [7:0] reply_tag, reply_txid, reply_index;
-    reg [159:0] observation;
+    reg [223:0] observation;
     reg [63:0] cycle;
     wire [31:0] request, resource_id;
     assign probe_address = resource_id;
@@ -33,7 +33,7 @@ module hls_topology_debug #(
     wire [7:0] operation = request[31:24];
     wire [7:0] words = request[7:0];
     wire [7:0] reply_count = reply_tag == (INFO | 8'h80) ? 13 :
-        reply_tag == (QUERY | 8'h80) ? 5 : 1;
+        reply_tag == (QUERY | 8'h80) ? 7 : 1;
 
     hls_debug_frame_rx #(.MAX_WORDS(1)) receiver (
         .clk(clk), .reset(reset),
@@ -51,7 +51,7 @@ module hls_topology_debug #(
             m_data = {reply_tag, 8'd0, reply_txid, reply_count};
         else if (reply_tag == (INFO | 8'h80)) begin
             case (reply_index)
-                1: m_data = 4; // protocol/manifest schema
+                1: m_data = 5; // protocol/manifest schema
                 2: m_data = RESOURCES;
                 3: m_data = CHANNELS;
                 4: m_data = RESOURCES - CHANNELS - ACTORS;

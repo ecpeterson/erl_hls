@@ -21,12 +21,12 @@ def main():
     args.stage.mkdir(parents=True, exist_ok=True)
     # Larger banks also run in the 4096-cycle RTL test. Keep the exhaustive
     # arbitrary-history check small enough for the regular CI memory budget.
-    for slots, mailbox in ((1, 0), (1, 1), (3, 0), (9, 1), (32, 0)):
-        prefix = args.stage / f'slots-{slots}-mailbox-{mailbox}'
+    for slots, mailbox, reduction in ((1, 0, 0), (1, 1, 66), (3, 0, 53), (9, 1, 59), (32, 0, 0)):
+        prefix = args.stage / f'slots-{slots}-mailbox-{mailbox}-reduction-{reduction}'
         sources = [ROOT / 'test/rtl/debug/hls_actor_snapshot_formal.sv',
                    ROOT / 'priv/rtl/debug/hls_actor_snapshot.v']
         script = 'read_verilog -sv ' + ' '.join(map(quote, sources)) + '\n'
-        script += f'chparam -set SLOTS {slots} -set MAILBOX {mailbox} hls_actor_snapshot_formal\n'
+        script += f'chparam -set SLOTS {slots} -set MAILBOX {mailbox} -set REDUCTION_WIDTH {reduction} hls_actor_snapshot_formal\n'
         script += 'prep -top hls_actor_snapshot_formal -flatten\nmemory_map\nopt\n'
         script += 'sat -verify -prove match 1 -set-at 1 reset 1 -set-def-inputs -seq 8\n'
         prefix.with_suffix('.ys').write_text(script)

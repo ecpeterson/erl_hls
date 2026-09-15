@@ -47,7 +47,7 @@ build(Plan, Specs, MailboxDebug, Codebook) ->
         bank(Index, Group, maps:get(Module, Interfaces), Placements, maps:get(Module, Codebooks))) ||
         {Index, Group = #{module := Module}} <- lists:enumerate(0, Groups)],
     %% Normalize JSON keys/strings once for exact host-side manifest comparison.
-    json_value(#{schema => 2, binding => digest({Plan, Scheduler}), banks => Banks}).
+    json_value(#{schema => 3, binding => digest({Plan, Scheduler}), banks => Banks}).
 
 with_mailbox(false, _Group, Bank) -> Bank;
 with_mailbox(true, #{mailbox_capacity := Capacity}, Bank = #{index := Index}) ->
@@ -56,19 +56,32 @@ with_mailbox(true, #{mailbox_capacity := Capacity}, Bank = #{index := Index}) ->
 
 bank(Index, #{module := Module, slot_count := Slots, state := #{width := DataWidth},
         reduction_storage_width := ReductionWidth, state_storage := block_ram},
-        #{phases := Phases}, Placements, Sites) ->
+        Interface = #{phases := Phases}, Placements, Sites) ->
     Layout = xls_statem_codegen:shared_machine_layout(DataWidth, ReductionWidth),
     Fields = maps:with([phase, enter_pending, failure], Layout),
     Entries = lists:keysort(1, [{Slot, #{key => actor_key(Id), slot => Slot,
         name => iolist_to_binary(io_lib:format("~p", [Id]))}} ||
         {Id, #{index := I, slot := Slot}} <- maps:to_list(Placements), I =:= Index]),
-    #{index => Index, ram => iolist_to_binary(["scheduler_", integer_to_list(Index), "_state"]),
+    Bank = #{index => Index, ram => iolist_to_binary(["scheduler_", integer_to_list(Index), "_state"]),
         slots => Slots, width => maps:get(width, Layout), fields => Fields,
         failures => maps:from_list([{integer_to_binary(Code), maps:remove(code, Site)} ||
             Site = #{code := Code} <- [#{code => C, kind => K} || {C, K} <- xls_failure_sites:generic()] ++ Sites]),
-        module => atom_to_binary(Module), phases => [atom_to_binary(P) || P <- Phases], actors => [A || {_, A} <- Entries]};
+        module => atom_to_binary(Module), phases => [atom_to_binary(P) || P <- Phases], actors => [A || {_, A} <- Entries]},
+    with_reduction(maps:get(reductions, Interface, none), Layout, Bank);
 bank(Index, _Group, _Interface, _Placements, _Codebook) ->
     error({debug_requires_state_ram, Index}).
+
+with_reduction(none, _Layout, Bank) -> Bank;
+with_reduction(Reduction = #{sites := Sites}, #{reduction := #{offset := Start}}, Bank) ->
+    Layout = xls_statem_reduction_ir:packed_layout(Reduction),
+    Names = [status, site, key, remaining, failure],
+    {Width, Fields} = lists:foldl(fun(Name, {Offset, Acc}) ->
+        #{offset := Source, width := Bits} = maps:get(Name, Layout),
+        {Offset + Bits, Acc#{Name => #{offset => Start + Source, width => Bits,
+            observation_offset => 56 + Offset}}}
+    end, {0, #{}}, Names),
+    Bank#{reduction => #{width => Width, fields => Fields,
+        sites => [maps:with([id, phase, name, population], Site) || Site <- Sites]}}.
 
 json_value(Term) -> json:decode(iolist_to_binary(json:encode(Term))).
 

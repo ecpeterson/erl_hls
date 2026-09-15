@@ -90,9 +90,9 @@ describe({resource, Session = #{resources := Resources, manifest := Manifest}, I
 
 statem_fields() ->
     [message_queue_len, mailbox_capacity, free_slots, reserved, postponed,
-        phase, lifecycle, beam_message_queue_len].
+        phase, lifecycle, reduction, beam_message_queue_len].
 
-actor_fields() -> [initialized, phase, enter_pending, failed, failure].
+actor_fields() -> [initialized, phase, enter_pending, failed, failure, reduction].
 
 resource_actor_fields(#{<<"mailbox_capacity">> := _}) ->
     actor_fields() ++ [mailbox_initialized, message_queue_len, postponed, reserved, free_slots,
@@ -110,7 +110,8 @@ observe({actor_snapshot, Session, Id}, Fields, Timeout) ->
         {ok, Snapshot = #{phase := Phase}} when is_binary(Phase) ->
             %% Catalog binding already checked the codebook against loaded actors.
             {ok, Snapshot#{phase := binary_to_existing_atom(Phase),
-                failure := actor_failure(maps:get(failure, Snapshot))}};
+                failure := actor_failure(maps:get(failure, Snapshot)),
+                reduction := actor_reduction(maps:get(reduction, Snapshot))}};
         Other -> Other
     end;
 observe({beam, Pid}, Fields, _Timeout) ->
@@ -133,10 +134,10 @@ observe({statem, Pid}, Fields, Timeout) ->
             _ ->
                 #{mailbox := #{committed := Count, capacity := Capacity,
                     available := Free, reserved := Reserved}, postponed := Postponed,
-                    phase := Phase, lifecycle := Lifecycle} = hls_statem:info(Pid, Timeout),
+                    phase := Phase, lifecycle := Lifecycle, reduction := Reduction} = hls_statem:info(Pid, Timeout),
                 #{message_queue_len => Count, mailbox_capacity => Capacity,
                     free_slots => Free, reserved => Reserved, postponed => Postponed,
-                    phase => Phase, lifecycle => Lifecycle}
+                    phase => Phase, lifecycle => Lifecycle, reduction => cpu_reduction(Reduction, Phase)}
         end,
         case lists:member(beam_message_queue_len, Fields) of
             false -> {ok, State};
@@ -159,3 +160,11 @@ is_resource(_) -> false.
 
 actor_failure(Failure = #{kind := Kind}) -> Failure#{kind := binary_to_existing_atom(Kind)};
 actor_failure(none) -> none.
+
+actor_reduction(Reduction = #{name := Name, phase := Phase, failure := Failure}) ->
+    Reduction#{name := binary_to_existing_atom(Name), phase := binary_to_existing_atom(Phase),
+        failure := actor_failure(Failure)};
+actor_reduction(Reduction) -> Reduction.
+
+cpu_reduction(idle, _Phase) -> idle;
+cpu_reduction(Reduction, Phase) -> Reduction#{status => open, phase => Phase}.

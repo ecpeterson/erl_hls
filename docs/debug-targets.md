@@ -5,8 +5,8 @@
 | Target | Inspection items | Meaning |
 | --- | --- | --- |
 | BEAM PID | `message_queue_len`, `status`, `reductions`, `memory` | Native process information; for an `hls_gs` hardware proxy this describes the host proxy. |
-| `{hls_statem, Pid}` or a bound CPU actor | `message_queue_len`, `mailbox_capacity`, `free_slots`, `reserved`, `postponed`, `phase`, `lifecycle`, `beam_message_queue_len` | The reference actor's bounded mailbox and scheduler state, with its front-end BEAM queue reported separately. |
-| Hardware actor with a verified snapshot binding | `phase`, `enter_pending`, `failed`, `failure`, `initialized`, `cycle`, `observation`, optional mailbox counts/work flags, and binding metadata | Last committed shared-actor state and optional scheduler-step metadata. Queries do not wait for the actor or scheduler. |
+| `{hls_statem, Pid}` or a bound CPU actor | `message_queue_len`, `mailbox_capacity`, `free_slots`, `reserved`, `postponed`, `phase`, `lifecycle`, `reduction`, `beam_message_queue_len` | The reference actor's bounded mailbox and scheduler state, with its front-end BEAM queue reported separately. |
+| Hardware actor with a verified snapshot binding | `phase`, `enter_pending`, `failed`, `failure`, `reduction`, `initialized`, `cycle`, `observation`, optional mailbox counts/work flags, and binding metadata | Last committed shared-actor state and optional scheduler-step metadata. Queries do not wait for the actor or scheduler. |
 | Hardware actor with a metadata-only binding | `identity`, `module`, `placement`, `mailbox_capacity`, `boundaries` | The supplied build plan's logical identity, physical placement, declared capacity, and related monitored boundaries. Live actor mailbox occupancy is not available. |
 | Physical topology resource | `name`, `resource_kind`, `cycle`, `value`; FIFO `capacity`, `occupancy`, `free_slots`; channel `valid`, `ready` | One passive FPGA resource sample. A physical FIFO can carry a frame, a credit, or an internal request; its occupancy is not an actor's mailbox depth. |
 | `{boundary, DebugClient, Id}` | `scope`, `capabilities` | An explicitly named monitored interface supporting `get_counters` and `get_trace`. |
@@ -39,6 +39,14 @@ hls_debug:info(Actor, [identity, placement, message_queue_len, postponed]).
 
 A different CPU launcher can use `hls_debug_catalog:cpu(Plan, Processes)`, where `Plan` is the normalized topology and `Processes` maps every `{actor, Id}` or `{family, Id, Coordinates}` to its `hls_statem` PID. Missing or extra bindings are rejected. These bindings explicitly name reference actors; a transport proxy is not an actor binding. Handles belong to that process incarnation and must be reacquired after a restart.
 
+## Open reductions
+
+Both reference actors and shared hardware actors support `hls_debug:info(Actor, reduction)`. This singular item describes an application reduction; the native PID item `reductions` remains ERTS's execution counter.
+
+An idle window returns `idle`. An active one includes `status`, opening `phase`, reduction `name`, `key`, declared `population`, `received`, `remaining`, and `failure`. CPU inspection returns `#{class => Class, reason => Reason}` for a pending reducer exception, without exposing its stack or accumulator. Hardware decodes a failure code and optional source location. A pending exception does not stop inspection or close the window: valid remaining contributions must still arrive. The CPU process exits when the final contribution releases the exception; hardware retains its terminal failure latch. Before the first committed hardware write, the reduction observation is `undefined`.
+
+[Reduction observations](topology-debug.md#reduction-observations) describes commit coherence and offloading limits. In particular, a recipient waiting for a complete offloaded aggregate does not expose its contributors' partial folds. Direct hardware actors currently have metadata-only bindings.
+
 ## Shared hardware actors and monitored boundaries
 
 ```erlang
@@ -63,7 +71,7 @@ Catalog = hls_debug_catalog:hardware(Plan, Specs, [Boundary], Session),
 hls_debug:info(Actor, [identity, placement, initialized, phase, enter_pending, failed, cycle]).
 ```
 
-This binding checks the complete compiler projection against the manifest, including phase names and scheduler slots. A different plan, shard count, or actor-resource map is rejected before querying. `phase` is the actor's Erlang phase atom, also used by CPU inspection. Low-level actor resources return the manifest's binary phase name. Multiple fields in one call share a single sample. `initialized = false` gives `undefined` for `phase`, `enter_pending`, `failed`, and `failure`. CPU failures ordinarily terminate the process, so CPU targets do not advertise a persistent hardware failure latch.
+This binding checks the complete compiler projection against the manifest, including phase names and scheduler slots. A different plan, shard count, or actor-resource map is rejected before querying. `phase` is the actor's Erlang phase atom, also used by CPU inspection. Low-level actor resources return the manifest's binary phase name. Multiple fields in one call share a single sample. `initialized = false` gives `undefined` for `phase`, `enter_pending`, `failed`, `failure`, and `reduction`. CPU failures ordinarily terminate the process, so CPU targets do not advertise a persistent hardware failure latch.
 
 `observation` identifies the committed-state resource and its manifest fingerprint. The snapshot can lag an in-flight callback and its timestamp dates the query rather than the last state write. The `failure` item is `none` for a healthy initialized actor, or a map such as `#{code => 276, kind => case_clause, file => <<"actor.erl">>, line => 42}`. Protocol failures may omit `file` and `line`. The code is artifact-local; use the decoded reason and origin. All requested actor items share one sample. With `mailbox_debug => true`, the same target additionally advertises mailbox depth, postponed entries, free slots, and scheduler work flags. It retains no event history or state age. After reset, acquire a fresh transport session and catalog. Counters, traces, and physical wait inspection retain their separate scopes.
 

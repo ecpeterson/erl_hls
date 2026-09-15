@@ -38,9 +38,47 @@ def check_write_contract(module):
         raise ValueError("state RAM accepted-write contract mismatch")
 
 
+def reduction_bits(reduction, phases, width):
+    """Validate the compiler's packed projection before exposing any RAM bits."""
+    selected = []
+    observation_offset = 56
+    sizes = {"status": (2, 2), "site": (1, 8), "key": (32, 32),
+             "remaining": (1, 8), "failure": (16, 16)}
+    for name, (minimum, maximum) in sizes.items():
+        field = reduction["fields"][name]
+        offset, size = field["offset"], field["width"]
+        if (type(size) is not int or not minimum <= size <= maximum or
+                type(offset) is not int or not 0 <= offset <= width-size or
+                field["observation_offset"] != observation_offset):
+            raise ValueError(f"invalid reduction field: {name}")
+        selected.extend(range(offset, offset+size))
+        observation_offset += size
+    if reduction["width"] != observation_offset-56:
+        raise ValueError("invalid reduction width")
+    sites = reduction["sites"]
+    if (not 1 <= len(sites) <= 256 or
+            [s["id"] for s in sites] != list(range(len(sites))) or
+            len(sites) > 1 << reduction["fields"]["site"]["width"]):
+        raise ValueError("invalid reduction sites")
+    for site in sites:
+        population = site["population"]
+        size = population["size"]
+        if (site["phase"] not in phases or not isinstance(site["name"], str) or
+                type(size) is not int or not 1 <= size <= 255 or
+                size >= 1 << reduction["fields"]["remaining"]["width"] or
+                population["mode"] not in ("count", "members")):
+            raise ValueError("invalid reduction population")
+        if population["mode"] == "members":
+            members = population["members"]
+            if (len(members) != size or len(set(members)) != size or
+                    not all(type(m) is int and 0 <= m < 2**32 for m in members)):
+                raise ValueError("invalid reduction members")
+    return selected
+
+
 def discover(projection, root, hierarchy, flat, top, clock_bit):
-    if projection.get("schema") != 2 or not projection.get("banks"):
-        raise ValueError("expected a nonempty scheduler projection, schema 2")
+    if projection.get("schema") != 3 or not projection.get("banks"):
+        raise ValueError("expected a nonempty scheduler projection, schema 3")
     module = hierarchy["modules"][top]
     for instance in root:
         module = hierarchy["modules"][module["cells"][instance]["type"]]
@@ -75,7 +113,9 @@ def discover(projection, root, hierarchy, flat, top, clock_bit):
             if field["width"] != size or type(offset) is not int or not 0 <= offset <= width-size:
                 raise ValueError(f"invalid actor field: {name}")
             selected.extend(range(offset, offset+size))
-        if len(set(selected)) != 25:
+        if reduction := bank.get("reduction"):
+            selected.extend(reduction_bits(reduction, bank["phases"], width))
+        if len(set(selected)) != len(selected):
             raise ValueError("overlapping actor fields")
         phases = bank["phases"]
         if not 1 <= len(phases) <= 256 or len(set(phases)) != len(phases) or not all(isinstance(p, str) for p in phases):
@@ -116,7 +156,8 @@ def discover(projection, root, hierarchy, flat, top, clock_bit):
 
 
 def resources(banks, first_id):
-    return [dict(actor, id=first_id+i, kind="actor", width=56 if "mailbox" in bank else 26, bank=bank["index"],
+    return [dict(actor, id=first_id+i, kind="actor", width=56+bank["reduction"]["width"] if "reduction" in bank else (56 if "mailbox" in bank else 26),
+                 **({"reduction": bank["reduction"]} if "reduction" in bank else {}), bank=bank["index"],
                  **({"mailbox_capacity": bank["mailbox"]["capacity"]} if "mailbox" in bank else {}),
                  module=bank["module"], phases=bank["phases"], failures=bank["failures"])
             for i, (bank, actor) in enumerate((bank, actor) for bank in banks for actor in bank["actors"])]
@@ -129,12 +170,14 @@ def wrapper(banks, first_id, clock, reset, active_low):
     exporting every row as a separate wire would turn the store into registers.
     """
     offset, resource = 0, first_id
-    lines = ["wire [31:0] probe_address;\nwire [63:0] probe_value;\n"]
-    selected = [f"(probe_address < 32'd{first_id} ? probe_values[probe_address*64 +: 64] : 64'b0)"]
+    lines = ["wire [31:0] probe_address;\nwire [127:0] probe_value;\n"]
+    selected = [f"(probe_address < 32'd{first_id} ? probe_values[probe_address*64 +: 64] : 128'b0)"]
     for bank in banks:
         index, slots = bank["index"], bank["slots"]
         address_width = bank["address_width"]
-        mailbox_offset = offset + 1 + address_width + 25
+        reduction_width = bank.get("reduction", {}).get("width", 0)
+        write_width = 25 + reduction_width
+        mailbox_offset = offset + 1 + address_width + write_width
         mailbox_valid = f"actor_writes[{mailbox_offset}]" if "mailbox" in bank else "1'b0"
         mailbox_values = f"actor_writes[{mailbox_offset+1} +: {24*bank['slots']}]" if "mailbox" in bank else "'0"
         # Decode the full resource ID, but subtract only the low row-address
@@ -142,19 +185,19 @@ def wrapper(banks, first_id, clock, reset, active_low):
         row_base = resource % (1 << address_width)
         lines.append(f"wire [{address_width-1}:0] actor_address_{index} = "
                      f"probe_address[{address_width-1}:0] - {address_width}'d{row_base};\n"
-                     f"wire [63:0] actor_value_{index};\n"
+                     f"wire [127:0] actor_value_{index};\n"
                      f"hls_actor_snapshot #(.SLOTS({slots}), .ADDRESS_WIDTH({address_width}), "
-                     f".MAILBOX({int('mailbox' in bank)})) "
+                     f".MAILBOX({int('mailbox' in bank)}), .REDUCTION_WIDTH({reduction_width})) "
                      f"snapshot_{bank['index']} (.clk(\\{clock} ), "
                      f".reset({'!' if active_low else ''}\\{reset} ), "
                      f".write_enable(actor_writes[{offset}]), "
                      f".write_address(actor_writes[{offset+1} +: {address_width}]), "
-                     f".write_value(actor_writes[{offset+1+address_width} +: 25]), "
+                     f".write_value(actor_writes[{offset+1+address_width} +: {write_width}]), "
                      f".mailbox_valid({mailbox_valid}), .mailbox_values({mailbox_values}), "
                      f".read_address(actor_address_{index}), "
                      f".value(actor_value_{index}));\n")
         selected.append(f"(probe_address >= 32'd{resource} && probe_address < 32'd{resource+slots} "
-                        f"? actor_value_{index} : 64'b0)")
+                        f"? actor_value_{index} : 128'b0)")
         offset += len(bank["taps"])
         resource += bank["slots"]
     lines.append("assign probe_value = " + " |\n    ".join(selected) + ";\n")
