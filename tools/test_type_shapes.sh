@@ -27,7 +27,7 @@ for kind in shape nested; do
             > "$stage/${kind}_mismatch.ir" 2> "$stage/${kind}_mismatch.log"; then
         echo "XLS accepted a $kind source/DSLX vector shape mismatch" >&2; exit 1
     fi
-    if ! rg -q 'const_assert! failure' "$stage/${kind}_mismatch.log"; then
+    if ! grep -q 'const_assert! failure' "$stage/${kind}_mismatch.log"; then
         cat "$stage/${kind}_mismatch.log" >&2; exit 1
     fi
     echo "PASS: $kind source/DSLX mismatch fails the compile-time routing assertion"
