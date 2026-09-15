@@ -7,6 +7,7 @@ import bram;
 import mailbox;
 import scheduler;
 import hls_failure;
+import hls_integer;
 import phi_field;
 
 const MAILBOX_CAPACITY = u8:5;
@@ -658,7 +659,7 @@ fn enter(old_phase: Phase, phase: Phase, data: Datacell) -> EntryOutcome {
       let _0 = Cell_1.1.step;
       let _1 = Cell_1.1.event;
       let _2 = Cell_1.1.noise_disabled;
-      let _3 = _2 << 1;
+      let _3 = hls_integer::shift<true>(_2, u1:1);
       let _4 = _1 | _3;
       let _5 = Phenomdata {
         step: _0,

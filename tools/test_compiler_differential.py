@@ -13,6 +13,17 @@ import compiler_differential_cases as cases
 
 
 class GeneratorTest(unittest.TestCase):
+    def test_shifts_bound_counts_independently_of_value_width(self):
+        for t in cases.TYPES:
+            for c in ['s8', 'u8']:
+                source = cases.Emitter(t, 'helper').emit(
+                    ['shift', 'bsl', ['var', 'X'], ['var', 'Y'], c])
+                self.assertIn(f'X bsl hls_nums:wrap(hls_nums:{c}(), Y)', source)
+                self.assertTrue(source.startswith(f'hls_nums:wrap(hls_nums:{t}(),'))
+        coverage = cases.coverage([cases.generate(751, i) for i in range(100)])
+        self.assertGreater(coverage.get('operator:bsl', 0), 0)
+        self.assertGreater(coverage.get('operator:bsr', 0), 0)
+
     def test_replay_is_independent_of_generation_order(self):
         forward = {i: cases.generate(751, i) for i in range(40)}
         reverse = {i: cases.generate(751, i) for i in reversed(range(40))}

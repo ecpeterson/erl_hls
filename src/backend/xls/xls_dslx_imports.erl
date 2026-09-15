@@ -9,7 +9,7 @@
 from_forms(Forms) ->
     Uses = uses(Forms),
     Providers = lists:usort([Module || {provider, Module, _Name} <- Uses]),
-    OperatorImports = [hls_integer || {operator, 'rem'} <- Uses] ++
+    OperatorImports = [hls_integer || {operator, _} <- Uses] ++
         [hls_patterns || {pattern, tail} <- Uses],
     lists:usort(OperatorImports ++ lists:append([imports(Module,
         lists:usort([Name || {provider, M, Name} <- Uses, M =:= Module])) || Module <- Providers])).
@@ -22,8 +22,8 @@ uses({remote_type, _, [{atom, _, Module}, {atom, _, Name}, Args]}) ->
     [{provider, Module, Name} | uses(Args)];
 uses({call, _, {remote, _, {atom, _, Module}, {atom, _, Name}}, Args}) ->
     [{provider, Module, Name} | uses(Args)];
-uses({op, _, 'rem', Left, Right}) ->
-    [{operator, 'rem'} | uses([Left, Right])];
+uses({op, _, Op, Left, Right}) when Op =:= 'rem'; Op =:= 'bsl'; Op =:= 'bsr' ->
+    [{operator, Op} | uses([Left, Right])];
 uses(Tuple) when is_tuple(Tuple) ->
     uses(tuple_to_list(Tuple));
 uses(List) when is_list(List) ->

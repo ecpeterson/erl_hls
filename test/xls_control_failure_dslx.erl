@@ -16,11 +16,12 @@ write(Stage) ->
     Source = "test/xls_control_failure_fixture.erl",
     Generated = xls_parse:to_xls(Source),
     {ok, Semantics} = file:read_file("test_data/xls_control_failure_semantics.inc.x"),
-    Cases = [{M, X, Y, oracle(M, X, Y)} || M <- lists:seq(0, 58),
-        X <- [0, 1, 2, 16#ffffffff], Y <- [0, 1, 2]],
+    Cases = [{M, X, Y, oracle(M, X, Y)} || M <- lists:seq(0, 70),
+        X <- [0, 1, 2, 16#ffffffff], Y <- case M < 59 of
+            true -> [0, 1, 2]; false -> [0, 1, 128, 255] end],
     ok = write(Stage, "control.x", [Generated, Semantics,
         [dslx_test(M, [C || C = {Mode, _, _, _} <- Cases, Mode =:= M])
-            || M <- lists:seq(0, 58)]]),
+            || M <- lists:seq(0, 70)]]),
     ok = write(Stage, "control_vectors.svh", [vector(C) || C <- Cases]),
     %% Selected failures reject constant initialization, even for an unrelated top.
     {ok, Original} = file:read_file(Source),

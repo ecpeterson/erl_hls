@@ -43,6 +43,12 @@ integer_operator_companion_test() ->
     ?assertEqual([hls_integer], xls_dslx_imports:from_forms(Forms ++ Forms)),
     ?assertEqual([], xls_dslx_imports:from_forms([form("probe(X, Y) -> X div Y.")])).
 
+shift_operator_companion_test() ->
+    ?assertEqual([hls_integer], xls_dslx_imports:from_forms([
+        form("probe(X, Y) -> X bsl Y."), form("probe(X, Y) -> X bsr Y.")])),
+    ?assertEqual([hls_integer], xls_dslx_imports:from_forms([
+        form("probe(X) -> X bsl 1."), form("probe(X) -> X bsr -2.")])).
+
 float_imports_follow_actual_uses_test() ->
     Forms = [form("-type values() :: hls_vec:vector(hls_nums:float32(), 2)."),
         form("probe() -> hls_nums:u32().")],

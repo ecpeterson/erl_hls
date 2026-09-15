@@ -432,6 +432,8 @@ statement_from_statement({var, Line, Name}, State) ->
     end;
 statement_from_statement({integer, _L, Integer}, State) ->
     reference(State, {static, integer, Integer});
+statement_from_statement({op, _L, '+', {integer, _IntegerLine, Integer}}, State) ->
+    reference(State, {static, integer, Integer});
 statement_from_statement({float, _L, Float}, State) ->
     reference(State, {static, float, Float});
 statement_from_statement({op, _L, '+', {float, _FloatLine, Float}}, State) ->
@@ -451,6 +453,10 @@ statement_from_statement({op, Line, 'orelse', Left, Right}, State) ->
         {clause, Line, [{atom, Line, true}], [], [{atom, Line, true}]},
         {clause, Line, [{atom, Line, false}], [], [Right]}
     ], State);
+statement_from_statement({op, Line, Op, Left, Right}, State)
+        when Op =:= 'bsl'; Op =:= 'bsr' ->
+    {[Value, Count], Evaluated} = lower_arguments([Left, Right], State),
+    lower_shift(Op, Value, Count, Line, Evaluated);
 statement_from_statement(X, State) when is_tuple(X) andalso op == element(1, X) ->
     [op, Line, Op | Args] = tuple_to_list(X),
     {References, ArgState} = lower_arguments(Args, State),
@@ -537,6 +543,26 @@ lower_arguments(Args, State) ->
         Next = statement_from_statement(Arg, Acc#clause_state{reference = none}),
         {reference(Next), Next}
     end, State, Args).
+
+%% Shift operands have independent types: the result keeps the value's width,
+%% while a signed count can reverse direction. Even literal counts use the
+%% helper: DSLX rejects a primitive constexpr shift beyond the operand width.
+lower_shift(Op, {static, integer, Value}, {static, integer, Count}, _Line, State) ->
+    reference(State, {static, integer, erlang:Op(Value, Count)});
+lower_shift(_Op, {static, integer, _}, _Count, Line, _State) ->
+    error({untyped_shift_value, Line, {use, hls_type, as, 2}});
+lower_shift(Op, Value, {static, integer, Count}, Line, State) ->
+    Direction = case {Op, Count < 0} of
+        {'bsl', false} -> 'bsl';
+        {'bsr', true} -> 'bsl';
+        _ -> 'bsr'
+    end,
+    Magnitude = abs(Count),
+    Literal = [xls_nums:index_type(Magnitude + 1), ":", integer_to_list(Magnitude)],
+    lower_shift(Direction, Value, Literal, Line, State);
+lower_shift(Op, Value, Count, _Line, State) ->
+    Left = case Op of 'bsl' -> "true"; 'bsr' -> "false" end,
+    instr(State, ["hls_integer::shift<", Left, ">(", Value, ", ", Count, ")"]).
 
 division_failure({static, integer, 0}, Line, State) ->
     add_failure(xls_failure_sites:at(badarith, Line), State);
@@ -805,8 +831,6 @@ op('-', [Left, Right]) -> [Left, " - ", Right];
 op('*', [Left, Right]) -> [Left, " * ", Right];
 op('div', [Left, Right]) -> [Left, " / ", Right];
 op('rem', [Left, Right]) -> ["hls_integer::remainder(", Left, ", ", Right, ")"];
-op('bsl', [Left, Right]) -> [Left, " << ", Right];
-op('bsr', [Left, Right]) -> [Left, " >> ", Right];
 op('band', [Left, Right]) -> [Left, " & ", Right];
 op('bor', [Left, Right]) -> [Left, " | ", Right];
 op('bxor', [Left, Right]) -> [Left, " ^ ", Right];

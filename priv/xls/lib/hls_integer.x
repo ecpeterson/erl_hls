@@ -7,3 +7,30 @@ pub fn remainder<S: bool, W: u32>(left: xN[S][W], right: xN[S][W]) -> xN[S][W] {
     let divisor = if S && right == (!xN[S][W]:0) { xN[S][W]:1 } else { right };
     left % divisor
 }
+
+// Erlang reverses the direction for a negative count. Value and count widths
+// are independent. Take the magnitude in unsigned arithmetic so MIN_COUNT
+// remains representable, and retain all count bits (overshifts never wrap).
+// A signed value's >> is arithmetic. LEFT and unsigned-count direction checks
+// are compile-time constants; ordinary unsigned shifts need no reverse path.
+pub fn shift<LEFT: bool, S: bool, W: u32, CS: bool, CW: u32>(
+    value: xN[S][W], count: xN[CS][CW]) -> xN[S][W] {
+    let reverse = CS && count < xN[CS][CW]:0;
+    let magnitude = if reverse { uN[CW]:0 - (count as uN[CW]) }
+                    else { count as uN[CW] };
+    if LEFT != reverse { value << magnitude } else { value >> magnitude }
+}
+
+#[test]
+fn shift_extremes() {
+    assert_eq(shift<true>(s8:-8, s16:-2), s8:-2);
+    assert_eq(shift<true>(s8:-8, s8:-128), s8:-1);
+    assert_eq(shift<false>(s8:-8, s8:-128), s8:0);
+    assert_eq(shift<true>(u8:255, s64:-9223372036854775808), u8:0);
+    assert_eq(shift<false>(s8:-8, s64:-9223372036854775808), s8:0);
+    assert_eq(shift<false>(s8:-8, u64:18446744073709551615), s8:-1);
+    assert_eq(shift<true>(u8:1, u64:4294967296), u8:0);
+    assert_eq(shift<false>(u64:0x8000000000000000, u8:63), u64:1);
+    assert_eq(shift<true>(s1:-1, s1:-1), s1:-1);
+    assert_eq(shift<false>(s1:-1, s1:-1), s1:0);
+}

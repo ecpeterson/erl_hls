@@ -101,6 +101,23 @@ The same intermediate-width rules apply inside guards. A comparison after an ove
 
 Variable division and remainder can synthesize substantial combinational logic. A dynamic divisor adds a zero test to the existing failure carrier; a literal nonzero divisor needs no such test. There is no new history buffer or division-specific actor-state field; XLS may pipeline the checking logic. A guard's divider still exists in hardware even if selection prevents its result from being observed. Choose constant divisors, narrower operands, or application-specific algorithms when area or timing matters; no general area or timing bound is implied here.
 
+### Integer shifts
+
+`bsl` and `bsr` accept independently typed integer values and counts. A negative count reverses direction: `X bsl -N` shifts right, and `X bsr -N` shifts left. Right shifts sign-extend a signed value and zero-extend an unsigned value. Counts retain their full width, including the most negative signed count; they are never reduced modulo the value width or truncated to 32 bits.
+
+The result keeps the shifted value's width and signedness. A left shift discards bits beyond that width. At or beyond the value width, a left shift returns zero; a right shift returns zero for a nonnegative value and `-1` for a negative signed value. To make BEAM observe the same modular result before a comparison, division, or subsequent right shift, wrap the intermediate explicitly:
+
+```erlang
+Value = hls_type:as(hls_nums:s8(), -64),
+Count = hls_type:as(hls_nums:s16(), 2),
+Shifted = hls_nums:wrap(hls_nums:s8(), Value bsl Count),
+true = Shifted =:= 0.
+```
+
+The value must have its intended type **before** shifting. In particular, use `hls_type:as(hls_nums:u32(), 1) bsl Count` for a 32-bit bit mask. Casting the result afterwards cannot recover bits lost from a narrower operand. A direct untyped literal shifted by a runtime count is rejected with `untyped_shift_value`; give named literals explicit types too. When both operands are integer literals, the compiler evaluates the expression as an Erlang constant, allowing `hls_nums:wrap(hls_nums:u8(), 1 bsl 8)` to normalize to zero. Signed integer literals are accepted in guards as well as bodies.
+
+Shifts on typed values use the static `hls_integer::shift` helper, including literal overshifts that DSLX's primitive constexpr-shift validation rejects. An unsigned count needs only the requested direction after specialization; a signed dynamic count can require both shift directions, magnitude logic, and selection. Constant shifts simplify to wiring and sign/zero fill after inlining. There is no new actor state or failure field. Huge effective left shifts on BEAM can exhaust its bignum resources (`system_limit`); fixed-width hardware produces the modular result without allocating that intermediate. VM resource exhaustion is outside the arithmetic agreement contract.
+
 ## Explicit floating-point operations
 
 `hls_float` provides `add/3`, `sub/3`, `mul/3`, `eq/3`, and `lt/3`. Their first argument selects `hls_nums:float16()`, `float32()`, or `float64()`. The remaining arguments and the result are ordinary BEAM floats (Booleans for comparisons). Each call is a precision boundary:
@@ -137,5 +154,6 @@ An exact execution reference should evaluate typed operations with their declare
 - Float tests cover rounding ties and adjacent values, both overflow signs, finite rounding at the overflow threshold, subnormals, signed underflow, numeric coercion, recursive normalization, and exact-packing rejection.
 - Integer/fixed-point tests cover checked boundaries, intentional wrapping of large bignums, idempotence, wire agreement, scale preservation, and the distinction between saturation and wrapping.
 - `bash tools/test_integer_arithmetic.sh XLS_ROOT` compares explicitly wrapped BEAM division/remainder with DSLX/JIT and optimized RTL at signed and unsigned 8/16/32/64-bit widths. RTL exhausts all 8-bit pairs and samples boundaries and a deterministic spread at larger widths. The control-failure regression checks guard alternatives, short-circuiting, first failures, zero-divisor initializers, and stalled service replies. The small actor-debug regression queries included-helper arithmetic failures through `hls_debug:info` with block-RAM scheduler state.
+- `bash tools/test_integer_shifts.sh XLS_ROOT` compares lowered shifts across 12 value/count type combinations, including 128-bit values and 64-bit counts. RTL exhausts all four signedness combinations of 8-bit values/counts. Wider tests cover direction reversal, signed-count minima, overshifts, and counts above 32 bits. The reference executes BEAM shifts directly for counts up to magnitude 1,024; larger counts use the equivalent width-saturated count to avoid enormous bignum allocations. The control-flow service tests additionally exercise literal counts, wrapping before comparisons, guard fallthrough, and stalled replies at three pipeline schedules.
 - `hls_numeric_dslx` lowers actual Erlang wrapping expressions and compares their XLS results with BEAM values. `hls_numeric_semantics.inc.x` records the integer-division and float-cancellation counterexamples and verifies XLS's subnormal behavior. The simulation preparation and CI runner include these tests.
 - `tools/test_float_arithmetic.sh` lowers real Erlang operations for binary16/32/64, compares selected cases with the DSLX interpreter and JIT, and replays boundary and deterministic bit-pattern corpora through optimized generated RTL. Macro-configured actors exercise public message packing, nested vector codecs, initialization, overflow errors, unselected overflow, recovery, and stalled replies.

@@ -41,7 +41,7 @@ class Generator:
     def word(self, depth, bound=0, calls=True):
         if depth <= 0:
             return self.leaf(bound)
-        op = self.rng.choice(["leaf", "binary", "binary", "bnot", "select",
+        op = self.rng.choice(["leaf", "binary", "binary", "shift", "bnot", "select",
                               "if", "let", "join", "pair", "nth", "record"] +
                              ([] if self.total else ["partial", "match"]) +
                              (["call"] if calls else []))
@@ -52,6 +52,11 @@ class Generator:
         if op == "binary":
             operators = WORD_BINARY[:-2] if self.total else WORD_BINARY
             return ["binary", self.rng.choice(operators), word(), word()]
+        if op == "shift":
+            # Independent count types exercise reversal without asking BEAM
+            # to allocate an unbounded intermediate bignum during fuzzing.
+            return [op, self.rng.choice(["bsl", "bsr"]), word(), word(),
+                    self.rng.choice(["s8", "u8"])]
         if op == "bnot":
             return [op, word()]
         if op in ("select", "join"):
@@ -62,7 +67,7 @@ class Generator:
         if op == "if":
             # rem cannot overflow, even for signed-min / -1. Guard arithmetic
             # has no normalization calls (remote calls are not legal guards).
-            return [op, self.rng.choice(["compare", "rem", "alternative"]), word(),
+            return [op, self.rng.choice(["compare", "rem", "alternative", "shift"]), word(),
                     word(), self.total or self.rng.choice([True, False])]
         if op == "let":
             return [op, word(), self.word(depth - 1, bound + 1, calls)]
@@ -170,6 +175,9 @@ class Emitter:
             return self.wrap(str(n[1]))
         if op == "binary":
             return self.wrap(f"({emit(n[2])} {n[1]} {emit(n[3])})")
+        if op == "shift":
+            count = self.wrap(emit(n[3]), n[4])
+            return self.wrap(f"({emit(n[2])} {n[1]} {count})")
         if op == "bnot":
             return self.wrap(f"(bnot {emit(n[1])})")
         if op == "compare":
@@ -184,7 +192,8 @@ class Emitter:
             return f"(case {emit(n[1])} of {n[2]} -> {emit(n[3])} end)"
         if op == "if":
             guard = {"compare": "X =:= Y", "rem": "X rem Y =:= 0",
-                     "alternative": "X rem Y > 0; X =:= 0"}[n[1]]
+                     "alternative": "X rem Y > 0; X =:= 0",
+                     "shift": "X bsl -1 < 0"}[n[1]]
             fallback = f"; true -> {emit(n[3])}" if n[4] else ""
             return f"(if {guard} -> {emit(n[2])}{fallback} end)"
         if op == "let":
@@ -297,7 +306,7 @@ def coverage(programs):
     counts = Counter()
     def visit(node):
         counts[node[0]] += 1
-        if node[0] in ("binary", "compare"):
+        if node[0] in ("binary", "compare", "shift"):
             counts[f"operator:{node[1]}"] += 1
         for _, child in children(node):
             visit(child)
