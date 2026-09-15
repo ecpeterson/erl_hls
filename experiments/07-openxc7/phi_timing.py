@@ -105,12 +105,16 @@ def compare(args):
     print((args.stage / "compare.console").read_text(), end="")
 
 
-def load_profile(rtl):
+def load_profile(rtl, *, require_d3=True):
     build = json.loads((rtl / "phi_decoder_profile.build.json").read_text())
     expected = {"width": 3, "height": 3, "shards_per_plane": 3,
                 "pipeline_stages": 2, "initiation_interval": 1, "delay_model": "unit",
                 "flop_inputs": False, "flop_outputs": True}
-    if build["schema"] != 1 or build["profile"] != expected:
+    profile = build["profile"]
+    if build["schema"] != 1:
+        raise ValueError("unsupported profile manifest schema")
+    if require_d3 and (any(profile.get(k) != v for k, v in expected.items()) or
+                       profile.get("planes", ["x", "z"]) != ["x", "z"]):
         raise ValueError("expected the D3, three-shard, two-stage, II=1 decoder profile")
     for name in ("phi_decoder_profile.v", "phi_decoder_profile_top.v", "hls_1r1w_ram.v"):
         if build["rtl"].get(name) != sha(rtl / name):

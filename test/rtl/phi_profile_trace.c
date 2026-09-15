@@ -15,15 +15,15 @@
 #define MAX_ROUTERS MAX_PHI_SCHEDULERS
 
 /* phi_halo_cell::ReductionAggregateRequest is a 32-bit slot followed by the
- * 171-bit public ReductionAggregate. These least-significant bit positions
+ * 186-bit public ReductionAggregate. These least-significant bit positions
  * are stable under the DSLX struct's most-significant-field packing order.
  * Rejecting any other width makes an ABI change fail closed instead of
  * silently attaching misleading reduction metadata to a trace. */
-#define AGGREGATE_REQUEST_BITS 203
+#define AGGREGATE_REQUEST_BITS 218
 #define AGGREGATE_KEY_LSB 135
 #define AGGREGATE_SITE_LSB 167
 #define AGGREGATE_FAILED_LSB 169
-#define AGGREGATE_VALID_LSB 170
+#define AGGREGATE_VALID_LSB 185
 
 typedef struct {
     char hierarchy[PATH_SIZE];
@@ -72,11 +72,12 @@ static unsigned router_count;
 static phi_plane_t planes[PHI_PLANE_COUNT];
 static unsigned plane_count;
 static unsigned profile_shard_count;
+static unsigned profile_plane_count;
 static uint64_t cycle_number;
 static FILE *trace_file;
 
 static unsigned expected_scheduler_count(void) {
-    return PHI_PLANE_COUNT * profile_shard_count;
+    return profile_plane_count * profile_shard_count;
 }
 
 static int read_profile_configuration(void) {
@@ -97,6 +98,15 @@ static int read_profile_configuration(void) {
         return 0;
     }
     profile_shard_count = (unsigned)value;
+    text = getenv("ERL_HLS_PHI_PROFILE_PLANE_COUNT");
+    if (!text || text[0] == '\0')
+        text = "2";
+    value = strtoul(text, &end, 10);
+    if (end == text || *end != '\0' || value == 0 || value > PHI_PLANE_COUNT) {
+        vpi_printf("phi_profile_trace: plane count must be 1 or 2, got %s\n", text);
+        return 0;
+    }
+    profile_plane_count = (unsigned)value;
     return 1;
 }
 
@@ -176,7 +186,7 @@ static void aggregate_detail(
     size_t detail_size
 ) {
     unsigned valid = get_vector_u32(request, AGGREGATE_VALID_LSB) & 1U;
-    unsigned failed = get_vector_u32(request, AGGREGATE_FAILED_LSB) & 1U;
+    unsigned failed = get_vector_u32(request, AGGREGATE_FAILED_LSB) & 0xffffU;
     unsigned site = get_vector_u32(request, AGGREGATE_SITE_LSB) & 3U;
     unsigned key = get_vector_u32(request, AGGREGATE_KEY_LSB);
 
@@ -471,13 +481,13 @@ static int discovered_profile_is_complete(void) {
 
     if (scheduler_count != expected_scheduler_count() ||
         router_count != expected_scheduler_count() ||
-        plane_count != PHI_PLANE_COUNT)
+        plane_count != profile_plane_count)
         return 0;
     for (index = 0; index < expected_scheduler_count(); index++) {
         if (!scheduler_complete(&schedulers[index]))
             return 0;
     }
-    for (index = 0; index < PHI_PLANE_COUNT; index++) {
+    for (index = 0; index < profile_plane_count; index++) {
         if (!plane_complete(&planes[index]))
             return 0;
     }
@@ -668,9 +678,10 @@ static PLI_INT32 cb_start_of_sim(p_cb_data cb) {
     if (!discovered_profile_is_complete()) {
         vpi_printf(
             "phi_profile_trace: expected %u phi schedulers, %u phi routers, "
-            "and 2 %u-shard reduction planes; found %u, %u, and %u\n",
+            "and %u %u-shard reduction planes; found %u, %u, and %u\n",
             expected_scheduler_count(),
             expected_scheduler_count(),
+            profile_plane_count,
             profile_shard_count,
             scheduler_count,
             router_count,

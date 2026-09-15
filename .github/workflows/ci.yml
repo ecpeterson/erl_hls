@@ -291,6 +291,18 @@ jobs:
           fi
           "$XLS_ROOT/codegen_main" --version
 
+      - name: Check smaller and rectangular decoder profiles against BEAM
+        run: python3 tools/test_decoder_profiles.py "$RUNNER_TEMP/xls" --cases board-sized rectangle-z --trace
+
+      - name: Diagnose backpressure in the smaller profile through public debug queries
+        run: |
+          python3 tools/test_topology_debug_integration.py \
+            --top phi_decoder_profile_top --clock aclk --reset aresetn --reset-active-low \
+            --stage _build/decoder-profiles/board-sized/debug \
+            _build/decoder-profiles/board-sized/compiled/phi_decoder_profile.v \
+            _build/decoder-profiles/board-sized/compiled/phi_decoder_profile_top.v \
+            _build/decoder-profiles/board-sized/compiled/hls_1r1w_ram.v
+
       - name: Build the complete D3 debug composition and production reference
         run: python3 tools/build_phi_debug.py "$RUNNER_TEMP/xls"
 
@@ -303,6 +315,9 @@ jobs:
         with:
           name: complete-debug-reports
           path: |
+            _build/decoder-profiles/**/*.json
+            _build/decoder-profiles/**/*.log
+            _build/decoder-profiles/**/*.events
             _build/phi-debug/**/*.log
             _build/phi-debug/**/*.build.json
             _build/phi-debug/**/*.v

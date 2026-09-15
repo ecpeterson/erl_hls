@@ -4,10 +4,10 @@
 
 -module(phi_decoder_profile_topology).
 -moduledoc """
-Distance-three phi mesh with compact deterministic syndrome sources.
+Rectangular phi mesh with compact deterministic syndrome sources.
 
-The two `phi_halo_cell` planes and all of their cardinal routes are identical
-to `phi_noise_topology`. Each paired syndrome family is replaced by a compact
+By default the two `phi_halo_cell` planes and their cardinal routes match
+`phi_noise_topology`. Each paired syndrome family is replaced by a compact
 `phi_syndrome_replay_cell`, which responds to the existing request protocol
 with a deterministic nontrivial stream. Only correction and status events
 leave the graph.
@@ -33,37 +33,37 @@ does not attempt to quiesce or model convergence.
 topology() ->
     topology(?DEFAULT_DISTANCE).
 
--doc "Returns one bounded decoder-only topology.".
--spec topology(pos_integer()) -> hls_topology:spec().
-topology(Distance) when Distance > 0, Distance =< 50 ->
-    Shape = [Distance, Distance],
+-doc "Returns a square-distance or explicitly configured decoder-only topology.".
+-spec topology(pos_integer() | map()) -> hls_topology:spec().
+topology(Distance) when is_integer(Distance), Distance > 0, Distance =< 50 ->
+    topology(#{shape => [Distance, Distance]});
+topology(Options) when is_map(Options) ->
+    Config = #{shape := Shape} = phi_decoder_profile:normalize(Options),
+    Planes = phi_decoder_profile:planes(Config),
     #{
         version => 1,
         actors => #{},
         ingresses => [],
-        families => #{
-            phi_x => #{module => phi_halo_cell, shape => Shape},
-            phi_z => #{module => phi_halo_cell, shape => Shape},
-            syndrome_x => #{module => phi_syndrome_replay_cell, shape => Shape},
-            syndrome_z => #{module => phi_syndrome_replay_cell, shape => Shape}
-        },
+        families => maps:from_list(lists:append([
+            [{Phi, #{module => phi_halo_cell, shape => Shape}},
+             {Source, #{module => phi_syndrome_replay_cell, shape => Shape}}]
+            || #{phi := Phi, source := Source} <- Planes
+        ])),
         externals => [
-            {x_decoder_events, out, [phi_correction, phi_status]},
-            {z_decoder_events, out, [phi_correction, phi_status]}
+            {Events, out, [phi_correction, phi_status]}
+            || #{events := Events} <- Planes
         ],
         routes => [],
         route_relations =>
-            plane_relations(phi_x, syndrome_x, x_decoder_events) ++
-            plane_relations(phi_z, syndrome_z, z_decoder_events) ++
-            [
-                relation(syndrome_x, phi, phi_x, [0, 0]),
-                relation(syndrome_z, phi, phi_z, [0, 0])
-            ],
+            lists:append([plane_relations(Phi, Source, Events)
+                || #{phi := Phi, source := Source, events := Events} <- Planes]) ++
+            [relation(Source, phi, Phi, [0, 0])
+                || #{phi := Phi, source := Source} <- Planes],
         startup =>
-            source_startup(syndrome_x, 0, Distance) ++
-            source_startup(syndrome_z, 1, Distance) ++
-            phi_startup(phi_x, 2, Distance) ++
-            phi_startup(phi_z, 3, Distance)
+            lists:append([source_startup(Source, Seed, Shape)
+                || #{source := Source, source_seed := Seed} <- Planes]) ++
+            lists:append([phi_startup(Phi, Seed, Shape)
+                || #{phi := Phi, phi_seed := Seed} <- Planes])
     };
 topology(_Distance) ->
     error(badarg).
@@ -84,27 +84,27 @@ relation(Source, Port, Destination, Offset) ->
         {family, Destination, {translate, Offset, wrap}}
     ]}.
 
-source_startup(Family, FamilyIndex, Distance) ->
+source_startup(Family, FamilyIndex, [Width, Height] = Shape) ->
     [
         {{Family, X, Y}, [#phenom_config{
-            seed = seed(FamilyIndex, Distance, X, Y),
+            seed = seed(FamilyIndex, Shape, X, Y),
             threshold = ?HALF_RATE,
             x = X,
             y = Y
         }]}
-        || X <- lists:seq(0, Distance - 1),
-           Y <- lists:seq(0, Distance - 1)
+        || X <- lists:seq(0, Width - 1),
+           Y <- lists:seq(0, Height - 1)
     ].
 
-phi_startup(Family, FamilyIndex, Distance) ->
+phi_startup(Family, FamilyIndex, [Width, Height] = Shape) ->
     [
         {{Family, X, Y}, [#phi_config{
-            seed = seed(FamilyIndex, Distance, X, Y)
+            seed = seed(FamilyIndex, Shape, X, Y)
         }]}
-        || X <- lists:seq(0, Distance - 1),
-           Y <- lists:seq(0, Distance - 1)
+        || X <- lists:seq(0, Width - 1),
+           Y <- lists:seq(0, Height - 1)
     ].
 
-seed(FamilyIndex, Distance, X, Y) ->
-    Linear = FamilyIndex * Distance * Distance + X * Distance + Y + 1,
+seed(FamilyIndex, [Width, Height], X, Y) ->
+    Linear = FamilyIndex * Width * Height + X * Height + Y + 1,
     (Linear * ?SEED_STRIDE) band ?U32_MASK.

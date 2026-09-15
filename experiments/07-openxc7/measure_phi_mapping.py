@@ -18,6 +18,26 @@ sys.path.insert(0, str(HERE.parents[1] / "tools"))
 from measure_topology_debug import cell_counts, distribution
 
 
+def measure_mapping(run, name, seed, sources, yosys):
+    run.mkdir(parents=True, exist_ok=True)
+    script = "read_verilog -sv " + " ".join(map(quote, sources)) + "\n"
+    script += f"hierarchy -check -top {CORE}\nproc\nflatten\nopt\nmemory_collect\n"
+    script += f"rename -scramble-name -seed {seed}\n"
+    script += f"synth_xilinx -flatten -abc9 -family xc7 -noiopad -noclkbuf -top {CORE}\n"
+    script += "check -assert\nscc -expect 0\ntee -o stat.json stat -json -tech xilinx\n"
+    completion = mapped_stage(run, "map", script, sources, ["stat.json", "map.log"], yosys)
+    cells = json.loads((run / "stat.json").read_text())["design"]["num_cells_by_type"]
+    delays = re.findall(r"ABC: A: +Del = ([0-9]+(?:\.[0-9]+)?)", (run / "map.log").read_text())
+    if not delays:
+        raise ValueError(f"{name}/{seed}: missing ABC9 mapping-stage delay")
+    result = {"variant": name, "seed": seed, **cell_counts(cells),
+              "DSP": cells.get("DSP48E1", 0), "CARRY4": cells.get("CARRY4", 0),
+              "mapping_delay_ps": float(delays[-1]), "completion": completion}
+    print(json.dumps({k: v for k, v in result.items() if k != "completion"}), flush=True)
+    return result
+
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("baseline", type=Path)
@@ -47,23 +67,7 @@ def main():
 
     def measure(pair):
         name, seed = pair
-        run = stage / f"{name}-{seed}"
-        run.mkdir(exist_ok=True)
-        script = "read_verilog -sv " + " ".join(map(quote, sources[name])) + "\n"
-        script += f"hierarchy -check -top {CORE}\nproc\nflatten\nopt\nmemory_collect\n"
-        script += f"rename -scramble-name -seed {seed}\n"
-        script += f"synth_xilinx -flatten -abc9 -family xc7 -noiopad -noclkbuf -top {CORE}\n"
-        script += "check -assert\nscc -expect 0\ntee -o stat.json stat -json -tech xilinx\n"
-        completion = mapped_stage(run, "map", script, sources[name], ["stat.json", "map.log"], yosys)
-        cells = json.loads((run / "stat.json").read_text())["design"]["num_cells_by_type"]
-        delays = re.findall(r"ABC: A: +Del = ([0-9]+(?:\.[0-9]+)?)", (run / "map.log").read_text())
-        if not delays:
-            raise ValueError(f"{name}/{seed}: missing ABC9 mapping-stage delay")
-        result = {"variant": name, "seed": seed, **cell_counts(cells),
-                  "DSP": cells.get("DSP48E1", 0), "CARRY4": cells.get("CARRY4", 0),
-                  "mapping_delay_ps": float(delays[-1]), "completion": completion}
-        print(json.dumps({k: v for k, v in result.items() if k != "completion"}), flush=True)
-        return result
+        return measure_mapping(stage / f"{name}-{seed}", name, seed, sources[name], yosys)
 
     pairs = [(name, seed) for seed in args.seeds for name in stages]
     with ThreadPoolExecutor(max_workers=args.jobs) as pool:

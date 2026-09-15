@@ -8,6 +8,8 @@ build `erl_hls` designs natively on Apple Silicon. It has three workloads:
   routed debug path and both instrumentation monitors; and
 - a [D3 decoder place-and-route benchmark](phi-timing.md) on `xc7z100ffg900-2`, with explicit timing-model coverage and placement-seed distributions.
 
+The [configurable decoder profiles](decoder-profiles.md) measure smaller rectangular populations and either decoder plane without changing the D3 reference workload.
+
 The flow generates exact-package chip databases and runs Yosys,
 nextpnr-xilinx, Project X-Ray frame generation, and bitstream assembly. By
 default, openXC7 packages and outputs remain in ignored directories beneath

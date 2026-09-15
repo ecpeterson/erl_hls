@@ -19,6 +19,7 @@ ERL_HLS_PHI_NOISE_TOPOLOGY_X="$stage/phi_noise_topology.x" \
 ERL_HLS_PHI_NOISE_TOPOLOGY_SMOKE_X="$stage/phi_noise_topology_smoke.x" \
 ERL_HLS_PHI_SYNDROME_REPLAY_X="$stage/phi_syndrome_replay_cell.x" \
 ERL_HLS_PHI_DECODER_PROFILE_X="$stage/phi_decoder_profile_topology.x" \
+ERL_HLS_PHI_DECODER_PROFILE_CONFIG="$stage/phi_decoder_profile.json" \
 ERL_HLS_PHI_DECODER_PROFILE_TOP_V="$stage/phi_decoder_profile_top.v" \
 ERL_HLS_PHI_MEMORY_GATEWAY_X="$stage/phi_memory_gateway.x" \
 ERL_HLS_PHI_MEMORY_DEBUG_TOP_V="$stage/phi_memory_debug_top.v" \
@@ -88,12 +89,29 @@ erl \
             "weak_components" -> weak_components;
             PartitionText -> error({effect_window_partition, PartitionText})
         end,
-        ProfilePlan = hls_topology:from_module(
-            phi_decoder_profile_topology
+        ProfileDimension = fun(Name) ->
+            case os:getenv(Name) of false -> 3; Text -> list_to_integer(Text) end
+        end,
+        ProfilePlanes = case os:getenv("ERL_HLS_PHI_PROFILE_PLANES") of
+            false -> [x, z];
+            "xz" -> [x, z];
+            "x" -> [x];
+            "z" -> [z];
+            PlaneText -> error({invalid_profile_planes, PlaneText})
+        end,
+        ProfileConfig = phi_decoder_profile:normalize(#{
+            shape => [ProfileDimension("ERL_HLS_PHI_PROFILE_WIDTH"),
+                      ProfileDimension("ERL_HLS_PHI_PROFILE_HEIGHT")],
+            planes => ProfilePlanes, shards => ProfileShardCount
+        }),
+        ok = file:write_file(os:getenv("ERL_HLS_PHI_DECODER_PROFILE_CONFIG"),
+            json:encode(phi_decoder_profile:manifest(ProfileConfig))),
+        ProfilePlan = hls_topology:normalize(
+            phi_decoder_profile_topology:topology(ProfileConfig)
         ),
         ProfilePhysical =
             (phi_decoder_profile_topology_dslx:profile(
-                ProfileShardCount
+                ProfileConfig
             ))#{
                 effect_window_partition => ProfileEffectWindowPartition
             },
@@ -154,7 +172,7 @@ erl \
             ProfilePhysical
         ),
         PhiDecoderProfileTop = phi_decoder_profile_top_v:to_verilog(
-            ProfileShardCount
+            ProfileConfig
         ),
         PhiBridgeDistance = case os:getenv(
             "ERL_HLS_PHI_BRIDGE_DISTANCE"

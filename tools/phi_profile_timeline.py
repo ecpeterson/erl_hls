@@ -127,16 +127,8 @@ def discover_components(
         for event in events
         if event.component in {"phi_x_plane", "phi_z_plane"}
     })
-    if len(schedulers) < 2 or len(schedulers) % 2 != 0:
-        raise SystemExit(
-            "expected an equal nonempty X/Z pair of phi scheduler groups, "
-            f"found {len(schedulers)} schedulers: "
-            f"{', '.join(schedulers) or 'none'}"
-        )
-    if planes != ["phi_x_plane", "phi_z_plane"]:
-        raise SystemExit(
-            "expected phi_x_plane and phi_z_plane in the trace"
-        )
+    if not planes or not schedulers or len(schedulers) % len(planes):
+        raise SystemExit("expected equally sharded nonempty selected phi planes")
     routers = numbered_components(events, "window_router_")
     if len(routers) < len(schedulers):
         raise SystemExit(
@@ -151,11 +143,8 @@ def discover_components(
         routers[-len(schedulers):],
         strict=True,
     ))
-    shard_count = len(schedulers) // 2
-    return [
-        schedulers[:shard_count],
-        schedulers[shard_count:],
-    ], planes, router_map
+    shard_count = len(schedulers) // len(planes)
+    return [schedulers[i:i + shard_count] for i in range(0, len(schedulers), shard_count)], planes, router_map
 
 
 def fragment_destination_table(source: str, plane: str) -> dict[int, list[int]]:
@@ -215,7 +204,7 @@ def read_destination_tables(path: Path) -> dict[str, dict[int, list[int]]]:
     source = path.read_text(encoding="utf-8")
     return {
         plane: fragment_destination_table(source, plane)
-        for plane in ("x", "z")
+        for plane in ("x", "z") if f"proc Phi_{plane}ReductionPlane" in source
     }
 
 
@@ -446,9 +435,9 @@ def build_dependencies(
             )
         accepted = []
         for egress, router_accept in zip(egresses, accepts, strict=True):
-            if egress.cycle != router_accept.cycle:
+            if egress.cycle > router_accept.cycle:
                 raise SystemExit(
-                    "direct scheduler-to-router handshake changed clocks: "
+                    "router accepted an effect before its scheduler enqueued it: "
                     f"{egress} -> {router_accept}"
                 )
             write = writes_by_cycle.get(egress.cycle)

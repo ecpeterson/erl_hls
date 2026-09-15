@@ -72,6 +72,7 @@ write(Stage, Options) -> write(small, Stage, Options).
 
 write(phi, Stage, Options) ->
     {Plan, Specs} = fixture(phi),
+    ok = write_file(Stage, "phi_decoder_profile.json", json:encode(phi_decoder_profile:manifest(#{}))),
     Artifacts = artifacts(phi, Options),
     maps:foreach(fun(Module, Actor) -> ok = write_file(Stage, atom_to_list(Module) ++ ".x", Actor) end, Artifacts),
     ok = write_file(Stage, "phi_decoder_profile_topology.x", xls_topology_dslx:emit(Plan,
