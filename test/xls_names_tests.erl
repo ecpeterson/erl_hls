@@ -25,6 +25,12 @@ enum_scopes_test() ->
     ok = xls_names:actor(replace(replace(Base, hls_phases, [value]),
         hls_outputs, [value]), hls_statem).
 
+output_channel_collisions_test_() ->
+    [?_assertMatch({xls_name_collision, {proc, 'Top'}, _,
+            #{kind := generated}, #{kind := output, name := Name}}, reason(fun() ->
+        xls_names:actor(replace(forms([value]), hls_outputs, [Name]), hls_statem)
+    end)) || Name <- [req, admit, egress]].
+
 reserved_wire_tags_test_() ->
     [?_assertMatch({xls_name_collision, wire_tag, Name, _, _},
         reason(fun() -> xls_names:wire_tags(forms([Name])) end))
@@ -65,6 +71,16 @@ identifiers_test_() ->
 valid_identifiers_test_() ->
     [?_assertEqual(ok, xls_names:actor(field_forms(Name), hls_statem))
         || Name <- ['Value', value, '_value', u0, u65, u032, self_field]].
+
+case_conversion_does_not_hide_unsupported_source_spelling_test() ->
+    [begin
+        ?assertMatch({invalid_xls_identifier, Scope, "ß", _}, reason(fun() ->
+            xls_names:actor(replace(forms([value]), Attribute, ['ß']), hls_statem)
+        end))
+    end || {Attribute, Scope} <- [{hls_phases, phase}, {hls_outputs, output}]],
+    ?assertMatch({invalid_xls_identifier, tag, "ß", _}, reason(fun() ->
+        xls_names:actor(forms(['ß']), hls_statem)
+    end)).
 
 encoding_boundaries_test() ->
     Base = forms([value]),

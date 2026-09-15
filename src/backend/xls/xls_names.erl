@@ -51,8 +51,21 @@ control_names(Forms, Kind) ->
                 end
             end, Phases),
             ok = enum(phase, declared(Forms, hls_phases, phase), #{}),
-            ok = enum(output, declared(Forms, hls_outputs, output), #{})
+            Ports = declared(Forms, hls_outputs, output),
+            ok = enum(output, Ports, #{}),
+            port_channels(Ports)
     end.
+
+port_channels(Ports) ->
+    %% Top creates these channels before the per-output frame channels. A
+    %% port named req would rebind req_p/req_c, changing the service wiring.
+    Fixed = ["req_p", "req_c", "admit_p", "admit_c", "egress_p", "egress_c"],
+    _ = lists:foldl(fun({Name, Origin}, Seen) ->
+        lists:foldl(fun(Suffix, Acc) ->
+            claim({proc, 'Top'}, atom_to_list(Name) ++ Suffix, Origin, Acc)
+        end, Seen, ["_p", "_c"])
+    end, maps:from_list([{Name, generated(Name)} || Name <- Fixed]), Ports),
+    ok.
 
 %% A private accumulator adds both a record and a wire tag. Validate it at
 %% source analysis, including interface inference, before closing expressions.
@@ -120,6 +133,9 @@ enum(Scope, Entries, Initial) ->
             true -> ok;
             false -> error({invalid_xls_name, Scope, Name, Origin})
         end,
+        %% Check before case conversion too: Unicode can uppercase to ASCII,
+        %% while output channel identifiers retain the original spelling.
+        ok = spelling(Scope, atom_to_list(Name), Origin),
         Symbol = enum_member(Name),
         ok = identifier(Scope, Symbol, Origin),
         claim(Scope, Symbol, Origin, Seen)
@@ -133,10 +149,16 @@ claim(Scope, Name, Origin, Seen) ->
     end.
 
 identifier(Scope, Text, Origin) ->
-    case re:run(Text, "^[A-Za-z_][A-Za-z0-9_]*$", [unicode, {capture, none}]) =:= match
-            andalso not keyword(Text) of
+    ok = spelling(Scope, Text, Origin),
+    case not keyword(Text) of
         true -> ok;
         false -> error({invalid_xls_identifier, Scope, Text, Origin})
+    end.
+
+spelling(Scope, Text, Origin) ->
+    case re:run(Text, "^[A-Za-z_][A-Za-z0-9_]*$", [unicode, {capture, none}]) of
+        match -> ok;
+        nomatch -> error({invalid_xls_identifier, Scope, Text, Origin})
     end.
 
 %% DSLX scanner_keywords.inc in the pinned XLS release. Sized keywords stop

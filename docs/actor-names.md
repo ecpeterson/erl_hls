@@ -14,6 +14,8 @@ This preflight covers actor declarations and fixed compiler names. Imported-prov
 
 Tags, phases, ports, and reducer names have separate enum scopes. Reusing `value` as a message tag, phase, output port, and field is valid. Distinct atoms that uppercase to the same member, such as `ready` and `'Ready'`, cannot share an enum. Phase atoms `repeat_phase`, `reduce`, `terminate`, `consume`, `postpone`, `fail`, `true`, and `false` are reserved by callback or expression lowering.
 
+Output ports also create local frame channels in the generated `Top` proc. The names `req`, `admit`, and `egress` are reserved there: they would rebind the existing internal channel endpoints instead of creating independent output wiring.
+
 | Encoding | Capacity |
 | --- | --- |
 | Public wire tags | 253, or 252 when an actor has a private reduction accumulator |
