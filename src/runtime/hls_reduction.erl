@@ -16,6 +16,10 @@ reduction is opened, not on the reference runtime's arrival-order fold.
 The final accepted contribution returns a private completion event and no
 longer returns open reduction state. This makes closing linear: the owning
 scheduler must deliver that event exactly once before opening another window.
+
+A reducer exception is an absorbing value: subsequent valid contributions
+still count, but do not call the reducer. The final contribution re-raises
+the first exception with its original stack, instead of returning completion.
 """.
 
 -export([open/4, contribute/5, contribute/6, info/1]).
@@ -37,7 +41,8 @@ scheduler must deliver that event exactly once before opening another window.
     expected = #{} :: map(),
     seen = #{} :: map(),
     remaining :: 1..?MAX_PARTICIPANTS,
-    accumulator :: term()
+    accumulator :: term(),
+    failure = none :: none | {error | exit | throw, term(), erlang:stacktrace()}
 }).
 
 -opaque reduction() :: #reduction{}.
@@ -196,15 +201,28 @@ accept(Module, Value, Reduction = #reduction{
     name = Name,
     key = Key,
     remaining = Remaining,
-    accumulator = Accumulator
+    accumulator = Accumulator,
+    failure = Failure0
 }) ->
-    Combined = Module:reduce(Name, Accumulator, Value),
-    case Remaining of
-        1 ->
+    {Combined, Failure} = combine(Module, Name, Accumulator, Value, Failure0),
+    case {Remaining, Failure} of
+        {1, none} ->
             {complete, {reduction_complete, Name, Key, Combined}};
+        {1, {Class, Reason, Stack}} ->
+            erlang:raise(Class, Reason, Stack);
         _ ->
             {pending, Reduction#reduction{
                 remaining = Remaining - 1,
-                accumulator = Combined
+                accumulator = Combined,
+                failure = Failure
             }}
     end.
+
+combine(Module, Name, Accumulator, Value, none) ->
+    try Module:reduce(Name, Accumulator, Value) of
+        Combined -> {Combined, none}
+    catch
+        Class:Reason:Stack -> {Accumulator, {Class, Reason, Stack}}
+    end;
+combine(_Module, _Name, Accumulator, _Value, Failure) ->
+    {Accumulator, Failure}.

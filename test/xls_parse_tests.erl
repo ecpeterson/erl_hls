@@ -99,7 +99,7 @@ aggregate_only_uses_one_pending_receptacle_per_actor_test() ->
     ?assertNotEqual(nomatch, binary:match(AggregateOnly,
         <<"state.aggregate_pending_valid[aggregate_slot]">>)),
     ?assertNotEqual(nomatch, binary:match(AggregateOnly,
-        <<"ReductionAggregate {\n          failed: u1:1">>)),
+        <<"ReductionAggregate {\n          failure: hls_failure::REDUCTION_PROTOCOL">>)),
     ?assertNotEqual(nomatch, binary:match(AggregateOnly,
         <<"update(state.aggregate_pending_valid, aggregate_slot, u1:1)">>)),
     ?assertNotEqual(nomatch, binary:match(AggregateOnly,

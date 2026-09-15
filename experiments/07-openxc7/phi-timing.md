@@ -67,7 +67,9 @@ python3 experiments/07-openxc7/phi_timing.py "$candidate" \
     --reference "$baseline" --stage "$comparison" --phase compare
 ```
 
-This requires matching workload, compiler, standard library, and RAM configuration. It checks output-valid timing and every valid payload, including values held while a sink is blocked. It rejects unknown outputs and requires progress after reset. Use this stronger comparison when a change should preserve cycle timing; the ordinary harness remains appropriate for changes that intentionally alter scheduling.
+This requires matching workload, compiler, standard library, and RAM configuration. It checks output-valid timing and every valid payload, including values held while a sink is blocked. It rejects unknown outputs and requires progress after reset. Use this stronger comparison when a change should preserve cycle timing.
+
+For intentional scheduling changes, add `--comparison-mode actor-sequence`. This compares accepted correction/status event prefixes separately for all 18 coordinates, preserving each actor's event order and every payload bit while allowing arbitration to reorder different actors. It checks both designs' payload stability across backpressure and requires each actor to progress before and after reset. The autonomous sources may reach different steps, so unmatched final prefixes and reset-discarded in-flight tails are outside this bounded comparison. Run the ordinary `--phase simulate` harness for each version as well to check complete status sets and measure cycles per step under variable sink readiness.
 
 To screen sensitivity to synthesis naming order, map two matched signal-name seeds for each version:
 

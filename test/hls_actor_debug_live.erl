@@ -6,7 +6,7 @@ inspect(Session, Stage, Moment) ->
     case file:read_file(filename:join(Stage, "actor-test")) of
         {error, enoent} -> ok;
         {ok, Bytes} ->
-            Kind = case Bytes of <<"small">> -> small; <<"phi">> -> phi; <<"mailbox">> -> mailbox end,
+            Kind = case Bytes of <<"small">> -> small; <<"phi">> -> phi; <<"mailbox">> -> mailbox; <<"reduction">> -> reduction; <<"aggregate">> -> aggregate end,
             {Plan, Specs} = hls_actor_debug_dslx:fixture(Kind),
             Catalog = hls_debug_catalog:hardware(Plan, Specs, [], Session),
             Ids = hls_debug_catalog:actors(Catalog),
@@ -65,6 +65,19 @@ check(mailbox, blocked, {family, producer, _}, #{phase := Phase, failed := false
         when Phase =:= boot; Phase =:= producer -> ok;
 check(mailbox, released, {family, producer, _}, #{phase := producer, failed := false}) -> ok;
 check(mailbox, blocked, {family, consumer, _}, #{phase := waiting, failed := false}) -> ok;
+check(Placement, _, {family, cell, [1, 0]}, #{phase := done, failed := false, failure := none})
+        when Placement =:= reduction; Placement =:= aggregate -> ok;
+check(Placement, _, {family, cell, [Slot, 0]}, #{phase := gathering, failed := true,
+        enter_pending := false, failure := #{kind := Kind, file := <<"hls_reduction_failure_fixture.erl">>, line := Line}})
+        when Placement =:= reduction; Placement =:= aggregate ->
+    Expected = case Slot of
+        0 -> {badarith, 45};
+        2 -> {case_clause, 46};
+        3 -> {match_failure, 47};
+        4 -> {if_clause, 53}
+    end,
+    Expected = {Kind, Line},
+    ok;
 check(phi, _, _, #{failed := false, failure := none}) -> ok;
 check(Kind, Moment, Id, Snapshot) -> error({actor_snapshot, Kind, Moment, Id, Snapshot}).
 

@@ -50,9 +50,10 @@ layout_is_minimal_and_derived_test() ->
         remaining_bits => 2,
         member_bits => 3,
         accumulator_bits => 40,
-        total_bits => 80
+        failure_bits => 16,
+        total_bits => 96
     }, xls_statem_reduction_ir:layout(Reduction)),
-    ?assertEqual(80, xls_statem_reduction_ir:storage_width(Reduction)).
+    ?assertEqual(96, xls_statem_reduction_ir:storage_width(Reduction)).
 
 interface_is_closed_and_omits_derived_facts_test() ->
     Reduction = maps:get(reduction, analyze(?FIXTURE)),
@@ -83,7 +84,7 @@ interface_is_closed_and_omits_derived_facts_test() ->
         maps:get(source_capture_total, Site)
         || Site <- maps:get(sites, Interface)
     ]),
-    ?assertEqual(80,
+    ?assertEqual(96,
         xls_statem_reduction_ir:interface_storage_width(Interface)).
 
 structural_interface_matches_closed_ir_test() ->
@@ -246,10 +247,10 @@ width_resolution_is_deferred_test() ->
                     Beam
                 ),
                 %% 2 status + 1 site + 32 key + 2 remaining + 3 members
-                %% + a 24+8-bit accumulator.
-                ?assertEqual(72,
+                %% + a 24+8-bit accumulator and 16-bit pending failure.
+                ?assertEqual(88,
                     xls_statem_reduction_ir:storage_width(Reduction)),
-                ?assertEqual(72,
+                ?assertEqual(88,
                     xls_statem_reduction_ir:interface_storage_width(
                         Interface))
             end

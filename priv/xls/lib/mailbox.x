@@ -108,15 +108,19 @@ pub fn compact_order<DEPTH: u32>(
 
 // Returned batch credits represent completed effect batches, so they
 // update scheduler metadata without carrying another actor context.
+// Select only from the registered inputs. pending_valid also includes newly
+// captured requests; preserve those for the next iteration. Registered-valid
+// slots cannot be overwritten during capture.
 pub fn collect_credit<PRODUCER_COUNT: u32>(
-    pending: ScheduledRequest[PRODUCER_COUNT],
+    registered_pending: ScheduledRequest[PRODUCER_COUNT],
+    registered_valid: u1[PRODUCER_COUNT],
     pending_valid: u1[PRODUCER_COUNT],
     egress_busy: u1) -> (u1[PRODUCER_COUNT], u1) {
   let (credit_found, credit_producer) =
     unroll_for! (candidate, acc):
         (u32, (u1, u32)) in u32:0..PRODUCER_COUNT {
-      let take = !acc.0 && pending_valid[candidate] &&
-        pending[candidate].credit;
+      let take = !acc.0 && registered_valid[candidate] &&
+        registered_pending[candidate].credit;
       (acc.0 || take, if take { candidate } else { acc.1 })
     }((u1:0, u32:0));
   let remaining = if credit_found {
@@ -423,11 +427,14 @@ fn credit_collection_releases_one_batch_without_consuming_messages_test() {
   let request = zero!<ScheduledRequest>();
   let credit = ScheduledRequest { credit: true, ..request };
   let pending = [credit, request, credit];
-  assert_eq(collect_credit(pending, [false, true, false], true),
+  assert_eq(collect_credit(pending, [false, true, false], [false, true, false], true),
             ([false, true, false], true));
-  let (remaining, busy) = collect_credit(pending, [true, true, true], true);
+  // Newly captured credits remain pending until the next iteration.
+  assert_eq(collect_credit(pending, [false, false, false], [true, true, true], true),
+    ([true, true, true], true));
+  let (remaining, busy) = collect_credit(pending, [true, true, true], [true, true, true], true);
   assert_eq((remaining, busy), ([false, true, true], false));
-  assert_eq(collect_credit(pending, remaining, busy),
+  assert_eq(collect_credit(pending, remaining, remaining, busy),
             ([false, true, false], false));
 }
 

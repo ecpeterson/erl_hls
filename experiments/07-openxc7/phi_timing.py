@@ -92,12 +92,14 @@ def compare(args):
     reference = re.sub(pattern, lambda match: "baseline_" + match[0], reference)
     ref = args.stage / "reference.v"
     ref.write_text(reference)
-    command(["iverilog", "-g2012", "-s", "phi_compare_tb", "-o", args.stage / "compare.vvp",
+    command(["iverilog", "-g2012", "-s", "phi_compare_tb",
+             f"-Pphi_compare_tb.CYCLE_EXACT={int(args.comparison_mode == 'cycle')}",
+             "-o", args.stage / "compare.vvp",
              HERE / "phi_compare_tb.sv", ref,
              *[args.rtl / name for name in ("phi_decoder_profile.v", "phi_decoder_profile_top.v", "hls_1r1w_ram.v")]],
             args.stage, "compare-compile")
     command(["vvp", args.stage / "compare.vvp"], args.stage, "compare")
-    save(args.stage / "comparison.json", {"builds": builds,
+    save(args.stage / "comparison.json", {"builds": builds, "mode": args.comparison_mode,
          "testbench_sha256": sha(HERE / "phi_compare_tb.sv"),
          "console_sha256": sha(args.stage / "compare.console")})
     print((args.stage / "compare.console").read_text(), end="")
@@ -382,6 +384,8 @@ def main():
     parser.add_argument("--phase", choices=("all", "simulate", "compare", "map", "route", "report"), default="map",
                         help="default: map; simulation and place-and-route are explicit phases")
     parser.add_argument("--reference", type=Path, help="baseline RTL directory for the compare phase")
+    parser.add_argument("--comparison-mode", choices=("cycle", "actor-sequence"), default="cycle",
+                        help="compare cycle timing or accepted per-actor event sequences")
     args = parser.parse_args()
     if args.phase == "compare" and args.reference is None:
         parser.error("compare requires --reference")

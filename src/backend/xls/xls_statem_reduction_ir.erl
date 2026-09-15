@@ -139,6 +139,7 @@ storage_width(Reduction) ->
     remaining_bits := pos_integer(),
     member_bits := pos_integer(),
     accumulator_bits := non_neg_integer(),
+    failure_bits := 16,
     total_bits := pos_integer()
 }.
 layout(Reduction = #{accumulator := Accumulator}) ->
@@ -149,7 +150,7 @@ layout(Reduction = #{accumulator := Accumulator}) ->
     RemainingBits = remaining_width(Reduction),
     MemberBits = member_width(Reduction),
     Total = StatusBits + SiteBits + KeyBits + RemainingBits +
-        MemberBits + AccumulatorBits,
+        MemberBits + AccumulatorBits + 16,
     #{
         status_bits => StatusBits,
         site_bits => SiteBits,
@@ -157,6 +158,7 @@ layout(Reduction = #{accumulator := Accumulator}) ->
         remaining_bits => RemainingBits,
         member_bits => MemberBits,
         accumulator_bits => AccumulatorBits,
+        failure_bits => 16,
         total_bits => Total
     }.
 
@@ -190,7 +192,7 @@ interface_storage_width(#{accumulator := Accumulator, sites := Sites}) ->
            maps:get(mode, Population) =:= members
     ]])),
     StatusBits + SiteBits + KeyBits + RemainingBits + MemberBits +
-        type_width(Accumulator).
+        type_width(Accumulator) + 16.
 
 public_site(Site) ->
     Contributions = maps:get(contributions, Site),

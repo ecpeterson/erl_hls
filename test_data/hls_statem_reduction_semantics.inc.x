@@ -166,6 +166,7 @@ fn reduction_shared_priority_and_layout_test() {
       value: u32:0x12345678,
       contributions: u8:0x34,
     },
+    failure: u16:0x123d,
   };
   let packed = bits_from_reduction_state(reduction);
   assert_eq(packed[0:2], u2:2);
@@ -175,6 +176,7 @@ fn reduction_shared_priority_and_layout_test() {
   assert_eq(packed[37:40], u3:0b101);
   assert_eq(packed[40:72], u32:0x12345678);
   assert_eq(packed[72:80], u8:0x34);
+  assert_eq(packed[80:96], u16:0x123d);
   assert_eq(reduction_state_from_bits(packed), reduction);
 
   let completed = SharedMachine {
@@ -238,4 +240,31 @@ pub proc ReductionSharedCompileTop {
 
   init { () }
   next(state: ()) { state }
+}
+
+#[test]
+fn failed_member_fold_drains_unique_members() {
+  let opened = reduction_open_site(ReductionSite::COLLECTING_MEMBERS, u32:0, zero!<Sum>());
+  let failed = ReductionState { failure: u16:0x123d, ..opened };
+  let one = reduction_apply(failed, reduction_contribution(
+    reduction_test_member(u32:0, u32:9, u32:5), Phase::COLLECTING_MEMBERS, zero!<Cell>()));
+  assert_eq(one.state.remaining, ReductionRemaining:2);
+  assert_eq(one.state.seen, ReductionMembers:1);
+  assert_eq(one.state.accumulator, failed.accumulator);
+  let duplicate = reduction_apply(one.state, reduction_contribution(
+    reduction_test_member(u32:0, u32:9, u32:7), Phase::COLLECTING_MEMBERS, zero!<Cell>()));
+  assert_eq(duplicate.outcome, ReductionOutcome::DUPLICATE_MEMBER);
+  assert_eq(duplicate.state, one.state);
+  let unexpected = reduction_apply(one.state, reduction_contribution(
+    reduction_test_member(u32:0, u32:1, u32:7), Phase::COLLECTING_MEMBERS, zero!<Cell>()));
+  assert_eq(unexpected.outcome, ReductionOutcome::UNEXPECTED_MEMBER);
+  assert_eq(unexpected.state, one.state);
+  let two = reduction_apply(one.state, reduction_contribution(
+    reduction_test_member(u32:0, u32:7, u32:7), Phase::COLLECTING_MEMBERS, zero!<Cell>()));
+  let three = reduction_apply(two.state, reduction_contribution(
+    reduction_test_member(u32:0, u32:2, u32:7), Phase::COLLECTING_MEMBERS, zero!<Cell>()));
+  assert_eq(three.outcome, ReductionOutcome::COMPLETE);
+  assert_eq(three.state.seen, ReductionMembers:0b111);
+  assert_eq(three.state.failure, failed.failure);
+  assert_eq(three.state.accumulator, failed.accumulator);
 }

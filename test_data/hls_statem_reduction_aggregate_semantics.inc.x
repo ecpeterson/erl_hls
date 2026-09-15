@@ -21,7 +21,7 @@ fn reduction_count_aggregate_test() {
     aggregate_test_count(u32:7, u32:13),
   ]);
   assert_eq(aggregate.valid, u1:1);
-  assert_eq(aggregate.failed, u1:0);
+  assert_eq(aggregate.failure, u16:0);
   assert_eq(aggregate.site, ReductionSite::COUNTING as uN[1]);
   assert_eq(aggregate.key, u32:7);
   assert_eq(aggregate.count, ReductionRemaining:2);
@@ -48,7 +48,7 @@ fn reduction_member_aggregate_test() {
     aggregate_test_member(u32:9, u32:9, u32:3),
     aggregate_test_member(u32:9, u32:2, u32:5),
   ]);
-  assert_eq(aggregate.failed, u1:0);
+  assert_eq(aggregate.failure, u16:0);
   assert_eq(aggregate.count, ReductionRemaining:3);
   assert_eq(aggregate.seen, ReductionMembers:0b111);
   let opened = reduction_open_site(
@@ -67,20 +67,20 @@ fn malformed_reduction_aggregates_fail_closed_test() {
     aggregate_test_count(u32:1, u32:4),
     aggregate_test_count(u32:2, u32:5),
   ]);
-  assert_eq(mismatched.failed, u1:1);
+  assert_eq(mismatched.failure, hls_failure::REDUCTION_PROTOCOL);
 
   let guarded_out = reduction_aggregate_batch<u32:2>([
     aggregate_test_count(u32:1, u32:0),
     aggregate_test_count(u32:1, u32:5),
   ]);
-  assert_eq(guarded_out.failed, u1:1);
+  assert_eq(guarded_out.failure, hls_failure::REDUCTION_PROTOCOL);
 
   let duplicate = reduction_aggregate_batch<u32:3>([
     aggregate_test_member(u32:1, u32:9, u32:1),
     aggregate_test_member(u32:1, u32:9, u32:2),
     aggregate_test_member(u32:1, u32:2, u32:3),
   ]);
-  assert_eq(duplicate.failed, u1:1);
+  assert_eq(duplicate.failure, hls_failure::REDUCTION_PROTOCOL);
 
   let incomplete = reduction_aggregate_batch<u32:1>([
     aggregate_test_count(u32:1, u32:4),

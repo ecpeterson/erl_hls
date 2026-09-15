@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
-xls_root=${1:?usage: test_actor_debug.sh XLS_ROOT [STAGE] [small|mailbox|phi]}
+xls_root=${1:?usage: test_actor_debug.sh XLS_ROOT [STAGE] [small|mailbox|reduction|aggregate|phi]}
 project_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 stage=${2:-"$project_root/_build/actor-debug"}
 kind=${3:-small}
-case "$kind" in small|mailbox|phi) ;; *) echo "unknown actor fixture: $kind" >&2; exit 1;; esac
+case "$kind" in small|mailbox|reduction|aggregate|phi) ;; *) echo "unknown actor fixture: $kind" >&2; exit 1;; esac
 mkdir -p "$stage"
 stage=$(cd "$stage" && pwd)
 xls_root=$(cd "$xls_root" && pwd)
@@ -12,7 +12,7 @@ cd "$project_root"
 rebar3 as test compile
 erl -noshell -pa _build/test/lib/erl_hls/ebin _build/test/lib/erl_hls/test \
     -eval '[Stage, KindText] = init:get_plain_arguments(),
-        Kind = maps:get(KindText, #{"small" => small, "mailbox" => mailbox, "phi" => phi}),
+        Kind = maps:get(KindText, #{"small" => small, "mailbox" => mailbox, "phi" => phi, "reduction" => reduction, "aggregate" => aggregate}),
         Options = case Kind of small -> #{}; _ -> #{mailbox_debug => true} end,
         ok = hls_actor_debug_dslx:write(Kind, Stage, Options), halt().' -extra "$stage" "$kind"
 if [[ "$kind" == phi ]]; then
@@ -40,7 +40,7 @@ for stages in "${stages_to_test[@]}"; do
         --fifo_module= --module_name=actor_debug --ram_configurations="$(phi_scheduler_ram_configurations "$scheduler_count")" \
         "$stage/actor_debug.opt.ir" > "$stage/actor_debug_$stages.v"
     python3 tools/test_topology_debug_integration.py --yosys "${YOSYS:-yosys}" \
-        --top actor_debug_wrapper --stage "$stage/p$stages" \
+        --top actor_debug_wrapper --stage "$stage/p$stages" --require-acyclic \
         --actor-projection "$stage/small-actors.json" --actor-test "$kind" \
         "$stage/actor_debug_$stages.v" "$stage/actor_debug_wrapper.v" priv/rtl/hls_1r1w_ram.v
 done
