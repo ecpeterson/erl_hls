@@ -7,20 +7,23 @@
 %% Walking type arguments also finds providers nested inside hls_lists:list/2.
 -spec from_forms([erl_parse:abstract_form()]) -> [atom()].
 from_forms(Forms) ->
-    Uses = providers(Forms),
-    Providers = lists:usort([Module || {Module, _Name} <- Uses]),
-    lists:usort(lists:append([imports(Module,
-        lists:usort([Name || {M, Name} <- Uses, M =:= Module])) || Module <- Providers])).
+    Uses = uses(Forms),
+    Providers = lists:usort([Module || {provider, Module, _Name} <- Uses]),
+    OperatorImports = [hls_integer || {operator, 'rem'} <- Uses],
+    lists:usort(OperatorImports ++ lists:append([imports(Module,
+        lists:usort([Name || {provider, M, Name} <- Uses, M =:= Module])) || Module <- Providers])).
 
-providers({remote_type, _, [{atom, _, Module}, {atom, _, Name}, Args]}) ->
-    [{Module, Name} | providers(Args)];
-providers({call, _, {remote, _, {atom, _, Module}, {atom, _, Name}}, Args}) ->
-    [{Module, Name} | providers(Args)];
-providers(Tuple) when is_tuple(Tuple) ->
-    providers(tuple_to_list(Tuple));
-providers(List) when is_list(List) ->
-    lists:append([providers(Item) || Item <- List]);
-providers(_) ->
+uses({remote_type, _, [{atom, _, Module}, {atom, _, Name}, Args]}) ->
+    [{provider, Module, Name} | uses(Args)];
+uses({call, _, {remote, _, {atom, _, Module}, {atom, _, Name}}, Args}) ->
+    [{provider, Module, Name} | uses(Args)];
+uses({op, _, 'rem', Left, Right}) ->
+    [{operator, 'rem'} | uses([Left, Right])];
+uses(Tuple) when is_tuple(Tuple) ->
+    uses(tuple_to_list(Tuple));
+uses(List) when is_list(List) ->
+    lists:append([uses(Item) || Item <- List]);
+uses(_) ->
     [].
 
 imports(Module, Names) ->

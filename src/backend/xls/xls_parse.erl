@@ -11,10 +11,13 @@ Transforms supported Erlang actor modules into corresponding XLS modules.
 
 Callback bodies may use source-ordered `case` and `if` expressions. Supported
 `case` patterns include literals, variables, aliases, tuples, and homogeneous
-records. Each clause accepts one guard sequence from the same side-effect-free expression
-subset as a callback guard, including comma-separated tests and `andalso` or
-`orelse`. A missing match raises a selected `case_clause` or `if_clause`
-failure; catch-all clauses are optional. The first selected expression failure
+records. Each clause accepts semicolon-separated alternatives from the same
+side-effect-free guard subset as a callback, including comma-separated tests
+and `andalso` or `orelse`. Integer `div` and `rem` reject a zero divisor with
+`badarith` in bodies; in guards, an arithmetic failure rejects that guard
+sequence and permits the next alternative or clause. A missing match raises a
+selected `case_clause` or `if_clause` failure; catch-all clauses are optional.
+The first selected expression failure
 is retained through nested branches and helpers. See `docs/control-flow.md`
 for failure reporting and the bounded hardware contract.
 
@@ -395,6 +398,14 @@ statement_from_statement({xls_live, _Line, Live, Expression}, State) ->
 statement_from_statement({xls_map, _Line, Expression, Render}, State) ->
     Evaluated = statement_from_statement(Expression, State),
     instr(Evaluated#clause_state{reference = none}, Render(reference(Evaluated)));
+%% A guard sequence has its own exception boundary. An arithmetic failure
+%% rejects this sequence; it must neither fail the actor nor prevent a later
+%% semicolon alternative from matching. Earlier body failures remain intact.
+statement_from_statement({xls_guard, _Line, Expression}, State) ->
+    Evaluated = statement_from_statement(Expression, State#clause_state{failures = []}),
+    Guard = instr(Evaluated, ["!(", failure_expression(Evaluated), ") && (",
+        reference(Evaluated), ")"]),
+    Guard#clause_state{failures = State#clause_state.failures};
 statement_from_statement({block, _Line, Expressions}, State) ->
     lower_expression_sequence(Expressions, State);
 statement_from_statement(String, State) when is_list(String) ->
@@ -437,15 +448,14 @@ statement_from_statement({op, Line, 'orelse', Left, Right}, State) ->
         {clause, Line, [{atom, Line, false}], [], [Right]}
     ], State);
 statement_from_statement(X, State) when is_tuple(X) andalso op == element(1, X) ->
-    [op, _L, Op | Args] = tuple_to_list(X),
-    {BwdArgRefs, IntermediateState} = lists:foldl(
-        fun(Arg, {ArgRefs, ThisState}) ->
-            NewState = statement_from_statement(Arg, ThisState#clause_state{reference = none}),
-            {[NewState#clause_state.reference | ArgRefs], NewState}
-        end,
-        {[], State}, Args
-    ),
-    instr(IntermediateState, op(Op, lists:reverse(BwdArgRefs)));
+    [op, Line, Op | Args] = tuple_to_list(X),
+    {References, ArgState} = lower_arguments(Args, State),
+    Evaluated = instr(ArgState, op(Op, References)),
+    case {Op, References} of
+        {Division, [_Left, Right]} when Division =:= 'div'; Division =:= 'rem' ->
+            division_failure(Right, Line, Evaluated);
+        _ -> Evaluated
+    end;
 statement_from_statement({tuple, _L, Slots}, State) ->
     {BwdReferences, IntermediateState} = lists:foldl(
         fun(Slot, {References, ThisState}) ->
@@ -523,6 +533,13 @@ lower_arguments(Args, State) ->
         Next = statement_from_statement(Arg, Acc#clause_state{reference = none}),
         {reference(Next), Next}
     end, State, Args).
+
+division_failure({static, integer, 0}, Line, State) ->
+    add_failure(xls_failure_sites:at(badarith, Line), State);
+division_failure({static, integer, _Nonzero}, _Line, State) -> State;
+division_failure(Divisor, Line, State) ->
+    add_failure(["hls_failure::check(", Divisor, " == 0, ",
+        xls_failure_sites:at(badarith, Line), ")"], State).
 
 %% A selected outcome contributes one explicit failure kind. Its value
 %% and any exported bindings remain separate from that bookkeeping.
@@ -823,6 +840,7 @@ op('+', [Left, Right]) -> [Left, " + ", Right];
 op('-', [Left, Right]) -> [Left, " - ", Right];
 op('*', [Left, Right]) -> [Left, " * ", Right];
 op('div', [Left, Right]) -> [Left, " / ", Right];
+op('rem', [Left, Right]) -> ["hls_integer::remainder(", Left, ", ", Right, ")"];
 op('bsl', [Left, Right]) -> [Left, " << ", Right];
 op('bsr', [Left, Right]) -> [Left, " >> ", Right];
 op('band', [Left, Right]) -> [Left, " & ", Right];

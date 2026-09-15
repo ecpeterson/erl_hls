@@ -159,9 +159,8 @@ lower_if(Line, Clauses, State) ->
     lower_ordered_case(Line, "()", Normalized, State, if_clause).
 
 if_clause({clause, Line, [], Guards, Body}) when Body =/= [] ->
-    Predicate = xls_guard_lower:predicate(Guards, Line),
     %% An unguarded wildcard avoids carrying a redundant final true test.
-    Normalized = case Predicate of {atom, _, true} -> []; _ -> [[Predicate]] end,
+    Normalized = case Guards of [[{atom, _, true}]] -> []; _ -> Guards end,
     {clause, Line, [{var, Line, '_'}], Normalized, Body};
 if_clause(Clause) -> error({unsupported_xls_if_clause, Clause}).
 

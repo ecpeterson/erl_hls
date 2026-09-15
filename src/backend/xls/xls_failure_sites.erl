@@ -36,6 +36,8 @@ sites({'if', Line, Clauses}) -> [origin(if_clause, Line) | sites(Clauses)];
 sites({clause, Line, Patterns, Guards, Body}) ->
     [origin(function_clause, Line) | pattern_sites(Patterns) ++ sites([Guards, Body])];
 sites({tuple, Line, [A, B, C]}) -> [origin(explicit_fail, Line) | sites([A, B, C])];
+sites({op, Line, Op, Left, Right}) when Op =:= 'div'; Op =:= 'rem' ->
+    [origin(badarith, Line) | sites([Left, Right])];
 sites({call, Line, {remote, _, {atom, _, hls_float}, {atom, _, Operation}}, Args})
         when Operation =:= add; Operation =:= sub; Operation =:= mul;
              Operation =:= eq; Operation =:= lt ->

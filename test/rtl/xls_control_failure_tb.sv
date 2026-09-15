@@ -11,7 +11,7 @@ module xls_control_failure_tb;
     reg [32:0] held;
     reg stalled = 0;
     reg [31:0] mode = 0, x = 0, y = 0;
-    wire [34:0] outcome;
+    wire [35:0] outcome;
 
     control_service dut(.clk(clk), .reset(reset),
         ._ext_recv(request), ._ext_recv_vld(request_valid), ._ext_recv_rdy(request_ready),
@@ -65,12 +65,12 @@ module xls_control_failure_tb;
     endtask
 
     task automatic probe(input [31:0] m, input [31:0] left, input [31:0] right,
-        input [2:0] code, input [31:0] value);
+        input [3:0] code, input [31:0] value);
         begin
             mode = m; x = left; y = right; #1;
             if (outcome !== {code, value})
                 $fatal(1, "mode=%0d x=%0d y=%0d: outcome %h != %h", m, left, right, outcome, {code, value});
-            expect_reply(code == 0 ? 6 : 1, code == 0 ? value : {29'd0, code});
+            expect_reply(code == 0 ? 6 : 1, code == 0 ? value : {28'd0, code});
             beat({8'd3, 8'd0, txid[7:0], 8'd3}, 0);
             beat(m, 0); beat(left, 0); beat(right, 1);
             txid = txid + 1;

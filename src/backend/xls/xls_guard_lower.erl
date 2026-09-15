@@ -21,17 +21,31 @@ condition(Guards, Conditions, Line) ->
     {op, Line, 'andalso', conjunction(Conditions), predicate(Guards, Line)}.
 
 -spec predicate([[erl_parse:abstract_expression()]], erl_anno:location()) ->
-    erl_parse:abstract_expression().
-predicate([Expressions], _Line) when Expressions =/= [] ->
-    ok = lists:foreach(
-        fun(Expression) ->
-            validate_predicate(Expression)
-        end,
-        Expressions
-    ),
-    sequence(Expressions);
+    term().
+predicate(Guards = [_ | _], Line) ->
+    alternatives([guard_sequence(Expressions, Line) || Expressions <- Guards]);
 predicate(Guards, Line) ->
     error({unsupported_xls_guard_sequences, Line, Guards}).
+
+guard_sequence(Expressions = [_ | _], Line) ->
+    ok = lists:foreach(fun validate_predicate/1, Expressions),
+    Predicate = sequence(Expressions),
+    case can_fail(Predicate) of
+        true -> {xls_guard, Line, Predicate};
+        false -> Predicate
+    end;
+guard_sequence(Expressions, Line) ->
+    error({unsupported_xls_guard_sequences, Line, Expressions}).
+
+%% All other accepted guard operations are total on their XLS operand types.
+%% Keep their existing compact output, without an unnecessary failure carrier.
+can_fail({op, _, Op, _, _}) when Op =:= 'div'; Op =:= 'rem' -> true;
+can_fail(Tuple) when is_tuple(Tuple) -> lists:any(fun can_fail/1, tuple_to_list(Tuple));
+can_fail(_) -> false.
+
+alternatives([Only]) -> Only;
+alternatives([First | Rest]) ->
+    {op, expression_line(First), 'orelse', First, alternatives(Rest)}.
 
 validate_predicate({atom, _Line, Atom})
         when Atom =:= true; Atom =:= false ->
@@ -113,4 +127,4 @@ comparison_operators() ->
     ['<', '=<', '>', '>=', '=:=', '=/='].
 
 arithmetic_operators() ->
-    ['+', '-', '*', 'band', 'bor', 'bxor', 'bsl', 'bsr'].
+    ['+', '-', '*', 'div', 'rem', 'band', 'bor', 'bxor', 'bsl', 'bsr'].

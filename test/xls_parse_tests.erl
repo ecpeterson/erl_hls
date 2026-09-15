@@ -205,24 +205,13 @@ hls_tags_fill_but_do_not_overflow_the_u8_namespace_test() ->
         xls_parse:find_tags([{attribute, 2, hls_tags, Tags}])
     ).
 
-guard_alternatives_are_rejected_test() ->
-    [Clause] = parse_clauses(
+guard_alternatives_are_lowered_test() ->
+    XLS = lower_callback_clauses(
         "probe(#message{value = Value}, State) "
         "when Value =:= 0; Value =:= 1 -> State."
     ),
-    ?assertException(
-        error,
-        {unsupported_xls_guard_sequences, _, _},
-        xls_callback_lower:lower(
-            [Clause],
-            callback_arguments(),
-            state,
-            fun(R) -> R end,
-            "no_clause",
-            fun(_Kind) -> "body_failure" end,
-            #{}
-        )
-    ).
+    ?assertNotEqual(nomatch, binary:match(XLS, <<" == 0">>)),
+    ?assertNotEqual(nomatch, binary:match(XLS, <<" == 1">>)).
 
 non_boolean_guard_root_is_rejected_test() ->
     [Clause] = parse_clauses(
@@ -706,23 +695,12 @@ if_without_true_fallback_carries_failure_test() ->
         "probe(Value) -> if Value =:= 0 -> Value end.", ["value"]),
     ?assertNotEqual(nomatch, binary:match(XLS, <<"hls_failure::IF_CLAUSE">>)).
 
-if_guard_alternatives_are_rejected_test() ->
-    Clause = parse_clause(
+if_guard_alternatives_are_lowered_test() ->
+    XLS = lower_expression_clause(
         "probe(Value) -> if "
-        "Value =:= 0; Value =:= 1 -> Value; true -> 2 end."
-    ),
-    ?assertException(
-        error,
-        {unsupported_xls_guard_sequences, _, _},
-        xls_parse:branch_from_clause(
-            Clause,
-            ["value"],
-            state,
-            fun(R) -> R end,
-            "failure",
-            #{}
-        )
-    ).
+        "Value =:= 0; Value =:= 1 -> Value; true -> 2 end.", ["value"]),
+    ?assertNotEqual(nomatch, binary:match(XLS, <<" == 0">>)),
+    ?assertNotEqual(nomatch, binary:match(XLS, <<" == 1">>)).
 
 hls_gs_callback_body_accepts_if_test() ->
     Path = filename:join("_build", "gs_if_fixture.erl"),

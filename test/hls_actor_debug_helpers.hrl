@@ -9,3 +9,11 @@ included_inner(Value) ->
 -spec included_if(hls_nums:u32()) -> hls_nums:u32().
 included_if(Value) ->
     if Value =:= 1 -> Value end.
+
+-spec included_div(hls_nums:u32()) -> hls_nums:u32().
+included_div(Value) ->
+    1 div (Value - 8).
+
+-spec included_rem(hls_nums:u32()) -> hls_nums:u32().
+included_rem(Value) ->
+    Value rem (Value - 9).
