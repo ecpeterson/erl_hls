@@ -25,7 +25,7 @@ open(Pid, Manifest) ->
     case info(Pid) of
         {ok, #{fingerprint := Hash, resources := Count, channels := Channels, queues := Queues, actors := Actors}} ->
             case Manifest of
-                #{<<"schema">> := 4, <<"fingerprint">> := Hash,
+                #{<<"schema">> := 5, <<"fingerprint">> := Hash,
                   <<"resources">> := Resources, <<"probes">> := Probes}
                         when length(Resources) =:= Count, length(Probes) =:= Channels ->
                     case manifest_fingerprint(Manifest) =:= Hash andalso
@@ -59,13 +59,13 @@ resource(Session = #{resources := Resources}, Id) when Id >= 0, Id < tuple_size(
     {ok, {resource, Session, Id}};
 resource(_, Id) -> {error, {unknown_resource, Id}}.
 
-decode_info(<<4:32/little, Count:32/little, Channels:32/little, Queues:32/little,
+decode_info(<<5:32/little, Count:32/little, Channels:32/little, Queues:32/little,
         Actors:32/little, Hash:32/binary>>) when Channels > 0, Count =:= Channels + Queues + Actors ->
-    {ok, #{schema => 4, resources => Count, channels => Channels, queues => Queues, actors => Actors,
+    {ok, #{schema => 5, resources => Count, channels => Channels, queues => Queues, actors => Actors,
         fingerprint => string:lowercase(binary:encode_hex(Hash))}};
 decode_info(_) -> {error, unsupported_topology_info}.
 
-decode_observation(<<Id:32/little, Cycle:64/little, Value:64/little>>,
+decode_observation(<<Id:32/little, Cycle:64/little, Value:128/little>>,
         #{<<"id">> := Id, <<"width">> := Width} = Resource) when Value bsr Width =:= 0 ->
     Sample = #{id => Id, cycle => Cycle, value => Value},
     case Resource of
@@ -75,7 +75,11 @@ decode_observation(<<Id:32/little, Cycle:64/little, Value:64/little>>,
             {ok, Sample#{occupancy => Value, free_slots => Capacity-Value}};
         #{<<"kind">> := <<"actor">>, <<"phases">> := Phases, <<"failures">> := Failures} ->
             case actor_observation(Sample#{value := Value band 16#ffffffff}, Phases, Failures) of
-                {ok, Actor} -> mailbox_observation(Actor#{value := Value}, Resource);
+                {ok, Actor} ->
+                    case mailbox_observation(Actor#{value := Value}, Resource) of
+                        {ok, Sample0} -> reduction_observation(Sample0, Resource);
+                        Error -> Error
+                    end;
                 Error -> Error
             end;
         _ -> {error, invalid_resource_value}
@@ -97,7 +101,7 @@ actor_observation(Sample = #{value := Value}, Phases, Failures)
 actor_observation(_, _, _) -> {error, invalid_resource_value}.
 
 mailbox_observation(Sample = #{value := Value}, #{<<"mailbox_capacity">> := Capacity}) ->
-    Word = Value bsr 32,
+    Word = (Value bsr 32) band 16#ffffff,
     Count = Word band 255,
     Postponed = (Word bsr 8) band 255,
     Phase = (Word bsr 21) band 3,
@@ -118,7 +122,44 @@ mailbox_observation(Sample = #{value := Value}, #{<<"mailbox_capacity">> := Capa
                 scheduler_phase => element(Phase+1, {boot, startup, run})}};
         _ -> {error, invalid_mailbox_observation}
     end;
-mailbox_observation(Sample, _Resource) -> {ok, Sample}.
+mailbox_observation(Sample = #{value := Value}, _Resource) when (Value bsr 32) band 16#ffffff =:= 0 ->
+    {ok, Sample};
+mailbox_observation(_, _) -> {error, invalid_mailbox_observation}.
+
+reduction_observation(Sample = #{initialized := false, value := Value}, _Resource)
+        when Value bsr 56 =:= 0 ->
+    {ok, Sample#{reduction => undefined}};
+reduction_observation(Sample = #{initialized := true, value := Value},
+        #{<<"reduction">> := #{<<"fields">> := Fields, <<"sites">> := Sites}, <<"failures">> := Failures}) ->
+    Read = fun(Name) ->
+        #{<<"observation_offset">> := Offset, <<"width">> := Width} = maps:get(Name, Fields),
+        (Value bsr Offset) band ((1 bsl Width)-1)
+    end,
+    case Read(<<"status">>) of
+        0 -> {ok, Sample#{reduction => idle}};
+        Status when Status =:= 1; Status =:= 2 ->
+            Id = Read(<<"site">>),
+            Remaining = Read(<<"remaining">>),
+            Code = Read(<<"failure">>),
+            case {[S || S = #{<<"id">> := I} <- Sites, I =:= Id], failure_details(Code, Failures)} of
+                {[#{<<"phase">> := Phase, <<"name">> := Name,
+                    <<"population">> := Population = #{<<"size">> := Size}}], {ok, Failure}}
+                        when Remaining =< Size, (Status =:= 1 andalso Remaining > 0) orelse
+                            (Status =:= 2 andalso Remaining =:= 0) ->
+                    {ok, Sample#{reduction => #{status => element(Status, {open, complete}),
+                        phase => Phase, name => Name, key => Read(<<"key">>),
+                        population => population(Population), received => Size-Remaining,
+                        remaining => Remaining, failure => Failure}}};
+                _ -> {error, invalid_reduction_observation}
+            end;
+        _ -> {error, invalid_reduction_observation}
+    end;
+reduction_observation(Sample = #{initialized := true, value := Value}, _Resource) when Value bsr 56 =:= 0 ->
+    {ok, Sample#{reduction => idle}};
+reduction_observation(_, _) -> {error, invalid_reduction_observation}.
+
+population(#{<<"mode">> := <<"count">>, <<"size">> := Size}) -> {count, Size};
+population(#{<<"mode">> := <<"members">>, <<"members">> := Members}) -> {members, Members}.
 
 failure_details(0, _) -> {ok, none};
 failure_details(Code, Failures) ->

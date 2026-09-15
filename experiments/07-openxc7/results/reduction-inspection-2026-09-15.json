@@ -1,0 +1,303 @@
+{
+  "schema": 1,
+  "baseline_commit": "d21a93d782b1c7de6134a73573a3ca4fb5443bb5",
+  "scope": "Isolated D3 physical query and actor snapshot logic, including mailbox snapshots. Application signals are unconstrained inputs with observed aliases and constants retained. No placement, timing, power, or whole-design area measurement.",
+  "prediction": {
+    "added_LUT": [
+      200,
+      500
+    ],
+    "added_FF": [
+      50,
+      150
+    ],
+    "added_BRAM": 0
+  },
+  "seeds": [
+    1,
+    2
+  ],
+  "variants": {
+    "main": {
+      "manifest": "330331870b6fc843d0051a1d3cec1802148663541bf7b9f81a953a27ece3e9ea",
+      "schema": 4,
+      "sources": {
+        "sidecar.v": "085cb988cdb9ef2986e0014bae25b885e0d606e87707a1be80e98ffdcf952842",
+        "hls_actor_snapshot.v": "7b3ddccd71720280ebb204187a34a7d90f0d44ebeee7f6effab89b30748bbbba",
+        "hls_topology_debug.v": "6054ddc3593ec7d3d682154b84a837ee44ed32cf86822a5de07530f6733dce1a",
+        "hls_debug_frame_rx.v": "e689f254b14ebab341b936c30c9a90db7888b8f1bdf68a99ef8ef71aa90bae55"
+      },
+      "samples": [
+        {
+          "mode": "actors",
+          "seed": 1,
+          "LUT": 1306,
+          "LUT_logic": 1146,
+          "LUT_RAM": 160,
+          "FF": 887,
+          "RAMB18": 0,
+          "RAMB36": 0
+        },
+        {
+          "mode": "actors",
+          "seed": 2,
+          "LUT": 1306,
+          "LUT_logic": 1146,
+          "LUT_RAM": 160,
+          "FF": 887,
+          "RAMB18": 0,
+          "RAMB36": 0
+        }
+      ],
+      "summary": {
+        "LUT": {
+          "best": 1306,
+          "mean": 1306,
+          "variance": 0,
+          "worst": 1306
+        },
+        "LUT_logic": {
+          "best": 1146,
+          "mean": 1146,
+          "variance": 0,
+          "worst": 1146
+        },
+        "LUT_RAM": {
+          "best": 160,
+          "mean": 160,
+          "variance": 0,
+          "worst": 160
+        },
+        "FF": {
+          "best": 887,
+          "mean": 887,
+          "variance": 0,
+          "worst": 887
+        },
+        "RAMB18": {
+          "best": 0,
+          "mean": 0,
+          "variance": 0,
+          "worst": 0
+        },
+        "RAMB36": {
+          "best": 0,
+          "mean": 0,
+          "variance": 0,
+          "worst": 0
+        }
+      },
+      "cells": {
+        "1": {
+          "$scopeinfo": 10,
+          "BUFG": 1,
+          "CARRY4": 53,
+          "FDRE": 887,
+          "INV": 35,
+          "LUT2": 67,
+          "LUT3": 84,
+          "LUT4": 200,
+          "LUT5": 481,
+          "LUT6": 314,
+          "RAM32M": 40
+        },
+        "2": {
+          "$scopeinfo": 10,
+          "BUFG": 1,
+          "CARRY4": 53,
+          "FDRE": 887,
+          "INV": 35,
+          "LUT2": 67,
+          "LUT3": 84,
+          "LUT4": 200,
+          "LUT5": 481,
+          "LUT6": 314,
+          "RAM32M": 40
+        }
+      }
+    },
+    "current": {
+      "manifest": "1ede296d71c5846ac366f0b74d6a11a727630a132e22471991c8c9c39e03e11c",
+      "schema": 5,
+      "sources": {
+        "sidecar.v": "6699431d5d75a25b3fc418aa448f39056a783ff863047760d458aedaa4aef774",
+        "hls_actor_snapshot.v": "347251a1965df664817aee66764f0b2763382268c41cdc1d229f9af8c6d0fd11",
+        "hls_topology_debug.v": "27c1336a3d5ead19c81b4e4fb89de54d26e0358963d86d92a7a5a0ec80392b96",
+        "hls_debug_frame_rx.v": "e689f254b14ebab341b936c30c9a90db7888b8f1bdf68a99ef8ef71aa90bae55"
+      },
+      "samples": [
+        {
+          "mode": "actors",
+          "seed": 1,
+          "LUT": 1762,
+          "LUT_logic": 1386,
+          "LUT_RAM": 376,
+          "FF": 942,
+          "RAMB18": 0,
+          "RAMB36": 0
+        },
+        {
+          "mode": "actors",
+          "seed": 2,
+          "LUT": 1762,
+          "LUT_logic": 1386,
+          "LUT_RAM": 376,
+          "FF": 942,
+          "RAMB18": 0,
+          "RAMB36": 0
+        }
+      ],
+      "summary": {
+        "LUT": {
+          "best": 1762,
+          "mean": 1762,
+          "variance": 0,
+          "worst": 1762
+        },
+        "LUT_logic": {
+          "best": 1386,
+          "mean": 1386,
+          "variance": 0,
+          "worst": 1386
+        },
+        "LUT_RAM": {
+          "best": 376,
+          "mean": 376,
+          "variance": 0,
+          "worst": 376
+        },
+        "FF": {
+          "best": 942,
+          "mean": 942,
+          "variance": 0,
+          "worst": 942
+        },
+        "RAMB18": {
+          "best": 0,
+          "mean": 0,
+          "variance": 0,
+          "worst": 0
+        },
+        "RAMB36": {
+          "best": 0,
+          "mean": 0,
+          "variance": 0,
+          "worst": 0
+        }
+      },
+      "cells": {
+        "1": {
+          "$scopeinfo": 10,
+          "BUFG": 1,
+          "CARRY4": 53,
+          "FDRE": 942,
+          "INV": 35,
+          "LUT2": 116,
+          "LUT3": 95,
+          "LUT4": 260,
+          "LUT5": 510,
+          "LUT6": 405,
+          "RAM32M": 94
+        },
+        "2": {
+          "$scopeinfo": 10,
+          "BUFG": 1,
+          "CARRY4": 53,
+          "FDRE": 942,
+          "INV": 35,
+          "LUT2": 116,
+          "LUT3": 95,
+          "LUT4": 260,
+          "LUT5": 510,
+          "LUT6": 405,
+          "RAM32M": 94
+        }
+      }
+    }
+  },
+  "application": {
+    "profile": {
+      "delay_model": "unit",
+      "flop_inputs": false,
+      "flop_outputs": true,
+      "height": 3,
+      "initiation_interval": 1,
+      "phi_actor_count": 18,
+      "pipeline_stages": 2,
+      "planes": [
+        "x",
+        "z"
+      ],
+      "scheduler_count": 8,
+      "shards_per_plane": 3,
+      "source_actor_count": 18,
+      "source_scheduler_count": 2,
+      "width": 3
+    },
+    "options": {
+      "codegen": [
+        "--pipeline_stages=2",
+        "--delay_model=unit",
+        "--flop_inputs=false",
+        "--flop_outputs=true",
+        "--use_system_verilog=false",
+        "--reset=reset",
+        "--fifo_module=",
+        "--worst_case_throughput=1",
+        "--ram_configurations=scheduler_0_state:1R1W:_scheduler_0_ram_read_req_out:_scheduler_0_ram_read_resp_in:_scheduler_0_ram_write_req_out:_scheduler_0_ram_write_resp_in,scheduler_0_mailbox:1R1W:_scheduler_0_mailbox_read_req_out:_scheduler_0_mailbox_read_resp_in:_scheduler_0_mailbox_write_req_out:_scheduler_0_mailbox_write_resp_in,scheduler_1_state:1R1W:_scheduler_1_ram_read_req_out:_scheduler_1_ram_read_resp_in:_scheduler_1_ram_write_req_out:_scheduler_1_ram_write_resp_in,scheduler_1_mailbox:1R1W:_scheduler_1_mailbox_read_req_out:_scheduler_1_mailbox_read_resp_in:_scheduler_1_mailbox_write_req_out:_scheduler_1_mailbox_write_resp_in,scheduler_2_state:1R1W:_scheduler_2_ram_read_req_out:_scheduler_2_ram_read_resp_in:_scheduler_2_ram_write_req_out:_scheduler_2_ram_write_resp_in,scheduler_2_mailbox:1R1W:_scheduler_2_mailbox_read_req_out:_scheduler_2_mailbox_read_resp_in:_scheduler_2_mailbox_write_req_out:_scheduler_2_mailbox_write_resp_in,scheduler_3_state:1R1W:_scheduler_3_ram_read_req_out:_scheduler_3_ram_read_resp_in:_scheduler_3_ram_write_req_out:_scheduler_3_ram_write_resp_in,scheduler_3_mailbox:1R1W:_scheduler_3_mailbox_read_req_out:_scheduler_3_mailbox_read_resp_in:_scheduler_3_mailbox_write_req_out:_scheduler_3_mailbox_write_resp_in,scheduler_4_state:1R1W:_scheduler_4_ram_read_req_out:_scheduler_4_ram_read_resp_in:_scheduler_4_ram_write_req_out:_scheduler_4_ram_write_resp_in,scheduler_4_mailbox:1R1W:_scheduler_4_mailbox_read_req_out:_scheduler_4_mailbox_read_resp_in:_scheduler_4_mailbox_write_req_out:_scheduler_4_mailbox_write_resp_in,scheduler_5_state:1R1W:_scheduler_5_ram_read_req_out:_scheduler_5_ram_read_resp_in:_scheduler_5_ram_write_req_out:_scheduler_5_ram_write_resp_in,scheduler_5_mailbox:1R1W:_scheduler_5_mailbox_read_req_out:_scheduler_5_mailbox_read_resp_in:_scheduler_5_mailbox_write_req_out:_scheduler_5_mailbox_write_resp_in,scheduler_6_state:1R1W:_scheduler_6_ram_read_req_out:_scheduler_6_ram_read_resp_in:_scheduler_6_ram_write_req_out:_scheduler_6_ram_write_resp_in,scheduler_6_mailbox:1R1W:_scheduler_6_mailbox_read_req_out:_scheduler_6_mailbox_read_resp_in:_scheduler_6_mailbox_write_req_out:_scheduler_6_mailbox_write_resp_in,scheduler_7_state:1R1W:_scheduler_7_ram_read_req_out:_scheduler_7_ram_read_resp_in:_scheduler_7_ram_write_req_out:_scheduler_7_ram_write_resp_in,scheduler_7_mailbox:1R1W:_scheduler_7_mailbox_read_req_out:_scheduler_7_mailbox_read_resp_in:_scheduler_7_mailbox_write_req_out:_scheduler_7_mailbox_write_resp_in"
+      ],
+      "top": "Top"
+    },
+    "ram_configuration": "93f48d245aec55f733300dda4f5b558f9bff20a30e6d98a76f38c87f1fb47602",
+    "tools": {
+      "codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162",
+      "ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+      "opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c"
+    },
+    "rtl": {
+      "hls_1r1w_ram.v": "13e12a7561df37e150c3e727c43f9e5234b74bb9741fc969185c12948b2583e8",
+      "phi_decoder_profile.v": "be1624be75a8f8246d677cc762f1f5ec83461ca22dd1cec975cfc25d49b76bd2",
+      "phi_decoder_profile_top.v": "682cecdb542a61570ca63fe3ef579b4b91f59ffd4f1dc014cf6853729de65cda"
+    },
+    "actors": 36,
+    "reduction_actors": 18,
+    "reduction_bits_per_actor": 55,
+    "channels": 262,
+    "fifos": 88,
+    "actor_dslx_matches_main": true
+  },
+  "yosys": "Yosys 0.69+10 (git sha1 370a53acf-dirty, Release, Clang /usr/local/osxcross/target/bin/aarch64-apple-darwin25.5-clang++ 21.1.8)",
+  "delta": {
+    "LUT": 456,
+    "LUT_logic": 240,
+    "LUT_RAM": 216,
+    "FF": 55,
+    "RAMB18": 0,
+    "RAMB36": 0
+  },
+  "validation": {
+    "eunit": 986,
+    "python_rtl_tests": 12,
+    "snapshot_formal": "eight steps, five geometries, arbitrary inputs and later resets",
+    "dslx_jit_tests": 20,
+    "live_ordinary_pipeline_stages": [
+      2,
+      3
+    ],
+    "live_aggregate_pipeline_stages": [
+      2,
+      3
+    ],
+    "direct_rtl_cycles": 7000,
+    "d3_equivalence_cycles": 4800,
+    "d3_actors_queried": 36,
+    "d3_adaptive_queries": 92
+  },
+  "recipe": {
+    "current": [
+      "bash tools/test_actor_debug.sh XLS_ROOT _build/reduction-inspection/phi phi",
+      "python3 tools/measure_topology_debug.py _build/reduction-inspection/phi/debug --stage _build/reduction-inspection/area/current --modes actors --seeds 2 --yosys YOSYS"
+    ],
+    "baseline": "Extract the projection generator and instrumentation/measurement tools from baseline_commit, regenerate the schema-2 actor projection against the same D3 artifacts, then instrument the exact same compiled RTL and measure --modes actors --seeds 2 with the same Yosys."
+  }
+}

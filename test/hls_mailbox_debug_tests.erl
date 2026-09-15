@@ -23,7 +23,7 @@ mailbox_wire_contract_test() ->
     Resource = #{<<"id">> => 0, <<"kind">> => <<"actor">>, <<"width">> => 56,
         <<"mailbox_capacity">> => 3, <<"phases">> => [<<"waiting">>], <<"failures">> => #{}},
     Decode = fun(Word, Actor) -> hls_topology_debug:decode_observation(
-        <<0:32/little, 123:64/little, Actor:32/little, Word:32/little>>, Resource) end,
+        <<0:32/little, 123:64/little, Actor:32/little, Word:32/little, 0:64>>, Resource) end,
     ?assertMatch({ok, #{initialized := false, mailbox_initialized := false,
         message_queue_len := undefined, free_slots := undefined}}, Decode(0, 0)),
     %% Same vector as the DSLX packing test: count=2, postponed=1, RUN,

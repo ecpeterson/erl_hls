@@ -86,7 +86,7 @@ resource_items_use_one_hardware_sample_test() ->
         spawn_link(fun() -> Parent ! {sample, hls_debug:info(Target, [cycle, occupancy, free_slots, capacity, occupancy])} end),
         [{{0, 2}, {16#11, Tx, 0}, <<0:32/little>>}] = phi_memory_fabric_fixture:await_sends(Fabric, 1, 1000),
         ok = phi_memory_fabric_fixture:deliver(Fabric, {2, 0}, {16#91, Tx, 0},
-            <<0:32/little, 33:64/little, 3:64/little>>),
+            <<0:32/little, 33:64/little, 3:128/little>>),
         receive {sample, Values} ->
             ?assertEqual([{cycle, 33}, {occupancy, 3}, {free_slots, 1}, {capacity, 4}, {occupancy, 3}], Values)
         after 1000 -> error(no_sample) end,
@@ -107,7 +107,7 @@ actor_items_use_one_hardware_sample_test() ->
             [phase, initialized, enter_pending, failed, failure, cycle, message_queue_len, postponed, free_slots])} end),
         [{{0, 2}, {16#11, Tx, 0}, <<0:32/little>>}] = phi_memory_fabric_fixture:await_sends(Fabric, 1, 1000),
         ok = phi_memory_fabric_fixture:deliver(Fabric, {2, 0}, {16#91, Tx, 0},
-            <<0:32/little, 33:64/little, ((1 bsl 25)+512+1):32/little, 16#c00102:32/little>>),
+            <<0:32/little, 33:64/little, ((1 bsl 25)+512+1):32/little, 16#c00102:32/little, 0:64>>),
         receive {sample, Values} ->
             ?assertEqual([{phase, active}, {initialized, true}, {enter_pending, false},
                 {failed, true}, {failure, #{code => 1, kind => function_clause}}, {cycle, 33},
