@@ -29,24 +29,12 @@ init([]) ->
         persistent_term:get(?MODULE, #{})),
     {ok, #{leases => Leases, waiters => #{}}}.
 
-handle_call({open, WritePath, ReadPath, Broker}, _From, State = #{leases := Leases}) ->
-    Keys = lists:usort(path_keys(WritePath) ++ path_keys(ReadPath)),
-    Conflicts = [Entry || #{keys := Existing} = Entry <- maps:values(Leases),
-        lists:any(fun(Key) -> lists:member(Key, Existing) end, Keys)],
-    case Conflicts of
-        [#{owner := Owner, status := Status} | _] ->
-            {reply, {error, {device_owned, Owner, Status}}, State};
-        [] ->
-            Lease = make_ref(),
-            %% Workers cannot open anything before the reservation is stored.
-            Writer = worker(writer, WritePath, Broker, Lease),
-            Reader = worker(reader, ReadPath, Broker, Lease),
-            Monitor = monitor(process, Broker),
-            Entry = #{owner => Broker, monitor => Monitor, keys => Keys,
-                workers => #{Writer => pending, Reader => pending}, status => open},
-            Next = save(State#{leases := Leases#{Lease => Entry}}),
-            Writer ! open, Reader ! open,
-            {reply, {ok, Lease, Writer, Reader}, Next}
+handle_call({open, WritePath, ReadPath, Broker}, _From, State) ->
+    case {path_keys(WritePath), path_keys(ReadPath)} of
+        {{ok, Write, WriteKeys}, {ok, Read, ReadKeys}} ->
+            reserve(Write, Read, Broker, lists:usort(WriteKeys ++ ReadKeys), State);
+        {{error, _} = Error, _} -> {reply, Error, State};
+        {_, Error} -> {reply, Error, State}
     end;
 handle_call({await, Lease, Timeout}, From = {Caller, _}, State = #{leases := Leases, waiters := Waiters}) ->
     case Leases of
@@ -108,6 +96,25 @@ handle_info({timeout, Timer, ID}, State = #{waiters := Waiters}) ->
         error -> {noreply, State}
     end.
 
+reserve(WritePath, ReadPath, Broker, Keys, State = #{leases := Leases}) ->
+    Conflicts = [Entry || #{keys := Existing} = Entry <- maps:values(Leases),
+        lists:any(fun(Key) -> lists:member(Key, Existing) end, Keys)],
+    case Conflicts of
+        [#{owner := Owner, status := Status} | _] ->
+            {reply, {error, {device_owned, Owner, Status}}, State};
+        [] ->
+            Lease = make_ref(),
+            %% Workers cannot open anything before the reservation is stored.
+            Writer = worker(writer, WritePath, Broker, Lease),
+            Reader = worker(reader, ReadPath, Broker, Lease),
+            Monitor = monitor(process, Broker),
+            Entry = #{owner => Broker, monitor => Monitor, keys => Keys,
+                workers => #{Writer => pending, Reader => pending}, status => open},
+            Next = save(State#{leases := Leases#{Lease => Entry}}),
+            Writer ! open, Reader ! open,
+            {reply, {ok, Lease, Writer, Reader}, Next}
+    end.
+
 worker(Direction, Path, Broker, Lease) ->
     {Pid, _Monitor} = spawn_monitor(fun() ->
         process_flag(trap_exit, true),
@@ -153,8 +160,8 @@ path_keys(Path) ->
     %% symlink can name a different file than the OS will open.
     case file:read_file_info(Absolute) of
         {ok, #file_info{major_device = Major, minor_device = Minor, inode = Inode}} ->
-            [{path, Name}, {inode, Major, Minor, Inode}];
-        {error, _} -> [{path, Name}]
+            {ok, Absolute, [{path, Name}, {inode, Major, Minor, Inode}]};
+        {error, Reason} -> {error, {endpoint, Absolute, Reason}}
     end.
 
 normalize([], Acc) -> lists:reverse(Acc);

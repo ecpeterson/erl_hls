@@ -335,6 +335,18 @@ duplicate_device_paths_and_aliases_test() ->
             attempt_open(Tx, filename:join(filename:dirname(Rx), "./rx")))
     end).
 
+missing_endpoint_cannot_create_an_unreserved_alias_test() ->
+    with_peer_paths(empty, #{}, fun(_Device, _Peer, _Filled, Tx, _Rx) ->
+        Missing = Tx ++ "-missing",
+        Alias = Tx ++ "-dangling",
+        Read = Tx ++ "-read",
+        ok = file:write_file(Read, <<>>),
+        ok = file:make_symlink(Missing, Alias),
+        ?assertEqual({error, {endpoint, Alias, enoent}}, attempt_open(Alias, Read)),
+        ?assertEqual({error, {endpoint, Missing, enoent}}, attempt_open(Missing, Read)),
+        ?assertEqual({error, enoent}, file:read_file_info(Missing))
+    end).
+
 registry_restart_does_not_erase_live_reservation_test() ->
     with_peer_paths(empty, #{}, fun(Device, Peer, _Filled, Tx, Rx) ->
         #{io := #{lease := Lease}} = hls_fabric:info(Device),
@@ -426,6 +438,7 @@ with_peer_paths(Mode, Options, Run) ->
     Filled = case Mode of filled -> binary_to_integer(peer(Peer, "fill")); _ -> 0 end,
     {ok, Fabric} = hls_fabric:start_link(Tx, Rx, Options),
     unlink(Fabric),
+    #{io := #{lease := Lease}} = hls_fabric:info(Fabric),
     try Run(Fabric, Peer, Filled, Tx, Rx)
     after
         Monitor = monitor(process, Fabric),
@@ -433,7 +446,10 @@ with_peer_paths(Mode, Options, Run) ->
         receive {'DOWN', Monitor, process, Fabric, _} -> ok
         after 1000 -> error(broker_cleanup_timeout) end,
         catch port_close(Peer),
-        file:del_dir_r(Root)
+        case hls_fabric:await_closed(Lease, 1000) of
+            ok -> file:del_dir_r(Root);
+            {error, _} -> ok % retain quarantined paths until this VM exits
+        end
     end.
 
 peer(Peer, Command) -> port_command(Peer, [Command, "\n"]), peer_reply(Peer).
