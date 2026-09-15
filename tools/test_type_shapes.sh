@@ -19,11 +19,16 @@ options=(--warnings_as_errors=false --dslx_path="$project_root/priv/xls/lib"
     --use_system_verilog=false "$stage/shape.opt.ir" > "$stage/shape.v"
 iverilog -g2012 -s shape_tb -o "$stage/shape.vvp" "$stage/shape.v" "$stage/shape_tb.sv"
 vvp "$stage/shape.vvp" | tee "$stage/shape.sim.log"
-if "$xls_root/ir_converter_main" --top=Service "${options[@]}" "$stage/shape_mismatch.x" \
-        > "$stage/shape_mismatch.ir" 2> "$stage/shape_mismatch.log"; then
-    echo "XLS accepted a source/DSLX vector shape mismatch" >&2; exit 1
-fi
-if ! rg -q 'const_assert! failure' "$stage/shape_mismatch.log"; then
-    cat "$stage/shape_mismatch.log" >&2; exit 1
-fi
-echo "PASS: source/DSLX shape mismatch fails the compile-time routing assertion"
+"$xls_root/ir_converter_main" --top=probe "${options[@]}" "$stage/nested.x" > "$stage/nested.ir"
+for kind in shape nested; do
+    top=probe
+    [[ "$kind" != shape ]] || top=Service
+    if "$xls_root/ir_converter_main" --top="$top" "${options[@]}" "$stage/${kind}_mismatch.x" \
+            > "$stage/${kind}_mismatch.ir" 2> "$stage/${kind}_mismatch.log"; then
+        echo "XLS accepted a $kind source/DSLX vector shape mismatch" >&2; exit 1
+    fi
+    if ! rg -q 'const_assert! failure' "$stage/${kind}_mismatch.log"; then
+        cat "$stage/${kind}_mismatch.log" >&2; exit 1
+    fi
+    echo "PASS: $kind source/DSLX mismatch fails the compile-time routing assertion"
+done

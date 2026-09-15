@@ -52,6 +52,15 @@ deterministic_build_still_analyzes_with_its_macros_test() ->
         ?assertNot(total(hls_actor_interface:from_module(hls_shape_reduction_fixture)))
     end).
 
+preprocessed_forms_remain_compilable_with_their_context_test() ->
+    with_source(fun(Actor, _Provider, _Header) ->
+        {ok, Forms} = xls_parse:parse_file(Actor, [{d, 'SHAPE_COUNT', 3}]),
+        {ok, hls_shape_reduction_fixture, Beam} = compile:forms(Forms, [binary, debug_info]),
+        {module, hls_shape_reduction_fixture} = code:load_binary(
+            hls_shape_reduction_fixture, Actor, Beam),
+        ?assertNot(total(hls_actor_interface:from_module(hls_shape_reduction_fixture)))
+    end).
+
 unavailable_and_recursive_aliases_remain_unknown_test() ->
     with_source(fun(Actor, Provider, _Header) ->
         lists:foreach(fun(Declaration) ->

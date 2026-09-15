@@ -23,18 +23,22 @@ calls_from_types({remote_type, Anno, [Module, Name, Args]}) ->
     };
 calls_from_types(X) -> X.
 
-parse_transform(Forms, Options) ->
+parse_transform(Forms0, Options) ->
+    Context = hls_source:from_forms(Forms0, Options),
+    %% Source-reader annotations carry preprocessing facts into compile:forms
+    %% too. Emit one context attribute, subject to deterministic-build rules.
+    Forms = [F || F <- Forms0, not is_source_context(F)],
     [FileAttr, ModuleAttr | TailForms] = Forms,
     {BodyForms, EOFForm} = {lists:droplast(TailForms), lists:last(TailForms)},
 
     PublicStructNames = xls_parse:find_tags(Forms),
     StateName = xls_parse:state(Forms),
     AnalysisForms = Forms ++ [{attribute, element(2, ModuleAttr),
-        hls_source_context, hls_source:from_forms(Forms, Options)}],
+        hls_source_context, Context}],
     InterfaceAttributes = actor_interface_attributes(AnalysisForms, ModuleAttr),
     SourceAttributes = case InterfaceAttributes of
         [] -> [];
-        [_] -> hls_source:capture(Forms, Options)
+        [_] -> hls_source:capture(AnalysisForms, Options)
     end,
     SerializableStructNames = [StateName | PublicStructNames],
     RewrittenBodyForms = rewrite_record_defaults(
@@ -128,6 +132,9 @@ parse_transform(Forms, Options) ->
         ],
     % io:format("~s~n", [[[erl_pp:form(Form), "\n"] || Form <- EmittedForms]]),
     EmittedForms.
+
+is_source_context({attribute, _, hls_source_context, _}) -> true;
+is_source_context(_) -> false.
 
 record_width_expression(Forms, Tag, Line) ->
     {attribute, _RecordLine, record, {_Tag, Fields}} =

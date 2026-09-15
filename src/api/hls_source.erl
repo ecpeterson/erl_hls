@@ -49,7 +49,11 @@ capture(Forms = [{attribute, Line, file, {_SourceName, _}} | _], Options) ->
 %% corresponding BEAM metadata. Only preprocessing options enter the context.
 -spec from_forms([erl_parse:abstract_form()], [compile:option()]) -> context().
 from_forms(Forms = [{attribute, _, file, {SourceName, _}} | _], Options) ->
-    (context(SourceName, Options))#{origins => origins(Forms)}.
+    Context = case [C || {attribute, _, hls_source_context, C} <- Forms] of
+        [Captured] -> Captured;
+        [] -> context(SourceName, Options)
+    end,
+    Context#{origins => origins(Forms)}.
 
 context(SourceName, Options) ->
     {ok, Directory} = file:get_cwd(),
@@ -87,9 +91,11 @@ read(Filename, #{directory := Directory, source_name := SourceName,
     end,
     %% Keep source-only consumers on the same preprocessing context as the
     %% parse transform. A peer read may already have attached this attribute.
-    [F || F <- Forms, element(1, F) =/= attribute orelse
-        element(3, F) =/= hls_source_context] ++
-        [{attribute, 0, hls_source_context, Context}].
+    lists:flatmap(fun
+        ({attribute, _, hls_source_context, _}) -> [];
+        ({eof, Line} = Eof) -> [{attribute, Line, hls_source_context, Context}, Eof];
+        (Form) -> [Form]
+    end, Forms).
 
 origins(Forms) ->
     lists:usort([File || {attribute, _, file, {File, _}} <- Forms]).

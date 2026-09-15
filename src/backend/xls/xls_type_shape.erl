@@ -17,7 +17,7 @@ records(Forms, Names) ->
         {ok, Captured} -> Captured;
         none -> hls_source:from_forms(Forms, [])
     end,
-    Source = source(Forms, Context),
+    Source = #{path := SourcePath} = source(Forms, Context),
     {Records, _Cache} = lists:mapfoldl(fun(Name, Cache) ->
         {attribute, _, record, {Name, Fields}} = xls_parse:find_record(Forms, Name),
         {Shapes, Next} = lists:mapfoldl(fun({typed_record_field, Field, Type}, Acc) ->
@@ -25,7 +25,7 @@ records(Forms, Names) ->
             {{xls_parse:record_field_name(Field), shape(Shape)}, Updated}
         end, Cache, Fields),
         {{Name, {record, Name, maps:from_list(Shapes)}}, Next}
-    end, #{}, lists:usort(Names)),
+    end, #{SourcePath => Source}, lists:usort(Names)),
     maps:from_list(Records).
 
 source(Forms, Context) ->

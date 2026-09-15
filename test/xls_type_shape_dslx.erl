@@ -2,6 +2,7 @@
 -export([write/1]).
 
 write(Stage) ->
+    ok = nested_assertions(Stage),
     xls_type_shape_fixture:with_source(fun(Actor, Provider, _Header) ->
         ok = xls_type_shape_fixture:load(Provider, []),
         ok = xls_type_shape_fixture:load(Actor, []),
@@ -19,6 +20,19 @@ write(Stage) ->
         ok = file:write_file(filename:join(Stage, "shape_mismatch.x"),
             xls_parse:to_xls(Actor, #{shared_service => aggregate_only}))
     end).
+
+nested_assertions(Stage) ->
+    {ok, Tokens, _} = erl_scan:string("#message{values = [[A, B], [C, D] | _]} ."),
+    {ok, [Pattern]} = erl_parse:parse_exprs(Tokens),
+    Shape = {record, message, #{values => {array, {array, unknown, 2}, 3}}},
+    Checks = xls_pattern_totality:prove(Pattern, Shape),
+    lists:foreach(fun({Name, Inner}) ->
+        ok = file:write_file(filename:join(Stage, Name ++ ".x"),
+            ["struct Message { values: u32[", integer_to_list(Inner), "][3] }\n",
+                "pub fn probe(message: Message) -> u32 {\n",
+                xls_pattern_totality:assertions("Message", Checks),
+                "message.values[u32:0][u32:0]\n}\n"])
+    end, [{"nested", 2}, {"nested_mismatch", 1}]).
 
 expected(A, B, C, D) ->
     Cell = {cell, 0, [0, 0]},
