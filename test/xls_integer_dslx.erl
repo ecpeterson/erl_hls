@@ -12,7 +12,7 @@ write(Stage) ->
             8 -> [{A, B} || A <- lists:seq(0, 255), B <- lists:seq(0, 255)];
             _ -> Boundaries ++ spread(W)
         end,
-        Text = ["import hls_failure;\n", function(Name, Type, 'div'), function(Name, Type, 'rem'),
+        Text = ["import hls_failure;\nimport hls_integer;\n", function(Name, Type, 'div'), function(Name, Type, 'rem'),
             io_lib:format("pub fn probe(x: uN[~p], y: uN[~p]) -> bits[~p] {\n"
                 "  let (q, qfail) = quotient(x, y);\n"
                 "  let (r, rfail) = remainder(x, y);\n"

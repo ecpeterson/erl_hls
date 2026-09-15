@@ -840,7 +840,7 @@ op('+', [Left, Right]) -> [Left, " + ", Right];
 op('-', [Left, Right]) -> [Left, " - ", Right];
 op('*', [Left, Right]) -> [Left, " * ", Right];
 op('div', [Left, Right]) -> [Left, " / ", Right];
-op('rem', [Left, Right]) -> [Left, " % ", Right];
+op('rem', [Left, Right]) -> ["hls_integer::remainder(", Left, ", ", Right, ")"];
 op('bsl', [Left, Right]) -> [Left, " << ", Right];
 op('bsr', [Left, Right]) -> [Left, " >> ", Right];
 op('band', [Left, Right]) -> [Left, " & ", Right];
