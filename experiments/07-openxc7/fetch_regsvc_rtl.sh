@@ -160,7 +160,7 @@ quoted_remote_xls=$(remote_quote "$remote_xls")
 ssh "${ssh_options[@]}" "$remote_host" \
     "bash $quoted_remote_script $quoted_remote_stage $quoted_remote_xls"
 
-echo "Fetching the five generated RTL outputs"
+echo "Fetching the five RTL artifacts"
 for rtl_file in "${rtl_files[@]}"; do
     quoted_remote_file=$(remote_quote "$remote_stage/$rtl_file")
     rsync -a -e "$rsync_shell" \
@@ -177,7 +177,7 @@ for ((index = 0; index < ${#rtl_files[@]}; index++)); do
     rtl_file=${rtl_files[$index]}
     expected_module=${expected_modules[$index]}
     if ! grep -Eq \
-        "^[[:space:]]*module[[:space:]]+$expected_module[[:space:]]*\\(" \
+        "^[[:space:]]*module[[:space:]]+$expected_module[[:space:]]*(#[[:space:]]*)?\\(" \
         "$fetch_stage/$rtl_file"; then
         fail "$rtl_file does not declare expected module $expected_module"
     fi
