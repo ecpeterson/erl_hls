@@ -281,9 +281,9 @@ Tag::BULK_GET => {
         };
         let _11 = (Tag::BULK_READ, _10, bits_from_bulkread(_10));
         let _12 = (REPLY, _11, Xls_clause_2_State_1, );
-        if ((hls_failure::first(hls_failure::check(_8.1, XLS_FAILURE_SITE_BADARG_3A68C26C_L117), hls_failure::check(_9.1, XLS_FAILURE_SITE_BADARG_3A68C26C_L121))) != hls_failure::NONE) {
+        if ((hls_failure::first_all([hls_failure::check(_8.1, XLS_FAILURE_SITE_BADARG_3A68C26C_L117), hls_failure::check(_9.1, XLS_FAILURE_SITE_BADARG_3A68C26C_L121)])) != hls_failure::NONE) {
           let s = zero!<State>();
-          (axis::pack(Tag::ERROR as u8, hls_failure::kind(hls_failure::first(hls_failure::check(_8.1, XLS_FAILURE_SITE_BADARG_3A68C26C_L117), hls_failure::check(_9.1, XLS_FAILURE_SITE_BADARG_3A68C26C_L121))) as u32), (Tag::STATE, s))
+          (axis::pack(Tag::ERROR as u8, hls_failure::kind(hls_failure::first_all([hls_failure::check(_8.1, XLS_FAILURE_SITE_BADARG_3A68C26C_L117), hls_failure::check(_9.1, XLS_FAILURE_SITE_BADARG_3A68C26C_L121)])) as u32), (Tag::STATE, s))
         } else {
           (axis::pack(_12.1.0 as u8, _12.1.2), _12.2)
         }
@@ -337,9 +337,9 @@ Tag::SET => {
         };
         let _12 = (Tag::STATE, _11);
         let _13 = (NOREPLY, _12, );
-        if ((hls_failure::first(hls_failure::check(_3.1, XLS_FAILURE_SITE_BADARG_3A68C26C_L100), hls_failure::check(_10.1, XLS_FAILURE_SITE_BADARG_3A68C26C_L102))) != hls_failure::NONE) {
+        if ((hls_failure::first_all([hls_failure::check(_3.1, XLS_FAILURE_SITE_BADARG_3A68C26C_L100), hls_failure::check(_10.1, XLS_FAILURE_SITE_BADARG_3A68C26C_L102)])) != hls_failure::NONE) {
           let s = zero!<State>();
-          (axis::pack(Tag::ERROR as u8, hls_failure::kind(hls_failure::first(hls_failure::check(_3.1, XLS_FAILURE_SITE_BADARG_3A68C26C_L100), hls_failure::check(_10.1, XLS_FAILURE_SITE_BADARG_3A68C26C_L102))) as u32), (Tag::STATE, s))
+          (axis::pack(Tag::ERROR as u8, hls_failure::kind(hls_failure::first_all([hls_failure::check(_3.1, XLS_FAILURE_SITE_BADARG_3A68C26C_L100), hls_failure::check(_10.1, XLS_FAILURE_SITE_BADARG_3A68C26C_L102)])) as u32), (Tag::STATE, s))
         } else {
           (zero!<axis::Frame>(), _13.1)
         }
