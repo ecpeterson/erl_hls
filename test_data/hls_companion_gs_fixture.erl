@@ -11,8 +11,7 @@
 init([]) -> #state{}.
 
 handle_call(#query{values = Values}, State) ->
-    Phi0 = hls_lists:nth(1, Values),
-    Phi1 = hls_lists:nth(2, Values),
+    [Phi0, Phi1] = Values,
     Sum = hls_vec:dot(hls_fixed:signed(72, 32), Values, Values),
     Rounded = hls_fixed:round_ratio(Sum, 12),
     Clamped = hls_fixed:saturate(hls_fixed:signed(32, 16), Rounded),

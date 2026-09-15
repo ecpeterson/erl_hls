@@ -9,10 +9,15 @@
 from_forms(Forms) ->
     Uses = uses(Forms),
     Providers = lists:usort([Module || {provider, Module, _Name} <- Uses]),
-    OperatorImports = [hls_integer || {operator, 'rem'} <- Uses],
+    OperatorImports = [hls_integer || {operator, 'rem'} <- Uses] ++
+        [hls_patterns || {pattern, tail} <- Uses],
     lists:usort(OperatorImports ++ lists:append([imports(Module,
         lists:usort([Name || {provider, M, Name} <- Uses, M =:= Module])) || Module <- Providers])).
 
+uses({clause, _, Patterns, Guards, Body}) ->
+    pattern_uses(Patterns) ++ uses([Guards, Body]);
+uses({match, _, Pattern, Value}) ->
+    pattern_uses(Pattern) ++ uses(Value);
 uses({remote_type, _, [{atom, _, Module}, {atom, _, Name}, Args]}) ->
     [{provider, Module, Name} | uses(Args)];
 uses({call, _, {remote, _, {atom, _, Module}, {atom, _, Name}}, Args}) ->
@@ -25,6 +30,14 @@ uses(List) when is_list(List) ->
     lists:append([uses(Item) || Item <- List]);
 uses(_) ->
     [].
+
+pattern_uses({cons, _, Head, {var, _, Name}}) when Name =/= '_' ->
+    [{pattern, tail} | pattern_uses(Head)];
+pattern_uses({cons, _, Head, {match, _, Left, Right}}) ->
+    [{pattern, tail} | pattern_uses([Head, Left, Right])];
+pattern_uses(Tuple) when is_tuple(Tuple) -> pattern_uses(tuple_to_list(Tuple));
+pattern_uses(List) when is_list(List) -> lists:append([pattern_uses(P) || P <- List]);
+pattern_uses(_) -> [].
 
 imports(Module, Names) ->
     _ = code:ensure_loaded(Module),

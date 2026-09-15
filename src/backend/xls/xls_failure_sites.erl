@@ -54,6 +54,13 @@ sites(_) -> [].
 
 pattern_sites({Tag, Line, _}) when Tag =:= var; Tag =:= atom; Tag =:= integer ->
     [origin(match_failure, Line)];
+pattern_sites({record, Line, _, Fields}) ->
+    [origin(match_failure, Line) | pattern_sites(Fields)];
+pattern_sites({cons, Line, Head, Tail}) ->
+    [origin(match_failure, Line) | pattern_sites([Head, Tail])];
+pattern_sites({nil, Line}) -> [origin(match_failure, Line)];
+pattern_sites({op, Line, _, Pattern}) ->
+    [origin(match_failure, Line) | pattern_sites(Pattern)];
 pattern_sites(Tuple) when is_tuple(Tuple) -> pattern_sites(tuple_to_list(Tuple));
 pattern_sites(List) when is_list(List) -> lists:append([pattern_sites(X) || X <- List]);
 pattern_sites(_) -> [].

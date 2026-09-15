@@ -38,6 +38,10 @@ active(enter, _, Cell) ->
         12 -> included_set(Cell#cell.value);
         13 -> included_slice(Cell#cell.value);
         14 -> case Cell#cell.value of 14 -> hls_type:as(hls_nums:u32(), 1); _ -> included_nth(0) end;
+        15 -> included_pattern(Cell#cell.value);
+        16 -> included_list_head(hls_lists:new(hls_nums:u32(), 2));
+        17 -> included_list_case(Cell#cell.value);
+        18 -> included_list_tail(Cell#cell.value);
         1 -> Cell#cell.value
     end,
     {Cell, [{cast, out, #report{value = Value}}]};

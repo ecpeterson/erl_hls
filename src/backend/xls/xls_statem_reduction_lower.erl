@@ -843,6 +843,10 @@ irrefutable_pattern({match, _Line, Left, Right}, Bound0) ->
     end;
 irrefutable_pattern({record, _Line, _Tag, Fields}, Bound) ->
     irrefutable_record_fields(Fields, Bound);
+%% TODO: prove fixed-length list heads total using a source-resolved logical
+%% type shape. Provider aliases such as phi_field:field() are opaque here;
+%% interface inference must not execute application providers or trust stale
+%% BEAMs. Until then, list-pattern contributions use ordinary placement.
 irrefutable_pattern(_Pattern, Bound) ->
     {false, Bound}.
 
@@ -1095,7 +1099,20 @@ bind_typed_pattern({var, _Line, Name}, Type, Origin, Bindings) ->
 bind_typed_pattern({match, _Line, Left, Right}, Type, Origin, Bindings) ->
     bind_typed_pattern(Right, Type, Origin,
         bind_typed_pattern(Left, Type, Origin, Bindings));
+bind_typed_pattern({cons, _Line, Head, Tail}, Type, Origin, Bindings) ->
+    {Element, Rest} = list_pattern_types(Type),
+    bind_typed_pattern(Tail, Rest, Origin,
+        bind_typed_pattern(Head, Element, Origin, Bindings));
 bind_typed_pattern(_Pattern, _Type, _Origin, Bindings) -> Bindings.
+
+%% Provenance survives destructuring even when a provider keeps its component
+%% types opaque (for example phi_field). Such a projection can contribute a
+%% value, but cannot qualify as a u32 key without a known element descriptor.
+list_pattern_types({hls_type, Module, Name, [Element, Size]})
+        when Module =:= hls_lists, Name =:= list;
+             Module =:= hls_vec, Name =:= vector ->
+    {Element, {hls_type, Module, Name, [Element, max(0, Size - 1)]}};
+list_pattern_types(_Opaque) -> {unknown, unknown}.
 
 whole_record_variable({var, _Line, Name}) when Name =/= '_' -> Name;
 whole_record_variable({match, _Line, {var, _VarLine, Name}, _Pattern})

@@ -1,6 +1,10 @@
 `timescale 1ns/1ps
 
-module phi_noise_topology_smoke_tb;
+module phi_noise_topology_smoke_tb #(
+    parameter integer DATA_STATE_WIDTH = 449,
+    parameter integer PHI_STATE_WIDTH = 540,
+    parameter integer SYNDROME_STATE_WIDTH = 449
+);
     localparam [7:0] PHI_CORRECTION_TAG = 8'd11;
     localparam [7:0] PAULI_QUERY_TAG = 8'd13;
     localparam [7:0] PAULI_REPLY_TAG = 8'd14;
@@ -46,10 +50,10 @@ module phi_noise_topology_smoke_tb;
 
     wire [31:0] data_state_rd_addr [0:1];
     wire [31:0] data_state_wr_addr [0:1];
-    wire [433:0] data_state_wr_data [0:1];
+    wire [DATA_STATE_WIDTH-1:0] data_state_wr_data [0:1];
     wire data_state_wr_en [0:1];
     wire data_state_rd_en [0:1];
-    wire [433:0] data_state_rd_data [0:1];
+    wire [DATA_STATE_WIDTH-1:0] data_state_rd_data [0:1];
     wire [31:0] data_mailbox_rd_addr [0:1];
     wire [31:0] data_mailbox_wr_addr [0:1];
     wire [127:0] data_mailbox_wr_data [0:1];
@@ -59,10 +63,10 @@ module phi_noise_topology_smoke_tb;
 
     wire [31:0] phi_state_rd_addr [0:1];
     wire [31:0] phi_state_wr_addr [0:1];
-    wire [545:0] phi_state_wr_data [0:1];
+    wire [PHI_STATE_WIDTH-1:0] phi_state_wr_data [0:1];
     wire phi_state_wr_en [0:1];
     wire phi_state_rd_en [0:1];
-    wire [545:0] phi_state_rd_data [0:1];
+    wire [PHI_STATE_WIDTH-1:0] phi_state_rd_data [0:1];
     wire [31:0] phi_mailbox_rd_addr [0:1];
     wire [31:0] phi_mailbox_wr_addr [0:1];
     wire [127:0] phi_mailbox_wr_data [0:1];
@@ -72,10 +76,10 @@ module phi_noise_topology_smoke_tb;
 
     wire [31:0] syndrome_state_rd_addr [0:1];
     wire [31:0] syndrome_state_wr_addr [0:1];
-    wire [433:0] syndrome_state_wr_data [0:1];
+    wire [SYNDROME_STATE_WIDTH-1:0] syndrome_state_wr_data [0:1];
     wire syndrome_state_wr_en [0:1];
     wire syndrome_state_rd_en [0:1];
-    wire [433:0] syndrome_state_rd_data [0:1];
+    wire [SYNDROME_STATE_WIDTH-1:0] syndrome_state_rd_data [0:1];
     wire [31:0] syndrome_mailbox_rd_addr [0:1];
     wire [31:0] syndrome_mailbox_wr_addr [0:1];
     wire [127:0] syndrome_mailbox_wr_data [0:1];
@@ -188,26 +192,37 @@ module phi_noise_topology_smoke_tb;
         .scheduler_5_mailbox_rd_data(syndrome_mailbox_rd_data[1])
     );
 
+    // A stale fixture must fail instead of silently truncating a RAM word.
+    initial begin
+        if ($bits(dut.scheduler_0_state_wr_data) != DATA_STATE_WIDTH ||
+            $bits(dut.scheduler_1_state_wr_data) != DATA_STATE_WIDTH ||
+            $bits(dut.scheduler_2_state_wr_data) != PHI_STATE_WIDTH ||
+            $bits(dut.scheduler_3_state_wr_data) != PHI_STATE_WIDTH ||
+            $bits(dut.scheduler_4_state_wr_data) != SYNDROME_STATE_WIDTH ||
+            $bits(dut.scheduler_5_state_wr_data) != SYNDROME_STATE_WIDTH)
+            $fatal(1, "D1 fixture RAM widths do not match the generated scheduler ports");
+    end
+
     always #5 clk = ~clk;
 
     genvar ram_index;
     generate
         for (ram_index = 0; ram_index < 2; ram_index = ram_index + 1) begin: scheduler_rams
-            hls_1r1w_ram #(.WIDTH(434), .ADDRESS_WIDTH(4)) data_state (
+            hls_1r1w_ram #(.WIDTH(DATA_STATE_WIDTH), .ADDRESS_WIDTH(4)) data_state (
                 .clk(clk), .rd_addr(data_state_rd_addr[ram_index][3:0]),
                 .wr_addr(data_state_wr_addr[ram_index][3:0]),
                 .wr_data(data_state_wr_data[ram_index]),
                 .wr_en(data_state_wr_en[ram_index]), .rd_en(data_state_rd_en[ram_index]),
                 .rd_data(data_state_rd_data[ram_index])
             );
-            hls_1r1w_ram #(.WIDTH(546), .ADDRESS_WIDTH(4)) phi_state (
+            hls_1r1w_ram #(.WIDTH(PHI_STATE_WIDTH), .ADDRESS_WIDTH(4)) phi_state (
                 .clk(clk), .rd_addr(phi_state_rd_addr[ram_index][3:0]),
                 .wr_addr(phi_state_wr_addr[ram_index][3:0]),
                 .wr_data(phi_state_wr_data[ram_index]),
                 .wr_en(phi_state_wr_en[ram_index]), .rd_en(phi_state_rd_en[ram_index]),
                 .rd_data(phi_state_rd_data[ram_index])
             );
-            hls_1r1w_ram #(.WIDTH(434), .ADDRESS_WIDTH(4)) syndrome_state (
+            hls_1r1w_ram #(.WIDTH(SYNDROME_STATE_WIDTH), .ADDRESS_WIDTH(4)) syndrome_state (
                 .clk(clk), .rd_addr(syndrome_state_rd_addr[ram_index][3:0]),
                 .wr_addr(syndrome_state_wr_addr[ram_index][3:0]),
                 .wr_data(syndrome_state_wr_data[ram_index]),
@@ -400,23 +415,17 @@ module phi_noise_topology_smoke_tb;
                     ram_index_trace, syndrome_mailbox_wr_addr[ram_index_trace],
                     syndrome_mailbox_wr_data[ram_index_trace][31:24]);
             if (!reset && data_state_wr_en[ram_index_trace])
-                $display("data[%0d] state write slot=%0d phase=%0d enter=%0d failed=%0d",
+                $display("data[%0d] state write slot=%0d raw=%h",
                     ram_index_trace, data_state_wr_addr[ram_index_trace],
-                    data_state_wr_data[ram_index_trace][7:0],
-                    data_state_wr_data[ram_index_trace][432],
-                    data_state_wr_data[ram_index_trace][433]);
+                    data_state_wr_data[ram_index_trace]);
             if (!reset && phi_state_wr_en[ram_index_trace])
-                $display("phi[%0d] state write slot=%0d phase=%0d enter=%0d failed=%0d",
+                $display("phi[%0d] state write slot=%0d raw=%h",
                     ram_index_trace, phi_state_wr_addr[ram_index_trace],
-                    phi_state_wr_data[ram_index_trace][7:0],
-                    phi_state_wr_data[ram_index_trace][544],
-                    phi_state_wr_data[ram_index_trace][545]);
+                    phi_state_wr_data[ram_index_trace]);
             if (!reset && syndrome_state_wr_en[ram_index_trace])
-                $display("syndrome[%0d] state write slot=%0d phase=%0d enter=%0d failed=%0d",
+                $display("syndrome[%0d] state write slot=%0d raw=%h",
                     ram_index_trace, syndrome_state_wr_addr[ram_index_trace],
-                    syndrome_state_wr_data[ram_index_trace][7:0],
-                    syndrome_state_wr_data[ram_index_trace][432],
-                    syndrome_state_wr_data[ram_index_trace][433]);
+                    syndrome_state_wr_data[ram_index_trace]);
         end
     end
 `endif

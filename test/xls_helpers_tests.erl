@@ -55,16 +55,26 @@ overloaded_arities_have_distinct_names_test() ->
     ?assertEqual(["hls_local_value__0", "hls_local_value__1"],
         [Name || #{name := Name} <- Helpers]).
 
-invalid_helper_head_test_() ->
-    [?_assertException(error, {unsupported_xls_helper_head, _}, prepare([
-        "root() -> helper(1, 2).",
-        "-spec helper(hls_nums:u32(), hls_nums:u32()) -> hls_nums:u32().", Source
-    ])) || Source <- [
+patterned_helper_heads_test_() ->
+    [?_test(begin
+        {_, Helpers} = prepare([
+            "root() -> helper(1, 2).",
+            "-spec helper(hls_nums:u32(), hls_nums:u32()) -> hls_nums:u32().", Source
+        ]),
+        Emitted = iolist_to_binary(xls_helpers:emit(Helpers, cell, #{})),
+        ?assertNotEqual(nomatch, binary:match(Emitted, <<"if ">>))
+    end) || Source <- [
         "helper(X, X) -> X.",
-        "helper({X, Y}, _) -> X + Y.",
         "helper(X, _) when X > 0 -> X.",
         "helper(0, _) -> 0; helper(X, _) -> X."
     ]].
+
+patterns_do_not_hide_reachable_calls_test() ->
+    ?assertError({recursive_xls_helpers, [{helper, 1}, {helper, 1}]}, prepare([
+        "root() -> helper(1).",
+        "-spec helper(hls_nums:u32()) -> hls_nums:u32().",
+        "helper(0) -> 0; helper(X) -> helper(X)."
+    ])).
 
 missing_or_unbounded_spec_test_() ->
     [?_assertException(error, {missing_xls_helper_spec, _},

@@ -67,7 +67,7 @@ const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L439 = u16:246; // phi_halo_cell.e
 const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L447 = u16:262; // phi_halo_cell.erl:L447
 const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L455 = u16:278; // phi_halo_cell.erl:L455
 const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L457 = u16:294; // phi_halo_cell.erl:L457
-const XLS_FAILURE_SITE_BADARG_76CA4A82_L467 = u16:318; // phi_halo_cell.erl:L467
+const XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L467 = u16:306; // phi_halo_cell.erl:L467
 const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L496 = u16:321; // phi_halo_cell.erl:L496
 const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L509 = u16:342; // phi_halo_cell.erl:L509
 const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L517 = u16:358; // phi_halo_cell.erl:L517
@@ -1659,55 +1659,54 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> EntryOutcome {
       let _OldPhase_1 = old_phase;
       let Cell_1 = (Tag::CELL, data);
       let _0 = Cell_1.1.phi;
-      let _1 = { let collection_values = _0; let (collection_index, collection_invalid) = hls_lists::checked_index<{array_size(collection_values)}>(u32:1); (collection_values[collection_index], collection_invalid) };
-      let Phi0_1 = _1.0;
-      let _2 = Cell_1.1.step;
-      let _3 = Phi0 {
-        step: _2,
+      let Phi0_1 = _0[u32:0 % array_size(_0)];
+      let _1 = Cell_1.1.step;
+      let _2 = Phi0 {
+        step: _1,
         value: Phi0_1,
         ..zero!<Phi0>()
       };
-      let _4 = (Tag::PHI0, _3, bits_from_phi0(_3));
-      let Message_1 = _4;
+      let _3 = (Tag::PHI0, _2, bits_from_phi0(_2));
+      let Message_1 = _3;
       let Xls_entry_0_1 = Cell_1;
-      let _5 = Cell_1.1.step;
-      let _6 = (_5 as u32);
-      let _7 = Phifold {
+      let _4 = Cell_1.1.step;
+      let _5 = (_4 as u32);
+      let _6 = Phifold {
         value0: 0,
         value1: 0,
         ..zero!<Phifold>()
       };
-      let _8 = (Tag::PHI_FOLD, _7, bits_from_phifold(_7));
-      let _9 = (_6, _8, );
-      let Xls_entry_1_1 = _9;
-      let _10 = Phi0 {
+      let _7 = (Tag::PHI_FOLD, _6, bits_from_phifold(_6));
+      let _8 = (_5, _7, );
+      let Xls_entry_1_1 = _8;
+      let _9 = Phi0 {
         source: 8,
         ..(Message_1).1
       };
-      let _11 = (Tag::PHI0, _10, bits_from_phi0(_10));
-      let Xls_entry_2_1 = _11;
-      let _12 = Phi0 {
+      let _10 = (Tag::PHI0, _9, bits_from_phi0(_9));
+      let Xls_entry_2_1 = _10;
+      let _11 = Phi0 {
         source: 4,
         ..(Message_1).1
       };
-      let _13 = (Tag::PHI0, _12, bits_from_phi0(_12));
-      let Xls_entry_3_1 = _13;
-      let _14 = Phi0 {
+      let _12 = (Tag::PHI0, _11, bits_from_phi0(_11));
+      let Xls_entry_3_1 = _12;
+      let _13 = Phi0 {
         source: 2,
         ..(Message_1).1
       };
-      let _15 = (Tag::PHI0, _14, bits_from_phi0(_14));
-      let Xls_entry_4_1 = _15;
-      let _16 = Phi0 {
+      let _14 = (Tag::PHI0, _13, bits_from_phi0(_13));
+      let Xls_entry_4_1 = _14;
+      let _15 = Phi0 {
         source: 1,
         ..(Message_1).1
       };
-      let _17 = (Tag::PHI0, _16, bits_from_phi0(_16));
-      let Xls_entry_5_1 = _17;
-      let _18 = (Xls_entry_2_1, Xls_entry_3_1, Xls_entry_4_1, Xls_entry_5_1, );
-      let _19 = (Xls_entry_0_1, Xls_entry_1_1, _18, );
-      let _20 = {
-        let evaluated = _19;
+      let _16 = (Tag::PHI0, _15, bits_from_phi0(_15));
+      let Xls_entry_5_1 = _16;
+      let _17 = (Xls_entry_2_1, Xls_entry_3_1, Xls_entry_4_1, Xls_entry_5_1, );
+      let _18 = (Xls_entry_0_1, Xls_entry_1_1, _17, );
+      let _19 = {
+        let evaluated = _18;
               let effect_0 = axis::pack(
                 evaluated.2.0.0 as u8, evaluated.2.0.2);
               let effect_1 = axis::pack(
@@ -1738,9 +1737,9 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> EntryOutcome {
           },
         }
       };
-      if (hls_failure::check(_1.1, XLS_FAILURE_SITE_BADARG_76CA4A82_L467)) != hls_failure::NONE {
-        EntryOutcome { data, failure: hls_failure::check(_1.1, XLS_FAILURE_SITE_BADARG_76CA4A82_L467), ..zero!<EntryOutcome>() }
-      } else { _20 }
+      if (hls_failure::check(!(array_size(_0) >= u32:1), XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L467)) != hls_failure::NONE {
+        EntryOutcome { data, failure: hls_failure::check(!(array_size(_0) >= u32:1), XLS_FAILURE_SITE_MATCH_FAILURE_76CA4A82_L467), ..zero!<EntryOutcome>() }
+      } else { _19 }
     },
     Phase::FLIPPING => {
       let _OldPhase_1 = old_phase;
