@@ -105,6 +105,9 @@ jobs:
       - name: Check source type shapes and destructured reduction transport
         run: bash tools/test_type_shapes.sh "$RUNNER_TEMP/xls"
 
+      - name: Check actor namespaces and mixed-case record codecs
+        run: bash tools/test_names.sh "$RUNNER_TEMP/xls"
+
       - name: Check application framing and admission conservation
         run: bash tools/test_application_frames.sh "$RUNNER_TEMP/xls"
 
@@ -230,6 +233,7 @@ jobs:
             _build/collections/**
             _build/patterns/**
             _build/type-shapes/**
+            _build/names/**
             _build/xls_sim/regsvc/*.ir
             _build/xls_sim/regsvc/*.v
             _build/xls_sim/regsvc/sim/vvp.log

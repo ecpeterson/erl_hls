@@ -49,7 +49,7 @@ declarations(Spec = #{
         "}\n\n",
         "enum ReductionName : u8 {\n",
         [
-            ["  ", uppercase(maps:get(name, Reducer)), " = u8:",
+            ["  ", xls_names:enum_member(maps:get(name, Reducer)), " = u8:",
                 integer_to_list(Index), ",\n"]
             || {Index, Reducer} <- lists:enumerate(0, Reducers)
         ],
@@ -162,7 +162,7 @@ tag_member(none, _Selector) ->
     [];
 tag_member(#{accumulator := #{name := Name}}, Selector)
         when Selector >= 0, Selector =< 255 ->
-    ["  ", uppercase(Name), " = u8:", integer_to_list(Selector), ",\n"].
+    ["  ", xls_names:enum_member(Name), " = u8:", integer_to_list(Selector), ",\n"].
 
 codec_functions(Spec = #{accumulator := #{name := AccumulatorName}}) ->
     Layout = xls_statem_reduction_ir:layout(Spec),
@@ -179,7 +179,7 @@ codec_functions(Spec = #{accumulator := #{name := AccumulatorName}}) ->
     MemberStart = RemainingStart + RemainingBits,
     AccumulatorStart = MemberStart + MemberBits,
     FailureStart = AccumulatorStart + AccumulatorBits,
-    AccumulatorFunction = record_function_name(AccumulatorName),
+    AccumulatorFunction = xls_names:record_codec(AccumulatorName),
     [
         "fn reduction_state_from_bits(\n",
         "    raw: bits[", integer_to_list(TotalBits),
@@ -223,7 +223,7 @@ site_functions(Spec = #{sites := Sites}) ->
         "  match site {\n",
         [
             ["    ReductionSite::", site_label(Site), " => ",
-                "ReductionName::", uppercase(maps:get(name, Site)), ",\n"]
+                "ReductionName::", xls_names:enum_member(maps:get(name, Site)), ",\n"]
             || Site <- Sites
         ],
         "  }\n",
@@ -304,8 +304,8 @@ contribution_tag_arm(Tag, Contributions) ->
         || {Site, Contribution} <- Contributions,
            maps:get(tag, Contribution) =:= Tag],
     [
-        "    Tag::", uppercase(Tag), " => {\n",
-        "      let message = ", record_function_name(Tag),
+        "    Tag::", xls_names:enum_member(Tag), " => {\n",
+        "      let message = ", xls_names:record_codec(Tag),
         "_from_bits(frame.payload);\n",
         "      match phase {\n",
         [contribution_phase_arm(Contribution) || Contribution <- Tagged],
@@ -318,7 +318,7 @@ contribution_phase_arm({Site, #{
     build := #{body := Body, result := Result}
 }}) ->
     [
-        "        Phase::", uppercase(maps:get(phase, Site)), " => {\n",
+        "        Phase::", xls_names:enum_member(maps:get(phase, Site)), " => {\n",
         "          let built = {\n",
         xls_parse_io:indent(Body, 12),
         "            ", Result, "\n",
@@ -350,7 +350,7 @@ reducer_function(#{
 
 reducer_arm(#{name := Name, body := Body, result := Result}) ->
     [
-        "    ReductionName::", uppercase(Name), " => {\n",
+        "    ReductionName::", xls_names:enum_member(Name), " => {\n",
         xls_parse_io:indent(Body, 6),
         "      ", Result, "\n",
         "    },\n"
@@ -389,8 +389,8 @@ transport_contribution_arm({Site, #{
     transport := #{body := Body, result := Result}
 }}) ->
     [
-        "    Tag::", uppercase(Tag), " => {\n",
-        "      let message = ", record_function_name(Tag),
+        "    Tag::", xls_names:enum_member(Tag), " => {\n",
+        "      let message = ", xls_names:record_codec(Tag),
         "_from_bits(frame.payload);\n",
         "      let built = {\n",
         xls_parse_io:indent(Body, 8),
@@ -646,7 +646,7 @@ completion_arm(Site = #{
 }) ->
     [
         "      (ReductionSite::", site_label(Site), ", Phase::",
-        uppercase(Phase), ") => {\n",
+        xls_names:enum_member(Phase), ") => {\n",
         "        let conclusion = {\n",
         xls_parse_io:indent(Body, 10),
         "          ", Result, "\n",
@@ -707,10 +707,4 @@ mode_value(count) -> "ReductionMode::COUNT";
 mode_value(members) -> "ReductionMode::MEMBERS".
 
 site_label(#{phase := Phase}) ->
-    uppercase(Phase).
-
-uppercase(Atom) ->
-    string:uppercase(atom_to_list(Atom)).
-
-record_function_name(Atom) ->
-    lists:delete($_, atom_to_list(Atom)).
+    xls_names:enum_member(Phase).

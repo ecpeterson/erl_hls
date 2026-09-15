@@ -914,7 +914,7 @@ family_lane_selection(Module, Lane, Routes) ->
     ],
     [
         "    let ", family_lane_selected(Lane), " = match egress.port {\n",
-        [["      ", Module, "::OutputPort::", uppercase(Port),
+        [["      ", Module, "::OutputPort::", xls_names:enum_member(Port),
             " => true,\n"] || Port <- Ports],
         "      _ => false,\n",
         "    };\n"
@@ -1483,8 +1483,6 @@ separator(_Index, _Arity) -> "".
 channel_tuple([]) -> "()";
 channel_tuple([Name]) -> ["(", Name, ",)"];
 channel_tuple(Names) -> ["(", join_with(", ", Names), ")"].
-
-uppercase(Atom) -> string:uppercase(atom_to_list(Atom)).
 
 join_tokens([Token]) -> Token;
 join_tokens([First, Second | Rest]) ->

@@ -185,7 +185,7 @@ router_family_send(Plane = #{
 }) ->
     Population = length(Fragments),
     [
-        "        FamilyId::", uppercase(Id), " => {\n",
+        "        FamilyId::", xls_names:enum_member(Id), " => {\n",
         [
             [
                 "          let effect_", integer_to_list(Ordinal), " = ",
@@ -670,8 +670,6 @@ mux_name(#{index := Index}) ->
 
 mux_state_name(#{index := Index}) ->
     ["SchedulerAggregateArrayMuxState", integer_to_list(Index)].
-
-uppercase(Atom) -> string:uppercase(atom_to_list(Atom)).
 
 config_signature(Arguments, Indent) ->
     Padding = lists:duplicate(Indent + 2, $ ),

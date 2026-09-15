@@ -1074,7 +1074,7 @@ state_machine_output_count_fits_ordered_egress_abi_test() ->
     ok = file:write_file(Path, Source),
     try
         ?assertError(
-            {too_many_hls_statem_outputs, 256, 255},
+            {xls_namespace_exhausted, output, 256, 255},
             xls_parse:to_xls(Path)
         )
     after

@@ -239,7 +239,7 @@ address_support(Spec = #{families := Families, schedulers := Schedulers}) ->
     [
         "enum FamilyId : u8 {\n",
         [
-            ["  ", uppercase(maps:get(id, Family)), " = u8:",
+            ["  ", xls_names:enum_member(maps:get(id, Family)), " = u8:",
                 integer_to_list(Index), ",\n"]
             || {Index, Family} <- lists:enumerate(0, Families)
         ],
@@ -315,7 +315,7 @@ scheduler_address_support(_Spec, Scheduler = #{
         "  match (address.family as FamilyId, address.x, address.y) {\n",
         [
             [
-                "    (FamilyId::", uppercase(Family), ", u16:",
+                "    (FamilyId::", xls_names:enum_member(Family), ", u16:",
                 integer_to_list(X), ", u16:", integer_to_list(Y),
                 ") => u32:", integer_to_list(Slot), ",\n"
             ]
@@ -344,7 +344,7 @@ family_address_entries(#{
 scheduled_address(Family, X, Y) ->
     [
         "ScheduledAddress { family: FamilyId::",
-        uppercase(Family), " as u8, x: ", u16_value(X),
+        xls_names:enum_member(Family), " as u8, x: ", u16_value(X),
         ", y: ", u16_value(Y), " }"
     ].
 
@@ -405,7 +405,7 @@ control_support(Spec = #{ingresses := [Ingress]}) ->
     ].
 
 control_family_member(Index, #{id := Id}) ->
-    ["  ", uppercase(Id), " = u8:", integer_to_list(Index), ",\n"].
+    ["  ", xls_names:enum_member(Id), " = u8:", integer_to_list(Index), ",\n"].
 
 controlled_groups(Families) ->
     lists:usort(lists:append([
@@ -434,7 +434,7 @@ control_family_arm(Spec, Ingress, Family = #{
     [First | _] = Bindings,
     Module = scheduler_module(Spec, maps:get(group, First)),
     [
-        "        ControlFamily::", uppercase(Id), " => {\n",
+        "        ControlFamily::", xls_names:enum_member(Id), " => {\n",
         control_address(ScaleX, ScaleY, OffsetX, OffsetY),
         "          let selected = (", control_target_condition(
             maps:get(targets, maps:get(ingress, Family)),
@@ -470,7 +470,7 @@ control_family_arm_single(Spec, Ingress, Family = #{
     Module = scheduler_module(Spec, Group),
     Scheduler = scheduler(Spec, Group),
     [
-        "        ControlFamily::", uppercase(Id), " => {\n",
+        "        ControlFamily::", xls_names:enum_member(Id), " => {\n",
         control_address(ScaleX, ScaleY, OffsetX, OffsetY),
         "          let selected = (", control_target_condition(
             maps:get(targets, maps:get(ingress, Family)),
@@ -572,14 +572,14 @@ startup_arm(Module, Index, #{
     schema := Schema,
     fields := Fields
 }) ->
-    Struct = record_struct_name(Schema),
-    Function = record_function_name(Schema),
+    Struct = xls_names:record_type(Schema),
+    Function = xls_names:record_codec(Schema),
     [
         "      u32:", integer_to_list(Index), " => ",
         Module, "::ScheduledRequest {\n",
         "        slot: u32:", integer_to_list(Slot), ",\n",
         "        frame: axis::pack(\n",
-        "          ", Module, "::Tag::", uppercase(Schema), " as u8,\n",
+        "          ", Module, "::Tag::", xls_names:enum_member(Schema), " as u8,\n",
         "          ", Module, "::bits_from_", Function, "(\n",
         "            ", Module, "::", Struct, " {\n",
         [startup_field(Field) || Field <- Fields],
@@ -761,7 +761,7 @@ router_last_binding(Spec, Scheduler) ->
 
 router_family_arm(Spec, Family = #{id := Id}) ->
     [
-        "      FamilyId::", uppercase(Id), " => {\n",
+        "      FamilyId::", xls_names:enum_member(Id), " => {\n",
         router_family_routes(Spec, Family),
         "      },\n"
     ].
@@ -791,7 +791,7 @@ router_port_arm(Spec, Family, Module, Port, RouteIndex) ->
                 Family, Port
             ),
             [
-                "        ", Module, "::OutputPort::", uppercase(Port),
+                "        ", Module, "::OutputPort::", xls_names:enum_member(Port),
                 " => grant_tok,\n"
             ]
     end.
@@ -801,7 +801,7 @@ router_route_arm(Spec, Module, Port, #{
     recipients := [Recipient]
 }) ->
     [
-        "        ", Module, "::OutputPort::", uppercase(Port), " => ",
+        "        ", Module, "::OutputPort::", xls_names:enum_member(Port), " => ",
         route_send(Spec, Recipient, "grant_tok"),
         ",\n"
     ];
@@ -810,7 +810,7 @@ router_route_arm(Spec, Module, Port, #{
     recipients := [Left, Right]
 }) ->
     [
-        "        ", Module, "::OutputPort::", uppercase(Port), " => {\n",
+        "        ", Module, "::OutputPort::", xls_names:enum_member(Port), " => {\n",
         "          let left_tok = ", route_send(Spec, Left, "grant_tok"),
         ";\n",
         "          let right_tok = ", route_send(Spec, Right, "grant_tok"),
@@ -1271,14 +1271,6 @@ config_signature(Arguments, Indent) ->
 channel_tuple([]) -> "()";
 channel_tuple([Name]) -> ["(", Name, ",)"];
 channel_tuple(Names) -> ["(", join_with(", ", Names), ")"].
-
-uppercase(Atom) -> string:uppercase(atom_to_list(Atom)).
-
-record_struct_name(Atom) ->
-    string:titlecase(lists:delete($_, atom_to_list(Atom))).
-
-record_function_name(Atom) ->
-    string:lowercase(lists:delete($_, atom_to_list(Atom))).
 
 separator(Index, Count) when Index + 1 < Count -> ",";
 separator(_Index, _Count) -> "".

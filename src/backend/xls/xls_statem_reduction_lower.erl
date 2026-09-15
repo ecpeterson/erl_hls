@@ -134,6 +134,7 @@ analyze_source(Forms, #{
                 DataName,
                 MessageNames
             ),
+            ok = xls_names:reduction(Forms, AccumulatorName, Opens),
             AccumulatorRecord = xls_parse:find_record(
                 Forms, AccumulatorName),
             ok = xls_parse:validate_record_defaults(AccumulatorRecord),
@@ -776,8 +777,8 @@ close_contribution_group(Tag, Contributions, DataName, AccumulatorType,
     Clauses = [rewrite_contribution_clause(Contribution)
         || Contribution <- Contributions],
     MessageValue = [
-        "(Tag::", uppercase(Tag), ", message, bits_from_",
-        record_function_name(Tag), "(message))"
+        "(Tag::", xls_names:enum_member(Tag), ", message, bits_from_",
+        xls_names:record_codec(Tag), "(message))"
     ],
     Arguments = [
         xls_pattern_lower:record_argument(Tag, "message", MessageValue),
@@ -785,7 +786,7 @@ close_contribution_group(Tag, Contributions, DataName, AccumulatorType,
         xls_pattern_lower:record_argument(
             DataName,
             "data",
-            ["(Tag::", uppercase(DataName), ", data)"]
+            ["(Tag::", xls_names:enum_member(DataName), ", data)"]
         )
     ],
     Failure = ["(u1:0, u32:0, u32:0, zero!<",
@@ -827,7 +828,7 @@ source_capture_total(#{capture_checks := Checks}) -> Checks =/= none.
 capture_assertions(Tag, Contributions) ->
     case [Checks || #{capture_checks := Checks} <- Contributions, Checks =/= none] of
         [] -> [];
-        [Checks | _] -> xls_pattern_totality:assertions(record_struct_type(Tag), Checks)
+        [Checks | _] -> xls_pattern_totality:assertions(xls_names:record_type(Tag), Checks)
     end.
 
 close_transport_contribution_group(Tag, Contributions, DataName,
@@ -835,8 +836,8 @@ close_transport_contribution_group(Tag, Contributions, DataName,
     Clauses = [rewrite_transport_contribution_clause(Contribution)
         || Contribution <- Contributions],
     MessageValue = [
-        "(Tag::", uppercase(Tag), ", message, bits_from_",
-        record_function_name(Tag), "(message))"
+        "(Tag::", xls_names:enum_member(Tag), ", message, bits_from_",
+        xls_names:record_codec(Tag), "(message))"
     ],
     Arguments = [
         xls_pattern_lower:record_argument(Tag, "message", MessageValue)
@@ -891,8 +892,8 @@ close_completion(#{clauses := Clauses0}, Phase, DataName,
         || Clause <- Clauses0
     ],
     AccumulatorValue = [
-        "(Tag::", uppercase(AccumulatorName), ", accumulator, bits_from_",
-        record_function_name(AccumulatorName), "(accumulator))"
+        "(Tag::", xls_names:enum_member(AccumulatorName), ", accumulator, bits_from_",
+        xls_names:record_codec(AccumulatorName), "(accumulator))"
     ],
     Arguments = [
         xls_pattern_lower:value_argument("key"),
@@ -902,7 +903,7 @@ close_completion(#{clauses := Clauses0}, Phase, DataName,
         xls_pattern_lower:record_argument(
             DataName,
             "data",
-            ["(Tag::", uppercase(DataName), ", data)"]
+            ["(Tag::", xls_names:enum_member(DataName), ", data)"]
         )
     ],
     Failure = fun(Code) -> ["(phase, data, Directive::FAIL, u1:0, ", Code, ")"] end,
@@ -1003,8 +1004,8 @@ close_reducer(#{name := Name, clause := {clause, Line, [
 
 accumulator_argument(Name, Variable) ->
     [
-        "(Tag::", uppercase(Name), ", ", Variable, ", bits_from_",
-        record_function_name(Name), "(", Variable, "))"
+        "(Tag::", xls_names:enum_member(Name), ", ", Variable, ", bits_from_",
+        xls_names:record_codec(Name), "(", Variable, "))"
     ].
 
 type_ref(Forms, Name) ->
@@ -1021,7 +1022,7 @@ type_ref({attribute, _Line, record, {Name, Fields0}}) ->
     #{
         kind => record,
         name => Name,
-        dslx_type => record_struct_type(Name),
+        dslx_type => xls_names:record_type(Name),
         fields => Fields
     }.
 
@@ -1240,17 +1241,13 @@ lowered(Body, Result) ->
 
 enum_atoms(Phases) ->
     maps:from_list(
-        [{Phase, ["Phase::", uppercase(Phase)]} || Phase <- Phases] ++
+        [{Phase, ["Phase::", xls_names:enum_member(Phase)]} || Phase <- Phases] ++
         [
             {consume, "Directive::CONSUME"},
             {postpone, "Directive::POSTPONE"},
             {fail, "Directive::FAIL"}
         ]
     ).
-
-record_struct_type(Name) -> string:titlecase(record_function_name(Name)).
-record_function_name(Name) -> lists:delete($_, atom_to_list(Name)).
-uppercase(Atom) -> string:uppercase(atom_to_list(Atom)).
 
 public_contribution(Contribution) ->
     maps:with([tag, phase, name, mode], Contribution).
