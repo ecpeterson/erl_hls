@@ -547,6 +547,8 @@ erlc -o "$beam_dir" "$stage/erl_src/hls_type.erl"
 erlc -pa "$beam_dir" -o "$beam_dir" \
     "$stage/erl_src/hls_fabric.erl" \
     "$stage/erl_src/hls_fabric_io.erl" \
+    "$stage/erl_src/hls_fabric_lease.erl" \
+    "$stage/erl_src/hls_fabric_session.erl" \
     "$stage/erl_src/hls_fabric_client.erl" \
     "$stage/erl_src/hls_lists.erl" \
     "$stage/erl_src/hls_codec.erl" \

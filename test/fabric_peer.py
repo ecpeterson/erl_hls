@@ -1,8 +1,11 @@
 """Controlled FIFO peer for host backpressure tests; no simulator or RTL access."""
 
 import os
+import fcntl
 import select
+import struct
 import sys
+import termios
 
 
 def open_fifo(path):
@@ -38,6 +41,9 @@ for line in sys.stdin:
         print("ok", flush=True)
     elif command == "take":
         print(read_exact(tx, int(args[0])).hex(), flush=True)
+    elif command == "rx_pending":
+        pending = fcntl.ioctl(rx, termios.FIONREAD, struct.pack("I", 0))
+        print(struct.unpack("I", pending)[0], flush=True)
     elif command == "drain":
         result = bytearray()
         try:

@@ -64,7 +64,12 @@ with_fabric(Write, Run) ->
     receive {Port, {exit_status, 0}} -> ok after 1000 -> error(mkfifo_failed) end,
     %% Keeping both ends open prevents EOF while the broker is being tested.
     {ok, Read} = file:open(ReadPath, [read, write, raw, binary]),
-    WritePath = case Write of default -> filename:join(Root, "tx"); _ -> Write end,
+    WritePath = case Write of
+        default ->
+            Path = filename:join(Root, "tx"),
+            ok = file:write_file(Path, <<>>), Path;
+        _ -> Write
+    end,
     {ok, Fabric} = hls_fabric:start_link(WritePath, ReadPath),
     unlink(Fabric),
     try Run(Fabric, Read, WritePath)
