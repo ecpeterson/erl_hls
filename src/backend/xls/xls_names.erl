@@ -183,6 +183,7 @@ origin(Kind, Name, Line, File) ->
 generated(Name) -> #{kind => generated, name => Name}.
 
 %% Reserve the actor artifact's fixed declarations in every service mode.
+%% Include fixed parameters: DSLX value bindings can shadow record types.
 %% N is the record codec's width parameter. Other function names cannot
 %% collide with the two codec name forms or the hls_local_ helper prefix.
 runtime(hls_gs) ->
@@ -200,6 +201,7 @@ runtime(hls_statem) ->
         "ReductionMode", "ReductionName", "ReductionSite", "ReductionRemaining",
         "ReductionMembers", "ReductionState", "ReductionContribution", "ReductionOutcome",
         "ReductionApply", "ReductionDispatch", "ReductionAggregate", "ReductionAggregateRequest",
-        "N", "MAILBOX_CAPACITY", "MAILBOX_DEPTH", "EGRESS_DEPTH", "ENTRY_EFFECT_CAPACITY",
+        "N", "COUNT", "ACTOR_COUNT", "PRODUCER_COUNT", "STARTUP_COUNT", "INSTANCE_ID",
+        "MAILBOX_CAPACITY", "MAILBOX_DEPTH", "EGRESS_DEPTH", "ENTRY_EFFECT_CAPACITY",
         "ENTRY_EFFECT_PAYLOAD_BITS", "INITIAL_MACHINE", "machine_from_bits", "bits_from_machine",
         "reduction_state_from_bits", "bits_from_reduction_state"].

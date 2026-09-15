@@ -133,9 +133,12 @@ runtime_declarations_remain_reserved_test() ->
         {ok, Forms} = xls_parse:parse_file(Path),
         RecordTypes = [xls_names:record_type(N) || {attribute, _, record, {N, _}} <- Forms],
         Text = iolist_to_binary(xls_parse:to_xls(Path, Options)),
-        {match, Matches} = re:run(Text,
+        {match, Declarations} = re:run(Text,
             "^(?:pub )?(?:struct|enum|type|proc|const) ([A-Z][A-Za-z0-9_]*)\\b",
             [multiline, global, {capture, [1], list}]),
+        {match, Parameters} = re:run(Text, "\\b([A-Z][A-Z_0-9]*): u32\\b",
+            [global, {capture, [1], list}]),
+        Matches = lists:usort(Declarations ++ Parameters),
         [begin
             RecordName = list_to_atom("_" ++ Name),
             Result = reason(fun() -> xls_names:actor(forms([RecordName]), Kind) end),
