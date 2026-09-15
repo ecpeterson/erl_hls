@@ -464,7 +464,7 @@ gathering(cast, #phi_config{}, Cell) ->
     (internal, hls_statem:reduction_complete(), #cell{}) ->
         hls_statem:internal_result(phase(), #cell{}).
 comparing(enter, _OldPhase, Cell) ->
-    Phi0 = hls_vec:nth(1, Cell#cell.phi),
+    [Phi0 | _] = Cell#cell.phi,
     Message = #phi0{
         step = Cell#cell.step,
         value = Phi0

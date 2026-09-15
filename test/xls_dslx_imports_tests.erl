@@ -26,6 +26,14 @@ collection_operations_import_checks_test() ->
     ?assertEqual([hls_lists, hls_vec], xls_dslx_imports:from_forms(Forms ++
         [form("dot(T, A, B) -> hls_vec:dot(T, A, B).")])).
 
+bound_tail_import_test() ->
+    ?assertEqual([hls_patterns], xls_dslx_imports:from_forms([
+        form("probe([_ | Tail]) -> Tail.")])),
+    ?assertEqual([hls_patterns], xls_dslx_imports:from_forms([
+        form("probe(V) -> [_ | Tail = [X, Y]] = V, Tail.")])),
+    ?assertEqual([], xls_dslx_imports:from_forms([
+        form("probe([X, Y | _]) -> X + Y.")])).
+
 providers_without_companions_test() ->
     Forms = [form("probe() -> hls_type:zero(hls_nums:u32()).")],
     ?assertEqual([], xls_dslx_imports:from_forms(Forms)).
@@ -69,7 +77,7 @@ malformed_declaration_test() ->
 included_types_reach_gs_emission_test() ->
     Source = "test_data/hls_companion_gs_fixture.erl",
     {ok, Forms} = xls_parse:parse_file(Source),
-    ?assertEqual([hls_fixed, hls_lists, hls_vec, phi_field], xls_dslx_imports:from_forms(Forms)),
+    ?assertEqual([hls_fixed, hls_vec, phi_field], xls_dslx_imports:from_forms(Forms)),
     Generated = iolist_to_binary(xls_parse:to_xls(Source)),
     ?assertEqual(1, length(binary:matches(Generated, <<"import phi_field;">>))),
     ?assertNotEqual(nomatch, binary:match(Generated, <<"phi_field::Scalar[2]">>)),

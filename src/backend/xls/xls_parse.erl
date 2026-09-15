@@ -10,8 +10,8 @@ Transforms supported Erlang actor modules into corresponding XLS modules.
 ## Control flow
 
 Callback bodies may use source-ordered `case` and `if` expressions. Supported
-`case` patterns include literals, variables, aliases, tuples, and homogeneous
-records. Each clause accepts semicolon-separated alternatives from the same
+`case` patterns include literals, variables, aliases, tuples, homogeneous
+records, and fixed-array list patterns. Each clause accepts semicolon-separated alternatives from the same
 side-effect-free guard subset as a callback, including comma-separated tests
 and `andalso` or `orelse`. Integer `div` and `rem` reject a zero divisor with
 `badarith` in bodies; in guards, an arithmetic failure rejects that guard
@@ -53,8 +53,8 @@ They evaluate at their binding, even if omitted later. See
 Initializers and callbacks may call local pure helpers with concrete `-spec`
 types. Only reachable helpers are translated, each as a DSLX function carrying
 its result and failure code. The definition graph must be acyclic; XLS
-inlines the calls. Helpers currently have one unguarded clause with distinct
-variable parameters (or `_`), and use the same expression subset as callbacks.
+inlines the calls. Helpers may have multiple patterned, guarded clauses and use the same
+expression subset as callbacks. Unmatched helper heads raise `function_clause`.
 See `docs/local-helpers.md` for types, call semantics, and structural limits.
 
 ## Wire tags
@@ -68,6 +68,7 @@ prepending or moving one can renumber them. Every entry must be a unique atom.
 %% Internal API shared by the actor-specific lowerers while this module is
 %% split into smaller compiler passes.
 -export([
+    add_match_failure/3,
     bind/4,
     bitsfromstruct_from_record/1,
     branch_from_clause/4,
@@ -526,7 +527,7 @@ statement_from_statement({record_field, _L, Object, _RecordAtom, {atom, _LL, Slo
     instr(IntermediateState, [reference(IntermediateState), ".1.", atom_to_list(SlotAtom)]);
 statement_from_statement({match, _L, LHS, RHS}, State) ->
     RHSState = statement_from_statement(RHS, State),
-    destructure_lhs(LHS, RHSState).
+    xls_pattern_lower:match(LHS, reference(RHSState), RHSState).
 
 lower_arguments(Args, State) ->
     lists:mapfoldl(fun(Arg, Acc) ->
@@ -613,44 +614,6 @@ record_value(NameAtom, Struct, _State) ->
         "(Tag::", string:uppercase(atom_to_list(NameAtom)), ", ", Struct, ", ",
         "bits_from_", lists:delete($_, atom_to_list(NameAtom)), "(", Struct, "))"
     ].
-
--spec destructure_lhs(erl_parse:af_pattern(), clause_state()) -> clause_state().
--doc """
-Converts an assignment from an opaque RHS to a structured LHS into a sequence of
-accessors into the RHS being assigned to slots inside of the LHS.
-""".
-destructure_lhs({var, _L, '_'}, State) ->
-    State;
-destructure_lhs({var, Line, Name}, State) ->
-    bind(Name, Line, reference(State), State);
-destructure_lhs({record, _L, _Atom, Slots}, State) ->
-    RecordRef = State#clause_state.reference,
-    IntermediateState = lists:foldl(
-        fun({record_field, _1, {atom, _2, SlotAtom}, LHS}, ThisState) ->
-            Slot = atom_to_list(SlotAtom),
-            Substate = ThisState#clause_state{reference = [RecordRef, ".", Slot]},
-            destructure_lhs(LHS, Substate)
-        end,
-        State, Slots
-    ),
-    IntermediateState#clause_state{reference = RecordRef};
-destructure_lhs({tuple, _L, Slots}, State) ->
-    TupleRef = State#clause_state.reference,
-    IntermediateState = lists:foldl(
-        fun({Index, LHS}, ThisState) ->
-            Substate = ThisState#clause_state{
-                reference = [TupleRef, ".", integer_to_list(Index)]
-            },
-            destructure_lhs(LHS, Substate)
-        end,
-        State,
-        lists:enumerate(0, Slots)
-    ),
-    IntermediateState#clause_state{reference = TupleRef};
-%% constant cases
-destructure_lhs({atom, Line, Atom}, State) when Atom == true orelse Atom == false ->
-    add_match_failure([reference(State), " != bool:", atom_to_list(Atom)], Line, State).
-%% TODO: badmatch on other constants
 
 %%%
 %%% Erlang record / XLS struct munging.

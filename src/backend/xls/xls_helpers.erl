@@ -11,8 +11,9 @@
 
 -export([prepare/2, emit/3]).
 
--type helper() :: #{name := string(), clause := erl_parse:af_clause(),
-    arguments := [iodata()], result := iodata()}.
+-type helper() :: #{name := string(), clauses := [erl_parse:af_clause(), ...],
+    arguments := [iodata()], argument_records := [none | {record, atom()}],
+    result := iodata()}.
 
 -spec prepare([erl_parse:abstract_form()], [{atom(), arity()}]) ->
     {[erl_parse:abstract_form()], [helper()]}.
@@ -33,7 +34,7 @@ prepare(Forms0, Roots) ->
             end;
         _ -> Form
     end || Form <- Forms],
-    {Rewritten, [Helper#{clause := rewrite(maps:get(clause, Helper), Helpers)}
+    {Rewritten, [Helper#{clauses := rewrite(maps:get(clauses, Helper), Helpers)}
         || Key <- dependency_order(Helpers), Helper <- [maps:get(Key, Helpers)]]}.
 
 dependency_order(Helpers) ->
@@ -49,7 +50,7 @@ visit(Key, Path, Helpers, Acc) ->
         false -> ok
     end,
     Dependencies = lists:usort([Callee || {Callee, _} <-
-        local_calls(maps:get(clause, maps:get(Key, Helpers)))]),
+        local_calls(maps:get(clauses, maps:get(Key, Helpers)))]),
     {Done, Reversed} = lists:foldl(fun(Callee, Next) ->
         visit(Callee, [Key | Path], Helpers, Next)
     end, Acc, Dependencies),
@@ -93,22 +94,12 @@ reachable([{Key, CallLine} | Rest], Context = #{definitions := Definitions,
     end,
     Helper = prepare_helper(Key, Definition, Context),
     %% Mark before following edges: a cyclic definition graph is finite too.
-    reachable(local_calls(maps:get(clause, Helper)) ++ Rest,
+    reachable(local_calls(maps:get(clauses, Helper)) ++ Rest,
         Context, Seen#{Key => Helper}).
 
 prepare_helper(Key = {Name, Arity}, #{file := File, line := Line,
         clauses := Clauses}, Context = #{forms := Forms}) ->
     Origin = {File, Line, Key},
-    Clause = case Clauses of
-        [C = {clause, _, Parameters, [], _}] ->
-            Names = [N || {var, _, N} <- Parameters, N =/= '_'],
-            case lists:all(fun({var, _, _}) -> true; (_) -> false end, Parameters)
-                    andalso length(Names) =:= length(lists:usort(Names)) of
-                true -> C;
-                false -> error({unsupported_xls_helper_head, Origin})
-            end;
-        _ -> error({unsupported_xls_helper_head, Origin})
-    end,
     Specs = [Types || {attribute, _, spec, {K, Types}} <- Forms, K =:= Key],
     {Args, Result} = case Specs of
         [[{type, _, 'fun', [{type, _, product, A}, R]}]]
@@ -122,7 +113,8 @@ prepare_helper(Key = {Name, Arity}, #{file := File, line := Line,
         nomatch -> error({unsupported_xls_helper_name, Origin})
     end,
     #{name => "hls_local_" ++ Spelling ++ "__" ++ integer_to_list(Arity),
-        clause => Clause, arguments => [type(T, Context, Origin) || T <- Args],
+        clauses => Clauses, arguments => [type(T, Context, Origin) || T <- Args],
+        argument_records => [argument_record(T) || T <- Args],
         result => type(Result, Context, Origin)}.
 
 type({ann_type, _, [_Name, Type]}, Context, Origin) -> type(Type, Context, Origin);
@@ -158,13 +150,40 @@ rewrite(Value, _Helpers) -> Value.
 emit(Helpers, DataName, EnumAtoms) ->
     [emit_helper(H, DataName, EnumAtoms) || H <- Helpers].
 
-emit_helper(#{name := Name, clause := Clause = {clause, Line, _, _, _},
-        arguments := Types, result := Type}, DataName, EnumAtoms) ->
+%% Keep the common irrefutable helper compact. Patterned or guarded clauses
+%% share callback selection, including function_clause versus body failures.
+emit_helper(#{name := Name, clauses := Clauses = [{clause, Line, _, _, _} | _],
+        arguments := Types, argument_records := Records, result := Type}, DataName, EnumAtoms) ->
     Arguments = ["argument_" ++ integer_to_list(I) || I <- lists:seq(1, length(Types))],
-    #{body := Body, result := Result, failure := Failure} =
-        xls_parse:clause_outcome(Clause, Arguments, DataName, EnumAtoms),
+    Body = case plain_head(Clauses) of
+        true ->
+            [Clause] = Clauses,
+            #{body := Computation, result := Result, failure := Failure} =
+                xls_parse:clause_outcome(Clause, Arguments, DataName, EnumAtoms),
+            [Computation, "(", Result, ", ", Failure, ")"];
+        false ->
+            Inputs = [case Record of
+                none -> xls_pattern_lower:value_argument(Argument);
+                {record, RecordName} -> xls_pattern_lower:record_argument(
+                    RecordName, [Argument, ".1"], Argument)
+            end || {Argument, Record} <- lists:zip(Arguments, Records)],
+            Failed = fun(Code) -> ["(zero!<", Type, ">(), ", Code, ")"] end,
+            {Computation, Result} = xls_callback_lower:lower(Clauses, Inputs,
+                DataName, fun(Value) -> ["(", Value, ", hls_failure::NONE)"] end,
+                Failed(xls_failure_sites:at(function_clause, Line)), Failed, EnumAtoms),
+            [Computation, Result]
+    end,
     ["fn ", Name, "(", lists:join(", ", [[A, ": ", T]
         || {A, T} <- lists:zip(Arguments, Types)]), ") -> (", Type,
         ", hls_failure::Code) {  // L", integer_to_list(erl_anno:line(Line)), "\n",
-        xls_parse_io:indent(xls_parse:print([Body,
-            "(", Result, ", ", Failure, ")"]), 2), "}\n\n"].
+        xls_parse_io:indent(xls_parse:print(Body), 2), "}\n\n"].
+
+plain_head([{clause, _, Parameters, [], _}]) ->
+    Names = [N || {var, _, N} <- Parameters, N =/= '_'],
+    lists:all(fun({var, _, _}) -> true; (_) -> false end, Parameters)
+        andalso length(Names) =:= length(lists:usort(Names));
+plain_head(_) -> false.
+
+argument_record({ann_type, _, [_Name, Type]}) -> argument_record(Type);
+argument_record({type, _, record, [{atom, _, Name}]}) -> {record, Name};
+argument_record(_) -> none.

@@ -311,7 +311,7 @@ selected_body_badmatch_does_not_try_later_clause_test() ->
         <<
             "let Xls_clause_1_State_1 = (Tag::STATE, data);\n"
             "if message.value == 0 {\n"
-            "  if ((hls_failure::check(bool:0 != bool:true, hls_failure::MATCH_FAILURE)) != hls_failure::NONE) {\n"
+            "  if ((hls_failure::check(!(bool:0 == bool:true), hls_failure::MATCH_FAILURE)) != hls_failure::NONE) {\n"
             "    body_failure\n"
             "  } else {\n"
             "    Xls_clause_1_State_1\n"
@@ -375,7 +375,7 @@ boolean_case_preserves_branch_badmatches_test() ->
         nomatch,
         binary:match(
             XLS,
-            <<"Value_1 != bool:true">>
+            <<"!(Value_1 == bool:true)">>
         )
     ),
     ?assertNotEqual(nomatch, binary:match(XLS, <<"hls_failure::NONE">>)).
@@ -496,12 +496,12 @@ selected_general_case_body_badmatch_does_not_fall_through_test() ->
         "_ -> 2 end.",
         ["value"]
     ),
-    ?assertNotEqual(nomatch, binary:match(XLS, <<" != bool:true">>)),
+    ?assertNotEqual(nomatch, binary:match(XLS, <<" == bool:true)">>)),
     ?assertNotEqual(nomatch, binary:match(XLS, <<"hls_failure::NONE">>)),
     ?assertNotEqual(
         nomatch,
         binary:match(XLS, <<
-            "(1, hls_failure::check(bool:0 != bool:true, hls_failure::MATCH_FAILURE))\n"
+            "(1, hls_failure::check(!(bool:0 == bool:true), hls_failure::MATCH_FAILURE))\n"
             "  } else {\n"
             "    (2, hls_failure::NONE)"
         >>)
@@ -686,7 +686,7 @@ selected_if_body_badmatch_reaches_body_failure_test() ->
         "true -> Value + 1 end, "
         "{Result, State}."
     ),
-    ?assertNotEqual(nomatch, binary:match(XLS, <<" != bool:true">>)),
+    ?assertNotEqual(nomatch, binary:match(XLS, <<" == bool:true)">>)),
     ?assertNotEqual(nomatch, binary:match(XLS, <<"hls_failure::NONE">>)),
     ?assertNotEqual(nomatch, binary:match(XLS, <<"body_failure">>)).
 

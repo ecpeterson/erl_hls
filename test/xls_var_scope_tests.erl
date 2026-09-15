@@ -28,7 +28,7 @@ exports_only_names_used_after_join_test() ->
 
 later_match_is_a_use_test() ->
     Xls = lower("f(X) -> case X of true -> Value = X; false -> Value = X end, Value = X."),
-    ?assertNotEqual(nomatch, binary:match(Xls, <<"Value_1 != Value_2">>)).
+    ?assertNotEqual(nomatch, binary:match(Xls, <<"!(Value_1 == X_1)">>)).
 
 %% A case can occur inside an expression, not just at the top of a body.
 expression_continuations_export_bindings_test_() ->

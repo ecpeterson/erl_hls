@@ -104,6 +104,9 @@ pattern_shape({atom, _Line, _Atom}) ->
     scalar;
 pattern_shape({tuple, _Line, Patterns}) ->
     {tuple, length(Patterns)};
+pattern_shape({cons, _, _, _}) -> array;
+pattern_shape({nil, _}) -> array;
+pattern_shape({op, _, Sign, {integer, _, _}}) when Sign =:= '-'; Sign =:= '+' -> scalar;
 pattern_shape({record, _Line, Name, _Fields}) ->
     {record, Name};
 pattern_shape(Pattern) ->

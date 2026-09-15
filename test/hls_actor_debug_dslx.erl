@@ -3,12 +3,12 @@
 
 fixture(small) ->
     Plan = hls_topology:normalize(#{version => 1, actors => #{},
-        ingresses => [{commands, {rectangle, [15, 1]}, [
+        ingresses => [{commands, {rectangle, [19, 1]}, [
             {configure, [configure], [{family, cell, {embed, [1, 1], [0, 0]}}]}]}],
-        families => #{cell => #{module => hls_actor_debug_fixture, shape => [15, 1]}},
+        families => #{cell => #{module => hls_actor_debug_fixture, shape => [19, 1]}},
         externals => [{reports, out, [report]}], routes => [],
         route_relations => [{{cell, out}, [{external, reports}]}],
-        startup => [{{cell, I, 0}, [{configure, I}]} || I <- lists:seq(0, 14)]}),
+        startup => [{{cell, I, 0}, [{configure, I}]} || I <- lists:seq(0, 18)]}),
     {Plan, #{cells => #{members => [{family, cell}],
         state_storage => block_ram, mailbox_storage => block_ram}}};
 fixture(mailbox) ->

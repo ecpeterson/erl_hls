@@ -121,6 +121,40 @@ interface_inference_does_not_lower_reducer_expressions_test() ->
         end
     ).
 
+list_contribution_retains_message_provenance_test() ->
+    Path = "test_data/hls_list_reduction_fixture.erl",
+    #{reduction := #{sites := [Site]}} = analyze(Path),
+    [Contribution] = maps:get(contributions, Site),
+    ?assert(maps:get(source_transportable, Contribution)),
+    %% Provider-independent source analysis deliberately does not claim that
+    %% every list pattern matches the complete wire schema.
+    ?assertNot(maps:get(source_capture_total, Contribution)),
+    ?assert(is_binary(iolist_to_binary(lower(Path, #{shared_service => ordinary})))).
+
+list_contribution_rejects_actor_data_test() ->
+    with_mutated_fixture("test_data/hls_list_reduction_fixture.erl",
+        <<"values = [A, B]}, Cell)">>,
+        <<"values = [A, _]}, Cell = #cell{values = [B | _]})">>,
+        fun(Path) ->
+            ?assertError({invalid_hls_statem_reduction_origin, data, [message]}, analyze(Path))
+        end).
+
+list_head_can_supply_a_typed_reduction_key_test() ->
+    with_mutated_fixture("test_data/hls_list_reduction_fixture.erl",
+        <<"#value{key = Key, values = [A, B]}">>,
+        <<"#value{values = [Key = A, B]}">>,
+        fun(Path) ->
+            ?assert(is_map(analyze(Path)))
+        end).
+
+list_projection_does_not_invent_a_u32_type_test() ->
+    with_mutated_fixture("test_data/hls_list_reduction_fixture.erl",
+        <<"#value{key = Key, values = [A, B]}">>,
+        <<"#value{values = [A | Key = [B]]}">>,
+        fun(Path) ->
+            ?assertException(error, {invalid_hls_statem_reduction_u32, 'Key', _}, analyze(Path))
+        end).
+
 actor_data_dependent_applicability_is_reported_not_globally_rejected_test() ->
     with_mutated_fixture(
         <<"counting(cast, #count_value{key = Key, value = Value}, Cell)\n">>,
@@ -425,7 +459,10 @@ deferred_type_forms(Module) ->
     ].
 
 with_mutated_fixture(Find, Replacement, Test) ->
-    {ok, Source} = file:read_file(?FIXTURE),
+    with_mutated_fixture(?FIXTURE, Find, Replacement, Test).
+
+with_mutated_fixture(Fixture, Find, Replacement, Test) ->
+    {ok, Source} = file:read_file(Fixture),
     Mutated = binary:replace(Source, Find, Replacement),
     ?assertNotEqual(Source, Mutated),
     Path = filename:join(
