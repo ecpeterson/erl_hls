@@ -12,6 +12,8 @@ Run the Erlang-side unit and CPU-reference tests locally:
 rebar3 eunit
 ```
 
+Run `python3 tools/compiler_differential.py XLS_ROOT --stage _build/differential-smoke --count 16 --rtl-batches 2` for generated BEAM/DSLX/JIT and RTL comparisons. The [differential testing guide](docs/compiler-differential.md) covers longer campaigns, saved witnesses, replay, and shrinking.
+
 The generated-RTL regression wrapper uses the configured Linux host:
 
 ```sh
