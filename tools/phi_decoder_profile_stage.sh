@@ -9,8 +9,7 @@ xls_root=$(cd "$xls_root" && pwd)
 stage_timeout=${3:-2h}
 shard_count=${4:-3}
 pipeline_stages=${5:-2}
-initiation_interval=${6:-2}
-scheduler_count=$((2 + 2 * shard_count))
+initiation_interval=${6:-1}
 trace_enabled=${ERL_HLS_PHI_PROFILE_TRACE:-0}
 
 if [[ "$trace_enabled" != 0 && "$trace_enabled" != 1 ]]; then
@@ -38,6 +37,7 @@ for artifact in \
     phi_decoder_profile.vvp \
     phi_decoder_profile.scheduler_profile \
     phi_decoder_profile.trace.csv \
+    phi_decoder_profile.events \
     xls_sim_bridge.o \
     xls_sim_bridge.vpi \
     phi_profile_trace.o \
@@ -69,14 +69,26 @@ timed_command() {
 bash "$stage/compile_phi_decoder_profile.sh" "$stage" "$xls_root" \
     "$stage_timeout" "$shard_count" "$pipeline_stages" "$initiation_interval"
 compiled=$(cd "$stage/compiled" && pwd -P)
-effect_domain_count=$(grep -c 'spawn effect_window::Arbiter<' \
-    "$compiled/sources/phi_decoder_profile_topology.x")
+
+# Read the immutable artifact configuration, not the caller's environment.
+read -r width height x_enabled z_enabled scheduler_count plane_count < <(
+    python3 - "$compiled/phi_decoder_profile.json" <<'PYCONFIG'
+import json, sys
+c = json.load(open(sys.argv[1]))
+print(c["width"], c["height"], int("x" in c["planes"]), int("z" in c["planes"]),
+      c["scheduler_count"], len(c["planes"]))
+PYCONFIG
+)
 
 timed_command \
     phi_decoder_profile-iverilog \
     iverilog \
     -g2012 \
     -s phi_decoder_profile_tb \
+    -Pphi_decoder_profile_tb.WIDTH="$width" \
+    -Pphi_decoder_profile_tb.HEIGHT="$height" \
+    -Pphi_decoder_profile_tb.X_ENABLED="$x_enabled" \
+    -Pphi_decoder_profile_tb.Z_ENABLED="$z_enabled" \
     -o phi_decoder_profile.vvp.new \
     phi_decoder_profile_tb.sv \
     "$compiled/phi_decoder_profile_top.v" \
@@ -84,28 +96,24 @@ timed_command \
     "$compiled/phi_decoder_profile.v"
 mv phi_decoder_profile.vvp.new phi_decoder_profile.vvp
 
-iverilog-vpi xls_sim_bridge.c
-# Bash 3.2 treats empty arrays as unset under nounset. Use the conditional
-# expansions below for both optional argument lists.
+# Optional interface trace; no census of optimized XLS implementation locals.
 trace_environment=()
 trace_module=()
 if [[ "$trace_enabled" == 1 ]]; then
     iverilog-vpi phi_profile_trace.c
     trace_environment=(
         ERL_HLS_PHI_PROFILE_SHARDS="$shard_count"
+        ERL_HLS_PHI_PROFILE_PLANE_COUNT="$plane_count"
         ERL_HLS_SIM_PHI_TRACE=phi_decoder_profile.trace.csv
+        ERL_HLS_SIM_TOP=phi_decoder_profile_tb
     )
-    trace_module=(-m phi_profile_trace)
+    trace_module=(-M "$stage" -m phi_profile_trace)
 fi
 
 if /usr/bin/time "${time_arguments[@]}" -o phi_decoder_profile-vvp.time.new \
         timeout --signal=TERM --kill-after=5m "$stage_timeout" \
-        env ERL_HLS_SIM_PROFILE_ONLY=1 \
-        ERL_HLS_SIM_TOP=phi_decoder_profile_tb \
-        ERL_HLS_SIM_SCHEDULER_PROFILE=phi_decoder_profile.scheduler_profile \
-        ${trace_environment[@]+"${trace_environment[@]}"} \
-        vvp -M "$stage" -m xls_sim_bridge ${trace_module[@]+"${trace_module[@]}"} \
-        phi_decoder_profile.vvp 2>&1 | \
+        env ${trace_environment[@]+"${trace_environment[@]}"} \
+        vvp ${trace_module[@]+"${trace_module[@]}"} phi_decoder_profile.vvp 2>&1 | \
         tee phi_decoder_profile.sim.log.new; then
     mv phi_decoder_profile-vvp.time.new phi_decoder_profile-vvp.time
     mv phi_decoder_profile.sim.log.new phi_decoder_profile.sim.log
@@ -117,186 +125,17 @@ else
         mv phi_decoder_profile.sim.log.new phi_decoder_profile.sim.log.failed
     exit "$status"
 fi
-
-awk -F= \
-    -v expected_schedulers="$scheduler_count" \
-    -v expected_window_routers="$scheduler_count" \
-    -v expected_window_domains="$effect_domain_count" '
-    /_selection_activations=/ {
-        name = $1
-        sub(/_selection_activations$/, "", name)
-        activations[name] = $2
-    }
-    /_mailbox_occupancy_samples=/ {
-        name = $1
-        sub(/_mailbox_occupancy_samples$/, "", name)
-        occupancy_samples[name] = $2
-    }
-    /_selection_cycles_selectable=/ {
-        name = $1
-        sub(/_selection_cycles_selectable$/, "", name)
-        accounted[name] += $2
-    }
-    /_selection_cycles_(executor_blocked|same_actor_only|waiting_egress_credit|no_actor_work|internal_other)=/ {
-        name = $1
-        sub(/_selection_cycles_(executor_blocked|same_actor_only|waiting_egress_credit|no_actor_work|internal_other)$/, "", name)
-        accounted[name] += $2
-    }
-    /_selection_cycles_same_actor_only=/ {
-        name = $1
-        sub(/_selection_cycles_same_actor_only$/, "", name)
-        same_actor[name] = $2
-    }
-    /_executor_decoupled=/ {
-        name = $1
-        sub(/_executor_decoupled$/, "", name)
-        executor_decoupled[name] = $2
-    }
-    /_same_actor_observed_(mailbox|entry|egress|internal_other)=/ {
-        name = $1
-        sub(/_same_actor_observed_(mailbox|entry|egress|internal_other)$/, "", name)
-        same_actor_observed[name] += $2
-    }
-    /_same_actor_followups=/ {
-        name = $1
-        sub(/_same_actor_followups$/, "", name)
-        followups[name] = $2
-    }
-    /_same_actor_followup_(mailbox|entry|egress|waiting_egress_credit|no_work)=/ {
-        name = $1
-        sub(/_same_actor_followup_(mailbox|entry|egress|waiting_egress_credit|no_work)$/, "", name)
-        followup_accounted[name] += $2
-    }
-    /_same_actor_followup_mailbox=/ {
-        name = $1
-        sub(/_same_actor_followup_mailbox$/, "", name)
-        followup_mailbox[name] = $2
-    }
-    /_same_actor_followup_direct_mailbox=/ {
-        name = $1
-        sub(/_same_actor_followup_direct_mailbox$/, "", name)
-        direct_mailbox[name] = $2
-    }
-    /^profile_observed_cycles=/ {
-        observed_cycles = $2
-    }
-    /^effect_window_router_candidates=/ {
-        window_router_candidates = $2
-    }
-    /^effect_window_router_count=/ {
-        window_router_count = $2
-    }
-    /^effect_window_domain_candidates=/ {
-        window_domain_candidates = $2
-    }
-    /^effect_window_domain_count=/ {
-        window_domain_count = $2
-    }
-    /^window_router_[0-9]+_requests=/ {
-        name = $1
-        sub(/_requests$/, "", name)
-        window_requests[name] = $2
-    }
-    /^window_router_[0-9]+_request_latencies=/ {
-        name = $1
-        sub(/_request_latencies$/, "", name)
-        window_request_latencies[name] = $2
-    }
-    /^window_router_[0-9]+_request_pending=/ {
-        name = $1
-        sub(/_request_pending$/, "", name)
-        window_request_pending[name] = $2
-    }
-    /^window_router_[0-9]+_grants=/ {
-        name = $1
-        sub(/_grants$/, "", name)
-        window_grants[name] = $2
-    }
-    /^window_router_[0-9]+_unmatched_grants=/ {
-        name = $1
-        sub(/_unmatched_grants$/, "", name)
-        window_unmatched_grants[name] = $2
-    }
-    /^window_router_[0-9]+_releases=/ {
-        name = $1
-        sub(/_releases$/, "", name)
-        window_releases[name] = $2
-    }
-    /^window_router_[0-9]+_owner_held=/ {
-        name = $1
-        sub(/_owner_held$/, "", name)
-        window_owner_held[name] = $2
-    }
-    /^window_router_[0-9]+_lifecycle_errors=/ {
-        name = $1
-        sub(/_lifecycle_errors$/, "", name)
-        window_lifecycle_errors[name] = $2
-    }
-    /^effect_window_owner_concurrency_[0-9]+_cycles=/ {
-        owner_histogram_cycles += $2
-    }
-    /^effect_window_request_pending_concurrency_[0-9]+_cycles=/ {
-        request_histogram_cycles += $2
-    }
-    END {
-        found = 0
-        for (name in activations) {
-            found++
-            if (accounted[name] != activations[name])
-                exit 1
-            if (occupancy_samples[name] != activations[name])
-                exit 1
-            if (executor_decoupled[name]) {
-                if (same_actor_observed[name] != 0 || followups[name] != 0)
-                    exit 1
-            } else if (same_actor_observed[name] != same_actor[name]) {
-                exit 1
-            }
-            if (followup_accounted[name] != followups[name])
-                exit 1
-            if (!executor_decoupled[name] &&
-                    (followups[name] > same_actor[name] ||
-                    same_actor[name] - followups[name] > 1))
-                exit 1
-            if (direct_mailbox[name] > followup_mailbox[name])
-                exit 1
-        }
-        if (found != expected_schedulers) {
-            printf "incomplete scheduler profile: found %d, expected %d\n", \
-                found, expected_schedulers > "/dev/stderr"
-            exit 1
-        }
-        found_window = 0
-        for (name in window_requests) {
-            found_window = 1
-            if (window_requests[name] != window_request_latencies[name] + window_request_pending[name])
-                exit 1
-            if (window_grants[name] != window_request_latencies[name] + window_unmatched_grants[name])
-                exit 1
-            if (window_grants[name] - window_releases[name] != window_owner_held[name])
-                exit 1
-            if (window_owner_held[name] < 0 || window_owner_held[name] > 1 || window_lifecycle_errors[name] != 0)
-                exit 1
-        }
-        if (!found_window ||
-                window_router_candidates != expected_window_routers ||
-                window_router_count != expected_window_routers ||
-                window_domain_candidates != expected_window_domains ||
-                window_domain_count != expected_window_domains ||
-                owner_histogram_cycles != observed_cycles ||
-                request_histogram_cycles != observed_cycles)
-            exit 1
-    }
-' phi_decoder_profile.scheduler_profile
+# vpiFinish can stop a simulator without a failing process exit status.
+grep -q '^PASS: decoder-only request-paced profile completed' phi_decoder_profile.sim.log
 
 {
+    printf 'width=%s height=%s planes=%s\n' "$width" "$height" "$plane_count"
     printf 'shard_count=%s\n' "$shard_count"
     printf 'scheduler_count=%s\n' "$scheduler_count"
     printf 'pipeline_stages=%s\n' "$pipeline_stages"
     printf 'initiation_interval=%s\n' "$initiation_interval"
     grep -H -E 'PROFILE_RESULT|PROFILE_ACTIVITY|PASS:' \
         phi_decoder_profile.sim.log
-    cat phi_decoder_profile.scheduler_profile
     wc -lc \
         "$compiled/sources/phi_decoder_profile_topology.x" \
         "$compiled/phi_decoder_profile.ir" \

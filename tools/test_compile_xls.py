@@ -237,7 +237,8 @@ class Builds(unittest.TestCase):
         self.assertIn('interrupted', report['error'])
 
     def test_profile_wrapper_publishes_metadata_ram_configuration_and_assets(self):
-        (self.inputs / 'phi_decoder_profile_topology.x').write_text('const WIDTH = u16:3;\nconst HEIGHT = u16:3;\n')
+        (self.inputs / 'phi_decoder_profile_topology.x').write_text('const WIDTH = u16:3;\nconst HEIGHT = u16:3;\nproc Phi_xReductionPlane {}\nproc Phi_zReductionPlane {}\n' + ''.join(f'proc SchedulerRouter{i} {{}}\n' for i in range(8)))
+        (self.inputs / 'phi_decoder_profile.json').write_text(json.dumps(dict(width=3, height=3, planes=['x', 'z'], shards_per_plane=3, scheduler_count=8, source_scheduler_count=2, phi_actor_count=18, source_actor_count=18)))
         shutil.copyfile(ROOT / 'tools/phi_scheduler_rams.sh', self.inputs / 'phi_scheduler_rams.sh')
         for asset in ('hls_1r1w_ram.v', 'phi_decoder_profile_top.v'):
             (self.inputs / asset).write_text('// ' + asset)
@@ -258,6 +259,13 @@ class Builds(unittest.TestCase):
             self.assertEqual(manifest['rtl'][asset], compiler.sha(release / asset))
         subprocess.run(command, cwd=self.root, check=True, stdout=subprocess.DEVNULL)
         self.assertEqual(self.statuses(self.inputs / 'compiled'), dict(ir=True, opt=True, codegen=True))
+        config_path = self.inputs / 'phi_decoder_profile.json'
+        valid_config = json.loads(config_path.read_text())
+        for changes in ({'width': 2}, {'planes': ['x']}, {'scheduler_count': 7}, {'shards_per_plane': 2}, {'phi_actor_count': 1}):
+            config_path.write_text(json.dumps({**valid_config, **changes}))
+            rejected = subprocess.run(command, cwd=self.root, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            self.assertNotEqual(rejected.returncode, 0)
+            self.assertEqual((self.inputs / 'compiled').resolve(), release)
 
     def test_preflight_preserves_existing_output(self):
         old = self.build()

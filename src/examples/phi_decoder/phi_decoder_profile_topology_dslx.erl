@@ -20,21 +20,20 @@ between schedulers.  Their counters remain distinct from the decoder counters.
 profile() ->
     profile(3).
 
--doc "Returns a physical profile with the selected shards per phi plane.".
--spec profile(pos_integer()) -> xls_topology_dslx:profile().
-profile(ShardCount) when ShardCount > 0, ShardCount =< 9 ->
+-doc "Returns a physical profile at a shard count or profile configuration.".
+-spec profile(pos_integer() | map()) -> xls_topology_dslx:profile().
+profile(Options) ->
+    Config = phi_decoder_profile:normalize(Options),
     #{
         name => phi_decoder_profile_topology,
         channel_depth => 1,
         actor_egress_depth => burst,
-        reduction_placements => #{
-            phi_x => source_fragments,
-            phi_z => source_fragments
-        },
-        scheduler_groups => scheduler_groups(ShardCount)
-    };
-profile(_ShardCount) ->
-    error(badarg).
+        reduction_placements => maps:from_list([
+            {Phi, source_fragments}
+            || #{phi := Phi} <- phi_decoder_profile:planes(Config)
+        ]),
+        scheduler_groups => scheduler_groups(Config)
+    }.
 
 -doc "Normalizes the checked three-shard scheduler plan.".
 -spec scheduler_plan() -> hls_scheduler_plan:plan().
@@ -42,11 +41,12 @@ scheduler_plan() ->
     scheduler_plan(3).
 
 -doc "Normalizes a decoder-only scheduler plan.".
--spec scheduler_plan(pos_integer()) -> hls_scheduler_plan:plan().
-scheduler_plan(ShardCount) ->
+-spec scheduler_plan(pos_integer() | map()) -> hls_scheduler_plan:plan().
+scheduler_plan(Options) ->
+    Config = phi_decoder_profile:normalize(Options),
     hls_scheduler_plan:normalize(
-        hls_topology:from_module(phi_decoder_profile_topology),
-        scheduler_groups(ShardCount)
+        hls_topology:normalize(phi_decoder_profile_topology:topology(Config)),
+        scheduler_groups(Config)
     ).
 
 -doc "Generates the checked three-shard DSLX artifact.".
@@ -54,33 +54,28 @@ scheduler_plan(ShardCount) ->
 to_dslx() ->
     to_dslx(3).
 
--doc "Generates the decoder-only DSLX artifact at one shard count.".
--spec to_dslx(pos_integer()) -> iolist().
-to_dslx(ShardCount) ->
-    Plan = hls_topology:from_module(phi_decoder_profile_topology),
-    xls_topology_dslx:emit(Plan, profile(ShardCount)).
+-doc "Generates the decoder-only DSLX artifact at a shard count or configuration.".
+-spec to_dslx(pos_integer() | map()) -> iolist().
+to_dslx(Options) ->
+    Config = phi_decoder_profile:normalize(Options),
+    Plan = hls_topology:normalize(phi_decoder_profile_topology:topology(Config)),
+    xls_topology_dslx:emit(Plan, profile(Config)).
 
-scheduler_groups(ShardCount) when ShardCount > 0, ShardCount =< 9 ->
+scheduler_groups(Config = #{shards := ShardCount}) ->
+    Planes = phi_decoder_profile:planes(Config),
     maps:from_list(
         [
-            {{0, syndrome_x}, group([{family, syndrome_x}])},
-            {{1, syndrome_z}, group([{family, syndrome_z}])}
+            {{Seed, Source}, group([{family, Source}])}
+            || #{source := Source, source_seed := Seed} <- Planes
         ] ++
         [
-            {{2, phi_x, Shard}, group([
-                {family, phi_x, {interleaved, Shard, ShardCount}}
+            {{Seed, Phi, Shard}, group([
+                {family, Phi, {interleaved, Shard, ShardCount}}
             ])}
-            || Shard <- lists:seq(0, ShardCount - 1)
-        ] ++
-        [
-            {{3, phi_z, Shard}, group([
-                {family, phi_z, {interleaved, Shard, ShardCount}}
-            ])}
-            || Shard <- lists:seq(0, ShardCount - 1)
+            || #{phi := Phi, phi_seed := Seed} <- Planes,
+               Shard <- lists:seq(0, ShardCount - 1)
         ]
-    );
-scheduler_groups(_ShardCount) ->
-    error(badarg).
+    ).
 
 group(Members) ->
     #{

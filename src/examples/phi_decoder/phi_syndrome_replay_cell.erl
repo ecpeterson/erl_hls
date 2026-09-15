@@ -19,7 +19,7 @@ the diagnostic removes data-qubit actors, measurement-noise actors, host
 correction feedback, and final Pauli-frame queries.  A half-scale threshold
 keeps the workload nontrivial.  The generated profiling topology realizes
 each source family with a separate scheduler so its activity remains distinct
-from the six phi schedulers under measurement.
+from the selected phi schedulers under measurement.
 """.
 
 -behavior(hls_statem).
