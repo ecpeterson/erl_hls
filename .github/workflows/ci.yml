@@ -229,6 +229,7 @@ jobs:
             _build/integer-arithmetic/**
             _build/collections/**
             _build/patterns/**
+            _build/type-shapes/**
             _build/xls_sim/regsvc/*.ir
             _build/xls_sim/regsvc/*.v
             _build/xls_sim/regsvc/sim/vvp.log

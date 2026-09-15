@@ -140,8 +140,7 @@ analyze_source(Forms, #{
             OpenIndex = index_opens(Opens),
             ValidOpens = [validate_open(Open, Forms, DataName)
                 || Open <- Opens],
-            Shapes = xls_type_shape:records(Forms,
-                [Tag || #{tag := Tag} <- Contributions0]),
+            Shapes = contribution_shapes(Forms, Contributions0),
             Contributions = [
                 validate_contribution(
                     Contribution,
@@ -406,6 +405,15 @@ contribution_result({tuple, _Line, [NextPhase, NextData,
     };
 contribution_result(_Result) ->
     none.
+
+contribution_shapes(Forms, Contributions) ->
+    Requests = lists:foldl(fun
+        (#{tag := Tag, clause := {clause, _, [Message | _], [], _}}, Acc) ->
+            Fields = xls_pattern_totality:shape_fields(Message),
+            Acc#{Tag => lists:usort(Fields ++ maps:get(Tag, Acc, []))};
+        (_, Acc) -> Acc
+    end, #{}, Contributions),
+    xls_type_shape:records(Forms, Requests).
 
 validate_contribution(
     Contribution = #{

@@ -100,13 +100,24 @@ nested_parameterized_aliases_resolve_once_per_source_test() ->
         Session = trace:session_create(type_shape_reads, self(), []),
         try
             1 = trace:function(Session, {hls_source, read, 2}, true, [call_count]),
-            Shapes = xls_type_shape:records(Forms, [cell, value]),
+            Shapes = xls_type_shape:records(Forms, #{cell => [values], value => [values]}),
             ?assertMatch(#{cell := {record, cell, #{values := {array, {array, unknown, 2}, 3}}},
                 value := {record, value, #{values := {array, {array, unknown, 2}, 3}}}}, Shapes),
             ?assertEqual({call_count, 1}, trace:info(Session, {hls_source, read, 2}, call_count))
         after
             trace:session_destroy(Session)
         end
+    end).
+
+plain_heads_do_not_read_unneeded_provider_sources_test() ->
+    with_source(fun(Actor, Provider, _Header) ->
+        {ok, Source} = file:read_file(Actor),
+        Plain = binary:replace(Source, <<"values = [A, B]">>, <<"values = _Values">>),
+        ok = file:write_file(Actor, binary:replace(Plain, <<"value = A + B">>, <<"value = 0">>)),
+        ok = file:write_file(Provider, "-module(hls_shape_type_fixture).\n-type vector() :: ?PRIVATE_TYPE.\n"),
+        ?assert(total(xls_parse:actor_interface(Actor))),
+        ok = load(Actor, []),
+        ?assert(total(hls_actor_interface:from_module(hls_shape_reduction_fixture)))
     end).
 
 captured_alias_context_survives_a_changed_working_directory_test() ->

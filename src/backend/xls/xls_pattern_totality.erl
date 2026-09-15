@@ -1,7 +1,21 @@
 -module(xls_pattern_totality).
 -moduledoc false.
 
--export([prove/2, assertions/2]).
+-export([prove/2, assertions/2, shape_fields/1]).
+
+%% Fresh scalar bindings need no alias facts. In particular, a provider with
+%% private preprocessing requirements must not affect unrelated plain heads.
+-spec shape_fields(erl_parse:af_pattern()) -> [atom()].
+shape_fields({record, _, _, Fields}) ->
+    [Field || {record_field, _, {atom, _, Field}, Pattern} <- Fields,
+        needs_shape(Pattern)];
+shape_fields({match, _, Left, Right}) -> shape_fields(Left) ++ shape_fields(Right);
+shape_fields(_) -> [].
+
+needs_shape({cons, _, _, _}) -> true;
+needs_shape({nil, _}) -> true;
+needs_shape({match, _, Left, Right}) -> needs_shape(Left) orelse needs_shape(Right);
+needs_shape(_) -> false.
 
 %% A successful proof returns precisely the array dimensions it used. These
 %% are rechecked against actual DSLX types; source aliases alone cannot grant

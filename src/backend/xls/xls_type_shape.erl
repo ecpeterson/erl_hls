@@ -11,21 +11,25 @@
 %% Deliberately independent of loaded modules and provider callbacks. Aliases
 %% are source declarations, not proof of a provider's emitted hardware type;
 %% consumers must retain and check the dimensions on which they rely in DSLX.
--spec records([erl_parse:abstract_form()], [atom()]) -> #{atom() => shape()}.
-records(Forms, Names) ->
+-spec records([erl_parse:abstract_form()], #{atom() => [atom()]}) -> #{atom() => shape()}.
+records(Forms, Requests) ->
     Context = case xls_parse:find_optional_attribute(Forms, hls_source_context) of
         {ok, Captured} -> Captured;
         none -> hls_source:from_forms(Forms, [])
     end,
     Source = #{path := SourcePath} = source(Forms, Context),
-    {Records, _Cache} = lists:mapfoldl(fun(Name, Cache) ->
+    {Records, _Cache} = lists:mapfoldl(fun({Name, RequestedFields}, Cache) ->
         {attribute, _, record, {Name, Fields}} = xls_parse:find_record(Forms, Name),
         {Shapes, Next} = lists:mapfoldl(fun({typed_record_field, Field, Type}, Acc) ->
-            {Shape, Updated} = resolve(Type, #{}, Source, Acc, []),
-            {{xls_parse:record_field_name(Field), shape(Shape)}, Updated}
+            FieldName = xls_parse:record_field_name(Field),
+            {Shape, Updated} = case lists:member(FieldName, RequestedFields) of
+                true -> resolve(Type, #{}, Source, Acc, []);
+                false -> {unknown, Acc}
+            end,
+            {{FieldName, shape(Shape)}, Updated}
         end, Cache, Fields),
         {{Name, {record, Name, maps:from_list(Shapes)}}, Next}
-    end, #{SourcePath => Source}, lists:usort(Names)),
+    end, #{SourcePath => Source}, lists:sort(maps:to_list(Requests))),
     maps:from_list(Records).
 
 source(Forms, Context) ->
