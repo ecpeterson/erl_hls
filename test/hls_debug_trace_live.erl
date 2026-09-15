@@ -2,8 +2,10 @@
 -export([run/1]).
 
 run(Stage) ->
-    {ok, Fabric} = hls_fabric:start_link(filename:join(Stage, "debug_tx"), filename:join(Stage, "debug_rx")),
-    try run(Fabric, Stage) after hls_fabric:stop(Fabric) end.
+    {ok, Device} = hls_fabric:start_link(filename:join(Stage, "debug_tx"), filename:join(Stage, "debug_rx")),
+    {ok, Fabric} = hls_fabric:open_session(Device),
+    try run(Fabric, Stage)
+    after hls_fabric:stop(Fabric), hls_fabric:stop(Device) end.
 
 run(Fabric, Stage) ->
     {ok, Client} = hls_debug:start_link(undefined, {fabric, Fabric, 1}),

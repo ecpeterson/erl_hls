@@ -34,12 +34,14 @@ simulated_rtl_test_() ->
             DebugReadPath = filename:join(SimDir, "debug_rx"),
             {setup,
                 fun() ->
-                    {ok, AppFabric} = hls_fabric:start_link(
+                    {ok, AppDevice} = hls_fabric:start_link(
                         WritePath, ReadPath
                     ),
-                    {ok, DebugFabric} = hls_fabric:start_link(
+                    {ok, DebugDevice} = hls_fabric:start_link(
                         DebugWritePath, DebugReadPath
                     ),
+                    {ok, AppFabric} = hls_fabric:open_session(AppDevice),
+                    {ok, DebugFabric} = hls_fabric:open_session(DebugDevice),
                     {ok, PidOne} = hls_gs:start_link(regsvc, [], [
                         {fabric, AppFabric, 1}
                     ]),
@@ -53,8 +55,8 @@ simulated_rtl_test_() ->
                         regsvc, {fabric, DebugFabric, 2}
                     ),
                     {
-                        AppFabric,
-                        DebugFabric,
+                        {AppDevice, AppFabric},
+                        {DebugDevice, DebugFabric},
                         PidOne,
                         PidTwo,
                         DebugPidOne,
@@ -62,8 +64,8 @@ simulated_rtl_test_() ->
                     }
                 end,
                 fun({
-                    AppFabric,
-                    DebugFabric,
+                    {AppDevice, AppFabric},
+                    {DebugDevice, DebugFabric},
                     PidOne,
                     PidTwo,
                     DebugPidOne,
@@ -74,7 +76,9 @@ simulated_rtl_test_() ->
                     regsvc:stop(PidTwo),
                     regsvc:stop(PidOne),
                     hls_fabric:stop(DebugFabric),
-                    hls_fabric:stop(AppFabric)
+                    hls_fabric:stop(AppFabric),
+                    hls_fabric:stop(DebugDevice),
+                    hls_fabric:stop(AppDevice)
                 end,
                 fun({
                     _AppFabric,

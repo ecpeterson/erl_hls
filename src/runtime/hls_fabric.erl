@@ -1,9 +1,10 @@
 -module(hls_fabric).
 -moduledoc """
-Owns one routed frame transport with bounded transmit admission and receive
-credits. Application and debug streams use separate brokers. Blocking raw I/O
-runs in two linked workers, leaving route ownership, deadlines, and inspection
-responsive when either physical direction stalls.
+Owns one routed frame device with bounded transmit admission and receive
+credits. Application and debug streams use separate device brokers. Logical
+sessions may close independently while the device and its two raw I/O workers
+remain open. Route ownership, deadlines, and inspection stay responsive when
+either physical direction stalls.
 
 `send/4` waits for write completion; `send_request/5` uses OTP's asynchronous
 request interface. A `{not_sent, Reason}` rejection guarantees that this frame
@@ -16,13 +17,15 @@ use and owner-specific. A slow route eventually blocks the shared receive
 stream; it cannot accumulate an unbounded number of frames in its mailbox.
 The route remains transport metadata, not an actor-message sender identity.
 
-Routes are retired when their owners exit. Reuse requires a fresh, drained or
-reset transport session; see `docs/host-transactions.md`.
+Routes are retired when their owners or sessions exit. Retirement survives
+logical session replacement. Reuse requires a drained/reset device boundary;
+see `docs/host-transactions.md`. Device closure is confirmed separately from
+broker death; unconfirmed raw I/O release prevents a competing open in this VM.
 """.
 
 -behavior(gen_server).
 
--export([start_link/2, start_link/3, stop/1]).
+-export([start_link/2, start_link/3, stop/1, close/2, await_closed/2, open_session/1, drain_session/2]).
 -export([register_route/3, send/4, send/5, send_request/5, ack/2, info/1, client_info/1]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2]).
 
@@ -32,9 +35,11 @@ reset transport session; see `docs/host-transactions.md`.
 -type deadline() :: timeout() | {abs, integer()}.
 -export_type([route/0, header/0, deadline/0]).
 
--record(route_owner, {pid :: pid(), monitor :: reference()}).
+-record(route_owner, {pid :: pid(), monitor :: reference(), session = none :: pid() | none}).
+-record(session, {monitor :: reference(), status = open :: open | draining}).
 -record(tx, {
     id :: reference(),
+    session = none :: pid() | none,
     from :: gen_server:from() | none,
     monitor :: reference(),
     timer :: reference() | none,
@@ -43,6 +48,8 @@ reset transport session; see `docs/host-transactions.md`.
     bytes :: binary()
 }).
 -record(state, {
+    lease :: reference(),
+    sessions = #{} :: #{pid() => #session{}},
     writer :: pid(),
     writer_ready = false :: boolean(),
     reader :: pid(),
@@ -66,7 +73,29 @@ start_link(WritePath, ReadPath) -> start_link(WritePath, ReadPath, #{}).
 start_link(WritePath, ReadPath, Options) ->
     gen_server:start_link(?MODULE, {WritePath, ReadPath, Options}, []).
 
+-doc "Stops a session or device broker. Raw I/O release may still be pending; use close/2 to await it.".
 stop(Pid) -> gen_server:stop(Pid).
+
+-doc "Stops the device broker and waits for confirmed descriptor closure. Timeout leaves its lease held.".
+-spec close(pid(), timeout()) -> ok | {error, term()}.
+close(Device, Timeout) when Timeout =:= infinity; is_integer(Timeout), Timeout >= 0 ->
+    Lease = gen_server:call(Device, io_lease),
+    ok = stop(Device),
+    await_closed(Lease, Timeout).
+
+-doc "Waits on the io.lease returned by info/1, including after the device broker exits.".
+-spec await_closed(reference(), timeout()) -> ok | {error, term()}.
+await_closed(Lease, Timeout) when is_reference(Lease), Timeout =:= infinity;
+        is_reference(Lease), is_integer(Timeout), Timeout >= 0 ->
+    hls_fabric_lease:await(Lease, Timeout).
+
+-doc "Opens a replaceable logical session on a persistent device broker. Accepts the same frame API.".
+-spec open_session(pid()) -> {ok, pid()} | {error, term()}.
+open_session(Device) when node(Device) =:= node() -> hls_fabric_session:start_link(Device).
+
+-doc "Stops session admission, waits for host writes and receipts, then retires its routes. Does not fence device work.".
+-spec drain_session(pid(), timeout()) -> ok | {error, draining}.
+drain_session(Session, Timeout) -> gen_server:call(Session, drain_session, Timeout).
 
 -spec register_route(pid(), route(), pid()) -> ok | {error, term()}.
 register_route(Pid, Route, Owner) when node(Pid) =:= node(), node(Owner) =:= node() ->
@@ -113,17 +142,35 @@ init({WritePath, ReadPath, Options}) ->
             #{tx_limit := Tx, tx_route_limit := TxRoute,
                 rx_limit := Rx, rx_route_limit := RxRoute} = maps:merge(Defaults, Options),
             process_flag(trap_exit, true),
-            Broker = self(),
-            Writer = spawn_link(fun() -> hls_fabric_io:writer(WritePath, Broker) end),
-            Reader = spawn_link(fun() -> hls_fabric_io:reader(ReadPath, Broker) end),
-            {ok, pump_rx(#state{writer = Writer, reader = Reader,
-                tx_limit = Tx, tx_route_limit = TxRoute, rx_limit = Rx, rx_route_limit = RxRoute})}
+            case hls_fabric_lease:open(WritePath, ReadPath, self()) of
+                {ok, Lease, Writer, Reader} ->
+                    {ok, pump_rx(#state{lease = Lease, writer = Writer, reader = Reader,
+                        tx_limit = Tx, tx_route_limit = TxRoute, rx_limit = Rx, rx_route_limit = RxRoute})};
+                {error, Reason} -> {stop, Reason}
+            end
     end.
 
-handle_call({register_route, Route, Owner}, _From, State = #state{routes = Routes})
+handle_call(attach_session, {Session, _}, State = #state{sessions = Sessions}) ->
+    case Sessions of
+        #{Session := _} -> {reply, ok, State};
+        _ ->
+            Entry = #session{monitor = monitor(process, Session)},
+            {reply, ok, State#state{sessions = Sessions#{Session => Entry}}}
+    end;
+handle_call(io_lease, _From, State = #state{lease = Lease}) -> {reply, Lease, State};
+handle_call({session, Session, Request}, From, State = #state{sessions = Sessions}) ->
+    case {Request, Sessions} of
+        {info, _} -> request(info, Session, From, State);
+        {_, #{Session := #session{status = open}}} -> settle(request(Request, Session, From, State));
+        {{send, _, _, _, _}, _} -> reject(session_closed, State);
+        _ -> {reply, {error, session_closed}, State}
+    end;
+handle_call(Request, From, State) -> settle(request(Request, none, From, State)).
+
+request({register_route, Route, Owner}, Session, _From, State = #state{routes = Routes})
         when is_pid(Owner) ->
     case {hls_fabric_io:valid_route(Route), Routes} of
-        {true, #{Route := #route_owner{pid = Owner}}} ->
+        {true, #{Route := #route_owner{pid = Owner, session = Session}}} ->
             case is_process_alive(Owner) of
                 true -> {reply, ok, State};
                 false -> {reply, {error, {route_retired, Route}}, retire(Owner, State)}
@@ -137,30 +184,44 @@ handle_call({register_route, Route, Owner}, _From, State = #state{routes = Route
                     {reply, {error, {route_retired, Route}}, retire(Existing, State)}
             end;
         {true, _} ->
-            Entry = #route_owner{pid = Owner, monitor = monitor(process, Owner)},
+            Entry = #route_owner{pid = Owner, monitor = monitor(process, Owner), session = Session},
             {reply, ok, State#state{routes = Routes#{Route => Entry}}};
         {false, _} -> {reply, {error, {invalid_route, Route}}, State}
     end;
-handle_call({send, Route, Header, Payload, Deadline}, From, State)
+request({send, Route, Header, Payload, Deadline}, Session, From, State)
         when is_integer(Deadline); Deadline =:= infinity ->
     case hls_fabric_io:encode(Route, Header, Payload) of
         {error, Reason} -> reject(Reason, State);
-        {ok, Bytes} -> admit(Route, Bytes, Deadline, From, State)
+        {ok, Bytes} -> admit(Route, Bytes, Deadline, Session, From, State)
     end;
-handle_call(info, _From, State) -> {reply, snapshot(State), State};
-handle_call(Request, _From, State) -> {reply, {error, {invalid_request, Request}}, State}.
+request(info, Session, _From, State) ->
+    {reply, (snapshot(State))#{session => Session}, State};
+request(Request, _Session, _From, State) -> {reply, {error, {invalid_request, Request}}, State}.
 
-handle_cast({ack, Owner, Receipt}, State = #state{receipts = Receipts}) ->
+handle_cast(Message, State) -> settle(cast(Message, State)).
+handle_info(Message, State) -> settle(event(Message, State)).
+
+settle({noreply, State}) -> {noreply, finish_draining(State)};
+settle({reply, Reply, State}) -> {reply, Reply, finish_draining(State)};
+settle(Result) -> Result.
+
+cast({drain_session, Session}, State = #state{sessions = Sessions}) ->
+    case Sessions of
+        #{Session := Entry} ->
+            {noreply, State#state{sessions = Sessions#{Session := Entry#session{status = draining}}}};
+        _ -> {noreply, State}
+    end;
+cast({ack, Owner, Receipt}, State = #state{receipts = Receipts}) ->
     case Receipts of
         #{Receipt := {Owner, _Route}} ->
             {noreply, pump_rx(State#state{receipts = maps:remove(Receipt, Receipts)})};
         _ -> {noreply, count(ignored_acks, State)}
     end;
-handle_cast(_Message, State) -> {noreply, State}.
+cast(_Message, State) -> {noreply, State}.
 
-handle_info({writer_ready, Writer}, State = #state{writer = Writer}) ->
+event({writer_ready, Writer}, State = #state{writer = Writer}) ->
     {noreply, pump_tx(State#state{writer_ready = true})};
-handle_info({written, Writer, ID, ok},
+event({written, Writer, ID, ok},
         State = #state{writer = Writer, active = #tx{id = ID, deadline = Deadline, route = Route} = Tx}) ->
     case expired(Deadline) of
         false ->
@@ -170,14 +231,14 @@ handle_info({written, Writer, ID, ok},
             complete(Tx, {error, {write_timeout, Route}}),
             {stop, {write_timeout, Route}, State#state{active = none}}
     end;
-handle_info({written, Writer, ID, {error, Reason}},
+event({written, Writer, ID, {error, Reason}},
         State = #state{writer = Writer, active = #tx{id = ID} = Tx}) ->
     complete(Tx, {error, Reason}),
     {stop, {write_failed, Reason}, State#state{active = none}};
-handle_info({timeout, Timer, ID}, State = #state{active = #tx{id = ID, timer = Timer, route = Route} = Tx}) ->
+event({timeout, Timer, ID}, State = #state{active = #tx{id = ID, timer = Timer, route = Route} = Tx}) ->
     complete(Tx, {error, {write_timeout, Route}}),
     {stop, {write_timeout, Route}, State#state{active = none}};
-handle_info({timeout, Timer, ID}, State = #state{queued = Queued}) ->
+event({timeout, Timer, ID}, State = #state{queued = Queued}) ->
     {Expired, Remaining} = lists:partition(fun(#tx{id = Ref, timer = T}) ->
         Ref =:= ID andalso T =:= Timer
     end, queue:to_list(Queued)),
@@ -185,20 +246,23 @@ handle_info({timeout, Timer, ID}, State = #state{queued = Queued}) ->
     Next = lists:foldl(fun(_, Acc) -> count(expired, Acc) end,
         State#state{queued = queue:from_list(Remaining)}, Expired),
     {noreply, pump_tx(Next)};
-handle_info({received, Reader, Route, Header, Payload}, State = #state{reader = Reader, reading = true}) ->
+event({received, Reader, Route, Header, Payload}, State = #state{reader = Reader, reading = true}) ->
     {noreply, pump_rx(State#state{reading = false, buffered = {Route, Header, Payload}})};
-handle_info({'DOWN', Monitor, process, Owner, _Reason}, State) ->
+event({'DOWN', Monitor, process, Session, _Reason}, State = #state{sessions = Sessions})
+        when is_map_key(Session, Sessions), (map_get(Session, Sessions))#session.monitor =:= Monitor ->
+    {noreply, pump_tx(retire_session(Session, State))};
+event({'DOWN', Monitor, process, Owner, _Reason}, State) ->
     case owns_monitor(Monitor, State) of
         true -> {noreply, pump_tx(retire(Owner, State))};
         false -> {noreply, State}
     end;
-handle_info({'EXIT', Writer, Reason}, State = #state{writer = Writer}) ->
+event({'EXIT', Writer, Reason}, State = #state{writer = Writer}) ->
     {stop, {writer_down, Reason}, State};
-handle_info({'EXIT', Reader, Reason}, State = #state{reader = Reader}) ->
+event({'EXIT', Reader, Reason}, State = #state{reader = Reader}) ->
     {stop, {reader_down, Reason}, State};
-handle_info(_Message, State) -> {noreply, State}.
+event(_Message, State) -> {noreply, State}.
 
-admit(Route, Bytes, Deadline, From = {Owner, _}, State = #state{
+admit(Route, Bytes, Deadline, Session, From = {Owner, _}, State = #state{
     queued = Queued, tx_limit = Limit, tx_route_limit = RouteLimit
 }) ->
     Transactions = transactions(State),
@@ -213,7 +277,7 @@ admit(Route, Bytes, Deadline, From = {Owner, _}, State = #state{
                 infinity -> none;
                 _ -> erlang:start_timer(max(0, Deadline - erlang:monotonic_time(millisecond)), self(), ID)
             end,
-            Tx = #tx{id = ID, from = From, monitor = monitor(process, Owner), timer = Timer,
+            Tx = #tx{id = ID, session = Session, from = From, monitor = monitor(process, Owner), timer = Timer,
                 deadline = Deadline, route = Route, bytes = Bytes},
             {noreply, pump_tx(State#state{queued = queue:in(Tx, Queued)})}
     end.
@@ -270,6 +334,53 @@ retire(Owner, State = #state{routes = Routes, receipts = Receipts, queued = Queu
     pump_rx(State#state{routes = NewRoutes, receipts = Remaining,
         queued = queue:from_list(Live), active = NextActive}).
 
+finish_draining(State = #state{sessions = Sessions}) ->
+    maps:fold(fun
+        (Session, #session{status = draining}, Acc) ->
+            case session_busy(Session, Acc) of
+                true -> Acc;
+                false ->
+                    gen_server:cast(Session, {session_drained, self()}),
+                    retire_session(Session, Acc)
+            end;
+        (_Session, _Entry, Acc) -> Acc
+    end, State, Sessions).
+
+session_busy(Session, State = #state{routes = Routes, receipts = Receipts, buffered = Buffered}) ->
+    Owns = fun(Route) ->
+        case Routes of #{Route := #route_owner{session = Session}} -> true; _ -> false end
+    end,
+    lists:any(fun(#tx{session = S}) -> S =:= Session end, transactions(State)) orelse
+        lists:any(fun({_Owner, Route}) -> Owns(Route) end, maps:values(Receipts)) orelse
+        case Buffered of {Route, _, _} -> Owns(Route); none -> false end.
+
+retire_session(Session, State = #state{sessions = Sessions, routes = Routes,
+        queued = Queued, active = Active, receipts = Receipts}) ->
+    #session{monitor = Monitor} = maps:get(Session, Sessions),
+    demonitor(Monitor, [flush]),
+    Retired = [Route || {Route, #route_owner{session = S}} <- maps:to_list(Routes), S =:= Session],
+    NewRoutes = lists:foldl(fun(Route, Acc) ->
+        #route_owner{monitor = Ref} = maps:get(Route, Acc),
+        demonitor(Ref, [flush]), Acc#{Route := retired}
+    end, Routes, Retired),
+    {Abandoned, Remaining} = lists:partition(fun(#tx{session = S}) -> S =:= Session end,
+        queue:to_list(Queued)),
+    [complete(Tx, {error, {not_sent, session_closed}}) || Tx <- Abandoned],
+    NextActive = case Active of
+        #tx{session = Session} = Tx ->
+            case Tx#tx.from of
+                none -> ok;
+                From -> gen_server:reply(From, {error, {transport_down, session_closed}})
+            end,
+            Tx#tx{from = none};
+        _ -> Active
+    end,
+    pump_rx(State#state{sessions = maps:remove(Session, Sessions), routes = NewRoutes,
+        queued = queue:from_list(Remaining), active = NextActive,
+        receipts = maps:filter(fun(_Receipt, {_Owner, Route}) ->
+            not lists:member(Route, Retired)
+        end, Receipts)}).
+
 pump_rx(State = #state{buffered = {Route, Header, Payload}, routes = Routes, receipts = Receipts,
         rx_limit = Limit, rx_route_limit = RouteLimit}) ->
     case Routes of
@@ -293,7 +404,7 @@ pump_rx(State) -> State.
 
 count(Key, State = #state{counts = Counts}) -> State#state{counts = Counts#{Key := maps:get(Key, Counts) + 1}}.
 
-snapshot(State = #state{routes = Routes, queued = Queued, active = Active, writer_ready = Ready,
+snapshot(State = #state{lease = Lease, reader = Reader, writer = Writer, sessions = Sessions, routes = Routes, queued = Queued, active = Active, writer_ready = Ready,
         reading = Reading, buffered = Buffered, receipts = Receipts, counts = Counts,
         tx_limit = TxLimit, tx_route_limit = TxRouteLimit, rx_limit = RxLimit, rx_route_limit = RxRouteLimit}) ->
     RouteInfo = maps:map(fun
@@ -306,7 +417,9 @@ snapshot(State = #state{routes = Routes, queued = Queued, active = Active, write
         #tx{route = Route, bytes = Bytes, deadline = Deadline} ->
             #{route => Route, bytes => byte_size(Bytes), deadline => Deadline}
     end,
-    #{tx => #{capacity => TxLimit, route_capacity => TxRouteLimit, queued => queue:len(Queued),
+    #{device => self(), io => #{lease => Lease, reader => Reader, writer => Writer},
+        sessions => maps:map(fun(_Pid, #session{status = Status}) -> Status end, Sessions),
+        tx => #{capacity => TxLimit, route_capacity => TxRouteLimit, queued => queue:len(Queued),
             active => ActiveInfo, writer_ready => Ready,
             per_route => lists:foldl(fun(#tx{route = R}, Acc) ->
                 maps:update_with(R, fun(N) -> N + 1 end, 1, Acc)
@@ -317,9 +430,9 @@ snapshot(State = #state{routes = Routes, queued = Queued, active = Active, write
         routes => RouteInfo, counts => Counts}.
 
 terminate(Reason, #state{writer = Writer, reader = Reader, queued = Queued, active = Active}) ->
-    %% Killing a worker cannot undo bytes already transferred by a blocked OS
-    %% call. The stream must be drained/reset before a replacement is opened.
+    %% The workers finish any raw operation before closing their descriptors.
+    %% Their lease remains held until both explicitly confirm closure.
     [complete(Tx, {error, {not_sent, {transport_down, Reason}}}) || Tx <- queue:to_list(Queued)],
     case Active of none -> ok; _ -> complete(Active, {error, {transport_down, Reason}}) end,
-    [begin unlink(Pid), exit(Pid, kill) end || Pid <- [Writer, Reader]],
+    [Pid ! stop || Pid <- [Writer, Reader]],
     ok.

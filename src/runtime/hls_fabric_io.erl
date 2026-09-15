@@ -3,32 +3,59 @@
 
 %% Each raw descriptor belongs to one worker. The broker never enters an
 %% operating-system open/read/write, and permits at most one frame per worker.
--export([writer/2, reader/2, encode/3, valid_route/1]).
+-export([run/4, encode/3, valid_route/1]).
 
-writer(Path, Broker) ->
-    {ok, FD} = file:open(Path, [write, raw, binary]),
-    Broker ! {writer_ready, self()},
-    try write_loop(FD, Broker) after file:close(FD) end.
+run(Direction, Path, Broker, Lease) ->
+    Mode = case Direction of writer -> write; reader -> read end,
+    case file:open(Path, [Mode, raw, binary]) of
+        {ok, FD} ->
+            try
+                case is_process_alive(Broker) of
+                    false -> ok;
+                    true when Direction =:= writer ->
+                        Broker ! {writer_ready, self()}, write_loop(FD, Broker);
+                    true -> read_loop(FD, Broker)
+                end
+            after hls_fabric_lease:closed(Lease, file:close(FD)) end;
+        {error, Reason} ->
+            hls_fabric_lease:closed(Lease, ok),
+            exit({open_failed, Reason})
+    end.
 
 write_loop(FD, Broker) ->
     receive
         {write, ID, Bytes} ->
             Broker ! {written, self(), ID, file:write(FD, Bytes)},
-            write_loop(FD, Broker)
+            write_loop(FD, Broker);
+        stop -> ok;
+        {'EXIT', Broker, _Reason} -> ok
     end.
-
-reader(Path, Broker) ->
-    {ok, FD} = file:open(Path, [read, raw, binary]),
-    try read_loop(FD, Broker) after file:close(FD) end.
 
 read_loop(FD, Broker) ->
     receive
         read ->
-            {ok, <<Destination:16/little, Source:16/little>>} = read_exact(FD, 4),
-            {ok, <<Words:8, TxID:8, Flags:8, Tag:8>>} = read_exact(FD, 4),
-            {ok, Payload} = read_exact(FD, 4 * Words),
-            Broker ! {received, self(), {Source, Destination}, {Tag, TxID, Flags}, Payload},
-            read_loop(FD, Broker)
+            case read_frame(FD) of
+                {ok, Route, Header, Payload} ->
+                    Broker ! {received, self(), Route, Header, Payload},
+                    read_loop(FD, Broker);
+                {error, Reason} ->
+                    case is_process_alive(Broker) of
+                        true -> exit({read_failed, Reason});
+                        false -> ok
+                    end
+            end;
+        stop -> ok;
+        {'EXIT', Broker, _Reason} -> ok
+    end.
+
+read_frame(FD) ->
+    case read_exact(FD, 8) of
+        {ok, <<Destination:16/little, Source:16/little, Words:8, TxID:8, Flags:8, Tag:8>>} ->
+            case read_exact(FD, 4 * Words) of
+                {ok, Payload} -> {ok, {Source, Destination}, {Tag, TxID, Flags}, Payload};
+                Error -> Error
+            end;
+        Error -> Error
     end.
 
 read_exact(FD, Length) -> read_exact(FD, Length, <<>>).
