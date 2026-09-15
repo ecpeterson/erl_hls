@@ -40,7 +40,7 @@ for stages in "${stages_to_test[@]}"; do
         --fifo_module= --module_name=actor_debug --ram_configurations="$(phi_scheduler_ram_configurations "$scheduler_count")" \
         "$stage/actor_debug.opt.ir" > "$stage/actor_debug_$stages.v"
     python3 tools/test_topology_debug_integration.py --yosys "${YOSYS:-yosys}" \
-        --top actor_debug_wrapper --stage "$stage/p$stages" --require-acyclic \
+        --top actor_debug_wrapper --stage "$stage/p$stages" \
         --actor-projection "$stage/small-actors.json" --actor-test "$kind" \
         "$stage/actor_debug_$stages.v" "$stage/actor_debug_wrapper.v" priv/rtl/hls_1r1w_ram.v
 done

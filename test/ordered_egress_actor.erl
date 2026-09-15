@@ -8,12 +8,14 @@
 -compile({parse_transform, hls_pack}).
 
 -hls_data(cell).
--hls_phases([emitting]).
+-hls_phases([emitting, done]).
 -hls_outputs([first, second, third, loop]).
 -hls_mailbox_capacity(1).
 -hls_tags([ordered_value]).
 
--export([init/1, emitting/3]).
+-export([init/1, emitting/3, done/3]).
+
+-define(ROUNDS, 16).
 
 -record(ordered_value, {
     value = hls_type:zero() :: hls_nums:u32()
@@ -31,10 +33,17 @@ init([]) ->
     (cast, #ordered_value{}, #cell{}) -> hls_statem:cast_result(#cell{}).
 emitting(enter, _OldPhase, Cell) ->
     {Cell, [
-        {cast, third, #ordered_value{value = 3}},
-        {cast, first, #ordered_value{value = 1}},
-        {cast, second, #ordered_value{value = 2}},
-        {cast, loop, #ordered_value{value = 0}}
+        {cast, third, #ordered_value{value = 4 * Cell#cell.value + 3}},
+        {cast, first, #ordered_value{value = 4 * Cell#cell.value + 1}},
+        {cast, second, #ordered_value{value = 4 * Cell#cell.value + 2}},
+        {cast, loop, #ordered_value{value = Cell#cell.value + 1}}
     ]};
+emitting(cast, #ordered_value{value = Value}, Cell) when Value < ?ROUNDS ->
+    {repeat_phase, Cell#cell{value = Value}, consume};
 emitting(cast, #ordered_value{value = Value}, Cell) ->
-    {emitting, Cell#cell{value = Value}, consume}.
+    {done, Cell#cell{value = Value}, consume}.
+
+done(enter, _OldPhase, Cell) ->
+    {Cell, [{cast, first, #ordered_value{value = 4 * Cell#cell.value}}]};
+done(cast, #ordered_value{}, Cell) ->
+    {done, Cell, consume}.

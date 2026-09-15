@@ -3178,20 +3178,24 @@ pub proc Service {
     (req_in, egress_out, admission_out)
   }
 
-  init { initial_machine() }
+  init { (initial_machine(), u1:0) }
 
-  next(machine: Machine) {
+  next(state: (Machine, u1)) {
+    let (machine, admission_valid) = state;
+    // Reserve capacity in machine_step, then publish its credit
+    // from registered state to break receive/admission feedback.
+    // Its token is independent of the current receive and egress.
+    let _admission_tok = send_if(
+      join(), admission_out, admission_valid, u1:1);
     let receive_enabled = !hls_failure::failed(machine.failure) &&
       !machine.enter_pending && machine.admission_pending &&
       machine.reduction.status != ReductionStatus::COMPLETE;
     let (tok, frame, received) = recv_if_non_blocking(
       join(), req_in, receive_enabled, zero!<axis::Frame>());
     let stepped = machine_step(machine, frame, received, u1:1);
-    let egress_tok = send_if(
+    let _egress_tok = send_if(
       tok, egress_out, stepped.egress_valid, stepped.egress);
-    let _admission_tok = send_if(
-      egress_tok, admission_out, stepped.admission_valid, u1:1);
-    stepped.machine
+    (stepped.machine, stepped.admission_valid)
   }
 }
 

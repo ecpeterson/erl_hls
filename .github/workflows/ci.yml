@@ -99,6 +99,9 @@ jobs:
       - name: Check application framing and admission conservation
         run: bash tools/test_application_frames.sh "$RUNNER_TEMP/xls"
 
+      - name: Check direct actor admission, self-delivery, and credit conservation
+        run: bash tools/test_direct_admission.sh "$RUNNER_TEMP/xls"
+
       - name: Inspect admitted receive backpressure through the debug endpoint
         run: |
           python3 tools/test_topology_debug_integration.py \
@@ -202,6 +205,7 @@ jobs:
             _build/entry_outcomes/*.v
             _build/entry_outcomes/*.sv
             _build/application_frames/**
+            _build/direct-admission-tests/**
             _build/initialization/**
             _build/actor-debug/**
             _build/actor-snapshot-formal/**
