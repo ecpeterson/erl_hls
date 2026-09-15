@@ -260,6 +260,8 @@ all of the following:
 - the translation multiset is inverse-closed, including multiplicity when
   distinct ports alias on a size-two dimension.
 
+The irrefutable-head check can use fixed-vector shapes from source aliases, including the decoder's `phi_field:field()`. Fresh bindings in an exact-length list or a sufficiently short prefix are total; guards, literal elements, and repeated-variable constraints remain partial. Dimensions used by the proof are checked against the emitted XLS message type with compile-time assertions. See [logical type shapes](source-context.md#logical-type-shapes) for source discovery, unknown-shape behavior, and freshness checks.
+
 Under those assumptions, these facts bound each source fragment to two
 reduction windows. The structural analysis alone does not prove that all
 actors traverse coherent name/key/site windows, nor that a completed aggregate

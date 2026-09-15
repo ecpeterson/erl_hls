@@ -12,7 +12,7 @@ Contexts are build-local metadata, not artifact fingerprints. Includes and
 BEAM builds omit this metadata, as they omit the compiler's source path.
 """.
 
--export([capture/2, options/2, read/2]).
+-export([capture/2, from_forms/2, options/2, read/2]).
 -export_type([context/0, option/0]).
 
 -type option() :: {i, file:filename()} | {d, atom()} | {d, atom(), term()} |
@@ -34,7 +34,7 @@ options(_Filename, Options) ->
     error({invalid_source_options, Options}).
 
 -spec capture([erl_parse:abstract_form()], [compile:option()]) -> [tuple()].
-capture(Forms = [{attribute, Line, file, {SourceName, _}} | _], Options) ->
+capture(Forms = [{attribute, Line, file, {_SourceName, _}} | _], Options) ->
     ModuleOptions = lists:flatmap(fun
         ({attribute, _, compile, Values}) when is_list(Values) -> Values;
         ({attribute, _, compile, Value}) -> [Value];
@@ -42,9 +42,18 @@ capture(Forms = [{attribute, Line, file, {SourceName, _}} | _], Options) ->
     end, Forms),
     case lists:member(deterministic, Options ++ ModuleOptions) of
         true -> [];
-        false -> [{attribute, Line, hls_source_context,
-            (context(SourceName, Options))#{origins => origins(Forms)}}]
+        false -> [{attribute, Line, hls_source_context, from_forms(Forms, Options)}]
     end.
+
+%% Available during analysis even when a deterministic build omits the
+%% corresponding BEAM metadata. Only preprocessing options enter the context.
+-spec from_forms([erl_parse:abstract_form()], [compile:option()]) -> context().
+from_forms(Forms = [{attribute, _, file, {SourceName, _}} | _], Options) ->
+    Context = case [C || {attribute, _, hls_source_context, C} <- Forms] of
+        [Captured] -> Captured;
+        [] -> context(SourceName, Options)
+    end,
+    Context#{origins => origins(Forms)}.
 
 context(SourceName, Options) ->
     {ok, Directory} = file:get_cwd(),
@@ -76,10 +85,17 @@ read(Filename, #{directory := Directory, source_name := SourceName,
     end,
     ActualOrigins = origins(Forms),
     case maps:find(origins, Context) of
-        error -> Forms;
-        {ok, ActualOrigins} -> Forms;
+        error -> ok;
+        {ok, ActualOrigins} -> ok;
         {ok, ExpectedOrigins} -> error({source_origins, ExpectedOrigins, ActualOrigins})
-    end.
+    end,
+    %% Keep source-only consumers on the same preprocessing context as the
+    %% parse transform. A peer read may already have attached this attribute.
+    lists:flatmap(fun
+        ({attribute, _, hls_source_context, _}) -> [];
+        ({eof, Line} = Eof) -> [{attribute, Line, hls_source_context, Context}, Eof];
+        (Form) -> [Form]
+    end, Forms).
 
 origins(Forms) ->
     lists:usort([File || {attribute, _, file, {File, _}} <- Forms]).

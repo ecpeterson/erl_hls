@@ -403,13 +403,13 @@ gathering(enter, _OldPhase, Cell) ->
     ]};
 gathering(
     cast,
-    #phi{epoch = Epoch, values = Values},
+    #phi{epoch = Epoch, values = [Phi0, Phi1]},
     Cell
 ) ->
     {gathering, Cell,
         {contribute, diffusion, Epoch, #phi_fold{
-            value0 = phi_field:accumulate(0, hls_vec:nth(1, Values)),
-            value1 = phi_field:accumulate(0, hls_vec:nth(2, Values))
+            value0 = phi_field:accumulate(0, Phi0),
+            value1 = phi_field:accumulate(0, Phi1)
         }}};
 gathering(
     internal,
