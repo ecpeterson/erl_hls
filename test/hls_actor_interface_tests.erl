@@ -101,7 +101,7 @@ phi_interface_records_protocol_facts_test() ->
             x, y, noise_quiet, status_valid],
         [maps:get(name, Field) || Field <- StateFields]
     ),
-    ?assertEqual(171,
+    ?assertEqual(187,
         hls_actor_interface:reduction_storage_width(Interface)),
     #{sites := ReductionSites} = maps:get(reductions, Interface),
     ?assertEqual(
@@ -232,7 +232,7 @@ reduction_interface_survives_parse_transform_test() ->
     try
         Interface = hls_actor_interface:from_module(Module),
         ?assertEqual(xls_parse:actor_interface(Path), Interface),
-        ?assertEqual(80,
+        ?assertEqual(96,
             hls_actor_interface:reduction_storage_width(Interface)),
         Topology = #{actors => [#{
             id => reducer,
@@ -247,9 +247,9 @@ reduction_interface_survives_parse_transform_test() ->
                 mailbox_storage => block_ram
             }}
         ),
-        ?assertEqual(80, maps:get(reduction_storage_width, Group)),
+        ?assertEqual(96, maps:get(reduction_storage_width, Group)),
         [Binding] = xls_scheduler_ram_v:bindings(#{groups => [Group]}),
-        ?assertEqual(185, maps:get(state_width, Binding)),
+        ?assertEqual(201, maps:get(state_width, Binding)),
         ?assertEqual(128, maps:get(mailbox_width, Binding))
     after
         true = code:delete(Module),

@@ -2193,8 +2193,12 @@ pub proc SharedService<
         (write_tok, next_state)
       },
       SharedPhase::RUN => {
+        // Return credits must already occupy a pending receptacle.
+        // Using a newly captured credit here closes a combinational path
+        // through result retirement, the router, and its credit output.
         let (credit_pending_valid, credit_busy) = mailbox::collect_credit(
-          captured_pending,
+          state.pending,
+          state.pending_valid,
           captured_pending_valid,
           state.egress_busy);
         let buffered_can_retire = state.completed_valid &&

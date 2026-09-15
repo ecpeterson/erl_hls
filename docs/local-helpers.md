@@ -1,6 +1,6 @@
 # Local helper functions
 
-Initializers and actor callbacks can call pure functions defined in the same include-expanded Erlang module. A helper needs no export. Both `helper(Value)` and `?MODULE:helper(Value)` name the same definition. Only functions reachable from `init/1`, `hls_gs` handlers, or declared `hls_statem` phase functions are translated; unrelated host utilities retain their ordinary Erlang implementation.
+Initializers and actor callbacks can call pure functions defined in the same include-expanded Erlang module. A helper needs no export. Both `helper(Value)` and `?MODULE:helper(Value)` name the same definition. Only functions reachable from `init/1`, `hls_gs` handlers, declared `hls_statem` phase functions, or `reduce/3` are translated; unrelated host utilities retain their ordinary Erlang implementation.
 
 ```erlang
 -spec prepare_reply(#data_cell{}, hls_nums:u32(), hls_pauli:pauli()) -> #data_cell{}.

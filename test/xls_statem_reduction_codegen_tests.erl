@@ -20,7 +20,7 @@ site_nested_ir_renders_local_reduction_test() ->
         xls_statem_reduction_codegen:declarations(Spec),
         xls_statem_reduction_codegen:functions(Spec)
     ]),
-    ?assertEqual(72, xls_statem_reduction_codegen:private_width(Spec)),
+    ?assertEqual(88, xls_statem_reduction_codegen:private_width(Spec)),
     ?assertEqual(
         <<"  SUM_VALUE = u8:17,\n">>,
         iolist_to_binary(xls_statem_reduction_codegen:tag_member(Spec, 17))
@@ -30,7 +30,7 @@ site_nested_ir_renders_local_reduction_test() ->
     assert_contains(Text, "COLLECTING = uN[1]:1"),
     assert_contains(Text, "type ReductionRemaining = uN[2]"),
     assert_contains(Text, "type ReductionMembers = bits[3]"),
-    assert_contains(Text, "raw: bits[72]"),
+    assert_contains(Text, "raw: bits[88]"),
     assert_contains(Text, "Tag::COUNT_VALUE"),
     assert_contains(Text, "Phase::COUNTING"),
     assert_contains(Text, "Tag::MEMBER_VALUE"),
@@ -118,7 +118,7 @@ spec() ->
         Data,
         Accumulator,
         Sites,
-        [#{name => sum, body => [], result => "left"}]
+        [#{name => sum, body => [], result => "(left, hls_failure::NONE)"}]
     ).
 
 type_ref(Name, DslxType) ->

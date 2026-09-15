@@ -747,7 +747,7 @@ shared_capture(_Reductions, aggregate_only) ->
         let captured_aggregate = ReductionAggregateRequest {
           aggregate: if aggregate_protocol_error {
             ReductionAggregate {
-              failed: u1:1,
+              failure: hls_failure::REDUCTION_PROTOCOL,
               ..incoming_aggregate.aggregate
             }
           } else {

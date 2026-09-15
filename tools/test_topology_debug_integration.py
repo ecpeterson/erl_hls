@@ -84,6 +84,12 @@ def run(args):
     manifest = json.loads((stage / "manifest.json").read_text())
     flat = json.loads((stage / "flat.json").read_text())
     ports = flat["modules"][args.top]["ports"]
+    # A cycle can stop simulation before even the independent debug endpoint
+    # answers. Diagnose the application structurally before starting the host.
+    with (stage / "scc.log").open("w") as log:
+        subprocess.run([args.yosys, "-Q", "-T", "-p",
+                        f"read_json {json.dumps(str(stage / 'flat.json'))}; scc -expect 0"],
+                       stdout=log, stderr=subprocess.STDOUT, check=True, timeout=60)
     (stage / "tb.sv").write_text(testbench(args, ports, manifest))
     # Check structural noninterference before subsequent Yosys cleanup.
     instrumented = json.loads((stage / "instrumented.json").read_text())["modules"][args.output_top]
@@ -163,5 +169,5 @@ if __name__ == "__main__":
     parser.add_argument("--yosys", default="yosys")
     parser.add_argument("--actor-projection", type=Path)
     parser.add_argument("--actor-root", default="")
-    parser.add_argument("--actor-test", choices=("small", "phi", "mailbox"))
+    parser.add_argument("--actor-test", choices=("small", "phi", "mailbox", "reduction", "aggregate"))
     run(parser.parse_args())

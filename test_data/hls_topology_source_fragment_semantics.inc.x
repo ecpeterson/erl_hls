@@ -48,7 +48,7 @@ proc SourceFragmentTransposeTest {
       let expected = u32:300 + north_source + south_source;
       assert_eq(request.slot, slot);
       assert_eq(request.aggregate.valid, u1:1);
-      assert_eq(request.aggregate.failed, u1:0);
+      assert_eq(request.aggregate.failure, u16:0);
       assert_eq(request.aggregate.count, uN[2]:2);
       assert_eq(
         request.aggregate.accumulator,
@@ -125,7 +125,7 @@ proc SourceFragmentTwoWindowTest {
       let south_source = x * u32:3 + (y + u32:2) % u32:3;
       assert_eq(request.slot, slot);
       assert_eq(request.aggregate.valid, u1:1);
-      assert_eq(request.aggregate.failed, u1:0);
+      assert_eq(request.aggregate.failure, u16:0);
       assert_eq(request.aggregate.count, uN[2]:2);
       assert_eq(
         request.aggregate.accumulator,

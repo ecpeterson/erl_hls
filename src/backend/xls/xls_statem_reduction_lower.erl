@@ -1016,14 +1016,16 @@ close_reducer(#{name := Name, clause := {clause, Line, [
             accumulator_argument(AccumulatorName, "right")
         )
     ],
-    Failure = ["zero!<", maps:get(dslx_type, AccumulatorType), ">()"],
+    Failure = fun(Code) ->
+        ["(zero!<", maps:get(dslx_type, AccumulatorType), ">(), ", Code, ")"]
+    end,
     {LoweredBody, Result} = xls_callback_lower:lower(
         [Clause],
         Arguments,
         DataName,
-        fun(R) -> [R, ".1"] end,
+        fun(R) -> ["(", R, ".1, hls_failure::NONE)"] end,
+        Failure(xls_failure_sites:at(function_clause, Line)),
         Failure,
-        fun(_Kind) -> Failure end,
         EnumAtoms
     ),
     #{

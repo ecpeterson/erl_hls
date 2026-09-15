@@ -100,5 +100,40 @@ member(Member, Value, Reduction) ->
         ?MODULE, sum, epoch, Member, Value, Reduction
     ).
 
+failure_drains_count_and_retains_stack_test_() ->
+    [?_test(begin
+        {ok, R0} = hls_reduction:open(fault, epoch, {count, 3}, {commutative_monoid, 0}),
+        {pending, R1} = hls_reduction:contribute(?MODULE, fault, epoch, Class, R0),
+        receive {reducer_called, Class} -> ok after 0 -> error(reducer_not_called) end,
+        ?assertEqual(mismatch, hls_reduction:contribute(?MODULE, fault, future, never, R1)),
+        {pending, R2} = hls_reduction:contribute(?MODULE, fault, epoch, never, R1),
+        ?assertMatch(#{received := 2, remaining := 1}, hls_reduction:info(R2)),
+        try hls_reduction:contribute(?MODULE, fault, epoch, never, R2) of
+            Result -> error({unexpected_completion, Result})
+        catch
+            Class:original:Stack -> ?assertMatch([{?MODULE, reduce, 3, _} | _], Stack)
+        end,
+        receive {reducer_called, _} -> error(reducer_ran_after_failure) after 0 -> ok end
+    end) || Class <- [error, exit, throw]].
+
+failure_drains_members_without_accepting_duplicates_test() ->
+    {ok, R0} = hls_reduction:open(fault, epoch, {members, [a, b, c]}, {commutative_monoid, 0}),
+    {pending, R1} = hls_reduction:contribute(?MODULE, fault, epoch, b, error, R0),
+    receive {reducer_called, error} -> ok after 0 -> error(reducer_not_called) end,
+    ?assertEqual({error, {duplicate_member, b}},
+        hls_reduction:contribute(?MODULE, fault, epoch, b, never, R1)),
+    ?assertEqual({error, {unexpected_member, d}},
+        hls_reduction:contribute(?MODULE, fault, epoch, d, never, R1)),
+    {pending, R2} = hls_reduction:contribute(?MODULE, fault, epoch, a, never, R1),
+    ?assertError(original, hls_reduction:contribute(?MODULE, fault, epoch, c, never, R2)),
+    receive {reducer_called, _} -> error(reducer_ran_after_failure) after 0 -> ok end.
+
+reduce(fault, _, Class) ->
+    self() ! {reducer_called, Class},
+    case Class of
+        error -> error(original);
+        exit -> exit(original);
+        throw -> throw(original)
+    end;
 reduce(sum, Left, Right) ->
     Left + Right.

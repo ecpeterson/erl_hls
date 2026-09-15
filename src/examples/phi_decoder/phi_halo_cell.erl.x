@@ -414,6 +414,7 @@ struct ReductionState {
   remaining: ReductionRemaining,
   seen: ReductionMembers,
   accumulator: Phifold,
+  failure: hls_failure::Code,
 }
 
 struct ReductionContribution {
@@ -426,7 +427,7 @@ struct ReductionContribution {
 
 pub struct ReductionAggregate {
   valid: u1,
-  failed: u1,
+  failure: hls_failure::Code,
   site: uN[2],
   key: u32,
   count: uN[3],
@@ -524,11 +525,11 @@ struct SharedMachine {
   failure: hls_failure::Code,
 }
 
-pub type MachineBits = bits[524];
+pub type MachineBits = bits[540];
 
 pub type MachineRamReadReq = bram::ReadReq;
-pub type MachineRamReadResp = bram::ReadResp<u32:524>;
-pub type MachineRamWriteReq = bram::WriteReq<u32:524>;
+pub type MachineRamReadResp = bram::ReadResp<u32:540>;
+pub type MachineRamWriteReq = bram::WriteReq<u32:540>;
 pub type MachineRamWriteResp = bram::WriteResp;
 
 pub type MailboxRamReadReq = mailbox::RamReadReq;
@@ -641,7 +642,7 @@ struct SharedState<ACTOR_COUNT: u32, PRODUCER_COUNT: u32> {
 }
 
 fn reduction_state_from_bits(
-    raw: bits[171]) -> ReductionState {
+    raw: bits[187]) -> ReductionState {
   ReductionState {
     status: raw[0:2] as ReductionStatus,
     site: raw[2:4] as ReductionSite,
@@ -649,12 +650,14 @@ fn reduction_state_from_bits(
     remaining: raw[36:39] as ReductionRemaining,
     seen: raw[39:43] as ReductionMembers,
     accumulator: phifold_from_bits(raw[43:171]),
+    failure: raw[171:187] as hls_failure::Code,
   }
 }
 
 fn bits_from_reduction_state(
-    state: ReductionState) -> bits[171] {
-  bits_from_phifold(state.accumulator) ++
+    state: ReductionState) -> bits[187] {
+  state.failure ++
+    bits_from_phifold(state.accumulator) ++
     (state.seen as bits[4]) ++
     (state.remaining as bits[3]) ++
     (state.key as bits[32]) ++
@@ -837,7 +840,7 @@ if ((_4.1) != hls_failure::NONE) {
 }
 
 fn reduction_reduce(
-    name: ReductionName, left: Phifold, right: Phifold) -> Phifold {
+    name: ReductionName, left: Phifold, right: Phifold) -> (Phifold, hls_failure::Code) {
   match name {
     ReductionName::DIFFUSION => {
       let Xls_clause_1_Left0_1 = left.value0;
@@ -853,9 +856,9 @@ let _2 = Phifold {
 };
 let _3 = (Tag::PHI_FOLD, _2, bits_from_phifold(_2));
 if (bool:false) {
-  zero!<Phifold>()
+  (zero!<Phifold>(), hls_failure::NONE)
 } else {
-  _3.1
+  (_3.1, hls_failure::NONE)
 }
     },
     ReductionName::COMPARISON => {
@@ -915,9 +918,9 @@ let _6 = Phifold {
 };
 let _7 = (Tag::PHI_FOLD, _6, bits_from_phifold(_6));
 if ((_5.1) != hls_failure::NONE) {
-  zero!<Phifold>()
+  (zero!<Phifold>(), _5.1)
 } else {
-  _7.1
+  (_7.1, hls_failure::NONE)
 }
     },
     ReductionName::MOVEMENT => {
@@ -934,9 +937,9 @@ let _2 = Phifold {
 };
 let _3 = (Tag::PHI_FOLD, _2, bits_from_phifold(_2));
 if (bool:false) {
-  zero!<Phifold>()
+  (zero!<Phifold>(), hls_failure::NONE)
 } else {
-  _3.1
+  (_3.1, hls_failure::NONE)
 }
     },
   }
@@ -1072,11 +1075,20 @@ fn reduction_aggregate_push(
     member_bit == zero!<ReductionMembers>();
   let duplicate = member_mode && !first &&
     (aggregate.seen & member_bit) != zero!<ReductionMembers>();
-  let accepted = !aggregate.failed && contribution.valid &&
+  let accepted = contribution.valid &&
     same_window && within_population && !unexpected && !duplicate;
+  // A failed fold still drains its population. Its first failure
+  // absorbs later values without evaluating the reducer again.
+  let (accumulator, reduced_failure) =
+    if accepted && !first && !hls_failure::failed(aggregate.failure) {
+      reduction_reduce(reduction_site_name(contribution.site),
+        aggregate.accumulator, contribution.value)
+    } else { (contribution.value, hls_failure::NONE) };
+  let failure = hls_failure::first(aggregate.failure,
+    if accepted { reduced_failure } else { hls_failure::REDUCTION_PROTOCOL });
   ReductionAggregate {
     valid: u1:1,
-    failed: aggregate.failed || !accepted,
+    failure,
     site: if first { contribution.site as uN[2] } else { aggregate.site },
     key: if first { contribution.key } else { aggregate.key },
     count: if accepted {
@@ -1085,13 +1097,9 @@ fn reduction_aggregate_push(
     seen: if accepted && member_mode {
       aggregate.seen | member_bit
     } else { aggregate.seen },
-    accumulator: if !accepted { aggregate.accumulator } else {
-      if first { contribution.value } else {
-        reduction_reduce(
-          reduction_site_name(contribution.site),
-          aggregate.accumulator, contribution.value)
-      }
-    },
+    accumulator: if accepted && !hls_failure::failed(failure) {
+      accumulator
+    } else { aggregate.accumulator },
   }
 }
 
@@ -1122,7 +1130,7 @@ fn reduction_apply_complete_aggregate(
       ReductionMode::MEMBERS;
     let members_ok = aggregate.seen ==
       reduction_aggregate_expected_members(state.site);
-    if aggregate.failed || !fresh || !full {
+    if !fresh || !full {
       ReductionApply { state, outcome: ReductionOutcome::MISMATCH }
     } else if !members_ok {
       ReductionApply { state,
@@ -1134,6 +1142,7 @@ fn reduction_apply_complete_aggregate(
         seen: if member_mode { aggregate.seen }
           else { state.seen },
         accumulator: aggregate.accumulator,
+        failure: aggregate.failure,
         ..state
       };
       ReductionApply {
@@ -1169,6 +1178,13 @@ fn reduction_apply(
       ReductionApply { state,
         outcome: ReductionOutcome::DUPLICATE_MEMBER }
     } else {
+      // Failure is private until every contribution has arrived.
+      let (accumulator, failure) = if hls_failure::failed(state.failure) {
+        (state.accumulator, state.failure)
+      } else {
+        reduction_reduce(reduction_site_name(state.site),
+          state.accumulator, contribution.value)
+      };
       let remaining = state.remaining - ReductionRemaining:1;
       let complete = remaining == ReductionRemaining:0;
       let next_state = ReductionState {
@@ -1177,9 +1193,9 @@ fn reduction_apply(
         remaining,
         seen: if member_mode { state.seen | member_bit }
           else { state.seen },
-        accumulator: reduction_reduce(
-          reduction_site_name(state.site),
-          state.accumulator, contribution.value),
+        accumulator: if hls_failure::failed(failure) { state.accumulator }
+          else { accumulator },
+        failure,
         ..state
       };
       ReductionApply {
@@ -1196,6 +1212,10 @@ fn reduction_dispatch_completion(
   if state.status != ReductionStatus::COMPLETE {
     ReductionDispatch { reduction: state, phase, data,
       ..zero!<ReductionDispatch>() }
+  } else if hls_failure::failed(state.failure) {
+    ReductionDispatch { reduction: state, phase, data,
+      directive: Directive::FAIL, failure: state.failure,
+      dispatched: u1:1, ..zero!<ReductionDispatch>() }
   } else {
     let key = state.key;
     let accumulator: Phifold = state.accumulator;
@@ -1425,7 +1445,7 @@ fn machine_from_bits(raw: MachineBits) -> SharedMachine {
     data: cell_from_bits(raw[16:336]),
     enter_pending: raw[336:337],
     failure: raw[337:353],
-    reduction: reduction_state_from_bits(raw[353:524]),
+    reduction: reduction_state_from_bits(raw[353:540]),
   }
 }
 
@@ -3380,7 +3400,7 @@ pub proc SharedService<
     let captured_aggregate = ReductionAggregateRequest {
       aggregate: if aggregate_protocol_error {
         ReductionAggregate {
-          failed: u1:1,
+          failure: hls_failure::REDUCTION_PROTOCOL,
           ..incoming_aggregate.aggregate
         }
       } else {
@@ -3469,8 +3489,12 @@ pub proc SharedService<
         (write_tok, next_state)
       },
       SharedPhase::RUN => {
+        // Return credits must already occupy a pending receptacle.
+        // Using a newly captured credit here closes a combinational path
+        // through result retirement, the router, and its credit output.
         let (credit_pending_valid, credit_busy) = mailbox::collect_credit(
-          captured_pending,
+          state.pending,
+          state.pending_valid,
           captured_pending_valid,
           state.egress_busy);
         let buffered_can_retire = state.completed_valid &&

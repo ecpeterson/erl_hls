@@ -28,6 +28,18 @@ fixture(mailbox) ->
         startup => [{{F, I, 0}, [{configure, Role}]} || {F, Role} <- [{producer, 0}, {consumer, 1}], I <- lists:seq(0, 2)]}),
     {Plan, maps:from_list([{F, #{members => [{family, F}], state_storage => block_ram,
         mailbox_storage => block_ram}} || F <- Families])};
+fixture(Kind) when Kind =:= reduction; Kind =:= aggregate ->
+    Plan = hls_topology:normalize(#{version => 1, actors => #{},
+        families => #{cell => #{module => hls_reduction_failure_fixture, shape => [5, 1]}},
+        ingresses => [{commands, {rectangle, [5, 1]}, [
+            {configure, [configure], [{family, cell, {embed, [1, 1], [0, 0]}}]}]}],
+        externals => [{reports, out, [report]}], routes => [],
+        route_relations => [{{cell, out}, [{external, reports}]} | [
+            {{cell, Port}, [{family, cell, {translate, [Offset, 0], wrap}}]}
+            || {Port, Offset} <- [{left, -1}, {middle, 0}, {right, 1}]]],
+        startup => [{{cell, I, 0}, [{configure, I}]} || I <- lists:seq(0, 4)]}),
+    {Plan, #{cells => #{members => [{family, cell}],
+        state_storage => block_ram, mailbox_storage => block_ram}}};
 fixture(phi) ->
     {hls_topology:from_module(phi_decoder_profile_topology),
         maps:get(scheduler_groups, phi_decoder_profile_topology_dslx:profile())}.
@@ -38,6 +50,8 @@ artifacts(Kind, Options) ->
     {Directory, Requirements} = case Kind of
         small -> {"test", #{hls_actor_debug_fixture => #{}}};
         mailbox -> {"test", #{hls_mailbox_debug_fixture => #{}}};
+        reduction -> {"test", #{hls_reduction_failure_fixture => #{}}};
+        aggregate -> {"test", #{hls_reduction_failure_fixture => #{shared_service => aggregate_only}}};
         phi ->
             {Plan, _} = fixture(phi),
             {"src/examples/phi_decoder", xls_topology_dslx:artifact_requirements(Plan,
@@ -64,9 +78,13 @@ write(phi, Stage, Options) ->
         maps:merge(phi_decoder_profile_topology_dslx:profile(), Options))),
     ok = write_file(Stage, "phi_decoder_profile_top.v", phi_decoder_profile_top_v:to_verilog(3, Options)),
     write_file(Stage, "phi-actors.json", json:encode(xls_scheduler_debug:projection(Plan, Specs, Artifacts, Options)));
-write(Kind, Stage, Options) ->
+write(Kind, Stage, Options0) ->
+    Options = case Kind of
+        aggregate -> Options0#{reduction_placements => #{cell => source_fragments}};
+        _ -> Options0
+    end,
     {Plan, Specs} = fixture(Kind),
-    Small = artifacts(Kind, Options),
+    Small = artifacts(Kind, Options0),
     maps:foreach(fun(Module, Actor) -> ok = write_file(Stage, atom_to_list(Module) ++ ".x", Actor) end, Small),
     ok = write_file(Stage, "actor_debug.x", xls_topology_dslx:emit(Plan,
         maps:merge(#{name => actor_debug, channel_depth => 1, actor_egress_depth => burst,

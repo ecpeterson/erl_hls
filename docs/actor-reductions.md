@@ -105,8 +105,7 @@ trees, fragments, or other placements.
 
 ## Completion and phase boundaries
 
-The final accepted contribution closes the reduction and produces one private
-event before the scheduler selects another external mailbox entry:
+The final accepted contribution closes a successful reduction and produces one private event before the scheduler selects another external mailbox entry:
 
 ```erlang
 gathering(internal,
@@ -145,6 +144,12 @@ wait:
 - using a count contribution for member mode, or vice versa;
 - contributing an unexpected member;
 - contributing the same member twice.
+
+A supported exception in the pure `reduce/3` combiner is an absorbing failure value. The destination actor keeps the first failure and continues accepting the remaining valid contributions in that window, updating count/member bookkeeping without calling the combiner again. The accumulator remains a private placeholder. Only after the population is complete does the destination fail; its completion callback and any effects dependent on that completion do not run. Other actors are not failed by this mechanism. A missing contributor can therefore leave the failed reduction waiting indefinitely, just as it can leave a successful partial fold waiting; there is no implicit timeout, cancellation, or link propagation.
+
+On BEAM, the final contribution re-raises the saved exception with its original class, reason, and stack. In hardware, the completed window transfers its source-located code to the actor's terminal failure latch, visible through `hls_debug:info(Actor, failure)`. Until then, the actor's `failed` field remains false. Protocol errors retain their existing policy: wrong-window ordinary messages postpone, and duplicate/unexpected members fail rather than count toward completion. Unrelated callbacks can still fail independently while a reduction drains.
+
+“First” refers to the chosen fold's evaluation order. Source-fragment placement can reassociate and reorder values, and does not call the combiner on the first value and the identity. Programs must uphold their monoid promise on successful inputs; different invalid folds need not report the same source error, or even encounter the same partial operation. The absorbing failure contract prevents a detected error from turning into a successful result; it does not make a partial combiner a valid commutative monoid.
 
 `hls_statem:info/1` reports whether reduction state is idle. For an open
 reduction it exposes the name, key, population, accepted count, and remaining
@@ -188,11 +193,13 @@ ordinary phase-boundary, repeat, and failure rules.
 
 The generated subset supports one active count or fixed-member reduction per
 actor. All sites in one actor currently share one private accumulator-record
-type, and each reduction name has exactly one unguarded `reduce/3` clause.
+type, and each reduction name has exactly one unguarded `reduce/3` clause. Reducers may call the same typed local helpers as other actor callbacks.
 Population shapes, contribution clauses, reducer results, and completion
 clauses are checked statically. A contribution with the wrong name/key is
 postponed; duplicate or unexpected fixed members fail the actor.
 Leaving or repeating a phase with an incomplete reduction also fails.
+
+A reduction stores a 16-bit pending failure code alongside its accumulator and bookkeeping. This is separate from the actor’s terminal failure latch so the scheduler can keep draining the window. Source-fragment aggregates carry the same code instead of a one-bit error flag. Failure bookkeeping adds no extra activation to a successful fold.
 
 The opening key and identity are evaluated with the entry's data and cast actions in one [entry outcome](entry-outcomes.md). A supported match failure anywhere in that callback prevents both the open and every cast in that entry. An invalid reopen likewise preserves the previous data and reduction state and fails the actor, even when egress is stalled.
 
@@ -342,6 +349,8 @@ the plane retains such a batch rather than silently corrupting another queue.
 Where more than one selected family feeds the same homogeneous scheduler, a
 small round-robin mux gives every plane a bounded holding slot.
 
+Returned effect credits become eligible after they occupy the scheduler’s existing pending receptacle. A credit captured in the current iteration cannot release a result in that same iteration; this breaks the combinational path through result retirement, router lookahead, and credit return without adding another buffer.
+
 The planes, aggregate muxes, actor schedulers, and effect-window arbiters share
 `arbitration::select`. It chooses the first eligible index at or after the
 cursor, wrapping to the first eligible index when necessary. An empty set
@@ -374,3 +383,5 @@ profile and the matching `aggregate_only` actor artifacts reported by
 `xls_topology_dslx:artifact_requirements/2`. The simulation preparation driver
 queries every staged family topology and selects the matching actor artifact,
 rejecting incompatible requirements for a module before DSLX typechecking.
+
+`bash tools/test_reduction_dslx.sh XLS_ROOT [STAGE]` exercises absorbing failures through the real Erlang reducer, helper calls, direct/shared machines, aggregate delivery, and count/fixed-member bookkeeping. It retains generated fixtures for diagnosis. `bash tools/test_actor_debug.sh XLS_ROOT STAGE reduction` and the `aggregate` variant query source-located arithmetic, case, match, and if failures in generated RTL through the framed debug endpoint; a healthy actor shares the scheduler and completes under output backpressure.

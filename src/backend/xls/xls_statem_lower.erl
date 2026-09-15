@@ -31,7 +31,7 @@ lower(Filename, Forms, PhaseNames) ->
 lower(Filename, Forms0, PhaseNames, Options0) ->
     {SourceForms, Sites} = xls_failure_sites:prepare(Forms0),
     {Forms, Helpers} = xls_helpers:prepare(SourceForms,
-        [{init, 1} | [{Phase, 3} || Phase <- PhaseNames]]),
+        [{init, 1}, {reduce, 3} | [{Phase, 3} || Phase <- PhaseNames]]),
     Options = validate_options(Options0),
     SharedService = maps:get(shared_service, Options),
     Declarations = declarations(Forms, PhaseNames),

@@ -60,7 +60,7 @@ proc SourceFragmentAlternatingPopulationTest {
       let (next_tok, request) = recv(tok, aggregate_in);
       assert_eq(request.slot, slot);
       assert_eq(request.aggregate.valid, u1:1);
-      assert_eq(request.aggregate.failed, u1:0);
+      assert_eq(request.aggregate.failure, u16:0);
       assert_eq(
         request.aggregate.site,
         uN[1]:0);
@@ -89,7 +89,7 @@ proc SourceFragmentAlternatingPopulationTest {
       let (next_tok, request) = recv(tok, aggregate_in);
       assert_eq(request.slot, slot);
       assert_eq(request.aggregate.valid, u1:1);
-      assert_eq(request.aggregate.failed, u1:0);
+      assert_eq(request.aggregate.failure, u16:0);
       assert_eq(
         request.aggregate.site,
         uN[1]:1);
@@ -116,7 +116,7 @@ proc SourceFragmentAlternatingPopulationTest {
       let (next_tok, request) = recv(tok, aggregate_in);
       assert_eq(request.slot, slot);
       assert_eq(request.aggregate.valid, u1:1);
-      assert_eq(request.aggregate.failed, u1:0);
+      assert_eq(request.aggregate.failure, u16:0);
       assert_eq(
         request.aggregate.site,
         uN[1]:0);
