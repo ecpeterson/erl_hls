@@ -16,6 +16,11 @@ init([]) ->
     Value = hls_nums:wrap(hls_nums:u32(), 7),
     #ledger{value = case Value of 7 -> Value end}.
 
+handle_call(#probe{mode = 42, left = X, right = Y}, State)
+        when X div Y > 0; X rem Y =:= 0 ->
+    {reply, #report{value = 101}, State#ledger{value = 101}};
+handle_call(#probe{mode = 42}, State) ->
+    {reply, #report{value = 202}, State#ledger{value = 202}};
 handle_call(#probe{mode = Mode, left = Left, right = Right}, State) ->
     Value = evaluate(Mode, Left, Right),
     {reply, #report{value = Value}, State#ledger{value = Value}};
@@ -29,7 +34,8 @@ handle_cast(#change{value = Value}, State) ->
 -spec evaluate(hls_nums:u32(), hls_nums:u32(), hls_nums:u32()) -> hls_nums:u32().
 evaluate(Mode, X, Y) ->
     if Mode < 8 -> first_group(Mode, X, Y);
-        true -> second_group(Mode, X, Y)
+        Mode < 25 -> second_group(Mode, X, Y);
+        true -> arithmetic_group(Mode, X, Y)
     end.
 
 -spec first_group(hls_nums:u32(), hls_nums:u32(), hls_nums:u32()) -> hls_nums:u32().
@@ -81,3 +87,50 @@ only_if(X) -> if X =:= 0 -> X end.
 
 -spec keep(hls_nums:u32(), hls_nums:u32()) -> hls_nums:u32().
 keep(X, _Ignored) -> X.
+
+%% Divisor failure follows expression selection, and each guard sequence has
+%% its own exception boundary. These run through both helpers and the service.
+-spec arithmetic_group(hls_nums:u32(), hls_nums:u32(), hls_nums:u32()) -> hls_nums:u32().
+arithmetic_group(Mode, X, Y) ->
+    if Mode < 32 -> arithmetic_first(Mode, X, Y);
+       Mode < 39 -> arithmetic_second(Mode, X, Y);
+       true -> arithmetic_third(Mode, X, Y)
+    end.
+
+-spec arithmetic_first(hls_nums:u32(), hls_nums:u32(), hls_nums:u32()) -> hls_nums:u32().
+arithmetic_first(Mode, X, Y) ->
+    case Mode of
+        25 -> X div Y;
+        26 -> X rem Y;
+        27 -> case Y of 0 -> X; _ -> X div Y end;
+        28 -> case Y =/= 0 andalso X div Y > 0 of true -> X; false -> Y end;
+        29 -> case Y =:= 0 orelse X rem Y =:= 0 of true -> X; false -> Y end;
+        30 -> if X div Y > 0 -> X; true -> Y end;
+        31 -> if X rem Y =:= 0 -> X; true -> Y end
+    end.
+
+-spec arithmetic_second(hls_nums:u32(), hls_nums:u32(), hls_nums:u32()) -> hls_nums:u32().
+arithmetic_second(Mode, X, Y) ->
+    case Mode of
+        32 -> if (X div Y > 0) orelse true -> X; true -> Y end;
+        33 -> if X div Y > 0; Y =:= 0 -> X; true -> Y end;
+        34 -> if X div Y >= 0, X rem Y =:= 0 -> X; true -> Y end;
+        35 -> if X div Y > 0 -> X end;
+        36 -> true = X =:= 0, X div Y;
+        37 -> V = X div Y, true = X =:= 0, V;
+        38 -> X div (Y div X)
+    end.
+
+-spec arithmetic_third(hls_nums:u32(), hls_nums:u32(), hls_nums:u32()) -> hls_nums:u32().
+arithmetic_third(Mode, X, Y) ->
+    case Mode of
+        39 -> X rem 0;
+        40 -> X div 2;
+        41 -> case X of V when V div Y > 0; V rem Y =:= 0 -> X; _ -> Y end;
+        42 -> if X div Y > 0; X rem Y =:= 0 -> hls_type:as(hls_nums:u32(), 101); true -> hls_type:as(hls_nums:u32(), 202) end;
+        %% A guard must not erase a failure from an earlier body expression.
+        43 -> V = X div Y, if X rem Y =:= 0 -> V; true -> X end;
+        44 -> if true orelse X div Y > 0 -> X; true -> Y end;
+        45 -> if false andalso X div Y > 0 -> X; true -> Y end;
+        46 -> case (X div Y > 0) orelse true of true -> X; false -> Y end
+    end.

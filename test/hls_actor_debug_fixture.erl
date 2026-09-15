@@ -31,6 +31,9 @@ active(enter, _, Cell) ->
             included_outer(0);
         6 -> included_if(Cell#cell.value);
         7 -> if Cell#cell.value =:= 7 -> hls_type:as(hls_nums:u32(), 1); true -> included_outer(0) end;
+        8 -> included_div(Cell#cell.value);
+        9 -> included_rem(Cell#cell.value);
+        10 -> if Cell#cell.value div (Cell#cell.value - 10) > 0; Cell#cell.value =:= 10 -> hls_type:as(hls_nums:u32(), 1) end;
         1 -> Cell#cell.value
     end,
     {Cell, [{cast, out, #report{value = Value}}]};

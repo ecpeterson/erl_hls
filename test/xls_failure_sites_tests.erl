@@ -35,17 +35,20 @@ beam_reports_the_same_selected_origins_test() ->
             _ -> error(expected_failure)
         catch error:Reason:Stack ->
             ?assertEqual(Kind, beam_kind(Reason)),
-            {hls_actor_debug_fixture, _, _, Location} = hd(Stack),
+            %% Arithmetic BIFs may precede their source caller in the stack.
+            {hls_actor_debug_fixture, _, _, Location} =
+                lists:keyfind(hls_actor_debug_fixture, 1, Stack),
             File = list_to_binary(filename:basename(proplists:get_value(file, Location))),
             Line = proplists:get_value(line, Location),
             ?assertMatch([_], [Site || Site = #{file := F, line := L, kind := K} <- Sites,
                 {F, L, K} =:= {File, Line, Kind}])
         end
-    end, [{0, case_clause}, {2, match_failure}, {6, if_clause}]).
+    end, [{0, case_clause}, {2, match_failure}, {6, if_clause}, {8, badarith}, {9, badarith}]).
 
 beam_kind({case_clause, _}) -> case_clause;
 beam_kind({badmatch, _}) -> match_failure;
-beam_kind(if_clause) -> if_clause.
+beam_kind(if_clause) -> if_clause;
+beam_kind(badarith) -> badarith.
 
 unused_sites_are_not_declared_test() ->
     {ok, Forms} = xls_parse:parse_file("test/hls_actor_debug_fixture.erl"),
