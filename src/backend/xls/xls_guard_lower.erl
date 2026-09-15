@@ -71,6 +71,8 @@ validate_value({var, _Line, _Name}) ->
     ok;
 validate_value({integer, _Line, _Integer}) ->
     ok;
+validate_value({op, _Line, Sign, {integer, _, _}}) when Sign =:= '-'; Sign =:= '+' ->
+    ok;
 validate_value({atom, _Line, Atom})
         when Atom =:= true; Atom =:= false ->
     ok;

@@ -36,7 +36,8 @@ evaluate(Mode, X, Y) ->
     if Mode < 8 -> first_group(Mode, X, Y);
         Mode < 25 -> second_group(Mode, X, Y);
         Mode < 47 -> arithmetic_group(Mode, X, Y);
-        true -> collection_group(Mode, X, Y)
+        Mode < 59 -> collection_group(Mode, X, Y);
+        true -> shift_group(Mode, X, Y)
     end.
 
 -spec first_group(hls_nums:u32(), hls_nums:u32(), hls_nums:u32()) -> hls_nums:u32().
@@ -164,4 +165,39 @@ collection_failures(Mode, X, Y) ->
         56 -> hls_lists:nth(4, Values);
         57 -> hls_vec:nth(16#100000001, Values);
         58 -> hls_vec:nth(-1, Values)
+    end.
+
+-spec shift_group(hls_nums:u32(), hls_nums:u32(), hls_nums:u32()) -> hls_nums:u32().
+shift_group(Mode, X, Y) ->
+    V = hls_nums:wrap(hls_nums:s32(), X),
+    Count = hls_nums:wrap(hls_nums:s8(), Y),
+    if Mode < 65 -> shift_values(Mode, V, Count);
+       true -> shift_control(Mode, V, Count, X, Y)
+    end.
+
+-spec shift_values(hls_nums:u32(), hls_nums:s32(), hls_nums:s8()) -> hls_nums:u32().
+shift_values(Mode, V, Count) ->
+    Value = case Mode of
+        59 -> hls_nums:wrap(hls_nums:s32(), V bsl Count);
+        60 -> hls_nums:wrap(hls_nums:s32(), V bsr Count);
+        61 -> V bsl -2;
+        62 -> V bsr 4294967296;
+        63 -> V bsl -4294967296;
+        64 -> N = -2, V bsl N
+    end,
+    hls_nums:wrap(hls_nums:u32(), Value).
+
+-spec shift_control(hls_nums:u32(), hls_nums:s32(), hls_nums:s8(),
+    hls_nums:u32(), hls_nums:u32()) -> hls_nums:u32().
+shift_control(Mode, V, Count, X, Y) ->
+    case Mode of
+        65 -> if X div Y > 0; V bsl -1 < 0 -> X; true -> Y end;
+        66 -> if V bsr (Y band 63) < 0 -> X; true -> Y end;
+        67 -> Shifted = hls_nums:wrap(hls_nums:s32(), V bsl Count),
+            if Shifted < V -> X; true -> Y end;
+        68 -> Shifted = hls_nums:wrap(hls_nums:s32(), V bsr Count),
+            case Shifted of 0 -> X; _ -> Y end;
+        69 -> hls_nums:wrap(hls_nums:u32(), 1 bsl 32);
+        70 -> Base = hls_type:as(hls_nums:u32(), 1),
+            hls_nums:wrap(hls_nums:u32(), Base bsl Count)
     end.

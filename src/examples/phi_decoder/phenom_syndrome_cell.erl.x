@@ -7,6 +7,7 @@ import bram;
 import mailbox;
 import scheduler;
 import hls_failure;
+import hls_integer;
 import phi_field;
 
 const MAILBOX_CAPACITY = u8:5;
@@ -610,7 +611,7 @@ fn enter(old_phase: Phase, phase: Phase, data: Syndrome) -> EntryOutcome {
           let _4 = Syndrome_1.1.step;
           let _5 = Syndrome_1.1.announcement;
           let _6 = Syndrome_1.1.announcement_quiet;
-          let _7 = _6 << 1;
+          let _7 = hls_integer::shift<true>(_6, u1:1);
           let _8 = _5 | _7;
           let _9 = Syndrome_1.1.x;
           let _10 = Syndrome_1.1.y;
@@ -1170,7 +1171,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
             let _13 = Xls_clause_1_Flags_1 & 1;
             let Xls_clause_1_Present_1 = _13;
             let _14 = Xls_clause_1_Flags_1 & 2;
-            let _15 = _14 >> 1;
+            let _15 = hls_integer::shift<false>(_14, u1:1);
             let Xls_clause_1_Quiet_1 = _15;
             let _16 = Xls_clause_1_Seen_1 | Xls_clause_1_Source_1;
             let Xls_clause_1_NewSeen_1 = _16;

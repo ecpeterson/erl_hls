@@ -7,6 +7,7 @@ import bram;
 import mailbox;
 import scheduler;
 import hls_failure;
+import hls_integer;
 import phi_field;
 
 const MAILBOX_CAPACITY = u8:5;
@@ -1512,7 +1513,7 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> EntryOutcome {
         let _6 = Cell_1.1.y;
         let _7 = Cell_1.1.anyon;
         let _8 = Cell_1.1.noise_quiet;
-        let _9 = _8 << 1;
+        let _9 = hls_integer::shift<true>(_8, u1:1);
         let _10 = _7 | _9;
         let _11 = Phistatus {
           step: _4,
@@ -1762,7 +1763,7 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> EntryOutcome {
           let _7 = Cell_1.1.best_direction;
           let _8 = _7 != 0;
           let _11 = if _8 {
-            let _9 = NextRandom_1 >> 31;
+            let _9 = hls_integer::shift<false>(NextRandom_1, u5:31);
             let _10 = _9 == 1;
             (_10, hls_failure::NONE)
           } else {
@@ -2500,7 +2501,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
             let _10 = Xls_clause_1_Flags_1 & 1;
             let Xls_clause_1_Present_1 = _10;
             let _11 = Xls_clause_1_Flags_1 & 2;
-            let _12 = _11 >> 1;
+            let _12 = hls_integer::shift<false>(_11, u1:1);
             let Xls_clause_1_Quiet_1 = _12;
             let _13 = Xls_clause_1_Cell_1.1.anyon;
             let _14 = _13 ^ Xls_clause_1_Present_1;
