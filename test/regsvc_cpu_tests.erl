@@ -17,6 +17,12 @@ ordered_call_clause_cpu_test_() ->
         fun ordered_call_clause_scenario_/1
     ).
 
+bulk_bounds_do_not_wrap_test() ->
+    State = regsvc:init([]),
+    lists:foreach(fun({Start, Count}) ->
+        ?assertError(function_clause, regsvc:handle_call({bulk_get, Start, Count}, State))
+    end, [{16, 1}, {16#ffffffff, 1}, {16#fffffffe, 3}]).
+
 simulated_rtl_test_() ->
     case os:getenv("ERL_HLS_SIM_DIR") of
         false ->
@@ -252,6 +258,14 @@ rtl_error_scenario_(Pid) ->
         ?_assertEqual(
             {error, {remote_error, function_clause}},
             gen_server:call(Pid, {bulk_get, 16, 1})
+        ),
+        ?_assertEqual(
+            {error, {remote_error, function_clause}},
+            gen_server:call(Pid, {bulk_get, 16#ffffffff, 1})
+        ),
+        ?_assertEqual(
+            {error, {remote_error, function_clause}},
+            gen_server:call(Pid, {bulk_get, 16#fffffffe, 3})
         ),
         ?_assertEqual(
             {error, {remote_error, function_clause}},

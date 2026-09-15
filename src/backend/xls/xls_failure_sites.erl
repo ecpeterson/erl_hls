@@ -11,7 +11,7 @@ generic() ->
     [{1, function_clause}, {2, match_failure}, {3, request_length},
         {4, case_clause}, {5, if_clause}, {6, explicit_fail},
         {7, invalid_message}, {8, invalid_repeat}, {9, reduction_mismatch},
-        {10, reduction_protocol}, {11, invalid_effect}, {12, internal}, {13, badarith}].
+        {10, reduction_protocol}, {11, invalid_effect}, {12, internal}, {13, badarith}, {14, badarg}].
 
 %% epp emits integer line annotations and file attributes at include boundaries.
 %% Attach that enclosing file once; lowering then preserves the source origin
@@ -42,6 +42,12 @@ sites({call, Line, {remote, _, {atom, _, hls_float}, {atom, _, Operation}}, Args
         when Operation =:= add; Operation =:= sub; Operation =:= mul;
              Operation =:= eq; Operation =:= lt ->
     [origin(badarith, Line) | sites(Args)];
+sites({call, Line, {remote, _, {atom, _, Module}, {atom, _, Operation}}, Args})
+        when (Module =:= hls_lists orelse Module =:= hls_vec) andalso
+             (Operation =:= nth orelse Operation =:= set);
+             Module =:= hls_lists andalso
+             (Operation =:= sublist orelse Operation =:= array_slice) ->
+    [origin(badarg, Line) | sites(Args)];
 sites(Tuple) when is_tuple(Tuple) -> sites(tuple_to_list(Tuple));
 sites(List) when is_list(List) -> lists:append([sites(X) || X <- List]);
 sites(_) -> [].

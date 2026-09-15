@@ -1,16 +1,20 @@
 -module(hls_lists).
+-moduledoc """
+Fixed-size lists with one-based, checked access on BEAM and XLS.
+
+Indices must identify an element. Slices must fit entirely; a zero-length slice
+may start one past the end. Invalid bounds raise `badarg`, or a source-located
+failure in hardware. `sublist/4` retains the declared length by zero-padding
+after the selected range. `array_slice/4` returns exactly the requested length,
+which must be a positive compile-time constant when translating to XLS. Empty
+collections are supported by the host codecs; XLS does not support their values.
+""".
 -export([list/2]).
 -export_type([list/2]).
 -export([new/2, sublist/4, nth/2, set/3, array_slice/4]).
 -export([zero/2, transpile/3, pack/3, unpack/3, width/2, print_type/2]).
--export([dslx_codec/2]).
+-export([dslx_codec/2, dslx_imports/1]).
 -behavior(hls_type).
-
-%% TODO: the module interface should probably closely match that of XLS, so that
-%%  the Erlang programmer knows how to adapt their code to be convertible.
-%%
-%% NOTE: We adhere to Erlang-type indexing conventions, so that people introduce
-%%  as few off-by-ones as possible when converting code.
 
 -type list(ElementType, Count) :: list(ElementType) | {no_return(), Count}.
 
@@ -25,26 +29,34 @@ new(Subtype, Count) ->
     [hls_type:zero(Subtype) || _ <- lists:seq(1, Count)].
 
 -doc "Extracts the sublist [Start, Start + Count) without modifying parent list length.".
-sublist(Descriptor, List, Start, Count) ->
-    {hls_type, hls_lists, list, [Subtype, BigLength]} = Descriptor,
+sublist({hls_type, hls_lists, list, [Subtype, BigLength]}, List, Start, Count) ->
+    Selected = checked_slice(List, Start, Count, BigLength),
     Padding = lists:duplicate(BigLength - Count, hls_type:zero(Subtype)),
-    lists:sublist(List, Start, Count) ++ Padding.
+    Selected ++ Padding.
 
-array_slice(_Descriptor, List, Start, Length) ->
-    lists:sublist(List, Start, Length).
+array_slice({hls_type, hls_lists, list, [_Subtype, Size]}, List, Start, Length) ->
+    checked_slice(List, Start, Length, Size).
+
+checked_slice(List, Start, Count, Size)
+        when length(List) =:= Size, is_integer(Start), is_integer(Count),
+             Start >= 1, Start =< Size + 1, Count >= 0, Count =< Size + 1 - Start ->
+    lists:sublist(List, Start, Count);
+checked_slice(_List, _Start, _Count, _Size) -> error(badarg).
 
 -spec nth(integer(), hls_lists:list(T, _C)) -> T.
 -doc "Extracts the nth element from the list.".
-nth(Index, List) ->
-    lists:nth(Index, List).
+nth(Index, List) when is_integer(Index), Index >= 1, Index =< length(List) ->
+    lists:nth(Index, List);
+nth(_Index, _List) -> error(badarg).
 
 -spec set(integer(), hls_lists:list(T, C), T) -> hls_lists:list(T, C).
 -doc "Replaces List's value at Index with the Item.".
-set(Index, List, Item) ->
-    case {Index, List} of
-        {1, [_Old | Rest]} -> [Item | Rest];
-        {_, [Old | Rest]} -> [Old | set(Index - 1, Rest, Item)]
-    end.
+set(Index, List, Item) when is_integer(Index), Index >= 1, Index =< length(List) ->
+    set_at(Index, List, Item);
+set(_Index, _List, _Item) -> error(badarg).
+
+set_at(1, [_Old | Rest], Item) -> [Item | Rest];
+set_at(Index, [Old | Rest], Item) -> [Old | set_at(Index - 1, Rest, Item)].
 
 zero(list, [Subtype, Count]) ->
     new(Subtype, Count).
@@ -54,37 +66,63 @@ zero(list, [Subtype, Count]) ->
 transpile(list, [{phantom, type, Subtype}, {static, integer, Count}], State) ->
     xls_parse:reference(State, {phantom, type, list(Subtype, Count)});
 transpile(nth, [Index, List], _State) ->
-    [List, "[", Index, " - u32:1]"];
+    checked_element(Index, List, "collection_values[collection_index]");
 transpile(set, [Index, List, Value], _State) ->
-    ["update(", List, ", ", Index, " - u32:1, ", Value, ")"];
+    checked_element(Index, List, ["update(collection_values, collection_index, ", Value, ")"]);
 transpile(new, [Subtype, Count], State) ->
     NewState = transpile(list, [Subtype, Count], State),
     transpile(zero, [xls_parse:reference(NewState)], NewState);
 transpile(zero, [{phantom, type, {hls_type, hls_lists, list, [Subtype, Count]}}], _State) ->
     %% NOTE: Here we enforce that the arguments to `new/2` are static.
     ["zero!<", print_type(list, [Subtype, Count]), ">()"];
-transpile(sublist, [Descriptor, List, Start, Count], State1) ->
-    % io:format("transpile @ ~p~n", [[sublist, [Descriptor, List, Start, Count], State1]]),
-    {phantom, type, Type = {hls_type, hls_lists, list, [Subtype, _BigCount]}} = Descriptor,
-    SmallSize = hls_type:width(Subtype),
-    BigSize = hls_type:width(Type),
+transpile(sublist, [Descriptor, List, Start, Count], _State) ->
+    checked_slice_call(sublist, Descriptor, List, Start, Count);
+transpile(array_slice, [Descriptor, List, Start, {static, integer, Length}], _State)
+        when Length > 0 ->
+    checked_slice_call({array_slice, Length}, Descriptor, List, Start, {static, integer, Length});
+transpile(array_slice, [_Descriptor, _List, _Start, {static, integer, 0}], _State) ->
+    error(empty_xls_collection);
+transpile(array_slice, [_Descriptor, _List, _Start, Length], _State) ->
+    error({invalid_array_slice_length, Length}).
 
-    State2 = xls_parse:instr(State1, hls_type:dslx_to_bits(Type, List)),
-    %% XLS casts array element zero to the most-significant bits. Move Start to
-    %% that position, then retain Count elements at the top and clear the tail.
-    State3 = xls_parse:instr(State2, [xls_parse:reference(State2), " << ((", Start, " - u32:1) * ", integer_to_list(SmallSize), ")"]),
-    State4 = xls_parse:instr(State3, [
-        xls_parse:reference(State3),
-        " & (all_ones!<bits[", integer_to_list(BigSize), "]>() << (",
-        integer_to_list(BigSize), " - (", Count, " * ",
-        integer_to_list(SmallSize), ")))"
-    ]),
-    xls_parse:instr(State4, hls_type:dslx_from_bits(Type, xls_parse:reference(State4)));
-transpile(array_slice, [{phantom, type, OldDescriptor}, List, {static, integer, Start}, {static, integer, Length}], _State) ->
-    {hls_type, hls_lists, list, [Subtype, _OldLength]} = OldDescriptor,
-    NewDescriptor = list(Subtype, Length),
-    ["array_slice(", List, ", u32:", integer_to_list(Start - 1),
-        ", zero!<", hls_type:print_type(NewDescriptor), ">() )"].
+%% Keep element types at the call site: XLS currently emits invalid IR names
+%% for type-generic functions instantiated with parameterized structs (including
+%% APFloat, also nested in arrays). Bounds arithmetic lives in the static module.
+%% TODO: move these typed operations into that module once XLS fixes its mangling.
+checked_element(Index, List, Result) ->
+    {fallible, badarg, ["{ let collection_values = ", List, "; ",
+        "let (collection_index, collection_invalid) = hls_lists::checked_index<",
+        "{array_size(collection_values)}>(", index(Index), "); (", Result,
+        ", collection_invalid) }"]}.
+
+checked_slice_call(Operation, {phantom, type, Type = {hls_type, ?MODULE, list, [Subtype, Size]}},
+        List, Start, Count) ->
+    OutputSize = case Operation of sublist -> Size; {array_slice, Length} -> Length end,
+    OutputType = print_type(list, [Subtype, OutputSize]),
+    {fallible, badarg, ["{ let slice_values: ", hls_type:print_type(Type), " = ", List,
+        "; let (slice_start, slice_mask, slice_invalid) = hls_lists::slice_bounds<u32:",
+        integer_to_list(Size), ", u32:", integer_to_list(OutputSize), ">(",
+        index(Start), ", ", index(Count), "); ",
+        "let sliced = array_slice(slice_values, slice_start, zero!<", OutputType, ">()); ",
+        "let selected = for (i, result): (u32, ", OutputType, ") in u32:0..u32:",
+        integer_to_list(OutputSize), " { update(result, i, if slice_mask[i] { sliced[i] } ",
+        "else { zero!<", hls_type:print_type(Subtype), ">() }) } (zero!<", OutputType,
+        ">()); (selected, slice_invalid) }"]}.
+
+%% Preserve a literal's full value before checking bounds. Dynamic expressions
+%% keep their inferred integer width and signedness too.
+index({static, integer, Value}) when Value >= 0, Value =< 16#ffffffff ->
+    ["u32:", integer_to_list(Value)];
+index({static, integer, Value}) ->
+    Width = max(32, bit_size(binary:encode_unsigned(abs(Value))) + 1),
+    [xls_nums:signed_type(Width), ":", integer_to_list(Value)];
+index(Value) -> Value.
+
+dslx_imports(Names) ->
+    case lists:any(fun(Name) -> lists:member(Name, [nth, set, sublist, array_slice]) end, Names) of
+        true -> [hls_lists];
+        false -> []
+    end.
 
 pack(List, list, [ElementType, Length]) when length(List) =:= Length ->
     %% XLS casts array element zero to the most-significant bits, while the AXIS
@@ -110,8 +148,9 @@ unpack(Packed, list, [ElementType, Length]) ->
     %% back into the logical Erlang list order.
     {Backwards, Rest}.
 
-print_type(list, [Subtype, Count]) ->
-    [hls_type:print_type(Subtype), "[", integer_to_list(Count), "]"].
+print_type(list, [Subtype, Count]) when Count > 0 ->
+    [hls_type:print_type(Subtype), "[", integer_to_list(Count), "]"];
+print_type(list, [_Subtype, 0]) -> error(empty_xls_collection).
 
 width(list, [Subtype, Count]) ->
     hls_type:width(Subtype) * Count.

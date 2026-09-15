@@ -96,6 +96,9 @@ jobs:
       - name: Compare integer division and remainder with BEAM, JIT, and RTL
         run: bash tools/test_integer_arithmetic.sh "$RUNNER_TEMP/xls"
 
+      - name: Compare checked collections with BEAM, JIT, and RTL
+        run: bash tools/test_collections.sh "$RUNNER_TEMP/xls"
+
       - name: Check application framing and admission conservation
         run: bash tools/test_application_frames.sh "$RUNNER_TEMP/xls"
 
@@ -218,6 +221,7 @@ jobs:
             _build/control_failures/**
             _build/typed-float/**
             _build/integer-arithmetic/**
+            _build/collections/**
             _build/xls_sim/regsvc/*.ir
             _build/xls_sim/regsvc/*.v
             _build/xls_sim/regsvc/sim/vvp.log

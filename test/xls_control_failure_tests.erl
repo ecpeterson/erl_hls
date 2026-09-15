@@ -21,6 +21,16 @@ arithmetic_selection_oracle_test_() ->
             {41, 1, 0, {0, 0}}, {42, 1, 0, {0, 202}}, {43, 1, 0, {13, 0}},
             {44, 1, 0, {0, 1}}, {45, 1, 0, {0, 0}}, {46, 1, 0, {13, 0}}]].
 
+collection_selection_oracle_test_() ->
+    [?_assertEqual(Expected, xls_control_failure_dslx:oracle(Mode, X, Y))
+        || {Mode, X, Y, Expected} <- [
+            {47, 2, 9, {0, 9}}, {47, 0, 0, {14, 0}},
+            {48, 4, 0, {14, 0}}, {49, 3, 2, {14, 0}}, {50, 3, 0, {14, 0}},
+            {51, 0, 7, {0, 7}}, {52, 0, 7, {0, 0}},
+            {53, 0, 1, {14, 0}}, {54, 0, 1, {2, 0}},
+            {55, 0, 0, {14, 0}}, {55, 1, 0, {13, 0}},
+            {56, 1, 0, {14, 0}}, {57, 1, 0, {14, 0}}, {58, 1, 0, {14, 0}}]].
+
 proxy_decodes_control_failures_test() ->
     {ok, Fabric} = phi_memory_fabric_fixture:start_link(),
     {ok, Proxy} = hls_gs:start_link(xls_control_failure_fixture, [], [{fabric, Fabric, 1}]),
@@ -34,7 +44,7 @@ proxy_decodes_control_failures_test() ->
                 {xls_control_failure_fixture:pack_tag(error), Tx, 0}, <<Code:32/little>>),
             receive {reply, Reply} -> ?assertEqual({error, {remote_error, Reason}}, Reply)
             after 1000 -> error(no_reply) end
-        end, [{1, 2, match_failure}, {2, 4, case_clause}, {3, 5, if_clause}, {4, 13, badarith}])
+        end, [{1, 2, match_failure}, {2, 4, case_clause}, {3, 5, if_clause}, {4, 13, badarith}, {5, 14, badarg}])
     after
         hls_gs:stop(Proxy),
         phi_memory_fabric_fixture:stop(Fabric)

@@ -4,6 +4,7 @@
 
 import axis;
 import hls_failure;
+import hls_lists;
 
 const NOREPLY = u1:0;  // some standard erlang tokens
 const REPLY = u1:1;
@@ -144,6 +145,11 @@ pub fn bits_from_state(s: State) -> bits[bit_count<State>()] {
   (s.registers as bits[512]) ++  zero!<bits[0]>()
 }
 
+const XLS_FAILURE_SITE_BADARG_3A68C26C_L100 = u16:30; // regsvc.erl:L100
+const XLS_FAILURE_SITE_BADARG_3A68C26C_L102 = u16:46; // regsvc.erl:L102
+const XLS_FAILURE_SITE_BADARG_3A68C26C_L109 = u16:62; // regsvc.erl:L109
+const XLS_FAILURE_SITE_BADARG_3A68C26C_L117 = u16:78; // regsvc.erl:L117
+const XLS_FAILURE_SITE_BADARG_3A68C26C_L121 = u16:94; // regsvc.erl:L121
 fn initial_state_outcome() -> (bool, State) {  // L93
   let _0 = State {
     ..zero!<State>()
@@ -205,17 +211,17 @@ Tag::GET => {
     if _0 {
       let _1 = Xls_clause_1_Register_1 + 1;
       let _2 = Xls_clause_1_State_1.1.registers;
-      let _3 = _2[_1 - u32:1];
-      let Xls_clause_1_Value_1 = _3;
+      let _3 = { let collection_values = _2; let (collection_index, collection_invalid) = hls_lists::checked_index<{array_size(collection_values)}>(_1); (collection_values[collection_index], collection_invalid) };
+      let Xls_clause_1_Value_1 = _3.0;
       let _4 = Read {
         value: Xls_clause_1_Value_1,
         ..zero!<Read>()
       };
       let _5 = (Tag::READ, _4, bits_from_read(_4));
       let _6 = (REPLY, _5, Xls_clause_1_State_1, );
-      if (bool:false) {
+      if ((hls_failure::check(_3.1, XLS_FAILURE_SITE_BADARG_3A68C26C_L109)) != hls_failure::NONE) {
         let s = zero!<State>();
-        (axis::pack(Tag::ERROR as u8, hls_failure::kind(hls_failure::NONE) as u32), (Tag::STATE, s))
+        (axis::pack(Tag::ERROR as u8, hls_failure::kind(hls_failure::check(_3.1, XLS_FAILURE_SITE_BADARG_3A68C26C_L109)) as u32), (Tag::STATE, s))
       } else {
         (axis::pack(_6.1.0 as u8, _6.1.2), _6.2)
       }
@@ -252,8 +258,8 @@ Tag::BULK_GET => {
       let _5 = if _0 {
         let _1 = Xls_clause_2_Count_1 <= 3;
         let _4 = if _1 {
-          let _2 = Xls_clause_2_Start_1 + Xls_clause_2_Count_1;
-          let _3 = _2 <= 16;
+          let _2 = 16 - Xls_clause_2_Count_1;
+          let _3 = Xls_clause_2_Start_1 <= _2;
           (_3, hls_failure::NONE)
         } else {
           (bool:0, hls_failure::NONE)
@@ -265,24 +271,21 @@ Tag::BULK_GET => {
       if _5.0 {
         let _6 = Xls_clause_2_State_1.1.registers;
         let _7 = Xls_clause_2_Start_1 + 1;
-        let _8 = _6 as bits[512];
-        let _9 = _8 << ((_7 - u32:1) * 32);
-        let _10 = _9 & (all_ones!<bits[512]>() << (512 - (Xls_clause_2_Count_1 * 32)));
-        let _11 = _10 as u32[16];
-        let Xls_clause_2_Sublist_1 = _11;
-        let _12 = array_slice(Xls_clause_2_Sublist_1, u32:0, zero!<u32[3]>() );
-        let Xls_clause_2_Trim_1 = _12;
-        let _13 = Bulkread {
+        let _8 = { let slice_values: u32[16] = _6; let (slice_start, slice_mask, slice_invalid) = hls_lists::slice_bounds<u32:16, u32:16>(_7, Xls_clause_2_Count_1); let sliced = array_slice(slice_values, slice_start, zero!<u32[16]>()); let selected = for (i, result): (u32, u32[16]) in u32:0..u32:16 { update(result, i, if slice_mask[i] { sliced[i] } else { zero!<u32>() }) } (zero!<u32[16]>()); (selected, slice_invalid) };
+        let Xls_clause_2_Sublist_1 = _8.0;
+        let _9 = { let slice_values: u32[16] = Xls_clause_2_Sublist_1; let (slice_start, slice_mask, slice_invalid) = hls_lists::slice_bounds<u32:16, u32:3>(u32:1, u32:3); let sliced = array_slice(slice_values, slice_start, zero!<u32[3]>()); let selected = for (i, result): (u32, u32[3]) in u32:0..u32:3 { update(result, i, if slice_mask[i] { sliced[i] } else { zero!<u32>() }) } (zero!<u32[3]>()); (selected, slice_invalid) };
+        let Xls_clause_2_Trim_1 = _9.0;
+        let _10 = Bulkread {
           values: Xls_clause_2_Trim_1,
           ..zero!<Bulkread>()
         };
-        let _14 = (Tag::BULK_READ, _13, bits_from_bulkread(_13));
-        let _15 = (REPLY, _14, Xls_clause_2_State_1, );
-        if (bool:false) {
+        let _11 = (Tag::BULK_READ, _10, bits_from_bulkread(_10));
+        let _12 = (REPLY, _11, Xls_clause_2_State_1, );
+        if ((hls_failure::first(hls_failure::check(_8.1, XLS_FAILURE_SITE_BADARG_3A68C26C_L117), hls_failure::check(_9.1, XLS_FAILURE_SITE_BADARG_3A68C26C_L121))) != hls_failure::NONE) {
           let s = zero!<State>();
-          (axis::pack(Tag::ERROR as u8, hls_failure::kind(hls_failure::NONE) as u32), (Tag::STATE, s))
+          (axis::pack(Tag::ERROR as u8, hls_failure::kind(hls_failure::first(hls_failure::check(_8.1, XLS_FAILURE_SITE_BADARG_3A68C26C_L117), hls_failure::check(_9.1, XLS_FAILURE_SITE_BADARG_3A68C26C_L121))) as u32), (Tag::STATE, s))
         } else {
-          (axis::pack(_15.1.0 as u8, _15.1.2), _15.2)
+          (axis::pack(_12.1.0 as u8, _12.1.2), _12.2)
         }
       } else {
         let s = zero!<State>();
@@ -317,8 +320,8 @@ Tag::SET => {
       if _0 {
         let _1 = Xls_clause_2_Register_1 + 1;
         let _2 = Xls_clause_2_State_1.1.registers;
-        let _3 = _2[_1 - u32:1];
-        let Xls_clause_2_OldValue_1 = _3;
+        let _3 = { let collection_values = _2; let (collection_index, collection_invalid) = hls_lists::checked_index<{array_size(collection_values)}>(_1); (collection_values[collection_index], collection_invalid) };
+        let Xls_clause_2_OldValue_1 = _3.0;
         let _4 = !Xls_clause_2_Mask_1;
         let _5 = Xls_clause_2_OldValue_1 & _4;
         let _6 = Xls_clause_2_Value_1 & Xls_clause_2_Mask_1;
@@ -326,17 +329,17 @@ Tag::SET => {
         let Xls_clause_2_NewValue_1 = _7;
         let _8 = Xls_clause_2_Register_1 + 1;
         let _9 = Xls_clause_2_State_1.1.registers;
-        let _10 = update(_9, _8 - u32:1, Xls_clause_2_NewValue_1);
-        let Xls_clause_2_NewRegisters_1 = _10;
+        let _10 = { let collection_values = _9; let (collection_index, collection_invalid) = hls_lists::checked_index<{array_size(collection_values)}>(_8); (update(collection_values, collection_index, Xls_clause_2_NewValue_1), collection_invalid) };
+        let Xls_clause_2_NewRegisters_1 = _10.0;
         let _11 = State {
           registers: Xls_clause_2_NewRegisters_1,
           ..(Xls_clause_2_State_1).1
         };
         let _12 = (Tag::STATE, _11);
         let _13 = (NOREPLY, _12, );
-        if (bool:false) {
+        if ((hls_failure::first(hls_failure::check(_3.1, XLS_FAILURE_SITE_BADARG_3A68C26C_L100), hls_failure::check(_10.1, XLS_FAILURE_SITE_BADARG_3A68C26C_L102))) != hls_failure::NONE) {
           let s = zero!<State>();
-          (axis::pack(Tag::ERROR as u8, hls_failure::kind(hls_failure::NONE) as u32), (Tag::STATE, s))
+          (axis::pack(Tag::ERROR as u8, hls_failure::kind(hls_failure::first(hls_failure::check(_3.1, XLS_FAILURE_SITE_BADARG_3A68C26C_L100), hls_failure::check(_10.1, XLS_FAILURE_SITE_BADARG_3A68C26C_L102))) as u32), (Tag::STATE, s))
         } else {
           (zero!<axis::Frame>(), _13.1)
         }

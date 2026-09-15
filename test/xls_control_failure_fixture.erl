@@ -35,7 +35,8 @@ handle_cast(#change{value = Value}, State) ->
 evaluate(Mode, X, Y) ->
     if Mode < 8 -> first_group(Mode, X, Y);
         Mode < 25 -> second_group(Mode, X, Y);
-        true -> arithmetic_group(Mode, X, Y)
+        Mode < 47 -> arithmetic_group(Mode, X, Y);
+        true -> collection_group(Mode, X, Y)
     end.
 
 -spec first_group(hls_nums:u32(), hls_nums:u32(), hls_nums:u32()) -> hls_nums:u32().
@@ -133,4 +134,34 @@ arithmetic_third(Mode, X, Y) ->
         44 -> if true orelse X div Y > 0 -> X; true -> Y end;
         45 -> if false andalso X div Y > 0 -> X; true -> Y end;
         46 -> case (X div Y > 0) orelse true of true -> X; false -> Y end
+    end.
+
+-spec collection_group(hls_nums:u32(), hls_nums:u32(), hls_nums:u32()) -> hls_nums:u32().
+collection_group(Mode, X, Y) ->
+    if Mode < 53 -> collection_values(Mode, X, Y);
+       true -> collection_failures(Mode, X, Y)
+    end.
+
+-spec collection_values(hls_nums:u32(), hls_nums:u32(), hls_nums:u32()) -> hls_nums:u32().
+collection_values(Mode, X, Y) ->
+    Values = hls_lists:set(2, hls_lists:new(hls_nums:u32(), 3), Y),
+    case Mode of
+        47 -> hls_vec:nth(X, Values);
+        48 -> hls_vec:nth(2, hls_vec:set(X, Values, X));
+        49 -> hls_lists:nth(1, hls_lists:sublist(hls_lists:list(hls_nums:u32(), 3), Values, X, Y));
+        50 -> hls_lists:nth(1, hls_lists:array_slice(hls_lists:list(hls_nums:u32(), 3), Values, X, 2));
+        51 -> case X of 0 -> Y; _ -> hls_vec:nth(X, Values) end;
+        52 -> case X =:= 0 orelse hls_vec:nth(X, Values) =:= Y of true -> X; false -> Y end
+    end.
+
+-spec collection_failures(hls_nums:u32(), hls_nums:u32(), hls_nums:u32()) -> hls_nums:u32().
+collection_failures(Mode, X, Y) ->
+    Values = hls_lists:new(hls_nums:u32(), 3),
+    case Mode of
+        53 -> V = hls_lists:nth(X, Values), true = Y =:= 0, V;
+        54 -> true = Y =:= 0, hls_lists:nth(X, Values);
+        55 -> keep(hls_lists:nth(X, Values), X div Y);
+        56 -> hls_lists:nth(4, Values);
+        57 -> hls_vec:nth(16#100000001, Values);
+        58 -> hls_vec:nth(-1, Values)
     end.

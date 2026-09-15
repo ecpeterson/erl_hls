@@ -113,7 +113,7 @@ handle_call(#bulk_get{count = 0}, State) ->
 handle_call(#bulk_get{start = Start, count = Count}, State)
         when Count > 0,
              Count =< ?MAX_PAYLOAD,
-             Start + Count =< ?REGISTER_COUNT ->
+             Start =< ?REGISTER_COUNT - Count ->
     Sublist = hls_lists:sublist(
         hls_lists:list(hls_nums:u32(), ?REGISTER_COUNT),
         State#state.registers, Start + 1, Count

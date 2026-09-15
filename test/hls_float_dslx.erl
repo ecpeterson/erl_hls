@@ -5,7 +5,7 @@ write(Stage) ->
     lists:foreach(fun(Name) ->
         Type = hls_nums:Name(),
         W = hls_type:width(Type),
-        Text = ["import apfloat;\nimport hls_float;\nimport hls_failure;\n",
+        Text = ["import apfloat;\nimport hls_float;\nimport hls_failure;\nimport hls_lists;\n",
             [probe(Type, Op) || Op <- [add, sub, mul, eq, lt]],
             io_lib:format("pub fn probe(mode: u3, x: uN[~p], y: uN[~p]) -> (uN[~p], bool) {\n"
                 " match mode { u3:0 => add(x,y), u3:1 => sub(x,y), u3:2 => mul(x,y),"
