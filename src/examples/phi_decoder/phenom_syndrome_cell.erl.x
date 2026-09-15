@@ -1162,7 +1162,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
             } else {
               (bool:0, hls_failure::NONE)
             };
-            (_11.0, hls_failure::first(_6.1, _11.1))
+            (_11.0, hls_failure::first_all([_6.1, _11.1]))
           } else {
             (bool:0, hls_failure::NONE)
           };
@@ -1260,7 +1260,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
               let Xls_clause_1_NextSyndrome_1 = Xls_clause_1_Complete_1;
               let _47 = (Phase::ANNOUNCING, Xls_clause_1_NextSyndrome_1, Directive::CONSUME, bool:0, );
               let _48 = (_47.0, _47.1, _47.2, _47.3, hls_failure::NONE);
-              (_48, hls_failure::first(_27.1, hls_failure::first(_30.1, hls_failure::first(_39.1, _44.1))))
+              (_48, hls_failure::first_all([_27.1, _30.1, _39.1, _44.1]))
             } else {
               let Xls_clause_1_NextSyndrome_1 = Xls_clause_1_Collected_1;
               let _23 = (Phase::COLLECTING, Xls_clause_1_NextSyndrome_1, Directive::CONSUME, bool:0, );

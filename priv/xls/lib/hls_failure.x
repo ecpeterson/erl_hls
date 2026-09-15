@@ -42,6 +42,26 @@ pub fn first(earlier: Code, later: Code) -> Code {
     if earlier != NONE { earlier } else { later }
 }
 
+// Codes are in evaluation order. Fold from the right to retain the same
+// priority expression without making generated source grow in nesting depth.
+pub fn first_all<N: u32>(codes: Code[N]) -> Code {
+    for (i, selected): (u32, Code) in u32:0..N {
+        first(codes[N - i - u32:1], selected)
+    } (NONE)
+}
+
+#[test]
+fn first_all_preserves_source_code_and_order() {
+    assert_eq(first_all([NONE, NONE, NONE]), NONE);
+    for (position, ()): (u32, ()) in u32:0..u32:64 {
+        let codes = for (i, codes): (u32, Code[64]) in u32:0..u32:64 {
+            let code = ((i + u32:1) as Code) << u32:4 | BADARG;
+            update(codes, i, if i >= position { code } else { NONE })
+        } (zero!<Code[64]>());
+        assert_eq(first_all(codes), codes[position]);
+    } (())
+}
+
 pub fn check(failed: bool, code: Code) -> Code {
     if failed { code } else { NONE }
 }

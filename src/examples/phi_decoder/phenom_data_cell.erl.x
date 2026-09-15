@@ -969,7 +969,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
             } else {
               (bool:0, hls_failure::NONE)
             };
-            (_9.0, hls_failure::first(_6.1, _9.1))
+            (_9.0, hls_failure::first_all([_6.1, _9.1]))
           } else {
             (bool:0, hls_failure::NONE)
           };
@@ -1065,7 +1065,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
               let Xls_clause_1_NextCell_1 = Xls_clause_1_Completed_1;
               let _42 = (Phase::REPORTING, Xls_clause_1_NextCell_1, Directive::CONSUME, bool:0, );
               let _43 = (_42.0, _42.1, _42.2, _42.3, hls_failure::NONE);
-              (_43, hls_failure::first(_19.1, hls_failure::first(_22.1, hls_failure::first(_33.1, hls_failure::first(_37.1, _39.1)))))
+              (_43, hls_failure::first_all([_19.1, _22.1, _33.1, _37.1, _39.1]))
             } else {
               let Xls_clause_1_NextCell_1 = Xls_clause_1_Collected_1;
               let _15 = (Phase::COLLECTING, Xls_clause_1_NextCell_1, Directive::CONSUME, bool:0, );
@@ -1195,7 +1195,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
             } else {
               (bool:0, hls_failure::NONE)
             };
-            (_9.0, hls_failure::first(_6.1, _9.1))
+            (_9.0, hls_failure::first_all([_6.1, _9.1]))
           } else {
             (bool:0, hls_failure::NONE)
           };

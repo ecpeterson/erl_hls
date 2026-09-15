@@ -576,10 +576,11 @@ failure_kind(State) -> ["hls_failure::kind(", failure_code(State), ")"].
 
 -spec failure_code(clause_state()) -> printable().
 failure_code(#clause_state{failures = []}) -> "hls_failure::NONE";
-failure_code(#clause_state{failures = [Last | Earlier]}) ->
-    lists:foldl(fun(Failure, Later) ->
-        ["hls_failure::first(", Failure, ", ", Later, ")"]
-    end, Last, Earlier).
+failure_code(#clause_state{failures = [Only]}) -> Only;
+failure_code(#clause_state{failures = Failures}) ->
+    %% A flat argument list avoids XLS's expression-nesting limit for callbacks
+    %% with many failure sites. The static helper retains the right fold.
+    ["hls_failure::first_all([", lists:join(", ", lists:reverse(Failures)), "])"].
 
 add_match_failure(Predicate, Line, State) ->
     add_failure(["hls_failure::check(", Predicate, ", ",
