@@ -1,119 +1,77 @@
 `timescale 1ns/1ps
 
+// Public frames prove repeated self-delivery, source order across aliased
+// outputs, and reset recovery. No generated internal signals are inspected.
 module ordered_egress_topology_tb;
-    localparam [7:0] ORDERED_VALUE_TAG = 8'd3;
-
-    reg clk = 1'b0;
-    reg reset = 1'b1;
-    reg ordered_values_ready = 1'b0;
-    wire [127:0] ordered_values;
-    wire ordered_values_valid;
-
-    reg [127:0] captured [0:2];
-    reg [127:0] stalled_value;
-    integer captured_count = 0;
-    integer cycle;
+    localparam ROUNDS = 16;
+    localparam FRAMES = 3*ROUNDS + 1;
+    reg clk = 0, reset = 1, release_sink = 0;
+    reg [31:0] flow = 32'h13579bdf;
+    wire ready = release_sink && (flow[0] || flow[1]);
+    wire [127:0] frame;
+    wire valid;
+    reg stalled = 0;
+    reg [127:0] held;
+    integer received = 0, stalled_cycles = 0, clocks = 0;
+    integer expected;
 
     __ordered_egress_topology__Top_0_next dut (
-        .clk(clk),
-        .reset(reset),
-        ._ordered_values_out_rdy(
-            ordered_values_ready
-        ),
-        ._ordered_values_out(ordered_values),
-        ._ordered_values_out_vld(
-            ordered_values_valid
-        )
+        .clk(clk), .reset(reset), ._ordered_values_out_rdy(ready),
+        ._ordered_values_out(frame), ._ordered_values_out_vld(valid)
     );
-
     always #5 clk = ~clk;
+    always @(negedge clk) flow <= {flow[30:0], flow[31]^flow[21]^flow[1]^flow[0]};
 
     always @(posedge clk) begin
-        if (!reset && ordered_values_valid && ordered_values_ready) begin
-            if (captured_count >= 3) begin
-                $display("FAIL: ordered egress emitted an unexpected value");
-                $fatal(1);
-            end else begin
-                captured[captured_count] <= ordered_values;
-                captured_count <= captured_count + 1;
+        clocks = clocks + 1;
+        if (clocks > 20000) $fatal(1, "ordered topology progress timeout");
+        if (reset) begin
+            received = 0;
+            stalled = 0;
+        end else begin
+            if ((^{valid, ready}) === 1'bx) $fatal(1, "unknown handshake");
+            if (stalled && (!valid || frame !== held))
+                $fatal(1, "ordered output changed under backpressure");
+            stalled = valid && !ready;
+            held = frame;
+            if (stalled) stalled_cycles = stalled_cycles + 1;
+            if (valid && ready) begin
+                if (received >= FRAMES) $fatal(1, "unexpected output after completion");
+                if (received == FRAMES-1) expected = 4*ROUNDS;
+                else case (received % 3)
+                    0: expected = 4*(received/3) + 3;
+                    1: expected = 4*(received/3) + 1;
+                    2: expected = 4*(received/3) + 2;
+                endcase
+                if (frame !== {32'h01000003, 64'b0, expected[31:0]})
+                    $fatal(1, "frame %0d: expected value %0d, got %032h", received, expected, frame);
+                received = received + 1;
             end
         end
     end
 
-    task automatic wait_for_valid;
-        input integer timeout_cycles;
+    task automatic restart;
         begin
-            for (cycle = 0;
-                    cycle < timeout_cycles && !ordered_values_valid;
-                    cycle = cycle + 1)
-                @(posedge clk);
-            if (!ordered_values_valid) begin
-                $display("FAIL: ordered egress never became valid");
-                $fatal(1);
-            end
-        end
-    endtask
-
-    task automatic wait_for_count;
-        input integer target;
-        input integer timeout_cycles;
-        begin
-            for (cycle = 0;
-                    cycle < timeout_cycles && captured_count < target;
-                    cycle = cycle + 1)
-                @(posedge clk);
-            if (captured_count < target) begin
-                $display("FAIL: expected %0d ordered values, got %0d",
-                    target, captured_count);
-                $fatal(1);
-            end
-            @(negedge clk);
-        end
-    endtask
-
-    task automatic check_value;
-        input integer index;
-        input [31:0] expected;
-        reg [31:0] header;
-        begin
-            header = captured[index][127:96];
-            if (header[7:0] !== ORDERED_VALUE_TAG ||
-                    header[31:24] !== 8'd1) begin
-                $display("FAIL: ordered value %0d has header %08x",
-                    index, header);
-                $fatal(1);
-            end
-            if (captured[index][31:0] !== expected) begin
-                $display("FAIL: ordered value %0d expected %0d, got %0d",
-                    index, expected, captured[index][31:0]);
-                $fatal(1);
-            end
+            @(negedge clk); reset = 1; release_sink = 0;
+            repeat (5) @(negedge clk);
+            reset = 0;
+            wait (valid);
+            repeat (100) @(negedge clk);
         end
     endtask
 
     initial begin
-        repeat (5) @(posedge clk);
-        @(negedge clk);
-        reset = 1'b0;
-
-        wait_for_valid(1000);
-        stalled_value = ordered_values;
-        repeat (100) begin
-            @(posedge clk);
-            if (!ordered_values_valid || ordered_values !== stalled_value) begin
-                $display("FAIL: ordered output changed under backpressure");
-                $fatal(1);
-            end
-        end
-
-        @(negedge clk);
-        ordered_values_ready = 1'b1;
-        wait_for_count(3, 1000);
-        check_value(0, 32'd3);
-        check_value(1, 32'd1);
-        check_value(2, 32'd2);
-
-        $display("PASS: aliased actor egress preserves source order");
+        restart();
+        // Discard a frame held at the sink, then reset again mid-stream.
+        restart();
+        release_sink = 1;
+        wait (received >= 7);
+        restart();
+        release_sink = 1;
+        wait (received == FRAMES);
+        repeat (200) @(negedge clk);
+        if (stalled_cycles < 300) $fatal(1, "insufficient stall coverage");
+        $display("PASS: %0d self-send rounds, aliased source order, stalls and reset (%0d clocks)", ROUNDS, clocks);
         $finish;
     end
 endmodule

@@ -1,0 +1,560 @@
+{
+  "schema": 1,
+  "date": "2026-09-15",
+  "baseline_commit": "b95cce8deb8a419b5e6ffe1060cad286086f31d7",
+  "implementation_commit": "7ac39aca07db40afdcbaa82f88f0c042f8d4836e",
+  "prediction": "One extra state bit per direct service, modest surrounding logic changes, unchanged D3 hardware.",
+  "area": {
+    "rtl_sha256": {
+      "baseline": "ed8d50e2962a53b566797ebd2c1bc04cb06bd3c22a96534f3209246823952516",
+      "candidate": "e3320656453d655bb5c02c79e8d13ddd8cc707f0a7948b217c8db14dfb32c4b8"
+    },
+    "samples": [
+      {
+        "variant": "baseline",
+        "seed": 1,
+        "LUT": 55,
+        "LUT_logic": 55,
+        "LUT_RAM": 0,
+        "FF": 17,
+        "RAMB18": 0,
+        "RAMB36": 0,
+        "DSP": 0,
+        "CARRY4": 5,
+        "script": "read_verilog -sv \"${REPO}/_build/direct-admission/baseline/top.v\"\nhierarchy -check -top __ordered_egress_actor__Service_0_next\nproc\nflatten\nopt\nrename -scramble-name -seed 1\nsynth_xilinx -flatten -abc9 -family xc7 -noiopad -noclkbuf -top __ordered_egress_actor__Service_0_next\ncheck -assert\nscc -expect 0\ntee -o stat.json stat -json -tech xilinx\n",
+        "log_sha256": "ab6aeb22d004cbe0312a633739e5297e70ea1678fcb83c9b03c21fe05804d2e9"
+      },
+      {
+        "variant": "candidate",
+        "seed": 1,
+        "LUT": 52,
+        "LUT_logic": 52,
+        "LUT_RAM": 0,
+        "FF": 18,
+        "RAMB18": 0,
+        "RAMB36": 0,
+        "DSP": 0,
+        "CARRY4": 5,
+        "script": "read_verilog -sv \"${REPO}/_build/direct-admission/registered-independent/top.v\"\nhierarchy -check -top __ordered_egress_actor__Service_0_next\nproc\nflatten\nopt\nrename -scramble-name -seed 1\nsynth_xilinx -flatten -abc9 -family xc7 -noiopad -noclkbuf -top __ordered_egress_actor__Service_0_next\ncheck -assert\nscc -expect 0\ntee -o stat.json stat -json -tech xilinx\n",
+        "log_sha256": "acb6eb9e2099fde3fed99d21cf8356282a256decf1887334ce0d487a64c20d43"
+      },
+      {
+        "variant": "baseline",
+        "seed": 2,
+        "LUT": 58,
+        "LUT_logic": 58,
+        "LUT_RAM": 0,
+        "FF": 17,
+        "RAMB18": 0,
+        "RAMB36": 0,
+        "DSP": 0,
+        "CARRY4": 5,
+        "script": "read_verilog -sv \"${REPO}/_build/direct-admission/baseline/top.v\"\nhierarchy -check -top __ordered_egress_actor__Service_0_next\nproc\nflatten\nopt\nrename -scramble-name -seed 2\nsynth_xilinx -flatten -abc9 -family xc7 -noiopad -noclkbuf -top __ordered_egress_actor__Service_0_next\ncheck -assert\nscc -expect 0\ntee -o stat.json stat -json -tech xilinx\n",
+        "log_sha256": "86daeb971650d8a1ee062d2b3ac4124f3f82ed0cd640263295917398aaf95a38"
+      },
+      {
+        "variant": "candidate",
+        "seed": 2,
+        "LUT": 49,
+        "LUT_logic": 49,
+        "LUT_RAM": 0,
+        "FF": 18,
+        "RAMB18": 0,
+        "RAMB36": 0,
+        "DSP": 0,
+        "CARRY4": 5,
+        "script": "read_verilog -sv \"${REPO}/_build/direct-admission/registered-independent/top.v\"\nhierarchy -check -top __ordered_egress_actor__Service_0_next\nproc\nflatten\nopt\nrename -scramble-name -seed 2\nsynth_xilinx -flatten -abc9 -family xc7 -noiopad -noclkbuf -top __ordered_egress_actor__Service_0_next\ncheck -assert\nscc -expect 0\ntee -o stat.json stat -json -tech xilinx\n",
+        "log_sha256": "acc76301a2cfb94189735d0c3f5be9438851ceee19c4d4494dd594afce29dc29"
+      }
+    ],
+    "summary": {
+      "baseline": {
+        "LUT": {
+          "best": 55,
+          "mean": 56.5,
+          "variance": 2.25,
+          "worst": 58
+        },
+        "FF": {
+          "best": 17,
+          "mean": 17,
+          "variance": 0,
+          "worst": 17
+        },
+        "LUT_RAM": {
+          "best": 0,
+          "mean": 0,
+          "variance": 0,
+          "worst": 0
+        },
+        "RAMB18": {
+          "best": 0,
+          "mean": 0,
+          "variance": 0,
+          "worst": 0
+        },
+        "RAMB36": {
+          "best": 0,
+          "mean": 0,
+          "variance": 0,
+          "worst": 0
+        },
+        "DSP": {
+          "best": 0,
+          "mean": 0,
+          "variance": 0,
+          "worst": 0
+        },
+        "CARRY4": {
+          "best": 5,
+          "mean": 5,
+          "variance": 0,
+          "worst": 5
+        }
+      },
+      "candidate": {
+        "LUT": {
+          "best": 49,
+          "mean": 50.5,
+          "variance": 2.25,
+          "worst": 52
+        },
+        "FF": {
+          "best": 18,
+          "mean": 18,
+          "variance": 0,
+          "worst": 18
+        },
+        "LUT_RAM": {
+          "best": 0,
+          "mean": 0,
+          "variance": 0,
+          "worst": 0
+        },
+        "RAMB18": {
+          "best": 0,
+          "mean": 0,
+          "variance": 0,
+          "worst": 0
+        },
+        "RAMB36": {
+          "best": 0,
+          "mean": 0,
+          "variance": 0,
+          "worst": 0
+        },
+        "DSP": {
+          "best": 0,
+          "mean": 0,
+          "variance": 0,
+          "worst": 0
+        },
+        "CARRY4": {
+          "best": 5,
+          "mean": 5,
+          "variance": 0,
+          "worst": 5
+        }
+      }
+    },
+    "tool_sha256": {
+      "${REPO}/experiments/07-openxc7/.apio/packages/oss-cad-suite/bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+      "${REPO}/experiments/07-openxc7/.apio/packages/oss-cad-suite/libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+      "${REPO}/experiments/07-openxc7/.apio/packages/oss-cad-suite/libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d",
+      "${REPO}/experiments/07-openxc7/.apio/packages/oss-cad-suite/BUILD-INFO.json": "b509fbcf8adf9e4f8359d8c89ed179bacb3aa7c9557d830ba80936b907c3db85"
+    },
+    "original_erlang_fixture_sha256": "69ba78a473d0e57108dd6cd298fa0110ac5bccec96ea7818cc3e063b68f05125",
+    "dslx_sources": {
+      "baseline": [
+        {
+          "path": "${REPO}/_build/direct-admission/baseline/arbitration.x",
+          "sha256": "8df5bb59310352e9981f8593010218dbc2349b60405406dfeb39cff66986bc48"
+        },
+        {
+          "path": "${REPO}/_build/direct-admission/baseline/axis.x",
+          "sha256": "ed6ef54ac090be9f5d125f7dead74effce2fa085b3a547ca65f6b55014ad22f6"
+        },
+        {
+          "path": "${REPO}/_build/direct-admission/baseline/bram.x",
+          "sha256": "8dd43b778fc9b61a5967ed5202c164563835ec90cd85e40bb0cf0b2b409e7cdf"
+        },
+        {
+          "path": "${REPO}/_build/direct-admission/baseline/effect_window.x",
+          "sha256": "a6450a77190293db0256eb3dccba26abb99008bd808243e860f0b72e8c9b8d81"
+        },
+        {
+          "path": "${REPO}/_build/direct-admission/baseline/frame_queue.x",
+          "sha256": "938dbaa621cc9973d505a915859c1e16e055271989929b774f874bf318a3614a"
+        },
+        {
+          "path": "${REPO}/_build/direct-admission/baseline/frame_transport.x",
+          "sha256": "3523c8ed1ff99bb4e09c75cf62c9999fdeb46ae8fa0cec654fb8c2a9e1a6f8a9"
+        },
+        {
+          "path": "${REPO}/_build/direct-admission/baseline/hls_fabric_router.x",
+          "sha256": "47beed81304b0f61ea4acd4819cf51949af91e7b560e1c4701607767ea767d44"
+        },
+        {
+          "path": "${REPO}/_build/direct-admission/baseline/hls_failure.x",
+          "sha256": "539e3978e2146432d397cb0f57f65df60c8879e7a5b19c883c08c4992980c620"
+        },
+        {
+          "path": "${REPO}/_build/direct-admission/baseline/hls_fixed.x",
+          "sha256": "a3ff6655b5cca3984d736b57712e57e5976ab6196c709742aa26850537c88902"
+        },
+        {
+          "path": "${REPO}/_build/direct-admission/baseline/hls_float.x",
+          "sha256": "1882c965143004e7dd70cac139cf1ee41d17199f0877e374a280cebfb6204c26"
+        },
+        {
+          "path": "${REPO}/_build/direct-admission/baseline/hls_integer.x",
+          "sha256": "6cab6f43b0d4a7288a4dcbdd91a1d8f61d391f0ee84b0b79c5ef13689ec6153d"
+        },
+        {
+          "path": "${REPO}/_build/direct-admission/baseline/hls_spatial_router.x",
+          "sha256": "3cca4008525b6831a825db8af3286df5b3d28f06bb6c505f75e06fb0fc42b6f5"
+        },
+        {
+          "path": "${REPO}/_build/direct-admission/baseline/hls_vec.x",
+          "sha256": "c66c888c606ce7bc3e7b1c526cd1216e571f23fc6712f719df14dc6f5d82e5e6"
+        },
+        {
+          "path": "${REPO}/_build/direct-admission/baseline/mailbox.x",
+          "sha256": "d7e989c08fc7fab571df91ffb80820f26521116c2a0d08e2b44c49e23b9fcb02"
+        },
+        {
+          "path": "${REPO}/_build/direct-admission/baseline/ordered_egress_actor.x",
+          "sha256": "08e1e89a872c8c775f9e554c60569f6b1eccc4f96786f525f7837676833dcb60"
+        },
+        {
+          "path": "${REPO}/_build/direct-admission/baseline/ordered_egress_topology.x",
+          "sha256": "d9f06f091b5e03b8ff7e03d86703a008fc798385e56b5d8eb704bde39cac5a44"
+        },
+        {
+          "path": "${REPO}/_build/direct-admission/baseline/scheduler.x",
+          "sha256": "e7ab85c1f981c56fab222ed0a0d5731ac63a44fb18dfa534cd4f0fedd2b2ad7f"
+        },
+        {
+          "path": "${REPO}/_build/direct-admission/baseline/scheduler_observation.x",
+          "sha256": "7c01db596893e73678cb6eb220430127d4d2235ed09eebf530ca0efb778d8263"
+        }
+      ],
+      "candidate": [
+        {
+          "path": "${REPO}/_build/direct-admission/committed/arbitration.x",
+          "sha256": "8df5bb59310352e9981f8593010218dbc2349b60405406dfeb39cff66986bc48"
+        },
+        {
+          "path": "${REPO}/_build/direct-admission/committed/axis.x",
+          "sha256": "ed6ef54ac090be9f5d125f7dead74effce2fa085b3a547ca65f6b55014ad22f6"
+        },
+        {
+          "path": "${REPO}/_build/direct-admission/committed/bram.x",
+          "sha256": "8dd43b778fc9b61a5967ed5202c164563835ec90cd85e40bb0cf0b2b409e7cdf"
+        },
+        {
+          "path": "${REPO}/_build/direct-admission/committed/effect_window.x",
+          "sha256": "a6450a77190293db0256eb3dccba26abb99008bd808243e860f0b72e8c9b8d81"
+        },
+        {
+          "path": "${REPO}/_build/direct-admission/committed/frame_queue.x",
+          "sha256": "938dbaa621cc9973d505a915859c1e16e055271989929b774f874bf318a3614a"
+        },
+        {
+          "path": "${REPO}/_build/direct-admission/committed/frame_transport.x",
+          "sha256": "3523c8ed1ff99bb4e09c75cf62c9999fdeb46ae8fa0cec654fb8c2a9e1a6f8a9"
+        },
+        {
+          "path": "${REPO}/_build/direct-admission/committed/hls_fabric_router.x",
+          "sha256": "47beed81304b0f61ea4acd4819cf51949af91e7b560e1c4701607767ea767d44"
+        },
+        {
+          "path": "${REPO}/_build/direct-admission/committed/hls_failure.x",
+          "sha256": "539e3978e2146432d397cb0f57f65df60c8879e7a5b19c883c08c4992980c620"
+        },
+        {
+          "path": "${REPO}/_build/direct-admission/committed/hls_fixed.x",
+          "sha256": "a3ff6655b5cca3984d736b57712e57e5976ab6196c709742aa26850537c88902"
+        },
+        {
+          "path": "${REPO}/_build/direct-admission/committed/hls_float.x",
+          "sha256": "1882c965143004e7dd70cac139cf1ee41d17199f0877e374a280cebfb6204c26"
+        },
+        {
+          "path": "${REPO}/_build/direct-admission/committed/hls_integer.x",
+          "sha256": "6cab6f43b0d4a7288a4dcbdd91a1d8f61d391f0ee84b0b79c5ef13689ec6153d"
+        },
+        {
+          "path": "${REPO}/_build/direct-admission/committed/hls_spatial_router.x",
+          "sha256": "3cca4008525b6831a825db8af3286df5b3d28f06bb6c505f75e06fb0fc42b6f5"
+        },
+        {
+          "path": "${REPO}/_build/direct-admission/committed/hls_vec.x",
+          "sha256": "c66c888c606ce7bc3e7b1c526cd1216e571f23fc6712f719df14dc6f5d82e5e6"
+        },
+        {
+          "path": "${REPO}/_build/direct-admission/committed/mailbox.x",
+          "sha256": "d7e989c08fc7fab571df91ffb80820f26521116c2a0d08e2b44c49e23b9fcb02"
+        },
+        {
+          "path": "${REPO}/_build/direct-admission/committed/ordered_egress_actor.x",
+          "sha256": "5575f14a124f5fe287473bfc905f1c813704f53fdaee5717fe8491ab245065b6"
+        },
+        {
+          "path": "${REPO}/_build/direct-admission/committed/ordered_egress_topology.x",
+          "sha256": "d9f06f091b5e03b8ff7e03d86703a008fc798385e56b5d8eb704bde39cac5a44"
+        },
+        {
+          "path": "${REPO}/_build/direct-admission/committed/scheduler.x",
+          "sha256": "e7ab85c1f981c56fab222ed0a0d5731ac63a44fb18dfa534cd4f0fedd2b2ad7f"
+        },
+        {
+          "path": "${REPO}/_build/direct-admission/committed/scheduler_observation.x",
+          "sha256": "7c01db596893e73678cb6eb220430127d4d2235ed09eebf530ca0efb778d8263"
+        }
+      ]
+    },
+    "committed_generator_rtl_matches_measured_candidate": true,
+    "compile_commands": [
+      "ir_converter_main --warnings_as_errors=false --dslx_path=\"$stage\" --dslx_stdlib_path=\"$xls/xls/dslx/stdlib\" --top=Top \"$stage/ordered_egress_topology.x\" > \"$stage/top.ir\"",
+      "opt_main \"$stage/top.ir\" > \"$stage/top.opt.ir\"",
+      "codegen_main --pipeline_stages=1 --delay_model=unit --flop_inputs=false --flop_outputs=true --use_system_verilog=false --reset=reset --fifo_module= \"$stage/top.opt.ir\" > \"$stage/top.v\""
+    ],
+    "scope": "Isolated Service for the original one-shot ordered_egress_actor fixture, not the composed baseline topology with its SCC or the expanded regression fixture.",
+    "tools": {
+      "codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162",
+      "ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+      "opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c"
+    },
+    "stdlib": {
+      "xls/dslx/stdlib/abs_diff.x": "9006b878c3762aeea72bc42be9a012cd0c050a78364a1c09ea4f547e06059eae",
+      "xls/dslx/stdlib/acm_random.x": "47093ca764f983b34adaeb0f694b2a3b711815eb8beeba656d3a39ed157f7ac7",
+      "xls/dslx/stdlib/apfloat.x": "5bbc79dd7842baa26ae467f5a9240ab98a5f5776b4749eb4e73dd1171b8bae8d",
+      "xls/dslx/stdlib/bfloat16.x": "c810ed761142c429a68f0b80559b92c6cbfe087ccd11bead091151d2ff49ee37",
+      "xls/dslx/stdlib/fixed_point.x": "20aede1704d2cdbe515de083d05cb44c8d279aac5fcf5f52d7dc768193d1c631",
+      "xls/dslx/stdlib/float32.x": "2dbc3bd4c5045fb1b8765b293457d6cca1ba338ca1bd5763b2957d11b0a7d84a",
+      "xls/dslx/stdlib/float64.x": "186e40914bdcd0be7c478e6c85204cfa9858b660a8a1dcfffab20e3e4d1ba071",
+      "xls/dslx/stdlib/float_instances.x": "4c89968e94e045c51c354b8f18507f727b0b85b8dcd01b0af69db25314f314cd",
+      "xls/dslx/stdlib/hfloat16.x": "767b0b70354aa15437f689898a0dd168eba47161e999382adcbdc150b6df4243",
+      "xls/dslx/stdlib/lza.x": "6717f61514829d52e9ead876d42e5dc33cd0c48069506137bb2a1dee98b066ac",
+      "xls/dslx/stdlib/round.x": "ac1093df45b238fb0cf867010a9887856d6cf380d17cb5b61c69a47af77c89a0",
+      "xls/dslx/stdlib/std.x": "888583e31552728f6f594c9bb454173b5d8a2d55df2acdee0bd4e2e15d7f1ffa",
+      "xls/dslx/stdlib/tests/float32_downcast_test.x": "20e81a55ba42a7849b2ac274811e4bb457a8b2eb501f4b304b543925e80fe0ab",
+      "xls/dslx/stdlib/tests/float32_upcast_test.x": "dbff7cea87d189c915623e1d4d4274049e7a5779d7b03060e91201073da27b54",
+      "xls/dslx/stdlib/tests/round_tests.x": "5f9b66ad008155f4829db2424f34cc125363f80a789d4057c1433d56fa05632b",
+      "xls/dslx/stdlib/tests/umul_instances.x": "06f7b95e669477fc30e86f9e1d32637b09cfe1fa8f9cb8ea4b351645c1b1bc91"
+    }
+  },
+  "structure": {
+    "composed_original_fixture_sccs": {
+      "baseline": 1,
+      "candidate": 0
+    },
+    "logs": [
+      {
+        "path": "${REPO}/_build/direct-admission/baseline/scc.log",
+        "sha256": "c7c96a8969971cde92da32d8debbf6fc82495a16617f303a3581e65363cbc30f"
+      },
+      {
+        "path": "${REPO}/_build/direct-admission/committed/scc.log",
+        "sha256": "1902690962d5c26e45f3788e1ed8dd6e690c063cd4a20a1fdb693598e79a282a"
+      }
+    ]
+  },
+  "validation": {
+    "eunit": {
+      "tests": 869,
+      "failures": 0,
+      "log": {
+        "path": "${REPO}/_build/direct-admission/eunit-final.log",
+        "sha256": "c851d734beb8d341c07160fd153fe6f86dbd1295ffcfb3000fa3f9a9e4bfce27"
+      }
+    },
+    "native_regressions": [
+      {
+        "path": "${REPO}/_build/direct-admission/final/d1-p1-ii1.sim.log",
+        "sha256": "61c0ddd5d20b83013d723a13aefc1006a715063c3dc2f53ff5b5ae827acc99c8",
+        "result": [
+          "PASS: 16 self-send rounds, aliased source order, stalls and reset (635 clocks)"
+        ]
+      },
+      {
+        "path": "${REPO}/_build/direct-admission/final/d1-p2-ii1.sim.log",
+        "sha256": "bd29fbbd4a49a9ac641666422e214d33bf9070d4a0dc696c9a27930b758eb329",
+        "result": [
+          "PASS: 16 self-send rounds, aliased source order, stalls and reset (665 clocks)"
+        ]
+      },
+      {
+        "path": "${REPO}/_build/direct-admission/final/d1-p3-ii2.sim.log",
+        "sha256": "d2e100e77ca2bc53510d4e9c9b1babf4597617aa444991cc7204662414656602",
+        "result": [
+          "PASS: 16 self-send rounds, aliased source order, stalls and reset (756 clocks)"
+        ]
+      },
+      {
+        "path": "${REPO}/_build/direct-admission/final/d2-p1-ii1.sim.log",
+        "sha256": "a97d60edcc67116c85e4b61b09a5d6f12290d8b0e599237acd5c0f52fc932941",
+        "result": [
+          "PASS: 16 self-send rounds, aliased source order, stalls and reset (624 clocks)"
+        ]
+      },
+      {
+        "path": "${REPO}/_build/direct-admission/final/d2-p2-ii1.sim.log",
+        "sha256": "260762a4d41b71b89ad5d4739f8f606803b3369e36eb5940b3a54c3ea462fa00",
+        "result": [
+          "PASS: 16 self-send rounds, aliased source order, stalls and reset (652 clocks)"
+        ]
+      },
+      {
+        "path": "${REPO}/_build/direct-admission/final/d2-p3-ii2.sim.log",
+        "sha256": "98195496f2aed9ac950d75435c8845cef5bc0fcbac5b79983b0e28ed0980cfd3",
+        "result": [
+          "PASS: 16 self-send rounds, aliased source order, stalls and reset (752 clocks)"
+        ]
+      },
+      {
+        "path": "${REPO}/_build/direct-admission/final/service-p1-ii1.sim.log",
+        "sha256": "bbec9181c04e12e46e8aca9e2fd6356635c4343b282c89db4c5e946866120cdb",
+        "result": [
+          "PASS: direct service credit conservation, 16 requests/17 credits, independent stalls and reset"
+        ]
+      },
+      {
+        "path": "${REPO}/_build/direct-admission/final/service-p2-ii1.sim.log",
+        "sha256": "ba8c9367c0f8e552bb5242763b70bde5cd650785e66e17a7533e755254338572",
+        "result": [
+          "PASS: direct service credit conservation, 16 requests/17 credits, independent stalls and reset"
+        ]
+      },
+      {
+        "path": "${REPO}/_build/direct-admission/final/service-p3-ii2.sim.log",
+        "sha256": "0f1bb30016ec18409a63110a3b95b3d9b99450c6ddc48f610be34bed7c7a70c7",
+        "result": [
+          "PASS: direct service credit conservation, 16 requests/17 credits, independent stalls and reset"
+        ]
+      },
+      {
+        "path": "${REPO}/_build/direct-admission/final/formal/service-p1-ii1.log",
+        "sha256": "0ae98dd928532b07a5c3970b962cfded1fef9ff93fc3b305892e503b035dff91",
+        "result": "24-step SAT proof succeeded"
+      },
+      {
+        "path": "${REPO}/_build/direct-admission/final/formal/service-p2-ii1.log",
+        "sha256": "6a2f94b8bfc15c92dcb798a95e665f363bb6da8aff96d87fbbb97b2d4224a377",
+        "result": "24-step SAT proof succeeded"
+      },
+      {
+        "path": "${REPO}/_build/direct-admission/final/formal/service-p3-ii2.log",
+        "sha256": "89a890199989b2453af42e5a9ac7d71d5bb4e423ec75eb1d78a5bbaaf34ca13c",
+        "result": "24-step SAT proof succeeded"
+      }
+    ],
+    "native_full_log": {
+      "path": "${REPO}/_build/direct-admission/final.log",
+      "sha256": "4512def5990eecfff8086fa80d45f1b00d63835ba44a1180e4aed8d939a512de"
+    },
+    "formal_scope": "24 steps; one-slot fixture; requests require previously accepted credits; arbitrary request data, sink readiness, and later reset. Bounded safety, not unbounded liveness.",
+    "public_debug": {
+      "blocked_seeds": 1,
+      "adaptive_queries": 8,
+      "external_stall_and_release": true,
+      "structural_and_cycle_noninterference": true,
+      "reports": [
+        {
+          "path": "${REPO}/_build/direct-admission/final/debug/manifest.json",
+          "sha256": "d15cc43af8c84228050984ba2988281c9c2732c0324c3ef0d9b8910b71cfeb06"
+        },
+        {
+          "path": "${REPO}/_build/direct-admission/final/debug/blocked.json",
+          "sha256": "a0498d364ad69ab361b5c5cb22d36756e9bb9a98c9c1ca8462e057f44fc2f739"
+        },
+        {
+          "path": "${REPO}/_build/direct-admission/final/debug/recovered.json",
+          "sha256": "5bd6276af75404d904ca4624d6856e529461825fd352b42a32021e78d9bb1993"
+        }
+      ]
+    },
+    "pinned_linux": {
+      "headSha": "7ac39aca07db40afdcbaa82f88f0c042f8d4836e",
+      "url": "https://github.com/ecpeterson/erl_hls/actions/runs/34951136354",
+      "conclusion": "failure",
+      "jobs": [
+        {
+          "name": "test",
+          "conclusion": "failure",
+          "failed_steps": [
+            "Verify checked generated artifacts"
+          ]
+        },
+        {
+          "name": "complete-debug",
+          "conclusion": "success",
+          "failed_steps": []
+        }
+      ],
+      "note": "All behavioral steps pass. Only the Verilog digest manifest differs; the manifest is updated from this run\u2019s generated artifacts.",
+      "golden_verilog_sha256": {
+        "regsvc.v": "5b026d20b8b5aad6d22d04256965699d8b426d960fb1eb3d97bef54ea3c6b2b3",
+        "phi_halo_cell.v": "800e8ed14c16ac357cecc4d62efb1fd5ff4bc9206490ad5c73aecdf82d6c91ea",
+        "phenom_data_cell.v": "b0bea5cfdd62190ee528f7e80e9a67d83092b9bb0fb0f15810f3177dd34506f6",
+        "phenom_syndrome_cell.v": "57b45ef4b8f970b1137ea4c919c4a540e29eb87c854459ef2e2ebefc8c0628f4"
+      }
+    }
+  },
+  "d3": {
+    "rtl": {
+      "phi_decoder_profile.v": {
+        "baseline": "4e8b90ade1c6f755e2d936fda8ff660e9603c60e02a00701d1642bbcda6947e1",
+        "candidate": "4e8b90ade1c6f755e2d936fda8ff660e9603c60e02a00701d1642bbcda6947e1",
+        "identical": true
+      },
+      "phi_decoder_profile_top.v": {
+        "baseline": "dc93b1683d37d04e91199e6ab7edecbd8c7a127679d7121fa0399ee35ad0446e",
+        "candidate": "dc93b1683d37d04e91199e6ab7edecbd8c7a127679d7121fa0399ee35ad0446e",
+        "identical": true
+      },
+      "hls_1r1w_ram.v": {
+        "baseline": "13e12a7561df37e150c3e727c43f9e5234b74bb9741fc969185c12948b2583e8",
+        "candidate": "13e12a7561df37e150c3e727c43f9e5234b74bb9741fc969185c12948b2583e8",
+        "identical": true
+      }
+    },
+    "matching_manifest_fields": {
+      "options": true,
+      "profile": true,
+      "ram_configuration": true,
+      "recipe": true,
+      "stdlib": true,
+      "tools": true
+    },
+    "manifests": {
+      "baseline": {
+        "path": "${REPO}/_build/reduction-failures/d3-final/compiled/phi_decoder_profile.build.json",
+        "sha256": "3796a6bed418a8ca0ac7479352c5499cd2c707ded9b8b480e7729ab423abfa1c"
+      },
+      "candidate": {
+        "path": "${REPO}/_build/direct-admission/d3/compiled/phi_decoder_profile.build.json",
+        "sha256": "3dc5c141a5d81e914403f77ff48bfc974086e744ee401a25d8a33b6d47587141"
+      }
+    },
+    "request_paced": {
+      "warmup_step": 8,
+      "target_step": 32,
+      "measured_cycles": 4320,
+      "cycles_per_step": 180,
+      "log": {
+        "path": "${REPO}/_build/direct-admission/d3/phi_decoder_profile.sim.log",
+        "sha256": "539aaaf2d8e27ef36583440168854d301a41415a50bc3b63cf23710c8fd0dfc2"
+      }
+    },
+    "prior_mapping_report": "d3-reduction-failures-2026-09-15.json",
+    "last_routed_report": "d3-arbitration-2026-09-14.json",
+    "new_mapping_or_routing": false
+  },
+  "limitations": [
+    "Two synthesis naming seeds, not placement seeds or a confidence interval.",
+    "No direct-service delay, routed timing, or power measurement.",
+    "No new D3 mapping/routing or variable-readiness simulation; all three D3 RTL assets are byte-identical."
+  ]
+}
