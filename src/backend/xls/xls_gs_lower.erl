@@ -11,7 +11,7 @@
 initial_state(Forms, StateName) ->
     Clause = xls_init:clause(Forms, hls_gs),
     Init = xls_init:lower(Clause, StateName, fun(R) -> [R, ".1"] end, #{}),
-    xls_init:emit("initial_state", record_struct_name(StateName), Init).
+    xls_init:emit("initial_state", xls_names:record_type(StateName), Init).
 
 -spec callback_arms([erl_parse:abstract_form()], atom()) -> iolist().
 callback_arms(Forms, StateName) ->
@@ -71,12 +71,12 @@ callback_arm(Kind, {Tag, Clauses}, StateName, Forms) ->
         #{}
     ),
     [
-        "\nTag::", uppercase(Tag), " => {\n",
+        "\nTag::", xls_names:enum_member(Tag), " => {\n",
         "  if frame.header.payload_words != u8:",
         integer_to_list(xls_parse:message_words(Forms, Tag)), " {\n",
         "    (axis::pack(Tag::ERROR as u8, ERROR_REQUEST_LENGTH), state_record)\n",
         "  } else {\n",
-        "    let request = ", record_function_name(Tag),
+        "    let request = ", xls_names:record_codec(Tag),
         "_from_bits(frame.payload);\n",
         xls_parse_io:indent(xls_parse:print(Body), 4),
         xls_parse_io:indent(xls_parse:print(Result), 4),
@@ -100,24 +100,15 @@ callbacks(cast, StateName) ->
     }.
 
 failure(Code, StateName) ->
-    Struct = record_struct_name(StateName),
+    Struct = xls_names:record_type(StateName),
     [
         "let s = zero!<", Struct, ">();\n",
         "(axis::pack(Tag::ERROR as u8, ", Code, "), ",
-        "(Tag::", uppercase(StateName), ", s))"
+        "(Tag::", xls_names:enum_member(StateName), ", s))"
     ].
 
 public_record_value(Tag, Raw) ->
     [
-        "(Tag::", uppercase(Tag), ", ", Raw, ", bits_from_",
-        record_function_name(Tag), "(", Raw, "))"
+        "(Tag::", xls_names:enum_member(Tag), ", ", Raw, ", bits_from_",
+        xls_names:record_codec(Tag), "(", Raw, "))"
     ].
-
-uppercase(Atom) ->
-    string:uppercase(atom_to_list(Atom)).
-
-record_struct_name(Atom) ->
-    string:titlecase(record_function_name(Atom)).
-
-record_function_name(Atom) ->
-    lists:delete($_, atom_to_list(Atom)).

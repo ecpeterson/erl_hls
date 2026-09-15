@@ -94,10 +94,10 @@ preamble(#{
         "pub enum Tag : u8 {\n",
         "  NONE = u8:0,\n",
         "  ERROR = u8:1,\n",
-        "  ", uppercase(DataName), " = u8:2,\n",
+        "  ", xls_names:enum_member(DataName), " = u8:2,\n",
         [
             [
-                "  ", uppercase(Name), " = u8:",
+                "  ", xls_names:enum_member(Name), " = u8:",
                 integer_to_list(Index), ",\n"
             ]
             || {Index, Name} <- lists:enumerate(3, MessageNames)
@@ -128,7 +128,7 @@ phase_declaration(Phases) ->
         "enum Phase : u8 {\n",
         [
             [
-                "  ", uppercase(Name), " = u8:", integer_to_list(Index),
+                "  ", xls_names:enum_member(Name), " = u8:", integer_to_list(Index),
                 ",\n"
             ]
             || {Index, Name} <- lists:enumerate(0, Phases)
@@ -148,7 +148,7 @@ machine_declarations(#{
     Reductions = maps:get(reductions, Spec, none),
     SharedService = maps:get(shared_service, Spec, ordinary),
     ReductionWidth = xls_statem_reduction_codegen:private_width(Reductions),
-    DataStruct = record_struct_name(DataName),
+    DataStruct = xls_names:record_type(DataName),
     MachineBits = shared_machine_width(DataWidth, ReductionWidth),
     EffectCapacity = max(1, MaxEntryEffects),
     EffectPayloadBits = entry_effect_payload_bits(Entries, MessageWords),
@@ -156,7 +156,7 @@ machine_declarations(#{
         "pub enum OutputPort : u8 {\n",
         [
             [
-                "  ", uppercase(Port), " = u8:",
+                "  ", xls_names:enum_member(Port), " = u8:",
                 integer_to_list(Index), ",\n"
             ]
             || {Index, Port} <- lists:enumerate(0, OutputNames)
@@ -356,7 +356,7 @@ machine_codec(#{data_name := DataName, data_width := DataWidth} = Spec) ->
     #{data := #{offset := DataStart}, enter_pending := #{offset := EnterStart},
         failure := #{offset := FailureStart}, reduction := #{offset := ReductionStart},
         width := ReductionEnd} = shared_machine_layout(DataWidth, ReductionWidth),
-    DataFunction = record_function_name(DataName),
+    DataFunction = xls_names:record_codec(DataName),
     [
         "fn machine_from_bits(raw: MachineBits) -> SharedMachine {\n",
         "  SharedMachine {\n",
@@ -396,7 +396,7 @@ enter_function(#{data_name := DataName, entries := Entries,
         message_words := MessageWords} = Spec) ->
     Layouts = entry_layouts(Entries),
     [
-        "fn enter(old_phase: Phase, phase: Phase, data: ", record_struct_name(DataName),
+        "fn enter(old_phase: Phase, phase: Phase, data: ", xls_names:record_type(DataName),
         ") -> EntryOutcome {\n",
         "  match phase {\n",
         [entry_arm(Entry) || Entry <- Entries],
@@ -410,7 +410,7 @@ enter_function(#{data_name := DataName, entries := Entries,
 entry_arm(#{phase := Phase,
         evaluation := #{body := Body, result := Result, failed := Failed, failure := Failure}}) ->
     [
-        "    Phase::", uppercase(Phase), " => {\n",
+        "    Phase::", xls_names:enum_member(Phase), " => {\n",
         xls_parse_io:indent(Body, 6),
         "      if ", Failed, " {\n",
         "        EntryOutcome { data, failure: ", Failure, ", ..zero!<EntryOutcome>() }\n",
@@ -445,7 +445,7 @@ entry_reduction_field(none, false, _Phase) -> [];
 entry_reduction_field(_Reductions, false, _Phase) ->
     "    reduction: zero!<ReductionState>(),\n";
 entry_reduction_field(_Reductions, true, Phase) ->
-    ["    reduction: reduction_open_site(ReductionSite::", uppercase(Phase),
+    ["    reduction: reduction_open_site(ReductionSite::", xls_names:enum_member(Phase),
         ", evaluated.1.0, evaluated.1.1.1),\n"].
 
 entry_layouts(Entries) ->
@@ -489,8 +489,8 @@ entry_effect_index_arm(Index, Effect, Offset, MessageWords) ->
     Width = maps:get(Tag, MessageWords) * 32,
     [
         "      u8:", integer_to_list(Index), " => Egress {\n",
-        "        port: OutputPort::", uppercase(maps:get(port, Effect)), ",\n",
-        "        frame: axis::pack(Tag::", uppercase(Tag), " as u8,\n",
+        "        port: OutputPort::", xls_names:enum_member(maps:get(port, Effect)), ",\n",
+        "        frame: axis::pack(Tag::", xls_names:enum_member(Tag), " as u8,\n",
         "          effects.payloads[", integer_to_list(Offset), ":",
         integer_to_list(Offset + Width), "]),\n",
         "      },\n"
@@ -599,7 +599,7 @@ dispatch_function(#{
     data_name := DataName,
     casts := Casts
 }) ->
-    DataStruct = record_struct_name(DataName),
+    DataStruct = xls_names:record_type(DataName),
     [
         "fn dispatch(frame: axis::Frame, phase: Phase, data: ", DataStruct,
         ") -> (Phase, ", DataStruct, ", Directive, u1, hls_failure::Code) {\n",
@@ -613,8 +613,8 @@ dispatch_function(#{
 dispatch_tag_arm(Tag, Casts) ->
     TagCasts = [Cast || Cast <- Casts, maps:get(tag, Cast) =:= Tag],
     [
-        "    Tag::", uppercase(Tag), " => {\n",
-        "      let message = ", record_function_name(Tag),
+        "    Tag::", xls_names:enum_member(Tag), " => {\n",
+        "      let message = ", xls_names:record_codec(Tag),
         "_from_bits(frame.payload);\n",
         "      match phase {\n",
         [dispatch_phase_arm(Cast) || Cast <- TagCasts],
@@ -629,7 +629,7 @@ dispatch_phase_arm(#{
     result := Result
 }) ->
     [
-        "        Phase::", uppercase(Phase), " => {\n",
+        "        Phase::", xls_names:enum_member(Phase), " => {\n",
         xls_parse_io:indent(Body, 10),
         xls_parse_io:indent(Result, 10),
         "        },\n"
@@ -1425,7 +1425,7 @@ shared_service(Spec) ->
 tag_ok_expression(MessageNames, MessageWords) ->
     join_with(" || ", [
         [
-            "(frame.header.op == (Tag::", uppercase(Name), " as u8) && ",
+            "(frame.header.op == (Tag::", xls_names:enum_member(Name), " as u8) && ",
             "frame.header.payload_words == u8:",
             integer_to_list(maps:get(Name, MessageWords)), ")"
         ]
@@ -1531,7 +1531,7 @@ egress_demux(#{output_names := OutputNames}) ->
         "    let _send_tok = match egress.port {\n",
         [
             [
-                "      OutputPort::", uppercase(Port), " =>\n",
+                "      OutputPort::", xls_names:enum_member(Port), " =>\n",
                 "        send(tok, ", name(Port),
                 "_out, egress.frame),\n"
             ]
@@ -1594,17 +1594,8 @@ top(#{output_names := OutputNames}) ->
 %%% Naming and iodata helpers
 %%%
 
-uppercase(Atom) ->
-    string:uppercase(atom_to_list(Atom)).
-
 name(Atom) ->
     atom_to_list(Atom).
-
-record_struct_name(Atom) ->
-    string:titlecase(record_function_name(Atom)).
-
-record_function_name(Atom) ->
-    lists:delete($_, atom_to_list(Atom)).
 
 separator(Index, Count) when Index + 1 < Count -> ",";
 separator(_Index, _Count) -> "".

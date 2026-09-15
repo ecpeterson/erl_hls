@@ -14,8 +14,8 @@
 -spec interface([erl_parse:abstract_form()], [atom(), ...]) -> interface().
 -doc "Summarizes the statically dispatched and emitted hls_statem schemas.".
 interface(Forms, PhaseNames) ->
-    {_, Sites} = xls_failure_sites:prepare(Forms),
-    (interface_from_prepared(prepare_interface(Forms, PhaseNames)))#{failure_origins => Sites}.
+    {Annotated, Sites} = xls_failure_sites:prepare(Forms),
+    (interface_from_prepared(prepare_interface(Annotated, PhaseNames)))#{failure_origins => Sites}.
 
 -spec lower(file:filename(), [erl_parse:abstract_form()], [atom(), ...]) ->
     iolist().
@@ -29,12 +29,12 @@ lower(Filename, Forms, PhaseNames) ->
     #{shared_service := ordinary | aggregate_only, mailbox_debug => boolean()}
 ) -> iolist().
 lower(Filename, Forms0, PhaseNames, Options0) ->
+    Declarations = declarations(Forms0, PhaseNames),
     {SourceForms, Sites} = xls_failure_sites:prepare(Forms0),
     {Forms, Helpers} = xls_helpers:prepare(SourceForms,
         [{init, 1}, {reduce, 3} | [{Phase, 3} || Phase <- PhaseNames]]),
     Options = validate_options(Options0),
     SharedService = maps:get(shared_service, Options),
-    Declarations = declarations(Forms, PhaseNames),
     MessageNames = maps:get(message_names, Declarations),
     MessageWords = maps:from_list([
         {Name, xls_parse:message_words(Forms, Name)} || Name <- MessageNames
@@ -144,6 +144,7 @@ prepare_interface(Forms, PhaseNames) ->
     prepare_callbacks(Forms, declarations(Forms, PhaseNames), interface).
 
 declarations(Forms, PhaseNames) ->
+    ok = xls_names:actor(Forms, hls_statem),
     MessageNames = xls_parse:find_tags(Forms),
     OutputNames = xls_parse:find_attribute(Forms, hls_outputs),
     Capacity = xls_parse:find_attribute(Forms, hls_mailbox_capacity),
@@ -481,7 +482,7 @@ lower_entries(Entries, Prepared, EnumAtoms) ->
         lists:zip(Entries, Layouts)].
 
 enter_args(DataName) ->
-    ["old_phase", "phase", ["(Tag::", uppercase(DataName), ", data)"]].
+    ["old_phase", "phase", ["(Tag::", xls_names:enum_member(DataName), ", data)"]].
 
 %%%
 %%% Cast dispatch
@@ -509,8 +510,8 @@ lower_cast_group(
         || Clause <- Clauses0
     ],
     MessageValue = [
-        "(Tag::", uppercase(Tag), ", message, bits_from_",
-        record_function_name(Tag), "(message))"
+        "(Tag::", xls_names:enum_member(Tag), ", message, bits_from_",
+        xls_names:record_codec(Tag), "(message))"
     ],
     Arguments = [
         xls_pattern_lower:record_argument(Tag, "message", MessageValue),
@@ -518,7 +519,7 @@ lower_cast_group(
         xls_pattern_lower:record_argument(
             DataName,
             "data",
-            ["(Tag::", uppercase(DataName), ", data)"]
+            ["(Tag::", xls_names:enum_member(DataName), ", data)"]
         )
     ],
     Failure = fun(Code) -> ["(phase, data, Directive::FAIL, u1:0, ", Code, ")"] end,
@@ -624,20 +625,6 @@ validate_names(PhaseNames, MessageNames, OutputNames, DataName)
     true = PhaseNames =/= [],
     true = MessageNames =/= [],
     true = OutputNames =/= [],
-    case length(OutputNames) =< 255 of
-        true -> ok;
-        false -> error({too_many_hls_statem_outputs,
-            length(OutputNames), 255})
-    end,
-    lists:foreach(
-        fun(Phase) ->
-            case lists:member(Phase, [repeat_phase, reduce, terminate]) of
-                true -> error({reserved_hls_statem_phase, Phase});
-                false -> ok
-            end
-        end,
-        PhaseNames
-    ),
     ok = require_unique(phase, PhaseNames),
     ok = require_unique(message_tag, MessageNames),
     ok = require_unique(output, OutputNames),
@@ -685,7 +672,7 @@ require_declared(Kind, Value, Values) when is_list(Values) ->
 
 enum_atoms(PhaseNames) ->
     PhaseAtoms = [
-        {Name, ["Phase::", uppercase(Name)]} || Name <- PhaseNames
+        {Name, ["Phase::", xls_names:enum_member(Name)]} || Name <- PhaseNames
     ],
     DirectiveAtoms = [
         {consume, "Directive::CONSUME"},
@@ -700,9 +687,3 @@ strip_dispatched_phase({clause, Line, [First, Phase, Third], Guards, Body}) ->
 
 dispatched_phase_variable({atom, Line, _Phase}) ->
     {var, Line, '_'}.
-
-uppercase(Atom) ->
-    string:uppercase(atom_to_list(Atom)).
-
-record_function_name(Atom) ->
-    lists:delete($_, atom_to_list(Atom)).

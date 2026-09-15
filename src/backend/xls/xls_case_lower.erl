@@ -173,7 +173,7 @@ record_tag_condition(Pattern, Subject) ->
         {ok, Name} -> [[
             Subject,
             ".0 == Tag::",
-            string:uppercase(atom_to_list(Name))
+            xls_names:enum_member(Name)
         ]]
     end.
 

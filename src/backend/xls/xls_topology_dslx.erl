@@ -761,7 +761,7 @@ actor_lane_selection(Module, Lane, Routes) ->
     ],
     [
         "    let ", actor_lane_selected(Lane), " = match egress.port {\n",
-        [["      ", Module, "::OutputPort::", uppercase(Port),
+        [["      ", Module, "::OutputPort::", xls_names:enum_member(Port),
             " => true,\n"] || Port <- Ports],
         "      _ => false,\n",
         "    };\n"
@@ -918,8 +918,6 @@ egress_channel(Actor, _Depth) ->
 
 producer(Channel) -> [Channel, "_p"].
 consumer(Channel) -> [Channel, "_c"].
-
-uppercase(Atom) -> string:uppercase(atom_to_list(Atom)).
 
 join_tokens([Token]) -> Token;
 join_tokens([First, Second | Rest]) ->

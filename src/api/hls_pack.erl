@@ -31,6 +31,7 @@ parse_transform(Forms0, Options) ->
     [FileAttr, ModuleAttr | TailForms] = Forms,
     {BodyForms, EOFForm} = {lists:droplast(TailForms), lists:last(TailForms)},
 
+    ok = xls_names:wire_tags(Forms),
     PublicStructNames = xls_parse:find_tags(Forms),
     StateName = xls_parse:state(Forms),
     AnalysisForms = Forms ++ [{attribute, element(2, ModuleAttr),

@@ -123,7 +123,7 @@ type({type, _, tuple, Fields}, Context, Origin) when is_list(Fields) ->
     ["(", [[type(T, Context, Origin), ", "] || T <- Fields], ")"];
 type({type, _, record, [{atom, _, Name}]},
         #{data := Data, tags := Tags, forms := Forms}, Origin) ->
-    Struct = string:titlecase(lists:delete($_, atom_to_list(Name))),
+    Struct = xls_names:record_type(Name),
     case {Name =:= Data, lists:member(Name, Tags)} of
         {true, _} -> ["(Tag, ", Struct, ")"];
         {false, true} -> ["(Tag, ", Struct, ", bits[",

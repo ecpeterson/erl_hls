@@ -63,6 +63,8 @@ An actor may declare more than one `-hls_tags([...])` attribute. The compiler
 concatenates every block in include-expanded source order. That order is part
 of the wire ABI: appending a block preserves existing tag values, while
 prepending or moving one can renumber them. Every entry must be a unique atom.
+Hardware declarations also require unambiguous generated names and bounded
+enum encodings; see `docs/actor-names.md` for spelling and reserved names.
 """.
 -export([actor_interface/1, actor_interface/2, to_xls/1, to_xls/2]).
 %% Internal API shared by the actor-specific lowerers while this module is
@@ -170,13 +172,14 @@ actor_interface(Filename, SourceOptions) ->
     end.
 
 to_xls_gs(Filename, Forms0) ->
+    ok = xls_names:actor(Forms0, hls_gs),
     {SourceForms, Sites} = xls_failure_sites:prepare(Forms0),
     {Forms, Helpers} = xls_helpers:prepare(SourceForms,
         [{init, 1}, {handle_call, 2}, {handle_cast, 2}]),
     PublicStructNames = find_tags(Forms),
     StateName = state(Forms),
     StateRecord = find_record(Forms, StateName),
-    StateStructName = string:titlecase(lists:delete($_, atom_to_list(StateName))),
+    StateStructName = xls_names:record_type(StateName),
     ok = lists:foreach(
         fun(Name) ->
             validate_record_defaults(find_record(Forms, Name))
@@ -206,7 +209,7 @@ to_xls_gs(Filename, Forms0) ->
     "pub enum Tag : u8 {\n",
     "  NONE = u8:0,\n",
     [
-        ["  ", string:uppercase(atom_to_list(Atom)), " = u8:", integer_to_list(Index), ",\n"]
+        ["  ", xls_names:enum_member(Atom), " = u8:", integer_to_list(Index), ",\n"]
         ||  {Index, Atom} <- lists:enumerate([error, StateName | PublicStructNames])
     ],
     "}\n\n",
@@ -236,7 +239,7 @@ to_xls_gs(Filename, Forms0) ->
     """
         let (tok1, frame) = recv(join(), req_in);
     """, "\n",
-    ["    let state_record = (Tag::", string:uppercase(atom_to_list(StateName)),
+    ["    let state_record = (Tag::", xls_names:enum_member(StateName),
      ", state);\n\n"],
     """
         // cognate to {reply, Reply, State}
@@ -420,7 +423,7 @@ statement_from_statement({atom, _L, Atom}, State = #clause_state{
 }) ->
     reference(
         State,
-        maps:get(Atom, EnumAtoms, string:uppercase(atom_to_list(Atom)))
+        maps:get(Atom, EnumAtoms, xls_names:enum_member(Atom))
     );
 statement_from_statement({var, Line, Name}, State) ->
     case find_binding(Name, Line, State) of
@@ -476,10 +479,10 @@ statement_from_statement({record, _L, NameAtom, Fields}, State) ->
     ),
     Assignments = lists:reverse(BwdAssignments),
     SecondState = instr(IntermediateState, [
-        string:titlecase(lists:delete($_, atom_to_list(NameAtom))), " {\n",
+        xls_names:record_type(NameAtom), " {\n",
         [["  ", atom_to_list(FieldAtom), ": ", Reference, ",\n"]
             || {FieldAtom, Reference} <- Assignments],
-        "  ..zero!<", string:titlecase(lists:delete($_, atom_to_list(NameAtom))), ">()\n",
+        "  ..zero!<", xls_names:record_type(NameAtom), ">()\n",
         "}"
     ]),
     instr(SecondState, record_value(NameAtom, reference(SecondState), SecondState));
@@ -494,7 +497,7 @@ statement_from_statement({record, _L, ToUpdate, NameAtom, UpdateFields}, State) 
     ),
     Assignments = lists:reverse(BwdAssignments),
     SecondState = instr(IntermediateState, [
-        string:titlecase(lists:delete($_, atom_to_list(NameAtom))), " {\n",
+        xls_names:record_type(NameAtom), " {\n",
             [["  ", atom_to_list(FieldAtom), ": ", Reference, ",\n"]
                 || {FieldAtom, Reference} <- Assignments],
         "  ..(", InputState#clause_state.reference, ").1\n",
@@ -608,11 +611,11 @@ bind(Name, Line, Value, State) ->
 
 -spec record_value(atom(), ir(), clause_state()) -> iolist().
 record_value(NameAtom, Struct, #clause_state{state_name = NameAtom}) ->
-    ["(Tag::", string:uppercase(atom_to_list(NameAtom)), ", ", Struct, ")"];
+    ["(Tag::", xls_names:enum_member(NameAtom), ", ", Struct, ")"];
 record_value(NameAtom, Struct, _State) ->
     [
-        "(Tag::", string:uppercase(atom_to_list(NameAtom)), ", ", Struct, ", ",
-        "bits_from_", lists:delete($_, atom_to_list(NameAtom)), "(", Struct, "))"
+        "(Tag::", xls_names:enum_member(NameAtom), ", ", Struct, ", ",
+        "bits_from_", xls_names:record_codec(NameAtom), "(", Struct, "))"
     ].
 
 %%%
@@ -629,11 +632,10 @@ record_value(NameAtom, Struct, _State) ->
 -doc "Translates an Erlang record definition to an XLS struct definition.".
 struct_from_record(RecordForm) ->
     {attribute, _L, record, {NameAtom, Fields}} = RecordForm,
-    Name = lists:delete($_, atom_to_list(NameAtom)),
-    StructName = string:titlecase(Name),
+    StructName = xls_names:record_type(NameAtom),
     ["pub struct ", StructName, " {\n",
-        [io_lib:format("  ~w : ~s,~n", [
-                element(3, element(3, Field)),
+        [io_lib:format("  ~s : ~s,~n", [
+                atom_to_list(record_field_name(Field)),
                 hls_type:print_type(hls_type:descriptor(Type))
             ])
             ||  {typed_record_field, Field, Type} <- Fields
@@ -644,9 +646,8 @@ struct_from_record(RecordForm) ->
 -doc "Builds an XLS-side unpacker for the Erlang record definition.".
 structfrombits_from_record(RecordForm) ->
     {attribute, _L, record, {NameAtom, Fields}} = RecordForm,
-    Name = lists:delete($_, atom_to_list(NameAtom)),
-    StructName = string:titlecase(Name),
-    ["pub fn ", string:lowercase(StructName), "_from_bits<N: u32>(raw: bits[N]) -> ", StructName, " {\n",
+    StructName = xls_names:record_type(NameAtom),
+    ["pub fn ", xls_names:record_codec(NameAtom), "_from_bits<N: u32>(raw: bits[N]) -> ", StructName, " {\n",
     "  ", StructName, " {\n",
     lists:reverse(element(1, lists:foldl(
         fun(
@@ -669,9 +670,8 @@ structfrombits_from_record(RecordForm) ->
 -spec bitsfromstruct_from_record(erl_parse:af_record_decl()) -> iolist().
 -doc "Builds an XLS-side packer for the Erlang record definition.".
 bitsfromstruct_from_record(_RecordForm = {attribute, _L, record, {NameAtom, Fields}}) ->
-    Name = lists:delete($_, atom_to_list(NameAtom)),
-    StructName = string:titlecase(Name),
-    ["pub fn bits_from_", string:lowercase(StructName), "(s: ", StructName, ") -> bits[bit_count<", StructName, ">()] {\n",
+    StructName = xls_names:record_type(NameAtom),
+    ["pub fn bits_from_", xls_names:record_codec(NameAtom), "(s: ", StructName, ") -> bits[bit_count<", StructName, ">()] {\n",
         ["  ", lists:foldl(
             fun({typed_record_field, Field, Type}, Body) ->
                 Slot = record_field_name(Field),

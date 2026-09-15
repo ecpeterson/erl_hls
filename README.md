@@ -150,6 +150,8 @@ Type providers can export the optional `hls_type` callback `dslx_imports/0`, ret
 
 ## Translated record defaults
 
+Hardware translation checks [actor names and wire encodings](docs/actor-names.md) before invoking XLS. Record types and codecs share one spelling convention; collisions report both source declarations, including included files.
+
 Source translation accepts explicit include paths, macro definitions, and Erlang feature options. Topology interface checks reuse the context captured when the actor's BEAM was compiled, and resolve each distinct actor module once per planning pass. See the [source-context contract](docs/source-context.md) for configured builds, stale-source diagnostics, and the compiler-scaling benchmark.
 
 Actor expressions can call [typed local helpers](docs/local-helpers.md). The compiler emits the reachable definition graph as DSLX functions, preserving the first selected failure across calls; XLS inlines the functions. Helpers can factor numeric and record calculations without introducing scheduler boundaries. In both helpers and callbacks, variables bound in every `case`/`if` arm are available afterward; joined values must have a common XLS type.

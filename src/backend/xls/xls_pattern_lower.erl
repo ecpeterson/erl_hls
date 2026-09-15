@@ -111,7 +111,7 @@ compile_pattern({record, Line, Name, Fields}, Subject, Context0) ->
         #{value := Value} ->
             %% Expression values retain the tag alongside the record struct.
             Tagged = add_condition([Value, ".0 == Tag::",
-                string:uppercase(atom_to_list(Name))], Line, Context0),
+                xls_names:enum_member(Name)], Line, Context0),
             compile_pattern({record, Line, Name, Fields},
                 record_argument(Name, [Value, ".1"], Value), Tagged)
     end;
@@ -138,7 +138,7 @@ compile_pattern({atom, Line, Atom}, Subject,
     Encoded = maps:get(
         Atom,
         EnumAtoms,
-        string:uppercase(atom_to_list(Atom))
+        xls_names:enum_member(Atom)
     ),
     add_condition([maps:get(raw, Subject), " == ", Encoded], Line, Context);
 compile_pattern({op, Line, '-', {integer, _, Integer}}, Subject, Context) ->
