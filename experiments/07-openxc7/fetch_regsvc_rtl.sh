@@ -27,8 +27,8 @@ expected_modules=(
     __regsvc__Top_0_next
     __hls_debug_observer__Observer_0_next
     __hls_debug_server__DebugServer_0_next
-    __hls_fabric_router__PairIngress_0_next
-    __hls_fabric_router__PairEgress_0_next
+    hls_fabric_ingress
+    hls_fabric_egress
 )
 manifest_inputs=(
     regsvc.x
@@ -43,8 +43,11 @@ manifest_inputs=(
     regsvc_core_adapter.v
     regsvc_debug_top.v
     hls_debug_tap.v
+    hls_debug_monitor.v
     hls_trace_store.v
-    regsvc_pair_fixture.sv
+    regsvc_fabric_fixture.sv
+    hls_fabric_ingress.v
+    hls_fabric_egress.v
     remote_xls_sim.sh
     compile_xls.py
 )

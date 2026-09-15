@@ -121,6 +121,9 @@ jobs:
       - name: Check actor namespaces and mixed-case record codecs
         run: bash tools/test_names.sh "$RUNNER_TEMP/xls"
 
+      - name: Check configurable routed streams and prove packet conservation
+        run: python3 tools/test_fabric_router.py
+
       - name: Check application framing and admission conservation
         run: bash tools/test_application_frames.sh "$RUNNER_TEMP/xls"
 
@@ -173,6 +176,9 @@ jobs:
           XLS_ROOT: ${{ runner.temp }}/xls
         run: bash tools/remote_xls_sim.sh "$PWD/_build/xls_sim/regsvc" "$XLS_ROOT"
 
+      - name: Exercise configurable local services and public stall diagnostics
+        run: python3 tools/test_fabric_services.py _build/xls_sim/regsvc
+
       - name: Diagnose dropped observations through the debug endpoint
         run: python3 tools/test_debug_trace_integration.py _build/xls_sim/regsvc
 
@@ -182,6 +188,10 @@ jobs:
         with:
           name: debug-observation-reports
           path: |
+            _build/frame-router/**/*.log
+            _build/frame-router/**/*.vcd
+            _build/fabric-services/*.log
+            _build/fabric-services/*.term
             _build/debug-trace-integration/*.log
             _build/debug-trace-integration/trace_*.term
             _build/actor-debug/**/actors-*.term

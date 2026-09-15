@@ -27,17 +27,17 @@ module regsvc_pair_harness_tb;
     always @(posedge clock) begin
         if (dut.resetn) begin
             active_cycles <= active_cycles + 1;
-            if (dut.routed_pair.app_one_in_valid &&
-                    dut.routed_pair.app_one_in_ready)
+            if (dut.routed_pair.app_in_valid[0] &&
+                    dut.routed_pair.app_in_ready[0])
                 saw_app_one <= 1'b1;
-            if (dut.routed_pair.app_two_in_valid &&
-                    dut.routed_pair.app_two_in_ready)
+            if (dut.routed_pair.app_in_valid[1] &&
+                    dut.routed_pair.app_in_ready[1])
                 saw_app_two <= 1'b1;
-            if (dut.routed_pair.debug_one_in_valid &&
-                    dut.routed_pair.debug_one_in_ready)
+            if (dut.routed_pair.debug_in_valid[0] &&
+                    dut.routed_pair.debug_in_ready[0])
                 saw_debug_one <= 1'b1;
-            if (dut.routed_pair.debug_two_in_valid &&
-                    dut.routed_pair.debug_two_in_ready)
+            if (dut.routed_pair.debug_in_valid[1] &&
+                    dut.routed_pair.debug_in_ready[1])
                 saw_debug_two <= 1'b1;
             if (dut.app_phase == dut.APP_HEADER && dut.app_request_ready) begin
                 if (dut.app_destination)

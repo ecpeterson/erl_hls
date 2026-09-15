@@ -358,44 +358,6 @@ vvp hls_debug_server.vvp
     --warnings_as_errors=false \
     --dslx_path=. \
     --dslx_stdlib_path="$stdlib" \
-    --top=PairIngress \
-    hls_fabric_router.x > hls_fabric_ingress.ir
-
-"$xls_root/opt_main" hls_fabric_ingress.ir > hls_fabric_ingress.opt.ir
-
-"$xls_root/codegen_main" \
-    --pipeline_stages=1 \
-    --delay_model=unit \
-    --flop_inputs=false \
-    --flop_outputs=true \
-    --use_system_verilog=false \
-    --reset=reset \
-    --fifo_module= \
-    hls_fabric_ingress.opt.ir > hls_fabric_ingress.v
-
-"$xls_root/ir_converter_main" \
-    --warnings_as_errors=false \
-    --dslx_path=. \
-    --dslx_stdlib_path="$stdlib" \
-    --top=PairEgress \
-    hls_fabric_router.x > hls_fabric_egress.ir
-
-"$xls_root/opt_main" hls_fabric_egress.ir > hls_fabric_egress.opt.ir
-
-"$xls_root/codegen_main" \
-    --pipeline_stages=1 \
-    --delay_model=unit \
-    --flop_inputs=false \
-    --flop_outputs=true \
-    --use_system_verilog=false \
-    --reset=reset \
-    --fifo_module= \
-    hls_fabric_egress.opt.ir > hls_fabric_egress.v
-
-"$xls_root/ir_converter_main" \
-    --warnings_as_errors=false \
-    --dslx_path=. \
-    --dslx_stdlib_path="$stdlib" \
     --top=HostRoutedTx \
     hls_fabric_router.x > hls_fabric_host_tx.ir
 
@@ -425,7 +387,7 @@ iverilog \
     -s regsvc_pair_tb \
     -o regsvc_pair.vvp \
     regsvc_pair_tb.sv \
-    regsvc_pair_fixture.sv \
+    regsvc_fabric_fixture.sv \
     regsvc_debug_top.v \
     hls_debug_monitor.v \
     hls_fabric_ingress.v \
@@ -463,7 +425,7 @@ iverilog \
     -s regsvc_bridge_tb \
     -o regsvc_bridge.vvp \
     regsvc_bridge_tb.sv \
-    regsvc_pair_fixture.sv \
+    regsvc_fabric_fixture.sv \
     regsvc_debug_top.v \
     hls_debug_monitor.v \
     hls_fabric_ingress.v \

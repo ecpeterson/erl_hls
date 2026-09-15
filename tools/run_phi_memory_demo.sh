@@ -56,6 +56,8 @@ rsync -a -e "ssh -o BatchMode=yes" \
     "$local_stage"/*.x \
     "$local_stage/phi_memory_debug_top.v" \
     "$local_stage/hls_1r1w_ram.v" \
+    "$local_stage/hls_fabric_ingress.v" \
+    "$local_stage/hls_fabric_egress.v" \
     "$local_stage/hls_debug_tap.v" \
     "$local_stage/hls_debug_monitor.v" \
     "$local_stage/hls_trace_store.v" \

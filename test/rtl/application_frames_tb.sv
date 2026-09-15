@@ -125,12 +125,9 @@ module application_frames_tb;
         packet(255, 260, 99);
         route(7, 99, 1); // route-only packet
         route(7, 1, 1);  // no application header to forward
-`ifdef PAIR
-        packet(2, 2, 2);
-`else
         // Correct destination with the wrong source is also drained.
         route(8, 1, 0); beat(32'h07000001, 0); beat(99, 1);
-`endif
+
         packet(1, 1, 1);
 `endif
         // A missing TLAST does not make a later header-looking word a header.

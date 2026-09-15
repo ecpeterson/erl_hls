@@ -180,7 +180,7 @@ module regsvc_pair_openxc7_harness (
         end
     end
 
-    regsvc_pair_fixture routed_pair (
+    regsvc_fabric_fixture routed_pair (
         .aclk(clock),
         .aresetn(resetn),
 

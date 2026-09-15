@@ -92,8 +92,9 @@ require populated counter and trace replies after the memory experiment. This
 placement observes physical routed application packets; it does not expose
 individual actor mailboxes or state.
 
-The routed simulation hosts two independent `regsvc` instances behind each
-shared stream. A 32-bit source/destination envelope precedes the existing
+The [configurable routed fixture](docs/fabric-routing.md) hosts independent
+`regsvc` instances behind each shared stream. Regressions cover both the default
+two-service configuration and three non-contiguous endpoint IDs. A 32-bit source/destination envelope precedes the existing
 application or debug frame, and arbitration retains a selected endpoint through
 `TLAST`. On the Erlang side, one `hls_fabric` process owns each physical stream
 while distinct `hls_gs` proxy PIDs retain the ordinary `gen_server`-style API.
