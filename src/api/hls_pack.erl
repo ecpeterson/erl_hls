@@ -29,7 +29,9 @@ parse_transform(Forms, Options) ->
 
     PublicStructNames = xls_parse:find_tags(Forms),
     StateName = xls_parse:state(Forms),
-    InterfaceAttributes = actor_interface_attributes(Forms, ModuleAttr),
+    AnalysisForms = Forms ++ [{attribute, element(2, ModuleAttr),
+        hls_source_context, hls_source:from_forms(Forms, Options)}],
+    InterfaceAttributes = actor_interface_attributes(AnalysisForms, ModuleAttr),
     SourceAttributes = case InterfaceAttributes of
         [] -> [];
         [_] -> hls_source:capture(Forms, Options)

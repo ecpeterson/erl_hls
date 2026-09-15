@@ -126,9 +126,7 @@ list_contribution_retains_message_provenance_test() ->
     #{reduction := #{sites := [Site]}} = analyze(Path),
     [Contribution] = maps:get(contributions, Site),
     ?assert(maps:get(source_transportable, Contribution)),
-    %% Provider-independent source analysis deliberately does not claim that
-    %% every list pattern matches the complete wire schema.
-    ?assertNot(maps:get(source_capture_total, Contribution)),
+    ?assert(maps:get(source_capture_total, Contribution)),
     ?assert(is_binary(iolist_to_binary(lower(Path, #{shared_service => ordinary})))).
 
 list_contribution_rejects_actor_data_test() ->

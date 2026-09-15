@@ -102,6 +102,9 @@ jobs:
       - name: Compare bounded patterns and guarded helpers with BEAM, JIT, and RTL
         run: bash tools/test_patterns.sh "$RUNNER_TEMP/xls"
 
+      - name: Check source type shapes and destructured reduction transport
+        run: bash tools/test_type_shapes.sh "$RUNNER_TEMP/xls"
+
       - name: Check application framing and admission conservation
         run: bash tools/test_application_frames.sh "$RUNNER_TEMP/xls"
 

@@ -140,13 +140,16 @@ analyze_source(Forms, #{
             OpenIndex = index_opens(Opens),
             ValidOpens = [validate_open(Open, Forms, DataName)
                 || Open <- Opens],
+            Shapes = xls_type_shape:records(Forms,
+                [Tag || #{tag := Tag} <- Contributions0]),
             Contributions = [
                 validate_contribution(
                     Contribution,
                     open_for_contribution(Contribution, OpenIndex),
                     AccumulatorName,
                     Forms,
-                    DataName
+                    DataName,
+                    Shapes
                 )
                 || Contribution <- Contributions0
             ],
@@ -419,7 +422,8 @@ validate_contribution(
     Open = #{name := Name, population := #{mode := Mode}},
     Accumulator,
     Forms,
-    DataName
+    DataName,
+    Shapes
 ) ->
     MessageBindings = pattern_bindings(MessagePattern, Tag, message, Forms),
     DataBindings = pattern_bindings(DataPattern, DataName, data, Forms),
@@ -443,10 +447,14 @@ validate_contribution(
     ),
     Contribution#{
         site => maps:get(id, Open),
+        capture_checks => case Guards of
+            [] -> xls_pattern_totality:prove(MessagePattern, maps:get(Tag, Shapes));
+            _ -> none
+        end,
         source_transportable => source_transportable(
             MessagePattern, DataPattern, Guards)
     };
-validate_contribution(Contribution, Open, _Accumulator, _Forms, _DataName) ->
+validate_contribution(Contribution, Open, _Accumulator, _Forms, _DataName, _Shapes) ->
     error({hls_statem_reduction_contribution_mismatch,
         public_contribution(Contribution), public_open(Open)}).
 
@@ -806,66 +814,13 @@ close_contribution_group(Tag, Contributions, DataName, AccumulatorType,
         transport => Transport
     }.
 
-source_capture_total(#{
-    tag := Tag,
-    clause := {clause, _Line, [Message | _Patterns], [], _Body}
-}) ->
-    case schema_record_pattern(Message, Tag) of
-        true -> element(1, irrefutable_pattern(Message, #{}));
-        false -> false
-    end;
-source_capture_total(_Contribution) ->
-    false.
+source_capture_total(#{capture_checks := Checks}) -> Checks =/= none.
 
-%% This intentionally recognizes a conservative subset of irrefutable Erlang
-%% record patterns.  Omitted record fields are wildcards; explicit fields may
-%% bind fresh variables (including through aliases), but literals and repeated
-%% variables constrain the accepted value and therefore cannot justify routing
-%% every message of the schema away from the ordinary mailbox.
-schema_record_pattern({record, _Line, Tag, _Fields}, Tag) ->
-    true;
-schema_record_pattern({match, _Line, Left, Right}, Tag) ->
-    schema_record_pattern(Left, Tag) orelse schema_record_pattern(Right, Tag);
-schema_record_pattern(_Pattern, _Tag) ->
-    false.
-
-irrefutable_pattern({var, _Line, '_'}, Bound) ->
-    {true, Bound};
-irrefutable_pattern({var, _Line, Name}, Bound) ->
-    case maps:is_key(Name, Bound) of
-        true -> {false, Bound};
-        false -> {true, Bound#{Name => true}}
-    end;
-irrefutable_pattern({match, _Line, Left, Right}, Bound0) ->
-    case irrefutable_pattern(Left, Bound0) of
-        {true, Bound1} -> irrefutable_pattern(Right, Bound1);
-        {false, Bound1} -> {false, Bound1}
-    end;
-irrefutable_pattern({record, _Line, _Tag, Fields}, Bound) ->
-    irrefutable_record_fields(Fields, Bound);
-%% TODO: prove fixed-length list heads total using a source-resolved logical
-%% type shape. Provider aliases such as phi_field:field() are opaque here;
-%% interface inference must not execute application providers or trust stale
-%% BEAMs. Until then, list-pattern contributions use ordinary placement.
-irrefutable_pattern(_Pattern, Bound) ->
-    {false, Bound}.
-
-irrefutable_record_fields([], Bound) ->
-    {true, Bound};
-irrefutable_record_fields([
-    {record_field, _Line, {var, _FieldLine, '_'},
-        {var, _ValueLine, '_'}} | Rest
-], Bound) ->
-    irrefutable_record_fields(Rest, Bound);
-irrefutable_record_fields([
-    {record_field, _Line, {atom, _FieldLine, _Field}, Value} | Rest
-], Bound0) ->
-    case irrefutable_pattern(Value, Bound0) of
-        {true, Bound1} -> irrefutable_record_fields(Rest, Bound1);
-        {false, Bound1} -> {false, Bound1}
-    end;
-irrefutable_record_fields(_Fields, Bound) ->
-    {false, Bound}.
+capture_assertions(Tag, Contributions) ->
+    case [Checks || #{capture_checks := Checks} <- Contributions, Checks =/= none] of
+        [] -> [];
+        [Checks | _] -> xls_pattern_totality:assertions(record_struct_type(Tag), Checks)
+    end.
 
 close_transport_contribution_group(Tag, Contributions, DataName,
         AccumulatorType, EnumAtoms) ->
@@ -889,7 +844,7 @@ close_transport_contribution_group(Tag, Contributions, DataName,
         fun(_Kind) -> Failure end,
         EnumAtoms
     ),
-    lowered(Body, Result).
+    lowered([capture_assertions(Tag, Contributions), Body], Result).
 
 rewrite_contribution_clause(#{
     clause := Clause0,
