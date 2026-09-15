@@ -43,12 +43,14 @@ beam_reports_the_same_selected_origins_test() ->
             ?assertMatch([_], [Site || Site = #{file := F, line := L, kind := K} <- Sites,
                 {F, L, K} =:= {File, Line, Kind}])
         end
-    end, [{0, case_clause}, {2, match_failure}, {6, if_clause}, {8, badarith}, {9, badarith}]).
+    end, [{0, case_clause}, {2, match_failure}, {6, if_clause}, {8, badarith}, {9, badarith},
+        {11, badarg}, {12, badarg}, {13, badarg}]).
 
 beam_kind({case_clause, _}) -> case_clause;
 beam_kind({badmatch, _}) -> match_failure;
 beam_kind(if_clause) -> if_clause;
-beam_kind(badarith) -> badarith.
+beam_kind(badarith) -> badarith;
+beam_kind(badarg) -> badarg.
 
 unused_sites_are_not_declared_test() ->
     {ok, Forms} = xls_parse:parse_file("test/hls_actor_debug_fixture.erl"),

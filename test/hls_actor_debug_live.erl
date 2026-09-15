@@ -41,7 +41,7 @@ inspect(Session, Stage, Moment) ->
 
 check(small, _, {family, cell, [Slot, 0]}, #{phase := Phase, failed := true,
         enter_pending := false, failure := #{kind := Kind, file := File, line := Line}})
-        when Slot =/= 1, Slot =/= 7, Slot =/= 10 ->
+        when Slot =/= 1, Slot =/= 7, Slot =/= 10, Slot =/= 14 ->
     Expected = case Slot of
         0 -> {active, case_clause, <<"hls_actor_debug_helpers.hrl">>, 7};
         2 -> {active, match_failure, <<"hls_actor_debug_fixture.erl">>, 30};
@@ -50,15 +50,18 @@ check(small, _, {family, cell, [Slot, 0]}, #{phase := Phase, failed := true,
         5 -> {boot, function_clause, <<"hls_actor_debug_fixture.erl">>, 16};
         6 -> {active, if_clause, <<"hls_actor_debug_helpers.hrl">>, 11};
         8 -> {active, badarith, <<"hls_actor_debug_helpers.hrl">>, 15};
-        9 -> {active, badarith, <<"hls_actor_debug_helpers.hrl">>, 19}
+        9 -> {active, badarith, <<"hls_actor_debug_helpers.hrl">>, 19};
+        11 -> {active, badarg, <<"hls_actor_debug_helpers.hrl">>, 23};
+        12 -> {active, badarg, <<"hls_actor_debug_helpers.hrl">>, 27};
+        13 -> {active, badarg, <<"hls_actor_debug_helpers.hrl">>, 32}
     end,
     Expected = {Phase, Kind, File, Line},
     ok;
 check(small, released, {family, cell, [Slot, 0]},
         #{phase := active, failed := false, failure := none, enter_pending := false})
-        when Slot =:= 1; Slot =:= 7; Slot =:= 10 -> ok;
+        when Slot =:= 1; Slot =:= 7; Slot =:= 10; Slot =:= 14 -> ok;
 check(small, blocked, {family, cell, [Slot, 0]}, #{phase := active, failed := false, failure := none})
-        when Slot =:= 1; Slot =:= 7; Slot =:= 10 -> ok;
+        when Slot =:= 1; Slot =:= 7; Slot =:= 10; Slot =:= 14 -> ok;
 check(mailbox, released, {family, consumer, _}, #{phase := done, failed := false,
         message_queue_len := 0, postponed := 0}) -> ok;
 check(mailbox, blocked, {family, producer, _}, #{phase := Phase, failed := false})

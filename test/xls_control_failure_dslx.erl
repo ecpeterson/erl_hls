@@ -8,20 +8,21 @@ oracle(Mode, X, Y) ->
         error:{badmatch, _} -> {2, 0};
         error:{case_clause, _} -> {4, 0};
         error:if_clause -> {5, 0};
-        error:badarith -> {13, 0}
+        error:badarith -> {13, 0};
+        error:badarg -> {14, 0}
     end.
 
 write(Stage) ->
     Source = "test/xls_control_failure_fixture.erl",
     Generated = xls_parse:to_xls(Source),
     {ok, Semantics} = file:read_file("test_data/xls_control_failure_semantics.inc.x"),
-    Cases = [{M, X, Y, oracle(M, X, Y)} || M <- lists:seq(0, 46),
+    Cases = [{M, X, Y, oracle(M, X, Y)} || M <- lists:seq(0, 58),
         X <- [0, 1, 2, 16#ffffffff], Y <- [0, 1, 2]],
     ok = write(Stage, "control.x", [Generated, Semantics,
         [dslx_test(M, [C || C = {Mode, _, _, _} <- Cases, Mode =:= M])
-            || M <- lists:seq(0, 46)]]),
+            || M <- lists:seq(0, 58)]]),
     ok = write(Stage, "control_vectors.svh", [vector(C) || C <- Cases]),
-    %% Both forms fail constant initialization, even for an unrelated top.
+    %% Selected failures reject constant initialization, even for an unrelated top.
     {ok, Original} = file:read_file(Source),
     lists:foreach(fun({Name, Expression}) ->
         Path = filename:join(Stage, Name ++ ".erl"),
@@ -31,7 +32,10 @@ write(Stage) ->
     end, [{"bad_div_init", <<"Value div 0">>},
           {"bad_rem_init", <<"Value rem 0">>},
           {"bad_case_init", <<"case Value of 0 -> Value end">>},
-          {"bad_if_init", <<"if Value =:= 0 -> Value end">>}]).
+          {"bad_if_init", <<"if Value =:= 0 -> Value end">>},
+          {"bad_nth_init", <<"hls_vec:nth(0, hls_lists:new(hls_nums:u32(), 3))">>},
+          {"bad_set_init", <<"hls_vec:nth(1, hls_vec:set(4, hls_lists:new(hls_nums:u32(), 3), Value))">>},
+          {"bad_slice_init", <<"hls_vec:nth(1, hls_lists:array_slice(hls_lists:list(hls_nums:u32(), 3), hls_lists:new(hls_nums:u32(), 3), 3, 2))">>}]).
 
 dslx_test(Mode, Cases) ->
     [io_lib:format("\n#[test]\nfn beam_~p() {\n  let cases = [\n", [Mode]),

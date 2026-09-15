@@ -39,3 +39,36 @@ sublist_cpu_semantics_test() ->
         [20, 30, 0, 0, 0],
         hls_lists:sublist(Descriptor, [10, 20, 30, 40, 50], 2, 2)
     ).
+
+checked_indices_test() ->
+    lists:foreach(fun(Module) ->
+        ?assertEqual(10, Module:nth(1, [10, 20, 30])),
+        ?assertEqual(30, Module:nth(3, [10, 20, 30])),
+        ?assertEqual([10, 20, 99], Module:set(3, [10, 20, 30], 99)),
+        lists:foreach(fun(Index) ->
+            ?assertError(badarg, Module:nth(Index, [10, 20, 30])),
+            ?assertError(badarg, Module:set(Index, [10, 20, 30], 99))
+        end, [-1, 0, 4, 1 bsl 100, 1.0, invalid]),
+        ?assertError(badarg, Module:nth(1, [])),
+        ?assertError(badarg, Module:set(1, [], 99)),
+        ?assertError(badarg, Module:nth(1, [10 | invalid])),
+        ?assertError(badarg, Module:set(1, [10 | invalid], 99))
+    end, [hls_lists, hls_vec]).
+
+exact_slice_bounds_test() ->
+    T = hls_lists:list(hls_nums:u8(), 3),
+    ?assertEqual([20, 30], hls_lists:array_slice(T, [10, 20, 30], 2, 2)),
+    ?assertEqual([], hls_lists:array_slice(T, [10, 20, 30], 4, 0)),
+    ?assertEqual([0, 0, 0], hls_lists:sublist(T, [10, 20, 30], 4, 0)),
+    lists:foreach(fun({Start, Count}) ->
+        ?assertError(badarg, hls_lists:array_slice(T, [10, 20, 30], Start, Count)),
+        ?assertError(badarg, hls_lists:sublist(T, [10, 20, 30], Start, Count))
+    end, [{0, 0}, {-1, 1}, {1, -1}, {3, 2}, {4, 1}, {5, 0},
+        {1 bsl 100, 1}, {1, 1 bsl 100}, {1.0, 1}, {1, 1.0}]),
+    lists:foreach(fun(List) ->
+        ?assertError(badarg, hls_lists:array_slice(T, List, 1, 1)),
+        ?assertError(badarg, hls_lists:sublist(T, List, 1, 1))
+    end, [[10], [10, 20, 30, 40], [10 | invalid]]),
+    Empty = hls_lists:list(hls_nums:u8(), 0),
+    ?assertEqual([], hls_lists:array_slice(Empty, [], 1, 0)),
+    ?assertEqual([], hls_lists:sublist(Empty, [], 1, 0)).

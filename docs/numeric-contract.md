@@ -28,6 +28,18 @@ All float codecs continue to accept integer inputs through the VM's binary64 con
 
 Fixed-size lists and vectors require exact lengths, and generated record packers require the declared record tag and arity. Numeric normalization does not permit deleting, adding, or padding fields or elements. Nested providers are checked individually, so one short element cannot be compensated by an oversized neighbor.
 
+## Checked collection access
+
+`hls_lists:nth/2`, `hls_lists:set/3`, and their `hls_vec` counterparts use one-based indices in `1..Size`. Invalid indices raise `badarg` on BEAM and produce a source-located `badarg` failure in XLS. Reads do not clamp to the last element, and updates do not silently ignore an invalid index.
+
+`hls_lists:array_slice(Descriptor, Values, Start, Length)` returns exactly `Length` elements. Its length must be a positive compile-time constant for XLS; its start may be dynamic. `hls_lists:sublist(Descriptor, Values, Start, Count)` permits a dynamic count and appends zero elements after the selected range to retain the descriptor's full size. Both require `Values` to have the declared type/size, `1 =< Start =< Size + 1`, and `0 =< Count =< Size + 1 - Start`. A zero-count range may start just past the end; a nonempty overrun fails instead of truncating or padding missing input. Empty collections and zero-length `array_slice` results remain supported on BEAM, but their XLS translation reports `empty_xls_collection`: XLS's IR does not support empty array values. A zero-count `sublist` of a nonempty collection is supported on both targets because its result retains the original size.
+
+The static [`hls_lists.x`](../priv/xls/lib/hls_lists.x) implementation accepts signed or unsigned indices and counts at their inferred integer widths, including values wider than 32 bits. It checks bounds before narrowing an index for the array primitive. Negative or oversized values cannot become valid by truncation. As with other arithmetic, an index expression may already have wrapped before reaching this API; widen its operands or use an overflow-free expression when mathematical bounds are intended. For example, after checking `0 < Count =< Size`, compare `Start =< Size - Count` for a zero-based range instead of adding `Start + Count` in a narrow type. `regsvc` uses this form for bulk reads.
+
+The existing failure carrier preserves the first selected error, suppresses failed results/effects, and rejects a failing constant initializer. Unselected branches remain harmless. GS proxies decode the new reason as `{error, {remote_error, badarg}}`; shared-actor debug queries retain the source file and line, including calls inside included helpers. This adds no new recovery or exception-catching mechanism. Checks for constant in-range accesses can be eliminated during XLS optimization; dynamic checks can add comparison and selection logic.
+
+`bash tools/test_collections.sh XLS_ROOT` compares lowered Erlang calls with BEAM, the DSLX interpreter/JIT, and optimized RTL. It exhausts all eight-bit start/count pairs for signed and unsigned indices and samples 32/64-bit boundaries, including values that would truncate to a valid 32-bit index. Existing control-failure and actor-debug regressions cover selected/skipped failures, first-error order, invalid initializers, stalled replies, and public source-location queries. The float collection regressions exercise structured and nested elements.
+
 ## Using explicit conversions
 
 ```erlang

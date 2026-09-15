@@ -7,7 +7,7 @@ import bram;
 import mailbox;
 import scheduler;
 import hls_failure;
-import hls_vec;
+import hls_lists;
 import phi_field;
 
 const MAILBOX_CAPACITY = u8:5;
@@ -59,24 +59,27 @@ const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L371 = u16:118; // phi_halo_cell.e
 const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L379 = u16:134; // phi_halo_cell.erl:L379
 const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L381 = u16:150; // phi_halo_cell.erl:L381
 const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L383 = u16:166; // phi_halo_cell.erl:L383
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L414 = u16:177; // phi_halo_cell.erl:L414
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L431 = u16:198; // phi_halo_cell.erl:L431
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L439 = u16:214; // phi_halo_cell.erl:L439
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L447 = u16:230; // phi_halo_cell.erl:L447
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L455 = u16:246; // phi_halo_cell.erl:L455
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L457 = u16:262; // phi_halo_cell.erl:L457
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L496 = u16:273; // phi_halo_cell.erl:L496
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L509 = u16:294; // phi_halo_cell.erl:L509
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L517 = u16:310; // phi_halo_cell.erl:L517
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L525 = u16:326; // phi_halo_cell.erl:L525
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L533 = u16:342; // phi_halo_cell.erl:L533
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L535 = u16:358; // phi_halo_cell.erl:L535
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L589 = u16:374; // phi_halo_cell.erl:L589
-const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L608 = u16:385; // phi_halo_cell.erl:L608
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L616 = u16:406; // phi_halo_cell.erl:L616
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L627 = u16:422; // phi_halo_cell.erl:L627
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L636 = u16:438; // phi_halo_cell.erl:L636
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L638 = u16:454; // phi_halo_cell.erl:L638
+const XLS_FAILURE_SITE_BADARG_76CA4A82_L411 = u16:190; // phi_halo_cell.erl:L411
+const XLS_FAILURE_SITE_BADARG_76CA4A82_L412 = u16:206; // phi_halo_cell.erl:L412
+const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L414 = u16:209; // phi_halo_cell.erl:L414
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L431 = u16:230; // phi_halo_cell.erl:L431
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L439 = u16:246; // phi_halo_cell.erl:L439
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L447 = u16:262; // phi_halo_cell.erl:L447
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L455 = u16:278; // phi_halo_cell.erl:L455
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L457 = u16:294; // phi_halo_cell.erl:L457
+const XLS_FAILURE_SITE_BADARG_76CA4A82_L467 = u16:318; // phi_halo_cell.erl:L467
+const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L496 = u16:321; // phi_halo_cell.erl:L496
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L509 = u16:342; // phi_halo_cell.erl:L509
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L517 = u16:358; // phi_halo_cell.erl:L517
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L525 = u16:374; // phi_halo_cell.erl:L525
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L533 = u16:390; // phi_halo_cell.erl:L533
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L535 = u16:406; // phi_halo_cell.erl:L535
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L589 = u16:422; // phi_halo_cell.erl:L589
+const XLS_FAILURE_SITE_FUNCTION_CLAUSE_76CA4A82_L608 = u16:433; // phi_halo_cell.erl:L608
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L616 = u16:454; // phi_halo_cell.erl:L616
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L627 = u16:470; // phi_halo_cell.erl:L627
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L636 = u16:486; // phi_halo_cell.erl:L636
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_76CA4A82_L638 = u16:502; // phi_halo_cell.erl:L638
 pub struct Phi {
   epoch : u32,
   values : phi_field::Field,
@@ -730,10 +733,10 @@ fn reduction_contribution(
             let Xls_clause_1_Values_1 = message.values;
             let Xls_clause_1_Cell_1 = (Tag::CELL, data);
             let _0 = (0 as u32);
-let _1 = Xls_clause_1_Values_1[1 - u32:1];
-let _2 = phi_field::accumulate(0, _1);
-let _3 = Xls_clause_1_Values_1[2 - u32:1];
-let _4 = phi_field::accumulate(0, _3);
+let _1 = hls_lists::nth(u32:1, Xls_clause_1_Values_1);
+let _2 = phi_field::accumulate(0, _1.0);
+let _3 = hls_lists::nth(u32:2, Xls_clause_1_Values_1);
+let _4 = phi_field::accumulate(0, _3.0);
 let _5 = Phifold {
   value0: _2,
   value1: _4,
@@ -741,7 +744,7 @@ let _5 = Phifold {
 };
 let _6 = (Tag::PHI_FOLD, _5, bits_from_phifold(_5));
 let _7 = (Xls_clause_1_Epoch_1, _0, _6, );
-if (bool:false) {
+if ((hls_failure::first(hls_failure::check(_1.1, XLS_FAILURE_SITE_BADARG_76CA4A82_L411), hls_failure::check(_3.1, XLS_FAILURE_SITE_BADARG_76CA4A82_L412))) != hls_failure::NONE) {
   (u1:0, u32:0, u32:0, zero!<Phifold>())
 } else {
   (u1:1, _7.0, _7.1, _7.2.1)
@@ -954,10 +957,10 @@ fn reduction_transport_contribution(
         let Xls_clause_1_Epoch_1 = message.epoch;
         let Xls_clause_1_Values_1 = message.values;
         let _0 = (0 as u32);
-let _1 = Xls_clause_1_Values_1[1 - u32:1];
-let _2 = phi_field::accumulate(0, _1);
-let _3 = Xls_clause_1_Values_1[2 - u32:1];
-let _4 = phi_field::accumulate(0, _3);
+let _1 = hls_lists::nth(u32:1, Xls_clause_1_Values_1);
+let _2 = phi_field::accumulate(0, _1.0);
+let _3 = hls_lists::nth(u32:2, Xls_clause_1_Values_1);
+let _4 = phi_field::accumulate(0, _3.0);
 let _5 = Phifold {
   value0: _2,
   value1: _4,
@@ -965,7 +968,7 @@ let _5 = Phifold {
 };
 let _6 = (Tag::PHI_FOLD, _5, bits_from_phifold(_5));
 let _7 = (Xls_clause_1_Epoch_1, _0, _6, );
-if (bool:false) {
+if ((hls_failure::first(hls_failure::check(_1.1, XLS_FAILURE_SITE_BADARG_76CA4A82_L411), hls_failure::check(_3.1, XLS_FAILURE_SITE_BADARG_76CA4A82_L412))) != hls_failure::NONE) {
   (u1:0, u32:0, u32:0, zero!<Phifold>())
 } else {
   (u1:1, _7.0, _7.1, _7.2.1)
@@ -1656,8 +1659,8 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> EntryOutcome {
       let _OldPhase_1 = old_phase;
       let Cell_1 = (Tag::CELL, data);
       let _0 = Cell_1.1.phi;
-      let _1 = _0[1 - u32:1];
-      let Phi0_1 = _1;
+      let _1 = hls_lists::nth(u32:1, _0);
+      let Phi0_1 = _1.0;
       let _2 = Cell_1.1.step;
       let _3 = Phi0 {
         step: _2,
@@ -1735,8 +1738,8 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> EntryOutcome {
           },
         }
       };
-      if bool:false {
-        EntryOutcome { data, failure: hls_failure::NONE, ..zero!<EntryOutcome>() }
+      if (hls_failure::check(_1.1, XLS_FAILURE_SITE_BADARG_76CA4A82_L467)) != hls_failure::NONE {
+        EntryOutcome { data, failure: hls_failure::check(_1.1, XLS_FAILURE_SITE_BADARG_76CA4A82_L467), ..zero!<EntryOutcome>() }
       } else { _20 }
     },
     Phase::FLIPPING => {

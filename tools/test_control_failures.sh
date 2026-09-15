@@ -14,7 +14,7 @@ erl -noshell -pa _build/test/lib/erl_hls/ebin _build/test/lib/erl_hls/test \
 options=(--warnings_as_errors=false --dslx_path="$project_root/priv/xls/lib"
     --dslx_stdlib_path="$xls_root/xls/dslx/stdlib")
 "$xls_root/interpreter_main" --compare=jit "${options[@]}" "$stage/control.x"
-for kind in case if div rem; do
+for kind in case if div rem nth set slice; do
     if "$xls_root/ir_converter_main" --top=bits_from_report "${options[@]}" \
             "$stage/bad_${kind}_init.x" > "$stage/bad_${kind}_init.ir" 2> "$stage/bad_${kind}_init.log"; then
         echo "failing $kind initializer was accepted" >&2; exit 1

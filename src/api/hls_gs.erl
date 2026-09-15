@@ -72,6 +72,7 @@ stop(PID) ->
 -define(ERROR_CASE_CLAUSE, 4).
 -define(ERROR_IF_CLAUSE, 5).
 -define(ERROR_BADARITH, 13).
+-define(ERROR_BADARG, 14).
 
 %% Failed casts can emit ERROR replies. Never lend their ID to a call.
 -define(CAST_TX_ID, 255).
@@ -175,6 +176,7 @@ error_reason(?ERROR_REQUEST_LENGTH) -> request_length;
 error_reason(?ERROR_CASE_CLAUSE) -> case_clause;
 error_reason(?ERROR_IF_CLAUSE) -> if_clause;
 error_reason(?ERROR_BADARITH) -> badarith;
+error_reason(?ERROR_BADARG) -> badarg;
 error_reason(ErrorCode) -> {unknown_error, ErrorCode}.
 
 %%%
