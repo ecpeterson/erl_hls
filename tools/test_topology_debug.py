@@ -121,7 +121,7 @@ class DiscoveryTests(unittest.TestCase):
                 "failures": {"16": {"kind": "case_clause", "file": "fixture.erl", "line": 20}},
                 "module": "fixture", "phases": ["boot", "active"],
                 "actors": [{"slot": i, "key": str(i)*64, "name": str(i)} for i in range(2)]}
-        projection = {"schema": 2, "banks": [bank]}
+        projection = {"schema": 3, "banks": [bank]}
         ports = {"clk": {"bits": [1], "direction": "input"},
                  "wr_en": {"bits": [2], "direction": "input"},
                  "wr_addr": {"bits": [3], "direction": "input"},
@@ -195,6 +195,43 @@ class DiscoveryTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "clock mismatch"):
             discover()
 
+        # Reduction taps include only selected committed fields. The accumulator
+        # and member bitmap stay in application RAM, outside the observation.
+        flat["netnames"]["shell.application.clk"]["bits"] = [1]
+        data = list(range(200, 330))
+        bank["width"] = 130
+        ports["wr_data"]["bits"] = data
+        flat["netnames"]["shell.scheduler_0_state.wr_data"]["bits"] = data
+        ram = hierarchy["modules"]["ram"]
+        ram["memories"]["memory"]["width"] = 130
+        ram["cells"]["write"]["connections"].update(DATA=data, EN=[90]*130)
+        ram["cells"]["enable"]["connections"].update(Y=[90]*130, A=["0"]*130, B=["1"]*130)
+        reduction = {"width": 53, "sites": [{"id": 0, "phase": "active", "name": "sum",
+                    "population": {"mode": "members", "size": 3, "members": [10, 20, 30]}}],
+                     "fields": {}}
+        source, observation = 65, 56
+        for name, size in (("status", 2), ("site", 1), ("key", 32), ("remaining", 2), ("failure", 16)):
+            if name == "failure":
+                source += 10  # private accumulator and seen bits
+            reduction["fields"][name] = {"offset": source, "width": size, "observation_offset": observation}
+            source += size
+            observation += size
+        bank["reduction"] = reduction
+        observed = discover()
+        self.assertEqual(observed[0]["taps"][27:80], data[65:102] + data[112:128])
+        self.assertEqual(topology.actors.resources(observed, 5)[0]["width"], 109)
+        for mutation, message in [
+            (lambda r: r["fields"]["key"].update(offset=64), "overlapping"),
+            (lambda r: r["fields"]["site"].update(observation_offset=64), "invalid reduction field"),
+            (lambda r: r.update(width=54), "invalid reduction width"),
+            (lambda r: r["sites"][0].update(id=1), "invalid reduction sites"),
+            (lambda r: r["sites"][0]["population"].update(size=4), "invalid reduction population"),
+            (lambda r: r["sites"][0]["population"].update(members=[10, 20, 20]), "invalid reduction members")]:
+            bad = copy.deepcopy(projection)
+            mutation(bad["banks"][0]["reduction"])
+            with self.assertRaisesRegex(ValueError, message):
+                discover(bad)
+
     def test_snapshot_rtl(self):
         with tempfile.TemporaryDirectory() as stage:
             exe = str(Path(stage) / "test.vvp")
@@ -209,29 +246,34 @@ class DiscoveryTests(unittest.TestCase):
         # Distinct data at every global ID detects aliasing and bank overlap.
         banks, offset, resource = [], 0, 5
         setup = ['for(i=0;i<5;i=i+1) begin probe_values[i*64+:64]=i+100; expected[i]=i+100; end']
-        for index, slots, mailbox in ((0, 3, True), (1, 9, False), (2, 1, True)):
+        for index, slots, mailbox, reduction in ((0, 3, True, 0), (1, 9, False, 66), (2, 1, True, 53)):
             aw = max(1, (slots-1).bit_length())
-            width = 1 + aw + 25 + (1 + 24*slots if mailbox else 0)
+            width = 1 + aw + 25 + reduction + (1 + 24*slots if mailbox else 0)
             bank = {'index': index, 'slots': slots, 'address_width': aw, 'taps': [0]*width}
             if mailbox:
                 bank['mailbox'] = {}
+            if reduction:
+                bank['reduction'] = {'width': reduction}
             banks.append(bank)
             for slot in range(slots):
                 state = 1000 + resource + slot
                 metadata = 2000 + resource + slot if mailbox else 0
+                reduction_value = ((1 << (reduction-1)) + resource + slot) if reduction else 0
+                expected = (reduction_value << 56) + (metadata << 32) + (1 << 25) + state
+                state += reduction_value << 25
                 setup += [f'@(negedge clk); actor_writes=0; actor_writes[{offset}]=1;',
-                          f'actor_writes[{offset+1}+:{aw}]={slot}; actor_writes[{offset+1+aw}+:25]={state};',
-                          f'expected[{resource+slot}]={{32\'d{metadata}, 32\'d{(1 << 25) + state}}};']
+                          f"actor_writes[{offset+1}+:{aw}]={slot}; actor_writes[{offset+1+aw}+:{25+reduction}]={25+reduction}'d{state};",
+                          f"expected[{resource+slot}]=128'd{expected};"]
                 if mailbox:
-                    setup += [f'actor_writes[{offset+1+aw+25}]=1;']
-                    setup += [f'actor_writes[{offset+1+aw+26+24*j}+:24]={2000+resource+j};'
+                    setup += [f'actor_writes[{offset+1+aw+25+reduction}]=1;']
+                    setup += [f'actor_writes[{offset+1+aw+26+reduction+24*j}+:24]={2000+resource+j};'
                               for j in range(slots)]
                 setup += ['@(posedge clk); #1;']
             offset += width
             resource += slots
         bench = ['module selector_tb; reg clk=0,reset=1; always #5 clk=~clk;',
                  'reg [31:0] address; reg [319:0] probe_values;',
-                 f'reg [{offset-1}:0] actor_writes=0; reg [63:0] expected[0:{resource-1}]; integer i;',
+                 f'reg [{offset-1}:0] actor_writes=0; reg [127:0] expected[0:{resource-1}]; integer i;',
                  topology.actors.wrapper(banks, 5, 'clk', 'reset', False),
                  'assign probe_address=address;',
                  'initial begin repeat(2) @(negedge clk); reset=0;', *setup,

@@ -118,7 +118,7 @@ def main():
     body = {k: v for k, v in manifest.items() if k != 'fingerprint'}
     canonical = json.dumps(body, sort_keys=True, ensure_ascii=False, separators=(',', ':')).encode()
     fingerprint = hashlib.sha256(canonical).hexdigest()
-    if manifest['schema'] != 4 or manifest['fingerprint'] != fingerprint:
+    if manifest['schema'] != 5 or manifest['fingerprint'] != fingerprint:
         raise ValueError('corrupt or unsupported manifest')
     hierarchy = json.loads((args.instrumented / 'hierarchy.json').read_text())
     flat = json.loads((args.instrumented / 'flat.json').read_text())['modules'][manifest['top']]
@@ -147,11 +147,11 @@ def main():
         selected = banks if mode in ('actor_state', 'actors', 'all') else []
         if mode == 'actor_state':
             # Hold the query protocol and observed application fixed while
-            # measuring just the pre-existing phase/failure retention path.
+            # measuring committed actor state without the separate mailbox store.
             selected = [{k: v for k, v in bank.items() if k != 'mailbox'}
                         for bank in banks]
             for bank in selected:
-                bank['taps'] = bank['taps'][:1 + bank['address_width'] + 25]
+                bank['taps'] = bank['taps'][:1 + bank['address_width'] + 25 + bank.get('reduction', {}).get('width', 0)]
         folder = stage / mode
         folder.mkdir(parents=True, exist_ok=True)
         (folder / 'sidecar.v').write_text(sidecar(mode, physical, selected, indices, manifest))

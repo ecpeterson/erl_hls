@@ -19,7 +19,7 @@ import topology_debug_actors as actors
 import topology_debug_services as services
 
 
-SCHEMA = 4
+SCHEMA = 5
 FIFO = re.compile(r"fifo_for_depth_(\d+)_ty_.*_(?:with|no)_bypass(?:_register_push)?(?:___\d+)?$")
 PORT_PAIRS = (("_vld", "_rdy"), ("_valid", "_ready"), ("_tvalid", "_tready"))
 

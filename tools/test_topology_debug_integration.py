@@ -42,6 +42,8 @@ def testbench(args, ports, manifest):
                 signal = "resetn" if args.reset_active_low else "!resetn"
             elif name in sinks:
                 signal = "released" if name == sinks[0] else "1'b1"
+            elif name == "release_contributions" and args.actor_test in ("reduction", "aggregate"):
+                signal = "released"
             else:
                 raise ValueError(f"test has no driver for input {name}")
             originals.append(f".\\{name} ({signal})")

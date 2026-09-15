@@ -16,7 +16,7 @@ The resource catalog contains:
 
 FIFO occupancy comes from the existing `slots` register. The XLS adapter recognizes generated FIFOs with or without bypass and with an unregistered pop interface, including registered push readiness. This includes the scheduler's registered selection-publication queue. It validates the register's clock and the full-comparison constant. A recognized implementation with an unexpected shape fails generation; other FIFO variants appear in `unsupported_queues` and retain handshake probes only. The integration test independently checks each exposed occupancy against accepted pushes minus accepted pops.
 
-The exporter adds only output aliases to the elaborated application. It does not insert queue counters or modify application cells, memories, or original ports. The wrapper adds a selector, one 64-bit clock counter, a bounded command receiver, and storage for one sampled reply. Enabling actor projections retains 26 bits per actor before synthesis: phase, entry-pending, a sixteen-bit failure code, and validity. The 25 data bits use an indexed memory per scheduler bank; one validity bit per actor resets independently. Optional mailbox observations retain another 24 bits per actor in registers because all slots publish together. Both stores retain only the latest value. Debug backpressure can delay subsequent queries but cannot stall application traffic. Probe fanout and selector routing can affect physical timing and area; logical noninterference is not a timing-closure claim.
+The exporter adds only output aliases to the elaborated application. It does not insert queue counters or modify application cells, memories, or original ports. The wrapper adds a selector, one 64-bit clock counter, a bounded command receiver, and storage for one sampled reply. Enabling actor projections retains 26 bits per actor before synthesis: phase, entry-pending, a sixteen-bit failure code, and validity. Actors with reductions also retain 50 + site-width + remaining-width bits, excluding the accumulator and member bitmap. These metadata bits share the indexed memory per scheduler bank; one validity bit per actor resets independently. Optional mailbox observations retain another 24 bits per actor in registers because all slots publish together. Both stores retain only the latest value. Debug backpressure can delay subsequent queries but cannot stall application traffic. Probe fanout and selector routing can affect physical timing and area; logical noninterference is not a timing-closure claim.
 
 Optional generated scheduler outputs expose completed-step mailbox metadata as described below. Intermediate admission claims, RAM-adapter reservations, and reduction-bank occupancy are not decoded. Optional actor snapshots describe committed state, which can be older than an in-flight continuation. Their boundaries may be visible as channels, but the tool does not infer private state from generated signal-name guesses. A consumer with no observed blocked output is an unresolved internal wait, not evidence that it has no work.
 
@@ -102,17 +102,36 @@ Add `--actor-projection actors.json` to the instrumentation command. If the shel
 
 Supply the exact actor DSLX artifacts used by XLS, including their selected service specialization. The projection verifies their failure-code declarations and records each actor's opaque identity key, scheduler slot, module, phase codebook, and compact failure source map. At runtime, binding checks canonical numbering and source origins against the structural BEAM inventory without lowering expressions or running application transpilers. The manifest determines which origins survived lowering; it is part of the trusted compiler output, not a source-independent proof of behavior. Its binding digest covers the normalized topology and scheduler plan, including initialization and interleaved family placement. Keep the projection with its generated RTL: interface checks cannot prove that an arbitrary width-compatible RTL file implements the supplied semantic plan. The endpoint's manifest fingerprint then covers both the supplied projection and the exact RTL sources.
 
-Each snapshot updates on an accepted state-RAM write. It copies `phase`, `enter_pending`, and the sixteen-bit `failure` code from the committed application RAM row into a separate snapshot memory; `initialized` becomes true on the first such write after reset. Until then the state fields are `undefined`, even though the unreset application RAM may contain old values. A later write replaces the snapshot; no history is retained. The snapshot memory has one accepted-write input and one asynchronous query port. Its data is unreset; a resettable validity bitmap masks uninitialized rows to zero, including after reuse. On XC7 this permits distributed RAM (SLICEM LUTs), with synthesis free to choose registers for small banks. It does not consume application RAM ports or impose requests, reservations, or backpressure. The asynchronous query port preserves the sampling edge and requires no extra query cycle.
+Each snapshot updates on an accepted state-RAM write. It copies `phase`, `enter_pending`, the sixteen-bit `failure` code, and any reduction metadata from the committed application RAM row into a separate snapshot memory; `initialized` becomes true on the first such write after reset. Until then the state fields are `undefined`, even though the unreset application RAM may contain old values. A later write replaces the snapshot; no history is retained. The snapshot memory has one accepted-write input and one asynchronous query port. Its data is unreset; a resettable validity bitmap masks uninitialized rows to zero, including after reuse. On XC7 this permits distributed RAM (SLICEM LUTs), with synthesis free to choose registers for small banks. It does not consume application RAM ports or impose requests, reservations, or backpressure. The asynchronous query port preserves the sampling edge and requires no extra query cycle.
 
 ```mermaid
 flowchart LR
     Scheduler -->|complete committed machine| BRAM[Actor state BRAM]
-    Scheduler -->|same accepted write: phase, entry flag, code| Shadow[Banked snapshot memory: 25 bits per actor + validity]
+    Scheduler -->|same accepted write: phase, entry flag, code, reduction metadata| Shadow[Banked snapshot memory: selected metadata + validity]
     Shadow -->|sampled query value| Host[hls_debug on the host]
     Compiler -->|file/line/reason source map| Host
 ```
 
-A sampled actor word has phase in bits 0–7, entry-pending in bit 8, failure code in bits 9–24, and initialized in bit 25. Bits 26–31 are zero. Without mailbox observations the upper 32 bits are also zero. A query returns the snapshot from before its sampling edge, so a simultaneous application write becomes visible to later queries. The returned `cycle` dates the observation, not the last commit. A stalled executor can retain a newer in-flight state; a failure is visible only after its state write commits. `enter_pending = false` does not mean the actor is idle or its mailbox empty. Queries derive `failed` from the code and decode `failure` against the manifest: `none` for zero, otherwise a reason plus file and line when a source expression is responsible. Unknown codes are rejected. No filenames, source-map tables, or execution history are stored on the device.
+A sampled actor word has phase in bits 0–7, entry-pending in bit 8, failure code in bits 9–24, and initialized in bit 25. Bits 26–31 are zero. Bits 32–55 are zero without mailbox observations; reduction metadata starts at bit 56 when present. A query returns the snapshot from before its sampling edge, so a simultaneous application write becomes visible to later queries. The returned `cycle` dates the observation, not the last commit. A stalled executor can retain a newer in-flight state; a failure is visible only after its state write commits. `enter_pending = false` does not mean the actor is idle or its mailbox empty. Queries derive `failed` from the code and decode `failure` against the manifest: `none` for zero, otherwise a reason plus file and line when a source expression is responsible. Unknown codes are rejected. No filenames, source-map tables, or execution history are stored on the device.
+
+## Reduction observations
+
+`hls_debug:info(Actor, reduction)` returns `idle` when no window is active, `undefined` before the first committed snapshot after reset, or a map such as:
+
+```erlang
+#{status => open, phase => gathering, name => sum, key => 0,
+  population => {count, 3}, received => 2, remaining => 1,
+  failure => #{code => 61, kind => badarith,
+               file => <<"hls_reduction_failure_fixture.erl">>, line => 47}}
+```
+
+The phase and reduction name identify the opening site. `population` is `{count, N}` or `{members, Members}`; `remaining` counts contributions still required and `received` counts accepted contributions. It does not identify which fixed members are missing: the member bitmap and accumulator are not retained. Site names, populations, and failure source maps live in the manifest. Resource-level queries return names as binaries; catalog-bound actors use the verified Erlang atoms.
+
+A pending reduction `failure` is separate from the actor's top-level terminal `failure`. A failed fold remains `open` and accepts the remaining valid contributions without invoking the reducer again. It becomes `complete` with zero remaining contributions before releasing that failure to the actor. Healthy completion clears the window. Queries do not release, cancel, or consume the window. A complete failed window can remain visible after the actor has stopped.
+
+Phase, terminal failure, and reduction metadata come from the same accepted state write and are sampled together in one reply. They can lag an executing callback. With source-fragment offloading, the recipient accepts a complete aggregate at once: its count remains at the full population and its reduction failure remains `none` until that aggregate arrives. Work and failures retained in partial source fragments or the combining service are outside this observation. A healthy recipient snapshot therefore does not establish that its contributors are healthy, and a remaining count alone does not establish deadlock.
+
+Projection schema 3 supplies packed source offsets and observation offsets for status (2 bits), site (1–8), key (32), remaining count (1–8), and pending failure (16). They occupy consecutive observation bits starting at 56, using at most 66 bits. The snapshot stores only these selected bits alongside the existing 25 actor-state bits, with one shared validity bit; it requires no additional application RAM port. The query's 128-bit value leaves unused bits zero. The wider schema-5 reply adds two stream beats to each query, including physical FIFO/channel queries, and remains immutable under debug backpressure. Hosts, manifests, and debug RTL must be regenerated together.
 
 ## Shared-scheduler mailbox observations
 
@@ -139,7 +158,7 @@ Until the first metadata sample after reset, `mailbox_initialized` is false and 
 
 Actor-state RAM writes and scheduler metadata have separate publication boundaries. A query samples their retained copies on one edge; it does **not** make their underlying commits atomic. In particular, do not infer that a phase change and a mailbox count happened together. `cycle` dates the query, not either publication. Use physical ready/valid probes to investigate a stalled scheduler step; repeated unchanged metadata alone does not establish a deadlock or its duration.
 
-With this option enabled, resource bits 32–39 hold depth, 40–47 postponed count, 48 in-flight, 49 mail candidate, 50 entry candidate, 51 egress waiter, 52 shared egress busy, 53–54 scheduler phase, and 55 mailbox validity. Bits 56–63 are zero. XLS array packing places slot zero in the least significant 24-bit word of the generated output. The DSLX packing, host decoding, and RTL retention tests share byte-level vectors.
+With this option enabled, resource bits 32–39 hold depth, 40–47 postponed count, 48 in-flight, 49 mail candidate, 50 entry candidate, 51 egress waiter, 52 shared egress busy, 53–54 scheduler phase, and 55 mailbox validity. Reduction metadata, when present, starts at bit 56. XLS array packing places slot zero in the least significant 24-bit word of the generated output. The DSLX packing, host decoding, and RTL retention tests share byte-level vectors.
 
 ## Query and inspect waits
 
@@ -172,14 +191,14 @@ Reports distinguish external sinks, ambiguous connections, candidate blocked out
 
 A query samples its value and timestamp together before the accepting clock edge's application state updates. The held reply stays immutable until consumed. Different queries observe different edges. Repeated equal values do not prove that a queue stayed full between visits, and the interval between observations is not a measured stall age. A cyclic group of repeatedly blocked channels is a candidate for investigation, not proof of deadlock: wiring alone does not identify the exact continuation or arbitration condition that an actor requires. The 64-bit timestamp resets with the application and wraps after `2^64` cycles; the walker rejects nonincreasing observations, but a reset followed by a sufficiently long gap can escape that check.
 
-## Inner query protocol, schema 4
+## Inner query protocol, schema 5
 
 All words are little-endian. Request flags are zero and all beats have full keep. Replies preserve the request transaction ID. The outer single-endpoint router accepts `{source:16, destination:16}` as a route word and returns `{2:16, source:16}` before the reply header.
 
 | Operation | Request payload | Reply payload |
 | --- | --- | --- |
-| `INFO` `0x10` → `0x90` | Empty | Schema `4`, resource count, channel count, FIFO count, actor count, 32 fingerprint bytes (13 words total) |
-| `QUERY` `0x11` → `0x91` | Resource ID (1 word) | Resource ID, cycle low, cycle high, value low, value high (5 words) |
+| `INFO` `0x10` → `0x90` | Empty | Schema `5`, resource count, channel count, FIFO count, actor count, 32 fingerprint bytes (13 words total) |
+| `QUERY` `0x11` → `0x91` | Resource ID (1 word) | Resource ID, cycle low, cycle high, 128-bit value in four low-to-high words (7 words) |
 | Error `0xff` | — | Code `1`: malformed/unsupported request; code `2`: out-of-range resource ID |
 
 Malformed inner requests drain through their actual `TLAST`, even beyond 255 beats, and produce one error with the original transaction ID. Payload words cannot become headers. The standalone router drops malformed route words or wrong destinations through `TLAST`. It retains frame ownership through the response's accepted final beat. Missing `TLAST` requires reset to abort the packet. There are no commands that mutate application state.
@@ -205,12 +224,14 @@ It runs the Erlang client against a real Icarus/FIFO/VPI endpoint, identifies fu
 
 ## Measure diagnostic logic
 
+The [D3 reduction-inspection measurement](../experiments/07-openxc7/results/reduction-inspection-2026-09-15.md) compares this query service with merged main using two matched seeds, including distributed-memory LUTs and the wider reply.
+
 ```sh
 python3 tools/measure_topology_debug.py "$stage/topology-debug" \
   --stage "$stage/debug-area" --yosys /path/to/yosys --seeds 5
 ```
 
-This compares physical-only queries with physical queries plus actor snapshots, including mailbox snapshots when selected by the supplied projection. A mailbox-enabled build also measures phase/failure snapshots alone (`actor_state`), isolating the incremental mailbox retention and selection cost. It makes application observations unconstrained inputs while retaining aliases and constants discovered during elaboration. All cases use schema 4 and the same manifest constant. The unchanged outer route adapter is excluded. It runs `synth_xilinx -flatten -abc9 -arch xc7 -noiopad` after scrambling internal names with matched seeds, retaining the generated Verilog, Yosys scripts/logs, individual logic-LUT, RAM-LUT, flip-flop, RAMB18, and RAMB36 counts, and best/mean/population-variance/worst summaries. `LUT` includes both logic and distributed-memory LUTs; a `RAM32M` or `RAM64M` occupies four SLICEM LUTs. Unknown distributed-memory primitives fail the report instead of silently disappearing from the total.
+This compares physical-only queries with physical queries plus actor snapshots, including mailbox snapshots when selected by the supplied projection. A mailbox-enabled build also measures committed-state snapshots without mailbox retention (`actor_state`), isolating the incremental mailbox retention and selection cost. It makes application observations unconstrained inputs while retaining aliases and constants discovered during elaboration. All cases use schema 5 and the same manifest constant. The unchanged outer route adapter is excluded. It runs `synth_xilinx -flatten -abc9 -arch xc7 -noiopad` after scrambling internal names with matched seeds, retaining the generated Verilog, Yosys scripts/logs, individual logic-LUT, RAM-LUT, flip-flop, RAMB18, and RAMB36 counts, and best/mean/population-variance/worst summaries. `LUT` includes both logic and distributed-memory LUTs; a `RAM32M` or `RAM64M` occupies four SLICEM LUTs. Unknown distributed-memory primitives fail the report instead of silently disappearing from the total.
 
 The result isolates diagnostic logic cost at its observation boundary. It does not measure complete-application area or placed/routed timing, and application-specific invariants can allow further optimization. Seed variation measures mapping sensitivity, not an unbiased statistical population. Changes to probe fanout still require timing qualification in the integrated design.
 

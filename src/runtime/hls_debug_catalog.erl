@@ -62,7 +62,7 @@ hardware(Plan, Specs, Boundaries, Session = #{manifest := Manifest}) ->
             <<"actors">> := Actors, <<"failures">> := Failures} = Bank <- maps:get(<<"banks">>, Projection), A <- Actors],
     case length(ActorResources) =:= map_size(ByKey) andalso
             lists:sort(Expected) =:= lists:sort([maps:with(
-                [<<"key">>, <<"name">>, <<"slot">>, <<"bank">>, <<"phases">>, <<"module">>, <<"failures">>, <<"width">>, <<"mailbox_capacity">>], R)
+                [<<"key">>, <<"name">>, <<"slot">>, <<"bank">>, <<"phases">>, <<"module">>, <<"failures">>, <<"width">>, <<"mailbox_capacity">>, <<"reduction">>], R)
                 || R <- ActorResources]) of
         true -> ok;
         false -> error(actor_resources_mismatch)
@@ -80,6 +80,9 @@ hardware(Plan, Specs, Boundaries, Session = #{manifest := Manifest}) ->
         end
     end, Targets)}.
 
+observation_fields(Bank = #{<<"reduction">> := Reduction = #{<<"width">> := Width}}) ->
+    (observation_fields(maps:remove(<<"reduction">>, Bank)))#{
+        <<"width">> := 56 + Width, <<"reduction">> => Reduction};
 observation_fields(#{<<"mailbox">> := #{<<"capacity">> := Capacity}}) ->
     #{<<"width">> => 56, <<"mailbox_capacity">> => Capacity};
 observation_fields(_) -> #{<<"width">> => 26}.

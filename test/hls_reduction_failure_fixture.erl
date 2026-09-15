@@ -16,7 +16,9 @@
 init([]) -> {ok, boot, #cell{}}.
 boot(enter, _, Cell) -> {Cell, []};
 boot(cast, #configure{value = Mode}, Cell) ->
-    {gathering, Cell#cell{mode = Mode}, consume}.
+    {gathering, Cell#cell{mode = Mode}, consume};
+boot(cast, #message{}, Cell) ->
+    {boot, Cell, postpone}.
 
 gathering(enter, _, Cell) ->
     {Cell, [

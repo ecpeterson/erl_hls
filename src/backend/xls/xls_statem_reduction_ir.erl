@@ -12,6 +12,7 @@
     new/4,
     interface/1,
     layout/1,
+    packed_layout/1,
     site_count/1,
     max_population/1,
     max_member_count/1,
@@ -162,6 +163,19 @@ layout(Reduction = #{accumulator := Accumulator}) ->
         total_bits => Total
     }.
 
+%% Low-to-high private storage, shared by the codec and committed-state probes.
+%% Public interface summaries contain the same population and type facts.
+-spec packed_layout(reduction() | map()) -> map().
+packed_layout(Reduction) ->
+    Sizes = layout(Reduction),
+    {_, Fields} = lists:foldl(fun({Name, Size}, {Offset, Acc}) ->
+        Width = maps:get(Size, Sizes),
+        {Offset + Width, Acc#{Name => #{offset => Offset, width => Width}}}
+    end, {0, #{}}, [{status, status_bits}, {site, site_bits}, {key, key_bits},
+        {remaining, remaining_bits}, {seen, member_bits},
+        {accumulator, accumulator_bits}, {failure, failure_bits}]),
+    Fields.
+
 -spec interface(reduction()) -> map().
 interface(#{
     accumulator := Accumulator,
@@ -178,21 +192,7 @@ public_type_ref(Type) ->
     maps:with([name, fields], Type).
 
 -spec interface_storage_width(map()) -> pos_integer().
-interface_storage_width(#{accumulator := Accumulator, sites := Sites}) ->
-    StatusBits = 2,
-    KeyBits = 32,
-    SiteBits = unsigned_width(length(Sites) - 1),
-    RemainingBits = unsigned_width(lists:max([
-        maps:get(size, maps:get(population, Site)) || Site <- Sites
-    ])),
-    MemberBits = max(1, lists:max([0 | [
-        maps:get(size, Population)
-        || Site <- Sites,
-           Population <- [maps:get(population, Site)],
-           maps:get(mode, Population) =:= members
-    ]])),
-    StatusBits + SiteBits + KeyBits + RemainingBits + MemberBits +
-        type_width(Accumulator) + 16.
+interface_storage_width(Reduction) -> storage_width(Reduction).
 
 public_site(Site) ->
     Contributions = maps:get(contributions, Site),

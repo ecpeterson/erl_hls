@@ -135,14 +135,19 @@ info(#reduction{
     name = Name,
     key = Key,
     population = Population,
-    remaining = Remaining
+    remaining = Remaining,
+    failure = Failure
 }) ->
     #{
         name => Name,
         key => Key,
         population => Population,
         received => population_size(Population) - Remaining,
-        remaining => Remaining
+        remaining => Remaining,
+        failure => case Failure of
+            none -> none;
+            {Class, Reason, _Stack} -> #{class => Class, reason => Reason}
+        end
     }.
 
 normalize_population({count, Count})
