@@ -88,6 +88,7 @@ transpile(array_slice, [_Descriptor, _List, _Start, Length], _State) ->
 %% Keep element types at the call site: XLS currently emits invalid IR names
 %% for type-generic functions instantiated with parameterized structs (including
 %% APFloat, also nested in arrays). Bounds arithmetic lives in the static module.
+%% TODO: move these typed operations into that module once XLS fixes its mangling.
 checked_element(Index, List, Result) ->
     {fallible, badarg, ["{ let collection_values = ", List, "; ",
         "let (collection_index, collection_invalid) = hls_lists::checked_index<",

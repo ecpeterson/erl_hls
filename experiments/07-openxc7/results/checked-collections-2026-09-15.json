@@ -1,0 +1,1033 @@
+{
+  "baseline_commit": "129279ab9ab33c2466876fe8be980e79abf7a746",
+  "prediction": "Modest logic increase from dynamic checks; constant accesses should optimize to wiring.",
+  "sources": {
+    "baseline": {
+      "arbitration.x": "8df5bb59310352e9981f8593010218dbc2349b60405406dfeb39cff66986bc48",
+      "axis.x": "ed6ef54ac090be9f5d125f7dead74effce2fa085b3a547ca65f6b55014ad22f6",
+      "bram.x": "8dd43b778fc9b61a5967ed5202c164563835ec90cd85e40bb0cf0b2b409e7cdf",
+      "effect_window.x": "a6450a77190293db0256eb3dccba26abb99008bd808243e860f0b72e8c9b8d81",
+      "frame_queue.x": "938dbaa621cc9973d505a915859c1e16e055271989929b774f874bf318a3614a",
+      "frame_transport.x": "3523c8ed1ff99bb4e09c75cf62c9999fdeb46ae8fa0cec654fb8c2a9e1a6f8a9",
+      "hls_failure.x": "539e3978e2146432d397cb0f57f65df60c8879e7a5b19c883c08c4992980c620",
+      "hls_fixed.x": "a3ff6655b5cca3984d736b57712e57e5976ab6196c709742aa26850537c88902",
+      "hls_float.x": "1882c965143004e7dd70cac139cf1ee41d17199f0877e374a280cebfb6204c26",
+      "hls_integer.x": "6cab6f43b0d4a7288a4dcbdd91a1d8f61d391f0ee84b0b79c5ef13689ec6153d",
+      "hls_vec.x": "c66c888c606ce7bc3e7b1c526cd1216e571f23fc6712f719df14dc6f5d82e5e6",
+      "mailbox.x": "d7e989c08fc7fab571df91ffb80820f26521116c2a0d08e2b44c49e23b9fcb02",
+      "regsvc.x": "9ba6b523ba9599c91e49f909ca251616db4588a8413dc6d43b390bcf11de63d5",
+      "scheduler.x": "e7ab85c1f981c56fab222ed0a0d5731ac63a44fb18dfa534cd4f0fedd2b2ad7f",
+      "scheduler_observation.x": "7c01db596893e73678cb6eb220430127d4d2235ed09eebf530ca0efb778d8263"
+    },
+    "candidate": {
+      "arbitration.x": "8df5bb59310352e9981f8593010218dbc2349b60405406dfeb39cff66986bc48",
+      "axis.x": "ed6ef54ac090be9f5d125f7dead74effce2fa085b3a547ca65f6b55014ad22f6",
+      "bram.x": "8dd43b778fc9b61a5967ed5202c164563835ec90cd85e40bb0cf0b2b409e7cdf",
+      "effect_window.x": "a6450a77190293db0256eb3dccba26abb99008bd808243e860f0b72e8c9b8d81",
+      "frame_queue.x": "938dbaa621cc9973d505a915859c1e16e055271989929b774f874bf318a3614a",
+      "frame_transport.x": "3523c8ed1ff99bb4e09c75cf62c9999fdeb46ae8fa0cec654fb8c2a9e1a6f8a9",
+      "hls_failure.x": "87f37af0658bcf1b1646982ab5864c5bf21d41fc0a9713349f790eec9e6e11bd",
+      "hls_fixed.x": "a3ff6655b5cca3984d736b57712e57e5976ab6196c709742aa26850537c88902",
+      "hls_float.x": "1882c965143004e7dd70cac139cf1ee41d17199f0877e374a280cebfb6204c26",
+      "hls_integer.x": "6cab6f43b0d4a7288a4dcbdd91a1d8f61d391f0ee84b0b79c5ef13689ec6153d",
+      "hls_lists.x": "dbee03cead923041238b3e09760421ea5be815c78ba737e0366251cbc6e31065",
+      "hls_vec.x": "c66c888c606ce7bc3e7b1c526cd1216e571f23fc6712f719df14dc6f5d82e5e6",
+      "mailbox.x": "d7e989c08fc7fab571df91ffb80820f26521116c2a0d08e2b44c49e23b9fcb02",
+      "regsvc.x": "5ac99bb2f87c34b030866c18ab1c9f9b9c29df86f906f6a2e38e0684489f5b08",
+      "scheduler.x": "e7ab85c1f981c56fab222ed0a0d5731ac63a44fb18dfa534cd4f0fedd2b2ad7f",
+      "scheduler_observation.x": "7c01db596893e73678cb6eb220430127d4d2235ed09eebf530ca0efb778d8263"
+    }
+  },
+  "rtl_sha256": {
+    "baseline": "1253d716604a6615f5ab4be68c0938ddac3e696978c5ef9ec36d7374bd9d6aff",
+    "candidate": "815121304d931a5383833ab5f3ef941a82bb9c11a6e9474e6f3cbd90bfc11f57"
+  },
+  "commands": {
+    "baseline": [
+      [
+        [
+          "${REPO}/_build/mailbox-extraction/xls/ir_converter_main",
+          "--warnings_as_errors=false",
+          "--top=Top",
+          "--dslx_path=${REPO}/_build/checked-collections/area-revised/baseline",
+          "--dslx_stdlib_path=${REPO}/_build/mailbox-extraction/xls/xls/dslx/stdlib",
+          "${REPO}/_build/checked-collections/area-revised/baseline/regsvc.x"
+        ],
+        "regsvc.ir"
+      ],
+      [
+        [
+          "${REPO}/_build/mailbox-extraction/xls/opt_main",
+          "${REPO}/_build/checked-collections/area-revised/baseline/regsvc.ir"
+        ],
+        "regsvc.opt.ir"
+      ],
+      [
+        [
+          "${REPO}/_build/mailbox-extraction/xls/codegen_main",
+          "--pipeline_stages=1",
+          "--delay_model=unit",
+          "--flop_inputs=false",
+          "--flop_outputs=true",
+          "--use_system_verilog=false",
+          "--module_name=measured",
+          "--reset=reset",
+          "--fifo_module=",
+          "${REPO}/_build/checked-collections/area-revised/baseline/regsvc.opt.ir"
+        ],
+        "regsvc.v"
+      ]
+    ],
+    "candidate": [
+      [
+        [
+          "${REPO}/_build/mailbox-extraction/xls/ir_converter_main",
+          "--warnings_as_errors=false",
+          "--top=Top",
+          "--dslx_path=${REPO}/_build/checked-collections/area-revised/candidate",
+          "--dslx_stdlib_path=${REPO}/_build/mailbox-extraction/xls/xls/dslx/stdlib",
+          "${REPO}/_build/checked-collections/area-revised/candidate/regsvc.x"
+        ],
+        "regsvc.ir"
+      ],
+      [
+        [
+          "${REPO}/_build/mailbox-extraction/xls/opt_main",
+          "${REPO}/_build/checked-collections/area-revised/candidate/regsvc.ir"
+        ],
+        "regsvc.opt.ir"
+      ],
+      [
+        [
+          "${REPO}/_build/mailbox-extraction/xls/codegen_main",
+          "--pipeline_stages=1",
+          "--delay_model=unit",
+          "--flop_inputs=false",
+          "--flop_outputs=true",
+          "--use_system_verilog=false",
+          "--module_name=measured",
+          "--reset=reset",
+          "--fifo_module=",
+          "${REPO}/_build/checked-collections/area-revised/candidate/regsvc.opt.ir"
+        ],
+        "regsvc.v"
+      ]
+    ]
+  },
+  "samples": [
+    {
+      "version": "baseline",
+      "seed": 1,
+      "LUT": 2913,
+      "LUT_logic": 2913,
+      "LUT_RAM": 0,
+      "FF": 1226,
+      "RAMB18": 0,
+      "RAMB36": 0,
+      "DSP": 0,
+      "CARRY4": 24,
+      "script": "read_verilog -sv \"${REPO}/_build/checked-collections/area-revised/baseline/regsvc.v\"\nhierarchy -check -top measured\nproc\nflatten\nopt\ncheck -assert\nscc -expect 0\nrename -scramble-name -seed 1\nsynth_xilinx -flatten -abc9 -family xc7 -noiopad -noclkbuf -top measured\ncheck -assert\nscc -expect 0\ntee -o stat.json stat -json -tech xilinx\n",
+      "log_sha256": "fba5c4404c02671411e27ac3127ce34268699ac20d9ad0a86061ed12f94d08eb"
+    },
+    {
+      "version": "candidate",
+      "seed": 1,
+      "LUT": 2504,
+      "LUT_logic": 2504,
+      "LUT_RAM": 0,
+      "FF": 1226,
+      "RAMB18": 0,
+      "RAMB36": 0,
+      "DSP": 0,
+      "CARRY4": 44,
+      "script": "read_verilog -sv \"${REPO}/_build/checked-collections/area-revised/candidate/regsvc.v\"\nhierarchy -check -top measured\nproc\nflatten\nopt\ncheck -assert\nscc -expect 0\nrename -scramble-name -seed 1\nsynth_xilinx -flatten -abc9 -family xc7 -noiopad -noclkbuf -top measured\ncheck -assert\nscc -expect 0\ntee -o stat.json stat -json -tech xilinx\n",
+      "log_sha256": "6cd9a03e2d833746f7bdc57098d3c125b36ceca169106bfb2980c7014c2d5966"
+    },
+    {
+      "version": "baseline",
+      "seed": 2,
+      "LUT": 3155,
+      "LUT_logic": 3155,
+      "LUT_RAM": 0,
+      "FF": 1226,
+      "RAMB18": 0,
+      "RAMB36": 0,
+      "DSP": 0,
+      "CARRY4": 24,
+      "script": "read_verilog -sv \"${REPO}/_build/checked-collections/area-revised/baseline/regsvc.v\"\nhierarchy -check -top measured\nproc\nflatten\nopt\ncheck -assert\nscc -expect 0\nrename -scramble-name -seed 2\nsynth_xilinx -flatten -abc9 -family xc7 -noiopad -noclkbuf -top measured\ncheck -assert\nscc -expect 0\ntee -o stat.json stat -json -tech xilinx\n",
+      "log_sha256": "9c952406e29f0de243df727d3e127440da9a421b57f0cd74249cb2b474daf636"
+    },
+    {
+      "version": "candidate",
+      "seed": 2,
+      "LUT": 2429,
+      "LUT_logic": 2429,
+      "LUT_RAM": 0,
+      "FF": 1226,
+      "RAMB18": 0,
+      "RAMB36": 0,
+      "DSP": 0,
+      "CARRY4": 24,
+      "script": "read_verilog -sv \"${REPO}/_build/checked-collections/area-revised/candidate/regsvc.v\"\nhierarchy -check -top measured\nproc\nflatten\nopt\ncheck -assert\nscc -expect 0\nrename -scramble-name -seed 2\nsynth_xilinx -flatten -abc9 -family xc7 -noiopad -noclkbuf -top measured\ncheck -assert\nscc -expect 0\ntee -o stat.json stat -json -tech xilinx\n",
+      "log_sha256": "64244393465b022d1a5cf24f9be5454674c9777507079ea1bd98845bb9ba0277"
+    }
+  ],
+  "summary": {
+    "baseline": {
+      "LUT": {
+        "best": 2913,
+        "mean": 3034,
+        "variance": 14641,
+        "worst": 3155
+      },
+      "FF": {
+        "best": 1226,
+        "mean": 1226,
+        "variance": 0,
+        "worst": 1226
+      },
+      "LUT_RAM": {
+        "best": 0,
+        "mean": 0,
+        "variance": 0,
+        "worst": 0
+      },
+      "RAMB18": {
+        "best": 0,
+        "mean": 0,
+        "variance": 0,
+        "worst": 0
+      },
+      "RAMB36": {
+        "best": 0,
+        "mean": 0,
+        "variance": 0,
+        "worst": 0
+      },
+      "DSP": {
+        "best": 0,
+        "mean": 0,
+        "variance": 0,
+        "worst": 0
+      },
+      "CARRY4": {
+        "best": 24,
+        "mean": 24,
+        "variance": 0,
+        "worst": 24
+      }
+    },
+    "candidate": {
+      "LUT": {
+        "best": 2429,
+        "mean": 2466.5,
+        "variance": 1406.25,
+        "worst": 2504
+      },
+      "FF": {
+        "best": 1226,
+        "mean": 1226,
+        "variance": 0,
+        "worst": 1226
+      },
+      "LUT_RAM": {
+        "best": 0,
+        "mean": 0,
+        "variance": 0,
+        "worst": 0
+      },
+      "RAMB18": {
+        "best": 0,
+        "mean": 0,
+        "variance": 0,
+        "worst": 0
+      },
+      "RAMB36": {
+        "best": 0,
+        "mean": 0,
+        "variance": 0,
+        "worst": 0
+      },
+      "DSP": {
+        "best": 0,
+        "mean": 0,
+        "variance": 0,
+        "worst": 0
+      },
+      "CARRY4": {
+        "best": 24,
+        "mean": 34,
+        "variance": 100,
+        "worst": 44
+      }
+    }
+  },
+  "tool_sha256": {
+    "${REPO}/_build/mailbox-extraction/xls/ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+    "${REPO}/_build/mailbox-extraction/xls/opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c",
+    "${REPO}/_build/mailbox-extraction/xls/codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162",
+    "${REPO}/experiments/07-openxc7/.apio/packages/oss-cad-suite/bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+    "${REPO}/experiments/07-openxc7/.apio/packages/oss-cad-suite/libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+    "${REPO}/experiments/07-openxc7/.apio/packages/oss-cad-suite/libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d",
+    "${REPO}/experiments/07-openxc7/.apio/packages/oss-cad-suite/BUILD-INFO.json": "b509fbcf8adf9e4f8359d8c89ed179bacb3aa7c9557d830ba80936b907c3db85"
+  },
+  "stdlib_sha256": "307c8f0cc99c6eae06d7aa53c3c13f1aeec3d3c65c603cc390b7fbabbe980b73",
+  "candidate_commit": "8e57f063a2f0b2e99b354287f7328d093bb161e9",
+  "validation": {
+    "eunit": {
+      "path": "_build/checked-collections/eunit-final-lowering.log",
+      "sha256": "b7b78d65d075869423182c992daaeb646f2e0d060f2aac1e5a13f32e93f66d38",
+      "summary": [
+        "888 tests, 0 failures"
+      ]
+    },
+    "collections": {
+      "path": "_build/checked-collections/semantics-revised.log",
+      "sha256": "5c6c6201bd580d45ce9b95e7587090ba4a60c6e931afe187faf8cb3c2e83cc59",
+      "summary": [
+        "[===============] 1 test(s) ran; 0 failed; 0 skipped.",
+        "[===============] 1 test(s) ran; 0 failed; 0 skipped.",
+        "PASS: constant collection accesses and checks optimize to wiring",
+        "[===============] 1 test(s) ran; 0 failed; 0 skipped.",
+        "PASS: 65536 BEAM/RTL collection vectors at 8-bit index width",
+        "[===============] 1 test(s) ran; 0 failed; 0 skipped.",
+        "PASS: 65536 BEAM/RTL collection vectors at 8-bit index width",
+        "[===============] 1 test(s) ran; 0 failed; 0 skipped.",
+        "PASS: 377 BEAM/RTL collection vectors at 32-bit index width",
+        "[===============] 1 test(s) ran; 0 failed; 0 skipped.",
+        "PASS: 377 BEAM/RTL collection vectors at 32-bit index width",
+        "[===============] 1 test(s) ran; 0 failed; 0 skipped.",
+        "PASS: 452 BEAM/RTL collection vectors at 64-bit index width",
+        "[===============] 1 test(s) ran; 0 failed; 0 skipped.",
+        "PASS: 452 BEAM/RTL collection vectors at 64-bit index width"
+      ]
+    },
+    "control": {
+      "path": "_build/checked-collections/control-revised.log",
+      "sha256": "356f56dd809a5519c6516a0591de859b14eb4db3abb64debf100a12e4a2880d0",
+      "summary": [
+        "[===============] 59 test(s) ran; 0 failed; 0 skipped.",
+        "PASS: case failure rejects constant initialization",
+        "PASS: if failure rejects constant initialization",
+        "PASS: div failure rejects constant initialization",
+        "PASS: rem failure rejects constant initialization",
+        "PASS: nth failure rejects constant initialization",
+        "PASS: set failure rejects constant initialization",
+        "PASS: slice failure rejects constant initialization",
+        "PASS: control_service has no structural errors or combinational loops",
+        "PASS: 708 BEAM/expression/service vectors, typed call/cast errors and stalled replies",
+        "PASS: control_service has no structural errors or combinational loops",
+        "PASS: 708 BEAM/expression/service vectors, typed call/cast errors and stalled replies",
+        "PASS: control_service has no structural errors or combinational loops",
+        "PASS: 708 BEAM/expression/service vectors, typed call/cast errors and stalled replies"
+      ]
+    },
+    "native_binary16": {
+      "path": "_build/checked-collections/float.log",
+      "sha256": "d9f19457b8547517ce7c4534983cd5230495554b188e24d2e4a018c0c81b681d",
+      "summary": [
+        "[===============] 6 test(s) ran; 0 failed; 0 skipped.",
+        "[===============] 1 test(s) ran; 0 failed; 0 skipped.",
+        "PASS: binary16, 5290 BEAM/optimized-RTL arithmetic and comparison vectors",
+        "PASS: float_actor has no structural errors or combinational loops",
+        "PASS: binary16, 76 public actor requests, reset, overflow recovery and stalled replies",
+        "[===============] 6 test(s) ran; 0 failed; 0 skipped."
+      ]
+    },
+    "xls_type_repro": {
+      "path": "_build/checked-collections/type-repro.log",
+      "sha256": "af913ed22c20f210dd11679d7ea56134245921dc771bd8d5ee7f97685cd3ebed",
+      "summary": [
+        "Error: INVALID_ARGUMENT: Expected token of type \"(\" in '(' in function parameters @ 5:59, but found: Token(\":\", value=\"\") @ 5:59; @ _build/checked-collections/type-repro.ir"
+      ]
+    },
+    "xls_type_repro_jit": {
+      "path": "_build/checked-collections/type-repro-jit.log",
+      "sha256": "b6c354d42fa975c7e12860f238fe7d7f0392191b5a43290050720336a884ef1e",
+      "summary": [
+        "[===============] 1 test(s) ran; 0 failed; 0 skipped."
+      ]
+    },
+    "d3_request_paced": {
+      "path": "_build/checked-collections/d3-revised/phi_decoder_profile.sim.log",
+      "sha256": "539aaaf2d8e27ef36583440168854d301a41415a50bc3b63cf23710c8fd0dfc2",
+      "summary": [
+        "PROFILE_RESULT warmup_step=8 target_step=32 measured_cycles=4320 cycles_per_step=180.000000 projected_steps_per_second_200mhz=1111111.111111",
+        "PASS: decoder-only request-paced profile completed"
+      ]
+    },
+    "d3_variable_ready": {
+      "path": "_build/checked-collections/d3-variable-ready/simulate.console",
+      "sha256": "29bc28984c66999d598848e21456b9b412d26701f88de528e818744e8d8de3ba",
+      "summary": [
+        "PASS: D3 timing harness completed all coordinates through step 32",
+        "cycles_per_step=182.583333 x_stalls=162 z_stalls=161 x_corrections=63 z_corrections=64",
+        "${REPO}/experiments/07-openxc7/phi_timing_tb.sv:89: $finish called at 60715000 (1ps)"
+      ]
+    },
+    "d3_cycle_comparison": {
+      "path": "_build/checked-collections/d3-compare-revised/compare.console",
+      "sha256": "764482d7730ee0532fc37ee8d5b0cf475282ac1ed7e0d16a8bd1128607388f3b",
+      "summary": [
+        "PASS: D3 public outputs through 12000 cycles, long stalls and reset; cycle_exact=1 X=635 Z=626 matched per-actor frames",
+        "stalled cycles: baseline X=1452 Z=1708; candidate X=1452 Z=1708",
+        "${REPO}/experiments/07-openxc7/phi_compare_tb.sv:118: $finish called at 120005000 (1ps)"
+      ]
+    },
+    "linux_actor_debug_p2": {
+      "path": "_build/checked-collections/ci-revised/actor-debug/p2/host.log",
+      "sha256": "aeeecf1ba966fb237742c4b038a2f4a165c30f10465218f4e4e8c4d169835625",
+      "summary": [
+        "PASS: 15 scoped actor snapshots (small, blocked)",
+        "PASS: 15 scoped actor snapshots (small, released)",
+        "PASS: 2 blocked seeds, 20 adaptive queries; external stall found and release observed"
+      ]
+    },
+    "linux_actor_origins_p2": {
+      "path": "_build/checked-collections/ci-revised/actor-debug/p2/actors-blocked.term",
+      "sha256": "f8ed05a1fcb6d21ed95a7efafde9abd251c451811df434ba07ac26e6b97fa8f4",
+      "badarg_origins": [
+        {
+          "code": 206,
+          "file": "hls_actor_debug_helpers.hrl",
+          "line": 23
+        },
+        {
+          "code": 222,
+          "file": "hls_actor_debug_helpers.hrl",
+          "line": 27
+        },
+        {
+          "code": 254,
+          "file": "hls_actor_debug_helpers.hrl",
+          "line": 32
+        }
+      ]
+    },
+    "linux_actor_debug_p3": {
+      "path": "_build/checked-collections/ci-revised/actor-debug/p3/host.log",
+      "sha256": "6b8b3bb20c090c30a3c8de7d858bb1f447a097a26d69867323da15a6cea963ae",
+      "summary": [
+        "PASS: 15 scoped actor snapshots (small, blocked)",
+        "PASS: 15 scoped actor snapshots (small, released)",
+        "PASS: 1 blocked seeds, 8 adaptive queries; external stall found and release observed"
+      ]
+    },
+    "linux_actor_origins_p3": {
+      "path": "_build/checked-collections/ci-revised/actor-debug/p3/actors-blocked.term",
+      "sha256": "98e6ff8515519c3fb9ee801daf831f7fb872eb06a5c33fe92c6981d04e010a67",
+      "badarg_origins": [
+        {
+          "code": 206,
+          "file": "hls_actor_debug_helpers.hrl",
+          "line": 23
+        },
+        {
+          "code": 222,
+          "file": "hls_actor_debug_helpers.hrl",
+          "line": 27
+        },
+        {
+          "code": 254,
+          "file": "hls_actor_debug_helpers.hrl",
+          "line": 32
+        }
+      ]
+    }
+  },
+  "native_float_scope": "Binary16 arithmetic/actor tests passed; sweep stopped before binary32/64 to avoid duplicating the successful pinned Linux suite.",
+  "ci_implementation_run": "https://github.com/ecpeterson/erl_hls/actions/runs/34957847676",
+  "date": "2026-09-15",
+  "rtl_digest_manifest": "9c8bd4e1a6e27b87f35960ca4ca1879facc5f139540d217850a83e07af39d12f  regsvc.v\nd762752b2d6795855680db649e3f107ee10fd9843477d74143d672637213c608  phi_halo_cell.v\nb0bea5cfdd62190ee528f7e80e9a67d83092b9bb0fb0f15810f3177dd34506f6  phenom_data_cell.v\n57b45ef4b8f970b1137ea4c919c4a540e29eb87c854459ef2e2ebefc8c0628f4  phenom_syndrome_cell.v\n",
+  "d3_compile_run": {
+    "elapsed_seconds": 725.3218411249109,
+    "output": "${REPO}/_build/checked-collections/d3-revised/compiled",
+    "release": "${REPO}/_build/checked-collections/d3-revised/.compiled-releases/a61e9bb5ccd954b91d051cdd579cfb8a2b009b37ae45fbf54d008a7a3803bf41",
+    "stages": {
+      "codegen": {
+        "adopted": false,
+        "execution_time": {
+          "elapsed_seconds": 168.72379799978808,
+          "max_rss_bytes": 364052480,
+          "returncode": 0,
+          "system_seconds": 0.671804,
+          "user_seconds": 167.937958
+        },
+        "key": "e2a5039d7a6181162d95fdefb27f1bcf25621e9dc9e0f96615062da94f7751d5",
+        "original_time": {
+          "elapsed_seconds": 168.72379799978808,
+          "max_rss_bytes": 364052480,
+          "returncode": 0,
+          "system_seconds": 0.671804,
+          "user_seconds": 167.937958
+        },
+        "reused": false
+      },
+      "ir": {
+        "adopted": false,
+        "execution_time": {
+          "elapsed_seconds": 197.00052074994892,
+          "max_rss_bytes": 476823552,
+          "returncode": 0,
+          "system_seconds": 1.269579,
+          "user_seconds": 180.333323
+        },
+        "key": "7aa45ddb5c5ef0e9b43d96dbb34c682f308f84f98f55b11bc34d1904048aa420",
+        "original_time": {
+          "elapsed_seconds": 197.00052074994892,
+          "max_rss_bytes": 476823552,
+          "returncode": 0,
+          "system_seconds": 1.269579,
+          "user_seconds": 180.333323
+        },
+        "reused": false
+      },
+      "opt": {
+        "adopted": false,
+        "execution_time": {
+          "elapsed_seconds": 358.5154708339833,
+          "max_rss_bytes": 433913856,
+          "returncode": 0,
+          "system_seconds": 1.386943,
+          "user_seconds": 353.96334
+        },
+        "key": "dbe1b3684d5932c17223db2b019135ef30dff5086724314959d570178ccbad6b",
+        "original_time": {
+          "elapsed_seconds": 358.5154708339833,
+          "max_rss_bytes": 433913856,
+          "returncode": 0,
+          "system_seconds": 1.386943,
+          "user_seconds": 353.96334
+        },
+        "reused": false
+      }
+    },
+    "status": "complete"
+  },
+  "historical_place_and_route": {
+    "core": {
+      "DSP": 144,
+      "FF": 81058,
+      "LUT": 118906,
+      "RAMB18": 104,
+      "RAMB36": 16
+    },
+    "design_wide_clock_validated": false,
+    "mean_mhz": 12.99,
+    "partial_path_mhz": [
+      14.46,
+      11.89,
+      12.62
+    ],
+    "population_variance_mhz2": 1.1692666666666667,
+    "report": "d3-arbitration-2026-09-14.json"
+  },
+  "d3_mapping": {
+    "samples": [
+      {
+        "CARRY4": 2457,
+        "DSP": 144,
+        "FF": 83640,
+        "LUT": 124182,
+        "LUT_RAM": 0,
+        "LUT_logic": 124182,
+        "RAMB18": 104,
+        "RAMB36": 16,
+        "completion": {
+          "inputs": {
+            "files": {
+              "${REPO}/_build/reduction-failures/d3-final/.compiled-releases/1e197ee39df323c72d6ed873c4463839d8a132873a1478e4d8377e71e9ea030a/hls_1r1w_ram.v": "13e12a7561df37e150c3e727c43f9e5234b74bb9741fc969185c12948b2583e8",
+              "${REPO}/_build/reduction-failures/d3-final/.compiled-releases/1e197ee39df323c72d6ed873c4463839d8a132873a1478e4d8377e71e9ea030a/phi_decoder_profile.v": "4e8b90ade1c6f755e2d936fda8ff660e9603c60e02a00701d1642bbcda6947e1",
+              "${REPO}/_build/reduction-failures/d3-final/.compiled-releases/1e197ee39df323c72d6ed873c4463839d8a132873a1478e4d8377e71e9ea030a/phi_decoder_profile_top.v": "dc93b1683d37d04e91199e6ab7edecbd8c7a127679d7121fa0399ee35ad0446e",
+              "${REPO}/experiments/07-openxc7/.apio/packages/oss-cad-suite/BUILD-INFO.json": "b509fbcf8adf9e4f8359d8c89ed179bacb3aa7c9557d830ba80936b907c3db85",
+              "${REPO}/experiments/07-openxc7/.apio/packages/oss-cad-suite/bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+              "${REPO}/experiments/07-openxc7/.apio/packages/oss-cad-suite/libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+              "${REPO}/experiments/07-openxc7/.apio/packages/oss-cad-suite/libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d"
+            },
+            "script": "read_verilog -sv \"${REPO}/_build/reduction-failures/d3-final/.compiled-releases/1e197ee39df323c72d6ed873c4463839d8a132873a1478e4d8377e71e9ea030a/phi_decoder_profile.v\" \"${REPO}/_build/reduction-failures/d3-final/.compiled-releases/1e197ee39df323c72d6ed873c4463839d8a132873a1478e4d8377e71e9ea030a/phi_decoder_profile_top.v\" \"${REPO}/_build/reduction-failures/d3-final/.compiled-releases/1e197ee39df323c72d6ed873c4463839d8a132873a1478e4d8377e71e9ea030a/hls_1r1w_ram.v\"\nhierarchy -check -top phi_decoder_profile_top\nproc\nflatten\nopt\nmemory_collect\nrename -scramble-name -seed 1\nsynth_xilinx -flatten -abc9 -family xc7 -noiopad -noclkbuf -top phi_decoder_profile_top\ncheck -assert\nscc -expect 0\ntee -o stat.json stat -json -tech xilinx\n"
+          },
+          "outputs": {
+            "map.log": "56968b48c3ae4aca6f79ab8785bbf1652d98b80094bb6fe958228fafce0ce2ef",
+            "stat.json": "29c1cc02bcd55c750015b0024e4cabf6ce8f34febcb53467081136601619f223"
+          }
+        },
+        "mapping_delay_ps": 17455.0,
+        "seed": 1,
+        "variant": "baseline"
+      },
+      {
+        "CARRY4": 2438,
+        "DSP": 144,
+        "FF": 83640,
+        "LUT": 125641,
+        "LUT_RAM": 0,
+        "LUT_logic": 125641,
+        "RAMB18": 104,
+        "RAMB36": 16,
+        "completion": {
+          "inputs": {
+            "files": {
+              "${REPO}/_build/checked-collections/d3-revised/.compiled-releases/a61e9bb5ccd954b91d051cdd579cfb8a2b009b37ae45fbf54d008a7a3803bf41/hls_1r1w_ram.v": "13e12a7561df37e150c3e727c43f9e5234b74bb9741fc969185c12948b2583e8",
+              "${REPO}/_build/checked-collections/d3-revised/.compiled-releases/a61e9bb5ccd954b91d051cdd579cfb8a2b009b37ae45fbf54d008a7a3803bf41/phi_decoder_profile.v": "859cbb62ce54e52a771dc7ebd0227417a99be381bcb2f98c8dae4ebf4ca42635",
+              "${REPO}/_build/checked-collections/d3-revised/.compiled-releases/a61e9bb5ccd954b91d051cdd579cfb8a2b009b37ae45fbf54d008a7a3803bf41/phi_decoder_profile_top.v": "dc93b1683d37d04e91199e6ab7edecbd8c7a127679d7121fa0399ee35ad0446e",
+              "${REPO}/experiments/07-openxc7/.apio/packages/oss-cad-suite/BUILD-INFO.json": "b509fbcf8adf9e4f8359d8c89ed179bacb3aa7c9557d830ba80936b907c3db85",
+              "${REPO}/experiments/07-openxc7/.apio/packages/oss-cad-suite/bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+              "${REPO}/experiments/07-openxc7/.apio/packages/oss-cad-suite/libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+              "${REPO}/experiments/07-openxc7/.apio/packages/oss-cad-suite/libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d"
+            },
+            "script": "read_verilog -sv \"${REPO}/_build/checked-collections/d3-revised/.compiled-releases/a61e9bb5ccd954b91d051cdd579cfb8a2b009b37ae45fbf54d008a7a3803bf41/phi_decoder_profile.v\" \"${REPO}/_build/checked-collections/d3-revised/.compiled-releases/a61e9bb5ccd954b91d051cdd579cfb8a2b009b37ae45fbf54d008a7a3803bf41/phi_decoder_profile_top.v\" \"${REPO}/_build/checked-collections/d3-revised/.compiled-releases/a61e9bb5ccd954b91d051cdd579cfb8a2b009b37ae45fbf54d008a7a3803bf41/hls_1r1w_ram.v\"\nhierarchy -check -top phi_decoder_profile_top\nproc\nflatten\nopt\nmemory_collect\nrename -scramble-name -seed 1\nsynth_xilinx -flatten -abc9 -family xc7 -noiopad -noclkbuf -top phi_decoder_profile_top\ncheck -assert\nscc -expect 0\ntee -o stat.json stat -json -tech xilinx\n"
+          },
+          "outputs": {
+            "map.log": "fdecccdfe131c66a7df9452072db1631aa117533a5118bd1e46ef03f2fa7bc32",
+            "stat.json": "22eeae106be041ad66d39153f64b64741d5e1982630b9c3563093ee226f36d9b"
+          }
+        },
+        "mapping_delay_ps": 16874.0,
+        "seed": 1,
+        "variant": "candidate"
+      },
+      {
+        "CARRY4": 2448,
+        "DSP": 144,
+        "FF": 83640,
+        "LUT": 125005,
+        "LUT_RAM": 0,
+        "LUT_logic": 125005,
+        "RAMB18": 104,
+        "RAMB36": 16,
+        "completion": {
+          "inputs": {
+            "files": {
+              "${REPO}/_build/reduction-failures/d3-final/.compiled-releases/1e197ee39df323c72d6ed873c4463839d8a132873a1478e4d8377e71e9ea030a/hls_1r1w_ram.v": "13e12a7561df37e150c3e727c43f9e5234b74bb9741fc969185c12948b2583e8",
+              "${REPO}/_build/reduction-failures/d3-final/.compiled-releases/1e197ee39df323c72d6ed873c4463839d8a132873a1478e4d8377e71e9ea030a/phi_decoder_profile.v": "4e8b90ade1c6f755e2d936fda8ff660e9603c60e02a00701d1642bbcda6947e1",
+              "${REPO}/_build/reduction-failures/d3-final/.compiled-releases/1e197ee39df323c72d6ed873c4463839d8a132873a1478e4d8377e71e9ea030a/phi_decoder_profile_top.v": "dc93b1683d37d04e91199e6ab7edecbd8c7a127679d7121fa0399ee35ad0446e",
+              "${REPO}/experiments/07-openxc7/.apio/packages/oss-cad-suite/BUILD-INFO.json": "b509fbcf8adf9e4f8359d8c89ed179bacb3aa7c9557d830ba80936b907c3db85",
+              "${REPO}/experiments/07-openxc7/.apio/packages/oss-cad-suite/bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+              "${REPO}/experiments/07-openxc7/.apio/packages/oss-cad-suite/libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+              "${REPO}/experiments/07-openxc7/.apio/packages/oss-cad-suite/libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d"
+            },
+            "script": "read_verilog -sv \"${REPO}/_build/reduction-failures/d3-final/.compiled-releases/1e197ee39df323c72d6ed873c4463839d8a132873a1478e4d8377e71e9ea030a/phi_decoder_profile.v\" \"${REPO}/_build/reduction-failures/d3-final/.compiled-releases/1e197ee39df323c72d6ed873c4463839d8a132873a1478e4d8377e71e9ea030a/phi_decoder_profile_top.v\" \"${REPO}/_build/reduction-failures/d3-final/.compiled-releases/1e197ee39df323c72d6ed873c4463839d8a132873a1478e4d8377e71e9ea030a/hls_1r1w_ram.v\"\nhierarchy -check -top phi_decoder_profile_top\nproc\nflatten\nopt\nmemory_collect\nrename -scramble-name -seed 2\nsynth_xilinx -flatten -abc9 -family xc7 -noiopad -noclkbuf -top phi_decoder_profile_top\ncheck -assert\nscc -expect 0\ntee -o stat.json stat -json -tech xilinx\n"
+          },
+          "outputs": {
+            "map.log": "9656ee2d4c136a28469920c3f21dcad1635b35e0b4c73efd4db7866321e50fe9",
+            "stat.json": "f7085fb441255ce2cb57e24307b8346084af68b9f2c5e395792d8d752d7d3945"
+          }
+        },
+        "mapping_delay_ps": 16874.0,
+        "seed": 2,
+        "variant": "baseline"
+      },
+      {
+        "CARRY4": 2439,
+        "DSP": 144,
+        "FF": 83640,
+        "LUT": 125330,
+        "LUT_RAM": 0,
+        "LUT_logic": 125330,
+        "RAMB18": 104,
+        "RAMB36": 16,
+        "completion": {
+          "inputs": {
+            "files": {
+              "${REPO}/_build/checked-collections/d3-revised/.compiled-releases/a61e9bb5ccd954b91d051cdd579cfb8a2b009b37ae45fbf54d008a7a3803bf41/hls_1r1w_ram.v": "13e12a7561df37e150c3e727c43f9e5234b74bb9741fc969185c12948b2583e8",
+              "${REPO}/_build/checked-collections/d3-revised/.compiled-releases/a61e9bb5ccd954b91d051cdd579cfb8a2b009b37ae45fbf54d008a7a3803bf41/phi_decoder_profile.v": "859cbb62ce54e52a771dc7ebd0227417a99be381bcb2f98c8dae4ebf4ca42635",
+              "${REPO}/_build/checked-collections/d3-revised/.compiled-releases/a61e9bb5ccd954b91d051cdd579cfb8a2b009b37ae45fbf54d008a7a3803bf41/phi_decoder_profile_top.v": "dc93b1683d37d04e91199e6ab7edecbd8c7a127679d7121fa0399ee35ad0446e",
+              "${REPO}/experiments/07-openxc7/.apio/packages/oss-cad-suite/BUILD-INFO.json": "b509fbcf8adf9e4f8359d8c89ed179bacb3aa7c9557d830ba80936b907c3db85",
+              "${REPO}/experiments/07-openxc7/.apio/packages/oss-cad-suite/bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+              "${REPO}/experiments/07-openxc7/.apio/packages/oss-cad-suite/libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+              "${REPO}/experiments/07-openxc7/.apio/packages/oss-cad-suite/libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d"
+            },
+            "script": "read_verilog -sv \"${REPO}/_build/checked-collections/d3-revised/.compiled-releases/a61e9bb5ccd954b91d051cdd579cfb8a2b009b37ae45fbf54d008a7a3803bf41/phi_decoder_profile.v\" \"${REPO}/_build/checked-collections/d3-revised/.compiled-releases/a61e9bb5ccd954b91d051cdd579cfb8a2b009b37ae45fbf54d008a7a3803bf41/phi_decoder_profile_top.v\" \"${REPO}/_build/checked-collections/d3-revised/.compiled-releases/a61e9bb5ccd954b91d051cdd579cfb8a2b009b37ae45fbf54d008a7a3803bf41/hls_1r1w_ram.v\"\nhierarchy -check -top phi_decoder_profile_top\nproc\nflatten\nopt\nmemory_collect\nrename -scramble-name -seed 2\nsynth_xilinx -flatten -abc9 -family xc7 -noiopad -noclkbuf -top phi_decoder_profile_top\ncheck -assert\nscc -expect 0\ntee -o stat.json stat -json -tech xilinx\n"
+          },
+          "outputs": {
+            "map.log": "5412095a43c106b21da6eb6003fb2244f3f7ec049df986a44503e7996c6ab5db",
+            "stat.json": "ce9e4c66522ecc0fa11d0cccec822ff352562fcb0a694b2ad2a2a9cd798ea401"
+          }
+        },
+        "mapping_delay_ps": 16874.0,
+        "seed": 2,
+        "variant": "candidate"
+      }
+    ],
+    "seeds": [
+      1,
+      2
+    ],
+    "summary": {
+      "baseline": {
+        "CARRY4": {
+          "best": 2448,
+          "mean": 2452.5,
+          "variance": 20.25,
+          "worst": 2457
+        },
+        "DSP": {
+          "best": 144,
+          "mean": 144,
+          "variance": 0,
+          "worst": 144
+        },
+        "FF": {
+          "best": 83640,
+          "mean": 83640,
+          "variance": 0,
+          "worst": 83640
+        },
+        "LUT": {
+          "best": 124182,
+          "mean": 124593.5,
+          "variance": 169332.25,
+          "worst": 125005
+        },
+        "LUT_RAM": {
+          "best": 0,
+          "mean": 0,
+          "variance": 0,
+          "worst": 0
+        },
+        "LUT_logic": {
+          "best": 124182,
+          "mean": 124593.5,
+          "variance": 169332.25,
+          "worst": 125005
+        },
+        "RAMB18": {
+          "best": 104,
+          "mean": 104,
+          "variance": 0,
+          "worst": 104
+        },
+        "RAMB36": {
+          "best": 16,
+          "mean": 16,
+          "variance": 0,
+          "worst": 16
+        },
+        "mapping_delay_ps": {
+          "best": 16874.0,
+          "mean": 17164.5,
+          "variance": 84390.25,
+          "worst": 17455.0
+        }
+      },
+      "candidate": {
+        "CARRY4": {
+          "best": 2438,
+          "mean": 2438.5,
+          "variance": 0.25,
+          "worst": 2439
+        },
+        "DSP": {
+          "best": 144,
+          "mean": 144,
+          "variance": 0,
+          "worst": 144
+        },
+        "FF": {
+          "best": 83640,
+          "mean": 83640,
+          "variance": 0,
+          "worst": 83640
+        },
+        "LUT": {
+          "best": 125330,
+          "mean": 125485.5,
+          "variance": 24180.25,
+          "worst": 125641
+        },
+        "LUT_RAM": {
+          "best": 0,
+          "mean": 0,
+          "variance": 0,
+          "worst": 0
+        },
+        "LUT_logic": {
+          "best": 125330,
+          "mean": 125485.5,
+          "variance": 24180.25,
+          "worst": 125641
+        },
+        "RAMB18": {
+          "best": 104,
+          "mean": 104,
+          "variance": 0,
+          "worst": 104
+        },
+        "RAMB36": {
+          "best": 16,
+          "mean": 16,
+          "variance": 0,
+          "worst": 16
+        },
+        "mapping_delay_ps": {
+          "best": 16874.0,
+          "mean": 16874.0,
+          "variance": 0.0,
+          "worst": 16874.0
+        }
+      }
+    }
+  },
+  "d3_mapping_inputs": {
+    "builds": {
+      "baseline": {
+        "artifacts": {
+          "phi_decoder_profile.ir": "ea64499249dc82944d53e3de7a99a483616a413e68e47cc4e4f90a54abfb3d7e",
+          "phi_decoder_profile.opt.ir": "03317cb85ed835794112b471f1d98c2e78fbd2b344399d08c16a2fc359eaa981",
+          "phi_decoder_profile.v": "4e8b90ade1c6f755e2d936fda8ff660e9603c60e02a00701d1642bbcda6947e1"
+        },
+        "assets": {
+          "hls_1r1w_ram.v": "13e12a7561df37e150c3e727c43f9e5234b74bb9741fc969185c12948b2583e8",
+          "phi_decoder_profile_top.v": "dc93b1683d37d04e91199e6ab7edecbd8c7a127679d7121fa0399ee35ad0446e",
+          "phi_scheduler_rams.sh": "93f48d245aec55f733300dda4f5b558f9bff20a30e6d98a76f38c87f1fb47602"
+        },
+        "options": {
+          "codegen": [
+            "--pipeline_stages=2",
+            "--delay_model=unit",
+            "--flop_inputs=false",
+            "--flop_outputs=true",
+            "--use_system_verilog=false",
+            "--reset=reset",
+            "--fifo_module=",
+            "--worst_case_throughput=1",
+            "--ram_configurations=scheduler_0_state:1R1W:_scheduler_0_ram_read_req_out:_scheduler_0_ram_read_resp_in:_scheduler_0_ram_write_req_out:_scheduler_0_ram_write_resp_in,scheduler_0_mailbox:1R1W:_scheduler_0_mailbox_read_req_out:_scheduler_0_mailbox_read_resp_in:_scheduler_0_mailbox_write_req_out:_scheduler_0_mailbox_write_resp_in,scheduler_1_state:1R1W:_scheduler_1_ram_read_req_out:_scheduler_1_ram_read_resp_in:_scheduler_1_ram_write_req_out:_scheduler_1_ram_write_resp_in,scheduler_1_mailbox:1R1W:_scheduler_1_mailbox_read_req_out:_scheduler_1_mailbox_read_resp_in:_scheduler_1_mailbox_write_req_out:_scheduler_1_mailbox_write_resp_in,scheduler_2_state:1R1W:_scheduler_2_ram_read_req_out:_scheduler_2_ram_read_resp_in:_scheduler_2_ram_write_req_out:_scheduler_2_ram_write_resp_in,scheduler_2_mailbox:1R1W:_scheduler_2_mailbox_read_req_out:_scheduler_2_mailbox_read_resp_in:_scheduler_2_mailbox_write_req_out:_scheduler_2_mailbox_write_resp_in,scheduler_3_state:1R1W:_scheduler_3_ram_read_req_out:_scheduler_3_ram_read_resp_in:_scheduler_3_ram_write_req_out:_scheduler_3_ram_write_resp_in,scheduler_3_mailbox:1R1W:_scheduler_3_mailbox_read_req_out:_scheduler_3_mailbox_read_resp_in:_scheduler_3_mailbox_write_req_out:_scheduler_3_mailbox_write_resp_in,scheduler_4_state:1R1W:_scheduler_4_ram_read_req_out:_scheduler_4_ram_read_resp_in:_scheduler_4_ram_write_req_out:_scheduler_4_ram_write_resp_in,scheduler_4_mailbox:1R1W:_scheduler_4_mailbox_read_req_out:_scheduler_4_mailbox_read_resp_in:_scheduler_4_mailbox_write_req_out:_scheduler_4_mailbox_write_resp_in,scheduler_5_state:1R1W:_scheduler_5_ram_read_req_out:_scheduler_5_ram_read_resp_in:_scheduler_5_ram_write_req_out:_scheduler_5_ram_write_resp_in,scheduler_5_mailbox:1R1W:_scheduler_5_mailbox_read_req_out:_scheduler_5_mailbox_read_resp_in:_scheduler_5_mailbox_write_req_out:_scheduler_5_mailbox_write_resp_in,scheduler_6_state:1R1W:_scheduler_6_ram_read_req_out:_scheduler_6_ram_read_resp_in:_scheduler_6_ram_write_req_out:_scheduler_6_ram_write_resp_in,scheduler_6_mailbox:1R1W:_scheduler_6_mailbox_read_req_out:_scheduler_6_mailbox_read_resp_in:_scheduler_6_mailbox_write_req_out:_scheduler_6_mailbox_write_resp_in,scheduler_7_state:1R1W:_scheduler_7_ram_read_req_out:_scheduler_7_ram_read_resp_in:_scheduler_7_ram_write_req_out:_scheduler_7_ram_write_resp_in,scheduler_7_mailbox:1R1W:_scheduler_7_mailbox_read_req_out:_scheduler_7_mailbox_read_resp_in:_scheduler_7_mailbox_write_req_out:_scheduler_7_mailbox_write_resp_in"
+          ],
+          "top": "Top"
+        },
+        "profile": {
+          "delay_model": "unit",
+          "flop_inputs": false,
+          "flop_outputs": true,
+          "height": 3,
+          "initiation_interval": 1,
+          "pipeline_stages": 2,
+          "shards_per_plane": 3,
+          "width": 3
+        },
+        "ram_configuration": "93f48d245aec55f733300dda4f5b558f9bff20a30e6d98a76f38c87f1fb47602",
+        "recipe": 1,
+        "rtl": {
+          "hls_1r1w_ram.v": "13e12a7561df37e150c3e727c43f9e5234b74bb9741fc969185c12948b2583e8",
+          "phi_decoder_profile.v": "4e8b90ade1c6f755e2d936fda8ff660e9603c60e02a00701d1642bbcda6947e1",
+          "phi_decoder_profile_top.v": "dc93b1683d37d04e91199e6ab7edecbd8c7a127679d7121fa0399ee35ad0446e"
+        },
+        "schema": 1,
+        "sources": {
+          "arbitration.x": "8df5bb59310352e9981f8593010218dbc2349b60405406dfeb39cff66986bc48",
+          "axis.x": "ed6ef54ac090be9f5d125f7dead74effce2fa085b3a547ca65f6b55014ad22f6",
+          "bram.x": "8dd43b778fc9b61a5967ed5202c164563835ec90cd85e40bb0cf0b2b409e7cdf",
+          "effect_window.x": "a6450a77190293db0256eb3dccba26abb99008bd808243e860f0b72e8c9b8d81",
+          "frame_queue.x": "938dbaa621cc9973d505a915859c1e16e055271989929b774f874bf318a3614a",
+          "frame_transport.x": "3523c8ed1ff99bb4e09c75cf62c9999fdeb46ae8fa0cec654fb8c2a9e1a6f8a9",
+          "hls_companion_gs_fixture.x": "8d099fff517227bbae9c7504cd07a22ea22b39dd75811f69433c086194649dfb",
+          "hls_debug_framing.x": "3aad6b34dc150945749e9acc326cf1e3a73469731078154f28a43153f9bc0098",
+          "hls_debug_observer.x": "30b1b679f80a9efbc73877090af9879f0c10d6fc0f2823afab9b8d863e6518b1",
+          "hls_debug_server.x": "545125175d59232a00e68fee9883b237ff488c3d22ea61a84d1aec87bfb1b1db",
+          "hls_debug_trace.x": "c51b46c19d9b0ff9883111a3dcd09b428e1d86850ca922e26403b334ecc0e54d",
+          "hls_debug_types.x": "8a57396f9f5c2665db164b885b379b807de6272d3078e41e0e061c993d7c9176",
+          "hls_fabric_router.x": "47beed81304b0f61ea4acd4819cf51949af91e7b560e1c4701607767ea767d44",
+          "hls_failure.x": "539e3978e2146432d397cb0f57f65df60c8879e7a5b19c883c08c4992980c620",
+          "hls_fixed.x": "a3ff6655b5cca3984d736b57712e57e5976ab6196c709742aa26850537c88902",
+          "hls_float.x": "1882c965143004e7dd70cac139cf1ee41d17199f0877e374a280cebfb6204c26",
+          "hls_integer.x": "6cab6f43b0d4a7288a4dcbdd91a1d8f61d391f0ee84b0b79c5ef13689ec6153d",
+          "hls_numeric_test.x": "5ce91a2701a6bbdffdd3fe50cca240d057c88d135f67298fbb3de1ed41a22150",
+          "hls_spatial_router.x": "3cca4008525b6831a825db8af3286df5b3d28f06bb6c505f75e06fb0fc42b6f5",
+          "hls_vec.x": "c66c888c606ce7bc3e7b1c526cd1216e571f23fc6712f719df14dc6f5d82e5e6",
+          "mailbox.x": "8fd5cc1762cd8121ee10bf4ca1dca7a6d489a56e349aaf10b961e1c59ce81145",
+          "ordered_egress_actor.x": "08e1e89a872c8c775f9e554c60569f6b1eccc4f96786f525f7837676833dcb60",
+          "ordered_egress_topology.x": "d9f06f091b5e03b8ff7e03d86703a008fc798385e56b5d8eb704bde39cac5a44",
+          "phenom_data_cell.x": "b33c2ebfae492b70b4fc6d50d98ed7cb2cbe146fb6ea733280a5988d1be149a2",
+          "phenom_syndrome_cell.x": "91d79cd54329ddf7529e4f3629fc00e8e83b268b8df83a11f5b48c155d95afbb",
+          "phi_decoder_profile_topology.x": "dac44d696f0865ec33cba992d6bf5ee887687a4ac273bb9e1fbc5ba81939e7a6",
+          "phi_field.x": "7e35e2901be89e4f9b148e8d8c47d0a05581e6206070c25e8d2dc5d02828f84b",
+          "phi_field_test.x": "8f6adaaeb4636166922624ae6064814684790b21d8d6979f6ed715e14176342a",
+          "phi_halo_cell.x": "53ee0f5ace0dc01a59a494d249e9cb9f5b8f9aa376e073f43cf0d1ab66943bb0",
+          "phi_memory_gateway.x": "416cf35d1be05526c637139caba74b8a0f5d68c67a9dffa9d0615617ad3dc4f7",
+          "phi_noise_topology.x": "1c4d5ffe946af7b95539600d2301324f8d5ecc6a66c43dd136ff87c353b0490c",
+          "phi_noise_topology_smoke.x": "60f08c13efa15dc204f29dcb5f687c632fa544f9683c5c6f82c785115edf4bd7",
+          "phi_phenom_topology.x": "5bd78193313021ac40045a0704e16e7e25400a3a231453648a3aa9f9dfbaf155",
+          "phi_syndrome_replay_cell.x": "2984713682940cc12cb25372e0fe8704825220857f1a373898005673f61e237a",
+          "phi_torus_topology.x": "33cb8eced0785e3d08c4ee82d94cdb58fc27facc01d6883017b2e4a9f0865693",
+          "regsvc.x": "9ba6b523ba9599c91e49f909ca251616db4588a8413dc6d43b390bcf11de63d5",
+          "scheduler.x": "e7ab85c1f981c56fab222ed0a0d5731ac63a44fb18dfa534cd4f0fedd2b2ad7f",
+          "scheduler_observation.x": "7c01db596893e73678cb6eb220430127d4d2235ed09eebf530ca0efb778d8263",
+          "xls_case_fixture.x": "5dc4f5bbc8b13600fbd1fbb9859dfce87bf9e997b55081c97eb5b4312dd108f8",
+          "xls_short_circuit_test.x": "eb3987f21f728bece437c83ae51cb65efd10ff2ad0683a71b4490a64caaead5b"
+        },
+        "stages": {
+          "codegen": "903519a3722383f57d1fb409172406c15b6be956ea458e988d72470d718ac26c",
+          "ir": "012b28ecb5c224471d76964ee75eded7df351d85f8f7b27a6ab1b71bf0d95a81",
+          "opt": "0b407d2ef00fc33134f15626292074e65998e41c9af7af90c317321b0ee44a3b"
+        },
+        "stdlib": {
+          "xls/dslx/stdlib/abs_diff.x": "9006b878c3762aeea72bc42be9a012cd0c050a78364a1c09ea4f547e06059eae",
+          "xls/dslx/stdlib/acm_random.x": "47093ca764f983b34adaeb0f694b2a3b711815eb8beeba656d3a39ed157f7ac7",
+          "xls/dslx/stdlib/apfloat.x": "5bbc79dd7842baa26ae467f5a9240ab98a5f5776b4749eb4e73dd1171b8bae8d",
+          "xls/dslx/stdlib/bfloat16.x": "c810ed761142c429a68f0b80559b92c6cbfe087ccd11bead091151d2ff49ee37",
+          "xls/dslx/stdlib/fixed_point.x": "20aede1704d2cdbe515de083d05cb44c8d279aac5fcf5f52d7dc768193d1c631",
+          "xls/dslx/stdlib/float32.x": "2dbc3bd4c5045fb1b8765b293457d6cca1ba338ca1bd5763b2957d11b0a7d84a",
+          "xls/dslx/stdlib/float64.x": "186e40914bdcd0be7c478e6c85204cfa9858b660a8a1dcfffab20e3e4d1ba071",
+          "xls/dslx/stdlib/float_instances.x": "4c89968e94e045c51c354b8f18507f727b0b85b8dcd01b0af69db25314f314cd",
+          "xls/dslx/stdlib/hfloat16.x": "767b0b70354aa15437f689898a0dd168eba47161e999382adcbdc150b6df4243",
+          "xls/dslx/stdlib/lza.x": "6717f61514829d52e9ead876d42e5dc33cd0c48069506137bb2a1dee98b066ac",
+          "xls/dslx/stdlib/round.x": "ac1093df45b238fb0cf867010a9887856d6cf380d17cb5b61c69a47af77c89a0",
+          "xls/dslx/stdlib/std.x": "888583e31552728f6f594c9bb454173b5d8a2d55df2acdee0bd4e2e15d7f1ffa",
+          "xls/dslx/stdlib/tests/float32_downcast_test.x": "20e81a55ba42a7849b2ac274811e4bb457a8b2eb501f4b304b543925e80fe0ab",
+          "xls/dslx/stdlib/tests/float32_upcast_test.x": "dbff7cea87d189c915623e1d4d4274049e7a5779d7b03060e91201073da27b54",
+          "xls/dslx/stdlib/tests/round_tests.x": "5f9b66ad008155f4829db2424f34cc125363f80a789d4057c1433d56fa05632b",
+          "xls/dslx/stdlib/tests/umul_instances.x": "06f7b95e669477fc30e86f9e1d32637b09cfe1fa8f9cb8ea4b351645c1b1bc91"
+        },
+        "tools": {
+          "codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162",
+          "ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+          "opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c"
+        }
+      },
+      "candidate": {
+        "artifacts": {
+          "phi_decoder_profile.ir": "05f5bc8784bd5e9bfdc5321989915a5a93c01945de5f12079bc0c70c3e3a24fb",
+          "phi_decoder_profile.opt.ir": "43d2aa2cf4d3a7419ba4e31bfd02c27041f7a5a43271b6abfe7ed09a25dd6e1d",
+          "phi_decoder_profile.v": "859cbb62ce54e52a771dc7ebd0227417a99be381bcb2f98c8dae4ebf4ca42635"
+        },
+        "assets": {
+          "hls_1r1w_ram.v": "13e12a7561df37e150c3e727c43f9e5234b74bb9741fc969185c12948b2583e8",
+          "phi_decoder_profile_top.v": "dc93b1683d37d04e91199e6ab7edecbd8c7a127679d7121fa0399ee35ad0446e",
+          "phi_scheduler_rams.sh": "93f48d245aec55f733300dda4f5b558f9bff20a30e6d98a76f38c87f1fb47602"
+        },
+        "options": {
+          "codegen": [
+            "--pipeline_stages=2",
+            "--delay_model=unit",
+            "--flop_inputs=false",
+            "--flop_outputs=true",
+            "--use_system_verilog=false",
+            "--reset=reset",
+            "--fifo_module=",
+            "--worst_case_throughput=1",
+            "--ram_configurations=scheduler_0_state:1R1W:_scheduler_0_ram_read_req_out:_scheduler_0_ram_read_resp_in:_scheduler_0_ram_write_req_out:_scheduler_0_ram_write_resp_in,scheduler_0_mailbox:1R1W:_scheduler_0_mailbox_read_req_out:_scheduler_0_mailbox_read_resp_in:_scheduler_0_mailbox_write_req_out:_scheduler_0_mailbox_write_resp_in,scheduler_1_state:1R1W:_scheduler_1_ram_read_req_out:_scheduler_1_ram_read_resp_in:_scheduler_1_ram_write_req_out:_scheduler_1_ram_write_resp_in,scheduler_1_mailbox:1R1W:_scheduler_1_mailbox_read_req_out:_scheduler_1_mailbox_read_resp_in:_scheduler_1_mailbox_write_req_out:_scheduler_1_mailbox_write_resp_in,scheduler_2_state:1R1W:_scheduler_2_ram_read_req_out:_scheduler_2_ram_read_resp_in:_scheduler_2_ram_write_req_out:_scheduler_2_ram_write_resp_in,scheduler_2_mailbox:1R1W:_scheduler_2_mailbox_read_req_out:_scheduler_2_mailbox_read_resp_in:_scheduler_2_mailbox_write_req_out:_scheduler_2_mailbox_write_resp_in,scheduler_3_state:1R1W:_scheduler_3_ram_read_req_out:_scheduler_3_ram_read_resp_in:_scheduler_3_ram_write_req_out:_scheduler_3_ram_write_resp_in,scheduler_3_mailbox:1R1W:_scheduler_3_mailbox_read_req_out:_scheduler_3_mailbox_read_resp_in:_scheduler_3_mailbox_write_req_out:_scheduler_3_mailbox_write_resp_in,scheduler_4_state:1R1W:_scheduler_4_ram_read_req_out:_scheduler_4_ram_read_resp_in:_scheduler_4_ram_write_req_out:_scheduler_4_ram_write_resp_in,scheduler_4_mailbox:1R1W:_scheduler_4_mailbox_read_req_out:_scheduler_4_mailbox_read_resp_in:_scheduler_4_mailbox_write_req_out:_scheduler_4_mailbox_write_resp_in,scheduler_5_state:1R1W:_scheduler_5_ram_read_req_out:_scheduler_5_ram_read_resp_in:_scheduler_5_ram_write_req_out:_scheduler_5_ram_write_resp_in,scheduler_5_mailbox:1R1W:_scheduler_5_mailbox_read_req_out:_scheduler_5_mailbox_read_resp_in:_scheduler_5_mailbox_write_req_out:_scheduler_5_mailbox_write_resp_in,scheduler_6_state:1R1W:_scheduler_6_ram_read_req_out:_scheduler_6_ram_read_resp_in:_scheduler_6_ram_write_req_out:_scheduler_6_ram_write_resp_in,scheduler_6_mailbox:1R1W:_scheduler_6_mailbox_read_req_out:_scheduler_6_mailbox_read_resp_in:_scheduler_6_mailbox_write_req_out:_scheduler_6_mailbox_write_resp_in,scheduler_7_state:1R1W:_scheduler_7_ram_read_req_out:_scheduler_7_ram_read_resp_in:_scheduler_7_ram_write_req_out:_scheduler_7_ram_write_resp_in,scheduler_7_mailbox:1R1W:_scheduler_7_mailbox_read_req_out:_scheduler_7_mailbox_read_resp_in:_scheduler_7_mailbox_write_req_out:_scheduler_7_mailbox_write_resp_in"
+          ],
+          "top": "Top"
+        },
+        "profile": {
+          "delay_model": "unit",
+          "flop_inputs": false,
+          "flop_outputs": true,
+          "height": 3,
+          "initiation_interval": 1,
+          "pipeline_stages": 2,
+          "shards_per_plane": 3,
+          "width": 3
+        },
+        "ram_configuration": "93f48d245aec55f733300dda4f5b558f9bff20a30e6d98a76f38c87f1fb47602",
+        "recipe": 1,
+        "rtl": {
+          "hls_1r1w_ram.v": "13e12a7561df37e150c3e727c43f9e5234b74bb9741fc969185c12948b2583e8",
+          "phi_decoder_profile.v": "859cbb62ce54e52a771dc7ebd0227417a99be381bcb2f98c8dae4ebf4ca42635",
+          "phi_decoder_profile_top.v": "dc93b1683d37d04e91199e6ab7edecbd8c7a127679d7121fa0399ee35ad0446e"
+        },
+        "schema": 1,
+        "sources": {
+          "arbitration.x": "8df5bb59310352e9981f8593010218dbc2349b60405406dfeb39cff66986bc48",
+          "axis.x": "ed6ef54ac090be9f5d125f7dead74effce2fa085b3a547ca65f6b55014ad22f6",
+          "bram.x": "8dd43b778fc9b61a5967ed5202c164563835ec90cd85e40bb0cf0b2b409e7cdf",
+          "effect_window.x": "a6450a77190293db0256eb3dccba26abb99008bd808243e860f0b72e8c9b8d81",
+          "frame_queue.x": "938dbaa621cc9973d505a915859c1e16e055271989929b774f874bf318a3614a",
+          "frame_transport.x": "3523c8ed1ff99bb4e09c75cf62c9999fdeb46ae8fa0cec654fb8c2a9e1a6f8a9",
+          "hls_companion_gs_fixture.x": "507890b4331e62e1912d76e493f2676c0fb5ecd71d0baf6bffd6de380220f334",
+          "hls_debug_framing.x": "3aad6b34dc150945749e9acc326cf1e3a73469731078154f28a43153f9bc0098",
+          "hls_debug_observer.x": "30b1b679f80a9efbc73877090af9879f0c10d6fc0f2823afab9b8d863e6518b1",
+          "hls_debug_server.x": "545125175d59232a00e68fee9883b237ff488c3d22ea61a84d1aec87bfb1b1db",
+          "hls_debug_trace.x": "c51b46c19d9b0ff9883111a3dcd09b428e1d86850ca922e26403b334ecc0e54d",
+          "hls_debug_types.x": "8a57396f9f5c2665db164b885b379b807de6272d3078e41e0e061c993d7c9176",
+          "hls_fabric_router.x": "47beed81304b0f61ea4acd4819cf51949af91e7b560e1c4701607767ea767d44",
+          "hls_failure.x": "87f37af0658bcf1b1646982ab5864c5bf21d41fc0a9713349f790eec9e6e11bd",
+          "hls_fixed.x": "a3ff6655b5cca3984d736b57712e57e5976ab6196c709742aa26850537c88902",
+          "hls_float.x": "1882c965143004e7dd70cac139cf1ee41d17199f0877e374a280cebfb6204c26",
+          "hls_integer.x": "6cab6f43b0d4a7288a4dcbdd91a1d8f61d391f0ee84b0b79c5ef13689ec6153d",
+          "hls_lists.x": "dbee03cead923041238b3e09760421ea5be815c78ba737e0366251cbc6e31065",
+          "hls_numeric_test.x": "5ce91a2701a6bbdffdd3fe50cca240d057c88d135f67298fbb3de1ed41a22150",
+          "hls_spatial_router.x": "3cca4008525b6831a825db8af3286df5b3d28f06bb6c505f75e06fb0fc42b6f5",
+          "hls_vec.x": "c66c888c606ce7bc3e7b1c526cd1216e571f23fc6712f719df14dc6f5d82e5e6",
+          "mailbox.x": "d7e989c08fc7fab571df91ffb80820f26521116c2a0d08e2b44c49e23b9fcb02",
+          "ordered_egress_actor.x": "67b44af935dc986c25609e2ed92e8a05a9667103f69b8b29a1b86dbdb2a38d51",
+          "ordered_egress_topology.x": "d9f06f091b5e03b8ff7e03d86703a008fc798385e56b5d8eb704bde39cac5a44",
+          "phenom_data_cell.x": "27c372a220110a0eec47744f81f1be1683aa6d9d4554145b3db4ec7bfa37fefa",
+          "phenom_syndrome_cell.x": "d9caff8752a07da0526c586c762d04869ff7df335c8f6976365a4e1873167627",
+          "phi_decoder_profile_topology.x": "dac44d696f0865ec33cba992d6bf5ee887687a4ac273bb9e1fbc5ba81939e7a6",
+          "phi_field.x": "7e35e2901be89e4f9b148e8d8c47d0a05581e6206070c25e8d2dc5d02828f84b",
+          "phi_field_test.x": "8f6adaaeb4636166922624ae6064814684790b21d8d6979f6ed715e14176342a",
+          "phi_halo_cell.x": "9525e306cdbe5578c8e4444f0459aa590c3a28ef9110461212bd8c3bf0a5c7c0",
+          "phi_memory_gateway.x": "416cf35d1be05526c637139caba74b8a0f5d68c67a9dffa9d0615617ad3dc4f7",
+          "phi_noise_topology.x": "1c4d5ffe946af7b95539600d2301324f8d5ecc6a66c43dd136ff87c353b0490c",
+          "phi_noise_topology_smoke.x": "60f08c13efa15dc204f29dcb5f687c632fa544f9683c5c6f82c785115edf4bd7",
+          "phi_phenom_topology.x": "5bd78193313021ac40045a0704e16e7e25400a3a231453648a3aa9f9dfbaf155",
+          "phi_syndrome_replay_cell.x": "eb60af82b937c014586dc8fa57580aeece5dd1e8e66aaaff376fd0c1b3ccc9b3",
+          "phi_torus_topology.x": "33cb8eced0785e3d08c4ee82d94cdb58fc27facc01d6883017b2e4a9f0865693",
+          "regsvc.x": "5ac99bb2f87c34b030866c18ab1c9f9b9c29df86f906f6a2e38e0684489f5b08",
+          "scheduler.x": "e7ab85c1f981c56fab222ed0a0d5731ac63a44fb18dfa534cd4f0fedd2b2ad7f",
+          "scheduler_observation.x": "7c01db596893e73678cb6eb220430127d4d2235ed09eebf530ca0efb778d8263",
+          "xls_case_fixture.x": "5dc4f5bbc8b13600fbd1fbb9859dfce87bf9e997b55081c97eb5b4312dd108f8",
+          "xls_short_circuit_test.x": "eb3987f21f728bece437c83ae51cb65efd10ff2ad0683a71b4490a64caaead5b"
+        },
+        "stages": {
+          "codegen": "e2a5039d7a6181162d95fdefb27f1bcf25621e9dc9e0f96615062da94f7751d5",
+          "ir": "7aa45ddb5c5ef0e9b43d96dbb34c682f308f84f98f55b11bc34d1904048aa420",
+          "opt": "dbe1b3684d5932c17223db2b019135ef30dff5086724314959d570178ccbad6b"
+        },
+        "stdlib": {
+          "xls/dslx/stdlib/abs_diff.x": "9006b878c3762aeea72bc42be9a012cd0c050a78364a1c09ea4f547e06059eae",
+          "xls/dslx/stdlib/acm_random.x": "47093ca764f983b34adaeb0f694b2a3b711815eb8beeba656d3a39ed157f7ac7",
+          "xls/dslx/stdlib/apfloat.x": "5bbc79dd7842baa26ae467f5a9240ab98a5f5776b4749eb4e73dd1171b8bae8d",
+          "xls/dslx/stdlib/bfloat16.x": "c810ed761142c429a68f0b80559b92c6cbfe087ccd11bead091151d2ff49ee37",
+          "xls/dslx/stdlib/fixed_point.x": "20aede1704d2cdbe515de083d05cb44c8d279aac5fcf5f52d7dc768193d1c631",
+          "xls/dslx/stdlib/float32.x": "2dbc3bd4c5045fb1b8765b293457d6cca1ba338ca1bd5763b2957d11b0a7d84a",
+          "xls/dslx/stdlib/float64.x": "186e40914bdcd0be7c478e6c85204cfa9858b660a8a1dcfffab20e3e4d1ba071",
+          "xls/dslx/stdlib/float_instances.x": "4c89968e94e045c51c354b8f18507f727b0b85b8dcd01b0af69db25314f314cd",
+          "xls/dslx/stdlib/hfloat16.x": "767b0b70354aa15437f689898a0dd168eba47161e999382adcbdc150b6df4243",
+          "xls/dslx/stdlib/lza.x": "6717f61514829d52e9ead876d42e5dc33cd0c48069506137bb2a1dee98b066ac",
+          "xls/dslx/stdlib/round.x": "ac1093df45b238fb0cf867010a9887856d6cf380d17cb5b61c69a47af77c89a0",
+          "xls/dslx/stdlib/std.x": "888583e31552728f6f594c9bb454173b5d8a2d55df2acdee0bd4e2e15d7f1ffa",
+          "xls/dslx/stdlib/tests/float32_downcast_test.x": "20e81a55ba42a7849b2ac274811e4bb457a8b2eb501f4b304b543925e80fe0ab",
+          "xls/dslx/stdlib/tests/float32_upcast_test.x": "dbff7cea87d189c915623e1d4d4274049e7a5779d7b03060e91201073da27b54",
+          "xls/dslx/stdlib/tests/round_tests.x": "5f9b66ad008155f4829db2424f34cc125363f80a789d4057c1433d56fa05632b",
+          "xls/dslx/stdlib/tests/umul_instances.x": "06f7b95e669477fc30e86f9e1d32637b09cfe1fa8f9cb8ea4b351645c1b1bc91"
+        },
+        "tools": {
+          "codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162",
+          "ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+          "opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c"
+        }
+      }
+    },
+    "measurement_script": "c8360b29fd097925fd816842876d6739b3b9cac982cb0a43aefc1465afe76074",
+    "seeds": [
+      1,
+      2
+    ],
+    "tool_files": {
+      "${REPO}/experiments/07-openxc7/.apio/packages/oss-cad-suite/BUILD-INFO.json": "b509fbcf8adf9e4f8359d8c89ed179bacb3aa7c9557d830ba80936b907c3db85",
+      "${REPO}/experiments/07-openxc7/.apio/packages/oss-cad-suite/bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+      "${REPO}/experiments/07-openxc7/.apio/packages/oss-cad-suite/libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+      "${REPO}/experiments/07-openxc7/.apio/packages/oss-cad-suite/libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d"
+    }
+  },
+  "d3_scripts": {
+    "baseline-1": {
+      "script": "read_verilog -sv \"${REPO}/_build/reduction-failures/d3-final/.compiled-releases/1e197ee39df323c72d6ed873c4463839d8a132873a1478e4d8377e71e9ea030a/phi_decoder_profile.v\" \"${REPO}/_build/reduction-failures/d3-final/.compiled-releases/1e197ee39df323c72d6ed873c4463839d8a132873a1478e4d8377e71e9ea030a/phi_decoder_profile_top.v\" \"${REPO}/_build/reduction-failures/d3-final/.compiled-releases/1e197ee39df323c72d6ed873c4463839d8a132873a1478e4d8377e71e9ea030a/hls_1r1w_ram.v\"\nhierarchy -check -top phi_decoder_profile_top\nproc\nflatten\nopt\nmemory_collect\nrename -scramble-name -seed 1\nsynth_xilinx -flatten -abc9 -family xc7 -noiopad -noclkbuf -top phi_decoder_profile_top\ncheck -assert\nscc -expect 0\ntee -o stat.json stat -json -tech xilinx\n",
+      "log_sha256": "56968b48c3ae4aca6f79ab8785bbf1652d98b80094bb6fe958228fafce0ce2ef"
+    },
+    "baseline-2": {
+      "script": "read_verilog -sv \"${REPO}/_build/reduction-failures/d3-final/.compiled-releases/1e197ee39df323c72d6ed873c4463839d8a132873a1478e4d8377e71e9ea030a/phi_decoder_profile.v\" \"${REPO}/_build/reduction-failures/d3-final/.compiled-releases/1e197ee39df323c72d6ed873c4463839d8a132873a1478e4d8377e71e9ea030a/phi_decoder_profile_top.v\" \"${REPO}/_build/reduction-failures/d3-final/.compiled-releases/1e197ee39df323c72d6ed873c4463839d8a132873a1478e4d8377e71e9ea030a/hls_1r1w_ram.v\"\nhierarchy -check -top phi_decoder_profile_top\nproc\nflatten\nopt\nmemory_collect\nrename -scramble-name -seed 2\nsynth_xilinx -flatten -abc9 -family xc7 -noiopad -noclkbuf -top phi_decoder_profile_top\ncheck -assert\nscc -expect 0\ntee -o stat.json stat -json -tech xilinx\n",
+      "log_sha256": "9656ee2d4c136a28469920c3f21dcad1635b35e0b4c73efd4db7866321e50fe9"
+    },
+    "candidate-1": {
+      "script": "read_verilog -sv \"${REPO}/_build/checked-collections/d3-revised/.compiled-releases/a61e9bb5ccd954b91d051cdd579cfb8a2b009b37ae45fbf54d008a7a3803bf41/phi_decoder_profile.v\" \"${REPO}/_build/checked-collections/d3-revised/.compiled-releases/a61e9bb5ccd954b91d051cdd579cfb8a2b009b37ae45fbf54d008a7a3803bf41/phi_decoder_profile_top.v\" \"${REPO}/_build/checked-collections/d3-revised/.compiled-releases/a61e9bb5ccd954b91d051cdd579cfb8a2b009b37ae45fbf54d008a7a3803bf41/hls_1r1w_ram.v\"\nhierarchy -check -top phi_decoder_profile_top\nproc\nflatten\nopt\nmemory_collect\nrename -scramble-name -seed 1\nsynth_xilinx -flatten -abc9 -family xc7 -noiopad -noclkbuf -top phi_decoder_profile_top\ncheck -assert\nscc -expect 0\ntee -o stat.json stat -json -tech xilinx\n",
+      "log_sha256": "fdecccdfe131c66a7df9452072db1631aa117533a5118bd1e46ef03f2fa7bc32"
+    },
+    "candidate-2": {
+      "script": "read_verilog -sv \"${REPO}/_build/checked-collections/d3-revised/.compiled-releases/a61e9bb5ccd954b91d051cdd579cfb8a2b009b37ae45fbf54d008a7a3803bf41/phi_decoder_profile.v\" \"${REPO}/_build/checked-collections/d3-revised/.compiled-releases/a61e9bb5ccd954b91d051cdd579cfb8a2b009b37ae45fbf54d008a7a3803bf41/phi_decoder_profile_top.v\" \"${REPO}/_build/checked-collections/d3-revised/.compiled-releases/a61e9bb5ccd954b91d051cdd579cfb8a2b009b37ae45fbf54d008a7a3803bf41/hls_1r1w_ram.v\"\nhierarchy -check -top phi_decoder_profile_top\nproc\nflatten\nopt\nmemory_collect\nrename -scramble-name -seed 2\nsynth_xilinx -flatten -abc9 -family xc7 -noiopad -noclkbuf -top phi_decoder_profile_top\ncheck -assert\nscc -expect 0\ntee -o stat.json stat -json -tech xilinx\n",
+      "log_sha256": "5412095a43c106b21da6eb6003fb2244f3f7ec049df986a44503e7996c6ab5db"
+    }
+  }
+}
