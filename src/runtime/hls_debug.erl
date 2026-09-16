@@ -17,6 +17,7 @@ A client owns 256 transaction slots. Timeouts do not cancel device work; see
 -behavior(gen_server).
 
 -export([start_link/2, stop/1, query/4]).
+-export([encode_request/2, response/3]).
 -export([info/2, info/3, inspect_waits/2]).
 -export([get_counters/1, get_counters/2, get_trace/1, get_trace/2]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2]).
@@ -105,6 +106,14 @@ request(Tag, Payload, Decode, From, State = #state{fabric = Client, module = Mod
     Context = {Tag bor 16#80, Decode, Module},
     Next = hls_fabric_client:request(Tag, Payload, Context, From, Client),
     {noreply, State#state{fabric = Next}}.
+
+-doc "Encodes a debug request without starting a proxy. The returned context is passed to response/3.".
+encode_request(Module, get_counters) -> {?DEBUG_GET_COUNTERS, <<>>, {?DEBUG_COUNTERS, decoded, Module}};
+encode_request(Module, get_trace) -> {?DEBUG_GET_TRACE, <<>>, {?DEBUG_TRACE, decoded, Module}};
+encode_request(Module, {query, Tag, Payload})
+        when Tag > 0, Tag < 128, is_binary(Payload), byte_size(Payload) rem 4 =:= 0,
+             byte_size(Payload) =< 1020 ->
+    {Tag, Payload, {Tag bor 16#80, raw, Module}}.
 
 handle_cast({?FABRIC_RX, Receipt, Route, Header, Payload}, State = #state{fabric = Client}) ->
     Next = hls_fabric_client:receive_frame(Receipt, Route, Header, Payload, fun response/3, Client),

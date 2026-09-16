@@ -4,6 +4,8 @@ An `hls_gs` hardware proxy and an `hls_debug` client each own one return route a
 
 ## Admission and completion
 
+Custom host adapters can use the frame codecs without starting proxy processes. `hls_gs:encode_request(Module, call | cast, Record)` returns `{Tag, Payload, Context}`, validating the declared request kind and word-aligning the payload. Pass the context unchanged to `hls_gs:decode_reply(Tag, Payload, Context)` for a call response; it returns `{reply, Record}` or `ignore` using the same reply-contract and payload checks as the proxy. `hls_debug:encode_request(Module, Request)` and `hls_debug:response(Tag, Payload, Context)` provide the corresponding debug operations, including counters, traces and raw queries. These functions perform encoding and validation only; the adapter remains responsible for transaction IDs, return routes, admission, timeouts and receive receipts.
+
 Application calls use IDs 0–254, allowing 255 outstanding calls per proxy. All application casts use ID 255 and occupy no call slot. Successful casts have no reply; a failed cast can emit an error, which the proxy counts as an ignored reply rather than delivering to an unrelated caller. Debug queries use all 256 IDs. Application and debug transports, and clients on different return routes, have independent capacities.
 
 The allocator selects an unused slot, scanning cyclically from its previous position. A full client returns `{error, transaction_limit}` without transmitting the new request. It does not queue that request for later submission. `gen_server:call` and `gen_server:send_request` can both address an application proxy; application wrappers which destructure successful records must decide how to expose admission and transport errors.
