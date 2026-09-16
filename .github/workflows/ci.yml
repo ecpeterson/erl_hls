@@ -103,6 +103,9 @@ jobs:
       - name: Check service reply contracts under backpressure
         run: bash tools/test_service_contracts.sh "$RUNNER_TEMP/xls"
 
+      - name: Compare fixed bit syntax and diagnose packed samples through public debug APIs
+        run: bash tools/test_binary.sh "$RUNNER_TEMP/xls"
+
       - name: Compare dense and padded codecs with BEAM and RTL
         run: bash tools/test_logical_types.sh "$RUNNER_TEMP/xls"
 
@@ -245,6 +248,10 @@ jobs:
             _build/service_contracts/*.json
             _build/service_contracts/**/*.v
             _build/service_contracts/**/*.x
+            _build/binary/**/*.log
+            _build/binary/live/*.term
+            _build/binary/*.x
+            _build/binary/*.v
             _build/logical-types/*.x
             _build/logical-types/*.mem
             _build/logical-types/**/*.v

@@ -94,6 +94,7 @@ case_shape(Clauses) ->
         Clauses
     ).
 
+pattern_shape({bin, _, _}) -> bits;
 pattern_shape({var, _Line, _Name}) ->
     any;
 pattern_shape({match, Line, Left, Right}) ->

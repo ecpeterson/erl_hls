@@ -124,6 +124,16 @@ compile_pattern({tuple, _Line, Patterns}, Subject, Context0) ->
         Context0,
         lists:enumerate(0, Patterns)
     );
+compile_pattern(Binary = {bin, _, _}, #{raw := Raw}, Context) ->
+    {{Line, Predicate}, Parts} = xls_binary_lower:pattern(Binary, Raw),
+    lists:foldl(fun({Pattern, Projection, Mode}, Acc) ->
+        Matched = compile_pattern(Pattern, value_argument(Projection), Acc#{comparison => Mode}),
+        maps:remove(comparison, Matched)
+    end, add_condition(Predicate, Line, Context), Parts);
+compile_pattern({integer, Line, Integer}, #{raw := Raw}, Context = #{comparison := integer}) ->
+    add_condition(equality(Raw, xls_binary_lower:integer_literal(Integer), Context), Line, Context);
+compile_pattern({char, Line, Integer}, Subject, Context) ->
+    compile_pattern({integer, Line, Integer}, Subject, Context);
 compile_pattern({integer, Line, Integer}, Subject, Context) ->
     add_condition(
         [maps:get(raw, Subject), " == ", integer_to_list(Integer)],
@@ -174,9 +184,13 @@ compile_list(Pattern, _Line, _Subject, _Offset, _Context) ->
 
 bind_or_compare(Name, Line, Value, Context = #{state := State}) ->
     case xls_parse:find_binding(Name, Line, State) of
-        {ok, Bound} -> add_condition([Bound, " == ", Value], Line, Context);
+        {ok, Bound} -> add_condition(equality(Bound, Value, Context), Line, Context);
         error -> Context#{state := xls_parse:bind(Name, Line, Value, State)}
     end.
+
+equality(Left, Right, #{comparison := Mode}) ->
+    ["hls_bits::same_", atom_to_list(Mode), "(", Left, ", ", Right, ")"];
+equality(Left, Right, _Context) -> [Left, " == ", Right].
 
 add_condition(Condition, Line, Context = #{conditions := Conditions}) ->
     Context#{conditions := [{Line, Condition} | Conditions]}.

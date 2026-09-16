@@ -71,6 +71,7 @@ validate_predicate({op, Line, Operator, Left, Right}) ->
 validate_predicate(Expression) ->
     unsupported_guard(expression_line(Expression), non_boolean_predicate).
 
+validate_value({xls_bit_size, _, _, Value}) -> validate_value(Value);
 validate_value({var, _Line, _Name}) ->
     ok;
 validate_value({integer, _Line, _Integer}) ->
