@@ -5,11 +5,12 @@ Packing emits 0 or 1. Decoding uses the low bit and ignores the seven padding
 bits. Use `not`, `andalso`, `orelse`, guards, and patterns on both targets.
 """.
 -behavior(hls_type).
+-compile(no_auto_import_types).
 -export([bool/0, width/2, value_width/2, zero/2, pack/3, unpack/3,
     print_type/2, transpile/3]).
 -export_type([bool/0]).
 
--type bool() :: boolean().
+-type bool() :: erlang:boolean().
 
 -spec bool() -> hls_type:descriptor().
 bool() -> {hls_type, ?MODULE, bool, []}.
