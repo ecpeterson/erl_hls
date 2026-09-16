@@ -78,7 +78,7 @@ variable_unsigned_round_trip_test() ->
     ?assertEqual(<<16#abcdef:24/little>>, Packed),
     ?assertEqual({16#abcdef, <<>>}, hls_type:unpack(Packed, Type)),
     ?assertError(function_clause, hls_nums:uN(0)),
-    ?assertError(function_clause, hls_nums:uN(3)).
+    ?assertEqual(3, hls_type:value_width(hls_nums:uN(3))).
 
 variable_unsigned_type_transpiles_test() ->
     {ok, Tokens, _EndLine} = erl_scan:string(

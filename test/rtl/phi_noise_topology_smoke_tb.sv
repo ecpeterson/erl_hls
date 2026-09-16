@@ -1,10 +1,7 @@
 `timescale 1ns/1ps
 
-module phi_noise_topology_smoke_tb #(
-    parameter integer DATA_STATE_WIDTH = 449,
-    parameter integer PHI_STATE_WIDTH = 540,
-    parameter integer SYNDROME_STATE_WIDTH = 449
-);
+module phi_noise_topology_smoke_tb;
+    `include "phi_noise_topology_smoke_rams.vh"
     localparam [7:0] PHI_CORRECTION_TAG = 8'd11;
     localparam [7:0] PAULI_QUERY_TAG = 8'd13;
     localparam [7:0] PAULI_REPLY_TAG = 8'd14;

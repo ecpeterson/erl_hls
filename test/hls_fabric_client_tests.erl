@@ -255,6 +255,20 @@ per_request_reply_sets_test() ->
         ?assertMatch(#{pending := 0, ignored_replies := 9}, synced_info(Client, Fabric))
     end).
 
+dense_application_payload_test() ->
+    with_client({application, hls_logical_fixture}, fun(Client, Fabric) ->
+        Ref = async(fun() -> gen_server:call(Client, {step, true, 7, -129}) end),
+        [{_, {_, Tx, _}, Payload}] = phi_memory_fabric_fixture:await_sends(Fabric, 1, 1000),
+        ?assertEqual(<<1:1, 7:3, -129:9/little, 0:19>>, Payload),
+        Tag = hls_logical_fixture:pack_tag(result),
+        %% Only the final word's trailing padding is ignored, not missing or extra words.
+        [deliver(Fabric, Tag, Tx, Wrong) || Wrong <- [<<>>, <<255, 23>>, <<0:64>>]],
+        ?assertMatch(#{pending := 1, ignored_replies := 3}, synced_info(Client, Fabric)),
+        deliver(Fabric, Tag, Tx, <<1:1, 7:3, -129:9/little, -1:19>>),
+        expect(Ref, {result, true, 7, -129}),
+        ?assertMatch(#{pending := 0}, synced_info(Client, Fabric))
+    end).
+
 with_client(Kind, Run) ->
     {ok, Fabric} = phi_memory_fabric_fixture:start_link(),
     {ok, Client} = case Kind of

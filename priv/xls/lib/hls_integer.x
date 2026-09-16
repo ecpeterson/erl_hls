@@ -4,8 +4,18 @@
 // TODO: remove this guard once our pinned XLS handles signed remainder overflow.
 // Standalone upstream reproducer: test_data/xls_srem_overflow_repro.x.
 pub fn remainder<S: bool, W: u32>(left: xN[S][W], right: xN[S][W]) -> xN[S][W] {
-    let divisor = if S && right == (!xN[S][W]:0) { xN[S][W]:1 } else { right };
-    left % divisor
+    // s1 cannot represent +1. Its only nonzero divisor is -1 and every valid
+    // remainder is zero; clear the dividend so even that primitive is safe.
+    let dividend = if S && W == u32:1 { xN[S][W]:0 } else { left };
+    let divisor = if S && right == (!xN[S][W]:0) { u1:1 as xN[S][W] } else { right };
+    dividend % divisor
+}
+
+#[test]
+fn one_bit_remainder() {
+    assert_eq(remainder(s1:-1, s1:-1), s1:0);
+    assert_eq(remainder(s1:0, s1:-1), s1:0);
+    assert_eq(remainder(u1:1, u1:1), u1:0);
 }
 
 // Erlang reverses the direction for a negative count. Value and count widths

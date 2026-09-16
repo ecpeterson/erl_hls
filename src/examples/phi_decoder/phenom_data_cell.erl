@@ -90,9 +90,9 @@ logical query.
 %% distinguishes their syndrome neighborhoods.
 %% TODO: Fence logical snapshots with noise disable plus a decoder/transport
 %% drain witness; zero live anyons alone does not close an epoch.
-%% TODO: Pack hls_pauli as a genuine u2 once hls_pack supports non-byte-aligned
-%% record fields; until then an external update/query must reject invalid u32
-%% encodings at this untrusted boundary.
+%% TODO: Validate external Pauli codes before narrowing their logical type to u2.
+%% Padded codecs permit narrow values, but truncating first would erase invalid
+%% u32 encodings that the update/query guards must still reject.
 
 -record(data_cell, {
     step = hls_type:zero() :: hls_nums:u32(),
@@ -106,8 +106,8 @@ logical query.
     reply_request_id = hls_type:zero() :: hls_nums:u32(),
     reply_anticommutes = hls_type:zero() :: hls_nums:u32(),
     reply_resume = hls_type:zero() :: hls_nums:u32(),
-    noise_disabled = hls_type:zero() :: hls_nums:u32(),
-    cutoff_armed = hls_type:zero() :: hls_nums:u32(),
+    noise_disabled = hls_type:zero() :: hls_bool:bool(),
+    cutoff_armed = hls_type:zero() :: hls_bool:bool(),
     cutoff_step = hls_type:zero() :: hls_nums:u32()
 }).
 
@@ -294,12 +294,12 @@ collecting(
     },
     Cell = #data_cell{
         step = Step,
-        noise_disabled = 0,
-        cutoff_armed = 0
+        noise_disabled = false,
+        cutoff_armed = false
     }
 ) when FirstQuietStep >= Step ->
     {collecting, Cell#data_cell{
-        cutoff_armed = 1,
+        cutoff_armed = true,
         cutoff_step = FirstQuietStep
     }, consume};
 collecting(cast, #noise_cutoff{}, Cell) ->
@@ -330,12 +330,12 @@ collecting(
     {NextPhase, NextCell} = case NewSeen =:= ?PHI_ALL_DIRECTIONS of
         false -> {collecting, Collected};
         true ->
-            CutoffApplies = Cell#data_cell.cutoff_armed =:= 1 andalso
+            CutoffApplies = Cell#data_cell.cutoff_armed andalso
                 Step >= Cell#data_cell.cutoff_step,
-            NoiseDisabled = Cell#data_cell.noise_disabled =:= 1 orelse
+            NoiseDisabled = Cell#data_cell.noise_disabled orelse
                 CutoffApplies,
-            {NoiseDisabledWord, NextRandom, Event} = case NoiseDisabled of
-                true -> {hls_type:as(hls_nums:u32(), 1), Cell#data_cell.random_state,
+            {NextRandom, Event} = case NoiseDisabled of
+                true -> {Cell#data_cell.random_state,
                     hls_type:as(hls_nums:u32(), 0)};
                 false ->
                     Sample = hls_prng:xorshift32(Cell#data_cell.random_state),
@@ -343,7 +343,7 @@ collecting(
                         Sample < Cell#data_cell.threshold -> hls_type:as(hls_nums:u32(), 1);
                         true -> hls_type:as(hls_nums:u32(), 0)
                     end,
-                    {hls_type:as(hls_nums:u32(), 0), Sample, Hit}
+                    {Sample, Hit}
             end,
             AccumulatedPauli = case Event of
                 1 -> hls_pauli:multiply(
@@ -356,11 +356,8 @@ collecting(
                 event = Event,
                 random_state = NextRandom,
                 accumulated_pauli = AccumulatedPauli,
-                noise_disabled = NoiseDisabledWord,
-                cutoff_armed = case CutoffApplies of
-                    false -> Cell#data_cell.cutoff_armed;
-                    true -> hls_type:as(hls_nums:u32(), 0)
-                end
+                noise_disabled = NoiseDisabled,
+                cutoff_armed = Cell#data_cell.cutoff_armed andalso not CutoffApplies
             },
             {reporting, Completed}
     end,
@@ -379,7 +376,7 @@ collecting(
         request_id = RequestId,
         measurement = Measurement
     },
-    Cell = #data_cell{noise_disabled = 1}
+    Cell = #data_cell{noise_disabled = true}
 ) ->
     case hls_pauli:is_pauli(Measurement) of
         true ->
@@ -400,10 +397,13 @@ collecting(cast, #pauli_query{}, Cell) ->
             #noise_cutoff{} | #pauli_update{},
         #data_cell{}) -> hls_statem:cast_result(phase(), #data_cell{}).
 reporting(enter, _OldPhase, Cell) ->
+    QuietFlag = case Cell#data_cell.noise_disabled of
+        true -> hls_type:as(hls_nums:u32(), 2);
+        false -> hls_type:as(hls_nums:u32(), 0)
+    end,
     Message = #phenom_data{
         step = Cell#data_cell.step,
-        flags = Cell#data_cell.event bor
-            (Cell#data_cell.noise_disabled bsl 1)
+        flags = Cell#data_cell.event bor QuietFlag
     },
     {Cell, [
         {cast, north, Message#phenom_data{source = ?PHI_SOUTH_MASK}},
@@ -418,12 +418,12 @@ reporting(
     },
     Cell = #data_cell{
         step = Step,
-        noise_disabled = 0,
-        cutoff_armed = 0
+        noise_disabled = false,
+        cutoff_armed = false
     }
 ) when FirstQuietStep > Step ->
     {reporting, Cell#data_cell{
-        cutoff_armed = 1,
+        cutoff_armed = true,
         cutoff_step = FirstQuietStep
     }, consume};
 reporting(cast, #noise_cutoff{}, Cell) ->
@@ -463,7 +463,7 @@ reporting(
         request_id = RequestId,
         measurement = Measurement
     },
-    Cell = #data_cell{noise_disabled = 1}
+    Cell = #data_cell{noise_disabled = true}
 ) ->
     case hls_pauli:is_pauli(Measurement) of
         true ->
@@ -565,7 +565,7 @@ replying(
         request_id = RequestId,
         measurement = Measurement
     },
-    Cell = #data_cell{noise_disabled = 1}
+    Cell = #data_cell{noise_disabled = true}
 ) ->
     case hls_pauli:is_pauli(Measurement) of
         true ->

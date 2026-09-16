@@ -12,7 +12,7 @@ erl -noshell -pa _build/test/lib/erl_hls/ebin _build/test/lib/erl_hls/test \
     -eval 'ok = xls_integer_dslx:write(hd(init:get_plain_arguments())), halt().' -extra "$stage"
 options=(--warnings_as_errors=false --dslx_path="$project_root/priv/xls/lib"
     --dslx_stdlib_path="$xls_root/xls/dslx/stdlib")
-for width in 8 16 32 64; do
+for width in 1 3 8 9 16 32 64; do
     for sign in u s; do
         prefix="$stage/$sign$width"
         "$xls_root/interpreter_main" --compare=jit "${options[@]}" "$prefix.x"

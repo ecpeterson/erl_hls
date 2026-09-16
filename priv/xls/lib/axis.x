@@ -438,11 +438,20 @@ proc RxNRejectsMalformedAndResynchronizesTest {
 }
 
 pub fn pack<N: u32>(op: u8, payload: bits[N]) -> Frame {
-  let payload_words = (N / 32) as u8;
+  let payload_words = ((N + u32:31) / u32:32) as u8;
   Frame {
     header: Header { op, payload_words, ..zero!<Header>() },
     payload: payload as bits[PAYLOAD_BITS]
   }
+}
+
+#[test]
+fn densely_packed_payload() {
+  let frame = pack(u8:7, uN[13]:0x1abc);
+  assert_eq(frame.header.payload_words, u8:1);
+  assert_eq(frame.payload, bits[96]:0x1abc);
+  assert_eq(pack(u8:7, uN[33]:1).header.payload_words, u8:2);
+  assert_eq(pack(u8:7, bits[0]:0).header.payload_words, u8:0);
 }
 
 #[test]

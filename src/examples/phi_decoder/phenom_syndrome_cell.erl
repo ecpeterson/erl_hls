@@ -96,8 +96,8 @@ not in the paired phi actor's mailbox.
     threshold = hls_type:zero() :: hls_nums:u32(),
     x = hls_type:zero() :: hls_nums:u16(),
     y = hls_type:zero() :: hls_nums:u16(),
-    noise_disabled = hls_type:zero() :: hls_nums:u32(),
-    cutoff_armed = hls_type:zero() :: hls_nums:u32(),
+    noise_disabled = hls_type:zero() :: hls_bool:bool(),
+    cutoff_armed = hls_type:zero() :: hls_bool:bool(),
     cutoff_step = hls_type:zero() :: hls_nums:u32()
 }).
 
@@ -308,12 +308,12 @@ collecting(
     },
     Syndrome = #syndrome{
         step = Step,
-        noise_disabled = 0,
-        cutoff_armed = 0
+        noise_disabled = false,
+        cutoff_armed = false
     }
 ) when FirstQuietStep >= Step ->
     {collecting, Syndrome#syndrome{
-        cutoff_armed = 1,
+        cutoff_armed = true,
         cutoff_step = FirstQuietStep
     }, consume};
 collecting(cast, #noise_cutoff{}, Syndrome) ->
@@ -356,12 +356,12 @@ collecting(
     {NextPhase, NextSyndrome} = case NewSeen =:= ?PHI_ALL_DIRECTIONS of
         false -> {collecting, Collected};
         true ->
-            CutoffApplies = Syndrome#syndrome.cutoff_armed =:= 1 andalso
+            CutoffApplies = Syndrome#syndrome.cutoff_armed andalso
                 Step >= Syndrome#syndrome.cutoff_step,
-            NoiseDisabled = Syndrome#syndrome.noise_disabled =:= 1 orelse
+            NoiseDisabled = Syndrome#syndrome.noise_disabled orelse
                 CutoffApplies,
-            {NoiseDisabledWord, NextRandom, Measurement} = case NoiseDisabled of
-                true -> {hls_type:as(hls_nums:u32(), 1), RandomState,
+            {NextRandom, Measurement} = case NoiseDisabled of
+                true -> {RandomState,
                     hls_type:as(hls_nums:u32(), 0)};
                 false ->
                     Sample = hls_prng:xorshift32(RandomState),
@@ -369,19 +369,19 @@ collecting(
                         Sample < Threshold -> hls_type:as(hls_nums:u32(), 1);
                         true -> hls_type:as(hls_nums:u32(), 0)
                     end,
-                    {hls_type:as(hls_nums:u32(), 0), Sample, Hit}
+                    {Sample, Hit}
             end,
             Detection = NewParity bxor Measurement bxor PreviousMeasurement,
             Complete = Collected#syndrome{
                 previous_measurement = Measurement,
                 announcement = Detection,
-                announcement_quiet = NewDataQuiet band NoiseDisabledWord,
+                announcement_quiet = case NoiseDisabled of
+                    true -> NewDataQuiet;
+                    false -> hls_type:as(hls_nums:u32(), 0)
+                end,
                 random_state = NextRandom,
-                noise_disabled = NoiseDisabledWord,
-                cutoff_armed = case CutoffApplies of
-                    false -> Syndrome#syndrome.cutoff_armed;
-                    true -> hls_type:as(hls_nums:u32(), 0)
-                end
+                noise_disabled = NoiseDisabled,
+                cutoff_armed = Syndrome#syndrome.cutoff_armed andalso not CutoffApplies
             },
             {announcing, Complete}
     end,
@@ -406,12 +406,12 @@ announcing(
     },
     Syndrome = #syndrome{
         step = Step,
-        noise_disabled = 0,
-        cutoff_armed = 0
+        noise_disabled = false,
+        cutoff_armed = false
     }
 ) when FirstQuietStep > Step ->
     {announcing, Syndrome#syndrome{
-        cutoff_armed = 1,
+        cutoff_armed = true,
         cutoff_step = FirstQuietStep
     }, consume};
 announcing(cast, #noise_cutoff{}, Syndrome) ->

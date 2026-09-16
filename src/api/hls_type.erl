@@ -13,6 +13,7 @@
     pack_exact/2,
     print_type/1,
     unpack/2,
+    value_width/1,
     width/1,
     zero/0,
     zero/1
@@ -41,19 +42,19 @@
 %%%
 
 -doc """
-Packs a value into a binary of exactly the bit width returned by `width/2`.
+Packs a value into a bitstring of exactly the bit width returned by `width/2`.
 Each provider defines its accepted domain and normalization policy. Every
-successful pack must unpack completely and repack to identical bytes; repeated
+successful pack must unpack completely and repack to identical bits; repeated
 normalization must preserve the decoded value. Reject invalid shapes and values
 outside that domain. These are codec laws, not arithmetic equivalence laws.
 """.
--callback pack(Value :: any(), atom(), [any()]) -> binary().
+-callback pack(Value :: any(), atom(), [any()]) -> bitstring().
 
 -doc """
 Unpacks a value previously processed by pack/2.  This is usually a sub-call of
 an `hls_gs` instance's `unpack/2`.
 """.
--callback unpack(Packed :: binary(), atom(), [any()]) -> {Value :: any(), Rest :: binary()}.
+-callback unpack(Packed :: bitstring(), atom(), [any()]) -> {Value :: any(), Rest :: bitstring()}.
 
 -doc """
 Converts an Erlang call with XLS embodiments of its arguments to an equivalent
@@ -82,7 +83,9 @@ allowing types such as integers to avoid importing unrelated float companions.
 -doc """
 Describes wire conversion for a type whose DSLX value cannot use a bit cast.
 The two functions render from-bits and to-bits expressions respectively.
-Collections compose their element codecs. Omission means ordinary bit casts.
+Collections compose their element codecs, including padding within each
+element. Omission means ordinary bit casts; value_width/2 declares whether
+such casts add or remove padding. Padding must match the host codec policy.
 """.
 -callback dslx_codec(atom(), [arg()]) -> bit_cast |
     {fun((xls_parse:printable()) -> xls_parse:printable()),
@@ -95,8 +98,12 @@ Collections compose their element codecs. Omission means ordinary bit casts.
 -doc "Emits the corresponding XLS type for the Erlang type descriptor.".
 -callback print_type(TypeName :: atom(), Args :: [any()]) -> xls_parse:printable().
 
--doc "Calculate the bit width of this type when packed.".
+-doc "Serialized bit width, including padding; pack/3 must return this many bits.".
 -callback width(Name :: atom(), Args :: [any()]) -> integer().
+
+-doc "Logical XLS value width, excluding wire padding. Defaults to width/2.".
+-callback value_width(Name :: atom(), Args :: [arg()]) -> non_neg_integer().
+-optional_callbacks([value_width/2]).
 
 % -doc """
 % in-XLS un/pack? or maybe transpiles to `as` but has no Erlang effect?
@@ -144,19 +151,28 @@ transpile(Operation, _Args, _State) when Operation =:= normalize;
 width(#hls_type{module = Module, name = Name, args = Args}) ->
     Module:width(Name, Args).
 
+-doc "Returns the logical value width; width/1 returns the serialized width.".
+-spec value_width(descriptor()) -> non_neg_integer().
+value_width(#hls_type{module = Module, name = Name, args = Args}) ->
+    _ = code:ensure_loaded(Module),
+    case erlang:function_exported(Module, value_width, 2) of
+        true -> Module:value_width(Name, Args);
+        false -> Module:width(Name, Args)
+    end.
+
 -doc """
-Packs a host value, checking the provider's binary against its declared width.
+Packs a host value, checking the provider's bitstring against its declared width.
 Built-in integers reject overflow and fixed-size collections require exact
 lengths. Floats round to the selected IEEE binary format and reject nonfinite
 results. Generated record packers use this boundary for each field, including
 fields in topology startup messages. See docs/numeric-contract.md.
 """.
--spec pack(term(), descriptor()) -> binary().
+-spec pack(term(), descriptor()) -> bitstring().
 pack(Value, Descriptor = #hls_type{module = Module, name = Name, args = Args}) ->
     Width = width(Descriptor),
     case Module:pack(Value, Name, Args) of
-        Packed when is_binary(Packed), bit_size(Packed) =:= Width -> Packed;
-        Packed when is_binary(Packed) ->
+        Packed when is_bitstring(Packed), bit_size(Packed) =:= Width -> Packed;
+        Packed when is_bitstring(Packed) ->
             error({invalid_packed_width, Descriptor, Width, bit_size(Packed)});
         _Invalid -> error({invalid_packed_value, Descriptor})
     end.
@@ -177,7 +193,7 @@ Packs only if unpacking preserves the original Erlang term exactly (=:=).
 This host-only check rejects float rounding and integer-to-float coercion,
 including inside collections. Ordinary pack/2 follows the provider's policy.
 """.
--spec pack_exact(term(), descriptor()) -> binary().
+-spec pack_exact(term(), descriptor()) -> bitstring().
 pack_exact(Value, Descriptor) ->
     Packed = pack(Value, Descriptor),
     case unpack(Packed, Descriptor) of
@@ -185,8 +201,10 @@ pack_exact(Value, Descriptor) ->
         {_Normalized, <<>>} -> error({inexact_packing, Descriptor})
     end.
 
-unpack(Binary, {hls_type, Module, Name, Args}) ->
-    Module:unpack(Binary, Name, Args).
+unpack(Packed, Type = {hls_type, Module, Name, Args}) ->
+    {Field, Rest} = hls_codec:split(Packed, width(Type)),
+    {Value, <<>>} = Module:unpack(Field, Name, Args),
+    {Value, Rest}.
 
 print_type({hls_type, Module, Name, Args}) ->
     Module:print_type(Name, Args).

@@ -1,6 +1,6 @@
 # Control flow and failures
 
-Supported `case` and `if` expressions try clauses in source order. A catch-all clause is optional. If no clause matches, the selected expression fails with `case_clause` or `if_clause`, respectively. A guarded final variable pattern is still conditional. Supported patterns are integer/Boolean/enum literals, variables, aliases, tuples, homogeneous records, and fixed-array list patterns; guards accept semicolon-separated alternatives, each containing comma-separated Boolean tests from the supported guard subset. Heterogeneous tagged alternatives and general Erlang exceptions remain outside this subset.
+Supported `case` and `if` expressions try clauses in source order. A catch-all clause is optional. If no clause matches, the selected expression fails with `case_clause` or `if_clause`, respectively. A guarded final variable pattern is still conditional. Supported patterns are integer/Boolean/enum literals, variables, aliases, tuples, homogeneous records, and fixed-array list patterns; guards accept semicolon-separated alternatives, each containing comma-separated Boolean tests from the supported guard subset. Bound Boolean variables and Boolean record fields may also appear directly as guards. Heterogeneous tagged alternatives and general Erlang exceptions remain outside this subset.
 
 ```erlang
 -spec nonzero(hls_nums:u32()) -> hls_nums:u32().

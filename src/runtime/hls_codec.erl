@@ -1,10 +1,34 @@
 -module(hls_codec).
 -moduledoc false.
 -export([checked_integer/3, pack_integer/3, wrap_integer/3, pack_float/2,
-    unpack_float16/1]).
+    unpack_float16/1, unsigned/1, join/1, split/2, pad_to/2, align/2]).
+
+%% Scalar fields use Erlang's little-endian bit syntax. Aggregates concatenate
+%% those bitstrings directly; XLS performs the fixed wire permutation.
+-spec unsigned(bitstring()) -> non_neg_integer().
+unsigned(Packed) ->
+    Width = bit_size(Packed),
+    <<Value:Width/little>> = Packed,
+    Value.
+
+-spec join([bitstring()]) -> bitstring().
+join(Fields) -> list_to_bitstring(Fields).
+
+-spec split(bitstring(), non_neg_integer()) -> {bitstring(), bitstring()}.
+split(Packed, Width) ->
+    <<Field:Width/bitstring, Rest/bitstring>> = Packed,
+    {Field, Rest}.
+
+-spec pad_to(bitstring(), non_neg_integer()) -> bitstring().
+pad_to(Packed, Width) ->
+    <<Packed/bitstring, 0:(Width - bit_size(Packed))>>.
+
+-spec align(bitstring(), pos_integer()) -> bitstring().
+align(Packed, Unit) ->
+    pad_to(Packed, ((bit_size(Packed) + Unit - 1) div Unit) * Unit).
 
 %% Values enter from untyped host messages. Width and signedness come from the
-%% type provider; packed widths must be positive and byte-aligned.
+%% type provider; packed widths must be positive.
 -spec checked_integer(term(), pos_integer(), signed | unsigned) -> integer().
 checked_integer(Value, Width, unsigned) when is_integer(Value),
         Value >= 0, Value < (1 bsl Width) -> Value;
@@ -12,7 +36,7 @@ checked_integer(Value, Width, signed) when is_integer(Value),
         Value >= -(1 bsl (Width - 1)), Value < (1 bsl (Width - 1)) -> Value;
 checked_integer(_Value, _Width, _Signedness) -> error(badarg).
 
--spec pack_integer(term(), pos_integer(), signed | unsigned) -> binary().
+-spec pack_integer(term(), pos_integer(), signed | unsigned) -> bitstring().
 pack_integer(Value, Width, Signedness) ->
     Checked = checked_integer(Value, Width, Signedness),
     %% Bit syntax preserves the low Width bits of the checked value, including

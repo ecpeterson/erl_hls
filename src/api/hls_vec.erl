@@ -15,6 +15,7 @@ type. Fixed-point products retain their combined scale; no rescaling is implicit
 -export([width/2, zero/2, pack/3, unpack/3, print_type/2, transpile/3, dslx_imports/1]).
 -export_type([vector/2]).
 -export([dslx_codec/2]).
+-export([value_width/2]).
 
 -type vector(Element, Size) :: [Element] | {no_return(), Size}.
 
@@ -36,6 +37,7 @@ dot_sum([Left | LeftRest], [Right | RightRest], Sum) ->
 width(vector, [Subtype, Size]) ->
     _ = vector(Subtype, Size),
     hls_type:width(Subtype) * Size.
+value_width(vector, Args) -> hls_lists:value_width(list, Args).
 zero(vector, Args) -> hls_lists:zero(list, Args).
 print_type(vector, Args) -> hls_lists:print_type(list, Args).
 pack(Values, vector, Args) -> hls_lists:pack(Values, list, Args).
@@ -49,5 +51,5 @@ transpile(vector, [{phantom, type, Subtype}, {static, integer, Size}], State) ->
 transpile(nth, Args, State) -> hls_lists:transpile(nth, Args, State);
 transpile(set, Args, State) -> hls_lists:transpile(set, Args, State);
 transpile(dot, [{phantom, type, AccumulatorType}, Left, Right], _State) ->
-    ["hls_vec::dot<u32:", integer_to_list(hls_type:width(AccumulatorType)),
+    ["hls_vec::dot<u32:", integer_to_list(hls_type:value_width(AccumulatorType)),
         ">(", Left, ", ", Right, ")"].

@@ -429,8 +429,8 @@ pack_startup_message(Target, Index, Module, Message)
     {Tag, Payload} = case Packed of
         {PackedTag, PackedPayload}
                 when is_integer(PackedTag), PackedTag >= 0,
-                     PackedTag =< 255, is_binary(PackedPayload) ->
-            {PackedTag, PackedPayload};
+                     PackedTag =< 255, is_bitstring(PackedPayload) ->
+            {PackedTag, hls_codec:align(PackedPayload, 32)};
         {InvalidTag, InvalidPayload} ->
             error({invalid_packed_startup_message,
                 Target, Index, InvalidTag, InvalidPayload})

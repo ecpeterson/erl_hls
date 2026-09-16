@@ -37,6 +37,7 @@ rsync -a -e "ssh -o BatchMode=yes" \
     "$local_stage/phi_phenom_topology_tb.sv" \
     "$local_stage/phi_torus_topology_tb.sv" \
     "$local_stage/phi_noise_topology_smoke_tb.sv" \
+    "$local_stage/phi_noise_topology_smoke_rams.vh" \
     "$local_stage/phi_memory_bridge_tb.sv" \
     "$local_stage/hls_fabric_host_tx_tb.sv" \
     "$local_stage/ordered_egress_topology_tb.sv" \

@@ -5,7 +5,7 @@ write(Stage) ->
     {ok, Forms0} = epp:parse_file("test/xls_helpers_fixture.erl", [], []),
     {Forms, Helpers} = xls_helpers:prepare(Forms0, [{factored, 3}, {inline, 3}]),
     Declarations = ["enum Tag : u8 { CELL = 0, REPORT = 1 }\n",
-        xls_dslx_imports:emit([hls_failure], xls_dslx_imports:from_forms(Forms)),
+        xls_dslx_imports:emit([hls_failure, hls_bits], xls_dslx_imports:from_forms(Forms)),
         [[xls_parse:struct_from_record(Record),
             xls_parse:bitsfromstruct_from_record(Record)]
             || Record = {attribute, _, record, _} <- Forms]],

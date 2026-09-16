@@ -10,7 +10,7 @@ write(Stage) ->
     Expected = [{I, Name, [{Input, expected(Name, Input)} || Input <- Grid]}
         || {I, Name} <- lists:enumerate(0, Names)],
     Text = ["enum Tag : u8 { CELL = 1 }\n",
-        xls_dslx_imports:emit([hls_failure], xls_dslx_imports:from_forms(Forms)),
+        xls_dslx_imports:emit([hls_failure, hls_bits], xls_dslx_imports:from_forms(Forms)),
         [[xls_parse:struct_from_record(R), xls_parse:bitsfromstruct_from_record(R)]
             || R = {attribute, _, record, _} <- Forms],
         xls_helpers:emit(Helpers, cell, #{}),
