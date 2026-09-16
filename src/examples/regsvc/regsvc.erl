@@ -10,6 +10,7 @@
 
 -behavior(hls_gs).
 -hls_tags([set, get, ping, bulk_get, ack, read, bulk_read]).  % public wire payloads
+-hls_replies([{ping, [ack]}, {get, [read]}, {bulk_get, [bulk_read]}]).
 -compile({parse_transform, hls_pack}).  % auto-defines un/pack
 
 -define(REGISTER_COUNT, 16).

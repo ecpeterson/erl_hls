@@ -3,6 +3,7 @@
 -compile({parse_transform, hls_pack}).
 -export([init/1, handle_call/2, handle_cast/2]).
 -hls_tags(['Set_Value', 'Get_Value', 'Reply_Value']).
+-hls_replies([{'Get_Value', ['Reply_Value']}]).
 -record('Set_Value', {'Value' = hls_type:zero() :: hls_nums:u32()}).
 -record('Get_Value', {'Key' = hls_type:zero() :: hls_nums:u32()}).
 -record('Reply_Value', {'Value' = hls_type:zero() :: hls_nums:u32()}).

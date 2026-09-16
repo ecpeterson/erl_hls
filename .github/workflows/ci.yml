@@ -100,6 +100,9 @@ jobs:
       - name: Compare control-flow failures with BEAM and routed RTL
         run: bash tools/test_control_failures.sh "$RUNNER_TEMP/xls"
 
+      - name: Check service reply contracts under backpressure
+        run: bash tools/test_service_contracts.sh "$RUNNER_TEMP/xls"
+
       - name: Compare typed floats with BEAM, JIT, and routed RTL
         run: bash tools/test_float_arithmetic.sh "$RUNNER_TEMP/xls"
 
@@ -235,6 +238,10 @@ jobs:
             _build/effect_window/*.ys
             _build/effect_window/*.log
             _build/effect_window/*.console
+            _build/service_contracts/*.log
+            _build/service_contracts/*.json
+            _build/service_contracts/**/*.v
+            _build/service_contracts/**/*.x
             _build/entry_outcomes/*.x
             _build/entry_outcomes/*.ir
             _build/entry_outcomes/*.v

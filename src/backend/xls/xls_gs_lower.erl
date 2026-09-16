@@ -15,37 +15,17 @@ initial_state(Forms, StateName) ->
 
 -spec callback_arms([erl_parse:abstract_form()], atom()) -> iolist().
 callback_arms(Forms, StateName) ->
-    DeclaredTags = xls_parse:find_tags(Forms),
-    CallGroups = callback_groups(Forms, handle_call),
-    CastGroups = callback_groups(Forms, handle_cast),
-    ok = validate_groups(CallGroups, CastGroups, DeclaredTags),
+    #{calls := Replies} = hls_service_contract:from_forms(Forms),
+    CallGroups = hls_service_contract:groups(Forms, handle_call),
+    CastGroups = hls_service_contract:groups(Forms, handle_cast),
     [
-        [callback_arm(call, Group, StateName, Forms) || Group <- CallGroups],
+        [callback_arm({call, maps:get(Tag, Replies)}, Group, StateName, Forms)
+            || Group = {Tag, _} <- CallGroups],
         [callback_arm(cast, Group, StateName, Forms) || Group <- CastGroups],
         "\n_ => {\n",
         xls_parse_io:indent(failure("ERROR_FUNCTION_CLAUSE", StateName), 2),
         "}\n"
     ].
-
-callback_groups(Forms, Function) ->
-    Clauses = xls_parse:find_function(Forms, Function, 2),
-    xls_callback_lower:group_by(Clauses, fun callback_tag/1).
-
-callback_tag({clause, _Line, [MessagePattern, _DataPattern], _Guards, _Body}) ->
-    xls_pattern_lower:record_pattern_name(MessagePattern).
-
-validate_groups(CallGroups, CastGroups, DeclaredTags) ->
-    CallTags = [Tag || {Tag, _Clauses} <- CallGroups],
-    CastTags = [Tag || {Tag, _Clauses} <- CastGroups],
-    UsedTags = CallTags ++ CastTags,
-    case [Tag || Tag <- UsedTags, not lists:member(Tag, DeclaredTags)] of
-        [] -> ok;
-        Undeclared -> error({undeclared_hls_gs_callback_tags, Undeclared})
-    end,
-    case [Tag || Tag <- CallTags, lists:member(Tag, CastTags)] of
-        [] -> ok;
-        Ambiguous -> error({ambiguous_hls_gs_callback_tags, Ambiguous})
-    end.
 
 callback_arm(Kind, {Tag, Clauses}, StateName, Forms) ->
     Arguments = [
@@ -84,10 +64,16 @@ callback_arm(Kind, {Tag, Clauses}, StateName, Forms) ->
         "},\n"
     ].
 
-callbacks(call, StateName) ->
+callbacks({call, Replies}, StateName) ->
     {
         fun(R) ->
-            ["(axis::pack(", R, ".1.0 as u8, ", R, ".1.2), ", R, ".2)"]
+            ["if ", lists:join(" || ", [
+                [R, ".1.0 == Tag::", xls_names:enum_member(Tag)] || Tag <- Replies
+            ]), " {\n",
+            "  (axis::pack(", R, ".1.0 as u8, ", R, ".1.2), ", R, ".2)\n",
+            "} else {\n",
+            xls_parse_io:indent(failure("ERROR_REPLY_CONTRACT", StateName), 2),
+            "\n}"]
         end,
         failure("ERROR_FUNCTION_CLAUSE", StateName),
         fun(Kind) -> failure(["hls_failure::kind(", Kind, ") as u32"], StateName) end

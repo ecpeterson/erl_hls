@@ -2,6 +2,7 @@
 
 -hls_data(state).
 -hls_tags([first]).
+-hls_replies([{last, [last]}]).
 -include("hls_tags_shared.hrl").
 -hls_tags([last]).
 -compile({parse_transform, hls_pack}).

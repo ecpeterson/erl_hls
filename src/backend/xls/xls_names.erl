@@ -210,7 +210,7 @@ generated(Name) -> #{kind => generated, name => Name}.
 %% collide with the two codec name forms or the hls_local_ helper prefix.
 runtime(hls_gs) ->
     ["Tag", "Service", "Top", "N", "NOREPLY", "REPLY", "OK", "MAX_PAYLOAD",
-        "ERROR_FUNCTION_CLAUSE", "ERROR_REQUEST_LENGTH", "INITIAL_STATE"];
+        "ERROR_FUNCTION_CLAUSE", "ERROR_REQUEST_LENGTH", "ERROR_REPLY_CONTRACT", "INITIAL_STATE"];
 runtime(hls_statem) ->
     ["Tag", "Phase", "Directive", "OutputPort", "Egress", "EntryEffects",
         "EntryOutcome", "MailboxSlot", "Machine", "SharedMachine", "MachineBits",

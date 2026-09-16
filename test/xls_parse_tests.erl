@@ -707,6 +707,7 @@ hls_gs_callback_body_accepts_if_test() ->
     ok = filelib:ensure_dir(Path),
     Source = <<
         "-module(gs_if_fixture).\n"
+        "-hls_replies([{query, [message]}]).\n"
         "-hls_data(state).\n"
         "-hls_tags([message, query]).\n"
         "-record(message, {\n"

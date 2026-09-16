@@ -11,6 +11,7 @@ const REPLY = u1:1;
 const OK = u1:0;
 const ERROR_FUNCTION_CLAUSE = u32:1;
 const ERROR_REQUEST_LENGTH = u32:3;
+const ERROR_REPLY_CONTRACT = u32:15;
 
 const MAX_PAYLOAD = u32:3;
 
@@ -145,12 +146,12 @@ pub fn bits_from_state(s: State) -> bits[bit_count<State>()] {
   (s.registers as bits[512]) ++  zero!<bits[0]>()
 }
 
-const XLS_FAILURE_SITE_BADARG_3A68C26C_L100 = u16:30; // regsvc.erl:L100
-const XLS_FAILURE_SITE_BADARG_3A68C26C_L102 = u16:46; // regsvc.erl:L102
-const XLS_FAILURE_SITE_BADARG_3A68C26C_L109 = u16:62; // regsvc.erl:L109
-const XLS_FAILURE_SITE_BADARG_3A68C26C_L117 = u16:78; // regsvc.erl:L117
-const XLS_FAILURE_SITE_BADARG_3A68C26C_L121 = u16:94; // regsvc.erl:L121
-fn initial_state_outcome() -> (bool, State) {  // L93
+const XLS_FAILURE_SITE_BADARG_3A68C26C_L101 = u16:30; // regsvc.erl:L101
+const XLS_FAILURE_SITE_BADARG_3A68C26C_L103 = u16:46; // regsvc.erl:L103
+const XLS_FAILURE_SITE_BADARG_3A68C26C_L110 = u16:62; // regsvc.erl:L110
+const XLS_FAILURE_SITE_BADARG_3A68C26C_L118 = u16:78; // regsvc.erl:L118
+const XLS_FAILURE_SITE_BADARG_3A68C26C_L122 = u16:94; // regsvc.erl:L122
+fn initial_state_outcome() -> (bool, State) {  // L94
   let _0 = State {
     ..zero!<State>()
   };
@@ -195,7 +196,12 @@ Tag::PING => {
       let s = zero!<State>();
       (axis::pack(Tag::ERROR as u8, hls_failure::kind(hls_failure::NONE) as u32), (Tag::STATE, s))
     } else {
-      (axis::pack(_2.1.0 as u8, _2.1.2), _2.2)
+      if _2.1.0 == Tag::ACK {
+        (axis::pack(_2.1.0 as u8, _2.1.2), _2.2)
+      } else {
+        let s = zero!<State>();
+        (axis::pack(Tag::ERROR as u8, ERROR_REPLY_CONTRACT), (Tag::STATE, s))
+      }
     }
   }
 },
@@ -219,11 +225,16 @@ Tag::GET => {
       };
       let _5 = (Tag::READ, _4, bits_from_read(_4));
       let _6 = (REPLY, _5, Xls_clause_1_State_1, );
-      if ((hls_failure::check(_3.1, XLS_FAILURE_SITE_BADARG_3A68C26C_L109)) != hls_failure::NONE) {
+      if ((hls_failure::check(_3.1, XLS_FAILURE_SITE_BADARG_3A68C26C_L110)) != hls_failure::NONE) {
         let s = zero!<State>();
-        (axis::pack(Tag::ERROR as u8, hls_failure::kind(hls_failure::check(_3.1, XLS_FAILURE_SITE_BADARG_3A68C26C_L109)) as u32), (Tag::STATE, s))
+        (axis::pack(Tag::ERROR as u8, hls_failure::kind(hls_failure::check(_3.1, XLS_FAILURE_SITE_BADARG_3A68C26C_L110)) as u32), (Tag::STATE, s))
       } else {
-        (axis::pack(_6.1.0 as u8, _6.1.2), _6.2)
+        if _6.1.0 == Tag::READ {
+          (axis::pack(_6.1.0 as u8, _6.1.2), _6.2)
+        } else {
+          let s = zero!<State>();
+          (axis::pack(Tag::ERROR as u8, ERROR_REPLY_CONTRACT), (Tag::STATE, s))
+        }
       }
     } else {
       let s = zero!<State>();
@@ -248,7 +259,12 @@ Tag::BULK_GET => {
         let s = zero!<State>();
         (axis::pack(Tag::ERROR as u8, hls_failure::kind(hls_failure::NONE) as u32), (Tag::STATE, s))
       } else {
-        (axis::pack(_2.1.0 as u8, _2.1.2), _2.2)
+        if _2.1.0 == Tag::BULK_READ {
+          (axis::pack(_2.1.0 as u8, _2.1.2), _2.2)
+        } else {
+          let s = zero!<State>();
+          (axis::pack(Tag::ERROR as u8, ERROR_REPLY_CONTRACT), (Tag::STATE, s))
+        }
       }
     } else {
       let Xls_clause_2_Start_1 = request.start;
@@ -281,11 +297,16 @@ Tag::BULK_GET => {
         };
         let _11 = (Tag::BULK_READ, _10, bits_from_bulkread(_10));
         let _12 = (REPLY, _11, Xls_clause_2_State_1, );
-        if ((hls_failure::first_all([hls_failure::check(_8.1, XLS_FAILURE_SITE_BADARG_3A68C26C_L117), hls_failure::check(_9.1, XLS_FAILURE_SITE_BADARG_3A68C26C_L121)])) != hls_failure::NONE) {
+        if ((hls_failure::first_all([hls_failure::check(_8.1, XLS_FAILURE_SITE_BADARG_3A68C26C_L118), hls_failure::check(_9.1, XLS_FAILURE_SITE_BADARG_3A68C26C_L122)])) != hls_failure::NONE) {
           let s = zero!<State>();
-          (axis::pack(Tag::ERROR as u8, hls_failure::kind(hls_failure::first_all([hls_failure::check(_8.1, XLS_FAILURE_SITE_BADARG_3A68C26C_L117), hls_failure::check(_9.1, XLS_FAILURE_SITE_BADARG_3A68C26C_L121)])) as u32), (Tag::STATE, s))
+          (axis::pack(Tag::ERROR as u8, hls_failure::kind(hls_failure::first_all([hls_failure::check(_8.1, XLS_FAILURE_SITE_BADARG_3A68C26C_L118), hls_failure::check(_9.1, XLS_FAILURE_SITE_BADARG_3A68C26C_L122)])) as u32), (Tag::STATE, s))
         } else {
-          (axis::pack(_12.1.0 as u8, _12.1.2), _12.2)
+          if _12.1.0 == Tag::BULK_READ {
+            (axis::pack(_12.1.0 as u8, _12.1.2), _12.2)
+          } else {
+            let s = zero!<State>();
+            (axis::pack(Tag::ERROR as u8, ERROR_REPLY_CONTRACT), (Tag::STATE, s))
+          }
         }
       } else {
         let s = zero!<State>();
@@ -337,9 +358,9 @@ Tag::SET => {
         };
         let _12 = (Tag::STATE, _11);
         let _13 = (NOREPLY, _12, );
-        if ((hls_failure::first_all([hls_failure::check(_3.1, XLS_FAILURE_SITE_BADARG_3A68C26C_L100), hls_failure::check(_10.1, XLS_FAILURE_SITE_BADARG_3A68C26C_L102)])) != hls_failure::NONE) {
+        if ((hls_failure::first_all([hls_failure::check(_3.1, XLS_FAILURE_SITE_BADARG_3A68C26C_L101), hls_failure::check(_10.1, XLS_FAILURE_SITE_BADARG_3A68C26C_L103)])) != hls_failure::NONE) {
           let s = zero!<State>();
-          (axis::pack(Tag::ERROR as u8, hls_failure::kind(hls_failure::first_all([hls_failure::check(_3.1, XLS_FAILURE_SITE_BADARG_3A68C26C_L100), hls_failure::check(_10.1, XLS_FAILURE_SITE_BADARG_3A68C26C_L102)])) as u32), (Tag::STATE, s))
+          (axis::pack(Tag::ERROR as u8, hls_failure::kind(hls_failure::first_all([hls_failure::check(_3.1, XLS_FAILURE_SITE_BADARG_3A68C26C_L101), hls_failure::check(_10.1, XLS_FAILURE_SITE_BADARG_3A68C26C_L103)])) as u32), (Tag::STATE, s))
         } else {
           (zero!<axis::Frame>(), _13.1)
         }

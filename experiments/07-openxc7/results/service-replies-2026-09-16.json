@@ -1,0 +1,55 @@
+{
+  "baseline": "b3e2467b2c7bd7c5844869761ad5a6c6f5869367",
+  "prediction": "Reply membership checks fold away for fixed record constructors; no regsvc area change.",
+  "tool_sha256": {
+    "ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+    "opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c",
+    "codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162"
+  },
+  "yosys": "Yosys 0.69+10 (git sha1 370a53acf-dirty, Release, Clang /usr/local/osxcross/target/bin/aarch64-apple-darwin25.5-clang++ 21.1.8)",
+  "mapping": "synth_xilinx -flatten -abc9 -arch xc7 -noiopad -noclkbuf -top __regsvc__Top_0_next",
+  "schedule": {
+    "pipeline_stages": 1,
+    "delay_model": "unit",
+    "flop_inputs": false,
+    "flop_outputs": true
+  },
+  "results": {
+    "before": {
+      "cells": {
+        "$scopeinfo": 6,
+        "CARRY4": 24,
+        "FDRE": 1226,
+        "LUT2": 198,
+        "LUT3": 186,
+        "LUT4": 1053,
+        "LUT5": 649,
+        "LUT6": 333,
+        "MUXF7": 66,
+        "MUXF8": 33
+      },
+      "LUT": 2419,
+      "FF": 1226,
+      "dslx_sha256": "9f1d8648a8e00b2c3a9b53a70dc53f026d1441ec023877d378b958389296949a",
+      "rtl_sha256": "49f8629bd336986f86c80666bca666b650a8ea661297b31e2a83aaf6a1e80c35"
+    },
+    "after": {
+      "cells": {
+        "$scopeinfo": 6,
+        "CARRY4": 24,
+        "FDRE": 1226,
+        "LUT2": 198,
+        "LUT3": 186,
+        "LUT4": 1053,
+        "LUT5": 649,
+        "LUT6": 333,
+        "MUXF7": 66,
+        "MUXF8": 33
+      },
+      "LUT": 2419,
+      "FF": 1226,
+      "dslx_sha256": "e14e66f89274986fd9f74a84ea3250bfc9cb99ed3ee86b3dc59208b3f73ee61d",
+      "rtl_sha256": "f0c41dd78218c2c54f9d227baba4efa948a7fa7a3900c0a94c5f741cff1b57d5"
+    }
+  }
+}

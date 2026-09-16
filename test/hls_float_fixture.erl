@@ -14,6 +14,7 @@
 
 -hls_data(ledger).
 -hls_tags([calculate, read, load, report]).
+-hls_replies([{calculate, [report]}, {read, [report]}]).
 -record(ledger, {
     value = hls_type:zero() :: hls_nums:?FLOAT_TYPE(),
     history = hls_type:zero() :: hls_vec:vector(hls_vec:vector(hls_nums:?FLOAT_TYPE(), 2), 2)

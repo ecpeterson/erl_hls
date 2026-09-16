@@ -3,6 +3,7 @@
 -module(hls_companion_gs_fixture).
 -hls_data(state).
 -hls_tags([query, reply]).
+-hls_replies([{query, [reply]}]).
 -include("hls_companion_types.hrl").
 
 -record(reply, {value = hls_type:zero() :: phi_field:scalar()}).

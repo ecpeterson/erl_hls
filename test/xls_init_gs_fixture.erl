@@ -5,6 +5,7 @@
 
 -hls_data(ledger).
 -hls_tags([query, change, report]).
+-hls_replies([{query, [report]}]).
 
 -record(query, {value = hls_type:zero() :: hls_nums:u32()}).
 -record(change, {value = hls_type:zero() :: hls_nums:u32()}).

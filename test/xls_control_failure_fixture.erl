@@ -6,6 +6,7 @@
 
 -hls_data(ledger).
 -hls_tags([probe, read, change, report]).
+-hls_replies([{probe, [report]}, {read, [report]}]).
 -record(ledger, {value = hls_type:zero() :: hls_nums:u32()}).
 -record(probe, {mode = hls_type:zero() :: hls_nums:u32(), left = hls_type:zero() :: hls_nums:u32(), right = hls_type:zero() :: hls_nums:u32()}).
 -record(read, {unused = hls_type:zero() :: hls_nums:u32()}).
