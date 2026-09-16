@@ -45,7 +45,14 @@ size_bif_resolution_test() ->
     Definition = {function, 1, bit_size, 1, []},
     ?assertEqual([Definition, Bif], xls_binary_lower:prepare([Definition, Bif])),
     Disabled = {attribute, 1, compile, {no_auto_import, [{bit_size, 1}]}},
-    ?assertEqual([Disabled, Bif], xls_binary_lower:prepare([Disabled, Bif])).
+    ?assertEqual([Disabled, Bif], xls_binary_lower:prepare([Disabled, Bif])),
+    Qualified = {call, 1, {remote, 1, {atom, 1, local_module}, {atom, 1, bit_size}}, [{var, 1, 'X'}]},
+    LocalForms = [{attribute, 1, module, local_module}, {attribute, 1, hls_data, unused},
+        {attribute, 1, hls_tags, []},
+        {function, 1, probe, 1, [{clause, 1, [{var, 1, 'X'}], [], [Qualified]}]}],
+    %% Localizing a qualified call must not make it look auto-imported.
+    ?assertError({undefined_xls_helper, 1, {bit_size, 1}},
+        xls_helpers:prepare(LocalForms, [{probe, 1}])).
 
 source_failure_sites_test() ->
     {ok, Forms0} = epp:parse_file("test/xls_binary_fixture.erl", [], []),
