@@ -59,8 +59,8 @@ oracle(Type, A, B) ->
     {X, <<>>} = hls_type:unpack(<<A:Wire/little>>, Type),
     {Y, <<>>} = hls_type:unpack(<<B:Wire/little>>, Type),
     try
-        Q = binary:decode_unsigned(hls_type:pack(hls_nums:wrap(Type, X div Y), Type), little),
-        R = binary:decode_unsigned(hls_type:pack(hls_nums:wrap(Type, X rem Y), Type), little),
+        Q = hls_codec:unsigned(hls_type:pack(hls_nums:wrap(Type, X div Y), Type)),
+        R = hls_codec:unsigned(hls_type:pack(hls_nums:wrap(Type, X rem Y), Type)),
         ((Q band ((1 bsl W)-1)) bsl (W+2)) bor ((R band ((1 bsl W)-1)) bsl 1)
     catch error:badarith -> (1 bsl (W+1)) bor 1
     end.

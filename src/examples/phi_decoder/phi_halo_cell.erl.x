@@ -7,6 +7,7 @@ import bram;
 import mailbox;
 import scheduler;
 import hls_failure;
+import hls_bits;
 import hls_integer;
 import phi_field;
 
@@ -84,14 +85,15 @@ pub struct Phi {
 }
 
 pub fn phi_from_bits<N: u32>(raw: bits[N]) -> Phi {
+  let stream = hls_bits::to_stream(raw);
   Phi {
-    epoch: raw[0:32] as u32,
-    values: raw[32:96] as phi_field::Field,
+    epoch: hls_bits::from_stream(stream[N - u32:32+:bits[32]]) as u32,
+    values: hls_bits::from_stream(stream[N - u32:96+:bits[64]]) as phi_field::Field,
   }
 }
 
 pub fn bits_from_phi(s: Phi) -> bits[96] {
-  (s.values as bits[64]) ++ (s.epoch as bits[32]) ++  zero!<bits[0]>()
+  hls_bits::from_stream(hls_bits::to_stream(s.epoch as bits[32]) ++ hls_bits::to_stream(s.values as bits[64]) ++ zero!<bits[0]>())
 }
 
 pub struct Anyonmove {
@@ -100,14 +102,15 @@ pub struct Anyonmove {
 }
 
 pub fn anyonmove_from_bits<N: u32>(raw: bits[N]) -> Anyonmove {
+  let stream = hls_bits::to_stream(raw);
   Anyonmove {
-    step: raw[0:32] as u32,
-    present: raw[32:64] as u32,
+    step: hls_bits::from_stream(stream[N - u32:32+:bits[32]]) as u32,
+    present: hls_bits::from_stream(stream[N - u32:64+:bits[32]]) as u32,
   }
 }
 
 pub fn bits_from_anyonmove(s: Anyonmove) -> bits[64] {
-  (s.present as bits[32]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
+  hls_bits::from_stream(hls_bits::to_stream(s.step as bits[32]) ++ hls_bits::to_stream(s.present as bits[32]) ++ zero!<bits[0]>())
 }
 
 pub struct Phi0 {
@@ -117,15 +120,16 @@ pub struct Phi0 {
 }
 
 pub fn phi0_from_bits<N: u32>(raw: bits[N]) -> Phi0 {
+  let stream = hls_bits::to_stream(raw);
   Phi0 {
-    step: raw[0:32] as u32,
-    source: raw[32:64] as u32,
-    value: raw[64:96] as phi_field::Scalar,
+    step: hls_bits::from_stream(stream[N - u32:32+:bits[32]]) as u32,
+    source: hls_bits::from_stream(stream[N - u32:64+:bits[32]]) as u32,
+    value: hls_bits::from_stream(stream[N - u32:96+:bits[32]]) as phi_field::Scalar,
   }
 }
 
 pub fn bits_from_phi0(s: Phi0) -> bits[96] {
-  (s.value as bits[32]) ++ (s.source as bits[32]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
+  hls_bits::from_stream(hls_bits::to_stream(s.step as bits[32]) ++ hls_bits::to_stream(s.source as bits[32]) ++ hls_bits::to_stream(s.value as bits[32]) ++ zero!<bits[0]>())
 }
 
 pub struct Phenomconfig {
@@ -136,16 +140,17 @@ pub struct Phenomconfig {
 }
 
 pub fn phenomconfig_from_bits<N: u32>(raw: bits[N]) -> Phenomconfig {
+  let stream = hls_bits::to_stream(raw);
   Phenomconfig {
-    seed: raw[0:32] as u32,
-    threshold: raw[32:64] as u32,
-    x: raw[64:80] as u16,
-    y: raw[80:96] as u16,
+    seed: hls_bits::from_stream(stream[N - u32:32+:bits[32]]) as u32,
+    threshold: hls_bits::from_stream(stream[N - u32:64+:bits[32]]) as u32,
+    x: hls_bits::from_stream(stream[N - u32:80+:bits[16]]) as u16,
+    y: hls_bits::from_stream(stream[N - u32:96+:bits[16]]) as u16,
   }
 }
 
 pub fn bits_from_phenomconfig(s: Phenomconfig) -> bits[96] {
-  (s.y as bits[16]) ++ (s.x as bits[16]) ++ (s.threshold as bits[32]) ++ (s.seed as bits[32]) ++  zero!<bits[0]>()
+  hls_bits::from_stream(hls_bits::to_stream(s.seed as bits[32]) ++ hls_bits::to_stream(s.threshold as bits[32]) ++ hls_bits::to_stream(s.x as bits[16]) ++ hls_bits::to_stream(s.y as bits[16]) ++ zero!<bits[0]>())
 }
 
 pub struct Phenomrequest {
@@ -153,13 +158,14 @@ pub struct Phenomrequest {
 }
 
 pub fn phenomrequest_from_bits<N: u32>(raw: bits[N]) -> Phenomrequest {
+  let stream = hls_bits::to_stream(raw);
   Phenomrequest {
-    step: raw[0:32] as u32,
+    step: hls_bits::from_stream(stream[N - u32:32+:bits[32]]) as u32,
   }
 }
 
 pub fn bits_from_phenomrequest(s: Phenomrequest) -> bits[32] {
-  (s.step as bits[32]) ++  zero!<bits[0]>()
+  hls_bits::from_stream(hls_bits::to_stream(s.step as bits[32]) ++ zero!<bits[0]>())
 }
 
 pub struct Phenomquery {
@@ -168,14 +174,15 @@ pub struct Phenomquery {
 }
 
 pub fn phenomquery_from_bits<N: u32>(raw: bits[N]) -> Phenomquery {
+  let stream = hls_bits::to_stream(raw);
   Phenomquery {
-    step: raw[0:32] as u32,
-    source: raw[32:64] as u32,
+    step: hls_bits::from_stream(stream[N - u32:32+:bits[32]]) as u32,
+    source: hls_bits::from_stream(stream[N - u32:64+:bits[32]]) as u32,
   }
 }
 
 pub fn bits_from_phenomquery(s: Phenomquery) -> bits[64] {
-  (s.source as bits[32]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
+  hls_bits::from_stream(hls_bits::to_stream(s.step as bits[32]) ++ hls_bits::to_stream(s.source as bits[32]) ++ zero!<bits[0]>())
 }
 
 pub struct Phenomdata {
@@ -185,15 +192,16 @@ pub struct Phenomdata {
 }
 
 pub fn phenomdata_from_bits<N: u32>(raw: bits[N]) -> Phenomdata {
+  let stream = hls_bits::to_stream(raw);
   Phenomdata {
-    step: raw[0:32] as u32,
-    source: raw[32:64] as u32,
-    flags: raw[64:96] as u32,
+    step: hls_bits::from_stream(stream[N - u32:32+:bits[32]]) as u32,
+    source: hls_bits::from_stream(stream[N - u32:64+:bits[32]]) as u32,
+    flags: hls_bits::from_stream(stream[N - u32:96+:bits[32]]) as u32,
   }
 }
 
 pub fn bits_from_phenomdata(s: Phenomdata) -> bits[96] {
-  (s.flags as bits[32]) ++ (s.source as bits[32]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
+  hls_bits::from_stream(hls_bits::to_stream(s.step as bits[32]) ++ hls_bits::to_stream(s.source as bits[32]) ++ hls_bits::to_stream(s.flags as bits[32]) ++ zero!<bits[0]>())
 }
 
 pub struct Phenomanyon {
@@ -204,16 +212,17 @@ pub struct Phenomanyon {
 }
 
 pub fn phenomanyon_from_bits<N: u32>(raw: bits[N]) -> Phenomanyon {
+  let stream = hls_bits::to_stream(raw);
   Phenomanyon {
-    step: raw[0:32] as u32,
-    flags: raw[32:64] as u32,
-    x: raw[64:80] as u16,
-    y: raw[80:96] as u16,
+    step: hls_bits::from_stream(stream[N - u32:32+:bits[32]]) as u32,
+    flags: hls_bits::from_stream(stream[N - u32:64+:bits[32]]) as u32,
+    x: hls_bits::from_stream(stream[N - u32:80+:bits[16]]) as u16,
+    y: hls_bits::from_stream(stream[N - u32:96+:bits[16]]) as u16,
   }
 }
 
 pub fn bits_from_phenomanyon(s: Phenomanyon) -> bits[96] {
-  (s.y as bits[16]) ++ (s.x as bits[16]) ++ (s.flags as bits[32]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
+  hls_bits::from_stream(hls_bits::to_stream(s.step as bits[32]) ++ hls_bits::to_stream(s.flags as bits[32]) ++ hls_bits::to_stream(s.x as bits[16]) ++ hls_bits::to_stream(s.y as bits[16]) ++ zero!<bits[0]>())
 }
 
 pub struct Phicorrection {
@@ -224,16 +233,17 @@ pub struct Phicorrection {
 }
 
 pub fn phicorrection_from_bits<N: u32>(raw: bits[N]) -> Phicorrection {
+  let stream = hls_bits::to_stream(raw);
   Phicorrection {
-    step: raw[0:32] as u32,
-    x: raw[32:48] as u16,
-    y: raw[48:64] as u16,
-    direction: raw[64:96] as u32,
+    step: hls_bits::from_stream(stream[N - u32:32+:bits[32]]) as u32,
+    x: hls_bits::from_stream(stream[N - u32:48+:bits[16]]) as u16,
+    y: hls_bits::from_stream(stream[N - u32:64+:bits[16]]) as u16,
+    direction: hls_bits::from_stream(stream[N - u32:96+:bits[32]]) as u32,
   }
 }
 
 pub fn bits_from_phicorrection(s: Phicorrection) -> bits[96] {
-  (s.direction as bits[32]) ++ (s.y as bits[16]) ++ (s.x as bits[16]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
+  hls_bits::from_stream(hls_bits::to_stream(s.step as bits[32]) ++ hls_bits::to_stream(s.x as bits[16]) ++ hls_bits::to_stream(s.y as bits[16]) ++ hls_bits::to_stream(s.direction as bits[32]) ++ zero!<bits[0]>())
 }
 
 pub struct Phiconfig {
@@ -241,13 +251,14 @@ pub struct Phiconfig {
 }
 
 pub fn phiconfig_from_bits<N: u32>(raw: bits[N]) -> Phiconfig {
+  let stream = hls_bits::to_stream(raw);
   Phiconfig {
-    seed: raw[0:32] as u32,
+    seed: hls_bits::from_stream(stream[N - u32:32+:bits[32]]) as u32,
   }
 }
 
 pub fn bits_from_phiconfig(s: Phiconfig) -> bits[32] {
-  (s.seed as bits[32]) ++  zero!<bits[0]>()
+  hls_bits::from_stream(hls_bits::to_stream(s.seed as bits[32]) ++ zero!<bits[0]>())
 }
 
 pub struct Pauliquery {
@@ -256,14 +267,15 @@ pub struct Pauliquery {
 }
 
 pub fn pauliquery_from_bits<N: u32>(raw: bits[N]) -> Pauliquery {
+  let stream = hls_bits::to_stream(raw);
   Pauliquery {
-    request_id: raw[0:32] as u32,
-    measurement: raw[32:64] as u32,
+    request_id: hls_bits::from_stream(stream[N - u32:32+:bits[32]]) as u32,
+    measurement: hls_bits::from_stream(stream[N - u32:64+:bits[32]]) as u32,
   }
 }
 
 pub fn bits_from_pauliquery(s: Pauliquery) -> bits[64] {
-  (s.measurement as bits[32]) ++ (s.request_id as bits[32]) ++  zero!<bits[0]>()
+  hls_bits::from_stream(hls_bits::to_stream(s.request_id as bits[32]) ++ hls_bits::to_stream(s.measurement as bits[32]) ++ zero!<bits[0]>())
 }
 
 pub struct Paulireply {
@@ -274,16 +286,17 @@ pub struct Paulireply {
 }
 
 pub fn paulireply_from_bits<N: u32>(raw: bits[N]) -> Paulireply {
+  let stream = hls_bits::to_stream(raw);
   Paulireply {
-    request_id: raw[0:32] as u32,
-    x: raw[32:48] as u16,
-    y: raw[48:64] as u16,
-    anticommutes: raw[64:96] as u32,
+    request_id: hls_bits::from_stream(stream[N - u32:32+:bits[32]]) as u32,
+    x: hls_bits::from_stream(stream[N - u32:48+:bits[16]]) as u16,
+    y: hls_bits::from_stream(stream[N - u32:64+:bits[16]]) as u16,
+    anticommutes: hls_bits::from_stream(stream[N - u32:96+:bits[32]]) as u32,
   }
 }
 
 pub fn bits_from_paulireply(s: Paulireply) -> bits[96] {
-  (s.anticommutes as bits[32]) ++ (s.y as bits[16]) ++ (s.x as bits[16]) ++ (s.request_id as bits[32]) ++  zero!<bits[0]>()
+  hls_bits::from_stream(hls_bits::to_stream(s.request_id as bits[32]) ++ hls_bits::to_stream(s.x as bits[16]) ++ hls_bits::to_stream(s.y as bits[16]) ++ hls_bits::to_stream(s.anticommutes as bits[32]) ++ zero!<bits[0]>())
 }
 
 pub struct Noisecutoff {
@@ -291,13 +304,14 @@ pub struct Noisecutoff {
 }
 
 pub fn noisecutoff_from_bits<N: u32>(raw: bits[N]) -> Noisecutoff {
+  let stream = hls_bits::to_stream(raw);
   Noisecutoff {
-    first_quiet_step: raw[0:32] as u32,
+    first_quiet_step: hls_bits::from_stream(stream[N - u32:32+:bits[32]]) as u32,
   }
 }
 
 pub fn bits_from_noisecutoff(s: Noisecutoff) -> bits[32] {
-  (s.first_quiet_step as bits[32]) ++  zero!<bits[0]>()
+  hls_bits::from_stream(hls_bits::to_stream(s.first_quiet_step as bits[32]) ++ zero!<bits[0]>())
 }
 
 pub struct Pauliupdate {
@@ -305,13 +319,14 @@ pub struct Pauliupdate {
 }
 
 pub fn pauliupdate_from_bits<N: u32>(raw: bits[N]) -> Pauliupdate {
+  let stream = hls_bits::to_stream(raw);
   Pauliupdate {
-    pauli: raw[0:32] as u32,
+    pauli: hls_bits::from_stream(stream[N - u32:32+:bits[32]]) as u32,
   }
 }
 
 pub fn bits_from_pauliupdate(s: Pauliupdate) -> bits[32] {
-  (s.pauli as bits[32]) ++  zero!<bits[0]>()
+  hls_bits::from_stream(hls_bits::to_stream(s.pauli as bits[32]) ++ zero!<bits[0]>())
 }
 
 pub struct Phistatus {
@@ -322,16 +337,17 @@ pub struct Phistatus {
 }
 
 pub fn phistatus_from_bits<N: u32>(raw: bits[N]) -> Phistatus {
+  let stream = hls_bits::to_stream(raw);
   Phistatus {
-    step: raw[0:32] as u32,
-    x: raw[32:48] as u16,
-    y: raw[48:64] as u16,
-    flags: raw[64:96] as u32,
+    step: hls_bits::from_stream(stream[N - u32:32+:bits[32]]) as u32,
+    x: hls_bits::from_stream(stream[N - u32:48+:bits[16]]) as u16,
+    y: hls_bits::from_stream(stream[N - u32:64+:bits[16]]) as u16,
+    flags: hls_bits::from_stream(stream[N - u32:96+:bits[32]]) as u32,
   }
 }
 
 pub fn bits_from_phistatus(s: Phistatus) -> bits[96] {
-  (s.flags as bits[32]) ++ (s.y as bits[16]) ++ (s.x as bits[16]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
+  hls_bits::from_stream(hls_bits::to_stream(s.step as bits[32]) ++ hls_bits::to_stream(s.x as bits[16]) ++ hls_bits::to_stream(s.y as bits[16]) ++ hls_bits::to_stream(s.flags as bits[32]) ++ zero!<bits[0]>())
 }
 
 pub struct Cell {
@@ -348,22 +364,23 @@ pub struct Cell {
 }
 
 pub fn cell_from_bits<N: u32>(raw: bits[N]) -> Cell {
+  let stream = hls_bits::to_stream(raw);
   Cell {
-    step: raw[0:32] as u32,
-    diffusion_epoch: raw[32:64] as u32,
-    phi: raw[64:128] as phi_field::Field,
-    best_direction: raw[128:160] as u32,
-    anyon: raw[160:192] as u32,
-    random_state: raw[192:224] as u32,
-    x: raw[224:240] as u16,
-    y: raw[240:256] as u16,
-    noise_quiet: raw[256:288] as u32,
-    status_valid: raw[288:320] as u32,
+    step: hls_bits::from_stream(stream[N - u32:32+:bits[32]]) as u32,
+    diffusion_epoch: hls_bits::from_stream(stream[N - u32:64+:bits[32]]) as u32,
+    phi: hls_bits::from_stream(stream[N - u32:128+:bits[64]]) as phi_field::Field,
+    best_direction: hls_bits::from_stream(stream[N - u32:160+:bits[32]]) as u32,
+    anyon: hls_bits::from_stream(stream[N - u32:192+:bits[32]]) as u32,
+    random_state: hls_bits::from_stream(stream[N - u32:224+:bits[32]]) as u32,
+    x: hls_bits::from_stream(stream[N - u32:240+:bits[16]]) as u16,
+    y: hls_bits::from_stream(stream[N - u32:256+:bits[16]]) as u16,
+    noise_quiet: hls_bits::from_stream(stream[N - u32:288+:bits[32]]) as u32,
+    status_valid: hls_bits::from_stream(stream[N - u32:320+:bits[32]]) as u32,
   }
 }
 
 pub fn bits_from_cell(s: Cell) -> bits[320] {
-  (s.status_valid as bits[32]) ++ (s.noise_quiet as bits[32]) ++ (s.y as bits[16]) ++ (s.x as bits[16]) ++ (s.random_state as bits[32]) ++ (s.anyon as bits[32]) ++ (s.best_direction as bits[32]) ++ (s.phi as bits[64]) ++ (s.diffusion_epoch as bits[32]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
+  hls_bits::from_stream(hls_bits::to_stream(s.step as bits[32]) ++ hls_bits::to_stream(s.diffusion_epoch as bits[32]) ++ hls_bits::to_stream(s.phi as bits[64]) ++ hls_bits::to_stream(s.best_direction as bits[32]) ++ hls_bits::to_stream(s.anyon as bits[32]) ++ hls_bits::to_stream(s.random_state as bits[32]) ++ hls_bits::to_stream(s.x as bits[16]) ++ hls_bits::to_stream(s.y as bits[16]) ++ hls_bits::to_stream(s.noise_quiet as bits[32]) ++ hls_bits::to_stream(s.status_valid as bits[32]) ++ zero!<bits[0]>())
 }
 
 pub struct Phifold {
@@ -372,14 +389,15 @@ pub struct Phifold {
 }
 
 pub fn phifold_from_bits<N: u32>(raw: bits[N]) -> Phifold {
+  let stream = hls_bits::to_stream(raw);
   Phifold {
-    value0: raw[0:64] as s64,
-    value1: raw[64:128] as s64,
+    value0: hls_bits::from_stream(stream[N - u32:64+:bits[64]]) as s64,
+    value1: hls_bits::from_stream(stream[N - u32:128+:bits[64]]) as s64,
   }
 }
 
 pub fn bits_from_phifold(s: Phifold) -> bits[128] {
-  (s.value1 as bits[64]) ++ (s.value0 as bits[64]) ++  zero!<bits[0]>()
+  hls_bits::from_stream(hls_bits::to_stream(s.value0 as bits[64]) ++ hls_bits::to_stream(s.value1 as bits[64]) ++ zero!<bits[0]>())
 }
 
 enum ReductionStatus : u2 {
@@ -1539,9 +1557,9 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> EntryOutcome {
         let _19 = {
           let evaluated = _18;
                 let effect_0 = axis::pack(
-                  evaluated.2.0.0 as u8, evaluated.2.0.2);
+                  evaluated.2.0.0 as u8, hls_bits::frame_payload(evaluated.2.0.2));
                 let effect_1 = axis::pack(
-                  evaluated.2.1.0 as u8, evaluated.2.1.2);
+                  evaluated.2.1.0 as u8, hls_bits::frame_payload(evaluated.2.1.2));
           EntryOutcome {
             data: evaluated.0.1,
             reduction: zero!<ReductionState>(),
@@ -1574,7 +1592,7 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> EntryOutcome {
         let _8 = {
           let evaluated = _7;
                 let effect_0 = axis::pack(
-                  evaluated.2.0.0 as u8, evaluated.2.0.2);
+                  evaluated.2.0.0 as u8, hls_bits::frame_payload(evaluated.2.0.2));
           EntryOutcome {
             data: evaluated.0.1,
             reduction: zero!<ReductionState>(),
@@ -1627,13 +1645,13 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> EntryOutcome {
       let _11 = {
         let evaluated = _10;
               let effect_0 = axis::pack(
-                evaluated.2.0.0 as u8, evaluated.2.0.2);
+                evaluated.2.0.0 as u8, hls_bits::frame_payload(evaluated.2.0.2));
               let effect_1 = axis::pack(
-                evaluated.2.1.0 as u8, evaluated.2.1.2);
+                evaluated.2.1.0 as u8, hls_bits::frame_payload(evaluated.2.1.2));
               let effect_2 = axis::pack(
-                evaluated.2.2.0 as u8, evaluated.2.2.2);
+                evaluated.2.2.0 as u8, hls_bits::frame_payload(evaluated.2.2.2));
               let effect_3 = axis::pack(
-                evaluated.2.3.0 as u8, evaluated.2.3.2);
+                evaluated.2.3.0 as u8, hls_bits::frame_payload(evaluated.2.3.2));
         EntryOutcome {
           data: evaluated.0.1,
           reduction: reduction_open_site(ReductionSite::GATHERING, evaluated.1.0, evaluated.1.1.1),
@@ -1713,13 +1731,13 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> EntryOutcome {
       let _19 = {
         let evaluated = _18;
               let effect_0 = axis::pack(
-                evaluated.2.0.0 as u8, evaluated.2.0.2);
+                evaluated.2.0.0 as u8, hls_bits::frame_payload(evaluated.2.0.2));
               let effect_1 = axis::pack(
-                evaluated.2.1.0 as u8, evaluated.2.1.2);
+                evaluated.2.1.0 as u8, hls_bits::frame_payload(evaluated.2.1.2));
               let effect_2 = axis::pack(
-                evaluated.2.2.0 as u8, evaluated.2.2.2);
+                evaluated.2.2.0 as u8, hls_bits::frame_payload(evaluated.2.2.2));
               let effect_3 = axis::pack(
-                evaluated.2.3.0 as u8, evaluated.2.3.2);
+                evaluated.2.3.0 as u8, hls_bits::frame_payload(evaluated.2.3.2));
         EntryOutcome {
           data: evaluated.0.1,
           reduction: reduction_open_site(ReductionSite::COMPARING, evaluated.1.0, evaluated.1.1.1),
@@ -1874,15 +1892,15 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> EntryOutcome {
           let _45 = {
             let evaluated = _44;
                   let effect_0 = axis::pack(
-                    evaluated.2.0.0 as u8, evaluated.2.0.2);
+                    evaluated.2.0.0 as u8, hls_bits::frame_payload(evaluated.2.0.2));
                   let effect_1 = axis::pack(
-                    evaluated.2.1.0 as u8, evaluated.2.1.2);
+                    evaluated.2.1.0 as u8, hls_bits::frame_payload(evaluated.2.1.2));
                   let effect_2 = axis::pack(
-                    evaluated.2.2.0 as u8, evaluated.2.2.2);
+                    evaluated.2.2.0 as u8, hls_bits::frame_payload(evaluated.2.2.2));
                   let effect_3 = axis::pack(
-                    evaluated.2.3.0 as u8, evaluated.2.3.2);
+                    evaluated.2.3.0 as u8, hls_bits::frame_payload(evaluated.2.3.2));
                   let effect_4 = axis::pack(
-                    evaluated.2.4.0 as u8, evaluated.2.4.2);
+                    evaluated.2.4.0 as u8, hls_bits::frame_payload(evaluated.2.4.2));
             EntryOutcome {
               data: evaluated.0.1,
               reduction: reduction_open_site(ReductionSite::FLIPPING, evaluated.1.0, evaluated.1.1.1),
@@ -1996,13 +2014,13 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> EntryOutcome {
           let _30 = {
             let evaluated = _29;
                   let effect_0 = axis::pack(
-                    evaluated.2.0.0 as u8, evaluated.2.0.2);
+                    evaluated.2.0.0 as u8, hls_bits::frame_payload(evaluated.2.0.2));
                   let effect_1 = axis::pack(
-                    evaluated.2.1.0 as u8, evaluated.2.1.2);
+                    evaluated.2.1.0 as u8, hls_bits::frame_payload(evaluated.2.1.2));
                   let effect_2 = axis::pack(
-                    evaluated.2.2.0 as u8, evaluated.2.2.2);
+                    evaluated.2.2.0 as u8, hls_bits::frame_payload(evaluated.2.2.2));
                   let effect_3 = axis::pack(
-                    evaluated.2.3.0 as u8, evaluated.2.3.2);
+                    evaluated.2.3.0 as u8, hls_bits::frame_payload(evaluated.2.3.2));
             EntryOutcome {
               data: evaluated.0.1,
               reduction: reduction_open_site(ReductionSite::FLIPPING, evaluated.1.0, evaluated.1.1.1),

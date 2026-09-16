@@ -66,7 +66,7 @@ parse_transform(Forms0, Options) ->
                         calls_from_types(replace_anno(Line, Desc))
                     ]},
                     default,
-                    [binary]
+                    [bitstring]
                 }
                 ||  {attribute, _L, record, {_T, Fields}} <- [xls_parse:find_record(Forms, Tag)],
                     {typed_record_field, Field, Desc} <- Fields,

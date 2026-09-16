@@ -1341,11 +1341,10 @@ invalid_gs_wire_width_test_() ->
         try ?assertError(Error, xls_parse:to_xls(Path))
         after ok = file:delete(Path) end
     end) || {Type, Error} <- [
-        {"hls_nums:u8()", {xls_message_not_word_aligned, message, 8, 32}},
         {"hls_vec:vector(hls_nums:u32(), 4)", {xls_message_too_wide, message, 128, 96}}
     ]].
 
-non_word_aligned_state_machine_message_is_rejected_test() ->
+non_word_aligned_state_machine_message_is_accepted_test() ->
     Path = filename:join("_build", "non_word_statem_fixture.erl"),
     ok = filelib:ensure_dir(Path),
     Source = <<
@@ -1364,10 +1363,9 @@ non_word_aligned_state_machine_message_is_rejected_test() ->
     >>,
     ok = file:write_file(Path, Source),
     try
-        ?assertError(
-            {xls_message_not_word_aligned, message, 8, 32},
-            xls_parse:to_xls(Path)
-        )
+        {ok, Forms} = xls_parse:parse_file(Path),
+        ?assertEqual(1, xls_parse:message_words(Forms, message)),
+        ?assertEqual(8, xls_parse:record_width(xls_parse:find_record(Forms, message)))
     after
         ok = file:delete(Path)
     end.

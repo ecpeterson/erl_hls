@@ -40,11 +40,11 @@ unsigned_type(64) -> "u64";
 unsigned_type(Width) when Width > 0 ->
     ["uN[", integer_to_list(Width), "]"].
 
--doc "Prints a byte-aligned unsigned value as a DSLX literal.".
+-doc "Prints an unsigned value as a DSLX literal.".
 -spec unsigned_literal(non_neg_integer(), pos_integer()) -> iolist().
 unsigned_literal(Value, Width)
         when is_integer(Value), Value >= 0,
-             is_integer(Width), Width > 0, Width rem 8 =:= 0,
+             is_integer(Width), Width > 0,
              Value < (1 bsl Width) ->
     Digits = max(1, (Width + 3) div 4),
     Hex = integer_to_list(Value, 16),
@@ -52,9 +52,9 @@ unsigned_literal(Value, Width)
         lists:duplicate(Digits - length(Hex), $0), Hex].
 
 -doc "Prints a little-endian packed unsigned value as a DSLX literal.".
--spec packed_unsigned_literal(binary()) -> iolist().
-packed_unsigned_literal(Packed) when is_binary(Packed) ->
+-spec packed_unsigned_literal(bitstring()) -> iolist().
+packed_unsigned_literal(Packed) when is_bitstring(Packed) ->
     unsigned_literal(
-        binary:decode_unsigned(Packed, little),
+        hls_codec:unsigned(Packed),
         bit_size(Packed)
     ).

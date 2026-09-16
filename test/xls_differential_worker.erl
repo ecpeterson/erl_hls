@@ -29,7 +29,7 @@ lower(Source, Dslx, Cases, Results) ->
     Roots = [{binary_to_existing_atom(maps:get(<<"name">>, C)), 3} || C <- Cases],
     {Forms, Helpers} = xls_helpers:prepare(Forms0, Roots),
     Declarations = ["enum Tag : u8 { STATE = 1 }\n",
-        xls_dslx_imports:emit([hls_failure], xls_dslx_imports:from_forms(Forms)),
+        xls_dslx_imports:emit([hls_failure, hls_bits], xls_dslx_imports:from_forms(Forms)),
         [[xls_parse:struct_from_record(Record), xls_parse:bitsfromstruct_from_record(Record)]
             || Record = {attribute, _, record, _} <- Forms]],
     Functions = [function(Case, Forms) || Case <- Cases],

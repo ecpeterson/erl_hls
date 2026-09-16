@@ -124,7 +124,7 @@ call(Message, _From, Replies, GS = #state{module = Module, state = State, fabric
     {reply, Reply, GS#state{state = NewState}};
 call(Message, From, Replies, GS = #state{module = Module, fabric = Client}) ->
     Tag = Module:pack_tag(element(1, Message)),
-    Payload = Module:pack(Message),
+    Payload = hls_codec:align(Module:pack(Message), 32),
     Next = hls_fabric_client:request(Tag, Payload, {Module, Replies}, From, Client),
     {noreply, GS#state{fabric = Next}}.
 
@@ -144,7 +144,7 @@ handle_cast(
 handle_cast(Message, GS = #state{module = Module, fabric = Client, contract = Contract}) ->
     ok = check_cast(Message, Contract),
     Tag = Module:pack_tag(element(1, Message)),
-    Payload = Module:pack(Message),
+    Payload = hls_codec:align(Module:pack(Message), 32),
     Next = hls_fabric_client:cast(Tag, ?CAST_TX_ID, Payload, Client),
     {noreply, GS#state{fabric = Next}}.
 
@@ -211,7 +211,10 @@ unpack_reply(_Module, error, <<ErrorCode:32/little-unsigned-integer>>) ->
 unpack_reply(_Module, error, _Payload) ->
     error(invalid_error_payload);
 unpack_reply(Module, Tag, Payload) ->
-    Module:unpack(Tag, Payload).
+    Width = Module:pack_width(Tag),
+    true = bit_size(Payload) =:= ((Width + 31) div 32) * 32,
+    {Record, _Padding} = hls_codec:split(Payload, Width),
+    Module:unpack(Tag, Record).
 
 error_reason(?ERROR_FUNCTION_CLAUSE) -> function_clause;
 error_reason(?ERROR_MATCH_FAILURE) -> match_failure;

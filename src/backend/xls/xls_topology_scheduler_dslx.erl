@@ -572,28 +572,18 @@ startup_arm(Module, Index, #{
     schema := Schema,
     fields := Fields
 }) ->
-    Struct = xls_names:record_type(Schema),
-    Function = xls_names:record_codec(Schema),
+    Payload = hls_codec:align(hls_codec:join([hls_type:pack(Value, Type)
+        || #{type := Type, value := Value} <- Fields]), 32),
     [
         "      u32:", integer_to_list(Index), " => ",
         Module, "::ScheduledRequest {\n",
         "        slot: u32:", integer_to_list(Slot), ",\n",
         "        frame: axis::pack(\n",
         "          ", Module, "::Tag::", xls_names:enum_member(Schema), " as u8,\n",
-        "          ", Module, "::bits_from_", Function, "(\n",
-        "            ", Module, "::", Struct, " {\n",
-        [startup_field(Field) || Field <- Fields],
-        "            })),\n",
+        "          ", xls_nums:packed_unsigned_literal(Payload), "),\n",
         "        ..zero!<", Module, "::ScheduledRequest>()\n",
         "      },\n"
     ].
-
-startup_field(#{name := Name, type := Type, value := Value})
-        when is_integer(Value) ->
-    ["              ", atom_to_list(Name), ": ",
-        hls_type:print_type(Type), ":", integer_to_list(Value), ",\n"];
-startup_field(#{name := Name, type := Type, value := Value}) ->
-    error({unsupported_startup_literal, Name, Type, Value}).
 
 router_proc(Spec, Scheduler = #{
     stem := Stem,

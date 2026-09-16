@@ -1,6 +1,6 @@
 -module(hls_nums).
 -moduledoc """
-Fixed-width numeric values with byte-aligned wire encodings. Integer packing
+Fixed-width numeric values with dense little-endian wire encodings. Integer packing
 rejects values outside the declared signed or unsigned range; wrap/2 explicitly
 requests modular conversion.
 Float packing rounds to binary16/32/64 and rejects nonfinite results. Live
@@ -43,12 +43,11 @@ u16()     -> {hls_type, ?MODULE, ?FUNCTION_NAME, []}.
 u32()     -> {hls_type, ?MODULE, ?FUNCTION_NAME, []}.
 u64()     -> {hls_type, ?MODULE, ?FUNCTION_NAME, []}.
 -doc """
-An arbitrary positive-width unsigned integer. Wire storage rounds up to whole
-bytes; packing zero-extends, and decoding discards the high padding bits.
+An arbitrary positive-width unsigned integer occupying exactly Width bits.
 """.
 uN(Width) when is_integer(Width), Width > 0 ->
     {hls_type, ?MODULE, ?FUNCTION_NAME, [Width]}.
--doc "An arbitrary positive-width signed integer, sign-extended to whole wire bytes.".
+-doc "An arbitrary positive-width signed integer occupying exactly Width bits.".
 sN(Width) when is_integer(Width), Width > 0 ->
     {hls_type, ?MODULE, ?FUNCTION_NAME, [Width]}.
 s8()      -> {hls_type, ?MODULE, ?FUNCTION_NAME, []}.
@@ -73,7 +72,7 @@ signedness(Type) when Type =:= u8; Type =:= u16; Type =:= u32;
 signedness(Type) when Type =:= s8; Type =:= s16; Type =:= s32;
         Type =:= s64; Type =:= sN -> signed.
 
-width(Name, Args) -> ((value_width(Name, Args) + 7) div 8) * 8.
+width(Name, Args) -> value_width(Name, Args).
 
 value_width(u8,      []) -> 8;
 value_width(u16,     []) -> 16;
@@ -135,7 +134,7 @@ unpack(<<Value:32/unsigned-little-integer, Rest/binary>>, u32,     []) -> {Value
 unpack(<<Value:64/unsigned-little-integer, Rest/binary>>, u64,     []) -> {Value, Rest};
 unpack(Packed, Type, Args) when Type =:= uN; Type =:= sN ->
     Width = width(Type, Args),
-    <<Bits:Width/unsigned-little-integer, Rest/binary>> = Packed,
+    <<Bits:Width/unsigned-little-integer, Rest/bitstring>> = Packed,
     {hls_codec:wrap_integer(Bits, value_width(Type, Args), signedness(Type)), Rest};
 unpack(<<Value:8/signed-little-integer,    Rest/binary>>, s8,      []) -> {Value, Rest};
 unpack(<<Value:16/signed-little-integer,   Rest/binary>>, s16,     []) -> {Value, Rest};

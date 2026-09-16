@@ -9,21 +9,21 @@ dslx_imports() -> get(test_dslx_imports).
 
 nested_type_provider_test() ->
     Forms = [form("-type fields() :: hls_lists:list(phi_field:scalar(), 2).")],
-    ?assertEqual([phi_field], xls_dslx_imports:from_forms(Forms)).
+    ?assertEqual([hls_bits, phi_field], xls_dslx_imports:from_forms(Forms)).
 
 nested_call_provider_test() ->
     Forms = [form("probe() -> hls_type:zero(hls_lists:list(phi_field:scalar(), 2)).")],
-    ?assertEqual([phi_field], xls_dslx_imports:from_forms(Forms)).
+    ?assertEqual([hls_bits, phi_field], xls_dslx_imports:from_forms(Forms)).
 
 composed_providers_test() ->
     Forms = [form("-type fields() :: hls_vec:vector(hls_fixed:signed(16, 8), 3).")],
-    ?assertEqual([hls_fixed], xls_dslx_imports:from_forms(Forms)).
+    ?assertEqual([hls_bits, hls_fixed], xls_dslx_imports:from_forms(Forms)).
 
 collection_operations_import_checks_test() ->
     Forms = [form("probe(I, Values) -> hls_vec:nth(I, Values)."),
         form("update(I, Values, V) -> hls_lists:set(I, Values, V).")],
-    ?assertEqual([hls_lists], xls_dslx_imports:from_forms(Forms)),
-    ?assertEqual([hls_lists, hls_vec], xls_dslx_imports:from_forms(Forms ++
+    ?assertEqual([hls_bits, hls_lists], xls_dslx_imports:from_forms(Forms)),
+    ?assertEqual([hls_bits, hls_lists, hls_vec], xls_dslx_imports:from_forms(Forms ++
         [form("dot(T, A, B) -> hls_vec:dot(T, A, B).")])).
 
 bound_tail_import_test() ->
@@ -52,7 +52,7 @@ shift_operator_companion_test() ->
 float_imports_follow_actual_uses_test() ->
     Forms = [form("-type values() :: hls_vec:vector(hls_nums:float32(), 2)."),
         form("probe() -> hls_nums:u32().")],
-    ?assertEqual([apfloat], xls_dslx_imports:from_forms(Forms)),
+    ?assertEqual([apfloat, hls_bits], xls_dslx_imports:from_forms(Forms)),
     ?assertEqual([apfloat, hls_float], xls_dslx_imports:from_forms([
         form("probe() -> hls_float:literal(hls_nums:float64(), 0.1).")])).
 
@@ -83,7 +83,7 @@ malformed_declaration_test() ->
 included_types_reach_gs_emission_test() ->
     Source = "test_data/hls_companion_gs_fixture.erl",
     {ok, Forms} = xls_parse:parse_file(Source),
-    ?assertEqual([hls_fixed, hls_vec, phi_field], xls_dslx_imports:from_forms(Forms)),
+    ?assertEqual([hls_bits, hls_fixed, hls_vec, phi_field], xls_dslx_imports:from_forms(Forms)),
     Generated = iolist_to_binary(xls_parse:to_xls(Source)),
     ?assertEqual(1, length(binary:matches(Generated, <<"import phi_field;">>))),
     ?assertNotEqual(nomatch, binary:match(Generated, <<"phi_field::Scalar[2]">>)),

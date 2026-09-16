@@ -762,8 +762,8 @@ pack_startup_message(Target, Module, Interface, Message)
     {Tag, Payload} = case {Module:pack_tag(TagName), Module:pack(Message)} of
         {PackedTag, PackedPayload}
                 when is_integer(PackedTag), PackedTag >= 0,
-                     PackedTag =< 255, is_binary(PackedPayload) ->
-            {PackedTag, PackedPayload};
+                     PackedTag =< 255, is_bitstring(PackedPayload) ->
+            {PackedTag, hls_codec:align(PackedPayload, 32)};
         Invalid -> error({invalid_packed_startup, Target, Invalid})
     end,
     Width = bit_size(Payload),

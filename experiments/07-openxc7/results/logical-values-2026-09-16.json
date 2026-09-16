@@ -1,6 +1,6 @@
 {
   "baseline": "475f03bf24567cea3870159a23b208d9182ea15f",
-  "prediction": "Modest reduction in data-cell registers and selection logic; no external message or step behavior change. Upper bits may already optimize away.",
+  "prediction": "Dense packing should leave standalone actor area roughly unchanged relative to the padded version: logical fields were already narrow. Stored decoder state shrinks another 14 bits; BRAM savings depend on allocation boundaries.",
   "scope": "Complete standalone generated phenom_data_cell service, including word receiver/transmitters and internal mailboxes; excludes topology scheduler RAMs, router, debug and physical IO.",
   "yosys": "Yosys 0.69+10 (git sha1 370a53acf-dirty, Release, Clang /usr/local/osxcross/target/bin/aarch64-apple-darwin25.5-clang++ 21.1.8)",
   "tool_sha256": {
@@ -20,8 +20,8 @@
       "rtl_sha256": "76890414e756b9e3a235f9728cc76a7ee9f2e0ab4cb2af701570e8756725a0ec"
     },
     "after": {
-      "dslx_sha256": "46e34ce705a52c0cad746e5a47863ba40653dc28921fb745754bf7e1661fef3c",
-      "rtl_sha256": "164ab11dd973e5de62dcea4a23152de4aeeed6c4bdaeea51eea49da5d7ab40d2"
+      "dslx_sha256": "631aee20a7f633abebd73b3b2c9c6318da4e19c35b59889e1df34f9fb5d91bbc",
+      "rtl_sha256": "39e987b26a9932069a4281fa02fcff3054876eb58b9c98d8cb8e2693ca3c869e"
     }
   },
   "results": [
@@ -109,35 +109,5 @@
         "MUXF8": 58
       }
     }
-  ],
-  "summary": {
-    "before": {
-      "LUT": {
-        "best": 3937,
-        "mean": 3976.5,
-        "population_variance": 1560.25,
-        "worst": 4016
-      },
-      "FF": {
-        "best": 2617,
-        "mean": 2617,
-        "population_variance": 0,
-        "worst": 2617
-      }
-    },
-    "after": {
-      "LUT": {
-        "best": 3843,
-        "mean": 3933.5,
-        "population_variance": 8190.25,
-        "worst": 4024
-      },
-      "FF": {
-        "best": 2617,
-        "mean": 2617,
-        "population_variance": 0,
-        "worst": 2617
-      }
-    }
-  }
+  ]
 }

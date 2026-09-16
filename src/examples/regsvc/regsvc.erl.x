@@ -4,6 +4,7 @@
 
 import axis;
 import hls_failure;
+import hls_bits;
 import hls_lists;
 
 const NOREPLY = u1:0;  // some standard erlang tokens
@@ -35,15 +36,16 @@ pub struct Set {
 }
 
 pub fn set_from_bits<N: u32>(raw: bits[N]) -> Set {
+  let stream = hls_bits::to_stream(raw);
   Set {
-    register: raw[0:32] as u32,
-    value: raw[32:64] as u32,
-    mask: raw[64:96] as u32,
+    register: hls_bits::from_stream(stream[N - u32:32+:bits[32]]) as u32,
+    value: hls_bits::from_stream(stream[N - u32:64+:bits[32]]) as u32,
+    mask: hls_bits::from_stream(stream[N - u32:96+:bits[32]]) as u32,
   }
 }
 
 pub fn bits_from_set(s: Set) -> bits[96] {
-  (s.mask as bits[32]) ++ (s.value as bits[32]) ++ (s.register as bits[32]) ++  zero!<bits[0]>()
+  hls_bits::from_stream(hls_bits::to_stream(s.register as bits[32]) ++ hls_bits::to_stream(s.value as bits[32]) ++ hls_bits::to_stream(s.mask as bits[32]) ++ zero!<bits[0]>())
 }
 
 pub struct Get {
@@ -51,13 +53,14 @@ pub struct Get {
 }
 
 pub fn get_from_bits<N: u32>(raw: bits[N]) -> Get {
+  let stream = hls_bits::to_stream(raw);
   Get {
-    register: raw[0:32] as u32,
+    register: hls_bits::from_stream(stream[N - u32:32+:bits[32]]) as u32,
   }
 }
 
 pub fn bits_from_get(s: Get) -> bits[32] {
-  (s.register as bits[32]) ++  zero!<bits[0]>()
+  hls_bits::from_stream(hls_bits::to_stream(s.register as bits[32]) ++ zero!<bits[0]>())
 }
 
 pub struct Ping {
@@ -65,13 +68,14 @@ pub struct Ping {
 }
 
 pub fn ping_from_bits<N: u32>(raw: bits[N]) -> Ping {
+  let stream = hls_bits::to_stream(raw);
   Ping {
-    value: raw[0:32] as u32,
+    value: hls_bits::from_stream(stream[N - u32:32+:bits[32]]) as u32,
   }
 }
 
 pub fn bits_from_ping(s: Ping) -> bits[32] {
-  (s.value as bits[32]) ++  zero!<bits[0]>()
+  hls_bits::from_stream(hls_bits::to_stream(s.value as bits[32]) ++ zero!<bits[0]>())
 }
 
 pub struct Bulkget {
@@ -80,14 +84,15 @@ pub struct Bulkget {
 }
 
 pub fn bulkget_from_bits<N: u32>(raw: bits[N]) -> Bulkget {
+  let stream = hls_bits::to_stream(raw);
   Bulkget {
-    start: raw[0:32] as u32,
-    count: raw[32:64] as u32,
+    start: hls_bits::from_stream(stream[N - u32:32+:bits[32]]) as u32,
+    count: hls_bits::from_stream(stream[N - u32:64+:bits[32]]) as u32,
   }
 }
 
 pub fn bits_from_bulkget(s: Bulkget) -> bits[64] {
-  (s.count as bits[32]) ++ (s.start as bits[32]) ++  zero!<bits[0]>()
+  hls_bits::from_stream(hls_bits::to_stream(s.start as bits[32]) ++ hls_bits::to_stream(s.count as bits[32]) ++ zero!<bits[0]>())
 }
 
 pub struct Ack {
@@ -95,13 +100,14 @@ pub struct Ack {
 }
 
 pub fn ack_from_bits<N: u32>(raw: bits[N]) -> Ack {
+  let stream = hls_bits::to_stream(raw);
   Ack {
-    value: raw[0:32] as u32,
+    value: hls_bits::from_stream(stream[N - u32:32+:bits[32]]) as u32,
   }
 }
 
 pub fn bits_from_ack(s: Ack) -> bits[32] {
-  (s.value as bits[32]) ++  zero!<bits[0]>()
+  hls_bits::from_stream(hls_bits::to_stream(s.value as bits[32]) ++ zero!<bits[0]>())
 }
 
 pub struct Read {
@@ -109,13 +115,14 @@ pub struct Read {
 }
 
 pub fn read_from_bits<N: u32>(raw: bits[N]) -> Read {
+  let stream = hls_bits::to_stream(raw);
   Read {
-    value: raw[0:32] as u32,
+    value: hls_bits::from_stream(stream[N - u32:32+:bits[32]]) as u32,
   }
 }
 
 pub fn bits_from_read(s: Read) -> bits[32] {
-  (s.value as bits[32]) ++  zero!<bits[0]>()
+  hls_bits::from_stream(hls_bits::to_stream(s.value as bits[32]) ++ zero!<bits[0]>())
 }
 
 pub struct Bulkread {
@@ -123,13 +130,14 @@ pub struct Bulkread {
 }
 
 pub fn bulkread_from_bits<N: u32>(raw: bits[N]) -> Bulkread {
+  let stream = hls_bits::to_stream(raw);
   Bulkread {
-    values: raw[0:96] as u32[3],
+    values: { let codec_input = hls_bits::to_stream(hls_bits::from_stream(stream[N - u32:96+:bits[96]])) as bits[32][3]; for (codec_index, codec_output): (u32, u32[3]) in u32:0..u32:3 { update(codec_output, codec_index, hls_bits::from_stream(codec_input[u32:2 - codec_index]) as u32) } (zero!<u32[3]>()) },
   }
 }
 
 pub fn bits_from_bulkread(s: Bulkread) -> bits[96] {
-  (s.values as bits[96]) ++  zero!<bits[0]>()
+  hls_bits::from_stream(hls_bits::to_stream(hls_bits::from_stream(({ let codec_input = s.values; for (codec_index, codec_output): (u32, bits[32][3]) in u32:0..u32:3 { update(codec_output, codec_index, hls_bits::to_stream(codec_input[u32:2 - codec_index] as bits[32])) } (zero!<bits[32][3]>()) }) as bits[96])) ++ zero!<bits[0]>())
 }
 
 pub struct State {
@@ -137,13 +145,14 @@ pub struct State {
 }
 
 pub fn state_from_bits<N: u32>(raw: bits[N]) -> State {
+  let stream = hls_bits::to_stream(raw);
   State {
-    registers: raw[0:512] as u32[16],
+    registers: { let codec_input = hls_bits::to_stream(hls_bits::from_stream(stream[N - u32:512+:bits[512]])) as bits[32][16]; for (codec_index, codec_output): (u32, u32[16]) in u32:0..u32:16 { update(codec_output, codec_index, hls_bits::from_stream(codec_input[u32:15 - codec_index]) as u32) } (zero!<u32[16]>()) },
   }
 }
 
 pub fn bits_from_state(s: State) -> bits[512] {
-  (s.registers as bits[512]) ++  zero!<bits[0]>()
+  hls_bits::from_stream(hls_bits::to_stream(hls_bits::from_stream(({ let codec_input = s.registers; for (codec_index, codec_output): (u32, bits[32][16]) in u32:0..u32:16 { update(codec_output, codec_index, hls_bits::to_stream(codec_input[u32:15 - codec_index] as bits[32])) } (zero!<bits[32][16]>()) }) as bits[512])) ++ zero!<bits[0]>())
 }
 
 const XLS_FAILURE_SITE_BADARG_3A68C26C_L101 = u16:30; // regsvc.erl:L101
@@ -197,7 +206,7 @@ Tag::PING => {
       (axis::pack(Tag::ERROR as u8, hls_failure::kind(hls_failure::NONE) as u32), (Tag::STATE, s))
     } else {
       if _2.1.0 == Tag::ACK {
-        (axis::pack(_2.1.0 as u8, _2.1.2), _2.2)
+        (axis::pack(_2.1.0 as u8, hls_bits::frame_payload(_2.1.2)), _2.2)
       } else {
         let s = zero!<State>();
         (axis::pack(Tag::ERROR as u8, ERROR_REPLY_CONTRACT), (Tag::STATE, s))
@@ -230,7 +239,7 @@ Tag::GET => {
         (axis::pack(Tag::ERROR as u8, hls_failure::kind(hls_failure::check(_3.1, XLS_FAILURE_SITE_BADARG_3A68C26C_L110)) as u32), (Tag::STATE, s))
       } else {
         if _6.1.0 == Tag::READ {
-          (axis::pack(_6.1.0 as u8, _6.1.2), _6.2)
+          (axis::pack(_6.1.0 as u8, hls_bits::frame_payload(_6.1.2)), _6.2)
         } else {
           let s = zero!<State>();
           (axis::pack(Tag::ERROR as u8, ERROR_REPLY_CONTRACT), (Tag::STATE, s))
@@ -260,7 +269,7 @@ Tag::BULK_GET => {
         (axis::pack(Tag::ERROR as u8, hls_failure::kind(hls_failure::NONE) as u32), (Tag::STATE, s))
       } else {
         if _2.1.0 == Tag::BULK_READ {
-          (axis::pack(_2.1.0 as u8, _2.1.2), _2.2)
+          (axis::pack(_2.1.0 as u8, hls_bits::frame_payload(_2.1.2)), _2.2)
         } else {
           let s = zero!<State>();
           (axis::pack(Tag::ERROR as u8, ERROR_REPLY_CONTRACT), (Tag::STATE, s))
@@ -302,7 +311,7 @@ Tag::BULK_GET => {
           (axis::pack(Tag::ERROR as u8, hls_failure::kind(hls_failure::first_all([hls_failure::check(_8.1, XLS_FAILURE_SITE_BADARG_3A68C26C_L118), hls_failure::check(_9.1, XLS_FAILURE_SITE_BADARG_3A68C26C_L122)])) as u32), (Tag::STATE, s))
         } else {
           if _12.1.0 == Tag::BULK_READ {
-            (axis::pack(_12.1.0 as u8, _12.1.2), _12.2)
+            (axis::pack(_12.1.0 as u8, hls_bits::frame_payload(_12.1.2)), _12.2)
           } else {
             let s = zero!<State>();
             (axis::pack(Tag::ERROR as u8, ERROR_REPLY_CONTRACT), (Tag::STATE, s))

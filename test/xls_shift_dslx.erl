@@ -75,7 +75,7 @@ oracle(VT, CT, A, B) ->
     Safe = case abs(Y) > 1024 of true -> min(W, max(-W, Y)); false -> Y end,
     (bits(VT, X bsl Safe) bsl W) bor bits(VT, X bsr Safe).
 
-bits(T, V) -> binary:decode_unsigned(hls_type:pack(hls_nums:wrap(T, V), T), little)
+bits(T, V) -> hls_codec:unsigned(hls_type:pack(hls_nums:wrap(T, V), T))
     band ((1 bsl hls_type:value_width(T))-1).
 type(u1) -> hls_nums:uN(1);
 type(s1) -> hls_nums:sN(1);

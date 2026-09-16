@@ -194,7 +194,7 @@ to_xls_gs(Filename, Forms0) ->
     // written the next time it is generated. Better to modify the Erlang input.
 
     """,
-    "\n", xls_dslx_imports:emit([axis, hls_failure], xls_dslx_imports:from_forms(Forms)),
+    "\n", xls_dslx_imports:emit([axis, hls_failure, hls_bits], xls_dslx_imports:from_forms(Forms)),
     """
 
     const NOREPLY = u1:0;  // some standard erlang tokens
@@ -676,6 +676,7 @@ structfrombits_from_record(RecordForm) ->
     {attribute, _L, record, {NameAtom, Fields}} = RecordForm,
     StructName = xls_names:record_type(NameAtom),
     ["pub fn ", xls_names:record_codec(NameAtom), "_from_bits<N: u32>(raw: bits[N]) -> ", StructName, " {\n",
+    "  let stream = hls_bits::to_stream(raw);\n",
     "  ", StructName, " {\n",
     lists:reverse(element(1, lists:foldl(
         fun(
@@ -685,7 +686,8 @@ structfrombits_from_record(RecordForm) ->
             Slot = record_field_name(Field),
             Descriptor = hls_type:descriptor(Type),
             NextOffset = Offset + hls_type:width(Descriptor),
-            Bits = io_lib:format("raw[~w:~w]", [Offset, NextOffset]),
+            Bits = io_lib:format("hls_bits::from_stream(stream[N - u32:~w+:bits[~w]])",
+                [NextOffset, NextOffset - Offset]),
             Line = ["    ", atom_to_list(Slot), ": ",
                 hls_type:dslx_from_bits(Descriptor, Bits), ",\n"],
             {[Line | Body], NextOffset}
@@ -701,24 +703,19 @@ bitsfromstruct_from_record(RecordForm = {attribute, _L, record, {NameAtom, Field
     StructName = xls_names:record_type(NameAtom),
     ["pub fn bits_from_", xls_names:record_codec(NameAtom), "(s: ", StructName,
         ") -> bits[", integer_to_list(record_width(RecordForm)), "] {\n",
-        ["  ", lists:foldl(
-            fun({typed_record_field, Field, Type}, Body) ->
-                Slot = record_field_name(Field),
-                Line = ["(", hls_type:dslx_to_bits(hls_type:descriptor(Type),
-                    ["s.", atom_to_list(Slot)]), ") ++ "],
-                [Line | Body]  % implicit lists:reverse with this join order
-            end,
-            [" zero!<bits[0]>()\n"], Fields
-        )],
+        "  hls_bits::from_stream(",
+        [["hls_bits::to_stream(", hls_type:dslx_to_bits(hls_type:descriptor(Type),
+            ["s.", atom_to_list(record_field_name(Field))]), ") ++ "]
+            || {typed_record_field, Field, Type} <- Fields],
+        "zero!<bits[0]>())\n",
     "}\n"].
 
 -spec message_words([erl_parse:abstract_form()], atom()) -> 0..3.
 message_words(Forms, Name) ->
     Width = record_width(find_record(Forms, Name)),
-    case Width rem 32 of
-        0 when Width =< 96 -> Width div 32;
-        0 -> error({xls_message_too_wide, Name, Width, 96});
-        _ -> error({xls_message_not_word_aligned, Name, Width, 32})
+    case Width =< 96 of
+        true -> (Width + 31) div 32;
+        false -> error({xls_message_too_wide, Name, Width, 96})
     end.
 
 -spec record_width(erl_parse:af_record_decl()) -> non_neg_integer().

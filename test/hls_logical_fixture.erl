@@ -4,8 +4,8 @@
 -export([init/1, handle_call/2, handle_cast/2]).
 
 -hls_data(state).
--hls_tags([step, read, result, bundle, reset]).
--hls_replies([{step, [result]}, {read, [result]}, {bundle, [bundle]}]).
+-hls_tags([step, read, result, bundle, reset, mixed]).
+-hls_replies([{step, [result]}, {read, [result]}, {bundle, [bundle]}, {mixed, [mixed]}]).
 
 -record(state, {
     enabled = hls_type:zero() :: hls_bool:bool(),
@@ -17,7 +17,7 @@
     count = hls_type:zero() :: hls_nums:uN(3),
     delta = hls_type:zero() :: hls_nums:sN(9)
 }).
--record(read, {unused = hls_type:zero() :: hls_nums:u32()}).
+-record(read, {unused = hls_type:zero() :: hls_nums:uN(1)}).
 -record(result, {
     enabled = hls_type:zero() :: hls_bool:bool(),
     count = hls_type:zero() :: hls_nums:uN(3),
@@ -27,7 +27,15 @@
     flags = hls_type:zero() :: hls_vec:vector(hls_bool:bool(), 4),
     values = hls_type:zero() :: hls_vec:vector(hls_vec:vector(hls_nums:sN(5), 2), 4)
 }).
--record(reset, {unused = hls_type:zero() :: hls_nums:u32()}).
+-record(reset, {unused = hls_type:zero() :: hls_nums:uN(1)}).
+-record(mixed, {
+    prefix = hls_type:zero() :: hls_nums:uN(3),
+    value = hls_type:zero() :: hls_nums:float32(),
+    flag = hls_type:zero() :: hls_bool:bool(),
+    tail = hls_type:zero() :: hls_nums:sN(9),
+    fixed = hls_type:zero() :: hls_fixed:signed(16, 8),
+    suffix = hls_type:zero() :: hls_nums:uN(3)
+}).
 
 init([]) -> #state{enabled = true, count = 5, value = -129}.
 
@@ -46,7 +54,9 @@ handle_call(Bundle = #bundle{flags = Flags, values = Values}, State) ->
     Updated = hls_vec:set(1, Pair, hls_nums:wrap(hls_nums:sN(5), Squared)),
     Reply = Bundle#bundle{flags = hls_vec:set(2, Flags, not hls_vec:nth(2, Flags)),
         values = hls_vec:set(2, Values, Updated)},
-    {reply, Reply, State}.
+    {reply, Reply, State};
+handle_call(Mixed = #mixed{flag = Flag}, State) ->
+    {reply, Mixed#mixed{flag = not Flag}, State}.
 
 handle_cast(#reset{}, _State) -> {noreply, #state{}}.
 

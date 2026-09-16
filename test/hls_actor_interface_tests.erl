@@ -166,11 +166,11 @@ phenomenological_interfaces_are_distinct_test() ->
         schema_fields(Data, pauli_reply)
     ),
     ?assertMatch(
-        #{name := data_cell, width := 368},
+        #{name := data_cell, width := 354},
         hls_actor_interface:state(Data)
     ),
     ?assertMatch(
-        #{name := syndrome, width := 368},
+        #{name := syndrome, width := 354},
         hls_actor_interface:state(Syndrome)
     ).
 

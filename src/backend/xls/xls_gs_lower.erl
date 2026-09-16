@@ -70,7 +70,7 @@ callbacks({call, Replies}, StateName) ->
             ["if ", lists:join(" || ", [
                 [R, ".1.0 == Tag::", xls_names:enum_member(Tag)] || Tag <- Replies
             ]), " {\n",
-            "  (axis::pack(", R, ".1.0 as u8, ", R, ".1.2), ", R, ".2)\n",
+            "  (axis::pack(", R, ".1.0 as u8, hls_bits::frame_payload(", R, ".1.2)), ", R, ".2)\n",
             "} else {\n",
             xls_parse_io:indent(failure("ERROR_REPLY_CONTRACT", StateName), 2),
             "\n}"]

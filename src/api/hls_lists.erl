@@ -121,16 +121,14 @@ index(Value) -> Value.
 
 dslx_imports(Names) ->
     case lists:any(fun(Name) -> lists:member(Name, [nth, set, sublist, array_slice]) end, Names) of
-        true -> [hls_lists];
-        false -> []
+        true -> [hls_bits, hls_lists];
+        false -> [hls_bits]
     end.
 
 pack(List, list, [ElementType, Length]) when length(List) =:= Length ->
-    %% XLS casts array element zero to the most-significant bits, while the AXIS
-    %% serializer sends the least-significant word first. Accumulate in reverse
-    %% wire order so the XLS side can use a zero-cost array/bit cast, then
-    %% flatten the iolist once without a separate list-reversal pass.
-    iolist_to_binary(lists:foldl(
+    %% Retain the established reverse element order on the wire. The DSLX
+    %% codec permutes bits; the host only concatenates native bitstrings.
+    hls_codec:join(lists:foldl(
         fun(Element, Acc) -> [hls_type:pack(Element, ElementType) | Acc] end,
         [],
         List
@@ -160,26 +158,25 @@ value_width(list, [Subtype, Count]) ->
     hls_type:value_width(Subtype) * Count.
 
 dslx_codec(list, [Subtype, Count]) ->
-    case hls_type:dslx_codec(Subtype) of
-        bit_cast -> bit_cast;
-        _ ->
-            BitsType = ["bits[", integer_to_list(hls_type:width(Subtype)), "]"],
-            ArrayType = print_type(list, [Subtype, Count]),
-            {fun(Bits) ->
-                codec_map([Bits, " as ", BitsType, "[", integer_to_list(Count), "]"],
-                    ArrayType, Count, fun(V) -> hls_type:dslx_from_bits(Subtype, V) end)
-             end,
-             fun(Values) ->
-                ["(", codec_map(Values, [BitsType, "[", integer_to_list(Count), "]"],
-                    Count, fun(V) -> hls_type:dslx_to_bits(Subtype, V) end),
-                    ") as bits[", integer_to_list(hls_type:width(Subtype) * Count), "]"]
-             end}
-    end.
+    %% XLS cannot bit-cast a flattened value into a multidimensional array.
+    %% Compose element codecs at every dimension; these static maps are wires.
+    BitsType = ["bits[", integer_to_list(hls_type:width(Subtype)), "]"],
+    ArrayType = print_type(list, [Subtype, Count]),
+    {fun(Bits) ->
+        codec_map(["hls_bits::to_stream(", Bits, ") as ", BitsType, "[", integer_to_list(Count), "]"],
+            ArrayType, Count, fun(V) -> hls_type:dslx_from_bits(Subtype,
+                ["hls_bits::from_stream(", V, ")"]) end)
+     end,
+     fun(Values) ->
+        ["hls_bits::from_stream((", codec_map(Values, [BitsType, "[", integer_to_list(Count), "]"],
+            Count, fun(V) -> ["hls_bits::to_stream(", hls_type:dslx_to_bits(Subtype, V), ")"] end),
+            ") as bits[", integer_to_list(hls_type:width(Subtype) * Count), "])"]
+     end}.
 
 %% Bind input before entering the loop so recursively nested codecs may reuse
 %% these local names without capturing an enclosing array's index.
 codec_map(Input, OutputType, Count, Convert) ->
     ["{ let codec_input = ", Input, "; for (codec_index, codec_output): (u32, ",
         OutputType, ") in u32:0..u32:", integer_to_list(Count),
-        " { update(codec_output, codec_index, ", Convert("codec_input[codec_index]"),
+        " { update(codec_output, codec_index, ", Convert(["codec_input[u32:", integer_to_list(Count - 1), " - codec_index]"]),
         ") } (zero!<", OutputType, ">()) }"].
