@@ -103,6 +103,8 @@ proxies responsive during physical stalls; `hls_fabric:info/1` exposes their
 transport queues and credits.
 [Host transaction ownership](docs/host-transactions.md) defines bounded call
 admission, timeout behavior, local inspection, and session recovery.
+Services declare [per-request reply sets](docs/service-contracts.md) checked by
+the CPU adapter, generated hardware, and proxy before completing a call.
 The regression checks isolated process state, concurrent calls, complete-frame
 arbitration under backpressure, and debug access while application output is
 blocked. Fabric endpoint addresses are transport identifiers, not Erlang PIDs.

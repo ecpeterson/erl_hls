@@ -37,6 +37,7 @@ parse_transform(Forms0, Options) ->
     AnalysisForms = Forms ++ [{attribute, element(2, ModuleAttr),
         hls_source_context, Context}],
     InterfaceAttributes = actor_interface_attributes(AnalysisForms, ModuleAttr),
+    ServiceAttributes = service_contract_attributes(AnalysisForms, ModuleAttr),
     SourceAttributes = case InterfaceAttributes of
         [] -> [];
         [_] -> hls_source:capture(AnalysisForms, Options)
@@ -121,7 +122,7 @@ parse_transform(Forms0, Options) ->
 
     EmittedForms =
         [FileAttr, ModuleAttr, ExportAttr] ++
-        InterfaceAttributes ++ SourceAttributes ++
+        InterfaceAttributes ++ ServiceAttributes ++ SourceAttributes ++
         RewrittenBodyForms ++
         [
             PackForm,
@@ -136,6 +137,21 @@ parse_transform(Forms0, Options) ->
 
 is_source_context({attribute, _, hls_source_context, _}) -> true;
 is_source_context(_) -> false.
+
+service_contract_attributes(Forms, {attribute, Line, module, _}) ->
+    case xls_parse:find_optional_attribute(Forms, hls_phases) of
+        {ok, _} -> [];
+        none ->
+            case lists:any(fun
+                ({function, _, Name, 2, _}) ->
+                    Name =:= handle_call orelse Name =:= handle_cast;
+                (_) -> false
+            end, Forms) of
+                true -> [{attribute, Line, hls_service_contract,
+                    hls_service_contract:from_forms(Forms)}];
+                false -> []
+            end
+    end.
 
 record_width_expression(Forms, Tag, Line) ->
     {attribute, _RecordLine, record, {_Tag, Fields}} =

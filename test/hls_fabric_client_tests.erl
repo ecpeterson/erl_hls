@@ -91,6 +91,15 @@ timeout_and_death(Kind, Client, Fabric) ->
     All = phi_memory_fabric_fixture:await_sends(Fabric, Base + Capacity - 2, 5000),
     LiveFrames = lists:nthtail(Base, All),
     ?assertEqual({error, transaction_limit}, call(Kind, Client, 999, 1000)),
+    case Kind of
+        application ->
+            {_, {_, TimedTx, _}, _} = TimedFrame,
+            {_, {_, DeadTx, _}, _} = DeadFrame,
+            [deliver(Fabric, regsvc:pack_tag(read), Tx, <<51:32/little>>)
+                || Tx <- [TimedTx, DeadTx]],
+            ?assertMatch(#{available := 0, abandoned := 1}, synced_info(Client, Fabric));
+        debug -> ok
+    end,
     %% The late old reply releases exactly its own slot. The next request may
     %% now reuse it, while the other abandoned request remains unavailable.
     reply(Kind, Fabric, TimedFrame),
@@ -206,10 +215,51 @@ cpu_info_test() ->
     try ?assertEqual(none, hls_fabric:client_info(Client))
     after hls_gs:stop(Client) end.
 
+per_request_reply_sets_test() ->
+    with_client({application, hls_reply_fixture}, fun(Client, Fabric) ->
+        Read = async(fun() -> gen_server:call(Client, {read, 0}) end),
+        [{_, {_, ReadTx, _}, _}] = phi_memory_fabric_fixture:await_sends(Fabric, 1, 1000),
+        Query = async(fun() -> gen_server:call(Client, {query, 1, 23}) end),
+        [_, {_, {_, QueryTx, _}, _}] = phi_memory_fabric_fixture:await_sends(Fabric, 2, 1000),
+        Tag = fun hls_reply_fixture:pack_tag/1,
+        %% A record allowed for one live request is not allowed for another.
+        %% All of these carry owned IDs and correct routes/flags.
+        deliver(Fabric, Tag(large), ReadTx, <<23:32/little, 7:32/little>>),
+        deliver(Fabric, Tag(wrong), QueryTx, <<23:32/little>>),
+        deliver(Fabric, Tag(read), ReadTx, <<0:32/little>>),
+        deliver(Fabric, Tag(ledger), ReadTx, <<7:32/little>>),
+        deliver(Fabric, Tag(small), ReadTx, <<7:32/little, 99:32/little>>),
+        deliver(Fabric, Tag(small), ReadTx, <<7, 0>>),
+        deliver(Fabric, Tag(error), ReadTx, <<>>),
+        deliver(Fabric, Tag(error), ReadTx, <<15, 0>>),
+        deliver(Fabric, Tag(error), ReadTx, <<15:32/little, 99:32/little>>),
+        ?assertMatch(#{pending := 2, ignored_replies := 9}, synced_info(Client, Fabric)),
+        ?assertEqual({error, {invalid_request, call, change}},
+            gen_server:call(Client, {change, 99})),
+        ?assertEqual({error, {invalid_request, call, wrong}},
+            gen_server:call(Client, {wrong, 99})),
+        ?assertEqual(2, length(phi_memory_fabric_fixture:sends(Fabric))),
+        deliver(Fabric, Tag(large), QueryTx, <<23:32/little, 7:32/little>>),
+        expect(Query, {large, 23, 7}),
+        ?assertMatch(#{pending := 1}, synced_info(Client, Fabric)),
+        deliver(Fabric, Tag(small), ReadTx, <<7:32/little>>),
+        expect(Read, {small, 7}),
+        Error = async(fun() -> gen_server:call(Client, {query, 2, 99}) end),
+        [_, _, {_, {_, ErrorTx, _}, _}] = phi_memory_fabric_fixture:await_sends(Fabric, 3, 1000),
+        deliver(Fabric, Tag(error), ErrorTx, <<15:32/little>>),
+        expect(Error, {error, {remote_error, reply_contract}}),
+        Small = async(fun() -> gen_server:call(Client, {query, 0, 101}) end),
+        [_, _, _, {_, {_, SmallTx, _}, _}] = phi_memory_fabric_fixture:await_sends(Fabric, 4, 1000),
+        deliver(Fabric, Tag(small), SmallTx, <<101:32/little>>),
+        expect(Small, {small, 101}),
+        ?assertMatch(#{pending := 0, ignored_replies := 9}, synced_info(Client, Fabric))
+    end).
+
 with_client(Kind, Run) ->
     {ok, Fabric} = phi_memory_fabric_fixture:start_link(),
     {ok, Client} = case Kind of
         application -> hls_gs:start_link(regsvc, [], [{fabric, Fabric, 1}]);
+        {application, Module} -> hls_gs:start_link(Module, [], [{fabric, Fabric, 1}]);
         debug -> hls_debug:start_link(undefined, {fabric, Fabric, 1})
     end,
     try Run(Client, Fabric)

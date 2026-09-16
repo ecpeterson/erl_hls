@@ -276,7 +276,7 @@ rtl_error_scenario_(Pid) ->
             gen_server:call(Pid, {get, 16})
         ),
         ?_assertEqual(
-            {error, {remote_error, function_clause}},
+            {error, {invalid_request, call, ack}},
             gen_server:call(Pid, {ack, 0})
         ),
         ?_assertEqual(0, regsvc:get(Pid, 0))

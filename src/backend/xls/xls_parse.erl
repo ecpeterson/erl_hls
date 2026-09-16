@@ -202,6 +202,7 @@ to_xls_gs(Filename, Forms0) ->
     const OK = u1:0;
     const ERROR_FUNCTION_CLAUSE = u32:1;
     const ERROR_REQUEST_LENGTH = u32:3;
+    const ERROR_REPLY_CONTRACT = u32:15;
 
 
     """,

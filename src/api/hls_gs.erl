@@ -10,6 +10,13 @@ handled by the server must belong exclusively to either `handle_call/2` or
 `handle_cast/2`, because the generated request header does not otherwise
 encode which callback family should receive it.
 
+`-hls_replies([{RequestTag, [ReplyTag, ...]}, ...]).` declares the allowed
+public reply records for every call tag. `hls_pack` embeds the checked contract
+in the BEAM; the CPU adapter checks callback results against it, and hardware
+returns `reply_contract` on violation. Fabric proxies require this metadata
+and match replies against each outstanding request's set. See
+`docs/service-contracts.md` for declarations, errors, and execution semantics.
+
 Hardware translation requires one unguarded `init([])` clause returning the
 state record. Its supported pure expressions are evaluated and checked by XLS
 at compile time; a match failure rejects conversion. Cold start and hardware
@@ -45,6 +52,7 @@ inspection, and session recovery.
 
 -record(state, {
     module :: module(),
+    contract = none :: none | hls_service_contract:contract(),
     fabric = none :: none | hls_fabric_client:state(),
     state :: state()
 }).
@@ -73,6 +81,7 @@ stop(PID) ->
 -define(ERROR_IF_CLAUSE, 5).
 -define(ERROR_BADARITH, 13).
 -define(ERROR_BADARG, 14).
+-define(ERROR_REPLY_CONTRACT, 15).
 
 %% Failed casts can emit ERROR replies. Never lend their ID to a call.
 -define(CAST_TX_ID, 255).
@@ -80,11 +89,20 @@ stop(PID) ->
 init({Module, Arg, Options}) ->
     case {transport(Options), Arg} of
         {cpu, _} ->
-            {ok, #state{state = Module:init(Arg), module = Module}};
+            Contract = case hls_service_contract:from_module(Module) of
+                {ok, Value} -> Value;
+                none -> none
+            end,
+            {ok, #state{state = Module:init(Arg), module = Module, contract = Contract}};
         {{fabric, Broker, LocalEndpoint, PeerEndpoint}, []} ->
-            case hls_fabric_client:new(Broker, LocalEndpoint, PeerEndpoint, ?CAST_TX_ID) of
-                {ok, Client} -> {ok, #state{module = Module, fabric = Client}};
-                {error, Reason} -> {stop, Reason}
+            case hls_service_contract:from_module(Module) of
+                none -> {stop, {missing_hls_service_contract, Module}};
+                {ok, Contract} ->
+                    case hls_fabric_client:new(Broker, LocalEndpoint, PeerEndpoint, ?CAST_TX_ID) of
+                        {ok, Client} -> {ok, #state{module = Module, fabric = Client,
+                            contract = Contract}};
+                        {error, Reason} -> {stop, Reason}
+                    end
             end;
         {{fabric, _Broker, _LocalEndpoint, _PeerEndpoint}, _} ->
             {stop, {unsupported_hls_init_argument, Arg}}
@@ -94,23 +112,27 @@ handle_call('$hls_fabric_info', _From, GS = #state{fabric = none}) ->
     {reply, none, GS};
 handle_call('$hls_fabric_info', _From, GS = #state{fabric = Client}) ->
     {reply, hls_fabric_client:info(Client), GS};
-handle_call(
-    Message,
-    _From,
-    GS = #state{module = Module, state = State, fabric = none}
-) ->
+handle_call(Message, From, GS = #state{contract = Contract}) ->
+    case call_replies(Message, Contract) of
+        invalid -> {reply, {error, {invalid_request, call, element(1, Message)}}, GS};
+        Replies -> call(Message, From, Replies, GS)
+    end.
+
+call(Message, _From, Replies, GS = #state{module = Module, state = State, fabric = none}) ->
     {reply, Reply, NewState} = Module:handle_call(Message, State),
+    ok = check_reply(Message, Reply, Replies),
     {reply, Reply, GS#state{state = NewState}};
-handle_call(Message, From, GS = #state{module = Module, fabric = Client}) ->
+call(Message, From, Replies, GS = #state{module = Module, fabric = Client}) ->
     Tag = Module:pack_tag(element(1, Message)),
     Payload = Module:pack(Message),
-    Next = hls_fabric_client:request(Tag, Payload, Module, From, Client),
+    Next = hls_fabric_client:request(Tag, Payload, {Module, Replies}, From, Client),
     {noreply, GS#state{fabric = Next}}.
 
 handle_cast(
     Message,
-    GS = #state{module = Module, state = State, fabric = none}
+    GS = #state{module = Module, state = State, fabric = none, contract = Contract}
 ) ->
+    ok = check_cast(Message, Contract),
     {noreply, NewState} = Module:handle_cast(Message, State),
     {noreply, GS#state{state = NewState}};
 handle_cast(
@@ -119,7 +141,8 @@ handle_cast(
 ) ->
     Next = hls_fabric_client:receive_frame(Receipt, Route, Header, Payload, fun decode_reply/3, Client),
     {noreply, GS#state{fabric = Next}};
-handle_cast(Message, GS = #state{module = Module, fabric = Client}) ->
+handle_cast(Message, GS = #state{module = Module, fabric = Client, contract = Contract}) ->
+    ok = check_cast(Message, Contract),
     Tag = Module:pack_tag(element(1, Message)),
     Payload = Module:pack(Message),
     Next = hls_fabric_client:cast(Tag, ?CAST_TX_ID, Payload, Client),
@@ -130,15 +153,35 @@ handle_info(Message, GS = #state{fabric = Client})
     {noreply, GS#state{fabric = hls_fabric_client:handle_info(Message, Client)}};
 handle_info(_Message, GS) -> {noreply, GS}.
 
-decode_reply(TagID, Payload, Module) ->
-    %% hls_gs permits any declared record; there is no per-request reply
-    %% schema. Unknown tags and invalid payloads cannot retire a transaction.
+decode_reply(TagID, Payload, {Module, Replies}) ->
+    %% Keep the allowed set with the slot, including abandoned calls. A known
+    %% but unrelated record is no more evidence of completion than an unknown tag.
     try
         Tag = Module:unpack_tag(TagID),
+        true = Tag =:= error orelse lists:member(Tag, Replies),
         {Reply, <<>>} = unpack_reply(Module, Tag, Payload),
         {reply, Reply}
     catch
         error:_ -> ignore
+    end.
+
+call_replies(_Message, none) -> none;
+call_replies(Message, #{calls := Calls}) ->
+    maps:get(element(1, Message), Calls, invalid).
+
+check_reply(_Request, _Reply, none) -> ok;
+check_reply(Request, Reply, Replies) ->
+    case is_tuple(Reply) andalso tuple_size(Reply) > 0
+            andalso lists:member(element(1, Reply), Replies) of
+        true -> ok;
+        false -> error({reply_contract, element(1, Request), Reply, Replies})
+    end.
+
+check_cast(_Message, none) -> ok;
+check_cast(Message, #{casts := Casts}) ->
+    case lists:member(element(1, Message), Casts) of
+        true -> ok;
+        false -> error({invalid_request, cast, element(1, Message)})
     end.
 
 terminate(_Reason, _State) ->
@@ -163,10 +206,10 @@ transport(Options) ->
             end
     end.
 
-unpack_reply(_Module, error, <<ErrorCode:32/little-unsigned-integer, Rest/binary>>) ->
-    {{error, {remote_error, error_reason(ErrorCode)}}, Rest};
-unpack_reply(_Module, error, Payload) ->
-    {{error, {remote_error, {malformed_error, Payload}}}, <<>>};
+unpack_reply(_Module, error, <<ErrorCode:32/little-unsigned-integer>>) ->
+    {{error, {remote_error, error_reason(ErrorCode)}}, <<>>};
+unpack_reply(_Module, error, _Payload) ->
+    error(invalid_error_payload);
 unpack_reply(Module, Tag, Payload) ->
     Module:unpack(Tag, Payload).
 
@@ -177,6 +220,7 @@ error_reason(?ERROR_CASE_CLAUSE) -> case_clause;
 error_reason(?ERROR_IF_CLAUSE) -> if_clause;
 error_reason(?ERROR_BADARITH) -> badarith;
 error_reason(?ERROR_BADARG) -> badarg;
+error_reason(?ERROR_REPLY_CONTRACT) -> reply_contract;
 error_reason(ErrorCode) -> {unknown_error, ErrorCode}.
 
 %%%

@@ -336,6 +336,7 @@ for source in \
     "$project_root/src/runtime/hls_fabric_session.erl" \
     "$project_root/src/runtime/hls_fabric_client.erl" \
     "$project_root/src/api/hls_gs.erl" \
+    "$project_root/src/api/hls_service_contract.erl" \
     "$project_root/src/runtime/hls_debug.erl" \
     "$project_root/src/runtime/hls_debug_target.erl" \
     "$project_root/src/api/hls_lists.erl" \

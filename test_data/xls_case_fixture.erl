@@ -7,6 +7,7 @@
 
 -hls_data(state).
 -hls_tags([query, update, reply]).
+-hls_replies([{query, [reply]}]).
 
 -record(query, {
     mode = hls_type:zero() :: hls_nums:u32(),

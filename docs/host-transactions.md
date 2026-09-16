@@ -1,6 +1,6 @@
 # Host transaction ownership
 
-An `hls_gs` hardware proxy and an `hls_debug` client each own one return route and a bounded set of outstanding transactions. The CPU `hls_gs` adapter still invokes callbacks directly. These are host-side rules: the FPGA frame layout and generated datapath are unchanged.
+An `hls_gs` hardware proxy and an `hls_debug` client each own one return route and a bounded set of outstanding transactions. The CPU `hls_gs` adapter invokes callbacks directly and checks their declared reply kinds. See [service reply contracts](service-contracts.md) for the shared CPU, hardware, and host contract.
 
 ## Admission and completion
 
@@ -10,7 +10,7 @@ The allocator selects an unused slot, scanning cyclically from its previous posi
 
 A slot is released by its matching reply, by a broker rejection proving that the request was not sent, or by closing the client to further work. Reply matching checks the return route, transaction ID, and zero flags. Debug clients additionally require the expected reply tag or `DEBUG_ERROR`. An unknown tag, wrong debug reply kind, unowned ID, or wrong route/flags increments `ignored_replies` without consuming a pending request. A duplicate received while its old ID remains free is consequently ignored.
 
-Application replies must decode to a declared record with no trailing payload, or to the remote-error result. Invalid record payloads and unknown tags leave the call pending. `hls_gs` does not yet declare a reply-record set for each request: a different valid declared record cannot be distinguished from a legitimate response by this client. Known debug replies retain their existing decoding-error results. Reply validation is not a general guarantee against a faulty endpoint inventing a plausible response.
+Application replies must belong to the outstanding request's declared reply set and decode with no trailing payload, or contain exactly one word of remote-error code. A valid record of an unexpected kind, invalid record payload, malformed error, or unknown tag leaves the call pending and increments `ignored_replies`. The proxy rejects calls using cast-only or non-request tags before transmission. Known debug replies retain their existing decoding-error results. Reply validation is not a general guarantee against a faulty endpoint inventing a plausible response.
 
 ## Timeout, caller death, and transport failure
 
