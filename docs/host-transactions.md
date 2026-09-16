@@ -61,6 +61,8 @@ The limits bound admitted transport state and broker-to-owner deliveries, not ar
 
 ## Logical sessions and route lifetime
 
+Client constructors accept an explicit host return endpoint: `hls_gs:start_link(Module, [], [{fabric, Broker, LocalEndpoint, PeerEndpoint}])` and `hls_debug:start_link(Module, {fabric, Broker, LocalEndpoint, PeerEndpoint})`. The shorter `{fabric, Broker, PeerEndpoint}` form uses local endpoint zero. Distinct local endpoints let independent clients address the same service without sharing transaction slots or reply ownership. Choose unused endpoints; closing a client still retires its return route for the device broker's lifetime.
+
 `hls_fabric:start_link/2,3` starts the persistent device broker. `hls_fabric:open_session(Device)` starts a linked logical session accepting the same `register_route`, `send`, `send_request`, `ack`, and `info` interface. Pass that session PID to an `hls_gs`, `hls_debug`, or frame client in place of the device PID. Clients may still address the device broker directly when no separate lifetime is needed.
 
 ```erlang

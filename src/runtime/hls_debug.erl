@@ -44,9 +44,11 @@ A client owns 256 transaction slots. Timeouts do not cancel device work; see
 }).
 
 start_link(Module, {fabric, Broker, PeerEndpoint}) ->
+    start_link(Module, {fabric, Broker, 0, PeerEndpoint});
+start_link(Module, {fabric, Broker, LocalEndpoint, PeerEndpoint}) ->
     gen_server:start_link(
         ?MODULE,
-        {Module, {fabric, Broker, 0, PeerEndpoint}},
+        {Module, {fabric, Broker, LocalEndpoint, PeerEndpoint}},
         []
     ).
 

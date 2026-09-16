@@ -197,6 +197,8 @@ code_change(_OldVsn, GS, _Extra) ->
 
 transport(Options) ->
     case lists:keyfind(fabric, 1, Options) of
+        {fabric, Broker, LocalEndpoint, PeerEndpoint} ->
+            {fabric, Broker, LocalEndpoint, PeerEndpoint};
         {fabric, Broker, PeerEndpoint} ->
             {fabric, Broker, 0, PeerEndpoint};
         false ->
