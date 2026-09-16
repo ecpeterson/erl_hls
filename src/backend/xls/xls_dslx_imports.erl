@@ -10,10 +10,13 @@ from_forms(Forms) ->
     Uses = uses(Forms),
     Providers = lists:usort([Module || {provider, Module, _Name} <- Uses]),
     OperatorImports = [hls_integer || {operator, _} <- Uses] ++
-        [hls_patterns || {pattern, tail} <- Uses],
+        [hls_patterns || {pattern, tail} <- Uses] ++
+        [hls_bits || bit_syntax <- Uses],
     lists:usort(OperatorImports ++ lists:append([imports(Module,
         lists:usort([Name || {provider, M, Name} <- Uses, M =:= Module])) || Module <- Providers])).
 
+uses({xls_bit_size, _, _, Value}) -> [bit_syntax | uses(Value)];
+uses({bin, _, Elements}) -> [bit_syntax | uses(Elements)];
 uses({clause, _, Patterns, Guards, Body}) ->
     pattern_uses(Patterns) ++ uses([Guards, Body]);
 uses({match, _, Pattern, Value}) ->
@@ -31,6 +34,7 @@ uses(List) when is_list(List) ->
 uses(_) ->
     [].
 
+pattern_uses({bin, _, Elements}) -> [bit_syntax | pattern_uses(Elements)];
 pattern_uses({cons, _, Head, {var, _, Name}}) when Name =/= '_' ->
     [{pattern, tail} | pattern_uses(Head)];
 pattern_uses({cons, _, Head, {match, _, Left, Right}}) ->

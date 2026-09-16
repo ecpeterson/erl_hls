@@ -11,7 +11,7 @@ Transforms supported Erlang actor modules into corresponding XLS modules.
 
 Callback bodies may use source-ordered `case` and `if` expressions. Supported
 `case` patterns include literals, variables, aliases, tuples, homogeneous
-records, and fixed-array list patterns. Each clause accepts semicolon-separated alternatives from the same
+records, fixed-size binary patterns, and fixed-array list patterns. Each clause accepts semicolon-separated alternatives from the same
 side-effect-free guard subset as a callback, including comma-separated tests
 and `andalso` or `orelse`. Integer `div` and `rem` reject a zero divisor with
 `badarith` in bodies; in guards, an arithmetic failure rejects that guard
@@ -19,7 +19,8 @@ sequence and permits the next alternative or clause. A missing match raises a
 selected `case_clause` or `if_clause` failure; catch-all clauses are optional.
 The first selected expression failure
 is retained through nested branches and helpers. See `docs/control-flow.md`
-for failure reporting and the bounded hardware contract.
+for failure reporting and the bounded hardware contract. Fixed-size bitstring
+construction, matching and size BIFs are described in `docs/bit-syntax.md`.
 
 A new variable bound in every `case` or `if` arm is available after the
 expression, including bindings introduced by case patterns and nested
@@ -433,6 +434,8 @@ statement_from_statement({var, Line, Name}, State) ->
     end;
 statement_from_statement({integer, _L, Integer}, State) ->
     reference(State, {static, integer, Integer});
+statement_from_statement({char, _L, Integer}, State) ->
+    reference(State, {static, integer, Integer});
 statement_from_statement({op, _L, '+', {integer, _IntegerLine, Integer}}, State) ->
     reference(State, {static, integer, Integer});
 statement_from_statement({float, _L, Float}, State) ->
@@ -467,6 +470,15 @@ statement_from_statement(X, State) when is_tuple(X) andalso op == element(1, X) 
             division_failure(Right, Line, Evaluated);
         _ -> Evaluated
     end;
+statement_from_statement({xls_bit_size, _, Name, Value}, State) ->
+    Evaluated = statement_from_statement(Value, State),
+    Size = ["hls_bits::length(", reference(Evaluated), ")"],
+    instr(Evaluated, case Name of
+        bit_size -> Size;
+        byte_size -> ["((", Size, " + u32:7) / u32:8)"]
+    end);
+statement_from_statement(Binary = {bin, _, _}, State) ->
+    xls_binary_lower:construct(Binary, State);
 statement_from_statement({tuple, _L, Slots}, State) ->
     {BwdReferences, IntermediateState} = lists:foldl(
         fun(Slot, {References, ThisState}) ->

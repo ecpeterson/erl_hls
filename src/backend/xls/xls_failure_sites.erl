@@ -30,6 +30,8 @@ prepare(Forms = [{attribute, _, file, {Main, _}} | _]) ->
     {Annotated, [#{kind => Kind, file => list_to_binary(File), line => Line}
         || {File, Line, Kind} <- Origins]}.
 
+sites({bin_element, Line, Value, _Size, _Types}) ->
+    [origin(badarg, Line) | sites(Value)];
 sites({match, _, Pattern, Value}) -> pattern_sites(Pattern) ++ sites(Value);
 sites({'case', Line, Subject, Clauses}) -> [origin(case_clause, Line) | sites([Subject, Clauses])];
 sites({'if', Line, Clauses}) -> [origin(if_clause, Line) | sites(Clauses)];
@@ -52,7 +54,9 @@ sites(Tuple) when is_tuple(Tuple) -> sites(tuple_to_list(Tuple));
 sites(List) when is_list(List) -> lists:append([sites(X) || X <- List]);
 sites(_) -> [].
 
-pattern_sites({Tag, Line, _}) when Tag =:= var; Tag =:= atom; Tag =:= integer ->
+pattern_sites({bin, Line, Elements}) ->
+    [origin(match_failure, Line) | pattern_sites(Elements)];
+pattern_sites({Tag, Line, _}) when Tag =:= var; Tag =:= atom; Tag =:= integer; Tag =:= char ->
     [origin(match_failure, Line)];
 pattern_sites({record, Line, _, Fields}) ->
     [origin(match_failure, Line) | pattern_sites(Fields)];
