@@ -16,9 +16,12 @@ run(Stage) ->
             {ID, R}
         end || {ID, A, _} <- Clients],
         await(filename:join(Stage, "app_held"), 10000),
+        %% app_held witnesses the first reply at the shared output. Requests
+        %% from the other clients may still be arriving, so observe each
+        %% endpoint through its public counters before asserting its stall.
         Blocked = [begin
             #{pending := 1} = Info = hls_fabric:client_info(A),
-            {ok, Counters} = hls_debug:get_counters(D),
+            Counters = await_stall(D, erlang:monotonic_time(millisecond) + 10000),
             {ID, Info, Counters}
         end || {ID, A, D} <- Clients],
         true = lists:all(fun({_, _, #{app_tx_stall_cycles := N}}) -> N > 0 end, Blocked),
@@ -64,6 +67,19 @@ replies(Requests) ->
 
 save(Stage, Name, Value) ->
     file:write_file(filename:join(Stage, Name), io_lib:format("~p.~n", [Value])).
+
+await_stall(Debug, Deadline) ->
+    Remaining = max(1, Deadline - erlang:monotonic_time(millisecond)),
+    {ok, #{app_tx_stall_cycles := Cycles} = Counters} =
+        hls_debug:get_counters(Debug, Remaining),
+    case Cycles > 0 of
+        true -> Counters;
+        false ->
+            case erlang:monotonic_time(millisecond) < Deadline of
+                true -> await_stall(Debug, Deadline);
+                false -> error({stall_timeout, Counters})
+            end
+    end.
 
 await(_Path, 0) -> error(stimulus_timeout);
 await(Path, Left) ->
