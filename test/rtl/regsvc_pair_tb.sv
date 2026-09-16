@@ -27,7 +27,7 @@ module regsvc_pair_tb;
     reg [31:0] observed_word;
     integer index;
 
-    regsvc_pair_fixture dut (
+    regsvc_fabric_fixture dut (
         .aclk(clk),
         .aresetn(resetn),
         .s_axis_tdata(s_data),
@@ -267,63 +267,18 @@ module regsvc_pair_tb;
         end
     endtask
 
-    task automatic expect_one_event_trace;
-        input [15:0] endpoint;
-        input [7:0] debug_txid;
-        input [31:0] event_metadata;
+    task automatic expect_empty_trace(input [15:0] endpoint,input [7:0] txid);
+        integer n;
         begin
-            receive_debug_beat(observed_word, 1'b0);
-            if (observed_word !== route(endpoint, 16'd0)) begin
-                $display("FAIL: trace reply came from wrong endpoint: %08x",
-                         observed_word);
-                $fatal(1);
-            end
-            receive_debug_beat(observed_word, 1'b0);
-            if (observed_word !== header(8'h83, debug_txid, 8'd9)) begin
-                $display("FAIL: malformed debug trace header: %08x",
-                         observed_word);
-                $fatal(1);
-            end
-            receive_debug_beat(observed_word, 1'b0);
-            if (observed_word !== 32'd2) begin
-                $display("FAIL: unexpected trace version %0d", observed_word);
-                $fatal(1);
-            end
-            receive_debug_beat(observed_word, 1'b0);
-            if (observed_word !== 32'd3) begin
-                $display("FAIL: unexpected trace record width %0d", observed_word);
-                $fatal(1);
-            end
-            receive_debug_beat(observed_word, 1'b0);
-            if (observed_word !== 32'd1) begin
-                $display("FAIL: expected one retained trace event, got %0d",
-                         observed_word);
-                $fatal(1);
-            end
-            receive_debug_beat(observed_word, 1'b0);
-            if (observed_word !== 32'd0) begin
-                $display("FAIL: endpoint unexpectedly dropped trace events");
-                $fatal(1);
-            end
-            receive_debug_beat(observed_word, 1'b0);
-            if (observed_word !== 32'd0) begin
-                $display("FAIL: trace reported observation drops");
-                $fatal(1);
-            end
-            receive_debug_beat(observed_word, 1'b0);
-            if (observed_word >= 64) $fatal(1, "invalid framing status");
-            receive_debug_beat(observed_word, 1'b0);
-            if (observed_word == 32'd0) begin
-                $display("FAIL: application trace timestamp was zero");
-                $fatal(1);
-            end
-            receive_debug_beat(observed_word, 1'b0);
-            if (observed_word !== 0) $fatal(1, "local trace unexpectedly carried a route");
-            receive_debug_beat(observed_word, 1'b1);
-            if (observed_word !== event_metadata) begin
-                $display("FAIL: malformed application trace event %08x",
-                         observed_word);
-                $fatal(1);
+            receive_debug_beat(observed_word,0);
+            if(observed_word !== route(endpoint,0)) $fatal(1,"wrong trace route");
+            receive_debug_beat(observed_word,0);
+            if(observed_word !== header(8'h83,txid,6)) $fatal(1,"expected empty trace");
+            for(n=0;n<6;n=n+1) begin
+                receive_debug_beat(observed_word,n==5);
+                if(n==0 && observed_word!=2) $fatal(1,"trace version");
+                if(n==1 && observed_word!=3) $fatal(1,"trace width");
+                if(n>=2 && n<=4 && observed_word!=0) $fatal(1,"unexpected events/drops");
             end
         end
     endtask
@@ -436,15 +391,12 @@ module regsvc_pair_tb;
             $fatal(1);
         end
 
-        // With consumer input flops disabled, the selected endpoint has
-        // accepted its request but cannot transfer its response into the
-        // blocked shared router. The independent trace therefore contains the
-        // request header alone; the response is observed after release below.
+        // The router has accepted the response header into its one-word
+        // buffer even though the shared output is blocked. The endpoint's
+        // public trace already contains RX and TX header events; TX is not a
+        // claim that the host has received the complete response.
         send_debug_trace(first_endpoint, 8'h56);
-        expect_one_event_trace(
-            first_endpoint,
-            8'h56,
-            {8'h01, 8'h00, first_endpoint[7:0], 8'd5});
+        expect_two_event_trace(first_endpoint, 8'h56, first_endpoint[7:0]);
 
         // Releasing the output must emit the entirety of the selected packet
         // before arbitration moves to the other endpoint.
@@ -472,14 +424,10 @@ module regsvc_pair_tb;
             second_endpoint[7:0],
             second_endpoint == 16'd1 ? 32'h11111111 : 32'h22222222);
 
-        // The first endpoint's response crossed its local boundary only after
-        // the shared output was released. Snapshot that deferred TX event so
-        // the next trace bank starts empty for the overlap checks.
+        // Releasing the buffered packet does not repeat the endpoint's
+        // previously observed response header.
         send_debug_trace(first_endpoint, 8'h5a);
-        expect_one_event_trace(
-            first_endpoint,
-            8'h5a,
-            {8'h02, 8'h00, first_endpoint[7:0], 8'd7});
+        expect_empty_trace(first_endpoint, 8'h5a);
 
         // Populate the alternate trace bank, then freeze it and hold its reply
         // at the shared debug output. Application traffic must continue into

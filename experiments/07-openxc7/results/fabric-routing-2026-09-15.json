@@ -1,0 +1,141 @@
+{
+  "baseline": "8b64d1a600212da646e5d53f97a36b6b306428b5",
+  "yosys": "Yosys 0.69+10 (git sha1 370a53acf-dirty, Release, Clang /usr/local/osxcross/target/bin/aarch64-apple-darwin25.5-clang++ 21.1.8)",
+  "variants": {
+    "baseline-2": {
+      "ports": 2,
+      "cells": {
+        "LUT6": 37,
+        "LUT3": 9,
+        "LUT5": 16,
+        "LUT2": 1,
+        "LUT4": 41,
+        "FDRE": 39,
+        "$scopeinfo": 2
+      },
+      "counts": {
+        "LUT": 104,
+        "LUT_logic": 104,
+        "LUT_RAM": 0,
+        "FF": 39,
+        "RAMB18": 0,
+        "RAMB36": 0
+      },
+      "inputs": {
+        "_build/frame-router/area-final/baseline-2/router_area.v": "19be4e5907fde9a21c8b79333afeb6f0b7b20a4990595bf982d192c8a9a50c0a",
+        "_build/frame-router/area-final/baseline/ingress.v": "fdc98bfd1d5f8db2cd074ec4cfe39e90bd1335aa01cfd4f27c483c6f77cf100b",
+        "_build/frame-router/area-final/baseline/egress.v": "3da44b97b7dce61e87621e3d43ebf062c06c75b5e26bc4e1faa4a40de99364e6"
+      }
+    },
+    "current-1": {
+      "ports": 1,
+      "cells": {
+        "LUT2": 3,
+        "LUT3": 1,
+        "LUT4": 40,
+        "LUT6": 5,
+        "LUT5": 5,
+        "FDRE": 40,
+        "$scopeinfo": 2
+      },
+      "counts": {
+        "LUT": 54,
+        "LUT_logic": 54,
+        "LUT_RAM": 0,
+        "FF": 40,
+        "RAMB18": 0,
+        "RAMB36": 0
+      },
+      "inputs": {
+        "_build/frame-router/area-final/current-1/router_area.v": "f7ef8676ecd21490caa2b15a5dee205007bb2131127e45d3de10d70d5e9c9a46",
+        "priv/rtl/fabric/hls_fabric_egress.v": "02cc590f3fa5c4700dbcc825ec0e20ffb627941bc9a0b9c73ea2b2c6b409492e",
+        "priv/rtl/fabric/hls_fabric_ingress.v": "7ec632e77ee4ec969aea4f1d558ee28bdfde3f5de8b1232371f504e857b7ba4f"
+      }
+    },
+    "current-2": {
+      "ports": 2,
+      "cells": {
+        "LUT3": 39,
+        "LUT4": 38,
+        "LUT6": 7,
+        "LUT5": 11,
+        "FDRE": 43,
+        "$scopeinfo": 2
+      },
+      "counts": {
+        "LUT": 95,
+        "LUT_logic": 95,
+        "LUT_RAM": 0,
+        "FF": 43,
+        "RAMB18": 0,
+        "RAMB36": 0
+      },
+      "inputs": {
+        "_build/frame-router/area-final/current-2/router_area.v": "0f722aaa07422e56ff84cbacfa3b1e0500193b627bd9613a643e29c86ad319da",
+        "priv/rtl/fabric/hls_fabric_egress.v": "02cc590f3fa5c4700dbcc825ec0e20ffb627941bc9a0b9c73ea2b2c6b409492e",
+        "priv/rtl/fabric/hls_fabric_ingress.v": "7ec632e77ee4ec969aea4f1d558ee28bdfde3f5de8b1232371f504e857b7ba4f"
+      }
+    },
+    "current-3": {
+      "ports": 3,
+      "cells": {
+        "LUT2": 6,
+        "LUT5": 99,
+        "LUT6": 11,
+        "LUT4": 21,
+        "LUT3": 2,
+        "MUXF7": 2,
+        "MUXF8": 1,
+        "FDRE": 47,
+        "$scopeinfo": 2
+      },
+      "counts": {
+        "LUT": 139,
+        "LUT_logic": 139,
+        "LUT_RAM": 0,
+        "FF": 47,
+        "RAMB18": 0,
+        "RAMB36": 0
+      },
+      "inputs": {
+        "_build/frame-router/area-final/current-3/router_area.v": "c3b3bbf30c81fd56485fdd2fb4f300d3c5c96ec9a52214c687edf408f6ba5421",
+        "priv/rtl/fabric/hls_fabric_egress.v": "02cc590f3fa5c4700dbcc825ec0e20ffb627941bc9a0b9c73ea2b2c6b409492e",
+        "priv/rtl/fabric/hls_fabric_ingress.v": "7ec632e77ee4ec969aea4f1d558ee28bdfde3f5de8b1232371f504e857b7ba4f"
+      }
+    },
+    "current-8": {
+      "ports": 8,
+      "cells": {
+        "LUT2": 25,
+        "LUT6": 150,
+        "LUT3": 12,
+        "LUT5": 58,
+        "LUT4": 21,
+        "INV": 2,
+        "CARRY4": 1,
+        "FDRE": 53,
+        "$scopeinfo": 2
+      },
+      "counts": {
+        "LUT": 266,
+        "LUT_logic": 266,
+        "LUT_RAM": 0,
+        "FF": 53,
+        "RAMB18": 0,
+        "RAMB36": 0
+      },
+      "inputs": {
+        "_build/frame-router/area-final/current-8/router_area.v": "a6fceba923a90fae23922d02f9c4ce55eebde45f6c24adf46842e8808a01acd2",
+        "priv/rtl/fabric/hls_fabric_egress.v": "02cc590f3fa5c4700dbcc825ec0e20ffb627941bc9a0b9c73ea2b2c6b409492e",
+        "priv/rtl/fabric/hls_fabric_ingress.v": "7ec632e77ee4ec969aea4f1d558ee28bdfde3f5de8b1232371f504e857b7ba4f"
+      }
+    }
+  },
+  "tools": {
+    "ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+    "opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c",
+    "codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162"
+  },
+  "method": "Isolated word-only ingress + egress; return destination 0; Xilinx 7-series mapping; no placement or power estimate.",
+  "date": "2026-09-15"
+}

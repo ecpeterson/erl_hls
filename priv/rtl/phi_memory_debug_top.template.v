@@ -1,7 +1,6 @@
 // Routed phi-memory gateway plus the shared passive boundary monitor. The
 // application gateway owns endpoint 1 on its application stream. The debug
-// stream uses the existing two-endpoint router fixture with endpoint 1 active;
-// endpoint 2 is tied off until debug endpoint allocation is generated.
+// stream routes endpoint 1 to the boundary monitor. Unknown routes drain.
 //
 // Scheduler RAM declarations, ports, and instances are inserted by
 // phi_memory_debug_top_v.
@@ -33,42 +32,30 @@ module phi_memory_debug_top (
     input  wire        m_dbg_tready,
     output wire        m_dbg_tlast
 );
-    wire [32:0] debug_shared_in = {s_dbg_tlast, s_dbg_tdata};
-    wire [32:0] debug_shared_out;
     wire [32:0] debug_local_in;
     wire [32:0] debug_local_out;
+    wire [3:0] debug_local_keep_in, debug_local_keep_out;
     wire        debug_local_in_valid;
     wire        debug_local_in_ready;
     wire        debug_local_out_valid;
     wire        debug_local_out_ready;
 
 @APPLICATION@
-    __hls_fabric_router__PairIngress_0_next debug_ingress (
-        .clk(aclk),
-        .reset(!aresetn),
-        ._shared_in(debug_shared_in),
-        ._shared_in_vld(s_dbg_tvalid),
-        ._shared_in_rdy(s_dbg_tready),
-        ._endpoint_one_out(debug_local_in),
-        ._endpoint_one_out_vld(debug_local_in_valid),
-        ._endpoint_one_out_rdy(debug_local_in_ready),
-        ._endpoint_two_out(),
-        ._endpoint_two_out_vld(),
-        ._endpoint_two_out_rdy(1'b1)
+    hls_fabric_ingress #(.PORTS(1),.ENDPOINTS(16'd1)) debug_ingress (
+        .clk(aclk),.reset(!aresetn),
+        .s_data(s_dbg_tdata),.s_keep(s_dbg_tkeep),.s_last(s_dbg_tlast),
+        .s_valid(s_dbg_tvalid),.s_ready(s_dbg_tready),
+        .m_data(debug_local_in[31:0]),.m_keep(debug_local_keep_in),
+        .m_last(debug_local_in[32]),.m_valid(debug_local_in_valid),
+        .m_ready(debug_local_in_ready),.m_source(),.route_error()
     );
-
-    __hls_fabric_router__PairEgress_0_next debug_egress (
-        .clk(aclk),
-        .reset(!aresetn),
-        ._endpoint_one_in(debug_local_out),
-        ._endpoint_one_in_vld(debug_local_out_valid),
-        ._endpoint_one_in_rdy(debug_local_out_ready),
-        ._endpoint_two_in(33'b0),
-        ._endpoint_two_in_vld(1'b0),
-        ._endpoint_two_in_rdy(),
-        ._shared_out(debug_shared_out),
-        ._shared_out_vld(m_dbg_tvalid),
-        ._shared_out_rdy(m_dbg_tready)
+    hls_fabric_egress #(.PORTS(1),.ENDPOINTS(16'd1)) debug_egress (
+        .clk(aclk),.reset(!aresetn),
+        .s_data(debug_local_out[31:0]),.s_keep(debug_local_keep_out),
+        .s_last(debug_local_out[32]),.s_valid(debug_local_out_valid),
+        .s_ready(debug_local_out_ready),.s_destination(16'd0),
+        .m_data(m_dbg_tdata),.m_keep(m_dbg_tkeep),.m_last(m_dbg_tlast),
+        .m_valid(m_dbg_tvalid),.m_ready(m_dbg_tready)
     );
 
     hls_debug_monitor #(.ROUTED(1)) debug_monitor (
@@ -83,19 +70,15 @@ module phi_memory_debug_top (
         .app_tx_tready(m_axis_tready),
         .app_tx_tlast(routed_out[32]),
         .s_dbg_tdata(debug_local_in[31:0]),
-        .s_dbg_tkeep(4'hf),
+        .s_dbg_tkeep(debug_local_keep_in),
         .s_dbg_tvalid(debug_local_in_valid),
         .s_dbg_tready(debug_local_in_ready),
         .s_dbg_tlast(debug_local_in[32]),
         .m_dbg_tdata(debug_local_out[31:0]),
-        .m_dbg_tkeep(),
+        .m_dbg_tkeep(debug_local_keep_out),
         .m_dbg_tvalid(debug_local_out_valid),
         .m_dbg_tready(debug_local_out_ready),
         .m_dbg_tlast(debug_local_out[32])
     );
-
-    assign m_dbg_tdata = debug_shared_out[31:0];
-    assign m_dbg_tlast = debug_shared_out[32];
-    assign m_dbg_tkeep = 4'hf;
 
 endmodule

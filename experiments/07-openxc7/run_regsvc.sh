@@ -101,10 +101,11 @@ if ! grep -Fxq $'xls-version\tv0.0.0-10601-g9f360fc89' "$manifest"; then
 fi
 
 sources=(
-    "$project_root/test/rtl/regsvc_pair_fixture.sv"
+    "$project_root/test/rtl/regsvc_fabric_fixture.sv"
     "$project_root/src/examples/regsvc/regsvc_debug_top.v"
     "$project_root/src/examples/regsvc/regsvc_core_adapter.v"
     "$project_root/priv/rtl/debug/hls_debug_tap.v"
+    "$project_root/priv/rtl/debug/hls_debug_monitor.v"
     "$project_root/priv/rtl/debug/hls_trace_store.v"
     "$generated_rtl/regsvc.v"
     "$generated_rtl/hls_debug_observer.v"
@@ -124,6 +125,11 @@ do
         output \
         "$generated_file" \
         "$generated_rtl/$generated_file"
+done
+
+for direction in ingress egress; do
+    verify_manifest_entry input "hls_fabric_${direction}.v" \
+        "$project_root/priv/rtl/fabric/hls_fabric_${direction}.v"
 done
 
 verify_manifest_entry \
@@ -153,9 +159,11 @@ verify_manifest_entry \
 verify_manifest_entry \
     input hls_debug_tap.v "$project_root/priv/rtl/debug/hls_debug_tap.v"
 verify_manifest_entry \
+    input hls_debug_monitor.v "$project_root/priv/rtl/debug/hls_debug_monitor.v"
+verify_manifest_entry \
     input hls_trace_store.v "$project_root/priv/rtl/debug/hls_trace_store.v"
 verify_manifest_entry \
-    input regsvc_pair_fixture.sv "$project_root/test/rtl/regsvc_pair_fixture.sv"
+    input regsvc_fabric_fixture.sv "$project_root/test/rtl/regsvc_fabric_fixture.sv"
 verify_manifest_entry \
     input remote_xls_sim.sh "$project_root/tools/remote_xls_sim.sh"
 
@@ -196,9 +204,9 @@ core_stats="$regsvc_build/regsvc_pair_core-stats.json"
 rm -f "$core_stats" "$regsvc_build/yosys-core.log"
 echo "Synthesizing the routed regsvc pair out of context"
 core_yosys="read_verilog -sv$yosys_sources;"
-core_yosys+=" hierarchy -check -top regsvc_pair_fixture;"
+core_yosys+=" hierarchy -check -top regsvc_fabric_fixture;"
 core_yosys+=" synth_xilinx -flatten -abc9 -arch xc7 -noiopad"
-core_yosys+=" -top regsvc_pair_fixture;"
+core_yosys+=" -top regsvc_fabric_fixture;"
 core_yosys+=" check -assert;"
 core_yosys+=" tee -o \"$core_stats\" stat -json"
 "$oss_cad_suite/bin/yosys" \

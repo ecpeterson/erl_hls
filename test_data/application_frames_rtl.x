@@ -18,21 +18,6 @@ pub proc ReservedTop {
   next(state: ()) { state }
 }
 
-pub proc PairTop {
-  config(beat_in: chan<axis::Beat> in, frame_out: chan<axis::Frame> out) {
-    let (one_p, one_c) = chan<axis::Beat, u32:1>("one");
-    let (two_p, two_c) = chan<axis::Beat, u32:1>("two");
-    let (frame_one_p, frame_one_c) = chan<axis::Frame, u32:1>("frame_one");
-    let (frame_two_p, frame_two_c) = chan<axis::Frame, u32:1>("frame_two");
-    spawn hls_fabric_router::PairIngress(beat_in, one_p, two_p);
-    spawn axis::Rx(one_c, frame_one_p);
-    spawn axis::Rx(two_c, frame_two_p);
-    spawn axis::FrameMux2(frame_one_c, frame_two_c, frame_out);
-  }
-  init { () }
-  next(state: ()) { state }
-}
-
 pub proc EndpointTop {
   config(beat_in: chan<axis::Beat> in, frame_out: chan<axis::Frame> out) {
     let (routed_p, routed_c) = chan<axis::Beat, u32:1>("routed");

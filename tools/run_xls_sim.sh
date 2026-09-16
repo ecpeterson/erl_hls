@@ -21,13 +21,15 @@ rsync -a -e "ssh -o BatchMode=yes" \
     "$local_stage/regsvc_debug_top.v" \
     "$local_stage/phi_memory_debug_top.v" \
     "$local_stage/hls_1r1w_ram.v" \
+    "$local_stage/hls_fabric_ingress.v" \
+    "$local_stage/hls_fabric_egress.v" \
     "$local_stage/hls_debug_tap.v" \
     "$local_stage/hls_debug_monitor.v" \
     "$local_stage/hls_debug_tap_tb.sv" \
     "$local_stage/hls_debug_server_tb.sv" \
     "$local_stage/hls_trace_store.v" \
     "$local_stage/hls_trace_store_tb.sv" \
-    "$local_stage/regsvc_pair_fixture.sv" \
+    "$local_stage/regsvc_fabric_fixture.sv" \
     "$local_stage/regsvc_pair_tb.sv" \
     "$local_stage/regsvc_bridge_tb.sv" \
     "$local_stage/phi_halo_cell_tb.sv" \

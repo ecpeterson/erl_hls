@@ -1,8 +1,8 @@
 `timescale 1ns/1ps
 
-module regsvc_bridge_tb;
-    parameter integer PORTS = 2;
-    parameter [16*PORTS-1:0] ENDPOINTS = {16'd2,16'd1};
+module fabric_services_tb;
+    parameter integer PORTS = 3;
+    parameter [16*PORTS-1:0] ENDPOINTS = {16'd42,16'd9,16'd2};
     reg         clk = 1'b0;
     reg         resetn = 1'b0;
 
@@ -30,6 +30,18 @@ module regsvc_bridge_tb;
     wire        m_dbg_tvalid;
     reg         m_dbg_tready = 1'b1;
 
+    wire app_valid;
+    reg allow_app=0;
+    assign m_axis_tvalid=app_valid && allow_app;
+    integer fd;
+    always @(negedge clk) if(resetn) begin
+        fd=$fopen("release_app","r");
+        if(fd) begin allow_app=1;$fclose(fd);end
+        if(!allow_app && app_valid) begin fd=$fopen("app_held","w");$fclose(fd);end
+        fd=$fopen("done","r");
+        if(fd) begin $fclose(fd);$display("PASS: public service/debug routing");$finish;end
+    end
+
     regsvc_fabric_fixture #(.PORTS(PORTS),.ENDPOINTS(ENDPOINTS)) dut (
         .aclk(clk),
         .aresetn(resetn),
@@ -40,8 +52,8 @@ module regsvc_bridge_tb;
         .s_axis_tlast(s_axis_tlast),
         .m_axis_tdata(m_axis_tdata),
         .m_axis_tkeep(m_axis_tkeep),
-        .m_axis_tvalid(m_axis_tvalid),
-        .m_axis_tready(m_axis_tready),
+        .m_axis_tvalid(app_valid),
+        .m_axis_tready(m_axis_tready && allow_app),
         .m_axis_tlast(m_axis_tlast),
         .s_dbg_tdata(s_dbg_tdata),
         .s_dbg_tkeep(s_dbg_tkeep),

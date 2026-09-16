@@ -272,6 +272,7 @@ cp "$project_root/src/examples/regsvc/regsvc_core_adapter.v" \
 cp "$project_root/src/examples/regsvc/regsvc_debug_top.v" \
     "$stage/regsvc_debug_top.v"
 cp "$project_root/priv/rtl/hls_1r1w_ram.v" "$stage/hls_1r1w_ram.v"
+cp "$project_root"/priv/rtl/fabric/*.v "$stage/"
 cp "$project_root/priv/xls/fabric/hls_fabric_router.x" \
     "$stage/hls_fabric_router.x"
 cp "$project_root/priv/xls/fabric/hls_spatial_router.x" \
@@ -293,8 +294,8 @@ cp "$project_root/priv/rtl/debug/hls_trace_store.v" \
     "$stage/hls_trace_store.v"
 cp "$project_root/test/rtl/debug/hls_debug_tap_tb.sv" \
     "$stage/hls_debug_tap_tb.sv"
-cp "$project_root/test/rtl/regsvc_pair_fixture.sv" \
-    "$stage/regsvc_pair_fixture.sv"
+cp "$project_root/test/rtl/regsvc_fabric_fixture.sv" \
+    "$stage/regsvc_fabric_fixture.sv"
 cp "$project_root/test/rtl/regsvc_pair_tb.sv" "$stage/regsvc_pair_tb.sv"
 cp "$project_root/test/rtl/regsvc_bridge_tb.sv" "$stage/regsvc_bridge_tb.sv"
 cp "$project_root/test/rtl/debug/hls_trace_store_tb.sv" \

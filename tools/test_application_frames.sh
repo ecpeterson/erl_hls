@@ -11,14 +11,13 @@ options=(--warnings_as_errors=false
     --dslx_path="$project_root/priv/xls/lib:$project_root/priv/xls/fabric"
     --dslx_stdlib_path="$xls_root/xls/dslx/stdlib")
 "$xls_root/interpreter_main" --compare=jit "${options[@]}" priv/xls/lib/axis.x
-for top in RawTop ReservedTop PairTop EndpointTop DebugTop; do
+for top in RawTop ReservedTop EndpointTop DebugTop; do
     "$xls_root/ir_converter_main" --top="$top" "${options[@]}" \
         test_data/application_frames_rtl.x > "$stage/$top.ir"
     "$xls_root/opt_main" "$stage/$top.ir" > "$stage/$top.opt.ir"
     defines=(-g2012)
     case "$top" in
         ReservedTop) defines+=(-DRESERVED);;
-        PairTop) defines+=(-DROUTED -DPAIR);;
         EndpointTop) defines+=(-DROUTED);;
     esac
     for schedule in 1:1 2:1 3:2; do

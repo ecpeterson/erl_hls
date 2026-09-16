@@ -27,8 +27,8 @@ expected_modules=(
     __regsvc__Top_0_next
     __hls_debug_observer__Observer_0_next
     __hls_debug_server__DebugServer_0_next
-    __hls_fabric_router__PairIngress_0_next
-    __hls_fabric_router__PairEgress_0_next
+    hls_fabric_ingress
+    hls_fabric_egress
 )
 manifest_inputs=(
     regsvc.x
@@ -43,8 +43,11 @@ manifest_inputs=(
     regsvc_core_adapter.v
     regsvc_debug_top.v
     hls_debug_tap.v
+    hls_debug_monitor.v
     hls_trace_store.v
-    regsvc_pair_fixture.sv
+    regsvc_fabric_fixture.sv
+    hls_fabric_ingress.v
+    hls_fabric_egress.v
     remote_xls_sim.sh
     compile_xls.py
 )
@@ -157,7 +160,7 @@ quoted_remote_xls=$(remote_quote "$remote_xls")
 ssh "${ssh_options[@]}" "$remote_host" \
     "bash $quoted_remote_script $quoted_remote_stage $quoted_remote_xls"
 
-echo "Fetching the five generated RTL outputs"
+echo "Fetching the five RTL artifacts"
 for rtl_file in "${rtl_files[@]}"; do
     quoted_remote_file=$(remote_quote "$remote_stage/$rtl_file")
     rsync -a -e "$rsync_shell" \
@@ -174,7 +177,7 @@ for ((index = 0; index < ${#rtl_files[@]}; index++)); do
     rtl_file=${rtl_files[$index]}
     expected_module=${expected_modules[$index]}
     if ! grep -Eq \
-        "^[[:space:]]*module[[:space:]]+$expected_module[[:space:]]*\\(" \
+        "^[[:space:]]*module[[:space:]]+$expected_module[[:space:]]*(#[[:space:]]*)?\\(" \
         "$fetch_stage/$rtl_file"; then
         fail "$rtl_file does not declare expected module $expected_module"
     fi
