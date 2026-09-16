@@ -17,6 +17,7 @@ ERL_HLS_PHI_PHENOM_TOPOLOGY_X="$stage/phi_phenom_topology.x" \
 ERL_HLS_PHI_TORUS_TOPOLOGY_X="$stage/phi_torus_topology.x" \
 ERL_HLS_PHI_NOISE_TOPOLOGY_X="$stage/phi_noise_topology.x" \
 ERL_HLS_PHI_NOISE_TOPOLOGY_SMOKE_X="$stage/phi_noise_topology_smoke.x" \
+ERL_HLS_PHI_NOISE_TOPOLOGY_SMOKE_RAMS="$stage/phi_noise_topology_smoke_rams.vh" \
 ERL_HLS_PHI_SYNDROME_REPLAY_X="$stage/phi_syndrome_replay_cell.x" \
 ERL_HLS_PHI_DECODER_PROFILE_X="$stage/phi_decoder_profile_topology.x" \
 ERL_HLS_PHI_DECODER_PROFILE_CONFIG="$stage/phi_decoder_profile.json" \
@@ -77,6 +78,19 @@ erl \
             phi_noise_topology:topology(1, 0)
         ),
         PhiNoiseSmokePhysical = phi_noise_topology_dslx:profile(),
+        PhiNoiseSmokeScheduler = hls_scheduler_plan:normalize(
+            PhiNoiseSmokePlan, maps:get(scheduler_groups, PhiNoiseSmokePhysical)
+        ),
+        %% Both schedulers in each family must agree with the fixture layout.
+        [#{state_width := DataWidth}, #{state_width := DataWidth},
+         #{state_width := PhiWidth}, #{state_width := PhiWidth},
+         #{state_width := SyndromeWidth}, #{state_width := SyndromeWidth}] =
+            xls_scheduler_ram_v:bindings(PhiNoiseSmokeScheduler),
+        ok = file:write_file(os:getenv("ERL_HLS_PHI_NOISE_TOPOLOGY_SMOKE_RAMS"),
+            ["// Generated from the D1 scheduler plan.\n",
+             [io_lib:format("localparam integer ~s_STATE_WIDTH = ~B;~n", [Name, Width])
+             || {Name, Width} <- [{"DATA", DataWidth}, {"PHI", PhiWidth},
+                                 {"SYNDROME", SyndromeWidth}]]]),
         ProfileShardCount = case os:getenv("ERL_HLS_PHI_PROFILE_SHARDS") of
             false -> 3;
             ProfileShardText -> list_to_integer(ProfileShardText)

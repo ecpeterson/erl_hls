@@ -90,9 +90,9 @@ logical query.
 %% distinguishes their syndrome neighborhoods.
 %% TODO: Fence logical snapshots with noise disable plus a decoder/transport
 %% drain witness; zero live anyons alone does not close an epoch.
-%% TODO: Pack hls_pauli as a genuine u2 once hls_pack supports non-byte-aligned
-%% record fields; until then an external update/query must reject invalid u32
-%% encodings at this untrusted boundary.
+%% TODO: Validate external Pauli codes before narrowing their logical type to u2.
+%% Padded codecs permit narrow values, but truncating first would erase invalid
+%% u32 encodings that the update/query guards must still reject.
 
 -record(data_cell, {
     step = hls_type:zero() :: hls_nums:u32(),
