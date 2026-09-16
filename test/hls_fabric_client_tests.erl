@@ -1,6 +1,36 @@
 -module(hls_fabric_client_tests).
 -include_lib("eunit/include/eunit.hrl").
 
+explicit_endpoints_test_() ->
+    [{atom_to_list(Kind), fun() ->
+        {ok, Fabric} = phi_memory_fabric_fixture:start_link(),
+        Clients = [begin
+            {ok, Client} = case Kind of
+                application -> hls_gs:start_link(regsvc, [], [{fabric, Fabric, Local, 42}]);
+                debug -> hls_debug:start_link(undefined, {fabric, Fabric, Local, 42})
+            end,
+            {Local, Client}
+        end || Local <- [1, 65535]],
+        try
+            Requests = [{Local, async(fun() -> call(Kind, Client, Local, infinity) end)}
+                || {Local, Client} <- Clients],
+            Frames = phi_memory_fabric_fixture:await_sends(Fabric, 2, 1000),
+            ?assertEqual([1, 65535], lists:sort([Local || {{Local, 42}, _, _} <- Frames])),
+            %% Both clients start at transaction zero; return routes disambiguate them.
+            [begin
+                ?assertEqual(0, Tx),
+                ok = phi_memory_fabric_fixture:deliver(Fabric, {42, Local},
+                    {reply_tag(Kind), Tx, 0}, Payload)
+            end || {{Local, 42}, {_, Tx, _}, Payload} <- lists:reverse(Frames)],
+            [expect(Ref, success(Kind, Local)) || {Local, Ref} <- Requests],
+            [?assertMatch(#{route := {Local, 42}, pending := 0}, hls_fabric:client_info(Client))
+                || {Local, Client} <- Clients]
+        after
+            [gen_server:stop(Client) || {_, Client} <- Clients],
+            gen_server:stop(Fabric)
+        end
+    end} || Kind <- [application, debug]].
+
 ownership_test_() ->
     [{atom_to_list(Kind), {timeout, 30, fun() ->
         with_client(Kind, fun(Client, Fabric) ->

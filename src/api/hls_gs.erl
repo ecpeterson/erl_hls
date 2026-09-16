@@ -33,6 +33,7 @@ inspection, and session recovery.
 -export([start_link/2, start_link/3, stop/1]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 -export([generic_unpack/2]).
+-export([encode_request/3, decode_reply/3]).
 -behavior(gen_server).
 
 %%%
@@ -123,9 +124,8 @@ call(Message, _From, Replies, GS = #state{module = Module, state = State, fabric
     ok = check_reply(Message, Reply, Replies),
     {reply, Reply, GS#state{state = NewState}};
 call(Message, From, Replies, GS = #state{module = Module, fabric = Client}) ->
-    Tag = Module:pack_tag(element(1, Message)),
-    Payload = hls_codec:align(Module:pack(Message), 32),
-    Next = hls_fabric_client:request(Tag, Payload, {Module, Replies}, From, Client),
+    {Tag, Payload, Context} = encode(Module, Message, Replies),
+    Next = hls_fabric_client:request(Tag, Payload, Context, From, Client),
     {noreply, GS#state{fabric = Next}}.
 
 handle_cast(
@@ -143,8 +143,7 @@ handle_cast(
     {noreply, GS#state{fabric = Next}};
 handle_cast(Message, GS = #state{module = Module, fabric = Client, contract = Contract}) ->
     ok = check_cast(Message, Contract),
-    Tag = Module:pack_tag(element(1, Message)),
-    Payload = hls_codec:align(Module:pack(Message), 32),
+    {Tag, Payload, _Context} = encode(Module, Message, none),
     Next = hls_fabric_client:cast(Tag, ?CAST_TX_ID, Payload, Client),
     {noreply, GS#state{fabric = Next}}.
 
@@ -164,6 +163,23 @@ decode_reply(TagID, Payload, {Module, Replies}) ->
     catch
         error:_ -> ignore
     end.
+
+-doc "Encodes a hardware request without starting a proxy. The returned context is passed to decode_reply/3.".
+encode_request(Module, Kind, Message) ->
+    {ok, Contract} = hls_service_contract:from_module(Module),
+    Replies = case Kind of
+        call ->
+            case call_replies(Message, Contract) of
+                invalid -> error({invalid_request, call, element(1, Message)});
+                Allowed -> Allowed
+            end;
+        cast -> ok = check_cast(Message, Contract), none
+    end,
+    encode(Module, Message, Replies).
+
+encode(Module, Message, Replies) ->
+    {Module:pack_tag(element(1, Message)),
+        hls_codec:align(Module:pack(Message), 32), {Module, Replies}}.
 
 call_replies(_Message, none) -> none;
 call_replies(Message, #{calls := Calls}) ->
@@ -197,6 +213,8 @@ code_change(_OldVsn, GS, _Extra) ->
 
 transport(Options) ->
     case lists:keyfind(fabric, 1, Options) of
+        {fabric, Broker, LocalEndpoint, PeerEndpoint} ->
+            {fabric, Broker, LocalEndpoint, PeerEndpoint};
         {fabric, Broker, PeerEndpoint} ->
             {fabric, Broker, 0, PeerEndpoint};
         false ->
