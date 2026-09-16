@@ -84,6 +84,14 @@ module service_contracts_tb;
         end
     endtask
 
+    task automatic nonrequest_tag;
+        begin
+            // Raw wire input bypasses the proxy's request-kind validation.
+            header(1, 1); expect_beat(1, 1); value = 0;
+            beat({8'd8, 8'd0, tx[7:0], 8'd1}, 0); beat(0, 1); tx = tx + 1;
+        end
+    endtask
+
     initial begin
         repeat (5) @(negedge clk); reset = 0;
         read_state();
@@ -93,7 +101,8 @@ module service_contracts_tb;
             query(2, 999); read_state();
             change(82); query(3, 1); read_state();
             query(3, 0); read_state();
-            query(9, 0); read_state();
+            if (n == 0) nonrequest_tag(); else query(9, 0);
+            read_state();
             // A schema-length error is pre-dispatch and preserves state.
             change(83); header(1, 1); expect_beat(3, 1);
             beat({8'd3, 8'd0, tx[7:0], 8'd1}, 0); beat(0, 1); tx = tx + 1;
