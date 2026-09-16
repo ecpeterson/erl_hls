@@ -50,6 +50,10 @@ alternatives([First | Rest]) ->
 validate_predicate({atom, _Line, Atom})
         when Atom =:= true; Atom =:= false ->
     ok;
+validate_predicate({var, _Line, _Name}) ->
+    ok;
+validate_predicate({record_field, _Line, Object, _Record, _Field}) ->
+    validate_value(Object);
 validate_predicate({op, _Line, 'not', Operand}) ->
     validate_predicate(Operand);
 validate_predicate({op, _Line, Operator, Left, Right})

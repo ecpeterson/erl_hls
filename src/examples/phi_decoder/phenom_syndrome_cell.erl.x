@@ -70,7 +70,7 @@ pub fn phi_from_bits<N: u32>(raw: bits[N]) -> Phi {
   }
 }
 
-pub fn bits_from_phi(s: Phi) -> bits[bit_count<Phi>()] {
+pub fn bits_from_phi(s: Phi) -> bits[96] {
   (s.values as bits[64]) ++ (s.epoch as bits[32]) ++  zero!<bits[0]>()
 }
 
@@ -86,7 +86,7 @@ pub fn anyonmove_from_bits<N: u32>(raw: bits[N]) -> Anyonmove {
   }
 }
 
-pub fn bits_from_anyonmove(s: Anyonmove) -> bits[bit_count<Anyonmove>()] {
+pub fn bits_from_anyonmove(s: Anyonmove) -> bits[64] {
   (s.present as bits[32]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
 }
 
@@ -104,7 +104,7 @@ pub fn phi0_from_bits<N: u32>(raw: bits[N]) -> Phi0 {
   }
 }
 
-pub fn bits_from_phi0(s: Phi0) -> bits[bit_count<Phi0>()] {
+pub fn bits_from_phi0(s: Phi0) -> bits[96] {
   (s.value as bits[32]) ++ (s.source as bits[32]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
 }
 
@@ -124,7 +124,7 @@ pub fn phenomconfig_from_bits<N: u32>(raw: bits[N]) -> Phenomconfig {
   }
 }
 
-pub fn bits_from_phenomconfig(s: Phenomconfig) -> bits[bit_count<Phenomconfig>()] {
+pub fn bits_from_phenomconfig(s: Phenomconfig) -> bits[96] {
   (s.y as bits[16]) ++ (s.x as bits[16]) ++ (s.threshold as bits[32]) ++ (s.seed as bits[32]) ++  zero!<bits[0]>()
 }
 
@@ -138,7 +138,7 @@ pub fn phenomrequest_from_bits<N: u32>(raw: bits[N]) -> Phenomrequest {
   }
 }
 
-pub fn bits_from_phenomrequest(s: Phenomrequest) -> bits[bit_count<Phenomrequest>()] {
+pub fn bits_from_phenomrequest(s: Phenomrequest) -> bits[32] {
   (s.step as bits[32]) ++  zero!<bits[0]>()
 }
 
@@ -154,7 +154,7 @@ pub fn phenomquery_from_bits<N: u32>(raw: bits[N]) -> Phenomquery {
   }
 }
 
-pub fn bits_from_phenomquery(s: Phenomquery) -> bits[bit_count<Phenomquery>()] {
+pub fn bits_from_phenomquery(s: Phenomquery) -> bits[64] {
   (s.source as bits[32]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
 }
 
@@ -172,7 +172,7 @@ pub fn phenomdata_from_bits<N: u32>(raw: bits[N]) -> Phenomdata {
   }
 }
 
-pub fn bits_from_phenomdata(s: Phenomdata) -> bits[bit_count<Phenomdata>()] {
+pub fn bits_from_phenomdata(s: Phenomdata) -> bits[96] {
   (s.flags as bits[32]) ++ (s.source as bits[32]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
 }
 
@@ -192,7 +192,7 @@ pub fn phenomanyon_from_bits<N: u32>(raw: bits[N]) -> Phenomanyon {
   }
 }
 
-pub fn bits_from_phenomanyon(s: Phenomanyon) -> bits[bit_count<Phenomanyon>()] {
+pub fn bits_from_phenomanyon(s: Phenomanyon) -> bits[96] {
   (s.y as bits[16]) ++ (s.x as bits[16]) ++ (s.flags as bits[32]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
 }
 
@@ -212,7 +212,7 @@ pub fn phicorrection_from_bits<N: u32>(raw: bits[N]) -> Phicorrection {
   }
 }
 
-pub fn bits_from_phicorrection(s: Phicorrection) -> bits[bit_count<Phicorrection>()] {
+pub fn bits_from_phicorrection(s: Phicorrection) -> bits[96] {
   (s.direction as bits[32]) ++ (s.y as bits[16]) ++ (s.x as bits[16]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
 }
 
@@ -226,7 +226,7 @@ pub fn phiconfig_from_bits<N: u32>(raw: bits[N]) -> Phiconfig {
   }
 }
 
-pub fn bits_from_phiconfig(s: Phiconfig) -> bits[bit_count<Phiconfig>()] {
+pub fn bits_from_phiconfig(s: Phiconfig) -> bits[32] {
   (s.seed as bits[32]) ++  zero!<bits[0]>()
 }
 
@@ -242,7 +242,7 @@ pub fn pauliquery_from_bits<N: u32>(raw: bits[N]) -> Pauliquery {
   }
 }
 
-pub fn bits_from_pauliquery(s: Pauliquery) -> bits[bit_count<Pauliquery>()] {
+pub fn bits_from_pauliquery(s: Pauliquery) -> bits[64] {
   (s.measurement as bits[32]) ++ (s.request_id as bits[32]) ++  zero!<bits[0]>()
 }
 
@@ -262,7 +262,7 @@ pub fn paulireply_from_bits<N: u32>(raw: bits[N]) -> Paulireply {
   }
 }
 
-pub fn bits_from_paulireply(s: Paulireply) -> bits[bit_count<Paulireply>()] {
+pub fn bits_from_paulireply(s: Paulireply) -> bits[96] {
   (s.anticommutes as bits[32]) ++ (s.y as bits[16]) ++ (s.x as bits[16]) ++ (s.request_id as bits[32]) ++  zero!<bits[0]>()
 }
 
@@ -276,7 +276,7 @@ pub fn noisecutoff_from_bits<N: u32>(raw: bits[N]) -> Noisecutoff {
   }
 }
 
-pub fn bits_from_noisecutoff(s: Noisecutoff) -> bits[bit_count<Noisecutoff>()] {
+pub fn bits_from_noisecutoff(s: Noisecutoff) -> bits[32] {
   (s.first_quiet_step as bits[32]) ++  zero!<bits[0]>()
 }
 
@@ -290,7 +290,7 @@ pub fn pauliupdate_from_bits<N: u32>(raw: bits[N]) -> Pauliupdate {
   }
 }
 
-pub fn bits_from_pauliupdate(s: Pauliupdate) -> bits[bit_count<Pauliupdate>()] {
+pub fn bits_from_pauliupdate(s: Pauliupdate) -> bits[32] {
   (s.pauli as bits[32]) ++  zero!<bits[0]>()
 }
 
@@ -310,7 +310,7 @@ pub fn phistatus_from_bits<N: u32>(raw: bits[N]) -> Phistatus {
   }
 }
 
-pub fn bits_from_phistatus(s: Phistatus) -> bits[bit_count<Phistatus>()] {
+pub fn bits_from_phistatus(s: Phistatus) -> bits[96] {
   (s.flags as bits[32]) ++ (s.y as bits[16]) ++ (s.x as bits[16]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
 }
 
@@ -326,8 +326,8 @@ pub struct Syndrome {
   threshold : u32,
   x : u16,
   y : u16,
-  noise_disabled : u32,
-  cutoff_armed : u32,
+  noise_disabled : bool,
+  cutoff_armed : bool,
   cutoff_step : u32,
 }
 
@@ -344,14 +344,14 @@ pub fn syndrome_from_bits<N: u32>(raw: bits[N]) -> Syndrome {
     threshold: raw[256:288] as u32,
     x: raw[288:304] as u16,
     y: raw[304:320] as u16,
-    noise_disabled: raw[320:352] as u32,
-    cutoff_armed: raw[352:384] as u32,
-    cutoff_step: raw[384:416] as u32,
+    noise_disabled: raw[320:328] as bool,
+    cutoff_armed: raw[328:336] as bool,
+    cutoff_step: raw[336:368] as u32,
   }
 }
 
-pub fn bits_from_syndrome(s: Syndrome) -> bits[bit_count<Syndrome>()] {
-  (s.cutoff_step as bits[32]) ++ (s.cutoff_armed as bits[32]) ++ (s.noise_disabled as bits[32]) ++ (s.y as bits[16]) ++ (s.x as bits[16]) ++ (s.threshold as bits[32]) ++ (s.random_state as bits[32]) ++ (s.announcement_quiet as bits[32]) ++ (s.data_quiet as bits[32]) ++ (s.announcement as bits[32]) ++ (s.previous_measurement as bits[32]) ++ (s.data_parity as bits[32]) ++ (s.seen_sources as bits[32]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
+pub fn bits_from_syndrome(s: Syndrome) -> bits[368] {
+  (s.cutoff_step as bits[32]) ++ (s.cutoff_armed as bits[8]) ++ (s.noise_disabled as bits[8]) ++ (s.y as bits[16]) ++ (s.x as bits[16]) ++ (s.threshold as bits[32]) ++ (s.random_state as bits[32]) ++ (s.announcement_quiet as bits[32]) ++ (s.data_quiet as bits[32]) ++ (s.announcement as bits[32]) ++ (s.previous_measurement as bits[32]) ++ (s.data_parity as bits[32]) ++ (s.seen_sources as bits[32]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
 }
 
 pub enum OutputPort : u8 {
@@ -410,11 +410,11 @@ struct SharedMachine {
   failure: hls_failure::Code,
 }
 
-pub type MachineBits = bits[449];
+pub type MachineBits = bits[401];
 
 pub type MachineRamReadReq = bram::ReadReq;
-pub type MachineRamReadResp = bram::ReadResp<u32:449>;
-pub type MachineRamWriteReq = bram::WriteReq<u32:449>;
+pub type MachineRamReadResp = bram::ReadResp<u32:401>;
+pub type MachineRamWriteReq = bram::WriteReq<u32:401>;
 pub type MachineRamWriteResp = bram::WriteResp;
 
 pub type MailboxRamReadReq = mailbox::RamReadReq;
@@ -551,9 +551,9 @@ fn machine_from_bits(raw: MachineBits) -> SharedMachine {
   SharedMachine {
     phase: raw[0:8] as Phase,
     entered_from: raw[8:16] as Phase,
-    data: syndrome_from_bits(raw[16:432]),
-    enter_pending: raw[432:433],
-    failure: raw[433:449],
+    data: syndrome_from_bits(raw[16:384]),
+    enter_pending: raw[384:385],
+    failure: raw[385:401],
   }
 }
 
@@ -1189,89 +1189,89 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
             let _21 = (Tag::SYNDROME, _20);
             let Xls_clause_1_Collected_1 = _21;
             let _22 = Xls_clause_1_NewSeen_1 == 15;
-            let _49 = if _22 {
+            let _48 = if _22 {
               let _23 = Xls_clause_1_Syndrome_1.1.cutoff_armed;
-              let _24 = _23 == 1;
-              let _27 = if _24 {
-                let _25 = Xls_clause_1_Syndrome_1.1.cutoff_step;
-                let _26 = Xls_clause_1_Step_1 >= _25;
-                (_26, hls_failure::NONE)
+              let _26 = if _23 {
+                let _24 = Xls_clause_1_Syndrome_1.1.cutoff_step;
+                let _25 = Xls_clause_1_Step_1 >= _24;
+                (_25, hls_failure::NONE)
               } else {
                 (bool:0, hls_failure::NONE)
               };
-              let Xls_clause_1_CutoffApplies_1 = _27.0;
-              let _28 = Xls_clause_1_Syndrome_1.1.noise_disabled;
-              let _29 = _28 == 1;
-              let _30 = if _29 {
+              let Xls_clause_1_CutoffApplies_1 = _26.0;
+              let _27 = Xls_clause_1_Syndrome_1.1.noise_disabled;
+              let _28 = if _27 {
                 (bool:1, hls_failure::NONE)
               } else {
                 (Xls_clause_1_CutoffApplies_1, hls_failure::NONE)
               };
-              let Xls_clause_1_NoiseDisabled_1 = _30.0;
-              let _39 = if Xls_clause_1_NoiseDisabled_1 {
-                let _31 = (1 as u32);
-                let _32 = (0 as u32);
-                let _33 = (_31, Xls_clause_1_RandomState_1, _32, );
-                (_33, hls_failure::NONE)
+              let Xls_clause_1_NoiseDisabled_1 = _28.0;
+              let _36 = if Xls_clause_1_NoiseDisabled_1 {
+                let _29 = (0 as u32);
+                let _30 = (Xls_clause_1_RandomState_1, _29, );
+                (_30, hls_failure::NONE)
               } else {
-                let _31 = (Xls_clause_1_RandomState_1 ^ (Xls_clause_1_RandomState_1 << u32:13)) & u32:0xffffffff;
-                let _32 = (_31 ^ (_31 >> u32:17)) & u32:0xffffffff;
-                let _33 = (_32 ^ (_32 << u32:5)) & u32:0xffffffff;
-                let Xls_clause_1_Sample_1 = _33;
-                let _36 = {
-                  let _34 = Xls_clause_1_Sample_1 < Xls_clause_1_Threshold_1;
-                  if _34 {
-                    let _35 = (1 as u32);
-                    (_35, hls_failure::NONE)
+                let _29 = (Xls_clause_1_RandomState_1 ^ (Xls_clause_1_RandomState_1 << u32:13)) & u32:0xffffffff;
+                let _30 = (_29 ^ (_29 >> u32:17)) & u32:0xffffffff;
+                let _31 = (_30 ^ (_30 << u32:5)) & u32:0xffffffff;
+                let Xls_clause_1_Sample_1 = _31;
+                let _34 = {
+                  let _32 = Xls_clause_1_Sample_1 < Xls_clause_1_Threshold_1;
+                  if _32 {
+                    let _33 = (1 as u32);
+                    (_33, hls_failure::NONE)
                   } else {
-                    let _34 = (0 as u32);
-                    (_34, hls_failure::NONE)
+                    let _32 = (0 as u32);
+                    (_32, hls_failure::NONE)
                   }
                 };
-                let Xls_clause_1_Hit_1 = _36.0;
-                let _37 = (0 as u32);
-                let _38 = (_37, Xls_clause_1_Sample_1, Xls_clause_1_Hit_1, );
-                (_38, _36.1)
+                let Xls_clause_1_Hit_1 = _34.0;
+                let _35 = (Xls_clause_1_Sample_1, Xls_clause_1_Hit_1, );
+                (_35, _34.1)
               };
-              let Xls_clause_1_NoiseDisabledWord_1 = _39.0.0;
-              let Xls_clause_1_NextRandom_1 = _39.0.1;
-              let Xls_clause_1_Measurement_1 = _39.0.2;
-              let _40 = Xls_clause_1_NewParity_1 ^ Xls_clause_1_Measurement_1;
-              let _41 = _40 ^ Xls_clause_1_PreviousMeasurement_1;
-              let Xls_clause_1_Detection_1 = _41;
-              let _42 = Xls_clause_1_NewDataQuiet_1 & Xls_clause_1_NoiseDisabledWord_1;
-              let _44 = if Xls_clause_1_CutoffApplies_1 {
-                let _43 = (0 as u32);
-                (_43, hls_failure::NONE)
+              let Xls_clause_1_NextRandom_1 = _36.0.0;
+              let Xls_clause_1_Measurement_1 = _36.0.1;
+              let _37 = Xls_clause_1_NewParity_1 ^ Xls_clause_1_Measurement_1;
+              let _38 = _37 ^ Xls_clause_1_PreviousMeasurement_1;
+              let Xls_clause_1_Detection_1 = _38;
+              let _40 = if Xls_clause_1_NoiseDisabled_1 {
+                (Xls_clause_1_NewDataQuiet_1, hls_failure::NONE)
               } else {
-                let _43 = Xls_clause_1_Syndrome_1.1.cutoff_armed;
-                (_43, hls_failure::NONE)
+                let _39 = (0 as u32);
+                (_39, hls_failure::NONE)
               };
-              let _45 = Syndrome {
+              let _41 = Xls_clause_1_Syndrome_1.1.cutoff_armed;
+              let _43 = if _41 {
+                let _42 = !Xls_clause_1_CutoffApplies_1;
+                (_42, hls_failure::NONE)
+              } else {
+                (bool:0, hls_failure::NONE)
+              };
+              let _44 = Syndrome {
                 previous_measurement: Xls_clause_1_Measurement_1,
                 announcement: Xls_clause_1_Detection_1,
-                announcement_quiet: _42,
+                announcement_quiet: _40.0,
                 random_state: Xls_clause_1_NextRandom_1,
-                noise_disabled: Xls_clause_1_NoiseDisabledWord_1,
-                cutoff_armed: _44.0,
+                noise_disabled: Xls_clause_1_NoiseDisabled_1,
+                cutoff_armed: _43.0,
                 ..(Xls_clause_1_Collected_1).1
               };
-              let _46 = (Tag::SYNDROME, _45);
-              let Xls_clause_1_Complete_1 = _46;
+              let _45 = (Tag::SYNDROME, _44);
+              let Xls_clause_1_Complete_1 = _45;
               let Xls_clause_1_NextSyndrome_1 = Xls_clause_1_Complete_1;
-              let _47 = (Phase::ANNOUNCING, Xls_clause_1_NextSyndrome_1, Directive::CONSUME, bool:0, );
-              let _48 = (_47.0, _47.1, _47.2, _47.3, hls_failure::NONE);
-              (_48, hls_failure::first_all([_27.1, _30.1, _39.1, _44.1]))
+              let _46 = (Phase::ANNOUNCING, Xls_clause_1_NextSyndrome_1, Directive::CONSUME, bool:0, );
+              let _47 = (_46.0, _46.1, _46.2, _46.3, hls_failure::NONE);
+              (_47, hls_failure::first_all([_26.1, _28.1, _36.1, _40.1, _43.1]))
             } else {
               let Xls_clause_1_NextSyndrome_1 = Xls_clause_1_Collected_1;
               let _23 = (Phase::COLLECTING, Xls_clause_1_NextSyndrome_1, Directive::CONSUME, bool:0, );
               let _24 = (_23.0, _23.1, _23.2, _23.3, hls_failure::NONE);
               (_24, hls_failure::NONE)
             };
-            if ((_49.1) != hls_failure::NONE) {
-              (phase, data, Directive::FAIL, u1:0, _49.1)
+            if ((_48.1) != hls_failure::NONE) {
+              (phase, data, Directive::FAIL, u1:0, _48.1)
             } else {
-              (_49.0.0, _49.0.1.1, _49.0.2, _49.0.3, _49.0.4)
+              (_48.0.0, _48.0.1.1, _48.0.2, _48.0.3, _48.0.4)
             }
           } else {
             let Xls_clause_2_Syndrome_1 = (Tag::SYNDROME, data);
@@ -1360,7 +1360,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
           let Xls_clause_1_FirstQuietStep_1 = message.first_quiet_step;
           let Xls_clause_1_Syndrome_1 = (Tag::SYNDROME, data);
           let Xls_clause_1_Step_1 = data.step;
-          let _1 = if (data.noise_disabled == 0 && data.cutoff_armed == 0) {
+          let _1 = if (data.noise_disabled == bool:false && data.cutoff_armed == bool:false) {
             let _0 = Xls_clause_1_FirstQuietStep_1 >= Xls_clause_1_Step_1;
             (_0, hls_failure::NONE)
           } else {
@@ -1368,7 +1368,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
           };
           if _1.0 {
             let _2 = Syndrome {
-              cutoff_armed: 1,
+              cutoff_armed: bool:1,
               cutoff_step: Xls_clause_1_FirstQuietStep_1,
               ..(Xls_clause_1_Syndrome_1).1
             };
@@ -1395,7 +1395,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
           let Xls_clause_1_FirstQuietStep_1 = message.first_quiet_step;
           let Xls_clause_1_Syndrome_1 = (Tag::SYNDROME, data);
           let Xls_clause_1_Step_1 = data.step;
-          let _1 = if (data.noise_disabled == 0 && data.cutoff_armed == 0) {
+          let _1 = if (data.noise_disabled == bool:false && data.cutoff_armed == bool:false) {
             let _0 = Xls_clause_1_FirstQuietStep_1 > Xls_clause_1_Step_1;
             (_0, hls_failure::NONE)
           } else {
@@ -1403,7 +1403,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
           };
           if _1.0 {
             let _2 = Syndrome {
-              cutoff_armed: 1,
+              cutoff_armed: bool:1,
               cutoff_step: Xls_clause_1_FirstQuietStep_1,
               ..(Xls_clause_1_Syndrome_1).1
             };

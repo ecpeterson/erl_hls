@@ -137,13 +137,13 @@ prng_advances_once_when_join_completes_test() ->
     {collecting, Cell3, consume} = offer_direct(west, false, 0, Cell2),
     ?assertMatch(
         {syndrome, 0, _, 0, 0, 0, 0, 0,
-            ?PRNG_SEED, ?HALF_THRESHOLD, 0, 0, 0, 0, 0},
+            ?PRNG_SEED, ?HALF_THRESHOLD, 0, 0, false, false, 0},
         Cell3
     ),
     {announcing, Cell4, consume} = offer_direct(south, false, 0, Cell3),
     ?assertMatch(
         {syndrome, 0, ?PHI_ALL_DIRECTIONS, 0, 1, 1, 0, 0,
-            ?PRNG_FIRST, ?HALF_THRESHOLD, 0, 0, 0, 0, 0},
+            ?PRNG_FIRST, ?HALF_THRESHOLD, 0, 0, false, false, 0},
         Cell4
     ).
 
@@ -277,7 +277,7 @@ early_request_replays_when_result_is_ready_test() ->
         ?assertEqual(0, maps:get(postponed, After)),
         ?assertEqual(
             {syndrome, 1, 0, 0, 0, 0, 1, 0,
-                ?PRNG_FIRST, 0, ?COORD_X, ?COORD_Y, 0, 0, 0},
+                ?PRNG_FIRST, 0, ?COORD_X, ?COORD_Y, false, false, 0},
             maps:get(data, After)
         )
     after
@@ -391,7 +391,7 @@ cutoff_freezes_prng_after_first_quiet_round_test() ->
         ?assertMatch(
             {syndrome, 3, 0, 0, 0, 0, 1, 0,
                 ?PRNG_FIRST, ?U32_MASK, ?COORD_X, ?COORD_Y,
-                1, 0, 1},
+                true, false, 1},
             maps:get(data, Info)
         )
     after
@@ -461,7 +461,7 @@ collecting_cell(Seed, Threshold, X, Y) ->
 syndrome(Step, Seen, Parity, PreviousMeasurement, Announcement, Random,
         Threshold, X, Y) ->
     {syndrome, Step, Seen, Parity, PreviousMeasurement, Announcement,
-        0, 0, Random, Threshold, X, Y, 0, 0, 0}.
+        0, 0, Random, Threshold, X, Y, false, false, 0}.
 
 apply_responses([Response], Step, Cell) ->
     offer_direct(Response, Step, Cell);

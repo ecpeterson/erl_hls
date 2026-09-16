@@ -42,7 +42,7 @@ pub fn set_from_bits<N: u32>(raw: bits[N]) -> Set {
   }
 }
 
-pub fn bits_from_set(s: Set) -> bits[bit_count<Set>()] {
+pub fn bits_from_set(s: Set) -> bits[96] {
   (s.mask as bits[32]) ++ (s.value as bits[32]) ++ (s.register as bits[32]) ++  zero!<bits[0]>()
 }
 
@@ -56,7 +56,7 @@ pub fn get_from_bits<N: u32>(raw: bits[N]) -> Get {
   }
 }
 
-pub fn bits_from_get(s: Get) -> bits[bit_count<Get>()] {
+pub fn bits_from_get(s: Get) -> bits[32] {
   (s.register as bits[32]) ++  zero!<bits[0]>()
 }
 
@@ -70,7 +70,7 @@ pub fn ping_from_bits<N: u32>(raw: bits[N]) -> Ping {
   }
 }
 
-pub fn bits_from_ping(s: Ping) -> bits[bit_count<Ping>()] {
+pub fn bits_from_ping(s: Ping) -> bits[32] {
   (s.value as bits[32]) ++  zero!<bits[0]>()
 }
 
@@ -86,7 +86,7 @@ pub fn bulkget_from_bits<N: u32>(raw: bits[N]) -> Bulkget {
   }
 }
 
-pub fn bits_from_bulkget(s: Bulkget) -> bits[bit_count<Bulkget>()] {
+pub fn bits_from_bulkget(s: Bulkget) -> bits[64] {
   (s.count as bits[32]) ++ (s.start as bits[32]) ++  zero!<bits[0]>()
 }
 
@@ -100,7 +100,7 @@ pub fn ack_from_bits<N: u32>(raw: bits[N]) -> Ack {
   }
 }
 
-pub fn bits_from_ack(s: Ack) -> bits[bit_count<Ack>()] {
+pub fn bits_from_ack(s: Ack) -> bits[32] {
   (s.value as bits[32]) ++  zero!<bits[0]>()
 }
 
@@ -114,7 +114,7 @@ pub fn read_from_bits<N: u32>(raw: bits[N]) -> Read {
   }
 }
 
-pub fn bits_from_read(s: Read) -> bits[bit_count<Read>()] {
+pub fn bits_from_read(s: Read) -> bits[32] {
   (s.value as bits[32]) ++  zero!<bits[0]>()
 }
 
@@ -128,7 +128,7 @@ pub fn bulkread_from_bits<N: u32>(raw: bits[N]) -> Bulkread {
   }
 }
 
-pub fn bits_from_bulkread(s: Bulkread) -> bits[bit_count<Bulkread>()] {
+pub fn bits_from_bulkread(s: Bulkread) -> bits[96] {
   (s.values as bits[96]) ++  zero!<bits[0]>()
 }
 
@@ -142,7 +142,7 @@ pub fn state_from_bits<N: u32>(raw: bits[N]) -> State {
   }
 }
 
-pub fn bits_from_state(s: State) -> bits[bit_count<State>()] {
+pub fn bits_from_state(s: State) -> bits[512] {
   (s.registers as bits[512]) ++  zero!<bits[0]>()
 }
 

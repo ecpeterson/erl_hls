@@ -4,15 +4,15 @@
 %% Exhaust the eight-bit input space in RTL; larger widths use boundaries and
 %% a deterministic spread. JIT compares a small boundary corpus at every width.
 write(Stage) ->
-    lists:foreach(fun(Name) ->
-        Type = hls_nums:Name(),
-        W = hls_type:width(Type),
+    lists:foreach(fun({Name, Type, Constructor}) ->
+        W = hls_type:value_width(Type),
         Boundaries = boundaries(W),
         Cases = case W of
-            8 -> [{A, B} || A <- lists:seq(0, 255), B <- lists:seq(0, 255)];
+            _ when W =< 8 -> [{A, B} || A <- lists:seq(0, (1 bsl W)-1),
+                B <- lists:seq(0, (1 bsl W)-1)];
             _ -> Boundaries ++ spread(W)
         end,
-        Text = ["import hls_failure;\nimport hls_integer;\n", function(Name, Type, 'div'), function(Name, Type, 'rem'),
+        Text = ["import hls_failure;\nimport hls_integer;\n", function(Constructor, Type, 'div'), function(Constructor, Type, 'rem'),
             io_lib:format("pub fn probe(x: uN[~p], y: uN[~p]) -> bits[~p] {\n"
                 "  let (q, qfail) = quotient(x, y);\n"
                 "  let (r, rfail) = remainder(x, y);\n"
@@ -24,7 +24,7 @@ write(Stage) ->
                 "];\nfor (i, ()): (u32, ()) in u32:0..u32:~p {\n"
                 " let (a, b, expected) = cases[i];\n"
                 " assert_eq(probe(a, b), expected);\n} (())\n}\n", [length(Boundaries)])],
-        Prefix = filename:join(Stage, atom_to_list(Name)),
+        Prefix = filename:join(Stage, Name),
         ok = file:write_file(Prefix ++ ".x", Text),
         %% Fixed-size records let Icarus read the exhaustive corpus without
         %% compiling hundreds of thousands of individual test statements.
@@ -33,14 +33,17 @@ write(Stage) ->
                 (A bsl (3*W+2)) bor (B bsl (2*W+2)) bor oracle(Type, A, B)])
             || {A, B} <- Cases]),
         ok = file:write_file(Prefix ++ ".count", integer_to_list(length(Cases)))
-    end, [u8, s8, u16, s16, u32, s32, u64, s64]).
+    end, [{Sign ++ integer_to_list(W),
+        case Sign of "u" -> hls_nums:uN(W); "s" -> hls_nums:sN(W) end,
+        Sign ++ "N(" ++ integer_to_list(W) ++ ")"}
+        || W <- [1, 3, 8, 9, 16, 32, 64], Sign <- ["u", "s"]]).
 
-function(Name, Type, Op) ->
+function(Constructor, Type, Op) ->
     Source = lists:flatten(io_lib:format(
-        "probe(X, Y) -> hls_nums:wrap(hls_nums:~s(), X ~s Y).", [Name, Op])),
+        "probe(X, Y) -> hls_nums:wrap(hls_nums:~s, X ~s Y).", [Constructor, Op])),
     {ok, Tokens, _} = erl_scan:string(Source),
     {ok, {function, _, _, _, [Clause]}} = erl_parse:parse_form(Tokens),
-    W = hls_type:width(Type),
+    W = hls_type:value_width(Type),
     #{body := Body, result := Result, failed := Failed} = xls_parse:clause_outcome(
         Clause, [["(x as ", hls_type:print_type(Type), ")"],
                  ["(y as ", hls_type:print_type(Type), ")"]], state, #{}),
@@ -51,20 +54,21 @@ function(Name, Type, Op) ->
         integer_to_list(W), "], failed)\n}\n"].
 
 oracle(Type, A, B) ->
-    W = hls_type:width(Type),
-    {X, <<>>} = hls_type:unpack(<<A:W/little>>, Type),
-    {Y, <<>>} = hls_type:unpack(<<B:W/little>>, Type),
+    W = hls_type:value_width(Type),
+    Wire = hls_type:width(Type),
+    {X, <<>>} = hls_type:unpack(<<A:Wire/little>>, Type),
+    {Y, <<>>} = hls_type:unpack(<<B:Wire/little>>, Type),
     try
         Q = binary:decode_unsigned(hls_type:pack(hls_nums:wrap(Type, X div Y), Type), little),
         R = binary:decode_unsigned(hls_type:pack(hls_nums:wrap(Type, X rem Y), Type), little),
-        (Q bsl (W+2)) bor (R bsl 1)
+        ((Q band ((1 bsl W)-1)) bsl (W+2)) bor ((R band ((1 bsl W)-1)) bsl 1)
     catch error:badarith -> (1 bsl (W+1)) bor 1
     end.
 
 boundaries(W) ->
     High = 1 bsl (W-1),
-    Values = lists:usort([0, 1, 2, 3, 7, High-2, High-1, High, High+1,
-        2*High-3, 2*High-2, 2*High-1]),
+    Values = lists:usort([V || V <- [0, 1, 2, 3, 7, High-2, High-1, High, High+1,
+        2*High-3, 2*High-2, 2*High-1], V >= 0, V < 2*High]),
     [{A, B} || A <- Values, B <- Values].
 
 spread(W) ->

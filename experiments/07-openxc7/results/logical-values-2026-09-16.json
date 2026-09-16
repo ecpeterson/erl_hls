@@ -1,0 +1,143 @@
+{
+  "baseline": "475f03bf24567cea3870159a23b208d9182ea15f",
+  "prediction": "Modest reduction in data-cell registers and selection logic; no external message or step behavior change. Upper bits may already optimize away.",
+  "scope": "Complete standalone generated phenom_data_cell service, including word receiver/transmitters and internal mailboxes; excludes topology scheduler RAMs, router, debug and physical IO.",
+  "yosys": "Yosys 0.69+10 (git sha1 370a53acf-dirty, Release, Clang /usr/local/osxcross/target/bin/aarch64-apple-darwin25.5-clang++ 21.1.8)",
+  "tool_sha256": {
+    "ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+    "opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c",
+    "codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162"
+  },
+  "schedule": {
+    "pipeline_stages": 1,
+    "flop_inputs": false,
+    "flop_outputs": true,
+    "delay_model": "unit"
+  },
+  "sources": {
+    "before": {
+      "dslx_sha256": "95bd599318ae206240f7a51ac984a80109970ad298fa3c4e38b2261425ec318e",
+      "rtl_sha256": "76890414e756b9e3a235f9728cc76a7ee9f2e0ab4cb2af701570e8756725a0ec"
+    },
+    "after": {
+      "dslx_sha256": "46e34ce705a52c0cad746e5a47863ba40653dc28921fb745754bf7e1661fef3c",
+      "rtl_sha256": "164ab11dd973e5de62dcea4a23152de4aeeed6c4bdaeea51eea49da5d7ab40d2"
+    }
+  },
+  "results": [
+    {
+      "mode": "before",
+      "seed": 1,
+      "LUT": 4016,
+      "FF": 2617,
+      "cells": {
+        "$scopeinfo": 16,
+        "CARRY4": 42,
+        "FDRE": 2616,
+        "FDSE": 1,
+        "INV": 13,
+        "LUT1": 41,
+        "LUT2": 329,
+        "LUT3": 687,
+        "LUT4": 432,
+        "LUT5": 1238,
+        "LUT6": 1289,
+        "MUXF7": 73,
+        "MUXF8": 24
+      }
+    },
+    {
+      "mode": "before",
+      "seed": 2,
+      "LUT": 3937,
+      "FF": 2617,
+      "cells": {
+        "$scopeinfo": 16,
+        "CARRY4": 42,
+        "FDRE": 2616,
+        "FDSE": 1,
+        "INV": 12,
+        "LUT1": 110,
+        "LUT2": 363,
+        "LUT3": 672,
+        "LUT4": 352,
+        "LUT5": 1087,
+        "LUT6": 1353,
+        "MUXF7": 118,
+        "MUXF8": 55
+      }
+    },
+    {
+      "mode": "after",
+      "seed": 1,
+      "LUT": 3843,
+      "FF": 2617,
+      "cells": {
+        "$scopeinfo": 16,
+        "CARRY4": 42,
+        "FDRE": 2616,
+        "FDSE": 1,
+        "INV": 12,
+        "LUT1": 111,
+        "LUT2": 371,
+        "LUT3": 676,
+        "LUT4": 326,
+        "LUT5": 1031,
+        "LUT6": 1328,
+        "MUXF7": 122,
+        "MUXF8": 59
+      }
+    },
+    {
+      "mode": "after",
+      "seed": 2,
+      "LUT": 4024,
+      "FF": 2617,
+      "cells": {
+        "$scopeinfo": 16,
+        "CARRY4": 42,
+        "FDRE": 2616,
+        "FDSE": 1,
+        "INV": 12,
+        "LUT1": 111,
+        "LUT2": 375,
+        "LUT3": 699,
+        "LUT4": 410,
+        "LUT5": 1092,
+        "LUT6": 1337,
+        "MUXF7": 118,
+        "MUXF8": 58
+      }
+    }
+  ],
+  "summary": {
+    "before": {
+      "LUT": {
+        "best": 3937,
+        "mean": 3976.5,
+        "population_variance": 1560.25,
+        "worst": 4016
+      },
+      "FF": {
+        "best": 2617,
+        "mean": 2617,
+        "population_variance": 0,
+        "worst": 2617
+      }
+    },
+    "after": {
+      "LUT": {
+        "best": 3843,
+        "mean": 3933.5,
+        "population_variance": 8190.25,
+        "worst": 4024
+      },
+      "FF": {
+        "best": 2617,
+        "mean": 2617,
+        "population_variance": 0,
+        "worst": 2617
+      }
+    }
+  }
+}

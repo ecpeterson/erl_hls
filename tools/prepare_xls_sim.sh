@@ -344,6 +344,7 @@ for source in \
     "$project_root/src/api/hls_fixed.erl" \
     "$project_root/src/api/hls_vec.erl" \
     "$project_root/src/api/hls_nums.erl" \
+    "$project_root/src/api/hls_bool.erl" \
     "$project_root/src/api/hls_type.erl" \
     "$project_root/src/examples/regsvc/regsvc.erl" \
     "$project_root/src/examples/phi_decoder/hls_pauli.erl" \

@@ -16,6 +16,8 @@ The parse transform and XLS lowerer validate the same source contract. `hls_pack
 
 ## Execution and failures
 
+These are explicit HLS interface contracts, stronger than ordinary Erlang message passing. Erlang normally lets the caller interpret a reply and fail when it does not match the caller’s expectations; an `hls_gs` contract instead makes the declared reply kinds part of the service boundary and checks them before completion. The annotation is intended for a finite hardware interface, not as a general requirement on Erlang processes.
+
 The CPU adapter checks each callback reply before committing the returned state. A reply outside the set raises `{reply_contract, RequestTag, Reply, AllowedTags}`, terminating the adapter like an ordinary callback exception. This checks the record kind; the [numeric representation contract](numeric-contract.md) still governs field values.
 
 Generated hardware checks the reply tag after evaluating the selected body. An ordinary body failure takes precedence. A contract violation returns the one-word `ERROR` code 15, decoded by the proxy as `{error, {remote_error, reply_contract}}`. It follows the existing `hls_gs` callback-failure rule: zero callback state, rather than committing the invalid result's proposed state. A request-length error occurs before the callback and preserves state. See [control flow and failures](control-flow.md).

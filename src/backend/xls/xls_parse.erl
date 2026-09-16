@@ -697,9 +697,10 @@ structfrombits_from_record(RecordForm) ->
 
 -spec bitsfromstruct_from_record(erl_parse:af_record_decl()) -> iolist().
 -doc "Builds an XLS-side packer for the Erlang record definition.".
-bitsfromstruct_from_record(_RecordForm = {attribute, _L, record, {NameAtom, Fields}}) ->
+bitsfromstruct_from_record(RecordForm = {attribute, _L, record, {NameAtom, Fields}}) ->
     StructName = xls_names:record_type(NameAtom),
-    ["pub fn bits_from_", xls_names:record_codec(NameAtom), "(s: ", StructName, ") -> bits[bit_count<", StructName, ">()] {\n",
+    ["pub fn bits_from_", xls_names:record_codec(NameAtom), "(s: ", StructName,
+        ") -> bits[", integer_to_list(record_width(RecordForm)), "] {\n",
         ["  ", lists:foldl(
             fun({typed_record_field, Field, Type}, Body) ->
                 Slot = record_field_name(Field),

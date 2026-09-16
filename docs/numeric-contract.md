@@ -19,7 +19,7 @@ The laws permit normalization, but do not specify which normalization is appropr
 | Type | Accepted packing policy | Explicit alternatives |
 | --- | --- | --- |
 | `hls_nums:u8/u16/u32/u64/uN` | Preserve integers in the unsigned range; reject overflow and negative values. | `hls_nums:wrap(T, Value)` reduces modulo `2^Width`. |
-| `hls_nums:s8/s16/s32/s64` | Preserve integers in the signed range; reject overflow. | `hls_nums:wrap(T, Value)` reduces modulo `2^Width`, then interprets the sign bit. |
+| `hls_nums:s8/s16/s32/s64/sN` | Preserve integers in the signed range; reject overflow. | `hls_nums:wrap(T, Value)` reduces modulo `2^Width`, then interprets the sign bit. |
 | `hls_fixed:signed(Width, FractionBits)` | Preserve in-range raw scaled integers; reject overflow. | `hls_fixed:wrap/2` wraps the raw integer; `saturate/2` clamps it. Neither changes the fractional scale. |
 | `hls_nums:float16/float32` | Round to IEEE binary16/binary32, including ties to even and gradual underflow; reject results that encode infinity. | `hls_type:normalize/2` exposes the rounded host value; `pack_exact/2` rejects any change to the original term. |
 | `hls_nums:float64` | Preserve finite binary64 floats, including signed zero and subnormals. Integer inputs undergo ERTS's integer-to-binary64 conversion. | `pack_exact/2` rejects integer-to-float coercion as well as any other term change. |
@@ -27,6 +27,30 @@ The laws permit normalization, but do not specify which normalization is appropr
 All float codecs continue to accept integer inputs through the VM's binary64 conversion before encoding. This can lose integer precision before narrowing, and excessively large integers are rejected. For example, normalizing `(1 bsl 53) + 1` as `float64` produces `9007199254740992.0`. Use `pack_exact/2` when coercion is unwanted. Bignum storage itself is never a reason to reject an integer: an in-range `u64` or `uN(96)` value remains valid regardless of how ERTS stores it.
 
 Fixed-size lists and vectors require exact lengths, and generated record packers require the declared record tag and arity. Numeric normalization does not permit deleting, adding, or padding fields or elements. Nested providers are checked individually, so one short element cannot be compensated by an oversized neighbor.
+
+## Logical values and wire padding
+
+`hls_type:value_width(T)` is the logical XLS width, while `hls_type:width(T)` is the serialized width in bits. `hls_nums:uN(N)` and `hls_nums:sN(N)` support every positive integer `N`; their wire width is `8 * ceil(N / 8)`. Existing byte-aligned types keep their encodings. A signed width includes its sign bit, so `sN(1)` has just two values: `-1` and `0`.
+
+Packing still checks the logical range. Unsigned values are zero-extended and signed values sign-extended into the containing bytes, then emitted little-endian. Decoding discards the high padding bits and interprets the remaining logical value; it does not require canonical padding. Repacking produces canonical padding. For example:
+
+```erlang
+<<7>> = hls_type:pack(7, hls_nums:uN(3)).
+<<255>> = hls_type:pack(-1, hls_nums:sN(3)).
+{7, <<>>} = hls_type:unpack(<<255>>, hls_nums:uN(3)).
+{-1, <<>>} = hls_type:unpack(<<7>>, hls_nums:sN(3)).
+0 = hls_nums:wrap(hls_nums:uN(3), 7 + 1).
+```
+
+`hls_bool:bool()` has one logical bit and one wire byte. Its host values are exactly `false` and `true`, packed as `0` and `1`. Decoding takes the low bit, ignoring the other seven. Numeric `0`/`1` are not Boolean host values. Boolean fields support ordinary expressions, record patterns, and guards, including a bound Boolean variable or record field used directly as a guard. XLS requires those guard values to have Boolean types. `hls_type:as/2` remains an ERTS identity and must not be used to convert a Boolean into a numeric host value; use a `case` at that boundary.
+
+Lists and vectors preserve each element’s full wire slot. They reverse element order for the existing least-significant-first transport, including recursively nested collections; they do not pack adjacent small values into the same byte. For example, `[[-16, 15], [-1, 1]]` at `vector(vector(sN(5), 2), 2)` has 20 logical bits and serializes to `<<1, 255, 15, 240>>`. Record fields retain declaration order on the wire. Generated record packers return the sum of field **wire** widths, independently of the XLS struct’s logical bit count. Public messages still need a whole number of 32-bit words and must fit the existing frame capacity; adding a Boolean field does not automatically pad the whole message.
+
+Providers may export `value_width/2`; omission means the value and wire widths are equal. Bit-cast providers with different widths receive scalar narrowing/widening casts, and collections map those codecs over their elements. Structured providers continue to supply `dslx_codec/2` and must explicitly compose both widths and both conversion directions. A custom provider’s padding policy belongs to its contract; no universal range check or enum validation is inserted into generated decoders. `hls_pauli` retains its 32-bit representation so that application guards can detect invalid external Pauli encodings before use.
+
+Small types do not change BEAM arithmetic: `wrap/2` normalizes at the **logical** width, and `hls_vec:dot/3` widens to the accumulator’s logical width. Signed extension, saturation, comparison, and division still follow the arithmetic agreement rules below. Changing an actor’s field types changes its state layout; regenerate its RTL and matching host/debug metadata together.
+
+`bash tools/test_logical_types.sh XLS_ROOT` checks scalar and nested byte vectors against the XLS interpreter/JIT and generated RTL, then replays a BEAM-derived service scenario at three pipeline schedules. The scenario covers initialized state, narrow wrapping arithmetic, Boolean guards, nested updates, casts, noncanonical padding, transaction-ID wrap, and stalled output. Integer division/remainder and shift suites also cover non-byte widths and one-bit signed values.
 
 ## Checked collection access
 

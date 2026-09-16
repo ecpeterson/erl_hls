@@ -13,6 +13,7 @@
     pack_exact/2,
     print_type/1,
     unpack/2,
+    value_width/1,
     width/1,
     zero/0,
     zero/1
@@ -82,7 +83,9 @@ allowing types such as integers to avoid importing unrelated float companions.
 -doc """
 Describes wire conversion for a type whose DSLX value cannot use a bit cast.
 The two functions render from-bits and to-bits expressions respectively.
-Collections compose their element codecs. Omission means ordinary bit casts.
+Collections compose their element codecs, including padding within each
+element. Omission means ordinary bit casts; value_width/2 declares whether
+such casts add or remove padding. Padding must match the host codec policy.
 """.
 -callback dslx_codec(atom(), [arg()]) -> bit_cast |
     {fun((xls_parse:printable()) -> xls_parse:printable()),
@@ -95,8 +98,12 @@ Collections compose their element codecs. Omission means ordinary bit casts.
 -doc "Emits the corresponding XLS type for the Erlang type descriptor.".
 -callback print_type(TypeName :: atom(), Args :: [any()]) -> xls_parse:printable().
 
--doc "Calculate the bit width of this type when packed.".
+-doc "Serialized bit width, including padding; pack/3 must return this many bits.".
 -callback width(Name :: atom(), Args :: [any()]) -> integer().
+
+-doc "Logical XLS value width, excluding wire padding. Defaults to width/2.".
+-callback value_width(Name :: atom(), Args :: [arg()]) -> non_neg_integer().
+-optional_callbacks([value_width/2]).
 
 % -doc """
 % in-XLS un/pack? or maybe transpiles to `as` but has no Erlang effect?
@@ -143,6 +150,15 @@ transpile(Operation, _Args, _State) when Operation =:= normalize;
 -doc "". 
 width(#hls_type{module = Module, name = Name, args = Args}) ->
     Module:width(Name, Args).
+
+-doc "Returns the logical value width; width/1 returns the serialized width.".
+-spec value_width(descriptor()) -> non_neg_integer().
+value_width(#hls_type{module = Module, name = Name, args = Args}) ->
+    _ = code:ensure_loaded(Module),
+    case erlang:function_exported(Module, value_width, 2) of
+        true -> Module:value_width(Name, Args);
+        false -> Module:width(Name, Args)
+    end.
 
 -doc """
 Packs a host value, checking the provider's binary against its declared width.
@@ -191,11 +207,19 @@ unpack(Binary, {hls_type, Module, Name, Args}) ->
 print_type({hls_type, Module, Name, Args}) ->
     Module:print_type(Name, Args).
 
-dslx_codec({hls_type, Module, Name, Args}) ->
+dslx_codec(Type = {hls_type, Module, Name, Args}) ->
     _ = code:ensure_loaded(Module),
-    case erlang:function_exported(Module, dslx_codec, 2) of
+    Codec = case erlang:function_exported(Module, dslx_codec, 2) of
         true -> Module:dslx_codec(Name, Args);
         false -> bit_cast
+    end,
+    case Codec =:= bit_cast andalso value_width(Type) =/= width(Type) of
+        true ->
+            %% Scalars can cast through padding, but arrays cannot: padding
+            %% belongs to each element, not to the flattened collection.
+            {fun(Bits) -> [Bits, " as ", print_type(Type)] end,
+             fun(Value) -> [Value, " as bits[", integer_to_list(width(Type)), "]"] end};
+        false -> Codec
     end.
 
 dslx_from_bits(Type, Bits) ->

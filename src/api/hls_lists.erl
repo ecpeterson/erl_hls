@@ -14,6 +14,7 @@ collections are supported by the host codecs; XLS does not support their values.
 -export([new/2, sublist/4, nth/2, set/3, array_slice/4]).
 -export([zero/2, transpile/3, pack/3, unpack/3, width/2, print_type/2]).
 -export([dslx_codec/2, dslx_imports/1]).
+-export([value_width/2]).
 -behavior(hls_type).
 
 -type list(ElementType, Count) :: list(ElementType) | {no_return(), Count}.
@@ -154,6 +155,9 @@ print_type(list, [_Subtype, 0]) -> error(empty_xls_collection).
 
 width(list, [Subtype, Count]) ->
     hls_type:width(Subtype) * Count.
+
+value_width(list, [Subtype, Count]) ->
+    hls_type:value_width(Subtype) * Count.
 
 dslx_codec(list, [Subtype, Count]) ->
     case hls_type:dslx_codec(Subtype) of

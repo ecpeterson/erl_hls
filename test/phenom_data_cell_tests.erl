@@ -37,7 +37,7 @@ fourth_query_draws_exactly_once_test() ->
     {collecting, Third, consume} = query(?WEST_MASK, Second),
     ?assertMatch(
         {data_cell, 0, _, ?FIRST_RANDOM, 0, ?SEED,
-            0, 0, i, 0, 0, 0, 0, 0, 0},
+            0, 0, i, 0, 0, 0, false, false, 0},
         Third
     ),
     {reporting, Final, consume} = query(?SOUTH_MASK, Third),
@@ -95,7 +95,7 @@ lookahead_queries_replay_after_reporting_test() ->
         ?assertMatch(
             {data_cell, 1, ?ALL_DIRECTIONS, ?FIRST_RANDOM + 1,
                 0, _SecondRandom, 0, 0, y, 0, 0,
-                0, 0, 0, 0},
+                0, false, false, 0},
             maps:get(data, After)
         )
     after
@@ -181,7 +181,7 @@ cumulative_pauli_queries_are_ordered_and_coordinate_aware_test() ->
         ?assertMatch(
             {data_cell, 1, ?ALL_DIRECTIONS, ?U32_MASK, 0,
                 ?FIRST_RANDOM, 13, 17, i, 104, 0,
-                2, 1, 0, 1},
+                2, true, false, 1},
             maps:get(data, Info)
         )
     after
@@ -191,7 +191,7 @@ cumulative_pauli_queries_are_ordered_and_coordinate_aware_test() ->
 
 measurement_query_phase_and_payload_validation_test() ->
     Reporting = controlled_cell(4, ?ALL_DIRECTIONS, 0, 0, ?FIRST_RANDOM,
-        13, 17, y, 0, 0, 0, 1),
+        13, 17, y, 0, 0, 0, true),
     Valid = {pauli_query, 91, x},
     {replying, Replying, consume} = phenom_data_cell:reporting(
         cast,
@@ -200,12 +200,12 @@ measurement_query_phase_and_payload_validation_test() ->
     ),
     ?assertEqual(
         controlled_cell(4, ?ALL_DIRECTIONS, 0, 0, ?FIRST_RANDOM,
-            13, 17, y, 91, 1, 2, 1),
+            13, 17, y, 91, 1, 2, true),
         Replying
     ),
     ?assertEqual(
         {repeat_phase, controlled_cell(4, ?ALL_DIRECTIONS, 0, 0,
-            ?FIRST_RANDOM, 13, 17, y, 92, 1, 2, 1), consume},
+            ?FIRST_RANDOM, 13, 17, y, 92, 1, 2, true), consume},
         phenom_data_cell:replying(
             cast,
             {pauli_query, 92, z},
@@ -213,7 +213,7 @@ measurement_query_phase_and_payload_validation_test() ->
         )
     ),
     Collecting = controlled_cell(4, 0, 0, 0, ?FIRST_RANDOM,
-        13, 17, y, 0, 0, 0, 1),
+        13, 17, y, 0, 0, 0, true),
     {replying, CollectingReply, consume} =
         phenom_data_cell:collecting(
             cast,
@@ -222,7 +222,7 @@ measurement_query_phase_and_payload_validation_test() ->
         ),
     ?assertMatch(
         {data_cell, 4, 0, 0, 0, ?FIRST_RANDOM, 13, 17, y,
-            93, 1, 1, 1, 0, 0},
+            93, 1, 1, true, false, 0},
         CollectingReply
     ),
     EnabledReporting = cell(4, ?ALL_DIRECTIONS, 0, 0, ?FIRST_RANDOM,
@@ -373,12 +373,12 @@ configured_cell(Threshold) ->
 cell(Step, Seen, Threshold, Event, Random, X, Y, Pauli, RequestId,
         Anticommutes) ->
     controlled_cell(Step, Seen, Threshold, Event, Random, X, Y, Pauli,
-        RequestId, Anticommutes, 0, 0).
+        RequestId, Anticommutes, 0, false).
 
 controlled_cell(Step, Seen, Threshold, Event, Random, X, Y, Pauli,
         RequestId, Anticommutes, Resume, NoiseDisabled) ->
     {data_cell, Step, Seen, Threshold, Event, Random, X, Y, Pauli,
-        RequestId, Anticommutes, Resume, NoiseDisabled, 0, 0}.
+        RequestId, Anticommutes, Resume, NoiseDisabled, false, 0}.
 
 assert_query_failure(Messages) ->
     {PID, Neighbors, Ref} = start_cell(),

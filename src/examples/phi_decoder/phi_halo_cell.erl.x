@@ -90,7 +90,7 @@ pub fn phi_from_bits<N: u32>(raw: bits[N]) -> Phi {
   }
 }
 
-pub fn bits_from_phi(s: Phi) -> bits[bit_count<Phi>()] {
+pub fn bits_from_phi(s: Phi) -> bits[96] {
   (s.values as bits[64]) ++ (s.epoch as bits[32]) ++  zero!<bits[0]>()
 }
 
@@ -106,7 +106,7 @@ pub fn anyonmove_from_bits<N: u32>(raw: bits[N]) -> Anyonmove {
   }
 }
 
-pub fn bits_from_anyonmove(s: Anyonmove) -> bits[bit_count<Anyonmove>()] {
+pub fn bits_from_anyonmove(s: Anyonmove) -> bits[64] {
   (s.present as bits[32]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
 }
 
@@ -124,7 +124,7 @@ pub fn phi0_from_bits<N: u32>(raw: bits[N]) -> Phi0 {
   }
 }
 
-pub fn bits_from_phi0(s: Phi0) -> bits[bit_count<Phi0>()] {
+pub fn bits_from_phi0(s: Phi0) -> bits[96] {
   (s.value as bits[32]) ++ (s.source as bits[32]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
 }
 
@@ -144,7 +144,7 @@ pub fn phenomconfig_from_bits<N: u32>(raw: bits[N]) -> Phenomconfig {
   }
 }
 
-pub fn bits_from_phenomconfig(s: Phenomconfig) -> bits[bit_count<Phenomconfig>()] {
+pub fn bits_from_phenomconfig(s: Phenomconfig) -> bits[96] {
   (s.y as bits[16]) ++ (s.x as bits[16]) ++ (s.threshold as bits[32]) ++ (s.seed as bits[32]) ++  zero!<bits[0]>()
 }
 
@@ -158,7 +158,7 @@ pub fn phenomrequest_from_bits<N: u32>(raw: bits[N]) -> Phenomrequest {
   }
 }
 
-pub fn bits_from_phenomrequest(s: Phenomrequest) -> bits[bit_count<Phenomrequest>()] {
+pub fn bits_from_phenomrequest(s: Phenomrequest) -> bits[32] {
   (s.step as bits[32]) ++  zero!<bits[0]>()
 }
 
@@ -174,7 +174,7 @@ pub fn phenomquery_from_bits<N: u32>(raw: bits[N]) -> Phenomquery {
   }
 }
 
-pub fn bits_from_phenomquery(s: Phenomquery) -> bits[bit_count<Phenomquery>()] {
+pub fn bits_from_phenomquery(s: Phenomquery) -> bits[64] {
   (s.source as bits[32]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
 }
 
@@ -192,7 +192,7 @@ pub fn phenomdata_from_bits<N: u32>(raw: bits[N]) -> Phenomdata {
   }
 }
 
-pub fn bits_from_phenomdata(s: Phenomdata) -> bits[bit_count<Phenomdata>()] {
+pub fn bits_from_phenomdata(s: Phenomdata) -> bits[96] {
   (s.flags as bits[32]) ++ (s.source as bits[32]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
 }
 
@@ -212,7 +212,7 @@ pub fn phenomanyon_from_bits<N: u32>(raw: bits[N]) -> Phenomanyon {
   }
 }
 
-pub fn bits_from_phenomanyon(s: Phenomanyon) -> bits[bit_count<Phenomanyon>()] {
+pub fn bits_from_phenomanyon(s: Phenomanyon) -> bits[96] {
   (s.y as bits[16]) ++ (s.x as bits[16]) ++ (s.flags as bits[32]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
 }
 
@@ -232,7 +232,7 @@ pub fn phicorrection_from_bits<N: u32>(raw: bits[N]) -> Phicorrection {
   }
 }
 
-pub fn bits_from_phicorrection(s: Phicorrection) -> bits[bit_count<Phicorrection>()] {
+pub fn bits_from_phicorrection(s: Phicorrection) -> bits[96] {
   (s.direction as bits[32]) ++ (s.y as bits[16]) ++ (s.x as bits[16]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
 }
 
@@ -246,7 +246,7 @@ pub fn phiconfig_from_bits<N: u32>(raw: bits[N]) -> Phiconfig {
   }
 }
 
-pub fn bits_from_phiconfig(s: Phiconfig) -> bits[bit_count<Phiconfig>()] {
+pub fn bits_from_phiconfig(s: Phiconfig) -> bits[32] {
   (s.seed as bits[32]) ++  zero!<bits[0]>()
 }
 
@@ -262,7 +262,7 @@ pub fn pauliquery_from_bits<N: u32>(raw: bits[N]) -> Pauliquery {
   }
 }
 
-pub fn bits_from_pauliquery(s: Pauliquery) -> bits[bit_count<Pauliquery>()] {
+pub fn bits_from_pauliquery(s: Pauliquery) -> bits[64] {
   (s.measurement as bits[32]) ++ (s.request_id as bits[32]) ++  zero!<bits[0]>()
 }
 
@@ -282,7 +282,7 @@ pub fn paulireply_from_bits<N: u32>(raw: bits[N]) -> Paulireply {
   }
 }
 
-pub fn bits_from_paulireply(s: Paulireply) -> bits[bit_count<Paulireply>()] {
+pub fn bits_from_paulireply(s: Paulireply) -> bits[96] {
   (s.anticommutes as bits[32]) ++ (s.y as bits[16]) ++ (s.x as bits[16]) ++ (s.request_id as bits[32]) ++  zero!<bits[0]>()
 }
 
@@ -296,7 +296,7 @@ pub fn noisecutoff_from_bits<N: u32>(raw: bits[N]) -> Noisecutoff {
   }
 }
 
-pub fn bits_from_noisecutoff(s: Noisecutoff) -> bits[bit_count<Noisecutoff>()] {
+pub fn bits_from_noisecutoff(s: Noisecutoff) -> bits[32] {
   (s.first_quiet_step as bits[32]) ++  zero!<bits[0]>()
 }
 
@@ -310,7 +310,7 @@ pub fn pauliupdate_from_bits<N: u32>(raw: bits[N]) -> Pauliupdate {
   }
 }
 
-pub fn bits_from_pauliupdate(s: Pauliupdate) -> bits[bit_count<Pauliupdate>()] {
+pub fn bits_from_pauliupdate(s: Pauliupdate) -> bits[32] {
   (s.pauli as bits[32]) ++  zero!<bits[0]>()
 }
 
@@ -330,7 +330,7 @@ pub fn phistatus_from_bits<N: u32>(raw: bits[N]) -> Phistatus {
   }
 }
 
-pub fn bits_from_phistatus(s: Phistatus) -> bits[bit_count<Phistatus>()] {
+pub fn bits_from_phistatus(s: Phistatus) -> bits[96] {
   (s.flags as bits[32]) ++ (s.y as bits[16]) ++ (s.x as bits[16]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
 }
 
@@ -362,7 +362,7 @@ pub fn cell_from_bits<N: u32>(raw: bits[N]) -> Cell {
   }
 }
 
-pub fn bits_from_cell(s: Cell) -> bits[bit_count<Cell>()] {
+pub fn bits_from_cell(s: Cell) -> bits[320] {
   (s.status_valid as bits[32]) ++ (s.noise_quiet as bits[32]) ++ (s.y as bits[16]) ++ (s.x as bits[16]) ++ (s.random_state as bits[32]) ++ (s.anyon as bits[32]) ++ (s.best_direction as bits[32]) ++ (s.phi as bits[64]) ++ (s.diffusion_epoch as bits[32]) ++ (s.step as bits[32]) ++  zero!<bits[0]>()
 }
 
@@ -378,7 +378,7 @@ pub fn phifold_from_bits<N: u32>(raw: bits[N]) -> Phifold {
   }
 }
 
-pub fn bits_from_phifold(s: Phifold) -> bits[bit_count<Phifold>()] {
+pub fn bits_from_phifold(s: Phifold) -> bits[128] {
   (s.value1 as bits[64]) ++ (s.value0 as bits[64]) ++  zero!<bits[0]>()
 }
 
