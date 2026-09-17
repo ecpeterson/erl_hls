@@ -51,9 +51,11 @@ def mapped_memories(module):
 
 def map_memories(yosys, read, top, stage, name):
     target = stage / f"{name}.json"
+    # Primitive simulation bodies can contain processes; keep those libraries
+    # opaque when serializing the mapped application for inspection.
     yosys_run(yosys, read + f"\nhierarchy -check -top {top}\n" +
               f"synth_xilinx -family xc7 -flatten -noiopad -noclkbuf -top {top} -run begin:map_ffram\n" +
-              f"select {top}\nwrite_json -selected {quote(target)}\n", stage, name)
+              f"blackbox =A:whitebox\nwrite_json {quote(target)}\n", stage, name)
     design = json.loads(target.read_text())
     return mapped_memories(design["modules"][top])
 

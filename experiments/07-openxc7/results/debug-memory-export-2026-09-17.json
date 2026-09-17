@@ -3,7 +3,7 @@
   "base_revision": "bd0ebf5",
   "tools_sha256": {
     "tools/topology_debug.py": "acaf058158e8c220761cfc0e1dc81579e69f2838ae253679f4f832e9784a6ea6",
-    "tools/check_debug_memories.py": "dac1c4168f0cb3282b84120daa7c2bf1b44c3467c241a32def380ad389e86ff0",
+    "tools/check_debug_memories.py": "28ddd88622f221c0bf6018c0c65498cf0bdc48aa667f1429531c78f5451247d3",
     "tools/test_debug_memories.py": "5c0f7e77e63f9aabca8855d78d36ecbff0048cc59df0f7e42b5343f3a3bac037"
   },
   "fixtures": {
