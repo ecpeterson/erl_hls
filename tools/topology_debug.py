@@ -285,8 +285,11 @@ def instrument(args):
         args.clock, args.reset, args.reset_active_low, banks, monitor))
     exported = export_probes(flat, args.top, physical, args.output_top, banks)
     (stage / "instrumented.json").write_text(json.dumps(exported))
+    # Keep synthesis attributes, and coalesce identical mux output bits before
+    # rendering memory writes. Otherwise a word enable becomes separate bit
+    # writes in Verilog, which can fragment RAMs when the RTL is synthesized.
     yosys_run(args.yosys, f"read_json {quote(stage / 'instrumented.json')}\n" +
-              f"opt_clean -purge\nwrite_verilog -noattr {quote(stage / 'instrumented.v')}\n", stage, "export")
+              f"opt_reduce\nopt_clean -purge\nwrite_verilog {quote(stage / 'instrumented.v')}\n", stage, "export")
     print(f"Exported {len(probes)} channels, {len(queues)} FIFO occupancies, {len(resources)-len(physical)} actors; manifest {manifest['fingerprint']}")
 
 

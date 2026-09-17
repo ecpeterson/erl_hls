@@ -1,0 +1,659 @@
+{
+  "scope": "XC7 application memory configurations after debug Verilog roundtrip; before FF/LUT mapping or placement",
+  "base_revision": "bd0ebf5",
+  "tools_sha256": {
+    "tools/topology_debug.py": "acaf058158e8c220761cfc0e1dc81579e69f2838ae253679f4f832e9784a6ea6",
+    "tools/check_debug_memories.py": "dac1c4168f0cb3282b84120daa7c2bf1b44c3467c241a32def380ad389e86ff0",
+    "tools/test_debug_memories.py": "5c0f7e77e63f9aabca8855d78d36ecbff0048cc59df0f7e42b5343f3a3bac037"
+  },
+  "fixtures": {
+    "focused": {
+      "yosys": "Yosys 0.69+10 (git sha1 370a53acf-dirty, Release, Clang /usr/local/osxcross/target/bin/aarch64-apple-darwin25.5-clang++ 21.1.8)",
+      "inputs": {
+        "flat.json": "36c7cc7523ed9faa073f46b3e93722139c6685fe3f1d685cb5dff4ec7b7c0144",
+        "instrumented.json": "55d7073870fa28e402470d83b229fa81570757a9819f2e11c31d7fcdcdd63d23",
+        "instrumented.v": "d6445c27505d1150495cd848311545eab85f41ec63bd76eb20904a1c71d2fb04"
+      },
+      "original": {
+        "first_ram.memory": {
+          "width": 32,
+          "size": 16,
+          "start_offset": 0,
+          "attributes": {
+            "ram_style": "block"
+          }
+        },
+        "masked_data": {
+          "width": 32,
+          "size": 16,
+          "start_offset": 0,
+          "attributes": {
+            "ram_style": "block"
+          }
+        },
+        "second_ram.memory": {
+          "width": 32,
+          "size": 16,
+          "start_offset": 0,
+          "attributes": {
+            "ram_style": "block"
+          }
+        },
+        "table_data": {
+          "width": 32,
+          "size": 16,
+          "start_offset": 16,
+          "attributes": {
+            "ram_style": "distributed"
+          }
+        }
+      },
+      "roundtrip": {
+        "first_ram.memory": {
+          "width": 32,
+          "size": 16,
+          "start_offset": 0,
+          "attributes": {
+            "ram_style": "block"
+          }
+        },
+        "masked_data": {
+          "width": 32,
+          "size": 16,
+          "start_offset": 0,
+          "attributes": {
+            "ram_style": "block"
+          }
+        },
+        "second_ram.memory": {
+          "width": 32,
+          "size": 16,
+          "start_offset": 0,
+          "attributes": {
+            "ram_style": "block"
+          }
+        },
+        "table_data": {
+          "width": 32,
+          "size": 16,
+          "start_offset": 16,
+          "attributes": {
+            "ram_style": "distributed"
+          }
+        }
+      },
+      "mapping": {
+        "preserved": {
+          "primitives": {
+            "RAM32M": 6,
+            "RAMB18E1": 3
+          },
+          "unmapped_bits": 0,
+          "configurations": [
+            {
+              "type": "RAM32M",
+              "parameters_sha256": "193f9667bc11613ea4b4f3fa278f090c46d70fd3a5657cc2715fd6ab0c1a91e7",
+              "count": 4
+            },
+            {
+              "type": "RAM32M",
+              "parameters_sha256": "4958e2fd5bd8398a35d4dacd7eff334f0a25f20d6cd6441b427e31d4c0f15e54",
+              "count": 1
+            },
+            {
+              "type": "RAM32M",
+              "parameters_sha256": "6275be04fa59ebf77e8da8b5fbe4bd545c397fabeb0449487d13979cdc98a064",
+              "count": 1
+            },
+            {
+              "type": "RAMB18E1",
+              "parameters_sha256": "cb01ba45c782338435d06eb66c995ede078d06ce3879319bb76731f7b19d66fa",
+              "count": 3
+            }
+          ]
+        },
+        "verilog": {
+          "primitives": {
+            "RAM32M": 6,
+            "RAMB18E1": 3
+          },
+          "unmapped_bits": 0,
+          "configurations": [
+            {
+              "type": "RAM32M",
+              "parameters_sha256": "193f9667bc11613ea4b4f3fa278f090c46d70fd3a5657cc2715fd6ab0c1a91e7",
+              "count": 4
+            },
+            {
+              "type": "RAM32M",
+              "parameters_sha256": "4958e2fd5bd8398a35d4dacd7eff334f0a25f20d6cd6441b427e31d4c0f15e54",
+              "count": 1
+            },
+            {
+              "type": "RAM32M",
+              "parameters_sha256": "6275be04fa59ebf77e8da8b5fbe4bd545c397fabeb0449487d13979cdc98a064",
+              "count": 1
+            },
+            {
+              "type": "RAMB18E1",
+              "parameters_sha256": "cb01ba45c782338435d06eb66c995ede078d06ce3879319bb76731f7b19d66fa",
+              "count": 3
+            }
+          ]
+        }
+      }
+    },
+    "mixed_scheduler": {
+      "yosys": "Yosys 0.69+10 (git sha1 370a53acf-dirty, Release, Clang /usr/local/osxcross/target/bin/aarch64-apple-darwin25.5-clang++ 21.1.8)",
+      "inputs": {
+        "flat.json": "da3e51c37024e867a722ae1434db6e8879894eeda7524909bd3b8f9c9477bc64",
+        "instrumented.json": "379e2a5faa4d8281a61b5cfa582efe15bfbf7584311790d149d822ecb7364af8",
+        "instrumented.v": "d92ece976c0d33b9516f122ddc17158224f4b15fff58e8033f80037dd2389af9"
+      },
+      "original": {
+        "scheduler_0_mailbox.memory": {
+          "width": 128,
+          "size": 16,
+          "start_offset": 0,
+          "attributes": {
+            "ram_style": "block"
+          }
+        },
+        "scheduler_0_state.memory": {
+          "width": 65,
+          "size": 4,
+          "start_offset": 0,
+          "attributes": {
+            "ram_style": "block"
+          }
+        }
+      },
+      "roundtrip": {
+        "scheduler_0_mailbox.memory": {
+          "width": 128,
+          "size": 16,
+          "start_offset": 0,
+          "attributes": {
+            "ram_style": "block"
+          }
+        },
+        "scheduler_0_state.memory": {
+          "width": 65,
+          "size": 4,
+          "start_offset": 0,
+          "attributes": {
+            "ram_style": "block"
+          }
+        }
+      },
+      "mapping": {
+        "preserved": {
+          "primitives": {
+            "RAMB36E1": 3
+          },
+          "unmapped_bits": 0,
+          "configurations": [
+            {
+              "type": "RAMB36E1",
+              "parameters_sha256": "0ab1b7340e152c2dbc75b37340b7e8097858e555b78dd6357027c27514dba574",
+              "count": 3
+            }
+          ]
+        },
+        "verilog": {
+          "primitives": {
+            "RAMB36E1": 3
+          },
+          "unmapped_bits": 0,
+          "configurations": [
+            {
+              "type": "RAMB36E1",
+              "parameters_sha256": "0ab1b7340e152c2dbc75b37340b7e8097858e555b78dd6357027c27514dba574",
+              "count": 3
+            }
+          ]
+        }
+      }
+    },
+    "d3": {
+      "yosys": "Yosys 0.69+10 (git sha1 370a53acf-dirty, Release, Clang /usr/local/osxcross/target/bin/aarch64-apple-darwin25.5-clang++ 21.1.8)",
+      "inputs": {
+        "flat.json": "d8e98bdf5794397392c5a0b01bb145bbd58b5c36551bf8e82a51f8d0010fb649",
+        "instrumented.json": "8b20b3c85972346ce441dc108167973bd9af1e7860ba8d0ed8f9ba60c342902d",
+        "instrumented.v": "422402f780f1ac2e1ecc6b4afb56d67444f1c08533c3321fd723dbc74c9b526d"
+      },
+      "original": {
+        "scheduler_0_mailbox.memory": {
+          "width": 128,
+          "size": 64,
+          "start_offset": 0,
+          "attributes": {
+            "ram_style": "block"
+          }
+        },
+        "scheduler_0_state.memory": {
+          "width": 387,
+          "size": 16,
+          "start_offset": 0,
+          "attributes": {
+            "ram_style": "block"
+          }
+        },
+        "scheduler_1_mailbox.memory": {
+          "width": 128,
+          "size": 64,
+          "start_offset": 0,
+          "attributes": {
+            "ram_style": "block"
+          }
+        },
+        "scheduler_1_state.memory": {
+          "width": 387,
+          "size": 16,
+          "start_offset": 0,
+          "attributes": {
+            "ram_style": "block"
+          }
+        },
+        "scheduler_2_mailbox.memory": {
+          "width": 128,
+          "size": 64,
+          "start_offset": 0,
+          "attributes": {
+            "ram_style": "block"
+          }
+        },
+        "scheduler_2_state.memory": {
+          "width": 540,
+          "size": 16,
+          "start_offset": 0,
+          "attributes": {
+            "ram_style": "block"
+          }
+        },
+        "scheduler_3_mailbox.memory": {
+          "width": 128,
+          "size": 64,
+          "start_offset": 0,
+          "attributes": {
+            "ram_style": "block"
+          }
+        },
+        "scheduler_3_state.memory": {
+          "width": 540,
+          "size": 16,
+          "start_offset": 0,
+          "attributes": {
+            "ram_style": "block"
+          }
+        },
+        "scheduler_4_mailbox.memory": {
+          "width": 128,
+          "size": 64,
+          "start_offset": 0,
+          "attributes": {
+            "ram_style": "block"
+          }
+        },
+        "scheduler_4_state.memory": {
+          "width": 387,
+          "size": 16,
+          "start_offset": 0,
+          "attributes": {
+            "ram_style": "block"
+          }
+        },
+        "scheduler_5_mailbox.memory": {
+          "width": 128,
+          "size": 64,
+          "start_offset": 0,
+          "attributes": {
+            "ram_style": "block"
+          }
+        },
+        "scheduler_5_state.memory": {
+          "width": 387,
+          "size": 16,
+          "start_offset": 0,
+          "attributes": {
+            "ram_style": "block"
+          }
+        }
+      },
+      "roundtrip": {
+        "scheduler_0_mailbox.memory": {
+          "width": 128,
+          "size": 64,
+          "start_offset": 0,
+          "attributes": {
+            "ram_style": "block"
+          }
+        },
+        "scheduler_0_state.memory": {
+          "width": 387,
+          "size": 16,
+          "start_offset": 0,
+          "attributes": {
+            "ram_style": "block"
+          }
+        },
+        "scheduler_1_mailbox.memory": {
+          "width": 128,
+          "size": 64,
+          "start_offset": 0,
+          "attributes": {
+            "ram_style": "block"
+          }
+        },
+        "scheduler_1_state.memory": {
+          "width": 387,
+          "size": 16,
+          "start_offset": 0,
+          "attributes": {
+            "ram_style": "block"
+          }
+        },
+        "scheduler_2_mailbox.memory": {
+          "width": 128,
+          "size": 64,
+          "start_offset": 0,
+          "attributes": {
+            "ram_style": "block"
+          }
+        },
+        "scheduler_2_state.memory": {
+          "width": 540,
+          "size": 16,
+          "start_offset": 0,
+          "attributes": {
+            "ram_style": "block"
+          }
+        },
+        "scheduler_3_mailbox.memory": {
+          "width": 128,
+          "size": 64,
+          "start_offset": 0,
+          "attributes": {
+            "ram_style": "block"
+          }
+        },
+        "scheduler_3_state.memory": {
+          "width": 540,
+          "size": 16,
+          "start_offset": 0,
+          "attributes": {
+            "ram_style": "block"
+          }
+        },
+        "scheduler_4_mailbox.memory": {
+          "width": 128,
+          "size": 64,
+          "start_offset": 0,
+          "attributes": {
+            "ram_style": "block"
+          }
+        },
+        "scheduler_4_state.memory": {
+          "width": 387,
+          "size": 16,
+          "start_offset": 0,
+          "attributes": {
+            "ram_style": "block"
+          }
+        },
+        "scheduler_5_mailbox.memory": {
+          "width": 128,
+          "size": 64,
+          "start_offset": 0,
+          "attributes": {
+            "ram_style": "block"
+          }
+        },
+        "scheduler_5_state.memory": {
+          "width": 387,
+          "size": 16,
+          "start_offset": 0,
+          "attributes": {
+            "ram_style": "block"
+          }
+        }
+      },
+      "mapping": {
+        "preserved": {
+          "primitives": {
+            "RAMB18E1": 74,
+            "RAMB36E1": 12
+          },
+          "unmapped_bits": 0,
+          "configurations": [
+            {
+              "type": "RAMB18E1",
+              "parameters_sha256": "cb01ba45c782338435d06eb66c995ede078d06ce3879319bb76731f7b19d66fa",
+              "count": 74
+            },
+            {
+              "type": "RAMB36E1",
+              "parameters_sha256": "0ab1b7340e152c2dbc75b37340b7e8097858e555b78dd6357027c27514dba574",
+              "count": 12
+            }
+          ]
+        },
+        "verilog": {
+          "primitives": {
+            "RAMB18E1": 74,
+            "RAMB36E1": 12
+          },
+          "unmapped_bits": 0,
+          "configurations": [
+            {
+              "type": "RAMB18E1",
+              "parameters_sha256": "cb01ba45c782338435d06eb66c995ede078d06ce3879319bb76731f7b19d66fa",
+              "count": 74
+            },
+            {
+              "type": "RAMB36E1",
+              "parameters_sha256": "0ab1b7340e152c2dbc75b37340b7e8097858e555b78dd6357027c27514dba574",
+              "count": 12
+            }
+          ]
+        }
+      }
+    }
+  },
+  "negative_controls": {
+    "stripped": {
+      "primitives": {
+        "RAM32M": 128
+      },
+      "unmapped_bits": 0,
+      "configurations": [
+        {
+          "type": "RAM32M",
+          "parameters_sha256": "30fa2b9605b5d3cdbd65a3ecd0c0dab99d02d58bee46cc2ea97860f4b5c6b50f",
+          "count": 1
+        },
+        {
+          "type": "RAM32M",
+          "parameters_sha256": "3330afb8aae33d0e58ff035d72ff22e09815bad9b36b01a6c1665ac53ef9fd01",
+          "count": 1
+        },
+        {
+          "type": "RAM32M",
+          "parameters_sha256": "65bfb6f1ee7488a655bb16137f0fa17444e2b5cef3e97d14beea8ab911192cbb",
+          "count": 1
+        },
+        {
+          "type": "RAM32M",
+          "parameters_sha256": "672e88ef4e997c93208cf9e8560899bf9f26ca747b628a0647cc9198eeea882d",
+          "count": 118
+        },
+        {
+          "type": "RAM32M",
+          "parameters_sha256": "9d0e869a217b17012f6a88c21f2416cc1da8df00b40d72b760a690a8a0519aa8",
+          "count": 1
+        },
+        {
+          "type": "RAM32M",
+          "parameters_sha256": "a50a99b2cc697d5d2c2474cd6caedebddf39e33830979d2162bf44482a7bae22",
+          "count": 1
+        },
+        {
+          "type": "RAM32M",
+          "parameters_sha256": "b24c6f5ec6539ec85d524306c7651a3acadd0a92ba252c536717a214121d499e",
+          "count": 1
+        },
+        {
+          "type": "RAM32M",
+          "parameters_sha256": "c6f6510a710094fa38558dc070c58fa9f38108c142a3c92188a5d27ee92236b9",
+          "count": 1
+        },
+        {
+          "type": "RAM32M",
+          "parameters_sha256": "d954a431fef2634aa79d7b0a822b037667592acad8089c677342da751668d578",
+          "count": 1
+        },
+        {
+          "type": "RAM32M",
+          "parameters_sha256": "daa0e82515dfd4a3e7617a303876061f6d1e7aafc83ab1acdef2777ce4a3eedc",
+          "count": 1
+        },
+        {
+          "type": "RAM32M",
+          "parameters_sha256": "dec08f9424919071f827b245132802282737b8fd5f8ef3afd2d6ac5eb5b40bc1",
+          "count": 1
+        }
+      ]
+    },
+    "unreduced": {
+      "primitives": {
+        "RAM32M": 32,
+        "RAMB36E1": 12
+      },
+      "unmapped_bits": 0,
+      "configurations": [
+        {
+          "type": "RAM32M",
+          "parameters_sha256": "30fa2b9605b5d3cdbd65a3ecd0c0dab99d02d58bee46cc2ea97860f4b5c6b50f",
+          "count": 1
+        },
+        {
+          "type": "RAM32M",
+          "parameters_sha256": "3330afb8aae33d0e58ff035d72ff22e09815bad9b36b01a6c1665ac53ef9fd01",
+          "count": 1
+        },
+        {
+          "type": "RAM32M",
+          "parameters_sha256": "65bfb6f1ee7488a655bb16137f0fa17444e2b5cef3e97d14beea8ab911192cbb",
+          "count": 1
+        },
+        {
+          "type": "RAM32M",
+          "parameters_sha256": "672e88ef4e997c93208cf9e8560899bf9f26ca747b628a0647cc9198eeea882d",
+          "count": 22
+        },
+        {
+          "type": "RAM32M",
+          "parameters_sha256": "9d0e869a217b17012f6a88c21f2416cc1da8df00b40d72b760a690a8a0519aa8",
+          "count": 1
+        },
+        {
+          "type": "RAM32M",
+          "parameters_sha256": "a50a99b2cc697d5d2c2474cd6caedebddf39e33830979d2162bf44482a7bae22",
+          "count": 1
+        },
+        {
+          "type": "RAM32M",
+          "parameters_sha256": "b24c6f5ec6539ec85d524306c7651a3acadd0a92ba252c536717a214121d499e",
+          "count": 1
+        },
+        {
+          "type": "RAM32M",
+          "parameters_sha256": "c6f6510a710094fa38558dc070c58fa9f38108c142a3c92188a5d27ee92236b9",
+          "count": 1
+        },
+        {
+          "type": "RAM32M",
+          "parameters_sha256": "d954a431fef2634aa79d7b0a822b037667592acad8089c677342da751668d578",
+          "count": 1
+        },
+        {
+          "type": "RAM32M",
+          "parameters_sha256": "daa0e82515dfd4a3e7617a303876061f6d1e7aafc83ab1acdef2777ce4a3eedc",
+          "count": 1
+        },
+        {
+          "type": "RAM32M",
+          "parameters_sha256": "dec08f9424919071f827b245132802282737b8fd5f8ef3afd2d6ac5eb5b40bc1",
+          "count": 1
+        },
+        {
+          "type": "RAMB36E1",
+          "parameters_sha256": "0ab1b7340e152c2dbc75b37340b7e8097858e555b78dd6357027c27514dba574",
+          "count": 12
+        }
+      ]
+    }
+  },
+  "historical_preserved_input_sha256": {
+    "direct-actor-debug-2026-09-17.json": {
+      "physical_queries": "d54ec35aadea6e81d065835c23913e63dcba429075b485fc1580e0419294c7bd",
+      "actor_queries": "2cc2ee7307b49d1fc30014eb29b1e293527c8b9daabc5d5768037b6fb29bebd7"
+    },
+    "direct-mailbox-2026-09-17.json": {
+      "baseline": "19de71cde68ecfe36fc703b40f5e9c8f9c275becd66ba29efb7e673e562e2010",
+      "candidate": "eb33c5327cbf751f2078b305c0ee028971e05ae6b8daf6b17f784ad85e914911"
+    },
+    "phi-memory-debug-2026-09-13.json": {
+      "instrumented.json": "2816e68cf2437de753e0b0a87e2068584ee025913521f840a267299c1e111c4e"
+    }
+  },
+  "validation": {
+    "eunit": {
+      "tests": 1102,
+      "failures": 0
+    },
+    "debug_python_tests": {
+      "tests": 19,
+      "failures": 0
+    },
+    "focused_memory_simulation_cycles": 1024,
+    "mixed_public_debug": [
+      "Exported 74 channels, 30 FIFO occupancies, 6 actors; manifest 1185bd0c57c934e91337829565e459d3d7e128c9c9af57c1b6a05d7655b7f8ae",
+      "PASS: 6 scoped actor snapshots (mailbox_mixed, blocked)",
+      "PASS: 6 scoped actor snapshots (mailbox_mixed, released)",
+      "PASS: 2 initially blocked seeds, 26 initial adaptive queries; external stall found and release observed",
+      "PASS: actor_debug_wrapper structural and cycle-by-cycle noninterference"
+    ],
+    "d3_public_debug": [
+      "PASS: all debug services, 54 actors, 7 full queues; D3 witness matches ERTS",
+      "PASS: production/all-hooks cycle equality for 14402 cycles; 512 beats during debug stall"
+    ],
+    "d3_cycle_comparison": {
+      "cycles": 14402,
+      "release_cycle": 8397,
+      "last_output": 13855,
+      "recovery_cycles": 5458,
+      "rx_beats": 411,
+      "tx_beats": 2380,
+      "tx_beats_while_debug_blocked": 512
+    }
+  },
+  "d3_builds": {
+    "production": {
+      "tools": {
+        "ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+        "opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c",
+        "codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162"
+      },
+      "build_provenance_sha256": "b1a6b27092202bd2793299d8742cb7a8b2bd66067b98cccb0da93ad828b5b2ba"
+    },
+    "observed": {
+      "tools": {
+        "ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+        "opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c",
+        "codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162"
+      },
+      "build_provenance_sha256": "31f83559514b4ae16e7f6cce3b34847c5c7be96593d84e8333bb7fc75840d617"
+    }
+  }
+}
