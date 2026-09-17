@@ -26,7 +26,7 @@ projection(Plan, Specs, Artifacts, Options) ->
 validate(Plan, Specs, Projection = #{<<"banks">> := Shared}) ->
     Banks = Shared ++ maps:get(<<"direct">>, Projection, []),
     ByModule = maps:from_list([{M, Fs} || #{<<"module">> := M, <<"failures">> := Fs} <- Banks]),
-    MailboxDebug = lists:any(fun(B) -> is_map_key(<<"mailbox">>, B) end, Banks),
+    MailboxDebug = lists:any(fun(B) -> is_map_key(<<"mailbox">>, B) end, Shared),
     Options = #{mailbox_debug => MailboxDebug, direct_actor_debug => maps:is_key(<<"direct">>, Projection)},
     Expected = build(Plan, Specs, Options, fun(Module, Origins) ->
         Values = maps:from_keys(maps:values(maps:get(atom_to_binary(Module), ByModule, #{})), true),
@@ -55,7 +55,7 @@ build(Plan, Specs, Options, Codebook) ->
         bank(Index, Group, maps:get(Module, Interfaces), Placements, maps:get(Module, Codebooks))) ||
         {Index, Group = #{module := Module}} <- lists:enumerate(0, Groups)],
     %% Normalize JSON keys/strings once for exact host-side manifest comparison.
-    Projection = #{schema => 3, binding => digest({Plan, Scheduler}), banks => Banks},
+    Projection = #{schema => 4, binding => digest({Plan, Scheduler}), banks => Banks},
     json_value(case xls_actor_observation:enabled(Options) of
         false -> Projection;
         true -> Projection#{direct => [direct_bank(Index, Binding,
@@ -69,6 +69,8 @@ direct_bank(Index, #{id := Id, module := Module, port := Port},
     Layout = xls_actor_observation:layout(Reduction),
     Bank = #{index => Index, slots => 1, port => Port,
         width => maps:get(width, Layout), fields => maps:get(fields, Layout),
+        mailbox => (maps:get(mailbox, Layout))#{kind => direct,
+            capacity => maps:get(mailbox_capacity, Interface)},
         failures => failures(Sites), module => atom_to_binary(Module),
         phases => [atom_to_binary(P) || P <- Phases],
         actors => [#{key => actor_key(Id), slot => 0,
@@ -86,7 +88,7 @@ failures(Sites) ->
 
 with_mailbox(false, _Group, Bank) -> Bank;
 with_mailbox(true, #{mailbox_capacity := Capacity}, Bank = #{index := Index}) ->
-    Bank#{mailbox => #{capacity => Capacity, width => 24,
+    Bank#{mailbox => #{kind => shared, capacity => Capacity, width => 24,
         port => iolist_to_binary(["_scheduler_", integer_to_list(Index), "_mailbox_debug_out"])}}.
 
 bank(Index, #{module := Module, slot_count := Slots, state := #{width := DataWidth},

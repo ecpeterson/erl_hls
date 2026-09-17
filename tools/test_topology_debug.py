@@ -121,7 +121,7 @@ class DiscoveryTests(unittest.TestCase):
                 "failures": {"16": {"kind": "case_clause", "file": "fixture.erl", "line": 20}},
                 "module": "fixture", "phases": ["boot", "active"],
                 "actors": [{"slot": i, "key": str(i)*64, "name": str(i)} for i in range(2)]}
-        projection = {"schema": 3, "banks": [bank]}
+        projection = {"schema": 4, "banks": [bank]}
         ports = {"clk": {"bits": [1], "direction": "input"},
                  "wr_en": {"bits": [2], "direction": "input"},
                  "wr_addr": {"bits": [3], "direction": "input"},
@@ -175,7 +175,7 @@ class DiscoveryTests(unittest.TestCase):
 
         # The semantic output belongs to the generator and must be permanently
         # ready. A query cannot own this handshake or stall scheduler progress.
-        bank["mailbox"] = {"capacity": 3, "width": 24, "port": "_scheduler_0_mailbox_debug_out"}
+        bank["mailbox"] = {"kind": "shared", "capacity": 3, "width": 24, "port": "_scheduler_0_mailbox_debug_out"}
         port = bank["mailbox"]["port"]
         connections = {port: list(range(100, 148)), port+"_vld": [148],
                        port+"_rdy": ["1"], "clk": [1]}

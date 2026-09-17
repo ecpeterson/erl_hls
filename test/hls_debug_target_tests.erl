@@ -98,7 +98,7 @@ actor_items_use_one_hardware_sample_test() ->
     {ok, Client} = hls_debug:start_link(undefined, {fabric, Fabric, 2}),
     try
         R = #{<<"kind">> => <<"actor">>, <<"id">> => 0, <<"name">> => <<"actor">>,
-            <<"phases">> => [<<"boot">>, <<"active">>], <<"width">> => 56, <<"mailbox_capacity">> => 3,
+            <<"phases">> => [<<"boot">>, <<"active">>], <<"width">> => 56, <<"mailbox_capacity">> => 3, <<"mailbox_kind">> => <<"shared">>,
             <<"failures">> => #{<<"1">> => #{<<"kind">> => <<"function_clause">>}}},
         Session = #{client => Client, resources => {R}, manifest => #{<<"fingerprint">> => <<"fixture">>}},
         Target = {actor, #{scope => #{kind => actor}}, {actor_snapshot, Session, 0}},

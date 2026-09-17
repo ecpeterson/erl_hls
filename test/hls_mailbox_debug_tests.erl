@@ -21,7 +21,7 @@ cpu_postponement_and_replay_test() ->
 
 mailbox_wire_contract_test() ->
     Resource = #{<<"id">> => 0, <<"kind">> => <<"actor">>, <<"width">> => 56,
-        <<"mailbox_capacity">> => 3, <<"phases">> => [<<"waiting">>], <<"failures">> => #{}},
+        <<"mailbox_capacity">> => 3, <<"mailbox_kind">> => <<"shared">>, <<"phases">> => [<<"waiting">>], <<"failures">> => #{}},
     Decode = fun(Word, Actor) -> hls_topology_debug:decode_observation(
         <<0:32/little, 123:64/little, Actor:32/little, Word:32/little, 0:64>>, Resource) end,
     ?assertMatch({ok, #{initialized := false, mailbox_initialized := false,
@@ -67,3 +67,24 @@ diagnostic_profile_is_explicit_test() ->
         xls_topology_dslx:emit(Plan, Profile#{scheduler_groups => #{}, mailbox_debug => true})),
     ?assertError(mailbox_debug_requires_hls_statem,
         xls_parse:to_xls("src/examples/regsvc/regsvc.erl", #{mailbox_debug => true})).
+
+
+direct_reservations_wire_contract_test() ->
+    Resource = #{<<"id">> => 0, <<"kind">> => <<"actor">>, <<"width">> => 56,
+        <<"mailbox_capacity">> => 3, <<"mailbox_kind">> => <<"direct">>,
+        <<"phases">> => [<<"waiting">>], <<"failures">> => #{}},
+    Decode = fun(Word, Actor) -> hls_topology_debug:decode_observation(
+        <<0:32/little, 123:64/little, Actor:32/little, Word:32/little, 0:64>>, Resource) end,
+    ?assertMatch({ok, #{mailbox_initialized := false, reserved := undefined}}, Decode(0, 0)),
+    ?assertEqual({error, invalid_mailbox_observation}, Decode(0, 1 bsl 25)),
+    ?assertEqual({error, invalid_mailbox_observation}, Decode(16#810202, 0)),
+    {ok, Sample} = Decode(16#810202, 1 bsl 25),
+    ?assertMatch(#{message_queue_len := 2, postponed := 2, reserved := 1,
+        free_slots := 0, mailbox_initialized := true}, Sample),
+    ?assertNot(maps:is_key(in_flight, Sample)),
+    ?assertNot(maps:is_key(scheduler_phase, Sample)),
+    ?assertMatch({ok, #{message_queue_len := 3, reserved := 0, free_slots := 0}},
+        Decode(16#800203, 1 bsl 25)),
+    lists:foreach(fun(Word) ->
+        ?assertEqual({error, invalid_mailbox_observation}, Decode(Word, 1 bsl 25))
+    end, [16#810203, 16#800302, 16#010202, 16#820202, 16#c00202]).

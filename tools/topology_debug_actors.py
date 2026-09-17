@@ -125,7 +125,7 @@ def ram_source(bank, root, module, hierarchy, flat, clock_bit):
 
 
 def direct_source(bank, root, module, hierarchy, flat, clock_bit):
-    if bank["slots"] != 1 or "mailbox" in bank or "ram" in bank:
+    if bank["slots"] != 1 or "mailbox" not in bank or "ram" in bank:
         raise ValueError("invalid direct actor observation provider")
     port, width = bank["port"], bank["width"]
     matches = [(name, cell) for name, cell in module["cells"].items()
@@ -153,8 +153,8 @@ def direct_source(bank, root, module, hierarchy, flat, clock_bit):
 
 def discover(projection, root, hierarchy, flat, top, clock_bit):
     shared, direct = projection.get("banks", []), projection.get("direct", [])
-    if projection.get("schema") != 3 or not (shared or direct):
-        raise ValueError("expected a nonempty actor projection, schema 3")
+    if projection.get("schema") != 4 or not (shared or direct):
+        raise ValueError("expected a nonempty actor projection, schema 4")
     module = hierarchy["modules"][top]
     for instance in root:
         module = hierarchy["modules"][module["cells"][instance]["type"]]
@@ -165,43 +165,58 @@ def discover(projection, root, hierarchy, flat, top, clock_bit):
         slots, width = bank["slots"], bank["width"]
         is_direct = index >= len(shared)
         if (type(slots) is not int or slots < 1 or type(width) is not int or
-                width < (25 if is_direct else 33)):
+                width < (49 if is_direct else 33)):
             raise ValueError("invalid actor observation dimensions")
         selected = selected_fields(bank, keys)
         source = direct_source if is_direct else ram_source
         path, address_width, prefix, values = source(bank, root, module, hierarchy, flat, clock_bit)
         taps = prefix + [values[i] for i in selected]
         mailbox = bank.get("mailbox")
-        if mailbox:
-            port = mailbox["port"]
-            if mailbox["width"] != 24 or not 1 <= mailbox["capacity"] <= 255:
+        if mailbox is not None:
+            if (mailbox["width"] != 24 or not 1 <= mailbox["capacity"] <= 255 or
+                    mailbox["kind"] != ("direct" if is_direct else "shared")):
                 raise ValueError("invalid mailbox projection")
-            matches = [(name, cell) for name, cell in module["cells"].items()
-                       if port in cell.get("connections", {})]
-            if len(matches) != 1:
-                raise ValueError("expected one generated mailbox observation output")
-            name, cell = matches[0]
-            app = hierarchy["modules"][cell["type"]]
-            for signal, direction, size in ((port, "output", 24*slots),
-                    (port+"_vld", "output", 1), (port+"_rdy", "input", 1)):
-                description = app["ports"][signal]
-                if description["direction"] != direction or len(description["bits"]) != size:
-                    raise ValueError("mailbox observation port mismatch")
-            if cell["connections"][port+"_rdy"] != ["1"]:
-                raise ValueError("mailbox observation output must always be ready")
-            def observed(signal):
-                return flat["netnames"][".".join((*root, name, signal))]["bits"]
-            if observed("clk") != [clock_bit]:
-                raise ValueError("mailbox observation clock mismatch")
-            taps += observed(port+"_vld") + observed(port)
+            if is_direct:
+                offset = mailbox["offset"]
+                if (type(offset) is not int or not 0 <= offset <= width-24 or
+                        set(selected).intersection(range(offset, offset+24)) or
+                        len(selected) + 24 != width):
+                    raise ValueError("invalid direct mailbox fields")
+                # Both halves are one publication, retained on the same edge.
+                taps += prefix[:1] + values[offset:offset+24]
+            else:
+                taps += mailbox_source(mailbox["port"], slots, root, module,
+                                       hierarchy, flat, clock_bit)
         banks.append(dict(bank, path=list(path), address_width=address_width, taps=taps))
     return banks
+
+
+def mailbox_source(port, slots, root, module, hierarchy, flat, clock_bit):
+    matches = [(name, cell) for name, cell in module["cells"].items()
+               if port in cell.get("connections", {})]
+    if len(matches) != 1:
+        raise ValueError("expected one generated mailbox observation output")
+    name, cell = matches[0]
+    app = hierarchy["modules"][cell["type"]]
+    def observed(signal):
+        return flat["netnames"][".".join((*root, name, signal))]["bits"]
+    for signal, direction, size in ((port, "output", 24*slots),
+            (port+"_vld", "output", 1), (port+"_rdy", "input", 1)):
+        description = app["ports"][signal]
+        if (description["direction"] != direction or len(description["bits"]) != size or
+                len(cell["connections"][signal]) != size or len(observed(signal)) != size):
+            raise ValueError("mailbox observation port mismatch")
+    if cell["connections"][port+"_rdy"] != ["1"] or observed(port+"_rdy") != ["1"]:
+        raise ValueError("mailbox observation output must always be ready")
+    if observed("clk") != [clock_bit]:
+        raise ValueError("mailbox observation clock mismatch")
+    return observed(port+"_vld") + observed(port)
 
 
 def resources(banks, first_id):
     return [dict(actor, id=first_id+i, kind="actor", width=56+bank["reduction"]["width"] if "reduction" in bank else (56 if "mailbox" in bank else 26),
                  **({"reduction": bank["reduction"]} if "reduction" in bank else {}), bank=bank["index"],
-                 **({"mailbox_capacity": bank["mailbox"]["capacity"]} if "mailbox" in bank else {}),
+                 **({"mailbox_capacity": bank["mailbox"]["capacity"], "mailbox_kind": bank["mailbox"]["kind"]} if "mailbox" in bank else {}),
                  module=bank["module"], phases=bank["phases"], failures=bank["failures"])
             for i, (bank, actor) in enumerate((bank, actor) for bank in banks for actor in bank["actors"])]
 

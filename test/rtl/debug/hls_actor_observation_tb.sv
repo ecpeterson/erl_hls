@@ -7,9 +7,9 @@ module hls_actor_observation_tb;
     reg egress_ready = 0;
     wire [135:0] egress;
     wire egress_valid;
-    wire [24:0] observation;
+    wire [48:0] observation;
     wire observation_valid;
-    reg [24:0] retained = 0;
+    reg [48:0] retained = 0;
     reg observed = 0;
     integer reports = 0;
     `include "actor_observation_expected.svh"
@@ -32,7 +32,7 @@ module hls_actor_observation_tb;
             if (observation_valid) begin
                 // The first publication is init's committed Machine, before
                 // the initial boot entry clears enter_pending.
-                if (!observed && observation !== 25'h100)
+                if (!observed && observation !== {24'h800000, 25'h100})
                     $fatal(1, "first publication skipped initialized state: %h", observation);
                 observed <= 1;
                 retained <= observation;
@@ -55,11 +55,11 @@ module hls_actor_observation_tb;
         repeat (100) @(negedge clk);
         // The first registered egress holds its value, and the second effect
         // blocks this entry's retirement. Only incoming Machine is committed.
-        if (!egress_valid || reports != 0 || retained !== 25'h101)
+        if (!egress_valid || reports != 0 || retained !== {24'h800000, 25'h101})
             $fatal(1, "uncommitted entry completion observed while egress stalled: %h", retained);
         egress_ready = 1;
         repeat (100) @(negedge clk);
-        if (reports != 2 || retained !== 25'h1)
+        if (reports != 2 || retained !== {24'h810000, 25'h1})
             $fatal(1, "entry did not retire after both effects: reports=%0d state=%h", reports, retained);
         $display("PASS: diagnostic state remains committed across a blocked output effect");
         $finish;

@@ -26,6 +26,7 @@ inspect(Session, Stage, Moment) ->
         {error, enoent} -> ok;
         {ok, Bytes} ->
             Kind = case Bytes of <<"small">> -> small; <<"phi">> -> phi; <<"mailbox">> -> mailbox; <<"reduction">> -> reduction; <<"direct_reduction">> -> direct_reduction; <<"aggregate">> -> aggregate;
+                <<"direct_mailbox">> -> direct_mailbox; <<"mailbox_mixed">> -> mailbox_mixed;
                 <<"mixed_direct">> -> {mixed, direct}; <<"mixed_one">> -> {mixed, one};
                 <<"mixed_two">> -> {mixed, two}; <<"mixed_coalesced">> -> {mixed, coalesced};
                 <<"ingress_direct">> -> {ingress, direct}; <<"ingress_one">> -> {ingress, one};
@@ -57,11 +58,10 @@ inspect(Session, Stage, Moment) ->
                 {capabilities, #{info := Fields}} = hls_debug:info(Actor, capabilities),
                 MailboxFields = [mailbox_initialized, message_queue_len, postponed, free_slots, reserved,
                     in_flight, mail_candidate, entry_candidate, waiting_for_egress, egress_busy, scheduler_phase],
-                case Kind of
-                    direct_reduction ->
-                        [] = [F || F <- MailboxFields, lists:member(F, Fields)],
-                        {error, {unsupported_items, _, [message_queue_len]}} =
-                            hls_debug:info(Actor, [message_queue_len]);
+                case hls_debug:info(Actor, placement) of
+                    {placement, #{kind := direct}} ->
+                        [] = [mailbox_initialized, message_queue_len, postponed, free_slots, reserved] -- Fields,
+                        [] = [F || F <- [in_flight, scheduler_phase, egress_busy], lists:member(F, Fields)];
                     _ -> ok
                 end,
                 Snapshot = hls_debug:info(Actor,
@@ -85,9 +85,23 @@ inspect(Session, Stage, Moment) ->
                 check_mailbox(Actor, Snapshot)
             end, Observations),
             case {Kind, Moment} of
-                {mailbox, blocked} ->
+                {K, blocked} when K =:= mailbox; K =:= direct_mailbox; K =:= mailbox_mixed ->
                     true = lists:any(fun(#{message_queue_len := N, postponed := P}) -> N =:= 2 andalso P =:= 2 end, Values),
-                    true = lists:any(fun(#{egress_busy := Busy, waiting_for_egress := Waiting}) -> Busy andalso Waiting end, Values);
+                    case K of
+                        direct_mailbox -> ok;
+                        _ -> true = lists:any(fun
+                            (#{egress_busy := Busy, waiting_for_egress := Waiting}) -> Busy andalso Waiting;
+                            (_) -> false
+                        end, Values)
+                    end,
+                    case K of
+                        mailbox -> ok;
+                        _ -> true = lists:any(fun
+                            (#{placement := #{kind := direct}, message_queue_len := 2,
+                                postponed := 2, reserved := 1, free_slots := 0}) -> true;
+                            (_) -> false
+                        end, Values)
+                    end;
                 _ -> ok
             end,
             io:format("PASS: ~p scoped actor snapshots (~p, ~p)~n", [length(Ids), Kind, Moment])
@@ -137,6 +151,8 @@ check(small, released, {family, cell, [Slot, 0]},
         when Slot =:= 1; Slot =:= 7; Slot =:= 10; Slot =:= 14; Slot =:= 18 -> ok;
 check(small, blocked, {family, cell, [Slot, 0]}, #{phase := active, failed := false, failure := none})
         when Slot =:= 1; Slot =:= 7; Slot =:= 10; Slot =:= 14; Slot =:= 18 -> ok;
+check(Kind, Moment, Id, Snapshot) when Kind =:= direct_mailbox; Kind =:= mailbox_mixed ->
+    check(mailbox, Moment, Id, Snapshot);
 check(mailbox, released, {family, consumer, _}, #{phase := done, failed := false,
         message_queue_len := 0, postponed := 0}) -> ok;
 check(mailbox, blocked, {family, producer, _}, #{phase := Phase, failed := false})
@@ -178,9 +194,9 @@ check(phi, _, _, #{failed := false, failure := none}) -> ok;
 check(Kind, Moment, Id, Snapshot) -> error({actor_snapshot, Kind, Moment, Id, Snapshot}).
 
 check_mailbox(Actor, #{mailbox_initialized := true, message_queue_len := N,
-        free_slots := Free, reserved := 0, postponed := Postponed}) ->
+        free_slots := Free, reserved := Reserved, postponed := Postponed}) ->
     {mailbox_capacity, Capacity} = hls_debug:info(Actor, mailbox_capacity),
-    true = N + Free =:= Capacity,
+    true = N + Reserved + Free =:= Capacity,
     true = Postponed =< N;
 check_mailbox(_, #{mailbox_initialized := false}) -> error(mailbox_not_initialized);
 check_mailbox(_, _) -> ok.

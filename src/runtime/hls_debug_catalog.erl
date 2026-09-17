@@ -62,7 +62,7 @@ hardware(Plan, Specs, Boundaries, Session = #{manifest := Manifest}) ->
             <<"actors">> := Actors, <<"failures">> := Failures} = Bank <- maps:get(<<"banks">>, Projection) ++ maps:get(<<"direct">>, Projection, []), A <- Actors],
     case length(ActorResources) =:= map_size(ByKey) andalso
             lists:sort(Expected) =:= lists:sort([maps:with(
-                [<<"key">>, <<"name">>, <<"slot">>, <<"bank">>, <<"phases">>, <<"module">>, <<"failures">>, <<"width">>, <<"mailbox_capacity">>, <<"reduction">>], R)
+                [<<"key">>, <<"name">>, <<"slot">>, <<"bank">>, <<"phases">>, <<"module">>, <<"failures">>, <<"width">>, <<"mailbox_capacity">>, <<"mailbox_kind">>, <<"reduction">>], R)
                 || R <- ActorResources]) of
         true -> ok;
         false -> error(actor_resources_mismatch)
@@ -72,8 +72,11 @@ hardware(Plan, Specs, Boundaries, Session = #{manifest := Manifest}) ->
         case maps:find(xls_scheduler_debug:actor_key(Id), ByKey) of
             {ok, #{<<"id">> := ResourceId} = Resource} ->
                 {actor, Metadata#{observation => #{kind => committed_state,
-                    mailbox => case maps:is_key(<<"mailbox_capacity">>, Resource) of
-                        true -> scheduler_step; false -> unavailable end,
+                    mailbox => case maps:get(<<"mailbox_kind">>, Resource, none) of
+                        <<"direct">> -> actor_step;
+                        <<"shared">> -> scheduler_step;
+                        none -> unavailable
+                    end,
                     fingerprint => Hash, resource => ResourceId}},
                     {actor_snapshot, Session, ResourceId}};
             error -> {actor, Metadata, none}
@@ -83,8 +86,8 @@ hardware(Plan, Specs, Boundaries, Session = #{manifest := Manifest}) ->
 observation_fields(Bank = #{<<"reduction">> := Reduction = #{<<"width">> := Width}}) ->
     (observation_fields(maps:remove(<<"reduction">>, Bank)))#{
         <<"width">> := 56 + Width, <<"reduction">> => Reduction};
-observation_fields(#{<<"mailbox">> := #{<<"capacity">> := Capacity}}) ->
-    #{<<"width">> => 56, <<"mailbox_capacity">> => Capacity};
+observation_fields(#{<<"mailbox">> := #{<<"capacity">> := Capacity, <<"kind">> := Kind}}) ->
+    #{<<"width">> => 56, <<"mailbox_capacity">> => Capacity, <<"mailbox_kind">> => Kind};
 observation_fields(_) -> #{<<"width">> => 26}.
 
 -spec actors(map()) -> [actor_id()].
