@@ -101,7 +101,7 @@ lower(Plan, Profile) ->
         effect_window_partition := WindowPartition,
         mailbox_debug := MailboxDebug,
         direct_actor_debug := ActorDebug
-    } = xls_topology_profile:normalize(Profile, family),
+    } = xls_topology_profile:normalize(Profile),
     SchedulerPlan = hls_scheduler_plan:normalize(Plan, Groups),
     case SchedulerPlan of
         #{groups := [_ | _], direct_members := [_ | _]} ->

@@ -365,7 +365,7 @@ jobs:
 
   mixed-topology:
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 10
 
     steps:
       - name: Check out repository
@@ -403,6 +403,7 @@ jobs:
           "$XLS_ROOT/codegen_main" --version
 
       - name: Compare mixed direct/shared topologies with CPU and inspect stalls
+        timeout-minutes: 5
         run: bash tools/test_mixed_topology.sh "$RUNNER_TEMP/xls"
 
       - name: Upload mixed topology diagnostics

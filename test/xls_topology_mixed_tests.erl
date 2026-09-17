@@ -99,11 +99,11 @@ one_global_window_covers_direct_paths_between_groups_test() ->
 unsupported_physical_contracts_fail_explicitly_test() ->
     {Plan, Specs} = hls_mixed_topology_dslx:fixture(one),
     Profile = profile(Specs),
-    ?assertError({mixed_effect_window_partition, weak_components},
+    ?assertError({instance_effect_window_partition, weak_components},
         xls_topology_dslx:emit(Plan, Profile#{effect_window_partition => weak_components})),
-    ?assertError({mixed_topology_section, reduction_placements},
+    ?assertError({unsupported_instance_section, reduction_placements},
         xls_topology_dslx:emit(Plan, Profile#{reduction_placements => #{workers => source_fragments}})),
-    ?assertError({mixed_topology_section, ingresses},
+    ?assertError({unsupported_instance_section, ingresses},
         xls_topology_dslx:emit(Plan#{ingresses := [unsupported]}, Profile)).
 
 scheduled_startup_must_fit_reserved_mailboxes_test() ->
@@ -121,7 +121,11 @@ stale_connectivity_caches_are_rejected_before_materializing_test() ->
     {Plan, Specs} = hls_mixed_topology_dslx:fixture(one),
     lists:foreach(fun(Key) ->
         Expected = maps:get(Key, Plan),
-        ?assertError({mixed_topology_lanes, Key, Expected, []},
+        Reason = case Key of
+            lanes -> inconsistent_dslx_plan_lanes;
+            lane_relations -> inconsistent_dslx_family_plan_lanes
+        end,
+        ?assertError({Reason, Expected, []},
             xls_topology_dslx:emit(Plan#{Key := []}, profile(Specs)))
     end, [lanes, lane_relations]).
 

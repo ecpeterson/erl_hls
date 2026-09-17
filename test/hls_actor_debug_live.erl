@@ -34,8 +34,10 @@ inspect(Session, Stage, Moment) ->
             Completion = case {Kind, Moment} of
                 {{mixed, _}, released} ->
                     {ok, Source} = hls_debug_catalog:actor(Catalog, {actor, source}),
+                    %% The four placements at two pipeline depths completed
+                    %% in 171--202 polls; retain more than twice that budget.
                     try await_outcome(Source,
-                        [{failed, false}, {phase, done}, {enter_pending, false}], 2000)
+                        [{failed, false}, {phase, done}, {enter_pending, false}], 512)
                     catch Class:Reason:Stack -> {failed, Class, Reason, Stack}
                     end;
                 _ -> ok

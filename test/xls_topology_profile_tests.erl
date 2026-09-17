@@ -2,8 +2,7 @@
 
 -include_lib("eunit/include/eunit.hrl").
 
-%% Exercise both public emitters: sharing a validator must not broaden the
-%% scalar backend's implicit options or lose the family backend's diagnostics.
+%% Exact and compact family graphs share one physical option contract.
 common_profile_errors_test_() ->
     Profile = profile(),
     Cases = [
@@ -30,32 +29,17 @@ common_profile_errors_test_() ->
         || {Input, Reason} <- Cases
     ]} || {Kind, Plan} <- plans()].
 
-family_options_remain_backend_specific_test_() ->
-    [{scalar, Scalar}, {family, Family}] = plans(),
-    Cases = [
+physical_option_errors_are_representation_independent_test_() ->
+    Cases = [{scheduler_groups, [], {scheduler_groups, []}},
         {reduction_placements, [], {reduction_placements, []}},
-        {effect_window_partition, invalid, {effect_window_partition, invalid}}
-    ],
-    [?_test(begin
-        Profile = (profile())#{Key => Value},
-        ?assertError({invalid_dslx_profile_keys, [], [Key]},
-            xls_topology_dslx:emit(Scalar, Profile)),
-        ?assertError(FamilyError, xls_topology_dslx:emit(Family, Profile))
-    end) || {Key, Value, FamilyError} <- Cases].
+        {effect_window_partition, invalid, {effect_window_partition, invalid}}],
+    [?_assertError(Error, xls_topology_dslx:emit(Plan, (profile())#{Key => Value}))
+        || {_Kind, Plan} <- plans(), {Key, Value, Error} <- Cases].
 
-explicit_scheduler_profile_uses_the_same_validation_test_() ->
-    [?_assertError({scheduler_groups, []},
-        xls_topology_dslx:emit(Plan, (profile())#{scheduler_groups => []}))
-        || {_Kind, Plan} <- plans()].
-
-explicit_family_defaults_preserve_output_test() ->
-    {family, Family} = lists:keyfind(family, 1, plans()),
-    Profile = profile(),
-    ?assertEqual(emit(Family, Profile), emit(Family, Profile#{
-        scheduler_groups => #{},
-        reduction_placements => #{},
-        effect_window_partition => global
-    })).
+explicit_physical_defaults_preserve_output_test_() ->
+    [?_assertEqual(emit(Plan, profile()), emit(Plan, (profile())#{
+        scheduler_groups => #{}, reduction_placements => #{},
+        effect_window_partition => global})) || {_Kind, Plan} <- plans()].
 
 atom_and_string_names_preserve_output_test_() ->
     [?_assertEqual(emit(Plan, profile()),

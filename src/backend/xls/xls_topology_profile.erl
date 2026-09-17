@@ -5,7 +5,7 @@
 -module(xls_topology_profile).
 -moduledoc false.
 
--export([normalize/2, identifier/2, egress_depth/2]).
+-export([normalize/1, identifier/2, egress_depth/2]).
 -export_type([profile/0]).
 
 -define(U32_MAX, 16#ffffffff).
@@ -22,13 +22,15 @@
     effect_window_partition => global | weak_components
 }.
 
-%% Validate before inserting defaults so scalar profiles continue to reject
-%% family-only options. A normalized family profile has every optional key.
--spec normalize(profile(), scalar | family) -> profile().
-normalize(Profile, Backend) when is_map(Profile) ->
+%% Validate one physical option contract before inserting defaults. Backend
+%% capability checks concern the requested operation, not the spelling of
+%% otherwise identical placement profiles.
+-spec normalize(profile()) -> profile().
+normalize(Profile) when is_map(Profile) ->
     Required = [actor_egress_depth, channel_depth, name],
     Keys = lists:sort(maps:keys(Profile)),
-    Allowed = Required ++ optional_keys(Backend),
+    Allowed = Required ++ [effect_window_partition, reduction_placements,
+        scheduler_groups, mailbox_debug, direct_actor_debug],
     case {Required -- Keys, Keys -- Allowed} of
         {[], []} -> ok;
         {Missing, Unknown} ->
@@ -39,13 +41,9 @@ normalize(Profile, Backend) when is_map(Profile) ->
     Name = identifier(Name0, topology_name),
     ok = validate_channel_depth(Depth),
     ok = validate_egress_depth(EgressDepth),
-    normalize_options(Profile#{name := Name}, Backend);
-normalize(Profile, _Backend) ->
+    normalize_options(Profile#{name := Name});
+normalize(Profile) ->
     error({invalid_dslx_profile, Profile}).
-
-optional_keys(scalar) -> [direct_actor_debug];
-optional_keys(family) ->
-    [effect_window_partition, reduction_placements, scheduler_groups, mailbox_debug, direct_actor_debug].
 
 validate_channel_depth(Depth)
         when is_integer(Depth), Depth > 0, Depth =< ?U32_MAX -> ok;
@@ -56,9 +54,7 @@ validate_egress_depth(Depth)
         when is_integer(Depth), Depth >= 0, Depth =< ?U32_MAX -> ok;
 validate_egress_depth(Depth) -> error({egress_depth, Depth}).
 
-normalize_options(Profile, scalar) ->
-    Profile#{direct_actor_debug => xls_actor_observation:enabled(Profile)};
-normalize_options(Profile, family) ->
+normalize_options(Profile) ->
     Groups = map_option(scheduler_groups, Profile),
     Placements = map_option(reduction_placements, Profile),
     Partition = maps:get(effect_window_partition, Profile, global),

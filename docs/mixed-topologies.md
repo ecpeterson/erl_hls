@@ -1,8 +1,36 @@
-# Mixed actor placement
+# Mixed actor topologies
 
-A topology can combine exact actor instances and rectangular actor families. Logical routes and startup messages describe the application; `scheduler_groups` independently assigns actors to homogeneous shared executors. Ungrouped actors instantiate their ordinary register-backed `Service`. A singleton does not acquire a state RAM or shared scheduler merely because its neighbors use one.
+A topology describes actors, their message routes, and their startup messages. A physical profile chooses which actors have dedicated circuitry and which share an executor. Changing placement preserves actor identities, message contents, and per-sender ordering; it can change latency, throughput, buffering, and the arrival order of messages from different senders.
 
-Exact routes address a particular family member using its existing instance ID. A family relation can address a fixed singleton:
+## Actors and placement
+
+An exact actor is one named instance, such as `collector`. A family names a rectangular collection of instances, such as `{workers, X, Y}`. Families make repeated declarations and routes convenient; they do not imply shared execution.
+
+Every actor has its own logical state and bounded mailbox. Its placement determines their implementation:
+
+| Placement | Callback logic | State and mailbox | When it can advance |
+| --- | --- | --- | --- |
+| Direct | Dedicated to this actor (`Service`) | Registers | Independently, when its work and transport permit |
+| Shared group | One executor for the group's actors (`SharedService`) | Separate per-actor rows in RAM | When the group's scheduler selects it |
+
+Ungrouped actors are direct. A direct singleton has no shared executor and does not wait for a group scheduling grant. It can process a message or advance an entry action as soon as its own dependencies permit, but pipeline latency, ordered effects, and output backpressure still apply. Register storage does not imply one-cycle execution.
+
+For an application with a `source`, a `collector`, and a `[2, 2]` worker family, this `scheduler_groups` profile fragment shares all four workers while leaving the two exact actors direct:
+
+```erlang
+#{scheduler_groups =>
+    #{worker_group => #{members => [{family, workers}],
+                        state_storage => block_ram,
+                        mailbox_storage => block_ram}}}
+```
+
+The resulting layout is two independent register-backed actors plus one shared worker executor and its RAMs. An empty or omitted `scheduler_groups` instead gives all six actors dedicated implementations.
+
+A group may also contain `{actor, Id}`, including an exact actor alongside a family. Every member must use the same callback module. To divide a family between two executors, use `{family, workers, {interleaved, 0, 2}}` in one group and `{family, workers, {interleaved, 1, 2}}` in the other. These select alternating members in row-major order; together, the groups must cover the complete family. Physical slot numbers are assigned by the placement plan and are not application addresses.
+
+## Routes and delivery
+
+Routes name logical recipients, independently of their placement. An exact actor can target particular family members, and a family relation can target one exact actor. For example, these topology fragments describe a source fanning out to four workers, each replying to a collector:
 
 ```erlang
 #{actors => #{source => source_actor, collector => collector_actor},
@@ -13,33 +41,54 @@ Exact routes address a particular family member using its existing instance ID. 
   ...}
 ```
 
-The complete description must still give every declared output exactly one route. Exact routes have exact actor sources; individual family members do not override their family's relations. Recipient coordinates are checked against the family shape. Schemas and field layouts must match across each route. The current direct-frame transport also requires matching numeric schema selectors at source and destination.
+The complete topology must give every declared output one route. Family members inherit their family's relations; exact routes do not override individual members. Recipient coordinates, message schemas, and field layouts are checked before generation. The current frame transport also requires matching numeric schema selectors at source and destination.
 
-One placement can share all four workers:
+A message follows this path:
 
-```erlang
-#{workers => #{members => [{family, workers}],
-              state_storage => block_ram, mailbox_storage => block_ram}}
+```mermaid
+flowchart LR
+    A[Sender's ordered effects] --> R[Source router]
+    R --> Q[Bounded destination lane]
+    Q --> I[Mailbox admission]
+    I --> M[Recipient's mailbox]
+    M --> E[Recipient execution]
 ```
 
-Another can split them into two interleaved executors, using `{family, workers, {interleaved, 0, 2}}` and `{family, workers, {interleaved, 1, 2}}`. An exact actor with the same callback module can join either group using `{actor, Id}`. Groups require complete family coverage and one callback module per executor. These placement choices retain the logical `{actor, Id}` and `{family, Id, Coordinates}` identities used by the debug catalog.
+The router selects a destination from the sender's output port. Admission waits for capacity in that recipient's mailbox. Acceptance into a transport queue is not acceptance by the callback: a message can still be waiting in transit or in the mailbox. Transport buffers are additional to the declared mailbox capacity.
 
-## Physical routing
+The delivery contract is:
 
-`xls_topology_dslx` selects the materialized backend when a graph combines exact actors and families, schedules exact actors, or leaves some families direct while sharing others. It expands family members into physical endpoints and routes a complete frame either to a direct actor's admitted ingress or to a shared executor's slot-addressed request input. Startup messages precede ordinary routed inputs at each destination. Shared startup messages must fit that actor's mailbox because initialization finishes before the executor dispatches application work.
+- Messages from one actor to one recipient enter its mailbox in source order, including messages sent through different output ports that name that same recipient. An actor can still postpone messages according to its callback semantics.
+- Messages from different actors can interleave. Placement does not promise a global ordering or identical cycle timing.
+- A `direct` route has one recipient. A `queued` fanout completes the sender's effect at its ordered egress; the router then hands a copy to every listed recipient's lane before advancing to its next effect. Recipients can accept and execute at different times; fanout is not atomic multicast.
+- Startup messages precede ordinary routed messages at their destination, in declaration order. This is a local ordering rule, not a topology-wide startup barrier. Shared startup must fit each actor's mailbox because its group admits startup before dispatching callbacks.
+- Full buffers propagate backpressure without discarding accepted messages. Bounded queues and fair arbitration do not establish deadlock freedom for an arbitrary application protocol.
 
-Each physical source and logical recipient share an ordered lane across all aliased output ports. A queued fanout waits for all selected lane sends before advancing to the next effect. Shared routers use the same retained-batch and return-credit implementation as the compact family backend. Return credits have dedicated producer inputs and cannot wait behind application requests for mailbox capacity. Direct actors retain their existing admission-credit contract and do not contend for shared lookahead credits.
+## Routing and arbitration in the current implementation
 
-All shared executors in a mixed graph use one global effect-window arbiter. A direct actor can transmit backpressure between shared groups, so partitioning solely by immediate shared-to-shared edges would be unsafe. `weak_components` is rejected for mixed graphs until its dependency analysis includes these indirect paths.
+There is no central message bus. Each direct actor and each shared group has an output router. A lane connects a physical source (one direct actor or one group) to a logical recipient. Aliased output ports share that lane, retaining their order. A message for a shared actor carries its destination slot to the group's admission logic; actors sharing a source group use that group's router.
 
-For exact-only graphs, supplying `scheduler_groups` opts into this placement-capable backend, including `scheduler_groups => #{}` for an entirely direct realization. Omitting the key retains the original scalar backend.
+For the example above, the source router has four worker lanes. They can feed four direct actors or four mailboxes behind one shared executor. With shared workers, the group's router has one result lane to the direct collector; with direct workers, four result lanes meet at the collector's ingress. This is where placement changes the physical layout without changing the logical routes.
 
-The materialized backend currently accepts closed graphs, two-dimensional families, RAM-backed shared state/mailboxes, and direct or queued fanout. Rectangle ingress and source-fragment reduction placement are rejected explicitly. Ordinary actor-owned reductions retain their actor implementation. Generated source and physical routing resources scale with the deployed population and its source/destination incidences; this path is intended for bounded mixed deployments. Wholly direct and wholly shared regular-family graphs retain the compact channel-array backend used by D3.
+Arbitration occurs where resources are shared:
+
+| Resource | Selection |
+| --- | --- |
+| Direct actor's ingress | Reserves a mailbox place, then polls incoming lanes in rotation |
+| Shared group's admission | Selects among pending producer requests whose destination mailbox has space |
+| Shared executor | Selects an eligible actor, excluding actors already in flight |
+| External output | Merges its producer lanes in rotation |
+
+These choices preserve each sender's ordering while letting unrelated senders compete. A stalled output can eventually fill a group's result and routing buffers and stall its other members too; sharing trades independent execution capacity for smaller replicated logic.
+
+Shared routers also use an **effect-window arbiter**. Its grant permits one early return of a batch-completion credit, so a router can retain a lookahead batch while its current batch drains. It does not grant every message send or serialize all actor execution. Mixed deployments use one global arbiter for this extra capacity; direct actors do not participate. Credit returns have dedicated inputs so they do not queue behind application requests awaiting mailbox space.
+
+The instance backend supports closed graphs, two-dimensional families, RAM-backed shared groups, and direct or queued routes. Rectangle ingress, source-fragment reduction placement, and `weak_components` effect-window partitioning are rejected for exact-only and mixed deployments. Ordinary actor-owned reductions remain available. Partitioning needs to account for backpressure paths through direct actors as well as immediate shared-to-shared edges.
+
+Exact-only and mixed graphs use the same placement and routing backend. Regular graphs containing only families retain a compact array representation when wholly direct or wholly shared. Repeated node and routing definitions follow family rules rather than explicitly listing every member; startup and slot tables can still grow with population. This is a source-size benefit, not a claim of faster hardware. Both representations use the same actor implementations and shared-router credit protocol.
 
 ## Inspection and validation
 
-Set `direct_actor_debug => true` and, when there are shared executors, `mailbox_debug => true` in the physical profile. Obtain actor compilation options from `xls_topology_dslx:artifact_requirements/2`; one module used in both placements needs both sets of diagnostic ports. Generate `xls_scheduler_debug:projection/4` from the exact artifacts and bind one `hls_debug_catalog:hardware/4`. Direct and shared actors expose the same logical identities, phase and failure information. Shared actors additionally expose their scheduler's mailbox/work observations; direct mailbox reservation counts are not yet projected.
+Enable `direct_actor_debug` for direct actors and `mailbox_debug` for shared groups in the physical profile. Get actor compilation options from `xls_topology_dslx:artifact_requirements/2`, generate `xls_scheduler_debug:projection/4` from those artifacts, and bind a single `hls_debug_catalog:hardware/4`. The catalog retains logical actor identities across placements. Both placements expose phase and failure information; shared actors additionally expose scheduler mailbox/work observations. Direct mailbox reservation counts are not yet projected. See [topology debugging](topology-debug.md).
 
-`bash tools/test_mixed_topology.sh XLS_ROOT` runs a closed feedback workload as all-direct actors, one worker executor, two interleaved worker executors, and a group containing both a family and an exact worker. A singleton source sends two aliased work messages to each of five workers. Each worker checks input order and emits two aliased results; a singleton collector checks all twenty distinct results before reporting and triggering the next round. The RTL must match all 32 reports from the CPU realization of the same normalized routes, including the final feedback completion.
-
-The test exercises pipeline depths two and three, holds the external output blocked, inspects all actors and follows the blocked sink through public debug queries, then releases it and requires recovery. It rejects combinational cycles and checks cycle-by-cycle equivalence between the original generated RTL and its passive debug instrumentation. It does not assert a global arrival order between workers or identical cycle timing across placements.
+`bash tools/test_mixed_topology.sh XLS_ROOT` compares a closed feedback workload with its CPU reference in four placements: all direct, one worker group, two interleaved groups, and a group combining family and exact workers. At pipeline depths two and three, it checks aliased message ordering, all 32 round reports, startup, and final completion. It blocks the output, diagnoses the stall through public debug queries, then requires recovery after release. Structural checks reject combinational cycles and verify that passive debug instrumentation preserves every output cycle.

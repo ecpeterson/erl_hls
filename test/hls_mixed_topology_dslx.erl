@@ -89,7 +89,7 @@ cpu() ->
                 {'DOWN', Monitor, process, Pid, Reason} -> error({cpu_fixture_failed, Reason})
             end;
         {'DOWN', Monitor, process, Pid, Reason} -> error({cpu_fixture_failed, Reason})
-    after 30000 ->
+    after 5000 ->
         exit(Pid, kill),
         receive {'DOWN', Monitor, process, Pid, _} -> ok end,
         error(cpu_fixture_timeout)
@@ -131,7 +131,7 @@ cpu_run() ->
         end, WorkerStartup),
         queue_startup(SourceStartup, Pids),
         Reports = receive_reports(32, []),
-        await_cpu_source(maps:get(source, Pids), 1000),
+        await_cpu_source(maps:get(source, Pids), 100),
         maps:foreach(fun(Id, Pid) ->
             ExpectedPhase = final_phase(Id),
             [{phase, ExpectedPhase}, {message_queue_len, 0}, {postponed, 0}, {reserved, 0}] =
@@ -171,5 +171,5 @@ forward(Recipients, Pids, Host) ->
 receive_reports(0, Acc) -> lists:reverse(Acc);
 receive_reports(N, Acc) ->
     receive {mixed_report, Report} -> receive_reports(N-1, [Report | Acc])
-    after 10000 -> error({missing_cpu_reports, N})
+    after 1000 -> error({missing_cpu_reports, N})
     end.

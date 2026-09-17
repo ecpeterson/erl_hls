@@ -1,13 +1,13 @@
 %%%% A materialized topology graph with independent placement decisions.
--module(xls_topology_mixed_dslx).
+-module(xls_topology_instance_dslx).
 -moduledoc false.
 -export([required/2, artifact_requirements/2, emit/2]).
 
-%% The compact renderer remains the fast path for wholly direct or wholly
-%% shared families. A mixed graph is deliberately materialized: route size
+%% The compact renderer preserves generated loops for wholly direct or wholly
+%% shared families. An explicit graph is materialized: route size
 %% follows deployed instances, while actor artifacts remain shared.
 required(Plan, Profile) ->
-    #{scheduler_groups := Specs} = xls_topology_profile:normalize(Profile, family),
+    #{scheduler_groups := Specs} = xls_topology_profile:normalize(Profile),
     #{groups := Groups, direct_members := Direct} = hls_scheduler_plan:normalize(Plan, Specs),
     Groups =/= [] andalso Direct =/= [].
 
@@ -23,21 +23,19 @@ lower(Plan, Profile0) ->
         reduction_placements := Reductions,
         direct_actor_debug := ActorDebug,
         mailbox_debug := MailboxDebug} =
-        xls_topology_profile:normalize(Profile0, family),
+        xls_topology_profile:normalize(Profile0),
     require_empty(ingresses, maps:get(ingresses, Plan)),
     require_empty(reduction_placements, maps:to_list(Reductions)),
     case WindowPartition of
         global -> ok;
-        _ -> error({mixed_effect_window_partition, WindowPartition})
+        _ -> error({instance_effect_window_partition, WindowPartition})
     end,
     Schedule = #{groups := Groups0} = hls_scheduler_plan:normalize(Plan, GroupSpecs),
     Placements = hls_scheduler_plan:placements(Schedule),
-    check_lanes(lanes, maps:get(routes, Plan), Plan),
-    check_lanes(lane_relations, maps:get(route_relations, Plan), Plan),
+    xls_topology_graph:check_lanes(lanes, maps:get(routes, Plan), Plan),
+    xls_topology_graph:check_lanes(lane_relations, maps:get(route_relations, Plan), Plan),
     {Materialized, Origins} = materialize(Plan),
-    ScalarProfile = maps:with([name, channel_depth, actor_egress_depth,
-        direct_actor_debug], Profile),
-    Base = xls_topology_dslx:lower(Materialized, ScalarProfile),
+    Base = xls_topology_graph:lower(Materialized, Profile),
     Startup = maps:from_list([{Id, Frames} || #{target := Id, frames := Frames}
         <- maps:get(startup, Base)]),
     Actors = [place_actor(Actor, maps:get(maps:get(id, Actor), Origins),
@@ -71,7 +69,7 @@ lower(Plan, Profile0) ->
         effect_window_domains => [[I || #{index := I} <- Schedulers1]]}.
 
 require_empty(_, []) -> ok;
-require_empty(Section, _) -> error({mixed_topology_section, Section}).
+require_empty(Section, _) -> error({unsupported_instance_section, Section}).
 
 materialize(Plan = #{actors := Exact, families := Families,
         routes := ExactRoutes}) ->
@@ -88,21 +86,7 @@ materialize(Plan = #{actors := Exact, families := Families,
         X <- lists:seq(0, W - 1), Y <- lists:seq(0, H - 1)]),
     Routes = ExactRoutes ++ Relations,
     {Plan#{actors := Expanded, families := [], routes := Routes,
-        route_relations := [], lane_relations := [], lanes := derive_lanes(Routes)}, Origins}.
-
-check_lanes(Key, Routes, Plan) ->
-    Expected = derive_lanes(Routes),
-    case maps:get(Key, Plan, '$missing') of
-        Expected -> ok;
-        Cached -> error({mixed_topology_lanes, Key, Expected, Cached})
-    end.
-
-derive_lanes(Routes) ->
-    [#{source => Source, destination => Recipient,
-        source_ports => lists:sort([Port || #{source := {Id, Port}, recipients := Rs}
-            <- Routes, Id =:= Source, lists:member(Recipient, Rs)])}
-        || {Source, Recipient} <- lists:usort([{Id, Recipient} ||
-            #{source := {Id, _}, recipients := Rs} <- Routes, Recipient <- Rs])].
+        route_relations := [], lane_relations := [], lanes := xls_topology_graph:lanes(Routes)}, Origins}.
 
 family_entries(I, Family = #{id := Id, shape := [W, H]}) ->
     [{maps:without([shape, instance_count], Family#{id := {Id, X, Y}}),
@@ -111,7 +95,7 @@ family_entries(I, Family = #{id := Id, shape := [W, H]}) ->
                 "][u32:", n(Y), "]"]}}
         || X <- lists:seq(0, W - 1), Y <- lists:seq(0, H - 1)];
 family_entries(_, #{id := Id, shape := Shape}) ->
-    error({mixed_family_shape, Id, Shape}).
+    error({unsupported_instance_family_shape, Id, Shape}).
 
 place_actor(Actor = #{id := Id, index := Index}, Origin = #{logical := Logical},
         Placements, Startup) ->
@@ -147,9 +131,9 @@ flag_modules(Requirements, Units, Flag, true) ->
     end, Requirements, Units).
 
 validate_delivery(#{delivery := direct, recipients := [_]}) -> ok;
-validate_delivery(#{delivery := queued}) -> ok;
-validate_delivery(#{source := Source, delivery := Delivery}) ->
-    error({mixed_route_delivery, Source, Delivery}).
+validate_delivery(#{delivery := queued, recipients := [_, _ | _]}) -> ok;
+validate_delivery(#{source := Source, delivery := Delivery, recipients := Recipients}) ->
+    error({unsupported_dslx_route_delivery, Source, Delivery, length(Recipients)}).
 
 lane(I, Source, {external, Id} = Recipient, _) ->
     #{index => I, source => Source, recipient => Recipient,
@@ -349,9 +333,10 @@ window_channels(Schedulers) ->
         "    spawn effect_window::Arbiter<u32:", n(N), ">(",
         "effect_window_request_c, effect_window_grant_p, effect_window_release_c);\n"].
 
-direct_spawn(Spec, Actor = #{index := I, stem := Stem, module_name := Module,
+direct_spawn(Spec, Actor = #{id := Id, index := I, stem := Stem, module_name := Module,
         inbound := Inbound, debug := Debug}) ->
-    ["    spawn ", Module, "::Service(", Stem, "_req_c, ", Stem, "_egress_p, ",
+    ["    // Actor ", io_lib:format("~p", [Id]), " uses ", Module, ".\n",
+        "    spawn ", Module, "::Service(", Stem, "_req_c, ", Stem, "_egress_p, ",
         Stem, "_admit_p", xls_actor_observation:spawn_argument(Spec, Debug), ");\n",
         "    spawn ActorIngress", n(I), "(",
         case Inbound of [] -> []; _ -> [Stem, "_requests_c, "] end,
