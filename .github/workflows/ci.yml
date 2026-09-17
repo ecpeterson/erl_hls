@@ -81,6 +81,9 @@ jobs:
           python3 tools/test_topology_debug.py
           python3 tools/test_direct_actor_debug.py
 
+      - name: Preserve RAM attributes, write ports, and behavior through debug export
+        run: python3 tools/test_debug_memories.py
+
       - name: Check bounded actor snapshot equivalence
         run: python3 tools/test_actor_snapshot_formal.py
 
@@ -168,6 +171,7 @@ jobs:
           bash tools/test_actor_debug.sh "$RUNNER_TEMP/xls" _build/mailbox-debug mailbox
           bash tools/test_actor_debug.sh "$RUNNER_TEMP/xls" _build/direct-mailbox-debug direct_mailbox
           bash tools/test_actor_debug.sh "$RUNNER_TEMP/xls" _build/mixed-mailbox-debug mailbox_mixed
+          python3 tools/check_debug_memories.py _build/mixed-mailbox-debug/p2 --map-xc7
 
       - name: Diagnose reduction failures through scoped debug queries
         run: |
@@ -204,6 +208,12 @@ jobs:
         with:
           name: debug-observation-reports
           path: |
+            _build/debug-memories/**/*.json
+            _build/debug-memories/**/*.log
+            _build/debug-memories/**/*.ys
+            _build/mixed-mailbox-debug/p2/memory-check/report.json
+            _build/mixed-mailbox-debug/p2/memory-check/*.ys
+            _build/mixed-mailbox-debug/p2/memory-check/*.log
             _build/frame-router/**/*.log
             _build/frame-router/**/*.vcd
             _build/fabric-services/*.log
@@ -349,6 +359,9 @@ jobs:
       - name: Build the complete D3 debug composition and production reference
         run: python3 tools/build_phi_debug.py "$RUNNER_TEMP/xls"
 
+      - name: Preserve complete D3 application RAM mapping through debug export
+        run: python3 tools/check_debug_memories.py _build/phi-debug/debug --map-xc7
+
       - name: Diagnose D3 stalls while all debug services share one transport
         run: python3 tools/test_phi_debug.py _build/phi-debug
 
@@ -365,6 +378,8 @@ jobs:
             _build/phi-debug/**/*.build.json
             _build/phi-debug/**/*.v
             _build/phi-debug/**/manifest.json
+            _build/phi-debug/debug/memory-check/report.json
+            _build/phi-debug/debug/memory-check/*.ys
             _build/phi-debug/live/*.json
             _build/phi-debug/live/*.term
 
