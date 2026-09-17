@@ -28,6 +28,12 @@ fixture(mailbox) ->
         startup => [{{F, I, 0}, [{configure, Role}]} || {F, Role} <- [{producer, 0}, {consumer, 1}], I <- lists:seq(0, 2)]}),
     {Plan, maps:from_list([{F, #{members => [{family, F}], state_storage => block_ram,
         mailbox_storage => block_ram}} || F <- Families])};
+fixture(direct_mailbox) ->
+    {Plan, _} = fixture(mailbox),
+    {Plan, #{}};
+fixture(mailbox_mixed) ->
+    {Plan, Specs} = fixture(mailbox),
+    {Plan, maps:with([producer], Specs)};
 fixture(direct_reduction) ->
     {Plan, _Specs} = fixture(reduction),
     {Plan, #{}};
@@ -52,7 +58,8 @@ artifacts(Kind) -> artifacts(Kind, #{}).
 artifacts(Kind, Options) ->
     {Directory, Requirements} = case Kind of
         small -> {"test", #{hls_actor_debug_fixture => #{}}};
-        mailbox -> {"test", #{hls_mailbox_debug_fixture => #{}}};
+        K when K =:= mailbox; K =:= direct_mailbox; K =:= mailbox_mixed ->
+            {"test", #{hls_mailbox_debug_fixture => #{}}};
         reduction -> {"test", #{hls_reduction_failure_fixture => #{}}};
         direct_reduction -> {"test", #{hls_reduction_failure_fixture => #{}}};
         aggregate -> {"test", #{hls_reduction_failure_fixture => #{shared_service => aggregate_only}}};

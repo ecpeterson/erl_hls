@@ -1,6 +1,6 @@
 -module(xls_actor_observation).
 -moduledoc "Optional observations of committed register-backed actor state.".
--export([enabled/1, layout/1, bindings/2, wires/1, ports/1,
+-export([enabled/1, imports/1, layout/1, bindings/2, wires/1, ports/1,
     scalar_name/1, family_name/1, validate_channels/1, declarations/1, proc_field/1,
     config_parameter/1, config_value/1, sample/1, spawn_argument/2]).
 
@@ -10,11 +10,14 @@ enabled(Options) ->
         Other -> error({direct_actor_debug, Other})
     end.
 
+imports(Options) -> optional(Options, [direct_mailbox_observation]).
+
 %% The observation contains no payload or accumulator bits. Its reduction
-%% metadata is contiguous on the compiler output; the query shell inserts the
-%% common protocol's initialization and reserved mailbox fields.
+%% metadata and mailbox counts follow the common state fields. The query shell
+%% places each projection into its protocol field and retains one coherent sample.
 layout(none) ->
-    #{width => 25, fields => #{phase => #{offset => 0, width => 8},
+    #{width => 49, mailbox => #{offset => 25, width => 24},
+        fields => #{phase => #{offset => 0, width => 8},
         enter_pending => #{offset => 8, width => 1},
         failure => #{offset => 9, width => 16}}};
 layout(Reduction) ->
@@ -25,7 +28,7 @@ layout(Reduction) ->
             width => Bits, observation_offset => 56 + Offset}}}
     end, {0, #{}}, [{status, status_bits}, {site, site_bits}, {key, key_bits},
         {remaining, remaining_bits}, {failure, failure_bits}]),
-    (layout(none))#{width := 25 + Width,
+    (layout(none))#{width := 49 + Width, mailbox := #{offset => 25 + Width, width => 24},
         reduction => #{width => Width, fields => Fields}}.
 
 %% Names come from the same normalized actor/family ordering as topology
@@ -84,7 +87,8 @@ declarations(Spec) ->
         _ -> []
     end,
     optional(Spec, ["pub type ActorObservation = bits[", integer_to_list(Width), "];\n\n",
-        "fn actor_observation(machine: Machine) -> ActorObservation {\n", Prefix,
+        "fn actor_observation(machine: Machine) -> ActorObservation {\n",
+        "    direct_mailbox_observation::snapshot(machine.slots, machine.occupied, machine.admission_pending) ++\n", Prefix,
         "    machine.failure ++ machine.enter_pending ++ (machine.phase as u8)\n",
         "}\n\n"]).
 

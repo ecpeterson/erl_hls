@@ -38,6 +38,7 @@ for test_module in \
     arbitration.x \
     scheduler.x \
     scheduler_observation.x \
+    direct_mailbox_observation.x \
     bram.x \
     effect_window.x \
     frame_transport.x \

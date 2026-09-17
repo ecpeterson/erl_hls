@@ -261,7 +261,7 @@ if __name__ == "__main__":
     parser.add_argument("--yosys", default="yosys")
     parser.add_argument("--actor-projection", type=Path)
     parser.add_argument("--actor-root", default="")
-    parser.add_argument("--actor-test", choices=("small", "phi", "mailbox", "reduction", "aggregate", "direct_reduction",
+    parser.add_argument("--actor-test", choices=("small", "phi", "mailbox", "direct_mailbox", "mailbox_mixed", "reduction", "aggregate", "direct_reduction",
                                                 "mixed_direct", "mixed_one", "mixed_two", "mixed_coalesced",
                                                 "ingress_direct", "ingress_one", "ingress_two", "ingress_coalesced"))
     parser.add_argument("--reference-rtl", type=Path, action="append", help="diagnostics-disabled application RTL for transfer comparison")

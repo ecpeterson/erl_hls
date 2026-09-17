@@ -14,7 +14,8 @@ ROOT = Path(__file__).resolve().parents[1]
 def direct_fixture():
     port = "_actor_worker_debug_out"
     direct = {
-        "index": 0, "slots": 1, "width": 25, "port": port,
+        "index": 0, "slots": 1, "width": 49, "port": port,
+        "mailbox": {"kind": "direct", "offset": 25, "width": 24, "capacity": 3},
         "fields": {"phase": {"offset": 0, "width": 8},
                    "enter_pending": {"offset": 8, "width": 1},
                    "failure": {"offset": 9, "width": 16}},
@@ -22,7 +23,7 @@ def direct_fixture():
         "failures": {"16": {"kind": "case_clause", "file": "worker.erl", "line": 20}},
         "actors": [{"slot": 0, "key": "a" * 64, "name": "worker"}],
     }
-    connections = {"clk": [1], port: list(range(100, 125)),
+    connections = {"clk": [1], port: list(range(100, 149)),
                    port + "_vld": [200], port + "_rdy": ["1"]}
     application = {
         "ports": {name: {"bits": bits, "direction": "input" if
@@ -37,7 +38,7 @@ def direct_fixture():
                          for name, bits in connections.items()},
             "cells": {"state": {"type": "$dff", "connections": {"CLK": [1], "Q": [500]}}},
             "memories": {"unrelated": {"size": 8, "width": 32}}}
-    return {"schema": 3, "banks": [], "direct": [direct]}, hierarchy, flat
+    return {"schema": 4, "banks": [], "direct": [direct]}, hierarchy, flat
 
 
 def add_shared_bank(projection, hierarchy, flat):
@@ -74,12 +75,13 @@ class DirectActorTests(unittest.TestCase):
         projection, hierarchy, flat = direct_fixture()
         banks = discover(projection, hierarchy, flat)
         self.assertEqual(len(banks), 1)
-        self.assertEqual(banks[0]["taps"], [200, "0", *range(100, 125)])
+        self.assertEqual(banks[0]["taps"], [200, "0", *range(100, 125), 200, *range(125, 149)])
         self.assertEqual(banks[0]["address_width"], 1)
         resource, = topology.actors.resources(banks, 5)
         self.assertEqual({key: resource[key] for key in ("id", "bank", "slot", "width", "key")},
-                         {"id": 5, "bank": 0, "slot": 0, "width": 26, "key": "a" * 64})
-        self.assertNotIn("mailbox_capacity", resource)
+                         {"id": 5, "bank": 0, "slot": 0, "width": 56, "key": "a" * 64})
+        self.assertEqual(resource["mailbox_capacity"], 3)
+        self.assertEqual(resource["mailbox_kind"], "direct")
 
         original = copy.deepcopy(flat)
         exported = topology.export_probes({"modules": {"top": flat}}, "top",
@@ -100,6 +102,12 @@ class DirectActorTests(unittest.TestCase):
                     discover(projection, hierarchy, flat)
         for mutation in (
             lambda actor: actor["fields"]["failure"].update(offset=25),
+            lambda actor: actor.pop("mailbox"),
+            lambda actor: actor["mailbox"].update(offset=24),
+            lambda actor: actor["mailbox"].update(offset=26),
+            lambda actor: actor["mailbox"].update(width=23),
+            lambda actor: actor["mailbox"].update(kind="shared"),
+            lambda actor: actor["mailbox"].update(capacity=0),
             lambda actor: actor["fields"]["failure"].update(offset=8),
             lambda actor: actor["fields"]["phase"].update(width=7),
             lambda actor: actor["actors"][0].update(slot=1),
@@ -172,7 +180,8 @@ class DirectActorTests(unittest.TestCase):
     def test_reduction_projects_metadata_only(self):
         projection, hierarchy, flat = direct_fixture()
         direct = projection["direct"][0]
-        direct["width"] = 78
+        direct["width"] = 102
+        direct["mailbox"]["offset"] = 78
         reduction = {"width": 53, "fields": {}, "sites": [{"id": 0,
             "phase": "active", "name": "sum", "population": {
                 "mode": "members", "size": 3, "members": [10, 20, 30]}}]}
@@ -182,13 +191,13 @@ class DirectActorTests(unittest.TestCase):
             source += size
             observation += size
         direct["reduction"] = reduction
-        data = list(range(300, 378))
+        data = list(range(300, 402))
         port = direct["port"]
         hierarchy["modules"]["application"]["ports"][port]["bits"] = data
         hierarchy["modules"]["shell"]["cells"]["application"]["connections"][port] = data
         flat["netnames"]["shell.application." + port]["bits"] = data
         banks = discover(projection, hierarchy, flat)
-        self.assertEqual(banks[0]["taps"], [200, "0", *data])
+        self.assertEqual(banks[0]["taps"], [200, "0", *data[:78], 200, *data[78:]])
         resource, = topology.actors.resources(banks, 5)
         self.assertEqual(resource["width"], 109)
         for mutation in (
@@ -208,10 +217,11 @@ class DirectActorTests(unittest.TestCase):
         # A second direct row puts one-slot collectors at both address parities.
         second = copy.deepcopy(banks[1])
         second["index"] = 2
-        second["width"] = 78
+        second["width"] = 102
+        second["mailbox"]["offset"] = 78
         second["actors"][0]["key"] = "b" * 64
         second["reduction"] = {"width": 53}
-        second["taps"] += list(range(300, 353))
+        second["taps"][27:27] = list(range(300, 353))
         banks.append(second)
         width = sum(len(bank["taps"]) for bank in banks)
         setup, offset, resource = [], 0, 5
@@ -222,11 +232,17 @@ class DirectActorTests(unittest.TestCase):
                 reduction_width = bank.get("reduction", {}).get("width", 0)
                 reduction = (1 << (reduction_width - 1)) + resource if reduction_width else 0
                 packed = value + (reduction << 25)
-                expected = (1 << 25) + value + (reduction << 56)
+                mailbox = 0x810202 if "mailbox" in bank else 0
+                expected = (1 << 25) + value + (mailbox << 32) + (reduction << 56)
                 setup += [f"@(negedge clk); actor_writes=0; actor_writes[{offset}]=1;",
                           f"actor_writes[{offset+1}+:{aw}]={slot};",
                           f"actor_writes[{offset+1+aw}+:{25+reduction_width}]={25+reduction_width}'d{packed};",
                           f"expected[{resource}]=128'd{expected};", "@(posedge clk); #1;"]
+                if mailbox:
+                    start = offset + 1 + aw + 25 + reduction_width
+                    # Both taps reference the same producer-valid bit.
+                    setup[-1:-1] = [f"actor_writes[{start}]=1;",
+                                    f"actor_writes[{start+1}+:24]=24'h{mailbox:x};"]
                 resource += 1
             offset += len(bank["taps"])
         bench = ["module direct_snapshot_tb; reg clk=0,reset=1; always #5 clk=~clk;",
@@ -243,6 +259,9 @@ class DirectActorTests(unittest.TestCase):
         offset = 0
         for bank in banks:
             bench += [f"actor_writes[{offset}]=0;"]
+            if "mailbox" in bank:
+                start = offset + 1 + bank["address_width"] + 25 + bank.get("reduction", {}).get("width", 0)
+                bench += [f"actor_writes[{start}]=0;"]
             offset += len(bank["taps"])
         bench += ["repeat(3) @(posedge clk); #1;",
                   f"for(i=5;i<{resource};i=i+1) begin address=i; #1;",

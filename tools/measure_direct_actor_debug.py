@@ -4,6 +4,7 @@
 Run test_actor_debug.sh ... direct_reduction first. The baseline and observed
 fixtures share application ports, reset, codegen options, and workload. This
 maps complete designs; it does not infer placed timing or power.
+Use --baseline to compare two already instrumented fixture/p2 builds.
 """
 import argparse
 import hashlib
@@ -23,6 +24,8 @@ def main():
     parser.add_argument('--yosys', default='yosys')
     parser.add_argument('--stage', type=Path, required=True)
     parser.add_argument('--seeds', type=int, default=2)
+    parser.add_argument('--baseline', type=Path, help='previous fixture directory containing p2')
+    parser.add_argument('--scope', help='workload and comparison recorded in the report')
     args = parser.parse_args()
     if args.seeds < 1:
         parser.error('--seeds must be positive')
@@ -31,13 +34,19 @@ def main():
     # Keep physical queries enabled in both measurements so the increment
     # includes actor publication, retention and query selection, rather than
     # charging the existing transport/probe controller entirely to actors.
-    production = fixture / 'production'
-    topology_debug.instrument(argparse.Namespace(
-        rtl=[production / 'actor_debug_2.v', production / 'actor_debug_wrapper.v'],
-        yosys=args.yosys, top='actor_debug_production_wrapper', clock='clk', reset='reset',
-        output_top='hls_application', reset_active_low=False, stage=stage/'baseline',
-        actor_projection=None, actor_root=''))
-    modes = {'physical_queries': stage/'baseline', 'actor_queries': fixture/'p2'}
+    if args.baseline:
+        modes = {'baseline': args.baseline.resolve()/'p2', 'candidate': fixture/'p2'}
+        scope = 'complete instrumented fixture, pipeline stages 2, XC7 ABC9; baseline versus candidate'
+    else:
+        production = fixture / 'production'
+        topology_debug.instrument(argparse.Namespace(
+            rtl=[production / 'actor_debug_2.v', production / 'actor_debug_wrapper.v'],
+            yosys=args.yosys, top='actor_debug_production_wrapper', clock='clk', reset='reset',
+            output_top='hls_application', reset_active_low=False, stage=stage/'baseline',
+            actor_projection=None, actor_root=''))
+        modes = {'physical_queries': stage/'baseline', 'actor_queries': fixture/'p2'}
+        scope = ('complete five-actor reduction fixture, pipeline stages 2, XC7 ABC9; '
+                 'physical queries versus physical plus committed actor queries')
     rows, inputs = [], {}
     rtl = ROOT/'priv/rtl/debug'
     for mode, instrumented in modes.items():
@@ -64,9 +73,7 @@ def main():
             row = {'mode': mode, 'seed': seed, **cell_counts(cells), 'DSP': cells.get('DSP48E1', 0)}
             rows.append(row)
             print(row, flush=True)
-    report = {'scope': 'complete five-actor reduction fixture, pipeline stages 2, XC7 ABC9; '
-                       'physical queries versus physical plus committed actor queries; '
-                       'no placed timing or power',
+    report = {'scope': (args.scope or scope) + '; no placed timing or power',
               'yosys': subprocess.check_output([args.yosys, '-V'], text=True).strip(),
               'inputs': inputs, 'runs': rows,
               'summary': {mode: {metric: distribution([row[metric] for row in rows if row['mode'] == mode])

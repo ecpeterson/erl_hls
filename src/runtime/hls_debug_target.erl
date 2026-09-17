@@ -94,7 +94,9 @@ statem_fields() ->
 
 actor_fields() -> [initialized, phase, enter_pending, failed, failure, reduction].
 
-resource_actor_fields(#{<<"mailbox_capacity">> := _}) ->
+resource_actor_fields(#{<<"mailbox_kind">> := <<"direct">>}) ->
+    actor_fields() ++ [mailbox_initialized, message_queue_len, postponed, reserved, free_slots];
+resource_actor_fields(#{<<"mailbox_kind">> := <<"shared">>}) ->
     actor_fields() ++ [mailbox_initialized, message_queue_len, postponed, reserved, free_slots,
         in_flight, mail_candidate, entry_candidate, waiting_for_egress, egress_busy, scheduler_phase];
 resource_actor_fields(_) -> actor_fields().

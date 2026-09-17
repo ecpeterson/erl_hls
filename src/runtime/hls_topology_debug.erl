@@ -100,7 +100,25 @@ actor_observation(Sample = #{value := Value}, Phases, Failures)
     end;
 actor_observation(_, _, _) -> {error, invalid_resource_value}.
 
-mailbox_observation(Sample = #{value := Value}, #{<<"mailbox_capacity">> := Capacity}) ->
+mailbox_observation(Sample = #{value := Value, initialized := Initialized},
+        #{<<"mailbox_kind">> := <<"direct">>, <<"mailbox_capacity">> := Capacity}) ->
+    Word = (Value bsr 32) band 16#ffffff,
+    Count = Word band 255,
+    Postponed = (Word bsr 8) band 255,
+    Reserved = (Word bsr 16) band 1,
+    case Word of
+        0 when not Initialized -> {ok, (maps:merge(Sample, maps:from_keys(
+            [message_queue_len, postponed, free_slots, reserved], undefined)))#{
+                mailbox_initialized => false}};
+        _ when Initialized, Word band 16#fe0000 =:= 16#800000,
+                Count + Reserved =< Capacity, Postponed =< Count ->
+            {ok, Sample#{mailbox_initialized => true, message_queue_len => Count,
+                postponed => Postponed, reserved => Reserved,
+                free_slots => Capacity-Count-Reserved}};
+        _ -> {error, invalid_mailbox_observation}
+    end;
+mailbox_observation(Sample = #{value := Value},
+        #{<<"mailbox_kind">> := <<"shared">>, <<"mailbox_capacity">> := Capacity}) ->
     Word = (Value bsr 32) band 16#ffffff,
     Count = Word band 255,
     Postponed = (Word bsr 8) band 255,

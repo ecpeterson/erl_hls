@@ -1,0 +1,172 @@
+{
+  "scope": "Complete six-direct-actor rectangle-ingress fixture, merged PR124 versus mailbox observations; pipeline stages 2, XC7 ABC9; application, routing, physical probes, actor queries and debug route included; no placed timing or power",
+  "yosys": "Yosys 0.69+10 (git sha1 370a53acf-dirty, Release, Clang /usr/local/osxcross/target/bin/aarch64-apple-darwin25.5-clang++ 21.1.8)",
+  "inputs": {
+    "baseline": {
+      "/private/tmp/erl-hls-mixed-ingress/_build/ingress-check/ingress_direct/p2/instrumented.json": "19de71cde68ecfe36fc703b40f5e9c8f9c275becd66ba29efb7e673e562e2010",
+      "/private/tmp/erl-hls-mixed-ingress/_build/ingress-check/ingress_direct/p2/debug_top.v": "e0a4f8fd0c99c92bc5dc8008c2941a15abdafe01d88073b2dbb332b79099c150",
+      "/private/tmp/erl-hls-direct-mailbox/priv/rtl/debug/hls_topology_debug.v": "27c1336a3d5ead19c81b4e4fb89de54d26e0358963d86d92a7a5a0ec80392b96",
+      "/private/tmp/erl-hls-direct-mailbox/priv/rtl/debug/hls_debug_frame_rx.v": "e689f254b14ebab341b936c30c9a90db7888b8f1bdf68a99ef8ef71aa90bae55",
+      "/private/tmp/erl-hls-direct-mailbox/priv/rtl/debug/hls_debug_route.v": "7f1f1dfb3a282a963811fd2e99991e789eeec5e38260ecace06a05d3f4cef287",
+      "/private/tmp/erl-hls-direct-mailbox/priv/rtl/debug/hls_actor_snapshot.v": "347251a1965df664817aee66764f0b2763382268c41cdc1d229f9af8c6d0fd11"
+    },
+    "candidate": {
+      "/private/tmp/erl-hls-direct-mailbox/_build/ingress-check/ingress_direct/p2/instrumented.json": "eb33c5327cbf751f2078b305c0ee028971e05ae6b8daf6b17f784ad85e914911",
+      "/private/tmp/erl-hls-direct-mailbox/_build/ingress-check/ingress_direct/p2/debug_top.v": "03464b44044c651d15bf295480daa97a18447a1caf14f45374c1c812e6b8d9d4",
+      "/private/tmp/erl-hls-direct-mailbox/priv/rtl/debug/hls_topology_debug.v": "27c1336a3d5ead19c81b4e4fb89de54d26e0358963d86d92a7a5a0ec80392b96",
+      "/private/tmp/erl-hls-direct-mailbox/priv/rtl/debug/hls_debug_frame_rx.v": "e689f254b14ebab341b936c30c9a90db7888b8f1bdf68a99ef8ef71aa90bae55",
+      "/private/tmp/erl-hls-direct-mailbox/priv/rtl/debug/hls_debug_route.v": "7f1f1dfb3a282a963811fd2e99991e789eeec5e38260ecace06a05d3f4cef287",
+      "/private/tmp/erl-hls-direct-mailbox/priv/rtl/debug/hls_actor_snapshot.v": "347251a1965df664817aee66764f0b2763382268c41cdc1d229f9af8c6d0fd11"
+    }
+  },
+  "runs": [
+    {
+      "mode": "baseline",
+      "seed": 1,
+      "LUT": 5713,
+      "LUT_logic": 5713,
+      "LUT_RAM": 0,
+      "FF": 4691,
+      "RAMB18": 0,
+      "RAMB36": 0,
+      "DSP": 0
+    },
+    {
+      "mode": "baseline",
+      "seed": 2,
+      "LUT": 5713,
+      "LUT_logic": 5713,
+      "LUT_RAM": 0,
+      "FF": 4691,
+      "RAMB18": 0,
+      "RAMB36": 0,
+      "DSP": 0
+    },
+    {
+      "mode": "candidate",
+      "seed": 1,
+      "LUT": 5813,
+      "LUT_logic": 5813,
+      "LUT_RAM": 0,
+      "FF": 4771,
+      "RAMB18": 0,
+      "RAMB36": 0,
+      "DSP": 0
+    },
+    {
+      "mode": "candidate",
+      "seed": 2,
+      "LUT": 5813,
+      "LUT_logic": 5813,
+      "LUT_RAM": 0,
+      "FF": 4771,
+      "RAMB18": 0,
+      "RAMB36": 0,
+      "DSP": 0
+    }
+  ],
+  "summary": {
+    "baseline": {
+      "LUT": {
+        "best": 5713,
+        "mean": 5713,
+        "variance": 0,
+        "worst": 5713
+      },
+      "LUT_logic": {
+        "best": 5713,
+        "mean": 5713,
+        "variance": 0,
+        "worst": 5713
+      },
+      "LUT_RAM": {
+        "best": 0,
+        "mean": 0,
+        "variance": 0,
+        "worst": 0
+      },
+      "FF": {
+        "best": 4691,
+        "mean": 4691,
+        "variance": 0,
+        "worst": 4691
+      },
+      "RAMB18": {
+        "best": 0,
+        "mean": 0,
+        "variance": 0,
+        "worst": 0
+      },
+      "RAMB36": {
+        "best": 0,
+        "mean": 0,
+        "variance": 0,
+        "worst": 0
+      },
+      "DSP": {
+        "best": 0,
+        "mean": 0,
+        "variance": 0,
+        "worst": 0
+      }
+    },
+    "candidate": {
+      "LUT": {
+        "best": 5813,
+        "mean": 5813,
+        "variance": 0,
+        "worst": 5813
+      },
+      "LUT_logic": {
+        "best": 5813,
+        "mean": 5813,
+        "variance": 0,
+        "worst": 5813
+      },
+      "LUT_RAM": {
+        "best": 0,
+        "mean": 0,
+        "variance": 0,
+        "worst": 0
+      },
+      "FF": {
+        "best": 4771,
+        "mean": 4771,
+        "variance": 0,
+        "worst": 4771
+      },
+      "RAMB18": {
+        "best": 0,
+        "mean": 0,
+        "variance": 0,
+        "worst": 0
+      },
+      "RAMB36": {
+        "best": 0,
+        "mean": 0,
+        "variance": 0,
+        "worst": 0
+      },
+      "DSP": {
+        "best": 0,
+        "mean": 0,
+        "variance": 0,
+        "worst": 0
+      }
+    }
+  },
+  "baseline_revision": "e2857d9d4cce66eeb81d071f622aeb39d9ba0fb6",
+  "candidate_revision": "594cd3b884c93b8c8d4eb21dd7a6afdbf63af96c",
+  "prediction": "Less than 200 additional LUTs and 200 additional FFs across the six direct actors and query shell; all-shared D3 unchanged.",
+  "tools_sha256": {
+    "ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+    "opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c",
+    "codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162"
+  },
+  "d3_unchanged_sha256": {
+    "phi_decoder_profile_topology.x": "8577630f191876779b8323399f714ec1fa811126a7252c85c63de81bc132c1e0",
+    "phi_decoder_profile_top.v": "682cecdb542a61570ca63fe3ef579b4b91f59ffd4f1dc014cf6853729de65cda",
+    "phi_syndrome_replay_cell.x": "cba6a7d0235b8e322c0c619182ac37cbb59a3133f158038de318ddbee3b23027",
+    "phi_halo_cell.x": "30fc7cbc6573ecbbad11474f33b0ce4be4ead2f95b9620bcb896b62a2c31f47d"
+  }
+}

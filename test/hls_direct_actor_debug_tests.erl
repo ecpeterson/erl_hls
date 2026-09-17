@@ -18,10 +18,10 @@ projection_and_catalog_test() ->
         {ok, Actor} = hls_debug_catalog:actor(Catalog, Id),
         ?assertEqual({placement, #{kind => direct}}, hls_debug:info(Actor, placement)),
         {capabilities, #{info := Items}} = hls_debug:info(Actor, capabilities),
-        ?assertEqual([], [phase, enter_pending, failure, reduction, initialized, cycle] -- Items),
-        ?assertNot(lists:member(message_queue_len, Items)),
-        ?assertNot(lists:member(reserved, Items)),
-        ?assertMatch({observation, #{kind := committed_state, mailbox := unavailable}},
+        ?assertEqual([], [phase, enter_pending, failure, reduction, initialized, cycle, message_queue_len, reserved, free_slots, postponed] -- Items),
+        ?assertNot(lists:member(in_flight, Items)),
+        ?assertNot(lists:member(scheduler_phase, Items)),
+        ?assertMatch({observation, #{kind := committed_state, mailbox := actor_step}},
             hls_debug:info(Actor, observation))
     end, hls_debug_catalog:actors(Catalog)),
     [First | Rest] = Direct,
@@ -35,13 +35,18 @@ projection_and_catalog_test() ->
     ?assertError(actor_projection_mismatch, xls_scheduler_debug:validate(Plan, Specs,
         Projection#{<<"direct">> := Rest})),
     [R | Rs] = Resources,
-    BadManifest = Manifest#{<<"resources">> := [R#{<<"slot">> := 1} | Rs]},
-    ?assertError(actor_resources_mismatch,
-        hls_debug_catalog:hardware(Plan, Specs, [], Session#{manifest := BadManifest})).
+    lists:foreach(fun(BadResource) ->
+        BadManifest = Manifest#{<<"resources">> := [BadResource | Rs]},
+        ?assertError(actor_resources_mismatch,
+            hls_debug_catalog:hardware(Plan, Specs, [], Session#{manifest := BadManifest}))
+    end, [R#{<<"slot">> := 1}, R#{<<"mailbox_kind">> := <<"shared">>},
+        R#{<<"mailbox_capacity">> := 99}, maps:remove(<<"mailbox_kind">>, R)]).
 
 resource(#{<<"index">> := Index, <<"actors">> := [Actor], <<"module">> := Module,
         <<"phases">> := Phases, <<"failures">> := Failures,
+        <<"mailbox">> := #{<<"capacity">> := Capacity},
         <<"reduction">> := Reduction = #{<<"width">> := Width}}) ->
     Actor#{<<"id">> => Index, <<"kind">> => <<"actor">>, <<"bank">> => Index,
         <<"module">> => Module, <<"phases">> => Phases, <<"failures">> => Failures,
+        <<"mailbox_kind">> => <<"direct">>, <<"mailbox_capacity">> => Capacity,
         <<"reduction">> => Reduction, <<"width">> => 56 + Width}.

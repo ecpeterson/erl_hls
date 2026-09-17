@@ -39,7 +39,7 @@ rectangular_binding_order_test() ->
     ?assertEqual([{{family, cell, [X, Y]}, iolist_to_binary(
         ["_family_0_debug_out__", integer_to_list(X), "_", integer_to_list(Y)])} ||
         X <- lists:seq(0, 1), Y <- lists:seq(0, 2)],
-        [{Id, Port} || #{id := Id, port := Port, width := 25} <- Bindings]),
+        [{Id, Port} || #{id := Id, port := Port, width := 49} <- Bindings]),
     Specs = #{cells => #{members => [{family, cell}],
         state_storage => block_ram, mailbox_storage => block_ram}},
     ?assertEqual([], xls_actor_observation:bindings(plan(rectangle), Specs)).
@@ -69,7 +69,7 @@ write(Stage) ->
             Binding <- xls_actor_observation:bindings(Plan, #{})]))
     end, [scalar, rectangle]),
     write(Stage, "hls_dense_statem_fixture.json",
-        json:encode([#{port => <<"_actor_debug_out">>, width => 25}])),
+        json:encode([#{port => <<"_actor_debug_out">>, width => 49}])),
     write(Stage, "hls_actor_observation_fixture.x",
         xls_parse:to_xls("test/hls_actor_observation_fixture.erl", Options)),
     write(Stage, "debug_commit.x", """

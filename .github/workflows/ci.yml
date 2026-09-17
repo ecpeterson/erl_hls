@@ -164,7 +164,10 @@ jobs:
         run: bash tools/test_actor_debug.sh "$RUNNER_TEMP/xls"
 
       - name: Inspect postponed mailboxes and recovery through scoped debug queries
-        run: bash tools/test_actor_debug.sh "$RUNNER_TEMP/xls" _build/mailbox-debug mailbox
+        run: |
+          bash tools/test_actor_debug.sh "$RUNNER_TEMP/xls" _build/mailbox-debug mailbox
+          bash tools/test_actor_debug.sh "$RUNNER_TEMP/xls" _build/direct-mailbox-debug direct_mailbox
+          bash tools/test_actor_debug.sh "$RUNNER_TEMP/xls" _build/mixed-mailbox-debug mailbox_mixed
 
       - name: Diagnose reduction failures through scoped debug queries
         run: |
@@ -270,6 +273,8 @@ jobs:
             _build/actor-snapshot-formal/**
             _build/arbitration/**
             _build/mailbox-debug/**
+            _build/direct-mailbox-debug/**
+            _build/mixed-mailbox-debug/**
             _build/reduction-debug/**
             _build/aggregate-debug/**
             _build/reduction-semantics/**
