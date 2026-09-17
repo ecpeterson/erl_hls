@@ -64,13 +64,20 @@ emit(Plan = #{actors := [], families := [_ | _]}, Profile) ->
 emit(Plan, _Profile) ->
     error({invalid_topology_plan, Plan}).
 
--doc "Returns the actor-artifact specializations selected by a family profile.".
+-doc "Returns the actor-artifact specializations selected by a topology profile.".
 -spec artifact_requirements(hls_topology:plan(), profile()) ->
-    #{module() := #{shared_service := ordinary | aggregate_only, mailbox_debug => boolean()}}.
+    #{module() := #{shared_service := ordinary | aggregate_only, mailbox_debug => boolean(), direct_actor_debug => boolean()}}.
 artifact_requirements(#{actors := [], families := [_ | _]} = Plan, Profile) ->
     xls_topology_family_dslx:artifact_requirements(Plan, Profile);
+artifact_requirements(#{families := []} = Plan, Profile) ->
+    #{actors := Actors, direct_actor_debug := Debug} = lower(Plan, Profile),
+    Requirement = case Debug of
+        true -> #{shared_service => ordinary, direct_actor_debug => true};
+        false -> #{shared_service => ordinary}
+    end,
+    maps:from_list([{Module, Requirement} || #{module := Module} <- Actors]);
 artifact_requirements(Plan, _Profile) ->
-    error({artifact_requirements_require_family_topology, Plan}).
+    error({invalid_topology_plan, Plan}).
 
 %%%
 %%% Backend lowering and validation
@@ -83,7 +90,7 @@ lower(Plan = #{
         lane_relations := []
     }, Profile) ->
     #{name := Name, channel_depth := Depth,
-        actor_egress_depth := EgressDepth} =
+        actor_egress_depth := EgressDepth, direct_actor_debug := ActorDebug} =
         xls_topology_profile:normalize(Profile, scalar),
     ok = validate_lanes(Plan),
     Actors = annotate_actors(maps:get(actors, Plan), EgressDepth),
@@ -103,6 +110,7 @@ lower(Plan = #{
     #{
         name => Name,
         depth => Depth,
+        direct_actor_debug => ActorDebug,
         actors => Actors,
         externals => Externals,
         routes => Routes,
@@ -478,6 +486,7 @@ render(Spec) ->
         ),
         startup_procs(maps:get(startup, Spec)),
         top_proc(
+            Spec,
             Actors,
             Externals,
             Depth,
@@ -832,18 +841,25 @@ startup_arm(Index, Frame) ->
         maps:get(payload, Frame), "),\n"
     ].
 
-top_proc(Actors, Externals, Depth, RouteCode, IngressCode) ->
+top_proc(Spec, Actors, Externals, Depth, RouteCode, IngressCode) ->
+    Channels = Externals ++ case xls_actor_observation:enabled(Spec) of
+        false -> [];
+        true -> [#{output_name => xls_actor_observation:scalar_name(Index),
+            type => [Module, "::ActorObservation"]} ||
+            #{index := Index, module_name := Module} <- Actors]
+    end,
+    ok = xls_actor_observation:validate_channels([maps:get(output_name, C) || C <- Channels]),
     [
         "pub proc Top {\n",
         [["  ", maps:get(output_name, External),
-            ": chan<axis::Frame> out;\n"] || External <- Externals],
+            ": chan<", maps:get(type, External, "axis::Frame"), "> out;\n"] || External <- Channels],
         "\n",
-        top_config_signature(Externals),
+        top_config_signature(Channels),
         actor_channels(Actors, Depth),
-        actor_spawns(Actors),
+        actor_spawns(Spec, Actors),
         RouteCode,
         IngressCode,
-        "\n    ", external_tuple(Externals), "\n",
+        "\n    ", external_tuple(Channels), "\n",
         "  }\n\n",
         "  init { () }\n",
         "  next(state: ()) { state }\n",
@@ -856,7 +872,7 @@ top_config_signature(Externals) ->
         "  config(\n",
         [
             ["      ", maps:get(output_name, External),
-                ": chan<axis::Frame> out",
+                ": chan<", maps:get(type, External, "axis::Frame"), "> out",
                 separator(Index, length(Externals)), "\n"]
             || {Index, External} <- lists:enumerate(0, Externals)
         ],
@@ -877,13 +893,15 @@ actor_channels(Actors, Depth) ->
         || Actor <- Actors
     ].
 
-actor_spawns(Actors) ->
+actor_spawns(Spec, Actors) ->
     [
         [
             "    spawn ", maps:get(module_name, Actor), "::Service(\n",
             "      ", consumer([maps:get(stem, Actor), "_req"]),
             ",\n      ", producer(maps:get(egress_channel, Actor)),
             ",\n      ", producer([maps:get(stem, Actor), "_admit"]),
+            xls_actor_observation:spawn_argument(Spec,
+                xls_actor_observation:scalar_name(maps:get(index, Actor))),
             ");\n"
         ]
         || Actor <- Actors

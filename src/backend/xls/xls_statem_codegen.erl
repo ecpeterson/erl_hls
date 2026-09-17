@@ -38,7 +38,8 @@
     casts := [cast_clause()],
     reductions := none | xls_statem_reduction_ir:reduction(),
     shared_service := ordinary | aggregate_only,
-    mailbox_debug => boolean()
+    mailbox_debug => boolean(),
+    direct_actor_debug => boolean()
 }.
 
 -spec emit(spec()) -> iolist().
@@ -51,6 +52,7 @@ emit(Spec) ->
             maps:get(reductions, Spec, none), SharedService
         ),
         machine_declarations(Spec),
+        xls_actor_observation:declarations(Spec),
         xls_statem_reduction_codegen:functions(
             maps:get(reductions, Spec, none), SharedService
         ),
@@ -916,15 +918,20 @@ service(Spec) ->
         "pub proc Service {\n",
         "  req_in: chan<axis::Frame> in;\n",
         "  egress_out: chan<Egress> out;\n",
-        "  admission_out: chan<u1> out;\n\n",
+        "  admission_out: chan<u1> out;\n",
+        xls_actor_observation:proc_field(Spec),
+        "\n",
         "  config(req_in: chan<axis::Frame> in,\n",
         "         egress_out: chan<Egress> out,\n",
-        "         admission_out: chan<u1> out) {\n",
-        "    (req_in, egress_out, admission_out)\n",
+        "         admission_out: chan<u1> out",
+        xls_actor_observation:config_parameter(Spec), ") {\n",
+        "    (req_in, egress_out, admission_out",
+        xls_actor_observation:config_value(Spec), ")\n",
         "  }\n\n",
         "  init { (initial_machine(), u1:0) }\n\n",
         "  next(state: (Machine, u1)) {\n",
         "    let (machine, admission_valid) = state;\n",
+        xls_actor_observation:sample(Spec),
         "    // Reserve capacity in machine_step, then publish its credit\n",
         "    // from registered state to break receive/admission feedback.\n",
         "    // Its token is independent of the current receive and egress.\n",
@@ -1543,7 +1550,7 @@ egress_demux(#{output_names := OutputNames}) ->
         "}\n\n"
     ].
 
-top(#{output_names := OutputNames}) ->
+top(Spec = #{output_names := OutputNames}) ->
     [
         "pub proc Top {\n",
         "  ext_recv: chan<axis::Beat> in;\n",
@@ -1551,13 +1558,15 @@ top(#{output_names := OutputNames}) ->
             ["  ", name(Port), "_send: chan<axis::Beat> out;\n"]
             || Port <- OutputNames
         ],
+        xls_actor_observation:proc_field(Spec),
         "\n  config(ext_recv: chan<axis::Beat> in,\n",
         [
             ["         ", name(Port), "_send: chan<axis::Beat> out,\n"]
             || Port <- lists:droplast(OutputNames)
         ],
         "         ", name(lists:last(OutputNames)),
-        "_send: chan<axis::Beat> out) {\n",
+        "_send: chan<axis::Beat> out",
+        xls_actor_observation:config_parameter(Spec), ") {\n",
         "    let (req_p, req_c) = chan<axis::Frame, u32:1>(\"req\");\n",
         "    let (admit_p, admit_c) = chan<u1, u32:1>(\"admit\");\n",
         "    let (egress_p, egress_c) =\n",
@@ -1570,7 +1579,8 @@ top(#{output_names := OutputNames}) ->
             || Port <- OutputNames
         ],
         "    spawn axis::ReservedRx(ext_recv, req_p, admit_c);\n",
-        "    spawn Service(req_c, egress_p, admit_p);\n",
+        "    spawn Service(req_c, egress_p, admit_p",
+        xls_actor_observation:spawn_argument(Spec, "actor_debug_out"), ");\n",
         "    spawn EgressDemux(egress_c, ",
         join_with(", ", [[name(Port), "_p"] || Port <- OutputNames]),
         ");\n",
@@ -1583,6 +1593,7 @@ top(#{output_names := OutputNames}) ->
         ],
         "    (ext_recv, ",
         join_with(", ", [[name(Port), "_send"] || Port <- OutputNames]),
+        xls_actor_observation:config_value(Spec),
         ")\n",
         "  }\n\n",
         "  init { () }\n",

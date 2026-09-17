@@ -23,12 +23,13 @@ DEBUG_RTL = [ROOT / "priv/rtl/debug" / name for name in
 
 def testbench(args, ports, manifest):
     lines = ["`timescale 1ns/1ps", "module topology_live_tb;", "reg clk=0, resetn=0;",
-             "always #5 clk=~clk;", "reg released=0; integer fd, cycles=0;",
+             "always #5 clk=~clk;", "reg released=0, contributions=0; integer fd, cycles=0;",
              "reg [31:0] s_dbg_tdata=0; reg [3:0] s_dbg_tkeep=15;",
              "reg s_dbg_tlast=0, s_dbg_tvalid=0; wire s_dbg_tready;",
              "wire [31:0] m_dbg_tdata; wire [3:0] m_dbg_tkeep;",
              "wire m_dbg_tlast, m_dbg_tvalid; reg m_dbg_tready=0;"]
-    originals, instrumented, checks = [], [], []
+    originals, instrumented, production, checks, final_checks = [], [], [], [], []
+    compare_production = bool(getattr(args, "reference_rtl", None))
     sinks = [ready for _, _, ready, direction in topology.channel_ports({"ports": ports}) if direction == "output"]
     if not sinks:
         raise ValueError("test requires an external sink")
@@ -42,20 +43,42 @@ def testbench(args, ports, manifest):
                 signal = "resetn" if args.reset_active_low else "!resetn"
             elif name in sinks:
                 signal = "released" if name == sinks[0] else "1'b1"
-            elif name == "release_contributions" and args.actor_test in ("reduction", "aggregate"):
-                signal = "released"
+            elif name == "release_contributions" and args.actor_test in ("reduction", "aggregate", "direct_reduction"):
+                signal = "contributions" if args.actor_test == "direct_reduction" else "released"
             else:
                 raise ValueError(f"test has no driver for input {name}")
             originals.append(f".\\{name} ({signal})")
             instrumented.append(f".\\{name} ({signal})")
+            production.append(f".\\{name} ({signal})")
         else:
-            for suffix in ("ref", "dut"):
+            for suffix in (("ref", "dut", "production") if compare_production else ("ref", "dut")):
                 lines.append(f"wire [{width-1}:0] port_{index}_{suffix};")
             originals.append(f".\\{name} (port_{index}_ref)")
             instrumented.append(f".\\{name} (port_{index}_dut)")
+            production.append(f".\\{name} (port_{index}_production)")
             valid_name = valid_for_data.get(name)
             condition = "1" if valid_name is None else f"port_{list(ports).index(valid_name)}_ref"
             checks.append(f"if ({condition} && port_{index}_ref !== port_{index}_dut) $fatal(1, \"changed application output {name}\");")
+    if compare_production:
+        if args.actor_test != "direct_reduction":
+            raise ValueError("production comparison currently uses the direct reduction fixture")
+        report_index = list(ports).index("_reports_out")
+        valid_index = list(ports).index("_reports_out_vld")
+        for suffix in ("dut", "production"):
+            lines.append(f"integer reports_{suffix}=0;")
+            checks += [
+                f"if(port_{valid_index}_{suffix} && !contributions) $fatal(1, \"{suffix}: completed before missing contributors\");",
+                f"if(port_{valid_index}_{suffix} && port_{report_index}_{suffix}[95:0] !== 96'd3) $fatal(1, \"{suffix}: wrong healthy reduction result\");",
+                f"if(port_{valid_index}_{suffix} && released) reports_{suffix}=reports_{suffix}+1;",
+            ]
+            final_checks.append(f"if(reports_{suffix} != 1) $fatal(1, \"{suffix}: expected exactly one healthy report, got %0d\",reports_{suffix});")
+        # This fixture's complete application transcript is one report. Check
+        # the whole frame as well as its value, independently of cycle timing.
+        lines += [f"reg [{len(ports['_reports_out']['bits'])-1}:0] report_dut, report_production;"]
+        for suffix in ("dut", "production"):
+            checks.append(f"if(port_{valid_index}_{suffix} && released) report_{suffix}=port_{report_index}_{suffix};")
+        final_checks.append('if(report_dut !== report_production) $fatal(1, "production/debug application frame differs");')
+        final_checks.append('$display("PASS: production/debug application transcripts match (one healthy report, payload 3)");')
     debug_ports = [f".{side}_dbg_{suffix}({side}_dbg_{suffix})" for side in ("s", "m")
                    for suffix in ("tdata", "tkeep", "tlast", "tvalid", "tready")]
     queues = [q for q in manifest["resources"] if q["kind"] == "fifo"]
@@ -67,14 +90,18 @@ def testbench(args, ports, manifest):
         checks.append(f"occupancy_{q['id']} = occupancy_{q['id']} + "
                       f"((dut.probe_values[{push}+:2] == 3) ? 1 : 0) - "
                       f"((dut.probe_values[{pop}+:2] == 3) ? 1 : 0);")
+    if compare_production:
+        lines.append(f"{args.reference_top} production ({', '.join(production)});")
     lines += [f"{args.top} reference ({', '.join(originals)});",
               f"hls_debug_application dut ({', '.join(instrumented+debug_ports)});",
               "initial begin repeat(5) @(negedge clk); resetn=1; end",
               "always @(posedge clk) if(resetn) begin", *checks,
               "cycles=cycles+1; if(cycles>5000000) $fatal(1, \"host query timeout\");",
               "end", "always @(negedge clk) if(resetn && cycles%100==0) begin",
+              'fd=$fopen("contributions","r"); if(fd) begin contributions=1; $fclose(fd); fd=$fopen("contributions_released","w"); $fclose(fd); end',
               'fd=$fopen("release","r"); if(fd) begin released=1; $fclose(fd); fd=$fopen("released","w"); $fclose(fd); end',
               'fd=$fopen("done","r"); if(fd) begin $fclose(fd);',
+              *final_checks,
               '$display("PASS: original/instrumented application equivalence for %0d cycles",cycles); $finish; end',
               "end", "endmodule"]
     return "\n".join(lines)+"\n"
@@ -105,13 +132,31 @@ def run(args):
         (stage / "actor-test").write_text(args.actor_test)
     else:
         (stage / "actor-test").unlink(missing_ok=True)
-    for name in ("release", "released", "done", "debug_tx", "debug_rx"):
+    for name in ("release", "released", "contributions", "contributions_released", "done", "debug_tx", "debug_rx"):
         (stage / name).unlink(missing_ok=True)
     for name in ("xls_sim_bridge.c", "xls_sim_axis.h"):
         shutil.copy(ROOT / "test/rtl" / name, stage)
+    reference_rtl = getattr(args, "reference_rtl", None) or []
+    if reference_rtl:
+        # Independent XLS builds reuse internal proc/FIFO module names. Flatten
+        # the production copy under its own top before compiling both designs
+        # into one simulation; never rename individual generated signal text.
+        reference_flat = stage / "production.v"
+        script = "\n".join([
+            "read_verilog -sv " + " ".join(json.dumps(str(path.resolve())) for path in reference_rtl),
+            f"hierarchy -check -top {args.reference_top}",
+            "proc", "flatten", f"hierarchy -top {args.reference_top}",
+            "write_verilog " + json.dumps(str(reference_flat)),
+        ])
+        (stage / "production.ys").write_text(script + "\n")
+        with (stage / "production.log").open("w") as log:
+            subprocess.run([args.yosys, "-Q", "-T", "-s", str(stage / "production.ys")],
+                           stdout=log, stderr=subprocess.STDOUT, check=True, timeout=180)
+        reference_rtl = [reference_flat]
     commands = [["iverilog-vpi", "xls_sim_bridge.c"],
         ["iverilog", "-g2012", "-s", "topology_live_tb", "-o", "test.vvp", "tb.sv", "debug_top.v", "instrumented.v",
-         *map(str, DEBUG_RTL), *[str(p.resolve()) for p in args.rtl]]]
+         *map(str, DEBUG_RTL), *[str(p.resolve()) for p in args.rtl],
+         *[str(p.resolve()) for p in reference_rtl]]]
     with (stage / "compile.log").open("w") as log:
         for command in commands:
             subprocess.run(command, cwd=stage, stdout=log, stderr=subprocess.STDOUT, check=True, timeout=180)
@@ -153,7 +198,7 @@ def run(args):
                 sim.terminate()
                 sim.wait(timeout=10)
     assert "PASS: original/instrumented" in (stage / "simulation.log").read_text()
-    for name in ("blocked", "recovered"):
+    for name in (("blocked", "completed", "recovered") if args.actor_test == "direct_reduction" else ("blocked", "recovered")):
         report = json.loads((stage / f"{name}.json").read_text())
         (stage / f"{name}.txt").write_text(reporting.text_report(manifest, report))
     print(f"PASS: {manifest['top']} structural and cycle-by-cycle noninterference")
@@ -171,5 +216,7 @@ if __name__ == "__main__":
     parser.add_argument("--yosys", default="yosys")
     parser.add_argument("--actor-projection", type=Path)
     parser.add_argument("--actor-root", default="")
-    parser.add_argument("--actor-test", choices=("small", "phi", "mailbox", "reduction", "aggregate"))
+    parser.add_argument("--actor-test", choices=("small", "phi", "mailbox", "reduction", "aggregate", "direct_reduction"))
+    parser.add_argument("--reference-rtl", type=Path, action="append", help="diagnostics-disabled application RTL for transfer comparison")
+    parser.add_argument("--reference-top", default="actor_debug_production_wrapper")
     run(parser.parse_args())

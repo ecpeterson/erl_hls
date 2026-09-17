@@ -81,7 +81,7 @@ emit(Plan, Profile) ->
 -doc "Returns the actor-artifact specializations selected by a profile.".
 -spec artifact_requirements(
     hls_topology:plan(), xls_topology_dslx:profile()
-) -> #{module() := #{shared_service := ordinary | aggregate_only, mailbox_debug => boolean()}}.
+) -> #{module() := #{shared_service := ordinary | aggregate_only, mailbox_debug => boolean(), direct_actor_debug => boolean()}}.
 artifact_requirements(Plan, Profile) ->
     maps:get(artifact_requirements, lower(Plan, Profile)).
 
@@ -99,9 +99,15 @@ lower(Plan, Profile) ->
         scheduler_groups := Groups,
         reduction_placements := Placements,
         effect_window_partition := WindowPartition,
-        mailbox_debug := MailboxDebug
+        mailbox_debug := MailboxDebug,
+        direct_actor_debug := ActorDebug
     } = xls_topology_profile:normalize(Profile, family),
     SchedulerPlan = hls_scheduler_plan:normalize(Plan, Groups),
+    case {ActorDebug, SchedulerPlan} of
+        {true, #{groups := [_ | _], direct_members := [_ | _]}} ->
+            error(direct_actor_debug_requires_direct_family_topology);
+        _ -> ok
+    end,
     case {MailboxDebug, maps:get(groups, SchedulerPlan)} of
         {true, []} -> error(mailbox_debug_requires_shared_schedulers);
         _ -> ok
@@ -155,14 +161,20 @@ lower(Plan, Profile) ->
         depth => Depth,
         effect_window_partition => WindowPartition,
         mailbox_debug => MailboxDebug,
+        direct_actor_debug => ActorDebug,
         reduction_plan => ReductionPlan,
         artifact_requirements =>
             maps:map(fun(_, Requirement) ->
-                case MailboxDebug of
+                WithMailbox = case MailboxDebug of
                     true -> Requirement#{mailbox_debug => true};
                     false -> Requirement
+                end,
+                case ActorDebug andalso Schedulers =:= [] of
+                    true -> WithMailbox#{direct_actor_debug => true};
+                    false -> WithMailbox
                 end
-            end, hls_reduction_plan:artifact_requirements(ReductionPlan)),
+            end, maps:merge(maps:from_list([{Module, #{shared_service => ordinary}} ||
+                #{module := Module} <- Families]), hls_reduction_plan:artifact_requirements(ReductionPlan))),
         schedulers => Schedulers,
         families => Families,
         width => Width,
@@ -1201,9 +1213,13 @@ family_node(Spec, Family) ->
         || Index <- lists:seq(0, InputCount - 1)],
     Outputs = [[lane_output(Lane), ": chan<axis::Frame> out"]
         || Lane <- OutboundLanes],
+    Debug = case xls_actor_observation:enabled(Spec) of
+        true -> [["actor_debug_out: chan<", maps:get(module_name, Family), "::ActorObservation> out"]];
+        false -> []
+    end,
     [
         "proc ", node_name(Spec, Family), node_parametrics(Family), " {\n",
-        config_signature(Inputs ++ Outputs, 2),
+        config_signature(Inputs ++ Outputs ++ Debug, 2),
         node_body(Spec, Family, InputCount, OutboundLanes),
         "    ()\n  }\n\n",
         "  init { () }\n",
@@ -1223,7 +1239,8 @@ node_body(Spec, Family, InputCount, OutboundLanes) ->
         integer_to_list(maps:get(egress_depth, Family)),
         ">(\"actor_egress\");\n",
         "    spawn ", Module, "::Service(\n",
-        "      actor_req_c, actor_egress_p, actor_admit_p);\n",
+        "      actor_req_c, actor_egress_p, actor_admit_p",
+        xls_actor_observation:spawn_argument(Spec, "actor_debug_out"), ");\n",
         "    spawn ", router_name(Spec, Family), "(actor_egress_c",
         [[", ", lane_output(Lane)] || Lane <- OutboundLanes],
         ");\n",
@@ -1246,7 +1263,8 @@ family_grid(Spec) ->
         config_signature(
             IngressArguments ++
                 [[OutputName, ": chan<axis::Frame> out"]
-                || #{output_name := OutputName} <- Externals],
+                || #{output_name := OutputName} <- Externals] ++
+                debug_arguments(Spec, "TORUS_WIDTH", "TORUS_HEIGHT"),
             2
         ),
         [lane_array(Lane) || Lane <- Lanes],
@@ -1318,7 +1336,7 @@ family_spawn(Spec, Family) ->
         "      unroll_for! (y, _): (u32, ()) in u32:0..TORUS_HEIGHT {\n",
         "        spawn ", node_name(Spec, Family),
         node_specialization(Family), "(\n",
-        node_spawn_arguments(Family),
+        node_spawn_arguments(Spec, Family),
         "        );\n",
         "      }(())\n",
         "    }(());\n"
@@ -1328,13 +1346,17 @@ family_comment(#{families := [_]}, _Family) -> [];
 family_comment(_Spec, Family) ->
     ["    // Family ", io_lib:format("~tp", [maps:get(id, Family)]), ".\n"].
 
-node_spawn_arguments(Family) ->
+node_spawn_arguments(Spec, Family) ->
     InboundLanes = maps:get(inbound_lanes, Family),
     OutboundLanes = maps:get(outbound_lanes, Family),
     Arguments =
         [family_lane_consumer(Lane) || Lane <- InboundLanes] ++
         control_consumer(Family) ++
-        [[maps:get(stem, Lane), "_p[x][y]"] || Lane <- OutboundLanes],
+        [[maps:get(stem, Lane), "_p[x][y]"] || Lane <- OutboundLanes] ++
+        case xls_actor_observation:enabled(Spec) of
+            true -> [[xls_actor_observation:family_name(maps:get(index, Family)), "[x][y]"]];
+            false -> []
+        end,
     [
         ["          ", Argument, separator(Index, length(Arguments)), "\n"]
         || {Index, Argument} <- lists:enumerate(0, Arguments)
@@ -1405,15 +1427,17 @@ top_proc(Spec) ->
         || #{input_name := InputName} <- Ingresses],
     ExternalMembers = [[OutputName, ": chan<axis::Frame> out"]
         || #{output_name := OutputName} <- Externals],
+    DebugMembers = debug_arguments(Spec, "WIDTH", "HEIGHT"),
     Names = [InputName || #{input_name := InputName} <- Ingresses] ++
-        [OutputName || #{output_name := OutputName} <- Externals],
+        [OutputName || #{output_name := OutputName} <- Externals] ++ debug_names(Spec),
+    ok = xls_actor_observation:validate_channels(Names),
     [
         "pub proc Top {\n",
         [["  ", Member, ";\n"]
-            || Member <- IngressMembers ++ ExternalMembers],
+            || Member <- IngressMembers ++ ExternalMembers ++ DebugMembers],
         "\n",
         config_signature(
-            IngressMembers ++ ExternalMembers,
+            IngressMembers ++ ExternalMembers ++ DebugMembers,
             2
         ),
         "    spawn ", grid_name(Spec), "<WIDTH, HEIGHT>(",
@@ -1425,6 +1449,20 @@ top_proc(Spec) ->
         "  next(state: ()) { state }\n",
         "}\n"
     ].
+
+debug_arguments(Spec = #{families := Families}, Width, Height) ->
+    case xls_actor_observation:enabled(Spec) of
+        false -> [];
+        true -> [[xls_actor_observation:family_name(Index), ": chan<", Module,
+            "::ActorObservation>[", Height, "][", Width, "] out"] ||
+            #{index := Index, module_name := Module} <- Families]
+    end.
+
+debug_names(Spec = #{families := Families}) ->
+    case xls_actor_observation:enabled(Spec) of
+        false -> [];
+        true -> [xls_actor_observation:family_name(Index) || #{index := Index} <- Families]
+    end.
 
 config_signature(Arguments, Indent) ->
     Padding = lists:duplicate(Indent + 2, $ ),

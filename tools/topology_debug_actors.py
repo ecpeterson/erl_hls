@@ -1,4 +1,4 @@
-"""Bind compiler projections to the public write ports of scheduler state RAMs."""
+"""Bind compiler projections to committed RAM writes and actor observation ports."""
 
 
 def check_write_contract(module):
@@ -76,58 +76,101 @@ def reduction_bits(reduction, phases, width):
     return selected
 
 
+def selected_fields(bank, keys):
+    width, slots = bank["width"], bank["slots"]
+    fields = bank["fields"]
+    selected = []
+    for name, size in (("phase", 8), ("enter_pending", 1), ("failure", 16)):
+        field = fields[name]
+        offset = field["offset"]
+        if field["width"] != size or type(offset) is not int or not 0 <= offset <= width-size:
+            raise ValueError(f"invalid actor field: {name}")
+        selected.extend(range(offset, offset+size))
+    if reduction := bank.get("reduction"):
+        selected.extend(reduction_bits(reduction, bank["phases"], width))
+    if len(set(selected)) != len(selected):
+        raise ValueError("overlapping actor fields")
+    phases = bank["phases"]
+    if not 1 <= len(phases) <= 256 or len(set(phases)) != len(phases) or not all(isinstance(p, str) for p in phases):
+        raise ValueError("invalid phase codebook")
+    if [a["slot"] for a in bank["actors"]] != list(range(slots)):
+        raise ValueError("actor slots must cover the bank exactly")
+    for actor in bank["actors"]:
+        key = actor["key"]
+        if len(key) != 64 or any(c not in "0123456789abcdef" for c in key) or key in keys:
+            raise ValueError("invalid or duplicate actor identity")
+        keys.add(key)
+    return selected
+
+
+def ram_source(bank, root, module, hierarchy, flat, clock_bit):
+    slots, width = bank["slots"], bank["width"]
+    address_width = max(1, (slots - 1).bit_length())
+    path = (*root, bank["ram"])
+    ram = hierarchy["modules"][module["cells"][bank["ram"]]["type"]]
+    if ram.get("attributes", {}).get("hdlname", "").removeprefix("\\") != "hls_1r1w_ram":
+        raise ValueError(f"unsupported state RAM at {'.'.join(path)}")
+    check_write_contract(ram)
+    expected = {"clk": ("input", 1), "wr_en": ("input", 1),
+                "wr_addr": ("input", address_width), "wr_data": ("input", width)}
+    def bits(name):
+        return flat["netnames"][".".join((*path, name))]["bits"]
+    for name, (direction, size) in expected.items():
+        port = ram["ports"][name]
+        if port["direction"] != direction or len(port["bits"]) != size or len(bits(name)) != size:
+            raise ValueError(f"state RAM port mismatch: {'.'.join(path)}.{name}")
+    if bits("clk") != [clock_bit]:
+        raise ValueError("state RAM is in a different clock domain")
+    return path, address_width, bits("wr_en") + bits("wr_addr"), bits("wr_data")
+
+
+def direct_source(bank, root, module, hierarchy, flat, clock_bit):
+    if bank["slots"] != 1 or "mailbox" in bank or "ram" in bank:
+        raise ValueError("invalid direct actor observation provider")
+    port, width = bank["port"], bank["width"]
+    matches = [(name, cell) for name, cell in module["cells"].items()
+               if port in cell.get("connections", {})]
+    if len(matches) != 1:
+        raise ValueError("expected one generated direct actor observation output")
+    name, cell = matches[0]
+    app = hierarchy["modules"][cell["type"]]
+    path = (*root, name)
+    def bits(signal):
+        return flat["netnames"][".".join((*path, signal))]["bits"]
+    for signal, direction, size in ((port, "output", width),
+            (port+"_vld", "output", 1), (port+"_rdy", "input", 1)):
+        description = app["ports"][signal]
+        if (description["direction"] != direction or len(description["bits"]) != size or
+                len(cell["connections"][signal]) != size or len(bits(signal)) != size):
+            raise ValueError("direct actor observation port mismatch")
+    if cell["connections"][port+"_rdy"] != ["1"] or bits(port+"_rdy") != ["1"]:
+        raise ValueError("direct actor observation output must always be ready")
+    if bits("clk") != [clock_bit]:
+        raise ValueError("direct actor observation clock mismatch")
+    # One row per direct actor; its observation has no RAM address.
+    return path, 1, bits(port+"_vld") + ["0"], bits(port)
+
+
 def discover(projection, root, hierarchy, flat, top, clock_bit):
-    if projection.get("schema") != 3 or not projection.get("banks"):
-        raise ValueError("expected a nonempty scheduler projection, schema 3")
+    shared, direct = projection.get("banks", []), projection.get("direct", [])
+    if projection.get("schema") != 3 or not (shared or direct):
+        raise ValueError("expected a nonempty actor projection, schema 3")
     module = hierarchy["modules"][top]
     for instance in root:
         module = hierarchy["modules"][module["cells"][instance]["type"]]
     banks, keys = [], set()
-    for index, bank in enumerate(projection["banks"]):
+    for index, bank in enumerate(shared + direct):
         if bank["index"] != index:
-            raise ValueError("scheduler bank indices must be contiguous")
+            raise ValueError("actor bank indices must be contiguous")
         slots, width = bank["slots"], bank["width"]
-        if type(slots) is not int or slots < 1 or type(width) is not int or width < 33:
-            raise ValueError("invalid scheduler RAM dimensions")
-        address_width = max(1, (slots - 1).bit_length())
-        path = (*root, bank["ram"])
-        ram = hierarchy["modules"][module["cells"][bank["ram"]]["type"]]
-        if ram.get("attributes", {}).get("hdlname", "").removeprefix("\\") != "hls_1r1w_ram":
-            raise ValueError(f"unsupported state RAM at {'.'.join(path)}")
-        check_write_contract(ram)
-        expected = {"clk": ("input", 1), "wr_en": ("input", 1),
-                    "wr_addr": ("input", address_width), "wr_data": ("input", width)}
-        def bits(name):
-            return flat["netnames"][".".join((*path, name))]["bits"]
-        for name, (direction, size) in expected.items():
-            port = ram["ports"][name]
-            if port["direction"] != direction or len(port["bits"]) != size or len(bits(name)) != size:
-                raise ValueError(f"state RAM port mismatch: {'.'.join(path)}.{name}")
-        if bits("clk") != [clock_bit]:
-            raise ValueError("state RAM is in a different clock domain")
-        fields = bank["fields"]
-        selected = []
-        for name, size in (("phase", 8), ("enter_pending", 1), ("failure", 16)):
-            field = fields[name]
-            offset = field["offset"]
-            if field["width"] != size or type(offset) is not int or not 0 <= offset <= width-size:
-                raise ValueError(f"invalid actor field: {name}")
-            selected.extend(range(offset, offset+size))
-        if reduction := bank.get("reduction"):
-            selected.extend(reduction_bits(reduction, bank["phases"], width))
-        if len(set(selected)) != len(selected):
-            raise ValueError("overlapping actor fields")
-        phases = bank["phases"]
-        if not 1 <= len(phases) <= 256 or len(set(phases)) != len(phases) or not all(isinstance(p, str) for p in phases):
-            raise ValueError("invalid phase codebook")
-        if [a["slot"] for a in bank["actors"]] != list(range(slots)):
-            raise ValueError("actor slots must cover the bank exactly")
-        for actor in bank["actors"]:
-            key = actor["key"]
-            if len(key) != 64 or any(c not in "0123456789abcdef" for c in key) or key in keys:
-                raise ValueError("invalid or duplicate actor identity")
-            keys.add(key)
-        taps = bits("wr_en") + bits("wr_addr") + [bits("wr_data")[i] for i in selected]
+        is_direct = index >= len(shared)
+        if (type(slots) is not int or slots < 1 or type(width) is not int or
+                width < (25 if is_direct else 33)):
+            raise ValueError("invalid actor observation dimensions")
+        selected = selected_fields(bank, keys)
+        source = direct_source if is_direct else ram_source
+        path, address_width, prefix, values = source(bank, root, module, hierarchy, flat, clock_bit)
+        taps = prefix + [values[i] for i in selected]
         mailbox = bank.get("mailbox")
         if mailbox:
             port = mailbox["port"]

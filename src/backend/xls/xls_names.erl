@@ -213,7 +213,7 @@ runtime(hls_gs) ->
         "ERROR_FUNCTION_CLAUSE", "ERROR_REQUEST_LENGTH", "ERROR_REPLY_CONTRACT", "INITIAL_STATE"];
 runtime(hls_statem) ->
     ["Tag", "Phase", "Directive", "OutputPort", "Egress", "EntryEffects",
-        "EntryOutcome", "MailboxSlot", "Machine", "SharedMachine", "MachineBits",
+        "EntryOutcome", "ActorObservation", "MailboxSlot", "Machine", "SharedMachine", "MachineBits",
         "MachineRamReadReq", "MachineRamReadResp", "MachineRamWriteReq",
         "MachineRamWriteResp", "MailboxRamReadReq", "MailboxRamReadResp",
         "MailboxRamWriteReq", "MailboxRamWriteResp", "MachineStep", "ScheduledRequest",

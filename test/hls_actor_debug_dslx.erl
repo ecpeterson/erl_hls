@@ -100,6 +100,12 @@ write(Kind, Stage, Options0) ->
         false -> {[], []};
         true -> {xls_scheduler_observation:wires(Scheduler), xls_scheduler_observation:ports(Scheduler)}
     end,
+    {ActorWires, ActorPorts} = case maps:get(direct_actor_debug, Options, false) of
+        false -> {[], []};
+        true ->
+            Observations = xls_actor_observation:bindings(Plan, Specs),
+            {xls_actor_observation:wires(Observations), xls_actor_observation:ports(Observations)}
+    end,
     TemplateFile = case Kind of
         K when K =:= reduction; K =:= aggregate; K =:= direct_reduction ->
             "test/rtl/hls_reduction_debug.template.v";
@@ -116,8 +122,8 @@ write(Kind, Stage, Options0) ->
     Wrapper = lists:foldl(fun({Pattern, Replacement}, Text) ->
         binary:replace(Text, Pattern, iolist_to_binary(Replacement), [global])
     end, Template, [{<<"@NAME@">>, "actor_debug"}, {<<"@CONFIGURE@">>, Configure},
-        {<<"@WIRES@">>, [xls_scheduler_ram_v:wires(Bindings), DebugWires]},
-        {<<"@PORTS@">>, [xls_scheduler_ram_v:application_ports(Bindings), DebugPorts]},
+        {<<"@WIRES@">>, [xls_scheduler_ram_v:wires(Bindings), DebugWires, ActorWires]},
+        {<<"@PORTS@">>, [xls_scheduler_ram_v:application_ports(Bindings), DebugPorts, ActorPorts]},
         {<<"@RAMS@">>, xls_scheduler_ram_v:instances(Bindings, "clk")}]),
     ok = write_file(Stage, "actor_debug_wrapper.v", Wrapper),
     ok = write_file(Stage, "small-actors.json",
