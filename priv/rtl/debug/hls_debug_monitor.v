@@ -108,6 +108,22 @@ module hls_debug_capture (
         s_dbg_tdata
     };
     wire [DEBUG_BEAT_BITS-1:0] debug_response;
+    wire server_request_ready;
+    reg reply_pending;
+
+    // XLS may begin the next proc activation while a previous response is
+    // stalled. Do not let that activation request a snapshot until the server
+    // can receive it: an early snapshot would stall passive observation.
+    // Partial/malformed packets still drain through TLAST before this fence.
+    assign s_dbg_tready = !reply_pending && server_request_ready;
+    always @(posedge aclk) begin
+        if (!aresetn)
+            reply_pending <= 0;
+        else if (s_dbg_tvalid && s_dbg_tready && s_dbg_tlast)
+            reply_pending <= 1;
+        else if (m_dbg_tvalid && m_dbg_tready && m_dbg_tlast)
+            reply_pending <= 0;
+    end
     wire [7:0] server_snapshot_request;
     wire server_snapshot_request_valid;
     wire server_snapshot_request_ready;
@@ -184,8 +200,8 @@ module hls_debug_capture (
         .clk(aclk),
         .reset(!aresetn),
         ._request_in(debug_request),
-        ._request_in_vld(s_dbg_tvalid),
-        ._request_in_rdy(s_dbg_tready),
+        ._request_in_vld(s_dbg_tvalid && !reply_pending),
+        ._request_in_rdy(server_request_ready),
         ._response_out(debug_response),
         ._response_out_vld(m_dbg_tvalid),
         ._response_out_rdy(m_dbg_tready),

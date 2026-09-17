@@ -202,6 +202,9 @@ jobs:
       - name: Diagnose dropped observations through the debug endpoint
         run: python3 tools/test_debug_trace_integration.py _build/xls_sim/regsvc
 
+      - name: Prove continuous passive sampling under arbitrary debug traffic
+        run: python3 tools/test_debug_sampling.py _build/xls_sim/regsvc
+
       - name: Upload decoded debug observations
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -211,6 +214,13 @@ jobs:
             _build/debug-memories/**/*.json
             _build/debug-memories/**/*.log
             _build/debug-memories/**/*.ys
+            _build/debug-sampling/**/*.log
+            _build/debug-sampling/**/*.ys
+            _build/debug-sampling/**/*.abc
+            _build/debug-sampling/**/*.aig
+            _build/debug-sampling/**/*.aim
+            _build/debug-sampling/**/*.aiw
+            _build/debug-sampling/report.json
             _build/mixed-mailbox-debug/p2/memory-check/report.json
             _build/mixed-mailbox-debug/p2/memory-check/*.ys
             _build/mixed-mailbox-debug/p2/memory-check/*.log
