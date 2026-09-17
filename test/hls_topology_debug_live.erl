@@ -34,10 +34,11 @@ run(Stage) ->
                 {ok, #{value := 1}} <- [hls_topology_debug:query(Session, Id)]];
             _ -> Full
         end,
-        Withheld = case file:read_file(filename:join(Stage, "actor-test")) of
-            {ok, <<"reduction">>} -> true;
-            {ok, <<"aggregate">>} -> true;
-            _ -> false
+        {Withheld, Direct} = case file:read_file(filename:join(Stage, "actor-test")) of
+            {ok, <<"reduction">>} -> {true, false};
+            {ok, <<"direct_reduction">>} -> {true, true};
+            {ok, <<"aggregate">>} -> {true, false};
+            _ -> {false, false}
         end,
         case Withheld of
             true ->
@@ -54,19 +55,42 @@ run(Stage) ->
         end, maps:get(edges, Report)),
         true = Withheld orelse HasSink,
         ok = file:write_file(filename:join(Stage, "blocked.json"), json:encode(Report)),
+        RecoverySeeds = case Direct of
+            true ->
+                %% Release missing contributors independently of the report
+                %% sink. Inspect committed failure while the healthy peer's
+                %% output is backpressured, entirely through public queries.
+                ok = file:write_file(filename:join(Stage, "contributions"), <<>>),
+                ok = await_file(Stage, "contributions_released", 1000),
+                ok = hls_actor_debug_live:await_completed(Session, direct_reduction),
+                ok = hls_actor_debug_live:inspect(Session, Stage, completed),
+                OutputSeeds = [Id || #{<<"id">> := Id, <<"endpoints">> := Endpoints} <- maps:get(<<"probes">>, Manifest),
+                    lists:any(fun(E) -> maps:get(<<"external">>, E, false) andalso
+                        maps:get(<<"role">>, E) =:= <<"consumer">> end, Endpoints),
+                    {ok, #{value := 1}} <- [hls_topology_debug:query(Session, Id)]],
+                [_ | _] = OutputSeeds,
+                {ok, Completed} = hls_topology_debug:inspect_waits(Session, OutputSeeds, #{max_queries => 2048}),
+                true = lists:any(fun(#{kind := K, channel := Id}) ->
+                    K =:= external_sink andalso lists:member(Id, maps:get(reobserved_blocked, Completed))
+                end, maps:get(edges, Completed)),
+                ok = file:write_file(filename:join(Stage, "completed.json"), json:encode(Completed)),
+                OutputSeeds;
+            false -> Seeds
+        end,
         ok = file:write_file(filename:join(Stage, "release"), <<>>),
-        ok = await_release(Stage, 1000),
-        {ok, Recovered} = hls_topology_debug:inspect_waits(Session, Seeds, #{max_queries => 2048}),
+        ok = await_file(Stage, "released", 1000),
+        {ok, Recovered} = hls_topology_debug:inspect_waits(Session, RecoverySeeds, #{max_queries => 2048}),
         ok = file:write_file(filename:join(Stage, "recovered.json"), json:encode(Recovered)),
         false = lists:any(fun(#{kind := K, channel := Id}) ->
             K =:= external_sink andalso lists:member(Id, maps:get(reobserved_blocked, Recovered))
         end, maps:get(edges, Recovered)),
         ok = hls_actor_debug_live:inspect(Session, Stage, released),
-        Diagnosis = case Withheld of
-            true -> "partial reductions inspected and withheld participants released";
-            false -> "external stall found and release observed"
+        Diagnosis = case {Withheld, Direct} of
+            {true, true} -> "pending and terminal reductions inspected; healthy output stall found and released";
+            {true, false} -> "partial reductions inspected and withheld participants released";
+            {false, false} -> "external stall found and release observed"
         end,
-        io:format("PASS: ~p blocked seeds, ~p adaptive queries; ~s~n",
+        io:format("PASS: ~p initially blocked seeds, ~p initial adaptive queries; ~s~n",
             [length(Seeds), length(maps:get(observations, Report)), Diagnosis]),
         ok
     after
@@ -75,9 +99,9 @@ run(Stage) ->
     end,
     file:write_file(filename:join(Stage, "done"), <<>>).
 
-await_release(_Stage, 0) -> error(sink_release_timeout);
-await_release(Stage, Attempts) ->
-    case file:read_file(filename:join(Stage, "released")) of
+await_file(_Stage, Name, 0) -> error({release_timeout, Name});
+await_file(Stage, Name, Attempts) ->
+    case file:read_file(filename:join(Stage, Name)) of
         {ok, _} -> ok;
-        {error, enoent} -> timer:sleep(1), await_release(Stage, Attempts-1)
+        {error, enoent} -> timer:sleep(1), await_file(Stage, Name, Attempts-1)
     end.

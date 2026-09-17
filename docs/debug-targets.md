@@ -6,7 +6,7 @@
 | --- | --- | --- |
 | BEAM PID | `message_queue_len`, `status`, `reductions`, `memory` | Native process information; for an `hls_gs` hardware proxy this describes the host proxy. |
 | `{hls_statem, Pid}` or a bound CPU actor | `message_queue_len`, `mailbox_capacity`, `free_slots`, `reserved`, `postponed`, `phase`, `lifecycle`, `reduction`, `beam_message_queue_len` | The reference actor's bounded mailbox and scheduler state, with its front-end BEAM queue reported separately. |
-| Hardware actor with a verified snapshot binding | `phase`, `enter_pending`, `failed`, `failure`, `reduction`, `initialized`, `cycle`, `observation`, optional mailbox counts/work flags, and binding metadata | Last committed shared-actor state and optional scheduler-step metadata. Queries do not wait for the actor or scheduler. |
+| Hardware actor with a verified snapshot binding | `phase`, `enter_pending`, `failed`, `failure`, `reduction`, `initialized`, `cycle`, `observation`, optional mailbox counts/work flags, and binding metadata | Last published committed actor state and optional shared-scheduler metadata. Queries do not wait for the actor or scheduler. |
 | Hardware actor with a metadata-only binding | `identity`, `module`, `placement`, `mailbox_capacity`, `boundaries` | The supplied build plan's logical identity, physical placement, declared capacity, and related monitored boundaries. Live actor mailbox occupancy is not available. |
 | Physical topology resource | `name`, `resource_kind`, `cycle`, `value`; FIFO `capacity`, `occupancy`, `free_slots`; channel `valid`, `ready` | One passive FPGA resource sample. A physical FIFO can carry a frame, a credit, or an internal request; its occupancy is not an actor's mailbox depth. |
 | `{boundary, DebugClient, Id}` | `scope`, `capabilities` | An explicitly named monitored interface supporting `get_counters` and `get_trace`. |
@@ -41,11 +41,11 @@ A different CPU launcher can use `hls_debug_catalog:cpu(Plan, Processes)`, where
 
 ## Open reductions
 
-Both reference actors and shared hardware actors support `hls_debug:info(Actor, reduction)`. This singular item describes an application reduction; the native PID item `reductions` remains ERTS's execution counter.
+Reference actors and hardware actors with snapshot providers support `hls_debug:info(Actor, reduction)`. This singular item describes an application reduction; the native PID item `reductions` remains ERTS's execution counter.
 
 An idle window returns `idle`. An active one includes `status`, opening `phase`, reduction `name`, `key`, declared `population`, `received`, `remaining`, and `failure`. CPU inspection returns `#{class => Class, reason => Reason}` for a pending reducer exception, without exposing its stack or accumulator. Hardware decodes a failure code and optional source location. A pending exception does not stop inspection or close the window: valid remaining contributions must still arrive. The CPU process exits when the final contribution releases the exception; hardware retains its terminal failure latch. Before the first committed hardware write, the reduction observation is `undefined`.
 
-[Reduction observations](topology-debug.md#reduction-observations) describes commit coherence and offloading limits. In particular, a recipient waiting for a complete offloaded aggregate does not expose its contributors' partial folds. Direct hardware actors currently have metadata-only bindings.
+[Reduction observations](topology-debug.md#reduction-observations) describes commit coherence and offloading limits. In particular, a recipient waiting for a complete offloaded aggregate does not expose its contributors' partial folds. Direct hardware actors need the optional [register-backed actor provider](topology-debug.md#register-backed-actor-snapshots).
 
 ## Shared hardware actors and monitored boundaries
 
@@ -63,7 +63,7 @@ hls_debug:info(Actor, [identity, placement, mailbox_capacity, boundaries]),
 
 Shared placements identify the scheduler group ID, its generated zero-based index, and the actor's slot within it. Interleaved families use the normalized scheduler plan's member instances and local indices; they do not assume that a logical row-major index equals a physical slot. Ungrouped actors have direct placement. The supplied plan and explicitly related boundary handles are host declarations, not a bitstream identity check. They do not associate generated signal names or physical resource IDs with logical actors. Physical resource sessions independently verify the RTL manifest fingerprint.
 
-To inspect committed shared-actor state, generate a diagnostic build with [actor projections](topology-debug.md#shared-actor-snapshots), open its verified topology session, and pass that session as the fourth catalog argument:
+To inspect committed actor state, generate a diagnostic build with [actor projections](topology-debug.md#shared-actor-snapshots), open its verified topology session, and pass that session as the fourth catalog argument:
 
 ```erlang
 Catalog = hls_debug_catalog:hardware(Plan, Specs, [Boundary], Session),

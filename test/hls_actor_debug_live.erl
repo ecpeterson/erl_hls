@@ -1,12 +1,31 @@
 -module(hls_actor_debug_live).
--export([inspect/3]).
+-export([inspect/3, await_completed/2]).
+
+%% Releasing ingress is not an actor-completion fence. Synchronize this test
+%% through the same public observations a host diagnostic would use, rather
+%% than relying on simulator-internal state or a pipeline-specific sleep.
+await_completed(Session, Kind) ->
+    {Plan, Specs} = hls_actor_debug_dslx:fixture(Kind),
+    Catalog = hls_debug_catalog:hardware(Plan, Specs, [], Session),
+    lists:foreach(fun(Id = {family, cell, [Slot, 0]}) ->
+        {ok, Actor} = hls_debug_catalog:actor(Catalog, Id),
+        Expected = case Slot of 1 -> [{failed, false}, {phase, done}]; _ -> [{failed, true}, {phase, gathering}] end,
+        await_outcome(Actor, Expected, 100)
+    end, hls_debug_catalog:actors(Catalog)).
+
+await_outcome(Actor, Expected, Attempts) ->
+    case hls_debug:info(Actor, [failed, phase], 10000) of
+        Expected -> ok;
+        _ when Attempts > 0 -> await_outcome(Actor, Expected, Attempts - 1);
+        Actual -> error({actor_completion_timeout, Expected, Actual})
+    end.
 
 %% Every observation goes through hls_debug:info and the real framed transport.
 inspect(Session, Stage, Moment) ->
     case file:read_file(filename:join(Stage, "actor-test")) of
         {error, enoent} -> ok;
         {ok, Bytes} ->
-            Kind = case Bytes of <<"small">> -> small; <<"phi">> -> phi; <<"mailbox">> -> mailbox; <<"reduction">> -> reduction; <<"aggregate">> -> aggregate end,
+            Kind = case Bytes of <<"small">> -> small; <<"phi">> -> phi; <<"mailbox">> -> mailbox; <<"reduction">> -> reduction; <<"direct_reduction">> -> direct_reduction; <<"aggregate">> -> aggregate end,
             {Plan, Specs} = hls_actor_debug_dslx:fixture(Kind),
             Catalog = hls_debug_catalog:hardware(Plan, Specs, [], Session),
             Ids = hls_debug_catalog:actors(Catalog),
@@ -15,6 +34,13 @@ inspect(Session, Stage, Moment) ->
                 {capabilities, #{info := Fields}} = hls_debug:info(Actor, capabilities),
                 MailboxFields = [mailbox_initialized, message_queue_len, postponed, free_slots, reserved,
                     in_flight, mail_candidate, entry_candidate, waiting_for_egress, egress_busy, scheduler_phase],
+                case Kind of
+                    direct_reduction ->
+                        [] = [F || F <- MailboxFields, lists:member(F, Fields)],
+                        {error, {unsupported_items, _, [message_queue_len]}} =
+                            hls_debug:info(Actor, [message_queue_len]);
+                    _ -> ok
+                end,
                 Snapshot = hls_debug:info(Actor,
                     [identity, placement, phase, initialized, enter_pending, failed, failure, reduction, cycle] ++
                         [F || F <- MailboxFields, lists:member(F, Fields)], 10000),
@@ -75,6 +101,11 @@ check(mailbox, blocked, {family, producer, _}, #{phase := Phase, failed := false
         when Phase =:= boot; Phase =:= producer -> ok;
 check(mailbox, released, {family, producer, _}, #{phase := producer, failed := false}) -> ok;
 check(mailbox, blocked, {family, consumer, _}, #{phase := waiting, failed := false}) -> ok;
+check(direct_reduction, Moment, Id, Snapshot) ->
+    %% The same reduction ownership and failure contract holds without a RAM
+    %% scheduler. A blocked report has already committed the healthy outcome.
+    SharedMoment = case Moment of completed -> released; _ -> Moment end,
+    check(reduction, SharedMoment, Id, Snapshot);
 check(Placement, blocked, {family, cell, [Slot, 0]}, #{phase := boot, failed := false, reduction := idle})
         when (Placement =:= reduction orelse Placement =:= aggregate), Slot >= 2 -> ok;
 check(reduction, blocked, {family, cell, [Slot, 0]}, #{phase := gathering, failed := false, failure := none,

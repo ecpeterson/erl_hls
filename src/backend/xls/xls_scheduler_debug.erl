@@ -1,5 +1,5 @@
 -module(xls_scheduler_debug).
--moduledoc "Compiler-owned projections of shared-actor state writes and scheduler metadata.".
+-moduledoc "Compiler-owned projections of committed actor state and scheduler metadata.".
 -export([projection/3, projection/4, validate/3, actor_key/1]).
 
 %% Emit beside the RTL generated from this exact plan. The instrumentation tool
@@ -13,9 +13,9 @@ projection(Plan, Specs, Artifacts) ->
     projection(Plan, Specs, Artifacts, #{}).
 
 -spec projection(hls_topology:plan(), hls_scheduler_plan:spec(),
-    #{module() => iodata()}, #{mailbox_debug => boolean()}) -> map().
+    #{module() => iodata()}, #{mailbox_debug => boolean(), direct_actor_debug => boolean()}) -> map().
 projection(Plan, Specs, Artifacts, Options) ->
-    build(Plan, Specs, xls_scheduler_observation:enabled(Options), fun(Module, Origins) ->
+    build(Plan, Specs, Options, fun(Module, Origins) ->
         xls_failure_sites:from_artifact(Origins, maps:get(Module, Artifacts))
     end).
 
@@ -23,10 +23,12 @@ projection(Plan, Specs, Artifacts, Options) ->
 %% BEAM origins. It does not run compiler providers or require deployed source.
 %% The verified manifest fingerprint binds the selected subset to the RTL.
 -spec validate(hls_topology:plan(), hls_scheduler_plan:spec(), map()) -> ok.
-validate(Plan, Specs, Projection = #{<<"banks">> := Banks}) ->
+validate(Plan, Specs, Projection = #{<<"banks">> := Shared}) ->
+    Banks = Shared ++ maps:get(<<"direct">>, Projection, []),
     ByModule = maps:from_list([{M, Fs} || #{<<"module">> := M, <<"failures">> := Fs} <- Banks]),
     MailboxDebug = lists:any(fun(B) -> is_map_key(<<"mailbox">>, B) end, Banks),
-    Expected = build(Plan, Specs, MailboxDebug, fun(Module, Origins) ->
+    Options = #{mailbox_debug => MailboxDebug, direct_actor_debug => maps:is_key(<<"direct">>, Projection)},
+    Expected = build(Plan, Specs, Options, fun(Module, Origins) ->
         Values = maps:from_keys(maps:values(maps:get(atom_to_binary(Module), ByModule, #{})), true),
         xls_failure_sites:number([O || O <- Origins, is_map_key(json_value(O), Values)])
     end),
@@ -36,10 +38,16 @@ validate(Plan, Specs, Projection = #{<<"banks">> := Banks}) ->
     end;
 validate(_Plan, _Specs, _Projection) -> error(actor_projection_mismatch).
 
-build(Plan, Specs, MailboxDebug, Codebook) ->
+build(Plan, Specs, Options, Codebook) ->
+    MailboxDebug = xls_scheduler_observation:enabled(Options),
     Scheduler = #{groups := Groups} = hls_scheduler_plan:normalize(Plan, Specs),
     Placements = hls_scheduler_plan:placements(Scheduler),
-    Interfaces = hls_actor_interface:from_modules([M || #{module := M} <- Groups]),
+    Direct = case xls_actor_observation:enabled(Options) of
+        true -> xls_actor_observation:bindings(Plan, Specs);
+        false -> []
+    end,
+    Interfaces = hls_actor_interface:from_modules(lists:usort(
+        [M || #{module := M} <- Groups ++ Direct])),
     Codebooks = maps:map(fun(Module, #{failure_origins := Origins}) ->
         Codebook(Module, Origins)
     end, Interfaces),
@@ -47,7 +55,34 @@ build(Plan, Specs, MailboxDebug, Codebook) ->
         bank(Index, Group, maps:get(Module, Interfaces), Placements, maps:get(Module, Codebooks))) ||
         {Index, Group = #{module := Module}} <- lists:enumerate(0, Groups)],
     %% Normalize JSON keys/strings once for exact host-side manifest comparison.
-    json_value(#{schema => 3, binding => digest({Plan, Scheduler}), banks => Banks}).
+    Projection = #{schema => 3, binding => digest({Plan, Scheduler}), banks => Banks},
+    json_value(case xls_actor_observation:enabled(Options) of
+        false -> Projection;
+        true -> Projection#{direct => [direct_bank(Index, Binding,
+            maps:get(Module, Interfaces), maps:get(Module, Codebooks)) ||
+            {Index, Binding = #{module := Module}} <- lists:enumerate(length(Banks), Direct)]}
+    end).
+
+direct_bank(Index, #{id := Id, module := Module, port := Port},
+        #{phases := Phases} = Interface, Sites) ->
+    Reduction = maps:get(reductions, Interface, none),
+    Layout = xls_actor_observation:layout(Reduction),
+    Bank = #{index => Index, slots => 1, port => Port,
+        width => maps:get(width, Layout), fields => maps:get(fields, Layout),
+        failures => failures(Sites), module => atom_to_binary(Module),
+        phases => [atom_to_binary(P) || P <- Phases],
+        actors => [#{key => actor_key(Id), slot => 0,
+            name => iolist_to_binary(io_lib:format("~p", [Id]))}]},
+    case Reduction of
+        none -> Bank;
+        #{sites := ReductionSites} -> Bank#{reduction => (maps:get(reduction, Layout))#{
+            sites => [maps:with([id, phase, name, population], Site) || Site <- ReductionSites]}}
+    end.
+
+failures(Sites) ->
+    maps:from_list([{integer_to_binary(Code), maps:remove(code, Site)} ||
+        Site = #{code := Code} <- [#{code => C, kind => K} ||
+            {C, K} <- xls_failure_sites:generic()] ++ Sites]).
 
 with_mailbox(false, _Group, Bank) -> Bank;
 with_mailbox(true, #{mailbox_capacity := Capacity}, Bank = #{index := Index}) ->
@@ -64,8 +99,7 @@ bank(Index, #{module := Module, slot_count := Slots, state := #{width := DataWid
         {Id, #{index := I, slot := Slot}} <- maps:to_list(Placements), I =:= Index]),
     Bank = #{index => Index, ram => iolist_to_binary(["scheduler_", integer_to_list(Index), "_state"]),
         slots => Slots, width => maps:get(width, Layout), fields => Fields,
-        failures => maps:from_list([{integer_to_binary(Code), maps:remove(code, Site)} ||
-            Site = #{code := Code} <- [#{code => C, kind => K} || {C, K} <- xls_failure_sites:generic()] ++ Sites]),
+        failures => failures(Sites),
         module => atom_to_binary(Module), phases => [atom_to_binary(P) || P <- Phases], actors => [A || {_, A} <- Entries]},
     with_reduction(maps:get(reductions, Interface, none), Layout, Bank);
 bank(Index, _Group, _Interface, _Placements, _Codebook) ->

@@ -119,7 +119,7 @@ to_xls(Filename) ->
     to_xls(Filename, #{shared_service => ordinary}).
 
 -spec to_xls(string(), #{shared_service => ordinary | aggregate_only,
-    mailbox_debug => boolean(),
+    mailbox_debug => boolean(), direct_actor_debug => boolean(),
     source_options => [hls_source:option()] | hls_source:context()}) ->
     iolist().
 -doc "Transpiles an actor with preprocessing options and a shared-service artifact mode.".
@@ -127,24 +127,27 @@ to_xls(Filename, Options0) ->
     Options = validate_xls_options(Options0),
     Mode = maps:get(shared_service, Options),
     MailboxDebug = maps:get(mailbox_debug, Options),
+    ActorDebug = maps:get(direct_actor_debug, Options),
     {ok, Forms} = parse_file(Filename, maps:get(source_options, Options)),
     case find_optional_attribute(Forms, hls_phases) of
         none when MailboxDebug -> error(mailbox_debug_requires_hls_statem);
+        none when ActorDebug -> error(direct_actor_debug_requires_hls_statem);
         none when Mode =:= ordinary -> to_xls_gs(Filename, Forms);
         none -> error({unsupported_hls_gs_shared_service, Mode});
         {ok, PhaseNames} ->
             to_xls_statem(Filename, Forms, PhaseNames,
-                maps:with([shared_service, mailbox_debug], Options))
+                maps:with([shared_service, mailbox_debug, direct_actor_debug], Options))
     end.
 
 validate_xls_options(Options) when is_map(Options) ->
     Keys = lists:sort(maps:keys(Options)),
-    case Keys -- [shared_service, source_options, mailbox_debug] of
+    case Keys -- [shared_service, source_options, mailbox_debug, direct_actor_debug] of
         [] ->
             case maps:get(shared_service, Options, ordinary) of
                 Mode when Mode =:= ordinary; Mode =:= aggregate_only ->
                     #{shared_service => Mode,
                         mailbox_debug => xls_scheduler_observation:enabled(Options),
+                        direct_actor_debug => xls_actor_observation:enabled(Options),
                         source_options => maps:get(source_options, Options, [])};
                 Mode ->
                     error({invalid_xls_shared_service, Mode})

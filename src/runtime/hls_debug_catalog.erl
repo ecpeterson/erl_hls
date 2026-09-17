@@ -49,7 +49,7 @@ hardware(Plan, SchedulerSpecs, Boundaries) ->
     end, Logical),
     #{actors => Targets, boundaries => Boundaries}.
 
--doc "Binds shared actors to committed-state snapshots in a verified topology debug session.".
+-doc "Binds actors to committed-state snapshots in a verified topology debug session.".
 hardware(Plan, Specs, Boundaries, Session = #{manifest := Manifest}) ->
     Projection = maps:get(<<"actor_projection">>, Manifest, none),
     ok = xls_scheduler_debug:validate(Plan, Specs, Projection),
@@ -59,7 +59,7 @@ hardware(Plan, Specs, Boundaries, Session = #{manifest := Manifest}) ->
     Expected = [maps:merge(A#{<<"bank">> => Index, <<"phases">> => Phases, <<"module">> => Module,
         <<"failures">> => Failures}, observation_fields(Bank)) ||
         #{<<"index">> := Index, <<"phases">> := Phases, <<"module">> := Module,
-            <<"actors">> := Actors, <<"failures">> := Failures} = Bank <- maps:get(<<"banks">>, Projection), A <- Actors],
+            <<"actors">> := Actors, <<"failures">> := Failures} = Bank <- maps:get(<<"banks">>, Projection) ++ maps:get(<<"direct">>, Projection, []), A <- Actors],
     case length(ActorResources) =:= map_size(ByKey) andalso
             lists:sort(Expected) =:= lists:sort([maps:with(
                 [<<"key">>, <<"name">>, <<"slot">>, <<"bank">>, <<"phases">>, <<"module">>, <<"failures">>, <<"width">>, <<"mailbox_capacity">>, <<"reduction">>], R)

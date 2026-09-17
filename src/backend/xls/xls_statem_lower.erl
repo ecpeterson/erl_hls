@@ -26,7 +26,7 @@ lower(Filename, Forms, PhaseNames) ->
     file:filename(),
     [erl_parse:abstract_form()],
     [atom(), ...],
-    #{shared_service := ordinary | aggregate_only, mailbox_debug => boolean()}
+    #{shared_service := ordinary | aggregate_only, mailbox_debug => boolean(), direct_actor_debug => boolean()}
 ) -> iolist().
 lower(Filename, Forms0, PhaseNames, Options0) ->
     Declarations = declarations(Forms0, PhaseNames),
@@ -91,11 +91,12 @@ lower(Filename, Forms0, PhaseNames, Options0) ->
         casts => Casts,
         reductions => Reductions,
         shared_service => SharedService,
-        mailbox_debug => xls_scheduler_observation:enabled(Options)
+        mailbox_debug => xls_scheduler_observation:enabled(Options),
+        direct_actor_debug => xls_actor_observation:enabled(Options)
     }).
 
 validate_options(Options) when is_map(Options) ->
-    case lists:sort(maps:keys(Options)) -- [mailbox_debug] of
+    case lists:sort(maps:keys(Options)) -- [mailbox_debug, direct_actor_debug] of
         [shared_service] ->
             case maps:get(shared_service, Options) of
                 Mode when Mode =:= ordinary; Mode =:= aggregate_only ->

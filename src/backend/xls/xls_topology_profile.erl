@@ -17,6 +17,7 @@
     actor_egress_depth := egress_policy(),
     scheduler_groups => map(),
     mailbox_debug => boolean(),
+    direct_actor_debug => boolean(),
     reduction_placements => map(),
     effect_window_partition => global | weak_components
 }.
@@ -42,9 +43,9 @@ normalize(Profile, Backend) when is_map(Profile) ->
 normalize(Profile, _Backend) ->
     error({invalid_dslx_profile, Profile}).
 
-optional_keys(scalar) -> [];
+optional_keys(scalar) -> [direct_actor_debug];
 optional_keys(family) ->
-    [effect_window_partition, reduction_placements, scheduler_groups, mailbox_debug].
+    [effect_window_partition, reduction_placements, scheduler_groups, mailbox_debug, direct_actor_debug].
 
 validate_channel_depth(Depth)
         when is_integer(Depth), Depth > 0, Depth =< ?U32_MAX -> ok;
@@ -55,7 +56,8 @@ validate_egress_depth(Depth)
         when is_integer(Depth), Depth >= 0, Depth =< ?U32_MAX -> ok;
 validate_egress_depth(Depth) -> error({egress_depth, Depth}).
 
-normalize_options(Profile, scalar) -> Profile;
+normalize_options(Profile, scalar) ->
+    Profile#{direct_actor_debug => xls_actor_observation:enabled(Profile)};
 normalize_options(Profile, family) ->
     Groups = map_option(scheduler_groups, Profile),
     Placements = map_option(reduction_placements, Profile),
@@ -67,6 +69,7 @@ normalize_options(Profile, family) ->
     end,
     Profile#{
         mailbox_debug => xls_scheduler_observation:enabled(Profile),
+        direct_actor_debug => xls_actor_observation:enabled(Profile),
         scheduler_groups => Groups,
         reduction_placements => Placements,
         effect_window_partition => Partition

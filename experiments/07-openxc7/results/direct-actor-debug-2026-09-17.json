@@ -1,0 +1,187 @@
+{
+  "scope": "complete five-actor reduction fixture, pipeline stages 2, XC7 ABC9; physical queries versus physical plus committed actor queries; no placed timing or power",
+  "yosys": "Yosys 0.69+10 (git sha1 370a53acf-dirty, Release, Clang /usr/local/osxcross/target/bin/aarch64-apple-darwin25.5-clang++ 21.1.8)",
+  "inputs": {
+    "physical_queries": {
+      "/private/tmp/erl-hls-direct-actor-observations/_build/direct-live/area/baseline/instrumented.json": "d54ec35aadea6e81d065835c23913e63dcba429075b485fc1580e0419294c7bd",
+      "/private/tmp/erl-hls-direct-actor-observations/_build/direct-live/area/baseline/debug_top.v": "e669629a6ad2c3746c6178db90f5b3fe72971556295b9bd0b2019429546ddf60",
+      "/private/tmp/erl-hls-direct-actor-observations/priv/rtl/debug/hls_topology_debug.v": "27c1336a3d5ead19c81b4e4fb89de54d26e0358963d86d92a7a5a0ec80392b96",
+      "/private/tmp/erl-hls-direct-actor-observations/priv/rtl/debug/hls_debug_frame_rx.v": "e689f254b14ebab341b936c30c9a90db7888b8f1bdf68a99ef8ef71aa90bae55",
+      "/private/tmp/erl-hls-direct-actor-observations/priv/rtl/debug/hls_debug_route.v": "7f1f1dfb3a282a963811fd2e99991e789eeec5e38260ecace06a05d3f4cef287",
+      "/private/tmp/erl-hls-direct-actor-observations/priv/rtl/debug/hls_actor_snapshot.v": "347251a1965df664817aee66764f0b2763382268c41cdc1d229f9af8c6d0fd11"
+    },
+    "actor_queries": {
+      "/private/tmp/erl-hls-direct-actor-observations/_build/direct-live/p2/instrumented.json": "2cc2ee7307b49d1fc30014eb29b1e293527c8b9daabc5d5768037b6fb29bebd7",
+      "/private/tmp/erl-hls-direct-actor-observations/_build/direct-live/p2/debug_top.v": "f4950a28cb220b560eb086cfc300ee8be18edc3d4e9acbbff0200e5d3dfbfa5c",
+      "/private/tmp/erl-hls-direct-actor-observations/priv/rtl/debug/hls_topology_debug.v": "27c1336a3d5ead19c81b4e4fb89de54d26e0358963d86d92a7a5a0ec80392b96",
+      "/private/tmp/erl-hls-direct-actor-observations/priv/rtl/debug/hls_debug_frame_rx.v": "e689f254b14ebab341b936c30c9a90db7888b8f1bdf68a99ef8ef71aa90bae55",
+      "/private/tmp/erl-hls-direct-actor-observations/priv/rtl/debug/hls_debug_route.v": "7f1f1dfb3a282a963811fd2e99991e789eeec5e38260ecace06a05d3f4cef287",
+      "/private/tmp/erl-hls-direct-actor-observations/priv/rtl/debug/hls_actor_snapshot.v": "347251a1965df664817aee66764f0b2763382268c41cdc1d229f9af8c6d0fd11"
+    }
+  },
+  "runs": [
+    {
+      "mode": "physical_queries",
+      "seed": 1,
+      "LUT": 6602,
+      "LUT_logic": 6602,
+      "LUT_RAM": 0,
+      "FF": 4096,
+      "RAMB18": 0,
+      "RAMB36": 0,
+      "DSP": 0
+    },
+    {
+      "mode": "physical_queries",
+      "seed": 2,
+      "LUT": 6457,
+      "LUT_logic": 6457,
+      "LUT_RAM": 0,
+      "FF": 4096,
+      "RAMB18": 0,
+      "RAMB36": 0,
+      "DSP": 0
+    },
+    {
+      "mode": "actor_queries",
+      "seed": 1,
+      "LUT": 6828,
+      "LUT_logic": 6828,
+      "LUT_RAM": 0,
+      "FF": 4225,
+      "RAMB18": 0,
+      "RAMB36": 0,
+      "DSP": 0
+    },
+    {
+      "mode": "actor_queries",
+      "seed": 2,
+      "LUT": 6828,
+      "LUT_logic": 6828,
+      "LUT_RAM": 0,
+      "FF": 4225,
+      "RAMB18": 0,
+      "RAMB36": 0,
+      "DSP": 0
+    }
+  ],
+  "summary": {
+    "physical_queries": {
+      "LUT": {
+        "best": 6457,
+        "mean": 6529.5,
+        "variance": 5256.25,
+        "worst": 6602
+      },
+      "LUT_logic": {
+        "best": 6457,
+        "mean": 6529.5,
+        "variance": 5256.25,
+        "worst": 6602
+      },
+      "LUT_RAM": {
+        "best": 0,
+        "mean": 0,
+        "variance": 0,
+        "worst": 0
+      },
+      "FF": {
+        "best": 4096,
+        "mean": 4096,
+        "variance": 0,
+        "worst": 4096
+      },
+      "RAMB18": {
+        "best": 0,
+        "mean": 0,
+        "variance": 0,
+        "worst": 0
+      },
+      "RAMB36": {
+        "best": 0,
+        "mean": 0,
+        "variance": 0,
+        "worst": 0
+      },
+      "DSP": {
+        "best": 0,
+        "mean": 0,
+        "variance": 0,
+        "worst": 0
+      }
+    },
+    "actor_queries": {
+      "LUT": {
+        "best": 6828,
+        "mean": 6828,
+        "variance": 0,
+        "worst": 6828
+      },
+      "LUT_logic": {
+        "best": 6828,
+        "mean": 6828,
+        "variance": 0,
+        "worst": 6828
+      },
+      "LUT_RAM": {
+        "best": 0,
+        "mean": 0,
+        "variance": 0,
+        "worst": 0
+      },
+      "FF": {
+        "best": 4225,
+        "mean": 4225,
+        "variance": 0,
+        "worst": 4225
+      },
+      "RAMB18": {
+        "best": 0,
+        "mean": 0,
+        "variance": 0,
+        "worst": 0
+      },
+      "RAMB36": {
+        "best": 0,
+        "mean": 0,
+        "variance": 0,
+        "worst": 0
+      },
+      "DSP": {
+        "best": 0,
+        "mean": 0,
+        "variance": 0,
+        "worst": 0
+      }
+    }
+  },
+  "codegen_options": {
+    "pipeline_stages": 2,
+    "delay_model": "unit",
+    "flop_inputs": false,
+    "flop_outputs": true,
+    "use_system_verilog": false,
+    "reset": "reset",
+    "fifo_module": ""
+  },
+  "xls_tools": {
+    "ir_converter_main": {
+      "path": "/Users/ecpeterson/Documents/code/xls-upstream-rescue-2026-09-09/tools/ir_converter_main",
+      "sha256": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e"
+    },
+    "opt_main": {
+      "path": "/Users/ecpeterson/Documents/code/xls-upstream-rescue-2026-09-09/tools/opt_main",
+      "sha256": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c"
+    },
+    "codegen_main": {
+      "path": "/Users/ecpeterson/Documents/code/xls-upstream-rescue-2026-09-09/tools/codegen_main-pr3-independent",
+      "sha256": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162"
+    }
+  },
+  "application_sources": {
+    "_build/direct-live/actor_debug.x": "af627b26eda9fa43d99e7d7152c891afde0ec43d061b750464ead10a83709505",
+    "_build/direct-live/hls_reduction_failure_fixture.x": "d91ad618bfb3c352932070c353f8d192e8638493cbf57a3fafab47c703fd81c8",
+    "_build/direct-live/production/actor_debug.x": "347584efd226d17be1aea34da8326a306423d2eaed5269b0c3ea964290380348",
+    "_build/direct-live/production/hls_reduction_failure_fixture.x": "d3494076add1bf8094806f962339966fbd813f3997ae2aaa38a8257ed2761e7f"
+  }
+}
