@@ -682,7 +682,7 @@ proc ControlDispatcher {
         ControlFamily::DATA_EVEN => {
           let address_x = state.x * u16:1 + u16:0;
           let address_y = state.y * u16:2 + u16:0;
-          let selected = ((state.packet.target == u2:0 && (state.packet.frame.header.op == u8:13 || state.packet.frame.header.op == u8:16)) || (state.packet.target == u2:1 && (state.packet.frame.header.op == u8:15))) && hls_spatial_router::contains(
+          let selected = ((state.packet.target == u2:0 && ((state.packet.frame.header.op == u8:13 && state.packet.frame.header.payload_words == u8:2) || (state.packet.frame.header.op == u8:16 && state.packet.frame.header.payload_words == u8:1))) || (state.packet.target == u2:1 && ((state.packet.frame.header.op == u8:15 && state.packet.frame.header.payload_words == u8:1)))) && hls_spatial_router::contains(
             state.packet.rectangle, address_x, address_y);
           let request = phenom_data_cell::ScheduledRequest {
             slot: scheduler_0_slot(ScheduledAddress { family: FamilyId::DATA_EVEN as u8, x: state.x, y: state.y }),
@@ -694,7 +694,7 @@ proc ControlDispatcher {
         ControlFamily::DATA_ODD => {
           let address_x = state.x * u16:1 + u16:0;
           let address_y = state.y * u16:2 + u16:1;
-          let selected = ((state.packet.target == u2:0 && (state.packet.frame.header.op == u8:13 || state.packet.frame.header.op == u8:16)) || (state.packet.target == u2:1 && (state.packet.frame.header.op == u8:15))) && hls_spatial_router::contains(
+          let selected = ((state.packet.target == u2:0 && ((state.packet.frame.header.op == u8:13 && state.packet.frame.header.payload_words == u8:2) || (state.packet.frame.header.op == u8:16 && state.packet.frame.header.payload_words == u8:1))) || (state.packet.target == u2:1 && ((state.packet.frame.header.op == u8:15 && state.packet.frame.header.payload_words == u8:1)))) && hls_spatial_router::contains(
             state.packet.rectangle, address_x, address_y);
           let request = phenom_data_cell::ScheduledRequest {
             slot: scheduler_1_slot(ScheduledAddress { family: FamilyId::DATA_ODD as u8, x: state.x, y: state.y }),
@@ -706,7 +706,7 @@ proc ControlDispatcher {
         ControlFamily::SYNDROME_X => {
           let address_x = state.x * u16:1 + u16:0;
           let address_y = state.y * u16:2 + u16:0;
-          let selected = ((state.packet.target == u2:1 && (state.packet.frame.header.op == u8:15))) && hls_spatial_router::contains(
+          let selected = ((state.packet.target == u2:1 && ((state.packet.frame.header.op == u8:15 && state.packet.frame.header.payload_words == u8:1)))) && hls_spatial_router::contains(
             state.packet.rectangle, address_x, address_y);
           let request = phenom_syndrome_cell::ScheduledRequest {
             slot: scheduler_4_slot(ScheduledAddress { family: FamilyId::SYNDROME_X as u8, x: state.x, y: state.y }),
@@ -718,7 +718,7 @@ proc ControlDispatcher {
         ControlFamily::SYNDROME_Z => {
           let address_x = state.x * u16:1 + u16:0;
           let address_y = state.y * u16:2 + u16:0;
-          let selected = ((state.packet.target == u2:1 && (state.packet.frame.header.op == u8:15))) && hls_spatial_router::contains(
+          let selected = ((state.packet.target == u2:1 && ((state.packet.frame.header.op == u8:15 && state.packet.frame.header.payload_words == u8:1)))) && hls_spatial_router::contains(
             state.packet.rectangle, address_x, address_y);
           let request = phenom_syndrome_cell::ScheduledRequest {
             slot: scheduler_5_slot(ScheduledAddress { family: FamilyId::SYNDROME_Z as u8, x: state.x, y: state.y }),

@@ -20,6 +20,7 @@ active(enter, _, Cell) ->
             {cast, result_b, #result{id = Cell#cell.id, sequence = 2 * (Cell#cell.next - 1) + 1}}]
     end,
     {Cell, Actions};
+active(cast, #pulse{value = 0}, Cell) -> {active, Cell, consume};
 active(cast, #work{sequence = Sequence}, Cell) ->
     %% A reordered aliased port or routed input preceding startup fails here.
     true = Sequence =:= Cell#cell.next,

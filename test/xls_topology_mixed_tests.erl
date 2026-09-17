@@ -102,9 +102,7 @@ unsupported_physical_contracts_fail_explicitly_test() ->
     ?assertError({instance_effect_window_partition, weak_components},
         xls_topology_dslx:emit(Plan, Profile#{effect_window_partition => weak_components})),
     ?assertError({unsupported_instance_section, reduction_placements},
-        xls_topology_dslx:emit(Plan, Profile#{reduction_placements => #{workers => source_fragments}})),
-    ?assertError({unsupported_instance_section, ingresses},
-        xls_topology_dslx:emit(Plan#{ingresses := [unsupported]}, Profile)).
+        xls_topology_dslx:emit(Plan, Profile#{reduction_placements => #{workers => source_fragments}})).
 
 scheduled_startup_must_fit_reserved_mailboxes_test() ->
     {Plan, Specs} = hls_mixed_topology_dslx:fixture(one),

@@ -366,6 +366,10 @@ jobs:
   mixed-topology:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        workload: [closed, ingress]
 
     steps:
       - name: Check out repository
@@ -404,13 +408,20 @@ jobs:
 
       - name: Compare mixed direct/shared topologies with CPU and inspect stalls
         timeout-minutes: 5
-        run: bash tools/test_mixed_topology.sh "$RUNNER_TEMP/xls"
+        env:
+          WORKLOAD: ${{ matrix.workload }}
+        run: |
+          placements=(direct one two coalesced)
+          if [[ "$WORKLOAD" == ingress ]]; then
+            placements=(ingress_direct ingress_one ingress_two ingress_coalesced)
+          fi
+          bash tools/test_mixed_topology.sh "$RUNNER_TEMP/xls" _build/mixed-topology "${placements[@]}"
 
       - name: Upload mixed topology diagnostics
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: mixed-topology-reports
+          name: mixed-topology-${{ matrix.workload }}-reports
           path: |
             _build/mixed-topology/**/*.log
             _build/mixed-topology/**/*.term
@@ -419,6 +430,7 @@ jobs:
             _build/mixed-topology/**/*.v
             _build/mixed-topology/**/manifest.json
             _build/mixed-topology/**/actors.json
+            _build/mixed-topology/**/commands.json
             _build/mixed-topology/**/blocked.txt
             _build/mixed-topology/**/recovered.txt
           if-no-files-found: ignore

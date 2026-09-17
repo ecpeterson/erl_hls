@@ -498,23 +498,8 @@ control_address(ScaleX, ScaleY, OffsetX, OffsetY) ->
         ";\n"
     ].
 
-control_target_condition(TargetIds, #{targets := Targets}) ->
-    join_with(" || ", [
-        [
-            "(state.packet.target == u2:",
-            integer_to_list(maps:get(selector, Target)),
-            " && (",
-            join_with(" || ", [
-                ["state.packet.frame.header.op == u8:",
-                    integer_to_list(Selector)]
-                || {_Schema, Selector, _Fields} <-
-                       maps:get(encodings, Target)
-            ]),
-            "))"
-        ]
-        || Target = #{id := Id} <- Targets,
-           lists:member(Id, TargetIds)
-    ]).
+control_target_condition(TargetIds, Ingress) ->
+    xls_topology_ingress:condition(TargetIds, Ingress, "state.packet").
 
 control_advance(#{width := Width, height := Height}, FamilyCount) ->
     [

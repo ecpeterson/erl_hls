@@ -44,12 +44,14 @@ rectangular_binding_order_test() ->
         state_storage => block_ram, mailbox_storage => block_ram}},
     ?assertEqual([], xls_actor_observation:bindings(plan(rectangle), Specs)).
 
-partially_scheduled_ingress_is_rejected_test() ->
+partially_scheduled_ingress_retains_direct_observation_test() ->
     {Plan, Specs} = hls_actor_debug_dslx:fixture(mailbox),
     Partial = maps:with([producer], Specs),
-    ?assertError({unsupported_instance_section, ingresses},
-        xls_topology_dslx:emit(Plan, (profile(rectangle))#{
-            scheduler_groups => Partial, direct_actor_debug => true})).
+    Text = iolist_to_binary(xls_topology_dslx:emit(Plan, (profile(rectangle))#{
+        scheduler_groups => Partial, direct_actor_debug => true})),
+    ?assertNotEqual(nomatch, binary:match(Text, <<"spawn IngressRouter0">>)),
+    ?assertNotEqual(nomatch, binary:match(Text, <<"family_0_debug_out">>)),
+    ?assertEqual(nomatch, binary:match(Text, <<"family_1_debug_out">>)).
 
 %% Native compiler smoke fixtures: a standalone actor, scalar topology, and
 %% genuinely two-dimensional rectangular family exercise each output path.
