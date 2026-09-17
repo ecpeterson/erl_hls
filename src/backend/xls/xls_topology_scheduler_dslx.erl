@@ -5,7 +5,7 @@
 -module(xls_topology_scheduler_dslx).
 -moduledoc false.
 
--export([emit/1]).
+-export([emit/1, effect_router/3]).
 
 -spec emit(map()) -> iolist().
 emit(Spec0) ->
@@ -585,39 +585,39 @@ startup_arm(Module, Index, #{
         "      },\n"
     ].
 
-router_proc(Spec, Scheduler = #{
-    stem := Stem,
-    module_name := Module,
-    families := Families,
-    destinations := Destinations,
-    external_ids := ExternalIds
-}) ->
-    StateName = [router_name(Scheduler), "State"],
-    Members =
-        [
-            ["scheduled_in: chan<", Module, "::ScheduledEffects> in"],
-            ["credit_out: chan<", Module, "::ScheduledRequest> out"]
-        ] ++
-        [router_destination_argument(Destination)
+router_proc(Spec, Scheduler = #{stem := Stem, families := Families,
+        destinations := Destinations, external_ids := ExternalIds}) ->
+    Routing = #{
+        arguments => [router_destination_argument(Destination)
             || Destination <- Destinations] ++
-        [router_external_argument(Spec, ExternalId)
-            || ExternalId <- ExternalIds] ++
-        xls_topology_source_fragment_dslx:router_arguments(
-            Spec, Scheduler
-        ) ++
-        [
+            [router_external_argument(Spec, ExternalId)
+                || ExternalId <- ExternalIds],
+        names => [router_destination_name(maps:get(index, Destination))
+            || Destination <- Destinations] ++
+            [external_output_name(Spec, ExternalId)
+                || ExternalId <- ExternalIds],
+        send => ["    let address = ", Stem, "_address(scheduled.slot);\n",
+            router_send_binding(Spec, Scheduler, Families)]
+    },
+    effect_router(Spec, Scheduler, Routing).
+
+%% Both compact and materialized topologies use exactly the same retained
+%% lookahead-credit protocol. Only the typed destination ports and route
+%% selection differ; direct actors do not participate in this protocol.
+effect_router(Spec, Scheduler = #{module_name := Module},
+        #{arguments := RouteArguments, names := RouteNames, send := RouteSend}) ->
+    StateName = [router_name(Scheduler), "State"],
+    Members = [
+        ["scheduled_in: chan<", Module, "::ScheduledEffects> in"],
+        ["credit_out: chan<", Module, "::ScheduledRequest> out"]
+    ] ++ RouteArguments ++
+        xls_topology_source_fragment_dslx:router_arguments(Spec, Scheduler) ++ [
             "window_request_out: chan<u1> out",
             "window_grant_in: chan<u1> in",
             "window_release_out: chan<u1> out"
         ],
-    Names = ["scheduled_in", "credit_out"] ++
-        [router_destination_name(maps:get(index, Destination))
-            || Destination <- Destinations] ++
-        [external_output_name(Spec, ExternalId)
-            || ExternalId <- ExternalIds] ++
-        xls_topology_source_fragment_dslx:router_argument_names(
-            Spec, Scheduler
-        ) ++
+    Names = ["scheduled_in", "credit_out"] ++ RouteNames ++
+        xls_topology_source_fragment_dslx:router_argument_names(Spec, Scheduler) ++
         ["window_request_out", "window_grant_in", "window_release_out"],
     [
         "// Routes one committed actor-entry batch in source order. A ",
@@ -664,8 +664,7 @@ router_proc(Spec, Scheduler = #{
         ),
         "    let effect = effect_info.0;\n",
         "    let emit = batch_valid && effect_info.1;\n",
-        "    let address = ", Stem, "_address(scheduled.slot);\n",
-        router_send_binding(Spec, Scheduler, Families),
+        RouteSend,
         router_last_binding(Spec, Scheduler),
         "    let transition = effect_window::advance_client(\n",
         "      state.control, incoming_valid, grant_valid, last);\n",

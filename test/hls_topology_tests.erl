@@ -164,7 +164,7 @@ indexed_tuple_actor_ids_normalize_and_emit_without_mangling_test() ->
     >>)),
     ?assertNotEqual(nomatch, binary:match(
         Generated,
-        <<"spawn phi_halo_cell::Service(\n">>
+        <<"spawn phi_halo_cell::Service(">>
     )).
 
 route_sources_are_checked_and_total_test() ->
@@ -360,46 +360,25 @@ generated_topology_is_deterministic_test() ->
 generated_topology_has_expected_physical_shape_test() ->
     Generated = iolist_to_binary(phi_phenom_topology_dslx:to_dslx()),
     ?assertEqual(3, count(Generated, <<"::Service(">>)),
-    ?assertEqual(3, count(Generated, <<"spawn axis::ReservedFrame(">>)),
-    ?assertEqual(2, count(Generated, <<"spawn axis::FrameMux2(">>)),
+    ?assertEqual(3, count(Generated, <<"proc ActorIngress">>)),
+    ?assertEqual(3, count(Generated, <<"spawn ActorIngress">>)),
     ?assertEqual(3, count(Generated, <<"proc ActorRouter">>)),
     ?assertEqual(3, count(Generated, <<"spawn ActorRouter">>)),
     ?assertEqual(1, count(Generated, <<"::Egress, u32:3>">>)),
     ?assertEqual(2, count(Generated, <<"::Egress, u32:4>">>)),
-    ?assertEqual(0, count(Generated, <<"QueuedFanout">>)),
-    ?assertEqual(3, count(Generated, <<"proc StartupPrefix">>)),
-    ?assertEqual(3, count(Generated, <<"spawn StartupPrefix">>)),
-    ?assertNotEqual(nomatch, binary:match(
-        Generated,
-        <<"lane(s) reached through multiple source ports retain actor action ",
-            "order">>
-    )),
-    ?assertEqual(nomatch, binary:match(Generated, <<"may_reorder">>)),
+    %% All four aliased source ports select one ordered send to syndrome.
+    ?assertEqual(1, count(Generated, <<
+        "effect.port == phenom_data_cell::OutputPort::NORTH || "
+        "effect.port == phenom_data_cell::OutputPort::EAST || "
+        "effect.port == phenom_data_cell::OutputPort::WEST || "
+        "effect.port == phenom_data_cell::OutputPort::SOUTH"
+    >>)),
     ?assertNotEqual(nomatch, binary:match(Generated,
-        <<"phenom_data_cell::OutputPort::NORTH => true,\n"
-          "      phenom_data_cell::OutputPort::EAST => true,\n"
-          "      phenom_data_cell::OutputPort::WEST => true,\n"
-          "      phenom_data_cell::OutputPort::SOUTH => true,\n"
-          "      _ => false,\n"
-          "    };\n"
-          "    let lane_1_selected = match egress.port">>
-    )),
+        <<"uN[96]:0x00000000800000009E3779B9">>)),
     ?assertNotEqual(nomatch, binary:match(Generated,
-        <<"let lane_0_tok = send_if(\n"
-          "      tok, actor_0_lane_0_out, lane_0_selected, egress.frame);">>
-    )),
-    ?assertNotEqual(
-        nomatch,
-        binary:match(Generated, <<"uN[96]:0x00000000800000009E3779B9">>)
-    ),
-    ?assertNotEqual(
-        nomatch,
-        binary:match(Generated, <<"uN[96]:0x000000008000000085EBCA6B">>)
-    ),
-    ?assertNotEqual(
-        nomatch,
-        binary:match(Generated, <<"axis::pack(u8:12, u32:0x6D2B79F5)">>)
-    ).
+        <<"uN[96]:0x000000008000000085EBCA6B">>)),
+    ?assertNotEqual(nomatch, binary:match(Generated,
+        <<"axis::pack(u8:12, u32:0x6D2B79F5)">>)).
 
 generated_topology_uses_explicit_actor_egress_depth_test() ->
     Plan = hls_topology:from_module(phi_phenom_topology),
@@ -441,39 +420,20 @@ generated_startup_preserves_per_actor_message_order_test() ->
           "uN[96]:0x000800070000000600000005)">>
     ),
     ?assert(First < Second),
-    ?assertEqual(1, count(Generated, <<"recv_if(\n">>)),
-    ?assertNotEqual(nomatch, binary:match(Generated, <<
-        "let starting = index < u32:2;\n"
-        "    let startup_frame = match index"
-    >>)),
-    ?assertNotEqual(nomatch, binary:match(Generated, <<
-        "let (tok, routed_frame) = recv_if(\n"
-        "      join(), routed_in, !starting, zero!<axis::Frame>());\n"
-        "    let frame = if starting { startup_frame } else { routed_frame };\n"
-        "    send(tok, frame_out, frame);"
-    >>)).
+    ?assertNotEqual(nomatch, binary:match(Generated,
+        <<"} else if state.2 < u32:2 {">>)).
 
-generated_startup_prefix_precedes_routed_admission_test() ->
+generated_startup_and_routed_receive_both_require_admission_test() ->
     Generated = iolist_to_binary(phi_phenom_topology_dslx:to_dslx()),
-    {Prefix0, _} = binary:match(Generated, <<"spawn StartupPrefix0(">>),
-    {Admission0, _} = binary:match(
-        Generated,
-        <<"spawn axis::ReservedFrame(startup_0_prefix_c">>
-    ),
-    {Prefix1, _} = binary:match(Generated, <<"spawn StartupPrefix1(">>),
-    {Admission1, _} = binary:match(
-        Generated,
-        <<"spawn axis::ReservedFrame(startup_1_prefix_c">>
-    ),
-    {Prefix2, _} = binary:match(Generated, <<"spawn StartupPrefix2(">>),
-    {Admission2, _} = binary:match(
-        Generated,
-        <<"spawn axis::ReservedFrame(startup_2_prefix_c">>
-    ),
-    ?assert(Prefix0 < Admission0),
-    ?assert(Prefix1 < Admission1),
-    ?assert(Prefix2 < Admission2),
-    ?assertEqual(0, count(Generated, <<"FrameMux2(startup_">>)).
+    [_Preamble | Procs] = binary:split(Generated, <<"proc ActorIngress">>, [global]),
+    ?assertEqual(3, length(Procs)),
+    lists:foreach(fun(Proc) ->
+        {Admission, _} = binary:match(Proc, <<"recv(join(), admission_in)">>),
+        {Startup, _} = binary:match(Proc, <<"} else if state.2 < u32:1 {">>),
+        {Routed, _} = binary:match(Proc, <<"frame_in[candidate]">>),
+        ?assert(Admission < Startup),
+        ?assert(Startup < Routed)
+    end, Procs).
 
 dslx_backend_rejects_unpacked_startup_data_test() ->
     Spec = phi_phenom_topology:topology(),
@@ -698,7 +658,7 @@ dslx_backend_rejects_startup_target_with_initial_effects_test() ->
             ?assertMatch([_ | _], Effects)
     end.
 
-dslx_backend_explicitly_rejects_startup_only_actor_test() ->
+dslx_backend_supports_startup_only_actor_test() ->
     Spec = phi_phenom_topology:topology(),
     Actors = maps:get(actors, Spec),
     Directions = [north, east, west, south],
@@ -728,13 +688,11 @@ dslx_backend_explicitly_rejects_startup_only_actor_test() ->
         routes := Routes ++ Data2Routes,
         startup := maps:get(startup, Spec) ++ [{data2, DataStartup}]
     }),
-    ?assertError(
-        {unsupported_dslx_startup_only_actor, data},
-        xls_topology_dslx:emit(
-            Plan,
-            phi_phenom_topology_dslx:profile()
-        )
-    ).
+    Generated = iolist_to_binary(xls_topology_dslx:emit(
+        Plan, phi_phenom_topology_dslx:profile())),
+    ?assertEqual(4, count(Generated, <<"::Service(">>)),
+    ?assertNotEqual(nomatch, binary:match(Generated,
+        <<"spawn ActorIngress0(actor_0_req_p, actor_0_admit_c)">>)).
 
 dslx_backend_rejects_unimplemented_coupled_fanout_test() ->
     Plan = hls_topology:from_module(phi_phenom_topology),

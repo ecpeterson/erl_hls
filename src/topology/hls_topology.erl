@@ -57,6 +57,13 @@ referenced endpoint must exist, and live runtime identities are rejected.
 Normalization sorts unordered input, preserves message order within each
 startup target, and derives exact lanes or compact lane relations.
 
+An exact source route may target a bounded family member using the same
+`{actor, {FamilyId, X, Y}}` identity used by startup. Family relations may target
+an exact actor using `{actor, ActorId}`; that recipient is the same for every
+source member. These crossings preserve the exact actor's identity and leave
+family relations compact. Exact routes cannot override an individual family
+member's outputs: those remain covered by the family's route relations.
+
 A singleton route is `{Source, [Recipient]}`. A route with two or more
 recipients is `{Source, Delivery, Recipients}` so fanout cannot acquire an
 implicit completion rule. The format distinguishes four semantic completion
@@ -133,7 +140,7 @@ normalize_exact_sections(Spec, FamilyIndex, Actors) ->
     ]),
     Routes = normalize_routes(
         maps:get(routes, Spec),
-        ActorIndex,
+        #{actors => ActorIndex, families => FamilyIndex},
         ExternalIndex
     ),
     Startup = normalize_startup(
@@ -225,9 +232,9 @@ normalize_external(Spec) ->
 %%% Routes and ordered lanes
 %%%
 
-normalize_routes(Specs, ActorIndex, ExternalIndex) when is_list(Specs) ->
+normalize_routes(Specs, Endpoints = #{actors := ActorIndex}, ExternalIndex) when is_list(Specs) ->
     Routes = [
-        normalize_route(Spec, ActorIndex, ExternalIndex) || Spec <- Specs
+        normalize_route(Spec, Endpoints, ExternalIndex) || Spec <- Specs
     ],
     Sources = [maps:get(source, Route) || Route <- Routes],
     require_unique(duplicate_route_sources, Sources),
@@ -244,18 +251,18 @@ normalize_routes(Specs, ActorIndex, ExternalIndex) when is_list(Specs) ->
             ),
             ok = validate_route_interfaces(
                 Sorted,
-                ActorIndex,
+                Endpoints,
                 ExternalIndex
             ),
             Sorted;
         Missing -> error({unrouted_outputs, Missing})
     end;
-normalize_routes(Specs, _ActorIndex, _ExternalIndex) ->
+normalize_routes(Specs, _Endpoints, _ExternalIndex) ->
     error({invalid_topology_field, routes, Specs}).
 
-normalize_route({Source, []}, _ActorIndex, _ExternalIndex) ->
+normalize_route({Source, []}, _Endpoints, _ExternalIndex) ->
     error({empty_route, Source});
-normalize_route({Source, Recipients}, ActorIndex, ExternalIndex)
+normalize_route({Source, Recipients}, Endpoints, ExternalIndex)
         when is_list(Recipients) ->
     case Recipients of
         [_] ->
@@ -263,15 +270,15 @@ normalize_route({Source, Recipients}, ActorIndex, ExternalIndex)
                 Source,
                 direct,
                 Recipients,
-                ActorIndex,
+                Endpoints,
                 ExternalIndex
             );
         _ ->
             error({fanout_delivery_required, Source})
     end;
-normalize_route({Source, _Delivery, []}, _ActorIndex, _ExternalIndex) ->
+normalize_route({Source, _Delivery, []}, _Endpoints, _ExternalIndex) ->
     error({empty_route, Source});
-normalize_route({Source, Delivery, Recipients}, ActorIndex, ExternalIndex)
+normalize_route({Source, Delivery, Recipients}, Endpoints, ExternalIndex)
         when is_list(Recipients), length(Recipients) > 1 ->
     case lists:member(Delivery, [buffered, coupled, queued, best_effort]) of
         true ->
@@ -279,31 +286,31 @@ normalize_route({Source, Delivery, Recipients}, ActorIndex, ExternalIndex)
                 Source,
                 Delivery,
                 Recipients,
-                ActorIndex,
+                Endpoints,
                 ExternalIndex
             );
         false ->
             error({invalid_fanout_delivery, Source, Delivery})
     end;
-normalize_route({Source, Delivery, Recipients}, _ActorIndex, _ExternalIndex)
+normalize_route({Source, Delivery, Recipients}, _Endpoints, _ExternalIndex)
         when is_list(Recipients) ->
     error({invalid_fanout, Source, Delivery, Recipients});
-normalize_route(Spec, _ActorIndex, _ExternalIndex) ->
+normalize_route(Spec, _Endpoints, _ExternalIndex) ->
     error({invalid_route_spec, Spec}).
 
 normalize_route(
     Source,
     Delivery,
     Recipients,
-    ActorIndex,
+    Endpoints,
     ExternalIndex
 ) ->
-    NormalSource = normalize_source(Source, ActorIndex),
+    NormalSource = normalize_source(Source, Endpoints),
     NormalRecipients = [
         normalize_recipient(
             Recipient,
             NormalSource,
-            ActorIndex,
+            Endpoints,
             ExternalIndex
         )
         || Recipient <- Recipients
@@ -319,37 +326,37 @@ normalize_route(
         recipients => lists:sort(NormalRecipients)
     }.
 
-normalize_source({ActorId, Port}, ActorIndex) when is_atom(Port) ->
+normalize_source({ActorId, Port}, #{actors := ActorIndex}) when is_atom(Port) ->
     Actor = require_actor(ActorId, ActorIndex, route_source),
     case lists:member(Port, maps:get(outputs, Actor)) of
         true -> {ActorId, Port};
         false -> error({unknown_actor_output, ActorId, Port})
     end;
-normalize_source(Source, _ActorIndex) ->
+normalize_source(Source, _Endpoints) ->
     error({invalid_route_source, Source}).
 
 normalize_recipient(
     Recipient = {actor, ActorId},
     Source,
-    ActorIndex,
+    Endpoints,
     _ExternalIndex
 ) ->
-    _ = require_actor(ActorId, ActorIndex, {route_recipient, Source}),
+    _ = hls_topology_endpoint:actor(ActorId, Endpoints, {route_recipient, Source}),
     Recipient;
 normalize_recipient(
     Recipient = {external, ExternalId},
     Source,
-    _ActorIndex,
+    _Endpoints,
     ExternalIndex
 ) ->
     case maps:is_key(ExternalId, ExternalIndex) of
         true -> Recipient;
         false -> error({unknown_external, ExternalId, {route_recipient, Source}})
     end;
-normalize_recipient(Recipient, Source, _ActorIndex, _ExternalIndex) ->
+normalize_recipient(Recipient, Source, _Endpoints, _ExternalIndex) ->
     error({invalid_route_recipient, Source, Recipient}).
 
-validate_route_interfaces(Routes, ActorIndex, ExternalIndex) ->
+validate_route_interfaces(Routes, Endpoints = #{actors := ActorIndex}, ExternalIndex) ->
     lists:foreach(
         fun(Route) ->
             Source = {ActorId, Port} = maps:get(source, Route),
@@ -366,7 +373,7 @@ validate_route_interfaces(Routes, ActorIndex, ExternalIndex) ->
                         SourceInterface,
                         Emitted,
                         Recipient,
-                        ActorIndex,
+                        Endpoints,
                         ExternalIndex
                     )
                 end,
@@ -381,58 +388,28 @@ validate_route_recipient_interface(
     SourceInterface,
     Emitted,
     Recipient = {actor, ActorId},
-    ActorIndex,
+    Endpoints,
     _ExternalIndex
 ) ->
-    Destination = maps:get(ActorId, ActorIndex),
-    DestinationInterface = maps:get(interface, Destination),
-    Dispatched = hls_actor_interface:dispatched_schemas(
-        DestinationInterface
-    ),
-    require_route_schemas(Source, Recipient, Emitted, Dispatched),
-    lists:foreach(
-        fun(Schema) ->
-            SourceSchema = hls_actor_interface:schema(
-                SourceInterface,
-                Schema
-            ),
-            DestinationSchema = hls_actor_interface:schema(
-                DestinationInterface,
-                Schema
-            ),
-            SourceFields = maps:get(fields, SourceSchema),
-            DestinationFields = maps:get(fields, DestinationSchema),
-            case SourceFields =:= DestinationFields of
-                true -> ok;
-                false -> error({incompatible_route_schema_layout,
-                    Source, Recipient, Schema,
-                    SourceFields, DestinationFields})
-            end
-        end,
-        Emitted
-    );
+    #{interface := DestinationInterface} = hls_topology_endpoint:actor(
+        ActorId, Endpoints, {route_recipient, Source}),
+    hls_topology_endpoint:validate_route(
+        Source, Recipient, SourceInterface, Emitted, DestinationInterface);
 validate_route_recipient_interface(
     Source,
     _SourceInterface,
     Emitted,
     Recipient = {external, ExternalId},
-    _ActorIndex,
+    _Endpoints,
     ExternalIndex
 ) ->
     External = maps:get(ExternalId, ExternalIndex),
-    require_route_schemas(
+    hls_topology_endpoint:require_schemas(
         Source,
         Recipient,
         Emitted,
         maps:get(schemas, External)
     ).
-
-require_route_schemas(Source, Recipient, Emitted, Dispatched) ->
-    case Emitted -- Dispatched of
-        [] -> ok;
-        Unsupported -> error({incompatible_route_schemas,
-            Source, Recipient, Unsupported, Dispatched})
-    end.
 
 derive_lanes(Routes) ->
     LanePorts = lists:foldl(
@@ -487,32 +464,8 @@ normalize_startup_item(Spec, _ActorIndex, _FamilyIndex) ->
     error({invalid_startup_spec, Spec}).
 
 require_startup_target(Target, ActorIndex, FamilyIndex) ->
-    case maps:find(Target, ActorIndex) of
-        {ok, Actor} -> Actor;
-        error -> require_family_instance(Target, FamilyIndex)
-    end.
-
-require_family_instance(Target, FamilyIndex)
-        when is_tuple(Target), tuple_size(Target) > 1 ->
-    FamilyId = element(1, Target),
-    Coordinates = tl(tuple_to_list(Target)),
-    case maps:find(FamilyId, FamilyIndex) of
-        {ok, Family = #{shape := Shape}}
-                when length(Coordinates) =:= length(Shape) ->
-            case lists:all(
-                fun({Coordinate, Size}) ->
-                    is_integer(Coordinate) andalso
-                        Coordinate >= 0 andalso Coordinate < Size
-                end,
-                lists:zip(Coordinates, Shape)
-            ) of
-                true -> Family;
-                false -> error({invalid_family_instance, Target, Shape})
-            end;
-        _ -> error({unknown_actor, Target, startup})
-    end;
-require_family_instance(Target, _FamilyIndex) ->
-    error({unknown_actor, Target, startup}).
+    hls_topology_endpoint:actor(Target,
+        #{actors => ActorIndex, families => FamilyIndex}, startup).
 
 validate_startup_schemas(ActorId, Messages, Actor) ->
     Interface = maps:get(interface, Actor),

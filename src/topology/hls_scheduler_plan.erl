@@ -27,19 +27,18 @@ logical interface; reduction state is packed alongside actor data in the same
 per-instance state row. Mailboxes are a separate binding because safe shared
 scheduling also needs per-instance bounded admission state.
 
-A shared executor advances one actor by a resumable microstep. If the next
-ordered effect lacks egress credit, the actor keeps its pending-effect index
-and the executor visits another member. An effect which has already been
-accepted is never rolled back or sent again. The executor therefore holds no
-tentative multi-resource reservation, and a blocked member cannot exclude
-another member in its group. The actor-level `fail` directive remains a
-terminal failure and is not this scheduler retry mechanism.
+A shared executor advances selected actors while preserving each actor's
+ordered effects. Already accepted effects are never rolled back or sent again.
+The scheduler can visit other eligible actors while one actor awaits an
+effect credit, but finite result and routing buffers can eventually stall the
+whole group under downstream backpressure. The actor-level `fail` directive
+remains a terminal failure and is not this scheduler retry mechanism.
 
-This prevents the executor itself from creating head-of-line deadlock. It does
-not prove progress for an application protocol which has already committed a
-resource acquisition, or for a bounded destination mailbox whose only free
-space can be consumed by requests that depend on a later release. Those remain
-topology-level channel-dependency and reserved-progress obligations.
+Actor selection does not prove progress for an application protocol which has
+already committed a resource acquisition, or for a bounded destination mailbox
+whose only free space can be consumed by requests that depend on a later
+release. Those remain topology-level channel-dependency and reserved-progress
+obligations.
 """.
 
 -export([normalize/2, placements/1]).

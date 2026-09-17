@@ -81,6 +81,18 @@ def testbench(args, ports, manifest):
         final_checks.append('$display("PASS: production/debug application transcripts match (one healthy report, payload 3)");')
     debug_ports = [f".{side}_dbg_{suffix}({side}_dbg_{suffix})" for side in ("s", "m")
                    for suffix in ("tdata", "tkeep", "tlast", "tvalid", "tready")]
+    if args.actor_test and args.actor_test.startswith("mixed_"):
+        report_index = list(ports).index("_reports_out")
+        valid_index = list(ports).index("_reports_out_vld")
+        lines += ["reg [127:0] expected_reports [0:31]; integer reports=0;",
+                  'initial $readmemh("expected.hex", expected_reports);']
+        checks += [f"if(port_{valid_index}_dut && released) begin",
+                   '  if(reports >= 32) $fatal(1, "duplicate mixed report");',
+                   f'  if(port_{report_index}_dut !== expected_reports[reports]) $fatal(1, "mixed report %0d: got %032h expected %032h", reports, port_{report_index}_dut, expected_reports[reports]);',
+                   '  $display("mixed report %0d accepted at cycle %0d", reports, cycles);',
+                   "  reports=reports+1; end"]
+        final_checks += ['if(reports != 32) $fatal(1, "missing mixed reports: %0d", reports);',
+                         '$display("PASS: mixed RTL matches all 32 CPU reports (320 work items, 640 result items)");']
     queues = [q for q in manifest["resources"] if q["kind"] == "fifo"]
     for q in queues:
         lines.append(f"integer occupancy_{q['id']}=0;")
@@ -130,6 +142,8 @@ def run(args):
     del flat, instrumented
     if getattr(args, "actor_test", None):
         (stage / "actor-test").write_text(args.actor_test)
+        if args.actor_test.startswith("mixed_"):
+            shutil.copy(stage.parent / "expected.hex", stage / "expected.hex")
     else:
         (stage / "actor-test").unlink(missing_ok=True)
     for name in ("release", "released", "contributions", "contributions_released", "done", "debug_tx", "debug_rx"):
@@ -216,7 +230,8 @@ if __name__ == "__main__":
     parser.add_argument("--yosys", default="yosys")
     parser.add_argument("--actor-projection", type=Path)
     parser.add_argument("--actor-root", default="")
-    parser.add_argument("--actor-test", choices=("small", "phi", "mailbox", "reduction", "aggregate", "direct_reduction"))
+    parser.add_argument("--actor-test", choices=("small", "phi", "mailbox", "reduction", "aggregate", "direct_reduction",
+                                                "mixed_direct", "mixed_one", "mixed_two", "mixed_coalesced"))
     parser.add_argument("--reference-rtl", type=Path, action="append", help="diagnostics-disabled application RTL for transfer comparison")
     parser.add_argument("--reference-top", default="actor_debug_production_wrapper")
     run(parser.parse_args())
