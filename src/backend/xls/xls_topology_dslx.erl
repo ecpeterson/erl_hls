@@ -848,6 +848,7 @@ top_proc(Spec, Actors, Externals, Depth, RouteCode, IngressCode) ->
             type => [Module, "::ActorObservation"]} ||
             #{index := Index, module_name := Module} <- Actors]
     end,
+    ok = xls_actor_observation:validate_channels([maps:get(output_name, C) || C <- Channels]),
     [
         "pub proc Top {\n",
         [["  ", maps:get(output_name, External),

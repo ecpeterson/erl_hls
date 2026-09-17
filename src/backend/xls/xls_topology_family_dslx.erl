@@ -1430,6 +1430,7 @@ top_proc(Spec) ->
     DebugMembers = debug_arguments(Spec, "WIDTH", "HEIGHT"),
     Names = [InputName || #{input_name := InputName} <- Ingresses] ++
         [OutputName || #{output_name := OutputName} <- Externals] ++ debug_names(Spec),
+    ok = xls_actor_observation:validate_channels(Names),
     [
         "pub proc Top {\n",
         [["  ", Member, ";\n"]

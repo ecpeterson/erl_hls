@@ -1,7 +1,7 @@
 -module(xls_actor_observation).
 -moduledoc "Optional observations of committed register-backed actor state.".
 -export([enabled/1, layout/1, bindings/2, wires/1, ports/1,
-    scalar_name/1, family_name/1, declarations/1, proc_field/1,
+    scalar_name/1, family_name/1, validate_channels/1, declarations/1, proc_field/1,
     config_parameter/1, config_value/1, sample/1, spawn_argument/2]).
 
 enabled(Options) ->
@@ -60,6 +60,18 @@ ports(Bindings) ->
 wire_name(Index) -> ["direct_actor_", integer_to_list(Index), "_debug"].
 scalar_name(Index) -> ["actor_", integer_to_list(Index), "_debug_out"].
 family_name(Index) -> ["family_", integer_to_list(Index), "_debug_out"].
+
+%% Application boundary names and generated observation names share Top's
+%% namespace. Reject collisions before XLS could shadow or reject a channel.
+validate_channels(Names) ->
+    lists:foldl(fun(Name, Seen) ->
+        Key = iolist_to_binary(Name),
+        case is_map_key(Key, Seen) of
+            true -> error({topology_channel_collision, Key});
+            false -> Seen#{Key => true}
+        end
+    end, #{}, Names),
+    ok.
 
 declarations(Spec) ->
     Reduction = maps:get(reductions, Spec, none),

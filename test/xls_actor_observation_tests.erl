@@ -25,6 +25,15 @@ diagnostic_outputs_are_explicit_test() ->
     ?assertError(direct_actor_debug_requires_hls_statem,
         xls_parse:to_xls("src/examples/regsvc/regsvc.erl", #{direct_actor_debug => true})).
 
+observation_boundary_name_collisions_test() ->
+    lists:foreach(fun({Kind, Boundary, Port}) ->
+        Plan = plan(Kind, Boundary),
+        _ = xls_topology_dslx:emit(Plan, profile(Kind)),
+        ?assertError({topology_channel_collision, Port},
+            xls_topology_dslx:emit(Plan, (profile(Kind))#{direct_actor_debug => true}))
+    end, [{scalar, actor_0_debug, <<"actor_0_debug_out">>},
+        {rectangle, family_0_debug, <<"family_0_debug_out">>}]).
+
 rectangular_binding_order_test() ->
     Bindings = xls_actor_observation:bindings(plan(rectangle), #{}),
     ?assertEqual([{{family, cell, [X, Y]}, iolist_to_binary(
@@ -86,20 +95,22 @@ frame_constant(Name, Tag, Value) ->
     Frame = (Header bsl 96) bor Value,
     io_lib:format("localparam [127:0] ~s = 128'h~32.16.0b;~n", [Name, Frame]).
 
-plan(scalar) ->
+plan(Kind) -> plan(Kind, reports).
+
+plan(scalar, Reports) ->
     hls_topology:normalize(#{version => 1,
         actors => #{first => hls_dense_statem_fixture, second => hls_dense_statem_fixture},
         families => #{}, ingresses => [], route_relations => [],
-        externals => [{reports, out, [report]}],
-        routes => [{{Id, out}, queued, [{actor, Id}, {external, reports}]} || Id <- [first, second]],
+        externals => [{Reports, out, [report]}],
+        routes => [{{Id, out}, queued, [{actor, Id}, {external, Reports}]} || Id <- [first, second]],
         startup => [{first, [{configure, false, 7, -256}]}, {second, [{configure, true, 3, 255}]}]});
-plan(rectangle) ->
+plan(rectangle, Reports) ->
     hls_topology:normalize(#{version => 1, actors => #{},
         families => #{cell => #{module => hls_dense_statem_fixture, shape => [2, 3]}},
         ingresses => [{commands, {rectangle, [2, 3]}, [
             {configure, [configure], [{family, cell, {embed, [1, 1], [0, 0]}}]}]}],
-        externals => [{reports, out, [report]}], routes => [],
-        route_relations => [{{cell, out}, [{external, reports}]}],
+        externals => [{Reports, out, [report]}], routes => [],
+        route_relations => [{{cell, out}, [{external, Reports}]}],
         startup => [{{cell, X, Y}, [{configure, true, X, Y}]} ||
             X <- lists:seq(0, 1), Y <- lists:seq(0, 2)]}).
 
