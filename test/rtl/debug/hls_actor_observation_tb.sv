@@ -10,6 +10,7 @@ module hls_actor_observation_tb;
     wire [24:0] observation;
     wire observation_valid;
     reg [24:0] retained = 0;
+    reg observed = 0;
     integer reports = 0;
     `include "actor_observation_expected.svh"
 
@@ -25,9 +26,17 @@ module hls_actor_observation_tb;
     always @(posedge clk) begin
         if (reset) begin
             retained <= 0;
+            observed <= 0;
             reports <= 0;
         end else begin
-            if (observation_valid) retained <= observation;
+            if (observation_valid) begin
+                // The first publication is init's committed Machine, before
+                // the initial boot entry clears enter_pending.
+                if (!observed && observation !== 25'h100)
+                    $fatal(1, "first publication skipped initialized state: %h", observation);
+                observed <= 1;
+                retained <= observation;
+            end
             if (egress_valid && egress_ready) begin
                 if (egress !== (reports == 0 ? {8'd0, FIRST} : {8'd1, SECOND}))
                     $fatal(1, "unexpected output effect %0d: %h", reports, egress);
