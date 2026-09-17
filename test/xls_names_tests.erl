@@ -11,6 +11,7 @@ record_collisions_test_() ->
             {[bits], "bits_from_bits"},
             {[tag], "Tag"},
             {['SharedMachine'], "SharedMachine"},
+            {['ActorObservation'], "ActorObservation"},
             {['N'], "N"}
         ]].
 
