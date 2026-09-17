@@ -2,7 +2,7 @@
   "scope": "XC7 application memory configurations after debug Verilog roundtrip; before FF/LUT mapping or placement",
   "base_revision": "bd0ebf5",
   "tools_sha256": {
-    "tools/topology_debug.py": "acaf058158e8c220761cfc0e1dc81579e69f2838ae253679f4f832e9784a6ea6",
+    "tools/topology_debug.py": "2051ebd625e135aa25b961f79616cb2d93e13f5762e8099269a5f22753eb425a",
     "tools/check_debug_memories.py": "28ddd88622f221c0bf6018c0c65498cf0bdc48aa667f1429531c78f5451247d3",
     "tools/test_debug_memories.py": "5c0f7e77e63f9aabca8855d78d36ecbff0048cc59df0f7e42b5343f3a3bac037"
   },
@@ -12,7 +12,7 @@
       "inputs": {
         "flat.json": "36c7cc7523ed9faa073f46b3e93722139c6685fe3f1d685cb5dff4ec7b7c0144",
         "instrumented.json": "55d7073870fa28e402470d83b229fa81570757a9819f2e11c31d7fcdcdd63d23",
-        "instrumented.v": "d6445c27505d1150495cd848311545eab85f41ec63bd76eb20904a1c71d2fb04"
+        "instrumented.v": "abc3addddad989d6705a099483e6ce6a7a19be98d7af99eba208a95dfb5666f5"
       },
       "original": {
         "first_ram.memory": {
@@ -148,7 +148,7 @@
       "inputs": {
         "flat.json": "da3e51c37024e867a722ae1434db6e8879894eeda7524909bd3b8f9c9477bc64",
         "instrumented.json": "379e2a5faa4d8281a61b5cfa582efe15bfbf7584311790d149d822ecb7364af8",
-        "instrumented.v": "d92ece976c0d33b9516f122ddc17158224f4b15fff58e8033f80037dd2389af9"
+        "instrumented.v": "a210e3486a739d17ac88160ba294c2627e86baa0f616563558daee8c6165df55"
       },
       "original": {
         "scheduler_0_mailbox.memory": {
@@ -220,7 +220,7 @@
       "inputs": {
         "flat.json": "d8e98bdf5794397392c5a0b01bb145bbd58b5c36551bf8e82a51f8d0010fb649",
         "instrumented.json": "8b20b3c85972346ce441dc108167973bd9af1e7860ba8d0ed8f9ba60c342902d",
-        "instrumented.v": "422402f780f1ac2e1ecc6b4afb56d67444f1c08533c3321fd723dbc74c9b526d"
+        "instrumented.v": "2a2e2979372ad638a9c807f2dabd5c6c7e8f9382aadbadd930b980a28621aa8e"
       },
       "original": {
         "scheduler_0_mailbox.memory": {
@@ -626,16 +626,24 @@
     ],
     "d3_public_debug": [
       "PASS: all debug services, 54 actors, 7 full queues; D3 witness matches ERTS",
-      "PASS: production/all-hooks cycle equality for 14402 cycles; 512 beats during debug stall"
+      "PASS: production/all-hooks cycle equality for 14403 cycles; 512 beats during debug stall"
     ],
     "d3_cycle_comparison": {
-      "cycles": 14402,
-      "release_cycle": 8397,
-      "last_output": 13855,
+      "cycles": 14403,
+      "release_cycle": 8398,
+      "last_output": 13856,
       "recovery_cycles": 5458,
       "rx_beats": 411,
       "tx_beats": 2380,
       "tx_beats_while_debug_blocked": 512
+    },
+    "simulator": "Icarus Verilog 12.0 (v12_0), native Apple Silicon SystemVerilog/VPI build",
+    "captured_profile_replay": {
+      "input_sha256": "ea5f8098a9c9c8ee2573bccabf7cffc747b6512fd43ac2779c520b4dd84c2cee",
+      "normalized_enables_only_icarus12": "stalls at clock 15",
+      "driver_separation_icarus12": "1000 blocked-output clocks and 4000 clocks with output release complete",
+      "rtl_bytes_with_source_annotations": 40833489,
+      "rtl_bytes_without_source_annotations": 12685830
     }
   },
   "d3_builds": {

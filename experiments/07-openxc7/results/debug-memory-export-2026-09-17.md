@@ -18,7 +18,7 @@ The [machine-readable report](debug-memory-export-2026-09-17.json) records tool 
 
 The small regression includes two instances of the production 1R1W RAM, a byte-enabled block RAM, and an initialized distributed RAM with a nonzero address origin. Simulation checks all initialized rows and 1,024 randomized cycles of reads, writes, same-address collisions, port enables, request stalls, and reset. The two generated application checks reuse the public debug clients to diagnose blocked actors and queues and verify recovery; cycle comparisons cover original and instrumented application outputs.
 
-The D3 run inspects all 54 actors, follows seven full queues to the blocked external sink, accepts 512 application beats while a debug reply is held, and matches the ERTS result. Its independently compiled production reference matches instrumented application outputs for 14,402 clocks. The run's 5,458-clock recovery interval depends on host scheduling and is not a throughput benchmark. Native validation also passes 1,102 EUnit tests and 19 existing Python/debug-tool tests.
+The D3 run inspects all 54 actors, follows seven full queues to the blocked external sink, accepts 512 application beats while a debug reply is held, and matches the ERTS result. Its independently compiled production reference matches instrumented application outputs for 14,403 clocks. The run's 5,458-clock recovery interval depends on host scheduling and is not a throughput benchmark. The final export is simulated with native Icarus 12, matching CI's major version. Native validation also passes 1,102 EUnit tests and 19 existing Python/debug-tool tests.
 
 Two negative controls distinguish the necessary export changes:
 
@@ -29,6 +29,8 @@ Two negative controls distinguish the necessary export changes:
 | Attributes retained, with `opt_reduce` | 3 RAMB18 + 6 RAM32M | Matches preserved JSON |
 
 Without enable normalization, each bit of a word enable becomes a separate conditional memory write in Verilog. The subsequent read/optimization/mapping pipeline can fragment the intended ports. `opt_reduce` makes identical mux output bits aliases before emission, allowing a common word or byte write to remain common. Distinct byte enables remain independent. This uses Yosys's semantic optimization rather than editing generated Verilog text.
+
+Export also separates internal buses at driver boundaries. The existing smaller-profile integration test exposed a zero-time simulation stall on Icarus 12 after write-enable normalization. A replay of its captured netlist reproduced the stall without the debug transport; Icarus 13 advanced normally. Driver separation lets Icarus 12 advance too, without changing module ports or introducing hardware state. The simulator issue is distinct from a logical combinational cycle. The exporter omits generated-source `src`/`hdlname` annotations from RTL while retaining synthesis attributes and the original JSON provenance; in the captured smaller profile this reduced the export from 39 MiB to 12 MiB. CI's existing timeout limits are unchanged.
 
 The prediction registered before synthesis was that preserving attributes would restore RAM mapping, with existing JSON-based area conclusions unchanged. The first check showed that attributes alone were insufficient; enable normalization was also required. The corrected export matches both memory configurations and tested application behavior.
 

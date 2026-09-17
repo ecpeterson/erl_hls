@@ -64,7 +64,7 @@ Compile the generated wrapper with `hls_debug_route.v`, `hls_debug_frame_rx.v`, 
 
 ### Application memory preservation
 
-The instrumented JSON preserves the application's cells and memory declarations, adding only observation aliases. The Verilog exporter retains synthesis attributes such as `ram_style="block"` and combines identical mux output bits before rendering writes. A shared word or byte enable therefore remains shared in the emitted RTL. Both representations are suitable synthesis inputs.
+The instrumented JSON preserves the application's cells and memory declarations, adding only observation aliases. The Verilog exporter retains synthesis attributes such as `ram_style="block"` and combines identical mux output bits before rendering writes. A shared word or byte enable therefore remains shared in the emitted RTL. Internal buses are separated at driver boundaries to avoid simulator feedback through aliases of the same packed vector; module ports stay intact. Bulky generated-source annotations (`src` and `hdlname`) remain in the JSON and are omitted from Verilog. Both representations are suitable synthesis inputs.
 
 To check a generated application that uses RAM:
 
