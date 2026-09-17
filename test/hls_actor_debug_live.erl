@@ -14,7 +14,7 @@ await_completed(Session, Kind) ->
     end, hls_debug_catalog:actors(Catalog)).
 
 await_outcome(Actor, Expected, Attempts) ->
-    case hls_debug:info(Actor, [failed, phase], 10000) of
+    case hls_debug:info(Actor, [Item || {Item, _} <- Expected], 10000) of
         Expected -> ok;
         _ when Attempts > 0 -> await_outcome(Actor, Expected, Attempts - 1);
         Actual -> error({actor_completion_timeout, Expected, Actual})
@@ -25,9 +25,21 @@ inspect(Session, Stage, Moment) ->
     case file:read_file(filename:join(Stage, "actor-test")) of
         {error, enoent} -> ok;
         {ok, Bytes} ->
-            Kind = case Bytes of <<"small">> -> small; <<"phi">> -> phi; <<"mailbox">> -> mailbox; <<"reduction">> -> reduction; <<"direct_reduction">> -> direct_reduction; <<"aggregate">> -> aggregate end,
-            {Plan, Specs} = hls_actor_debug_dslx:fixture(Kind),
+            Kind = case Bytes of <<"small">> -> small; <<"phi">> -> phi; <<"mailbox">> -> mailbox; <<"reduction">> -> reduction; <<"direct_reduction">> -> direct_reduction; <<"aggregate">> -> aggregate;
+                <<"mixed_direct">> -> {mixed, direct}; <<"mixed_one">> -> {mixed, one};
+                <<"mixed_two">> -> {mixed, two}; <<"mixed_coalesced">> -> {mixed, coalesced}
+            end,
+            {Plan, Specs} = fixture(Kind),
             Catalog = hls_debug_catalog:hardware(Plan, Specs, [], Session),
+            Completion = case {Kind, Moment} of
+                {{mixed, _}, released} ->
+                    {ok, Source} = hls_debug_catalog:actor(Catalog, {actor, source}),
+                    try await_outcome(Source,
+                        [{failed, false}, {phase, done}, {enter_pending, false}], 2000)
+                    catch Class:Reason:Stack -> {failed, Class, Reason, Stack}
+                    end;
+                _ -> ok
+            end,
             Ids = hls_debug_catalog:actors(Catalog),
             Observations = [begin
                 {ok, Actor} = hls_debug_catalog:actor(Catalog, Id),
@@ -51,6 +63,11 @@ inspect(Session, Stage, Moment) ->
             Values = [V || {_, _, V} <- Observations],
             ok = file:write_file(filename:join(Stage, "actors-" ++ atom_to_list(Moment) ++ ".term"),
                 io_lib:format("~p.~n", [Values])),
+            case Completion of
+                ok -> ok;
+                {failed, FailureClass, FailureReason, FailureStack} ->
+                    erlang:raise(FailureClass, FailureReason, FailureStack)
+            end,
             lists:foreach(fun({Id, Actor, Snapshot}) ->
                 true = maps:get(initialized, Snapshot),
                 check(Kind, Moment, Id, Snapshot),
@@ -65,8 +82,20 @@ inspect(Session, Stage, Moment) ->
             io:format("PASS: ~p scoped actor snapshots (~p, ~p)~n", [length(Ids), Kind, Moment])
     end.
 
+fixture({mixed, Placement}) -> hls_mixed_topology_dslx:fixture(Placement);
+fixture(Kind) -> hls_actor_debug_dslx:fixture(Kind).
+
 %% Startup shares finite application queues with the stalled output. A later
 %% actor may still be in boot; the released check requires its final outcome.
+check({mixed, _}, released, Id, Snapshot) ->
+    ExpectedPhase = case Id of
+        {actor, source} -> done;
+        {actor, collector} -> reporting;
+        _ -> active
+    end,
+    #{phase := ExpectedPhase, failed := false, failure := none, enter_pending := false} = Snapshot,
+    ok;
+check({mixed, _}, blocked, _, #{failed := false, failure := none}) -> ok;
 check(small, blocked, {family, cell, _}, #{phase := boot, failed := false,
         failure := none}) -> ok;
 check(small, _, {family, cell, [Slot, 0]}, #{phase := Phase, failed := true,

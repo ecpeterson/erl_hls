@@ -169,6 +169,8 @@ A `case` or `if` may omit its catch-all clause. Missing branches carry typed `ca
 
 Both actor forms use a checked compile-time `init([])` value for cold start and hardware reset. Nonzero values belong in the initializer; record defaults remain type-directed zero. Shared schedulers repopulate actor RAM before dispatching startup messages. The [initialization contract](docs/initialization.md) describes the supported source subset, CPU and proxy behavior, and reset tests.
 
+[Mixed topologies](docs/mixed-topologies.md) combine exact singleton actors and rectangular families, with direct or shared execution selected independently. The closed feedback regression compares four placements against one CPU reference and inspects both kinds of actor through the public debug interface while output is blocked.
+
 Every field in a private-state or wire record must have a type-directed zero
 default:
 

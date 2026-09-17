@@ -3,7 +3,7 @@
 -include_lib("eunit/include/eunit.hrl").
 
 %% Exercise both public emitters: sharing a validator must not broaden the
-%% scalar backend's options or lose the family backend's diagnostics.
+%% scalar backend's implicit options or lose the family backend's diagnostics.
 common_profile_errors_test_() ->
     Profile = profile(),
     Cases = [
@@ -33,7 +33,6 @@ common_profile_errors_test_() ->
 family_options_remain_backend_specific_test_() ->
     [{scalar, Scalar}, {family, Family}] = plans(),
     Cases = [
-        {scheduler_groups, [], {scheduler_groups, []}},
         {reduction_placements, [], {reduction_placements, []}},
         {effect_window_partition, invalid, {effect_window_partition, invalid}}
     ],
@@ -43,6 +42,11 @@ family_options_remain_backend_specific_test_() ->
             xls_topology_dslx:emit(Scalar, Profile)),
         ?assertError(FamilyError, xls_topology_dslx:emit(Family, Profile))
     end) || {Key, Value, FamilyError} <- Cases].
+
+explicit_scheduler_profile_uses_the_same_validation_test_() ->
+    [?_assertError({scheduler_groups, []},
+        xls_topology_dslx:emit(Plan, (profile())#{scheduler_groups => []}))
+        || {_Kind, Plan} <- plans()].
 
 explicit_family_defaults_preserve_output_test() ->
     {family, Family} = lists:keyfind(family, 1, plans()),

@@ -103,9 +103,9 @@ lower(Plan, Profile) ->
         direct_actor_debug := ActorDebug
     } = xls_topology_profile:normalize(Profile, family),
     SchedulerPlan = hls_scheduler_plan:normalize(Plan, Groups),
-    case {ActorDebug, SchedulerPlan} of
-        {true, #{groups := [_ | _], direct_members := [_ | _]}} ->
-            error(direct_actor_debug_requires_direct_family_topology);
+    case SchedulerPlan of
+        #{groups := [_ | _], direct_members := [_ | _]} ->
+            error(mixed_topology_requires_materialized_backend);
         _ -> ok
     end,
     case {MailboxDebug, maps:get(groups, SchedulerPlan)} of

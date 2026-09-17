@@ -8,10 +8,10 @@ Internal family normalizer used by `hls_topology`.
 
 The supported compact subset is intentionally small: zero-based rectangular
 families, same-shape wrapped translations, and rectangle-addressed ingress
-whose targets name statically embedded families. Relations currently target
-families or external outputs; routes do not yet cross between the exact and
-family sections. Family members and route pairs are never enumerated during
-normalization.
+whose targets name statically embedded families. Relations target translated
+family members, fixed exact actors, or external outputs. Exact source routes
+may address individual family members. Family members and route pairs are
+never enumerated during normalization.
 
 An ingress ID denotes the single router service addressed at the application
 boundary. Target IDs and rectangles are selectors interpreted inside that
@@ -45,9 +45,12 @@ normalize(
     ),
     Exact = #{externals := Externals} = NormalizeExact(Spec, FamilyIndex, Interfaces),
     ExternalIndex = index_by_id(Externals),
+    ActorIndex = maps:map(fun(_Id, Module) ->
+        #{interface => maps:get(Module, Interfaces)}
+    end, ActorSpecs),
     Relations = normalize_route_relations(
         RelationSpecs,
-        FamilyIndex,
+        #{actors => ActorIndex, families => FamilyIndex},
         ExternalIndex
     ),
     Ingresses = normalize_ingresses(
@@ -343,10 +346,10 @@ is_family_instance_id(_Id, _Family) ->
 %%% Route relations
 %%%
 
-normalize_route_relations(Specs, FamilyIndex, ExternalIndex)
+normalize_route_relations(Specs, Endpoints = #{families := FamilyIndex}, ExternalIndex)
         when is_list(Specs) ->
     Relations = [
-        normalize_route_relation(Spec, FamilyIndex, ExternalIndex)
+        normalize_route_relation(Spec, Endpoints, ExternalIndex)
         || Spec <- Specs
     ],
     Sources = [maps:get(source, Relation) || Relation <- Relations],
@@ -364,18 +367,18 @@ normalize_route_relations(Specs, FamilyIndex, ExternalIndex)
             ),
             ok = validate_relation_interfaces(
                 Sorted,
-                FamilyIndex,
+                Endpoints,
                 ExternalIndex
             ),
             Sorted;
         Missing -> error({unrouted_family_outputs, Missing})
     end;
-normalize_route_relations(Specs, _FamilyIndex, _ExternalIndex) ->
+normalize_route_relations(Specs, _Endpoints, _ExternalIndex) ->
     error({invalid_topology_field, route_relations, Specs}).
 
-normalize_route_relation({Source, []}, _FamilyIndex, _ExternalIndex) ->
+normalize_route_relation({Source, []}, _Endpoints, _ExternalIndex) ->
     error({empty_route_relation, Source});
-normalize_route_relation({Source, Recipients}, FamilyIndex, ExternalIndex)
+normalize_route_relation({Source, Recipients}, Endpoints, ExternalIndex)
         when is_list(Recipients) ->
     case Recipients of
         [_] ->
@@ -383,7 +386,7 @@ normalize_route_relation({Source, Recipients}, FamilyIndex, ExternalIndex)
                 Source,
                 direct,
                 Recipients,
-                FamilyIndex,
+                Endpoints,
                 ExternalIndex
             );
         _ ->
@@ -391,13 +394,13 @@ normalize_route_relation({Source, Recipients}, FamilyIndex, ExternalIndex)
     end;
 normalize_route_relation(
     {Source, _Delivery, []},
-    _FamilyIndex,
+    _Endpoints,
     _ExternalIndex
 ) ->
     error({empty_route_relation, Source});
 normalize_route_relation(
     {Source, Delivery, Recipients},
-    FamilyIndex,
+    Endpoints,
     ExternalIndex
 ) when is_list(Recipients), length(Recipients) > 1 ->
     case lists:member(Delivery, [buffered, coupled, queued, best_effort]) of
@@ -406,7 +409,7 @@ normalize_route_relation(
                 Source,
                 Delivery,
                 Recipients,
-                FamilyIndex,
+                Endpoints,
                 ExternalIndex
             );
         false ->
@@ -414,29 +417,29 @@ normalize_route_relation(
     end;
 normalize_route_relation(
     {Source, Delivery, Recipients},
-    _FamilyIndex,
+    _Endpoints,
     _ExternalIndex
 ) when is_list(Recipients) ->
     error({invalid_fanout, Source, Delivery, Recipients});
-normalize_route_relation(Spec, _FamilyIndex, _ExternalIndex) ->
+normalize_route_relation(Spec, _Endpoints, _ExternalIndex) ->
     error({invalid_route_relation_spec, Spec}).
 
 normalize_route_relation(
     Source,
     Delivery,
     Recipients,
-    FamilyIndex,
+    Endpoints = #{families := FamilyIndex},
     ExternalIndex
 ) ->
-    NormalSource = normalize_source(Source, FamilyIndex),
+    NormalSource = normalize_source(Source, Endpoints),
     {SourceFamilyId, _Port} = NormalSource,
-    SourceShape = maps:get(shape, maps:get(SourceFamilyId, FamilyIndex)),
+    #{shape := SourceShape} = maps:get(SourceFamilyId, FamilyIndex),
     ValidatedRecipients = [
         normalize_recipient(
             Recipient,
             NormalSource,
             SourceShape,
-            FamilyIndex,
+            Endpoints,
             ExternalIndex
         )
         || Recipient <- Recipients
@@ -457,20 +460,20 @@ normalize_route_relation(
         recipients => lists:sort(NormalRecipients)
     }.
 
-normalize_source({FamilyId, Port}, FamilyIndex) when is_atom(Port) ->
+normalize_source({FamilyId, Port}, #{families := FamilyIndex}) when is_atom(Port) ->
     Family = require_family(FamilyId, FamilyIndex, route_relation_source),
     case lists:member(Port, maps:get(outputs, Family)) of
         true -> {FamilyId, Port};
         false -> error({unknown_family_output, FamilyId, Port})
     end;
-normalize_source(Source, _FamilyIndex) ->
+normalize_source(Source, _Endpoints) ->
     error({invalid_route_relation_source, Source}).
 
 normalize_recipient(
     Recipient = {family, DestinationId, {translate, Offset, wrap}},
     Source,
     SourceShape,
-    FamilyIndex,
+    #{families := FamilyIndex},
     _ExternalIndex
 ) ->
     Destination = require_family(
@@ -492,10 +495,20 @@ normalize_recipient(
             Source, Recipient, SourceShape})
     end;
 normalize_recipient(
+    Recipient = {actor, ActorId},
+    Source,
+    _SourceShape,
+    #{actors := ActorIndex},
+    _ExternalIndex
+) ->
+    _ = hls_topology_endpoint:actor(ActorId,
+        #{actors => ActorIndex, families => #{}}, {route_relation_recipient, Source}),
+    Recipient;
+normalize_recipient(
     Recipient = {external, ExternalId},
     Source,
     _SourceShape,
-    _FamilyIndex,
+    _Endpoints,
     ExternalIndex
 ) ->
     case maps:is_key(ExternalId, ExternalIndex) of
@@ -507,12 +520,12 @@ normalize_recipient(
     Recipient,
     Source,
     _SourceShape,
-    _FamilyIndex,
+    _Endpoints,
     _ExternalIndex
 ) ->
     error({invalid_route_relation_recipient, Source, Recipient}).
 
-validate_relation_interfaces(Relations, FamilyIndex, ExternalIndex) ->
+validate_relation_interfaces(Relations, #{families := FamilyIndex, actors := ActorIndex}, ExternalIndex) ->
     lists:foreach(
         fun(Relation) ->
             Source = {FamilyId, Port} = maps:get(source, Relation),
@@ -531,16 +544,20 @@ validate_relation_interfaces(Relations, FamilyIndex, ExternalIndex) ->
                             interface,
                             maps:get(DestinationId, FamilyIndex)
                         ),
-                        validate_actor_interface(
+                        hls_topology_endpoint:validate_route(
                             Source,
                             Recipient,
                             SourceInterface,
                             Emitted,
                             DestinationInterface
                         );
+                    (Recipient = {actor, ActorId}) ->
+                        #{interface := DestinationInterface} = maps:get(ActorId, ActorIndex),
+                        hls_topology_endpoint:validate_route(Source, Recipient,
+                            SourceInterface, Emitted, DestinationInterface);
                     (Recipient = {external, ExternalId}) ->
                         External = maps:get(ExternalId, ExternalIndex),
-                        require_route_schemas(
+                        hls_topology_endpoint:require_schemas(
                             Source,
                             Recipient,
                             Emitted,
@@ -552,42 +569,6 @@ validate_relation_interfaces(Relations, FamilyIndex, ExternalIndex) ->
         end,
         Relations
     ).
-
-validate_actor_interface(
-    Source,
-    Recipient,
-    SourceInterface,
-    Emitted,
-    DestinationInterface
-) ->
-    Dispatched = hls_actor_interface:dispatched_schemas(DestinationInterface),
-    require_route_schemas(Source, Recipient, Emitted, Dispatched),
-    lists:foreach(
-        fun(Schema) ->
-            SourceFields = maps:get(
-                fields,
-                hls_actor_interface:schema(SourceInterface, Schema)
-            ),
-            DestinationFields = maps:get(
-                fields,
-                hls_actor_interface:schema(DestinationInterface, Schema)
-            ),
-            case SourceFields =:= DestinationFields of
-                true -> ok;
-                false -> error({incompatible_route_schema_layout,
-                    Source, Recipient, Schema,
-                    SourceFields, DestinationFields})
-            end
-        end,
-        Emitted
-    ).
-
-require_route_schemas(Source, Recipient, Emitted, Dispatched) ->
-    case Emitted -- Dispatched of
-        [] -> ok;
-        Unsupported -> error({incompatible_route_schemas,
-            Source, Recipient, Unsupported, Dispatched})
-    end.
 
 %%%
 %%% Compact lanes and point resolution
@@ -637,6 +618,8 @@ canonical_recipient(
         [canonical_offset(Value, Size)
             || {Value, Size} <- lists:zip(Offset, Shape)],
         wrap}};
+canonical_recipient(Recipient = {actor, _ActorId}, _Shape) ->
+    Recipient;
 canonical_recipient(Recipient = {external, _ExternalId}, _Shape) ->
     Recipient.
 
@@ -651,6 +634,8 @@ resolve_recipient(
         || {Coordinate, Delta, Size} <- zip3(Coordinates, Offset, Shape)
     ],
     {actor, family_instance_id(DestinationId, Resolved)};
+resolve_recipient(Recipient = {actor, _ActorId}, _Coordinates, _FamilyIndex) ->
+    Recipient;
 resolve_recipient(
     Recipient = {external, _ExternalId},
     _Coordinates,

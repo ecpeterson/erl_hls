@@ -362,3 +362,62 @@ jobs:
             _build/phi-debug/**/manifest.json
             _build/phi-debug/live/*.json
             _build/phi-debug/live/*.term
+
+  mixed-topology:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Install Erlang and rebar3
+        uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124
+        with:
+          otp-version: "28.0.2"
+          rebar3-version: "3.24.0"
+
+      - name: Install RTL verification tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes iverilog yosys
+
+      - name: Cache XLS
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: ${{ runner.temp }}/xls
+          key: xls-${{ runner.os }}-${{ runner.arch }}-${{ env.XLS_VERSION }}-${{ env.XLS_SHA256 }}
+
+      - name: Install pinned XLS release
+        env:
+          XLS_ROOT: ${{ runner.temp }}/xls
+        run: |
+          if [[ ! -x "$XLS_ROOT/codegen_main" ]]; then
+            archive="$RUNNER_TEMP/xls.tar.gz"
+            url="https://github.com/google/xls/releases/download/$XLS_VERSION/xls-$XLS_VERSION-linux-x64.tar.gz"
+            curl --fail --location --show-error "$url" --output "$archive"
+            echo "$XLS_SHA256  $archive" | sha256sum --check
+            mkdir -p "$XLS_ROOT"
+            tar -xzf "$archive" --strip-components=1 -C "$XLS_ROOT"
+          fi
+          "$XLS_ROOT/codegen_main" --version
+
+      - name: Compare mixed direct/shared topologies with CPU and inspect stalls
+        run: bash tools/test_mixed_topology.sh "$RUNNER_TEMP/xls"
+
+      - name: Upload mixed topology diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: mixed-topology-reports
+          path: |
+            _build/mixed-topology/**/*.log
+            _build/mixed-topology/**/*.term
+            _build/mixed-topology/**/*.hex
+            _build/mixed-topology/**/*.x
+            _build/mixed-topology/**/*.v
+            _build/mixed-topology/**/manifest.json
+            _build/mixed-topology/**/actors.json
+            _build/mixed-topology/**/blocked.txt
+            _build/mixed-topology/**/recovered.txt
+          if-no-files-found: ignore

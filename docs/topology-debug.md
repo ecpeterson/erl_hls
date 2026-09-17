@@ -116,7 +116,7 @@ A sampled actor word has phase in bits 0–7, entry-pending in bit 8, failure co
 
 ## Register-backed actor snapshots
 
-Set `direct_actor_debug => true` in a scalar or unscheduled family topology profile and pass its `xls_topology_dslx:artifact_requirements/2` options to `xls_parse:to_xls/2`. Supply the same option to `xls_scheduler_debug:projection/4`. The default build has no direct-actor observation channels. Each generated `Service` then publishes phase, entry-pending, failure, and optional reduction metadata on an independent output. No actor data, accumulator, member bitmap, or message history is copied.
+Set `direct_actor_debug => true` in the topology profile and pass its `xls_topology_dslx:artifact_requirements/2` options to `xls_parse:to_xls/2`. Supply the same option to `xls_scheduler_debug:projection/4`. The default build has no direct-actor observation channels. Each generated `Service` then publishes phase, entry-pending, failure, and optional reduction metadata on an independent output. No actor data, accumulator, member bitmap, or message history is copied.
 
 An RTL application shell can obtain bindings with `xls_actor_observation:bindings(Plan, Specs)` and add `wires(Bindings)` and `ports(Bindings)` alongside its other generated connections. `ports/1` ties each observation output ready high. The projection names those exact outputs and their packed layouts. The instrumentation pass checks the producer, directions, widths, shared clock, constant readiness, identities, and codebooks before connecting one retained snapshot per direct actor. It does not discover synthesized state-register names. Handwritten proc graphs must forward the observation channel and provide the matching compiler projection; enabling an actor artifact alone does not automatically instrument an arbitrary wrapper.
 
@@ -124,7 +124,7 @@ The output describes the committed `Machine` **entering** an actor step. It uses
 
 The query format and `hls_debug_catalog:hardware/4` API are the same as for shared actors. `initialized` becomes true after the first post-reset observation; a direct actor can publish its initial phase before executing its initial entry. Phase, failure, and reduction fields in one query come from one retained publication. The timestamp dates the query, not the state change. Direct targets advertise no mailbox counts or scheduler work flags: direct admission reservations are not represented by the shared scheduler's step-boundary counters. Reset requires a fresh transport session and catalog as for other targets.
 
-Projection schema 3 keeps RAM providers in `banks` and direct observation providers in `direct`. Their resource indices are contiguous across both lists. The current topology compiler supports direct observations for scalar topologies and wholly unscheduled family topologies; mixed direct/shared family emission remains unsupported. A fully scheduled family uses its existing RAM provider.
+Projection schema 3 keeps RAM providers in `banks` and direct observation providers in `direct`. Their resource indices are contiguous across both lists. [Mixed topologies](mixed-topologies.md) can expose both providers through one catalog, including one callback module realized both directly and in a shared group. Scheduled members use their RAM provider; direct members use their observation channel. Placement changes preserve logical actor identities but require the new build's projection and catalog.
 
 ## Reduction observations
 

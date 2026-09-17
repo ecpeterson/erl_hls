@@ -31,7 +31,9 @@ in list order before it performs its first routed-input receive.
 Startup quiescence is checked from the statically known initial phase and its
 source-ordered entry effects. Actor callbacks are not executed by topology
 generation. Regular-family plans are delegated to the narrower channel-array
-backend in `xls_topology_family_dslx`.
+backend in `xls_topology_family_dslx`. Mixed exact/family graphs and mixed
+direct/shared placements use `xls_topology_mixed_dslx`, which materializes
+logical instances while preserving their public identities.
 
 The physical profile selects an actor-egress depth policy. On an initially
 empty path, `burst` makes the required one-entry producer output register plus
@@ -41,7 +43,7 @@ integer requests that literal XLS channel depth; zero is an explicit bypass
 FIFO and leaves only the producer holding slot.
 """.
 
--export([artifact_requirements/2, emit/2, from_module/2]).
+-export([artifact_requirements/2, emit/2, from_module/2, lower/2]).
 -export_type([profile/0]).
 
 -type profile() :: xls_topology_profile:profile().
@@ -55,34 +57,46 @@ from_module(TopologyModule, Profile) when is_atom(TopologyModule) ->
 
 -doc "Emits deterministic DSLX from one normalized plan and physical profile.".
 -spec emit(hls_topology:plan(), profile()) -> iolist().
-emit(#{actors := [_ | _], families := [_ | _]}, _Profile) ->
-    error(mixed_topology);
-emit(Plan = #{families := []}, Profile) ->
-    render(lower(Plan, Profile));
-emit(Plan = #{actors := [], families := [_ | _]}, Profile) ->
-    xls_topology_family_dslx:emit(Plan, Profile);
-emit(Plan, _Profile) ->
-    error({invalid_topology_plan, Plan}).
+emit(Plan, Profile) ->
+    case backend(Plan, Profile) of
+        scalar -> render(lower(Plan, Profile));
+        family -> xls_topology_family_dslx:emit(Plan, Profile);
+        mixed -> xls_topology_mixed_dslx:emit(Plan, Profile)
+    end.
 
 -doc "Returns the actor-artifact specializations selected by a topology profile.".
 -spec artifact_requirements(hls_topology:plan(), profile()) ->
     #{module() := #{shared_service := ordinary | aggregate_only, mailbox_debug => boolean(), direct_actor_debug => boolean()}}.
-artifact_requirements(#{actors := [], families := [_ | _]} = Plan, Profile) ->
-    xls_topology_family_dslx:artifact_requirements(Plan, Profile);
-artifact_requirements(#{families := []} = Plan, Profile) ->
-    #{actors := Actors, direct_actor_debug := Debug} = lower(Plan, Profile),
-    Requirement = case Debug of
-        true -> #{shared_service => ordinary, direct_actor_debug => true};
-        false -> #{shared_service => ordinary}
-    end,
-    maps:from_list([{Module, Requirement} || #{module := Module} <- Actors]);
-artifact_requirements(Plan, _Profile) ->
-    error({invalid_topology_plan, Plan}).
+artifact_requirements(Plan, Profile) ->
+    case backend(Plan, Profile) of
+        family -> xls_topology_family_dslx:artifact_requirements(Plan, Profile);
+        mixed -> xls_topology_mixed_dslx:artifact_requirements(Plan, Profile);
+        scalar ->
+            #{actors := Actors, direct_actor_debug := Debug} = lower(Plan, Profile),
+            Requirement = case Debug of
+                true -> #{shared_service => ordinary, direct_actor_debug => true};
+                false -> #{shared_service => ordinary}
+            end,
+            maps:from_list([{Module, Requirement} || #{module := Module} <- Actors])
+    end.
+
+%% Artifact signatures and graph generation must choose the same realization.
+backend(#{actors := [_ | _], families := [_ | _]}, _Profile) -> mixed;
+backend(#{families := []}, #{scheduler_groups := _}) -> mixed;
+backend(#{families := []}, _Profile) -> scalar;
+backend(Plan = #{actors := [], families := [_ | _]}, Profile) ->
+    case xls_topology_mixed_dslx:required(Plan, Profile) of
+        true -> mixed;
+        false -> family
+    end;
+backend(Plan, _Profile) -> error({invalid_topology_plan, Plan}).
 
 %%%
 %%% Backend lowering and validation
 %%%
 
+%% Shared by the scalar renderer and the materialized mixed renderer. Its
+%% input has only exact actor instances and already resolved routes.
 lower(Plan = #{
         families := [],
         ingresses := [],
