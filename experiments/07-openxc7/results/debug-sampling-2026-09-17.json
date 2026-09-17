@@ -1,0 +1,191 @@
+{
+  "scope": "One routed application-boundary monitor; excludes application logic and topology query services. XC7 ABC9 mapping, no placement, timing or power measurement.",
+  "baseline_commit": "bb46aad",
+  "seeds": [
+    1,
+    2
+  ],
+  "prediction": "One additional control FF and a few LUTs per monitor; unchanged RAM and application cycle behavior.",
+  "proof": {
+    "result": "pass",
+    "seconds": 1.7264312501065433,
+    "proof": "ABC PDR, unbounded safety after a sampled shared reset; no input/fairness constraints",
+    "negative_controls": [
+      "unfenced-requests",
+      "blocked-trace-writes"
+    ],
+    "yosys": "Yosys 0.69+10 (git sha1 370a53acf-dirty, Release, Clang /usr/local/osxcross/target/bin/aarch64-apple-darwin25.5-clang++ 21.1.8)",
+    "inputs": {
+      "/private/tmp/erl-hls-debug-sampling/priv/rtl/debug/hls_debug_monitor.v": "726faff8fcea7fb4b8aa6b7e17223b7ee9a8f8760925cbe31f681e63d02423ed",
+      "/private/tmp/erl-hls-debug-sampling/priv/rtl/debug/hls_debug_tap.v": "15670f74ae87b25b284e23b53c821155fa83cda8f3587bdf68e62527adf7e4dd",
+      "/private/tmp/erl-hls-debug-sampling/priv/rtl/debug/hls_trace_store.v": "5c47a9f7f16b3f7756e3970c745e6c05a77485c5a1159766bd8e403856cb7eed",
+      "/private/tmp/erl-hls-debug-sampling/_build/debug-sampling/hls_debug_observer.v": "d0f150d2d61b9232803dd7362dde5866497eaa64470c99ce7376f10c27a69181",
+      "/private/tmp/erl-hls-debug-sampling/_build/debug-sampling/hls_debug_server.v": "55450c967b8af406f43bc93e6713fc997e0f9382dd6c4dacdd6eaf0a45338095",
+      "/private/tmp/erl-hls-debug-sampling/test/rtl/debug/hls_debug_sampling_formal.sv": "3a8d6fdd0e4748617e1fa586bd441c775fb1005b27d2b50e279acda66194512b",
+      "/private/tmp/erl-hls-debug-sampling/test/rtl/debug/hls_debug_sampling_tb.sv": "b1780eba1d7ac94cb17682c6e6506e912a7ee2e69c8e8abf23444a7f8f88d958",
+      "/private/tmp/erl-hls-debug-sampling/tools/test_debug_sampling.py": "1a583181900494adc97958a8fb4bf45e9b011856cc1f5bf4ddd5b1e2ba4293ea"
+    },
+    "tools": {
+      "/Users/ecpeterson/Documents/code/xls-upstream-rescue-2026-09-09/tools/oss-cad-suite/bin/yosys": "8a6175ee88d6412c3d792c47d0750b8707a8e12cc2222c1322546d47cd85edb9",
+      "/Users/ecpeterson/Documents/code/xls-upstream-rescue-2026-09-09/tools/oss-cad-suite/bin/yosys-abc": "91bc02357beb61ace477cf8d8c0a84541ccb44f224c36dab4a8a6f4db689100f"
+    }
+  },
+  "area": {
+    "baseline": {
+      "samples": [
+        {
+          "mode": "boundary",
+          "seed": 1,
+          "LUT": 1582,
+          "LUT_logic": 1582,
+          "LUT_RAM": 0,
+          "FF": 1184,
+          "RAMB18": 0,
+          "RAMB36": 3
+        },
+        {
+          "mode": "boundary",
+          "seed": 2,
+          "LUT": 1582,
+          "LUT_logic": 1582,
+          "LUT_RAM": 0,
+          "FF": 1184,
+          "RAMB18": 0,
+          "RAMB36": 3
+        }
+      ],
+      "statistics": {
+        "LUT": {
+          "best": 1582,
+          "mean": 1582,
+          "variance": 0,
+          "worst": 1582
+        },
+        "LUT_logic": {
+          "best": 1582,
+          "mean": 1582,
+          "variance": 0,
+          "worst": 1582
+        },
+        "LUT_RAM": {
+          "best": 0,
+          "mean": 0,
+          "variance": 0,
+          "worst": 0
+        },
+        "FF": {
+          "best": 1184,
+          "mean": 1184,
+          "variance": 0,
+          "worst": 1184
+        },
+        "RAMB18": {
+          "best": 0,
+          "mean": 0,
+          "variance": 0,
+          "worst": 0
+        },
+        "RAMB36": {
+          "best": 3,
+          "mean": 3,
+          "variance": 0,
+          "worst": 3
+        }
+      },
+      "provenance": {
+        "manifest": "765b7554128c18306898a8db5d570e0305109b296ca556d58388fbe54f1e6ca3",
+        "mode": "boundary",
+        "sources": {
+          "/private/tmp/erl-hls-debug-sampling/_build/sampling-area/baseline/boundary/sidecar.v": "e78fa15ed894846927ff6a927af499d80812776983c6f26de3da04da364c9e76",
+          "/private/tmp/erl-hls-debug-memory/priv/rtl/debug/hls_actor_snapshot.v": "347251a1965df664817aee66764f0b2763382268c41cdc1d229f9af8c6d0fd11",
+          "/private/tmp/erl-hls-debug-memory/priv/rtl/debug/hls_topology_debug.v": "27c1336a3d5ead19c81b4e4fb89de54d26e0358963d86d92a7a5a0ec80392b96",
+          "/private/tmp/erl-hls-debug-memory/priv/rtl/debug/hls_debug_frame_rx.v": "e689f254b14ebab341b936c30c9a90db7888b8f1bdf68a99ef8ef71aa90bae55",
+          "/private/tmp/erl-hls-debug-memory/priv/rtl/debug/hls_debug_monitor.v": "611f21d9365b3f0c8dfaa7157e51576198f22f8e68ee80279ad3fc5a345ea8d5",
+          "/private/tmp/erl-hls-debug-memory/priv/rtl/debug/hls_debug_tap.v": "15670f74ae87b25b284e23b53c821155fa83cda8f3587bdf68e62527adf7e4dd",
+          "/private/tmp/erl-hls-debug-memory/priv/rtl/debug/hls_trace_store.v": "5c47a9f7f16b3f7756e3970c745e6c05a77485c5a1159766bd8e403856cb7eed",
+          "/private/tmp/erl-hls-debug-sampling/_build/debug-sampling/hls_debug_observer.v": "d0f150d2d61b9232803dd7362dde5866497eaa64470c99ce7376f10c27a69181",
+          "/private/tmp/erl-hls-debug-sampling/_build/debug-sampling/hls_debug_server.v": "55450c967b8af406f43bc93e6713fc997e0f9382dd6c4dacdd6eaf0a45338095"
+        }
+      },
+      "yosys": "Yosys 0.69+10 (git sha1 370a53acf-dirty, Release, Clang /usr/local/osxcross/target/bin/aarch64-apple-darwin25.5-clang++ 21.1.8)"
+    },
+    "candidate": {
+      "samples": [
+        {
+          "mode": "boundary",
+          "seed": 1,
+          "LUT": 1564,
+          "LUT_logic": 1564,
+          "LUT_RAM": 0,
+          "FF": 1185,
+          "RAMB18": 0,
+          "RAMB36": 3
+        },
+        {
+          "mode": "boundary",
+          "seed": 2,
+          "LUT": 1564,
+          "LUT_logic": 1564,
+          "LUT_RAM": 0,
+          "FF": 1185,
+          "RAMB18": 0,
+          "RAMB36": 3
+        }
+      ],
+      "statistics": {
+        "LUT": {
+          "best": 1564,
+          "mean": 1564,
+          "variance": 0,
+          "worst": 1564
+        },
+        "LUT_logic": {
+          "best": 1564,
+          "mean": 1564,
+          "variance": 0,
+          "worst": 1564
+        },
+        "LUT_RAM": {
+          "best": 0,
+          "mean": 0,
+          "variance": 0,
+          "worst": 0
+        },
+        "FF": {
+          "best": 1185,
+          "mean": 1185,
+          "variance": 0,
+          "worst": 1185
+        },
+        "RAMB18": {
+          "best": 0,
+          "mean": 0,
+          "variance": 0,
+          "worst": 0
+        },
+        "RAMB36": {
+          "best": 3,
+          "mean": 3,
+          "variance": 0,
+          "worst": 3
+        }
+      },
+      "provenance": {
+        "manifest": "765b7554128c18306898a8db5d570e0305109b296ca556d58388fbe54f1e6ca3",
+        "mode": "boundary",
+        "sources": {
+          "/private/tmp/erl-hls-debug-sampling/_build/sampling-area/candidate/boundary/sidecar.v": "e78fa15ed894846927ff6a927af499d80812776983c6f26de3da04da364c9e76",
+          "/private/tmp/erl-hls-debug-sampling/priv/rtl/debug/hls_actor_snapshot.v": "347251a1965df664817aee66764f0b2763382268c41cdc1d229f9af8c6d0fd11",
+          "/private/tmp/erl-hls-debug-sampling/priv/rtl/debug/hls_topology_debug.v": "27c1336a3d5ead19c81b4e4fb89de54d26e0358963d86d92a7a5a0ec80392b96",
+          "/private/tmp/erl-hls-debug-sampling/priv/rtl/debug/hls_debug_frame_rx.v": "e689f254b14ebab341b936c30c9a90db7888b8f1bdf68a99ef8ef71aa90bae55",
+          "/private/tmp/erl-hls-debug-sampling/priv/rtl/debug/hls_debug_monitor.v": "726faff8fcea7fb4b8aa6b7e17223b7ee9a8f8760925cbe31f681e63d02423ed",
+          "/private/tmp/erl-hls-debug-sampling/priv/rtl/debug/hls_debug_tap.v": "15670f74ae87b25b284e23b53c821155fa83cda8f3587bdf68e62527adf7e4dd",
+          "/private/tmp/erl-hls-debug-sampling/priv/rtl/debug/hls_trace_store.v": "5c47a9f7f16b3f7756e3970c745e6c05a77485c5a1159766bd8e403856cb7eed",
+          "/private/tmp/erl-hls-debug-sampling/_build/debug-sampling/hls_debug_observer.v": "d0f150d2d61b9232803dd7362dde5866497eaa64470c99ce7376f10c27a69181",
+          "/private/tmp/erl-hls-debug-sampling/_build/debug-sampling/hls_debug_server.v": "55450c967b8af406f43bc93e6713fc997e0f9382dd6c4dacdd6eaf0a45338095"
+        }
+      },
+      "yosys": "Yosys 0.69+10 (git sha1 370a53acf-dirty, Release, Clang /usr/local/osxcross/target/bin/aarch64-apple-darwin25.5-clang++ 21.1.8)"
+    }
+  }
+}
