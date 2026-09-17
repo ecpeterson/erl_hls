@@ -69,7 +69,6 @@ first routed receive, while the actor graph and routing stay compact.
 -export([artifact_requirements/2, emit/2]).
 
 -define(U16_MAX, 16#ffff).
--define(U16_EXTENT, 16#10000).
 -define(U32_MAX, 16#ffffffff).
 -define(MAX_PAYLOAD_BITS, 96).
 
@@ -121,9 +120,9 @@ lower(Plan, Profile) ->
     [Width, Height] = require_common_shape(Families0),
     Families1 = annotate_families(Families0, EgressDepth),
     FamilyIndex = index_by_id(Families1),
-    Ingresses = annotate_ingresses(
+    Ingresses = xls_topology_ingress:lower(
         maps:get(ingresses, Plan, []),
-        FamilyIndex
+        #{actors => #{}, families => FamilyIndex}
     ),
     Externals = annotate_externals(require_externals(
         maps:get(externals, Plan, [])
@@ -285,90 +284,6 @@ annotate_families(Families, EgressDepth) ->
         end
         || {Index, Family} <- lists:enumerate(0, Families)
     ].
-
-annotate_ingresses([], _FamilyIndex) -> [];
-annotate_ingresses([Ingress = #{
-    id := Id,
-    kind := rectangle,
-    shape := [Width, Height],
-    targets := Targets
-}], FamilyIndex) when Width =< ?U16_EXTENT, Height =< ?U16_EXTENT ->
-    length(Targets) =< 4 orelse error({ingress_targets, length(Targets)}),
-    AnnotatedTargets = [
-        annotate_ingress_target(Index, Target, FamilyIndex)
-        || {Index, Target} <- lists:enumerate(0, Targets)
-    ],
-    Recipients = ingress_recipients(AnnotatedTargets),
-    [Ingress#{
-        index => 0,
-        input_name => [xls_topology_profile:identifier(Id, ingress_id), "_in"],
-        targets => AnnotatedTargets,
-        recipients => Recipients
-    }];
-annotate_ingresses([#{shape := Shape}], _FamilyIndex) ->
-    error({ingress_shape, Shape, ?U16_EXTENT});
-annotate_ingresses(Ingresses, _FamilyIndex) ->
-    error({ingress_count, length(Ingresses)}).
-
-annotate_ingress_target(
-    Index,
-    Target = #{id := Id, schemas := Schemas, recipients := Recipients},
-    FamilyIndex
-) ->
-    TargetName = string:uppercase(
-        xls_topology_profile:identifier(Id, ingress_target)),
-    Encodings = lists:usort([
-        begin
-            #{interface := Interface} = maps:get(FamilyId, FamilyIndex),
-            #{selector := Selector, fields := Fields} =
-                hls_actor_interface:schema(Interface, Schema),
-            {Schema, Selector, Fields}
-        end
-        || Schema <- Schemas,
-           #{family := FamilyId} <- Recipients
-    ]),
-    lists:foreach(
-        fun(Schema) ->
-            case [Encoding || Encoding = {Name, _, _} <- Encodings,
-                    Name =:= Schema] of
-                [_] -> ok;
-                Values -> error({ingress_encoding, Id, Schema, Values})
-            end
-        end,
-        Schemas
-    ),
-    Target#{
-        selector => Index,
-        target_name => TargetName,
-        encodings => Encodings
-    }.
-
-ingress_recipients(Targets) ->
-    ByFamily = lists:foldl(
-        fun(#{id := TargetId, recipients := Recipients}, Acc0) ->
-            lists:foldl(
-                fun(Recipient = #{family := FamilyId}, Acc) ->
-                    maps:update_with(
-                        FamilyId,
-                        fun(Existing = #{scale := Scale, offset := Offset,
-                                targets := TargetIds}) ->
-                            #{scale := Scale, offset := Offset} = Recipient,
-                            Existing#{targets := [TargetId | TargetIds]}
-                        end,
-                        Recipient#{targets => [TargetId]},
-                        Acc
-                    )
-                end,
-                Acc0,
-                Recipients
-            )
-        end,
-        #{},
-        Targets
-    ),
-    [Recipient#{targets := lists:sort(TargetIds)}
-        || {_FamilyId, Recipient = #{targets := TargetIds}} <-
-               lists:sort(maps:to_list(ByFamily))].
 
 validate_relations(Relations, FamilyIndex) ->
     lists:foreach(
@@ -955,14 +870,7 @@ control_support(Spec = #{ingresses := [Ingress]}) ->
                maps:get(ingress, Family) =/= none]
     ].
 
-control_target_enum(#{targets := Targets}) ->
-    [
-        "pub enum ControlTarget : u2 {\n",
-        [["  ", maps:get(target_name, Target), " = ",
-            integer_to_list(maps:get(selector, Target)), ",\n"]
-            || Target <- Targets],
-        "}\n\n"
-    ].
+control_target_enum(Ingress) -> xls_topology_ingress:target_enum(Ingress).
 
 spatial_ingress_router(Spec, Ingress = #{recipients := Recipients}) ->
     Members = [
@@ -1022,20 +930,8 @@ spatial_ingress_router_sends([Family | Rest], Ingress, Index, PreviousToken) ->
         spatial_ingress_router_sends(Rest, Ingress, Index + 1, Token)
     ].
 
-control_target_condition(TargetIds, #{targets := Targets}) ->
-    join_with(" || ", [
-        control_target_clause(Target)
-        || Target = #{id := Id} <- Targets,
-           lists:member(Id, TargetIds)
-    ]).
-
-control_target_clause(#{target_name := Name, encodings := Encodings}) ->
-    Selectors = [Selector || {_Schema, Selector, _Fields} <- Encodings],
-    ["(packet.target == ControlTarget::", Name, " as u2 && (",
-        join_with(" || ", [
-            ["packet.frame.header.op == u8:", integer_to_list(Selector)]
-            || Selector <- Selectors
-        ]), "))"].
+control_target_condition(TargetIds, Ingress) ->
+    xls_topology_ingress:condition(TargetIds, Ingress, "packet").
 
 family_control(Family = #{ingress := #{
     scale := [ScaleX, ScaleY],

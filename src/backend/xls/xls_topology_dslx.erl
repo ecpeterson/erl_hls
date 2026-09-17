@@ -13,7 +13,8 @@ Routes preserve per-source/recipient order across aliased output ports. The
 supported fanout mode is `queued`: the source event completes at its common
 egress, and its router subsequently waits for every recipient. Direct actors
 retain mailbox admission credit while polling routed input. Their explicit
-startup frames precede routed messages. Wire selectors must match across routes;
+startup frames precede routed and external messages. Rectangle ingress selects
+logical actor points or embedded families independently of placement. Wire selectors must match across routes;
 selector remapping remains unsupported.
 
 The `burst` egress policy reserves one entry-effect burst on an initially empty

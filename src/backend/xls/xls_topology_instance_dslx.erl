@@ -24,7 +24,6 @@ lower(Plan, Profile0) ->
         direct_actor_debug := ActorDebug,
         mailbox_debug := MailboxDebug} =
         xls_topology_profile:normalize(Profile0),
-    require_empty(ingresses, maps:get(ingresses, Plan)),
     require_empty(reduction_placements, maps:to_list(Reductions)),
     case WindowPartition of
         global -> ok;
@@ -49,10 +48,14 @@ lower(Plan, Profile0) ->
     end,
     Routes = maps:get(routes, Base),
     lists:foreach(fun validate_delivery/1, Routes),
-    Units = Direct ++ Schedulers,
-    Lanes0 = lists:usort([{maps:get(unit, maps:get(Id, ActorIndex)), Recipient}
+    Ingresses = ingress_units(Plan, ActorIndex),
+    Units = Direct ++ Schedulers ++ Ingresses,
+    Routed = [{maps:get(unit, maps:get(Id, ActorIndex)), Recipient}
         || #{source := {Id, _}, recipients := Recipients} <- Routes,
-           Recipient <- Recipients]),
+           Recipient <- Recipients],
+    Incoming = [{Key, {actor, Id}} || #{unit := Key, bindings := Bindings} <- Ingresses,
+        Id <- maps:keys(Bindings)],
+    Lanes0 = lists:usort(Routed ++ Incoming),
     Lanes = [lane(I, Source, Recipient, ActorIndex) ||
         {I, {Source, Recipient}} <- lists:enumerate(0, Lanes0)],
     Units1 = [unit_routes(Unit, Routes, ActorIndex, Lanes) || Unit <- Units],
@@ -64,7 +67,7 @@ lower(Plan, Profile0) ->
     WithMailbox = flag_modules(WithDirect, Schedulers1, mailbox_debug, MailboxDebug),
     Base#{actors := Actors, direct => Direct1, schedulers => Schedulers1,
         units => Units1, lanes := Lanes, actor_index => ActorIndex,
-        semantic_plan => Plan, mailbox_debug => MailboxDebug,
+        semantic_plan => Plan, mailbox_debug => MailboxDebug, ingresses => Ingresses,
         artifact_requirements => WithMailbox,
         effect_window_domains => [[I || #{index := I} <- Schedulers1]]}.
 
@@ -85,8 +88,27 @@ materialize(Plan = #{actors := Exact, families := Families,
         #{id := Id, shape := [W, H]} <- Families,
         X <- lists:seq(0, W - 1), Y <- lists:seq(0, H - 1)]),
     Routes = ExactRoutes ++ Relations,
-    {Plan#{actors := Expanded, families := [], routes := Routes,
+    {Plan#{actors := Expanded, families := [], ingresses := [], routes := Routes,
         route_relations := [], lane_relations := [], lanes := xls_topology_graph:lanes(Routes)}, Origins}.
+
+ingress_units(#{families := Families, ingresses := Ingresses}, Actors) ->
+    Interfaces = maps:from_list([{Module, Interface} ||
+        #{module := Module, interface := Interface} <- maps:values(Actors)]),
+    FamilyIndex = maps:from_list([{Id, Family#{interface => maps:get(Module, Interfaces)}}
+        || Family = #{id := Id, module := Module} <- Families]),
+    [Ingress#{kind => ingress, unit => {ingress, I}, bindings => maps:from_list(
+        lists:append([ingress_bindings(Recipient, FamilyIndex)
+            || Recipient <- Recipients]))} ||
+        Ingress = #{index := I, recipients := Recipients} <-
+            xls_topology_ingress:lower(Ingresses, #{actors => Actors, families => FamilyIndex})].
+
+ingress_bindings(#{actor := Id, at := Point, targets := Targets}, _) ->
+    [{Id, #{point => Point, targets => Targets}}];
+ingress_bindings(#{family := Id, scale := [SX, SY], offset := [OX, OY],
+        targets := Targets}, Families) ->
+    #{shape := [W, H]} = maps:get(Id, Families),
+    [{{Id, X, Y}, #{point => [OX + SX * X, OY + SY * Y], targets => Targets}}
+        || X <- lists:seq(0, W - 1), Y <- lists:seq(0, H - 1)].
 
 family_entries(I, Family = #{id := Id, shape := [W, H]}) ->
     [{maps:without([shape, instance_count], Family#{id := {Id, X, Y}}),
@@ -159,13 +181,33 @@ render(Spec = #{units := Units, direct := Direct, schedulers := Schedulers}) ->
         [startup_proc(Scheduler) || Scheduler <- Schedulers],
         [router(Spec, Unit) || Unit <- Units], top_proc(Spec)].
 
-preamble(#{name := Name, actors := Actors, depth := Depth}) ->
+preamble(#{name := Name, actors := Actors, depth := Depth, ingresses := Ingresses}) ->
     ["// ", Name, ".x\n// Materialized logical graph; placement does not change actor identity.\n",
         "import axis;\nimport frame_transport;\nimport effect_window;\n",
+        case Ingresses of [] -> []; _ -> "import hls_spatial_router;\n" end,
         [["import ", Module, ";\n"] || Module <- lists:usort([
             M || #{module_name := M} <- Actors])],
-        "\nconst CHANNEL_DEPTH = u32:", n(Depth), ";\n\n"].
+        "\nconst CHANNEL_DEPTH = u32:", n(Depth), ";\n\n",
+        [xls_topology_ingress:target_enum(Ingress) || Ingress <- Ingresses]].
 
+router(_Spec, Ingress = #{kind := ingress, index := I, bindings := Bindings,
+        outbound := Lanes}) ->
+    Arguments = ["spatial_in: chan<hls_spatial_router::SpatialFrame> in" |
+        [lane_argument(Lane) || Lane <- Lanes]],
+    Names = ["spatial_in" | [lane_name(Lane) || Lane <- Lanes]],
+    [proc_header(["IngressRouter", n(I)], Arguments, Names),
+        "  init { () }\n  next(state: ()) {\n",
+        "    let (tok, packet) = recv(join(), spatial_in);\n",
+        [begin
+            #{point := [X, Y], targets := Targets} = maps:get(Id, Bindings),
+            ["    let lane_", n(Index), "_tok = send_if(tok, ", lane_name(Lane), ", (",
+                xls_topology_ingress:condition(Targets, Ingress, "packet"),
+                ") && hls_spatial_router::contains(packet.rectangle, u16:", n(X),
+                ", u16:", n(Y), "), ", lane_value(Lane, "packet"), ");\n"]
+        end || Lane = #{index := Index, recipient := {actor, Id}} <- Lanes],
+        "    let _done = ", join_tokens(["tok" | [["lane_", n(Index), "_tok"]
+            || #{index := Index} <- Lanes]]), ";\n",
+        "    state\n  }\n}\n\n"];
 router(Spec, Unit = #{kind := scheduler, module_name := Module, outbound := Lanes}) ->
     Routing = #{arguments => [lane_argument(Lane) || Lane <- Lanes],
         names => [lane_name(Lane) || Lane <- Lanes],
@@ -283,7 +325,7 @@ top_proc(Spec = #{direct := Direct, schedulers := Schedulers, units := Units}) -
         [router_spawn(Spec, Unit) || Unit <- Units], external_spawns(Spec),
         "    ", tuple(Names), "\n  }\n  init { () }\n  next(state: ()) { state }\n}\n"].
 
-top_ports(Spec = #{schedulers := Schedulers, externals := Externals}) ->
+top_ports(Spec = #{schedulers := Schedulers, externals := Externals, ingresses := Ingresses}) ->
     Ram = lists:append([lists:zip(xls_scheduler_ram_dslx:names([Stem, "_"]),
         xls_scheduler_ram_dslx:parameters([Stem, "_"], [Module, "::"])) ||
         #{stem := Stem, module_name := Module} <- Schedulers]),
@@ -291,7 +333,9 @@ top_ports(Spec = #{schedulers := Schedulers, externals := Externals}) ->
         xls_scheduler_observation:arguments(Spec)),
     External = [{Name, [Name, ": chan<axis::Frame> out"]} ||
         #{output_name := Name} <- Externals],
-    Ram ++ Mailbox ++ External ++ debug_ports(Spec).
+    Inputs = [{Name, [Name, ": chan<hls_spatial_router::SpatialFrame> in"]}
+        || #{input_name := Name} <- Ingresses],
+    Ram ++ Mailbox ++ Inputs ++ External ++ debug_ports(Spec).
 
 debug_ports(#{direct_actor_debug := false}) -> [];
 debug_ports(#{semantic_plan := #{actors := Actors, families := Families},
@@ -307,6 +351,7 @@ debug_ports(#{semantic_plan := #{actors := Actors, families := Families},
         maps:is_key({family, Id, [0, 0]}, Logical),
         Name <- [xls_actor_observation:family_name(I)]].
 
+unit_channels(#{kind := ingress}) -> [];
 unit_channels(#{kind := direct, stem := Stem, module_name := Module,
         egress_depth := EgressDepth, inbound := Inbound}) ->
     [channel([Stem, "_req"], "axis::Frame", none, "CHANNEL_DEPTH"),
@@ -358,6 +403,9 @@ scheduler_spawn(Spec, #{stem := Stem, index := I, module_name := Module,
         lists:join(", ", xls_scheduler_ram_dslx:names([Stem, "_"])),
         xls_scheduler_observation:spawn_argument(Spec, Stem), ");\n"].
 
+router_spawn(Spec, #{kind := ingress, index := I, input_name := Name, outbound := Lanes}) ->
+    ["    spawn IngressRouter", n(I), "(", Name,
+        [[", ", lane_producer(Spec, Lane)] || Lane <- Lanes], ");\n"];
 router_spawn(Spec, #{kind := direct, index := I, stem := Stem, outbound := Lanes}) ->
     ["    spawn ActorRouter", n(I), "(", Stem, "_egress_c",
         [[", ", lane_producer(Spec, Lane)] || Lane <- Lanes], ");\n"];

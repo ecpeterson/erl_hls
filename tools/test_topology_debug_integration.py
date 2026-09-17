@@ -29,10 +29,23 @@ def testbench(args, ports, manifest):
              "wire [31:0] m_dbg_tdata; wire [3:0] m_dbg_tkeep;",
              "wire m_dbg_tlast, m_dbg_tvalid; reg m_dbg_tready=0;"]
     originals, instrumented, production, checks, final_checks = [], [], [], [], []
+    ingress = bool(args.actor_test and args.actor_test.startswith("ingress_"))
+    packets = json.loads((args.stage.parent / "commands.json").read_text()) if ingress else []
     compare_production = bool(getattr(args, "reference_rtl", None))
     sinks = [ready for _, _, ready, direction in topology.channel_ports({"ports": ports}) if direction == "output"]
     if not sinks:
         raise ValueError("test requires an external sink")
+    if ingress:
+        # The report sink is held while acknowledgments drain independently.
+        sinks.remove("_reports_out_rdy")
+        sinks.insert(0, "_reports_out_rdy")
+        lines += [f"reg [193:0] commands [0:{len(packets)-1}];",
+                  f"integer command_round [0:{len(packets)-1}];",
+                  "integer sent=0, acks=0, input_stalls=0; reg application_complete=0;", "initial begin"]
+        lines += [f"commands[{i}]=194'h{p['bits']}; command_round[{i}]={p['round']};"
+                  for i, p in enumerate(packets)]
+        lines += ["end", f"wire command_valid = sent < {len(packets)} && command_round[sent] <= acks;",
+                  "wire [193:0] command_data = command_valid ? commands[sent] : 194'b0;"]
     valid_for_data = {stem: valid for stem, valid, _, _ in topology.channel_ports({"ports": ports})}
     for index, (name, port) in enumerate(ports.items()):
         width = len(port["bits"])
@@ -41,6 +54,10 @@ def testbench(args, ports, manifest):
                 signal = "clk"
             elif name == args.reset:
                 signal = "resetn" if args.reset_active_low else "!resetn"
+            elif ingress and name == "_commands_in":
+                signal = "command_data"
+            elif ingress and name == "_commands_in_vld":
+                signal = "command_valid"
             elif name in sinks:
                 signal = "released" if name == sinks[0] else "1'b1"
             elif name == "release_contributions" and args.actor_test in ("reduction", "aggregate", "direct_reduction"):
@@ -81,7 +98,7 @@ def testbench(args, ports, manifest):
         final_checks.append('$display("PASS: production/debug application transcripts match (one healthy report, payload 3)");')
     debug_ports = [f".{side}_dbg_{suffix}({side}_dbg_{suffix})" for side in ("s", "m")
                    for suffix in ("tdata", "tkeep", "tlast", "tvalid", "tready")]
-    if args.actor_test and args.actor_test.startswith("mixed_"):
+    if args.actor_test and args.actor_test.startswith(("mixed_", "ingress_")):
         report_index = list(ports).index("_reports_out")
         valid_index = list(ports).index("_reports_out_vld")
         lines += ["reg [127:0] expected_reports [0:31]; integer reports=0;",
@@ -93,6 +110,20 @@ def testbench(args, ports, manifest):
                    "  reports=reports+1; end"]
         final_checks += ['if(reports != 32) $fatal(1, "missing mixed reports: %0d", reports);',
                          '$display("PASS: mixed RTL matches all 32 CPU reports (320 work items, 640 result items)");']
+    if ingress:
+        ready = list(ports).index("_commands_in_rdy")
+        ack_valid = list(ports).index("_acks_out_vld")
+        ack_data = list(ports).index("_acks_out")
+        checks += [f"if(command_valid && port_{ready}_dut) sent <= sent+1;",
+                   f"if(command_valid && !port_{ready}_dut) input_stalls=input_stalls+1;",
+                   f"if(port_{ack_valid}_dut) begin",
+                   f'  if(port_{ack_data}_dut[95:0] !== acks+1) $fatal(1, "wrong command acknowledgment");',
+                   "  acks=acks+1; end",
+                   f"if(reports == 32 && acks == 32 && sent == {len(packets)} && !application_complete) begin",
+                   '  application_complete=1; fd=$fopen("application_complete","w"); $fclose(fd); end']
+        final_checks += [f'if(sent != {len(packets)} || acks != 32) $fatal(1, "incomplete command stream");',
+                         'if(input_stalls == 0) $fatal(1, "command input never experienced backpressure");',
+                         '$display("PASS: %0d external packets, %0d input stall cycles", sent, input_stalls);']
     queues = [q for q in manifest["resources"] if q["kind"] == "fifo"]
     for q in queues:
         lines.append(f"integer occupancy_{q['id']}=0;")
@@ -142,11 +173,11 @@ def run(args):
     del flat, instrumented
     if getattr(args, "actor_test", None):
         (stage / "actor-test").write_text(args.actor_test)
-        if args.actor_test.startswith("mixed_"):
+        if args.actor_test.startswith(("mixed_", "ingress_")):
             shutil.copy(stage.parent / "expected.hex", stage / "expected.hex")
     else:
         (stage / "actor-test").unlink(missing_ok=True)
-    for name in ("release", "released", "contributions", "contributions_released", "done", "debug_tx", "debug_rx"):
+    for name in ("release", "released", "contributions", "contributions_released", "application_complete", "done", "debug_tx", "debug_rx"):
         (stage / name).unlink(missing_ok=True)
     for name in ("xls_sim_bridge.c", "xls_sim_axis.h"):
         shutil.copy(ROOT / "test/rtl" / name, stage)
@@ -231,7 +262,8 @@ if __name__ == "__main__":
     parser.add_argument("--actor-projection", type=Path)
     parser.add_argument("--actor-root", default="")
     parser.add_argument("--actor-test", choices=("small", "phi", "mailbox", "reduction", "aggregate", "direct_reduction",
-                                                "mixed_direct", "mixed_one", "mixed_two", "mixed_coalesced"))
+                                                "mixed_direct", "mixed_one", "mixed_two", "mixed_coalesced",
+                                                "ingress_direct", "ingress_one", "ingress_two", "ingress_coalesced"))
     parser.add_argument("--reference-rtl", type=Path, action="append", help="diagnostics-disabled application RTL for transfer comparison")
     parser.add_argument("--reference-top", default="actor_debug_production_wrapper")
     run(parser.parse_args())

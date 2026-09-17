@@ -27,11 +27,20 @@ inspect(Session, Stage, Moment) ->
         {ok, Bytes} ->
             Kind = case Bytes of <<"small">> -> small; <<"phi">> -> phi; <<"mailbox">> -> mailbox; <<"reduction">> -> reduction; <<"direct_reduction">> -> direct_reduction; <<"aggregate">> -> aggregate;
                 <<"mixed_direct">> -> {mixed, direct}; <<"mixed_one">> -> {mixed, one};
-                <<"mixed_two">> -> {mixed, two}; <<"mixed_coalesced">> -> {mixed, coalesced}
+                <<"mixed_two">> -> {mixed, two}; <<"mixed_coalesced">> -> {mixed, coalesced};
+                <<"ingress_direct">> -> {ingress, direct}; <<"ingress_one">> -> {ingress, one};
+                <<"ingress_two">> -> {ingress, two}; <<"ingress_coalesced">> -> {ingress, coalesced}
             end,
             {Plan, Specs} = fixture(Kind),
             Catalog = hls_debug_catalog:hardware(Plan, Specs, [], Session),
             Completion = case {Kind, Moment} of
+                {{ingress, _}, released} ->
+                    %% Completion is signaled by public output handshakes, not
+                    %% simulator access to actor state. Preserve diagnostics on
+                    %% failure just as for the closed graph's actor fence.
+                    try await_application(Stage, 3000)
+                    catch Class:Reason:Stack -> {failed, Class, Reason, Stack}
+                    end;
                 {{mixed, _}, released} ->
                     {ok, Source} = hls_debug_catalog:actor(Catalog, {actor, source}),
                     %% The four placements at two pipeline depths completed
@@ -84,11 +93,13 @@ inspect(Session, Stage, Moment) ->
             io:format("PASS: ~p scoped actor snapshots (~p, ~p)~n", [length(Ids), Kind, Moment])
     end.
 
+fixture({ingress, _} = Kind) -> hls_mixed_topology_dslx:fixture(Kind);
 fixture({mixed, Placement}) -> hls_mixed_topology_dslx:fixture(Placement);
 fixture(Kind) -> hls_actor_debug_dslx:fixture(Kind).
 
 %% Startup shares finite application queues with the stalled output. A later
 %% actor may still be in boot; the released check requires its final outcome.
+check({ingress, _}, Moment, Id, Snapshot) -> check({mixed, direct}, Moment, Id, Snapshot);
 check({mixed, _}, released, Id, Snapshot) ->
     ExpectedPhase = case Id of
         {actor, source} -> done;
@@ -173,3 +184,11 @@ check_mailbox(Actor, #{mailbox_initialized := true, message_queue_len := N,
     true = Postponed =< N;
 check_mailbox(_, #{mailbox_initialized := false}) -> error(mailbox_not_initialized);
 check_mailbox(_, _) -> ok.
+
+
+await_application(_Stage, 0) -> error(application_completion_timeout);
+await_application(Stage, Attempts) ->
+    case file:read_file(filename:join(Stage, "application_complete")) of
+        {ok, _} -> ok;
+        {error, enoent} -> timer:sleep(10), await_application(Stage, Attempts - 1)
+    end.
