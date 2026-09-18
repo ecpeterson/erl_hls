@@ -33,6 +33,7 @@ compatibility scaffolding for an obsolete internal format.
 ## Source contracts and documentation
 
 - Give every exported Erlang function, callback and type a nonempty formal `-doc`. Give every function a `-spec`. Explain each private function/type with a docstring or adjacent comment. Use native equivalents in other languages: Python docstrings/type hints, or interface comments where no formal syntax exists.
+- Document handwritten DSLX functions, types and procs with adjacent comments, including each proc's `config`, `init` and `next`. State caller bounds, validity conditions, ordering and blocking where relevant; a file banner is not a substitute. DSLX signatures supply the type contract.
 - Explain distinct requests in dispatcher clauses (`handle_call`, `handle_cast`, `handle_info`, `handle_event`); use judgment for other multi-purpose functions. Describe intent, not the pattern's spelling.
 - Docstrings describe behavior, inputs/results, failure and useful usage constraints. Keep implementation details in source comments, except caller-visible surprises such as unbounded retention or expensive operations.
 - Be brief and dense. Lead with the point; remove repetition, retrospective explanations and prose that merely restates names or types. Add an example only when it saves explanation.

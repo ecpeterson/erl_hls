@@ -8,17 +8,20 @@
 import axis;
 import bram;
 
+// One frame plus its phase-local postponement flag.
 pub struct Slot {
   postponed: u1,
   frame: axis::Frame,
 }
 
+// A pending actor message, or an effect-batch credit when credit is set.
 pub struct ScheduledRequest {
   slot: u32,
   frame: axis::Frame,
   credit: u1,
 }
 
+// A reserved producer/destination/RAM slot; indices are meaningful only if valid.
 pub struct Admission {
   valid: u1,
   producer: u32,
@@ -26,19 +29,27 @@ pub struct Admission {
   physical: u8,
 }
 
+// Whole-row mailbox read request.
 pub type RamReadReq = bram::ReadReq;
+// One complete mailbox frame returned from RAM.
 pub type RamReadResp = bram::ReadResp<axis::FRAME_BITS>;
+// Whole-frame mailbox write request.
 pub type RamWriteReq = bram::WriteReq<axis::FRAME_BITS>;
+// Completion token for a mailbox write.
 pub type RamWriteResp = bram::WriteResp;
 
+// Map an actor slot and physical queue index to a slot-major RAM address.
+// index must be below capacity; the result must fit u32 and the allocated RAM.
 pub fn address(slot: u32, index: u8, capacity: u32) -> u32 {
   slot * capacity + index as u32
 }
 
+// Construct a whole-frame read under address's bounds; this does not issue I/O.
 pub fn read(slot: u32, index: u8, capacity: u32) -> RamReadReq {
   bram::read(address(slot, index, capacity))
 }
 
+// Construct a whole-frame write under address's bounds; this does not issue I/O.
 pub fn write(
     slot: u32, index: u8, capacity: u32, frame: axis::Frame)
     -> RamWriteReq {
@@ -69,6 +80,8 @@ fn free_index<DEPTH: u32>(order: u8[DEPTH], occupied: u8) -> u8 {
 
 // Return (valid, logical queue position, physical RAM index), skipping
 // postponed messages without changing their order or releasing their slots.
+// occupied must not exceed DEPTH; every order entry must be below DEPTH.
+// An empty or fully postponed queue returns (false, 0, 0).
 pub fn select<DEPTH: u32>(
     order: u8[DEPTH], occupied: u8, postponed: u1[DEPTH]) -> (u1, u8, u8) {
   unroll_for! (position, acc):
@@ -88,6 +101,7 @@ pub fn select<DEPTH: u32>(
 
 // Remove one consumed logical position; the remaining physical indices keep
 // their order. The caller decrements occupied and owns postponement resets.
+// selected must name an occupied position and occupied must not exceed DEPTH.
 pub fn compact_order<DEPTH: u32>(
     row: u8[DEPTH],
     selected: u8,
@@ -131,6 +145,7 @@ pub fn collect_credit<PRODUCER_COUNT: u32>(
   (remaining, egress_busy && !credit_found)
 }
 
+// Updated queue metadata and at most one reserved admission, before its RAM write.
 pub struct AdmissionResult<ACTOR_COUNT: u32, PRODUCER_COUNT: u32, DEPTH: u32> {
   pending_valid: u1[PRODUCER_COUNT],
   occupied: u8[ACTOR_COUNT],
@@ -264,6 +279,10 @@ pub struct Retirement {
   egress_blocked: u1,
 }
 
+// Apply a completed activation's consumption, postponement and readiness changes.
+// A phase boundary clears postponement; failure clears the actor's ready flags.
+// Valid outcomes require an in-range actor and valid selected message indices
+// when consuming/postponing. An invalid outcome leaves metadata untouched.
 pub fn retire<ACTOR_COUNT: u32, DEPTH: u32>(
     metadata: Metadata<ACTOR_COUNT, DEPTH>, slot: u32,
     order_index: u8, mailbox_index: u8, outcome: Retirement)
@@ -300,6 +319,7 @@ pub fn retire<ACTOR_COUNT: u32, DEPTH: u32>(
   }
 }
 
+// RAM request rows must preserve actor ownership and the entire frame.
 #[test]
 fn rows_are_slot_major_and_hold_one_frame_test() {
   let frame = axis::pack(u8:13, u32:0x12345678);
@@ -310,6 +330,7 @@ fn rows_are_slot_major_and_hold_one_frame_test() {
     bram::write(u32:17, axis::bits_from_frame(frame)));
 }
 
+// Postponement skips messages without reordering the remaining candidates.
 #[test]
 fn selection_preserves_queue_order_across_postponement_test() {
   let order = [u8:2, u8:0, u8:3, u8:1];
@@ -329,6 +350,7 @@ fn selection_preserves_queue_order_across_postponement_test() {
             (true, u8:0, u8:2));
 }
 
+// Reusing freed physical storage must append at the logical tail.
 #[test]
 fn consumption_reuses_physical_storage_at_queue_tail_test() {
   let order = [u8:2, u8:0, u8:3, u8:1];
@@ -348,6 +370,7 @@ fn consumption_reuses_physical_storage_at_queue_tail_test() {
   assert_eq(admitted.cursor, u32:0);
 }
 
+// Only eligible messages may reserve capacity; rejection must preserve metadata.
 #[test]
 fn admission_skips_full_excluded_failed_invalid_and_credit_requests_test() {
   let message = zero!<ScheduledRequest>();
@@ -385,6 +408,7 @@ fn admission_skips_full_excluded_failed_invalid_and_credit_requests_test() {
   assert_eq(rejected.cursor, u32:1);
 }
 
+// A single-slot mailbox waits for consumption before admitting the next producer.
 #[test]
 fn admission_round_robins_and_waits_for_single_slot_retirement_test() {
   let request = zero!<ScheduledRequest>();
@@ -422,6 +446,7 @@ fn admission_round_robins_and_waits_for_single_slot_retirement_test() {
   assert_eq(wrapped.cursor, u32:1);
 }
 
+// Collect one registered credit while retaining messages and newly captured work.
 #[test]
 fn credit_collection_releases_one_batch_without_consuming_messages_test() {
   let request = zero!<ScheduledRequest>();
@@ -438,6 +463,7 @@ fn credit_collection_releases_one_batch_without_consuming_messages_test() {
             ([false, true, false], false));
 }
 
+// Consumption and a phase transition must preserve all remaining message order.
 #[test]
 fn retirement_preserves_queue_order_across_a_phase_boundary_test() {
   let metadata = Metadata<u32:2, u32:3> {
@@ -457,6 +483,7 @@ fn retirement_preserves_queue_order_across_a_phase_boundary_test() {
     (true, u8:0, u8:2));
 }
 
+// Entry credit and postponement must update readiness in the same transition.
 #[test]
 fn postponement_and_entry_credit_update_candidates_together_test() {
   let metadata = Metadata<u32:1, u32:2> {
@@ -480,6 +507,7 @@ fn postponement_and_entry_credit_update_candidates_together_test() {
   assert_eq(resumed.egress_waiters, [false]);
 }
 
+// Failure clears readiness; absent retirement cannot touch any metadata.
 #[test]
 fn failed_or_absent_retirements_cannot_reactivate_actors_test() {
   let metadata = Metadata<u32:1, u32:1> {

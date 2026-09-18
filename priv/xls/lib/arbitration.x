@@ -1,8 +1,10 @@
-// Select the first eligible index at or after cursor, then wrap.
-// Empty candidate sets return (false, 0). Selection does not advance cursor.
+// Bounded round-robin selection for nonempty contender arrays.
 
 import std;
 
+// Return the first eligible index at or after cursor, wrapping if necessary.
+// Empty candidate sets return (false, 0); an out-of-range cursor starts at zero.
+// INDEX_BITS must represent every contender. Selection does not advance cursor.
 pub fn select<CONTENDER_COUNT: u32, INDEX_BITS: u32>(
     pending: u1[CONTENDER_COUNT], cursor: uN[INDEX_BITS]) -> (u1, uN[INDEX_BITS]) {
   const_assert!(CONTENDER_COUNT > u32:0);
@@ -23,8 +25,8 @@ pub fn select<CONTENDER_COUNT: u32, INDEX_BITS: u32>(
   (or_reduce(requests), one_hot_sel(grant, indices))
 }
 
-// The caller advances only after a grant/accepted activation. Test the last
-// legal index before incrementing: COUNT itself need not fit in INDEX_BITS.
+// Advance a valid contender index with wraparound. Call only after acceptance;
+// INDEX_BITS must represent every contender but need not represent COUNT itself.
 pub fn successor<CONTENDER_COUNT: u32, INDEX_BITS: u32>(
     index: uN[INDEX_BITS]) -> uN[INDEX_BITS] {
   const_assert!(CONTENDER_COUNT > u32:0);
@@ -37,6 +39,7 @@ pub fn successor<CONTENDER_COUNT: u32, INDEX_BITS: u32>(
   }
 }
 
+// Exercise selection, wraparound and the empty-set sentinel.
 #[test]
 fn selection_respects_cursor_and_wraps_test() {
   let pending = [u1:1, u1:0, u1:1, u1:1];
@@ -48,6 +51,7 @@ fn selection_respects_cursor_and_wraps_test() {
     (u1:0, u32:0));
 }
 
+// Cover singleton and non-power-of-two populations with minimally wide indices.
 #[test]
 fn narrow_selection_and_successor_test() {
   assert_eq(select([true], u1:0), (true, u1:0));
