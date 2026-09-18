@@ -118,9 +118,9 @@ producer_modules(External, Relations, Families) ->
            lists:member({external, External}, Recipients)
     ]).
 
+%% This profile derives producers from the example's implicit-delivery relations.
+-spec relation_recipients({{atom(), atom()}, [term()]}) -> {atom(), [term()]}.
 relation_recipients({{Source, _Port}, Recipients}) ->
-    {Source, Recipients};
-relation_recipients({{Source, _Port}, _Delivery, Recipients}) ->
     {Source, Recipients}.
 
 validate_command_selectors(#{ingress := #{targets := Targets}}) ->

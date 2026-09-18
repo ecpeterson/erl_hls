@@ -11,10 +11,12 @@
 
 -type variant() :: #{id := non_neg_integer(), actions := [map()],
     reduction := none | map()}.
--type plan() :: #{clause := erl_parse:af_clause(), program := term(),
+%% An analyzed entry; its containing state machine may attach a dispatch phase.
+-type plan() :: #{phase => atom(), clause := erl_parse:abstract_clause(), program := term(),
     variants := [variant(), ...], reduction := none | map()}.
 
--spec analyze(erl_parse:af_clause(), [atom()], [atom()]) -> plan().
+-doc "Checks a bounded entry program and returns its ordered effect alternatives, reduction and normalized program.".
+-spec analyze(erl_parse:abstract_clause(), [atom()], [atom()]) -> plan().
 analyze(Clause, Messages, Outputs) ->
     {clause, Line, Patterns, Guards, Body} =
         xls_callback_result:map(Clause, fun(Value) -> Value end),

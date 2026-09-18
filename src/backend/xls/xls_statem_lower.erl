@@ -11,20 +11,22 @@
 
 -type interface() :: map().
 
--spec interface([erl_parse:abstract_form()], [atom(), ...]) -> interface().
+-spec interface([hls_source:form()], [atom(), ...]) -> interface().
 -doc "Summarizes the statically dispatched and emitted hls_statem schemas.".
 interface(Forms, PhaseNames) ->
     {Annotated, Sites} = xls_failure_sites:prepare(Forms),
     (interface_from_prepared(prepare_interface(Annotated, PhaseNames)))#{failure_origins => Sites}.
 
--spec lower(file:filename(), [erl_parse:abstract_form()], [atom(), ...]) ->
+-doc "Validates and emits an hls_statem actor with ordinary shared-service settings.".
+-spec lower(file:filename(), [hls_source:form()], [atom(), ...]) ->
     iolist().
 lower(Filename, Forms, PhaseNames) ->
     lower(Filename, Forms, PhaseNames, #{shared_service => ordinary}).
 
+-doc "Validates and emits an hls_statem actor with the selected service and observation options.".
 -spec lower(
     file:filename(),
-    [erl_parse:abstract_form()],
+    [hls_source:form()],
     [atom(), ...],
     #{shared_service := ordinary | aggregate_only, mailbox_debug => boolean(), direct_actor_debug => boolean()}
 ) -> iolist().

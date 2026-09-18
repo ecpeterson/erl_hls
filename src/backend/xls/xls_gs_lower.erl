@@ -13,7 +13,8 @@ initial_state(Forms, StateName) ->
     Init = xls_init:lower(Clause, StateName, fun(R) -> [R, ".1"] end, #{}),
     xls_init:emit("initial_state", xls_names:record_type(StateName), Init).
 
--spec callback_arms([erl_parse:abstract_form()], atom()) -> iolist().
+-doc "Emits request dispatch, ordered callback selection and reply-contract checks for an hls_gs service.".
+-spec callback_arms([hls_source:form()], atom()) -> iolist().
 callback_arms(Forms, StateName) ->
     #{calls := Replies} = hls_service_contract:from_forms(Forms),
     CallGroups = hls_service_contract:groups(Forms, handle_call),

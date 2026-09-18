@@ -17,7 +17,8 @@ enum_member(Name) -> string:uppercase(atom_to_list(Name)).
 
 %% Wire identity is an Erlang contract too. DSLX spelling restrictions apply
 %% only to hardware translation; they do not restrict CPU-only record names.
--spec wire_tags([erl_parse:abstract_form()]) -> ok.
+-doc "Rejects duplicate or reserved wire tags, independently of DSLX identifier spelling.".
+-spec wire_tags([hls_source:form()]) -> ok.
 wire_tags(Forms) ->
     Data = xls_parse:state(Forms),
     Tags = xls_parse:find_tags(Forms),
@@ -27,7 +28,8 @@ wire_tags(Forms) ->
     end, #{none => generated(none), error => generated(error)}, [Data | Tags]),
     ok.
 
--spec actor([erl_parse:abstract_form()], hls_gs | hls_statem) -> ok.
+-doc "Checks an actor's declarations for reserved names, namespace exhaustion and generated-name collisions.".
+-spec actor([hls_source:form()], hls_gs | hls_statem) -> ok.
 actor(Forms, Kind) ->
     ok = control_names(Forms, Kind),
     ok = wire_tags(Forms),
@@ -69,7 +71,8 @@ port_channels(Ports) ->
 
 %% A private accumulator adds both a record and a wire tag. Validate it at
 %% source analysis, including interface inference, before closing expressions.
--spec reduction([erl_parse:abstract_form()], atom(), [map()]) -> ok.
+-doc "Checks the private accumulator and reducer names against the actor's generated namespaces.".
+-spec reduction([hls_source:form()], atom(), [map()]) -> ok.
 reduction(Forms, Accumulator, Opens) ->
     Public = xls_parse:find_tags(Forms),
     case length(Public) =< 252 of

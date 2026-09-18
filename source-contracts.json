@@ -1,0 +1,5 @@
+{
+  "include": ["*.erl", "*.hrl"],
+  "exclude": [],
+  "base_ref": "origin/main"
+}

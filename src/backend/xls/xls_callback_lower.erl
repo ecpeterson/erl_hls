@@ -26,8 +26,9 @@ group_by(Items, KeyFun) ->
         Items
     ).
 
+-doc "Lowers ordered callback selection to statements and a result, distinguishing clause fallthrough from selected-body failure.".
 -spec lower(
-    [erl_parse:af_clause(), ...],
+    [erl_parse:abstract_clause(), ...],
     [xls_pattern_lower:argument()],
     atom(),
     fun((xls_parse:printable()) -> xls_parse:printable()),

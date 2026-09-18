@@ -8,8 +8,9 @@
 
 -export([condition/3, predicate/2]).
 
+-doc "Combines pattern predicates and guards; guard errors cause fallthrough.".
 -spec condition(
-    [[erl_parse:abstract_expression()]],
+    [[erl_parse:abstract_expr()]],
     [xls_parse:printable()],
     erl_anno:location()
 ) -> term().
@@ -20,7 +21,8 @@ condition(Guards, [], Line) ->
 condition(Guards, Conditions, Line) ->
     {op, Line, 'andalso', conjunction(Conditions), predicate(Guards, Line)}.
 
--spec predicate([[erl_parse:abstract_expression()]], erl_anno:location()) ->
+-doc "Lowers nonempty guard alternatives, preserving short-circuiting and failure-as-false semantics.".
+-spec predicate([[erl_parse:abstract_expr()]], erl_anno:location()) ->
     term().
 predicate(Guards = [_ | _], Line) ->
     alternatives([guard_sequence(Expressions, Line) || Expressions <- Guards]);

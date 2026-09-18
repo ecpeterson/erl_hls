@@ -12,10 +12,11 @@
 
 -export([lower/4, lower_if/3]).
 
+-doc "Lowers ordered case selection, joining surviving bindings and propagating only the selected arm's failure.".
 -spec lower(
     erl_anno:location(),
-    erl_parse:abstract_expression(),
-    [erl_parse:af_clause(), ...],
+    erl_parse:abstract_expr(),
+    [erl_parse:abstract_clause(), ...],
     xls_parse:clause_state()
 ) -> xls_parse:clause_state().
 lower(Line, Condition, Clauses, State) ->
@@ -156,7 +157,8 @@ render_chain([#{head := Head, guard := Guard, state := State} | Rest], Exports, 
         xls_parse_io:indent(xls_parse:print(render_chain(Rest, Exports, Kind)), 2), "}"].
 
 %% Guard-only clauses share case's ordering, branch joins, and failure carrier.
--spec lower_if(erl_anno:location(), [erl_parse:af_clause(), ...],
+-doc "Lowers guard-only selection with Erlang clause order and if_clause failure on no match.".
+-spec lower_if(erl_anno:location(), [erl_parse:abstract_clause(), ...],
     xls_parse:clause_state()) -> xls_parse:clause_state().
 lower_if(Line, Clauses, State) ->
     Normalized = [if_clause(Clause) || Clause <- Clauses],

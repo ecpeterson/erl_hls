@@ -7,8 +7,9 @@
 -type lowered() :: #{line := non_neg_integer(), body := iodata(),
     result := iodata(), failed := iodata()}.
 
--spec clause([erl_parse:abstract_form()], hls_gs | hls_statem) ->
-    erl_parse:af_clause().
+-doc "Returns the sole init([]) clause; rejects guards, other heads and multiple initializers.".
+-spec clause([hls_source:form()], hls_gs | hls_statem) ->
+    erl_parse:abstract_clause().
 
 %% Hardware has one compile-time initializer. Per-instance configuration is
 %% supplied separately by topology startup messages, before normal input traffic.
@@ -21,7 +22,8 @@ clause(Forms, Behaviour) ->
             error({unsupported_hls_init_clauses, Behaviour, length(Clauses)})
     end.
 
--spec lower(erl_parse:af_clause(), atom(),
+-doc "Lowers initialization to its source line, statements, postprocessed value and failure expression.".
+-spec lower(erl_parse:abstract_clause(), atom(),
     fun((xls_parse:printable()) -> xls_parse:printable()), map()) -> lowered().
 lower(Clause = {clause, Line, _, _, _}, DataName, Postprocess, EnumAtoms) ->
     #{body := Body, result := Result, failed := Failed} =

@@ -55,7 +55,7 @@ broker death; unconfirmed raw I/O release prevents a competing open in this VM.
     reader :: pid(),
     reading = false :: boolean(),
     routes = #{} :: #{route() => #route_owner{} | retired},
-    queued = {[], []} :: queue:queue(#tx{}),
+    queued = queue:new() :: queue:queue(#tx{}),
     active = none :: none | #tx{},
     tx_limit :: pos_integer(),
     tx_route_limit :: pos_integer(),

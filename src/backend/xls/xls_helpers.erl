@@ -11,12 +11,14 @@
 
 -export([prepare/2, emit/3]).
 
--type helper() :: #{name := string(), clauses := [erl_parse:af_clause(), ...],
+%% A reachable helper with concrete input/result types and its source clauses.
+-type helper() :: #{name := string(), clauses := [erl_parse:abstract_clause(), ...],
     arguments := [iodata()], argument_records := [none | {record, atom()}],
     result := iodata()}.
 
--spec prepare([erl_parse:abstract_form()], [{atom(), arity()}]) ->
-    {[erl_parse:abstract_form()], [helper()]}.
+-doc "Finds reachable local helpers, checks concrete signatures and recursion, and returns rewritten roots plus dependency-ordered helpers.".
+-spec prepare([hls_source:form()], [{atom(), arity()}]) ->
+    {[hls_source:form()], [helper()]}.
 prepare(Forms0, Roots) ->
     Module = xls_parse:find_attribute(Forms0, module),
     Forms = localize(xls_binary_lower:prepare(Forms0), Module),

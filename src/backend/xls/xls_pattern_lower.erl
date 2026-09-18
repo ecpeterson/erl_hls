@@ -36,7 +36,8 @@ record_argument(Name, Raw, Value) ->
 value_argument(Value) ->
     #{raw => Value, value => Value}.
 
--spec record_pattern_name(erl_parse:af_pattern()) -> atom().
+-doc "Returns the record tag beneath optional variable aliases; rejects other pattern shapes.".
+-spec record_pattern_name(erl_parse:abstract_expr()) -> atom().
 record_pattern_name({record, _Line, Name, _Fields}) ->
     Name;
 record_pattern_name({match, _Line, {var, _VarLine, _Name}, Pattern}) ->
@@ -46,8 +47,9 @@ record_pattern_name({match, _Line, Pattern, {var, _VarLine, _Name}}) ->
 record_pattern_name(Pattern) ->
     error({unsupported_xls_record_pattern, Pattern}).
 
+-doc "Lowers equally many head patterns and arguments to bindings and ordered match predicates.".
 -spec lower(
-    [erl_parse:af_pattern()],
+    [erl_parse:abstract_expr()],
     [argument()],
     xls_parse:clause_state()
 ) -> {xls_parse:clause_state(), [xls_parse:printable()]}.
@@ -71,7 +73,8 @@ lower(Patterns, Arguments, _State) ->
 
 %% Assignments use the same projections and equality predicates as clause
 %% heads, but a mismatch contributes a failure instead of selecting another arm.
--spec match(erl_parse:af_pattern(), xls_parse:printable(),
+-doc "Lowers an assignment pattern, recording badmatch on mismatch and retaining the assigned value.".
+-spec match(erl_parse:abstract_expr(), xls_parse:printable(),
     xls_parse:clause_state()) -> xls_parse:clause_state().
 match(Pattern, Value, State) ->
     #{state := Bound, conditions := Conditions} = compile_pattern(Pattern,

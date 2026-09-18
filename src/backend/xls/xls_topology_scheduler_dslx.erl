@@ -1178,6 +1178,6 @@ channel_tuple(Names) -> ["(", join_with(", ", Names), ")"].
 separator(Index, Count) when Index + 1 < Count -> ",";
 separator(_Index, _Count) -> "".
 
-join_with(_Separator, []) -> [];
-join_with(Separator, [First | Rest]) ->
-    [First | [[Separator, Item] || Item <- Rest]].
+%% Join rendered channel names without flattening their fragments.
+-spec join_with(iodata(), [iodata(), ...]) -> iolist().
+join_with(Separator, Items) -> lists:join(Separator, Items).

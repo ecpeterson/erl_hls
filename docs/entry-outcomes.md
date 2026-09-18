@@ -1,6 +1,6 @@
 # Phase-entry outcomes
 
-An `hls_statem` entry callback returns `{NextData, Actions}`. The complete callback must succeed before any action can be emitted. XLS combines the returned data, ordered effects, optional reduction key/identity, and selected failure code in a typed `EntryOutcome`.
+An `hls_statem` entry callback returns `{NextData, Actions}`. The complete callback must succeed before any action can be emitted.
 
 An unselected `andalso`, `orelse`, `case`, or `if` expression branch contributes no failure.
 
@@ -21,7 +21,7 @@ running(enter, _OldPhase, Data) ->
 
 The selected list retains Erlang source order. Returned data is evaluated before the action list; common list prefixes precede a branching tail. A failure in any selected computation invalidates the whole entry, including effects preceding that failure. Branches preserve selection semantics, not a guarantee that unselected combinational circuitry stops switching. Values and named segments computed before a branch are still eager. A segment captures its payloads when bound; aliases and later uses do not evaluate them again. Even an unused segment retains its selected failure checks.
 
-The compiler normalizes each leaf into one typed outcome. One eight-bit layout selector identifies its ordered port/schema sequence. Shared payload storage is sized to the largest alternative. The layout determines the selected list length; every slot in that list emits a message. Hardware may still contain computations and multiplexers for multiple alternatives. At most 256 expanded paths per entry and 256 layouts per actor are supported; excessive expansion is diagnosed. Every individual message may contain at most 96 packed bits; transport padding rounds the complete payload to whole 32-bit words.
+At most 256 expanded paths per entry and 256 distinct ordered port/schema layouts per actor are supported; excessive expansion is diagnosed. Each message may contain at most 96 packed bits, padded to whole 32-bit transport words. Reservation capacity follows the largest selected list.
 
 A phase can open the same reduction site in several alternatives or leave it unopened. Its opening alternatives must agree on name, population, key expression, and identity; existing data-relative key and constant-identity restrictions apply. An unopened alternative preserves an existing reduction. An opening alternative fails if a reduction is already active. Source-fragment placement additionally requires an unconditional open and an unconditional, complete contribution prefix. A branching suffix after that prefix is supported.
 
@@ -38,14 +38,14 @@ Interface inference records the conservative union of possible effects at each o
 
 The direct service may have emitted part of a successful entry when a later destination stalls. Accepted effects are not rolled back. The shared scheduler owns draining an accepted batch. Neither path dispatches another mailbox message for that actor while entry remains pending.
 
-The outcome is combinational: an entry can be recomputed from unchanged incoming data while its effects drain or its batch waits for space.
+Callbacks must remain pure: an entry may be reevaluated while waiting for output space.
 
 ## Failure scope
 
 Hardware latches failure until reset; ERTS terminates with an Erlang exception. The committed code retains the first selected reason and source location, available through verified shared-actor debug queries; it does not emit an exception packet. Earlier successful entries are not rolled back. A cast that successfully transitions into a failing entry has already selected the new phase and incoming entry data; those values are preserved.
 
-This contract covers supported matches, `case_clause`, and `if_clause` failures. It does not cover general Erlang exceptions or arithmetic-domain errors. Entry heads and action lists must belong to the bounded subset; a missing branch invalidates the entry just as a failed match does. See [control-flow failures](control-flow.md). Initialization and reset do not follow the entry contract.
+This contract covers supported match, clause-selection and arithmetic/provider failures. It does not cover general Erlang exceptions. Entry heads and action lists must belong to the bounded subset; a missing branch invalidates the entry just as a failed match does. See [control-flow failures](control-flow.md). Initialization and reset do not follow the entry contract.
 
-## Testing
+## Validation
 
-Run `bash tools/test_entry_outcomes.sh XLS_ROOT` to compare BEAM-derived outcomes with direct and shared execution in DSLX, JIT, and Icarus Verilog. The fixtures cover failed and successful entries, eager named segments, skipped expression branches, ordered outputs, and stalled egress. Branching fixtures also check varying schemas and payload lengths, nested choices, partial output acceptance, skipped failures, and nonexhaustive complete results, guarded choices, action-list tails, and unused named segments. Additional DSLX/JIT fixtures exercise unconditional and conditional reduction opens, blocked commits, and invalid reopens.
+`bash tools/test_entry_outcomes.sh XLS_ROOT` compares BEAM outcomes with direct/shared DSLX, JIT and RTL, including branches, named segments, reductions and stalled egress.

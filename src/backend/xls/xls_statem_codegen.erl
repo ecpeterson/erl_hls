@@ -21,20 +21,23 @@
     body := iodata(),
     result := iodata()
 }.
+%% Complete renderer input, including the emitted failure-site catalog.
 -type spec() :: #{
+    failure_sites := [map()],
     source := file:filename(),
     imports := [atom()],
     capacity := 1..255,
     phases := [atom(), ...],
     message_names := [atom(), ...],
-    message_words := #{atom() := 1..3},
+    message_words := #{atom() => 0..3},
     output_names := [atom(), ...],
     data_name := atom(),
-    data_width := pos_integer(),
+    data_width := non_neg_integer(),
     record_declarations := iodata(),
     helper_functions := iodata(),
     init := xls_init:lowered(),
     entries := [entry(), ...],
+    max_entry_effects := non_neg_integer(),
     casts := [cast_clause()],
     reductions := none | xls_statem_reduction_ir:reduction(),
     shared_service := ordinary | aggregate_only,

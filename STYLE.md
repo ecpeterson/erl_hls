@@ -29,3 +29,26 @@ compatibility scaffolding for an obsolete internal format.
 - Keep compact generated DSLX beside its source when it is useful in review.
 - Store digests rather than checked-in generated Verilog when regression jobs
   already regenerate, simulate, and retain that Verilog as an artifact.
+
+## Source contracts and documentation
+
+- Give every exported Erlang function, callback and type a nonempty formal `-doc`. Give every function a `-spec`. Explain each private function/type with a docstring or adjacent comment. Use native equivalents in other languages: Python docstrings/type hints, or interface comments where no formal syntax exists.
+- Explain distinct requests in dispatcher clauses (`handle_call`, `handle_cast`, `handle_info`, `handle_event`); use judgment for other multi-purpose functions. Describe intent, not the pattern's spelling.
+- Docstrings describe behavior, inputs/results, failure and useful usage constraints. Keep implementation details in source comments, except caller-visible surprises such as unbounded retention or expensive operations.
+- Be brief and dense. Lead with the point; remove repetition, retrospective explanations and prose that merely restates names or types. Add an example only when it saves explanation.
+- Human documentation belongs in `docs/`: prerequisites before dependents, general concepts before details, and intended contracts apart from incidental implementation. Keep agent working/design notes in `yap/`, outside `docs/`; link only when useful to maintainers. Record measurements as evidence, not API promises.
+- Run the source-contract check and Dialyzer for every PR. Fix real type errors; any unavoidable upstream-tool exception must be narrow, explained beside the affected code and covered by regression tests. Do not add blanket suppressions or vacuous specs to obtain green checks.
+- Existing documentation gaps are migration work, not a model for new code. Complete the contracts of each declaration you change. Review prose and spec accuracy manually: CI checks presence and detects changed declarations, not semantic truth.
+
+## Roadmap and other working notes
+
+- Don't manually line-wrap. Many Markdown renderers don't handle it well.
+- Use checkboxes to indicate to-do items.
+- Items which are checked off should have all child nodes removed.
+- Keep items short. If there is more detail to include which is not itself a
+  task, use sub-bullets.
+- Structure tasks around executable targets which exercise the feature.
+- Don't create entirely new trees. Re-organize the existing tree to accommodate
+  new items.
+- Keep items sorted by dependency order foremost and priority order secondmost.
+- Don't use tabs.
