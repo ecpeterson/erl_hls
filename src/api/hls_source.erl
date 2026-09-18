@@ -148,7 +148,8 @@ read_in_directory(Filename, Context = #{directory := Directory}) ->
 %% OTP 28.0.2 epp:open/1 omits features/reserved_word_fun from its spec,
 %% contradicting parse_file/2's documented options and actual implementation.
 %% That infers no return here. Source-context tests cover feature preprocessing;
-%% remove this local exemption when the OTP contract is corrected.
+%% upstream master fixes it in erlang/otp@a19d9e0 (not yet in maint-28).
+%% Remove this exemption after qualifying a toolchain with that correction.
 -dialyzer({nowarn_function, read_here/5}).
 %% Preprocess in the already selected build directory and report source errors.
 -spec read_here(file:filename(), file:filename(), [file:filename()],

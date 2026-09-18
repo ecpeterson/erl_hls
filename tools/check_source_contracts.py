@@ -1,15 +1,18 @@
 #!/usr/bin/env python3
-"""Check Erlang source contracts, rejecting new or changed undocumented declarations."""
+"""Check source contracts, rejecting new or changed undocumented declarations."""
 from __future__ import annotations
 
 import argparse
 from collections import Counter, defaultdict
+from fnmatch import fnmatchcase
 import io
 import json
 from pathlib import Path
 import subprocess
 import tarfile
 import tempfile
+
+import dslx_source_contracts
 
 
 def run(*args: str) -> str:
@@ -18,18 +21,22 @@ def run(*args: str) -> str:
 
 
 def selected(paths: list[str], config: dict[str, object]) -> list[str]:
-    """Select owned Erlang declarations using the reviewed repository scope."""
-    return sorted(set(p for p in paths if p.endswith((".erl", ".hrl"))
-                      and any(Path(p).match(pattern) for pattern in config["include"])
-                      and not any(Path(p).match(pattern) for pattern in config.get("exclude", []))))
+    """Select owned Erlang and handwritten DSLX using the reviewed repository scope."""
+    return sorted(set(p for p in paths if p.endswith((".erl", ".hrl", ".x"))
+                      and any(fnmatchcase(p, pattern) for pattern in config["include"])
+                      and not any(fnmatchcase(p, pattern) for pattern in config.get("exclude", []))))
 
 
 def findings(stage: str, paths: list[str], cwd: str) -> list[dict[str, object]]:
-    """Read source with a macro-preserving parser, without compiling or executing it."""
-    result = subprocess.run(["erl", "+S", "2", "-noshell", "-pa", stage,
-                             "-s", "source_contracts", "main", "--", *paths],
-                            cwd=cwd, check=True, text=True, capture_output=True)
-    return json.loads(result.stdout)
+    """Inspect declarations without compiling or executing the audited source."""
+    erlang = [p for p in paths if p.endswith((".erl", ".hrl"))]
+    gaps = []
+    if erlang:
+        result = subprocess.run(["erl", "+S", "2", "-noshell", "-pa", stage,
+                                 "-s", "source_contracts", "main", "--", *erlang],
+                                cwd=cwd, check=True, text=True, capture_output=True)
+        gaps = json.loads(result.stdout)
+    return gaps + dslx_source_contracts.findings([p for p in paths if p.endswith(".x")], cwd)
 
 
 def key(item: dict[str, object]) -> tuple[object, object, object]:
@@ -80,8 +87,9 @@ def main() -> int:
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
     for item in new:
-        print(f"{item['path']}:{item['line']}: {item['id']}: missing {item['rule']}")
-    print(f"Checked {len(paths)} Erlang files; {len(gaps)} existing/current gaps: {report['counts']}; {len(new)} new/changed gaps")
+        reason = item.get("reason", f"missing {item['rule']}")
+        print(f"{item['path']}:{item['line']}: {item['id']}: {reason}")
+    print(f"Checked {len(paths)} source files; {len(gaps)} existing/current gaps: {report['counts']}; {len(new)} new/changed gaps")
     return int(bool(new))
 
 

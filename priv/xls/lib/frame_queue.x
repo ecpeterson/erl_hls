@@ -4,6 +4,8 @@
 
 import axis;
 
+// FIFO of at most two frames; lookahead_valid implies current_valid.
+// Values whose valid bit is clear are unspecified.
 pub struct Queue {
   current_valid: u1,
   current: axis::Frame,
@@ -11,6 +13,7 @@ pub struct Queue {
   lookahead: axis::Frame,
 }
 
+// Remove the oldest frame, or leave an empty queue empty.
 pub fn pop(queue: Queue) -> Queue {
   Queue {
     current_valid: queue.lookahead_valid,
@@ -20,6 +23,8 @@ pub fn pop(queue: Queue) -> Queue {
   }
 }
 
+// Append a frame. The caller must establish !queue.lookahead_valid;
+// pushing into a full queue overwrites its second frame.
 pub fn push(queue: Queue, frame: axis::Frame) -> Queue {
   if !queue.current_valid {
     Queue { current_valid: u1:1, current: frame, ..queue }
@@ -28,10 +33,14 @@ pub fn push(queue: Queue, frame: axis::Frame) -> Queue {
   }
 }
 
+// Apply a conditional pop, allowing capacity to be checked before a later push.
 pub fn after_pop(queue: Queue, do_pop: u1) -> Queue {
   if do_pop { pop(queue) } else { queue }
 }
 
+// Pop then push, including when both select the same queue. Enabled indices
+// must be in range and the push destination must have room after the pop.
+// Disabled indices are ignored; all other queues retain their contents.
 pub fn update_bank<COUNT: u32>(
     bank: Queue[COUNT], pop_valid: u1, pop_source: u32,
     push_valid: u1, push_source: u32, push_frame: axis::Frame) -> Queue[COUNT] {
@@ -43,6 +52,7 @@ pub fn update_bank<COUNT: u32>(
   } else { after_pop }
 }
 
+// Replacing a consumed head must retain the old tail before the new frame.
 #[test]
 fn full_queue_pop_push_preserves_order_test() {
   let first = axis::pack(u8:1, u32:1);
@@ -60,6 +70,7 @@ fn full_queue_pop_push_preserves_order_test() {
   assert_eq(pop(last).current_valid, false);
 }
 
+// Distinct destinations and disabled operations cannot disturb other queues.
 #[test]
 fn distinct_bank_updates_leave_other_queues_intact_test() {
   let first = axis::pack(u8:1, u32:1);
@@ -74,6 +85,7 @@ fn distinct_bank_updates_leave_other_queues_intact_test() {
   assert_eq(update_bank(bank, false, u32:99, false, u32:99, next), bank);
 }
 
+// A same-activation pop creates room even when the original queue was full.
 #[test]
 fn capacity_is_measured_after_selected_pop_test() {
   let frame = axis::pack(u8:1, u32:0);

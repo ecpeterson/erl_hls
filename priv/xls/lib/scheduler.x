@@ -2,6 +2,7 @@
 
 import arbitration;
 
+// Per-actor ready flags for entry, mailbox, egress and private reduction work.
 pub struct Candidates<COUNT: u32> {
   entry: u1[COUNT],
   mail: u1[COUNT],
@@ -13,6 +14,8 @@ pub struct Candidates<COUNT: u32> {
 // Private reduction work can run while egress is busy. Within each actor,
 // entry/egress work suppresses mailbox dispatch; in-flight actors stay excluded.
 // The round-robin choice is across eligible actors, not across work categories.
+// Return (valid, actor), with (false, 0) when none can run. COUNT must be positive;
+// the caller advances cursor only after accepting the selected activation.
 pub fn select<COUNT: u32>(
     candidates: Candidates<COUNT>, egress_busy: u1,
     in_flight: u1[COUNT], cursor: u32) -> (u1, u32) {
@@ -30,6 +33,7 @@ pub fn select<COUNT: u32>(
   arbitration::select(eligible, cursor)
 }
 
+// An actor awaiting egress credit cannot overtake its effect with mailbox work.
 #[test]
 fn egress_waiters_suppress_mail_until_credit_returns_test() {
   let candidates = Candidates<u32:3> {
@@ -42,6 +46,7 @@ fn egress_waiters_suppress_mail_until_credit_returns_test() {
   assert_eq(select(candidates, true, [false, true, false], u32:0), (false, u32:0));
 }
 
+// Private work bypasses global egress pressure while preserving actor exclusion.
 #[test]
 fn reduction_work_bypasses_busy_egress_but_not_in_flight_test() {
   let candidates = Candidates<u32:3> {
@@ -55,6 +60,7 @@ fn reduction_work_bypasses_busy_egress_but_not_in_flight_test() {
   assert_eq(select(candidates, true, [true, true, false], u32:0), (false, u32:0));
 }
 
+// Work category cannot grant an actor priority over the round-robin cursor.
 #[test]
 fn actor_fairness_spans_entry_mail_and_reduction_work_test() {
   let candidates = Candidates<u32:4> {

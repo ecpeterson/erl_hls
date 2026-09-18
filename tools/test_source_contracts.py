@@ -5,6 +5,7 @@ import importlib.util
 import json
 from pathlib import Path
 import subprocess
+from unittest.mock import patch
 import tempfile
 import unittest
 
@@ -121,6 +122,125 @@ class SourceContractsTests(unittest.TestCase):
                                              '_build/generated.erl', 'notes/a.md'],
                                             {'include': ['*.erl', '*.hrl'], 'exclude': ['_build/*']}),
                          ['include/t.hrl', 'root.erl', 'src/sub/deep.erl'])
+
+
+class DslxContractsTests(unittest.TestCase):
+    """Protect DSLX coverage against syntax, visibility and baseline mistakes."""
+
+    def audit(self, source: str) -> list[dict[str, object]]:
+        """Inspect inert DSLX without requiring the XLS binaries."""
+        with tempfile.TemporaryDirectory() as directory:
+            Path(directory, 'example.x').write_text(source)
+            return CONTRACTS.dslx_source_contracts.findings(['example.x'], directory)
+
+    def test_public_and_private_declarations(self) -> None:
+        """Comments cover functions, aliases, records and enums at both visibilities."""
+        for declaration in ['fn f() { () }', 'type T = u32;',
+                            'struct S<N: u32> { x: uN[N] }', 'enum E: u1 { A = 0 }']:
+            for public in [False, True]:
+                with self.subTest(declaration=declaration, public=public):
+                    source = ('pub ' if public else '') + declaration
+                    gaps = self.audit(source)
+                    self.assertEqual([g['rule'] for g in gaps],
+                                     ['public_doc' if public else 'private_comment'])
+                    self.assertEqual(self.audit('// Describes the contract.\n' + source), [])
+                    self.assertEqual(len(self.audit('// ----\n' + source)), 1)
+
+    def test_comments_belong_to_one_declaration(self) -> None:
+        """File banners, trailing notes and body comments do not document later APIs."""
+        source = ('// File overview.\n\npub fn f() {\n // Implementation detail.\n ()\n}\n'
+                  '// Explains g.\nfn g() { () } // Describes g only.\nfn h() { () }')
+        self.assertEqual([g['id'] for g in self.audit(source)], ['function:f', 'function:h'])
+        self.assertEqual(len(self.audit('// Explains f.\nfn f() { () } fn g() { () }')), 1)
+
+    def test_literals_and_parametric_defaults(self) -> None:
+        """Braces and keywords inside defaults, strings and character literals stay inert."""
+        source = r'''// Pads a value.
+pub fn f<N: u32, M: u32 = {if N > u32:0 { N } else { u32:1 }}>(x: uN[N]) -> uN[M] {
+  trace_fmt!("fake fn hidden() {{ }} // pub proc Fake", x);
+  let quote = '\'';
+  let brace = '{';
+  x as uN[M]
+}
+// Wraps a payload.
+pub type Wrapped = (u32, u8[2]);
+'''
+        self.assertEqual(self.audit(source), [])
+
+    def test_attributes_and_proc_lifecycle(self) -> None:
+        """Test attributes retain comments and every lifecycle body has its own contract."""
+        source = '''// Drives a finite sequence.
+#[test_proc]
+proc Example<N: u32> {
+  input: chan<uN[N]> in;
+  config(input: chan<uN[N]> in) { (input,) }
+  // Starts empty.
+  init { () }
+  next(state: ()) { state }
+}
+#[test]
+// Exercises the empty case.
+fn empty_test() { () }
+'''
+        self.assertEqual([g['id'] for g in self.audit(source)],
+                         ['function:Example.config', 'function:Example.next'])
+        self.assertEqual(self.audit('// Adds no state.\n#[quickcheck(test_count=12)]\nfn p() { true }'), [])
+
+    def test_unsupported_or_incomplete_syntax_fails_closed(self) -> None:
+        """The audit cannot silently pass a lost declaration or malformed boundary."""
+        for source in ['pub fn f() {', 'pub fn f() { ] }', 'pub fn f() { "unterminated }',
+                       'pub fn f<N: u32() { () }', 'pub fn f() -> u32;',
+                       'pub struct { x: u32 }', 'impl S { fn f() { () } }',
+                       'type T = u32', 'proc P {', 'proc P { unsupported {} }']:
+            with self.subTest(source=source):
+                gaps = self.audit(source)
+                self.assertEqual([g['rule'] for g in gaps], ['parse'])
+                self.assertEqual(CONTRACTS.regressions(gaps, gaps), gaps)
+
+    def test_fingerprints_and_completed_debt(self) -> None:
+        """Code/type/visibility changes need prose; formatting and line shifts do not."""
+        before = self.audit('pub fn f(x: u32) -> u32 { x + u32:1 }')
+        moved = self.audit('\n\npub fn f ( x : u32 ) -> u32 {\n x + u32:1\n}')
+        self.assertEqual(CONTRACTS.regressions(moved, before), [])
+        for source in ['pub fn f(x: u32) -> u32 { x + u32:2 }',
+                       'pub fn f(x: u16) -> u16 { x + u16:1 }',
+                       'fn f(x: u32) -> u32 { x + u32:1 }']:
+            self.assertEqual(len(CONTRACTS.regressions(self.audit(source), before)), 1)
+        documented = self.audit('// Adds one.\npub fn f(x: u32) -> u32 { x + u32:1 }')
+        self.assertEqual(CONTRACTS.regressions(before, documented), before)
+
+    def test_only_handwritten_dslx_is_selected(self) -> None:
+        """The scope includes static libraries without treating generated outputs as owned APIs."""
+        config = json.loads((ROOT / 'source-contracts.json').read_text())
+        self.assertEqual(CONTRACTS.selected([
+            'priv/xls/lib/mailbox.x', 'priv/xls/debug/server.x', 'priv/xls/direct.x',
+            'priv/xls/deep/sub/library.x',
+            'examples/generated.erl.x', 'test_data/generated.x', '_build/out.x'], config),
+            ['priv/xls/debug/server.x', 'priv/xls/deep/sub/library.x',
+             'priv/xls/direct.x', 'priv/xls/lib/mailbox.x'])
+
+    def test_git_baseline_uses_current_dslx_scope(self) -> None:
+        """Adding DSLX coverage must audit old source, not classify every old gap as new."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            library = root / 'priv/xls/lib'
+            library.mkdir(parents=True)
+            source = library / 'f.x'
+            source.write_text('pub fn f() -> u32 { u32:1 }')
+            for args in [('init', '-q'), ('add', '.'),
+                         ('-c', 'user.name=Test', '-c', 'user.email=test@example.invalid',
+                          'commit', '-qm', 'baseline')]:
+                subprocess.run(['git', '-C', directory, *args], check=True)
+            config = {'include': ['priv/xls/*.x']}
+            # Keep every Git subprocess in the fixture without changing global cwd.
+            check_output = subprocess.check_output
+            with patch.object(CONTRACTS.subprocess, 'check_output',
+                              side_effect=lambda *a, **kw: check_output(*a, cwd=directory, **kw)):
+                prior = CONTRACTS.baseline('', 'HEAD', config)
+            path = 'priv/xls/lib/f.x'
+            self.assertEqual(CONTRACTS.regressions(CONTRACTS.findings('', [path], directory), prior), [])
+            source.write_text('pub fn f() -> u32 { u32:2 }')
+            self.assertEqual(len(CONTRACTS.regressions(CONTRACTS.findings('', [path], directory), prior)), 1)
 
 
 if __name__ == '__main__':

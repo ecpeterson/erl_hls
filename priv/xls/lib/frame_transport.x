@@ -7,10 +7,12 @@ import axis;
 
 // Counts and grid dimensions are positive; the caller chooses grid FIFO depth.
 
+// Forward complete frames in order; a stalled output backpressures the input.
 pub proc FrameRelay {
   frame_in: chan<axis::Frame> in;
   frame_out: chan<axis::Frame> out;
 
+  // Bind the upstream source and downstream destination.
   config(
       frame_in: chan<axis::Frame> in,
       frame_out: chan<axis::Frame> out
@@ -18,8 +20,10 @@ pub proc FrameRelay {
     (frame_in, frame_out)
   }
 
+  // Start with no retained application state.
   init { () }
 
+  // Complete one receive/send pair before accepting another frame.
   next(state: ()) {
     let (tok, frame) = recv(join(), frame_in);
     let _done = send(tok, frame_out, frame);
@@ -27,10 +31,13 @@ pub proc FrameRelay {
   }
 }
 
+// Poll one input per activation in round-robin order, including empty inputs.
+// INPUT_COUNT must be positive; a selected frame blocks further polling until sent.
 pub proc FrameArrayMux<INPUT_COUNT: u32> {
   frame_in: chan<axis::Frame>[INPUT_COUNT] in;
   frame_out: chan<axis::Frame> out;
 
+  // Bind all input lanes to the one ordered output.
   config(
       frame_in: chan<axis::Frame>[INPUT_COUNT] in,
       frame_out: chan<axis::Frame> out
@@ -38,8 +45,10 @@ pub proc FrameArrayMux<INPUT_COUNT: u32> {
     (frame_in, frame_out)
   }
 
+  // Start polling at input zero.
   init { u32:0 }
 
+  // Poll the current lane and forward any frame before advancing the cursor.
   next(cursor: u32) {
     let (tok, received, frame) =
       unroll_for! (candidate, acc):
@@ -65,7 +74,11 @@ pub proc FrameArrayMux<INPUT_COUNT: u32> {
   }
 }
 
+// Merge frame_in[x][y] with bounded column queues and per-stage round-robin polling.
+// Both dimensions must be positive. Per-input order is preserved, with no global
+// arrival order or equal service-rate guarantee between rows and columns.
 pub proc FrameGridMux<GRID_WIDTH: u32, GRID_HEIGHT: u32, CHANNEL_DEPTH: u32> {
+  // Connect every grid lane, using CHANNEL_DEPTH for each column queue.
   config(
       frame_in: chan<axis::Frame>[GRID_HEIGHT][GRID_WIDTH] in,
       frame_out: chan<axis::Frame> out
@@ -79,16 +92,20 @@ pub proc FrameGridMux<GRID_WIDTH: u32, GRID_HEIGHT: u32, CHANNEL_DEPTH: u32> {
     ()
   }
 
+  // Retain no state beyond the child muxes.
   init { () }
+  // Leave all polling and forwarding to the child muxes.
   next(state: ()) { state }
 }
 
+// Check relay order through a bufferless output.
 #[test_proc]
 proc RelayPreservesFramesTest {
   done: chan<bool> out;
   input: chan<axis::Frame> out;
   output: chan<axis::Frame> in;
 
+  // Connect the relay between a buffered input and bufferless output.
   config(done: chan<bool> out) {
     let (input_p, input_c) = chan<axis::Frame, u32:2>("relay_input");
     let (output_p, output_c) = chan<axis::Frame, u32:0>("relay_output");
@@ -96,8 +113,10 @@ proc RelayPreservesFramesTest {
     (done, input_p, output_c)
   }
 
+  // Start the one-shot witness without retained state.
   init { () }
 
+  // Send two distinct frames and require the same order on receipt.
   next(state: ()) {
     let first = axis::pack(u8:1, u32:11);
     let second = axis::pack(u8:2, u32:22);
@@ -112,12 +131,14 @@ proc RelayPreservesFramesTest {
   }
 }
 
+// Check progress past empty lanes and retention under output pressure.
 #[test_proc]
 proc ArrayMuxPollsPastEmptyInputsTest {
   done: chan<bool> out;
   input: chan<axis::Frame>[3] out;
   output: chan<axis::Frame> in;
 
+  // Expose three mux inputs and a bufferless output to the witness.
   config(done: chan<bool> out) {
     let (input_p, input_c) = chan<axis::Frame, u32:2>[3]("mux_input");
     let (output_p, output_c) = chan<axis::Frame, u32:0>("mux_output");
@@ -125,8 +146,10 @@ proc ArrayMuxPollsPastEmptyInputsTest {
     (done, input_p, output_c)
   }
 
+  // Start the one-shot witness without retained state.
   init { () }
 
+  // Use only the last lane and require both frames to survive output stalls.
   next(state: ()) {
     let first = axis::pack(u8:3, u32:31);
     let second = axis::pack(u8:3, u32:32);
@@ -143,12 +166,14 @@ proc ArrayMuxPollsPastEmptyInputsTest {
   }
 }
 
+// Check that rectangular dimensions neither omit nor duplicate inputs.
 #[test_proc]
 proc RectangularGridIncludesEveryLaneTest {
   done: chan<bool> out;
   input: chan<axis::Frame>[2][3] out;
   output: chan<axis::Frame> in;
 
+  // Connect all six lanes of a three-by-two grid.
   config(done: chan<bool> out) {
     let (input_p, input_c) = chan<axis::Frame, u32:1>[2][3]("grid_input");
     let (output_p, output_c) = chan<axis::Frame, u32:0>("grid_output");
@@ -156,8 +181,10 @@ proc RectangularGridIncludesEveryLaneTest {
     (done, input_p, output_c)
   }
 
+  // Start the one-shot witness without retained state.
   init { () }
 
+  // Send one tagged frame per lane and require every tag exactly once.
   next(state: ()) {
     let tok = unroll_for! (x, tok): (u32, token) in u32:0..u32:3 {
       unroll_for! (y, tok): (u32, token) in u32:0..u32:2 {
