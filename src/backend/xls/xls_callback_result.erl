@@ -8,12 +8,14 @@
 
 -export([map/2, results/1]).
 
--spec map(erl_parse:af_clause(), fun((term()) -> term())) -> erl_parse:af_clause().
+-doc "Applies a rewrite to each reachable callback result while preserving evaluation order. Rejects more than 256 result paths.".
+-spec map(erl_parse:abstract_clause(), fun((term()) -> term())) -> erl_parse:abstract_clause().
 map(Clause, Leaf) ->
     {Program, _Results} = normalize(Clause, Leaf),
     Program.
 
--spec results(erl_parse:af_clause()) -> [term()].
+-doc "Returns resolved callback result constructors in source order; rejects more than 256 result paths.".
+-spec results(erl_parse:abstract_clause()) -> [term()].
 results(Clause) ->
     {_Program, Results} = normalize(Clause, fun(Value) -> Value end),
     Results.

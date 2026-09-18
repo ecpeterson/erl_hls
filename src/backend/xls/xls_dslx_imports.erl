@@ -5,7 +5,8 @@
 
 %% Discover declarations from syntax, not from the text emitted by transpile/3.
 %% Walking type arguments also finds providers nested inside hls_lists:list/2.
--spec from_forms([erl_parse:abstract_form()]) -> [atom()].
+-doc "Returns the unique DSLX imports required by types, provider calls and supported syntax.".
+-spec from_forms([hls_source:form()]) -> [atom()].
 from_forms(Forms) ->
     Uses = uses(Forms),
     Providers = lists:usort([Module || {provider, Module, _Name} <- Uses]),

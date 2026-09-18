@@ -1,0 +1,51 @@
+name: Source quality
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: source-quality-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  contracts:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124
+        with:
+          otp-version: '28.0.2'
+          rebar3-version: '3.24.0'
+      - name: Test the source checker
+        run: python3 tools/test_source_contracts.py
+      - name: Check source contracts against the integration base
+        env:
+          SOURCE_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [[ -n "$SOURCE_BASE" && "$SOURCE_BASE" != 0000000000000000000000000000000000000000 ]]; then
+            python3 tools/check_source_contracts.py --base "$SOURCE_BASE"
+          else
+            python3 tools/check_source_contracts.py
+          fi
+      - name: Retain the full documentation/spec backlog
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: source-contracts
+          path: _build/source-contracts.json
+          if-no-files-found: ignore
+      - name: Cache Dialyzer tables
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: |
+            _build/default/*plt
+            ~/.cache/rebar3/*plt
+          key: dialyzer-${{ runner.os }}-${{ runner.arch }}-28.0.2-${{ hashFiles('rebar.lock', '**/rebar.config') }}
+      - name: Check inferred types
+        run: rebar3 dialyzer

@@ -5,9 +5,11 @@
 -export([from_forms/1, from_module/1, groups/2]).
 -export_type([contract/0]).
 
+-doc "Allowed reply tags by call request, plus supported cast tags.".
 -type contract() :: #{calls := #{atom() => [atom(), ...]}, casts := [atom()]}.
 
--spec from_forms([erl_parse:abstract_form()]) -> contract().
+-doc "Validates request/reply declarations and returns allowed call replies and cast tags.".
+-spec from_forms([hls_source:form()]) -> contract().
 from_forms(Forms) ->
     Public = xls_parse:find_tags(Forms),
     Calls = [Tag || {Tag, _} <- groups(Forms, handle_call)],
@@ -30,6 +32,8 @@ from_forms(Forms) ->
         {Missing, Extra} -> error({hls_reply_requests, #{missing => Missing, extra => Extra}})
     end.
 
+%% Require a unique call request with a nonempty, duplicate-free set of declared replies.
+-spec declaration(term(), [atom()], #{atom() => [atom(), ...]}) -> #{atom() => [atom(), ...]}.
 declaration({Request, Replies}, Public, Acc)
         when is_atom(Request), is_list(Replies), Replies =/= [] ->
     case maps:is_key(Request, Acc) of
@@ -43,7 +47,8 @@ declaration({Request, Replies}, Public, Acc)
     end;
 declaration(Entry, _Public, _Acc) -> error({invalid_hls_reply_declaration, Entry}).
 
--spec groups([erl_parse:abstract_form()], atom()) -> [{atom(), [erl_parse:af_clause()]}].
+-doc "Groups two-argument callback clauses by request record, preserving clause order.".
+-spec groups([hls_source:form()], atom()) -> [{atom(), [erl_parse:abstract_clause()]}].
 groups(Forms, Function) ->
     Clauses = xls_parse:find_function(Forms, Function, 2),
     xls_callback_lower:group_by(Clauses, fun
@@ -53,6 +58,7 @@ groups(Forms, Function) ->
 
 %% Embedded by hls_pack, so a deployed proxy needs neither source nor compiler
 %% analysis. CPU-only modules without the transform retain the ordinary adapter.
+-doc "Returns the embedded service contract, or none for an untransformed CPU-only module.".
 -spec from_module(module()) -> {ok, contract()} | none.
 from_module(Module) ->
     case proplists:get_value(hls_service_contract, Module:module_info(attributes)) of

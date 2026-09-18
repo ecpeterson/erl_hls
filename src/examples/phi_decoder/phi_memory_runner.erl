@@ -49,7 +49,7 @@ models transaction-correlated call and cast traffic intended for lowering.
     deadline :: integer(),
     sending = none :: none | gen_server:request_id(),
     commands = [] :: [term()],
-    events = {[], []} :: queue:queue(term()),
+    events = queue:new() :: queue:queue(term()),
     result = running ::
         running | {ok, phi_memory_experiment:witness()} | {error, term()},
     waiters = [] :: [gen_server:from()]

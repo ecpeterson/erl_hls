@@ -36,15 +36,17 @@ split_entry_actions(ActionList, Line) ->
         false -> {Open, Casts}
     end.
 
--spec internal_groups([erl_parse:af_clause()], [atom()]) ->
-    [{{atom(), atom()}, [erl_parse:af_clause(), ...]}].
+-doc "Groups internal-event clauses by phase and event tag, preserving source order.".
+-spec internal_groups([erl_parse:abstract_clause()], [atom()]) ->
+    [{{atom(), atom()}, [erl_parse:abstract_clause(), ...]}].
 internal_groups(Clauses, Phases) ->
     xls_callback_lower:group_by(
         Clauses,
         fun(Clause) -> internal_key(Clause, Phases) end
     ).
 
--spec analyze([erl_parse:abstract_form()], map()) -> #{
+-doc "Validates reductions and returns closed reducer expressions plus remaining ordinary casts.".
+-spec analyze([hls_source:form()], map()) -> #{
     reduction := none | xls_statem_reduction_ir:reduction(),
     cast_groups := list()
 }.
@@ -94,7 +96,8 @@ analyze(Forms, #{
 analyze(_Forms, Context) ->
     error({invalid_hls_statem_reduction_context, Context}).
 
--spec analyze_interface([erl_parse:abstract_form()], map()) -> #{
+-doc "Validates and summarizes reduction structure without invoking provider transpilers.".
+-spec analyze_interface([hls_source:form()], map()) -> #{
     reduction := none | map(),
     cast_groups := list()
 }.

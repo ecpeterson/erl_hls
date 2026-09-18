@@ -11,10 +11,11 @@
 
 -type callback_kind() :: enter | cast | internal.
 
--spec prepare([erl_parse:abstract_form()], [atom()]) -> #{
-    enter := [erl_parse:af_clause()],
-    cast := [erl_parse:af_clause()],
-    internal := [erl_parse:af_clause()]
+-doc "Classifies state-function clauses as enter, cast or internal and normalizes their event heads.".
+-spec prepare([hls_source:form()], [atom()]) -> #{
+    enter := [erl_parse:abstract_clause()],
+    cast := [erl_parse:abstract_clause()],
+    internal := [erl_parse:abstract_clause()]
 }.
 prepare(Forms, Phases) ->
     Classified = lists:append([
@@ -41,8 +42,9 @@ callback_clauses(Forms, Name, Arity) ->
         _ -> error({duplicate_hls_statem_callback, Name, Arity})
     end.
 
--spec prepare_clause(erl_parse:af_clause(), atom()) ->
-    {callback_kind(), erl_parse:af_clause()}.
+%% Replace the event discriminator by the containing function's known phase.
+-spec prepare_clause(erl_parse:abstract_clause(), atom()) ->
+    {callback_kind(), erl_parse:abstract_clause()}.
 prepare_clause(
     {clause, Line, [{atom, _EventLine, enter}, OldPhase, Data], Guards, Body},
     Phase

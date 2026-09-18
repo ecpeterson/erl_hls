@@ -1,7 +1,5 @@
 -module(hls_type).
--moduledoc """
- 
-""".
+-moduledoc "Typed host codecs and DSLX conversion through type-provider descriptors.".
 -export([
     as/2,
     descriptor/1,
@@ -13,12 +11,13 @@
     pack_exact/2,
     print_type/1,
     unpack/2,
+    transpile/3,
     value_width/1,
     width/1,
     zero/0,
     zero/1
 ]).
--compile(export_all).
+-export_type([descriptor/0, arg/0]).
 
 %%%
 %%% Structure for XLS type descriptors
@@ -29,13 +28,14 @@
     name,
     args
 }).
--doc "". 
+-doc "A type provider, constructor name and its ordered parameters.".
 -type descriptor() :: #hls_type{
     module :: module(),
     name :: atom(),
     args :: [arg()]
 }.
--type arg() :: integer() | descriptor().
+-doc "A numeric, atom or nested type parameter supplied to a type constructor.".
+-type arg() :: integer() | atom() | descriptor().
 
 %%%
 %%% hls_type behavior
@@ -125,7 +125,7 @@ zero() ->
     error(unexpanded_hls_zero).
 
 -spec zero(descriptor()) -> any().
--doc "". 
+-doc "Returns the provider's zero value for the descriptor.".
 zero(#hls_type{module = Module, name = Name, args = Args}) ->
     Module:zero(Name, Args).
 
@@ -140,6 +140,8 @@ of an Erlang literal.
 as(_Descriptor, Value) ->
     Value.
 
+-doc "Lowers a type ascription; rejects host-only normalization and exact-packing operations.".
+-spec transpile(atom(), [xls_parse:ir()], xls_parse:clause_state()) -> xls_parse:ir().
 transpile(as, [{phantom, type, Descriptor}, Value], _State) ->
     ["(", Value, " as ", print_type(Descriptor), ")"];
 transpile(Operation, _Args, _State) when Operation =:= normalize;
@@ -147,7 +149,7 @@ transpile(Operation, _Args, _State) when Operation =:= normalize;
     error({host_only_type_operation, Operation}).
 
 -spec width(descriptor()) -> integer().
--doc "". 
+-doc "Returns the serialized bit width, including padding.".
 width(#hls_type{module = Module, name = Name, args = Args}) ->
     Module:width(Name, Args).
 
@@ -201,14 +203,20 @@ pack_exact(Value, Descriptor) ->
         {_Normalized, <<>>} -> error({inexact_packing, Descriptor})
     end.
 
+-doc "Decodes exactly one declared-width field and returns its value and remaining bits.".
+-spec unpack(bitstring(), descriptor()) -> {term(), bitstring()}.
 unpack(Packed, Type = {hls_type, Module, Name, Args}) ->
     {Field, Rest} = hls_codec:split(Packed, width(Type)),
     {Value, <<>>} = Module:unpack(Field, Name, Args),
     {Value, Rest}.
 
+-doc "Renders the descriptor's DSLX value type.".
+-spec print_type(descriptor()) -> xls_parse:printable().
 print_type({hls_type, Module, Name, Args}) ->
     Module:print_type(Name, Args).
 
+-doc "Returns the provider's from-bits/to-bits renderers, or bit_cast for ordinary value types.".
+-spec dslx_codec(descriptor()) -> bit_cast | {fun((xls_parse:printable()) -> xls_parse:printable()), fun((xls_parse:printable()) -> xls_parse:printable())}.
 dslx_codec({hls_type, Module, Name, Args}) ->
     _ = code:ensure_loaded(Module),
     case erlang:function_exported(Module, dslx_codec, 2) of
@@ -216,12 +224,16 @@ dslx_codec({hls_type, Module, Name, Args}) ->
         false -> bit_cast
     end.
 
+-doc "Renders wire bits as a typed DSLX value using the provider's padding policy.".
+-spec dslx_from_bits(descriptor(), xls_parse:printable()) -> xls_parse:printable().
 dslx_from_bits(Type, Bits) ->
     case dslx_codec(Type) of
         bit_cast -> [Bits, " as ", print_type(Type)];
         {Decode, _Encode} -> Decode(Bits)
     end.
 
+-doc "Renders a DSLX value as serialized bits, including the provider's padding.".
+-spec dslx_to_bits(descriptor(), xls_parse:printable()) -> xls_parse:printable().
 dslx_to_bits(Type, Value) ->
     case dslx_codec(Type) of
         bit_cast -> [Value, " as bits[", integer_to_list(width(Type)), "]"];
@@ -229,11 +241,11 @@ dslx_to_bits(Type, Value) ->
     end.
 
 %%%
-%%% 
+%%%
 %%%
 
--spec descriptor(erl_parse:af_abstract_type()) -> descriptor().
--doc "". 
+-spec descriptor(erl_parse:abstract_type()) -> arg().
+-doc "Converts a remote type expression or literal parameter to its provider descriptor or value.".
 descriptor({remote_type, _1, [{atom, _2, Module}, {atom, _3, Name}, Args]}) ->
     {hls_type, Module, Name, [descriptor(Arg) || Arg <- Args]};
 descriptor({integer, _1, Integer}) ->

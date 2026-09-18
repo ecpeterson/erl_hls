@@ -9,7 +9,8 @@
 -moduledoc false.
 -export([annotate/1]).
 
--spec annotate([erl_parse:abstract_expression()]) -> [tuple()].
+-doc "Marks branch expressions with variables used by their continuation; later matches count as uses.".
+-spec annotate([erl_parse:abstract_expr()]) -> [tuple()].
 annotate(Expressions) -> sequence(Expressions, #{}).
 
 sequence(Expressions, Live) ->

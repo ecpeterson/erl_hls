@@ -21,7 +21,7 @@
     capacity :: 1..256,
     next = 0 :: byte(),
     pending = #{} :: #{byte() => #pending{}},
-    sends = #{} :: gen_server:request_id_collection(),
+    sends = gen_server:reqids_new() :: gen_server:request_id_collection(),
     status = up :: up | {down, term()},
     rejected_requests = 0 :: non_neg_integer(),
     ignored_replies = 0 :: non_neg_integer()

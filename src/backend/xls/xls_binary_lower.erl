@@ -4,7 +4,8 @@
 
 %% Auto-imported size BIFs are not local helpers. Respect definitions and
 %% no_auto_import; explicitly qualified erlang calls always name the BIF.
--spec prepare([erl_parse:abstract_form()]) -> [tuple()].
+-doc "Resolves supported size BIFs while respecting local definitions and no_auto_import.".
+-spec prepare([hls_source:form()]) -> [tuple()].
 prepare(Forms) ->
     Options = lists:flatten([case O of L when is_list(L) -> L; _ -> [O] end
         || {attribute, _, compile, O} <- Forms]),
@@ -82,7 +83,8 @@ calculate(Op, Args) ->
         false -> error
     end.
 
--spec construct(erl_parse:abstract_expression(), xls_parse:clause_state()) -> xls_parse:clause_state().
+-doc "Lowers fixed-width binary construction, preserving evaluation order and recording payload failures.".
+-spec construct(erl_parse:abstract_expr(), xls_parse:clause_state()) -> xls_parse:clause_state().
 construct({bin, _, Elements}, State) ->
     {Parts, Evaluated} = lists:mapfoldl(fun construct_segment/2, State, segments(Elements)),
     xls_parse:instr(Evaluated, ["(", lists:join(" ++ ", Parts ++ ["bits[0]:0"]), ",)"]).
@@ -122,8 +124,9 @@ encode_integer(Value, #{width := Width, endian := Endian}) ->
 %% Projections remain well typed even when the fixed input is too short.
 %% The length predicate rejects those placeholder values before selecting a
 %% clause; an assignment instead reports the ordinary badmatch failure.
--spec pattern(erl_parse:af_pattern(), xls_parse:printable()) ->
-    {{erl_anno:anno(), iolist()}, [{erl_parse:af_pattern(), iolist(), integer | bits}]}.
+-doc "Returns a binary pattern's length predicate and field projections for subsequent matching.".
+-spec pattern(erl_parse:abstract_expr(), xls_parse:printable()) ->
+    {{erl_anno:anno(), iolist()}, [{erl_parse:abstract_expr(), iolist(), integer | bits}]}.
 pattern({bin, Line, Elements}, Value) ->
     {Parts, Offset, Tail} = pattern_segments(segments(Elements), Value, 0),
     Predicate = case Tail of

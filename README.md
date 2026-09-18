@@ -4,6 +4,8 @@ Compile a bounded subset of Erlang processes into hardware and interoperate
 with them from native Erlang processes, through simulation or an FPGA. The
 current hardware backend lowers through XLS.
 
+See the [documentation guide](docs/README.md) for actor contracts, compilation, composition and debugging.
+
 ## Tests
 
 Run the Erlang-side unit and CPU-reference tests locally:

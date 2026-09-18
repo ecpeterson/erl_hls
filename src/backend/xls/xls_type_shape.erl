@@ -11,7 +11,8 @@
 %% Deliberately independent of loaded modules and provider callbacks. Aliases
 %% are source declarations, not proof of a provider's emitted hardware type;
 %% consumers must retain and check the dimensions on which they rely in DSLX.
--spec records([erl_parse:abstract_form()], #{atom() => [atom()]}) -> #{atom() => shape()}.
+-doc "Resolves requested record-field shapes from source aliases. Returned dimensions still require validation against emitted DSLX types.".
+-spec records([hls_source:form()], #{atom() => [atom()]}) -> #{atom() => shape()}.
 records(Forms, Requests) ->
     Context = case xls_parse:find_optional_attribute(Forms, hls_source_context) of
         {ok, Captured} -> Captured;

@@ -5,7 +5,8 @@
 
 %% Fresh scalar bindings need no alias facts. In particular, a provider with
 %% private preprocessing requirements must not affect unrelated plain heads.
--spec shape_fields(erl_parse:af_pattern()) -> [atom()].
+-doc "Returns record fields whose collection patterns need type-shape evidence.".
+-spec shape_fields(erl_parse:abstract_expr()) -> [atom()].
 shape_fields({record, _, _, Fields}) ->
     [Field || {record_field, _, {atom, _, Field}, Pattern} <- Fields,
         needs_shape(Pattern)];
@@ -20,7 +21,8 @@ needs_shape(_) -> false.
 %% A successful proof returns precisely the array dimensions it used. These
 %% are rechecked against actual DSLX types; source aliases alone cannot grant
 %% authority to intercept a whole message schema at a reduction source.
--spec prove(erl_parse:af_pattern(), xls_type_shape:shape()) -> none | [tuple()].
+-doc "Proves that a pattern accepts every value of the shape, returning required dimension checks; returns none when unproved.".
+-spec prove(erl_parse:abstract_expr(), xls_type_shape:shape()) -> none | [tuple()].
 prove(Pattern, Shape) ->
     case prove(Pattern, Shape, [], #{}, []) of
         none -> none;

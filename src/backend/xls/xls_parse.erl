@@ -324,7 +324,7 @@ print({static, float, Value}) ->
 -type clause_state() :: #clause_state{}.
 
 -spec branch_from_clause(
-    erl_parse:af_clause(),
+    erl_parse:abstract_clause(),
     [atom()],
     atom(),
     fun((printable()) -> printable())
@@ -362,7 +362,8 @@ branch_from_state(ComputeState, Postprocessor, Failure) ->
 
 %% Keep the computed value and its selected failure together. Consumers may
 %% commit a compound result only when the whole callback has succeeded.
--spec clause_outcome(erl_parse:af_clause(), [printable()], atom(), map()) ->
+-doc "Lowers a callback clause to statements, result and first-failure expressions.".
+-spec clause_outcome(erl_parse:abstract_clause(), [printable()], atom(), map()) ->
     #{body := printable(), result := printable(), failed := printable(), failure := printable()}.
 clause_outcome(Clause, ArgVals, StateName, EnumAtoms) ->
     State = lower_clause(Clause, ArgVals, StateName, EnumAtoms),
@@ -393,7 +394,7 @@ lower_clause({clause, _Line, ArgPatterns, _Guards, Body},
         xls_var_scope:annotate(BigBody)
     ).
 
--spec statement_from_statement(erl_parse:abstract_expression(), clause_state()) -> clause_state().
+-spec statement_from_statement(erl_parse:abstract_expr(), clause_state()) -> clause_state().
 -doc """
 Main transpiler workhorse.  Recursively converts a complex `erl_parse`
 expression into a sequence of simple emitted XLS expressions.
@@ -633,7 +634,8 @@ add_failure(Failure, State = #clause_state{failures = Failures}) ->
 
 %% A partially bound name stays unsafe even if a later expression attempts to
 %% bind it again. Keep the originating join for a useful source diagnostic.
--spec find_binding(atom(), erl_anno:location(), clause_state()) ->
+-doc "Finds a variable's current value, rejecting bindings unsafe across a branch join.".
+-spec find_binding(atom(), erl_anno:anno(), clause_state()) ->
     {ok, printable()} | error.
 find_binding(Name, Line, #clause_state{bindings = Bindings, unsafe_bindings = Unsafe}) ->
     case maps:find(Name, Unsafe) of
@@ -641,7 +643,8 @@ find_binding(Name, Line, #clause_state{bindings = Bindings, unsafe_bindings = Un
         error -> maps:find(Name, Bindings)
     end.
 
--spec bind(atom(), erl_anno:location(), printable(), clause_state()) -> clause_state().
+-doc "Binds a fresh variable or checks equality with its existing value, recording a match failure on mismatch.".
+-spec bind(atom(), erl_anno:anno(), printable(), clause_state()) -> clause_state().
 bind(Name, Line, Value, State) ->
     Previous = find_binding(Name, Line, State),
     {Emitted, Named} = uniquify(State, Name),
@@ -671,7 +674,7 @@ record_value(NameAtom, Struct, _State) ->
 %%% opaque prepacked literals.
 %%%
 
--spec struct_from_record(erl_parse:af_record_decl()) -> iolist().
+-spec struct_from_record(hls_source:record_declaration()) -> iolist().
 -doc "Translates an Erlang record definition to an XLS struct definition.".
 struct_from_record(RecordForm) ->
     {attribute, _L, record, {NameAtom, Fields}} = RecordForm,
@@ -685,7 +688,7 @@ struct_from_record(RecordForm) ->
         ],
     "}\n"].
 
--spec structfrombits_from_record(erl_parse:af_record_decl()) -> iolist().
+-spec structfrombits_from_record(hls_source:record_declaration()) -> iolist().
 -doc "Builds an XLS-side unpacker for the Erlang record definition.".
 structfrombits_from_record(RecordForm) ->
     {attribute, _L, record, {NameAtom, Fields}} = RecordForm,
@@ -712,7 +715,7 @@ structfrombits_from_record(RecordForm) ->
     "  }\n",
     "}\n"].
 
--spec bitsfromstruct_from_record(erl_parse:af_record_decl()) -> iolist().
+-spec bitsfromstruct_from_record(hls_source:record_declaration()) -> iolist().
 -doc "Builds an XLS-side packer for the Erlang record definition.".
 bitsfromstruct_from_record(RecordForm = {attribute, _L, record, {NameAtom, Fields}}) ->
     StructName = xls_names:record_type(NameAtom),
@@ -725,7 +728,8 @@ bitsfromstruct_from_record(RecordForm = {attribute, _L, record, {NameAtom, Field
         "zero!<bits[0]>())\n",
     "}\n"].
 
--spec message_words([erl_parse:abstract_form()], atom()) -> 0..3.
+-doc "Returns the number of 32-bit words needed for a record's packed fields.".
+-spec message_words([hls_source:form()], atom()) -> 0..3.
 message_words(Forms, Name) ->
     Width = record_width(find_record(Forms, Name)),
     case Width =< 96 of
@@ -733,7 +737,7 @@ message_words(Forms, Name) ->
         false -> error({xls_message_too_wide, Name, Width, 96})
     end.
 
--spec record_width(erl_parse:af_record_decl()) -> non_neg_integer().
+-spec record_width(hls_source:record_declaration()) -> non_neg_integer().
 -doc "Calculates the packed width of an Erlang record's XLS struct.".
 record_width({attribute, _L, record, {_NameAtom, Fields}}) ->
     lists:sum([
@@ -741,14 +745,14 @@ record_width({attribute, _L, record, {_NameAtom, Fields}}) ->
         || {typed_record_field, _Field, Type} <- Fields
     ]).
 
--spec record_field_name(erl_parse:af_record_field()) -> atom().
+-spec record_field_name(hls_source:record_field()) -> atom().
 -doc "Extracts a field name from record declarations with or without a default.".
 record_field_name({record_field, _L, {atom, _AtomL, Name}}) ->
     Name;
 record_field_name({record_field, _L, {atom, _AtomL, Name}, _Default}) ->
     Name.
 
--spec validate_record_defaults(erl_parse:af_record_decl()) -> ok.
+-spec validate_record_defaults(hls_source:record_declaration()) -> ok.
 -doc """
 Requires every field in a translated record to use the type-directed
 `hls_type:zero()` marker, keeping Erlang defaults consistent with XLS `zero!`.
@@ -861,7 +865,7 @@ op('=/=', [Left, Right]) -> [Left, " != ", Right].
 %%% Search / selection tools
 %%%
 
--spec state([erl_parse:abstract_form()]) -> atom().
+-spec state([hls_source:form()]) -> atom().
 -doc "Finds the record name which carries an actor's rich data value.".
 state(Forms) ->
     case find_optional_attribute(Forms, hls_data) of
@@ -882,7 +886,7 @@ inferred_state(Forms) ->
     }} = InitSpec,
     StateAtom.
 
--spec find_record([erl_parse:abstract_form()], atom()) -> erl_parse:af_record_decl().
+-spec find_record([hls_source:form()], atom()) -> hls_source:record_declaration().
 -doc "Find the record definition with the indicated name from the set of Forms.".
 find_record(Forms, Name) ->
     {value, Record} = lists:search(
@@ -892,7 +896,7 @@ find_record(Forms, Name) ->
     ),
     Record.
 
--spec find_function([erl_parse:abstract_form()], atom(), integer()) -> erl_parse:af_clause_seq().
+-spec find_function([hls_source:form()], atom(), integer()) -> [erl_parse:abstract_clause(), ...].
 -doc "Find the function definition with the indicated F/A from the set of Forms.".
 find_function(Forms, F, A) ->
     {value, {function, _LineNo, F, A, Clauses}} = lists:search(
@@ -904,8 +908,8 @@ find_function(Forms, F, A) ->
     ),
     Clauses.
 
--spec find_attribute([erl_parse:abstract_form()], atom()) -> erl_parse:af_wild_attribute().
--doc "Finds the attribute with the indicated name from the set of Forms.".
+-spec find_attribute([hls_source:form()], atom()) -> term().
+-doc "Returns the first named attribute's value; fails if it is absent.".
 find_attribute(Forms, Atom) ->
     {value, {attribute, _L, _A, Value}} = lists:search(
         fun ({attribute, _L, A, _Value}) -> A == Atom;
@@ -915,7 +919,7 @@ find_attribute(Forms, Atom) ->
     ),
     Value.
 
--spec find_tags([erl_parse:abstract_form()]) -> [atom()].
+-spec find_tags([hls_source:form()]) -> [atom()].
 -doc "Collects all hls_tags attributes in include-expanded source order.".
 find_tags(Forms) ->
     Fragments = [
@@ -962,7 +966,8 @@ duplicate_tags([Tag | Rest], Counts, Duplicates) ->
     end,
     duplicate_tags(Rest, Counts#{Tag => Count + 1}, NextDuplicates).
 
--spec find_optional_attribute([erl_parse:abstract_form()], atom()) ->
+-doc "Returns an attribute's value, or none when the attribute is absent.".
+-spec find_optional_attribute([hls_source:form()], atom()) ->
     none | {ok, term()}.
 find_optional_attribute(Forms, Atom) ->
     case lists:search(
@@ -976,7 +981,7 @@ find_optional_attribute(Forms, Atom) ->
         false -> none
     end.
 
--spec find_spec([erl_parse:abstract_form()], atom(), integer()) -> erl_parse:af_function_spec().
+-spec find_spec([hls_source:form()], atom(), integer()) -> hls_source:function_spec().
 -doc "Finds the function type declaration with the given F/A from the set of Forms.".
 find_spec(Forms, F, A) ->
     {value, Spec} = lists:search(
@@ -992,7 +997,7 @@ find_spec(Forms, F, A) ->
 %%% Other utilities
 %%%
 
--spec parse_file(string()) -> {ok, [erl_parse:abstract_form()]}.
+-spec parse_file(string()) -> {ok, [hls_source:form()]}.
 -doc "Helper routine for reading an entire .erl source file into memory.".
 parse_file(Filename) ->
     parse_file(Filename, []).
