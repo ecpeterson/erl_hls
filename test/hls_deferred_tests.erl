@@ -99,3 +99,9 @@ handle_exhaustion_test() ->
 -spec attribute([hls_source:form()], atom(), term()) -> [hls_source:form()].
 attribute(Forms, Name, Value) ->
     [case F of {attribute, L, Name, _} -> {attribute, L, Name, Value}; _ -> F end || F <- Forms].
+
+%% Competing failures in reply/state expressions retain Erlang's left-to-right precedence.
+-spec reply_evaluation_order_test() -> ok.
+reply_evaluation_order_test() ->
+    {ok, State} = hls_gs:init({hls_deferred_fixture, [], []}),
+    ?assertError(badarith, hls_gs:handle_call({read, 1}, {self(), make_ref()}, State)).

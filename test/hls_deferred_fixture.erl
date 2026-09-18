@@ -33,6 +33,10 @@ handle_call(#wait{value = Value}, From, State = #state{count = Count}) ->
     {noreply, State#state{count = Count + 1,
         handles = hls_lists:set(Count + 1, State#state.handles, From),
         values = hls_lists:set(Count + 1, State#state.values, Value)}};
+%% Erlang evaluates the reply expression before the proposed state; badarith must win over badarg.
+handle_call(#read{unused = 1}, _From, State) ->
+    {reply, #report{value = 8 div State#state.cursor},
+        State#state{total = hls_lists:nth(3, State#state.values)}};
 %% Continuation priority means this observes every preceding released reply.
 handle_call(#read{}, _From, State) -> {reply, #report{value = State#state.total}, State}.
 

@@ -89,6 +89,7 @@ module deferred_server_tb;
         expect_reply(1, 10, 18); packet(3, 10, 1); packet(3, 10, 2); drained();
         restart();
         expect_reply(8, 40, 0); packet(5, 40, 0); drained();
+        expect_reply(1, 40, 13); packet(5, 40, 1); drained();
         $display("PASS: retained replies, bounded admission, continuations, stale handles, stalls and failure drain");
         $finish;
     end

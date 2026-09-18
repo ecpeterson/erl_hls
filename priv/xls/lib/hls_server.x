@@ -23,7 +23,7 @@ pub fn first<N: u32>(slots: Slot[N], live: bool) -> (bool, u32) {
   }((false, u32:0))
 }
 
-// A stale or forged handle cannot select a newer caller, even at the same slot.
+// Only a complete nonzero handle selects its caller; a retired handle cannot select a reused slot.
 pub fn lookup<N: u32>(slots: Slot[N], handle: u64) -> (bool, u32) {
   for (i, found): (u32, (bool, u32)) in u32:0..N {
     if handle != u64:0 && slots[i].handle == handle { (true, i) } else { found }

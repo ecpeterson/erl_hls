@@ -130,21 +130,22 @@ actions({cons, _, {tuple, _, [{atom, _, reply}, From, Reply]}, Tail}) ->
     {{retained, From, Reply}, Continue};
 actions(Actions) -> error({invalid_hls_server_actions, Actions}).
 
-%% xls_map evaluates source values once, then converts them to a common outcome tuple.
+%% Preserve tuple/list field evaluation order (including failure precedence), then form the common outcome.
 -spec mapped(term(), term(), term(), atom(), map()) -> term().
 mapped(Line, State, Reply, Continue, Enum) ->
     Continuation = case Continue of none -> "u8:0"; _ -> maps:get(Continue, Enum) end,
-    {Fields, RenderReply, Handle} = case Reply of
-        none -> {[State], "zero!<axis::Frame>()", "u64:0"};
-        {immediate, Value} -> {[State, Value], "reply", "inv.from"};
-        {retained, From, Value} -> {[State, Value, From], "reply", "(value.2 as u64)"}
+    {Fields, StateField, ReplyField, Handle} = case Reply of
+        none -> {[State], "value.0", none, "u64:0"};
+        {immediate, Value} -> {[Value, State], "value.1", "value.0", "inv.from"};
+        {retained, From, Value} -> {[State, From, Value], "value.0", "value.2", "(value.1 as u64)"}
     end,
     {xls_map, Line, {tuple, Line, Fields}, fun(R) ->
         ["{ let value = ", R, ";\n",
-         case Reply of none -> []; _ ->
-             "let reply = axis::pack(value.1.0 as u8, hls_bits::frame_payload(value.1.2));\n" end,
-         "(", RenderReply, ", ", Handle, ", value.0, ", Continuation, ", ",
-         case Reply of none -> "true"; _ -> ["reply_allowed(", Handle, ", reply.header.op)"] end,
+         case ReplyField of none -> []; _ ->
+             ["let reply = axis::pack(", ReplyField, ".0 as u8, hls_bits::frame_payload(", ReplyField, ".2));\n"] end,
+         "(", case ReplyField of none -> "zero!<axis::Frame>()"; _ -> "reply" end,
+         ", ", Handle, ", ", StateField, ", ", Continuation, ", ",
+         case ReplyField of none -> "true"; _ -> ["reply_allowed(", Handle, ", reply.header.op)"] end,
          ") } "]
     end}.
 
