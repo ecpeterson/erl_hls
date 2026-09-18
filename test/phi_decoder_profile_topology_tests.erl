@@ -135,7 +135,7 @@ weak_component_effect_windows_follow_the_disconnected_planes_test() ->
 effect_window_domains_are_weak_not_strong_components_test() ->
     %% A one-way dependency joins two directed cycles: SCC partitioning would
     %% incorrectly allow both sides to retain independent effect windows.
-    JoinedCycles = schedulers([
+    JoinedCycles = dependencies([
         {0, [1]},
         {1, [0, 2]},
         {2, [3]},
@@ -143,9 +143,9 @@ effect_window_domains_are_weak_not_strong_components_test() ->
     ]),
     ?assertEqual(
         [[0, 1, 2, 3]],
-        xls_topology_effect_windows:partition(JoinedCycles, weak_components)
+        xls_topology_effect_windows:partition([0, 1, 2, 3], weak_components, JoinedCycles)
     ),
-    DisconnectedCycles = schedulers([
+    DisconnectedCycles = dependencies([
         {0, [1]},
         {1, [0]},
         {2, [3]},
@@ -154,7 +154,7 @@ effect_window_domains_are_weak_not_strong_components_test() ->
     ?assertEqual(
         [[0, 1], [2, 3]],
         xls_topology_effect_windows:partition(
-            DisconnectedCycles, weak_components
+            [0, 1, 2, 3], weak_components, DisconnectedCycles
         )
     ),
     %% A bounded manager incident to both otherwise-disconnected components
@@ -163,7 +163,7 @@ effect_window_domains_are_weak_not_strong_components_test() ->
     ?assertEqual(
         [[0, 1, 2, 3]],
         xls_topology_effect_windows:partition(
-            DisconnectedCycles, weak_components, [[1, 2]]
+            [0, 1, 2, 3], weak_components, DisconnectedCycles ++ [[1, 2]]
         )
     ).
 
@@ -186,9 +186,5 @@ assert_contains(Binary, Pattern) ->
 count(Binary, Pattern) ->
     length(binary:matches(Binary, Pattern)).
 
-schedulers(Edges) ->
-    [#{
-        index => Source,
-        destinations => [#{index => Destination}
-            || Destination <- Destinations]
-    } || {Source, Destinations} <- Edges].
+dependencies(Edges) ->
+    [[Source, Destination] || {Source, Destinations} <- Edges, Destination <- Destinations].

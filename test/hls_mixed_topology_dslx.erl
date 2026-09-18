@@ -21,20 +21,23 @@ fixture({ingress, Placement}) ->
         route_relations => [{{workers, Port}, [{actor, collector}]} || Port <- [result_a, result_b]],
         startup => [{Id, Messages} || #{target := Id, messages := Messages} <- Startup, Id =/= source]},
     {hls_topology:normalize(Spec), Specs};
+fixture({components, _Policy}) ->
+    Left = definition(source, collector, extra, workers, reports),
+    Right = definition(source_peer, collector_peer, extra_peer, workers_peer, reports_peer),
+    Joined = maps:map(fun
+        (version, Version) -> Version;
+        (K, V) when K =:= actors; K =:= families -> maps:merge(V, maps:get(K, Right));
+        (K, V) -> V ++ maps:get(K, Right)
+    end, Left),
+    %% Interleave the group indices between components to exercise local grant
+    %% positions, which must not be confused with global scheduler indices.
+    {hls_topology:normalize(Joined),
+        #{even => group([{family, workers, {interleaved, 0, 2}}]),
+          even_peer => group([{family, workers_peer, {interleaved, 0, 2}}]),
+          odd => group([{family, workers, {interleaved, 1, 2}}]),
+          odd_peer => group([{family, workers_peer, {interleaved, 1, 2}}])}};
 fixture(Placement) ->
-    Workers = [{{workers, X, Y}, 2 * X + Y} || X <- [0, 1], Y <- [0, 1]] ++ [{extra, 4}],
-    Plan = hls_topology:normalize(#{version => 1,
-        actors => #{source => hls_mixed_source, collector => hls_mixed_collector,
-            extra => hls_mixed_worker},
-        families => #{workers => #{module => hls_mixed_worker, shape => [2, 2]}},
-        ingresses => [], externals => [{reports, out, [report]}],
-        routes => [{{source, Port}, queued, [{actor, Id} || {Id, _} <- Workers]}
-            || Port <- [first, second]] ++ [
-                {{extra, Port}, [{actor, collector}]} || Port <- [result_a, result_b]] ++ [
-                {{collector, report}, [{external, reports}]},
-                {{collector, feedback}, [{actor, source}]}],
-        route_relations => [{{workers, Port}, [{actor, collector}]} || Port <- [result_a, result_b]],
-        startup => [{source, [{kick, 0}]}] ++ [{Id, [{configure, I}]} || {Id, I} <- Workers]}),
+    Plan = hls_topology:normalize(definition(source, collector, extra, workers, reports)),
     Specs = case Placement of
         direct -> #{};
         one -> #{workers => group([{family, workers}])};
@@ -44,13 +47,29 @@ fixture(Placement) ->
     end,
     {Plan, Specs}.
 
+definition(Source, Collector, Extra, Family, Reports) ->
+    Members = [{{Family, X, Y}, 2 * X + Y} || X <- [0, 1], Y <- [0, 1]] ++ [{Extra, 4}],
+    #{version => 1,
+        actors => #{Source => hls_mixed_source, Collector => hls_mixed_collector,
+            Extra => hls_mixed_worker},
+        families => #{Family => #{module => hls_mixed_worker, shape => [2, 2]}},
+        ingresses => [], externals => [{Reports, out, [report]}],
+        routes => [{{Source, Port}, queued, [{actor, Id} || {Id, _} <- Members]}
+            || Port <- [first, second]] ++ [
+                {{Extra, Port}, [{actor, Collector}]} || Port <- [result_a, result_b]] ++ [
+                {{Collector, report}, [{external, Reports}]},
+                {{Collector, feedback}, [{actor, Source}]}],
+        route_relations => [{{Family, Port}, [{actor, Collector}]} || Port <- [result_a, result_b]],
+        startup => [{Source, [{kick, 0}]}] ++ [{Id, [{configure, I}]} || {Id, I} <- Members]}.
+
 group(Members) -> #{members => Members, state_storage => block_ram, mailbox_storage => block_ram}.
 
 write(Placement, Stage) ->
     {Plan, Specs} = fixture(Placement),
     Options = #{direct_actor_debug => true, mailbox_debug => map_size(Specs) > 0},
     Profile = maps:merge(#{name => mixed_topology, channel_depth => 1,
-        actor_egress_depth => 0, scheduler_groups => Specs}, Options),
+        actor_egress_depth => 0, scheduler_groups => Specs,
+        effect_window_partition => window_policy(Placement)}, Options),
     Requirements = xls_topology_dslx:artifact_requirements(Plan, Profile),
     Artifacts = maps:map(fun(Module, Requirement) ->
         xls_parse:to_xls(filename:join("test", atom_to_list(Module) ++ ".erl"), Requirement)
@@ -78,12 +97,17 @@ write(Placement, Stage) ->
         xls_scheduler_ram_v:application_ports(Bindings), MailboxPorts, xls_actor_observation:ports(Direct), ");\n",
         xls_scheduler_ram_v:instances(Bindings, "clk"), "endmodule\n"],
     ok = file:write_file(filename:join(Stage, "mixed_topology_wrapper.v"), Wrapper),
-    Reports = cpu(Placement),
+    %% Each disconnected copy has the same transcript as the closed CPU graph;
+    %% RTL checks both ports independently and stalls only the first copy.
+    Reports = case Placement of {components, _} -> cpu(); _ -> cpu(Placement) end,
     ok = write_commands(Placement, Stage),
     Expected = [{report, I, 80 * I + 30} || I <- lists:seq(0, 31)],
     Expected = Reports,
     ok = file:write_file(filename:join(Stage, "cpu.term"), io_lib:format("~p.~n", [Reports])),
     file:write_file(filename:join(Stage, "expected.hex"), [frame_hex(R) || R <- Reports]).
+
+window_policy({components, Policy}) -> Policy;
+window_policy(_) -> global.
 
 frame_hex(Report) ->
     Payload = hls_codec:align(hls_mixed_collector:pack(Report), 32),
@@ -228,11 +252,15 @@ receive_reports(N, Acc) ->
     end.
 
 
+input_ports({components, _}) ->
+    "  output wire [127:0] _reports_peer_out, output wire _reports_peer_out_vld, input wire _reports_peer_out_rdy,\n";
 input_ports({ingress, _}) ->
     "  input wire [193:0] _commands_in, input wire _commands_in_vld, output wire _commands_in_rdy,\n"
     "  output wire [127:0] _acks_out, output wire _acks_out_vld, input wire _acks_out_rdy,\n";
 input_ports(_) -> [].
 
+input_connections({components, _}) ->
+    ", ._reports_peer_out(_reports_peer_out), ._reports_peer_out_vld(_reports_peer_out_vld), ._reports_peer_out_rdy(_reports_peer_out_rdy)";
 input_connections({ingress, _}) ->
     ", ._commands_in(_commands_in), ._commands_in_vld(_commands_in_vld), ._commands_in_rdy(_commands_in_rdy)"
     ", ._acks_out(_acks_out), ._acks_out_vld(_acks_out_vld), ._acks_out_rdy(_acks_out_rdy)";

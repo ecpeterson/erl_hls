@@ -399,7 +399,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        workload: [closed, ingress]
+        workload: [closed, ingress, windows]
 
     steps:
       - name: Check out repository
@@ -444,8 +444,13 @@ jobs:
           placements=(direct one two coalesced)
           if [[ "$WORKLOAD" == ingress ]]; then
             placements=(ingress_direct ingress_one ingress_two ingress_coalesced)
+          elif [[ "$WORKLOAD" == windows ]]; then
+            placements=(components_global components_weak)
           fi
           bash tools/test_mixed_topology.sh "$RUNNER_TEMP/xls" _build/mixed-topology "${placements[@]}"
+          if [[ "$WORKLOAD" == windows ]]; then
+            python3 tools/measure_mixed_windows.py _build/mixed-topology
+          fi
 
       - name: Upload mixed topology diagnostics
         if: always()
@@ -463,4 +468,6 @@ jobs:
             _build/mixed-topology/**/commands.json
             _build/mixed-topology/**/blocked.txt
             _build/mixed-topology/**/recovered.txt
+            _build/mixed-windows/cycles.json
+            _build/mixed-windows/**/*.log
           if-no-files-found: ignore

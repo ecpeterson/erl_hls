@@ -29,12 +29,16 @@ def testbench(args, ports, manifest):
              "wire [31:0] m_dbg_tdata; wire [3:0] m_dbg_tkeep;",
              "wire m_dbg_tlast, m_dbg_tvalid; reg m_dbg_tready=0;"]
     originals, instrumented, production, checks, final_checks = [], [], [], [], []
+    components = bool(args.actor_test and args.actor_test.startswith("components_"))
     ingress = bool(args.actor_test and args.actor_test.startswith("ingress_"))
     packets = json.loads((args.stage.parent / "commands.json").read_text()) if ingress else []
     compare_production = bool(getattr(args, "reference_rtl", None))
     sinks = [ready for _, _, ready, direction in topology.channel_ports({"ports": ports}) if direction == "output"]
     if not sinks:
         raise ValueError("test requires an external sink")
+    if components:
+        sinks.remove("_reports_out_rdy")
+        sinks.insert(0, "_reports_out_rdy")
     if ingress:
         # The report sink is held while acknowledgments drain independently.
         sinks.remove("_reports_out_rdy")
@@ -59,7 +63,7 @@ def testbench(args, ports, manifest):
             elif ingress and name == "_commands_in_vld":
                 signal = "command_valid"
             elif name in sinks:
-                signal = "released" if name == sinks[0] else "1'b1"
+                signal = "released" if name == sinks[0] else ("cycles%7 != 0" if components else "1'b1")
             elif name == "release_contributions" and args.actor_test in ("reduction", "aggregate", "direct_reduction"):
                 signal = "contributions" if args.actor_test == "direct_reduction" else "released"
             else:
@@ -98,18 +102,27 @@ def testbench(args, ports, manifest):
         final_checks.append('$display("PASS: production/debug application transcripts match (one healthy report, payload 3)");')
     debug_ports = [f".{side}_dbg_{suffix}({side}_dbg_{suffix})" for side in ("s", "m")
                    for suffix in ("tdata", "tkeep", "tlast", "tvalid", "tready")]
-    if args.actor_test and args.actor_test.startswith(("mixed_", "ingress_")):
-        report_index = list(ports).index("_reports_out")
-        valid_index = list(ports).index("_reports_out_vld")
-        lines += ["reg [127:0] expected_reports [0:31]; integer reports=0;",
+    if args.actor_test and args.actor_test.startswith(("mixed_", "ingress_", "components_")):
+        lines += ["reg [127:0] expected_reports [0:31];",
                   'initial $readmemh("expected.hex", expected_reports);']
-        checks += [f"if(port_{valid_index}_dut && released) begin",
-                   '  if(reports >= 32) $fatal(1, "duplicate mixed report");',
-                   f'  if(port_{report_index}_dut !== expected_reports[reports]) $fatal(1, "mixed report %0d: got %032h expected %032h", reports, port_{report_index}_dut, expected_reports[reports]);',
-                   '  $display("mixed report %0d accepted at cycle %0d", reports, cycles);',
-                   "  reports=reports+1; end"]
-        final_checks += ['if(reports != 32) $fatal(1, "missing mixed reports: %0d", reports);',
-                         '$display("PASS: mixed RTL matches all 32 CPU reports (320 work items, 640 result items)");']
+        report_ports = [("_reports_out", "reports", "released")]
+        if components:
+            report_ports.append(("_reports_peer_out", "peer_reports", "cycles%7 != 0"))
+        for port, counter, ready in report_ports:
+            report_index = list(ports).index(port)
+            valid_index = list(ports).index(port + "_vld")
+            lines.append(f"integer {counter}=0;")
+            checks += [f"if(port_{valid_index}_dut && ({ready})) begin",
+                       f'  if({counter} >= 32) $fatal(1, "duplicate {counter}");',
+                       f'  if(port_{report_index}_dut !== expected_reports[{counter}]) $fatal(1, "{counter} %0d: wrong frame %032h", {counter}, port_{report_index}_dut);',
+                       f'  $display("{counter} %0d accepted at cycle %0d", {counter}, cycles);',
+                       f"  {counter}={counter}+1; end"]
+            final_checks += [f'if({counter} != 32) $fatal(1, "missing {counter}: %0d", {counter});',
+                             f'$display("PASS: {counter} matches all 32 CPU reports (320 work items, 640 result items)");']
+        if components:
+            # The host waits for peer completion through hls_debug before
+            # releasing the blocked component; assert the public transfers too.
+            checks.append('if(released && peer_reports != 32) $fatal(1, "peer failed to complete independently");')
     if ingress:
         ready = list(ports).index("_commands_in_rdy")
         ack_valid = list(ports).index("_acks_out_vld")
@@ -124,6 +137,35 @@ def testbench(args, ports, manifest):
         final_checks += [f'if(sent != {len(packets)} || acks != 32) $fatal(1, "incomplete command stream");',
                          'if(input_stalls == 0) $fatal(1, "command input never experienced backpressure");',
                          '$display("PASS: %0d external packets, %0d input stall cycles", sent, input_stalls);']
+    if components:
+        # Count handshakes on the same passive probes exposed to host queries.
+        # This checks that the fixture actually exercises every grant port and
+        # simultaneous domains, without reading the arbiter's internal state.
+        grants = [r for r in manifest["resources"] if r["kind"] == "channel"
+                  and "/__effect_window__Arbiter" in r["name"] and "/_grant_out__" in r["name"]]
+        domains = sorted({r["name"].rsplit("/", 1)[0] for r in grants})
+        expected_peak = 2 if args.actor_test == "components_weak" else 1
+        if len(domains) != expected_peak:
+            raise ValueError(f"expected {expected_peak} observed effect-window domains, got {domains}")
+        lines.append("integer window_peak=0;")
+        for i, domain in enumerate(domains):
+            lines.append(f"integer window_owned_{i}=0;")
+            for grant in [g for g in grants if g["name"].startswith(domain + "/")]:
+                counter = f"window_grants_{grant['id']}"
+                lines.append(f"integer {counter}=0;")
+                checks.append(f"if(dut.probe_values[{64*grant['id']}+:2] == 3) begin "
+                              f"window_owned_{i}=window_owned_{i}+1; {counter}={counter}+1; end")
+                final_checks.append(f'if({counter}==0) $fatal(1, "unused grant port: {grant["name"]}");')
+            releases = [r for r in manifest["resources"] if r["kind"] == "channel"
+                        and r["name"].startswith(domain + "/_release_in__")]
+            for release in releases:
+                checks.append(f"if(dut.probe_values[{64*release['id']}+:2] == 3) window_owned_{i}=window_owned_{i}-1;")
+            checks.append(f'if(window_owned_{i}<0 || window_owned_{i}>1) $fatal(1, "domain {i} ownership conservation");')
+            final_checks.append(f'if(window_owned_{i}!=0) $fatal(1, "domain {i} leaked ownership");')
+        total = " + ".join(f"window_owned_{i}" for i in range(len(domains)))
+        checks.append(f"if(({total})>window_peak) window_peak={total};")
+        final_checks += [f'if(window_peak!={expected_peak}) $fatal(1, "expected {expected_peak} concurrent owners, got %0d",window_peak);',
+                         '$display("PASS: every grant port exercised; concurrent ownership peak %0d",window_peak);']
     queues = [q for q in manifest["resources"] if q["kind"] == "fifo"]
     for q in queues:
         lines.append(f"integer occupancy_{q['id']}=0;")
@@ -139,7 +181,7 @@ def testbench(args, ports, manifest):
               f"hls_debug_application dut ({', '.join(instrumented+debug_ports)});",
               "initial begin repeat(5) @(negedge clk); resetn=1; end",
               "always @(posedge clk) if(resetn) begin", *checks,
-              "cycles=cycles+1; if(cycles>5000000) $fatal(1, \"host query timeout\");",
+              "cycles<=cycles+1; if(cycles>5000000) $fatal(1, \"host query timeout\");",
               "end", "always @(negedge clk) if(resetn && cycles%100==0) begin",
               'fd=$fopen("contributions","r"); if(fd) begin contributions=1; $fclose(fd); fd=$fopen("contributions_released","w"); $fclose(fd); end',
               'fd=$fopen("release","r"); if(fd) begin released=1; $fclose(fd); fd=$fopen("released","w"); $fclose(fd); end',
@@ -173,7 +215,7 @@ def run(args):
     del flat, instrumented
     if getattr(args, "actor_test", None):
         (stage / "actor-test").write_text(args.actor_test)
-        if args.actor_test.startswith(("mixed_", "ingress_")):
+        if args.actor_test.startswith(("mixed_", "ingress_", "components_")):
             shutil.copy(stage.parent / "expected.hex", stage / "expected.hex")
     else:
         (stage / "actor-test").unlink(missing_ok=True)
@@ -263,7 +305,8 @@ if __name__ == "__main__":
     parser.add_argument("--actor-root", default="")
     parser.add_argument("--actor-test", choices=("small", "phi", "mailbox", "direct_mailbox", "mailbox_mixed", "reduction", "aggregate", "direct_reduction",
                                                 "mixed_direct", "mixed_one", "mixed_two", "mixed_coalesced",
-                                                "ingress_direct", "ingress_one", "ingress_two", "ingress_coalesced"))
+                                                "ingress_direct", "ingress_one", "ingress_two", "ingress_coalesced",
+                                                "components_global", "components_weak"))
     parser.add_argument("--reference-rtl", type=Path, action="append", help="diagnostics-disabled application RTL for transfer comparison")
     parser.add_argument("--reference-top", default="actor_debug_production_wrapper")
     run(parser.parse_args())

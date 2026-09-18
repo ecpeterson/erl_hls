@@ -1,0 +1,219 @@
+{
+  "baseline": "b06ea41",
+  "area": {
+    "sources": {
+      "components_global": {
+        "/private/tmp/erl-hls-mixed-effect-windows/_build/mixed-topology/components_global/p2/instrumented.json": "5672a1b52b887ff6ff9b14ca5a0806cee14c167b3b09054f779cbc6d563d5886",
+        "/private/tmp/erl-hls-mixed-effect-windows/_build/mixed-topology/components_global/p2/debug_top.v": "45bb712157a75e8cdb97a0480484ccfcdfeb95e659731baeb34ee77e9f79c820",
+        "/private/tmp/erl-hls-mixed-effect-windows/priv/rtl/debug/hls_debug_frame_rx.v": "e689f254b14ebab341b936c30c9a90db7888b8f1bdf68a99ef8ef71aa90bae55",
+        "/private/tmp/erl-hls-mixed-effect-windows/priv/rtl/debug/hls_debug_route.v": "7f1f1dfb3a282a963811fd2e99991e789eeec5e38260ecace06a05d3f4cef287",
+        "/private/tmp/erl-hls-mixed-effect-windows/priv/rtl/debug/hls_topology_debug.v": "27c1336a3d5ead19c81b4e4fb89de54d26e0358963d86d92a7a5a0ec80392b96",
+        "/private/tmp/erl-hls-mixed-effect-windows/priv/rtl/debug/hls_actor_snapshot.v": "347251a1965df664817aee66764f0b2763382268c41cdc1d229f9af8c6d0fd11"
+      },
+      "components_weak": {
+        "/private/tmp/erl-hls-mixed-effect-windows/_build/mixed-topology/components_weak/p2/instrumented.json": "73fa3068d6e6e3d27c7b1fa8df598acd1959e241efda01f0847c93fcc036911e",
+        "/private/tmp/erl-hls-mixed-effect-windows/_build/mixed-topology/components_weak/p2/debug_top.v": "1c61d00227f1fa2a26c24fde09c36b4e9c67fa82bf08cfc7e23ec7011488507f",
+        "/private/tmp/erl-hls-mixed-effect-windows/priv/rtl/debug/hls_debug_frame_rx.v": "e689f254b14ebab341b936c30c9a90db7888b8f1bdf68a99ef8ef71aa90bae55",
+        "/private/tmp/erl-hls-mixed-effect-windows/priv/rtl/debug/hls_debug_route.v": "7f1f1dfb3a282a963811fd2e99991e789eeec5e38260ecace06a05d3f4cef287",
+        "/private/tmp/erl-hls-mixed-effect-windows/priv/rtl/debug/hls_topology_debug.v": "27c1336a3d5ead19c81b4e4fb89de54d26e0358963d86d92a7a5a0ec80392b96",
+        "/private/tmp/erl-hls-mixed-effect-windows/priv/rtl/debug/hls_actor_snapshot.v": "347251a1965df664817aee66764f0b2763382268c41cdc1d229f9af8c6d0fd11"
+      }
+    },
+    "yosys": "Yosys 0.69+10 (git sha1 370a53acf-dirty, Release, Clang /usr/local/osxcross/target/bin/aarch64-apple-darwin25.5-clang++ 21.1.8)",
+    "pipeline_stages": 2,
+    "seeds": 2,
+    "samples": [
+      {
+        "mode": "components_global",
+        "seed": 1,
+        "LUT": 15742,
+        "LUT_logic": 15662,
+        "LUT_RAM": 80,
+        "FF": 12543,
+        "RAMB18": 12,
+        "RAMB36": 4
+      },
+      {
+        "mode": "components_global",
+        "seed": 2,
+        "LUT": 15837,
+        "LUT_logic": 15757,
+        "LUT_RAM": 80,
+        "FF": 12543,
+        "RAMB18": 12,
+        "RAMB36": 4
+      },
+      {
+        "mode": "components_weak",
+        "seed": 1,
+        "LUT": 15924,
+        "LUT_logic": 15844,
+        "LUT_RAM": 80,
+        "FF": 12539,
+        "RAMB18": 12,
+        "RAMB36": 4
+      },
+      {
+        "mode": "components_weak",
+        "seed": 2,
+        "LUT": 16140,
+        "LUT_logic": 16060,
+        "LUT_RAM": 80,
+        "FF": 12539,
+        "RAMB18": 12,
+        "RAMB36": 4
+      }
+    ],
+    "summary": {
+      "components_global": {
+        "LUT": {
+          "best": 15742,
+          "mean": 15789.5,
+          "variance": 2256.25,
+          "worst": 15837
+        },
+        "LUT_logic": {
+          "best": 15662,
+          "mean": 15709.5,
+          "variance": 2256.25,
+          "worst": 15757
+        },
+        "LUT_RAM": {
+          "best": 80,
+          "mean": 80,
+          "variance": 0,
+          "worst": 80
+        },
+        "FF": {
+          "best": 12543,
+          "mean": 12543,
+          "variance": 0,
+          "worst": 12543
+        },
+        "RAMB18": {
+          "best": 12,
+          "mean": 12,
+          "variance": 0,
+          "worst": 12
+        },
+        "RAMB36": {
+          "best": 4,
+          "mean": 4,
+          "variance": 0,
+          "worst": 4
+        }
+      },
+      "components_weak": {
+        "LUT": {
+          "best": 15924,
+          "mean": 16032,
+          "variance": 11664,
+          "worst": 16140
+        },
+        "LUT_logic": {
+          "best": 15844,
+          "mean": 15952,
+          "variance": 11664,
+          "worst": 16060
+        },
+        "LUT_RAM": {
+          "best": 80,
+          "mean": 80,
+          "variance": 0,
+          "worst": 80
+        },
+        "FF": {
+          "best": 12539,
+          "mean": 12539,
+          "variance": 0,
+          "worst": 12539
+        },
+        "RAMB18": {
+          "best": 12,
+          "mean": 12,
+          "variance": 0,
+          "worst": 12
+        },
+        "RAMB36": {
+          "best": 4,
+          "mean": 4,
+          "variance": 0,
+          "worst": 4
+        }
+      }
+    }
+  },
+  "cycles": [
+    {
+      "mode": "components_global",
+      "pipeline_stages": 2,
+      "first": 99,
+      "last": 2871,
+      "peer_first": 95,
+      "peer_last": 2870,
+      "report_interval_mean": 89.41935483870968,
+      "peer_report_interval_mean": 89.51612903225806
+    },
+    {
+      "mode": "components_global",
+      "pipeline_stages": 3,
+      "first": 100,
+      "last": 2970,
+      "peer_first": 100,
+      "peer_last": 2968,
+      "report_interval_mean": 92.58064516129032,
+      "peer_report_interval_mean": 92.51612903225806
+    },
+    {
+      "mode": "components_weak",
+      "pipeline_stages": 2,
+      "first": 99,
+      "last": 2871,
+      "peer_first": 95,
+      "peer_last": 2870,
+      "report_interval_mean": 89.41935483870968,
+      "peer_report_interval_mean": 89.51612903225806
+    },
+    {
+      "mode": "components_weak",
+      "pipeline_stages": 3,
+      "first": 100,
+      "last": 2970,
+      "peer_first": 100,
+      "peer_last": 2968,
+      "report_interval_mean": 92.58064516129032,
+      "peer_report_interval_mean": 92.51612903225806
+    }
+  ],
+  "application_sources": {
+    "components_global": {
+      "topology_2.v": "403b3fd54c9c979de612552b57aaf5ceaaa744d035193fe88d0c173c816604b4",
+      "hls_mixed_worker.x": "e840c5c253d5b2ae19cce22e87cb1dc7dbd4cd35931d2f22f8d086853d9122dd",
+      "mixed_topology_wrapper.v": "42defad3a6c05467e9e30264d1149dd717bb3da3185ccd73bf4d534f44c56643",
+      "expected.hex": "6c40f4f885b669dec8fea4666fcdd0bad71c61c6e4cb1e9667b4ce4f17070e51",
+      "topology_3.v": "7b84b66a83eab6b57f5f2b268ad7f27a9dd084cfc0d6c2883baf10a154961f6b",
+      "hls_mixed_source.x": "bbaeb93869e559f4e7d134b9fc9f331e4f9bc5050b12b41660c2311d12e27a08",
+      "mixed_topology.x": "9d042604e8e2e0ebe1756b854ec369561bf95ecb5c3518e6f20446bc11a11a21",
+      "hls_mixed_collector.x": "5594d88a918fb1384940be46e0836f7a2f2da26f4d1e8422d37838927fcbde98"
+    },
+    "components_weak": {
+      "topology_2.v": "dc7e4b57a6772b5dd2c84d4bec00986fb1d694a635f0fe9895ddc278a3666415",
+      "hls_mixed_worker.x": "e840c5c253d5b2ae19cce22e87cb1dc7dbd4cd35931d2f22f8d086853d9122dd",
+      "mixed_topology_wrapper.v": "42defad3a6c05467e9e30264d1149dd717bb3da3185ccd73bf4d534f44c56643",
+      "expected.hex": "6c40f4f885b669dec8fea4666fcdd0bad71c61c6e4cb1e9667b4ce4f17070e51",
+      "topology_3.v": "40fcd12facaedb65dcedf60db57414ce890731e927c5d8f8b2dc06dd0cbbcc74",
+      "hls_mixed_source.x": "bbaeb93869e559f4e7d134b9fc9f331e4f9bc5050b12b41660c2311d12e27a08",
+      "mixed_topology.x": "f64e896d44f38107c0fe9ca9a634443499637a609bb72324ea318b2da371cf01",
+      "hls_mixed_collector.x": "5594d88a918fb1384940be46e0836f7a2f2da26f4d1e8422d37838927fcbde98"
+    }
+  },
+  "xls_binary_sha256": {
+    "ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+    "opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c",
+    "codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162"
+  },
+  "d3_unchanged": {
+    "global": "86e2dc83ff073a86ed12fc61aed54127ab11ebef780b34bc5e0c21df49e3ec82",
+    "weak_components": "17ca9690be773181b4b6ffca5b63bb704b8b09881d86cc60a688221d9e6a6336"
+  }
+}
