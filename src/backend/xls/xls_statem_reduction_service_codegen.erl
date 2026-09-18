@@ -10,7 +10,7 @@
 
 -export([
     direct_after_failed/2,
-    direct_dispatch_bindings/1,
+    direct_dispatch_bindings/2,
     direct_effective_binding/1,
     direct_entry_bindings/1,
     direct_entry_reduction_field/1,
@@ -25,7 +25,7 @@
     shared_capture_token/2,
     shared_config_endpoint/2,
     shared_config_parameter/2,
-    shared_dispatch_bindings/2,
+    shared_dispatch_bindings/3,
     shared_dispatch_dispatched_field/2,
     shared_dispatch_effective_binding/2,
     shared_dispatch_failed_binding/2,
@@ -183,18 +183,19 @@ direct_unblocked_slots(Capacity, Slots) ->
         "]"
     ].
 
--spec direct_dispatch_bindings(reductions()) -> iodata().
-direct_dispatch_bindings(none) ->
+-doc "Binds a singleton callback result, including optional internal-event and reply fields.".
+-spec direct_dispatch_bindings(reductions(), map()) -> iodata().
+direct_dispatch_bindings(none, Events) ->
     [
-        "      let (next_phase, next_data, directive, repeat_phase, dispatch_failure) =\n",
+        "      let (next_phase, next_data, directive, repeat_phase, dispatch_failure", event_tail(Events, "next_event"), ") =\n",
         "        if dispatchable {\n",
-        "          dispatch(selected_frame, machine.phase, machine.data)\n",
+        "          dispatch(selected_frame, machine.phase, machine.data", xls_statem_reply_codegen:optional(Events, ", call_from, call_error"), ")\n",
         "        } else {\n",
         "          (machine.phase, machine.data, ",
-        "Directive::CONSUME, u1:0, hls_failure::NONE)\n",
+        "Directive::CONSUME, u1:0, hls_failure::NONE", event_tail(Events, "u8:0"), ")\n",
         "        };\n"
     ];
-direct_dispatch_bindings(_Reductions) ->
+direct_dispatch_bindings(_Reductions, Events) ->
     [
         "      let contribution = reduction_contribution(\n",
         "        selected_frame, machine.phase, machine.data);\n",
@@ -209,20 +210,20 @@ direct_dispatch_bindings(_Reductions) ->
         "        (reduction_applied.outcome == ReductionOutcome::PENDING ||\n",
         "         reduction_applied.outcome == ",
         "ReductionOutcome::COMPLETE);\n",
-        "      let (next_phase, next_data, directive, repeat_phase, dispatch_failure) =\n",
+        "      let (next_phase, next_data, directive, repeat_phase, dispatch_failure", event_tail(Events, "next_event"), ") =\n",
         "        if !dispatchable {\n",
         "          (machine.phase, machine.data, ",
-        "Directive::CONSUME, u1:0, hls_failure::NONE)\n",
+        "Directive::CONSUME, u1:0, hls_failure::NONE", event_tail(Events, "u8:0"), ")\n",
         "        } else if !reduction_candidate {\n",
-        "          dispatch(selected_frame, machine.phase, machine.data)\n",
+        "          dispatch(selected_frame, machine.phase, machine.data", xls_statem_reply_codegen:optional(Events, ", call_from, call_error"), ")\n",
         "        } else if reduction_mismatch {\n",
         "          (machine.phase, machine.data, ",
-        "Directive::POSTPONE, u1:0, hls_failure::NONE)\n",
+        "Directive::POSTPONE, u1:0, hls_failure::NONE", event_tail(Events, "u8:0"), ")\n",
         "        } else if reduction_accepted {\n",
         "          (machine.phase, machine.data, ",
-        "Directive::CONSUME, u1:0, hls_failure::NONE)\n",
+        "Directive::CONSUME, u1:0, hls_failure::NONE", event_tail(Events, "u8:0"), ")\n",
         "        } else {\n",
-        "          (machine.phase, machine.data, Directive::FAIL, u1:0, hls_failure::REDUCTION_PROTOCOL)\n",
+        "          (machine.phase, machine.data, Directive::FAIL, u1:0, hls_failure::REDUCTION_PROTOCOL", event_tail(Events, "u8:0"), ")\n",
         "        };\n",
         "      let next_reduction = if reduction_accepted {\n",
         "        reduction_applied.state\n",
@@ -387,22 +388,23 @@ shared_machine_aggregate(aggregate_only) ->
 
     """.
 
--spec shared_dispatch_bindings(reductions(), service_mode()) -> iodata().
-shared_dispatch_bindings(none, _Mode) ->
+-doc "Binds a shared callback result while preserving reduction dispatch precedence.".
+-spec shared_dispatch_bindings(reductions(), service_mode(), map()) -> iodata().
+shared_dispatch_bindings(none, _Mode, Events) ->
     [
-        "    let (next_phase, next_data, directive, repeat_phase, dispatch_failure) =\n",
+        "    let (next_phase, next_data, directive, repeat_phase, dispatch_failure", event_tail(Events, "next_event"), ") =\n",
         "      if tag_ok {\n",
-        "        dispatch(frame, machine.phase, machine.data)\n",
+        "        dispatch(frame, machine.phase, machine.data", xls_statem_reply_codegen:optional(Events, ", call_from, call_error"), ")\n",
         "      } else {\n",
-        "        (machine.phase, machine.data, Directive::FAIL, u1:0, hls_failure::REDUCTION_PROTOCOL)\n",
+        "        (machine.phase, machine.data, Directive::FAIL, u1:0, hls_failure::REDUCTION_PROTOCOL", event_tail(Events, "u8:0"), ")\n",
         "      };\n"
     ];
-shared_dispatch_bindings(_Reductions, aggregate_only) ->
+shared_dispatch_bindings(_Reductions, aggregate_only, Events) ->
     %% A source-fragment artifact receives contribution messages only through
     %% its aggregate port. Any such frame on an ordinary mailbox is therefore
     %% handled by the actor's ordinary dispatch table (normally as an error).
-    shared_dispatch_bindings(none, ordinary);
-shared_dispatch_bindings(_Reductions, ordinary) ->
+    shared_dispatch_bindings(none, ordinary, Events);
+shared_dispatch_bindings(_Reductions, ordinary, Events) ->
     [
         "    let contribution = reduction_contribution(\n",
         "      frame, machine.phase, machine.data);\n",
@@ -416,19 +418,19 @@ shared_dispatch_bindings(_Reductions, ordinary) ->
         "    let reduction_accepted = reduction_candidate &&\n",
         "      (reduction_applied.outcome == ReductionOutcome::PENDING ||\n",
         "       reduction_applied.outcome == ReductionOutcome::COMPLETE);\n",
-        "    let (next_phase, next_data, directive, repeat_phase, dispatch_failure) =\n",
+        "    let (next_phase, next_data, directive, repeat_phase, dispatch_failure", event_tail(Events, "next_event"), ") =\n",
         "      if !tag_ok {\n",
-        "        (machine.phase, machine.data, Directive::FAIL, u1:0, hls_failure::REDUCTION_PROTOCOL)\n",
+        "        (machine.phase, machine.data, Directive::FAIL, u1:0, hls_failure::REDUCTION_PROTOCOL", event_tail(Events, "u8:0"), ")\n",
         "      } else if !reduction_candidate {\n",
-        "        dispatch(frame, machine.phase, machine.data)\n",
+        "        dispatch(frame, machine.phase, machine.data", xls_statem_reply_codegen:optional(Events, ", call_from, call_error"), ")\n",
         "      } else if reduction_mismatch {\n",
         "        (machine.phase, machine.data, ",
-        "Directive::POSTPONE, u1:0, hls_failure::NONE)\n",
+        "Directive::POSTPONE, u1:0, hls_failure::NONE", event_tail(Events, "u8:0"), ")\n",
         "      } else if reduction_accepted {\n",
         "        (machine.phase, machine.data, ",
-        "Directive::CONSUME, u1:0, hls_failure::NONE)\n",
+        "Directive::CONSUME, u1:0, hls_failure::NONE", event_tail(Events, "u8:0"), ")\n",
         "      } else {\n",
-        "        (machine.phase, machine.data, Directive::FAIL, u1:0, hls_failure::REDUCTION_PROTOCOL)\n",
+        "        (machine.phase, machine.data, Directive::FAIL, u1:0, hls_failure::REDUCTION_PROTOCOL", event_tail(Events, "u8:0"), ")\n",
         "      };\n",
         "    let next_reduction = if reduction_accepted {\n",
         "      reduction_applied.state\n",
@@ -811,3 +813,12 @@ join_with(_Separator, []) ->
     [];
 join_with(Separator, [First | Rest]) ->
     [First | [[Separator, Item] || Item <- Rest]].
+
+%% Add the finite event selector only to opted-in callback results.
+-spec event_tail(map(), iodata()) -> iodata().
+event_tail(Spec, Value) ->
+    [xls_statem_event_codegen:optional(Spec, [", ", Value]),
+     xls_statem_reply_codegen:optional(Spec, case Value of
+        "next_event" -> ", reply_from, reply_frame, reply_allowed";
+        "u8:0" -> ", u64:0, zero!<axis::Frame>(), true"
+     end)].

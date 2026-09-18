@@ -1,160 +1,62 @@
 %%%% hls_statem
 %%%%
-%% TODO: Add a fixed-shape synchronous call/reply contract once its response
-%% path and bounded lifetime have a lowerable representation.
-%% TODO: Evaluate bounded subsets of gen_statem timeouts and next_event
-%% actions instead of growing ad hoc alternatives.
+%% TODO: Evaluate bounded subsets of gen_statem timeouts.
 
 -module(hls_statem).
 -moduledoc """
 A bounded CPU reference scheduler for HLS state machines.
 
-An `hls_statem` callback separates its finite-control `Phase` atom from its
-rich `Data` value. The CPU scheduler in this module defines the ordering and
-postponement rules shared with the generated implementation.
+Callbacks separate finite-control `Phase` from typed `Data`. `init/1` returns
+`{ok, Phase, Data}`; each `Phase/3` handles entry, casts, declared calls and
+private internal events. Translation requires one unguarded `init([])` clause
+and one entry clause per phase.
 
-## Callbacks
+`Phase(enter, OldPhase, Data)` returns `{NextData, Actions}`. Entry actions are
+bounded casts, optionally preceded by one `open_reduction` action. A complete
+entry must succeed before any of its effects are emitted. See
+`docs/entry-outcomes.md` and `docs/actor-reductions.md`.
 
-The callback module exports `init/1`, returning `{ok, Phase, Data}`, and one
-`Phase/3` function for each application phase.
+`Phase(cast, Record, Data)` returns `{NextPhase, NextData, Directive}`.
+`consume` removes the input; `postpone` retains it until a phase boundary;
+`fail` stops the actor. Reduction contributions use a structured directive.
+`{repeat_phase, NextData, consume}` explicitly reenters the current phase and
+retries postponed inputs. Returning the current phase normally does neither.
 
-Translation requires a single unguarded `init([])` clause with a final
-`{ok, Phase, Data}` tuple. XLS checks the initializer at compile time, including
-supported match failures. Direct actors and shared-scheduler RAM population
-use the same checked phase and data at cold start and reset. Topology startup
-messages remain ordinary inputs, dispatched after initial entry; they do not
-replace `init/1`. See `docs/initialization.md` for the full contract.
+With `-hls_continuations([Name, ...])`, a consuming cast or named internal
+callback may append `[{next_event, internal, Name}]` as a fourth result field.
+It invokes `Phase(internal, Name, Data)` before another mailbox selection.
+Phase entry runs first if the preceding callback changed or repeated phase.
+Only one named event may be pending; iteration arguments belong in `Data`.
+Entry and reduction-completion callbacks cannot insert events or reply.
 
-Initial entry and each phase boundary invoke `Module:Phase(enter, OldPhase,
-Data)` before retrying postponed messages. Entry returns `{NextData, Actions}`.
-`OldPhase` equals `Phase` for initial entry.
+Retained calls opt in with `-hls_pending_calls(N)`, `-hls_reply_port(Port)` and
+`-hls_replies(...)`. `Phase({call, From}, Request, Data)` consumes the request
+and may save `From` in typed state. Any ordinary or named internal callback
+can complete it with `[{reply, From, Reply}]`, optionally followed by one
+`next_event` action. Calls cannot postpone or contribute to a reduction.
+Caller timeout abandons interest without freeing the retained slot. See
+`docs/retained-replies.md` for capacity, ordering and failure semantics.
 
-`Actions` is a bounded list. It may begin with one
-`{open_reduction, Name, Key, Population, {commutative_monoid, Identity}}`
-action, followed by `{cast, Port, Message}` actions. Nested `case` and `if`
-expressions can choose the complete result or an action-list segment; bounded
-segments may use literal cons cells and `++`. Only the selected branch is
-semantically evaluated. Ports and schemas are static within each alternative,
-and each port may occur at most once along a selected path. CPU output uses
-ordinary `gen_server:cast/2`.
-
-Segments may be named with ordinary variable bindings, including tuple
-bindings that choose state values and actions together using fresh variables
-or `_`. Refutable segment-binding patterns are unsupported. XLS limits an entry
-to 256 expanded paths and an actor to 256 layouts. Recursive list construction,
-function-produced lists, and dynamic ports are outside this bounded subset.
-
-The complete entry callback must succeed before its actions can be emitted.
-A named segment is evaluated at its binding, even if omitted later. In XLS, a
-supported match failure anywhere in the callback preserves the incoming entry
-data and reduction state, emits no effects from that entry, and latches the
-actor's existing failed state until reset. Earlier successful entries are not
-rolled back. The CPU runtime instead terminates on the callback exception.
-
-Successful hardware entries retain ordered effect completion: the direct
-service commits entry data and a new reduction after its last allocated effect
-slot; shared execution commits them when its whole effect batch is accepted.
-Both paths defer mailbox dispatch until entry finishes. See
-`docs/entry-outcomes.md` for the entry execution contract and test procedure.
-
-An open reduction accepts either a fixed contribution count or a fixed member
-set. A cast clause contributes through the ordinary conclusion's directive:
-
-```
-{Phase, Data, {contribute, Name, Key, Value}}
-{Phase, Data, {contribute, Name, Key, Member, Value}}
-```
-
-The phase and data must be unchanged. Accepted values are combined by the
-callback module's `reduce(Name, Accumulator, Value)` function. The final value
-is delivered privately as
-`Phase(internal, {reduction_complete, Name, Key, Value}, Data)` before another
-external mailbox entry is selected. Internal handlers use the ordinary fixed
-conclusion shape, but may only consume, fail, change phase, or repeat it.
-
-Application input invokes `Module:Phase(cast, Message, Data)` and returns one
-fixed-shape conclusion:
-
-```
-{NextPhase, NextData, consume | postpone | fail}
-```
-
-It may instead request an explicit same-phase scheduling boundary:
-
-```
-{repeat_phase, NextData, consume}
-```
-
-This consumes the input, enters the current phase again, then retries
-postponed inputs in arrival order.
-`consume` removes the input, `postpone` retains it until a phase boundary, and
-`fail` installs the returned phase and diagnostic data before stopping with
-`{hls_statem_failure, Message}`. `repeat_phase` is an HLS extension,
-deliberately distinct from OTP's `repeat_state`, which does not release
-postponed events. Returning the current phase in an ordinary conclusion does
-not trigger entry or retries.
-`repeat_phase`, `reduce`, and `terminate` are reserved phase names; the latter
-two would collide with reduction and diagnostic callbacks at arity three.
-
-An overloaded Erlang specification can preserve the relationship between the
-event kind and its result:
-
-```
--spec waiting(enter, hls_statem:phase(), #cell{}) ->
-        hls_statem:enter_result(#cell{});
-    (cast, #message{}, #cell{}) ->
-        hls_statem:cast_result(#cell{}).
-```
-
-The singleton first-argument types make the overload domains disjoint.
-`when` cannot express this conditional relationship: it can only add `::`
-subtype constraints to type variables. `callback_result/0,1` provide a union
-for generic contexts, but that union does not retain the event/result pairing;
-its `event_type/0` argument is intentionally an over-approximation. Only a
-phase that can complete a reduction needs an `internal` clause.
-
-Clauses are tried in source order. A failure in a selected body does not resume
-clause search. The lowered subset requires literal `enter`/`cast` heads,
-record-shaped cast messages, and one unguarded entry clause per phase. A cast
-conclusion must currently be the clause's final tuple, `case`, or `if`; the
-`repeat_phase` adapter cannot yet follow a result through a local binding or
-helper call. Ordinary values bound in every `case`/`if` arm are available after
-the expression when their XLS types agree. A later match against such a name
-checks equality, and only the selected arm contributes match failures.
+The oldest eligible mailbox input runs first. Initial entry and phase entry
+precede private events, which precede postponed retries and external input.
+Postponed inputs retain capacity; reserve room for a message which advances
+the phase. An endless internal-event chain starves this actor's mailbox.
 
 Passing `{outputs, Map}` to `start_link/3` connects and enters immediately.
-Cyclic CPU topologies can start machines disconnected, then call `connect/2`.
-Inputs received before connection occupy the bounded mailbox; no application
-callback runs until initial entry. Hardware ports are statically connected.
+Cyclic CPU topologies may start disconnected, then call `connect/2`. Inputs
+received before connection occupy the bounded queue without running callbacks.
+The ordinary BEAM mailbox precedes this queue, so it models scheduling rather
+than host admission guarantees.
 
-The callback vocabulary is a restricted `gen_statem` state-functions style.
-Calls, timeouts, `next_event`, and other OTP result/action forms are not
-supported. See `docs/actor-reductions.md` for reduction semantics and the
-staged lowering design.
-
-## Postponement
-
-The scheduler tries the oldest eligible input. Changing `Data`, or returning
-the same phase in an ordinary conclusion, does not retry a postponed message.
-On a real phase change or an explicit `repeat_phase` boundary, the phase is
-entered first and all postponed messages then become eligible again in arrival
-order.
-
-## Capacity and failure
-
-Postponed messages retain mailbox capacity. The configured capacity must leave
-room for a message capable of advancing the phase, or the protocol can deadlock
-under backpressure. On the CPU, mailbox overflow stops the process. Missing
-callback clauses, callback exceptions, ordinary non-cast process messages,
-invalid callback results, and explicit failure results stop it as well.
-
-The ordinary BEAM mailbox sits in front of this bounded queue, so this module
-models scheduling semantics rather than host-side admission guarantees.
+Callback exceptions, invalid results and overflow terminate the CPU adapter.
+Hardware latches failure until coordinated reset. Retained-call hardware also
+fails outstanding and subsequent calls. Timeouts and other OTP result forms
+are outside this restricted `gen_statem` state-functions vocabulary.
 """.
 
 -behavior(gen_server).
 
--export([start_link/3, connect/2, stop/1, cast/2, info/1, info/2]).
+-export([start_link/3, connect/2, stop/1, cast/2, call/2, call/3, info/1, info/2]).
 -export([
     init/1,
     handle_call/3,
@@ -183,7 +85,8 @@ models scheduling semantics rather than host-side admission guarantees.
     enter_result/1,
     internal_result/0,
     internal_result/1,
-    internal_result/2
+    internal_result/2,
+    next_event_action/0, reply_action/0, step_actions/0, call_result/1
 ]).
 
 %%%
@@ -194,7 +97,8 @@ models scheduling semantics rather than host-side admission guarantees.
 -type lifecycle() :: disconnected | connected.
 -type output_port() :: atom().
 -type data() :: term().
--type event_type() :: enter | cast | internal.
+-doc "The callback event discriminator; From is an activation-local retained-call handle.".
+-type event_type() :: enter | cast | internal | {call, hls_gs:from()}.
 -type cast_action() :: {cast, output_port(), term()}.
 -type reduction_population() ::
     {count, 1..255} |
@@ -229,13 +133,23 @@ models scheduling semantics rather than host-side admission guarantees.
 -type cast_directive() :: consume | postpone | fail | contribution().
 -type cast_result() :: cast_result(phase(), data()).
 -type cast_result(DataType) :: cast_result(phase(), DataType).
+-doc "One named internal step, inserted ahead of postponed and external messages.".
+-type next_event_action() :: {next_event, internal, atom()}.
+-doc "Completes an activation-local retained caller with one declared reply record.".
+-type reply_action() :: {reply, hls_gs:from(), term()}.
+-doc "At most one reply, followed by at most one named internal event.".
+-type step_actions() :: [reply_action() | next_event_action()].
+-doc "A call consumes its input; a saved From may be completed by a later callback.".
+-type call_result(DataType) :: internal_result(DataType).
+-doc "A cast conclusion, optionally scheduling one internal step after phase entry.".
 -type cast_result(PhaseType, DataType) ::
     {
         NextPhase :: PhaseType,
         NextData :: DataType,
         Directive :: cast_directive()
     } |
-    {repeat_phase, NextData :: DataType, consume}.
+    {repeat_phase, NextData :: DataType, consume} |
+    {PhaseType | repeat_phase, DataType, consume, step_actions()}.
 -type enter_result() :: enter_result(data()).
 -type enter_result(DataType) :: {
     NextData :: DataType,
@@ -243,13 +157,15 @@ models scheduling semantics rather than host-side admission guarantees.
 }.
 -type internal_result() :: internal_result(phase(), data()).
 -type internal_result(DataType) :: internal_result(phase(), DataType).
+-doc "An internal conclusion; it cannot postpone itself or consume mailbox capacity.".
 -type internal_result(PhaseType, DataType) ::
     {
         NextPhase :: PhaseType,
         NextData :: DataType,
         Directive :: consume | fail
     } |
-    {repeat_phase, NextData :: DataType, consume}.
+    {repeat_phase, NextData :: DataType, consume} |
+    {PhaseType | repeat_phase, DataType, consume, step_actions()}.
 -type callback_result() :: callback_result(data()).
 -type callback_result(DataType) ::
     enter_result(DataType) |
@@ -264,13 +180,15 @@ models scheduling semantics rather than host-side admission guarantees.
     InitialPhase :: phase(),
     InitialData :: data()
 }.
+-doc "Handles entry, cast, declared call, or private internal events for one phase.".
 -callback 'StateName'(
     enter,
     OldPhase :: phase(),
     Data :: DataType
 ) -> enter_result(DataType);
     (cast, Message :: term(), Data :: DataType) -> cast_result(DataType);
-    (internal, reduction_complete(), Data :: DataType) ->
+    ({call, hls_gs:from()}, Message :: term(), Data :: DataType) -> call_result(DataType);
+    (internal, reduction_complete() | atom(), Data :: DataType) ->
         internal_result(DataType).
 -callback reduce(
     Name :: atom(),
@@ -292,7 +210,12 @@ models scheduling semantics rather than host-side admission guarantees.
     mailbox :: hls_mailbox:mailbox(),
     postponed = #{} :: #{non_neg_integer() => true},
     next_message_id = 0 :: non_neg_integer(),
-    reduction = none :: none | hls_reduction:reduction()
+    reduction = none :: none | hls_reduction:reduction(),
+    continuation = none :: none | atom(),
+    continuation_names = [] :: [atom()],
+    calls = #{} :: #{atom() => [atom()]},
+    reply_book = none :: none | hls_reply_book:book(),
+    call_messages = #{} :: #{non_neg_integer() => gen_server:from()}
 }).
 
 %%%
@@ -326,6 +249,14 @@ stop(PID) ->
 cast(PID, Message) ->
     gen_server:cast(PID, Message).
 
+-doc "Calls a state machine with the ordinary five-second ERTS timeout.".
+-spec call(pid(), term()) -> term().
+call(Pid, Message) -> call(Pid, Message, 5000).
+
+-doc "Waits for a declared call's reply; timeout abandons caller interest, not retained service ownership.".
+-spec call(pid(), term(), timeout()) -> term().
+call(Pid, Message, Timeout) -> gen_server:call(Pid, Message, Timeout).
+
 -doc "Returns the lifecycle, phase, callback data, and queue counters.".
 -spec info(pid()) -> map().
 info(PID) -> info(PID, 5000).
@@ -338,6 +269,9 @@ info(PID, Timeout) ->
 %%% gen_server callbacks
 %%%
 
+-doc "Initializes a CPU state machine and enters its initial phase when connected.".
+%% Initialize callback data and enter only when outputs are connected.
+-spec init({module(), term(), pos_integer(), undefined | map()}) -> {ok, #runtime{}}.
 init({Module, Arg, Capacity, Outputs}) ->
     {ok, Phase, Data} = Module:init(Arg),
     ok = validate_phase(Phase),
@@ -345,21 +279,28 @@ init({Module, Arg, Capacity, Outputs}) ->
         undefined -> {disconnected, #{}};
         _ -> {connected, Outputs}
     end,
+    {Calls, Book} = case hls_service_contract:from_module(Module) of
+        {ok, #{calls := C, pending_calls := N}} -> {C, hls_reply_book:new(N)};
+        _ -> {#{}, none}
+    end,
     Runtime0 = #runtime{
         module = Module,
         lifecycle = Lifecycle,
         phase = Phase,
         data = Data,
         outputs = OutputMap,
-        mailbox = hls_mailbox:new(Capacity)
+        mailbox = hls_mailbox:new(Capacity),
+        continuation_names = hls_continuation:names(Module),
+        calls = Calls, reply_book = Book
     },
     case Lifecycle of
         disconnected -> {ok, Runtime0};
         connected -> {ok, enter_phase(Phase, Runtime0)}
     end.
 
-%% Synchronous calls deliberately fail instead of masquerading as casts.
-%% The TODO at the top records the missing lowerable call/reply contract.
+-doc "Connects outputs or queues a declared call for phase-sensitive dispatch.".
+-spec handle_call(term(), gen_server:from(), #runtime{}) -> term().
+%% Deferred connections enter before dispatching any queued application input.
 handle_call({connect, Outputs}, _From,
         Runtime0 = #runtime{lifecycle = disconnected, phase = Phase}) ->
     Connected = Runtime0#runtime{
@@ -372,11 +313,18 @@ handle_call({connect, Outputs}, _From,
         {stop, Reason, Runtime2} ->
             {stop, Reason, {error, Reason}, Runtime2}
     end;
+%% A second connection cannot replace a live output map.
 handle_call({connect, _Outputs}, _From, Runtime) ->
     {reply, {error, already_connected}, Runtime};
-handle_call(Request, _From, Runtime) ->
-    {stop, {unsupported_hls_statem_call, Request},
-        {error, unsupported_call}, Runtime}.
+%% Actors without a call declaration retain their existing unsupported-call failure.
+handle_call(Request, _From, Runtime = #runtime{reply_book = none}) ->
+    {stop, {unsupported_hls_statem_call, Request}, {error, unsupported_call}, Runtime};
+%% Calls occupy the same ordered input queue as casts; caller ownership begins at dispatch.
+handle_call(Request, From, Runtime = #runtime{calls = Calls, next_message_id = Id, call_messages = Messages}) ->
+    case is_tuple(Request) andalso tuple_size(Request) > 0 andalso maps:is_key(element(1, Request), Calls) of
+        true -> admit_and_process(Request, Runtime#runtime{call_messages = Messages#{Id => From}});
+        false -> {reply, {error, unsupported_call}, Runtime}
+    end.
 
 handle_cast(Message, Runtime0) ->
     admit_and_process(Message, Runtime0).
@@ -439,6 +387,10 @@ enqueue(Message, Runtime = #runtime{
             }}
     end.
 
+%% Internal steps have priority without creating a phase or mailbox boundary.
+-spec process_messages(#runtime{}) -> {ok, #runtime{}} | {stop, term(), #runtime{}}.
+process_messages(Runtime = #runtime{continuation = Name}) when Name =/= none ->
+    process_internal(Name, Runtime#runtime{continuation = none});
 process_messages(Runtime = #runtime{
     mailbox = Mailbox,
     postponed = Postponed
@@ -453,35 +405,47 @@ process_messages(Runtime = #runtime{
             process_message(Selection, Entry, Runtime)
     end.
 
+%% Dispatch a selected mailbox input before committing its conclusion.
+-spec process_message(term(), {non_neg_integer(), term()}, #runtime{}) ->
+    {ok, #runtime{}} | {stop, term(), #runtime{}}.
 process_message(
     Selection,
     {MessageID, Message},
     Runtime = #runtime{
-        module = Module,
         phase = Phase,
         data = Data,
         postponed = Postponed0
     }
 ) ->
-    Result = Module:Phase(cast, Message, Data),
+    {RawResult, Book, IsCall} = invoke_message(MessageID, Message, Runtime),
+    {Result, Continue, Reply} = event_result(RawResult, Runtime#runtime.continuation_names),
     {NextPhase, NextData, Directive, Repeat} =
         state_result(Result, Phase, Data),
     NextRuntime = Runtime#runtime{
         phase = NextPhase,
-        data = NextData
+        data = NextData,
+        continuation = Continue,
+        reply_book = Book
     },
     BoundaryStatus = reduction_boundary_status(
         Directive, Repeat, Phase, NextPhase, Runtime
     ),
+    ok = case IsCall andalso Directive =/= consume andalso Directive =/= fail of
+        true -> error({unsupported_hls_statem_call_directive, Directive}); false -> ok
+    end,
+    Replied = case BoundaryStatus =:= ok andalso Directive =/= fail of
+        true -> complete_reply(Reply, NextRuntime);
+        false -> NextRuntime
+    end,
     case {BoundaryStatus, Directive} of
         {{error, Status}, _} ->
             {stop,
                 {hls_statem_reduction_incomplete, Status, Message},
                 Runtime};
         {ok, fail} ->
-            {stop, {hls_statem_failure, Message}, NextRuntime};
+            {stop, {hls_statem_failure, Message}, Replied};
         {ok, postpone} ->
-            finish_transition(Phase, NextRuntime#runtime{
+            finish_transition(Phase, Replied#runtime{
                 postponed = Postponed0#{MessageID => true}
             });
         {ok, {contribute, _Name, _Key, _Value} = Contribution} ->
@@ -491,7 +455,7 @@ process_message(
                 {MessageID, Message},
                 Phase,
                 Data,
-                NextRuntime
+                Replied
             );
         {ok, {contribute, _Name, _Key, _Member, _Value} = Contribution} ->
             process_contribution(
@@ -500,13 +464,13 @@ process_message(
                 {MessageID, Message},
                 Phase,
                 Data,
-                NextRuntime
+                Replied
             );
         {ok, consume} ->
             Consumed = consume_message(
                 Selection,
                 {MessageID, Message},
-                NextRuntime
+                Replied
             ),
             case Repeat of
                 true -> finish_repeat(Phase, Consumed);
@@ -542,22 +506,37 @@ reduction_boundary_status(_Directive, Repeat, Phase, NextPhase,
         false -> ok
     end.
 
+%% Run a private event without removing any mailbox entry.
+-spec process_internal(term(), #runtime{}) ->
+    {ok, #runtime{}} | {stop, term(), #runtime{}}.
 process_internal(Event, Runtime = #runtime{
     module = Module,
     phase = Phase,
     data = Data
 }) ->
-    Result = Module:Phase(internal, Event, Data),
+    RawResult = Module:Phase(internal, Event, Data),
+    %% Reduction completion retains its fixed three-field conclusion contract.
+    case {Event, RawResult} of
+        {{reduction_complete, _, _, _}, {_, _, _, _}} ->
+            error(hls_statem_reduction_actions_unsupported);
+        _ -> ok
+    end,
+    {Result, Continue, Reply} = event_result(RawResult, Runtime#runtime.continuation_names),
     {NextPhase, NextData, Directive, Repeat} =
         internal_state_result(Result, Phase),
-    NextRuntime = Runtime#runtime{phase = NextPhase, data = NextData},
+    NextRuntime = Runtime#runtime{phase = NextPhase, data = NextData,
+        continuation = Continue},
+    case reduction_boundary_status(Directive, Repeat, Phase, NextPhase, Runtime) of
+        ok -> ok;
+        {error, Status} -> error({hls_statem_reduction_incomplete, Status, Event})
+    end,
     case Directive of
         fail ->
             {stop, {hls_statem_failure, Event}, NextRuntime};
         consume when Repeat ->
-            finish_repeat(Phase, NextRuntime);
+            finish_repeat(Phase, complete_reply(Reply, NextRuntime));
         consume ->
-            finish_transition(Phase, NextRuntime)
+            finish_transition(Phase, complete_reply(Reply, NextRuntime))
     end.
 
 process_contribution(
@@ -627,6 +606,8 @@ apply_contribution(
         Reduction
     ).
 
+%% Retire input ownership together with its mailbox and postponement entries.
+-spec consume_message(hls_mailbox:selection(), {non_neg_integer(), term()}, #runtime{}) -> #runtime{}.
 consume_message(Selection, Entry = {MessageID, _Message}, Runtime = #runtime{
     mailbox = Mailbox,
     postponed = Postponed
@@ -634,8 +615,39 @@ consume_message(Selection, Entry = {MessageID, _Message}, Runtime = #runtime{
     {ok, Entry, NextMailbox} = hls_mailbox:consume(Selection, Mailbox),
     Runtime#runtime{
         mailbox = NextMailbox,
-        postponed = maps:remove(MessageID, Postponed)
+        postponed = maps:remove(MessageID, Postponed),
+        call_messages = maps:remove(MessageID, Runtime#runtime.call_messages)
     }.
+
+%% A checked action list can complete one retained caller and insert one private event.
+-spec event_result(term(), [atom()]) -> {term(), none | atom(), none | {reply, non_neg_integer(), term()}}.
+event_result({Phase, Data, consume, Actions}, Names) ->
+    {Reply, Continue} = hls_callback_actions:split(Actions, statem, Names),
+    {{Phase, Data, consume}, Continue, Reply};
+event_result({_Phase, _Data, _Directive, Actions}, _Names) ->
+    error({invalid_hls_statem_event_actions, Actions});
+event_result(Result, _Names) -> {Result, none, none}.
+
+%% No reply book is allocated for actors which only consume casts.
+-spec complete_reply(none | {reply, non_neg_integer(), term()}, #runtime{}) -> #runtime{}.
+complete_reply(none, Runtime) -> Runtime;
+complete_reply(Reply, Runtime = #runtime{reply_book = Book}) when Book =/= none ->
+    Runtime#runtime{reply_book = hls_reply_book:complete(Reply, Book)};
+complete_reply(_Reply, _Runtime) -> error(hls_statem_calls_not_declared).
+
+%% Allocate only at dispatch so delayed connection and phase entry preserve arrival order.
+-spec invoke_message(non_neg_integer(), term(), #runtime{}) -> {term(), none | hls_reply_book:book(), boolean()}.
+invoke_message(Id, Message, #runtime{module = Module, phase = Phase, data = Data,
+        calls = Calls, call_messages = Messages, reply_book = Book}) ->
+    case maps:find(Id, Messages) of
+        error -> {Module:Phase(cast, Message, Data), Book, false};
+        {ok, From} ->
+            Tag = element(1, Message),
+            case hls_reply_book:admit(Module:pack_tag(Tag), From, maps:get(Tag, Calls), Book) of
+                full -> {{Phase, Data, consume}, Book, true};
+                {ok, Token, Next} -> {Module:Phase({call, Token}, Message, Data), Next, true}
+            end
+    end.
 
 state_result({repeat_phase, NextData, consume}, Phase, _Data) ->
     {Phase, NextData, consume, true};

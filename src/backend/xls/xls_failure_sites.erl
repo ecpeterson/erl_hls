@@ -7,11 +7,13 @@
 %% site. Generated constant names depend
 %% only on their origin. Lowerers can reference them without mutable counters
 %% or a source-map parameter threaded through every expression operation.
+-doc "Returns reserved failure kinds which have no individual source site.".
+-spec generic() -> [{1..15, atom()}].
 generic() ->
     [{1, function_clause}, {2, match_failure}, {3, request_length},
         {4, case_clause}, {5, if_clause}, {6, explicit_fail},
         {7, invalid_message}, {8, invalid_repeat}, {9, reduction_mismatch},
-        {10, reduction_protocol}, {11, invalid_effect}, {12, internal}, {13, badarith}, {14, badarg}].
+        {10, reduction_protocol}, {11, invalid_effect}, {12, internal}, {13, badarith}, {14, badarg}, {15, reply_contract}].
 
 %% epp emits integer line annotations and file attributes at include boundaries.
 %% Attach that enclosing file once; lowering then preserves the source origin

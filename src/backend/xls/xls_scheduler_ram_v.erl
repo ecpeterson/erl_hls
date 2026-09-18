@@ -34,11 +34,13 @@ application_ports(Bindings) ->
 instances(Bindings, Clock) ->
     [binding_instances(Binding, Clock) || Binding <- Bindings].
 
+%% Derive physical row widths including optional actor-private state.
+-spec binding(non_neg_integer(), map()) -> map().
 binding(Index, Group) ->
     StateWidth = xls_statem_codegen:shared_machine_width(
         maps:get(width, maps:get(state, Group)),
         maps:get(reduction_storage_width, Group, 0)
-    ),
+    ) + maps:get(continuation_width, Group, 0) + maps:get(reply_storage_width, Group, 0),
     SlotCount = maps:get(slot_count, Group),
     MailboxCapacity = maps:get(mailbox_capacity, Group),
     #{

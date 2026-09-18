@@ -138,13 +138,20 @@ parse_transform(Forms0, Options) ->
 is_source_context({attribute, _, hls_source_context, _}) -> true;
 is_source_context(_) -> false.
 
+%% Embed immediate or retained-server contracts for source-independent host proxies.
+-spec service_contract_attributes([hls_source:form()], tuple()) -> [tuple()].
 service_contract_attributes(Forms, {attribute, Line, module, _}) ->
     case xls_parse:find_optional_attribute(Forms, hls_phases) of
-        {ok, _} -> [];
+        {ok, _} ->
+            case xls_parse:find_optional_attribute(Forms, hls_pending_calls) of
+                none -> [];
+                {ok, _} -> [{attribute, Line, hls_service_contract,
+                    hls_service_contract:from_forms(Forms)}]
+            end;
         none ->
             case lists:any(fun
-                ({function, _, Name, 2, _}) ->
-                    Name =:= handle_call orelse Name =:= handle_cast;
+                ({function, _, handle_call, Arity, _}) when Arity =:= 2; Arity =:= 3 -> true;
+                ({function, _, handle_cast, 2, _}) -> true;
                 (_) -> false
             end, Forms) of
                 true -> [{attribute, Line, hls_service_contract,

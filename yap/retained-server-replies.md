@@ -1,0 +1,9 @@
+# Retained server replies
+
+Working design. Opt-in `-hls_pending_calls(N)` selects `handle_call/3`; immediate `handle_call/2` servers keep their current generated implementation. `From` is an opaque 64-bit handle, retained in ordinary state. Its allocation sequence never wraps within an activation. Completed handles cannot address a newer caller. Handles are capabilities to preserve unchanged, not security tokens.
+
+Callbacks retain ordinary `{reply, Reply, State}` / `{noreply, State}` results. Extended results use `{noreply, State, Actions}`, where Actions is an optional `{reply, From, Record}` followed by an optional `{continue, Name}`. No-reply results may use OTP's `{noreply, State, {continue, Name}}`. Immediate replies may use OTP's `{reply, Reply, State, {continue, Name}}`. `-hls_continuations([Name, ...])` declares finite continuation names; `handle_continue/2` runs before another external request. One reply per continuation bounds work and permits an arbitrarily long drain across finite state.
+
+The CPU adapter owns bounded From-to-caller mappings; hardware owns bounded From-to-transaction mappings. Full tables reject new calls before callback mutation, but casts still run. Caller timeout does not free hardware reply capacity. A callback failure terminates the CPU server; hardware latches failure, replies with that failure to all retained calls, and rejects further work until reset. Invalid reply contracts follow the same failure path. Unknown/stale reply handles are ignored.
+
+A static DSLX driver owns slots and sequencing; generated callback logic owns only application state and finite callback dispatch. It invokes one callback per operation, retaining continuation priority and holding the result through output stalls. Existing immediate servers do not pay for this machinery.

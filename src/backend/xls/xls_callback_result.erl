@@ -6,22 +6,30 @@
 -module(xls_callback_result).
 -moduledoc false.
 
--export([map/2, results/1]).
+-export([map/2, map_actions/2, results/1]).
 
 -doc "Applies a rewrite to each reachable callback result while preserving evaluation order. Rejects more than 256 result paths.".
 -spec map(erl_parse:abstract_clause(), fun((term()) -> term())) -> erl_parse:abstract_clause().
 map(Clause, Leaf) ->
-    {Program, _Results} = normalize(Clause, Leaf),
+    {Program, _Results} = normalize(Clause, Leaf, false),
+    Program.
+
+-doc "Rewrites bounded server results, retaining literal action-list constructors through aliases as well as tuples.".
+-spec map_actions(erl_parse:abstract_clause(), fun((term()) -> term())) -> erl_parse:abstract_clause().
+map_actions(Clause, Leaf) ->
+    {Program, _Results} = normalize(Clause, Leaf, true),
     Program.
 
 -doc "Returns resolved callback result constructors in source order; rejects more than 256 result paths.".
 -spec results(erl_parse:abstract_clause()) -> [term()].
 results(Clause) ->
-    {_Program, Results} = normalize(Clause, fun(Value) -> Value end),
+    {_Program, Results} = normalize(Clause, fun(Value) -> Value end, false),
     Results.
 
-normalize(Clause = {clause, Line, Patterns, Guards, Body}, Leaf) ->
-    State0 = #{next => 0, used => variables(Clause), needed => needed(Body), results => []},
+%% List actions have separate binding semantics in state machines; only bounded servers opt into list capture.
+-spec normalize(erl_parse:abstract_clause(), fun((term()) -> term()), boolean()) -> {erl_parse:abstract_clause(), [term()]}.
+normalize(Clause = {clause, Line, Patterns, Guards, Body}, Leaf, Lists) ->
+    State0 = #{next => 0, used => variables(Clause), needed => needed(Body, Lists), lists => Lists, results => []},
     Continue = fun(Value, _Bindings, State = #{results := Results}) ->
         case length(Results) < 256 of
             true -> {Leaf(Value), State#{results => [Value | Results]}};
@@ -32,13 +40,15 @@ normalize(Clause = {clause, Line, Patterns, Guards, Body}, Leaf) ->
     {Program, #{results := Results}} = body(Body, Bindings, Continue, State0),
     {{clause, Line, Patterns, Guards, Program}, lists:reverse(Results)}.
 
+%% Thread captured constructors through a body, applying the caller's rewrite only to final results.
+-spec body([term()], map(), fun((term(), map(), map()) -> {term(), map()}), map()) -> {[term()], map()}.
 body([Last], Bindings, Continue, State) ->
     {Result, Next} = choice(Last, Bindings, Continue, State),
     {[Result], Next};
 body([{match, Line, {tuple, _, _} = Pattern, Expression} = First | Rest],
-        Bindings, Continue, State = #{needed := Needed}) ->
+        Bindings, Continue, State = #{needed := Needed, lists := Lists}) ->
     case maps:size(maps:with(maps:keys(variables(Pattern)), Needed)) > 0
-            andalso structural(Expression, Bindings)
+            andalso structural(Expression, Bindings, Lists)
             andalso fresh_pattern(Pattern, bound_after(Expression, Bindings)) of
         true ->
             {Program, Next} = capture(Expression, Bindings, fun(Value, Evaluated, Acc) ->
@@ -50,11 +60,11 @@ body([{match, Line, {tuple, _, _} = Pattern, Expression} = First | Rest],
         false -> ordinary(First, Rest, Bindings, Continue, State)
     end;
 body([{match, Line, {var, _, Name}, Expression} = First | Rest],
-        Bindings, Continue, State = #{needed := Needed})
+        Bindings, Continue, State = #{needed := Needed, lists := Lists})
         when Name =:= '_'; not is_map_key(Name, Bindings) ->
     case (Name =:= '_' orelse is_map_key(Name, Needed)
             orelse uses_constructor(Expression, Bindings))
-            andalso structural(Expression, Bindings) of
+            andalso structural(Expression, Bindings, Lists) of
         true ->
             {Program, Next} = capture(Expression, Bindings, fun(Value, Evaluated, Acc) ->
                 Local = case Name of
@@ -113,29 +123,37 @@ fresh_names(_, _Names) -> false.
 
 %% Follow result fields/aliases backwards, leaving unrelated product-valued
 %% computations (including refutable matches) to ordinary expression lowering.
-needed(Body) ->
+-spec needed([term()], boolean()) -> map().
+needed(Body, Lists) ->
     lists:foldr(fun
         ({match, _, Pattern, Expression}, Names) ->
             case maps:size(maps:with(maps:keys(variables(Pattern)), Names)) of
                 0 -> Names;
-                _ -> maps:merge(Names, result_variables(Expression))
+                _ -> maps:merge(Names, result_variables(Expression, Lists))
             end;
         (_, Names) -> Names
-    end, result_variables(lists:last(Body)), lists:droplast(Body)).
+    end, result_variables(lists:last(Body), Lists), lists:droplast(Body)).
 
-result_variables({var, _, _} = Variable) -> variables(Variable);
-result_variables({tuple, _, Fields}) -> merge_results(Fields);
-result_variables({'case', _, _, Clauses}) -> result_arms(Clauses);
-result_variables({'if', _, Clauses}) -> result_arms(Clauses);
-result_variables({block, _, Body}) -> needed(Body);
-result_variables(_) -> #{}.
+%% Follow names inside result products and bounded action lists.
+-spec result_variables(term(), boolean()) -> map().
+result_variables({var, _, _} = Variable, _) -> variables(Variable);
+result_variables({tuple, _, Fields}, Lists) -> merge_results(Fields, Lists);
+result_variables({cons, _, Head, Tail}, true) -> merge_results([Head, Tail], true);
+result_variables({'case', _, _, Clauses}, Lists) -> result_arms(Clauses, Lists);
+result_variables({'if', _, Clauses}, Lists) -> result_arms(Clauses, Lists);
+result_variables({block, _, Body}, Lists) -> needed(Body, Lists);
+result_variables(_, _) -> #{}.
 
-result_arms(Clauses) ->
-    lists:foldl(fun({clause, _, _, _, Body}, Acc) -> maps:merge(Acc, needed(Body)) end,
+%% Union aliases required by any alternative result path.
+-spec result_arms([erl_parse:abstract_clause()], boolean()) -> map().
+result_arms(Clauses, Lists) ->
+    lists:foldl(fun({clause, _, _, _, Body}, Acc) -> maps:merge(Acc, needed(Body, Lists)) end,
         #{}, Clauses).
 
-merge_results(Expressions) ->
-    lists:foldl(fun(Expression, Acc) -> maps:merge(Acc, result_variables(Expression)) end,
+%% Collect result dependencies from constructor fields.
+-spec merge_results([term()], boolean()) -> map().
+merge_results(Expressions, Lists) ->
+    lists:foldl(fun(Expression, Acc) -> maps:merge(Acc, result_variables(Expression, Lists)) end,
         #{}, Expressions).
 
 uses_constructor(Expression, Bindings) ->
@@ -144,26 +162,33 @@ uses_constructor(Expression, Bindings) ->
 
 %% Only structurally known bindings need continuation expansion. Ordinary
 %% arithmetic/record choices still join through the expression lowerer.
-structural({tuple, _, _}, _Bindings) -> true;
-structural({atom, _, Atom}, _Bindings) -> Atom =/= true andalso Atom =/= false;
-structural({var, _, Name}, Bindings) -> maps:get(Name, Bindings, ordinary) =/= ordinary;
-structural({'case', _, _, Clauses}, Bindings) -> structural_arms(Clauses, Bindings);
-structural({'if', _, Clauses}, Bindings) -> structural_arms(Clauses, Bindings);
-structural({block, _, Body}, Bindings) -> structural_body(Body, Bindings);
-structural(_, _) -> false.
+-spec structural(term(), map(), boolean()) -> boolean().
+structural({tuple, _, _}, _Bindings, _) -> true;
+structural({cons, _, _, _}, _Bindings, true) -> true;
+structural({nil, _}, _Bindings, true) -> true;
+structural({atom, _, Atom}, _Bindings, _) -> Atom =/= true andalso Atom =/= false;
+structural({var, _, Name}, Bindings, _) -> maps:get(Name, Bindings, ordinary) =/= ordinary;
+structural({'case', _, _, Clauses}, Bindings, Lists) -> structural_arms(Clauses, Bindings, Lists);
+structural({'if', _, Clauses}, Bindings, Lists) -> structural_arms(Clauses, Bindings, Lists);
+structural({block, _, Body}, Bindings, Lists) -> structural_body(Body, Bindings, Lists);
+structural(_, _, _) -> false.
 
-structural_arms(Clauses, Bindings) ->
-    lists:any(fun({clause, _, _, _, Body}) -> structural_body(Body, Bindings) end,
+%% Any structural arm requires resolving the choice before callback-specific lowering.
+-spec structural_arms([erl_parse:abstract_clause()], map(), boolean()) -> boolean().
+structural_arms(Clauses, Bindings, Lists) ->
+    lists:any(fun({clause, _, _, _, Body}) -> structural_body(Body, Bindings, Lists) end,
         Clauses).
 
-structural_body([Last], Bindings) -> structural(Last, Bindings);
-structural_body([{match, _, {var, _, Name}, Expression} | Rest], Bindings) ->
-    Local = case structural(Expression, Bindings) of
+%% Follow local constructor aliases to determine whether the final value needs structural capture.
+-spec structural_body([term()], map(), boolean()) -> boolean().
+structural_body([Last], Bindings, Lists) -> structural(Last, Bindings, Lists);
+structural_body([{match, _, {var, _, Name}, Expression} | Rest], Bindings, Lists) ->
+    Local = case structural(Expression, Bindings, Lists) of
         true -> Bindings#{Name => Expression};
         false -> Bindings
     end,
-    structural_body(Rest, Local);
-structural_body([_ | Rest], Bindings) -> structural_body(Rest, Bindings).
+    structural_body(Rest, Local, Lists);
+structural_body([_ | Rest], Bindings, Lists) -> structural_body(Rest, Bindings, Lists).
 
 choice({'case', Line, Subject, Clauses}, Bindings, Continue, State0) ->
     {Arms, State} = clauses(Clauses, Bindings, Continue, State0),
@@ -193,10 +218,15 @@ capture(Expression, Bindings, Continue, State) ->
         end, Acc)
     end, State).
 
+%% Retain constructor structure while evaluating its ordinary fields exactly once.
+-spec capture_value(term(), fun((term(), map()) -> {term(), map()}), map()) -> {term(), map()}.
 capture_value({tuple, Line, Fields}, Continue, State) ->
     capture_fields(Fields, fun(Values, Next) ->
         Continue({tuple, Line, Values}, Next)
     end, State);
+capture_value({cons, Line, Head, Tail}, Continue, State = #{lists := true}) ->
+    capture_fields([Head, Tail], fun([H, T], Next) -> Continue({cons, Line, H, T}, Next) end, State);
+capture_value({nil, _} = Value, Continue, State = #{lists := true}) -> Continue(Value, State);
 capture_value({atom, _, _} = Value, Continue, State) -> Continue(Value, State);
 capture_value({var, _, _} = Value, Continue, State) -> Continue(Value, State);
 capture_value(Expression, Continue, State0) ->

@@ -53,14 +53,18 @@ lower(Filename, Forms0, PhaseNames, Options0) ->
     ]),
 
     EnumAtoms = enum_atoms(PhaseNames),
-    Init = lower_init(maps:get(init_clause, Prepared), DataName, EnumAtoms),
+    CallSpec = maps:get(retained_calls, Prepared),
+    HasCalls = CallSpec =/= none,
+    Init = lower_init(maps:get(init_clause, Prepared), DataName, EnumAtoms, Prepared),
     Entries = lower_entries(
         maps:get(entries, Prepared),
         Prepared#{message_words => MessageWords},
         EnumAtoms
     ),
+    Names = maps:get(continuations, Prepared),
     Casts = lower_casts(
-        maps:get(cast_groups, Prepared),
+        maps:get(cast_groups, Prepared) ++ maps:get(call_groups, Prepared),
+        Names, HasCalls,
         DataName,
         EnumAtoms
     ),
@@ -91,6 +95,10 @@ lower(Filename, Forms0, PhaseNames, Options0) ->
         init => Init,
         entries => Entries,
         casts => Casts,
+        continuations => Names,
+        retained_calls => CallSpec,
+        internal_steps => xls_statem_continuation:lower(maps:get(internal_steps, Prepared),
+            Names, DataName, EnumAtoms, HasCalls, fun(C, P) -> normalize_cast_result(C, P, Names, HasCalls) end),
         reductions => Reductions,
         shared_service => SharedService,
         mailbox_debug => xls_scheduler_observation:enabled(Options),
@@ -146,6 +154,8 @@ validate_shared_service(aggregate_only, #{sites := Sites}) ->
 prepare_interface(Forms, PhaseNames) ->
     prepare_callbacks(Forms, declarations(Forms, PhaseNames), interface).
 
+%% Validates the fixed vocabulary, storage bounds and optional caller contract.
+-spec declarations([hls_source:form()], [atom(), ...]) -> map().
 declarations(Forms, PhaseNames) ->
     ok = xls_names:actor(Forms, hls_statem),
     MessageNames = xls_parse:find_tags(Forms),
@@ -167,13 +177,30 @@ declarations(Forms, PhaseNames) ->
         message_names => MessageNames,
         output_names => OutputNames,
         capacity => Capacity,
+        continuations => xls_statem_continuation:names(Forms),
+        retained_calls => retained_calls(Forms, OutputNames),
         data_name => DataName,
         records => Records
     }.
 
+%% Retained replies leave through one declared output; it must route back to the owning host.
+-spec retained_calls([hls_source:form()], [atom()]) -> none | map().
+retained_calls(Forms, Outputs) ->
+    case xls_parse:find_optional_attribute(Forms, hls_pending_calls) of
+        none -> none;
+        {ok, _} ->
+            Contract = hls_service_contract:from_forms(Forms),
+            Port = xls_parse:find_attribute(Forms, hls_reply_port),
+            true = lists:member(Port, Outputs),
+            true = map_size(maps:get(calls, Contract)) > 0,
+            Contract#{port => Port}
+    end.
+
 prepare_callbacks(Forms, Declarations) ->
     prepare_callbacks(Forms, Declarations, closed).
 
+%% Partitions callback kinds before deriving entry and reduction interfaces.
+-spec prepare_callbacks([hls_source:form()], map(), interface | closed) -> map().
 prepare_callbacks(Forms, Declarations, ReductionMode) ->
     PhaseNames = maps:get(phases, Declarations),
     MessageNames = maps:get(message_names, Declarations),
@@ -195,8 +222,14 @@ prepare_callbacks(Forms, Declarations, ReductionMode) ->
         PhaseNames,
         MessageNames
     ),
+    CallGroups = analyze_cast_groups(maps:get(call, Callbacks), PhaseNames, MessageNames),
+    case CallGroups =/= [] andalso maps:get(retained_calls, Declarations) =:= none of
+        true -> error(hls_statem_calls_not_declared); false -> ok
+    end,
+    {StepGroups, CompletionClauses} = xls_statem_continuation:groups(
+        maps:get(internal, Callbacks), maps:get(continuations, Declarations)),
     InternalGroups = xls_statem_reduction_lower:internal_groups(
-        maps:get(internal, Callbacks),
+        CompletionClauses,
         PhaseNames
     ),
     ReductionContext = #{
@@ -214,6 +247,8 @@ prepare_callbacks(Forms, Declarations, ReductionMode) ->
         maps:get(records, Declarations)
     ),
     maps:merge(Declarations#{
+        call_groups => CallGroups,
+        internal_steps => StepGroups,
         init_clause => InitClause,
         initial_phase => initial_phase(InitClause, PhaseNames),
         entries => Entries
@@ -247,9 +282,11 @@ reduction_records(Forms, Records, Reduction) ->
 %%% Actor interface analysis
 %%%
 
+%% Describes public routing and all actor-private storage required by a scheduler.
+-spec interface_from_prepared(map()) -> interface().
 interface_from_prepared(Prepared) ->
     Entries = maps:get(entries, Prepared),
-    CastGroups = maps:get(cast_groups, Prepared),
+    CastGroups = maps:get(cast_groups, Prepared) ++ maps:get(call_groups, Prepared),
     ReductionInterface = maps:get(reduction_interface, Prepared),
     Base = #{
         version => 3,
@@ -279,9 +316,17 @@ interface_from_prepared(Prepared) ->
         ])
     },
     case ReductionInterface of
-        none -> Base;
-        Interface -> Base#{reductions => Interface}
+        none -> with_continuation_width(Base, Prepared);
+        Interface -> with_continuation_width(Base#{reductions => Interface}, Prepared)
     end.
+
+%% Finite event state is private scheduler storage, separate from application data.
+-spec with_continuation_width(map(), map()) -> map().
+with_continuation_width(Interface, #{retained_calls := #{pending_calls := N, port := Port, calls := Calls}}) ->
+    Interface#{continuation_width => 8, reply_storage_width => 96 + 72 * N,
+        reply_effects => [#{port => Port, schema => Tag} || Tag <- lists:usort(lists:append(maps:values(Calls)))]};
+with_continuation_width(Interface, #{continuations := []}) -> Interface;
+with_continuation_width(Interface, _Prepared) -> Interface#{continuation_width => 8}.
 
 reduction_interface(none) -> none;
 reduction_interface(Reduction) ->
@@ -411,13 +456,16 @@ dispatches(CastGroups, MessageNames, PhaseNames) ->
 %%% init/1
 %%%
 
-lower_init(Clause0, DataName, EnumAtoms) ->
+%% Builds the checked cold-start state with fresh reply ownership.
+-spec lower_init(erl_parse:abstract_clause(), atom(), map(), map()) -> xls_init:lowered().
+lower_init(Clause0, DataName, EnumAtoms, Spec) ->
     Clause = rewrite_init_result(Clause0),
     Postprocessor = fun(R) -> [
         "Machine {\n",
         "  phase: ", R, ".0,\n",
         "  entered_from: ", R, ".0,\n",
         "  data: ", R, ".1.1,\n",
+        xls_statem_reply_codegen:initial(Spec),
         "  enter_pending: u1:1,\n",
         "  ..zero!<Machine>()\n",
         "}"
@@ -445,6 +493,8 @@ rewrite_init_result(Clause) ->
 %% their bindings instead of copying the continuation into each alternative.
 %% Retain the entry plan's bounded alternatives,
 %% evaluation order, failure predicate, and conservative interface analysis.
+%% Lowers entry alternatives into interned, statically routed effect layouts.
+-spec lower_entries([map()], map(), map()) -> [map()].
 lower_entries(Entries, Prepared, EnumAtoms) ->
     #{data_name := DataName, message_words := MessageWords,
         reductions := Reductions} = Prepared,
@@ -464,7 +514,7 @@ lower_entries(Entries, Prepared, EnumAtoms) ->
         end, {0, #{}}, Entries),
     true = LayoutCount > 0,
     AllLayouts = lists:append(Layouts),
-    PayloadBits = max(1, lists:max([lists:sum([
+    PayloadBits = max(case xls_statem_reply_codegen:enabled(Prepared) of true -> 128; false -> 1 end, lists:max([lists:sum([
         maps:get(Tag, MessageWords) * 32 || #{tag := Tag} <- Actions])
         || #{actions := Actions} <- AllLayouts])),
     [begin
@@ -491,31 +541,38 @@ enter_args(DataName) ->
 %%% Cast dispatch
 %%%
 
-lower_casts(Groups, DataName, EnumAtoms) ->
+%% Lowers schema/phase groups through the common checked callback path.
+-spec lower_casts(list(), [atom()], boolean(), atom(), map()) -> [map()].
+lower_casts(Groups, Names, HasCalls, DataName, EnumAtoms) ->
     [
         lower_cast_group(
             Key,
             Group,
+            Names, HasCalls,
             DataName,
             EnumAtoms
         )
         || {Key, Group} <- Groups
     ].
 
+%% Carries a call handle only for call clauses; cast clauses retain their original arguments.
+-spec lower_cast_group({atom(), atom()}, [erl_parse:abstract_clause()], [atom()], boolean(), atom(), map()) -> map().
 lower_cast_group(
     {Tag, Phase},
     Clauses0,
+    Names, HasCalls,
     DataName,
     EnumAtoms
 ) ->
     Clauses = [
-        strip_dispatched_phase(normalize_cast_result(Clause, Phase))
+        strip_dispatched_phase(normalize_cast_result(Clause, Phase, Names, HasCalls))
         || Clause <- Clauses0
     ],
     MessageValue = [
         "(Tag::", xls_names:enum_member(Tag), ", message, bits_from_",
         xls_names:record_codec(Tag), "(message))"
     ],
+    IsCall = case hd(Clauses0) of {clause, _, Patterns0, _, _} -> length(Patterns0) =:= 4 end,
     Arguments = [
         xls_pattern_lower:record_argument(Tag, "message", MessageValue),
         xls_pattern_lower:value_argument("phase"),
@@ -524,15 +581,22 @@ lower_cast_group(
             "data",
             ["(Tag::", xls_names:enum_member(DataName), ", data)"]
         )
-    ],
-    Failure = fun(Code) -> ["(phase, data, Directive::FAIL, u1:0, ", Code, ")"] end,
+    ] ++ case IsCall of true -> [xls_pattern_lower:value_argument("call_from")]; false -> [] end,
+    Tail = case {Names, HasCalls} of
+        {[], false} -> [];
+        {_, false} -> ", u8:0";
+        {_, true} -> ", u8:0, u64:0, zero!<axis::Frame>(), true"
+    end,
+    Failure = fun(Code) -> ["(phase, data, Directive::FAIL, u1:0, ", Code, Tail, ")"] end,
     [{clause, FirstLine, _, _, _} | _] = Clauses,
     {Body, Result} = xls_callback_lower:lower(
         Clauses,
         Arguments,
         DataName,
         fun(R) -> [
-            "(", R, ".0, ", R, ".1.1, ", R, ".2, ", R, ".3, ", R, ".4)"
+            "(", R, ".0, ", R, ".1.1, ", R, ".2, ", R, ".3, ", R, ".4",
+                case {Names, HasCalls} of {[], false} -> []; _ -> [", ", R, ".5"] end,
+                case HasCalls of true -> [", ", R, ".6, ", R, ".7, ", R, ".8"]; false -> [] end, ")"
         ] end,
         Failure(xls_failure_sites:at(function_clause, FirstLine)),
         Failure,
@@ -550,10 +614,25 @@ lower_cast_group(
 %% boundary. Keeping this rewrite here prevents the generic expression lowerer
 %% from having to know about hls_statem callback semantics. The shared result
 %% normalizer exposes constructors through aliases and structural choices.
-normalize_cast_result(Clause, Phase) ->
-    xls_callback_result:map(Clause, fun(Result) ->
-        normalize_cast_result_expression(Result, Phase)
+%% Adds finite internal events and retained replies to checked callback conclusions.
+-spec normalize_cast_result(erl_parse:abstract_clause(), atom(), [atom()], boolean()) -> erl_parse:abstract_clause().
+normalize_cast_result(Clause = {clause, _, Patterns, _, _}, Phase, Names, HasCalls) ->
+    Map = case {Names, HasCalls} of {[], false} -> fun xls_callback_result:map/2; _ -> fun xls_callback_result:map_actions/2 end,
+    Map(Clause, fun(Result) ->
+        ok = validate_call_directive(Patterns, Result),
+        xls_statem_continuation:normalize(Result, Names, HasCalls,
+            fun(R) -> normalize_cast_result_expression(R, Phase) end)
     end).
+
+%% A call is consumed once; replay would need to preserve its previously allocated handle.
+-spec validate_call_directive([term()], term()) -> ok.
+validate_call_directive([_, _, _, _], {tuple, _, [_, _, Directive | _]}) ->
+    case Directive of
+        {atom, _, consume} -> ok;
+        {atom, _, fail} -> ok;
+        _ -> error({unsupported_hls_statem_call_directive, Directive})
+    end;
+validate_call_directive(_Patterns, _Result) -> ok.
 
 normalize_cast_result_expression(
     {tuple, Line, [
@@ -609,6 +688,10 @@ cast_key(
     ),
     {Tag, Phase}.
 
+%% Extracts the statically selected schema and phase from cast or call patterns.
+-spec cast_head(erl_anno:anno(), [erl_parse:abstract_expr()], [atom()], [atom()]) -> {atom(), atom()}.
+cast_head(Line, [Message, Phase, Data, _From], MessageNames, PhaseNames) ->
+    cast_head(Line, [Message, Phase, Data], MessageNames, PhaseNames);
 cast_head(_Line, [MessagePattern, {atom, _PhaseLine, Phase}, _DataPattern],
         MessageNames, PhaseNames) ->
     Tag = xls_pattern_lower:record_pattern_name(MessagePattern),
@@ -684,6 +767,10 @@ enum_atoms(PhaseNames) ->
     ],
     maps:from_list(PhaseAtoms ++ DirectiveAtoms).
 
+%% Avoids testing a phase literal after the dispatch table has already selected it.
+-spec strip_dispatched_phase(erl_parse:abstract_clause()) -> erl_parse:abstract_clause().
+strip_dispatched_phase({clause, Line, [First, Phase, Third, From], Guards, Body}) ->
+    {clause, Line, [First, dispatched_phase_variable(Phase), Third, From], Guards, Body};
 strip_dispatched_phase({clause, Line, [First, Phase, Third], Guards, Body}) ->
     {clause, Line, [First, dispatched_phase_variable(Phase), Third],
         Guards, Body}.

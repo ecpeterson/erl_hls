@@ -117,7 +117,7 @@ dispatched_schemas(Summary, Phase) ->
 output_schemas(Summary, Port) ->
     lists:usort([
         maps:get(schema, Effect)
-        || Effect <- maps:get(entry_effects, Summary),
+        || Effect <- maps:get(entry_effects, Summary) ++ maps:get(reply_effects, Summary, []),
            maps:get(port, Effect) =:= Port
     ]).
 
