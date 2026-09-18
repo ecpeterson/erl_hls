@@ -16,6 +16,7 @@ pub enum Kind : u4 {
     INTERNAL = 12,
     BADARITH = 13,
     BADARG = 14,
+    REPLY_CONTRACT = 15,
 }
 
 // Zero is success. Codes 1..15 are generic reasons; source-located codes are
@@ -37,6 +38,8 @@ pub const INVALID_EFFECT = Code:11;
 pub const INTERNAL = Code:12;
 pub const BADARITH = Code:13;
 pub const BADARG = Code:14;
+// A live caller must receive one of its declared reply record types.
+pub const REPLY_CONTRACT = Code:15;
 
 pub fn first(earlier: Code, later: Code) -> Code {
     if earlier != NONE { earlier } else { later }

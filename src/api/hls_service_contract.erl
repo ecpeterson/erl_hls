@@ -13,8 +13,7 @@
 -spec from_forms([hls_source:form()]) -> contract().
 from_forms(Forms) ->
     Public = xls_parse:find_tags(Forms),
-    Calls = [Tag || {Tag, _} <- groups(Forms, handle_call)],
-    Casts = [Tag || {Tag, _} <- groups(Forms, handle_cast)],
+    {Calls, Casts} = request_tags(Forms),
     case [Tag || Tag <- Calls ++ Casts, not lists:member(Tag, Public)] of
         [] -> ok;
         Undeclared -> error({undeclared_hls_gs_callback_tags, Undeclared})
@@ -31,6 +30,19 @@ from_forms(Forms) ->
     case {Calls -- maps:keys(Replies), maps:keys(Replies) -- Calls} of
         {[], []} -> extended(Forms, #{calls => Replies, casts => Casts});
         {Missing, Extra} -> error({hls_reply_requests, #{missing => Missing, extra => Extra}})
+    end.
+
+%% State functions use the same schema/reply contract as server callbacks.
+-spec request_tags([hls_source:form()]) -> {[atom()], [atom()]}.
+request_tags(Forms) ->
+    case xls_parse:find_optional_attribute(Forms, hls_phases) of
+        none -> {[Tag || {Tag, _} <- groups(Forms, handle_call)],
+            [Tag || {Tag, _} <- groups(Forms, handle_cast)]};
+        {ok, Phases} ->
+            Callbacks = xls_statem_callbacks:prepare(Forms, Phases),
+            Tags = fun(Kind) -> lists:usort([xls_pattern_lower:record_pattern_name(Pattern)
+                || {clause, _, [Pattern | _], _, _} <- maps:get(Kind, Callbacks)]) end,
+            {Tags(call), Tags(cast)}
     end.
 
 %% Require a unique call request with a nonempty, duplicate-free set of declared replies.
@@ -90,13 +102,8 @@ extended(Forms, Contract) ->
                 none -> [];
                 {ok, Value} -> Value
             end,
-            case is_list(Names) andalso length(Names) =< 255 andalso
-                    lists:all(fun(Name) -> is_atom(Name) andalso
-                        not lists:member(Name, [none, true, false]) end, Names) andalso
-                    length(Names) =:= length(lists:usort(Names)) of
-                true -> Contract#{pending_calls => N, continuations => Names};
-                false -> error({invalid_hls_continuations, Names})
-            end
+            Contract#{pending_calls => N,
+                continuations => hls_continuation:validate(Names)}
     end.
 
 %% Callback families are optional; absence contributes no request tags.

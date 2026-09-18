@@ -110,6 +110,8 @@ normalize_group(Id, Spec, MemberIndex) when is_map(Spec) ->
 normalize_group(Id, _Spec, _MemberIndex) ->
     error({scheduler_group, Id}).
 
+%% Assign slots and preserve the actor interface's complete private-storage dimensions.
+-spec layout_group(map(), map()) -> map().
 layout_group(Group = #{members := Members0}, Interface) ->
     Capacity = maps:get(mailbox_capacity, Interface),
     true = lists:all(
@@ -122,7 +124,8 @@ layout_group(Group = #{members := Members0}, Interface) ->
     ReductionStorageWidth =
         hls_actor_interface:reduction_storage_width(Interface),
     {Members, SlotCount} = assign_slots(Members0),
-    Group#{
+    EventStorage = maps:with([continuation_width, reply_storage_width], Interface),
+    maps:merge(EventStorage, Group#{
         state => State,
         reduction_storage_width => ReductionStorageWidth,
         mailbox_capacity => Capacity,
@@ -132,7 +135,7 @@ layout_group(Group = #{members := Members0}, Interface) ->
         effect_progress => resumable,
         reservation => none,
         blocked => yield
-    }.
+    }).
 
 validate_keys(Id, Spec) ->
     Required = [mailbox_storage, members, state_storage],

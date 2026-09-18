@@ -142,7 +142,12 @@ is_source_context(_) -> false.
 -spec service_contract_attributes([hls_source:form()], tuple()) -> [tuple()].
 service_contract_attributes(Forms, {attribute, Line, module, _}) ->
     case xls_parse:find_optional_attribute(Forms, hls_phases) of
-        {ok, _} -> [];
+        {ok, _} ->
+            case xls_parse:find_optional_attribute(Forms, hls_pending_calls) of
+                none -> [];
+                {ok, _} -> [{attribute, Line, hls_service_contract,
+                    hls_service_contract:from_forms(Forms)}]
+            end;
         none ->
             case lists:any(fun
                 ({function, _, handle_call, Arity, _}) when Arity =:= 2; Arity =:= 3 -> true;

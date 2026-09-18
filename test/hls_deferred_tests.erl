@@ -90,7 +90,8 @@ declaration_bounds_test() ->
 -spec handle_exhaustion_test() -> ok.
 handle_exhaustion_test() ->
     {ok, Contract} = hls_service_contract:from_module(hls_deferred_fixture),
-    Pending = (hls_gs_deferred:new(Contract))#{next := 1 bsl 56},
+    Initial = #{book := Book} = hls_gs_deferred:new(Contract),
+    Pending = Initial#{book := Book#{next := 1 bsl 56}},
     ?assertError(reply_handle_exhausted,
         hls_gs_deferred:dispatch(call, hls_deferred_fixture, {wait, 1},
             {{self(), make_ref()}, [report]}, hls_deferred_fixture:init([]), Pending)).

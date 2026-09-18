@@ -9,12 +9,15 @@
 
 -export([prepare/2]).
 
--type callback_kind() :: enter | cast | internal.
+%% Normalized callback families have separate dispatch arguments.
+
+-type callback_kind() :: enter | cast | call | internal.
 
 -doc "Classifies state-function clauses as enter, cast or internal and normalizes their event heads.".
 -spec prepare([hls_source:form()], [atom()]) -> #{
     enter := [erl_parse:abstract_clause()],
     cast := [erl_parse:abstract_clause()],
+    call := [erl_parse:abstract_clause()],
     internal := [erl_parse:abstract_clause()]
 }.
 prepare(Forms, Phases) ->
@@ -26,6 +29,7 @@ prepare(Forms, Phases) ->
     #{
         enter => [Clause || {enter, Clause} <- Classified],
         cast => [Clause || {cast, Clause} <- Classified],
+        call => [Clause || {call, Clause} <- Classified],
         internal => [Clause || {internal, Clause} <- Classified]
     }.
 
@@ -63,5 +67,10 @@ prepare_clause(
 ) ->
     {internal, {clause, Line,
         [Event, {atom, Line, Phase}, Data], Guards, Body}};
+prepare_clause(
+    {clause, Line, [{tuple, _, [{atom, _, call}, From]}, Message, Data], Guards, Body},
+    Phase
+) ->
+    {call, {clause, Line, [Message, {atom, Line, Phase}, Data, From], Guards, Body}};
 prepare_clause({clause, Line, Patterns, _Guards, _Body}, Phase) ->
     error({unsupported_hls_statem_state_head, Phase, Line, Patterns}).
