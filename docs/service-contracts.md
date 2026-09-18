@@ -8,7 +8,7 @@ An `hls_gs` module declares the public records permitted in replies to each call
 -compile({parse_transform, hls_pack}).
 ```
 
-Every record handled by `handle_call/2` must have exactly one nonempty reply set. Each member must be a unique public `hls_tags` record. State records and the reserved `error` tag are not reply-set members. Cast tags have no reply declaration: their successful completion is silent. A record may be both a request and a reply, but a request tag cannot select both `handle_call/2` and `handle_cast/2`. Declarations may be spread across attributes and included headers; duplicate request declarations are rejected, even when identical.
+Every record handled by `handle_call/2` (or `handle_call/3` for [retained replies](retained-replies.md)) must have exactly one nonempty reply set. Each member must be a unique public `hls_tags` record. State records and the reserved `error` tag are not reply-set members. Cast tags have no reply declaration: their successful completion is silent. A record may be both a request and a reply, but a request tag cannot select both `handle_call/2` and `handle_cast/2`. Declarations may be spread across attributes and included headers; duplicate request declarations are rejected, even when identical.
 
 The sets describe the intended interface independently of the implementation. For example, `[{query, [small, large]}]` permits either record, including records with different payload lengths. Separate source-ordered callback clauses can return different record types. Expression-level record choices still obey the compiler's [ordinary type-join constraints](control-flow.md); this declaration does not add general sum types.
 
@@ -20,7 +20,7 @@ These are explicit HLS interface contracts, stronger than ordinary Erlang messag
 
 The CPU adapter checks each callback reply before committing the returned state. A reply outside the set raises `{reply_contract, RequestTag, Reply, AllowedTags}`, terminating the adapter like an ordinary callback exception. This checks the record kind; the [numeric representation contract](numeric-contract.md) still governs field values.
 
-Generated hardware checks the reply tag after evaluating the selected body. An ordinary body failure takes precedence. A contract violation returns the one-word `ERROR` code 15, decoded by the proxy as `{error, {remote_error, reply_contract}}`. It follows the existing `hls_gs` callback-failure rule: zero callback state, rather than committing the invalid result's proposed state. A request-length error occurs before the callback and preserves state. See [control flow and failures](control-flow.md).
+Generated hardware checks the reply tag after evaluating the selected body. An ordinary body failure takes precedence. A contract violation returns the one-word `ERROR` code 15, decoded by the proxy as `{error, {remote_error, reply_contract}}`. For immediate servers it follows the existing `hls_gs` callback-failure rule: zero callback state, rather than committing the invalid result's proposed state. A request-length error occurs before the callback and preserves state. See [control flow and failures](control-flow.md).
 
 For constant record constructors, XLS can fold the membership check away. A declaration is not a static proof that the implementation always honors it; an erroneous callback remains executable and reports its violation. Constructors returned through typed helpers, local aliases, and branches receive the same check.
 

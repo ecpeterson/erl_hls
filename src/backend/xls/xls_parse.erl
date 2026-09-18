@@ -175,7 +175,17 @@ actor_interface(Filename, SourceOptions) ->
             error({unsupported_hls_actor_interface, Filename, hls_gs})
     end.
 
+-doc "Chooses the immediate or retained-call server backend from its checked contract.".
+-spec to_xls_gs(file:filename(), [hls_source:form()]) -> iolist().
 to_xls_gs(Filename, Forms0) ->
+    case hls_service_contract:call_arity(Forms0) of
+        3 -> xls_gs_deferred:emit(Filename, Forms0);
+        2 -> to_xls_gs_immediate(Filename, Forms0)
+    end.
+
+-doc "Emits the compact immediate-reply server without retained-call scheduling storage.".
+-spec to_xls_gs_immediate(file:filename(), [hls_source:form()]) -> iolist().
+to_xls_gs_immediate(Filename, Forms0) ->
     ok = xls_names:actor(Forms0, hls_gs),
     {SourceForms, Sites} = xls_failure_sites:prepare(Forms0),
     {Forms, Helpers} = xls_helpers:prepare(SourceForms,

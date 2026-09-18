@@ -2,11 +2,12 @@
 -module(hls_service_contract).
 -moduledoc false.
 
--export([from_forms/1, from_module/1, groups/2]).
+-export([from_forms/1, from_module/1, groups/2, call_arity/1]).
 -export_type([contract/0]).
 
 -doc "Allowed reply tags by call request, plus supported cast tags.".
--type contract() :: #{calls := #{atom() => [atom(), ...]}, casts := [atom()]}.
+-type contract() :: #{calls := #{atom() => [atom(), ...]}, casts := [atom()],
+    pending_calls => 1..255, continuations => [atom()]}.
 
 -doc "Validates request/reply declarations and returns allowed call replies and cast tags.".
 -spec from_forms([hls_source:form()]) -> contract().
@@ -28,7 +29,7 @@ from_forms(Forms) ->
         (Value, _) -> error({invalid_hls_replies, Value})
     end, #{}, Declarations),
     case {Calls -- maps:keys(Replies), maps:keys(Replies) -- Calls} of
-        {[], []} -> #{calls => Replies, casts => Casts};
+        {[], []} -> extended(Forms, #{calls => Replies, casts => Casts});
         {Missing, Extra} -> error({hls_reply_requests, #{missing => Missing, extra => Extra}})
     end.
 
@@ -47,12 +48,13 @@ declaration({Request, Replies}, Public, Acc)
     end;
 declaration(Entry, _Public, _Acc) -> error({invalid_hls_reply_declaration, Entry}).
 
--doc "Groups two-argument callback clauses by request record, preserving clause order.".
+-doc "Groups call/cast clauses by request record, preserving clause order and the declared call arity.".
 -spec groups([hls_source:form()], atom()) -> [{atom(), [erl_parse:abstract_clause()]}].
 groups(Forms, Function) ->
-    Clauses = xls_parse:find_function(Forms, Function, 2),
+    Arity = case Function of handle_call -> call_arity(Forms); _ -> 2 end,
+    Clauses = clauses(Forms, Function, Arity),
     xls_callback_lower:group_by(Clauses, fun
-        ({clause, _, [Pattern, _State], _, _}) ->
+        ({clause, _, [Pattern | _Arguments], _, _}) ->
             xls_pattern_lower:record_pattern_name(Pattern)
     end).
 
@@ -65,3 +67,39 @@ from_module(Module) ->
         [Contract] -> {ok, Contract};
         undefined -> none
     end.
+
+-doc "Selects handle_call/3 for bounded retained-reply servers; mixed call arities are rejected.".
+-spec call_arity([hls_source:form()]) -> 2 | 3.
+call_arity(Forms) ->
+    Two = clauses(Forms, handle_call, 2),
+    Three = clauses(Forms, handle_call, 3),
+    case {Two, Three, xls_parse:find_optional_attribute(Forms, hls_pending_calls)} of
+        {_, [], none} -> 2;
+        {[], _, {ok, N}} when is_integer(N), N > 0, N =< 255 -> 3;
+        _ -> error(invalid_hls_pending_calls)
+    end.
+
+%% Retained calls require an explicit finite resource and continuation vocabulary.
+-spec extended([hls_source:form()], contract()) -> contract().
+extended(Forms, Contract) ->
+    case call_arity(Forms) of
+        2 -> Contract;
+        3 ->
+            {ok, N} = xls_parse:find_optional_attribute(Forms, hls_pending_calls),
+            Names = case xls_parse:find_optional_attribute(Forms, hls_continuations) of
+                none -> [];
+                {ok, Value} -> Value
+            end,
+            case is_list(Names) andalso length(Names) =< 255 andalso
+                    lists:all(fun(Name) -> is_atom(Name) andalso
+                        not lists:member(Name, [none, true, false]) end, Names) andalso
+                    length(Names) =:= length(lists:usort(Names)) of
+                true -> Contract#{pending_calls => N, continuations => Names};
+                false -> error({invalid_hls_continuations, Names})
+            end
+    end.
+
+%% Callback families are optional; absence contributes no request tags.
+-spec clauses([hls_source:form()], atom(), arity()) -> [erl_parse:abstract_clause()].
+clauses(Forms, Name, Arity) ->
+    lists:append([C || {function, _, F, A, C} <- Forms, F =:= Name, A =:= Arity]).

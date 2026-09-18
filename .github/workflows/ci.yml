@@ -108,6 +108,9 @@ jobs:
       - name: Check service reply contracts under backpressure
         run: bash tools/test_service_contracts.sh "$RUNNER_TEMP/xls"
 
+      - name: Check retained replies and iterative continuation drains
+        run: bash tools/test_deferred_replies.sh "$RUNNER_TEMP/xls"
+
       - name: Compare fixed bit syntax and diagnose packed samples through public debug APIs
         run: bash tools/test_binary.sh "$RUNNER_TEMP/xls"
 
@@ -271,6 +274,7 @@ jobs:
             _build/effect_window/*.ys
             _build/effect_window/*.log
             _build/effect_window/*.console
+            _build/deferred-replies/**
             _build/service_contracts/*.log
             _build/service_contracts/*.json
             _build/service_contracts/**/*.v

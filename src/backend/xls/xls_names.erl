@@ -34,7 +34,11 @@ actor(Forms, Kind) ->
     ok = control_names(Forms, Kind),
     ok = wire_tags(Forms),
     Names = [xls_parse:state(Forms) | xls_parse:find_tags(Forms)],
-    ok = records(Forms, Names, Kind),
+    SymbolKind = case {Kind, xls_parse:find_optional_attribute(Forms, hls_pending_calls)} of
+        {hls_gs, {ok, _}} -> hls_gs_deferred;
+        _ -> Kind
+    end,
+    ok = records(Forms, Names, SymbolKind),
     tags(Forms, Names).
 
 control_names(Forms, Kind) ->
@@ -211,6 +215,9 @@ generated(Name) -> #{kind => generated, name => Name}.
 %% Include fixed parameters: DSLX value bindings can shadow record types.
 %% N is the record codec's width parameter. Other function names cannot
 %% collide with the two codec name forms or the hls_local_ helper prefix.
+-spec runtime(hls_gs | hls_gs_deferred | hls_statem) -> [string()].
+runtime(hls_gs_deferred) ->
+    runtime(hls_gs) ++ ["STATE_BITS", "Invocation", "Outcome", "Worker", "dispatch", "reply_allowed"];
 runtime(hls_gs) ->
     ["Tag", "Service", "Top", "N", "NOREPLY", "REPLY", "OK", "MAX_PAYLOAD",
         "ERROR_FUNCTION_CLAUSE", "ERROR_REQUEST_LENGTH", "ERROR_REPLY_CONTRACT", "INITIAL_STATE"];
