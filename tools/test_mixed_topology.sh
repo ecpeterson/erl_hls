@@ -13,13 +13,15 @@ cd "$project_root"
 rebar3 as test compile
 source tools/phi_scheduler_rams.sh
 for placement in "${placements[@]}"; do
-    case "$placement" in direct|one|two|coalesced|ingress_direct|ingress_one|ingress_two|ingress_coalesced) ;; *) echo "unknown placement: $placement" >&2; exit 1;; esac
+    case "$placement" in direct|one|two|coalesced|ingress_direct|ingress_one|ingress_two|ingress_coalesced|components_global|components_weak) ;; *) echo "unknown placement: $placement" >&2; exit 1;; esac
     build="$stage/$placement"
     mkdir -p "$build"
     erl -noshell -pa _build/test/lib/erl_hls/ebin _build/test/lib/erl_hls/test \
         -eval '[Stage, Text] = init:get_plain_arguments(),
             Modes = #{"direct" => direct, "one" => one, "two" => two, "coalesced" => coalesced},
             Placement = case Text of
+                "components_global" -> {components, global};
+                "components_weak" -> {components, weak_components};
                 "ingress_" ++ Mode -> {ingress, maps:get(Mode, Modes)};
                 _ -> maps:get(Text, Modes)
             end,
@@ -31,7 +33,7 @@ for placement in "${placements[@]}"; do
     count=$(python3 -c 'import json,sys; print(len(json.load(open(sys.argv[1]))["banks"]))' "$build/actors.json")
     codegen_options=(--fifo_module=)
     [[ "$count" == 0 ]] || codegen_options+=(--ram_configurations="$(phi_scheduler_ram_configurations "$count")")
-    case "$placement" in ingress_*) actor_test="$placement";; *) actor_test="mixed_$placement";; esac
+    case "$placement" in ingress_*|components_*) actor_test="$placement";; *) actor_test="mixed_$placement";; esac
     for stages in 2 3; do
         "$xls_root/codegen_main" --pipeline_stages="$stages" --delay_model=unit \
             --flop_inputs=false --flop_outputs=true --use_system_verilog=false --reset=reset \

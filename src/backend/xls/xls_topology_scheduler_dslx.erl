@@ -55,28 +55,12 @@ annotate(Spec = #{
     %% schedulers must remain in one effect-window ownership domain.
     PlaneIncidences = [maps:get(source_schedulers, Plane)
         || Plane <- maps:get(source_fragment_planes, Spec, [])],
+    Dependencies = [[Index, Destination] ||
+        #{index := Index, destinations := Destinations} <- Annotated0,
+        #{index := Destination} <- Destinations] ++ PlaneIncidences,
     Domains = xls_topology_effect_windows:partition(
-        Annotated0,
-        WindowPartition,
-        PlaneIncidences
-    ),
-    Membership = maps:from_list([
-        {SchedulerIndex0, {DomainIndex, Position}}
-        || {DomainIndex, Members} <- lists:enumerate(0, Domains),
-           {Position, SchedulerIndex0} <- lists:enumerate(0, Members)
-    ]),
-    Annotated = [
-        begin
-            {Domain, Position} = maps:get(
-                maps:get(index, Scheduler), Membership
-            ),
-            Scheduler#{
-                effect_window_domain => Domain,
-                effect_window_position => Position
-            }
-        end
-        || Scheduler <- Annotated0
-    ],
+        [Index || #{index := Index} <- Annotated0], WindowPartition, Dependencies),
+    Annotated = xls_topology_effect_windows:annotate(Annotated0, Domains),
     Externals = [annotate_external(External, Annotated)
         || External <- maps:get(externals, Spec)],
     Spec#{
@@ -897,11 +881,11 @@ grid_proc(Spec = #{
     [
         "proc ", grid_name(Spec), " {\n",
         config_signature(Arguments, 2),
-        effect_window_channels(EffectWindowDomains),
+        xls_effect_window_dslx:channels(EffectWindowDomains),
         [external_channel(External) || External <- Externals],
         [scheduler_channels(Spec, Scheduler) || Scheduler <- Schedulers],
         xls_topology_source_fragment_dslx:plane_channels(Spec),
-        effect_window_spawn(EffectWindowDomains),
+        xls_effect_window_dslx:spawn(EffectWindowDomains),
         xls_topology_source_fragment_dslx:aggregate_mux_spawns(Spec),
         [scheduler_spawn(Spec, Scheduler) || Scheduler <- Schedulers],
         xls_topology_source_fragment_dslx:plane_spawns(Spec),
@@ -913,39 +897,6 @@ grid_proc(Spec = #{
         "  init { () }\n",
         "  next(state: ()) { state }\n",
         "}\n\n"
-    ].
-
-effect_window_channels(Domains) ->
-    [effect_window_domain_channels(Index, Members, Domains)
-        || {Index, Members} <- lists:enumerate(0, Domains)].
-
-effect_window_domain_channels(Index, Members, Domains) ->
-    Count = integer_to_list(length(Members)),
-    Stem = effect_window_domain_stem(Index, Domains),
-    [
-        effect_window_domain_comment(Index, Members, Domains),
-        "    let (", Stem, "_request_p, ", Stem, "_request_c) =\n",
-        "      chan<u1, CHANNEL_DEPTH>[u32:", Count,
-        "](\"", Stem, "_request\");\n",
-        "    let (", Stem, "_grant_p, ", Stem, "_grant_c) =\n",
-        "      chan<u1, CHANNEL_DEPTH>[u32:", Count,
-        "](\"", Stem, "_grant\");\n",
-        "    let (", Stem, "_release_p, ", Stem, "_release_c) =\n",
-        "      chan<u1, CHANNEL_DEPTH>[u32:", Count,
-        "](\"", Stem, "_release\");\n"
-    ].
-
-effect_window_spawn(Domains) ->
-    [effect_window_domain_spawn(Index, Members, Domains)
-        || {Index, Members} <- lists:enumerate(0, Domains)].
-
-effect_window_domain_spawn(Index, Members, Domains) ->
-    Stem = effect_window_domain_stem(Index, Domains),
-    [
-        "    spawn effect_window::Arbiter<u32:",
-        integer_to_list(length(Members)), ">(\n",
-        "      ", Stem, "_request_c, ", Stem, "_grant_p,\n",
-        "      ", Stem, "_release_c);\n"
     ].
 
 external_channel(External) ->
@@ -1040,8 +991,6 @@ ram_argument_pairs([Request, Response | Rest]) ->
 router_spawn(Spec, Scheduler = #{
     stem := Stem,
     index := Source,
-    effect_window_domain := WindowDomain,
-    effect_window_position := WindowPosition,
     destinations := Destinations,
     external_ids := ExternalIds
 }) ->
@@ -1069,15 +1018,8 @@ router_spawn(Spec, Scheduler = #{
                 xls_topology_source_fragment_dslx:router_spawn_arguments(
                     Spec, Scheduler
                 )],
-        ",\n      ", effect_window_domain_stem(
-            WindowDomain, maps:get(effect_window_domains, Spec)),
-        "_request_p[u32:", integer_to_list(WindowPosition), "],\n",
-        "      ", effect_window_domain_stem(
-            WindowDomain, maps:get(effect_window_domains, Spec)),
-        "_grant_c[u32:", integer_to_list(WindowPosition), "],\n",
-        "      ", effect_window_domain_stem(
-            WindowDomain, maps:get(effect_window_domains, Spec)),
-        "_release_p[u32:", integer_to_list(WindowPosition), "]",
+        ",\n      ", lists:join(",\n      ", xls_effect_window_dslx:arguments(
+            maps:get(effect_window_domains, Spec), Scheduler)),
         ");\n"
     ].
 
@@ -1210,19 +1152,6 @@ control_output_name(Group) ->
 
 startup_name(#{index := Index}) ->
     ["SchedulerStartup", integer_to_list(Index)].
-
-effect_window_domain_stem(0, [_OnlyDomain]) ->
-    "effect_window";
-effect_window_domain_stem(Index, [_ | _]) ->
-    ["effect_window_domain_", integer_to_list(Index)].
-
-effect_window_domain_comment(_Index, _Members, [_OnlyDomain]) -> [];
-effect_window_domain_comment(Index, Members, [_ | _]) ->
-    [
-        "    // Effect-window domain ", integer_to_list(Index),
-        ": schedulers ", join_with(", ", [integer_to_list(Member)
-            || Member <- Members]), ".\n"
-    ].
 
 effect_window_scope(#{effect_window_domains := [_OnlyDomain]}) ->
     "global";

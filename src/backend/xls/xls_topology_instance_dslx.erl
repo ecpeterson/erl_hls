@@ -25,10 +25,6 @@ lower(Plan, Profile0) ->
         mailbox_debug := MailboxDebug} =
         xls_topology_profile:normalize(Profile0),
     require_empty(reduction_placements, maps:to_list(Reductions)),
-    case WindowPartition of
-        global -> ok;
-        _ -> error({instance_effect_window_partition, WindowPartition})
-    end,
     Schedule = #{groups := Groups0} = hls_scheduler_plan:normalize(Plan, GroupSpecs),
     Placements = hls_scheduler_plan:placements(Schedule),
     xls_topology_graph:check_lanes(lanes, maps:get(routes, Plan), Plan),
@@ -49,7 +45,6 @@ lower(Plan, Profile0) ->
     Routes = maps:get(routes, Base),
     lists:foreach(fun validate_delivery/1, Routes),
     Ingresses = ingress_units(Plan, ActorIndex),
-    Units = Direct ++ Schedulers ++ Ingresses,
     Routed = [{maps:get(unit, maps:get(Id, ActorIndex)), Recipient}
         || #{source := {Id, _}, recipients := Recipients} <- Routes,
            Recipient <- Recipients],
@@ -58,18 +53,31 @@ lower(Plan, Profile0) ->
     Lanes0 = lists:usort(Routed ++ Incoming),
     Lanes = [lane(I, Source, Recipient, ActorIndex) ||
         {I, {Source, Recipient}} <- lists:enumerate(0, Lanes0)],
-    Units1 = [unit_routes(Unit, Routes, ActorIndex, Lanes) || Unit <- Units],
-    Schedulers1 = [Unit || Unit = #{kind := scheduler} <- Units1],
-    Direct1 = [Unit || Unit = #{kind := direct} <- Units1],
+    %% Ownership analysis follows actor-to-actor backpressure dependencies.
+    %% External input/output endpoints terminate here; direct actors remain
+    %% vertices, including fan-in, fan-out, and arbitrarily long relay paths.
+    Dependencies = [[window_vertex(Source), window_vertex(Destination)] ||
+        #{source := Source, destination := Destination} <- Lanes,
+        element(1, Source) =/= ingress, element(1, Destination) =/= external],
+    Domains = xls_topology_effect_windows:partition(
+        [I || #{index := I} <- Schedulers], WindowPartition, Dependencies),
+    Schedulers1 = xls_topology_effect_windows:annotate(
+        [unit_routes(Unit, Routes, ActorIndex, Lanes) || Unit <- Schedulers], Domains),
+    Direct1 = [unit_routes(Unit, Routes, ActorIndex, Lanes) || Unit <- Direct],
+    Units = Direct1 ++ Schedulers1 ++
+        [unit_routes(Unit, Routes, ActorIndex, Lanes) || Unit <- Ingresses],
     Requirements = maps:from_list([{Module, #{shared_service => ordinary}} ||
         #{module := Module} <- Actors]),
     WithDirect = flag_modules(Requirements, Direct1, direct_actor_debug, ActorDebug),
     WithMailbox = flag_modules(WithDirect, Schedulers1, mailbox_debug, MailboxDebug),
     Base#{actors := Actors, direct => Direct1, schedulers => Schedulers1,
-        units => Units1, lanes := Lanes, actor_index => ActorIndex,
+        units => Units, lanes := Lanes, actor_index => ActorIndex,
         semantic_plan => Plan, mailbox_debug => MailboxDebug, ingresses => Ingresses,
         artifact_requirements => WithMailbox,
-        effect_window_domains => [[I || #{index := I} <- Schedulers1]]}.
+        effect_window_domains => Domains}.
+
+window_vertex({scheduler, Index}) -> Index;
+window_vertex({direct, _} = Actor) -> Actor.
 
 require_empty(_, []) -> ok;
 require_empty(Section, _) -> error({unsupported_instance_section, Section}).
@@ -312,14 +320,17 @@ proc_header(Name, Arguments, Names) ->
         "  config(\n    ", lists:join(",\n    ", Arguments), "\n  ) {\n    ",
         tuple(Names), "\n  }\n"].
 
-top_proc(Spec = #{direct := Direct, schedulers := Schedulers, units := Units}) ->
+top_proc(Spec = #{direct := Direct, schedulers := Schedulers, units := Units,
+        effect_window_domains := Domains}) ->
     Ports = top_ports(Spec),
     Names = [Name || {Name, _} <- Ports],
     ok = xls_actor_observation:validate_channels(Names),
     ["pub proc Top {\n", [["  ", Argument, ";\n"] || {_, Argument} <- Ports],
         "  config(\n    ", lists:join(",\n    ", [A || {_, A} <- Ports]), "\n  ) {\n",
         [unit_channels(Unit) || Unit <- Units],
-        external_channels(Spec), window_channels(Schedulers),
+        external_channels(Spec),
+        xls_effect_window_dslx:channels(Domains),
+        xls_effect_window_dslx:spawn(Domains),
         [direct_spawn(Spec, Actor) || Actor <- Direct],
         [scheduler_spawn(Spec, Scheduler) || Scheduler <- Schedulers],
         [router_spawn(Spec, Unit) || Unit <- Units], external_spawns(Spec),
@@ -370,14 +381,6 @@ channel(Stem, Type, Count, Depth) ->
         case Count of none -> []; _ -> ["[u32:", n(Count), "]"] end,
         "(\"", Stem, "\");\n"].
 
-window_channels([]) -> [];
-window_channels(Schedulers) ->
-    N = length(Schedulers),
-    [[channel(["effect_window_", Name], "u1", N, "CHANNEL_DEPTH") ||
-        Name <- ["request", "grant", "release"]],
-        "    spawn effect_window::Arbiter<u32:", n(N), ">(",
-        "effect_window_request_c, effect_window_grant_p, effect_window_release_c);\n"].
-
 direct_spawn(Spec, Actor = #{id := Id, index := I, stem := Stem, module_name := Module,
         inbound := Inbound, debug := Debug}) ->
     ["    // Actor ", io_lib:format("~p", [Id]), " uses ", Module, ".\n",
@@ -409,13 +412,13 @@ router_spawn(Spec, #{kind := ingress, index := I, input_name := Name, outbound :
 router_spawn(Spec, #{kind := direct, index := I, stem := Stem, outbound := Lanes}) ->
     ["    spawn ActorRouter", n(I), "(", Stem, "_egress_c",
         [[", ", lane_producer(Spec, Lane)] || Lane <- Lanes], ");\n"];
-router_spawn(Spec, #{kind := scheduler, index := I, stem := Stem,
+router_spawn(Spec, Scheduler = #{kind := scheduler, index := I, stem := Stem,
         outbound := Lanes, inbound := Inbound}) ->
     ["    spawn SchedulerRouter", n(I), "(", Stem, "_egress_c, ", Stem,
         "_requests_p[u32:", n(length(Inbound)), "]",
         [[", ", lane_producer(Spec, Lane)] || Lane <- Lanes],
-        ", effect_window_request_p[u32:", n(I), "], effect_window_grant_c[u32:", n(I),
-        "], effect_window_release_p[u32:", n(I), "]);\n"].
+        ", ", lists:join(", ", xls_effect_window_dslx:arguments(
+            maps:get(effect_window_domains, Spec), Scheduler)), ");\n"].
 
 lane_producer(#{units := Units}, Lane = #{destination := {external, _}}) ->
     external_lane_producer(Lane, Units);

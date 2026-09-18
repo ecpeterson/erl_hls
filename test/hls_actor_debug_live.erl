@@ -29,12 +29,23 @@ inspect(Session, Stage, Moment) ->
                 <<"direct_mailbox">> -> direct_mailbox; <<"mailbox_mixed">> -> mailbox_mixed;
                 <<"mixed_direct">> -> {mixed, direct}; <<"mixed_one">> -> {mixed, one};
                 <<"mixed_two">> -> {mixed, two}; <<"mixed_coalesced">> -> {mixed, coalesced};
+                <<"components_global">> -> {components, global};
+                <<"components_weak">> -> {components, weak_components};
                 <<"ingress_direct">> -> {ingress, direct}; <<"ingress_one">> -> {ingress, one};
                 <<"ingress_two">> -> {ingress, two}; <<"ingress_coalesced">> -> {ingress, coalesced}
             end,
             {Plan, Specs} = fixture(Kind),
             Catalog = hls_debug_catalog:hardware(Plan, Specs, [], Session),
             Completion = case {Kind, Moment} of
+                {{components, _}, _} ->
+                    Sources = case Moment of blocked -> [source_peer]; released -> [source, source_peer] end,
+                    try lists:foreach(fun(Id) ->
+                        {ok, Source} = hls_debug_catalog:actor(Catalog, {actor, Id}),
+                        await_outcome(Source,
+                            [{failed, false}, {phase, done}, {enter_pending, false}], 512)
+                    end, Sources)
+                    catch Class:Reason:Stack -> {failed, Class, Reason, Stack}
+                    end;
                 {{ingress, _}, released} ->
                     %% Completion is signaled by public output handshakes, not
                     %% simulator access to actor state. Preserve diagnostics on
@@ -107,12 +118,21 @@ inspect(Session, Stage, Moment) ->
             io:format("PASS: ~p scoped actor snapshots (~p, ~p)~n", [length(Ids), Kind, Moment])
     end.
 
+fixture({components, _} = Kind) -> hls_mixed_topology_dslx:fixture(Kind);
 fixture({ingress, _} = Kind) -> hls_mixed_topology_dslx:fixture(Kind);
 fixture({mixed, Placement}) -> hls_mixed_topology_dslx:fixture(Placement);
 fixture(Kind) -> hls_actor_debug_dslx:fixture(Kind).
 
 %% Startup shares finite application queues with the stalled output. A later
 %% actor may still be in boot; the released check requires its final outcome.
+check({components, _}, released, Id, Snapshot) ->
+    Logical = case Id of
+        {actor, source_peer} -> {actor, source};
+        {actor, collector_peer} -> {actor, collector};
+        _ -> Id
+    end,
+    check({mixed, two}, released, Logical, Snapshot);
+check({components, _}, blocked, _, #{failed := false, failure := none}) -> ok;
 check({ingress, _}, Moment, Id, Snapshot) -> check({mixed, direct}, Moment, Id, Snapshot);
 check({mixed, _}, released, Id, Snapshot) ->
     ExpectedPhase = case Id of

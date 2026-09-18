@@ -96,11 +96,58 @@ one_global_window_covers_direct_paths_between_groups_test() ->
     ?assertEqual(1, count(Text, <<"spawn effect_window::Arbiter<u32:2>">>)),
     ?assertEqual(2, count(Text, <<"::SharedService<">>)).
 
+direct_feedback_paths_keep_one_window_test() ->
+    {Plan, Specs} = hls_mixed_topology_dslx:fixture(two),
+    Profile = (profile(Specs))#{effect_window_partition => weak_components},
+    %% There is no immediate shared-to-shared route: both workers reply through
+    %% the direct collector and source. Dropping those vertices splits them.
+    ?assertEqual(generated(two), iolist_to_binary(xls_topology_dslx:emit(Plan, Profile))).
+
+no_shared_actors_need_no_window_test() ->
+    {Plan, Specs} = hls_mixed_topology_dslx:fixture(direct),
+    Profile = (profile(Specs))#{effect_window_partition => weak_components},
+    Text = iolist_to_binary(xls_topology_dslx:emit(Plan, Profile)),
+    ?assertEqual(0, count(Text, <<"spawn effect_window::Arbiter">>)).
+
+disconnected_mixed_components_use_local_grant_indices_test() ->
+    {Plan, Specs} = hls_mixed_topology_dslx:fixture({components, weak_components}),
+    Profile = (profile(Specs))#{effect_window_partition => weak_components},
+    Text = iolist_to_binary(xls_topology_dslx:emit(Plan, Profile)),
+    ?assertEqual(2, count(Text, <<"spawn effect_window::Arbiter<u32:2>">>)),
+    ?assertNotEqual(nomatch, binary:match(Text, <<"domain 0: schedulers 0, 2.">>)),
+    ?assertNotEqual(nomatch, binary:match(Text, <<"domain 1: schedulers 1, 3.">>)),
+    ?assertEqual(0, count(Text, <<"_request_p[u32:3]">>)),
+    Global = iolist_to_binary(xls_topology_dslx:emit(Plan, profile(Specs))),
+    ?assertEqual(1, count(Global, <<"spawn effect_window::Arbiter<u32:4>">>)).
+
+shared_executor_joins_logically_disconnected_components_test() ->
+    {Plan, Specs} = hls_mixed_topology_dslx:fixture({components, weak_components}),
+    #{even := Even, even_peer := Peer} = Specs,
+    Joined = (maps:remove(even_peer, Specs))#{even := Even#{members :=
+        maps:get(members, Even) ++ maps:get(members, Peer)}},
+    Text = iolist_to_binary(xls_topology_dslx:emit(Plan,
+        (profile(Joined))#{effect_window_partition => weak_components})),
+    ?assertEqual(1, count(Text, <<"spawn effect_window::Arbiter<u32:3>">>)).
+
+exact_only_components_ignore_external_sink_fan_in_test() ->
+    Plan = hls_topology:normalize(#{version => 1, families => #{},
+        actors => maps:from_keys([a, b, c, relay], hls_topology_source_fixture),
+        ingresses => [], route_relations => [], startup => [],
+        externals => [{values, out, [message]}],
+        routes => [{{a, out}, [{actor, relay}]}, {{relay, out}, [{actor, b}]},
+            {{b, out}, [{external, values}]}, {{c, out}, [{external, values}]}]}),
+    Groups = maps:from_list([{Id, #{members => [{actor, Id}],
+        state_storage => block_ram, mailbox_storage => block_ram}} || Id <- [a, b, c]]),
+    Text = iolist_to_binary(xls_topology_dslx:emit(Plan,
+        (profile(Groups))#{effect_window_partition => weak_components})),
+    ?assertEqual(1, count(Text, <<"spawn effect_window::Arbiter<u32:2>">>)),
+    ?assertEqual(1, count(Text, <<"spawn effect_window::Arbiter<u32:1>">>)),
+    ?assertNotEqual(nomatch, binary:match(Text, <<"domain 0: schedulers 0, 1.">>)),
+    ?assertNotEqual(nomatch, binary:match(Text, <<"domain 1: schedulers 2.">>)).
+
 unsupported_physical_contracts_fail_explicitly_test() ->
     {Plan, Specs} = hls_mixed_topology_dslx:fixture(one),
     Profile = profile(Specs),
-    ?assertError({instance_effect_window_partition, weak_components},
-        xls_topology_dslx:emit(Plan, Profile#{effect_window_partition => weak_components})),
     ?assertError({unsupported_instance_section, reduction_placements},
         xls_topology_dslx:emit(Plan, Profile#{reduction_placements => #{workers => source_fragments}})).
 
