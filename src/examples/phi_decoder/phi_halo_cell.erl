@@ -456,6 +456,7 @@ gathering(cast, #phenom_anyon{}, Cell) ->
 gathering(cast, #phi_config{}, Cell) ->
     {gathering, Cell, fail}.
 
+-doc "Reduces neighbor field strengths to a movement direction while deferring later steps.".
 -spec comparing(enter, phase(), #cell{}) -> hls_statem:enter_result(#cell{});
     (cast,
         #phi_config{} | #phi{} | #phi0{} | #anyon_move{} |
@@ -500,11 +501,11 @@ comparing(
     Cell = #cell{step = Step}
 ) ->
     BestDirection = case WinnerMask of
-        ?PHI_NORTH_MASK -> hls_type:as(hls_nums:u32(), ?PHI_NORTH_MASK);
-        ?PHI_EAST_MASK -> hls_type:as(hls_nums:u32(), ?PHI_EAST_MASK);
-        ?PHI_WEST_MASK -> hls_type:as(hls_nums:u32(), ?PHI_WEST_MASK);
-        ?PHI_SOUTH_MASK -> hls_type:as(hls_nums:u32(), ?PHI_SOUTH_MASK);
-        _ -> hls_type:as(hls_nums:u32(), ?NO_DIRECTION)
+        ?PHI_NORTH_MASK -> ?PHI_NORTH_MASK;
+        ?PHI_EAST_MASK -> ?PHI_EAST_MASK;
+        ?PHI_WEST_MASK -> ?PHI_WEST_MASK;
+        ?PHI_SOUTH_MASK -> ?PHI_SOUTH_MASK;
+        _ -> ?NO_DIRECTION
     end,
     {flipping, Cell#cell{best_direction = BestDirection}, consume};
 comparing(
@@ -534,6 +535,7 @@ comparing(cast, #phenom_anyon{}, Cell) ->
 comparing(cast, #phi_config{}, Cell) ->
     {comparing, Cell, fail}.
 
+-doc "Chooses a correction and publishes directional moves, then collects neighbor arrivals.".
 -spec flipping(enter, phase(), #cell{}) -> hls_statem:enter_result(#cell{});
     (cast,
         #phi_config{} | #phi{} | #phi0{} | #anyon_move{} |
@@ -543,12 +545,12 @@ comparing(cast, #phi_config{}, Cell) ->
         hls_statem:internal_result(phase(), #cell{}).
 flipping(enter, _OldPhase, Cell) ->
     NextRandom = hls_prng:xorshift32(Cell#cell.random_state),
-    Absent = hls_type:as(hls_nums:u32(), 0),
+    Absent = 0,
     {Present, Corrections} = if
         Cell#cell.anyon =:= 1,
         Cell#cell.best_direction =/= ?NO_DIRECTION,
         (NextRandom bsr 31) =:= 1 ->
-            {hls_type:as(hls_nums:u32(), 1), [{cast, correction, #phi_correction{
+            {1, [{cast, correction, #phi_correction{
                 step = Cell#cell.step,
                 x = Cell#cell.x,
                 y = Cell#cell.y,

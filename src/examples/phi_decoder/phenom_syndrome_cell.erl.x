@@ -51,9 +51,9 @@ const XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L255 = u16:22; // phenom_syndrome_
 const XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L263 = u16:38; // phenom_syndrome_cell.erl:L263
 const XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L265 = u16:54; // phenom_syndrome_cell.erl:L265
 const XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L267 = u16:70; // phenom_syndrome_cell.erl:L267
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L303 = u16:86; // phenom_syndrome_cell.erl:L303
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L320 = u16:102; // phenom_syndrome_cell.erl:L320
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L328 = u16:118; // phenom_syndrome_cell.erl:L328
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L304 = u16:86; // phenom_syndrome_cell.erl:L304
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L321 = u16:102; // phenom_syndrome_cell.erl:L321
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L329 = u16:118; // phenom_syndrome_cell.erl:L329
 const XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L390 = u16:134; // phenom_syndrome_cell.erl:L390
 const XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L401 = u16:150; // phenom_syndrome_cell.erl:L401
 const XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L418 = u16:166; // phenom_syndrome_cell.erl:L418
@@ -622,8 +622,8 @@ fn enter(old_phase: Phase, phase: Phase, data: Syndrome) -> EntryOutcome {
       let _29 = {
         if _0 == 15 {
           let _1 = Syndrome_1.1.step;
-          let _2 = _1 + 1;
-          let _3 = _2 & 4294967295;
+          let _2 = _1 + u32:1;
+          let _3 = _2 & u32:4294967295;
           let NextStep_1 = _3;
           let _4 = Syndrome_1.1.step;
           let _5 = Syndrome_1.1.announcement;
@@ -649,35 +649,35 @@ fn enter(old_phase: Phase, phase: Phase, data: Syndrome) -> EntryOutcome {
           let Query_1 = _14;
           let _15 = Syndrome {
             step: NextStep_1,
-            seen_sources: 0,
-            announcement: 0,
-            data_quiet: 1,
-            announcement_quiet: 0,
+            seen_sources: u32:0,
+            announcement: u32:0,
+            data_quiet: u32:1,
+            announcement_quiet: u32:0,
             ..(Syndrome_1).1
           };
           let _16 = (Tag::SYNDROME, _15);
           let Cleared_1 = _16;
           let Xls_entry_1_1 = Cleared_1;
           let _17 = Phenomquery {
-            source: 8,
+            source: u32:8,
             ..(Query_1).1
           };
           let _18 = (Tag::PHENOM_QUERY, _17, bits_from_phenomquery(_17));
           let Xls_entry_2_1 = _18;
           let _19 = Phenomquery {
-            source: 4,
+            source: u32:4,
             ..(Query_1).1
           };
           let _20 = (Tag::PHENOM_QUERY, _19, bits_from_phenomquery(_19));
           let Xls_entry_3_1 = _20;
           let _21 = Phenomquery {
-            source: 2,
+            source: u32:2,
             ..(Query_1).1
           };
           let _22 = (Tag::PHENOM_QUERY, _21, bits_from_phenomquery(_21));
           let Xls_entry_4_1 = _22;
           let _23 = Phenomquery {
-            source: 1,
+            source: u32:1,
             ..(Query_1).1
           };
           let _24 = (Tag::PHENOM_QUERY, _23, bits_from_phenomquery(_23));
@@ -733,35 +733,35 @@ fn enter(old_phase: Phase, phase: Phase, data: Syndrome) -> EntryOutcome {
           let Query_1 = _3;
           let _4 = Syndrome {
             step: NextStep_1,
-            seen_sources: 0,
-            announcement: 0,
-            data_quiet: 1,
-            announcement_quiet: 0,
+            seen_sources: u32:0,
+            announcement: u32:0,
+            data_quiet: u32:1,
+            announcement_quiet: u32:0,
             ..(Syndrome_1).1
           };
           let _5 = (Tag::SYNDROME, _4);
           let Cleared_1 = _5;
           let Xls_entry_6_1 = Cleared_1;
           let _6 = Phenomquery {
-            source: 8,
+            source: u32:8,
             ..(Query_1).1
           };
           let _7 = (Tag::PHENOM_QUERY, _6, bits_from_phenomquery(_6));
           let Xls_entry_7_1 = _7;
           let _8 = Phenomquery {
-            source: 4,
+            source: u32:4,
             ..(Query_1).1
           };
           let _9 = (Tag::PHENOM_QUERY, _8, bits_from_phenomquery(_8));
           let Xls_entry_8_1 = _9;
           let _10 = Phenomquery {
-            source: 2,
+            source: u32:2,
             ..(Query_1).1
           };
           let _11 = (Tag::PHENOM_QUERY, _10, bits_from_phenomquery(_10));
           let Xls_entry_9_1 = _11;
           let _12 = Phenomquery {
-            source: 1,
+            source: u32:1,
             ..(Query_1).1
           };
           let _13 = (Tag::PHENOM_QUERY, _12, bits_from_phenomquery(_12));
@@ -986,11 +986,11 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
           };
           if _14.0 {
             let _15 = Syndrome {
-              seen_sources: 0,
-              data_parity: 0,
-              announcement: 0,
-              data_quiet: 1,
-              announcement_quiet: 0,
+              seen_sources: u32:0,
+              data_parity: u32:0,
+              announcement: u32:0,
+              data_quiet: u32:1,
+              announcement_quiet: u32:0,
               random_state: Xls_clause_1_Seed_1,
               threshold: Xls_clause_1_Threshold_1,
               x: Xls_clause_1_X_1,
@@ -1020,7 +1020,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
         Phase::COLLECTING => {
           let Xls_clause_1_Syndrome_1 = (Tag::SYNDROME, data);
           let _0 = (Phase::COLLECTING, Xls_clause_1_Syndrome_1, Directive::FAIL, bool:0, );
-          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L303);
+          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L304);
           if (bool:false) {
             (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
           } else {
@@ -1079,7 +1079,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
           } else {
             let Xls_clause_2_Syndrome_1 = (Tag::SYNDROME, data);
             let _0 = (Phase::COLLECTING, Xls_clause_2_Syndrome_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L328);
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L329);
             if (bool:false) {
               (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
@@ -1092,7 +1092,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
           let Xls_clause_1_Syndrome_1 = (Tag::SYNDROME, data);
           if Xls_clause_1_Step_1 == data.step {
             let _0 = Syndrome {
-              data_parity: 0,
+              data_parity: u32:0,
               ..(Xls_clause_1_Syndrome_1).1
             };
             let _1 = (Tag::SYNDROME, _0);
@@ -1185,9 +1185,9 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
             (bool:0, hls_failure::NONE)
           };
           if _12.0 {
-            let _13 = Xls_clause_1_Flags_1 & 1;
+            let _13 = Xls_clause_1_Flags_1 & u32:1;
             let Xls_clause_1_Present_1 = _13;
-            let _14 = Xls_clause_1_Flags_1 & 2;
+            let _14 = Xls_clause_1_Flags_1 & u32:2;
             let _15 = hls_integer::shift<false>(_14, u1:1);
             let Xls_clause_1_Quiet_1 = _15;
             let _16 = Xls_clause_1_Seen_1 | Xls_clause_1_Source_1;
@@ -1206,7 +1206,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
             let _21 = (Tag::SYNDROME, _20);
             let Xls_clause_1_Collected_1 = _21;
             let _22 = Xls_clause_1_NewSeen_1 == 15;
-            let _48 = if _22 {
+            let _46 = if _22 {
               let _23 = Xls_clause_1_Syndrome_1.1.cutoff_armed;
               let _26 = if _23 {
                 let _24 = Xls_clause_1_Syndrome_1.1.cutoff_step;
@@ -1223,72 +1223,68 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
                 (Xls_clause_1_CutoffApplies_1, hls_failure::NONE)
               };
               let Xls_clause_1_NoiseDisabled_1 = _28.0;
-              let _36 = if Xls_clause_1_NoiseDisabled_1 {
-                let _29 = (0 as u32);
-                let _30 = (Xls_clause_1_RandomState_1, _29, );
-                (_30, hls_failure::NONE)
+              let _35 = if Xls_clause_1_NoiseDisabled_1 {
+                let _29 = (Xls_clause_1_RandomState_1, u32:0, );
+                (_29, hls_failure::NONE)
               } else {
                 let _29 = (Xls_clause_1_RandomState_1 ^ (Xls_clause_1_RandomState_1 << u32:13)) & u32:0xffffffff;
                 let _30 = (_29 ^ (_29 >> u32:17)) & u32:0xffffffff;
                 let _31 = (_30 ^ (_30 << u32:5)) & u32:0xffffffff;
                 let Xls_clause_1_Sample_1 = _31;
-                let _34 = {
+                let _33 = {
                   let _32 = Xls_clause_1_Sample_1 < Xls_clause_1_Threshold_1;
                   if _32 {
-                    let _33 = (1 as u32);
-                    (_33, hls_failure::NONE)
+                    (u32:1, hls_failure::NONE)
                   } else {
-                    let _32 = (0 as u32);
-                    (_32, hls_failure::NONE)
+                    (u32:0, hls_failure::NONE)
                   }
                 };
-                let Xls_clause_1_Hit_1 = _34.0;
-                let _35 = (Xls_clause_1_Sample_1, Xls_clause_1_Hit_1, );
-                (_35, _34.1)
+                let Xls_clause_1_Hit_1 = _33.0;
+                let _34 = (Xls_clause_1_Sample_1, Xls_clause_1_Hit_1, );
+                (_34, _33.1)
               };
-              let Xls_clause_1_NextRandom_1 = _36.0.0;
-              let Xls_clause_1_Measurement_1 = _36.0.1;
-              let _37 = Xls_clause_1_NewParity_1 ^ Xls_clause_1_Measurement_1;
-              let _38 = _37 ^ Xls_clause_1_PreviousMeasurement_1;
-              let Xls_clause_1_Detection_1 = _38;
-              let _40 = if Xls_clause_1_NoiseDisabled_1 {
+              let Xls_clause_1_NextRandom_1 = _35.0.0;
+              let Xls_clause_1_Measurement_1 = _35.0.1;
+              let _36 = Xls_clause_1_NewParity_1 ^ Xls_clause_1_Measurement_1;
+              let _37 = _36 ^ Xls_clause_1_PreviousMeasurement_1;
+              let Xls_clause_1_Detection_1 = _37;
+              let _38 = if Xls_clause_1_NoiseDisabled_1 {
                 (Xls_clause_1_NewDataQuiet_1, hls_failure::NONE)
               } else {
-                let _39 = (0 as u32);
-                (_39, hls_failure::NONE)
+                (u32:0, hls_failure::NONE)
               };
-              let _41 = Xls_clause_1_Syndrome_1.1.cutoff_armed;
-              let _43 = if _41 {
-                let _42 = !Xls_clause_1_CutoffApplies_1;
-                (_42, hls_failure::NONE)
+              let _39 = Xls_clause_1_Syndrome_1.1.cutoff_armed;
+              let _41 = if _39 {
+                let _40 = !Xls_clause_1_CutoffApplies_1;
+                (_40, hls_failure::NONE)
               } else {
                 (bool:0, hls_failure::NONE)
               };
-              let _44 = Syndrome {
+              let _42 = Syndrome {
                 previous_measurement: Xls_clause_1_Measurement_1,
                 announcement: Xls_clause_1_Detection_1,
-                announcement_quiet: _40.0,
+                announcement_quiet: _38.0,
                 random_state: Xls_clause_1_NextRandom_1,
                 noise_disabled: Xls_clause_1_NoiseDisabled_1,
-                cutoff_armed: _43.0,
+                cutoff_armed: _41.0,
                 ..(Xls_clause_1_Collected_1).1
               };
-              let _45 = (Tag::SYNDROME, _44);
-              let Xls_clause_1_Complete_1 = _45;
+              let _43 = (Tag::SYNDROME, _42);
+              let Xls_clause_1_Complete_1 = _43;
               let Xls_clause_1_NextSyndrome_1 = Xls_clause_1_Complete_1;
-              let _46 = (Phase::ANNOUNCING, Xls_clause_1_NextSyndrome_1, Directive::CONSUME, bool:0, );
-              let _47 = (_46.0, _46.1, _46.2, _46.3, hls_failure::NONE);
-              (_47, hls_failure::first_all([_26.1, _28.1, _36.1, _40.1, _43.1]))
+              let _44 = (Phase::ANNOUNCING, Xls_clause_1_NextSyndrome_1, Directive::CONSUME, bool:0, );
+              let _45 = (_44.0, _44.1, _44.2, _44.3, hls_failure::NONE);
+              (_45, hls_failure::first_all([_26.1, _28.1, _35.1, _38.1, _41.1]))
             } else {
               let Xls_clause_1_NextSyndrome_1 = Xls_clause_1_Collected_1;
               let _23 = (Phase::COLLECTING, Xls_clause_1_NextSyndrome_1, Directive::CONSUME, bool:0, );
               let _24 = (_23.0, _23.1, _23.2, _23.3, hls_failure::NONE);
               (_24, hls_failure::NONE)
             };
-            if ((_48.1) != hls_failure::NONE) {
-              (phase, data, Directive::FAIL, u1:0, _48.1)
+            if ((_46.1) != hls_failure::NONE) {
+              (phase, data, Directive::FAIL, u1:0, _46.1)
             } else {
-              (_48.0.0, _48.0.1.1, _48.0.2, _48.0.3, _48.0.4)
+              (_46.0.0, _46.0.1.1, _46.0.2, _46.0.3, _46.0.4)
             }
           } else {
             let Xls_clause_2_Syndrome_1 = (Tag::SYNDROME, data);
@@ -1400,7 +1396,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
           } else {
             let Xls_clause_2_Syndrome_1 = (Tag::SYNDROME, data);
             let _0 = (Phase::COLLECTING, Xls_clause_2_Syndrome_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L320);
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_8D795B60_L321);
             if (bool:false) {
               (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {

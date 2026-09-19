@@ -62,7 +62,8 @@ erl -noshell -pa "$project_root/_build/test/lib/erl_hls/ebin" \
 iverilog -g2012 -s literal_context_tb -o "$stage/literal_context.vvp" \
     "$stage/literal_context_tb.sv" "$stage/literal_context.v"
 vvp "$stage/literal_context.vvp"
-for kind in literal_conflicting_uses literal_existing_value; do
+for kind in literal_conflicting_uses literal_existing_value \
+        literal_record_existing_value literal_record_conflicting_uses; do
     if "$xls_root/ir_converter_main" --top=root "${options[@]}" \
             "$stage/$kind.x" > "$stage/$kind.ir" 2> "$stage/$kind.log"; then
         echo "XLS accepted $kind" >&2; exit 1

@@ -279,6 +279,7 @@ configuring(cast, #noise_cutoff{}, Cell) ->
 configuring(cast, #pauli_update{}, Cell) ->
     {configuring, Cell, fail}.
 
+-doc "Collects neighbor queries, applies corrections and serves stable Pauli queries.".
 -spec collecting(enter, phase(), #data_cell{}) ->
     hls_statem:enter_result(#data_cell{});
     (cast,
@@ -335,13 +336,12 @@ collecting(
             NoiseDisabled = Cell#data_cell.noise_disabled orelse
                 CutoffApplies,
             {NextRandom, Event} = case NoiseDisabled of
-                true -> {Cell#data_cell.random_state,
-                    hls_type:as(hls_nums:u32(), 0)};
+                true -> {Cell#data_cell.random_state, 0};
                 false ->
                     Sample = hls_prng:xorshift32(Cell#data_cell.random_state),
                     Hit = if
-                        Sample < Cell#data_cell.threshold -> hls_type:as(hls_nums:u32(), 1);
-                        true -> hls_type:as(hls_nums:u32(), 0)
+                        Sample < Cell#data_cell.threshold -> 1;
+                        true -> 0
                     end,
                     {Sample, Hit}
             end,
@@ -390,6 +390,7 @@ collecting(
 collecting(cast, #pauli_query{}, Cell) ->
     {collecting, Cell, fail}.
 
+-doc "Publishes the completed noise round and handles corrections, cutoffs and stable queries.".
 -spec reporting(enter, phase(), #data_cell{}) ->
     hls_statem:enter_result(#data_cell{});
     (cast,
@@ -398,8 +399,8 @@ collecting(cast, #pauli_query{}, Cell) ->
         #data_cell{}) -> hls_statem:cast_result(phase(), #data_cell{}).
 reporting(enter, _OldPhase, Cell) ->
     QuietFlag = case Cell#data_cell.noise_disabled of
-        true -> hls_type:as(hls_nums:u32(), 2);
-        false -> hls_type:as(hls_nums:u32(), 0)
+        true -> 2;
+        false -> 0
     end,
     Message = #phenom_data{
         step = Cell#data_cell.step,
@@ -477,6 +478,7 @@ reporting(
 reporting(cast, #pauli_query{}, Cell) ->
     {reporting, Cell, fail}.
 
+-doc "Emits a Pauli-query response, then resumes the saved noise-protocol phase.".
 -spec replying(enter, phase(), #data_cell{}) ->
     hls_statem:enter_result(#data_cell{});
     (cast,
@@ -513,7 +515,7 @@ replying(
         true ->
             {reporting, Cell#data_cell{
                 seen_sources = NewSeen,
-                event = hls_type:as(hls_nums:u32(), 0)
+                event = 0
             }, consume}
     end;
 replying(
@@ -577,14 +579,15 @@ replying(
 replying(cast, #pauli_query{}, Cell) ->
     {replying, Cell, fail}.
 
+%% Builds a nondestructive Pauli-query response in the cell state.
 -spec prepare_reply(#data_cell{}, hls_nums:u32(), hls_pauli:pauli()) -> #data_cell{}.
 prepare_reply(Cell, RequestId, Measurement) ->
     Anticommutes = hls_pauli:anticommutes(Cell#data_cell.accumulated_pauli, Measurement),
     Cell#data_cell{
         reply_request_id = RequestId,
         reply_anticommutes = case Anticommutes of
-            false -> hls_type:as(hls_nums:u32(), 0);
-            true -> hls_type:as(hls_nums:u32(), 1)
+            false -> 0;
+            true -> 1
         end
     }.
 

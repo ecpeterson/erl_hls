@@ -2,12 +2,24 @@
 -moduledoc false.
 -export([run/2]).
 -compile(nowarn_export_vars).
--hls_data(unused).
--hls_tags([]).
+-hls_data(cell).
+-hls_tags([report]).
+-compile({parse_transform, hls_pack}).
 
--doc "Exercises signature-directed literals and selected failures without explicit literal casts.".
+%% Mixed field types exercise logical widths independently of packed widths.
+-record(cell, {
+    value = hls_type:zero() :: hls_nums:u32(),
+    sample = hls_type:zero() :: hls_nums:u8(),
+    signed = hls_type:zero() :: hls_nums:sN(5),
+    padded = hls_type:zero() :: hls_bits:padded(hls_nums:uN(3), 32)
+}).
+%% Message constructors retain their tag and packed payload representation.
+-record(report, {value = hls_type:zero() :: hls_nums:u32()}).
+
+-doc "Exercises signature- and field-directed literals and selected failures without explicit literal casts.".
 -spec run(hls_nums:u8(), hls_nums:u8()) -> hls_nums:s32().
-run(Mode, X) -> select(Mode, X).
+run(Mode, X) ->
+    case Mode < 17 of true -> select(Mode, X); false -> records(Mode, X) end.
 
 %% Keep ordinary BEAM integers as the oracle for these bounded expressions.
 -spec select(hls_nums:u8(), hls_nums:u8()) -> hls_nums:s32().
@@ -40,6 +52,54 @@ select(Mode, X) ->
                 false -> Local = 300, wide_value(Local)
             end;
         _ -> -99
+    end.
+
+%% Keep record witnesses separate so XLS need not infer one huge conditional.
+-spec records(hls_nums:u8(), hls_nums:u8()) -> hls_nums:s32().
+records(Mode, X) ->
+    case Mode of
+        17 ->
+            {Sample, Hit} = case X =:= 0 of true -> {X, 0}; false -> {X, 7} end,
+            Cell = #cell{value = Hit, sample = Sample},
+            hls_type:as(hls_nums:s32(), Cell#cell.value);
+        18 ->
+            {_, Hit} = case X =:= 0 of true -> {X, 0}; false -> {X, 7} end,
+            Cell = #cell{value = Hit},
+            hls_type:as(hls_nums:s32(), Cell#cell.value);
+        19 ->
+            Cell = update(#cell{value = 100}, X =:= 0),
+            hls_type:as(hls_nums:s32(), Cell#cell.value);
+        20 ->
+            Cell = #cell{signed = if X < 8 -> -16; true -> 15 end},
+            hls_type:as(hls_nums:s32(), Cell#cell.signed);
+        21 ->
+            Cell = #cell{padded = case X =:= 0 of true -> 0; false -> 7 end},
+            hls_type:as(hls_nums:s32(), Cell#cell.padded);
+        22 ->
+            Message = #report{value = case X =:= 0 of true -> 0; false -> $A end},
+            #report{value = Value} = Message,
+            hls_type:as(hls_nums:s32(), Value);
+        23 ->
+            Cell = #cell{value = hls_type:as(hls_nums:u32(), X)},
+            case Cell of #cell{value = 0} -> -1; #cell{value = Value} -> hls_type:as(hls_nums:s32(), Value) end;
+        24 ->
+            case X =:= 0 of true -> Hit = 7, X; false -> Hit = 0, X end,
+            Cell = #cell{value = Hit},
+            hls_type:as(hls_nums:s32(), Cell#cell.value);
+        25 ->
+            Cell = #cell{value = case X =:= 0 of
+                true -> true = (X =:= 1), 0; false -> 7 end},
+            hls_type:as(hls_nums:s32(), Cell#cell.value);
+        26 ->
+            #cell{value = Value} = #cell{value = 7},
+            hls_type:as(hls_nums:s32(), Value);
+        27 ->
+            Pair = case X =:= 0 of true -> {0, 0}; false -> {7, 15} end,
+            {Wide, _} = Pair,
+            {_, Small} = Pair,
+            Cell = #cell{value = Wide, sample = Small},
+            hls_type:as(hls_nums:s32(), Cell#cell.value) +
+                hls_type:as(hls_nums:s32(), Cell#cell.sample)
     end.
 
 %% A mixed signed/unsigned tuple exercises literal widths in nested branches.
@@ -77,3 +137,9 @@ byte_value(Value) -> hls_type:as(hls_nums:s32(), Value).
 %% Widening/narrowing an existing value is still an explicit operation.
 -spec wide_value(hls_nums:u32()) -> hls_nums:s32().
 wide_value(Value) -> hls_type:as(hls_nums:s32(), Value).
+
+%% A record update supplies context through a bound, nested branch result.
+-spec update(#cell{}, boolean()) -> #cell{}.
+update(Cell, Flag) ->
+    Value = case Flag of true -> 3 + 4; false -> 0 end,
+    Cell#cell{value = Value}.

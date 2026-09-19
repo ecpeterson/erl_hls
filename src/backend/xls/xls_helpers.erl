@@ -32,13 +32,13 @@ prepare(Forms0, Roots) ->
         {function, Line, Name, Arity, Clauses} ->
             case lists:member({Name, Arity}, Roots) of
                 true -> {function, Line, Name, Arity,
-                    xls_literal_types:clauses(rewrite(Clauses, Helpers), unknown)};
+                    xls_literal_types:clauses(rewrite(Clauses, Helpers), unknown, Forms)};
                 false -> Form
             end;
         _ -> Form
     end || Form <- Forms],
     {Rewritten, [Helper#{clauses := xls_literal_types:clauses(
-            rewrite(maps:get(clauses, Helper), Helpers), maps:get(result, Helper))}
+            rewrite(maps:get(clauses, Helper), Helpers), maps:get(result, Helper), Forms)}
         || Key <- dependency_order(Helpers), Helper <- [maps:get(Key, Helpers)]]}.
 
 dependency_order(Helpers) ->

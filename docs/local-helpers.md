@@ -9,8 +9,8 @@ prepare_reply(Cell, RequestId, Measurement) ->
     Cell#data_cell{
         reply_request_id = RequestId,
         reply_anticommutes = case Anticommutes of
-            false -> hls_type:as(hls_nums:u32(), 0);
-            true -> hls_type:as(hls_nums:u32(), 1)
+            false -> 0;
+            true -> 1
         end
     }.
 ```
@@ -21,7 +21,7 @@ prepare_reply(Cell, RequestId, Measurement) ->
 
 Each helper has one concrete `-spec`. Arguments and results can use `hls_type` provider types, including integers, fixed-point numbers and fixed-size vectors, `boolean()`, fixed tuples of supported types, and the actor's declared data/message records. XLS checks argument and result types. Specs such as `integer()`, polymorphic variables, overloaded signatures, and local type aliases do not give the current translator a supported concrete representation. A call does not insert a numeric cast or normalization; use the type provider's operations explicitly where needed. The existing [numeric contracts](numeric-contract.md) also apply inside helpers.
 
-Signatures supply integer-literal widths through tuple fields, local bindings, arithmetic and `case`/`if` results. For example, a helper taking `{boolean(), hls_nums:u16(), hls_nums:s32()}` accepts `{Flag, 0, -1}` without casts around the literals. A helper returning that tuple can select `{true, 1, -1}` or `{false, 65535, 2}`. Literals must fit their declared type; existing values are not widened or narrowed, and a bound value used at incompatible widths remains a type error. Comparisons, shift counts and provider arguments retain their independent typing rules; signatures do not supply a default width for unrelated expressions.
+Helper signatures and declared record fields supply integer-literal widths through tuple fields, local bindings, arithmetic and `case`/`if` results. For example, a helper taking `{boolean(), hls_nums:u16(), hls_nums:s32()}` accepts `{Flag, 0, -1}` without casts around the literals. A helper returning that tuple can select `{true, 1, -1}` or `{false, 65535, 2}`. Literals must fit their declared type; existing values are not widened or narrowed, and a bound value used at incompatible widths remains a type error. Record construction and updates supply the field’s logical type, including through tuple destructuring where other elements remain unconstrained. Padding affects the wire layout only. Comparisons, shift counts and provider arguments retain their independent typing rules; these contexts do not supply a default width for unrelated expressions.
 
 Helpers may have multiple clauses with the same pattern and guard subset as callbacks, including fixed-list patterns, aliases, repeated variables, and semicolon guard alternatives. Clauses are tried in source order. If no head and guard match, the helper raises `function_clause`; a failure in a selected body does not try a later clause. Pattern matching, `case`, `if`, and short-circuit Boolean expressions are also available in the body. Nested calls and multiple arities are supported. Type descriptors are compile-time objects used inside expressions, rather than runtime helper parameters; parametric helper signatures are not supported.
 
