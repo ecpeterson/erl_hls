@@ -448,6 +448,9 @@ statement_from_statement({var, Line, Name}, State) ->
     end;
 statement_from_statement({integer, _L, Integer}, State) ->
     reference(State, {static, integer, Integer});
+%% A signature gives this literal its width without casting an existing value.
+statement_from_statement({xls_typed_integer, _L, Type, Integer}, State) ->
+    reference(State, [Type, ":", integer_to_list(Integer)]);
 statement_from_statement({char, _L, Integer}, State) ->
     reference(State, {static, integer, Integer});
 statement_from_statement({op, _L, '+', {integer, _IntegerLine, Integer}}, State) ->

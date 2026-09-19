@@ -13,8 +13,8 @@
 
 %% A reachable helper with concrete input/result types and its source clauses.
 -type helper() :: #{name := string(), clauses := [erl_parse:abstract_clause(), ...],
-    arguments := [iodata()], argument_records := [none | {record, atom()}],
-    result := iodata()}.
+    arguments := [xls_literal_types:type()], argument_records := [none | {record, atom()}],
+    result := xls_literal_types:type()}.
 
 -doc "Finds reachable local helpers, checks concrete signatures and recursion, and returns rewritten roots plus dependency-ordered helpers.".
 -spec prepare([hls_source:form()], [{atom(), arity()}]) ->
@@ -31,12 +31,14 @@ prepare(Forms0, Roots) ->
     Rewritten = [case Form of
         {function, Line, Name, Arity, Clauses} ->
             case lists:member({Name, Arity}, Roots) of
-                true -> {function, Line, Name, Arity, rewrite(Clauses, Helpers)};
+                true -> {function, Line, Name, Arity,
+                    xls_literal_types:clauses(rewrite(Clauses, Helpers), unknown)};
                 false -> Form
             end;
         _ -> Form
     end || Form <- Forms],
-    {Rewritten, [Helper#{clauses := rewrite(maps:get(clauses, Helper), Helpers)}
+    {Rewritten, [Helper#{clauses := xls_literal_types:clauses(
+            rewrite(maps:get(clauses, Helper), Helpers), maps:get(result, Helper))}
         || Key <- dependency_order(Helpers), Helper <- [maps:get(Key, Helpers)]]}.
 
 dependency_order(Helpers) ->
@@ -99,6 +101,8 @@ reachable([{Key, CallLine} | Rest], Context = #{definitions := Definitions,
     reachable(local_calls(maps:get(clauses, Helper)) ++ Rest,
         Context, Seen#{Key => Helper}).
 
+%% Resolve a reachable helper's one concrete signature and preserve its shape.
+-spec prepare_helper({atom(), arity()}, map(), map()) -> helper().
 prepare_helper(Key = {Name, Arity}, #{file := File, line := Line,
         clauses := Clauses}, Context = #{forms := Forms}) ->
     Origin = {File, Line, Key},
@@ -119,43 +123,54 @@ prepare_helper(Key = {Name, Arity}, #{file := File, line := Line,
         argument_records => [argument_record(T) || T <- Args],
         result => type(Result, Context, Origin)}.
 
+%% Keep tuple fields available to literal lowering; provider types are opaque.
+-spec type(erl_parse:abstract_type(), map(), term()) -> xls_literal_types:type().
 type({ann_type, _, [_Name, Type]}, Context, Origin) -> type(Type, Context, Origin);
-type({type, _, boolean, []}, _Context, _Origin) -> "bool";
+type({type, _, boolean, []}, _Context, _Origin) -> {provider, hls_bool:bool()};
 type({type, _, tuple, Fields}, Context, Origin) when is_list(Fields) ->
-    ["(", [[type(T, Context, Origin), ", "] || T <- Fields], ")"];
+    {tuple, [type(T, Context, Origin) || T <- Fields]};
 type({type, _, record, [{atom, _, Name}]},
         #{data := Data, tags := Tags, forms := Forms}, Origin) ->
     Struct = xls_names:record_type(Name),
     case {Name =:= Data, lists:member(Name, Tags)} of
-        {true, _} -> ["(Tag, ", Struct, ")"];
-        {false, true} -> ["(Tag, ", Struct, ", bits[",
+        {true, _} -> {dslx, ["(Tag, ", Struct, ")"]};
+        {false, true} -> {dslx, ["(Tag, ", Struct, ", bits[",
             integer_to_list(xls_parse:record_width(xls_parse:find_record(Forms, Name))),
-            "])"];
+            "])"]};
         _ -> error({undeclared_xls_helper_record, Origin, Name})
     end;
 type({remote_type, _, _} = Type, _Context, Origin) ->
-    try hls_type:print_type(hls_type:descriptor(Type)) of
-        Printed -> Printed
+    try
+        Descriptor = hls_type:descriptor(Type),
+        _ = hls_type:print_type(Descriptor),
+        {provider, Descriptor}
     catch error:Reason -> error({unsupported_xls_helper_type, Origin, Type, Reason})
     end;
 type(Type, _Context, Origin) -> error({unsupported_xls_helper_type, Origin, Type}).
 
+%% Attach argument contracts before flattening can separate literals from uses.
+-spec rewrite(term(), #{{atom(), arity()} => helper()}) -> term().
 rewrite({call, Line, {atom, _, Name}, Args}, Helpers) ->
-    #{name := Emitted} = maps:get({Name, length(Args)}, Helpers),
-    {xls_helper_call, Line, Emitted, rewrite(Args, Helpers)};
+    #{name := Emitted, arguments := Types} = maps:get({Name, length(Args)}, Helpers),
+    {xls_helper_call, Line, Emitted, [
+        {xls_expected, Line, Type, rewrite(Arg, Helpers)}
+        || {Arg, Type} <- lists:zip(Args, Types)]};
 rewrite(Tuple, Helpers) when is_tuple(Tuple) ->
     list_to_tuple([rewrite(X, Helpers) || X <- tuple_to_list(Tuple)]);
 rewrite(List, Helpers) when is_list(List) -> [rewrite(X, Helpers) || X <- List];
 rewrite(Value, _Helpers) -> Value.
 
+-doc "Emits dependency-ordered helper definitions with concrete signatures and selected failures.".
 -spec emit([helper()], atom(), map()) -> iolist().
 emit(Helpers, DataName, EnumAtoms) ->
     [emit_helper(H, DataName, EnumAtoms) || H <- Helpers].
 
 %% Keep the common irrefutable helper compact. Patterned or guarded clauses
 %% share callback selection, including function_clause versus body failures.
+-spec emit_helper(helper(), atom(), map()) -> iolist().
 emit_helper(#{name := Name, clauses := Clauses = [{clause, Line, _, _, _} | _],
-        arguments := Types, argument_records := Records, result := Type}, DataName, EnumAtoms) ->
+        arguments := Types, argument_records := Records, result := ResultType}, DataName, EnumAtoms) ->
+    Type = xls_literal_types:format(ResultType),
     Arguments = ["argument_" ++ integer_to_list(I) || I <- lists:seq(1, length(Types))],
     Body = case plain_head(Clauses) of
         true ->
@@ -175,7 +190,7 @@ emit_helper(#{name := Name, clauses := Clauses = [{clause, Line, _, _, _} | _],
                 Failed(xls_failure_sites:at(function_clause, Line)), Failed, EnumAtoms),
             [Computation, Result]
     end,
-    ["fn ", Name, "(", lists:join(", ", [[A, ": ", T]
+    ["fn ", Name, "(", lists:join(", ", [[A, ": ", xls_literal_types:format(T)]
         || {A, T} <- lists:zip(Arguments, Types)]), ") -> (", Type,
         ", hls_failure::Code) {  // L", integer_to_list(erl_anno:line(Line)), "\n",
         xls_parse_io:indent(xls_parse:print(Body), 2), "}\n\n"].
