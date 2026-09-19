@@ -100,14 +100,16 @@ include_origin_diagnostic_test() ->
         prepare(["root() -> helper().", "-file(\"helpers.hrl\", 1).",
             "helper() -> 0."])).
 
+%% Preserve structural signature context while retaining the emitted contract.
+-spec typed_composite_helper_test() -> ok.
 typed_composite_helper_test() ->
     {_, [#{arguments := [Input], result := Output}]} = prepare([
         "root() -> helper({true, #cell{}}).",
         "-spec helper({boolean(), #cell{}}) -> #report{}.",
         "helper(Pair) -> {_, Cell} = Pair, #report{value = Cell#cell.value}."
     ]),
-    ?assertEqual(<<"(bool, (Tag, Cell), )">>, iolist_to_binary(Input)),
-    ?assertEqual(<<"(Tag, Report, bits[32])">>, iolist_to_binary(Output)).
+    ?assertEqual(<<"(bool, (Tag, Cell), )">>, iolist_to_binary(xls_literal_types:format(Input))),
+    ?assertEqual(<<"(Tag, Report, bits[32])">>, iolist_to_binary(xls_literal_types:format(Output))).
 
 prepare(Sources) ->
     Forms = [form(S) || S <- [
