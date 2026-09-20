@@ -14,6 +14,8 @@ module zynq_ps_probe_tb;
     wire [11:0] bid, rid;
     wire [1:0] bresp, rresp;
     wire [31:0] rdata;
+    reg [127:0] status = 0;
+    wire [31:0] control;
     reg [31:0] model_scratch = 0, model_writes = 0, sample, earlier;
     integer trial, lane, beats;
     localparam [31:0] BASE = 32'h40000000;
@@ -22,7 +24,11 @@ module zynq_ps_probe_tb;
 `ifdef MAPPED
     zynq_ps_probe_mapped dut(.*);
 `else
+`ifdef EXTENDED
+    zynq_ps_probe #(.EXTENDED(1)) dut(.*);
+`else
     zynq_ps_probe dut(.*);
+`endif
 `endif
 
     // Advance one edge and allow all sequential/combinational outputs to settle.
@@ -138,6 +144,26 @@ module zynq_ps_probe_tb;
         read_value(BASE+4, 12'hfff, 0, 2, 0, 0, 0, 0, sample);
         if (sample !== 1) $fatal(1, "ABI mismatch");
         check_state;
+        // Extension reads snapshot each selected word and never grant writes.
+        for (trial = 0; trial < 4; trial = trial + 1) begin
+            status = 128'h44444444333333332222222211111111;
+`ifdef EXTENDED
+            read_value(BASE+20+4*trial, 12'h234, 0, 2, 0, 1, 0, 5, sample);
+            if (sample !== status[32*trial +: 32]) $fatal(1, "extension word mismatch");
+`else
+            read_value(BASE+20+4*trial, 12'h234, 0, 2, 0, 1, 2, 5, sample);
+`endif
+            start_write(BASE+20+4*trial, 12'h234, 0, 2, 0, 1);
+            write_beat(32'hdeadbeef, 15, 12'h234, 1);
+            finish_write(12'h234, 2, 0);
+        end
+`ifdef EXTENDED
+        araddr = BASE+20; arlen = 0; arsize = 2; arlock = 0; arburst = 1;
+        arvalid = 1; tick; arvalid = 0;
+        status = 0; repeat (5) tick;
+        if (rdata !== 32'h11111111) $fatal(1, "live status changed a stalled response");
+        rready = 1; tick; rready = 0;
+`endif
 
         // Cover every byte mask and both address-first and data-first arrival.
         for (trial = 0; trial < 64; trial = trial + 1) begin
@@ -201,6 +227,7 @@ module zynq_ps_probe_tb;
         if (!rvalid || rdata !== model_scratch || rid !== 12'h222)
             $fatal(1, "concurrent read/write ordering mismatch");
         model_scratch = 32'h01234567; model_writes = model_writes + 1;
+        if (control !== model_scratch) $fatal(1, "control did not follow scratch");
         finish_write(12'h111, 0, 3);
         rready = 1; tick; rready = 0;
         check_state;
