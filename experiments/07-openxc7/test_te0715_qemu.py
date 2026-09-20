@@ -54,16 +54,21 @@ def cpio(files: list[tuple[str, bytes, int]]) -> bytes:
     return bytes(output)
 
 
-def run(candidate: Path, timeout: float) -> Path:
-    """Require the guest success marker before timeout; always stop QEMU and save UART output."""
+def run(candidate: Path, timeout: float, *, programs: tuple[str, str] = ("probe_zynq_ps", "test_probe_zynq_ps"),
+        init: bytes = INIT) -> Path:
+    """Check a candidate's diagnostic and UIO in Linux, retaining UART output and stopping QEMU.
+
+    Alternative diagnostics supply two program basenames and an init script that
+    emits SUCCESS only after checking them. No physical PL access is attempted.
+    """
     executable = shutil.which("qemu-system-arm")
     if executable is None:
         raise ValueError("qemu-system-arm is required for the optional Linux smoke test")
     work = candidate.parent / "qemu"
     work.mkdir(exist_ok=True)
-    overlay = cpio([("boot-check", INIT, 0o100755)] +
+    overlay = cpio([("boot-check", init, 0o100755)] +
                    [(name, (candidate / name).read_bytes(), 0o100755)
-                    for name in ("probe_zynq_ps", "test_probe_zynq_ps")])
+                    for name in programs])
     initrd = work / "test-initramfs.gz"
     initrd.write_bytes((candidate / "rootfs.cpio.gz").read_bytes() + gzip.compress(overlay, mtime=0))
     # QEMU 10.2's Zynq SMP direct-boot stubs overlap. Userspace tests need one CPU.
