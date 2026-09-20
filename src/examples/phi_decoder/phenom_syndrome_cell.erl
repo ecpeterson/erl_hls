@@ -266,6 +266,7 @@ configuring(cast, #phenom_data{}, Syndrome) ->
 configuring(cast, #noise_cutoff{}, Syndrome) ->
     {configuring, Syndrome, fail}.
 
+-doc "Collects directional data and computes one detection event with measurement noise.".
 -spec collecting(enter, phase(), #syndrome{}) ->
     hls_statem:enter_result(#syndrome{});
     (cast,
@@ -361,13 +362,12 @@ collecting(
             NoiseDisabled = Syndrome#syndrome.noise_disabled orelse
                 CutoffApplies,
             {NextRandom, Measurement} = case NoiseDisabled of
-                true -> {RandomState,
-                    hls_type:as(hls_nums:u32(), 0)};
+                true -> {RandomState, 0};
                 false ->
                     Sample = hls_prng:xorshift32(RandomState),
                     Hit = if
-                        Sample < Threshold -> hls_type:as(hls_nums:u32(), 1);
-                        true -> hls_type:as(hls_nums:u32(), 0)
+                        Sample < Threshold -> 1;
+                        true -> 0
                     end,
                     {Sample, Hit}
             end,
@@ -377,7 +377,7 @@ collecting(
                 announcement = Detection,
                 announcement_quiet = case NoiseDisabled of
                     true -> NewDataQuiet;
-                    false -> hls_type:as(hls_nums:u32(), 0)
+                    false -> 0
                 end,
                 random_state = NextRandom,
                 noise_disabled = NoiseDisabled,

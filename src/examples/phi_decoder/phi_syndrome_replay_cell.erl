@@ -146,6 +146,7 @@ configuring(cast, #phenom_request{step = 0}, Source) ->
 configuring(cast, #phenom_request{}, Source) ->
     {configuring, Source, fail}.
 
+-doc "Starts measurement replay at step zero after configuration.".
 -spec waiting(enter, phase(), #source{}) -> hls_statem:enter_result(#source{});
     (cast, #phenom_config{} | #phenom_request{}, #source{}) ->
         hls_statem:cast_result(phase(), #source{}).
@@ -164,8 +165,8 @@ waiting(
 ) ->
     NextRandom = hls_prng:xorshift32(RandomState),
     Measurement = case NextRandom < Threshold of
-        false -> hls_type:as(hls_nums:u32(), 0);
-        true -> hls_type:as(hls_nums:u32(), 1)
+        false -> 0;
+        true -> 1
     end,
     {announcing, Source#source{
         step = 0,
@@ -176,6 +177,7 @@ waiting(
 waiting(cast, #phenom_request{}, Source) ->
     {waiting, Source, fail}.
 
+-doc "Publishes the current detection event and accepts the next sequential step.".
 -spec announcing(enter, phase(), #source{}) ->
     hls_statem:enter_result(#source{});
     (cast, #phenom_config{} | #phenom_request{}, #source{}) ->
@@ -202,8 +204,8 @@ announcing(
 ) when Step =:= ((PreviousStep + 1) band ?U32_MASK) ->
     NextRandom = hls_prng:xorshift32(RandomState),
     Measurement = case NextRandom < Threshold of
-        false -> hls_type:as(hls_nums:u32(), 0);
-        true -> hls_type:as(hls_nums:u32(), 1)
+        false -> 0;
+        true -> 1
     end,
     {repeat_phase, Source#source{
         step = Step,

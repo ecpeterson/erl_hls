@@ -1106,6 +1106,8 @@ state_event_kinds_use_fixed_result_shapes_test() ->
         end
     ).
 
+%% Filtering entry clauses preserves priority among the remaining cast clauses.
+-spec state_event_filtering_preserves_cast_clause_order_test() -> ok.
 state_event_filtering_preserves_cast_clause_order_test() ->
     Source =
         "waiting(cast, #message{value = 0}, Cell) ->\n"
@@ -1119,8 +1121,8 @@ state_event_filtering_preserves_cast_clause_order_test() ->
         Source,
         "",
         fun(XLS) ->
-            {First, _} = binary:match(XLS, <<"value: 111111">>),
-            {Second, _} = binary:match(XLS, <<"value: 222222">>),
+            {First, _} = binary:match(XLS, <<"value: u32:111111">>),
+            {Second, _} = binary:match(XLS, <<"value: u32:222222">>),
             ?assert(First < Second)
         end
     ).
