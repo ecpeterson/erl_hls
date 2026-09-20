@@ -19,6 +19,8 @@ def path_report(clock, logic, routing):
 
 
 class TimingReports(unittest.TestCase):
+    """Check profile geometry, retained hardware, report coverage and provenance."""
+
     @unittest.skipUnless(shutil.which("iverilog") and shutil.which("vvp"), "Icarus is not installed")
     def test_public_event_harness_geometry_and_rejection(self) -> None:
         """Check rectangular masks, omitted planes and rejection of an invalid coordinate."""

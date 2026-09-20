@@ -6,6 +6,8 @@ The larger fabric accommodates D3; the Z-7030 uses the checked SBG485 package ov
 
 The [2026-09-12 D3 baseline](results/d3-2026-09-12.md) records the measured seed distribution, resource counts, critical-path findings, and validation results. The [2026-09-14 arbitration and RAM-ordering comparison](results/d3-arbitration-2026-09-14.md) compares fresh main and the changed design with that earlier measurement: LUT use falls while routed timing becomes more sensitive to placement seed.
 
+The [2026-09-20 Zynq-7030 probe](results/z7030-decoder-2026-09-20.md) records the four-cell core mapping, two interrupted one-hour routing attempts, and a packed-netlist capacity bound for D3. It establishes no new clock estimate.
+
 ## Choose the probe budget
 
 Start with the cheapest measurement that answers the PR's question. Run focused correctness checks and D3 throughput before the large synthesis or routing jobs, and measure the final candidate after those checks pass. Use small representative fixtures while comparing implementations. A change that leaves the generated RTL identical can reuse its verified measurements.
