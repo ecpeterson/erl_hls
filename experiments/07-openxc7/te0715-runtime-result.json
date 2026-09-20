@@ -1,0 +1,38 @@
+{
+  "board": "TE0715-05-71C33-A / TEF1002-03-A",
+  "base_project_commit": "d6ea75a5ab182e42c76daf96b4bb979062839c9e",
+  "hardware_validated": false,
+  "kernel": "6.1.30-xilinx-v2023.2",
+  "userspace": "Alpine 3.23.6 armv7",
+  "otp": "28.5.0.1",
+  "beam_modules": 111,
+  "rootfs_image_bytes": 536870912,
+  "rootfs_used_mib_reported_by_guest": 103,
+  "rootfs_compressed_bytes": 49074412,
+  "candidate_bytes": 65614802,
+  "package_count": 63,
+  "package_download_bytes": 45989997,
+  "warm_assembly_and_validation_seconds": 122.39,
+  "qemu": "QEMU emulator version 10.2.0",
+  "validation": {
+    "target_eunit_cases": 23,
+    "normal_init_and_openrc": true,
+    "published_compressed_image_rechecked": true,
+    "snapshot_preserves_image_hash": true,
+    "uio_probe_binding": true,
+    "xilinx_dmaengine_provider_registered": true,
+    "dma_channels_exercised": false,
+    "pl_mmio_exercised": false,
+    "networking_exercised": false,
+    "portable_archive_input_tests": 5,
+    "ps_probe_c_and_rtl_tests": "passed",
+    "source_contracts": "no new/changed gaps",
+    "dialyzer": "passed"
+  },
+  "manifest_sha256": "d7ccd63c03a3f286082824cb74cf0e098db5fb2564d63d4e0aaac57dc1f30c69",
+  "uart_log_sha256": {
+    "assembly-uart.log": "f33075c702696d7732335485daa4708f8c4b92663f82d018fc4513be3e4402cb",
+    "sd-root-uart.log": "a9797b083fc4f3a7f4e050ba5df724b4a699c3c5eaef939d40e55d977ae8a5c8",
+    "recheck-uart.log": "3f4ed66ba9aa79bab2ccad46fa068df84465781161e61d9c6e7b586b65a8d473"
+  }
+}

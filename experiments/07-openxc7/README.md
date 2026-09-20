@@ -7,6 +7,7 @@ build `erl_hls` designs natively on Apple Silicon. It includes:
 - an [XC7Z030-SBG485 package overlay and counter/BRAM/DSP compile check](zynq7030.md);
 - a [PS7/FCLK0/GP0 register probe](../../docs/zynq-ps-probe.md) for CPU-access bring-up;
 - a [native TE0715 SD boot candidate](docs/te0715-boot.md), with source-built FSBL and ARM Linux diagnostic;
+- an [ARM Linux/OTP SD root](docs/te0715-runtime.md), with board diagnostics and target-side frame-I/O tests;
 - the current two-process, packet-routed `regsvc` fixture, including a separate
   routed debug path and both instrumentation monitors; and
 - a [D3 decoder place-and-route benchmark](phi-timing.md) on `xc7z100ffg900-2`, with explicit timing-model coverage and placement-seed distributions.
