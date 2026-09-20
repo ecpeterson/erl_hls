@@ -14,7 +14,7 @@ from prepare_te0715_boot import fetch
 
 
 def run(yosys: Path | None) -> None:
-    """Simulate every routed frame size and verify BRAM inference when Yosys is given."""
+    """Sweep RTL frame sizes; check mapped BRAM boundaries and ownership with Yosys."""
     root = Path(__file__).resolve().parent
     config = b"CONFIG_PL330_DMA=y\nCONFIG_MODVERSIONS=y\n"
     assert kernel_config(b"ARM boot" + gzip.compress(b"kernelIKCFG_ST" + gzip.compress(config))) == config
@@ -55,7 +55,8 @@ def run(yosys: Path | None) -> None:
                     raise ValueError("expected one RAMB18E1 black box")
                 (stage / "cells.v").write_text(cells)
                 extra = [str(stage / "mapped.v"), str(stage / "cells.v"), *map(str, models)]
-                flags = ["-DMAPPED", "-s", "glbl"]
+                flags = ["-DMAPPED", "-Pzynq_dma_mailbox_tb.EXHAUSTIVE_LENGTHS=0", "-s", "glbl"]
+            print(f"DMA mailbox: {'mapped boundary cases' if mapped else 'exhaustive RTL'}", flush=True)
             subprocess.run(["iverilog", "-g2012", *flags, "-s", "zynq_dma_mailbox_tb",
                             "-o", str(stage / "mailbox.vvp"), *sources, *extra], check=True)
             subprocess.run(["vvp", str(stage / "mailbox.vvp")], check=True, timeout=60)

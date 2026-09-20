@@ -1,7 +1,7 @@
 `timescale 1ns/1ps
 // Model a burst-capable PS master and an independently stalled/invalid stream.
 // All checks use the published interfaces, including the post-synthesis run.
-module zynq_dma_mailbox_tb;
+module zynq_dma_mailbox_tb #(parameter EXHAUSTIVE_LENGTHS = 1);
     reg clock = 0, reset_n = 0;
     reg [11:0] awid = 0, wid = 0, arid = 0;
     reg [31:0] awaddr = 0, wdata = 0, araddr = 0;
@@ -24,13 +24,19 @@ module zynq_dma_mailbox_tb;
     reg [31:0] packet [0:511];
     reg [31:0] result;
     reg [31:0] saved_word;
-    integer words, offset, count, i, trial;
+    reg [16:1] write_bursts = 0, read_bursts = 0;
+    integer words, offset, count, i, trial, lengths = 0;
     localparam [31:0] BASE = 32'h40000000;
 `ifdef MAPPED
     zynq_dma_mailbox_mapped dut(.*);
 `else
     zynq_dma_mailbox dut(.*);
 `endif
+
+    // Counter/address carries and their adjacent lengths exercise mapped boundaries.
+    function automatic power_of_two(input integer value);
+        power_of_two = value > 0 && (value & (value-1)) == 0;
+    endfunction
 
     // Advance one cycle, asserting every held response/stream remains stable.
     task automatic tick;
@@ -56,6 +62,7 @@ module zynq_dma_mailbox_tb;
                        input [1:0] response);
         integer beat;
         begin
+            if (response == 0) write_bursts[beats] = 1;
             awaddr = address; awid = 12'h759; awlen = beats-1;
             wid = awid ^ {11'b0,bad_id}; wdata = packet[first]; wlast = beats == 1; wvalid = 1;
             repeat(2) tick;
@@ -91,6 +98,7 @@ module zynq_dma_mailbox_tb;
                        input [1:0] response, input compare_ram, output [31:0] value);
         integer beat, timeout;
         begin
+            if (response == 0 && compare_ram) read_bursts[beats] = 1;
             araddr = address; arid = 12'hac3; arlen = beats-1; arvalid = 1;
             #1; if (!arready) $fatal(1,"AR blocked");
             tick; arvalid = 0; araddr = 0; arid = 0;
@@ -158,14 +166,21 @@ module zynq_dma_mailbox_tb;
         command(24,7,0);
         command(12,4,2); command(12,1032,2); command(12,9,2);
         for (words=2; words<=257; words=words+1) begin
-            permit=0;
-            transmit(words);
-            repeat(7) tick;
-            command(12,8,2); // An occupied TX slot cannot be republished or overwritten.
-            put(BASE+'h1000,0,1,2);
-            permit=1;
-            receive_packet(words);
+            // RTL sweeps all sizes; mapped runs cover burst tails and binary carries.
+            if (EXHAUSTIVE_LENGTHS || words <= 18 || power_of_two(words-1) ||
+                power_of_two(words) || power_of_two(words+1)) begin
+                lengths=lengths+1;
+                permit=0;
+                transmit(words);
+                repeat(7) tick;
+                command(12,8,2); // An occupied TX slot cannot be republished or overwritten.
+                put(BASE+'h1000,0,1,2);
+                permit=1;
+                receive_packet(words);
+            end
         end
+        if (write_bursts !== 16'hffff || read_bursts !== 16'hffff)
+            $fatal(1,"missing burst lengths: writes=%h reads=%h",write_bursts,read_bursts);
         // Two occupied slots: RX backpressures a second published TX frame.
         transmit(17); repeat(40) tick;
         transmit(17); repeat(12) tick;
@@ -222,7 +237,7 @@ module zynq_dma_mailbox_tb;
         get(BASE+8,0,1,0,0,result);
         if(result!==0 || irq || tx_valid) $fatal(1,"reset retained ownership");
         get(BASE+'h2000,0,1,2,0,result);
-        $display("PASS: DMA mailbox all 256 frame lengths, bursts, stalls, bounds and reset");
+        $display("PASS: DMA mailbox %0d frame lengths, all burst lengths, stalls, bounds and reset",lengths);
         $finish;
     end
     initial begin #10000000; $fatal(1,"watchdog"); end
