@@ -11,6 +11,7 @@ from test_zynq_dma import run as check_dma
 from test_qemu_cosim import run as check_cosim
 from test_gtx_probe import run as check_gtx
 from test_sfp_probe import run as check_sfp
+from test_ethernet import run as check_ethernet
 
 
 def run(yosys: Path | None) -> None:
@@ -22,6 +23,8 @@ def run(yosys: Path | None) -> None:
     check_cosim()
     check_gtx(yosys)
     check_sfp(yosys)
+    if yosys:
+        check_ethernet(yosys, root / "build/ethernet")
     source, bench = root / "zynq_ps_probe.v", root / "zynq_ps_probe_tb.sv"
     with tempfile.TemporaryDirectory(prefix="zynq-ps-probe-") as directory:
         stage = Path(directory)

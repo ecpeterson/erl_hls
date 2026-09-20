@@ -12,7 +12,8 @@ build `erl_hls` designs natively on Apple Silicon. It includes:
 - [Linux–RTL DMA co-simulation](docs/te0715-cosim.md), connecting QEMU's CPU/PL330 to the mailbox in Icarus;
 - a [complete TE0715 routed `regsvc` image](docs/te0715-regsvc.md), with two actors, independent application/debug DMA, and Linux/BEAM–RTL integration checks;
 - a [GTX/SFP prerequisite probe](docs/gtx.md), with native placement/routing, CPU diagnostics and explicit configuration-database blockers;
-- a [carrier SFP identification probe](docs/sfp-management.md), with a standalone SD candidate, non-activating RGPIO check and EEPROM reader; and
+- a [carrier SFP identification probe](docs/sfp-management.md), with a standalone SD candidate, non-activating RGPIO check and EEPROM reader;
+- a [1000BASE-X packet regression](docs/ethernet-packets.md), with bounded frame storage, independent wire checks and simulated link recovery; and
 - a [D3 decoder place-and-route benchmark](phi-timing.md) on `xc7z100ffg900-2`, with explicit timing-model coverage and placement-seed distributions.
 
 The [configurable decoder profiles](decoder-profiles.md) measure smaller rectangular populations and either decoder plane without changing the D3 reference workload.
