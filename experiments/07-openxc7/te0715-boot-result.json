@@ -1,0 +1,95 @@
+{
+  "date": "2026-09-20",
+  "module": "TE0715-05-71C33-A",
+  "carrier": "TEF1002-03-A",
+  "part": "xc7z030sbg485-1",
+  "hardware_validated": false,
+  "host": "Apple Silicon macOS",
+  "linux_vm_used": false,
+  "compiler": "arm-none-eabi-gcc (Arm GNU Toolchain 14.3.Rel1 (Build arm-14.174)) 14.3.1 20250623",
+  "native_tools": {
+    "clang": "Apple clang version 21.0.0 (clang-2100.1.1.101)",
+    "dtc": "Version: DTC 1.7.2",
+    "mkimage": "mkimage version 2026.01",
+    "qemu": "QEMU emulator version 10.2.0"
+  },
+  "checks": {
+    "boot_headers_and_source_payloads": "pass",
+    "fit_selection_payloads_and_sha256": "pass",
+    "profile_and_corruption_tests": 9,
+    "native_and_mapped_rtl": "pass",
+    "qemu_linux_uio_and_arm_userspace": "pass",
+    "source_contracts": "0 new/changed gaps",
+    "dialyzer": "pass"
+  },
+  "reproducibility": {
+    "fresh_source_builds_compared": 2,
+    "byte_identical_candidate_files": 13,
+    "same_checkout_path_tools_and_bitstream": true
+  },
+  "sd_files": {
+    "BOOT.bin": {
+      "bytes": 7151972,
+      "sha256": "75a12cc8594172268f33e0c820801d3b121374558bca37af8b102f4f6229af8b"
+    },
+    "boot.scr": {
+      "bytes": 325,
+      "sha256": "eb00c2469ed51c33f763046a708ca54f3dd8a5259925478a014e9556d3c3693e"
+    },
+    "image.ub": {
+      "bytes": 25186968,
+      "sha256": "3e158268fcad456733a25630e945cddabb8cc3bf854176d8cfdb5ae7e770751f"
+    },
+    "probe_zynq_ps": {
+      "bytes": 32324,
+      "sha256": "c015822c405ae1987bf8e7c82d7340ac879f1b26f06234c0863e691e5de117d8"
+    }
+  },
+  "ps_init_sha256": "b984c818b828b4d9847360ac849acd5eb572e1d1973e4aef30c416a7015cd2e6",
+  "boot_partitions": [
+    {
+      "name": "fsbl.elf",
+      "offset": 5888,
+      "bytes": 131092,
+      "load": 0,
+      "entry": 0,
+      "sha256": "c04ce7cf627d81b41d108af988c0b0f790bd465b8f67971bac5aacf54d451733"
+    },
+    {
+      "name": "probe.bit",
+      "offset": 137024,
+      "bytes": 5979936,
+      "load": 0,
+      "entry": 0,
+      "sha256": "cbc17bebbecbbc9025436a2496e35a807ee7e15bfa447628d77c054f8708adfc"
+    },
+    {
+      "name": "u-boot.elf",
+      "offset": 6116992,
+      "bytes": 1018200,
+      "load": 67108864,
+      "entry": 67108864,
+      "sha256": "56aae4c832d264518dc607103df4b5e089acb981e174e270173cc9f77ccb46fe"
+    },
+    {
+      "name": "system.dtb",
+      "offset": 7135232,
+      "bytes": 16740,
+      "load": 1048576,
+      "entry": 0,
+      "sha256": "fb3711ae10c36758faff2c1789aaedf8cd880b7c6bd073bfc337b08e7be72e9f"
+    }
+  ],
+  "not_tested": [
+    "BootROM/FSBL/U-Boot execution",
+    "DDR training or memory integrity",
+    "SD electrical/boot behavior",
+    "PCAP configuration",
+    "FCLK/reset operation",
+    "PL register accesses"
+  ],
+  "elapsed_seconds": {
+    "fresh_source_build_with_cached_downloads_and_compiler": 28.37,
+    "qemu_linux_test": 4.82
+  }
+}
