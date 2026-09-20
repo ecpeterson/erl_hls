@@ -9,6 +9,7 @@ from pathlib import Path
 
 from test_zynq_dma import run as check_dma
 from test_qemu_cosim import run as check_cosim
+from test_gtx_probe import run as check_gtx
 
 
 def run(yosys: Path | None) -> None:
@@ -18,6 +19,7 @@ def run(yosys: Path | None) -> None:
     subprocess.run([sys.executable, str(root / "test_te0715_runtime.py")], check=True)
     check_dma(yosys)
     check_cosim()
+    check_gtx(yosys)
     source, bench = root / "zynq_ps_probe.v", root / "zynq_ps_probe_tb.sv"
     with tempfile.TemporaryDirectory(prefix="zynq-ps-probe-") as directory:
         stage = Path(directory)
@@ -25,14 +27,18 @@ def run(yosys: Path | None) -> None:
             subprocess.run(["cc", "-std=c11", "-Wall", "-Wextra", "-Werror", "-O2",
                             str(root / f"{name}.c"), "-o", str(stage / name)], check=True)
         subprocess.run([str(stage / "test_probe_zynq_ps")], check=True)
-        modes = [False, True] if yosys else [False]
-        for mapped in modes:
+        modes = [(mapped, extended) for mapped in ([False, True] if yosys else [False])
+                 for extended in (False, True)]
+        for mapped, extended in modes:
             arguments = ["iverilog", "-g2012", "-s", "zynq_ps_probe_tb", "-o", str(stage / "test.vvp")]
             sources = [str(source), str(bench)]
+            if extended:
+                arguments.append("-DEXTENDED")
             if mapped:
                 # Native bundles provide yosys-config; distro runtime packages
                 # may omit it while installing models under <prefix>/share/yosys.
-                script = (f'read_verilog "{source}"; synth_xilinx -noiopad -flatten '
+                parameters = 'chparam -set EXTENDED 1 zynq_ps_probe; ' if extended else ''
+                script = (f'read_verilog "{source}"; {parameters}synth_xilinx -noiopad -flatten '
                           '-family xc7 -top zynq_ps_probe; check -assert; '
                           'rename zynq_ps_probe zynq_ps_probe_mapped; '
                           f'write_verilog -noattr "{stage / "mapped.v"}"')

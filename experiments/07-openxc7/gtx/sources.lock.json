@@ -1,0 +1,56 @@
+{
+  "metadata": {
+    "GTXE2_CHANNEL": {
+      "url": "https://raw.githubusercontent.com/openXC7/nextpnr-xilinx-meta/a4af910cac907f2cbd3a545f26f8e26573e860de/virtex7/site_type_GTXE2_CHANNEL.json",
+      "sha256": "229adf06756043a1bcab5030a3673dc756b94c455fb10bbd35d3857b45e393dc"
+    },
+    "GTXE2_COMMON": {
+      "url": "https://raw.githubusercontent.com/openXC7/nextpnr-xilinx-meta/a4af910cac907f2cbd3a545f26f8e26573e860de/virtex7/site_type_GTXE2_COMMON.json",
+      "sha256": "fd41cd098e673ce1b3c5bed8f617c794882e2f562749470e955d50e7cbff43d0"
+    },
+    "IBUFDS_GTE2": {
+      "url": "https://raw.githubusercontent.com/openXC7/nextpnr-xilinx-meta/a4af910cac907f2cbd3a545f26f8e26573e860de/virtex7/site_type_IBUFDS_GTE2.json",
+      "sha256": "07c371d0f17ba9ccfc72f2ba845b51f2b5d80c4435b8c9583b75667c5c386d18"
+    },
+    "IPAD": {
+      "url": "https://raw.githubusercontent.com/openXC7/nextpnr-xilinx-meta/a4af910cac907f2cbd3a545f26f8e26573e860de/virtex7/site_type_IPAD.json",
+      "sha256": "894b460750bf3baa87311f53be8850f339460815695faa221eb50e4b941097d0"
+    },
+    "OPAD": {
+      "url": "https://raw.githubusercontent.com/openXC7/nextpnr-xilinx-meta/a4af910cac907f2cbd3a545f26f8e26573e860de/virtex7/site_type_OPAD.json",
+      "sha256": "3e8702ed4bde6ea0601313506c7a450d8651866d5a5c7a01e304c324116a1f99"
+    }
+  },
+  "sites": {
+    "GTXE2_CHANNEL": {
+      "url": "https://raw.githubusercontent.com/openXC7/database-virtex7/ad4f03d11d5e6235bbdafee479a2c8602d580356/site_type_GTXE2_CHANNEL.json",
+      "sha256": "b2686a32fe988f2d7607a148b5844702953a76e63bd0994c97490e52a6b62c83"
+    },
+    "GTXE2_COMMON": {
+      "url": "https://raw.githubusercontent.com/openXC7/database-virtex7/ad4f03d11d5e6235bbdafee479a2c8602d580356/site_type_GTXE2_COMMON.json",
+      "sha256": "befaa8953a453364e6adefee4393a799993735577d1cc4db16d88163604f4173"
+    },
+    "IBUFDS_GTE2": {
+      "url": "https://raw.githubusercontent.com/openXC7/database-virtex7/ad4f03d11d5e6235bbdafee479a2c8602d580356/site_type_IBUFDS_GTE2.json",
+      "sha256": "69a5997ac7c323f154d03808ebb4052b3fa870011febd9a52130822a5c6fbf26"
+    },
+    "IPAD": {
+      "url": "https://raw.githubusercontent.com/openXC7/database-virtex7/ad4f03d11d5e6235bbdafee479a2c8602d580356/site_type_IPAD.json",
+      "sha256": "e7b0f334d155c5167d8aa2bb06db83529a3a824ade3df92fb657d82d31e344b1"
+    },
+    "OPAD": {
+      "url": "https://raw.githubusercontent.com/openXC7/database-virtex7/ad4f03d11d5e6235bbdafee479a2c8602d580356/site_type_OPAD.json",
+      "sha256": "0543ec9bc69201f23c31eed052ca7a058f92c5e3dc2699a3498a25582bff8140"
+    }
+  },
+  "rtl": {
+    "gtx_7series.py": {
+      "url": "https://raw.githubusercontent.com/enjoy-digital/liteiclink/8a4ce305510614266dad462dbe6b1f154f7487f4/liteiclink/serdes/gtx_7series.py",
+      "sha256": "bc3b2bf8eaef16b76c50b6925fde39ccf8dd5da938db2985f3041231e936d6ab"
+    },
+    "gtx_7series_init.py": {
+      "url": "https://raw.githubusercontent.com/enjoy-digital/liteiclink/8a4ce305510614266dad462dbe6b1f154f7487f4/liteiclink/serdes/gtx_7series_init.py",
+      "sha256": "adb7ebd50a56f09032b23867ef6af555b495b1f089fd067596b48f4e1a98cde2"
+    }
+  }
+}

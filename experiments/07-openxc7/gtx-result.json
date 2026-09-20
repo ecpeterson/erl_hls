@@ -1,0 +1,97 @@
+{
+  "part": "xc7z030sbg485-1",
+  "seed": 1,
+  "synthesis_and_route": "passed",
+  "bitstream_generated": false,
+  "hardware_qualified": false,
+  "toolchain_identity": "a213a512ebf6bd5e312bd4b81cadabad5acedd6abd36f9eef5857768bb028f34 928c19a867eafd823594cf9480ed6bdce7aa443264c37fc6873440665f058244 metadata-4eb2054db141bb8ced35896be3a7dab54f3a45c726620a6b45730477578140c6",
+  "source_sha256": {
+    "zynq_ps_probe.v": "0fa4b70423025d28c0e1751d2992307335a46fb3afba0fc9b8ec80c8479f82eb",
+    "zynq_ps_probe_top.v": "f8fab4f6425dd5e6cf983dcee55e8bc6eda844509448c43c895d45ba52204b3a",
+    "gtx/gtx_probe_control.v": "74a4f58f87fb48d8a9e81ba60af1c3f5a99fa1515cc5e99a24d87931022f7509",
+    "gtx/gtx_probe_sample.v": "30d7796f45ab00bb48942ad91311d677c91644f4687f699ed402c51db4413f61",
+    "gtx/te0715_gtx_lane.v": "b7fb4b7ea40b52efd85c09bd658a8985b349c63307914bb54bd441c3e331aa9d",
+    "gtx/te0715_gtx_top.v": "b096ae0b82a1a5bc5652470455daad0fba599f5f839a4d2ba1c9a29a2fcedac0",
+    "gtx/te0715_gtx.xdc": "7a7ad41a5fa10c90b9a10b4e943515e13532a0a0e0cbb479b938683ecd6ef07a"
+  },
+  "configuration": {
+    "refclk_mhz": 125,
+    "line_rate_gbps": 1.25,
+    "control_clock_mhz": 25,
+    "user_clock_mhz": 62.5,
+    "loopback": "near-end PMA",
+    "prbs": 7
+  },
+  "fmax_partial_only": {
+    "clock": {
+      "achieved": 90.29,
+      "constraint": 25.0
+    },
+    "rx_clock": {
+      "achieved": 227.74,
+      "constraint": 62.5
+    },
+    "tx_clock": {
+      "achieved": 259.81,
+      "constraint": 62.5
+    }
+  },
+  "resources": {
+    "BUFGCTRL": 3,
+    "CARRY4": 74,
+    "GTXE2_CHANNEL": 1,
+    "IBUFDS_GTE2": 1,
+    "PAD": 6,
+    "PS7_PS7": 1,
+    "PSEUDO_GND": 1,
+    "PSEUDO_VCC": 1,
+    "SLICE_FFX": 633,
+    "SLICE_LUTX": 1000
+  },
+  "sha256": {
+    "probe.fasm": "99cdc34d2a7b222f8198eca897795533961a93ec3c96045c58e879d2b338ffdc",
+    "netlist.json": "b551e11b96eaaeac7021d42a66603d902b85950062d8e9d23311acdaa6c85735",
+    "preparation.json": "8e30ab0d47685ef66e1e84f4eece526e1fc1e70e4351e049980c9a7129134a9f"
+  },
+  "database_audit": {
+    "gtx_tiles": [
+      "GTX_CHANNEL_1_X186Y17",
+      "GTX_COMMON_X186Y23",
+      "GTX_INT_INTERFACE_X73Y11",
+      "GTX_INT_INTERFACE_X73Y12",
+      "GTX_INT_INTERFACE_X73Y13",
+      "GTX_INT_INTERFACE_X73Y14",
+      "GTX_INT_INTERFACE_X73Y15",
+      "GTX_INT_INTERFACE_X73Y16",
+      "GTX_INT_INTERFACE_X73Y17",
+      "GTX_INT_INTERFACE_X73Y18",
+      "GTX_INT_INTERFACE_X73Y19",
+      "GTX_INT_INTERFACE_X73Y20",
+      "GTX_INT_INTERFACE_X73Y21",
+      "GTX_INT_INTERFACE_X73Y25"
+    ],
+    "missing_frame_mapping": [
+      "GTX_CHANNEL_1_X186Y17",
+      "GTX_COMMON_X186Y23",
+      "GTX_INT_INTERFACE_X73Y11",
+      "GTX_INT_INTERFACE_X73Y12",
+      "GTX_INT_INTERFACE_X73Y13",
+      "GTX_INT_INTERFACE_X73Y14",
+      "GTX_INT_INTERFACE_X73Y15",
+      "GTX_INT_INTERFACE_X73Y16",
+      "GTX_INT_INTERFACE_X73Y17",
+      "GTX_INT_INTERFACE_X73Y18",
+      "GTX_INT_INTERFACE_X73Y19",
+      "GTX_INT_INTERFACE_X73Y20",
+      "GTX_INT_INTERFACE_X73Y21",
+      "GTX_INT_INTERFACE_X73Y25"
+    ],
+    "missing_segbits_types": [
+      "GTX_CHANNEL_1",
+      "GTX_COMMON",
+      "GTX_INT_INTERFACE"
+    ],
+    "hardware_qualified": false,
+    "assembly_data_present": false
+  }
+}

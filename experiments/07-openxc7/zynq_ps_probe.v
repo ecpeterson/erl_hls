@@ -5,7 +5,9 @@
 // Sources must honor AXI's VALID stability rules, WID and WLAST. Reset aborts
 // pending work and clears scratch/counters; quiesce the master before resetting.
 module zynq_ps_probe #(
-    parameter [31:0] BASE_ADDR = 32'h40000000
+    parameter [31:0] BASE_ADDR = 32'h40000000,
+    parameter [31:0] IDENTITY = 32'h45524c48,
+    parameter EXTENDED = 0
 )(
     input wire clock, input wire reset_n,
     input wire [11:0] awid, input wire [31:0] awaddr,
@@ -22,7 +24,10 @@ module zynq_ps_probe #(
     input wire arvalid, output wire arready,
     output reg [11:0] rid, output reg [31:0] rdata,
     output reg [1:0] rresp, output wire rlast,
-    output reg rvalid, input wire rready
+    output reg rvalid, input wire rready,
+    // Optional diagnostic extension: four words sampled in this clock domain.
+    // Control mirrors the byte-writeable scratch register (zero after reset).
+    input wire [127:0] status, output wire [31:0] control
 );
     localparam [1:0] OKAY = 2'b00, SLVERR = 2'b10;
     reg [31:0] scratch, cycles, writes;
@@ -32,6 +37,7 @@ module zynq_ps_probe #(
     wire read_ok = arlen == 0 && arsize == 2 && arlock == 0 &&
                    (arburst == 0 || arburst == 1);
     integer byte_index;
+    assign control = scratch;
 
     // Write data may be presented before its address; hold it until AW is accepted.
     assign awready = reset_n && !write_active && !bvalid;
@@ -81,11 +87,15 @@ module zynq_ps_probe #(
                 rdata <= 0;
                 if (read_ok) begin
                     case (araddr)
-                        BASE_ADDR:      rdata <= 32'h45524c48; // "ERLH"
+                        BASE_ADDR:      rdata <= IDENTITY;
                         BASE_ADDR + 4:  rdata <= 1;            // register ABI
                         BASE_ADDR + 8:  rdata <= scratch;
                         BASE_ADDR + 12: rdata <= cycles;
                         BASE_ADDR + 16: rdata <= writes;
+                        BASE_ADDR + 20, BASE_ADDR + 24,
+                        BASE_ADDR + 28, BASE_ADDR + 32:
+                            if (EXTENDED) rdata <= status[32*((araddr-BASE_ADDR-20)/4) +: 32];
+                            else rresp <= SLVERR;
                         default: rresp <= SLVERR;
                     endcase
                 end
