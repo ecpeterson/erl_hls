@@ -1,0 +1,80 @@
+{
+  "part": "xc7z030sbg485-1",
+  "module": "TE0715-05-71C33-A",
+  "carrier": "TEF1002-03-A",
+  "fclk0_hz": 25000000,
+  "rgpio_hz": 250000,
+  "carrier_controls_activated": false,
+  "hardware_validated": false,
+  "chipdb_sha256": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+  "chipdb_identity": "xc7z030sbg485-1 a213a512ebf6bd5e312bd4b81cadabad5acedd6abd36f9eef5857768bb028f34 928c19a867eafd823594cf9480ed6bdce7aa443264c37fc6873440665f058244",
+  "resources": {
+    "BUFGCTRL": 1,
+    "CARRY4": 31,
+    "IOB33_INBUF_EN": 1,
+    "IOB33_OUTBUF": 2,
+    "PAD": 3,
+    "PS7_PS7": 1,
+    "PSEUDO_GND": 1,
+    "PSEUDO_VCC": 1,
+    "SLICE_FFX": 290,
+    "SLICE_LUTX": 444
+  },
+  "checks": {
+    "trenz_slave_original_and_mapped": true,
+    "all_sfp_flags": true,
+    "echo_and_stuck_wires": true,
+    "reset_without_slave_reset": true,
+    "no_control_activation": true,
+    "bitstream_roundtrip_non_ecc_set_bits": 22650,
+    "boot_partition_count": 4,
+    "arm_static_diagnostics_in_qemu": true,
+    "linux_uio_discovery": true,
+    "ps_pl_regression": true,
+    "source_contract_tests": 19,
+    "new_source_contract_gaps": 0,
+    "dialyzer": true
+  },
+  "limitations": [
+    "Routed ordinary I/O only; no GTX, PCS/MAC, I2C or optical test.",
+    "Carrier read layout/echo follow published REV03 source; verify installed REV04 firmware on hardware.",
+    "The probe does not enable RGPIO controls; transmitter/rate and power writes remain deferred.",
+    "Digital simulation does not qualify I/O delays; QEMU checks Linux/userspace without RGPIO co-simulation."
+  ],
+  "inputs": {
+    "check_zynq7030_bitstream.py": "4c412f9cde20ec566e65f4af2656eaf98463cf7de58c7cbdb4065f594882c27f",
+    "openxc7_common.sh": "ded14bc5ce345de4b238680e879a3e88967e7fd7068b7d8a8d66535daba1b3c2",
+    "prepare_zynq7030.py": "1c65e320fc78b76959f79b5998b4f4c2af35750c5397c4c235ce9db697b8eda5",
+    "run_sfp_probe.sh": "d4806904a04c7901065f0219da98b1abb655f8e3f344cecb2cbb0dd9c1616a93",
+    "sfp/probe_sfp.c": "eaa46d5f74e67fcf706ed2c451b5ef55fc08368b17eaad7041935c13d1cc8515",
+    "sfp/record.py": "35c06eab6ee85617978e669ea235496c378476520f4379a8422b95cabe29ca04",
+    "sfp/rgpio_reader.v": "149db479447225d45d386f7ba343814cac99dd0ed2fb340470749eb42a79afd3",
+    "sfp/sfp_status_tb.sv": "7fc2656f5200d80a0c32a4d4322c149540b47bc75efe824a68d66153f1994fc5",
+    "sfp/te0715_sfp.xdc": "a76436f23c9d8261d5dbe0be2fcf600c70b3ba41d9ad18bce679bbbf2cbd8cdd",
+    "sfp/te0715_sfp_top.v": "862fe9bb10a2d73e840ae29f65be28e2a344c2d66bd4bfd043b6c6d21f969fb3",
+    "sfp/test_probe_sfp.c": "a4526bc6a38e6536ac55b81b586616eb08caa47a19351a5a7d52459c178dd923",
+    "sfp/vendor/LICENSE": "322043a315b814730e191310dbf10cbcaec6c5bfa9ae486e1fd4c934760b594b",
+    "sfp/vendor/README.md": "4cfb9e35d5a3c893a68210d5ee1867cea9b9e3784bb3d1cb2d299ee75eee5fd8",
+    "sfp/vendor/ddsrpi_slave.v": "34d3285f8dc1e22586f3932b065ff787dd15bc1207c42c3cf5eac0d74bc90bfc",
+    "sfp/vendor/ddsrpi_slave.vhd": "02d52e5ee42e5cece413855849d9762d9c1416da6ce3996003f08a3451c70a53",
+    "sfp/vendor/source.json": "e4eef906365ca0e9a9ce1dc8afb610eefac82d29921abcb1a46aef5323265ac6",
+    "test_sfp_probe.py": "8200e33ba49469d4535f385c9f40ec571ba770e88ac97505b32a2e024f043261",
+    "test_te0715_qemu.py": "06f9768f86626516bf29a591a6a6cc546c8c5186427d906c38509dc76e43a0f1",
+    "zynq_ps_probe.v": "0fa4b70423025d28c0e1751d2992307335a46fb3afba0fc9b8ec80c8479f82eb",
+    "zynq_ps_probe_top.v": "f8fab4f6425dd5e6cf983dcee55e8bc6eda844509448c43c895d45ba52204b3a"
+  },
+  "bitstream_sha256": "4088cf87d05ffb7451205ea06902a40c56d5f8686fbe3dac559fc9b3c7d9a26d",
+  "native_manifest_sha256": "c0e7e56955592ad0b23853610252cb22f19745952969b1c7fe0f53ef3eb9bf68",
+  "candidate_manifest_sha256": "dfa9d002c4fa2dcaf31893fe8e0d03931a33f1647aa67fdf89c9a7a7bf294343",
+  "sd_files": {
+    "BOOT.bin": "c95ecbe3708690b7e2290ccd4cf6274454965e31f0604fe79eace146b4ba82fb",
+    "boot.scr": "eb00c2469ed51c33f763046a708ca54f3dd8a5259925478a014e9556d3c3693e",
+    "image.ub": "3e158268fcad456733a25630e945cddabb8cc3bf854176d8cfdb5ae7e770751f",
+    "probe_sfp": "ad486fc71be58f4168c9e97dc62ea7e2f32d0d0af3fdd0aeab48e59385f35aef"
+  },
+  "qemu_uart_sha256": "5f51aad4f2fbe010be7d3d8dfbaa238e814ce3231b8ece280c5e00b5749acaea",
+  "tool_releases": {
+    "openxc7": "2026-08-20",
+    "oss-cad-suite": "2026-08-19"
+  }
+}
