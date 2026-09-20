@@ -8,7 +8,8 @@ endmodule
 // PS7/GP0 register shell. Extended status and control use the exported FCLK0
 // clock/reset domain; IDENTITY distinguishes a diagnostic's register contract.
 module zynq_probe_ps #(
-    parameter EXTENDED = 0, parameter [31:0] IDENTITY = 32'h45524c48
+    parameter EXTENDED = 0, parameter [31:0] IDENTITY = 32'h45524c48,
+    parameter [31:0] ABI = 1
 )(
     input wire [127:0] status, output wire [31:0] control,
     output wire clock, output wire reset_n
@@ -27,7 +28,7 @@ module zynq_probe_ps #(
     BUFG fabric_clock(.I(fclk[0]), .O(clock));
     zynq_probe_reset reset_sync(.clock(clock),
         .reset_n_async(freset_n[0] && gp_reset_n), .reset_n(reset_n));
-    zynq_ps_probe #(.EXTENDED(EXTENDED), .IDENTITY(IDENTITY)) registers(
+    zynq_ps_probe #(.EXTENDED(EXTENDED), .IDENTITY(IDENTITY), .ABI(ABI)) registers(
         .status(status), .control(control),
         .clock(clock), .reset_n(reset_n),
         .awid(awid), .awaddr(awaddr), .awlen(awlen), .awsize({1'b0, awsize}),

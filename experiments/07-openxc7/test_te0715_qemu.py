@@ -54,11 +54,11 @@ def cpio(files: list[tuple[str, bytes, int]]) -> bytes:
     return bytes(output)
 
 
-def run(candidate: Path, timeout: float, *, programs: tuple[str, str] = ("probe_zynq_ps", "test_probe_zynq_ps"),
+def run(candidate: Path, timeout: float, *, programs: tuple[str, ...] = ("probe_zynq_ps", "test_probe_zynq_ps"),
         init: bytes = INIT) -> Path:
     """Check a candidate's diagnostic and UIO in Linux, retaining UART output and stopping QEMU.
 
-    Alternative diagnostics supply two program basenames and an init script that
+    Alternative diagnostics supply program basenames and an init script that
     emits SUCCESS only after checking them. No physical PL access is attempted.
     """
     executable = shutil.which("qemu-system-arm")

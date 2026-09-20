@@ -39,7 +39,7 @@ def run(yosys: Path | None) -> None:
             if mapped:
                 # Native bundles provide yosys-config; distro runtime packages
                 # may omit it while installing models under <prefix>/share/yosys.
-                parameters = 'chparam -set EXTENDED 1 zynq_ps_probe; ' if extended else ''
+                parameters = 'chparam -set EXTENDED 1 -set ABI 2 zynq_ps_probe; ' if extended else ''
                 script = (f'read_verilog "{source}"; {parameters}synth_xilinx -noiopad -flatten '
                           '-family xc7 -top zynq_ps_probe; check -assert; '
                           'rename zynq_ps_probe zynq_ps_probe_mapped; '

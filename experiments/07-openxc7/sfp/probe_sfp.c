@@ -2,35 +2,24 @@
 #include <stdint.h>
 #include <stdio.h>
 
-/* Word offsets in the SFP7 ABI-1 page at GP0 0x40000000. */
-enum { SFP_ID, SFP_ABI, SFP_CHALLENGE, SFP_CYCLES, SFP_WRITES,
-       SFP_RAW, SFP_FRAMES, SFP_DIVISOR };
-
-/* Ordered word I/O; wait must delay at least 1 ms at a 25-MHz FCLK. */
-struct sfp_io {
-    void *context;
-    uint32_t (*read)(void *, unsigned);
-    void (*write)(void *, unsigned, uint32_t);
-    void (*wait)(void *);
-};
-
+#include "sfp_io.h"
 /* Check two distinct echoes and an advancing transaction count before returning
  * one atomic status word. Requires exclusive access; always restores challenge
  * after accepting the identity. A valid marker is not a CRC or firmware ID.
  */
 static const char *sfp_probe(struct sfp_io io, uint32_t *status) {
     if (io.read(io.context, SFP_ID) != UINT32_C(0x53465037) ||
-        io.read(io.context, SFP_ABI) != 1)
+        io.read(io.context, SFP_ABI) != 2)
         return "unexpected identity/ABI; no writes attempted";
-    uint32_t original = io.read(io.context, SFP_CHALLENGE);
+    uint32_t original = io.read(io.context, SFP_CONTROL);
     const uint8_t challenges[] = {0x5a, 0xa5};
     const char *error = NULL;
     for (unsigned i = 0; i < 2; ++i) {
         uint32_t before = io.read(io.context, SFP_FRAMES);
-        io.write(io.context, SFP_CHALLENGE, challenges[i]);
+        io.write(io.context, SFP_CONTROL, (original & ~UINT32_C(0xff)) | challenges[i]);
         unsigned attempt;
         for (attempt = 0; attempt < 20; ++attempt) {
-            io.wait(io.context);
+            io.wait(io.context, 1000);
             *status = io.read(io.context, SFP_RAW);
             if ((*status & UINT32_C(0xf00000ff)) == (UINT32_C(0xa0000000) | challenges[i]) &&
                 io.read(io.context, SFP_FRAMES) != before) break;
@@ -40,11 +29,13 @@ static const char *sfp_probe(struct sfp_io io, uint32_t *status) {
             break;
         }
     }
-    io.write(io.context, SFP_CHALLENGE, original);
+    io.write(io.context, SFP_CONTROL, original);
     return error;
 }
 
 #ifndef SFP_TEST
+#include "sfp_eeprom.h"
+#include <string.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <sys/mman.h>
@@ -60,7 +51,7 @@ static uint32_t sfp_read(void *context, unsigned word) {
     return value;
 }
 
-/* A write changes only the probe's non-activating echo challenge. */
+/* Update the echo challenge and I2C commands through ordered MMIO. */
 static void sfp_write(void *context, unsigned word, uint32_t value) {
     volatile uint32_t *registers = context;
     __sync_synchronize();
@@ -68,10 +59,10 @@ static void sfp_write(void *context, unsigned word, uint32_t value) {
     __sync_synchronize();
 }
 
-/* Allow several 128-us RGPIO frames for the round-trip challenge. */
-static void sfp_wait(void *context) {
+/* Delay at least the requested interval; scheduler delays only slow the bus. */
+static void sfp_wait(void *context, unsigned microseconds) {
     (void)context;
-    struct timespec delay = {.tv_sec = 0, .tv_nsec = 1000000};
+    struct timespec delay = {.tv_sec = 0, .tv_nsec = (long)microseconds * 1000};
     while (nanosleep(&delay, &delay) != 0 && errno == EINTR) {}
 }
 
@@ -79,7 +70,10 @@ static void sfp_wait(void *context) {
  * FPGA configuration and 25-MHz FCLK initialization precede this operation.
  */
 int main(int argc, char **argv) {
-    if (argc != 2) { fprintf(stderr, "usage: %s /dev/uioN\n", argv[0]); return 2; }
+    int eeprom = argc == 3 && !strcmp(argv[2], "--eeprom");
+    if (argc != 2 && !eeprom) {
+        fprintf(stderr, "usage: %s /dev/uioN [--eeprom]\n", argv[0]); return 2;
+    }
     int fd = open(argv[1], O_RDWR | O_SYNC);
     if (fd < 0) { perror("open UIO"); return 1; }
     void *mapping = mmap(NULL, 4096, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
@@ -90,6 +84,13 @@ int main(int argc, char **argv) {
     if (error) fprintf(stderr, "%s (raw=%08x)\n", error, status);
     else printf("RGPIO responding: raw=%08x present=%u los=%u tx_fault=%u\n",
                 status, !(status & (1u << 18)), !!(status & (1u << 17)), !!(status & (1u << 19)));
+    if (!error && eeprom) {
+        uint8_t bytes[96];
+        error = sfp_eeprom_read(io, bytes);
+        if (!error) error = sfp_eeprom_check(bytes);
+        if (error) fprintf(stderr, "%s\n", error);
+        else sfp_eeprom_report(stdout, bytes);
+    }
     munmap(mapping, 4096);
     close(fd);
     return error ? 1 : 0;

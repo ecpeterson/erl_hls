@@ -7,7 +7,9 @@ module sfp_status_tb;
     always #5 clock = ~clock;
     reg [31:0] control = 0;
     wire [127:0] status;
-    wire tx, serial_clock, slave_tx;
+    wire tx, serial_clock, slave_tx, scl, sda_release;
+    wire [1:0] select_bus;
+    reg sda_in = 1;
     reg [1:0] fault = 0;
     wire delayed_rx;
     assign #7 delayed_rx = fault == 1 ? 1'b0 : fault == 2 ? 1'b1 : slave_tx;
@@ -17,7 +19,9 @@ module sfp_status_tb;
     sfp_status #(.QUARTER_CYCLES(4)) dut(
 `endif
         .clock(clock), .reset_n(reset_n), .control(control), .rx(delayed_rx),
-        .tx(tx), .serial_clock(serial_clock), .status(status));
+        .tx(tx), .serial_clock(serial_clock), .status(status),
+        .i2c_sda_in(sda_in), .i2c_scl(scl), .i2c_sda_release(sda_release),
+        .i2c_select(select_bus));
 
     wire [31:0] received;
     reg [2:0] flags = 0;
@@ -50,6 +54,19 @@ module sfp_status_tb;
     reg [31:0] before_frames;
     initial begin
         repeat (4) @(negedge clock);
+        reset_n = 1;
+        // Exercise every GPIO command and unrelated bit; no non-SFP selection.
+        for (i = 0; i < 8; i = i + 1) begin
+            control = 32'hfffffc75 | ((i & 3) << 8);
+            sda_in = (i >> 2) & 1;
+            repeat (4) @(negedge clock);
+            if (scl !== !control[8] || sda_release !== !control[9] || select_bus !== 0)
+                $fatal(1, "I2C command routing");
+            if (status[127:96] !== {31'b0, sda_in}) $fatal(1, "SDA readback");
+        end
+        reset_n = 0;
+        repeat (3) @(negedge clock);
+        if (!scl || !sda_release || status[127:96] !== 1) $fatal(1, "I2C reset idle");
         reset_n = 1;
         for (i = 0; i < 8; i = i + 1) begin
             flags = i;

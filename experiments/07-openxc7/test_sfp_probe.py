@@ -28,10 +28,11 @@ def run(yosys: Path | None, ghdl: Path | None = None) -> None:
                 "experiments/07-openxc7/sfp/vendor/ddsrpi_slave.vhd", "-e", "ddsrpi_slave"], cwd=root.parent.parent)
             if regenerated != reference.read_bytes():
                 raise ValueError("GHDL output differs from the pinned slave reference")
-        for name in ("probe_sfp", "test_probe_sfp"):
+        for name in ("probe_sfp", "test_probe_sfp", "test_sfp_eeprom"):
             subprocess.run(["cc", "-std=c11", "-Wall", "-Wextra", "-Werror", "-O2",
                             str(sfp / f"{name}.c"), "-o", str(stage / name)], check=True)
-        subprocess.run([str(stage / "test_probe_sfp")], check=True)
+        for test in ("test_probe_sfp", "test_sfp_eeprom"):
+            subprocess.run([str(stage / test)], check=True)
         for mapped in ([False, True] if yosys else [False]):
             arguments = ["iverilog", "-g2012", "-s", "sfp_status_tb", "-o", str(stage / "test.vvp")]
             sources = [sfp / "rgpio_reader.v", sfp / "sfp_status_tb.sv", reference]
@@ -63,7 +64,8 @@ def main() -> None:
         init = INIT.replace(b"probe_zynq_ps", b"probe_sfp").replace(
             b"'unexpected identity/ABI; no writes attempted'",
             b"'unexpected identity/ABI; no writes attempted (raw=00000000)'")
-        print(check_linux(args.candidate.resolve(), 45, programs=("probe_sfp", "test_probe_sfp"), init=init))
+        init = init.replace(b"/test_probe_sfp\n", b"/test_probe_sfp\n/test_sfp_eeprom\n")
+        print(check_linux(args.candidate.resolve(), 45, programs=("probe_sfp", "test_probe_sfp", "test_sfp_eeprom"), init=init))
 
 
 if __name__ == "__main__":
