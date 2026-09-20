@@ -23,7 +23,7 @@
     "ethernet/LICENSE.migen": "67a7e7bc7fa1b9f6dc05916f05214df4db67afbbf2289b9c24c3678c9dc6a180",
     "ethernet/frame_store.v": "8c3087d4e92c72ea0e111a7dac9701f4e45db18c784082df83e94ace87f228fe",
     "ethernet/frame_store_tb.sv": "d6b5a701a64944f1980426d564750d5d887e6d5a378be52e3fefa53565411aad",
-    "ethernet/generate.py": "83eba97b68c78e90c3efedb3cd18caab19dc76824b0ed69f2b6c7b323df4d24b",
+    "ethernet/generate.py": "7e069fda36fc6f6c939ec70d154f9cde8adb21622b92f560f98136a8f7f54b21",
     "ethernet/models.lock.json": "1b03cfd99e7b77ce405dd54f01bc845b7e1eabaaa76192526ef589453a432652",
     "ethernet/packet_endpoint.v": "5583ebb106e43879b0aed81dca182c68e7a1e03fd8bd70ea417067abd0c92620",
     "ethernet/packet_tb.sv": "307cfea791d945f7b22f60e949ec37e06a37af77119f771037d1560a9521c178",
@@ -31,11 +31,11 @@
     "ethernet/reference.py": "e8ff6524a178bd762ab29fd834354d2b531935be7b3d663fdfacdbbf5af0aac5",
     "ethernet/sources.lock.json": "2b2afb348f12cbcb3a4b1bd3b828f020fd83777c7c656d9c5f6720646835b273"
   },
-  "runner_sha256": "0fab9538f27c0179b6b09f51fd4fadb4c26b786f01e7bba0b6eaeea4b2e7452a",
+  "runner_sha256": "bc0494b05319a2d943b874b9de14cfb252912670552d11567b4069d27b28d860",
   "generated": {
-    "production/liteeth_packet_core.v": "1cda3e3efaae493b0ed3c2640817ae73fdd74987122643e7fa7a93adeebcfb72",
+    "production/liteeth_packet_core.v": "8327f3c2633ee2133ca270d018878849cbbf3f162d914eb827a19c448e3bad28",
     "production/liteeth_packet_core_mem_6b5b.init": "e22c47be531b5bb60b52cad484ac222142ffe634e17784506cbacfa1efb67843",
-    "simulation/liteeth_packet_core.v": "3ad753972b107c71e580d7eb73103f40d487cfa5bd0012155a5a5ea880f9e566",
+    "simulation/liteeth_packet_core.v": "5651b802d9ca2e2817fe44723888e2518c5dd8aef1b13270eaac5296ca90caae",
     "simulation/liteeth_packet_core_mem_6b5b.init": "e22c47be531b5bb60b52cad484ac222142ffe634e17784506cbacfa1efb67843"
   },
   "yosys": "Yosys 0.63+173 (git sha1 66306a8ca-dirty, aarch64-apple-darwin23.5-clang++ 18.1.8 -fPIC -O3)",
@@ -69,6 +69,6 @@
     "admission/release races, 5000-byte overflow, sticky error, partial abort, flush",
     "two RAMB36E1 retained with production negotiation timers"
   ],
-  "elapsed_seconds": 30.65,
+  "elapsed_seconds": 30.68,
   "hardware_qualified": false
 }

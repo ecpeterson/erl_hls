@@ -102,8 +102,10 @@ def main() -> None:
     result = platform.get_verilog(core, ios=core.ports(), name="liteeth_packet_core")
     # The default header embeds wall time and the calling repository's revision,
     # which is not the pinned LiteX revision. Keep provenance in the build report.
+    body = result.main_source
+    body = body[body.index("module "):body.rindex("endmodule") + len("endmodule")]
     result.main_source = ("// Generated from LiteEth, LiteX and Migen; see ethernet/LICENSE.* and sources.lock.json.\n"
-                          + result.main_source[result.main_source.index("module "):])
+                          + body + "\n")
     result.write("liteeth_packet_core.v")
 
 
