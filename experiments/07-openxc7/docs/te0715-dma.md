@@ -41,7 +41,7 @@ cat /sys/bus/platform/devices/40000000.dma-mailbox/status
 ERL_LIBS=/opt/erl-hls/lib escript /opt/erl-hls/bin/check_dma_beam.escript /dev/hls-dma0
 ```
 
-Both diagnostics check all 256 payload lengths (0–255 words). The C check also exercises partial reads, malformed-write rejection, exclusive direction ownership and nonblocking empty reads. The BEAM check uses separate raw-file handles and the current `hls_fabric_io:encode/3` format. Save the UART output and candidate manifest.
+Both diagnostics check all 256 payload lengths (0–255 words). The C check also exercises partial reads, malformed-write rejection, exclusive direction ownership, empty/full nonblocking I/O, ordered draining under backpressure and wakeup of a blocked read. The BEAM check uses separate raw-file handles and the current `hls_fabric_io:encode/3` format. Save the UART output and candidate manifest.
 
 After successful loopback, explicitly test removal with a blocked reader:
 
@@ -79,7 +79,9 @@ RAM accepts aligned 32-bit AXI3 INCR bursts of 1–16 beats; registers require s
 
 CI sweeps all 256 frame lengths in source RTL. Mapped-core simulation with [pinned AMD functional BRAM models](../dma/models.lock.json) covers 29 lengths: 2–18 words and each larger power of two with its neighbors, through 257 words. Both runs cover every 1–16-beat burst length, byte enables, invalid addresses/IDs/last beats, backpressure, response stability, malformed packets and reset. Synthesis requires exactly two BRAMs. One placement of the final RTL used 811 `SLICE_LUTX` slots, 166 flip-flops and two `RAMB18E1`s; the partially modelled timing estimate was 175.84 MHz. The bitstream round trip recovered 34,946 non-ECC set bits. These are compile results, not board timing qualification.
 
-The QEMU tests boot the actual new kernel and load both modules with version checks enabled. They exercise PL330 DDR copies on both channels at 8, 12, 64, 1024 and 1028 bytes, verify guard bytes, and confirm that the transport refuses absent PL hardware. The resulting SD root also runs the existing 23 BEAM transport tests. QEMU does **not** validate GP0 burst conversion, PL interrupts, stream DMA, positive character-device operation or hardware teardown; the board commands above cover those outstanding checks.
+The standalone QEMU tests boot the actual new kernel and load both modules with version checks enabled. They exercise PL330 DDR copies on both channels at 8, 12, 64, 1024 and 1028 bytes, verify guard bytes, and confirm that the transport refuses absent PL hardware. The resulting SD root also runs the existing 23 BEAM transport tests.
+
+[QEMU–Icarus co-simulation](te0715-cosim.md) additionally runs the real driver and both loopback diagnostics against the mailbox RTL, including PL interrupt delivery through the emulated GIC, backpressure and blocked-reader unbind/rebind. It does not qualify physical GP0 burst conversion, DMA bus-fault propagation, board timing or actual hardware teardown. The board commands above remain required.
 
 - [ ] Verify board loopback and unbind/rebind, then record throughput and CPU cost for representative frame sizes.
 - [ ] Add independent application/debug endpoints and attach a generated actor stream after this transport passes on hardware.
