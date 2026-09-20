@@ -1,0 +1,131 @@
+{
+  "date": "2026-09-20",
+  "part": "xc7z030sbg485-1",
+  "hardware_validated": false,
+  "timing_qualified": false,
+  "placements_of_final_rtl": 1,
+  "utilization": {
+    "BUFGCTRL": {
+      "available": 32,
+      "used": 1
+    },
+    "PS7_PS7": {
+      "available": 1,
+      "used": 1
+    },
+    "SLICE_LUTX": {
+      "available": 157200,
+      "used": 811
+    },
+    "SLICE_FFX": {
+      "available": 157200,
+      "used": 166
+    },
+    "RAMB18E1_RAMB18E1": {
+      "available": 530,
+      "used": 2
+    },
+    "RAMB36E1_RAMB36E1": {
+      "available": 265,
+      "used": 0
+    },
+    "DSP48E1_DSP48E1": {
+      "available": 400,
+      "used": 0
+    }
+  },
+  "partial_timing_estimate": {
+    "clock": {
+      "achieved": 175.84,
+      "constraint": 100.0
+    }
+  },
+  "frames_sha256": "e9685bca066f015cbf0f7871eaa6ff4b9e984057c10ab42b016a516929728009",
+  "decoded_non_ecc_set_bits": 34946,
+  "source_sha256": {
+    "dma/builder.lock.json": "e89aa9a60b6511a3d83a87c8750339b79cfe69d0169c959cb5dfee530fe1c016",
+    "dma/check_dma_beam.escript": "66b5c6708e4718cfb941d9225d10bb6b4d7f00e48c0f46e8a2226c062effa26a",
+    "dma/check_dma_device.c": "dab86cbaab6adf64ca4ef955a3b1be33b0f0c032801b66a31b4de315cdf12d4a",
+    "dma/device_tree.py": "4caa4f4988f4279e39d58c02dd87c0444a5eadd51979d19a83c95aff561f3cf6",
+    "dma/driver/Makefile": "2e59119699604456be8ed146647acaf071f9d39c8fe3a4807ef0cf5280f32d42",
+    "dma/driver/hls_dma_copy.h": "cac056dde6bb3a6a7e3271e6159e74d666a4e895402aa5c6a46545ee76c38543",
+    "dma/driver/hls_dma_mailbox.c": "3bb6db922ef066cb15019ea64fd20cf1efdc917bb662530562c7f4169956d356",
+    "dma/driver/hls_dma_selftest.c": "ba44036e172756cc5c13cf42ab60fa951a277ecd9c781f2668d4a99f65ebe349",
+    "dma/install-init.sh": "af358989e21c60e85ac87fc2346da50303b2fa6bfcf9b435ecc0a82c6fdfa673",
+    "dma/kernel-build.sh": "34e5f3eb86828fc4b1eff8f7d90a174f37b3f28378d59ff7406d5699de6dd8da",
+    "dma/models.lock.json": "9b4d24561de50e4830028d61bab97edc671117290145263efdbefa68d8f8494e",
+    "dma/runtime-check.sh": "db0769816ce7c0197c567636c620e054411d225bad27102b91b8ec7494fda2b8",
+    "dma/zynq_dma_mailbox.v": "7594b8112db9fa59f4dd8e5b7a3ae7f9c4f185310fbb57071a412a2b2c551f9c",
+    "dma/zynq_dma_mailbox_tb.sv": "257f26786f23333310bb1cc64eff8fe087cc44b661a92cc186809666a1255486",
+    "dma/zynq_dma_top.v": "0a54f11aa2d342623965f603e0eeedc179acd7d6804eb8d8ab667ed1d4ea721e"
+  },
+  "kernel": {
+    "release": "6.1.30-erlhls-dma",
+    "source": {
+      "file": "linux-xlnx-a19da02c.tar.gz",
+      "url": "https://codeload.github.com/Xilinx/linux-xlnx/tar.gz/a19da02cf5b44420ec6afb1eef348c21d9e8cda2",
+      "sha256": "0b7f96aadcbc1a5d3adc0cd22ed4e75bd30954484d1caedab1ac704dd5eeb873"
+    },
+    "manifest_sha256": "63a91f52e0bb9a92a41b6a3882494d7e10ec5507ca8f30bda7273c09303beb54",
+    "module_compile_flags": "W=1 KCFLAGS=-Werror",
+    "builder_guest": "ARM64 Linux / QEMU HVF, 4 CPUs / 4 GiB RAM"
+  },
+  "image": {
+    "manifest_sha256": "a6f7148053d0a8c1ce48ce39305846b89a923eebceee9fef5cfee82fd9615814",
+    "files": {
+      "runtime.its": {
+        "bytes": 920,
+        "sha256": "3c09a1e1774c801c760a1e70af703deacbf72a2d6b406f479a2f66b370d0174b"
+      },
+      "zImage": {
+        "bytes": 4627608,
+        "sha256": "cb21f9d733fc24155de5ce8ad1c86eaf540586d4be9a8c00b14f9735ee93cd6e"
+      },
+      "image.ub": {
+        "bytes": 4645416,
+        "sha256": "5b309412e92a11e7b290aa054a6720f30516cd5cb82461cb0140e55f2e594e19"
+      },
+      "system.dtb": {
+        "bytes": 16834,
+        "sha256": "869d2ace402684b30ed1657760e5a059b3236a76745613b8b15694baf0f7f8e0"
+      },
+      "rootfs.ext4.gz": {
+        "bytes": 50230661,
+        "sha256": "f071ea05d009864919433e539ac6638f4c4be378361a847452cd197859a15fdf"
+      },
+      "BOOT.bin": {
+        "bytes": 7152068,
+        "sha256": "3346626e6035a76b5b2a1f53da5db9ee505c13f8ff5da5a35ed8138c91652590"
+      },
+      "boot.scr": {
+        "bytes": 436,
+        "sha256": "6e2ed340fac2dbda5b1405c5465e392f4ad6d88e68def8c1e522ea18fbf446d4"
+      }
+    },
+    "rootfs_uncompressed": {
+      "bytes": 536870912,
+      "sha256": "88e18eaa06d49f2f720484b7e215d4d3fc3f65fa03bfab93c2b312d1569eebc0"
+    }
+  },
+  "checks": {
+    "rtl_and_mapped_frame_lengths": 256,
+    "dmaengine_channels": 2,
+    "dmaengine_test_sizes": [
+      8,
+      12,
+      64,
+      1024,
+      1028
+    ],
+    "sd_root_beam_tests": 23,
+    "source_contracts": "passed; no changed gaps",
+    "dialyzer": "passed"
+  },
+  "not_exercised": [
+    "Physical SD/DDR boot",
+    "PL330-to-GP0 transactions",
+    "PL interrupt delivery",
+    "Positive character-device I/O and unbind on hardware",
+    "Throughput and CPU cost"
+  ]
+}

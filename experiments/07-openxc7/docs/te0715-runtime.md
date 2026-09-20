@@ -2,7 +2,7 @@
 
 This SD-root candidate runs OTP 28 and the current `erl_hls` BEAM modules on **TE0715-05-71C33-A / TEF1002-03-A**. It retains the [register-probe boot candidate](te0715-boot.md)'s FSBL, PL, U-Boot, Linux and matching kernel modules. The root filesystem is Alpine 3.23.6 for ARMv7, with OTP 28.5.0.1, `erlc`, crypto/TLS, Dropbear SSH, I²C/device-tree tools, `strace`, `tcpdump`, `ethtool`, and `memtester`. Hardware operation is unverified.
 
-The 512 MiB ext4 image belongs on SD partition 2; partition 1 holds `BOOT.bin`, `boot.scr` and `image.ub`. Linux mounts the root from SD rather than keeping the Erlang installation in an initramfs. No hardware service starts automatically. The PL remains the GP0 register probe: there is **no DMA endpoint yet**.
+The 512 MiB ext4 image belongs on SD partition 2; partition 1 holds `BOOT.bin`, `boot.scr` and `image.ub`. Linux mounts the root from SD rather than keeping the Erlang installation in an initramfs. No hardware service starts automatically. The PL remains the GP0 register probe: this candidate has no DMA endpoint. The separate [DMA loopback image](te0715-dma.md) adds one.
 
 ## Build and check
 
@@ -37,15 +37,6 @@ After confirming fabric clocks/resets, the existing register diagnostic is at `/
 
 The `hls.runtime_check=1` kernel argument is reserved for the isolated QEMU acceptance run: it executes the tests and reboots. Ordinary SD boot omits it.
 
-## DMA integration boundary
+## DMA integration
 
-The retained kernel registers the Xilinx DMAengine provider (`xilinx-vdma`). This establishes provider availability, not working DMA channels. The earlier experiments combine a PL AXI DMA engine, interrupt/device-tree wiring, that provider, and a character-device client. Our current PL has only a CPU-accessible register bank.
-
-The next hardware/driver work must be developed together:
-
-- [ ] Build a PS–PL stream loopback with a DDR master connection, interrupts, and checked clock/reset/address assignments. Select a synthesizable DMA engine and its matching Linux provider; the Xilinx provider requires the corresponding register/descriptor ABI.
-- [ ] Adapt the character-device contract to today's routed frames: two header words plus up to 255 payload words (1028 bytes). The old experiment's one-word header and 256-byte buffers are insufficient. Preserve partial-read state, complete-frame writes, bounded queues and meaningful close/error behavior.
-- [ ] Build the client module against the exact kernel configuration and symbol versions. Keep its node absent from the register-probe device tree. Reassess the older interrupt-coalescing patch with low-rate traffic and queued receives.
-- [ ] Exercise BEAM → character device → DMA → PL loopback → DMA → BEAM, including independent application/debug traffic, blocked reads, errors and teardown. Inspect DMA status through the supported debug/register interface.
-
-The stock Alpine ARMv7 kernel is not substituted: its inspected configuration omits the Zynq UART and Xilinx DMA provider. A source-built kernel and matching module SDK remain follow-on work; the userspace image does not depend on that replacement.
+This register-probe image retains the vendor kernel and its Xilinx DMAengine provider, but contains no DMA hardware endpoint. The separate [PL330 loopback candidate](te0715-dma.md) uses the Zynq's built-in DMA controller, a source-built matching kernel/module set, and the current routed-frame character-device contract. It is the next board acceptance step; keep this probe image as the smaller recovery/diagnostic baseline.
