@@ -1,0 +1,97 @@
+{
+  "date": "2026-09-20",
+  "hardware_qualified": false,
+  "host": "arm64",
+  "part": "xc7z030sbg485-1",
+  "placements_per_workload": 1,
+  "scope": "compile-only; source RTL simulation; mapped resource retention; non-ECC bitstream round trip",
+  "source_sha256": {
+    "check_zynq7030_bitstream.py": "4c412f9cde20ec566e65f4af2656eaf98463cf7de58c7cbdb4065f594882c27f",
+    "openxc7_common.sh": "5ba0ca44dbdfc68b31d871d7439c3be0fca868f135d602db9a1af9a7708fd235",
+    "prepare_zynq7030.py": "1c65e320fc78b76959f79b5998b4f4c2af35750c5397c4c235ce9db697b8eda5",
+    "run_zynq7030.sh": "4ca1727a1238cac3464fa2563fa1704a32530796e660c52f1a83f359fac17aad",
+    "smoke.v": "281fe88bc1dadf83a8c020feea962f808fa556195f553d7c7bffb1dd7b601f57",
+    "test_zynq7030.py": "26aa572ef9040746866c52f8358b631f0bea21a246f0630ba0240dfd6f874928",
+    "xc7z030sbg485.xdc": "6e72b1516836d2637c37220ab7de9525886d46e4d6d62f09899423f31e47e072",
+    "zynq7030_smoke.v": "ac1e33976fa3b40d4e62522d5067a1ed27d41f8c6a5386cf0e897c5689140e03"
+  },
+  "timing_qualified": false,
+  "tools": {
+    "openxc7": {
+      "commit": "4643d2ecfd6569bad2ae7963b17d90687363af6e",
+      "release-tag": "2026-08-20",
+      "target-platform": "darwin-arm64"
+    },
+    "oss-cad-suite": {
+      "commit": "b246ed025634562f953daccef0c9d2f7995d30c3",
+      "release-tag": "2026-08-19",
+      "target-platform": "darwin-arm64"
+    }
+  },
+  "workloads": {
+    "counter": {
+      "decoded_non_ecc_set_bits": 1176,
+      "frames_sha256": "02067e471c926b28cffec411b0b34367f8f78e968ed65b9085862389d4099ec0",
+      "partial_timing_estimate": {
+        "(internal) clock": {
+          "achieved": 321.23,
+          "constraint": 100.0
+        }
+      },
+      "utilization": {
+        "DSP48E1_DSP48E1": {
+          "available": 400,
+          "used": 0
+        },
+        "RAMB18E1_RAMB18E1": {
+          "available": 530,
+          "used": 0
+        },
+        "RAMB36E1_RAMB36E1": {
+          "available": 265,
+          "used": 0
+        },
+        "SLICE_FFX": {
+          "available": 157200,
+          "used": 24
+        },
+        "SLICE_LUTX": {
+          "available": 157200,
+          "used": 49
+        }
+      }
+    },
+    "resources": {
+      "decoded_non_ecc_set_bits": 4731,
+      "frames_sha256": "5165832cad227a583e73b0d6cc9cec50935f46b4abaa38282f75f4c66bf72b80",
+      "partial_timing_estimate": {
+        "resources.clock": {
+          "achieved": 514.14,
+          "constraint": 100.0
+        }
+      },
+      "utilization": {
+        "DSP48E1_DSP48E1": {
+          "available": 400,
+          "used": 1
+        },
+        "RAMB18E1_RAMB18E1": {
+          "available": 530,
+          "used": 1
+        },
+        "RAMB36E1_RAMB36E1": {
+          "available": 265,
+          "used": 0
+        },
+        "SLICE_FFX": {
+          "available": 157200,
+          "used": 73
+        },
+        "SLICE_LUTX": {
+          "available": 157200,
+          "used": 67
+        }
+      }
+    }
+  }
+}
