@@ -43,7 +43,9 @@ def synthesize(yosys: Path, stage: Path, sources: list[Path], mapped: bool) -> P
                  if mapped else ["hierarchy -top ethernet_packet_endpoint", "proc", "opt"])
     commands += ["check -assert", "scc -expect 0", f'write_verilog -noattr "{output}"']
     if mapped:
-        commands += [f'tee -o "{stage / "stat.json"}" stat -json']
+        # Older distro Yosys treats quotes in tee's filename literally. The
+        # process already runs in stage, so a plain basename is portable.
+        commands += ["tee -o stat.json stat -json"]
     subprocess.run([str(yosys), "-Q", "-q", "-l", str(output.with_suffix(".log")),
                     "-p", "; ".join(commands)], check=True, cwd=stage, timeout=180)
     return output
