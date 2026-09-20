@@ -24,7 +24,8 @@ def record(build: Path, apio: Path) -> dict:
     artifacts += ["netlist.json", "stat.json", "yosys.log", f"{prefix}-nextpnr.log", f"{prefix}-report.json"]
     return {"part": prefix, "module": "TE0715-05-71C33-A", "carrier": "TEF1002-03-A",
         "fclk0_hz": 25000000, "rgpio_hz": 250000, "carrier_controls_activated": False,
-        "hardware_validated": False,
+        "hardware_validated": False, "abi": 2, "eeprom_address": "0x50",
+        "eeprom_bytes": 96, "i2c_clock_feedback": False,
         "chipdb_sha256": digest(build.parent / "chipdb/xc7z030sbg485.bin"),
         "chipdb_identity": (build.parent / "chipdb/xc7z030sbg485.bin.toolchain").read_text().strip(),
         "inputs": {str(p.relative_to(root)): digest(p) for p in sorted(inputs)},

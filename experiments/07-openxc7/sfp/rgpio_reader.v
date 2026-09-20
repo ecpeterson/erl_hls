@@ -72,25 +72,40 @@ endmodule
 // A status page in the existing GP0 probe's FCLK domain. Software can challenge
 // the echo using control[7:0]. Frames counts wire transactions, not good replies;
 // software must verify marker A and a changed echo before trusting status.
+// The separate carrier I2C bridge uses control[8:9] to drive SCL/SDA low;
+// zero releases SDA and drives SCL high. The carrier does not return SCL.
 module sfp_status # (parameter QUARTER_CYCLES = 25)(
-    input wire clock, reset_n, rx,
+    input wire clock, reset_n, rx, i2c_sda_in,
     input wire [31:0] control,
-    output wire tx, serial_clock,
+    output wire tx, serial_clock, i2c_scl, i2c_sda_release,
+    output wire [1:0] i2c_select,
     output wire [127:0] status
 );
     wire [31:0] snapshot;
     wire valid;
     localparam [31:0] SERIAL_DIVISOR = QUARTER_CYCLES;
     reg [31:0] frames;
+    (* ASYNC_REG = "TRUE" *) reg sda_meta, sda_sync;
     rgpio_reader #(.QUARTER_CYCLES(QUARTER_CYCLES)) reader(
         .clock(clock), .reset_n(reset_n), .challenge(control[7:0]), .rx(rx),
         .tx(tx), .serial_clock(serial_clock), .snapshot(snapshot), .valid(valid));
     always @(posedge clock) begin
-        if (!reset_n) frames <= 0;
-        else if (valid) frames <= frames + 1'b1;
+        if (!reset_n) begin
+            frames <= 0;
+            sda_meta <= 1;
+            sda_sync <= 1;
+        end else begin
+            if (valid) frames <= frames + 1'b1;
+            sda_meta <= i2c_sda_in;
+            sda_sync <= sda_meta;
+        end
     end
-    // 0x14 raw word, 0x18 transaction count, 0x1c quarter-cycle divisor, 0x20 zero.
-    assign status = {32'b0, SERIAL_DIVISOR, frames, snapshot};
+    // Select only SFP; the CPLD converts SDA release to open-drain drive.
+    assign i2c_select = 2'b00;
+    assign i2c_scl = !reset_n || !control[8];
+    assign i2c_sda_release = !reset_n || !control[9];
+    // 0x20: synchronized aggregate SDA input (not SCL or selected-bus feedback).
+    assign status = {31'b0, sda_sync, SERIAL_DIVISOR, frames, snapshot};
 endmodule
 
 `default_nettype wire

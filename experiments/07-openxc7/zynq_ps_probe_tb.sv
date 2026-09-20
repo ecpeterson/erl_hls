@@ -25,7 +25,7 @@ module zynq_ps_probe_tb;
     zynq_ps_probe_mapped dut(.*);
 `else
 `ifdef EXTENDED
-    zynq_ps_probe #(.EXTENDED(1)) dut(.*);
+    zynq_ps_probe #(.EXTENDED(1), .ABI(2)) dut(.*);
 `else
     zynq_ps_probe dut(.*);
 `endif
@@ -142,7 +142,11 @@ module zynq_ps_probe_tb;
         read_value(BASE, 12'habc, 0, 2, 0, 1, 0, 7, sample);
         if (sample !== 32'h45524c48) $fatal(1, "identity mismatch");
         read_value(BASE+4, 12'hfff, 0, 2, 0, 0, 0, 0, sample);
-        if (sample !== 1) $fatal(1, "ABI mismatch");
+`ifdef EXTENDED
+        if (sample !== 2) $fatal(1, "extended ABI mismatch");
+`else
+        if (sample !== 1) $fatal(1, "default ABI mismatch");
+`endif
         check_state;
         // Extension reads snapshot each selected word and never grant writes.
         for (trial = 0; trial < 4; trial = trial + 1) begin

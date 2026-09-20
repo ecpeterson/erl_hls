@@ -7,6 +7,7 @@
 module zynq_ps_probe #(
     parameter [31:0] BASE_ADDR = 32'h40000000,
     parameter [31:0] IDENTITY = 32'h45524c48,
+    parameter [31:0] ABI = 1,
     parameter EXTENDED = 0
 )(
     input wire clock, input wire reset_n,
@@ -88,7 +89,7 @@ module zynq_ps_probe #(
                 if (read_ok) begin
                     case (araddr)
                         BASE_ADDR:      rdata <= IDENTITY;
-                        BASE_ADDR + 4:  rdata <= 1;            // register ABI
+                        BASE_ADDR + 4:  rdata <= ABI;          // register ABI
                         BASE_ADDR + 8:  rdata <= scratch;
                         BASE_ADDR + 12: rdata <= cycles;
                         BASE_ADDR + 16: rdata <= writes;

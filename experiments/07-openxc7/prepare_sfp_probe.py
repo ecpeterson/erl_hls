@@ -48,7 +48,7 @@ def build(base: Path, fsbl: Path, rtl: Path, sdk: Path, output: Path) -> Path:
     shutil.copyfile(rtl / "xc7z030sbg485-1.bit", output / "probe.bit")
     compiler = next((sdk / "compiler").glob("*/bin/arm-none-eabi-gcc"))
     musl = sdk / "work/musl-build"
-    for name in ("probe_sfp", "test_probe_sfp"):
+    for name in ("probe_sfp", "test_probe_sfp", "test_sfp_eeprom"):
         target = output / name
         subprocess.run([str(compiler), f"-specs={musl / 'static-musl.specs'}", "-std=c11",
             "-Wall", "-Wextra", "-Werror", "-Os", "-mcpu=cortex-a9", "-mfpu=vfpv3",
