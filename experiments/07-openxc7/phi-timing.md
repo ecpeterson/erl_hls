@@ -1,8 +1,8 @@
-# D3 decoder physical timing
+# Decoder physical timing
 
-This benchmark maps and routes the decoder-only D3 workload on `xc7z100ffg900-2` using the native Apple Silicon packages pinned in [the experiment setup](README.md#setup). It uses two phi planes, three scheduler shards per plane, and deterministic syndrome replay. XLS uses two pipeline stages, II=1, and its `unit` delay model. This is not the full phenomenological memory experiment or a board design.
+This benchmark maps and routes checked decoder profiles on `xc7z100ffg900-2` or `xc7z030sbg485-1` using the native Apple Silicon packages pinned in [the experiment setup](README.md#setup). The default D3 workload uses two phi planes, three scheduler shards per plane, and deterministic syndrome replay. The standard profiles use two XLS pipeline stages, II=1, and the `unit` delay model. This is not the full phenomenological memory experiment or a board design.
 
-The selected fabric has room for a large decoder experiment, and the installed Project X-Ray data contains its exact package. The two-pin harness assigns an MRCC clock input and an activity output within bank 33. These are compile-harness constraints, not a board pinout. The runner produces no bitstream.
+The larger fabric accommodates D3; the Z-7030 uses the checked SBG485 package overlay from the board preparation. The two-pin harness assigns an MRCC clock input and an activity output within bank 33 on the Z-7100 or bank 13 on the Z-7030. These are compile-harness constraints, not a board pinout. The runner produces no bitstream.
 
 The [2026-09-12 D3 baseline](results/d3-2026-09-12.md) records the measured seed distribution, resource counts, critical-path findings, and validation results. The [2026-09-14 arbitration and RAM-ordering comparison](results/d3-arbitration-2026-09-14.md) compares fresh main and the changed design with that earlier measurement: LUT use falls while routed timing becomes more sensitive to placement seed.
 
@@ -58,6 +58,21 @@ Core mapping, harness mapping, the chip database, and completed routes are cache
 
 The first large-device database generation and synthesis take substantially longer than the small counter experiment. The generated chip database alone is about 637 MiB. Route sequentially on memory-limited hosts; the benchmark does not require building XLS or LLVM.
 
+## Zynq-7030 population probe
+
+Prepare and validate the four-phi-cell population before routing it. This closed 2×1 grid per plane approximates a board's phi population; it excludes the data/measurement network, physical transport and external debug gateway. Opposing neighbors coincide in this small periodic graph, so use D3 as the nontrivial-correction check. See [profile geometry](decoder-profiles.md#geometry-and-populations).
+
+```sh
+python3 tools/test_decoder_profiles.py "$ERL_HLS_XLS_ROOT" \
+    --stage _build/z7030-profiles --cases board-sized d3
+python3 experiments/07-openxc7/phi_timing.py \
+    _build/z7030-profiles/board-sized/compiled \
+    --stage _build/z7030-physical --part xc7z030sbg485-1 \
+    --device-root "$ERL_HLS_OPENXC7_BUILD_ROOT" --phase all --seeds 1
+```
+
+`--device-root` reuses the board experiment's checked database cache, avoiding another copy. Omit it to use `STAGE/device`. Start with one diagnostic placement seed; if it completes and another sample is useful, repeat with `--phase route --seeds 1 2`. Report both attempts. The default request remains 100 MHz for continuity with the historical measurement; a missed target is retained and disclosed. The runner accepts the compiled profile's dimensions and planes, checks the measured harness under variable sink readiness, and retains the same mapped-core preservation checks. The separate `compare` phase remains D3-only.
+
 ## Compare compiler changes
 
 Preserve separately compiled baseline and candidate directories. A strict public-interface comparison drives both designs with identical independent sink stalls and a mid-run reset:
@@ -95,7 +110,7 @@ Check timing coverage and individual paired results as well as the distributions
 
 The application is synthesized out of context with `synth_xilinx -flatten -abc9 -family xc7 -noiopad -noclkbuf`. The small harness is mapped separately, and the mapped decoder is then restored without another application synthesis pass. The assembly check requires the same multiset of decoder primitive types and parameters, plus a single global clock buffer feeding its active sequential clocks. This detects pruning or an accidental second clock; it is not a formal wiring-equivalence proof.
 
-An independent LFSR varies both output-ready signals. Registers capture all output bits before a rotating activity digest, so the digest's XOR tree is separated from the decoder's output logic. The harness simulation checks accepted status/correction records, stall stability, nontrivial corrections on both planes, all nine coordinates through step 32, and a defined activity output. It reports cycles per step between steps 8 and 32 for this stimulus.
+An independent LFSR varies both output-ready signals. Registers capture all output bits before a rotating activity digest, so the digest's XOR tree is separated from the decoder's output logic. The harness simulation checks accepted status/correction records, stall stability, nontrivial corrections on active planes when the periodic geometry permits them, every selected coordinate through step 32, and a defined activity output. It reports cycles per step between steps 8 and 32 for this stimulus.
 
 `check -assert` and `scc -expect 0` run on both mapped stages. Routing failures stop the run. Timing-target misses are retained with `--timing-allow-fail`; loops are not ignored.
 

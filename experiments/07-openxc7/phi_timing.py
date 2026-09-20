@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Map and route the generated D3 decoder profile on the pinned native openXC7 flow."""
+"""Map and route a checked decoder profile on the pinned native openXC7 flow."""
 import argparse
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
@@ -11,9 +11,11 @@ from pathlib import Path
 import re
 import statistics
 import subprocess
+from typing import Any
 
 HERE = Path(__file__).resolve().parent
 PART = "xc7z100ffg900-2"
+PARTS = (PART, "xc7z030sbg485-1")
 TOP = "phi_timing_harness"
 CORE = "phi_decoder_profile_top"
 TIMING_MODEL = ("Partial-path estimate from pinned openXC7: BRAM and registered DSP timing are excluded; "
@@ -64,8 +66,23 @@ def quote(path):
     return json.dumps(str(path))
 
 
-def simulate(args):
+def profile_parameters(rtl: Path) -> dict[str, int]:
+    """Return checked geometry and active planes for the public-event harness."""
+    profile = load_profile(rtl, require_d3=False)["profile"]
+    width, height = profile["width"], profile["height"]
+    planes = profile.get("planes", ["x", "z"])
+    if (type(width) is not int or type(height) is not int or width < 1 or height < 1 or
+            not planes or len(set(planes)) != len(planes) or set(planes) - {"x", "z"}):
+        raise ValueError("invalid profile geometry or planes")
+    return {"WIDTH": width, "HEIGHT": height,
+            "X_ENABLED": int("x" in planes), "Z_ENABLED": int("z" in planes)}
+
+
+def simulate(args: argparse.Namespace) -> None:
+    """Check every actor's progress and stalled output on the measured harness."""
+    parameters = profile_parameters(args.rtl)
     command(["iverilog", "-g2012", "-s", "phi_timing_tb", "-o", args.stage / "harness.vvp",
+             *[f"-Pphi_timing_tb.{key}={value}" for key, value in parameters.items()],
              HERE / "phi_timing_tb.sv", HERE / "phi_timing_harness.v",
              *[args.rtl / name for name in ("phi_decoder_profile.v", "phi_decoder_profile_top.v", "hls_1r1w_ram.v")]],
             args.stage, "simulate-compile")
@@ -273,12 +290,18 @@ def completion_valid(run, expected):
         for name in ("nextpnr.json", "nextpnr.log"))
 
 
-def route_key(args, binaries, mapping):
+def chipdb_path(args: argparse.Namespace) -> Path:
+    """Locate the selected package database in the reusable device cache."""
+    return args.device_root / "chipdb" / (args.part.rsplit("-", 1)[0] + ".bin")
+
+
+def route_key(args: argparse.Namespace, binaries: dict[str, Path], mapping: dict[str, Any]) -> dict[str, Any]:
+    """Fingerprint the device, constraints, mapped design and routing tool."""
     return {"netlist": mapping["netlist_sha256"],
-            "chipdb": sha(args.stage / "device/chipdb/xc7z100ffg900.bin"),
+            "chipdb": sha(chipdb_path(args)),
             "xdc": sha(args.stage / "timing.xdc"),
             "nextpnr": {str(p): sha(p) for p in tool_files(binaries["nextpnr"])},
-            "part": PART, "frequency": args.frequency, "router": "router2"}
+            "part": args.part, "frequency": args.frequency, "router": "router2"}
 
 
 def timed_path(data, log):
@@ -300,7 +323,8 @@ def timed_path(data, log):
             "warnings": warning_summary(log)}
 
 
-def report(args, binaries, mapping):
+def report(args: argparse.Namespace, binaries: dict[str, Path], mapping: dict[str, Any]) -> None:
+    """Publish all requested completed routes with provenance and coverage limits."""
     runs = []
     key = route_key(args, binaries, mapping)
     for seed in args.seeds:
@@ -312,13 +336,15 @@ def report(args, binaries, mapping):
         if not math.isclose(timing["target_mhz"], args.frequency):
             raise ValueError(f"seed {seed}: wrong clock constraint")
         runs.append({"seed": seed, **timing})
-    summary = {"part": PART, "target_mhz": args.frequency, "mapping": mapping,
-               "profile_build": load_profile(args.rtl),
+    summary = {"part": args.part, "target_mhz": args.frequency, "mapping": mapping,
+               "profile_build": load_profile(args.rtl, require_d3=False),
                "statistics": summarize(runs), "runs": runs, "route_inputs": key,
                "timing_model": TIMING_MODEL}
     save(args.stage / "report.json", summary)
-    lines = ["# D3 decoder physical timing", "", summary["timing_model"], "",
-             f"Target: `{PART}`, {args.frequency:g} MHz. Decoder-only D3, three shards per phi plane.", "",
+    profile = summary["profile_build"]["profile"]
+    lines = ["# Decoder physical timing", "", summary["timing_model"], "",
+             f"Target: `{args.part}`, {args.frequency:g} MHz. Decoder-only {profile['width']}×{profile['height']} phi grid per plane; "
+             f"planes {','.join(profile.get('planes', ['x', 'z']))}; {profile['shards_per_plane']} shards per plane.", "",
              "| Seed | Partial-path MHz | Logic ns | Routing ns |", "| --- | ---: | ---: | ---: |"]
     lines += [f"| {r['seed']} | {r['achieved_mhz']:.2f} | {r['critical_path']['logic_ns']:.2f} | {r['critical_path']['routing_ns']:.2f} |" for r in runs]
     s = summary["statistics"]
@@ -344,7 +370,8 @@ def report(args, binaries, mapping):
     print(json.dumps(summary["statistics"], indent=2))
 
 
-def route_seed(seed, args, binary, key):
+def route_seed(seed: int, args: argparse.Namespace, binary: Path, key: dict[str, Any]) -> None:
+    """Route one seed, retaining only hash-verified successful completions as reusable."""
     run = args.stage / f"seed-{seed}"
     run.mkdir(exist_ok=True)
     stamp = run / "completed.json"
@@ -354,7 +381,7 @@ def route_seed(seed, args, binary, key):
         return
     stamp.unlink(missing_ok=True)
     print(f"Routing seed {seed}", flush=True)
-    command([binary, "--chipdb", args.stage / "device/chipdb/xc7z100ffg900.bin",
+    command([binary, "--chipdb", chipdb_path(args),
              "--json", args.stage / "mapped.json", "--xdc", args.stage / "timing.xdc",
              "--freq", args.frequency, "--seed", seed, "--router", "router2",
              "--timing-allow-fail", "--report", run / "nextpnr.json", "--log", run / "nextpnr.log"],
@@ -363,24 +390,40 @@ def route_seed(seed, args, binary, key):
                  "outputs": {name: sha(run / name) for name in ("nextpnr.json", "nextpnr.log")}})
 
 
-def route(args, binaries, mapping):
-    env = dict(os.environ, ERL_HLS_OPENXC7_BUILD_ROOT=str(args.stage / "device"))
-    command(["bash", "-c", 'set -euo pipefail; source "$1"; prepare_openxc7; make_chipdb "$2"',
-             "bash", HERE / "openxc7_common.sh", PART], args.stage, "device", env)
+def timing_xdc(part: str, frequency: float) -> str:
+    """Return package-valid compile-only pins and the requested clock period."""
+    if part == "xc7z030sbg485-1":
+        pins = (HERE / "xc7z030sbg485.xdc").read_text()
+    elif part == PART:
+        pins = ("# Compile-harness pins, not a board assignment.\n"
+                "set_property -dict {PACKAGE_PIN F5 IOSTANDARD LVCMOS18} [get_ports clock]\n"
+                "set_property -dict {PACKAGE_PIN A2 IOSTANDARD LVCMOS18} [get_ports activity]\n")
+    else:
+        raise ValueError(f"unsupported part: {part}")
+    return pins + f"create_clock -period {1000/frequency:.9f} [get_ports clock]\n"
+
+
+def route(args: argparse.Namespace, binaries: dict[str, Path], mapping: dict[str, Any]) -> None:
+    """Prepare the selected database and route every requested seed sequentially by default."""
+    env = dict(os.environ, ERL_HLS_OPENXC7_BUILD_ROOT=str(args.device_root))
+    prepare = 'prepare_zynq7030' if args.part == "xc7z030sbg485-1" else 'prepare_openxc7; make_chipdb "$2"'
+    command(["bash", "-c", 'set -euo pipefail; source "$1"; ' + prepare,
+             "bash", HERE / "openxc7_common.sh", args.part], args.stage, "device", env)
     xdc = args.stage / "timing.xdc"
-    xdc.write_text("# Compile-harness pins, not a board assignment.\n"
-                   "set_property -dict {PACKAGE_PIN F5 IOSTANDARD LVCMOS18} [get_ports clock]\n"
-                   "set_property -dict {PACKAGE_PIN A2 IOSTANDARD LVCMOS18} [get_ports activity]\n"
-                   f"create_clock -period {1000/args.frequency:.9f} [get_ports clock]\n")
+    xdc.write_text(timing_xdc(args.part, args.frequency))
     key = route_key(args, binaries, mapping)
     with ThreadPoolExecutor(max_workers=min(args.jobs, len(args.seeds))) as pool:
         list(pool.map(lambda seed: route_seed(seed, args, binaries["nextpnr"], key), args.seeds))
 
 
-def main():
+def main() -> None:
+    """Run an explicit simulation, mapping, comparison or physical timing phase."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("rtl", type=Path, help="prepared, compiled decoder-profile RTL directory")
     parser.add_argument("--stage", type=Path, required=True)
+    parser.add_argument("--part", choices=PARTS, default=PART)
+    parser.add_argument("--device-root", type=Path,
+                        help="shared device cache (default: STAGE/device); includes the checked Z-7030 overlay")
     parser.add_argument("--seeds", type=int, nargs="+", default=[1, 2],
                         help="placement seeds (default: 1 2); used only by route/report/all")
     parser.add_argument("--jobs", type=int, default=1, help="maximum concurrent place-and-route processes")
@@ -396,10 +439,11 @@ def main():
     if args.jobs < 1 or args.frequency <= 0 or not math.isfinite(args.frequency) or len(set(args.seeds)) != len(args.seeds) or min(args.seeds) < 1:
         parser.error("jobs/frequency must be positive and seeds must be unique positive integers")
     args.rtl, args.stage = args.rtl.resolve(), args.stage.resolve()
+    args.device_root = (args.device_root or args.stage / "device").resolve()
     args.stage.mkdir(parents=True, exist_ok=True)
     apio = Path(os.environ.get("ERL_HLS_APIO_HOME", HERE / ".apio")).resolve()
     binaries = {"yosys": apio / "packages/oss-cad-suite/bin/yosys", "nextpnr": apio / "packages/openxc7/bin/nextpnr-xilinx"}
-    load_profile(args.rtl)
+    profile_parameters(args.rtl)
     if args.phase == "compare":
         compare(args)
         return
