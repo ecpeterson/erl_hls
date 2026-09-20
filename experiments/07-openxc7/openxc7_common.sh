@@ -69,6 +69,7 @@ prepare_openxc7() {
     toolchain_id=$(shasum -a 256 "$openxc7/BUILD-INFO.json" | cut -d ' ' -f 1)
 }
 
+# Cache the exact part, tool release and optional database-overlay identity.
 make_chipdb() {
     local part=$1
     local footprint=${part%-*}
@@ -77,7 +78,7 @@ make_chipdb() {
     local chipdb_tmp="$chipdb.$$.tmp"
     local stamp="$chipdb.toolchain"
     local stamp_tmp="$stamp.$$.tmp"
-    local expected_stamp="$part $toolchain_id"
+    local expected_stamp="$part $toolchain_id${database_id:+ $database_id}"
 
     if [[ -s "$chipdb" && -f "$stamp" ]] &&
             [[ $(<"$stamp") == "$expected_stamp" ]]; then
@@ -88,6 +89,7 @@ make_chipdb() {
     rm -f "$bba" "$chipdb_tmp" "$stamp_tmp"
     "$openxc7/libexec/python3.12" "$nextpnr_python/bbaexport.py" \
         --device "$part" \
+        --xray "$prjxray_db/zynq7" \
         --bba "$bba"
     "$openxc7/bin/bbasm" -l "$bba" "$chipdb_tmp"
     test -s "$chipdb_tmp"

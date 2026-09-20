@@ -1,9 +1,10 @@
 # Native openXC7 experiments
 
 This experiment checks whether the open-source Xilinx 7-series toolchain can
-build `erl_hls` designs natively on Apple Silicon. It has three workloads:
+build `erl_hls` designs natively on Apple Silicon. It includes:
 
-- a small counter smoke test for `xc7z010clg225-1` and `xc7z020clg484-2`; and
+- a small counter smoke test for `xc7z010clg225-1` and `xc7z020clg484-2`;
+- an [XC7Z030-SBG485 package overlay and counter/BRAM/DSP compile check](zynq7030.md);
 - the current two-process, packet-routed `regsvc` fixture, including a separate
   routed debug path and both instrumentation monitors; and
 - a [D3 decoder place-and-route benchmark](phi-timing.md) on `xc7z100ffg900-2`, with explicit timing-model coverage and placement-seed distributions.
