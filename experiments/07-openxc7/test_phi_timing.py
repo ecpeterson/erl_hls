@@ -3,6 +3,7 @@
 import os
 from pathlib import Path
 import shutil
+import subprocess
 import tempfile
 from types import SimpleNamespace
 import unittest
@@ -18,6 +19,60 @@ def path_report(clock, logic, routing):
 
 
 class TimingReports(unittest.TestCase):
+    @unittest.skipUnless(shutil.which("iverilog") and shutil.which("vvp"), "Icarus is not installed")
+    def test_public_event_harness_geometry_and_rejection(self) -> None:
+        """Check rectangular masks, omitted planes and rejection of an invalid coordinate."""
+        # A small independent source emits correction/status pairs for every
+        # coordinate and step. Its accepted-beat index advances only on ready.
+        source = """
+module event_source #(parameter W=2, H=3, BAD=0)(
+    input clock, resetn, ready, output [127:0] frame);
+    reg [31:0] index = 0;
+    wire [31:0] actor = (index / 2) % (W*H);
+    wire [15:0] x = BAD ? W : actor / H;
+    wire [15:0] y = actor % H;
+    wire [31:0] step = (index / 2) / (W*H);
+    wire [31:0] tag = index[0] ? 32'h03000011 : 32'h0300000b;
+    assign frame = {tag, 32'd1, y, x, step};
+    always @(posedge clock)
+        if (!resetn) index <= 0;
+        else if (ready) index <= index + 1;
+endmodule
+module phi_decoder_profile_top(
+    input aclk, aresetn, x_decoder_event_ready, z_decoder_event_ready,
+    output [127:0] x_decoder_event, z_decoder_event,
+    output x_decoder_event_valid, z_decoder_event_valid);
+    assign x_decoder_event_valid = X_ACTIVE && aresetn;
+    assign z_decoder_event_valid = Z_ACTIVE && aresetn;
+    event_source #(.W(WIDTH_VALUE), .H(HEIGHT_VALUE), .BAD(BAD_VALUE)) x(
+        aclk, aresetn, x_decoder_event_ready, x_decoder_event);
+    event_source #(.W(WIDTH_VALUE), .H(HEIGHT_VALUE), .BAD(BAD_VALUE)) z(
+        aclk, aresetn, z_decoder_event_ready, z_decoder_event);
+endmodule
+"""
+        for width, height, planes, bad in ((2, 1, ["x", "z"], 0),
+                                           (2, 5, ["z"], 0), (2, 5, ["z"], 1)):
+            with self.subTest(width=width, height=height, planes=planes, bad=bad):
+                with tempfile.TemporaryDirectory() as directory:
+                    stage = Path(directory)
+                    rtl = source
+                    for token, value in {"WIDTH_VALUE": width, "HEIGHT_VALUE": height,
+                                         "X_ACTIVE": int("x" in planes), "Z_ACTIVE": int("z" in planes),
+                                         "BAD_VALUE": bad}.items():
+                        rtl = rtl.replace(token, str(value))
+                    (stage / "phi_decoder_profile_top.v").write_text(rtl)
+                    for name in ("phi_decoder_profile.v", "hls_1r1w_ram.v"):
+                        (stage / name).write_text("// No additional modules in this fixture.\n")
+                    profile = {"profile": {"width": width, "height": height, "planes": planes}}
+                    with patch.object(timing, "load_profile", return_value=profile):
+                        if bad:
+                            with self.assertRaises(subprocess.CalledProcessError):
+                                timing.simulate(SimpleNamespace(stage=stage, rtl=stage))
+                            self.assertIn("out-of-range coordinate", (stage / "simulate.console").read_text())
+                        else:
+                            timing.simulate(SimpleNamespace(stage=stage, rtl=stage))
+                            self.assertIn("PASS:", (stage / "simulate.console").read_text())
+
     def test_package_constraints_and_device_cache(self) -> None:
         """Use exact-package pins and cache paths without changing historical XDC."""
         board = SimpleNamespace(part="xc7z030sbg485-1", device_root=Path("cache"))
