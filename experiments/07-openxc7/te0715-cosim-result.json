@@ -1,0 +1,41 @@
+{
+  "wall_seconds": 26.778,
+  "hardware_validated": false,
+  "host": "macOS-26.5.2-arm64-arm-64bit-Mach-O",
+  "qemu_version": "QEMU emulator version 10.2.0",
+  "qemu_sha256": "a646fbb03a74e1609a386dcc68b1051a566bb54b6e5af4e78c2c219357691553",
+  "kernel_manifest_sha256": "63a91f52e0bb9a92a41b6a3882494d7e10ec5507ca8f30bda7273c09303beb54",
+  "base_manifest_sha256": "74b79d73c787f8a6b832fabdea1b6bf3ac46a0ccd53b557358583158a06d9601",
+  "device_tree_sha256": "869d2ace402684b30ed1657760e5a059b3236a76745613b8b15694baf0f7f8e0",
+  "runtime_manifest_sha256": "a6f7148053d0a8c1ce48ce39305846b89a923eebceee9fef5cfee82fd9615814",
+  "rtl": {
+    "reads": 86579,
+    "writes": 69404,
+    "steps": 9101,
+    "resets": 1,
+    "frames": 515,
+    "stalls": 44764,
+    "irq_rises": 515
+  },
+  "guest_checks": [
+    "PASS: all 256 routed frame sizes, partial reads and admission checks",
+    "PASS: full RX/TX backpressure and ordered drain",
+    "PASS: blocked read woke on completed frame",
+    "PASS: open reader woke with ENODEV on driver unbind",
+    "PASS: Linux PL330 and Icarus mailbox integration",
+    "PASS: ARM BEAM raw-file DMA loopback, all 256 frame sizes"
+  ],
+  "inputs": {
+    "run_qemu_cosim.py": "febe71f3005d793d9fbbc59a1968b63aab9e0de8fbdde0686b55677ec9e91821",
+    "dma/zynq_dma_mailbox.v": "7594b8112db9fa59f4dd8e5b7a3ae7f9c4f185310fbb57071a412a2b2c551f9c",
+    "dma/check_dma_device.c": "707f025b552df78e8eebfa9193303d2bbfa5189425cf9001e032d5f7bc6b5325",
+    "cosim/guest-init.sh": "43257c3cbdafaf37c357464c81bbe1d26de4455716416b1d4c6f8ede855818d5",
+    "cosim/icarus_bridge.c": "2585ae512886568bd5d96b39cea1f60c2db84e8167cda85c54f1c39e4e0575d2",
+    "cosim/mailbox_tb.sv": "e6b7d1dc8036b640ca1556f0a6dde9be33ddb0bccedb65ebfd58495619e49acd",
+    "cosim/protocol.h": "308b64297c5029a18dc31a97875df4049881280c61234203ff367ecf0204e006",
+    "cosim/qemu_bridge.c": "add8ab2659967481543b531298ef5491be3fd6568a76095f4cde2e6f80427666",
+    "cosim/qemu_bridge.h": "289618b8d5f216cb312aa6c6323d354044ac4f534f29973c7a5b8d87268ab1a6",
+    "cosim/runtime.py": "06c796e23b9bc09d90fda2e6ceff0881b3d3c8a0839ad21c082e530f71e66b93",
+    "cosim/sources.lock.json": "f15d1456f9b9c8064d531e02295f0ba761407bc08464ac073111ca6baaeefc09"
+  }
+}

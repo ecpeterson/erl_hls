@@ -9,6 +9,7 @@ build `erl_hls` designs natively on Apple Silicon. It includes:
 - a [native TE0715 SD boot candidate](docs/te0715-boot.md), with source-built FSBL and ARM Linux diagnostic;
 - an [ARM Linux/OTP SD root](docs/te0715-runtime.md), with board diagnostics and target-side frame-I/O tests;
 - a [PL330 DMA packet loopback](docs/te0715-dma.md), with a matching source-built kernel, frame driver and board acceptance tools;
+- [Linux–RTL DMA co-simulation](docs/te0715-cosim.md), connecting QEMU's CPU/PL330 to the mailbox in Icarus;
 - the current two-process, packet-routed `regsvc` fixture, including a separate
   routed debug path and both instrumentation monitors; and
 - a [D3 decoder place-and-route benchmark](phi-timing.md) on `xc7z100ffg900-2`, with explicit timing-model coverage and placement-seed distributions.

@@ -8,14 +8,16 @@ import tempfile
 from pathlib import Path
 
 from test_zynq_dma import run as check_dma
+from test_qemu_cosim import run as check_cosim
 
 
 def run(yosys: Path | None) -> None:
-    """Check board compatibility and simulate AXI; --yosys also verifies the mapped core."""
+    """Check board assets, AXI and the socket bridge; --yosys also verifies mapped cores."""
     root = Path(__file__).resolve().parent
     subprocess.run([sys.executable, str(root / "test_te0715_boot.py")], check=True)
     subprocess.run([sys.executable, str(root / "test_te0715_runtime.py")], check=True)
     check_dma(yosys)
+    check_cosim()
     source, bench = root / "zynq_ps_probe.v", root / "zynq_ps_probe_tb.sv"
     with tempfile.TemporaryDirectory(prefix="zynq-ps-probe-") as directory:
         stage = Path(directory)
