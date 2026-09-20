@@ -54,7 +54,8 @@ def build(jobs: int) -> Path:
     board = replace_once(board, '#include "qemu/osdep.h"',
                              '#include "qemu/osdep.h"\n#include "hw/misc/hls_cosim.h"')
     board = replace_once(board, '    dev = qdev_new("pl330");',
-                             '    hls_cosim_init(address_space_mem, pic[61 - GIC_INTERNAL]);\n\n'
+                             '    hls_cosim_init(address_space_mem, pic[61 - GIC_INTERNAL],\n'
+                             '                   pic[62 - GIC_INTERNAL]);\n\n'
                              '    dev = qdev_new("pl330");')
     meson = (originals / "misc.meson").read_bytes()
     write_changed(source / "hw/arm/xilinx_zynq.c", board.encode())

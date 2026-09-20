@@ -10,16 +10,20 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 
 
-def compile_rtl(stage: Path) -> Path:
-    """Build the VPI adapter and source mailbox, preserving compiler diagnostics."""
+def compile_rtl(stage: Path, regsvc_sources: list[Path] | None = None) -> Path:
+    """Build the loopback or supplied routed application, preserving diagnostics."""
     stage.mkdir(parents=True, exist_ok=True)
     with (stage / "compile.log").open("w") as output:
         subprocess.run(["iverilog-vpi", "--name=icarus_bridge", "-Wall", "-Wextra", "-Werror",
                         f"-I{ROOT / 'cosim'}", str(ROOT / "cosim/icarus_bridge.c")],
                        cwd=stage, stdout=output, stderr=subprocess.STDOUT, check=True)
-        subprocess.run(["iverilog", "-g2012", "-L", str(stage), "-m", "icarus_bridge",
+        extra = ([str(ROOT / "dma/zynq_dma_pair.v"),
+                  str(ROOT / "dma/zynq_regsvc_core.sv"), *map(str, regsvc_sources)]
+                 if regsvc_sources else [])
+        flags = ["-DREGSVC_COSIM"] if regsvc_sources else []
+        subprocess.run(["iverilog", "-g2012", *flags, "-L", str(stage), "-m", "icarus_bridge",
                         "-s", "mailbox_cosim_tb", "-o", str(stage / "mailbox.vvp"),
-                        str(ROOT / "cosim/mailbox_tb.sv"), str(ROOT / "dma/zynq_dma_mailbox.v")],
+                        str(ROOT / "cosim/mailbox_tb.sv"), str(ROOT / "dma/zynq_dma_mailbox.v"), *extra],
                        stdout=output, stderr=subprocess.STDOUT, check=True)
     return stage / "mailbox.vvp"
 

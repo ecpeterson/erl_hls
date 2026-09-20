@@ -9,14 +9,15 @@ module mailbox_cosim_tb;
     reg [2:0] awsize = 2, arsize = 2;
     reg [1:0] awburst = 1, arburst = 1, awlock = 0, arlock = 0;
     reg awvalid = 0, wvalid = 0, wlast = 0, bready = 0, arvalid = 0, rready = 0;
-    wire awready, wready, bvalid, arready, rvalid, rlast, irq;
+    wire awready, wready, bvalid, arready, rvalid, rlast;
+    wire [1:0] irq;
     wire [11:0] bid, rid;
     wire [1:0] bresp, rresp;
     wire [31:0] rdata, tx_data;
     wire tx_last, tx_valid, rx_ready;
     integer clock_count = 0, reads = 0, writes = 0, steps = 0, resets = 0;
     integer frames = 0, stalls = 0, irq_rises = 0;
-    reg previous_irq = 0;
+    reg [1:0] previous_irq = 0;
     wire permit = clock_count % 16 < 11;
     wire tx_ready = permit && rx_ready;
     wire [31:0] rx_data = tx_data;
@@ -24,7 +25,17 @@ module mailbox_cosim_tb;
     wire rx_last = tx_last;
     integer op, address, value, amount, cycles;
     reg [31:0] response, result;
-    zynq_dma_mailbox dut(.*);
+`ifdef REGSVC_COSIM
+    // Integration counters come from guest debug queries, not hierarchical peeks.
+    zynq_regsvc_core dut(.*);
+    assign tx_data = 0;
+    assign tx_last = 0;
+    assign tx_valid = 0;
+    assign rx_ready = 0;
+`else
+    zynq_dma_mailbox dut(.irq(irq[0]), .*);
+    assign irq[1] = 0;
+`endif
 
     // Complete a clock edge and check stalled outputs before serving another RPC.
     task automatic tick;
@@ -38,7 +49,7 @@ module mailbox_cosim_tb;
             if (reset_n && tx_valid && tx_ready && tx_last) frames = frames + 1;
             #4; clock = 1; #5; clock = 0; #1;
             if (held && (!tx_valid || {tx_last, tx_data} !== saved)) $fatal(1,"unstable stream");
-            if (irq && !previous_irq) irq_rises = irq_rises + 1;
+            if (|(irq & ~previous_irq)) irq_rises = irq_rises + 1;
             previous_irq = irq;
             clock_count = clock_count + 1;
             cycles = cycles + 1;
@@ -88,7 +99,7 @@ module mailbox_cosim_tb;
                 end
                 default: $fatal(1,"unknown co-simulation command");
             endcase
-            $cosim_reply(response,result,{31'b0,irq},cycles);
+            $cosim_reply(response,result,{30'b0,irq},cycles);
         end
         $display("COSIM reads=%0d writes=%0d steps=%0d resets=%0d frames=%0d stalls=%0d irq_rises=%0d",
                  reads,writes,steps,resets,frames,stalls,irq_rises);

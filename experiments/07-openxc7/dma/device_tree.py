@@ -7,8 +7,8 @@ from pathlib import Path
 from prepare_te0715_boot import fdt
 
 
-def mailbox_tree(source: Path, output: Path) -> None:
-    """Replace only the probe node; resolve provider handles from this exact base DT."""
+def mailbox_tree(source: Path, output: Path, *, debug: bool = False) -> None:
+    """Bind one loopback mailbox or independent app/debug banks with stable device names."""
     if fdt(source, "/amba_pl/probe@40000000", "compatible") != "generic-uio":
         raise ValueError("expected the register-probe base device tree")
     dma = fdt(source, "/axi/dma-controller@f8003000", "phandle", "x")
@@ -27,3 +27,13 @@ def mailbox_tree(source: Path, output: Path) -> None:
     }
     for name, (kind, values) in fields.items():
         subprocess.run(["fdtput", "-t", kind, str(output), node, name, *values], check=True)
+    subprocess.run(["fdtput", "-t", "s", str(output), "/aliases", "hlsdma0", node], check=True)
+    if debug:
+        node = "/amba_pl/dma-mailbox@40004000"
+        subprocess.run(["fdtput", "-c", str(output), node], check=True)
+        fields.update({"reg": ("x", ["40004000", "3000"]),
+                       "interrupts": ("x", ["0", "1e", "4"]),
+                       "dmas": ("x", [dma, "2", dma, "3"])})
+        for name, (kind, values) in fields.items():
+            subprocess.run(["fdtput", "-t", kind, str(output), node, name, *values], check=True)
+        subprocess.run(["fdtput", "-t", "s", str(output), "/aliases", "hlsdma1", node], check=True)

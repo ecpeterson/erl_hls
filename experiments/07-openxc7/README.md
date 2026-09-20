@@ -10,8 +10,7 @@ build `erl_hls` designs natively on Apple Silicon. It includes:
 - an [ARM Linux/OTP SD root](docs/te0715-runtime.md), with board diagnostics and target-side frame-I/O tests;
 - a [PL330 DMA packet loopback](docs/te0715-dma.md), with a matching source-built kernel, frame driver and board acceptance tools;
 - [Linux–RTL DMA co-simulation](docs/te0715-cosim.md), connecting QEMU's CPU/PL330 to the mailbox in Icarus;
-- the current two-process, packet-routed `regsvc` fixture, including a separate
-  routed debug path and both instrumentation monitors; and
+- a [complete TE0715 routed `regsvc` image](docs/te0715-regsvc.md), with two actors, independent application/debug DMA, and Linux/BEAM–RTL integration checks; and
 - a [D3 decoder place-and-route benchmark](phi-timing.md) on `xc7z100ffg900-2`, with explicit timing-model coverage and placement-seed distributions.
 
 The [configurable decoder profiles](decoder-profiles.md) measure smaller rectangular populations and either decoder plane without changing the D3 reference workload.
@@ -51,9 +50,13 @@ This builds both exact parts at a 100 MHz target. Outputs are written beneath
 `build/smoke/`. On an M2, the first run takes about 85 seconds including both
 chip databases; a cached run takes about nine seconds.
 
-## Export the generated `regsvc` RTL
+## Earlier two-pin `regsvc` compile experiment
 
-XLS remains on the Linux UTM, so first export a fresh, verified RTL set:
+The following exporter, harness and measurements predate the board image. For current-source compilation and PS/DMA deployment, use the [TE0715 routed image](docs/te0715-regsvc.md); its wider trace format uses three trace BRAMs per actor.
+
+### Export the generated `regsvc` RTL
+
+This earlier flow exports a verified RTL set from the Linux UTM:
 
 ```sh
 ./fetch_regsvc_rtl.sh
@@ -138,14 +141,14 @@ Neither result closes the requested 100 MHz timing target, but both are valid
 compile-only bitstreams. Machine-readable Yosys statistics and nextpnr timing
 and utilization reports are retained under `build/regsvc/`.
 
-## Bitstream safety and scope
+## Two-pin harness scope
 
-The XDC files select package-valid pins solely to make place-and-route
+The counter and two-pin harness XDC files select package-valid pins solely to make place-and-route
 possible. They are not board constraints. Do not program any bitstream from
 this experiment until the pins and I/O-bank voltages have been checked against
 the corresponding board schematic.
 
-This is a PL compile proof. It does not instantiate PS7, exercise DMA, validate
+The two-pin harness is a PL compile proof. It does not instantiate PS7, exercise DMA, validate
 a board design, or demonstrate the harness transactions in silicon. A focused
 Icarus test checks application tags 3–10, the supported counter and trace debug
 requests, and reserved/unsupported-tag errors at both endpoints while observing

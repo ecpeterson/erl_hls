@@ -15,7 +15,7 @@
 typedef struct HlsCosim {
     MemoryRegion mmio;
     QEMUTimer *timer;
-    qemu_irq irq;
+    qemu_irq irq[2];
     int fd;
     uint32_t sequence;
     bool running;
@@ -48,11 +48,12 @@ static MemTxResult bridge_rpc(HlsCosim *s, uint32_t op, uint32_t address,
     if (cosim_get(packet) != COSIM_MAGIC || cosim_get(packet + 4) != COSIM_VERSION ||
         cosim_get(packet + 8) != (op | COSIM_REPLY) ||
         cosim_get(packet + 12) != sequence || cosim_get(packet + 16) > 3 ||
-        cosim_get(packet + 24) > 1 || cosim_get(packet + 28) > 4096) {
+        cosim_get(packet + 24) > 3 || cosim_get(packet + 28) > 4096) {
         errno = EPROTO;
         bridge_failed("invalid reply");
     }
-    qemu_set_irq(s->irq, cosim_get(packet + 24));
+    for (unsigned i = 0; i < 2; i++)
+        qemu_set_irq(s->irq[i], (cosim_get(packet + 24) >> i) & 1);
     if (data) *data = cosim_get(packet + 20);
     return cosim_get(packet + 16) ? MEMTX_ERROR : MEMTX_OK;
 }
@@ -111,7 +112,7 @@ static void bridge_reset(void *opaque)
 }
 
 /* Map the PL window and wire its interrupt only when this experiment is requested. */
-void hls_cosim_init(MemoryRegion *memory, qemu_irq irq)
+void hls_cosim_init(MemoryRegion *memory, qemu_irq app_irq, qemu_irq debug_irq)
 {
     const char *path = getenv("HLS_COSIM_SOCKET");
     struct sockaddr_un address = {.sun_family = AF_UNIX};
@@ -122,14 +123,14 @@ void hls_cosim_init(MemoryRegion *memory, qemu_irq irq)
         bridge_failed("socket path");
     }
     s = g_new0(HlsCosim, 1);
-    s->irq = irq;
+    s->irq[0] = app_irq; s->irq[1] = debug_irq;
     s->fd = qemu_socket(AF_UNIX, SOCK_STREAM, 0);
     strcpy(address.sun_path, path);
     if (s->fd < 0 || connect(s->fd, (struct sockaddr *)&address, sizeof(address))) {
         bridge_failed("connect");
     }
     s->timer = timer_new_ns(QEMU_CLOCK_VIRTUAL, bridge_tick, s);
-    memory_region_init_io(&s->mmio, NULL, &bridge_ops, s, "hls-cosim", 0x3000);
+    memory_region_init_io(&s->mmio, NULL, &bridge_ops, s, "hls-cosim", 0x8000);
     memory_region_add_subregion(memory, 0x40000000, &s->mmio);
     qemu_register_reset(bridge_reset, s);
 }

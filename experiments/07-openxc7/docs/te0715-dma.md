@@ -62,7 +62,7 @@ A malformed incoming frame, DMA error or interrupted DMA freezes further I/O wit
 
 ## Register/stream boundary
 
-The mailbox occupies GP0 addresses `0x40000000`–`0x40002fff`, clocked by FCLK0 at 100 MHz. PL interrupt 0 maps to GIC SPI 29 (interrupt ID 61). The driver owns the clock, interrupt and PL330 channels selected by the DT. No PL peripheral-request handshake is used: DMA performs incrementing-address memory copies to packet RAM. [AMD's PL330 overview](https://xilinx-wiki.atlassian.net/wiki/spaces/A/pages/18842220/Zynq+Linux+pl330+DMA) describes this built-in controller; its old sample driver is not used here.
+The mailbox occupies GP0 addresses `0x40000000`–`0x40002fff`, clocked by FCLK0 at 100 MHz. PL interrupt 0 maps to GIC SPI 29 (interrupt ID 61). The driver owns the clock, interrupt and PL330 channels selected by the DT. The required `hlsdma0` DT alias fixes the character-device name independently of probe order. No PL peripheral-request handshake is used: DMA performs incrementing-address memory copies to packet RAM. [AMD's PL330 overview](https://xilinx-wiki.atlassian.net/wiki/spaces/A/pages/18842220/Zynq+Linux+pl330+DMA) describes this built-in controller; its old sample driver is not used here.
 
 | Offset | Meaning |
 |---|---|
@@ -84,5 +84,5 @@ The standalone QEMU tests boot the actual new kernel and load both modules with 
 [QEMU–Icarus co-simulation](te0715-cosim.md) additionally runs the real driver and both loopback diagnostics against the mailbox RTL, including PL interrupt delivery through the emulated GIC, backpressure and blocked-reader unbind/rebind. It does not qualify physical GP0 burst conversion, DMA bus-fault propagation, board timing or actual hardware teardown. The board commands above remain required.
 
 - [ ] Verify board loopback and unbind/rebind, then record throughput and CPU cost for representative frame sizes.
-- [ ] Add independent application/debug endpoints and attach a generated actor stream after this transport passes on hardware.
+- [ ] After board loopback passes, qualify the [routed actor/debug image](te0715-regsvc.md), already exercised through Linux–RTL co-simulation.
 - [ ] Use those measurements to decide whether to retain PL330, add buffering, or build a PL DMA engine on an HP port.

@@ -31,6 +31,10 @@ def run(yosys: Path | None) -> None:
                         str(root / "dma/check_dma_device.c"), "-o", str(tool)], check=True)
         if subprocess.run([str(tool)], capture_output=True).returncode != 2:
             raise AssertionError("board diagnostic did not reject missing device argument")
+        subprocess.run(["iverilog", "-g2012", "-s", "zynq_dma_pair_tb", "-o", str(stage / "pair.vvp"),
+                        *[str(root / f"dma/{name}") for name in (
+                            "zynq_dma_mailbox.v", "zynq_dma_pair.v", "zynq_dma_pair_tb.sv")]], check=True)
+        subprocess.run(["vvp", str(stage / "pair.vvp")], check=True, timeout=10)
         sources = [str(root / "dma/zynq_dma_mailbox.v"), str(root / "dma/zynq_dma_mailbox_tb.sv")]
         for mapped in ([False, True] if yosys else [False]):
             flags = []

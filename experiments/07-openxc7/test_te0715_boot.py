@@ -9,6 +9,7 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 from boot.board import EXPECTED_FREQ, EXPECTED_PS, bsp_parameters, check_profile
+from build_regsvc_fsbl import divide_fclk0
 from check_zynq_boot import bit_payload, check, check_linux_elf, elf_segments
 from prepare_te0715_boot import digest, fdt
 
@@ -44,6 +45,16 @@ class BoardTests(unittest.TestCase):
         """An incomplete upstream BSP must fail rather than silently retain board defaults."""
         with self.assertRaisesRegex(ValueError, "BSP macro"):
             bsp_parameters("#define STDIN_BASEADDRESS 0\n", EXPECTED_FREQ)
+
+    def test_routed_clock(self) -> None:
+        """Change every silicon table's FCLK0 divider, rejecting drift or a second patch."""
+        old = "EMIT_MASKWRITE(0XF8000170, 0x03F03F30U ,0x00200500U)"
+        source = "DDR untouched\n" + (old + "\n") * 3 + "MIO untouched\n"
+        expected = source.replace("0x00200500U", "0x00800500U")
+        self.assertEqual(divide_fclk0(source), expected)
+        for invalid in (source.replace(old, "", 1), source + old, expected):
+            with self.subTest(invalid=invalid), self.assertRaises(ValueError):
+                divide_fclk0(invalid)
 
     def test_malformed_inputs(self) -> None:
         """Truncated ELF and .bit containers fail before payload interpretation."""

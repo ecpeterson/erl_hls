@@ -20,6 +20,11 @@ rm -rf /target/lib/modules
 cp -a /lib/modules /target/lib/
 depmod -b /target "$release"
 cp /check_dma_device /check_dma_beam.escript /target/opt/erl-hls/bin/
+if [ -d /regsvc ]; then
+    rm -rf /target/opt/erl-hls/lib/erl_hls/ebin
+    cp -a /regsvc/ebin /target/opt/erl-hls/lib/erl_hls/
+    cp /regsvc/check_regsvc_dma.escript /target/opt/erl-hls/bin/
+fi
 cp /dma-runtime-check /target/opt/erl-hls/check-init
 rm -f /target/etc/modprobe.d/erl-hls-probe.conf
 sync
