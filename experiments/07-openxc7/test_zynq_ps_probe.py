@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
-"""Check the PS probe's AXI/reset boundary before and optionally after synthesis."""
+"""Check the PS probe's board profile and AXI/reset boundary, optionally after synthesis."""
 
 import argparse
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
 
 def run(yosys: Path | None) -> None:
-    """Simulate the boundary tests; --yosys also verifies its technology-mapped core."""
+    """Check board compatibility and simulate AXI; --yosys also verifies the mapped core."""
     root = Path(__file__).resolve().parent
+    subprocess.run([sys.executable, str(root / "test_te0715_boot.py")], check=True)
     source, bench = root / "zynq_ps_probe.v", root / "zynq_ps_probe_tb.sv"
     with tempfile.TemporaryDirectory(prefix="zynq-ps-probe-") as directory:
         stage = Path(directory)

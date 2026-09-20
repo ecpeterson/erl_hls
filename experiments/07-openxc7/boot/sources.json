@@ -1,0 +1,30 @@
+{
+  "source_date_epoch": 1729879230,
+  "sources": {
+    "trenz": {
+      "file": "trenz-te0715-2023.2.zip",
+      "url": "https://www.trenz-electronic.de/trenzdownloads/Trenz_Electronic/Modules_and_Module_Carriers/4x5/TE0715/Reference_Design/2023.2/test_board/TE0715-test_board-vivado_2023.2-build_4_20241025180030.zip",
+      "sha256": "84b77bc92e5659181a55cf9062335b9d2be04982f7e003fb472b0cda67b8341c"
+    },
+    "arm": {
+      "file": "arm-gnu-toolchain-14.3.rel1.tar.xz",
+      "url": "https://developer.arm.com/-/media/Files/downloads/gnu/14.3.rel1/binrel/arm-gnu-toolchain-14.3.rel1-darwin-arm64-arm-none-eabi.tar.xz",
+      "sha256": "30f4d08b219190a37cded6aa796f4549504902c53cfc3c7e044a8490b6eba1f7"
+    },
+    "embeddedsw": {
+      "file": "embeddedsw-2023.2.tar.gz",
+      "url": "https://codeload.github.com/Xilinx/embeddedsw/tar.gz/c9a0ee31b2a14cbcfcb56ca369037319b4ad4847",
+      "sha256": "92338fb0a8ef45e8bcfb0766972be7c9f1f46294067b46cf37b69279d3f5812e"
+    },
+    "bootgen": {
+      "file": "bootgen-2023.2.tar.gz",
+      "url": "https://codeload.github.com/Xilinx/bootgen/tar.gz/8e6702bb5064b806e45028486de7376962470a36",
+      "sha256": "ff587b48750921cc7bfe0835e6028baf689486a619c0ba24edf79ed96babf1fb"
+    },
+    "musl": {
+      "file": "musl-1.2.5.tar.gz",
+      "url": "https://musl.libc.org/releases/musl-1.2.5.tar.gz",
+      "sha256": "a9a118bbe84d8764da0ea0d28b3ab3fae8477fc7e4085d90102b8596fc7c75e4"
+    }
+  }
+}
