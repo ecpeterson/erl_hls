@@ -133,6 +133,7 @@ if resources:
 ' "$part" "$report_path"
 }
 
+# Route and assemble at the requested MHz (100 by default); strict timing is the default.
 build_bitstream() {
     local design_name=$1
     local netlist=$2
@@ -140,6 +141,7 @@ build_bitstream() {
     local footprint=${part%-*}
     local xdc=$4
     local timing_policy=${5:-strict}
+    local clock_mhz=${6:-100}
     local output_root="$build_root/$design_name"
     local output="$output_root/$part"
     local nextpnr_options=(
@@ -149,7 +151,7 @@ build_bitstream() {
         --json "$netlist"
         --fasm "$output.fasm"
         --report "$output-report.json"
-        --freq 100
+        --freq "$clock_mhz"
         --router router2
         --log "$output-nextpnr.log"
     )

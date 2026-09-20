@@ -10,6 +10,8 @@ ARM Linux / BEAM → character driver → QEMU CPU + PL330
                               Icarus mailbox RTL → stream loopback
 ```
 
+The [routed image](te0715-regsvc.md) uses the same bridge with two mailbox banks and separate interrupt lines, connecting application and debug streams to generated actors. Select it with `--regsvc build/routed-dma/rtl` and its assembled SD runtime. Protocol version 2 carries the two interrupt levels as a bitmap; rebuild QEMU when updating the bridge.
+
 The bridge has no substitute packet RAM, mailbox registers or completion logic. The testbench drives public AXI/stream ports and periodically stalls the loopback. VPI carries commands and responses; it does not read or modify internal DUT state.
 
 ## Run
@@ -39,7 +41,7 @@ CI runs `test_qemu_cosim.py` through the existing PS-probe suite: real Icarus/AX
 
 ## What still needs hardware
 
-This is a functional schedule, not a timing model. Each memory access completes an AXI transaction; a QEMU virtual timer advances 64 extra RTL cycles per millisecond after the first access, allowing the stream to progress while Linux sleeps. The test does not model the physical 100-MHz fabric clock, CPU/fabric clock ratios or throughput.
+This is a functional schedule, not a timing model. Each memory access completes an AXI transaction; a QEMU virtual timer advances 64 extra RTL cycles per millisecond after the first access, allowing the stream to progress while Linux sleeps. The test does not model the selected physical fabric clock, CPU/fabric clock ratios or throughput.
 
 QEMU splits wider memory accesses into single 32-bit AXI transactions here. It does not reproduce the PS's GP0 burst conversion, arbitration, cache/coherency behavior or electrical interfaces. Existing standalone RTL/mapped-core tests cover AXI bursts; silicon must still qualify the complete PS–PL path.
 

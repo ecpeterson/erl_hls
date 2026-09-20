@@ -1,0 +1,241 @@
+{
+  "date": "2026-09-20",
+  "part": "xc7z030sbg485-1",
+  "hardware_validated": false,
+  "timing_qualified": false,
+  "fclk0_hz": 25000000,
+  "utilization": {
+    "BUFGCTRL": {
+      "available": 32,
+      "used": 1
+    },
+    "PS7_PS7": {
+      "available": 1,
+      "used": 1
+    },
+    "SLICE_LUTX": {
+      "available": 157200,
+      "used": 10811
+    },
+    "SLICE_FFX": {
+      "available": 157200,
+      "used": 4918
+    },
+    "RAMB18E1_RAMB18E1": {
+      "available": 530,
+      "used": 4
+    },
+    "RAMB36E1_RAMB36E1": {
+      "available": 265,
+      "used": 6
+    },
+    "DSP48E1_DSP48E1": {
+      "available": 400,
+      "used": 0
+    }
+  },
+  "partial_timing_estimate": {
+    "clock": {
+      "achieved": 48.5,
+      "constraint": 25.0
+    }
+  },
+  "frames_sha256": "6bbac84d46f01842f46960eb1c8914b6113124c1e4f2043496b459cf8a39177c",
+  "decoded_non_ecc_set_bits": 531434,
+  "physical": {
+    "hardware_validated": false,
+    "fclk0_hz": 25000000,
+    "rtl_manifest_sha256": "a85f08f2774c6a73ab247502af6f1ef9c950734dc29dbe0b284282bc11eeba98",
+    "inputs": {
+      "experiments/07-openxc7/run_zynq_regsvc.sh": "51c83196cba4788b63933e0ee6eca102315883993dbefcfd08029c5ede7e7cff",
+      "experiments/07-openxc7/openxc7_common.sh": "ded14bc5ce345de4b238680e879a3e88967e7fd7068b7d8a8d66535daba1b3c2",
+      "experiments/07-openxc7/zynq_ps_probe.v": "53576c7b3f5f46d781d0ce4d2393fd980991b690bf3083331f5941fbce61b72f",
+      "experiments/07-openxc7/zynq_ps_probe.xdc": "fe6262f60fa92dab1312937256f5c35e371e67a63a0039eaa26cf30ed165962f",
+      "experiments/07-openxc7/dma/zynq_dma_mailbox.v": "7594b8112db9fa59f4dd8e5b7a3ae7f9c4f185310fbb57071a412a2b2c551f9c",
+      "experiments/07-openxc7/dma/zynq_dma_pair.v": "82fc157b438657346d012dec392ca993a6f9a6431bbd12c4d43711cc4943a089",
+      "experiments/07-openxc7/dma/zynq_regsvc_core.sv": "191b8b10dd10dc1331e1f053053d0713f04af17903d65932ffb68a2dd7aeab86",
+      "experiments/07-openxc7/dma/zynq_dma_top.v": "a005296f596652352b6bbfa1e016ba7ad1b26e02c655f6a82564142ad9183178",
+      "experiments/07-openxc7/dma/routed_image.py": "ad5c56c00a7922b4e6e58897ee1bc26bd16078fd15461b23781c7fc18280bd26"
+    },
+    "files": {
+      "xc7z030sbg485-1.bit": "281160d38f87ffb3084ffe70f81239a8493861c42b0244d32b5b12059698d2a0",
+      "xc7z030sbg485-1-report.json": "eae9e52344c02f8fbd33fdb87b5af73b8da55032638809367b528ac09578cf4d",
+      "stats.json": "df07a06fcb676a86ea9c1a4b1257031708661022e3166ce608cb999e5184c26a",
+      "netlist.json": "347dede445fb3144f641d7b72815cfa95fe12c95e9c1b1a720d64c6b9cce734a"
+    }
+  },
+  "rtl": {
+    "manifest_sha256": "a85f08f2774c6a73ab247502af6f1ef9c950734dc29dbe0b284282bc11eeba98",
+    "outputs": {
+      "regsvc.v": "11e16682dcad8941e55c928342df4e13ae6d5de0a520f665cc22871daaea4884",
+      "hls_debug_observer.v": "d0f150d2d61b9232803dd7362dde5866497eaa64470c99ce7376f10c27a69181",
+      "hls_debug_server.v": "55450c967b8af406f43bc93e6713fc997e0f9382dd6c4dacdd6eaf0a45338095"
+    },
+    "build_manifests": {
+      "regsvc": "9384ec293405c0833f35f8e1ec512199f26fce0296c683ae974b471dd3b7a1a3",
+      "hls_debug_observer": "e09f726e7ab6e47fe90e98c65c01135c6083677a43486d24bf9c931f378ffb99",
+      "hls_debug_server": "f2d768b09363d679cdd045796c34ea31b701cd666c9903c223ef60fa0877f875"
+    },
+    "xls_tools": {
+      "ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+      "opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c",
+      "codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162"
+    }
+  },
+  "fsbl": {
+    "fclk0_hz": 25000000,
+    "fsbl_sha256": "2d889a76e50ecbfdc24117a8bd04c989c248fd432fa14558f667567fdaff2a5d",
+    "original_ps_init_sha256": "b984c818b828b4d9847360ac849acd5eb572e1d1973e4aef30c416a7015cd2e6",
+    "ps_init_sha256": "5bab34f502434d5645af9236f641cc5619d866d07ffdf3f0bbec30206b630e46",
+    "ps_header_sha256": "73e4602dd37a4bb02b5064ac981c83d258506921a5af2ca9928eedd10d08a941",
+    "sources": {
+      "embeddedsw": {
+        "file": "embeddedsw-2023.2.tar.gz",
+        "url": "https://codeload.github.com/Xilinx/embeddedsw/tar.gz/c9a0ee31b2a14cbcfcb56ca369037319b4ad4847",
+        "sha256": "92338fb0a8ef45e8bcfb0766972be7c9f1f46294067b46cf37b69279d3f5812e"
+      },
+      "trenz": {
+        "file": "trenz-te0715-2023.2.zip",
+        "url": "https://www.trenz-electronic.de/trenzdownloads/Trenz_Electronic/Modules_and_Module_Carriers/4x5/TE0715/Reference_Design/2023.2/test_board/TE0715-test_board-vivado_2023.2-build_4_20241025180030.zip",
+        "sha256": "84b77bc92e5659181a55cf9062335b9d2be04982f7e003fb472b0cda67b8341c"
+      },
+      "arm": {
+        "file": "arm-gnu-toolchain-14.3.rel1.tar.xz",
+        "url": "https://developer.arm.com/-/media/Files/downloads/gnu/14.3.rel1/binrel/arm-gnu-toolchain-14.3.rel1-darwin-arm64-arm-none-eabi.tar.xz",
+        "sha256": "30f4d08b219190a37cded6aa796f4549504902c53cfc3c7e044a8490b6eba1f7"
+      }
+    },
+    "inputs": {
+      "build_regsvc_fsbl.py": "3c8f308fe44700eb4b10fcc4e91559f0ebfaf41be89dc2869eaf25a486d62aac",
+      "boot/board.py": "a4e0e0891dfb2a0053c28272775255d585e07e8057532e4e6d6b1393a8cda8ee",
+      "prepare_te0715_boot.py": "55bcb50951024db147cdffc7fc4c460353908093dbfc524a9b3c1e52b9c868c3",
+      "boot/patches/bootgen.patch": "722d95cd1fe931e79b69fa962538e3e9da404b6b4f8c2808cd7bf8f9d63042ae",
+      "boot/patches/embeddedsw.patch": "50c4f7cb1cae4715b2aad16b5d45b0f16d89b32cf1aca43e0f115ed7f6656c26"
+    }
+  },
+  "image": {
+    "manifest_sha256": "58a66cf017a1dd7da0a0dd882a295b284dd4ee804e92b03941cda6cd9d085df6",
+    "files": {
+      "runtime.its": {
+        "bytes": 920,
+        "sha256": "3c09a1e1774c801c760a1e70af703deacbf72a2d6b406f479a2f66b370d0174b"
+      },
+      "zImage": {
+        "bytes": 4627608,
+        "sha256": "cb21f9d733fc24155de5ce8ad1c86eaf540586d4be9a8c00b14f9735ee93cd6e"
+      },
+      "image.ub": {
+        "bytes": 4645740,
+        "sha256": "d05c79678b4a3bb3ecc3ed40af54e4f06cd310cefad2afa0683ae1d8a9cbf40e"
+      },
+      "system.dtb": {
+        "bytes": 17158,
+        "sha256": "aca0c035fd8e83968d6aef94f39a16f44fb46a0b4f5a0ffeab3fc7d4fe571a54"
+      },
+      "rootfs.ext4.gz": {
+        "bytes": 51582995,
+        "sha256": "347b1f98e350c5e044e7c357571227acf476b73dbf9bbe978e8916280aa60a0e"
+      },
+      "BOOT.bin": {
+        "bytes": 7152392,
+        "sha256": "299d6c1bfa8ee5a41d484f55d11f42278d8d5b69384281d37d08ab7f01bb9855"
+      },
+      "boot.scr": {
+        "bytes": 436,
+        "sha256": "6e2ed340fac2dbda5b1405c5465e392f4ad6d88e68def8c1e522ea18fbf446d4"
+      }
+    },
+    "rootfs_uncompressed": {
+      "bytes": 536870912,
+      "sha256": "1e75e9720f880214ea86f7dd05f571ca6a2278ca92d23acc3f70850e16753a1a"
+    }
+  },
+  "cosimulation": {
+    "wall_seconds": 36.636,
+    "hardware_validated": false,
+    "host": "macOS-26.5.2-arm64-arm-64bit-Mach-O",
+    "qemu_version": "QEMU emulator version 10.2.0",
+    "qemu_sha256": "263075186230290083044fac79b98299a7da29e1be9b3873c483956c04afb98d",
+    "kernel_manifest_sha256": "59b4f247226113acada426c9dced9f9301a2e3283f1d33959dcafa1f2ccf0ed2",
+    "base_manifest_sha256": "74b79d73c787f8a6b832fabdea1b6bf3ac46a0ccd53b557358583158a06d9601",
+    "device_tree_sha256": "aca0c035fd8e83968d6aef94f39a16f44fb46a0b4f5a0ffeab3fc7d4fe571a54",
+    "regsvc_manifest_sha256": "a85f08f2774c6a73ab247502af6f1ef9c950734dc29dbe0b284282bc11eeba98",
+    "runtime_manifest_sha256": "58a66cf017a1dd7da0a0dd882a295b284dd4ee804e92b03941cda6cd9d085df6",
+    "rtl": {
+      "reads": 6106,
+      "writes": 5002,
+      "steps": 6696,
+      "resets": 1,
+      "irq_rises": 649
+    },
+    "guest_checks": [
+      "PASS: debug counters and trace remain usable while application RX is full",
+      "PASS: two DMA-routed actors, isolated registers and transaction-ID reuse",
+      "PASS: full 64-event debug trace over DMA, then empty drain",
+      "PASS: DMA owners closed; reverse-order rebind preserved names and actor state",
+      "PASS: ARM BEAM routed application and independent DMA debug",
+      "PASS: Linux PL330 and Icarus routed application integration"
+    ],
+    "inputs": {
+      "run_qemu_cosim.py": "150a80d017d2ccbfac77ee19dad725c544a247d178f7cd3e7acd1c75f2e3556c",
+      "dma/zynq_dma_mailbox.v": "7594b8112db9fa59f4dd8e5b7a3ae7f9c4f185310fbb57071a412a2b2c551f9c",
+      "dma/check_dma_device.c": "707f025b552df78e8eebfa9193303d2bbfa5189425cf9001e032d5f7bc6b5325",
+      "dma/device_tree.py": "7c80b0dc1a498554b12e5168e6b759cefcb694fc7dc0b9d5b449d26e5f76e0d2",
+      "dma/zynq_dma_pair.v": "82fc157b438657346d012dec392ca993a6f9a6431bbd12c4d43711cc4943a089",
+      "dma/zynq_regsvc_core.sv": "191b8b10dd10dc1331e1f053053d0713f04af17903d65932ffb68a2dd7aeab86",
+      "dma/check_regsvc_dma.escript": "7605aeb4c9fe0f002228ca214a7ff59c9b191705da494342a703671d26dd36ec",
+      "cosim/guest-init.sh": "43257c3cbdafaf37c357464c81bbe1d26de4455716416b1d4c6f8ede855818d5",
+      "cosim/icarus_bridge.c": "2585ae512886568bd5d96b39cea1f60c2db84e8167cda85c54f1c39e4e0575d2",
+      "cosim/mailbox_tb.sv": "f526afe0b443647575f67b356e101d18d394ad4764f5e8dd1d9281050cad0cb3",
+      "cosim/protocol.h": "ce4b1b1c55c3d604d43760b2c98eba5b900a292b114cdcb34cbf32202ccda3a1",
+      "cosim/qemu_bridge.c": "cc0fb6cc1c0cb848a4e8393d5630c2e17de54fa4934a904787297556f1fc9438",
+      "cosim/qemu_bridge.h": "3b0b04d9b53427a06be610cc31688f20f421560a95891bd11b9e3646719f2b3b",
+      "cosim/regsvc-init.sh": "c036d40eb1eb77a455cab2c3824623fa8188d482b8e7daa37cbdc0cb3521fc2d",
+      "cosim/runtime.py": "58cd4b661579587e553dd33128ccdf74715f2042cea964215c0d9a4ca2de2862",
+      "cosim/sources.lock.json": "f15d1456f9b9c8064d531e02295f0ba761407bc08464ac073111ca6baaeefc09"
+    }
+  },
+  "loopback_regression": {
+    "wall_seconds": 26.95,
+    "qemu_sha256": "263075186230290083044fac79b98299a7da29e1be9b3873c483956c04afb98d",
+    "kernel_manifest_sha256": "59b4f247226113acada426c9dced9f9301a2e3283f1d33959dcafa1f2ccf0ed2",
+    "rtl": {
+      "reads": 86572,
+      "writes": 69404,
+      "steps": 9674,
+      "resets": 1,
+      "frames": 515,
+      "stalls": 44575,
+      "irq_rises": 515
+    },
+    "guest_checks": [
+      "PASS: all 256 routed frame sizes, partial reads and admission checks",
+      "PASS: full RX/TX backpressure and ordered drain",
+      "PASS: blocked read woke on completed frame",
+      "PASS: open reader woke with ENODEV on driver unbind",
+      "PASS: Linux PL330 and Icarus mailbox integration",
+      "PASS: ARM BEAM raw-file DMA loopback, all 256 frame sizes"
+    ]
+  },
+  "checks": {
+    "driver_build": "W=1 KCFLAGS=-Werror",
+    "native_routed_rtl": "passed",
+    "paired_axi_isolation": "passed",
+    "source_and_mapped_mailboxes": "256 source / 29 mapped frame lengths; all 1-16-beat bursts",
+    "source_and_mapped_ps_probe": "passed",
+    "clock_table_rejection": "passed",
+    "sd_beam_transport_tests": 23,
+    "qemu_bad_replies": "passed",
+    "source_contracts": "passed; no new/changed gaps",
+    "dialyzer": "passed"
+  },
+  "not_exercised": [
+    "Physical boot/DDR",
+    "Physical GP0 conversion and interrupts",
+    "DMA bus-fault propagation",
+    "Independent hardware reset or recovery",
+    "Board timing",
+    "Throughput and CPU cost"
+  ],
+  "placement": "One default-seed placement; repeat builds recovered identical frame contents."
+}

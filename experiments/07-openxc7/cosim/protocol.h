@@ -1,6 +1,7 @@
 /* Local simulator RPC: eight little-endian u32s per request/reply, one in flight.
  * Request: magic, version, op, sequence, address, data, amount, zero.
- * Reply: magic, version, op|REPLY, sequence, AXI response, data, IRQ, cycles.
+ * Reply: magic, version, op|REPLY, sequence, AXI response, data, IRQ bitmap, cycles.
+ * IRQ bits 0/1 are the independent application/debug mailbox levels.
  * READ/WRITE amount is four bytes; STEP amount is 1..4096 clock cycles.
  * RESET is permitted only between transactions and discards mailbox ownership.
  */
@@ -13,7 +14,7 @@
 #include <unistd.h>
 
 #define COSIM_MAGIC 0x484c5343u
-#define COSIM_VERSION 1u
+#define COSIM_VERSION 2u
 #define COSIM_REPLY 0x80000000u
 #define COSIM_READ 1u
 #define COSIM_WRITE 2u

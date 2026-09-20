@@ -34,6 +34,7 @@
 /* Open files keep this object alive after unbind; dead gates all hardware access. */
 struct hls_mailbox {
 	struct miscdevice misc;
+	char name[32];
 	struct kref refs;
 	struct mutex life_lock, tx_lock, rx_lock;
 	spinlock_t irq_lock;
@@ -278,7 +279,12 @@ static int hls_probe(struct platform_device *pdev)
 	struct hls_mailbox *box;
 	struct resource *resource;
 	struct clk *clock;
-	int error;
+	int error, index;
+
+	/* DT aliases keep application/debug names stable across probe and rebind. */
+	index = of_alias_get_id(pdev->dev.of_node, "hlsdma");
+	if (index < 0)
+		return dev_err_probe(&pdev->dev, index, "missing hlsdma alias\n");
 
 	box = kzalloc(sizeof(*box), GFP_KERNEL);
 	if (!box)
@@ -340,7 +346,8 @@ static int hls_probe(struct platform_device *pdev)
 	if (error)
 		goto unmap_rx;
 	box->misc.minor = MISC_DYNAMIC_MINOR;
-	box->misc.name = "hls-dma0";
+	snprintf(box->name, sizeof(box->name), "hls-dma%d", index);
+	box->misc.name = box->name;
 	box->misc.fops = &hls_fops;
 	box->misc.parent = &pdev->dev;
 	box->misc.mode = 0600;

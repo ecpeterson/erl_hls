@@ -14,6 +14,7 @@ from cosim.runtime import compile_rtl, rtl_server
 
 PACKET = struct.Struct("<8I")
 MAGIC = 0x484C5343
+VERSION = 2
 BASE = 0x40000000
 
 
@@ -31,7 +32,7 @@ class Peer:
                 fragmented: bool = False) -> tuple[int, int, int, int]:
         """Require matching identity/sequence and return bus status, data, IRQ, cycles."""
         self.sequence += 1
-        packet = PACKET.pack(MAGIC, 1, op, self.sequence, address, data, amount, 0)
+        packet = PACKET.pack(MAGIC, VERSION, op, self.sequence, address, data, amount, 0)
         if fragmented:
             for byte in packet:
                 self.socket.sendall(bytes([byte]))
@@ -44,7 +45,7 @@ class Peer:
                 raise EOFError("RTL peer closed before replying")
             response.extend(part)
         magic, version, reply, sequence, status, value, irq, cycles = PACKET.unpack(response)
-        if (magic, version, reply, sequence) != (MAGIC, 1, op | 0x80000000, self.sequence):
+        if (magic, version, reply, sequence) != (MAGIC, VERSION, op | 0x80000000, self.sequence):
             raise ValueError("unexpected reply identity")
         return status, value, irq, cycles
 
@@ -101,9 +102,9 @@ class BridgeTests(unittest.TestCase):
 
     def test_bad_packets(self) -> None:
         """Bad version, sequence, step count and partial EOF fail without a reply."""
-        packets = [PACKET.pack(MAGIC, 2, 1, 1, BASE, 0, 4, 0),
-                   PACKET.pack(MAGIC, 1, 1, 2, BASE, 0, 4, 0),
-                   PACKET.pack(MAGIC, 1, 3, 1, 0, 0, 4097, 0), b"truncated"]
+        packets = [PACKET.pack(MAGIC, VERSION + 1, 1, 1, BASE, 0, 4, 0),
+                   PACKET.pack(MAGIC, VERSION, 1, 2, BASE, 0, 4, 0),
+                   PACKET.pack(MAGIC, VERSION, 3, 1, 0, 0, 4097, 0), b"truncated"]
         for i, packet in enumerate(packets):
             with self.subTest(case=i):
                 path, log = self.root / f"bad{i}.sock", self.root / f"bad{i}.log"
@@ -124,11 +125,11 @@ class QemuBridgeTests(unittest.TestCase):
 
     def test_bad_replies(self) -> None:
         """Reject bad identity, sequence, status, IRQ, cycle count and partial EOF."""
-        replies = [[MAGIC, 2, 0x80000004, 1, 0, 0, 0, 5],
-                   [MAGIC, 1, 0x80000004, 2, 0, 0, 0, 5],
-                   [MAGIC, 1, 0x80000004, 1, 4, 0, 0, 5],
-                   [MAGIC, 1, 0x80000004, 1, 0, 0, 2, 5],
-                   [MAGIC, 1, 0x80000004, 1, 0, 0, 0, 4097]]
+        replies = [[MAGIC, VERSION + 1, 0x80000004, 1, 0, 0, 0, 5],
+                   [MAGIC, VERSION, 0x80000004, 2, 0, 0, 0, 5],
+                   [MAGIC, VERSION, 0x80000004, 1, 4, 0, 0, 5],
+                   [MAGIC, VERSION, 0x80000004, 1, 0, 0, 4, 5],
+                   [MAGIC, VERSION, 0x80000004, 1, 0, 0, 0, 4097]]
         for i, packet in enumerate([*(PACKET.pack(*reply) for reply in replies), b"partial", b""]):
             with self.subTest(case=i), tempfile.TemporaryDirectory(prefix="hls-peer-", dir="/tmp") as temporary:
                 path = Path(temporary) / "peer.sock"
@@ -151,7 +152,7 @@ class QemuBridgeTests(unittest.TestCase):
                                     if not part:
                                         raise EOFError("QEMU closed before its reset request")
                                     request.extend(part)
-                                self.assertEqual(PACKET.unpack(request), (MAGIC, 1, 4, 1, 0, 0, 0, 0))
+                                self.assertEqual(PACKET.unpack(request), (MAGIC, VERSION, 4, 1, 0, 0, 0, 0))
                                 connection.sendall(packet)
                                 connection.shutdown(socket.SHUT_WR)
                                 output, _ = process.communicate(timeout=5)
