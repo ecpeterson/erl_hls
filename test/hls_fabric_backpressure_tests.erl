@@ -108,12 +108,23 @@ receive_global_credit_and_owner_death_test() ->
         hls_fabric:ack(Fabric, Receipt)
     end).
 
-proxy_processes_replies_during_write_stall_test() ->
+-doc "Exercise replies during a blocked write without leaking failed requests to other tests.".
+-spec proxy_processes_replies_during_write_stall_test_() -> {spawn, fun(() -> ok)}.
+proxy_processes_replies_during_write_stall_test_() ->
+    {spawn, fun proxy_processes_replies_during_write_stall/0}.
+
+%% A peer read does not establish that the broker processed its write receipt.
+%% Wait before reusing transmit credit; the first device reply stays pending.
+-spec proxy_processes_replies_during_write_stall() -> ok.
+proxy_processes_replies_during_write_stall() ->
     with_peer(empty, #{tx_limit => 1}, fun(Fabric, Peer, _Filled) ->
         {ok, Client} = hls_debug:start_link(undefined, {fabric, Fabric, 1}),
         try
             First = gen_server:send_request(Client, {query, 1, <<11:32/little>>}),
             ?assertEqual(frame(1, 11), take(Peer, 12)),
+            await(Fabric, fun(#{tx := #{active := Active}, counts := #{written := Written}}) ->
+                Active =:= none andalso Written =:= 1
+            end),
             Filled = binary_to_integer(peer(Peer, "fill")),
             Second = gen_server:send_request(Client, {query, 1, <<22:32/little>>}),
             await(Fabric, fun(#{tx := #{active := Active}}) -> Active =/= none end),
