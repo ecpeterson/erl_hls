@@ -60,6 +60,9 @@ jobs:
           fi
           "$XLS_ROOT/codegen_main" --version
 
+      - name: Check build-artifact compaction safeguards
+        run: python3 tools/test_compact_build.py
+
       - name: Run Erlang tests
         run: rebar3 eunit
 
