@@ -1,0 +1,73 @@
+{
+  "date": "2026-09-20",
+  "decoded_non_ecc_set_bits": 16950,
+  "frames_sha256": "694729afcfedbec2fe1b05d2718cba510a1139243dfb2c001600e1db196cc3c1",
+  "hardware_qualified": false,
+  "host": "arm64",
+  "netlist_sha256": "566c8077b43fdc6066e33845cb3806938b45a80c9483afe1e119ede207e99986",
+  "part": "xc7z030sbg485-1",
+  "partial_timing_estimate": {
+    "clock": {
+      "achieved": 138.2,
+      "constraint": 100.0
+    }
+  },
+  "placements": 1,
+  "scope": "compile-only; AXI/reset RTL and mapped-core simulation; host diagnostic tests; PS7/BUFG retention; non-ECC bitstream round trip",
+  "source_sha256": {
+    "check_zynq7030_bitstream.py": "4c412f9cde20ec566e65f4af2656eaf98463cf7de58c7cbdb4065f594882c27f",
+    "openxc7_common.sh": "4ab62cdf76407a30e57c0f2ae7faddccd7344036b3c7bc3090916b7b4914b823",
+    "prepare_zynq7030.py": "1c65e320fc78b76959f79b5998b4f4c2af35750c5397c4c235ce9db697b8eda5",
+    "probe_zynq_ps.c": "00c52ec341066cf5ce21809a0097b62d4fd1ebf5bfb7c61284e3cce57ee9a035",
+    "run_zynq_ps_probe.sh": "c1880a424fd114b9029ce264d928b0f56a1904a8b8327c5acc4eb22b3a7266d6",
+    "test_probe_zynq_ps.c": "4a0e8c4ede4bd5ba51cbb4a6ff1f3e5227971e12f51e1dc5de6c356311da1bcc",
+    "test_zynq_ps_probe.py": "4f29ab320826066c04b3b36f7afe3b6916f02b036d045547096a74d943805498",
+    "zynq_ps_probe.v": "53576c7b3f5f46d781d0ce4d2393fd980991b690bf3083331f5941fbce61b72f",
+    "zynq_ps_probe.xdc": "fe6262f60fa92dab1312937256f5c35e371e67a63a0039eaa26cf30ed165962f",
+    "zynq_ps_probe_tb.sv": "fed3277742ac82d1ebe93b2c15ddc1fda471b9f88feb4482b30cc1d6adeb5fc7",
+    "zynq_ps_probe_top.v": "86691c45bcd519dd0ec57cf67c8b44f94687346d042b714398f1f985a738848a"
+  },
+  "timing_qualified": false,
+  "tools": {
+    "openxc7": {
+      "commit": "4643d2ecfd6569bad2ae7963b17d90687363af6e",
+      "release-tag": "2026-08-20",
+      "target-platform": "darwin-arm64"
+    },
+    "oss-cad-suite": {
+      "commit": "b246ed025634562f953daccef0c9d2f7995d30c3",
+      "release-tag": "2026-08-19",
+      "target-platform": "darwin-arm64"
+    }
+  },
+  "utilization": {
+    "BUFGCTRL": {
+      "available": 32,
+      "used": 1
+    },
+    "DSP48E1_DSP48E1": {
+      "available": 400,
+      "used": 0
+    },
+    "PS7_PS7": {
+      "available": 1,
+      "used": 1
+    },
+    "RAMB18E1_RAMB18E1": {
+      "available": 530,
+      "used": 0
+    },
+    "RAMB36E1_RAMB36E1": {
+      "available": 265,
+      "used": 0
+    },
+    "SLICE_FFX": {
+      "available": 157200,
+      "used": 168
+    },
+    "SLICE_LUTX": {
+      "available": 157200,
+      "used": 281
+    }
+  }
+}

@@ -190,3 +190,29 @@ build_bitstream() {
     shasum -a 256 "$output.frames" | cut -d ' ' -f 1
     summarize_report "$part" "$output-report.json"
 }
+
+# Prepare the pinned, checked SBG485 overlay and its exact-package chip database.
+prepare_zynq7030() {
+    prepare_openxc7
+    require_executable "$openxc7/bin/bitread"
+    local archive=${ERL_HLS_ZYNQ_PINOUTS:-"$build_root/z7all.zip"}
+    if [[ ! -f "$archive" ]]; then
+        local pinout_url
+        pinout_url=$(python3 -c 'import sys; sys.path.insert(0, sys.argv[1]); from prepare_zynq7030 import PINOUT_URL; print(PINOUT_URL)' "$experiment_root")
+        curl --fail --location --show-error --max-time 90 "$pinout_url" -o "$archive.tmp"
+        mv "$archive.tmp" "$archive"
+    fi
+    prjxray_db=$(python3 "$experiment_root/prepare_zynq7030.py" \
+        "$prjxray_db" "$archive" "$build_root/databases")
+    database_id=$(shasum -a 256 "$prjxray_db/manifest.json" | cut -d ' ' -f 1)
+    make_chipdb xc7z030sbg485-1
+}
+
+# Check every non-ECC configuration bit after serializing an XC7 bitstream.
+verify_bitstream() {
+    local part=$1
+    local output=$2
+    "$openxc7/bin/bitread" --part_file "$prjxray_db/zynq7/$part/part.yaml" \
+        -y -z -o "$output.bits" "$output.bit" > "$output-bitread.log"
+    python3 "$experiment_root/check_zynq7030_bitstream.py" "$output.frames" "$output.bits"
+}
