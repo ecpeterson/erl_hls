@@ -1,0 +1,12 @@
+{
+  "RAMB18E1.v": {
+    "file": "RAMB18E1.v",
+    "url": "https://raw.githubusercontent.com/Xilinx/XilinxUnisimLibrary/1c8e05fd1e9a79ceb8b996a0996674122eed086f/verilog/src/unisims/RAMB18E1.v",
+    "sha256": "f04b8980e1565e9b622723334d48d687e6dc48b93d08cb99ecb1206a0700848b"
+  },
+  "glbl.v": {
+    "file": "glbl.v",
+    "url": "https://raw.githubusercontent.com/Xilinx/XilinxUnisimLibrary/1c8e05fd1e9a79ceb8b996a0996674122eed086f/verilog/src/glbl.v",
+    "sha256": "de59a57e3e0091f1b9162d9914dce24c469820a0c5b5a41d1d202d93fae0abdd"
+  }
+}
