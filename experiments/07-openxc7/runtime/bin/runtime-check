@@ -1,0 +1,16 @@
+#!/bin/sh
+# Check the target BEAM and routed file-I/O contract without requiring PL hardware.
+set -eu
+export ERL_LIBS=/opt/erl-hls/lib
+export ERL_FLAGS='+S 1:1 +A 2'
+exec erl -noshell -pa /opt/erl-hls/test-ebin -eval '
+    "28" = erlang:system_info(otp_release),
+    4 = erlang:system_info(wordsize),
+    {ok, _} = application:ensure_all_started(ssl),
+    32 = byte_size(crypto:strong_rand_bytes(32)),
+    io:format("OTP ~s, ~s, ~B-bit words~n", [erlang:system_info(otp_release),
+        erlang:system_info(system_architecture), 8 * erlang:system_info(wordsize)]),
+    case eunit:test([hls_fabric_tests, hls_fabric_client_tests], [verbose]) of
+        ok -> io:format("PASS: ARM BEAM crypto and routed I/O~n"), halt(0);
+        error -> halt(1)
+    end.'
