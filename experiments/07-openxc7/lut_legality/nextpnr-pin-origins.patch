@@ -1,0 +1,26 @@
+--- a/xilinx/arch_place.cc
++++ b/xilinx/arch_place.cc
+@@ -1749,7 +1749,10 @@
+                     auto &orig_attr = lut6->attrs[id("X_ORIG_PORT_" + p.str(this))].str;
+                     bool first = true;
+                     for (auto &nc : new_connections.at(p)) {
+-                        orig_attr += orig_ports_l6[nc] + (first ? "" : " ");
++                        const auto &original = orig_ports_l6[nc];
++                        if (original.empty())
++                            continue;
++                        orig_attr += (first ? "" : " ") + original;
+                         first = false;
+                     }
+                     if (orig_attr.empty())
+@@ -1765,7 +1768,10 @@
+                     auto &orig_attr = lut5->attrs[id("X_ORIG_PORT_" + p.str(this))].str;
+                     bool first = true;
+                     for (auto &nc : new_connections.at(p)) {
+-                        orig_attr += orig_ports_l5[nc] + (first ? "" : " ");
++                        const auto &original = orig_ports_l5[nc];
++                        if (original.empty())
++                            continue;
++                        orig_attr += (first ? "" : " ") + original;
+                         first = false;
+                     }
+                     if (orig_attr.empty())
