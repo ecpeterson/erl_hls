@@ -1,0 +1,10 @@
+{
+  "channel": {
+    "url": "https://raw.githubusercontent.com/openXC7/prjxray/ed3331c6200f421164101388759fc2860b0f5634/fuzzers/005-tilegrid/gtx_channel/generate.tcl",
+    "sha256": "eb7ea792918f6b1a367dc3a00b2c03016b455a4f4bf9ad51ec85385a9cb7bdb3"
+  },
+  "common": {
+    "url": "https://raw.githubusercontent.com/openXC7/prjxray/ed3331c6200f421164101388759fc2860b0f5634/fuzzers/005-tilegrid/gtx_common/generate.tcl",
+    "sha256": "079b6ed6ad21dc1948a2838d2a4f9fda402d6cf4cf7cb9a10ee6226812a6c6e5"
+  }
+}
