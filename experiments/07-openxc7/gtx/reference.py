@@ -51,6 +51,7 @@ def prepare(output: Path) -> dict:
         if script.count(unused_import) != 1:
             raise ValueError(f"upstream Tcl import changed: {kind}")
     output.mkdir(parents=True)
+    (output / "LICENSE").write_bytes(Path(__file__).with_name("LICENSE.prjxray").read_bytes())
     runs = []
     for kind, case in CASES.items():
         for variant, change in {"base": {}, **case["changes"]}.items():
