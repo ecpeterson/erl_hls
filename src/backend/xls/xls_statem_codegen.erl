@@ -326,6 +326,7 @@ machine_declarations(#{
         "  // Entry work known to need the scheduler's batch sequencer.\n",
         "  egress_waiters: u1[ACTOR_COUNT],\n",
         "  egress_busy: u1,\n",
+        "  outbox_busy: u1[ACTOR_COUNT],\n",
         "  state_write_pending: u1,\n",
         "  mailbox_write_pending: u1,\n",
         "}\n\n"
@@ -1053,7 +1054,7 @@ shared_service(Spec) ->
           mail: state.mail_candidates,
           egress: state.egress_waiters,
           ..zero!<scheduler::Candidates<ACTOR_COUNT>>()
-        }, state.egress_busy, in_flight, cursor)
+        }, state.egress_busy, scheduler::exclude_reserved(in_flight, state.outbox_busy), cursor)
     }
 
     // Translate actor-specific results into the shared metadata transition.
@@ -1106,11 +1107,15 @@ shared_service(Spec) ->
     // when an effect batch temporarily blocks retirement. A token carried
     // beside the metadata orders each activation's RAM writes before the next
     // activation's reads, independently of metadata pipeline placement.
+    // PER_ACTOR_EGRESS requires one independently drained batch slot per actor.
+    // A credit names the drained actor; no second activation issues while its
+    // slot is occupied. The demultiplexer must accept every reserved batch.
     pub proc SharedService<
         ACTOR_COUNT: u32,
         PRODUCER_COUNT: u32,
         STARTUP_COUNT: u32,
-        INSTANCE_ID: u32
+        INSTANCE_ID: u32,
+        PER_ACTOR_EGRESS: u1 = {u1:0}
     > {
       request_in: chan<ScheduledRequest>[PRODUCER_COUNT] in;
       startup_in: chan<ScheduledRequest> in;
@@ -1272,11 +1277,18 @@ shared_service(Spec) ->
             // Return credits must already occupy a pending receptacle.
             // Using a newly captured credit here closes a combinational path
             // through result retirement, the router, and its credit output.
-            let (credit_pending_valid, credit_busy) = mailbox::collect_credit(
-              state.pending,
-              state.pending_valid,
-              captured_pending_valid,
-              state.egress_busy);
+            let (credit_pending_valid, credit_busy, credit_outboxes) =
+              if PER_ACTOR_EGRESS {
+                let (pending, busy) = mailbox::collect_actor_credits(
+                  state.pending, state.pending_valid,
+                  captured_pending_valid, state.outbox_busy);
+                (pending, u1:0, busy)
+              } else {
+                let (pending, busy) = mailbox::collect_credit(
+                  state.pending, state.pending_valid,
+                  captured_pending_valid, state.egress_busy);
+                (pending, busy, state.outbox_busy)
+              };
             let buffered_can_retire = state.completed_valid &&
               (!state.completed.effects_valid || !credit_busy);
             let accept_executor_result =
@@ -1311,8 +1323,11 @@ shared_service(Spec) ->
             let credited = SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
               pending: captured_pending,
               pending_valid: credit_pending_valid,
-              egress_busy: credit_busy ||
-                (retire_valid && result.effects_valid),
+              egress_busy: !PER_ACTOR_EGRESS &&
+                (credit_busy || (retire_valid && result.effects_valid)),
+              outbox_busy: if PER_ACTOR_EGRESS && retire_valid && result.effects_valid {
+                update(credit_outboxes, result.slot, u1:1)
+              } else { credit_outboxes },
     """,
         "\n          ..",
         ?REDUCTION_SERVICE:shared_state_source(Reductions, SharedService),

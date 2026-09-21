@@ -103,6 +103,9 @@ jobs:
           python3 tools/compiler_differential.py "$RUNNER_TEMP/xls" \
             --count 16 --depth 3 --inputs 20 --rtl-batches 2 --shrink-budget 40
 
+      - name: Check independent actor outboxes under sustained output pressure
+        run: bash tools/test_actor_outboxes.sh "$RUNNER_TEMP/xls"
+
       - name: Compare macro-configured actors with BEAM
         run: bash tools/test_source_context.sh "$RUNNER_TEMP/xls"
 
@@ -332,6 +335,7 @@ jobs:
             _build/actor-debug/**
             _build/actor-snapshot-formal/**
             _build/arbitration/**
+            _build/actor-outboxes/**
             _build/mailbox-debug/**
             _build/direct-mailbox-debug/**
             _build/mixed-mailbox-debug/**

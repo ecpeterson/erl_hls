@@ -145,6 +145,47 @@ pub fn collect_credit<PRODUCER_COUNT: u32>(
   (remaining, egress_busy && !credit_found)
 }
 
+// Each credit returns the named actor's independently reserved outbox after
+// its entire batch drains. Collect all registered credits, so a busy producer
+// cannot starve another actor's return. Fresh captures wait one activation;
+// the caller must issue at most one batch per actor between returns.
+pub fn collect_actor_credits<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
+    registered_pending: ScheduledRequest[PRODUCER_COUNT],
+    registered_valid: u1[PRODUCER_COUNT],
+    pending_valid: u1[PRODUCER_COUNT],
+    outbox_busy: u1[ACTOR_COUNT]) -> (u1[PRODUCER_COUNT], u1[ACTOR_COUNT]) {
+  let returned = unroll_for! (slot, result):
+      (u32, u1[ACTOR_COUNT]) in u32:0..ACTOR_COUNT {
+    let found = unroll_for! (producer, found):
+        (u32, u1) in u32:0..PRODUCER_COUNT {
+      found || (registered_valid[producer] &&
+        registered_pending[producer].credit &&
+        registered_pending[producer].slot == slot)
+    }(false);
+    update(result, slot, outbox_busy[slot] && !found)
+  }(zero!<u1[ACTOR_COUNT]>());
+  let remaining = unroll_for! (producer, result):
+      (u32, u1[PRODUCER_COUNT]) in u32:0..PRODUCER_COUNT {
+    let credit = registered_valid[producer] && registered_pending[producer].credit;
+    update(result, producer, pending_valid[producer] && !credit)
+  }(zero!<u1[PRODUCER_COUNT]>());
+  (remaining, returned)
+}
+
+// Credits neither consume messages nor release a different actor's slot.
+#[test]
+fn actor_credits_are_independent_and_registered_test() {
+  let request = zero!<ScheduledRequest>();
+  let pending = [ScheduledRequest {slot: u32:2, credit: true, ..request},
+    request, ScheduledRequest {slot: u32:0, credit: true, ..request}];
+  assert_eq(collect_actor_credits(pending, [false, true, true],
+    [true, true, true], [true, true, true]),
+    ([true, true, false], [false, true, true]));
+  assert_eq(collect_actor_credits(pending, [true, true, true],
+    [true, true, true], [true, true, true]),
+    ([false, true, false], [false, true, false]));
+}
+
 // Updated queue metadata and at most one reserved admission, before its RAM write.
 pub struct AdmissionResult<ACTOR_COUNT: u32, PRODUCER_COUNT: u32, DEPTH: u32> {
   pending_valid: u1[PRODUCER_COUNT],
@@ -522,4 +563,23 @@ fn failed_or_absent_retirements_cannot_reactivate_actors_test() {
   assert_eq(failed.egress_waiters, [false]);
   assert_eq(failed.occupied, metadata.occupied);
   assert_eq(failed.order, metadata.order);
+}
+
+// Connect one independently owned producer endpoint to the scheduler array.
+// Backpressure affects only this producer; credits must use dedicated relays.
+pub proc RequestRelay {
+  input: chan<ScheduledRequest> in;
+  output: chan<ScheduledRequest> out;
+  // Neither endpoint may have another writer/reader respectively.
+  config(input: chan<ScheduledRequest> in, output: chan<ScheduledRequest> out) {
+    (input, output)
+  }
+  // Hold no application state.
+  init { () }
+  // Preserve each request or credit until the scheduler accepts it.
+  next(state: ()) {
+    let (tok, request) = recv(join(), input);
+    let _sent = send(tok, output, request);
+    state
+  }
 }
