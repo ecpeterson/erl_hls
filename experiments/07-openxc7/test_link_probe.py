@@ -104,6 +104,21 @@ def check_arm(candidate: Path) -> Path:
                         b"not " + identity + b" ABI-1 register bank")
     if manifest["profile"] != "prbs":
         init = init.replace(b"/test_probe_ethernet\n", b"")
+    if manifest.get("fsbl_programs_si5338"):
+        # Kernel/ARM ABI check only: QEMU has no Si5338 or analog clock model.
+        init = init.replace(b"echo 'PASS:", b"""/test_si5338
+/test_ps_i2c
+modprobe i2c-dev
+test -c /dev/i2c-0
+case "$(readlink -f /sys/class/i2c-dev/i2c-0/device)" in
+  */e0005000.i2c/i2c-0) ;; *) exit 1 ;; esac
+status=0
+/probe_clock || status=$?
+test "$status" -eq 2
+status=0
+/probe_clock /tmp/inert-page || status=$?
+test "$status" -eq 1
+echo 'PASS:""")
     return check_linux(candidate, 45, programs=tuple(manifest["programs"]), init=init)
 
 

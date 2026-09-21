@@ -8,7 +8,7 @@ These three independent SD kits pair the retained, timing-checked [Vivado images
 | `ethernet-loopback` | Internal PMA loopback, fixed Ethernet frames | `erl-hls-ethernet` | `probe_ethernet` |
 | `ethernet-external` | External SFP, matching fixed-frame peer | `erl-hls-ethernet` | `probe_ethernet` |
 
-All use GP0 at `0x40000000`, size `0x1000`, and require a **125-MHz Si5338 reference**. The FSBL sets FCLK0 to 25 MHz but **does not program the Si5338 or carrier controller**. Verify the delivered reference-clock configuration and [carrier prerequisites](sfp-management.md) first. Internal loopback does not qualify the connector or DAC. The external image inverts both serial polarities for this carrier/module combination; use an isolated matching peer, since unrelated traffic fails its pattern checker.
+All use GP0 at `0x40000000`, size `0x1000`, and require a **125-MHz Si5338 reference**. The original `link-sd` archive sets FCLK0 to 25 MHz and leaves Si5338 settings unchanged. The separate [clock-startup kits](clock-startup.md) initialize and verify the Si5338 before PL loading; they require VCCIO34 at 1.8 V. Neither configures the carrier controller. Verify clock and [carrier prerequisites](sfp-management.md) first. Internal loopback does not qualify the connector or DAC. The external image inverts both serial polarities for this carrier/module combination; use an isolated matching peer, since unrelated traffic fails its pattern checker.
 
 ## Prepare and verify
 

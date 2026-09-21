@@ -1,0 +1,173 @@
+{
+  "date": "2026-09-21",
+  "source_base": "366e672bedc588b1a660b57c1439ce1dda953136",
+  "scope": "Volatile clock initialization and matched SD kits; no physical clock or board qualification",
+  "module": "TE0715-05-71C33-A",
+  "carrier": "TEF1002-03-A",
+  "part": "xc7z030sbg485-1",
+  "hardware_validated": false,
+  "rtl_changed": false,
+  "archive": {
+    "filename": "clock-startup-kits-20260921.tar.gz",
+    "bytes": 170574617,
+    "sha256": "b4b56a437d7a4e1d95394759df87c8e7e0a2c727284f8a7fdbb8e2485a7b388f",
+    "location": "Retained locally under experiments/07-openxc7/build/clock-startup-20260921/"
+  },
+  "schematic": {
+    "url": "https://www.trenz-electronic.de/trenzdownloads/Trenz_Electronic/Modules_and_Module_Carriers/4x5/TE0715/REV05/Documents/SCH-TE0715-05-71C33-A.PDF",
+    "sha256": "c8462aef622a4bc62ecd6a640a451581326536b26d94a0e3f13dafec4eff215a",
+    "bytes": 10803275,
+    "sheets_reviewed": [
+      9,
+      11,
+      13,
+      15
+    ]
+  },
+  "clock_profile": {
+    "input_hz": 25000000,
+    "vco_hz": 2500000000,
+    "clk2_hz": 125000000,
+    "clk3_hz": 50000000,
+    "clk2_format": "LVDS18",
+    "clk3_format": "CMOS18",
+    "unused_outputs_disabled": [
+      0,
+      1
+    ]
+  },
+  "vccio34_mv_required": 1800,
+  "fclk0_hz": 25000000,
+  "fsbl_sha256": "cc9164a4acefa4b8cc1caffb703c79045bc9e780a3ab472df21546f23ab23a72",
+  "fsbl_memory_bytes": {
+    "text": 98560,
+    "data": 12436,
+    "bss": 76700
+  },
+  "checks": {
+    "clock_configuration_fault_boundaries": 785,
+    "accepted_but_failed_writes": "pass at every write boundary",
+    "clock_readback_fault_boundaries": 253,
+    "ps_i2c_cases": 11,
+    "fsbl_hook_failure_matrix": "pass",
+    "native_address_and_undefined_behavior_sanitizers": "pass",
+    "boot_container_checks_per_profile": 4,
+    "arm_linux_i2c_and_uio": "pass for all three profiles; QEMU bypasses FSBL/U-Boot and has no Si5338 model",
+    "full_native_ps_probe_suite": "pass, including mapped GTX/Ethernet and DMA/co-simulation",
+    "source_contracts": "pass, zero new/changed gaps",
+    "dialyzer": "pass"
+  },
+  "logs": {
+    "regression.log": "a2990cec90fa33439fdc65f59b28425edf72542632078b75868ff3631abf87fc",
+    "source-tests.log": "064390a9e43df1b3409ac61d82d3b4ea604548e7baec2410e5de02b7d72fedf9",
+    "source-check.log": "9d732719cf2e06c6f611a88c678dc40b6bbaf383c0852f9484249d0d9044c69e",
+    "dialyzer.log": "7a27c735f5bb5df0aea781266b15275ecb68571256d0026af2479345eed04087"
+  },
+  "profiles": {
+    "prbs": {
+      "manifest_sha256": "ffdbda74e1ad2464e44bc4fc811762924141ff6eb3be44e110d4790cf62130a7",
+      "configuration": {
+        "uio": "erl-hls-gtx",
+        "program": "probe_gtx",
+        "source": "gtx",
+        "loopback": "near-end PMA",
+        "rx_polarity": 0,
+        "tx_polarity": 0
+      },
+      "sd_files": {
+        "BOOT.bin": {
+          "bytes": 7135584,
+          "sha256": "b213d089e93e1a5a919d53c3062c326cd18b85951609a04b05f0101980c2a66c"
+        },
+        "boot.scr": {
+          "bytes": 315,
+          "sha256": "b9715417edb25008a686418e8d9241b40b30b11b9da016c32085a2c19aaaa89f"
+        },
+        "image.ub": {
+          "bytes": 25186956,
+          "sha256": "02eeff2ce6d7330a70d48cf3baf0a57d02591172f094134ca77081ad796fc676"
+        },
+        "probe_gtx": {
+          "bytes": 36252,
+          "sha256": "37fb917ea3599e66c85bf21ff2dedb954ae7f1b2cbf92020ce98f9da1d0bc5e1"
+        },
+        "probe_clock": {
+          "bytes": 36160,
+          "sha256": "3b094d39dc13aab63c9dbae774d3f5fa2df4a44f35892ce442cd1dd1f01ced6d"
+        }
+      },
+      "uart_sha256": "3ddf95e34723df1f6528a43f394d6fed90e462cf3eaa36ab1ebd579cb90cf3ed",
+      "test_log_sha256": "2960a84f5c20b407cce9f95b560869dac2397e0309f28187d209a4e5e1c69450"
+    },
+    "ethernet-loopback": {
+      "manifest_sha256": "9ad6336339a5590e0f0cf4024a3669274a6b88074694b16f8f2160fea68ad3de",
+      "configuration": {
+        "uio": "erl-hls-ethernet",
+        "program": "probe_ethernet",
+        "source": "ethernet",
+        "loopback": "near-end PMA",
+        "rx_polarity": 0,
+        "tx_polarity": 0
+      },
+      "sd_files": {
+        "BOOT.bin": {
+          "bytes": 7135592,
+          "sha256": "58d0a2f23f669c24e98f919c216109ec69666ed9a1d58ff74bed8f457b71df50"
+        },
+        "boot.scr": {
+          "bytes": 328,
+          "sha256": "a063d95632e1956325ef7b19e925ad00545668bfeea3441fe455aad9bbda3891"
+        },
+        "image.ub": {
+          "bytes": 25186976,
+          "sha256": "3889780fd455445f43cbb60e1bc5fd4f04d3c8003a4d17272b7656f7d507186e"
+        },
+        "probe_ethernet": {
+          "bytes": 32776,
+          "sha256": "6d2d11cf0a58899e95439322b82ae1148f1b5a5e738a1de0f8ba8a49fbb2a703"
+        },
+        "probe_clock": {
+          "bytes": 36160,
+          "sha256": "3b094d39dc13aab63c9dbae774d3f5fa2df4a44f35892ce442cd1dd1f01ced6d"
+        }
+      },
+      "uart_sha256": "af56200b34f7ec137b9cdb7834e137f61e2fa3c7e3599f670ca35d831ba41a1b",
+      "test_log_sha256": "779967bcb5a490759f1e7cf4696db33e1067b9c992c66026eaafc74f658e50e7"
+    },
+    "ethernet-external": {
+      "manifest_sha256": "2b418c8e83bb2c9c5100c0a6319ea3d899881c3d07b85580bad12f20954e9586",
+      "configuration": {
+        "uio": "erl-hls-ethernet",
+        "program": "probe_ethernet",
+        "source": "ethernet",
+        "loopback": "none",
+        "rx_polarity": 1,
+        "tx_polarity": 1
+      },
+      "sd_files": {
+        "BOOT.bin": {
+          "bytes": 7135592,
+          "sha256": "9159afd7798515b1532acd42d8cff921a79a154266a737f31256e5df66862789"
+        },
+        "boot.scr": {
+          "bytes": 328,
+          "sha256": "88b2cfd4857b599e85cf1e6eaba67b6fa3ff64ebefa09ef6879061090fa454b2"
+        },
+        "image.ub": {
+          "bytes": 25186976,
+          "sha256": "f7a1e48a77b39157b55b8c0bfd322111a692225f9779846e568002830fd4fbb0"
+        },
+        "probe_ethernet": {
+          "bytes": 32776,
+          "sha256": "6d2d11cf0a58899e95439322b82ae1148f1b5a5e738a1de0f8ba8a49fbb2a703"
+        },
+        "probe_clock": {
+          "bytes": 36160,
+          "sha256": "3b094d39dc13aab63c9dbae774d3f5fa2df4a44f35892ce442cd1dd1f01ced6d"
+        }
+      },
+      "uart_sha256": "e342cd0d835910813dacc4bb2ca4970098c462646d5ea28bf5989322d0823818",
+      "test_log_sha256": "9ae360e5729bbfe4ded9ee733ebacbf41a5a4acddeb5976d185addaf760f4dba"
+    }
+  }
+}

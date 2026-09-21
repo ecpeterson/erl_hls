@@ -13,6 +13,7 @@ build `erl_hls` designs natively on Apple Silicon. It includes:
 - an optional [packet DMA test fixture](docs/ethernet-dma.md), carrying arbitrary Linux frames through the PCS/MAC with independent clock-domain ownership;
 - a [complete TE0715 routed `regsvc` image](docs/te0715-regsvc.md), with two actors, independent application/debug DMA, and Linux/BEAM–RTL integration checks;
 - [matched PRBS/Ethernet SD kits](docs/link-sd.md), with retained Vivado images, a 25-MHz FSBL and Linux diagnostics;
+- [Si5338 clock-startup kits](docs/clock-startup.md), with bounded initialization before PL loading and Linux readback;
 - a [GTX/SFP prerequisite probe](docs/gtx.md), with native placement/routing and CPU diagnostics;
 - a [checked native GTX assembly flow](docs/gtx-configuration.md), using measured tile locations, bounded database overlays and retained vendor references;
 - a [Vivado reference batch](docs/vivado-reference.md) for exact-part configuration comparisons, vendor primitive simulation, timing/CDC evidence and fallback board candidates;
