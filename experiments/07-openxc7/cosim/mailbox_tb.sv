@@ -18,11 +18,19 @@ module mailbox_cosim_tb;
     integer clock_count = 0, reads = 0, writes = 0, steps = 0, resets = 0;
     integer frames = 0, stalls = 0, irq_rises = 0;
     reg [1:0] previous_irq = 0;
+`ifdef ETHERNET_COSIM
+    wire tx_ready, rx_valid, rx_last;
+    wire [31:0] rx_data, fixture_status;
+    reg [1:0] fixture_control=0;
+    ethernet_cosim_fixture packet_link(.cut(fixture_control[0]), .hold_rx(fixture_control[1]),
+                                      .status(fixture_status), .*);
+`else
     wire permit = clock_count % 16 < 11;
     wire tx_ready = permit && rx_ready;
     wire [31:0] rx_data = tx_data;
     wire rx_valid = tx_valid && permit;
     wire rx_last = tx_last;
+`endif
     integer op, address, value, amount, cycles;
     reg [31:0] response, result;
 `ifdef REGSVC_COSIM
@@ -33,7 +41,11 @@ module mailbox_cosim_tb;
     assign tx_valid = 0;
     assign rx_ready = 0;
 `else
+`ifdef ETHERNET_COSIM
+    zynq_dma_mailbox #(.MAX_WORDS(380), .IDENTITY(32'h484c454d)) dut(.irq(irq[0]), .*);
+`else
     zynq_dma_mailbox dut(.irq(irq[0]), .*);
+`endif
     assign irq[1] = 0;
 `endif
 
@@ -47,7 +59,11 @@ module mailbox_cosim_tb;
             saved = {tx_last, tx_data};
             if (held) stalls = stalls + 1;
             if (reset_n && tx_valid && tx_ready && tx_last) frames = frames + 1;
+`ifdef ETHERNET_COSIM
+            #19; clock = 1; #20; clock = 0; #1;
+`else
             #4; clock = 1; #5; clock = 0; #1;
+`endif
             if (held && (!tx_valid || {tx_last, tx_data} !== saved)) $fatal(1,"unstable stream");
             if (|(irq & ~previous_irq)) irq_rises = irq_rises + 1;
             previous_irq = irq;
@@ -90,8 +106,25 @@ module mailbox_cosim_tb;
         while ($cosim_next(op,address,value,amount)) begin
             cycles = 0; response = 0; result = 0;
             case (op)
-                1: begin reads = reads + 1; read_word; end
-                2: begin writes = writes + 1; write_word; end
+                1: begin
+                    reads = reads + 1;
+`ifdef ETHERNET_COSIM
+                    // Emulated fixture controls are outside the mailbox aperture.
+                    if (address==32'h40003000) begin result=32'h4543544c; tick; end
+                    else if (address==32'h40003004) begin result={30'b0,fixture_control}; tick; end
+                    else if (address==32'h40003008) begin result=fixture_status; tick; end
+                    else
+`endif
+                    read_word;
+                end
+                2: begin
+                    writes = writes + 1;
+`ifdef ETHERNET_COSIM
+                    if (address==32'h40003004) begin fixture_control=value[1:0]; tick; end
+                    else
+`endif
+                    write_word;
+                end
                 3: begin steps = steps + 1; repeat(amount) tick; end
                 4: begin
                     resets = resets + 1;

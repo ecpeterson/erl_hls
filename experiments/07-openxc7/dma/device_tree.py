@@ -7,8 +7,10 @@ from pathlib import Path
 from prepare_te0715_boot import fdt
 
 
-def mailbox_tree(source: Path, output: Path, *, debug: bool = False) -> None:
-    """Bind one loopback mailbox or independent app/debug banks with stable device names."""
+def mailbox_tree(source: Path, output: Path, *, debug: bool = False, ethernet: bool = False) -> None:
+    """Bind routed banks or one optional Ethernet diagnostic with stable device names."""
+    if debug and ethernet:
+        raise ValueError("Ethernet fixture does not include an application/debug pair")
     if fdt(source, "/amba_pl/probe@40000000", "compatible") != "generic-uio":
         raise ValueError("expected the register-probe base device tree")
     dma = fdt(source, "/axi/dma-controller@f8003000", "phandle", "x")
@@ -19,7 +21,7 @@ def mailbox_tree(source: Path, output: Path, *, debug: bool = False) -> None:
     node = "/amba_pl/dma-mailbox@40000000"
     subprocess.run(["fdtput", "-c", str(output), node], check=True)
     fields = {
-        "compatible": ("s", ["erl-hls,dma-mailbox-v1"]),
+        "compatible": ("s", ["erl-hls,ethernet-diagnostic-v1" if ethernet else "erl-hls,dma-mailbox-v1"]),
         "reg": ("x", ["40000000", "3000"]),
         "clocks": ("x", clock), "clock-names": ("s", ["s_axi_aclk"]),
         "interrupt-parent": ("x", [gic]), "interrupts": ("x", ["0", "1d", "4"]),

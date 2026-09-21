@@ -14,6 +14,7 @@ struct hls_dma_copy {
 	struct device *device;
 	void *buffer;
 	dma_addr_t address;
+	size_t capacity;
 	struct completion done;
 };
 
@@ -23,10 +24,11 @@ static inline void hls_dma_done(void *arg)
 	complete(arg);
 }
 
-/* Acquire the named DT channel and allocate one maximum-size routed frame. */
+/* Acquire the named DT channel and allocate one coherent slot of the requested capacity. */
 static inline int hls_dma_acquire(struct device *dev, const char *name,
-				struct hls_dma_copy *copy)
+				struct hls_dma_copy *copy, size_t capacity)
 {
+	copy->capacity = capacity;
 	copy->channel = dma_request_chan(dev, name);
 	if (IS_ERR(copy->channel))
 		return PTR_ERR(copy->channel);
@@ -35,7 +37,7 @@ static inline int hls_dma_acquire(struct device *dev, const char *name,
 		return -EOPNOTSUPP;
 	}
 	copy->device = dmaengine_get_dma_device(copy->channel);
-	copy->buffer = dma_alloc_coherent(copy->device, HLS_FRAME_BYTES,
+	copy->buffer = dma_alloc_coherent(copy->device, capacity,
 					&copy->address, GFP_KERNEL);
 	if (!copy->buffer) {
 		dma_release_channel(copy->channel);
@@ -49,7 +51,7 @@ static inline int hls_dma_acquire(struct device *dev, const char *name,
 static inline void hls_dma_release(struct hls_dma_copy *copy)
 {
 	dmaengine_terminate_sync(copy->channel);
-	dma_free_coherent(copy->device, HLS_FRAME_BYTES, copy->buffer, copy->address);
+	dma_free_coherent(copy->device, copy->capacity, copy->buffer, copy->address);
 	dma_release_channel(copy->channel);
 }
 

@@ -23,10 +23,10 @@ static int __init hls_test_init(void)
 	of_node_put(node);
 	if (!pdev)
 		return -ENODEV;
-	error = hls_dma_acquire(&pdev->dev, "tx", &tx);
+	error = hls_dma_acquire(&pdev->dev, "tx", &tx, HLS_FRAME_BYTES);
 	if (error)
 		goto put;
-	error = hls_dma_acquire(&pdev->dev, "rx", &rx);
+	error = hls_dma_acquire(&pdev->dev, "rx", &rx, HLS_FRAME_BYTES);
 	if (error)
 		goto release_tx;
 	if (tx.device != rx.device) {

@@ -15,6 +15,24 @@ def digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def fix_config_pulses(source: Path) -> None:
+    """Require fresh received configuration words for each PCS negotiation event.
+
+    The pinned PCS latches both PulseSynchronizer inputs high until reset. Clear
+    them each cycle before the conditional assignments, so link loss cannot
+    renegotiate using events left over from the previous connection.
+    """
+    old = "        self.sync.eth_rx += [\n            If(self.rx.seen_config_reg,"
+    new = ("        self.sync.eth_rx += [\n"
+           "            rx_config_reg_abi.i.eq(0),\n"
+           "            rx_config_reg_ack.i.eq(0),\n"
+           "            If(self.rx.seen_config_reg,")
+    text = source.read_text()
+    if text.count(old) != 1:
+        raise ValueError("pinned PCS configuration-event source changed; review the local fix")
+    source.write_text(text.replace(old, new))
+
+
 def environment(cache: Path, unpacked: Path) -> dict[str, str]:
     """Download about 4 MB once and return an isolated generator import path.
 
@@ -46,5 +64,8 @@ def environment(cache: Path, unpacked: Path) -> dict[str, str]:
             for member in source.getmembers():
                 if member.isfile():
                     source.extract(member, target, filter="data")
-        roots.append(target / f"{name}-{pin['revision']}")
+        source_root = target / f"{name}-{pin['revision']}"
+        if name == "liteeth":
+            fix_config_pulses(source_root / "liteeth/phy/pcs_1000basex.py")
+        roots.append(source_root)
     return {**os.environ, "PYTHONPATH": os.pathsep.join(map(str, roots)), "PYTHONDONTWRITEBYTECODE": "1"}
