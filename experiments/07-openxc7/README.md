@@ -14,6 +14,7 @@ build `erl_hls` designs natively on Apple Silicon. It includes:
 - a [complete TE0715 routed `regsvc` image](docs/te0715-regsvc.md), with two actors, independent application/debug DMA, and Linux/BEAM–RTL integration checks;
 - a [GTX/SFP prerequisite probe](docs/gtx.md), with native placement/routing, CPU diagnostics and explicit configuration-database blockers;
 - a [GTX feature audit and Z7030 reference bundle](docs/gtx-configuration.md), narrowing the missing bitstream prerequisites without installing speculative encodings;
+- a [Vivado reference batch](docs/vivado-reference.md) for exact-part configuration comparisons, vendor primitive simulation, timing/CDC evidence and fallback board candidates;
 - a [carrier SFP identification probe](docs/sfp-management.md), with a standalone SD candidate, non-activating RGPIO check and EEPROM reader;
 - a [1000BASE-X packet regression](docs/ethernet-packets.md), with bounded frame storage, independent wire checks, [supervised clock-loss recovery](docs/ethernet-gtx.md#supervised-recovery) and a [board-facing compile probe](docs/ethernet-board.md); and
 - a [D3 decoder place-and-route benchmark](phi-timing.md) on `xc7z100ffg900-2`, with explicit timing-model coverage and placement-seed distributions.

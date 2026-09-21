@@ -92,7 +92,8 @@ module te0715_gtx_channel #(parameter PRBS=1, EXTERNAL=0)(
         .ES_VERT_OFFSET(1'h0),
         .RX_DATA_WIDTH(5'h14),
         .OUTREFCLK_SEL_INV(2'h3),
-        .PMA_RSV(21'h1e7080),
+        // UG476 Table 4-11: CPLL uses the lower-rate RXPI profile.
+        .PMA_RSV(32'h00018480),
         .PMA_RSV2(14'h2050),
         .PMA_RSV3(1'h0),
         .PMA_RSV4(1'h0),
@@ -132,7 +133,9 @@ module te0715_gtx_channel #(parameter PRBS=1, EXTERNAL=0)(
         .RX_XCLK_SEL("RXREC"),
         .RX_DDI_SEL(1'h0),
         .RX_DEFER_RESET_BUF_EN("TRUE"),
-        .RXCDR_CFG(66'h3000023ff10100020),
+        // UG476 Tables 4-17/4-19: /4 CDR differs for PRBS and 8b/10b data.
+        // Ethernet is encoded in fabric even though the hard codec is bypassed.
+        .RXCDR_CFG(PRBS ? 72'h03000023ff40100020 : 72'h03000023ff10100020),
         .RXCDR_FR_RESET_ON_EIDLE(1'h0),
         .RXCDR_HOLD_DURING_EIDLE(1'h0),
         .RXCDR_PH_RESET_ON_EIDLE(1'h0),

@@ -35,10 +35,14 @@ module ethernet_gtx_packet_endpoint (
     assign rx_word = {gt_rx_disperr[1], gt_rx_charisk[1], gt_rx_data[15:8],
                       gt_rx_disperr[0], gt_rx_charisk[0], gt_rx_data[7:0]};
     // PCS requests alignment in TX; the GTX control is consumed in RX half.
+    reg align_registered = 0;
+    always @(posedge eth_tx_clk)
+        if (eth_tx_rst) align_registered <= 0;
+        else align_registered <= align;
     (* ASYNC_REG = "TRUE" *) reg [1:0] align_sync = 0;
     always @(posedge eth_rx_half_clk)
         if (eth_rx_half_rst) align_sync <= 0;
-        else align_sync <= {align_sync[0], align};
+        else align_sync <= {align_sync[0], align_registered};
     assign gt_align = align_sync[1];
     liteeth_pcs_gearbox gearbox (
         .eth_tx_clk(eth_tx_clk), .eth_tx_rst(eth_tx_rst),

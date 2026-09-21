@@ -1,6 +1,6 @@
 # GTX configuration prerequisites
 
-The routed Ethernet probe still cannot become an openXC7 bitstream. Its selected Z7030 channel/common tiles have no configuration-frame locations in the pinned Zynq database. Existing Virtex definitions cover every enabled GTX feature in this probe, but those encodings need device-specific validation before reuse.
+The pinned Zynq database still lacks the selected channel/common configuration-frame locations. The [Vivado reference batch](vivado-reference.md) has independently measured those locations and checked donor encodings against a full Ethernet image. The native writer also omits two reference-buffer default bits. Integrating these findings and checking the resulting complete native image remain outstanding.
 
 | Tile type | Distinct enabled features | Encoded features | Fixed connections | Missing definitions |
 | --- | ---: | ---: | ---: | ---: |
@@ -27,8 +27,8 @@ cd build/gtx-reference-only
 vivado -mode batch -source run.tcl
 ```
 
-The bundle contains six **inert configuration references, never board images**. It uses the pinned [X-Ray channel](https://github.com/openXC7/prjxray/blob/ed3331c6200f421164101388759fc2860b0f5634/fuzzers/005-tilegrid/gtx_channel/generate.tcl) and [common](https://github.com/openXC7/prjxray/blob/ed3331c6200f421164101388759fc2860b0f5634/fuzzers/005-tilegrid/gtx_common/generate.tcl) procedures, including their DRC exemptions for unconnected primitives. Those exemptions do not belong in a board build. The bundle records the Vivado version and retains each checkpoint and bitstream. There are no hardware-manager or programming commands. Bundle preparation and the paired source variations are tested locally; Vivado execution remains outstanding.
+The bundle contains six **inert configuration references, never board images**. It uses the pinned [X-Ray channel](https://github.com/openXC7/prjxray/blob/ed3331c6200f421164101388759fc2860b0f5634/fuzzers/005-tilegrid/gtx_channel/generate.tcl) and [common](https://github.com/openXC7/prjxray/blob/ed3331c6200f421164101388759fc2860b0f5634/fuzzers/005-tilegrid/gtx_common/generate.tcl) procedures, including their DRC exemptions for unconnected primitives. Those exemptions do not belong in a board build. The bundle records the Vivado version and retains each checkpoint and bitstream. There are no hardware-manager or programming commands. All six references ran successfully under Vivado 2024.2; the independent attribute pairs agree on the selected tiles' locations.
 
 Two separate attribute changes per tile provide a first consistency check: channel comma detection and CPLL lock configuration; common QPLL division and bias configuration. Return the complete bundle after execution. Decode the bitstreams with X-Ray `bitread`, compare each variant against its baseline, and check whether both changes imply the same frame origin and word offset using the donor definitions. Then validate the reference-clock buffer, remaining encodings and routed probe against independent Z7030 evidence. A matching pair alone is insufficient to enable assembly, and nothing here installs a speculative database overlay.
 
-This task does not require the physical board. It does require a Vivado run or equivalent independently established Z7030 reference data; native source preparation cannot supply that missing evidence. PS Ethernet and PL330 DMA remain independent of this blocker.
+The retained reference data supports further native work without a running Vivado host. It covers this channel/common configuration, not every GTX site or feature combination. PS Ethernet and PL330 DMA remain independent of the native GTX assembly work.

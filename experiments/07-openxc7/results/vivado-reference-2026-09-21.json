@@ -1,0 +1,793 @@
+{
+  "date": "2026-09-21",
+  "part": "xc7z030sbg485-1",
+  "tool": "Vivado 2024.2 build 5239630",
+  "speed_file": "-1 PRODUCTION 1.12 2019-11-22",
+  "source_base": "c0389d4",
+  "hardware_qualified": false,
+  "raw_archive": {
+    "filename": "erl-hls-vivado-evidence-20260921.tar.gz",
+    "sha256": "e465bba8b1effdf82450ec5147ccfeab43de85c6af7d5c83ef5f318c4a5f6bc3",
+    "location": "Retained locally; checkpoints, bitstreams, SDF, Wizard sources, simulations and all diagnostic runs."
+  },
+  "profiles": {
+    "register": {
+      "timing": {
+        "wns_ns": 5.362,
+        "tns_ns": 0.0,
+        "setup_failing": 0,
+        "setup_endpoints": 526,
+        "whs_ns": 0.108,
+        "ths_ns": 0.0,
+        "hold_failing": 0,
+        "hold_endpoints": 526,
+        "wpws_ns": 4.6,
+        "tpws_ns": 0.0,
+        "pulse_failing": 0,
+        "pulse_endpoints": 169
+      },
+      "check_timing_counts": {
+        "no_clock": 0,
+        "constant_clock": 0,
+        "pulse_width_clock": 0,
+        "unconstrained_internal_endpoints": 0,
+        "no_input_delay": 0,
+        "no_output_delay": 0,
+        "multiple_clock": 0,
+        "generated_clocks": 0,
+        "loops": 0,
+        "partial_input_delay": 0,
+        "partial_output_delay": 0,
+        "latch_loops": 0
+      },
+      "cdc": {
+        "counts": {},
+        "reviewed_reset_alerts": 0,
+        "unreviewed_critical": []
+      },
+      "utilization": {
+        "total_luts": 124,
+        "logic_luts": 124,
+        "lutram": 0,
+        "srl": 0,
+        "ff": 168,
+        "ramb36": 0,
+        "ramb18": 0,
+        "dsp": 0
+      },
+      "artifacts_sha256": {
+        "candidate.bit": "7176ec0b8c412c3c3b925dd5e9e95305fdd50fc55d658d3686a24814b274a4dc",
+        "routed.dcp": "1271b560ae4f36387ae905b99b7baed2f21a96946266c512ec2967ce43ae26e8",
+        "routed.sdf": "fab38cf2379acb7237df0af0bb3f478db8deffc59c942dd19b6fa32cffabb01a",
+        "routed.v": "ab1beac0471a5e305148388a48bbda8c586c10b16bf87d566fe9fe15bbbeac3d",
+        "timing.rpt": "ec256986dac09383e95d7c0f696559f327ef63cf4019c28636f7b788ea4e1f4d",
+        "cdc.rpt": "e5ccff63aeb20697acae3f90495207a007ebfe2796dd14cdbeae2a918a2fe518",
+        "input-manifest.json": "92ededd9960d126a2d469a7d6a4f9ec828e835290b91d3e1070a25d1b78e4535"
+      }
+    },
+    "dma": {
+      "timing": {
+        "wns_ns": 3.322,
+        "tns_ns": 0.0,
+        "setup_failing": 0,
+        "setup_endpoints": 693,
+        "whs_ns": 0.069,
+        "ths_ns": 0.0,
+        "hold_failing": 0,
+        "hold_endpoints": 693,
+        "wpws_ns": 4.6,
+        "tpws_ns": 0.0,
+        "pulse_failing": 0,
+        "pulse_endpoints": 184
+      },
+      "check_timing_counts": {
+        "no_clock": 0,
+        "constant_clock": 0,
+        "pulse_width_clock": 0,
+        "unconstrained_internal_endpoints": 0,
+        "no_input_delay": 0,
+        "no_output_delay": 0,
+        "multiple_clock": 0,
+        "generated_clocks": 0,
+        "loops": 0,
+        "partial_input_delay": 0,
+        "partial_output_delay": 0,
+        "latch_loops": 0
+      },
+      "cdc": {
+        "counts": {},
+        "reviewed_reset_alerts": 0,
+        "unreviewed_critical": []
+      },
+      "utilization": {
+        "total_luts": 260,
+        "logic_luts": 260,
+        "lutram": 0,
+        "srl": 0,
+        "ff": 179,
+        "ramb36": 0,
+        "ramb18": 2,
+        "dsp": 0
+      },
+      "artifacts_sha256": {
+        "candidate.bit": "2aa08b40ba77b5149023ae144283e1f9f92ca32c484e42b42ea3d657e2a24989",
+        "routed.dcp": "9d006dfc7c923ce13a71942aea33606216692be9a2f41194218f4af8d21ee114",
+        "routed.sdf": "29295a4546341d9de0bffbc961d7e46e0c236e6e9d0c9cda7ed43bbd1222b6fa",
+        "routed.v": "7002170b5080e6069dd8519e06fa695222b9fd28415a28103ac273ab0b7dedea",
+        "timing.rpt": "391489c8b147832f40336ea951006ed859d40d055ee77365ee123e82aaae108c",
+        "cdc.rpt": "6582dcaa2122a9877f21976dc81775b55597272c324041cc6e7bba1fd3a90a17",
+        "input-manifest.json": "92ededd9960d126a2d469a7d6a4f9ec828e835290b91d3e1070a25d1b78e4535"
+      }
+    },
+    "prbs": {
+      "timing": {
+        "wns_ns": 6.365,
+        "tns_ns": 0.0,
+        "setup_failing": 0,
+        "setup_endpoints": 1665,
+        "whs_ns": 0.069,
+        "ths_ns": 0.0,
+        "hold_failing": 0,
+        "hold_endpoints": 1665,
+        "wpws_ns": 6.462,
+        "tpws_ns": 0.0,
+        "pulse_failing": 0,
+        "pulse_endpoints": 606
+      },
+      "check_timing_counts": {
+        "no_clock": 0,
+        "constant_clock": 0,
+        "pulse_width_clock": 0,
+        "unconstrained_internal_endpoints": 0,
+        "no_input_delay": 0,
+        "no_output_delay": 0,
+        "multiple_clock": 0,
+        "generated_clocks": 0,
+        "loops": 0,
+        "partial_input_delay": 0,
+        "partial_output_delay": 0,
+        "latch_loops": 0
+      },
+      "cdc": {
+        "counts": {
+          "CDC-3": 8,
+          "CDC-10": 2,
+          "CDC-15": 96
+        },
+        "reviewed_reset_alerts": 2,
+        "unreviewed_critical": []
+      },
+      "utilization": {
+        "total_luts": 337,
+        "logic_luts": 337,
+        "lutram": 0,
+        "srl": 0,
+        "ff": 593,
+        "ramb36": 0,
+        "ramb18": 0,
+        "dsp": 0
+      },
+      "artifacts_sha256": {
+        "candidate.bit": "b346b9f278b3a1d0f6f63205043ee3340568f9198d8bdeca0adc65cd79de7471",
+        "routed.dcp": "3a4efc16d86feb31727a53b4a1311001209872755cd67ff4596f1982612c2302",
+        "routed.sdf": "999a4bbd2afe240423f343ba1d8aebd032a41512d14aa0ee73bbddf9db8acb9c",
+        "routed.v": "819f2be8cd42c5f68f48fd9fd0a65a0169a40753dbc789236651911cdc91aafe",
+        "timing.rpt": "df2a08f846c90c59f4e7ab99d1ffbd5a127e936371a63488a6fd9f6688091b8a",
+        "cdc.rpt": "1cfc4bc44220c74a63c0be36557be0639fb750c144287e35975c5b149886b608",
+        "input-manifest.json": "92ededd9960d126a2d469a7d6a4f9ec828e835290b91d3e1070a25d1b78e4535"
+      }
+    },
+    "ethernet-loopback": {
+      "timing": {
+        "wns_ns": 1.105,
+        "tns_ns": 0.0,
+        "setup_failing": 0,
+        "setup_endpoints": 3478,
+        "whs_ns": 0.072,
+        "ths_ns": 0.0,
+        "hold_failing": 0,
+        "hold_endpoints": 3366,
+        "wpws_ns": 3.09,
+        "tpws_ns": 0.0,
+        "pulse_failing": 0,
+        "pulse_endpoints": 1357
+      },
+      "check_timing_counts": {
+        "no_clock": 0,
+        "constant_clock": 0,
+        "pulse_width_clock": 0,
+        "unconstrained_internal_endpoints": 0,
+        "no_input_delay": 0,
+        "no_output_delay": 0,
+        "multiple_clock": 0,
+        "generated_clocks": 0,
+        "loops": 0,
+        "partial_input_delay": 0,
+        "partial_output_delay": 0,
+        "latch_loops": 0
+      },
+      "cdc": {
+        "counts": {
+          "CDC-3": 24,
+          "CDC-6": 1,
+          "CDC-9": 4,
+          "CDC-10": 6,
+          "CDC-15": 96
+        },
+        "reviewed_reset_alerts": 6,
+        "unreviewed_critical": []
+      },
+      "utilization": {
+        "total_luts": 1061,
+        "logic_luts": 1037,
+        "lutram": 24,
+        "srl": 0,
+        "ff": 1276,
+        "ramb36": 2,
+        "ramb18": 0,
+        "dsp": 0
+      },
+      "artifacts_sha256": {
+        "candidate.bit": "26572ac185d85f646b423fc15cc931311a4a1e227bad0cc79800de77c4dd9944",
+        "routed.dcp": "84e0deec57e23003c371f8a9c97e84b03b4c112926f7cef5efddd564cecf9e33",
+        "routed.sdf": "0cc4f841b73eaa3207a74c39d44dc40d8374b34a47f12923ce697b326c594312",
+        "routed.v": "31da2edec91834bfa8f9461df238e43464db68f01bd371fc5f6d33654c0999ab",
+        "timing.rpt": "f5e4ebf51f999735df7a4b2892dc2f31530f9b7a7edd79ac3e627fc3bd59f832",
+        "cdc.rpt": "8e3800642f70bb8340fb25d3e42ab68d62f7c1e0cd47a3189b254a2696adac55",
+        "input-manifest.json": "92ededd9960d126a2d469a7d6a4f9ec828e835290b91d3e1070a25d1b78e4535"
+      }
+    },
+    "ethernet-external": {
+      "timing": {
+        "wns_ns": 1.105,
+        "tns_ns": 0.0,
+        "setup_failing": 0,
+        "setup_endpoints": 3478,
+        "whs_ns": 0.072,
+        "ths_ns": 0.0,
+        "hold_failing": 0,
+        "hold_endpoints": 3366,
+        "wpws_ns": 3.09,
+        "tpws_ns": 0.0,
+        "pulse_failing": 0,
+        "pulse_endpoints": 1357
+      },
+      "check_timing_counts": {
+        "no_clock": 0,
+        "constant_clock": 0,
+        "pulse_width_clock": 0,
+        "unconstrained_internal_endpoints": 0,
+        "no_input_delay": 0,
+        "no_output_delay": 0,
+        "multiple_clock": 0,
+        "generated_clocks": 0,
+        "loops": 0,
+        "partial_input_delay": 0,
+        "partial_output_delay": 0,
+        "latch_loops": 0
+      },
+      "cdc": {
+        "counts": {
+          "CDC-3": 24,
+          "CDC-6": 1,
+          "CDC-9": 4,
+          "CDC-10": 6,
+          "CDC-15": 96
+        },
+        "reviewed_reset_alerts": 6,
+        "unreviewed_critical": []
+      },
+      "utilization": {
+        "total_luts": 1061,
+        "logic_luts": 1037,
+        "lutram": 24,
+        "srl": 0,
+        "ff": 1276,
+        "ramb36": 2,
+        "ramb18": 0,
+        "dsp": 0
+      },
+      "artifacts_sha256": {
+        "candidate.bit": "4630e552dab1bc6856906be62a212f63896f32beccf784e9b4248dd45f3b27c6",
+        "routed.dcp": "ed078fc8e7fc4797f136b41636339d40701ba6f93d1182bdd79f062d8285a35e",
+        "routed.sdf": "59e41afdb07763c574409d7960abb357300a12d32dc8f886174706f20ba38a76",
+        "routed.v": "e39edb9e618d38e3fd948e2eee6d3d7af784e167afb7f9122caecc4455a6e8a3",
+        "timing.rpt": "16a873328663f727c1487a31ee7ee3bba2188e2bcd148c0ceb02d69fa453f215",
+        "cdc.rpt": "d7d049e74fd53b2500ed83d6c64c917cc602a314d8d72f9c970193d03bee56ac",
+        "input-manifest.json": "92ededd9960d126a2d469a7d6a4f9ec828e835290b91d3e1070a25d1b78e4535"
+      }
+    },
+    "phi": {
+      "timing": {
+        "wns_ns": -7.663,
+        "tns_ns": -132534.875,
+        "setup_failing": 61574,
+        "setup_endpoints": 91715,
+        "whs_ns": 0.047,
+        "ths_ns": 0.0,
+        "hold_failing": 0,
+        "hold_endpoints": 91715,
+        "wpws_ns": 4.22,
+        "tpws_ns": 0.0,
+        "pulse_failing": 0,
+        "pulse_endpoints": 29923
+      },
+      "check_timing_counts": {
+        "no_clock": 0,
+        "constant_clock": 0,
+        "pulse_width_clock": 0,
+        "unconstrained_internal_endpoints": 0,
+        "no_input_delay": 0,
+        "no_output_delay": 0,
+        "multiple_clock": 0,
+        "generated_clocks": 0,
+        "loops": 0,
+        "partial_input_delay": 0,
+        "partial_output_delay": 0,
+        "latch_loops": 0
+      },
+      "cdc": {
+        "counts": {},
+        "reviewed_reset_alerts": 0,
+        "unreviewed_critical": []
+      },
+      "utilization": {
+        "total_luts": 34067,
+        "logic_luts": 34064,
+        "lutram": 0,
+        "srl": 3,
+        "ff": 29842,
+        "ramb36": 28,
+        "ramb18": 4,
+        "dsp": 40
+      },
+      "artifacts_sha256": {
+        "routed.dcp": "a0673df8b77f722162cbf7ffc1b632bb96a1e122bfda8832ec8d141670f9218e",
+        "routed.sdf": "520e1ba73a7e79bf02991943754c3de6b38a9e07a58f3d0b776957a2d35ab1be",
+        "routed.v": "0dce95a5bbd07399d721bca50e6b3cfb29642a67a903feaacf44a1fed6e9c71b",
+        "timing.rpt": "1f39e00befc67c925ae6682b13252fbdd165b4e97bab998346e3ff04cd629ba9",
+        "cdc.rpt": "fb3724641bfc1b6f63b36aa063ace7f09caa08d2bc7b200e43dd38497002c0c8"
+      }
+    },
+    "phi-20.0ns": {
+      "timing": {
+        "wns_ns": 0.341,
+        "tns_ns": 0.0,
+        "setup_failing": 0,
+        "setup_endpoints": 91315,
+        "whs_ns": 0.048,
+        "ths_ns": 0.0,
+        "hold_failing": 0,
+        "hold_endpoints": 91315,
+        "wpws_ns": 9.22,
+        "tpws_ns": 0.0,
+        "pulse_failing": 0,
+        "pulse_endpoints": 29744
+      },
+      "check_timing_counts": {
+        "no_clock": 0,
+        "constant_clock": 0,
+        "pulse_width_clock": 0,
+        "unconstrained_internal_endpoints": 0,
+        "no_input_delay": 0,
+        "no_output_delay": 0,
+        "multiple_clock": 0,
+        "generated_clocks": 0,
+        "loops": 0,
+        "partial_input_delay": 0,
+        "partial_output_delay": 0,
+        "latch_loops": 0
+      },
+      "cdc": {
+        "counts": {},
+        "reviewed_reset_alerts": 0,
+        "unreviewed_critical": []
+      },
+      "utilization": {
+        "total_luts": 32942,
+        "logic_luts": 32939,
+        "lutram": 0,
+        "srl": 3,
+        "ff": 29658,
+        "ramb36": 28,
+        "ramb18": 4,
+        "dsp": 40
+      },
+      "artifacts_sha256": {
+        "routed.dcp": "4a5ced3b1d12429c641c0b679f12e44005ed02a552ea547b2fd86359de94801d",
+        "routed.sdf": "3a360208ca9b32e89c943c66c2e4bb095fb9f22d1400b1ded903e7dbf66566b6",
+        "routed.v": "d84bc540783ebd2beb174076add77dc677b8c96fcb5d10652778955a60d7e6e8",
+        "timing.rpt": "38aef8d137a0efda0d1b567d342134a3814bfe9b5801c8ad5698f5556c18ff6e",
+        "cdc.rpt": "ae2e6b8d74f3735f8b54ea4193f70a1074a207472d1656acf4f57301ae56bb34"
+      }
+    },
+    "micro": {
+      "timing": {
+        "wns_ns": 0.0,
+        "tns_ns": 0.0,
+        "setup_failing": 0,
+        "setup_endpoints": 331,
+        "whs_ns": 0.072,
+        "ths_ns": 0.0,
+        "hold_failing": 0,
+        "hold_endpoints": 331,
+        "wpws_ns": 4.6,
+        "tpws_ns": 0.0,
+        "pulse_failing": 0,
+        "pulse_endpoints": 182
+      },
+      "check_timing_counts": {
+        "no_clock": 0,
+        "constant_clock": 0,
+        "pulse_width_clock": 0,
+        "unconstrained_internal_endpoints": 0,
+        "no_input_delay": 0,
+        "no_output_delay": 0,
+        "multiple_clock": 0,
+        "generated_clocks": 0,
+        "loops": 0,
+        "partial_input_delay": 0,
+        "partial_output_delay": 0,
+        "latch_loops": 0
+      },
+      "cdc": {
+        "counts": {},
+        "reviewed_reset_alerts": 0,
+        "unreviewed_critical": []
+      },
+      "utilization": {
+        "total_luts": 114,
+        "logic_luts": 114,
+        "lutram": 0,
+        "srl": 0,
+        "ff": 176,
+        "ramb36": 2,
+        "ramb18": 0,
+        "dsp": 2
+      },
+      "artifacts_sha256": {
+        "routed.dcp": "ecb06b9a601f554b1d32ce55612e8413ff85fdb7106e5f12858ab3de07417d6a",
+        "routed.sdf": "7ab7864cd8e48077acaf65267e1163e6de7258481abc6756b452a46223881b58",
+        "routed.v": "4a24f93e1e523a7e95ad693ed8834c022f0f0e2b535bbc4775605cde165e0c80",
+        "timing.rpt": "2a93040635857674682dd2016f1b05b2fcd5b4278c880dfb16ad4c30eeebfaa4",
+        "cdc.rpt": "196a4d151321a60a9a930cb5c1c785718f23c55b000be06a4b0a5ae67cbc235d"
+      }
+    }
+  },
+  "application": {
+    "population": "four phi and four replay cells, both planes, closed profile; no DMA/Ethernet/debug shell",
+    "rtl_sha256": {
+      "phi_decoder_profile.v": "2fcf50391593da789d696ad253a8b0161f7013bbc86ddb9a8ba2ea9026e2e477",
+      "hls_1r1w_ram.v": "13e12a7561df37e150c3e727c43f9e5234b74bb9741fc969185c12948b2583e8",
+      "phi_decoder_profile_top.v": "34fcdf6da8cb117bd3bd509a510654aa13f2a979c1fe9df34670b7f2d776ca7a",
+      "phi_timing_harness.v": "939d82bcb62599e9bd64e8e68d0e8b0911799d75c0360cbff30ee63e4d2c6733"
+    },
+    "previous_native": {
+      "partial_mhz": 16.52,
+      "physical_luts": 33748,
+      "report": "lut-legality-2026-09-21.json"
+    },
+    "comparison_limit": "Different mapping and routing; neither an isolated timing-model comparison nor measured step throughput."
+  },
+  "micro_primitives": [
+    {
+      "kind": "DSP48E1",
+      "parameters": {
+        "AREG": "0",
+        "BREG": "0",
+        "MREG": "0",
+        "PREG": "0",
+        "USE_MULT": "\"MULTIPLY\"",
+        "USE_SIMD": "\"ONE48\""
+      }
+    },
+    {
+      "kind": "RAMB36E1",
+      "parameters": {
+        "DOA_REG": "0",
+        "DOB_REG": "0",
+        "READ_WIDTH_A": "36",
+        "READ_WIDTH_B": "36",
+        "WRITE_MODE_A": "\"READ_FIRST\"",
+        "WRITE_MODE_B": "\"WRITE_FIRST\""
+      }
+    },
+    {
+      "kind": "DSP48E1",
+      "parameters": {
+        "AREG": "0",
+        "BREG": "0",
+        "MREG": "1",
+        "PREG": "1",
+        "USE_MULT": "\"MULTIPLY\"",
+        "USE_SIMD": "\"ONE48\""
+      }
+    },
+    {
+      "kind": "RAMB36E1",
+      "parameters": {
+        "DOA_REG": "0",
+        "DOB_REG": "1",
+        "READ_WIDTH_A": "36",
+        "READ_WIDTH_B": "36",
+        "WRITE_MODE_A": "\"READ_FIRST\"",
+        "WRITE_MODE_B": "\"WRITE_FIRST\""
+      }
+    }
+  ],
+  "simulations": {
+    "gtx": {
+      "pass": true,
+      "checks": [
+        "CPLL lock and reset completion",
+        "mean RX recovered clock over 256 periods",
+        "clean PRBS7",
+        "detected injected error"
+      ],
+      "mean_period_ns": 16.000148,
+      "bench_sha256": "8f0bb26e65a5aa4039704c351d57310938d1a17591f342465a023b0918c44edf",
+      "log_sha256": "e2bba4e7e186b143899b1adf305604efd24be89b2938113e166a661f0aea1ab4"
+    },
+    "ethernet": {
+      "pass": true,
+      "checked_frames_per_attempt": [
+        25,
+        25
+      ],
+      "full_stop_restart": true,
+      "simulation_ns": 430320,
+      "mac_pcs": "Vivado-synthesized accelerated core",
+      "transceiver_clocks": "Actual vendor GTX/MMCM models, unaccelerated reset timing",
+      "bench_sha256": "d70350a736b5ef91cc3df142902ec5b02e401fbf3bf639900c82c00a5e01a2ab",
+      "core_netlist_sha256": "60a71c91309e2eecae01e9eabecb1a23f9e8e988df4bf560bb5a657376c53b3d",
+      "log_sha256": "6fa72e9d78f942d7cec76bbc239151e49a01fbf4059b81fe308ebec222337f2b",
+      "behavioral_xsim": "Did not complete; retained separately and not counted as a pass."
+    }
+  },
+  "gtx_locations": {
+    "channel": {
+      "baseaddr": "0x00442480",
+      "word_offset": 22,
+      "observations": {
+        "align": {
+          "baseaddr": "0x00442480",
+          "word_offset": 22,
+          "changed_bit": [
+            "0x0044249c",
+            38,
+            11
+          ]
+        },
+        "lock": {
+          "baseaddr": "0x00442480",
+          "word_offset": 22,
+          "changed_bit": [
+            "0x0044249e",
+            23,
+            24
+          ]
+        }
+      }
+    },
+    "common": {
+      "baseaddr": "0x00442480",
+      "word_offset": 0,
+      "observations": {
+        "divider": {
+          "baseaddr": "0x00442480",
+          "word_offset": 0,
+          "changed_bit": [
+            "0x0044249e",
+            45,
+            16
+          ]
+        },
+        "bias": {
+          "baseaddr": "0x00442480",
+          "word_offset": 0,
+          "changed_bit": [
+            "0x0044249e",
+            47,
+            16
+          ]
+        }
+      }
+    }
+  },
+  "refclk": {
+    "swing": {
+      "delta": [
+        [
+          "0x0044249e",
+          46,
+          11
+        ],
+        [
+          "0x0044249f",
+          46,
+          11
+        ]
+      ],
+      "bitstream_sha256": "a94f09897dec0daa924a238a857fe36b3c06eda2ac292518a680ed4f0dc12fd3"
+    },
+    "cm": {
+      "delta": [
+        [
+          "0x0044249f",
+          46,
+          10
+        ]
+      ],
+      "bitstream_sha256": "f6c92dc70c8367187fbc570de82c1d96020e03509fd3fe247e92e8b10315636d"
+    },
+    "trst": {
+      "delta": [
+        [
+          "0x0044249f",
+          46,
+          12
+        ]
+      ],
+      "bitstream_sha256": "b48871fce14828d31fc89c684314e2609211244084106f3e6cb97efc653636de"
+    },
+    "base": {
+      "bitstream_sha256": "fefe2d0475b850156c839a265e32862a2a616ca607ca25170b767152d1a3bdc6"
+    }
+  },
+  "known_configuration_comparison": {
+    "enabled_features": 322,
+    "expected_set_bits": 330,
+    "known_bit_mask": 1933,
+    "missing_enabled_features": [],
+    "extra_known_bits": [
+      [
+        4465822,
+        46,
+        11
+      ],
+      [
+        4465823,
+        46,
+        11
+      ]
+    ],
+    "extra_bit_features": {
+      "GTX_COMMON.GTXE2_COMMON.IBUFDS_GTE2.CLKSWING_CFG[0]": [
+        [
+          4465822,
+          46,
+          11
+        ]
+      ],
+      "GTX_COMMON.GTXE2_COMMON.IBUFDS_GTE2.CLKSWING_CFG[1]": [
+        [
+          4465823,
+          46,
+          11
+        ]
+      ]
+    },
+    "fasm_sha256": "005742df99822acf37a1cb0b651e8b7171289140d938c86f3196fcdcb2962788",
+    "bits_sha256": "5f60adcb8f8ae0aa9c44b989019a7a4d4932af8e21f63705486194f715e71a94",
+    "complete_native_bitstream_qualified": false
+  },
+  "wizard": {
+    "rate_gbaud": 1.25,
+    "reference_mhz": 125,
+    "raw_data_width": 20,
+    "buffered_tx_rx": true,
+    "configuration_sha256": "ebff19f86c5bb431c4ac30b09047ff14715b8335eee0ccff35da78889ee9ee73",
+    "generated_channel_sha256": "0e4a214e9339e2df843586e0c8698de7a868e9e4842752ff83267388b2e095b0",
+    "cpll_factors": {
+      "wizard": [
+        4,
+        5
+      ],
+      "owned": [
+        5,
+        4
+      ],
+      "output_divider": 4
+    },
+    "reviewed_settings": {
+      "pma_rsv": "00018480, CPLL setting in UG476 Table 4-11",
+      "prbs_cdr": "03000023ff40100020, Table 4-17",
+      "ethernet_cdr": "03000023ff10100020, Table 4-19; fabric supplies 8b/10b"
+    },
+    "analog_qualified": false
+  },
+  "native_ethernet_comparison": {
+    "previous_report": "ethernet-board-2026-09-21.json",
+    "previous": {
+      "physical_luts": 1645,
+      "ff": 1376,
+      "tx_partial_mhz": 106.55,
+      "rx_partial_mhz": 123.72
+    },
+    "current": {
+      "physical_luts": 1644,
+      "ff": 1383,
+      "partial_fmax": {
+        "clock": {
+          "achieved": 81.53,
+          "constraint": 25.0
+        },
+        "rx_clock": {
+          "achieved": 112.28,
+          "constraint": 125.0
+        },
+        "rx_half_clock": {
+          "achieved": 459.56,
+          "constraint": 62.5
+        },
+        "tx_clock": {
+          "achieved": 122.82,
+          "constraint": 125.0
+        },
+        "tx_half_clock": {
+          "achieved": 521.1,
+          "constraint": 62.5
+        }
+      },
+      "lut_check": {
+        "luts": 2404,
+        "placement": {
+          "5LUT": 1149,
+          "6LUT": 1255
+        },
+        "truth_table_rows": 78912,
+        "elided_memory_constant_origins": 0,
+        "elided_logic_constant_origins": 0
+      },
+      "backend_sha256": "02490f35c4ec3c02672bd59d22d2023b6e80e69053de6892f48d7fce18230c21",
+      "chipdb_sha256": "12ff64f36c83bf853535cdedca6fa7cef35097bc18e92958afb7da7e07d1b588",
+      "fasm_sha256": "005742df99822acf37a1cb0b651e8b7171289140d938c86f3196fcdcb2962788",
+      "netlist_sha256": "f10e4e9b3bd6e36db1d13eaf894353a916ff5424612d8b334bb4f913730fbfee"
+    },
+    "coverage": "Partial only: missing BRAM sequential timing, calibrated FF delays and generated-clock/CDC constraints; not a safe-clock estimate"
+  },
+  "final_inputs_sha256": {
+    "inputs/dma/zynq_dma_mailbox.v": "1b2ec093826afbedb718ff6562db44e58b9088bf7af142a36870c353daf5918f",
+    "inputs/dma/zynq_dma_top.v": "a005296f596652352b6bbfa1e016ba7ad1b26e02c655f6a82564142ad9183178",
+    "inputs/ethernet/clock_pair.v": "92fc7114355a4ae52ad4ec7cdc842735ae0b4032f4371adfce41aa7da6168930",
+    "inputs/ethernet/frame_store.v": "8c3087d4e92c72ea0e111a7dac9701f4e45db18c784082df83e94ace87f228fe",
+    "inputs/ethernet/gtx_clocks.v": "ba451aae0b622cd457fb472bf511f2bdf5cfe61462fc55ca48698cb269d0276a",
+    "inputs/ethernet/gtx_packet_endpoint.v": "fcebd0f65b4ae8f9649c282ae51455d7b5c0edb6158c7c74ecc03d5700c38cc4",
+    "inputs/ethernet/packet_endpoint.v": "052af02e0e8ecd9831fe962b32d705d35b5782efc8cbf0e6b7576655f44c5f75",
+    "inputs/ethernet/probe_traffic.v": "23a4328f9a53d1e3dccb8b40544e413505e2f07ca111dd99e7296783993c9167",
+    "inputs/ethernet/snapshot.v": "384f6a04bac72bbc5e946f8dfb2fd89f6962547183ea1ed16f7e02fed3b22d2c",
+    "inputs/ethernet/supervised_endpoint.v": "a10ace24148fb50f938f57803b161c3d0c6a0fea5de459684faffec9ddc1a631",
+    "inputs/ethernet/te0715_ethernet_top.v": "69da8b5ba7a5492b105c30f8e67700c3c71e2a82cc8a64649c3b6b3c8955c435",
+    "inputs/ethernet_serial_tb.sv": "d70350a736b5ef91cc3df142902ec5b02e401fbf3bf639900c82c00a5e01a2ab",
+    "inputs/generated/liteeth_packet_core.v": "8bb24a04c8fb6b0b5e43a71aa67a355db20077640cad8183dea28e4e9a982f50",
+    "inputs/generated/liteeth_packet_core_mem_6b5b.init": "e22c47be531b5bb60b52cad484ac222142ffe634e17784506cbacfa1efb67843",
+    "inputs/generated/liteeth_pcs_gearbox.v": "6b9bedd4756ecccfb6559d35a3476e14771968c698eb0bcd93c8311621ca8c67",
+    "inputs/generated-sim/liteeth_packet_core.v": "0d1a4e670285d95e154c7650eaec97caa11fefc6639004924ebbdaa99fcb0196",
+    "inputs/generated-sim/liteeth_packet_core_mem_6b5b.init": "e22c47be531b5bb60b52cad484ac222142ffe634e17784506cbacfa1efb67843",
+    "inputs/generated-sim/liteeth_pcs_gearbox.v": "6b9bedd4756ecccfb6559d35a3476e14771968c698eb0bcd93c8311621ca8c67",
+    "inputs/gtx/gtx_probe_control.v": "74a4f58f87fb48d8a9e81ba60af1c3f5a99fa1515cc5e99a24d87931022f7509",
+    "inputs/gtx/gtx_probe_sample.v": "30d7796f45ab00bb48942ad91311d677c91644f4687f699ed402c51db4413f61",
+    "inputs/gtx/te0715_gtx_channel.v": "540c26292e313c85c425e2031ae983471d4e018bc2953b6189a2b901d0d90997",
+    "inputs/gtx/te0715_gtx_lane.v": "2f7aba045a9ed8b62b6f5479bf2aa48f8ebd8365eebb960c900e6c254fe084c8",
+    "inputs/gtx/te0715_gtx_top.v": "b096ae0b82a1a5bc5652470455daad0fba599f5f839a4d2ba1c9a29a2fcedac0",
+    "inputs/gtx_tb.sv": "8f0bb26e65a5aa4039704c351d57310938d1a17591f342465a023b0918c44edf",
+    "inputs/micro.v": "e704229c757bdd6788dd2cd4160836aec517974305d368f0f5868fca3144fc6f",
+    "inputs/phi/hls_1r1w_ram.v": "13e12a7561df37e150c3e727c43f9e5234b74bb9741fc969185c12948b2583e8",
+    "inputs/phi/phi_decoder_profile.v": "2fcf50391593da789d696ad253a8b0161f7013bbc86ddb9a8ba2ea9026e2e477",
+    "inputs/phi/phi_decoder_profile_top.v": "34fcdf6da8cb117bd3bd509a510654aa13f2a979c1fe9df34670b7f2d776ca7a",
+    "inputs/phi/phi_timing_harness.v": "939d82bcb62599e9bd64e8e68d0e8b0911799d75c0360cbff30ee63e4d2c6733",
+    "inputs/zynq_ps_probe.v": "d956d23ac44bbc9fc32f9c020c7c2a4de69aed8019360c2698c92a4af5fb4ead",
+    "inputs/zynq_ps_probe_top.v": "202ec98a6b71e5f1efad24255236b17dda4b08c0eba35396e1fc6936e935f57e"
+  },
+  "limits": [
+    "Known donor mask and selected sites only; no complete native bitstream qualification.",
+    "One implementation per constraint set, not a seed distribution.",
+    "The microbenchmark does not itself add timing arcs to nextpnr.",
+    "Physical clocks, power, DDR, carrier management and DAC operation require hardware checks."
+  ],
+  "native_archive": {
+    "filename": "native-comparison-20260921.tar.gz",
+    "sha256": "e86f202afc9c5562d17b5312c060c9c332b51daded422405a5d9e838d2bf7bdc",
+    "location": "Retained locally beside the Vivado archive."
+  }
+}
