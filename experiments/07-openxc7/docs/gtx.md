@@ -58,6 +58,6 @@ The static GTX attributes/reserved-port ties derive from the pinned LiteICLink s
 
 ## Remaining qualification
 
-1. Establish Zynq GTX channel/common/interface frame addresses and feature encodings from an independent, device-specific reference; validate them before enabling assembly.
+1. Establish Zynq GTX frame addresses and validate donor feature encodings with the prepared [device-specific reference task](gtx-configuration.md) before enabling assembly.
 2. Check physical clock/reset and CDC timing; qualify repeated startup, stopped-clock recovery and PRBS error detection on hardware.
 3. Integrate the prepared [carrier management](sfp-management.md) and [PCS/MAC gearbox adapter](ethernet-gtx.md); then qualify external polarity, loss-of-signal, module compatibility and sustained traffic.

@@ -9,6 +9,8 @@ import unittest
 from pathlib import Path
 
 from gtx.prepare import audit_database, digest, fetch, install_metadata, validate_site
+from gtx.coverage import compare, connectivity, enabled_features
+from gtx.reference import CASES, source
 
 
 class MetadataTests(unittest.TestCase):
@@ -71,6 +73,49 @@ class MetadataTests(unittest.TestCase):
             fasm.write_text("# no GTX\n")
             with self.assertRaisesRegex(ValueError, "no GTX"):
                 audit_database(root, fasm)
+
+    def test_feature_expansion(self) -> None:
+        """Literal zero extension, nonzero starts and repeated features remain exact."""
+        self.assertEqual(enabled_features("T.X[7:2] = 4'b1010\nT.Y\nT.Y\nT.Z[0] # note\n"),
+                         {"T.X[3]", "T.X[5]", "T.Y", "T.Z[0]"})
+        self.assertEqual(enabled_features("T.X[7:0] = 8'b00000000"), set())
+        for invalid in ("T.X[2:7] = 6'b101010", "T.X[1:0] = 3'b111", "T.X[2:0]", "T.X { unknown }"):
+            with self.assertRaises(ValueError):
+                enabled_features(invalid)
+
+    def test_feature_coverage(self) -> None:
+        """A fixed interface needs no frame mapping; an unknown feature still fails coverage."""
+        grid = {"C": {"type": "GTX_CHANNEL_1", "bits": {}},
+                "I": {"type": "GTX_INT_INTERFACE", "bits": {}}}
+        donor = {"segbits_gtx_channel_1.db": b"GTX_CHANNEL_1.ATTR[0] 28_123\n",
+                 "ppips_gtx_int_interface.db": b"GTX_INT_INTERFACE.FIXED always\nGTX_INT_INTERFACE.DEFAULT default\n"}
+        report = compare(grid, "C.ATTR[3:0] = 4'b0001\nI.FIXED", donor)
+        self.assertTrue(report["donor_covers_enabled_features"])
+        self.assertEqual(report["missing_frame_mapping"], ["C"])
+        self.assertFalse(report["encodings_validated_on_zynq"])
+        missing = compare(grid, "C.ATTR[1]\nI.DEFAULT", donor)
+        self.assertFalse(missing["donor_covers_enabled_features"])
+        self.assertEqual(missing["coverage"]["GTX_CHANNEL_1"]["missing"], ["GTX_CHANNEL_1.ATTR[1]"])
+        self.assertEqual(missing["coverage"]["GTX_INT_INTERFACE"]["missing"], ["GTX_INT_INTERFACE.DEFAULT"])
+
+    def test_connectivity_not_timing(self) -> None:
+        """Timing estimates may differ, but donor routing endpoints must agree."""
+        pip = {"P": {"src_wire": "A", "dst_wire": "B", "src_to_dst": {"delay": 1}}}
+        changed = {"P": {**pip["P"], "src_to_dst": {"delay": 2}}}
+        self.assertEqual(connectivity(pip), connectivity(changed))
+        changed["P"]["dst_wire"] = "C"
+        self.assertNotEqual(connectivity(pip), connectivity(changed))
+
+    def test_reference_variations(self) -> None:
+        """Each paired reference changes only one attribute at a fixed bonded site."""
+        for case in CASES.values():
+            baseline = source(case, {})
+            self.assertIn('LOC="'+case["site"]+'"', baseline)
+            for change in case["changes"].values():
+                variant = source(case, change)
+                differences = [(a, b) for a, b in zip(baseline.splitlines(), variant.splitlines()) if a != b]
+                self.assertEqual(len(differences), 1)
+                self.assertIn("DO NOT PROGRAM", variant)
 
 
 def run(yosys: Path | None) -> None:

@@ -1,0 +1,34 @@
+{
+  "segbits_gtx_channel_1.db": {
+    "url": "https://raw.githubusercontent.com/openXC7/database-virtex7/ad4f03d11d5e6235bbdafee479a2c8602d580356/segbits_gtx_channel_1.db",
+    "sha256": "638a958c10b939558f6006f70cbb8d012d51033f1687b21cf9ebad01052d2bb4"
+  },
+  "segbits_gtx_common.db": {
+    "url": "https://raw.githubusercontent.com/openXC7/database-virtex7/ad4f03d11d5e6235bbdafee479a2c8602d580356/segbits_gtx_common.db",
+    "sha256": "3bf892ab151ca75690c458ac6c2eda62e54241f736a3277b81c04449977114a8"
+  },
+  "ppips_gtx_channel_1.db": {
+    "url": "https://raw.githubusercontent.com/openXC7/database-virtex7/ad4f03d11d5e6235bbdafee479a2c8602d580356/ppips_gtx_channel_1.db",
+    "sha256": "74660a8c7e4f56981f52348b00d22692467a19f6a5ed95484bc547b916ddac3f"
+  },
+  "ppips_gtx_common.db": {
+    "url": "https://raw.githubusercontent.com/openXC7/database-virtex7/ad4f03d11d5e6235bbdafee479a2c8602d580356/ppips_gtx_common.db",
+    "sha256": "49cda48d5d1205382ba0619c08b9b12f0d8f16ca2875f31516b7dfd0cc7d23f6"
+  },
+  "ppips_gtx_int_interface.db": {
+    "url": "https://raw.githubusercontent.com/openXC7/database-virtex7/ad4f03d11d5e6235bbdafee479a2c8602d580356/ppips_gtx_int_interface.db",
+    "sha256": "853709ccf9481745773e5a920e95939e1e2e25da13d9837b51dfe95a45a5e4eb"
+  },
+  "tile_type_GTX_CHANNEL_1.json": {
+    "url": "https://raw.githubusercontent.com/openXC7/database-virtex7/ad4f03d11d5e6235bbdafee479a2c8602d580356/tile_type_GTX_CHANNEL_1.json",
+    "sha256": "9d9e323251d1df49a92f30671ac0c0e2ea6545060156c2729adb8fe5d3ab2100"
+  },
+  "tile_type_GTX_COMMON.json": {
+    "url": "https://raw.githubusercontent.com/openXC7/database-virtex7/ad4f03d11d5e6235bbdafee479a2c8602d580356/tile_type_GTX_COMMON.json",
+    "sha256": "897323e043d06ee737a36e16577f2af421747b36283ee86c9462463b7140d3d3"
+  },
+  "tile_type_GTX_INT_INTERFACE.json": {
+    "url": "https://raw.githubusercontent.com/openXC7/database-virtex7/ad4f03d11d5e6235bbdafee479a2c8602d580356/tile_type_GTX_INT_INTERFACE.json",
+    "sha256": "82f1fd187a68497a937ce734ee291962f4ee98c98ddf1e0890d8a6bbbd3d6cb7"
+  }
+}
