@@ -1,0 +1,2255 @@
+{
+  "date": "2026-09-21",
+  "backend_revision": "68aeeb39f92e39bfb239c7e4a44dd93451fc1889",
+  "upstream_inspected_revision": "4524cbdaf9505cf0488eb520bf360f5579f58a8d",
+  "known_upstream_fixes": [
+    "2d3005e755a2b1009f434efdb5acf2103ffe4d92",
+    "7cfd1e90682370accd00f63fcf7c16c5bcd24007"
+  ],
+  "native_build": {
+    "architecture": "arm64",
+    "macos": "26.5.2 (25F84)",
+    "compiler": "Apple Clang 21.0.0 (clang-2100.1.1.101)",
+    "cmake": "4.3.1",
+    "boost": "1.90.0_1",
+    "eigen": "3.4.0",
+    "cmake_options": {
+      "ARCH": "xilinx",
+      "BUILD_GUI": "OFF",
+      "BUILD_PYTHON": "OFF",
+      "BUILD_TESTS": "ON",
+      "USE_OPENMP": "OFF",
+      "CMAKE_BUILD_TYPE": "Release",
+      "CMAKE_POLICY_VERSION_MINIMUM": "3.5",
+      "CMAKE_POLICY_DEFAULT_CMP0167": "OLD",
+      "CURRENT_GIT_VERSION": "68aeeb39-baseline"
+    },
+    "archives": {
+      "nextpnr.tar.gz": "5652a7356b1c8ae67355c9bdcd96d88e5592d9eface9ea4b60584a9460824439",
+      "eigen.tar.gz": "8586084f71f9bde545ee7fa6d00288b264a2b7ac3607b974e54d13e7162c1c72"
+    },
+    "binaries": {
+      "nextpnr-baseline": "1a81f884b7e9aa835f87c6abc4d1d2a8347523b5cec26a88fdcdcd7062ec3e0e",
+      "nextpnr-candidate": "02490f35c4ec3c02672bd59d22d2023b6e80e69053de6892f48d7fce18230c21",
+      "nextpnr-placement-only": "62ca2e4924e759ebf77db9f86c3b5f39b8dc38e380a93248e3214aab5cef408f"
+    },
+    "note": "All binaries share a version label; hashes identify variants. No installed tool is replaced."
+  },
+  "small_regressions": {
+    "status": "complete",
+    "inputs": {
+      "baseline": "1a81f884b7e9aa835f87c6abc4d1d2a8347523b5cec26a88fdcdcd7062ec3e0e",
+      "candidate": "02490f35c4ec3c02672bd59d22d2023b6e80e69053de6892f48d7fce18230c21",
+      "yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+      "chipdb": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+      "tilegrid": "a3b2ec28c10ba7a40471e4aa808c9c0ee1fec5e2852c6ec45dcc04b139de3f7f"
+    },
+    "fixtures": {
+      "fixture.v": "e00e77c7f514184be63d7ef428bb0b6dd110412832d73ed271587ff91ecdde0d",
+      "fixed_fixture.v": "b9f5c6fadd99e609fe0b64b8ecfe828e1254d440245ec5f382ef143413381d83"
+    },
+    "runs": [
+      {
+        "fixture": "lut5",
+        "variant": "baseline",
+        "seconds": 1.941,
+        "repairs": 65,
+        "luts": 100,
+        "placement": {
+          "6LUT": 100
+        },
+        "truth_table_rows": 6400,
+        "elided_memory_constant_origins": 0,
+        "artifacts": {
+          "json": "889c6b5a897de4fb5e547d201ea2425748cb911ec81fa05ef577d8aab2b5dab5",
+          "fasm": "404050bde8807d252a18a4940f3ac4c8927c0b5b8bd2e9998d2e960b082b75ad",
+          "log": "2cf69a39f579c5f5fd2ab8de2e08e475fe8652888f1b12bd12ff5589c799eb65"
+        },
+        "revalidation": {
+          "luts": 100,
+          "placement": {
+            "6LUT": 100
+          },
+          "truth_table_rows": 6400,
+          "elided_memory_constant_origins": 0,
+          "elided_logic_constant_origins": 0
+        }
+      },
+      {
+        "fixture": "lut5",
+        "variant": "candidate",
+        "seconds": 1.721,
+        "repairs": 1,
+        "luts": 100,
+        "placement": {
+          "5LUT": 64,
+          "6LUT": 36
+        },
+        "truth_table_rows": 4352,
+        "elided_memory_constant_origins": 0,
+        "artifacts": {
+          "json": "3cafec0024ffa6e75a8a63730ef08541bb149969e9aeb69a7bf4360f7e77e052",
+          "fasm": "c888fd244dd64a7490cd691dfa91af2b59f9fd4cc7ff61b597989e5341b96808",
+          "log": "c52171166b6b578f59e48d36a94620368780b7e2c087dd9173bcf9a5741d1b9c"
+        },
+        "revalidation": {
+          "luts": 100,
+          "placement": {
+            "5LUT": 64,
+            "6LUT": 36
+          },
+          "truth_table_rows": 4352,
+          "elided_memory_constant_origins": 0,
+          "elided_logic_constant_origins": 0
+        }
+      },
+      {
+        "fixture": "lut6",
+        "variant": "baseline",
+        "seconds": 1.675,
+        "repairs": 2,
+        "luts": 100,
+        "placement": {
+          "6LUT": 100
+        },
+        "truth_table_rows": 6400,
+        "elided_memory_constant_origins": 0,
+        "artifacts": {
+          "json": "2e19c760c9818d791d2ac0cf91bac8df9eaf10cf9a94da26f6ec5ad467a6f121",
+          "fasm": "3d9ca1f2ee6a0fe00dde9a25012cf8bd6caa39890a122b6383d057b080727814",
+          "log": "6d53cec3b17cda96ec2ee9e1700634506b8c1bc964d07b477a8e942da7e00abe"
+        },
+        "revalidation": {
+          "luts": 100,
+          "placement": {
+            "6LUT": 100
+          },
+          "truth_table_rows": 6400,
+          "elided_memory_constant_origins": 0,
+          "elided_logic_constant_origins": 0
+        }
+      },
+      {
+        "fixture": "lut6",
+        "variant": "candidate",
+        "seconds": 1.644,
+        "repairs": 2,
+        "luts": 100,
+        "placement": {
+          "6LUT": 100
+        },
+        "truth_table_rows": 6400,
+        "elided_memory_constant_origins": 0,
+        "artifacts": {
+          "json": "2e19c760c9818d791d2ac0cf91bac8df9eaf10cf9a94da26f6ec5ad467a6f121",
+          "fasm": "3d9ca1f2ee6a0fe00dde9a25012cf8bd6caa39890a122b6383d057b080727814",
+          "log": "42fa581ea3878e95328ad25195727ddd5af36b0d2cfe6b4b18e969eb69c06dc0"
+        },
+        "revalidation": {
+          "luts": 100,
+          "placement": {
+            "6LUT": 100
+          },
+          "truth_table_rows": 6400,
+          "elided_memory_constant_origins": 0,
+          "elided_logic_constant_origins": 0
+        }
+      },
+      {
+        "fixture": "dual",
+        "variant": "baseline",
+        "seconds": 1.95,
+        "repairs": 20,
+        "luts": 188,
+        "placement": {
+          "6LUT": 124,
+          "5LUT": 64
+        },
+        "truth_table_rows": 7936,
+        "elided_memory_constant_origins": 0,
+        "artifacts": {
+          "json": "af52abee88444c45b05282dfd4d6802136a35b1409c110b026482850a1301040",
+          "fasm": "46144fbc3106afa00ae9f713c62fe363763a5c549569b38f600edfe08b393d56",
+          "log": "6ba9c354766bdb8020eb4412cb343a6e7da860e5e5107d3ba386fa3f20984d17"
+        },
+        "revalidation": {
+          "luts": 188,
+          "placement": {
+            "6LUT": 124,
+            "5LUT": 64
+          },
+          "truth_table_rows": 7936,
+          "elided_memory_constant_origins": 0,
+          "elided_logic_constant_origins": 0
+        }
+      },
+      {
+        "fixture": "dual",
+        "variant": "candidate",
+        "seconds": 2.022,
+        "repairs": 0,
+        "luts": 188,
+        "placement": {
+          "6LUT": 104,
+          "5LUT": 84
+        },
+        "truth_table_rows": 7040,
+        "elided_memory_constant_origins": 0,
+        "artifacts": {
+          "json": "3b69b4dca36f52d8094b52c3037011009736cc17aba66d8891989d9575d516a8",
+          "fasm": "9ff9a9b9f3d6ca258a6d2aa7853d9c41e4127e93d72d4a55558f06038bb2bdc8",
+          "log": "8c6fe403991e60273ae242137757c3497f96dd2ede88c7e317118d5050906653"
+        },
+        "revalidation": {
+          "luts": 188,
+          "placement": {
+            "6LUT": 104,
+            "5LUT": 84
+          },
+          "truth_table_rows": 7040,
+          "elided_memory_constant_origins": 0,
+          "elided_logic_constant_origins": 0
+        }
+      },
+      {
+        "fixture": "carry",
+        "variant": "baseline",
+        "seconds": 1.796,
+        "repairs": 83,
+        "luts": 170,
+        "placement": {
+          "5LUT": 32,
+          "6LUT": 138
+        },
+        "truth_table_rows": 7808,
+        "elided_memory_constant_origins": 0,
+        "artifacts": {
+          "json": "855fbecc5200f5d78587698994834c68ba00a76b5df89846a52f713da84cee6a",
+          "fasm": "0f4f4b0b56f89a22f88c666a68adbd99cae1ef74437237a2287552c83cc3a119",
+          "log": "84d0138d37755895cf1ee607cf6cf885a9138a548be609003a60d8e16818d3b7"
+        },
+        "revalidation": {
+          "luts": 170,
+          "placement": {
+            "5LUT": 32,
+            "6LUT": 138
+          },
+          "truth_table_rows": 7808,
+          "elided_memory_constant_origins": 0,
+          "elided_logic_constant_origins": 0
+        }
+      },
+      {
+        "fixture": "carry",
+        "variant": "candidate",
+        "seconds": 1.732,
+        "repairs": 0,
+        "luts": 170,
+        "placement": {
+          "5LUT": 115,
+          "6LUT": 55
+        },
+        "truth_table_rows": 5056,
+        "elided_memory_constant_origins": 0,
+        "artifacts": {
+          "json": "4fe119fbcc77463a1ba1d7e558f61a2c08f9715e0d0c33a6938b96204a28b09b",
+          "fasm": "863e41547cb6fa03645b23a8f6268e118a7356c9e388ca9ab47c1261f2fa653c",
+          "log": "050316999934541422c5b411bdd21e04675a212a75c6cd6eb60611cd758d909b"
+        },
+        "revalidation": {
+          "luts": 170,
+          "placement": {
+            "5LUT": 115,
+            "6LUT": 55
+          },
+          "truth_table_rows": 5056,
+          "elided_memory_constant_origins": 0,
+          "elided_logic_constant_origins": 0
+        }
+      },
+      {
+        "fixture": "ram",
+        "variant": "baseline",
+        "seconds": 2.692,
+        "repairs": 19,
+        "luts": 188,
+        "placement": {
+          "6LUT": 188
+        },
+        "truth_table_rows": 3840,
+        "elided_memory_constant_origins": 0,
+        "artifacts": {
+          "json": "55800f2dc90c58669d902539f78947b56e9c719d7efe43a62d1f0176aadde7a2",
+          "fasm": "2bbd92ee1f855668023ae99e098a5c6600e0d28bddda9c8e155d4dbf655d59ca",
+          "log": "da3091a59f0f6e36eb31276f8da03cd6c13b1be8d6167fc405790a7f70bc505d"
+        },
+        "revalidation": {
+          "luts": 188,
+          "placement": {
+            "6LUT": 188
+          },
+          "truth_table_rows": 3840,
+          "elided_memory_constant_origins": 0,
+          "elided_logic_constant_origins": 0
+        }
+      },
+      {
+        "fixture": "ram",
+        "variant": "candidate",
+        "seconds": 2.75,
+        "repairs": 0,
+        "luts": 188,
+        "placement": {
+          "6LUT": 169,
+          "5LUT": 19
+        },
+        "truth_table_rows": 3104,
+        "elided_memory_constant_origins": 2,
+        "artifacts": {
+          "json": "8f2212dc765b555ebb3044a0cb70fdd43d987da43fffb5ec59942884bb42839c",
+          "fasm": "7fa150d328853691af035b19643fa0889aa7c8734e970bdef5bf2a6258169e48",
+          "log": "0b7e63d3430d6b6299fc7d3e182f2b9b8474398b4a20e78f246113d7eae36c2f"
+        },
+        "revalidation": {
+          "luts": 188,
+          "placement": {
+            "6LUT": 169,
+            "5LUT": 19
+          },
+          "truth_table_rows": 3104,
+          "elided_memory_constant_origins": 2,
+          "elided_logic_constant_origins": 0
+        }
+      },
+      {
+        "fixture": "srl",
+        "variant": "baseline",
+        "seconds": 1.929,
+        "repairs": 2,
+        "luts": 100,
+        "placement": {
+          "6LUT": 100
+        },
+        "truth_table_rows": 2304,
+        "elided_memory_constant_origins": 0,
+        "artifacts": {
+          "json": "70bd231b9dc49b550b9a0084bcb9546fe4cc8e36393aa17ff4d0f6e1871cd8a3",
+          "fasm": "7e1294e0526586c9439ab786395ac65529db1ddaeec2b6247b793db2a8a0d7ee",
+          "log": "a8f7a1aa3aca25be23390d040cfaac19e375e70bcdb284eb4263619e7122e2f5"
+        },
+        "revalidation": {
+          "luts": 100,
+          "placement": {
+            "6LUT": 100
+          },
+          "truth_table_rows": 2304,
+          "elided_memory_constant_origins": 0,
+          "elided_logic_constant_origins": 0
+        }
+      },
+      {
+        "fixture": "srl",
+        "variant": "candidate",
+        "seconds": 1.928,
+        "repairs": 2,
+        "luts": 100,
+        "placement": {
+          "6LUT": 100
+        },
+        "truth_table_rows": 2304,
+        "elided_memory_constant_origins": 0,
+        "artifacts": {
+          "json": "70bd231b9dc49b550b9a0084bcb9546fe4cc8e36393aa17ff4d0f6e1871cd8a3",
+          "fasm": "7e1294e0526586c9439ab786395ac65529db1ddaeec2b6247b793db2a8a0d7ee",
+          "log": "07bf73930fb8aa1b2b6c48899b644f4ab5caa184fa84ae83c680b80c478289da"
+        },
+        "revalidation": {
+          "luts": 100,
+          "placement": {
+            "6LUT": 100
+          },
+          "truth_table_rows": 2304,
+          "elided_memory_constant_origins": 0,
+          "elided_logic_constant_origins": 0
+        }
+      },
+      {
+        "fixture": "fixed",
+        "variant": "baseline",
+        "seconds": 1.491,
+        "repairs": 1,
+        "luts": 5,
+        "placement": {
+          "6LUT": 4,
+          "5LUT": 1
+        },
+        "truth_table_rows": 256,
+        "elided_memory_constant_origins": 0,
+        "artifacts": {
+          "json": "b7a61d0b698c88a8fcc16b15871de091e840c65a98b572fb0c00e3eb4707bf01",
+          "fasm": "a976579300bd9b4939b7ae3a3ad1e940378a3d39a5233b2299e817db889ecd3f",
+          "log": "ab76159e6f0b267887acd2796b07a43cef992f8ab8976148b39713e0c107228d"
+        },
+        "revalidation": {
+          "luts": 5,
+          "placement": {
+            "6LUT": 4,
+            "5LUT": 1
+          },
+          "truth_table_rows": 256,
+          "elided_memory_constant_origins": 0,
+          "elided_logic_constant_origins": 0
+        }
+      },
+      {
+        "fixture": "fixed",
+        "variant": "candidate",
+        "seconds": 1.5,
+        "repairs": 0,
+        "luts": 5,
+        "placement": {
+          "6LUT": 3,
+          "5LUT": 2
+        },
+        "truth_table_rows": 224,
+        "elided_memory_constant_origins": 0,
+        "artifacts": {
+          "json": "90747883b44f495cff254fceeaf90fee9317afb33d50975e53c99d1ae0e1b771",
+          "fasm": "fd4fefb0dfc34463b2d67f0432a0cbffa04a6fc0513622cb84c41e1d61d7f81d",
+          "log": "5fca0872415fcb8202a80dbf3fbc86e51ae63bcfbea88e68321355851365d9fe"
+        },
+        "revalidation": {
+          "luts": 5,
+          "placement": {
+            "6LUT": 3,
+            "5LUT": 2
+          },
+          "truth_table_rows": 224,
+          "elided_memory_constant_origins": 0,
+          "elided_logic_constant_origins": 0
+        }
+      },
+      {
+        "fixture": "tied",
+        "variant": "baseline",
+        "seconds": 1.442,
+        "repairs": 1,
+        "expected_failure": "low: wrong programmed truth table at 3",
+        "artifacts": {
+          "json": "3ecb893972f05ba18a8aecc2c8a1448355c6d6d695870caf0aa49493e3ce6cf6",
+          "fasm": "c2a6cb8a2f48662988cf772843e52609dff4d52416ff7369e0763da241497274",
+          "log": "7e595e31e12399253e4b59c33363bd767de4064f017ce2c5f839d44a4f7fd1a7"
+        }
+      },
+      {
+        "fixture": "tied",
+        "variant": "candidate",
+        "seconds": 1.404,
+        "repairs": 0,
+        "luts": 5,
+        "placement": {
+          "5LUT": 2,
+          "6LUT": 3
+        },
+        "truth_table_rows": 192,
+        "elided_memory_constant_origins": 0,
+        "artifacts": {
+          "json": "52002e630296b09eea6923ee84614af837fa89f6b110b1f3a365a70de6c20697",
+          "fasm": "31be8a733cbe6cdce20924da35816ec18e2778d0ccf9a472b3d3bb3be1065cc8",
+          "log": "312843febcba25bef60847ab930617b3dcca1153b50538ac28935ba6ff575773"
+        },
+        "revalidation": {
+          "luts": 5,
+          "placement": {
+            "5LUT": 2,
+            "6LUT": 3
+          },
+          "truth_table_rows": 192,
+          "elided_memory_constant_origins": 0,
+          "elided_logic_constant_origins": 0
+        }
+      }
+    ],
+    "tool_files": {
+      "baseline": {
+        "/Users/ecpeterson/Documents/code/erl_xls/experiments/07-openxc7/build/lut-legality-20260921/bin/nextpnr-baseline": "1a81f884b7e9aa835f87c6abc4d1d2a8347523b5cec26a88fdcdcd7062ec3e0e"
+      },
+      "candidate": {
+        "/Users/ecpeterson/Documents/code/erl_xls/experiments/07-openxc7/build/lut-legality-20260921/bin/nextpnr-candidate": "02490f35c4ec3c02672bd59d22d2023b6e80e69053de6892f48d7fce18230c21"
+      },
+      "yosys": {
+        "/Users/ecpeterson/Documents/code/erl_xls/experiments/07-openxc7/.apio/packages/oss-cad-suite/bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+        "/Users/ecpeterson/Documents/code/erl_xls/experiments/07-openxc7/.apio/packages/oss-cad-suite/BUILD-INFO.json": "b509fbcf8adf9e4f8359d8c89ed179bacb3aa7c9557d830ba80936b907c3db85",
+        "/Users/ecpeterson/Documents/code/erl_xls/experiments/07-openxc7/.apio/packages/oss-cad-suite/libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+        "/Users/ecpeterson/Documents/code/erl_xls/experiments/07-openxc7/.apio/packages/oss-cad-suite/libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d"
+      }
+    },
+    "checker_sha256": "c39fea2b9fd400a5741302ce37db66093339f3d774a795ed75a714f5faf4bb1c",
+    "runner_sha256": "6b74cb960cf7ca25fd24a51814667b4da9caab6388304c61c60982fc9ce893c2",
+    "patches": {
+      "nextpnr-output-pin.patch": "af4f322db2fb581ecc695ab289e1708743f0234d54dbc546d910ade8e5cf21ad",
+      "nextpnr-pin-origins.patch": "61541440af12696957cf46aa64082f535e46d34b7727c2c140ca241a2791b865"
+    },
+    "revalidated_checker_sha256": "844c6dd0cdc602d4b191dd279d3ee8d93abe8b89ceb5d48bb952d4374e157501"
+  },
+  "placement_only_ablation": {
+    "inputs": {
+      "baseline": "62ca2e4924e759ebf77db9f86c3b5f39b8dc38e380a93248e3214aab5cef408f",
+      "candidate": "02490f35c4ec3c02672bd59d22d2023b6e80e69053de6892f48d7fce18230c21",
+      "yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+      "chipdb": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+      "tilegrid": "a3b2ec28c10ba7a40471e4aa808c9c0ee1fec5e2852c6ec45dcc04b139de3f7f"
+    },
+    "fixtures": {
+      "fixed_fixture.v": "b9f5c6fadd99e609fe0b64b8ecfe828e1254d440245ec5f382ef143413381d83"
+    },
+    "runs": [
+      {
+        "fixture": "tied",
+        "variant": "baseline",
+        "seconds": 1.658,
+        "repairs": 0,
+        "expected_failure": "low: wrong programmed truth table at 3",
+        "artifacts": {
+          "json": "528a5b2dbfd236772a7883033968a615c34a6696325f48391b633a6714f2726d",
+          "fasm": "bd2fce82acdf8e5b1f5c96119b067b0b821c9ec338fa5e05cdd25a33f6701ad7",
+          "log": "5f02af5b55409f4396d7a6bb046a097938d8561ce2792fda020c91f4c7e69608"
+        }
+      },
+      {
+        "fixture": "tied",
+        "variant": "candidate",
+        "seconds": 1.381,
+        "repairs": 0,
+        "luts": 5,
+        "placement": {
+          "5LUT": 2,
+          "6LUT": 3
+        },
+        "truth_table_rows": 192,
+        "elided_memory_constant_origins": 0,
+        "artifacts": {
+          "json": "52002e630296b09eea6923ee84614af837fa89f6b110b1f3a365a70de6c20697",
+          "fasm": "31be8a733cbe6cdce20924da35816ec18e2778d0ccf9a472b3d3bb3be1065cc8",
+          "log": "90cbc69dc34f9487e6b877ff43a1159e6826cbeadd3c99769f7b62d0bd0fe23b"
+        }
+      }
+    ]
+  },
+  "unconstrained_tied_input": {
+    "removed_bel_constraints": 2,
+    "input_sha256": "0d073c658eb92eceb28a45b340653cf4e51dc851d4086be19c5b81f666aefab1",
+    "runs": {
+      "baseline": {
+        "expected_failure": "low: wrong programmed truth table at 5",
+        "artifacts": {
+          "baseline-packed.json": "997ff340c268adef3469f24dc0c5a124c58844197dd1fccbaca811bdf5a76445",
+          "baseline.json": "9e6887f6fa63037f06e686f582d9e8586cc202ec487108b01af943c45fbbceee",
+          "baseline.fasm": "13214587068d9af6e0fcf1ab11ab7551ce06aff1083285dd49ad4f1bc0973df8"
+        }
+      },
+      "candidate": {
+        "luts": 5,
+        "placement": {
+          "5LUT": 2,
+          "6LUT": 3
+        },
+        "truth_table_rows": 192,
+        "elided_memory_constant_origins": 0,
+        "elided_logic_constant_origins": 0,
+        "artifacts": {
+          "candidate-packed.json": "997ff340c268adef3469f24dc0c5a124c58844197dd1fccbaca811bdf5a76445",
+          "candidate.json": "966ae5dad0436ef4b3400c3e2d5b7d7e9a6ec6ef8d7d648d1c57427e29b40faa",
+          "candidate.fasm": "0b36a7e8c0f0a2525f778cc621dd57e225d18329bb0bf082c968a77dcb77b997"
+        }
+      }
+    }
+  },
+  "decoder": {
+    "baseline": {
+      "variant": "baseline",
+      "started_utc": "2026-09-21T07:14:34.976049+00:00",
+      "budget_seconds": 1800,
+      "command": [
+        "/Users/ecpeterson/Documents/code/erl_xls/experiments/07-openxc7/build/lut-legality-20260921/bin/nextpnr-baseline",
+        "--chipdb",
+        "/Users/ecpeterson/Documents/code/erl_xls/experiments/07-openxc7/build/chipdb/xc7z030sbg485.bin",
+        "--json",
+        "/Users/ecpeterson/Documents/code/erl_xls/experiments/07-openxc7/build/decoder-timing-20260920/board-sized/mapped.json",
+        "--xdc",
+        "/Users/ecpeterson/Documents/code/erl_xls/experiments/07-openxc7/build/decoder-timing-20260920/board-sized/timing.xdc",
+        "--freq",
+        "100",
+        "--seed",
+        "1",
+        "--router",
+        "router2",
+        "--timing-allow-fail",
+        "--report",
+        "/Users/ecpeterson/Documents/code/erl_xls/experiments/07-openxc7/build/lut-legality-20260921/decoder-baseline/timing.json",
+        "--log",
+        "/Users/ecpeterson/Documents/code/erl_xls/experiments/07-openxc7/build/lut-legality-20260921/decoder-baseline/nextpnr.log",
+        "--write",
+        "/Users/ecpeterson/Documents/code/erl_xls/experiments/07-openxc7/build/lut-legality-20260921/decoder-baseline/design.json",
+        "--no-route"
+      ],
+      "inputs": {
+        "/Users/ecpeterson/Documents/code/erl_xls/experiments/07-openxc7/build/lut-legality-20260921/bin/nextpnr-baseline": "1a81f884b7e9aa835f87c6abc4d1d2a8347523b5cec26a88fdcdcd7062ec3e0e",
+        "/Users/ecpeterson/Documents/code/erl_xls/experiments/07-openxc7/build/chipdb/xc7z030sbg485.bin": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+        "/Users/ecpeterson/Documents/code/erl_xls/experiments/07-openxc7/build/decoder-timing-20260920/board-sized/mapped.json": "72c771f33faf4ad8c7da0159ab585704eebcce1f1fdbb779c52ee5d0beb42458",
+        "/Users/ecpeterson/Documents/code/erl_xls/experiments/07-openxc7/build/decoder-timing-20260920/board-sized/timing.xdc": "db9eb249de99dec634273d767d0facc4b4ab52f3aa86944500ee2d55b2ecdbab"
+      },
+      "application_revision": "372423182fd8a125ca56cb307d10799d05b5d42e",
+      "backend_revision": "68aeeb39f92e39bfb239c7e4a44dd93451fc1889",
+      "seed": 1,
+      "status": "complete",
+      "returncode": 0,
+      "elapsed_seconds": 653.032,
+      "outputs": {
+        "timing.json": "caa43f5a0ef8f6b247ab2d98bf7530585318fba0fac13aa0c683bfdb9c493ff6",
+        "nextpnr.log": "1f54e652bfaa2eb0bd17cb1d8f75b48222f6ce98e1b37528d3c9921c113b0476",
+        "console.log": "1f54e652bfaa2eb0bd17cb1d8f75b48222f6ce98e1b37528d3c9921c113b0476",
+        "design.json": "746e57ed1f2e0d9f57e58200ce063d62ddb24f8057219d009acf49baa4a7c8b2"
+      },
+      "phase": "placement_only",
+      "repairs": 9616,
+      "packed_lut_cells": 39180,
+      "occupied_physical_luts": 35572,
+      "o5_cells": 3608,
+      "o6_cells": 35572,
+      "analytic_seconds": 550.57,
+      "legalization_seconds": 503.74,
+      "refinement_seconds": 91.71,
+      "congestion": []
+    },
+    "candidate": {
+      "variant": "candidate",
+      "started_utc": "2026-09-21T07:14:33.763833+00:00",
+      "budget_seconds": 3600,
+      "command": [
+        "/Users/ecpeterson/Documents/code/erl_xls/experiments/07-openxc7/build/lut-legality-20260921/bin/nextpnr-candidate",
+        "--chipdb",
+        "/Users/ecpeterson/Documents/code/erl_xls/experiments/07-openxc7/build/chipdb/xc7z030sbg485.bin",
+        "--json",
+        "/Users/ecpeterson/Documents/code/erl_xls/experiments/07-openxc7/build/decoder-timing-20260920/board-sized/mapped.json",
+        "--xdc",
+        "/Users/ecpeterson/Documents/code/erl_xls/experiments/07-openxc7/build/decoder-timing-20260920/board-sized/timing.xdc",
+        "--freq",
+        "100",
+        "--seed",
+        "1",
+        "--router",
+        "router2",
+        "--timing-allow-fail",
+        "--report",
+        "/Users/ecpeterson/Documents/code/erl_xls/experiments/07-openxc7/build/lut-legality-20260921/decoder-candidate/timing.json",
+        "--log",
+        "/Users/ecpeterson/Documents/code/erl_xls/experiments/07-openxc7/build/lut-legality-20260921/decoder-candidate/nextpnr.log",
+        "--write",
+        "/Users/ecpeterson/Documents/code/erl_xls/experiments/07-openxc7/build/lut-legality-20260921/decoder-candidate/design.json",
+        "--fasm",
+        "/Users/ecpeterson/Documents/code/erl_xls/experiments/07-openxc7/build/lut-legality-20260921/decoder-candidate/design.fasm"
+      ],
+      "inputs": {
+        "/Users/ecpeterson/Documents/code/erl_xls/experiments/07-openxc7/build/lut-legality-20260921/bin/nextpnr-candidate": "02490f35c4ec3c02672bd59d22d2023b6e80e69053de6892f48d7fce18230c21",
+        "/Users/ecpeterson/Documents/code/erl_xls/experiments/07-openxc7/build/chipdb/xc7z030sbg485.bin": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+        "/Users/ecpeterson/Documents/code/erl_xls/experiments/07-openxc7/build/decoder-timing-20260920/board-sized/mapped.json": "72c771f33faf4ad8c7da0159ab585704eebcce1f1fdbb779c52ee5d0beb42458",
+        "/Users/ecpeterson/Documents/code/erl_xls/experiments/07-openxc7/build/decoder-timing-20260920/board-sized/timing.xdc": "db9eb249de99dec634273d767d0facc4b4ab52f3aa86944500ee2d55b2ecdbab"
+      },
+      "application_revision": "372423182fd8a125ca56cb307d10799d05b5d42e",
+      "backend_revision": "68aeeb39f92e39bfb239c7e4a44dd93451fc1889",
+      "seed": 1,
+      "status": "complete",
+      "returncode": 0,
+      "elapsed_seconds": 1067.093,
+      "outputs": {
+        "timing.json": "74604341f8bf46eb8bbee7ad719085ede11a132bcc1108b1153ab0efabea4b8c",
+        "nextpnr.log": "2a3237afbbe20502a595e62849af94d50b9e4b79be7b3dd13a187e6a0e3c10f7",
+        "console.log": "2a3237afbbe20502a595e62849af94d50b9e4b79be7b3dd13a187e6a0e3c10f7",
+        "pack.console": "7f55de82a27dc39d2a95a02c0a6e3eb1990936a33c6f21789b5988b90eb4bfcb",
+        "design.fasm": "8d7a75b4906aab44bc85cf9a9d800106550769145b06e61d891f14e163f64556",
+        "packed.json": "9dbacdfd8d2b1eb3d638644b7a548910a9677c65be273bf5b5b8576ed854f8a5",
+        "design.json": "30583b119682a9398003b3547bb271ef695b43bc8b86c90da12710f14838a407"
+      },
+      "phase": "route",
+      "repairs": 0,
+      "packed_lut_cells": 39180,
+      "occupied_physical_luts": 33748,
+      "o5_cells": 13224,
+      "o6_cells": 25956,
+      "analytic_seconds": 542.14,
+      "legalization_seconds": 495.51,
+      "refinement_seconds": 90.56,
+      "congestion": [
+        {
+          "iteration": 1,
+          "wires": 1309725,
+          "overused": 63626,
+          "overuse": 69415
+        },
+        {
+          "iteration": 2,
+          "wires": 1386856,
+          "overused": 4295,
+          "overuse": 4305
+        },
+        {
+          "iteration": 3,
+          "wires": 1393979,
+          "overused": 845,
+          "overuse": 847
+        },
+        {
+          "iteration": 4,
+          "wires": 1395476,
+          "overused": 500,
+          "overuse": 500
+        },
+        {
+          "iteration": 5,
+          "wires": 1396173,
+          "overused": 387,
+          "overuse": 387
+        },
+        {
+          "iteration": 6,
+          "wires": 1396701,
+          "overused": 348,
+          "overuse": 349
+        },
+        {
+          "iteration": 7,
+          "wires": 1397198,
+          "overused": 301,
+          "overuse": 301
+        },
+        {
+          "iteration": 8,
+          "wires": 1397585,
+          "overused": 264,
+          "overuse": 264
+        },
+        {
+          "iteration": 9,
+          "wires": 1397877,
+          "overused": 246,
+          "overuse": 246
+        },
+        {
+          "iteration": 10,
+          "wires": 1398140,
+          "overused": 225,
+          "overuse": 225
+        },
+        {
+          "iteration": 11,
+          "wires": 1398292,
+          "overused": 203,
+          "overuse": 203
+        },
+        {
+          "iteration": 12,
+          "wires": 1398498,
+          "overused": 166,
+          "overuse": 166
+        },
+        {
+          "iteration": 13,
+          "wires": 1398682,
+          "overused": 151,
+          "overuse": 151
+        },
+        {
+          "iteration": 14,
+          "wires": 1398774,
+          "overused": 120,
+          "overuse": 120
+        },
+        {
+          "iteration": 15,
+          "wires": 1398894,
+          "overused": 128,
+          "overuse": 128
+        },
+        {
+          "iteration": 16,
+          "wires": 1399020,
+          "overused": 101,
+          "overuse": 101
+        },
+        {
+          "iteration": 17,
+          "wires": 1399129,
+          "overused": 88,
+          "overuse": 88
+        },
+        {
+          "iteration": 18,
+          "wires": 1399314,
+          "overused": 84,
+          "overuse": 84
+        },
+        {
+          "iteration": 19,
+          "wires": 1399410,
+          "overused": 75,
+          "overuse": 75
+        },
+        {
+          "iteration": 20,
+          "wires": 1399439,
+          "overused": 75,
+          "overuse": 75
+        },
+        {
+          "iteration": 21,
+          "wires": 1399501,
+          "overused": 49,
+          "overuse": 49
+        },
+        {
+          "iteration": 22,
+          "wires": 1399511,
+          "overused": 52,
+          "overuse": 52
+        },
+        {
+          "iteration": 23,
+          "wires": 1399589,
+          "overused": 38,
+          "overuse": 38
+        },
+        {
+          "iteration": 24,
+          "wires": 1399648,
+          "overused": 37,
+          "overuse": 37
+        },
+        {
+          "iteration": 25,
+          "wires": 1399682,
+          "overused": 33,
+          "overuse": 33
+        },
+        {
+          "iteration": 26,
+          "wires": 1399684,
+          "overused": 33,
+          "overuse": 33
+        },
+        {
+          "iteration": 27,
+          "wires": 1399708,
+          "overused": 39,
+          "overuse": 39
+        },
+        {
+          "iteration": 28,
+          "wires": 1399725,
+          "overused": 30,
+          "overuse": 30
+        },
+        {
+          "iteration": 29,
+          "wires": 1399781,
+          "overused": 34,
+          "overuse": 34
+        },
+        {
+          "iteration": 30,
+          "wires": 1399787,
+          "overused": 31,
+          "overuse": 31
+        },
+        {
+          "iteration": 31,
+          "wires": 1399814,
+          "overused": 25,
+          "overuse": 25
+        },
+        {
+          "iteration": 32,
+          "wires": 1399838,
+          "overused": 26,
+          "overuse": 26
+        },
+        {
+          "iteration": 33,
+          "wires": 1399855,
+          "overused": 20,
+          "overuse": 20
+        },
+        {
+          "iteration": 34,
+          "wires": 1399864,
+          "overused": 15,
+          "overuse": 15
+        },
+        {
+          "iteration": 35,
+          "wires": 1399858,
+          "overused": 12,
+          "overuse": 12
+        },
+        {
+          "iteration": 36,
+          "wires": 1399884,
+          "overused": 12,
+          "overuse": 12
+        },
+        {
+          "iteration": 37,
+          "wires": 1399859,
+          "overused": 7,
+          "overuse": 7
+        },
+        {
+          "iteration": 38,
+          "wires": 1399864,
+          "overused": 9,
+          "overuse": 9
+        },
+        {
+          "iteration": 39,
+          "wires": 1399866,
+          "overused": 9,
+          "overuse": 9
+        },
+        {
+          "iteration": 40,
+          "wires": 1399860,
+          "overused": 12,
+          "overuse": 12
+        },
+        {
+          "iteration": 41,
+          "wires": 1399882,
+          "overused": 7,
+          "overuse": 7
+        },
+        {
+          "iteration": 42,
+          "wires": 1399900,
+          "overused": 6,
+          "overuse": 6
+        },
+        {
+          "iteration": 43,
+          "wires": 1399900,
+          "overused": 5,
+          "overuse": 5
+        },
+        {
+          "iteration": 44,
+          "wires": 1399923,
+          "overused": 5,
+          "overuse": 5
+        },
+        {
+          "iteration": 45,
+          "wires": 1399920,
+          "overused": 5,
+          "overuse": 5
+        },
+        {
+          "iteration": 46,
+          "wires": 1399945,
+          "overused": 4,
+          "overuse": 4
+        },
+        {
+          "iteration": 47,
+          "wires": 1399936,
+          "overused": 2,
+          "overuse": 2
+        },
+        {
+          "iteration": 48,
+          "wires": 1399945,
+          "overused": 1,
+          "overuse": 1
+        },
+        {
+          "iteration": 49,
+          "wires": 1399943,
+          "overused": 1,
+          "overuse": 1
+        },
+        {
+          "iteration": 50,
+          "wires": 1399945,
+          "overused": 1,
+          "overuse": 1
+        },
+        {
+          "iteration": 51,
+          "wires": 1399950,
+          "overused": 1,
+          "overuse": 1
+        },
+        {
+          "iteration": 52,
+          "wires": 1399943,
+          "overused": 1,
+          "overuse": 1
+        },
+        {
+          "iteration": 53,
+          "wires": 1399943,
+          "overused": 1,
+          "overuse": 1
+        },
+        {
+          "iteration": 54,
+          "wires": 1399947,
+          "overused": 1,
+          "overuse": 1
+        },
+        {
+          "iteration": 55,
+          "wires": 1399948,
+          "overused": 1,
+          "overuse": 1
+        },
+        {
+          "iteration": 56,
+          "wires": 1399947,
+          "overused": 0,
+          "overuse": 0
+        }
+      ],
+      "router_seconds": 414.07,
+      "lut_validation": {
+        "luts": 39180,
+        "placement": {
+          "5LUT": 13224,
+          "6LUT": 25956
+        },
+        "truth_table_rows": 1859552,
+        "elided_memory_constant_origins": 0,
+        "elided_logic_constant_origins": 2
+      },
+      "partial_timing": {
+        "clock": "decoder.aclk",
+        "critical_path_clock": "decoder.aclk",
+        "achieved_mhz": 16.52,
+        "target_mhz": 100.0,
+        "critical_path": {
+          "logic_ns": 3.9,
+          "routing_ns": 56.6,
+          "text": "Info: Critical path report for clock 'decoder.aclk' (posedge -> posedge):\nInfo: curr total\nInfo:  0.1  0.1  Source $flatten\\decoder.$auto$ff.cc:337:slice$71382.Q\nInfo:  2.7  2.8    Net decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_2_2_2_next_inst.__phi_halo_cell__SharedExecutor_0_next_inst.p0_request_internal__1 budget 0.000000 ns (73,147) -> (81,158)\nInfo:                Sink $flatten\\decoder.$abc$1281309$lut$aiger1281308$50285.A2\nInfo:  0.1  3.0  Source $flatten\\decoder.$abc$1281309$lut$aiger1281308$50285.O5\nInfo:  0.8  3.8    Net $flatten\\decoder.$techmap1298906$auto$abc9_ops.cc:1613:reintegrate$1281584.A[0] budget 0.000000 ns (81,158) -> (74,158)\nInfo:                Sink $flatten\\decoder.$abc$1281309$lut$aiger1281308$51062.A1\nInfo:  0.1  3.9  Source $flatten\\decoder.$abc$1281309$lut$aiger1281308$51062.O6\nInfo:  2.4  6.2    Net $flatten\\decoder.$techmap1291482$abc$1281309$lut$aiger1281308$51063.A[1] budget 0.000000 ns (74,158) -> (70,112)\nInfo:                Sink $flatten\\decoder.$abc$1281309$lut$aiger1281308$51063.A3\nInfo:  0.1  6.4  Source $flatten\\decoder.$abc$1281309$lut$aiger1281308$51063.O5\nInfo:  4.5 10.9    Net $flatten\\decoder.$techmap1291483$abc$1281309$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_2_2_2_next_inst.__phi_halo_cell__SharedExecutor_0_next_inst._0__5[5].A[1] budget 0.000000 ns (70,112) -> (108,27)\nInfo:                Sink $flatten\\decoder.$abc$1281309$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_2_2_2_next_inst.__phi_halo_cell__SharedExecutor_0_next_inst._0__5[5].A1\nInfo:  0.1 11.0  Source $flatten\\decoder.$abc$1281309$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_2_2_2_next_inst.__phi_halo_cell__SharedExecutor_0_next_inst._0__5[5].O6\nInfo:  1.8 12.8    Net decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_2_2_2_next_inst.instantiation_output_159360[724] budget 0.000000 ns (108,27) -> (93,15)\nInfo:                Sink $flatten\\decoder.$abc$1281309$lut$aiger1281308$51070.A1\nInfo:  0.2 13.0  Source $flatten\\decoder.$abc$1281309$lut$aiger1281308$51070.O5\nInfo:  0.5 13.5    Net $flatten\\decoder.$techmap1291492$abc$1281309$lut$aiger1281308$51078.A[4] budget 0.000000 ns (93,15) -> (93,14)\nInfo:                Sink $flatten\\decoder.$abc$1281309$lut$aiger1281308$51078.A5\nInfo:  0.1 13.6  Source $flatten\\decoder.$abc$1281309$lut$aiger1281308$51078.O5\nInfo:  1.0 14.6    Net $flatten\\decoder.$techmap1291502$abc$1281309$lut$aiger1281308$51094.A[4] budget 0.000000 ns (93,14) -> (93,20)\nInfo:                Sink $flatten\\decoder.$abc$1281309$lut$aiger1281308$51094.A4\nInfo:  0.1 14.8  Source $flatten\\decoder.$abc$1281309$lut$aiger1281308$51094.O6\nInfo:  0.8 15.5    Net $flatten\\decoder.$techmap1291522$abc$1281309$lut$aiger1281308$51126.A[5] budget 0.000000 ns (93,20) -> (98,25)\nInfo:                Sink $flatten\\decoder.$abc$1281309$lut$aiger1281308$51126.A6\nInfo:  0.1 15.7  Source $flatten\\decoder.$abc$1281309$lut$aiger1281308$51126.O6\nInfo:  3.9 19.5    Net $flatten\\decoder.$techmap1291524$abc$1281309$lut$aiger1281308$51246.A[1] budget 0.000000 ns (98,25) -> (77,98)\nInfo:                Sink $flatten\\decoder.$abc$1281309$lut$aiger1281308$51141.A1\nInfo:  0.1 19.6  Source $flatten\\decoder.$abc$1281309$lut$aiger1281308$51141.O6\nInfo:  0.4 20.1    Net $flatten\\decoder.$techmap1297523$auto$abc9_ops.cc:1613:reintegrate$1281476.A[4] budget 0.000000 ns (77,98) -> (73,98)\nInfo:                Sink $flatten\\decoder.$abc$1281309$lut$aiger1281308$51142.A2\nInfo:  0.1 20.2  Source $flatten\\decoder.$abc$1281309$lut$aiger1281308$51142.O6\nInfo:  3.6 23.8    Net $flatten\\decoder.$techmap1294831$auto$abc9_ops.cc:1613:reintegrate$1281472.A[3] budget 0.000000 ns (73,98) -> (10,141)\nInfo:                Sink $flatten\\decoder.$abc$1281309$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_2_2_2_next_inst.incoming_result[407].A1\nInfo:  0.1 23.9  Source $flatten\\decoder.$abc$1281309$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_2_2_2_next_inst.incoming_result[407].O6\nInfo:  1.8 25.7    Net decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_2_2_2_next_inst.incoming_result[407] budget 0.000000 ns (10,141) -> (44,114)\nInfo:                Sink $flatten\\decoder.$abc$1281309$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.materialized_fifo_fifo__scheduler_2_egress_.push_data[384].A3\nInfo:  0.1 25.8  Source $flatten\\decoder.$abc$1281309$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.materialized_fifo_fifo__scheduler_2_egress_.push_data[384].O6\nInfo:  2.5 28.2    Net decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.instantiation_output_159521[384] budget 0.000000 ns (44,114) -> (74,92)\nInfo:                Sink $flatten\\decoder.$abc$1281309$lut$aiger1281308$51178.A2\nInfo:  0.2 28.4  Source $flatten\\decoder.$abc$1281309$lut$aiger1281308$51178.O5\nInfo:  0.2 28.5    Net $flatten\\decoder.$techmap1291540$abc$1281309$lut$aiger1281308$51213.A[3] budget 0.000000 ns (74,92) -> (74,92)\nInfo:                Sink $flatten\\decoder.$abc$1281309$lut$aiger1281308$51213.A3\nInfo:  0.1 28.7  Source $flatten\\decoder.$abc$1281309$lut$aiger1281308$51213.O6\nInfo:  1.4 30.0    Net $flatten\\decoder.$techmap1291541$abc$1281309$lut$aiger1281308$92604.A[1] budget 0.000000 ns (74,92) -> (78,80)\nInfo:                Sink $flatten\\decoder.$abc$1281309$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.materialized_fifo_fifo__phi_x_reduction_batch__0_.push_data[225].A5\nInfo:  0.1 30.1  Source $flatten\\decoder.$abc$1281309$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.materialized_fifo_fifo__phi_x_reduction_batch__0_.push_data[225].O6\nInfo:  1.2 31.3    Net decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.instantiation_output_159646[225] budget 0.000000 ns (78,80) -> (81,88)\nInfo:                Sink $flatten\\decoder.$abc$1281309$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.materialized_fifo_fifo__phi_x_reduction_batch__0_.push_data[353].A1\nInfo:  0.1 31.5  Source $flatten\\decoder.$abc$1281309$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.materialized_fifo_fifo__phi_x_reduction_batch__0_.push_data[353].O6\nInfo:  1.4 32.9    Net decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.instantiation_output_159646[353] budget 0.000000 ns (81,88) -> (74,98)\nInfo:                Sink $flatten\\decoder.$abc$1281309$lut$aiger1281308$103497.A4\nInfo:  0.1 33.0  Source $flatten\\decoder.$abc$1281309$lut$aiger1281308$103497.O6\nInfo:  0.2 33.2    Net $flatten\\decoder.$techmap1291546$auto$abc9_ops.cc:1613:reintegrate$1286322.A[1] budget 0.000000 ns (74,98) -> (74,98)\nInfo:                Sink $flatten\\decoder.$abc$1281309$lut$aiger1281308$103498.A4\nInfo:  0.1 33.3  Source $flatten\\decoder.$abc$1281309$lut$aiger1281308$103498.O5\nInfo:  0.0 33.3    Net $flatten\\decoder.$techmap1291548$auto$abc9_ops.cc:1613:reintegrate$1286321.A[1] budget 0.000000 ns (74,98) -> (74,98)\nInfo:                Sink $flatten\\decoder.$abc$1281309$lut$aiger1281308$103499.A2\nInfo:  0.1 33.4  Source $flatten\\decoder.$abc$1281309$lut$aiger1281308$103499.O6\nInfo:  1.1 34.5    Net $flatten\\decoder.$techmap1294969$abc$1281309$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_decoder_profile_topology__SchedulerRouter2_0_next_inst.or_175039.A[1] budget 0.000000 ns (74,98) -> (64,89)\nInfo:                Sink $flatten\\decoder.$abc$1281309$lut$aiger1281308$103503.A2\nInfo:  0.1 34.6  Source $flatten\\decoder.$abc$1281309$lut$aiger1281308$103503.O6\nInfo:  1.4 36.0    Net $flatten\\decoder.$techmap1297112$auto$abc9_ops.cc:1613:reintegrate$1285435.A[1] budget 0.000000 ns (64,89) -> (57,99)\nInfo:                Sink $flatten\\decoder.$abc$1281309$lut$aiger1281308$103504.A3\nInfo:  0.2 36.2  Source $flatten\\decoder.$abc$1281309$lut$aiger1281308$103504.O5\nInfo:  4.1 40.3    Net $flatten\\decoder.$techmap1294089$abc$1281309$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_decoder_profile_topology__Phi_xReductionPlane_0_next_inst.one_hot_sel_171415.A[5] budget 0.000000 ns (57,99) -> (23,180)\nInfo:                Sink $flatten\\decoder.$abc$1281309$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_decoder_profile_topology__Phi_xReductionPlane_0_next_inst.one_hot_sel_171415.A6\nInfo:  0.1 40.4  Source $flatten\\decoder.$abc$1281309$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_decoder_profile_topology__Phi_xReductionPlane_0_next_inst.one_hot_sel_171415.O6\nInfo:  3.3 43.7    Net decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_decoder_profile_topology__Phi_xReductionPlane_0_next_inst.next_batch[512] budget 0.000000 ns (23,180) -> (30,109)\nInfo:                Sink $flatten\\decoder.$abc$1281309$lut$aiger1281308$103517.A4\nInfo:  0.1 43.8  Source $flatten\\decoder.$abc$1281309$lut$aiger1281308$103517.O6\nInfo:  0.8 44.5    Net $flatten\\decoder.$techmap1294091$abc$1281309$lut$aiger1281308$103530.A[1] budget 0.000000 ns (30,109) -> (33,108)\nInfo:                Sink $flatten\\decoder.$abc$1281309$lut$aiger1281308$103535.A1\nInfo:  0.2 44.7  Source $flatten\\decoder.$abc$1281309$lut$aiger1281308$103535.O5\nInfo:  0.2 44.8    Net $flatten\\decoder.$techmap1294094$abc$1281309$lut$aiger1281308$103548.A[4] budget 0.000000 ns (33,108) -> (33,108)\nInfo:                Sink $flatten\\decoder.$abc$1281309$lut$aiger1281308$103548.A3\nInfo:  0.1 45.0  Source $flatten\\decoder.$abc$1281309$lut$aiger1281308$103548.O6\nInfo:  0.2 45.1    Net $flatten\\decoder.$techmap1294095$abc$1281309$lut$aiger1281308$103549.A[1] budget 0.000000 ns (33,108) -> (33,108)\nInfo:                Sink $flatten\\decoder.$abc$1281309$lut$aiger1281308$103549.A3\nInfo:  0.2 45.3  Source $flatten\\decoder.$abc$1281309$lut$aiger1281308$103549.O5\nInfo:  5.2 50.4    Net $flatten\\decoder.$techmap1294099$abc$1281309$lut$aiger1281308$103562.A[1] budget 0.000000 ns (33,108) -> (145,180)\nInfo:                Sink $flatten\\decoder.$abc$1281309$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_decoder_profile_topology__Phi_xReductionPlane_0_next_inst.one_hot_sel_171423.A4\nInfo:  0.1 50.6  Source $flatten\\decoder.$abc$1281309$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_decoder_profile_topology__Phi_xReductionPlane_0_next_inst.one_hot_sel_171423.O6\nInfo:  9.7 60.2    Net decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_decoder_profile_topology__Phi_xReductionPlane_0_next_inst.one_hot_sel_171423 budget 0.000000 ns (145,180) -> (54,114)\nInfo:                Sink $flatten\\decoder.$auto$xilinx_dffopt.cc:338:execute$1330539.A4\nInfo:  0.2 60.4  Source $flatten\\decoder.$auto$xilinx_dffopt.cc:338:execute$1330539.O5\nInfo:  0.0 60.4    Net $flatten\\decoder.$auto$xilinx_dffopt.cc:347:execute$1330540 budget -1.447000 ns (54,114) -> (54,114)\nInfo:                Sink $flatten\\decoder.$auto$ff.cc:337:slice$65642.D\nInfo:  0.1 60.5  Setup $flatten\\decoder.$auto$ff.cc:337:slice$65642.D\nInfo: 3.9 ns logic, 56.6 ns routing"
+        },
+        "utilization": {
+          "BSCAN": {
+            "available": 4,
+            "used": 0
+          },
+          "BUFGCTRL": {
+            "available": 32,
+            "used": 1
+          },
+          "BUFGCTRL_CE0INV": {
+            "available": 32,
+            "used": 0
+          },
+          "BUFGCTRL_CE1INV": {
+            "available": 32,
+            "used": 0
+          },
+          "BUFGCTRL_IGNORE0INV": {
+            "available": 32,
+            "used": 0
+          },
+          "BUFGCTRL_IGNORE1INV": {
+            "available": 32,
+            "used": 0
+          },
+          "BUFGCTRL_S0INV": {
+            "available": 32,
+            "used": 0
+          },
+          "BUFGCTRL_S1INV": {
+            "available": 32,
+            "used": 0
+          },
+          "BUFG_BUFG": {
+            "available": 32,
+            "used": 0
+          },
+          "BUFHCE_BUFHCE": {
+            "available": 96,
+            "used": 0
+          },
+          "BUFHCE_CEINV": {
+            "available": 96,
+            "used": 0
+          },
+          "BUFIO_BUFIO": {
+            "available": 20,
+            "used": 0
+          },
+          "CARRY4": {
+            "available": 19650,
+            "used": 902
+          },
+          "DCIRESET_DCIRESET": {
+            "available": 1,
+            "used": 0
+          },
+          "DNA_PORT_DNA_PORT": {
+            "available": 1,
+            "used": 0
+          },
+          "DSP48E1_ALUMODE0INV": {
+            "available": 400,
+            "used": 0
+          },
+          "DSP48E1_ALUMODE1INV": {
+            "available": 400,
+            "used": 0
+          },
+          "DSP48E1_ALUMODE2INV": {
+            "available": 400,
+            "used": 0
+          },
+          "DSP48E1_ALUMODE3INV": {
+            "available": 400,
+            "used": 0
+          },
+          "DSP48E1_CARRYININV": {
+            "available": 400,
+            "used": 0
+          },
+          "DSP48E1_CLKINV": {
+            "available": 400,
+            "used": 0
+          },
+          "DSP48E1_DSP48E1": {
+            "available": 400,
+            "used": 48
+          },
+          "DSP48E1_INMODE0INV": {
+            "available": 400,
+            "used": 0
+          },
+          "DSP48E1_INMODE1INV": {
+            "available": 400,
+            "used": 0
+          },
+          "DSP48E1_INMODE2INV": {
+            "available": 400,
+            "used": 0
+          },
+          "DSP48E1_INMODE3INV": {
+            "available": 400,
+            "used": 0
+          },
+          "DSP48E1_INMODE4INV": {
+            "available": 400,
+            "used": 0
+          },
+          "DSP48E1_OPMODE0INV": {
+            "available": 400,
+            "used": 0
+          },
+          "DSP48E1_OPMODE1INV": {
+            "available": 400,
+            "used": 0
+          },
+          "DSP48E1_OPMODE2INV": {
+            "available": 400,
+            "used": 0
+          },
+          "DSP48E1_OPMODE3INV": {
+            "available": 400,
+            "used": 0
+          },
+          "DSP48E1_OPMODE4INV": {
+            "available": 400,
+            "used": 0
+          },
+          "DSP48E1_OPMODE5INV": {
+            "available": 400,
+            "used": 0
+          },
+          "DSP48E1_OPMODE6INV": {
+            "available": 400,
+            "used": 0
+          },
+          "EFUSE_USR_EFUSE_USR": {
+            "available": 1,
+            "used": 0
+          },
+          "FIFO18E1_FIFO18E1": {
+            "available": 265,
+            "used": 0
+          },
+          "FIFO18E1_RDCLKINV": {
+            "available": 265,
+            "used": 0
+          },
+          "FIFO18E1_RDENINV": {
+            "available": 265,
+            "used": 0
+          },
+          "FIFO18E1_RDRCLKINV": {
+            "available": 265,
+            "used": 0
+          },
+          "FIFO18E1_RSTINV": {
+            "available": 265,
+            "used": 0
+          },
+          "FIFO18E1_RSTREGINV": {
+            "available": 265,
+            "used": 0
+          },
+          "FIFO18E1_WRCLKINV": {
+            "available": 265,
+            "used": 0
+          },
+          "FIFO18E1_WRENINV": {
+            "available": 265,
+            "used": 0
+          },
+          "FRAME_ECC_FRAME_ECC": {
+            "available": 1,
+            "used": 0
+          },
+          "HARD0": {
+            "available": 1380,
+            "used": 0
+          },
+          "ICAP_ICAP": {
+            "available": 2,
+            "used": 0
+          },
+          "IDELAYCTRL_IDELAYCTRL": {
+            "available": 5,
+            "used": 0
+          },
+          "IDELAYE2_CINV": {
+            "available": 100,
+            "used": 0
+          },
+          "IDELAYE2_DATAININV": {
+            "available": 100,
+            "used": 0
+          },
+          "IDELAYE2_IDATAININV": {
+            "available": 100,
+            "used": 0
+          },
+          "IDELAYE2_IDELAYE2": {
+            "available": 100,
+            "used": 0
+          },
+          "ILOGICE2_CE1USED": {
+            "available": 100,
+            "used": 0
+          },
+          "ILOGICE2_CLKBINV": {
+            "available": 100,
+            "used": 0
+          },
+          "ILOGICE2_CLKINV": {
+            "available": 100,
+            "used": 0
+          },
+          "ILOGICE2_D2OBYP_SEL": {
+            "available": 100,
+            "used": 0
+          },
+          "ILOGICE2_D2OFFBYP_SEL": {
+            "available": 100,
+            "used": 0
+          },
+          "ILOGICE2_DINV": {
+            "available": 100,
+            "used": 0
+          },
+          "ILOGICE2_IDELMUX": {
+            "available": 100,
+            "used": 0
+          },
+          "ILOGICE2_IFF": {
+            "available": 100,
+            "used": 0
+          },
+          "ILOGICE2_IFFDELMUX": {
+            "available": 100,
+            "used": 0
+          },
+          "ILOGICE2_IFFMUX": {
+            "available": 100,
+            "used": 0
+          },
+          "ILOGICE2_IMUX": {
+            "available": 100,
+            "used": 0
+          },
+          "ILOGICE2_REVUSED": {
+            "available": 100,
+            "used": 0
+          },
+          "ILOGICE2_SRUSED": {
+            "available": 100,
+            "used": 0
+          },
+          "ILOGICE3_CE1USED": {
+            "available": 100,
+            "used": 0
+          },
+          "ILOGICE3_CLKBINV": {
+            "available": 100,
+            "used": 0
+          },
+          "ILOGICE3_CLKINV": {
+            "available": 100,
+            "used": 0
+          },
+          "ILOGICE3_D2OBYP_SEL": {
+            "available": 100,
+            "used": 0
+          },
+          "ILOGICE3_D2OFFBYP_SEL": {
+            "available": 100,
+            "used": 0
+          },
+          "ILOGICE3_DINV": {
+            "available": 100,
+            "used": 0
+          },
+          "ILOGICE3_IDELMUXE3": {
+            "available": 100,
+            "used": 0
+          },
+          "ILOGICE3_IFF": {
+            "available": 100,
+            "used": 0
+          },
+          "ILOGICE3_IFFDELMUXE3": {
+            "available": 100,
+            "used": 0
+          },
+          "ILOGICE3_IFFMUX": {
+            "available": 100,
+            "used": 0
+          },
+          "ILOGICE3_IMUX": {
+            "available": 100,
+            "used": 0
+          },
+          "ILOGICE3_REVUSED": {
+            "available": 100,
+            "used": 0
+          },
+          "ILOGICE3_SRUSED": {
+            "available": 100,
+            "used": 0
+          },
+          "ILOGICE3_ZHOLD_DELAY": {
+            "available": 100,
+            "used": 0
+          },
+          "ILOGICE3_ZHOLD_FABRIC_INV": {
+            "available": 100,
+            "used": 0
+          },
+          "ILOGICE3_ZHOLD_IFF_INV": {
+            "available": 100,
+            "used": 0
+          },
+          "INVERTER": {
+            "available": 120,
+            "used": 0
+          },
+          "IOB18M_DCITERMDISABLE_SEL": {
+            "available": 72,
+            "used": 0
+          },
+          "IOB18M_DIFFI_INUSED": {
+            "available": 72,
+            "used": 0
+          },
+          "IOB18M_DIFFO_OUTUSED": {
+            "available": 72,
+            "used": 0
+          },
+          "IOB18M_IBUFDISABLE_SEL": {
+            "available": 72,
+            "used": 0
+          },
+          "IOB18M_INBUF_DCIEN": {
+            "available": 72,
+            "used": 0
+          },
+          "IOB18M_IUSED": {
+            "available": 72,
+            "used": 0
+          },
+          "IOB18M_OUSED": {
+            "available": 72,
+            "used": 0
+          },
+          "IOB18M_OUTBUF_DCIEN": {
+            "available": 72,
+            "used": 0
+          },
+          "IOB18M_O_OUTUSED": {
+            "available": 72,
+            "used": 0
+          },
+          "IOB18M_TERM_OVERRIDE": {
+            "available": 72,
+            "used": 0
+          },
+          "IOB18M_TUSED": {
+            "available": 72,
+            "used": 0
+          },
+          "IOB18M_T_OUTUSED": {
+            "available": 72,
+            "used": 0
+          },
+          "IOB18S_DCITERMDISABLE_SEL": {
+            "available": 72,
+            "used": 0
+          },
+          "IOB18S_DIFFI_INUSED": {
+            "available": 72,
+            "used": 0
+          },
+          "IOB18S_DIFFO_INUSED": {
+            "available": 72,
+            "used": 0
+          },
+          "IOB18S_IBUFDISABLE_SEL": {
+            "available": 72,
+            "used": 0
+          },
+          "IOB18S_INBUF_DCIEN": {
+            "available": 72,
+            "used": 0
+          },
+          "IOB18S_IUSED": {
+            "available": 72,
+            "used": 0
+          },
+          "IOB18S_OINMUX": {
+            "available": 72,
+            "used": 0
+          },
+          "IOB18S_OUTBUF_DCIEN": {
+            "available": 72,
+            "used": 0
+          },
+          "IOB18S_OUTMUX": {
+            "available": 72,
+            "used": 0
+          },
+          "IOB18S_TERM_OVERRIDE": {
+            "available": 72,
+            "used": 0
+          },
+          "IOB18S_TINMUX": {
+            "available": 72,
+            "used": 0
+          },
+          "IOB18_DCITERMDISABLE_SEL": {
+            "available": 150,
+            "used": 0
+          },
+          "IOB18_DIFFI_INUSED": {
+            "available": 150,
+            "used": 0
+          },
+          "IOB18_IBUFDISABLE_SEL": {
+            "available": 150,
+            "used": 0
+          },
+          "IOB18_INBUF_DCIEN": {
+            "available": 150,
+            "used": 0
+          },
+          "IOB18_IUSED": {
+            "available": 150,
+            "used": 0
+          },
+          "IOB18_OUSED": {
+            "available": 150,
+            "used": 0
+          },
+          "IOB18_OUTBUF_DCIEN": {
+            "available": 150,
+            "used": 0
+          },
+          "IOB18_TERM_OVERRIDE": {
+            "available": 150,
+            "used": 0
+          },
+          "IOB18_TUSED": {
+            "available": 150,
+            "used": 0
+          },
+          "IOB33M_DIFFI_INUSED": {
+            "available": 48,
+            "used": 0
+          },
+          "IOB33M_DIFFO_OUTUSED": {
+            "available": 48,
+            "used": 0
+          },
+          "IOB33M_IBUFDISABLE_SEL": {
+            "available": 48,
+            "used": 0
+          },
+          "IOB33M_INBUF_EN": {
+            "available": 48,
+            "used": 0
+          },
+          "IOB33M_INTERMDISABLE_SEL": {
+            "available": 48,
+            "used": 0
+          },
+          "IOB33M_IUSED": {
+            "available": 48,
+            "used": 0
+          },
+          "IOB33M_OUSED": {
+            "available": 48,
+            "used": 0
+          },
+          "IOB33M_OUTBUF": {
+            "available": 48,
+            "used": 0
+          },
+          "IOB33M_O_OUTUSED": {
+            "available": 48,
+            "used": 0
+          },
+          "IOB33M_TERM_OVERRIDE": {
+            "available": 48,
+            "used": 0
+          },
+          "IOB33M_TUSED": {
+            "available": 48,
+            "used": 0
+          },
+          "IOB33M_T_OUTUSED": {
+            "available": 48,
+            "used": 0
+          },
+          "IOB33S_DIFFI_INUSED": {
+            "available": 48,
+            "used": 0
+          },
+          "IOB33S_DIFFO_INUSED": {
+            "available": 48,
+            "used": 0
+          },
+          "IOB33S_IBUFDISABLE_SEL": {
+            "available": 48,
+            "used": 0
+          },
+          "IOB33S_INBUF_EN": {
+            "available": 48,
+            "used": 0
+          },
+          "IOB33S_INTERMDISABLE_SEL": {
+            "available": 48,
+            "used": 0
+          },
+          "IOB33S_IUSED": {
+            "available": 48,
+            "used": 0
+          },
+          "IOB33S_OINMUX": {
+            "available": 48,
+            "used": 0
+          },
+          "IOB33S_OUTBUF": {
+            "available": 48,
+            "used": 0
+          },
+          "IOB33S_OUTMUX": {
+            "available": 48,
+            "used": 0
+          },
+          "IOB33S_TERM_OVERRIDE": {
+            "available": 48,
+            "used": 0
+          },
+          "IOB33S_TINMUX": {
+            "available": 48,
+            "used": 0
+          },
+          "IOB33_DIFFI_INUSED": {
+            "available": 100,
+            "used": 0
+          },
+          "IOB33_IBUFDISABLE_SEL": {
+            "available": 100,
+            "used": 0
+          },
+          "IOB33_INBUF_EN": {
+            "available": 100,
+            "used": 1
+          },
+          "IOB33_INTERMDISABLE_SEL": {
+            "available": 100,
+            "used": 0
+          },
+          "IOB33_IUSED": {
+            "available": 100,
+            "used": 0
+          },
+          "IOB33_OUSED": {
+            "available": 100,
+            "used": 0
+          },
+          "IOB33_OUTBUF": {
+            "available": 100,
+            "used": 1
+          },
+          "IOB33_TERM_OVERRIDE": {
+            "available": 100,
+            "used": 0
+          },
+          "IOB33_TUSED": {
+            "available": 100,
+            "used": 0
+          },
+          "ISERDESE2_CLKBINV": {
+            "available": 100,
+            "used": 0
+          },
+          "ISERDESE2_CLKDIVINV": {
+            "available": 100,
+            "used": 0
+          },
+          "ISERDESE2_CLKDIVPINV": {
+            "available": 100,
+            "used": 0
+          },
+          "ISERDESE2_CLKINV": {
+            "available": 100,
+            "used": 0
+          },
+          "ISERDESE2_DINV": {
+            "available": 100,
+            "used": 0
+          },
+          "ISERDESE2_ISERDESE2": {
+            "available": 100,
+            "used": 0
+          },
+          "ISERDESE2_OCLKBINV": {
+            "available": 100,
+            "used": 0
+          },
+          "ISERDESE2_OCLKINV": {
+            "available": 100,
+            "used": 0
+          },
+          "MMCME2_ADV_CLKINSELINV": {
+            "available": 5,
+            "used": 0
+          },
+          "MMCME2_ADV_MMCME2_ADV": {
+            "available": 5,
+            "used": 0
+          },
+          "MMCME2_ADV_PSENINV": {
+            "available": 5,
+            "used": 0
+          },
+          "MMCME2_ADV_PSINCDECINV": {
+            "available": 5,
+            "used": 0
+          },
+          "MMCME2_ADV_PWRDWNINV": {
+            "available": 5,
+            "used": 0
+          },
+          "MMCME2_ADV_RSTINV": {
+            "available": 5,
+            "used": 0
+          },
+          "NULLMUX": {
+            "available": 490,
+            "used": 0
+          },
+          "OLOGICE2_CLKINV": {
+            "available": 100,
+            "used": 0
+          },
+          "OLOGICE2_D1INV": {
+            "available": 100,
+            "used": 0
+          },
+          "OLOGICE2_D2INV": {
+            "available": 100,
+            "used": 0
+          },
+          "OLOGICE2_MISR": {
+            "available": 100,
+            "used": 0
+          },
+          "OLOGICE2_O1USED": {
+            "available": 100,
+            "used": 0
+          },
+          "OLOGICE2_OCEUSED": {
+            "available": 100,
+            "used": 0
+          },
+          "OLOGICE2_OFBUSED": {
+            "available": 100,
+            "used": 0
+          },
+          "OLOGICE2_OMUX": {
+            "available": 100,
+            "used": 0
+          },
+          "OLOGICE2_OQUSED": {
+            "available": 100,
+            "used": 0
+          },
+          "OLOGICE2_OREVUSED": {
+            "available": 100,
+            "used": 0
+          },
+          "OLOGICE2_OSRUSED": {
+            "available": 100,
+            "used": 0
+          },
+          "OLOGICE2_OUTFF": {
+            "available": 100,
+            "used": 0
+          },
+          "OLOGICE2_T1INV": {
+            "available": 100,
+            "used": 0
+          },
+          "OLOGICE2_T1USED": {
+            "available": 100,
+            "used": 0
+          },
+          "OLOGICE2_T2INV": {
+            "available": 100,
+            "used": 0
+          },
+          "OLOGICE2_TCEUSED": {
+            "available": 100,
+            "used": 0
+          },
+          "OLOGICE2_TFBUSED": {
+            "available": 100,
+            "used": 0
+          },
+          "OLOGICE2_TFF": {
+            "available": 100,
+            "used": 0
+          },
+          "OLOGICE2_TMUX": {
+            "available": 100,
+            "used": 0
+          },
+          "OLOGICE2_TQUSED": {
+            "available": 100,
+            "used": 0
+          },
+          "OLOGICE2_TREVUSED": {
+            "available": 100,
+            "used": 0
+          },
+          "OLOGICE2_TSRUSED": {
+            "available": 100,
+            "used": 0
+          },
+          "OLOGICE3_CLKINV": {
+            "available": 100,
+            "used": 0
+          },
+          "OLOGICE3_D1INV": {
+            "available": 100,
+            "used": 0
+          },
+          "OLOGICE3_D2INV": {
+            "available": 100,
+            "used": 0
+          },
+          "OLOGICE3_MISR": {
+            "available": 100,
+            "used": 0
+          },
+          "OLOGICE3_O1USED": {
+            "available": 100,
+            "used": 0
+          },
+          "OLOGICE3_OCEUSED": {
+            "available": 100,
+            "used": 0
+          },
+          "OLOGICE3_OFBUSED": {
+            "available": 100,
+            "used": 0
+          },
+          "OLOGICE3_OMUX": {
+            "available": 100,
+            "used": 0
+          },
+          "OLOGICE3_OQUSED": {
+            "available": 100,
+            "used": 0
+          },
+          "OLOGICE3_OREVUSED": {
+            "available": 100,
+            "used": 0
+          },
+          "OLOGICE3_OSRUSED": {
+            "available": 100,
+            "used": 0
+          },
+          "OLOGICE3_OUTFF": {
+            "available": 100,
+            "used": 0
+          },
+          "OLOGICE3_T1INV": {
+            "available": 100,
+            "used": 0
+          },
+          "OLOGICE3_T1USED": {
+            "available": 100,
+            "used": 0
+          },
+          "OLOGICE3_T2INV": {
+            "available": 100,
+            "used": 0
+          },
+          "OLOGICE3_TCEUSED": {
+            "available": 100,
+            "used": 0
+          },
+          "OLOGICE3_TFBUSED": {
+            "available": 100,
+            "used": 0
+          },
+          "OLOGICE3_TFF": {
+            "available": 100,
+            "used": 0
+          },
+          "OLOGICE3_TMUX": {
+            "available": 100,
+            "used": 0
+          },
+          "OLOGICE3_TQUSED": {
+            "available": 100,
+            "used": 0
+          },
+          "OLOGICE3_TREVUSED": {
+            "available": 100,
+            "used": 0
+          },
+          "OLOGICE3_TSRUSED": {
+            "available": 100,
+            "used": 0
+          },
+          "OSERDESE2_CLKBINV": {
+            "available": 100,
+            "used": 0
+          },
+          "OSERDESE2_CLKDIVBINV": {
+            "available": 100,
+            "used": 0
+          },
+          "OSERDESE2_CLKDIVFBINV": {
+            "available": 100,
+            "used": 0
+          },
+          "OSERDESE2_CLKDIVFINV": {
+            "available": 100,
+            "used": 0
+          },
+          "OSERDESE2_CLKDIVINV": {
+            "available": 100,
+            "used": 0
+          },
+          "OSERDESE2_CLKINV": {
+            "available": 100,
+            "used": 0
+          },
+          "OSERDESE2_D1INV": {
+            "available": 100,
+            "used": 0
+          },
+          "OSERDESE2_D2INV": {
+            "available": 100,
+            "used": 0
+          },
+          "OSERDESE2_D3INV": {
+            "available": 100,
+            "used": 0
+          },
+          "OSERDESE2_D4INV": {
+            "available": 100,
+            "used": 0
+          },
+          "OSERDESE2_D5INV": {
+            "available": 100,
+            "used": 0
+          },
+          "OSERDESE2_D6INV": {
+            "available": 100,
+            "used": 0
+          },
+          "OSERDESE2_D7INV": {
+            "available": 100,
+            "used": 0
+          },
+          "OSERDESE2_D8INV": {
+            "available": 100,
+            "used": 0
+          },
+          "OSERDESE2_OSERDESE2": {
+            "available": 100,
+            "used": 0
+          },
+          "OSERDESE2_T1INV": {
+            "available": 100,
+            "used": 0
+          },
+          "OSERDESE2_T2INV": {
+            "available": 100,
+            "used": 0
+          },
+          "OSERDESE2_T3INV": {
+            "available": 100,
+            "used": 0
+          },
+          "OSERDESE2_T4INV": {
+            "available": 100,
+            "used": 0
+          },
+          "PAD": {
+            "available": 490,
+            "used": 2
+          },
+          "PLLE2_ADV_CLKINSELINV": {
+            "available": 5,
+            "used": 0
+          },
+          "PLLE2_ADV_PLLE2_ADV": {
+            "available": 5,
+            "used": 0
+          },
+          "PLLE2_ADV_PWRDWNINV": {
+            "available": 5,
+            "used": 0
+          },
+          "PLLE2_ADV_RSTINV": {
+            "available": 5,
+            "used": 0
+          },
+          "PS7_PS7": {
+            "available": 1,
+            "used": 0
+          },
+          "PSEUDO_GND": {
+            "available": 42636,
+            "used": 1
+          },
+          "PSEUDO_VCC": {
+            "available": 42636,
+            "used": 1
+          },
+          "PULL_OR_KEEP1": {
+            "available": 490,
+            "used": 0
+          },
+          "RAMB18E1_CLKARDCLKINV": {
+            "available": 530,
+            "used": 0
+          },
+          "RAMB18E1_CLKBWRCLKINV": {
+            "available": 530,
+            "used": 0
+          },
+          "RAMB18E1_ENARDENINV": {
+            "available": 530,
+            "used": 0
+          },
+          "RAMB18E1_ENBWRENINV": {
+            "available": 530,
+            "used": 0
+          },
+          "RAMB18E1_RAMB18E1": {
+            "available": 530,
+            "used": 44
+          },
+          "RAMB18E1_REGCLKARDRCLKINV": {
+            "available": 530,
+            "used": 0
+          },
+          "RAMB18E1_REGCLKBINV": {
+            "available": 530,
+            "used": 0
+          },
+          "RAMB18E1_RSTRAMARSTRAMINV": {
+            "available": 530,
+            "used": 0
+          },
+          "RAMB18E1_RSTRAMBINV": {
+            "available": 530,
+            "used": 0
+          },
+          "RAMB18E1_RSTREGARSTREGINV": {
+            "available": 530,
+            "used": 0
+          },
+          "RAMB18E1_RSTREGBINV": {
+            "available": 530,
+            "used": 0
+          },
+          "RAMB36E1_CLKARDCLKLINV": {
+            "available": 265,
+            "used": 0
+          },
+          "RAMB36E1_CLKARDCLKUINV": {
+            "available": 265,
+            "used": 0
+          },
+          "RAMB36E1_CLKBWRCLKLINV": {
+            "available": 265,
+            "used": 0
+          },
+          "RAMB36E1_CLKBWRCLKUINV": {
+            "available": 265,
+            "used": 0
+          },
+          "RAMB36E1_ENARDENLINV": {
+            "available": 265,
+            "used": 0
+          },
+          "RAMB36E1_ENARDENUINV": {
+            "available": 265,
+            "used": 0
+          },
+          "RAMB36E1_ENBWRENLINV": {
+            "available": 265,
+            "used": 0
+          },
+          "RAMB36E1_ENBWRENUINV": {
+            "available": 265,
+            "used": 0
+          },
+          "RAMB36E1_RAMB36E1": {
+            "available": 265,
+            "used": 8
+          },
+          "RAMB36E1_REGCLKARDRCLKLINV": {
+            "available": 265,
+            "used": 0
+          },
+          "RAMB36E1_REGCLKARDRCLKUINV": {
+            "available": 265,
+            "used": 0
+          },
+          "RAMB36E1_REGCLKBLINV": {
+            "available": 265,
+            "used": 0
+          },
+          "RAMB36E1_REGCLKBUINV": {
+            "available": 265,
+            "used": 0
+          },
+          "RAMB36E1_RSTRAMARSTRAMLINV": {
+            "available": 265,
+            "used": 0
+          },
+          "RAMB36E1_RSTRAMARSTRAMUINV": {
+            "available": 265,
+            "used": 0
+          },
+          "RAMB36E1_RSTRAMBLINV": {
+            "available": 265,
+            "used": 0
+          },
+          "RAMB36E1_RSTRAMBUINV": {
+            "available": 265,
+            "used": 0
+          },
+          "RAMB36E1_RSTREGARSTREGLINV": {
+            "available": 265,
+            "used": 0
+          },
+          "RAMB36E1_RSTREGARSTREGUINV": {
+            "available": 265,
+            "used": 0
+          },
+          "RAMB36E1_RSTREGBLINV": {
+            "available": 265,
+            "used": 0
+          },
+          "RAMB36E1_RSTREGBUINV": {
+            "available": 265,
+            "used": 0
+          },
+          "RAMBFIFO36E1_CLKARDCLKLINV": {
+            "available": 265,
+            "used": 0
+          },
+          "RAMBFIFO36E1_CLKARDCLKUINV": {
+            "available": 265,
+            "used": 0
+          },
+          "RAMBFIFO36E1_CLKBWRCLKLINV": {
+            "available": 265,
+            "used": 0
+          },
+          "RAMBFIFO36E1_CLKBWRCLKUINV": {
+            "available": 265,
+            "used": 0
+          },
+          "RAMBFIFO36E1_ENARDENLINV": {
+            "available": 265,
+            "used": 0
+          },
+          "RAMBFIFO36E1_ENARDENUINV": {
+            "available": 265,
+            "used": 0
+          },
+          "RAMBFIFO36E1_ENBWRENLINV": {
+            "available": 265,
+            "used": 0
+          },
+          "RAMBFIFO36E1_ENBWRENUINV": {
+            "available": 265,
+            "used": 0
+          },
+          "RAMBFIFO36E1_RAMBFIFO36E1": {
+            "available": 265,
+            "used": 0
+          },
+          "RAMBFIFO36E1_REGCLKARDRCLKLINV": {
+            "available": 265,
+            "used": 0
+          },
+          "RAMBFIFO36E1_REGCLKARDRCLKUINV": {
+            "available": 265,
+            "used": 0
+          },
+          "RAMBFIFO36E1_REGCLKBLINV": {
+            "available": 265,
+            "used": 0
+          },
+          "RAMBFIFO36E1_REGCLKBUINV": {
+            "available": 265,
+            "used": 0
+          },
+          "RAMBFIFO36E1_RSTRAMARSTRAMLRSTINV": {
+            "available": 265,
+            "used": 0
+          },
+          "RAMBFIFO36E1_RSTRAMARSTRAMUINV": {
+            "available": 265,
+            "used": 0
+          },
+          "RAMBFIFO36E1_RSTRAMBLINV": {
+            "available": 265,
+            "used": 0
+          },
+          "RAMBFIFO36E1_RSTRAMBUINV": {
+            "available": 265,
+            "used": 0
+          },
+          "RAMBFIFO36E1_RSTREGARSTREGLINV": {
+            "available": 265,
+            "used": 0
+          },
+          "RAMBFIFO36E1_RSTREGARSTREGUINV": {
+            "available": 265,
+            "used": 0
+          },
+          "RAMBFIFO36E1_RSTREGBLINV": {
+            "available": 265,
+            "used": 0
+          },
+          "RAMBFIFO36E1_RSTREGBUINV": {
+            "available": 265,
+            "used": 0
+          },
+          "SELMUX2_1": {
+            "available": 59350,
+            "used": 10
+          },
+          "SLICE_FFX": {
+            "available": 157200,
+            "used": 29803
+          },
+          "SLICE_LUTX": {
+            "available": 157200,
+            "used": 39180
+          },
+          "STARTUP_STARTUP": {
+            "available": 1,
+            "used": 0
+          },
+          "USR_ACCESS_USR_ACCESS": {
+            "available": 1,
+            "used": 0
+          }
+        },
+        "warnings": {
+          "Unconnected port BCOUT": {
+            "count": 864,
+            "example": "Warning: Port BCOUT1 connected to net $flatten\\decoder.$abc$1281309$aiger1281308$46615 on cell $flatten\\decoder.\\application.\\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\\__phi_halo_cell__SharedService_0__2_2_2_2_next_inst.\\__phi_halo_cell__SharedExecutor_0_next_inst.$mul$/Users/ecpeterson/Documents/code/erl_xls/experiments/07-openxc7/build/decoder-timing-20260920/validation/board-sized/.compiled-releases/abffe6feabf50dbb2bc912f59eee4581f022970d285a42facd7b424e4f1be738/phi_decoder_profile.v:4278$4798.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.sliceA.last.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.sliceB[0].mul has no connections"
+          },
+          "Unconnected port CARRYCASCOUT": {
+            "count": 48,
+            "example": "Warning: Port CARRYCASCOUT connected to net $flatten\\decoder.$abc$1281309$aiger1281308$46632 on cell $flatten\\decoder.\\application.\\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\\__phi_halo_cell__SharedService_0__2_2_2_2_next_inst.\\__phi_halo_cell__SharedExecutor_0_next_inst.$mul$/Users/ecpeterson/Documents/code/erl_xls/experiments/07-openxc7/build/decoder-timing-20260920/validation/board-sized/.compiled-releases/abffe6feabf50dbb2bc912f59eee4581f022970d285a42facd7b424e4f1be738/phi_decoder_profile.v:4278$4798.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.sliceA.last.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.sliceB[0].mul has no connections"
+          },
+          "Unconnected port ACOUT": {
+            "count": 480,
+            "example": "Warning: Port ACOUT22 connected to net $flatten\\decoder.$abc$1281309$aiger1281308$47440 on cell $flatten\\decoder.\\application.\\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\\__phi_halo_cell__SharedService_0__2_2_2_2_next_inst.\\__phi_halo_cell__SharedExecutor_0_next_inst.$mul$/Users/ecpeterson/Documents/code/erl_xls/experiments/07-openxc7/build/decoder-timing-20260920/validation/board-sized/.compiled-releases/abffe6feabf50dbb2bc912f59eee4581f022970d285a42facd7b424e4f1be738/phi_decoder_profile.v:4278$4798.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.sliceA.last.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mul_sliceB_last has no connections"
+          },
+          "Unconnected port PCOUT": {
+            "count": 768,
+            "example": "Warning: Port PCOUT22 connected to net $flatten\\decoder.$abc$1281309$aiger1281308$47545 on cell $flatten\\decoder.\\application.\\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\\__phi_halo_cell__SharedService_0__2_2_2_2_next_inst.\\__phi_halo_cell__SharedExecutor_0_next_inst.$mul$/Users/ecpeterson/Documents/code/erl_xls/experiments/07-openxc7/build/decoder-timing-20260920/validation/board-sized/.compiled-releases/abffe6feabf50dbb2bc912f59eee4581f022970d285a42facd7b424e4f1be738/phi_decoder_profile.v:4278$4798.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.sliceA.last.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mul_sliceB_last has no connections"
+          }
+        }
+      },
+      "statistics": {
+        "samples": 1,
+        "mean_mhz": 16.52,
+        "best_mhz": 16.52,
+        "worst_mhz": 16.52,
+        "population_variance_mhz_squared": 0,
+        "note": "One seed does not estimate seed sensitivity; timing coverage is incomplete."
+      }
+    }
+  },
+  "historical_comparison": {
+    "report": "z7030-decoder-2026-09-20.json",
+    "packaged_build_repairs": [
+      9503,
+      9536
+    ],
+    "packaged_build_completed_routes": 0,
+    "packaged_build_timeout_seconds": [
+      3600,
+      3600
+    ],
+    "last_overused_wires": [
+      1147,
+      9255
+    ],
+    "note": "Prior binaries use a different compiler/dependency build. The matched native baseline was placed but not routed, so this is not a controlled routing speedup measurement."
+  },
+  "limits": [
+    "Combinational LUT truth tables and placement checks do not prove route connectivity, sequential memory behavior, configuration encoding or board operation.",
+    "BRAM sequential timing is omitted; DSP delays are coarse; FF checks use fixed 0.1 ns values; speed grade is not calibrated."
+  ],
+  "artifact_root": "experiments/07-openxc7/build/lut-legality-20260921/"
+}

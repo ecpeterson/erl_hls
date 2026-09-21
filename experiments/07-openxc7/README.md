@@ -18,6 +18,8 @@ build `erl_hls` designs natively on Apple Silicon. It includes:
 
 The [configurable decoder profiles](decoder-profiles.md) measure smaller rectangular populations and either decoder plane without changing the D3 reference workload.
 
+The [XC7 LUT regression](lut_legality/README.md) builds isolated backend candidates and checks placement and emitted LUT functions before decoder routing experiments.
+
 The flow generates exact-package chip databases and runs Yosys,
 nextpnr-xilinx, Project X-Ray frame generation, and bitstream assembly. By
 default, openXC7 packages and outputs remain in ignored directories beneath
