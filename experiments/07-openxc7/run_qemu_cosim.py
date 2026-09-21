@@ -16,6 +16,7 @@ from pathlib import Path
 
 from cosim.runtime import compile_rtl, rtl_server
 from build_regsvc_rtl import sources as regsvc_sources
+from ethernet.dma_fixture import sources as ethernet_sources
 from dma.device_tree import mailbox_tree
 from prepare_te0715_boot import digest, fetch
 from prepare_te0715_dma import check_manifest, diagnostic
@@ -27,8 +28,10 @@ BUILD = ROOT / "build/cosim"
 
 
 def run(base: Path, kernel: Path, qemu: Path, runtime: Path | None, timeout: int,
-        regsvc: Path | None = None) -> Path:
+        regsvc: Path | None = None, ethernet: bool = False, yosys: Path | None = None) -> Path:
     """Require end-to-end guest/RTL witnesses, retaining logs and input provenance."""
+    if ethernet and (runtime or regsvc):
+        raise ValueError("Ethernet diagnostic is independent of routed/BEAM application fixtures")
     check_manifest(base)
     kernel_manifest = check_manifest(kernel)
     if kernel_manifest["base_kernel_sha256"] != digest(base / "zImage"):
@@ -45,19 +48,21 @@ def run(base: Path, kernel: Path, qemu: Path, runtime: Path | None, timeout: int
             raise ValueError("routed test requires the matching assembled SD runtime")
         if runtime_manifest["kernel_manifest_sha256"] != digest(kernel / "manifest.json"):
             raise ValueError("routed runtime and co-simulation must use the same kernel/driver")
-    stage = BUILD / ("routed" if regsvc else "run")
+    stage = BUILD / ("ethernet" if ethernet else "routed" if regsvc else "run")
     stage.mkdir(parents=True, exist_ok=True)
     (stage / "report.json").unlink(missing_ok=True)
-    compile_rtl(stage, regsvc_sources(regsvc) if regsvc else None)
-    diagnostic(stage / "check_dma_device")
+    compile_rtl(stage, regsvc_sources(regsvc) if regsvc else None,
+                ethernet_sources(stage, yosys) if ethernet else None)
+    diagnostic_name = "check_dma_packets" if ethernet else "check_dma_device"
+    diagnostic(stage / diagnostic_name, ROOT / "ethernet/check_dma_packets.c" if ethernet else None)
     lock = json.loads((ROOT / "runtime/packages.lock.json").read_text())
     entries = tar_entries(fetch(lock["rootfs"], ROOT / "build/runtime/downloads"))
-    init = ROOT / "cosim" / ("regsvc-init.sh" if regsvc else "guest-init.sh")
+    init = ROOT / "cosim" / ("ethernet-init.sh" if ethernet else "regsvc-init.sh" if regsvc else "guest-init.sh")
     entries += [("init", init.read_bytes(), stat.S_IFREG | 0o755),
                 ("hls_dma_mailbox.ko", (kernel / "hls_dma_mailbox.ko").read_bytes(), stat.S_IFREG | 0o644),
-                ("check_dma_device", (stage / "check_dma_device").read_bytes(), stat.S_IFREG | 0o755)]
+                (diagnostic_name, (stage / diagnostic_name).read_bytes(), stat.S_IFREG | 0o755)]
     (stage / "test.cpio.gz").write_bytes(gzip.compress(cpio(entries), mtime=0))
-    mailbox_tree(base / "system.dtb", stage / "system.dtb", debug=bool(regsvc))
+    mailbox_tree(base / "system.dtb", stage / "system.dtb", debug=bool(regsvc), ethernet=ethernet)
     if regsvc and digest(stage / "system.dtb") != runtime_manifest["files"]["system.dtb"]["sha256"]:
         raise ValueError("routed runtime and co-simulation device trees differ")
     command = [str(qemu), "-M", "xilinx-zynq-a9", "-m", "1024", "-smp", "1",
@@ -91,7 +96,11 @@ def run(base: Path, kernel: Path, qemu: Path, runtime: Path | None, timeout: int
                "PASS: blocked read woke on completed frame",
                "PASS: open reader woke with ENODEV on driver unbind",
                "PASS: Linux PL330 and Icarus mailbox integration"]
-    if regsvc:
+    if ethernet:
+        markers = ["PASS: Linux PL330 Ethernet frames, exact byte lengths, padding and partial reads",
+                   "PASS: committed receive survives link loss; fresh packets follow renegotiation",
+                   "PASS: Linux PL330 and Icarus Ethernet fixture integration"]
+    elif regsvc:
         markers = ["PASS: debug counters and trace remain usable while application RX is full",
                    "PASS: two DMA-routed actors, isolated registers and transaction-ID reuse",
                    "PASS: full 64-event debug trace over DMA, then empty drain",
@@ -107,8 +116,9 @@ def run(base: Path, kernel: Path, qemu: Path, runtime: Path | None, timeout: int
     if not match:
         raise RuntimeError("missing RTL completion counters")
     counts = {key: int(value) for key, value in re.findall(r"(\w+)=(\d+)", match[1])}
-    activity = ("steps", "irq_rises") if regsvc else ("steps", "stalls", "irq_rises")
-    if (not regsvc and counts["frames"] != (515 if runtime else 259)) or not all(counts[key] for key in activity):
+    activity = ("steps", "irq_rises") if regsvc or ethernet else ("steps", "stalls", "irq_rises")
+    expected_frames = 16 if ethernet else 515 if runtime else 259
+    if (not regsvc and counts["frames"] != expected_frames) or not all(counts[key] for key in activity):
         raise RuntimeError(f"missing RTL activity: {counts}")
     if regsvc:
         # Routed congestion evidence comes from public debug counters in the guest.
@@ -122,11 +132,13 @@ def run(base: Path, kernel: Path, qemu: Path, runtime: Path | None, timeout: int
               "device_tree_sha256": digest(stage / "system.dtb"),
               "regsvc_manifest_sha256": digest(regsvc / "manifest.json") if regsvc else None,
               "runtime_manifest_sha256": digest(runtime / "manifest.json") if runtime else None,
-              "rtl": counts, "guest_checks": markers,
+              "rtl": counts, "guest_checks": markers, "ethernet_fixture": ethernet,
               "inputs": {str(p.relative_to(ROOT)): digest(p) for p in
                          [Path(__file__), ROOT / "dma/zynq_dma_mailbox.v", ROOT / "dma/check_dma_device.c",
                           ROOT / "dma/device_tree.py", ROOT / "dma/zynq_dma_pair.v",
                           ROOT / "dma/zynq_regsvc_core.sv", ROOT / "dma/check_regsvc_dma.escript",
+                          *([*sorted((ROOT / "ethernet").glob("*")), stage / "packet-core.v",
+                             *sorted((stage / "generated").glob("*"))] if ethernet else []),
                           *sorted((ROOT / "cosim").glob("*"))] if p.is_file()}}
     path = stage / "report.json"
     path.write_text(json.dumps(report, indent=2) + "\n")
@@ -142,13 +154,16 @@ def main() -> None:
     parser.add_argument("--qemu", type=Path, default=BUILD / "qemu-build/qemu-system-arm")
     parser.add_argument("--runtime", type=Path)
     parser.add_argument("--regsvc", type=Path, help="verified RTL from build_regsvc_rtl.py")
+    parser.add_argument("--ethernet", action="store_true", help="optional packet-DMA/PCS/MAC test fixture")
+    parser.add_argument("--yosys", type=Path, help="process lowering tool for the Ethernet fixture")
     parser.add_argument("--timeout", type=int, default=120)
     args = parser.parse_args()
     if args.timeout < 1:
         parser.error("timeout must be positive")
     print(run(args.base.resolve(), args.kernel.resolve(), args.qemu.resolve(),
               args.runtime.resolve() if args.runtime else None, args.timeout,
-              args.regsvc.resolve() if args.regsvc else None))
+              args.regsvc.resolve() if args.regsvc else None, args.ethernet,
+              args.yosys.resolve() if args.yosys else None))
 
 
 if __name__ == "__main__":

@@ -1,12 +1,14 @@
 // One TX and one RX packet slot between AXI3 memory accesses and 32-bit streams.
 // Software fills TX RAM, then publishes its byte length; RX RAM is immutable
-// from TLAST until acknowledged. Frames contain 2..257 full words. No packet
+// from TLAST until acknowledged. Frames contain 2..MAX_WORDS full words, with
+// 2 <= MAX_WORDS <= 511. No packet
 // storage is reset: ownership/length prevent reads of uninitialized RX words.
 // One AXI transaction per direction, no WID interleaving. RAM supports aligned
 // 32-bit INCR bursts; registers require single beats. Errors return SLVERR;
 // writes before a later burst error may already have altered unpublished RAM.
 module zynq_dma_mailbox #(
-    parameter [31:0] BASE_ADDR = 32'h40000000
+    parameter [31:0] BASE_ADDR = 32'h40000000,
+    parameter MAX_WORDS = 257, parameter [31:0] IDENTITY = 32'h484c444d
 )(
     input wire clock, input wire reset_n,
     input wire [11:0] awid, input wire [31:0] awaddr,
@@ -30,6 +32,8 @@ module zynq_dma_mailbox #(
     input wire rx_valid, output wire rx_ready,
     output wire irq
 );
+    localparam [31:0] TX_END = 32'h1000 + 4*(MAX_WORDS-1);
+    localparam [31:0] RX_END = 32'h2000 + 4*(MAX_WORDS-1);
     localparam [1:0] IDLE = 0, FETCH = 1, SEND = 2;
     reg [1:0] tx_state, read_state;
     reg [8:0] tx_index, tx_words, rx_count, rx_words;
@@ -51,7 +55,7 @@ module zynq_dma_mailbox #(
     wire write_beat = wvalid && wready;
     wire register_write = write_beat && !write_bad && !write_ram && wstrb == 4'hf;
     wire publish = register_write && write_addr == 12 && !tx_busy &&
-                   wdata >= 8 && wdata <= 1028 && wdata[1:0] == 0;
+                   wdata >= 8 && wdata <= 4*MAX_WORDS && wdata[1:0] == 0;
     wire ack = register_write && write_addr == 20;
     wire set_mask = register_write && write_addr == 24;
     wire ram_write = write_beat && !write_bad && write_ram && !tx_busy;
@@ -67,7 +71,7 @@ module zynq_dma_mailbox #(
             for (lane = 0; lane < 4; lane = lane + 1)
                 if (wstrb[lane]) tx_ram[write_addr[10:2]][8*lane +: 8] <= wdata[8*lane +: 8];
         if (tx_state == FETCH) tx_q <= tx_ram[tx_index];
-        if (rx_valid && rx_ready && !rx_discard && rx_count < 257)
+        if (rx_valid && rx_ready && !rx_discard && rx_count < MAX_WORDS)
             rx_ram[rx_count] <= rx_data;
         if (read_state == FETCH && read_ram && !read_error)
             rx_q <= rx_ram[read_addr[10:2]];
@@ -115,11 +119,11 @@ module zynq_dma_mailbox #(
             // Oversized frames drain to TLAST without exposing a truncated packet.
             if (rx_valid && rx_ready) begin
                 if (rx_last) begin
-                    if (!rx_discard && rx_count >= 1 && rx_count < 257) begin
+                    if (!rx_discard && rx_count >= 1 && rx_count < MAX_WORDS) begin
                         rx_words <= rx_count + 1'b1; rx_full <= 1;
                     end else fault <= 1;
                     rx_count <= 0; rx_discard <= 0;
-                end else if (rx_count == 257) begin
+                end else if (rx_count == MAX_WORDS) begin
                     rx_discard <= 1; fault <= 1;
                 end else rx_count <= rx_count + 1'b1;
             end
@@ -128,9 +132,9 @@ module zynq_dma_mailbox #(
             if (awvalid && awready) begin
                 bid <= awid; write_active <= 1; write_left <= awlen;
                 write_addr <= aw_offset;
-                write_ram <= aw_offset >= 32'h1000 && aw_offset <= 32'h1400 && aw_end <= 32'h1400;
+                write_ram <= aw_offset >= 32'h1000 && aw_offset <= TX_END && aw_end <= TX_END;
                 write_error <= awsize != 2 || awlock != 0 || awaddr[1:0] != 0 ||
-                    !((awburst == 1 && aw_offset >= 32'h1000 && aw_offset <= 32'h1400 && aw_end <= 32'h1400 && !tx_busy) ||
+                    !((awburst == 1 && aw_offset >= 32'h1000 && aw_offset <= TX_END && aw_end <= TX_END && !tx_busy) ||
                       (awlen == 0 && (awburst == 0 || awburst == 1) && aw_offset < 32'h20));
             end
             if (write_beat) begin
@@ -145,9 +149,9 @@ module zynq_dma_mailbox #(
 
             if (arvalid && arready) begin
                 rid <= arid; read_addr <= ar_offset; read_left <= arlen;
-                read_ram <= ar_offset >= 32'h2000 && ar_offset <= 32'h2400 && ar_end <= 32'h2400;
+                read_ram <= ar_offset >= 32'h2000 && ar_offset <= RX_END && ar_end <= RX_END;
                 read_error <= arsize != 2 || arlock != 0 || araddr[1:0] != 0 ||
-                    !((arburst == 1 && ar_offset >= 32'h2000 && ar_offset <= 32'h2400 && ar_end <= 32'h2400 &&
+                    !((arburst == 1 && ar_offset >= 32'h2000 && ar_offset <= RX_END && ar_end <= RX_END &&
                        rx_full && ar_end < 32'h2000 + {21'b0, rx_words, 2'b00}) ||
                       (arlen == 0 && (arburst == 0 || arburst == 1) && ar_offset < 32'h20));
                 read_state <= FETCH;
@@ -156,7 +160,7 @@ module zynq_dma_mailbox #(
                 register_data <= 0; rresp <= read_error ? 2'b10 : 0;
                 if (!read_error && !read_ram) begin
                     case (read_addr)
-                        0: register_data <= 32'h484c444d; // "HLDM"
+                        0: register_data <= IDENTITY;
                         4: register_data <= 1;
                         8: register_data <= {28'b0, (rx_count != 0 || rx_discard), fault, rx_full, tx_busy};
                         16: register_data <= {21'b0, rx_words, 2'b00};

@@ -10,8 +10,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 
 
-def compile_rtl(stage: Path, regsvc_sources: list[Path] | None = None) -> Path:
-    """Build the loopback or supplied routed application, preserving diagnostics."""
+def compile_rtl(stage: Path, regsvc_sources: list[Path] | None = None,
+                ethernet_sources: list[Path] | None = None) -> Path:
+    """Build one loopback, routed application or Ethernet diagnostic fixture."""
+    if regsvc_sources and ethernet_sources:
+        raise ValueError("choose one co-simulation payload")
+    stage = stage.resolve()
     stage.mkdir(parents=True, exist_ok=True)
     with (stage / "compile.log").open("w") as output:
         subprocess.run(["iverilog-vpi", "--name=icarus_bridge", "-Wall", "-Wextra", "-Werror",
@@ -21,6 +25,9 @@ def compile_rtl(stage: Path, regsvc_sources: list[Path] | None = None) -> Path:
                   str(ROOT / "dma/zynq_regsvc_core.sv"), *map(str, regsvc_sources)]
                  if regsvc_sources else [])
         flags = ["-DREGSVC_COSIM"] if regsvc_sources else []
+        if ethernet_sources:
+            flags = ["-DETHERNET_COSIM"]
+            extra = [str(ROOT / "cosim/ethernet_fixture.sv"), *map(str, ethernet_sources)]
         subprocess.run(["iverilog", "-g2012", *flags, "-L", str(stage), "-m", "icarus_bridge",
                         "-s", "mailbox_cosim_tb", "-o", str(stage / "mailbox.vvp"),
                         str(ROOT / "cosim/mailbox_tb.sv"), str(ROOT / "dma/zynq_dma_mailbox.v"), *extra],
@@ -31,10 +38,11 @@ def compile_rtl(stage: Path, regsvc_sources: list[Path] | None = None) -> Path:
 @contextlib.contextmanager
 def rtl_server(stage: Path, socket: Path, log: Path) -> Iterator[subprocess.Popen]:
     """Start one isolated RTL peer, wait for its socket, and always reap it on exit."""
+    stage, socket, log = stage.resolve(), socket.resolve(), log.resolve()
     env = dict(os.environ, HLS_COSIM_SOCKET=str(socket))
     with log.open("w") as output:
         process = subprocess.Popen(["vvp", "-M", str(stage), str(stage / "mailbox.vvp")],
-                                   env=env, stdout=output, stderr=subprocess.STDOUT)
+                                   cwd=stage, env=env, stdout=output, stderr=subprocess.STDOUT)
         try:
             deadline = time.monotonic() + 5
             while not socket.exists():

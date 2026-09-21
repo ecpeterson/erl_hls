@@ -58,10 +58,10 @@ def simulation_models(stage: Path, models: Path | None, cache: Path) -> list[Pat
     if models is None:
         return []
     root = Path(__file__).resolve().parent
-    cells, count = re.subn(r"\bmodule RAMB36E1\b.*?\bendmodule\b", "",
+    cells, count = re.subn(r"\bmodule RAMB(?:18|36)E1\b.*?\bendmodule\b", "",
                            models.read_text(), flags=re.S)
-    if count != 1:
-        raise ValueError("expected one RAMB36E1 black box")
+    if count != 2:
+        raise ValueError("expected RAMB18E1 and RAMB36E1 black boxes")
     (stage / "cells.v").write_text(cells)
     cache.mkdir(parents=True, exist_ok=True)
     lock = json.loads((root / "ethernet/models.lock.json").read_text())

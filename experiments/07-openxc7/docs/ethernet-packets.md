@@ -1,6 +1,6 @@
 # 1000BASE-X packet endpoint
 
-This bring-up fixture sends and receives complete Ethernet frames through a MAC and 1000BASE-X PCS. It checks the digital packet path before connecting it to the [GTX lane](gtx.md), [carrier SFP](sfp-management.md) or [DMA mailbox](te0715-dma.md). It produces simulated and synthesized RTL, **not a board image**.
+This bring-up fixture sends and receives complete Ethernet frames through a MAC and 1000BASE-X PCS. It checks the digital packet path before physical [GTX](gtx.md) and [carrier SFP](sfp-management.md) qualification. An optional [DMA fixture](ethernet-dma.md) supplies arbitrary host packets. These tests produce simulated and synthesized RTL, **not a board image**.
 
 ## Frame service
 
@@ -48,6 +48,8 @@ Packet scenarios run before and after XC7 mapping; the latter uses AMD's functio
 
 The MAC/PCS is generated from pinned [LiteEth](../ethernet/sources.lock.json) components, with licenses retained alongside the generator. Before pre-mapping Icarus simulation, Yosys lowers processes and simplifies expressions to avoid an event-scheduling loop in the generated FSM blocks; this does not map FPGA primitives.
 
+Source preparation applies one local PCS correction: configuration/acknowledgement events are pulses, cleared between received configuration words. This prevents stale negotiation events from reasserting link-up while the input remains invalid. The regression requires sustained link-down before accepting fresh negotiation; observing a single down transition is insufficient. The correction is confined to fresh source extraction and does not alter the cached upstream archive.
+
 ## Hardware follow-through
 
-The [GTX adapter](ethernet-gtx.md) adds the pinned 20-bit/62.5-MHz gearbox and raw-pin mapping, with independent digital alignment tests. Physical clock/reset constraints, receiver synchronization, analog behavior and the external cable remain unqualified. This test does not demonstrate 125-MHz timing closure. Connecting DMA requires clock crossings and coherent diagnostics; connecting the SFP requires the board's RX/TX polarity corrections. A programmable image also still requires the missing Zynq GTX configuration database entries described in the GTX probe.
+The [GTX adapter](ethernet-gtx.md) adds the pinned 20-bit/62.5-MHz gearbox and raw-pin mapping, with independent digital alignment tests. Physical clock/reset constraints, receiver synchronization, analog behavior and the external cable remain unqualified. This test does not demonstrate 125-MHz timing closure. Application integration requires appropriate clock crossings and coherent diagnostics; SFP integration requires the board's RX/TX polarity corrections. A programmable image also requires the [Zynq GTX configuration reference](gtx-configuration.md).

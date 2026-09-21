@@ -33,14 +33,14 @@ def check_manifest(directory: Path) -> dict:
     return manifest
 
 
-def diagnostic(output: Path) -> None:
-    """Compile the board acceptance tool with the preceding boot build's static musl SDK."""
+def diagnostic(output: Path, source: Path | None = None) -> None:
+    """Compile an ARM diagnostic using the boot build's static musl SDK."""
     compiler = next((ROOT / "build/boot/compiler").glob("*/bin/arm-none-eabi-gcc"))
     musl = ROOT / "build/boot/work/musl-build"
     subprocess.run([str(compiler), f"-specs={musl / 'static-musl.specs'}", "-std=c11",
                     "-Wall", "-Wextra", "-Werror", "-Os", "-mcpu=cortex-a9", "-mfpu=vfpv3",
                     "-mfloat-abi=hard", "-static", "-Wl,-z,noexecstack",
-                    f"-Wl,-T,{musl / 'linux-static.ld'}", str(ROOT / "dma/check_dma_device.c"),
+                    f"-Wl,-T,{musl / 'linux-static.ld'}", str(source or ROOT / "dma/check_dma_device.c"),
                     "-o", str(output)], check=True)
     check_linux_elf(output.read_bytes())
 

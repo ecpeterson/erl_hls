@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
-/* Routed frame character device backed by PL330 copies to/from PL packet RAM. */
+/* Frame character device backed by PL330 copies to/from PL packet RAM.
+ * The Ethernet diagnostic profile is test wiring, not an application router. */
 #include <linux/clk.h>
 #include <linux/fs.h>
 #include <linux/interrupt.h>
@@ -13,6 +14,7 @@
 #include <linux/poll.h>
 #include <linux/slab.h>
 #include <linux/uaccess.h>
+#include <asm/unaligned.h>
 #include "hls_dma_copy.h"
 
 #define REG_ID 0
@@ -23,6 +25,8 @@
 #define REG_ACK 20
 #define REG_MASK 24
 #define REG_EVENTS 28
+#define ETH_MAX_BYTES 1514
+#define ETH_SLOT_BYTES (4 + ALIGN(ETH_MAX_BYTES, 4))
 #define TX_RAM 0x1000
 #define RX_RAM 0x2000
 #define TX_BUSY BIT(0)
@@ -42,9 +46,9 @@ struct hls_mailbox {
 	void __iomem *regs;
 	struct hls_dma_copy tx, rx;
 	dma_addr_t tx_ram, rx_ram;
-	size_t rx_bytes, rx_offset;
+	size_t rx_bytes, rx_offset, capacity;
 	fmode_t opened;
-	bool dead, failed;
+	bool dead, failed, ethernet;
 	u32 mask;
 	int irq;
 };
@@ -141,19 +145,25 @@ static ssize_t hls_write(struct file *file, const char __user *data, size_t byte
 {
 	struct hls_mailbox *box = file->private_data;
 	int error;
+	size_t prefix = box->ethernet ? 4 : 0;
+	size_t transfer = prefix + ALIGN(bytes, 4);
 
-	if (bytes < 8 || bytes > HLS_FRAME_BYTES || (bytes & 3))
+	if (box->ethernet ? (bytes < 14 || bytes > ETH_MAX_BYTES) :
+	    (bytes < 8 || bytes > HLS_FRAME_BYTES || (bytes & 3)))
 		return -EMSGSIZE;
 	if (mutex_lock_interruptible(&box->tx_lock))
 		return -ERESTARTSYS;
 	error = hls_error(box);
 	if (error)
 		goto out;
-	if (copy_from_user(box->tx.buffer, data, bytes)) {
+	if (copy_from_user(box->tx.buffer + prefix, data, bytes)) {
 		error = -EFAULT;
 		goto out;
 	}
-	if (bytes != 8 + 4 * ((u8 *)box->tx.buffer)[4]) {
+	if (box->ethernet) {
+		put_unaligned_le32(bytes, box->tx.buffer);
+		memset(box->tx.buffer + prefix + bytes, 0, transfer - prefix - bytes);
+	} else if (bytes != 8 + 4 * ((u8 *)box->tx.buffer)[4]) {
 		error = -EPROTO;
 		goto out;
 	}
@@ -167,13 +177,13 @@ static ssize_t hls_write(struct file *file, const char __user *data, size_t byte
 		error = hls_error(box);
 	if (error)
 		goto out;
-	error = hls_dma_transfer(&box->tx, box->tx_ram, box->tx.address, bytes);
+	error = hls_dma_transfer(&box->tx, box->tx_ram, box->tx.address, transfer);
 	if (error) {
 		hls_failed(box);
 		goto out;
 	}
 	if (!(error = hls_error(box)))
-		writel(bytes, box->regs + REG_TX_LENGTH);
+		writel(transfer, box->regs + REG_TX_LENGTH);
 out:
 	mutex_unlock(&box->tx_lock);
 	return error ?: bytes;
@@ -217,14 +227,24 @@ static ssize_t hls_read(struct file *file, char __user *data, size_t bytes, loff
 			goto out;
 		box->rx_bytes = readl(box->regs + REG_RX_LENGTH);
 		box->rx_offset = 0;
-		if (box->rx_bytes < 8 || box->rx_bytes > HLS_FRAME_BYTES || (box->rx_bytes & 3)) {
+		if (box->rx_bytes < 8 || box->rx_bytes > box->capacity || (box->rx_bytes & 3)) {
 			error = -EPROTO;
 			goto fail;
 		}
 		error = hls_dma_transfer(&box->rx, box->rx.address, box->rx_ram, box->rx_bytes);
 		if (error)
 			goto fail;
-		if (box->rx_bytes != 8 + 4 * ((u8 *)box->rx.buffer)[4]) {
+		if (box->ethernet) {
+			u32 length = get_unaligned_le32(box->rx.buffer);
+
+			if (length < 14 || length > ETH_MAX_BYTES ||
+			    box->rx_bytes != 4 + ALIGN(length, 4)) {
+				error = -EPROTO;
+				goto fail;
+			}
+			box->rx_offset = 4;
+			box->rx_bytes = 4 + length;
+		} else if (box->rx_bytes != 8 + 4 * ((u8 *)box->rx.buffer)[4]) {
 			error = -EPROTO;
 			goto fail;
 		}
@@ -289,6 +309,8 @@ static int hls_probe(struct platform_device *pdev)
 	box = kzalloc(sizeof(*box), GFP_KERNEL);
 	if (!box)
 		return -ENOMEM;
+	box->ethernet = of_device_is_compatible(pdev->dev.of_node, "erl-hls,ethernet-diagnostic-v1");
+	box->capacity = box->ethernet ? ETH_SLOT_BYTES : HLS_FRAME_BYTES;
 	kref_init(&box->refs);
 	mutex_init(&box->life_lock); mutex_init(&box->tx_lock); mutex_init(&box->rx_lock);
 	spin_lock_init(&box->irq_lock);
@@ -308,7 +330,7 @@ static int hls_probe(struct platform_device *pdev)
 		error = PTR_ERR(box->regs);
 		goto free;
 	}
-	if (readl(box->regs + REG_ID) != 0x484c444d || readl(box->regs + REG_ABI) != 1) {
+	if (readl(box->regs + REG_ID) != (box->ethernet ? 0x484c454d : 0x484c444d) || readl(box->regs + REG_ABI) != 1) {
 		error = -ENODEV;
 		goto free;
 	}
@@ -319,20 +341,20 @@ static int hls_probe(struct platform_device *pdev)
 	}
 	writel(0, box->regs + REG_MASK);
 	writel(TX_DONE, box->regs + REG_ACK);
-	error = hls_dma_acquire(&pdev->dev, "tx", &box->tx);
+	error = hls_dma_acquire(&pdev->dev, "tx", &box->tx, box->capacity);
 	if (error)
 		goto free;
-	error = hls_dma_acquire(&pdev->dev, "rx", &box->rx);
+	error = hls_dma_acquire(&pdev->dev, "rx", &box->rx, box->capacity);
 	if (error)
 		goto release_tx;
 	box->tx_ram = dma_map_resource(box->tx.device, resource->start + TX_RAM,
-				       HLS_FRAME_BYTES, DMA_FROM_DEVICE, 0);
+				       box->capacity, DMA_FROM_DEVICE, 0);
 	if (dma_mapping_error(box->tx.device, box->tx_ram)) {
 		error = -EIO;
 		goto release_rx;
 	}
 	box->rx_ram = dma_map_resource(box->rx.device, resource->start + RX_RAM,
-				       HLS_FRAME_BYTES, DMA_TO_DEVICE, 0);
+				       box->capacity, DMA_TO_DEVICE, 0);
 	if (dma_mapping_error(box->rx.device, box->rx_ram)) {
 		error = -EIO;
 		goto unmap_tx;
@@ -361,9 +383,9 @@ static int hls_probe(struct platform_device *pdev)
 free_irq:
 	free_irq(box->irq, box);
 unmap_rx:
-	dma_unmap_resource(box->rx.device, box->rx_ram, HLS_FRAME_BYTES, DMA_TO_DEVICE, 0);
+	dma_unmap_resource(box->rx.device, box->rx_ram, box->capacity, DMA_TO_DEVICE, 0);
 unmap_tx:
-	dma_unmap_resource(box->tx.device, box->tx_ram, HLS_FRAME_BYTES, DMA_FROM_DEVICE, 0);
+	dma_unmap_resource(box->tx.device, box->tx_ram, box->capacity, DMA_FROM_DEVICE, 0);
 release_rx:
 	hls_dma_release(&box->rx);
 release_tx:
@@ -390,8 +412,8 @@ static int hls_remove(struct platform_device *pdev)
 	writel(0, box->regs + REG_MASK);
 	spin_unlock_irqrestore(&box->irq_lock, flags);
 	free_irq(box->irq, box);
-	dma_unmap_resource(box->rx.device, box->rx_ram, HLS_FRAME_BYTES, DMA_TO_DEVICE, 0);
-	dma_unmap_resource(box->tx.device, box->tx_ram, HLS_FRAME_BYTES, DMA_FROM_DEVICE, 0);
+	dma_unmap_resource(box->rx.device, box->rx_ram, box->capacity, DMA_TO_DEVICE, 0);
+	dma_unmap_resource(box->tx.device, box->tx_ram, box->capacity, DMA_FROM_DEVICE, 0);
 	hls_dma_release(&box->rx); hls_dma_release(&box->tx);
 	mutex_unlock(&box->rx_lock); mutex_unlock(&box->tx_lock);
 	kref_put(&box->refs, hls_free);
@@ -424,7 +446,8 @@ static struct attribute *hls_attrs[] = { &dev_attr_status.attr, NULL };
 ATTRIBUTE_GROUPS(hls);
 
 static const struct of_device_id hls_match[] = {
-	{ .compatible = "erl-hls,dma-mailbox-v1" }, {}
+	{ .compatible = "erl-hls,dma-mailbox-v1" },
+	{ .compatible = "erl-hls,ethernet-diagnostic-v1" }, {}
 };
 MODULE_DEVICE_TABLE(of, hls_match);
 static struct platform_driver hls_driver = {
@@ -433,4 +456,4 @@ static struct platform_driver hls_driver = {
 };
 module_platform_driver(hls_driver);
 MODULE_LICENSE("GPL");
-MODULE_DESCRIPTION("PL330-backed routed frame mailbox for Zynq bring-up");
+MODULE_DESCRIPTION("PL330-backed frame mailbox for Zynq bring-up");

@@ -10,8 +10,10 @@ build `erl_hls` designs natively on Apple Silicon. It includes:
 - an [ARM Linux/OTP SD root](docs/te0715-runtime.md), with board diagnostics and target-side frame-I/O tests;
 - a [PL330 DMA packet loopback](docs/te0715-dma.md), with a matching source-built kernel, frame driver and board acceptance tools;
 - [Linux–RTL DMA co-simulation](docs/te0715-cosim.md), connecting QEMU's CPU/PL330 to the mailbox in Icarus;
+- an optional [packet DMA test fixture](docs/ethernet-dma.md), carrying arbitrary Linux frames through the PCS/MAC with independent clock-domain ownership;
 - a [complete TE0715 routed `regsvc` image](docs/te0715-regsvc.md), with two actors, independent application/debug DMA, and Linux/BEAM–RTL integration checks;
 - a [GTX/SFP prerequisite probe](docs/gtx.md), with native placement/routing, CPU diagnostics and explicit configuration-database blockers;
+- a [GTX feature audit and Z7030 reference bundle](docs/gtx-configuration.md), narrowing the missing bitstream prerequisites without installing speculative encodings;
 - a [carrier SFP identification probe](docs/sfp-management.md), with a standalone SD candidate, non-activating RGPIO check and EEPROM reader;
 - a [1000BASE-X packet regression](docs/ethernet-packets.md), with bounded frame storage, independent wire checks, [supervised clock-loss recovery](docs/ethernet-gtx.md#supervised-recovery) and a [board-facing compile probe](docs/ethernet-board.md); and
 - a [D3 decoder place-and-route benchmark](phi-timing.md) on `xc7z100ffg900-2`, with explicit timing-model coverage and placement-seed distributions.

@@ -206,6 +206,12 @@ module packet_tb;
         repeat(100) @(negedge clock_a); cut=1;
         wait(!up_a && !up_b && !rx_up_b);
         repeat(30) @(negedge clock_a);
+        // A down edge alone is insufficient: stale negotiation events must not
+        // reassert link-up without fresh configuration words from the peer.
+        repeat(10000) begin
+            @(negedge clock_a);
+            if(up_a || up_b || rx_up_b) $fatal(1,"link rose while incoming symbols remained invalid");
+        end
         if (accepted!=before_accepted) $fatal(1,"partial frame committed across link loss");
         cut=0;
         wait(up_a && up_b && rx_up_b);
