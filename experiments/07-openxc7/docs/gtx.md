@@ -1,6 +1,6 @@
-# TE0715 GTX compile probe
+# TE0715 GTX diagnostic
 
-This probe tests the openXC7 prerequisites for the TEF1002 SFP path: one GTX channel, its reference clock, reset sequencing and CPU-visible diagnostics. It generates a routed design, **not a programmable image**. Zynq GTX configuration-frame mappings and feature data remain incomplete. It implements neither Ethernet PCS/MAC nor SFP management.
+This probe tests the openXC7 prerequisites for the TEF1002 SFP path: one GTX channel, its reference clock, reset sequencing and CPU-visible diagnostics. The compile command generates a routed design; the separate [native assembly flow](gtx-configuration.md) produces checked bitstreams. [Matched SD kits](link-sd.md) use retained Vivado images as the first board baseline. Hardware operation remains unverified. It implements neither Ethernet PCS/MAC nor SFP management.
 
 The independent PS copper Ethernet and [PL330 DMA image](te0715-regsvc.md) do not depend on this GTX work.
 
@@ -50,7 +50,7 @@ bash experiments/07-openxc7/run_gtx_probe.sh
 
 The command downloads about 300 KiB of pinned logical metadata and structural site definitions, checks them against Zynq's sites, and builds a separate cached chip database. It never modifies the installed toolchain or the working Zynq bit database. Yosys checks primitive retention; nextpnr uses seed 1 and explicit control/user-clock constraints. Outputs live in `build/gtx-probe/`, including the source manifest, routed FASM, logs, timing report and `result.json`.
 
-The [recorded native result](../gtx-result.json) demonstrates synthesis and routing. The audit identifies missing frame mappings and segment-bit definitions for the used GTX channel/common/interface tiles. The command has no assembly step, even if a later database fills these entries: their contents would still need independent validation. Virtex metadata is reusable where site structure agrees; Virtex configuration-frame addresses are not evidence for Zynq addresses.
+The [initial native result](../gtx-result.json) records synthesis/routing and gaps in the base database. The [current assembly result](../results/native-gtx-2026-09-21.json) checks measured Zynq tile locations and a bounded database overlay against retained vendor images. The compile command itself has no assembly step. Virtex metadata is reusable where site structure agrees; Virtex configuration-frame addresses are not evidence for Zynq addresses.
 
 Digital regression runs through the existing PS-probe CI entry point. It exercises original/extended AXI registers and GTX sequencing/snapshots before and after Yosys synthesis, including stale lock, missing clocks, fault latching and coordinated restart. It does not simulate the analog GTX. Native timing covers only modeled paths; PS/GTX timing and physical CDC constraints remain unqualified. In particular, the counter snapshot bus must settle before its synchronized acknowledgement is consumed.
 
@@ -58,6 +58,6 @@ The static GTX attributes/reserved-port ties derive from the pinned LiteICLink s
 
 ## Remaining qualification
 
-1. Establish Zynq GTX frame addresses and validate donor feature encodings with the prepared [device-specific reference task](gtx-configuration.md) before enabling assembly.
+1. Verify the delivered reference clock and boot the [PRBS SD kit](link-sd.md); retain its manifest and UART evidence.
 2. Check physical clock/reset and CDC timing; qualify repeated startup, stopped-clock recovery and PRBS error detection on hardware.
-3. Integrate the prepared [carrier management](sfp-management.md) and [PCS/MAC gearbox adapter](ethernet-gtx.md); then qualify external polarity, loss-of-signal, module compatibility and sustained traffic.
+3. Qualify the [Ethernet board profiles](ethernet-board.md), external polarity, carrier controls, module compatibility and sustained traffic.

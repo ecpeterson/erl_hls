@@ -56,4 +56,4 @@ build/boot/compiler/arm-gnu-toolchain-14.3.rel1-darwin-arm64-arm-none-eabi/bin/a
   ethernet/probe_ethernet.c -o build/ethernet-board/probe_ethernet
 ```
 
-This builds a diagnostic binary, not an SD image. Use a matching PS boot configuration with the selected PL candidate. Physical transceiver qualification remains outstanding for both toolchains. PS Ethernet and the existing DMA bring-up path are independent of PL GTX qualification.
+This command builds only the diagnostic. Use the [matched SD kits](link-sd.md) to package it with the selected retained Vivado image and 25-MHz FSBL. Physical transceiver qualification remains outstanding for both toolchains. PS Ethernet and the existing DMA bring-up path are independent of PL GTX qualification.

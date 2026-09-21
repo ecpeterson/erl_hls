@@ -1,0 +1,128 @@
+{
+  "date": "2026-09-21",
+  "source_base": "4e2ea4c7bd9179e08cf34313c460b30ddadcdf57",
+  "scope": "SD packaging and ARM userspace validation of retained Vivado images; no board or analog qualification",
+  "part": "xc7z030sbg485-1",
+  "hardware_validated": false,
+  "rtl_changed": false,
+  "archive": {
+    "filename": "link-sd-kits-20260921.tar.gz",
+    "bytes": 162540999,
+    "sha256": "9a57fb9ffcb47c7a99976be91c3bc54bece55b86a8af907e8b0d868797845aa0",
+    "location": "Retained locally under experiments/07-openxc7/build/link-sd-20260921/"
+  },
+  "checks": {
+    "full_native_ps_probe_suite": "pass (including mapped GTX, Ethernet and DMA regressions)",
+    "base_boot_tests": 11,
+    "boot_container_checks_per_profile": 4,
+    "prbs_mock_cases": 12,
+    "arm_linux_uio": "pass for all three profiles; bypasses FSBL/U-Boot; no physical PL access",
+    "source_contracts": "pass, zero new/changed gaps",
+    "dialyzer": "pass"
+  },
+  "qemu": "QEMU emulator version 10.2.0",
+  "profiles": {
+    "prbs": {
+      "manifest_sha256": "136a1bb58c1198ebb8ededc6cb0e2dbeaa3b193c527f8e15da7a79d70e30d234",
+      "configuration": {
+        "uio": "erl-hls-gtx",
+        "program": "probe_gtx",
+        "source": "gtx",
+        "loopback": "near-end PMA",
+        "rx_polarity": 0,
+        "tx_polarity": 0
+      },
+      "fclk0_hz": 25000000,
+      "reference_clock_hz_required": 125000000,
+      "fsbl_programs_si5338": false,
+      "sd_files": {
+        "BOOT.bin": {
+          "bytes": 7151968,
+          "sha256": "88466b7bdb174ee7be0c8aa6d4fdcae3e4d587318faabcfe30d53752b1a94990"
+        },
+        "boot.scr": {
+          "bytes": 315,
+          "sha256": "b9715417edb25008a686418e8d9241b40b30b11b9da016c32085a2c19aaaa89f"
+        },
+        "image.ub": {
+          "bytes": 25186956,
+          "sha256": "02eeff2ce6d7330a70d48cf3baf0a57d02591172f094134ca77081ad796fc676"
+        },
+        "probe_gtx": {
+          "bytes": 36252,
+          "sha256": "37fb917ea3599e66c85bf21ff2dedb954ae7f1b2cbf92020ce98f9da1d0bc5e1"
+        }
+      },
+      "uart_sha256": "7f3ba338901b6324409770ea15b2de6211cbf974ec00605a8f63157e8ed1d1e1",
+      "test_log_sha256": "18f826fb56b850777f3b21a3eda08a33e4496cef3cef84f29efbaaab1cf29f0d"
+    },
+    "ethernet-loopback": {
+      "manifest_sha256": "f16cf8f90a8147826f8ab6f0fc6c56853088fa843119bb6dbd8f25933c6e285c",
+      "configuration": {
+        "uio": "erl-hls-ethernet",
+        "program": "probe_ethernet",
+        "source": "ethernet",
+        "loopback": "near-end PMA",
+        "rx_polarity": 0,
+        "tx_polarity": 0
+      },
+      "fclk0_hz": 25000000,
+      "reference_clock_hz_required": 125000000,
+      "fsbl_programs_si5338": false,
+      "sd_files": {
+        "BOOT.bin": {
+          "bytes": 7151976,
+          "sha256": "cc6ceab75217c770c144185b9a6c8c5f22090961f952cdce1919277b8572b32c"
+        },
+        "boot.scr": {
+          "bytes": 328,
+          "sha256": "a063d95632e1956325ef7b19e925ad00545668bfeea3441fe455aad9bbda3891"
+        },
+        "image.ub": {
+          "bytes": 25186976,
+          "sha256": "3889780fd455445f43cbb60e1bc5fd4f04d3c8003a4d17272b7656f7d507186e"
+        },
+        "probe_ethernet": {
+          "bytes": 32776,
+          "sha256": "6d2d11cf0a58899e95439322b82ae1148f1b5a5e738a1de0f8ba8a49fbb2a703"
+        }
+      },
+      "uart_sha256": "815325ce6ea718d8d05fc1ab4856512760034bea2e462849171b5098e0a98f49",
+      "test_log_sha256": "0d0e5d09a02b131bbaf45d675a316a32973a3d06b3c9e72ceb5a8cd43cd386ee"
+    },
+    "ethernet-external": {
+      "manifest_sha256": "260b679683a68c257d3cdc61671e855c866adf0e6fd9e20ce9335d6cb52d28a0",
+      "configuration": {
+        "uio": "erl-hls-ethernet",
+        "program": "probe_ethernet",
+        "source": "ethernet",
+        "loopback": "none",
+        "rx_polarity": 1,
+        "tx_polarity": 1
+      },
+      "fclk0_hz": 25000000,
+      "reference_clock_hz_required": 125000000,
+      "fsbl_programs_si5338": false,
+      "sd_files": {
+        "BOOT.bin": {
+          "bytes": 7151976,
+          "sha256": "e47ffe21315d413f92fc88da32a5e445aa8d096afd3b383248bbb4826b63bc4f"
+        },
+        "boot.scr": {
+          "bytes": 328,
+          "sha256": "88b2cfd4857b599e85cf1e6eaba67b6fa3ff64ebefa09ef6879061090fa454b2"
+        },
+        "image.ub": {
+          "bytes": 25186976,
+          "sha256": "f7a1e48a77b39157b55b8c0bfd322111a692225f9779846e568002830fd4fbb0"
+        },
+        "probe_ethernet": {
+          "bytes": 32776,
+          "sha256": "6d2d11cf0a58899e95439322b82ae1148f1b5a5e738a1de0f8ba8a49fbb2a703"
+        }
+      },
+      "uart_sha256": "56ea2dc6b4ea9e5862722fa4d8e4559abbf8bf0164808fd364ddbde9508d990d",
+      "test_log_sha256": "1e29982b578e51a81c19245b977839132d8002ab0b95d77847970d0e4dfc0691"
+    }
+  }
+}
