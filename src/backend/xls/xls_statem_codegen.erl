@@ -1033,7 +1033,7 @@ service(Spec) ->
         "}\n\n"
     ].
 
-%% Runs the register-backed shared mailbox adapter around the common executor.
+%% Emits RAM-backed scheduling, retaining one pending request per producer.
 -spec shared_service(spec()) -> iodata().
 shared_service(Spec) ->
     Reductions = maps:get(reductions, Spec, none),
@@ -1170,6 +1170,8 @@ shared_service(Spec) ->
     """,
         "\n", xls_scheduler_observation:sample(Spec),
     """
+        // Each producer is visited once. Select one slot's value before
+        // updating the array, keeping unrolled type inference linear.
         let capture_enabled = state.phase == SharedPhase::RUN;
         let (capture_tok, captured_pending, captured_pending_valid) =
           unroll_for! (producer, acc):
@@ -1182,20 +1184,13 @@ shared_service(Spec) ->
               recv_if_non_blocking(
                 acc.0,
                 request_in[producer],
-                capture_enabled && !acc.2[producer],
+                capture_enabled && !state.pending_valid[producer],
                 zero!<ScheduledRequest>());
             (
               next_tok,
-              if captured {
-                update(acc.1, producer, request)
-              } else {
-                acc.1
-              },
-              if captured {
-                update(acc.2, producer, u1:1)
-              } else {
-                acc.2
-              }
+              update(acc.1, producer,
+                if captured { request } else { state.pending[producer] }),
+              update(acc.2, producer, state.pending_valid[producer] || captured)
             )
           }((memory_tok, state.pending, state.pending_valid));
     """,
