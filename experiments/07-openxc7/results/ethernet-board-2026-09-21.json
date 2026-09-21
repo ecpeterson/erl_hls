@@ -1,0 +1,422 @@
+{
+  "date": "2026-09-21",
+  "part": "xc7z030sbg485-1",
+  "profiles": {
+    "loopback": {
+      "profile": {
+        "external": false,
+        "lane": "GTXE2_CHANNEL_X0Y1",
+        "mmcm_count": 2,
+        "frame_store_ramb36": 2,
+        "refclk_mhz": 125,
+        "line_rate_gbps": 1.25,
+        "full_clock_mhz": 125,
+        "half_clock_mhz": 62.5
+      },
+      "routed": true,
+      "bitstream_generated": false,
+      "hardware_qualified": false,
+      "runner_sha256": "d62e208afd418292d35209f0149bb14ce41cd0198586d9d0da181edac614863a",
+      "lut_checker_sha256": "844c6dd0cdc602d4b191dd279d3ee8d93abe8b89ceb5d48bb952d4374e157501",
+      "lut_check": {
+        "luts": 2387,
+        "placement": {
+          "5LUT": 1141,
+          "6LUT": 1246
+        },
+        "truth_table_rows": 78528,
+        "elided_memory_constant_origins": 0,
+        "elided_logic_constant_origins": 0
+      },
+      "seed": 1,
+      "router": "router2",
+      "yosys": "Yosys 0.63+173 (git sha1 66306a8ca-dirty, aarch64-apple-darwin23.5-clang++ 18.1.8 -fPIC -O3)",
+      "backend_sha256": "02490f35c4ec3c02672bd59d22d2023b6e80e69053de6892f48d7fce18230c21",
+      "chipdb_sha256": "12ff64f36c83bf853535cdedca6fa7cef35097bc18e92958afb7da7e07d1b588",
+      "inputs": {
+        "build/ethernet-board/generated/liteeth_packet_core.v": "1a78fe412c11c64085b15ee079cde46afb15649268468ef8e81b95b4167f1cbc",
+        "build/ethernet-board/generated/liteeth_pcs_gearbox.v": "6b9bedd4756ecccfb6559d35a3476e14771968c698eb0bcd93c8311621ca8c67",
+        "zynq_ps_probe.v": "d956d23ac44bbc9fc32f9c020c7c2a4de69aed8019360c2698c92a4af5fb4ead",
+        "zynq_ps_probe_top.v": "202ec98a6b71e5f1efad24255236b17dda4b08c0eba35396e1fc6936e935f57e",
+        "gtx/te0715_gtx_channel.v": "cf11d84ba3197c6d7d2f15fdd4b09ae4d0d8a163869ee24b78a2a6d314d27304",
+        "gtx/gtx_probe_control.v": "74a4f58f87fb48d8a9e81ba60af1c3f5a99fa1515cc5e99a24d87931022f7509",
+        "ethernet/frame_store.v": "8c3087d4e92c72ea0e111a7dac9701f4e45db18c784082df83e94ace87f228fe",
+        "ethernet/packet_endpoint.v": "052af02e0e8ecd9831fe962b32d705d35b5782efc8cbf0e6b7576655f44c5f75",
+        "ethernet/gtx_packet_endpoint.v": "e1d18e3fb598252059e781b129d777d7bc898b08f557f5378d7e8498b6ea687e",
+        "ethernet/clock_pair.v": "92fc7114355a4ae52ad4ec7cdc842735ae0b4032f4371adfce41aa7da6168930",
+        "ethernet/supervised_endpoint.v": "a10ace24148fb50f938f57803b161c3d0c6a0fea5de459684faffec9ddc1a631",
+        "ethernet/gtx_clocks.v": "ba451aae0b622cd457fb472bf511f2bdf5cfe61462fc55ca48698cb269d0276a",
+        "ethernet/snapshot.v": "384f6a04bac72bbc5e946f8dfb2fd89f6962547183ea1ed16f7e02fed3b22d2c",
+        "ethernet/probe_traffic.v": "23a4328f9a53d1e3dccb8b40544e413505e2f07ca111dd99e7296783993c9167",
+        "ethernet/te0715_ethernet_top.v": "7034c14416f2994647851e0af3af47f25d83c973f4d8b9a592d4be45aa72906f",
+        "ethernet/te0715_ethernet.xdc": "e2e08276ffeffc236580fc5465771e98447ea7a52d28ea7dc47037182b1abced"
+      },
+      "netlist_sha256": "463d7f827961f712a5e27520c0850a58e7b358c6de3e9b3be5511d9fec4bc2d0",
+      "database_audit": {
+        "gtx_tiles": [
+          "GTX_CHANNEL_1_X186Y17",
+          "GTX_COMMON_X186Y23",
+          "GTX_INT_INTERFACE_X73Y11",
+          "GTX_INT_INTERFACE_X73Y12",
+          "GTX_INT_INTERFACE_X73Y13",
+          "GTX_INT_INTERFACE_X73Y14",
+          "GTX_INT_INTERFACE_X73Y15",
+          "GTX_INT_INTERFACE_X73Y16",
+          "GTX_INT_INTERFACE_X73Y17",
+          "GTX_INT_INTERFACE_X73Y18",
+          "GTX_INT_INTERFACE_X73Y19",
+          "GTX_INT_INTERFACE_X73Y20",
+          "GTX_INT_INTERFACE_X73Y21",
+          "GTX_INT_INTERFACE_X73Y25"
+        ],
+        "missing_frame_mapping": [
+          "GTX_CHANNEL_1_X186Y17",
+          "GTX_COMMON_X186Y23",
+          "GTX_INT_INTERFACE_X73Y11",
+          "GTX_INT_INTERFACE_X73Y12",
+          "GTX_INT_INTERFACE_X73Y13",
+          "GTX_INT_INTERFACE_X73Y14",
+          "GTX_INT_INTERFACE_X73Y15",
+          "GTX_INT_INTERFACE_X73Y16",
+          "GTX_INT_INTERFACE_X73Y17",
+          "GTX_INT_INTERFACE_X73Y18",
+          "GTX_INT_INTERFACE_X73Y19",
+          "GTX_INT_INTERFACE_X73Y20",
+          "GTX_INT_INTERFACE_X73Y21",
+          "GTX_INT_INTERFACE_X73Y25"
+        ],
+        "missing_segbits_types": [
+          "GTX_CHANNEL_1",
+          "GTX_COMMON",
+          "GTX_INT_INTERFACE"
+        ],
+        "hardware_qualified": false,
+        "assembly_data_present": false
+      },
+      "synthesis_cells": {
+        "$scopeinfo": 33,
+        "BUFG": 9,
+        "CARRY4": 152,
+        "FDCE": 730,
+        "FDPE": 5,
+        "FDRE": 546,
+        "FDSE": 95,
+        "GTXE2_CHANNEL": 1,
+        "IBUF": 2,
+        "IBUFDS_GTE2": 1,
+        "INV": 188,
+        "LUT1": 2,
+        "LUT2": 300,
+        "LUT3": 145,
+        "LUT4": 207,
+        "LUT5": 271,
+        "LUT6": 239,
+        "MMCME2_BASE": 2,
+        "OBUF": 2,
+        "PS7": 1,
+        "RAM32M": 2,
+        "RAMB36E1": 2
+      },
+      "fasm_sha256": "b14eceaca75830a5af25047c1a122045a4ee38446791f263474bd66791d02e57",
+      "partial_timing": {
+        "critical_paths": [],
+        "fmax": {
+          "clock": {
+            "achieved": 92.19,
+            "constraint": 25.0
+          },
+          "rx_clock": {
+            "achieved": 123.72,
+            "constraint": 125.0
+          },
+          "rx_half_clock": {
+            "achieved": 519.48,
+            "constraint": 62.5
+          },
+          "tx_clock": {
+            "achieved": 106.55,
+            "constraint": 125.0
+          },
+          "tx_half_clock": {
+            "achieved": 591.37,
+            "constraint": 62.5
+          }
+        },
+        "utilization": {
+          "BUFGCTRL": {
+            "available": 32,
+            "used": 9
+          },
+          "CARRY4": {
+            "available": 19650,
+            "used": 156
+          },
+          "GTXE2_CHANNEL": {
+            "available": 4,
+            "used": 1
+          },
+          "IBUFDS_GTE2": {
+            "available": 2,
+            "used": 1
+          },
+          "MMCME2_ADV_MMCME2_ADV": {
+            "available": 5,
+            "used": 2
+          },
+          "PAD": {
+            "available": 512,
+            "used": 6
+          },
+          "PS7_PS7": {
+            "available": 1,
+            "used": 1
+          },
+          "PSEUDO_GND": {
+            "available": 42636,
+            "used": 1
+          },
+          "PSEUDO_VCC": {
+            "available": 42636,
+            "used": 1
+          },
+          "RAMB36E1_RAMB36E1": {
+            "available": 265,
+            "used": 2
+          },
+          "SLICE_FFX": {
+            "available": 157200,
+            "used": 1376
+          },
+          "SLICE_LUTX": {
+            "available": 157200,
+            "used": 2387
+          }
+        }
+      },
+      "modeled_targets_met": false,
+      "timing_coverage": "Partial only: missing BRAM sequential timing, calibrated FF delays and generated-clock/CDC constraints; not a safe-clock estimate",
+      "elapsed_seconds": 13.69,
+      "physical_lut_sites": 1645
+    },
+    "external": {
+      "profile": {
+        "external": true,
+        "lane": "GTXE2_CHANNEL_X0Y1",
+        "mmcm_count": 2,
+        "frame_store_ramb36": 2,
+        "refclk_mhz": 125,
+        "line_rate_gbps": 1.25,
+        "full_clock_mhz": 125,
+        "half_clock_mhz": 62.5
+      },
+      "routed": true,
+      "bitstream_generated": false,
+      "hardware_qualified": false,
+      "runner_sha256": "d62e208afd418292d35209f0149bb14ce41cd0198586d9d0da181edac614863a",
+      "lut_checker_sha256": "844c6dd0cdc602d4b191dd279d3ee8d93abe8b89ceb5d48bb952d4374e157501",
+      "lut_check": {
+        "luts": 2387,
+        "placement": {
+          "5LUT": 1141,
+          "6LUT": 1246
+        },
+        "truth_table_rows": 78528,
+        "elided_memory_constant_origins": 0,
+        "elided_logic_constant_origins": 0
+      },
+      "seed": 1,
+      "router": "router2",
+      "yosys": "Yosys 0.63+173 (git sha1 66306a8ca-dirty, aarch64-apple-darwin23.5-clang++ 18.1.8 -fPIC -O3)",
+      "backend_sha256": "02490f35c4ec3c02672bd59d22d2023b6e80e69053de6892f48d7fce18230c21",
+      "chipdb_sha256": "12ff64f36c83bf853535cdedca6fa7cef35097bc18e92958afb7da7e07d1b588",
+      "inputs": {
+        "build/ethernet-board/generated/liteeth_packet_core.v": "1a78fe412c11c64085b15ee079cde46afb15649268468ef8e81b95b4167f1cbc",
+        "build/ethernet-board/generated/liteeth_pcs_gearbox.v": "6b9bedd4756ecccfb6559d35a3476e14771968c698eb0bcd93c8311621ca8c67",
+        "zynq_ps_probe.v": "d956d23ac44bbc9fc32f9c020c7c2a4de69aed8019360c2698c92a4af5fb4ead",
+        "zynq_ps_probe_top.v": "202ec98a6b71e5f1efad24255236b17dda4b08c0eba35396e1fc6936e935f57e",
+        "gtx/te0715_gtx_channel.v": "cf11d84ba3197c6d7d2f15fdd4b09ae4d0d8a163869ee24b78a2a6d314d27304",
+        "gtx/gtx_probe_control.v": "74a4f58f87fb48d8a9e81ba60af1c3f5a99fa1515cc5e99a24d87931022f7509",
+        "ethernet/frame_store.v": "8c3087d4e92c72ea0e111a7dac9701f4e45db18c784082df83e94ace87f228fe",
+        "ethernet/packet_endpoint.v": "052af02e0e8ecd9831fe962b32d705d35b5782efc8cbf0e6b7576655f44c5f75",
+        "ethernet/gtx_packet_endpoint.v": "e1d18e3fb598252059e781b129d777d7bc898b08f557f5378d7e8498b6ea687e",
+        "ethernet/clock_pair.v": "92fc7114355a4ae52ad4ec7cdc842735ae0b4032f4371adfce41aa7da6168930",
+        "ethernet/supervised_endpoint.v": "a10ace24148fb50f938f57803b161c3d0c6a0fea5de459684faffec9ddc1a631",
+        "ethernet/gtx_clocks.v": "ba451aae0b622cd457fb472bf511f2bdf5cfe61462fc55ca48698cb269d0276a",
+        "ethernet/snapshot.v": "384f6a04bac72bbc5e946f8dfb2fd89f6962547183ea1ed16f7e02fed3b22d2c",
+        "ethernet/probe_traffic.v": "23a4328f9a53d1e3dccb8b40544e413505e2f07ca111dd99e7296783993c9167",
+        "ethernet/te0715_ethernet_top.v": "7034c14416f2994647851e0af3af47f25d83c973f4d8b9a592d4be45aa72906f",
+        "ethernet/te0715_ethernet.xdc": "e2e08276ffeffc236580fc5465771e98447ea7a52d28ea7dc47037182b1abced"
+      },
+      "netlist_sha256": "2247829b394ec5eb7deb788662e183ea198dcb2d4b0c08e38136fd1816cca3b3",
+      "database_audit": {
+        "gtx_tiles": [
+          "GTX_CHANNEL_1_X186Y17",
+          "GTX_COMMON_X186Y23",
+          "GTX_INT_INTERFACE_X73Y11",
+          "GTX_INT_INTERFACE_X73Y12",
+          "GTX_INT_INTERFACE_X73Y13",
+          "GTX_INT_INTERFACE_X73Y14",
+          "GTX_INT_INTERFACE_X73Y15",
+          "GTX_INT_INTERFACE_X73Y16",
+          "GTX_INT_INTERFACE_X73Y17",
+          "GTX_INT_INTERFACE_X73Y18",
+          "GTX_INT_INTERFACE_X73Y19",
+          "GTX_INT_INTERFACE_X73Y20",
+          "GTX_INT_INTERFACE_X73Y21",
+          "GTX_INT_INTERFACE_X73Y25"
+        ],
+        "missing_frame_mapping": [
+          "GTX_CHANNEL_1_X186Y17",
+          "GTX_COMMON_X186Y23",
+          "GTX_INT_INTERFACE_X73Y11",
+          "GTX_INT_INTERFACE_X73Y12",
+          "GTX_INT_INTERFACE_X73Y13",
+          "GTX_INT_INTERFACE_X73Y14",
+          "GTX_INT_INTERFACE_X73Y15",
+          "GTX_INT_INTERFACE_X73Y16",
+          "GTX_INT_INTERFACE_X73Y17",
+          "GTX_INT_INTERFACE_X73Y18",
+          "GTX_INT_INTERFACE_X73Y19",
+          "GTX_INT_INTERFACE_X73Y20",
+          "GTX_INT_INTERFACE_X73Y21",
+          "GTX_INT_INTERFACE_X73Y25"
+        ],
+        "missing_segbits_types": [
+          "GTX_CHANNEL_1",
+          "GTX_COMMON",
+          "GTX_INT_INTERFACE"
+        ],
+        "hardware_qualified": false,
+        "assembly_data_present": false
+      },
+      "synthesis_cells": {
+        "$scopeinfo": 33,
+        "BUFG": 9,
+        "CARRY4": 152,
+        "FDCE": 730,
+        "FDPE": 5,
+        "FDRE": 546,
+        "FDSE": 95,
+        "GTXE2_CHANNEL": 1,
+        "IBUF": 2,
+        "IBUFDS_GTE2": 1,
+        "INV": 188,
+        "LUT1": 2,
+        "LUT2": 300,
+        "LUT3": 145,
+        "LUT4": 207,
+        "LUT5": 271,
+        "LUT6": 239,
+        "MMCME2_BASE": 2,
+        "OBUF": 2,
+        "PS7": 1,
+        "RAM32M": 2,
+        "RAMB36E1": 2
+      },
+      "fasm_sha256": "efc33460eb5e39804b83614d2b8d78d41d05adf07e6f99a149ecb4725d31acdd",
+      "partial_timing": {
+        "critical_paths": [],
+        "fmax": {
+          "clock": {
+            "achieved": 92.19,
+            "constraint": 25.0
+          },
+          "rx_clock": {
+            "achieved": 123.72,
+            "constraint": 125.0
+          },
+          "rx_half_clock": {
+            "achieved": 519.48,
+            "constraint": 62.5
+          },
+          "tx_clock": {
+            "achieved": 106.55,
+            "constraint": 125.0
+          },
+          "tx_half_clock": {
+            "achieved": 591.37,
+            "constraint": 62.5
+          }
+        },
+        "utilization": {
+          "BUFGCTRL": {
+            "available": 32,
+            "used": 9
+          },
+          "CARRY4": {
+            "available": 19650,
+            "used": 156
+          },
+          "GTXE2_CHANNEL": {
+            "available": 4,
+            "used": 1
+          },
+          "IBUFDS_GTE2": {
+            "available": 2,
+            "used": 1
+          },
+          "MMCME2_ADV_MMCME2_ADV": {
+            "available": 5,
+            "used": 2
+          },
+          "PAD": {
+            "available": 512,
+            "used": 6
+          },
+          "PS7_PS7": {
+            "available": 1,
+            "used": 1
+          },
+          "PSEUDO_GND": {
+            "available": 42636,
+            "used": 1
+          },
+          "PSEUDO_VCC": {
+            "available": 42636,
+            "used": 1
+          },
+          "RAMB36E1_RAMB36E1": {
+            "available": 265,
+            "used": 2
+          },
+          "SLICE_FFX": {
+            "available": 157200,
+            "used": 1376
+          },
+          "SLICE_LUTX": {
+            "available": 157200,
+            "used": 2387
+          }
+        }
+      },
+      "modeled_targets_met": false,
+      "timing_coverage": "Partial only: missing BRAM sequential timing, calibrated FF delays and generated-clock/CDC constraints; not a safe-clock estimate",
+      "elapsed_seconds": 15.04,
+      "physical_lut_sites": 1645
+    }
+  },
+  "arm_diagnostic": {
+    "compiler": "Arm GNU 14.3.Rel1 Darwin arm64, static musl 1.2.5",
+    "sha256": "6d2d11cf0a58899e95439322b82ae1148f1b5a5e738a1de0f8ba8a49fbb2a703",
+    "linux_elf_checked": true,
+    "executed_on_arm": false
+  },
+  "upstream_database_check": {
+    "revision": "a90f27c1caefee5276f47440f4c730b50519a86f",
+    "missing_gtx_tile_frames": [
+      "GTX_CHANNEL_1_X186Y17",
+      "GTX_COMMON_X186Y23"
+    ],
+    "gtx_segbits_present": false
+  },
+  "prbs_refactor_comparison": {
+    "primitive_parameters": 199,
+    "preserved_primitive_ports": 174,
+    "added_unused_outputs": [
+      "RXCHARISK",
+      "RXDATA",
+      "RXDISPERR"
+    ],
+    "equal": true
+  }
+}

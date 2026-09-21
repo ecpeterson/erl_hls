@@ -2,6 +2,12 @@
 // It models digital bit ordering only: no analog GTX/CDR, elastic-buffer latency,
 // lock/reset timing or electrical behavior. The synthesized DUT is the endpoint.
 module gearbox_packet_fixture (
+`ifdef SUPERVISED
+    input wire control_clk, run, pll_lock, tx_done, rx_done,
+    input wire tx_half_enable, rx_half_enable,
+    output wire pll_reset, gt_reset, user_ready, tx_reset_n, rx_reset_n,
+    output wire [31:0] status,
+`endif
     input wire eth_tx_clk, eth_tx_rst, eth_rx_clk, eth_rx_rst,
     input wire [9:0] tbi_rx,
     output wire [9:0] tbi_tx,
@@ -18,17 +24,25 @@ module gearbox_packet_fixture (
     output wire [31:0] preamble_errors, crc_errors
 );
 
-    reg tx_half=0, rx_half=0;
+    reg tx_div=0, rx_div=0;
+`ifdef SUPERVISED
+    wire tx_half = tx_div && tx_half_enable;
+    wire rx_half = rx_div && rx_half_enable;
+    wire adapter_rx_reset = !rx_reset_n;
+`else
+    wire tx_half = tx_div, rx_half = rx_div;
+    wire adapter_rx_reset = eth_rx_rst;
+`endif
     integer bit_offset=0, phase=0;
     initial begin
         if ($value$plusargs("bit_offset=%d",bit_offset)) begin end
         if ($value$plusargs("half_phase=%d",phase)) begin end
-        tx_half=phase; rx_half=phase;
+        tx_div=phase; rx_div=phase;
     end
     // Ideal edge-aligned 2:1 clocks. Blocking clock assignment deliberately
     // triggers half-domain flops before the full-domain nonblocking updates.
-    always @(posedge eth_tx_clk) tx_half = !tx_half;
-    always @(posedge eth_rx_clk) rx_half = !rx_half;
+    always @(posedge eth_tx_clk) tx_div = !tx_div;
+    always @(posedge eth_rx_clk) rx_div = !rx_div;
     wire [15:0] tx_pins;
     wire [1:0] tx_val, tx_mode;
     wire [19:0] tx_word = {tx_mode[1],tx_val[1],tx_pins[15:8],
@@ -51,7 +65,7 @@ module gearbox_packet_fixture (
     // offset during packets. This behavioral oracle does not use PCSGearbox.
     always @(posedge eth_rx_clk) history <= {tbi_rx,history[59:10]};
     always @(posedge rx_half) begin
-        if (eth_rx_rst) begin displacement=bit_offset; rx_word<=0; end
+        if (adapter_rx_reset) begin displacement=bit_offset; rx_word<=0; end
         else begin
             if (gt_align)
                 for(candidate=0;candidate<20;candidate=candidate+1)
@@ -60,11 +74,21 @@ module gearbox_packet_fixture (
             rx_word <= history >> displacement;
         end
     end
+`ifdef SUPERVISED
+    ethernet_supervised_endpoint dut (
+        .control_clk(control_clk), .reset_n(!eth_tx_rst), .run(run),
+        .pll_lock(pll_lock), .tx_done(tx_done), .rx_done(rx_done),
+        .pll_reset(pll_reset), .gt_reset(gt_reset), .user_ready(user_ready),
+        .status(status), .tx_reset_n(tx_reset_n), .rx_reset_n(rx_reset_n),
+        .eth_tx_clk(eth_tx_clk), .eth_rx_clk(eth_rx_clk),
+        .eth_tx_half_clk(tx_half), .eth_rx_half_clk(rx_half),
+`else
     ethernet_gtx_packet_endpoint dut (
         .eth_tx_clk(eth_tx_clk), .eth_tx_rst(eth_tx_rst),
         .eth_rx_clk(eth_rx_clk), .eth_rx_rst(eth_rx_rst),
         .eth_tx_half_clk(tx_half), .eth_tx_half_rst(eth_tx_rst),
         .eth_rx_half_clk(rx_half), .eth_rx_half_rst(eth_rx_rst),
+`endif
         .gt_tx_data(tx_pins), .gt_tx_dispval(tx_val), .gt_tx_dispmode(tx_mode),
         .gt_rx_data({rx_word[17:10],rx_word[7:0]}),
         .gt_rx_charisk({rx_word[18],rx_word[8]}),

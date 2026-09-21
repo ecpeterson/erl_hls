@@ -13,6 +13,7 @@ from test_gtx_probe import run as check_gtx
 from test_sfp_probe import run as check_sfp
 from test_ethernet import run as check_ethernet
 from test_ethernet_gearbox import run as check_gearbox
+from test_ethernet_recovery import run as check_recovery
 
 
 def run(yosys: Path | None) -> None:
@@ -27,6 +28,7 @@ def run(yosys: Path | None) -> None:
     if yosys:
         check_ethernet(yosys, root / "build/ethernet")
         check_gearbox(yosys, root / "build/ethernet-gearbox")
+        check_recovery(yosys, root / "build/ethernet-recovery")
     source, bench = root / "zynq_ps_probe.v", root / "zynq_ps_probe_tb.sv"
     with tempfile.TemporaryDirectory(prefix="zynq-ps-probe-") as directory:
         stage = Path(directory)

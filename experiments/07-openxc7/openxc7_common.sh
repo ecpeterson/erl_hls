@@ -218,3 +218,23 @@ verify_bitstream() {
         -y -z -o "$output.bits" "$output.bit" > "$output-bitread.log"
     python3 "$experiment_root/check_zynq7030_bitstream.py" "$output.frames" "$output.bits"
 }
+
+# Reuse a separate checked logical GTX overlay and exact-package chip database.
+prepare_gtx() {
+    prepare_zynq7030
+    gtx_build="$build_root/gtx-probe"
+    mkdir -p "$gtx_build"
+    metadata=$(python3 "$experiment_root/gtx/prepare.py" "$prjxray_db/zynq7" \
+        "$openxc7/share/nextpnr/external/nextpnr-xilinx-meta/zynq7" "$gtx_build")
+    identity="$toolchain_id $database_id $(basename "$metadata")"
+    if [[ ! -s "$gtx_build/chipdb.bin" || ! -f "$gtx_build/chipdb.identity" ]] ||
+            [[ $(<"$gtx_build/chipdb.identity") != "$identity" ]]; then
+        "$openxc7/libexec/python3.12" "$nextpnr_python/bbaexport.py" \
+            --device xc7z030sbg485-1 --xray "$prjxray_db/zynq7" --metadata "$metadata" \
+            --bba "$gtx_build/chipdb.bba" > "$gtx_build/bbaexport.log" 2>&1
+        "$openxc7/bin/bbasm" -l "$gtx_build/chipdb.bba" "$gtx_build/chipdb.bin.tmp"
+        mv "$gtx_build/chipdb.bin.tmp" "$gtx_build/chipdb.bin"
+        printf '%s\n' "$identity" > "$gtx_build/chipdb.identity"
+        rm "$gtx_build/chipdb.bba"
+    fi
+}

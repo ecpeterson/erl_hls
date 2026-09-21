@@ -1,5 +1,5 @@
 {
-  "scope": "One full-duplex 1000BASE-X packet endpoint; no GTX, PS, host CDC, pins or timing qualification",
+  "scope": "Control-supervised raw GTX packet endpoint; modeled status and ideal related clocks; no MMCM, hard GTX, physical timing or board qualification",
   "sources": {
     "migen": {
       "revision": "e19524c963a8342952840983047557707fbe0b6a",
@@ -43,47 +43,99 @@
     "ethernet/sources.lock.json": "2b2afb348f12cbcb3a4b1bd3b828f020fd83777c7c656d9c5f6720646835b273",
     "ethernet/supervised_endpoint.v": "a10ace24148fb50f938f57803b161c3d0c6a0fea5de459684faffec9ddc1a631",
     "ethernet/te0715_ethernet.xdc": "e2e08276ffeffc236580fc5465771e98447ea7a52d28ea7dc47037182b1abced",
-    "ethernet/te0715_ethernet_top.v": "7034c14416f2994647851e0af3af47f25d83c973f4d8b9a592d4be45aa72906f"
+    "ethernet/te0715_ethernet_top.v": "7034c14416f2994647851e0af3af47f25d83c973f4d8b9a592d4be45aa72906f",
+    "gtx/gtx_probe_control.v": "74a4f58f87fb48d8a9e81ba60af1c3f5a99fa1515cc5e99a24d87931022f7509",
+    "zynq_ps_probe.v": "d956d23ac44bbc9fc32f9c020c7c2a4de69aed8019360c2698c92a4af5fb4ead"
   },
-  "runner_sha256": "1cf909d5567e4f0c631dbea9da18f037e36f3882b3106a5525e0166cf43bdb14",
-  "generated": {
-    "production/liteeth_packet_core.v": "1a78fe412c11c64085b15ee079cde46afb15649268468ef8e81b95b4167f1cbc",
-    "production/liteeth_packet_core_mem_6b5b.init": "e22c47be531b5bb60b52cad484ac222142ffe634e17784506cbacfa1efb67843",
-    "simulation/liteeth_packet_core.v": "7d220beda9dede6ab839e1cb911f41773c33949e966affa20e56225683bb5fbf",
-    "simulation/liteeth_packet_core_mem_6b5b.init": "e22c47be531b5bb60b52cad484ac222142ffe634e17784506cbacfa1efb67843"
-  },
+  "runner_sha256": "f80da36a910b41d941e6f9ec7eaea810e9d3e628c87f26c7ff3aea11ddfab719",
+  "packet_runner_sha256": "1cf909d5567e4f0c631dbea9da18f037e36f3882b3106a5525e0166cf43bdb14",
   "yosys": "Yosys 0.63+173 (git sha1 66306a8ca-dirty, aarch64-apple-darwin23.5-clang++ 18.1.8 -fPIC -O3)",
   "production_cells": {
-    "$scopeinfo": 3,
-    "BUFG": 2,
-    "CARRY4": 150,
-    "FDRE": 803,
-    "FDSE": 95,
-    "INV": 211,
-    "LUT1": 3,
-    "LUT2": 227,
-    "LUT3": 114,
-    "LUT4": 56,
-    "LUT5": 97,
-    "LUT6": 220,
-    "MUXF7": 19,
-    "MUXF8": 4,
-    "RAM32M": 2,
-    "RAMB36E1": 2
+    "baseline": {
+      "$scopeinfo": 5,
+      "BUFG": 4,
+      "CARRY4": 150,
+      "FDRE": 866,
+      "FDSE": 95,
+      "INV": 212,
+      "LUT1": 4,
+      "LUT2": 198,
+      "LUT3": 103,
+      "LUT4": 66,
+      "LUT5": 117,
+      "LUT6": 241,
+      "MUXF7": 43,
+      "MUXF8": 9,
+      "RAM32M": 2,
+      "RAMB36E1": 2
+    },
+    "candidate": {
+      "$scopeinfo": 18,
+      "BUFG": 5,
+      "CARRY4": 190,
+      "FDCE": 189,
+      "FDPE": 2,
+      "FDRE": 866,
+      "FDSE": 95,
+      "INV": 852,
+      "LUT2": 280,
+      "LUT3": 143,
+      "LUT4": 84,
+      "LUT5": 207,
+      "LUT6": 265,
+      "MUXF7": 29,
+      "MUXF8": 4,
+      "RAM32M": 2,
+      "RAMB36E1": 2
+    }
   },
-  "checks": [
-    "19 pinned upstream PCS tests",
-    "independent wire encoding/disparity/FCS/IFG",
-    "consumer backpressure and two-slot overflow",
-    "TX/RX frame bounds",
-    "bad preamble/FCS rejection",
-    "full-duplex traffic with 100-ppm peer clock offset",
-    "link loss during traffic, committed RX preservation, renegotiation",
-    "no undriven nets or combinational SCCs",
-    "identical frame scenarios before and after XC7 mapping with AMD BRAM model",
-    "admission/release races, 5000-byte overflow, sticky error, partial abort, flush",
-    "two RAMB36E1 retained with production negotiation timers"
+  "packet_runs": [
+    {
+      "mapped": false,
+      "half_phase": 0,
+      "log_sha256": "ac7af8d507319474860a041b4c52f448b330006ceda0cf2d6bb9b54df6a5fda6"
+    },
+    {
+      "mapped": false,
+      "half_phase": 1,
+      "log_sha256": "36681a4fbcd3f04ecc4694579356c81455926f6991163f763da57e146a8c545f"
+    },
+    {
+      "mapped": true,
+      "half_phase": 0,
+      "log_sha256": "ac7af8d507319474860a041b4c52f448b330006ceda0cf2d6bb9b54df6a5fda6"
+    },
+    {
+      "mapped": true,
+      "half_phase": 1,
+      "log_sha256": "36681a4fbcd3f04ecc4694579356c81455926f6991163f763da57e146a8c545f"
+    }
   ],
-  "elapsed_seconds": 35.18,
+  "board_profiles": [
+    {
+      "external": false,
+      "lane": "GTXE2_CHANNEL_X0Y1",
+      "mmcm_count": 2,
+      "frame_store_ramb36": 2,
+      "refclk_mhz": 125,
+      "line_rate_gbps": 1.25,
+      "full_clock_mhz": 125,
+      "half_clock_mhz": 62.5
+    },
+    {
+      "external": true,
+      "lane": "GTXE2_CHANNEL_X0Y1",
+      "mmcm_count": 2,
+      "frame_store_ramb36": 2,
+      "refclk_mhz": 125,
+      "line_rate_gbps": 1.25,
+      "full_clock_mhz": 125,
+      "half_clock_mhz": 62.5
+    }
+  ],
+  "simulation_parameter_overrides": {
+    "TIMEOUT_CYCLES": 2000
+  },
+  "elapsed_seconds": 139.33,
   "hardware_qualified": false
 }
