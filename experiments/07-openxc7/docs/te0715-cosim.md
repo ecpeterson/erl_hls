@@ -29,7 +29,7 @@ python3 run_qemu_cosim.py build/boot/candidate build/dma-kernel/share/output \
 
 The builder pins QEMU 10.2.0 and Ninja sources by SHA-256 and builds only the ARM system emulator. It attaches the PL window/IRQ to `xilinx-zynq-a9` when `HLS_COSIM_SOCKET` is set. Without that variable the machine is unchanged. Everything stays under `build/cosim/`; keep that directory for incremental builds. The tested native Apple Silicon cache occupies about 1.2 GiB. No x86 host or privileged host device access is required.
 
-The runner verifies kernel and runtime manifests, builds the current C diagnostic and boots a disposable initramfs. With `--runtime`, it also runs the existing ARM BEAM diagnostic from a temporary decompressed SD root; omit the option for C-only checks. It never modifies the candidate images and removes the temporary 512-MiB root on exit. UART, RTL and compiler logs, plus a result/input-hash report, remain in `build/cosim/run/`. The default whole-guest timeout is 120 seconds.
+The runner verifies kernel and runtime manifests, builds the current C diagnostic and boots a disposable initramfs. With `--runtime`, it requires the same kernel/modules and device tree as the kit, compares the loaded driver and C diagnostic with the installed loopback-image copies, and runs the ARM BEAM diagnostic from a temporary decompressed SD root; omit the option for C-only checks. It never modifies the candidate images and removes the temporary 512-MiB root on exit. UART, RTL and compiler logs, plus a result/input-hash report, remain in `build/cosim/run/`. The default whole-guest timeout is 120 seconds.
 
 ## Coverage
 

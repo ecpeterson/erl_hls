@@ -1,0 +1,145 @@
+{
+  "date": "2026-09-21",
+  "source_base": "1b4dacbb0f40e770d75c9e9ea9e904cdaaa0641c",
+  "scope": "Matched Vivado register/DMA SD kits and Linux/RTL software acceptance; no physical board qualification",
+  "module": "TE0715-05-71C33-A",
+  "carrier": "TEF1002-03-A",
+  "part": "xc7z030sbg485-1",
+  "hardware_validated": false,
+  "rtl_changed": false,
+  "archive": {
+    "filename": "ps-sd-kits-20260921.tar.gz",
+    "bytes": 117101749,
+    "sha256": "5fc5c4251e1d5ecf1424af8797334c85b53ea5f92d81047a565bd8ea5e6bbbce",
+    "location": "Retained locally under experiments/07-openxc7/build/ps-sd-20260921/",
+    "verified_files": 55
+  },
+  "fclk0_hz": 100000000,
+  "fsbl_programs_si5338": false,
+  "fsbl_partition_sha256": "c04ce7cf627d81b41d108af988c0b0f790bd465b8f67971bac5aacf54d451733",
+  "ps_init_sha256": "b984c818b828b4d9847360ac849acd5eb572e1d1973e4aef30c416a7015cd2e6",
+  "reference_sha256": "eb6be818f5a8aaf94fac69ddac5388e95e778dd0e36d9c3138bb5a981f3e1f76",
+  "checks": {
+    "portable_ps_kit_cases": 4,
+    "boot_container_cases": {
+      "register": 6,
+      "dma": 4
+    },
+    "kit_metadata_corruption": "reject wrong clock, programs and root partition for both profiles",
+    "register_arm_linux_uio": "pass; actual kit kernel/userspace with disposable test overlay",
+    "dma_sd_root": "pass; matched kernel/modules, ARM OTP 28, crypto and 23 runtime tests",
+    "dma_root_uncompressed_bytes": 536870912,
+    "dma_root_uncompressed_sha256": "e41019d03c8e267f0c2d7f3adccda759082b2c778386300dcb870cc0d9798728",
+    "dma_cosim": "pass; exact shipped module/C client, matching kernel/DTB, installed BEAM diagnostic",
+    "shared_link_packaging_and_clock_startup_regressions": "pass",
+    "source_contracts": "pass, zero new/changed gaps",
+    "dialyzer": "pass",
+    "hardware_limits": "QEMU bypasses BootROM/FSBL/U-Boot and PL configuration; physical DDR, GP0, interrupts, clock/reset and board timing remain unverified"
+  },
+  "cosim": {
+    "qemu_version": "QEMU emulator version 10.2.0",
+    "qemu_sha256": "263075186230290083044fac79b98299a7da29e1be9b3873c483956c04afb98d",
+    "wall_seconds": 27.071,
+    "kernel_manifest_sha256": "e7d360ff9d642f161208fbe55f8365c72dac47d657c759aea96123dda476031d",
+    "runtime_manifest_sha256": "b437b00f706023038c2ef150f122e3717a43f9c444468949edb08d4b2139e477",
+    "device_tree_sha256": "d1944adcbff77eb8849788814907f92b98c6edeea8841f8aa38e83b05d08df55",
+    "rtl": {
+      "reads": 86581,
+      "writes": 69404,
+      "steps": 9185,
+      "resets": 1,
+      "frames": 515,
+      "stalls": 44846,
+      "irq_rises": 515
+    },
+    "guest_checks": [
+      "PASS: all 256 routed frame sizes, partial reads and admission checks",
+      "PASS: full RX/TX backpressure and ordered drain",
+      "PASS: blocked read woke on completed frame",
+      "PASS: open reader woke with ENODEV on driver unbind",
+      "PASS: Linux PL330 and Icarus mailbox integration",
+      "PASS: co-simulation uses the shipped DMA diagnostic and kernel module",
+      "PASS: ARM BEAM raw-file DMA loopback, all 256 frame sizes"
+    ]
+  },
+  "profiles": {
+    "register": {
+      "manifest_sha256": "98309d2a82be7ca49e85e1d61a375bab7f3a02ed652e88581940256a693ce8d5",
+      "bitstream_sha256": "7176ec0b8c412c3c3b925dd5e9e95305fdd50fc55d658d3686a24814b274a4dc",
+      "sd_files": {
+        "BOOT.bin": {
+          "bytes": 7151972,
+          "sha256": "6a007e42ef506dedba7cdb2b8a665d046146c773b66d6e3f71d57fe3d951bf3e"
+        },
+        "boot.scr": {
+          "bytes": 325,
+          "sha256": "eb00c2469ed51c33f763046a708ca54f3dd8a5259925478a014e9556d3c3693e"
+        },
+        "image.ub": {
+          "bytes": 25186968,
+          "sha256": "3e158268fcad456733a25630e945cddabb8cc3bf854176d8cfdb5ae7e770751f"
+        },
+        "probe_zynq_ps": {
+          "bytes": 32324,
+          "sha256": "c015822c405ae1987bf8e7c82d7340ac879f1b26f06234c0863e691e5de117d8"
+        }
+      },
+      "root_partition": null,
+      "pl_sources": {
+        "zynq_ps_probe.v": "d956d23ac44bbc9fc32f9c020c7c2a4de69aed8019360c2698c92a4af5fb4ead",
+        "zynq_ps_probe_top.v": "202ec98a6b71e5f1efad24255236b17dda4b08c0eba35396e1fc6936e935f57e"
+      }
+    },
+    "dma": {
+      "manifest_sha256": "b437b00f706023038c2ef150f122e3717a43f9c444468949edb08d4b2139e477",
+      "bitstream_sha256": "2aa08b40ba77b5149023ae144283e1f9f92ca32c484e42b42ea3d657e2a24989",
+      "sd_files": {
+        "BOOT.bin": {
+          "bytes": 7152120,
+          "sha256": "4e21f58241437359db32c0da10196f398ffb9645d38b0306b200dd58ca4bd218"
+        },
+        "boot.scr": {
+          "bytes": 436,
+          "sha256": "6e2ed340fac2dbda5b1405c5465e392f4ad6d88e68def8c1e522ea18fbf446d4"
+        },
+        "image.ub": {
+          "bytes": 4645468,
+          "sha256": "c376f97ffa1b4be676c36ca7e210d51534064536bd2e2b500599364821e5441c"
+        },
+        "rootfs.ext4.gz": {
+          "bytes": 50242356,
+          "sha256": "843c61ee2e764c3523856aa63011f4a58322ea313affeaa826208c9cbbd2236e"
+        }
+      },
+      "root_partition": {
+        "number": 2,
+        "filesystem": "ext4",
+        "gzip_source": "rootfs.ext4.gz"
+      },
+      "pl_sources": {
+        "dma/zynq_dma_mailbox.v": "1b2ec093826afbedb718ff6562db44e58b9088bf7af142a36870c353daf5918f",
+        "dma/zynq_dma_top.v": "a005296f596652352b6bbfa1e016ba7ad1b26e02c655f6a82564142ad9183178"
+      }
+    }
+  },
+  "logs": {
+    "dialyzer.log": "7a27c735f5bb5df0aea781266b15275ecb68571256d0026af2479345eed04087",
+    "dma/bootgen.log": "67e30f351bf05a8f7c3b5fdcddd0dbdba6375c377539ec7394cf1ec57acbc154",
+    "dma/cosim/compile.log": "68edfaf5bd61e19f502dc9b64d8ceafdf09c12380e04a4985b183be8fbefa7f9",
+    "dma/cosim/rtl.log": "cd47e411a14bd6cb67f2586a5501be6f7d8102add8711e90d87e1584aa4d110c",
+    "dma/cosim/uart.log": "46745c769f790dd6194953c0d5dda9c2cf84ecaae3518883df4d99f215062fe0",
+    "dma/cosim-test.log": "aa31314a3a485f2df6c70ac05ba9d862961da31713616ff4a4e099276c3b492e",
+    "dma/install-uart.log": "fb9363067a2d49c0e30d72790ad176cc5bce25fc7d2da6eca845c2bc399025ac",
+    "dma/qemu-test.log": "e81add771026e5b58eab83f943619c647e8477ccbfa26a534e8c68ba80082b11",
+    "dma/recheck-uart.log": "cfd1bca7d040ba81547fb51854428f5ad9c63575a35f46dd06542336b229646e",
+    "dma/sd-root-uart.log": "d449d9f72c8b2b156de9a50ce1aa67a8ea955af37076fbbc93b572b57d9f750d",
+    "dma/test.log": "4ede9e509aea7192507febfc8d797f710bce47eee85a6bfa9acd0e3b1eb05130",
+    "dma-build.log": "5582f2cee4031dd7000b765ed6de61e07b2a36c4c9bd5773176164e82de2df12",
+    "register/bootgen.log": "8732bab78352e2492ce707513a905fd61c857817e121a398f146cfcfc4658326",
+    "register/qemu/uart.log": "f52e446e32a2d3acf24d4756e8a6fe0dc3221776966db740d4e6bfa00ae0df8c",
+    "register/qemu-test.log": "70214bdeef1b29b1af7d71e2d0691341ed1943d7a1aa43441b4d7803230f4e68",
+    "register/test.log": "b83f318a51aeda93e28f2c6c97eb66b6736973b9675ab3d702083d7536528d51",
+    "source-check.log": "9d732719cf2e06c6f611a88c678dc40b6bbaf383c0852f9484249d0d9044c69e",
+    "source-tests.log": "d911013bd5150000eb5d869a2cd17cc79ef9b8472756c7096b9532d5d3624bd3"
+  }
+}

@@ -2,6 +2,8 @@
 
 This SD candidate connects Linux/BEAM to a 32-bit PL stream on **TE0715-05-71C33-A / TEF1002-03-A**. The stream loops back inside the FPGA. It uses Zynq's built-in PL330 controller and Linux DMAengine; no Vivado DMA IP, custom DMAengine provider or HP port is required. Physical board operation remains unverified.
 
+For first-board tests, use the [matched vendor DMA kit](ps-sd.md). The native build below remains available for toolchain comparison; both use this driver and packet contract.
+
 ```text
 write(frame) → coherent DDR → PL330 / GP0 → TX packet RAM
                                                ↓ stream loopback

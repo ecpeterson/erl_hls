@@ -28,7 +28,7 @@ vivado -mode batch -source simulate.tcl -tclargs ethernet
 
 Retain the bundle and `results/`. Each implementation retains checkpoints, SDF, simulation netlist, effective constraints, timing/CDC/DRC reports and tool version. Failed timing leaves reports but prevents a board candidate. The compile-only `micro` and `phi` profiles never emit images. `vivado/evidence.py RESULTS_DIRECTORY` extracts timing, reviewed reset alerts and hard-primitive modes; `test_vivado.py` checks the evidence parser in CI.
 
-Register/DMA profiles require the matching 100-MHz FCLK0 boot configuration; PRBS/Ethernet require 25 MHz. The external Ethernet profile includes both carrier polarity inversions. A generated `.bit` is a PL candidate, not a complete SD image; use the existing [boot workflow](te0715-boot.md) and verify its PS configuration before deployment.
+Register/DMA profiles require the matching 100-MHz FCLK0 boot configuration; PRBS/Ethernet require 25 MHz. Complete [register/DMA kits](ps-sd.md) and [clock-startup link kits](clock-startup.md) package these profiles with their matched software. The external Ethernet profile includes both carrier polarity inversions. A loose `.bit` is a PL candidate, not a complete SD image; keep each kit's boot files together.
 
 ## Clocks and crossings
 

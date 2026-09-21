@@ -29,7 +29,7 @@ class InputTests(unittest.TestCase):
             reference.write_text(json.dumps({"profiles": {
                 name: {"artifacts_sha256": {"candidate.bit": digest(image) if name == "prbs" else "other"}}
                 for name in kit.PROFILES}}))
-            with patch.object(kit, "REFERENCE", reference), patch.object(kit, "bit_payload") as parse:
+            with patch.object(kit, "REFERENCE", reference), patch("boot.reference.bit_payload") as parse:
                 kit.verify_reference("prbs", image)
                 self.assertEqual(parse.call_count, 1)
                 for profile in ("ethernet-loopback", "ethernet-external", "missing"):

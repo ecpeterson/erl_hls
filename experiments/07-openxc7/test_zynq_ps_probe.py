@@ -26,6 +26,7 @@ def run(yosys: Path | None) -> None:
     subprocess.run([sys.executable, str(root / "test_te0715_runtime.py")], check=True)
     subprocess.run([sys.executable, str(root / "test_link_probe.py")], check=True)
     subprocess.run([sys.executable, str(root / "test_clock_startup.py")], check=True)
+    subprocess.run([sys.executable, str(root / "test_ps_probe.py")], check=True)
     check_dma(yosys)
     check_cosim()
     check_gtx(yosys)
