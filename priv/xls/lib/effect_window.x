@@ -2,6 +2,7 @@
 
 import arbitration;
 
+// One retained owner, a round-robin cursor and independently pending contenders.
 pub struct State<CONTENDER_COUNT: u32> {
   owner_valid: u1,
   owner: u32,
@@ -17,6 +18,7 @@ pub proc Arbiter<CONTENDER_COUNT: u32> {
   grant_out: chan<u1>[CONTENDER_COUNT] out;
   release_in: chan<u1>[CONTENDER_COUNT] in;
 
+  // Each contender owns one request, grant and release channel.
   config(
       request_in: chan<u1>[CONTENDER_COUNT] in,
       grant_out: chan<u1>[CONTENDER_COUNT] out,
@@ -25,8 +27,10 @@ pub proc Arbiter<CONTENDER_COUNT: u32> {
     (request_in, grant_out, release_in)
   }
 
+  // Reset clears ownership and every pending request.
   init { zero!<State<CONTENDER_COUNT>>() }
 
+  // Capture requests, retain ownership until release, then grant from the prior snapshot.
   next(state: State<CONTENDER_COUNT>) {
     let (request_tok, captured_pending) =
       unroll_for! (contender, acc):
@@ -34,15 +38,14 @@ pub proc Arbiter<CONTENDER_COUNT: u32> {
         let (next_tok, _request, received) = recv_if_non_blocking(
           acc.0,
           request_in[contender],
-          !acc.1[contender],
+          !state.pending[contender],
           u1:0);
         (
           next_tok,
-          if received {
-            update(acc.1, contender, u1:1)
-          } else {
-            acc.1
-          }
+          // Each index is visited once. Update its bit without branching over
+          // the whole accumulated array: that duplicates inference work at
+          // every unrolled iteration in the XLS type checker.
+          update(acc.1, contender, state.pending[contender] || received)
         )
       }((join(), state.pending));
     let (release_tok, released) =
