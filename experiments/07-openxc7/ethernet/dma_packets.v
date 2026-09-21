@@ -7,7 +7,7 @@
 // requiring quiescent AXI users. Directional active_n signals may stop/restart
 // Ethernet independently: incomplete RX is discarded; completed RX survives;
 // an unconsumed TX slot restarts from its beginning. Acceptance is not delivery.
-// Assert active_n low asynchronously; release it synchronously to that direction.
+// Directional reset assertion is asynchronous; release is synchronized locally.
 // No link recovery resets the host stream, mailbox or AXI transaction.
 module ethernet_dma_packets(
     input wire clock, reset_n, tx_clock, rx_clock,
@@ -29,9 +29,10 @@ module ethernet_dma_packets(
     localparam FETCH=0, SEND=1;
     localparam HEADER=0, RX_FETCH=1, RX_SEND=2;
     wire host_reset_n;
-    wire tx_cursor_reset_n = reset_n && tx_active_n;
-    wire rx_cursor_reset_n = reset_n && rx_active_n;
+    wire tx_cursor_reset_n, rx_cursor_reset_n;
     zynq_probe_reset hr(clock, reset_n, host_reset_n);
+    zynq_probe_reset tr(tx_clock, reset_n && tx_active_n, tx_cursor_reset_n);
+    zynq_probe_reset rr(rx_clock, reset_n && rx_active_n, rx_cursor_reset_n);
 
     // Host admission checks the length envelope before publishing the TX slot.
     reg collecting, invalid;
@@ -72,11 +73,11 @@ module ethernet_dma_packets(
         .reset_n(reset_n), .write_clock(clock), .read_clock(tx_clock),
         .write_enable(host_write && collecting && !invalid), .publish(tx_publish),
         .write_address(write_index), .write_data(host_tx_data), .write_length(incoming_length),
-        .write_ready(tx_free), .read_enable(tx_active_n && tx_pending && tx_state==FETCH),
+        .write_ready(tx_free), .read_enable(tx_cursor_reset_n && tx_pending && tx_state==FETCH),
         .release_packet(tx_release), .read_address(tx_index[10:2]), .read_data(tx_word),
         .read_length(tx_length), .read_valid(tx_pending)
     );
-    assign tx_valid = tx_active_n && tx_pending && tx_state==SEND;
+    assign tx_valid = tx_cursor_reset_n && tx_pending && tx_state==SEND;
     assign tx_data = tx_word[8*tx_index[1:0] +: 8];
     assign tx_last = tx_index == tx_length-1'b1;
     always @(posedge tx_clock or negedge tx_cursor_reset_n) begin
@@ -105,7 +106,7 @@ module ethernet_dma_packets(
         next_word = rx_count[1:0]==0 ? 0 : rx_word;
         next_word[8*rx_count[1:0] +: 8] = rx_data;
     end
-    assign rx_ready = rx_active_n && rx_free;
+    assign rx_ready = rx_cursor_reset_n && rx_free;
     always @(posedge rx_clock or negedge rx_cursor_reset_n) begin
         if (!rx_cursor_reset_n) begin rx_count<=0; rx_word<=0; rx_discard<=0; end
         else if (rx_transfer) begin
