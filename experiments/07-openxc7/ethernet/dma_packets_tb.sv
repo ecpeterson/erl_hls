@@ -85,8 +85,11 @@ module dma_packets_tb;
         repeat(4) @(negedge rx_clock); rx_active_n=1;
     endtask
 
-    integer sizes[0:12]='{14,15,16,17,60,61,64,255,256,257,1020,1513,1514};
+    integer sizes[0:12];
     initial begin
+        sizes[0]=14; sizes[1]=15; sizes[2]=16; sizes[3]=17;
+        sizes[4]=60; sizes[5]=61; sizes[6]=64; sizes[7]=255;
+        sizes[8]=256; sizes[9]=257; sizes[10]=1020; sizes[11]=1513; sizes[12]=1514;
         start;
         for(integer n=0;n<13;n=n+1) begin
             fork

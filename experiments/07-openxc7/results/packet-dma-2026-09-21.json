@@ -18,7 +18,7 @@
       "MUXF8": 19,
       "RAMB18E1": 2
     },
-    "elapsed_seconds": 14.53,
+    "elapsed_seconds": 14.62,
     "hardware_qualified": false,
     "yosys": "Yosys 0.63+173 (git sha1 66306a8ca-dirty, aarch64-apple-darwin23.5-clang++ 18.1.8 -fPIC -O3)",
     "inputs": {
@@ -37,7 +37,7 @@
       "ethernet/dma_fixture.py": "8e49d1ded62783294c719a44b0525b03404d20659f2fb693f33497d455be8275",
       "ethernet/cdc_slot.v": "601be0147a3f5c5134c193f502a181e3a958be2775cd6f7e48b04d57318063e0",
       "ethernet/dma_packets.v": "d2f99816f98685c85fe038412a86c7a6ffe3b8a10e6ecfa052141d3007b6ba7f",
-      "ethernet/dma_packets_tb.sv": "5ce54a02bb146e9d916b73226bbf59b74ba2e5ea174d866cea29034b86dfd06f",
+      "ethernet/dma_packets_tb.sv": "8a86a854b6d8cc68faba4efb7a9f142eedc05d347e555ab8a3ac6642923dc1b2",
       "ethernet/packet_endpoint.v": "052af02e0e8ecd9831fe962b32d705d35b5782efc8cbf0e6b7576655f44c5f75",
       "ethernet/frame_store.v": "8c3087d4e92c72ea0e111a7dac9701f4e45db18c784082df83e94ace87f228fe",
       "ethernet/sources.lock.json": "2b2afb348f12cbcb3a4b1bd3b828f020fd83777c7c656d9c5f6720646835b273",
