@@ -36,10 +36,11 @@ def check_store(stage: Path) -> None:
 
 
 def synthesize(yosys: Path, stage: Path, sources: list[Path], mapped: bool,
-               top: str = "ethernet_packet_endpoint") -> Path:
-    """Lower processes, optionally map XC7 cells, and reject undriven nets/loops."""
+               top: str = "ethernet_packet_endpoint", parameters: dict[str, int] | None = None) -> Path:
+    """Lower/map a top with optional timer overrides; reject undriven nets/loops."""
     output = stage / ("mapped.v" if mapped else "lowered.v")
     commands = ["read_verilog " + " ".join(f'"{path}"' for path in sources)]
+    commands += [f"chparam -set {key} {value} {top}" for key, value in (parameters or {}).items()]
     commands += ([f"synth_xilinx -family xc7 -top {top} -noiopad -flatten"]
                  if mapped else [f"hierarchy -top {top}", "proc", "opt"])
     commands += ["check -assert", "scc -expect 0", f'write_verilog -noattr "{output}"']
@@ -50,6 +51,21 @@ def synthesize(yosys: Path, stage: Path, sources: list[Path], mapped: bool,
     subprocess.run([str(yosys), "-Q", "-q", "-l", str(output.with_suffix(".log")),
                     "-p", "; ".join(commands)], check=True, cwd=stage, timeout=180)
     return output
+
+
+def simulation_models(stage: Path, models: Path | None, cache: Path) -> list[Path]:
+    """Supply functional XC7 cells, replacing the BRAM black box with AMD's model."""
+    if models is None:
+        return []
+    root = Path(__file__).resolve().parent
+    cells, count = re.subn(r"\bmodule RAMB36E1\b.*?\bendmodule\b", "",
+                           models.read_text(), flags=re.S)
+    if count != 1:
+        raise ValueError("expected one RAMB36E1 black box")
+    (stage / "cells.v").write_text(cells)
+    cache.mkdir(parents=True, exist_ok=True)
+    lock = json.loads((root / "ethernet/models.lock.json").read_text())
+    return [stage / "cells.v", *[fetch(pin, cache) for pin in lock.values()]]
 
 
 def simulate(stage: Path, rtl: Path, models: Path | None, cache: Path,
@@ -66,18 +82,8 @@ def simulate(stage: Path, rtl: Path, models: Path | None, cache: Path,
     if gearbox is not None:
         sources.append(root / "ethernet/gearbox_packet_fixture.sv")
         flags.append("-DPACKET_ENDPOINT=gearbox_packet_fixture")
+    sources += simulation_models(stage, models, cache)
     if models:
-        # cells_sim declares BRAM only as a black box. Exercise the actual mapped
-        # ports/modes with AMD's functional model, as the DMA regression does.
-        cells, count = re.subn(r"\bmodule RAMB36E1\b.*?\bendmodule\b", "",
-                               models.read_text(), flags=re.S)
-        if count != 1:
-            raise ValueError("expected one RAMB36E1 black box")
-        (stage / "cells.v").write_text(cells)
-        sources.append(stage / "cells.v")
-        cache.mkdir(parents=True, exist_ok=True)
-        lock = json.loads((root / "ethernet/models.lock.json").read_text())
-        sources += [fetch(pin, cache) for pin in lock.values()]
         flags += ["-s", "glbl"]
     executable = stage / "packet.vvp"
     subprocess.run(["iverilog", "-g2012", *flags, "-s", "packet_tb", "-o", str(executable),

@@ -24,12 +24,29 @@ Configure 20-bit TX/RX data, disable the hard 8b/10b codecs and PRBS, and use tw
 
 `TXCHARISK` stays zero. In this bypass mode, the named receive sidebands carry raw data, not decoded character/error flags. Connect `gt_align`, synchronized into the RX half-rate domain, to both comma-alignment enables. `restart` remains a PCS request in the TX full-rate domain; a transceiver controller must carry it to its control clock. The [GTX probe](gtx.md) remains a separate PRBS design.
 
+## Supervised recovery
+
+`ethernet_supervised_endpoint` adds a 25-MHz control-clock supervisor around the raw-pin endpoint. Supply the related user-clock pairs and GTX status; it supplies the existing [GTX startup/reset controls and status word](gtx.md#diagnostic-contract). Each direction's `done` input must require both GTX reset-done and its clock generator's lock. `run` belongs to the control clock; lock/done inputs are synchronized internally. Clock generators and the hard transceiver remain external.
+
+Packet reset remains asserted until fresh progress is observed on **all four** user clocks and startup completes. Loss of PLL lock, either qualified reset-done signal, or clock progress latches a fault. Stopped clocks are detected within 1,040 control cycles (41.6 µs at 25 MHz) in the tested clock profile, allowing the configured 1,024-cycle watchdog plus handshake latency. This checks clock progress, not frequency, phase, jitter or physical timing.
+
+| Event | Frame service |
+| --- | --- |
+| Ordinary PCS link loss, physical clocks healthy | TX is flushed; unfinished RX is aborted; completed RX frames remain available. PCS renegotiates. |
+| Physical fault, `run=0`, or global reset | Both directions reset; buffered frames and packet counters clear. Nothing resumes until explicit restart and negotiation. |
+
+`tx_reset_n` and `rx_reset_n` assert without needing their user clocks and release synchronously within their domains. The frame producer and consumer **must abandon any partial frame when their reset asserts**. External `tx_ready`/`rx_valid` are masked while reset is asserted; stale state inside a stopped domain cannot authorize a transfer. Queue/counter outputs are local-domain observations and are not meaningful during reset. As with any reset, a frame already partly consumed cannot be retracted; the consumer discards that prefix. This service provides no retransmission or delivery acknowledgement.
+
+To retry, hold `run=0` for at least one control-clock edge, restore the physical prerequisites, then set `run=1`. Recovered clocks or lock alone do not clear a latched fault. The PCS `restart` request remains in the TX clock domain and does not automatically reset the GTX; normal negotiation can issue it during startup. The caller needs the directional resets before consuming the link flags; these flags alone cannot diagnose a stopped clock.
+
+Run `python3 experiments/07-openxc7/test_ethernet_recovery.py --yosys /path/to/yosys`. The public-stream regression stops full/half clocks, removes lock/reset-done, interrupts host assembly and wire transmission, holds a completed frame under backpressure, rejects stale startup lock, and resets while RX is stopped. It repeats with both divide-by-two phases before and after XC7 mapping. [Measured area and input identities](../ethernet-recovery-result.json) compare the same production-timer packet core with and without supervision. Physical clock constraints, MMCM/GTX integration and board recovery remain unqualified.
+
 ## Evidence and remaining work
 
 Run `python3 experiments/07-openxc7/test_ethernet_gearbox.py --yosys /path/to/yosys`. It is also included in the PS-probe CI entry point. Downloaded sources are pinned; no Python package installation is required. See [native synthesis and checks](../ethernet-gearbox-result.json).
 
 An independent ideal serializer/comma-aligner tests all 20 initial bit offsets and both divide-by-two phases. Representative full packet scenarios run before and after XC7 mapping: full duplex, 100-ppm peer clock difference, stalled consumers, overflow, malformed frames, interrupted traffic, renegotiation and coordinated reset. The independent wire oracle checks symbol disparity, byte order, preamble, padding and FCS after the raw-pin mapping. Offset sweeps use a single checked frame to keep CI inexpensive.
 
-The model does not qualify GTX comma detection, analog clock recovery, elastic-buffer behavior, reset sequencing or MMCM phase/skew. A stopped recovered clock still needs control-domain detection and recovery; the PCS link flag alone cannot establish physical readiness. Hardware integration must supply those clock/reset controls, board polarity, physical constraints and the missing Zynq GTX configuration data. No 125-MHz timing closure or programmable SFP image is claimed.
+The model does not qualify GTX comma detection, analog clock recovery, elastic-buffer behavior, reset sequencing or MMCM phase/skew. The supervised endpoint detects stopped clocks, but the PCS link flag alone cannot establish physical readiness. The [board-facing compile probe](ethernet-board.md) connects MMCMs, GTX controls, carrier polarity and GP0 diagnostics. Zynq GTX configuration data, complete physical constraints, timing closure and board qualification remain outstanding.
 
 LiteEth's complete pinned K7 PHY assumes a 200-MHz reference; this board candidate uses 125 MHz. Reusing its gearbox avoids duplicating that logic while leaving reference-clock qualification explicit. Replacing the packet IP would not supply the missing device configuration data.

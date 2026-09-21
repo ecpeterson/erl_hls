@@ -34,8 +34,12 @@ class PacketCore(LiteXModule):
         timers = dict(check_period=4096/125e6, breaklink_time=1/125e6,
                       more_ack_time=1/125e6, sgmii_ack_time=1/125e6) if simulation else {}
         self.pcs = PCS(lsb_first=True, **timers)
+        self.link_tx = Signal()
+        # Terminate negotiation's combinational status path before it drives
+        # MAC resets and frame-store admission across the TX datapath.
+        self.sync.eth_tx += self.link_tx.eq(self.pcs.link_up)
         self.link_rx = Signal()
-        self.specials += MultiReg(self.pcs.link_up, self.link_rx, "eth_rx")
+        self.specials += MultiReg(self.link_tx, self.link_rx, "eth_rx")
         self.comb += [
             self.pcs.tbi_rx_ce.eq(1),
             # The PCS carries bytes but leaves last_be undriven. The pinned
@@ -43,7 +47,7 @@ class PacketCore(LiteXModule):
             self.pcs.source.last_be.eq(1),
             self.cd_mac_tx.clk.eq(self.cd_eth_tx.clk),
             self.cd_mac_rx.clk.eq(self.cd_eth_rx.clk),
-            self.cd_mac_tx.rst.eq(self.cd_eth_tx.rst | ~self.pcs.link_up),
+            self.cd_mac_tx.rst.eq(self.cd_eth_tx.rst | ~self.link_tx),
             self.cd_mac_rx.rst.eq(self.cd_eth_rx.rst | ~self.link_rx),
         ]
         self.tx = stream.Endpoint(eth_phy_description(8))
@@ -74,7 +78,7 @@ class PacketCore(LiteXModule):
     def ports(self) -> set[Signal]:
         """Return a stable, named HDL boundary without unused stream metadata."""
         pins = dict(tbi_tx=self.pcs.tbi_tx, tbi_rx=self.pcs.tbi_rx,
-                    link_tx=self.pcs.link_up, link_rx=self.link_rx,
+                    link_tx=self.link_tx, link_rx=self.link_rx,
                     restart=self.pcs.restart, align=self.pcs.align,
                     preamble_errors=self.preamble_errors, crc_errors=self.crc_errors)
         for name, endpoint in (("tx", self.tx), ("rx", self.rx)):

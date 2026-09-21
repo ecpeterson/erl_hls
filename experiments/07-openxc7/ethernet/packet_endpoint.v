@@ -24,8 +24,17 @@ module ethernet_packet_endpoint (
 );
     wire to_mac_valid, to_mac_last, to_mac_ready;
     wire [7:0] to_mac_data;
-    wire from_mac_valid, from_mac_last, from_mac_error;
-    wire [7:0] from_mac_data;
+    wire mac_valid, mac_last, mac_error;
+    wire [7:0] mac_data;
+    reg from_mac_valid, from_mac_last, from_mac_error;
+    reg [7:0] from_mac_data;
+    // RX cannot be backpressured. Register the complete beat, including its
+    // final CRC verdict, before deciding whether the frame store commits it.
+    always @(posedge eth_rx_clk) begin
+        if(eth_rx_rst || !link_rx) from_mac_valid<=0;
+        else from_mac_valid<=mac_valid;
+        from_mac_data<=mac_data; from_mac_last<=mac_last; from_mac_error<=mac_error;
+    end
     ethernet_frame_store tx_store (
         .clk(eth_tx_clk), .rst(eth_tx_rst), .flush(!link_tx), .abort_partial(1'b0),
         .in_valid(tx_valid), .in_ready(tx_ready), .in_data(tx_data),
@@ -47,8 +56,8 @@ module ethernet_packet_endpoint (
         .eth_rx_clk(eth_rx_clk), .eth_rx_rst(eth_rx_rst),
         .tbi_rx(tbi_rx), .tbi_tx(tbi_tx), .link_tx(link_tx), .link_rx(link_rx),
         .restart(restart), .align(align), .tx_valid(to_mac_valid), .tx_ready(to_mac_ready),
-        .tx_data(to_mac_data), .tx_last(to_mac_last), .rx_valid(from_mac_valid),
-        .rx_data(from_mac_data), .rx_last(from_mac_last), .rx_error(from_mac_error),
+        .tx_data(to_mac_data), .tx_last(to_mac_last), .rx_valid(mac_valid),
+        .rx_data(mac_data), .rx_last(mac_last), .rx_error(mac_error),
         .preamble_errors(preamble_errors), .crc_errors(crc_errors)
     );
 endmodule

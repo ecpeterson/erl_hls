@@ -21,25 +21,36 @@
     "ethernet/LICENSE.liteeth": "701f2befb45f458277139405ed395fe33aeac788ad5da3d7ce78f87b2ac0c9ac",
     "ethernet/LICENSE.litex": "8371c1e1e72db0c21eba5acfec4f4f8597dc8555bd282b2a35ccbbde992675c5",
     "ethernet/LICENSE.migen": "67a7e7bc7fa1b9f6dc05916f05214df4db67afbbf2289b9c24c3678c9dc6a180",
+    "ethernet/board.py": "d62e208afd418292d35209f0149bb14ce41cd0198586d9d0da181edac614863a",
+    "ethernet/clock_pair.v": "92fc7114355a4ae52ad4ec7cdc842735ae0b4032f4371adfce41aa7da6168930",
     "ethernet/frame_store.v": "8c3087d4e92c72ea0e111a7dac9701f4e45db18c784082df83e94ace87f228fe",
     "ethernet/frame_store_tb.sv": "d6b5a701a64944f1980426d564750d5d887e6d5a378be52e3fefa53565411aad",
-    "ethernet/gearbox_packet_fixture.sv": "d78e30b4aecc68b210c1d1ee1afdbde408a14b4dea871121284647fec724e193",
-    "ethernet/generate.py": "7e069fda36fc6f6c939ec70d154f9cde8adb21622b92f560f98136a8f7f54b21",
+    "ethernet/gearbox_packet_fixture.sv": "5fcdf8f95793b87ad33fddb17a96adec1c652ebe3609fa1b3b326606a935602c",
+    "ethernet/generate.py": "4f5413a0e7eddf0176e712e2b522059342e990bc9efd20f1f80cc0738bcf324a",
     "ethernet/generate_gearbox.py": "bb4466f72a5ff724fb398a0cd4386e8ca674723d124c3437e39628f31eadee8a",
+    "ethernet/gtx_clocks.v": "ba451aae0b622cd457fb472bf511f2bdf5cfe61462fc55ca48698cb269d0276a",
     "ethernet/gtx_packet_endpoint.v": "e1d18e3fb598252059e781b129d777d7bc898b08f557f5378d7e8498b6ea687e",
     "ethernet/models.lock.json": "1b03cfd99e7b77ce405dd54f01bc845b7e1eabaaa76192526ef589453a432652",
-    "ethernet/packet_endpoint.v": "5583ebb106e43879b0aed81dca182c68e7a1e03fd8bd70ea417067abd0c92620",
+    "ethernet/packet_endpoint.v": "052af02e0e8ecd9831fe962b32d705d35b5782efc8cbf0e6b7576655f44c5f75",
     "ethernet/packet_tb.sv": "6ac2a4f4b2564c7521acf2edfd0146ae712301dd7c3894e1bd409fb71b7c53a4",
     "ethernet/prepare.py": "e49664564ca06be918b8d780badf02e0b84592e4cdd383282f740cc134fb62ce",
+    "ethernet/probe_ethernet.c": "1c5b795eec4349ab0cd2286be82daf557765c6f1b4f4a2c23cd28f459f93179d",
+    "ethernet/probe_tb.sv": "17576b4afba98c7a98e345782a1da46f2f6782125e7e02a24820aefc3c23208b",
+    "ethernet/probe_traffic.v": "23a4328f9a53d1e3dccb8b40544e413505e2f07ca111dd99e7296783993c9167",
+    "ethernet/recovery_tb.sv": "55bed6b00a3c7d6f30912f71eee1489bee73a3b09353ad9ae18db160f0151a54",
     "ethernet/reference.py": "e8ff6524a178bd762ab29fd834354d2b531935be7b3d663fdfacdbbf5af0aac5",
-    "ethernet/sources.lock.json": "2b2afb348f12cbcb3a4b1bd3b828f020fd83777c7c656d9c5f6720646835b273"
+    "ethernet/snapshot.v": "384f6a04bac72bbc5e946f8dfb2fd89f6962547183ea1ed16f7e02fed3b22d2c",
+    "ethernet/sources.lock.json": "2b2afb348f12cbcb3a4b1bd3b828f020fd83777c7c656d9c5f6720646835b273",
+    "ethernet/supervised_endpoint.v": "a10ace24148fb50f938f57803b161c3d0c6a0fea5de459684faffec9ddc1a631",
+    "ethernet/te0715_ethernet.xdc": "e2e08276ffeffc236580fc5465771e98447ea7a52d28ea7dc47037182b1abced",
+    "ethernet/te0715_ethernet_top.v": "7034c14416f2994647851e0af3af47f25d83c973f4d8b9a592d4be45aa72906f"
   },
   "runner_sha256": "de3eebf5fa3b343b87394ee911133efeff559edad7805e568f208fbbcf5d0818",
-  "packet_runner_sha256": "5fb17bd4b10873f5ebb7696f1b9cc7c77449019952d19ee286c52015cf1cda2b",
+  "packet_runner_sha256": "1cf909d5567e4f0c631dbea9da18f037e36f3882b3106a5525e0166cf43bdb14",
   "generated": {
-    "production/liteeth_packet_core.v": "8327f3c2633ee2133ca270d018878849cbbf3f162d914eb827a19c448e3bad28",
+    "production/liteeth_packet_core.v": "1a78fe412c11c64085b15ee079cde46afb15649268468ef8e81b95b4167f1cbc",
     "production/liteeth_pcs_gearbox.v": "6b9bedd4756ecccfb6559d35a3476e14771968c698eb0bcd93c8311621ca8c67",
-    "simulation/liteeth_packet_core.v": "5651b802d9ca2e2817fe44723888e2518c5dd8aef1b13270eaac5296ca90caae",
+    "simulation/liteeth_packet_core.v": "7d220beda9dede6ab839e1cb911f41773c33949e966affa20e56225683bb5fbf",
     "simulation/liteeth_pcs_gearbox.v": "6b9bedd4756ecccfb6559d35a3476e14771968c698eb0bcd93c8311621ca8c67"
   },
   "yosys": "Yosys 0.63+173 (git sha1 66306a8ca-dirty, aarch64-apple-darwin23.5-clang++ 18.1.8 -fPIC -O3)",
@@ -47,17 +58,17 @@
     "$scopeinfo": 5,
     "BUFG": 4,
     "CARRY4": 150,
-    "FDRE": 854,
+    "FDRE": 866,
     "FDSE": 95,
-    "INV": 233,
-    "LUT1": 1,
-    "LUT2": 237,
-    "LUT3": 117,
-    "LUT4": 63,
-    "LUT5": 120,
-    "LUT6": 199,
-    "MUXF7": 35,
-    "MUXF8": 7,
+    "INV": 212,
+    "LUT1": 4,
+    "LUT2": 198,
+    "LUT3": 103,
+    "LUT4": 66,
+    "LUT5": 117,
+    "LUT6": 241,
+    "MUXF7": 43,
+    "MUXF8": 9,
     "RAM32M": 2,
     "RAMB36E1": 2
   },
@@ -67,7 +78,7 @@
       "alignment_only": true,
       "bit_offset": 0,
       "half_phase": 0,
-      "log_sha256": "8ff39e28e09fd8b5de78c1e8ae655492d9a168e3a6058980a0ddba28811a142f"
+      "log_sha256": "296ac015266978abd634d878b4f37bae8b45e08bf2cf3484372e0b0553be3f65"
     },
     {
       "mapped": false,
@@ -81,7 +92,7 @@
       "alignment_only": true,
       "bit_offset": 2,
       "half_phase": 0,
-      "log_sha256": "8ff39e28e09fd8b5de78c1e8ae655492d9a168e3a6058980a0ddba28811a142f"
+      "log_sha256": "296ac015266978abd634d878b4f37bae8b45e08bf2cf3484372e0b0553be3f65"
     },
     {
       "mapped": false,
@@ -95,7 +106,7 @@
       "alignment_only": true,
       "bit_offset": 4,
       "half_phase": 0,
-      "log_sha256": "8ff39e28e09fd8b5de78c1e8ae655492d9a168e3a6058980a0ddba28811a142f"
+      "log_sha256": "296ac015266978abd634d878b4f37bae8b45e08bf2cf3484372e0b0553be3f65"
     },
     {
       "mapped": false,
@@ -109,7 +120,7 @@
       "alignment_only": true,
       "bit_offset": 6,
       "half_phase": 0,
-      "log_sha256": "8ff39e28e09fd8b5de78c1e8ae655492d9a168e3a6058980a0ddba28811a142f"
+      "log_sha256": "296ac015266978abd634d878b4f37bae8b45e08bf2cf3484372e0b0553be3f65"
     },
     {
       "mapped": false,
@@ -123,7 +134,7 @@
       "alignment_only": true,
       "bit_offset": 8,
       "half_phase": 0,
-      "log_sha256": "8ff39e28e09fd8b5de78c1e8ae655492d9a168e3a6058980a0ddba28811a142f"
+      "log_sha256": "296ac015266978abd634d878b4f37bae8b45e08bf2cf3484372e0b0553be3f65"
     },
     {
       "mapped": false,
@@ -137,7 +148,7 @@
       "alignment_only": true,
       "bit_offset": 10,
       "half_phase": 0,
-      "log_sha256": "8ff39e28e09fd8b5de78c1e8ae655492d9a168e3a6058980a0ddba28811a142f"
+      "log_sha256": "296ac015266978abd634d878b4f37bae8b45e08bf2cf3484372e0b0553be3f65"
     },
     {
       "mapped": false,
@@ -151,7 +162,7 @@
       "alignment_only": true,
       "bit_offset": 12,
       "half_phase": 0,
-      "log_sha256": "8ff39e28e09fd8b5de78c1e8ae655492d9a168e3a6058980a0ddba28811a142f"
+      "log_sha256": "296ac015266978abd634d878b4f37bae8b45e08bf2cf3484372e0b0553be3f65"
     },
     {
       "mapped": false,
@@ -165,7 +176,7 @@
       "alignment_only": true,
       "bit_offset": 14,
       "half_phase": 0,
-      "log_sha256": "8ff39e28e09fd8b5de78c1e8ae655492d9a168e3a6058980a0ddba28811a142f"
+      "log_sha256": "296ac015266978abd634d878b4f37bae8b45e08bf2cf3484372e0b0553be3f65"
     },
     {
       "mapped": false,
@@ -179,7 +190,7 @@
       "alignment_only": true,
       "bit_offset": 16,
       "half_phase": 0,
-      "log_sha256": "8ff39e28e09fd8b5de78c1e8ae655492d9a168e3a6058980a0ddba28811a142f"
+      "log_sha256": "296ac015266978abd634d878b4f37bae8b45e08bf2cf3484372e0b0553be3f65"
     },
     {
       "mapped": false,
@@ -193,7 +204,7 @@
       "alignment_only": true,
       "bit_offset": 18,
       "half_phase": 0,
-      "log_sha256": "8ff39e28e09fd8b5de78c1e8ae655492d9a168e3a6058980a0ddba28811a142f"
+      "log_sha256": "296ac015266978abd634d878b4f37bae8b45e08bf2cf3484372e0b0553be3f65"
     },
     {
       "mapped": false,
@@ -207,30 +218,30 @@
       "alignment_only": false,
       "bit_offset": 7,
       "half_phase": 0,
-      "log_sha256": "954e8d61e01daa32c1f70a5f70a2e3c415dc66ffea602007fcaa8d55a6c9f7ed"
+      "log_sha256": "71573167945789bf3ddc46fc9563cc67ed145cc2fb77fb4846398533c558650a"
     },
     {
       "mapped": false,
       "alignment_only": false,
       "bit_offset": 13,
       "half_phase": 1,
-      "log_sha256": "954e8d61e01daa32c1f70a5f70a2e3c415dc66ffea602007fcaa8d55a6c9f7ed"
+      "log_sha256": "71573167945789bf3ddc46fc9563cc67ed145cc2fb77fb4846398533c558650a"
     },
     {
       "mapped": true,
       "alignment_only": false,
       "bit_offset": 7,
       "half_phase": 0,
-      "log_sha256": "954e8d61e01daa32c1f70a5f70a2e3c415dc66ffea602007fcaa8d55a6c9f7ed"
+      "log_sha256": "71573167945789bf3ddc46fc9563cc67ed145cc2fb77fb4846398533c558650a"
     },
     {
       "mapped": true,
       "alignment_only": false,
       "bit_offset": 13,
       "half_phase": 1,
-      "log_sha256": "954e8d61e01daa32c1f70a5f70a2e3c415dc66ffea602007fcaa8d55a6c9f7ed"
+      "log_sha256": "71573167945789bf3ddc46fc9563cc67ed145cc2fb77fb4846398533c558650a"
     }
   ],
-  "elapsed_seconds": 59.23,
+  "elapsed_seconds": 59.9,
   "hardware_qualified": false
 }
