@@ -23,15 +23,18 @@
     "ethernet/LICENSE.migen": "67a7e7bc7fa1b9f6dc05916f05214df4db67afbbf2289b9c24c3678c9dc6a180",
     "ethernet/frame_store.v": "8c3087d4e92c72ea0e111a7dac9701f4e45db18c784082df83e94ace87f228fe",
     "ethernet/frame_store_tb.sv": "d6b5a701a64944f1980426d564750d5d887e6d5a378be52e3fefa53565411aad",
+    "ethernet/gearbox_packet_fixture.sv": "d78e30b4aecc68b210c1d1ee1afdbde408a14b4dea871121284647fec724e193",
     "ethernet/generate.py": "7e069fda36fc6f6c939ec70d154f9cde8adb21622b92f560f98136a8f7f54b21",
+    "ethernet/generate_gearbox.py": "bb4466f72a5ff724fb398a0cd4386e8ca674723d124c3437e39628f31eadee8a",
+    "ethernet/gtx_packet_endpoint.v": "e1d18e3fb598252059e781b129d777d7bc898b08f557f5378d7e8498b6ea687e",
     "ethernet/models.lock.json": "1b03cfd99e7b77ce405dd54f01bc845b7e1eabaaa76192526ef589453a432652",
     "ethernet/packet_endpoint.v": "5583ebb106e43879b0aed81dca182c68e7a1e03fd8bd70ea417067abd0c92620",
-    "ethernet/packet_tb.sv": "307cfea791d945f7b22f60e949ec37e06a37af77119f771037d1560a9521c178",
+    "ethernet/packet_tb.sv": "6ac2a4f4b2564c7521acf2edfd0146ae712301dd7c3894e1bd409fb71b7c53a4",
     "ethernet/prepare.py": "e49664564ca06be918b8d780badf02e0b84592e4cdd383282f740cc134fb62ce",
     "ethernet/reference.py": "e8ff6524a178bd762ab29fd834354d2b531935be7b3d663fdfacdbbf5af0aac5",
     "ethernet/sources.lock.json": "2b2afb348f12cbcb3a4b1bd3b828f020fd83777c7c656d9c5f6720646835b273"
   },
-  "runner_sha256": "bc0494b05319a2d943b874b9de14cfb252912670552d11567b4069d27b28d860",
+  "runner_sha256": "5fb17bd4b10873f5ebb7696f1b9cc7c77449019952d19ee286c52015cf1cda2b",
   "generated": {
     "production/liteeth_packet_core.v": "8327f3c2633ee2133ca270d018878849cbbf3f162d914eb827a19c448e3bad28",
     "production/liteeth_packet_core_mem_6b5b.init": "e22c47be531b5bb60b52cad484ac222142ffe634e17784506cbacfa1efb67843",
@@ -69,6 +72,6 @@
     "admission/release races, 5000-byte overflow, sticky error, partial abort, flush",
     "two RAMB36E1 retained with production negotiation timers"
   ],
-  "elapsed_seconds": 30.68,
+  "elapsed_seconds": 32.4,
   "hardware_qualified": false
 }

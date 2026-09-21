@@ -1,0 +1,236 @@
+{
+  "scope": "One packet endpoint through LiteEth PCSGearbox and GTX raw data pins; ideal related clocks/serial alignment model; no hard GTX/MMCM, pins, route or board qualification",
+  "sources": {
+    "migen": {
+      "revision": "e19524c963a8342952840983047557707fbe0b6a",
+      "url": "https://codeload.github.com/m-labs/migen/tar.gz/e19524c963a8342952840983047557707fbe0b6a",
+      "sha256": "e5aad1483c577001c8de0af93694db3b8e9de7c6b9fae1a072f43a896beaa53a"
+    },
+    "litex": {
+      "revision": "db643c5f29d588df1e844e8a53267e1e48553ee5",
+      "url": "https://codeload.github.com/enjoy-digital/litex/tar.gz/db643c5f29d588df1e844e8a53267e1e48553ee5",
+      "sha256": "b8536a36fde0299caee19b004d743da569bcc8561143a8a9b82b6a481e1aff23"
+    },
+    "liteeth": {
+      "revision": "96547670d9d4776b81edba0c8a82e5f10ed8a1e3",
+      "url": "https://codeload.github.com/enjoy-digital/liteeth/tar.gz/96547670d9d4776b81edba0c8a82e5f10ed8a1e3",
+      "sha256": "da2f994041be9a2d7fc310bd5e041e868db9ee2d58a449c628b119eae302f987"
+    }
+  },
+  "inputs": {
+    "ethernet/LICENSE.liteeth": "701f2befb45f458277139405ed395fe33aeac788ad5da3d7ce78f87b2ac0c9ac",
+    "ethernet/LICENSE.litex": "8371c1e1e72db0c21eba5acfec4f4f8597dc8555bd282b2a35ccbbde992675c5",
+    "ethernet/LICENSE.migen": "67a7e7bc7fa1b9f6dc05916f05214df4db67afbbf2289b9c24c3678c9dc6a180",
+    "ethernet/frame_store.v": "8c3087d4e92c72ea0e111a7dac9701f4e45db18c784082df83e94ace87f228fe",
+    "ethernet/frame_store_tb.sv": "d6b5a701a64944f1980426d564750d5d887e6d5a378be52e3fefa53565411aad",
+    "ethernet/gearbox_packet_fixture.sv": "d78e30b4aecc68b210c1d1ee1afdbde408a14b4dea871121284647fec724e193",
+    "ethernet/generate.py": "7e069fda36fc6f6c939ec70d154f9cde8adb21622b92f560f98136a8f7f54b21",
+    "ethernet/generate_gearbox.py": "bb4466f72a5ff724fb398a0cd4386e8ca674723d124c3437e39628f31eadee8a",
+    "ethernet/gtx_packet_endpoint.v": "e1d18e3fb598252059e781b129d777d7bc898b08f557f5378d7e8498b6ea687e",
+    "ethernet/models.lock.json": "1b03cfd99e7b77ce405dd54f01bc845b7e1eabaaa76192526ef589453a432652",
+    "ethernet/packet_endpoint.v": "5583ebb106e43879b0aed81dca182c68e7a1e03fd8bd70ea417067abd0c92620",
+    "ethernet/packet_tb.sv": "6ac2a4f4b2564c7521acf2edfd0146ae712301dd7c3894e1bd409fb71b7c53a4",
+    "ethernet/prepare.py": "e49664564ca06be918b8d780badf02e0b84592e4cdd383282f740cc134fb62ce",
+    "ethernet/reference.py": "e8ff6524a178bd762ab29fd834354d2b531935be7b3d663fdfacdbbf5af0aac5",
+    "ethernet/sources.lock.json": "2b2afb348f12cbcb3a4b1bd3b828f020fd83777c7c656d9c5f6720646835b273"
+  },
+  "runner_sha256": "de3eebf5fa3b343b87394ee911133efeff559edad7805e568f208fbbcf5d0818",
+  "packet_runner_sha256": "5fb17bd4b10873f5ebb7696f1b9cc7c77449019952d19ee286c52015cf1cda2b",
+  "generated": {
+    "production/liteeth_packet_core.v": "8327f3c2633ee2133ca270d018878849cbbf3f162d914eb827a19c448e3bad28",
+    "production/liteeth_pcs_gearbox.v": "6b9bedd4756ecccfb6559d35a3476e14771968c698eb0bcd93c8311621ca8c67",
+    "simulation/liteeth_packet_core.v": "5651b802d9ca2e2817fe44723888e2518c5dd8aef1b13270eaac5296ca90caae",
+    "simulation/liteeth_pcs_gearbox.v": "6b9bedd4756ecccfb6559d35a3476e14771968c698eb0bcd93c8311621ca8c67"
+  },
+  "yosys": "Yosys 0.63+173 (git sha1 66306a8ca-dirty, aarch64-apple-darwin23.5-clang++ 18.1.8 -fPIC -O3)",
+  "production_cells": {
+    "$scopeinfo": 5,
+    "BUFG": 4,
+    "CARRY4": 150,
+    "FDRE": 854,
+    "FDSE": 95,
+    "INV": 233,
+    "LUT1": 1,
+    "LUT2": 237,
+    "LUT3": 117,
+    "LUT4": 63,
+    "LUT5": 120,
+    "LUT6": 199,
+    "MUXF7": 35,
+    "MUXF8": 7,
+    "RAM32M": 2,
+    "RAMB36E1": 2
+  },
+  "packet_runs": [
+    {
+      "mapped": false,
+      "alignment_only": true,
+      "bit_offset": 0,
+      "half_phase": 0,
+      "log_sha256": "8ff39e28e09fd8b5de78c1e8ae655492d9a168e3a6058980a0ddba28811a142f"
+    },
+    {
+      "mapped": false,
+      "alignment_only": true,
+      "bit_offset": 1,
+      "half_phase": 1,
+      "log_sha256": "296ac015266978abd634d878b4f37bae8b45e08bf2cf3484372e0b0553be3f65"
+    },
+    {
+      "mapped": false,
+      "alignment_only": true,
+      "bit_offset": 2,
+      "half_phase": 0,
+      "log_sha256": "8ff39e28e09fd8b5de78c1e8ae655492d9a168e3a6058980a0ddba28811a142f"
+    },
+    {
+      "mapped": false,
+      "alignment_only": true,
+      "bit_offset": 3,
+      "half_phase": 1,
+      "log_sha256": "296ac015266978abd634d878b4f37bae8b45e08bf2cf3484372e0b0553be3f65"
+    },
+    {
+      "mapped": false,
+      "alignment_only": true,
+      "bit_offset": 4,
+      "half_phase": 0,
+      "log_sha256": "8ff39e28e09fd8b5de78c1e8ae655492d9a168e3a6058980a0ddba28811a142f"
+    },
+    {
+      "mapped": false,
+      "alignment_only": true,
+      "bit_offset": 5,
+      "half_phase": 1,
+      "log_sha256": "296ac015266978abd634d878b4f37bae8b45e08bf2cf3484372e0b0553be3f65"
+    },
+    {
+      "mapped": false,
+      "alignment_only": true,
+      "bit_offset": 6,
+      "half_phase": 0,
+      "log_sha256": "8ff39e28e09fd8b5de78c1e8ae655492d9a168e3a6058980a0ddba28811a142f"
+    },
+    {
+      "mapped": false,
+      "alignment_only": true,
+      "bit_offset": 7,
+      "half_phase": 1,
+      "log_sha256": "296ac015266978abd634d878b4f37bae8b45e08bf2cf3484372e0b0553be3f65"
+    },
+    {
+      "mapped": false,
+      "alignment_only": true,
+      "bit_offset": 8,
+      "half_phase": 0,
+      "log_sha256": "8ff39e28e09fd8b5de78c1e8ae655492d9a168e3a6058980a0ddba28811a142f"
+    },
+    {
+      "mapped": false,
+      "alignment_only": true,
+      "bit_offset": 9,
+      "half_phase": 1,
+      "log_sha256": "296ac015266978abd634d878b4f37bae8b45e08bf2cf3484372e0b0553be3f65"
+    },
+    {
+      "mapped": false,
+      "alignment_only": true,
+      "bit_offset": 10,
+      "half_phase": 0,
+      "log_sha256": "8ff39e28e09fd8b5de78c1e8ae655492d9a168e3a6058980a0ddba28811a142f"
+    },
+    {
+      "mapped": false,
+      "alignment_only": true,
+      "bit_offset": 11,
+      "half_phase": 1,
+      "log_sha256": "296ac015266978abd634d878b4f37bae8b45e08bf2cf3484372e0b0553be3f65"
+    },
+    {
+      "mapped": false,
+      "alignment_only": true,
+      "bit_offset": 12,
+      "half_phase": 0,
+      "log_sha256": "8ff39e28e09fd8b5de78c1e8ae655492d9a168e3a6058980a0ddba28811a142f"
+    },
+    {
+      "mapped": false,
+      "alignment_only": true,
+      "bit_offset": 13,
+      "half_phase": 1,
+      "log_sha256": "296ac015266978abd634d878b4f37bae8b45e08bf2cf3484372e0b0553be3f65"
+    },
+    {
+      "mapped": false,
+      "alignment_only": true,
+      "bit_offset": 14,
+      "half_phase": 0,
+      "log_sha256": "8ff39e28e09fd8b5de78c1e8ae655492d9a168e3a6058980a0ddba28811a142f"
+    },
+    {
+      "mapped": false,
+      "alignment_only": true,
+      "bit_offset": 15,
+      "half_phase": 1,
+      "log_sha256": "296ac015266978abd634d878b4f37bae8b45e08bf2cf3484372e0b0553be3f65"
+    },
+    {
+      "mapped": false,
+      "alignment_only": true,
+      "bit_offset": 16,
+      "half_phase": 0,
+      "log_sha256": "8ff39e28e09fd8b5de78c1e8ae655492d9a168e3a6058980a0ddba28811a142f"
+    },
+    {
+      "mapped": false,
+      "alignment_only": true,
+      "bit_offset": 17,
+      "half_phase": 1,
+      "log_sha256": "296ac015266978abd634d878b4f37bae8b45e08bf2cf3484372e0b0553be3f65"
+    },
+    {
+      "mapped": false,
+      "alignment_only": true,
+      "bit_offset": 18,
+      "half_phase": 0,
+      "log_sha256": "8ff39e28e09fd8b5de78c1e8ae655492d9a168e3a6058980a0ddba28811a142f"
+    },
+    {
+      "mapped": false,
+      "alignment_only": true,
+      "bit_offset": 19,
+      "half_phase": 1,
+      "log_sha256": "296ac015266978abd634d878b4f37bae8b45e08bf2cf3484372e0b0553be3f65"
+    },
+    {
+      "mapped": false,
+      "alignment_only": false,
+      "bit_offset": 7,
+      "half_phase": 0,
+      "log_sha256": "954e8d61e01daa32c1f70a5f70a2e3c415dc66ffea602007fcaa8d55a6c9f7ed"
+    },
+    {
+      "mapped": false,
+      "alignment_only": false,
+      "bit_offset": 13,
+      "half_phase": 1,
+      "log_sha256": "954e8d61e01daa32c1f70a5f70a2e3c415dc66ffea602007fcaa8d55a6c9f7ed"
+    },
+    {
+      "mapped": true,
+      "alignment_only": false,
+      "bit_offset": 7,
+      "half_phase": 0,
+      "log_sha256": "954e8d61e01daa32c1f70a5f70a2e3c415dc66ffea602007fcaa8d55a6c9f7ed"
+    },
+    {
+      "mapped": true,
+      "alignment_only": false,
+      "bit_offset": 13,
+      "half_phase": 1,
+      "log_sha256": "954e8d61e01daa32c1f70a5f70a2e3c415dc66ffea602007fcaa8d55a6c9f7ed"
+    }
+  ],
+  "elapsed_seconds": 59.23,
+  "hardware_qualified": false
+}
