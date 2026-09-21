@@ -14,9 +14,13 @@ script+=" select -assert-count 1 t:GTXE2_CHANNEL; select -assert-count 1 t:IBUFD
 script+=" select -assert-count 1 t:PS7; select -clear; write_json \"$gtx_build/netlist.json\";"
 "$oss_cad_suite/bin/yosys" -Q -q -l "$gtx_build/yosys.log" -p "$script"
 rm -f "$gtx_build/probe.fasm" "$gtx_build/report.json" "$gtx_build/result.json"
-"$openxc7/bin/nextpnr-xilinx" --chipdb "$gtx_build/chipdb.bin" \
+backend=${ERL_HLS_NEXTPNR:-$openxc7/bin/nextpnr-xilinx}
+"$backend" --chipdb "$gtx_build/chipdb.bin" \
     --xdc "$experiment_root/gtx/te0715_gtx.xdc" --json "$gtx_build/netlist.json" \
-    --fasm "$gtx_build/probe.fasm" --report "$gtx_build/report.json" \
+    --pack-only --write "$gtx_build/packed.json" > "$gtx_build/pack.log" 2>&1
+"$backend" --chipdb "$gtx_build/chipdb.bin" \
+    --xdc "$experiment_root/gtx/te0715_gtx.xdc" --json "$gtx_build/netlist.json" \
+    --write "$gtx_build/routed.json" --fasm "$gtx_build/probe.fasm" --report "$gtx_build/report.json" \
     --freq 25 --seed 1 --router router2 --log "$gtx_build/nextpnr.log" \
     > "$gtx_build/nextpnr.stdout" 2>&1
 python3 "$experiment_root/gtx/report.py" "$prjxray_db/zynq7" "$gtx_build"

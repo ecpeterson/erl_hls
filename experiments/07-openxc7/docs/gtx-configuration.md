@@ -1,34 +1,56 @@
-# GTX configuration prerequisites
+# Native GTX candidates
 
-The pinned Zynq database still lacks the selected channel/common configuration-frame locations. The [Vivado reference batch](vivado-reference.md) has independently measured those locations and checked donor encodings against a full Ethernet image. The native writer also omits two reference-buffer default bits. Integrating these findings and checking the resulting complete native image remain outstanding.
+The experiment assembles PRBS, Ethernet loopback and external-SFP candidates for TE0715-05-71C33-A on TEF1002-03-A using native Apple Silicon tools. Assembly requires the matching retained Vivado reference and rejects a GTX configuration mismatch. No command programs hardware. Native timing and physical operation remain unqualified; use the [timing-closed vendor candidates](vivado-reference.md) as the initial board baseline.
 
-| Tile type | Distinct enabled features | Encoded features | Fixed connections | Missing definitions |
-| --- | ---: | ---: | ---: | ---: |
-| GTX channel 1 | 735 | 323 | 412 | 0 |
-| GTX common | 6 | 3 | 3 | 0 |
-| GTX interface | 61 | 0 | 61 | 0 |
+## Build
 
-The [recorded audit](../results/gtx-coverage-2026-09-21.json) identifies its routed FASM, Zynq tilegrid and pinned donor files. It checks logical tile connectivity independently of family timing estimates, expands enabled FASM bits, and recognizes unconditional pseudo-PIPs. Unlike the coarse compile-probe audit, it does not require configuration bits for connections declared always present. Neither audit establishes encoding correctness or hardware operation.
-
-Reproduce the audit without modifying either database:
+From `experiments/07-openxc7`, with the [pinned tools](../README.md#setup) installed:
 
 ```sh
-python3 gtx/coverage.py /path/to/database/zynq7 \
-  build/ethernet-board/loopback/probe.fasm build/gtx-coverage
+bash gtx/build_backend.sh build/native-backend
+export ERL_HLS_NEXTPNR="$PWD/build/native-backend/bin/nextpnr-gtx"
+bash run_ethernet_probe.sh
+# Or: bash run_ethernet_probe.sh --external
+# Or: bash run_gtx_probe.sh
 ```
 
-## Device-specific reference
+The separate backend includes the LUT placement/input-origin fixes and two clocking fixes. Reference-buffer swing settings are emitted with or without a shared PLL. Converting a BASE clock primitive to ADV leaves its nonexistent second clock input disconnected; genuine ADV clock inputs remain intact. Existing installed tools are unchanged.
 
-Prepare a small bundle on this machine, then run it where Vivado supports `xc7z030sbg485-1`:
+Routing retains `probe.fasm` under `build/ethernet-board/{loopback,external}` or `build/gtx-probe`. Assembly is a separate, checked step:
 
 ```sh
-python3 gtx/reference.py build/gtx-reference-only
-cd build/gtx-reference-only
-vivado -mode batch -source run.tcl
+python3 gtx/assemble.py \
+  --database /path/to/prepared-database/zynq7 \
+  --fasm build/ethernet-board/loopback/probe.fasm \
+  --reference /path/to/retained-release/results/ethernet-loopback/candidate.bit \
+  --profile ethernet-loopback \
+  --tools .apio/packages/openxc7/bin \
+  --output build/native-loopback
 ```
 
-The bundle contains six **inert configuration references, never board images**. It uses the pinned [X-Ray channel](https://github.com/openXC7/prjxray/blob/ed3331c6200f421164101388759fc2860b0f5634/fuzzers/005-tilegrid/gtx_channel/generate.tcl) and [common](https://github.com/openXC7/prjxray/blob/ed3331c6200f421164101388759fc2860b0f5634/fuzzers/005-tilegrid/gtx_common/generate.tcl) procedures, including their DRC exemptions for unconnected primitives. Those exemptions do not belong in a board build. The bundle records the Vivado version and retains each checkpoint and bitstream. There are no hardware-manager or programming commands. All six references ran successfully under Vivado 2024.2; the independent attribute pairs agree on the selected tiles' locations.
+Use the matching FASM, reference and `--profile` for `ethernet-external` or `prbs`. The database is the SBG485 overlay prepared by the probe scripts. The [reference report](../results/vivado-reference-2026-09-21.json) identifies the retained archive and accepted vendor images. Output must be new; failures retain diagnostics without publishing `candidate.bit`.
 
-Two separate attribute changes per tile provide a first consistency check: channel comma detection and CPLL lock configuration; common QPLL division and bias configuration. Return the complete bundle after execution. Decode the bitstreams with X-Ray `bitread`, compare each variant against its baseline, and check whether both changes imply the same frame origin and word offset using the donor definitions. Then validate the reference-clock buffer, remaining encodings and routed probe against independent Z7030 evidence. A matching pair alone is insufficient to enable assembly, and nothing here installs a speculative database overlay.
+## What is checked
 
-The retained reference data supports further native work without a running Vivado host. It covers this channel/common configuration, not every GTX site or feature combination. PS Ethernet and PL330 DMA remain independent of the native GTX assembly work.
+The overlay changes only the measured channel/common tile mappings and the missing feature tables. Other GTX sites, the other reference buffer and shared-QPLL profiles are rejected. Installed database files remain unchanged.
+
+- Independent vendor references locate channel `GTX_CHANNEL_1_X186Y17` at frame base `0x00442480`, word offset 22, and common `GTX_COMMON_X186Y23` at that base, offset zero. Ten inert references cover two independent mapping checks per tile and the bonded buffer controls.
+- Every candidate must match the vendor image over the entire 1,933-bit known GTX mask, including unset bits. Donor hashes and tile connectivity are checked; unconditional interface wires need no frame bits.
+- The missing 32 bottom-half clock-cascade definitions come from the pinned Artix table. All 2,804 existing Zynq definitions agree, all additions match Zynq's top-half table, and the bottom-half tile graphs match. This is corroborated database reuse, **not an independent measurement of those 32 locations**. No clock-frame addresses or timing estimates are copied from Artix.
+- Every supplied non-ECC frame bit must survive assembly and decoding. This checks serialization, not whether every encoded resource implements its intended function. Ethernet routing separately checks LUT connectivity and emitted truth tables.
+
+The [native results](../results/native-gtx-2026-09-21.json) record three completed images and their limits. Matching GTX settings does not qualify the whole native configuration, generated clocks, CDC constraints, analog channel or DAC. The native Ethernet routes still miss their partial 125-MHz targets.
+
+## Regression and new configurations
+
+CI checks overlay boundaries, donor disagreements, immutable reuse and substituted references without proprietary tools. To exercise the patched backend against a retained Ethernet route:
+
+```sh
+python3 gtx/check_backend.py --nextpnr "$ERL_HLS_NEXTPNR" \
+  --chipdb build/gtx-probe/chipdb.bin \
+  --stage build/ethernet-board/loopback --output build/backend-checks
+```
+
+Its 11 cases check default/explicit swing values, buffer controls and BASE/ADV clock retention. Nondefault reference-buffer settings are inert writer tests, never board candidates.
+
+For another GTX site or configuration, obtain independent evidence before extending the accepted scope. `gtx/reference.py` prepares six tile-location references and `vivado/refclk.py` four buffer references for a Vivado host. These unconnected primitives deliberately use X-Ray fuzzer DRC exemptions: **never program them or reuse those exemptions in a board build**. The retained references suffice for the current candidates; no running Vivado host is needed.

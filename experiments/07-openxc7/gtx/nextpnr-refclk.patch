@@ -1,0 +1,62 @@
+--- a/xilinx/fasm.cc
++++ b/xilinx/fasm.cc
+@@ -3147,6 +3147,31 @@
+         return fnd->second.as_bool();
+     }
+ 
++    // GTX CLKSWING is shared by both reference buffers, independently of QPLL use.
++    // Emit the buffers' requested value and reject contradictory shared settings.
++    void write_gtx_refclk_swing(CellInfo *ci)
++    {
++        int swing = 3;
++        bool found = false;
++        for (auto &entry : ctx->cells) {
++            auto other = entry.second.get();
++            if (other->type != id_IBUFDS_GTE2 || other->bel.tile != ci->bel.tile)
++                continue;
++            int requested = int_or_default(other->params, ctx->id("CLKSWING_CFG"), 3);
++            if (requested < 0 || requested > 3 || (found && swing != requested))
++                log_error("Incompatible GTX reference-buffer CLKSWING_CFG in %s\n",
++                          get_tile_name(ci->bel.tile).c_str());
++            swing = requested;
++            found = true;
++        }
++        if (swing != 3)
++            log_warning("According to UG476, GTX CLKSWING_CFG should always be 0b11\n");
++        push(get_tile_name(ci->bel.tile));
++        push("GTXE2_COMMON");
++        write_int_vector("IBUFDS_GTE2.CLKSWING_CFG[1:0]", swing, 2);
++        pop(2);
++    }
++
+     void write_ibufds_gte2(CellInfo * ci)
+     {
+         push(get_tile_name(ci->bel.tile));
+@@ -3162,6 +3187,8 @@
+                                        ci->hierpath.c_str(ctx), ci->name.c_str(ctx));
+         write_bit("CLKRCV_TRST", clkrcv_trst);
+         pop(2);
++        if (boost::starts_with(get_tile_name(ci->bel.tile), "GTX_COMMON_"))
++            write_gtx_refclk_swing(ci);
+     }
+ 
+     void write_gtp_pll(CellInfo *ci)
+@@ -4463,6 +4490,7 @@
+ 
+     void write_gtx_pll(CellInfo *ci)
+     {
++        write_gtx_refclk_swing(ci);
+         push(get_tile_name(ci->bel.tile));
+ 
+         push("GTXE2_COMMON");
+@@ -4475,10 +4503,6 @@
+             write_bit("GTREFCLK0_USED");
+             write_bit("GTREFCLK1_USED");
+         }
+-        auto clkswing_cfg = int_or_default(ci->params, ctx->id("CLKSWING_CFG"), 3);
+-        if (clkswing_cfg != 3) log_warning("%s/%s: According to ug476, CLK should always be 0b11\n",
+-                                           ci->hierpath.c_str(ctx), ci->name.c_str(ctx));
+-        write_int_vector("IBUFDS_GTE2.CLKSWING_CFG[1:0]", clkswing_cfg, 2);
+         write_bit("INV_DRPCLK", bool_or_default(ci->params, ctx->id("IS_DRPCLK_INVERTED")));
+         write_bit("INV_QPLLLOCKDETCLK", bool_or_default(ci->params, ctx->id("IS_QPLLLOCKDETCLK_INVERTED")));
+ 
