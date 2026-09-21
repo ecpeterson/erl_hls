@@ -61,3 +61,9 @@ for fixture in gs direct shared; do
         vvp "$stage/init_${fixture}_${stages}.vvp"
     done
 done
+
+# A larger producer set must elaborate promptly as well as preserving the
+# RAM-backed behavior exercised above. Keep this bound separate from codegen.
+timeout 120s "$xls_root/ir_converter_main" --top=Top "${options[@]}" \
+    "$project_root/test_data/shared_capture_large.x" > "$stage/shared_capture_large.ir"
+"$xls_root/opt_main" "$stage/shared_capture_large.ir" > "$stage/shared_capture_large.opt.ir"
