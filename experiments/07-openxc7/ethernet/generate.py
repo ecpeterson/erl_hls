@@ -102,7 +102,9 @@ def main() -> None:
     args.output.mkdir(parents=True, exist_ok=True)
     os.chdir(args.output)
     core = PacketCore(args.simulation)
-    platform = XilinxPlatform("xc7z030-sbg485-1", [])
+    # The default ISE attribute map drops async_reg. Preserve synchronizer
+    # placement metadata even when only exporting Verilog for native tools.
+    platform = XilinxPlatform("xc7z030-sbg485-1", [], toolchain="vivado")
     result = platform.get_verilog(core, ios=core.ports(), name="liteeth_packet_core")
     # The default header embeds wall time and the calling repository's revision,
     # which is not the pinned LiteX revision. Keep provenance in the build report.

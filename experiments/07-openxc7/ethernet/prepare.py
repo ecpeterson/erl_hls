@@ -33,6 +33,23 @@ def fix_config_pulses(source: Path) -> None:
     source.write_text(text.replace(old, new))
 
 
+def fix_rx_speed_domain(source: Path) -> None:
+    """Choose RX's SGMII mode from its local ability register, never the TX copy."""
+    text = source.read_text()
+    replacements = {
+        "                self.rx.sgmii_speed.eq(0b10),\n": "",
+        "                self.rx.sgmii_speed.eq(sgmii_rx_speed),\n": "",
+        "            # Detect that link is down:\n":
+            "            self.rx.sgmii_speed.eq(Mux(self.lp_abi.i[0], sgmii_rx_speed, SGMII_1000MBPS_SPEED)),\n"
+            "            # Detect that link is down:\n",
+    }
+    for old, new in replacements.items():
+        if text.count(old) != 1:
+            raise ValueError("pinned PCS RX speed selection changed; review the local fix")
+        text = text.replace(old, new)
+    source.write_text(text)
+
+
 def environment(cache: Path, unpacked: Path) -> dict[str, str]:
     """Download about 4 MB once and return an isolated generator import path.
 
@@ -67,5 +84,6 @@ def environment(cache: Path, unpacked: Path) -> dict[str, str]:
         source_root = target / f"{name}-{pin['revision']}"
         if name == "liteeth":
             fix_config_pulses(source_root / "liteeth/phy/pcs_1000basex.py")
+            fix_rx_speed_domain(source_root / "liteeth/phy/pcs_1000basex.py")
         roots.append(source_root)
     return {**os.environ, "PYTHONPATH": os.pathsep.join(map(str, roots)), "PYTHONDONTWRITEBYTECODE": "1"}

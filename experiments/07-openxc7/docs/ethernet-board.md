@@ -1,6 +1,6 @@
 # TE0715 Ethernet diagnostic
 
-This compile probe joins the buffered [packet service](ethernet-packets.md), [GTX adapter and recovery controller](ethernet-gtx.md), two MMCMs, a fixed-frame generator/checker and the PS GP0 register bank. It targets TE0715-05-71C33-A on TEF1002-03-A. It does **not** yet produce a programmable image: the Zynq GTX configuration database is incomplete, and the 125-MHz datapath has not closed timing.
+This probe joins the buffered [packet service](ethernet-packets.md), [GTX adapter and recovery controller](ethernet-gtx.md), two MMCMs, a fixed-frame generator/checker and the PS GP0 register bank. It targets TE0715-05-71C33-A on TEF1002-03-A. The [Vivado reference flow](vivado-reference.md) produces timing-closed 125-MHz candidates; board operation remains unverified. The native flow still needs validated GTX configuration data and complete timing support before it can produce a qualified image.
 
 ```text
 Linux/UIO ── GP0 control + counter snapshots
@@ -56,4 +56,4 @@ build/boot/compiler/arm-gnu-toolchain-14.3.rel1-darwin-arm64-arm-none-eabi/bin/a
   ethernet/probe_ethernet.c -o build/ethernet-board/probe_ethernet
 ```
 
-This builds a diagnostic binary, not an SD image. GTX configuration, timing closure and physical transceiver qualification are prerequisites for adding it to a board image. PS Ethernet and the existing DMA bring-up path do not depend on the GTX database gap.
+This builds a diagnostic binary, not an SD image. Use a matching PS boot configuration with the selected PL candidate. Physical transceiver qualification remains outstanding for both toolchains. PS Ethernet and the existing DMA bring-up path do not depend on the native GTX database gap.

@@ -18,17 +18,29 @@ module te0715_ethernet_top #(parameter EXTERNAL=0)(
     wire [7:0] tx_data, rx_data;
     wire [31:0] sent, received, bad_frames, sent_snapshot;
     wire [63:0] rx_snapshot;
+    reg tx_link_sample, rx_link_sample;
+    always @(posedge tx_clock or negedge tx_reset_n)
+        if(!tx_reset_n) tx_link_sample<=0; else tx_link_sample<=link_tx;
+    always @(posedge rx_clock or negedge rx_reset_n)
+        if(!rx_reset_n) rx_link_sample<=0; else rx_link_sample<=link_rx;
+    // Synchronize independent completion/lock indications before combining them.
+    // Registered link samples also keep reset qualification out of the CDC cone.
+    (* ASYNC_REG="TRUE" *) reg [1:0] done_meta, done_sync;
     (* ASYNC_REG="TRUE" *) reg [3:0] flags_meta, flags_sync;
-    always @(posedge clock or negedge reset_n)
-        if(!reset_n) begin flags_meta<=0; flags_sync<=0; end
-        else begin flags_meta<={rx_locked,tx_locked,link_rx,link_tx}; flags_sync<=flags_meta; end
+    always @(posedge clock or negedge reset_n) begin
+        if(!reset_n) begin flags_meta<=0; flags_sync<=0; done_meta<=0; done_sync<=0; end
+        else begin
+            flags_meta<={rx_locked,tx_locked,rx_link_sample,tx_link_sample}; flags_sync<=flags_meta;
+            done_meta<={rx_done,tx_done}; done_sync<=done_meta;
+        end
+    end
     zynq_probe_ps #(.EXTENDED(1), .IDENTITY(32'h45544837)) processor_shell (
         .clock(clock), .reset_n(reset_n), .control(control),
         .status({rx_snapshot[63:32],rx_snapshot[31:0],sent_snapshot,12'b0,flags_sync,status[15:0]})
     );
     ethernet_supervised_endpoint packets (
         .control_clk(clock), .reset_n(reset_n), .run(control[0]),
-        .pll_lock(pll_lock), .tx_done(tx_done && tx_locked), .rx_done(rx_done && rx_locked),
+        .pll_lock(pll_lock), .tx_done(done_sync[0] && flags_sync[2]), .rx_done(done_sync[1] && flags_sync[3]),
         .pll_reset(pll_reset), .gt_reset(gt_reset), .user_ready(user_ready), .status(status),
         .eth_tx_clk(tx_clock), .eth_rx_clk(rx_clock), .eth_tx_half_clk(tx_half_clock), .eth_rx_half_clk(rx_half_clock),
         .tx_reset_n(tx_reset_n), .rx_reset_n(rx_reset_n),

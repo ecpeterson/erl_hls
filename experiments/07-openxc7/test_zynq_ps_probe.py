@@ -20,6 +20,7 @@ from test_ethernet_dma import run as check_packet_dma
 def run(yosys: Path | None) -> None:
     """Check board assets, AXI and the socket bridge; --yosys also verifies mapped cores."""
     root = Path(__file__).resolve().parent
+    subprocess.run([sys.executable, str(root / "test_vivado.py")], check=True)
     subprocess.run([sys.executable, str(root / "test_te0715_boot.py")], check=True)
     subprocess.run([sys.executable, str(root / "test_te0715_runtime.py")], check=True)
     check_dma(yosys)
