@@ -46,9 +46,9 @@ def diagnostic(output: Path, source: Path | None = None) -> None:
 
 
 def build(base: Path, runtime: Path, kernel: Path, bitstream: Path, timeout: int,
-          regsvc: Path | None = None) -> Path:
-    """Package loopback or a verified 25-MHz routed payload without altering input images."""
-    build_root = ROOT / "build/routed-dma" if regsvc else BUILD
+          regsvc: Path | None = None, output_root: Path | None = None) -> Path:
+    """Package loopback/routed inputs; an explicit output root must be a new directory."""
+    build_root = output_root or (ROOT / "build/routed-dma" if regsvc else BUILD)
     fsbl, routed = routed_inputs(regsvc, bitstream) if regsvc else (base / "fsbl.elf", None)
     board = validate_candidate(base)
     runtime_manifest = check_manifest(runtime)
@@ -60,7 +60,7 @@ def build(base: Path, runtime: Path, kernel: Path, bitstream: Path, timeout: int
     for name, sha256 in kernel_manifest["inputs"].items():
         if digest(ROOT / name) != sha256:
             raise ValueError(f"kernel/driver input changed; rebuild first: {name}")
-    build_root.mkdir(parents=True, exist_ok=True)
+    build_root.mkdir(parents=True, exist_ok=output_root is None)
     stage = build_root / "stage"
     if stage.is_symlink():
         raise ValueError("refusing symlinked DMA stage")
@@ -158,10 +158,12 @@ def main() -> None:
     parser.add_argument("kernel", type=Path)
     parser.add_argument("bitstream", type=Path)
     parser.add_argument("--regsvc", type=Path, help="routed build root containing rtl/ and fsbl/")
+    parser.add_argument("--output-root", type=Path, help="new directory; preserve existing DMA candidates")
     parser.add_argument("--timeout", type=int, default=180)
     args = parser.parse_args()
     print(build(args.base.resolve(), args.runtime.resolve(), args.kernel.resolve(),
-                args.bitstream.resolve(), args.timeout, args.regsvc.resolve() if args.regsvc else None))
+                args.bitstream.resolve(), args.timeout, args.regsvc.resolve() if args.regsvc else None,
+                args.output_root.resolve() if args.output_root else None))
 
 
 if __name__ == "__main__":

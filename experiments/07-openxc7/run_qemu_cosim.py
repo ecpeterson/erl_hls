@@ -42,12 +42,12 @@ def run(base: Path, kernel: Path, qemu: Path, runtime: Path | None, timeout: int
     if regsvc and not runtime:
         raise ValueError("routed application requires an ARM BEAM runtime image")
     runtime_manifest = check_manifest(runtime) if runtime else None
+    if runtime_manifest and runtime_manifest.get("kernel_manifest_sha256") != digest(kernel / "manifest.json"):
+        raise ValueError("DMA runtime and co-simulation must use the same kernel/driver")
     if regsvc:
         if ((runtime_manifest.get("routed_payload") or {}).get("rtl_manifest_sha256") !=
                 digest(regsvc / "manifest.json")):
             raise ValueError("routed test requires the matching assembled SD runtime")
-        if runtime_manifest["kernel_manifest_sha256"] != digest(kernel / "manifest.json"):
-            raise ValueError("routed runtime and co-simulation must use the same kernel/driver")
     stage = BUILD / ("ethernet" if ethernet else "routed" if regsvc else "run")
     stage.mkdir(parents=True, exist_ok=True)
     (stage / "report.json").unlink(missing_ok=True)
@@ -63,8 +63,8 @@ def run(base: Path, kernel: Path, qemu: Path, runtime: Path | None, timeout: int
                 (diagnostic_name, (stage / diagnostic_name).read_bytes(), stat.S_IFREG | 0o755)]
     (stage / "test.cpio.gz").write_bytes(gzip.compress(cpio(entries), mtime=0))
     mailbox_tree(base / "system.dtb", stage / "system.dtb", debug=bool(regsvc), ethernet=ethernet)
-    if regsvc and digest(stage / "system.dtb") != runtime_manifest["files"]["system.dtb"]["sha256"]:
-        raise ValueError("routed runtime and co-simulation device trees differ")
+    if runtime and digest(stage / "system.dtb") != runtime_manifest["files"]["system.dtb"]["sha256"]:
+        raise ValueError("DMA runtime and co-simulation device trees differ")
     command = [str(qemu), "-M", "xilinx-zynq-a9", "-m", "1024", "-smp", "1",
                "-nographic", "-monitor", "none", "-nic", "none", "-no-reboot",
                "-kernel", str(kernel / "zImage"), "-dtb", str(stage / "system.dtb"),
@@ -108,6 +108,7 @@ def run(base: Path, kernel: Path, qemu: Path, runtime: Path | None, timeout: int
                    "PASS: ARM BEAM routed application and independent DMA debug",
                    "PASS: Linux PL330 and Icarus routed application integration"]
     elif runtime:
+        markers.append("PASS: co-simulation uses the shipped DMA diagnostic and kernel module")
         markers.append("PASS: ARM BEAM raw-file DMA loopback, all 256 frame sizes")
     for marker in markers:
         if marker not in uart:

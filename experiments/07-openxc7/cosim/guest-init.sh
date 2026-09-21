@@ -16,6 +16,10 @@ if [ -b /dev/mmcblk0 ]; then
     mount -o ro /dev/mmcblk0 /mnt
     mount -t devtmpfs devtmpfs /mnt/dev
     mount -t proc proc /mnt/proc
+    # Prove that the C client and loaded module are exactly the shipped SD versions.
+    cmp /check_dma_device /mnt/opt/erl-hls/bin/check_dma_device
+    cmp /hls_dma_mailbox.ko "/mnt/lib/modules/$(uname -r)/extra/hls_dma_mailbox.ko"
+    echo 'PASS: co-simulation uses the shipped DMA diagnostic and kernel module'
     chroot /mnt /usr/bin/env ERL_LIBS=/opt/erl-hls/lib \
         escript /opt/erl-hls/bin/check_dma_beam.escript /dev/hls-dma0
 fi

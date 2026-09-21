@@ -2,6 +2,8 @@
 
 This flow prepares the [PS–PL register probe](../../../docs/zynq-ps-probe.md) for **TE0715-05-71C33-A / XC7Z030-1SBG485C**, intended for **TEF1002-03-A**. It builds on Apple Silicon without Vivado, PetaLinux or a Linux VM. Hardware boot is unverified.
 
+For first-board tests, use the [matched vendor register kit](ps-sd.md), which reuses this boot software with the timing-checked Vivado PL image. The source build below supplies its reusable SDK and base candidate.
+
 The SD boot chain is BootROM → FSBL → PL configuration → U-Boot → Linux → UIO diagnostic. The FSBL uses Trenz's generated DDR/MIO initialization unchanged. Trenz's [module table](https://wiki.trenz-electronic.de/display/PD/TE0715+Test+Board) maps this REV05 SKU to profile `04_30_1c_1gb`; the build checks that mapping and the PS settings before compiling.
 
 | Component | Source |

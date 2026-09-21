@@ -7,6 +7,7 @@ build `erl_hls` designs natively on Apple Silicon. It includes:
 - an [XC7Z030-SBG485 package overlay and counter/BRAM/DSP compile check](zynq7030.md);
 - a [PS7/FCLK0/GP0 register probe](../../docs/zynq-ps-probe.md) for CPU-access bring-up;
 - a [native TE0715 SD boot candidate](docs/te0715-boot.md), with source-built FSBL and ARM Linux diagnostic;
+- [matched vendor register/DMA SD kits](docs/ps-sd.md), with a 100-MHz FSBL and checked Linux/BEAM diagnostics for first-board tests;
 - an [ARM Linux/OTP SD root](docs/te0715-runtime.md), with board diagnostics and target-side frame-I/O tests;
 - a [PL330 DMA packet loopback](docs/te0715-dma.md), with a matching source-built kernel, frame driver and board acceptance tools;
 - [Linux–RTL DMA co-simulation](docs/te0715-cosim.md), connecting QEMU's CPU/PL330 to the mailbox in Icarus;

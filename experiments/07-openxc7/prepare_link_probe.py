@@ -8,13 +8,13 @@ from pathlib import Path
 import shutil
 import subprocess
 
-from check_zynq_boot import bit_payload, check_directory, check_linux_elf
+from boot.reference import REFERENCE, verify_reference as verify_image
+from check_zynq_boot import check_directory, check_linux_elf
 from prepare_te0715_boot import check_fit, digest, fdt, run
 from prepare_te0715_runtime import validate_candidate
 from clocking.profile import audit, read_rows, VENDOR_SHA256
 
 ROOT = Path(__file__).resolve().parent
-REFERENCE = ROOT / "results/vivado-reference-2026-09-21.json"
 # Names identify the selected image on disk; the two ETH7 images share an MMIO ABI.
 PROFILES = {
     "prbs": {"uio": "erl-hls-gtx", "program": "probe_gtx", "source": "gtx",
@@ -30,12 +30,7 @@ def verify_reference(profile: str, bitstream: Path) -> dict:
     """Reject swapped or altered images, including unqualified native substitutes."""
     if profile not in PROFILES:
         raise ValueError(f"unknown link profile: {profile}")
-    reference = json.loads(REFERENCE.read_text())
-    expected = reference["profiles"][profile]["artifacts_sha256"]["candidate.bit"]
-    if digest(bitstream) != expected:
-        raise ValueError(f"bitstream differs from retained {profile} reference")
-    bit_payload(bitstream.read_bytes())
-    return reference
+    return verify_image(profile, bitstream, REFERENCE)
 
 
 def verify_clock(fsbl: Path) -> dict:
