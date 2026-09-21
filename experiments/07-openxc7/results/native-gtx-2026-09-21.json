@@ -1,0 +1,297 @@
+{
+  "date": "2026-09-21",
+  "part": "xc7z030sbg485-1",
+  "source_base": "2bf51ca",
+  "backend_sha256": "c6ca0a64ddccfcc3cde401cb99b7ccadf5212c32ef4c2f48d12fee58b2099ecb",
+  "backend_source_revision": "68aeeb39f92e39bfb239c7e4a44dd93451fc1889",
+  "backend_patches_sha256": {
+    "lut_legality/nextpnr-output-pin.patch": "af4f322db2fb581ecc695ab289e1708743f0234d54dbc546d910ade8e5cf21ad",
+    "lut_legality/nextpnr-pin-origins.patch": "61541440af12696957cf46aa64082f535e46d34b7727c2c140ca241a2791b865",
+    "gtx/nextpnr-refclk.patch": "bf7d7733016121b900f29ce48077eec88851608a86bc052c7b5e0fe7a2723e44",
+    "gtx/nextpnr-unused-clkin.patch": "1421f5a093d20e235bc8b14fc6926a8e2d6dbafbbb00deb18b266e108f57adc8"
+  },
+  "assembler_tools_sha256": {
+    "bitread": "b38853980b01f87fe542b2ef9517bf6f1fded58787a3e12bf3f5f19afd1b5940",
+    "fasm2frames": "404015d5a2b44be9adfc55efef526369ad7d8f6d2d1045453fae9ba0214e6434",
+    "xc7frames2bit": "629a3e9274a2a4c7f9e01d04b24666ba5abd1505852c0b3394e13db025b919f4"
+  },
+  "clock_cascades": {
+    "matching_existing_encodings": 2804,
+    "added_cascades": 32,
+    "all_additions_match_zynq_top_half": true,
+    "independent_vendor_location_measurement": false,
+    "sources_sha256": {
+      "zynq7/segbits_clk_hrow_bot_r.db": "dc4fc20f5ffdddefde25b7490dfc03d4b19785de3b8d2dc3ab7a02107eb5ab26",
+      "zynq7/segbits_clk_hrow_top_r.db": "4c9c9effdaa6039eaa0df3c44056be0ceeaa1a34eab9134821f9f3e85f46738c",
+      "artix7/segbits_clk_hrow_bot_r.db": "5b22e19775dfa493f75bb3edbfccc06709a50b829e89857dc20aee1cbc8f6794",
+      "zynq7/tile_type_CLK_HROW_BOT_R.json": "18ca6b73966bd313a063ba52d0780a77c247b5aca6e0f8b2475422b1f40a4d3d",
+      "artix7/tile_type_CLK_HROW_BOT_R.json": "441944cdae73c1d861ddee278f751a6ca372a75efb81802abd26b8db8087c445"
+    },
+    "tile_connectivity_matches": true
+  },
+  "backend_regressions": {
+    "cases": 11,
+    "passed": true,
+    "hardware_qualified": false
+  },
+  "profiles": {
+    "ethernet-loopback": {
+      "part": "xc7z030sbg485-1",
+      "profile": "ethernet-loopback",
+      "reference_bitstream_sha256": "26572ac185d85f646b423fc15cc931311a4a1e227bad0cc79800de77c4dd9944",
+      "vendor_comparison": {
+        "enabled_features": 324,
+        "expected_set_bits": 332,
+        "known_bit_mask": 1933,
+        "missing_enabled_features": [],
+        "extra_known_bits": [],
+        "extra_bit_features": {},
+        "fasm_sha256": "5a324b0fc47502fc056c89a2232840f50160e867cb50b9e4c2904e53cf7b68df",
+        "bits_sha256": "5f60adcb8f8ae0aa9c44b989019a7a4d4932af8e21f63705486194f715e71a94",
+        "complete_native_bitstream_qualified": false
+      },
+      "native_comparison": {
+        "enabled_features": 324,
+        "expected_set_bits": 332,
+        "known_bit_mask": 1933,
+        "missing_enabled_features": [],
+        "extra_known_bits": [],
+        "extra_bit_features": {},
+        "fasm_sha256": "5a324b0fc47502fc056c89a2232840f50160e867cb50b9e4c2904e53cf7b68df",
+        "bits_sha256": "656bee7dd3ac1d4dd55cc243f6d28673a6a993d8d108eec213e1e34bba0a2a94",
+        "complete_native_bitstream_qualified": false
+      },
+      "recovered_non_ecc_bits": 102477,
+      "bitstream_bytes": 5980127,
+      "artifacts_sha256": {
+        "input.fasm": "5a324b0fc47502fc056c89a2232840f50160e867cb50b9e4c2904e53cf7b68df",
+        "candidate.frames": "fa0b3e23e4214609f5dcb1df5378d4a40363196ff67ae0be70c92f899d06fbf7",
+        "candidate.bits": "656bee7dd3ac1d4dd55cc243f6d28673a6a993d8d108eec213e1e34bba0a2a94"
+      },
+      "bitstream_sha256": "51f6f99a014b020027a238953e9d0aea76b3fbeccd57ac4223140782ecdc81a3",
+      "hardware_qualified": false,
+      "timing_qualified": false,
+      "limits": "GTX known-mask equality and complete frame serialization only; other configuration semantics are not independently validated.",
+      "physical_luts": 1652,
+      "lut_check": {
+        "luts": 2404,
+        "placement": {
+          "6LUT": 1256,
+          "5LUT": 1148
+        },
+        "truth_table_rows": 79200,
+        "elided_memory_constant_origins": 0,
+        "elided_logic_constant_origins": 0
+      },
+      "fmax_partial_only": {
+        "clock": {
+          "achieved": 83.14,
+          "constraint": 25.0
+        },
+        "rx_clock": {
+          "achieved": 113.48,
+          "constraint": 125.0
+        },
+        "rx_half_clock": {
+          "achieved": 512.56,
+          "constraint": 62.5
+        },
+        "tx_clock": {
+          "achieved": 120.89,
+          "constraint": 125.0
+        },
+        "tx_half_clock": {
+          "achieved": 626.17,
+          "constraint": 62.5
+        }
+      },
+      "flip_flops": 1383,
+      "ramb36": 2
+    },
+    "ethernet-external": {
+      "part": "xc7z030sbg485-1",
+      "profile": "ethernet-external",
+      "reference_bitstream_sha256": "4630e552dab1bc6856906be62a212f63896f32beccf784e9b4248dd45f3b27c6",
+      "vendor_comparison": {
+        "enabled_features": 324,
+        "expected_set_bits": 332,
+        "known_bit_mask": 1933,
+        "missing_enabled_features": [],
+        "extra_known_bits": [],
+        "extra_bit_features": {},
+        "fasm_sha256": "38924e605d1730c4701e494d0f097d950cd8eec1d59811997d2d8220f137c980",
+        "bits_sha256": "c74e3dc0100b7d82e5b5d7705b014d2ed97f13d7dbb50e36699c8b70014e6b51",
+        "complete_native_bitstream_qualified": false
+      },
+      "native_comparison": {
+        "enabled_features": 324,
+        "expected_set_bits": 332,
+        "known_bit_mask": 1933,
+        "missing_enabled_features": [],
+        "extra_known_bits": [],
+        "extra_bit_features": {},
+        "fasm_sha256": "38924e605d1730c4701e494d0f097d950cd8eec1d59811997d2d8220f137c980",
+        "bits_sha256": "b3643ee07fba63d7a9ddeb5646b07a25741aa6cc6917645c74b1487da16f32ac",
+        "complete_native_bitstream_qualified": false
+      },
+      "recovered_non_ecc_bits": 102473,
+      "bitstream_bytes": 5980127,
+      "artifacts_sha256": {
+        "input.fasm": "38924e605d1730c4701e494d0f097d950cd8eec1d59811997d2d8220f137c980",
+        "candidate.frames": "1fc12fa51ca3f58bbc406fe3f01c863a5a620d4aeda7df5d9d1b42c50ccbe731",
+        "candidate.bits": "b3643ee07fba63d7a9ddeb5646b07a25741aa6cc6917645c74b1487da16f32ac"
+      },
+      "bitstream_sha256": "f5a884a28b34f285448a4d496324709c2a420420624529aa50f1368ec5a05780",
+      "hardware_qualified": false,
+      "timing_qualified": false,
+      "limits": "GTX known-mask equality and complete frame serialization only; other configuration semantics are not independently validated.",
+      "physical_luts": 1652,
+      "lut_check": {
+        "luts": 2404,
+        "placement": {
+          "6LUT": 1256,
+          "5LUT": 1148
+        },
+        "truth_table_rows": 79200,
+        "elided_memory_constant_origins": 0,
+        "elided_logic_constant_origins": 0
+      },
+      "fmax_partial_only": {
+        "clock": {
+          "achieved": 83.14,
+          "constraint": 25.0
+        },
+        "rx_clock": {
+          "achieved": 113.48,
+          "constraint": 125.0
+        },
+        "rx_half_clock": {
+          "achieved": 512.56,
+          "constraint": 62.5
+        },
+        "tx_clock": {
+          "achieved": 120.89,
+          "constraint": 125.0
+        },
+        "tx_half_clock": {
+          "achieved": 626.17,
+          "constraint": 62.5
+        }
+      },
+      "flip_flops": 1383,
+      "ramb36": 2
+    },
+    "prbs": {
+      "part": "xc7z030sbg485-1",
+      "profile": "prbs",
+      "reference_bitstream_sha256": "b346b9f278b3a1d0f6f63205043ee3340568f9198d8bdeca0adc65cd79de7471",
+      "vendor_comparison": {
+        "enabled_features": 324,
+        "expected_set_bits": 332,
+        "known_bit_mask": 1933,
+        "missing_enabled_features": [],
+        "extra_known_bits": [],
+        "extra_bit_features": {},
+        "fasm_sha256": "b3abf03b1b1d1a29d160b2f89c771ae3a82822090fc99c25a1c3c18aa7c87469",
+        "bits_sha256": "b7b275ba3cdea11c370a17f99cbad4ed1fbd40dfb19fdeb468d6fc6d9343eccd",
+        "complete_native_bitstream_qualified": false
+      },
+      "native_comparison": {
+        "enabled_features": 324,
+        "expected_set_bits": 332,
+        "known_bit_mask": 1933,
+        "missing_enabled_features": [],
+        "extra_known_bits": [],
+        "extra_bit_features": {},
+        "fasm_sha256": "b3abf03b1b1d1a29d160b2f89c771ae3a82822090fc99c25a1c3c18aa7c87469",
+        "bits_sha256": "5a2be742baa481cb0eab38987b77db28e61281fdf44c4e2a5072916293e511ba",
+        "complete_native_bitstream_qualified": false
+      },
+      "recovered_non_ecc_bits": 44696,
+      "bitstream_bytes": 5980123,
+      "artifacts_sha256": {
+        "input.fasm": "b3abf03b1b1d1a29d160b2f89c771ae3a82822090fc99c25a1c3c18aa7c87469",
+        "candidate.frames": "6759d70849fdba58be939a373a52c04f55eaf54647c8d0a2e7ca97f5026fa8b9",
+        "candidate.bits": "5a2be742baa481cb0eab38987b77db28e61281fdf44c4e2a5072916293e511ba"
+      },
+      "bitstream_sha256": "6f5d33460c9a6d7946f200b14020da456e3a4e587aa4a7fe437b7fccdd6a18a7",
+      "hardware_qualified": false,
+      "timing_qualified": false,
+      "limits": "GTX known-mask equality and complete frame serialization only; other configuration semantics are not independently validated.",
+      "physical_luts": 658,
+      "lut_check": {
+        "luts": 1000,
+        "placement": {
+          "5LUT": 470,
+          "6LUT": 530
+        },
+        "truth_table_rows": 28992,
+        "elided_memory_constant_origins": 0,
+        "elided_logic_constant_origins": 0
+      },
+      "fmax_partial_only": {
+        "clock": {
+          "achieved": 79.87,
+          "constraint": 25.0
+        },
+        "rx_clock": {
+          "achieved": 159.36,
+          "constraint": 62.5
+        },
+        "tx_clock": {
+          "achieved": 262.54,
+          "constraint": 62.5
+        }
+      },
+      "flip_flops": 633,
+      "ramb36": 0
+    }
+  },
+  "preceding_native_ethernet": {
+    "source": "vivado-reference-2026-09-21.json",
+    "physical_luts": 1644,
+    "flip_flops": 1383,
+    "ramb36": 2,
+    "fmax_partial_only": {
+      "clock": {
+        "achieved": 81.53,
+        "constraint": 25.0
+      },
+      "rx_clock": {
+        "achieved": 112.28,
+        "constraint": 125.0
+      },
+      "rx_half_clock": {
+        "achieved": 459.56,
+        "constraint": 62.5
+      },
+      "tx_clock": {
+        "achieved": 122.82,
+        "constraint": 125.0
+      },
+      "tx_half_clock": {
+        "achieved": 521.1,
+        "constraint": 62.5
+      }
+    },
+    "comparison": "Same RTL, seed 1/router2. Disconnecting the unused MMCM clock changes placement/routing. LUT occupancy +8 (0.49%); FF/BRAM unchanged. Partial timing is not a safe-clock estimate."
+  },
+  "hardware_qualified": false,
+  "timing_qualified": false,
+  "raw_archive": {
+    "filename": "native-gtx-evidence.tar.gz",
+    "sha256": "93d76fbe8eaf76b8d06360f4e40fab1df0bac60433359b674f28bc3900970192",
+    "bytes": 69107694
+  },
+  "validation": {
+    "portable_assembly_tests": 6,
+    "vendor_evidence_parser_tests": 5,
+    "source_contract_tests": 19,
+    "source_contract_new_gaps": 0,
+    "dialyzer": "passed",
+    "native_bringup_suite": "passed",
+    "native_backend_ctest": "passed",
+    "clean_patch_reconstruction": "matches measured sources",
+    "backend_cases": 11
+  }
+}
