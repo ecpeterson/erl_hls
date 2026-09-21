@@ -819,6 +819,8 @@ state_machine_entry_action_accepts_runtime_predicate_test() ->
         end
     ).
 
+%% Generated entry batches retain their order and exclude occupied actor outboxes.
+-spec state_machine_entry_actions_use_one_source_ordered_egress_test() -> ok.
 state_machine_entry_actions_use_one_source_ordered_egress_test() ->
     Path = filename:join("_build", "ordered_egress_fixture.erl"),
     ok = filelib:ensure_dir(Path),
@@ -1035,7 +1037,7 @@ state_machine_entry_actions_use_one_source_ordered_egress_test() ->
         )),
         ?assertNotEqual(nomatch, binary:match(
             XLS,
-            <<"}, state.egress_busy, in_flight, cursor)">>
+            <<"scheduler::exclude_reserved(in_flight, state.outbox_busy)">>
         )),
         ?assertNotEqual(nomatch, binary:match(
             XLS,

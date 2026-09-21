@@ -546,6 +546,8 @@ shared_executor_dispatch(_Reductions, aggregate_only) ->
 %%% SharedService scheduling
 %%%
 
+%% Selects reduction work without borrowing another actor's reserved output space.
+-doc "Emits selection and retirement helpers for ordinary or aggregated reduction scheduling.".
 -spec shared_service_helpers(reductions(), service_mode()) -> iodata().
 shared_service_helpers(none, _Mode) ->
     [];
@@ -569,7 +571,7 @@ shared_service_helpers(_Reductions, Mode) ->
     end,
     """
           ..zero!<scheduler::Candidates<ACTOR_COUNT>>()
-        }, state.egress_busy, in_flight, cursor)
+        }, state.egress_busy, scheduler::exclude_reserved(in_flight, state.outbox_busy), cursor)
     }
 
     fn retire_reduction_actor<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(

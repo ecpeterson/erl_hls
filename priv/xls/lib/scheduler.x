@@ -11,6 +11,16 @@ pub struct Candidates<COUNT: u32> {
   aggregate: u1[COUNT],
 }
 
+// Reserve a whole effect batch before issue: an actor is unavailable while
+// executing or while its previous batch occupies its independent outbox.
+// A callback that produces no effects releases its reservation at retirement.
+pub fn exclude_reserved<COUNT: u32>(
+    in_flight: u1[COUNT], outbox_busy: u1[COUNT]) -> u1[COUNT] {
+  unroll_for! (slot, result): (u32, u1[COUNT]) in u32:0..COUNT {
+    update(result, slot, in_flight[slot] || outbox_busy[slot])
+  }(zero!<u1[COUNT]>())
+}
+
 // Private reduction work can run while egress is busy. Within each actor,
 // entry/egress work suppresses mailbox dispatch; in-flight actors stay excluded.
 // The round-robin choice is across eligible actors, not across work categories.
@@ -75,4 +85,15 @@ fn actor_fairness_spans_entry_mail_and_reduction_work_test() {
   }(());
   assert_eq(select(candidates, true, [false, false, false, true], u32:3), (true, u32:0));
   assert_eq(select(zero!<Candidates<u32:1>>(), false, [false], u32:0), (false, u32:0));
+}
+
+// Arbitrarily long pressure at one actor cannot remove another ready actor.
+#[test]
+fn reserved_outbox_excludes_only_its_owner_test() {
+  let work = Candidates<u32:3> { mail: [true, true, true],
+    ..zero!<Candidates<u32:3>>() };
+  let blocked = exclude_reserved([false, false, true], [true, false, false]);
+  for (cursor, _): (u32, ()) in u32:0..u32:3 {
+    assert_eq(select(work, false, blocked, cursor), (true, u32:1));
+  }(());
 }

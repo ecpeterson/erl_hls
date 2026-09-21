@@ -16,6 +16,9 @@ config_parameter(Options) -> optional(Options,
     ",\n      mailbox_debug_out: chan<u24[ACTOR_COUNT]> out").
 config_value(Options) -> optional(Options, "\n      mailbox_debug_out,\n").
 
+%% Includes actors awaiting their own output slot in the public egress-wait flag.
+-doc "Emits the passive per-actor mailbox snapshot, including occupied output reservations.".
+-spec sample(map()) -> iodata().
 sample(Options) -> optional(Options, """
 
     // The shell always accepts this diagnostic output. Query backpressure
@@ -25,7 +28,8 @@ sample(Options) -> optional(Options, """
     let _observation = send(join(), mailbox_debug_out,
       scheduler_observation::snapshot(
         state.occupied, state.order, state.postponed, state.in_flight,
-        state.mail_candidates, state.entry_probes, state.egress_waiters,
+        state.mail_candidates, state.entry_probes,
+        scheduler::exclude_reserved(state.egress_waiters, state.outbox_busy),
         state.egress_busy, state.phase as u2,
         state.completed_valid && state.completed.effects_valid,
         state.completed.slot));
