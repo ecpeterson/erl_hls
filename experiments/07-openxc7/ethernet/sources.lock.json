@@ -1,0 +1,17 @@
+{
+  "migen": {
+    "revision": "e19524c963a8342952840983047557707fbe0b6a",
+    "url": "https://codeload.github.com/m-labs/migen/tar.gz/e19524c963a8342952840983047557707fbe0b6a",
+    "sha256": "e5aad1483c577001c8de0af93694db3b8e9de7c6b9fae1a072f43a896beaa53a"
+  },
+  "litex": {
+    "revision": "db643c5f29d588df1e844e8a53267e1e48553ee5",
+    "url": "https://codeload.github.com/enjoy-digital/litex/tar.gz/db643c5f29d588df1e844e8a53267e1e48553ee5",
+    "sha256": "b8536a36fde0299caee19b004d743da569bcc8561143a8a9b82b6a481e1aff23"
+  },
+  "liteeth": {
+    "revision": "96547670d9d4776b81edba0c8a82e5f10ed8a1e3",
+    "url": "https://codeload.github.com/enjoy-digital/liteeth/tar.gz/96547670d9d4776b81edba0c8a82e5f10ed8a1e3",
+    "sha256": "da2f994041be9a2d7fc310bd5e041e868db9ee2d58a449c628b119eae302f987"
+  }
+}
