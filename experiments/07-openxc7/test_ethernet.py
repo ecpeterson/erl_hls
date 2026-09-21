@@ -35,12 +35,13 @@ def check_store(stage: Path) -> None:
     subprocess.run(["vvp", str(executable)], check=True, timeout=10)
 
 
-def synthesize(yosys: Path, stage: Path, sources: list[Path], mapped: bool) -> Path:
+def synthesize(yosys: Path, stage: Path, sources: list[Path], mapped: bool,
+               top: str = "ethernet_packet_endpoint") -> Path:
     """Lower processes, optionally map XC7 cells, and reject undriven nets/loops."""
     output = stage / ("mapped.v" if mapped else "lowered.v")
     commands = ["read_verilog " + " ".join(f'"{path}"' for path in sources)]
-    commands += (["synth_xilinx -family xc7 -top ethernet_packet_endpoint -noiopad -flatten"]
-                 if mapped else ["hierarchy -top ethernet_packet_endpoint", "proc", "opt"])
+    commands += ([f"synth_xilinx -family xc7 -top {top} -noiopad -flatten"]
+                 if mapped else [f"hierarchy -top {top}", "proc", "opt"])
     commands += ["check -assert", "scc -expect 0", f'write_verilog -noattr "{output}"']
     if mapped:
         # Older distro Yosys treats quotes in tee's filename literally. The
@@ -51,12 +52,20 @@ def synthesize(yosys: Path, stage: Path, sources: list[Path], mapped: bool) -> P
     return output
 
 
-def simulate(stage: Path, rtl: Path, models: Path | None, cache: Path) -> str:
-    """Check delivered frames plus independently decoded transmitted symbols."""
+def simulate(stage: Path, rtl: Path, models: Path | None, cache: Path,
+             gearbox: tuple[int, int] | None = None, alignment_only: bool = False) -> str:
+    """Check frame contents and wire coding, optionally through the ideal GTX model.
+
+    Gearbox selects (initial bit offset, half-clock phase). Alignment-only runs
+    negotiate and transfer one checked frame; normal runs exercise all faults.
+    """
     root = Path(__file__).resolve().parent
     write_vectors(stage)
     sources = [root / "ethernet/packet_tb.sv", rtl]
     flags = []
+    if gearbox is not None:
+        sources.append(root / "ethernet/gearbox_packet_fixture.sv")
+        flags.append("-DPACKET_ENDPOINT=gearbox_packet_fixture")
     if models:
         # cells_sim declares BRAM only as a black box. Exercise the actual mapped
         # ports/modes with AMD's functional model, as the DMA regression does.
@@ -69,17 +78,21 @@ def simulate(stage: Path, rtl: Path, models: Path | None, cache: Path) -> str:
         cache.mkdir(parents=True, exist_ok=True)
         lock = json.loads((root / "ethernet/models.lock.json").read_text())
         sources += [fetch(pin, cache) for pin in lock.values()]
-        flags = ["-s", "glbl"]
+        flags += ["-s", "glbl"]
     executable = stage / "packet.vvp"
     subprocess.run(["iverilog", "-g2012", *flags, "-s", "packet_tb", "-o", str(executable),
                     *map(str, sources)], cwd=stage, check=True, timeout=60)
-    process = subprocess.run(["vvp", str(executable)], cwd=stage, text=True, timeout=60,
+    options = ([] if gearbox is None else
+               [f"+bit_offset={gearbox[0]}", f"+half_phase={gearbox[1]}"])
+    if alignment_only:
+        options.append("+alignment_only")
+    process = subprocess.run(["vvp", str(executable), *options], cwd=stage, text=True, timeout=60,
                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     result = process.stdout
     (stage / "simulation.log").write_text(result)
     print(result.strip(), flush=True)
     process.check_returncode()
-    check_capture(stage / "wire.hex", EXPECTED)
+    check_capture(stage / "wire.hex", [(60, 3)] if alignment_only else EXPECTED)
     print("PASS: independent 8b/10b disparity, preamble, padding, FCS and inter-frame gap")
     return result
 

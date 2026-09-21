@@ -12,6 +12,7 @@ from test_qemu_cosim import run as check_cosim
 from test_gtx_probe import run as check_gtx
 from test_sfp_probe import run as check_sfp
 from test_ethernet import run as check_ethernet
+from test_ethernet_gearbox import run as check_gearbox
 
 
 def run(yosys: Path | None) -> None:
@@ -25,6 +26,7 @@ def run(yosys: Path | None) -> None:
     check_sfp(yosys)
     if yosys:
         check_ethernet(yosys, root / "build/ethernet")
+        check_gearbox(yosys, root / "build/ethernet-gearbox")
     source, bench = root / "zynq_ps_probe.v", root / "zynq_ps_probe_tb.sv"
     with tempfile.TemporaryDirectory(prefix="zynq-ps-probe-") as directory:
         stage = Path(directory)
