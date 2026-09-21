@@ -11,6 +11,7 @@ import subprocess
 from check_zynq_boot import bit_payload, check_directory, check_linux_elf
 from prepare_te0715_boot import check_fit, digest, fdt, run
 from prepare_te0715_runtime import validate_candidate
+from clocking.profile import audit, read_rows, VENDOR_SHA256
 
 ROOT = Path(__file__).resolve().parent
 REFERENCE = ROOT / "results/vivado-reference-2026-09-21.json"
@@ -45,7 +46,23 @@ def verify_clock(fsbl: Path) -> dict:
     for name, expected in clock["inputs"].items():
         if digest(ROOT / name) != expected:
             raise ValueError(f"FSBL source changed: {name}")
+    if clock.get("fsbl_programs_si5338"):
+        if (clock.get("clock_profile") != audit(read_rows(ROOT / "clocking/profile.h")) or
+                clock.get("clock_vendor_table_sha256") != VENDOR_SHA256 or
+                clock.get("vccio34_mv_required") != 1800):
+            raise ValueError("FSBL clock profile or electrical prerequisites differ")
     return clock
+
+
+def program_sources(profile: str, clock_startup: bool) -> dict[str, list[Path]]:
+    """Select each diagnostic and its shared sources for this kit's boot contract."""
+    configuration = PROFILES[profile]
+    names = [configuration["program"]] + (["test_probe_gtx"] if profile == "prbs" else [])
+    sources = {name: [ROOT / configuration["source"] / f"{name}.c"] for name in names}
+    if clock_startup:
+        for name, core in (("probe_clock", "si5338"), ("test_si5338", "si5338"), ("test_ps_i2c", "ps_i2c")):
+            sources[name] = [ROOT / "clocking" / f"{name}.c", ROOT / "clocking" / f"{core}.c"]
+    return sources
 
 
 def check_candidate(candidate: Path) -> dict:
@@ -58,6 +75,8 @@ def check_candidate(candidate: Path) -> dict:
     if manifest["configuration"] != PROFILES[profile] or manifest["reference_sha256"] != digest(REFERENCE):
         raise ValueError("candidate profile or reference changed")
     verify_clock(candidate)
+    if manifest["programs"] != list(program_sources(profile, manifest.get("fsbl_programs_si5338", False))):
+        raise ValueError("candidate diagnostic set changed")
     for name, expected in manifest["files"].items():
         if digest(candidate / name) != expected:
             raise ValueError(f"candidate file changed: {name}")
@@ -69,6 +88,10 @@ def check_candidate(candidate: Path) -> dict:
                               ("reg", "x", "40000000 1000"), ("compatible", "s", "generic-uio")):
         if fdt(tree, node, prop, kind) != value:
             raise ValueError(f"candidate UIO property changed: {prop}")
+    if manifest.get("fsbl_programs_si5338"):
+        if (fdt(tree, "/axi/i2c@e0005000", "status", "s") != "okay" or
+                fdt(tree, "/aliases", "i2c0", "s") != "/axi/i2c@e0005000"):
+            raise ValueError("candidate PS I2C1 mapping changed")
     check_fit(candidate / "image.ub", candidate, candidate / "verify.log", dict(os.environ))
     for name in manifest["programs"]:
         check_linux_elf((candidate / name).read_bytes())
@@ -99,13 +122,14 @@ def build(profile: str, base: Path, fsbl: Path, bitstream: Path, sdk: Path, outp
     (output / "boot.cmd").write_text(script)
     run(["mkimage", "-A", "arm", "-T", "script", "-C", "none", "-n", f"TE0715 {profile}",
          "-d", "boot.cmd", "boot.scr"], output, log, env)
-    programs = [configuration["program"]] + (["test_probe_gtx"] if profile == "prbs" else [])
+    sources = program_sources(profile, clock.get("fsbl_programs_si5338", False))
+    programs = list(sources)
     compiler = next((sdk / "compiler").glob("*/bin/arm-none-eabi-gcc"))
     musl = sdk / "work/musl-build"
     for name in programs:
         run([compiler, f"-specs={musl / 'static-musl.specs'}", "-std=c11", "-Wall", "-Wextra", "-Werror",
              "-Os", "-mcpu=cortex-a9", "-mfpu=vfpv3", "-mfloat-abi=hard", "-static", "-Wl,-z,noexecstack",
-             f"-Wl,-T,{musl / 'linux-static.ld'}", ROOT / configuration["source"] / f"{name}.c",
+             f"-Wl,-T,{musl / 'linux-static.ld'}", *sources[name],
              "-o", output / name], output, log, env)
     (output / "boot.bif").write_text("the_ROM_image:\n{\n [bootloader] fsbl.elf\n probe.bit\n"
                                     " u-boot.elf\n [load=0x00100000] system.dtb\n}\n")
@@ -113,14 +137,16 @@ def build(profile: str, base: Path, fsbl: Path, bitstream: Path, sdk: Path, outp
     run([bootgen, "-arch", "zynq", "-image", "boot.bif", "-o", "BOOT.bin", "-w", "on"], output, log, env)
     manifest = {**clock, "module": board["module"], "carrier": board["carrier"], "part": board["part"],
         "profile": profile, "configuration": configuration, "hardware_validated": False,
-        "reference_clock_hz_required": 125000000, "fsbl_programs_si5338": False,
+        "reference_clock_hz_required": 125000000,
+        "fsbl_programs_si5338": clock.get("fsbl_programs_si5338", False),
         "reference_sha256": digest(REFERENCE), "base_manifest_sha256": digest(base / "manifest.json"),
         "fsbl_manifest_sha256": digest(fsbl / "manifest.json"), "compiler_sha256": digest(compiler),
         "bootgen_sha256": digest(bootgen), "boot_partitions": check_directory(output), "programs": programs,
         "sources": {str(p.relative_to(ROOT)): digest(p) for p in
                     [Path(__file__), ROOT / "check_zynq_boot.py", ROOT / "boot/probe.its", ROOT / "boot/boot.cmd",
-                     *(ROOT / configuration["source"] / f"{name}.c" for name in programs)]},
-        "sd_files": ["BOOT.bin", "boot.scr", "image.ub", configuration["program"]],
+                     *(p for files in sources.values() for p in files)]},
+        "sd_files": ["BOOT.bin", "boot.scr", "image.ub", configuration["program"],
+                     *(["probe_clock"] if clock.get("fsbl_programs_si5338") else [])],
         "files": {p.name: digest(p) for p in output.iterdir() if p.is_file()}}
     (output / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
     check_candidate(output)
