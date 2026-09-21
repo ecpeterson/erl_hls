@@ -38,3 +38,10 @@ for top in ArbiterTop ReturnTop; do
         timeout 60s vvp "$prefix.vvp" | tee "$prefix.sim.log"
     done
 done
+
+# Bound elaboration separately from functional tests: the prior conditional
+# array update becomes impractical at twelve contenders on the native compiler.
+timeout 120s "$xls_root/ir_converter_main" --top=Top --warnings_as_errors=false \
+    --dslx_path="$project_root/priv/xls/lib" --dslx_stdlib_path="$stdlib" \
+    "$project_root/test_data/effect_window_large.x" > "$stage/large.ir"
+"$xls_root/opt_main" "$stage/large.ir" > "$stage/large.opt.ir"
