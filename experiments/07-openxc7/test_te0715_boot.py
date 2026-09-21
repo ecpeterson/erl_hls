@@ -62,6 +62,20 @@ class BoardTests(unittest.TestCase):
             with self.subTest(reader=reader.__name__), self.assertRaises(ValueError):
                 reader(b"\0" * 64)
 
+    def test_bit_part_names(self) -> None:
+        """Accept the two tool spellings of this chip/package, never another target."""
+        for part in (b"xc7z030sbg485-1\0", b"7z030sbg485\0", b"7z020clg484\0",
+                     b"7z030ffg676\0", b"xc7z030sbg485-2\0", b"7z030sbg485"):
+            data = bytes.fromhex("00090ff00ff00ff00ff0000001")
+            for tag, field in zip(b"abcd", (b"design\0", part, b"date\0", b"time\0")):
+                data += bytes([tag]) + len(field).to_bytes(2, "big") + field
+            data += b"e\0\0\0\4test"
+            if part in (b"xc7z030sbg485-1\0", b"7z030sbg485\0"):
+                self.assertEqual(bit_payload(data), b"test")
+            else:
+                with self.subTest(part=part), self.assertRaisesRegex(ValueError, "wrong .bit target"):
+                    bit_payload(data)
+
 
 class CandidateTests(unittest.TestCase):
     """Exercise the independent verifier on real Bootgen output and targeted corruptions."""

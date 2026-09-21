@@ -44,7 +44,8 @@ def bit_payload(data: bytes) -> bytes:
         require(offset + length <= len(data), "truncated .bit metadata")
         fields[tag] = data[offset:offset + length]
         offset += length
-    require(fields[ord("b")] == b"xc7z030sbg485-1\0", "wrong .bit target")
+    # Vivado omits the xc prefix and speed grade; provenance must pin the latter.
+    require(fields[ord("b")] in (b"xc7z030sbg485-1\0", b"7z030sbg485\0"), "wrong .bit target")
     require(offset + 5 <= len(data) and data[offset] == ord("e"), "missing .bit payload")
     length = int.from_bytes(data[offset + 1:offset + 5], "big")
     payload = data[offset + 5:]

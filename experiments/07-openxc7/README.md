@@ -12,6 +12,7 @@ build `erl_hls` designs natively on Apple Silicon. It includes:
 - [Linux–RTL DMA co-simulation](docs/te0715-cosim.md), connecting QEMU's CPU/PL330 to the mailbox in Icarus;
 - an optional [packet DMA test fixture](docs/ethernet-dma.md), carrying arbitrary Linux frames through the PCS/MAC with independent clock-domain ownership;
 - a [complete TE0715 routed `regsvc` image](docs/te0715-regsvc.md), with two actors, independent application/debug DMA, and Linux/BEAM–RTL integration checks;
+- [matched PRBS/Ethernet SD kits](docs/link-sd.md), with retained Vivado images, a 25-MHz FSBL and Linux diagnostics;
 - a [GTX/SFP prerequisite probe](docs/gtx.md), with native placement/routing and CPU diagnostics;
 - a [checked native GTX assembly flow](docs/gtx-configuration.md), using measured tile locations, bounded database overlays and retained vendor references;
 - a [Vivado reference batch](docs/vivado-reference.md) for exact-part configuration comparisons, vendor primitive simulation, timing/CDC evidence and fallback board candidates;
