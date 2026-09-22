@@ -507,7 +507,8 @@ module phi_halo_cell_tb;
         output_ready[EAST] = 1'b0;
         send_phi0(32'd1, NORTH_MASK, 32'd140000);
         send_phi0(32'd1, EAST_MASK, 32'd150000);
-        send_phi0(32'd1, WEST_MASK, 32'd145000);
+        // This heads draw selects east from the equal east/west maxima.
+        send_phi0(32'd1, WEST_MASK, 32'd150000);
         send_phi0(32'd1, SOUTH_MASK, 32'd135000);
 
         while (!output_valid[EAST])

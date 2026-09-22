@@ -26,11 +26,11 @@ meanings:
   * On entering `comparing`, it casts its final layer-zero value to each
     neighbor. Each message identifies the incoming edge as seen by its
     recipient. Four distinct sources complete the comparison and record both
-    the largest neighboring value and its direction when that maximum is
-    unique. A tie has no candidate direction. The cell then moves to
-    `flipping`.
+    the largest neighboring value and all directions attaining it. A
+    pseudorandom choice among those directions breaks ties independently of
+    arrival order. The cell then moves to `flipping`.
   * On entering `flipping`, it advances a small pseudorandom generator and
-    moves a local anyon toward the unique comparison winner on heads. Exactly
+    moves a local anyon toward the selected comparison winner on heads. Exactly
     one neighbor receives a present anyon update for a move; the other three
     receive an absent update. Four incoming anyon messages complete the step
     and move the cell back to `measuring`.
@@ -77,7 +77,8 @@ cell has emitted the message needed to release the first.
 This distance-three slice performs twelve diffusion rounds per anyon step. The
 paper prescribes `c = 10 log^2(L)` field updates; twelve is the nearest whole
 number at `L = 3`. The coin is the most-significant bit of a deterministic
-`xorshift32` sequence.
+`xorshift32` sequence. The lower 31 bits of the same word select among tied
+maxima without consuming an extra word or changing the coin stream.
 Each cell receives a nonzero seed before it begins, so a topology can give
 statically instantiated cells distinct reproducible streams. The paired
 syndrome input supplies nontrivial noise; its data and measurement generators
@@ -500,13 +501,8 @@ comparing(
         #phi_fold{value1 = WinnerMask}},
     Cell = #cell{step = Step}
 ) ->
-    BestDirection = case WinnerMask of
-        ?PHI_NORTH_MASK -> ?PHI_NORTH_MASK;
-        ?PHI_EAST_MASK -> ?PHI_EAST_MASK;
-        ?PHI_WEST_MASK -> ?PHI_WEST_MASK;
-        ?PHI_SOUTH_MASK -> ?PHI_SOUTH_MASK;
-        _ -> ?NO_DIRECTION
-    end,
+    NextRandom = hls_prng:xorshift32(Cell#cell.random_state),
+    BestDirection = choose_direction(hls_type:as(hls_nums:u32(), WinnerMask), NextRandom),
     {flipping, Cell#cell{best_direction = BestDirection}, consume};
 comparing(
     cast,
@@ -534,6 +530,26 @@ comparing(cast, #phenom_anyon{}, Cell) ->
     {comparing, Cell, fail};
 comparing(cast, #phi_config{}, Cell) ->
     {comparing, Cell, fail}.
+
+%% Map the low 31 random bits to an ordinal among the winning edges. Multiply
+%% high avoids division; the three-way case's bucket sizes differ by one draw.
+-spec choose_direction(hls_nums:u32(), hls_nums:u32()) -> hls_nums:u32().
+choose_direction(Mask, Random) ->
+    North = Mask band 1,
+    East = (Mask bsr 1) band 1,
+    West = (Mask bsr 2) band 1,
+    South = (Mask bsr 3) band 1,
+    Count = North + East + West + South,
+    Draw = hls_type:as(hls_nums:u64(), Random band 16#7fffffff),
+    Rank = hls_type:as(hls_nums:u32(),
+        (Draw * hls_type:as(hls_nums:u64(), Count)) bsr 31),
+    if
+        Count =:= 0 -> ?NO_DIRECTION;
+        Rank < North -> ?PHI_NORTH_MASK;
+        Rank < North + East -> ?PHI_EAST_MASK;
+        Rank < North + East + West -> ?PHI_WEST_MASK;
+        true -> ?PHI_SOUTH_MASK
+    end.
 
 -doc "Chooses a correction and publishes directional moves, then collects neighbor arrivals.".
 -spec flipping(enter, phase(), #cell{}) -> hls_statem:enter_result(#cell{});

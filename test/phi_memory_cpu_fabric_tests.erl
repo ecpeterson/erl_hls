@@ -40,6 +40,28 @@ distance_three_noisy_closeout_test_() ->
         ok = maybe_write_witness(Envelope)
     end)}.
 
+%% Aliased opposite neighbors must no longer suppress all moves on the smallest torus.
+-spec distance_two_noisy_closeout_test() -> ok.
+distance_two_noisy_closeout_test() ->
+    First = distance_two_witness(),
+    ?assertEqual(First, distance_two_witness()),
+    ?assertMatch(#{correction_count := 34, closeout_step := 17,
+        data_counts := #{commutes := 8, anticommutes := 0}}, phi_memory_demo:summary(First)).
+
+%% Give each run independent actors, deterministic noise and the ordinary cutoff/query protocol.
+-spec distance_two_witness() -> phi_memory_experiment:witness().
+distance_two_witness() ->
+    {ok, Fabric} = phi_memory_cpu_fabric:start_link(2, ?NOISE_RATE),
+    try
+        Options = #{distance => 2, first_quiet_step => 16,
+            line_y => 2, measurement => z, request_id => 16#504849},
+        {ok, Runner} = phi_memory_runner:start_link(Fabric, Options, 2000),
+        try
+            {ok, Witness} = phi_memory_runner:await(Runner),
+            Witness
+        after phi_memory_runner:stop(Runner) end
+    after phi_memory_cpu_fabric:stop(Fabric) end.
+
 maybe_write_witness(Envelope) ->
     case os:getenv("ERL_HLS_PHI_CPU_WITNESS") of
         false ->
