@@ -52,10 +52,10 @@ fixture() ->
         },
         expected_summary => #{
             closeout_step => 18,
-            correction_count => 80,
+            correction_count => 77,
             measurement => z,
-            data_counts => #{commutes => 8, anticommutes => 10},
-            row => #{y => 4, parity => 1}
+            data_counts => #{commutes => 9, anticommutes => 9},
+            row => #{y => 4, parity => 0}
         }
     }.
 

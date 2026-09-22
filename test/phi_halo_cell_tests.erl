@@ -158,6 +158,8 @@ measurement_gates_diffusion_and_toggles_anyon_test() ->
         stop_collectors(Ref, Collectors)
     end.
 
+%% All arrival orders retain the same maximum set and seeded winner.
+-spec comparison_source_orders_test_() -> list().
 comparison_source_orders_test_() ->
     Unique = comparison_messages([
         {north, 14},
@@ -184,9 +186,33 @@ comparison_source_orders_test_() ->
         {south, -2}
     ]),
     comparison_order_tests(unique, Unique, 18, ?EAST_MASK) ++
-        comparison_order_tests(tied, Tied, 18, 0) ++
+        comparison_order_tests(tied, Tied, 18, ?WEST_MASK) ++
         comparison_order_tests(negative, Negative, -1, ?EAST_MASK) ++
-        comparison_order_tests(negative_tied, NegativeTied, -1, 0).
+        comparison_order_tests(negative_tied, NegativeTied, -1, ?WEST_MASK).
+
+%% Every nonempty maximum set can select each member, and never a losing edge.
+-spec tied_candidates_and_coin_test() -> ok.
+tied_candidates_and_coin_test() ->
+    {Seeds, _} = lists:mapfoldl(fun(_, Seed) -> {Seed, hls_prng:xorshift32(Seed)} end,
+        ?PRNG_SEED, lists:seq(1, 256)),
+    lists:foreach(fun(Mask) ->
+        Choices = [begin
+            NextRandom = hls_prng:xorshift32(Seed),
+            Cell = flipping_cell(1, 0, Seed),
+            {flipping, Selected, consume} = phi_halo_cell:comparing(internal,
+                {reduction_complete, comparison, 0, {phi_fold, 17, Mask}}, Cell),
+            Direction = element(5, Selected),
+            ?assertEqual(Seed, element(7, Selected)),
+            ?assert(lists:member(Direction, [1, 2, 4, 8])),
+            ?assertEqual(Direction, Direction band Mask),
+            {Updated, Actions} = phi_halo_cell:flipping(enter, comparing, Selected),
+            ?assertEqual(NextRandom, element(7, Updated)),
+            Expected = case NextRandom bsr 31 of 0 -> []; 1 -> [Direction] end,
+            ?assertEqual(Expected, [D || {cast, correction, {phi_correction, 0, 0, 0, D}} <- Actions]),
+            Direction
+        end || Seed <- Seeds],
+        ?assertEqual([D || D <- [1,2,4,8], D band Mask =/= 0], lists:usort(Choices))
+    end, lists:seq(1,15)).
 
 duplicate_comparison_source_stops_cell_test() ->
     {PID, Collectors, Ref} = start_cell(),
@@ -272,11 +298,13 @@ directional_coin_moves_test_() ->
         || Direction <- [north, east, west, south]
     ].
 
+%% Empty candidates, absence and tails all preserve one PRNG advance per step.
+-spec coin_advances_when_no_move_is_eligible_test_() -> list().
 coin_advances_when_no_move_is_eligible_test_() ->
     Cases = [
         {tails, 1, ?EAST_MASK, ?PRNG_SEED, ?PRNG_FIRST, 1},
         {no_anyon, 0, ?EAST_MASK, ?PRNG_FIRST, ?PRNG_SECOND, 0},
-        {tied_maximum, 1, 0, ?PRNG_FIRST, ?PRNG_SECOND, 1}
+        {no_candidate, 1, 0, ?PRNG_FIRST, ?PRNG_SECOND, 1}
     ],
     [
         {atom_to_binary(Name), fun() ->
@@ -507,6 +535,8 @@ mismatched_movement_step_is_postponed_test() ->
         )
     end).
 
+%% A zero-valued tied field still records a candidate; a tails coin suppresses its move.
+-spec boolean_anyon_api_encodes_move_test() -> ok.
 boolean_anyon_api_encodes_move_test() ->
     with_cell(fun(PID, Ref) ->
         enter_comparing(PID, Ref, [0, 0], [0, 0]),
@@ -515,7 +545,7 @@ boolean_anyon_api_encodes_move_test() ->
         ok = phi_halo_cell:offer_anyon(PID, 0, true),
         Info = phi_halo_cell:runtime_info(PID),
         ?assertMatch(
-            {cell, 0, ?DIFFUSION_ROUNDS, [0, 0], 0, 0,
+            {cell, 0, ?DIFFUSION_ROUNDS, [0, 0], ?WEST_MASK, 0,
                 ?PRNG_FIRST, 0, 0, 0, 0},
             maps:get(data, Info)
         ),
