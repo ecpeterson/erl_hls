@@ -23,6 +23,8 @@ def validate(profile: dict) -> list[str]:
         raise ValueError('duplicate event ID')
     lanes = defaultdict(list)
     for event in events.values():
+        if {'event_id', 'duration_ns', 'profile_dependencies'} & event.get('args', {}).keys():
+            raise ValueError('event arguments use reserved export fields')
         if event['track'] not in track_ids:
             raise ValueError('unknown event track')
         for field in ('ts', 'dur'):
@@ -38,8 +40,8 @@ def validate(profile: dict) -> list[str]:
     for counter in profile.get('counters', []):
         if counter['track'] not in track_ids or type(counter['ts']) is not int or not 0 <= counter['ts'] <= 2**52:
             raise ValueError('invalid counter track or time')
-        if not math.isfinite(counter['value']):
-            raise ValueError('nonfinite counter')
+        if not math.isfinite(counter['value']) or float(counter['value']) != counter['value']:
+            raise ValueError('counter must be exactly representable as a finite double')
     incoming, outgoing = dict.fromkeys(events, 0), defaultdict(list)
     pairs = set()
     for edge in profile['edges']:
@@ -100,6 +102,11 @@ def longest_path(profile: dict, target: str) -> dict:
             'scope': profile.get('metadata', {}).get('dependency_scope', 'recorded dependencies only')}
 
 
+
+def counter_name(counter: dict) -> str:
+    """Give process-scoped Chrome counters a reversible identity including their logical track."""
+    return json.dumps([counter['track'], counter['name']], separators=(',', ':'), ensure_ascii=False)
+
 def perfetto(profile: dict) -> dict:
     """Export slices, counters, argument metadata and causal flows without external dependencies."""
     validate(profile)
@@ -112,12 +119,17 @@ def perfetto(profile: dict) -> dict:
         pid, tid = tracks[track['id']]
         result.append({'ph': 'M', 'name': 'thread_name', 'pid': pid, 'tid': tid, 'args': {'name': track['name']}})
     events = {e['id']: e for e in profile['events']}
+    incoming = defaultdict(list)
+    for edge in profile['edges']:
+        incoming[edge['target']].append(edge)
     timed = []
+    # Chrome flow args are not imported by Perfetto; retain their evidence on the consumer slice.
     for event in events.values():
         pid, tid = tracks[event['track']]
         timed.append({'ph': 'X', 'name': event['name'], 'cat': event.get('category', 'work'),
                       'pid': pid, 'tid': tid, 'ts': event['ts']/1000, 'dur': event['dur']/1000,
-                      'args': {**event.get('args', {}), 'event_id': event['id'], 'duration_ns': event['dur']}})
+                      'args': {**event.get('args', {}), 'event_id': event['id'], 'duration_ns': event['dur'],
+                               'profile_dependencies': json.dumps(incoming[event['id']], separators=(',', ':'))}})
     for index, edge in enumerate(profile['edges'], 1):
         # Anchor each flow to the source/target slice start, not an ambiguous shared end boundary.
         for phase, endpoint in (('s', 'source'), ('f', 'target')):
@@ -128,7 +140,7 @@ def perfetto(profile: dict) -> dict:
                           **({'bp': 'e'} if phase == 'f' else {}), 'args': edge})
     for counter in profile.get('counters', []):
         pid, tid = tracks[counter['track']]
-        timed.append({'ph': 'C', 'name': counter['name'], 'pid': pid, 'tid': tid,
+        timed.append({'ph': 'C', 'name': counter_name(counter), 'pid': pid, 'tid': tid,
                       'ts': counter['ts']/1000, 'args': {'value': counter['value']}})
     result += sorted(timed, key=lambda e: (e['ts'], {'X': 0, 's': 1, 'f': 2, 'C': 3}[e['ph']]))
     return {'traceEvents': result, 'displayTimeUnit': 'ns', 'metadata': profile.get('metadata', {})}

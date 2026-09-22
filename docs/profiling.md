@@ -7,7 +7,7 @@ A timing profile is a saved, application-independent graph of work, counters and
 - `tracks`: unique `id`, `name`, optional `group`.
 - `events`: unique `id`, `track`, `name`, integer `ts` and `dur`, optional `args` and `category`. Zero duration denotes an observed instant. Use separate tracks for simultaneous or overlapping work.
 - `edges`: `source`, `target`, `kind`, nonempty `evidence`, optional nonnegative `delay_ns`. An edge means the source finishes before the target starts. Delays count only when the adapter explicitly attributes them; elapsed time between two observations is not automatically a causal delay.
-- `counters`: `track`, `name`, integer `ts`, numeric `value`.
+- `counters`: `track`, `name`, integer `ts`, finite `value` exactly representable as a double.
 - `metadata`: provenance and `dependency_scope`, describing which dependencies were observed or reconstructed and which remain unknown.
 
 Convert every clock to a common trace-relative nanosecond origin. Retain original cycle, period and reset/epoch information in arguments. Adapters must resolve transaction identity and record their evidence; the exporter cannot infer causality from temporal proximity.
@@ -18,7 +18,7 @@ python3 tools/hls_profile.py timing.profile.json \
   --start 1000 --end 1600 --target completion-42
 ```
 
-Open the JSON in [Perfetto](https://ui.perfetto.dev). Its supported [Chrome trace format](https://perfetto.dev/docs/getting-started/other-formats) carries slices, arguments, counters and causal flows. The SVG has native hover details and bold dependency lines for the selected longest chain. Flow arrows attach to event starts; the graph's timing constraint uses source completion.
+Open the JSON in [Perfetto](https://ui.perfetto.dev). Its supported [Chrome trace format](https://perfetto.dev/docs/getting-started/other-formats) carries slices, arguments, counters and causal flows. The SVG has native hover details and bold dependency lines for the selected longest chain. Imported consumer slices retain incoming dependency evidence in `profile_dependencies`, because Perfetto does not import Chrome flow arguments. The exporter reserves that argument plus `event_id` and `duration_ns`. Counter names include their track identity so same-named series remain separate. Flow arrows attach to event starts; the graph's timing constraint uses source completion.
 
 `--window` restricts exports to complete events inside `--start`/`--end`, retains the preceding counter values and records how many boundary dependencies were omitted. Without it, SVG zooming leaves the analysis graph intact.
 
@@ -33,4 +33,4 @@ python3 tools/verify_perfetto_profile.py /path/to/trace_processor \
   timing.profile.json timing.perfetto.json
 ```
 
-The check compares every imported event ID, nanosecond timestamp, duration and flow endpoint; a successful JSON parse alone is insufficient.
+The check compares every imported event ID, nanosecond timestamp, duration, flow endpoint and counter sample; a successful JSON parse alone is insufficient.

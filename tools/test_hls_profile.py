@@ -5,7 +5,7 @@ import json
 import unittest
 import xml.etree.ElementTree as ET
 
-from hls_profile import longest_path, perfetto, svg, validate, window
+from hls_profile import longest_path, perfetto, svg, validate, window, counter_name
 
 
 def fixture() -> dict:
@@ -69,6 +69,25 @@ class ProfileTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'separate tracks'):
             perfetto(p)
 
+    def test_counter_identity_includes_track(self) -> None:
+        """Chrome scopes counters by process/name, so distinct logical tracks need distinct names."""
+        p = fixture()
+        p['counters'].append({'track': 'b', 'name': 'depth', 'ts': 4, 'value': 9})
+        counters = [e for e in perfetto(p)['traceEvents'] if e['ph'] == 'C']
+        self.assertEqual(len({e['name'] for e in counters}), 2)
+        self.assertEqual(json.loads(counter_name(p['counters'][1])), ['b', 'depth'])
+
+    def test_export_cannot_silently_lose_data(self) -> None:
+        """Reject reserved argument collisions and counters that cannot survive native double storage."""
+        p = fixture()
+        p['events'][0]['args'] = {'event_id': 'shadow'}
+        with self.assertRaisesRegex(ValueError, 'reserved'):
+            perfetto(p)
+        p = fixture()
+        p['counters'][0]['value'] = 2**53+1
+        with self.assertRaisesRegex(ValueError, 'finite double'):
+            perfetto(p)
+
     def test_roundtrip_and_render(self) -> None:
         """SVG native titles and Perfetto args/flows retain event identity and causality."""
         p = json.loads(json.dumps(fixture()))
@@ -81,6 +100,8 @@ class ProfileTests(unittest.TestCase):
         self.assertEqual(sum(e['ph'] == 'f' for e in trace), 4)
         self.assertEqual(next(e for e in trace if e.get('name') == 'slow work')['args']['slot'], 3)
         self.assertEqual(sum(e['ph'] == 'C' for e in trace), 1)
+        target = next(e for e in trace if e.get('ph') == 'X' and e['args']['event_id'] == 'join')
+        self.assertEqual(len(json.loads(target['args']['profile_dependencies'])), 2)
 
 
 if __name__ == '__main__':
