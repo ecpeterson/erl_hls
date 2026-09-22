@@ -209,7 +209,7 @@ def svg(profile: dict, start: int, end: int, target: str | None = None) -> str:
         for current, following in zip(points, [*points[1:], {'ts': end}]):
             xp, xq = x(current['ts']), x(following['ts'])
             yp = y-18*current['value']/scale
-            out.append(f'<path d="M{xp:.2f} {previous_y:.2f} V{yp:.2f} H{xq:.2f}" fill="none" stroke="#378447"><title>{esc(json.dumps(current))}</title></path>')
+            out.append(f'<path d="M{xp:.2f} {previous_y:.2f} V{yp:.2f} H{xq:.2f}" fill="none" stroke="#378447" data-tooltip="{esc(json.dumps(current))}"><title>{esc(json.dumps(current))}</title></path>')
             previous_y = yp
     for edge in profile['edges']:
         if edge['source'] not in positions or edge['target'] not in positions:
@@ -219,13 +219,13 @@ def svg(profile: dict, start: int, end: int, target: str | None = None) -> str:
         ay, by = lanes[a['track']], lanes[b['track']]
         mid = (ax+bx)/2
         cls = 'edge bold' if (a['id'], b['id']) in bold else 'edge'
-        out.append(f'<path class="{cls}" marker-end="url(#arrow)" d="M{ax:.2f} {ay} Q{mid:.2f} {min(ay,by)-20} {bx:.2f} {by}"><title>{esc(json.dumps(edge, indent=2))}</title></path>')
+        out.append(f'<path class="{cls}" marker-end="url(#arrow)" data-tooltip="{esc(json.dumps(edge))}" d="M{ax:.2f} {ay} Q{mid:.2f} {min(ay,by)-20} {bx:.2f} {by}"><title>{esc(json.dumps(edge, indent=2))}</title></path>')
     for event in visible:
         y, xp = lanes[event['track']], x(max(start, event['ts']))
         duration = max(3, x(min(end, event['ts']+event['dur']))-xp)
         color = '#c45b17' if event['id'] in marked else '#2878b5'
         tip = esc(json.dumps(event, indent=2))
-        out.append(f'<rect class="event" x="{xp:.2f}" y="{y-8}" width="{duration:.2f}" height="16" rx="2" fill="{color}"><title>{tip}</title></rect>')
+        out.append(f'<rect class="event" x="{xp:.2f}" y="{y-8}" width="{duration:.2f}" height="16" rx="2" fill="{color}" data-tooltip="{tip}"><title>{tip}</title></rect>')
     return '\n'.join([*out, '</svg>'])+'\n'
 
 
