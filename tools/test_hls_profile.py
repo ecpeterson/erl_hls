@@ -88,6 +88,43 @@ class ProfileTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'finite double'):
             perfetto(p)
 
+    def test_clock_width_instant_preserves_causality(self) -> None:
+        """A handshake's visible clock bin must not become additional causal work."""
+        p = fixture()
+        p['events'][0]['display_duration_ns'] = 8
+        self.assertEqual(longest_path(p, 'join'), longest_path(fixture(), 'join'))
+        event = next(e for e in perfetto(p)['traceEvents'] if e.get('ph') == 'X')
+        self.assertEqual((event['dur'], event['args']['duration_ns']), (.008, 0))
+        self.assertEqual(event['args']['display_duration_ns'], 8)
+        tree = ET.fromstring(svg(p, 0, 80))
+        rectangles = [e for e in tree.iter('{http://www.w3.org/2000/svg}rect')
+                      if e.get('class') == 'event']
+        self.assertAlmostEqual(float(rectangles[0].get('width')), 119)
+        self.assertNotIn('root', {e['id'] for e in window(p, 0, 7)['events']})
+
+    def test_invalid_clock_widths_are_rejected(self) -> None:
+        """Do not hide overlapping clock bins or change the meaning of duration slices."""
+        for width in (-1, 1.5, True, 51):
+            p = fixture()
+            p['events'][0]['display_duration_ns'] = width
+            with self.subTest(width=width), self.assertRaises(ValueError):
+                validate(p)
+        p = fixture()
+        p['events'][1]['display_duration_ns'] = 41
+        with self.assertRaisesRegex(ValueError, 'expand an instant'):
+            validate(p)
+
+    def test_svg_labels_and_evidence_categories(self) -> None:
+        """Visible labels escape source text; waits and unknown intervals remain visually distinct."""
+        p = fixture()
+        p['events'][1]['category'] = 'wait'
+        p['events'][2]['category'] = 'unknown'
+        tree = ET.fromstring(svg(p, 0, 80))
+        texts = [e.text for e in tree.iter('{http://www.w3.org/2000/svg}text')]
+        self.assertIn('join <&>', texts)
+        fills = {e.get('fill') for e in tree.iter('{http://www.w3.org/2000/svg}rect')}
+        self.assertTrue({'#d7a84b', '#c5cbd3'} <= fills)
+
     def test_roundtrip_and_render(self) -> None:
         """SVG native titles and Perfetto args/flows retain event identity and causality."""
         p = json.loads(json.dumps(fixture()))

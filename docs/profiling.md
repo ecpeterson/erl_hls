@@ -18,7 +18,7 @@ python3 tools/hls_profile.py timing.profile.json \
   --start 1000 --end 1600 --target completion-42
 ```
 
-Open the JSON in [Perfetto](https://ui.perfetto.dev). Its supported [Chrome trace format](https://perfetto.dev/docs/getting-started/other-formats) carries slices, arguments, counters and causal flows. The SVG has native hover details and bold dependency lines for the selected longest chain. Imported consumer slices retain incoming dependency evidence in `profile_dependencies`, because Perfetto does not import Chrome flow arguments. The exporter reserves that argument plus `event_id` and `duration_ns`. Counter names include their track identity so same-named series remain separate. Flow arrows attach to event starts; the graph's timing constraint uses source completion.
+Open the JSON in [Perfetto](https://ui.perfetto.dev). Its supported [Chrome trace format](https://perfetto.dev/docs/getting-started/other-formats) carries slices, arguments, counters and causal flows. The SVG has native hover details and bold dependency lines for the selected longest chain. Imported consumer slices retain incoming dependency evidence in `profile_dependencies`, because Perfetto does not import Chrome flow arguments. The exporter reserves that argument plus `event_id`, `duration_ns` and `display_duration_ns`. Counter names include their track identity so same-named series remain separate. Flow arrows attach to event starts; the graph's timing constraint uses source completion.
 
 `--window` restricts exports to complete events inside `--start`/`--end`, retains the preceding counter values and records how many boundary dependencies were omitted. Without it, SVG zooming leaves the analysis graph intact.
 
@@ -34,3 +34,7 @@ python3 tools/verify_perfetto_profile.py /path/to/trace_processor \
 ```
 
 The check compares every imported event ID, nanosecond timestamp, duration, flow endpoint and counter sample; a successful JSON parse alone is insufficient.
+
+Adapters may give a zero-duration boundary event `display_duration_ns` equal to its observed clock period. SVG and Perfetto draw that cycle as a block; `dur` and causal accounting remain unchanged. This denotes the cycle containing a handshake, not a measured computation latency. Include that distinction in event evidence. Visible bins on one track must not overlap, and a window retains only complete displayed bins. Native import verification checks the displayed durations as well as identities and causal endpoints.
+
+The SVG labels blocks where space permits. Adapters can distinguish `service`, `wait`, `unknown` and `handshake` categories by color; classification must describe recorded evidence. A wait slice is elapsed dependency time, not resource occupation.

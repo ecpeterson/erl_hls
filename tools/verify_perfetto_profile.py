@@ -8,7 +8,7 @@ from pathlib import Path
 from collections import defaultdict
 import subprocess
 
-from hls_profile import counter_name
+from hls_profile import counter_name, display_duration
 
 
 def verify(processor: Path, profile: dict, trace: Path) -> dict:
@@ -31,7 +31,7 @@ def verify(processor: Path, profile: dict, trace: Path) -> dict:
         for field in ('source', 'target'):
             row[field] = bytes.fromhex(row[field]).decode('utf-8')
     actual = [(r['source'], int(r['ts']), int(r['dur'])) for r in rows if r['kind'] == 'slice']
-    expected = [(e['id'], e['ts'], e['dur']) for e in profile['events']]
+    expected = [(e['id'], e['ts'], display_duration(e)) for e in profile['events']]
     if sorted(actual) != sorted(expected):
         raise ValueError('Perfetto import changed slice IDs, times or durations')
     expected_evidence = defaultdict(list)

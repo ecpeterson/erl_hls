@@ -23,19 +23,22 @@ def validate(profile: dict) -> list[str]:
         raise ValueError('duplicate event ID')
     lanes = defaultdict(list)
     for event in events.values():
-        if {'event_id', 'duration_ns', 'profile_dependencies'} & event.get('args', {}).keys():
+        if {'event_id', 'duration_ns', 'display_duration_ns', 'profile_dependencies'} & event.get('args', {}).keys():
             raise ValueError('event arguments use reserved export fields')
         if event['track'] not in track_ids:
             raise ValueError('unknown event track')
         for field in ('ts', 'dur'):
             if type(event[field]) is not int or event[field] < 0:
                 raise ValueError(f'{field} must be a nonnegative integer')
-        if event['ts']+event['dur'] > 2**52:
+        display = event.get('display_duration_ns', event['dur'])
+        if type(display) is not int or display < event['dur'] or (display != event['dur'] and event['dur'] != 0):
+            raise ValueError('display duration may only expand an instant into an observed cycle')
+        if event['ts']+display > 2**52:
             raise ValueError('use a trace-relative origin for times beyond 2**52 ns')
         lanes[event['track']].append(event)
     for lane in lanes.values():
         lane.sort(key=lambda e: e['ts'])
-        if any(a['ts']+a['dur'] > b['ts'] or a['ts'] == b['ts'] for a, b in zip(lane, lane[1:])):
+        if any(a['ts']+display_duration(a) > b['ts'] or a['ts'] == b['ts'] for a, b in zip(lane, lane[1:])):
             raise ValueError('overlapping slices require separate tracks')
     for counter in profile.get('counters', []):
         if counter['track'] not in track_ids or type(counter['ts']) is not int or not 0 <= counter['ts'] <= 2**52:
@@ -103,6 +106,11 @@ def longest_path(profile: dict, target: str) -> dict:
 
 
 
+def display_duration(event: dict) -> int:
+    """Return a declared observation-cycle width without adding work to causal accounting."""
+    return event.get('display_duration_ns', event['dur'])
+
+
 def counter_name(counter: dict) -> str:
     """Give process-scoped Chrome counters a reversible identity including their logical track."""
     return json.dumps([counter['track'], counter['name']], separators=(',', ':'), ensure_ascii=False)
@@ -127,8 +135,9 @@ def perfetto(profile: dict) -> dict:
     for event in events.values():
         pid, tid = tracks[event['track']]
         timed.append({'ph': 'X', 'name': event['name'], 'cat': event.get('category', 'work'),
-                      'pid': pid, 'tid': tid, 'ts': event['ts']/1000, 'dur': event['dur']/1000,
+                      'pid': pid, 'tid': tid, 'ts': event['ts']/1000, 'dur': display_duration(event)/1000,
                       'args': {**event.get('args', {}), 'event_id': event['id'], 'duration_ns': event['dur'],
+                               'display_duration_ns': display_duration(event),
                                'profile_dependencies': json.dumps(incoming[event['id']], separators=(',', ':'))}})
     for index, edge in enumerate(profile['edges'], 1):
         # Anchor each flow to the source/target slice start, not an ambiguous shared end boundary.
@@ -152,7 +161,7 @@ def window(profile: dict, start: int, end: int) -> dict:
     validate(profile)
     if end <= start:
         raise ValueError('empty profile window')
-    events = [e for e in profile['events'] if start <= e['ts'] and e['ts']+e['dur'] < end]
+    events = [e for e in profile['events'] if start <= e['ts'] and e['ts']+display_duration(e) < end]
     ids = {e['id'] for e in events}
     edges = [e for e in profile['edges'] if e['source'] in ids and e['target'] in ids]
     boundary = sum((e['source'] in ids) != (e['target'] in ids) for e in profile['edges'])
@@ -175,11 +184,12 @@ def svg(profile: dict, start: int, end: int, target: str | None = None) -> str:
     validate(profile)
     if end <= start:
         raise ValueError('empty timeline window')
-    visible = [e for e in profile['events'] if e['ts'] < end and e['ts']+e['dur'] >= start]
+    visible = [e for e in profile['events'] if e['ts'] < end and e['ts']+display_duration(e) >= start]
     tracks = [t for t in profile['tracks'] if any(e['track'] == t['id'] for e in visible)]
     series = defaultdict(list)
     for counter in profile.get('counters', []):
         series[counter['track'], counter['name']].append(counter)
+    series = {key: samples for key, samples in series.items() if any(c['ts'] < end for c in samples)}
     lanes = {t['id']: 90+52*i for i, t in enumerate(tracks)}
     positions = {e['id']: e for e in visible}
     path = longest_path(profile, target) if target else None
@@ -187,6 +197,7 @@ def svg(profile: dict, start: int, end: int, target: str | None = None) -> str:
     marked = set(path['events']) if path else set()
     width, height = 1450, 140+52*(len(tracks)+len(series))
     esc = html.escape
+    colors = {'wait': '#d7a84b', 'service': '#2878b5', 'unknown': '#c5cbd3', 'handshake': '#8661b5'}
     def x(time: int) -> float:
         """Map nanoseconds into the visible plot area."""
         return 230+(time-start)*1190/(end-start)
@@ -194,7 +205,8 @@ def svg(profile: dict, start: int, end: int, target: str | None = None) -> str:
            '<style>text{font:12px sans-serif;fill:#17212b}.edge{fill:none;stroke:#9ca9ba;stroke-width:1}.bold{stroke:#17212b;stroke-width:3} .event:hover{stroke:#d65f00;stroke-width:3}</style>',
            '<rect width="100%" height="100%" fill="#fff"/>',
            '<defs><marker id="arrow" viewBox="0 0 8 8" refX="8" refY="4" markerWidth="4" markerHeight="4" orient="auto"><path d="M0 0 L8 4 L0 8Z" fill="context-stroke"/></marker></defs>',
-           '<text x="15" y="23">Timing graph — hover work and dependency lines for evidence</text>']
+           '<text x="15" y="23">Timing graph — hover blocks and dependencies for evidence</text>',
+           '<text x="700" y="23">Blue: service · amber: wait · gray: unknown · purple: boundary clock bin</text>']
     if path:
         out.append(f'<text x="15" y="43">Longest recorded chain (full selected graph): {path["accounted_ns"]} ns accounted; {path["unassigned_ns"]} ns unassigned. {esc(path["scope"])}</text>')
     for i in range(11):
@@ -202,9 +214,13 @@ def svg(profile: dict, start: int, end: int, target: str | None = None) -> str:
         anchor = 'end' if i == 10 else 'start'
         out += [f'<path d="M{x(time):.2f} 65 V{height-30}" stroke="#edf0f3"/>',
                 f'<text x="{x(time):.2f}" y="64" text-anchor="{anchor}">{time} ns</text>']
+    def label(text: str, y: int) -> str:
+        """Keep lane names out of the plot; retain the complete name on hover."""
+        shortened = text if len(text) <= 31 else text[:30]+'…'
+        return f'<text x="12" y="{y+4}"><title>{esc(text)}</title>{esc(shortened)}</text>'
     for track in tracks:
         y = lanes[track['id']]
-        out += [f'<text x="12" y="{y+4}">{esc(track["name"])}</text>',
+        out += [label(track['name'], y),
                 f'<path d="M230 {y} H1420" stroke="#dde3e9"/>']
     for index, ((track, name), samples) in enumerate(series.items()):
         samples.sort(key=lambda c: c['ts'])
@@ -216,7 +232,7 @@ def svg(profile: dict, start: int, end: int, target: str | None = None) -> str:
             continue
         y = 90+52*(len(tracks)+index)
         scale = max(1, max(abs(c['value']) for c in points))
-        out.append(f'<text x="12" y="{y+4}">{esc(track)} / {esc(name)} [0…{scale}]</text>')
+        out.append(label(f'{track} / {name} [0…{scale}]', y))
         previous_y = y-18*points[0]['value']/scale
         for current, following in zip(points, [*points[1:], {'ts': end}]):
             xp, xq = x(current['ts']), x(following['ts'])
@@ -234,10 +250,15 @@ def svg(profile: dict, start: int, end: int, target: str | None = None) -> str:
         out.append(f'<path class="{cls}" marker-end="url(#arrow)" data-tooltip="{esc(json.dumps(edge))}" d="M{ax:.2f} {ay} Q{mid:.2f} {min(ay,by)-20} {bx:.2f} {by}"><title>{esc(json.dumps(edge, indent=2))}</title></path>')
     for event in visible:
         y, xp = lanes[event['track']], x(max(start, event['ts']))
-        duration = max(3, x(min(end, event['ts']+event['dur']))-xp)
-        color = '#c45b17' if event['id'] in marked else '#2878b5'
+        duration = max(3, x(min(end, event['ts']+display_duration(event)))-xp)
+        color = '#c45b17' if event['id'] in marked else colors.get(event.get('category'), '#2878b5')
         tip = esc(json.dumps(event, indent=2))
         out.append(f'<rect class="event" x="{xp:.2f}" y="{y-8}" width="{duration:.2f}" height="16" rx="2" fill="{color}" data-tooltip="{tip}"><title>{tip}</title></rect>')
+        if duration >= 45:
+            # Conservative character budget keeps labels inside their own clock interval.
+            budget = int((duration-8)/7)
+            event_label = event['name'] if len(event['name']) <= budget else event['name'][:max(0, budget-1)]+'…'
+            out.append(f'<text x="{xp+4:.2f}" y="{y+4}" style="fill:#111;pointer-events:none">{esc(event_label)}</text>')
     return '\n'.join([*out, '</svg>'])+'\n'
 
 
