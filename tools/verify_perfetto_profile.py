@@ -15,20 +15,21 @@ def verify(processor: Path, profile: dict, trace: Path) -> dict:
     """Require exact event/flow identities and all timestamped counter samples after native import."""
     query = """
     SELECT 'slice' AS kind, hex(EXTRACT_ARG(arg_set_id, 'args.event_id')) AS source,
-           hex(EXTRACT_ARG(arg_set_id, 'args.profile_dependencies')) AS target, ts, dur FROM slice
+           hex(EXTRACT_ARG(arg_set_id, 'args.profile_dependencies')) AS target, ts, dur,
+           hex(EXTRACT_ARG(arg_set_id, 'args.profile_resource_dependencies')) AS resource FROM slice
     UNION ALL
     SELECT 'flow', hex(EXTRACT_ARG(s.arg_set_id, 'args.event_id')),
-           hex(EXTRACT_ARG(t.arg_set_id, 'args.event_id')), 0, 0
+           hex(EXTRACT_ARG(t.arg_set_id, 'args.event_id')), 0, 0, ''
     FROM flow f JOIN slice s ON s.id=f.slice_out JOIN slice t ON t.id=f.slice_in
     UNION ALL
-    SELECT 'counter', hex(t.name), '', c.ts, printf('%!.17g', c.value) FROM counter c JOIN track t ON t.id=c.track_id;
+    SELECT 'counter', hex(t.name), '', c.ts, printf('%!.17g', c.value), '' FROM counter c JOIN track t ON t.id=c.track_id;
     """
     result = subprocess.run([str(processor), str(trace), '-Q', query], check=True, capture_output=True, text=True)
     # The CLI's CSV printer does not escape embedded quotes and rounds native float columns.
     # Hex-encoded text and SQL-formatted round-trip floats avoid losing evidence in that boundary.
     rows = list(csv.DictReader(io.StringIO(result.stdout)))
     for row in rows:
-        for field in ('source', 'target'):
+        for field in ('source', 'target', 'resource'):
             row[field] = bytes.fromhex(row[field]).decode('utf-8')
     actual = [(r['source'], int(r['ts']), int(r['dur'])) for r in rows if r['kind'] == 'slice']
     expected = [(e['id'], e['ts'], display_duration(e)) for e in profile['events']]
@@ -37,7 +38,12 @@ def verify(processor: Path, profile: dict, trace: Path) -> dict:
     expected_evidence = defaultdict(list)
     for edge in profile['edges']:
         expected_evidence[edge['target']].append(edge)
+    expected_resources = defaultdict(list)
+    for edge in profile.get('resource_dependencies', []):
+        expected_resources[edge['target']].append(edge)
     for row in rows:
+        if row['kind'] == 'slice' and json.loads(row['resource'] or '[]') != expected_resources[row['source']]:
+            raise ValueError('Perfetto import changed resource-order evidence')
         if row['kind'] == 'slice' and json.loads(row['target']) != expected_evidence[row['source']]:
             raise ValueError('Perfetto import changed dependency evidence')
     actual_edges = [(r['source'], r['target']) for r in rows if r['kind'] == 'flow']
