@@ -54,7 +54,8 @@ def rtl_events(path):
     return result
 
 
-def exercise(name, config, args):
+def exercise(name: str, config: tuple[int, int, str, int], args: argparse.Namespace) -> dict:
+    """Require BEAM/RTL equivalence and, when requested, validated reusable timing exports."""
     width, height, planes, shards = config
     stage = args.stage / name
     stage.mkdir(parents=True, exist_ok=True)
@@ -107,7 +108,8 @@ def exercise(name, config, args):
         command(["env", "ERL_HLS_PHI_PROFILE_TRACE=1", "bash", ROOT / "tools/phi_decoder_profile_stage.sh",
                  stage, args.xls_root, "20m", shards, 2, 1], ROOT, stage / "profile.log", 3700)
         command(["python3", ROOT / "tools/phi_profile_timeline.py", stage / "phi_decoder_profile.trace.csv",
-                 stage / "timeline.svg", "--topology", compiled / "sources/phi_decoder_profile_topology.x",
+                 stage / "timeline.svg", "--profile", stage / "timing.profile.json",
+                 "--perfetto", stage / "timing.perfetto.json", "--topology", compiled / "sources/phi_decoder_profile_topology.x",
                  "--scheduler", "phi_0", "--occurrence", 100, "--pipeline-stages", 2], ROOT, stage / "trace.log")
         summary["trace"] = (stage / "trace.log").read_text().splitlines()
     (stage / "validation.json").write_text(json.dumps(summary, indent=2) + "\n")

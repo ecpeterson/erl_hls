@@ -8,6 +8,9 @@ from collections import defaultdict, deque
 import csv
 from dataclasses import dataclass
 import html
+import json
+
+import hls_profile
 from itertools import groupby
 from pathlib import Path
 import re
@@ -659,6 +662,7 @@ def render(
     before: int,
     after: int,
 ) -> str:
+    """Render the selected causal neighborhood with portable native hover details."""
     start = max(0, focus_cycle - before)
     end = focus_cycle + after
     width = 1200
@@ -843,7 +847,7 @@ def render(
             f'C {middle:.2f} {sy + bend:.2f}, {middle:.2f} '
             f'{ty - bend:.2f}, {tx:.2f} {ty:.2f}" '
             'marker-end="url(#arrow)" '
-            f'data-tooltip="{esc(dependency.detail)}"/>'
+            f'data-tooltip="{esc(dependency.detail)}"><title>{esc(dependency.detail)}</title></path>'
         )
 
     for event in visible:
@@ -876,7 +880,7 @@ def render(
         stroke = color if hollow else BACKGROUND
         svg.append(
             f'{shape} fill="{fill}" stroke="{stroke}" stroke-width="1.5" '
-            f'data-tooltip="{esc(event_tooltip(event))}"/>'
+            f'data-tooltip="{esc(event_tooltip(event))}"><title>{esc(event_tooltip(event))}</title></{shape[1:].split()[0]}>'
         )
         if id(event) in focus_events:
             svg.append(
@@ -900,7 +904,38 @@ def render(
     return "\n".join(svg) + "\n"
 
 
+
+def timing_profile(events: list[Event], dependencies: list[Dependency], period_ns: int) -> dict:
+    """Preserve the original trace details and checked dependencies in the common timing model."""
+    if period_ns <= 0:
+        raise ValueError("clock period must be positive")
+    identifiers = {id(event): f"event-{i}" for i, event in enumerate(events)}
+    tracks = {}
+    records = []
+    for event in events:
+        track = f"{event.component}/{event.event}/{event.slot}"
+        tracks[track] = {'id': track, 'name': track, 'group': event.component}
+        records.append({'id': identifiers[id(event)], 'track': track, 'name': event.event,
+                        'ts': event.cycle*period_ns, 'dur': 0,
+                        'args': {'cycle': event.cycle, 'clock_period_ns': period_ns,
+                                 'slot': event.slot, 'detail': event.detail, **fields(event.detail)}})
+    edges = {}
+    for dependency in dependencies:
+        key = (identifiers[id(dependency.source)], identifiers[id(dependency.target)])
+        edge = edges.setdefault(key, {'source': key[0], 'target': key[1], 'kind': dependency.kind,
+                                      'evidence': dependency.detail, 'multiplicity': 0})
+        if edge['kind'] != dependency.kind or edge['evidence'] != dependency.detail:
+            raise ValueError('conflicting dependency descriptions')
+        edge['multiplicity'] += 1
+    profile = {'schema': 1, 'unit': 'ns', 'tracks': list(tracks.values()), 'events': records,
+               'edges': list(edges.values()),
+               'metadata': {'dependency_scope': 'source-fragment fixture dependencies; events are instants',
+                            'clock_period_ns': period_ns}}
+    hls_profile.validate(profile)
+    return profile
+
 def main() -> None:
+    """Validate the recording and emit the original SVG plus optional reusable profiles."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("trace", type=Path)
     parser.add_argument("output", type=Path)
@@ -915,6 +950,9 @@ def main() -> None:
     parser.add_argument("--after", type=int, default=22)
     parser.add_argument("--pipeline-stages", type=int, default=2)
     parser.add_argument("--focus-cycle", type=int)
+    parser.add_argument("--profile", type=Path)
+    parser.add_argument("--perfetto", type=Path)
+    parser.add_argument("--period-ns", type=int, default=8)
     args = parser.parse_args()
     if args.pipeline_stages < 1:
         raise SystemExit("pipeline stages must be positive")
@@ -935,6 +973,12 @@ def main() -> None:
     dependencies = build_dependencies(
         events, groups, planes, router_map, tables
     )
+    if args.profile or args.perfetto:
+        profile = timing_profile(events, dependencies, args.period_ns)
+        if args.profile:
+            args.profile.write_text(json.dumps(profile, separators=(',', ':'))+'\n')
+        if args.perfetto:
+            args.perfetto.write_text(json.dumps(hls_profile.perfetto(profile), separators=(',', ':'))+'\n')
     focus_cycle = choose_focus(
         events, args.scheduler, args.occurrence, args.focus_cycle
     )

@@ -67,6 +67,8 @@ structure, checks, and current limitations.
 The remote host and paths can be overridden with `ERL_HLS_REMOTE_HOST`,
 `ERL_HLS_REMOTE_ROOT`, and `ERL_HLS_REMOTE_XLS`.
 
+[Timing profiles](docs/profiling.md) preserve work, counters and causal dependencies for reusable SVG and Perfetto views.
+
 XLS also runs natively on Apple Silicon. The [incremental build runner](docs/incremental-xls-builds.md) shares checked conversion, optimization, and codegen stages between the `regsvc` regression and decoder-profile helper, preserves the last successful artifact bundle after failed rebuilds, and reports which stages actually ran. The guide includes native commands and cache/failure checks.
 
 GitHub Actions runs the same generated-RTL and bridged-EUnit regressions on
