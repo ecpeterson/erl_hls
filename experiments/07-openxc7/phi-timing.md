@@ -36,6 +36,8 @@ The first two points follow directly from [the pinned nextpnr timing implementat
 
 Use the results to compare modeled paths, routing costs, congestion, and seed sensitivity under this exact toolchain. Do not multiply the partial-path MHz by simulated cycles per step to claim deployed throughput. Design-wide timing requires a backend with the missing sequential models and calibrated device timing, plus appropriate clock and I/O constraints. Hold timing, board interfaces, and silicon validation remain separate qualifications.
 
+The [native endpoint audit](timing_coverage/README.md) checks the running backend against explicit port/clock requirements and reproduces these omissions on small routed circuits. Passing those requirements does not establish complete timing coverage.
+
 Check coverage before comparing frequencies: moving registers into a DSP can remove its paths from this backend's timing analysis. A higher reported MHz accompanied by newly excluded paths does not establish an improvement.
 
 ## Run

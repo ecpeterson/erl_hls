@@ -1,0 +1,1005 @@
+{
+  "design_wide_clock_validated": false,
+  "inputs": {
+    "/Users/ecpeterson/Documents/code/erl_hls_worktrees/native-timing-coverage/experiments/07-openxc7/timing_coverage/check.py": "2af2fd4b012742f79056b8ba16b1e1e93119bbe2823df1b1c89d31f63c73761f",
+    "/Users/ecpeterson/Documents/code/erl_hls_worktrees/native-timing-coverage/experiments/07-openxc7/timing_coverage/fixture.v": "8dd6ff2dbb8bde263be26e2be72b8dd4a6bc99d318aa8b502ddf75ab2e96e859",
+    "/Users/ecpeterson/Documents/code/erl_hls_worktrees/native-timing-coverage/experiments/07-openxc7/timing_coverage/nextpnr-coverage.patch": "6fe14d0df5a7abf9c45c53a0d74f9e410f0685370c4fb93ae5e5780e16e7bb9e",
+    "/Users/ecpeterson/Documents/code/erl_hls_worktrees/native-timing-coverage/experiments/07-openxc7/timing_coverage/run.py": "dfb2b835e3c22adf0bc2aab3c4bfe74860199bb763a6391e1cf15b6d5ebd38a5",
+    "/Users/ecpeterson/Documents/code/erl_xls/experiments/07-openxc7/build/chipdb/xc7z030sbg485.bin": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba"
+  },
+  "part": "xc7z030sbg485-1",
+  "raw_report": "/Users/ecpeterson/Documents/code/erl_xls/experiments/07-openxc7/build/native-timing-20260924/measurements/result.json",
+  "raw_report_sha256": "f13e515838b2deda0a55cbe09ad7ae4127f8653a0f9c83ce6ce205a49c19a746",
+  "requested_mhz": 100,
+  "runs": [
+    {
+      "artifacts": {
+        "baseline.console": "d71444cab19c0ce57523bd34b87ad3ccc174ec5d472f91c63a2e8645928f3623",
+        "baseline.fasm": "72aa9b170a80ab3f36e7b6132d0b581badd9796e463cbf936382e05511acadcc",
+        "baseline.log": "d71444cab19c0ce57523bd34b87ad3ccc174ec5d472f91c63a2e8645928f3623",
+        "baseline.report.json": "c1cfdac482712a982c58bd8d0ecd067690312cef8075bea64e4e73b0731bc1ee",
+        "coverage.json": "2bd091882142134b71cdbee68f53ceaf3decddb0ca6561c607314ce084ccf800",
+        "map.console": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "map.ys": "f83cf7db7550ae6bd82d63114b6e93aaa587c7e55af05b723019d137f9c95222",
+        "mapped.json": "2feacb0d784f1b6d9ce2bd68920cc40fab09e0c0990063f04aaca325e3ec86d7",
+        "nextpnr.console": "1277f2035ecb769309e4315ffce2b8da97ba39e6b7f704ad3cb08f944d17ba87",
+        "nextpnr.fasm": "72aa9b170a80ab3f36e7b6132d0b581badd9796e463cbf936382e05511acadcc",
+        "nextpnr.log": "1277f2035ecb769309e4315ffce2b8da97ba39e6b7f704ad3cb08f944d17ba87",
+        "nextpnr.report.json": "c1cfdac482712a982c58bd8d0ecd067690312cef8075bea64e4e73b0731bc1ee",
+        "timing.xdc": "f71ce9982a6706873035714f44df2f4ec2ed80591a5f721e7e11a88b32553025"
+      },
+      "coverage": {
+        "checks": [
+          {
+            "examples": [],
+            "failed": 0,
+            "failure_reasons": {},
+            "matched": 80,
+            "passed": true,
+            "requirement": {
+              "class": "register_output",
+              "port": "Q",
+              "type": "SLICE_FFX"
+            }
+          },
+          {
+            "examples": [],
+            "failed": 0,
+            "failure_reasons": {},
+            "matched": 80,
+            "passed": true,
+            "requirement": {
+              "class": "register_input",
+              "port": "D",
+              "type": "SLICE_FFX"
+            }
+          }
+        ],
+        "design_wide_clock_validated": false,
+        "endpoint_requirements_met": true
+      },
+      "mapped": {
+        "counts": {
+          "BUFG": 1,
+          "CARRY4": 8,
+          "FDRE": 80,
+          "IBUF": 1,
+          "LUT2": 80,
+          "LUT4": 1,
+          "OBUF": 1,
+          "SRL16E": 1
+        },
+        "hard_blocks": {}
+      },
+      "mode": "logic",
+      "observer_neutral": true,
+      "variants": {
+        "baseline": {
+          "fasm_features_sha256": "439ee1bc6c0ab0d4d3772d6138b65979f29316bfdeba2bb21aa8f5db2061a5dd",
+          "fmax": {
+            "clock": {
+              "achieved": 209.78,
+              "constraint": 100.0
+            }
+          },
+          "paths": {
+            "$iopadmap$clock": {
+              "logic_ns": 2.0,
+              "routing_ns": 2.8,
+              "text": "Info: Critical path report for clock '$iopadmap$clock' (posedge -> posedge):\nInfo: curr total\nInfo:  0.1  0.1  Source $auto$ff.cc:337:slice$1614.Q\nInfo:  1.1  1.2    Net flow[0] budget 0.000000 ns (14,105) -> (13,112)\nInfo:                Sink $abc$1900$auto$blifparse.cc:557:parse_blif$1904.A4\nInfo:  0.1  1.3  Source $abc$1900$auto$blifparse.cc:557:parse_blif$1904.O6\nInfo:  0.0  1.3    Net $auto$alumacc.cc:512:replace_alu$1123.X[0] budget 0.205000 ns (13,112) -> (13,112)\nInfo:                Sink $auto$alumacc.cc:512:replace_alu$1123.genblk1.slice[0].genblk1.carry4.S0\nInfo:  0.5  1.8  Source $auto$alumacc.cc:512:replace_alu$1123.genblk1.slice[0].genblk1.carry4.CO3\nInfo:  0.1  1.9    Net $auto$alumacc.cc:512:replace_alu$1123.CO[3] budget 0.729000 ns (13,112) -> (13,111)\nInfo:                Sink $auto$alumacc.cc:512:replace_alu$1123.genblk1.slice[1].genblk1.carry4.CIN\nInfo:  0.1  2.0  Source $auto$alumacc.cc:512:replace_alu$1123.genblk1.slice[1].genblk1.carry4.CO3\nInfo:  0.1  2.1    Net $auto$alumacc.cc:512:replace_alu$1123.CO[7] budget 0.729000 ns (13,111) -> (13,110)\nInfo:                Sink $auto$alumacc.cc:512:replace_alu$1123.genblk1.slice[2].genblk1.carry4.CIN\nInfo:  0.1  2.2  Source $auto$alumacc.cc:512:replace_alu$1123.genblk1.slice[2].genblk1.carry4.CO3\nInfo:  0.1  2.3    Net $auto$alumacc.cc:512:replace_alu$1123.CO[11] budget 0.729000 ns (13,110) -> (13,109)\nInfo:                Sink $auto$alumacc.cc:512:replace_alu$1123.genblk1.slice[3].genblk1.carry4.CIN\nInfo:  0.1  2.5  Source $auto$alumacc.cc:512:replace_alu$1123.genblk1.slice[3].genblk1.carry4.CO3\nInfo:  0.1  2.6    Net $auto$alumacc.cc:512:replace_alu$1123.CO[15] budget 0.729000 ns (13,109) -> (13,108)\nInfo:                Sink $auto$alumacc.cc:512:replace_alu$1123.genblk1.slice[4].genblk1.carry4.CIN\nInfo:  0.1  2.7  Source $auto$alumacc.cc:512:replace_alu$1123.genblk1.slice[4].genblk1.carry4.CO3\nInfo:  0.1  2.8    Net $auto$alumacc.cc:512:replace_alu$1123.CO[19] budget 0.728000 ns (13,108) -> (13,107)\nInfo:                Sink $auto$alumacc.cc:512:replace_alu$1123.genblk1.slice[5].genblk1.carry4.CIN\nInfo:  0.1  2.9  Source $auto$alumacc.cc:512:replace_alu$1123.genblk1.slice[5].genblk1.carry4.CO3\nInfo:  0.1  3.0    Net $auto$alumacc.cc:512:replace_alu$1123.CO[23] budget 0.728000 ns (13,107) -> (13,106)\nInfo:                Sink $auto$alumacc.cc:512:replace_alu$1123.genblk1.slice[6].genblk1.carry4.CIN\nInfo:  0.1  3.1  Source $auto$alumacc.cc:512:replace_alu$1123.genblk1.slice[6].genblk1.carry4.CO3\nInfo:  0.1  3.2    Net $auto$alumacc.cc:512:replace_alu$1123.CO[27] budget 0.728000 ns (13,106) -> (13,105)\nInfo:                Sink $auto$alumacc.cc:512:replace_alu$1123.genblk1.slice[7].genblk1.carry4.CIN\nInfo:  0.3  3.6  Source $auto$alumacc.cc:512:replace_alu$1123.genblk1.slice[7].genblk1.carry4.O1\nInfo:  0.9  4.5    Net result[29] budget 0.000000 ns (13,105) -> (10,109)\nInfo:                Sink $abc$1900$auto$blifparse.cc:557:parse_blif$1948.A1\nInfo:  0.1  4.6  Source $abc$1900$auto$blifparse.cc:557:parse_blif$1948.O6\nInfo:  0.0  4.7    Net $0\\digest[47:0][29] budget 0.204000 ns (10,109) -> (10,109)\nInfo:                Sink $auto$ff.cc:337:slice$1707.D\nInfo:  0.1  4.8  Setup $auto$ff.cc:337:slice$1707.D\nInfo: 2.0 ns logic, 2.8 ns routing"
+            }
+          },
+          "seconds": 2.005
+        },
+        "nextpnr": {
+          "fasm_features_sha256": "439ee1bc6c0ab0d4d3772d6138b65979f29316bfdeba2bb21aa8f5db2061a5dd",
+          "fmax": {
+            "clock": {
+              "achieved": 209.78,
+              "constraint": 100.0
+            }
+          },
+          "paths": {
+            "$iopadmap$clock": {
+              "logic_ns": 2.0,
+              "routing_ns": 2.8,
+              "text": "Info: Critical path report for clock '$iopadmap$clock' (posedge -> posedge):\nInfo: curr total\nInfo:  0.1  0.1  Source $auto$ff.cc:337:slice$1614.Q\nInfo:  1.1  1.2    Net flow[0] budget 0.000000 ns (14,105) -> (13,112)\nInfo:                Sink $abc$1900$auto$blifparse.cc:557:parse_blif$1904.A4\nInfo:  0.1  1.3  Source $abc$1900$auto$blifparse.cc:557:parse_blif$1904.O6\nInfo:  0.0  1.3    Net $auto$alumacc.cc:512:replace_alu$1123.X[0] budget 0.205000 ns (13,112) -> (13,112)\nInfo:                Sink $auto$alumacc.cc:512:replace_alu$1123.genblk1.slice[0].genblk1.carry4.S0\nInfo:  0.5  1.8  Source $auto$alumacc.cc:512:replace_alu$1123.genblk1.slice[0].genblk1.carry4.CO3\nInfo:  0.1  1.9    Net $auto$alumacc.cc:512:replace_alu$1123.CO[3] budget 0.729000 ns (13,112) -> (13,111)\nInfo:                Sink $auto$alumacc.cc:512:replace_alu$1123.genblk1.slice[1].genblk1.carry4.CIN\nInfo:  0.1  2.0  Source $auto$alumacc.cc:512:replace_alu$1123.genblk1.slice[1].genblk1.carry4.CO3\nInfo:  0.1  2.1    Net $auto$alumacc.cc:512:replace_alu$1123.CO[7] budget 0.729000 ns (13,111) -> (13,110)\nInfo:                Sink $auto$alumacc.cc:512:replace_alu$1123.genblk1.slice[2].genblk1.carry4.CIN\nInfo:  0.1  2.2  Source $auto$alumacc.cc:512:replace_alu$1123.genblk1.slice[2].genblk1.carry4.CO3\nInfo:  0.1  2.3    Net $auto$alumacc.cc:512:replace_alu$1123.CO[11] budget 0.729000 ns (13,110) -> (13,109)\nInfo:                Sink $auto$alumacc.cc:512:replace_alu$1123.genblk1.slice[3].genblk1.carry4.CIN\nInfo:  0.1  2.5  Source $auto$alumacc.cc:512:replace_alu$1123.genblk1.slice[3].genblk1.carry4.CO3\nInfo:  0.1  2.6    Net $auto$alumacc.cc:512:replace_alu$1123.CO[15] budget 0.729000 ns (13,109) -> (13,108)\nInfo:                Sink $auto$alumacc.cc:512:replace_alu$1123.genblk1.slice[4].genblk1.carry4.CIN\nInfo:  0.1  2.7  Source $auto$alumacc.cc:512:replace_alu$1123.genblk1.slice[4].genblk1.carry4.CO3\nInfo:  0.1  2.8    Net $auto$alumacc.cc:512:replace_alu$1123.CO[19] budget 0.728000 ns (13,108) -> (13,107)\nInfo:                Sink $auto$alumacc.cc:512:replace_alu$1123.genblk1.slice[5].genblk1.carry4.CIN\nInfo:  0.1  2.9  Source $auto$alumacc.cc:512:replace_alu$1123.genblk1.slice[5].genblk1.carry4.CO3\nInfo:  0.1  3.0    Net $auto$alumacc.cc:512:replace_alu$1123.CO[23] budget 0.728000 ns (13,107) -> (13,106)\nInfo:                Sink $auto$alumacc.cc:512:replace_alu$1123.genblk1.slice[6].genblk1.carry4.CIN\nInfo:  0.1  3.1  Source $auto$alumacc.cc:512:replace_alu$1123.genblk1.slice[6].genblk1.carry4.CO3\nInfo:  0.1  3.2    Net $auto$alumacc.cc:512:replace_alu$1123.CO[27] budget 0.728000 ns (13,106) -> (13,105)\nInfo:                Sink $auto$alumacc.cc:512:replace_alu$1123.genblk1.slice[7].genblk1.carry4.CIN\nInfo:  0.3  3.6  Source $auto$alumacc.cc:512:replace_alu$1123.genblk1.slice[7].genblk1.carry4.O1\nInfo:  0.9  4.5    Net result[29] budget 0.000000 ns (13,105) -> (10,109)\nInfo:                Sink $abc$1900$auto$blifparse.cc:557:parse_blif$1948.A1\nInfo:  0.1  4.6  Source $abc$1900$auto$blifparse.cc:557:parse_blif$1948.O6\nInfo:  0.0  4.7    Net $0\\digest[47:0][29] budget 0.204000 ns (10,109) -> (10,109)\nInfo:                Sink $auto$ff.cc:337:slice$1707.D\nInfo:  0.1  4.8  Setup $auto$ff.cc:337:slice$1707.D\nInfo: 2.0 ns logic, 2.8 ns routing"
+            }
+          },
+          "seconds": 1.609
+        }
+      }
+    },
+    {
+      "artifacts": {
+        "baseline.console": "8ee9dfbb8a1ccdfd63a59d2565100b46a6e11db6e2ad3bbd4f7a5fb8f132bf5d",
+        "baseline.fasm": "a2dc69d452cd1b89a3db253215382cb4f2ff437d1f39d0f1d3d441d6af1083ba",
+        "baseline.log": "8ee9dfbb8a1ccdfd63a59d2565100b46a6e11db6e2ad3bbd4f7a5fb8f132bf5d",
+        "baseline.report.json": "47e31eba36cb628e5be70f56e2a884af0d224ef3904523edfadf42540795cf03",
+        "coverage.json": "5e2ede0e73b4f56889777619b221e620b038079b6edd6904b052bbe4e9649982",
+        "map.console": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "map.ys": "571f13591bb3bf706c0bf8458c2485fd8d34cf2e93999d3cfad9aba12f450527",
+        "mapped.json": "fc97da78a40000f042a89e34862dd4da0bd5db6bf3d56092a1eebcf68aa6ea77",
+        "nextpnr.console": "2a35422576bd33c3e99cafa11b64f967c97e0d71dcb2de06c0fbb782928e472e",
+        "nextpnr.fasm": "a2dc69d452cd1b89a3db253215382cb4f2ff437d1f39d0f1d3d441d6af1083ba",
+        "nextpnr.log": "2a35422576bd33c3e99cafa11b64f967c97e0d71dcb2de06c0fbb782928e472e",
+        "nextpnr.report.json": "47e31eba36cb628e5be70f56e2a884af0d224ef3904523edfadf42540795cf03",
+        "timing.xdc": "f71ce9982a6706873035714f44df2f4ec2ed80591a5f721e7e11a88b32553025"
+      },
+      "coverage": {
+        "checks": [
+          {
+            "examples": [],
+            "failed": 0,
+            "failure_reasons": {},
+            "matched": 80,
+            "passed": true,
+            "requirement": {
+              "class": "register_output",
+              "port": "Q",
+              "type": "SLICE_FFX"
+            }
+          },
+          {
+            "examples": [],
+            "failed": 0,
+            "failure_reasons": {},
+            "matched": 80,
+            "passed": true,
+            "requirement": {
+              "class": "register_input",
+              "port": "D",
+              "type": "SLICE_FFX"
+            }
+          },
+          {
+            "examples": [
+              {
+                "cell": "hard_probe.ram_probe.memory",
+                "port": "DOBDO0",
+                "reason": "class=ignore"
+              },
+              {
+                "cell": "hard_probe.ram_probe.memory",
+                "port": "DOBDO1",
+                "reason": "class=ignore"
+              }
+            ],
+            "failed": 32,
+            "failure_reasons": {
+              "class=ignore": 32
+            },
+            "matched": 32,
+            "passed": false,
+            "requirement": {
+              "class": "register_output",
+              "port": "DO(?:ADO|BDO)[0-9]+",
+              "type": "RAMB(?:18|36)E1_RAMB(?:18|36)E1"
+            }
+          },
+          {
+            "examples": [
+              {
+                "cell": "hard_probe.ram_probe.memory",
+                "port": "DIADI0",
+                "reason": "class=ignore"
+              },
+              {
+                "cell": "hard_probe.ram_probe.memory",
+                "port": "DIADI1",
+                "reason": "class=ignore"
+              }
+            ],
+            "failed": 64,
+            "failure_reasons": {
+              "class=ignore": 64
+            },
+            "matched": 64,
+            "passed": false,
+            "requirement": {
+              "class": "register_input",
+              "port": "(?:DIADI|DIBDI)[0-9]+",
+              "type": "RAMB(?:18|36)E1_RAMB(?:18|36)E1"
+            }
+          }
+        ],
+        "design_wide_clock_validated": false,
+        "endpoint_requirements_met": false
+      },
+      "mapped": {
+        "counts": {
+          "BUFG": 1,
+          "FDRE": 80,
+          "IBUF": 1,
+          "LUT2": 48,
+          "LUT4": 1,
+          "OBUF": 1,
+          "RAMB36E1": 1,
+          "SRL16E": 1
+        },
+        "hard_blocks": {
+          "hard_probe.ram_probe.memory": {
+            "parameters": {
+              "DOA_REG": "00000000000000000000000000000000",
+              "DOB_REG": "0",
+              "RAM_MODE": "TDP",
+              "READ_WIDTH_A": "00000000000000000000000000000000",
+              "READ_WIDTH_B": "00000000000000000000000000100100",
+              "WRITE_WIDTH_A": "00000000000000000000000000100100",
+              "WRITE_WIDTH_B": "00000000000000000000000000000000"
+            },
+            "type": "RAMB36E1"
+          }
+        }
+      },
+      "mode": "ram",
+      "observer_neutral": true,
+      "variants": {
+        "baseline": {
+          "fasm_features_sha256": "89efb6a892201f09cca4a9ad142eb6ca8c1c1a8f46d95a4f82961bd099ff9dc7",
+          "fmax": {
+            "clock": {
+              "achieved": 823.05,
+              "constraint": 100.0
+            }
+          },
+          "paths": {
+            "$iopadmap$clock": {
+              "logic_ns": 0.4,
+              "routing_ns": 0.9,
+              "text": "Info: Critical path report for clock '$iopadmap$clock' (posedge -> posedge):\nInfo: curr total\nInfo:  0.1  0.1  Source $auto$ff.cc:337:slice$1625.Q\nInfo:  0.8  0.9    Net flow[19] budget 0.000000 ns (10,109) -> (10,108)\nInfo:                Sink $abc$1796$auto$blifparse.cc:557:parse_blif$1808.A1\nInfo:  0.2  1.1  Source $abc$1796$auto$blifparse.cc:557:parse_blif$1808.O5\nInfo:  0.0  1.1    Net $0\\argument[31:0][19] budget 4.553000 ns (10,108) -> (10,108)\nInfo:                Sink $auto$ff.cc:337:slice$1657.D\nInfo:  0.1  1.2  Setup $auto$ff.cc:337:slice$1657.D\nInfo: 0.4 ns logic, 0.9 ns routing"
+            }
+          },
+          "seconds": 1.453
+        },
+        "nextpnr": {
+          "fasm_features_sha256": "89efb6a892201f09cca4a9ad142eb6ca8c1c1a8f46d95a4f82961bd099ff9dc7",
+          "fmax": {
+            "clock": {
+              "achieved": 823.05,
+              "constraint": 100.0
+            }
+          },
+          "paths": {
+            "$iopadmap$clock": {
+              "logic_ns": 0.4,
+              "routing_ns": 0.9,
+              "text": "Info: Critical path report for clock '$iopadmap$clock' (posedge -> posedge):\nInfo: curr total\nInfo:  0.1  0.1  Source $auto$ff.cc:337:slice$1625.Q\nInfo:  0.8  0.9    Net flow[19] budget 0.000000 ns (10,109) -> (10,108)\nInfo:                Sink $abc$1796$auto$blifparse.cc:557:parse_blif$1808.A1\nInfo:  0.2  1.1  Source $abc$1796$auto$blifparse.cc:557:parse_blif$1808.O5\nInfo:  0.0  1.1    Net $0\\argument[31:0][19] budget 4.553000 ns (10,108) -> (10,108)\nInfo:                Sink $auto$ff.cc:337:slice$1657.D\nInfo:  0.1  1.2  Setup $auto$ff.cc:337:slice$1657.D\nInfo: 0.4 ns logic, 0.9 ns routing"
+            }
+          },
+          "seconds": 1.574
+        }
+      }
+    },
+    {
+      "artifacts": {
+        "baseline.console": "e4cd173761fec9c747ae7d5f32d95b7f90e593233374cc7a74a260a6b8ca23e0",
+        "baseline.fasm": "5b2c354b7888b1892ce330f90aea100de57498a34e9510c4c4c7fe9c79eb1f7b",
+        "baseline.log": "e4cd173761fec9c747ae7d5f32d95b7f90e593233374cc7a74a260a6b8ca23e0",
+        "baseline.report.json": "47e31eba36cb628e5be70f56e2a884af0d224ef3904523edfadf42540795cf03",
+        "coverage.json": "5e2ede0e73b4f56889777619b221e620b038079b6edd6904b052bbe4e9649982",
+        "map.console": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "map.ys": "80631f5ae7251add8a0da9710fd0fd5a36f5cafbebb336e48f18c18ba7c74072",
+        "mapped.json": "830da4e8d1a3254bd68e6a2e24d489d355b901e620acac45b206ff46ae7b8636",
+        "nextpnr.console": "8ad389a01e02ead1ebbd8765cdde9612c65b87ffa56b82a45b98df79e2ad021c",
+        "nextpnr.fasm": "5b2c354b7888b1892ce330f90aea100de57498a34e9510c4c4c7fe9c79eb1f7b",
+        "nextpnr.log": "8ad389a01e02ead1ebbd8765cdde9612c65b87ffa56b82a45b98df79e2ad021c",
+        "nextpnr.report.json": "47e31eba36cb628e5be70f56e2a884af0d224ef3904523edfadf42540795cf03",
+        "timing.xdc": "f71ce9982a6706873035714f44df2f4ec2ed80591a5f721e7e11a88b32553025"
+      },
+      "coverage": {
+        "checks": [
+          {
+            "examples": [],
+            "failed": 0,
+            "failure_reasons": {},
+            "matched": 80,
+            "passed": true,
+            "requirement": {
+              "class": "register_output",
+              "port": "Q",
+              "type": "SLICE_FFX"
+            }
+          },
+          {
+            "examples": [],
+            "failed": 0,
+            "failure_reasons": {},
+            "matched": 80,
+            "passed": true,
+            "requirement": {
+              "class": "register_input",
+              "port": "D",
+              "type": "SLICE_FFX"
+            }
+          },
+          {
+            "examples": [
+              {
+                "cell": "hard_probe.ram_probe.memory",
+                "port": "DOBDO0",
+                "reason": "class=ignore"
+              },
+              {
+                "cell": "hard_probe.ram_probe.memory",
+                "port": "DOBDO1",
+                "reason": "class=ignore"
+              }
+            ],
+            "failed": 32,
+            "failure_reasons": {
+              "class=ignore": 32
+            },
+            "matched": 32,
+            "passed": false,
+            "requirement": {
+              "class": "register_output",
+              "port": "DO(?:ADO|BDO)[0-9]+",
+              "type": "RAMB(?:18|36)E1_RAMB(?:18|36)E1"
+            }
+          },
+          {
+            "examples": [
+              {
+                "cell": "hard_probe.ram_probe.memory",
+                "port": "DIADI0",
+                "reason": "class=ignore"
+              },
+              {
+                "cell": "hard_probe.ram_probe.memory",
+                "port": "DIADI1",
+                "reason": "class=ignore"
+              }
+            ],
+            "failed": 64,
+            "failure_reasons": {
+              "class=ignore": 64
+            },
+            "matched": 64,
+            "passed": false,
+            "requirement": {
+              "class": "register_input",
+              "port": "(?:DIADI|DIBDI)[0-9]+",
+              "type": "RAMB(?:18|36)E1_RAMB(?:18|36)E1"
+            }
+          }
+        ],
+        "design_wide_clock_validated": false,
+        "endpoint_requirements_met": false
+      },
+      "mapped": {
+        "counts": {
+          "BUFG": 1,
+          "FDRE": 80,
+          "IBUF": 1,
+          "LUT2": 48,
+          "LUT4": 1,
+          "OBUF": 1,
+          "RAMB36E1": 1,
+          "SRL16E": 1
+        },
+        "hard_blocks": {
+          "hard_probe.ram_probe.memory": {
+            "parameters": {
+              "DOA_REG": "00000000000000000000000000000000",
+              "DOB_REG": "1",
+              "RAM_MODE": "TDP",
+              "READ_WIDTH_A": "00000000000000000000000000000000",
+              "READ_WIDTH_B": "00000000000000000000000000100100",
+              "WRITE_WIDTH_A": "00000000000000000000000000100100",
+              "WRITE_WIDTH_B": "00000000000000000000000000000000"
+            },
+            "type": "RAMB36E1"
+          }
+        }
+      },
+      "mode": "ram_registered",
+      "observer_neutral": true,
+      "variants": {
+        "baseline": {
+          "fasm_features_sha256": "2f219330b7b5ca0749c60b9e53d0eb1651adf5193bc9e9291e5277c8b7b27b7e",
+          "fmax": {
+            "clock": {
+              "achieved": 823.05,
+              "constraint": 100.0
+            }
+          },
+          "paths": {
+            "$iopadmap$clock": {
+              "logic_ns": 0.4,
+              "routing_ns": 0.9,
+              "text": "Info: Critical path report for clock '$iopadmap$clock' (posedge -> posedge):\nInfo: curr total\nInfo:  0.1  0.1  Source $auto$ff.cc:337:slice$1625.Q\nInfo:  0.8  0.9    Net flow[19] budget 0.000000 ns (10,109) -> (10,108)\nInfo:                Sink $abc$1796$auto$blifparse.cc:557:parse_blif$1808.A1\nInfo:  0.2  1.1  Source $abc$1796$auto$blifparse.cc:557:parse_blif$1808.O5\nInfo:  0.0  1.1    Net $0\\argument[31:0][19] budget 4.553000 ns (10,108) -> (10,108)\nInfo:                Sink $auto$ff.cc:337:slice$1657.D\nInfo:  0.1  1.2  Setup $auto$ff.cc:337:slice$1657.D\nInfo: 0.4 ns logic, 0.9 ns routing"
+            }
+          },
+          "seconds": 1.502
+        },
+        "nextpnr": {
+          "fasm_features_sha256": "2f219330b7b5ca0749c60b9e53d0eb1651adf5193bc9e9291e5277c8b7b27b7e",
+          "fmax": {
+            "clock": {
+              "achieved": 823.05,
+              "constraint": 100.0
+            }
+          },
+          "paths": {
+            "$iopadmap$clock": {
+              "logic_ns": 0.4,
+              "routing_ns": 0.9,
+              "text": "Info: Critical path report for clock '$iopadmap$clock' (posedge -> posedge):\nInfo: curr total\nInfo:  0.1  0.1  Source $auto$ff.cc:337:slice$1625.Q\nInfo:  0.8  0.9    Net flow[19] budget 0.000000 ns (10,109) -> (10,108)\nInfo:                Sink $abc$1796$auto$blifparse.cc:557:parse_blif$1808.A1\nInfo:  0.2  1.1  Source $abc$1796$auto$blifparse.cc:557:parse_blif$1808.O5\nInfo:  0.0  1.1    Net $0\\argument[31:0][19] budget 4.553000 ns (10,108) -> (10,108)\nInfo:                Sink $auto$ff.cc:337:slice$1657.D\nInfo:  0.1  1.2  Setup $auto$ff.cc:337:slice$1657.D\nInfo: 0.4 ns logic, 0.9 ns routing"
+            }
+          },
+          "seconds": 1.456
+        }
+      }
+    },
+    {
+      "artifacts": {
+        "baseline.console": "19b349128b9bed7d1b2ba1cb4b98e719f6d59632086e71bec7b3bf457c79eb81",
+        "baseline.fasm": "12e36667d040f6c99907bc5d53d5f5df167a25532d1737459830d2a874b2341a",
+        "baseline.log": "19b349128b9bed7d1b2ba1cb4b98e719f6d59632086e71bec7b3bf457c79eb81",
+        "baseline.report.json": "f1ff4eafbd039d7b0196508f0bd3eae42d8bc3ed05f8f700580333757c5304d8",
+        "coverage.json": "facec5948a702707c56969b1e1cbe67e76781044c554da891e992aeb4c0b6f22",
+        "map.console": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "map.ys": "0cbed0813c418444f8a52e0f019006d555757de17cf40f59c355053ffd7a99bc",
+        "mapped.json": "989cceb4c63e712a55ad28500e15c585e756e17aedb2612b8a3727294a3f024a",
+        "nextpnr.console": "b2ff6fac340b3b194ba70678d4af3267c24f58d3710f157a9acec15fc0755f8d",
+        "nextpnr.fasm": "12e36667d040f6c99907bc5d53d5f5df167a25532d1737459830d2a874b2341a",
+        "nextpnr.log": "b2ff6fac340b3b194ba70678d4af3267c24f58d3710f157a9acec15fc0755f8d",
+        "nextpnr.report.json": "f1ff4eafbd039d7b0196508f0bd3eae42d8bc3ed05f8f700580333757c5304d8",
+        "timing.xdc": "f71ce9982a6706873035714f44df2f4ec2ed80591a5f721e7e11a88b32553025"
+      },
+      "coverage": {
+        "checks": [
+          {
+            "examples": [],
+            "failed": 0,
+            "failure_reasons": {},
+            "matched": 96,
+            "passed": true,
+            "requirement": {
+              "class": "register_output",
+              "port": "Q",
+              "type": "SLICE_FFX"
+            }
+          },
+          {
+            "examples": [],
+            "failed": 0,
+            "failure_reasons": {},
+            "matched": 96,
+            "passed": true,
+            "requirement": {
+              "class": "register_input",
+              "port": "D",
+              "type": "SLICE_FFX"
+            }
+          },
+          {
+            "examples": [],
+            "failed": 0,
+            "failure_reasons": {},
+            "matched": 48,
+            "passed": true,
+            "requirement": {
+              "class": "comb_output",
+              "port": "P[0-9]+",
+              "type": "DSP48E1_DSP48E1"
+            }
+          },
+          {
+            "examples": [],
+            "failed": 0,
+            "failure_reasons": {},
+            "matched": 48,
+            "passed": true,
+            "requirement": {
+              "class": "comb_input",
+              "port": "[AB][0-9]+",
+              "type": "DSP48E1_DSP48E1"
+            }
+          }
+        ],
+        "design_wide_clock_validated": false,
+        "endpoint_requirements_met": true
+      },
+      "mapped": {
+        "counts": {
+          "BUFG": 1,
+          "DSP48E1": 1,
+          "FDRE": 96,
+          "IBUF": 1,
+          "LUT2": 64,
+          "LUT4": 1,
+          "OBUF": 1
+        },
+        "hard_blocks": {
+          "hard_probe.dsp_probe.multiplier": {
+            "parameters": {
+              "ACASCREG": "00000000000000000000000000000000",
+              "ADREG": "00000000000000000000000000000000",
+              "ALUMODEREG": "00000000000000000000000000000000",
+              "AREG": "00000000000000000000000000000000",
+              "BCASCREG": "00000000000000000000000000000000",
+              "BREG": "00000000000000000000000000000000",
+              "CARRYINREG": "00000000000000000000000000000000",
+              "CARRYINSELREG": "00000000000000000000000000000000",
+              "CREG": "00000000000000000000000000000000",
+              "DREG": "00000000000000000000000000000000",
+              "INMODEREG": "00000000000000000000000000000000",
+              "MREG": "0",
+              "OPMODEREG": "00000000000000000000000000000000",
+              "PREG": "0"
+            },
+            "type": "DSP48E1"
+          }
+        }
+      },
+      "mode": "dsp",
+      "observer_neutral": true,
+      "variants": {
+        "baseline": {
+          "fasm_features_sha256": "02a556708c4d37d3073039cbfeda796e686b44b16480c3196f59272d7bf5e538",
+          "fmax": {
+            "clock": {
+              "achieved": 119.3,
+              "constraint": 100.0
+            }
+          },
+          "paths": {
+            "$iopadmap$clock": {
+              "logic_ns": 5.7,
+              "routing_ns": 2.7,
+              "text": "Info: Critical path report for clock '$iopadmap$clock' (posedge -> posedge):\nInfo: curr total\nInfo:  0.1  0.1  Source $auto$ff.cc:337:slice$1670.Q\nInfo:  1.0  1.1    Net argument[19] budget 1.415000 ns (10,105) -> (28,109)\nInfo:                Sink hard_probe.dsp_probe.multiplier.A3\nInfo:  5.4  6.5  Source hard_probe.dsp_probe.multiplier.P10\nInfo:  1.6  8.1    Net result[10] budget 0.000000 ns (28,109) -> (10,105)\nInfo:                Sink $abc$1809$auto$blifparse.cc:557:parse_blif$1846.A4\nInfo:  0.1  8.3  Source $abc$1809$auto$blifparse.cc:557:parse_blif$1846.O6\nInfo:  0.0  8.3    Net $0\\digest[47:0][10] budget 0.345000 ns (10,105) -> (10,105)\nInfo:                Sink $auto$ff.cc:337:slice$1693.D\nInfo:  0.1  8.4  Setup $auto$ff.cc:337:slice$1693.D\nInfo: 5.7 ns logic, 2.7 ns routing"
+            }
+          },
+          "seconds": 1.567
+        },
+        "nextpnr": {
+          "fasm_features_sha256": "02a556708c4d37d3073039cbfeda796e686b44b16480c3196f59272d7bf5e538",
+          "fmax": {
+            "clock": {
+              "achieved": 119.3,
+              "constraint": 100.0
+            }
+          },
+          "paths": {
+            "$iopadmap$clock": {
+              "logic_ns": 5.7,
+              "routing_ns": 2.7,
+              "text": "Info: Critical path report for clock '$iopadmap$clock' (posedge -> posedge):\nInfo: curr total\nInfo:  0.1  0.1  Source $auto$ff.cc:337:slice$1670.Q\nInfo:  1.0  1.1    Net argument[19] budget 1.415000 ns (10,105) -> (28,109)\nInfo:                Sink hard_probe.dsp_probe.multiplier.A3\nInfo:  5.4  6.5  Source hard_probe.dsp_probe.multiplier.P10\nInfo:  1.6  8.1    Net result[10] budget 0.000000 ns (28,109) -> (10,105)\nInfo:                Sink $abc$1809$auto$blifparse.cc:557:parse_blif$1846.A4\nInfo:  0.1  8.3  Source $abc$1809$auto$blifparse.cc:557:parse_blif$1846.O6\nInfo:  0.0  8.3    Net $0\\digest[47:0][10] budget 0.345000 ns (10,105) -> (10,105)\nInfo:                Sink $auto$ff.cc:337:slice$1693.D\nInfo:  0.1  8.4  Setup $auto$ff.cc:337:slice$1693.D\nInfo: 5.7 ns logic, 2.7 ns routing"
+            }
+          },
+          "seconds": 1.515
+        }
+      }
+    },
+    {
+      "artifacts": {
+        "baseline.console": "dcbdb8002559cd9d0b8b7f7395f298072b8ca29cd5aee2d136de54b100f3344a",
+        "baseline.fasm": "3dc0c992de2f408c5d8b95b7b0f16a2c48c695a5f1155fa78c6bee547fc17332",
+        "baseline.log": "dcbdb8002559cd9d0b8b7f7395f298072b8ca29cd5aee2d136de54b100f3344a",
+        "baseline.report.json": "25be6ceb1ffb2451cf9513e0e5d9b7d0fbdce6f5a339d3d6af60e37e58b687c7",
+        "coverage.json": "606ffbe3010b200565a2ba450664fd93a621c82dc6552600666c04212978ac90",
+        "map.console": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "map.ys": "2b5a631e2f8e3fc003bd2614226f85c4f3a5d3b3ae42b3c68b51e40c21fb22fc",
+        "mapped.json": "88ed5110104c9fc1de320f0e34448a0d84e8ef3017656a1f14e35279249f577f",
+        "nextpnr.console": "b244b69423a85650277122d9f4dc78ba7245e29f23fd7a2df6d70677377a5a6a",
+        "nextpnr.fasm": "3dc0c992de2f408c5d8b95b7b0f16a2c48c695a5f1155fa78c6bee547fc17332",
+        "nextpnr.log": "b244b69423a85650277122d9f4dc78ba7245e29f23fd7a2df6d70677377a5a6a",
+        "nextpnr.report.json": "25be6ceb1ffb2451cf9513e0e5d9b7d0fbdce6f5a339d3d6af60e37e58b687c7",
+        "timing.xdc": "f71ce9982a6706873035714f44df2f4ec2ed80591a5f721e7e11a88b32553025"
+      },
+      "coverage": {
+        "checks": [
+          {
+            "examples": [],
+            "failed": 0,
+            "failure_reasons": {},
+            "matched": 96,
+            "passed": true,
+            "requirement": {
+              "class": "register_output",
+              "port": "Q",
+              "type": "SLICE_FFX"
+            }
+          },
+          {
+            "examples": [],
+            "failed": 0,
+            "failure_reasons": {},
+            "matched": 96,
+            "passed": true,
+            "requirement": {
+              "class": "register_input",
+              "port": "D",
+              "type": "SLICE_FFX"
+            }
+          },
+          {
+            "examples": [
+              {
+                "cell": "hard_probe.dsp_probe.multiplier",
+                "port": "P0",
+                "reason": "class=ignore"
+              },
+              {
+                "cell": "hard_probe.dsp_probe.multiplier",
+                "port": "P1",
+                "reason": "class=ignore"
+              }
+            ],
+            "failed": 48,
+            "failure_reasons": {
+              "class=ignore": 48
+            },
+            "matched": 48,
+            "passed": false,
+            "requirement": {
+              "class": "register_output",
+              "port": "P[0-9]+",
+              "type": "DSP48E1_DSP48E1"
+            }
+          },
+          {
+            "examples": [
+              {
+                "cell": "hard_probe.dsp_probe.multiplier",
+                "port": "A0",
+                "reason": "class=ignore"
+              },
+              {
+                "cell": "hard_probe.dsp_probe.multiplier",
+                "port": "A1",
+                "reason": "class=ignore"
+              }
+            ],
+            "failed": 48,
+            "failure_reasons": {
+              "class=ignore": 48
+            },
+            "matched": 48,
+            "passed": false,
+            "requirement": {
+              "class": "register_input",
+              "port": "[AB][0-9]+",
+              "type": "DSP48E1_DSP48E1"
+            }
+          }
+        ],
+        "design_wide_clock_validated": false,
+        "endpoint_requirements_met": false
+      },
+      "mapped": {
+        "counts": {
+          "BUFG": 1,
+          "DSP48E1": 1,
+          "FDRE": 96,
+          "IBUF": 1,
+          "LUT2": 64,
+          "LUT4": 1,
+          "OBUF": 1
+        },
+        "hard_blocks": {
+          "hard_probe.dsp_probe.multiplier": {
+            "parameters": {
+              "ACASCREG": "00000000000000000000000000000000",
+              "ADREG": "00000000000000000000000000000000",
+              "ALUMODEREG": "00000000000000000000000000000000",
+              "AREG": "00000000000000000000000000000000",
+              "BCASCREG": "00000000000000000000000000000000",
+              "BREG": "00000000000000000000000000000000",
+              "CARRYINREG": "00000000000000000000000000000000",
+              "CARRYINSELREG": "00000000000000000000000000000000",
+              "CREG": "00000000000000000000000000000000",
+              "DREG": "00000000000000000000000000000000",
+              "INMODEREG": "00000000000000000000000000000000",
+              "MREG": "1",
+              "OPMODEREG": "00000000000000000000000000000000",
+              "PREG": "1"
+            },
+            "type": "DSP48E1"
+          }
+        }
+      },
+      "mode": "dsp_registered",
+      "observer_neutral": true,
+      "variants": {
+        "baseline": {
+          "fasm_features_sha256": "003db626edffdd4ef51a2be2c5f2c7784083eaeabbdcce63df15cd354417dd3e",
+          "fmax": {
+            "clock": {
+              "achieved": 943.4,
+              "constraint": 100.0
+            }
+          },
+          "paths": {
+            "$iopadmap$clock": {
+              "logic_ns": 0.3,
+              "routing_ns": 0.7,
+              "text": "Info: Critical path report for clock '$iopadmap$clock' (posedge -> posedge):\nInfo: curr total\nInfo:  0.1  0.1  Source $auto$ff.cc:337:slice$1631.Q\nInfo:  0.7  0.8    Net flow[12] budget 0.000000 ns (17,106) -> (17,106)\nInfo:                Sink $abc$1809$auto$blifparse.cc:557:parse_blif$1859.A2\nInfo:  0.1  0.9  Source $abc$1809$auto$blifparse.cc:557:parse_blif$1859.O5\nInfo:  0.0  1.0    Net $0\\argument[31:0][12] budget 4.532000 ns (17,106) -> (17,106)\nInfo:                Sink $auto$ff.cc:337:slice$1679.D\nInfo:  0.1  1.1  Setup $auto$ff.cc:337:slice$1679.D\nInfo: 0.3 ns logic, 0.7 ns routing"
+            }
+          },
+          "seconds": 1.39
+        },
+        "nextpnr": {
+          "fasm_features_sha256": "003db626edffdd4ef51a2be2c5f2c7784083eaeabbdcce63df15cd354417dd3e",
+          "fmax": {
+            "clock": {
+              "achieved": 943.4,
+              "constraint": 100.0
+            }
+          },
+          "paths": {
+            "$iopadmap$clock": {
+              "logic_ns": 0.3,
+              "routing_ns": 0.7,
+              "text": "Info: Critical path report for clock '$iopadmap$clock' (posedge -> posedge):\nInfo: curr total\nInfo:  0.1  0.1  Source $auto$ff.cc:337:slice$1631.Q\nInfo:  0.7  0.8    Net flow[12] budget 0.000000 ns (17,106) -> (17,106)\nInfo:                Sink $abc$1809$auto$blifparse.cc:557:parse_blif$1859.A2\nInfo:  0.1  0.9  Source $abc$1809$auto$blifparse.cc:557:parse_blif$1859.O5\nInfo:  0.0  1.0    Net $0\\argument[31:0][12] budget 4.532000 ns (17,106) -> (17,106)\nInfo:                Sink $auto$ff.cc:337:slice$1679.D\nInfo:  0.1  1.1  Setup $auto$ff.cc:337:slice$1679.D\nInfo: 0.3 ns logic, 0.7 ns routing"
+            }
+          },
+          "seconds": 1.329
+        }
+      }
+    },
+    {
+      "artifacts": {
+        "baseline.console": "adffc2c8160b230a4b0db33bb5af4fdda66321a95f6ae8dba8d74f86233b6313",
+        "baseline.fasm": "5da69a51eb970bb71d9c85184e6607f19507c7feefe249c09c034e7e35eb832d",
+        "baseline.log": "adffc2c8160b230a4b0db33bb5af4fdda66321a95f6ae8dba8d74f86233b6313",
+        "baseline.report.json": "8ec1d9a5ab33147a551a9faa4549c9f8c0dadfa782862d7641de77bdb6b961c9",
+        "coverage.json": "89371dec16d630eb32c9f0e5e37b46d4c1aae1402c75e2c3fadbb9846f4588b7",
+        "map.console": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "map.ys": "6c5edc51def857053d5fe89cc19fd35d3b0930fb8493fed39518967c529174bf",
+        "mapped.json": "35c5f6280eb01de0fb1a05353275a4962ecd628909641d5a1b338dec8f0a0e25",
+        "nextpnr.console": "88160e47aed48148dbb85f0b95875aba237d28738bc5d5a841804023f9334458",
+        "nextpnr.fasm": "5da69a51eb970bb71d9c85184e6607f19507c7feefe249c09c034e7e35eb832d",
+        "nextpnr.log": "88160e47aed48148dbb85f0b95875aba237d28738bc5d5a841804023f9334458",
+        "nextpnr.report.json": "8ec1d9a5ab33147a551a9faa4549c9f8c0dadfa782862d7641de77bdb6b961c9",
+        "timing.xdc": "f71ce9982a6706873035714f44df2f4ec2ed80591a5f721e7e11a88b32553025"
+      },
+      "coverage": {
+        "checks": [
+          {
+            "examples": [],
+            "failed": 0,
+            "failure_reasons": {},
+            "matched": 96,
+            "passed": true,
+            "requirement": {
+              "class": "register_output",
+              "port": "Q",
+              "type": "SLICE_FFX"
+            }
+          },
+          {
+            "examples": [],
+            "failed": 0,
+            "failure_reasons": {},
+            "matched": 96,
+            "passed": true,
+            "requirement": {
+              "class": "register_input",
+              "port": "D",
+              "type": "SLICE_FFX"
+            }
+          },
+          {
+            "examples": [
+              {
+                "cell": "hard_probe.ram_probe.memory",
+                "port": "DOBDO0",
+                "reason": "class=ignore"
+              },
+              {
+                "cell": "hard_probe.ram_probe.memory",
+                "port": "DOBDO1",
+                "reason": "class=ignore"
+              }
+            ],
+            "failed": 32,
+            "failure_reasons": {
+              "class=ignore": 32
+            },
+            "matched": 32,
+            "passed": false,
+            "requirement": {
+              "class": "register_output",
+              "port": "DO(?:ADO|BDO)[0-9]+",
+              "type": "RAMB(?:18|36)E1_RAMB(?:18|36)E1"
+            }
+          },
+          {
+            "examples": [
+              {
+                "cell": "hard_probe.ram_probe.memory",
+                "port": "DIADI0",
+                "reason": "class=ignore"
+              },
+              {
+                "cell": "hard_probe.ram_probe.memory",
+                "port": "DIADI1",
+                "reason": "class=ignore"
+              }
+            ],
+            "failed": 64,
+            "failure_reasons": {
+              "class=ignore": 64
+            },
+            "matched": 64,
+            "passed": false,
+            "requirement": {
+              "class": "register_input",
+              "port": "(?:DIADI|DIBDI)[0-9]+",
+              "type": "RAMB(?:18|36)E1_RAMB(?:18|36)E1"
+            }
+          },
+          {
+            "examples": [],
+            "failed": 0,
+            "failure_reasons": {},
+            "matched": 48,
+            "passed": true,
+            "requirement": {
+              "class": "comb_output",
+              "port": "P[0-9]+",
+              "type": "DSP48E1_DSP48E1"
+            }
+          },
+          {
+            "examples": [],
+            "failed": 0,
+            "failure_reasons": {},
+            "matched": 48,
+            "passed": true,
+            "requirement": {
+              "class": "comb_input",
+              "port": "[AB][0-9]+",
+              "type": "DSP48E1_DSP48E1"
+            }
+          }
+        ],
+        "design_wide_clock_validated": false,
+        "endpoint_requirements_met": false
+      },
+      "mapped": {
+        "counts": {
+          "BUFG": 1,
+          "DSP48E1": 1,
+          "FDRE": 96,
+          "IBUF": 1,
+          "LUT2": 64,
+          "LUT4": 1,
+          "OBUF": 1,
+          "RAMB36E1": 1
+        },
+        "hard_blocks": {
+          "hard_probe.dsp_probe.multiplier": {
+            "parameters": {
+              "ACASCREG": "00000000000000000000000000000000",
+              "ADREG": "00000000000000000000000000000000",
+              "ALUMODEREG": "00000000000000000000000000000000",
+              "AREG": "00000000000000000000000000000000",
+              "BCASCREG": "00000000000000000000000000000000",
+              "BREG": "00000000000000000000000000000000",
+              "CARRYINREG": "00000000000000000000000000000000",
+              "CARRYINSELREG": "00000000000000000000000000000000",
+              "CREG": "00000000000000000000000000000000",
+              "DREG": "00000000000000000000000000000000",
+              "INMODEREG": "00000000000000000000000000000000",
+              "MREG": "0",
+              "OPMODEREG": "00000000000000000000000000000000",
+              "PREG": "0"
+            },
+            "type": "DSP48E1"
+          },
+          "hard_probe.ram_probe.memory": {
+            "parameters": {
+              "DOA_REG": "00000000000000000000000000000000",
+              "DOB_REG": "0",
+              "RAM_MODE": "TDP",
+              "READ_WIDTH_A": "00000000000000000000000000000000",
+              "READ_WIDTH_B": "00000000000000000000000000100100",
+              "WRITE_WIDTH_A": "00000000000000000000000000100100",
+              "WRITE_WIDTH_B": "00000000000000000000000000000000"
+            },
+            "type": "RAMB36E1"
+          }
+        }
+      },
+      "mode": "ram_dsp",
+      "observer_neutral": true,
+      "variants": {
+        "baseline": {
+          "fasm_features_sha256": "9e51c9e4db64b21ab4df37207dd18d58c5892a03fc9b08c12149646cf8ad9593",
+          "fmax": {
+            "clock": {
+              "achieved": 144.05,
+              "constraint": 100.0
+            }
+          },
+          "paths": {
+            "$iopadmap$clock": {
+              "logic_ns": 4.2,
+              "routing_ns": 2.7,
+              "text": "Info: Critical path report for clock '$iopadmap$clock' (posedge -> posedge):\nInfo: curr total\nInfo:  0.1  0.1  Source $auto$ff.cc:337:slice$1633.Q\nInfo:  1.1  1.2    Net flow[14] budget 1.933000 ns (10,105) -> (28,109)\nInfo:                Sink hard_probe.dsp_probe.multiplier.B14\nInfo:  3.8  5.0  Source hard_probe.dsp_probe.multiplier.P39\nInfo:  1.6  6.7    Net result[39] budget 0.000000 ns (28,109) -> (10,105)\nInfo:                Sink $abc$1809$auto$blifparse.cc:557:parse_blif$1817.A4\nInfo:  0.2  6.8  Source $abc$1809$auto$blifparse.cc:557:parse_blif$1817.O5\nInfo:  0.0  6.8    Net $0\\digest[47:0][39] budget 0.852000 ns (10,105) -> (10,105)\nInfo:                Sink $auto$ff.cc:337:slice$1722.D\nInfo:  0.1  6.9  Setup $auto$ff.cc:337:slice$1722.D\nInfo: 4.2 ns logic, 2.7 ns routing"
+            }
+          },
+          "seconds": 1.584
+        },
+        "nextpnr": {
+          "fasm_features_sha256": "9e51c9e4db64b21ab4df37207dd18d58c5892a03fc9b08c12149646cf8ad9593",
+          "fmax": {
+            "clock": {
+              "achieved": 144.05,
+              "constraint": 100.0
+            }
+          },
+          "paths": {
+            "$iopadmap$clock": {
+              "logic_ns": 4.2,
+              "routing_ns": 2.7,
+              "text": "Info: Critical path report for clock '$iopadmap$clock' (posedge -> posedge):\nInfo: curr total\nInfo:  0.1  0.1  Source $auto$ff.cc:337:slice$1633.Q\nInfo:  1.1  1.2    Net flow[14] budget 1.933000 ns (10,105) -> (28,109)\nInfo:                Sink hard_probe.dsp_probe.multiplier.B14\nInfo:  3.8  5.0  Source hard_probe.dsp_probe.multiplier.P39\nInfo:  1.6  6.7    Net result[39] budget 0.000000 ns (28,109) -> (10,105)\nInfo:                Sink $abc$1809$auto$blifparse.cc:557:parse_blif$1817.A4\nInfo:  0.2  6.8  Source $abc$1809$auto$blifparse.cc:557:parse_blif$1817.O5\nInfo:  0.0  6.8    Net $0\\digest[47:0][39] budget 0.852000 ns (10,105) -> (10,105)\nInfo:                Sink $auto$ff.cc:337:slice$1722.D\nInfo:  0.1  6.9  Setup $auto$ff.cc:337:slice$1722.D\nInfo: 4.2 ns logic, 2.7 ns routing"
+            }
+          },
+          "seconds": 1.579
+        }
+      }
+    }
+  ],
+  "saved_decoder_audit": {
+    "bram_connected_ports": {
+      "ignore": 7544
+    },
+    "cells": {
+      "BUFGCTRL": 1,
+      "CARRY4": 902,
+      "DSP48E1_DSP48E1": 48,
+      "IOB33_INBUF_EN": 1,
+      "IOB33_OUTBUF": 1,
+      "PAD": 2,
+      "PSEUDO_GND": 1,
+      "PSEUDO_VCC": 1,
+      "RAMB18E1_RAMB18E1": 44,
+      "RAMB36E1_RAMB36E1": 8,
+      "SELMUX2_1": 10,
+      "SLICE_FFX": 29803,
+      "SLICE_LUTX": 39180
+    },
+    "coverage_sha256": "ff6bb598de970cb943010c05fa4f30901cd77623ce495b77f7093fc8cfa46526",
+    "coverage_tool_sha256": "c045c3925ed86ed9defdfdaf2d46cfc987c0062e56cb5b43568a4afa9f0ccc71",
+    "design_wide_clock_validated": false,
+    "placement_without_routes_sha256": "5bcaf930f241c39b3a7e1fa4b2d419a0a0f386e8453c838cc509f0077b66b87f",
+    "registered_dsp_cells": 0,
+    "scope": "Existing placement and port graph; ROUTING net attributes stripped to avoid pinned-backend import assertion; no Fmax recalculated.",
+    "source": "experiments/07-openxc7/build/lut-legality-20260921/decoder-candidate/design.json",
+    "source_sha256": "30583b119682a9398003b3547bb271ef695b43bc8b86c90da12710f14838a407"
+  },
+  "schema": 1,
+  "seed": 1,
+  "status": "complete",
+  "tools": {
+    "baseline": {
+      "/Users/ecpeterson/Documents/code/erl_xls/experiments/07-openxc7/build/native-timing-20260924/reproducible/bin/nextpnr-baseline": "3c3bd360ce63affcc5b0333d481d80c67541e244778db907556900a4ef4b429f"
+    },
+    "nextpnr": {
+      "/Users/ecpeterson/Documents/code/erl_xls/experiments/07-openxc7/build/native-timing-20260924/reproducible/bin/nextpnr-coverage": "c045c3925ed86ed9defdfdaf2d46cfc987c0062e56cb5b43568a4afa9f0ccc71"
+    },
+    "yosys": {
+      "/Users/ecpeterson/Documents/code/erl_xls/experiments/07-openxc7/.apio/packages/oss-cad-suite/BUILD-INFO.json": "b509fbcf8adf9e4f8359d8c89ed179bacb3aa7c9557d830ba80936b907c3db85",
+      "/Users/ecpeterson/Documents/code/erl_xls/experiments/07-openxc7/.apio/packages/oss-cad-suite/bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+      "/Users/ecpeterson/Documents/code/erl_xls/experiments/07-openxc7/.apio/packages/oss-cad-suite/libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+      "/Users/ecpeterson/Documents/code/erl_xls/experiments/07-openxc7/.apio/packages/oss-cad-suite/libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d"
+    }
+  },
+  "vendor_reference": {
+    "archive_sha256": "e465bba8b1effdf82450ec5147ccfeab43de85c6af7d5c83ef5f318c4a5f6bc3",
+    "max_cell_delay_ns": {
+      "BRAM_registered_output": 0.748,
+      "BRAM_unregistered_output": 2.08,
+      "DSP_registered_P_output": 0.383
+    },
+    "micro_sdf_sha256": "7ab7864cd8e48077acaf65267e1163e6de7258481abc6756b452a46223881b58",
+    "part": "xc7z030sbg485-1",
+    "scope": "Retained September 21 reference; different mapping/placement, not a matched timing A/B.",
+    "vivado": "2024.2"
+  }
+}

@@ -12,6 +12,7 @@ from unittest.mock import patch
 import phi_timing as timing
 # The existing lightweight CI entry point also checks the physical LUT oracle.
 from lut_legality.test_check import CheckerTest
+from timing_coverage.test_check import CoverageTest
 
 
 def path_report(clock, logic, routing):
