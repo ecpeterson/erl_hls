@@ -1,0 +1,7 @@
+--- a/hls_fixed.x
++++ b/hls_fixed.x
+@@ -19,0 +20 @@
++  const SHIFT = ctz(DENOMINATOR);
+@@ -24 +25 @@
+-  let quotient = (rounded / (DENOMINATOR as uN[MAG])) as sN[MAG];
++  let quotient = ((rounded >> SHIFT) / ((DENOMINATOR >> SHIFT) as uN[MAG])) as sN[MAG];

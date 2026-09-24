@@ -1,0 +1,3991 @@
+[
+  {
+    "case": "baseline/bulk-lut",
+    "seed": 1,
+    "stages": 0,
+    "delay_model": null,
+    "lut_only": true,
+    "period_ns": 30.039050765995796,
+    "reported_mhz": 33.29,
+    "luts": 1576,
+    "ffs": 131,
+    "dsps": 0,
+    "cells": {
+      "LUT4": 323,
+      "LUT3": 344,
+      "LUT5": 341,
+      "LUT6": 233,
+      "LUT2": 335,
+      "INV": 71,
+      "CARRY4": 68,
+      "BUFG": 1,
+      "FDSE": 31,
+      "FDRE": 100,
+      "OBUF": 1,
+      "IBUF": 1,
+      "$scopeinfo": 1
+    },
+    "source_sha256": {
+      "bulk.x": "e976b45e639c5c3f72412e681b1f5abd4b70d2426d2195360f9c6f34161870b5",
+      "hls_fixed.x": "a3ff6655b5cca3984d736b57712e57e5976ab6196c709742aa26850537c88902",
+      "hls_vec.x": "c66c888c606ce7bc3e7b1c526cd1216e571f23fc6712f719df14dc6f5d82e5e6",
+      "phi_field.x": "7e35e2901be89e4f9b148e8d8c47d0a05581e6206070c25e8d2dc5d02828f84b",
+      "ratio.x": "77ac3305b3c31d6b47075ed7633a3bdd55744b9d192b1ff509ac9725c5945143"
+    },
+    "tool_sha256": {
+      "probe.py": "54b89f94f32e82e97561d084fac75be291a9fed236bc365dcb9e06f988c1919d",
+      "oss-cad-suite/bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+      "oss-cad-suite/BUILD-INFO.json": "b509fbcf8adf9e4f8359d8c89ed179bacb3aa7c9557d830ba80936b907c3db85",
+      "oss-cad-suite/libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+      "oss-cad-suite/libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d",
+      "nextpnr-coverage": "c045c3925ed86ed9defdfdaf2d46cfc987c0062e56cb5b43568a4afa9f0ccc71",
+      "xls/ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+      "xls/opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c",
+      "xls/codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162",
+      "xc7z030sbg485.bin": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+      "xc7z030sbg485.xdc": "6e72b1516836d2637c37220ab7de9525886d46e4d6d62f09899423f31e47e072"
+    },
+    "stdlib_manifest_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+    "coverage": {
+      "endpoint_requirements_met": true,
+      "design_wide_clock_validated": false,
+      "checks": [
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "D",
+            "class": "register_input"
+          },
+          "matched": 131,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "Q",
+            "class": "register_output"
+          },
+          "matched": 131,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        }
+      ]
+    },
+    "rtl_sha256": "c7e153f3de6743507d0683e5265f237987eb403c05dc4db77649eab7c5ebe3ef",
+    "netlist_sha256": "56195558a5afaf47046b042f56ada7684b0c761cf25a45e52c20cae77063adfc",
+    "raw_report_sha256": "013260d010c572eca7f29d1cfa134c1abd1f5b9c278d3eac386bfa68c9f1899c"
+  },
+  {
+    "case": "baseline/bulk-lut-seed2",
+    "seed": 2,
+    "stages": 0,
+    "delay_model": "unit",
+    "lut_only": true,
+    "period_ns": 29.994001199760046,
+    "reported_mhz": 33.34,
+    "luts": 1576,
+    "ffs": 131,
+    "dsps": 0,
+    "cells": {
+      "LUT4": 323,
+      "LUT3": 344,
+      "LUT5": 341,
+      "LUT6": 233,
+      "LUT2": 335,
+      "INV": 71,
+      "CARRY4": 68,
+      "BUFG": 1,
+      "FDSE": 31,
+      "FDRE": 100,
+      "OBUF": 1,
+      "IBUF": 1,
+      "$scopeinfo": 1
+    },
+    "source_sha256": {
+      "bulk.x": "e976b45e639c5c3f72412e681b1f5abd4b70d2426d2195360f9c6f34161870b5",
+      "hls_fixed.x": "a3ff6655b5cca3984d736b57712e57e5976ab6196c709742aa26850537c88902",
+      "hls_vec.x": "c66c888c606ce7bc3e7b1c526cd1216e571f23fc6712f719df14dc6f5d82e5e6",
+      "phi_field.x": "7e35e2901be89e4f9b148e8d8c47d0a05581e6206070c25e8d2dc5d02828f84b",
+      "ratio.x": "77ac3305b3c31d6b47075ed7633a3bdd55744b9d192b1ff509ac9725c5945143"
+    },
+    "tool_sha256": {
+      "probe.py": "2d829128a61f021b8ac5f1481ee465a282b9dd34f0da34ca2ca4e5a49a71c28b",
+      "oss-cad-suite/bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+      "oss-cad-suite/BUILD-INFO.json": "b509fbcf8adf9e4f8359d8c89ed179bacb3aa7c9557d830ba80936b907c3db85",
+      "oss-cad-suite/libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+      "oss-cad-suite/libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d",
+      "nextpnr-coverage": "c045c3925ed86ed9defdfdaf2d46cfc987c0062e56cb5b43568a4afa9f0ccc71",
+      "xls/ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+      "xls/opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c",
+      "xls/codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162",
+      "xc7z030sbg485.bin": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+      "xc7z030sbg485.xdc": "6e72b1516836d2637c37220ab7de9525886d46e4d6d62f09899423f31e47e072"
+    },
+    "stdlib_manifest_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+    "coverage": {
+      "endpoint_requirements_met": true,
+      "design_wide_clock_validated": false,
+      "checks": [
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "D",
+            "class": "register_input"
+          },
+          "matched": 131,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "Q",
+            "class": "register_output"
+          },
+          "matched": 131,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        }
+      ]
+    },
+    "rtl_sha256": "c7e153f3de6743507d0683e5265f237987eb403c05dc4db77649eab7c5ebe3ef",
+    "netlist_sha256": "56195558a5afaf47046b042f56ada7684b0c761cf25a45e52c20cae77063adfc",
+    "raw_report_sha256": "f0edf61bae4721a9a153c1c7a290e7fee258bacd9e7a6c2cc8030bd8472ed80c"
+  },
+  {
+    "case": "baseline/bulk-lut-seed3",
+    "seed": 3,
+    "stages": 0,
+    "delay_model": "unit",
+    "lut_only": true,
+    "period_ns": 33.72681281618887,
+    "reported_mhz": 29.65,
+    "luts": 1576,
+    "ffs": 131,
+    "dsps": 0,
+    "cells": {
+      "LUT4": 323,
+      "LUT3": 344,
+      "LUT5": 341,
+      "LUT6": 233,
+      "LUT2": 335,
+      "INV": 71,
+      "CARRY4": 68,
+      "BUFG": 1,
+      "FDSE": 31,
+      "FDRE": 100,
+      "OBUF": 1,
+      "IBUF": 1,
+      "$scopeinfo": 1
+    },
+    "source_sha256": {
+      "bulk.x": "e976b45e639c5c3f72412e681b1f5abd4b70d2426d2195360f9c6f34161870b5",
+      "hls_fixed.x": "a3ff6655b5cca3984d736b57712e57e5976ab6196c709742aa26850537c88902",
+      "hls_vec.x": "c66c888c606ce7bc3e7b1c526cd1216e571f23fc6712f719df14dc6f5d82e5e6",
+      "phi_field.x": "7e35e2901be89e4f9b148e8d8c47d0a05581e6206070c25e8d2dc5d02828f84b",
+      "ratio.x": "77ac3305b3c31d6b47075ed7633a3bdd55744b9d192b1ff509ac9725c5945143"
+    },
+    "tool_sha256": {
+      "probe.py": "2d829128a61f021b8ac5f1481ee465a282b9dd34f0da34ca2ca4e5a49a71c28b",
+      "oss-cad-suite/bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+      "oss-cad-suite/BUILD-INFO.json": "b509fbcf8adf9e4f8359d8c89ed179bacb3aa7c9557d830ba80936b907c3db85",
+      "oss-cad-suite/libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+      "oss-cad-suite/libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d",
+      "nextpnr-coverage": "c045c3925ed86ed9defdfdaf2d46cfc987c0062e56cb5b43568a4afa9f0ccc71",
+      "xls/ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+      "xls/opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c",
+      "xls/codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162",
+      "xc7z030sbg485.bin": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+      "xc7z030sbg485.xdc": "6e72b1516836d2637c37220ab7de9525886d46e4d6d62f09899423f31e47e072"
+    },
+    "stdlib_manifest_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+    "coverage": {
+      "endpoint_requirements_met": true,
+      "design_wide_clock_validated": false,
+      "checks": [
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "D",
+            "class": "register_input"
+          },
+          "matched": 131,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "Q",
+            "class": "register_output"
+          },
+          "matched": 131,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        }
+      ]
+    },
+    "rtl_sha256": "c7e153f3de6743507d0683e5265f237987eb403c05dc4db77649eab7c5ebe3ef",
+    "netlist_sha256": "56195558a5afaf47046b042f56ada7684b0c761cf25a45e52c20cae77063adfc",
+    "raw_report_sha256": "df53445c6a163bfd2b85e0c8c58b043c1d166e6e247275211f887843fd016454"
+  },
+  {
+    "case": "baseline/bulk-measure",
+    "seed": 1,
+    "stages": 0,
+    "delay_model": null,
+    "lut_only": false,
+    "period_ns": 36.98224852071006,
+    "reported_mhz": 27.04,
+    "luts": 243,
+    "ffs": 131,
+    "dsps": 6,
+    "cells": {
+      "LUT4": 32,
+      "LUT2": 103,
+      "LUT3": 65,
+      "LUT5": 37,
+      "INV": 71,
+      "LUT6": 6,
+      "CARRY4": 60,
+      "BUFG": 1,
+      "FDSE": 31,
+      "FDRE": 100,
+      "DSP48E1": 6,
+      "OBUF": 1,
+      "IBUF": 1,
+      "$scopeinfo": 1
+    },
+    "source_sha256": {
+      "bulk.x": "e976b45e639c5c3f72412e681b1f5abd4b70d2426d2195360f9c6f34161870b5",
+      "hls_fixed.x": "a3ff6655b5cca3984d736b57712e57e5976ab6196c709742aa26850537c88902",
+      "hls_vec.x": "c66c888c606ce7bc3e7b1c526cd1216e571f23fc6712f719df14dc6f5d82e5e6",
+      "phi_field.x": "7e35e2901be89e4f9b148e8d8c47d0a05581e6206070c25e8d2dc5d02828f84b",
+      "ratio.x": "77ac3305b3c31d6b47075ed7633a3bdd55744b9d192b1ff509ac9725c5945143"
+    },
+    "tool_sha256": {
+      "probe.py": "84bae75c8efac0cde74647c2b19564aafd2d2e7c04b9b7c924d18a1c59291793",
+      "oss-cad-suite/bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+      "oss-cad-suite/BUILD-INFO.json": "b509fbcf8adf9e4f8359d8c89ed179bacb3aa7c9557d830ba80936b907c3db85",
+      "oss-cad-suite/libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+      "oss-cad-suite/libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d",
+      "nextpnr-coverage": "c045c3925ed86ed9defdfdaf2d46cfc987c0062e56cb5b43568a4afa9f0ccc71",
+      "xls/ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+      "xls/opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c",
+      "xls/codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162",
+      "xc7z030sbg485.bin": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+      "xc7z030sbg485.xdc": "6e72b1516836d2637c37220ab7de9525886d46e4d6d62f09899423f31e47e072"
+    },
+    "stdlib_manifest_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+    "coverage": {
+      "endpoint_requirements_met": true,
+      "design_wide_clock_validated": false,
+      "checks": [
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "D",
+            "class": "register_input"
+          },
+          "matched": 131,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "Q",
+            "class": "register_output"
+          },
+          "matched": 131,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "requirement": {
+            "type": "DSP48E1_DSP48E1",
+            "port": "P[0-9]+",
+            "class": "comb_output"
+          },
+          "matched": 288,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "requirement": {
+            "type": "DSP48E1_DSP48E1",
+            "port": "[AB][0-9]+",
+            "class": "comb_input"
+          },
+          "matched": 288,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        }
+      ]
+    },
+    "rtl_sha256": "c7e153f3de6743507d0683e5265f237987eb403c05dc4db77649eab7c5ebe3ef",
+    "netlist_sha256": "eb77e5860fcb173f94f4ce6ccbdbca37c7b914558ad6fd9fa28ad8453f769bb1",
+    "raw_report_sha256": "a141ae432834bf116d10d9f35fc994f4bc40a0659fcb86d270f22e7bac486899"
+  },
+  {
+    "case": "baseline/bulk-pipeline2",
+    "seed": 1,
+    "stages": 2,
+    "delay_model": "unit",
+    "lut_only": true,
+    "period_ns": 27.078256160303276,
+    "reported_mhz": 36.93,
+    "luts": 1685,
+    "ffs": 202,
+    "dsps": 0,
+    "cells": {
+      "LUT4": 355,
+      "LUT5": 375,
+      "LUT3": 364,
+      "LUT6": 233,
+      "LUT2": 358,
+      "INV": 73,
+      "CARRY4": 69,
+      "BUFG": 1,
+      "FDSE": 31,
+      "FDRE": 171,
+      "OBUF": 1,
+      "IBUF": 1,
+      "$scopeinfo": 1
+    },
+    "source_sha256": {
+      "bulk.x": "e976b45e639c5c3f72412e681b1f5abd4b70d2426d2195360f9c6f34161870b5",
+      "hls_fixed.x": "a3ff6655b5cca3984d736b57712e57e5976ab6196c709742aa26850537c88902",
+      "hls_vec.x": "c66c888c606ce7bc3e7b1c526cd1216e571f23fc6712f719df14dc6f5d82e5e6",
+      "phi_field.x": "7e35e2901be89e4f9b148e8d8c47d0a05581e6206070c25e8d2dc5d02828f84b",
+      "ratio.x": "77ac3305b3c31d6b47075ed7633a3bdd55744b9d192b1ff509ac9725c5945143"
+    },
+    "tool_sha256": {
+      "probe.py": "c2a54df0d8ca055f848f35c9eacfebb045c7f3ac4f248e9ff49d90a90f11bfa5",
+      "xc7z030sbg485.xdc": "6e72b1516836d2637c37220ab7de9525886d46e4d6d62f09899423f31e47e072",
+      "oss-cad-suite/BUILD-INFO.json": "b509fbcf8adf9e4f8359d8c89ed179bacb3aa7c9557d830ba80936b907c3db85",
+      "oss-cad-suite/bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+      "oss-cad-suite/libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+      "oss-cad-suite/libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d",
+      "xc7z030sbg485.bin": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+      "nextpnr-coverage": "c045c3925ed86ed9defdfdaf2d46cfc987c0062e56cb5b43568a4afa9f0ccc71",
+      "xls/codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162",
+      "xls/ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+      "xls/opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c"
+    },
+    "stdlib_manifest_sha256": "69b58c808171a853603d35223eed3fb209ad5f004c34e4f399ef5d2c79744570",
+    "coverage": {
+      "endpoint_requirements_met": true,
+      "design_wide_clock_validated": false,
+      "checks": [
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "D",
+            "class": "register_input"
+          },
+          "matched": 202,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "Q",
+            "class": "register_output"
+          },
+          "matched": 202,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        }
+      ]
+    },
+    "rtl_sha256": "9071433ed914eedd356b6c0917a44138f6b6c4b727dbcd8d8203f394bce7ec20",
+    "netlist_sha256": "b5ef0b13fd822648c8bffeaf9c79a01d2d8c063600313b6376ae1930a507141d",
+    "raw_report_sha256": "c446165ed016b12ec194872ab81f4891879ae489de78d34056a7290e450dfb5b"
+  },
+  {
+    "case": "baseline/bulk-pipeline2-seed2",
+    "seed": 2,
+    "stages": 2,
+    "delay_model": "unit",
+    "lut_only": true,
+    "period_ns": 27.89400278940028,
+    "reported_mhz": 35.85,
+    "luts": 1685,
+    "ffs": 202,
+    "dsps": 0,
+    "cells": {
+      "LUT4": 355,
+      "LUT5": 375,
+      "LUT3": 364,
+      "LUT6": 233,
+      "LUT2": 358,
+      "INV": 73,
+      "CARRY4": 69,
+      "BUFG": 1,
+      "FDSE": 31,
+      "FDRE": 171,
+      "OBUF": 1,
+      "IBUF": 1,
+      "$scopeinfo": 1
+    },
+    "source_sha256": {
+      "bulk.x": "e976b45e639c5c3f72412e681b1f5abd4b70d2426d2195360f9c6f34161870b5",
+      "hls_fixed.x": "a3ff6655b5cca3984d736b57712e57e5976ab6196c709742aa26850537c88902",
+      "hls_vec.x": "c66c888c606ce7bc3e7b1c526cd1216e571f23fc6712f719df14dc6f5d82e5e6",
+      "phi_field.x": "7e35e2901be89e4f9b148e8d8c47d0a05581e6206070c25e8d2dc5d02828f84b",
+      "ratio.x": "77ac3305b3c31d6b47075ed7633a3bdd55744b9d192b1ff509ac9725c5945143"
+    },
+    "tool_sha256": {
+      "probe.py": "c2a54df0d8ca055f848f35c9eacfebb045c7f3ac4f248e9ff49d90a90f11bfa5",
+      "xc7z030sbg485.xdc": "6e72b1516836d2637c37220ab7de9525886d46e4d6d62f09899423f31e47e072",
+      "oss-cad-suite/BUILD-INFO.json": "b509fbcf8adf9e4f8359d8c89ed179bacb3aa7c9557d830ba80936b907c3db85",
+      "oss-cad-suite/bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+      "oss-cad-suite/libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+      "oss-cad-suite/libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d",
+      "xc7z030sbg485.bin": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+      "nextpnr-coverage": "c045c3925ed86ed9defdfdaf2d46cfc987c0062e56cb5b43568a4afa9f0ccc71",
+      "xls/codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162",
+      "xls/ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+      "xls/opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c"
+    },
+    "stdlib_manifest_sha256": "69b58c808171a853603d35223eed3fb209ad5f004c34e4f399ef5d2c79744570",
+    "coverage": {
+      "endpoint_requirements_met": true,
+      "design_wide_clock_validated": false,
+      "checks": [
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "D",
+            "class": "register_input"
+          },
+          "matched": 202,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "Q",
+            "class": "register_output"
+          },
+          "matched": 202,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        }
+      ]
+    },
+    "rtl_sha256": "9071433ed914eedd356b6c0917a44138f6b6c4b727dbcd8d8203f394bce7ec20",
+    "netlist_sha256": "b5ef0b13fd822648c8bffeaf9c79a01d2d8c063600313b6376ae1930a507141d",
+    "raw_report_sha256": "411cf2019157d108bc75818dad84b4f5f8efd47a9b1472e671fbc5c621e52e60"
+  },
+  {
+    "case": "baseline/bulk-pipeline2-seed3",
+    "seed": 3,
+    "stages": 2,
+    "delay_model": "unit",
+    "lut_only": true,
+    "period_ns": 26.581605528973952,
+    "reported_mhz": 37.62,
+    "luts": 1685,
+    "ffs": 202,
+    "dsps": 0,
+    "cells": {
+      "LUT4": 355,
+      "LUT5": 375,
+      "LUT3": 364,
+      "LUT6": 233,
+      "LUT2": 358,
+      "INV": 73,
+      "CARRY4": 69,
+      "BUFG": 1,
+      "FDSE": 31,
+      "FDRE": 171,
+      "OBUF": 1,
+      "IBUF": 1,
+      "$scopeinfo": 1
+    },
+    "source_sha256": {
+      "bulk.x": "e976b45e639c5c3f72412e681b1f5abd4b70d2426d2195360f9c6f34161870b5",
+      "hls_fixed.x": "a3ff6655b5cca3984d736b57712e57e5976ab6196c709742aa26850537c88902",
+      "hls_vec.x": "c66c888c606ce7bc3e7b1c526cd1216e571f23fc6712f719df14dc6f5d82e5e6",
+      "phi_field.x": "7e35e2901be89e4f9b148e8d8c47d0a05581e6206070c25e8d2dc5d02828f84b",
+      "ratio.x": "77ac3305b3c31d6b47075ed7633a3bdd55744b9d192b1ff509ac9725c5945143"
+    },
+    "tool_sha256": {
+      "probe.py": "c2a54df0d8ca055f848f35c9eacfebb045c7f3ac4f248e9ff49d90a90f11bfa5",
+      "xc7z030sbg485.xdc": "6e72b1516836d2637c37220ab7de9525886d46e4d6d62f09899423f31e47e072",
+      "oss-cad-suite/BUILD-INFO.json": "b509fbcf8adf9e4f8359d8c89ed179bacb3aa7c9557d830ba80936b907c3db85",
+      "oss-cad-suite/bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+      "oss-cad-suite/libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+      "oss-cad-suite/libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d",
+      "xc7z030sbg485.bin": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+      "nextpnr-coverage": "c045c3925ed86ed9defdfdaf2d46cfc987c0062e56cb5b43568a4afa9f0ccc71",
+      "xls/codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162",
+      "xls/ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+      "xls/opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c"
+    },
+    "stdlib_manifest_sha256": "69b58c808171a853603d35223eed3fb209ad5f004c34e4f399ef5d2c79744570",
+    "coverage": {
+      "endpoint_requirements_met": true,
+      "design_wide_clock_validated": false,
+      "checks": [
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "D",
+            "class": "register_input"
+          },
+          "matched": 202,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "Q",
+            "class": "register_output"
+          },
+          "matched": 202,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        }
+      ]
+    },
+    "rtl_sha256": "9071433ed914eedd356b6c0917a44138f6b6c4b727dbcd8d8203f394bce7ec20",
+    "netlist_sha256": "b5ef0b13fd822648c8bffeaf9c79a01d2d8c063600313b6376ae1930a507141d",
+    "raw_report_sha256": "b4e31ce4995e83991843a13fc93e384def79123e980b693e35d39ddb5b7bc2ba"
+  },
+  {
+    "case": "baseline/ratio-lut",
+    "seed": 1,
+    "stages": 0,
+    "delay_model": null,
+    "lut_only": true,
+    "period_ns": 22.655188038060714,
+    "reported_mhz": 44.14,
+    "luts": 1504,
+    "ffs": 74,
+    "dsps": 0,
+    "cells": {
+      "LUT6": 232,
+      "LUT4": 300,
+      "LUT5": 353,
+      "LUT2": 276,
+      "LUT3": 343,
+      "MUXF7": 8,
+      "MUXF8": 4,
+      "INV": 72,
+      "CARRY4": 47,
+      "BUFG": 1,
+      "FDRE": 74,
+      "OBUF": 1,
+      "IBUF": 1,
+      "$scopeinfo": 1
+    },
+    "source_sha256": {
+      "bulk.x": "e976b45e639c5c3f72412e681b1f5abd4b70d2426d2195360f9c6f34161870b5",
+      "hls_fixed.x": "a3ff6655b5cca3984d736b57712e57e5976ab6196c709742aa26850537c88902",
+      "hls_vec.x": "c66c888c606ce7bc3e7b1c526cd1216e571f23fc6712f719df14dc6f5d82e5e6",
+      "phi_field.x": "7e35e2901be89e4f9b148e8d8c47d0a05581e6206070c25e8d2dc5d02828f84b",
+      "ratio.x": "77ac3305b3c31d6b47075ed7633a3bdd55744b9d192b1ff509ac9725c5945143"
+    },
+    "tool_sha256": {
+      "probe.py": "54b89f94f32e82e97561d084fac75be291a9fed236bc365dcb9e06f988c1919d",
+      "oss-cad-suite/bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+      "oss-cad-suite/BUILD-INFO.json": "b509fbcf8adf9e4f8359d8c89ed179bacb3aa7c9557d830ba80936b907c3db85",
+      "oss-cad-suite/libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+      "oss-cad-suite/libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d",
+      "nextpnr-coverage": "c045c3925ed86ed9defdfdaf2d46cfc987c0062e56cb5b43568a4afa9f0ccc71",
+      "xls/ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+      "xls/opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c",
+      "xls/codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162",
+      "xc7z030sbg485.bin": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+      "xc7z030sbg485.xdc": "6e72b1516836d2637c37220ab7de9525886d46e4d6d62f09899423f31e47e072"
+    },
+    "stdlib_manifest_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+    "coverage": {
+      "endpoint_requirements_met": true,
+      "design_wide_clock_validated": false,
+      "checks": [
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "D",
+            "class": "register_input"
+          },
+          "matched": 74,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "Q",
+            "class": "register_output"
+          },
+          "matched": 74,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        }
+      ]
+    },
+    "rtl_sha256": "b421744c1c7ac6b7c53cb3af646fe311ace0dd5302e1cc7908e73d2cd2d720e8",
+    "netlist_sha256": "794812acb26c3d98902d4b956ed46fd5fbd3d69bd9bd4215602363dc7e952ea6",
+    "raw_report_sha256": "b4364ad9d5b775ad78a8a4504e7b99bbc78279dc9cdd31e24a3d73cc48fd9f3d"
+  },
+  {
+    "case": "baseline/ratio-measure",
+    "seed": 1,
+    "stages": 0,
+    "delay_model": null,
+    "lut_only": false,
+    "period_ns": 29.325513196480937,
+    "reported_mhz": 34.1,
+    "luts": 140,
+    "ffs": 74,
+    "dsps": 6,
+    "cells": {
+      "LUT4": 7,
+      "LUT3": 69,
+      "LUT2": 60,
+      "LUT5": 4,
+      "INV": 72,
+      "CARRY4": 43,
+      "BUFG": 1,
+      "FDRE": 74,
+      "DSP48E1": 6,
+      "OBUF": 1,
+      "IBUF": 1,
+      "$scopeinfo": 1
+    },
+    "source_sha256": {
+      "bulk.x": "e976b45e639c5c3f72412e681b1f5abd4b70d2426d2195360f9c6f34161870b5",
+      "hls_fixed.x": "a3ff6655b5cca3984d736b57712e57e5976ab6196c709742aa26850537c88902",
+      "hls_vec.x": "c66c888c606ce7bc3e7b1c526cd1216e571f23fc6712f719df14dc6f5d82e5e6",
+      "phi_field.x": "7e35e2901be89e4f9b148e8d8c47d0a05581e6206070c25e8d2dc5d02828f84b",
+      "ratio.x": "77ac3305b3c31d6b47075ed7633a3bdd55744b9d192b1ff509ac9725c5945143"
+    },
+    "tool_sha256": {
+      "probe.py": "84bae75c8efac0cde74647c2b19564aafd2d2e7c04b9b7c924d18a1c59291793",
+      "oss-cad-suite/bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+      "oss-cad-suite/BUILD-INFO.json": "b509fbcf8adf9e4f8359d8c89ed179bacb3aa7c9557d830ba80936b907c3db85",
+      "oss-cad-suite/libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+      "oss-cad-suite/libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d",
+      "nextpnr-coverage": "c045c3925ed86ed9defdfdaf2d46cfc987c0062e56cb5b43568a4afa9f0ccc71",
+      "xls/ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+      "xls/opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c",
+      "xls/codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162",
+      "xc7z030sbg485.bin": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+      "xc7z030sbg485.xdc": "6e72b1516836d2637c37220ab7de9525886d46e4d6d62f09899423f31e47e072"
+    },
+    "stdlib_manifest_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+    "coverage": {
+      "endpoint_requirements_met": true,
+      "design_wide_clock_validated": false,
+      "checks": [
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "D",
+            "class": "register_input"
+          },
+          "matched": 74,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "Q",
+            "class": "register_output"
+          },
+          "matched": 74,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "requirement": {
+            "type": "DSP48E1_DSP48E1",
+            "port": "P[0-9]+",
+            "class": "comb_output"
+          },
+          "matched": 288,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "requirement": {
+            "type": "DSP48E1_DSP48E1",
+            "port": "[AB][0-9]+",
+            "class": "comb_input"
+          },
+          "matched": 288,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        }
+      ]
+    },
+    "rtl_sha256": "b421744c1c7ac6b7c53cb3af646fe311ace0dd5302e1cc7908e73d2cd2d720e8",
+    "netlist_sha256": "045fad62e207374e2653ad65889ce9355bf89446728d786bfc39f244bd2bf47c",
+    "raw_report_sha256": "e436ff06bf0e01ecda2ce338c91b98ac0d1e388f67c5ceead0ee6f7f91bed21a"
+  },
+  {
+    "case": "bounded-bulk/bulk-lut",
+    "seed": 1,
+    "stages": 0,
+    "delay_model": "unit",
+    "lut_only": true,
+    "period_ns": 20.173492031470648,
+    "reported_mhz": 49.57,
+    "luts": 949,
+    "ffs": 131,
+    "dsps": 0,
+    "cells": {
+      "LUT4": 167,
+      "LUT5": 249,
+      "LUT6": 137,
+      "LUT3": 209,
+      "LUT2": 187,
+      "MUXF7": 2,
+      "INV": 2,
+      "CARRY4": 46,
+      "BUFG": 1,
+      "FDRE": 131,
+      "OBUF": 1,
+      "IBUF": 1,
+      "$scopeinfo": 1
+    },
+    "source_sha256": {
+      "bulk.x": "e976b45e639c5c3f72412e681b1f5abd4b70d2426d2195360f9c6f34161870b5",
+      "hls_fixed.x": "22cc6986c5cee67c4effcec999c713dd35da857f8ce26ade754b721ab9543b24",
+      "hls_vec.x": "c66c888c606ce7bc3e7b1c526cd1216e571f23fc6712f719df14dc6f5d82e5e6",
+      "phi_field.x": "0fba474f3b8ec442010df47880a730866406bd0cdde4fedb06be195880298ebb",
+      "ratio.x": "77ac3305b3c31d6b47075ed7633a3bdd55744b9d192b1ff509ac9725c5945143"
+    },
+    "tool_sha256": {
+      "probe.py": "2d829128a61f021b8ac5f1481ee465a282b9dd34f0da34ca2ca4e5a49a71c28b",
+      "oss-cad-suite/bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+      "oss-cad-suite/BUILD-INFO.json": "b509fbcf8adf9e4f8359d8c89ed179bacb3aa7c9557d830ba80936b907c3db85",
+      "oss-cad-suite/libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+      "oss-cad-suite/libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d",
+      "nextpnr-coverage": "c045c3925ed86ed9defdfdaf2d46cfc987c0062e56cb5b43568a4afa9f0ccc71",
+      "xls/ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+      "xls/opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c",
+      "xls/codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162",
+      "xc7z030sbg485.bin": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+      "xc7z030sbg485.xdc": "6e72b1516836d2637c37220ab7de9525886d46e4d6d62f09899423f31e47e072"
+    },
+    "stdlib_manifest_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+    "coverage": {
+      "endpoint_requirements_met": true,
+      "design_wide_clock_validated": false,
+      "checks": [
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "D",
+            "class": "register_input"
+          },
+          "matched": 131,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "Q",
+            "class": "register_output"
+          },
+          "matched": 131,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        }
+      ]
+    },
+    "rtl_sha256": "281ae3055d849350e2f07333c72985dd3e5f013bd72628d3b2c407e7ea692066",
+    "netlist_sha256": "924afb9b4b0a445e978758189231a5476d43b870862219dc01182b159105df9b",
+    "raw_report_sha256": "bf180f7dba417d64b2e4c050ca2685f582bfe86554e9cf4b0db8665e13ddd796"
+  },
+  {
+    "case": "bounded-bulk/bulk-measure",
+    "seed": 1,
+    "stages": 0,
+    "delay_model": "unit",
+    "lut_only": false,
+    "period_ns": 26.838432635534087,
+    "reported_mhz": 37.26,
+    "luts": 170,
+    "ffs": 131,
+    "dsps": 6,
+    "cells": {
+      "LUT2": 98,
+      "LUT3": 30,
+      "LUT4": 31,
+      "LUT5": 5,
+      "LUT6": 6,
+      "INV": 2,
+      "CARRY4": 41,
+      "BUFG": 1,
+      "FDRE": 131,
+      "DSP48E1": 6,
+      "OBUF": 1,
+      "IBUF": 1,
+      "$scopeinfo": 1
+    },
+    "source_sha256": {
+      "bulk.x": "e976b45e639c5c3f72412e681b1f5abd4b70d2426d2195360f9c6f34161870b5",
+      "hls_fixed.x": "22cc6986c5cee67c4effcec999c713dd35da857f8ce26ade754b721ab9543b24",
+      "hls_vec.x": "c66c888c606ce7bc3e7b1c526cd1216e571f23fc6712f719df14dc6f5d82e5e6",
+      "phi_field.x": "0fba474f3b8ec442010df47880a730866406bd0cdde4fedb06be195880298ebb",
+      "ratio.x": "77ac3305b3c31d6b47075ed7633a3bdd55744b9d192b1ff509ac9725c5945143"
+    },
+    "tool_sha256": {
+      "probe.py": "2d829128a61f021b8ac5f1481ee465a282b9dd34f0da34ca2ca4e5a49a71c28b",
+      "oss-cad-suite/bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+      "oss-cad-suite/BUILD-INFO.json": "b509fbcf8adf9e4f8359d8c89ed179bacb3aa7c9557d830ba80936b907c3db85",
+      "oss-cad-suite/libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+      "oss-cad-suite/libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d",
+      "nextpnr-coverage": "c045c3925ed86ed9defdfdaf2d46cfc987c0062e56cb5b43568a4afa9f0ccc71",
+      "xls/ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+      "xls/opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c",
+      "xls/codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162",
+      "xc7z030sbg485.bin": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+      "xc7z030sbg485.xdc": "6e72b1516836d2637c37220ab7de9525886d46e4d6d62f09899423f31e47e072"
+    },
+    "stdlib_manifest_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+    "coverage": {
+      "endpoint_requirements_met": true,
+      "design_wide_clock_validated": false,
+      "checks": [
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "D",
+            "class": "register_input"
+          },
+          "matched": 131,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "Q",
+            "class": "register_output"
+          },
+          "matched": 131,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "requirement": {
+            "type": "DSP48E1_DSP48E1",
+            "port": "P[0-9]+",
+            "class": "comb_output"
+          },
+          "matched": 288,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "requirement": {
+            "type": "DSP48E1_DSP48E1",
+            "port": "[AB][0-9]+",
+            "class": "comb_input"
+          },
+          "matched": 288,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        }
+      ]
+    },
+    "rtl_sha256": "281ae3055d849350e2f07333c72985dd3e5f013bd72628d3b2c407e7ea692066",
+    "netlist_sha256": "3e96c914971b4b59a69450d5f3ea8c82430769a77c2fc2b9703a64c5d89d4cd9",
+    "raw_report_sha256": "c66c0e131c624069e3fde90a924c302d3dc5a8bbe116af2bb78e69aae3cef775"
+  },
+  {
+    "case": "without-saturation/bulk-lut",
+    "seed": 1,
+    "stages": 0,
+    "delay_model": "unit",
+    "lut_only": true,
+    "period_ns": 20.173492031470648,
+    "reported_mhz": 49.57,
+    "luts": 949,
+    "ffs": 131,
+    "dsps": 0,
+    "cells": {
+      "LUT4": 167,
+      "LUT5": 249,
+      "LUT6": 137,
+      "LUT3": 209,
+      "LUT2": 187,
+      "MUXF7": 2,
+      "INV": 2,
+      "CARRY4": 46,
+      "BUFG": 1,
+      "FDRE": 131,
+      "OBUF": 1,
+      "IBUF": 1,
+      "$scopeinfo": 1
+    },
+    "source_sha256": {
+      "bulk.x": "e976b45e639c5c3f72412e681b1f5abd4b70d2426d2195360f9c6f34161870b5",
+      "hls_fixed.x": "f8506dde6299d8b080012d78605d1a4a0b5d51647da8da106388351ce6a0aea9",
+      "hls_vec.x": "c66c888c606ce7bc3e7b1c526cd1216e571f23fc6712f719df14dc6f5d82e5e6",
+      "phi_field.x": "783e0415f61729dae012421a451123ac9478e708db59c0400acbfa3a13f4a8bd",
+      "ratio.x": "77ac3305b3c31d6b47075ed7633a3bdd55744b9d192b1ff509ac9725c5945143"
+    },
+    "tool_sha256": {
+      "probe.py": "c2a54df0d8ca055f848f35c9eacfebb045c7f3ac4f248e9ff49d90a90f11bfa5",
+      "xc7z030sbg485.xdc": "6e72b1516836d2637c37220ab7de9525886d46e4d6d62f09899423f31e47e072",
+      "oss-cad-suite/BUILD-INFO.json": "b509fbcf8adf9e4f8359d8c89ed179bacb3aa7c9557d830ba80936b907c3db85",
+      "oss-cad-suite/bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+      "oss-cad-suite/libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+      "oss-cad-suite/libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d",
+      "xc7z030sbg485.bin": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+      "nextpnr-coverage": "c045c3925ed86ed9defdfdaf2d46cfc987c0062e56cb5b43568a4afa9f0ccc71",
+      "xls/codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162",
+      "xls/ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+      "xls/opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c"
+    },
+    "stdlib_manifest_sha256": "69b58c808171a853603d35223eed3fb209ad5f004c34e4f399ef5d2c79744570",
+    "coverage": {
+      "endpoint_requirements_met": true,
+      "design_wide_clock_validated": false,
+      "checks": [
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "D",
+            "class": "register_input"
+          },
+          "matched": 131,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "Q",
+            "class": "register_output"
+          },
+          "matched": 131,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        }
+      ]
+    },
+    "rtl_sha256": "d6edec4d60f6729e52489dd4f1b63a3d644ea2582a627aded2adc0e42a2e5aca",
+    "netlist_sha256": "a072d34874d1e58faa5a83fcacd22784af531c4e133717f7982311300789896c",
+    "raw_report_sha256": "45bc480c7f1d50902b43b4dfe17ee6cfd27f692a13d463c69390fac333fba8d9"
+  },
+  {
+    "case": "without-saturation/bulk-lut-seed2",
+    "seed": 2,
+    "stages": 0,
+    "delay_model": "unit",
+    "lut_only": true,
+    "period_ns": 19.51219512195122,
+    "reported_mhz": 51.25,
+    "luts": 949,
+    "ffs": 131,
+    "dsps": 0,
+    "cells": {
+      "LUT4": 167,
+      "LUT5": 249,
+      "LUT6": 137,
+      "LUT3": 209,
+      "LUT2": 187,
+      "MUXF7": 2,
+      "INV": 2,
+      "CARRY4": 46,
+      "BUFG": 1,
+      "FDRE": 131,
+      "OBUF": 1,
+      "IBUF": 1,
+      "$scopeinfo": 1
+    },
+    "source_sha256": {
+      "bulk.x": "e976b45e639c5c3f72412e681b1f5abd4b70d2426d2195360f9c6f34161870b5",
+      "hls_fixed.x": "f8506dde6299d8b080012d78605d1a4a0b5d51647da8da106388351ce6a0aea9",
+      "hls_vec.x": "c66c888c606ce7bc3e7b1c526cd1216e571f23fc6712f719df14dc6f5d82e5e6",
+      "phi_field.x": "783e0415f61729dae012421a451123ac9478e708db59c0400acbfa3a13f4a8bd",
+      "ratio.x": "77ac3305b3c31d6b47075ed7633a3bdd55744b9d192b1ff509ac9725c5945143"
+    },
+    "tool_sha256": {
+      "probe.py": "c2a54df0d8ca055f848f35c9eacfebb045c7f3ac4f248e9ff49d90a90f11bfa5",
+      "xc7z030sbg485.xdc": "6e72b1516836d2637c37220ab7de9525886d46e4d6d62f09899423f31e47e072",
+      "oss-cad-suite/BUILD-INFO.json": "b509fbcf8adf9e4f8359d8c89ed179bacb3aa7c9557d830ba80936b907c3db85",
+      "oss-cad-suite/bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+      "oss-cad-suite/libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+      "oss-cad-suite/libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d",
+      "xc7z030sbg485.bin": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+      "nextpnr-coverage": "c045c3925ed86ed9defdfdaf2d46cfc987c0062e56cb5b43568a4afa9f0ccc71",
+      "xls/codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162",
+      "xls/ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+      "xls/opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c"
+    },
+    "stdlib_manifest_sha256": "69b58c808171a853603d35223eed3fb209ad5f004c34e4f399ef5d2c79744570",
+    "coverage": {
+      "endpoint_requirements_met": true,
+      "design_wide_clock_validated": false,
+      "checks": [
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "D",
+            "class": "register_input"
+          },
+          "matched": 131,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "Q",
+            "class": "register_output"
+          },
+          "matched": 131,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        }
+      ]
+    },
+    "rtl_sha256": "d6edec4d60f6729e52489dd4f1b63a3d644ea2582a627aded2adc0e42a2e5aca",
+    "netlist_sha256": "a072d34874d1e58faa5a83fcacd22784af531c4e133717f7982311300789896c",
+    "raw_report_sha256": "618d8ee376657cc2e0675774bf5573ca39e6e80051c6e249c601779a445d53d7"
+  },
+  {
+    "case": "without-saturation/bulk-lut-seed3",
+    "seed": 3,
+    "stages": 0,
+    "delay_model": "unit",
+    "lut_only": true,
+    "period_ns": 19.876764062810572,
+    "reported_mhz": 50.31,
+    "luts": 949,
+    "ffs": 131,
+    "dsps": 0,
+    "cells": {
+      "LUT4": 167,
+      "LUT5": 249,
+      "LUT6": 137,
+      "LUT3": 209,
+      "LUT2": 187,
+      "MUXF7": 2,
+      "INV": 2,
+      "CARRY4": 46,
+      "BUFG": 1,
+      "FDRE": 131,
+      "OBUF": 1,
+      "IBUF": 1,
+      "$scopeinfo": 1
+    },
+    "source_sha256": {
+      "bulk.x": "e976b45e639c5c3f72412e681b1f5abd4b70d2426d2195360f9c6f34161870b5",
+      "hls_fixed.x": "f8506dde6299d8b080012d78605d1a4a0b5d51647da8da106388351ce6a0aea9",
+      "hls_vec.x": "c66c888c606ce7bc3e7b1c526cd1216e571f23fc6712f719df14dc6f5d82e5e6",
+      "phi_field.x": "783e0415f61729dae012421a451123ac9478e708db59c0400acbfa3a13f4a8bd",
+      "ratio.x": "77ac3305b3c31d6b47075ed7633a3bdd55744b9d192b1ff509ac9725c5945143"
+    },
+    "tool_sha256": {
+      "probe.py": "c2a54df0d8ca055f848f35c9eacfebb045c7f3ac4f248e9ff49d90a90f11bfa5",
+      "xc7z030sbg485.xdc": "6e72b1516836d2637c37220ab7de9525886d46e4d6d62f09899423f31e47e072",
+      "oss-cad-suite/BUILD-INFO.json": "b509fbcf8adf9e4f8359d8c89ed179bacb3aa7c9557d830ba80936b907c3db85",
+      "oss-cad-suite/bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+      "oss-cad-suite/libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+      "oss-cad-suite/libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d",
+      "xc7z030sbg485.bin": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+      "nextpnr-coverage": "c045c3925ed86ed9defdfdaf2d46cfc987c0062e56cb5b43568a4afa9f0ccc71",
+      "xls/codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162",
+      "xls/ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+      "xls/opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c"
+    },
+    "stdlib_manifest_sha256": "69b58c808171a853603d35223eed3fb209ad5f004c34e4f399ef5d2c79744570",
+    "coverage": {
+      "endpoint_requirements_met": true,
+      "design_wide_clock_validated": false,
+      "checks": [
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "D",
+            "class": "register_input"
+          },
+          "matched": 131,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "Q",
+            "class": "register_output"
+          },
+          "matched": 131,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        }
+      ]
+    },
+    "rtl_sha256": "d6edec4d60f6729e52489dd4f1b63a3d644ea2582a627aded2adc0e42a2e5aca",
+    "netlist_sha256": "a072d34874d1e58faa5a83fcacd22784af531c4e133717f7982311300789896c",
+    "raw_report_sha256": "10a52803f2d77d0689d390463dadb1302fded94d7e313ca9796810e47ae02c09"
+  },
+  {
+    "case": "without-saturation/bulk-measure",
+    "seed": 1,
+    "stages": 0,
+    "delay_model": "unit",
+    "lut_only": false,
+    "period_ns": 26.838432635534087,
+    "reported_mhz": 37.26,
+    "luts": 170,
+    "ffs": 131,
+    "dsps": 6,
+    "cells": {
+      "LUT2": 98,
+      "LUT3": 30,
+      "LUT4": 31,
+      "LUT5": 5,
+      "LUT6": 6,
+      "INV": 2,
+      "CARRY4": 41,
+      "BUFG": 1,
+      "FDRE": 131,
+      "DSP48E1": 6,
+      "OBUF": 1,
+      "IBUF": 1,
+      "$scopeinfo": 1
+    },
+    "source_sha256": {
+      "bulk.x": "e976b45e639c5c3f72412e681b1f5abd4b70d2426d2195360f9c6f34161870b5",
+      "hls_fixed.x": "f8506dde6299d8b080012d78605d1a4a0b5d51647da8da106388351ce6a0aea9",
+      "hls_vec.x": "c66c888c606ce7bc3e7b1c526cd1216e571f23fc6712f719df14dc6f5d82e5e6",
+      "phi_field.x": "783e0415f61729dae012421a451123ac9478e708db59c0400acbfa3a13f4a8bd",
+      "ratio.x": "77ac3305b3c31d6b47075ed7633a3bdd55744b9d192b1ff509ac9725c5945143"
+    },
+    "tool_sha256": {
+      "probe.py": "c2a54df0d8ca055f848f35c9eacfebb045c7f3ac4f248e9ff49d90a90f11bfa5",
+      "xc7z030sbg485.xdc": "6e72b1516836d2637c37220ab7de9525886d46e4d6d62f09899423f31e47e072",
+      "oss-cad-suite/BUILD-INFO.json": "b509fbcf8adf9e4f8359d8c89ed179bacb3aa7c9557d830ba80936b907c3db85",
+      "oss-cad-suite/bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+      "oss-cad-suite/libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+      "oss-cad-suite/libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d",
+      "xc7z030sbg485.bin": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+      "nextpnr-coverage": "c045c3925ed86ed9defdfdaf2d46cfc987c0062e56cb5b43568a4afa9f0ccc71",
+      "xls/codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162",
+      "xls/ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+      "xls/opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c"
+    },
+    "stdlib_manifest_sha256": "69b58c808171a853603d35223eed3fb209ad5f004c34e4f399ef5d2c79744570",
+    "coverage": {
+      "endpoint_requirements_met": true,
+      "design_wide_clock_validated": false,
+      "checks": [
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "D",
+            "class": "register_input"
+          },
+          "matched": 131,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "Q",
+            "class": "register_output"
+          },
+          "matched": 131,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "requirement": {
+            "type": "DSP48E1_DSP48E1",
+            "port": "P[0-9]+",
+            "class": "comb_output"
+          },
+          "matched": 288,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "requirement": {
+            "type": "DSP48E1_DSP48E1",
+            "port": "[AB][0-9]+",
+            "class": "comb_input"
+          },
+          "matched": 288,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        }
+      ]
+    },
+    "rtl_sha256": "d6edec4d60f6729e52489dd4f1b63a3d644ea2582a627aded2adc0e42a2e5aca",
+    "netlist_sha256": "f111e1f8a9c45cfedd7a871ea7d894bd4e1a97f21cf058e6546f69122cf9dedc",
+    "raw_report_sha256": "1b49ea95c559f6614a734b3aa2dea23a052b18bc0dcaee3f6e71e54306d4cd3f"
+  },
+  {
+    "case": "without-saturation/bulk-pipeline2",
+    "seed": 1,
+    "stages": 2,
+    "delay_model": "unit",
+    "lut_only": true,
+    "period_ns": 18.12907904278463,
+    "reported_mhz": 55.16,
+    "luts": 977,
+    "ffs": 233,
+    "dsps": 0,
+    "cells": {
+      "LUT4": 187,
+      "LUT3": 212,
+      "LUT5": 228,
+      "LUT2": 193,
+      "LUT6": 157,
+      "MUXF7": 5,
+      "MUXF8": 1,
+      "INV": 2,
+      "CARRY4": 47,
+      "BUFG": 1,
+      "FDRE": 233,
+      "OBUF": 1,
+      "IBUF": 1,
+      "$scopeinfo": 1
+    },
+    "source_sha256": {
+      "bulk.x": "e976b45e639c5c3f72412e681b1f5abd4b70d2426d2195360f9c6f34161870b5",
+      "hls_fixed.x": "f8506dde6299d8b080012d78605d1a4a0b5d51647da8da106388351ce6a0aea9",
+      "hls_vec.x": "c66c888c606ce7bc3e7b1c526cd1216e571f23fc6712f719df14dc6f5d82e5e6",
+      "phi_field.x": "783e0415f61729dae012421a451123ac9478e708db59c0400acbfa3a13f4a8bd",
+      "ratio.x": "77ac3305b3c31d6b47075ed7633a3bdd55744b9d192b1ff509ac9725c5945143"
+    },
+    "tool_sha256": {
+      "probe.py": "c2a54df0d8ca055f848f35c9eacfebb045c7f3ac4f248e9ff49d90a90f11bfa5",
+      "xc7z030sbg485.xdc": "6e72b1516836d2637c37220ab7de9525886d46e4d6d62f09899423f31e47e072",
+      "oss-cad-suite/BUILD-INFO.json": "b509fbcf8adf9e4f8359d8c89ed179bacb3aa7c9557d830ba80936b907c3db85",
+      "oss-cad-suite/bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+      "oss-cad-suite/libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+      "oss-cad-suite/libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d",
+      "xc7z030sbg485.bin": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+      "nextpnr-coverage": "c045c3925ed86ed9defdfdaf2d46cfc987c0062e56cb5b43568a4afa9f0ccc71",
+      "xls/codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162",
+      "xls/ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+      "xls/opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c"
+    },
+    "stdlib_manifest_sha256": "69b58c808171a853603d35223eed3fb209ad5f004c34e4f399ef5d2c79744570",
+    "coverage": {
+      "endpoint_requirements_met": true,
+      "design_wide_clock_validated": false,
+      "checks": [
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "D",
+            "class": "register_input"
+          },
+          "matched": 233,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "Q",
+            "class": "register_output"
+          },
+          "matched": 233,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        }
+      ]
+    },
+    "rtl_sha256": "22175f7a8443e3a818cb750eac4cd23016a9559b675026dd1d7422394e3e765f",
+    "netlist_sha256": "c33bb2e09469b54af3bc8954c2f13f049c565ab2817e8aa49237dffcfc4917d5",
+    "raw_report_sha256": "c3c03f7bd8ff507af58fcb7fbf73db32b884ae51916a9f2b500705cafdf17ec3"
+  },
+  {
+    "case": "without-saturation/bulk-pipeline2-seed2",
+    "seed": 2,
+    "stages": 2,
+    "delay_model": "unit",
+    "lut_only": true,
+    "period_ns": 16.49620587264929,
+    "reported_mhz": 60.62,
+    "luts": 977,
+    "ffs": 233,
+    "dsps": 0,
+    "cells": {
+      "LUT4": 187,
+      "LUT3": 212,
+      "LUT5": 228,
+      "LUT2": 193,
+      "LUT6": 157,
+      "MUXF7": 5,
+      "MUXF8": 1,
+      "INV": 2,
+      "CARRY4": 47,
+      "BUFG": 1,
+      "FDRE": 233,
+      "OBUF": 1,
+      "IBUF": 1,
+      "$scopeinfo": 1
+    },
+    "source_sha256": {
+      "bulk.x": "e976b45e639c5c3f72412e681b1f5abd4b70d2426d2195360f9c6f34161870b5",
+      "hls_fixed.x": "f8506dde6299d8b080012d78605d1a4a0b5d51647da8da106388351ce6a0aea9",
+      "hls_vec.x": "c66c888c606ce7bc3e7b1c526cd1216e571f23fc6712f719df14dc6f5d82e5e6",
+      "phi_field.x": "783e0415f61729dae012421a451123ac9478e708db59c0400acbfa3a13f4a8bd",
+      "ratio.x": "77ac3305b3c31d6b47075ed7633a3bdd55744b9d192b1ff509ac9725c5945143"
+    },
+    "tool_sha256": {
+      "probe.py": "c2a54df0d8ca055f848f35c9eacfebb045c7f3ac4f248e9ff49d90a90f11bfa5",
+      "xc7z030sbg485.xdc": "6e72b1516836d2637c37220ab7de9525886d46e4d6d62f09899423f31e47e072",
+      "oss-cad-suite/BUILD-INFO.json": "b509fbcf8adf9e4f8359d8c89ed179bacb3aa7c9557d830ba80936b907c3db85",
+      "oss-cad-suite/bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+      "oss-cad-suite/libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+      "oss-cad-suite/libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d",
+      "xc7z030sbg485.bin": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+      "nextpnr-coverage": "c045c3925ed86ed9defdfdaf2d46cfc987c0062e56cb5b43568a4afa9f0ccc71",
+      "xls/codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162",
+      "xls/ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+      "xls/opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c"
+    },
+    "stdlib_manifest_sha256": "69b58c808171a853603d35223eed3fb209ad5f004c34e4f399ef5d2c79744570",
+    "coverage": {
+      "endpoint_requirements_met": true,
+      "design_wide_clock_validated": false,
+      "checks": [
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "D",
+            "class": "register_input"
+          },
+          "matched": 233,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "Q",
+            "class": "register_output"
+          },
+          "matched": 233,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        }
+      ]
+    },
+    "rtl_sha256": "22175f7a8443e3a818cb750eac4cd23016a9559b675026dd1d7422394e3e765f",
+    "netlist_sha256": "c33bb2e09469b54af3bc8954c2f13f049c565ab2817e8aa49237dffcfc4917d5",
+    "raw_report_sha256": "d4cefae72d8dbda3b2d15560bc33e8b3df43cc0b65d8ff67c4b5d0e68ae4df76"
+  },
+  {
+    "case": "without-saturation/bulk-pipeline2-seed3",
+    "seed": 3,
+    "stages": 2,
+    "delay_model": "unit",
+    "lut_only": true,
+    "period_ns": 17.568517217146873,
+    "reported_mhz": 56.92,
+    "luts": 977,
+    "ffs": 233,
+    "dsps": 0,
+    "cells": {
+      "LUT4": 187,
+      "LUT3": 212,
+      "LUT5": 228,
+      "LUT2": 193,
+      "LUT6": 157,
+      "MUXF7": 5,
+      "MUXF8": 1,
+      "INV": 2,
+      "CARRY4": 47,
+      "BUFG": 1,
+      "FDRE": 233,
+      "OBUF": 1,
+      "IBUF": 1,
+      "$scopeinfo": 1
+    },
+    "source_sha256": {
+      "bulk.x": "e976b45e639c5c3f72412e681b1f5abd4b70d2426d2195360f9c6f34161870b5",
+      "hls_fixed.x": "f8506dde6299d8b080012d78605d1a4a0b5d51647da8da106388351ce6a0aea9",
+      "hls_vec.x": "c66c888c606ce7bc3e7b1c526cd1216e571f23fc6712f719df14dc6f5d82e5e6",
+      "phi_field.x": "783e0415f61729dae012421a451123ac9478e708db59c0400acbfa3a13f4a8bd",
+      "ratio.x": "77ac3305b3c31d6b47075ed7633a3bdd55744b9d192b1ff509ac9725c5945143"
+    },
+    "tool_sha256": {
+      "probe.py": "c2a54df0d8ca055f848f35c9eacfebb045c7f3ac4f248e9ff49d90a90f11bfa5",
+      "xc7z030sbg485.xdc": "6e72b1516836d2637c37220ab7de9525886d46e4d6d62f09899423f31e47e072",
+      "oss-cad-suite/BUILD-INFO.json": "b509fbcf8adf9e4f8359d8c89ed179bacb3aa7c9557d830ba80936b907c3db85",
+      "oss-cad-suite/bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+      "oss-cad-suite/libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+      "oss-cad-suite/libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d",
+      "xc7z030sbg485.bin": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+      "nextpnr-coverage": "c045c3925ed86ed9defdfdaf2d46cfc987c0062e56cb5b43568a4afa9f0ccc71",
+      "xls/codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162",
+      "xls/ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+      "xls/opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c"
+    },
+    "stdlib_manifest_sha256": "69b58c808171a853603d35223eed3fb209ad5f004c34e4f399ef5d2c79744570",
+    "coverage": {
+      "endpoint_requirements_met": true,
+      "design_wide_clock_validated": false,
+      "checks": [
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "D",
+            "class": "register_input"
+          },
+          "matched": 233,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "Q",
+            "class": "register_output"
+          },
+          "matched": 233,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        }
+      ]
+    },
+    "rtl_sha256": "22175f7a8443e3a818cb750eac4cd23016a9559b675026dd1d7422394e3e765f",
+    "netlist_sha256": "c33bb2e09469b54af3bc8954c2f13f049c565ab2817e8aa49237dffcfc4917d5",
+    "raw_report_sha256": "ff795fb13158d47dd9a570c914103ea9347ed3aecd75684fe45bdeca3a9c7323"
+  },
+  {
+    "case": "magnitude-split/ratio-lut",
+    "seed": 1,
+    "stages": 0,
+    "delay_model": null,
+    "lut_only": true,
+    "period_ns": 19.223375624759708,
+    "reported_mhz": 52.02,
+    "luts": 871,
+    "ffs": 74,
+    "dsps": 0,
+    "cells": {
+      "LUT4": 118,
+      "LUT5": 242,
+      "LUT2": 131,
+      "LUT3": 247,
+      "LUT6": 133,
+      "MUXF7": 7,
+      "MUXF8": 3,
+      "INV": 70,
+      "CARRY4": 46,
+      "BUFG": 1,
+      "FDRE": 74,
+      "OBUF": 1,
+      "IBUF": 1,
+      "$scopeinfo": 1
+    },
+    "source_sha256": {
+      "bulk.x": "e976b45e639c5c3f72412e681b1f5abd4b70d2426d2195360f9c6f34161870b5",
+      "hls_fixed.x": "bd657d4dedaff9c5a7fb8c466b339d8bec5cc525650f98be8a37bd33e3e797af",
+      "hls_vec.x": "c66c888c606ce7bc3e7b1c526cd1216e571f23fc6712f719df14dc6f5d82e5e6",
+      "phi_field.x": "7e35e2901be89e4f9b148e8d8c47d0a05581e6206070c25e8d2dc5d02828f84b",
+      "ratio.x": "77ac3305b3c31d6b47075ed7633a3bdd55744b9d192b1ff509ac9725c5945143"
+    },
+    "tool_sha256": {
+      "probe.py": "54b89f94f32e82e97561d084fac75be291a9fed236bc365dcb9e06f988c1919d",
+      "oss-cad-suite/bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+      "oss-cad-suite/BUILD-INFO.json": "b509fbcf8adf9e4f8359d8c89ed179bacb3aa7c9557d830ba80936b907c3db85",
+      "oss-cad-suite/libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+      "oss-cad-suite/libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d",
+      "nextpnr-coverage": "c045c3925ed86ed9defdfdaf2d46cfc987c0062e56cb5b43568a4afa9f0ccc71",
+      "xls/ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+      "xls/opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c",
+      "xls/codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162",
+      "xc7z030sbg485.bin": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+      "xc7z030sbg485.xdc": "6e72b1516836d2637c37220ab7de9525886d46e4d6d62f09899423f31e47e072"
+    },
+    "stdlib_manifest_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+    "coverage": {
+      "endpoint_requirements_met": true,
+      "design_wide_clock_validated": false,
+      "checks": [
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "D",
+            "class": "register_input"
+          },
+          "matched": 74,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "Q",
+            "class": "register_output"
+          },
+          "matched": 74,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        }
+      ]
+    },
+    "rtl_sha256": "551a106ae4760c623aea5bc81740dd9b2a61e1a43144213cfbd47bc36c51403f",
+    "netlist_sha256": "6a0118360b7e8641ff0a5c3af08bf67cb4d037ba66e33fb9fffc413000a4a2df",
+    "raw_report_sha256": "7a9ea0e7490c2aa1234370c55561ceb4715dff71f0dc9eb4776ca7ca0c790152"
+  },
+  {
+    "case": "narrow/bulk-lut",
+    "seed": 1,
+    "stages": 0,
+    "delay_model": null,
+    "lut_only": true,
+    "period_ns": 27.67783005812344,
+    "reported_mhz": 36.13,
+    "luts": 1636,
+    "ffs": 131,
+    "dsps": 0,
+    "cells": {
+      "LUT4": 329,
+      "LUT2": 392,
+      "LUT6": 324,
+      "LUT5": 389,
+      "LUT3": 202,
+      "MUXF7": 3,
+      "INV": 2,
+      "MUXF8": 1,
+      "CARRY4": 58,
+      "BUFG": 1,
+      "FDSE": 31,
+      "FDRE": 100,
+      "OBUF": 1,
+      "IBUF": 1,
+      "$scopeinfo": 1
+    },
+    "source_sha256": {
+      "bulk.x": "e976b45e639c5c3f72412e681b1f5abd4b70d2426d2195360f9c6f34161870b5",
+      "hls_fixed.x": "227fa2668d60c2f277d1b8cf5cca00864bff2bdb98d43b31b7f78d18f93d501b",
+      "hls_vec.x": "c66c888c606ce7bc3e7b1c526cd1216e571f23fc6712f719df14dc6f5d82e5e6",
+      "phi_field.x": "b486589b1b57195d097469fca14b5ad7b9e2469b52b17dbde149b019b18baa9b",
+      "ratio.x": "77ac3305b3c31d6b47075ed7633a3bdd55744b9d192b1ff509ac9725c5945143"
+    },
+    "tool_sha256": {
+      "probe.py": "54b89f94f32e82e97561d084fac75be291a9fed236bc365dcb9e06f988c1919d",
+      "oss-cad-suite/bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+      "oss-cad-suite/BUILD-INFO.json": "b509fbcf8adf9e4f8359d8c89ed179bacb3aa7c9557d830ba80936b907c3db85",
+      "oss-cad-suite/libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+      "oss-cad-suite/libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d",
+      "nextpnr-coverage": "c045c3925ed86ed9defdfdaf2d46cfc987c0062e56cb5b43568a4afa9f0ccc71",
+      "xls/ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+      "xls/opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c",
+      "xls/codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162",
+      "xc7z030sbg485.bin": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+      "xc7z030sbg485.xdc": "6e72b1516836d2637c37220ab7de9525886d46e4d6d62f09899423f31e47e072"
+    },
+    "stdlib_manifest_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+    "coverage": {
+      "endpoint_requirements_met": true,
+      "design_wide_clock_validated": false,
+      "checks": [
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "D",
+            "class": "register_input"
+          },
+          "matched": 131,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "Q",
+            "class": "register_output"
+          },
+          "matched": 131,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        }
+      ]
+    },
+    "rtl_sha256": "a56085ee8c0fddf022aa8de73de7b511c666818de8460a44fc07db025083dcdb",
+    "netlist_sha256": "c1bd8840e2df4866b6141748d336a90b2cea4ba485b067efc970b8a08b4151a4",
+    "raw_report_sha256": "a8330dbafeaea431101c7bb877d4dcdf66a609cc622388feb4577ddfaf27f9cf"
+  },
+  {
+    "case": "narrow/bulk-measure",
+    "seed": 1,
+    "stages": 0,
+    "delay_model": null,
+    "lut_only": false,
+    "period_ns": 33.96739130434783,
+    "reported_mhz": 29.44,
+    "luts": 296,
+    "ffs": 131,
+    "dsps": 6,
+    "cells": {
+      "LUT2": 216,
+      "LUT3": 3,
+      "LUT4": 41,
+      "LUT5": 35,
+      "INV": 2,
+      "CARRY4": 50,
+      "BUFG": 1,
+      "FDSE": 31,
+      "FDRE": 100,
+      "LUT1": 1,
+      "DSP48E1": 6,
+      "OBUF": 1,
+      "IBUF": 1,
+      "$scopeinfo": 1
+    },
+    "source_sha256": {
+      "bulk.x": "e976b45e639c5c3f72412e681b1f5abd4b70d2426d2195360f9c6f34161870b5",
+      "hls_fixed.x": "227fa2668d60c2f277d1b8cf5cca00864bff2bdb98d43b31b7f78d18f93d501b",
+      "hls_vec.x": "c66c888c606ce7bc3e7b1c526cd1216e571f23fc6712f719df14dc6f5d82e5e6",
+      "phi_field.x": "b486589b1b57195d097469fca14b5ad7b9e2469b52b17dbde149b019b18baa9b",
+      "ratio.x": "77ac3305b3c31d6b47075ed7633a3bdd55744b9d192b1ff509ac9725c5945143"
+    },
+    "tool_sha256": {
+      "probe.py": "54b89f94f32e82e97561d084fac75be291a9fed236bc365dcb9e06f988c1919d",
+      "oss-cad-suite/bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+      "oss-cad-suite/BUILD-INFO.json": "b509fbcf8adf9e4f8359d8c89ed179bacb3aa7c9557d830ba80936b907c3db85",
+      "oss-cad-suite/libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+      "oss-cad-suite/libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d",
+      "nextpnr-coverage": "c045c3925ed86ed9defdfdaf2d46cfc987c0062e56cb5b43568a4afa9f0ccc71",
+      "xls/ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+      "xls/opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c",
+      "xls/codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162",
+      "xc7z030sbg485.bin": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+      "xc7z030sbg485.xdc": "6e72b1516836d2637c37220ab7de9525886d46e4d6d62f09899423f31e47e072"
+    },
+    "stdlib_manifest_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+    "coverage": {
+      "endpoint_requirements_met": true,
+      "design_wide_clock_validated": false,
+      "checks": [
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "D",
+            "class": "register_input"
+          },
+          "matched": 131,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "Q",
+            "class": "register_output"
+          },
+          "matched": 131,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "requirement": {
+            "type": "DSP48E1_DSP48E1",
+            "port": "P[0-9]+",
+            "class": "comb_output"
+          },
+          "matched": 288,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "requirement": {
+            "type": "DSP48E1_DSP48E1",
+            "port": "[AB][0-9]+",
+            "class": "comb_input"
+          },
+          "matched": 288,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        }
+      ]
+    },
+    "rtl_sha256": "a56085ee8c0fddf022aa8de73de7b511c666818de8460a44fc07db025083dcdb",
+    "netlist_sha256": "c040b47a22f7e51370f908fe352b9fbeaf56120e836e8a91d7698aa8248e55fc",
+    "raw_report_sha256": "286044e8f748bbae75ba45aea133ccfb0e6fc76bae18a2926832d416955c7067"
+  },
+  {
+    "case": "offset/ratio-lut",
+    "seed": 1,
+    "stages": 0,
+    "delay_model": null,
+    "lut_only": true,
+    "period_ns": 20.316944331572532,
+    "reported_mhz": 49.22,
+    "luts": 1440,
+    "ffs": 73,
+    "dsps": 0,
+    "cells": {
+      "LUT5": 376,
+      "LUT3": 257,
+      "LUT6": 254,
+      "LUT4": 301,
+      "LUT2": 252,
+      "MUXF7": 3,
+      "INV": 20,
+      "MUXF8": 1,
+      "CARRY4": 47,
+      "BUFG": 1,
+      "FDRE": 73,
+      "OBUF": 1,
+      "IBUF": 1,
+      "$scopeinfo": 1
+    },
+    "source_sha256": {
+      "bulk.x": "e976b45e639c5c3f72412e681b1f5abd4b70d2426d2195360f9c6f34161870b5",
+      "hls_fixed.x": "aa309a7ce0c4b444bc19fc24f5bf5fb2e70b52efc5bcf958963c03cbe4355785",
+      "hls_vec.x": "c66c888c606ce7bc3e7b1c526cd1216e571f23fc6712f719df14dc6f5d82e5e6",
+      "phi_field.x": "7e35e2901be89e4f9b148e8d8c47d0a05581e6206070c25e8d2dc5d02828f84b",
+      "ratio.x": "77ac3305b3c31d6b47075ed7633a3bdd55744b9d192b1ff509ac9725c5945143"
+    },
+    "tool_sha256": {
+      "probe.py": "54b89f94f32e82e97561d084fac75be291a9fed236bc365dcb9e06f988c1919d",
+      "oss-cad-suite/bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+      "oss-cad-suite/BUILD-INFO.json": "b509fbcf8adf9e4f8359d8c89ed179bacb3aa7c9557d830ba80936b907c3db85",
+      "oss-cad-suite/libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+      "oss-cad-suite/libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d",
+      "nextpnr-coverage": "c045c3925ed86ed9defdfdaf2d46cfc987c0062e56cb5b43568a4afa9f0ccc71",
+      "xls/ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+      "xls/opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c",
+      "xls/codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162",
+      "xc7z030sbg485.bin": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+      "xc7z030sbg485.xdc": "6e72b1516836d2637c37220ab7de9525886d46e4d6d62f09899423f31e47e072"
+    },
+    "stdlib_manifest_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+    "coverage": {
+      "endpoint_requirements_met": true,
+      "design_wide_clock_validated": false,
+      "checks": [
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "D",
+            "class": "register_input"
+          },
+          "matched": 73,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "Q",
+            "class": "register_output"
+          },
+          "matched": 73,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        }
+      ]
+    },
+    "rtl_sha256": "87d7072a1a99201571a46e0818b6967957720a7f401d35f93731b5a322e546bd",
+    "netlist_sha256": "6fb85efa9356c0c53dedbd3d53f0e00cdfec7641aab1d2a6bd75efa86c92c311",
+    "raw_report_sha256": "c188726c380de544628c3e8953c383d644d334b29c3820e83d65e182b97a0395"
+  },
+  {
+    "case": "partial-products/bulk-asap2",
+    "seed": 1,
+    "stages": 2,
+    "delay_model": "asap7",
+    "lut_only": true,
+    "period_ns": 24.6669955599408,
+    "reported_mhz": 40.54,
+    "luts": 1198,
+    "ffs": 255,
+    "dsps": 0,
+    "cells": {
+      "LUT4": 214,
+      "LUT5": 260,
+      "LUT3": 187,
+      "LUT6": 206,
+      "LUT2": 331,
+      "MUXF7": 2,
+      "INV": 2,
+      "CARRY4": 69,
+      "BUFG": 1,
+      "FDSE": 31,
+      "FDRE": 224,
+      "OBUF": 1,
+      "IBUF": 1,
+      "$scopeinfo": 1
+    },
+    "source_sha256": {
+      "bulk.x": "e976b45e639c5c3f72412e681b1f5abd4b70d2426d2195360f9c6f34161870b5",
+      "hls_fixed.x": "70bd32025a929fb8901da66c60bf26724f22fe1b3e6d932d9f4c6475e09c5f94",
+      "hls_vec.x": "c66c888c606ce7bc3e7b1c526cd1216e571f23fc6712f719df14dc6f5d82e5e6",
+      "phi_field.x": "7e35e2901be89e4f9b148e8d8c47d0a05581e6206070c25e8d2dc5d02828f84b"
+    },
+    "tool_sha256": {
+      "probe.py": "c2a54df0d8ca055f848f35c9eacfebb045c7f3ac4f248e9ff49d90a90f11bfa5",
+      "xc7z030sbg485.xdc": "6e72b1516836d2637c37220ab7de9525886d46e4d6d62f09899423f31e47e072",
+      "oss-cad-suite/BUILD-INFO.json": "b509fbcf8adf9e4f8359d8c89ed179bacb3aa7c9557d830ba80936b907c3db85",
+      "oss-cad-suite/bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+      "oss-cad-suite/libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+      "oss-cad-suite/libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d",
+      "xc7z030sbg485.bin": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+      "nextpnr-coverage": "c045c3925ed86ed9defdfdaf2d46cfc987c0062e56cb5b43568a4afa9f0ccc71",
+      "xls/codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162",
+      "xls/ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+      "xls/opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c"
+    },
+    "stdlib_manifest_sha256": "69b58c808171a853603d35223eed3fb209ad5f004c34e4f399ef5d2c79744570",
+    "coverage": {
+      "endpoint_requirements_met": true,
+      "design_wide_clock_validated": false,
+      "checks": [
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "D",
+            "class": "register_input"
+          },
+          "matched": 255,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "Q",
+            "class": "register_output"
+          },
+          "matched": 255,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        }
+      ]
+    },
+    "rtl_sha256": "37f30df9f4c5ce5aaacdbdb38298fb1ea304a03d1f1f283388d5de65646a4011",
+    "netlist_sha256": "7fa372d4414fc6be553639c7660148c78a06c7d551676bdecdc3f7d203edfa4c",
+    "raw_report_sha256": "014baa06716877ccad12eb9805537e0f44618d961c4e57cfe6a5acbdd1919b98"
+  },
+  {
+    "case": "partial-products/bulk-dsp",
+    "seed": 1,
+    "stages": 0,
+    "delay_model": "unit",
+    "lut_only": false,
+    "period_ns": 28.868360277136258,
+    "reported_mhz": 34.64,
+    "luts": 242,
+    "ffs": 131,
+    "dsps": 6,
+    "cells": {
+      "LUT2": 138,
+      "LUT3": 30,
+      "LUT4": 31,
+      "LUT5": 6,
+      "LUT6": 37,
+      "INV": 2,
+      "CARRY4": 53,
+      "BUFG": 1,
+      "FDSE": 31,
+      "FDRE": 100,
+      "DSP48E1": 6,
+      "OBUF": 1,
+      "IBUF": 1,
+      "$scopeinfo": 1
+    },
+    "source_sha256": {
+      "bulk.x": "e976b45e639c5c3f72412e681b1f5abd4b70d2426d2195360f9c6f34161870b5",
+      "hls_fixed.x": "70bd32025a929fb8901da66c60bf26724f22fe1b3e6d932d9f4c6475e09c5f94",
+      "hls_vec.x": "c66c888c606ce7bc3e7b1c526cd1216e571f23fc6712f719df14dc6f5d82e5e6",
+      "phi_field.x": "7e35e2901be89e4f9b148e8d8c47d0a05581e6206070c25e8d2dc5d02828f84b"
+    },
+    "tool_sha256": {
+      "probe.py": "c2a54df0d8ca055f848f35c9eacfebb045c7f3ac4f248e9ff49d90a90f11bfa5",
+      "xc7z030sbg485.xdc": "6e72b1516836d2637c37220ab7de9525886d46e4d6d62f09899423f31e47e072",
+      "oss-cad-suite/BUILD-INFO.json": "b509fbcf8adf9e4f8359d8c89ed179bacb3aa7c9557d830ba80936b907c3db85",
+      "oss-cad-suite/bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+      "oss-cad-suite/libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+      "oss-cad-suite/libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d",
+      "xc7z030sbg485.bin": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+      "nextpnr-coverage": "c045c3925ed86ed9defdfdaf2d46cfc987c0062e56cb5b43568a4afa9f0ccc71",
+      "xls/codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162",
+      "xls/ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+      "xls/opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c"
+    },
+    "stdlib_manifest_sha256": "69b58c808171a853603d35223eed3fb209ad5f004c34e4f399ef5d2c79744570",
+    "coverage": {
+      "endpoint_requirements_met": true,
+      "design_wide_clock_validated": false,
+      "checks": [
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "D",
+            "class": "register_input"
+          },
+          "matched": 131,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "Q",
+            "class": "register_output"
+          },
+          "matched": 131,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "requirement": {
+            "type": "DSP48E1_DSP48E1",
+            "port": "P[0-9]+",
+            "class": "comb_output"
+          },
+          "matched": 288,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "requirement": {
+            "type": "DSP48E1_DSP48E1",
+            "port": "[AB][0-9]+",
+            "class": "comb_input"
+          },
+          "matched": 288,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        }
+      ]
+    },
+    "rtl_sha256": "b3e124cedcdc9167149908bbca83760b620323867c59dc2be33c089349749eef",
+    "netlist_sha256": "97377b279009bc1c7098d3f659090f59e50c7113d36b72552bd4f848dece39c9",
+    "raw_report_sha256": "ecb74210c90ede1f553050d9b2179cfc057f0947e44795996e38af21919b5ad3"
+  },
+  {
+    "case": "partial-products/bulk-pipeline2",
+    "seed": 1,
+    "stages": 2,
+    "delay_model": "unit",
+    "lut_only": true,
+    "period_ns": 15.651901706057286,
+    "reported_mhz": 63.89,
+    "luts": 1660,
+    "ffs": 237,
+    "dsps": 0,
+    "cells": {
+      "LUT4": 280,
+      "LUT5": 350,
+      "LUT2": 398,
+      "LUT3": 414,
+      "LUT6": 217,
+      "INV": 2,
+      "CARRY4": 55,
+      "BUFG": 1,
+      "FDSE": 31,
+      "FDRE": 206,
+      "LUT1": 1,
+      "OBUF": 1,
+      "IBUF": 1,
+      "$scopeinfo": 1
+    },
+    "source_sha256": {
+      "bulk.x": "e976b45e639c5c3f72412e681b1f5abd4b70d2426d2195360f9c6f34161870b5",
+      "hls_fixed.x": "70bd32025a929fb8901da66c60bf26724f22fe1b3e6d932d9f4c6475e09c5f94",
+      "hls_vec.x": "c66c888c606ce7bc3e7b1c526cd1216e571f23fc6712f719df14dc6f5d82e5e6",
+      "phi_field.x": "7e35e2901be89e4f9b148e8d8c47d0a05581e6206070c25e8d2dc5d02828f84b"
+    },
+    "tool_sha256": {
+      "probe.py": "c2a54df0d8ca055f848f35c9eacfebb045c7f3ac4f248e9ff49d90a90f11bfa5",
+      "xc7z030sbg485.xdc": "6e72b1516836d2637c37220ab7de9525886d46e4d6d62f09899423f31e47e072",
+      "oss-cad-suite/BUILD-INFO.json": "b509fbcf8adf9e4f8359d8c89ed179bacb3aa7c9557d830ba80936b907c3db85",
+      "oss-cad-suite/bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+      "oss-cad-suite/libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+      "oss-cad-suite/libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d",
+      "xc7z030sbg485.bin": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+      "nextpnr-coverage": "c045c3925ed86ed9defdfdaf2d46cfc987c0062e56cb5b43568a4afa9f0ccc71",
+      "xls/codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162",
+      "xls/ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+      "xls/opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c"
+    },
+    "stdlib_manifest_sha256": "69b58c808171a853603d35223eed3fb209ad5f004c34e4f399ef5d2c79744570",
+    "coverage": {
+      "endpoint_requirements_met": true,
+      "design_wide_clock_validated": false,
+      "checks": [
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "D",
+            "class": "register_input"
+          },
+          "matched": 237,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "Q",
+            "class": "register_output"
+          },
+          "matched": 237,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        }
+      ]
+    },
+    "rtl_sha256": "7179cf302a3dab3a577bfec3db27095a645b34d6b613876fa0b179cac8e3433d",
+    "netlist_sha256": "25879019e3a60c4bf3ad9783ee794f2b1fa864128bc2d4c5d0e9110d123526cf",
+    "raw_report_sha256": "61a9589a437cca233ce59999664694ef59b7c568ff9150e79e34d135a08e8b7d"
+  },
+  {
+    "case": "partial-products/bulk-pipeline2-seed2",
+    "seed": 2,
+    "stages": 2,
+    "delay_model": "unit",
+    "lut_only": true,
+    "period_ns": 15.446400988569664,
+    "reported_mhz": 64.74,
+    "luts": 1660,
+    "ffs": 237,
+    "dsps": 0,
+    "cells": {
+      "LUT4": 280,
+      "LUT5": 350,
+      "LUT2": 398,
+      "LUT3": 414,
+      "LUT6": 217,
+      "INV": 2,
+      "CARRY4": 55,
+      "BUFG": 1,
+      "FDSE": 31,
+      "FDRE": 206,
+      "LUT1": 1,
+      "OBUF": 1,
+      "IBUF": 1,
+      "$scopeinfo": 1
+    },
+    "source_sha256": {
+      "bulk.x": "e976b45e639c5c3f72412e681b1f5abd4b70d2426d2195360f9c6f34161870b5",
+      "hls_fixed.x": "70bd32025a929fb8901da66c60bf26724f22fe1b3e6d932d9f4c6475e09c5f94",
+      "hls_vec.x": "c66c888c606ce7bc3e7b1c526cd1216e571f23fc6712f719df14dc6f5d82e5e6",
+      "phi_field.x": "7e35e2901be89e4f9b148e8d8c47d0a05581e6206070c25e8d2dc5d02828f84b"
+    },
+    "tool_sha256": {
+      "probe.py": "c2a54df0d8ca055f848f35c9eacfebb045c7f3ac4f248e9ff49d90a90f11bfa5",
+      "xc7z030sbg485.xdc": "6e72b1516836d2637c37220ab7de9525886d46e4d6d62f09899423f31e47e072",
+      "oss-cad-suite/BUILD-INFO.json": "b509fbcf8adf9e4f8359d8c89ed179bacb3aa7c9557d830ba80936b907c3db85",
+      "oss-cad-suite/bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+      "oss-cad-suite/libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+      "oss-cad-suite/libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d",
+      "xc7z030sbg485.bin": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+      "nextpnr-coverage": "c045c3925ed86ed9defdfdaf2d46cfc987c0062e56cb5b43568a4afa9f0ccc71",
+      "xls/codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162",
+      "xls/ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+      "xls/opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c"
+    },
+    "stdlib_manifest_sha256": "69b58c808171a853603d35223eed3fb209ad5f004c34e4f399ef5d2c79744570",
+    "coverage": {
+      "endpoint_requirements_met": true,
+      "design_wide_clock_validated": false,
+      "checks": [
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "D",
+            "class": "register_input"
+          },
+          "matched": 237,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "Q",
+            "class": "register_output"
+          },
+          "matched": 237,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        }
+      ]
+    },
+    "rtl_sha256": "7179cf302a3dab3a577bfec3db27095a645b34d6b613876fa0b179cac8e3433d",
+    "netlist_sha256": "25879019e3a60c4bf3ad9783ee794f2b1fa864128bc2d4c5d0e9110d123526cf",
+    "raw_report_sha256": "8d63ab783ae451d06a1a120c3e4798513507778bd0aa985a49c67eac717fc555"
+  },
+  {
+    "case": "partial-products/bulk-pipeline2-seed3",
+    "seed": 3,
+    "stages": 2,
+    "delay_model": "unit",
+    "lut_only": true,
+    "period_ns": 14.36988072998994,
+    "reported_mhz": 69.59,
+    "luts": 1660,
+    "ffs": 237,
+    "dsps": 0,
+    "cells": {
+      "LUT4": 280,
+      "LUT5": 350,
+      "LUT2": 398,
+      "LUT3": 414,
+      "LUT6": 217,
+      "INV": 2,
+      "CARRY4": 55,
+      "BUFG": 1,
+      "FDSE": 31,
+      "FDRE": 206,
+      "LUT1": 1,
+      "OBUF": 1,
+      "IBUF": 1,
+      "$scopeinfo": 1
+    },
+    "source_sha256": {
+      "bulk.x": "e976b45e639c5c3f72412e681b1f5abd4b70d2426d2195360f9c6f34161870b5",
+      "hls_fixed.x": "70bd32025a929fb8901da66c60bf26724f22fe1b3e6d932d9f4c6475e09c5f94",
+      "hls_vec.x": "c66c888c606ce7bc3e7b1c526cd1216e571f23fc6712f719df14dc6f5d82e5e6",
+      "phi_field.x": "7e35e2901be89e4f9b148e8d8c47d0a05581e6206070c25e8d2dc5d02828f84b"
+    },
+    "tool_sha256": {
+      "probe.py": "c2a54df0d8ca055f848f35c9eacfebb045c7f3ac4f248e9ff49d90a90f11bfa5",
+      "xc7z030sbg485.xdc": "6e72b1516836d2637c37220ab7de9525886d46e4d6d62f09899423f31e47e072",
+      "oss-cad-suite/BUILD-INFO.json": "b509fbcf8adf9e4f8359d8c89ed179bacb3aa7c9557d830ba80936b907c3db85",
+      "oss-cad-suite/bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+      "oss-cad-suite/libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+      "oss-cad-suite/libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d",
+      "xc7z030sbg485.bin": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+      "nextpnr-coverage": "c045c3925ed86ed9defdfdaf2d46cfc987c0062e56cb5b43568a4afa9f0ccc71",
+      "xls/codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162",
+      "xls/ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+      "xls/opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c"
+    },
+    "stdlib_manifest_sha256": "69b58c808171a853603d35223eed3fb209ad5f004c34e4f399ef5d2c79744570",
+    "coverage": {
+      "endpoint_requirements_met": true,
+      "design_wide_clock_validated": false,
+      "checks": [
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "D",
+            "class": "register_input"
+          },
+          "matched": 237,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "Q",
+            "class": "register_output"
+          },
+          "matched": 237,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        }
+      ]
+    },
+    "rtl_sha256": "7179cf302a3dab3a577bfec3db27095a645b34d6b613876fa0b179cac8e3433d",
+    "netlist_sha256": "25879019e3a60c4bf3ad9783ee794f2b1fa864128bc2d4c5d0e9110d123526cf",
+    "raw_report_sha256": "a9f055ac5292243fe15ed44a0b6804796275ab28e3abce343cc03f8ac0e7af84"
+  },
+  {
+    "case": "reciprocal/bulk-lut",
+    "seed": 1,
+    "stages": 0,
+    "delay_model": "unit",
+    "lut_only": true,
+    "period_ns": 22.90426019239579,
+    "reported_mhz": 43.66,
+    "luts": 956,
+    "ffs": 131,
+    "dsps": 0,
+    "cells": {
+      "LUT4": 169,
+      "LUT6": 141,
+      "LUT5": 253,
+      "LUT2": 188,
+      "LUT3": 205,
+      "MUXF7": 2,
+      "INV": 2,
+      "CARRY4": 48,
+      "BUFG": 1,
+      "FDSE": 31,
+      "FDRE": 100,
+      "OBUF": 1,
+      "IBUF": 1,
+      "$scopeinfo": 1
+    },
+    "source_sha256": {
+      "bulk.x": "e976b45e639c5c3f72412e681b1f5abd4b70d2426d2195360f9c6f34161870b5",
+      "hls_fixed.x": "22cc6986c5cee67c4effcec999c713dd35da857f8ce26ade754b721ab9543b24",
+      "hls_vec.x": "c66c888c606ce7bc3e7b1c526cd1216e571f23fc6712f719df14dc6f5d82e5e6",
+      "phi_field.x": "7e35e2901be89e4f9b148e8d8c47d0a05581e6206070c25e8d2dc5d02828f84b",
+      "ratio.x": "77ac3305b3c31d6b47075ed7633a3bdd55744b9d192b1ff509ac9725c5945143"
+    },
+    "tool_sha256": {
+      "probe.py": "2d829128a61f021b8ac5f1481ee465a282b9dd34f0da34ca2ca4e5a49a71c28b",
+      "oss-cad-suite/bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+      "oss-cad-suite/BUILD-INFO.json": "b509fbcf8adf9e4f8359d8c89ed179bacb3aa7c9557d830ba80936b907c3db85",
+      "oss-cad-suite/libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+      "oss-cad-suite/libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d",
+      "nextpnr-coverage": "c045c3925ed86ed9defdfdaf2d46cfc987c0062e56cb5b43568a4afa9f0ccc71",
+      "xls/ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+      "xls/opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c",
+      "xls/codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162",
+      "xc7z030sbg485.bin": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+      "xc7z030sbg485.xdc": "6e72b1516836d2637c37220ab7de9525886d46e4d6d62f09899423f31e47e072"
+    },
+    "stdlib_manifest_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+    "coverage": {
+      "endpoint_requirements_met": true,
+      "design_wide_clock_validated": false,
+      "checks": [
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "D",
+            "class": "register_input"
+          },
+          "matched": 131,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "Q",
+            "class": "register_output"
+          },
+          "matched": 131,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        }
+      ]
+    },
+    "rtl_sha256": "8aae8df5364c73366556fb89303f64d6b614f64b504c037b15dadf70a8b2be08",
+    "netlist_sha256": "67b4316a9eb5a2f59aa9a8ccfc4db3b9920d07b4e25ae82e62c122b80fef1f9d",
+    "raw_report_sha256": "2880ad105bd5b22526bff216a9dc94fd64c18e4e69ce6e5c17b78d56f46c90f3"
+  },
+  {
+    "case": "reciprocal/bulk-lut-seed2",
+    "seed": 2,
+    "stages": 0,
+    "delay_model": "unit",
+    "lut_only": true,
+    "period_ns": 22.079929344226098,
+    "reported_mhz": 45.29,
+    "luts": 956,
+    "ffs": 131,
+    "dsps": 0,
+    "cells": {
+      "LUT4": 169,
+      "LUT6": 141,
+      "LUT5": 253,
+      "LUT2": 188,
+      "LUT3": 205,
+      "MUXF7": 2,
+      "INV": 2,
+      "CARRY4": 48,
+      "BUFG": 1,
+      "FDSE": 31,
+      "FDRE": 100,
+      "OBUF": 1,
+      "IBUF": 1,
+      "$scopeinfo": 1
+    },
+    "source_sha256": {
+      "bulk.x": "e976b45e639c5c3f72412e681b1f5abd4b70d2426d2195360f9c6f34161870b5",
+      "hls_fixed.x": "22cc6986c5cee67c4effcec999c713dd35da857f8ce26ade754b721ab9543b24",
+      "hls_vec.x": "c66c888c606ce7bc3e7b1c526cd1216e571f23fc6712f719df14dc6f5d82e5e6",
+      "phi_field.x": "7e35e2901be89e4f9b148e8d8c47d0a05581e6206070c25e8d2dc5d02828f84b",
+      "ratio.x": "77ac3305b3c31d6b47075ed7633a3bdd55744b9d192b1ff509ac9725c5945143"
+    },
+    "tool_sha256": {
+      "probe.py": "2d829128a61f021b8ac5f1481ee465a282b9dd34f0da34ca2ca4e5a49a71c28b",
+      "oss-cad-suite/bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+      "oss-cad-suite/BUILD-INFO.json": "b509fbcf8adf9e4f8359d8c89ed179bacb3aa7c9557d830ba80936b907c3db85",
+      "oss-cad-suite/libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+      "oss-cad-suite/libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d",
+      "nextpnr-coverage": "c045c3925ed86ed9defdfdaf2d46cfc987c0062e56cb5b43568a4afa9f0ccc71",
+      "xls/ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+      "xls/opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c",
+      "xls/codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162",
+      "xc7z030sbg485.bin": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+      "xc7z030sbg485.xdc": "6e72b1516836d2637c37220ab7de9525886d46e4d6d62f09899423f31e47e072"
+    },
+    "stdlib_manifest_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+    "coverage": {
+      "endpoint_requirements_met": true,
+      "design_wide_clock_validated": false,
+      "checks": [
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "D",
+            "class": "register_input"
+          },
+          "matched": 131,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "Q",
+            "class": "register_output"
+          },
+          "matched": 131,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        }
+      ]
+    },
+    "rtl_sha256": "8aae8df5364c73366556fb89303f64d6b614f64b504c037b15dadf70a8b2be08",
+    "netlist_sha256": "67b4316a9eb5a2f59aa9a8ccfc4db3b9920d07b4e25ae82e62c122b80fef1f9d",
+    "raw_report_sha256": "a84cfd297a2437f1e89ca77739591d5ee306a803740c74f38f1534a88182b07e"
+  },
+  {
+    "case": "reciprocal/bulk-lut-seed3",
+    "seed": 3,
+    "stages": 0,
+    "delay_model": "unit",
+    "lut_only": true,
+    "period_ns": 22.920009168003666,
+    "reported_mhz": 43.63,
+    "luts": 956,
+    "ffs": 131,
+    "dsps": 0,
+    "cells": {
+      "LUT4": 169,
+      "LUT6": 141,
+      "LUT5": 253,
+      "LUT2": 188,
+      "LUT3": 205,
+      "MUXF7": 2,
+      "INV": 2,
+      "CARRY4": 48,
+      "BUFG": 1,
+      "FDSE": 31,
+      "FDRE": 100,
+      "OBUF": 1,
+      "IBUF": 1,
+      "$scopeinfo": 1
+    },
+    "source_sha256": {
+      "bulk.x": "e976b45e639c5c3f72412e681b1f5abd4b70d2426d2195360f9c6f34161870b5",
+      "hls_fixed.x": "22cc6986c5cee67c4effcec999c713dd35da857f8ce26ade754b721ab9543b24",
+      "hls_vec.x": "c66c888c606ce7bc3e7b1c526cd1216e571f23fc6712f719df14dc6f5d82e5e6",
+      "phi_field.x": "7e35e2901be89e4f9b148e8d8c47d0a05581e6206070c25e8d2dc5d02828f84b",
+      "ratio.x": "77ac3305b3c31d6b47075ed7633a3bdd55744b9d192b1ff509ac9725c5945143"
+    },
+    "tool_sha256": {
+      "probe.py": "2d829128a61f021b8ac5f1481ee465a282b9dd34f0da34ca2ca4e5a49a71c28b",
+      "oss-cad-suite/bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+      "oss-cad-suite/BUILD-INFO.json": "b509fbcf8adf9e4f8359d8c89ed179bacb3aa7c9557d830ba80936b907c3db85",
+      "oss-cad-suite/libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+      "oss-cad-suite/libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d",
+      "nextpnr-coverage": "c045c3925ed86ed9defdfdaf2d46cfc987c0062e56cb5b43568a4afa9f0ccc71",
+      "xls/ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+      "xls/opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c",
+      "xls/codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162",
+      "xc7z030sbg485.bin": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+      "xc7z030sbg485.xdc": "6e72b1516836d2637c37220ab7de9525886d46e4d6d62f09899423f31e47e072"
+    },
+    "stdlib_manifest_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+    "coverage": {
+      "endpoint_requirements_met": true,
+      "design_wide_clock_validated": false,
+      "checks": [
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "D",
+            "class": "register_input"
+          },
+          "matched": 131,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "Q",
+            "class": "register_output"
+          },
+          "matched": 131,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        }
+      ]
+    },
+    "rtl_sha256": "8aae8df5364c73366556fb89303f64d6b614f64b504c037b15dadf70a8b2be08",
+    "netlist_sha256": "67b4316a9eb5a2f59aa9a8ccfc4db3b9920d07b4e25ae82e62c122b80fef1f9d",
+    "raw_report_sha256": "72ebb84e386ef8143a34f58a03baea66a2465d68eaabf509e4fe44b5e1a61149"
+  },
+  {
+    "case": "reciprocal/bulk-measure",
+    "seed": 1,
+    "stages": 0,
+    "delay_model": "unit",
+    "lut_only": false,
+    "period_ns": 28.49814762040467,
+    "reported_mhz": 35.09,
+    "luts": 205,
+    "ffs": 131,
+    "dsps": 6,
+    "cells": {
+      "LUT2": 101,
+      "LUT3": 30,
+      "LUT4": 31,
+      "LUT5": 36,
+      "LUT6": 6,
+      "INV": 2,
+      "CARRY4": 42,
+      "BUFG": 1,
+      "FDSE": 31,
+      "FDRE": 100,
+      "LUT1": 1,
+      "DSP48E1": 6,
+      "OBUF": 1,
+      "IBUF": 1,
+      "$scopeinfo": 1
+    },
+    "source_sha256": {
+      "bulk.x": "e976b45e639c5c3f72412e681b1f5abd4b70d2426d2195360f9c6f34161870b5",
+      "hls_fixed.x": "22cc6986c5cee67c4effcec999c713dd35da857f8ce26ade754b721ab9543b24",
+      "hls_vec.x": "c66c888c606ce7bc3e7b1c526cd1216e571f23fc6712f719df14dc6f5d82e5e6",
+      "phi_field.x": "7e35e2901be89e4f9b148e8d8c47d0a05581e6206070c25e8d2dc5d02828f84b",
+      "ratio.x": "77ac3305b3c31d6b47075ed7633a3bdd55744b9d192b1ff509ac9725c5945143"
+    },
+    "tool_sha256": {
+      "probe.py": "2d829128a61f021b8ac5f1481ee465a282b9dd34f0da34ca2ca4e5a49a71c28b",
+      "oss-cad-suite/bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+      "oss-cad-suite/BUILD-INFO.json": "b509fbcf8adf9e4f8359d8c89ed179bacb3aa7c9557d830ba80936b907c3db85",
+      "oss-cad-suite/libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+      "oss-cad-suite/libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d",
+      "nextpnr-coverage": "c045c3925ed86ed9defdfdaf2d46cfc987c0062e56cb5b43568a4afa9f0ccc71",
+      "xls/ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+      "xls/opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c",
+      "xls/codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162",
+      "xc7z030sbg485.bin": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+      "xc7z030sbg485.xdc": "6e72b1516836d2637c37220ab7de9525886d46e4d6d62f09899423f31e47e072"
+    },
+    "stdlib_manifest_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+    "coverage": {
+      "endpoint_requirements_met": true,
+      "design_wide_clock_validated": false,
+      "checks": [
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "D",
+            "class": "register_input"
+          },
+          "matched": 131,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "Q",
+            "class": "register_output"
+          },
+          "matched": 131,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "requirement": {
+            "type": "DSP48E1_DSP48E1",
+            "port": "P[0-9]+",
+            "class": "comb_output"
+          },
+          "matched": 288,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "requirement": {
+            "type": "DSP48E1_DSP48E1",
+            "port": "[AB][0-9]+",
+            "class": "comb_input"
+          },
+          "matched": 288,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        }
+      ]
+    },
+    "rtl_sha256": "8aae8df5364c73366556fb89303f64d6b614f64b504c037b15dadf70a8b2be08",
+    "netlist_sha256": "5f70bb22b25a25876f9189d780bd7166563f8911ebb894b46d8b8a5da4b652ce",
+    "raw_report_sha256": "41c0716ad9a75d8cd98e170e193a7d55ff1af0ab449ec66000159ed1397aab43"
+  },
+  {
+    "case": "reciprocal/bulk-pipeline2-seed2",
+    "seed": 2,
+    "stages": 2,
+    "delay_model": "unit",
+    "lut_only": true,
+    "period_ns": 14.792899408284025,
+    "reported_mhz": 67.6,
+    "luts": 1018,
+    "ffs": 200,
+    "dsps": 0,
+    "cells": {
+      "LUT4": 195,
+      "LUT6": 195,
+      "LUT5": 235,
+      "LUT3": 210,
+      "LUT2": 182,
+      "MUXF7": 13,
+      "MUXF8": 6,
+      "INV": 2,
+      "CARRY4": 46,
+      "BUFG": 1,
+      "FDSE": 31,
+      "FDRE": 169,
+      "LUT1": 1,
+      "OBUF": 1,
+      "IBUF": 1,
+      "$scopeinfo": 1
+    },
+    "source_sha256": {
+      "bulk.x": "e976b45e639c5c3f72412e681b1f5abd4b70d2426d2195360f9c6f34161870b5",
+      "hls_fixed.x": "22cc6986c5cee67c4effcec999c713dd35da857f8ce26ade754b721ab9543b24",
+      "hls_vec.x": "c66c888c606ce7bc3e7b1c526cd1216e571f23fc6712f719df14dc6f5d82e5e6",
+      "phi_field.x": "7e35e2901be89e4f9b148e8d8c47d0a05581e6206070c25e8d2dc5d02828f84b",
+      "ratio.x": "77ac3305b3c31d6b47075ed7633a3bdd55744b9d192b1ff509ac9725c5945143"
+    },
+    "tool_sha256": {
+      "probe.py": "c2a54df0d8ca055f848f35c9eacfebb045c7f3ac4f248e9ff49d90a90f11bfa5",
+      "xc7z030sbg485.xdc": "6e72b1516836d2637c37220ab7de9525886d46e4d6d62f09899423f31e47e072",
+      "oss-cad-suite/BUILD-INFO.json": "b509fbcf8adf9e4f8359d8c89ed179bacb3aa7c9557d830ba80936b907c3db85",
+      "oss-cad-suite/bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+      "oss-cad-suite/libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+      "oss-cad-suite/libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d",
+      "xc7z030sbg485.bin": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+      "nextpnr-coverage": "c045c3925ed86ed9defdfdaf2d46cfc987c0062e56cb5b43568a4afa9f0ccc71",
+      "xls/codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162",
+      "xls/ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+      "xls/opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c"
+    },
+    "stdlib_manifest_sha256": "69b58c808171a853603d35223eed3fb209ad5f004c34e4f399ef5d2c79744570",
+    "coverage": {
+      "endpoint_requirements_met": true,
+      "design_wide_clock_validated": false,
+      "checks": [
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "D",
+            "class": "register_input"
+          },
+          "matched": 200,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "Q",
+            "class": "register_output"
+          },
+          "matched": 200,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        }
+      ]
+    },
+    "rtl_sha256": "1e1f8516292d05a300ffc8133919edc31da8b60caa8870ddd61dccee126e9d3a",
+    "netlist_sha256": "3252640a4e30db83f96d485789584864f89b2733d72f70fe95779008ab15b960",
+    "raw_report_sha256": "3abf48d05a4cc039e62f5c3a148ec33be63c195b076ec0fe8070f6262721c19d"
+  },
+  {
+    "case": "reciprocal/bulk-pipeline2-seed3",
+    "seed": 3,
+    "stages": 2,
+    "delay_model": "unit",
+    "lut_only": true,
+    "period_ns": 16.466326362588507,
+    "reported_mhz": 60.73,
+    "luts": 1018,
+    "ffs": 200,
+    "dsps": 0,
+    "cells": {
+      "LUT4": 195,
+      "LUT6": 195,
+      "LUT5": 235,
+      "LUT3": 210,
+      "LUT2": 182,
+      "MUXF7": 13,
+      "MUXF8": 6,
+      "INV": 2,
+      "CARRY4": 46,
+      "BUFG": 1,
+      "FDSE": 31,
+      "FDRE": 169,
+      "LUT1": 1,
+      "OBUF": 1,
+      "IBUF": 1,
+      "$scopeinfo": 1
+    },
+    "source_sha256": {
+      "bulk.x": "e976b45e639c5c3f72412e681b1f5abd4b70d2426d2195360f9c6f34161870b5",
+      "hls_fixed.x": "22cc6986c5cee67c4effcec999c713dd35da857f8ce26ade754b721ab9543b24",
+      "hls_vec.x": "c66c888c606ce7bc3e7b1c526cd1216e571f23fc6712f719df14dc6f5d82e5e6",
+      "phi_field.x": "7e35e2901be89e4f9b148e8d8c47d0a05581e6206070c25e8d2dc5d02828f84b",
+      "ratio.x": "77ac3305b3c31d6b47075ed7633a3bdd55744b9d192b1ff509ac9725c5945143"
+    },
+    "tool_sha256": {
+      "probe.py": "c2a54df0d8ca055f848f35c9eacfebb045c7f3ac4f248e9ff49d90a90f11bfa5",
+      "xc7z030sbg485.xdc": "6e72b1516836d2637c37220ab7de9525886d46e4d6d62f09899423f31e47e072",
+      "oss-cad-suite/BUILD-INFO.json": "b509fbcf8adf9e4f8359d8c89ed179bacb3aa7c9557d830ba80936b907c3db85",
+      "oss-cad-suite/bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+      "oss-cad-suite/libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+      "oss-cad-suite/libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d",
+      "xc7z030sbg485.bin": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+      "nextpnr-coverage": "c045c3925ed86ed9defdfdaf2d46cfc987c0062e56cb5b43568a4afa9f0ccc71",
+      "xls/codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162",
+      "xls/ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+      "xls/opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c"
+    },
+    "stdlib_manifest_sha256": "69b58c808171a853603d35223eed3fb209ad5f004c34e4f399ef5d2c79744570",
+    "coverage": {
+      "endpoint_requirements_met": true,
+      "design_wide_clock_validated": false,
+      "checks": [
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "D",
+            "class": "register_input"
+          },
+          "matched": 200,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "Q",
+            "class": "register_output"
+          },
+          "matched": 200,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        }
+      ]
+    },
+    "rtl_sha256": "1e1f8516292d05a300ffc8133919edc31da8b60caa8870ddd61dccee126e9d3a",
+    "netlist_sha256": "3252640a4e30db83f96d485789584864f89b2733d72f70fe95779008ab15b960",
+    "raw_report_sha256": "873e882b40d5c335fa49f0bb5c21709d2dbbaf78e6d2c4cf85485e6dd2778a6d"
+  },
+  {
+    "case": "reciprocal/bulk-unit2",
+    "seed": 1,
+    "stages": 2,
+    "delay_model": "unit",
+    "lut_only": true,
+    "period_ns": 16.871941960519656,
+    "reported_mhz": 59.27,
+    "luts": 1018,
+    "ffs": 200,
+    "dsps": 0,
+    "cells": {
+      "LUT4": 195,
+      "LUT6": 195,
+      "LUT5": 235,
+      "LUT3": 210,
+      "LUT2": 182,
+      "MUXF7": 13,
+      "MUXF8": 6,
+      "INV": 2,
+      "CARRY4": 46,
+      "BUFG": 1,
+      "FDSE": 31,
+      "FDRE": 169,
+      "LUT1": 1,
+      "OBUF": 1,
+      "IBUF": 1,
+      "$scopeinfo": 1
+    },
+    "source_sha256": {
+      "bulk.x": "e976b45e639c5c3f72412e681b1f5abd4b70d2426d2195360f9c6f34161870b5",
+      "hls_fixed.x": "22cc6986c5cee67c4effcec999c713dd35da857f8ce26ade754b721ab9543b24",
+      "hls_vec.x": "c66c888c606ce7bc3e7b1c526cd1216e571f23fc6712f719df14dc6f5d82e5e6",
+      "phi_field.x": "7e35e2901be89e4f9b148e8d8c47d0a05581e6206070c25e8d2dc5d02828f84b",
+      "ratio.x": "77ac3305b3c31d6b47075ed7633a3bdd55744b9d192b1ff509ac9725c5945143"
+    },
+    "tool_sha256": {
+      "probe.py": "2d829128a61f021b8ac5f1481ee465a282b9dd34f0da34ca2ca4e5a49a71c28b",
+      "oss-cad-suite/bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+      "oss-cad-suite/BUILD-INFO.json": "b509fbcf8adf9e4f8359d8c89ed179bacb3aa7c9557d830ba80936b907c3db85",
+      "oss-cad-suite/libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+      "oss-cad-suite/libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d",
+      "nextpnr-coverage": "c045c3925ed86ed9defdfdaf2d46cfc987c0062e56cb5b43568a4afa9f0ccc71",
+      "xls/ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+      "xls/opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c",
+      "xls/codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162",
+      "xc7z030sbg485.bin": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+      "xc7z030sbg485.xdc": "6e72b1516836d2637c37220ab7de9525886d46e4d6d62f09899423f31e47e072"
+    },
+    "stdlib_manifest_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+    "coverage": {
+      "endpoint_requirements_met": true,
+      "design_wide_clock_validated": false,
+      "checks": [
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "D",
+            "class": "register_input"
+          },
+          "matched": 200,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "Q",
+            "class": "register_output"
+          },
+          "matched": 200,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        }
+      ]
+    },
+    "rtl_sha256": "1e1f8516292d05a300ffc8133919edc31da8b60caa8870ddd61dccee126e9d3a",
+    "netlist_sha256": "3252640a4e30db83f96d485789584864f89b2733d72f70fe95779008ab15b960",
+    "raw_report_sha256": "8f65856813d575947098199401907b6de916e2dcdb11560eb51b3b85671f7ea8"
+  },
+  {
+    "case": "reciprocal-even/bulk-lut",
+    "seed": 1,
+    "stages": 0,
+    "delay_model": "unit",
+    "lut_only": true,
+    "period_ns": 25.252525252525253,
+    "reported_mhz": 39.6,
+    "luts": 1542,
+    "ffs": 131,
+    "dsps": 0,
+    "cells": {
+      "LUT4": 309,
+      "LUT5": 391,
+      "LUT6": 299,
+      "LUT3": 247,
+      "LUT2": 296,
+      "INV": 2,
+      "CARRY4": 49,
+      "BUFG": 1,
+      "FDSE": 31,
+      "FDRE": 100,
+      "OBUF": 1,
+      "IBUF": 1,
+      "$scopeinfo": 1
+    },
+    "source_sha256": {
+      "bulk.x": "e976b45e639c5c3f72412e681b1f5abd4b70d2426d2195360f9c6f34161870b5",
+      "hls_fixed.x": "2eb2103fbe81eb293b61af0467221cc7d5584d36c209190cf2b99894030b3837",
+      "hls_vec.x": "c66c888c606ce7bc3e7b1c526cd1216e571f23fc6712f719df14dc6f5d82e5e6",
+      "phi_field.x": "7e35e2901be89e4f9b148e8d8c47d0a05581e6206070c25e8d2dc5d02828f84b",
+      "ratio.x": "77ac3305b3c31d6b47075ed7633a3bdd55744b9d192b1ff509ac9725c5945143"
+    },
+    "tool_sha256": {
+      "probe.py": "2d829128a61f021b8ac5f1481ee465a282b9dd34f0da34ca2ca4e5a49a71c28b",
+      "oss-cad-suite/bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+      "oss-cad-suite/BUILD-INFO.json": "b509fbcf8adf9e4f8359d8c89ed179bacb3aa7c9557d830ba80936b907c3db85",
+      "oss-cad-suite/libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+      "oss-cad-suite/libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d",
+      "nextpnr-coverage": "c045c3925ed86ed9defdfdaf2d46cfc987c0062e56cb5b43568a4afa9f0ccc71",
+      "xls/ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+      "xls/opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c",
+      "xls/codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162",
+      "xc7z030sbg485.bin": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+      "xc7z030sbg485.xdc": "6e72b1516836d2637c37220ab7de9525886d46e4d6d62f09899423f31e47e072"
+    },
+    "stdlib_manifest_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+    "coverage": {
+      "endpoint_requirements_met": true,
+      "design_wide_clock_validated": false,
+      "checks": [
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "D",
+            "class": "register_input"
+          },
+          "matched": 131,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "Q",
+            "class": "register_output"
+          },
+          "matched": 131,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        }
+      ]
+    },
+    "rtl_sha256": "3d5545aad2e2d9bc2f2fb02471131cc99cbd31b0e222dcf398fb281772459621",
+    "netlist_sha256": "6eb1988af8a93c213babac3b3e99cc59d66b9b9d1ac1b2af16b4e911c57b0f40",
+    "raw_report_sha256": "790fb37eef168306b2791789007a1e42fe7acc533780b5d1ebbe06ef08585ad4"
+  },
+  {
+    "case": "reciprocal-even/bulk-measure",
+    "seed": 1,
+    "stages": 0,
+    "delay_model": "unit",
+    "lut_only": false,
+    "period_ns": 30.883261272390364,
+    "reported_mhz": 32.38,
+    "luts": 203,
+    "ffs": 131,
+    "dsps": 6,
+    "cells": {
+      "LUT2": 99,
+      "LUT3": 30,
+      "LUT4": 31,
+      "LUT5": 36,
+      "LUT6": 6,
+      "INV": 2,
+      "CARRY4": 42,
+      "BUFG": 1,
+      "FDSE": 31,
+      "FDRE": 100,
+      "LUT1": 1,
+      "DSP48E1": 6,
+      "OBUF": 1,
+      "IBUF": 1,
+      "$scopeinfo": 1
+    },
+    "source_sha256": {
+      "bulk.x": "e976b45e639c5c3f72412e681b1f5abd4b70d2426d2195360f9c6f34161870b5",
+      "hls_fixed.x": "2eb2103fbe81eb293b61af0467221cc7d5584d36c209190cf2b99894030b3837",
+      "hls_vec.x": "c66c888c606ce7bc3e7b1c526cd1216e571f23fc6712f719df14dc6f5d82e5e6",
+      "phi_field.x": "7e35e2901be89e4f9b148e8d8c47d0a05581e6206070c25e8d2dc5d02828f84b",
+      "ratio.x": "77ac3305b3c31d6b47075ed7633a3bdd55744b9d192b1ff509ac9725c5945143"
+    },
+    "tool_sha256": {
+      "probe.py": "2d829128a61f021b8ac5f1481ee465a282b9dd34f0da34ca2ca4e5a49a71c28b",
+      "oss-cad-suite/bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+      "oss-cad-suite/BUILD-INFO.json": "b509fbcf8adf9e4f8359d8c89ed179bacb3aa7c9557d830ba80936b907c3db85",
+      "oss-cad-suite/libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+      "oss-cad-suite/libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d",
+      "nextpnr-coverage": "c045c3925ed86ed9defdfdaf2d46cfc987c0062e56cb5b43568a4afa9f0ccc71",
+      "xls/ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+      "xls/opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c",
+      "xls/codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162",
+      "xc7z030sbg485.bin": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+      "xc7z030sbg485.xdc": "6e72b1516836d2637c37220ab7de9525886d46e4d6d62f09899423f31e47e072"
+    },
+    "stdlib_manifest_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+    "coverage": {
+      "endpoint_requirements_met": true,
+      "design_wide_clock_validated": false,
+      "checks": [
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "D",
+            "class": "register_input"
+          },
+          "matched": 131,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "Q",
+            "class": "register_output"
+          },
+          "matched": 131,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "requirement": {
+            "type": "DSP48E1_DSP48E1",
+            "port": "P[0-9]+",
+            "class": "comb_output"
+          },
+          "matched": 288,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "requirement": {
+            "type": "DSP48E1_DSP48E1",
+            "port": "[AB][0-9]+",
+            "class": "comb_input"
+          },
+          "matched": 288,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        }
+      ]
+    },
+    "rtl_sha256": "3d5545aad2e2d9bc2f2fb02471131cc99cbd31b0e222dcf398fb281772459621",
+    "netlist_sha256": "8ced0a0d4c47e7e521d19dc7c293a639d61efd8848702d34e6825cbcf6b0fe6a",
+    "raw_report_sha256": "98425fc5142fdea6e4d3ea9118c15fee4b1fa22c957acde34c1b56f25efab1f3"
+  },
+  {
+    "case": "selected/bulk-pipeline2",
+    "seed": 1,
+    "stages": 2,
+    "delay_model": "unit",
+    "lut_only": true,
+    "period_ns": 16.871941960519656,
+    "reported_mhz": 59.27,
+    "luts": 1018,
+    "ffs": 200,
+    "dsps": 0,
+    "cells": {
+      "LUT4": 195,
+      "LUT6": 195,
+      "LUT5": 235,
+      "LUT3": 210,
+      "LUT2": 182,
+      "MUXF7": 13,
+      "MUXF8": 6,
+      "INV": 2,
+      "CARRY4": 46,
+      "BUFG": 1,
+      "FDSE": 31,
+      "FDRE": 169,
+      "LUT1": 1,
+      "OBUF": 1,
+      "IBUF": 1,
+      "$scopeinfo": 1
+    },
+    "source_sha256": {
+      "bulk.x": "e976b45e639c5c3f72412e681b1f5abd4b70d2426d2195360f9c6f34161870b5",
+      "hls_fixed.x": "f8506dde6299d8b080012d78605d1a4a0b5d51647da8da106388351ce6a0aea9",
+      "hls_vec.x": "c66c888c606ce7bc3e7b1c526cd1216e571f23fc6712f719df14dc6f5d82e5e6",
+      "phi_field.x": "7e35e2901be89e4f9b148e8d8c47d0a05581e6206070c25e8d2dc5d02828f84b"
+    },
+    "tool_sha256": {
+      "probe.py": "c2a54df0d8ca055f848f35c9eacfebb045c7f3ac4f248e9ff49d90a90f11bfa5",
+      "xc7z030sbg485.xdc": "6e72b1516836d2637c37220ab7de9525886d46e4d6d62f09899423f31e47e072",
+      "oss-cad-suite/BUILD-INFO.json": "b509fbcf8adf9e4f8359d8c89ed179bacb3aa7c9557d830ba80936b907c3db85",
+      "oss-cad-suite/bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+      "oss-cad-suite/libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+      "oss-cad-suite/libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d",
+      "xc7z030sbg485.bin": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+      "nextpnr-coverage": "c045c3925ed86ed9defdfdaf2d46cfc987c0062e56cb5b43568a4afa9f0ccc71",
+      "xls/codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162",
+      "xls/ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+      "xls/opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c"
+    },
+    "stdlib_manifest_sha256": "69b58c808171a853603d35223eed3fb209ad5f004c34e4f399ef5d2c79744570",
+    "coverage": {
+      "endpoint_requirements_met": true,
+      "design_wide_clock_validated": false,
+      "checks": [
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "D",
+            "class": "register_input"
+          },
+          "matched": 200,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "Q",
+            "class": "register_output"
+          },
+          "matched": 200,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        }
+      ]
+    },
+    "rtl_sha256": "6b2370ee52f8a5d4caaff37e2d050dca00f3f0aa83ead92a630def2588cd46f8",
+    "netlist_sha256": "51927d916c1a747a429c4d90c1ba6a4f59c5672230ce603eefc7339cf9d8e3fe",
+    "raw_report_sha256": "f8de6893d345e3732946d7842d16ef2f9ea73fc8fb6583dc4a51efcf439482b8"
+  },
+  {
+    "case": "signed-bias/bulk-asap2",
+    "seed": 1,
+    "stages": 2,
+    "delay_model": "asap7",
+    "lut_only": true,
+    "period_ns": 21.105951878429718,
+    "reported_mhz": 47.38,
+    "luts": 1667,
+    "ffs": 201,
+    "dsps": 0,
+    "cells": {
+      "LUT4": 303,
+      "LUT6": 298,
+      "LUT2": 385,
+      "LUT5": 359,
+      "LUT3": 322,
+      "INV": 3,
+      "CARRY4": 59,
+      "BUFG": 1,
+      "FDSE": 31,
+      "FDRE": 170,
+      "OBUF": 1,
+      "IBUF": 1,
+      "$scopeinfo": 1
+    },
+    "source_sha256": {
+      "bulk.x": "e976b45e639c5c3f72412e681b1f5abd4b70d2426d2195360f9c6f34161870b5",
+      "hls_fixed.x": "227fa2668d60c2f277d1b8cf5cca00864bff2bdb98d43b31b7f78d18f93d501b",
+      "hls_vec.x": "c66c888c606ce7bc3e7b1c526cd1216e571f23fc6712f719df14dc6f5d82e5e6",
+      "phi_field.x": "7e35e2901be89e4f9b148e8d8c47d0a05581e6206070c25e8d2dc5d02828f84b",
+      "ratio.x": "77ac3305b3c31d6b47075ed7633a3bdd55744b9d192b1ff509ac9725c5945143"
+    },
+    "tool_sha256": {
+      "probe.py": "2d829128a61f021b8ac5f1481ee465a282b9dd34f0da34ca2ca4e5a49a71c28b",
+      "oss-cad-suite/bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+      "oss-cad-suite/BUILD-INFO.json": "b509fbcf8adf9e4f8359d8c89ed179bacb3aa7c9557d830ba80936b907c3db85",
+      "oss-cad-suite/libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+      "oss-cad-suite/libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d",
+      "nextpnr-coverage": "c045c3925ed86ed9defdfdaf2d46cfc987c0062e56cb5b43568a4afa9f0ccc71",
+      "xls/ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+      "xls/opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c",
+      "xls/codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162",
+      "xc7z030sbg485.bin": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+      "xc7z030sbg485.xdc": "6e72b1516836d2637c37220ab7de9525886d46e4d6d62f09899423f31e47e072"
+    },
+    "stdlib_manifest_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+    "coverage": {
+      "endpoint_requirements_met": true,
+      "design_wide_clock_validated": false,
+      "checks": [
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "D",
+            "class": "register_input"
+          },
+          "matched": 201,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "Q",
+            "class": "register_output"
+          },
+          "matched": 201,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        }
+      ]
+    },
+    "rtl_sha256": "4e7715a92f794a7d54f2371ff054665d3a04a5ecb3b1e732c5811548867ceac8",
+    "netlist_sha256": "1506cd199daedf8695a931ef46c580de7f81632ecefd9751664c9836c8e46633",
+    "raw_report_sha256": "0002b4b0957c7a2709c882155bb0b5393da19e3ec9079557951af1adc2635362"
+  },
+  {
+    "case": "signed-bias/bulk-lut",
+    "seed": 1,
+    "stages": 0,
+    "delay_model": null,
+    "lut_only": true,
+    "period_ns": 25.464731347084285,
+    "reported_mhz": 39.27,
+    "luts": 1581,
+    "ffs": 131,
+    "dsps": 0,
+    "cells": {
+      "LUT4": 318,
+      "LUT6": 305,
+      "LUT5": 367,
+      "LUT2": 353,
+      "LUT3": 238,
+      "MUXF7": 4,
+      "MUXF8": 1,
+      "INV": 3,
+      "CARRY4": 53,
+      "BUFG": 1,
+      "FDSE": 31,
+      "FDRE": 100,
+      "OBUF": 1,
+      "IBUF": 1,
+      "$scopeinfo": 1
+    },
+    "source_sha256": {
+      "bulk.x": "e976b45e639c5c3f72412e681b1f5abd4b70d2426d2195360f9c6f34161870b5",
+      "hls_fixed.x": "227fa2668d60c2f277d1b8cf5cca00864bff2bdb98d43b31b7f78d18f93d501b",
+      "hls_vec.x": "c66c888c606ce7bc3e7b1c526cd1216e571f23fc6712f719df14dc6f5d82e5e6",
+      "phi_field.x": "7e35e2901be89e4f9b148e8d8c47d0a05581e6206070c25e8d2dc5d02828f84b",
+      "ratio.x": "77ac3305b3c31d6b47075ed7633a3bdd55744b9d192b1ff509ac9725c5945143"
+    },
+    "tool_sha256": {
+      "probe.py": "54b89f94f32e82e97561d084fac75be291a9fed236bc365dcb9e06f988c1919d",
+      "oss-cad-suite/bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+      "oss-cad-suite/BUILD-INFO.json": "b509fbcf8adf9e4f8359d8c89ed179bacb3aa7c9557d830ba80936b907c3db85",
+      "oss-cad-suite/libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+      "oss-cad-suite/libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d",
+      "nextpnr-coverage": "c045c3925ed86ed9defdfdaf2d46cfc987c0062e56cb5b43568a4afa9f0ccc71",
+      "xls/ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+      "xls/opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c",
+      "xls/codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162",
+      "xc7z030sbg485.bin": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+      "xc7z030sbg485.xdc": "6e72b1516836d2637c37220ab7de9525886d46e4d6d62f09899423f31e47e072"
+    },
+    "stdlib_manifest_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+    "coverage": {
+      "endpoint_requirements_met": true,
+      "design_wide_clock_validated": false,
+      "checks": [
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "D",
+            "class": "register_input"
+          },
+          "matched": 131,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "Q",
+            "class": "register_output"
+          },
+          "matched": 131,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        }
+      ]
+    },
+    "rtl_sha256": "f140204e65f58e99fa6f632a45579f862455ecf19db32d6210d28811a7944537",
+    "netlist_sha256": "162c52cb63c38928d345d4cf6eca1d804e62feae1f187fef70e154d0cac68342",
+    "raw_report_sha256": "2925ae361887bbeeb9f33773b94112f27f1381aa395aebe9a996affc86fa0a51"
+  },
+  {
+    "case": "signed-bias/bulk-measure",
+    "seed": 1,
+    "stages": 0,
+    "delay_model": null,
+    "lut_only": false,
+    "period_ns": 35.06311360448808,
+    "reported_mhz": 28.52,
+    "luts": 271,
+    "ffs": 131,
+    "dsps": 6,
+    "cells": {
+      "LUT2": 167,
+      "LUT3": 30,
+      "LUT4": 31,
+      "LUT5": 36,
+      "LUT6": 6,
+      "INV": 3,
+      "CARRY4": 51,
+      "BUFG": 1,
+      "FDSE": 31,
+      "FDRE": 100,
+      "LUT1": 1,
+      "DSP48E1": 6,
+      "OBUF": 1,
+      "IBUF": 1,
+      "$scopeinfo": 1
+    },
+    "source_sha256": {
+      "bulk.x": "e976b45e639c5c3f72412e681b1f5abd4b70d2426d2195360f9c6f34161870b5",
+      "hls_fixed.x": "227fa2668d60c2f277d1b8cf5cca00864bff2bdb98d43b31b7f78d18f93d501b",
+      "hls_vec.x": "c66c888c606ce7bc3e7b1c526cd1216e571f23fc6712f719df14dc6f5d82e5e6",
+      "phi_field.x": "7e35e2901be89e4f9b148e8d8c47d0a05581e6206070c25e8d2dc5d02828f84b",
+      "ratio.x": "77ac3305b3c31d6b47075ed7633a3bdd55744b9d192b1ff509ac9725c5945143"
+    },
+    "tool_sha256": {
+      "probe.py": "54b89f94f32e82e97561d084fac75be291a9fed236bc365dcb9e06f988c1919d",
+      "oss-cad-suite/bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+      "oss-cad-suite/BUILD-INFO.json": "b509fbcf8adf9e4f8359d8c89ed179bacb3aa7c9557d830ba80936b907c3db85",
+      "oss-cad-suite/libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+      "oss-cad-suite/libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d",
+      "nextpnr-coverage": "c045c3925ed86ed9defdfdaf2d46cfc987c0062e56cb5b43568a4afa9f0ccc71",
+      "xls/ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+      "xls/opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c",
+      "xls/codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162",
+      "xc7z030sbg485.bin": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+      "xc7z030sbg485.xdc": "6e72b1516836d2637c37220ab7de9525886d46e4d6d62f09899423f31e47e072"
+    },
+    "stdlib_manifest_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+    "coverage": {
+      "endpoint_requirements_met": true,
+      "design_wide_clock_validated": false,
+      "checks": [
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "D",
+            "class": "register_input"
+          },
+          "matched": 131,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "Q",
+            "class": "register_output"
+          },
+          "matched": 131,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "requirement": {
+            "type": "DSP48E1_DSP48E1",
+            "port": "P[0-9]+",
+            "class": "comb_output"
+          },
+          "matched": 288,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "requirement": {
+            "type": "DSP48E1_DSP48E1",
+            "port": "[AB][0-9]+",
+            "class": "comb_input"
+          },
+          "matched": 288,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        }
+      ]
+    },
+    "rtl_sha256": "f140204e65f58e99fa6f632a45579f862455ecf19db32d6210d28811a7944537",
+    "netlist_sha256": "8f10d3854b7fb67eed1b7a3207febfeaed943f427833fe031ddacdb4a3f0779c",
+    "raw_report_sha256": "313c8cde09c3f0789c762acd1882c8b76ace51627803786f101b562462b31089"
+  },
+  {
+    "case": "signed-bias/bulk-sky2",
+    "seed": 1,
+    "stages": 2,
+    "delay_model": "sky130",
+    "lut_only": true,
+    "period_ns": 21.105951878429718,
+    "reported_mhz": 47.38,
+    "luts": 1667,
+    "ffs": 201,
+    "dsps": 0,
+    "cells": {
+      "LUT4": 303,
+      "LUT6": 298,
+      "LUT2": 385,
+      "LUT5": 359,
+      "LUT3": 322,
+      "INV": 3,
+      "CARRY4": 59,
+      "BUFG": 1,
+      "FDSE": 31,
+      "FDRE": 170,
+      "OBUF": 1,
+      "IBUF": 1,
+      "$scopeinfo": 1
+    },
+    "source_sha256": {
+      "bulk.x": "e976b45e639c5c3f72412e681b1f5abd4b70d2426d2195360f9c6f34161870b5",
+      "hls_fixed.x": "227fa2668d60c2f277d1b8cf5cca00864bff2bdb98d43b31b7f78d18f93d501b",
+      "hls_vec.x": "c66c888c606ce7bc3e7b1c526cd1216e571f23fc6712f719df14dc6f5d82e5e6",
+      "phi_field.x": "7e35e2901be89e4f9b148e8d8c47d0a05581e6206070c25e8d2dc5d02828f84b",
+      "ratio.x": "77ac3305b3c31d6b47075ed7633a3bdd55744b9d192b1ff509ac9725c5945143"
+    },
+    "tool_sha256": {
+      "probe.py": "2d829128a61f021b8ac5f1481ee465a282b9dd34f0da34ca2ca4e5a49a71c28b",
+      "oss-cad-suite/bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+      "oss-cad-suite/BUILD-INFO.json": "b509fbcf8adf9e4f8359d8c89ed179bacb3aa7c9557d830ba80936b907c3db85",
+      "oss-cad-suite/libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+      "oss-cad-suite/libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d",
+      "nextpnr-coverage": "c045c3925ed86ed9defdfdaf2d46cfc987c0062e56cb5b43568a4afa9f0ccc71",
+      "xls/ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+      "xls/opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c",
+      "xls/codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162",
+      "xc7z030sbg485.bin": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+      "xc7z030sbg485.xdc": "6e72b1516836d2637c37220ab7de9525886d46e4d6d62f09899423f31e47e072"
+    },
+    "stdlib_manifest_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+    "coverage": {
+      "endpoint_requirements_met": true,
+      "design_wide_clock_validated": false,
+      "checks": [
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "D",
+            "class": "register_input"
+          },
+          "matched": 201,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "Q",
+            "class": "register_output"
+          },
+          "matched": 201,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        }
+      ]
+    },
+    "rtl_sha256": "4e7715a92f794a7d54f2371ff054665d3a04a5ecb3b1e732c5811548867ceac8",
+    "netlist_sha256": "1506cd199daedf8695a931ef46c580de7f81632ecefd9751664c9836c8e46633",
+    "raw_report_sha256": "341256e3120f6dad1d77fc551929d4a6e1c7477852bc639c2cb066529152cf10"
+  },
+  {
+    "case": "signed-bias/bulk-unit2",
+    "seed": 1,
+    "stages": 2,
+    "delay_model": "unit",
+    "lut_only": true,
+    "period_ns": 20.842017507294706,
+    "reported_mhz": 47.98,
+    "luts": 1664,
+    "ffs": 201,
+    "dsps": 0,
+    "cells": {
+      "LUT4": 346,
+      "LUT6": 329,
+      "LUT5": 379,
+      "LUT2": 356,
+      "LUT3": 254,
+      "MUXF7": 1,
+      "INV": 3,
+      "CARRY4": 58,
+      "BUFG": 1,
+      "FDSE": 31,
+      "FDRE": 170,
+      "OBUF": 1,
+      "IBUF": 1,
+      "$scopeinfo": 1
+    },
+    "source_sha256": {
+      "bulk.x": "e976b45e639c5c3f72412e681b1f5abd4b70d2426d2195360f9c6f34161870b5",
+      "hls_fixed.x": "227fa2668d60c2f277d1b8cf5cca00864bff2bdb98d43b31b7f78d18f93d501b",
+      "hls_vec.x": "c66c888c606ce7bc3e7b1c526cd1216e571f23fc6712f719df14dc6f5d82e5e6",
+      "phi_field.x": "7e35e2901be89e4f9b148e8d8c47d0a05581e6206070c25e8d2dc5d02828f84b",
+      "ratio.x": "77ac3305b3c31d6b47075ed7633a3bdd55744b9d192b1ff509ac9725c5945143"
+    },
+    "tool_sha256": {
+      "probe.py": "2d829128a61f021b8ac5f1481ee465a282b9dd34f0da34ca2ca4e5a49a71c28b",
+      "oss-cad-suite/bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+      "oss-cad-suite/BUILD-INFO.json": "b509fbcf8adf9e4f8359d8c89ed179bacb3aa7c9557d830ba80936b907c3db85",
+      "oss-cad-suite/libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+      "oss-cad-suite/libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d",
+      "nextpnr-coverage": "c045c3925ed86ed9defdfdaf2d46cfc987c0062e56cb5b43568a4afa9f0ccc71",
+      "xls/ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+      "xls/opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c",
+      "xls/codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162",
+      "xc7z030sbg485.bin": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+      "xc7z030sbg485.xdc": "6e72b1516836d2637c37220ab7de9525886d46e4d6d62f09899423f31e47e072"
+    },
+    "stdlib_manifest_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+    "coverage": {
+      "endpoint_requirements_met": true,
+      "design_wide_clock_validated": false,
+      "checks": [
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "D",
+            "class": "register_input"
+          },
+          "matched": 201,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "Q",
+            "class": "register_output"
+          },
+          "matched": 201,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        }
+      ]
+    },
+    "rtl_sha256": "0e1bfd558641cc4feddd439ed7283b9d4b3967a22aae713622fab66abc8a92b6",
+    "netlist_sha256": "0e32d5b39f97d260a9aa22741f82a80e3b0dfc2d14e5b6530134ca983ad7af8a",
+    "raw_report_sha256": "81566167d45325dd658e172da7bb17f56b561dbe1a408abf413f5e4fd2fadd7f"
+  },
+  {
+    "case": "signed-bias/ratio-lut",
+    "seed": 1,
+    "stages": 0,
+    "delay_model": null,
+    "lut_only": true,
+    "period_ns": 17.627357659086904,
+    "reported_mhz": 56.73,
+    "luts": 1508,
+    "ffs": 73,
+    "dsps": 0,
+    "cells": {
+      "LUT5": 385,
+      "LUT2": 283,
+      "LUT6": 315,
+      "LUT4": 313,
+      "LUT3": 212,
+      "INV": 2,
+      "CARRY4": 36,
+      "BUFG": 1,
+      "FDRE": 73,
+      "OBUF": 1,
+      "IBUF": 1,
+      "$scopeinfo": 1
+    },
+    "source_sha256": {
+      "bulk.x": "e976b45e639c5c3f72412e681b1f5abd4b70d2426d2195360f9c6f34161870b5",
+      "hls_fixed.x": "227fa2668d60c2f277d1b8cf5cca00864bff2bdb98d43b31b7f78d18f93d501b",
+      "hls_vec.x": "c66c888c606ce7bc3e7b1c526cd1216e571f23fc6712f719df14dc6f5d82e5e6",
+      "phi_field.x": "7e35e2901be89e4f9b148e8d8c47d0a05581e6206070c25e8d2dc5d02828f84b",
+      "ratio.x": "77ac3305b3c31d6b47075ed7633a3bdd55744b9d192b1ff509ac9725c5945143"
+    },
+    "tool_sha256": {
+      "probe.py": "54b89f94f32e82e97561d084fac75be291a9fed236bc365dcb9e06f988c1919d",
+      "oss-cad-suite/bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+      "oss-cad-suite/BUILD-INFO.json": "b509fbcf8adf9e4f8359d8c89ed179bacb3aa7c9557d830ba80936b907c3db85",
+      "oss-cad-suite/libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+      "oss-cad-suite/libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d",
+      "nextpnr-coverage": "c045c3925ed86ed9defdfdaf2d46cfc987c0062e56cb5b43568a4afa9f0ccc71",
+      "xls/ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+      "xls/opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c",
+      "xls/codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162",
+      "xc7z030sbg485.bin": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+      "xc7z030sbg485.xdc": "6e72b1516836d2637c37220ab7de9525886d46e4d6d62f09899423f31e47e072"
+    },
+    "stdlib_manifest_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+    "coverage": {
+      "endpoint_requirements_met": true,
+      "design_wide_clock_validated": false,
+      "checks": [
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "D",
+            "class": "register_input"
+          },
+          "matched": 73,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "Q",
+            "class": "register_output"
+          },
+          "matched": 73,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        }
+      ]
+    },
+    "rtl_sha256": "13f951307b1fca933c108da1b5163b4d2ce02b43b818589fc55535cbe413b71e",
+    "netlist_sha256": "7c1651f2cc93c91d903847e241c863f1b25555db4219e02ce5ff12488d05fbba",
+    "raw_report_sha256": "e356a862d41422b4b15ddaa029511393f1035b30091253f140dcdf510ce560ea"
+  },
+  {
+    "case": "signed-bias/ratio-measure",
+    "seed": 1,
+    "stages": 0,
+    "delay_model": null,
+    "lut_only": false,
+    "period_ns": 26.441036488630353,
+    "reported_mhz": 37.82,
+    "luts": 137,
+    "ffs": 73,
+    "dsps": 6,
+    "cells": {
+      "LUT5": 5,
+      "LUT3": 1,
+      "LUT2": 127,
+      "LUT4": 3,
+      "LUT6": 1,
+      "INV": 2,
+      "CARRY4": 33,
+      "BUFG": 1,
+      "FDRE": 73,
+      "DSP48E1": 6,
+      "OBUF": 1,
+      "IBUF": 1,
+      "$scopeinfo": 1
+    },
+    "source_sha256": {
+      "bulk.x": "e976b45e639c5c3f72412e681b1f5abd4b70d2426d2195360f9c6f34161870b5",
+      "hls_fixed.x": "227fa2668d60c2f277d1b8cf5cca00864bff2bdb98d43b31b7f78d18f93d501b",
+      "hls_vec.x": "c66c888c606ce7bc3e7b1c526cd1216e571f23fc6712f719df14dc6f5d82e5e6",
+      "phi_field.x": "7e35e2901be89e4f9b148e8d8c47d0a05581e6206070c25e8d2dc5d02828f84b",
+      "ratio.x": "77ac3305b3c31d6b47075ed7633a3bdd55744b9d192b1ff509ac9725c5945143"
+    },
+    "tool_sha256": {
+      "probe.py": "54b89f94f32e82e97561d084fac75be291a9fed236bc365dcb9e06f988c1919d",
+      "oss-cad-suite/bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+      "oss-cad-suite/BUILD-INFO.json": "b509fbcf8adf9e4f8359d8c89ed179bacb3aa7c9557d830ba80936b907c3db85",
+      "oss-cad-suite/libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+      "oss-cad-suite/libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d",
+      "nextpnr-coverage": "c045c3925ed86ed9defdfdaf2d46cfc987c0062e56cb5b43568a4afa9f0ccc71",
+      "xls/ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+      "xls/opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c",
+      "xls/codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162",
+      "xc7z030sbg485.bin": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+      "xc7z030sbg485.xdc": "6e72b1516836d2637c37220ab7de9525886d46e4d6d62f09899423f31e47e072"
+    },
+    "stdlib_manifest_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+    "coverage": {
+      "endpoint_requirements_met": true,
+      "design_wide_clock_validated": false,
+      "checks": [
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "D",
+            "class": "register_input"
+          },
+          "matched": 73,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "Q",
+            "class": "register_output"
+          },
+          "matched": 73,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "requirement": {
+            "type": "DSP48E1_DSP48E1",
+            "port": "P[0-9]+",
+            "class": "comb_output"
+          },
+          "matched": 288,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "requirement": {
+            "type": "DSP48E1_DSP48E1",
+            "port": "[AB][0-9]+",
+            "class": "comb_input"
+          },
+          "matched": 288,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        }
+      ]
+    },
+    "rtl_sha256": "13f951307b1fca933c108da1b5163b4d2ce02b43b818589fc55535cbe413b71e",
+    "netlist_sha256": "6d0135d30a8570162fdfc81a8d78a4d869ed704b904939156d369d3ef7d6f781",
+    "raw_report_sha256": "38316a7ebaf091a069c815f69747bd8333dadcc16534435d7a826cf7ddd3b69f"
+  },
+  {
+    "case": "split/bulk-lut",
+    "seed": 1,
+    "stages": 0,
+    "delay_model": null,
+    "lut_only": true,
+    "period_ns": 28.441410693970425,
+    "reported_mhz": 35.16,
+    "luts": 967,
+    "ffs": 131,
+    "dsps": 0,
+    "cells": {
+      "LUT4": 170,
+      "LUT6": 152,
+      "LUT2": 262,
+      "LUT5": 211,
+      "LUT3": 172,
+      "MUXF7": 4,
+      "MUXF8": 2,
+      "INV": 3,
+      "CARRY4": 64,
+      "BUFG": 1,
+      "FDSE": 31,
+      "FDRE": 100,
+      "OBUF": 1,
+      "IBUF": 1,
+      "$scopeinfo": 1
+    },
+    "source_sha256": {
+      "bulk.x": "e976b45e639c5c3f72412e681b1f5abd4b70d2426d2195360f9c6f34161870b5",
+      "hls_fixed.x": "349cf9ae6f41a4ae374b778735207c9c74b51372679b1792640ea7dbaa4abf6c",
+      "hls_vec.x": "c66c888c606ce7bc3e7b1c526cd1216e571f23fc6712f719df14dc6f5d82e5e6",
+      "phi_field.x": "7e35e2901be89e4f9b148e8d8c47d0a05581e6206070c25e8d2dc5d02828f84b",
+      "ratio.x": "77ac3305b3c31d6b47075ed7633a3bdd55744b9d192b1ff509ac9725c5945143"
+    },
+    "tool_sha256": {
+      "probe.py": "54b89f94f32e82e97561d084fac75be291a9fed236bc365dcb9e06f988c1919d",
+      "oss-cad-suite/bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+      "oss-cad-suite/BUILD-INFO.json": "b509fbcf8adf9e4f8359d8c89ed179bacb3aa7c9557d830ba80936b907c3db85",
+      "oss-cad-suite/libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+      "oss-cad-suite/libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d",
+      "nextpnr-coverage": "c045c3925ed86ed9defdfdaf2d46cfc987c0062e56cb5b43568a4afa9f0ccc71",
+      "xls/ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+      "xls/opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c",
+      "xls/codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162",
+      "xc7z030sbg485.bin": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+      "xc7z030sbg485.xdc": "6e72b1516836d2637c37220ab7de9525886d46e4d6d62f09899423f31e47e072"
+    },
+    "stdlib_manifest_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+    "coverage": {
+      "endpoint_requirements_met": true,
+      "design_wide_clock_validated": false,
+      "checks": [
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "D",
+            "class": "register_input"
+          },
+          "matched": 131,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "Q",
+            "class": "register_output"
+          },
+          "matched": 131,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        }
+      ]
+    },
+    "rtl_sha256": "65d75b03fd9ab150bd06296a2efcaaa17061365b17aa8014a31050ddca8e116a",
+    "netlist_sha256": "c381222271a24534e4607fc09d1d90da354f822c1957f4fed119d562ec3f4db6",
+    "raw_report_sha256": "f005b11a1b5eaffd0d03960f45b182485e60cdc19704bedd5bff2a4e3bfe2be0"
+  },
+  {
+    "case": "split/bulk-measure",
+    "seed": 1,
+    "stages": 0,
+    "delay_model": null,
+    "lut_only": false,
+    "period_ns": 34.84320557491289,
+    "reported_mhz": 28.7,
+    "luts": 271,
+    "ffs": 131,
+    "dsps": 6,
+    "cells": {
+      "LUT2": 167,
+      "LUT3": 30,
+      "LUT4": 31,
+      "LUT5": 36,
+      "LUT6": 6,
+      "INV": 3,
+      "CARRY4": 59,
+      "BUFG": 1,
+      "FDSE": 31,
+      "FDRE": 100,
+      "LUT1": 1,
+      "DSP48E1": 6,
+      "OBUF": 1,
+      "IBUF": 1,
+      "$scopeinfo": 1
+    },
+    "source_sha256": {
+      "bulk.x": "e976b45e639c5c3f72412e681b1f5abd4b70d2426d2195360f9c6f34161870b5",
+      "hls_fixed.x": "349cf9ae6f41a4ae374b778735207c9c74b51372679b1792640ea7dbaa4abf6c",
+      "hls_vec.x": "c66c888c606ce7bc3e7b1c526cd1216e571f23fc6712f719df14dc6f5d82e5e6",
+      "phi_field.x": "7e35e2901be89e4f9b148e8d8c47d0a05581e6206070c25e8d2dc5d02828f84b",
+      "ratio.x": "77ac3305b3c31d6b47075ed7633a3bdd55744b9d192b1ff509ac9725c5945143"
+    },
+    "tool_sha256": {
+      "probe.py": "54b89f94f32e82e97561d084fac75be291a9fed236bc365dcb9e06f988c1919d",
+      "oss-cad-suite/bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+      "oss-cad-suite/BUILD-INFO.json": "b509fbcf8adf9e4f8359d8c89ed179bacb3aa7c9557d830ba80936b907c3db85",
+      "oss-cad-suite/libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+      "oss-cad-suite/libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d",
+      "nextpnr-coverage": "c045c3925ed86ed9defdfdaf2d46cfc987c0062e56cb5b43568a4afa9f0ccc71",
+      "xls/ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+      "xls/opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c",
+      "xls/codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162",
+      "xc7z030sbg485.bin": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+      "xc7z030sbg485.xdc": "6e72b1516836d2637c37220ab7de9525886d46e4d6d62f09899423f31e47e072"
+    },
+    "stdlib_manifest_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+    "coverage": {
+      "endpoint_requirements_met": true,
+      "design_wide_clock_validated": false,
+      "checks": [
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "D",
+            "class": "register_input"
+          },
+          "matched": 131,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "Q",
+            "class": "register_output"
+          },
+          "matched": 131,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "requirement": {
+            "type": "DSP48E1_DSP48E1",
+            "port": "P[0-9]+",
+            "class": "comb_output"
+          },
+          "matched": 288,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "requirement": {
+            "type": "DSP48E1_DSP48E1",
+            "port": "[AB][0-9]+",
+            "class": "comb_input"
+          },
+          "matched": 288,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        }
+      ]
+    },
+    "rtl_sha256": "65d75b03fd9ab150bd06296a2efcaaa17061365b17aa8014a31050ddca8e116a",
+    "netlist_sha256": "30f6e96a8dc05e134481d5ab950f9d4b6caa2b507d1d0a02098eff5411b521ba",
+    "raw_report_sha256": "deeda77f2d3d083da397fbfa57106681c618ad2c0d672b89a04c2d5d066033c4"
+  },
+  {
+    "case": "split/ratio-lut",
+    "seed": 1,
+    "stages": 0,
+    "delay_model": null,
+    "lut_only": true,
+    "period_ns": 18.99335232668566,
+    "reported_mhz": 52.65,
+    "luts": 888,
+    "ffs": 73,
+    "dsps": 0,
+    "cells": {
+      "LUT5": 207,
+      "LUT3": 142,
+      "LUT2": 241,
+      "LUT6": 140,
+      "LUT4": 158,
+      "INV": 2,
+      "CARRY4": 46,
+      "BUFG": 1,
+      "FDRE": 73,
+      "OBUF": 1,
+      "IBUF": 1,
+      "$scopeinfo": 1
+    },
+    "source_sha256": {
+      "bulk.x": "e976b45e639c5c3f72412e681b1f5abd4b70d2426d2195360f9c6f34161870b5",
+      "hls_fixed.x": "349cf9ae6f41a4ae374b778735207c9c74b51372679b1792640ea7dbaa4abf6c",
+      "hls_vec.x": "c66c888c606ce7bc3e7b1c526cd1216e571f23fc6712f719df14dc6f5d82e5e6",
+      "phi_field.x": "7e35e2901be89e4f9b148e8d8c47d0a05581e6206070c25e8d2dc5d02828f84b",
+      "ratio.x": "77ac3305b3c31d6b47075ed7633a3bdd55744b9d192b1ff509ac9725c5945143"
+    },
+    "tool_sha256": {
+      "probe.py": "54b89f94f32e82e97561d084fac75be291a9fed236bc365dcb9e06f988c1919d",
+      "oss-cad-suite/bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+      "oss-cad-suite/BUILD-INFO.json": "b509fbcf8adf9e4f8359d8c89ed179bacb3aa7c9557d830ba80936b907c3db85",
+      "oss-cad-suite/libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+      "oss-cad-suite/libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d",
+      "nextpnr-coverage": "c045c3925ed86ed9defdfdaf2d46cfc987c0062e56cb5b43568a4afa9f0ccc71",
+      "xls/ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+      "xls/opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c",
+      "xls/codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162",
+      "xc7z030sbg485.bin": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+      "xc7z030sbg485.xdc": "6e72b1516836d2637c37220ab7de9525886d46e4d6d62f09899423f31e47e072"
+    },
+    "stdlib_manifest_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+    "coverage": {
+      "endpoint_requirements_met": true,
+      "design_wide_clock_validated": false,
+      "checks": [
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "D",
+            "class": "register_input"
+          },
+          "matched": 73,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        },
+        {
+          "requirement": {
+            "type": "SLICE_FFX",
+            "port": "Q",
+            "class": "register_output"
+          },
+          "matched": 73,
+          "failed": 0,
+          "passed": true,
+          "failures": []
+        }
+      ]
+    },
+    "rtl_sha256": "ce85851e532b74daf63780ab3095b1706bdc75ef3d3a72f8c01d74fb5dee2eb7",
+    "netlist_sha256": "5577a205ee98bd11ca6821d983624f87c82192640e89fcbcf9114aad1bd8cf61",
+    "raw_report_sha256": "7436193210c8b0b8c2e55b88dbc05bcdf305e55f2792155beba1922652ebbb6e"
+  }
+]

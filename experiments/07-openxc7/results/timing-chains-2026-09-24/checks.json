@@ -1,0 +1,18 @@
+{
+  "eunit.log": {
+    "sha256": "ac8567f39a4073a05cd62f3a3bfc710c5f835c7627a5b423b37a72bc219f57a8",
+    "summary": "   message_queue_len: 0\n    messages: []\n    links: []\n    dictionary: []\n    trap_exit: false\n    status: running\n    heap_size: 10958\n    stack_size: 29\n    reductions: 11341\n  neighbours:\n\n.............................................................................................................................................................\nFinished in 20.834 seconds\n1151 tests, 0 failures\n"
+  },
+  "dialyzer.log": {
+    "sha256": "3c7624322e4a7afb64fc55427ecc7dda0751e26257c106797c983a0c45c6c016",
+    "summary": "===> Verifying dependencies...\n===> Analyzing applications...\n===> Compiling erl_hls\n===> Dialyzer starting, this may take a while...\n===> Updating plt...\n===> Resolving project files...\n===> Checking 222 files in _build/default/rebar3_28.0.2_plt...\n===> Doing success typing analysis...\n===> Resolving project warning files...\n===> Analyzing 112 files with _build/default/rebar3_28.0.2_plt...\n"
+  },
+  "contracts.log": {
+    "sha256": "d04e9ee5d689ab65bae4c1d450fd83c71437bb733f39383eb69842251c0dc060",
+    "summary": "Checked 339 source files; 6700 existing/current gaps: {'spec': 3045, 'public_doc': 1031, 'private_comment': 2526, 'clause_comment': 98}; 0 new/changed gaps\n"
+  },
+  "timing-tests-final.log": {
+    "sha256": "417fade05dcbfa3c51c621e5695e22598ef77d08d0f516e00239c5d00653110d",
+    "summary": "all coordinates through step 32\ncycles_per_step=25.958333 x_stalls=0 z_stalls=196 x_corrections=0 z_corrections=330\nexperiments/07-openxc7/phi_timing_tb.sv:104: $finish called at 8595000 (1ps)\nsimulate-compile\nsimulate\n..s..\n----------------------------------------------------------------------\nRan 36 tests in 0.244s\n\nOK (skipped=1)\n"
+  }
+}

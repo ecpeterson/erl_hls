@@ -1,0 +1,15 @@
+--- a/hls_fixed.x
++++ b/hls_fixed.x
+@@ -20,6 +20,6 @@
+-  let negative = numerator < sN[WIDTH]:0;
+-  let widened = numerator as sN[MAG];
+-  let magnitude = (if negative { -widened } else { widened }) as uN[MAG];
+-  let rounded = magnitude + ((DENOMINATOR / u32:2) as uN[MAG]);
+-  let quotient = (rounded / (DENOMINATOR as uN[MAG])) as sN[MAG];
+-  (if negative { -quotient } else { quotient }) as sN[WIDTH]
++  const HALF = DENOMINATOR / u32:2;
++  const OFFSET_Q = ((uN[MAG]:1 << (WIDTH - u32:1)) + (DENOMINATOR as uN[MAG]) - uN[MAG]:1) / (DENOMINATOR as uN[MAG]);
++  const OFFSET = OFFSET_Q * (DENOMINATOR as uN[MAG]);
++  let bias = if numerator < sN[WIDTH]:0 { DENOMINATOR - u32:1 - HALF } else { HALF };
++  let positive = (numerator as sN[MAG]) as uN[MAG] + OFFSET + (bias as uN[MAG]);
++  ((positive / (DENOMINATOR as uN[MAG])) - OFFSET_Q) as sN[WIDTH]

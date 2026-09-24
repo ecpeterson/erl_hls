@@ -1,0 +1,13 @@
+--- a/hls_fixed.x
++++ b/hls_fixed.x
+@@ -20 +20 @@
+-  let negative = numerator < sN[WIDTH]:0;
++  const SHIFT = ctz(DENOMINATOR);
+@@ -22,4 +22,3 @@
+-  let magnitude = (if negative { -widened } else { widened }) as uN[MAG];
+-  let rounded = magnitude + ((DENOMINATOR / u32:2) as uN[MAG]);
+-  let quotient = (rounded / (DENOMINATOR as uN[MAG])) as sN[MAG];
+-  (if negative { -quotient } else { quotient }) as sN[WIDTH]
++  let half = (DENOMINATOR / u32:2) as sN[MAG];
++  let biased = if numerator < sN[WIDTH]:0 { widened - half } else { widened + half };
++  ((biased / ((uN[MAG]:1 << SHIFT) as sN[MAG])) / ((DENOMINATOR >> SHIFT) as sN[MAG])) as sN[WIDTH]

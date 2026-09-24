@@ -1,0 +1,20 @@
+--- a/hls_fixed.x
++++ b/hls_fixed.x
+@@ -20,6 +20,11 @@
+-  let negative = numerator < sN[WIDTH]:0;
+-  let widened = numerator as sN[MAG];
+-  let magnitude = (if negative { -widened } else { widened }) as uN[MAG];
+-  let rounded = magnitude + ((DENOMINATOR / u32:2) as uN[MAG]);
+-  let quotient = (rounded / (DENOMINATOR as uN[MAG])) as sN[MAG];
+-  (if negative { -quotient } else { quotient }) as sN[WIDTH]
++  if (DENOMINATOR & (DENOMINATOR - u32:1)) == u32:0 {
++    let widened = numerator as sN[MAG];
++    let half = (DENOMINATOR / u32:2) as sN[MAG];
++    let biased = if numerator < sN[WIDTH]:0 { widened - half } else { widened + half };
++    (biased / (DENOMINATOR as sN[MAG])) as sN[WIDTH]
++  } else {
++    const K = WIDTH + u32:32 - clz(DENOMINATOR - u32:1) - (if (DENOMINATOR & u32:1) == u32:0 {u32:1} else {u32:0});
++    const M = ((uN[K + u32:1]:1 << K) + (DENOMINATOR as uN[K + u32:1]) - uN[K + u32:1]:1) / (DENOMINATOR as uN[K + u32:1]);
++    let product = (numerator as sN[WIDTH + K + u32:2]) * (M as sN[WIDTH + K + u32:2]);
++    ((product + (sN[WIDTH + K + u32:2]:1 << (K - u32:1))) >> K) as sN[WIDTH]
++  }
