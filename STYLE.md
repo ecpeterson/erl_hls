@@ -27,8 +27,8 @@ compatibility scaffolding for an obsolete internal format.
 - Replace obsolete internal formats directly unless compatibility is an
   explicit requirement; do not add deprecation machinery by default.
 - Keep compact generated DSLX beside its source when it is useful in review.
-- Store digests rather than checked-in generated Verilog when regression jobs
-  already regenerate, simulate, and retain that Verilog as an artifact.
+- Validate generated RTL through behavioral regressions, not committed text or
+  golden hashes. Retain generated RTL with regression diagnostics when useful.
 
 ## Source contracts and documentation
 
