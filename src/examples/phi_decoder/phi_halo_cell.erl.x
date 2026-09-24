@@ -427,22 +427,22 @@ fn hls_local_choose_direction__2(argument_1: u32, argument_2: u32) -> (u32, hls_
   let _15 = (_14 as u32);
   let v_Rank_1 = _15;
   let _19 = {
-    let _16 = v_Count_1 == 0;
+    let _16 = hls_integer::equal(v_Count_1, sN[2]:0);
     if _16 {
       (u32:0, hls_failure::NONE)
     } else {
-      let _16 = v_Rank_1 < v_North_1;
+      let _16 = hls_integer::less(v_Rank_1, v_North_1);
       if _16 {
         (u32:1, hls_failure::NONE)
       } else {
         let _16 = v_North_1 + v_East_1;
-        let _17 = v_Rank_1 < _16;
+        let _17 = hls_integer::less(v_Rank_1, _16);
         if _17 {
           (u32:2, hls_failure::NONE)
         } else {
           let _16 = v_North_1 + v_East_1;
           let _17 = _16 + v_West_1;
-          let _18 = v_Rank_1 < _17;
+          let _18 = hls_integer::less(v_Rank_1, _17);
           if _18 {
             (u32:4, hls_failure::NONE)
           } else {
@@ -882,7 +882,7 @@ if (bool:false) {
             let _0 = (0 as u32);
 let _1 = v_Xls_clause_1_PresentWord_1 & 1;
 let _2 = (_1 as s64);
-let _3 = v_Xls_clause_1_PresentWord_1 < 2;
+let _3 = hls_integer::less(v_Xls_clause_1_PresentWord_1, sN[3]:2);
 let _4 = if _3 {
   (0, hls_failure::NONE)
 } else {
@@ -947,9 +947,9 @@ if (bool:false) {
       let _0 = (0 as s64);
 let v_Xls_clause_1_Zero_1 = _0;
 let _5 = {
-  let _1 = v_Xls_clause_1_LeftMask_1 == 0;
+  let _1 = hls_integer::equal(v_Xls_clause_1_LeftMask_1, sN[2]:0);
   let _3 = if _1 {
-    let _2 = v_Xls_clause_1_RightMask_1 == 0;
+    let _2 = hls_integer::equal(v_Xls_clause_1_RightMask_1, sN[2]:0);
     (_2, hls_failure::NONE)
   } else {
     (bool:0, hls_failure::NONE)
@@ -958,22 +958,22 @@ let _5 = {
     let _4 = (v_Xls_clause_1_Zero_1, v_Xls_clause_1_Zero_1, );
     (_4, hls_failure::NONE)
   } else {
-    let _1 = v_Xls_clause_1_LeftMask_1 == 0;
+    let _1 = hls_integer::equal(v_Xls_clause_1_LeftMask_1, sN[2]:0);
     if _1 {
       let _2 = (v_Xls_clause_1_RightValue_1, v_Xls_clause_1_RightMask_1, );
       (_2, hls_failure::NONE)
     } else {
-      let _1 = v_Xls_clause_1_RightMask_1 == 0;
+      let _1 = hls_integer::equal(v_Xls_clause_1_RightMask_1, sN[2]:0);
       if _1 {
         let _2 = (v_Xls_clause_1_LeftValue_1, v_Xls_clause_1_LeftMask_1, );
         (_2, hls_failure::NONE)
       } else {
-        let _1 = v_Xls_clause_1_LeftValue_1 > v_Xls_clause_1_RightValue_1;
+        let _1 = hls_integer::less(v_Xls_clause_1_RightValue_1, v_Xls_clause_1_LeftValue_1);
         if _1 {
           let _2 = (v_Xls_clause_1_LeftValue_1, v_Xls_clause_1_LeftMask_1, );
           (_2, hls_failure::NONE)
         } else {
-          let _1 = v_Xls_clause_1_RightValue_1 > v_Xls_clause_1_LeftValue_1;
+          let _1 = hls_integer::less(v_Xls_clause_1_LeftValue_1, v_Xls_clause_1_RightValue_1);
           if _1 {
             let _2 = (v_Xls_clause_1_RightValue_1, v_Xls_clause_1_RightMask_1, );
             (_2, hls_failure::NONE)
@@ -1098,7 +1098,7 @@ if (bool:false) {
         let _0 = (0 as u32);
 let _1 = v_Xls_clause_1_PresentWord_1 & 1;
 let _2 = (_1 as s64);
-let _3 = v_Xls_clause_1_PresentWord_1 < 2;
+let _3 = hls_integer::less(v_Xls_clause_1_PresentWord_1, sN[3]:2);
 let _4 = if _3 {
   (0, hls_failure::NONE)
 } else {
@@ -1328,7 +1328,7 @@ fn reduction_dispatch_completion(
   let _8 = _7 * 12;
   let _9 = _8 & 4294967295;
   let v_Xls_clause_1_NextStepEpoch_1 = _9;
-  let _10 = v_Xls_clause_1_NextEpoch_1 == v_Xls_clause_1_NextStepEpoch_1;
+  let _10 = hls_integer::equal(v_Xls_clause_1_NextEpoch_1, v_Xls_clause_1_NextStepEpoch_1);
   let _15 = if _10 {
     let _11 = Cell {
       best_direction: u32:0,
@@ -1561,7 +1561,7 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> EntryOutcome {
       let v__OldPhase_1 = old_phase;
       let v_Cell_1 = (Tag::CELL, data);
       let _0 = v_Cell_1.1.status_valid;
-      let _1 = _0 == 1;
+      let _1 = hls_integer::equal(_0, sN[2]:1);
       let _20 = if _1 {
         let _2 = v_Cell_1.1.step;
         let _3 = _2 - u32:1;
@@ -1814,13 +1814,13 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> EntryOutcome {
       let v_Absent_1 = u32:0;
       let _44 = {
         let _4 = v_Cell_1.1.anyon;
-        let _5 = _4 == 1;
+        let _5 = hls_integer::equal(_4, sN[2]:1);
         let _11 = if _5 {
           let _6 = v_Cell_1.1.best_direction;
-          let _7 = _6 != 0;
+          let _7 = !hls_integer::equal(_6, sN[2]:0);
           let _10 = if _7 {
             let _8 = hls_integer::shift<false>(v_NextRandom_1, u5:31);
-            let _9 = _8 == 1;
+            let _9 = hls_integer::equal(_8, sN[2]:1);
             (_9, hls_failure::NONE)
           } else {
             (bool:0, hls_failure::NONE)
@@ -2283,7 +2283,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
           let v_Xls_clause_1_Step_1 = data.step;
           let _0 = v_Xls_clause_1_Step_1 * 12;
           let _1 = _0 & 4294967295;
-          let _2 = v_Xls_clause_1_Epoch_1 == _1;
+          let _2 = hls_integer::equal(v_Xls_clause_1_Epoch_1, _1);
           if _2 {
             let _3 = (Phase::MEASURING, v_Xls_clause_1_Cell_1, Directive::POSTPONE, bool:0, );
             let _4 = (_3.0, _3.1, _3.2, _3.3, hls_failure::NONE);
@@ -2523,15 +2523,15 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
           let v_Xls_clause_1_Y_1 = message.y;
           let v_Xls_clause_1_Cell_1 = (Tag::CELL, data);
           let _9 = if v_Xls_clause_1_Step_1 == data.step {
-            let _0 = v_Xls_clause_1_Flags_1 < 4;
+            let _0 = hls_integer::less(v_Xls_clause_1_Flags_1, sN[4]:4);
             let _8 = if _0 {
-              let _1 = v_Xls_clause_1_X_1 >= 0;
+              let _1 = hls_integer::less_equal(sN[2]:0, v_Xls_clause_1_X_1);
               let _7 = if _1 {
-                let _2 = v_Xls_clause_1_X_1 <= 65535;
+                let _2 = hls_integer::less_equal(v_Xls_clause_1_X_1, sN[17]:65535);
                 let _6 = if _2 {
-                  let _3 = v_Xls_clause_1_Y_1 >= 0;
+                  let _3 = hls_integer::less_equal(sN[2]:0, v_Xls_clause_1_Y_1);
                   let _5 = if _3 {
-                    let _4 = v_Xls_clause_1_Y_1 <= 65535;
+                    let _4 = hls_integer::less_equal(v_Xls_clause_1_Y_1, sN[17]:65535);
                     (_4, hls_failure::NONE)
                   } else {
                     (bool:0, hls_failure::NONE)
@@ -2593,7 +2593,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
           let v_Xls_clause_1_Step_1 = data.step;
           let _0 = v_Xls_clause_1_Step_1 + 1;
           let _1 = _0 & 4294967295;
-          let _2 = v_Xls_clause_1_EventStep_1 == _1;
+          let _2 = hls_integer::equal(v_Xls_clause_1_EventStep_1, _1);
           if _2 {
             let _3 = (Phase::GATHERING, v_Xls_clause_1_Cell_1, Directive::POSTPONE, bool:0, );
             let _4 = (_3.0, _3.1, _3.2, _3.3, hls_failure::NONE);
@@ -2619,7 +2619,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
           let v_Xls_clause_1_Step_1 = data.step;
           let _0 = v_Xls_clause_1_Step_1 + 1;
           let _1 = _0 & 4294967295;
-          let _2 = v_Xls_clause_1_EventStep_1 == _1;
+          let _2 = hls_integer::equal(v_Xls_clause_1_EventStep_1, _1);
           if _2 {
             let _3 = (Phase::COMPARING, v_Xls_clause_1_Cell_1, Directive::POSTPONE, bool:0, );
             let _4 = (_3.0, _3.1, _3.2, _3.3, hls_failure::NONE);
@@ -2645,7 +2645,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
           let v_Xls_clause_1_Step_1 = data.step;
           let _0 = v_Xls_clause_1_Step_1 + 1;
           let _1 = _0 & 4294967295;
-          let _2 = v_Xls_clause_1_EventStep_1 == _1;
+          let _2 = hls_integer::equal(v_Xls_clause_1_EventStep_1, _1);
           if _2 {
             let _3 = (Phase::FLIPPING, v_Xls_clause_1_Cell_1, Directive::POSTPONE, bool:0, );
             let _4 = (_3.0, _3.1, _3.2, _3.3, hls_failure::NONE);
@@ -2680,9 +2680,9 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Cell) -> (Phase, Cell, Direc
         Phase::CONFIGURING => {
           let v_Xls_clause_1_Seed_1 = message.seed;
           let v_Xls_clause_1_Cell_1 = (Tag::CELL, data);
-          let _0 = v_Xls_clause_1_Seed_1 > 0;
+          let _0 = hls_integer::less(sN[2]:0, v_Xls_clause_1_Seed_1);
           let _2 = if _0 {
-            let _1 = v_Xls_clause_1_Seed_1 <= 4294967295;
+            let _1 = hls_integer::less_equal(v_Xls_clause_1_Seed_1, sN[33]:4294967295);
             (_1, hls_failure::NONE)
           } else {
             (bool:0, hls_failure::NONE)

@@ -1,6 +1,6 @@
 # Actor names and encodings
 
-Hardware translation checks actor record, tag, phase, output-port, and reduction namespaces before invoking XLS. The same checks run when inferring a state-machine interface from source. A collision reports the emitted symbol and both source declarations, including the file and line; a conflict with the compiler's own declarations identifies the generated name instead.
+Hardware translation checks actor record, tag, phase, output-port, and reduction namespaces before invoking XLS. The same checks run when inferring a state-machine interface from source. A collision reports the emitted symbol and both origins: file/line for actor declarations, module path for imports, or the reserved compiler name.
 
 Record types retain the established spelling: remove the first underscore, then titlecase the result. The packer and unpacker use the lowercase form of that type name. For example, `#phi_fold{}` becomes `Phifold`, with `bits_from_phifold` and `phifold_from_bits`; `#'Input_Value'{}` becomes `InputValue`, with `bits_from_inputvalue` and `inputvalue_from_bits`. Enum members uppercase their Erlang atoms. Field names retain their spelling, including case.
 

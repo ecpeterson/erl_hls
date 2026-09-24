@@ -779,7 +779,7 @@ hls_gs_callback_body_accepts_if_test() ->
         XLS = iolist_to_binary(xls_parse:to_xls(Path)),
         ?assertNotEqual(nomatch, binary:match(XLS, <<"Tag::MESSAGE =>">>)),
         ?assertNotEqual(nomatch, binary:match(XLS, <<"Tag::QUERY =>">>)),
-        ?assertNotEqual(nomatch, binary:match(XLS, <<"v_Xls_clause_1_Value_1 > 0">>))
+        ?assertNotEqual(nomatch, binary:match(XLS, <<"hls_integer::less(sN[2]:0, v_Xls_clause_1_Value_1)">>))
     after
         ok = file:delete(Path)
     end.
@@ -792,12 +792,12 @@ hls_gs_callback_bodies_accept_general_case_test() ->
     )),
     ?assertNotEqual(nomatch, binary:match(XLS, <<"Tag::QUERY =>">>)),
     ?assertNotEqual(nomatch, binary:match(XLS, <<"Tag::UPDATE =>">>)),
-    ?assertNotEqual(nomatch, binary:match(XLS, <<"v_Xls_clause_1_Choice_1 < 8">>)),
+    ?assertNotEqual(nomatch, binary:match(XLS, <<"hls_integer::less(v_Xls_clause_1_Choice_1, sN[5]:8)">>)),
     ?assertNotEqual(
         nomatch,
         binary:match(XLS, <<"v_Xls_clause_1_Request_1.0 == Tag::QUERY">>)
     ),
-    ?assertNotEqual(nomatch, binary:match(XLS, <<"v_Xls_clause_1_Original_1 < 8">>)),
+    ?assertNotEqual(nomatch, binary:match(XLS, <<"hls_integer::less(v_Xls_clause_1_Original_1, sN[5]:8)">>)),
     ?assertNotEqual(nomatch, binary:match(XLS, <<"hls_failure::NONE">>)).
 
 state_machine_init_argument_is_rejected_test() ->
@@ -864,7 +864,7 @@ state_machine_entry_action_accepts_runtime_predicate_test() ->
             ),
             ?assertNotEqual(
                 nomatch,
-                binary:match(XLS, <<" != 0">>)
+                binary:match(XLS, <<"!hls_integer::equal(">>)
             )
         end
     ).

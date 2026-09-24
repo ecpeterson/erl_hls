@@ -8,6 +8,7 @@ import mailbox;
 import scheduler;
 import hls_failure;
 import hls_bits;
+import hls_integer;
 import phi_field;
 
 const MAILBOX_CAPACITY = u8:5;
@@ -884,7 +885,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
           let v_Xls_clause_1_X_1 = message.x;
           let v_Xls_clause_1_Y_1 = message.y;
           let v_Xls_clause_1_Cell_1 = (Tag::DATA_CELL, data);
-          let _0 = v_Xls_clause_1_Seed_1 > 0;
+          let _0 = hls_integer::less(sN[2]:0, v_Xls_clause_1_Seed_1);
           if _0 {
             let _1 = u32:0;
             let _2 = Datacell {
@@ -964,19 +965,19 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
           let v_Xls_clause_1_Cell_1 = (Tag::DATA_CELL, data);
           let v_Xls_clause_1_Seen_1 = data.seen_sources;
           let _10 = if v_Xls_clause_1_Step_1 == data.step {
-            let _0 = v_Xls_clause_1_Source_1 == 1;
+            let _0 = hls_integer::equal(v_Xls_clause_1_Source_1, sN[2]:1);
             let _6 = if _0 {
               (bool:1, hls_failure::NONE)
             } else {
-              let _1 = v_Xls_clause_1_Source_1 == 2;
+              let _1 = hls_integer::equal(v_Xls_clause_1_Source_1, sN[3]:2);
               let _5 = if _1 {
                 (bool:1, hls_failure::NONE)
               } else {
-                let _2 = v_Xls_clause_1_Source_1 == 4;
+                let _2 = hls_integer::equal(v_Xls_clause_1_Source_1, sN[4]:4);
                 let _4 = if _2 {
                   (bool:1, hls_failure::NONE)
                 } else {
-                  let _3 = v_Xls_clause_1_Source_1 == 8;
+                  let _3 = hls_integer::equal(v_Xls_clause_1_Source_1, sN[5]:8);
                   (_3, hls_failure::NONE)
                 };
                 (_4.0, _4.1)
@@ -985,7 +986,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
             };
             let _9 = if _6.0 {
               let _7 = v_Xls_clause_1_Seen_1 & v_Xls_clause_1_Source_1;
-              let _8 = _7 == 0;
+              let _8 = hls_integer::equal(_7, sN[2]:0);
               (_8, hls_failure::NONE)
             } else {
               (bool:0, hls_failure::NONE)
@@ -1003,12 +1004,12 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
             };
             let _13 = (Tag::DATA_CELL, _12);
             let v_Xls_clause_1_Collected_1 = _13;
-            let _14 = v_Xls_clause_1_NewSeen_1 == 15;
+            let _14 = hls_integer::equal(v_Xls_clause_1_NewSeen_1, sN[5]:15);
             let _41 = if _14 {
               let _15 = v_Xls_clause_1_Cell_1.1.cutoff_armed;
               let _18 = if _15 {
                 let _16 = v_Xls_clause_1_Cell_1.1.cutoff_step;
-                let _17 = v_Xls_clause_1_Step_1 >= _16;
+                let _17 = hls_integer::less_equal(_16, v_Xls_clause_1_Step_1);
                 (_17, hls_failure::NONE)
               } else {
                 (bool:0, hls_failure::NONE)
@@ -1096,7 +1097,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
             let v_Xls_clause_2_Step_1 = data.step;
             let _0 = v_Xls_clause_2_Step_1 + 1;
             let _1 = _0 & 4294967295;
-            let _2 = v_Xls_clause_2_QueryStep_1 == _1;
+            let _2 = hls_integer::equal(v_Xls_clause_2_QueryStep_1, _1);
             if _2 {
               let _3 = (Phase::COLLECTING, v_Xls_clause_2_Cell_1, Directive::POSTPONE, bool:0, );
               let _4 = (_3.0, _3.1, _3.2, _3.3, hls_failure::NONE);
@@ -1124,21 +1125,21 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
           let v_Xls_clause_1_Step_1 = data.step;
           let _0 = v_Xls_clause_1_Step_1 + 1;
           let _1 = _0 & 4294967295;
-          let _2 = v_Xls_clause_1_QueryStep_1 == _1;
+          let _2 = hls_integer::equal(v_Xls_clause_1_QueryStep_1, _1);
           let _10 = if _2 {
-            let _3 = v_Xls_clause_1_Source_1 == 1;
+            let _3 = hls_integer::equal(v_Xls_clause_1_Source_1, sN[2]:1);
             let _9 = if _3 {
               (bool:1, hls_failure::NONE)
             } else {
-              let _4 = v_Xls_clause_1_Source_1 == 2;
+              let _4 = hls_integer::equal(v_Xls_clause_1_Source_1, sN[3]:2);
               let _8 = if _4 {
                 (bool:1, hls_failure::NONE)
               } else {
-                let _5 = v_Xls_clause_1_Source_1 == 4;
+                let _5 = hls_integer::equal(v_Xls_clause_1_Source_1, sN[4]:4);
                 let _7 = if _5 {
                   (bool:1, hls_failure::NONE)
                 } else {
-                  let _6 = v_Xls_clause_1_Source_1 == 8;
+                  let _6 = hls_integer::equal(v_Xls_clause_1_Source_1, sN[5]:8);
                   (_6, hls_failure::NONE)
                 };
                 (_7.0, _7.1)
@@ -1182,19 +1183,19 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
           let v_Xls_clause_1_Cell_1 = (Tag::DATA_CELL, data);
           let v_Xls_clause_1_Seen_1 = data.seen_sources;
           let _10 = if (v_Xls_clause_1_Step_1 == data.step && data.reply_resume == 1) {
-            let _0 = v_Xls_clause_1_Source_1 == 1;
+            let _0 = hls_integer::equal(v_Xls_clause_1_Source_1, sN[2]:1);
             let _6 = if _0 {
               (bool:1, hls_failure::NONE)
             } else {
-              let _1 = v_Xls_clause_1_Source_1 == 2;
+              let _1 = hls_integer::equal(v_Xls_clause_1_Source_1, sN[3]:2);
               let _5 = if _1 {
                 (bool:1, hls_failure::NONE)
               } else {
-                let _2 = v_Xls_clause_1_Source_1 == 4;
+                let _2 = hls_integer::equal(v_Xls_clause_1_Source_1, sN[4]:4);
                 let _4 = if _2 {
                   (bool:1, hls_failure::NONE)
                 } else {
-                  let _3 = v_Xls_clause_1_Source_1 == 8;
+                  let _3 = hls_integer::equal(v_Xls_clause_1_Source_1, sN[5]:8);
                   (_3, hls_failure::NONE)
                 };
                 (_4.0, _4.1)
@@ -1203,7 +1204,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
             };
             let _9 = if _6.0 {
               let _7 = v_Xls_clause_1_Seen_1 & v_Xls_clause_1_Source_1;
-              let _8 = _7 == 0;
+              let _8 = hls_integer::equal(_7, sN[2]:0);
               (_8, hls_failure::NONE)
             } else {
               (bool:0, hls_failure::NONE)
@@ -1215,7 +1216,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
           if _10.0 {
             let _11 = v_Xls_clause_1_Seen_1 | v_Xls_clause_1_Source_1;
             let v_Xls_clause_1_NewSeen_1 = _11;
-            let _12 = v_Xls_clause_1_NewSeen_1 == 15;
+            let _12 = hls_integer::equal(v_Xls_clause_1_NewSeen_1, sN[5]:15);
             let _17 = if _12 {
               let _13 = Datacell {
                 seen_sources: v_Xls_clause_1_NewSeen_1,
@@ -1248,7 +1249,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
             let _3 = if data.reply_resume == 1 {
               let _0 = v_Xls_clause_2_Step_1 + 1;
               let _1 = _0 & 4294967295;
-              let _2 = v_Xls_clause_2_QueryStep_1 == _1;
+              let _2 = hls_integer::equal(v_Xls_clause_2_QueryStep_1, _1);
               (_2, hls_failure::NONE)
             } else {
               (bool:0, hls_failure::NONE)
@@ -1269,21 +1270,21 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
               let _11 = if data.reply_resume == 2 {
                 let _0 = v_Xls_clause_3_Step_1 + 1;
                 let _1 = _0 & 4294967295;
-                let _2 = v_Xls_clause_3_QueryStep_1 == _1;
+                let _2 = hls_integer::equal(v_Xls_clause_3_QueryStep_1, _1);
                 let _10 = if _2 {
-                  let _3 = v_Xls_clause_3_Source_1 == 1;
+                  let _3 = hls_integer::equal(v_Xls_clause_3_Source_1, sN[2]:1);
                   let _9 = if _3 {
                     (bool:1, hls_failure::NONE)
                   } else {
-                    let _4 = v_Xls_clause_3_Source_1 == 2;
+                    let _4 = hls_integer::equal(v_Xls_clause_3_Source_1, sN[3]:2);
                     let _8 = if _4 {
                       (bool:1, hls_failure::NONE)
                     } else {
-                      let _5 = v_Xls_clause_3_Source_1 == 4;
+                      let _5 = hls_integer::equal(v_Xls_clause_3_Source_1, sN[4]:4);
                       let _7 = if _5 {
                         (bool:1, hls_failure::NONE)
                       } else {
-                        let _6 = v_Xls_clause_3_Source_1 == 8;
+                        let _6 = hls_integer::equal(v_Xls_clause_3_Source_1, sN[5]:8);
                         (_6, hls_failure::NONE)
                       };
                       (_7.0, _7.1)
@@ -1503,7 +1504,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
           let v_Xls_clause_1_Cell_1 = (Tag::DATA_CELL, data);
           let v_Xls_clause_1_Step_1 = data.step;
           let _1 = if (data.noise_disabled == bool:false && data.cutoff_armed == bool:false) {
-            let _0 = v_Xls_clause_1_FirstQuietStep_1 >= v_Xls_clause_1_Step_1;
+            let _0 = hls_integer::less_equal(v_Xls_clause_1_Step_1, v_Xls_clause_1_FirstQuietStep_1);
             (_0, hls_failure::NONE)
           } else {
             (bool:0, hls_failure::NONE)
@@ -1538,7 +1539,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
           let v_Xls_clause_1_Cell_1 = (Tag::DATA_CELL, data);
           let v_Xls_clause_1_Step_1 = data.step;
           let _1 = if (data.noise_disabled == bool:false && data.cutoff_armed == bool:false) {
-            let _0 = v_Xls_clause_1_FirstQuietStep_1 > v_Xls_clause_1_Step_1;
+            let _0 = hls_integer::less(v_Xls_clause_1_Step_1, v_Xls_clause_1_FirstQuietStep_1);
             (_0, hls_failure::NONE)
           } else {
             (bool:0, hls_failure::NONE)

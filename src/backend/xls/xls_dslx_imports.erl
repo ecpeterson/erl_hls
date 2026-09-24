@@ -18,6 +18,7 @@ from_forms(Forms) ->
 
 %% Walk source and normalized syntax for direct companion dependencies.
 -spec uses(term()) -> [tuple() | bit_syntax].
+uses({xls_integer_compare, _, Op, Left, Right}) -> [{operator, Op} | uses([Left, Right])];
 uses({xls_bit_size, _, _, Value}) -> [bit_syntax | uses(Value)];
 uses({bin, _, Elements}) -> [bit_syntax | uses(Elements)];
 uses({clause, _, Patterns, Guards, Body}) ->

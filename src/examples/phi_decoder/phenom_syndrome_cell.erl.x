@@ -942,21 +942,21 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
           let v_Xls_clause_1_X_1 = message.x;
           let v_Xls_clause_1_Y_1 = message.y;
           let v_Xls_clause_1_Syndrome_1 = (Tag::SYNDROME, data);
-          let _0 = v_Xls_clause_1_Seed_1 > 0;
+          let _0 = hls_integer::less(sN[2]:0, v_Xls_clause_1_Seed_1);
           let _14 = if _0 {
-            let _1 = v_Xls_clause_1_Seed_1 <= 4294967295;
+            let _1 = hls_integer::less_equal(v_Xls_clause_1_Seed_1, sN[33]:4294967295);
             let _13 = if _1 {
-              let _2 = v_Xls_clause_1_Threshold_1 >= 0;
+              let _2 = hls_integer::less_equal(sN[2]:0, v_Xls_clause_1_Threshold_1);
               let _12 = if _2 {
-                let _3 = v_Xls_clause_1_Threshold_1 <= 4294967295;
+                let _3 = hls_integer::less_equal(v_Xls_clause_1_Threshold_1, sN[33]:4294967295);
                 let _11 = if _3 {
-                  let _4 = v_Xls_clause_1_X_1 >= 0;
+                  let _4 = hls_integer::less_equal(sN[2]:0, v_Xls_clause_1_X_1);
                   let _10 = if _4 {
-                    let _5 = v_Xls_clause_1_X_1 <= 65535;
+                    let _5 = hls_integer::less_equal(v_Xls_clause_1_X_1, sN[17]:65535);
                     let _9 = if _5 {
-                      let _6 = v_Xls_clause_1_Y_1 >= 0;
+                      let _6 = hls_integer::less_equal(sN[2]:0, v_Xls_clause_1_Y_1);
                       let _8 = if _6 {
-                        let _7 = v_Xls_clause_1_Y_1 <= 65535;
+                        let _7 = hls_integer::less_equal(v_Xls_clause_1_Y_1, sN[17]:65535);
                         (_7, hls_failure::NONE)
                       } else {
                         (bool:0, hls_failure::NONE)
@@ -1149,19 +1149,19 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
           let v_Xls_clause_1_RandomState_1 = data.random_state;
           let v_Xls_clause_1_Threshold_1 = data.threshold;
           let _12 = if v_Xls_clause_1_Step_1 == data.step {
-            let _0 = v_Xls_clause_1_Source_1 == 1;
+            let _0 = hls_integer::equal(v_Xls_clause_1_Source_1, sN[2]:1);
             let _6 = if _0 {
               (bool:1, hls_failure::NONE)
             } else {
-              let _1 = v_Xls_clause_1_Source_1 == 2;
+              let _1 = hls_integer::equal(v_Xls_clause_1_Source_1, sN[3]:2);
               let _5 = if _1 {
                 (bool:1, hls_failure::NONE)
               } else {
-                let _2 = v_Xls_clause_1_Source_1 == 4;
+                let _2 = hls_integer::equal(v_Xls_clause_1_Source_1, sN[4]:4);
                 let _4 = if _2 {
                   (bool:1, hls_failure::NONE)
                 } else {
-                  let _3 = v_Xls_clause_1_Source_1 == 8;
+                  let _3 = hls_integer::equal(v_Xls_clause_1_Source_1, sN[5]:8);
                   (_3, hls_failure::NONE)
                 };
                 (_4.0, _4.1)
@@ -1170,9 +1170,9 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
             };
             let _11 = if _6.0 {
               let _7 = v_Xls_clause_1_Seen_1 & v_Xls_clause_1_Source_1;
-              let _8 = _7 == 0;
+              let _8 = hls_integer::equal(_7, sN[2]:0);
               let _10 = if _8 {
-                let _9 = v_Xls_clause_1_Flags_1 < 4;
+                let _9 = hls_integer::less(v_Xls_clause_1_Flags_1, sN[4]:4);
                 (_9, hls_failure::NONE)
               } else {
                 (bool:0, hls_failure::NONE)
@@ -1206,12 +1206,12 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
             };
             let _21 = (Tag::SYNDROME, _20);
             let v_Xls_clause_1_Collected_1 = _21;
-            let _22 = v_Xls_clause_1_NewSeen_1 == 15;
+            let _22 = hls_integer::equal(v_Xls_clause_1_NewSeen_1, sN[5]:15);
             let _46 = if _22 {
               let _23 = v_Xls_clause_1_Syndrome_1.1.cutoff_armed;
               let _26 = if _23 {
                 let _24 = v_Xls_clause_1_Syndrome_1.1.cutoff_step;
-                let _25 = v_Xls_clause_1_Step_1 >= _24;
+                let _25 = hls_integer::less_equal(_24, v_Xls_clause_1_Step_1);
                 (_25, hls_failure::NONE)
               } else {
                 (bool:0, hls_failure::NONE)
@@ -1304,7 +1304,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
           let v_Xls_clause_1_Step_1 = data.step;
           let _0 = v_Xls_clause_1_Step_1 + 1;
           let _1 = _0 & 4294967295;
-          let _2 = v_Xls_clause_1_NextStep_1 == _1;
+          let _2 = hls_integer::equal(v_Xls_clause_1_NextStep_1, _1);
           if _2 {
             let _3 = (Phase::ANNOUNCING, v_Xls_clause_1_Syndrome_1, Directive::POSTPONE, bool:0, );
             let _4 = (_3.0, _3.1, _3.2, _3.3, hls_failure::NONE);
@@ -1375,7 +1375,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
           let v_Xls_clause_1_Syndrome_1 = (Tag::SYNDROME, data);
           let v_Xls_clause_1_Step_1 = data.step;
           let _1 = if (data.noise_disabled == bool:false && data.cutoff_armed == bool:false) {
-            let _0 = v_Xls_clause_1_FirstQuietStep_1 >= v_Xls_clause_1_Step_1;
+            let _0 = hls_integer::less_equal(v_Xls_clause_1_Step_1, v_Xls_clause_1_FirstQuietStep_1);
             (_0, hls_failure::NONE)
           } else {
             (bool:0, hls_failure::NONE)
@@ -1410,7 +1410,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
           let v_Xls_clause_1_Syndrome_1 = (Tag::SYNDROME, data);
           let v_Xls_clause_1_Step_1 = data.step;
           let _1 = if (data.noise_disabled == bool:false && data.cutoff_armed == bool:false) {
-            let _0 = v_Xls_clause_1_FirstQuietStep_1 > v_Xls_clause_1_Step_1;
+            let _0 = hls_integer::less(v_Xls_clause_1_Step_1, v_Xls_clause_1_FirstQuietStep_1);
             (_0, hls_failure::NONE)
           } else {
             (bool:0, hls_failure::NONE)

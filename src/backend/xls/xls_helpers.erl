@@ -21,7 +21,7 @@
     {[hls_source:form()], [helper()]}.
 prepare(Forms0, Roots) ->
     Module = xls_parse:find_attribute(Forms0, module),
-    Forms = localize(xls_binary_lower:prepare(Forms0), Module),
+    Forms = xls_comparison:prepare(localize(xls_binary_lower:prepare(Forms0), Module)),
     Definitions = definitions(Forms, undefined, #{}),
     Context = #{definitions => Definitions, roots => Roots, forms => Forms,
         data => xls_parse:state(Forms), tags => xls_parse:find_tags(Forms)},

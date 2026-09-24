@@ -478,6 +478,10 @@ statement_from_statement({op, Line, Op, Left, Right}, State)
         when Op =:= 'bsl'; Op =:= 'bsr' ->
     {[Value, Count], Evaluated} = lower_arguments([Left, Right], State),
     lower_shift(Op, Value, Count, Line, Evaluated);
+%% Integer facts are attached before callback/helper normalization.
+statement_from_statement({xls_integer_compare, _Line, Op, Left, Right}, State) ->
+    {References, Evaluated} = lower_arguments([Left, Right], State),
+    instr(Evaluated, xls_comparison:emit(Op, References));
 statement_from_statement(X, State) when is_tuple(X) andalso op == element(1, X) ->
     [op, Line, Op | Args] = tuple_to_list(X),
     {References, ArgState} = lower_arguments(Args, State),

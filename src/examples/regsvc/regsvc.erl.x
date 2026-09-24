@@ -5,6 +5,7 @@
 import axis;
 import hls_failure;
 import hls_bits;
+import hls_integer;
 import hls_lists;
 
 const NOREPLY = u1:0;  // some standard erlang tokens
@@ -222,7 +223,7 @@ Tag::GET => {
     let request = get_from_bits(frame.payload);
     let v_Xls_clause_1_Register_1 = request.register;
     let v_Xls_clause_1_State_1 = state_record;
-    let _0 = v_Xls_clause_1_Register_1 < 16;
+    let _0 = hls_integer::less(v_Xls_clause_1_Register_1, sN[6]:16);
     if _0 {
       let _1 = v_Xls_clause_1_Register_1 + 1;
       let _2 = v_Xls_clause_1_State_1.1.registers;
@@ -279,12 +280,12 @@ Tag::BULK_GET => {
       let v_Xls_clause_2_Start_1 = request.start;
       let v_Xls_clause_2_Count_1 = request.count;
       let v_Xls_clause_2_State_1 = state_record;
-      let _0 = v_Xls_clause_2_Count_1 > 0;
+      let _0 = hls_integer::less(sN[2]:0, v_Xls_clause_2_Count_1);
       let _5 = if _0 {
-        let _1 = v_Xls_clause_2_Count_1 <= 3;
+        let _1 = hls_integer::less_equal(v_Xls_clause_2_Count_1, sN[3]:3);
         let _4 = if _1 {
           let _2 = 16 - v_Xls_clause_2_Count_1;
-          let _3 = v_Xls_clause_2_Start_1 <= _2;
+          let _3 = hls_integer::less_equal(v_Xls_clause_2_Start_1, _2);
           (_3, hls_failure::NONE)
         } else {
           (bool:0, hls_failure::NONE)
@@ -332,7 +333,7 @@ Tag::SET => {
     let request = set_from_bits(frame.payload);
     let v_Xls_clause_1_Mask_1 = request.mask;
     let v_Xls_clause_1_State_1 = state_record;
-    let _0 = v_Xls_clause_1_Mask_1 == 0;
+    let _0 = hls_integer::equal(v_Xls_clause_1_Mask_1, sN[2]:0);
     if _0 {
       let _1 = (NOREPLY, v_Xls_clause_1_State_1, );
       if (bool:false) {
@@ -346,7 +347,7 @@ Tag::SET => {
       let v_Xls_clause_2_Value_1 = request.value;
       let v_Xls_clause_2_Mask_1 = request.mask;
       let v_Xls_clause_2_State_1 = state_record;
-      let _0 = v_Xls_clause_2_Register_1 < 16;
+      let _0 = hls_integer::less(v_Xls_clause_2_Register_1, sN[6]:16);
       if _0 {
         let _1 = v_Xls_clause_2_Register_1 + 1;
         let _2 = v_Xls_clause_2_State_1.1.registers;
