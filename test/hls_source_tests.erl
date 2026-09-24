@@ -59,6 +59,62 @@ captured_context_survives_working_directory_change_test() ->
         end
     end).
 
+%% Moving a captured build behind a symlink must preserve preprocessing and
+%% terminate without recursively spawning readers in the physical directory.
+-spec relocated_build_context_test() -> ok.
+relocated_build_context_test() ->
+    with_source(fun(Path, Directory) ->
+        {ok, OriginalDirectory} = file:get_cwd(),
+        Relocated = Directory ++ "-relocated",
+        Relative = "src/hls_source_context_fixture.erl",
+        try
+            ok = file:write_file(filename:join([Directory, "headers", "config.hrl"]),
+                "-if(?FILE =:= \"headers/config.hrl\").\n"
+                "-define(WORD_TYPE, u64).\n-else.\n-define(WORD_TYPE, u32).\n-endif.\n"),
+            ok = file:set_cwd(Directory),
+            Options = [{i, "headers"}, {d, 'CAPACITY', 3}, {d, 'INITIAL', 7}],
+            compile_actor(Relative, Options),
+            Expected = hls_actor_interface:from_module(?MODULE_UNDER_TEST),
+            ?assertEqual(64, maps:get(width, hls_actor_interface:state(Expected))),
+            [Context] = proplists:get_value(hls_source_context,
+                ?MODULE_UNDER_TEST:module_info(attributes)),
+            Forms = hls_source:read(Path, Context),
+            Generated = iolist_to_binary(xls_parse:to_xls(Relative,
+                #{source_options => Context})),
+            ok = file:set_cwd(OriginalDirectory),
+            ok = file:rename(Directory, Relocated),
+            ok = file:make_symlink(Relocated, Directory),
+            %% Re-read from both an unrelated directory and the physical build
+            %% directory. Neither read may rewrite the captured metadata.
+            lists:foreach(fun(Cwd) ->
+                ok = file:set_cwd(Cwd),
+                ?assertEqual(Forms, hls_source:read(Path, Context)),
+                ?assertEqual(Forms, hls_source:read(Relative, Context)),
+                ?assertEqual(Expected, hls_actor_interface:from_module(?MODULE_UNDER_TEST)),
+                ?assertEqual(Generated, iolist_to_binary(xls_parse:to_xls(Relative,
+                    #{source_options => Context}))),
+                ?assertEqual({ok, Cwd}, file:get_cwd())
+            end, [OriginalDirectory, Relocated]),
+            ok = file:set_cwd(OriginalDirectory),
+            ok = file:write_file(filename:join([Relocated, "headers", "config.hrl"]),
+                "this is invalid.\n"),
+            ?assertMatch([{"headers/config.hrl", 1, erl_parse, _} | _],
+                errors(fun() -> hls_source:read(Path, Context) end)),
+            ?assertEqual({ok, OriginalDirectory}, file:get_cwd())
+        after
+            ok = file:set_cwd(OriginalDirectory),
+            %% Restore the fixture's directory even if an assertion fails.
+            case file:read_link(Directory) of
+                {ok, _} -> ok = file:delete(Directory);
+                {error, _} -> ok
+            end,
+            case filelib:is_dir(Relocated) of
+                true -> ok = file:rename(Relocated, Directory);
+                false -> ok
+            end
+        end
+    end).
+
 changed_include_resolution_requires_rebuild_test() ->
     with_source(fun(Path, Directory) ->
         Options = options(Directory) ++ [{d, 'CAPACITY', 1}],

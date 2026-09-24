@@ -102,13 +102,20 @@ validate_option({feature, Name, Mode}) when is_atom(Name),
         (Mode =:= enable orelse Mode =:= disable) -> ok;
 validate_option(Option) -> error({invalid_source_option, Option}).
 
--doc "Preprocesses source in its captured build context and checks include origins. May start a temporary peer when directories differ; raises on source errors.".
+-doc "Preprocesses source in its captured build context and checks include origins. Uses at most one temporary peer when directories differ; raises on source errors.".
 -spec read(file:filename(), context()) -> [hls_source:form()].
 read(Filename, #{directory := Directory, source_name := SourceName,
         includes := Includes, macros := Macros, features := FeatureOptions} = Context) ->
+    %% Select the original source spelling before entering a peer: get_cwd/0
+    %% resolves directory symlinks, but ?FILE and include origins must not change.
+    File = case filename:absname(Filename, Directory) =:=
+            filename:absname(SourceName, Directory) of
+        true -> SourceName;
+        false -> Filename
+    end,
     Forms = case file:get_cwd() of
-        {ok, Directory} -> read_here(Filename, SourceName, Includes, Macros, FeatureOptions);
-        {ok, _Elsewhere} -> read_in_directory(Filename, Context)
+        {ok, Directory} -> read_here(File, SourceName, Includes, Macros, FeatureOptions);
+        {ok, _Elsewhere} -> read_in_directory(File, Context)
     end,
     ActualOrigins = origins(Forms),
     case maps:find(origins, Context) of
@@ -140,7 +147,11 @@ read_in_directory(Filename, Context = #{directory := Directory}) ->
         args => ["+S", "1:1", "+A", "1", "-pa" | Paths]}),
     try
         ok = peer:call(Peer, file, set_cwd, [Directory]),
-        peer:call(Peer, ?MODULE, read, [Filename, Context], 60000)
+        %% Re-enter read/2 using the peer's actual directory, so a relocated
+        %% build reached through a symlink cannot recursively create peers.
+        {ok, ActualDirectory} = peer:call(Peer, file, get_cwd, []),
+        peer:call(Peer, ?MODULE, read,
+            [Filename, Context#{directory := ActualDirectory}], 60000)
     after
         peer:stop(Peer)
     end.
@@ -154,14 +165,7 @@ read_in_directory(Filename, Context = #{directory := Directory}) ->
 %% Preprocess in the already selected build directory and report source errors.
 -spec read_here(file:filename(), file:filename(), [file:filename()],
     [atom() | {atom(), term()}], [{feature, atom(), enable | disable}]) -> [form()].
-read_here(Filename, SourceName, Includes, Macros, FeatureOptions) ->
-    %% module_info reports an absolute source path; recover the original
-    %% spelling when it identifies this same file. Keep an explicitly
-    %% supplied different path (for example, a compiler source-name override).
-    File = case filename:absname(Filename) =:= filename:absname(SourceName) of
-        true -> SourceName;
-        false -> Filename
-    end,
+read_here(File, SourceName, Includes, Macros, FeatureOptions) ->
     {Features, ReservedWord} = case erl_features:keyword_fun(
             FeatureOptions, fun erl_scan:f_reserved_word/1) of
         {ok, Enabled} -> Enabled;
