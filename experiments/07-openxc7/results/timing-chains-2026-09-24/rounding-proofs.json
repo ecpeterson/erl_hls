@@ -1,0 +1,670 @@
+{
+  "bulk_bounds": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const a Int)\n(declare-const b Int)\n(declare-const neighbors Int)\n(assert (and (>= a -2147483648) (<= a 2147483647) (>= b -2147483648) (<= b 2147483647)\n             (>= neighbors -8589934592) (<= neighbors 8589934588)))\n(define-fun n () Int (+ a (* 7 b) neighbors))\n(define-fun rounded () Int\n  (ite (< n 0) (- (div (+ (- n) 6) 12)) (div (+ n 6) 12)))\n(assert (or (< rounded -2147483648) (> rounded 2147483647)))\n(check-sat)\n",
+  "rejected_fifth_neighbor": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const a Int)\n(declare-const b Int)\n(declare-const neighbors Int)\n(assert (and (>= a -2147483648) (<= a 2147483647) (>= b -2147483648) (<= b 2147483647)\n             (>= neighbors -10737418240) (<= neighbors 10737418235)))\n(define-fun n () Int (+ a (* 7 b) neighbors))\n(define-fun rounded () Int\n  (ite (< n 0) (- (div (+ (- n) 6) 12)) (div (+ n 6) 12)))\n(assert (or (< rounded -2147483648) (> rounded 2147483647)))\n(check-sat)\n",
+  "scope": "integer identities; not compiled RTL equivalence",
+  "solver": "Z3 version 4.15.4 - 64 bit",
+  "script_sha256": "cd78e71d282f117991ea4dfa73e6fec026c4e7f886bc2e29d0951edbd58c7499",
+  "proofs": [
+    {
+      "width": 1,
+      "divisor": 3,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -1) (<= n 0)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 1) 3))\n                 (div (+ n 1) 3)))\n(define-fun candidate () Int\n  (div (+ (* n 3) 4) 8))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 1,
+      "divisor": 5,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -1) (<= n 0)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 2) 5))\n                 (div (+ n 2) 5)))\n(define-fun candidate () Int\n  (div (+ (* n 4) 8) 16))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 1,
+      "divisor": 7,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -1) (<= n 0)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 3) 7))\n                 (div (+ n 3) 7)))\n(define-fun candidate () Int\n  (div (+ (* n 3) 8) 16))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 1,
+      "divisor": 10,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -1) (<= n 0)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 5) 10))\n                 (div (+ n 5) 10)))\n(define-fun candidate () Int\n  (div (+ (* n 4) 16) 32))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 1,
+      "divisor": 12,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -1) (<= n 0)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 6) 12))\n                 (div (+ n 6) 12)))\n(define-fun candidate () Int\n  (div (+ (* n 3) 16) 32))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 1,
+      "divisor": 13,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -1) (<= n 0)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 6) 13))\n                 (div (+ n 6) 13)))\n(define-fun candidate () Int\n  (div (+ (* n 3) 16) 32))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 1,
+      "divisor": 255,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -1) (<= n 0)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 127) 255))\n                 (div (+ n 127) 255)))\n(define-fun candidate () Int\n  (div (+ (* n 3) 256) 512))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 1,
+      "divisor": 1000,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -1) (<= n 0)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 500) 1000))\n                 (div (+ n 500) 1000)))\n(define-fun candidate () Int\n  (div (+ (* n 3) 1024) 2048))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 1,
+      "divisor": 2147483647,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -1) (<= n 0)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 1073741823) 2147483647))\n                 (div (+ n 1073741823) 2147483647)))\n(define-fun candidate () Int\n  (div (+ (* n 3) 2147483648) 4294967296))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 1,
+      "divisor": 4294967295,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -1) (<= n 0)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 2147483647) 4294967295))\n                 (div (+ n 2147483647) 4294967295)))\n(define-fun candidate () Int\n  (div (+ (* n 3) 4294967296) 8589934592))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 2,
+      "divisor": 3,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -2) (<= n 1)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 1) 3))\n                 (div (+ n 1) 3)))\n(define-fun candidate () Int\n  (div (+ (* n 6) 8) 16))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 2,
+      "divisor": 5,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -2) (<= n 1)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 2) 5))\n                 (div (+ n 2) 5)))\n(define-fun candidate () Int\n  (div (+ (* n 7) 16) 32))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 2,
+      "divisor": 7,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -2) (<= n 1)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 3) 7))\n                 (div (+ n 3) 7)))\n(define-fun candidate () Int\n  (div (+ (* n 5) 16) 32))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 2,
+      "divisor": 10,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -2) (<= n 1)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 5) 10))\n                 (div (+ n 5) 10)))\n(define-fun candidate () Int\n  (div (+ (* n 7) 32) 64))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 2,
+      "divisor": 12,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -2) (<= n 1)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 6) 12))\n                 (div (+ n 6) 12)))\n(define-fun candidate () Int\n  (div (+ (* n 6) 32) 64))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 2,
+      "divisor": 13,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -2) (<= n 1)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 6) 13))\n                 (div (+ n 6) 13)))\n(define-fun candidate () Int\n  (div (+ (* n 5) 32) 64))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 2,
+      "divisor": 255,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -2) (<= n 1)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 127) 255))\n                 (div (+ n 127) 255)))\n(define-fun candidate () Int\n  (div (+ (* n 5) 512) 1024))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 2,
+      "divisor": 1000,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -2) (<= n 1)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 500) 1000))\n                 (div (+ n 500) 1000)))\n(define-fun candidate () Int\n  (div (+ (* n 5) 2048) 4096))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 2,
+      "divisor": 2147483647,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -2) (<= n 1)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 1073741823) 2147483647))\n                 (div (+ n 1073741823) 2147483647)))\n(define-fun candidate () Int\n  (div (+ (* n 5) 4294967296) 8589934592))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 2,
+      "divisor": 4294967295,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -2) (<= n 1)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 2147483647) 4294967295))\n                 (div (+ n 2147483647) 4294967295)))\n(define-fun candidate () Int\n  (div (+ (* n 5) 8589934592) 17179869184))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 8,
+      "divisor": 3,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -128) (<= n 127)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 1) 3))\n                 (div (+ n 1) 3)))\n(define-fun candidate () Int\n  (div (+ (* n 342) 512) 1024))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 8,
+      "divisor": 5,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -128) (<= n 127)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 2) 5))\n                 (div (+ n 2) 5)))\n(define-fun candidate () Int\n  (div (+ (* n 410) 1024) 2048))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 8,
+      "divisor": 7,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -128) (<= n 127)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 3) 7))\n                 (div (+ n 3) 7)))\n(define-fun candidate () Int\n  (div (+ (* n 293) 1024) 2048))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 8,
+      "divisor": 10,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -128) (<= n 127)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 5) 10))\n                 (div (+ n 5) 10)))\n(define-fun candidate () Int\n  (div (+ (* n 410) 2048) 4096))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 8,
+      "divisor": 12,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -128) (<= n 127)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 6) 12))\n                 (div (+ n 6) 12)))\n(define-fun candidate () Int\n  (div (+ (* n 342) 2048) 4096))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 8,
+      "divisor": 13,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -128) (<= n 127)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 6) 13))\n                 (div (+ n 6) 13)))\n(define-fun candidate () Int\n  (div (+ (* n 316) 2048) 4096))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 8,
+      "divisor": 255,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -128) (<= n 127)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 127) 255))\n                 (div (+ n 127) 255)))\n(define-fun candidate () Int\n  (div (+ (* n 258) 32768) 65536))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 8,
+      "divisor": 1000,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -128) (<= n 127)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 500) 1000))\n                 (div (+ n 500) 1000)))\n(define-fun candidate () Int\n  (div (+ (* n 263) 131072) 262144))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 8,
+      "divisor": 2147483647,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -128) (<= n 127)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 1073741823) 2147483647))\n                 (div (+ n 1073741823) 2147483647)))\n(define-fun candidate () Int\n  (div (+ (* n 257) 274877906944) 549755813888))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 8,
+      "divisor": 4294967295,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -128) (<= n 127)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 2147483647) 4294967295))\n                 (div (+ n 2147483647) 4294967295)))\n(define-fun candidate () Int\n  (div (+ (* n 257) 549755813888) 1099511627776))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 16,
+      "divisor": 3,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -32768) (<= n 32767)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 1) 3))\n                 (div (+ n 1) 3)))\n(define-fun candidate () Int\n  (div (+ (* n 87382) 131072) 262144))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 16,
+      "divisor": 5,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -32768) (<= n 32767)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 2) 5))\n                 (div (+ n 2) 5)))\n(define-fun candidate () Int\n  (div (+ (* n 104858) 262144) 524288))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 16,
+      "divisor": 7,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -32768) (<= n 32767)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 3) 7))\n                 (div (+ n 3) 7)))\n(define-fun candidate () Int\n  (div (+ (* n 74899) 262144) 524288))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 16,
+      "divisor": 10,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -32768) (<= n 32767)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 5) 10))\n                 (div (+ n 5) 10)))\n(define-fun candidate () Int\n  (div (+ (* n 104858) 524288) 1048576))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 16,
+      "divisor": 12,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -32768) (<= n 32767)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 6) 12))\n                 (div (+ n 6) 12)))\n(define-fun candidate () Int\n  (div (+ (* n 87382) 524288) 1048576))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 16,
+      "divisor": 13,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -32768) (<= n 32767)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 6) 13))\n                 (div (+ n 6) 13)))\n(define-fun candidate () Int\n  (div (+ (* n 80660) 524288) 1048576))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 16,
+      "divisor": 255,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -32768) (<= n 32767)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 127) 255))\n                 (div (+ n 127) 255)))\n(define-fun candidate () Int\n  (div (+ (* n 65794) 8388608) 16777216))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 16,
+      "divisor": 1000,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -32768) (<= n 32767)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 500) 1000))\n                 (div (+ n 500) 1000)))\n(define-fun candidate () Int\n  (div (+ (* n 67109) 33554432) 67108864))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 16,
+      "divisor": 2147483647,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -32768) (<= n 32767)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 1073741823) 2147483647))\n                 (div (+ n 1073741823) 2147483647)))\n(define-fun candidate () Int\n  (div (+ (* n 65537) 70368744177664) 140737488355328))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 16,
+      "divisor": 4294967295,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -32768) (<= n 32767)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 2147483647) 4294967295))\n                 (div (+ n 2147483647) 4294967295)))\n(define-fun candidate () Int\n  (div (+ (* n 65537) 140737488355328) 281474976710656))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 31,
+      "divisor": 3,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -1073741824) (<= n 1073741823)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 1) 3))\n                 (div (+ n 1) 3)))\n(define-fun candidate () Int\n  (div (+ (* n 2863311531) 4294967296) 8589934592))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 31,
+      "divisor": 5,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -1073741824) (<= n 1073741823)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 2) 5))\n                 (div (+ n 2) 5)))\n(define-fun candidate () Int\n  (div (+ (* n 3435973837) 8589934592) 17179869184))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 31,
+      "divisor": 7,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -1073741824) (<= n 1073741823)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 3) 7))\n                 (div (+ n 3) 7)))\n(define-fun candidate () Int\n  (div (+ (* n 2454267027) 8589934592) 17179869184))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 31,
+      "divisor": 10,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -1073741824) (<= n 1073741823)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 5) 10))\n                 (div (+ n 5) 10)))\n(define-fun candidate () Int\n  (div (+ (* n 3435973837) 17179869184) 34359738368))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 31,
+      "divisor": 12,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -1073741824) (<= n 1073741823)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 6) 12))\n                 (div (+ n 6) 12)))\n(define-fun candidate () Int\n  (div (+ (* n 2863311531) 17179869184) 34359738368))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 31,
+      "divisor": 13,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -1073741824) (<= n 1073741823)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 6) 13))\n                 (div (+ n 6) 13)))\n(define-fun candidate () Int\n  (div (+ (* n 2643056798) 17179869184) 34359738368))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 31,
+      "divisor": 255,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -1073741824) (<= n 1073741823)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 127) 255))\n                 (div (+ n 127) 255)))\n(define-fun candidate () Int\n  (div (+ (* n 2155905153) 274877906944) 549755813888))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 31,
+      "divisor": 1000,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -1073741824) (<= n 1073741823)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 500) 1000))\n                 (div (+ n 500) 1000)))\n(define-fun candidate () Int\n  (div (+ (* n 2199023256) 1099511627776) 2199023255552))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 31,
+      "divisor": 2147483647,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -1073741824) (<= n 1073741823)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 1073741823) 2147483647))\n                 (div (+ n 1073741823) 2147483647)))\n(define-fun candidate () Int\n  (div (+ (* n 2147483650) 2305843009213693952) 4611686018427387904))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 31,
+      "divisor": 4294967295,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -1073741824) (<= n 1073741823)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 2147483647) 4294967295))\n                 (div (+ n 2147483647) 4294967295)))\n(define-fun candidate () Int\n  (div (+ (* n 2147483649) 4611686018427387904) 9223372036854775808))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 32,
+      "divisor": 3,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -2147483648) (<= n 2147483647)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 1) 3))\n                 (div (+ n 1) 3)))\n(define-fun candidate () Int\n  (div (+ (* n 5726623062) 8589934592) 17179869184))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 32,
+      "divisor": 5,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -2147483648) (<= n 2147483647)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 2) 5))\n                 (div (+ n 2) 5)))\n(define-fun candidate () Int\n  (div (+ (* n 6871947674) 17179869184) 34359738368))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 32,
+      "divisor": 7,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -2147483648) (<= n 2147483647)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 3) 7))\n                 (div (+ n 3) 7)))\n(define-fun candidate () Int\n  (div (+ (* n 4908534053) 17179869184) 34359738368))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 32,
+      "divisor": 10,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -2147483648) (<= n 2147483647)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 5) 10))\n                 (div (+ n 5) 10)))\n(define-fun candidate () Int\n  (div (+ (* n 6871947674) 34359738368) 68719476736))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 32,
+      "divisor": 12,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -2147483648) (<= n 2147483647)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 6) 12))\n                 (div (+ n 6) 12)))\n(define-fun candidate () Int\n  (div (+ (* n 5726623062) 34359738368) 68719476736))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 32,
+      "divisor": 13,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -2147483648) (<= n 2147483647)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 6) 13))\n                 (div (+ n 6) 13)))\n(define-fun candidate () Int\n  (div (+ (* n 5286113596) 34359738368) 68719476736))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 32,
+      "divisor": 255,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -2147483648) (<= n 2147483647)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 127) 255))\n                 (div (+ n 127) 255)))\n(define-fun candidate () Int\n  (div (+ (* n 4311810306) 549755813888) 1099511627776))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 32,
+      "divisor": 1000,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -2147483648) (<= n 2147483647)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 500) 1000))\n                 (div (+ n 500) 1000)))\n(define-fun candidate () Int\n  (div (+ (* n 4398046512) 2199023255552) 4398046511104))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 32,
+      "divisor": 2147483647,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -2147483648) (<= n 2147483647)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 1073741823) 2147483647))\n                 (div (+ n 1073741823) 2147483647)))\n(define-fun candidate () Int\n  (div (+ (* n 4294967299) 4611686018427387904) 9223372036854775808))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 32,
+      "divisor": 4294967295,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -2147483648) (<= n 2147483647)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 2147483647) 4294967295))\n                 (div (+ n 2147483647) 4294967295)))\n(define-fun candidate () Int\n  (div (+ (* n 4294967298) 9223372036854775808) 18446744073709551616))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 33,
+      "divisor": 3,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -4294967296) (<= n 4294967295)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 1) 3))\n                 (div (+ n 1) 3)))\n(define-fun candidate () Int\n  (div (+ (* n 11453246123) 17179869184) 34359738368))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 33,
+      "divisor": 5,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -4294967296) (<= n 4294967295)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 2) 5))\n                 (div (+ n 2) 5)))\n(define-fun candidate () Int\n  (div (+ (* n 13743895348) 34359738368) 68719476736))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 33,
+      "divisor": 7,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -4294967296) (<= n 4294967295)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 3) 7))\n                 (div (+ n 3) 7)))\n(define-fun candidate () Int\n  (div (+ (* n 9817068106) 34359738368) 68719476736))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 33,
+      "divisor": 10,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -4294967296) (<= n 4294967295)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 5) 10))\n                 (div (+ n 5) 10)))\n(define-fun candidate () Int\n  (div (+ (* n 13743895348) 68719476736) 137438953472))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 33,
+      "divisor": 12,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -4294967296) (<= n 4294967295)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 6) 12))\n                 (div (+ n 6) 12)))\n(define-fun candidate () Int\n  (div (+ (* n 11453246123) 68719476736) 137438953472))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 33,
+      "divisor": 13,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -4294967296) (<= n 4294967295)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 6) 13))\n                 (div (+ n 6) 13)))\n(define-fun candidate () Int\n  (div (+ (* n 10572227191) 68719476736) 137438953472))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 33,
+      "divisor": 255,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -4294967296) (<= n 4294967295)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 127) 255))\n                 (div (+ n 127) 255)))\n(define-fun candidate () Int\n  (div (+ (* n 8623620611) 1099511627776) 2199023255552))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 33,
+      "divisor": 1000,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -4294967296) (<= n 4294967295)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 500) 1000))\n                 (div (+ n 500) 1000)))\n(define-fun candidate () Int\n  (div (+ (* n 8796093023) 4398046511104) 8796093022208))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 33,
+      "divisor": 2147483647,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -4294967296) (<= n 4294967295)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 1073741823) 2147483647))\n                 (div (+ n 1073741823) 2147483647)))\n(define-fun candidate () Int\n  (div (+ (* n 8589934597) 9223372036854775808) 18446744073709551616))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 33,
+      "divisor": 4294967295,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -4294967296) (<= n 4294967295)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 2147483647) 4294967295))\n                 (div (+ n 2147483647) 4294967295)))\n(define-fun candidate () Int\n  (div (+ (* n 8589934595) 18446744073709551616) 36893488147419103232))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 36,
+      "divisor": 3,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -34359738368) (<= n 34359738367)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 1) 3))\n                 (div (+ n 1) 3)))\n(define-fun candidate () Int\n  (div (+ (* n 91625968982) 137438953472) 274877906944))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 36,
+      "divisor": 5,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -34359738368) (<= n 34359738367)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 2) 5))\n                 (div (+ n 2) 5)))\n(define-fun candidate () Int\n  (div (+ (* n 109951162778) 274877906944) 549755813888))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 36,
+      "divisor": 7,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -34359738368) (<= n 34359738367)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 3) 7))\n                 (div (+ n 3) 7)))\n(define-fun candidate () Int\n  (div (+ (* n 78536544842) 274877906944) 549755813888))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 36,
+      "divisor": 10,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -34359738368) (<= n 34359738367)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 5) 10))\n                 (div (+ n 5) 10)))\n(define-fun candidate () Int\n  (div (+ (* n 109951162778) 549755813888) 1099511627776))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 36,
+      "divisor": 12,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -34359738368) (<= n 34359738367)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 6) 12))\n                 (div (+ n 6) 12)))\n(define-fun candidate () Int\n  (div (+ (* n 91625968982) 549755813888) 1099511627776))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 36,
+      "divisor": 13,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -34359738368) (<= n 34359738367)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 6) 13))\n                 (div (+ n 6) 13)))\n(define-fun candidate () Int\n  (div (+ (* n 84577817522) 549755813888) 1099511627776))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 36,
+      "divisor": 255,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -34359738368) (<= n 34359738367)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 127) 255))\n                 (div (+ n 127) 255)))\n(define-fun candidate () Int\n  (div (+ (* n 68988964881) 8796093022208) 17592186044416))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 36,
+      "divisor": 1000,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -34359738368) (<= n 34359738367)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 500) 1000))\n                 (div (+ n 500) 1000)))\n(define-fun candidate () Int\n  (div (+ (* n 70368744178) 35184372088832) 70368744177664))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 36,
+      "divisor": 2147483647,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -34359738368) (<= n 34359738367)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 1073741823) 2147483647))\n                 (div (+ n 1073741823) 2147483647)))\n(define-fun candidate () Int\n  (div (+ (* n 68719476769) 73786976294838206464) 147573952589676412928))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 36,
+      "divisor": 4294967295,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -34359738368) (<= n 34359738367)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 2147483647) 4294967295))\n                 (div (+ n 2147483647) 4294967295)))\n(define-fun candidate () Int\n  (div (+ (* n 68719476753) 147573952589676412928) 295147905179352825856))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 37,
+      "divisor": 3,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -68719476736) (<= n 68719476735)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 1) 3))\n                 (div (+ n 1) 3)))\n(define-fun candidate () Int\n  (div (+ (* n 183251937963) 274877906944) 549755813888))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 37,
+      "divisor": 5,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -68719476736) (<= n 68719476735)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 2) 5))\n                 (div (+ n 2) 5)))\n(define-fun candidate () Int\n  (div (+ (* n 219902325556) 549755813888) 1099511627776))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 37,
+      "divisor": 7,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -68719476736) (<= n 68719476735)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 3) 7))\n                 (div (+ n 3) 7)))\n(define-fun candidate () Int\n  (div (+ (* n 157073089683) 549755813888) 1099511627776))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 37,
+      "divisor": 10,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -68719476736) (<= n 68719476735)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 5) 10))\n                 (div (+ n 5) 10)))\n(define-fun candidate () Int\n  (div (+ (* n 219902325556) 1099511627776) 2199023255552))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 37,
+      "divisor": 12,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -68719476736) (<= n 68719476735)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 6) 12))\n                 (div (+ n 6) 12)))\n(define-fun candidate () Int\n  (div (+ (* n 183251937963) 1099511627776) 2199023255552))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 37,
+      "divisor": 13,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -68719476736) (<= n 68719476735)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 6) 13))\n                 (div (+ n 6) 13)))\n(define-fun candidate () Int\n  (div (+ (* n 169155635043) 1099511627776) 2199023255552))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 37,
+      "divisor": 255,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -68719476736) (<= n 68719476735)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 127) 255))\n                 (div (+ n 127) 255)))\n(define-fun candidate () Int\n  (div (+ (* n 137977929761) 17592186044416) 35184372088832))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 37,
+      "divisor": 1000,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -68719476736) (<= n 68719476735)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 500) 1000))\n                 (div (+ n 500) 1000)))\n(define-fun candidate () Int\n  (div (+ (* n 140737488356) 70368744177664) 140737488355328))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 37,
+      "divisor": 2147483647,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -68719476736) (<= n 68719476735)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 1073741823) 2147483647))\n                 (div (+ n 1073741823) 2147483647)))\n(define-fun candidate () Int\n  (div (+ (* n 137438953537) 147573952589676412928) 295147905179352825856))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 37,
+      "divisor": 4294967295,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -68719476736) (<= n 68719476735)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 2147483647) 4294967295))\n                 (div (+ n 2147483647) 4294967295)))\n(define-fun candidate () Int\n  (div (+ (* n 137438953505) 295147905179352825856) 590295810358705651712))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 64,
+      "divisor": 3,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -9223372036854775808) (<= n 9223372036854775807)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 1) 3))\n                 (div (+ n 1) 3)))\n(define-fun candidate () Int\n  (div (+ (* n 24595658764946068822) 36893488147419103232) 73786976294838206464))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 64,
+      "divisor": 5,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -9223372036854775808) (<= n 9223372036854775807)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 2) 5))\n                 (div (+ n 2) 5)))\n(define-fun candidate () Int\n  (div (+ (* n 29514790517935282586) 73786976294838206464) 147573952589676412928))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 64,
+      "divisor": 7,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -9223372036854775808) (<= n 9223372036854775807)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 3) 7))\n                 (div (+ n 3) 7)))\n(define-fun candidate () Int\n  (div (+ (* n 21081993227096630419) 73786976294838206464) 147573952589676412928))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 64,
+      "divisor": 10,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -9223372036854775808) (<= n 9223372036854775807)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 5) 10))\n                 (div (+ n 5) 10)))\n(define-fun candidate () Int\n  (div (+ (* n 29514790517935282586) 147573952589676412928) 295147905179352825856))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 64,
+      "divisor": 12,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -9223372036854775808) (<= n 9223372036854775807)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 6) 12))\n                 (div (+ n 6) 12)))\n(define-fun candidate () Int\n  (div (+ (* n 24595658764946068822) 147573952589676412928) 295147905179352825856))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 64,
+      "divisor": 13,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -9223372036854775808) (<= n 9223372036854775807)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 6) 13))\n                 (div (+ n 6) 13)))\n(define-fun candidate () Int\n  (div (+ (* n 22703685013796371220) 147573952589676412928) 295147905179352825856))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 64,
+      "divisor": 255,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -9223372036854775808) (<= n 9223372036854775807)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 127) 255))\n                 (div (+ n 127) 255)))\n(define-fun candidate () Int\n  (div (+ (* n 18519084246547628290) 2361183241434822606848) 4722366482869645213696))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 64,
+      "divisor": 1000,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -9223372036854775808) (<= n 9223372036854775807)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 500) 1000))\n                 (div (+ n 500) 1000)))\n(define-fun candidate () Int\n  (div (+ (* n 18889465931478580855) 9444732965739290427392) 18889465931478580854784))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 64,
+      "divisor": 2147483647,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -9223372036854775808) (<= n 9223372036854775807)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 1073741823) 2147483647))\n                 (div (+ n 1073741823) 2147483647)))\n(define-fun candidate () Int\n  (div (+ (* n 18446744082299486213) 19807040628566084398385987584) 39614081257132168796771975168))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 64,
+      "divisor": 4294967295,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -9223372036854775808) (<= n 9223372036854775807)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 2147483647) 4294967295))\n                 (div (+ n 2147483647) 4294967295)))\n(define-fun candidate () Int\n  (div (+ (* n 18446744078004518914) 39614081257132168796771975168) 79228162514264337593543950336))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 129,
+      "divisor": 3,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -340282366920938463463374607431768211456) (<= n 340282366920938463463374607431768211455)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 1) 3))\n                 (div (+ n 1) 3)))\n(define-fun candidate () Int\n  (div (+ (* n 907419645122502569235665619818048563883) 1361129467683753853853498429727072845824) 2722258935367507707706996859454145691648))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 129,
+      "divisor": 5,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -340282366920938463463374607431768211456) (<= n 340282366920938463463374607431768211455)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 2) 5))\n                 (div (+ n 2) 5)))\n(define-fun candidate () Int\n  (div (+ (* n 1088903574147003083082798743781658276660) 2722258935367507707706996859454145691648) 5444517870735015415413993718908291383296))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 129,
+      "divisor": 7,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -340282366920938463463374607431768211456) (<= n 340282366920938463463374607431768211455)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 3) 7))\n                 (div (+ n 3) 7)))\n(define-fun candidate () Int\n  (div (+ (* n 777788267247859345059141959844041626186) 2722258935367507707706996859454145691648) 5444517870735015415413993718908291383296))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 129,
+      "divisor": 10,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -340282366920938463463374607431768211456) (<= n 340282366920938463463374607431768211455)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 5) 10))\n                 (div (+ n 5) 10)))\n(define-fun candidate () Int\n  (div (+ (* n 1088903574147003083082798743781658276660) 5444517870735015415413993718908291383296) 10889035741470030830827987437816582766592))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 129,
+      "divisor": 12,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -340282366920938463463374607431768211456) (<= n 340282366920938463463374607431768211455)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 6) 12))\n                 (div (+ n 6) 12)))\n(define-fun candidate () Int\n  (div (+ (* n 907419645122502569235665619818048563883) 5444517870735015415413993718908291383296) 10889035741470030830827987437816582766592))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 129,
+      "divisor": 13,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -340282366920938463463374607431768211456) (<= n 340282366920938463463374607431768211455)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 6) 13))\n                 (div (+ n 6) 13)))\n(define-fun candidate () Int\n  (div (+ (* n 837618133959233140832922110601275597431) 5444517870735015415413993718908291383296) 10889035741470030830827987437816582766592))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 129,
+      "divisor": 255,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -340282366920938463463374607431768211456) (<= n 340282366920938463463374607431768211455)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 127) 255))\n                 (div (+ n 127) 255)))\n(define-fun candidate () Int\n  (div (+ (* n 683233615151060758012736466686530683395) 87112285931760246646623899502532662132736) 174224571863520493293247799005065324265472))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 129,
+      "divisor": 1000,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -340282366920938463463374607431768211456) (<= n 340282366920938463463374607431768211455)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 500) 1000))\n                 (div (+ n 500) 1000)))\n(define-fun candidate () Int\n  (div (+ (* n 696898287454081973172991196020261297062) 348449143727040986586495598010130648530944) 696898287454081973172991196020261297061888))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 129,
+      "divisor": 2147483647,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -340282366920938463463374607431768211456) (<= n 340282366920938463463374607431768211455)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 1073741823) 2147483647))\n                 (div (+ n 1073741823) 2147483647)))\n(define-fun candidate () Int\n  (div (+ (* n 680564734158789577131380517896108113953) 730750818665451459101842416358141509827966271488) 1461501637330902918203684832716283019655932542976))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    },
+    {
+      "width": 129,
+      "divisor": 4294967295,
+      "verdict": "unsat",
+      "smtlib": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -340282366920938463463374607431768211456) (<= n 340282366920938463463374607431768211455)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 2147483647) 4294967295))\n                 (div (+ n 2147483647) 4294967295)))\n(define-fun candidate () Int\n  (div (+ (* n 680564734000333251992171378206633361411) 1461501637330902918203684832716283019655932542976) 2923003274661805836407369665432566039311865085952))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+    }
+  ],
+  "rejected_mutation": "(set-logic QF_LIA)\n(set-option :timeout 5000)\n(declare-const n Int)\n(assert (and (>= n -68719476736) (<= n 68719476735)))\n(define-fun reference () Int\n  (ite (< n 0) (- (div (+ (- n) 6) 12))\n                 (div (+ n 6) 12)))\n(define-fun candidate () Int\n  (div (+ (* n 183251937962) 1099511627776) 2199023255552))\n(assert (not (= reference candidate)))\n(check-sat)\n"
+}

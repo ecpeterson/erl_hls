@@ -1,0 +1,212 @@
+{
+  "board-route-baseline": {
+    "cells": {
+      "CARRY4": 906,
+      "DSP48E1": 56,
+      "FDRE": 29479,
+      "INV": 587,
+      "LUT2": 5570,
+      "LUT3": 5393,
+      "LUT4": 6740,
+      "LUT5": 7744,
+      "LUT6": 8257,
+      "MUXF7": 4,
+      "MUXF8": 2,
+      "RAMB18E1": 44,
+      "RAMB36E1": 8
+    },
+    "netlist_sha256": "f2053f98daee43b8530cc84d692d0326bd1d7e15aaf4b655d164507ede822ffd",
+    "mapping_sha256": "9ee046819c2083a6d3fc1895fa4ec0fd5612086dc88098e6e3ca082c5ecb1f9c",
+    "fmax": {
+      "decoder.aclk": {
+        "achieved": 16.52,
+        "constraint": 100.0
+      }
+    },
+    "utilization": {
+      "BUFGCTRL": {
+        "available": 32,
+        "used": 1
+      },
+      "CARRY4": {
+        "available": 19650,
+        "used": 906
+      },
+      "DSP48E1_DSP48E1": {
+        "available": 400,
+        "used": 56
+      },
+      "IOB33_INBUF_EN": {
+        "available": 100,
+        "used": 1
+      },
+      "IOB33_OUTBUF": {
+        "available": 100,
+        "used": 1
+      },
+      "PAD": {
+        "available": 490,
+        "used": 2
+      },
+      "PSEUDO_GND": {
+        "available": 42636,
+        "used": 1
+      },
+      "PSEUDO_VCC": {
+        "available": 42636,
+        "used": 1
+      },
+      "RAMB18E1_RAMB18E1": {
+        "available": 530,
+        "used": 44
+      },
+      "RAMB36E1_RAMB36E1": {
+        "available": 265,
+        "used": 8
+      },
+      "SELMUX2_1": {
+        "available": 59350,
+        "used": 6
+      },
+      "SLICE_FFX": {
+        "available": 157200,
+        "used": 29805
+      },
+      "SLICE_LUTX": {
+        "available": 157200,
+        "used": 39093
+      }
+    },
+    "timing_json_sha256": "d09684892d926bd3c8568f68a8e1c3b541e0f01f6ee4acf445e9b22b9542eaef",
+    "coverage_sha256": "5e711215f416f5c21f1237f5e572c0e3b5334c0cb3d32447d1b025fca41e7803",
+    "route_log_sha256": "95f41f4de5a638dd9f7e4027a3af43e1a92149b349f0f096250fd4ec76a5a5dd",
+    "paths": {
+      "decoder.aclk": {
+        "logic_ns": 4.2,
+        "routing_ns": 56.3
+      }
+    }
+  },
+  "board-route-reciprocal": {
+    "cells": {
+      "CARRY4": 754,
+      "DSP48E1": 56,
+      "FDRE": 29451,
+      "INV": 31,
+      "LUT2": 5303,
+      "LUT3": 4715,
+      "LUT4": 7675,
+      "LUT5": 7117,
+      "LUT6": 8446,
+      "MUXF7": 5,
+      "MUXF8": 1,
+      "RAMB18E1": 44,
+      "RAMB36E1": 8
+    },
+    "netlist_sha256": "bf2aa120768df8e6bd08dfd4d510e406e8b69bf9d451590fbf716b199f4a5fe9",
+    "mapping_sha256": "7d4f5bfb1c88e11f5c52fd0d31bfb983cad336817cb05f94296c2516f6831594",
+    "incomplete": {
+      "status": "stopped_without_complete_route",
+      "reason": "90-minute wall-clock budget; remaining routing conflicts; no frequency result",
+      "last_router_iteration": {
+        "iteration": 21,
+        "wires": 1454981,
+        "overused_wires": 921,
+        "overuse": 922
+      },
+      "observed_console_elapsed_seconds": 5419.351286888123,
+      "route_log_sha256": "5fcfd51b8658b64bb29a5dd8ddfd7cdb012187bb3c67729f9d3fc15dd95d24b9"
+    }
+  },
+  "board-map-final": {
+    "cells": {
+      "CARRY4": 750,
+      "DSP48E1": 56,
+      "FDRE": 29451,
+      "INV": 31,
+      "LUT2": 5234,
+      "LUT3": 4974,
+      "LUT4": 6597,
+      "LUT5": 7880,
+      "LUT6": 8420,
+      "MUXF7": 2,
+      "MUXF8": 1,
+      "RAMB18E1": 44,
+      "RAMB36E1": 8
+    },
+    "netlist_sha256": "f66c4bdfb1e12e747dbd3eca3c03ca0af5933ca3f7be8b6b98156dc0966b8d47",
+    "mapping_sha256": "bce7b369d0f7b6218a994b25bc0c6c508d4fd640cb7ea957db165e3c133f4498"
+  },
+  "board-route-replicated": {
+    "netlist_sha256": "0a386d55191e46c7e11fa1438e437df9890f19eb3449eff0b5786d900dee9d67",
+    "replication_sha256": "21ac373e77a5ecfada2ee1322594cd7fa6adc84b96ba000c1513221e1e52fbed",
+    "added_luts": 690,
+    "incomplete": {
+      "status": "stopped_without_complete_route",
+      "reason": "Stopped after about 87 minutes with routing conflicts (90-minute budget); no frequency result",
+      "last_router_iteration": {
+        "iteration": 11,
+        "wires": 1613119,
+        "overused_wires": 2268,
+        "overuse": 2268
+      },
+      "route_log_sha256": "a1fe786159307be0254c270748253f3e836fb9a8f6ca3b6faf805ab641e7f197",
+      "console_creation_to_stop_record_seconds": 5242.114226818085
+    }
+  },
+  "board-route-target25": {
+    "cells": {
+      "CARRY4": 754,
+      "DSP48E1": 56,
+      "FDRE": 29451,
+      "INV": 31,
+      "LUT2": 5303,
+      "LUT3": 4715,
+      "LUT4": 7675,
+      "LUT5": 7117,
+      "LUT6": 8446,
+      "MUXF7": 5,
+      "MUXF8": 1,
+      "RAMB18E1": 44,
+      "RAMB36E1": 8
+    },
+    "inputs": {
+      "target_mhz": 25,
+      "seed": 1,
+      "method": "placement checkpoint, then no-pack/no-place routing; RNG restarts at replay",
+      "netlist_sha256": "bf2aa120768df8e6bd08dfd4d510e406e8b69bf9d451590fbf716b199f4a5fe9",
+      "xdc_sha256": "e944bdfb3de376c65329db747f440897d8cd287855ba9e77595e48c461a8f33a",
+      "native_tool_sha256": "c045c3925ed86ed9defdfdaf2d46cfc987c0062e56cb5b43568a4afa9f0ccc71",
+      "place_flags": [
+        "--no-route",
+        "--write",
+        "placed.json"
+      ],
+      "route_flags": [
+        "--no-pack",
+        "--no-place",
+        "--router",
+        "router2"
+      ],
+      "replay_smoke_fmax": {
+        "arithmetic.clk": {
+          "achieved": 58.98,
+          "constraint": 100.0
+        }
+      }
+    },
+    "netlist_sha256": "bf2aa120768df8e6bd08dfd4d510e406e8b69bf9d451590fbf716b199f4a5fe9",
+    "incomplete": {
+      "status": "stopped_without_complete_route",
+      "reason": "60-minute total placement/routing budget; remaining routing conflicts; no frequency result",
+      "last_router_iteration": {
+        "iteration": 15,
+        "wires": 1451934,
+        "overused_wires": 1208,
+        "overuse": 1208
+      },
+      "route_log_sha256": "af39c2b20f587390804e39540c347162a3c3ceb152498b17762dd0fef74ea0b4",
+      "placement_checkpoint_sha256": "68d1b5b24834a3d31b50a0e381d541f2e6aa7ecf65e0012b4161381435415552"
+    }
+  }
+}

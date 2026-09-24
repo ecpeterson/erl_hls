@@ -1,0 +1,25 @@
+{
+  "baseline_ir_sha256": "952822ae1d044510cee3daadbeb15fcd8874d84b456119d1e1dfab3e597990f3",
+  "changed_channels": [
+    "  chan _phi_x_reduction_batch__0((bits[32], ((bits[8], bits[8], bits[8], bits[8]), bits[96])[4]), id=40, kind=streaming, ops=send_receive, flow_control=ready_valid, strictness=proven_mutually_exclusive, fifo_depth=1, bypass=true, register_push_outputs=true, register_pop_outputs=false)",
+    "  chan _phi_z_reduction_batch__0((bits[32], ((bits[8], bits[8], bits[8], bits[8]), bits[96])[4]), id=41, kind=streaming, ops=send_receive, flow_control=ready_valid, strictness=proven_mutually_exclusive, fifo_depth=1, bypass=true, register_push_outputs=true, register_pop_outputs=false)"
+  ],
+  "candidate_ir_sha256": "9a70f92bb1d15f591149c08d75e2394209045aeb15a18e810336be4e39970ff6",
+  "codegen_command": [
+    "$XLS/codegen_main",
+    "--pipeline_stages=2",
+    "--delay_model=unit",
+    "--flop_inputs=false",
+    "--flop_outputs=true",
+    "--use_system_verilog=false",
+    "--reset=reset",
+    "--fifo_module=",
+    "--worst_case_throughput=1",
+    "--ram_configurations=scheduler_0_state:1R1W:_scheduler_0_ram_read_req_out:_scheduler_0_ram_read_resp_in:_scheduler_0_ram_write_req_out:_scheduler_0_ram_write_resp_in,scheduler_0_mailbox:1R1W:_scheduler_0_mailbox_read_req_out:_scheduler_0_mailbox_read_resp_in:_scheduler_0_mailbox_write_req_out:_scheduler_0_mailbox_write_resp_in,scheduler_1_state:1R1W:_scheduler_1_ram_read_req_out:_scheduler_1_ram_read_resp_in:_scheduler_1_ram_write_req_out:_scheduler_1_ram_write_resp_in,scheduler_1_mailbox:1R1W:_scheduler_1_mailbox_read_req_out:_scheduler_1_mailbox_read_resp_in:_scheduler_1_mailbox_write_req_out:_scheduler_1_mailbox_write_resp_in,scheduler_2_state:1R1W:_scheduler_2_ram_read_req_out:_scheduler_2_ram_read_resp_in:_scheduler_2_ram_write_req_out:_scheduler_2_ram_write_resp_in,scheduler_2_mailbox:1R1W:_scheduler_2_mailbox_read_req_out:_scheduler_2_mailbox_read_resp_in:_scheduler_2_mailbox_write_req_out:_scheduler_2_mailbox_write_resp_in,scheduler_3_state:1R1W:_scheduler_3_ram_read_req_out:_scheduler_3_ram_read_resp_in:_scheduler_3_ram_write_req_out:_scheduler_3_ram_write_resp_in,scheduler_3_mailbox:1R1W:_scheduler_3_mailbox_read_req_out:_scheduler_3_mailbox_read_resp_in:_scheduler_3_mailbox_write_req_out:_scheduler_3_mailbox_write_resp_in",
+    "phi_decoder_profile.opt.ir"
+  ],
+  "transformation": {
+    "fifo_depth": 2,
+    "bypass": false
+  }
+}

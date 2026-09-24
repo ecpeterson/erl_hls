@@ -1,0 +1,225 @@
+{
+  "builds": {
+    "baseline": {
+      "artifacts": {
+        "phi_decoder_profile.ir": "b219bd6d8d62a046ab7cc45215307eb40b091e558c356cc094ace497ab531100",
+        "phi_decoder_profile.opt.ir": "9b05fbf8195100608370681a1a3a90be07478fc897e3f10e788c6eb08c14799e",
+        "phi_decoder_profile.v": "753c864dc9324bed53565cbae6003e03edf44d0566198e12bc5d999ccfe0c25b"
+      },
+      "assets": {
+        "hls_1r1w_ram.v": "13e12a7561df37e150c3e727c43f9e5234b74bb9741fc969185c12948b2583e8",
+        "phi_decoder_profile.json": "246a80bb257f6e23c4a654b10259fb4075219736fdb9ae2fe769a1574c87d9f0",
+        "phi_decoder_profile_top.v": "a2b91b65bae63ce942fda5c6e1f1d97bd26be9eef5486876e5e03745b647da5e",
+        "phi_scheduler_rams.sh": "93f48d245aec55f733300dda4f5b558f9bff20a30e6d98a76f38c87f1fb47602"
+      },
+      "options": {
+        "codegen": [
+          "--pipeline_stages=2",
+          "--delay_model=unit",
+          "--flop_inputs=false",
+          "--flop_outputs=true",
+          "--use_system_verilog=false",
+          "--reset=reset",
+          "--fifo_module=",
+          "--worst_case_throughput=1",
+          "--ram_configurations=scheduler_0_state:1R1W:_scheduler_0_ram_read_req_out:_scheduler_0_ram_read_resp_in:_scheduler_0_ram_write_req_out:_scheduler_0_ram_write_resp_in,scheduler_0_mailbox:1R1W:_scheduler_0_mailbox_read_req_out:_scheduler_0_mailbox_read_resp_in:_scheduler_0_mailbox_write_req_out:_scheduler_0_mailbox_write_resp_in,scheduler_1_state:1R1W:_scheduler_1_ram_read_req_out:_scheduler_1_ram_read_resp_in:_scheduler_1_ram_write_req_out:_scheduler_1_ram_write_resp_in,scheduler_1_mailbox:1R1W:_scheduler_1_mailbox_read_req_out:_scheduler_1_mailbox_read_resp_in:_scheduler_1_mailbox_write_req_out:_scheduler_1_mailbox_write_resp_in,scheduler_2_state:1R1W:_scheduler_2_ram_read_req_out:_scheduler_2_ram_read_resp_in:_scheduler_2_ram_write_req_out:_scheduler_2_ram_write_resp_in,scheduler_2_mailbox:1R1W:_scheduler_2_mailbox_read_req_out:_scheduler_2_mailbox_read_resp_in:_scheduler_2_mailbox_write_req_out:_scheduler_2_mailbox_write_resp_in,scheduler_3_state:1R1W:_scheduler_3_ram_read_req_out:_scheduler_3_ram_read_resp_in:_scheduler_3_ram_write_req_out:_scheduler_3_ram_write_resp_in,scheduler_3_mailbox:1R1W:_scheduler_3_mailbox_read_req_out:_scheduler_3_mailbox_read_resp_in:_scheduler_3_mailbox_write_req_out:_scheduler_3_mailbox_write_resp_in,scheduler_4_state:1R1W:_scheduler_4_ram_read_req_out:_scheduler_4_ram_read_resp_in:_scheduler_4_ram_write_req_out:_scheduler_4_ram_write_resp_in,scheduler_4_mailbox:1R1W:_scheduler_4_mailbox_read_req_out:_scheduler_4_mailbox_read_resp_in:_scheduler_4_mailbox_write_req_out:_scheduler_4_mailbox_write_resp_in,scheduler_5_state:1R1W:_scheduler_5_ram_read_req_out:_scheduler_5_ram_read_resp_in:_scheduler_5_ram_write_req_out:_scheduler_5_ram_write_resp_in,scheduler_5_mailbox:1R1W:_scheduler_5_mailbox_read_req_out:_scheduler_5_mailbox_read_resp_in:_scheduler_5_mailbox_write_req_out:_scheduler_5_mailbox_write_resp_in,scheduler_6_state:1R1W:_scheduler_6_ram_read_req_out:_scheduler_6_ram_read_resp_in:_scheduler_6_ram_write_req_out:_scheduler_6_ram_write_resp_in,scheduler_6_mailbox:1R1W:_scheduler_6_mailbox_read_req_out:_scheduler_6_mailbox_read_resp_in:_scheduler_6_mailbox_write_req_out:_scheduler_6_mailbox_write_resp_in,scheduler_7_state:1R1W:_scheduler_7_ram_read_req_out:_scheduler_7_ram_read_resp_in:_scheduler_7_ram_write_req_out:_scheduler_7_ram_write_resp_in,scheduler_7_mailbox:1R1W:_scheduler_7_mailbox_read_req_out:_scheduler_7_mailbox_read_resp_in:_scheduler_7_mailbox_write_req_out:_scheduler_7_mailbox_write_resp_in"
+        ],
+        "top": "Top"
+      },
+      "profile": {
+        "delay_model": "unit",
+        "flop_inputs": false,
+        "flop_outputs": true,
+        "height": 3,
+        "initiation_interval": 1,
+        "phi_actor_count": 18,
+        "pipeline_stages": 2,
+        "planes": [
+          "x",
+          "z"
+        ],
+        "scheduler_count": 8,
+        "shards_per_plane": 3,
+        "source_actor_count": 18,
+        "source_scheduler_count": 2,
+        "width": 3
+      },
+      "ram_configuration": "93f48d245aec55f733300dda4f5b558f9bff20a30e6d98a76f38c87f1fb47602",
+      "recipe": 1,
+      "rtl": {
+        "hls_1r1w_ram.v": "13e12a7561df37e150c3e727c43f9e5234b74bb9741fc969185c12948b2583e8",
+        "phi_decoder_profile.v": "753c864dc9324bed53565cbae6003e03edf44d0566198e12bc5d999ccfe0c25b",
+        "phi_decoder_profile_top.v": "a2b91b65bae63ce942fda5c6e1f1d97bd26be9eef5486876e5e03745b647da5e"
+      },
+      "schema": 1,
+      "sources": {
+        "arbitration.x": "5bfd061e68339cbf9788a40d9881b38bda2691a7f095500f806aba5ce8b2a79f",
+        "axis.x": "882c944ca4faa43c164225f230b3530e3b318f496ad6fc57c42619cb7e3a4d93",
+        "bram.x": "fea8277109e4847e45bb388eaae6236abf35a3f75f3558de1ed8b53f08fcd6bb",
+        "direct_mailbox_observation.x": "74b51d253146d257ddd354dea39da7c5adf90acee770ab086c9c9c24ae041b91",
+        "effect_window.x": "a43b66b52a73dd812cda83f1ef216aaa3c48550672c1a6d00663b5cdaab81586",
+        "frame_queue.x": "8e2d1d3daf12ba3cb739d8e577603409f73f490a12194367073a4b2ee0256359",
+        "frame_transport.x": "941fe8dd53cc9638c6cec48c99e06f9a4a7fc5471c3dc1877763415ac8226932",
+        "hls_bits.x": "ffcf2588f8d7ad58857f353b4e1480f286c2e718041868da6af99d7dbacf995b",
+        "hls_fabric_router.x": "03607387d441240b92841b7ecbd41803a7234b9d89e1beaddda414bb9b006f3b",
+        "hls_failure.x": "f69235cb3d7bc49b09c65961f13e87003ebde5eb41d55b9bccf1427d620909c8",
+        "hls_fixed.x": "a3ff6655b5cca3984d736b57712e57e5976ab6196c709742aa26850537c88902",
+        "hls_float.x": "1882c965143004e7dd70cac139cf1ee41d17199f0877e374a280cebfb6204c26",
+        "hls_integer.x": "3964caf0ee16b66540673f6bac3de68e8bcb41023c9539d67303f2e64c9ac6bb",
+        "hls_lists.x": "dbee03cead923041238b3e09760421ea5be815c78ba737e0366251cbc6e31065",
+        "hls_patterns.x": "ae1d294c976cc1360ced8b1850f45f4ec43932b078b4339b5ec543ae9a5ced7c",
+        "hls_reply.x": "8b238d80ebd67046b0b8cd946eb7d6edc68074c13a05a00770f26f4437e5f7b1",
+        "hls_server.x": "9ea16959a9fc504c3f26f67d1e308e01014573c2220b57f290add8591b4c743c",
+        "hls_spatial_router.x": "3cca4008525b6831a825db8af3286df5b3d28f06bb6c505f75e06fb0fc42b6f5",
+        "hls_vec.x": "c66c888c606ce7bc3e7b1c526cd1216e571f23fc6712f719df14dc6f5d82e5e6",
+        "mailbox.x": "4e79a78b2996de6ecf4b0cecf25c84705a743ac6dfc430c0c29d13302c9b61f8",
+        "phi_decoder_profile_topology.x": "86e2dc83ff073a86ed12fc61aed54127ab11ebef780b34bc5e0c21df49e3ec82",
+        "phi_field.x": "7e35e2901be89e4f9b148e8d8c47d0a05581e6206070c25e8d2dc5d02828f84b",
+        "phi_halo_cell.x": "5d5b4d56e9080dd70dec2641bc75f92705acda1e92960d4deda283c8d81f284c",
+        "phi_syndrome_replay_cell.x": "8845c05a2b5013433b19ee3f8f056c00b6cde990b232a80a26cd2a4d52c06c0e",
+        "scheduler.x": "18aeeae94e6e3c0b63e69521c13073a0e335d2e227b6935fb78f80550fe3e802",
+        "scheduler_observation.x": "7c01db596893e73678cb6eb220430127d4d2235ed09eebf530ca0efb778d8263"
+      },
+      "stages": {
+        "codegen": "ed10a5cf7c11d995bfee26dff604218862c075d77bdd4a42b66c67b1a1834038",
+        "ir": "8ef904c9d8d55839e11b4084c53ec5a3fdb6d5c5c0461d7957ea42d966ec6f13",
+        "opt": "88804ed600b04dab4ef932f5c9cf5b01fd3eab0f28632ed48afabf47b6ca2eea"
+      },
+      "stdlib": {
+        "xls/dslx/stdlib/abs_diff.x": "9006b878c3762aeea72bc42be9a012cd0c050a78364a1c09ea4f547e06059eae",
+        "xls/dslx/stdlib/acm_random.x": "47093ca764f983b34adaeb0f694b2a3b711815eb8beeba656d3a39ed157f7ac7",
+        "xls/dslx/stdlib/apfloat.x": "5bbc79dd7842baa26ae467f5a9240ab98a5f5776b4749eb4e73dd1171b8bae8d",
+        "xls/dslx/stdlib/bfloat16.x": "c810ed761142c429a68f0b80559b92c6cbfe087ccd11bead091151d2ff49ee37",
+        "xls/dslx/stdlib/fixed_point.x": "20aede1704d2cdbe515de083d05cb44c8d279aac5fcf5f52d7dc768193d1c631",
+        "xls/dslx/stdlib/float32.x": "2dbc3bd4c5045fb1b8765b293457d6cca1ba338ca1bd5763b2957d11b0a7d84a",
+        "xls/dslx/stdlib/float64.x": "186e40914bdcd0be7c478e6c85204cfa9858b660a8a1dcfffab20e3e4d1ba071",
+        "xls/dslx/stdlib/float_instances.x": "4c89968e94e045c51c354b8f18507f727b0b85b8dcd01b0af69db25314f314cd",
+        "xls/dslx/stdlib/hfloat16.x": "767b0b70354aa15437f689898a0dd168eba47161e999382adcbdc150b6df4243",
+        "xls/dslx/stdlib/lza.x": "6717f61514829d52e9ead876d42e5dc33cd0c48069506137bb2a1dee98b066ac",
+        "xls/dslx/stdlib/round.x": "ac1093df45b238fb0cf867010a9887856d6cf380d17cb5b61c69a47af77c89a0",
+        "xls/dslx/stdlib/std.x": "888583e31552728f6f594c9bb454173b5d8a2d55df2acdee0bd4e2e15d7f1ffa",
+        "xls/dslx/stdlib/tests/float32_downcast_test.x": "20e81a55ba42a7849b2ac274811e4bb457a8b2eb501f4b304b543925e80fe0ab",
+        "xls/dslx/stdlib/tests/float32_upcast_test.x": "dbff7cea87d189c915623e1d4d4274049e7a5779d7b03060e91201073da27b54",
+        "xls/dslx/stdlib/tests/round_tests.x": "5f9b66ad008155f4829db2424f34cc125363f80a789d4057c1433d56fa05632b",
+        "xls/dslx/stdlib/tests/umul_instances.x": "06f7b95e669477fc30e86f9e1d32637b09cfe1fa8f9cb8ea4b351645c1b1bc91"
+      },
+      "tools": {
+        "codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162",
+        "ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+        "opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c"
+      }
+    },
+    "candidate": {
+      "artifacts": {
+        "phi_decoder_profile.ir": "514734d9a925400ede720ec68f1d86632ae18492e0f1bb5e8b1dbb40f96dfd3d",
+        "phi_decoder_profile.opt.ir": "d867c12cdc8953c75c3914b1dc5de58b3e42f9de1a9a3dbd2addfbf3bd55734f",
+        "phi_decoder_profile.v": "363fe34a46a78bebb1b448f220099e14595d9dd0825fc09aada45ee34ad98a34"
+      },
+      "assets": {
+        "hls_1r1w_ram.v": "13e12a7561df37e150c3e727c43f9e5234b74bb9741fc969185c12948b2583e8",
+        "phi_decoder_profile.json": "246a80bb257f6e23c4a654b10259fb4075219736fdb9ae2fe769a1574c87d9f0",
+        "phi_decoder_profile_top.v": "a2b91b65bae63ce942fda5c6e1f1d97bd26be9eef5486876e5e03745b647da5e",
+        "phi_scheduler_rams.sh": "93f48d245aec55f733300dda4f5b558f9bff20a30e6d98a76f38c87f1fb47602"
+      },
+      "options": {
+        "codegen": [
+          "--pipeline_stages=2",
+          "--delay_model=unit",
+          "--flop_inputs=false",
+          "--flop_outputs=true",
+          "--use_system_verilog=false",
+          "--reset=reset",
+          "--fifo_module=",
+          "--worst_case_throughput=1",
+          "--ram_configurations=scheduler_0_state:1R1W:_scheduler_0_ram_read_req_out:_scheduler_0_ram_read_resp_in:_scheduler_0_ram_write_req_out:_scheduler_0_ram_write_resp_in,scheduler_0_mailbox:1R1W:_scheduler_0_mailbox_read_req_out:_scheduler_0_mailbox_read_resp_in:_scheduler_0_mailbox_write_req_out:_scheduler_0_mailbox_write_resp_in,scheduler_1_state:1R1W:_scheduler_1_ram_read_req_out:_scheduler_1_ram_read_resp_in:_scheduler_1_ram_write_req_out:_scheduler_1_ram_write_resp_in,scheduler_1_mailbox:1R1W:_scheduler_1_mailbox_read_req_out:_scheduler_1_mailbox_read_resp_in:_scheduler_1_mailbox_write_req_out:_scheduler_1_mailbox_write_resp_in,scheduler_2_state:1R1W:_scheduler_2_ram_read_req_out:_scheduler_2_ram_read_resp_in:_scheduler_2_ram_write_req_out:_scheduler_2_ram_write_resp_in,scheduler_2_mailbox:1R1W:_scheduler_2_mailbox_read_req_out:_scheduler_2_mailbox_read_resp_in:_scheduler_2_mailbox_write_req_out:_scheduler_2_mailbox_write_resp_in,scheduler_3_state:1R1W:_scheduler_3_ram_read_req_out:_scheduler_3_ram_read_resp_in:_scheduler_3_ram_write_req_out:_scheduler_3_ram_write_resp_in,scheduler_3_mailbox:1R1W:_scheduler_3_mailbox_read_req_out:_scheduler_3_mailbox_read_resp_in:_scheduler_3_mailbox_write_req_out:_scheduler_3_mailbox_write_resp_in,scheduler_4_state:1R1W:_scheduler_4_ram_read_req_out:_scheduler_4_ram_read_resp_in:_scheduler_4_ram_write_req_out:_scheduler_4_ram_write_resp_in,scheduler_4_mailbox:1R1W:_scheduler_4_mailbox_read_req_out:_scheduler_4_mailbox_read_resp_in:_scheduler_4_mailbox_write_req_out:_scheduler_4_mailbox_write_resp_in,scheduler_5_state:1R1W:_scheduler_5_ram_read_req_out:_scheduler_5_ram_read_resp_in:_scheduler_5_ram_write_req_out:_scheduler_5_ram_write_resp_in,scheduler_5_mailbox:1R1W:_scheduler_5_mailbox_read_req_out:_scheduler_5_mailbox_read_resp_in:_scheduler_5_mailbox_write_req_out:_scheduler_5_mailbox_write_resp_in,scheduler_6_state:1R1W:_scheduler_6_ram_read_req_out:_scheduler_6_ram_read_resp_in:_scheduler_6_ram_write_req_out:_scheduler_6_ram_write_resp_in,scheduler_6_mailbox:1R1W:_scheduler_6_mailbox_read_req_out:_scheduler_6_mailbox_read_resp_in:_scheduler_6_mailbox_write_req_out:_scheduler_6_mailbox_write_resp_in,scheduler_7_state:1R1W:_scheduler_7_ram_read_req_out:_scheduler_7_ram_read_resp_in:_scheduler_7_ram_write_req_out:_scheduler_7_ram_write_resp_in,scheduler_7_mailbox:1R1W:_scheduler_7_mailbox_read_req_out:_scheduler_7_mailbox_read_resp_in:_scheduler_7_mailbox_write_req_out:_scheduler_7_mailbox_write_resp_in"
+        ],
+        "top": "Top"
+      },
+      "profile": {
+        "delay_model": "unit",
+        "flop_inputs": false,
+        "flop_outputs": true,
+        "height": 3,
+        "initiation_interval": 1,
+        "phi_actor_count": 18,
+        "pipeline_stages": 2,
+        "planes": [
+          "x",
+          "z"
+        ],
+        "scheduler_count": 8,
+        "shards_per_plane": 3,
+        "source_actor_count": 18,
+        "source_scheduler_count": 2,
+        "width": 3
+      },
+      "ram_configuration": "93f48d245aec55f733300dda4f5b558f9bff20a30e6d98a76f38c87f1fb47602",
+      "recipe": 1,
+      "rtl": {
+        "hls_1r1w_ram.v": "13e12a7561df37e150c3e727c43f9e5234b74bb9741fc969185c12948b2583e8",
+        "phi_decoder_profile.v": "363fe34a46a78bebb1b448f220099e14595d9dd0825fc09aada45ee34ad98a34",
+        "phi_decoder_profile_top.v": "a2b91b65bae63ce942fda5c6e1f1d97bd26be9eef5486876e5e03745b647da5e"
+      },
+      "schema": 1,
+      "sources": {
+        "arbitration.x": "5bfd061e68339cbf9788a40d9881b38bda2691a7f095500f806aba5ce8b2a79f",
+        "axis.x": "882c944ca4faa43c164225f230b3530e3b318f496ad6fc57c42619cb7e3a4d93",
+        "bram.x": "fea8277109e4847e45bb388eaae6236abf35a3f75f3558de1ed8b53f08fcd6bb",
+        "direct_mailbox_observation.x": "74b51d253146d257ddd354dea39da7c5adf90acee770ab086c9c9c24ae041b91",
+        "effect_window.x": "a43b66b52a73dd812cda83f1ef216aaa3c48550672c1a6d00663b5cdaab81586",
+        "frame_queue.x": "8e2d1d3daf12ba3cb739d8e577603409f73f490a12194367073a4b2ee0256359",
+        "frame_transport.x": "941fe8dd53cc9638c6cec48c99e06f9a4a7fc5471c3dc1877763415ac8226932",
+        "hls_bits.x": "ffcf2588f8d7ad58857f353b4e1480f286c2e718041868da6af99d7dbacf995b",
+        "hls_fabric_router.x": "03607387d441240b92841b7ecbd41803a7234b9d89e1beaddda414bb9b006f3b",
+        "hls_failure.x": "f69235cb3d7bc49b09c65961f13e87003ebde5eb41d55b9bccf1427d620909c8",
+        "hls_fixed.x": "f8506dde6299d8b080012d78605d1a4a0b5d51647da8da106388351ce6a0aea9",
+        "hls_float.x": "1882c965143004e7dd70cac139cf1ee41d17199f0877e374a280cebfb6204c26",
+        "hls_integer.x": "3964caf0ee16b66540673f6bac3de68e8bcb41023c9539d67303f2e64c9ac6bb",
+        "hls_lists.x": "dbee03cead923041238b3e09760421ea5be815c78ba737e0366251cbc6e31065",
+        "hls_patterns.x": "ae1d294c976cc1360ced8b1850f45f4ec43932b078b4339b5ec543ae9a5ced7c",
+        "hls_reply.x": "8b238d80ebd67046b0b8cd946eb7d6edc68074c13a05a00770f26f4437e5f7b1",
+        "hls_server.x": "9ea16959a9fc504c3f26f67d1e308e01014573c2220b57f290add8591b4c743c",
+        "hls_spatial_router.x": "3cca4008525b6831a825db8af3286df5b3d28f06bb6c505f75e06fb0fc42b6f5",
+        "hls_vec.x": "c66c888c606ce7bc3e7b1c526cd1216e571f23fc6712f719df14dc6f5d82e5e6",
+        "mailbox.x": "4e79a78b2996de6ecf4b0cecf25c84705a743ac6dfc430c0c29d13302c9b61f8",
+        "phi_decoder_profile_topology.x": "86e2dc83ff073a86ed12fc61aed54127ab11ebef780b34bc5e0c21df49e3ec82",
+        "phi_field.x": "7e35e2901be89e4f9b148e8d8c47d0a05581e6206070c25e8d2dc5d02828f84b",
+        "phi_halo_cell.x": "5d5b4d56e9080dd70dec2641bc75f92705acda1e92960d4deda283c8d81f284c",
+        "phi_syndrome_replay_cell.x": "8845c05a2b5013433b19ee3f8f056c00b6cde990b232a80a26cd2a4d52c06c0e",
+        "scheduler.x": "18aeeae94e6e3c0b63e69521c13073a0e335d2e227b6935fb78f80550fe3e802",
+        "scheduler_observation.x": "7c01db596893e73678cb6eb220430127d4d2235ed09eebf530ca0efb778d8263"
+      },
+      "stages": {
+        "codegen": "ce9ac3139c36a66785d8349b004a12c143b86c7586ea4a47a95082ebf6eaa554",
+        "ir": "9c44913da3d1ad1d6e5b3d7d400f28c4212c82f889234078892837a3bd63f2bb",
+        "opt": "23b17caf5f7d5769aee4ad218a28d5c73c622cced3b6fd18171e8ef178f46505"
+      },
+      "stdlib": {
+        "xls/dslx/stdlib/abs_diff.x": "9006b878c3762aeea72bc42be9a012cd0c050a78364a1c09ea4f547e06059eae",
+        "xls/dslx/stdlib/acm_random.x": "47093ca764f983b34adaeb0f694b2a3b711815eb8beeba656d3a39ed157f7ac7",
+        "xls/dslx/stdlib/apfloat.x": "5bbc79dd7842baa26ae467f5a9240ab98a5f5776b4749eb4e73dd1171b8bae8d",
+        "xls/dslx/stdlib/bfloat16.x": "c810ed761142c429a68f0b80559b92c6cbfe087ccd11bead091151d2ff49ee37",
+        "xls/dslx/stdlib/fixed_point.x": "20aede1704d2cdbe515de083d05cb44c8d279aac5fcf5f52d7dc768193d1c631",
+        "xls/dslx/stdlib/float32.x": "2dbc3bd4c5045fb1b8765b293457d6cca1ba338ca1bd5763b2957d11b0a7d84a",
+        "xls/dslx/stdlib/float64.x": "186e40914bdcd0be7c478e6c85204cfa9858b660a8a1dcfffab20e3e4d1ba071",
+        "xls/dslx/stdlib/float_instances.x": "4c89968e94e045c51c354b8f18507f727b0b85b8dcd01b0af69db25314f314cd",
+        "xls/dslx/stdlib/hfloat16.x": "767b0b70354aa15437f689898a0dd168eba47161e999382adcbdc150b6df4243",
+        "xls/dslx/stdlib/lza.x": "6717f61514829d52e9ead876d42e5dc33cd0c48069506137bb2a1dee98b066ac",
+        "xls/dslx/stdlib/round.x": "ac1093df45b238fb0cf867010a9887856d6cf380d17cb5b61c69a47af77c89a0",
+        "xls/dslx/stdlib/std.x": "888583e31552728f6f594c9bb454173b5d8a2d55df2acdee0bd4e2e15d7f1ffa",
+        "xls/dslx/stdlib/tests/float32_downcast_test.x": "20e81a55ba42a7849b2ac274811e4bb457a8b2eb501f4b304b543925e80fe0ab",
+        "xls/dslx/stdlib/tests/float32_upcast_test.x": "dbff7cea87d189c915623e1d4d4274049e7a5779d7b03060e91201073da27b54",
+        "xls/dslx/stdlib/tests/round_tests.x": "5f9b66ad008155f4829db2424f34cc125363f80a789d4057c1433d56fa05632b",
+        "xls/dslx/stdlib/tests/umul_instances.x": "06f7b95e669477fc30e86f9e1d32637b09cfe1fa8f9cb8ea4b351645c1b1bc91"
+      },
+      "tools": {
+        "codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162",
+        "ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+        "opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c"
+      }
+    }
+  },
+  "console_sha256": "deb65283f45af66950eccd507d486b0f60d8bfaa1f0ae2411708aff225018cac",
+  "mode": "cycle",
+  "testbench_sha256": "a1e27ad1d62a6f4f08563f08963f3935596bbeaa67a74750bab3d6f79925efbe"
+}

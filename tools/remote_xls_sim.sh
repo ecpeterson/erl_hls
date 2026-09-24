@@ -31,7 +31,6 @@ vvp hls_trace_store.vvp
 # keep every test-bearing DSLX module explicit here.
 for test_module in \
     axis.x \
-    hls_fixed.x \
     hls_vec.x \
     hls_numeric_test.x \
     xls_short_circuit_test.x \
@@ -54,6 +53,10 @@ do
         --dslx_stdlib_path="$stdlib" \
         "$test_module"
 done
+
+# Check static rounding at narrow and wide widths, including sampled JIT results.
+"$xls_root/interpreter_main" --compare=jit --seed=1 \
+    --dslx_path=. --dslx_stdlib_path="$stdlib" hls_fixed.x
 
 # The companion owns the arithmetic properties; the generated fixture checks
 # its public functions against BEAM vectors. Keep the random seed reproducible.

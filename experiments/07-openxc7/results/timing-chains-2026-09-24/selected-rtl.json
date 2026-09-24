@@ -1,0 +1,6 @@
+{
+  "rtl_equal_ignoring_comments": false,
+  "selected_sha256": "6b2370ee52f8a5d4caaff37e2d050dca00f3f0aa83ead92a630def2588cd46f8",
+  "prototype_sha256": "1e1f8516292d05a300ffc8133919edc31da8b60caa8870ddd61dccee126e9d3a",
+  "rtl_equal_after_internal_signal_renaming": true
+}

@@ -1,0 +1,24 @@
+--- a/hls_fixed.x
++++ b/hls_fixed.x
+@@ -20 +19,0 @@
+-  let negative = numerator < sN[WIDTH]:0;
+@@ -22,4 +21,3 @@
+-  let magnitude = (if negative { -widened } else { widened }) as uN[MAG];
+-  let rounded = magnitude + ((DENOMINATOR / u32:2) as uN[MAG]);
+-  let quotient = (rounded / (DENOMINATOR as uN[MAG])) as sN[MAG];
+-  (if negative { -quotient } else { quotient }) as sN[WIDTH]
++  let half = (DENOMINATOR / u32:2) as sN[MAG];
++  let biased = if numerator < sN[WIDTH]:0 { widened - half } else { widened + half };
++  (biased / (DENOMINATOR as sN[MAG])) as sN[WIDTH]
+--- a/phi_field.x
++++ b/phi_field.x
+@@ -12,2 +12,2 @@
+-  let numerator = hls_vec::dot<u32:37>([phi0, phi1], s32[2]:[6, 2]) +
+-    (neighbor_sum as sN[37]);
++  let numerator = hls_vec::dot<u32:36>([phi0, phi1], s32[2]:[6, 2]) +
++    (neighbor_sum as sN[36]);
+@@ -19,2 +19,2 @@
+-  let numerator = hls_vec::dot<u32:37>([phi0, phi1], s32[2]:[1, 7]) +
+-    (neighbor_sum as sN[37]);
++  let numerator = hls_vec::dot<u32:36>([phi0, phi1], s32[2]:[1, 7]) +
++    (neighbor_sum as sN[36]);

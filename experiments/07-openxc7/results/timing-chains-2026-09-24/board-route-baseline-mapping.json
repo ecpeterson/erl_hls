@@ -1,0 +1,82 @@
+{
+  "assembled_cells": {
+    "BUFG": 1,
+    "CARRY4": 906,
+    "DSP48E1": 56,
+    "FDRE": 29805,
+    "IBUF": 1,
+    "INV": 588,
+    "LUT2": 5614,
+    "LUT3": 5394,
+    "LUT4": 6760,
+    "LUT5": 7745,
+    "LUT6": 8288,
+    "MUXF7": 4,
+    "MUXF8": 2,
+    "OBUF": 1,
+    "RAMB18E1": 44,
+    "RAMB36E1": 8
+  },
+  "assembly": {
+    "inputs": {
+      "files": {
+        "$REPO/experiments/07-openxc7/phi_timing_harness.v": "939d82bcb62599e9bd64e8e68d0e8b0911799d75c0360cbff30ee63e4d2c6733",
+        "$YOSYS/BUILD-INFO.json": "b509fbcf8adf9e4f8359d8c89ed179bacb3aa7c9557d830ba80936b907c3db85",
+        "$YOSYS/bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+        "$YOSYS/libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+        "$YOSYS/libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d",
+        "$STAGE/board-route-baseline/core-stub.v": "ed67c83b3c8b0a3cf8b1636c9f5fb5c93a19274180b5a38e0edf02e0524f80e2",
+        "$STAGE/board-route-baseline/core.json": "ea047c9bee611699f874d430e565a2ec0b0db799991f0d42b2147c00de083dc1"
+      },
+      "script": "read_verilog -lib core-stub.v\nread_verilog \"$REPO/experiments/07-openxc7/phi_timing_harness.v\"\nsynth_xilinx -flatten -abc9 -nosrl -family xc7 -top phi_timing_harness\ndesign -stash harness\nread_json core.json\nread_verilog -lib -nowb -overwrite +/xilinx/cells_sim.v +/xilinx/cells_xtra.v\ndesign -copy-from harness phi_timing_harness\nhierarchy -check -top phi_timing_harness\nflatten\nopt_clean\ncheck -assert\nscc -expect 0\ntee -o mapped-stat.json stat -json\nwrite_json mapped.json\n"
+    },
+    "outputs": {
+      "mapped-stat.json": "0612530f7242f8588b8d392e35bdb8c17fd078458fe9d9763f64c3f2ed2233b9",
+      "mapped.json": "f2053f98daee43b8530cc84d692d0326bd1d7e15aaf4b655d164507ede822ffd"
+    }
+  },
+  "core": {
+    "inputs": {
+      "files": {
+        "$YOSYS/BUILD-INFO.json": "b509fbcf8adf9e4f8359d8c89ed179bacb3aa7c9557d830ba80936b907c3db85",
+        "$YOSYS/bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+        "$YOSYS/libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+        "$YOSYS/libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d",
+        "$STAGE/public-baseline/board-sized/.compiled-releases/7a255e0c09487947a49b31074d48206dd3aa27cf5d576261b4c597403244a541/hls_1r1w_ram.v": "13e12a7561df37e150c3e727c43f9e5234b74bb9741fc969185c12948b2583e8",
+        "$STAGE/public-baseline/board-sized/.compiled-releases/7a255e0c09487947a49b31074d48206dd3aa27cf5d576261b4c597403244a541/phi_decoder_profile.v": "aff27b5203f2ee3f355e8b99e8c235fbd2985e634283dbc3c635fd1d827834fd",
+        "$STAGE/public-baseline/board-sized/.compiled-releases/7a255e0c09487947a49b31074d48206dd3aa27cf5d576261b4c597403244a541/phi_decoder_profile_top.v": "34fcdf6da8cb117bd3bd509a510654aa13f2a979c1fe9df34670b7f2d776ca7a"
+      },
+      "script": "read_verilog -sv \"$STAGE/public-baseline/board-sized/.compiled-releases/7a255e0c09487947a49b31074d48206dd3aa27cf5d576261b4c597403244a541/phi_decoder_profile.v\" \"$STAGE/public-baseline/board-sized/.compiled-releases/7a255e0c09487947a49b31074d48206dd3aa27cf5d576261b4c597403244a541/phi_decoder_profile_top.v\" \"$STAGE/public-baseline/board-sized/.compiled-releases/7a255e0c09487947a49b31074d48206dd3aa27cf5d576261b4c597403244a541/hls_1r1w_ram.v\"\nhierarchy -check -top phi_decoder_profile_top\nsynth_xilinx -flatten -abc9 -family xc7 -noiopad -noclkbuf -top phi_decoder_profile_top\ncheck -assert\nscc -expect 0\ntee -o core-stat.json stat -json\nwrite_json core.json\n"
+    },
+    "outputs": {
+      "core-stat.json": "4a816f6b0fb544c6da2df49808795d2b2b50f1132855ecbce88423942fbd6760",
+      "core.json": "ea047c9bee611699f874d430e565a2ec0b0db799991f0d42b2147c00de083dc1"
+    }
+  },
+  "decoder_cells": {
+    "CARRY4": 906,
+    "DSP48E1": 56,
+    "FDRE": 29479,
+    "INV": 587,
+    "LUT2": 5570,
+    "LUT3": 5393,
+    "LUT4": 6740,
+    "LUT5": 7744,
+    "LUT6": 8257,
+    "MUXF7": 4,
+    "MUXF8": 2,
+    "RAMB18E1": 44,
+    "RAMB36E1": 8
+  },
+  "netlist_sha256": "f2053f98daee43b8530cc84d692d0326bd1d7e15aaf4b655d164507ede822ffd",
+  "retained_decoder_cells": 64790,
+  "single_global_clock": true,
+  "timing_coverage": {
+    "combinational_dsps_with_coarse_delay": 56,
+    "design_wide_clock_validated": false,
+    "omitted_sequential_primitives": {
+      "RAMB18E1": 44,
+      "RAMB36E1": 8
+    }
+  }
+}
