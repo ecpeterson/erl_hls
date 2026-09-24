@@ -9,6 +9,7 @@ remote_xls=${ERL_HLS_REMOTE_XLS:-/home/ecpeterson/xls-v0.0.0-10601-g9f360fc89-li
 remote_stage="$remote_root/regsvc"
 
 "$project_root/tools/prepare_xls_sim.sh" "$local_stage"
+"$project_root/tools/xls_goldens.sh" check "$local_stage"
 cp "$project_root/tools/remote_xls_sim.sh" \
     "$local_stage/remote_xls_sim.sh"
 

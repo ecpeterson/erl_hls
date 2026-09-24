@@ -29,21 +29,21 @@ generation there. It then runs a cycle-controlled two-process SystemVerilog
 routing scenario and the EUnit application scenario through a VPI bridge.
 Independent application and debug FIFO pairs carry the two physical AXI Stream
 paths. The runner does not use or modify the VM's existing `~/erl_hls`
-checkout, and finishes by checking the source-adjacent generated DSLX and the
-compact Verilog digest manifest declared in `tools/xls_goldens.sh`. Generated
-Verilog is compiled and simulated from the staging directory instead of being
-checked into the repository; GitHub Actions uploads it with the other
-diagnostics when a regression or digest check fails.
+checkout. The runner checks source-adjacent generated DSLX with
+`tools/xls_goldens.sh`; RTL correctness is checked by simulation, without
+requiring byte-identical Verilog. GitHub Actions retains generated RTL with
+other diagnostics when a regression fails.
 
-After changing the translator or a translated example, refresh the checked-in
-artifacts with the same full regression:
+After changing the translator or a translated example, regenerate the checked-in
+DSLX locally and run EUnit:
 
 ```sh
 tools/update_xls_goldens.sh
 ```
 
-The files are copied only after the pinned remote flow and its simulations
-complete successfully.
+This needs Erlang and rebar3, not XLS or a remote host. Review the generated
+source diff before committing it with the source change. RTL regressions remain
+a separate check; refreshing DSLX does not establish hardware correctness.
 
 The phi example also includes lowerable phenomenological data- and syndrome-
 noise actors. CPU tests wire those actors to a self-periodic phi cell and run

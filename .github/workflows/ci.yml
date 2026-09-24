@@ -92,8 +92,17 @@ jobs:
           python3 tools/test_compact_build.py
           python3 tools/test_hls_profile.py
 
+      - name: Check the DSLX golden workflow
+        run: python3 tools/test_xls_goldens.py
+
       - name: Run Erlang tests
         run: rebar3 eunit
+
+      - name: Prepare simulation inputs
+        run: bash tools/prepare_xls_sim.sh "$PWD/_build/xls_sim/regsvc"
+
+      - name: Check generated DSLX before RTL compilation
+        run: bash tools/xls_goldens.sh check "$PWD/_build/xls_sim/regsvc"
 
       - name: Check differential compiler runner and shrinking
         run: |
@@ -232,9 +241,6 @@ jobs:
           experiments/08-phi-scheduler/run_raw_rtl.sh
           experiments/08-phi-scheduler/run_relax_bank.sh
 
-      - name: Prepare simulation inputs
-        run: bash tools/prepare_xls_sim.sh "$PWD/_build/xls_sim/regsvc"
-
       - name: Run generated RTL and bridged EUnit regressions
         env:
           XLS_ROOT: ${{ runner.temp }}/xls
@@ -294,9 +300,6 @@ jobs:
             --top __ordered_egress_topology__Top_0_next \
             --stage _build/topology-debug-queries/ordered \
             _build/xls_sim/regsvc/ordered_egress_topology.v
-
-      - name: Verify checked generated artifacts
-        run: bash tools/xls_goldens.sh check "$PWD/_build/xls_sim/regsvc"
 
       - name: Upload simulation diagnostics
         if: failure()
