@@ -193,14 +193,14 @@ Tag::PING => {
     (axis::pack(Tag::ERROR as u8, ERROR_REQUEST_LENGTH), state_record)
   } else {
     let request = ping_from_bits(frame.payload);
-    let Xls_clause_1_Value_1 = request.value;
-    let Xls_clause_1_State_1 = state_record;
+    let v_Xls_clause_1_Value_1 = request.value;
+    let v_Xls_clause_1_State_1 = state_record;
     let _0 = Ack {
-      value: Xls_clause_1_Value_1,
+      value: v_Xls_clause_1_Value_1,
       ..zero!<Ack>()
     };
     let _1 = (Tag::ACK, _0, bits_from_ack(_0));
-    let _2 = (REPLY, _1, Xls_clause_1_State_1, );
+    let _2 = (REPLY, _1, v_Xls_clause_1_State_1, );
     if (bool:false) {
       let s = zero!<State>();
       (axis::pack(Tag::ERROR as u8, hls_failure::kind(hls_failure::NONE) as u32), (Tag::STATE, s))
@@ -220,20 +220,20 @@ Tag::GET => {
     (axis::pack(Tag::ERROR as u8, ERROR_REQUEST_LENGTH), state_record)
   } else {
     let request = get_from_bits(frame.payload);
-    let Xls_clause_1_Register_1 = request.register;
-    let Xls_clause_1_State_1 = state_record;
-    let _0 = Xls_clause_1_Register_1 < 16;
+    let v_Xls_clause_1_Register_1 = request.register;
+    let v_Xls_clause_1_State_1 = state_record;
+    let _0 = v_Xls_clause_1_Register_1 < 16;
     if _0 {
-      let _1 = Xls_clause_1_Register_1 + 1;
-      let _2 = Xls_clause_1_State_1.1.registers;
+      let _1 = v_Xls_clause_1_Register_1 + 1;
+      let _2 = v_Xls_clause_1_State_1.1.registers;
       let _3 = { let collection_values = _2; let (collection_index, collection_invalid) = hls_lists::checked_index<{array_size(collection_values)}>(_1); (collection_values[collection_index], collection_invalid) };
-      let Xls_clause_1_Value_1 = _3.0;
+      let v_Xls_clause_1_Value_1 = _3.0;
       let _4 = Read {
-        value: Xls_clause_1_Value_1,
+        value: v_Xls_clause_1_Value_1,
         ..zero!<Read>()
       };
       let _5 = (Tag::READ, _4, bits_from_read(_4));
-      let _6 = (REPLY, _5, Xls_clause_1_State_1, );
+      let _6 = (REPLY, _5, v_Xls_clause_1_State_1, );
       if ((hls_failure::check(_3.1, XLS_FAILURE_SITE_BADARG_3A68C26C_L110)) != hls_failure::NONE) {
         let s = zero!<State>();
         (axis::pack(Tag::ERROR as u8, hls_failure::kind(hls_failure::check(_3.1, XLS_FAILURE_SITE_BADARG_3A68C26C_L110)) as u32), (Tag::STATE, s))
@@ -257,13 +257,13 @@ Tag::BULK_GET => {
     (axis::pack(Tag::ERROR as u8, ERROR_REQUEST_LENGTH), state_record)
   } else {
     let request = bulkget_from_bits(frame.payload);
-    let Xls_clause_1_State_1 = state_record;
+    let v_Xls_clause_1_State_1 = state_record;
     if request.count == 0 {
       let _0 = Bulkread {
         ..zero!<Bulkread>()
       };
       let _1 = (Tag::BULK_READ, _0, bits_from_bulkread(_0));
-      let _2 = (REPLY, _1, Xls_clause_1_State_1, );
+      let _2 = (REPLY, _1, v_Xls_clause_1_State_1, );
       if (bool:false) {
         let s = zero!<State>();
         (axis::pack(Tag::ERROR as u8, hls_failure::kind(hls_failure::NONE) as u32), (Tag::STATE, s))
@@ -276,15 +276,15 @@ Tag::BULK_GET => {
         }
       }
     } else {
-      let Xls_clause_2_Start_1 = request.start;
-      let Xls_clause_2_Count_1 = request.count;
-      let Xls_clause_2_State_1 = state_record;
-      let _0 = Xls_clause_2_Count_1 > 0;
+      let v_Xls_clause_2_Start_1 = request.start;
+      let v_Xls_clause_2_Count_1 = request.count;
+      let v_Xls_clause_2_State_1 = state_record;
+      let _0 = v_Xls_clause_2_Count_1 > 0;
       let _5 = if _0 {
-        let _1 = Xls_clause_2_Count_1 <= 3;
+        let _1 = v_Xls_clause_2_Count_1 <= 3;
         let _4 = if _1 {
-          let _2 = 16 - Xls_clause_2_Count_1;
-          let _3 = Xls_clause_2_Start_1 <= _2;
+          let _2 = 16 - v_Xls_clause_2_Count_1;
+          let _3 = v_Xls_clause_2_Start_1 <= _2;
           (_3, hls_failure::NONE)
         } else {
           (bool:0, hls_failure::NONE)
@@ -294,18 +294,18 @@ Tag::BULK_GET => {
         (bool:0, hls_failure::NONE)
       };
       if _5.0 {
-        let _6 = Xls_clause_2_State_1.1.registers;
-        let _7 = Xls_clause_2_Start_1 + 1;
-        let _8 = { let slice_values: u32[16] = _6; let (slice_start, slice_mask, slice_invalid) = hls_lists::slice_bounds<u32:16, u32:16>(_7, Xls_clause_2_Count_1); let sliced = array_slice(slice_values, slice_start, zero!<u32[16]>()); let selected = for (i, result): (u32, u32[16]) in u32:0..u32:16 { update(result, i, if slice_mask[i] { sliced[i] } else { zero!<u32>() }) } (zero!<u32[16]>()); (selected, slice_invalid) };
-        let Xls_clause_2_Sublist_1 = _8.0;
-        let _9 = { let slice_values: u32[16] = Xls_clause_2_Sublist_1; let (slice_start, slice_mask, slice_invalid) = hls_lists::slice_bounds<u32:16, u32:3>(u32:1, u32:3); let sliced = array_slice(slice_values, slice_start, zero!<u32[3]>()); let selected = for (i, result): (u32, u32[3]) in u32:0..u32:3 { update(result, i, if slice_mask[i] { sliced[i] } else { zero!<u32>() }) } (zero!<u32[3]>()); (selected, slice_invalid) };
-        let Xls_clause_2_Trim_1 = _9.0;
+        let _6 = v_Xls_clause_2_State_1.1.registers;
+        let _7 = v_Xls_clause_2_Start_1 + 1;
+        let _8 = { let slice_values: u32[16] = _6; let (slice_start, slice_mask, slice_invalid) = hls_lists::slice_bounds<u32:16, u32:16>(_7, v_Xls_clause_2_Count_1); let sliced = array_slice(slice_values, slice_start, zero!<u32[16]>()); let selected = for (i, result): (u32, u32[16]) in u32:0..u32:16 { update(result, i, if slice_mask[i] { sliced[i] } else { zero!<u32>() }) } (zero!<u32[16]>()); (selected, slice_invalid) };
+        let v_Xls_clause_2_Sublist_1 = _8.0;
+        let _9 = { let slice_values: u32[16] = v_Xls_clause_2_Sublist_1; let (slice_start, slice_mask, slice_invalid) = hls_lists::slice_bounds<u32:16, u32:3>(u32:1, u32:3); let sliced = array_slice(slice_values, slice_start, zero!<u32[3]>()); let selected = for (i, result): (u32, u32[3]) in u32:0..u32:3 { update(result, i, if slice_mask[i] { sliced[i] } else { zero!<u32>() }) } (zero!<u32[3]>()); (selected, slice_invalid) };
+        let v_Xls_clause_2_Trim_1 = _9.0;
         let _10 = Bulkread {
-          values: Xls_clause_2_Trim_1,
+          values: v_Xls_clause_2_Trim_1,
           ..zero!<Bulkread>()
         };
         let _11 = (Tag::BULK_READ, _10, bits_from_bulkread(_10));
-        let _12 = (REPLY, _11, Xls_clause_2_State_1, );
+        let _12 = (REPLY, _11, v_Xls_clause_2_State_1, );
         if ((hls_failure::first_all([hls_failure::check(_8.1, XLS_FAILURE_SITE_BADARG_3A68C26C_L118), hls_failure::check(_9.1, XLS_FAILURE_SITE_BADARG_3A68C26C_L122)])) != hls_failure::NONE) {
           let s = zero!<State>();
           (axis::pack(Tag::ERROR as u8, hls_failure::kind(hls_failure::first_all([hls_failure::check(_8.1, XLS_FAILURE_SITE_BADARG_3A68C26C_L118), hls_failure::check(_9.1, XLS_FAILURE_SITE_BADARG_3A68C26C_L122)])) as u32), (Tag::STATE, s))
@@ -330,11 +330,11 @@ Tag::SET => {
     (axis::pack(Tag::ERROR as u8, ERROR_REQUEST_LENGTH), state_record)
   } else {
     let request = set_from_bits(frame.payload);
-    let Xls_clause_1_Mask_1 = request.mask;
-    let Xls_clause_1_State_1 = state_record;
-    let _0 = Xls_clause_1_Mask_1 == 0;
+    let v_Xls_clause_1_Mask_1 = request.mask;
+    let v_Xls_clause_1_State_1 = state_record;
+    let _0 = v_Xls_clause_1_Mask_1 == 0;
     if _0 {
-      let _1 = (NOREPLY, Xls_clause_1_State_1, );
+      let _1 = (NOREPLY, v_Xls_clause_1_State_1, );
       if (bool:false) {
         let s = zero!<State>();
         (axis::pack(Tag::ERROR as u8, hls_failure::kind(hls_failure::NONE) as u32), (Tag::STATE, s))
@@ -342,28 +342,28 @@ Tag::SET => {
         (zero!<axis::Frame>(), _1.1)
       }
     } else {
-      let Xls_clause_2_Register_1 = request.register;
-      let Xls_clause_2_Value_1 = request.value;
-      let Xls_clause_2_Mask_1 = request.mask;
-      let Xls_clause_2_State_1 = state_record;
-      let _0 = Xls_clause_2_Register_1 < 16;
+      let v_Xls_clause_2_Register_1 = request.register;
+      let v_Xls_clause_2_Value_1 = request.value;
+      let v_Xls_clause_2_Mask_1 = request.mask;
+      let v_Xls_clause_2_State_1 = state_record;
+      let _0 = v_Xls_clause_2_Register_1 < 16;
       if _0 {
-        let _1 = Xls_clause_2_Register_1 + 1;
-        let _2 = Xls_clause_2_State_1.1.registers;
+        let _1 = v_Xls_clause_2_Register_1 + 1;
+        let _2 = v_Xls_clause_2_State_1.1.registers;
         let _3 = { let collection_values = _2; let (collection_index, collection_invalid) = hls_lists::checked_index<{array_size(collection_values)}>(_1); (collection_values[collection_index], collection_invalid) };
-        let Xls_clause_2_OldValue_1 = _3.0;
-        let _4 = !Xls_clause_2_Mask_1;
-        let _5 = Xls_clause_2_OldValue_1 & _4;
-        let _6 = Xls_clause_2_Value_1 & Xls_clause_2_Mask_1;
+        let v_Xls_clause_2_OldValue_1 = _3.0;
+        let _4 = !v_Xls_clause_2_Mask_1;
+        let _5 = v_Xls_clause_2_OldValue_1 & _4;
+        let _6 = v_Xls_clause_2_Value_1 & v_Xls_clause_2_Mask_1;
         let _7 = _5 | _6;
-        let Xls_clause_2_NewValue_1 = _7;
-        let _8 = Xls_clause_2_Register_1 + 1;
-        let _9 = Xls_clause_2_State_1.1.registers;
-        let _10 = { let collection_values = _9; let (collection_index, collection_invalid) = hls_lists::checked_index<{array_size(collection_values)}>(_8); (update(collection_values, collection_index, Xls_clause_2_NewValue_1), collection_invalid) };
-        let Xls_clause_2_NewRegisters_1 = _10.0;
+        let v_Xls_clause_2_NewValue_1 = _7;
+        let _8 = v_Xls_clause_2_Register_1 + 1;
+        let _9 = v_Xls_clause_2_State_1.1.registers;
+        let _10 = { let collection_values = _9; let (collection_index, collection_invalid) = hls_lists::checked_index<{array_size(collection_values)}>(_8); (update(collection_values, collection_index, v_Xls_clause_2_NewValue_1), collection_invalid) };
+        let v_Xls_clause_2_NewRegisters_1 = _10.0;
         let _11 = State {
-          registers: Xls_clause_2_NewRegisters_1,
-          ..(Xls_clause_2_State_1).1
+          registers: v_Xls_clause_2_NewRegisters_1,
+          ..(v_Xls_clause_2_State_1).1
         };
         let _12 = (Tag::STATE, _11);
         let _13 = (NOREPLY, _12, );

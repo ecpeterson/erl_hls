@@ -817,14 +817,14 @@ anonymous_variable(State = #clause_state{anonymous_counter = Counter}) ->
 
 -spec uniquify(clause_state(), atom() | string()) ->
     {string(), clause_state()}.
--doc "Rewrites NameAtom in a way that guarantees no collision with previous uses.".
+-doc "Allocates a source binding in a namespace disjoint from generated types, codecs and helpers.".
 uniquify(State, NameAtom) when is_atom(NameAtom) ->
     Name = atom_to_list(NameAtom),
     uniquify(State, Name);
 uniquify(State = #clause_state{named_counters = Counters}, Name) ->
     Counter = maps:get(Name, Counters, 0) + 1,
     NamedCounters = Counters#{Name => Counter},
-    NewName = Name ++ [$_ | integer_to_list(Counter)],
+    NewName = "v_" ++ Name ++ [$_ | integer_to_list(Counter)],
     {NewName, State#clause_state{named_counters = NamedCounters}}.
 
 -spec reference(clause_state()) -> none | ir().

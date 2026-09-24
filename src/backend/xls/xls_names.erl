@@ -2,16 +2,19 @@
 -moduledoc false.
 
 -export([record_type/1, record_codec/1, enum_member/1,
-    actor/2, reduction/3, wire_tags/1]).
+    actor/2, reduction/3, wire_tags/1, keyword/1, import_alias/1]).
 
 %% Keep the established artifact spelling (only the first underscore is
 %% removed). Codec declarations and every caller must use the same stem.
+-doc "Returns the shared DSLX struct spelling for a source record.".
 -spec record_type(atom()) -> string().
 record_type(Name) -> string:titlecase(lists:delete($_, atom_to_list(Name))).
 
+-doc "Returns the shared codec stem for a source record.".
 -spec record_codec(atom()) -> string().
 record_codec(Name) -> string:lowercase(record_type(Name)).
 
+-doc "Returns the DSLX spelling of a source atom used as an enum member.".
 -spec enum_member(atom()) -> string().
 enum_member(Name) -> string:uppercase(atom_to_list(Name)).
 
@@ -100,8 +103,13 @@ count(Kind, Values, Limit) ->
         false -> error({xls_namespace_exhausted, Kind, length(Values), Limit})
     end.
 
+%% Imports occupy the same module namespace as types and codec functions.
+-spec records([hls_source:form()], [atom()], hls_gs | hls_gs_deferred | hls_statem) -> ok.
 records(Forms, Names, Kind) ->
-    Runtime = maps:from_list([{Name, generated(Name)} || Name <- runtime(Kind)]),
+    Fixed = maps:from_list([{Name, generated(Name)} || Name <- runtime(Kind)]),
+    Runtime = lists:foldl(fun(Module, Seen) ->
+        claim(module, import_alias(Module), #{kind => import, name => Module}, Seen)
+    end, Fixed, xls_dslx_imports:from_forms(Forms)),
     _ = lists:foldl(fun(Name, Seen) ->
         Origin = record_origin(Forms, Name),
         Type = record_type(Name),
@@ -170,6 +178,8 @@ spelling(Scope, Text, Origin) ->
 
 %% DSLX scanner_keywords.inc in the pinned XLS release. Sized keywords stop
 %% at 64; arbitrary widths use uN/sN. Keep this list covered by XLS fixtures.
+-doc "Reports whether a spelling is a keyword in the pinned DSLX grammar.".
+-spec keyword(string()) -> boolean().
 keyword([Sign | Digits] = Text) when Sign =:= $u; Sign =:= $s ->
     case string:to_integer(Digits) of
         {N, []} when N >= 1, N =< 64 -> Digits =:= integer_to_list(N);
@@ -177,6 +187,8 @@ keyword([Sign | Digits] = Text) when Sign =:= $u; Sign =:= $s ->
     end;
 keyword(Text) -> named_keyword(Text).
 
+%% Ordinary keywords supplement the sized integer keywords.
+-spec named_keyword(string()) -> boolean().
 named_keyword(Text) ->
     lists:member(Text, ["_", "as", "const", "else", "enum", "false", "fn", "for",
         "if", "impl", "import", "in", "out", "let", "match", "pub", "proc",
@@ -237,3 +249,16 @@ runtime(hls_statem) ->
         "MAILBOX_CAPACITY", "MAILBOX_DEPTH", "EGRESS_DEPTH", "ENTRY_EFFECT_CAPACITY",
         "ENTRY_EFFECT_PAYLOAD_BITS", "INITIAL_MACHINE", "machine_from_bits", "bits_from_machine",
         "reduction_state_from_bits", "bits_from_reduction_state"].
+
+-doc "Checks a qualified import and returns its local alias; reserves compiler binding prefixes.".
+-spec import_alias(atom()) -> string().
+import_alias(Module) ->
+    Parts = string:split(atom_to_list(Module), ".", all),
+    lists:foreach(fun(Part) -> identifier(import, Part, #{kind => import, name => Module}) end, Parts),
+    Alias = lists:last(Parts),
+    Reserved = lists:any(fun(Prefix) -> lists:prefix(Prefix, Alias) end,
+        ["v_", "hls_local_", "XLS_FAILURE_SITE_"]),
+    case Reserved orelse re:run(Alias, "^_[0-9]+$", [{capture, none}]) =:= match of
+        true -> error({reserved_dslx_import_alias, Module, Alias});
+        false -> Alias
+    end.

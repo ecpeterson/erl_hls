@@ -85,13 +85,14 @@ egress_depth(burst, Interface) ->
     max(0, hls_actor_interface:max_entry_effects(Interface) - 1);
 egress_depth(Depth, _Interface) -> Depth.
 
+-doc "Validates a lowercase deployment identifier against the shared DSLX keyword set.".
 -spec identifier(atom() | string(), term()) -> string().
 identifier(Name, Context) when is_atom(Name) ->
     identifier(atom_to_list(Name), Context);
 identifier(Name, Context) when is_list(Name) ->
     case re:run(Name, "^[a-z][a-z0-9_]*$", [{capture, none}]) of
         match ->
-            case lists:member(Name, reserved_identifiers()) of
+            case reserved(Name, Context) of
                 true -> error({reserved_dslx_identifier, Context, Name});
                 false -> Name
             end;
@@ -100,9 +101,22 @@ identifier(Name, Context) when is_list(Name) ->
 identifier(Name, Context) ->
     error({invalid_dslx_identifier, Context, Name}).
 
-reserved_identifiers() ->
-    [
-        "as", "const", "else", "enum", "fn", "for", "if", "import",
-        "in", "let", "match", "proc", "pub", "spawn", "struct",
-        "type", "while"
-    ].
+%% Ports and endpoint IDs are stems: their emitted identifiers receive suffixes.
+%% In particular the ordinary source port `out` never becomes bare DSLX `out`.
+-spec reserved(string(), term()) -> boolean().
+reserved(_, {actor_output, _}) -> false;
+reserved(_, external_id) -> false;
+reserved(_, ingress_id) -> false;
+reserved(_, ingress_target) -> false;
+reserved(Name, {actor_module, _}) -> reserved_module(Name);
+reserved(Name, {scheduler, _}) -> reserved_module(Name);
+reserved(Name, family_module) -> reserved_module(Name);
+reserved(Name, scheduler_module) -> reserved_module(Name);
+reserved(Name, _) -> xls_names:keyword(Name) orelse lists:member(Name, ["spawn", "while"]).
+
+%% These modules provide the topology's transport and arbitration vocabulary.
+%% An actor artifact with the same import name would replace that vocabulary.
+-spec reserved_module(string()) -> boolean().
+reserved_module(Name) ->
+    reserved(Name, topology_name) orelse lists:member(Name,
+        ["axis", "frame_transport", "frame_queue", "effect_window", "arbitration", "hls_spatial_router"]).

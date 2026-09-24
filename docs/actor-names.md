@@ -10,7 +10,9 @@ The generated module has one namespace for record types and their two codec func
 
 Generated identifiers must use ASCII letters, digits, and underscores, beginning with a letter or underscore. Fields cannot use DSLX keywords or the bare `_` wildcard. Quoted Erlang names such as `'Value'` work; names containing punctuation or non-ASCII characters are rejected with their source origin. The check applies to records actually emitted by the actor, including its private accumulator; unrelated records in an included header do not occupy the actor's namespace.
 
-This preflight covers actor declarations and fixed compiler names. Imported-provider aliases, deployment identifiers, and value/type shadowing by source-derived local bindings remain subject to XLS's own scope checks.
+Source variable bindings use a separate `v_` namespace: `Value` becomes `v_Value_1`, so it cannot shadow the record type `Value_1`. Provider imports must have distinct local aliases (the final component of a dotted path), cannot collide with actor declarations, and cannot use the `v_`, `hls_local_`, or `XLS_FAILURE_SITE_` prefixes or anonymous temporary names such as `_0`.
+
+Topology module identifiers obey the same DSLX keyword rules and cannot reuse the topology's transport-module names. Port and endpoint IDs are stems with generated suffixes, so a port named `out` remains valid. These checks diagnose known generated namespaces; XLS still validates each complete module and its remaining lexical scopes.
 
 Tags, phases, ports, and reducer names have separate enum scopes. Reusing `value` as a message tag, phase, output port, and field is valid. Distinct atoms that uppercase to the same member, such as `ready` and `'Ready'`, cannot share an enum. Phase atoms `repeat_phase`, `reduce`, `terminate`, `consume`, `postpone`, `fail`, `true`, and `false` are reserved by callback or expression lowering.
 
