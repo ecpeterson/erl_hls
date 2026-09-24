@@ -143,14 +143,15 @@
     "added_luts": 690,
     "incomplete": {
       "status": "stopped_without_complete_route",
-      "reason": "90-minute wall-clock budget; remaining routing conflicts; no frequency result",
+      "reason": "Stopped after about 87 minutes with routing conflicts (90-minute budget); no frequency result",
       "last_router_iteration": {
         "iteration": 11,
         "wires": 1613119,
         "overused_wires": 2268,
         "overuse": 2268
       },
-      "route_log_sha256": "a1fe786159307be0254c270748253f3e836fb9a8f6ca3b6faf805ab641e7f197"
+      "route_log_sha256": "a1fe786159307be0254c270748253f3e836fb9a8f6ca3b6faf805ab641e7f197",
+      "console_creation_to_stop_record_seconds": 5242.114226818085
     }
   },
   "board-route-target25": {

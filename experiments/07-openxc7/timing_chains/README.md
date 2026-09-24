@@ -52,6 +52,8 @@ The input must have one flattened top and no combinational loops. Fixed-location
 
 ## Reusing placement
 
+Generate and map the complete four-phi/D3 workloads with [the profile timing guide](../phi-timing.md), selecting `--part xc7z030sbg485-1`. The retained mapping manifests record source digests and exact synthesis scripts. Use the coverage-enabled native binary for the routing commands below.
+
 For expensive full cores, retain a placement checkpoint before routing:
 
 ```sh

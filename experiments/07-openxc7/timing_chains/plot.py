@@ -55,7 +55,10 @@ def render(root: Path) -> None:
         axis.tick_params(axis='y', length=0)
     fig.text(.16, .035, 'Native estimates: LUT-only arithmetic, three seeds; full-core control, one seed.\nRAM/DSP timing is incomplete. These are not whole-design clock guarantees.', fontsize=10, color='#48545f')
     for extension in ('png', 'svg'):
-        fig.savefig(root / ('timing-comparison.'+extension), dpi=160, facecolor='white')
+        output = root / ('timing-comparison.'+extension)
+        fig.savefig(output, dpi=160, facecolor='white')
+        if extension == 'svg':
+            output.write_text('\n'.join(line.rstrip() for line in output.read_text().splitlines())+'\n')
     plt.close(fig)
 
 

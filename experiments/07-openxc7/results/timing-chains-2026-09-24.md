@@ -22,7 +22,7 @@ Period statistics below use the same three placement seeds (1–3). Variance is 
 | **Reciprocal, two stages** | **16.044** | **0.810** | **14.793** | **16.872** | **1,018** | **200** |
 | Reciprocal without saturation, two stages | 17.398 | 0.459 | 16.496 | 18.129 | 977 | 233 |
 
-The accepted change reduces mean arithmetic period **41.0%** in the two-stage probe and **27.6%** combinationally. At matched seed 1, DSP mapping gives 36.98→28.50 ns and 243→205 LUTs, with six DSPs unchanged; the coarse DSP model limits that comparison. [Statistics](timing-chains-2026-09-24/statistics.json) retain unrounded values.
+The accepted change reduces mean arithmetic period **41.0%** in the two-stage probe and **27.6%** combinationally. At matched seed 1, DSP mapping gives 36.98→28.50 ns and 243→205 LUTs, with six DSPs unchanged; the coarse DSP model limits that comparison. [Statistics](timing-chains-2026-09-24/statistics.json) retain individual samples and computed values.
 
 For non-power-of-two divisors, `hls_fixed::round_ratio` now multiplies by a statically rounded reciprocal, adds the half-unit bias and shifts. Reciprocal precision is chosen so every representable input rounds exactly as before, including negative ties and the most negative value. Power-of-two divisors use widened signed-bias division. No extra stage or state is introduced.
 
@@ -42,8 +42,9 @@ Each hypothesis was recorded before its measurement; [the register](timing-chain
 | Remove redundant bulk saturation | Save 1–2 ns | Combinational mean improves to 19.85 ns, but two-stage mean worsens 8.4%; rejected. |
 | Register both reduction-batch queues | Shorten executor→reduction path by at least 25% | Correctness passes, but cycles/step rise 93.25→107.25; rejected before spending time on routing. |
 | Split reciprocal into parallel partial products | Another 10–20% | Two-stage LUT-only mean 15.16 ns (5.5% better), but 1,660 LUTs versus 1,018; DSP mapping has the same six DSPs, more LUTs and no delay gain. Retained as an experiment. |
-| Replicate high-fan-out LUT drivers | 10–25% shorter routed control path | Failed to complete routing within 90 minutes; 2,268 conflicting wires remained. Not adopted. |
+| Replicate high-fan-out LUT drivers | 10–25% shorter routed control path | Stopped after 87 minutes with 2,268 conflicting wires remaining. Not adopted. |
 | Gentler 25 MHz target and placement replay | Easier convergence, possibly 10% shorter covered control delay | Placement completes; routing still has 1,208 conflicts at the 60-minute total budget. No frequency result. |
+| Add a third pipeline stage, retaining II=1 | 20–30% shorter arithmetic stage, ideally unchanged step cadence | Seed-1 arithmetic worsens 16.87→18.15 ns; whole-core cycles/step rise 93.25→123.25 (123.33 with stalls). Rejected. |
 
 The current source reproduces the reciprocal probe; generated RTL differs only in internal signal identifiers. The saturation result is significant: a simpler combinational expression need not produce a better partition across existing pipeline stages. The accepted implementation retains saturation.
 
@@ -64,3 +65,5 @@ The arithmetic candidate at the same 100 MHz target did not complete routing wit
 The DSLX tests exhaust eight-bit inputs for twelve divisors, check widths through 129 bits and run 10,000 sampled wide-input JIT comparisons. [Z3 evidence](timing-chains-2026-09-24/rounding-proofs.json) proves the integer rounding identity for all inputs in 110 width/divisor combinations; incorrect reciprocal rounding must produce a counterexample. It also proves the rejected saturation optimization's four-neighbor range bound. These arithmetic proofs do not claim compiler equivalence.
 
 Local EUnit passes **1,151 tests**; Dialyzer passes. Timing-tool tests pass **36 tests, one skipped**. Source contracts introduce no new gaps. [Check records](timing-chains-2026-09-24/checks.json) retain log digests. CI now explicitly executes the fixed-point properties with JIT comparison and a fixed random seed.
+
+The pinned Linux suite passes its functional, D3 memory/debug, bring-up and mixed-topology checks. Its changed phi RTL digest is refreshed from [the Linux artifact](timing-chains-2026-09-24/linux-goldens.json); the other three RTL and all seven DSLX goldens are unchanged. The complete golden check and 1,151 EUnit tests pass again locally after the refresh.

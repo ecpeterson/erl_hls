@@ -14,5 +14,13 @@
   "timing-tests-final.log": {
     "sha256": "417fade05dcbfa3c51c621e5695e22598ef77d08d0f516e00239c5d00653110d",
     "summary": "all coordinates through step 32\ncycles_per_step=25.958333 x_stalls=0 z_stalls=196 x_corrections=0 z_corrections=330\nexperiments/07-openxc7/phi_timing_tb.sv:104: $finish called at 8595000 (1ps)\nsimulate-compile\nsimulate\n..s..\n----------------------------------------------------------------------\nRan 36 tests in 0.244s\n\nOK (skipped=1)\n"
+  },
+  "eunit_after_goldens": {
+    "sha256": "daa58c7adcf0b2a8845443168b5834fb0fcb677370596671016ab69bf86670b6",
+    "summary": ".......................................\nFinished in 13.736 seconds\n1151 tests, 0 failures\n"
+  },
+  "linux_first_run": {
+    "url": "https://github.com/ecpeterson/erl_hls/actions/runs/35977548810",
+    "result": "All checks passed except the stale phi RTL digest; that digest is refreshed from the run artifact and the local complete golden check passes."
   }
 }

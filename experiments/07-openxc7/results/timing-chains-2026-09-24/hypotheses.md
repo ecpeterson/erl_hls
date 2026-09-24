@@ -22,3 +22,5 @@
 11. Split the exact reciprocal multiply into two parallel constant-limb products and recombine, exposing an additional boundary to the existing two-stage scheduler. Predict 10–20% shorter arithmetic path at possible area cost, with unchanged cycles and exact arithmetic.
 
 12. Use a 25-MHz placement/routing target instead of severely overconstraining the partial native model at 100 MHz. Predict easier congestion convergence and possibly at least 10% shorter covered control delay, with identical netlist/cycle behavior. This changes an optimization target, not the deployed clock. Checkpoint placement first so router retries need not repeat it.
+
+13. Add a third XLS pipeline stage, retaining II=1. Predict 20–30% shorter arithmetic stage; first measure whether the four-phi decoder preserves its cycle cadence. Reject extra cycles without a qualified complete-design clock gain. Repeat the queue cut on the selected saturated reciprocal implementation as well, so that its comparison uses the final arithmetic.
