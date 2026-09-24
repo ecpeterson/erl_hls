@@ -20,6 +20,7 @@ The laws permit normalization, but do not specify which normalization is appropr
 | --- | --- | --- |
 | `hls_nums:u8/u16/u32/u64/uN` | Preserve integers in the unsigned range; reject overflow and negative values. | `hls_nums:wrap(T, Value)` reduces modulo `2^Width`. |
 | `hls_nums:s8/s16/s32/s64/sN` | Preserve integers in the signed range; reject overflow. | `hls_nums:wrap(T, Value)` reduces modulo `2^Width`, then interprets the sign bit. |
+| `hls_serial:counter(Width)` | Reduce integers modulo `2^Width`, including negative values. | `wrap/2` normalizes explicitly; `pack_exact/2` rejects any change. [Temporal ordering](serial-counters.md) requires a half-range bound. |
 | `hls_fixed:signed(Width, FractionBits)` | Preserve in-range raw scaled integers; reject overflow. | `hls_fixed:wrap/2` wraps the raw integer; `saturate/2` clamps it. Neither changes the fractional scale. |
 | `hls_nums:float16/float32` | Round to IEEE binary16/binary32, including ties to even and gradual underflow; reject results that encode infinity. | `hls_type:normalize/2` exposes the rounded host value; `pack_exact/2` rejects any change to the original term. |
 | `hls_nums:float64` | Preserve finite binary64 floats, including signed zero and subnormals. Integer inputs undergo ERTS's integer-to-binary64 conversion. | `pack_exact/2` rejects integer-to-float coercion as well as any other term change. |

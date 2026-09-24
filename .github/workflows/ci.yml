@@ -173,6 +173,9 @@ jobs:
       - name: Compare integer division and remainder with BEAM, JIT, and RTL
         run: bash tools/test_integer_arithmetic.sh "$RUNNER_TEMP/xls"
 
+      - name: Compare wrapping counters with BEAM, JIT, and RTL
+        run: bash tools/test_serial.sh "$RUNNER_TEMP/xls"
+
       - name: Compare signed and mixed-width shifts with BEAM, JIT, and RTL
         run: bash tools/test_integer_shifts.sh "$RUNNER_TEMP/xls"
 
@@ -352,6 +355,7 @@ jobs:
             _build/typed-float/**
             _build/integer-arithmetic/**
             _build/integer-shifts/**
+            _build/serial/**
             _build/collections/**
             _build/patterns/**
             _build/type-shapes/**
