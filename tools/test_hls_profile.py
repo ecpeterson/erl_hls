@@ -5,7 +5,7 @@ import json
 import unittest
 import xml.etree.ElementTree as ET
 
-from hls_profile import longest_path, perfetto, svg, validate, window, counter_name
+from hls_profile import longest_path, perfetto, svg, validate, window, counter_name, observed_predecessors, observed_overlay
 
 
 def fixture() -> dict:
@@ -124,6 +124,57 @@ class ProfileTests(unittest.TestCase):
         self.assertIn('join <&>', texts)
         fills = {e.get('fill') for e in tree.iter('{http://www.w3.org/2000/svg}rect')}
         self.assertTrue({'#d7a84b', '#c5cbd3'} <= fills)
+
+    def test_resource_order_is_not_causality(self) -> None:
+        """Observed contention is retained without becoming a default flow or work dependency."""
+        p = fixture()
+        p['events'].append({'id': 'unrelated', 'track': 'c', 'name': 'other client', 'ts': 16, 'dur': 33})
+        p['resource_dependencies'] = [{'source': 'unrelated', 'target': 'join',
+            'kind': 'grant order', 'resource': 'executor', 'evidence': 'recorded grant'}]
+        self.assertEqual(longest_path(p, 'join'), longest_path(fixture(), 'join'))
+        causal = observed_predecessors(p, 'join')
+        scheduled = observed_predecessors(p, 'join', resources=True)
+        self.assertIn('slow', causal['events'])
+        self.assertNotIn('unrelated', causal['events'])
+        self.assertEqual(scheduled['events'], ['unrelated', 'join'])
+        self.assertEqual(scheduled['unexplained_gaps'], [{'target': 'join', 'ts': 49, 'dur': 1}])
+        trace = perfetto(p)['traceEvents']
+        self.assertEqual(sum(e['ph'] == 's' for e in trace), len(p['edges']))
+        target = next(e for e in trace if e.get('ph') == 'X' and e['args']['event_id'] == 'join')
+        self.assertEqual(json.loads(target['args']['profile_resource_dependencies']), p['resource_dependencies'])
+        del p['resource_dependencies'][0]['resource']
+        with self.assertRaisesRegex(ValueError, 'named resource'):
+            validate(p)
+
+    def test_observed_overlay_preserves_ties_and_original_graph(self) -> None:
+        """Latest arrival can differ from longest accumulated work; all tied arrivals remain visible."""
+        p = fixture()
+        p['events'][2].update(ts=35)
+        result = observed_predecessors(p, 'join')
+        self.assertEqual({e['source'] for e in result['relations'] if e['target'] == 'join'}, {'slow', 'fast'})
+        before = copy.deepcopy(p)
+        overlay = observed_overlay(p, 'join')
+        validate(overlay)
+        self.assertEqual(p, before)
+        rendered = svg(p, 0, 80, observed_target='join')
+        self.assertIn('Latest recorded prerequisites highlighted', rendered)
+        self.assertEqual(rendered.count('class="event"'), len(p['events']))
+        self.assertEqual(overlay['edges'], p['edges'])
+        self.assertEqual(sum(e['ph'] == 's' for e in perfetto(overlay)['traceEvents']), len(p['edges']))
+        self.assertTrue(all(e['id'].startswith('observed-overlay/') for e in overlay['events'][:-len(p['events'])]))
+        with self.assertRaisesRegex(ValueError, 'already contains'):
+            observed_overlay(overlay, 'join')
+
+    def test_resource_boundaries_survive_windowing(self) -> None:
+        """Cropping discloses lost resource predecessors separately from lost causal edges."""
+        p = fixture()
+        p['resource_dependencies'] = [{'source': 'fast', 'target': 'slow', 'kind': 'impossible', 'resource': 'port', 'evidence': 'fixture'}]
+        with self.assertRaisesRegex(ValueError, 'finishes after'):
+            validate(p)
+        p['resource_dependencies'][0].update(source='root', target='join')
+        clipped = window(p, 10, 70)
+        self.assertEqual(clipped['resource_dependencies'], [])
+        self.assertEqual(clipped['metadata']['omitted_resource_boundaries'], 1)
 
     def test_roundtrip_and_render(self) -> None:
         """SVG native titles and Perfetto args/flows retain event identity and causality."""

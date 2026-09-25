@@ -23,7 +23,7 @@ def validate(profile: dict) -> list[str]:
         raise ValueError('duplicate event ID')
     lanes = defaultdict(list)
     for event in events.values():
-        if {'event_id', 'duration_ns', 'display_duration_ns', 'profile_dependencies'} & event.get('args', {}).keys():
+        if {'event_id', 'duration_ns', 'display_duration_ns', 'profile_dependencies', 'profile_resource_dependencies'} & event.get('args', {}).keys():
             raise ValueError('event arguments use reserved export fields')
         if event['track'] not in track_ids:
             raise ValueError('unknown event track')
@@ -47,7 +47,9 @@ def validate(profile: dict) -> list[str]:
             raise ValueError('counter must be exactly representable as a finite double')
     incoming, outgoing = dict.fromkeys(events, 0), defaultdict(list)
     pairs = set()
-    for edge in profile['edges']:
+    for edge, resource in [(e, False) for e in profile['edges']]+[(e, True) for e in profile.get('resource_dependencies', [])]:
+        if resource and not edge.get('resource'):
+            raise ValueError('resource dependencies require a named resource')
         source, target = edge['source'], edge['target']
         if source not in events or target not in events or (source, target) in pairs:
             raise ValueError('unknown or duplicate dependency')
@@ -106,6 +108,65 @@ def longest_path(profile: dict, target: str) -> dict:
 
 
 
+def observed_predecessors(profile: dict, target: str, *, resources: bool = False) -> dict:
+    """Find latest recorded prerequisites, retaining ties and unexplained post-readiness gaps.
+
+    This is an explanation of one observed schedule, not a lower bound or a
+    counterfactual scheduling model. Resource ordering is opt-in and separate
+    from message/state dependencies. Missing predecessors remain unknown.
+    """
+    validate(profile)
+    events = {event['id']: event for event in profile['events']}
+    if target not in events:
+        raise ValueError(f'unknown path target: {target}')
+    incoming = defaultdict(list)
+    for edge in profile['edges']:
+        incoming[edge['target']].append({**edge, 'relation': 'causal'})
+    if resources:
+        for edge in profile.get('resource_dependencies', []):
+            incoming[edge['target']].append({**edge, 'relation': 'resource'})
+    pending, selected, relations, gaps, roots = [target], set(), [], [], []
+    while pending:
+        ident = pending.pop()
+        if ident in selected:
+            continue
+        selected.add(ident)
+        event, candidates = events[ident], incoming[ident]
+        if not candidates:
+            roots.append(ident)
+            continue
+        ready = max(events[e['source']]['ts']+events[e['source']]['dur']+e.get('delay_ns', 0) for e in candidates)
+        latest = [e for e in candidates if events[e['source']]['ts']+events[e['source']]['dur']+e.get('delay_ns', 0) == ready]
+        relations.extend(latest)
+        pending.extend(e['source'] for e in latest)
+        if ready < event['ts']:
+            gaps.append({'target': ident, 'ts': ready, 'dur': event['ts']-ready})
+    return {'target': target, 'events': sorted(selected, key=lambda key: (events[key]['ts'], key)),
+            'relations': relations, 'unexplained_gaps': gaps, 'boundary_roots': sorted(roots),
+            'includes_resource_order': resources,
+            'scope': profile.get('metadata', {}).get('dependency_scope', 'recorded prerequisites only')}
+
+
+def observed_overlay(profile: dict, target: str, *, resources: bool = False) -> dict:
+    """Add visually separate copies of latest prerequisite events, without adding causal flows."""
+    result = observed_predecessors(profile, target, resources=resources)
+    events = {event['id']: event for event in profile['events']}
+    tracks = {track['id']: track for track in profile['tracks']}
+    prefix = 'observed-overlay/'
+    selected_tracks = {events[key]['track'] for key in result['events']}
+    if any(t['id'].startswith(prefix) for t in profile['tracks']) or any(e['id'].startswith(prefix) for e in profile['events']):
+        raise ValueError('profile already contains an observed overlay')
+    group = 'Observed schedule overlay' if resources else 'Latest causal predecessors overlay'
+    overlay_tracks = [{**tracks[key], 'id': prefix+key, 'group': group} for key in tracks if key in selected_tracks]
+    gaps = {gap['target']: gap for gap in result['unexplained_gaps']}
+    overlay_events = [{**events[key], 'id': prefix+key, 'track': prefix+events[key]['track'],
+                       'args': {'original_args': events[key].get('args', {}), 'original_event': key,
+                                'overlay_target': target, 'unexplained_before_ns': gaps.get(key, {}).get('dur', 0)}}
+                      for key in result['events']]
+    return {**profile, 'tracks': overlay_tracks+profile['tracks'], 'events': overlay_events+profile['events'],
+            'metadata': {**profile.get('metadata', {}), 'observed_overlay': result}}
+
+
 def display_duration(event: dict) -> int:
     """Return a declared observation-cycle width without adding work to causal accounting."""
     return event.get('display_duration_ns', event['dur'])
@@ -130,6 +191,9 @@ def perfetto(profile: dict) -> dict:
     incoming = defaultdict(list)
     for edge in profile['edges']:
         incoming[edge['target']].append(edge)
+    resource_incoming = defaultdict(list)
+    for edge in profile.get('resource_dependencies', []):
+        resource_incoming[edge['target']].append(edge)
     timed = []
     # Chrome flow args are not imported by Perfetto; retain their evidence on the consumer slice.
     for event in events.values():
@@ -138,7 +202,8 @@ def perfetto(profile: dict) -> dict:
                       'pid': pid, 'tid': tid, 'ts': event['ts']/1000, 'dur': display_duration(event)/1000,
                       'args': {**event.get('args', {}), 'event_id': event['id'], 'duration_ns': event['dur'],
                                'display_duration_ns': display_duration(event),
-                               'profile_dependencies': json.dumps(incoming[event['id']], separators=(',', ':'))}})
+                               'profile_dependencies': json.dumps(incoming[event['id']], separators=(',', ':')),
+                               'profile_resource_dependencies': json.dumps(resource_incoming[event['id']], separators=(',', ':'))}})
     for index, edge in enumerate(profile['edges'], 1):
         # Anchor each flow to the source/target slice start, not an ambiguous shared end boundary.
         for phase, endpoint in (('s', 'source'), ('f', 'target')):
@@ -164,6 +229,8 @@ def window(profile: dict, start: int, end: int) -> dict:
     events = [e for e in profile['events'] if start <= e['ts'] and e['ts']+display_duration(e) < end]
     ids = {e['id'] for e in events}
     edges = [e for e in profile['edges'] if e['source'] in ids and e['target'] in ids]
+    resources = [e for e in profile.get('resource_dependencies', []) if e['source'] in ids and e['target'] in ids]
+    resource_boundary = sum((e['source'] in ids) != (e['target'] in ids) for e in profile.get('resource_dependencies', []))
     boundary = sum((e['source'] in ids) != (e['target'] in ids) for e in profile['edges'])
     counters, prior = [], {}
     for sample in profile.get('counters', []):
@@ -175,12 +242,12 @@ def window(profile: dict, start: int, end: int) -> dict:
                 prior[key] = sample
     counters += [{**s, 'ts': start, 'original_ts': s['ts']} for s in prior.values()
                  if not any(c['track'] == s['track'] and c['name'] == s['name'] and c['ts'] == start for c in counters)]
-    metadata = {**profile.get('metadata', {}), 'window_ns': [start, end], 'omitted_boundary_edges': boundary}
+    metadata = {**profile.get('metadata', {}), 'window_ns': [start, end], 'omitted_boundary_edges': boundary, 'omitted_resource_boundaries': resource_boundary}
     metadata['dependency_scope'] = f"window ({boundary} boundary dependencies omitted); " + metadata.get('dependency_scope', 'recorded dependencies only')
-    return {**profile, 'events': events, 'edges': edges, 'counters': counters, 'metadata': metadata}
+    return {**profile, 'events': events, 'edges': edges, 'counters': counters, 'resource_dependencies': resources, 'metadata': metadata}
 
-def svg(profile: dict, start: int, end: int, target: str | None = None) -> str:
-    """Draw a time window with native hover details and an optional longest recorded chain."""
+def svg(profile: dict, start: int, end: int, target: str | None = None, *, observed_target: str | None = None, resources: bool = False) -> str:
+    """Draw causal arrows, optionally highlighting a work chain or latest observed prerequisites."""
     validate(profile)
     if end <= start:
         raise ValueError('empty timeline window')
@@ -192,9 +259,15 @@ def svg(profile: dict, start: int, end: int, target: str | None = None) -> str:
     series = {key: samples for key, samples in series.items() if any(c['ts'] < end for c in samples)}
     lanes = {t['id']: 90+52*i for i, t in enumerate(tracks)}
     positions = {e['id']: e for e in visible}
+    if target and observed_target:
+        raise ValueError('choose either a work chain or observed prerequisites')
+    observed = observed_predecessors(profile, observed_target, resources=resources) if observed_target else None
     path = longest_path(profile, target) if target else None
     bold = {(e['source'], e['target']) for e in path['edges']} if path else set()
     marked = set(path['events']) if path else set()
+    if observed:
+        bold = {(e['source'], e['target']) for e in observed['relations'] if e['relation'] == 'causal'}
+        marked = set(observed['events'])
     width, height = 1450, 140+52*(len(tracks)+len(series))
     esc = html.escape
     colors = {'wait': '#d7a84b', 'service': '#2878b5', 'unknown': '#c5cbd3', 'handshake': '#8661b5'}
@@ -209,6 +282,8 @@ def svg(profile: dict, start: int, end: int, target: str | None = None) -> str:
            '<text x="700" y="23">Blue: service · amber: wait · gray: unknown · purple: boundary clock bin</text>']
     if path:
         out.append(f'<text x="15" y="43">Longest recorded chain (full selected graph): {path["accounted_ns"]} ns accounted; {path["unassigned_ns"]} ns unassigned. {esc(path["scope"])}</text>')
+    if observed:
+        out.append(f'<text x="15" y="43">Latest recorded prerequisites highlighted; {len(observed["unexplained_gaps"])} unexplained gaps; {len(observed["boundary_roots"])} boundary roots. Arrows remain causal only.</text>')
     for i in range(11):
         time = start+(end-start)*i//10
         anchor = 'end' if i == 10 else 'start'
@@ -271,6 +346,8 @@ def main() -> None:
     parser.add_argument('--start', type=int)
     parser.add_argument('--end', type=int)
     parser.add_argument('--target')
+    parser.add_argument('--observed-target', help='overlay latest recorded causal predecessors, retaining ties')
+    parser.add_argument('--observed-resources', action='store_true', help='include resource-order evidence in that overlay only')
     parser.add_argument('--window', action='store_true', help='export only complete events in --start/--end')
     args = parser.parse_args()
     profile = json.loads(args.profile.read_text())
@@ -279,12 +356,19 @@ def main() -> None:
         if args.start is None or args.end is None:
             parser.error('--window requires --start and --end')
         profile = window(profile, args.start, args.end)
+    if args.observed_resources and not args.observed_target:
+        parser.error('--observed-resources requires --observed-target')
+    if args.observed_target and args.target:
+        parser.error('choose --target or --observed-target')
     if args.perfetto:
-        args.perfetto.write_text(json.dumps(perfetto(profile), separators=(',', ':'))+'\n')
+        exported = observed_overlay(profile, args.observed_target, resources=args.observed_resources) if args.observed_target else profile
+        args.perfetto.write_text(json.dumps(perfetto(exported), separators=(',', ':'))+'\n')
     if args.svg:
         if args.start is None or args.end is None:
             parser.error('--svg requires --start and --end in ns')
-        args.svg.write_text(svg(profile, args.start, args.end, args.target))
+        args.svg.write_text(svg(profile, args.start, args.end, args.target, observed_target=args.observed_target, resources=args.observed_resources))
+    if args.observed_target:
+        print(json.dumps(observed_predecessors(profile, args.observed_target, resources=args.observed_resources), indent=2))
     if args.target:
         print(json.dumps(longest_path(profile, args.target), indent=2))
 
