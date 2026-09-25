@@ -69,3 +69,7 @@ python3 experiments/07-openxc7/timing_model/test_codegen.py \
 ```
 
 Retain raw reports/SDF, mapped inputs, manifests and tool fingerprints. Checkpoints and duplicate intermediate netlists can be removed once those records are complete. No new CI job or automatic vendor measurement is enabled.
+
+## Retargeting
+
+The current scripts retain Z-7030 assumptions; changing a part name alone is insufficient. The [retargeting plan](../yap/timing-model/retargeting.md) outlines target profiles, resumable campaigns, generated model data and qualification on a second target.
