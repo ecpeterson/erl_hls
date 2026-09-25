@@ -182,8 +182,8 @@ pack(Value, Descriptor = #hls_type{module = Module, name = Name, args = Args}) -
 -doc """
 Returns the host value obtained by packing and unpacking at the declared type.
 This exposes wire rounding without introducing a new live-value representation.
-It works recursively for collections and is a host-only operation. Integer
-overflow is still an error; use the numeric provider's wrap/2 to request wrapping.
+It works recursively for collections and is a host-only operation. Numeric
+integer providers reject overflow; serial counter providers normalize by wrapping.
 """.
 -spec normalize(descriptor(), term()) -> term().
 normalize(Descriptor, Value) ->

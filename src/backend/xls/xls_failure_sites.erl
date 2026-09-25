@@ -32,6 +32,8 @@ prepare(Forms = [{attribute, _, file, {Main, _}} | _]) ->
     {Annotated, [#{kind => Kind, file => list_to_binary(File), line => Line}
         || {File, Line, Kind} <- Origins]}.
 
+%% Collect potential source-located failures before lowering prunes unused sites.
+-spec sites(term()) -> [{file:filename(), erl_anno:line(), atom()}].
 sites({bin_element, Line, Value, _Size, _Types}) ->
     [origin(badarg, Line) | sites(Value)];
 sites({match, _, Pattern, Value}) -> pattern_sites(Pattern) ++ sites(Value);
@@ -46,6 +48,9 @@ sites({call, Line, {remote, _, {atom, _, hls_float}, {atom, _, Operation}}, Args
         when Operation =:= add; Operation =:= sub; Operation =:= mul;
              Operation =:= eq; Operation =:= lt ->
     [origin(badarith, Line) | sites(Args)];
+sites({call, Line, {remote, _, {atom, _, hls_serial}, {atom, _, Operation}}, Args})
+        when Operation =:= difference; Operation =:= before ->
+    [origin(badarg, Line) | sites(Args)];
 sites({call, Line, {remote, _, {atom, _, Module}, {atom, _, Operation}}, Args})
         when (Module =:= hls_lists orelse Module =:= hls_vec) andalso
              (Operation =:= nth orelse Operation =:= set);
