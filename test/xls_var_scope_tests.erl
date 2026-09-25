@@ -20,19 +20,25 @@ unsafe_diagnostic_identifies_join_test() ->
     ?assertError({unsafe_xls_variable, 5, 'Value', 2}, lower(
         "f(X) ->\ncase X of\ntrue -> Value = X;\nfalse -> X end,\nValue." )).
 
+%% Only values used after a join become branch exports.
+-spec exports_only_names_used_after_join_test() -> ok.
 exports_only_names_used_after_join_test() ->
     Xls = lower("f(X) -> case X of true -> Kept = X, Local = X; "
         "false -> Local = X, Kept = X end, Kept."),
-    ?assertEqual(3, length(binary:matches(Xls, <<"let Kept_1">>))),
-    ?assertEqual(2, length(binary:matches(Xls, <<"let Local_1">>))).
+    ?assertEqual(3, length(binary:matches(Xls, <<"let v_Kept_1">>))),
+    ?assertEqual(2, length(binary:matches(Xls, <<"let v_Local_1">>))).
 
+%% A later match retains the earlier binding as an equality constraint.
+-spec later_match_is_a_use_test() -> ok.
 later_match_is_a_use_test() ->
     Xls = lower("f(X) -> case X of true -> Value = X; false -> Value = X end, Value = X."),
-    ?assertNotEqual(nomatch, binary:match(Xls, <<"!(Value_1 == X_1)">>)).
+    ?assertNotEqual(nomatch, binary:match(Xls, <<"!(v_Value_1 == v_X_1)">>)).
 
 %% A case can occur inside an expression, not just at the top of a body.
+%% A branch nested inside an expression can export a subsequently used binding.
+-spec expression_continuations_export_bindings_test_() -> [term()].
 expression_continuations_export_bindings_test_() ->
-    [?_assertEqual(3, length(binary:matches(lower(Source), <<"let Value_1">>)))
+    [?_assertEqual(3, length(binary:matches(lower(Source), <<"let v_Value_1">>)))
         || Source <- [
             "f(X) -> {case X of true -> Value = X; false -> Value = X end, X}, Value.",
             "f(X) -> (case X of true -> Value = X; false -> Value = X end) =:= X, Value.",

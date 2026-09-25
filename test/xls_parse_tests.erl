@@ -231,6 +231,8 @@ non_boolean_guard_root_is_rejected_test() ->
         )
     ).
 
+%% Guard field access uses the record bound by that callback clause.
+-spec guard_record_access_uses_the_bound_record_test() -> ok.
 guard_record_access_uses_the_bound_record_test() ->
     XLS = lower_callback_clauses(
         "probe(#message{}, State) "
@@ -238,9 +240,11 @@ guard_record_access_uses_the_bound_record_test() ->
     ),
     ?assertNotEqual(
         nomatch,
-        binary:match(XLS, <<"Xls_clause_1_State_1.1.value">>)
+        binary:match(XLS, <<"v_Xls_clause_1_State_1.1.value">>)
     ).
 
+%% An or-guard evaluates its second predicate only after the first is false.
+-spec guard_orelse_keeps_rhs_in_false_branch_test() -> ok.
 guard_orelse_keeps_rhs_in_false_branch_test() ->
     XLS = lower_callback_clauses(
         "probe(#message{value = Value}, State) "
@@ -253,10 +257,12 @@ guard_orelse_keeps_rhs_in_false_branch_test() ->
             "if _0 {\n"
             "  (bool:1, hls_failure::NONE)\n"
             "} else {\n"
-            "  let _1 = Xls_clause_1_Value_1 == 1;"
+            "  let _1 = v_Xls_clause_1_Value_1 == 1;"
         >>)
     ).
 
+%% A comma guard evaluates its second predicate only after the first succeeds.
+-spec comma_guards_keep_rhs_in_true_branch_test() -> ok.
 comma_guards_keep_rhs_in_true_branch_test() ->
     XLS = lower_callback_clauses(
         "probe(#message{value = Value}, State) "
@@ -267,10 +273,12 @@ comma_guards_keep_rhs_in_true_branch_test() ->
         nomatch,
         binary:match(XLS, <<
             "if _0 {\n"
-            "  let _1 = Xls_clause_1_Value_1 < 2;"
+            "  let _1 = v_Xls_clause_1_Value_1 < 2;"
         >>)
     ).
 
+%% A failing head pattern suppresses its guard evaluation.
+-spec clause_guard_runs_only_after_the_head_matches_test() -> ok.
 clause_guard_runs_only_after_the_head_matches_test() ->
     XLS = lower_callback_clauses(
         "probe(#message{value = 0}, State) "
@@ -280,7 +288,7 @@ clause_guard_runs_only_after_the_head_matches_test() ->
         nomatch,
         binary:match(XLS, <<
             "if message.value == 0 {\n"
-            "  let _0 = Xls_clause_1_State_1.1.value;\n"
+            "  let _0 = v_Xls_clause_1_State_1.1.value;\n"
             "  let _1 = _0 == 1;"
         >>)
     ).
@@ -293,6 +301,8 @@ tuple_head_patterns_are_projected_for_xls_typechecking_test() ->
     ?assertNotEqual(nomatch, binary:match(XLS, <<"message.value.0">>)),
     ?assertNotEqual(nomatch, binary:match(XLS, <<"message.value.1">>)).
 
+%% Case-sensitive source names remain distinct after callback renaming.
+-spec case_distinct_callback_variables_remain_distinct_test() -> ok.
 case_distinct_callback_variables_remain_distinct_test() ->
     XLS = lower_callback_clauses(
         "probe(#message{value = Foo}, #state{value = FOO}) -> "
@@ -301,6 +311,8 @@ case_distinct_callback_variables_remain_distinct_test() ->
     ?assertNotEqual(nomatch, binary:match(XLS, <<"Foo_1">>)),
     ?assertNotEqual(nomatch, binary:match(XLS, <<"FOO_1">>)).
 
+%% A selected body failure does not retry another callback clause.
+-spec selected_body_badmatch_does_not_try_later_clause_test() -> ok.
 selected_body_badmatch_does_not_try_later_clause_test() ->
     XLS = lower_callback_clauses(
         "probe(#message{value = 0}, State) -> "
@@ -309,19 +321,19 @@ selected_body_badmatch_does_not_try_later_clause_test() ->
     ),
     ?assertEqual(
         <<
-            "let Xls_clause_1_State_1 = (Tag::STATE, data);\n"
+            "let v_Xls_clause_1_State_1 = (Tag::STATE, data);\n"
             "if message.value == 0 {\n"
             "  if ((hls_failure::check(!(bool:0 == bool:true), hls_failure::MATCH_FAILURE)) != hls_failure::NONE) {\n"
             "    body_failure\n"
             "  } else {\n"
-            "    Xls_clause_1_State_1\n"
+            "    v_Xls_clause_1_State_1\n"
             "  }\n"
             "} else {\n"
-            "  let Xls_clause_2_State_1 = (Tag::STATE, data);\n"
+            "  let v_Xls_clause_2_State_1 = (Tag::STATE, data);\n"
             "  if (bool:false) {\n"
             "    body_failure\n"
             "  } else {\n"
-            "    Xls_clause_2_State_1\n"
+            "    v_Xls_clause_2_State_1\n"
             "  }\n"
             "}"
         >>,
@@ -357,6 +369,8 @@ same_gs_tag_cannot_be_both_call_and_cast_test() ->
         ok = file:delete(Path)
     end.
 
+%% Only the selected Boolean case arm contributes a match failure.
+-spec boolean_case_preserves_branch_badmatches_test() -> ok.
 boolean_case_preserves_branch_badmatches_test() ->
     Clause = parse_clause(
         "probe(Condition, Value) -> "
@@ -375,30 +389,34 @@ boolean_case_preserves_branch_badmatches_test() ->
         nomatch,
         binary:match(
             XLS,
-            <<"!(Value_1 == bool:true)">>
+            <<"!(v_Value_1 == bool:true)">>
         )
     ),
     ?assertNotEqual(nomatch, binary:match(XLS, <<"hls_failure::NONE">>)).
 
+%% Short-circuit operators do not duplicate their left operand.
+-spec short_circuit_evaluates_left_once_test_() -> [term()].
 short_circuit_evaluates_left_once_test_() ->
     [?_assertEqual(1, length(binary:matches(
         lower_expression_clause(
             "probe(Value, Right) -> (Value + 1 =:= 2) " ++
                 Operator ++ " Right.",
             ["value", "right"]
-        ), <<"Value_1 + 1">>))) || Operator <- ["andalso", "orelse"]].
+        ), <<"v_Value_1 + 1">>))) || Operator <- ["andalso", "orelse"]].
 
+%% Right-side short-circuit bindings exist only inside the selected branch.
+-spec short_circuit_rhs_bindings_stay_in_their_branch_test_() -> [term()].
 short_circuit_rhs_bindings_stay_in_their_branch_test_() ->
     [?_test(begin
         XLS = lower_expression_clause(
             "probe(Left, Right) -> Left " ++ Operator ++ " "
                 "((Bound = Right) =:= false).", ["left", "right"]),
         {Branch, _} = binary:match(XLS, BranchPrefix),
-        {Binding, _} = binary:match(XLS, <<"let Bound_1 = Right_1;">>),
+        {Binding, _} = binary:match(XLS, <<"let v_Bound_1 = v_Right_1;">>),
         ?assert(Branch < Binding),
-        ?assertEqual(1, length(binary:matches(XLS, <<"let Bound_1">>)))
+        ?assertEqual(1, length(binary:matches(XLS, <<"let v_Bound_1">>)))
     end) || {Operator, BranchPrefix} <- [
-        {"andalso", <<"if Left_1 {">>},
+        {"andalso", <<"if v_Left_1 {">>},
         {"orelse", <<"} else {">>}
     ]].
 
@@ -418,6 +436,8 @@ hls_type_as_preserves_the_host_value_and_emits_a_dslx_cast_test() ->
     XLS = iolist_to_binary(xls_parse:print([Body, Result])),
     ?assertNotEqual(nomatch, binary:match(XLS, <<"(0 as u32)">>)).
 
+%% Sibling Boolean arms can bind a name independently.
+-spec boolean_case_bindings_are_local_to_each_arm_test() -> ok.
 boolean_case_bindings_are_local_to_each_arm_test() ->
     Clause = parse_clause(
         "probe(Condition) -> "
@@ -432,8 +452,10 @@ boolean_case_bindings_are_local_to_each_arm_test() ->
         #{}
     ),
     XLS = iolist_to_binary(xls_parse:print([Body, Result])),
-    ?assertEqual(nomatch, binary:match(XLS, <<"X_2">>)).
+    ?assertEqual(nomatch, binary:match(XLS, <<"v_X_2">>)).
 
+%% Integer case arms preserve source-order guard selection.
+-spec ordered_integer_case_uses_guards_then_falls_through_test() -> ok.
 ordered_integer_case_uses_guards_then_falls_through_test() ->
     XLS = lower_expression_clause(
         "probe(Value) -> case Value of "
@@ -443,10 +465,12 @@ ordered_integer_case_uses_guards_then_falls_through_test() ->
         ["value"]
     ),
     {Literal, _} = binary:match(XLS, <<"== 0">>),
-    {Guard, _} = binary:match(XLS, <<"Selected_1 < 3">>),
+    {Guard, _} = binary:match(XLS, <<"v_Selected_1 < 3">>),
     ?assert(Literal < Guard),
     ?assertNotEqual(nomatch, binary:match(XLS, <<"else {">>)).
 
+%% A case subject is evaluated once before pattern selection.
+-spec general_case_evaluates_its_scrutinee_once_test() -> ok.
 general_case_evaluates_its_scrutinee_once_test() ->
     XLS = lower_expression_clause(
         "probe(Value) -> case Value + 1 of "
@@ -454,8 +478,10 @@ general_case_evaluates_its_scrutinee_once_test() ->
         "_ -> 20 end.",
         ["value"]
     ),
-    ?assertEqual(1, length(binary:matches(XLS, <<"Value_1 + 1">>))).
+    ?assertEqual(1, length(binary:matches(XLS, <<"v_Value_1 + 1">>))).
 
+%% Tuple patterns compare repeated bindings rather than replacing them.
+-spec tuple_case_projects_and_compares_repeated_variables_test() -> ok.
 tuple_case_projects_and_compares_repeated_variables_test() ->
     XLS = lower_expression_clause(
         "probe(Pair) -> case Pair of "
@@ -466,8 +492,10 @@ tuple_case_projects_and_compares_repeated_variables_test() ->
     ),
     ?assertNotEqual(nomatch, binary:match(XLS, <<".0">>)),
     ?assertNotEqual(nomatch, binary:match(XLS, <<".1">>)),
-    ?assertNotEqual(nomatch, binary:match(XLS, <<"Same_1 ==">>)).
+    ?assertNotEqual(nomatch, binary:match(XLS, <<"v_Same_1 ==">>)).
 
+%% An outer binding is an equality constraint inside a case pattern.
+-spec case_pattern_compares_an_outer_binding_instead_of_rebinding_test() -> ok.
 case_pattern_compares_an_outer_binding_instead_of_rebinding_test() ->
     XLS = lower_expression_clause(
         "probe(Value, Outer) -> case Value of "
@@ -475,9 +503,11 @@ case_pattern_compares_an_outer_binding_instead_of_rebinding_test() ->
         "_ -> 2 end.",
         ["value", "outer"]
     ),
-    ?assertNotEqual(nomatch, binary:match(XLS, <<"Outer_1 ==">>)),
-    ?assertEqual(nomatch, binary:match(XLS, <<"let Outer_2">>)).
+    ?assertNotEqual(nomatch, binary:match(XLS, <<"v_Outer_1 ==">>)),
+    ?assertEqual(nomatch, binary:match(XLS, <<"let v_Outer_2">>)).
 
+%% A pattern alias exposes both the complete value and its projections.
+-spec case_alias_binds_the_whole_value_and_its_fields_test() -> ok.
 case_alias_binds_the_whole_value_and_its_fields_test() ->
     XLS = lower_expression_clause(
         "probe(Pair) -> case Pair of "
@@ -485,9 +515,9 @@ case_alias_binds_the_whole_value_and_its_fields_test() ->
         "_ -> {0, 0} end.",
         ["pair"]
     ),
-    ?assertNotEqual(nomatch, binary:match(XLS, <<"let Whole_1">>)),
-    ?assertNotEqual(nomatch, binary:match(XLS, <<"let Left_1">>)),
-    ?assertNotEqual(nomatch, binary:match(XLS, <<"Left_1 > 0">>)).
+    ?assertNotEqual(nomatch, binary:match(XLS, <<"let v_Whole_1">>)),
+    ?assertNotEqual(nomatch, binary:match(XLS, <<"let v_Left_1">>)),
+    ?assertNotEqual(nomatch, binary:match(XLS, <<"v_Left_1 > 0">>)).
 
 selected_general_case_body_badmatch_does_not_fall_through_test() ->
     XLS = lower_expression_clause(
@@ -507,6 +537,8 @@ selected_general_case_body_badmatch_does_not_fall_through_test() ->
         >>)
     ).
 
+%% Unused arm-local bindings do not require a common result type.
+-spec unused_general_case_bindings_stay_in_their_arms_test() -> ok.
 unused_general_case_bindings_stay_in_their_arms_test() ->
     XLS = lower_expression_clause(
         "probe(Value) -> case Value of "
@@ -514,9 +546,11 @@ unused_general_case_bindings_stay_in_their_arms_test() ->
         "_ -> Choice = 2, Choice end.",
         ["value"]
     ),
-    ?assertEqual(2, length(binary:matches(XLS, <<"let Choice_1">>))),
-    ?assertEqual(nomatch, binary:match(XLS, <<"Choice_2">>)).
+    ?assertEqual(2, length(binary:matches(XLS, <<"let v_Choice_1">>))),
+    ?assertEqual(nomatch, binary:match(XLS, <<"v_Choice_2">>)).
 
+%% An aliased variable arm is an exhaustive catch-all.
+-spec case_alias_catchall_is_exhaustive_test() -> ok.
 case_alias_catchall_is_exhaustive_test() ->
     XLS = lower_expression_clause(
         "probe(Value) -> case Value of "
@@ -524,8 +558,10 @@ case_alias_catchall_is_exhaustive_test() ->
         "Whole = _ -> Whole end.",
         ["value"]
     ),
-    ?assertNotEqual(nomatch, binary:match(XLS, <<"let Whole_1">>)).
+    ?assertNotEqual(nomatch, binary:match(XLS, <<"let v_Whole_1">>)).
 
+%% Record case arms combine tag, field, alias and guard conditions.
+-spec homogeneous_record_case_supports_aliases_fields_and_guards_test() -> ok.
 homogeneous_record_case_supports_aliases_fields_and_guards_test() ->
     XLS = lower_callback_clauses(
         "probe(Message = #message{}, State) -> "
@@ -636,6 +672,8 @@ duplicate_boolean_case_arm_is_rejected_test() ->
         )
     ).
 
+%% Compiler temporaries do not consume source variable names.
+-spec case_failure_uses_no_synthetic_erlang_bindings_test() -> ok.
 case_failure_uses_no_synthetic_erlang_bindings_test() ->
     Clause = parse_clause(
         "probe(Condition, Case_match_1) -> "
@@ -650,9 +688,11 @@ case_failure_uses_no_synthetic_erlang_bindings_test() ->
         #{}
     ),
     XLS = iolist_to_binary(xls_parse:print([Body, Result])),
-    ?assertNotEqual(nomatch, binary:match(XLS, <<"Case_match_1_1">>)),
+    ?assertNotEqual(nomatch, binary:match(XLS, <<"v_Case_match_1_1">>)),
     ?assertEqual(nomatch, binary:match(XLS, <<"let case_match_">>)).
 
+%% If clauses retain their source ordering and conjunctive guards.
+-spec if_clauses_preserve_source_order_and_comma_guards_test() -> ok.
 if_clauses_preserve_source_order_and_comma_guards_test() ->
     XLS = lower_expression_clause(
         "probe(Value) -> if "
@@ -661,13 +701,15 @@ if_clauses_preserve_source_order_and_comma_guards_test() ->
         "true -> Value + 3 end.",
         ["value"]
     ),
-    {First, _} = binary:match(XLS, <<"Value_1 >= 10">>),
-    {Second, _} = binary:match(XLS, <<"Value_1 >= 0">>),
-    {Third, _} = binary:match(XLS, <<"Value_1 < 20">>),
+    {First, _} = binary:match(XLS, <<"v_Value_1 >= 10">>),
+    {Second, _} = binary:match(XLS, <<"v_Value_1 >= 0">>),
+    {Third, _} = binary:match(XLS, <<"v_Value_1 < 20">>),
     ?assert(First < Second),
     ?assert(Second < Third),
     ?assertEqual(nomatch, binary:match(XLS, <<" && ">>)).
 
+%% Unused if-arm bindings stay local to their selected branch.
+-spec unused_if_bindings_stay_in_their_arms_test() -> ok.
 unused_if_bindings_stay_in_their_arms_test() ->
     XLS = lower_expression_clause(
         "probe(Value) -> if "
@@ -675,8 +717,8 @@ unused_if_bindings_stay_in_their_arms_test() ->
         "true -> Choice = Value - 1, Choice end.",
         ["value"]
     ),
-    ?assertEqual(2, length(binary:matches(XLS, <<"let Choice_1">>))),
-    ?assertEqual(nomatch, binary:match(XLS, <<"Choice_2">>)).
+    ?assertEqual(2, length(binary:matches(XLS, <<"let v_Choice_1">>))),
+    ?assertEqual(nomatch, binary:match(XLS, <<"v_Choice_2">>)).
 
 selected_if_body_badmatch_reaches_body_failure_test() ->
     XLS = lower_callback_clauses(
@@ -702,6 +744,8 @@ if_guard_alternatives_are_lowered_test() ->
     ?assertNotEqual(nomatch, binary:match(XLS, <<" == 0">>)),
     ?assertNotEqual(nomatch, binary:match(XLS, <<" == 1">>)).
 
+%% Both callback kinds accept guarded expression selection.
+-spec hls_gs_callback_body_accepts_if_test() -> ok.
 hls_gs_callback_body_accepts_if_test() ->
     Path = filename:join("_build", "gs_if_fixture.erl"),
     ok = filelib:ensure_dir(Path),
@@ -735,23 +779,25 @@ hls_gs_callback_body_accepts_if_test() ->
         XLS = iolist_to_binary(xls_parse:to_xls(Path)),
         ?assertNotEqual(nomatch, binary:match(XLS, <<"Tag::MESSAGE =>">>)),
         ?assertNotEqual(nomatch, binary:match(XLS, <<"Tag::QUERY =>">>)),
-        ?assertNotEqual(nomatch, binary:match(XLS, <<"Value_1 > 0">>))
+        ?assertNotEqual(nomatch, binary:match(XLS, <<"hls_integer::less(sN[2]:0, v_Xls_clause_1_Value_1)">>))
     after
         ok = file:delete(Path)
     end.
 
+%% A complete server lowers nested record and integer case expressions.
+-spec hls_gs_callback_bodies_accept_general_case_test() -> ok.
 hls_gs_callback_bodies_accept_general_case_test() ->
     XLS = iolist_to_binary(xls_parse:to_xls(
         "test_data/xls_case_fixture.erl"
     )),
     ?assertNotEqual(nomatch, binary:match(XLS, <<"Tag::QUERY =>">>)),
     ?assertNotEqual(nomatch, binary:match(XLS, <<"Tag::UPDATE =>">>)),
-    ?assertNotEqual(nomatch, binary:match(XLS, <<"Choice_1 < 8">>)),
+    ?assertNotEqual(nomatch, binary:match(XLS, <<"hls_integer::less(v_Xls_clause_1_Choice_1, sN[5]:8)">>)),
     ?assertNotEqual(
         nomatch,
-        binary:match(XLS, <<"Request_1.0 == Tag::QUERY">>)
+        binary:match(XLS, <<"v_Xls_clause_1_Request_1.0 == Tag::QUERY">>)
     ),
-    ?assertNotEqual(nomatch, binary:match(XLS, <<"Original_1 < 8">>)),
+    ?assertNotEqual(nomatch, binary:match(XLS, <<"hls_integer::less(v_Xls_clause_1_Original_1, sN[5]:8)">>)),
     ?assertNotEqual(nomatch, binary:match(XLS, <<"hls_failure::NONE">>)).
 
 state_machine_init_argument_is_rejected_test() ->
@@ -766,6 +812,8 @@ state_machine_init_guard_is_rejected_test() ->
         "init([]) when false -> {ok, waiting, #cell{}}.\n"
     ).
 
+%% Entry effects can contain an updated message record.
+-spec state_machine_entry_action_accepts_record_update_test() -> ok.
 state_machine_entry_action_accepts_record_update_test() ->
     EnterSource =
         "waiting(enter, _OldPhase, Cell) ->\n"
@@ -783,11 +831,13 @@ state_machine_entry_action_accepts_record_update_test() ->
         fun(XLS) ->
             ?assertNotEqual(
                 nomatch,
-                binary:match(XLS, <<"..(Message_1).1">>)
+                binary:match(XLS, <<"..(v_Message_1).1">>)
             )
         end
     ).
 
+%% Entry effects honor a runtime numeric predicate.
+-spec state_machine_entry_action_accepts_runtime_predicate_test() -> ok.
 state_machine_entry_action_accepts_runtime_predicate_test() ->
     EnterSource =
         "waiting(enter, _OldPhase, Cell) ->\n"
@@ -814,7 +864,7 @@ state_machine_entry_action_accepts_runtime_predicate_test() ->
             ),
             ?assertNotEqual(
                 nomatch,
-                binary:match(XLS, <<" != 0">>)
+                binary:match(XLS, <<"!hls_integer::equal(">>)
             )
         end
     ).

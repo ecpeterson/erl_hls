@@ -478,6 +478,10 @@ statement_from_statement({op, Line, Op, Left, Right}, State)
         when Op =:= 'bsl'; Op =:= 'bsr' ->
     {[Value, Count], Evaluated} = lower_arguments([Left, Right], State),
     lower_shift(Op, Value, Count, Line, Evaluated);
+%% Integer facts are attached before callback/helper normalization.
+statement_from_statement({xls_integer_compare, _Line, Op, Left, Right}, State) ->
+    {References, Evaluated} = lower_arguments([Left, Right], State),
+    instr(Evaluated, xls_comparison:emit(Op, References));
 statement_from_statement(X, State) when is_tuple(X) andalso op == element(1, X) ->
     [op, Line, Op | Args] = tuple_to_list(X),
     {References, ArgState} = lower_arguments(Args, State),
@@ -817,14 +821,16 @@ anonymous_variable(State = #clause_state{anonymous_counter = Counter}) ->
 
 -spec uniquify(clause_state(), atom() | string()) ->
     {string(), clause_state()}.
--doc "Rewrites NameAtom in a way that guarantees no collision with previous uses.".
+-doc "Allocates a source binding in a namespace disjoint from generated types, codecs and helpers.".
 uniquify(State, NameAtom) when is_atom(NameAtom) ->
     Name = atom_to_list(NameAtom),
     uniquify(State, Name);
 uniquify(State = #clause_state{named_counters = Counters}, Name) ->
     Counter = maps:get(Name, Counters, 0) + 1,
     NamedCounters = Counters#{Name => Counter},
-    NewName = Name ++ [$_ | integer_to_list(Counter)],
+    %% Preserve the source convention for intentionally unused bindings.
+    Prefix = case Name of [$_ | _] -> "_v_"; _ -> "v_" end,
+    NewName = Prefix ++ Name ++ [$_ | integer_to_list(Counter)],
     {NewName, State#clause_state{named_counters = NamedCounters}}.
 
 -spec reference(clause_state()) -> none | ir().

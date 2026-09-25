@@ -66,6 +66,8 @@ type_and_codec_test() ->
         hls_type:unpack(<<4:32/little-unsigned-integer>>, Type)
     ).
 
+%% Pauli operations remain bitwise expressions on the two packed components.
+-spec pauli_operations_transpile_test() -> ok.
 pauli_operations_transpile_test() ->
     Clause = parse_clause(
         "probe(Left, Right) ->\n"
@@ -77,7 +79,7 @@ pauli_operations_transpile_test() ->
     DSLX = lower(Clause, ["left", "right"]),
     ?assertNotEqual(
         nomatch,
-        binary:match(DSLX, <<"(Left_1 ^ Right_1)">>)
+        binary:match(DSLX, <<"(v_Left_1 ^ v_Right_1)">>)
     ),
     ?assertNotEqual(
         nomatch,
@@ -85,7 +87,7 @@ pauli_operations_transpile_test() ->
     ),
     ?assertNotEqual(
         nomatch,
-        binary:match(DSLX, <<"(Product_1 <= u32:3)">>)
+        binary:match(DSLX, <<"(v_Product_1 <= u32:3)">>)
     ),
     ?assertNotEqual(
         nomatch,

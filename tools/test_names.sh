@@ -9,7 +9,12 @@ xls_root=$(cd "$xls_root" && pwd)
 cd "$project_root"
 rebar3 as test compile
 erl -noshell -pa _build/test/lib/erl_hls/ebin _build/test/lib/erl_hls/test \
-    -eval 'ok = xls_names_dslx:write(hd(init:get_plain_arguments())), halt().' -extra "$stage"
+    -eval '[Stage] = init:get_plain_arguments(), ok = xls_names_dslx:write(Stage),
+        ok = file:write_file(filename:join(Stage, "unused.x"), xls_short_circuit_dslx:to_dslx()), halt().' -extra "$stage"
+# Keep intentionally unused source bindings warning-free after renaming.
+"$xls_root/interpreter_main" --warnings_as_errors=true --compare=jit \
+    --dslx_path="$project_root/priv/xls/lib" \
+    --dslx_stdlib_path="$xls_root/xls/dslx/stdlib" "$stage/unused.x"
 options=(--warnings_as_errors=false --dslx_path="$project_root/priv/xls/lib"
     --dslx_stdlib_path="$xls_root/xls/dslx/stdlib")
 for kind in names gs; do

@@ -49,6 +49,10 @@ alternatives([Only]) -> Only;
 alternatives([First | Rest]) ->
     {op, expression_line(First), 'orelse', First, alternatives(Rest)}.
 
+%% The numeric annotation retains the original side-effect-free operator.
+-spec validate_predicate(term()) -> ok.
+validate_predicate({xls_integer_compare, Line, Op, Left, Right}) ->
+    validate_predicate({op, Line, Op, Left, Right});
 validate_predicate({atom, _Line, Atom})
         when Atom =:= true; Atom =:= false ->
     ok;
@@ -73,6 +77,10 @@ validate_predicate({op, Line, Operator, Left, Right}) ->
 validate_predicate(Expression) ->
     unsupported_guard(expression_line(Expression), non_boolean_predicate).
 
+%% Guard values exclude provider calls and arbitrary side effects.
+-spec validate_value(term()) -> ok.
+validate_value({xls_integer_compare, Line, Op, Left, Right}) ->
+    validate_value({op, Line, Op, Left, Right});
 validate_value({xls_bit_size, _, _, Value}) -> validate_value(Value);
 validate_value({var, _Line, _Name}) ->
     ok;

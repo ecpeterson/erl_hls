@@ -44,3 +44,23 @@ fn shift_extremes() {
     assert_eq(shift<true>(s1:-1, s1:-1), s1:-1);
     assert_eq(shift<false>(s1:-1, s1:-1), s1:0);
 }
+
+// Widen both operands losslessly before comparing mathematical values. An
+// unsigned operand needs one extra sign bit; same-type comparisons optimize
+// back to their original width. Arithmetic producing the operands is unchanged.
+pub fn less<S: bool, W: u32, T: bool, V: u32>(left: xN[S][W], right: xN[T][V]) -> bool {
+    const N = if W > V { W + u32:1 } else { V + u32:1 };
+    (left as sN[N]) < (right as sN[N])
+}
+
+// Include equality without subtracting, so the distance cannot overflow.
+pub fn less_equal<S: bool, W: u32, T: bool, V: u32>(left: xN[S][W], right: xN[T][V]) -> bool {
+    const N = if W > V { W + u32:1 } else { V + u32:1 };
+    (left as sN[N]) <= (right as sN[N])
+}
+
+// Equal bit patterns with different signedness need not be equal integers.
+pub fn equal<S: bool, W: u32, T: bool, V: u32>(left: xN[S][W], right: xN[T][V]) -> bool {
+    const N = if W > V { W + u32:1 } else { V + u32:1 };
+    (left as sN[N]) == (right as sN[N])
+}

@@ -16,6 +16,9 @@ from_forms(Forms) ->
     lists:usort(OperatorImports ++ lists:append([imports(Module,
         lists:usort([Name || {provider, M, Name} <- Uses, M =:= Module])) || Module <- Providers])).
 
+%% Walk source and normalized syntax for direct companion dependencies.
+-spec uses(term()) -> [tuple() | bit_syntax].
+uses({xls_integer_compare, _, Op, Left, Right}) -> [{operator, Op} | uses([Left, Right])];
 uses({xls_bit_size, _, _, Value}) -> [bit_syntax | uses(Value)];
 uses({bin, _, Elements}) -> [bit_syntax | uses(Elements)];
 uses({clause, _, Patterns, Guards, Body}) ->
@@ -66,16 +69,28 @@ validate(Provider, Imports) when is_list(Imports) ->
 validate(Provider, Imports) ->
     error({invalid_dslx_imports, Provider, Imports}).
 
+%% Import components must be identifiers, including their local alias.
+-spec valid_import(term()) -> boolean().
 valid_import(Import) when is_atom(Import) ->
     re:run(atom_to_list(Import),
         "^[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)*$",
-        [{capture, none}]) =:= match;
+        [{capture, none}]) =:= match andalso
+        lists:all(fun(Part) -> not xls_names:keyword(Part) end,
+            string:split(atom_to_list(Import), ".", all));
 valid_import(_) ->
     false.
 
 %% Runtime imports retain their established order; companions are sorted and
 %% deduplicated, including declarations that name a runtime module themselves.
+-doc "Emits unique imports in runtime-first order; rejects ambiguous or reserved local aliases.".
 -spec emit([atom()], [atom()]) -> iolist().
 emit(Runtime, Companions) ->
-    [["import ", atom_to_list(Module), ";\n"]
-        || Module <- Runtime ++ (lists:usort(Companions) -- Runtime)].
+    Modules = Runtime ++ (lists:usort(Companions) -- Runtime),
+    _ = lists:foldl(fun(Module, Seen) ->
+        Alias = xls_names:import_alias(Module),
+        case maps:find(Alias, Seen) of
+            {ok, Previous} -> error({xls_import_alias_collision, Alias, Previous, Module});
+            error -> Seen#{Alias => Module}
+        end
+    end, #{}, Modules),
+    [["import ", atom_to_list(Module), ";\n"] || Module <- Modules].

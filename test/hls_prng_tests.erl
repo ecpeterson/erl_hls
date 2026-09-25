@@ -23,6 +23,8 @@ xorshift32_rejects_out_of_range_values_test() ->
         [-1, 16#100000000]
     ).
 
+%% Each PRNG update uses the previous masked value, preserving the recurrence.
+-spec xorshift32_transpiles_to_sequential_fixed_width_steps_test() -> ok.
 xorshift32_transpiles_to_sequential_fixed_width_steps_test() ->
     Clause = parse_clause(
         "probe(Value) -> hls_prng:xorshift32(Value)."
@@ -39,7 +41,7 @@ xorshift32_transpiles_to_sequential_fixed_width_steps_test() ->
     ?assertNotEqual(
         nomatch,
         binary:match(XLS, <<
-            "let _0 = (Value_1 ^ (Value_1 << u32:13)) & "
+            "let _0 = (v_Value_1 ^ (v_Value_1 << u32:13)) & "
             "u32:0xffffffff;"
         >>)
     ),
