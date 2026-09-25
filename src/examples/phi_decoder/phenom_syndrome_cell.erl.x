@@ -595,7 +595,7 @@ fn machine_write(
 fn enter(old_phase: Phase, phase: Phase, data: Syndrome) -> EntryOutcome {
   match phase {
     Phase::CONFIGURING => {
-      let v__OldPhase_1 = old_phase;
+      let _v__OldPhase_1 = old_phase;
       let v_Syndrome_1 = (Tag::SYNDROME, data);
       let v_Xls_entry_0_1 = v_Syndrome_1;
       let _0 = ();
@@ -617,7 +617,7 @@ fn enter(old_phase: Phase, phase: Phase, data: Syndrome) -> EntryOutcome {
       } else { _3 }
     },
     Phase::COLLECTING => {
-      let v__OldPhase_1 = old_phase;
+      let _v__OldPhase_1 = old_phase;
       let v_Syndrome_1 = (Tag::SYNDROME, data);
       let _0 = v_Syndrome_1.1.seen_sources;
       let _29 = {
@@ -809,7 +809,7 @@ fn enter(old_phase: Phase, phase: Phase, data: Syndrome) -> EntryOutcome {
       } else { _29.0 }
     },
     Phase::ANNOUNCING => {
-      let v__OldPhase_1 = old_phase;
+      let _v__OldPhase_1 = old_phase;
       let v_Syndrome_1 = (Tag::SYNDROME, data);
       let v_Xls_entry_0_1 = v_Syndrome_1;
       let _0 = ();

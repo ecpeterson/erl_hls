@@ -118,6 +118,11 @@ records(Forms, Names, Kind) ->
             {"bits_from_" ++ Codec, record_packer}],
         Next = lists:foldl(fun({Symbol, Role}, Acc) ->
             ok = identifier(module, Symbol, Origin),
+            case lists:prefix("v_", Symbol) orelse lists:prefix("_v_", Symbol) of
+                true -> error({xls_name_collision, module, Symbol,
+                    generated(source_binding), Origin});
+                false -> ok
+            end,
             case lists:prefix("XLS_FAILURE_SITE_", Symbol) of
                 true -> error({xls_name_collision, module, Symbol,
                     generated(failure_constant), Origin});
@@ -257,7 +262,7 @@ import_alias(Module) ->
     lists:foreach(fun(Part) -> identifier(import, Part, #{kind => import, name => Module}) end, Parts),
     Alias = lists:last(Parts),
     Reserved = lists:any(fun(Prefix) -> lists:prefix(Prefix, Alias) end,
-        ["v_", "hls_local_", "XLS_FAILURE_SITE_"]),
+        ["v_", "_v_", "hls_local_", "XLS_FAILURE_SITE_"]),
     case Reserved orelse re:run(Alias, "^_[0-9]+$", [{capture, none}]) =:= match of
         true -> error({reserved_dslx_import_alias, Module, Alias});
         false -> Alias

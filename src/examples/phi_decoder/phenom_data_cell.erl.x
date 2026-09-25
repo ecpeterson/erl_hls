@@ -626,7 +626,7 @@ fn machine_write(
 fn enter(old_phase: Phase, phase: Phase, data: Datacell) -> EntryOutcome {
   match phase {
     Phase::CONFIGURING => {
-      let v__OldPhase_1 = old_phase;
+      let _v__OldPhase_1 = old_phase;
       let v_Cell_1 = (Tag::DATA_CELL, data);
       let v_Xls_entry_0_1 = v_Cell_1;
       let _0 = ();
@@ -648,7 +648,7 @@ fn enter(old_phase: Phase, phase: Phase, data: Datacell) -> EntryOutcome {
       } else { _3 }
     },
     Phase::COLLECTING => {
-      let v__OldPhase_1 = old_phase;
+      let _v__OldPhase_1 = old_phase;
       let v_Cell_1 = (Tag::DATA_CELL, data);
       let v_Xls_entry_0_1 = v_Cell_1;
       let _0 = ();
@@ -670,7 +670,7 @@ fn enter(old_phase: Phase, phase: Phase, data: Datacell) -> EntryOutcome {
       } else { _3 }
     },
     Phase::REPORTING => {
-      let v__OldPhase_1 = old_phase;
+      let _v__OldPhase_1 = old_phase;
       let v_Cell_1 = (Tag::DATA_CELL, data);
       let _0 = v_Cell_1.1.noise_disabled;
       let _1 = if _0 {
@@ -753,7 +753,7 @@ fn enter(old_phase: Phase, phase: Phase, data: Datacell) -> EntryOutcome {
       } else { _18 }
     },
     Phase::REPLYING => {
-      let v__OldPhase_1 = old_phase;
+      let _v__OldPhase_1 = old_phase;
       let v_Cell_1 = (Tag::DATA_CELL, data);
       let _0 = v_Cell_1.1.reply_request_id;
       let _1 = v_Cell_1.1.x;

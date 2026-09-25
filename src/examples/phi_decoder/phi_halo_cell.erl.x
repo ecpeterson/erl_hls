@@ -1535,7 +1535,7 @@ fn machine_write(
 fn enter(old_phase: Phase, phase: Phase, data: Cell) -> EntryOutcome {
   match phase {
     Phase::CONFIGURING => {
-      let v__OldPhase_1 = old_phase;
+      let _v__OldPhase_1 = old_phase;
       let v_Cell_1 = (Tag::CELL, data);
       let v_Xls_entry_0_1 = v_Cell_1;
       let _0 = ();
@@ -1558,7 +1558,7 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> EntryOutcome {
       } else { _3 }
     },
     Phase::MEASURING => {
-      let v__OldPhase_1 = old_phase;
+      let _v__OldPhase_1 = old_phase;
       let v_Cell_1 = (Tag::CELL, data);
       let _0 = v_Cell_1.1.status_valid;
       let _1 = hls_integer::equal(_0, sN[2]:1);
@@ -1652,7 +1652,7 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> EntryOutcome {
       } else { _20.0 }
     },
     Phase::GATHERING => {
-      let v__OldPhase_1 = old_phase;
+      let _v__OldPhase_1 = old_phase;
       let v_Cell_1 = (Tag::CELL, data);
       let _0 = v_Cell_1.1.diffusion_epoch;
       let v_Epoch_1 = _0;
@@ -1718,7 +1718,7 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> EntryOutcome {
       } else { _11 }
     },
     Phase::COMPARING => {
-      let v__OldPhase_1 = old_phase;
+      let _v__OldPhase_1 = old_phase;
       let v_Cell_1 = (Tag::CELL, data);
       let _0 = v_Cell_1.1.phi;
       let v_Phi0_1 = _0[u32:0 % array_size(_0)];
@@ -1804,7 +1804,7 @@ fn enter(old_phase: Phase, phase: Phase, data: Cell) -> EntryOutcome {
       } else { _19 }
     },
     Phase::FLIPPING => {
-      let v__OldPhase_1 = old_phase;
+      let _v__OldPhase_1 = old_phase;
       let v_Cell_1 = (Tag::CELL, data);
       let _0 = v_Cell_1.1.random_state;
       let _1 = (_0 ^ (_0 << u32:13)) & u32:0xffffffff;

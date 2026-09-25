@@ -828,7 +828,9 @@ uniquify(State, NameAtom) when is_atom(NameAtom) ->
 uniquify(State = #clause_state{named_counters = Counters}, Name) ->
     Counter = maps:get(Name, Counters, 0) + 1,
     NamedCounters = Counters#{Name => Counter},
-    NewName = "v_" ++ Name ++ [$_ | integer_to_list(Counter)],
+    %% Preserve the source convention for intentionally unused bindings.
+    Prefix = case Name of [$_ | _] -> "_v_"; _ -> "v_" end,
+    NewName = Prefix ++ Name ++ [$_ | integer_to_list(Counter)],
     {NewName, State#clause_state{named_counters = NamedCounters}}.
 
 -spec reference(clause_state()) -> none | ir().

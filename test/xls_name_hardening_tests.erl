@@ -15,7 +15,17 @@ record_shadow_test() ->
     {Name, State} = xls_parse:uniquify(#clause_state{}, 'Value'),
     ?assertEqual("v_Value_1", Name),
     ?assertEqual("v_Value_2", element(1, xls_parse:uniquify(State, 'Value'))),
-    ?assertEqual("v__Value_1", element(1, xls_parse:uniquify(State, '_Value'))).
+    ?assertEqual("_v__Value_1", element(1, xls_parse:uniquify(State, '_Value'))).
+
+%% Leading underscores in record names must not enter the unused-binding namespace.
+-spec unused_binding_collision_test() -> ok.
+unused_binding_collision_test() ->
+    Forms = [form(S) || S <- ["-module(name_fixture).", "-hls_data('__v__Value_1').",
+        "-hls_tags([request]).", "-record('__v__Value_1', {x :: hls_nums:u8()}).",
+        "-record(request, {x :: hls_nums:u8()})."]],
+    ?assertException(error, {xls_name_collision, module, "_v__Value_1",
+        #{kind := generated}, #{kind := record, name := '__v__Value_1'}},
+        xls_names:actor(Forms, hls_gs)).
 
 %% Import paths can differ while declaring the same local module alias.
 -spec import_aliases_test() -> ok.
@@ -30,7 +40,7 @@ import_aliases_test() ->
         Alias = atom_to_list(Module),
         ?assertError({reserved_dslx_import_alias, Module, Alias},
             xls_dslx_imports:emit([], [Module]))
-    end, ['_0', hls_local_helper__1, 'XLS_FAILURE_SITE_1']).
+    end, ['_0', '_v__Value_1', hls_local_helper__1, 'XLS_FAILURE_SITE_1']).
 
 %% Provider aliases share a scope with actor types; diagnose both declarations.
 -spec import_declaration_collision_test() -> ok.
