@@ -146,6 +146,9 @@ jobs:
       - name: Prove round-robin selection and grant fairness
         run: python3 tools/test_arbitration.py "$RUNNER_TEMP/xls"
 
+      - name: Prove queue-bank pop/push equivalence
+        run: python3 tools/test_frame_queue.py "$RUNNER_TEMP/xls"
+
       - name: Compare entry outcomes with BEAM and simulate RTL
         run: bash tools/test_entry_outcomes.sh "$RUNNER_TEMP/xls"
 

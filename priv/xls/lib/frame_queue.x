@@ -44,12 +44,15 @@ pub fn after_pop(queue: Queue, do_pop: u1) -> Queue {
 pub fn update_bank<COUNT: u32>(
     bank: Queue[COUNT], pop_valid: u1, pop_source: u32,
     push_valid: u1, push_source: u32, push_frame: axis::Frame) -> Queue[COUNT] {
-  let after_pop = if pop_valid {
-    update(bank, pop_source, pop(bank[pop_source]))
-  } else { bank };
-  if push_valid {
-    update(after_pop, push_source, push(after_pop[push_source], push_frame))
-  } else { after_pop }
+  // Each queue owns its data path. Selecting a whole queue before updating
+  // it builds a cross-bank mux followed by a second mux for the push.
+  unroll_for! (index, updated): (u32, Queue[COUNT]) in u32:0..COUNT {
+    let popped = after_pop(bank[index], pop_valid && pop_source == index);
+    let next = if push_valid && push_source == index {
+      push(popped, push_frame)
+    } else { popped };
+    update(updated, index, next)
+  }(bank)
 }
 
 // Replacing a consumed head must retain the old tail before the new frame.
