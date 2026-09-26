@@ -4,6 +4,9 @@
 // including payloads held across stalls; no private scheduler signals are read.
 module phi_compare_tb;
     parameter CYCLE_EXACT = 1;
+    parameter WIDTH = 3, HEIGHT = 3;
+    localparam PER_PLANE = WIDTH * HEIGHT;
+    localparam ACTORS = 2 * PER_PLANE;
     reg clock = 0;
     always #5 clock = ~clock;
     integer cycle = 0;
@@ -13,11 +16,11 @@ module phi_compare_tb;
     wire z_ready = (flow[2] | flow[3]) && !(cycle >= 2500 && cycle < 4000);
     wire [127:0] bx, bz, cx, cz;
     wire bx_valid, bz_valid, cx_valid, cz_valid;
-    reg [127:0] events [0:1][0:17][0:255];
+    reg [127:0] events [0:1][0:ACTORS-1][0:255];
     reg [127:0] held [0:1][0:1];
     reg stalled [0:1][0:1];
-    integer count [0:1][0:17];
-    integer matched [0:17];
+    integer count [0:1][0:ACTORS-1];
+    integer matched [0:ACTORS-1];
     integer total_matched [0:1];
     integer stall_cycles [0:1][0:1];
     integer variant, side, actor;
@@ -36,8 +39,8 @@ module phi_compare_tb;
             if (valid && ready) begin
                 x = frame[47:32];
                 y = frame[63:48];
-                if (x >= 3 || y >= 3) $fatal(1, "out-of-range coordinate");
-                actor = 9*side + 3*x + y;
+                if (x >= WIDTH || y >= HEIGHT) $fatal(1, "out-of-range coordinate");
+                actor = PER_PLANE*side + HEIGHT*x + y;
                 if (count[variant][actor] >= 256) $fatal(1, "comparison buffer exhausted");
                 events[variant][actor][count[variant][actor]] = frame;
                 count[variant][actor] = count[variant][actor] + 1;
@@ -83,18 +86,18 @@ module phi_compare_tb;
             // Actors progress at each design's own pace; arbitration may reorder
             // different actors. Compare each actor's common event prefix, keeping
             // its correction/status order and payloads. Reset discards in-flight tails.
-            for (actor = 0; actor < 18; actor = actor + 1) begin
+            for (actor = 0; actor < ACTORS; actor = actor + 1) begin
                 if (matched[actor] < count[0][actor] && matched[actor] < count[1][actor]) begin
                     if (events[0][actor][matched[actor]] !== events[1][actor][matched[actor]]) begin
                         $display("baseline=%032h candidate=%032h", events[0][actor][matched[actor]], events[1][actor][matched[actor]]);
                         $fatal(1, "actor %0d event %0d differs at cycle %0d", actor, matched[actor], cycle);
                     end
                     matched[actor] = matched[actor] + 1;
-                    total_matched[actor/9] = total_matched[actor/9] + 1;
+                    total_matched[actor/PER_PLANE] = total_matched[actor/PER_PLANE] + 1;
                 end
             end
         end else begin
-            for (actor = 0; actor < 18; actor = actor + 1) begin
+            for (actor = 0; actor < ACTORS; actor = actor + 1) begin
                 if (cycle == 6000 && matched[actor] < 8)
                     $fatal(1, "actor %0d has insufficient pre-reset coverage", actor);
                 matched[actor] = 0;
@@ -106,14 +109,14 @@ module phi_compare_tb;
                     stalled[variant][side] = 0;
         end
         if (cycle == 12000) begin
-            for (actor = 0; actor < 18; actor = actor + 1)
+            for (actor = 0; actor < ACTORS; actor = actor + 1)
                 if (matched[actor] < 8)
                     $fatal(1, "actor %0d has insufficient post-reset coverage", actor);
             for (variant = 0; variant < 2; variant = variant + 1)
                 for (side = 0; side < 2; side = side + 1)
                     if (stall_cycles[variant][side] < 1000)
                         $fatal(1, "insufficient stall coverage");
-            $display("PASS: D3 public outputs through 12000 cycles, long stalls and reset; cycle_exact=%0d X=%0d Z=%0d matched per-actor frames", CYCLE_EXACT, total_matched[0], total_matched[1]);
+            $display("PASS: public outputs through 12000 cycles, long stalls and reset; cycle_exact=%0d X=%0d Z=%0d matched per-actor frames", CYCLE_EXACT, total_matched[0], total_matched[1]);
             $display("stalled cycles: baseline X=%0d Z=%0d; candidate X=%0d Z=%0d", stall_cycles[0][0], stall_cycles[0][1], stall_cycles[1][0], stall_cycles[1][1]);
             $finish;
         end

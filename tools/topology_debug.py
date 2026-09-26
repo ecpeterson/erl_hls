@@ -125,12 +125,12 @@ def discover(hierarchy, flat_design, top, clock):
     return probes
 
 
-def fifo_resources(hierarchy, flat_design, top, probes):
+def fifo_resources(hierarchy: dict, flat_design: dict, top: str, probes: list[dict]) -> tuple[list[dict], list[dict]]:
     """Read the existing XLS FIFO slots register; never count transfers again.
 
     This adapter supports the checked, unregistered-pop XLS FIFO shapes, with
     and without bypass. Other implementations remain handshake-only vertices.
-    Validate the full comparator and register instead of trusting a name alone.
+    Validate registered occupancy and its full predicate instead of trusting a name alone.
     """
     flat = flat_design["modules"][top]
     channel_ids = {(p["valid_bit"], p["ready_bit"]): p["id"] for p in probes}
@@ -153,7 +153,8 @@ def fifo_resources(hierarchy, flat_design, top, probes):
         registered = any(c["type"] == "$dff" and c["connections"]["Q"] == slots and
                          c["connections"]["CLK"] == module["ports"]["clk"]["bits"] and
                          int(c["parameters"]["CLK_POLARITY"], 2) == 1 for c in cells)
-        compared = False
+        # In a one-entry queue, the registered occupancy bit is itself full.
+        compared = capacity == 1 and len(slots) == 1 and full == slots
         for cell in cells:
             if cell["type"] != "$eq" or cell["connections"]["Y"] != full:
                 continue

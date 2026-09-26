@@ -1,0 +1,47 @@
+diff --git a/xls/codegen/maybe_materialize_fifos_pass.cc b/xls/codegen/maybe_materialize_fifos_pass.cc
+index 5d0ccb001..72436e8cd 100644
+--- a/xls/codegen/maybe_materialize_fifos_pass.cc
++++ b/xls/codegen/maybe_materialize_fifos_pass.cc
+@@ -319,8 +319,11 @@ absl::StatusOr<Block*> MaterializeFifo(NameUniquer& uniquer, Package* p,
+     // aren't ready.
+     bb.OutputPort(FifoInstantiation::kPopDataPortName, pop_data_value);
+ 
++    // Writing an accepted empty-queue bypass only touches an unused head slot.
++    // Pointers still advance only for stored data. With registered push outputs,
++    // this removes pop_ready from the payload write enable.
+     bb.RegisterWrite(buf_reg, next_buf_value_if_push_occurs,
+-                     /*load_enable=*/did_push_occur_bool, reset_port);
++                     /*load_enable=*/pushed, reset_port);
+   }
+ 
+   return bb.Build();
+diff --git a/xls/codegen/maybe_materialize_fifos_pass_test.cc b/xls/codegen/maybe_materialize_fifos_pass_test.cc
+index 0c1f17aaa..2dfab4ed5 100644
+--- a/xls/codegen/maybe_materialize_fifos_pass_test.cc
++++ b/xls/codegen/maybe_materialize_fifos_pass_test.cc
+@@ -307,6 +307,16 @@ TEST_F(MaterializeFifosPassTest, ResetFullFifoWithDifferentResetName) {
+                 /*reset_name=*/"foobar");
+ }
+ 
++TEST_P(MaterializeFifosPassTest, BypassThenStoreAndReset) {
++  // Discarded empty bypasses must not leak into later stored traffic, including
++  // replacement while full, downstream stalls, and reset with queued data.
++  RunTestVector(GetParam(), {ResetOp{}, PushAndPop{1}, PushAndPop{2},
++                            PushAndPop{3}, NotReady{}, Push{4}, NotReady{},
++                            PushAndPop{5}, Pop{}, Pop{}, Push{6}, ResetOp{},
++                            NotReady{}, Pop{}, Push{7}, NotReady{}, Pop{},
++                            PushAndPop{8}, Push{9}, Pop{}, Pop{}});
++}
++
+ TEST_P(MaterializeFifosPassTest, BasicFifoBypass) {
+   RunTestVector(GetParam(), {
+                                 PushAndPop{1},
+@@ -329,7 +339,7 @@ TEST_P(MaterializeFifosPassTest, BasicFifoBypass) {
+ inline std::vector<FifoTestParam> GenerateMaterializeFifoTestParams() {
+   std::vector<FifoTestParam> params;
+   for (int64_t data_bit_count : {0, 32}) {
+-    for (int64_t depth : {0, 3, 5}) {
++    for (int64_t depth : {0, 1, 3, 5}) {
+       for (bool bypass : {true, false}) {
+         for (bool register_push_outputs : {true, false}) {
+           for (bool register_pop_outputs : {true, false}) {
