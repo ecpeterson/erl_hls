@@ -1,0 +1,12 @@
+{
+  "remaining_vendor_work": [
+    "Measure the prepared 35x37->71 constant product on xc7z030sbg485-1 with timing_model/batch.py and measure.tcl.",
+    "Measure matched reference/factored combinational kernels as held-out validation, checking both pin graphs and primitive parameters.",
+    "Fit the new row, audit the complete application and scheduling-normalized IR, and compare equal-latency pipeline schedules before a full-core application comparison."
+  ],
+  "corpora": [
+    "/Users/ecpeterson/Documents/code/erl_xls/_build/architecture-repo/_build/actor-boundaries/calibration-multiply71",
+    "/Users/ecpeterson/Documents/code/erl_xls/_build/architecture-repo/_build/actor-boundaries/arithmetic/vendor-kernels"
+  ],
+  "no_vendor_run_performed": true
+}

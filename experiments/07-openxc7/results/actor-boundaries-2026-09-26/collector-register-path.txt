@@ -1,0 +1,100 @@
+Info: Critical path report for clock 'decoder.aclk' (posedge -> posedge):
+Info: curr total
+Info:  0.1  0.1  Source $flatten\decoder.$auto$ff.cc:337:slice$52263.Q
+Info:  2.7  2.8    Net decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.materialized_fifo_fifo__scheduler_3_aggregate_.tail[1] budget 0.000000 ns (81,82) -> (81,19)
+Info:                Sink $flatten\decoder.$auto$abc9_ops.cc:1613:reintegrate$1103961.A5
+Info:  0.1  2.9  Source $flatten\decoder.$auto$abc9_ops.cc:1613:reintegrate$1103961.O6
+Info:  1.7  4.7    Net decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.instantiation_output_115602[186] budget 0.000000 ns (81,19) -> (83,47)
+Info:                Sink $flatten\decoder.$abc$1102507$lut$aiger1102506$50469.A1
+Info:  0.2  4.8  Source $flatten\decoder.$abc$1102507$lut$aiger1102506$50469.O5
+Info:  1.5  6.3    Net $flatten\decoder.$techmap1115310$abc$1102507$lut$aiger1102506$50470.A[1] budget 0.000000 ns (83,47) -> (83,77)
+Info:                Sink $flatten\decoder.$abc$1102507$lut$aiger1102506$50470.A1
+Info:  0.1  6.4  Source $flatten\decoder.$abc$1102507$lut$aiger1102506$50470.O5
+Info:  1.9  8.3    Net $flatten\decoder.$techmap1115317$abc$1102507$lut$aiger1102506$50525.A[2] budget 0.000000 ns (83,77) -> (112,72)
+Info:                Sink $flatten\decoder.$abc$1102507$lut$aiger1102506$50525.A1
+Info:  0.2  8.4  Source $flatten\decoder.$abc$1102507$lut$aiger1102506$50525.O5
+Info:  2.5 10.9    Net $flatten\decoder.$techmap1115318$abc$1102507$lut$aiger1102506$51356.A[3] budget 0.000000 ns (112,72) -> (154,88)
+Info:                Sink $flatten\decoder.$abc$1102507$lut$aiger1102506$67376.A2
+Info:  0.1 11.0  Source $flatten\decoder.$abc$1102507$lut$aiger1102506$67376.O6
+Info:  2.2 13.3    Net $flatten\decoder.$techmap1126129$abc$1102507$lut\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__DedicatedGroup_0_next_inst_1.__phi_halo_cell__DedicatedActor_0__1_next_inst.entered_machine_data_anyon[14].A[2] budget 0.000000 ns (154,88) -> (140,62)
+Info:                Sink $flatten\decoder.$abc$1102507$lut$aiger1102506$68140.A5
+Info:  0.1 13.4  Source $flatten\decoder.$abc$1102507$lut$aiger1102506$68140.O6
+Info:  0.0 13.4    Net $flatten\decoder.$abc$1102507$aiger1102506$68140 budget -1.267000 ns (140,62) -> (140,62)
+Info:                Sink $flatten\decoder.$auto$alumacc.cc:512:replace_alu$21727.genblk1.slice[3].genblk1.carry4.S1
+Info:  0.6 13.9  Source $flatten\decoder.$auto$alumacc.cc:512:replace_alu$21727.genblk1.slice[3].genblk1.carry4.O2
+Info:  5.0 18.9    Net $flatten\decoder.$abc$1102507$aiger1102506$27395 budget 0.539000 ns (140,62) -> (144,171)
+Info:                Sink $flatten\decoder.\application.\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\__phi_halo_cell__DedicatedGroup_0_next_inst_1.\__phi_halo_cell__DedicatedActor_0__1_next_inst.$mul$/Users/ecpeterson/Documents/code/erl_xls/_build/architecture-repo/_build/actor-boundaries/collector-register/phi_decoder_profile.v:3464$3964.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.sliceA.last.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.sliceB[0].mul.B15
+Info:  3.8 22.8  Source $flatten\decoder.\application.\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\__phi_halo_cell__DedicatedGroup_0_next_inst_1.\__phi_halo_cell__DedicatedActor_0__1_next_inst.$mul$/Users/ecpeterson/Documents/code/erl_xls/_build/architecture-repo/_build/actor-boundaries/collector-register/phi_decoder_profile.v:3464$3964.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.sliceA.last.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.sliceB[0].mul.ACOUT7
+Info:  0.1 22.8    Net $flatten\decoder.$abc$1102507$aiger1102506$27408 budget -1.126000 ns (144,171) -> (144,171)
+Info:                Sink $flatten\decoder.\application.\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\__phi_halo_cell__DedicatedGroup_0_next_inst_1.\__phi_halo_cell__DedicatedActor_0__1_next_inst.$mul$/Users/ecpeterson/Documents/code/erl_xls/_build/architecture-repo/_build/actor-boundaries/collector-register/phi_decoder_profile.v:3464$3964.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.sliceA.last.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.sliceB[1].mul.ACIN7
+Info:  5.2 28.0  Source $flatten\decoder.\application.\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\__phi_halo_cell__DedicatedGroup_0_next_inst_1.\__phi_halo_cell__DedicatedActor_0__1_next_inst.$mul$/Users/ecpeterson/Documents/code/erl_xls/_build/architecture-repo/_build/actor-boundaries/collector-register/phi_decoder_profile.v:3464$3964.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.sliceA.last.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.sliceB[1].mul.ACOUT7
+Info:  0.1 28.1    Net $flatten\decoder.$abc$1102507$aiger1102506$27942 budget 0.004000 ns (144,171) -> (144,166)
+Info:                Sink $flatten\decoder.\application.\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\__phi_halo_cell__DedicatedGroup_0_next_inst_1.\__phi_halo_cell__DedicatedActor_0__1_next_inst.$mul$/Users/ecpeterson/Documents/code/erl_xls/_build/architecture-repo/_build/actor-boundaries/collector-register/phi_decoder_profile.v:3464$3964.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.sliceA.last.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mul_sliceB_last.ACIN7
+Info:  5.2 33.3  Source $flatten\decoder.\application.\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\__phi_halo_cell__DedicatedGroup_0_next_inst_1.\__phi_halo_cell__DedicatedActor_0__1_next_inst.$mul$/Users/ecpeterson/Documents/code/erl_xls/_build/architecture-repo/_build/actor-boundaries/collector-register/phi_decoder_profile.v:3464$3964.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.sliceA.last.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mul_sliceB_last.P0
+Info:  4.2 37.5    Net $flatten\decoder.$techmap1115644$auto$abc9_ops.cc:1613:reintegrate$1113537.A[0] budget 0.000000 ns (144,166) -> (139,62)
+Info:                Sink $flatten\decoder.$auto$abc9_ops.cc:1613:reintegrate$1113537.A4
+Info:  0.1 37.6  Source $flatten\decoder.$auto$abc9_ops.cc:1613:reintegrate$1113537.O6
+Info:  0.0 37.6    Net $flatten\decoder.$abc$1102507$aiger1102506$68424b budget -0.746000 ns (139,62) -> (139,62)
+Info:                Sink $flatten\decoder.$auto$alumacc.cc:512:replace_alu$21298.genblk1.slice[8].genblk1.carry4.S2
+Info:  0.4 38.0  Source $flatten\decoder.$auto$alumacc.cc:512:replace_alu$21298.genblk1.slice[8].genblk1.carry4.CO3
+Info:  0.1 38.1    Net $flatten\decoder.$abc$1102507$aiger1102506$28436 budget -0.084000 ns (139,62) -> (139,61)
+Info:                Sink $flatten\decoder.$auto$alumacc.cc:512:replace_alu$21298.genblk1.slice[9].genblk1.carry4.CIN
+Info:  0.3 38.4  Source $flatten\decoder.$auto$alumacc.cc:512:replace_alu$21298.genblk1.slice[9].genblk1.carry4.O1
+Info:  1.4 39.8    Net $flatten\decoder.$abc$1102507$aiger1102506$28438 budget 0.000000 ns (139,61) -> (145,73)
+Info:                Sink $flatten\decoder.$abc$1102507$aiger1102506$28438$LUT$10496.A3
+Info:  0.1 40.0  Source $flatten\decoder.$abc$1102507$aiger1102506$28438$LUT$10496.O6
+Info:  0.0 40.0    Net $flatten\decoder.$abc$1102507$aiger1102506$28438$legal$10495 budget -0.474000 ns (145,73) -> (145,73)
+Info:                Sink $flatten\decoder.$auto$alumacc.cc:512:replace_alu$21733.genblk1.slice[3].genblk1.carry4.S2
+Info:  0.4 40.3  Source $flatten\decoder.$auto$alumacc.cc:512:replace_alu$21733.genblk1.slice[3].genblk1.carry4.CO3
+Info:  0.1 40.4    Net $flatten\decoder.$abc$1102507$aiger1102506$42548 budget -0.057000 ns (145,73) -> (145,72)
+Info:                Sink $flatten\decoder.$auto$alumacc.cc:512:replace_alu$21733.genblk1.slice[4].genblk1.carry4.CIN
+Info:  0.3 40.8  Source $flatten\decoder.$auto$alumacc.cc:512:replace_alu$21733.genblk1.slice[4].genblk1.carry4.O1
+Info:  1.5 42.3    Net $flatten\decoder.$techmap1120417$auto$abc9_ops.cc:1613:reintegrate$1111650.A[1] budget 0.000000 ns (145,72) -> (154,82)
+Info:                Sink $flatten\decoder.$auto$abc9_ops.cc:1613:reintegrate$1111650.A5
+Info:  0.1 42.4  Source $flatten\decoder.$auto$abc9_ops.cc:1613:reintegrate$1111650.O6
+Info:  2.3 44.7    Net $flatten\decoder.$techmap1145311$abc$1102507$lut$aiger1102506$68664.A[2] budget 0.000000 ns (154,82) -> (145,47)
+Info:                Sink $flatten\decoder.$techmap1145311$abc$1102507$lut$aiger1102506$68664.A[2]$LUT$10902.A3
+Info:  0.1 44.8  Source $flatten\decoder.$techmap1145311$abc$1102507$lut$aiger1102506$68664.A[2]$LUT$10902.O6
+Info:  0.0 44.8    Net $flatten\decoder.$techmap1145311$abc$1102507$lut$aiger1102506$68664.A[2]$legal$10901 budget -0.569000 ns (145,47) -> (145,47)
+Info:                Sink $flatten\decoder.$auto$alumacc.cc:512:replace_alu$21745.genblk1.slice[0].genblk1.carry4.S0
+Info:  0.5 45.3  Source $flatten\decoder.$auto$alumacc.cc:512:replace_alu$21745.genblk1.slice[0].genblk1.carry4.CO3
+Info:  0.1 45.4    Net $flatten\decoder.$abc$1102507$aiger1102506$42668 budget 0.003000 ns (145,47) -> (145,46)
+Info:                Sink $flatten\decoder.$auto$alumacc.cc:512:replace_alu$21745.genblk1.slice[1].genblk1.carry4.CIN
+Info:  0.1 45.5  Source $flatten\decoder.$auto$alumacc.cc:512:replace_alu$21745.genblk1.slice[1].genblk1.carry4.CO3
+Info:  0.1 45.6    Net $flatten\decoder.$abc$1102507$aiger1102506$42676 budget 0.020000 ns (145,46) -> (145,45)
+Info:                Sink $flatten\decoder.$auto$alumacc.cc:512:replace_alu$21745.genblk1.slice[2].genblk1.carry4.CIN
+Info:  0.1 45.7  Source $flatten\decoder.$auto$alumacc.cc:512:replace_alu$21745.genblk1.slice[2].genblk1.carry4.CO3
+Info:  0.1 45.8    Net $flatten\decoder.$abc$1102507$aiger1102506$42684 budget 0.031000 ns (145,45) -> (145,44)
+Info:                Sink $flatten\decoder.$auto$alumacc.cc:512:replace_alu$21745.genblk1.slice[3].genblk1.carry4.CIN
+Info:  0.1 45.9  Source $flatten\decoder.$auto$alumacc.cc:512:replace_alu$21745.genblk1.slice[3].genblk1.carry4.CO3
+Info:  0.1 46.1    Net $flatten\decoder.$abc$1102507$aiger1102506$42692 budget 0.078000 ns (145,44) -> (145,43)
+Info:                Sink $flatten\decoder.$auto$alumacc.cc:512:replace_alu$21745.genblk1.slice[4].genblk1.carry4.CIN
+Info:  0.1 46.2  Source $flatten\decoder.$auto$alumacc.cc:512:replace_alu$21745.genblk1.slice[4].genblk1.carry4.CO3
+Info:  0.1 46.3    Net $flatten\decoder.$abc$1102507$aiger1102506$42700 budget 0.089000 ns (145,43) -> (145,42)
+Info:                Sink $flatten\decoder.$auto$alumacc.cc:512:replace_alu$21745.genblk1.slice[5].genblk1.carry4.CIN
+Info:  0.1 46.4  Source $flatten\decoder.$auto$alumacc.cc:512:replace_alu$21745.genblk1.slice[5].genblk1.carry4.CO3
+Info:  0.1 46.5    Net $flatten\decoder.$abc$1102507$aiger1102506$42708 budget 0.089000 ns (145,42) -> (145,41)
+Info:                Sink $flatten\decoder.$auto$alumacc.cc:512:replace_alu$21745.genblk1.slice[6].genblk1.carry4.CIN
+Info:  0.2 46.7  Source $flatten\decoder.$auto$alumacc.cc:512:replace_alu$21745.genblk1.slice[6].genblk1.carry4.O0
+Info:  2.5 49.2    Net $flatten\decoder.$techmap1121831$auto$abc9_ops.cc:1613:reintegrate$1111395.A[2] budget 0.000000 ns (145,41) -> (154,83)
+Info:                Sink $flatten\decoder.$abc$1102507$lut$aiger1102506$68638.A1
+Info:  0.1 49.3  Source $flatten\decoder.$abc$1102507$lut$aiger1102506$68638.O6
+Info:  1.0 50.4    Net $flatten\decoder.$abc$1102507$aiger1102506$68638 budget 0.000000 ns (154,83) -> (154,75)
+Info:                Sink $flatten\decoder.$abc$1102507$aiger1102506$68638$LUT$14344.A5
+Info:  0.1 50.5  Source $flatten\decoder.$abc$1102507$aiger1102506$68638$LUT$14344.O6
+Info:  0.0 50.5    Net $flatten\decoder.$abc$1102507$aiger1102506$68638$legal$14343 budget -0.290000 ns (154,75) -> (154,75)
+Info:                Sink $flatten\decoder.\application.\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\__phi_halo_cell__DedicatedGroup_0_next_inst_1.\__phi_halo_cell__DedicatedActor_0__1_next_inst.$lt$/Users/ecpeterson/Documents/code/erl_xls/_build/architecture-repo/_build/actor-boundaries/collector-register/phi_decoder_profile.v:4555$3654.genblk1.slice[1].genblk1.carry4.S3
+Info:  0.4 50.9  Source $flatten\decoder.\application.\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\__phi_halo_cell__DedicatedGroup_0_next_inst_1.\__phi_halo_cell__DedicatedActor_0__1_next_inst.$lt$/Users/ecpeterson/Documents/code/erl_xls/_build/architecture-repo/_build/actor-boundaries/collector-register/phi_decoder_profile.v:4555$3654.genblk1.slice[1].genblk1.carry4.CO3
+Info:  0.1 51.0    Net $flatten\decoder.$abc$1102507$aiger1102506$46940 budget 0.100000 ns (154,75) -> (154,74)
+Info:                Sink $flatten\decoder.\application.\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\__phi_halo_cell__DedicatedGroup_0_next_inst_1.\__phi_halo_cell__DedicatedActor_0__1_next_inst.$lt$/Users/ecpeterson/Documents/code/erl_xls/_build/architecture-repo/_build/actor-boundaries/collector-register/phi_decoder_profile.v:4555$3654.genblk1.slice[2].genblk1.carry4.CIN
+Info:  0.3 51.3  Source $flatten\decoder.\application.\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\__phi_halo_cell__DedicatedGroup_0_next_inst_1.\__phi_halo_cell__DedicatedActor_0__1_next_inst.$lt$/Users/ecpeterson/Documents/code/erl_xls/_build/architecture-repo/_build/actor-boundaries/collector-register/phi_decoder_profile.v:4555$3654.genblk1.slice[2].genblk1.carry4.O1
+Info:  1.5 52.9    Net $flatten\decoder.$techmap1123048$abc$1102507$lut$aiger1102506$101305.A[5] budget 0.000000 ns (154,74) -> (154,91)
+Info:                Sink $flatten\decoder.$abc$1102507$lut$aiger1102506$136920.A6
+Info:  0.1 53.0  Source $flatten\decoder.$abc$1102507$lut$aiger1102506$136920.O6
+Info:  0.6 53.6    Net $flatten\decoder.$techmap1130290$auto$abc9_ops.cc:1613:reintegrate$1108571.A[4] budget 0.000000 ns (154,91) -> (156,92)
+Info:                Sink $flatten\decoder.$auto$abc9_ops.cc:1613:reintegrate$1108571.A1
+Info:  0.1 53.8  Source $flatten\decoder.$auto$abc9_ops.cc:1613:reintegrate$1108571.O6
+Info:  0.4 54.1    Net decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__DedicatedGroup_0_next_inst_1.__phi_halo_cell__DedicatedActor_0__1_next_inst._0__3[29] budget -0.278000 ns (156,92) -> (156,92)
+Info:                Sink $flatten\decoder.$auto$ff.cc:337:slice$45735.D
+Info:  0.1 54.2  Setup $flatten\decoder.$auto$ff.cc:337:slice$45735.D
+Info: 20.2 ns logic, 34.0 ns routing

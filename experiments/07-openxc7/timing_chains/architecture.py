@@ -144,6 +144,19 @@ endmodule
   let quotient = (rounded / (DENOMINATOR as uN[MAG])) as sN[MAG];
   (if negative { -quotient } else { quotient }) as sN[WIDTH]'''
         source.write_text(text[:start] + original + text[end:])
+    elif args.variant == 'factored-bulk':
+        # Reuse the arithmetic screen's exact expression; the application sum
+        # is wider storage but still contains at most four signed-32 neighbors.
+        from factor_rounding import source as bulk_source
+        source = args.stage / 'phi_field.x'
+        body = bulk_source(True).split(' -> s32 {\n', 1)[1].rsplit('\n}', 1)[0]
+        names = {'a': 'phi0', 'b': 'phi1', 'sum': 'neighbor_sum'}
+        body = re.sub(r'\b(a|b|sum)\b', lambda m: names[m[0]], body)
+        pattern = r'(pub fn relax_bulk\([^\n]+\) -> Scalar \{\n).*?\n\}'
+        text, count = re.subn(pattern, lambda m: m[1] + body + '\n}', source.read_text(), flags=re.S)
+        if count != 1:
+            raise ValueError('expected one bulk recurrence')
+        source.write_text(text)
     elif args.variant == 'registered-egress':
         # Only the two phi batch channels change. Depth two permits accepting
         # the next batch while the previous registered head drains.
@@ -230,7 +243,7 @@ def main() -> None:
     for name in ('reference', 'stage', 'xls', 'codegen', 'table'):
         parser.add_argument('--' + name, type=lambda p: Path(p).resolve(), required=True)
     parser.add_argument('--variant', choices=('reference', 'dedicated', 'registered-selection',
-                        'separate-entry', 'magnitude-rounding', 'registered-egress'), required=True)
+                        'separate-entry', 'magnitude-rounding', 'factored-bulk', 'registered-egress'), required=True)
     parser.add_argument('--build-only', action='store_true')
     parser.add_argument('--keep-next-selects', action='store_true')
     parser.add_argument('--resume-from', choices=('ir', 'opt', 'codegen'), default='ir')

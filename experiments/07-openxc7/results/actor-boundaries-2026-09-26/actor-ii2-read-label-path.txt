@@ -1,0 +1,88 @@
+Info: Critical path report for clock 'decoder.aclk' (posedge -> posedge):
+Info: curr total
+Info:  0.1  0.1  Source $flatten\decoder.$auto$ff.cc:337:slice$50736.Q
+Info:  3.6  3.7    Net decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__DedicatedGroup_0_next_inst.__phi_halo_cell__DedicatedActor_0__1_next_inst.____state_18[0] budget 0.000000 ns (140,82) -> (115,19)
+Info:                Sink $flatten\decoder.$abc$1105794$lut$aiger1105793$52492.A5
+Info:  0.1  3.8  Source $flatten\decoder.$abc$1105794$lut$aiger1105793$52492.O6
+Info:  1.2  5.0    Net $flatten\decoder.$techmap1122507$abc$1105794$lut$aiger1105793$52496.A[0] budget 0.000000 ns (115,19) -> (115,7)
+Info:                Sink $flatten\decoder.$abc$1105794$lut$aiger1105793$52496.A2
+Info:  0.2  5.2  Source $flatten\decoder.$abc$1105794$lut$aiger1105793$52496.O5
+Info:  3.8  9.0    Net $flatten\decoder.$techmap1122516$abc$1105794$lut$aiger1105793$52528.A[4] budget 0.000000 ns (115,7) -> (140,77)
+Info:                Sink $flatten\decoder.$abc$1105794$lut$aiger1105793$52528.A3
+Info:  0.1  9.1  Source $flatten\decoder.$abc$1105794$lut$aiger1105793$52528.O5
+Info:  2.3 11.5    Net $flatten\decoder.$techmap1147497$auto$abc9_ops.cc:1613:reintegrate$1106134.A[0] budget 0.000000 ns (140,77) -> (91,36)
+Info:                Sink $flatten\decoder.$abc$1105794$lut$aiger1105793$52529.A2
+Info:  0.2 11.6  Source $flatten\decoder.$abc$1105794$lut$aiger1105793$52529.O5
+Info:  0.8 12.4    Net $flatten\decoder.$techmap1122518$abc$1105794$lut$aiger1105793$52530.A[1] budget 0.000000 ns (91,36) -> (86,35)
+Info:                Sink $flatten\decoder.$abc$1105794$lut$aiger1105793$52530.A4
+Info:  0.1 12.5  Source $flatten\decoder.$abc$1105794$lut$aiger1105793$52530.O6
+Info:  1.0 13.5    Net $flatten\decoder.$techmap1122520$abc$1105794$lut$aiger1105793$52550.A[4] budget 0.000000 ns (86,35) -> (86,29)
+Info:                Sink $flatten\decoder.$abc$1105794$lut$aiger1105793$52591.A3
+Info:  0.1 13.6  Source $flatten\decoder.$abc$1105794$lut$aiger1105793$52591.O6
+Info:  1.0 14.6    Net $flatten\decoder.$techmap1122532$auto$abc9_ops.cc:1613:reintegrate$1106708.A[4] budget 0.000000 ns (86,29) -> (91,25)
+Info:                Sink $flatten\decoder.$auto$abc9_ops.cc:1613:reintegrate$1106708.A1
+Info:  0.1 14.8  Source $flatten\decoder.$auto$abc9_ops.cc:1613:reintegrate$1106708.O6
+Info:  0.5 15.3    Net decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__DedicatedGroup_0_next_inst.__phi_halo_cell__DedicatedActor_0__1_next_inst.entered_machine_failure[7] budget 0.000000 ns (91,25) -> (93,25)
+Info:                Sink $flatten\decoder.$abc$1105794$lut$aiger1105793$52749.A3
+Info:  0.1 15.4  Source $flatten\decoder.$abc$1105794$lut$aiger1105793$52749.O6
+Info:  0.2 15.6    Net $flatten\decoder.$techmap1122601$abc$1105794$lut$aiger1105793$52910.A[4] budget 0.000000 ns (93,25) -> (93,25)
+Info:                Sink $flatten\decoder.$abc$1105794$lut$aiger1105793$52910.A2
+Info:  0.1 15.7  Source $flatten\decoder.$abc$1105794$lut$aiger1105793$52910.O6
+Info:  0.7 16.4    Net $flatten\decoder.$techmap1122627$abc$1105794$lut$aiger1105793$52979.A[1] budget 0.000000 ns (93,25) -> (86,28)
+Info:                Sink $flatten\decoder.$abc$1105794$lut$aiger1105793$52979.A1
+Info:  0.1 16.6  Source $flatten\decoder.$abc$1105794$lut$aiger1105793$52979.O5
+Info:  0.7 17.3    Net $flatten\decoder.$techmap1122644$abc$1105794$lut$aiger1105793$53039.A[4] budget 0.000000 ns (86,28) -> (93,30)
+Info:                Sink $flatten\decoder.$abc$1105794$lut$aiger1105793$53039.A1
+Info:  0.2 17.4  Source $flatten\decoder.$abc$1105794$lut$aiger1105793$53039.O5
+Info:  0.2 17.6    Net $flatten\decoder.$techmap1122645$abc$1105794$lut$aiger1105793$53040.A[1] budget 0.000000 ns (93,30) -> (93,30)
+Info:                Sink $flatten\decoder.$abc$1105794$lut$aiger1105793$53040.A3
+Info:  0.2 17.7  Source $flatten\decoder.$abc$1105794$lut$aiger1105793$53040.O5
+Info:  1.3 19.0    Net $flatten\decoder.$techmap1122646$abc$1105794$lut$aiger1105793$53042.A[2] budget 0.000000 ns (93,30) -> (115,30)
+Info:                Sink $flatten\decoder.$abc$1105794$lut$aiger1105793$53042.A2
+Info:  0.1 19.2  Source $flatten\decoder.$abc$1105794$lut$aiger1105793$53042.O6
+Info:  0.0 19.2    Net $flatten\decoder.$techmap1122647$abc$1105794$lut$aiger1105793$53043.A[0] budget 0.000000 ns (115,30) -> (115,30)
+Info:                Sink $flatten\decoder.$abc$1105794$lut$aiger1105793$53047.A4
+Info:  0.2 19.3  Source $flatten\decoder.$abc$1105794$lut$aiger1105793$53047.O5
+Info:  4.4 23.7    Net $flatten\decoder.$techmap1122804$auto$abc9_ops.cc:1613:reintegrate$1106694.A[4] budget 0.000000 ns (115,30) -> (130,126)
+Info:                Sink $flatten\decoder.$abc$1105794$lut$aiger1105793$53978.A3
+Info:  0.1 23.8  Source $flatten\decoder.$abc$1105794$lut$aiger1105793$53978.O6
+Info:  0.7 24.5    Net $flatten\decoder.$techmap1122798$auto$abc9_ops.cc:1613:reintegrate$1106647.A[4] budget 0.000000 ns (130,126) -> (131,124)
+Info:                Sink $flatten\decoder.$auto$abc9_ops.cc:1613:reintegrate$1106647.A2
+Info:  0.1 24.6  Source $flatten\decoder.$auto$abc9_ops.cc:1613:reintegrate$1106647.O6
+Info:  0.2 24.8    Net decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.instantiation_output_116503[384] budget 0.000000 ns (131,124) -> (131,124)
+Info:                Sink $flatten\decoder.$abc$1105794$lut$aiger1105793$53990.A5
+Info:  0.1 24.9  Source $flatten\decoder.$abc$1105794$lut$aiger1105793$53990.O5
+Info:  1.0 25.9    Net $flatten\decoder.$techmap1122800$abc$1105794$lut$aiger1105793$53993.A[2] budget 0.000000 ns (131,124) -> (127,120)
+Info:                Sink $flatten\decoder.$abc$1105794$lut$aiger1105793$53993.A5
+Info:  0.1 26.0  Source $flatten\decoder.$abc$1105794$lut$aiger1105793$53993.O6
+Info:  0.7 26.7    Net $flatten\decoder.$techmap1122822$auto$abc9_ops.cc:1613:reintegrate$1106646.A[0] budget 0.000000 ns (127,120) -> (123,119)
+Info:                Sink $flatten\decoder.$abc$1105794$lut$aiger1105793$54002.A4
+Info:  0.1 26.9  Source $flatten\decoder.$abc$1105794$lut$aiger1105793$54002.O5
+Info:  3.4 30.3    Net $flatten\decoder.$techmap1145052$auto$abc9_ops.cc:1613:reintegrate$1106070.A[1] budget 0.000000 ns (123,119) -> (112,49)
+Info:                Sink $flatten\decoder.$abc$1105794$lut$aiger1105793$54009.A1
+Info:  0.1 30.4  Source $flatten\decoder.$abc$1105794$lut$aiger1105793$54009.O5
+Info:  3.8 34.2    Net $flatten\decoder.$techmap1125380$auto$abc9_ops.cc:1613:reintegrate$1105874.A[2] budget 0.000000 ns (112,49) -> (130,121)
+Info:                Sink $flatten\decoder.$abc$1105794$lut$aiger1105793$54010.A5
+Info:  0.1 34.3  Source $flatten\decoder.$abc$1105794$lut$aiger1105793$54010.O5
+Info:  0.0 34.3    Net $flatten\decoder.$techmap1122836$abc$1105794$lut$aiger1105793$54040.A[1] budget 0.000000 ns (130,121) -> (130,121)
+Info:                Sink $flatten\decoder.$abc$1105794$lut$aiger1105793$54040.A1
+Info:  0.1 34.4  Source $flatten\decoder.$abc$1105794$lut$aiger1105793$54040.O6
+Info:  1.4 35.9    Net $flatten\decoder.$techmap1122837$auto$abc9_ops.cc:1613:reintegrate$1115435.A[1] budget 0.000000 ns (130,121) -> (140,115)
+Info:                Sink $flatten\decoder.$abc$1105794$lut$aiger1105793$54097.A4
+Info:  0.1 36.0  Source $flatten\decoder.$abc$1105794$lut$aiger1105793$54097.O6
+Info:  1.4 37.4    Net $flatten\decoder.$techmap1125309$abc$1105794$lut$aiger1105793$54099.A[2] budget 0.000000 ns (140,115) -> (139,97)
+Info:                Sink $flatten\decoder.$abc$1105794$lut$aiger1105793$54099.A1
+Info:  0.1 37.5  Source $flatten\decoder.$abc$1105794$lut$aiger1105793$54099.O6
+Info:  2.1 39.6    Net $flatten\decoder.$techmap1125326$abc$1105794$lut$aiger1105793$54154.A[3] budget 0.000000 ns (139,97) -> (154,77)
+Info:                Sink $flatten\decoder.$abc$1105794$lut$aiger1105793$54154.A1
+Info:  0.1 39.7  Source $flatten\decoder.$abc$1105794$lut$aiger1105793$54154.O6
+Info:  2.9 42.6    Net $flatten\decoder.$techmap1125389$auto$abc9_ops.cc:1613:reintegrate$1114598.A[0] budget 0.000000 ns (154,77) -> (108,105)
+Info:                Sink $flatten\decoder.$abc$1105794$lut$aiger1105793$57471.A5
+Info:  0.1 42.7  Source $flatten\decoder.$abc$1105794$lut$aiger1105793$57471.O6
+Info:  4.2 47.0    Net $flatten\decoder.$techmap1125403$abc$1105794$lut$aiger1105793$71033.A[4] budget 0.000000 ns (108,105) -> (145,27)
+Info:                Sink $flatten\decoder.$abc$1105794$lut\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_decoder_profile_topology__Phi_xReductionPlane_0_next_inst.or_123034.A3
+Info:  0.2 47.1  Source $flatten\decoder.$abc$1105794$lut\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_decoder_profile_topology__Phi_xReductionPlane_0_next_inst.or_123034.O5
+Info:  6.6 53.8    Net decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_decoder_profile_topology__Phi_xReductionPlane_0_next_inst.or_123034 budget 1.071000 ns (145,27) -> (134,154)
+Info:                Sink $flatten\decoder.$auto$ff.cc:337:slice$42118.CE
+Info:  0.1 53.9  Setup $flatten\decoder.$auto$ff.cc:337:slice$42118.CE
+Info: 3.8 ns logic, 50.1 ns routing

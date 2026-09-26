@@ -141,3 +141,22 @@ Validation requires the complete 161-event BEAM witness with and without output 
 `width_mapping.py --stage "$STAGE/widths" --xls "$XLS" --yosys "$YOSYS" --library "$LIBRARY/hls_fixed.x"` measures resource thresholds for the bulk recurrence at widths 32/24/20/16/12; override with `--widths`. This isolated combinational screen measures neither the full decoder nor numerical quality. Reducing width requires an explicit decision about fractional precision and integer range.
 
 Extract per-process XLS stage estimates with `architecture_schedule.py "$STAGE/reference" "$STAGE/dedicated"`. It replays each recorded codegen command with schedule reporting and requires byte-identical RTL. These estimates exclude combinational paths composed across process/FIFO boundaries; compare them with whole-core placement and routing.
+
+## Actor-boundary experiments
+
+`boundary_experiment.py --reference DEDICATED --stage FRESH --variant VARIANT` reuses verified dedicated-actor IR and the frozen compiler/table. Variants are `collector-register`, `actor-register`, `actor-ii2`, `actor-ii2-field-only`, and `actor-ii2-batch-register`. The register variants use depth-two FIFOs without forward bypass. The recurrence variants permit two cycles only on phi actor feedback arcs; `field-only` further restricts this to its two numerical field values. Every other state arc retains a one-cycle limit. Schedule audits require unrelated process schedules to remain identical. These are explicit derived experiments, not compiler-cache edits.
+
+Validate with `architecture_validate.py FRESH PREPARED`, then map and route using the architecture commands above. `boundary_trace.py --rtl FRESH --stage TRACE` passively observes the dedicated fixture's aggregate and effect interfaces. It matches complete payloads in FIFO order, measures handoff latency and output blocking, and reports effect spacing as an observation rather than a causal dependency. It is specific to this fixture's generated module interfaces.
+
+`egress_experiment.py --reference FRESH --stage EAGER` substitutes only `dedicated_egress.v`, checking identical ports and byte-identical surrounding RTL. This work-conserving merge retains blocked grants and preserves per-input order. It is an RTL counterfactual for the benchmark: the frozen XLS compiler rejects the repeated nonblocking receive needed by the direct DSLX expression. Run the normal/stalled/reset comparison and the directed test:
+
+```sh
+iverilog -g2012 -s dedicated_egress_tb -o "$STAGE/egress.vvp" \
+  experiments/07-openxc7/timing_chains/dedicated_egress.v \
+  experiments/07-openxc7/timing_chains/dedicated_egress_tb.sv
+vvp "$STAGE/egress.vvp"
+```
+
+`factor_rounding.py --stage FRESH --xls XLS --yosys YOSYS --library hls_fixed.x --z3 Z3` proves the factored division identity and signed intermediate bounds, rejects an incorrect bias, compares compiled RTL against integer rounding, and measures isolated resources. `architecture.py --variant factored-bulk` applies that expression to the shared application for an operation-shape audit. Its calibrated codegen requires an additional measured constant-product entry; a rejection before calibration is expected, not a completed application measurement. Prepare the exact local probe with `timing_model/characterize.py --ops smul_const_35_37_71_45812984491 --widths 71` and the explicit tool/stage flags from the timing-model guide. Keep vendor characterization and held-out kernel validation separate from local resource screening.
+
+The arithmetic runner also writes `FRESH/vendor-kernels`, a `timing_model/batch.py`-compatible corpus containing both complete kernels between preserved input/output registers. Use it as held-out validation, separately from the constant-product calibration corpus. It prepares EDIF locally without invoking Vivado. [Measured outcomes and remaining calibration](../results/actor-boundaries-2026-09-26.md) identify the exact shape and audit sequence.

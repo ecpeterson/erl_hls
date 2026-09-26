@@ -2,6 +2,8 @@
 
 Removing shared execution reduces cycle count, but does not remove the longest composed control/arithmetic paths. The measured fusions repay their latency savings in the first routed controls. No compiler default changes in this experiment.
 
+The proposed local arithmetic and boundary trials are now complete in [Actor boundaries and exact arithmetic](actor-boundaries-2026-09-26.md). Registering the selected interfaces and relaxing actor recurrence did not improve step cost; exact arithmetic factoring reduced isolated DSP use and awaits vendor calibration.
+
 The fixture has two phi sites per plane, both X/Z planes, and four deterministic syndrome sources. The dedicated variant replaces four two-actor shared services with eight dedicated executors, register state and ordinary mailboxes. It preserves the source-fragment collectors, routing groups, effect-window protocol and callbacks; it also adds per-actor batch buffering. This isolates shared execution, not every cost of topology routing. It is a benchmark adapter, not a generally supported backend.
 
 All variants use two requested stages, II=1, the calibrated XC7 table, compact FIFOs, the same native tool/device database, and a 40 ns physical target. The model rejects the default dedicated lowering's 65-way state-update fan-in, so the matched controls use `--split_next_value_selects=0`. This setting changes hardware: the freshly regenerated default-split reference is byte-identical to PR #177, whose retained 39.67 ns × 79.25-cycle result remains a separate reference, not the baseline for attributing the architectural change.
