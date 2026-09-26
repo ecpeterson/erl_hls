@@ -115,3 +115,29 @@ Supply `--reference COMPILED_DIRECTORY --generated CANDIDATE_RTL --compiler CAND
 `prove_fifo.py --baseline RTL --candidate RTL --yosys BIN --stage FRESH_DIRECTORY` exhaustively checks the selected 424-bit, depth-one FIFO over twelve symbolic cycles. The first cycle resets it; later data, readiness, validity and resets are unrestricted. Both handshakes and every valid payload must match. This bounded check complements the independent XLS FIFO interpreter tests; it is not an unbounded equivalence proof.
 
 Apply one of the [recorded FIFO patches](../results/fifo-storage-2026-09-26.md) to a separate checkout of XLS `20bf86d9c9e90f9df380a0280a5973ce0c33a59a`, then build `//xls/tools:codegen_main` and test `//xls/codegen:maybe_materialize_fifos_pass_test`. For calibrated schedules, install the XC7 estimator first using the [timing-model instructions](../docs/timing-model.md). Freeze each binary before building another variant. Reuse the baseline optimized IR and recorded codegen flags, then pass that generated RTL to `fifo_experiment.py`; do not replace non-FIFO application logic. The report retains compiler, patch, baseline, netlist and testbench hashes.
+
+## Small-core architecture controls
+
+`architecture.py` derives one experiment from a prepared two-plane, 2×1 profile bundle (including `compiled/*.command.json` and `oracle.json`). It rejects a different geometry or an unexpected source pattern. Use the calibrated model and frozen compact-FIFO compiler from the preceding experiment; this does not change compiler defaults.
+
+```sh
+python3 experiments/07-openxc7/timing_chains/architecture.py \
+  --reference "$PREPARED" --stage "$STAGE/reference" --variant reference \
+  --xls "$XLS" --codegen "$CODEGEN" --table "$TABLE" --keep-next-selects
+python3 experiments/07-openxc7/timing_chains/architecture_validate.py \
+  "$STAGE/reference" "$PREPARED"
+python3 experiments/07-openxc7/phi_timing.py "$STAGE/reference" \
+  --stage "$STAGE/reference-map" --part xc7z030sbg485-1 --phase map
+python3 experiments/07-openxc7/timing_chains/architecture_physical.py \
+  --stage "$STAGE/reference-map" --nextpnr "$NEXTPNR" --chipdb "$CHIPDB"
+```
+
+Repeat in fresh stages with `--variant dedicated`, `registered-selection`, `separate-entry`, `magnitude-rounding` or `registered-egress`. The dedicated variant gives each actor its own executor, register state and bounded ordinary mailbox. It retains the source-fragment collectors, routing groups and effect-window protocol; extra per-actor effect channels contribute buffering. It is an experimental architecture, not a replacement topology backend.
+
+`--keep-next-selects` suppresses the optimizer's splitting of state updates into guarded next values. Use it on both sides of each comparison: it changes mapped logic even when cycles are unchanged. The dedicated variant otherwise produces a scheduling-normalization fan-in beyond the measured model. `--build-only --resume-from opt` reuses a verified IR conversion; skipped phases must match their recorded command and output hash.
+
+Validation requires the complete 161-event BEAM witness with and without output stalls, plus matching per-actor prefixes through prolonged stalls and reset. It permits different cross-actor interleavings and does not prove every application state. Physical runs retain placement separately, record bounded failures, and check required FF/DSP/RAM endpoint classes after routing. Endpoint coverage does not qualify the native delay values or establish a board clock.
+
+`width_mapping.py --stage "$STAGE/widths" --xls "$XLS" --yosys "$YOSYS" --library "$LIBRARY/hls_fixed.x"` measures resource thresholds for the bulk recurrence at widths 32/24/20/16/12; override with `--widths`. This isolated combinational screen measures neither the full decoder nor numerical quality. Reducing width requires an explicit decision about fractional precision and integer range.
+
+Extract per-process XLS stage estimates with `architecture_schedule.py "$STAGE/reference" "$STAGE/dedicated"`. It replays each recorded codegen command with schedule reporting and requires byte-identical RTL. These estimates exclude combinational paths composed across process/FIFO boundaries; compare them with whole-core placement and routing.
