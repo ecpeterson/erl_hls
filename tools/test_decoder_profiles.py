@@ -74,7 +74,8 @@ def exercise(name: str, config: tuple[int, int, str, int], args: argparse.Namesp
     command(["iverilog", "-g2012", "-tnull", "-i", stage / "phi_decoder_profile_top.v",
              stage / "hls_1r1w_ram.v"], stage, stage / "shell-check.log")
     command(["bash", ROOT / "tools/compile_phi_decoder_profile.sh", stage, args.xls_root,
-             "20m", shards, 2, 1], ROOT, stage / "compile.log", 3700)
+             "20m", shards, 2, 1, "--delay-model", args.delay_model,
+             *(["--delay-table", args.delay_table] if args.delay_table else [])], ROOT, stage / "compile.log", 3700)
     compiled = (stage / "compiled").resolve()
     expected = sequences(json.loads((stage / "oracle.json").read_text()))
     samples = []
@@ -106,7 +107,8 @@ def exercise(name: str, config: tuple[int, int, str, int], args: argparse.Namesp
         for source in ("phi_decoder_profile_tb.sv", "phi_profile_trace.c"):
             shutil.copyfile(ROOT / "test/rtl" / source, stage / source)
         command(["env", "ERL_HLS_PHI_PROFILE_TRACE=1", "bash", ROOT / "tools/phi_decoder_profile_stage.sh",
-                 stage, args.xls_root, "20m", shards, 2, 1], ROOT, stage / "profile.log", 3700)
+                 stage, args.xls_root, "20m", shards, 2, 1, "--delay-model", args.delay_model,
+                 *(["--delay-table", args.delay_table] if args.delay_table else [])], ROOT, stage / "profile.log", 3700)
         command(["python3", ROOT / "tools/phi_profile_timeline.py", stage / "phi_decoder_profile.trace.csv",
                  stage / "timeline.svg", "--profile", stage / "timing.profile.json",
                  "--perfetto", stage / "timing.perfetto.json", "--topology", compiled / "sources/phi_decoder_profile_topology.x",
@@ -117,13 +119,16 @@ def exercise(name: str, config: tuple[int, int, str, int], args: argparse.Namesp
     return summary
 
 
-def main():
+def main() -> None:
+    """Check selected decoder geometries with the requested scheduling model."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("xls_root", type=Path)
     parser.add_argument("--stage", type=Path, default=ROOT / "_build/decoder-profiles")
     parser.add_argument("--cases", nargs="+", choices=CASES,
                         default=["board-sized", "small-both", "small-x", "rectangle-z"])
     parser.add_argument("--trace", action="store_true", help="also check optional inter-proc traces and the profile shell runner")
+    parser.add_argument("--delay-model", default="unit")
+    parser.add_argument("--delay-table", type=lambda p: Path(p).resolve())
     args = parser.parse_args()
     args.stage, args.xls_root = args.stage.resolve(), args.xls_root.resolve()
     args.stage.mkdir(parents=True, exist_ok=True)

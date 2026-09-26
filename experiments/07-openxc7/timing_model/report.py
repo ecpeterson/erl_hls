@@ -41,13 +41,14 @@ def primitive_arcs(corpora: list[Path]) -> list[dict[str, Any]]:
             _, audit = checked_path(root)
             cells = json.loads((root / 'mapped.json').read_text())['modules']['probe_top']['cells']
             for measured in extract(root / 'vivado/routed.sdf'):
-                if not measured['cell'].startswith(('RAMB', 'DSP48')):
+                if not measured['cell'].startswith(('RAMB', 'DSP48', 'SRL')):
                     continue
                 params = cells[measured['instance']]['parameters']
                 rows.append({'probe': probe['name'], 'cell': measured['cell'],
                              'mode': {k: v for k, v in params.items() if not k.startswith(('INIT', 'SRVAL'))},
                              'worst_ps': {kind: max(a['ps'] for a in measured['arcs'] if a['kind'] == kind)
                                           for kind in sorted({a['kind'] for a in measured['arcs']})},
+                             'arcs': measured['arcs'],
                              'audit': audit, 'sdf_sha256': sha(root / 'vivado/routed.sdf')})
     return rows
 

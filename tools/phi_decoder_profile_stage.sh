@@ -67,7 +67,7 @@ timed_command() {
 }
 
 bash "$stage/compile_phi_decoder_profile.sh" "$stage" "$xls_root" \
-    "$stage_timeout" "$shard_count" "$pipeline_stages" "$initiation_interval"
+    "$stage_timeout" "$shard_count" "$pipeline_stages" "$initiation_interval" "${@:7}"
 compiled=$(cd "$stage/compiled" && pwd -P)
 
 # Read the immutable artifact configuration, not the caller's environment.

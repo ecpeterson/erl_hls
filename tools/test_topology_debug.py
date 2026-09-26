@@ -100,6 +100,34 @@ class DiscoveryTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "unrecognized XLS FIFO occupancy"):
                     topology.fifo_resources(hierarchy, flat, "top", probes)
 
+    def test_single_slot_registered_full_alias(self) -> None:
+        """Accept one-bit occupancy only when full aliases that same clocked state."""
+        name = "fifo_for_depth_1_ty_bits_32__with_bypass_register_push"
+        ports = {n: {"bits": [i], "direction": "input"} for i, n in enumerate(
+            ["clk", "push_valid", "push_ready", "pop_valid", "pop_ready"], 1)}
+        fifo = {"ports": ports, "netnames": {"slots": {"bits": [7]}, "is_full_bool": {"bits": [7]}},
+                "cells": {"count": {"type": "$dff", "parameters": {"CLK_POLARITY": "1"},
+                    "connections": {"CLK": [1], "Q": [7]}}}}
+        hierarchy = {"modules": {"top": {"cells": {"fifo": {"type": name}}}, name: fifo}}
+        nets = {"fifo."+n: {"bits": p["bits"]} for n, p in ports.items()}
+        nets["fifo.slots"] = {"bits": [7]}
+        flat = {"modules": {"top": {"netnames": nets}}}
+        probes = [{"id": 0, "valid_bit": 2, "ready_bit": 3}, {"id": 1, "valid_bit": 4, "ready_bit": 5}]
+        queues, unsupported = topology.fifo_resources(hierarchy, flat, "top", probes)
+        self.assertEqual((queues[0]["capacity"], queues[0]["bits"], unsupported), (1, [7], []))
+        for change in ('full', 'clock', 'capacity'):
+            changed = copy.deepcopy(hierarchy)
+            if change == 'full':
+                changed['modules'][name]['netnames']['is_full_bool']['bits'] = [8]
+            elif change == 'clock':
+                changed['modules'][name]['cells']['count']['connections']['CLK'] = [9]
+            else:
+                other = name.replace('depth_1_', 'depth_2_')
+                changed['modules'][other] = changed['modules'].pop(name)
+                changed['modules']['top']['cells']['fifo']['type'] = other
+            with self.subTest(change=change), self.assertRaisesRegex(ValueError, 'unrecognized XLS FIFO occupancy'):
+                topology.fifo_resources(changed, flat, 'top', probes)
+
     def test_clock_domain_rejected(self):
         ports = {"clk": {"bits": [1], "direction": "input"},
                  "x_valid": {"bits": [2], "direction": "output"},

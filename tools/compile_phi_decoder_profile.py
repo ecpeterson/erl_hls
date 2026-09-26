@@ -10,7 +10,8 @@ import subprocess
 from compile_xls import build, duration, interrupted, sha
 
 
-def main():
+def main() -> None:
+    """Compile the requested profile with checked geometry and explicit timing settings."""
     signal.signal(signal.SIGTERM, interrupted)
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("stage", type=Path)
@@ -19,12 +20,15 @@ def main():
     parser.add_argument("shards", nargs="?", type=int, default=3)
     parser.add_argument("pipeline_stages", nargs="?", type=int, default=2)
     parser.add_argument("initiation_interval", nargs="?", type=int, default=1)
+    parser.add_argument("--delay-model", default="unit")
+    parser.add_argument("--delay-table", type=Path)
     args = parser.parse_args()
     if min(args.shards, args.pipeline_stages, args.initiation_interval) < 1:
         parser.error("shards, pipeline stages, and initiation interval must be positive")
     stage = args.stage.resolve()
 
-    def metadata(snapshot):
+    def metadata(snapshot: Path) -> dict:
+        """Reject mismatched topology metadata and record the actual schedule settings."""
         source = (snapshot / "phi_decoder_profile_topology.x").read_text()
         dimensions = {name.lower(): int(re.search(rf"const {name} = u16:(\d+);", source)[1])
                       for name in ("WIDTH", "HEIGHT")}
@@ -41,10 +45,11 @@ def main():
             raise ValueError("profile population/schedulers disagree with the staged configuration")
         return {"profile": {**config,
                             "pipeline_stages": args.pipeline_stages, "initiation_interval": args.initiation_interval,
-                            "delay_model": "unit", "flop_inputs": False, "flop_outputs": True},
+                            "delay_model": args.delay_model, "flop_inputs": False, "flop_outputs": True},
                 "ram_configuration": sha(snapshot / "assets/phi_scheduler_rams.sh")}
 
-    def ram_configurations(snapshot):
+    def ram_configurations(snapshot: Path) -> str:
+        """Bind the scheduler RAM ports from the immutable source snapshot."""
         return subprocess.check_output([
             "bash", "-c", 'set -euo pipefail; source "$1"; phi_scheduler_ram_configurations "$2"',
             "bash", str(snapshot / "assets/phi_scheduler_rams.sh"), str(json.loads((snapshot / "assets/phi_decoder_profile.json").read_text())["scheduler_count"])], text=True).strip()
@@ -53,7 +58,7 @@ def main():
           name="phi_decoder_profile", pipeline_stages=args.pipeline_stages,
           initiation_interval=args.initiation_interval, ram_configurations=ram_configurations,
           assets=[stage / name for name in ("phi_decoder_profile_top.v", "hls_1r1w_ram.v", "phi_scheduler_rams.sh", "phi_decoder_profile.json")],
-          metadata=metadata, timeout=args.timeout)
+          metadata=metadata, timeout=args.timeout, delay_model=args.delay_model, delay_table=args.delay_table)
 
 
 if __name__ == "__main__":
