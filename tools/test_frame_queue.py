@@ -87,7 +87,7 @@ def main() -> None:
         run([xls / 'codegen_main', '--generator=combinational', '--module_name=bank',
              '--use_system_verilog=false', stage / f'{name}.opt.ir'], stage, f'{name}.v')
         script = stage / f'{name}.ys'
-        script.write_text(f'read_verilog "{stage / (name + ".v")}"\n'
+        script.write_text(f'read_verilog -sv "{stage / (name + ".v")}"\n'
                           'prep -top bank -flatten\nopt\n'
                           'sat -verify -prove out 1 -set-def-inputs -show-inputs\n')
         run([args.yosys, '-Q', '-T', '-s', script], stage, f'{name}-proof.log')
