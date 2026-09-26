@@ -4,7 +4,7 @@ import argparse
 from pathlib import Path
 import subprocess
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[3]
 
 
 def fixture(count: int, proof: bool = False) -> str:
@@ -69,7 +69,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('xls', type=Path)
     parser.add_argument('--yosys', default='yosys')
-    parser.add_argument('--library', type=Path, default=ROOT / 'priv/xls/lib')
+    parser.add_argument('--library', type=Path, required=True,
+                        help='isolated library directory containing the candidate patch and dependencies')
     parser.add_argument('--stage', type=Path, default=ROOT / '_build/frame-queue-proof')
     args = parser.parse_args()
     xls, stage = args.xls.resolve(), args.stage.resolve()

@@ -1,0 +1,1746 @@
+{
+  "schema": 1,
+  "scope": "selection dimensions only; not a coverage or timing qualification",
+  "ir_sha256": "6581477956e70209a7cab006adbcfd98810ed7b3be23ece893c9f24f2f4a666b",
+  "table_sha256": "97214bc36d32c19475bd23e00f675f562f7baf7981a095e04fdcb398151faabc",
+  "selections": 974,
+  "shapes": [
+    {
+      "op": "one_hot_sel",
+      "result_bits": 1,
+      "case_count": 3,
+      "selector_bits": 3,
+      "max_measured_bits": null,
+      "review_reasons": [
+        "unmeasured_case_count"
+      ],
+      "occurrences": 7,
+      "examples": [
+        {
+          "scope": "__phi_halo_cell__SharedExecutor_0_next",
+          "node": "one_hot_sel.127820",
+          "line": 2150
+        },
+        {
+          "scope": "__phi_halo_cell__SharedExecutor_0_next",
+          "node": "one_hot_sel.128509",
+          "line": 2189
+        },
+        {
+          "scope": "__phi_halo_cell__SharedExecutor_0_next",
+          "node": "one_hot_sel.128525",
+          "line": 2426
+        }
+      ]
+    },
+    {
+      "op": "one_hot_sel",
+      "result_bits": 1,
+      "case_count": 4,
+      "selector_bits": 4,
+      "max_measured_bits": 64,
+      "review_reasons": [],
+      "occurrences": 12,
+      "examples": [
+        {
+          "scope": "__phi_halo_cell__SharedExecutor_0_next",
+          "node": "one_hot_sel.128513",
+          "line": 2190
+        },
+        {
+          "scope": "__phi_halo_cell__SharedExecutor_0_next",
+          "node": "one_hot_sel.128529",
+          "line": 2512
+        },
+        {
+          "scope": "__phi_halo_cell__SharedExecutor_0_next",
+          "node": "one_hot_sel.128531",
+          "line": 2514
+        }
+      ]
+    },
+    {
+      "op": "one_hot_sel",
+      "result_bits": 1,
+      "case_count": 5,
+      "selector_bits": 5,
+      "max_measured_bits": null,
+      "review_reasons": [
+        "unmeasured_case_count"
+      ],
+      "occurrences": 3,
+      "examples": [
+        {
+          "scope": "__phi_halo_cell__SharedExecutor_0_next",
+          "node": "one_hot_sel.128515",
+          "line": 2192
+        },
+        {
+          "scope": "__phi_decoder_profile_topology__SchedulerRouter2_0_next",
+          "node": "one_hot_sel.128550",
+          "line": 6986
+        },
+        {
+          "scope": "__phi_decoder_profile_topology__SchedulerRouter3_0_next",
+          "node": "one_hot_sel.128605",
+          "line": 7327
+        }
+      ]
+    },
+    {
+      "op": "one_hot_sel",
+      "result_bits": 1,
+      "case_count": 7,
+      "selector_bits": 7,
+      "max_measured_bits": null,
+      "review_reasons": [
+        "unmeasured_case_count"
+      ],
+      "occurrences": 1,
+      "examples": [
+        {
+          "scope": "__phi_halo_cell__SharedExecutor_0_next",
+          "node": "one_hot_sel.126516",
+          "line": 2191
+        }
+      ]
+    },
+    {
+      "op": "one_hot_sel",
+      "result_bits": 2,
+      "case_count": 5,
+      "selector_bits": 5,
+      "max_measured_bits": null,
+      "review_reasons": [
+        "unmeasured_case_count"
+      ],
+      "occurrences": 1,
+      "examples": [
+        {
+          "scope": "__phi_halo_cell__SharedExecutor_0_next",
+          "node": "one_hot_sel.127909",
+          "line": 2513
+        }
+      ]
+    },
+    {
+      "op": "one_hot_sel",
+      "result_bits": 3,
+      "case_count": 6,
+      "selector_bits": 6,
+      "max_measured_bits": null,
+      "review_reasons": [
+        "unmeasured_case_count"
+      ],
+      "occurrences": 1,
+      "examples": [
+        {
+          "scope": "__phi_halo_cell__SharedExecutor_0_next",
+          "node": "one_hot_sel.126537",
+          "line": 2516
+        }
+      ]
+    },
+    {
+      "op": "one_hot_sel",
+      "result_bits": 32,
+      "case_count": 4,
+      "selector_bits": 4,
+      "max_measured_bits": 64,
+      "review_reasons": [],
+      "occurrences": 1,
+      "examples": [
+        {
+          "scope": "__phi_syndrome_replay_cell__SharedExecutor_0_next",
+          "node": "one_hot_sel.126421",
+          "line": 509
+        }
+      ]
+    },
+    {
+      "op": "one_hot_sel",
+      "result_bits": 96,
+      "case_count": 3,
+      "selector_bits": 3,
+      "max_measured_bits": null,
+      "review_reasons": [
+        "unmeasured_case_count"
+      ],
+      "occurrences": 4,
+      "examples": [
+        {
+          "scope": "__phi_decoder_profile_topology__SchedulerRouter2_0_next",
+          "node": "one_hot_sel.128007",
+          "line": 7083
+        },
+        {
+          "scope": "__phi_decoder_profile_topology__SchedulerRouter2_0_next",
+          "node": "one_hot_sel.128009",
+          "line": 7085
+        },
+        {
+          "scope": "__phi_decoder_profile_topology__SchedulerRouter3_0_next",
+          "node": "one_hot_sel.128106",
+          "line": 7407
+        }
+      ]
+    },
+    {
+      "op": "priority_sel",
+      "result_bits": 0,
+      "case_count": 1,
+      "selector_bits": 1,
+      "max_measured_bits": null,
+      "review_reasons": [
+        "zero_data_width",
+        "unmeasured_case_count"
+      ],
+      "occurrences": 3,
+      "examples": [
+        {
+          "scope": "__phi_decoder_profile_topology__SchedulerRouter0_0_next",
+          "node": "priority_sel.13522",
+          "line": 6768
+        },
+        {
+          "scope": "__phi_decoder_profile_topology__SchedulerRouter1_0_next",
+          "node": "priority_sel.13707",
+          "line": 6828
+        },
+        {
+          "scope": "__phi_decoder_profile_topology__SchedulerRouter3_0_next",
+          "node": "priority_sel.14490",
+          "line": 7460
+        }
+      ]
+    },
+    {
+      "op": "priority_sel",
+      "result_bits": 0,
+      "case_count": 3,
+      "selector_bits": 3,
+      "max_measured_bits": null,
+      "review_reasons": [
+        "zero_data_width",
+        "unmeasured_case_count"
+      ],
+      "occurrences": 2,
+      "examples": [
+        {
+          "scope": "__phi_decoder_profile_topology__SchedulerRouter2_0_next",
+          "node": "priority_sel.107626",
+          "line": 7115
+        },
+        {
+          "scope": "__phi_decoder_profile_topology__SchedulerRouter3_0_next",
+          "node": "priority_sel.125526",
+          "line": 7453
+        }
+      ]
+    },
+    {
+      "op": "priority_sel",
+      "result_bits": 1,
+      "case_count": 1,
+      "selector_bits": 1,
+      "max_measured_bits": null,
+      "review_reasons": [
+        "unmeasured_case_count"
+      ],
+      "occurrences": 69,
+      "examples": [
+        {
+          "scope": "__effect_window__Arbiter_0__4_next",
+          "node": "priority_sel.110742",
+          "line": 230
+        },
+        {
+          "scope": "__effect_window__Arbiter_0__4_next",
+          "node": "priority_sel.110745",
+          "line": 231
+        },
+        {
+          "scope": "__effect_window__Arbiter_0__4_next",
+          "node": "priority_sel.110748",
+          "line": 232
+        }
+      ]
+    },
+    {
+      "op": "priority_sel",
+      "result_bits": 1,
+      "case_count": 2,
+      "selector_bits": 2,
+      "max_measured_bits": 64,
+      "review_reasons": [],
+      "occurrences": 33,
+      "examples": [
+        {
+          "scope": "__phi_syndrome_replay_cell__SharedExecutor_0_next",
+          "node": "priority_sel.117235",
+          "line": 327
+        },
+        {
+          "scope": "__phi_syndrome_replay_cell__SharedExecutor_0_next",
+          "node": "priority_sel.114101",
+          "line": 377
+        },
+        {
+          "scope": "__phi_syndrome_replay_cell__SharedService_0__2_0_0_2_2_next",
+          "node": "priority_sel.124727",
+          "line": 799
+        }
+      ]
+    },
+    {
+      "op": "priority_sel",
+      "result_bits": 1,
+      "case_count": 3,
+      "selector_bits": 3,
+      "max_measured_bits": null,
+      "review_reasons": [
+        "unmeasured_case_count"
+      ],
+      "occurrences": 23,
+      "examples": [
+        {
+          "scope": "__phi_syndrome_replay_cell__SharedExecutor_0_next",
+          "node": "priority_sel.105514",
+          "line": 362
+        },
+        {
+          "scope": "__phi_syndrome_replay_cell__SharedExecutor_0_next",
+          "node": "priority_sel.105530",
+          "line": 363
+        },
+        {
+          "scope": "__phi_syndrome_replay_cell__SharedExecutor_0_next",
+          "node": "priority_sel.105525",
+          "line": 364
+        }
+      ]
+    },
+    {
+      "op": "priority_sel",
+      "result_bits": 2,
+      "case_count": 1,
+      "selector_bits": 1,
+      "max_measured_bits": null,
+      "review_reasons": [
+        "unmeasured_case_count"
+      ],
+      "occurrences": 3,
+      "examples": [
+        {
+          "scope": "__phi_halo_cell__SharedExecutor_0_next",
+          "node": "priority_sel.117512",
+          "line": 2437
+        },
+        {
+          "scope": "__phi_halo_cell__SharedService_0__2_2_0_2_2_next",
+          "node": "priority_sel.111970",
+          "line": 3725
+        },
+        {
+          "scope": "__phi_halo_cell__SharedService_0__2_3_0_2_2_next",
+          "node": "priority_sel.112685",
+          "line": 4867
+        }
+      ]
+    },
+    {
+      "op": "priority_sel",
+      "result_bits": 2,
+      "case_count": 3,
+      "selector_bits": 3,
+      "max_measured_bits": null,
+      "review_reasons": [
+        "unmeasured_case_count"
+      ],
+      "occurrences": 11,
+      "examples": [
+        {
+          "scope": "__phi_syndrome_replay_cell__SharedExecutor_0_next",
+          "node": "priority_sel.105363",
+          "line": 361
+        },
+        {
+          "scope": "__phi_syndrome_replay_cell__SharedExecutor_0_next",
+          "node": "priority_sel.118155",
+          "line": 388
+        },
+        {
+          "scope": "__phi_halo_cell__SharedExecutor_0_next",
+          "node": "priority_sel.116643",
+          "line": 2385
+        }
+      ]
+    },
+    {
+      "op": "priority_sel",
+      "result_bits": 2,
+      "case_count": 4,
+      "selector_bits": 4,
+      "max_measured_bits": 64,
+      "review_reasons": [],
+      "occurrences": 3,
+      "examples": [
+        {
+          "scope": "__phi_halo_cell__SharedExecutor_0_next",
+          "node": "priority_sel.106586",
+          "line": 2384
+        },
+        {
+          "scope": "__phi_halo_cell__SharedExecutor_0_next",
+          "node": "priority_sel.106617",
+          "line": 2386
+        },
+        {
+          "scope": "__phi_halo_cell__SharedExecutor_0_next",
+          "node": "effects_layout__2_squeezed__0_to_2",
+          "line": 2683
+        }
+      ]
+    },
+    {
+      "op": "priority_sel",
+      "result_bits": 3,
+      "case_count": 1,
+      "selector_bits": 1,
+      "max_measured_bits": null,
+      "review_reasons": [
+        "unmeasured_case_count"
+      ],
+      "occurrences": 2,
+      "examples": [
+        {
+          "scope": "__phi_halo_cell__SharedService_0__2_2_0_2_2_next",
+          "node": "priority_sel.111960",
+          "line": 3727
+        },
+        {
+          "scope": "__phi_halo_cell__SharedService_0__2_3_0_2_2_next",
+          "node": "priority_sel.112675",
+          "line": 4869
+        }
+      ]
+    },
+    {
+      "op": "priority_sel",
+      "result_bits": 3,
+      "case_count": 3,
+      "selector_bits": 3,
+      "max_measured_bits": null,
+      "review_reasons": [
+        "unmeasured_case_count"
+      ],
+      "occurrences": 2,
+      "examples": [
+        {
+          "scope": "__phi_halo_cell__SharedExecutor_0_next",
+          "node": "priority_sel.106322",
+          "line": 2256
+        },
+        {
+          "scope": "__phi_halo_cell__SharedExecutor_0_next",
+          "node": "priority_sel.106344",
+          "line": 2519
+        }
+      ]
+    },
+    {
+      "op": "priority_sel",
+      "result_bits": 4,
+      "case_count": 1,
+      "selector_bits": 1,
+      "max_measured_bits": null,
+      "review_reasons": [
+        "unmeasured_case_count"
+      ],
+      "occurrences": 2,
+      "examples": [
+        {
+          "scope": "__phi_halo_cell__SharedService_0__2_2_0_2_2_next",
+          "node": "priority_sel.111955",
+          "line": 3728
+        },
+        {
+          "scope": "__phi_halo_cell__SharedService_0__2_3_0_2_2_next",
+          "node": "priority_sel.112670",
+          "line": 4870
+        }
+      ]
+    },
+    {
+      "op": "priority_sel",
+      "result_bits": 5,
+      "case_count": 1,
+      "selector_bits": 1,
+      "max_measured_bits": null,
+      "review_reasons": [
+        "unmeasured_case_count"
+      ],
+      "occurrences": 1,
+      "examples": [
+        {
+          "scope": "__phi_halo_cell__SharedExecutor_0_next",
+          "node": "priority_sel.106677",
+          "line": 2418
+        }
+      ]
+    },
+    {
+      "op": "priority_sel",
+      "result_bits": 7,
+      "case_count": 3,
+      "selector_bits": 3,
+      "max_measured_bits": null,
+      "review_reasons": [
+        "unmeasured_case_count"
+      ],
+      "occurrences": 1,
+      "examples": [
+        {
+          "scope": "__phi_syndrome_replay_cell__SharedExecutor_0_next",
+          "node": "priority_sel.108112",
+          "line": 401
+        }
+      ]
+    },
+    {
+      "op": "priority_sel",
+      "result_bits": 8,
+      "case_count": 1,
+      "selector_bits": 1,
+      "max_measured_bits": null,
+      "review_reasons": [
+        "unmeasured_case_count"
+      ],
+      "occurrences": 26,
+      "examples": [
+        {
+          "scope": "__phi_syndrome_replay_cell__SharedService_0__2_0_0_2_2_next",
+          "node": "priority_sel.111135",
+          "line": 640
+        },
+        {
+          "scope": "__phi_syndrome_replay_cell__SharedService_0__2_0_0_2_2_next",
+          "node": "priority_sel.111123",
+          "line": 667
+        },
+        {
+          "scope": "__phi_syndrome_replay_cell__SharedService_0__2_0_0_2_2_next",
+          "node": "priority_sel.111108",
+          "line": 718
+        }
+      ]
+    },
+    {
+      "op": "priority_sel",
+      "result_bits": 16,
+      "case_count": 1,
+      "selector_bits": 1,
+      "max_measured_bits": null,
+      "review_reasons": [
+        "unmeasured_case_count"
+      ],
+      "occurrences": 6,
+      "examples": [
+        {
+          "scope": "__phi_syndrome_replay_cell__SharedExecutor_0_next",
+          "node": "priority_sel.125451",
+          "line": 484
+        },
+        {
+          "scope": "__phi_syndrome_replay_cell__SharedExecutor_0_next",
+          "node": "priority_sel.125454",
+          "line": 485
+        },
+        {
+          "scope": "__phi_halo_cell__SharedExecutor_0_next",
+          "node": "priority_sel.125510",
+          "line": 2709
+        }
+      ]
+    },
+    {
+      "op": "priority_sel",
+      "result_bits": 32,
+      "case_count": 1,
+      "selector_bits": 1,
+      "max_measured_bits": null,
+      "review_reasons": [
+        "unmeasured_case_count"
+      ],
+      "occurrences": 33,
+      "examples": [
+        {
+          "scope": "__phi_syndrome_replay_cell__SharedExecutor_0_next",
+          "node": "priority_sel.125472",
+          "line": 508
+        },
+        {
+          "scope": "__phi_syndrome_replay_cell__SharedService_0__2_0_0_2_2_next",
+          "node": "slot__4_bounded",
+          "line": 626
+        },
+        {
+          "scope": "__phi_syndrome_replay_cell__SharedService_0__2_0_0_2_2_next",
+          "node": "slot__5_bounded",
+          "line": 648
+        }
+      ]
+    },
+    {
+      "op": "priority_sel",
+      "result_bits": 32,
+      "case_count": 2,
+      "selector_bits": 2,
+      "max_measured_bits": 64,
+      "review_reasons": [],
+      "occurrences": 3,
+      "examples": [
+        {
+          "scope": "__phi_halo_cell__SharedExecutor_0_next",
+          "node": "priority_sel.82632",
+          "line": 2526
+        },
+        {
+          "scope": "__phi_halo_cell__SharedExecutor_0_next",
+          "node": "priority_sel.82653",
+          "line": 2527
+        },
+        {
+          "scope": "__phi_halo_cell__SharedExecutor_0_next",
+          "node": "priority_sel.106236",
+          "line": 2854
+        }
+      ]
+    },
+    {
+      "op": "priority_sel",
+      "result_bits": 32,
+      "case_count": 3,
+      "selector_bits": 3,
+      "max_measured_bits": null,
+      "review_reasons": [
+        "unmeasured_case_count"
+      ],
+      "occurrences": 5,
+      "examples": [
+        {
+          "scope": "__phi_syndrome_replay_cell__SharedExecutor_0_next",
+          "node": "priority_sel.125459",
+          "line": 486
+        },
+        {
+          "scope": "__phi_syndrome_replay_cell__SharedExecutor_0_next",
+          "node": "priority_sel.125464",
+          "line": 487
+        },
+        {
+          "scope": "__phi_syndrome_replay_cell__SharedExecutor_0_next",
+          "node": "priority_sel.125469",
+          "line": 507
+        }
+      ]
+    },
+    {
+      "op": "priority_sel",
+      "result_bits": 34,
+      "case_count": 2,
+      "selector_bits": 2,
+      "max_measured_bits": 64,
+      "review_reasons": [],
+      "occurrences": 2,
+      "examples": [
+        {
+          "scope": "__phi_decoder_profile_topology__Phi_xReductionPlane_0_next",
+          "node": "priority_sel.117533",
+          "line": 5428
+        },
+        {
+          "scope": "__phi_decoder_profile_topology__Phi_zReductionPlane_0_next",
+          "node": "priority_sel.117560",
+          "line": 6191
+        }
+      ]
+    },
+    {
+      "op": "priority_sel",
+      "result_bits": 40,
+      "case_count": 1,
+      "selector_bits": 1,
+      "max_measured_bits": null,
+      "review_reasons": [
+        "unmeasured_case_count"
+      ],
+      "occurrences": 6,
+      "examples": [
+        {
+          "scope": "__phi_halo_cell__SharedService_0__2_2_0_2_2_next",
+          "node": "priority_sel.111571",
+          "line": 3074
+        },
+        {
+          "scope": "__phi_halo_cell__SharedService_0__2_2_0_2_2_next",
+          "node": "priority_sel.111552",
+          "line": 3075
+        },
+        {
+          "scope": "__phi_halo_cell__SharedService_0__2_2_0_2_2_next",
+          "node": "priority_sel.111991",
+          "line": 3713
+        }
+      ]
+    },
+    {
+      "op": "priority_sel",
+      "result_bits": 64,
+      "case_count": 1,
+      "selector_bits": 1,
+      "max_measured_bits": null,
+      "review_reasons": [
+        "unmeasured_case_count"
+      ],
+      "occurrences": 4,
+      "examples": [
+        {
+          "scope": "__phi_halo_cell__SharedService_0__2_2_0_2_2_next",
+          "node": "priority_sel.112019",
+          "line": 3696
+        },
+        {
+          "scope": "__phi_halo_cell__SharedService_0__2_2_0_2_2_next",
+          "node": "priority_sel.112014",
+          "line": 3697
+        },
+        {
+          "scope": "__phi_halo_cell__SharedService_0__2_3_0_2_2_next",
+          "node": "priority_sel.112734",
+          "line": 4838
+        }
+      ]
+    },
+    {
+      "op": "priority_sel",
+      "result_bits": 64,
+      "case_count": 2,
+      "selector_bits": 2,
+      "max_measured_bits": 64,
+      "review_reasons": [],
+      "occurrences": 10,
+      "examples": [
+        {
+          "scope": "__phi_decoder_profile_topology__Phi_xReductionPlane_0_next",
+          "node": "priority_sel.80199",
+          "line": 5401
+        },
+        {
+          "scope": "__phi_decoder_profile_topology__Phi_xReductionPlane_0_next",
+          "node": "priority_sel.80293",
+          "line": 5520
+        },
+        {
+          "scope": "__phi_decoder_profile_topology__Phi_xReductionPlane_0_next",
+          "node": "priority_sel.80309",
+          "line": 5539
+        }
+      ]
+    },
+    {
+      "op": "priority_sel",
+      "result_bits": 64,
+      "case_count": 4,
+      "selector_bits": 4,
+      "max_measured_bits": 64,
+      "review_reasons": [],
+      "occurrences": 2,
+      "examples": [
+        {
+          "scope": "__phi_decoder_profile_topology__SchedulerRouter2_0_next",
+          "node": "priority_sel.107572",
+          "line": 6999
+        },
+        {
+          "scope": "__phi_decoder_profile_topology__SchedulerRouter3_0_next",
+          "node": "priority_sel.107789",
+          "line": 7340
+        }
+      ]
+    },
+    {
+      "op": "priority_sel",
+      "result_bits": 65,
+      "case_count": 2,
+      "selector_bits": 2,
+      "max_measured_bits": 64,
+      "review_reasons": [
+        "wider_than_table"
+      ],
+      "occurrences": 2,
+      "examples": [
+        {
+          "scope": "__phi_decoder_profile_topology__SchedulerStartup0_0_next",
+          "node": "priority_sel.105132",
+          "line": 33
+        },
+        {
+          "scope": "__phi_decoder_profile_topology__SchedulerStartup1_0_next",
+          "node": "priority_sel.105143",
+          "line": 60
+        }
+      ]
+    },
+    {
+      "op": "priority_sel",
+      "result_bits": 96,
+      "case_count": 1,
+      "selector_bits": 1,
+      "max_measured_bits": null,
+      "review_reasons": [
+        "unmeasured_case_count"
+      ],
+      "occurrences": 8,
+      "examples": [
+        {
+          "scope": "__phi_decoder_profile_topology__Phi_xReductionPlane_0_next",
+          "node": "frames_tuple_idx_1__1",
+          "line": 5231
+        },
+        {
+          "scope": "__phi_decoder_profile_topology__Phi_xReductionPlane_0_next",
+          "node": "frames_tuple_idx_1__2",
+          "line": 5234
+        },
+        {
+          "scope": "__phi_decoder_profile_topology__Phi_xReductionPlane_0_next",
+          "node": "frames_tuple_idx_1__3",
+          "line": 5298
+        }
+      ]
+    },
+    {
+      "op": "priority_sel",
+      "result_bits": 96,
+      "case_count": 3,
+      "selector_bits": 3,
+      "max_measured_bits": null,
+      "review_reasons": [
+        "unmeasured_case_count"
+      ],
+      "occurrences": 4,
+      "examples": [
+        {
+          "scope": "__phi_decoder_profile_topology__SchedulerRouter2_0_next",
+          "node": "priority_sel.107613",
+          "line": 7087
+        },
+        {
+          "scope": "__phi_decoder_profile_topology__SchedulerRouter2_0_next",
+          "node": "priority_sel.107621",
+          "line": 7088
+        },
+        {
+          "scope": "__phi_decoder_profile_topology__SchedulerRouter3_0_next",
+          "node": "priority_sel.107834",
+          "line": 7411
+        }
+      ]
+    },
+    {
+      "op": "priority_sel",
+      "result_bits": 96,
+      "case_count": 17,
+      "selector_bits": 17,
+      "max_measured_bits": null,
+      "review_reasons": [
+        "unmeasured_case_count"
+      ],
+      "occurrences": 2,
+      "examples": [
+        {
+          "scope": "__phi_decoder_profile_topology__SchedulerRouter2_0_next",
+          "node": "priority_sel.124818",
+          "line": 7055
+        },
+        {
+          "scope": "__phi_decoder_profile_topology__SchedulerRouter3_0_next",
+          "node": "priority_sel.124841",
+          "line": 7399
+        }
+      ]
+    },
+    {
+      "op": "priority_sel",
+      "result_bits": 128,
+      "case_count": 1,
+      "selector_bits": 1,
+      "max_measured_bits": null,
+      "review_reasons": [
+        "unmeasured_case_count"
+      ],
+      "occurrences": 2,
+      "examples": [
+        {
+          "scope": "__phi_decoder_profile_topology__Phi_xReductionPlane_0_next",
+          "node": "pop_sources",
+          "line": 5542
+        },
+        {
+          "scope": "__phi_decoder_profile_topology__Phi_zReductionPlane_0_next",
+          "node": "pop_sources",
+          "line": 6305
+        }
+      ]
+    },
+    {
+      "op": "priority_sel",
+      "result_bits": 384,
+      "case_count": 4,
+      "selector_bits": 4,
+      "max_measured_bits": 64,
+      "review_reasons": [
+        "wider_than_table"
+      ],
+      "occurrences": 1,
+      "examples": [
+        {
+          "scope": "__phi_halo_cell__SharedExecutor_0_next",
+          "node": "priority_sel.82946",
+          "line": 2866
+        }
+      ]
+    },
+    {
+      "op": "sel",
+      "result_bits": 0,
+      "case_count": 2,
+      "selector_bits": 1,
+      "max_measured_bits": 64,
+      "review_reasons": [
+        "zero_data_width"
+      ],
+      "occurrences": 6,
+      "examples": [
+        {
+          "scope": "__phi_decoder_profile_topology__SchedulerRouter0_0_next",
+          "node": "routed_tok",
+          "line": 6769
+        },
+        {
+          "scope": "__phi_decoder_profile_topology__SchedulerRouter1_0_next",
+          "node": "routed_tok",
+          "line": 6829
+        },
+        {
+          "scope": "__phi_decoder_profile_topology__SchedulerRouter2_0_next",
+          "node": "sel.14265",
+          "line": 7121
+        }
+      ]
+    },
+    {
+      "op": "sel",
+      "result_bits": 1,
+      "case_count": 1,
+      "selector_bits": 32,
+      "max_measured_bits": null,
+      "review_reasons": [
+        "unmeasured_case_count",
+        "unmeasured_selector_width"
+      ],
+      "occurrences": 62,
+      "examples": [
+        {
+          "scope": "__phi_syndrome_replay_cell__SharedService_0__2_0_0_2_2_next",
+          "node": "sel.102618",
+          "line": 723
+        },
+        {
+          "scope": "__phi_syndrome_replay_cell__SharedService_0__2_0_0_2_2_next",
+          "node": "sel.102104",
+          "line": 746
+        },
+        {
+          "scope": "__phi_syndrome_replay_cell__SharedService_0__2_0_0_2_2_next",
+          "node": "sel.111088",
+          "line": 755
+        }
+      ]
+    },
+    {
+      "op": "sel",
+      "result_bits": 1,
+      "case_count": 2,
+      "selector_bits": 1,
+      "max_measured_bits": 64,
+      "review_reasons": [],
+      "occurrences": 109,
+      "examples": [
+        {
+          "scope": "__phi_syndrome_replay_cell__SharedExecutor_0_next",
+          "node": "dispatched_machine_enter_pending",
+          "line": 453
+        },
+        {
+          "scope": "__phi_syndrome_replay_cell__SharedExecutor_0_next",
+          "node": "entered_machine_enter_pending",
+          "line": 518
+        },
+        {
+          "scope": "__phi_syndrome_replay_cell__SharedService_0__2_0_0_2_2_next",
+          "node": "result_received",
+          "line": 609
+        }
+      ]
+    },
+    {
+      "op": "sel",
+      "result_bits": 2,
+      "case_count": 1,
+      "selector_bits": 32,
+      "max_measured_bits": null,
+      "review_reasons": [
+        "unmeasured_case_count",
+        "unmeasured_selector_width"
+      ],
+      "occurrences": 2,
+      "examples": [
+        {
+          "scope": "__phi_halo_cell__SharedService_0__2_2_0_2_2_next",
+          "node": "sel.102366",
+          "line": 3638
+        },
+        {
+          "scope": "__phi_halo_cell__SharedService_0__2_3_0_2_2_next",
+          "node": "sel.102388",
+          "line": 4780
+        }
+      ]
+    },
+    {
+      "op": "sel",
+      "result_bits": 2,
+      "case_count": 2,
+      "selector_bits": 1,
+      "max_measured_bits": 64,
+      "review_reasons": [],
+      "occurrences": 41,
+      "examples": [
+        {
+          "scope": "__phi_syndrome_replay_cell__SharedExecutor_0_next",
+          "node": "directive",
+          "line": 372
+        },
+        {
+          "scope": "__phi_syndrome_replay_cell__SharedExecutor_0_next",
+          "node": "next_phase_squeezed_portion_0_width_2",
+          "line": 399
+        },
+        {
+          "scope": "__phi_syndrome_replay_cell__SharedExecutor_0_next",
+          "node": "dispatched_machine_phase_squeezed_portion_0_width_2",
+          "line": 426
+        }
+      ]
+    },
+    {
+      "op": "sel",
+      "result_bits": 3,
+      "case_count": 1,
+      "selector_bits": 32,
+      "max_measured_bits": null,
+      "review_reasons": [
+        "unmeasured_case_count",
+        "unmeasured_selector_width"
+      ],
+      "occurrences": 2,
+      "examples": [
+        {
+          "scope": "__phi_halo_cell__SharedService_0__2_2_0_2_2_next",
+          "node": "sel.102372",
+          "line": 3642
+        },
+        {
+          "scope": "__phi_halo_cell__SharedService_0__2_3_0_2_2_next",
+          "node": "sel.102394",
+          "line": 4784
+        }
+      ]
+    },
+    {
+      "op": "sel",
+      "result_bits": 3,
+      "case_count": 2,
+      "selector_bits": 1,
+      "max_measured_bits": 64,
+      "review_reasons": [],
+      "occurrences": 23,
+      "examples": [
+        {
+          "scope": "__phi_halo_cell__SharedExecutor_0_next",
+          "node": "sel.105833",
+          "line": 2242
+        },
+        {
+          "scope": "__phi_halo_cell__SharedExecutor_0_next",
+          "node": "sel.105839",
+          "line": 2243
+        },
+        {
+          "scope": "__phi_halo_cell__SharedExecutor_0_next",
+          "node": "completed_phase_squeezed_portion_0_width_3",
+          "line": 2268
+        }
+      ]
+    },
+    {
+      "op": "sel",
+      "result_bits": 4,
+      "case_count": 1,
+      "selector_bits": 32,
+      "max_measured_bits": null,
+      "review_reasons": [
+        "unmeasured_case_count",
+        "unmeasured_selector_width"
+      ],
+      "occurrences": 2,
+      "examples": [
+        {
+          "scope": "__phi_halo_cell__SharedService_0__2_2_0_2_2_next",
+          "node": "sel.102375",
+          "line": 3644
+        },
+        {
+          "scope": "__phi_halo_cell__SharedService_0__2_3_0_2_2_next",
+          "node": "sel.102397",
+          "line": 4786
+        }
+      ]
+    },
+    {
+      "op": "sel",
+      "result_bits": 4,
+      "case_count": 2,
+      "selector_bits": 1,
+      "max_measured_bits": 64,
+      "review_reasons": [],
+      "occurrences": 15,
+      "examples": [
+        {
+          "scope": "__effect_window__Arbiter_0__4_next",
+          "node": "eligible",
+          "line": 187
+        },
+        {
+          "scope": "__phi_halo_cell__SharedExecutor_0_next",
+          "node": "sel.105887",
+          "line": 2371
+        },
+        {
+          "scope": "__phi_halo_cell__SharedExecutor_0_next",
+          "node": "sel.105893",
+          "line": 2373
+        }
+      ]
+    },
+    {
+      "op": "sel",
+      "result_bits": 5,
+      "case_count": 1,
+      "selector_bits": 32,
+      "max_measured_bits": null,
+      "review_reasons": [
+        "unmeasured_case_count",
+        "unmeasured_selector_width"
+      ],
+      "occurrences": 2,
+      "examples": [
+        {
+          "scope": "__phi_halo_cell__SharedService_0__2_2_0_2_2_next",
+          "node": "sel.102137",
+          "line": 3071
+        },
+        {
+          "scope": "__phi_halo_cell__SharedService_0__2_3_0_2_2_next",
+          "node": "sel.102205",
+          "line": 4213
+        }
+      ]
+    },
+    {
+      "op": "sel",
+      "result_bits": 5,
+      "case_count": 2,
+      "selector_bits": 1,
+      "max_measured_bits": 64,
+      "review_reasons": [],
+      "occurrences": 2,
+      "examples": [
+        {
+          "scope": "__phi_halo_cell__SharedService_0__2_2_0_2_2_next",
+          "node": "postponed_row",
+          "line": 3083
+        },
+        {
+          "scope": "__phi_halo_cell__SharedService_0__2_3_0_2_2_next",
+          "node": "postponed_row",
+          "line": 4225
+        }
+      ]
+    },
+    {
+      "op": "sel",
+      "result_bits": 7,
+      "case_count": 2,
+      "selector_bits": 1,
+      "max_measured_bits": 64,
+      "review_reasons": [],
+      "occurrences": 2,
+      "examples": [
+        {
+          "scope": "__phi_syndrome_replay_cell__SharedExecutor_0_next",
+          "node": "sel.105424",
+          "line": 414
+        },
+        {
+          "scope": "__phi_syndrome_replay_cell__SharedExecutor_0_next",
+          "node": "failure_squeezed",
+          "line": 423
+        }
+      ]
+    },
+    {
+      "op": "sel",
+      "result_bits": 8,
+      "case_count": 1,
+      "selector_bits": 32,
+      "max_measured_bits": null,
+      "review_reasons": [
+        "unmeasured_case_count",
+        "unmeasured_selector_width"
+      ],
+      "occurrences": 98,
+      "examples": [
+        {
+          "scope": "__phi_syndrome_replay_cell__SharedService_0__2_0_0_2_2_next",
+          "node": "old_count",
+          "line": 627
+        },
+        {
+          "scope": "__phi_syndrome_replay_cell__SharedService_0__2_0_0_2_2_next",
+          "node": "sel.111136",
+          "line": 634
+        },
+        {
+          "scope": "__phi_syndrome_replay_cell__SharedService_0__2_0_0_2_2_next",
+          "node": "sel.111124",
+          "line": 659
+        }
+      ]
+    },
+    {
+      "op": "sel",
+      "result_bits": 8,
+      "case_count": 2,
+      "selector_bits": 1,
+      "max_measured_bits": 64,
+      "review_reasons": [],
+      "occurrences": 92,
+      "examples": [
+        {
+          "scope": "__phi_syndrome_replay_cell__SharedExecutor_0_next",
+          "node": "dispatched_machine_entered_from",
+          "line": 522
+        },
+        {
+          "scope": "__phi_syndrome_replay_cell__SharedService_0__2_0_0_2_2_next",
+          "node": "metadata_occupied__6",
+          "line": 649
+        },
+        {
+          "scope": "__phi_syndrome_replay_cell__SharedService_0__2_0_0_2_2_next",
+          "node": "metadata_occupied__5",
+          "line": 676
+        }
+      ]
+    },
+    {
+      "op": "sel",
+      "result_bits": 9,
+      "case_count": 2,
+      "selector_bits": 1,
+      "max_measured_bits": 64,
+      "review_reasons": [],
+      "occurrences": 2,
+      "examples": [
+        {
+          "scope": "__phi_halo_cell__SharedExecutor_0_next",
+          "node": "sel.106071",
+          "line": 2564
+        },
+        {
+          "scope": "__phi_halo_cell__SharedExecutor_0_next",
+          "node": "failure_squeezed",
+          "line": 2589
+        }
+      ]
+    },
+    {
+      "op": "sel",
+      "result_bits": 16,
+      "case_count": 1,
+      "selector_bits": 32,
+      "max_measured_bits": null,
+      "review_reasons": [
+        "unmeasured_case_count",
+        "unmeasured_selector_width"
+      ],
+      "occurrences": 2,
+      "examples": [
+        {
+          "scope": "__phi_halo_cell__SharedService_0__2_2_0_2_2_next",
+          "node": "sel.102363",
+          "line": 3636
+        },
+        {
+          "scope": "__phi_halo_cell__SharedService_0__2_3_0_2_2_next",
+          "node": "sel.102385",
+          "line": 4778
+        }
+      ]
+    },
+    {
+      "op": "sel",
+      "result_bits": 16,
+      "case_count": 2,
+      "selector_bits": 1,
+      "max_measured_bits": 64,
+      "review_reasons": [],
+      "occurrences": 27,
+      "examples": [
+        {
+          "scope": "__phi_syndrome_replay_cell__SharedExecutor_0_next",
+          "node": "dispatched_machine_failure",
+          "line": 452
+        },
+        {
+          "scope": "__phi_syndrome_replay_cell__SharedExecutor_0_next",
+          "node": "sel.78718",
+          "line": 469
+        },
+        {
+          "scope": "__phi_syndrome_replay_cell__SharedExecutor_0_next",
+          "node": "sel.78719",
+          "line": 470
+        }
+      ]
+    },
+    {
+      "op": "sel",
+      "result_bits": 32,
+      "case_count": 1,
+      "selector_bits": 32,
+      "max_measured_bits": null,
+      "review_reasons": [
+        "unmeasured_case_count",
+        "unmeasured_selector_width"
+      ],
+      "occurrences": 4,
+      "examples": [
+        {
+          "scope": "__phi_halo_cell__SharedService_0__2_2_0_2_2_next",
+          "node": "sel.102369",
+          "line": 3640
+        },
+        {
+          "scope": "__phi_halo_cell__SharedService_0__2_2_0_2_2_next",
+          "node": "sel.102138",
+          "line": 3683
+        },
+        {
+          "scope": "__phi_halo_cell__SharedService_0__2_3_0_2_2_next",
+          "node": "sel.102391",
+          "line": 4782
+        }
+      ]
+    },
+    {
+      "op": "sel",
+      "result_bits": 32,
+      "case_count": 2,
+      "selector_bits": 1,
+      "max_measured_bits": 64,
+      "review_reasons": [],
+      "occurrences": 93,
+      "examples": [
+        {
+          "scope": "__phi_syndrome_replay_cell__SharedExecutor_0_next",
+          "node": "sel.78720",
+          "line": 472
+        },
+        {
+          "scope": "__phi_syndrome_replay_cell__SharedExecutor_0_next",
+          "node": "sel.78721",
+          "line": 473
+        },
+        {
+          "scope": "__phi_syndrome_replay_cell__SharedExecutor_0_next",
+          "node": "sel.78723",
+          "line": 475
+        }
+      ]
+    },
+    {
+      "op": "sel",
+      "result_bits": 33,
+      "case_count": 2,
+      "selector_bits": 1,
+      "max_measured_bits": 64,
+      "review_reasons": [],
+      "occurrences": 4,
+      "examples": [
+        {
+          "scope": "__phi_decoder_profile_topology__Phi_xReductionPlane_0_next",
+          "node": "sel.117524",
+          "line": 5348
+        },
+        {
+          "scope": "__phi_decoder_profile_topology__Phi_xReductionPlane_0_next",
+          "node": "sel.117528",
+          "line": 5373
+        },
+        {
+          "scope": "__phi_decoder_profile_topology__Phi_zReductionPlane_0_next",
+          "node": "sel.117551",
+          "line": 6111
+        }
+      ]
+    },
+    {
+      "op": "sel",
+      "result_bits": 34,
+      "case_count": 2,
+      "selector_bits": 1,
+      "max_measured_bits": 64,
+      "review_reasons": [],
+      "occurrences": 2,
+      "examples": [
+        {
+          "scope": "__phi_decoder_profile_topology__Phi_xReductionPlane_0_next",
+          "node": "v_Xls_clause_1_LeftMask_1__2_squeezed",
+          "line": 5621
+        },
+        {
+          "scope": "__phi_decoder_profile_topology__Phi_zReductionPlane_0_next",
+          "node": "v_Xls_clause_1_LeftMask_1__2_squeezed",
+          "line": 6384
+        }
+      ]
+    },
+    {
+      "op": "sel",
+      "result_bits": 37,
+      "case_count": 2,
+      "selector_bits": 1,
+      "max_measured_bits": 64,
+      "review_reasons": [],
+      "occurrences": 1,
+      "examples": [
+        {
+          "scope": "__phi_halo_cell__SharedExecutor_0_next",
+          "node": "v_Xls_clause_1_Sum0_1__2",
+          "line": 2316
+        }
+      ]
+    },
+    {
+      "op": "sel",
+      "result_bits": 40,
+      "case_count": 1,
+      "selector_bits": 32,
+      "max_measured_bits": null,
+      "review_reasons": [
+        "unmeasured_case_count",
+        "unmeasured_selector_width"
+      ],
+      "occurrences": 6,
+      "examples": [
+        {
+          "scope": "__phi_halo_cell__SharedService_0__2_2_0_2_2_next",
+          "node": "sel.102183",
+          "line": 3057
+        },
+        {
+          "scope": "__phi_halo_cell__SharedService_0__2_2_0_2_2_next",
+          "node": "sel.111992",
+          "line": 3677
+        },
+        {
+          "scope": "__phi_halo_cell__SharedService_0__2_2_0_2_2_next",
+          "node": "sel.102136",
+          "line": 3804
+        }
+      ]
+    },
+    {
+      "op": "sel",
+      "result_bits": 40,
+      "case_count": 2,
+      "selector_bits": 1,
+      "max_measured_bits": 64,
+      "review_reasons": [],
+      "occurrences": 4,
+      "examples": [
+        {
+          "scope": "__phi_halo_cell__SharedService_0__2_2_0_2_2_next",
+          "node": "order__1",
+          "line": 3065
+        },
+        {
+          "scope": "__phi_halo_cell__SharedService_0__2_2_0_2_2_next",
+          "node": "metadata_order__3",
+          "line": 3743
+        },
+        {
+          "scope": "__phi_halo_cell__SharedService_0__2_3_0_2_2_next",
+          "node": "order__1",
+          "line": 4207
+        }
+      ]
+    },
+    {
+      "op": "sel",
+      "result_bits": 64,
+      "case_count": 1,
+      "selector_bits": 32,
+      "max_measured_bits": null,
+      "review_reasons": [
+        "unmeasured_case_count",
+        "unmeasured_selector_width"
+      ],
+      "occurrences": 4,
+      "examples": [
+        {
+          "scope": "__phi_halo_cell__SharedService_0__2_2_0_2_2_next",
+          "node": "sel.102636",
+          "line": 3588
+        },
+        {
+          "scope": "__phi_halo_cell__SharedService_0__2_2_0_2_2_next",
+          "node": "sel.102639",
+          "line": 3590
+        },
+        {
+          "scope": "__phi_halo_cell__SharedService_0__2_3_0_2_2_next",
+          "node": "sel.102643",
+          "line": 4730
+        }
+      ]
+    },
+    {
+      "op": "sel",
+      "result_bits": 64,
+      "case_count": 2,
+      "selector_bits": 1,
+      "max_measured_bits": 64,
+      "review_reasons": [],
+      "occurrences": 39,
+      "examples": [
+        {
+          "scope": "__phi_halo_cell__SharedExecutor_0_next",
+          "node": "v_Xls_clause_1_Sum1_1",
+          "line": 2102
+        },
+        {
+          "scope": "__phi_halo_cell__SharedExecutor_0_next",
+          "node": "sel.83034",
+          "line": 2816
+        },
+        {
+          "scope": "__phi_halo_cell__SharedExecutor_0_next",
+          "node": "sel.83036",
+          "line": 2818
+        }
+      ]
+    },
+    {
+      "op": "sel",
+      "result_bits": 96,
+      "case_count": 1,
+      "selector_bits": 32,
+      "max_measured_bits": null,
+      "review_reasons": [
+        "unmeasured_case_count",
+        "unmeasured_selector_width"
+      ],
+      "occurrences": 4,
+      "examples": [
+        {
+          "scope": "__phi_syndrome_replay_cell__SharedService_0__2_0_0_2_2_next",
+          "node": "admission_frame_payload__1",
+          "line": 944
+        },
+        {
+          "scope": "__phi_syndrome_replay_cell__SharedService_0__2_1_0_2_2_next",
+          "node": "admission_frame_payload__1",
+          "line": 1643
+        },
+        {
+          "scope": "__phi_halo_cell__SharedService_0__2_2_0_2_2_next",
+          "node": "admission_frame_payload__1",
+          "line": 3707
+        }
+      ]
+    },
+    {
+      "op": "sel",
+      "result_bits": 96,
+      "case_count": 2,
+      "selector_bits": 1,
+      "max_measured_bits": 64,
+      "review_reasons": [
+        "wider_than_table"
+      ],
+      "occurrences": 10,
+      "examples": [
+        {
+          "scope": "__phi_syndrome_replay_cell__SharedService_0__2_0_0_2_2_next",
+          "node": "sel.57745",
+          "line": 877
+        },
+        {
+          "scope": "__phi_syndrome_replay_cell__SharedService_0__2_0_0_2_2_next",
+          "node": "request__3_tup1_tup1",
+          "line": 917
+        },
+        {
+          "scope": "__phi_syndrome_replay_cell__SharedService_0__2_0_0_2_2_next",
+          "node": "request__4_tup1_tup1",
+          "line": 918
+        }
+      ]
+    },
+    {
+      "op": "sel",
+      "result_bits": 128,
+      "case_count": 2,
+      "selector_bits": 1,
+      "max_measured_bits": 64,
+      "review_reasons": [
+        "wider_than_table"
+      ],
+      "occurrences": 1,
+      "examples": [
+        {
+          "scope": "__phi_halo_cell__SharedExecutor_0_next",
+          "node": "sel.106212",
+          "line": 2802
+        }
+      ]
+    },
+    {
+      "op": "sel",
+      "result_bits": 225,
+      "case_count": 2,
+      "selector_bits": 1,
+      "max_measured_bits": 64,
+      "review_reasons": [
+        "wider_than_table"
+      ],
+      "occurrences": 2,
+      "examples": [
+        {
+          "scope": "__phi_syndrome_replay_cell__SharedService_0__2_0_0_2_2_next",
+          "node": "result_machine",
+          "line": 647
+        },
+        {
+          "scope": "__phi_syndrome_replay_cell__SharedService_0__2_1_0_2_2_next",
+          "node": "result_machine",
+          "line": 1346
+        }
+      ]
+    },
+    {
+      "op": "sel",
+      "result_bits": 384,
+      "case_count": 2,
+      "selector_bits": 1,
+      "max_measured_bits": 64,
+      "review_reasons": [
+        "wider_than_table"
+      ],
+      "occurrences": 4,
+      "examples": [
+        {
+          "scope": "__phi_halo_cell__SharedService_0__2_2_0_2_2_next",
+          "node": "sel.58108",
+          "line": 3601
+        },
+        {
+          "scope": "__phi_halo_cell__SharedService_0__2_3_0_2_2_next",
+          "node": "sel.58311",
+          "line": 4743
+        },
+        {
+          "scope": "__phi_decoder_profile_topology__SchedulerRouter2_0_next",
+          "node": "scheduled_effects_payloads__2",
+          "line": 6928
+        }
+      ]
+    },
+    {
+      "op": "sel",
+      "result_bits": 512,
+      "case_count": 2,
+      "selector_bits": 1,
+      "max_measured_bits": 64,
+      "review_reasons": [
+        "wider_than_table"
+      ],
+      "occurrences": 4,
+      "examples": [
+        {
+          "scope": "__phi_decoder_profile_topology__Phi_xReductionPlane_0_next",
+          "node": "sel.25160",
+          "line": 5668
+        },
+        {
+          "scope": "__phi_decoder_profile_topology__Phi_xReductionPlane_0_next",
+          "node": "work_frames",
+          "line": 5686
+        },
+        {
+          "scope": "__phi_decoder_profile_topology__Phi_zReductionPlane_0_next",
+          "node": "sel.25181",
+          "line": 6431
+        }
+      ]
+    },
+    {
+      "op": "sel",
+      "result_bits": 540,
+      "case_count": 2,
+      "selector_bits": 1,
+      "max_measured_bits": 64,
+      "review_reasons": [
+        "wider_than_table"
+      ],
+      "occurrences": 2,
+      "examples": [
+        {
+          "scope": "__phi_halo_cell__SharedService_0__2_2_0_2_2_next",
+          "node": "result_machine",
+          "line": 3129
+        },
+        {
+          "scope": "__phi_halo_cell__SharedService_0__2_3_0_2_2_next",
+          "node": "result_machine",
+          "line": 4271
+        }
+      ]
+    }
+  ]
+}

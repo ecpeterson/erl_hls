@@ -4,7 +4,10 @@
   "candidate_change_commit": "214ce8f",
   "part": "xc7z030sbg485-1",
   "target_mhz": 25,
-  "seed": 1,
+  "seeds": [
+    1,
+    2
+  ],
   "design_wide_clock_validated": false,
   "variants": {
     "baseline": {
@@ -302,6 +305,1396 @@
             "placed.json": "efc3b61f4b4660b7f747146414d610da691af8af168f6df1c258b0828b8fe3a4",
             "place.log": "50358b8e00b4f3419afade0447e02b2f716a88ff44bb04393a55ea96c4f3c32e",
             "route.log": "777aed658b411c8eb246218037b461bb14a9b9850daeaab0561959f156d4bbba"
+          }
+        },
+        {
+          "inputs": {
+            "<native-experiment>/build/native-timing-20260924/reproducible/bin/nextpnr-calibrated": "78e09c26bf142ea6e0d2bc0263ea2bada65aedd47d4358e483359c3e404f267c",
+            "<native-experiment>/build/chipdb/xc7z030sbg485.bin": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+            "<worktree>/_build/timing-control/physical/baseline-extended/mapped.json": "72bb21de3acb6ca95b3b26f49226d9e1f736a2ec64e34e270f96d5195341534a",
+            "<worktree>/_build/timing-control/physical/baseline-extended/timing.xdc": "1fbab82480c5e1221d5163cbc4607ba3d38c44d38d1e19ee81ddef52f0287977"
+          },
+          "frequency": 25,
+          "seed": 1,
+          "phases": {
+            "route": {
+              "command": [
+                "<native-experiment>/build/native-timing-20260924/reproducible/bin/nextpnr-calibrated",
+                "--chipdb",
+                "<native-experiment>/build/chipdb/xc7z030sbg485.bin",
+                "--seed",
+                "1",
+                "--freq",
+                "25",
+                "--json",
+                "placed.json",
+                "--no-pack",
+                "--no-place",
+                "--router",
+                "router2",
+                "--timing-allow-fail",
+                "--report",
+                "timing.json",
+                "--timing-coverage",
+                "coverage.json",
+                "--log",
+                "route.log"
+              ],
+              "seconds": 2322.033690582961,
+              "budget_seconds": 3600,
+              "exit": 0
+            }
+          },
+          "reused_placement": {
+            "run_manifest_sha256": "3034563949bfc2c8db9e3a8c0b91a481ceb215d1e8934500863c7d740f92c1ed",
+            "placed_json_sha256": "efc3b61f4b4660b7f747146414d610da691af8af168f6df1c258b0828b8fe3a4"
+          },
+          "id": "baseline-route-extended",
+          "outputs": {
+            "placed.json": "efc3b61f4b4660b7f747146414d610da691af8af168f6df1c258b0828b8fe3a4",
+            "route.log": "affa68692009a387d8329f55f860539f58305dc15f8d80911d35044687de860a",
+            "timing.json": "f090944f31f7bc9081004a917733005b112239a0cc0afa7d5447e6ab217a7ba2",
+            "coverage.json": "8d01ad8f82bc7d63c70aee22aa9691e9d83bef308975533dd32fee3dff767e5a"
+          },
+          "timing": {
+            "decoder.aclk": {
+              "achieved": 18.37,
+              "constraint": 25.0
+            }
+          },
+          "critical_path": {
+            "logic_ns": 3.6,
+            "routing_ns": 50.9,
+            "lines": [
+              "Critical path report for clock 'decoder.aclk' (posedge -> posedge):",
+              "Info: curr total",
+              "Info:  0.1  0.1  Source $flatten\\decoder.$auto$ff.cc:337:slice$68516.Q",
+              "Info:  2.7  2.8    Net decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_3_0_2_2_next_inst.__phi_halo_cell__SharedExecutor_0_next_inst.p0_request_internal__1 budget 0.000000 ns (77,56) -> (108,27)",
+              "Info:                Sink $flatten\\decoder.$abc$1269536$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_3_0_2_2_next_inst.__phi_halo_cell__SharedExecutor_0_next_inst.dispatched_machine_phase_squeezed_portion_0_width_3[2].A1",
+              "Info:  0.1  2.9  Source $flatten\\decoder.$abc$1269536$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_3_0_2_2_next_inst.__phi_halo_cell__SharedExecutor_0_next_inst.dispatched_machine_phase_squeezed_portion_0_width_3[2].O6",
+              "Info:  3.9  6.8    Net decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_3_0_2_2_next_inst.instantiation_output_161288[417] budget 0.000000 ns (108,27) -> (140,105)",
+              "Info:                Sink $flatten\\decoder.$abc$1269536$lut$aiger1269535$52375.A6",
+              "Info:  0.1  7.0  Source $flatten\\decoder.$abc$1269536$lut$aiger1269535$52375.O6",
+              "Info:  4.5 11.5    Net $flatten\\decoder.$techmap1285711$abc$1269536$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_3_0_2_2_next_inst.__phi_halo_cell__SharedExecutor_0_next_inst.and_166753[130].A[0] budget 0.000000 ns (140,105) -> (91,23)",
+              "Info:                Sink $flatten\\decoder.$abc$1269536$lut$aiger1269535$52379.A5",
+              "Info:  0.1 11.6  Source $flatten\\decoder.$abc$1269536$lut$aiger1269535$52379.O6",
+              "Info:  1.2 12.9    Net $flatten\\decoder.$techmap1279220$abc$1269536$lut$aiger1269535$52386.A[3] budget 0.000000 ns (91,23) -> (86,30)",
+              "Info:                Sink $flatten\\decoder.$abc$1269536$lut$aiger1269535$52386.A1",
+              "Info:  0.1 13.0  Source $flatten\\decoder.$abc$1269536$lut$aiger1269535$52386.O6",
+              "Info:  1.3 14.3    Net $flatten\\decoder.$techmap1279221$abc$1269536$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_3_0_2_2_next_inst.__phi_halo_cell__SharedExecutor_0_next_inst.entered_effects_valid.A[1] budget 0.000000 ns (86,30) -> (77,35)",
+              "Info:                Sink $flatten\\decoder.$abc$1269536$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_3_0_2_2_next_inst.__phi_halo_cell__SharedExecutor_0_next_inst.entered_effects_valid.A4",
+              "Info:  0.1 14.4  Source $flatten\\decoder.$abc$1269536$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_3_0_2_2_next_inst.__phi_halo_cell__SharedExecutor_0_next_inst.entered_effects_valid.O6",
+              "Info:  0.7 15.1    Net decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_3_0_2_2_next_inst.instantiation_output_161288[22] budget 0.000000 ns (77,35) -> (77,35)",
+              "Info:                Sink $flatten\\decoder.$abc$1269536$lut$aiger1269535$52409.A6",
+              "Info:  0.1 15.2  Source $flatten\\decoder.$abc$1269536$lut$aiger1269535$52409.O6",
+              "Info:  1.1 16.3    Net $flatten\\decoder.$techmap1279226$abc$1269536$lut$aiger1269535$52412.A[2] budget 0.000000 ns (77,35) -> (63,35)",
+              "Info:                Sink $flatten\\decoder.$abc$1269536$lut$aiger1269535$52412.A1",
+              "Info:  0.2 16.5  Source $flatten\\decoder.$abc$1269536$lut$aiger1269535$52412.O5",
+              "Info:  0.2 16.6    Net $flatten\\decoder.$techmap1279227$abc$1269536$lut$aiger1269535$52415.A[3] budget 0.000000 ns (63,35) -> (63,35)",
+              "Info:                Sink $flatten\\decoder.$abc$1269536$lut$aiger1269535$52415.A5",
+              "Info:  0.1 16.7  Source $flatten\\decoder.$abc$1269536$lut$aiger1269535$52415.O6",
+              "Info:  0.2 16.9    Net $flatten\\decoder.$techmap1279228$abc$1269536$lut$aiger1269535$52417.A[2] budget 0.000000 ns (63,35) -> (63,35)",
+              "Info:                Sink $flatten\\decoder.$abc$1269536$lut$aiger1269535$52417.A4",
+              "Info:  0.1 17.0  Source $flatten\\decoder.$abc$1269536$lut$aiger1269535$52417.O6",
+              "Info:  2.1 19.1    Net $flatten\\decoder.$techmap1279229$abc$1269536$lut$aiger1269535$52418.A[1] budget 0.000000 ns (63,35) -> (57,59)",
+              "Info:                Sink $flatten\\decoder.$abc$1269536$lut$aiger1269535$52418.A4",
+              "Info:  0.2 19.3  Source $flatten\\decoder.$abc$1269536$lut$aiger1269535$52418.O5",
+              "Info:  2.0 21.2    Net $flatten\\decoder.$techmap1279230$abc$1269536$lut$aiger1269535$60166.A[1] budget 0.000000 ns (57,59) -> (64,31)",
+              "Info:                Sink $flatten\\decoder.$abc$1269536$lut$aiger1269535$60166.A2",
+              "Info:  0.2 21.4  Source $flatten\\decoder.$abc$1269536$lut$aiger1269535$60166.O5",
+              "Info:  0.0 21.4    Net $flatten\\decoder.$techmap1282627$auto$abc9_ops.cc:1613:reintegrate$1273790.A[0] budget 0.000000 ns (64,31) -> (64,31)",
+              "Info:                Sink $flatten\\decoder.$abc$1269536$lut$aiger1269535$60167.A1",
+              "Info:  0.1 21.5  Source $flatten\\decoder.$abc$1269536$lut$aiger1269535$60167.O6",
+              "Info:  1.2 22.7    Net $flatten\\decoder.$techmap1279232$abc$1269536$lut$aiger1269535$60171.A[2] budget 0.000000 ns (64,31) -> (77,33)",
+              "Info:                Sink $flatten\\decoder.$abc$1269536$lut$aiger1269535$60171.A2",
+              "Info:  0.1 22.9  Source $flatten\\decoder.$abc$1269536$lut$aiger1269535$60171.O6",
+              "Info:  1.5 24.4    Net $flatten\\decoder.$techmap1279233$abc$1269536$lut$aiger1269535$60172.A[1] budget 0.000000 ns (77,33) -> (83,47)",
+              "Info:                Sink $flatten\\decoder.$abc$1269536$lut$aiger1269535$60172.A3",
+              "Info:  0.1 24.5  Source $flatten\\decoder.$abc$1269536$lut$aiger1269535$60172.O6",
+              "Info:  1.6 26.1    Net $flatten\\decoder.$techmap1281916$auto$abc9_ops.cc:1613:reintegrate$1270153.A[3] budget 0.000000 ns (83,47) -> (93,58)",
+              "Info:                Sink $flatten\\decoder.$abc$1269536$lut$aiger1269535$60905.A1",
+              "Info:  0.1 26.2  Source $flatten\\decoder.$abc$1269536$lut$aiger1269535$60905.O6",
+              "Info:  1.7 27.9    Net $flatten\\decoder.$techmap1279432$abc$1269536$lut$aiger1269535$61419.A[1] budget 0.000000 ns (93,58) -> (98,80)",
+              "Info:                Sink $flatten\\decoder.$abc$1269536$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.materialized_fifo_fifo__phi_z_reduction_batch__0_.push_data[225].A3",
+              "Info:  0.1 28.0  Source $flatten\\decoder.$abc$1269536$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.materialized_fifo_fifo__phi_z_reduction_batch__0_.push_data[225].O6",
+              "Info:  1.7 29.7    Net decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.instantiation_output_161592[225] budget 0.000000 ns (98,80) -> (111,91)",
+              "Info:                Sink $flatten\\decoder.$abc$1269536$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_decoder_profile_topology__SchedulerRouter3_0_next_inst.array_index_177267[3].A4",
+              "Info:  0.1 29.9  Source $flatten\\decoder.$abc$1269536$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_decoder_profile_topology__SchedulerRouter3_0_next_inst.array_index_177267[3].O6",
+              "Info:  1.6 31.5    Net decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.instantiation_output_161592[100] budget 0.000000 ns (111,91) -> (98,99)",
+              "Info:                Sink $flatten\\decoder.$abc$1269536$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_decoder_profile_topology__SchedulerRouter3_0_next_inst.and_177314.A3",
+              "Info:  0.1 31.6  Source $flatten\\decoder.$abc$1269536$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_decoder_profile_topology__SchedulerRouter3_0_next_inst.and_177314.O6",
+              "Info:  1.4 33.0    Net decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.instantiation_output_161588[101] budget 0.000000 ns (98,99) -> (104,90)",
+              "Info:                Sink $flatten\\decoder.$abc$1269536$lut$aiger1269535$60925.A2",
+              "Info:  0.1 33.1  Source $flatten\\decoder.$abc$1269536$lut$aiger1269535$60925.O6",
+              "Info:  2.2 35.3    Net $flatten\\decoder.$techmap1282225$abc$1269536$lut$aiger1269535$60926.A[1] budget 0.000000 ns (104,90) -> (83,107)",
+              "Info:                Sink $flatten\\decoder.$abc$1269536$lut$aiger1269535$60926.A1",
+              "Info:  0.1 35.4  Source $flatten\\decoder.$abc$1269536$lut$aiger1269535$60926.O6",
+              "Info:  0.3 35.7    Net $flatten\\decoder.$techmap1283454$auto$abc9_ops.cc:1613:reintegrate$1273728.A[3] budget 0.000000 ns (83,107) -> (83,107)",
+              "Info:                Sink $flatten\\decoder.$abc$1269536$lut$aiger1269535$102761.A5",
+              "Info:  0.1 35.8  Source $flatten\\decoder.$abc$1269536$lut$aiger1269535$102761.O5",
+              "Info:  0.7 36.5    Net $flatten\\decoder.$techmap1282227$abc$1269536$lut$aiger1269535$102766.A[4] budget 0.000000 ns (83,107) -> (83,110)",
+              "Info:                Sink $flatten\\decoder.$abc$1269536$lut$aiger1269535$102766.A3",
+              "Info:  0.2 36.7  Source $flatten\\decoder.$abc$1269536$lut$aiger1269535$102766.O5",
+              "Info:  5.5 42.2    Net $flatten\\decoder.$techmap1282229$abc$1269536$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_decoder_profile_topology__SchedulerRouter3_0_next_inst.or_177550.A[2] budget 0.000000 ns (83,110) -> (156,9)",
+              "Info:                Sink $flatten\\decoder.$abc$1269536$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_decoder_profile_topology__SchedulerRouter3_0_next_inst.or_177550.A1",
+              "Info:  0.1 42.3  Source $flatten\\decoder.$abc$1269536$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_decoder_profile_topology__SchedulerRouter3_0_next_inst.or_177550.O6",
+              "Info:  3.3 45.6    Net decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_decoder_profile_topology__SchedulerRouter3_0_next_inst.or_177550 budget 0.000000 ns (156,9) -> (81,37)",
+              "Info:                Sink $flatten\\decoder.$abc$1269536$lut$aiger1269535$108056.A4",
+              "Info:  0.2 45.7  Source $flatten\\decoder.$abc$1269536$lut$aiger1269535$108056.O5",
+              "Info:  0.2 45.9    Net $flatten\\decoder.$techmap1301419$abc$1269536$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.materialized_fifo_fifo__scheduler_3_egress_.did_push_occur.A[1] budget 0.000000 ns (81,37) -> (81,37)",
+              "Info:                Sink $flatten\\decoder.$abc$1269536$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.materialized_fifo_fifo__scheduler_3_egress_.did_push_occur.A5",
+              "Info:  0.1 46.0  Source $flatten\\decoder.$abc$1269536$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.materialized_fifo_fifo__scheduler_3_egress_.did_push_occur.O6",
+              "Info:  2.2 48.3    Net decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.materialized_fifo_fifo__scheduler_3_egress_.did_push_occur budget 0.000000 ns (81,37) -> (86,77)",
+              "Info:                Sink $flatten\\decoder.$abc$1269536$lut$auto$opt_dff.cc:251:make_patterns_logic$25802.A5",
+              "Info:  0.1 48.4  Source $flatten\\decoder.$abc$1269536$lut$auto$opt_dff.cc:251:make_patterns_logic$25802.O6",
+              "Info:  6.0 54.3    Net $flatten\\decoder.$abc$1269536$auto$opt_dff.cc:251:make_patterns_logic$25802 budget 1.293000 ns (86,77) -> (81,25)",
+              "Info:                Sink $flatten\\decoder.$auto$ff.cc:337:slice$40611.CE",
+              "Info:  0.1 54.4  Setup $flatten\\decoder.$auto$ff.cc:337:slice$40611.CE",
+              "Info: 3.6 ns logic, 50.9 ns routing"
+            ],
+            "nets": [
+              {
+                "delay_ns": 2.7,
+                "cumulative_ns": 2.8,
+                "connected_input_ports": 166,
+                "source_xy": [
+                  77,
+                  56
+                ],
+                "sink_xy": [
+                  108,
+                  27
+                ],
+                "net": "decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_3_0_2_2_next_inst.__phi_halo_cell__SharedExecutor_0_next_inst.p0_request_internal__1"
+              },
+              {
+                "delay_ns": 3.9,
+                "cumulative_ns": 6.8,
+                "connected_input_ports": 4,
+                "source_xy": [
+                  108,
+                  27
+                ],
+                "sink_xy": [
+                  140,
+                  105
+                ],
+                "net": "decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_3_0_2_2_next_inst.instantiation_output_161288[417]"
+              },
+              {
+                "delay_ns": 4.5,
+                "cumulative_ns": 11.5,
+                "connected_input_ports": 32,
+                "source_xy": [
+                  140,
+                  105
+                ],
+                "sink_xy": [
+                  91,
+                  23
+                ],
+                "net": "$flatten\\decoder.$techmap1285711$abc$1269536$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_3_0_2_2_next_inst.__phi_halo_cell__SharedExecutor_0_next_inst.and_166753[130].A[0]"
+              },
+              {
+                "delay_ns": 1.2,
+                "cumulative_ns": 12.9,
+                "connected_input_ports": 5,
+                "source_xy": [
+                  91,
+                  23
+                ],
+                "sink_xy": [
+                  86,
+                  30
+                ],
+                "net": "$flatten\\decoder.$techmap1279220$abc$1269536$lut$aiger1269535$52386.A[3]"
+              },
+              {
+                "delay_ns": 1.3,
+                "cumulative_ns": 14.3,
+                "connected_input_ports": 2,
+                "source_xy": [
+                  86,
+                  30
+                ],
+                "sink_xy": [
+                  77,
+                  35
+                ],
+                "net": "$flatten\\decoder.$techmap1279221$abc$1269536$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_3_0_2_2_next_inst.__phi_halo_cell__SharedExecutor_0_next_inst.entered_effects_valid.A[1]"
+              },
+              {
+                "delay_ns": 0.7,
+                "cumulative_ns": 15.1,
+                "connected_input_ports": 3,
+                "source_xy": [
+                  77,
+                  35
+                ],
+                "sink_xy": [
+                  77,
+                  35
+                ],
+                "net": "decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_3_0_2_2_next_inst.instantiation_output_161288[22]"
+              },
+              {
+                "delay_ns": 1.1,
+                "cumulative_ns": 16.3,
+                "connected_input_ports": 4,
+                "source_xy": [
+                  77,
+                  35
+                ],
+                "sink_xy": [
+                  63,
+                  35
+                ],
+                "net": "$flatten\\decoder.$techmap1279226$abc$1269536$lut$aiger1269535$52412.A[2]"
+              },
+              {
+                "delay_ns": 0.2,
+                "cumulative_ns": 16.6,
+                "connected_input_ports": 4,
+                "source_xy": [
+                  63,
+                  35
+                ],
+                "sink_xy": [
+                  63,
+                  35
+                ],
+                "net": "$flatten\\decoder.$techmap1279227$abc$1269536$lut$aiger1269535$52415.A[3]"
+              },
+              {
+                "delay_ns": 0.2,
+                "cumulative_ns": 16.9,
+                "connected_input_ports": 2,
+                "source_xy": [
+                  63,
+                  35
+                ],
+                "sink_xy": [
+                  63,
+                  35
+                ],
+                "net": "$flatten\\decoder.$techmap1279228$abc$1269536$lut$aiger1269535$52417.A[2]"
+              },
+              {
+                "delay_ns": 2.1,
+                "cumulative_ns": 19.1,
+                "connected_input_ports": 47,
+                "source_xy": [
+                  63,
+                  35
+                ],
+                "sink_xy": [
+                  57,
+                  59
+                ],
+                "net": "$flatten\\decoder.$techmap1279229$abc$1269536$lut$aiger1269535$52418.A[1]"
+              },
+              {
+                "delay_ns": 2.0,
+                "cumulative_ns": 21.2,
+                "connected_input_ports": 558,
+                "source_xy": [
+                  57,
+                  59
+                ],
+                "sink_xy": [
+                  64,
+                  31
+                ],
+                "net": "$flatten\\decoder.$techmap1279230$abc$1269536$lut$aiger1269535$60166.A[1]"
+              },
+              {
+                "delay_ns": 0.0,
+                "cumulative_ns": 21.4,
+                "connected_input_ports": 3,
+                "source_xy": [
+                  64,
+                  31
+                ],
+                "sink_xy": [
+                  64,
+                  31
+                ],
+                "net": "$flatten\\decoder.$techmap1282627$auto$abc9_ops.cc:1613:reintegrate$1273790.A[0]"
+              },
+              {
+                "delay_ns": 1.2,
+                "cumulative_ns": 22.7,
+                "connected_input_ports": 5,
+                "source_xy": [
+                  64,
+                  31
+                ],
+                "sink_xy": [
+                  77,
+                  33
+                ],
+                "net": "$flatten\\decoder.$techmap1279232$abc$1269536$lut$aiger1269535$60171.A[2]"
+              },
+              {
+                "delay_ns": 1.5,
+                "cumulative_ns": 24.4,
+                "connected_input_ports": 4,
+                "source_xy": [
+                  77,
+                  33
+                ],
+                "sink_xy": [
+                  83,
+                  47
+                ],
+                "net": "$flatten\\decoder.$techmap1279233$abc$1269536$lut$aiger1269535$60172.A[1]"
+              },
+              {
+                "delay_ns": 1.6,
+                "cumulative_ns": 26.1,
+                "connected_input_ports": 616,
+                "source_xy": [
+                  83,
+                  47
+                ],
+                "sink_xy": [
+                  93,
+                  58
+                ],
+                "net": "$flatten\\decoder.$techmap1281916$auto$abc9_ops.cc:1613:reintegrate$1270153.A[3]"
+              },
+              {
+                "delay_ns": 1.7,
+                "cumulative_ns": 27.9,
+                "connected_input_ports": 13,
+                "source_xy": [
+                  93,
+                  58
+                ],
+                "sink_xy": [
+                  98,
+                  80
+                ],
+                "net": "$flatten\\decoder.$techmap1279432$abc$1269536$lut$aiger1269535$61419.A[1]"
+              },
+              {
+                "delay_ns": 1.7,
+                "cumulative_ns": 29.7,
+                "connected_input_ports": 5,
+                "source_xy": [
+                  98,
+                  80
+                ],
+                "sink_xy": [
+                  111,
+                  91
+                ],
+                "net": "decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.instantiation_output_161592[225]"
+              },
+              {
+                "delay_ns": 1.6,
+                "cumulative_ns": 31.5,
+                "connected_input_ports": 8,
+                "source_xy": [
+                  111,
+                  91
+                ],
+                "sink_xy": [
+                  98,
+                  99
+                ],
+                "net": "decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.instantiation_output_161592[100]"
+              },
+              {
+                "delay_ns": 1.4,
+                "cumulative_ns": 33.0,
+                "connected_input_ports": 8,
+                "source_xy": [
+                  98,
+                  99
+                ],
+                "sink_xy": [
+                  104,
+                  90
+                ],
+                "net": "decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.instantiation_output_161588[101]"
+              },
+              {
+                "delay_ns": 2.2,
+                "cumulative_ns": 35.3,
+                "connected_input_ports": 4,
+                "source_xy": [
+                  104,
+                  90
+                ],
+                "sink_xy": [
+                  83,
+                  107
+                ],
+                "net": "$flatten\\decoder.$techmap1282225$abc$1269536$lut$aiger1269535$60926.A[1]"
+              },
+              {
+                "delay_ns": 0.3,
+                "cumulative_ns": 35.7,
+                "connected_input_ports": 7,
+                "source_xy": [
+                  83,
+                  107
+                ],
+                "sink_xy": [
+                  83,
+                  107
+                ],
+                "net": "$flatten\\decoder.$techmap1283454$auto$abc9_ops.cc:1613:reintegrate$1273728.A[3]"
+              },
+              {
+                "delay_ns": 0.7,
+                "cumulative_ns": 36.5,
+                "connected_input_ports": 1,
+                "source_xy": [
+                  83,
+                  107
+                ],
+                "sink_xy": [
+                  83,
+                  110
+                ],
+                "net": "$flatten\\decoder.$techmap1282227$abc$1269536$lut$aiger1269535$102766.A[4]"
+              },
+              {
+                "delay_ns": 5.5,
+                "cumulative_ns": 42.2,
+                "connected_input_ports": 7,
+                "source_xy": [
+                  83,
+                  110
+                ],
+                "sink_xy": [
+                  156,
+                  9
+                ],
+                "net": "$flatten\\decoder.$techmap1282229$abc$1269536$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_decoder_profile_topology__SchedulerRouter3_0_next_inst.or_177550.A[2]"
+              },
+              {
+                "delay_ns": 3.3,
+                "cumulative_ns": 45.6,
+                "connected_input_ports": 378,
+                "source_xy": [
+                  156,
+                  9
+                ],
+                "sink_xy": [
+                  81,
+                  37
+                ],
+                "net": "decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_decoder_profile_topology__SchedulerRouter3_0_next_inst.or_177550"
+              },
+              {
+                "delay_ns": 0.2,
+                "cumulative_ns": 45.9,
+                "connected_input_ports": 3,
+                "source_xy": [
+                  81,
+                  37
+                ],
+                "sink_xy": [
+                  81,
+                  37
+                ],
+                "net": "$flatten\\decoder.$techmap1301419$abc$1269536$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.materialized_fifo_fifo__scheduler_3_egress_.did_push_occur.A[1]"
+              },
+              {
+                "delay_ns": 2.2,
+                "cumulative_ns": 48.3,
+                "connected_input_ports": 3,
+                "source_xy": [
+                  81,
+                  37
+                ],
+                "sink_xy": [
+                  86,
+                  77
+                ],
+                "net": "decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.materialized_fifo_fifo__scheduler_3_egress_.did_push_occur"
+              },
+              {
+                "delay_ns": 6.0,
+                "cumulative_ns": 54.3,
+                "connected_input_ports": 357,
+                "source_xy": [
+                  86,
+                  77
+                ],
+                "sink_xy": [
+                  81,
+                  25
+                ],
+                "net": "$flatten\\decoder.$abc$1269536$auto$opt_dff.cc:251:make_patterns_logic$25802"
+              }
+            ]
+          },
+          "coverage": {
+            "endpoint_requirements_met": true,
+            "design_wide_clock_validated": false,
+            "checks": [
+              {
+                "requirement": {
+                  "type": "SLICE_FFX",
+                  "port": "Q",
+                  "class": "register_output"
+                },
+                "matched": 29737,
+                "failed": 0,
+                "passed": true,
+                "failures": []
+              },
+              {
+                "requirement": {
+                  "type": "SLICE_FFX",
+                  "port": "D",
+                  "class": "register_input"
+                },
+                "matched": 29737,
+                "failed": 0,
+                "passed": true,
+                "failures": []
+              },
+              {
+                "requirement": {
+                  "type": "RAMB(?:18|36)E1_RAMB(?:18|36)E1",
+                  "port": "DO(?:ADO|BDO)[0-9]+",
+                  "class": "register_output"
+                },
+                "matched": 1920,
+                "failed": 0,
+                "passed": true,
+                "failures": []
+              },
+              {
+                "requirement": {
+                  "type": "RAMB(?:18|36)E1_RAMB(?:18|36)E1",
+                  "port": "(?:DIADI|DIBDI)[0-9]+",
+                  "class": "register_input"
+                },
+                "matched": 1920,
+                "failed": 0,
+                "passed": true,
+                "failures": []
+              },
+              {
+                "requirement": {
+                  "type": "DSP48E1_DSP48E1",
+                  "port": "P[0-9]+",
+                  "class": "comb_output"
+                },
+                "matched": 2688,
+                "failed": 0,
+                "passed": true,
+                "failures": []
+              },
+              {
+                "requirement": {
+                  "type": "DSP48E1_DSP48E1",
+                  "port": "[AB][0-9]+",
+                  "class": "comb_input"
+                },
+                "matched": 2688,
+                "failed": 0,
+                "passed": true,
+                "failures": []
+              }
+            ],
+            "export_sha256": "8d01ad8f82bc7d63c70aee22aa9691e9d83bef308975533dd32fee3dff767e5a"
+          }
+        },
+        {
+          "inputs": {
+            "<native-experiment>/build/native-timing-20260924/reproducible/bin/nextpnr-calibrated": "78e09c26bf142ea6e0d2bc0263ea2bada65aedd47d4358e483359c3e404f267c",
+            "<native-experiment>/build/chipdb/xc7z030sbg485.bin": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+            "<worktree>/_build/timing-control/physical/baseline-seed2/mapped.json": "72bb21de3acb6ca95b3b26f49226d9e1f736a2ec64e34e270f96d5195341534a",
+            "<worktree>/_build/timing-control/physical/baseline-seed2/timing.xdc": "1fbab82480c5e1221d5163cbc4607ba3d38c44d38d1e19ee81ddef52f0287977"
+          },
+          "frequency": 25,
+          "seed": 2,
+          "phases": {
+            "place": {
+              "command": [
+                "<native-experiment>/build/native-timing-20260924/reproducible/bin/nextpnr-calibrated",
+                "--chipdb",
+                "<native-experiment>/build/chipdb/xc7z030sbg485.bin",
+                "--seed",
+                "2",
+                "--freq",
+                "25",
+                "--json",
+                "mapped.json",
+                "--xdc",
+                "timing.xdc",
+                "--no-route",
+                "--write",
+                "placed.json",
+                "--log",
+                "place.log"
+              ],
+              "seconds": 686.2604070417583,
+              "exit": 0,
+              "budget_seconds": 1800
+            },
+            "route": {
+              "command": [
+                "<native-experiment>/build/native-timing-20260924/reproducible/bin/nextpnr-calibrated",
+                "--chipdb",
+                "<native-experiment>/build/chipdb/xc7z030sbg485.bin",
+                "--seed",
+                "2",
+                "--freq",
+                "25",
+                "--json",
+                "placed.json",
+                "--no-pack",
+                "--no-place",
+                "--router",
+                "router2",
+                "--timing-allow-fail",
+                "--report",
+                "timing.json",
+                "--timing-coverage",
+                "coverage.json",
+                "--log",
+                "route.log"
+              ],
+              "seconds": 383.64373520808294,
+              "exit": 0,
+              "budget_seconds": 2700
+            }
+          },
+          "id": "baseline-seed2",
+          "outputs": {
+            "placed.json": "e24bb4edf82a034aefd0e6f8d55d974d81e53859d6aa7f2c38d3846b95d67dcc",
+            "place.log": "5c1990892021e2d15954a32505157c6341407f79a964b327285784ca7e78b4db",
+            "route.log": "e96c1ca83c4b580933899793cb5222deef04b7562a49b7dfc5adaf90507dc743",
+            "timing.json": "2ee714bcf35b20a1f621f6e6925024c062eed5d63852aaeb6263e9b621c6b6c4",
+            "coverage.json": "9d40f0aff916d10d2db27d651b746193f0ba56b94df00117be49cd5b8d225464"
+          },
+          "timing": {
+            "decoder.aclk": {
+              "achieved": 17.99,
+              "constraint": 25.0
+            }
+          },
+          "critical_path": {
+            "logic_ns": 21.4,
+            "routing_ns": 34.2,
+            "lines": [
+              "Critical path report for clock 'decoder.aclk' (posedge -> posedge):",
+              "Info: curr total",
+              "Info:  0.1  0.1  Source $flatten\\decoder.$auto$ff.cc:337:slice$70837.Q",
+              "Info:  6.2  6.3    Net decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_2_0_2_2_next_inst.p0_and_21655 budget 0.000000 ns (159,65) -> (131,118)",
+              "Info:                Sink $flatten\\decoder.$abc$1269536$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_2_0_2_2_next_inst.sel_167932[112].A4",
+              "Info:  0.1  6.4  Source $flatten\\decoder.$abc$1269536$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_2_0_2_2_next_inst.sel_167932[112].O6",
+              "Info:  3.3  9.7    Net decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_2_0_2_2_next_inst.executor_request[478] budget 0.000000 ns (131,118) -> (70,83)",
+              "Info:                Sink $flatten\\decoder.$abc$1269536$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_2_0_2_2_next_inst.__phi_halo_cell__SharedExecutor_0_next_inst._request_in[478].A3",
+              "Info:  0.1  9.9  Source $flatten\\decoder.$abc$1269536$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_2_0_2_2_next_inst.__phi_halo_cell__SharedExecutor_0_next_inst._request_in[478].O6",
+              "Info:  1.2 11.1    Net decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_2_0_2_2_next_inst.instantiation_output_159556[478] budget 0.000000 ns (70,83) -> (77,88)",
+              "Info:                Sink $flatten\\decoder.$abc$1269536$lut$aiger1269535$129987.A5",
+              "Info:  0.1 11.2  Source $flatten\\decoder.$abc$1269536$lut$aiger1269535$129987.O5",
+              "Info:  1.2 12.4    Net $flatten\\decoder.$techmap1277090$auto$abc9_ops.cc:1613:reintegrate$1275221.A[0] budget 0.000000 ns (77,88) -> (63,89)",
+              "Info:                Sink $flatten\\decoder.$techmap1277090$auto$abc9_ops.cc:1613:reintegrate$1275221.A[0]$LUT$3058.A5",
+              "Info:  0.1 12.5  Source $flatten\\decoder.$techmap1277090$auto$abc9_ops.cc:1613:reintegrate$1275221.A[0]$LUT$3058.O6",
+              "Info:  0.0 12.5    Net $flatten\\decoder.$techmap1277090$auto$abc9_ops.cc:1613:reintegrate$1275221.A[0]$legal$3057 budget -2.226000 ns (63,89) -> (63,89)",
+              "Info:                Sink $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$35232.genblk1.slice[0].genblk1.carry4.S0",
+              "Info:  0.4 12.9  Source $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$35232.genblk1.slice[0].genblk1.carry4.O1",
+              "Info:  1.2 14.1    Net $flatten\\decoder.$techmap1277625$auto$abc9_ops.cc:1613:reintegrate$1274960.A[1] budget 0.000000 ns (63,89) -> (73,86)",
+              "Info:                Sink $flatten\\decoder.$auto$abc9_ops.cc:1613:reintegrate$1274837.A2",
+              "Info:  0.1 14.2  Source $flatten\\decoder.$auto$abc9_ops.cc:1613:reintegrate$1274837.O6",
+              "Info:  1.4 15.5    Net $flatten\\decoder.$abc$1269536$aiger1269535$132575b budget 0.000000 ns (73,86) -> (54,87)",
+              "Info:                Sink $flatten\\decoder.$abc$1269536$aiger1269535$132575b$LUT$3270.A4",
+              "Info:  0.1 15.7  Source $flatten\\decoder.$abc$1269536$aiger1269535$132575b$LUT$3270.O6",
+              "Info:  0.0 15.7    Net $flatten\\decoder.$abc$1269536$aiger1269535$132575b$legal$3269 budget -1.599000 ns (54,87) -> (54,87)",
+              "Info:                Sink $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$35238.genblk1.slice[0].genblk1.carry4.S1",
+              "Info:  0.5 16.2  Source $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$35238.genblk1.slice[0].genblk1.carry4.CO3",
+              "Info:  0.1 16.3    Net $flatten\\decoder.$abc$1269536$aiger1269535$44325 budget -0.903000 ns (54,87) -> (54,86)",
+              "Info:                Sink $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$35238.genblk1.slice[1].genblk1.carry4.CIN",
+              "Info:  0.2 16.5  Source $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$35238.genblk1.slice[1].genblk1.carry4.O2",
+              "Info:  3.9 20.5    Net $flatten\\decoder.$abc$1269536$aiger1269535$44328 budget 0.470000 ns (54,86) -> (28,140)",
+              "Info:                Sink $flatten\\decoder.\\application.\\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\\__phi_halo_cell__SharedService_0__2_2_0_2_2_next_inst.\\__phi_halo_cell__SharedExecutor_0_next_inst.$mul$<worktree>/_build/timing-control/baseline/board-sized/.compiled-releases/80552880c70593bb2df03ac4539f094eed4a0da35be239db1a57ce3931ad9b7a/phi_decoder_profile.v:4176$4696.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.sliceA[0].mul.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.sliceB[0].mul.B7",
+              "Info:  3.8 24.3  Source $flatten\\decoder.\\application.\\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\\__phi_halo_cell__SharedService_0__2_2_0_2_2_next_inst.\\__phi_halo_cell__SharedExecutor_0_next_inst.$mul$<worktree>/_build/timing-control/baseline/board-sized/.compiled-releases/80552880c70593bb2df03ac4539f094eed4a0da35be239db1a57ce3931ad9b7a/phi_decoder_profile.v:4176$4696.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.sliceA[0].mul.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.sliceB[0].mul.ACOUT7",
+              "Info:  0.1 24.4    Net $flatten\\decoder.$abc$1269536$aiger1269535$44551 budget -1.030000 ns (28,140) -> (28,140)",
+              "Info:                Sink $flatten\\decoder.\\application.\\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\\__phi_halo_cell__SharedService_0__2_2_0_2_2_next_inst.\\__phi_halo_cell__SharedExecutor_0_next_inst.$mul$<worktree>/_build/timing-control/baseline/board-sized/.compiled-releases/80552880c70593bb2df03ac4539f094eed4a0da35be239db1a57ce3931ad9b7a/phi_decoder_profile.v:4176$4696.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.sliceA[0].mul.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.sliceB[1].mul.ACIN7",
+              "Info:  5.2 29.6  Source $flatten\\decoder.\\application.\\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\\__phi_halo_cell__SharedService_0__2_2_0_2_2_next_inst.\\__phi_halo_cell__SharedExecutor_0_next_inst.$mul$<worktree>/_build/timing-control/baseline/board-sized/.compiled-releases/80552880c70593bb2df03ac4539f094eed4a0da35be239db1a57ce3931ad9b7a/phi_decoder_profile.v:4176$4696.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.sliceA[0].mul.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.sliceB[1].mul.ACOUT7",
+              "Info:  0.1 29.7    Net $flatten\\decoder.$abc$1269536$aiger1269535$44705 budget -0.031000 ns (28,140) -> (28,135)",
+              "Info:                Sink $flatten\\decoder.\\application.\\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\\__phi_halo_cell__SharedService_0__2_2_0_2_2_next_inst.\\__phi_halo_cell__SharedExecutor_0_next_inst.$mul$<worktree>/_build/timing-control/baseline/board-sized/.compiled-releases/80552880c70593bb2df03ac4539f094eed4a0da35be239db1a57ce3931ad9b7a/phi_decoder_profile.v:4176$4696.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.sliceA[0].mul.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mul_sliceB_last.ACIN7",
+              "Info:  5.2 34.9  Source $flatten\\decoder.\\application.\\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\\__phi_halo_cell__SharedService_0__2_2_0_2_2_next_inst.\\__phi_halo_cell__SharedExecutor_0_next_inst.$mul$<worktree>/_build/timing-control/baseline/board-sized/.compiled-releases/80552880c70593bb2df03ac4539f094eed4a0da35be239db1a57ce3931ad9b7a/phi_decoder_profile.v:4176$4696.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.sliceA[0].mul.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mul_sliceB_last.P0",
+              "Info:  3.6 38.5    Net $flatten\\decoder.$techmap1277905$auto$abc9_ops.cc:1613:reintegrate$1274790.A[1] budget 0.000000 ns (28,135) -> (54,73)",
+              "Info:                Sink $flatten\\decoder.$auto$abc9_ops.cc:1613:reintegrate$1274790.A1",
+              "Info:  0.1 38.6  Source $flatten\\decoder.$auto$abc9_ops.cc:1613:reintegrate$1274790.O6",
+              "Info:  0.0 38.6    Net $flatten\\decoder.$abc$1269536$aiger1269535$133271b budget -0.734000 ns (54,73) -> (54,73)",
+              "Info:                Sink $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$35106.genblk1.slice[4].genblk1.carry4.S1",
+              "Info:  0.5 39.1  Source $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$35106.genblk1.slice[4].genblk1.carry4.CO3",
+              "Info:  0.1 39.2    Net $flatten\\decoder.$abc$1269536$aiger1269535$45199 budget -0.238000 ns (54,73) -> (54,72)",
+              "Info:                Sink $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$35106.genblk1.slice[5].genblk1.carry4.CIN",
+              "Info:  0.1 39.4  Source $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$35106.genblk1.slice[5].genblk1.carry4.CO3",
+              "Info:  0.1 39.5    Net $flatten\\decoder.$abc$1269536$aiger1269535$45207 budget -0.213000 ns (54,72) -> (54,71)",
+              "Info:                Sink $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$35106.genblk1.slice[6].genblk1.carry4.CIN",
+              "Info:  0.2 39.7  Source $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$35106.genblk1.slice[6].genblk1.carry4.O0",
+              "Info:  1.2 40.9    Net $flatten\\decoder.$abc$1269536$aiger1269535$45208 budget 0.000000 ns (54,71) -> (53,61)",
+              "Info:                Sink $flatten\\decoder.$abc$1269536$aiger1269535$45208$LUT$3682.A1",
+              "Info:  0.1 41.0  Source $flatten\\decoder.$abc$1269536$aiger1269535$45208$LUT$3682.O6",
+              "Info:  0.0 41.0    Net $flatten\\decoder.$abc$1269536$aiger1269535$45208$legal$3681 budget -0.601000 ns (53,61) -> (53,61)",
+              "Info:                Sink $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$35265.genblk1.slice[0].genblk1.carry4.S1",
+              "Info:  0.5 41.5  Source $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$35265.genblk1.slice[0].genblk1.carry4.CO3",
+              "Info:  0.1 41.6    Net $flatten\\decoder.$abc$1269536$aiger1269535$46969 budget -0.188000 ns (53,61) -> (53,60)",
+              "Info:                Sink $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$35265.genblk1.slice[1].genblk1.carry4.CIN",
+              "Info:  0.1 41.8  Source $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$35265.genblk1.slice[1].genblk1.carry4.CO3",
+              "Info:  0.1 41.9    Net $flatten\\decoder.$abc$1269536$aiger1269535$46977 budget -0.165000 ns (53,60) -> (53,59)",
+              "Info:                Sink $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$35265.genblk1.slice[2].genblk1.carry4.CIN",
+              "Info:  0.1 42.0  Source $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$35265.genblk1.slice[2].genblk1.carry4.CO3",
+              "Info:  0.1 42.1    Net $flatten\\decoder.$abc$1269536$aiger1269535$46985 budget -0.143000 ns (53,59) -> (53,58)",
+              "Info:                Sink $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$35265.genblk1.slice[3].genblk1.carry4.CIN",
+              "Info:  0.1 42.2  Source $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$35265.genblk1.slice[3].genblk1.carry4.CO3",
+              "Info:  0.1 42.3    Net $flatten\\decoder.$abc$1269536$aiger1269535$46993 budget -0.119000 ns (53,58) -> (53,57)",
+              "Info:                Sink $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$35265.genblk1.slice[4].genblk1.carry4.CIN",
+              "Info:  0.3 42.6  Source $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$35265.genblk1.slice[4].genblk1.carry4.O1",
+              "Info:  2.2 44.9    Net $flatten\\decoder.$techmap1288427$abc$1269536$lut$aiger1269535$133421.A[1] budget 0.000000 ns (53,57) -> (64,87)",
+              "Info:                Sink $flatten\\decoder.$abc$1269536$lut$aiger1269535$133421.A4",
+              "Info:  0.1 45.0  Source $flatten\\decoder.$abc$1269536$lut$aiger1269535$133421.O6",
+              "Info:  1.9 46.8    Net $flatten\\decoder.$techmap1288428$auto$abc9_ops.cc:1613:reintegrate$1272604.A[0] budget 0.000000 ns (64,87) -> (57,62)",
+              "Info:                Sink $flatten\\decoder.$techmap1288428$auto$abc9_ops.cc:1613:reintegrate$1272604.A[0]$LUT$4400.A3",
+              "Info:  0.1 47.0  Source $flatten\\decoder.$techmap1288428$auto$abc9_ops.cc:1613:reintegrate$1272604.A[0]$LUT$4400.O6",
+              "Info:  0.0 47.0    Net $flatten\\decoder.$techmap1288428$auto$abc9_ops.cc:1613:reintegrate$1272604.A[0]$legal$4399 budget -0.604000 ns (57,62) -> (57,62)",
+              "Info:                Sink $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$35292.genblk1.slice[0].genblk1.carry4.S0",
+              "Info:  0.5 47.5  Source $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$35292.genblk1.slice[0].genblk1.carry4.CO3",
+              "Info:  0.1 47.6    Net $flatten\\decoder.$abc$1269536$aiger1269535$47273 budget -0.054000 ns (57,62) -> (57,61)",
+              "Info:                Sink $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$35292.genblk1.slice[1].genblk1.carry4.CIN",
+              "Info:  0.1 47.7  Source $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$35292.genblk1.slice[1].genblk1.carry4.CO3",
+              "Info:  0.1 47.8    Net $flatten\\decoder.$abc$1269536$aiger1269535$47281 budget -0.039000 ns (57,61) -> (57,60)",
+              "Info:                Sink $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$35292.genblk1.slice[2].genblk1.carry4.CIN",
+              "Info:  0.1 47.9  Source $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$35292.genblk1.slice[2].genblk1.carry4.CO3",
+              "Info:  0.1 48.0    Net $flatten\\decoder.$abc$1269536$aiger1269535$47289 budget -0.024000 ns (57,60) -> (57,59)",
+              "Info:                Sink $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$35292.genblk1.slice[3].genblk1.carry4.CIN",
+              "Info:  0.1 48.1  Source $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$35292.genblk1.slice[3].genblk1.carry4.CO3",
+              "Info:  0.1 48.3    Net $flatten\\decoder.$abc$1269536$aiger1269535$47297 budget 0.036000 ns (57,59) -> (57,58)",
+              "Info:                Sink $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$35292.genblk1.slice[4].genblk1.carry4.CIN",
+              "Info:  0.1 48.4  Source $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$35292.genblk1.slice[4].genblk1.carry4.CO3",
+              "Info:  0.1 48.5    Net $flatten\\decoder.$abc$1269536$aiger1269535$47305 budget 0.048000 ns (57,58) -> (57,57)",
+              "Info:                Sink $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$35292.genblk1.slice[5].genblk1.carry4.CIN",
+              "Info:  0.1 48.6  Source $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$35292.genblk1.slice[5].genblk1.carry4.CO3",
+              "Info:  0.1 48.7    Net $flatten\\decoder.$abc$1269536$aiger1269535$47313 budget 0.048000 ns (57,57) -> (57,56)",
+              "Info:                Sink $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$35292.genblk1.slice[6].genblk1.carry4.CIN",
+              "Info:  0.3 49.0  Source $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$35292.genblk1.slice[6].genblk1.carry4.O3",
+              "Info:  2.0 51.0    Net $flatten\\decoder.$techmap1281456$auto$abc9_ops.cc:1613:reintegrate$1273986.A[4] budget 0.000000 ns (57,56) -> (63,86)",
+              "Info:                Sink $flatten\\decoder.$abc$1269536$lut$aiger1269535$133440.A4",
+              "Info:  0.1 51.1  Source $flatten\\decoder.$abc$1269536$lut$aiger1269535$133440.O6",
+              "Info:  1.3 52.4    Net $flatten\\decoder.$abc$1269536$aiger1269535$133440 budget 0.000000 ns (63,86) -> (63,69)",
+              "Info:                Sink $flatten\\decoder.$abc$1269536$aiger1269535$133440$LUT$8430.A4",
+              "Info:  0.1 52.6  Source $flatten\\decoder.$abc$1269536$aiger1269535$133440$LUT$8430.O6",
+              "Info:  0.0 52.6    Net $flatten\\decoder.$abc$1269536$aiger1269535$133440$legal$8429 budget -0.331000 ns (63,69) -> (63,69)",
+              "Info:                Sink $flatten\\decoder.\\application.\\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\\__phi_halo_cell__SharedService_0__2_2_0_2_2_next_inst.\\__phi_halo_cell__SharedExecutor_0_next_inst.$lt$<worktree>/_build/timing-control/baseline/board-sized/.compiled-releases/80552880c70593bb2df03ac4539f094eed4a0da35be239db1a57ce3931ad9b7a/phi_decoder_profile.v:5240$4468.genblk1.slice[1].genblk1.carry4.S3",
+              "Info:  0.4 52.9  Source $flatten\\decoder.\\application.\\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\\__phi_halo_cell__SharedService_0__2_2_0_2_2_next_inst.\\__phi_halo_cell__SharedExecutor_0_next_inst.$lt$<worktree>/_build/timing-control/baseline/board-sized/.compiled-releases/80552880c70593bb2df03ac4539f094eed4a0da35be239db1a57ce3931ad9b7a/phi_decoder_profile.v:5240$4468.genblk1.slice[1].genblk1.carry4.CO3",
+              "Info:  0.1 53.0    Net $flatten\\decoder.$abc$1269536$aiger1269535$50089 budget 0.059000 ns (63,69) -> (63,68)",
+              "Info:                Sink $flatten\\decoder.\\application.\\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\\__phi_halo_cell__SharedService_0__2_2_0_2_2_next_inst.\\__phi_halo_cell__SharedExecutor_0_next_inst.$lt$<worktree>/_build/timing-control/baseline/board-sized/.compiled-releases/80552880c70593bb2df03ac4539f094eed4a0da35be239db1a57ce3931ad9b7a/phi_decoder_profile.v:5240$4468.genblk1.slice[2].genblk1.carry4.CIN",
+              "Info:  0.3 53.4  Source $flatten\\decoder.\\application.\\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\\__phi_halo_cell__SharedService_0__2_2_0_2_2_next_inst.\\__phi_halo_cell__SharedExecutor_0_next_inst.$lt$<worktree>/_build/timing-control/baseline/board-sized/.compiled-releases/80552880c70593bb2df03ac4539f094eed4a0da35be239db1a57ce3931ad9b7a/phi_decoder_profile.v:5240$4468.genblk1.slice[2].genblk1.carry4.O1",
+              "Info:  2.0 55.3    Net $flatten\\decoder.$techmap1283980$auto$abc9_ops.cc:1613:reintegrate$1273689.A[2] budget 0.000000 ns (63,68) -> (64,92)",
+              "Info:                Sink $flatten\\decoder.$auto$abc9_ops.cc:1613:reintegrate$1273366.A4",
+              "Info:  0.2 55.5  Source $flatten\\decoder.$auto$abc9_ops.cc:1613:reintegrate$1273366.O5",
+              "Info:  0.0 55.5    Net decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_2_0_2_2_next_inst.__phi_halo_cell__SharedExecutor_0_next_inst.sel_166827[2] budget -0.479000 ns (64,92) -> (64,92)",
+              "Info:                Sink $flatten\\decoder.$auto$ff.cc:337:slice$71094.D",
+              "Info:  0.1 55.6  Setup $flatten\\decoder.$auto$ff.cc:337:slice$71094.D",
+              "Info: 21.4 ns logic, 34.2 ns routing"
+            ],
+            "nets": [
+              {
+                "delay_ns": 6.2,
+                "cumulative_ns": 6.3,
+                "connected_input_ports": 555,
+                "source_xy": [
+                  159,
+                  65
+                ],
+                "sink_xy": [
+                  131,
+                  118
+                ],
+                "net": "decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_2_0_2_2_next_inst.p0_and_21655"
+              },
+              {
+                "delay_ns": 3.3,
+                "cumulative_ns": 9.7,
+                "connected_input_ports": 4,
+                "source_xy": [
+                  131,
+                  118
+                ],
+                "sink_xy": [
+                  70,
+                  83
+                ],
+                "net": "decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_2_0_2_2_next_inst.executor_request[478]"
+              },
+              {
+                "delay_ns": 1.2,
+                "cumulative_ns": 11.1,
+                "connected_input_ports": 9,
+                "source_xy": [
+                  70,
+                  83
+                ],
+                "sink_xy": [
+                  77,
+                  88
+                ],
+                "net": "decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_2_0_2_2_next_inst.instantiation_output_159556[478]"
+              },
+              {
+                "delay_ns": 1.2,
+                "cumulative_ns": 12.4,
+                "connected_input_ports": 12,
+                "source_xy": [
+                  77,
+                  88
+                ],
+                "sink_xy": [
+                  63,
+                  89
+                ],
+                "net": "$flatten\\decoder.$techmap1277090$auto$abc9_ops.cc:1613:reintegrate$1275221.A[0]"
+              },
+              {
+                "delay_ns": 0.0,
+                "cumulative_ns": 12.5,
+                "connected_input_ports": 1,
+                "source_xy": [
+                  63,
+                  89
+                ],
+                "sink_xy": [
+                  63,
+                  89
+                ],
+                "net": "$flatten\\decoder.$techmap1277090$auto$abc9_ops.cc:1613:reintegrate$1275221.A[0]$legal$3057"
+              },
+              {
+                "delay_ns": 1.2,
+                "cumulative_ns": 14.1,
+                "connected_input_ports": 5,
+                "source_xy": [
+                  63,
+                  89
+                ],
+                "sink_xy": [
+                  73,
+                  86
+                ],
+                "net": "$flatten\\decoder.$techmap1277625$auto$abc9_ops.cc:1613:reintegrate$1274960.A[1]"
+              },
+              {
+                "delay_ns": 1.4,
+                "cumulative_ns": 15.5,
+                "connected_input_ports": 2,
+                "source_xy": [
+                  73,
+                  86
+                ],
+                "sink_xy": [
+                  54,
+                  87
+                ],
+                "net": "$flatten\\decoder.$abc$1269536$aiger1269535$132575b"
+              },
+              {
+                "delay_ns": 0.0,
+                "cumulative_ns": 15.7,
+                "connected_input_ports": 1,
+                "source_xy": [
+                  54,
+                  87
+                ],
+                "sink_xy": [
+                  54,
+                  87
+                ],
+                "net": "$flatten\\decoder.$abc$1269536$aiger1269535$132575b$legal$3269"
+              },
+              {
+                "delay_ns": 0.1,
+                "cumulative_ns": 16.3,
+                "connected_input_ports": 1,
+                "source_xy": [
+                  54,
+                  87
+                ],
+                "sink_xy": [
+                  54,
+                  86
+                ],
+                "net": "$flatten\\decoder.$abc$1269536$aiger1269535$44325"
+              },
+              {
+                "delay_ns": 3.9,
+                "cumulative_ns": 20.5,
+                "connected_input_ports": 2,
+                "source_xy": [
+                  54,
+                  86
+                ],
+                "sink_xy": [
+                  28,
+                  140
+                ],
+                "net": "$flatten\\decoder.$abc$1269536$aiger1269535$44328"
+              },
+              {
+                "delay_ns": 0.1,
+                "cumulative_ns": 24.4,
+                "connected_input_ports": 1,
+                "source_xy": [
+                  28,
+                  140
+                ],
+                "sink_xy": [
+                  28,
+                  140
+                ],
+                "net": "$flatten\\decoder.$abc$1269536$aiger1269535$44551"
+              },
+              {
+                "delay_ns": 0.1,
+                "cumulative_ns": 29.7,
+                "connected_input_ports": 1,
+                "source_xy": [
+                  28,
+                  140
+                ],
+                "sink_xy": [
+                  28,
+                  135
+                ],
+                "net": "$flatten\\decoder.$abc$1269536$aiger1269535$44705"
+              },
+              {
+                "delay_ns": 3.6,
+                "cumulative_ns": 38.5,
+                "connected_input_ports": 2,
+                "source_xy": [
+                  28,
+                  135
+                ],
+                "sink_xy": [
+                  54,
+                  73
+                ],
+                "net": "$flatten\\decoder.$techmap1277905$auto$abc9_ops.cc:1613:reintegrate$1274790.A[1]"
+              },
+              {
+                "delay_ns": 0.0,
+                "cumulative_ns": 38.6,
+                "connected_input_ports": 1,
+                "source_xy": [
+                  54,
+                  73
+                ],
+                "sink_xy": [
+                  54,
+                  73
+                ],
+                "net": "$flatten\\decoder.$abc$1269536$aiger1269535$133271b"
+              },
+              {
+                "delay_ns": 0.1,
+                "cumulative_ns": 39.2,
+                "connected_input_ports": 1,
+                "source_xy": [
+                  54,
+                  73
+                ],
+                "sink_xy": [
+                  54,
+                  72
+                ],
+                "net": "$flatten\\decoder.$abc$1269536$aiger1269535$45199"
+              },
+              {
+                "delay_ns": 0.1,
+                "cumulative_ns": 39.5,
+                "connected_input_ports": 1,
+                "source_xy": [
+                  54,
+                  72
+                ],
+                "sink_xy": [
+                  54,
+                  71
+                ],
+                "net": "$flatten\\decoder.$abc$1269536$aiger1269535$45207"
+              },
+              {
+                "delay_ns": 1.2,
+                "cumulative_ns": 40.9,
+                "connected_input_ports": 2,
+                "source_xy": [
+                  54,
+                  71
+                ],
+                "sink_xy": [
+                  53,
+                  61
+                ],
+                "net": "$flatten\\decoder.$abc$1269536$aiger1269535$45208"
+              },
+              {
+                "delay_ns": 0.0,
+                "cumulative_ns": 41.0,
+                "connected_input_ports": 1,
+                "source_xy": [
+                  53,
+                  61
+                ],
+                "sink_xy": [
+                  53,
+                  61
+                ],
+                "net": "$flatten\\decoder.$abc$1269536$aiger1269535$45208$legal$3681"
+              },
+              {
+                "delay_ns": 0.1,
+                "cumulative_ns": 41.6,
+                "connected_input_ports": 1,
+                "source_xy": [
+                  53,
+                  61
+                ],
+                "sink_xy": [
+                  53,
+                  60
+                ],
+                "net": "$flatten\\decoder.$abc$1269536$aiger1269535$46969"
+              },
+              {
+                "delay_ns": 0.1,
+                "cumulative_ns": 41.9,
+                "connected_input_ports": 1,
+                "source_xy": [
+                  53,
+                  60
+                ],
+                "sink_xy": [
+                  53,
+                  59
+                ],
+                "net": "$flatten\\decoder.$abc$1269536$aiger1269535$46977"
+              },
+              {
+                "delay_ns": 0.1,
+                "cumulative_ns": 42.1,
+                "connected_input_ports": 1,
+                "source_xy": [
+                  53,
+                  59
+                ],
+                "sink_xy": [
+                  53,
+                  58
+                ],
+                "net": "$flatten\\decoder.$abc$1269536$aiger1269535$46985"
+              },
+              {
+                "delay_ns": 0.1,
+                "cumulative_ns": 42.3,
+                "connected_input_ports": 1,
+                "source_xy": [
+                  53,
+                  58
+                ],
+                "sink_xy": [
+                  53,
+                  57
+                ],
+                "net": "$flatten\\decoder.$abc$1269536$aiger1269535$46993"
+              },
+              {
+                "delay_ns": 2.2,
+                "cumulative_ns": 44.9,
+                "connected_input_ports": 4,
+                "source_xy": [
+                  53,
+                  57
+                ],
+                "sink_xy": [
+                  64,
+                  87
+                ],
+                "net": "$flatten\\decoder.$techmap1288427$abc$1269536$lut$aiger1269535$133421.A[1]"
+              },
+              {
+                "delay_ns": 1.9,
+                "cumulative_ns": 46.8,
+                "connected_input_ports": 6,
+                "source_xy": [
+                  64,
+                  87
+                ],
+                "sink_xy": [
+                  57,
+                  62
+                ],
+                "net": "$flatten\\decoder.$techmap1288428$auto$abc9_ops.cc:1613:reintegrate$1272604.A[0]"
+              },
+              {
+                "delay_ns": 0.0,
+                "cumulative_ns": 47.0,
+                "connected_input_ports": 1,
+                "source_xy": [
+                  57,
+                  62
+                ],
+                "sink_xy": [
+                  57,
+                  62
+                ],
+                "net": "$flatten\\decoder.$techmap1288428$auto$abc9_ops.cc:1613:reintegrate$1272604.A[0]$legal$4399"
+              },
+              {
+                "delay_ns": 0.1,
+                "cumulative_ns": 47.6,
+                "connected_input_ports": 1,
+                "source_xy": [
+                  57,
+                  62
+                ],
+                "sink_xy": [
+                  57,
+                  61
+                ],
+                "net": "$flatten\\decoder.$abc$1269536$aiger1269535$47273"
+              },
+              {
+                "delay_ns": 0.1,
+                "cumulative_ns": 47.8,
+                "connected_input_ports": 1,
+                "source_xy": [
+                  57,
+                  61
+                ],
+                "sink_xy": [
+                  57,
+                  60
+                ],
+                "net": "$flatten\\decoder.$abc$1269536$aiger1269535$47281"
+              },
+              {
+                "delay_ns": 0.1,
+                "cumulative_ns": 48.0,
+                "connected_input_ports": 1,
+                "source_xy": [
+                  57,
+                  60
+                ],
+                "sink_xy": [
+                  57,
+                  59
+                ],
+                "net": "$flatten\\decoder.$abc$1269536$aiger1269535$47289"
+              },
+              {
+                "delay_ns": 0.1,
+                "cumulative_ns": 48.3,
+                "connected_input_ports": 1,
+                "source_xy": [
+                  57,
+                  59
+                ],
+                "sink_xy": [
+                  57,
+                  58
+                ],
+                "net": "$flatten\\decoder.$abc$1269536$aiger1269535$47297"
+              },
+              {
+                "delay_ns": 0.1,
+                "cumulative_ns": 48.5,
+                "connected_input_ports": 1,
+                "source_xy": [
+                  57,
+                  58
+                ],
+                "sink_xy": [
+                  57,
+                  57
+                ],
+                "net": "$flatten\\decoder.$abc$1269536$aiger1269535$47305"
+              },
+              {
+                "delay_ns": 0.1,
+                "cumulative_ns": 48.7,
+                "connected_input_ports": 1,
+                "source_xy": [
+                  57,
+                  57
+                ],
+                "sink_xy": [
+                  57,
+                  56
+                ],
+                "net": "$flatten\\decoder.$abc$1269536$aiger1269535$47313"
+              },
+              {
+                "delay_ns": 2.0,
+                "cumulative_ns": 51.0,
+                "connected_input_ports": 4,
+                "source_xy": [
+                  57,
+                  56
+                ],
+                "sink_xy": [
+                  63,
+                  86
+                ],
+                "net": "$flatten\\decoder.$techmap1281456$auto$abc9_ops.cc:1613:reintegrate$1273986.A[4]"
+              },
+              {
+                "delay_ns": 1.3,
+                "cumulative_ns": 52.4,
+                "connected_input_ports": 2,
+                "source_xy": [
+                  63,
+                  86
+                ],
+                "sink_xy": [
+                  63,
+                  69
+                ],
+                "net": "$flatten\\decoder.$abc$1269536$aiger1269535$133440"
+              },
+              {
+                "delay_ns": 0.0,
+                "cumulative_ns": 52.6,
+                "connected_input_ports": 1,
+                "source_xy": [
+                  63,
+                  69
+                ],
+                "sink_xy": [
+                  63,
+                  69
+                ],
+                "net": "$flatten\\decoder.$abc$1269536$aiger1269535$133440$legal$8429"
+              },
+              {
+                "delay_ns": 0.1,
+                "cumulative_ns": 53.0,
+                "connected_input_ports": 1,
+                "source_xy": [
+                  63,
+                  69
+                ],
+                "sink_xy": [
+                  63,
+                  68
+                ],
+                "net": "$flatten\\decoder.$abc$1269536$aiger1269535$50089"
+              },
+              {
+                "delay_ns": 2.0,
+                "cumulative_ns": 55.3,
+                "connected_input_ports": 32,
+                "source_xy": [
+                  63,
+                  68
+                ],
+                "sink_xy": [
+                  64,
+                  92
+                ],
+                "net": "$flatten\\decoder.$techmap1283980$auto$abc9_ops.cc:1613:reintegrate$1273689.A[2]"
+              },
+              {
+                "delay_ns": 0.0,
+                "cumulative_ns": 55.5,
+                "connected_input_ports": 1,
+                "source_xy": [
+                  64,
+                  92
+                ],
+                "sink_xy": [
+                  64,
+                  92
+                ],
+                "net": "decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_2_0_2_2_next_inst.__phi_halo_cell__SharedExecutor_0_next_inst.sel_166827[2]"
+              }
+            ]
+          },
+          "coverage": {
+            "endpoint_requirements_met": true,
+            "design_wide_clock_validated": false,
+            "checks": [
+              {
+                "requirement": {
+                  "type": "SLICE_FFX",
+                  "port": "Q",
+                  "class": "register_output"
+                },
+                "matched": 29737,
+                "failed": 0,
+                "passed": true,
+                "failures": []
+              },
+              {
+                "requirement": {
+                  "type": "SLICE_FFX",
+                  "port": "D",
+                  "class": "register_input"
+                },
+                "matched": 29737,
+                "failed": 0,
+                "passed": true,
+                "failures": []
+              },
+              {
+                "requirement": {
+                  "type": "RAMB(?:18|36)E1_RAMB(?:18|36)E1",
+                  "port": "DO(?:ADO|BDO)[0-9]+",
+                  "class": "register_output"
+                },
+                "matched": 1920,
+                "failed": 0,
+                "passed": true,
+                "failures": []
+              },
+              {
+                "requirement": {
+                  "type": "RAMB(?:18|36)E1_RAMB(?:18|36)E1",
+                  "port": "(?:DIADI|DIBDI)[0-9]+",
+                  "class": "register_input"
+                },
+                "matched": 1920,
+                "failed": 0,
+                "passed": true,
+                "failures": []
+              },
+              {
+                "requirement": {
+                  "type": "DSP48E1_DSP48E1",
+                  "port": "P[0-9]+",
+                  "class": "comb_output"
+                },
+                "matched": 2688,
+                "failed": 0,
+                "passed": true,
+                "failures": []
+              },
+              {
+                "requirement": {
+                  "type": "DSP48E1_DSP48E1",
+                  "port": "[AB][0-9]+",
+                  "class": "comb_input"
+                },
+                "matched": 2688,
+                "failed": 0,
+                "passed": true,
+                "failures": []
+              }
+            ],
+            "export_sha256": "9d40f0aff916d10d2db27d651b746193f0ba56b94df00117be49cd5b8d225464"
           }
         }
       ],
@@ -606,8 +1999,8 @@
             "failures": []
           }
         ],
-        "stage": "placed-unrouted",
-        "export_sha256": "83cbd4299eb4c2e301fca75e0ab8a7a18d0540a088612794509431e20ca321da",
+        "stage": "routed",
+        "export_sha256": "8d01ad8f82bc7d63c70aee22aa9691e9d83bef308975533dd32fee3dff767e5a",
         "cell_counts": {
           "PSEUDO_GND": 1,
           "SLICE_LUTX": 37669,
@@ -621,6 +2014,41 @@
           "PAD": 2,
           "RAMB36E1_RAMB36E1": 8,
           "RAMB18E1_RAMB18E1": 44
+        }
+      },
+      "routed_samples": [
+        {
+          "seed": 1,
+          "attempt": "baseline-route-extended",
+          "mhz": 18.37,
+          "period_ns": 54.43658138268916,
+          "cycles_per_step": 93.25,
+          "step_us": 5.076211213935764
+        },
+        {
+          "seed": 2,
+          "attempt": "baseline-seed2",
+          "mhz": 17.99,
+          "period_ns": 55.58643690939411,
+          "cycles_per_step": 93.25,
+          "step_us": 5.183435241801
+        }
+      ],
+      "routed_statistics": {
+        "population": true,
+        "count": 2,
+        "periods_derived_from_reported_mhz": true,
+        "period_ns": {
+          "mean": 55.01150914604163,
+          "variance": 0.3305419330734777,
+          "best": 54.43658138268916,
+          "worst": 55.58643690939411
+        },
+        "step_us": {
+          "mean": 5.129823227868382,
+          "variance": 0.0028742480379112204,
+          "best": 5.076211213935764,
+          "worst": 5.183435241801
         }
       }
     },
@@ -1434,6 +2862,733 @@
                 "net": "$flatten\\decoder.$abc$1087932$auto$opt_dff.cc:251:make_patterns_logic$23443"
               }
             ]
+          },
+          "coverage": {
+            "endpoint_requirements_met": true,
+            "design_wide_clock_validated": false,
+            "checks": [
+              {
+                "requirement": {
+                  "type": "SLICE_FFX",
+                  "port": "Q",
+                  "class": "register_output"
+                },
+                "matched": 29585,
+                "failed": 0,
+                "passed": true,
+                "failures": []
+              },
+              {
+                "requirement": {
+                  "type": "SLICE_FFX",
+                  "port": "D",
+                  "class": "register_input"
+                },
+                "matched": 29585,
+                "failed": 0,
+                "passed": true,
+                "failures": []
+              },
+              {
+                "requirement": {
+                  "type": "RAMB(?:18|36)E1_RAMB(?:18|36)E1",
+                  "port": "DO(?:ADO|BDO)[0-9]+",
+                  "class": "register_output"
+                },
+                "matched": 1920,
+                "failed": 0,
+                "passed": true,
+                "failures": []
+              },
+              {
+                "requirement": {
+                  "type": "RAMB(?:18|36)E1_RAMB(?:18|36)E1",
+                  "port": "(?:DIADI|DIBDI)[0-9]+",
+                  "class": "register_input"
+                },
+                "matched": 1920,
+                "failed": 0,
+                "passed": true,
+                "failures": []
+              },
+              {
+                "requirement": {
+                  "type": "DSP48E1_DSP48E1",
+                  "port": "P[0-9]+",
+                  "class": "comb_output"
+                },
+                "matched": 2688,
+                "failed": 0,
+                "passed": true,
+                "failures": []
+              },
+              {
+                "requirement": {
+                  "type": "DSP48E1_DSP48E1",
+                  "port": "[AB][0-9]+",
+                  "class": "comb_input"
+                },
+                "matched": 2688,
+                "failed": 0,
+                "passed": true,
+                "failures": []
+              }
+            ],
+            "export_sha256": "7ddb9d3d9fd67e6c9653203f4cefb0b59c1eddaf22e2c7190553e6b9a75257ca"
+          }
+        },
+        {
+          "inputs": {
+            "<native-experiment>/build/native-timing-20260924/reproducible/bin/nextpnr-calibrated": "78e09c26bf142ea6e0d2bc0263ea2bada65aedd47d4358e483359c3e404f267c",
+            "<native-experiment>/build/chipdb/xc7z030sbg485.bin": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+            "<worktree>/_build/timing-control/physical/candidate-seed2/mapped.json": "b01c9ff4c944c350d081fe5f77b019f30c368b15a849a39a4651b97685492ae3",
+            "<worktree>/_build/timing-control/physical/candidate-seed2/timing.xdc": "1fbab82480c5e1221d5163cbc4607ba3d38c44d38d1e19ee81ddef52f0287977"
+          },
+          "frequency": 25,
+          "seed": 2,
+          "phases": {
+            "place": {
+              "command": [
+                "<native-experiment>/build/native-timing-20260924/reproducible/bin/nextpnr-calibrated",
+                "--chipdb",
+                "<native-experiment>/build/chipdb/xc7z030sbg485.bin",
+                "--seed",
+                "2",
+                "--freq",
+                "25",
+                "--json",
+                "mapped.json",
+                "--xdc",
+                "timing.xdc",
+                "--no-route",
+                "--write",
+                "placed.json",
+                "--log",
+                "place.log"
+              ],
+              "seconds": 1657.6716634579934,
+              "exit": 0,
+              "budget_seconds": 1800
+            },
+            "route": {
+              "command": [
+                "<native-experiment>/build/native-timing-20260924/reproducible/bin/nextpnr-calibrated",
+                "--chipdb",
+                "<native-experiment>/build/chipdb/xc7z030sbg485.bin",
+                "--seed",
+                "2",
+                "--freq",
+                "25",
+                "--json",
+                "placed.json",
+                "--no-pack",
+                "--no-place",
+                "--router",
+                "router2",
+                "--timing-allow-fail",
+                "--report",
+                "timing.json",
+                "--timing-coverage",
+                "coverage.json",
+                "--log",
+                "route.log"
+              ],
+              "seconds": 298.6280790423043,
+              "exit": 0,
+              "budget_seconds": 2700
+            }
+          },
+          "id": "candidate-seed2",
+          "outputs": {
+            "placed.json": "6d65676fdcf08c17ab1bdd264e171a16de101351e52b92cdc02f80a751a264d6",
+            "place.log": "01e8eb123f5c036ddbbb590fa70f6b08ab2136b506b806950660246388c9bbb1",
+            "route.log": "7cd06162e60ef99e00dffd7cc8b89e34dd1b4f3b831d75c1456b6cb9489c410c",
+            "timing.json": "cde97992cbd491630057427f9993cb5c1b2e54a49beb760d331714c1f39464e0",
+            "coverage.json": "7e92cfe3897277272870f6d68bd9ca720f597828e29293f277b94d5a72abeb99"
+          },
+          "timing": {
+            "decoder.aclk": {
+              "achieved": 16.97,
+              "constraint": 25.0
+            }
+          },
+          "critical_path": {
+            "logic_ns": 3.8,
+            "routing_ns": 55.1,
+            "lines": [
+              "Critical path report for clock 'decoder.aclk' (posedge -> posedge):",
+              "Info: curr total",
+              "Info:  0.1  0.1  Source $flatten\\decoder.$auto$ff.cc:337:slice$66716.Q",
+              "Info:  3.0  3.1    Net decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_2_0_2_2_next_inst.____state_25_13 budget 0.000000 ns (78,6) -> (81,74)",
+              "Info:                Sink $flatten\\decoder.$abc$1087932$lut$aiger1087931$50772.A4",
+              "Info:  0.2  3.2  Source $flatten\\decoder.$abc$1087932$lut$aiger1087931$50772.O5",
+              "Info:  1.8  5.0    Net $flatten\\decoder.$techmap1098140$abc$1087932$lut$aiger1087931$50778.A[3] budget 0.000000 ns (81,74) -> (86,115)",
+              "Info:                Sink $flatten\\decoder.$abc$1087932$lut$aiger1087931$50778.A4",
+              "Info:  0.1  5.1  Source $flatten\\decoder.$abc$1087932$lut$aiger1087931$50778.O6",
+              "Info:  5.2 10.4    Net $flatten\\decoder.$techmap1098141$abc$1087932$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_2_0_2_2_next_inst.incoming_result[407].A[4] budget 0.000000 ns (86,115) -> (159,151)",
+              "Info:                Sink $flatten\\decoder.$abc$1087932$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_2_0_2_2_next_inst.tuple_index_152830.A6",
+              "Info:  0.1 10.5  Source $flatten\\decoder.$abc$1087932$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_2_0_2_2_next_inst.tuple_index_152830.O6",
+              "Info:  4.5 15.0    Net decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_2_0_2_2_next_inst.incoming_result[21] budget 0.000000 ns (159,151) -> (78,85)",
+              "Info:                Sink $flatten\\decoder.$abc$1087932$lut$aiger1087931$55863.A5",
+              "Info:  0.1 15.2  Source $flatten\\decoder.$abc$1087932$lut$aiger1087931$55863.O5",
+              "Info:  0.5 15.7    Net $flatten\\decoder.$techmap1098410$abc$1087932$lut$aiger1087931$55868.A[4] budget 0.000000 ns (78,85) -> (78,85)",
+              "Info:                Sink $flatten\\decoder.$abc$1087932$lut$aiger1087931$55868.A2",
+              "Info:  0.2 15.8  Source $flatten\\decoder.$abc$1087932$lut$aiger1087931$55868.O5",
+              "Info:  2.8 18.6    Net $flatten\\decoder.$techmap1098412$abc$1087932$lut$aiger1087931$55882.A[3] budget 0.000000 ns (78,85) -> (86,32)",
+              "Info:                Sink $flatten\\decoder.$abc$1087932$lut$aiger1087931$55882.A1",
+              "Info:  0.1 18.7  Source $flatten\\decoder.$abc$1087932$lut$aiger1087931$55882.O6",
+              "Info:  1.7 20.4    Net $flatten\\decoder.$techmap1098416$auto$abc9_ops.cc:1613:reintegrate$1093435.A[1] budget 0.000000 ns (86,32) -> (91,11)",
+              "Info:                Sink $flatten\\decoder.$abc$1087932$lut$aiger1087931$55903.A4",
+              "Info:  0.2 20.5  Source $flatten\\decoder.$abc$1087932$lut$aiger1087931$55903.O5",
+              "Info:  0.6 21.2    Net $flatten\\decoder.$techmap1098460$abc$1087932$lut$aiger1087931$55968.A[4] budget 0.000000 ns (91,11) -> (91,13)",
+              "Info:                Sink $flatten\\decoder.$abc$1087932$lut$aiger1087931$55968.A1",
+              "Info:  0.1 21.3  Source $flatten\\decoder.$abc$1087932$lut$aiger1087931$55968.O6",
+              "Info:  1.1 22.4    Net $flatten\\decoder.$techmap1098505$abc$1087932$lut$aiger1087931$56193.A[2] budget 0.000000 ns (91,13) -> (91,22)",
+              "Info:                Sink $flatten\\decoder.$abc$1087932$lut$aiger1087931$56193.A1",
+              "Info:  0.1 22.5  Source $flatten\\decoder.$abc$1087932$lut$aiger1087931$56193.O6",
+              "Info:  0.2 22.6    Net $flatten\\decoder.$techmap1098533$abc$1087932$lut$aiger1087931$56289.A[3] budget 0.000000 ns (91,22) -> (91,22)",
+              "Info:                Sink $flatten\\decoder.$abc$1087932$lut$aiger1087931$56289.A5",
+              "Info:  0.1 22.7  Source $flatten\\decoder.$abc$1087932$lut$aiger1087931$56289.O5",
+              "Info:  1.1 23.9    Net $flatten\\decoder.$techmap1098592$abc$1087932$lut$aiger1087931$56520.A[4] budget 0.000000 ns (91,22) -> (86,27)",
+              "Info:                Sink $flatten\\decoder.$abc$1087932$lut$aiger1087931$56520.A3",
+              "Info:  0.1 24.0  Source $flatten\\decoder.$abc$1087932$lut$aiger1087931$56520.O6",
+              "Info:  0.6 24.6    Net $flatten\\decoder.$techmap1098639$abc$1087932$lut$aiger1087931$56806.A[5] budget 0.000000 ns (86,27) -> (86,27)",
+              "Info:                Sink $flatten\\decoder.$abc$1087932$lut$aiger1087931$56806.A6",
+              "Info:  0.1 24.8  Source $flatten\\decoder.$abc$1087932$lut$aiger1087931$56806.O6",
+              "Info:  1.3 26.1    Net $flatten\\decoder.$techmap1098640$abc$1087932$lut$aiger1087931$56812.A[4] budget 0.000000 ns (86,27) -> (83,40)",
+              "Info:                Sink $flatten\\decoder.$abc$1087932$lut$aiger1087931$56812.A4",
+              "Info:  0.1 26.2  Source $flatten\\decoder.$abc$1087932$lut$aiger1087931$56812.O6",
+              "Info:  0.9 27.1    Net $flatten\\decoder.$techmap1098641$abc$1087932$lut$aiger1087931$56815.A[2] budget 0.000000 ns (83,40) -> (81,44)",
+              "Info:                Sink $flatten\\decoder.$abc$1087932$lut$aiger1087931$56927.A5",
+              "Info:  0.1 27.3  Source $flatten\\decoder.$abc$1087932$lut$aiger1087931$56927.O6",
+              "Info:  0.6 27.9    Net $flatten\\decoder.$techmap1098676$abc$1087932$lut$aiger1087931$56944.A[5] budget 0.000000 ns (81,44) -> (81,44)",
+              "Info:                Sink $flatten\\decoder.$abc$1087932$lut$aiger1087931$56944.A6",
+              "Info:  0.1 28.0  Source $flatten\\decoder.$abc$1087932$lut$aiger1087931$56944.O6",
+              "Info:  0.6 28.7    Net $flatten\\decoder.$techmap1098680$abc$1087932$lut\\scheduler_2_state.rd_addr.A[4] budget 0.000000 ns (81,44) -> (83,43)",
+              "Info:                Sink $flatten\\decoder.$abc$1087932$lut\\scheduler_2_state.rd_addr.A2",
+              "Info:  0.1 28.8  Source $flatten\\decoder.$abc$1087932$lut\\scheduler_2_state.rd_addr.O6",
+              "Info:  2.2 31.0    Net decoder.scheduler_2_state_rd_addr[0] budget 0.000000 ns (83,43) -> (98,20)",
+              "Info:                Sink $flatten\\decoder.$abc$1087932$lut$aiger1087931$57768.A2",
+              "Info:  0.1 31.1  Source $flatten\\decoder.$abc$1087932$lut$aiger1087931$57768.O6",
+              "Info:  0.8 31.8    Net $flatten\\decoder.$techmap1098706$abc$1087932$lut$aiger1087931$57775.A[1] budget 0.000000 ns (98,20) -> (93,21)",
+              "Info:                Sink $flatten\\decoder.$abc$1087932$lut$aiger1087931$57775.A3",
+              "Info:  0.1 32.0  Source $flatten\\decoder.$abc$1087932$lut$aiger1087931$57775.O6",
+              "Info:  1.1 33.1    Net $flatten\\decoder.$techmap1098710$abc$1087932$lut$aiger1087931$57794.A[3] budget 0.000000 ns (93,21) -> (91,29)",
+              "Info:                Sink $flatten\\decoder.$abc$1087932$lut$aiger1087931$57794.A1",
+              "Info:  0.2 33.3  Source $flatten\\decoder.$abc$1087932$lut$aiger1087931$57794.O5",
+              "Info:  0.7 34.0    Net $flatten\\decoder.$techmap1098715$abc$1087932$lut$aiger1087931$57820.A[3] budget 0.000000 ns (91,29) -> (91,32)",
+              "Info:                Sink $flatten\\decoder.$abc$1087932$lut$aiger1087931$57820.A1",
+              "Info:  0.1 34.1  Source $flatten\\decoder.$abc$1087932$lut$aiger1087931$57820.O6",
+              "Info:  0.9 35.0    Net $flatten\\decoder.$techmap1098762$auto$abc9_ops.cc:1613:reintegrate$1093426.A[2] budget 0.000000 ns (91,32) -> (91,37)",
+              "Info:                Sink $flatten\\decoder.$abc$1087932$lut$aiger1087931$57821.A3",
+              "Info:  0.1 35.1  Source $flatten\\decoder.$abc$1087932$lut$aiger1087931$57821.O6",
+              "Info:  0.2 35.3    Net $flatten\\decoder.$techmap1098731$abc$1087932$lut$aiger1087931$57877.A[1] budget 0.000000 ns (91,37) -> (91,37)",
+              "Info:                Sink $flatten\\decoder.$abc$1087932$lut$aiger1087931$57877.A5",
+              "Info:  0.1 35.4  Source $flatten\\decoder.$abc$1087932$lut$aiger1087931$57877.O6",
+              "Info:  0.0 35.4    Net $flatten\\decoder.$techmap1098743$abc$1087932$lut$aiger1087931$57928.A[1] budget 0.000000 ns (91,37) -> (91,37)",
+              "Info:                Sink $flatten\\decoder.$abc$1087932$lut$aiger1087931$57928.A4",
+              "Info:  0.2 35.6  Source $flatten\\decoder.$abc$1087932$lut$aiger1087931$57928.O5",
+              "Info:  1.4 36.9    Net $flatten\\decoder.$techmap1098754$abc$1087932$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_2_0_2_2_next_inst.take__16.A[1] budget 0.000000 ns (91,37) -> (83,43)",
+              "Info:                Sink $flatten\\decoder.$abc$1087932$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_2_0_2_2_next_inst.and_154337.A4",
+              "Info:  0.1 37.0  Source $flatten\\decoder.$abc$1087932$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_2_0_2_2_next_inst.and_154337.O6",
+              "Info:  1.5 38.5    Net decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_2_0_2_2_next_inst.and_154337 budget 0.000000 ns (83,43) -> (91,32)",
+              "Info:                Sink $flatten\\decoder.$abc$1087932$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_2_0_2_2_next_inst.and_153443.A3",
+              "Info:  0.1 38.7  Source $flatten\\decoder.$abc$1087932$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_2_0_2_2_next_inst.and_153443.O6",
+              "Info:  2.1 40.8    Net decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_2_0_2_2_next_inst.and_153443 budget 0.000000 ns (91,32) -> (81,61)",
+              "Info:                Sink $flatten\\decoder.$abc$1087932$lut$aiger1087931$100133.A1",
+              "Info:  0.1 40.9  Source $flatten\\decoder.$abc$1087932$lut$aiger1087931$100133.O6",
+              "Info:  3.3 44.2    Net $flatten\\decoder.$techmap1100783$abc$1087932$lut$aiger1087931$103011.A[5] budget 0.000000 ns (81,61) -> (98,4)",
+              "Info:                Sink $flatten\\decoder.$abc$1087932$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_2_0_2_2_next_inst.p0_stage_done.A4",
+              "Info:  0.1 44.3  Source $flatten\\decoder.$abc$1087932$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_2_0_2_2_next_inst.p0_stage_done.O6",
+              "Info:  5.5 49.8    Net decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_2_0_2_2_next_inst.p0_stage_done budget 0.000000 ns (98,4) -> (78,136)",
+              "Info:                Sink $flatten\\decoder.$abc$1087932$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_2_0_2_2_next_inst.and_154349.A5",
+              "Info:  0.1 49.9  Source $flatten\\decoder.$abc$1087932$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_2_0_2_2_next_inst.and_154349.O5",
+              "Info:  8.9 58.8    Net decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_2_0_2_2_next_inst.and_154349 budget 1.060000 ns (78,136) -> (83,2)",
+              "Info:                Sink $flatten\\decoder.$auto$ff.cc:337:slice$67589.CE",
+              "Info:  0.1 58.9  Setup $flatten\\decoder.$auto$ff.cc:337:slice$67589.CE",
+              "Info: 3.8 ns logic, 55.1 ns routing"
+            ],
+            "nets": [
+              {
+                "delay_ns": 3.0,
+                "cumulative_ns": 3.1,
+                "connected_input_ports": 4,
+                "source_xy": [
+                  78,
+                  6
+                ],
+                "sink_xy": [
+                  81,
+                  74
+                ],
+                "net": "decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_2_0_2_2_next_inst.____state_25_13"
+              },
+              {
+                "delay_ns": 1.8,
+                "cumulative_ns": 5.0,
+                "connected_input_ports": 6,
+                "source_xy": [
+                  81,
+                  74
+                ],
+                "sink_xy": [
+                  86,
+                  115
+                ],
+                "net": "$flatten\\decoder.$techmap1098140$abc$1087932$lut$aiger1087931$50778.A[3]"
+              },
+              {
+                "delay_ns": 5.2,
+                "cumulative_ns": 10.4,
+                "connected_input_ports": 917,
+                "source_xy": [
+                  86,
+                  115
+                ],
+                "sink_xy": [
+                  159,
+                  151
+                ],
+                "net": "$flatten\\decoder.$techmap1098141$abc$1087932$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_2_0_2_2_next_inst.incoming_result[407].A[4]"
+              },
+              {
+                "delay_ns": 4.5,
+                "cumulative_ns": 15.0,
+                "connected_input_ports": 2,
+                "source_xy": [
+                  159,
+                  151
+                ],
+                "sink_xy": [
+                  78,
+                  85
+                ],
+                "net": "decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_2_0_2_2_next_inst.incoming_result[21]"
+              },
+              {
+                "delay_ns": 0.5,
+                "cumulative_ns": 15.7,
+                "connected_input_ports": 1,
+                "source_xy": [
+                  78,
+                  85
+                ],
+                "sink_xy": [
+                  78,
+                  85
+                ],
+                "net": "$flatten\\decoder.$techmap1098410$abc$1087932$lut$aiger1087931$55868.A[4]"
+              },
+              {
+                "delay_ns": 2.8,
+                "cumulative_ns": 18.6,
+                "connected_input_ports": 2,
+                "source_xy": [
+                  78,
+                  85
+                ],
+                "sink_xy": [
+                  86,
+                  32
+                ],
+                "net": "$flatten\\decoder.$techmap1098412$abc$1087932$lut$aiger1087931$55882.A[3]"
+              },
+              {
+                "delay_ns": 1.7,
+                "cumulative_ns": 20.4,
+                "connected_input_ports": 55,
+                "source_xy": [
+                  86,
+                  32
+                ],
+                "sink_xy": [
+                  91,
+                  11
+                ],
+                "net": "$flatten\\decoder.$techmap1098416$auto$abc9_ops.cc:1613:reintegrate$1093435.A[1]"
+              },
+              {
+                "delay_ns": 0.6,
+                "cumulative_ns": 21.2,
+                "connected_input_ports": 2,
+                "source_xy": [
+                  91,
+                  11
+                ],
+                "sink_xy": [
+                  91,
+                  13
+                ],
+                "net": "$flatten\\decoder.$techmap1098460$abc$1087932$lut$aiger1087931$55968.A[4]"
+              },
+              {
+                "delay_ns": 1.1,
+                "cumulative_ns": 22.4,
+                "connected_input_ports": 1,
+                "source_xy": [
+                  91,
+                  13
+                ],
+                "sink_xy": [
+                  91,
+                  22
+                ],
+                "net": "$flatten\\decoder.$techmap1098505$abc$1087932$lut$aiger1087931$56193.A[2]"
+              },
+              {
+                "delay_ns": 0.2,
+                "cumulative_ns": 22.6,
+                "connected_input_ports": 2,
+                "source_xy": [
+                  91,
+                  22
+                ],
+                "sink_xy": [
+                  91,
+                  22
+                ],
+                "net": "$flatten\\decoder.$techmap1098533$abc$1087932$lut$aiger1087931$56289.A[3]"
+              },
+              {
+                "delay_ns": 1.1,
+                "cumulative_ns": 23.9,
+                "connected_input_ports": 2,
+                "source_xy": [
+                  91,
+                  22
+                ],
+                "sink_xy": [
+                  86,
+                  27
+                ],
+                "net": "$flatten\\decoder.$techmap1098592$abc$1087932$lut$aiger1087931$56520.A[4]"
+              },
+              {
+                "delay_ns": 0.6,
+                "cumulative_ns": 24.6,
+                "connected_input_ports": 1,
+                "source_xy": [
+                  86,
+                  27
+                ],
+                "sink_xy": [
+                  86,
+                  27
+                ],
+                "net": "$flatten\\decoder.$techmap1098639$abc$1087932$lut$aiger1087931$56806.A[5]"
+              },
+              {
+                "delay_ns": 1.3,
+                "cumulative_ns": 26.1,
+                "connected_input_ports": 4,
+                "source_xy": [
+                  86,
+                  27
+                ],
+                "sink_xy": [
+                  83,
+                  40
+                ],
+                "net": "$flatten\\decoder.$techmap1098640$abc$1087932$lut$aiger1087931$56812.A[4]"
+              },
+              {
+                "delay_ns": 0.9,
+                "cumulative_ns": 27.1,
+                "connected_input_ports": 3,
+                "source_xy": [
+                  83,
+                  40
+                ],
+                "sink_xy": [
+                  81,
+                  44
+                ],
+                "net": "$flatten\\decoder.$techmap1098641$abc$1087932$lut$aiger1087931$56815.A[2]"
+              },
+              {
+                "delay_ns": 0.6,
+                "cumulative_ns": 27.9,
+                "connected_input_ports": 2,
+                "source_xy": [
+                  81,
+                  44
+                ],
+                "sink_xy": [
+                  81,
+                  44
+                ],
+                "net": "$flatten\\decoder.$techmap1098676$abc$1087932$lut$aiger1087931$56944.A[5]"
+              },
+              {
+                "delay_ns": 0.6,
+                "cumulative_ns": 28.7,
+                "connected_input_ports": 2,
+                "source_xy": [
+                  81,
+                  44
+                ],
+                "sink_xy": [
+                  83,
+                  43
+                ],
+                "net": "$flatten\\decoder.$techmap1098680$abc$1087932$lut\\scheduler_2_state.rd_addr.A[4]"
+              },
+              {
+                "delay_ns": 2.2,
+                "cumulative_ns": 31.0,
+                "connected_input_ports": 269,
+                "source_xy": [
+                  83,
+                  43
+                ],
+                "sink_xy": [
+                  98,
+                  20
+                ],
+                "net": "decoder.scheduler_2_state_rd_addr[0]"
+              },
+              {
+                "delay_ns": 0.8,
+                "cumulative_ns": 31.8,
+                "connected_input_ports": 2,
+                "source_xy": [
+                  98,
+                  20
+                ],
+                "sink_xy": [
+                  93,
+                  21
+                ],
+                "net": "$flatten\\decoder.$techmap1098706$abc$1087932$lut$aiger1087931$57775.A[1]"
+              },
+              {
+                "delay_ns": 1.1,
+                "cumulative_ns": 33.1,
+                "connected_input_ports": 1,
+                "source_xy": [
+                  93,
+                  21
+                ],
+                "sink_xy": [
+                  91,
+                  29
+                ],
+                "net": "$flatten\\decoder.$techmap1098710$abc$1087932$lut$aiger1087931$57794.A[3]"
+              },
+              {
+                "delay_ns": 0.7,
+                "cumulative_ns": 34.0,
+                "connected_input_ports": 1,
+                "source_xy": [
+                  91,
+                  29
+                ],
+                "sink_xy": [
+                  91,
+                  32
+                ],
+                "net": "$flatten\\decoder.$techmap1098715$abc$1087932$lut$aiger1087931$57820.A[3]"
+              },
+              {
+                "delay_ns": 0.9,
+                "cumulative_ns": 35.0,
+                "connected_input_ports": 12,
+                "source_xy": [
+                  91,
+                  32
+                ],
+                "sink_xy": [
+                  91,
+                  37
+                ],
+                "net": "$flatten\\decoder.$techmap1098762$auto$abc9_ops.cc:1613:reintegrate$1093426.A[2]"
+              },
+              {
+                "delay_ns": 0.2,
+                "cumulative_ns": 35.3,
+                "connected_input_ports": 4,
+                "source_xy": [
+                  91,
+                  37
+                ],
+                "sink_xy": [
+                  91,
+                  37
+                ],
+                "net": "$flatten\\decoder.$techmap1098731$abc$1087932$lut$aiger1087931$57877.A[1]"
+              },
+              {
+                "delay_ns": 0.0,
+                "cumulative_ns": 35.4,
+                "connected_input_ports": 3,
+                "source_xy": [
+                  91,
+                  37
+                ],
+                "sink_xy": [
+                  91,
+                  37
+                ],
+                "net": "$flatten\\decoder.$techmap1098743$abc$1087932$lut$aiger1087931$57928.A[1]"
+              },
+              {
+                "delay_ns": 1.4,
+                "cumulative_ns": 36.9,
+                "connected_input_ports": 2,
+                "source_xy": [
+                  91,
+                  37
+                ],
+                "sink_xy": [
+                  83,
+                  43
+                ],
+                "net": "$flatten\\decoder.$techmap1098754$abc$1087932$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_2_0_2_2_next_inst.take__16.A[1]"
+              },
+              {
+                "delay_ns": 1.5,
+                "cumulative_ns": 38.5,
+                "connected_input_ports": 2,
+                "source_xy": [
+                  83,
+                  43
+                ],
+                "sink_xy": [
+                  91,
+                  32
+                ],
+                "net": "decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_2_0_2_2_next_inst.and_154337"
+              },
+              {
+                "delay_ns": 2.1,
+                "cumulative_ns": 40.8,
+                "connected_input_ports": 3,
+                "source_xy": [
+                  91,
+                  32
+                ],
+                "sink_xy": [
+                  81,
+                  61
+                ],
+                "net": "decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_2_0_2_2_next_inst.and_153443"
+              },
+              {
+                "delay_ns": 3.3,
+                "cumulative_ns": 44.2,
+                "connected_input_ports": 6,
+                "source_xy": [
+                  81,
+                  61
+                ],
+                "sink_xy": [
+                  98,
+                  4
+                ],
+                "net": "$flatten\\decoder.$techmap1100783$abc$1087932$lut$aiger1087931$103011.A[5]"
+              },
+              {
+                "delay_ns": 5.5,
+                "cumulative_ns": 49.8,
+                "connected_input_ports": 239,
+                "source_xy": [
+                  98,
+                  4
+                ],
+                "sink_xy": [
+                  78,
+                  136
+                ],
+                "net": "decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_2_0_2_2_next_inst.p0_stage_done"
+              },
+              {
+                "delay_ns": 8.9,
+                "cumulative_ns": 58.8,
+                "connected_input_ports": 917,
+                "source_xy": [
+                  78,
+                  136
+                ],
+                "sink_xy": [
+                  83,
+                  2
+                ],
+                "net": "decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_2_0_2_2_next_inst.and_154349"
+              }
+            ]
+          },
+          "coverage": {
+            "endpoint_requirements_met": true,
+            "design_wide_clock_validated": false,
+            "checks": [
+              {
+                "requirement": {
+                  "type": "SLICE_FFX",
+                  "port": "Q",
+                  "class": "register_output"
+                },
+                "matched": 29585,
+                "failed": 0,
+                "passed": true,
+                "failures": []
+              },
+              {
+                "requirement": {
+                  "type": "SLICE_FFX",
+                  "port": "D",
+                  "class": "register_input"
+                },
+                "matched": 29585,
+                "failed": 0,
+                "passed": true,
+                "failures": []
+              },
+              {
+                "requirement": {
+                  "type": "RAMB(?:18|36)E1_RAMB(?:18|36)E1",
+                  "port": "DO(?:ADO|BDO)[0-9]+",
+                  "class": "register_output"
+                },
+                "matched": 1920,
+                "failed": 0,
+                "passed": true,
+                "failures": []
+              },
+              {
+                "requirement": {
+                  "type": "RAMB(?:18|36)E1_RAMB(?:18|36)E1",
+                  "port": "(?:DIADI|DIBDI)[0-9]+",
+                  "class": "register_input"
+                },
+                "matched": 1920,
+                "failed": 0,
+                "passed": true,
+                "failures": []
+              },
+              {
+                "requirement": {
+                  "type": "DSP48E1_DSP48E1",
+                  "port": "P[0-9]+",
+                  "class": "comb_output"
+                },
+                "matched": 2688,
+                "failed": 0,
+                "passed": true,
+                "failures": []
+              },
+              {
+                "requirement": {
+                  "type": "DSP48E1_DSP48E1",
+                  "port": "[AB][0-9]+",
+                  "class": "comb_input"
+                },
+                "matched": 2688,
+                "failed": 0,
+                "passed": true,
+                "failures": []
+              }
+            ],
+            "export_sha256": "7e92cfe3897277272870f6d68bd9ca720f597828e29293f277b94d5a72abeb99"
           }
         }
       ],
@@ -1731,7 +3886,611 @@
           "RAMB36E1_RAMB36E1": 8,
           "RAMB18E1_RAMB18E1": 44
         }
+      },
+      "routed_samples": [
+        {
+          "seed": 1,
+          "attempt": "candidate-extended",
+          "mhz": 16.72,
+          "period_ns": 59.80861244019139,
+          "cycles_per_step": 93.25,
+          "step_us": 5.577153110047847
+        },
+        {
+          "seed": 2,
+          "attempt": "candidate-seed2",
+          "mhz": 16.97,
+          "period_ns": 58.927519151443725,
+          "cycles_per_step": 93.25,
+          "step_us": 5.494991160872128
+        }
+      ],
+      "routed_statistics": {
+        "population": true,
+        "count": 2,
+        "periods_derived_from_reported_mhz": true,
+        "period_ns": {
+          "mean": 59.36806579581756,
+          "variance": 0.19408134586904355,
+          "best": 58.927519151443725,
+          "worst": 59.80861244019139
+        },
+        "step_us": {
+          "mean": 5.536072135459987,
+          "variance": 0.001687646473088379,
+          "best": 5.494991160872128,
+          "worst": 5.577153110047847
+        }
       }
+    },
+    "handoff": {
+      "profile_manifest": {
+        "artifacts": {
+          "phi_decoder_profile.ir": "020ea54c400ddfdec5eef4263a5f466fc9250329ade45d4693a7736d7077fdaa",
+          "phi_decoder_profile.opt.ir": "52b1adcef319a9caf2ad6549da0cc2076e4bbe9fc099ccdf0c15dcb289a7d058",
+          "phi_decoder_profile.v": "22016887e98a31b0ccfa38f9c3393f31512e364ba86c8641887a32933ce6667b"
+        },
+        "assets": {
+          "hls_1r1w_ram.v": "13e12a7561df37e150c3e727c43f9e5234b74bb9741fc969185c12948b2583e8",
+          "phi_decoder_profile.json": "f01082f5b9fca7ea4334f71f086e78f9835a5602bd7b45dddf2e3ffaf175c95e",
+          "phi_decoder_profile_top.v": "34fcdf6da8cb117bd3bd509a510654aa13f2a979c1fe9df34670b7f2d776ca7a",
+          "phi_scheduler_rams.sh": "93f48d245aec55f733300dda4f5b558f9bff20a30e6d98a76f38c87f1fb47602"
+        },
+        "options": {
+          "codegen": [
+            "--pipeline_stages=2",
+            "--delay_model=unit",
+            "--flop_inputs=false",
+            "--flop_outputs=true",
+            "--use_system_verilog=false",
+            "--reset=reset",
+            "--fifo_module=",
+            "--worst_case_throughput=1",
+            "--ram_configurations=scheduler_0_state:1R1W:_scheduler_0_ram_read_req_out:_scheduler_0_ram_read_resp_in:_scheduler_0_ram_write_req_out:_scheduler_0_ram_write_resp_in,scheduler_0_mailbox:1R1W:_scheduler_0_mailbox_read_req_out:_scheduler_0_mailbox_read_resp_in:_scheduler_0_mailbox_write_req_out:_scheduler_0_mailbox_write_resp_in,scheduler_1_state:1R1W:_scheduler_1_ram_read_req_out:_scheduler_1_ram_read_resp_in:_scheduler_1_ram_write_req_out:_scheduler_1_ram_write_resp_in,scheduler_1_mailbox:1R1W:_scheduler_1_mailbox_read_req_out:_scheduler_1_mailbox_read_resp_in:_scheduler_1_mailbox_write_req_out:_scheduler_1_mailbox_write_resp_in,scheduler_2_state:1R1W:_scheduler_2_ram_read_req_out:_scheduler_2_ram_read_resp_in:_scheduler_2_ram_write_req_out:_scheduler_2_ram_write_resp_in,scheduler_2_mailbox:1R1W:_scheduler_2_mailbox_read_req_out:_scheduler_2_mailbox_read_resp_in:_scheduler_2_mailbox_write_req_out:_scheduler_2_mailbox_write_resp_in,scheduler_3_state:1R1W:_scheduler_3_ram_read_req_out:_scheduler_3_ram_read_resp_in:_scheduler_3_ram_write_req_out:_scheduler_3_ram_write_resp_in,scheduler_3_mailbox:1R1W:_scheduler_3_mailbox_read_req_out:_scheduler_3_mailbox_read_resp_in:_scheduler_3_mailbox_write_req_out:_scheduler_3_mailbox_write_resp_in"
+          ],
+          "top": "Top"
+        },
+        "profile": {
+          "delay_model": "unit",
+          "flop_inputs": false,
+          "flop_outputs": true,
+          "height": 1,
+          "initiation_interval": 1,
+          "phi_actor_count": 4,
+          "pipeline_stages": 2,
+          "planes": [
+            "x",
+            "z"
+          ],
+          "scheduler_count": 4,
+          "shards_per_plane": 1,
+          "source_actor_count": 4,
+          "source_scheduler_count": 2,
+          "width": 2
+        },
+        "ram_configuration": "93f48d245aec55f733300dda4f5b558f9bff20a30e6d98a76f38c87f1fb47602",
+        "recipe": 1,
+        "rtl": {
+          "hls_1r1w_ram.v": "13e12a7561df37e150c3e727c43f9e5234b74bb9741fc969185c12948b2583e8",
+          "phi_decoder_profile.v": "22016887e98a31b0ccfa38f9c3393f31512e364ba86c8641887a32933ce6667b",
+          "phi_decoder_profile_top.v": "34fcdf6da8cb117bd3bd509a510654aa13f2a979c1fe9df34670b7f2d776ca7a"
+        },
+        "schema": 1,
+        "sources": {
+          "arbitration.x": "5bfd061e68339cbf9788a40d9881b38bda2691a7f095500f806aba5ce8b2a79f",
+          "axis.x": "882c944ca4faa43c164225f230b3530e3b318f496ad6fc57c42619cb7e3a4d93",
+          "bram.x": "fea8277109e4847e45bb388eaae6236abf35a3f75f3558de1ed8b53f08fcd6bb",
+          "direct_mailbox_observation.x": "74b51d253146d257ddd354dea39da7c5adf90acee770ab086c9c9c24ae041b91",
+          "effect_window.x": "a43b66b52a73dd812cda83f1ef216aaa3c48550672c1a6d00663b5cdaab81586",
+          "frame_queue.x": "9f50a4b7e84551effc351818be54850c402f69b9d4141d39d597247113821caa",
+          "frame_transport.x": "941fe8dd53cc9638c6cec48c99e06f9a4a7fc5471c3dc1877763415ac8226932",
+          "hls_bits.x": "ffcf2588f8d7ad58857f353b4e1480f286c2e718041868da6af99d7dbacf995b",
+          "hls_fabric_router.x": "03607387d441240b92841b7ecbd41803a7234b9d89e1beaddda414bb9b006f3b",
+          "hls_failure.x": "f69235cb3d7bc49b09c65961f13e87003ebde5eb41d55b9bccf1427d620909c8",
+          "hls_fixed.x": "f8506dde6299d8b080012d78605d1a4a0b5d51647da8da106388351ce6a0aea9",
+          "hls_float.x": "1882c965143004e7dd70cac139cf1ee41d17199f0877e374a280cebfb6204c26",
+          "hls_integer.x": "9c219da378cd0f2346f216060b213fa6249c1917d1e69a0086ed1f6cce364c00",
+          "hls_lists.x": "dbee03cead923041238b3e09760421ea5be815c78ba737e0366251cbc6e31065",
+          "hls_patterns.x": "ae1d294c976cc1360ced8b1850f45f4ec43932b078b4339b5ec543ae9a5ced7c",
+          "hls_reply.x": "8b238d80ebd67046b0b8cd946eb7d6edc68074c13a05a00770f26f4437e5f7b1",
+          "hls_serial.x": "02ab9208f1e1d0e9a1b968d81db039be42a90d8e503ca783813b70cbfb7a0ff0",
+          "hls_server.x": "9ea16959a9fc504c3f26f67d1e308e01014573c2220b57f290add8591b4c743c",
+          "hls_spatial_router.x": "3cca4008525b6831a825db8af3286df5b3d28f06bb6c505f75e06fb0fc42b6f5",
+          "hls_vec.x": "c66c888c606ce7bc3e7b1c526cd1216e571f23fc6712f719df14dc6f5d82e5e6",
+          "mailbox.x": "4e79a78b2996de6ecf4b0cecf25c84705a743ac6dfc430c0c29d13302c9b61f8",
+          "phi_decoder_profile_topology.x": "8f7a9768660f2b5355d37681dfd3c693d8a73d546e3727069bc715fdb2f7ccd1",
+          "phi_field.x": "7e35e2901be89e4f9b148e8d8c47d0a05581e6206070c25e8d2dc5d02828f84b",
+          "phi_halo_cell.x": "2dfe29b7a01a0dbb712d07cbb073c6b8aa67d7918cfdbf9a6d6a0196a163c48a",
+          "phi_syndrome_replay_cell.x": "97ab2bcc657adf27e307e033e30ef6dccb3d49a2bcac2bbd2751cca1bbe45ac2",
+          "scheduler.x": "18aeeae94e6e3c0b63e69521c13073a0e335d2e227b6935fb78f80550fe3e802",
+          "scheduler_observation.x": "7c01db596893e73678cb6eb220430127d4d2235ed09eebf530ca0efb778d8263"
+        },
+        "stages": {
+          "codegen": "3a10b2f7a1c44ce5a781d904baa9da6569c00a2d19e59f166a94ac2b43978494",
+          "ir": "2cc2fdac4adce7e462dff73610dfe9d0b7e17bc4c3ca4925dc65a8ce6b00c3aa",
+          "opt": "e974a0efd47be60773c7951d398ba04a5629b68a73c2c2936a805feeb1e9cc35"
+        },
+        "stdlib": {
+          "xls/dslx/stdlib/abs_diff.x": "9006b878c3762aeea72bc42be9a012cd0c050a78364a1c09ea4f547e06059eae",
+          "xls/dslx/stdlib/acm_random.x": "47093ca764f983b34adaeb0f694b2a3b711815eb8beeba656d3a39ed157f7ac7",
+          "xls/dslx/stdlib/apfloat.x": "5bbc79dd7842baa26ae467f5a9240ab98a5f5776b4749eb4e73dd1171b8bae8d",
+          "xls/dslx/stdlib/bfloat16.x": "c810ed761142c429a68f0b80559b92c6cbfe087ccd11bead091151d2ff49ee37",
+          "xls/dslx/stdlib/fixed_point.x": "20aede1704d2cdbe515de083d05cb44c8d279aac5fcf5f52d7dc768193d1c631",
+          "xls/dslx/stdlib/float32.x": "2dbc3bd4c5045fb1b8765b293457d6cca1ba338ca1bd5763b2957d11b0a7d84a",
+          "xls/dslx/stdlib/float64.x": "186e40914bdcd0be7c478e6c85204cfa9858b660a8a1dcfffab20e3e4d1ba071",
+          "xls/dslx/stdlib/float_instances.x": "4c89968e94e045c51c354b8f18507f727b0b85b8dcd01b0af69db25314f314cd",
+          "xls/dslx/stdlib/hfloat16.x": "767b0b70354aa15437f689898a0dd168eba47161e999382adcbdc150b6df4243",
+          "xls/dslx/stdlib/lza.x": "6717f61514829d52e9ead876d42e5dc33cd0c48069506137bb2a1dee98b066ac",
+          "xls/dslx/stdlib/round.x": "ac1093df45b238fb0cf867010a9887856d6cf380d17cb5b61c69a47af77c89a0",
+          "xls/dslx/stdlib/std.x": "888583e31552728f6f594c9bb454173b5d8a2d55df2acdee0bd4e2e15d7f1ffa",
+          "xls/dslx/stdlib/tests/float32_downcast_test.x": "20e81a55ba42a7849b2ac274811e4bb457a8b2eb501f4b304b543925e80fe0ab",
+          "xls/dslx/stdlib/tests/float32_upcast_test.x": "dbff7cea87d189c915623e1d4d4274049e7a5779d7b03060e91201073da27b54",
+          "xls/dslx/stdlib/tests/round_tests.x": "5f9b66ad008155f4829db2424f34cc125363f80a789d4057c1433d56fa05632b",
+          "xls/dslx/stdlib/tests/umul_instances.x": "06f7b95e669477fc30e86f9e1d32637b09cfe1fa8f9cb8ea4b351645c1b1bc91"
+        },
+        "tools": {
+          "codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162",
+          "ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+          "opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c"
+        },
+        "experimental_ir_edits": [
+          {
+            "before": "  chan _scheduler_2_egress((bits[32], (bits[8], bits[384])), id=33, kind=streaming, ops=send_receive, flow_control=ready_valid, strictness=proven_mutually_exclusive, fifo_depth=1, bypass=true, register_push_outputs=true, register_pop_outputs=false)",
+            "after": "  chan _scheduler_2_egress((bits[32], (bits[8], bits[384])), id=33, kind=streaming, ops=send_receive, flow_control=ready_valid, strictness=proven_mutually_exclusive, fifo_depth=2, bypass=false, register_push_outputs=true, register_pop_outputs=false)"
+          },
+          {
+            "before": "  chan _scheduler_3_egress((bits[32], (bits[8], bits[384])), id=38, kind=streaming, ops=send_receive, flow_control=ready_valid, strictness=proven_mutually_exclusive, fifo_depth=1, bypass=true, register_push_outputs=true, register_pop_outputs=false)",
+            "after": "  chan _scheduler_3_egress((bits[32], (bits[8], bits[384])), id=38, kind=streaming, ops=send_receive, flow_control=ready_valid, strictness=proven_mutually_exclusive, fifo_depth=2, bypass=false, register_push_outputs=true, register_pop_outputs=false)"
+          }
+        ],
+        "experimental_reference_manifest_sha256": "ae615f3a78b6dd71dfabee293bfd12ca3183b6cca9706b9cd8c71b779e8a17dc"
+      },
+      "mapping": {
+        "assembled_cells": {
+          "BUFG": 1,
+          "CARRY4": 762,
+          "DSP48E1": 56,
+          "FDRE": 30305,
+          "IBUF": 1,
+          "INV": 34,
+          "LUT2": 5347,
+          "LUT3": 5263,
+          "LUT4": 6929,
+          "LUT5": 6561,
+          "LUT6": 7518,
+          "MUXF7": 8,
+          "MUXF8": 2,
+          "OBUF": 1,
+          "RAMB18E1": 44,
+          "RAMB36E1": 8
+        },
+        "assembly": {
+          "inputs": {
+            "files": {
+              "<worktree>/_build/timing-control/physical/handoff/core-stub.v": "f764add801a35433e4a1c32aeaaefb4cb432f601181e461517170b79750e2121",
+              "<worktree>/_build/timing-control/physical/handoff/core.json": "9660a138af8c524ca296c1ea6787c526d212f9b2f1cee09ba761a6bc8d64d302",
+              "<worktree>/experiments/07-openxc7/phi_timing_harness.v": "939d82bcb62599e9bd64e8e68d0e8b0911799d75c0360cbff30ee63e4d2c6733",
+              "<native-experiment>/.apio/packages/oss-cad-suite/BUILD-INFO.json": "b509fbcf8adf9e4f8359d8c89ed179bacb3aa7c9557d830ba80936b907c3db85",
+              "<native-experiment>/.apio/packages/oss-cad-suite/bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+              "<native-experiment>/.apio/packages/oss-cad-suite/libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+              "<native-experiment>/.apio/packages/oss-cad-suite/libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d"
+            },
+            "script": "read_verilog -lib core-stub.v\nread_verilog \"<worktree>/experiments/07-openxc7/phi_timing_harness.v\"\nsynth_xilinx -flatten -abc9 -nosrl -family xc7 -top phi_timing_harness\ndesign -stash harness\nread_json core.json\nread_verilog -lib -nowb -overwrite +/xilinx/cells_sim.v +/xilinx/cells_xtra.v\ndesign -copy-from harness phi_timing_harness\nhierarchy -check -top phi_timing_harness\nflatten\nopt_clean\ncheck -assert\nscc -expect 0\ntee -o mapped-stat.json stat -json\nwrite_json mapped.json\n"
+          },
+          "outputs": {
+            "mapped-stat.json": "4d00eb54ba8dfd27064c5a10d34b7d340ab429e5fdba6db3d185052e20b2e371",
+            "mapped.json": "9ccb360be82688ec75f913432521df7dca61af36ec21bfd1a88b44a14db20692"
+          }
+        },
+        "core": {
+          "inputs": {
+            "files": {
+              "<worktree>/_build/timing-control/handoff/compiled/hls_1r1w_ram.v": "13e12a7561df37e150c3e727c43f9e5234b74bb9741fc969185c12948b2583e8",
+              "<worktree>/_build/timing-control/handoff/compiled/phi_decoder_profile.v": "22016887e98a31b0ccfa38f9c3393f31512e364ba86c8641887a32933ce6667b",
+              "<worktree>/_build/timing-control/handoff/compiled/phi_decoder_profile_top.v": "34fcdf6da8cb117bd3bd509a510654aa13f2a979c1fe9df34670b7f2d776ca7a",
+              "<native-experiment>/.apio/packages/oss-cad-suite/BUILD-INFO.json": "b509fbcf8adf9e4f8359d8c89ed179bacb3aa7c9557d830ba80936b907c3db85",
+              "<native-experiment>/.apio/packages/oss-cad-suite/bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+              "<native-experiment>/.apio/packages/oss-cad-suite/libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+              "<native-experiment>/.apio/packages/oss-cad-suite/libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d"
+            },
+            "script": "read_verilog -sv \"<worktree>/_build/timing-control/handoff/compiled/phi_decoder_profile.v\" \"<worktree>/_build/timing-control/handoff/compiled/phi_decoder_profile_top.v\" \"<worktree>/_build/timing-control/handoff/compiled/hls_1r1w_ram.v\"\nhierarchy -check -top phi_decoder_profile_top\nsynth_xilinx -flatten -abc9 -family xc7 -noiopad -noclkbuf -top phi_decoder_profile_top\ncheck -assert\nscc -expect 0\ntee -o core-stat.json stat -json\nwrite_json core.json\n"
+          },
+          "outputs": {
+            "core-stat.json": "aa400914103a95634174e720e46b62bbb339af57bd57c96110cba4f12caa36f0",
+            "core.json": "9660a138af8c524ca296c1ea6787c526d212f9b2f1cee09ba761a6bc8d64d302"
+          }
+        },
+        "decoder_cells": {
+          "CARRY4": 762,
+          "DSP48E1": 56,
+          "FDRE": 29979,
+          "INV": 33,
+          "LUT2": 5303,
+          "LUT3": 5262,
+          "LUT4": 6909,
+          "LUT5": 6560,
+          "LUT6": 7487,
+          "MUXF7": 8,
+          "MUXF8": 2,
+          "RAMB18E1": 44,
+          "RAMB36E1": 8
+        },
+        "netlist_sha256": "9ccb360be82688ec75f913432521df7dca61af36ec21bfd1a88b44a14db20692",
+        "retained_decoder_cells": 62413,
+        "single_global_clock": true,
+        "timing_coverage": {
+          "combinational_dsps_with_coarse_delay": 56,
+          "design_wide_clock_validated": false,
+          "omitted_sequential_primitives": {
+            "RAMB18E1": 44,
+            "RAMB36E1": 8
+          }
+        }
+      },
+      "attempts": [
+        {
+          "inputs": {
+            "<native-experiment>/build/native-timing-20260924/reproducible/bin/nextpnr-calibrated": "78e09c26bf142ea6e0d2bc0263ea2bada65aedd47d4358e483359c3e404f267c",
+            "<native-experiment>/build/chipdb/xc7z030sbg485.bin": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+            "<worktree>/_build/timing-control/physical/handoff/mapped.json": "9ccb360be82688ec75f913432521df7dca61af36ec21bfd1a88b44a14db20692",
+            "<worktree>/_build/timing-control/physical/handoff/timing.xdc": "1fbab82480c5e1221d5163cbc4607ba3d38c44d38d1e19ee81ddef52f0287977"
+          },
+          "frequency": 25,
+          "seed": 1,
+          "phases": {
+            "place": {
+              "command": [
+                "<native-experiment>/build/native-timing-20260924/reproducible/bin/nextpnr-calibrated",
+                "--chipdb",
+                "<native-experiment>/build/chipdb/xc7z030sbg485.bin",
+                "--seed",
+                "1",
+                "--freq",
+                "25",
+                "--json",
+                "mapped.json",
+                "--xdc",
+                "timing.xdc",
+                "--no-route",
+                "--write",
+                "placed.json",
+                "--log",
+                "place.log"
+              ],
+              "seconds": 1587.4067163337022,
+              "exit": 0,
+              "budget_seconds": 1800
+            },
+            "route": {
+              "command": [
+                "<native-experiment>/build/native-timing-20260924/reproducible/bin/nextpnr-calibrated",
+                "--chipdb",
+                "<native-experiment>/build/chipdb/xc7z030sbg485.bin",
+                "--seed",
+                "1",
+                "--freq",
+                "25",
+                "--json",
+                "placed.json",
+                "--no-pack",
+                "--no-place",
+                "--router",
+                "router2",
+                "--timing-allow-fail",
+                "--report",
+                "timing.json",
+                "--timing-coverage",
+                "coverage.json",
+                "--log",
+                "route.log"
+              ],
+              "seconds": 192.601424084045,
+              "exit": -15,
+              "budget_seconds": 1800,
+              "stop_reason": "intentional screen rejection: placed estimate 16.96 MHz below 21.92 MHz break-even; limiting arithmetic path uses coarse DSP cascade arcs"
+            }
+          },
+          "id": "handoff",
+          "outputs": {
+            "placed.json": "bce165d5b4d5ab045d8013205b2faa74a18c7cf271ff80755be9cbc36858ccec",
+            "place.log": "6b9d2d87bccf57d7aab46d94aa643bd30dab6fa9b9b06bb9925530902def7a03",
+            "route.log": "69445a72a42e0337f0d7718d5f167fe1b56046752fa9f55c30cf7b2c28575896"
+          }
+        }
+      ],
+      "functional": {
+        "edits": [
+          {
+            "before": "  chan _scheduler_2_egress((bits[32], (bits[8], bits[384])), id=33, kind=streaming, ops=send_receive, flow_control=ready_valid, strictness=proven_mutually_exclusive, fifo_depth=1, bypass=true, register_push_outputs=true, register_pop_outputs=false)",
+            "after": "  chan _scheduler_2_egress((bits[32], (bits[8], bits[384])), id=33, kind=streaming, ops=send_receive, flow_control=ready_valid, strictness=proven_mutually_exclusive, fifo_depth=2, bypass=false, register_push_outputs=true, register_pop_outputs=false)"
+          },
+          {
+            "before": "  chan _scheduler_3_egress((bits[32], (bits[8], bits[384])), id=38, kind=streaming, ops=send_receive, flow_control=ready_valid, strictness=proven_mutually_exclusive, fifo_depth=1, bypass=true, register_push_outputs=true, register_pop_outputs=false)",
+            "after": "  chan _scheduler_3_egress((bits[32], (bits[8], bits[384])), id=38, kind=streaming, ops=send_receive, flow_control=ready_valid, strictness=proven_mutually_exclusive, fifo_depth=2, bypass=false, register_push_outputs=true, register_pop_outputs=false)"
+          }
+        ],
+        "command": [
+          "<xls-tools>/codegen_main",
+          "--pipeline_stages=2",
+          "--delay_model=unit",
+          "--flop_inputs=false",
+          "--flop_outputs=true",
+          "--use_system_verilog=false",
+          "--reset=reset",
+          "--fifo_module=",
+          "--worst_case_throughput=1",
+          "--ram_configurations=scheduler_0_state:1R1W:_scheduler_0_ram_read_req_out:_scheduler_0_ram_read_resp_in:_scheduler_0_ram_write_req_out:_scheduler_0_ram_write_resp_in,scheduler_0_mailbox:1R1W:_scheduler_0_mailbox_read_req_out:_scheduler_0_mailbox_read_resp_in:_scheduler_0_mailbox_write_req_out:_scheduler_0_mailbox_write_resp_in,scheduler_1_state:1R1W:_scheduler_1_ram_read_req_out:_scheduler_1_ram_read_resp_in:_scheduler_1_ram_write_req_out:_scheduler_1_ram_write_resp_in,scheduler_1_mailbox:1R1W:_scheduler_1_mailbox_read_req_out:_scheduler_1_mailbox_read_resp_in:_scheduler_1_mailbox_write_req_out:_scheduler_1_mailbox_write_resp_in,scheduler_2_state:1R1W:_scheduler_2_ram_read_req_out:_scheduler_2_ram_read_resp_in:_scheduler_2_ram_write_req_out:_scheduler_2_ram_write_resp_in,scheduler_2_mailbox:1R1W:_scheduler_2_mailbox_read_req_out:_scheduler_2_mailbox_read_resp_in:_scheduler_2_mailbox_write_req_out:_scheduler_2_mailbox_write_resp_in,scheduler_3_state:1R1W:_scheduler_3_ram_read_req_out:_scheduler_3_ram_read_resp_in:_scheduler_3_ram_write_req_out:_scheduler_3_ram_write_resp_in,scheduler_3_mailbox:1R1W:_scheduler_3_mailbox_read_req_out:_scheduler_3_mailbox_read_resp_in:_scheduler_3_mailbox_write_req_out:_scheduler_3_mailbox_write_resp_in",
+          "phi_decoder_profile.opt.ir"
+        ],
+        "codegen_seconds": 86.55234829057008,
+        "samples": [
+          {
+            "stalled": false,
+            "matched_events": 161,
+            "metrics": [
+              "PROFILE_RESULT warmup_step=8 target_step=32 measured_cycles=2934 cycles_per_step=122.250000 projected_steps_per_second_200mhz=1635991.820041",
+              "PROFILE_ACTIVITY total_cycles=4049 source_state_reads=143 phi_state_reads=1989 source_mailbox_reads=139 phi_mailbox_reads=137 x_corrections=11 z_corrections=18"
+            ]
+          },
+          {
+            "stalled": true,
+            "matched_events": 161,
+            "metrics": [
+              "PROFILE_RESULT warmup_step=8 target_step=32 measured_cycles=2934 cycles_per_step=122.250000 projected_steps_per_second_200mhz=1635991.820041",
+              "PROFILE_ACTIVITY total_cycles=4050 source_state_reads=144 phi_state_reads=1990 source_mailbox_reads=140 phi_mailbox_reads=138 x_corrections=11 z_corrections=18"
+            ]
+          }
+        ],
+        "artifacts": {
+          "phi_decoder_profile.opt.ir": "52b1adcef319a9caf2ad6549da0cc2076e4bbe9fc099ccdf0c15dcb289a7d058",
+          "phi_decoder_profile.v": "22016887e98a31b0ccfa38f9c3393f31512e364ba86c8641887a32933ce6667b",
+          "phi_decoder_profile.build.json": "f7149cf50563f32bad0c1fc6e6eaeb3c14fc4fa24ee087aaae0dc965b1ddd46e"
+        }
+      },
+      "placement_diagnostic": {
+        "kind": "placed-unrouted-estimate",
+        "timing": {
+          "decoder.aclk": {
+            "achieved": 16.96,
+            "constraint": 25.0
+          }
+        },
+        "critical_path": {
+          "logic_ns": 20.7,
+          "routing_ns": 38.2,
+          "lines": [
+            "Critical path report for clock 'decoder.aclk' (posedge -> posedge):",
+            "Info: curr total",
+            "Info:  0.1  0.1  Source $flatten\\decoder.$auto$ff.cc:337:slice$65141.Q",
+            "Info:  5.8  5.9    Net decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_3_0_2_2_next_inst.p0_and_21718 budget 0.438000 ns (98,170) -> (63,39)",
+            "Info:                Sink $flatten\\decoder.$abc$1098669$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_3_0_2_2_next_inst.sel_155851[361].A4",
+            "Info:  0.1  6.0  Source $flatten\\decoder.$abc$1098669$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_3_0_2_2_next_inst.sel_155851[361].O6",
+            "Info:  1.5  7.5    Net decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_3_0_2_2_next_inst.executor_request[727] budget 0.437000 ns (63,39) -> (70,51)",
+            "Info:                Sink $flatten\\decoder.$abc$1098669$lut$aiger1098668$116543.A5",
+            "Info:  0.1  7.6  Source $flatten\\decoder.$abc$1098669$lut$aiger1098668$116543.O6",
+            "Info:  1.7  9.4    Net $flatten\\decoder.$techmap1105785$abc$1098669$lut$aiger1098668$117777.A[2] budget 0.437000 ns (70,51) -> (73,77)",
+            "Info:                Sink $flatten\\decoder.$abc$1098669$lut$aiger1098668$117777.A2",
+            "Info:  0.2  9.5  Source $flatten\\decoder.$abc$1098669$lut$aiger1098668$117777.O5",
+            "Info:  0.2  9.7    Net $flatten\\decoder.$techmap1105789$abc$1098669$lut$aiger1098668$117802.A[1] budget 0.328000 ns (73,77) -> (73,77)",
+            "Info:                Sink $flatten\\decoder.$abc$1098669$lut$aiger1098668$117802.A2",
+            "Info:  0.1  9.8  Source $flatten\\decoder.$abc$1098669$lut$aiger1098668$117802.O6",
+            "Info:  0.9 10.6    Net $flatten\\decoder.$techmap1105840$abc$1098669$lut$aiger1098668$118010.A[3] budget 0.328000 ns (73,77) -> (74,73)",
+            "Info:                Sink $flatten\\decoder.$abc$1098669$lut$aiger1098668$118010.A4",
+            "Info:  0.1 10.8  Source $flatten\\decoder.$abc$1098669$lut$aiger1098668$118010.O6",
+            "Info:  2.7 13.5    Net $flatten\\decoder.$techmap1106618$auto$abc9_ops.cc:1613:reintegrate$1105248.A[5] budget 0.401000 ns (74,73) -> (81,125)",
+            "Info:                Sink $flatten\\decoder.$abc$1098669$lut$aiger1098668$118410.A1",
+            "Info:  0.1 13.6  Source $flatten\\decoder.$abc$1098669$lut$aiger1098668$118410.O5",
+            "Info:  2.4 16.0    Net $flatten\\decoder.$techmap1106673$auto$abc9_ops.cc:1613:reintegrate$1105236.A[3] budget 0.401000 ns (81,125) -> (108,146)",
+            "Info:                Sink $flatten\\decoder.$abc$1098669$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_3_0_2_2_next_inst.__phi_halo_cell__SharedExecutor_0_next_inst.v_Xls_clause_1_Sum0_1__2[16].A1",
+            "Info:  0.1 16.1  Source $flatten\\decoder.$abc$1098669$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_3_0_2_2_next_inst.__phi_halo_cell__SharedExecutor_0_next_inst.v_Xls_clause_1_Sum0_1__2[16].O6",
+            "Info:  2.4 18.5    Net decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_3_0_2_2_next_inst.__phi_halo_cell__SharedExecutor_0_next_inst._6__2[16] budget 0.400000 ns (108,146) -> (81,125)",
+            "Info:                Sink $flatten\\decoder.$auto$abc9_ops.cc:1613:reintegrate$1105233.A1",
+            "Info:  0.1 18.6  Source $flatten\\decoder.$auto$abc9_ops.cc:1613:reintegrate$1105233.O6",
+            "Info:  0.2 18.8    Net $flatten\\decoder.$abc$1098669$aiger1098668$122870b budget 0.328000 ns (81,125) -> (81,125)",
+            "Info:                Sink $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$32666.genblk1.slice[3].genblk1.carry4.S3",
+            "Info:  0.2 19.0  Source $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$32666.genblk1.slice[3].genblk1.carry4.O3",
+            "Info:  1.7 20.7    Net $flatten\\decoder.$abc$1098669$aiger1098668$40097 budget 0.421000 ns (81,125) -> (68,114)",
+            "Info:                Sink $flatten\\decoder.\\application.\\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\\__phi_halo_cell__SharedService_0__2_3_0_2_2_next_inst.\\__phi_halo_cell__SharedExecutor_0_next_inst.$mul$<worktree>/_build/timing-control/handoff/compiled/phi_decoder_profile.v:4176$4696.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.sliceA[0].mul.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.sliceB[0].mul.B16",
+            "Info:  3.8 24.6  Source $flatten\\decoder.\\application.\\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\\__phi_halo_cell__SharedService_0__2_3_0_2_2_next_inst.\\__phi_halo_cell__SharedExecutor_0_next_inst.$mul$<worktree>/_build/timing-control/handoff/compiled/phi_decoder_profile.v:4176$4696.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.sliceA[0].mul.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.sliceB[0].mul.ACOUT7",
+            "Info:  0.2 24.7    Net $flatten\\decoder.$abc$1098669$aiger1098668$40303 budget 0.421000 ns (68,114) -> (68,114)",
+            "Info:                Sink $flatten\\decoder.\\application.\\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\\__phi_halo_cell__SharedService_0__2_3_0_2_2_next_inst.\\__phi_halo_cell__SharedExecutor_0_next_inst.$mul$<worktree>/_build/timing-control/handoff/compiled/phi_decoder_profile.v:4176$4696.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.sliceA[0].mul.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.sliceB[1].mul.ACIN7",
+            "Info:  5.2 29.9  Source $flatten\\decoder.\\application.\\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\\__phi_halo_cell__SharedService_0__2_3_0_2_2_next_inst.\\__phi_halo_cell__SharedExecutor_0_next_inst.$mul$<worktree>/_build/timing-control/handoff/compiled/phi_decoder_profile.v:4176$4696.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.sliceA[0].mul.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.sliceB[1].mul.ACOUT7",
+            "Info:  0.9 30.8    Net $flatten\\decoder.$abc$1098669$aiger1098668$40457 budget 0.374000 ns (68,114) -> (68,109)",
+            "Info:                Sink $flatten\\decoder.\\application.\\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\\__phi_halo_cell__SharedService_0__2_3_0_2_2_next_inst.\\__phi_halo_cell__SharedExecutor_0_next_inst.$mul$<worktree>/_build/timing-control/handoff/compiled/phi_decoder_profile.v:4176$4696.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.sliceA[0].mul.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mul_sliceB_last.ACIN7",
+            "Info:  5.2 36.0  Source $flatten\\decoder.\\application.\\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\\__phi_halo_cell__SharedService_0__2_3_0_2_2_next_inst.\\__phi_halo_cell__SharedExecutor_0_next_inst.$mul$<worktree>/_build/timing-control/handoff/compiled/phi_decoder_profile.v:4176$4696.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.sliceA[0].mul.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mul_sliceB_last.P0",
+            "Info:  2.0 38.0    Net $flatten\\decoder.$techmap1106758$auto$abc9_ops.cc:1613:reintegrate$1105200.A[1] budget 0.374000 ns (68,109) -> (91,99)",
+            "Info:                Sink $flatten\\decoder.$auto$abc9_ops.cc:1613:reintegrate$1105200.A2",
+            "Info:  0.1 38.2  Source $flatten\\decoder.$auto$abc9_ops.cc:1613:reintegrate$1105200.O6",
+            "Info:  0.2 38.3    Net $flatten\\decoder.$abc$1098669$aiger1098668$123675b budget 0.374000 ns (91,99) -> (91,99)",
+            "Info:                Sink $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$32381.genblk1.slice[4].genblk1.carry4.S1",
+            "Info:  0.5 38.8  Source $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$32381.genblk1.slice[4].genblk1.carry4.CO3",
+            "Info:  0.5 39.4    Net $flatten\\decoder.$abc$1098669$aiger1098668$40951 budget 0.327000 ns (91,99) -> (91,98)",
+            "Info:                Sink $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$32381.genblk1.slice[5].genblk1.carry4.CIN",
+            "Info:  0.1 39.5  Source $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$32381.genblk1.slice[5].genblk1.carry4.CO3",
+            "Info:  0.5 40.0    Net $flatten\\decoder.$abc$1098669$aiger1098668$40959 budget 0.327000 ns (91,98) -> (91,97)",
+            "Info:                Sink $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$32381.genblk1.slice[6].genblk1.carry4.CIN",
+            "Info:  0.1 40.1  Source $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$32381.genblk1.slice[6].genblk1.carry4.CO3",
+            "Info:  0.5 40.7    Net $flatten\\decoder.$abc$1098669$aiger1098668$40967 budget 0.327000 ns (91,97) -> (91,96)",
+            "Info:                Sink $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$32381.genblk1.slice[7].genblk1.carry4.CIN",
+            "Info:  0.1 40.8  Source $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$32381.genblk1.slice[7].genblk1.carry4.CO3",
+            "Info:  0.5 41.3    Net $flatten\\decoder.$abc$1098669$aiger1098668$40975 budget 0.327000 ns (91,96) -> (91,95)",
+            "Info:                Sink $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$32381.genblk1.slice[8].genblk1.carry4.CIN",
+            "Info:  0.1 41.4  Source $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$32381.genblk1.slice[8].genblk1.carry4.CO3",
+            "Info:  0.5 42.0    Net $flatten\\decoder.$abc$1098669$aiger1098668$41137 budget 0.327000 ns (91,95) -> (91,94)",
+            "Info:                Sink $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$32381.genblk1.slice[9].genblk1.carry4.CIN",
+            "Info:  0.2 42.2  Source $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$32381.genblk1.slice[9].genblk1.carry4.O0",
+            "Info:  1.6 43.8    Net $flatten\\decoder.$abc$1098669$aiger1098668$41138 budget 0.327000 ns (91,94) -> (91,119)",
+            "Info:                Sink $flatten\\decoder.$abc$1098669$aiger1098668$41138$LUT$5932.A1",
+            "Info:  0.1 43.9  Source $flatten\\decoder.$abc$1098669$aiger1098668$41138$LUT$5932.O6",
+            "Info:  0.2 44.0    Net $flatten\\decoder.$abc$1098669$aiger1098668$41138$legal$5931 budget 0.327000 ns (91,119) -> (91,119)",
+            "Info:                Sink $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$32695.genblk1.slice[3].genblk1.carry4.S1",
+            "Info:  0.5 44.5  Source $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$32695.genblk1.slice[3].genblk1.carry4.CO3",
+            "Info:  0.5 45.1    Net $flatten\\decoder.$abc$1098669$aiger1098668$48353 budget 0.327000 ns (91,119) -> (91,118)",
+            "Info:                Sink $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$32695.genblk1.slice[4].genblk1.carry4.CIN",
+            "Info:  0.3 45.4  Source $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$32695.genblk1.slice[4].genblk1.carry4.O1",
+            "Info:  1.7 47.1    Net $flatten\\decoder.$techmap1110472$auto$abc9_ops.cc:1613:reintegrate$1104002.A[1] budget 0.327000 ns (91,118) -> (93,145)",
+            "Info:                Sink $flatten\\decoder.$auto$abc9_ops.cc:1613:reintegrate$1104002.A5",
+            "Info:  0.1 47.2  Source $flatten\\decoder.$auto$abc9_ops.cc:1613:reintegrate$1104002.O6",
+            "Info:  1.4 48.6    Net $flatten\\decoder.$techmap1117365$auto$abc9_ops.cc:1613:reintegrate$1102364.A[0] budget 0.327000 ns (93,145) -> (93,127)",
+            "Info:                Sink $flatten\\decoder.$techmap1117365$auto$abc9_ops.cc:1613:reintegrate$1102364.A[0]$LUT$6602.A1",
+            "Info:  0.1 48.7  Source $flatten\\decoder.$techmap1117365$auto$abc9_ops.cc:1613:reintegrate$1102364.A[0]$LUT$6602.O6",
+            "Info:  0.0 48.7    Net $flatten\\decoder.$techmap1117365$auto$abc9_ops.cc:1613:reintegrate$1102364.A[0]$legal$6601 budget 0.327000 ns (93,127) -> (93,127)",
+            "Info:                Sink $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$32722.genblk1.slice[0].genblk1.carry4.S0",
+            "Info:  0.5 49.2  Source $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$32722.genblk1.slice[0].genblk1.carry4.CO3",
+            "Info:  0.5 49.7    Net $flatten\\decoder.$abc$1098669$aiger1098668$48697 budget 0.327000 ns (93,127) -> (93,126)",
+            "Info:                Sink $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$32722.genblk1.slice[1].genblk1.carry4.CIN",
+            "Info:  0.1 49.9  Source $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$32722.genblk1.slice[1].genblk1.carry4.CO3",
+            "Info:  0.5 50.4    Net $flatten\\decoder.$abc$1098669$aiger1098668$48705 budget 0.327000 ns (93,126) -> (93,125)",
+            "Info:                Sink $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$32722.genblk1.slice[2].genblk1.carry4.CIN",
+            "Info:  0.1 50.5  Source $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$32722.genblk1.slice[2].genblk1.carry4.CO3",
+            "Info:  0.5 51.1    Net $flatten\\decoder.$abc$1098669$aiger1098668$48713 budget 0.327000 ns (93,125) -> (93,124)",
+            "Info:                Sink $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$32722.genblk1.slice[3].genblk1.carry4.CIN",
+            "Info:  0.1 51.2  Source $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$32722.genblk1.slice[3].genblk1.carry4.CO3",
+            "Info:  0.5 51.7    Net $flatten\\decoder.$abc$1098669$aiger1098668$48721 budget 0.327000 ns (93,124) -> (93,123)",
+            "Info:                Sink $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$32722.genblk1.slice[4].genblk1.carry4.CIN",
+            "Info:  0.1 51.8  Source $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$32722.genblk1.slice[4].genblk1.carry4.CO3",
+            "Info:  0.5 52.4    Net $flatten\\decoder.$abc$1098669$aiger1098668$48729 budget 0.327000 ns (93,123) -> (93,122)",
+            "Info:                Sink $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$32722.genblk1.slice[5].genblk1.carry4.CIN",
+            "Info:  0.1 52.5  Source $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$32722.genblk1.slice[5].genblk1.carry4.CO3",
+            "Info:  0.5 53.0    Net $flatten\\decoder.$abc$1098669$aiger1098668$48737 budget 0.327000 ns (93,122) -> (93,121)",
+            "Info:                Sink $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$32722.genblk1.slice[6].genblk1.carry4.CIN",
+            "Info:  0.3 53.4  Source $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$32722.genblk1.slice[6].genblk1.carry4.O1",
+            "Info:  1.0 54.3    Net $flatten\\decoder.$techmap1111193$auto$abc9_ops.cc:1613:reintegrate$1103873.A[5] budget 0.327000 ns (93,121) -> (93,127)",
+            "Info:                Sink $flatten\\decoder.$abc$1098669$lut$aiger1098668$124319.A6",
+            "Info:  0.1 54.5  Source $flatten\\decoder.$abc$1098669$lut$aiger1098668$124319.O6",
+            "Info:  1.0 55.5    Net $flatten\\decoder.$abc$1098669$aiger1098668$124319 budget 0.327000 ns (93,127) -> (91,132)",
+            "Info:                Sink $flatten\\decoder.$abc$1098669$aiger1098668$124319$LUT$8628.A1",
+            "Info:  0.1 55.6  Source $flatten\\decoder.$abc$1098669$aiger1098668$124319$LUT$8628.O6",
+            "Info:  0.2 55.7    Net $flatten\\decoder.$abc$1098669$aiger1098668$124319$legal$8627 budget 0.327000 ns (91,132) -> (91,132)",
+            "Info:                Sink $flatten\\decoder.\\application.\\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\\__phi_halo_cell__SharedService_0__2_3_0_2_2_next_inst.\\__phi_halo_cell__SharedExecutor_0_next_inst.$gt$<worktree>/_build/timing-control/handoff/compiled/phi_decoder_profile.v:5240$4467.genblk1.slice[1].genblk1.carry4.S3",
+            "Info:  0.4 56.1  Source $flatten\\decoder.\\application.\\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\\__phi_halo_cell__SharedService_0__2_3_0_2_2_next_inst.\\__phi_halo_cell__SharedExecutor_0_next_inst.$gt$<worktree>/_build/timing-control/handoff/compiled/phi_decoder_profile.v:5240$4467.genblk1.slice[1].genblk1.carry4.CO3",
+            "Info:  0.5 56.6    Net $flatten\\decoder.$abc$1098669$aiger1098668$50841 budget 0.327000 ns (91,132) -> (91,131)",
+            "Info:                Sink $flatten\\decoder.\\application.\\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\\__phi_halo_cell__SharedService_0__2_3_0_2_2_next_inst.\\__phi_halo_cell__SharedExecutor_0_next_inst.$gt$<worktree>/_build/timing-control/handoff/compiled/phi_decoder_profile.v:5240$4467.genblk1.slice[2].genblk1.carry4.CIN",
+            "Info:  0.3 57.0  Source $flatten\\decoder.\\application.\\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\\__phi_halo_cell__SharedService_0__2_3_0_2_2_next_inst.\\__phi_halo_cell__SharedExecutor_0_next_inst.$gt$<worktree>/_build/timing-control/handoff/compiled/phi_decoder_profile.v:5240$4467.genblk1.slice[2].genblk1.carry4.O1",
+            "Info:  1.8 58.7    Net $flatten\\decoder.$techmap1113319$auto$abc9_ops.cc:1613:reintegrate$1103730.A[1] budget 0.327000 ns (91,131) -> (98,152)",
+            "Info:                Sink $flatten\\decoder.$auto$abc9_ops.cc:1613:reintegrate$1102716.A2",
+            "Info:  0.2 58.9  Source $flatten\\decoder.$auto$abc9_ops.cc:1613:reintegrate$1102716.O5",
+            "Info:  0.0 58.9    Net decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_3_0_2_2_next_inst.__phi_halo_cell__SharedExecutor_0_next_inst.sel_152589[9] budget 0.327000 ns (98,152) -> (98,152)",
+            "Info:                Sink $flatten\\decoder.$auto$ff.cc:337:slice$66422.D",
+            "Info:  0.1 59.0  Setup $flatten\\decoder.$auto$ff.cc:337:slice$66422.D",
+            "Info: 20.7 ns logic, 38.2 ns routing"
+          ]
+        },
+        "command": {
+          "kind": "placed-unrouted-estimate",
+          "command": [
+            "<worktree>/_build/timing-control/nextpnr-diagnostic",
+            "--chipdb",
+            "<native-experiment>/build/chipdb/xc7z030sbg485.bin",
+            "--json",
+            "placed.json",
+            "--no-pack",
+            "--no-place",
+            "--no-route",
+            "--diagnostic-timing-paths",
+            "--report",
+            "placement-estimate.json",
+            "--timing-coverage",
+            "placement-coverage.json",
+            "--log",
+            "placement-paths.log"
+          ],
+          "seconds": 10.34851658390835,
+          "binary_sha256": "c1f18245f35664eae1667f7280b3bde5c28ff8aeef90447141e9c3ec6e7be990"
+        },
+        "binary_sha256": "c1f18245f35664eae1667f7280b3bde5c28ff8aeef90447141e9c3ec6e7be990",
+        "installer_sha256": "d679af9eec1ef52cb2ae0b5fc3bb2fea2d4265b02cb56769ebe1e79e64daaf1c"
+      },
+      "coverage": {
+        "endpoint_requirements_met": true,
+        "design_wide_clock_validated": false,
+        "checks": [
+          {
+            "requirement": {
+              "type": "SLICE_FFX",
+              "port": "Q",
+              "class": "register_output"
+            },
+            "matched": 30305,
+            "failed": 0,
+            "passed": true,
+            "failures": []
+          },
+          {
+            "requirement": {
+              "type": "SLICE_FFX",
+              "port": "D",
+              "class": "register_input"
+            },
+            "matched": 30305,
+            "failed": 0,
+            "passed": true,
+            "failures": []
+          },
+          {
+            "requirement": {
+              "type": "RAMB(?:18|36)E1_RAMB(?:18|36)E1",
+              "port": "DO(?:ADO|BDO)[0-9]+",
+              "class": "register_output"
+            },
+            "matched": 1920,
+            "failed": 0,
+            "passed": true,
+            "failures": []
+          },
+          {
+            "requirement": {
+              "type": "RAMB(?:18|36)E1_RAMB(?:18|36)E1",
+              "port": "(?:DIADI|DIBDI)[0-9]+",
+              "class": "register_input"
+            },
+            "matched": 1920,
+            "failed": 0,
+            "passed": true,
+            "failures": []
+          },
+          {
+            "requirement": {
+              "type": "DSP48E1_DSP48E1",
+              "port": "P[0-9]+",
+              "class": "comb_output"
+            },
+            "matched": 2688,
+            "failed": 0,
+            "passed": true,
+            "failures": []
+          },
+          {
+            "requirement": {
+              "type": "DSP48E1_DSP48E1",
+              "port": "[AB][0-9]+",
+              "class": "comb_input"
+            },
+            "matched": 2688,
+            "failed": 0,
+            "passed": true,
+            "failures": []
+          }
+        ],
+        "stage": "placed-unrouted",
+        "export_sha256": "d58d209747292e0aa8cf044f066cef9cffd366dd7eccd9228b97f8349f56db4c",
+        "cell_counts": {
+          "PSEUDO_GND": 1,
+          "SLICE_LUTX": 36082,
+          "PSEUDO_VCC": 1,
+          "BUFGCTRL": 1,
+          "SLICE_FFX": 30305,
+          "SELMUX2_1": 10,
+          "CARRY4": 762,
+          "DSP48E1_DSP48E1": 56,
+          "IOB33_OUTBUF": 1,
+          "IOB33_INBUF_EN": 1,
+          "PAD": 2,
+          "RAMB36E1_RAMB36E1": 8,
+          "RAMB18E1_RAMB18E1": 44
+        }
+      },
+      "routed_samples": []
     }
   },
   "checks": {

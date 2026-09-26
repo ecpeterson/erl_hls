@@ -33,6 +33,11 @@ jobs:
           sudo apt-get update
           sudo apt-get install --yes iverilog yosys
 
+      - name: Check local timing-model diagnostics
+        run: |
+          python3 experiments/07-openxc7/timing_model/test_model.py
+          python3 experiments/07-openxc7/timing_model/test_selection_shapes.py
+
       - name: Check Zynq package mapping and resource smoke
         run: python3 experiments/07-openxc7/test_zynq7030.py
 
@@ -145,9 +150,6 @@ jobs:
 
       - name: Prove round-robin selection and grant fairness
         run: python3 tools/test_arbitration.py "$RUNNER_TEMP/xls"
-
-      - name: Prove queue-bank pop/push equivalence
-        run: python3 tools/test_frame_queue.py "$RUNNER_TEMP/xls"
 
       - name: Compare entry outcomes with BEAM and simulate RTL
         run: bash tools/test_entry_outcomes.sh "$RUNNER_TEMP/xls"

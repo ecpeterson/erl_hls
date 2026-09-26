@@ -26,6 +26,16 @@ The table contains picoseconds excluding launch-register clock-to-Q and capture 
 
 The estimates are **not upper bounds**. Report underestimates separately from overestimates; their cancellation in the mean is not evidence of safety. Pipeline placement also needs validation: overpricing one operation can leave another stage too crowded. The current model remains opt-in because both effects appear in the measurements. XLS may replace a detailed estimator error with its generic “No known delay model estimate” error.
 
+Before planning more measurements, inventory the selections in a canonical optimized IR dump:
+
+```sh
+python3 experiments/07-openxc7/timing_model/selection_shapes.py input.opt.ir \
+  --output selection-shapes.json
+python3 experiments/07-openxc7/timing_model/test_selection_shapes.py
+```
+
+The inventory groups flattened result widths, case counts and selector widths, with source locations and input/table hashes. Review flags identify dimensions absent from the calibration corpus. They neither estimate delays nor qualify coverage: other operations, operand constraints and physical wiring require separate checks. Unsupported selection syntax fails explicitly.
+
 ## Use the native BRAM model
 
 Prepare the [native endpoint-audit tools](../timing_coverage/README.md), retain `nextpnr-coverage` as the baseline, and apply the model to that dedicated source checkout:

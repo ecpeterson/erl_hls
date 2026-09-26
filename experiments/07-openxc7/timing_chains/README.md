@@ -41,19 +41,26 @@ The solver checks the integer identity for every input at 110 width/divisor comb
 
 ## Queue banks
 
-The [queue-bank comparison](../results/control-queues-2026-09-25.md) retains the exact two- and nine-queue DSLX probes. Prepare separate source directories containing `bank2.x`/`bank9.x`, `axis.x`, and each version of `frame_queue.x`. The reference library is available at `97b6bf9`; the candidate is the current library. Run `probe.py` above with `--source "$SOURCES/bank2.x"`, omit `--stages` for the combinational bank transition, and use matched seeds 1/2 for both versions. Repeat with `bank9.x`.
+The [queue-bank comparison](../results/control-queues-2026-09-25.md) retains the exact two- and nine-queue DSLX probes. Prepare separate source directories containing `bank2.x`/`bank9.x`, `axis.x`, and each version of `frame_queue.x`. The reference library is available at `97b6bf9`; the candidate is the retained `queue-local.patch` applied to a copy of that library. Run `probe.py` above with `--source "$SOURCES/bank2.x"`, omit `--stages` for the combinational bank transition, and use matched seeds 1/2 for both versions. Repeat with `bank9.x`.
 
-The probe preserves all state/payload bits between fabric registers; its resource totals include those registers and the activity harness. It is separate from the complete decoder's area and throughput measurements. Check behavior with the compiled-RTL proof, which exhaustively compares the indexed reference and current update for 1/2/3/9 queues:
+The probe preserves all state/payload bits between fabric registers; its resource totals include those registers and the activity harness. It is separate from the complete decoder's area and throughput measurements. Check behavior with the compiled-RTL proof, which exhaustively compares the indexed reference and the selected candidate update for 1/2/3/9 queues:
 
 ```sh
-python3 tools/test_frame_queue.py "$XLS" --yosys "$YOSYS"
+python3 experiments/07-openxc7/timing_chains/prove_frame_queue.py "$XLS" \
+  --yosys "$YOSYS" --library "$SOURCES"
 ```
+
+Rejected variants remain reproducible without changing the compiler library. Copy the reference libraries into a fresh directory, then apply the recorded patches with `patch -d "$SOURCES" -p1`: `queue-local.patch` starts from `97b6bf9`; `queue-unconditional.patch` applies on top of it; `retirement-local.patch` starts from the reference mailbox. The exact `bank2.x`, `bank9.x` and `retire2.x` probes use those libraries. Preserve the ordinary `axis.x` and mailbox dependencies from the same reference revision.
+
+`unconditional-proof.x` compares validity and live payloads for two queues; `retirement-proof.x` compares complete metadata for two actors/four entries. Compile each proof as combinational `main`, then run Yosys `read_verilog -sv`, `prep -top bank -flatten`, `opt`, and `sat -verify -prove out 1 -set-def-inputs`, using `--module_name=bank` at codegen. Enabled actor/queue addresses must be in range; disabled addresses are unrestricted. The bank proof runner additionally covers 1/2/3/9 queues with exact payload comparison.
 
 ## Selective registered-boundary screen
 
 The [handoff experiment](../results/control-queues-2026-09-25/handoff-screen.json) records the exact two channel lines before/after editing, its input/output IR hashes, unchanged codegen flags and interface-trace summaries. Start from a separately compiled four-phi profile with the local queue update. Copy its optimized IR and replace only those exact lines; fail if either input line is absent or repeated. Reuse its recorded codegen command in a separate directory and retain a new manifest with the changed IR/RTL hashes. Never edit a published compiler-cache entry in place.
 
 Run the profile testbench with width 2, height 1, both planes and `STALL_OUTPUTS=0/1`; compare accepted frames per actor against the unchanged profile. The existing `phi_profile_trace.c` profiler uses `ERL_HLS_PHI_PROFILE_SHARDS=1` and `ERL_HLS_PHI_PROFILE_PLANE_COUNT=2` here. Then map/route through the complete-core procedure below. Compare **period × cycles/step**; a lower clock period alone can conceal a slower decoder.
+
+For a deliberately optimistic DSP sensitivity check, the [recorded edit](../results/control-queues-2026-09-25/dsp-sensitivity.json) changes only the fully combinational DSP branch of native `getCellDelay` to return zero propagation delay. Keep timing classes and connectivity intact; build a separate diagnostic binary, restore the source, and replay saved placements with `--no-pack --no-place --no-route --diagnostic-timing-paths`. This bounds the influence of those arc costs on the fixed native timing graph. It does not predict another placement, qualify missing paths or supply a usable timing model.
 
 ## Control fan-out
 

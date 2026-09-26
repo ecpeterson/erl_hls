@@ -442,5 +442,10 @@
     "MUXF8": 2,
     "RAMB18E1": 44,
     "RAMB36E1": 8
+  },
+  "reference_artifacts": {
+    "phi_decoder_profile.ir": "020ea54c400ddfdec5eef4263a5f466fc9250329ade45d4693a7736d7077fdaa",
+    "phi_decoder_profile.opt.ir": "6581477956e70209a7cab006adbcfd98810ed7b3be23ece893c9f24f2f4a666b",
+    "phi_decoder_profile.v": "a44b1365617d5139c56f5594b6f21d221602ffd867df4dbaa0c5b719fc5b8003"
   }
 }
