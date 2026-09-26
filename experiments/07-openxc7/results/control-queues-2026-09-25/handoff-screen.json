@@ -1,0 +1,451 @@
+{
+  "schema": 1,
+  "experiment": "registered-phi-egress",
+  "screen": {
+    "edits": [
+      {
+        "before": "  chan _scheduler_2_egress((bits[32], (bits[8], bits[384])), id=33, kind=streaming, ops=send_receive, flow_control=ready_valid, strictness=proven_mutually_exclusive, fifo_depth=1, bypass=true, register_push_outputs=true, register_pop_outputs=false)",
+        "after": "  chan _scheduler_2_egress((bits[32], (bits[8], bits[384])), id=33, kind=streaming, ops=send_receive, flow_control=ready_valid, strictness=proven_mutually_exclusive, fifo_depth=2, bypass=false, register_push_outputs=true, register_pop_outputs=false)"
+      },
+      {
+        "before": "  chan _scheduler_3_egress((bits[32], (bits[8], bits[384])), id=38, kind=streaming, ops=send_receive, flow_control=ready_valid, strictness=proven_mutually_exclusive, fifo_depth=1, bypass=true, register_push_outputs=true, register_pop_outputs=false)",
+        "after": "  chan _scheduler_3_egress((bits[32], (bits[8], bits[384])), id=38, kind=streaming, ops=send_receive, flow_control=ready_valid, strictness=proven_mutually_exclusive, fifo_depth=2, bypass=false, register_push_outputs=true, register_pop_outputs=false)"
+      }
+    ],
+    "command": [
+      "<xls-tools>/codegen_main",
+      "--pipeline_stages=2",
+      "--delay_model=unit",
+      "--flop_inputs=false",
+      "--flop_outputs=true",
+      "--use_system_verilog=false",
+      "--reset=reset",
+      "--fifo_module=",
+      "--worst_case_throughput=1",
+      "--ram_configurations=scheduler_0_state:1R1W:_scheduler_0_ram_read_req_out:_scheduler_0_ram_read_resp_in:_scheduler_0_ram_write_req_out:_scheduler_0_ram_write_resp_in,scheduler_0_mailbox:1R1W:_scheduler_0_mailbox_read_req_out:_scheduler_0_mailbox_read_resp_in:_scheduler_0_mailbox_write_req_out:_scheduler_0_mailbox_write_resp_in,scheduler_1_state:1R1W:_scheduler_1_ram_read_req_out:_scheduler_1_ram_read_resp_in:_scheduler_1_ram_write_req_out:_scheduler_1_ram_write_resp_in,scheduler_1_mailbox:1R1W:_scheduler_1_mailbox_read_req_out:_scheduler_1_mailbox_read_resp_in:_scheduler_1_mailbox_write_req_out:_scheduler_1_mailbox_write_resp_in,scheduler_2_state:1R1W:_scheduler_2_ram_read_req_out:_scheduler_2_ram_read_resp_in:_scheduler_2_ram_write_req_out:_scheduler_2_ram_write_resp_in,scheduler_2_mailbox:1R1W:_scheduler_2_mailbox_read_req_out:_scheduler_2_mailbox_read_resp_in:_scheduler_2_mailbox_write_req_out:_scheduler_2_mailbox_write_resp_in,scheduler_3_state:1R1W:_scheduler_3_ram_read_req_out:_scheduler_3_ram_read_resp_in:_scheduler_3_ram_write_req_out:_scheduler_3_ram_write_resp_in,scheduler_3_mailbox:1R1W:_scheduler_3_mailbox_read_req_out:_scheduler_3_mailbox_read_resp_in:_scheduler_3_mailbox_write_req_out:_scheduler_3_mailbox_write_resp_in",
+      "phi_decoder_profile.opt.ir"
+    ],
+    "codegen_seconds": 86.55234829057008,
+    "samples": [
+      {
+        "stalled": false,
+        "matched_events": 161,
+        "metrics": [
+          "PROFILE_RESULT warmup_step=8 target_step=32 measured_cycles=2934 cycles_per_step=122.250000 projected_steps_per_second_200mhz=1635991.820041",
+          "PROFILE_ACTIVITY total_cycles=4049 source_state_reads=143 phi_state_reads=1989 source_mailbox_reads=139 phi_mailbox_reads=137 x_corrections=11 z_corrections=18"
+        ]
+      },
+      {
+        "stalled": true,
+        "matched_events": 161,
+        "metrics": [
+          "PROFILE_RESULT warmup_step=8 target_step=32 measured_cycles=2934 cycles_per_step=122.250000 projected_steps_per_second_200mhz=1635991.820041",
+          "PROFILE_ACTIVITY total_cycles=4050 source_state_reads=144 phi_state_reads=1990 source_mailbox_reads=140 phi_mailbox_reads=138 x_corrections=11 z_corrections=18"
+        ]
+      }
+    ],
+    "artifacts": {
+      "phi_decoder_profile.opt.ir": "52b1adcef319a9caf2ad6549da0cc2076e4bbe9fc099ccdf0c15dcb289a7d058",
+      "phi_decoder_profile.v": "22016887e98a31b0ccfa38f9c3393f31512e364ba86c8641887a32933ce6667b",
+      "phi_decoder_profile.build.json": "f7149cf50563f32bad0c1fc6e6eaeb3c14fc4fa24ee087aaae0dc965b1ddd46e"
+    }
+  },
+  "variants": {
+    "queue-local": {
+      "trace_sha256": "03c78a00d85704488c1eb7d629cfba4167cc4eb9469067d6076638201dc645a6",
+      "batch_delays": {
+        "phi_0": {
+          "0": 992
+        },
+        "phi_1": {
+          "0": 992
+        }
+      },
+      "gathering_intervals": {
+        "phi_0/slot0": {
+          "6": 363,
+          "27": 24,
+          "28": 8
+        },
+        "phi_1/slot0": {
+          "6": 363,
+          "27": 23,
+          "28": 9
+        },
+        "phi_0/slot1": {
+          "6": 363,
+          "27": 24,
+          "28": 8
+        },
+        "phi_1/slot1": {
+          "6": 363,
+          "27": 23,
+          "28": 9
+        }
+      },
+      "example_events": [
+        {
+          "cycle": "150",
+          "component": "phi_0",
+          "event": "aggregate_receive",
+          "slot": "0",
+          "detail": "site=gathering;key=18;valid=1;failed=0",
+          "relative_cycle": 0
+        },
+        {
+          "cycle": "150",
+          "component": "phi_0",
+          "event": "state_read",
+          "slot": "0",
+          "detail": "",
+          "relative_cycle": 0
+        },
+        {
+          "cycle": "150",
+          "component": "phi_x_plane",
+          "event": "aggregate_send",
+          "slot": "0",
+          "detail": "shard=0;site=gathering;key=18;valid=1;failed=0",
+          "relative_cycle": 0
+        },
+        {
+          "cycle": "151",
+          "component": "phi_0",
+          "event": "aggregate_receive",
+          "slot": "1",
+          "detail": "site=gathering;key=18;valid=1;failed=0",
+          "relative_cycle": 1
+        },
+        {
+          "cycle": "151",
+          "component": "phi_0",
+          "event": "state_read",
+          "slot": "1",
+          "detail": "",
+          "relative_cycle": 1
+        },
+        {
+          "cycle": "151",
+          "component": "phi_x_plane",
+          "event": "aggregate_send",
+          "slot": "1",
+          "detail": "shard=0;site=gathering;key=18;valid=1;failed=0",
+          "relative_cycle": 1
+        },
+        {
+          "cycle": "152",
+          "component": "phi_0",
+          "event": "state_write",
+          "slot": "0",
+          "detail": "",
+          "relative_cycle": 2
+        },
+        {
+          "cycle": "152",
+          "component": "phi_0",
+          "event": "effects_egress",
+          "slot": "-1",
+          "detail": "",
+          "relative_cycle": 2
+        },
+        {
+          "cycle": "152",
+          "component": "window_router_2",
+          "event": "effects_accept",
+          "slot": "-1",
+          "detail": "",
+          "relative_cycle": 2
+        },
+        {
+          "cycle": "152",
+          "component": "window_router_2",
+          "event": "reduction_send",
+          "slot": "0",
+          "detail": "",
+          "relative_cycle": 2
+        },
+        {
+          "cycle": "152",
+          "component": "phi_x_plane",
+          "event": "batch_accept",
+          "slot": "0",
+          "detail": "source=0",
+          "relative_cycle": 2
+        },
+        {
+          "cycle": "154",
+          "component": "phi_0",
+          "event": "state_write",
+          "slot": "1",
+          "detail": "",
+          "relative_cycle": 4
+        },
+        {
+          "cycle": "154",
+          "component": "phi_0",
+          "event": "effects_egress",
+          "slot": "-1",
+          "detail": "",
+          "relative_cycle": 4
+        },
+        {
+          "cycle": "154",
+          "component": "window_router_2",
+          "event": "effects_accept",
+          "slot": "-1",
+          "detail": "",
+          "relative_cycle": 4
+        },
+        {
+          "cycle": "154",
+          "component": "window_router_2",
+          "event": "reduction_send",
+          "slot": "1",
+          "detail": "",
+          "relative_cycle": 4
+        },
+        {
+          "cycle": "154",
+          "component": "phi_x_plane",
+          "event": "batch_accept",
+          "slot": "1",
+          "detail": "source=0",
+          "relative_cycle": 4
+        },
+        {
+          "cycle": "156",
+          "component": "phi_0",
+          "event": "aggregate_receive",
+          "slot": "0",
+          "detail": "site=gathering;key=19;valid=1;failed=0",
+          "relative_cycle": 6
+        },
+        {
+          "cycle": "156",
+          "component": "phi_0",
+          "event": "state_read",
+          "slot": "0",
+          "detail": "",
+          "relative_cycle": 6
+        },
+        {
+          "cycle": "156",
+          "component": "phi_x_plane",
+          "event": "aggregate_send",
+          "slot": "0",
+          "detail": "shard=0;site=gathering;key=19;valid=1;failed=0",
+          "relative_cycle": 6
+        }
+      ]
+    },
+    "registered-handoff": {
+      "trace_sha256": "11104ca9971e81a01e81e2cdb0c254a66511395fdb88ff318e97aceed64b4019",
+      "batch_delays": {
+        "phi_0": {
+          "1": 992
+        },
+        "phi_1": {
+          "1": 992
+        }
+      },
+      "gathering_intervals": {
+        "phi_0/slot0": {
+          "8": 363,
+          "34": 24,
+          "35": 8
+        },
+        "phi_1/slot0": {
+          "8": 363,
+          "34": 23,
+          "35": 9
+        },
+        "phi_0/slot1": {
+          "8": 363,
+          "34": 24,
+          "35": 8
+        },
+        "phi_1/slot1": {
+          "8": 363,
+          "34": 23,
+          "35": 9
+        }
+      },
+      "example_events": [
+        {
+          "cycle": "194",
+          "component": "phi_0",
+          "event": "aggregate_receive",
+          "slot": "0",
+          "detail": "site=gathering;key=18;valid=1;failed=0",
+          "relative_cycle": 0
+        },
+        {
+          "cycle": "194",
+          "component": "phi_0",
+          "event": "state_read",
+          "slot": "0",
+          "detail": "",
+          "relative_cycle": 0
+        },
+        {
+          "cycle": "194",
+          "component": "phi_x_plane",
+          "event": "aggregate_send",
+          "slot": "0",
+          "detail": "shard=0;site=gathering;key=18;valid=1;failed=0",
+          "relative_cycle": 0
+        },
+        {
+          "cycle": "195",
+          "component": "phi_0",
+          "event": "aggregate_receive",
+          "slot": "1",
+          "detail": "site=gathering;key=18;valid=1;failed=0",
+          "relative_cycle": 1
+        },
+        {
+          "cycle": "195",
+          "component": "phi_0",
+          "event": "state_read",
+          "slot": "1",
+          "detail": "",
+          "relative_cycle": 1
+        },
+        {
+          "cycle": "195",
+          "component": "phi_x_plane",
+          "event": "aggregate_send",
+          "slot": "1",
+          "detail": "shard=0;site=gathering;key=18;valid=1;failed=0",
+          "relative_cycle": 1
+        },
+        {
+          "cycle": "196",
+          "component": "phi_0",
+          "event": "state_write",
+          "slot": "0",
+          "detail": "",
+          "relative_cycle": 2
+        },
+        {
+          "cycle": "196",
+          "component": "phi_0",
+          "event": "effects_egress",
+          "slot": "-1",
+          "detail": "",
+          "relative_cycle": 2
+        },
+        {
+          "cycle": "197",
+          "component": "window_router_2",
+          "event": "effects_accept",
+          "slot": "-1",
+          "detail": "",
+          "relative_cycle": 3
+        },
+        {
+          "cycle": "197",
+          "component": "window_router_2",
+          "event": "reduction_send",
+          "slot": "0",
+          "detail": "",
+          "relative_cycle": 3
+        },
+        {
+          "cycle": "197",
+          "component": "phi_x_plane",
+          "event": "batch_accept",
+          "slot": "0",
+          "detail": "source=0",
+          "relative_cycle": 3
+        },
+        {
+          "cycle": "199",
+          "component": "phi_0",
+          "event": "state_write",
+          "slot": "1",
+          "detail": "",
+          "relative_cycle": 5
+        },
+        {
+          "cycle": "199",
+          "component": "phi_0",
+          "event": "effects_egress",
+          "slot": "-1",
+          "detail": "",
+          "relative_cycle": 5
+        },
+        {
+          "cycle": "200",
+          "component": "window_router_2",
+          "event": "effects_accept",
+          "slot": "-1",
+          "detail": "",
+          "relative_cycle": 6
+        },
+        {
+          "cycle": "200",
+          "component": "window_router_2",
+          "event": "reduction_send",
+          "slot": "1",
+          "detail": "",
+          "relative_cycle": 6
+        },
+        {
+          "cycle": "200",
+          "component": "phi_x_plane",
+          "event": "batch_accept",
+          "slot": "1",
+          "detail": "source=0",
+          "relative_cycle": 6
+        },
+        {
+          "cycle": "202",
+          "component": "phi_0",
+          "event": "aggregate_receive",
+          "slot": "0",
+          "detail": "site=gathering;key=19;valid=1;failed=0",
+          "relative_cycle": 8
+        },
+        {
+          "cycle": "202",
+          "component": "phi_0",
+          "event": "state_read",
+          "slot": "0",
+          "detail": "",
+          "relative_cycle": 8
+        },
+        {
+          "cycle": "202",
+          "component": "phi_x_plane",
+          "event": "aggregate_send",
+          "slot": "0",
+          "detail": "shard=0;site=gathering;key=19;valid=1;failed=0",
+          "relative_cycle": 8
+        }
+      ]
+    }
+  },
+  "profiler_sha256": "21af7568fad8194dc0304afaa16e00da6d1905124311c9a66dd6ef6a33e16242",
+  "mapping_sha256": "48a9d97b503d9e3c49268aed5fb45eb65b6b4fe5d659e35cb9334d848ff79cb7",
+  "decoder_cells": {
+    "CARRY4": 762,
+    "DSP48E1": 56,
+    "FDRE": 29979,
+    "INV": 33,
+    "LUT2": 5303,
+    "LUT3": 5262,
+    "LUT4": 6909,
+    "LUT5": 6560,
+    "LUT6": 7487,
+    "MUXF7": 8,
+    "MUXF8": 2,
+    "RAMB18E1": 44,
+    "RAMB36E1": 8
+  },
+  "reference_artifacts": {
+    "phi_decoder_profile.ir": "020ea54c400ddfdec5eef4263a5f466fc9250329ade45d4693a7736d7077fdaa",
+    "phi_decoder_profile.opt.ir": "6581477956e70209a7cab006adbcfd98810ed7b3be23ece893c9f24f2f4a666b",
+    "phi_decoder_profile.v": "a44b1365617d5139c56f5594b6f21d221602ffd867df4dbaa0c5b719fc5b8003"
+  }
+}

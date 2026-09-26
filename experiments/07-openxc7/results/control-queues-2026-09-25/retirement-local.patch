@@ -1,0 +1,19 @@
+--- a/mailbox.x
++++ b/mailbox.x
+@@ -333,7 +333,6 @@
+-    let occupied = if outcome.consume {
+-      update(metadata.occupied, slot, old_count - u8:1)
+-    } else { metadata.occupied };
+-    let order = if outcome.consume {
+-      update(metadata.order, slot,
+-        compact_order(metadata.order[slot], order_index, old_count))
+-    } else { metadata.order };
++    let next_count = if outcome.consume { old_count - u8:1 } else { old_count };
++    let next_order = if outcome.consume {
++      compact_order(metadata.order[slot], order_index, old_count)
++    } else { metadata.order[slot] };
++    let occupied = update(metadata.occupied, slot, next_count);
++    let order = update(metadata.order, slot, next_order);
+@@ -348 +347 @@
+-    let (mail_remaining, _, _) = select(order[slot], occupied[slot], postponed_row);
++    let (mail_remaining, _, _) = select(next_order, next_count, postponed_row);

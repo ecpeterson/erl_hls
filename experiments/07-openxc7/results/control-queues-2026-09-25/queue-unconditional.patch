@@ -1,0 +1,5 @@
+--- a/frame_queue.x
++++ b/frame_queue.x
+@@ -20 +20 @@
+-    current: if queue.lookahead_valid { queue.lookahead } else { queue.current },
++    current: queue.lookahead,

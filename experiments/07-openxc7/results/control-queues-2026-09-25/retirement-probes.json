@@ -1,0 +1,404 @@
+{
+  "samples": [
+    {
+      "cell_counts": {
+        "LUT6": 25,
+        "LUT5": 34,
+        "LUT3": 132,
+        "LUT4": 70,
+        "LUT2": 35,
+        "MUXF7": 6,
+        "MUXF8": 2,
+        "LUT1": 1,
+        "CARRY4": 2,
+        "BUFG": 1,
+        "FDRE": 244,
+        "OBUF": 1,
+        "IBUF": 1,
+        "$scopeinfo": 1
+      },
+      "coverage": {
+        "endpoint_requirements_met": true,
+        "design_wide_clock_validated": false,
+        "checks": [
+          {
+            "requirement": {
+              "type": "SLICE_FFX",
+              "port": "D",
+              "class": "register_input"
+            },
+            "matched": 244,
+            "failed": 0,
+            "passed": true,
+            "failures": []
+          },
+          {
+            "requirement": {
+              "type": "SLICE_FFX",
+              "port": "Q",
+              "class": "register_output"
+            },
+            "matched": 244,
+            "failed": 0,
+            "passed": true,
+            "failures": []
+          }
+        ]
+      },
+      "fmax": {
+        "(internal) clock": {
+          "achieved": 131.44,
+          "constraint": 100.0
+        }
+      },
+      "critical_paths": {
+        "$abc$10722$iopadmap$clock": {
+          "logic_ns": 1.7,
+          "routing_ns": 5.9,
+          "text": "Info: Critical path report for clock '$abc$10722$iopadmap$clock' (posedge -> posedge):\nInfo: curr total\nInfo:  0.1  0.1  Source $auto$ff.cc:337:slice$2316.Q\nInfo:  0.2  0.2    Net stimulus[103] budget 0.000000 ns (24,112) -> (24,112)\nInfo:                Sink $abc$10722$lut$aiger10721$848.A2\nInfo:  0.1  0.4  Source $abc$10722$lut$aiger10721$848.O6\nInfo:  0.7  1.1    Net $techmap10760$abc$10722$lut$aiger10721$854.A[5] budget 0.000000 ns (24,112) -> (24,112)\nInfo:                Sink $abc$10722$lut$aiger10721$854.A6\nInfo:  0.1  1.2  Source $abc$10722$lut$aiger10721$854.O6\nInfo:  0.2  1.4    Net $techmap10761$abc$10722$lut$aiger10721$868.A[0] budget 0.000000 ns (24,112) -> (24,112)\nInfo:                Sink $abc$10722$lut$aiger10721$868.A1\nInfo:  0.2  1.5  Source $abc$10722$lut$aiger10721$868.O5\nInfo:  0.7  2.2    Net $techmap10771$auto$abc9_ops.cc:1613:reintegrate$10754.A[3] budget 0.000000 ns (24,112) -> (23,109)\nInfo:                Sink $abc$10722$lut$aiger10721$900.A4\nInfo:  0.2  2.4  Source $abc$10722$lut$aiger10721$900.O5\nInfo:  1.3  3.6    Net $abc$10722$lut\\value[91].A[2] budget 0.000000 ns (23,109) -> (17,108)\nInfo:                Sink $abc$10722$lut$aiger10721$1175.A1\nInfo:  0.1  3.8  Source $abc$10722$lut$aiger10721$1175.O6\nInfo:  0.8  4.6    Net $techmap10814$abc$10722$lut$aiger10721$1180.A[2] budget 0.000000 ns (17,108) -> (23,107)\nInfo:                Sink $abc$10722$lut$aiger10721$1180.A4\nInfo:  0.2  4.7  Source $abc$10722$lut$aiger10721$1180.O5\nInfo:  0.7  5.4    Net $techmap10815$auto$abc9_ops.cc:1613:reintegrate$10736.A[2] budget 0.000000 ns (23,107) -> (17,107)\nInfo:                Sink $abc$10722$lut$aiger10721$1427.A2\nInfo:  0.2  5.6  Source $abc$10722$lut$aiger10721$1427.O5\nInfo:  0.2  5.7    Net $techmap10920$abc$10722$lut$aiger10721$1444.A[4] budget 0.000000 ns (17,107) -> (17,107)\nInfo:                Sink $abc$10722$lut$aiger10721$1444.A4\nInfo:  0.1  5.9  Source $abc$10722$lut$aiger10721$1444.O6\nInfo:  0.6  6.4    Net $techmap10937$abc$10722$lut$aiger10721$1509.A[5] budget 0.000000 ns (17,107) -> (13,107)\nInfo:                Sink $abc$10722$lut$aiger10721$1509.A6\nInfo:  0.1  6.6  Source $abc$10722$lut$aiger10721$1509.O6\nInfo:  0.6  7.2    Net $abc$10722$lut\\value[44].A[6] budget 0.614000 ns (13,107) -> (14,108)\nInfo:                Sink $abc$10722$lut\\value[44].genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux7.S0\nInfo:  0.3  7.5  Source $abc$10722$lut\\value[44].genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux7.OUT\nInfo:  0.0  7.5    Net value[44] budget 0.188000 ns (14,108) -> (14,108)\nInfo:                Sink $auto$ff.cc:337:slice$2406.D\nInfo:  0.1  7.6  Setup $auto$ff.cc:337:slice$2406.D\nInfo: 1.7 ns logic, 5.9 ns routing"
+        }
+      },
+      "route_seconds": 2.8547432092018425,
+      "seed": 1,
+      "outputs": {
+        "design.opt.ir": "fc2fbd66747aa435b4a7d5587a42319ae65cc4f52b9e24afe19d9fd881bd929f",
+        "optimize.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "mapped.json": "b8d91c7fe4c3df0cda7e924ae3adcdf2d3f8dfceee09f05dc60f636aadef15ac",
+        "map.ys": "50620731085d7a4177d0348b18815aa88c50951de4ca5b6117742fadd65ad640",
+        "convert.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "timing.json": "fa82350c71c629db87b5380d38f5270cda5404dc41287bcf89fd1730d38a5c74",
+        "harness.v": "e13536ab875adb32fe3e96f78db4155dd6c1ef43e6e71477d280b0920acefb88",
+        "timing.xdc": "239f13d3586159280f5e6e1cf075d36f953405b1518fd6dd8ca1fdb909fbaa57",
+        "design.ir": "23098d8cf89ebe32fb91fa46ae1631315816513a56a94475546688baf9c9cf45",
+        "arithmetic.v": "de7aa26e03670f51c9442701f98f6f59c1e79208ca4684a05c7ca4c1f7e570e8",
+        "route.log": "584d674a1f072e638e7f78d7219a8c16d710339f9bb6eaf465d3e8525836d8ca",
+        "codegen.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "map.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "coverage.json": "60c37cd4aeecc3b4e7ad3dc9f1ae546c399dbecc7d125d6c3b1cbbfca4e5874c"
+      },
+      "variant": "baseline",
+      "period_ns": 7.608034083992696,
+      "inputs": {
+        "arbitration.x": "5bfd061e68339cbf9788a40d9881b38bda2691a7f095500f806aba5ce8b2a79f",
+        "axis.x": "882c944ca4faa43c164225f230b3530e3b318f496ad6fc57c42619cb7e3a4d93",
+        "bram.x": "fea8277109e4847e45bb388eaae6236abf35a3f75f3558de1ed8b53f08fcd6bb",
+        "mailbox.x": "4e79a78b2996de6ecf4b0cecf25c84705a743ac6dfc430c0c29d13302c9b61f8",
+        "retire2.x": "7e3bca422149553c77bd1b320fc5d8d52927b808e78f0a1b4bd5ed65a191453f",
+        "probe.py": "90014abd97e62030872bb3a557586006fb918c4787ce98ed8d702729f14b9db2",
+        "xc7z030sbg485.xdc": "6e72b1516836d2637c37220ab7de9525886d46e4d6d62f09899423f31e47e072",
+        "bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+        "libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+        "libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d",
+        "xc7z030sbg485.bin": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+        "nextpnr-calibrated": "78e09c26bf142ea6e0d2bc0263ea2bada65aedd47d4358e483359c3e404f267c",
+        "codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162",
+        "ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+        "opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c"
+      }
+    },
+    {
+      "cell_counts": {
+        "LUT6": 25,
+        "LUT5": 34,
+        "LUT3": 132,
+        "LUT4": 70,
+        "LUT2": 35,
+        "MUXF7": 6,
+        "MUXF8": 2,
+        "LUT1": 1,
+        "CARRY4": 2,
+        "BUFG": 1,
+        "FDRE": 244,
+        "OBUF": 1,
+        "IBUF": 1,
+        "$scopeinfo": 1
+      },
+      "coverage": {
+        "endpoint_requirements_met": true,
+        "design_wide_clock_validated": false,
+        "checks": [
+          {
+            "requirement": {
+              "type": "SLICE_FFX",
+              "port": "D",
+              "class": "register_input"
+            },
+            "matched": 244,
+            "failed": 0,
+            "passed": true,
+            "failures": []
+          },
+          {
+            "requirement": {
+              "type": "SLICE_FFX",
+              "port": "Q",
+              "class": "register_output"
+            },
+            "matched": 244,
+            "failed": 0,
+            "passed": true,
+            "failures": []
+          }
+        ]
+      },
+      "fmax": {
+        "(internal) clock": {
+          "achieved": 112.31,
+          "constraint": 100.0
+        }
+      },
+      "critical_paths": {
+        "$abc$10722$iopadmap$clock": {
+          "logic_ns": 2.5,
+          "routing_ns": 6.4,
+          "text": "Info: Critical path report for clock '$abc$10722$iopadmap$clock' (posedge -> posedge):\nInfo: curr total\nInfo:  0.1  0.1  Source $auto$ff.cc:337:slice$2317.Q\nInfo:  0.7  0.8    Net stimulus[104] budget 0.000000 ns (24,111) -> (24,111)\nInfo:                Sink $abc$10722$lut$aiger10721$849.A2\nInfo:  0.2  0.9  Source $abc$10722$lut$aiger10721$849.O5\nInfo:  0.5  1.4    Net $techmap10760$abc$10722$lut$aiger10721$854.A[4] budget 0.000000 ns (24,111) -> (23,111)\nInfo:                Sink $abc$10722$lut$aiger10721$854.A1\nInfo:  0.1  1.6  Source $abc$10722$lut$aiger10721$854.O6\nInfo:  0.7  2.2    Net $techmap10761$abc$10722$lut$aiger10721$868.A[0] budget 0.000000 ns (23,111) -> (24,109)\nInfo:                Sink $abc$10722$lut$aiger10721$868.A3\nInfo:  0.2  2.4  Source $abc$10722$lut$aiger10721$868.O5\nInfo:  0.7  3.1    Net $techmap10771$auto$abc9_ops.cc:1613:reintegrate$10754.A[3] budget 0.000000 ns (24,109) -> (24,109)\nInfo:                Sink $abc$10722$lut$aiger10721$1013.A6\nInfo:  0.1  3.2  Source $abc$10722$lut$aiger10721$1013.O6\nInfo:  1.0  4.3    Net $techmap10773$auto$abc9_ops.cc:1613:reintegrate$10753.A[1] budget 0.000000 ns (24,109) -> (17,106)\nInfo:                Sink $auto$abc9_ops.cc:1613:reintegrate$10753.A5\nInfo:  0.1  4.4  Source $auto$abc9_ops.cc:1613:reintegrate$10753.O6\nInfo:  0.0  4.4    Net $abc$10722$aiger10721$1016b budget 0.261000 ns (17,106) -> (17,106)\nInfo:                Sink $auto$alumacc.cc:512:replace_alu$1525.genblk1.slice[0].genblk1.carry4.S2\nInfo:  0.4  4.8  Source $auto$alumacc.cc:512:replace_alu$1525.genblk1.slice[0].genblk1.carry4.CO3\nInfo:  0.1  4.9    Net $abc$10722$aiger10721$255 budget 0.517000 ns (17,106) -> (17,105)\nInfo:                Sink $auto$alumacc.cc:512:replace_alu$1525.genblk1.slice[1].genblk1.carry4.CIN\nInfo:  0.3  5.2  Source $auto$alumacc.cc:512:replace_alu$1525.genblk1.slice[1].genblk1.carry4.O1\nInfo:  0.7  5.9    Net $techmap10789$auto$abc9_ops.cc:1613:reintegrate$10742.A[2] budget 0.000000 ns (17,105) -> (17,108)\nInfo:                Sink $abc$10722$lut$aiger10721$1486.A4\nInfo:  0.1  6.0  Source $abc$10722$lut$aiger10721$1486.O6\nInfo:  0.7  6.7    Net $techmap10894$abc$10722$lut$aiger10721$1531.A[4] budget 0.000000 ns (17,108) -> (14,107)\nInfo:                Sink $abc$10722$lut$aiger10721$1531.A5\nInfo:  0.1  6.8  Source $abc$10722$lut$aiger10721$1531.O5\nInfo:  0.6  7.4    Net $abc$10722$lut$aiger10721$1544.A[6] budget 0.260000 ns (14,107) -> (14,107)\nInfo:                Sink $abc$10722$lut$aiger10721$1544.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.lut1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux7.S0\nInfo:  0.3  7.7  Source $abc$10722$lut$aiger10721$1544.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.lut1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux7.OUT\nInfo:  0.0  7.7    Net $abc$10722$lut$aiger10721$1544.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.f1 budget 0.110000 ns (14,107) -> (14,107)\nInfo:                Sink $abc$10722$lut$aiger10721$1544.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8.1\nInfo:  0.1  7.8  Source $abc$10722$lut$aiger10721$1544.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8.OUT\nInfo:  0.7  8.4    Net $abc$10722$lut\\value[44].A[5] budget 0.000000 ns (14,107) -> (17,107)\nInfo:                Sink $abc$10722$lut\\value[91].genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.lut1.A6\nInfo:  0.1  8.6  Source $abc$10722$lut\\value[91].genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.lut1.O6\nInfo:  0.0  8.6    Net $abc$10722$lut\\value[91].genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.f1 budget 0.116000 ns (17,107) -> (17,107)\nInfo:                Sink $abc$10722$lut\\value[91].genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux7.1\nInfo:  0.2  8.8  Source $abc$10722$lut\\value[91].genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux7.OUT\nInfo:  0.0  8.8    Net value[91] budget 0.116000 ns (17,107) -> (17,107)\nInfo:                Sink $auto$ff.cc:337:slice$2453.D\nInfo:  0.1  8.9  Setup $auto$ff.cc:337:slice$2453.D\nInfo: 2.5 ns logic, 6.4 ns routing"
+        }
+      },
+      "route_seconds": 2.4439808749593794,
+      "seed": 2,
+      "outputs": {
+        "design.opt.ir": "fc2fbd66747aa435b4a7d5587a42319ae65cc4f52b9e24afe19d9fd881bd929f",
+        "optimize.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "mapped.json": "b8d91c7fe4c3df0cda7e924ae3adcdf2d3f8dfceee09f05dc60f636aadef15ac",
+        "map.ys": "50620731085d7a4177d0348b18815aa88c50951de4ca5b6117742fadd65ad640",
+        "convert.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "timing.json": "e51aafe55f1f7ee5021947f9518c4325ff18024d52141b5612b926a27e605772",
+        "harness.v": "e13536ab875adb32fe3e96f78db4155dd6c1ef43e6e71477d280b0920acefb88",
+        "timing.xdc": "239f13d3586159280f5e6e1cf075d36f953405b1518fd6dd8ca1fdb909fbaa57",
+        "design.ir": "23098d8cf89ebe32fb91fa46ae1631315816513a56a94475546688baf9c9cf45",
+        "arithmetic.v": "de7aa26e03670f51c9442701f98f6f59c1e79208ca4684a05c7ca4c1f7e570e8",
+        "route.log": "7c2918cb2aeacb3cf25ecce204f993348113898869d29a28610af4097a00563e",
+        "codegen.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "map.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "coverage.json": "f7c907246da496fe31d2890edd3d4b9f8e45dc257fcda03df703e90f814d5f61"
+      },
+      "variant": "baseline",
+      "period_ns": 8.903926631644556,
+      "inputs": {
+        "arbitration.x": "5bfd061e68339cbf9788a40d9881b38bda2691a7f095500f806aba5ce8b2a79f",
+        "axis.x": "882c944ca4faa43c164225f230b3530e3b318f496ad6fc57c42619cb7e3a4d93",
+        "bram.x": "fea8277109e4847e45bb388eaae6236abf35a3f75f3558de1ed8b53f08fcd6bb",
+        "mailbox.x": "4e79a78b2996de6ecf4b0cecf25c84705a743ac6dfc430c0c29d13302c9b61f8",
+        "retire2.x": "7e3bca422149553c77bd1b320fc5d8d52927b808e78f0a1b4bd5ed65a191453f",
+        "probe.py": "90014abd97e62030872bb3a557586006fb918c4787ce98ed8d702729f14b9db2",
+        "xc7z030sbg485.xdc": "6e72b1516836d2637c37220ab7de9525886d46e4d6d62f09899423f31e47e072",
+        "bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+        "libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+        "libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d",
+        "xc7z030sbg485.bin": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+        "nextpnr-calibrated": "78e09c26bf142ea6e0d2bc0263ea2bada65aedd47d4358e483359c3e404f267c",
+        "codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162",
+        "ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+        "opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c"
+      }
+    },
+    {
+      "cell_counts": {
+        "LUT2": 35,
+        "LUT5": 42,
+        "LUT6": 40,
+        "LUT4": 82,
+        "LUT3": 86,
+        "MUXF7": 8,
+        "MUXF8": 4,
+        "CARRY4": 2,
+        "BUFG": 1,
+        "FDRE": 244,
+        "OBUF": 1,
+        "IBUF": 1,
+        "$scopeinfo": 1
+      },
+      "coverage": {
+        "endpoint_requirements_met": true,
+        "design_wide_clock_validated": false,
+        "checks": [
+          {
+            "requirement": {
+              "type": "SLICE_FFX",
+              "port": "D",
+              "class": "register_input"
+            },
+            "matched": 244,
+            "failed": 0,
+            "passed": true,
+            "failures": []
+          },
+          {
+            "requirement": {
+              "type": "SLICE_FFX",
+              "port": "Q",
+              "class": "register_output"
+            },
+            "matched": 244,
+            "failed": 0,
+            "passed": true,
+            "failures": []
+          }
+        ]
+      },
+      "fmax": {
+        "(internal) clock": {
+          "achieved": 125.19,
+          "constraint": 100.0
+        }
+      },
+      "critical_paths": {
+        "$abc$9603$iopadmap$clock": {
+          "logic_ns": 1.5,
+          "routing_ns": 6.5,
+          "text": "Info: Critical path report for clock '$abc$9603$iopadmap$clock' (posedge -> posedge):\nInfo: curr total\nInfo:  0.1  0.1  Source $auto$ff.cc:337:slice$2274.Q\nInfo:  0.5  0.6    Net stimulus[95] budget 0.000000 ns (23,115) -> (23,115)\nInfo:                Sink $abc$9603$lut$aiger9602$858.A4\nInfo:  0.1  0.7  Source $abc$9603$lut$aiger9602$858.O6\nInfo:  0.6  1.3    Net $techmap9660$abc$9603$lut$aiger9602$890.A[3] budget 0.000000 ns (23,115) -> (23,112)\nInfo:                Sink $abc$9603$lut$aiger9602$890.A4\nInfo:  0.1  1.4  Source $abc$9603$lut$aiger9602$890.O6\nInfo:  1.2  2.6    Net $techmap9666$auto$abc9_ops.cc:1613:reintegrate$9653.A[2] budget 0.000000 ns (23,112) -> (13,109)\nInfo:                Sink $abc$9603$lut$aiger9602$891.A5\nInfo:  0.1  2.7  Source $abc$9603$lut$aiger9602$891.O6\nInfo:  1.5  4.2    Net $techmap9867$abc$9603$lut\\value[92].A[1] budget 0.000000 ns (13,109) -> (17,108)\nInfo:                Sink $abc$9603$lut$aiger9602$960.A6\nInfo:  0.1  4.3  Source $abc$9603$lut$aiger9602$960.O6\nInfo:  0.3  4.6    Net $techmap9684$abc$9603$lut$aiger9602$963.A[2] budget 0.000000 ns (17,108) -> (17,108)\nInfo:                Sink $abc$9603$lut$aiger9602$963.A3\nInfo:  0.1  4.7  Source $abc$9603$lut$aiger9602$963.O6\nInfo:  0.5  5.3    Net $techmap9685$abc$9603$lut$aiger9602$969.A[4] budget 0.000000 ns (17,108) -> (17,109)\nInfo:                Sink $abc$9603$lut$aiger9602$1449.A4\nInfo:  0.2  5.4  Source $abc$9603$lut$aiger9602$1449.O5\nInfo:  0.7  6.1    Net $techmap9801$abc$9603$lut$aiger9602$1469.A[5] budget 0.000000 ns (17,109) -> (14,110)\nInfo:                Sink $abc$9603$lut$aiger9602$1469.A6\nInfo:  0.1  6.2  Source $abc$9603$lut$aiger9602$1469.O6\nInfo:  0.7  6.9    Net $techmap9802$abc$9603$lut$aiger9602$1521.A[5] budget 0.000000 ns (14,110) -> (14,110)\nInfo:                Sink $abc$9603$lut$aiger9602$1521.A6\nInfo:  0.1  7.0  Source $abc$9603$lut$aiger9602$1521.O6\nInfo:  0.4  7.5    Net $techmap9806$abc$9603$lut$aiger9602$1653.A[5] budget 0.000000 ns (14,110) -> (14,109)\nInfo:                Sink $abc$9603$lut$aiger9602$1653.A6\nInfo:  0.1  7.6  Source $abc$9603$lut$aiger9602$1653.O6\nInfo:  0.2  7.7    Net $techmap9807$auto$abc9_ops.cc:1613:reintegrate$9624.A[4] budget 0.000000 ns (14,109) -> (14,109)\nInfo:                Sink $auto$abc9_ops.cc:1613:reintegrate$9608.A5\nInfo:  0.1  7.9  Source $auto$abc9_ops.cc:1613:reintegrate$9608.O5\nInfo:  0.0  7.9    Net value[91] budget 0.188000 ns (14,109) -> (14,109)\nInfo:                Sink $auto$ff.cc:337:slice$2419.D\nInfo:  0.1  8.0  Setup $auto$ff.cc:337:slice$2419.D\nInfo: 1.5 ns logic, 6.5 ns routing"
+        }
+      },
+      "route_seconds": 2.455113667063415,
+      "seed": 1,
+      "outputs": {
+        "design.opt.ir": "08624bb142baefc7776e112ebcba9467f24d8631af95e58da4a75b8bc058b35b",
+        "optimize.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "mapped.json": "85bf82b14e897665b17145bb86e2a9cb884733e33d64f8cfb1eecda5c10570e2",
+        "map.ys": "50620731085d7a4177d0348b18815aa88c50951de4ca5b6117742fadd65ad640",
+        "convert.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "timing.json": "10e47f68292f6c738ed27f18413bc79613ee66a29a4e36d3a6a99983691d73fa",
+        "harness.v": "e13536ab875adb32fe3e96f78db4155dd6c1ef43e6e71477d280b0920acefb88",
+        "timing.xdc": "239f13d3586159280f5e6e1cf075d36f953405b1518fd6dd8ca1fdb909fbaa57",
+        "design.ir": "f17a6b9accc96ecb24c7fd47f7cf2809aaebae14cb6e6bcde4cbd3685b16cd5a",
+        "arithmetic.v": "fa7425c2399a4e7046761fd980b58be27d564136892e3d491b6d2442944deff8",
+        "route.log": "2f38bd4a64c01167b2710934147c756d9cb1b6bcf040e65a6dffc8dc21756e1e",
+        "codegen.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "map.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "coverage.json": "7ef32e72d3412089f8f032a09b5ab29d6a6166f3d2619c002899c3f94c0f5398"
+      },
+      "variant": "local",
+      "period_ns": 7.987858455148175,
+      "inputs": {
+        "arbitration.x": "5bfd061e68339cbf9788a40d9881b38bda2691a7f095500f806aba5ce8b2a79f",
+        "axis.x": "882c944ca4faa43c164225f230b3530e3b318f496ad6fc57c42619cb7e3a4d93",
+        "bram.x": "fea8277109e4847e45bb388eaae6236abf35a3f75f3558de1ed8b53f08fcd6bb",
+        "mailbox.x": "9aa3ac826017d1a6f32fa5c393d3be23755cf2d404970f577a39551ccaf3cb1d",
+        "retire2.x": "7e3bca422149553c77bd1b320fc5d8d52927b808e78f0a1b4bd5ed65a191453f",
+        "probe.py": "90014abd97e62030872bb3a557586006fb918c4787ce98ed8d702729f14b9db2",
+        "xc7z030sbg485.xdc": "6e72b1516836d2637c37220ab7de9525886d46e4d6d62f09899423f31e47e072",
+        "bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+        "libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+        "libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d",
+        "xc7z030sbg485.bin": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+        "nextpnr-calibrated": "78e09c26bf142ea6e0d2bc0263ea2bada65aedd47d4358e483359c3e404f267c",
+        "codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162",
+        "ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+        "opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c"
+      }
+    },
+    {
+      "cell_counts": {
+        "LUT2": 35,
+        "LUT5": 42,
+        "LUT6": 40,
+        "LUT4": 82,
+        "LUT3": 86,
+        "MUXF7": 8,
+        "MUXF8": 4,
+        "CARRY4": 2,
+        "BUFG": 1,
+        "FDRE": 244,
+        "OBUF": 1,
+        "IBUF": 1,
+        "$scopeinfo": 1
+      },
+      "coverage": {
+        "endpoint_requirements_met": true,
+        "design_wide_clock_validated": false,
+        "checks": [
+          {
+            "requirement": {
+              "type": "SLICE_FFX",
+              "port": "D",
+              "class": "register_input"
+            },
+            "matched": 244,
+            "failed": 0,
+            "passed": true,
+            "failures": []
+          },
+          {
+            "requirement": {
+              "type": "SLICE_FFX",
+              "port": "Q",
+              "class": "register_output"
+            },
+            "matched": 244,
+            "failed": 0,
+            "passed": true,
+            "failures": []
+          }
+        ]
+      },
+      "fmax": {
+        "(internal) clock": {
+          "achieved": 126.9,
+          "constraint": 100.0
+        }
+      },
+      "critical_paths": {
+        "$abc$9603$iopadmap$clock": {
+          "logic_ns": 2.2,
+          "routing_ns": 5.7,
+          "text": "Info: Critical path report for clock '$abc$9603$iopadmap$clock' (posedge -> posedge):\nInfo: curr total\nInfo:  0.1  0.1  Source $auto$ff.cc:337:slice$2292.Q\nInfo:  0.7  0.8    Net stimulus[113] budget 0.000000 ns (17,109) -> (23,109)\nInfo:                Sink $abc$9603$lut$aiger9602$842.A5\nInfo:  0.1  0.9  Source $abc$9603$lut$aiger9602$842.O6\nInfo:  0.9  1.8    Net $techmap9665$abc$9603$lut$aiger9602$848.A[1] budget 0.000000 ns (23,109) -> (17,107)\nInfo:                Sink $abc$9603$lut$aiger9602$848.A4\nInfo:  0.1  2.0  Source $abc$9603$lut$aiger9602$848.O6\nInfo:  0.9  2.8    Net $techmap9666$auto$abc9_ops.cc:1613:reintegrate$9653.A[3] budget 0.000000 ns (17,107) -> (14,110)\nInfo:                Sink $auto$abc9_ops.cc:1613:reintegrate$9653.A3\nInfo:  0.2  3.0  Source $auto$abc9_ops.cc:1613:reintegrate$9653.O5\nInfo:  0.2  3.1    Net $techmap9750$abc$9603$lut$aiger9602$1645.A[1] budget 0.000000 ns (14,110) -> (14,110)\nInfo:                Sink $techmap9750$abc$9603$lut$aiger9602$1645.A[1]$LUT$10.A5\nInfo:  0.1  3.2  Source $techmap9750$abc$9603$lut$aiger9602$1645.A[1]$LUT$10.O6\nInfo:  0.0  3.2    Net $techmap9750$abc$9603$lut$aiger9602$1645.A[1]$legal$9 budget 0.166000 ns (14,110) -> (14,110)\nInfo:                Sink $auto$alumacc.cc:512:replace_alu$1476.genblk1.slice[0].genblk1.carry4.S0\nInfo:  0.5  3.7  Source $auto$alumacc.cc:512:replace_alu$1476.genblk1.slice[0].genblk1.carry4.CO3\nInfo:  0.1  3.8    Net $auto$alumacc.cc:512:replace_alu$1476.genblk1.slice[0].genblk1.carry4$carry$38 budget 0.600000 ns (14,110) -> (14,109)\nInfo:                Sink $auto$alumacc.cc:512:replace_alu$1476.genblk1.slice[0].genblk1.carry4$split$37.CIN\nInfo:  0.2  4.0  Source $auto$alumacc.cc:512:replace_alu$1476.genblk1.slice[0].genblk1.carry4$split$37.CO1\nInfo:  0.7  4.7    Net $techmap9797$abc$9603$lut$aiger9602$1084.A[1] budget 0.000000 ns (14,109) -> (14,112)\nInfo:                Sink $abc$9603$lut$aiger9602$1084.A1\nInfo:  0.2  4.9  Source $abc$9603$lut$aiger9602$1084.O5\nInfo:  0.4  5.3    Net $techmap9798$abc$9603$lut$aiger9602$1454.A[1] budget 0.000000 ns (14,112) -> (14,112)\nInfo:                Sink $abc$9603$lut$aiger9602$1454.A3\nInfo:  0.1  5.4  Source $abc$9603$lut$aiger9602$1454.O6\nInfo:  0.2  5.6    Net $techmap9801$abc$9603$lut$aiger9602$1469.A[3] budget 0.000000 ns (14,112) -> (14,112)\nInfo:                Sink $abc$9603$lut$aiger9602$1469.A3\nInfo:  0.1  5.7  Source $abc$9603$lut$aiger9602$1469.O6\nInfo:  0.4  6.2    Net $techmap9802$abc$9603$lut$aiger9602$1521.A[5] budget 0.000000 ns (14,112) -> (14,111)\nInfo:                Sink $abc$9603$lut$aiger9602$1521.A6\nInfo:  0.1  6.3  Source $abc$9603$lut$aiger9602$1521.O6\nInfo:  0.4  6.7    Net $techmap9806$abc$9603$lut$aiger9602$1653.A[5] budget 0.000000 ns (14,111) -> (14,111)\nInfo:                Sink $abc$9603$lut$aiger9602$1653.A6\nInfo:  0.1  6.8  Source $abc$9603$lut$aiger9602$1653.O6\nInfo:  0.8  7.6    Net $techmap9807$auto$abc9_ops.cc:1613:reintegrate$9624.A[4] budget 0.000000 ns (14,111) -> (17,113)\nInfo:                Sink $auto$abc9_ops.cc:1613:reintegrate$9608.A1\nInfo:  0.2  7.8  Source $auto$abc9_ops.cc:1613:reintegrate$9608.O5\nInfo:  0.0  7.8    Net value[91] budget 0.166000 ns (17,113) -> (17,113)\nInfo:                Sink $auto$ff.cc:337:slice$2419.D\nInfo:  0.1  7.9  Setup $auto$ff.cc:337:slice$2419.D\nInfo: 2.2 ns logic, 5.7 ns routing"
+        }
+      },
+      "route_seconds": 2.4362386660650373,
+      "seed": 2,
+      "outputs": {
+        "design.opt.ir": "08624bb142baefc7776e112ebcba9467f24d8631af95e58da4a75b8bc058b35b",
+        "optimize.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "mapped.json": "85bf82b14e897665b17145bb86e2a9cb884733e33d64f8cfb1eecda5c10570e2",
+        "map.ys": "50620731085d7a4177d0348b18815aa88c50951de4ca5b6117742fadd65ad640",
+        "convert.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "timing.json": "5e74c47c98a7a6a2907671585999eb32d427bca3de1b52b94c9e7a4ff6300732",
+        "harness.v": "e13536ab875adb32fe3e96f78db4155dd6c1ef43e6e71477d280b0920acefb88",
+        "timing.xdc": "239f13d3586159280f5e6e1cf075d36f953405b1518fd6dd8ca1fdb909fbaa57",
+        "design.ir": "f17a6b9accc96ecb24c7fd47f7cf2809aaebae14cb6e6bcde4cbd3685b16cd5a",
+        "arithmetic.v": "fa7425c2399a4e7046761fd980b58be27d564136892e3d491b6d2442944deff8",
+        "route.log": "0e43b4d1b6454e3aeb3cb5a44808e811411f9fb3af42c2386e0a6d02a782a5cc",
+        "codegen.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "map.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "coverage.json": "b6605ed23b1eba6902a5b7601fa75f1959977573bf458fb37f517a9c4ec91175"
+      },
+      "variant": "local",
+      "period_ns": 7.880220646178093,
+      "inputs": {
+        "arbitration.x": "5bfd061e68339cbf9788a40d9881b38bda2691a7f095500f806aba5ce8b2a79f",
+        "axis.x": "882c944ca4faa43c164225f230b3530e3b318f496ad6fc57c42619cb7e3a4d93",
+        "bram.x": "fea8277109e4847e45bb388eaae6236abf35a3f75f3558de1ed8b53f08fcd6bb",
+        "mailbox.x": "9aa3ac826017d1a6f32fa5c393d3be23755cf2d404970f577a39551ccaf3cb1d",
+        "retire2.x": "7e3bca422149553c77bd1b320fc5d8d52927b808e78f0a1b4bd5ed65a191453f",
+        "probe.py": "90014abd97e62030872bb3a557586006fb918c4787ce98ed8d702729f14b9db2",
+        "xc7z030sbg485.xdc": "6e72b1516836d2637c37220ab7de9525886d46e4d6d62f09899423f31e47e072",
+        "bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+        "libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+        "libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d",
+        "xc7z030sbg485.bin": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+        "nextpnr-calibrated": "78e09c26bf142ea6e0d2bc0263ea2bada65aedd47d4358e483359c3e404f267c",
+        "codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162",
+        "ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+        "opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c"
+      }
+    }
+  ],
+  "statistics": [
+    {
+      "variant": "baseline",
+      "mean_ns": 8.255980357818625,
+      "variance_ns2": 0.41983437376490657,
+      "best_ns": 7.608034083992696,
+      "worst_ns": 8.903926631644556,
+      "samples": 2
+    },
+    {
+      "variant": "local",
+      "mean_ns": 7.934039550663134,
+      "variance_ns2": 0.002896474479969991,
+      "best_ns": 7.880220646178093,
+      "worst_ns": 7.987858455148175,
+      "samples": 2
+    }
+  ]
+}

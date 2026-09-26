@@ -103,7 +103,7 @@ def run(args: argparse.Namespace) -> None:
             root, 'codegen', root / 'arithmetic.v')
     (root / 'harness.v').write_text(harness((root / 'arithmetic.v').read_text()))
     (root / 'map.ys').write_text(
-        'read_verilog arithmetic.v harness.v\n'
+        'read_verilog -sv arithmetic.v harness.v\n'
         'synth_xilinx -flatten -abc9 -family xc7 -top timing_chain' +
         (' -nodsp' if args.no_dsp else '') +
         '\ncheck -assert\nscc -expect 0\nwrite_json mapped.json\n')

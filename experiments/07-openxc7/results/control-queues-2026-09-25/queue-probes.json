@@ -1,0 +1,1011 @@
+{
+  "part": "xc7z030sbg485-1",
+  "design_wide_clock_validated": false,
+  "samples": [
+    {
+      "cell_counts": {
+        "LUT6": 796,
+        "LUT4": 382,
+        "LUT5": 428,
+        "LUT2": 10,
+        "MUXF7": 3,
+        "MUXF8": 1,
+        "LUT3": 1,
+        "BUFG": 1,
+        "FDRE": 1227,
+        "OBUF": 1,
+        "IBUF": 1,
+        "$scopeinfo": 1
+      },
+      "coverage": {
+        "endpoint_requirements_met": true,
+        "design_wide_clock_validated": false,
+        "checks": [
+          {
+            "requirement": {
+              "type": "SLICE_FFX",
+              "port": "D",
+              "class": "register_input"
+            },
+            "matched": 1227,
+            "failed": 0,
+            "passed": true,
+            "failures": []
+          },
+          {
+            "requirement": {
+              "type": "SLICE_FFX",
+              "port": "Q",
+              "class": "register_output"
+            },
+            "matched": 1227,
+            "failed": 0,
+            "passed": true,
+            "failures": []
+          }
+        ]
+      },
+      "fmax": {
+        "(internal) clock": {
+          "achieved": 94.91,
+          "constraint": 100.0
+        }
+      },
+      "critical_paths": {
+        "$abc$40229$iopadmap$clock": {
+          "logic_ns": 1.1,
+          "routing_ns": 9.4,
+          "text": "Info: Critical path report for clock '$abc$40229$iopadmap$clock' (posedge -> posedge):\nInfo: curr total\nInfo:  0.1  0.1  Source $auto$ff.cc:337:slice$2704.Q\nInfo:  0.7  0.8    Net stimulus[531] budget 0.000000 ns (10,110) -> (10,110)\nInfo:                Sink $abc$40229$lut$aiger40228$2977.A2\nInfo:  0.1  0.9  Source $abc$40229$lut$aiger40228$2977.O6\nInfo:  0.5  1.4    Net $abc$40229$lut$aiger40228$2995.A[6] budget 1.260000 ns (10,110) -> (10,108)\nInfo:                Sink $abc$40229$lut$aiger40228$2995.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux7.S0\nInfo:  0.3  1.7  Source $abc$40229$lut$aiger40228$2995.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux7.OUT\nInfo:  1.4  3.1    Net $techmap40794$abc$40229$lut$aiger40228$2998.A[3] budget 0.000000 ns (10,108) -> (17,116)\nInfo:                Sink $abc$40229$lut$aiger40228$2998.A5\nInfo:  0.1  3.2  Source $abc$40229$lut$aiger40228$2998.O5\nInfo:  5.3  8.5    Net $techmap41042$auto$abc9_ops.cc:1613:reintegrate$40675.A[1] budget 0.000000 ns (17,116) -> (30,120)\nInfo:                Sink $abc$40229$lut$aiger40228$6731.A3\nInfo:  0.2  8.6  Source $abc$40229$lut$aiger40228$6731.O5\nInfo:  0.7  9.3    Net $techmap41729$abc$40229$lut$aiger40228$6746.A[5] budget 0.000000 ns (30,120) -> (30,120)\nInfo:                Sink $abc$40229$lut$aiger40228$6746.A6\nInfo:  0.1  9.4  Source $abc$40229$lut$aiger40228$6746.O6\nInfo:  0.9 10.3    Net $techmap41734$auto$abc9_ops.cc:1613:reintegrate$40376.A[4] budget 0.000000 ns (30,120) -> (24,122)\nInfo:                Sink $auto$abc9_ops.cc:1613:reintegrate$40374.A2\nInfo:  0.1 10.4  Source $auto$abc9_ops.cc:1613:reintegrate$40374.O6\nInfo:  0.0 10.4    Net value[184] budget 0.418000 ns (24,122) -> (24,122)\nInfo:                Sink $auto$ff.cc:337:slice$3067.D\nInfo:  0.1 10.5  Setup $auto$ff.cc:337:slice$3067.D\nInfo: 1.1 ns logic, 9.4 ns routing"
+        }
+      },
+      "route_seconds": 6.469304374884814,
+      "seed": 1,
+      "stages": 0,
+      "delay_model": "unit",
+      "no_dsp": true,
+      "target_mhz": 100,
+      "outputs": {
+        "design.opt.ir": "c5133d9459ac9405c4334ef0ffc37ee623bc557130e1290c1ddcdf343a3638ad",
+        "optimize.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "mapped.json": "a3529b79b0d738ceff5a25bd36eeeb0d16a20b6f135a044add7d7bb575a792b0",
+        "map.ys": "7e72e9f8f10af8c1e8823fc3e8c3504f7dbcc5ffb1a136680ff86b04b5eeefa3",
+        "convert.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "timing.json": "b7a00d1ab99602e4ca8b77f10c429998c13ee761cd730933acc922904d6df46a",
+        "harness.v": "e8bbeecfe2d48ebc44e3a278131439079a072916c181028535cfcf9572d81d1f",
+        "timing.xdc": "239f13d3586159280f5e6e1cf075d36f953405b1518fd6dd8ca1fdb909fbaa57",
+        "design.ir": "f7daacf1b93456a44e37b03d66db16896679869ddfe659a0994ebc4447aaf407",
+        "arithmetic.v": "1e2533c1756eae4e4ce99a9a3ddf40e7f9bfb630fa1b4d83c3ba27d4512e1a10",
+        "route.log": "2a90ba438e77e3d125ed99d6e7b4e9e69dd3bed6e04cf88651292831d376347a",
+        "codegen.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "map.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "coverage.json": "283929c1252280f144f48bf77523e040bf7c03f1b23847ea457ed54a4229f56f"
+      },
+      "variant": "baseline",
+      "queues": 2,
+      "period_ns": 10.536297545042672,
+      "inputs": {
+        "axis.x": "882c944ca4faa43c164225f230b3530e3b318f496ad6fc57c42619cb7e3a4d93",
+        "bank2.x": "7f730edde447752ae63bf856177eaa6c3676eb0ecec25fc5365a071e040d8716",
+        "frame_queue.x": "8e2d1d3daf12ba3cb739d8e577603409f73f490a12194367073a4b2ee0256359",
+        "probe.py": "b2b99a9b4c12f78b0ae3fb95de131429de77571880b42ae9bee43d0d160f1add",
+        "xc7z030sbg485.xdc": "6e72b1516836d2637c37220ab7de9525886d46e4d6d62f09899423f31e47e072",
+        "bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+        "libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+        "libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d",
+        "xc7z030sbg485.bin": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+        "nextpnr-calibrated": "78e09c26bf142ea6e0d2bc0263ea2bada65aedd47d4358e483359c3e404f267c",
+        "codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162",
+        "ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+        "opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c"
+      }
+    },
+    {
+      "cell_counts": {
+        "LUT6": 796,
+        "LUT4": 382,
+        "LUT5": 428,
+        "LUT2": 10,
+        "MUXF7": 3,
+        "MUXF8": 1,
+        "LUT3": 1,
+        "BUFG": 1,
+        "FDRE": 1227,
+        "OBUF": 1,
+        "IBUF": 1,
+        "$scopeinfo": 1
+      },
+      "coverage": {
+        "endpoint_requirements_met": true,
+        "design_wide_clock_validated": false,
+        "checks": [
+          {
+            "requirement": {
+              "type": "SLICE_FFX",
+              "port": "D",
+              "class": "register_input"
+            },
+            "matched": 1227,
+            "failed": 0,
+            "passed": true,
+            "failures": []
+          },
+          {
+            "requirement": {
+              "type": "SLICE_FFX",
+              "port": "Q",
+              "class": "register_output"
+            },
+            "matched": 1227,
+            "failed": 0,
+            "passed": true,
+            "failures": []
+          }
+        ]
+      },
+      "fmax": {
+        "(internal) clock": {
+          "achieved": 98.27,
+          "constraint": 100.0
+        }
+      },
+      "critical_paths": {
+        "$abc$40229$iopadmap$clock": {
+          "logic_ns": 1.0,
+          "routing_ns": 9.2,
+          "text": "Info: Critical path report for clock '$abc$40229$iopadmap$clock' (posedge -> posedge):\nInfo: curr total\nInfo:  0.1  0.1  Source $auto$ff.cc:337:slice$2696.Q\nInfo:  0.6  0.7    Net stimulus[523] budget 0.000000 ns (44,112) -> (37,112)\nInfo:                Sink $abc$40229$lut$aiger40228$2976.A2\nInfo:  0.1  0.8  Source $abc$40229$lut$aiger40228$2976.O6\nInfo:  0.7  1.5    Net $techmap40791$abc$40229$lut$aiger40228$2989.A[5] budget 0.000000 ns (37,112) -> (37,112)\nInfo:                Sink $abc$40229$lut$aiger40228$2989.A6\nInfo:  0.1  1.6  Source $abc$40229$lut$aiger40228$2989.O6\nInfo:  1.1  2.8    Net $abc$40229$lut$aiger40228$3013.A[5] budget 0.000000 ns (37,112) -> (30,116)\nInfo:                Sink $abc$40229$lut$aiger40228$2998.A4\nInfo:  0.1  2.9  Source $abc$40229$lut$aiger40228$2998.O6\nInfo:  5.6  8.5    Net $techmap41042$auto$abc9_ops.cc:1613:reintegrate$40675.A[1] budget 0.000000 ns (30,116) -> (30,107)\nInfo:                Sink $abc$40229$lut$aiger40228$8507.A2\nInfo:  0.2  8.6  Source $abc$40229$lut$aiger40228$8507.O5\nInfo:  0.5  9.1    Net $techmap42001$abc$40229$lut$aiger40228$8529.A[5] budget 0.000000 ns (30,107) -> (30,107)\nInfo:                Sink $abc$40229$lut$aiger40228$8529.A6\nInfo:  0.1  9.2  Source $abc$40229$lut$aiger40228$8529.O6\nInfo:  0.7  9.9    Net $techmap42003$auto$abc9_ops.cc:1613:reintegrate$40295.A[5] budget 0.000000 ns (30,107) -> (30,107)\nInfo:                Sink $auto$abc9_ops.cc:1613:reintegrate$40295.A6\nInfo:  0.1 10.1  Source $auto$abc9_ops.cc:1613:reintegrate$40295.O6\nInfo:  0.0 10.1    Net value[469] budget 0.590000 ns (30,107) -> (30,107)\nInfo:                Sink $auto$ff.cc:337:slice$3352.D\nInfo:  0.1 10.2  Setup $auto$ff.cc:337:slice$3352.D\nInfo: 1.0 ns logic, 9.2 ns routing"
+        }
+      },
+      "route_seconds": 6.572265415918082,
+      "seed": 2,
+      "stages": 0,
+      "delay_model": "unit",
+      "no_dsp": true,
+      "target_mhz": 100,
+      "outputs": {
+        "design.opt.ir": "c5133d9459ac9405c4334ef0ffc37ee623bc557130e1290c1ddcdf343a3638ad",
+        "optimize.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "mapped.json": "a3529b79b0d738ceff5a25bd36eeeb0d16a20b6f135a044add7d7bb575a792b0",
+        "map.ys": "7e72e9f8f10af8c1e8823fc3e8c3504f7dbcc5ffb1a136680ff86b04b5eeefa3",
+        "convert.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "timing.json": "9863b90067e02b4aee71aea6d67a7cafd917d61342a4d56d9ab3c723d27db0d6",
+        "harness.v": "e8bbeecfe2d48ebc44e3a278131439079a072916c181028535cfcf9572d81d1f",
+        "timing.xdc": "239f13d3586159280f5e6e1cf075d36f953405b1518fd6dd8ca1fdb909fbaa57",
+        "design.ir": "f7daacf1b93456a44e37b03d66db16896679869ddfe659a0994ebc4447aaf407",
+        "arithmetic.v": "1e2533c1756eae4e4ce99a9a3ddf40e7f9bfb630fa1b4d83c3ba27d4512e1a10",
+        "route.log": "c893b9cfc914ba8a1ffc2add29cb2a43c57c34270def7cf2cf76251834bc339f",
+        "codegen.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "map.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "coverage.json": "c5a3ebd35645e50ce585a9cfbff5aa9e668cc3893e47c0ed6011c2dd5920806b"
+      },
+      "variant": "baseline",
+      "queues": 2,
+      "period_ns": 10.176045588684238,
+      "inputs": {
+        "axis.x": "882c944ca4faa43c164225f230b3530e3b318f496ad6fc57c42619cb7e3a4d93",
+        "bank2.x": "7f730edde447752ae63bf856177eaa6c3676eb0ecec25fc5365a071e040d8716",
+        "frame_queue.x": "8e2d1d3daf12ba3cb739d8e577603409f73f490a12194367073a4b2ee0256359",
+        "probe.py": "b2b99a9b4c12f78b0ae3fb95de131429de77571880b42ae9bee43d0d160f1add",
+        "xc7z030sbg485.xdc": "6e72b1516836d2637c37220ab7de9525886d46e4d6d62f09899423f31e47e072",
+        "bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+        "libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+        "libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d",
+        "xc7z030sbg485.bin": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+        "nextpnr-calibrated": "78e09c26bf142ea6e0d2bc0263ea2bada65aedd47d4358e483359c3e404f267c",
+        "codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162",
+        "ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+        "opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c"
+      }
+    },
+    {
+      "cell_counts": {
+        "LUT5": 2409,
+        "LUT4": 732,
+        "LUT6": 1343,
+        "LUT2": 288,
+        "LUT3": 2533,
+        "MUXF7": 153,
+        "MUXF8": 28,
+        "BUFG": 1,
+        "FDRE": 4839,
+        "OBUF": 1,
+        "IBUF": 1,
+        "$scopeinfo": 1
+      },
+      "coverage": {
+        "endpoint_requirements_met": true,
+        "design_wide_clock_validated": false,
+        "checks": [
+          {
+            "requirement": {
+              "type": "SLICE_FFX",
+              "port": "D",
+              "class": "register_input"
+            },
+            "matched": 4839,
+            "failed": 0,
+            "passed": true,
+            "failures": []
+          },
+          {
+            "requirement": {
+              "type": "SLICE_FFX",
+              "port": "Q",
+              "class": "register_output"
+            },
+            "matched": 4839,
+            "failed": 0,
+            "passed": true,
+            "failures": []
+          }
+        ]
+      },
+      "fmax": {
+        "(internal) clock": {
+          "achieved": 63.85,
+          "constraint": 100.0
+        }
+      },
+      "critical_paths": {
+        "$abc$169289$iopadmap$clock": {
+          "logic_ns": 2.2,
+          "routing_ns": 13.5,
+          "text": "Info: Critical path report for clock '$abc$169289$iopadmap$clock' (posedge -> posedge):\nInfo: curr total\nInfo:  0.1  0.1  Source $auto$ff.cc:337:slice$6703.Q\nInfo:  0.6  0.7    Net stimulus[2338] budget 0.000000 ns (57,117) -> (57,117)\nInfo:                Sink $abc$169289$lut$aiger169288$11842.A2\nInfo:  0.1  0.9  Source $abc$169289$lut$aiger169288$11842.O5\nInfo:  0.6  1.5    Net $techmap171364$abc$169289$lut$aiger169288$11846.A[3] budget 0.000000 ns (57,117) -> (57,115)\nInfo:                Sink $abc$169289$lut$aiger169288$11846.A2\nInfo:  0.1  1.6  Source $abc$169289$lut$aiger169288$11846.O6\nInfo:  0.8  2.4    Net $techmap171366$abc$169289$lut$aiger169288$11848.A[1] budget 0.000000 ns (57,115) -> (57,119)\nInfo:                Sink $abc$169289$lut$aiger169288$11848.A2\nInfo:  0.2  2.6  Source $abc$169289$lut$aiger169288$11848.O5\nInfo:  0.6  3.2    Net $techmap171376$abc$169289$lut$aiger169288$11884.A[2] budget 0.000000 ns (57,119) -> (54,119)\nInfo:                Sink $abc$169289$lut$aiger169288$11948.A2\nInfo:  0.1  3.3  Source $abc$169289$lut$aiger169288$11948.O6\nInfo:  1.8  5.1    Net $abc$169289$lut$aiger169288$16265.A[4] budget 0.000000 ns (54,119) -> (63,138)\nInfo:                Sink $abc$169289$lut$aiger169288$11990.A2\nInfo:  0.2  5.2  Source $abc$169289$lut$aiger169288$11990.O5\nInfo:  0.9  6.1    Net $techmap171409$abc$169289$lut$aiger169288$11998.A[4] budget 0.000000 ns (63,138) -> (63,138)\nInfo:                Sink $abc$169289$lut$aiger169288$11998.A5\nInfo:  0.1  6.2  Source $abc$169289$lut$aiger169288$11998.O6\nInfo:  0.6  6.9    Net $abc$169289$lut$aiger169288$12039.A[6] budget 0.000000 ns (63,138) -> (63,136)\nInfo:                Sink $abc$169289$lut$aiger169288$11999.A4\nInfo:  0.1  7.0  Source $abc$169289$lut$aiger169288$11999.O5\nInfo:  0.9  7.9    Net $techmap175535$auto$abc9_ops.cc:1613:reintegrate$171088.A[4] budget 0.000000 ns (63,136) -> (57,134)\nInfo:                Sink $abc$169289$lut$aiger169288$12057.A5\nInfo:  0.1  8.0  Source $abc$169289$lut$aiger169288$12057.O5\nInfo:  0.7  8.7    Net $abc$169289$lut$aiger169288$12095.A[6] budget 0.512000 ns (57,134) -> (64,133)\nInfo:                Sink $abc$169289$lut$aiger169288$12095.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.lut0.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux7.S0\nInfo:  0.3  9.0  Source $abc$169289$lut$aiger169288$12095.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.lut0.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux7.OUT\nInfo:  0.0  9.0    Net $abc$169289$lut$aiger169288$12095.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.f0 budget -0.146000 ns (64,133) -> (64,133)\nInfo:                Sink $abc$169289$lut$aiger169288$12095.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8.0\nInfo:  0.1  9.1  Source $abc$169289$lut$aiger169288$12095.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8.OUT\nInfo:  1.2 10.3    Net $techmap171433$abc$169289$lut$aiger169288$12105.A[3] budget 0.000000 ns (64,133) -> (64,120)\nInfo:                Sink $abc$169289$lut$aiger169288$12105.A1\nInfo:  0.2 10.5  Source $abc$169289$lut$aiger169288$12105.O5\nInfo:  4.2 14.6    Net $techmap171440$abc$169289$lut$aiger169288$12132.A[4] budget 0.000000 ns (64,120) -> (24,123)\nInfo:                Sink $abc$169289$lut$aiger169288$13461.A2\nInfo:  0.2 14.8  Source $abc$169289$lut$aiger169288$13461.O5\nInfo:  0.6 15.4    Net $techmap171706$auto$abc9_ops.cc:1613:reintegrate$171301.A[2] budget 0.000000 ns (24,123) -> (24,125)\nInfo:                Sink $auto$abc9_ops.cc:1613:reintegrate$171301.A1\nInfo:  0.2 15.5  Source $auto$abc9_ops.cc:1613:reintegrate$171301.O5\nInfo:  0.0 15.6    Net value[44] budget -0.193000 ns (24,125) -> (24,125)\nInfo:                Sink $auto$ff.cc:337:slice$6925.D\nInfo:  0.1 15.7  Setup $auto$ff.cc:337:slice$6925.D\nInfo: 2.2 ns logic, 13.5 ns routing"
+        }
+      },
+      "route_seconds": 36.01455887500197,
+      "seed": 1,
+      "stages": 0,
+      "delay_model": "unit",
+      "no_dsp": true,
+      "target_mhz": 100,
+      "outputs": {
+        "design.opt.ir": "73d07c657e4867570b7aabbc7e9c7c2e4264b4b5afb67edcd44e28c8ad6bf7a3",
+        "optimize.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "mapped.json": "c88dde646c74b095dd6f7a851f58a418640306cc75df02812452f77ae46d740a",
+        "map.ys": "7e72e9f8f10af8c1e8823fc3e8c3504f7dbcc5ffb1a136680ff86b04b5eeefa3",
+        "convert.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "timing.json": "6491d9354a8c60ef48dac779ada1fa18d5446918c1dde97556a1072403f737e7",
+        "harness.v": "4282d3f0967c90ae82b98e507bd9fbb3009961a9b2811970aa03905d58c69fa4",
+        "timing.xdc": "239f13d3586159280f5e6e1cf075d36f953405b1518fd6dd8ca1fdb909fbaa57",
+        "design.ir": "d9a775bcb02a0ab351436c04d6e76082d418d6a68b9052af58f96be5fa8e9f96",
+        "arithmetic.v": "0d69e0e4587d284667f9dd67aaf9a107815a38905797d343e1e9706b21626f91",
+        "route.log": "1e9902e36f94eff323095ecfef216f608f86ff3361fa81f098f8183927a06479",
+        "codegen.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "map.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "coverage.json": "2e6144b86fe74fc6d7508a72e667e2ccc8be07700fff2c20dfe698123b18f022"
+      },
+      "variant": "baseline",
+      "queues": 9,
+      "period_ns": 15.661707126076742,
+      "inputs": {
+        "axis.x": "882c944ca4faa43c164225f230b3530e3b318f496ad6fc57c42619cb7e3a4d93",
+        "bank9.x": "a6b20a09cd01250819cb3e2c88a3ebe96ec1963820ef4bb2c14d4d154bb1d322",
+        "frame_queue.x": "8e2d1d3daf12ba3cb739d8e577603409f73f490a12194367073a4b2ee0256359",
+        "probe.py": "b2b99a9b4c12f78b0ae3fb95de131429de77571880b42ae9bee43d0d160f1add",
+        "xc7z030sbg485.xdc": "6e72b1516836d2637c37220ab7de9525886d46e4d6d62f09899423f31e47e072",
+        "bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+        "libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+        "libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d",
+        "xc7z030sbg485.bin": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+        "nextpnr-calibrated": "78e09c26bf142ea6e0d2bc0263ea2bada65aedd47d4358e483359c3e404f267c",
+        "codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162",
+        "ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+        "opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c"
+      }
+    },
+    {
+      "cell_counts": {
+        "LUT5": 2409,
+        "LUT4": 732,
+        "LUT6": 1343,
+        "LUT2": 288,
+        "LUT3": 2533,
+        "MUXF7": 153,
+        "MUXF8": 28,
+        "BUFG": 1,
+        "FDRE": 4839,
+        "OBUF": 1,
+        "IBUF": 1,
+        "$scopeinfo": 1
+      },
+      "coverage": {
+        "endpoint_requirements_met": true,
+        "design_wide_clock_validated": false,
+        "checks": [
+          {
+            "requirement": {
+              "type": "SLICE_FFX",
+              "port": "D",
+              "class": "register_input"
+            },
+            "matched": 4839,
+            "failed": 0,
+            "passed": true,
+            "failures": []
+          },
+          {
+            "requirement": {
+              "type": "SLICE_FFX",
+              "port": "Q",
+              "class": "register_output"
+            },
+            "matched": 4839,
+            "failed": 0,
+            "passed": true,
+            "failures": []
+          }
+        ]
+      },
+      "fmax": {
+        "(internal) clock": {
+          "achieved": 64.94,
+          "constraint": 100.0
+        }
+      },
+      "critical_paths": {
+        "$abc$169289$iopadmap$clock": {
+          "logic_ns": 1.9,
+          "routing_ns": 13.5,
+          "text": "Info: Critical path report for clock '$abc$169289$iopadmap$clock' (posedge -> posedge):\nInfo: curr total\nInfo:  0.1  0.1  Source $auto$ff.cc:337:slice$6720.Q\nInfo:  0.6  0.7    Net stimulus[2355] budget 0.000000 ns (77,98) -> (77,98)\nInfo:                Sink $abc$169289$lut$aiger169288$11863.A1\nInfo:  0.1  0.8  Source $abc$169289$lut$aiger169288$11863.O6\nInfo:  0.3  1.1    Net $techmap171381$abc$169289$lut$aiger169288$11871.A[4] budget 0.000000 ns (77,98) -> (77,98)\nInfo:                Sink $abc$169289$lut$aiger169288$11871.A5\nInfo:  0.1  1.3  Source $abc$169289$lut$aiger169288$11871.O6\nInfo:  1.0  2.3    Net $techmap171382$abc$169289$lut$aiger169288$11894.A[2] budget 0.000000 ns (77,98) -> (74,103)\nInfo:                Sink $abc$169289$lut$aiger169288$11904.A1\nInfo:  0.1  2.4  Source $abc$169289$lut$aiger169288$11904.O6\nInfo:  2.5  4.9    Net $abc$169289$lut$aiger169288$12039.A[2] budget 0.000000 ns (74,103) -> (34,120)\nInfo:                Sink $abc$169289$lut$aiger169288$11931.A5\nInfo:  0.1  5.0  Source $abc$169289$lut$aiger169288$11931.O6\nInfo:  0.7  5.7    Net $techmap171393$abc$169289$lut$aiger169288$11946.A[5] budget 0.000000 ns (34,120) -> (34,120)\nInfo:                Sink $abc$169289$lut$aiger169288$11946.A6\nInfo:  0.1  5.8  Source $abc$169289$lut$aiger169288$11946.O6\nInfo:  0.5  6.4    Net $techmap171400$abc$169289$lut$aiger169288$11973.A[5] budget 0.000000 ns (34,120) -> (34,120)\nInfo:                Sink $abc$169289$lut$aiger169288$11973.A6\nInfo:  0.1  6.5  Source $abc$169289$lut$aiger169288$11973.O6\nInfo:  4.3 10.8    Net $abc$169289$lut$aiger169288$12039.A[7] budget 0.000000 ns (34,120) -> (81,77)\nInfo:                Sink $abc$169289$lut$aiger169288$27244.A6\nInfo:  0.1 10.9  Source $abc$169289$lut$aiger169288$27244.O6\nInfo:  0.6 11.5    Net $techmap174656$auto$abc9_ops.cc:1613:reintegrate$171123.A[3] budget 0.000000 ns (81,77) -> (78,77)\nInfo:                Sink $abc$169289$lut$aiger169288$27247.A4\nInfo:  0.1 11.7  Source $abc$169289$lut$aiger169288$27247.O5\nInfo:  0.6 12.3    Net $techmap174652$abc$169289$lut$aiger169288$27254.A[5] budget 0.000000 ns (78,77) -> (78,77)\nInfo:                Sink $abc$169289$lut$aiger169288$27254.A6\nInfo:  0.1 12.4  Source $abc$169289$lut$aiger169288$27254.O6\nInfo:  0.6 13.1    Net $techmap174653$abc$169289$lut$aiger169288$27266.A[5] budget 0.000000 ns (78,77) -> (78,77)\nInfo:                Sink $abc$169289$lut$aiger169288$27266.A6\nInfo:  0.1 13.2  Source $abc$169289$lut$aiger169288$27266.O6\nInfo:  0.6 13.8    Net $techmap174654$abc$169289$lut$aiger169288$27284.A[5] budget 0.000000 ns (78,77) -> (77,79)\nInfo:                Sink $abc$169289$lut$aiger169288$27284.A6\nInfo:  0.1 13.9  Source $abc$169289$lut$aiger169288$27284.O6\nInfo:  0.4 14.3    Net $techmap174655$abc$169289$lut$aiger169288$27301.A[4] budget 0.000000 ns (77,79) -> (78,80)\nInfo:                Sink $abc$169289$lut$aiger169288$27301.A5\nInfo:  0.1 14.5  Source $abc$169289$lut$aiger169288$27301.O6\nInfo:  0.7 15.1    Net $techmap174656$auto$abc9_ops.cc:1613:reintegrate$171123.A[4] budget 0.000000 ns (78,80) -> (81,79)\nInfo:                Sink $auto$abc9_ops.cc:1613:reintegrate$169782.A2\nInfo:  0.1 15.3  Source $auto$abc9_ops.cc:1613:reintegrate$169782.O5\nInfo:  0.0 15.3    Net value[1770] budget -0.236000 ns (81,79) -> (81,79)\nInfo:                Sink $auto$ff.cc:337:slice$8651.D\nInfo:  0.1 15.4  Setup $auto$ff.cc:337:slice$8651.D\nInfo: 1.9 ns logic, 13.5 ns routing"
+        }
+      },
+      "route_seconds": 42.16579499980435,
+      "seed": 2,
+      "stages": 0,
+      "delay_model": "unit",
+      "no_dsp": true,
+      "target_mhz": 100,
+      "outputs": {
+        "design.opt.ir": "73d07c657e4867570b7aabbc7e9c7c2e4264b4b5afb67edcd44e28c8ad6bf7a3",
+        "optimize.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "mapped.json": "c88dde646c74b095dd6f7a851f58a418640306cc75df02812452f77ae46d740a",
+        "map.ys": "7e72e9f8f10af8c1e8823fc3e8c3504f7dbcc5ffb1a136680ff86b04b5eeefa3",
+        "convert.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "timing.json": "b23c8701650f27022d73c7b65a53876115a45507eb727ab0762f240e29957713",
+        "harness.v": "4282d3f0967c90ae82b98e507bd9fbb3009961a9b2811970aa03905d58c69fa4",
+        "timing.xdc": "239f13d3586159280f5e6e1cf075d36f953405b1518fd6dd8ca1fdb909fbaa57",
+        "design.ir": "d9a775bcb02a0ab351436c04d6e76082d418d6a68b9052af58f96be5fa8e9f96",
+        "arithmetic.v": "0d69e0e4587d284667f9dd67aaf9a107815a38905797d343e1e9706b21626f91",
+        "route.log": "3ba9c985bff838d3d44076164e6fa6612e66d8eccc20966b57a6f871a7959e1d",
+        "codegen.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "map.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "coverage.json": "e22e42cb7a4fd2a8a23634f02ea8d6103dab3ba463adabdad166bc8626b361e4"
+      },
+      "variant": "baseline",
+      "queues": 9,
+      "period_ns": 15.398829688943641,
+      "inputs": {
+        "axis.x": "882c944ca4faa43c164225f230b3530e3b318f496ad6fc57c42619cb7e3a4d93",
+        "bank9.x": "a6b20a09cd01250819cb3e2c88a3ebe96ec1963820ef4bb2c14d4d154bb1d322",
+        "frame_queue.x": "8e2d1d3daf12ba3cb739d8e577603409f73f490a12194367073a4b2ee0256359",
+        "probe.py": "b2b99a9b4c12f78b0ae3fb95de131429de77571880b42ae9bee43d0d160f1add",
+        "xc7z030sbg485.xdc": "6e72b1516836d2637c37220ab7de9525886d46e4d6d62f09899423f31e47e072",
+        "bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+        "libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+        "libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d",
+        "xc7z030sbg485.bin": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+        "nextpnr-calibrated": "78e09c26bf142ea6e0d2bc0263ea2bada65aedd47d4358e483359c3e404f267c",
+        "codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162",
+        "ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+        "opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c"
+      }
+    },
+    {
+      "cell_counts": {
+        "LUT6": 428,
+        "LUT4": 319,
+        "LUT5": 39,
+        "LUT2": 35,
+        "LUT3": 2,
+        "BUFG": 1,
+        "FDRE": 1227,
+        "OBUF": 1,
+        "IBUF": 1,
+        "$scopeinfo": 1
+      },
+      "coverage": {
+        "endpoint_requirements_met": true,
+        "design_wide_clock_validated": false,
+        "checks": [
+          {
+            "requirement": {
+              "type": "SLICE_FFX",
+              "port": "D",
+              "class": "register_input"
+            },
+            "matched": 1227,
+            "failed": 0,
+            "passed": true,
+            "failures": []
+          },
+          {
+            "requirement": {
+              "type": "SLICE_FFX",
+              "port": "Q",
+              "class": "register_output"
+            },
+            "matched": 1227,
+            "failed": 0,
+            "passed": true,
+            "failures": []
+          }
+        ]
+      },
+      "fmax": {
+        "(internal) clock": {
+          "achieved": 150.22,
+          "constraint": 100.0
+        }
+      },
+      "critical_paths": {
+        "$abc$28298$iopadmap$clock": {
+          "logic_ns": 0.9,
+          "routing_ns": 5.8,
+          "text": "Info: Critical path report for clock '$abc$28298$iopadmap$clock' (posedge -> posedge):\nInfo: curr total\nInfo:  0.1  0.1  Source $auto$ff.cc:337:slice$2656.Q\nInfo:  0.4  0.5    Net stimulus[542] budget 0.000000 ns (13,106) -> (14,106)\nInfo:                Sink $abc$28298$lut$aiger28297$2817.A4\nInfo:  0.1  0.6  Source $abc$28298$lut$aiger28297$2817.O6\nInfo:  0.2  0.8    Net $techmap28829$abc$28298$lut$aiger28297$2821.A[4] budget 0.000000 ns (14,106) -> (14,106)\nInfo:                Sink $abc$28298$lut$aiger28297$2821.A2\nInfo:  0.2  0.9  Source $abc$28298$lut$aiger28297$2821.O5\nInfo:  0.6  1.6    Net $techmap28830$abc$28298$lut$aiger28297$2822.A[0] budget 0.000000 ns (14,106) -> (14,108)\nInfo:                Sink $abc$28298$lut$aiger28297$2822.A5\nInfo:  0.1  1.7  Source $abc$28298$lut$aiger28297$2822.O6\nInfo:  0.8  2.5    Net $techmap28835$abc$28298$lut$aiger28297$2845.A[4] budget 0.000000 ns (14,108) -> (17,114)\nInfo:                Sink $abc$28298$lut$aiger28297$2845.A1\nInfo:  0.2  2.6  Source $abc$28298$lut$aiger28297$2845.O5\nInfo:  3.8  6.4    Net $techmap28836$auto$abc9_ops.cc:1613:reintegrate$28813.A[2] budget 0.000000 ns (17,114) -> (24,122)\nInfo:                Sink $auto$abc9_ops.cc:1613:reintegrate$28759.A2\nInfo:  0.2  6.5  Source $auto$abc9_ops.cc:1613:reintegrate$28759.O5\nInfo:  0.0  6.6    Net value[51] budget 0.888000 ns (24,122) -> (24,122)\nInfo:                Sink $auto$ff.cc:337:slice$2875.D\nInfo:  0.1  6.7  Setup $auto$ff.cc:337:slice$2875.D\nInfo: 0.9 ns logic, 5.8 ns routing"
+        }
+      },
+      "route_seconds": 3.775339042302221,
+      "seed": 1,
+      "stages": 0,
+      "delay_model": "unit",
+      "no_dsp": true,
+      "target_mhz": 100,
+      "outputs": {
+        "design.opt.ir": "edcea8ad13f746d97cb5f6da4eafd06b4ce53f6dec9d487c21980448b47cafcf",
+        "optimize.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "mapped.json": "49c2f3c8113934823782c2713d5fa72c7de67612c38a7c1fb95e554c93eb3bd0",
+        "map.ys": "7e72e9f8f10af8c1e8823fc3e8c3504f7dbcc5ffb1a136680ff86b04b5eeefa3",
+        "convert.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "timing.json": "58dce0cb72965b8084b060bfd29c7bc450c34e4412b28e561a9d12ccfd1840de",
+        "harness.v": "e8bbeecfe2d48ebc44e3a278131439079a072916c181028535cfcf9572d81d1f",
+        "timing.xdc": "239f13d3586159280f5e6e1cf075d36f953405b1518fd6dd8ca1fdb909fbaa57",
+        "design.ir": "b724acfa1dd4b341c10b646335583a4f9433dd3db5ad51eb186537d075e9954f",
+        "arithmetic.v": "4486715f3714d620485b433aa42b5cbb2f89e5a5aae1927d214ad7ce036732c2",
+        "route.log": "0400adb2eb6881300c9b21be722367f72d21d1eecb8096e86e20c82c5aa9d943",
+        "codegen.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "map.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "coverage.json": "665119cdedd248f0574a44a07118d39d6f1a8fdecabeb07d9543883802ac0e0e"
+      },
+      "variant": "candidate",
+      "queues": 2,
+      "period_ns": 6.656903208627346,
+      "inputs": {
+        "axis.x": "882c944ca4faa43c164225f230b3530e3b318f496ad6fc57c42619cb7e3a4d93",
+        "bank2.x": "7f730edde447752ae63bf856177eaa6c3676eb0ecec25fc5365a071e040d8716",
+        "frame_queue.x": "9f50a4b7e84551effc351818be54850c402f69b9d4141d39d597247113821caa",
+        "probe.py": "b2b99a9b4c12f78b0ae3fb95de131429de77571880b42ae9bee43d0d160f1add",
+        "xc7z030sbg485.xdc": "6e72b1516836d2637c37220ab7de9525886d46e4d6d62f09899423f31e47e072",
+        "bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+        "libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+        "libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d",
+        "xc7z030sbg485.bin": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+        "nextpnr-calibrated": "78e09c26bf142ea6e0d2bc0263ea2bada65aedd47d4358e483359c3e404f267c",
+        "codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162",
+        "ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+        "opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c"
+      }
+    },
+    {
+      "cell_counts": {
+        "LUT6": 428,
+        "LUT4": 319,
+        "LUT5": 39,
+        "LUT2": 35,
+        "LUT3": 2,
+        "BUFG": 1,
+        "FDRE": 1227,
+        "OBUF": 1,
+        "IBUF": 1,
+        "$scopeinfo": 1
+      },
+      "coverage": {
+        "endpoint_requirements_met": true,
+        "design_wide_clock_validated": false,
+        "checks": [
+          {
+            "requirement": {
+              "type": "SLICE_FFX",
+              "port": "D",
+              "class": "register_input"
+            },
+            "matched": 1227,
+            "failed": 0,
+            "passed": true,
+            "failures": []
+          },
+          {
+            "requirement": {
+              "type": "SLICE_FFX",
+              "port": "Q",
+              "class": "register_output"
+            },
+            "matched": 1227,
+            "failed": 0,
+            "passed": true,
+            "failures": []
+          }
+        ]
+      },
+      "fmax": {
+        "(internal) clock": {
+          "achieved": 141.46,
+          "constraint": 100.0
+        }
+      },
+      "critical_paths": {
+        "$abc$28298$iopadmap$clock": {
+          "logic_ns": 0.8,
+          "routing_ns": 6.2,
+          "text": "Info: Critical path report for clock '$abc$28298$iopadmap$clock' (posedge -> posedge):\nInfo: curr total\nInfo:  0.1  0.1  Source $auto$ff.cc:337:slice$2684.Q\nInfo:  0.3  0.4    Net stimulus[570] budget 0.000000 ns (33,106) -> (33,106)\nInfo:                Sink $abc$28298$lut$aiger28297$2778.A4\nInfo:  0.1  0.5  Source $abc$28298$lut$aiger28297$2778.O6\nInfo:  0.6  1.1    Net $techmap28819$abc$28298$lut$aiger28297$2786.A[5] budget 0.000000 ns (33,106) -> (33,106)\nInfo:                Sink $abc$28298$lut$aiger28297$2786.A6\nInfo:  0.1  1.2  Source $abc$28298$lut$aiger28297$2786.O6\nInfo:  0.2  1.3    Net $techmap28820$abc$28298$lut$aiger28297$2790.A[4] budget 0.000000 ns (33,106) -> (33,106)\nInfo:                Sink $abc$28298$lut$aiger28297$2790.A3\nInfo:  0.1  1.5  Source $abc$28298$lut$aiger28297$2790.O5\nInfo:  1.2  2.7    Net $techmap28825$abc$28298$lut$aiger28297$2807.A[2] budget 0.000000 ns (33,106) -> (30,115)\nInfo:                Sink $abc$28298$lut$aiger28297$2863.A1\nInfo:  0.1  2.8  Source $abc$28298$lut$aiger28297$2863.O6\nInfo:  4.0  6.8    Net $techmap29639$abc$28298$lut\\value[387].A[4] budget 0.000000 ns (30,115) -> (30,119)\nInfo:                Sink $auto$abc9_ops.cc:1613:reintegrate$28511.A6\nInfo:  0.1  6.9  Source $auto$abc9_ops.cc:1613:reintegrate$28511.O6\nInfo:  0.0  7.0    Net value[301] budget 1.051000 ns (30,119) -> (30,119)\nInfo:                Sink $auto$ff.cc:337:slice$3125.D\nInfo:  0.1  7.1  Setup $auto$ff.cc:337:slice$3125.D\nInfo: 0.8 ns logic, 6.2 ns routing"
+        }
+      },
+      "route_seconds": 3.6598555422388017,
+      "seed": 2,
+      "stages": 0,
+      "delay_model": "unit",
+      "no_dsp": true,
+      "target_mhz": 100,
+      "outputs": {
+        "design.opt.ir": "edcea8ad13f746d97cb5f6da4eafd06b4ce53f6dec9d487c21980448b47cafcf",
+        "optimize.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "mapped.json": "49c2f3c8113934823782c2713d5fa72c7de67612c38a7c1fb95e554c93eb3bd0",
+        "map.ys": "7e72e9f8f10af8c1e8823fc3e8c3504f7dbcc5ffb1a136680ff86b04b5eeefa3",
+        "convert.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "timing.json": "98cb941dbb235f91f7c60e08e7eeb72e8fcf092a15c661db7f432a3d064bd7b3",
+        "harness.v": "e8bbeecfe2d48ebc44e3a278131439079a072916c181028535cfcf9572d81d1f",
+        "timing.xdc": "239f13d3586159280f5e6e1cf075d36f953405b1518fd6dd8ca1fdb909fbaa57",
+        "design.ir": "b724acfa1dd4b341c10b646335583a4f9433dd3db5ad51eb186537d075e9954f",
+        "arithmetic.v": "4486715f3714d620485b433aa42b5cbb2f89e5a5aae1927d214ad7ce036732c2",
+        "route.log": "5b88d97edb367ada62bdb72e0d168ccb149dc467124f0e2c6186fb2f1567dff7",
+        "codegen.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "map.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "coverage.json": "ba97af0c0667bdf0a6e5a5a022c09e0b58b69a60a6c2d2185ae37d1862cbe240"
+      },
+      "variant": "candidate",
+      "queues": 2,
+      "period_ns": 7.069136151562279,
+      "inputs": {
+        "axis.x": "882c944ca4faa43c164225f230b3530e3b318f496ad6fc57c42619cb7e3a4d93",
+        "bank2.x": "7f730edde447752ae63bf856177eaa6c3676eb0ecec25fc5365a071e040d8716",
+        "frame_queue.x": "9f50a4b7e84551effc351818be54850c402f69b9d4141d39d597247113821caa",
+        "probe.py": "b2b99a9b4c12f78b0ae3fb95de131429de77571880b42ae9bee43d0d160f1add",
+        "xc7z030sbg485.xdc": "6e72b1516836d2637c37220ab7de9525886d46e4d6d62f09899423f31e47e072",
+        "bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+        "libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+        "libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d",
+        "xc7z030sbg485.bin": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+        "nextpnr-calibrated": "78e09c26bf142ea6e0d2bc0263ea2bada65aedd47d4358e483359c3e404f267c",
+        "codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162",
+        "ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+        "opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c"
+      }
+    },
+    {
+      "cell_counts": {
+        "LUT5": 755,
+        "LUT4": 1981,
+        "LUT6": 736,
+        "LUT2": 74,
+        "LUT3": 9,
+        "BUFG": 1,
+        "FDRE": 4839,
+        "OBUF": 1,
+        "IBUF": 1,
+        "$scopeinfo": 1
+      },
+      "coverage": {
+        "endpoint_requirements_met": true,
+        "design_wide_clock_validated": false,
+        "checks": [
+          {
+            "requirement": {
+              "type": "SLICE_FFX",
+              "port": "D",
+              "class": "register_input"
+            },
+            "matched": 4839,
+            "failed": 0,
+            "passed": true,
+            "failures": []
+          },
+          {
+            "requirement": {
+              "type": "SLICE_FFX",
+              "port": "Q",
+              "class": "register_output"
+            },
+            "matched": 4839,
+            "failed": 0,
+            "passed": true,
+            "failures": []
+          }
+        ]
+      },
+      "fmax": {
+        "(internal) clock": {
+          "achieved": 93.41,
+          "constraint": 100.0
+        }
+      },
+      "critical_paths": {
+        "$abc$118572$iopadmap$clock": {
+          "logic_ns": 1.0,
+          "routing_ns": 9.7,
+          "text": "Info: Critical path report for clock '$abc$118572$iopadmap$clock' (posedge -> posedge):\nInfo: curr total\nInfo:  0.1  0.1  Source $auto$ff.cc:337:slice$6480.Q\nInfo:  0.3  0.4    Net stimulus[2348] budget 0.000000 ns (54,119) -> (54,119)\nInfo:                Sink $abc$118572$lut$aiger118571$11814.A4\nInfo:  0.2  0.5  Source $abc$118572$lut$aiger118571$11814.O5\nInfo:  0.4  1.0    Net $techmap121558$abc$118572$lut$aiger118571$11818.A[4] budget 0.000000 ns (54,119) -> (54,120)\nInfo:                Sink $abc$118572$lut$aiger118571$11818.A5\nInfo:  0.1  1.1  Source $abc$118572$lut$aiger118571$11818.O6\nInfo:  0.6  1.7    Net $techmap121559$abc$118572$lut$aiger118571$11823.A[5] budget 0.000000 ns (54,120) -> (53,121)\nInfo:                Sink $abc$118572$lut$aiger118571$11823.A6\nInfo:  0.1  1.8  Source $abc$118572$lut$aiger118571$11823.O6\nInfo:  0.9  2.7    Net $techmap121563$abc$118572$lut$aiger118571$11837.A[4] budget 0.000000 ns (53,121) -> (53,110)\nInfo:                Sink $abc$118572$lut$aiger118571$11889.A1\nInfo:  0.2  2.9  Source $abc$118572$lut$aiger118571$11889.O5\nInfo:  1.2  4.0    Net $techmap121578$abc$118572$lut$aiger118571$11893.A[3] budget 0.000000 ns (53,110) -> (53,122)\nInfo:                Sink $abc$118572$lut$aiger118571$11893.A5\nInfo:  0.1  4.2  Source $abc$118572$lut$aiger118571$11893.O6\nInfo:  6.3 10.4    Net $techmap124441$abc$118572$lut\\value[2193].A[3] budget 0.000000 ns (53,122) -> (53,132)\nInfo:                Sink $auto$abc9_ops.cc:1613:reintegrate$118824.A1\nInfo:  0.2 10.6  Source $auto$abc9_ops.cc:1613:reintegrate$118824.O5\nInfo:  0.0 10.6    Net value[2068] budget 0.610000 ns (53,132) -> (53,132)\nInfo:                Sink $auto$ff.cc:337:slice$8716.D\nInfo:  0.1 10.7  Setup $auto$ff.cc:337:slice$8716.D\nInfo: 1.0 ns logic, 9.7 ns routing"
+        }
+      },
+      "route_seconds": 14.921680124942213,
+      "seed": 1,
+      "stages": 0,
+      "delay_model": "unit",
+      "no_dsp": true,
+      "target_mhz": 100,
+      "outputs": {
+        "design.opt.ir": "8bc36f6cff0e14b4183f0a0f143b5a5315459758f04db97c3d3f19460917abde",
+        "optimize.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "mapped.json": "513f9e7007202aeccc64ede73bd80fc668263ad59f05a3ac89f2bd9ef28b83a8",
+        "map.ys": "7e72e9f8f10af8c1e8823fc3e8c3504f7dbcc5ffb1a136680ff86b04b5eeefa3",
+        "convert.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "timing.json": "1fe570da5f0c647ebde99a11877eaf90c3c5bd7cbe3d5bf25674d67fd3a3cf0a",
+        "harness.v": "4282d3f0967c90ae82b98e507bd9fbb3009961a9b2811970aa03905d58c69fa4",
+        "timing.xdc": "239f13d3586159280f5e6e1cf075d36f953405b1518fd6dd8ca1fdb909fbaa57",
+        "design.ir": "a8a5dceeb76fe76a0c0c8bb23c0973344d43b9ed37f3f824c63fd52f1824c4cd",
+        "arithmetic.v": "d36231c6ee802d64fd74fd12c20fb7e8ddb4365f8ad2b8bfae897fc7ea2d9fea",
+        "route.log": "f37a04e38ddf31542fb4ff2c7bf80308068ed6350305731198d8380f96bd937c",
+        "codegen.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "map.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "coverage.json": "5c81e8700821b8000591c1a113d091f41cdc575c72d5f3b0190f8c8c05190725"
+      },
+      "variant": "candidate",
+      "queues": 9,
+      "period_ns": 10.705491917353603,
+      "inputs": {
+        "axis.x": "882c944ca4faa43c164225f230b3530e3b318f496ad6fc57c42619cb7e3a4d93",
+        "bank9.x": "a6b20a09cd01250819cb3e2c88a3ebe96ec1963820ef4bb2c14d4d154bb1d322",
+        "frame_queue.x": "9f50a4b7e84551effc351818be54850c402f69b9d4141d39d597247113821caa",
+        "probe.py": "b2b99a9b4c12f78b0ae3fb95de131429de77571880b42ae9bee43d0d160f1add",
+        "xc7z030sbg485.xdc": "6e72b1516836d2637c37220ab7de9525886d46e4d6d62f09899423f31e47e072",
+        "bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+        "libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+        "libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d",
+        "xc7z030sbg485.bin": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+        "nextpnr-calibrated": "78e09c26bf142ea6e0d2bc0263ea2bada65aedd47d4358e483359c3e404f267c",
+        "codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162",
+        "ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+        "opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c"
+      }
+    },
+    {
+      "cell_counts": {
+        "LUT5": 755,
+        "LUT4": 1981,
+        "LUT6": 736,
+        "LUT2": 74,
+        "LUT3": 9,
+        "BUFG": 1,
+        "FDRE": 4839,
+        "OBUF": 1,
+        "IBUF": 1,
+        "$scopeinfo": 1
+      },
+      "coverage": {
+        "endpoint_requirements_met": true,
+        "design_wide_clock_validated": false,
+        "checks": [
+          {
+            "requirement": {
+              "type": "SLICE_FFX",
+              "port": "D",
+              "class": "register_input"
+            },
+            "matched": 4839,
+            "failed": 0,
+            "passed": true,
+            "failures": []
+          },
+          {
+            "requirement": {
+              "type": "SLICE_FFX",
+              "port": "Q",
+              "class": "register_output"
+            },
+            "matched": 4839,
+            "failed": 0,
+            "passed": true,
+            "failures": []
+          }
+        ]
+      },
+      "fmax": {
+        "(internal) clock": {
+          "achieved": 101.42,
+          "constraint": 100.0
+        }
+      },
+      "critical_paths": {
+        "$abc$118572$iopadmap$clock": {
+          "logic_ns": 0.9,
+          "routing_ns": 9.0,
+          "text": "Info: Critical path report for clock '$abc$118572$iopadmap$clock' (posedge -> posedge):\nInfo: curr total\nInfo:  0.1  0.1  Source $auto$ff.cc:337:slice$6503.Q\nInfo:  0.8  0.9    Net stimulus[2371] budget 0.000000 ns (50,134) -> (50,134)\nInfo:                Sink $abc$118572$lut$aiger118571$11862.A1\nInfo:  0.1  1.0  Source $abc$118572$lut$aiger118571$11862.O5\nInfo:  0.5  1.5    Net $techmap121571$abc$118572$lut$aiger118571$11866.A[4] budget 0.000000 ns (50,134) -> (50,135)\nInfo:                Sink $abc$118572$lut$aiger118571$11866.A4\nInfo:  0.1  1.7  Source $abc$118572$lut$aiger118571$11866.O6\nInfo:  1.3  2.9    Net $techmap121572$abc$118572$lut$aiger118571$11869.A[3] budget 0.000000 ns (50,135) -> (53,124)\nInfo:                Sink $abc$118572$lut$aiger118571$11920.A5\nInfo:  0.1  3.1  Source $abc$118572$lut$aiger118571$11920.O6\nInfo:  1.2  4.2    Net $techmap121591$abc$118572$lut$aiger118571$11921.A[0] budget 0.000000 ns (53,124) -> (50,131)\nInfo:                Sink $abc$118572$lut$aiger118571$11921.A5\nInfo:  0.1  4.3  Source $abc$118572$lut$aiger118571$11921.O6\nInfo:  5.2  9.6    Net $techmap124443$abc$118572$lut\\value[1677].A[2] budget 0.000000 ns (50,131) -> (23,136)\nInfo:                Sink $auto$abc9_ops.cc:1613:reintegrate$119308.A2\nInfo:  0.2  9.7  Source $auto$abc9_ops.cc:1613:reintegrate$119308.O5\nInfo:  0.0  9.8    Net value[1580] budget 0.455000 ns (23,136) -> (23,136)\nInfo:                Sink $auto$ff.cc:337:slice$8228.D\nInfo:  0.1  9.9  Setup $auto$ff.cc:337:slice$8228.D\nInfo: 0.9 ns logic, 9.0 ns routing"
+        }
+      },
+      "route_seconds": 14.550688082817942,
+      "seed": 2,
+      "stages": 0,
+      "delay_model": "unit",
+      "no_dsp": true,
+      "target_mhz": 100,
+      "outputs": {
+        "design.opt.ir": "8bc36f6cff0e14b4183f0a0f143b5a5315459758f04db97c3d3f19460917abde",
+        "optimize.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "mapped.json": "513f9e7007202aeccc64ede73bd80fc668263ad59f05a3ac89f2bd9ef28b83a8",
+        "map.ys": "7e72e9f8f10af8c1e8823fc3e8c3504f7dbcc5ffb1a136680ff86b04b5eeefa3",
+        "convert.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "timing.json": "56fe2658102424aa174ce44d3ca734fac9e2210f360713c7afeb17f255528c82",
+        "harness.v": "4282d3f0967c90ae82b98e507bd9fbb3009961a9b2811970aa03905d58c69fa4",
+        "timing.xdc": "239f13d3586159280f5e6e1cf075d36f953405b1518fd6dd8ca1fdb909fbaa57",
+        "design.ir": "a8a5dceeb76fe76a0c0c8bb23c0973344d43b9ed37f3f824c63fd52f1824c4cd",
+        "arithmetic.v": "d36231c6ee802d64fd74fd12c20fb7e8ddb4365f8ad2b8bfae897fc7ea2d9fea",
+        "route.log": "b06d7eda2ac2b8fa2ece85bbb7b06ee745153e0ea4d9fdb9fc2cfad65bb3f280",
+        "codegen.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "map.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "coverage.json": "8231a46911cd8d42c4c5d10de056ee07b267023b829f09bcc2a3ad91ba1cab1f"
+      },
+      "variant": "candidate",
+      "queues": 9,
+      "period_ns": 9.859988168014198,
+      "inputs": {
+        "axis.x": "882c944ca4faa43c164225f230b3530e3b318f496ad6fc57c42619cb7e3a4d93",
+        "bank9.x": "a6b20a09cd01250819cb3e2c88a3ebe96ec1963820ef4bb2c14d4d154bb1d322",
+        "frame_queue.x": "9f50a4b7e84551effc351818be54850c402f69b9d4141d39d597247113821caa",
+        "probe.py": "b2b99a9b4c12f78b0ae3fb95de131429de77571880b42ae9bee43d0d160f1add",
+        "xc7z030sbg485.xdc": "6e72b1516836d2637c37220ab7de9525886d46e4d6d62f09899423f31e47e072",
+        "bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+        "libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+        "libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d",
+        "xc7z030sbg485.bin": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+        "nextpnr-calibrated": "78e09c26bf142ea6e0d2bc0263ea2bada65aedd47d4358e483359c3e404f267c",
+        "codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162",
+        "ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+        "opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c"
+      }
+    },
+    {
+      "cell_counts": {
+        "LUT6": 428,
+        "LUT4": 190,
+        "LUT5": 166,
+        "LUT2": 34,
+        "LUT3": 4,
+        "BUFG": 1,
+        "FDRE": 1227,
+        "OBUF": 1,
+        "IBUF": 1,
+        "$scopeinfo": 1
+      },
+      "coverage": {
+        "endpoint_requirements_met": true,
+        "design_wide_clock_validated": false,
+        "checks": [
+          {
+            "requirement": {
+              "type": "SLICE_FFX",
+              "port": "D",
+              "class": "register_input"
+            },
+            "matched": 1227,
+            "failed": 0,
+            "passed": true,
+            "failures": []
+          },
+          {
+            "requirement": {
+              "type": "SLICE_FFX",
+              "port": "Q",
+              "class": "register_output"
+            },
+            "matched": 1227,
+            "failed": 0,
+            "passed": true,
+            "failures": []
+          }
+        ]
+      },
+      "fmax": {
+        "(internal) clock": {
+          "achieved": 136.28,
+          "constraint": 100.0
+        }
+      },
+      "critical_paths": {
+        "$abc$28290$iopadmap$clock": {
+          "logic_ns": 0.9,
+          "routing_ns": 6.5,
+          "text": "Info: Critical path report for clock '$abc$28290$iopadmap$clock' (posedge -> posedge):\nInfo: curr total\nInfo:  0.1  0.1  Source $auto$ff.cc:337:slice$2651.Q\nInfo:  0.5  0.6    Net stimulus[543] budget 0.000000 ns (10,105) -> (10,106)\nInfo:                Sink $abc$28290$lut$aiger28289$2813.A4\nInfo:  0.2  0.8  Source $abc$28290$lut$aiger28289$2813.O5\nInfo:  0.3  1.1    Net $techmap28759$abc$28290$lut$aiger28289$2817.A[4] budget 0.000000 ns (10,106) -> (10,106)\nInfo:                Sink $abc$28290$lut$aiger28289$2817.A5\nInfo:  0.1  1.2  Source $abc$28290$lut$aiger28289$2817.O6\nInfo:  0.6  1.9    Net $techmap28760$abc$28290$lut$aiger28289$2822.A[5] budget 0.000000 ns (10,106) -> (10,106)\nInfo:                Sink $abc$28290$lut$aiger28289$2822.A6\nInfo:  0.1  2.0  Source $abc$28290$lut$aiger28289$2822.O6\nInfo:  1.7  3.7    Net $techmap28765$abc$28290$lut$aiger28289$2844.A[4] budget 0.000000 ns (10,106) -> (23,117)\nInfo:                Sink $abc$28290$lut$aiger28289$2844.A2\nInfo:  0.1  3.8  Source $abc$28290$lut$aiger28289$2844.O6\nInfo:  3.2  7.1    Net $techmap28766$auto$abc9_ops.cc:1613:reintegrate$28744.A[2] budget 0.000000 ns (23,117) -> (34,120)\nInfo:                Sink $auto$abc9_ops.cc:1613:reintegrate$28690.A2\nInfo:  0.2  7.2  Source $auto$abc9_ops.cc:1613:reintegrate$28690.O5\nInfo:  0.0  7.2    Net value[51] budget 0.890000 ns (34,120) -> (34,120)\nInfo:                Sink $auto$ff.cc:337:slice$2869.D\nInfo:  0.1  7.3  Setup $auto$ff.cc:337:slice$2869.D\nInfo: 0.9 ns logic, 6.5 ns routing"
+        }
+      },
+      "route_seconds": 6.230138415936381,
+      "seed": 1,
+      "stages": 0,
+      "delay_model": "unit",
+      "no_dsp": true,
+      "target_mhz": 100,
+      "outputs": {
+        "design.opt.ir": "0dd264f26dc496bfaae3df4a82ba8d9b58fbbda078c0cd2528f8ed851ccdbcbd",
+        "optimize.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "mapped.json": "ea730c77d873648af631e8d797859eeee352e6dfa28bb2972a55567d0996092e",
+        "map.ys": "7e72e9f8f10af8c1e8823fc3e8c3504f7dbcc5ffb1a136680ff86b04b5eeefa3",
+        "convert.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "timing.json": "b5a939946a7ecfeca5b6bfb9bfe1be8b3cf45f98cb8b1f407ff4e900ae264b8f",
+        "harness.v": "e8bbeecfe2d48ebc44e3a278131439079a072916c181028535cfcf9572d81d1f",
+        "timing.xdc": "239f13d3586159280f5e6e1cf075d36f953405b1518fd6dd8ca1fdb909fbaa57",
+        "design.ir": "b6923f2e6a824186a327145d6165051dc8664ad4a3ed33204d747336f0f4aa37",
+        "arithmetic.v": "44512cacfb4b19cc05a028e642b840bb49abb9575341575e6e34d6e31794d5b3",
+        "route.log": "7af7167828f0628d25bdb48d32f53f52f9475552e1c71bb3a6f87516c7cb9479",
+        "codegen.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "map.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "coverage.json": "ed5c2dfb3c7454f82c4521c16315677c1a0ab95255462f400c0602a6180b4fd7"
+      },
+      "variant": "unconditional",
+      "queues": 2,
+      "period_ns": 7.33783387144115,
+      "inputs": {
+        "axis.x": "882c944ca4faa43c164225f230b3530e3b318f496ad6fc57c42619cb7e3a4d93",
+        "bank2.x": "7f730edde447752ae63bf856177eaa6c3676eb0ecec25fc5365a071e040d8716",
+        "frame_queue.x": "315233dc6889028423247d48a5108b1d7f37c3e1fbe0b097ba035b081e86872a",
+        "probe.py": "b2b99a9b4c12f78b0ae3fb95de131429de77571880b42ae9bee43d0d160f1add",
+        "xc7z030sbg485.xdc": "6e72b1516836d2637c37220ab7de9525886d46e4d6d62f09899423f31e47e072",
+        "bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+        "libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+        "libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d",
+        "xc7z030sbg485.bin": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+        "nextpnr-calibrated": "78e09c26bf142ea6e0d2bc0263ea2bada65aedd47d4358e483359c3e404f267c",
+        "codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162",
+        "ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+        "opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c"
+      }
+    },
+    {
+      "cell_counts": {
+        "LUT6": 428,
+        "LUT4": 190,
+        "LUT5": 166,
+        "LUT2": 34,
+        "LUT3": 4,
+        "BUFG": 1,
+        "FDRE": 1227,
+        "OBUF": 1,
+        "IBUF": 1,
+        "$scopeinfo": 1
+      },
+      "coverage": {
+        "endpoint_requirements_met": true,
+        "design_wide_clock_validated": false,
+        "checks": [
+          {
+            "requirement": {
+              "type": "SLICE_FFX",
+              "port": "D",
+              "class": "register_input"
+            },
+            "matched": 1227,
+            "failed": 0,
+            "passed": true,
+            "failures": []
+          },
+          {
+            "requirement": {
+              "type": "SLICE_FFX",
+              "port": "Q",
+              "class": "register_output"
+            },
+            "matched": 1227,
+            "failed": 0,
+            "passed": true,
+            "failures": []
+          }
+        ]
+      },
+      "fmax": {
+        "(internal) clock": {
+          "achieved": 113.05,
+          "constraint": 100.0
+        }
+      },
+      "critical_paths": {
+        "$abc$28290$iopadmap$clock": {
+          "logic_ns": 0.8,
+          "routing_ns": 8.0,
+          "text": "Info: Critical path report for clock '$abc$28290$iopadmap$clock' (posedge -> posedge):\nInfo: curr total\nInfo:  0.1  0.1  Source $auto$ff.cc:337:slice$2653.Q\nInfo:  0.3  0.4    Net stimulus[545] budget 0.000000 ns (14,105) -> (14,105)\nInfo:                Sink $abc$28290$lut$aiger28289$2813.A1\nInfo:  0.1  0.5  Source $abc$28290$lut$aiger28289$2813.O6\nInfo:  0.2  0.7    Net $techmap28759$abc$28290$lut$aiger28289$2817.A[4] budget 0.000000 ns (14,105) -> (14,105)\nInfo:                Sink $abc$28290$lut$aiger28289$2817.A2\nInfo:  0.1  0.8  Source $abc$28290$lut$aiger28289$2817.O6\nInfo:  0.4  1.2    Net $techmap28760$abc$28290$lut$aiger28289$2822.A[5] budget 0.000000 ns (14,105) -> (13,105)\nInfo:                Sink $abc$28290$lut$aiger28289$2822.A6\nInfo:  0.1  1.3  Source $abc$28290$lut$aiger28289$2822.O6\nInfo:  2.1  3.5    Net $techmap28765$abc$28290$lut$aiger28289$2844.A[4] budget 0.000000 ns (13,105) -> (43,116)\nInfo:                Sink $abc$28290$lut$aiger28289$2859.A1\nInfo:  0.1  3.6  Source $abc$28290$lut$aiger28289$2859.O6\nInfo:  5.0  8.6    Net $techmap29320$abc$28290$lut\\value[444].A[5] budget 0.000000 ns (43,116) -> (43,109)\nInfo:                Sink $auto$abc9_ops.cc:1613:reintegrate$28383.A6\nInfo:  0.1  8.7  Source $auto$abc9_ops.cc:1613:reintegrate$28383.O6\nInfo:  0.0  8.7    Net value[391] budget 0.790000 ns (43,109) -> (43,109)\nInfo:                Sink $auto$ff.cc:337:slice$3209.D\nInfo:  0.1  8.8  Setup $auto$ff.cc:337:slice$3209.D\nInfo: 0.8 ns logic, 8.0 ns routing"
+        }
+      },
+      "route_seconds": 6.4966336246579885,
+      "seed": 2,
+      "stages": 0,
+      "delay_model": "unit",
+      "no_dsp": true,
+      "target_mhz": 100,
+      "outputs": {
+        "design.opt.ir": "0dd264f26dc496bfaae3df4a82ba8d9b58fbbda078c0cd2528f8ed851ccdbcbd",
+        "optimize.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "mapped.json": "ea730c77d873648af631e8d797859eeee352e6dfa28bb2972a55567d0996092e",
+        "map.ys": "7e72e9f8f10af8c1e8823fc3e8c3504f7dbcc5ffb1a136680ff86b04b5eeefa3",
+        "convert.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "timing.json": "6f9db02d31b49a985107ca03b00da4cadc0b0a88e8dc833316c032798b95bbba",
+        "harness.v": "e8bbeecfe2d48ebc44e3a278131439079a072916c181028535cfcf9572d81d1f",
+        "timing.xdc": "239f13d3586159280f5e6e1cf075d36f953405b1518fd6dd8ca1fdb909fbaa57",
+        "design.ir": "b6923f2e6a824186a327145d6165051dc8664ad4a3ed33204d747336f0f4aa37",
+        "arithmetic.v": "44512cacfb4b19cc05a028e642b840bb49abb9575341575e6e34d6e31794d5b3",
+        "route.log": "5bbac8616c5e41b3dda7515780026e6a7019ebb3b46acae322be2c8c20413416",
+        "codegen.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "map.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "coverage.json": "1136b8b05624f2d2fc953edd9dfdf28347df394ba616cb2e33c7015196614ab0"
+      },
+      "variant": "unconditional",
+      "queues": 2,
+      "period_ns": 8.84564352056612,
+      "inputs": {
+        "axis.x": "882c944ca4faa43c164225f230b3530e3b318f496ad6fc57c42619cb7e3a4d93",
+        "bank2.x": "7f730edde447752ae63bf856177eaa6c3676eb0ecec25fc5365a071e040d8716",
+        "frame_queue.x": "315233dc6889028423247d48a5108b1d7f37c3e1fbe0b097ba035b081e86872a",
+        "probe.py": "b2b99a9b4c12f78b0ae3fb95de131429de77571880b42ae9bee43d0d160f1add",
+        "xc7z030sbg485.xdc": "6e72b1516836d2637c37220ab7de9525886d46e4d6d62f09899423f31e47e072",
+        "bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+        "libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+        "libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d",
+        "xc7z030sbg485.bin": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+        "nextpnr-calibrated": "78e09c26bf142ea6e0d2bc0263ea2bada65aedd47d4358e483359c3e404f267c",
+        "codegen_main": "86cbca2bec69093af32a4d702d20c3aacd87d455fe1552dd3ea5425070361162",
+        "ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+        "opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c"
+      }
+    }
+  ],
+  "statistics": [
+    {
+      "variant": "baseline",
+      "queues": 2,
+      "samples": 2,
+      "mean_ns": 10.356171566863456,
+      "variance_ns2": 0.03244536801501978,
+      "best_ns": 10.176045588684238,
+      "worst_ns": 10.536297545042672
+    },
+    {
+      "variant": "baseline",
+      "queues": 9,
+      "samples": 2,
+      "mean_ns": 15.530268407510192,
+      "variance_ns2": 0.01727613673841685,
+      "best_ns": 15.398829688943641,
+      "worst_ns": 15.661707126076742
+    },
+    {
+      "variant": "candidate",
+      "queues": 2,
+      "samples": 2,
+      "mean_ns": 6.863019680094812,
+      "variance_ns2": 0.042483999810198785,
+      "best_ns": 6.656903208627346,
+      "worst_ns": 7.069136151562279
+    },
+    {
+      "variant": "candidate",
+      "queues": 9,
+      "samples": 2,
+      "mean_ns": 10.282740042683901,
+      "variance_ns2": 0.17871914753674809,
+      "best_ns": 9.859988168014198,
+      "worst_ns": 10.705491917353603
+    },
+    {
+      "variant": "unconditional",
+      "queues": 2,
+      "samples": 2,
+      "mean_ns": 8.091738696003635,
+      "variance_ns2": 0.5683724844985918,
+      "best_ns": 7.33783387144115,
+      "worst_ns": 8.84564352056612
+    }
+  ]
+}
