@@ -5,6 +5,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 from characterize import operation
+from expand import probe
 
 
 def verify(codegen: Path, table: Path) -> None:
@@ -14,8 +15,8 @@ def verify(codegen: Path, table: Path) -> None:
                    '  ret result: bits[16] = sel(s, cases=[a, b], default=c, id=5)\n}\n')
     nary = ('package probe\ntop fn main(a: bits[16], b: bits[16], c: bits[16]) -> bits[16] {\n'
             '  ret result: bits[16] = xor(a, b, c, id=4)\n}\n')
-    cases = [('wide_select', wide_select, table.read_text(), 'select shape'),
-             ('nary', nary, table.read_text(), 'no calibration'),
+    cases = [('wide_select', wide_select, table.read_text(), None),
+             ('nary', nary, table.read_text(), None),
              ('valid', add, table.read_text(), None),
              ('missing', add, None, 'readable calibration'),
              ('empty', add, '', 'empty XC7'),
@@ -25,6 +26,14 @@ def verify(codegen: Path, table: Path) -> None:
              ('unsupported', add.replace('add(a, b', 'udiv(a, b'), table.read_text(), 'no calibration'),
              ('different_constant', operation('smul_const_37_39_76_183251937964', 76)[0],
               table.read_text(), 'width exceeds')]
+    for op, width, count in [('priority_sel', 384, 17), ('one_hot_sel', 128, 3),
+                             ('array_index_s12', 128, 5), ('array_update_s24', 24, 3),
+                             ('array2_s32_s8_n4_n5', 8, 2), ('shrl_s14', 128, 2),
+                             ('one_hot_msb', 32, 2), ('uge', 102, 2)]:
+        cases.append((op, probe(op, width, count)[0], table.read_text(), None))
+    for op, width, count in [('one_hot_sel', 128, 33), ('sel_d65', 16, 2),
+                             ('array_index_s65', 8, 4), ('shrl_s65', 32, 2)]:
+        cases.append((op+'_outside', probe(op, width, count)[0], table.read_text(), 'calibration'))
     with tempfile.TemporaryDirectory(prefix='xc7-model-') as directory:
         root = Path(directory)
         for name, source, data, error in cases:

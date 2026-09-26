@@ -2,6 +2,8 @@
 
 The opt-in XLS estimator improves the fixed-point update kernel's limiting setup period **10.615→7.909 ns**, at unchanged four-cycle latency and II=1. It also worsens one composed test. Native BRAM timing now includes previously omitted boundaries in six measured configurations; registered DSP timing remains incomplete. **No board clock is qualified.**
 
+> The [application campaign](xc7-timing-application-2026-09-26.md) supersedes this calibration table and its operation-level accuracy statistics. Its stricter post-route audit confirms the eighteen earlier composed-kernel and primitive comparisons.
+
 [Usage and reproduction](../docs/timing-model.md) · [Compact evidence](xc7-timing-model-2026-09-25.json) · [Calibration](../timing_model/xc7_7030.tsv) · [Preregistered hypotheses](../yap/timing-model/hypotheses.md)
 
 ## Method

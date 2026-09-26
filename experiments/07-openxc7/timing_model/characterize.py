@@ -65,20 +65,23 @@ def harness(name: str, ports: list[tuple[str, int]], result: int) -> str:
 
 def sha(path: Path) -> str:
     """Hash a tool or input without retaining its contents in memory."""
+    digest = hashlib.sha256()
     with path.open('rb') as stream:
-        return hashlib.file_digest(stream, 'sha256').hexdigest()
+        for block in iter(lambda: stream.read(1024 * 1024), b''):
+            digest.update(block)
+    return digest.hexdigest()
 
 
-def run(argv: list[str | Path], directory: Path, label: str, output: Path | None = None) -> None:
+def run(argv: list[str | Path], directory: Path, label: str, output: Path | None = None, timeout: int = 180) -> None:
     """Execute one bounded phase, preserving failure diagnostics."""
     with (directory / (label + '.log')).open('w') as log:
         if output:
             with output.open('w') as result:
                 subprocess.run(list(map(str, argv)), cwd=directory, stdout=result, stderr=log,
-                               check=True, timeout=180)
+                               check=True, timeout=timeout)
         else:
             subprocess.run(list(map(str, argv)), cwd=directory, stdout=log, stderr=subprocess.STDOUT,
-                           check=True, timeout=180)
+                           check=True, timeout=timeout)
 
 
 def prepare(args: argparse.Namespace) -> None:
