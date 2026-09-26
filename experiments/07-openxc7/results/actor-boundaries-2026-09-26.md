@@ -1,5 +1,7 @@
 # Actor boundaries and exact arithmetic
 
+**Timing-model update:** The later [DSP cascade audit](lut-arithmetic-2026-09-26.md#correcting-a-false-dsp-dependency) found impossible dependencies in our local native extension. The native periods/path attributions below are historical measurements under that model; affected architectural rankings require rechecking. Area, RTL cycle counts, XLS estimates and vendor measurements are unchanged.
+
 The tested register boundaries and two-cycle actor recurrence do not improve step time. A bit-preserving arithmetic rewrite does reduce the isolated bulk update from six DSPs to four; its application timing awaits one new calibration shape. No production default changes.
 
 This continues the [architecture experiment](architecture-2026-09-26.md) on the same two-plane 2×1 fixture: four phi actors and four syndrome actors. All boundary experiments derive from its dedicated-actor IR, with two requested pipeline stages, compact FIFOs, unsplit next-value selects, the same calibrated table and a 40 ns physical target. The new routes use seed 1. Native timing remains a partial-model diagnostic, not a qualified board clock.

@@ -1,0 +1,30 @@
+{
+  "schema": 1,
+  "part": "xc7z030sbg485-1",
+  "flow": "same compiled RTL and XLS schedule; synth_xilinx -abc9 with/without -nodsp",
+  "probes": [
+    {
+      "name": "dsp",
+      "split": "validation",
+      "files": {
+        "mapped.json": "6f8dd8a084731c47b844e233a21ec1cfd640981bd9af77e01344b1f7da160f6f",
+        "edif.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "normalization.json": "4c875ca5798b66f8bcd8be77d226400f9a9299fb6655f4e6b2faa5233ec7c0ff",
+        "command.json": "ff7f5bb96e63f55ab4daa16b006639932ecb5e768ccebf5e0aa2cde073bfa70e",
+        "mapped.edf": "6dc289ea3646438936cd51f240af6e4c95b9c2801e735c27f2921dac60bd4e0e"
+      }
+    },
+    {
+      "name": "lut",
+      "split": "validation",
+      "files": {
+        "mapped.json": "3f32a5fe05ff78b66cb2cacdcf41010ec913e9cba287c4d5b64e998a6d89a7a0",
+        "edif.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "normalization.json": "cd76713a14ddcf983e2f5514943a005a53f0fa7fb407aebb71e39db1c394354c",
+        "command.json": "ff7f5bb96e63f55ab4daa16b006639932ecb5e768ccebf5e0aa2cde073bfa70e",
+        "mapped.edf": "194c67884364a5112b3c1db26e7d6b2fdb452194a7fd1aefbf8cae8a6b1a25bb"
+      }
+    }
+  ],
+  "purpose": "Matched full-application vendor validation; no EC2 run yet."
+}

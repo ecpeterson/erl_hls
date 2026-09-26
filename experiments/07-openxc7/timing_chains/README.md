@@ -160,3 +160,21 @@ vvp "$STAGE/egress.vvp"
 `factor_rounding.py --stage FRESH --xls XLS --yosys YOSYS --library hls_fixed.x --z3 Z3` proves the factored division identity and signed intermediate bounds, rejects an incorrect bias, compares compiled RTL against integer rounding, and measures isolated resources. `architecture.py --variant factored-bulk` applies that expression to the shared application for an operation-shape audit. Its calibrated codegen requires an additional measured constant-product entry; a rejection before calibration is expected, not a completed application measurement. Prepare the exact local probe with `timing_model/characterize.py --ops smul_const_35_37_71_45812984491 --widths 71` and the explicit tool/stage flags from the timing-model guide. Keep vendor characterization and held-out kernel validation separate from local resource screening.
 
 The arithmetic runner also writes `FRESH/vendor-kernels`, a `timing_model/batch.py`-compatible corpus containing both complete kernels between preserved input/output registers. Use it as held-out validation, separately from the constant-product calibration corpus. It prepares EDIF locally without invoking Vivado. [Measured outcomes and remaining calibration](../results/actor-boundaries-2026-09-26.md) identify the exact shape and audit sequence.
+
+## Arithmetic resource mapping and DSP cascade dependencies
+
+`phi_timing.py PREPARED --stage FRESH --part xc7z030sbg485-1 --phase map --no-dsp` maps the unchanged decoder into LUTs/carry chains. It preserves the XLS schedule and the separately mapped harness. The synthesis script and policy are part of the mapping provenance; retain `--no-dsp` on subsequent `phi_timing.py` mapping/report invocations. `architecture_physical.py` can route the mapped result directly and selects FF/RAM/DSP endpoint requirements from the primitives actually present.
+
+The local coarse DSP timing model must exclude nonexistent A/B cascade dependencies before comparing DSP and LUT arithmetic. [UG479](https://docs.amd.com/api/khub/documents/gu4oRPFEh_Pm2uaAlfY6Kg/content) defines ACOUT/BCOUT as the selected A/ACIN or B/BCIN bus, independently of the multiplier result. With the corresponding registers bypassed, only the selected input's same bit can reach each cascade output. This corrects dependency existence; it does not calibrate cascade delay or other DSP paths.
+
+```sh
+python3 experiments/07-openxc7/timing_chains/install_dsp_cascade.py "$NEXTPNR_SOURCE"
+cmake --build "$NEXTPNR_BUILD" --target nextpnr-xilinx -j2
+cp "$NEXTPNR_BUILD/nextpnr-xilinx" "$NEXTPNR_CASCADE"
+```
+
+Use a dedicated experimental source tree and a new frozen binary path; retain the original binary for historical replay. The installer rejects an unexpected DSP model and can be rerun safely. It changes no delay values, registered-DSP support or non-cascade output dependencies. `test_phi_timing.py` runs a C++ dependency test and, when Yosys is available, proves the cascade identities against its primitive model with symbolic data/control inputs. These checks establish topology, not silicon delay.
+
+For an isolated model comparison, install with `--diagnostic-switch`, rebuild separately, then add `--diagnostic-dsp-cascade` to the native routing command. It routes with the historical dependency graph and rechecks timing with the correction in the same process, asserting an unchanged cell/net/placement/routing checksum. The log retains both timing reports; the final JSON uses corrected dependencies. This avoids the pinned reader's failure when reloading a fully routed JSON checkpoint. Without the diagnostic flag, the new binary uses corrected dependencies throughout.
+
+For vendor comparison, use `timing_model/prepare_application.py MAPPED_JSON FRESH --top phi_timing_harness --yosys "$YOSYS"` on both complete mappings, then run `timing_model/measure.tcl` with the same period/part and before/after graph audits. Changing mapping alone does not validate the existing DSP-trained XLS estimator for future LUT-only schedules.

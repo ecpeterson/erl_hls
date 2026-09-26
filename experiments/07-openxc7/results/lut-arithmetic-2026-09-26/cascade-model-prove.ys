@@ -1,0 +1,6 @@
+read_verilog -sv +/xilinx/cells_sim.v /Users/ecpeterson/Documents/code/erl_xls/_build/architecture-repo/experiments/07-openxc7/timing_chains/dsp_cascade_miter.v
+hierarchy -check -top dsp_cascade_miter
+proc
+flatten
+opt
+sat -verify -prove bad 0 -show-inputs

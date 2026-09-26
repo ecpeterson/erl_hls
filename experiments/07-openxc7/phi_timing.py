@@ -214,13 +214,20 @@ def mapped_stage(stage, label, script, inputs, outputs, binary):
     return result
 
 
-def map_design(args, binaries):
+def map_design(args: argparse.Namespace, binaries: dict[str, Path], *,
+               no_dsp: bool = False) -> dict[str, Any]:
+    """Map an unchanged decoder and preserve it while adding the timing harness.
+
+    Disable DSP inference only for the decoder when screening LUT arithmetic;
+    this leaves the compiled pipeline and the harness mapping policy unchanged.
+    """
     stage, rtl = args.stage, args.rtl
+    arithmetic = " -nodsp" if no_dsp else ""
     inputs = [rtl / name for name in ("phi_decoder_profile.v", "phi_decoder_profile_top.v", "hls_1r1w_ram.v")]
     core = mapped_stage(stage, "map-core",
         "read_verilog -sv " + " ".join(map(quote, inputs)) + "\n"
         f"hierarchy -check -top {CORE}\n"
-        f"synth_xilinx -flatten -abc9 -family xc7 -noiopad -noclkbuf -top {CORE}\n"
+        f"synth_xilinx -flatten -abc9 -family xc7 -noiopad -noclkbuf -top {CORE}{arithmetic}\n"
         "check -assert\nscc -expect 0\ntee -o core-stat.json stat -json\nwrite_json core.json\n",
         inputs, ["core.json", "core-stat.json"], binaries["yosys"])
     mapped_stage(stage, "core-interface",
@@ -241,7 +248,7 @@ def map_design(args, binaries):
         "tee -o mapped-stat.json stat -json\nwrite_json mapped.json\n",
         [stage / "core-stub.v", stage / "core.json", HERE / "phi_timing_harness.v"],
         ["mapped.json", "mapped-stat.json"], binaries["yosys"])
-    result = {"core": core, "assembly": assembly,
+    result = {"core": core, "assembly": assembly, "decoder_dsp_inference": not no_dsp,
               "netlist_sha256": sha(stage / "mapped.json"), **check_assembly(stage)}
     save(stage / "mapping.json", result)
     return result
@@ -433,6 +440,8 @@ def main() -> None:
     parser.add_argument("--reference", type=Path, help="baseline RTL directory for the compare phase")
     parser.add_argument("--comparison-mode", choices=("cycle", "actor-sequence"), default="cycle",
                         help="compare cycle timing or accepted per-actor event sequences")
+    parser.add_argument("--no-dsp", action="store_true",
+                        help="map the unchanged decoder arithmetic into LUTs/carry chains")
     args = parser.parse_args()
     if args.phase == "compare" and args.reference is None:
         parser.error("compare requires --reference")
@@ -451,7 +460,7 @@ def main() -> None:
         simulate(args)
     if args.phase == "simulate":
         return
-    mapping = map_design(args, binaries)
+    mapping = map_design(args, binaries, no_dsp=args.no_dsp)
     if args.phase in ("all", "route"):
         route(args, binaries, mapping)
     if args.phase in ("all", "route", "report"):

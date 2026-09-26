@@ -1,0 +1,64 @@
+{
+   "creator": "Yosys 0.63+173 (git sha1 66306a8ca-dirty, aarch64-apple-darwin23.5-clang++ 18.1.8 -fPIC -O3)",
+   "invocation": "stat -json ",
+   "modules": {
+      "\\phi_decoder_profile_top": {
+         "num_wires":         33387,
+         "num_wire_bits":     257063,
+         "num_pub_wires":     4667,
+         "num_pub_wire_bits": 205715,
+         "num_ports":         8,
+         "num_port_bits":     262,
+         "num_memories":      0,
+         "num_memory_bits":   0,
+         "num_processes":     0,
+         "num_cells":         56229,
+         "num_submodules":       0,
+         "num_cells_by_type": {
+            "$scopeinfo": 73,
+            "CARRY4": 754,
+            "DSP48E1": 56,
+            "FDRE": 22008,
+            "INV": 95,
+            "LUT2": 5604,
+            "LUT3": 7465,
+            "LUT4": 10074,
+            "LUT5": 5533,
+            "LUT6": 4495,
+            "MUXF7": 16,
+            "MUXF8": 4,
+            "RAMB18E1": 44,
+            "RAMB36E1": 8
+         }
+      }
+   },
+      "design": {
+         "num_wires":         33387,
+         "num_wire_bits":     257063,
+         "num_pub_wires":     4667,
+         "num_pub_wire_bits": 205715,
+         "num_ports":         8,
+         "num_port_bits":     262,
+         "num_memories":      0,
+         "num_memory_bits":   0,
+         "num_processes":     0,
+         "num_cells":         56229,
+         "num_submodules":       0,
+         "num_cells_by_type": {
+            "$scopeinfo": 73,
+            "CARRY4": 754,
+            "DSP48E1": 56,
+            "FDRE": 22008,
+            "INV": 95,
+            "LUT2": 5604,
+            "LUT3": 7465,
+            "LUT4": 10074,
+            "LUT5": 5533,
+            "LUT6": 4495,
+            "MUXF7": 16,
+            "MUXF8": 4,
+            "RAMB18E1": 44,
+            "RAMB36E1": 8
+         }
+      }
+}

@@ -53,7 +53,9 @@ def run(args: argparse.Namespace) -> None:
     spec.loader.exec_module(module)
     data = json.loads((args.stage / 'coverage.json').read_text())
     has_ram = any(cell['type'].startswith('RAMB') for cell in data['cells'].values())
-    audit = module.check(data, module.requirements('ram_dsp' if has_ram else 'dsp'))
+    has_dsp = any(cell['type'].startswith('DSP48') for cell in data['cells'].values())
+    mode = ('ram_dsp' if has_dsp else 'ram') if has_ram else ('dsp' if has_dsp else 'logic')
+    audit = module.check(data, module.requirements(mode))
     (args.stage / 'endpoint-audit.json').write_text(json.dumps(audit, indent=2) + '\n')
     if any(sha(Path(path)) != value for path, value in evidence['inputs'].items()):
         raise RuntimeError('physical inputs changed during measurement')

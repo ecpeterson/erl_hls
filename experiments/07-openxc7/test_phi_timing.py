@@ -15,6 +15,7 @@ from lut_legality.test_check import CheckerTest
 from timing_coverage.test_check import CoverageTest
 from timing_chains.test_replicate import ReplicationTest
 from timing_chains.test_probe import HarnessTest
+from timing_chains.test_dsp_cascade import DspCascadeTest
 
 
 def path_report(clock, logic, routing):
