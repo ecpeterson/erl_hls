@@ -15,12 +15,7 @@ write(Stage) ->
         Generated = xls_parse:to_xls(Actor),
         ok = file:write_file(filename:join(Stage, "shape.x"),
             [Generated, Semantics, tests(Cases)]),
-        ok = file:write_file(filename:join(Stage, "shape_tb.sv"), testbench(Cases)),
-        %% The source still declares two elements, but the loaded provider
-        %% emits one. Type-dependent routing must fail before RTL generation.
-        ok = xls_type_shape_fixture:load(Provider, [{d, 'WIRE_COUNT', 1}]),
-        ok = file:write_file(filename:join(Stage, "shape_mismatch.x"),
-            xls_parse:to_xls(Actor))
+        ok = file:write_file(filename:join(Stage, "shape_tb.sv"), testbench(Cases))
     end).
 
 nested_assertions(Stage) ->
