@@ -4,7 +4,7 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from control_cones import analyze
+from control_cones import analyze, compare
 
 
 SOURCE = 'service.materialized_fifo_fifo__executor_result_.slots'
@@ -57,6 +57,26 @@ class ControlConesTest(unittest.TestCase):
         """Ambiguous connectivity must fail before producing a comparison."""
         with self.assertRaisesRegex(ValueError, 'multiple drivers'):
             self.measure({'first': cell('LUT1', [1], 4), 'second': cell('LUT1', [2], 4)})
+
+
+class CompareTests(unittest.TestCase):
+    """Report new and removed cones without treating absent signals as success."""
+
+    def test_cuts_require_opt_in(self) -> None:
+        """Existing callers retain their strict matched-cone comparison."""
+        before = {'sources': ['s'], 'endpoints': ['e'],
+                  'paths': [{'source': 's', 'endpoint': 'e', 'levels': 24}]}
+        after = {**before, 'paths': []}
+        with self.assertRaises(ValueError):
+            compare(before, after)
+        self.assertEqual(compare(before, after, True)[0]['status'], 'cut')
+        self.assertEqual(compare(after, before, True)[0]['status'], 'added')
+
+    def test_missing_signal_is_not_a_cut(self) -> None:
+        """Optimization or changed naming must not silently erase an observation."""
+        before = {'sources': ['s'], 'endpoints': ['e'], 'paths': []}
+        with self.assertRaises(ValueError):
+            compare(before, {**before, 'endpoints': []}, True)
 
 
 if __name__ == '__main__':

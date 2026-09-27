@@ -546,16 +546,20 @@ aggregate_mux_proc(Spec, Scheduler = #{module_name := Module}) ->
         "}\n\n"
     ].
 
+-doc "Emit bounded aggregate handoffs for a scheduler and its selected reduction planes.".
 -spec scheduler_channels(map(), map()) -> iodata().
 scheduler_channels(Spec, Scheduler = #{stem := Stem, module_name := Module}) ->
     case scheduler_planes(Spec, Scheduler) of
         [] -> [];
         Planes ->
+            %% Empty bypass preserves immediate delivery; the stored slot makes
+            %% upstream readiness independent of the scheduler's current issue.
+            %% Buffer acceptance transfers ownership, not actor-state commit.
             [
                 "    let (", Stem, "_aggregate_p, ", Stem,
                 "_aggregate_c) =\n",
                 "      chan<", Module,
-                "::ReductionAggregateRequest, u32:0>(\"", Stem,
+                "::ReductionAggregateRequest, u32:1>(\"", Stem,
                 "_aggregate\");\n",
                 case Planes of
                     [_, _ | _] -> [

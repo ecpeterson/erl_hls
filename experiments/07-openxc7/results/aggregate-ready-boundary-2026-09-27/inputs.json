@@ -1,0 +1,40 @@
+{
+  "inputs": {
+    "/Users/ecpeterson/Documents/code/erl_xls/_build/timing-report-repo/_build/reciprocal-library/sources/phi_decoder_profile.opt.ir": "1b99b69dd37822c037d77c89e8136de166d341b19d420e15fac31d6249b12924",
+    "/Users/ecpeterson/Documents/code/erl_xls/_build/timing-report-repo/_build/mailbox-single/sources/codegen-command.json": "0ea6c3ba5b6b38e1eeb344abb70854a66d41a8fb4b98335ba657672d41ca1473",
+    "/Users/ecpeterson/Documents/code/erl_hls_worktrees/timing-control-simplification/_build/timing-fifo/codegen-compact": "72214d06c698abe038065f7f8c17daea98959d914a6dd122bdf3c768f1191ea4",
+    "experiments/07-openxc7/timing_chains/aggregate_fifo_tb.sv": "2ea06dd9c6bded08bba9f2352d1b4ba282dea167b5fbd8701435fef9b545fb05"
+  },
+  "command": [
+    "/Users/ecpeterson/Documents/code/erl_hls_worktrees/timing-control-simplification/_build/timing-fifo/codegen-compact",
+    "--pipeline_stages=2",
+    "--delay_model=xc7_7030",
+    "--flop_inputs=false",
+    "--flop_outputs=true",
+    "--use_system_verilog=false",
+    "--reset=reset",
+    "--fifo_module=",
+    "--xc7_delay_table=/Users/ecpeterson/Documents/code/erl_xls/_build/timing-report-repo/experiments/07-openxc7/timing_model/xc7_7030.tsv",
+    "--worst_case_throughput=1",
+    "--ram_configurations=scheduler_0_state:1R1W:_scheduler_0_ram_read_req_out:_scheduler_0_ram_read_resp_in:_scheduler_0_ram_write_req_out:_scheduler_0_ram_write_resp_in,scheduler_0_mailbox:1R1W:_scheduler_0_mailbox_read_req_out:_scheduler_0_mailbox_read_resp_in:_scheduler_0_mailbox_write_req_out:_scheduler_0_mailbox_write_resp_in,scheduler_1_state:1R1W:_scheduler_1_ram_read_req_out:_scheduler_1_ram_read_resp_in:_scheduler_1_ram_write_req_out:_scheduler_1_ram_write_resp_in,scheduler_1_mailbox:1R1W:_scheduler_1_mailbox_read_req_out:_scheduler_1_mailbox_read_resp_in:_scheduler_1_mailbox_write_req_out:_scheduler_1_mailbox_write_resp_in,scheduler_2_state:1R1W:_scheduler_2_ram_read_req_out:_scheduler_2_ram_read_resp_in:_scheduler_2_ram_write_req_out:_scheduler_2_ram_write_resp_in,scheduler_2_mailbox:1R1W:_scheduler_2_mailbox_read_req_out:_scheduler_2_mailbox_read_resp_in:_scheduler_2_mailbox_write_req_out:_scheduler_2_mailbox_write_resp_in,scheduler_3_state:1R1W:_scheduler_3_ram_read_req_out:_scheduler_3_ram_read_resp_in:_scheduler_3_ram_write_req_out:_scheduler_3_ram_write_resp_in,scheduler_3_mailbox:1R1W:_scheduler_3_mailbox_read_req_out:_scheduler_3_mailbox_read_resp_in:_scheduler_3_mailbox_write_req_out:_scheduler_3_mailbox_write_resp_in",
+    "--output_schedule_path=schedule.textproto",
+    "--output_schedule_ir_path=scheduled.ir",
+    "/Users/ecpeterson/Documents/code/erl_xls/_build/timing-report-repo/_build/aggregate-boundary/phi_decoder_profile.opt.ir"
+  ],
+  "channels": [
+    {
+      "before": "chan _scheduler_2_aggregate((bits[32], (bits[1], bits[16], bits[2], bits[32], bits[3], bits[4], (bits[64], bits[64]))), id=34, kind=streaming, ops=send_receive, flow_control=ready_valid, strictness=proven_mutually_exclusive, fifo_depth=0, bypass=true, register_push_outputs=false, register_pop_outputs=false)",
+      "after": "chan _scheduler_2_aggregate((bits[32], (bits[1], bits[16], bits[2], bits[32], bits[3], bits[4], (bits[64], bits[64]))), id=34, kind=streaming, ops=send_receive, flow_control=ready_valid, strictness=proven_mutually_exclusive, fifo_depth=1, bypass=true, register_push_outputs=true, register_pop_outputs=false)"
+    },
+    {
+      "before": "chan _scheduler_3_aggregate((bits[32], (bits[1], bits[16], bits[2], bits[32], bits[3], bits[4], (bits[64], bits[64]))), id=39, kind=streaming, ops=send_receive, flow_control=ready_valid, strictness=proven_mutually_exclusive, fifo_depth=0, bypass=true, register_push_outputs=false, register_pop_outputs=false)",
+      "after": "chan _scheduler_3_aggregate((bits[32], (bits[1], bits[16], bits[2], bits[32], bits[3], bits[4], (bits[64], bits[64]))), id=39, kind=streaming, ops=send_receive, flow_control=ready_valid, strictness=proven_mutually_exclusive, fifo_depth=1, bypass=true, register_push_outputs=true, register_pop_outputs=false)"
+    }
+  ],
+  "instances": {
+    "materialized_fifo_fifo__scheduler_2_aggregate_": "fifo_for_depth_0_ty__bits_32____bits_1___bits_16___bits_2___bits_32___bits_3___bits_4____bits_64___bits_64_____with_bypass",
+    "materialized_fifo_fifo__scheduler_3_aggregate_": "fifo_for_depth_0_ty__bits_32____bits_1___bits_16___bits_2___bits_32___bits_3___bits_4____bits_64___bits_64_____with_bypass___1"
+  },
+  "scope": "only final aggregate FIFO module bodies replaced; all application procs unchanged",
+  "production_channels": "production-channels.json"
+}

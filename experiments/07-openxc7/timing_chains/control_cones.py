@@ -64,24 +64,36 @@ def analyze(path: Path) -> dict:
                 measurements.append({'source': source, 'endpoint': endpoint, 'levels': len(chain),
                     'chain': [{'cell': n, 'type': cells[n]['type']} for n in chain]})
     return {'netlist': str(path), 'sha256': sha(path), 'paths': measurements,
+            'sources': sorted(sources), 'endpoints': sorted(endpoints),
             'scope': 'conservative cell dependency depth; not a timing or sensitizability proof'}
 
 
+def compare(before: dict, after: dict, allow_cuts: bool = False) -> list[dict]:
+    """Report disappeared dependencies only when the named observation sets survive."""
+    if before['sources'] != after['sources'] or before['endpoints'] != after['endpoints']:
+        raise ValueError('named observation sets changed; missing signals are not dependency cuts')
+    key = lambda p: (p['source'], p['endpoint'])
+    old = {key(p): p for p in before['paths']}
+    new = {key(p): p for p in after['paths']}
+    if old.keys() != new.keys() and not allow_cuts:
+        raise ValueError('source/endpoint reachability changed; review before comparing depths')
+    return [{'source': k[0], 'endpoint': k[1],
+             'before': old[k]['levels'] if k in old else None,
+             'after': new[k]['levels'] if k in new else None,
+             'status': 'retained' if k in old and k in new else 'cut' if k in old else 'added'}
+            for k in sorted(old.keys() | new.keys())]
+
+
 def main() -> None:
-    """Retain exact before/after paths and reject mismatched named dependencies."""
+    """Retain exact paths, optionally accepting explicitly reported dependency cuts."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('baseline', type=Path)
     parser.add_argument('candidate', type=Path)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--allow-cuts', action='store_true')
     args = parser.parse_args()
     before, after = analyze(args.baseline), analyze(args.candidate)
-    key = lambda p: (p['source'], p['endpoint'])
-    old = {key(p): p for p in before['paths']}
-    new = {key(p): p for p in after['paths']}
-    if old.keys() != new.keys():
-        raise ValueError('source/endpoint reachability changed; review before comparing depths')
-    changes = [{'source': k[0], 'endpoint': k[1], 'before': old[k]['levels'], 'after': new[k]['levels']}
-               for k in old]
+    changes = compare(before, after, args.allow_cuts)
     args.output.write_text(json.dumps({'baseline': before, 'candidate': after, 'changes': changes}, indent=2) + '\n')
     for row in changes:
         print(row['before'], '->', row['after'], row['endpoint'], flush=True)

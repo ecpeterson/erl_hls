@@ -1,0 +1,4 @@
+[
+  "chan _scheduler_2_aggregate((bits[32], (bits[1], bits[16], bits[2], bits[32], bits[3], bits[4], (bits[64], bits[64]))), id=34, kind=streaming, ops=send_receive, flow_control=ready_valid, strictness=proven_mutually_exclusive, fifo_depth=1, bypass=true, register_push_outputs=true, register_pop_outputs=false)",
+  "chan _scheduler_3_aggregate((bits[32], (bits[1], bits[16], bits[2], bits[32], bits[3], bits[4], (bits[64], bits[64]))), id=39, kind=streaming, ops=send_receive, flow_control=ready_valid, strictness=proven_mutually_exclusive, fifo_depth=1, bypass=true, register_push_outputs=true, register_pop_outputs=false)"
+]
