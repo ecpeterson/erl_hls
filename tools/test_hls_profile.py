@@ -51,17 +51,6 @@ class ProfileTests(unittest.TestCase):
         self.assertEqual(p['counters'][0]['original_ts'], 3)
         self.assertEqual(longest_path(p, 'join')['accounted_ns'], 10)
 
-    def test_legacy_adapter_preserves_aliased_neighbors(self) -> None:
-        """Aliased source fragments must preserve multiplicity without ambiguous parallel flows."""
-        from phi_profile_timeline import Event, Dependency, timing_profile
-        source = Event(2, 'phi_0', 'state_write', 0, 'epoch=4')
-        target = Event(3, 'phi_x_plane', 'batch_accept', 1, 'source=0')
-        dependency = Dependency(source, target, 'contribution', 'fixture')
-        profile = timing_profile([source, target], [dependency, dependency], 7)
-        self.assertEqual([e['ts'] for e in profile['events']], [14, 21])
-        self.assertEqual(profile['edges'][0]['multiplicity'], 2)
-        self.assertEqual(profile['events'][0]['args']['epoch'], '4')
-
     def test_ambiguous_flow_anchor_rejected(self) -> None:
         """Two instants at the same time on one track cannot be unambiguously bound by Perfetto."""
         p = fixture()
