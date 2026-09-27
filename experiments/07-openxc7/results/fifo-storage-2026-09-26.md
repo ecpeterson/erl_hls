@@ -1,5 +1,7 @@
 # Materialized FIFO storage, 2026-09-26
 
+**Timing-model update:** The later [DSP cascade audit](lut-arithmetic-2026-09-26.md#correcting-a-false-dsp-dependency) found impossible dependencies in our local native extension. The native periods/path attributions below are historical measurements under that model; affected architectural rankings require rechecking. Area, RTL cycle counts, XLS estimates and vendor measurements are unchanged.
+
 Compact depth-one FIFOs remove 7,218 flip-flops from the four-phi testbench while preserving every observed interface cycle. The experiment changes XLS materialization, not FIFO depth, bypass policy or pipeline latency. Compiler defaults remain unchanged; the source patches are retained for review.
 
 [Calibration and workload](xc7-timing-application-2026-09-26.md) · [Reproduction](../timing_chains/README.md#materialized-xls-fifos) · [Machine-readable evidence](fifo-storage-2026-09-26/evidence.json)

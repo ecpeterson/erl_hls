@@ -115,3 +115,66 @@ Supply `--reference COMPILED_DIRECTORY --generated CANDIDATE_RTL --compiler CAND
 `prove_fifo.py --baseline RTL --candidate RTL --yosys BIN --stage FRESH_DIRECTORY` exhaustively checks the selected 424-bit, depth-one FIFO over twelve symbolic cycles. The first cycle resets it; later data, readiness, validity and resets are unrestricted. Both handshakes and every valid payload must match. This bounded check complements the independent XLS FIFO interpreter tests; it is not an unbounded equivalence proof.
 
 Apply one of the [recorded FIFO patches](../results/fifo-storage-2026-09-26.md) to a separate checkout of XLS `20bf86d9c9e90f9df380a0280a5973ce0c33a59a`, then build `//xls/tools:codegen_main` and test `//xls/codegen:maybe_materialize_fifos_pass_test`. For calibrated schedules, install the XC7 estimator first using the [timing-model instructions](../docs/timing-model.md). Freeze each binary before building another variant. Reuse the baseline optimized IR and recorded codegen flags, then pass that generated RTL to `fifo_experiment.py`; do not replace non-FIFO application logic. The report retains compiler, patch, baseline, netlist and testbench hashes.
+
+## Small-core architecture controls
+
+`architecture.py` derives one experiment from a prepared two-plane, 2×1 profile bundle (including `compiled/*.command.json` and `oracle.json`). It rejects a different geometry or an unexpected source pattern. Use the calibrated model and frozen compact-FIFO compiler from the preceding experiment; this does not change compiler defaults.
+
+```sh
+python3 experiments/07-openxc7/timing_chains/architecture.py \
+  --reference "$PREPARED" --stage "$STAGE/reference" --variant reference \
+  --xls "$XLS" --codegen "$CODEGEN" --table "$TABLE" --keep-next-selects
+python3 experiments/07-openxc7/timing_chains/architecture_validate.py \
+  "$STAGE/reference" "$PREPARED"
+python3 experiments/07-openxc7/phi_timing.py "$STAGE/reference" \
+  --stage "$STAGE/reference-map" --part xc7z030sbg485-1 --phase map
+python3 experiments/07-openxc7/timing_chains/architecture_physical.py \
+  --stage "$STAGE/reference-map" --nextpnr "$NEXTPNR" --chipdb "$CHIPDB"
+```
+
+Repeat in fresh stages with `--variant dedicated`, `registered-selection`, `separate-entry`, `magnitude-rounding` or `registered-egress`. The dedicated variant gives each actor its own executor, register state and bounded ordinary mailbox. It retains the source-fragment collectors, routing groups and effect-window protocol; extra per-actor effect channels contribute buffering. It is an experimental architecture, not a replacement topology backend.
+
+`--keep-next-selects` suppresses the optimizer's splitting of state updates into guarded next values. Use it on both sides of each comparison: it changes mapped logic even when cycles are unchanged. The dedicated variant otherwise produces a scheduling-normalization fan-in beyond the measured model. `--build-only --resume-from opt` reuses a verified IR conversion; skipped phases must match their recorded command and output hash.
+
+Validation requires the complete 161-event BEAM witness with and without output stalls, plus matching per-actor prefixes through prolonged stalls and reset. It permits different cross-actor interleavings and does not prove every application state. Physical runs retain placement separately, record bounded failures, and check required FF/DSP/RAM endpoint classes after routing. Endpoint coverage does not qualify the native delay values or establish a board clock.
+
+`width_mapping.py --stage "$STAGE/widths" --xls "$XLS" --yosys "$YOSYS" --library "$LIBRARY/hls_fixed.x"` measures resource thresholds for the bulk recurrence at widths 32/24/20/16/12; override with `--widths`. This isolated combinational screen measures neither the full decoder nor numerical quality. Reducing width requires an explicit decision about fractional precision and integer range.
+
+Extract per-process XLS stage estimates with `architecture_schedule.py "$STAGE/reference" "$STAGE/dedicated"`. It replays each recorded codegen command with schedule reporting and requires byte-identical RTL. These estimates exclude combinational paths composed across process/FIFO boundaries; compare them with whole-core placement and routing.
+
+## Actor-boundary experiments
+
+`boundary_experiment.py --reference DEDICATED --stage FRESH --variant VARIANT` reuses verified dedicated-actor IR and the frozen compiler/table. Variants are `collector-register`, `actor-register`, `actor-ii2`, `actor-ii2-field-only`, and `actor-ii2-batch-register`. The register variants use depth-two FIFOs without forward bypass. The recurrence variants permit two cycles only on phi actor feedback arcs; `field-only` further restricts this to its two numerical field values. Every other state arc retains a one-cycle limit. Schedule audits require unrelated process schedules to remain identical. These are explicit derived experiments, not compiler-cache edits.
+
+Validate with `architecture_validate.py FRESH PREPARED`, then map and route using the architecture commands above. `boundary_trace.py --rtl FRESH --stage TRACE` passively observes the dedicated fixture's aggregate and effect interfaces. It matches complete payloads in FIFO order, measures handoff latency and output blocking, and reports effect spacing as an observation rather than a causal dependency. It is specific to this fixture's generated module interfaces.
+
+`egress_experiment.py --reference FRESH --stage EAGER` substitutes only `dedicated_egress.v`, checking identical ports and byte-identical surrounding RTL. This work-conserving merge retains blocked grants and preserves per-input order. It is an RTL counterfactual for the benchmark: the frozen XLS compiler rejects the repeated nonblocking receive needed by the direct DSLX expression. Run the normal/stalled/reset comparison and the directed test:
+
+```sh
+iverilog -g2012 -s dedicated_egress_tb -o "$STAGE/egress.vvp" \
+  experiments/07-openxc7/timing_chains/dedicated_egress.v \
+  experiments/07-openxc7/timing_chains/dedicated_egress_tb.sv
+vvp "$STAGE/egress.vvp"
+```
+
+`factor_rounding.py --stage FRESH --xls XLS --yosys YOSYS --library hls_fixed.x --z3 Z3` proves the factored division identity and signed intermediate bounds, rejects an incorrect bias, compares compiled RTL against integer rounding, and measures isolated resources. `architecture.py --variant factored-bulk` applies that expression to the shared application for an operation-shape audit. Its calibrated codegen requires an additional measured constant-product entry; a rejection before calibration is expected, not a completed application measurement. Prepare the exact local probe with `timing_model/characterize.py --ops smul_const_35_37_71_45812984491 --widths 71` and the explicit tool/stage flags from the timing-model guide. Keep vendor characterization and held-out kernel validation separate from local resource screening.
+
+The arithmetic runner also writes `FRESH/vendor-kernels`, a `timing_model/batch.py`-compatible corpus containing both complete kernels between preserved input/output registers. Use it as held-out validation, separately from the constant-product calibration corpus. It prepares EDIF locally without invoking Vivado. [Measured outcomes and remaining calibration](../results/actor-boundaries-2026-09-26.md) identify the exact shape and audit sequence.
+
+## Arithmetic resource mapping and DSP cascade dependencies
+
+`phi_timing.py PREPARED --stage FRESH --part xc7z030sbg485-1 --phase map --no-dsp` maps the unchanged decoder into LUTs/carry chains. It preserves the XLS schedule and the separately mapped harness. The synthesis script and policy are part of the mapping provenance; retain `--no-dsp` on subsequent `phi_timing.py` mapping/report invocations. `architecture_physical.py` can route the mapped result directly and selects FF/RAM/DSP endpoint requirements from the primitives actually present.
+
+The local coarse DSP timing model must exclude nonexistent A/B cascade dependencies before comparing DSP and LUT arithmetic. [UG479](https://docs.amd.com/api/khub/documents/gu4oRPFEh_Pm2uaAlfY6Kg/content) defines ACOUT/BCOUT as the selected A/ACIN or B/BCIN bus, independently of the multiplier result. With the corresponding registers bypassed, only the selected input's same bit can reach each cascade output. This corrects dependency existence; it does not calibrate cascade delay or other DSP paths.
+
+```sh
+python3 experiments/07-openxc7/timing_chains/install_dsp_cascade.py "$NEXTPNR_SOURCE"
+cmake --build "$NEXTPNR_BUILD" --target nextpnr-xilinx -j2
+cp "$NEXTPNR_BUILD/nextpnr-xilinx" "$NEXTPNR_CASCADE"
+```
+
+Use a dedicated experimental source tree and a new frozen binary path; retain the original binary for historical replay. The installer rejects an unexpected DSP model and can be rerun safely. It changes no delay values, registered-DSP support or non-cascade output dependencies. `test_phi_timing.py` runs a C++ dependency test and, when Yosys is available, proves the cascade identities against its primitive model with symbolic data/control inputs. These checks establish topology, not silicon delay.
+
+For an isolated model comparison, install with `--diagnostic-switch`, rebuild separately, then add `--diagnostic-dsp-cascade` to the native routing command. It routes with the historical dependency graph and rechecks timing with the correction in the same process, asserting an unchanged cell/net/placement/routing checksum. The log retains both timing reports; the final JSON uses corrected dependencies. This avoids the pinned reader's failure when reloading a fully routed JSON checkpoint. Without the diagnostic flag, the new binary uses corrected dependencies throughout.
+
+For vendor comparison, use `timing_model/prepare_application.py MAPPED_JSON FRESH --top phi_timing_harness --yosys "$YOSYS"` on both complete mappings, then run `timing_model/measure.tcl` with the same period/part and before/after graph audits. Changing mapping alone does not validate the existing DSP-trained XLS estimator for future LUT-only schedules.

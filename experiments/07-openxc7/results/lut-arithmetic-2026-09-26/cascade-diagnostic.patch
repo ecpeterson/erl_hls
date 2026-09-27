@@ -1,0 +1,24 @@
+--- a/xilinx/arch.cc
++++ b/xilinx/arch.cc
+@@ -2444 +2444,2 @@
+-        if (!xc7DspCascadeArcPossible(fromPort.str(this), toPort.str(this),
++        if (!bool_or_default(settings, id("diagnostic_dsp_legacy"), false) &&
++            !xc7DspCascadeArcPossible(fromPort.str(this), toPort.str(this),
+--- a/common/command.cc
++++ b/common/command.cc
+@@ -127,0 +128,2 @@
++    general.add_options()("diagnostic-dsp-cascade",
++                          "route with old DSP arcs, then retime the same wires with corrected cascades");
+@@ -334,0 +337,2 @@
++        if (vm.count("diagnostic-dsp-cascade"))
++            ctx->settings[ctx->id("diagnostic_dsp_legacy")] = true;
+@@ -371,0 +376,9 @@
++    }
++
++    if (vm.count("diagnostic-dsp-cascade")) {
++        const uint32_t before = ctx->checksum();
++        log_info("DSP_CASCADE_RECHECK: unchanged placement and routing, checksum 0x%08x\n", before);
++        ctx->settings[ctx->id("diagnostic_dsp_legacy")] = false;
++        timing_analysis(ctx.get(), false, true, true, false);
++        NPNR_ASSERT(ctx->checksum() == before);
++        log_info("DSP_CASCADE_RECHECK_COMPLETE: graph checksum unchanged\n");

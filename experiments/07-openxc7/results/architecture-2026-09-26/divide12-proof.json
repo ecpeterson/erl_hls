@@ -1,0 +1,15 @@
+{
+  "solver": "Z3 version 4.15.5 - 64 bit",
+  "solver_sha256": "bd17f09bc345d944aedcb0df63d8136cfec3b1bad24e5a72e83c61c302b75e8b",
+  "input_sha256": "713fed72ad6537d6f44ef3697bd042717c93d2dc7aa539f3f54a1f85db3b0bed",
+  "command": [
+    "/Users/ecpeterson/Documents/code/erl_xls/experiments/07-openxc7/.apio/packages/oss-cad-suite/bin/z3",
+    "-T:30",
+    "experiments/07-openxc7/results/architecture-2026-09-26/divide12-factor.smt2"
+  ],
+  "result": [
+    "unsat",
+    "unsat"
+  ],
+  "proves": "Integer rounding identity and bulk recurrence range; not a finite-width RTL implementation."
+}

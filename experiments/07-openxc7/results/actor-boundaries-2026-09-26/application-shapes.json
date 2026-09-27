@@ -1,0 +1,32 @@
+{
+  "products": [
+    {
+      "proc": "__phi_halo_cell__SharedExecutor_0_next",
+      "node": "smul.82439",
+      "shape": "smul_const_37_39_76_183251937963",
+      "width": 76
+    },
+    {
+      "proc": "__phi_halo_cell__SharedExecutor_0_next",
+      "node": "smul.82463",
+      "shape": "smul_const_37_39_76_183251937963",
+      "width": 76
+    },
+    {
+      "proc": "__phi_halo_cell__SharedExecutor_0_next",
+      "node": "smul.84832",
+      "shape": "smul_const_35_37_71_45812984491",
+      "width": 71
+    },
+    {
+      "proc": "__phi_halo_cell__SharedExecutor_0_next",
+      "node": "smul.84831",
+      "shape": "smul_const_35_37_71_45812984491",
+      "width": 71
+    }
+  ],
+  "new_shapes": [
+    "smul_const_35_37_71_45812984491"
+  ],
+  "expected_codegen_failure": "Error: UNIMPLEMENTED: No known delay model estimate for op 'smul'. (this fell all the way through to the FFI delay estimation that can only deal with kInvoke ops); Running pass #360: Pipeline Scheduling [short: pipesched]; Failed as part of compound pass scheduling #0; Running pass #0: Top level scheduling pass pipeline [short: scheduling]"
+}

@@ -1,0 +1,84 @@
+Info: Critical path report for clock 'decoder.aclk' (posedge -> posedge):
+Info: curr total
+Info:  0.1  0.1  Source $flatten\decoder.$auto$ff.cc:337:slice$59198.Q
+Info:  4.3  4.4    Net decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_2_0_2_2_next_inst.__phi_halo_cell__SharedExecutor_0_next_inst.p0_request_aggregate_valid__1 budget 0.000000 ns (70,46) -> (64,152)
+Info:                Sink $flatten\decoder.$abc$1119696$lut$aiger1119695$43255.A4
+Info:  0.2  4.5  Source $flatten\decoder.$abc$1119696$lut$aiger1119695$43255.O5
+Info:  1.0  5.5    Net $flatten\decoder.$techmap1129230$abc$1119696$lut$aiger1119695$43264.A[2] budget 0.000000 ns (64,152) -> (64,159)
+Info:                Sink $flatten\decoder.$abc$1119696$lut$aiger1119695$43264.A5
+Info:  0.1  5.7  Source $flatten\decoder.$abc$1119696$lut$aiger1119695$43264.O6
+Info:  3.5  9.1    Net $flatten\decoder.$abc$1119696$lut\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_2_0_2_2_next_inst.incoming_result[408].A[2] budget 0.000000 ns (64,159) -> (73,84)
+Info:                Sink $flatten\decoder.$abc$1119696$lut$aiger1119695$48263.A2
+Info:  0.2  9.3  Source $flatten\decoder.$abc$1119696$lut$aiger1119695$48263.O5
+Info:  1.2 10.5    Net $flatten\decoder.$techmap1129626$abc$1119696$lut$aiger1119695$48266.A[3] budget 0.000000 ns (73,84) -> (70,93)
+Info:                Sink $flatten\decoder.$abc$1119696$lut$aiger1119695$48266.A3
+Info:  0.1 10.6  Source $flatten\decoder.$abc$1119696$lut$aiger1119695$48266.O6
+Info:  3.0 13.6    Net $flatten\decoder.$techmap1129628$abc$1119696$lut$aiger1119695$48274.A[5] budget 0.000000 ns (70,93) -> (64,158)
+Info:                Sink $flatten\decoder.$abc$1119696$lut\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_2_0_2_2_next_inst.incoming_result[753].A2
+Info:  0.1 13.8  Source $flatten\decoder.$abc$1119696$lut\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_2_0_2_2_next_inst.incoming_result[753].O6
+Info:  0.6 14.4    Net decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_2_0_2_2_next_inst.incoming_result[753] budget 0.000000 ns (64,158) -> (63,157)
+Info:                Sink $flatten\decoder.$abc$1119696$lut$aiger1119695$48332.A1
+Info:  0.1 14.5  Source $flatten\decoder.$abc$1119696$lut$aiger1119695$48332.O6
+Info:  4.7 19.2    Net $flatten\decoder.$abc$1119696$lut$aiger1119695$92030.A[1] budget 0.000000 ns (63,157) -> (73,42)
+Info:                Sink $flatten\decoder.$abc$1119696$lut$aiger1119695$48351.A3
+Info:  0.1 19.3  Source $flatten\decoder.$abc$1119696$lut$aiger1119695$48351.O6
+Info:  0.0 19.3    Net $flatten\decoder.$techmap1129654$abc$1119696$lut$aiger1119695$48360.A[1] budget 0.000000 ns (73,42) -> (73,42)
+Info:                Sink $flatten\decoder.$abc$1119696$lut$aiger1119695$48360.A5
+Info:  0.1 19.4  Source $flatten\decoder.$abc$1119696$lut$aiger1119695$48360.O5
+Info:  1.0 20.5    Net $flatten\decoder.$techmap1129655$abc$1119696$lut$aiger1119695$48367.A[4] budget 0.000000 ns (73,42) -> (73,34)
+Info:                Sink $flatten\decoder.$abc$1119696$lut$aiger1119695$48390.A2
+Info:  0.1 20.6  Source $flatten\decoder.$abc$1119696$lut$aiger1119695$48390.O6
+Info:  0.2 20.8    Net $flatten\decoder.$techmap1129667$abc$1119696$lut$aiger1119695$48395.A[3] budget 0.000000 ns (73,34) -> (73,34)
+Info:                Sink $flatten\decoder.$abc$1119696$lut$aiger1119695$48395.A5
+Info:  0.1 20.9  Source $flatten\decoder.$abc$1119696$lut$aiger1119695$48395.O5
+Info:  0.4 21.3    Net $flatten\decoder.$techmap1129671$abc$1119696$lut$aiger1119695$48405.A[3] budget 0.000000 ns (73,34) -> (73,34)
+Info:                Sink $flatten\decoder.$abc$1119696$lut$aiger1119695$48405.A4
+Info:  0.1 21.4  Source $flatten\decoder.$abc$1119696$lut$aiger1119695$48405.O6
+Info:  0.6 22.0    Net $flatten\decoder.$techmap1129674$auto$abc9_ops.cc:1613:reintegrate$1124642.A[2] budget 0.000000 ns (73,34) -> (73,32)
+Info:                Sink $flatten\decoder.$auto$abc9_ops.cc:1613:reintegrate$1124642.A3
+Info:  0.1 22.1  Source $flatten\decoder.$auto$abc9_ops.cc:1613:reintegrate$1124642.O6
+Info:  1.6 23.8    Net decoder.scheduler_2_state_rd_addr[0] budget 0.000000 ns (73,32) -> (64,46)
+Info:                Sink $flatten\decoder.$abc$1119696$lut$aiger1119695$48802.A3
+Info:  0.1 23.9  Source $flatten\decoder.$abc$1119696$lut$aiger1119695$48802.O6
+Info:  0.2 24.0    Net $flatten\decoder.$techmap1129679$abc$1119696$lut$aiger1119695$48806.A[3] budget 0.000000 ns (64,46) -> (64,46)
+Info:                Sink $flatten\decoder.$abc$1119696$lut$aiger1119695$48806.A2
+Info:  0.2 24.2  Source $flatten\decoder.$abc$1119696$lut$aiger1119695$48806.O5
+Info:  0.2 24.3    Net $flatten\decoder.$techmap1129681$abc$1119696$lut$aiger1119695$48810.A[1] budget 0.000000 ns (64,46) -> (64,46)
+Info:                Sink $flatten\decoder.$abc$1119696$lut$aiger1119695$48810.A1
+Info:  0.1 24.5  Source $flatten\decoder.$abc$1119696$lut$aiger1119695$48810.O6
+Info:  0.7 25.1    Net $flatten\decoder.$techmap1129685$abc$1119696$lut$aiger1119695$48835.A[4] budget 0.000000 ns (64,46) -> (63,44)
+Info:                Sink $flatten\decoder.$abc$1119696$lut$aiger1119695$48835.A5
+Info:  0.1 25.3  Source $flatten\decoder.$abc$1119696$lut$aiger1119695$48835.O5
+Info:  0.4 25.7    Net $flatten\decoder.$techmap1129693$abc$1119696$lut$aiger1119695$48863.A[4] budget 0.000000 ns (63,44) -> (63,44)
+Info:                Sink $flatten\decoder.$abc$1119696$lut$aiger1119695$48863.A3
+Info:  0.1 25.8  Source $flatten\decoder.$abc$1119696$lut$aiger1119695$48863.O5
+Info:  0.4 26.3    Net $flatten\decoder.$techmap1135785$auto$abc9_ops.cc:1613:reintegrate$1123704.A[3] budget 0.000000 ns (63,44) -> (63,45)
+Info:                Sink $flatten\decoder.$abc$1119696$lut$aiger1119695$48914.A6
+Info:  0.1 26.4  Source $flatten\decoder.$abc$1119696$lut$aiger1119695$48914.O6
+Info:  0.8 27.2    Net $flatten\decoder.$techmap1129706$abc$1119696$lut$aiger1119695$48915.A[1] budget 0.000000 ns (63,45) -> (70,45)
+Info:                Sink $flatten\decoder.$abc$1119696$lut$aiger1119695$48915.A3
+Info:  0.2 27.3  Source $flatten\decoder.$abc$1119696$lut$aiger1119695$48915.O5
+Info:  0.7 28.0    Net $flatten\decoder.$techmap1129722$abc$1119696$lut$aiger1119695$48974.A[1] budget 0.000000 ns (70,45) -> (73,44)
+Info:                Sink $flatten\decoder.$abc$1119696$lut$aiger1119695$48974.A3
+Info:  0.1 28.1  Source $flatten\decoder.$abc$1119696$lut$aiger1119695$48974.O6
+Info:  0.6 28.7    Net $flatten\decoder.$techmap1129749$abc$1119696$lut\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_2_0_2_2_next_inst.take__16.A[2] budget 0.000000 ns (73,44) -> (70,44)
+Info:                Sink $flatten\decoder.$abc$1119696$lut\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_2_0_2_2_next_inst.and_168449.A3
+Info:  0.1 28.8  Source $flatten\decoder.$abc$1119696$lut\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_2_0_2_2_next_inst.and_168449.O6
+Info:  0.9 29.7    Net decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_2_0_2_2_next_inst.and_168449 budget 0.000000 ns (70,44) -> (70,39)
+Info:                Sink $flatten\decoder.$abc$1119696$lut\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_2_0_2_2_next_inst.and_167555.A1
+Info:  0.1 29.8  Source $flatten\decoder.$abc$1119696$lut\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_2_0_2_2_next_inst.and_167555.O6
+Info:  0.8 30.7    Net decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_2_0_2_2_next_inst.and_167555 budget 0.000000 ns (70,39) -> (70,32)
+Info:                Sink $flatten\decoder.$abc$1119696$lut\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_2_0_2_2_next_inst.p0_stage_done.A6
+Info:  0.1 30.8  Source $flatten\decoder.$abc$1119696$lut\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_2_0_2_2_next_inst.p0_stage_done.O6
+Info:  2.7 33.5    Net decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_2_0_2_2_next_inst.p0_stage_done budget 0.000000 ns (70,32) -> (112,59)
+Info:                Sink $flatten\decoder.$auto$abc9_ops.cc:1613:reintegrate$1119961.A6
+Info:  0.1 33.6  Source $flatten\decoder.$auto$abc9_ops.cc:1613:reintegrate$1119961.O6
+Info:  3.3 36.9    Net decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_decoder_profile_topology__Phi_xReductionPlane_0_next_inst.or_173296 budget 0.000000 ns (112,59) -> (145,108)
+Info:                Sink $flatten\decoder.$abc$1119696$lut\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_decoder_profile_topology__Phi_xReductionPlane_0_next_inst.and_173190.A5
+Info:  0.1 37.0  Source $flatten\decoder.$abc$1119696$lut\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_decoder_profile_topology__Phi_xReductionPlane_0_next_inst.and_173190.O6
+Info:  5.1 42.1    Net decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_decoder_profile_topology__Phi_xReductionPlane_0_next_inst.and_173190 budget 1.274000 ns (145,108) -> (156,39)
+Info:                Sink $flatten\decoder.$auto$ff.cc:337:slice$41686.CE
+Info:  0.1 42.2  Setup $flatten\decoder.$auto$ff.cc:337:slice$41686.CE
+Info: 3.4 ns logic, 38.8 ns routing
+
+Info: Max frequency for clock 'decoder.aclk': 23.67 MHz (FAIL at 25.00 MHz)
