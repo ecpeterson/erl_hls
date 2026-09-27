@@ -66,6 +66,8 @@ Future changes should target these complete boundary-to-boundary cones, and pric
 
 The [next experiments](../yap/timing-next-cones.md) preregister separate control and payload-selection changes, their competing limits, and promotion criteria.
 
+The [conceptual follow-up](timing-concept-audit-2026-09-27.md) distinguishes routing-dominated control from substantial arithmetic cell delay, and identifies duplicate completion datapaths consuming 48 reciprocal-product DSPs. It motivates an architecture-first revision to that experiment order.
+
 ## Indexed-selector experiment
 
 A balanced tree preserves arbitrary payloads, indices and out-of-range defaults. SAT proves the compiled RTL equivalent for 63/65/127 cases. At 127 cases, mapped maximum cell depth falls 40→5 and maximum MUXF8 depth 34→0; LUTs fall 5,555→1,622 with the same 3,105 FFs. Counts include the preserved harness. The neighboring 63/65-case probes also fall to five-cell depth.
