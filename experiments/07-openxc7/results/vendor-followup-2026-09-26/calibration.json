@@ -1,0 +1,60 @@
+{
+  "part": "xc7z030sbg485-1",
+  "tools": [
+    {},
+    {
+      "/Users/ecpeterson/Documents/code/erl_hls_worktrees/timing-control-simplification/_build/timing-fifo/codegen-compact": "72214d06c698abe038065f7f8c17daea98959d914a6dd122bdf3c768f1191ea4",
+      "/Users/ecpeterson/Documents/code/erl_xls/experiments/07-openxc7/.apio/packages/oss-cad-suite/bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+      "/Users/ecpeterson/Documents/code/erl_xls/_build/architecture-repo/experiments/07-openxc7/timing_model/expand.py": "754b9452e031dfb0b89ad48a4e8c2d12e022bd9cd1d100c8069ec9859d5b4c70",
+      "/Users/ecpeterson/Documents/code/erl_xls/_build/architecture-repo/experiments/07-openxc7/timing_model/characterize.py": "add4a8b3ea96507f79c1ea915187f3b66248054a503c0b5591f347c3d1e7d820"
+    },
+    {
+      "/Users/ecpeterson/Documents/code/erl_hls_worktrees/timing-control-simplification/_build/timing-fifo/codegen-compact": "72214d06c698abe038065f7f8c17daea98959d914a6dd122bdf3c768f1191ea4",
+      "/Users/ecpeterson/Documents/code/erl_xls/experiments/07-openxc7/.apio/packages/oss-cad-suite/bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877"
+    }
+  ],
+  "measurement_count": 1070,
+  "training_count": 848,
+  "table_sha256": "7037f0d615793920c91db5e92f019012cd08dc414c6355916a6343f5298cd213",
+  "errors": {
+    "cell_ps": {
+      "count": 216,
+      "mean_ps": 114.68,
+      "variance_ps2": 76308.6,
+      "min_error_ps": -924,
+      "max_error_ps": 2414,
+      "mean_absolute_ps": 163.82,
+      "exact_count": 15,
+      "underestimation": {
+        "count": 54,
+        "mean_ps": 98.3,
+        "worst_ps": 924
+      },
+      "overestimation": {
+        "count": 147,
+        "mean_ps": 204.61,
+        "worst_ps": 2414
+      }
+    },
+    "routed_ps": {
+      "count": 216,
+      "mean_ps": 15.51,
+      "variance_ps2": 352735.95,
+      "min_error_ps": -2753,
+      "max_error_ps": 3529,
+      "mean_absolute_ps": 316.71,
+      "exact_count": 2,
+      "underestimation": {
+        "count": 117,
+        "mean_ps": 278.03,
+        "worst_ps": 2753
+      },
+      "overestimation": {
+        "count": 97,
+        "mean_ps": 369.9,
+        "worst_ps": 3529
+      }
+    }
+  },
+  "wiring_probes_excluded_from_fit_and_errors": 6
+}

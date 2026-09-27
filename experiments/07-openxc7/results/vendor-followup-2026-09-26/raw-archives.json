@@ -1,0 +1,72 @@
+[
+  {
+    "archive": "preview-mapping-controls.tar.gz",
+    "sha256": "b83c46de0eb35c24bf748ce395516ff814d0b6b04d6b2eb1795c208261986433",
+    "bytes": 18773217
+  },
+  {
+    "archive": "preview-architectures.tar.gz",
+    "sha256": "e4b184a2d43145025a6db4ea7130826ccb44a8ebf0f4dc8e19a10cf80418a8b6",
+    "bytes": 134414252
+  },
+  {
+    "archive": "preview-constraint40.tar.gz",
+    "sha256": "957baef011426972bdd0a38d157ac0e4e5ea7227656bbc9ecc6fd94b7fbc9a0a",
+    "bytes": 38805818
+  },
+  {
+    "archive": "preview-factored-default.tar.gz",
+    "sha256": "52303e7346762ad999b54d15448ce09aea4903a61f8bef63cb2aa3b1f6cf6290",
+    "bytes": 8983871
+  },
+  {
+    "archive": "preview-dedicated-default.tar.gz",
+    "sha256": "05e342c9bdf8f8703d3220674830c7216411e41c696efe8bd972ebeb37987b95",
+    "bytes": 9969620
+  },
+  {
+    "archive": "factored-field-vendor-results.tar.gz",
+    "sha256": "a5229ba5f79ea8b015cc7e36ccd4f06e7bb39c90a225c273ad8108955c308547",
+    "bytes": 8933061
+  },
+  {
+    "archive": "center-kernels-results.tar.gz",
+    "sha256": "74a68ed12d593231068e9130a587bf324f31b05cc40e4e3b1b57250d1a32ae7d",
+    "bytes": 282816
+  },
+  {
+    "archive": "initial-small-results.tar.gz",
+    "sha256": "d8c1eaa1e1775e859d9a7a272437fd43b975cf802e04445a22b252e0df814ef9",
+    "bytes": 524713
+  },
+  {
+    "archive": "neighborhood-results.tar.gz",
+    "sha256": "1c2e583cc44954ebf6c97e7ccadea623cf7f47db3e4ec777cce11a6a0c09ba0a",
+    "bytes": 87036990
+  },
+  {
+    "archive": "cascades-v2-results.tar.gz",
+    "sha256": "19196d92543210abb9254f3a0bd17ecd5d953356c2fcf955edfdc74c9cf356cd",
+    "bytes": 915301
+  },
+  {
+    "archive": "physical-results.tar.gz",
+    "sha256": "26fe62c777f57f10aee98334a75b2835b00df0771356386ce53abf53e8d7f6a7",
+    "bytes": 3807034
+  },
+  {
+    "archive": "path-queries.tar.gz",
+    "sha256": "be7831aed2895b6d8fdc2f41311638d7cb6e8d26d0e2864d2f09a1da249ef8d9",
+    "bytes": 12208
+  },
+  {
+    "archive": "fit-results.tar.gz",
+    "sha256": "223be1507f842df774d05367f312e75b6e945d58457456f5f9b9141f55cbae54",
+    "bytes": 268080
+  },
+  {
+    "archive": "selector-edges-results.tar.gz",
+    "sha256": "ea0d12433dc582d054dd73da8b00b8514ea545c8c0f6b0352ef1d14f0f4a099e",
+    "bytes": 3261560
+  }
+]

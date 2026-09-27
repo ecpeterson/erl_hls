@@ -1,0 +1,30 @@
+[
+  {
+    "name": "sel_d8_w24_n63",
+    "op": "sel_d8",
+    "width": 24,
+    "count": 63,
+    "split": "validation"
+  },
+  {
+    "name": "sel_d8_w24_n66",
+    "op": "sel_d8",
+    "width": 24,
+    "count": 66,
+    "split": "validation"
+  },
+  {
+    "name": "sel_d8_w24_n95",
+    "op": "sel_d8",
+    "width": 24,
+    "count": 95,
+    "split": "validation"
+  },
+  {
+    "name": "sel_d8_w24_n127",
+    "op": "sel_d8",
+    "width": 24,
+    "count": 127,
+    "split": "validation"
+  }
+]

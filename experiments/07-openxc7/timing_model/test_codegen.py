@@ -24,15 +24,20 @@ def verify(codegen: Path, table: Path) -> None:
              ('duplicate', add, 'add 16 2 100 200\n' * 2, 'duplicate XC7'),
              ('wide', operation('add', 128)[0], table.read_text(), 'width exceeds'),
              ('unsupported', add.replace('add(a, b', 'udiv(a, b'), table.read_text(), 'no calibration'),
+             # An unmeasured literal may use the now-covered generic multiply;
+             # it must not borrow the cheaper exact-constant row.
              ('different_constant', operation('smul_const_37_39_76_183251937964', 76)[0],
-              table.read_text(), 'width exceeds')]
+              table.read_text(), None)]
     for op, width, count in [('priority_sel', 384, 17), ('one_hot_sel', 128, 3),
                              ('array_index_s12', 128, 5), ('array_update_s24', 24, 3),
                              ('array2_s32_s8_n4_n5', 8, 2), ('shrl_s14', 128, 2),
-                             ('one_hot_msb', 32, 2), ('uge', 102, 2)]:
+                             ('one_hot_msb', 256, 2), ('uge', 102, 2),
+                             ('and', 1, 65), ('one_hot_sel', 128, 65),
+                             ('sel_d8', 256, 128), ('smul', 128, 2)]:
         cases.append((op, probe(op, width, count)[0], table.read_text(), None))
-    for op, width, count in [('one_hot_sel', 128, 33), ('sel_d65', 16, 2),
-                             ('array_index_s65', 8, 4), ('shrl_s65', 32, 2)]:
+    for op, width, count in [('one_hot_sel', 128, 129), ('sel_d65', 16, 2),
+                             ('array_index_s65', 8, 4), ('shrl_s65', 32, 2),
+                             ('smul', 129, 2), ('one_hot_msb', 257, 2)]:
         cases.append((op+'_outside', probe(op, width, count)[0], table.read_text(), 'calibration'))
     with tempfile.TemporaryDirectory(prefix='xc7-model-') as directory:
         root = Path(directory)

@@ -1,0 +1,37 @@
+Property                     Type    Read-only  Value
+ARRIVAL_TIME                 double  true       20.052
+CLASS                        string  true       timing_path
+CLOCK_PESSIMISM              double  true       0.182
+CORNER                       string  true       Slow
+DATAPATH_DELAY               double  true       15.841
+DATAPATH_LOGIC_DELAY         double  true       9.933
+DATAPATH_NET_DELAY           double  true       5.908
+DELAY_TYPE                   string  true       max
+ENDPOINT_CLOCK               clock   true       clock
+ENDPOINT_CLOCK_DELAY         double  true       3.877
+ENDPOINT_CLOCK_EDGE          double  true       5.000
+ENDPOINT_CLOCK_ROOT          string  true
+ENDPOINT_PIN                 pin     true       $flatten\\decoder.$auto$ff.cc:337:slice$55305/D
+EXCEPTION                    string  true
+EXCEPTION_ID                 int*    true
+GROUP                        string  true       clock
+INPUT_DELAY                  double  true
+INTER_SLR_COMPENSATION       double  true
+LOGIC_LEVELS                 int     true       36
+MAX_FANOUT                   int     true       77
+NAME                         string  true       {decoder.scheduler_3_state.memory.0.9/CLKARDCLK --> $flatten\\decoder.$auto$ff.cc:337:slice$55305/D}
+OUTPUT_DELAY                 double  true
+REQUIRED_TIME                double  true       9.108
+REQUIREMENT                  double  true       5.000
+ROUTABLE_NETS                int     true       unset***
+SKEW                         double  true       -0.152
+SLACK                        double  true       -10.944
+STARTPOINT_CLOCK             clock   true       clock
+STARTPOINT_CLOCK_DELAY       double  true       4.211
+STARTPOINT_CLOCK_EDGE        double  true       0.000
+STARTPOINT_CLOCK_ROOT        string  true
+STARTPOINT_PIN               pin     true       decoder.scheduler_3_state.memory.0.9/CLKARDCLK
+TIME_BORROWED_FROM_ENDPOINT  double  true
+TIME_GIVEN_TO_STARTPOINT     double  true
+UNCERTAINTY                  double  true       0.035
+USER_UNCERTAINTY             double  true

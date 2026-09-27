@@ -1,0 +1,38 @@
+[
+  {
+    "name": "dsp",
+    "command": [
+      "vivado",
+      "-mode",
+      "batch",
+      "-nojournal",
+      "-nolog",
+      "-source",
+      "/home/ubuntu/timing-followup-20260926/scripts/probe_paths.tcl",
+      "-tclargs",
+      "/home/ubuntu/timing-followup-20260926/mapping-controls/dsp/vivado/routed.dcp",
+      "/home/ubuntu/timing-followup-20260926/dsp-paths.tsv",
+      "/home/ubuntu/timing-followup-20260926/path-queries/dsp"
+    ],
+    "exit": 0,
+    "checkpoint_sha256": "0bce823aa66919e35e3f394e592dd0728d8bf4c95cbb9909f6758dafbcb8688d"
+  },
+  {
+    "name": "lut",
+    "command": [
+      "vivado",
+      "-mode",
+      "batch",
+      "-nojournal",
+      "-nolog",
+      "-source",
+      "/home/ubuntu/timing-followup-20260926/scripts/probe_paths.tcl",
+      "-tclargs",
+      "/home/ubuntu/timing-followup-20260926/mapping-controls/lut/vivado/routed.dcp",
+      "/home/ubuntu/timing-followup-20260926/lut-paths.tsv",
+      "/home/ubuntu/timing-followup-20260926/path-queries/lut"
+    ],
+    "exit": 0,
+    "checkpoint_sha256": "6e70bf939ecab8c6046a066b7e52f530044f5861e522ce03c2cb3346c2bd3c55"
+  }
+]

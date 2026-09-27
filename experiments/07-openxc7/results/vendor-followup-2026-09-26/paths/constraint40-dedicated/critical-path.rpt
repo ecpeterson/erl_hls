@@ -1,0 +1,170 @@
+# First of 20 reported paths; full reports are retained in the evidence archive.
+Copyright 1986-2022 Xilinx, Inc. All Rights Reserved. Copyright 2022-2024 Advanced Micro Devices, Inc. All Rights Reserved.
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+| Tool Version : Vivado v.2024.2 (lin64) Build 5239630 Fri Nov 08 22:34:34 MST 2024
+| Date         : Sun Sep 27 00:13:11 2026
+| Host         : ip-172-31-24-238 running 64-bit Ubuntu 22.04.5 LTS
+| Command      : report_timing -delay_type max -max_paths 20 -path_type full_clock_expanded -file /home/ubuntu/timing-followup-20260926/constraint40/dedicated/vivado/paths.rpt
+| Design       : probe_top
+| Device       : 7z030-sbg485
+| Speed File   : -1  PRODUCTION 1.12 2019-11-22
+| Design State : Routed
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+Timing Report
+
+Slack (MET) :             12.682ns  (required time - arrival time)
+  Source:                 $flatten\\decoder.$auto$ff.cc:337:slice$40802/C
+                            (rising edge-triggered cell FDRE clocked by clock  {rise@0.000ns fall@20.000ns period=40.000ns})
+  Destination:            $flatten\\decoder.$auto$ff.cc:337:slice$47956/D
+                            (rising edge-triggered cell FDRE clocked by clock  {rise@0.000ns fall@20.000ns period=40.000ns})
+  Path Group:             clock
+  Path Type:              Setup (Max at Slow Process Corner)
+  Requirement:            40.000ns  (clock rise@40.000ns - clock rise@0.000ns)
+  Data Path Delay:        27.037ns  (logic 10.471ns (38.728%)  route 16.566ns (61.272%))
+  Logic Levels:           40  (CARRY4=20 DSP48E1=3 LUT2=8 LUT4=4 LUT5=3 LUT6=2)
+  Clock Path Skew:        -0.225ns (DCD - SCD + CPR)
+    Destination Clock Delay (DCD):    4.094ns = ( 44.094 - 40.000 )
+    Source Clock Delay      (SCD):    4.503ns
+    Clock Pessimism Removal (CPR):    0.184ns
+  Clock Uncertainty:      0.035ns  ((TSJ^2 + TIJ^2)^1/2 + DJ) / 2 + PE
+    Total System Jitter     (TSJ):    0.071ns
+    Total Input Jitter      (TIJ):    0.000ns
+    Discrete Jitter          (DJ):    0.000ns
+    Phase Error              (PE):    0.000ns
+
+    Location             Delay type                Incr(ns)  Path(ns)    Netlist Resource(s)
+  -------------------------------------------------------------------    -------------------
+                         (clock clock rise edge)      0.000     0.000 r
+    AA14                                              0.000     0.000 r  clock (IN)
+                         net (fo=0)                   0.000     0.000    clock
+    AA14                 IBUF (Prop_ibuf_I_O)         0.843     0.843 r  $iopadmap$phi_timing_harness.clock/O
+                         net (fo=1, routed)           1.830     2.673    $auto$clkbufmap.cc:262:execute$6457
+    BUFGCTRL_X0Y0        BUFG (Prop_bufg_I_O)         0.120     2.793 r  $auto$clkbufmap.cc:261:execute$6456/O
+                         net (fo=18546, routed)       1.710     4.503    decoder.application.clk
+    SLICE_X3Y15          FDRE                                         r  $flatten\\decoder.$auto$ff.cc:337:slice$40802/C
+  -------------------------------------------------------------------    -------------------
+    SLICE_X3Y15          FDRE (Prop_fdre_C_Q)         0.269     4.772 r  $flatten\\decoder.$auto$ff.cc:337:slice$40802/Q
+                         net (fo=4, routed)           0.749     5.521    decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_decoder_profile_topology__Phi_xReductionPlane_0_next_inst.sign_ext_120929[9]
+    SLICE_X5Y15          LUT4 (Prop_lut4_I0_O)        0.053     5.574 f  $flatten\\decoder.$abc$1084070$lut$aiger1084069$48344/O
+                         net (fo=1, routed)           0.677     6.251    $flattendecoder.$techmap1098429$abc$1084070$lut$aiger1084069$48347.A[0]
+    SLICE_X6Y17          LUT4 (Prop_lut4_I0_O)        0.053     6.304 f  $flatten\\decoder.$abc$1084070$lut$aiger1084069$48347/O
+                         net (fo=2, routed)           0.560     6.864    $flattendecoder.$techmap1098430$abc$1084070$lut$aiger1084069$48348.A[0]
+    SLICE_X7Y22          LUT2 (Prop_lut2_I0_O)        0.053     6.917 f  $flatten\\decoder.$abc$1084070$lut$aiger1084069$48348/O
+                         net (fo=16, routed)          0.683     7.600    $flattendecoder.$abc$1084070$lut$aiger1084069$48810.A[6]
+    SLICE_X12Y21         LUT4 (Prop_lut4_I2_O)        0.053     7.653 r  $flatten\\decoder.$abc$1084070$lut$aiger1084069$48354/O
+                         net (fo=56, routed)          0.652     8.305    $flattendecoder.$techmap1098739$auto$abc9_ops.cc:1613:reintegrate$1094817.A[4]
+    SLICE_X22Y19         LUT5 (Prop_lut5_I4_O)        0.053     8.358 r  $flatten\\decoder.$abc$1084070$lut$aiger1084069$48653/O
+                         net (fo=5, routed)           0.457     8.815    $flattendecoder.$techmap1099385$abc$1084070$lut$aiger1084069$77194.A[1]
+    SLICE_X25Y19         LUT2 (Prop_lut2_I1_O)        0.053     8.868 f  $flatten\\decoder.$abc$1084070$lut$aiger1084069$48744/O
+                         net (fo=3, routed)           0.632     9.500    $flattendecoder.$techmap1099383$abc$1084070$lut$aiger1084069$77187.A[2]
+    SLICE_X26Y17         LUT2 (Prop_lut2_I0_O)        0.063     9.563 r  $flatten\\decoder.$abc$1084070$lut$aiger1084069$48745/O
+                         net (fo=2, routed)           0.718    10.280    $flattendecoder.$abc$1084070$aiger1084069$48745
+    SLICE_X23Y17         CARRY4 (Prop_carry4_S[1]_CO[3])
+                                                      0.488    10.768 r  $flatten\\decoder.\\application.\\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\\__phi_decoder_profile_topology__Phi_xReductionPlane_0_next_inst.$lt$/Users/ecpeterson/Documents/code/erl_xls/_build/architecture-repo/_build/architecture/dedicated-v3/phi_decoder_profile.v:5964$4520.genblk1.slice[1].genblk1.carry4/CO[3]
+                         net (fo=1, routed)           0.000    10.768    $flattendecoder.$abc$1084070$aiger1084069$29300
+    SLICE_X23Y18         CARRY4 (Prop_carry4_CI_CO[3])
+                                                      0.058    10.826 r  $flatten\\decoder.\\application.\\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\\__phi_decoder_profile_topology__Phi_xReductionPlane_0_next_inst.$lt$/Users/ecpeterson/Documents/code/erl_xls/_build/architecture-repo/_build/architecture/dedicated-v3/phi_decoder_profile.v:5964$4520.genblk1.slice[2].genblk1.carry4/CO[3]
+                         net (fo=1, routed)           0.000    10.826    $flattendecoder.$abc$1084070$aiger1084069$29308
+    SLICE_X23Y19         CARRY4 (Prop_carry4_CI_CO[3])
+                                                      0.058    10.884 r  $flatten\\decoder.\\application.\\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\\__phi_decoder_profile_topology__Phi_xReductionPlane_0_next_inst.$lt$/Users/ecpeterson/Documents/code/erl_xls/_build/architecture-repo/_build/architecture/dedicated-v3/phi_decoder_profile.v:5964$4520.genblk1.slice[3].genblk1.carry4/CO[3]
+                         net (fo=1, routed)           0.000    10.884    $flattendecoder.$abc$1084070$aiger1084069$29316
+    SLICE_X23Y20         CARRY4 (Prop_carry4_CI_CO[3])
+                                                      0.058    10.942 r  $flatten\\decoder.\\application.\\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\\__phi_decoder_profile_topology__Phi_xReductionPlane_0_next_inst.$lt$/Users/ecpeterson/Documents/code/erl_xls/_build/architecture-repo/_build/architecture/dedicated-v3/phi_decoder_profile.v:5964$4520.genblk1.slice[4].genblk1.carry4/CO[3]
+                         net (fo=1, routed)           0.000    10.942    $flattendecoder.$abc$1084070$aiger1084069$29324
+    SLICE_X23Y21         CARRY4 (Prop_carry4_CI_O[2])
+                                                      0.136    11.078 r  $flatten\\decoder.\\application.\\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\\__phi_decoder_profile_topology__Phi_xReductionPlane_0_next_inst.$lt$/Users/ecpeterson/Documents/code/erl_xls/_build/architecture-repo/_build/architecture/dedicated-v3/phi_decoder_profile.v:5964$4520.genblk1.slice[5].genblk1.carry4/O[2]
+                         net (fo=1, routed)           0.883    11.961    $flattendecoder.$techmap1098665$abc$1084070$lut$aiger1084069$49021.A[1]
+    SLICE_X27Y16         LUT2 (Prop_lut2_I1_O)        0.163    12.124 f  $flatten\\decoder.$abc$1084070$lut$aiger1084069$49021/O
+                         net (fo=6, routed)           0.401    12.525    $flattendecoder.$techmap1098666$abc$1084070$lut$aiger1084069$49095.A[1]
+    SLICE_X26Y19         LUT2 (Prop_lut2_I1_O)        0.168    12.693 f  $flatten\\decoder.$abc$1084070$lut$aiger1084069$49095/O
+                         net (fo=4, routed)           0.688    13.381    $flattendecoder.$techmap1099049$abc$1084070$lut$aiger1084069$50436.A[2]
+    SLICE_X12Y21         LUT2 (Prop_lut2_I1_O)        0.053    13.434 r  $flatten\\decoder.$abc$1084070$lut$aiger1084069$49607/O
+                         net (fo=51, routed)          0.685    14.120    $flattendecoder.$techmap1127404$abc$1084070$lut$aiger1084069$68070.A[4]
+    SLICE_X8Y14          LUT5 (Prop_lut5_I4_O)        0.053    14.173 r  $flatten\\decoder.$abc$1084070$lut$aiger1084069$51193/O
+                         net (fo=1, routed)           0.135    14.308    $flattendecoder.$techmap1098769$abc$1084070$lutapplication.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__DedicatedGroup_0_next_inst.materialized_fifo_fifo__dedicated_aggregate__0_.push_data[1].A[4]
+    SLICE_X8Y14          LUT5 (Prop_lut5_I4_O)        0.053    14.361 r  $flatten\\decoder.$abc$1084070$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__DedicatedGroup_0_next_inst.materialized_fifo_fifo__dedicated_aggregate__0_.push_data[1]/O
+                         net (fo=4, routed)           2.527    16.888    decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.materialized_fifo_fifo__scheduler_2_aggregate_.push_data[1]
+    SLICE_X80Y15         LUT4 (Prop_lut4_I3_O)        0.053    16.941 r  $flatten\\decoder.$abc$1084070$lut$aiger1084069$51212/O
+                         net (fo=8, routed)           0.637    17.578    $flattendecoder.$techmap1125195$abc$1084070$lut$aiger1084069$83828.A[0]
+    SLICE_X69Y14         LUT2 (Prop_lut2_I1_O)        0.053    17.631 r  $flatten\\decoder.$auto$abc9_ops.cc:1613:reintegrate$1094306/O
+                         net (fo=1, routed)           0.000    17.631    $flattendecoder.$abc$1084070$aiger1084069$85478b
+    SLICE_X69Y14         CARRY4 (Prop_carry4_S[1]_CO[3])
+                                                      0.324    17.955 r  $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$21491.genblk1.slice[0].genblk1.carry4/CO[3]
+                         net (fo=1, routed)           0.000    17.955    $flattendecoder.$abc$1084070$aiger1084069$34212
+    SLICE_X69Y15         CARRY4 (Prop_carry4_CI_CO[3])
+                                                      0.058    18.013 r  $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$21491.genblk1.slice[1].genblk1.carry4/CO[3]
+                         net (fo=1, routed)           0.000    18.013    $flattendecoder.$abc$1084070$aiger1084069$34220
+    SLICE_X69Y16         CARRY4 (Prop_carry4_CI_CO[3])
+                                                      0.058    18.071 r  $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$21491.genblk1.slice[2].genblk1.carry4/CO[3]
+                         net (fo=1, routed)           0.000    18.071    $flattendecoder.$abc$1084070$aiger1084069$34228
+    SLICE_X69Y17         CARRY4 (Prop_carry4_CI_O[2])
+                                                      0.136    18.207 r  $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$21491.genblk1.slice[3].genblk1.carry4/O[2]
+                         net (fo=2, routed)           1.260    19.467    $flattendecoder.$abc$1084070$aiger1084069$34231
+    DSP48_X3Y9           DSP48E1 (Prop_dsp48e1_B[14]_PCOUT[47])
+                                                      3.363    22.830 r  $flatten\\decoder.\\application.\\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\\__phi_halo_cell__DedicatedGroup_0_next_inst.\\__phi_halo_cell__DedicatedActor_0__1_next_inst.$mul$/Users/ecpeterson/Documents/code/erl_xls/_build/architecture-repo/_build/architecture/dedicated-v3/phi_decoder_profile.v:3464$4021.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.sliceA[0].mul.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.sliceB[0].mul/PCOUT[47]
+                         net (fo=1, routed)           0.050    22.880    $flattendecoder.$abc$1084070$aiger1084069$34583
+    DSP48_X3Y10          DSP48E1 (Prop_dsp48e1_PCIN[47]_PCOUT[47])
+                                                      1.452    24.332 r  $flatten\\decoder.\\application.\\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\\__phi_halo_cell__DedicatedGroup_0_next_inst.\\__phi_halo_cell__DedicatedActor_0__1_next_inst.$mul$/Users/ecpeterson/Documents/code/erl_xls/_build/architecture-repo/_build/architecture/dedicated-v3/phi_decoder_profile.v:3464$4021.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.sliceA[0].mul.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.sliceB[1].mul/PCOUT[47]
+                         net (fo=1, routed)           0.000    24.332    $flattendecoder.$abc$1084070$aiger1084069$34737
+    DSP48_X3Y11          DSP48E1 (Prop_dsp48e1_PCIN[47]_P[0])
+                                                      1.286    25.618 r  $flatten\\decoder.\\application.\\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\\__phi_halo_cell__DedicatedGroup_0_next_inst.\\__phi_halo_cell__DedicatedActor_0__1_next_inst.$mul$/Users/ecpeterson/Documents/code/erl_xls/_build/architecture-repo/_build/architecture/dedicated-v3/phi_decoder_profile.v:3464$4021.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.sliceA[0].mul.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mul_sliceB_last/P[0]
+                         net (fo=2, routed)           0.727    26.345    $flattendecoder.$techmap1099847$auto$abc9_ops.cc:1613:reintegrate$1094253.A[1]
+    SLICE_X51Y20         LUT2 (Prop_lut2_I1_O)        0.053    26.398 r  $flatten\\decoder.$auto$abc9_ops.cc:1613:reintegrate$1094253/O
+                         net (fo=1, routed)           0.000    26.398    $flattendecoder.$abc$1084070$aiger1084069$86306b
+    SLICE_X51Y20         CARRY4 (Prop_carry4_S[1]_CO[3])
+                                                      0.324    26.722 r  $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$21257.genblk1.slice[4].genblk1.carry4/CO[3]
+                         net (fo=1, routed)           0.000    26.722    $flattendecoder.$abc$1084070$aiger1084069$35094
+    SLICE_X51Y21         CARRY4 (Prop_carry4_CI_CO[3])
+                                                      0.058    26.780 r  $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$21257.genblk1.slice[5].genblk1.carry4/CO[3]
+                         net (fo=1, routed)           0.000    26.780    $flattendecoder.$abc$1084070$aiger1084069$35102
+    SLICE_X51Y22         CARRY4 (Prop_carry4_CI_CO[3])
+                                                      0.058    26.838 r  $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$21257.genblk1.slice[6].genblk1.carry4/CO[3]
+                         net (fo=1, routed)           0.000    26.838    $flattendecoder.$abc$1084070$aiger1084069$35110
+    SLICE_X51Y23         CARRY4 (Prop_carry4_CI_CO[3])
+                                                      0.058    26.896 r  $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$21257.genblk1.slice[7].genblk1.carry4/CO[3]
+                         net (fo=1, routed)           0.000    26.896    $flattendecoder.$abc$1084070$aiger1084069$35118
+    SLICE_X51Y24         CARRY4 (Prop_carry4_CI_O[3])
+                                                      0.179    27.075 r  $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$21257.genblk1.slice[8].genblk1.carry4/O[3]
+                         net (fo=1, routed)           0.478    27.553    $flattendecoder.$abc$1084070$aiger1084069$35276
+    SLICE_X48Y25         CARRY4 (Prop_carry4_S[0]_CO[3])
+                                                      0.439    27.992 r  $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$21503.genblk1.slice[3].genblk1.carry4/CO[3]
+                         net (fo=1, routed)           0.000    27.992    $flattendecoder.$abc$1084070$aiger1084069$39936
+    SLICE_X48Y26         CARRY4 (Prop_carry4_CI_CO[3])
+                                                      0.060    28.052 r  $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$21503.genblk1.slice[4].genblk1.carry4/CO[3]
+                         net (fo=1, routed)           0.000    28.052    $flattendecoder.$abc$1084070$aiger1084069$39944
+    SLICE_X48Y27         CARRY4 (Prop_carry4_CI_CO[3])
+                                                      0.060    28.112 r  $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$21503.genblk1.slice[5].genblk1.carry4/CO[3]
+                         net (fo=1, routed)           0.000    28.112    $flattendecoder.$abc$1084070$aiger1084069$39952
+    SLICE_X48Y28         CARRY4 (Prop_carry4_CI_CO[3])
+                                                      0.060    28.172 r  $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$21503.genblk1.slice[6].genblk1.carry4/CO[3]
+                         net (fo=1, routed)           0.000    28.172    $flattendecoder.$abc$1084070$aiger1084069$39960
+    SLICE_X48Y29         CARRY4 (Prop_carry4_CI_CO[3])
+                                                      0.060    28.232 r  $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$21503.genblk1.slice[7].genblk1.carry4/CO[3]
+                         net (fo=1, routed)           0.000    28.232    $flattendecoder.$abc$1084070$aiger1084069$39968
+    SLICE_X48Y30         CARRY4 (Prop_carry4_CI_O[0])
+                                                      0.135    28.367 r  $flatten\\decoder.$auto$alumacc.cc:512:replace_alu$21503.genblk1.slice[8].genblk1.carry4/O[0]
+                         net (fo=31, routed)          1.667    30.033    $flattendecoder.$techmap1126330$abc$1084070$lut$aiger1084069$98549.A[2]
+    SLICE_X62Y21         LUT6 (Prop_lut6_I2_O)        0.153    30.186 r  $flatten\\decoder.$abc$1084070$lut$aiger1084069$101192/O
+                         net (fo=1, routed)           0.518    30.704    $flattendecoder.$techmap1105910$auto$abc9_ops.cc:1613:reintegrate$1092924.A[5]
+    SLICE_X64Y17         LUT6 (Prop_lut6_I5_O)        0.053    30.757 r  $flatten\\decoder.$auto$abc9_ops.cc:1613:reintegrate$1092924/O
+                         net (fo=2, routed)           0.784    31.541    decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__DedicatedGroup_0_next_inst.__phi_halo_cell__DedicatedActor_0__1_next_inst.sel_120560[36]
+    SLICE_X64Y13         FDRE                                         r  $flatten\\decoder.$auto$ff.cc:337:slice$47956/D
+  -------------------------------------------------------------------    -------------------
+
+                         (clock clock rise edge)     40.000    40.000 r
+    AA14                                              0.000    40.000 r  clock (IN)
+                         net (fo=0)                   0.000    40.000    clock
+    AA14                 IBUF (Prop_ibuf_I_O)         0.767    40.767 r  $iopadmap$phi_timing_harness.clock/O
+                         net (fo=1, routed)           1.741    42.508    $auto$clkbufmap.cc:262:execute$6457
+    BUFGCTRL_X0Y0        BUFG (Prop_bufg_I_O)         0.113    42.621 r  $auto$clkbufmap.cc:261:execute$6456/O
+                         net (fo=18546, routed)       1.473    44.094    decoder.application.clk
+    SLICE_X64Y13         FDRE                                         r  $flatten\\decoder.$auto$ff.cc:337:slice$47956/C
+                         clock pessimism              0.184    44.278
+                         clock uncertainty           -0.035    44.243
+    SLICE_X64Y13         FDRE (Setup_fdre_C_D)       -0.020    44.223    $flatten\\decoder.$auto$ff.cc:337:slice$47956
+  -------------------------------------------------------------------
+                         required time                         44.223
+                         arrival time                         -31.541
+  -------------------------------------------------------------------
+                         slack                                 12.682
