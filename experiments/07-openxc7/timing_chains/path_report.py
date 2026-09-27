@@ -297,9 +297,9 @@ def markdown(report: dict) -> str:
                          + (f'{floor:.3f}' if floor is not None else 'Unknown') + ' |')
         if 'step_ns' in summary:
             lines += ['', f"At {summary['cycles_per_step']:g} simulated cycles/step: "
-                      f"{summary['step_ns']/1000:.3f} µs. Unchanged-cycle 1 MHz requires "
+                      f"{summary['step_ns']/1000:.3f} µs. For this fixture alone, unchanged-cycle 1 MHz would require "
                       f"{summary['target_1mhz_period_ns']:.3f} ns.", '',
-                      '| Added cycles/step | Break-even period, ns | Period for 1 MHz, ns |',
+                      '| Added cycles/step | Break-even period, ns | Hypothetical fixture-only 1 MHz period, ns |',
                       '|---:|---:|---:|']
             for budget in summary['added_cycle_budget']:
                 lines.append(f"| {budget['added_cycles']:g} | {budget['break_even_period_ns']:.3f} | "

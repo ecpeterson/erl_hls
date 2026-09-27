@@ -1,0 +1,63 @@
+# Next timing experiments: registration before implementation
+
+Registered against PR #181 at `284c895`, after its measurements and before implementing these candidates. The objective is reduced routed **period × cycles/step**, preserving arithmetic, ordering and progress. Smaller logic cones are intermediate evidence, not a speedup.
+
+## Workload and controls
+
+The 1 µs application target belongs to a **2×4 qubit patch**, not the measured two-plane 2×1 fixture (four phi actors, four syndrome actors). Freeze the actual target's physical-qubit/actor mapping, planes, diffusion rounds, scheduler assignment and boundary workload before measuring it. Do not interpret `width=2,height=4` as that patch without checking the coordinate convention. Preserve the small fixture for inexpensive attribution; report application results separately, including any omitted transport.
+
+Use the selective `cell-only-zero` schedule as the primary small-core baseline, keeping the original routed-cost schedule as a secondary control. Pinned inputs are in `timing-feedback-2026-09-27-manifest.json`; the selective RTL SHA256 is `850ce04dcdb10886811b9e15ad4cd23c903ef04c2d965bf508084589842e6cba`. Preserve the two-stage executor schedule, II=1, mapped-tool versions and 5 ns physical constraint unless a separately registered experiment explicitly changes them.
+
+| Selective baseline | Default, ns | Explore, ns |
+|---|---:|---:|
+| DSP → arithmetic → mailbox RAM | 15.151 | 15.237 (global/DSP query) |
+| State RAM → executor arithmetic | 15.144 | 15.118 |
+| Scheduler/reduction FF control | 14.904 | 15.089 |
+
+Cycles are 79.25 normally and 79.833333 with the existing output stalls. Query sets overlap; they are not three exhaustive, disjoint classes. New paths can replace any sampled limit. Two placement directives measure sensitivity, not a probability distribution.
+
+## A. Compute mailbox availability independently of address selection
+
+**Change.** In `mailbox::select` and the aggregate-mode shared-service issue path, compute each row's eligible-position mask in parallel. Its OR gives availability; a priority grant gives the first logical/physical index. Carry the actor grant to the availability selection instead of selecting a complete row, walking its order, and then deriving `received`. Preserve the round-robin winner, earliest unpostponed message and immediate aggregate issue. Do not add a cached readiness bit or remove same-cycle issue.
+
+**Evidence.** The selective control path starts at executor-result FIFO occupancy, passes through the selected state-read address and mailbox-read predicate `and_169712`, then `p0_stage_done`, and ends at a reduction FF enable. It contains 23 combinational cells and 12.729 ns of interconnect. Generated `and_169712` depends on `read_mailbox && received`; `mailbox::select` currently folds availability and first-index selection together. Whether mapping already factors away that source-level dependency is an explicit uncertainty.
+
+**Predictions.** No new storage, stages or cycles; cycle-exact valid outputs should match. A useful structural result removes at least four serial LUT levels from the identified availability subcone. The working estimate is **1–2 ns less on the affected control family**, with **0–3% extra whole-core LUTs** from parallel row selection. These are low-confidence engineering estimates, motivated by several roughly 0.4–0.7 ns routed hops, not arithmetic subtraction from a frozen route. Stop if mapping is unchanged or the dependency remains. If the structural target succeeds but timing does not, report the replacement path and routing change rather than claiming success from depth alone.
+
+**Whole-core expectation: approximately zero improvement alone.** The 15.151 ns arithmetic path survives. Removing four cells cannot justify a whole-core percentage forecast.
+
+**Proof.** Compare all outputs of mailbox/actor selection over legal order arrays, occupied prefixes, postponement masks and cursors, including empty/full rows and non-power-of-two sizes. Then require unchanged accepted events and cycle-exact reset/stall behavior in the complete fixture. This must preserve message order, not merely choose some available message.
+
+## B. Break only the backward ready path at aggregate delivery
+
+**Change.** If A leaves the inter-proc enable chain long, replace only the two zero-depth, 218-bit reduction-aggregate channels with a one-entry, forward-bypassing skid buffer. Upstream ready depends on registered occupancy, never current downstream ready. An accepted item either passes immediately or is retained. Keep other FIFOs and the effect-credit protocol unchanged.
+
+**Evidence.** These channels are direct wires today. The reported chain crosses shared-service `p0_stage_done` (fanout 220) and reduction-plane `stage_outputs_ready_0` (fanout 1,963). This boundary lies on the actual path; an arbitrary egress register does not target the same dependency. Unlike the previously rejected non-bypassing egress FIFO, an empty skid buffer does not delay forward data.
+
+**Predictions.** The backward combinational dependency must disappear. Expect **about 438 extra FFs** for two payloads plus occupancy, and budget **under 3% more core LUTs**. The affected control family might shorten by **1–3 ns**; this is a low-confidence range because the longest path can move to the buffer's own capture enable. No arithmetic improvement is predicted, so again expect approximately zero whole-core clock gain alone.
+
+**Cycle caveat.** Empty/unblocked transfers add exactly zero latency. A full buffer cannot accept a replacement on the same cycle it drains, so recovery can introduce bubbles. Before implementing, profile aggregate valid/ready and blocked bursts on the unchanged core; register the workload cycle prediction from that evidence. No numerical whole-step cycle prediction is justified by the path report alone. A preliminary promotion budget is at most **one extra normal cycle/step**, not an expectation that this will hold. Reject this option if repeated full-buffer recovery consumes the timing benefit. This is an alternative control treatment to A initially, not an automatic addition to it.
+
+**Proof.** Establish bounded occupancy, no loss/duplication, stable stalled payload and per-channel order for arbitrary stalls/reset. Compare semantic application outputs and progress under prolonged pressure. Different producer-acceptance cycles are permitted; do not demand cycle equivalence while simultaneously adding capacity.
+
+## C. Remove only proved-unobservable receive zeroing
+
+**Change.** Identify receive-default gates whose payload is consumed only after the corresponding valid/predicate succeeds. First candidates are the 540-bit state-RAM response zero selection before executor issue and the executor-result zero selection before retirement. Propagate raw payload only where a proof shows the invalid value cannot affect an accepted send, RAM write, control decision or later valid state. Keep the essential stored-result/incoming-result choice and every observable default.
+
+**Evidence.** The RAM path crosses `sel_167806` immediately after RAM launch; the result path crosses `incoming_result` before mailbox delivery. Their generated assignments select zero for a disabled/invalid receive. XLS explicitly promises that zero at IR level: setting `gate_recvs=false` globally would change semantics, not implement this proof. An experiment may substitute an individual gate under a miter; a compiler change needs a justified guarded rewrite.
+
+**Predictions.** Preserve schedule, cycles and accepted payload bits exactly. Remove at least one mapped data-gating level at each demonstrated site; expect no area increase. The working family estimates are **0.3–0.8 ns less on RAM→executor** and **0.2–0.7 ns less on DSP→mailbox**, with low confidence. The current RAM launch plus its first gate/net segment is about 0.7 ns beyond RAM clock-to-output; only part of it is plausibly avoidable. Routing may absorb the gain. Neither the DSP cascade nor its carry chain is removed.
+
+**Whole-core ceiling from saved paths.** With unchanged placement/control, even perfect arithmetic improvements leave 14.904 ns: only **1.6%** below the 15.151 ns Default baseline. The corresponding Explore ceiling is **1.0%**. These are frozen-path counterfactuals, not bounds on a newly placed design. With a successful A or B control fix and unchanged cycles, a working combined expectation is **0–5% lower small-core step time**. A regression remains plausible; these ranges are not confidence intervals or a forecast for the 2×4 target.
+
+**Proof.** Use a sequential valid-payload miter: arbitrary invalid input data must not change any later observable value or acceptance/control decision. Preserve invariants for stored entries rather than demanding equality of dead payload bits. Exercise reset, stalled output and failed actors. If proof fails, retain the gate and record the counterexample; do not weaken the DSLX receive contract to rescue the experiment.
+
+## Gates against repeating previous mistakes
+
+1. Establish the 2×4 workload baseline; collect aggregate occupancy for B. Run A and C independently, then their combination only if each changes its intended mapped cone. Try B as an alternative if A cannot remove enough control delay. Retain unsuccessful screens.
+2. Record source → IR → RTL → mapped-cell evidence before predicting a physical gain. Keep unrelated proc schedules fixed where possible; list every unavoidable change. Proof failures, identical mapped logic and uncovered primitive modes stop the expensive measurement.
+3. Report global, RAM-source, DSP-through and control paths for each candidate, including newly critical families. Also report the longest path through the changed cone even when it ceases to rank globally. Compare both cell and net delay; do not add isolated-operation improvements.
+4. Simulate complete-step cycles before routing. Using Default's 15.151 ns × 79.25 baseline, **+1/+2/+14/+28 cycles require periods below 14.962/14.778/12.876/11.195 ns**, respectively. Recompute against each matched strategy and workload. In particular, a third executor stage is deferred: fourteen extra activation cycles cannot pay while a 14.904 ns control path survives.
+5. Route one matched Default pair first; use Explore only for promising/ambiguous results. Promote a timing claim only when period × cycles improves in both comparisons; report best/mean/worst and variance without treating two directives as random seeds. If signs disagree, retain the result as inconclusive. State any complexity reduction separately from timing.
+6. The selective baseline has registered DSPs outside current native coverage. Local proofs, simulation, mapping and structural reports can proceed; a full routed claim needs the retained vendor workflow or independently qualified native coverage. Do not substitute the slower fabric-register variant or a different clock constraint as its control.
+7. Recheck the actual 2×4 application before proposing adoption. A small-core success establishes a mechanism, not the application gain or its distance from 1 MHz. Keep the 1 µs goal fixed rather than redefining the workload to meet it.
