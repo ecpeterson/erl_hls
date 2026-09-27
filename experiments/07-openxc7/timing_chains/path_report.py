@@ -189,11 +189,19 @@ def enrich(paths: list[dict], netlist: dict | None) -> None:
             name, _, port = canonical(arc['resource']).rpartition('/')
             cell = cells.get(name)
             if cell is None:
+                # nextpnr separates the final pin with a dot; preceding dots
+                # remain part of the full cell name, including generated scopes.
+                name, _, port = canonical(arc['resource']).rpartition('.')
+                cell = cells.get(name)
+            if cell is None:
                 continue
             arc['primitive'] = cell['type']
             arc['source_locations'] = cell.get('attributes', {}).get('src', '').split('|')
             bits = cell['connections'].get(port.split('[')[0], [])
             index = re.search(r'\[(\d+)\]', port)
+            if not bits and (native := re.fullmatch(r'([A-Za-z_]+)(\d+)', port)):
+                bits = cell['connections'].get(native[1], [])
+                index = re.match(r'(\d+)', native[2])
             if index:
                 bits = bits[int(index[1]):int(index[1]) + 1]
             arc['aliases'] = sorted({a for bit in bits for a in aliases.get(bit, ())})

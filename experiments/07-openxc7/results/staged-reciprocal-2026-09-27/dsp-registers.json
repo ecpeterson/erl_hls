@@ -1,0 +1,533 @@
+{
+  "source": "// Two registered signed products share a numerator and clock enable.\nmodule products(input clk, enable, input signed [12:0] n, output reg signed [30:0] a,b);\nalways @(posedge clk) if(enable) begin a <= n * 18'sd43691; b <= n * 18'sd87381; end\nendmodule\n",
+  "variants": {
+    "packed": {
+      "enable_bits": [
+        3
+      ],
+      "cells": [
+        {
+          "type": "DSP48E1",
+          "enable": null,
+          "registers": {
+            "ACASCREG": 0,
+            "ADREG": 0,
+            "ALUMODEREG": 0,
+            "AREG": 0,
+            "BCASCREG": 0,
+            "BREG": 0,
+            "CARRYINREG": 0,
+            "CARRYINSELREG": 0,
+            "CREG": 0,
+            "DREG": 0,
+            "INMODEREG": 0,
+            "MREG": 1,
+            "OPMODEREG": 0,
+            "PREG": 0
+          }
+        },
+        {
+          "type": "DSP48E1",
+          "enable": null,
+          "registers": {
+            "ACASCREG": 0,
+            "ADREG": 0,
+            "ALUMODEREG": 0,
+            "AREG": 0,
+            "BCASCREG": 0,
+            "BREG": 0,
+            "CARRYINREG": 0,
+            "CARRYINSELREG": 0,
+            "CREG": 0,
+            "DREG": 0,
+            "INMODEREG": 0,
+            "MREG": 1,
+            "OPMODEREG": 0,
+            "PREG": 0
+          }
+        }
+      ]
+    },
+    "unpacked": {
+      "enable_bits": [
+        3
+      ],
+      "cells": [
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "DSP48E1",
+          "enable": null,
+          "registers": {
+            "ACASCREG": 0,
+            "ADREG": 0,
+            "ALUMODEREG": 0,
+            "AREG": 0,
+            "BCASCREG": 0,
+            "BREG": 0,
+            "CARRYINREG": 0,
+            "CARRYINSELREG": 0,
+            "CREG": 0,
+            "DREG": 0,
+            "INMODEREG": 0,
+            "MREG": 0,
+            "OPMODEREG": 0,
+            "PREG": 0
+          }
+        },
+        {
+          "type": "DSP48E1",
+          "enable": null,
+          "registers": {
+            "ACASCREG": 0,
+            "ADREG": 0,
+            "ALUMODEREG": 0,
+            "AREG": 0,
+            "BCASCREG": 0,
+            "BREG": 0,
+            "CARRYINREG": 0,
+            "CARRYINSELREG": 0,
+            "CREG": 0,
+            "DREG": 0,
+            "INMODEREG": 0,
+            "MREG": 0,
+            "OPMODEREG": 0,
+            "PREG": 0
+          }
+        }
+      ]
+    }
+  },
+  "files": {
+    "dsp-registers/tb.v": "51903bb36fc4d32ce8f85dc505e342c05d75bef2776b9ebf35e0939dbefbf314",
+    "dsp-registers/unpacked.v": "dfdb0c8c8f14a8ebb0065745b73fff1f07e7cefbad70e6738e305351c6f3646d",
+    "dsp-registers/input.v": "e9f6e9fce2565e84ffbb89aab5535f290cf1e720cb129c2c9fe516728a3c409f",
+    "dsp-registers/packed.v": "5286069d1ec9aa07808097e2129592d6d1ee74ea06b90dd0d3bcaafffcf7d9c4"
+  },
+  "note": "Observed in the installed toolchain; upstream cause not established."
+}

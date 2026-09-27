@@ -35,6 +35,17 @@ class PathReportTest(unittest.TestCase):
         self.assertEqual(path['period_ns'], 38.8)
         self.assertTrue(any(a.get('grid_displacement', 0) > 50 for a in path['arcs']))
 
+    def test_native_dotted_dsp_pin(self) -> None:
+        """Recognize a native DSP pin without confusing scope dots or whole output buses."""
+        netlist = {'modules': {'top': {
+            'netnames': {'product_bit': {'bits': [37]}, 'other_bit': {'bits': [38]}},
+            'cells': {'actor.product.slice[0]': {'type': 'DSP48E1',
+                'connections': {'P': list(range(10, 58))}, 'port_directions': {'P': 'output'}}}}}}
+        path = {'arcs': [{'kind': 'cell', 'resource': 'actor.product.slice[0].P27'}]}
+        enrich([path], netlist)
+        self.assertEqual(path['arcs'][0]['primitive'], 'DSP48E1')
+        self.assertEqual(path['arcs'][0]['aliases'], ['product_bit'])
+
     def test_registered_dsp_launch(self) -> None:
         """Keep DSP clock-to-output delay in the data path after register absorption."""
         text = (ROOT / 'results/timing-feedback-2026-09-27/retimed/critical-path.rpt').read_text()

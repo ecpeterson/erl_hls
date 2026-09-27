@@ -1,0 +1,70 @@
+{
+  "schema": 1,
+  "title": "Isolated reciprocal pipeline: native path evidence",
+  "runs": [
+    {
+      "name": "reference / seed 1",
+      "tool": "nextpnr",
+      "stage": "routed",
+      "constraint_ns": 5,
+      "paths": {
+        "path": "native-inputs.tar.gz",
+        "member": "1/reference/route.log",
+        "sha256": "f9874d62768644c22e518be2713ddeb42eda37ca937ee0122ca5c29f051273ac"
+      },
+      "netlist": {
+        "path": "native-inputs.tar.gz",
+        "member": "1/reference/mapped.json",
+        "sha256": "0eef552adb863837339a51673b158a3a6500f5c651e4ef9c55fba4ff552ec63d"
+      }
+    },
+    {
+      "name": "split / seed 1",
+      "tool": "nextpnr",
+      "stage": "routed",
+      "constraint_ns": 5,
+      "paths": {
+        "path": "native-inputs.tar.gz",
+        "member": "1/split/route.log",
+        "sha256": "f15a5867ac36841f9640c140f164d0ef99ae08a4097028a2ed4508d65912043a"
+      },
+      "netlist": {
+        "path": "native-inputs.tar.gz",
+        "member": "1/split/mapped.json",
+        "sha256": "548481ab542deeaae5442b813b552b762c089e83f25fb806d3e5255443eeeea8"
+      }
+    },
+    {
+      "name": "reference / seed 2",
+      "tool": "nextpnr",
+      "stage": "routed",
+      "constraint_ns": 5,
+      "paths": {
+        "path": "native-inputs.tar.gz",
+        "member": "2/reference/route.log",
+        "sha256": "f603f40afc7cc96e81278d84729d01093715ad0bc0a8cd7261b8c011b608969e"
+      },
+      "netlist": {
+        "path": "native-inputs.tar.gz",
+        "member": "2/reference/mapped.json",
+        "sha256": "0eef552adb863837339a51673b158a3a6500f5c651e4ef9c55fba4ff552ec63d"
+      }
+    },
+    {
+      "name": "split / seed 2",
+      "tool": "nextpnr",
+      "stage": "routed",
+      "constraint_ns": 5,
+      "paths": {
+        "path": "native-inputs.tar.gz",
+        "member": "2/split/route.log",
+        "sha256": "0796dd3254cf305ee1a486236bdc1bfb02e39d6472535c2394b20de22d9f4206"
+      },
+      "netlist": {
+        "path": "native-inputs.tar.gz",
+        "member": "2/split/mapped.json",
+        "sha256": "548481ab542deeaae5442b813b552b762c089e83f25fb806d3e5255443eeeea8"
+      }
+    }
+  ]
+}

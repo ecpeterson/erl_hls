@@ -1,0 +1,313 @@
+{
+  "source": "module shifter(input clk, enable, input [7:0] d, output reg [7:0] q); reg [7:0] a,b; always @(posedge clk) if(enable) begin a<=d; b<=a; q<=b; end endmodule\n",
+  "variants": {
+    "abc9": {
+      "enable_bits": [
+        3
+      ],
+      "cells": [
+        {
+          "type": "SRL16E",
+          "enable": [
+            "1"
+          ],
+          "registers": {}
+        },
+        {
+          "type": "SRL16E",
+          "enable": [
+            "1"
+          ],
+          "registers": {}
+        },
+        {
+          "type": "SRL16E",
+          "enable": [
+            "1"
+          ],
+          "registers": {}
+        },
+        {
+          "type": "SRL16E",
+          "enable": [
+            "1"
+          ],
+          "registers": {}
+        },
+        {
+          "type": "SRL16E",
+          "enable": [
+            "1"
+          ],
+          "registers": {}
+        },
+        {
+          "type": "SRL16E",
+          "enable": [
+            "1"
+          ],
+          "registers": {}
+        },
+        {
+          "type": "SRL16E",
+          "enable": [
+            "1"
+          ],
+          "registers": {}
+        },
+        {
+          "type": "SRL16E",
+          "enable": [
+            "1"
+          ],
+          "registers": {}
+        }
+      ]
+    },
+    "abc": {
+      "enable_bits": [
+        3
+      ],
+      "cells": [
+        {
+          "type": "SRL16E",
+          "enable": [
+            "1"
+          ],
+          "registers": {}
+        },
+        {
+          "type": "SRL16E",
+          "enable": [
+            "1"
+          ],
+          "registers": {}
+        },
+        {
+          "type": "SRL16E",
+          "enable": [
+            "1"
+          ],
+          "registers": {}
+        },
+        {
+          "type": "SRL16E",
+          "enable": [
+            "1"
+          ],
+          "registers": {}
+        },
+        {
+          "type": "SRL16E",
+          "enable": [
+            "1"
+          ],
+          "registers": {}
+        },
+        {
+          "type": "SRL16E",
+          "enable": [
+            "1"
+          ],
+          "registers": {}
+        },
+        {
+          "type": "SRL16E",
+          "enable": [
+            "1"
+          ],
+          "registers": {}
+        },
+        {
+          "type": "SRL16E",
+          "enable": [
+            "1"
+          ],
+          "registers": {}
+        }
+      ]
+    },
+    "nosrl": {
+      "enable_bits": [
+        3
+      ],
+      "cells": [
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        },
+        {
+          "type": "FDRE",
+          "enable": [
+            3
+          ],
+          "registers": {}
+        }
+      ]
+    }
+  },
+  "files": {
+    "srl-enable/nosrl.v": "e6d0486f2939e91089840e46740f8775cbb96f27f7d9dd12e9dc2f6e67a2effd",
+    "srl-enable/abc.v": "73efcfddd1607b9e38c9e4323eef5b7f9d0918911b14332201e7d089b9bc10f3",
+    "srl-enable/input.v": "6feaf95aefc2e3af867d58ec7f421bf7b8de0fa153b80d9d78106f4d8cbedee9",
+    "srl-enable/abc9.v": "73efcfddd1607b9e38c9e4323eef5b7f9d0918911b14332201e7d089b9bc10f3"
+  },
+  "note": "Observed in the installed toolchain; upstream cause not established."
+}
