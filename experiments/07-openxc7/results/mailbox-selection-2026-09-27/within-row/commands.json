@@ -1,0 +1,26 @@
+[
+  {
+    "label": "ir",
+    "command": [
+      "/Users/ecpeterson/Documents/code/erl_hls_worktrees/timing-control-simplification/_build/timing-application/xls/ir_converter_main",
+      "--warnings_as_errors=false",
+      "--dslx_path=.",
+      "--dslx_stdlib_path=/Users/ecpeterson/Documents/code/erl_hls_worktrees/timing-control-simplification/_build/timing-application/xls/xls/dslx/stdlib",
+      "--top=Top",
+      "phi_decoder_profile_topology.x"
+    ],
+    "seconds": 124.82053920812905,
+    "exit": 0,
+    "output_sha256": "ea15e91619932c3368be3e27c1d003743e58c4384d21e87855f5170328bd9ab1"
+  },
+  {
+    "label": "opt",
+    "command": [
+      "/Users/ecpeterson/Documents/code/erl_hls_worktrees/timing-control-simplification/_build/timing-application/xls/opt_main",
+      "phi_decoder_profile.ir"
+    ],
+    "seconds": 162.3559252503328,
+    "exit": 0,
+    "output_sha256": "360e1b2e316fca0366f0fec117b435c2556e215c2fca86416fd2e8b11020faf2"
+  }
+]

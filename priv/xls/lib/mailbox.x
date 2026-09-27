@@ -84,19 +84,33 @@ fn free_index<DEPTH: u32>(order: u8[DEPTH], occupied: u8) -> u8 {
 // An empty or fully postponed queue returns (false, 0, 0).
 pub fn select<DEPTH: u32>(
     order: u8[DEPTH], occupied: u8, postponed: u1[DEPTH]) -> (u1, u8, u8) {
-  unroll_for! (position, acc):
-      (u32, (u1, u8, u8)) in
-      u32:0..DEPTH {
+  let eligible = unroll_for! (position, flags):
+      (u32, u1[DEPTH]) in u32:0..DEPTH {
     let physical = order[position];
-    let take = !acc.0 &&
-      position < occupied as u32 &&
-      !postponed[physical as u32];
-    (
-      acc.0 || take,
-      if take { position as u8 } else { acc.1 },
-      if take { physical } else { acc.2 }
-    )
-  }((u1:0, u8:0, u8:0))
+    update(flags, position,
+      position < occupied as u32 && !postponed[physical as u32])
+  }(zero!<u1[DEPTH]>());
+  let requests = rev(eligible as uN[DEPTH]);
+  let grant = one_hot(requests, true) as uN[DEPTH];
+  let positions = unroll_for! (position, values):
+      (u32, u8[DEPTH]) in u32:0..DEPTH {
+    update(values, position, position as u8)
+  }(zero!<u8[DEPTH]>());
+  (or_reduce(requests), one_hot_sel(grant, positions), one_hot_sel(grant, order))
+}
+
+// Select a mailbox row after finding each actor's first unpostponed message.
+// Actor must be in range; each row obeys select's bounds and empty sentinel.
+// Parallel rows replicate selection logic. Prefer select on one indexed row
+// unless measurements justify this area's cost at the intended actor count.
+pub fn select_actor<ACTOR_COUNT: u32, DEPTH: u32>(
+    order: u8[DEPTH][ACTOR_COUNT], occupied: u8[ACTOR_COUNT],
+    postponed: u1[DEPTH][ACTOR_COUNT], actor: u32) -> (u1, u8, u8) {
+  let choices = unroll_for! (slot, choices):
+      (u32, (u1, u8, u8)[ACTOR_COUNT]) in u32:0..ACTOR_COUNT {
+    update(choices, slot, select(order[slot], occupied[slot], postponed[slot]))
+  }(zero!<(u1, u8, u8)[ACTOR_COUNT]>());
+  choices[actor]
 }
 
 // Remove one consumed logical position; the remaining physical indices keep
