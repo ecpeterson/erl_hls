@@ -18,7 +18,40 @@ env:
   XLS_SHA256: 163c27ee1a606b77956e0e2317a5b0ce98390d65b74ab12471356ddb679a835e
 
 jobs:
+  select:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    outputs:
+      test: ${{ steps.plan.outputs.test == 'true' && steps.passed.outputs.cache-hit != 'true' }}
+      topology: ${{ steps.plan.outputs.topology == 'true' && steps.passed.outputs.cache-hit != 'true' }}
+      qualify: ${{ steps.plan.outputs.qualify == 'true' && steps.passed.outputs.cache-hit != 'true' }}
+      key: ${{ steps.plan.outputs.key }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - run: python3 tools/test_ci_plan.py
+      - id: plan
+        env:
+          CI_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          CI_SUITE: ci
+          CI_GROUPS: test,topology
+        run: python3 tools/ci_plan.py
+      - id: passed
+        if: steps.plan.outputs.reusable == 'true' && steps.plan.outputs.qualify == 'true'
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: _build/ci-passed/ci
+          key: qualified-${{ runner.os }}-${{ runner.arch }}-ci-${{ steps.plan.outputs.key }}
+          lookup-only: true
+      - name: Explain reused qualification
+        if: steps.passed.outputs.cache-hit == 'true'
+        run: echo 'These exact source, dependency, test and workflow inputs already passed; reusing that qualification.' >> "$GITHUB_STEP_SUMMARY"
+
   test:
+    needs: select
+    if: needs.select.outputs.test == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 25
 
@@ -198,6 +231,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
+          retention-days: 7
           name: debug-observation-reports
           path: |
             _build/debug-memories/**/*.json
@@ -244,6 +278,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
+          retention-days: 7
           name: xls-simulation-diagnostics
           path: |
             _build/topology-debug-queries/**/*.log
@@ -302,6 +337,8 @@ jobs:
           if-no-files-found: ignore
 
   mixed-topology:
+    needs: select
+    if: needs.select.outputs.topology == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     strategy:
@@ -357,6 +394,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
+          retention-days: 7
           name: mixed-topology-${{ matrix.workload }}-reports
           path: |
             _build/mixed-topology/**/*.log
@@ -372,3 +410,18 @@ jobs:
             _build/mixed-windows/cycles.json
             _build/mixed-windows/**/*.log
           if-no-files-found: ignore
+
+  qualify:
+    needs: [select, test, mixed-topology]
+    if: ${{ !cancelled() && needs.select.outputs.qualify == 'true' && (needs.test.result == 'success' || needs.test.result == 'skipped') && (needs.mixed-topology.result == 'success' || needs.mixed-topology.result == 'skipped') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Record successful input qualification
+        run: |
+          mkdir -p _build/ci-passed
+          printf '%s\n' "$GITHUB_SHA" > _build/ci-passed/ci
+      - uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: _build/ci-passed/ci
+          key: qualified-${{ runner.os }}-${{ runner.arch }}-ci-${{ needs.select.outputs.key }}
