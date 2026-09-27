@@ -41,7 +41,7 @@ The promising pair also passes an `Explore` placement control, with routing poli
 | Reference | 15.846 | 15.794 | 15.794 / 15.820 / 15.846 | 0.000676 |
 | Cell-only, no penalty | 15.151 | 15.237 | 15.151 / 15.194 / 15.237 | 0.001849 |
 
-These are **two deterministic placement strategies**, not random seeds or confidence intervals. The candidate's implied 1.201–1.208 µs steps remain short of 1 MHz; unchanged-cycle operation needs a period of 12.618 ns.
+These are **two deterministic placement strategies**, not random seeds or confidence intervals. The candidate's implied 1.201–1.208 µs steps describe only this 2×1 fixture. The application target is **1 µs per step for a 2×4 qubit patch**; this experiment does not measure its distance from that target. The generated report's 12.618 ns budget answers the hypothetical question of running this smaller fixture at 1 MHz. Establish the target patch's actor/plane configuration and cycles before calculating its budget; neither coordinates nor step cost can be scaled mechanically from this fixture.
 
 ## What the failed prediction revealed
 
@@ -63,6 +63,10 @@ More importantly, the new query sets reveal **several near-tied limits**:
 The reference control path contains 26 LUT stages: 1.647 ns cell delay including launch, 13.632 ns interconnect. It was absent from the global top twenty. Even eliminating arithmetic would leave that 15.683 ns path if placement and the control circuit stayed unchanged. The selective candidate's worst path instead runs from a registered DSP through arithmetic to **mailbox RAM**: physical work continues beyond the executor boundary. Proc-local delay totals account for neither every upstream arrival nor every downstream destination.
 
 Future changes should target these complete boundary-to-boundary cones, and price any added feedback cycles before implementation. Breaking the serial ready/enable dependency and shortening arithmetic/egress paths must be assessed together; optimizing another isolated operator cannot justify a large whole-core prediction.
+
+The [next experiments](../yap/timing-next-cones.md) preregister separate control and payload-selection changes, their competing limits, and promotion criteria.
+
+The [conceptual follow-up](timing-concept-audit-2026-09-27.md) distinguishes routing-dominated control from substantial arithmetic cell delay, and identifies duplicate completion datapaths consuming 48 reciprocal-product DSPs. It motivates an architecture-first revision to that experiment order.
 
 ## Indexed-selector experiment
 

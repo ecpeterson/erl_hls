@@ -22,9 +22,9 @@ Query sets can overlap; the family table below deduplicates identical paths.
 | state RAM → DSP/carry arithmetic → register | 4 | 15.715–15.755 | 15.846 |
 | register → service/reduction control → register | 20 | 15.634–15.683 | 15.846 |
 
-At 79.25 simulated cycles/step: 1.256 µs. Unchanged-cycle 1 MHz requires 12.618 ns.
+At 79.25 simulated cycles/step: 1.256 µs. For this fixture alone, unchanged-cycle 1 MHz would require 12.618 ns.
 
-| Added cycles/step | Break-even period, ns | Period for 1 MHz, ns |
+| Added cycles/step | Break-even period, ns | Hypothetical fixture-only 1 MHz period, ns |
 |---:|---:|---:|
 | 1 | 15.649 | 12.461 |
 | 14 | 13.467 | 10.724 |
@@ -58,9 +58,9 @@ Query sets can overlap; the family table below deduplicates identical paths.
 | state RAM → DSP/carry arithmetic → register | 7 | 14.979–15.468 | 17.100 |
 | state RAM → other logic → register | 13 | 14.857–15.188 | 17.100 |
 
-At 79.25 simulated cycles/step: 1.355 µs. Unchanged-cycle 1 MHz requires 12.618 ns.
+At 79.25 simulated cycles/step: 1.355 µs. For this fixture alone, unchanged-cycle 1 MHz would require 12.618 ns.
 
-| Added cycles/step | Break-even period, ns | Period for 1 MHz, ns |
+| Added cycles/step | Break-even period, ns | Hypothetical fixture-only 1 MHz period, ns |
 |---:|---:|---:|
 | 1 | 16.887 | 12.461 |
 | 14 | 14.533 | 10.724 |
@@ -95,9 +95,9 @@ Query sets can overlap; the family table below deduplicates identical paths.
 | state RAM → DSP/carry arithmetic → register | 4 | 14.865–15.202 | 17.422 |
 | state RAM → other logic → register | 16 | 14.858–15.041 | 17.422 |
 
-At 79.25 simulated cycles/step: 1.381 µs. Unchanged-cycle 1 MHz requires 12.618 ns.
+At 79.25 simulated cycles/step: 1.381 µs. For this fixture alone, unchanged-cycle 1 MHz would require 12.618 ns.
 
-| Added cycles/step | Break-even period, ns | Period for 1 MHz, ns |
+| Added cycles/step | Break-even period, ns | Hypothetical fixture-only 1 MHz period, ns |
 |---:|---:|---:|
 | 1 | 17.205 | 12.461 |
 | 14 | 14.806 | 10.724 |
@@ -130,9 +130,9 @@ Query sets can overlap; the family table below deduplicates identical paths.
 | register → DSP/carry arithmetic → register | 9 | 15.055–15.133 | 15.151 |
 | register → service/reduction control → register | 20 | 14.719–14.904 | 15.151 |
 
-At 79.25 simulated cycles/step: 1.201 µs. Unchanged-cycle 1 MHz requires 12.618 ns.
+At 79.25 simulated cycles/step: 1.201 µs. For this fixture alone, unchanged-cycle 1 MHz would require 12.618 ns.
 
-| Added cycles/step | Break-even period, ns | Period for 1 MHz, ns |
+| Added cycles/step | Break-even period, ns | Hypothetical fixture-only 1 MHz period, ns |
 |---:|---:|---:|
 | 1 | 14.962 | 12.461 |
 | 14 | 12.876 | 10.724 |
@@ -185,9 +185,9 @@ Query sets can overlap; the family table below deduplicates identical paths.
 | state RAM → DSP/carry arithmetic (phi_field.x:21) → register | 3 | 15.666–15.725 | 15.794 |
 | register → service/reduction control → register | 20 | 15.337–15.387 | 15.794 |
 
-At 79.25 simulated cycles/step: 1.252 µs. Unchanged-cycle 1 MHz requires 12.618 ns.
+At 79.25 simulated cycles/step: 1.252 µs. For this fixture alone, unchanged-cycle 1 MHz would require 12.618 ns.
 
-| Added cycles/step | Break-even period, ns | Period for 1 MHz, ns |
+| Added cycles/step | Break-even period, ns | Hypothetical fixture-only 1 MHz period, ns |
 |---:|---:|---:|
 | 1 | 15.597 | 12.461 |
 | 14 | 13.423 | 10.724 |
@@ -222,9 +222,9 @@ Query sets can overlap; the family table below deduplicates identical paths.
 | register → other logic → register | 2 | 15.089–15.089 | 15.237 |
 | register → service/reduction control → register | 18 | 14.957–15.009 | 15.237 |
 
-At 79.25 simulated cycles/step: 1.208 µs. Unchanged-cycle 1 MHz requires 12.618 ns.
+At 79.25 simulated cycles/step: 1.208 µs. For this fixture alone, unchanged-cycle 1 MHz would require 12.618 ns.
 
-| Added cycles/step | Break-even period, ns | Period for 1 MHz, ns |
+| Added cycles/step | Break-even period, ns | Hypothetical fixture-only 1 MHz period, ns |
 |---:|---:|---:|
 | 1 | 15.047 | 12.461 |
 | 14 | 12.949 | 10.724 |
@@ -245,9 +245,9 @@ nextpnr, routed; requested period 5 ns. 1 distinct reported paths; worst 41.000 
 |---|---:|---:|---:|
 | register → service/reduction control → register | 1 | 41.000–41.000 | Unknown |
 
-At 79.25 simulated cycles/step: 3.249 µs. Unchanged-cycle 1 MHz requires 12.618 ns.
+At 79.25 simulated cycles/step: 3.249 µs. For this fixture alone, unchanged-cycle 1 MHz would require 12.618 ns.
 
-| Added cycles/step | Break-even period, ns | Period for 1 MHz, ns |
+| Added cycles/step | Break-even period, ns | Hypothetical fixture-only 1 MHz period, ns |
 |---:|---:|---:|
 | 1 | 40.489 | 12.461 |
 | 14 | 34.845 | 10.724 |
@@ -264,9 +264,9 @@ nextpnr, routed; requested period 5 ns. 1 distinct reported paths; worst 45.200 
 |---|---:|---:|---:|
 | register → other logic → mailbox RAM | 1 | 45.200–45.200 | Unknown |
 
-At 79.25 simulated cycles/step: 3.582 µs. Unchanged-cycle 1 MHz requires 12.618 ns.
+At 79.25 simulated cycles/step: 3.582 µs. For this fixture alone, unchanged-cycle 1 MHz would require 12.618 ns.
 
-| Added cycles/step | Break-even period, ns | Period for 1 MHz, ns |
+| Added cycles/step | Break-even period, ns | Hypothetical fixture-only 1 MHz period, ns |
 |---:|---:|---:|
 | 1 | 44.637 | 12.461 |
 | 14 | 38.414 | 10.724 |

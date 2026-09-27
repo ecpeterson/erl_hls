@@ -246,7 +246,9 @@ jobs:
           bash tools/test_actor_debug.sh "$RUNNER_TEMP/xls" _build/aggregate-debug aggregate
 
       - name: Run generated reduction semantics
-        run: bash tools/test_reduction_dslx.sh "$RUNNER_TEMP/xls"
+        run: |
+          bash tools/test_reduction_dslx.sh "$RUNNER_TEMP/xls"
+          python3 tools/test_shared_completion.py "$RUNNER_TEMP/xls"
 
       - name: Run specialized phi RTL regressions
         run: |

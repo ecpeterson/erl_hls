@@ -3066,29 +3066,24 @@ fn shared_machine_complete(machine: SharedMachine) -> SharedDispatch {
     }
   }
 }
-fn shared_machine_aggregate(
+fn shared_machine_accept_aggregate(
     machine: SharedMachine,
     request: ReductionAggregateRequest,
-    slot: u32) -> SharedDispatch {
+    slot: u32) -> SharedMachine {
   let applied = reduction_apply_complete_aggregate(
     machine.reduction, request.aggregate);
   let accepted = !hls_failure::failed(machine.failure) && !machine.enter_pending &&
     request.slot == slot &&
     applied.outcome == ReductionOutcome::COMPLETE;
   if accepted {
-    shared_machine_complete(SharedMachine {
+    SharedMachine {
       reduction: applied.state,
       ..machine
-    })
+    }
   } else {
-    SharedDispatch {
-      machine: SharedMachine {
-        failure: hls_failure::first(machine.failure, hls_failure::REDUCTION_PROTOCOL),
-        ..machine
-      },
-      dispatched: u1:1,
-      directive: Directive::FAIL,
-      ..zero!<SharedDispatch>()
+    SharedMachine {
+      failure: hls_failure::first(machine.failure, hls_failure::REDUCTION_PROTOCOL),
+      ..machine
     }
   }
 }
@@ -3184,11 +3179,12 @@ fn shared_machine_enter(machine: SharedMachine, egress_ready: u1)
 pub fn shared_execute(request: SharedExecutorRequest) ->
     SharedExecutorResult {
   let machine = machine_from_bits(request.machine);
-  let dispatched = if request.internal {
-    shared_machine_complete(machine)
-  } else if request.aggregate_valid {
-    shared_machine_aggregate(
+  let completion_machine = if request.internal { machine } else {
+    shared_machine_accept_aggregate(
       machine, request.aggregate_request, request.slot)
+  };
+  let dispatched = if request.internal || request.aggregate_valid {
+    shared_machine_complete(completion_machine)
   } else {
     shared_machine_dispatch(
       machine, request.frame, request.received)

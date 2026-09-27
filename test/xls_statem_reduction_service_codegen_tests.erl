@@ -2,26 +2,15 @@
 
 -include_lib("eunit/include/eunit.hrl").
 
-aggregate_apply_completes_in_one_executor_visit_test() ->
-    Support = aggregate_only_support(),
-    ?assertNotEqual(nomatch, binary:match(Support,
-        <<"if accepted {\n"
-          "    shared_machine_complete(SharedMachine {\n"
-          "      reduction: applied.state,\n"
-          "      ..machine\n"
-          "    })">>)).
-
-rejected_aggregate_still_dispatches_failure_test() ->
-    Support = aggregate_only_support(),
-    ?assertNotEqual(nomatch, binary:match(Support,
-        <<"} else {\n"
-          "    SharedDispatch {\n"
-          "      machine: SharedMachine {\n"
-          "        failure: hls_failure::first(machine.failure, hls_failure::REDUCTION_PROTOCOL),\n"
-          "        ..machine\n"
-          "      },\n"
-          "      dispatched: u1:1,\n"
-          "      directive: Directive::FAIL">>)).
+%% Completion arithmetic must have one syntactic call site across both requests.
+-spec aggregate_and_internal_share_completion_test() -> ok.
+aggregate_and_internal_share_completion_test() ->
+    Dispatch = iolist_to_binary(
+        xls_statem_reduction_service_codegen:shared_executor_dispatch(
+            reduction, aggregate_only)),
+    ?assertEqual(1, length(binary:matches(Dispatch, <<"shared_machine_complete(">>))),
+    ?assertEqual(nomatch, binary:match(aggregate_only_support(),
+        <<"shared_machine_complete(SharedMachine">>)).
 
 aggregate_arrival_has_same_activation_issue_path_test() ->
     Bindings = aggregate_only_issue_bindings(),

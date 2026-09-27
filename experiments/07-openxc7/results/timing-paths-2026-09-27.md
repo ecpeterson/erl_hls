@@ -12,9 +12,9 @@ vivado, routed; requested period 5 ns. 20 distinct reported paths; worst 15.846 
 | state RAM → DSP/carry arithmetic (phi_field.x:15) → register | 4 | 15.706–15.783 | 15.846 |
 | state RAM → DSP/carry arithmetic → register | 4 | 15.715–15.755 | 15.846 |
 
-At 79.25 simulated cycles/step: 1.256 µs. Unchanged-cycle 1 MHz requires 12.618 ns.
+At 79.25 simulated cycles/step: 1.256 µs. For this fixture alone, unchanged-cycle 1 MHz would require 12.618 ns.
 
-| Added cycles/step | Break-even period, ns | Period for 1 MHz, ns |
+| Added cycles/step | Break-even period, ns | Hypothetical fixture-only 1 MHz period, ns |
 |---:|---:|---:|
 | 1 | 15.649 | 12.461 |
 | 14 | 13.467 | 10.724 |
@@ -36,9 +36,9 @@ vivado, routed; requested period 5 ns. 20 distinct reported paths; worst 15.090 
 |---|---:|---:|---:|
 | state RAM → carry arithmetic → register | 20 | 14.614–15.090 | Unknown |
 
-At 79.25 simulated cycles/step: 1.196 µs. Unchanged-cycle 1 MHz requires 12.618 ns.
+At 79.25 simulated cycles/step: 1.196 µs. For this fixture alone, unchanged-cycle 1 MHz would require 12.618 ns.
 
-| Added cycles/step | Break-even period, ns | Period for 1 MHz, ns |
+| Added cycles/step | Break-even period, ns | Hypothetical fixture-only 1 MHz period, ns |
 |---:|---:|---:|
 | 1 | 14.902 | 12.461 |
 | 14 | 12.824 | 10.724 |
@@ -54,9 +54,9 @@ nextpnr, routed; requested period 40 ns. 1 distinct reported paths; worst 38.800
 |---|---:|---:|---:|
 | register → service/reduction control → register | 1 | 38.800–38.800 | Unknown |
 
-At 79.25 simulated cycles/step: 3.075 µs. Unchanged-cycle 1 MHz requires 12.618 ns.
+At 79.25 simulated cycles/step: 3.075 µs. For this fixture alone, unchanged-cycle 1 MHz would require 12.618 ns.
 
-| Added cycles/step | Break-even period, ns | Period for 1 MHz, ns |
+| Added cycles/step | Break-even period, ns | Hypothetical fixture-only 1 MHz period, ns |
 |---:|---:|---:|
 | 1 | 38.317 | 12.461 |
 | 14 | 32.975 | 10.724 |

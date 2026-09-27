@@ -1,3 +1,9 @@
+// Check failed aggregates through acceptance and completion, before phase entry.
+fn failure_test_aggregate(machine: SharedMachine,
+    request: ReductionAggregateRequest, slot: u32) -> SharedDispatch {
+  shared_machine_complete(shared_machine_accept_aggregate(machine, request, slot))
+}
+
 #[test]
 fn aggregate_bottom_counts_every_contribution() {
   let first = reduction_aggregate_push(zero!<ReductionAggregate>(), failure_test_frame(u32:1));
@@ -18,15 +24,15 @@ fn aggregate_bottom_counts_every_contribution() {
   let machine = SharedMachine { phase: Phase::GATHERING, enter_pending: u1:0,
     reduction: failure_test_open(), ..initial_shared_machine() };
   let request = ReductionAggregateRequest { slot: u32:1, aggregate: full };
-  let completed = shared_machine_aggregate(machine, request, u32:1);
+  let completed = failure_test_aggregate(machine, request, u32:1);
   assert_eq(completed.machine.failure, second.failure);
   assert_eq(completed.machine.phase, Phase::GATHERING);
   assert_eq(completed.machine.data, machine.data);
   assert_eq(completed.directive, Directive::FAIL);
   // A foreign aggregate cannot attribute its source error to this actor.
-  let wrong = shared_machine_aggregate(machine, request, u32:0);
+  let wrong = failure_test_aggregate(machine, request, u32:0);
   assert_eq(wrong.machine.failure, hls_failure::REDUCTION_PROTOCOL);
-  let sticky = shared_machine_aggregate(
+  let sticky = failure_test_aggregate(
     SharedMachine { failure: hls_failure::INVALID_MESSAGE, ..machine }, request, u32:1);
   assert_eq(sticky.machine.failure, hls_failure::INVALID_MESSAGE);
 }
