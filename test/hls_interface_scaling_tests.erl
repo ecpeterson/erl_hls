@@ -5,30 +5,25 @@
 %% Count actual source reads instead of imposing a machine-dependent timeout.
 %% Each boundary must still read again: an earlier successful query is not a
 %% license to reuse interfaces after a header or loaded module changes.
+-spec population_and_fanout_do_not_multiply_source_reads_test() -> 'ok'.
 population_and_fanout_do_not_multiply_source_reads_test() ->
     lists:foreach(fun({Count, Fanout}) ->
         Spec = exact_topology(Count, Fanout),
         {Plan, 1} = source_reads(fun() -> hls_topology:normalize(Spec) end),
         ?assertEqual(Count, length(maps:get(actors, Plan))),
         {_, 1} = source_reads(fun() -> xls_topology_dslx:emit(Plan, profile()) end),
-        {_, 1} = source_reads(fun() -> hls_topology:normalize(Spec) end),
-        Groups = maps:from_list([{Id, #{members => [{actor, Id}],
-            state_storage => registers, mailbox_storage => registers}}
-            || #{id := Id} <- maps:get(actors, Plan)]),
-        {#{groups := Scheduled}, 1} = source_reads(fun() ->
-            hls_scheduler_plan:normalize(Plan, Groups)
-        end),
-        ?assertEqual(Count, length(Scheduled))
+        {_, 1} = source_reads(fun() -> hls_topology:normalize(Spec) end)
     end, [{1, 1}, {32, 1}, {32, 8}]).
 
+%% Checks family count and dimensions do not multiply source reads.
+-spec family_count_and_dimensions_do_not_multiply_source_reads_test() -> 'ok'.
 family_count_and_dimensions_do_not_multiply_source_reads_test() ->
     lists:foreach(fun({Count, Dimension}) ->
         Spec = family_topology(Count, Dimension),
         {Plan, 1} = source_reads(fun() -> hls_topology:normalize(Spec) end),
         ?assertEqual(Count, length(maps:get(families, Plan))),
-        %% Family emission runs reduction planning and interface annotation;
-        %% each pass reads once per distinct module, not once per family.
-        {_, 2} = source_reads(fun() -> xls_topology_dslx:emit(Plan, profile()) end)
+        %% Interface annotation reads once per distinct module, not per family.
+        {_, 1} = source_reads(fun() -> xls_topology_dslx:emit(Plan, profile()) end)
     end, [{1, 1}, {12, 1}, {12, 8}]).
 
 exact_and_family_sections_share_interface_resolution_test() ->

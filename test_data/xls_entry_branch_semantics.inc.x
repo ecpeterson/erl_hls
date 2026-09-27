@@ -47,34 +47,7 @@ fn observe_direct(phase: Phase, value: u32, ready: u16) -> EntryObservation {
   }
 }
 
-fn observe_shared(phase: Phase, value: u32, ready: u16) -> EntryObservation {
-  let machine = SharedMachine {
-    phase, entered_from: phase, data: Cell { value },
-    ..initial_shared_machine()
-  };
-  let (machine, observed) = for (cycle, state):
-      (u32, (SharedMachine, EntryObservation)) in u32:0..u32:16 {
-    let (machine, observed) = state;
-    let result = shared_execute(SharedExecutorRequest {
-      machine: bits_from_machine(machine),
-      egress_ready: (ready >> cycle) as bool,
-      ..zero!<SharedExecutorRequest>()
-    });
-    // A shared executor publishes one batch; drain it in source order.
-    let observed = for (index, observed): (u32, EntryObservation)
-        in u32:0..ENTRY_EFFECT_CAPACITY {
-      observe_effect(observed, entry_effect(result.effects, index as u8),
-        result.effects_valid && index < entry_effect_count(result.effects) as u32)
-    }(observed);
-    (machine_from_bits(result.machine), observed)
-  }((machine, zero!<EntryObservation>()));
-  EntryObservation {
-    failed: hls_failure::failed(machine.failure),
-    pending: machine.enter_pending,
-    data: machine.data.value,
-    ..observed
-  }
-}
+
 
 fn observation_bits(observed: EntryObservation) -> bits[306] {
   (observed.failed as u1) ++ (observed.pending as u1) ++ observed.data ++
@@ -86,36 +59,19 @@ fn observation_bits(observed: EntryObservation) -> bits[306] {
   observed.values[u32:1] ++ observed.values[u32:2]
 }
 
-pub fn entry_probe(shared: bool, phase: u8, value: u32, ready: u16) -> bits[306] {
-  observation_bits(if shared {
-    observe_shared(phase as Phase, value, ready)
-  } else {
-    observe_direct(phase as Phase, value, ready)
-  })
+pub fn entry_probe( phase: u8, value: u32, ready: u16) -> bits[306] {
+  observation_bits(observe_direct(phase as Phase, value, ready))
 }
 
 // RTL checks one transition at a time, so the synthesized test circuit does
 // not contain sixteen cascaded copies of the complete entry implementation.
-pub fn entry_cycle_probe(shared: bool, phase: u8, value: u32,
+pub fn entry_cycle_probe( phase: u8, value: u32,
     pending: bool, failed: bool, index: u8, ready: bool) -> bits[314] {
   let machine = Machine {
     phase: phase as Phase, entered_from: phase as Phase, data: Cell { value },
     enter_pending: pending, failure: hls_failure::check(failed, hls_failure::INTERNAL), entry_effect_index: index, ..initial_machine()
   };
-  let (next, observed) = if shared {
-    let result = shared_execute(SharedExecutorRequest {
-      machine: bits_from_machine(shared_machine(machine)), egress_ready: ready,
-      ..zero!<SharedExecutorRequest>()
-    });
-    let observed = for (i, observed): (u32, EntryObservation)
-        in u32:0..ENTRY_EFFECT_CAPACITY {
-      observe_effect(observed, entry_effect(result.effects, i as u8),
-        result.effects_valid && i < entry_effect_count(result.effects) as u32)
-    }(zero!<EntryObservation>());
-    let next = machine_from_bits(result.machine);
-    (Machine { data: next.data, enter_pending: next.enter_pending,
-      failure: next.failure, ..machine }, observed)
-  } else {
+  let (next, observed) = {
     let result = machine_step(machine, zero!<axis::Frame>(), false, ready);
     (result.machine, observe_effect(zero!<EntryObservation>(),
       result.egress, result.egress_valid))

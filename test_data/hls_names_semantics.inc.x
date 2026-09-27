@@ -10,9 +10,7 @@ pub fn probe(a: u32, b: u32) -> bits[104] {
   let second = reduction_apply(first.state,
     reduction_contribution(input_frame(b), initial.phase, initial.data));
   let ordinary = reduction_dispatch_completion(second.state, initial.phase, initial.data);
-  let aggregate = reduction_aggregate_batch<u32:2>([input_frame(a), input_frame(b)]);
-  let combined = reduction_apply_complete_aggregate(opened.reduction, aggregate);
-  let completed = reduction_dispatch_completion(combined.state, initial.phase, initial.data);
+  let completed = ordinary;
   let emitted = enter(initial.phase, completed.phase, completed.data);
   let effect = entry_effect(emitted.effects, u8:0);
   let message = outputvalue_from_bits(effect.frame.payload);

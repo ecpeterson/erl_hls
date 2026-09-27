@@ -1,1 +1,0 @@
-FILESEXTRAPATHS:prepend := "${THISDIR}/u-boot-xlnx-scr:"

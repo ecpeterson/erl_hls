@@ -17,18 +17,16 @@ for unit in "$stage/statem_direct.x" "$stage/statem_events.x" "$stage/statem_red
     "$interpreter" --compare=jit --warnings_as_errors=false \
         --dslx_path="$stage" --dslx_stdlib_path="$xls_root/xls/dslx/stdlib" "$unit"
 done
-source tools/phi_scheduler_rams.sh
-for kind in direct shared; do
+for kind in direct topology; do
     rams=(--ram-configurations "")
     top="__statem_${kind}__Top_0_next"
-    if [[ "$kind" == shared ]]; then
-        rams=(--ram-configurations "$(phi_scheduler_ram_configurations 1)")
-        top=statem_shared_wrapper
+    if [[ "$kind" == topology ]]; then
+        top=statem_topology_wrapper
     fi
     for stages in 2 3; do
         prefix="$stage/$kind-p$stages"
         sources=("$prefix/statem.v")
-        if [[ "$kind" == shared ]]; then sources+=("$stage/statem_shared_wrapper.v" priv/rtl/hls_1r1w_ram.v); fi
+        if [[ "$kind" == topology ]]; then sources+=("$stage/statem_topology_wrapper.v"); fi
         python3 tools/compile_xls.py "$stage/statem_$kind.x" "$xls_root" --output "$prefix" \
             --name statem --top Top --pipeline-stages "$stages" "${rams[@]}"
         bash tools/check_rtl_structure.sh "$top" "$prefix-check" "${sources[@]}"

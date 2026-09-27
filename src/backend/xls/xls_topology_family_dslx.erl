@@ -3,70 +3,8 @@
 %%%% Lowers regular two-dimensional actor families into compact DSLX.
 
 -module(xls_topology_family_dslx).
--moduledoc """
-Generates the compact regular-family DSLX backend used by the phi/noise
-experiment.
-
-The accepted subset is deliberately narrow: one or more same-shaped
-two-dimensional families, wrapped translations between those families,
-single-recipient routes, and queued two-way fanout from one family endpoint to
-one family endpoint plus one scalar external output. Exact actors and other
-route forms remain outside this backend.
-
-The generated source contains one reusable node proc per family and nested
-`unroll_for!` spawns over channel arrays. Its routing structure therefore
-follows the number of family rules rather than the number of family members.
-Each node has one credit-aware ingress which polls its incoming lanes directly,
-without a tree of buffered two-way muxes. Explicit startup values still
-produce one match arm per configured member.
-
-Families may either instantiate one actor service per coordinate or join a
-homogeneous scheduler group. A group replaces the per-coordinate services and
-mailboxes with shared ingress, execution, and egress machinery around one
-actor implementation. Actor-machine words and mailbox frames cross separate
-simple-dual-port RAM boundaries, each with one read and one write port; the
-scheduler retains only bounded queue-order metadata. The current backend
-requires both scheduler storage bindings to be `block_ram`; a target wrapper
-must connect the generated RAM channel quartets to storage with the declared
-independent read- and write-channel protocol.
-
-Each compact lane relation becomes a depth-zero direct channel array. The
-explicit depth supplies the pinned block stitcher's per-channel FIFO metadata
-without installing a global default which could mask another unannotated
-channel. The graph must then be code-generated with one registered output per
-router lane; the repository scripts enforce that policy. That register is the
-lane's bounded holding slot and timing boundary, instead of placing another
-FIFO immediately after it. When two ports alias one destination, both router
-arms use the same array element, preserving the actor's source-ordered egress.
-Queued fanout starts after the common ordered egress accepts the event and waits
-for both registered branches. Each lane feeding a scalar external is first
-merged across its family grid. When several source families share that
-external, a second fair polling merge combines those bounded lane streams.
-There is no ordering promise between distinct source families. All receive
-sites are statically indexed because runtime channel indexing is not supported
-by the pinned XLS build.
-
-The profile's `channel_depth` controls the remaining explicit actor-request,
-admission, and external-merge queues. It does not change direct lane capacity.
-`actor_egress_depth` separately selects either end-to-end capacity for one
-complete entry-effect `burst` on an initially empty path or a literal
-nonnegative XLS FIFO depth. The symbolic policy counts the required one-entry
-producer output register and therefore depends on code generation retaining
-`--flop_outputs=true`; a literal zero is a bypass adapter which leaves only
-that physical holding slot.
-
-`effect_window_partition` defaults to `global`. The experimental
-`weak_components` setting gives each weak component of the conservative
-scheduler dependency graph a separate retained lookahead reservation. It is a
-correctness-permitted maximum split, not a promise of better throughput.
-
-Family-member startup remains explicit normalized data. A family which has
-startup data must provide exactly one frame for every member. The generated
-ingress sends that frame under the actor's first admission credit, ahead of its
-first routed receive, while the actor graph and routing stay compact.
-""".
-
--export([artifact_requirements/2, emit/2]).
+-moduledoc "Compact DSLX wiring for regular families of dedicated actors.".
+-export([artifact_requirements/2, emit/2, lower/2]).
 
 -define(U16_MAX, 16#ffff).
 -define(U32_MAX, 16#ffffffff).
@@ -80,7 +18,7 @@ emit(Plan, Profile) ->
 -doc "Returns the actor-artifact specializations selected by a profile.".
 -spec artifact_requirements(
     hls_topology:plan(), xls_topology_dslx:profile()
-) -> #{module() := #{shared_service := ordinary | aggregate_only, mailbox_debug => boolean(), direct_actor_debug => boolean()}}.
+) -> #{module() := #{direct_actor_debug => boolean()}}.
 artifact_requirements(Plan, Profile) ->
     maps:get(artifact_requirements, lower(Plan, Profile)).
 
@@ -88,6 +26,8 @@ artifact_requirements(Plan, Profile) ->
 %%% Validation and annotation
 %%%
 
+-doc "Resolves validated logical actors and routes into a renderable physical graph.".
+-spec lower(map(),map()) -> map().
 lower(Plan, Profile) ->
     ok = require_empty(actors, Plan),
     ok = require_empty(routes, Plan),
@@ -95,27 +35,8 @@ lower(Plan, Profile) ->
         name := Name,
         channel_depth := Depth,
         actor_egress_depth := EgressDepth,
-        scheduler_groups := Groups,
-        reduction_placements := Placements,
-        effect_window_partition := WindowPartition,
-        mailbox_debug := MailboxDebug,
         direct_actor_debug := ActorDebug
     } = xls_topology_profile:normalize(Profile),
-    SchedulerPlan = hls_scheduler_plan:normalize(Plan, Groups),
-    case SchedulerPlan of
-        #{groups := [_ | _], direct_members := [_ | _]} ->
-            error(mixed_topology_requires_materialized_backend);
-        _ -> ok
-    end,
-    case {MailboxDebug, maps:get(groups, SchedulerPlan)} of
-        {true, []} -> error(mailbox_debug_requires_shared_schedulers);
-        _ -> ok
-    end,
-    ReductionPlan = hls_reduction_plan:normalize(
-        Plan, SchedulerPlan, Placements
-    ),
-    Schedulers = annotate_schedulers(maps:get(groups, SchedulerPlan)),
-    SchedulerBindings = scheduler_bindings(Schedulers),
     Families0 = require_families(maps:get(families, Plan, [])),
     [Width, Height] = require_common_shape(Families0),
     Families1 = annotate_families(Families0, EgressDepth),
@@ -147,7 +68,7 @@ lower(Plan, Profile) ->
     Routes = annotate_routes(Relations, Lanes),
     Startup = annotate_startup(maps:get(startup, Plan), FamilyIndex),
     Families = [annotate_family_graph(
-        with_scheduler_bindings(Family, SchedulerBindings),
+        Family,
         Routes,
         Lanes,
         Startup,
@@ -158,23 +79,9 @@ lower(Plan, Profile) ->
     #{
         name => Name,
         depth => Depth,
-        effect_window_partition => WindowPartition,
-        mailbox_debug => MailboxDebug,
         direct_actor_debug => ActorDebug,
-        reduction_plan => ReductionPlan,
-        artifact_requirements =>
-            maps:map(fun(_, Requirement) ->
-                WithMailbox = case MailboxDebug of
-                    true -> Requirement#{mailbox_debug => true};
-                    false -> Requirement
-                end,
-                case ActorDebug andalso Schedulers =:= [] of
-                    true -> WithMailbox#{direct_actor_debug => true};
-                    false -> WithMailbox
-                end
-            end, maps:merge(maps:from_list([{Module, #{shared_service => ordinary}} ||
-                #{module := Module} <- Families]), hls_reduction_plan:artifact_requirements(ReductionPlan))),
-        schedulers => Schedulers,
+        artifact_requirements => maps:from_list([{Module,
+            #{direct_actor_debug => ActorDebug}} || #{module := Module} <- Families]),
         families => Families,
         width => Width,
         height => Height,
@@ -184,47 +91,6 @@ lower(Plan, Profile) ->
         ingresses => Ingresses,
         externals => Externals
     }.
-
-annotate_schedulers(Groups) ->
-    [annotate_scheduler(Index, Group)
-        || {Index, Group} <- lists:enumerate(0, Groups)].
-
-annotate_scheduler(Index, Group = #{
-    state_storage := block_ram,
-    mailbox_storage := block_ram
-}) ->
-    Group#{
-        index => Index,
-        stem => ["scheduler_", integer_to_list(Index)],
-        module_name => xls_topology_profile:identifier(
-            maps:get(module, Group), scheduler_module)
-    };
-annotate_scheduler(_Index, #{
-    id := Id,
-    state_storage := State,
-    mailbox_storage := Mailbox
-}) ->
-    error({scheduler_storage, Id, State, Mailbox}).
-
-scheduler_bindings(Schedulers) ->
-    lists:foldl(
-        fun({Id, Binding}, Acc) ->
-            maps:update_with(Id, fun(Existing) -> Existing ++ [Binding] end,
-                [Binding], Acc)
-        end,
-        #{},
-        [{Id, #{
-            group => Group,
-            base_slot => BaseSlot,
-            instances => Instances
-        }}
-        || #{index := Group, members := Members} <- Schedulers,
-           #{kind := family, id := Id, base_slot := BaseSlot,
-               instances := Instances} <- Members]
-    ).
-
-with_scheduler_bindings(Family = #{id := Id}, Bindings) ->
-    Family#{schedulers => maps:get(Id, Bindings, [])}.
 
 require_empty(Field, Plan) ->
     case maps:get(Field, Plan, '$missing') of
@@ -721,11 +587,8 @@ startup_fields(Target, Fields, Values) ->
 %%% Rendering
 %%%
 
-render(Spec = #{schedulers := [_ | _]}) ->
-    xls_topology_scheduler_dslx:emit(Spec);
-%% Scheduled plans use the group renderer above. The remaining renderer owns
-%% only per-coordinate actor services and never emits scheduler RAM plumbing.
-render(Spec = #{schedulers := []}) ->
+-spec render(map()) -> [[[any()]],...].
+render(Spec) ->
     [
         preamble(Spec),
         startup_support(maps:get(families, Spec)),

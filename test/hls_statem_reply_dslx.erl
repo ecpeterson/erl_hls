@@ -2,7 +2,7 @@
 -moduledoc "Builds singleton and two-actor retained-call regression designs.".
 -export([write/1]).
 
--doc "Writes both designs and a wrapper using the production state/mailbox RAMs.".
+-doc "Writes both designs and a wrapper using the dedicated actor interfaces.".
 -spec write(file:filename()) -> ok.
 write(Stage) ->
     Events = xls_parse:to_xls("test/hls_statem_event_fixture.erl"),
@@ -21,21 +21,17 @@ write(Stage) ->
             [wait, read, release, duplicate, explode], [{family, cells, {embed, [1, 1], [0, 0]}}]}]}],
         externals => [{replies, out, [report]}], routes => [],
         route_relations => [{{cells, reply}, [{external, replies}]}], startup => []}),
-    Groups = #{cells => #{members => [{family, cells}], state_storage => block_ram, mailbox_storage => block_ram}},
-    Profile = #{name => statem_shared, channel_depth => 1, actor_egress_depth => 0,
-        scheduler_groups => Groups},
-    ok = save(Stage, "statem_shared.x", xls_topology_dslx:emit(Plan, Profile)),
-    Bindings = xls_scheduler_ram_v:bindings(hls_scheduler_plan:normalize(Plan, Groups)),
-    Wrapper = ["module statem_shared_wrapper(input wire clk, reset,\n",
+    Profile = #{name => statem_topology, channel_depth => 1, actor_egress_depth => 0},
+    ok = save(Stage, "statem_topology.x", xls_topology_dslx:emit(Plan, Profile)),
+    Wrapper = ["module statem_topology_wrapper(input wire clk, reset,\n",
         " input wire [193:0] request, input wire request_valid, output wire request_ready,\n",
         " output wire [127:0] reply, output wire reply_valid, input wire reply_ready);\n",
-        xls_scheduler_ram_v:wires(Bindings),
-        "__statem_shared__Top_0_next dut(.clk(clk), .reset(reset),\n",
+        "__statem_topology__Top_0_next dut(.clk(clk), .reset(reset),\n",
         " ._commands_in(request), ._commands_in_vld(request_valid), ._commands_in_rdy(request_ready),\n",
         " ._replies_out(reply), ._replies_out_vld(reply_valid), ._replies_out_rdy(reply_ready)",
-        xls_scheduler_ram_v:application_ports(Bindings), ");\n",
-        xls_scheduler_ram_v:instances(Bindings, "clk"), "endmodule\n"],
-    save(Stage, "statem_shared_wrapper.v", Wrapper).
+        ");\n",
+        "endmodule\n"],
+    save(Stage, "statem_topology_wrapper.v", Wrapper).
 
 %% Keep generated probes separate from reviewed source fixtures.
 -spec save(file:filename(), file:filename(), iodata()) -> ok.

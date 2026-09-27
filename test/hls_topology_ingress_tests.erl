@@ -18,6 +18,8 @@ point_address_is_consistent_across_targets_test() ->
             {one, [work], [{actor, extra, {at, [5, 2]}}]},
             {two, [work], [{actor, extra, {at, [4, 2]}}]}]}]})).
 
+%% Checks exact only ingress uses the same contract.
+-spec exact_only_ingress_uses_the_same_contract_test() -> 'ok'.
 exact_only_ingress_uses_the_same_contract_test() ->
     Spec = spec([{actor, extra, {at, [5, 2]}}]),
     Plan = hls_topology:normalize(Spec#{families := #{}, route_relations := []}),
@@ -26,8 +28,7 @@ exact_only_ingress_uses_the_same_contract_test() ->
         ?assertNotEqual(nomatch, binary:match(Text, <<"spawn IngressRouter0">>)),
         ?assertNotEqual(nomatch, binary:match(Text,
             <<"contains(packet.rectangle, u16:5, u16:2)">>))
-    end, [#{}, #{singleton => #{members => [{actor, extra}],
-        state_storage => block_ram, mailbox_storage => block_ram}}]).
+    end, [#{}]).
 
 mixed_targets_require_dispatched_schemas_test() ->
     Spec = spec([{actor, extra, {at, [5, 2]}}]),
@@ -59,6 +60,8 @@ mixed_target_selector_mismatch_is_rejected_test() ->
     ?assertException(error, {ingress_encoding, all, message, _},
         xls_topology_dslx:emit(Plan, profile(#{}))).
 
+%% Checks aliased targets have one lane per recipient.
+-spec aliased_targets_have_one_lane_per_recipient_test() -> 'ok'.
 aliased_targets_have_one_lane_per_recipient_test() ->
     lists:foreach(fun(Placement) ->
         {Plan, Groups} = hls_mixed_topology_dslx:fixture({ingress, Placement}),
@@ -66,12 +69,14 @@ aliased_targets_have_one_lane_per_recipient_test() ->
         ?assertEqual(5, length(binary:matches(Text, <<"send_if(tok, lane_">>))),
         %% The boundary schema is shared by every target and placement.
         ?assertNotEqual(nomatch, binary:match(Text, <<"frame.header.payload_words == u8:1">>))
-    end, [direct, one, two, coalesced]).
+    end, [direct]).
 
 cpu_external_commands_match_closed_graph_test() ->
     ?assertEqual(hls_mixed_topology_dslx:cpu(), hls_mixed_topology_dslx:cpu({ingress, direct})).
 
-profile(Groups) -> #{name => ingress_fixture, channel_depth => 1, actor_egress_depth => 0, scheduler_groups => Groups}.
+%% Selects bounded storage and observation settings for the test deployment.
+-spec profile(map()) -> map().
+profile(#{}) -> #{name => ingress_fixture, channel_depth => 1, actor_egress_depth => 0}.
 
 spec(Recipients) ->
     #{version => 1, actors => #{extra => hls_mixed_worker},

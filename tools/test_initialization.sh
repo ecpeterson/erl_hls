@@ -17,7 +17,7 @@ options=(--warnings_as_errors=false --dslx_path="$stage:$project_root/priv/xls/l
 for kind in gs statem; do
     "$xls_root/interpreter_main" --compare=jit "${options[@]}" "$stage/init_$kind.x"
     # Rejection must happen even when the selected function/proc never calls
-    # the initializer (as for a shared scheduler's proc init() state).
+    # the initializer.
     if "$xls_root/ir_converter_main" --top=bits_from_report "${options[@]}" \
             "$stage/bad_$kind.x" > "$stage/bad_$kind.ir" 2> "$stage/bad_$kind.log"; then
         echo "failing $kind initializer was accepted" >&2; exit 1
@@ -26,7 +26,7 @@ for kind in gs statem; do
         cat "$stage/bad_$kind.log" >&2; exit 1
     fi
 done
-for fixture in gs direct shared; do
+for fixture in gs direct; do
     top=Top
     [[ "$fixture" != gs ]] || top=FrameTop
     "$xls_root/ir_converter_main" --top="$top" "${options[@]}" \
@@ -34,12 +34,6 @@ for fixture in gs direct shared; do
     "$xls_root/opt_main" "$stage/init_$fixture.ir" > "$stage/init_$fixture.opt.ir"
     rams=
     schedules=(1 2)
-    if [[ "$fixture" == shared ]]; then
-        source tools/phi_scheduler_rams.sh
-        rams=$(phi_scheduler_ram_configurations 1)
-        # The fixed-latency RAM channel constraints require at least two stages.
-        schedules=(2 3)
-    fi
     for stages in "${schedules[@]}"; do
         rtl="$stage/init_${fixture}_${stages}.v"
         "$xls_root/codegen_main" --pipeline_stages="$stages" \
@@ -53,7 +47,7 @@ for fixture in gs direct shared; do
         else
             bench=xls_init_topology_tb
             top="init_${fixture}_wrapper"
-            sources+=("$stage/${top}.v" priv/rtl/hls_1r1w_ram.v)
+            sources+=("$stage/${top}.v")
         fi
         iverilog -g2012 -I "$stage" -DINIT_TOP="$top" -s "$bench" \
             -o "$stage/init_${fixture}_${stages}.vvp" \
@@ -61,9 +55,3 @@ for fixture in gs direct shared; do
         vvp "$stage/init_${fixture}_${stages}.vvp"
     done
 done
-
-# A larger producer set must elaborate promptly as well as preserving the
-# RAM-backed behavior exercised above. Keep this bound separate from codegen.
-timeout 120s "$xls_root/ir_converter_main" --top=Top "${options[@]}" \
-    "$project_root/test_data/shared_capture_large.x" > "$stage/shared_capture_large.ir"
-"$xls_root/opt_main" "$stage/shared_capture_large.ir" > "$stage/shared_capture_large.opt.ir"

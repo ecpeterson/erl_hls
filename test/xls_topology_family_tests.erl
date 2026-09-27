@@ -121,156 +121,6 @@ generated_family_topology_matches_checked_in_artifact_test() ->
         iolist_to_binary(phi_torus_topology_dslx:to_dslx())
     ).
 
-generated_multi_family_topology_retains_compact_structure_test() ->
-    Generated = iolist_to_binary(phi_noise_topology_dslx:to_dslx()),
-    ?assertEqual(6, count(Generated, <<"proc SchedulerRouter">>)),
-    ?assertEqual(6, count(Generated, <<"spawn SchedulerRouter">>)),
-    ?assertEqual(6, count(Generated, <<"::SharedService<">>)),
-    ?assertEqual(0, count(Generated, <<"::EffectWindowAdapter(">>)),
-    ?assertEqual(1, count(Generated, <<
-        "spawn effect_window::Arbiter<"
-    >>)),
-    ?assertEqual(30, count(Generated, <<"::ScheduledEffects">>)),
-    %% Ordinary routers retain two effect lookups each; the two phi reduction
-    %% routers additionally materialize their four-frame captured prefixes.
-    ?assertEqual(20, count(Generated, <<"::scheduled_effect(">>)),
-    ?assertEqual(1, count(Generated, <<"proc Phi_xReductionPlane {">>)),
-    ?assertEqual(1, count(Generated, <<"proc Phi_zReductionPlane {">>)),
-    ?assertEqual(4, count(Generated, <<
-        "let last = batch_valid && effect_info.2"
-    >>)),
-    ?assertEqual(2, count(Generated, <<
-        "let last = batch_valid && if reduction_batch {"
-    >>)),
-    ?assertEqual(6, count(Generated, <<
-        "routed_tok, credit_out, forward_credit"
-    >>)),
-    ?assertEqual(1, count(Generated, <<"fn scheduler_0_address(">>)),
-    ?assertEqual(1, count(Generated, <<"fn scheduler_1_address(">>)),
-    ?assertEqual(1, count(Generated, <<"fn scheduler_2_address(">>)),
-    ?assertEqual(1, count(Generated, <<"fn scheduler_0_slot(">>)),
-    ?assertEqual(1, count(Generated, <<"fn scheduler_1_slot(">>)),
-    ?assertEqual(1, count(Generated, <<"fn scheduler_2_slot(">>)),
-    ?assertEqual(1, count(Generated, <<"fn scheduler_3_address(">>)),
-    ?assertEqual(1, count(Generated, <<"fn scheduler_4_address(">>)),
-    ?assertEqual(1, count(Generated, <<"fn scheduler_5_address(">>)),
-    ?assertEqual(1, count(Generated, <<"fn scheduler_3_slot(">>)),
-    ?assertEqual(1, count(Generated, <<"fn scheduler_4_slot(">>)),
-    ?assertEqual(1, count(Generated, <<"fn scheduler_5_slot(">>)),
-    ?assertEqual(12, count(Generated, <<
-        "ScheduledRequest, CHANNEL_DEPTH"
-    >>)),
-    ?assertEqual(0, count(Generated, <<"FamilyRouter">>)),
-    ?assertEqual(0, count(Generated, <<"FamilyIngress">>)),
-    ?assertEqual(0, count(Generated, <<"FamilyNode">>)),
-    ?assertEqual(0, count(Generated, <<"chan<axis::Frame, u32:0>">>)),
-    ?assertEqual(0, count(Generated, <<"spawn axis::FrameMux2(">>)),
-    ?assertEqual(0, count(Generated, <<"spawn axis::ReservedFrame(">>)),
-    ?assertEqual(0, count(Generated, <<" / HEIGHT">>)),
-    ?assertEqual(0, count(Generated, <<" % HEIGHT">>)),
-    ?assertEqual(0, count(Generated, <<" % WIDTH">>)),
-    ?assertNotEqual(nomatch, binary:match(Generated, <<
-        "match address.family as FamilyId"
-    >>)),
-    ?assertEqual(1, count(Generated, <<"proc ControlDispatcher">>)),
-    ?assertEqual(1, count(Generated, <<"spawn ControlDispatcher">>)),
-    %% Each RAM channel appears in Top's member and config lists and once more
-    %% in SchedulerGrid's config list.  Independent read and write ports let
-    %% the shared scheduler overlap the younger read with the older commit.
-    ?assertEqual(18, count(Generated, <<"::MachineRamReadReq> out">>)),
-    ?assertEqual(18, count(Generated, <<"::MachineRamReadResp> in">>)),
-    ?assertEqual(18, count(Generated, <<"::MachineRamWriteReq> out">>)),
-    ?assertEqual(18, count(Generated, <<"::MachineRamWriteResp> in">>)),
-    ?assertEqual(18, count(Generated, <<"::MailboxRamReadReq> out">>)),
-    ?assertEqual(18, count(Generated, <<"::MailboxRamReadResp> in">>)),
-    ?assertEqual(18, count(Generated, <<"::MailboxRamWriteReq> out">>)),
-    ?assertEqual(18, count(Generated, <<"::MailboxRamWriteResp> in">>)),
-    ?assertEqual(1, count(Generated, <<"spawn frame_transport::FrameArrayMux<u32:2>(">>)),
-    ?assertNotEqual(nomatch, binary:match(Generated, <<
-        "state.packet.target == u2:0"
-    >>)),
-    assert_ingress_selector(Generated, phenom_data_cell, pauli_query),
-    assert_ingress_selector(Generated, phenom_data_cell, pauli_update),
-    assert_ingress_selector(Generated, phenom_data_cell, noise_cutoff),
-    ?assertNotEqual(nomatch, binary:match(Generated, <<
-        "control_router_in: chan<hls_spatial_router::SpatialFrame> in"
-    >>)),
-    ?assertNotEqual(nomatch, binary:match(Generated, <<
-        "hls_spatial_router::contains(\n"
-        "            state.packet.rectangle, address_x, address_y)"
-    >>)),
-    ?assertNotEqual(nomatch, binary:match(Generated, <<
-        "proc SchedulerGrid {"
-    >>)).
-
-generated_one_shard_topology_retains_single_external_lanes_test() ->
-    Generated = iolist_to_binary(
-        phi_noise_topology_dslx:to_dslx(3, 16#80000000, 1)
-    ),
-    ?assertEqual(3, count(Generated, <<"::SharedService<">>)),
-    ?assertEqual(0, count(Generated, <<"proc FrameArrayMux">>)),
-    ?assertEqual(0, count(Generated, <<"spawn frame_transport::FrameArrayMux">>)).
-
-generated_phi_family_shards_use_static_destination_tables_test() ->
-    lists:foreach(
-        fun(ShardCount) ->
-            Generated = iolist_to_binary(
-                phi_noise_topology_dslx:to_dslx(
-                    3, 16#80000000, {phi_shards, ShardCount}
-                )
-            ),
-            SchedulerCount = 4 + 2 * ShardCount,
-            ?assertEqual(SchedulerCount,
-                count(Generated, <<"::SharedService<">>)),
-            ?assertEqual(1, count(Generated,
-                <<"fn phi_x_destination(">>)),
-            ?assertEqual(1, count(Generated,
-                <<"fn phi_z_destination(">>)),
-            ?assertEqual(0, count(Generated, <<" / HEIGHT">>)),
-            ?assertEqual(0, count(Generated, <<" % HEIGHT">>)),
-            ?assertEqual(0, count(Generated, <<" % WIDTH">>))
-        end,
-        [2, 3]
-    ).
-
-generated_family_topology_uses_explicit_actor_egress_depth_test() ->
-    Plan = hls_topology:normalize(phi_noise_topology:topology()),
-    Profile = maps:remove(
-        reduction_placements,
-        maps:remove(
-            scheduler_groups,
-            phi_noise_topology_dslx:profile()
-        )
-    ),
-    lists:foreach(
-        fun(Depth) ->
-            Generated = iolist_to_binary(xls_topology_dslx:emit(
-                Plan,
-                Profile#{actor_egress_depth := Depth}
-            )),
-            Needle = iolist_to_binary([
-                "::Egress, u32:", integer_to_list(Depth), ">"
-            ]),
-            ?assertEqual(6, count(Generated, Needle))
-        end,
-        [0, 1]
-    ).
-
-generated_family_startup_precedes_routed_input_test() ->
-    Generated = iolist_to_binary(phi_noise_topology_dslx:to_dslx()),
-    ?assertEqual(36, count(Generated, <<"::Tag::PHENOM_CONFIG as u8">>)),
-    ?assertEqual(18, count(Generated, <<"::Tag::PHI_CONFIG as u8">>)),
-    ?assertNotEqual(nomatch, binary:match(Generated, <<
-        "proc SchedulerStartup0 {"
-    >>)),
-    ?assertNotEqual(nomatch, binary:match(Generated, <<
-        "spawn SchedulerStartup0(scheduler_0_startup_p);"
-    >>)),
-    ?assertNotEqual(nomatch, binary:match(Generated, <<
-        "let _done = send_if(join(), request_out, active, request);"
-    >>)),
-    ?assertEqual(0, count(Generated, <<"admission_in">>)).
-
 generated_phi_torus_startup_is_per_coordinate_test() ->
     Generated = generated(phi_torus_topology:topology()),
     ?assertEqual(6, count(Generated, <<") => axis::pack(">>)),
@@ -281,17 +131,6 @@ generated_phi_torus_startup_is_per_coordinate_test() ->
         "spawn FamilyNode<x, y>("
     >>)).
 
-family_backend_rejects_partial_family_startup_test() ->
-    Plan = hls_topology:normalize(phi_noise_topology:topology(2)),
-    [_First | Rest] = maps:get(startup, Plan),
-    ?assertError(
-        {incomplete_family_startup, data_even, 4, 3},
-        xls_topology_dslx:emit(
-            Plan#{startup := Rest},
-            phi_noise_topology_dslx:profile()
-        )
-    ).
-
 family_backend_rejects_out_of_range_startup_fields_test() ->
     Spec = phi_torus_topology:topology(1, 1),
     lists:foreach(fun(Seed) ->
@@ -299,35 +138,6 @@ family_backend_rejects_out_of_range_startup_fields_test() ->
             {{phi, 0, 0}, [{phi_config, Seed}]}
         ]}))
     end, [-1, 1 bsl 32]).
-
-family_backend_rejects_invalid_actor_egress_depth_test() ->
-    Plan = hls_topology:normalize(phi_noise_topology:topology(1)),
-    Profile = phi_noise_topology_dslx:profile(),
-    lists:foreach(
-        fun(Value) ->
-            ?assertError(
-                {egress_depth, Value},
-                xls_topology_dslx:emit(
-                    Plan,
-                    Profile#{actor_egress_depth := Value}
-                )
-            )
-        end,
-        [-1, 16#100000000, auto]
-    ).
-
-family_backend_rejects_invalid_effect_window_partition_test() ->
-    Plan = hls_topology:normalize(phi_noise_topology:topology(1)),
-    Profile = phi_noise_topology_dslx:profile(),
-    ?assertError(
-        {effect_window_partition, strongly_connected_components},
-        xls_topology_dslx:emit(
-            Plan,
-            Profile#{
-                effect_window_partition => strongly_connected_components
-            }
-        )
-    ).
 
 family_backend_rejects_cross_family_selector_remap_test() ->
     Plan = hls_topology:normalize(selector_remap_topology()),
@@ -449,42 +259,11 @@ family_backend_rejects_dimensions_wider_than_dslx_u32_test() ->
         xls_topology_dslx:emit(Plan, phi_torus_topology_dslx:profile())
     ).
 
-rectangle_ingress_accepts_the_full_u16_coordinate_extent_test() ->
-    Plan0 = hls_topology:normalize(phi_noise_topology:topology(1)),
-    [Ingress0] = maps:get(ingresses, Plan0),
-    Plan = Plan0#{ingresses := [Ingress0#{shape := [16#10000, 2]}]},
-    Generated = iolist_to_binary(xls_topology_dslx:emit(
-        Plan,
-        phi_noise_topology_dslx:profile()
-    )),
-    ?assertNotEqual(nomatch, binary:match(Generated, <<
-        "control_router_in: chan<hls_spatial_router::SpatialFrame> in"
-    >>)).
-
-rectangle_ingress_rejects_an_extent_beyond_u16_coordinates_test() ->
-    Plan0 = hls_topology:normalize(phi_noise_topology:topology(1)),
-    [Ingress0] = maps:get(ingresses, Plan0),
-    Plan = Plan0#{ingresses := [Ingress0#{shape := [16#10001, 2]}]},
-    ?assertError(
-        {ingress_shape, [16#10001, 2], 16#10000},
-        xls_topology_dslx:emit(
-            Plan,
-            phi_noise_topology_dslx:profile()
-        )
-    ).
-
 generated(Spec) ->
     iolist_to_binary(xls_topology_dslx:emit(
         hls_topology:normalize(Spec),
         phi_torus_topology_dslx:profile()
     )).
-
-assert_ingress_selector(Generated, Module, Schema) ->
-    Selector = Module:pack_tag(Schema),
-    Needle = iolist_to_binary([
-        "state.packet.frame.header.op == u8:", integer_to_list(Selector)
-    ]),
-    ?assertNotEqual(nomatch, binary:match(Generated, Needle)).
 
 selector_remap_topology() ->
     #{

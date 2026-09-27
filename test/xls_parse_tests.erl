@@ -16,99 +16,6 @@ non_reduction_statem_codegen_matches_checked_in_artifacts_test() ->
         Sources
     ).
 
-ordinary_shared_service_option_preserves_default_output_test() ->
-    Sources = [
-        "src/examples/regsvc/regsvc.erl",
-        "test_data/hls_statem_reduction_lower_fixture.erl"
-    ],
-    lists:foreach(fun(Source) ->
-        ?assertEqual(
-            iolist_to_binary(xls_parse:to_xls(Source)),
-            iolist_to_binary(xls_parse:to_xls(
-                Source, #{shared_service => ordinary}))
-        )
-    end, Sources).
-
-shared_service_options_are_exact_and_validated_test() ->
-    Path = "src/examples/regsvc/regsvc.erl",
-    ?assertError(
-        {invalid_xls_shared_service, speculative},
-        xls_parse:to_xls(Path, #{shared_service => speculative})
-    ),
-    ?assertError(
-        {invalid_xls_options, [extra, shared_service]},
-        xls_parse:to_xls(Path,
-            #{shared_service => ordinary, extra => true})
-    ),
-    ?assertError(
-        {invalid_xls_options, [shared_service_mode]},
-        xls_parse:to_xls(Path, #{shared_service_mode => ordinary})
-    ),
-    ?assertError(
-        {unsupported_hls_gs_shared_service, aggregate_only},
-        xls_parse:to_xls(Path, #{shared_service => aggregate_only})
-    ).
-
-aggregate_only_requires_an_actor_reduction_test() ->
-    ?assertError(
-        aggregate_only_requires_reductions,
-        xls_parse:to_xls(
-            "test_data/hls_tags_statem_fixture.erl",
-            #{shared_service => aggregate_only}
-        )
-    ).
-
-aggregate_only_emits_only_the_transport_artifact_surface_test() ->
-    Path = "test_data/hls_statem_reduction_lower_fixture.erl",
-    Ordinary = iolist_to_binary(xls_parse:to_xls(Path)),
-    AggregateOnly = iolist_to_binary(xls_parse:to_xls(
-        Path, #{shared_service => aggregate_only})),
-    ?assertEqual(nomatch,
-        binary:match(Ordinary, <<"ReductionAggregateRequest">>)),
-    ?assertEqual(nomatch,
-        binary:match(Ordinary, <<"reduction_aggregate_batch">>)),
-    ?assertNotEqual(nomatch,
-        binary:match(AggregateOnly, <<"ReductionAggregateRequest">>)),
-    ?assertNotEqual(nomatch, binary:match(AggregateOnly,
-        <<"pub fn reduction_aggregate_batch<COUNT: u32>(">>)),
-    ?assertNotEqual(nomatch, binary:match(AggregateOnly,
-        <<"fn reduction_apply_complete_aggregate(">>)),
-    ?assertNotEqual(nomatch, binary:match(AggregateOnly,
-        <<"pub fn scheduled_reduction_prefix(\n"
-          "    scheduled: ScheduledEffects) -> (u1, u8, u1)">>)).
-
-aggregate_only_uses_one_pending_receptacle_per_actor_test() ->
-    Path = "test_data/hls_statem_reduction_lower_fixture.erl",
-    AggregateOnly = iolist_to_binary(xls_parse:to_xls(
-        Path, #{shared_service => aggregate_only})),
-    ?assertNotEqual(nomatch, binary:match(AggregateOnly,
-        <<"aggregate_pending: ReductionAggregateRequest[ACTOR_COUNT]">>)),
-    ?assertNotEqual(nomatch, binary:match(AggregateOnly,
-        <<"aggregate_pending_valid: u1[ACTOR_COUNT]">>)),
-    ?assertEqual(nomatch, binary:match(AggregateOnly,
-        <<"aggregate_pending: ReductionAggregateRequest,\n">>)),
-    ?assertEqual(nomatch, binary:match(AggregateOnly,
-        <<"aggregate_pending_valid: u1,\n">>)),
-    %% Aggregate capture never waits on a different actor's receptacle. The
-    %% one-open-window causal invariant normally excludes duplicates, while a
-    %% violated invariant or invalid slot poisons the captured aggregate.
-    ?assertNotEqual(nomatch, binary:match(AggregateOnly,
-        <<"aggregate_in,\n        capture_enabled,\n">>)),
-    ?assertNotEqual(nomatch, binary:match(AggregateOnly,
-        <<"let aggregate_protocol_error = incoming_aggregate_valid">>)),
-    ?assertNotEqual(nomatch, binary:match(AggregateOnly,
-        <<"state.aggregate_pending_valid[aggregate_slot]">>)),
-    ?assertNotEqual(nomatch, binary:match(AggregateOnly,
-        <<"ReductionAggregate {\n          failure: hls_failure::REDUCTION_PROTOCOL">>)),
-    ?assertNotEqual(nomatch, binary:match(AggregateOnly,
-        <<"update(state.aggregate_pending_valid, aggregate_slot, u1:1)">>)),
-    ?assertNotEqual(nomatch, binary:match(AggregateOnly,
-        <<"aggregate: state.aggregate_pending_valid,">>)),
-    ?assertNotEqual(nomatch, binary:match(AggregateOnly,
-        <<"retired.aggregate_pending[read_slot]">>)),
-    ?assertNotEqual(nomatch, binary:match(AggregateOnly,
-        <<"admitted.aggregate_pending_valid, read_slot, u1:0">>)).
-
 passive_state_observation_is_not_emitted_test() ->
     Xls = iolist_to_binary(xls_parse:to_xls("src/examples/regsvc/regsvc.erl")),
 
@@ -902,29 +809,6 @@ state_machine_entry_actions_use_one_source_ordered_egress_test() ->
     ok = file:write_file(Path, Source),
     try
         XLS = iolist_to_binary(xls_parse:to_xls(Path)),
-        ?assertNotEqual(nomatch, binary:match(XLS, <<"import bram;">>)),
-        ?assertNotEqual(nomatch, binary:match(XLS, <<"import mailbox;">>)),
-        ?assertNotEqual(nomatch, binary:match(
-            XLS,
-            <<"pub type MachineRamReadReq = bram::ReadReq;">>
-        )),
-        ?assertNotEqual(nomatch, binary:match(
-            XLS,
-            <<"pub type MailboxRamWriteReq = mailbox::RamWriteReq;">>
-        )),
-        ?assertNotEqual(nomatch, binary:match(
-            XLS,
-            <<"mailbox::write(\n">>
-        )),
-        ?assertNotEqual(nomatch, binary:match(
-            XLS,
-            <<"request.slot, physical, MAILBOX_DEPTH">>
-        )),
-        ?assertEqual(nomatch, binary:match(
-            XLS,
-            <<"pub struct MachineRamReadReq">>
-        )),
-        ?assertEqual(nomatch, binary:match(XLS, <<"fn mailbox_addr(">>)),
         {Third, _} = binary:match(
             XLS, <<"port: OutputPort::THIRD">>
         ),
@@ -964,8 +848,7 @@ state_machine_entry_actions_use_one_source_ordered_egress_test() ->
             XLS,
             <<"chan<Egress, EGRESS_DEPTH>(\"egress\")">>
         )),
-        %% The direct service keeps resumable per-effect progression. A shared
-        %% scheduler instead commits one complete ordered batch per entry.
+        %% A blocked effect retains its position in the source-ordered batch.
         ?assertEqual(1, length(binary:matches(
             XLS,
             <<"egress_valid: has_effect && can_advance">>
@@ -976,126 +859,7 @@ state_machine_entry_actions_use_one_source_ordered_egress_test() ->
         )),
         ?assertNotEqual(nomatch, binary:match(
             XLS,
-            <<"effects_valid: effects_valid && can_advance">>
-        )),
-        ?assertNotEqual(nomatch, binary:match(
-            XLS,
-            <<"fn shared_machine_dispatch(\n">>
-        )),
-        ?assertNotEqual(nomatch, binary:match(
-            XLS,
-            <<"fn shared_machine_enter(machine: SharedMachine, "
-              "egress_ready: u1)">>
-        )),
-        ?assertNotEqual(nomatch, binary:match(
-            XLS,
-            <<"enter_pending: effective && phase_boundary && !failed">>
-        )),
-        ?assertEqual(nomatch, binary:match(
-            XLS,
-            <<"let fuse_entry =">>
-        )),
-        ?assertNotEqual(nomatch, binary:match(
-            XLS,
             <<"egress_out, stepped.egress_valid, stepped.egress">>
-        )),
-        ?assertNotEqual(nomatch, binary:match(
-            XLS,
-            <<"pub proc SharedService<\n"
-              "    ACTOR_COUNT: u32,\n"
-              "    PRODUCER_COUNT: u32,\n"
-              "    STARTUP_COUNT: u32,\n"
-              "    INSTANCE_ID: u32">>
-        )),
-        ?assertNotEqual(nomatch, binary:match(
-            XLS,
-            <<"pub struct ScheduledEffects {\n  slot: u32">>
-        )),
-        ?assertNotEqual(nomatch, binary:match(
-            XLS,
-            <<"machine: if can_advance || entry_failed { advanced_machine }">>
-        )),
-        ?assertNotEqual(nomatch, binary:match(
-            XLS,
-            <<"mailbox_read_req_out: chan<MailboxRamReadReq> out">>
-        )),
-        ?assertNotEqual(nomatch, binary:match(
-            XLS,
-            <<"mailbox_write_req_out: chan<MailboxRamWriteReq> out">>
-        )),
-        ?assertNotEqual(nomatch, binary:match(
-            XLS,
-            <<"ram_read_req_out: chan<MachineRamReadReq> out">>
-        )),
-        ?assertNotEqual(nomatch, binary:match(
-            XLS,
-            <<"ram_write_req_out: chan<MachineRamWriteReq> out">>
-        )),
-        ?assertNotEqual(nomatch, binary:match(
-            XLS,
-            <<"let reservation = mailbox::reserve_admission(">>
-        )),
-        ?assertNotEqual(nomatch, binary:match(
-            XLS,
-            <<"mail_candidates: u1[ACTOR_COUNT]">>
-        )),
-        ?assertNotEqual(nomatch, binary:match(
-            XLS,
-            <<"entry_probes: u1[ACTOR_COUNT]">>
-        )),
-        ?assertNotEqual(nomatch, binary:match(
-            XLS,
-            <<"egress_waiters: u1[ACTOR_COUNT]">>
-        )),
-        ?assertNotEqual(nomatch, binary:match(
-            XLS,
-            <<"state_write_pending: u1">>
-        )),
-        ?assertNotEqual(nomatch, binary:match(
-            XLS,
-            <<"mailbox_write_pending: u1">>
-        )),
-        ?assertNotEqual(nomatch, binary:match(
-            XLS,
-            <<"pub proc SharedExecutor">>
-        )),
-        ?assertNotEqual(nomatch, binary:match(
-            XLS,
-            <<"in_flight: u1[ACTOR_COUNT]">>
-        )),
-        ?assertNotEqual(nomatch, binary:match(
-            XLS,
-            <<"completed: SharedExecutorResult">>
-        )),
-        ?assertNotEqual(nomatch, binary:match(
-            XLS,
-            <<"reservation.admission.valid">>
-        )),
-        ?assertNotEqual(nomatch, binary:match(
-            XLS,
-            <<"let capture_enabled = state.phase == SharedPhase::RUN">>
-        )),
-        ?assertEqual(nomatch, binary:match(XLS, <<"SharedPhase::COLLECT">>)),
-        ?assertNotEqual(nomatch, binary:match(
-            XLS,
-            <<"let dispatched = shared_machine_dispatch(\n">>
-        )),
-        ?assertNotEqual(nomatch, binary:match(
-            XLS,
-            <<"fn ready_selection<ACTOR_COUNT: u32, "
-              "PRODUCER_COUNT: u32>">>
-        )),
-        ?assertNotEqual(nomatch, binary:match(
-            XLS,
-            <<"scheduler::exclude_reserved(in_flight, state.outbox_busy)">>
-        )),
-        ?assertNotEqual(nomatch, binary:match(
-            XLS,
-            <<"egress_blocked: effects_valid && !egress_ready">>
-        )),
-        ?assertNotEqual(nomatch, binary:match(
-            XLS,
-            <<"retire_valid && result.effects_valid">>
         )),
         ?assertNotEqual(nomatch, binary:match(
             XLS,

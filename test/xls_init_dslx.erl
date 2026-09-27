@@ -13,6 +13,8 @@ statem_oracle(Offset) ->
         hls_statem:stop(Actor)
     end.
 
+-doc "Writes generated DSLX and the matching oracle or wrapper files into the test stage.".
+-spec write(atom() | binary() | [atom() | [any()] | char()]) -> 'ok'.
 write(Stage) ->
     lists:foreach(fun({Kind, Module}) ->
         Path = "test/" ++ atom_to_list(Module) ++ ".erl",
@@ -49,24 +51,19 @@ write(Stage) ->
         || {I, {report, Value, 0, 7}} <- lists:enumerate(Reports)]),
     Plan = topology(),
     Base = #{name => init_direct, channel_depth => 1, actor_egress_depth => burst},
-    Groups = #{cells => #{members => [{family, cell}],
-        state_storage => block_ram, mailbox_storage => block_ram}},
     write(Stage, "init_direct.x", xls_topology_dslx:emit(Plan, Base)),
-    write(Stage, "init_shared.x", xls_topology_dslx:emit(Plan,
-        Base#{name => init_shared, scheduler_groups => Groups})),
-    Bindings = xls_scheduler_ram_v:bindings(hls_scheduler_plan:normalize(Plan, Groups)),
     {ok, Template} = file:read_file("test/rtl/xls_init_topology.template.v"),
-    lists:foreach(fun({Name, Rams}) ->
+    lists:foreach(fun(Name) ->
         Wrapper = lists:foldl(fun({Pattern, Replacement}, Text) ->
             binary:replace(Text, Pattern, iolist_to_binary(Replacement), [global])
         end, Template, [
             {<<"@NAME@">>, Name},
-            {<<"@WIRES@">>, xls_scheduler_ram_v:wires(Rams)},
-            {<<"@PORTS@">>, xls_scheduler_ram_v:application_ports(Rams)},
-            {<<"@RAMS@">>, xls_scheduler_ram_v:instances(Rams, "clk")}
+            {<<"@WIRES@">>, ""},
+            {<<"@PORTS@">>, ""},
+            {<<"@RAMS@">>, ""}
         ]),
         write(Stage, Name ++ "_wrapper.v", Wrapper)
-    end, [{"init_direct", []}, {"init_shared", Bindings}]).
+    end, ["init_direct"]).
 
 topology() ->
     hls_topology:normalize(#{
@@ -82,6 +79,8 @@ topology() ->
                     {{cell, 1, 0}, [{configure, 16}]}]
     }).
 
+%% Renders initialization and mutation checks for the selected fixture.
+-spec semantics('gs' | 'statem') -> [1..255,...].
 semantics(gs) ->
     "\n#[test]\nfn initialized_state() {\n"
     "  assert_eq(initial_state(), Ledger {value: u32:42, default: u32:0});\n"
@@ -98,7 +97,7 @@ semantics(statem) ->
     "  assert_eq(m.data, Cell {value: u32:42, default: u32:0});\n"
     "  assert_eq(m.enter_pending, u1:1);\n"
     "  assert_eq(m.failure, hls_failure::NONE);\n"
-    "  assert_eq(initial_shared_machine(), shared_machine(m));\n"
+    "  assert_eq(initial_actor_state(), actor_state(m));\n"
     "}\n".
 
 write(Stage, Name, Data) -> file:write_file(filename:join(Stage, Name), Data).

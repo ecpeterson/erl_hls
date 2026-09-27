@@ -1,6 +1,8 @@
 -module(hls_dense_topology_dslx).
 -export([write/1]).
 
+-doc "Writes generated DSLX and the matching oracle or wrapper files into the test stage.".
+-spec write(atom() | binary() | [atom() | [any()] | char()]) -> 'ok'.
 write(Stage) ->
     write(Stage, "hls_dense_statem_fixture.x", xls_parse:to_xls("test/hls_dense_statem_fixture.erl")),
     Messages = [{configure, false, 7, -256}, {configure, true, 3, 255}],
@@ -12,7 +14,7 @@ write(Stage) ->
         io_lib:format("localparam [127:0] EXPECTED_~B = 128'h~32.16.0b;~n", [Index, Frame])
     end || {Index, Report} <- lists:enumerate(Reports)]),
     [First, Second] = Messages,
-    %% Explicit actors and a shared family exercise both startup packers.
+    %% Explicit actors and a family family exercise both startup packers.
     %% Loopback reports give exact actors a normal input alongside startup;
     %% the active handler consumes these reports without emitting again.
     Direct = hls_topology:normalize(#{version => 1,
@@ -22,7 +24,7 @@ write(Stage) ->
         routes => [{{first, out}, queued, [{actor, first}, {external, reports}]},
                    {{second, out}, queued, [{actor, second}, {external, reports}]}],
         startup => [{first, [First]}, {second, [Second]}]}),
-    Shared = hls_topology:normalize(#{version => 1, actors => #{},
+    Family = hls_topology:normalize(#{version => 1, actors => #{},
         ingresses => [{commands, {rectangle, [2, 1]}, [
             {configure, [configure], [{family, cell, {embed, [1, 1], [0, 0]}}]}
         ]}],
@@ -30,15 +32,12 @@ write(Stage) ->
         externals => [{reports, out, [report]}], routes => [],
         route_relations => [{{cell, out}, [{external, reports}]}],
         startup => [{{cell, 0, 0}, [First]}, {{cell, 1, 0}, [Second]}]}),
-    Groups = #{cells => #{members => [{family, cell}],
-        state_storage => block_ram, mailbox_storage => block_ram}},
     Base = #{channel_depth => 1, actor_egress_depth => burst},
     write(Stage, "dense_direct.x", xls_topology_dslx:emit(Direct, Base#{name => dense_direct})),
-    write(Stage, "dense_shared.x", xls_topology_dslx:emit(Shared,
-        Base#{name => dense_shared, scheduler_groups => Groups})),
-    Bindings = xls_scheduler_ram_v:bindings(hls_scheduler_plan:normalize(Shared, Groups)),
+    write(Stage, "dense_family.x", xls_topology_dslx:emit(Family,
+        Base#{name => dense_family})),
     {ok, Template} = file:read_file("test/rtl/xls_init_topology.template.v"),
-    %% Startup drives both fixtures. Only the shared family declares an ingress,
+    %% Startup drives both fixtures. Only the family family declares an ingress,
     %% which the wrapper holds idle.
     WithoutIngress0 = binary:replace(Template,
         <<"        ._commands_in('0), ._commands_in_vld(1'b0), ._commands_in_rdy(),\n">>, <<>>),
@@ -48,13 +47,13 @@ write(Stage) ->
         binary:replace(Text, Pattern, iolist_to_binary(Replacement), [global])
     end, case Name of
         "dense_direct" -> WithoutIngress;
-        "dense_shared" -> binary:replace(Template, <<"    @NAME@ dut">>,
+        "dense_family" -> binary:replace(Template, <<"    @NAME@ dut">>,
             <<"    __@NAME@__Top_0_next dut">>)
     end, [{<<"@NAME@">>, Name},
-        {<<"@WIRES@">>, xls_scheduler_ram_v:wires(Rams)},
-        {<<"@PORTS@">>, xls_scheduler_ram_v:application_ports(Rams)},
-        {<<"@RAMS@">>, xls_scheduler_ram_v:instances(Rams, "clk")}
-    ])) || {Name, Rams} <- [{"dense_direct", []}, {"dense_shared", Bindings}]],
+        {<<"@WIRES@">>, ""},
+        {<<"@PORTS@">>, ""},
+        {<<"@RAMS@">>, ""}
+    ])) || Name <- ["dense_direct", "dense_family"]],
     ok.
 
 oracle(Message) ->

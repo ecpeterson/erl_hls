@@ -105,7 +105,7 @@ if __name__ == '__main__':
     parser.add_argument('--stage', type=Path, default=ROOT / '_build/application_frames_area')
     parser.add_argument('--yosys', type=Path, default=os.environ.get('ERL_HLS_YOSYS') or
                         shutil.which('yosys') or
-                        ROOT / 'experiments/07-openxc7/.apio/packages/oss-cad-suite/bin/yosys')
+                        Path('yosys'))
     args = parser.parse_args()
     args.xls_root, args.stage, args.yosys = args.xls_root.resolve(), args.stage.resolve(), args.yosys.resolve()
     measure(args)

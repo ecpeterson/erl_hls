@@ -41,14 +41,16 @@ waiting(cast, block, Owner) ->
     Owner ! blocked,
     receive release -> {waiting, Owner, consume} end.
 
+%% Checks shared boundary requires explicit selection.
+-spec shared_boundary_requires_explicit_selection_test() -> 'ok'.
 shared_boundary_requires_explicit_selection_test() ->
     {ok, Fabric} = phi_memory_fabric_fixture:start_link(),
     {ok, Client} = hls_debug:start_link(undefined, {fabric, Fabric, 1}),
     try
         Boundary = {boundary, Client, host_stream},
-        Plan = hls_topology:from_module(phi_decoder_profile_topology),
+        Plan = hls_topology:from_module(phi_noise_topology),
         Catalog = hls_debug_catalog:hardware(Plan,
-            maps:get(scheduler_groups, phi_decoder_profile_topology_dslx:profile()), [Boundary]),
+            #{ }, [Boundary]),
         {ok, Actor} = hls_debug_catalog:actor(Catalog, {family, phi_x, [0, 0]}),
         {scope, Scope} = hls_debug:info(Actor, scope),
         ?assertEqual({error, {unsupported_operation, Scope, get_trace}}, hls_debug:get_trace(Actor)),
@@ -93,12 +95,14 @@ resource_items_use_one_hardware_sample_test() ->
         ?assertEqual(1, length(phi_memory_fabric_fixture:sends(Fabric)))
     after hls_debug:stop(Client), phi_memory_fabric_fixture:stop(Fabric) end.
 
+%% Checks actor items use one hardware sample.
+-spec actor_items_use_one_hardware_sample_test() -> 'ok'.
 actor_items_use_one_hardware_sample_test() ->
     {ok, Fabric} = phi_memory_fabric_fixture:start_link(),
     {ok, Client} = hls_debug:start_link(undefined, {fabric, Fabric, 2}),
     try
         R = #{<<"kind">> => <<"actor">>, <<"id">> => 0, <<"name">> => <<"actor">>,
-            <<"phases">> => [<<"boot">>, <<"active">>], <<"width">> => 56, <<"mailbox_capacity">> => 3, <<"mailbox_kind">> => <<"shared">>,
+            <<"phases">> => [<<"boot">>, <<"active">>], <<"width">> => 56, <<"mailbox_capacity">> => 3, <<"mailbox_kind">> => <<"direct">>,
             <<"failures">> => #{<<"1">> => #{<<"kind">> => <<"function_clause">>}}},
         Session = #{client => Client, resources => {R}, manifest => #{<<"fingerprint">> => <<"fixture">>}},
         Target = {actor, #{scope => #{kind => actor}}, {actor_snapshot, Session, 0}},
@@ -107,7 +111,7 @@ actor_items_use_one_hardware_sample_test() ->
             [phase, initialized, enter_pending, failed, failure, cycle, message_queue_len, postponed, free_slots])} end),
         [{{0, 2}, {16#11, Tx, 0}, <<0:32/little>>}] = phi_memory_fabric_fixture:await_sends(Fabric, 1, 1000),
         ok = phi_memory_fabric_fixture:deliver(Fabric, {2, 0}, {16#91, Tx, 0},
-            <<0:32/little, 33:64/little, ((1 bsl 25)+512+1):32/little, 16#c00102:32/little, 0:64>>),
+            <<0:32/little, 33:64/little, ((1 bsl 25)+512+1):32/little, 16#800102:32/little, 0:64>>),
         receive {sample, Values} ->
             ?assertEqual([{phase, active}, {initialized, true}, {enter_pending, false},
                 {failed, true}, {failure, #{code => 1, kind => function_clause}}, {cycle, 33},

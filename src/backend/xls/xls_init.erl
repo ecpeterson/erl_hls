@@ -35,9 +35,8 @@ lower(Clause = {clause, Line, _, _, _}, DataName, Postprocess, EnumAtoms) ->
         failed => xls_parse:print(Failed)
     }.
 
-%% Force evaluation even when only SharedService is instantiated: its RAM
-%% population calls the initializer from next(), rather than proc init().
-%% A failed match must reject conversion, never become a zero live machine.
+-doc "Emits an initializer that rejects failed matches during DSLX conversion.".
+%% Evaluate the outcome as a constant even if the caller runs after proc init().
 -spec emit(string(), string(), lowered()) -> iolist().
 emit(Name, Type, #{line := Line, body := Body, result := Result,
         failed := Failed}) ->

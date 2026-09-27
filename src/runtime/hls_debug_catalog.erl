@@ -1,15 +1,15 @@
 -module(hls_debug_catalog).
 -moduledoc """
-Logical actor targets derived from the normalized topology and scheduler plan.
+Logical actor targets and verified committed-state observations.
 
 CPU bindings name actual hls_statem processes. Hardware bindings describe
 placement and related monitored boundaries; they do not infer mailbox state
-from a scheduler's transport FIFOs or attribute shared events to one actor.
+from transport FIFOs or attribute boundary events to one actor.
 Boundary targets explicitly describe the monitored interface. hardware/3 is
 metadata-only; hardware/4 additionally binds committed-state snapshots through
 a verified session and checks the compiler projection against its manifest.
 """.
--export([cpu/2, hardware/3, hardware/4, actors/1, actor/2, boundaries/1]).
+-export([cpu/2, hardware/3, hardware/4, bind/3, actors/1, actor/2, boundaries/1]).
 -export_type([actor_id/0]).
 
 -type actor_id() :: {actor, term()} | {family, term(), [non_neg_integer()]}.
@@ -31,11 +31,9 @@ cpu(Plan, Processes) ->
     #{actors => Targets, boundaries => []}.
 
 -doc "Describes hardware placement and explicitly related shared boundary monitors.".
--spec hardware(hls_topology:plan(), hls_scheduler_plan:spec(),
+-spec hardware(hls_topology:plan(), #{actor_id() => map()},
     [{boundary, pid(), term()}]) -> map().
-hardware(Plan, SchedulerSpecs, Boundaries) ->
-    Scheduler = hls_scheduler_plan:normalize(Plan, SchedulerSpecs),
-    Placements = hls_scheduler_plan:placements(Scheduler),
+hardware(Plan, Placements, Boundaries) ->
     Logical = logical_actors(Plan),
     BoundaryIds = [Id || {boundary, _Client, Id} <- Boundaries],
     case BoundaryIds -- lists:usort(BoundaryIds) of
@@ -49,10 +47,20 @@ hardware(Plan, SchedulerSpecs, Boundaries) ->
     end, Logical),
     #{actors => Targets, boundaries => Boundaries}.
 
--doc "Binds actors to committed-state snapshots in a verified topology debug session.".
-hardware(Plan, Specs, Boundaries, Session = #{manifest := Manifest}) ->
+-doc "Binds dedicated actors to a verified committed-state debug session.".
+-spec hardware(hls_topology:plan(), #{}, list(), map()) -> map().
+hardware(Plan, Empty, Boundaries, Session = #{manifest := Manifest}) when map_size(Empty) =:= 0 ->
     Projection = maps:get(<<"actor_projection">>, Manifest, none),
-    ok = xls_scheduler_debug:validate(Plan, Specs, Projection),
+    ok = xls_actor_debug:validate(Plan, Projection),
+    bind(hardware(Plan, Empty, Boundaries), Projection, Session).
+
+-doc "Binds a backend-validated projection to a logical catalog, checking every manifest resource.".
+-spec bind(map(), map(), map()) -> map().
+bind(Catalog = #{actors := Targets}, Projection, Session = #{manifest := Manifest}) ->
+    case maps:get(<<"actor_projection">>, Manifest, none) =:= Projection of
+        true -> ok;
+        false -> error(actor_projection_mismatch)
+    end,
     #{<<"resources">> := Resources, <<"fingerprint">> := Hash} = Manifest,
     ActorResources = [R || R = #{<<"kind">> := <<"actor">>} <- Resources],
     ByKey = maps:from_list([{maps:get(<<"key">>, R), R} || R <- ActorResources]),
@@ -67,15 +75,14 @@ hardware(Plan, Specs, Boundaries, Session = #{manifest := Manifest}) ->
         true -> ok;
         false -> error(actor_resources_mismatch)
     end,
-    Catalog = #{actors := Targets} = hardware(Plan, Specs, Boundaries),
     Catalog#{actors := maps:map(fun(Id, {actor, Metadata, none}) ->
-        case maps:find(xls_scheduler_debug:actor_key(Id), ByKey) of
+        case maps:find(xls_actor_debug:actor_key(Id), ByKey) of
             {ok, #{<<"id">> := ResourceId} = Resource} ->
                 {actor, Metadata#{observation => #{kind => committed_state,
                     mailbox => case maps:get(<<"mailbox_kind">>, Resource, none) of
                         <<"direct">> -> actor_step;
-                        <<"shared">> -> scheduler_step;
-                        none -> unavailable
+                        none -> unavailable;
+                        _Kind -> backend_step
                     end,
                     fingerprint => Hash, resource => ResourceId}},
                     {actor_snapshot, Session, ResourceId}};

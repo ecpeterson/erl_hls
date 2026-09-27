@@ -1,12 +1,14 @@
 -module(xls_names_dslx).
 -export([write/1]).
 
+-doc "Writes generated DSLX and the matching oracle or wrapper files into the test stage.".
+-spec write(atom() | binary() | [atom() | [any()] | char()]) -> 'ok'.
 write(Stage) ->
     Grid = [0, 1, 2, 7, 16#7fffffff, 16#80000000, 16#fffffffe, 16#ffffffff],
     Cases = [{A, B, expected(A, B)} || A <- Grid, B <- Grid],
     {ok, Semantics} = file:read_file("test_data/hls_names_semantics.inc.x"),
     ok = file:write_file(filename:join(Stage, "names.x"), [
-        xls_parse:to_xls("test/xls_names_fixture.erl", #{shared_service => aggregate_only}),
+        xls_parse:to_xls("test/xls_names_fixture.erl"),
         Semantics, "#[test]\nfn beam_reduction_and_codecs() {\n",
         [io_lib:format("assert_eq(probe(u32:~B, u32:~B), bits[104]:~B);\n", [A, B, E])
             || {A, B, E} <- Cases], "}\n"]),

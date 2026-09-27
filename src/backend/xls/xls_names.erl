@@ -240,19 +240,13 @@ runtime(hls_gs) ->
         "ERROR_FUNCTION_CLAUSE", "ERROR_REQUEST_LENGTH", "ERROR_REPLY_CONTRACT", "INITIAL_STATE"];
 runtime(hls_statem) ->
     ["Tag", "Phase", "Directive", "OutputPort", "Egress", "EntryEffects",
-        "EntryOutcome", "ActorObservation", "MailboxSlot", "Machine", "SharedMachine", "MachineBits",
-        "MachineRamReadReq", "MachineRamReadResp", "MachineRamWriteReq",
-        "MachineRamWriteResp", "MailboxRamReadReq", "MailboxRamReadResp",
-        "MailboxRamWriteReq", "MailboxRamWriteResp", "MachineStep", "ScheduledRequest",
-        "ScheduledEffects", "SharedStep", "SharedDispatch", "SharedExecutorRequest",
-        "SharedExecutorResult", "SharedPhase", "SharedState", "SharedExecutor",
-        "Service", "SharedService", "EgressDemux", "Top", "ReductionStatus",
+        "EntryOutcome", "ActorObservation", "MailboxSlot", "Machine", "ActorState",
+        "ActorDispatch", "MachineStep", "Service", "EgressDemux", "Top", "ReductionStatus",
         "ReductionMode", "ReductionName", "ReductionSite", "ReductionRemaining",
         "ReductionMembers", "ReductionState", "ReductionContribution", "ReductionOutcome",
-        "ReductionApply", "ReductionDispatch", "ReductionAggregate", "ReductionAggregateRequest",
-        "N", "COUNT", "ACTOR_COUNT", "PRODUCER_COUNT", "STARTUP_COUNT", "INSTANCE_ID",
+        "ReductionApply", "ReductionDispatch", "N", "COUNT",
         "MAILBOX_CAPACITY", "MAILBOX_DEPTH", "EGRESS_DEPTH", "ENTRY_EFFECT_CAPACITY",
-        "ENTRY_EFFECT_PAYLOAD_BITS", "INITIAL_MACHINE", "machine_from_bits", "bits_from_machine",
+        "ENTRY_EFFECT_PAYLOAD_BITS", "INITIAL_ACTOR_STATE", "REPLY_CAPACITY", "ReplyBook",
         "reduction_state_from_bits", "bits_from_reduction_state"].
 
 -doc "Checks a qualified import and returns its local alias; reserves compiler binding prefixes.".

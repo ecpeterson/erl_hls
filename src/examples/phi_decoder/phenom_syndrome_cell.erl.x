@@ -3,11 +3,9 @@
 // overwritten the next time it is generated.
 
 import axis;
-import bram;
-import mailbox;
-import scheduler;
 import hls_failure;
 import hls_bits;
+import direct_mailbox_observation;
 import hls_integer;
 import phi_field;
 
@@ -403,23 +401,7 @@ struct EntryOutcome {
   failure: hls_failure::Code,
 }
 
-type MailboxSlot = mailbox::Slot;
-
-struct Machine {
-  phase: Phase,
-  entered_from: Phase,
-  data: Syndrome,
-  slots: MailboxSlot[5],
-  occupied: u8,
-  enter_pending: u1,
-  entry_effect_index: u8,
-  // Reserves one queue slot for the frame being assembled.
-  admission_pending: u1,
-  // A failed service ignores input until reset.
-  failure: hls_failure::Code,
-}
-
-struct SharedMachine {
+struct ActorState {
   phase: Phase,
   entered_from: Phase,
   data: Syndrome,
@@ -427,170 +409,31 @@ struct SharedMachine {
   failure: hls_failure::Code,
 }
 
-pub type MachineBits = bits[387];
-
-pub type MachineRamReadReq = bram::ReadReq;
-pub type MachineRamReadResp = bram::ReadResp<u32:387>;
-pub type MachineRamWriteReq = bram::WriteReq<u32:387>;
-pub type MachineRamWriteResp = bram::WriteResp;
-
-pub type MailboxRamReadReq = mailbox::RamReadReq;
-pub type MailboxRamReadResp = mailbox::RamReadResp;
-pub type MailboxRamWriteReq = mailbox::RamWriteReq;
-pub type MailboxRamWriteResp = mailbox::RamWriteResp;
-
-struct MachineStep {
-  machine: Machine,
-  egress: Egress,
-  egress_valid: u1,
-  admission_valid: u1,
-}
-
-pub type ScheduledRequest = mailbox::ScheduledRequest;
-
-pub struct ScheduledEffects {
-  slot: u32,
-  effects: EntryEffects,
-}
-
-struct SharedStep {
-  machine: SharedMachine,
-  effects: EntryEffects,
-  effects_valid: u1,
-  dispatched: u1,
-  directive: Directive,
-  phase_boundary: u1,
-  egress_blocked: u1,
-}
-
-struct SharedDispatch {
-  machine: SharedMachine,
+struct ActorDispatch {
+  machine: ActorState,
   dispatched: u1,
   directive: Directive,
   phase_boundary: u1,
 }
 
-pub struct SharedExecutorRequest {
-  slot: u32,
-  machine: MachineBits,
-  frame: axis::Frame,
-  received: u1,
-  mailbox_index: u8,
-  order_index: u8,
-  egress_ready: u1,
-}
-
-pub struct SharedExecutorResult {
-  slot: u32,
-  machine: MachineBits,
-  effects: EntryEffects,
-  effects_valid: u1,
-  dispatched: u1,
-  directive: Directive,
-  phase_boundary: u1,
-  egress_blocked: u1,
-  received: u1,
-  mailbox_index: u8,
-  order_index: u8,
-}
-
-enum SharedPhase : u3 {
-  BOOT = u3:0,
-  STARTUP = u3:1,
-  RUN = u3:2,
-}
-
-// XLS channel legalization currently confuses multiple otherwise-
-// identical SharedService instances connected to different external
-// RAM ports. INSTANCE_ID distinguishes those specializations; it is
-// neither actor state nor part of scheduling policy.
-struct SharedState<ACTOR_COUNT: u32, PRODUCER_COUNT: u32> {
-  instance_id: u32,
-  phase: SharedPhase,
-  next_valid: u1,
-  next_slot: u32,
-  in_flight: u1[ACTOR_COUNT],
-  completed_valid: u1,
-  completed: SharedExecutorResult,
-  admission_cursor: u32,
-  cursor: u32,
-  startup_seen: u32,
-  pending: ScheduledRequest[PRODUCER_COUNT],
-  pending_valid: u1[PRODUCER_COUNT],
-  occupied: u8[ACTOR_COUNT],
-  order: u8[5][ACTOR_COUNT],
-  postponed: u1[5][ACTOR_COUNT],
-  // Mailbox work that has not yet been postponed in this phase.
-  mail_candidates: u1[ACTOR_COUNT],
-  // Entry work whose effect batch has not yet been classified.
-  entry_probes: u1[ACTOR_COUNT],
-  // Entry work known to need the scheduler's batch sequencer.
-  egress_waiters: u1[ACTOR_COUNT],
-  egress_busy: u1,
-  outbox_busy: u1[ACTOR_COUNT],
-  state_write_pending: u1,
-  mailbox_write_pending: u1,
-}
-
-fn initial_machine_outcome() -> (bool, Machine) {  // L184
+fn initial_actor_state_outcome() -> (bool, ActorState) {  // L184
   let _0 = Syndrome {
     ..zero!<Syndrome>()
   };
   let _1 = (Tag::SYNDROME, _0);
   let _2 = (Phase::CONFIGURING, _1, );
-  (bool:false, Machine {
+  (bool:false, ActorState {
     phase: _2.0,
     entered_from: _2.0,
     data: _2.1.1,
     enter_pending: u1:1,
-    ..zero!<Machine>()
+    ..zero!<ActorState>()
   })
 }
-const INITIAL_MACHINE = initial_machine_outcome();
-const_assert!(!INITIAL_MACHINE.0);
+const INITIAL_ACTOR_STATE = initial_actor_state_outcome();
+const_assert!(!INITIAL_ACTOR_STATE.0);
 
-fn initial_machine() -> Machine { INITIAL_MACHINE.1 }
-
-fn shared_machine(machine: Machine) -> SharedMachine {
-  SharedMachine {
-    phase: machine.phase,
-    entered_from: machine.entered_from,
-    data: machine.data,
-    enter_pending: machine.enter_pending,
-    failure: machine.failure,
-  }
-}
-
-fn initial_shared_machine() -> SharedMachine {
-  shared_machine(initial_machine())
-}
-
-fn machine_from_bits(raw: MachineBits) -> SharedMachine {
-  SharedMachine {
-    phase: raw[0:8] as Phase,
-    entered_from: raw[8:16] as Phase,
-    data: syndrome_from_bits(raw[16:370]),
-    enter_pending: raw[370:371],
-    failure: raw[371:387],
-  }
-}
-
-fn bits_from_machine(machine: SharedMachine) -> MachineBits {
-  machine.failure ++
-    machine.enter_pending ++
-    bits_from_syndrome(machine.data) ++
-    (machine.entered_from as bits[8]) ++
-    (machine.phase as bits[8])
-}
-
-fn machine_read(slot: u32) -> MachineRamReadReq {
-  bram::read(slot)
-}
-
-fn machine_write(
-    slot: u32, machine: SharedMachine) -> MachineRamWriteReq {
-  bram::write(slot, bits_from_machine(machine))
-}
+fn initial_actor_state() -> ActorState { INITIAL_ACTOR_STATE.1 }
 
 fn enter(old_phase: Phase, phase: Phase, data: Syndrome) -> EntryOutcome {
   match phase {
@@ -902,13 +745,6 @@ fn entry_effect(effects: EntryEffects, index: u8) -> Egress {
   }
 }
 
-pub fn scheduled_effect(
-    scheduled: ScheduledEffects, index: u8) -> (Egress, u1, u1) {
-  let count = entry_effect_count(scheduled.effects);
-  let emit = index < count;
-  let last = index + u8:1 >= count;
-  (entry_effect(scheduled.effects, index), emit, last)
-}
 fn entry_effects_valid(effects: EntryEffects) -> u1 {
   entry_effect_count(effects) != u8:0
 }
@@ -1459,6 +1295,45 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Syndrome) -> (Phase, Syndrom
   }
 }
 
+type MailboxSlot = direct_mailbox_observation::Slot;
+
+struct Machine {
+  phase: Phase,
+  entered_from: Phase,
+  data: Syndrome,
+  slots: MailboxSlot[5],
+  occupied: u8,
+  enter_pending: u1,
+  entry_effect_index: u8,
+  // Reserves one queue slot for the frame being assembled.
+  admission_pending: u1,
+  // A failed service ignores input until reset.
+  failure: hls_failure::Code,
+}
+
+struct MachineStep {
+  machine: Machine,
+  egress: Egress,
+  egress_valid: u1,
+  admission_valid: u1,
+}
+
+fn initial_machine() -> Machine {
+  let machine = initial_actor_state();
+  Machine { phase: machine.phase, entered_from: machine.entered_from, data: machine.data,
+    enter_pending: machine.enter_pending, failure: machine.failure, ..zero!<Machine>() }
+}
+
+fn actor_state(machine: Machine) -> ActorState {
+  ActorState {
+    phase: machine.phase,
+    entered_from: machine.entered_from,
+    data: machine.data,
+    enter_pending: machine.enter_pending,
+    failure: machine.failure,
+  }
+}
+
 fn machine_step(
     machine: Machine, frame: axis::Frame, received: u1,
     egress_ready: u1) -> MachineStep {
@@ -1621,120 +1496,6 @@ fn machine_step(
   }
 }
 
-fn shared_machine_dispatch(
-    machine: SharedMachine, frame: axis::Frame, received: u1)
-    -> SharedDispatch {
-  if hls_failure::failed(machine.failure) {
-    SharedDispatch { machine, ..zero!<SharedDispatch>() }
-  } else if machine.enter_pending || !received {
-    SharedDispatch { machine, ..zero!<SharedDispatch>() }
-  } else {
-    let tag_ok = (frame.header.op == (Tag::PHI as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::ANYON_MOVE as u8) && frame.header.payload_words == u8:2) || (frame.header.op == (Tag::PHI0 as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHENOM_CONFIG as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHENOM_REQUEST as u8) && frame.header.payload_words == u8:1) || (frame.header.op == (Tag::PHENOM_QUERY as u8) && frame.header.payload_words == u8:2) || (frame.header.op == (Tag::PHENOM_DATA as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHENOM_ANYON as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHI_CORRECTION as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::PHI_CONFIG as u8) && frame.header.payload_words == u8:1) || (frame.header.op == (Tag::PAULI_QUERY as u8) && frame.header.payload_words == u8:2) || (frame.header.op == (Tag::PAULI_REPLY as u8) && frame.header.payload_words == u8:3) || (frame.header.op == (Tag::NOISE_CUTOFF as u8) && frame.header.payload_words == u8:1) || (frame.header.op == (Tag::PAULI_UPDATE as u8) && frame.header.payload_words == u8:1) || (frame.header.op == (Tag::PHI_STATUS as u8) && frame.header.payload_words == u8:3);
-    let (next_phase, next_data, directive, repeat_phase, dispatch_failure) =
-      if tag_ok {
-        dispatch(frame, machine.phase, machine.data)
-      } else {
-        (machine.phase, machine.data, Directive::FAIL, u1:0, hls_failure::REDUCTION_PROTOCOL)
-      };
-    let invalid_repeat = tag_ok && repeat_phase &&
-      (directive != Directive::CONSUME ||
-       next_phase != machine.phase);
-    let effective = tag_ok && !invalid_repeat;
-    let phase_changed = effective && next_phase != machine.phase;
-    let phase_boundary = phase_changed ||
-      (effective && repeat_phase);
-    let failure = hls_failure::dispatch(!tag_ok, invalid_repeat, false, effective, dispatch_failure);
-    let failed = hls_failure::failed(failure);
-    let next_machine = SharedMachine {
-      phase: if effective { next_phase } else { machine.phase },
-      entered_from: if phase_boundary {
-        machine.phase
-      } else { machine.entered_from },
-      data: if effective { next_data } else { machine.data },
-      enter_pending: effective && phase_boundary && !failed,
-      failure,
-      ..machine
-    };
-    SharedDispatch {
-      machine: next_machine,
-      dispatched: tag_ok && !invalid_repeat,
-      directive,
-      phase_boundary,
-      ..zero!<SharedDispatch>()
-    }
-  }
-}
-
-fn shared_machine_enter(machine: SharedMachine, egress_ready: u1)
-    -> SharedStep {
-  if hls_failure::failed(machine.failure) || !machine.enter_pending {
-    SharedStep { machine, ..zero!<SharedStep>() }
-  } else {
-    let outcome = enter(
-      machine.entered_from, machine.phase, machine.data);
-    let effects = outcome.effects;
-    let effects_valid = entry_effects_valid(effects);
-    let entry_failure = outcome.failure;
-    let entry_failed = hls_failure::failed(entry_failure);
-    let can_advance = !entry_failed && (!effects_valid || egress_ready);
-    let advanced_machine = SharedMachine {
-      data: if entry_failed { machine.data } else { outcome.data },
-      enter_pending: u1:0,
-      failure: entry_failure,
-      ..machine
-    };
-    SharedStep {
-      machine: if can_advance || entry_failed { advanced_machine }
-        else { machine },
-      effects,
-      effects_valid: effects_valid && can_advance,
-      egress_blocked: effects_valid && !egress_ready && !entry_failed,
-      ..zero!<SharedStep>()
-    }
-  }
-}
-
-pub fn shared_execute(request: SharedExecutorRequest) ->
-    SharedExecutorResult {
-  let machine = machine_from_bits(request.machine);
-  let dispatched = shared_machine_dispatch(
-    machine, request.frame, request.received);
-  let entered = shared_machine_enter(
-    dispatched.machine, request.egress_ready);
-  SharedExecutorResult {
-    slot: request.slot,
-    machine: bits_from_machine(entered.machine),
-    effects: entered.effects,
-    effects_valid: entered.effects_valid,
-    dispatched: dispatched.dispatched,
-    directive: dispatched.directive,
-    phase_boundary: dispatched.phase_boundary,
-    egress_blocked: entered.egress_blocked,
-    received: request.received,
-    mailbox_index: request.mailbox_index,
-    order_index: request.order_index,
-  }
-}
-
-pub proc SharedExecutor {
-  request_in: chan<SharedExecutorRequest> in;
-  result_out: chan<SharedExecutorResult> out;
-
-  config(
-      request_in: chan<SharedExecutorRequest> in,
-      result_out: chan<SharedExecutorResult> out
-  ) {
-    (request_in, result_out)
-  }
-
-  init { () }
-
-  next(state: ()) {
-    let (tok, request) = recv(join(), request_in);
-    let _done = send(tok, result_out, shared_execute(request));
-    state
-  }
-}
 pub proc Service {
   req_in: chan<axis::Frame> in;
   egress_out: chan<Egress> out;
@@ -1766,458 +1527,6 @@ pub proc Service {
   }
 }
 
-fn ready_selection<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
-    state: SharedState<ACTOR_COUNT, PRODUCER_COUNT>,
-    cursor: u32,
-    in_flight: u1[ACTOR_COUNT]) -> (u1, u32) {
-  scheduler::select(
-    scheduler::Candidates<ACTOR_COUNT> {
-      entry: state.entry_probes,
-      mail: state.mail_candidates,
-      egress: state.egress_waiters,
-      ..zero!<scheduler::Candidates<ACTOR_COUNT>>()
-    }, state.egress_busy, scheduler::exclude_reserved(in_flight, state.outbox_busy), cursor)
-}
-
-// Translate actor-specific results into the shared metadata transition.
-fn retire_actor<ACTOR_COUNT: u32, PRODUCER_COUNT: u32>(
-    state: SharedState<ACTOR_COUNT, PRODUCER_COUNT>,
-    valid: u1,
-    slot: u32,
-    stepped: SharedStep,
-    received: u1,
-    mailbox_index: u8,
-    order_index: u8) -> SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
-  let metadata = mailbox::retire(
-    mailbox::Metadata<ACTOR_COUNT, MAILBOX_DEPTH> {
-      occupied: state.occupied,
-      order: state.order,
-      postponed: state.postponed,
-      mail_candidates: state.mail_candidates,
-      entry_probes: state.entry_probes,
-      egress_waiters: state.egress_waiters,
-    }, slot, order_index, mailbox_index,
-    mailbox::Retirement {
-      valid,
-      consume: received && stepped.dispatched &&
-        stepped.directive == Directive::CONSUME,
-      postpone: received && stepped.dispatched &&
-        stepped.directive == Directive::POSTPONE,
-      phase_boundary: stepped.phase_boundary,
-      failed: hls_failure::failed(stepped.machine.failure),
-      enter_pending: stepped.machine.enter_pending,
-      egress_blocked: stepped.egress_blocked,
-    });
-  SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
-    occupied: metadata.occupied,
-    order: metadata.order,
-    postponed: metadata.postponed,
-    mail_candidates: metadata.mail_candidates,
-    entry_probes: metadata.entry_probes,
-    egress_waiters: metadata.egress_waiters,
-    ..state
-  }
-}
-
-// One mailbox owner issues loaded activations to a stateless executor and
-// retires completed results. In-flight slot exclusion prevents stale
-// same-actor reads; a one-result skid slot lets credit collection continue
-// when an effect batch temporarily blocks retirement. A token carried
-// beside the metadata orders each activation's RAM writes before the next
-// activation's reads, independently of metadata pipeline placement.
-// PER_ACTOR_EGRESS requires one independently drained batch slot per actor.
-// A credit names the drained actor; no second activation issues while its
-// slot is occupied. The demultiplexer must accept every reserved batch.
-pub proc SharedService<
-    ACTOR_COUNT: u32,
-    PRODUCER_COUNT: u32,
-    STARTUP_COUNT: u32,
-    INSTANCE_ID: u32,
-    PER_ACTOR_EGRESS: u1 = {u1:0}
-> {
-  request_in: chan<ScheduledRequest>[PRODUCER_COUNT] in;
-  startup_in: chan<ScheduledRequest> in;
-  egress_out: chan<ScheduledEffects> out;
-  ram_read_req_out: chan<MachineRamReadReq> out;
-  ram_read_resp_in: chan<MachineRamReadResp> in;
-  ram_write_req_out: chan<MachineRamWriteReq> out;
-  ram_write_resp_in: chan<MachineRamWriteResp> in;
-  mailbox_read_req_out: chan<MailboxRamReadReq> out;
-  mailbox_read_resp_in: chan<MailboxRamReadResp> in;
-  mailbox_write_req_out: chan<MailboxRamWriteReq> out;
-  mailbox_write_resp_in: chan<MailboxRamWriteResp> in;
-  executor_request_out: chan<SharedExecutorRequest> out;
-  executor_result_in: chan<SharedExecutorResult> in;
-
-  config(
-      request_in: chan<ScheduledRequest>[PRODUCER_COUNT] in,
-      startup_in: chan<ScheduledRequest> in,
-      egress_out: chan<ScheduledEffects> out,
-      ram_read_req_out: chan<MachineRamReadReq> out,
-      ram_read_resp_in: chan<MachineRamReadResp> in,
-      ram_write_req_out: chan<MachineRamWriteReq> out,
-      ram_write_resp_in: chan<MachineRamWriteResp> in,
-      mailbox_read_req_out: chan<MailboxRamReadReq> out,
-      mailbox_read_resp_in: chan<MailboxRamReadResp> in,
-      mailbox_write_req_out: chan<MailboxRamWriteReq> out,
-      mailbox_write_resp_in: chan<MailboxRamWriteResp> in
-  ) {
-    let (executor_request_p, executor_request_c) =
-      chan<SharedExecutorRequest, u32:1>("executor_request");
-    let (executor_result_p, executor_result_c) =
-      chan<SharedExecutorResult, u32:1>("executor_result");
-    spawn SharedExecutor(executor_request_c, executor_result_p);
-    (
-      request_in,
-      startup_in,
-      egress_out,
-      ram_read_req_out,
-      ram_read_resp_in,
-      ram_write_req_out,
-      ram_write_resp_in,
-      mailbox_read_req_out,
-      mailbox_read_resp_in,
-      mailbox_write_req_out,
-      mailbox_write_resp_in,
-      executor_request_p,
-      executor_result_c,
-    )
-  }
-
-  init {
-    (join(), SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
-      instance_id: INSTANCE_ID,
-      phase: SharedPhase::BOOT,
-      ..zero!<SharedState<ACTOR_COUNT, PRODUCER_COUNT>>()
-    })
-  }
-
-  next(prior: (token, SharedState<ACTOR_COUNT, PRODUCER_COUNT>)) {
-    let (memory_tok, state) = prior;
-    // Each producer is visited once. Select one slot's value before
-    // updating the array, keeping unrolled type inference linear.
-    let capture_enabled = state.phase == SharedPhase::RUN;
-    let (capture_tok, captured_pending, captured_pending_valid) =
-      unroll_for! (producer, acc):
-          (u32, (
-            token,
-            ScheduledRequest[PRODUCER_COUNT],
-            u1[PRODUCER_COUNT]
-          )) in u32:0..PRODUCER_COUNT {
-        let (next_tok, request, captured) =
-          recv_if_non_blocking(
-            acc.0,
-            request_in[producer],
-            capture_enabled && !state.pending_valid[producer],
-            zero!<ScheduledRequest>());
-        (
-          next_tok,
-          update(acc.1, producer,
-            if captured { request } else { state.pending[producer] }),
-          update(acc.2, producer, state.pending_valid[producer] || captured)
-        )
-      }((memory_tok, state.pending, state.pending_valid));
-    match state.phase {
-      SharedPhase::BOOT => {
-        let write_tok = send(
-          capture_tok,
-          ram_write_req_out,
-          machine_write(state.cursor, initial_shared_machine()));
-        let (_done, _) = recv(write_tok, ram_write_resp_in);
-        let entry_probes = update(
-          state.entry_probes, state.cursor, u1:1);
-        let next_state = if state.cursor + u32:1 == ACTOR_COUNT {
-          SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
-            phase: if STARTUP_COUNT == u32:0 {
-              SharedPhase::RUN
-            } else {
-              SharedPhase::STARTUP
-            },
-            next_valid: STARTUP_COUNT == u32:0,
-            next_slot: u32:0,
-            cursor: u32:0,
-            entry_probes,
-            ..state
-          }
-        } else {
-          SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
-            cursor: state.cursor + u32:1,
-            entry_probes,
-            ..state
-          }
-        };
-        (write_tok, next_state)
-      },
-      SharedPhase::STARTUP => {
-        let (tok, request) = recv(capture_tok, startup_in);
-        let physical = state.occupied[request.slot];
-        let write_tok = send(
-          tok,
-          mailbox_write_req_out,
-          mailbox::write(
-            request.slot, physical, MAILBOX_DEPTH, request.frame));
-        let (_done, _) = recv(write_tok, mailbox_write_resp_in);
-        let occupied = update(
-          state.occupied, request.slot, physical + u8:1);
-        let row = update(
-          state.order[request.slot], physical as u32, physical);
-        let order = update(state.order, request.slot, row);
-        let mail_candidates = update(
-          state.mail_candidates, request.slot, u1:1);
-        let startup_seen = state.startup_seen + u32:1;
-        let next_state = SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
-          phase: if startup_seen == STARTUP_COUNT {
-            SharedPhase::RUN
-          } else {
-            SharedPhase::STARTUP
-          },
-          next_valid: startup_seen == STARTUP_COUNT,
-          next_slot: u32:0,
-          startup_seen,
-          occupied,
-          order,
-          mail_candidates,
-          ..state
-        };
-        (write_tok, next_state)
-      },
-      SharedPhase::RUN => {
-        // Return credits must already occupy a pending receptacle.
-        // Using a newly captured credit here closes a combinational path
-        // through result retirement, the router, and its credit output.
-        let (credit_pending_valid, credit_busy, credit_outboxes) =
-          if PER_ACTOR_EGRESS {
-            let (pending, busy) = mailbox::collect_actor_credits(
-              state.pending, state.pending_valid,
-              captured_pending_valid, state.outbox_busy);
-            (pending, u1:0, busy)
-          } else {
-            let (pending, busy) = mailbox::collect_credit(
-              state.pending, state.pending_valid,
-              captured_pending_valid, state.egress_busy);
-            (pending, busy, state.outbox_busy)
-          };
-        let buffered_can_retire = state.completed_valid &&
-          (!state.completed.effects_valid || !credit_busy);
-        let accept_executor_result =
-          !state.completed_valid || buffered_can_retire;
-        let (executor_result_tok, incoming_result, incoming_valid) =
-          recv_if_non_blocking(
-            capture_tok,
-            executor_result_in,
-            accept_executor_result,
-            zero!<SharedExecutorResult>());
-        let result = if state.completed_valid {
-          state.completed
-        } else {
-          incoming_result
-        };
-        let result_valid = state.completed_valid || incoming_valid;
-        let retire_valid = result_valid &&
-          (!result.effects_valid || !credit_busy);
-        let resolved = SharedStep {
-          machine: machine_from_bits(result.machine),
-          effects: result.effects,
-          effects_valid: result.effects_valid,
-          dispatched: result.dispatched,
-          directive: result.directive,
-          phase_boundary: result.phase_boundary,
-          egress_blocked: result.egress_blocked,
-        };
-        let credited = SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
-          pending: captured_pending,
-          pending_valid: credit_pending_valid,
-          egress_busy: !PER_ACTOR_EGRESS &&
-            (credit_busy || (retire_valid && result.effects_valid)),
-          outbox_busy: if PER_ACTOR_EGRESS && retire_valid && result.effects_valid {
-            update(credit_outboxes, result.slot, u1:1)
-          } else { credit_outboxes },
-          ..state
-        };
-        let retired = retire_actor(
-          credited,
-          retire_valid,
-          result.slot,
-          resolved,
-          result.received,
-          result.mailbox_index,
-          result.order_index);
-        let retired_in_flight = if retire_valid {
-          update(retired.in_flight, result.slot, u1:0)
-        } else {
-          retired.in_flight
-        };
-        let completed_valid = if state.completed_valid {
-          if buffered_can_retire { incoming_valid } else { u1:1 }
-        } else {
-          incoming_valid && !retire_valid
-        };
-        let completed = if state.completed_valid {
-          if buffered_can_retire { incoming_result } else { state.completed }
-        } else {
-          incoming_result
-        };
-        let completion_blocked = completed_valid &&
-          completed.effects_valid && retired.egress_busy;
-        let issue_valid = state.next_valid && !completion_blocked;
-        let read_slot = if state.next_valid {
-          state.next_slot
-        } else {
-          u32:0
-        };
-        let entry_active = state.entry_probes[read_slot] ||
-          state.egress_waiters[read_slot];
-        let read_mailbox =
-          issue_valid &&
-          state.mail_candidates[read_slot] && !entry_active;
-        let (received, order_index, mailbox_index) =
-          mailbox::select(
-            state.order[read_slot], state.occupied[read_slot],
-            state.postponed[read_slot]);
-        let (state_completion_tok, _) = recv_if(
-          join(), ram_write_resp_in, state.state_write_pending,
-          zero!<MachineRamWriteResp>());
-        let (mailbox_completion_tok, _) = recv_if(
-          join(), mailbox_write_resp_in,
-          state.mailbox_write_pending,
-          zero!<MailboxRamWriteResp>());
-        let state_read_tok = send_if(
-          memory_tok,
-          ram_read_req_out,
-          issue_valid,
-          machine_read(read_slot));
-        let mailbox_read_tok = send_if(
-          memory_tok,
-          mailbox_read_req_out,
-          read_mailbox && received,
-          mailbox::read(read_slot, mailbox_index, MAILBOX_DEPTH));
-        let (state_done, response) = recv_if(
-          state_read_tok,
-          ram_read_resp_in,
-          issue_valid,
-          zero!<MachineRamReadResp>());
-        let (mailbox_done, mailbox_response) = recv_if(
-          mailbox_read_tok,
-          mailbox_read_resp_in,
-          read_mailbox && received,
-          zero!<MailboxRamReadResp>());
-        let reservation = mailbox::reserve_admission(
-          retired.occupied,
-          retired.order,
-          retired.mail_candidates,
-          retired.admission_cursor,
-          captured_pending,
-          credit_pending_valid,
-          issue_valid,
-          read_slot,
-          retire_valid && hls_failure::failed(resolved.machine.failure),
-          result.slot);
-        let admitted = SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
-          pending: captured_pending,
-          pending_valid: reservation.pending_valid,
-          occupied: reservation.occupied,
-          order: reservation.order,
-          mail_candidates: reservation.mail_candidates,
-          admission_cursor: reservation.cursor,
-          ..retired
-        };
-        let issued_in_flight = if issue_valid {
-          update(retired_in_flight, read_slot, u1:1)
-        } else {
-          retired_in_flight
-        };
-        let cursor = if issue_valid {
-          if read_slot + u32:1 == ACTOR_COUNT {
-            u32:0
-          } else {
-            read_slot + u32:1
-          }
-        } else {
-          state.cursor
-        };
-        let selection_state = SharedState<
-            ACTOR_COUNT, PRODUCER_COUNT> {
-          in_flight: issued_in_flight,
-          ..admitted
-        };
-        let (selected_ready, selected_slot) = ready_selection(
-          selection_state,
-          cursor,
-          issued_in_flight);
-        let ready = if completion_blocked {
-          state.next_valid
-        } else {
-          selected_ready
-        };
-        let next_slot = if completion_blocked {
-          state.next_slot
-        } else {
-          selected_slot
-        };
-        let frame = axis::frame_from_bits(mailbox_response.data);
-        let executor_request = SharedExecutorRequest {
-          slot: read_slot,
-          machine: response.data,
-          frame,
-          received: read_mailbox && received,
-          mailbox_index,
-          order_index,
-          egress_ready: u1:1,
-        };
-        let executor_request_tok = send_if(
-          join(state_done, mailbox_done),
-          executor_request_out,
-          issue_valid,
-          executor_request);
-        let scheduled = ScheduledEffects {
-          slot: result.slot,
-          effects: result.effects,
-        };
-        let egress_tok = send_if(
-          executor_result_tok,
-          egress_out,
-          retire_valid && result.effects_valid,
-          scheduled);
-        let state_write_tok = send_if(
-          join(state_read_tok, egress_tok),
-          ram_write_req_out,
-          retire_valid,
-          machine_write(result.slot, resolved.machine));
-        let admission_frame =
-          captured_pending[reservation.admission.producer].frame;
-        let mailbox_write_tok = send_if(
-          join(mailbox_read_tok, egress_tok),
-          mailbox_write_req_out,
-          reservation.admission.valid,
-          mailbox::write(
-            reservation.admission.slot,
-            reservation.admission.physical,
-            MAILBOX_DEPTH,
-            admission_frame));
-        let _done = join(
-          state_done,
-          mailbox_done,
-          state_write_tok,
-          mailbox_write_tok,
-          executor_request_tok,
-          state_completion_tok,
-          mailbox_completion_tok);
-        let next_state = SharedState<ACTOR_COUNT, PRODUCER_COUNT> {
-          next_valid: ready,
-          next_slot,
-          in_flight: issued_in_flight,
-          completed_valid,
-          completed,
-          cursor,
-          state_write_pending: retire_valid,
-          mailbox_write_pending: reservation.admission.valid,
-          ..selection_state
-        };
-        (join(state_write_tok, mailbox_write_tok), next_state)
-      },
-    }
-  }
-}
 proc EgressDemux {
   egress_in: chan<Egress> in;
   north_out: chan<axis::Frame> out;

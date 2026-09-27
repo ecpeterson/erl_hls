@@ -1,4 +1,4 @@
-// Frame transport shared by explicit, family, and scheduler topologies.
+// Frame transport shared by actor and family topologies.
 // Array muxes poll exactly one input per activation, even when it is empty.
 // Blocking output preserves the selected frame and cursor under backpressure.
 // Grid dimensions are inner-to-outer: frame_in[x][y].

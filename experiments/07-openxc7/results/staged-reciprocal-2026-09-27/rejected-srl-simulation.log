@@ -1,2 +1,0 @@
-FATAL: /Users/ecpeterson/Documents/code/erl_xls/_build/timing-report-repo/_build/staged-reciprocal-verified/testbench.sv:30: value mismatch cycle 39: 1fffffeaae != 1fffffeaad
-       Time: 406  Scope: testbench

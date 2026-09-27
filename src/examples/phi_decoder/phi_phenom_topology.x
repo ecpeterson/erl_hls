@@ -2,7 +2,6 @@
 // Materialized logical graph; placement does not change actor identity.
 import axis;
 import frame_transport;
-import effect_window;
 import phenom_data_cell;
 import phenom_syndrome_cell;
 import phi_halo_cell;

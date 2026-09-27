@@ -20,9 +20,8 @@ options=(--warnings_as_errors=false --dslx_path="$project_root/priv/xls/lib"
 iverilog -g2012 -s shape_tb -o "$stage/shape.vvp" "$stage/shape.v" "$stage/shape_tb.sv"
 vvp "$stage/shape.vvp" | tee "$stage/shape.sim.log"
 "$xls_root/ir_converter_main" --top=probe "${options[@]}" "$stage/nested.x" > "$stage/nested.ir"
-for kind in shape nested; do
+for kind in nested; do
     top=probe
-    [[ "$kind" != shape ]] || top=Service
     if "$xls_root/ir_converter_main" --top="$top" "${options[@]}" "$stage/${kind}_mismatch.x" \
             > "$stage/${kind}_mismatch.ir" 2> "$stage/${kind}_mismatch.log"; then
         echo "XLS accepted a $kind source/DSLX vector shape mismatch" >&2; exit 1

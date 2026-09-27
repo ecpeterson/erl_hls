@@ -10,7 +10,7 @@ if [[ $# == 0 || ! "$top" =~ ^[a-zA-Z_][a-zA-Z0-9_\$]*$ ]]; then
 fi
 project_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 yosys=${ERL_HLS_YOSYS:-$(command -v yosys || true)}
-yosys=${yosys:-"$project_root/experiments/07-openxc7/.apio/packages/oss-cad-suite/bin/yosys"}
+yosys=${yosys:-yosys}
 mkdir -p "$(dirname "$output")"
 
 {

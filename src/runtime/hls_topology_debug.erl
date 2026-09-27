@@ -10,7 +10,7 @@ Repeated observations suggest a stable wait; they do not prove continuous
 blocking between queries or establish an actor's semantic next dependency.
 """.
 -export([open/2, info/1, query/2, query/3, resource/2, inspect_waits/3, write_wait_report/4]).
--export([decode_info/1, decode_observation/2, manifest_fingerprint/1]).
+-export([decode_info/1, decode_observation/2, decode_observation/3, with_actor_observer/2, actor_fields/1, mailbox_observation/2, manifest_fingerprint/1]).
 
 -define(TIMEOUT, 10000).
 
@@ -46,10 +46,11 @@ open(Pid, Manifest) ->
 -spec query(map(), non_neg_integer()) -> {ok, map()} | {error, term()}.
 query(Session, Id) -> query(Session, Id, ?TIMEOUT).
 
+-doc "Reads and decodes one manifest resource through the verified debug session.".
 -spec query(map(), non_neg_integer(), timeout()) -> {ok, map()} | {error, term()}.
-query(#{client := Pid, resources := Resources}, Id, Timeout) when Id >= 0, Id < tuple_size(Resources) ->
+query(#{client := Pid, resources := Resources} = Session, Id, Timeout) when Id >= 0, Id < tuple_size(Resources) ->
     case hls_debug:query(Pid, 16#11, <<Id:32/little>>, Timeout) of
-        {ok, Bytes} -> decode_observation(Bytes, element(Id+1, Resources));
+        {ok, Bytes} -> decode_observation(Bytes, element(Id+1, Resources), maps:get(actor_observer, Session, ?MODULE));
         Error -> Error
     end;
 query(_, Id, _) -> {error, {unknown_resource, Id}}.
@@ -65,8 +66,14 @@ decode_info(<<5:32/little, Count:32/little, Channels:32/little, Queues:32/little
         fingerprint => string:lowercase(binary:encode_hex(Hash))}};
 decode_info(_) -> {error, unsupported_topology_info}.
 
+-doc "Decodes a query reply using the dedicated actor observation format.".
+-spec decode_observation(binary(), map()) -> {ok, map()} | {error, term()}.
+decode_observation(Bytes, Resource) -> decode_observation(Bytes, Resource, ?MODULE).
+
+-doc "Decodes a query reply with an explicitly selected actor-mailbox decoder.".
+-spec decode_observation(binary(), map(), module()) -> {ok, map()} | {error, term()}.
 decode_observation(<<Id:32/little, Cycle:64/little, Value:128/little>>,
-        #{<<"id">> := Id, <<"width">> := Width} = Resource) when Value bsr Width =:= 0 ->
+        #{<<"id">> := Id, <<"width">> := Width} = Resource, Observer) when Value bsr Width =:= 0 ->
     Sample = #{id => Id, cycle => Cycle, value => Value},
     case Resource of
         #{<<"kind">> := <<"channel">>} ->
@@ -76,7 +83,7 @@ decode_observation(<<Id:32/little, Cycle:64/little, Value:128/little>>,
         #{<<"kind">> := <<"actor">>, <<"phases">> := Phases, <<"failures">> := Failures} ->
             case actor_observation(Sample#{value := Value band 16#ffffffff}, Phases, Failures) of
                 {ok, Actor} ->
-                    case mailbox_observation(Actor#{value := Value}, Resource) of
+                    case Observer:mailbox_observation(Actor#{value := Value}, Resource) of
                         {ok, Sample0} -> reduction_observation(Sample0, Resource);
                         Error -> Error
                     end;
@@ -84,7 +91,7 @@ decode_observation(<<Id:32/little, Cycle:64/little, Value:128/little>>,
             end;
         _ -> {error, invalid_resource_value}
     end;
-decode_observation(_, _) -> {error, malformed_topology_observation}.
+decode_observation(_, _, _) -> {error, malformed_topology_observation}.
 
 actor_observation(Sample = #{value := 0}, _Phases, _Failures) ->
     {ok, Sample#{initialized => false, phase => undefined,
@@ -100,6 +107,8 @@ actor_observation(Sample = #{value := Value}, Phases, Failures)
     end;
 actor_observation(_, _, _) -> {error, invalid_resource_value}.
 
+-doc "Decodes the dedicated mailbox word, rejecting invalid capacity or initialization state.".
+-spec mailbox_observation(map(), map()) -> {ok, map()} | {error, term()}.
 mailbox_observation(Sample = #{value := Value, initialized := Initialized},
         #{<<"mailbox_kind">> := <<"direct">>, <<"mailbox_capacity">> := Capacity}) ->
     Word = (Value bsr 32) band 16#ffffff,
@@ -115,29 +124,6 @@ mailbox_observation(Sample = #{value := Value, initialized := Initialized},
             {ok, Sample#{mailbox_initialized => true, message_queue_len => Count,
                 postponed => Postponed, reserved => Reserved,
                 free_slots => Capacity-Count-Reserved}};
-        _ -> {error, invalid_mailbox_observation}
-    end;
-mailbox_observation(Sample = #{value := Value},
-        #{<<"mailbox_kind">> := <<"shared">>, <<"mailbox_capacity">> := Capacity}) ->
-    Word = (Value bsr 32) band 16#ffffff,
-    Count = Word band 255,
-    Postponed = (Word bsr 8) band 255,
-    Phase = (Word bsr 21) band 3,
-    case Word of
-        0 -> {ok, (maps:merge(Sample, maps:from_keys(
-            [message_queue_len, postponed, free_slots, reserved, in_flight,
-             mail_candidate, entry_candidate, waiting_for_egress, egress_busy, scheduler_phase], undefined)))#{
-                mailbox_initialized => false}};
-        _ when Word band (1 bsl 23) =/= 0, Phase < 3,
-                Count =< Capacity, Postponed =< Count ->
-            {ok, Sample#{mailbox_initialized => true, message_queue_len => Count,
-                postponed => Postponed, free_slots => Capacity-Count, reserved => 0,
-                in_flight => Word band (1 bsl 16) =/= 0,
-                mail_candidate => Word band (1 bsl 17) =/= 0,
-                entry_candidate => Word band (1 bsl 18) =/= 0,
-                waiting_for_egress => Word band (1 bsl 19) =/= 0,
-                egress_busy => Word band (1 bsl 20) =/= 0,
-                scheduler_phase => element(Phase+1, {boot, startup, run})}};
         _ -> {error, invalid_mailbox_observation}
     end;
 mailbox_observation(Sample = #{value := Value}, _Resource) when (Value bsr 32) band 16#ffffff =:= 0 ->
@@ -212,3 +198,21 @@ canonical_json(Map) when is_map(Map) ->
 canonical_json(List) when is_list(List) ->
     ["[", lists:join(",", [canonical_json(Value) || Value <- List]), "]"];
 canonical_json(Value) -> json:encode(Value).
+
+-doc "Attaches a trusted local decoder; the manifest never selects or loads executable code.".
+-spec with_actor_observer(map(), module()) -> map().
+with_actor_observer(Session, Observer) ->
+    {module, Observer} = code:ensure_loaded(Observer),
+    true = erlang:function_exported(Observer, mailbox_observation, 2),
+    true = erlang:function_exported(Observer, actor_fields, 1),
+    Session#{actor_observer => Observer}.
+
+-doc "Lists observation items available on a dedicated actor resource.".
+-spec actor_fields(map()) -> [atom()].
+actor_fields(Resource) ->
+    Base = [initialized, phase, enter_pending, failed, failure, reduction],
+    case Resource of
+        #{<<"mailbox_kind">> := <<"direct">>} ->
+            Base ++ [mailbox_initialized, message_queue_len, postponed, reserved, free_slots];
+        _ -> Base
+    end.

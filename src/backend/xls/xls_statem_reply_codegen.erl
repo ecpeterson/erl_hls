@@ -1,7 +1,7 @@
 -module(xls_statem_reply_codegen).
 -moduledoc "Caller ownership and a single reply effect for retained-call state machines.".
 -export([optional/2, enabled/1, width/1, count/1, layout/1, declarations/1,
-    admit/2, finish/2, functions/1, effect/1, initial/1]).
+    admit/3, finish/2, functions/1, effect/1, initial/1]).
 
 -doc "Reports whether an actor declares retained calls.".
 -spec enabled(map()) -> boolean().
@@ -11,7 +11,7 @@ enabled(Spec) -> maps:get(retained_calls, Spec, none) =/= none.
 -spec optional(map(), iodata()) -> iodata().
 optional(Spec, Code) -> case enabled(Spec) of true -> Code; false -> [] end.
 
--doc "Returns the actor-local caller book's packed RAM width.".
+-doc "Returns the actor-local caller book's packed width.".
 -spec width(map()) -> non_neg_integer().
 width(Spec) -> case enabled(Spec) of true -> 96 + 72 * count(Spec); false -> 0 end.
 
@@ -40,17 +40,15 @@ initial(Spec) -> case enabled(Spec) of
 end.
 
 -doc "Allocates only for a declared call whose mailbox callback can run.".
--spec admit(map(), direct | shared) -> iodata().
-admit(Spec, Kind) ->
-    {Frame, Valid} = case Kind of direct -> {"selected_frame", "dispatchable"}; shared -> {"frame", "tag_ok"} end,
+-spec admit(map(), iodata(), iodata()) -> iodata().
+admit(Spec, Frame, Valid) ->
     optional(Spec, ["    let (admitted_replies, call_from, call_error) = if ", Valid,
         " && is_call(", Frame, ".header.op) { hls_reply::admit(machine.replies, ", Frame,
         ") } else { (machine.replies, u64:0, u32:0) };\n"]).
 
 -doc "Validates the final scheduling outcome before completing or exposing any caller reply.".
--spec finish(map(), direct | shared) -> iodata().
-finish(Spec, Kind) ->
-    Frame = case Kind of direct -> "selected_frame"; shared -> "frame" end,
+-spec finish(map(), iodata()) -> iodata().
+finish(Spec, Frame) ->
     optional(Spec, ["    let (reply_book, response, response_valid) = finish_reply(admitted_replies, ", Frame,
         ", call_error, reply_from, reply_frame, reply_allowed, failure);\n"]).
 
@@ -70,17 +68,17 @@ functions(Spec = #{retained_calls := #{calls := Calls}}) ->
      "    (book, hls_reply::error_frame(input.header.txid, admission_error), !duplicate)\n",
      "  } else { hls_reply::complete(book, from, reply, allowed, hls_failure::kind(failure) as u32) }\n",
      "}\n\n",
-     "fn shared_machine_reply_failure(machine: SharedMachine, frame: axis::Frame, received: bool) -> SharedDispatch {\n",
+     "fn actor_reply_failure(machine: ActorState, frame: axis::Frame, received: bool) -> ActorDispatch {\n",
      "  let failed = ReplyBook { failure: if machine.replies.failure != u32:0 { machine.replies.failure } else { hls_failure::kind(machine.failure) as u32 }, ..machine.replies };\n",
      "  let (replies, owned_reply, owned) = hls_reply::drain(failed);\n",
-     "  SharedDispatch { machine: SharedMachine { replies, next_event: u8:0, enter_pending: false, ..machine },\n",
+     "  ActorDispatch { machine: ActorState { replies, next_event: u8:0, enter_pending: false, ..machine },\n",
      "    reply: if owned { owned_reply } else { hls_reply::error_frame(frame.header.txid, failed.failure) },\n",
-     "    reply_valid: owned || (received && is_call(frame.header.op)), dispatched: received && !owned, directive: Directive::CONSUME, ..zero!<SharedDispatch>() }\n",
+     "    reply_valid: owned || (received && is_call(frame.header.op)), dispatched: received && !owned, directive: Directive::CONSUME, ..zero!<ActorDispatch>() }\n",
      "}\n\n"];
 
 functions(_Spec) -> [].
 
--doc "Forms the scheduler's ordinary one-frame effect from a checked reply.".
+-doc "Forms the ordinary one-frame effect from a checked reply.".
 -spec effect(map()) -> iodata().
 effect(Spec) -> ["EntryEffects { layout: u8:", integer_to_list(layout(Spec)),
     ", payloads: axis::bits_from_frame(dispatched.reply) as bits[ENTRY_EFFECT_PAYLOAD_BITS] }"] .

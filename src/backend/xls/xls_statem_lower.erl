@@ -7,7 +7,7 @@
 -module(xls_statem_lower).
 -moduledoc false.
 
--export([interface/2, lower/3, lower/4]).
+-export([interface/2, lower/3, lower/4, artifact/3]).
 
 -type interface() :: map().
 
@@ -17,26 +17,27 @@ interface(Forms, PhaseNames) ->
     {Annotated, Sites} = xls_failure_sites:prepare(Forms),
     (interface_from_prepared(prepare_interface(Annotated, PhaseNames)))#{failure_origins => Sites}.
 
--doc "Validates and emits an hls_statem actor with ordinary shared-service settings.".
--spec lower(file:filename(), [hls_source:form()], [atom(), ...]) ->
-    iolist().
-lower(Filename, Forms, PhaseNames) ->
-    lower(Filename, Forms, PhaseNames, #{shared_service => ordinary}).
+-doc "Validates callbacks and renders a dedicated actor.".
+-spec lower(file:filename(), [hls_source:form()], [atom(), ...]) -> iolist().
+lower(Filename, Forms, Phases) -> lower(Filename, Forms, Phases, #{}).
 
--doc "Validates and emits an hls_statem actor with the selected service and observation options.".
--spec lower(
-    file:filename(),
-    [hls_source:form()],
-    [atom(), ...],
-    #{shared_service := ordinary | aggregate_only, mailbox_debug => boolean(), direct_actor_debug => boolean()}
-) -> iolist().
-lower(Filename, Forms0, PhaseNames, Options0) ->
+-doc "Renders a dedicated actor with optional committed-state observations.".
+-spec lower(file:filename(), [hls_source:form()], [atom(), ...], map()) -> iolist().
+lower(Filename, Forms, Phases, Options) ->
+    case maps:keys(Options) -- [direct_actor_debug] of
+        [] -> ok;
+        Keys -> error({invalid_xls_options, Keys})
+    end,
+    Spec = artifact(Filename, Forms, Phases),
+    xls_statem_codegen:emit(Spec#{direct_actor_debug => xls_actor_observation:enabled(Options)}).
+
+-doc "Lowers actor semantics to a closed artifact without choosing storage or execution placement.".
+-spec artifact(file:filename(), [hls_source:form()], [atom(), ...]) -> xls_actor_codegen:spec().
+artifact(Filename, Forms0, PhaseNames) ->
     Declarations = declarations(Forms0, PhaseNames),
     {SourceForms, Sites} = xls_failure_sites:prepare(Forms0),
     {Forms, Helpers} = xls_helpers:prepare(SourceForms,
         [{init, 1}, {reduce, 3} | [{Phase, 3} || Phase <- PhaseNames]]),
-    Options = validate_options(Options0),
-    SharedService = maps:get(shared_service, Options),
     MessageNames = maps:get(message_names, Declarations),
     MessageWords = maps:from_list([
         {Name, xls_parse:message_words(Forms, Name)} || Name <- MessageNames
@@ -69,7 +70,6 @@ lower(Filename, Forms0, PhaseNames, Options0) ->
         EnumAtoms
     ),
     Reductions = maps:get(reductions, Prepared),
-    ok = validate_shared_service(SharedService, Reductions),
     RecordDeclarations = xls_parse:print([
         [
             xls_parse:struct_from_record(Record), "\n",
@@ -78,7 +78,7 @@ lower(Filename, Forms0, PhaseNames, Options0) ->
         ]
         || Record <- Records
     ]),
-    xls_statem_codegen:emit(#{
+    #{
         source => Filename,
         failure_sites => Sites,
         imports => xls_dslx_imports:from_forms(Forms),
@@ -99,57 +99,8 @@ lower(Filename, Forms0, PhaseNames, Options0) ->
         retained_calls => CallSpec,
         internal_steps => xls_statem_continuation:lower(maps:get(internal_steps, Prepared),
             Names, DataName, EnumAtoms, HasCalls, fun(C, P) -> normalize_cast_result(C, P, Names, HasCalls) end),
-        reductions => Reductions,
-        shared_service => SharedService,
-        mailbox_debug => xls_scheduler_observation:enabled(Options),
-        direct_actor_debug => xls_actor_observation:enabled(Options)
-    }).
-
-validate_options(Options) when is_map(Options) ->
-    case lists:sort(maps:keys(Options)) -- [mailbox_debug, direct_actor_debug] of
-        [shared_service] ->
-            case maps:get(shared_service, Options) of
-                Mode when Mode =:= ordinary; Mode =:= aggregate_only ->
-                    Options;
-                Mode ->
-                    error({invalid_xls_shared_service, Mode})
-            end;
-        Keys ->
-            error({invalid_xls_options, Keys})
-    end;
-validate_options(Options) ->
-    error({invalid_xls_options, Options}).
-
-validate_shared_service(ordinary, _Reductions) ->
-    ok;
-validate_shared_service(aggregate_only, none) ->
-    error(aggregate_only_requires_reductions);
-validate_shared_service(aggregate_only, #{sites := Sites}) ->
-    %% Aggregate-only is a low-level actor artifact: a future topology may
-    %% classify a partial schema upstream and send its fallback messages on the
-    %% ordinary request port.  Whole-schema capture is therefore proved by the
-    %% source-fragment planner, while this boundary only requires that the
-    %% aggregate contribution itself can be evaluated without actor state.
-    Contributions = [{maps:get(phase, Site), Contribution}
-        || Site <- Sites,
-           Contribution <- maps:get(contributions, Site)],
-    Nontransportable = [
-        #{phase => Phase, schema => maps:get(tag, Contribution)}
-        || {Phase, Contribution} <- Contributions,
-           maps:get(source_transportable, Contribution) =:= false
-    ],
-    case Nontransportable of
-        [] -> ok;
-        _ -> error({aggregate_only_nontransportable_contributions,
-            Nontransportable})
-    end,
-    Tags = [maps:get(tag, Contribution)
-        || {_Phase, Contribution} <- Contributions],
-    case duplicate_values(Tags) of
-        [] -> ok;
-        Duplicates -> error({aggregate_only_ambiguous_contribution_schemas,
-            Duplicates})
-    end.
+        reductions => Reductions
+    }.
 
 prepare_interface(Forms, PhaseNames) ->
     prepare_callbacks(Forms, declarations(Forms, PhaseNames), interface).
@@ -461,13 +412,13 @@ dispatches(CastGroups, MessageNames, PhaseNames) ->
 lower_init(Clause0, DataName, EnumAtoms, Spec) ->
     Clause = rewrite_init_result(Clause0),
     Postprocessor = fun(R) -> [
-        "Machine {\n",
+        "ActorState {\n",
         "  phase: ", R, ".0,\n",
         "  entered_from: ", R, ".0,\n",
         "  data: ", R, ".1.1,\n",
         xls_statem_reply_codegen:initial(Spec),
         "  enter_pending: u1:1,\n",
-        "  ..zero!<Machine>()\n",
+        "  ..zero!<ActorState>()\n",
         "}"
     ] end,
     xls_init:lower(Clause, DataName, Postprocessor, EnumAtoms).
@@ -522,7 +473,7 @@ lower_entries(Entries, Prepared, EnumAtoms) ->
             fun(Id, Value) ->
                 Variant = lists:nth(Id + 1, EntryLayouts),
                 {xls_map, 0, Value, fun(R) ->
-                    xls_statem_codegen:entry_value(R, Variant,
+                    xls_actor_codegen:entry_value(R, Variant,
                         PayloadBits, MessageWords, Reductions)
                 end}
             end),
@@ -737,17 +688,6 @@ require_unique(Kind, Values) ->
     case length(Values) =:= length(lists:usort(Values)) of
         true -> ok;
         false -> error({duplicate_hls_statem_declaration, Kind, Values})
-    end.
-
-duplicate_values(Values) ->
-    duplicate_values(Values, #{}, #{}).
-
-duplicate_values([], _Seen, Duplicates) ->
-    lists:sort(maps:keys(Duplicates));
-duplicate_values([Value | Rest], Seen, Duplicates) ->
-    case maps:is_key(Value, Seen) of
-        true -> duplicate_values(Rest, Seen, Duplicates#{Value => true});
-        false -> duplicate_values(Rest, Seen#{Value => true}, Duplicates)
     end.
 
 require_declared(Kind, Value, Values) when is_list(Values) ->
