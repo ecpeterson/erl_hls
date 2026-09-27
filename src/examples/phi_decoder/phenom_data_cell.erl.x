@@ -48,27 +48,27 @@ pub enum Directive : u2 {
   FAIL = u2:2,
 }
 
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L266 = u16:22; // phenom_data_cell.erl:L266
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L274 = u16:38; // phenom_data_cell.erl:L274
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L276 = u16:54; // phenom_data_cell.erl:L276
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L278 = u16:70; // phenom_data_cell.erl:L278
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L280 = u16:86; // phenom_data_cell.erl:L280
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L307 = u16:102; // phenom_data_cell.erl:L307
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L318 = u16:118; // phenom_data_cell.erl:L318
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L372 = u16:134; // phenom_data_cell.erl:L372
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L388 = u16:150; // phenom_data_cell.erl:L388
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L391 = u16:166; // phenom_data_cell.erl:L391
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L431 = u16:182; // phenom_data_cell.erl:L431
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L442 = u16:198; // phenom_data_cell.erl:L442
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L460 = u16:214; // phenom_data_cell.erl:L460
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L476 = u16:230; // phenom_data_cell.erl:L476
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L479 = u16:246; // phenom_data_cell.erl:L479
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L497 = u16:262; // phenom_data_cell.erl:L497
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L549 = u16:278; // phenom_data_cell.erl:L549
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L551 = u16:294; // phenom_data_cell.erl:L551
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L562 = u16:310; // phenom_data_cell.erl:L562
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L577 = u16:326; // phenom_data_cell.erl:L577
-const XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L580 = u16:342; // phenom_data_cell.erl:L580
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_C77683BA_L235 = u16:22; // phenom_data_cell_impl.hrl:L235
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_C77683BA_L243 = u16:38; // phenom_data_cell_impl.hrl:L243
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_C77683BA_L245 = u16:54; // phenom_data_cell_impl.hrl:L245
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_C77683BA_L247 = u16:70; // phenom_data_cell_impl.hrl:L247
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_C77683BA_L249 = u16:86; // phenom_data_cell_impl.hrl:L249
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_C77683BA_L276 = u16:102; // phenom_data_cell_impl.hrl:L276
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_C77683BA_L287 = u16:118; // phenom_data_cell_impl.hrl:L287
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_C77683BA_L338 = u16:134; // phenom_data_cell_impl.hrl:L338
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_C77683BA_L354 = u16:150; // phenom_data_cell_impl.hrl:L354
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_C77683BA_L357 = u16:166; // phenom_data_cell_impl.hrl:L357
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_C77683BA_L396 = u16:182; // phenom_data_cell_impl.hrl:L396
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_C77683BA_L407 = u16:198; // phenom_data_cell_impl.hrl:L407
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_C77683BA_L422 = u16:214; // phenom_data_cell_impl.hrl:L422
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_C77683BA_L438 = u16:230; // phenom_data_cell_impl.hrl:L438
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_C77683BA_L441 = u16:246; // phenom_data_cell_impl.hrl:L441
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_C77683BA_L459 = u16:262; // phenom_data_cell_impl.hrl:L459
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_C77683BA_L505 = u16:278; // phenom_data_cell_impl.hrl:L505
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_C77683BA_L507 = u16:294; // phenom_data_cell_impl.hrl:L507
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_C77683BA_L518 = u16:310; // phenom_data_cell_impl.hrl:L518
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_C77683BA_L533 = u16:326; // phenom_data_cell_impl.hrl:L533
+const XLS_FAILURE_SITE_EXPLICIT_FAIL_C77683BA_L536 = u16:342; // phenom_data_cell_impl.hrl:L536
 pub struct Phi {
   epoch : u32,
   values : phi_field::Field,
@@ -381,7 +381,7 @@ pub fn bits_from_datacell(s: Datacell) -> bits[354] {
   hls_bits::from_stream(hls_bits::to_stream(s.step as bits[32]) ++ hls_bits::to_stream(s.seen_sources as bits[32]) ++ hls_bits::to_stream(s.threshold as bits[32]) ++ hls_bits::to_stream(s.event as bits[32]) ++ hls_bits::to_stream(s.random_state as bits[32]) ++ hls_bits::to_stream(s.x as bits[16]) ++ hls_bits::to_stream(s.y as bits[16]) ++ hls_bits::to_stream(s.accumulated_pauli as bits[32]) ++ hls_bits::to_stream(s.reply_request_id as bits[32]) ++ hls_bits::to_stream(s.reply_anticommutes as bits[32]) ++ hls_bits::to_stream(s.reply_resume as bits[32]) ++ hls_bits::to_stream(s.noise_disabled as bits[1]) ++ hls_bits::to_stream(s.cutoff_armed as bits[1]) ++ hls_bits::to_stream(s.cutoff_step as bits[32]) ++ zero!<bits[0]>())
 }
 
-fn hls_local_prepare_reply__3(argument_1: (Tag, Datacell), argument_2: u32, argument_3: u32) -> ((Tag, Datacell), hls_failure::Code) {  // L584
+fn hls_local_prepare_reply__3(argument_1: (Tag, Datacell), argument_2: u32, argument_3: u32) -> ((Tag, Datacell), hls_failure::Code) {  // L540
   let v_Cell_1 = argument_1;
   let v_RequestId_1 = argument_2;
   let v_Measurement_1 = argument_3;
@@ -563,7 +563,7 @@ struct SharedState<ACTOR_COUNT: u32, PRODUCER_COUNT: u32> {
   mailbox_write_pending: u1,
 }
 
-fn initial_machine_outcome() -> (bool, Machine) {  // L241
+fn initial_machine_outcome() -> (bool, Machine) {  // L209
   let _0 = Datacell {
     ..zero!<Datacell>()
   };
@@ -908,7 +908,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
           } else {
             let v_Xls_clause_2_Cell_1 = (Tag::DATA_CELL, data);
             let _0 = (Phase::CONFIGURING, v_Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L266);
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_C77683BA_L235);
             if (bool:false) {
               (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
@@ -919,7 +919,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
         Phase::REPLYING => {
           let v_Xls_clause_1_Cell_1 = (Tag::DATA_CELL, data);
           let _0 = (Phase::REPLYING, v_Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
-          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L497);
+          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_C77683BA_L459);
           if (bool:false) {
             (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
           } else {
@@ -951,7 +951,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
           } else {
             let v_Xls_clause_2_Cell_1 = (Tag::DATA_CELL, data);
             let _0 = (Phase::CONFIGURING, v_Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L274);
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_C77683BA_L243);
             if (bool:false) {
               (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
@@ -1109,7 +1109,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
             } else {
               let v_Xls_clause_3_Cell_1 = (Tag::DATA_CELL, data);
               let _0 = (Phase::COLLECTING, v_Xls_clause_3_Cell_1, Directive::FAIL, bool:0, );
-              let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L372);
+              let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_C77683BA_L338);
               if (bool:false) {
                 (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
               } else {
@@ -1169,7 +1169,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
           } else {
             let v_Xls_clause_2_Cell_1 = (Tag::DATA_CELL, data);
             let _0 = (Phase::REPORTING, v_Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L460);
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_C77683BA_L422);
             if (bool:false) {
               (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
@@ -1318,7 +1318,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
               } else {
                 let v_Xls_clause_4_Cell_1 = (Tag::DATA_CELL, data);
                 let _0 = (Phase::REPLYING, v_Xls_clause_4_Cell_1, Directive::FAIL, bool:0, );
-                let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L549);
+                let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_C77683BA_L505);
                 if (bool:false) {
                   (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
                 } else {
@@ -1361,7 +1361,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
         Phase::CONFIGURING => {
           let v_Xls_clause_1_Cell_1 = (Tag::DATA_CELL, data);
           let _0 = (Phase::CONFIGURING, v_Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
-          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L276);
+          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_C77683BA_L245);
           if (bool:false) {
             (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
           } else {
@@ -1387,7 +1387,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
               (_5, _1.1)
             } else {
               let _1 = (Phase::COLLECTING, v_Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
-              let _2 = (_1.0, _1.1, _1.2, _1.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L388);
+              let _2 = (_1.0, _1.1, _1.2, _1.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_C77683BA_L354);
               (_2, hls_failure::NONE)
             };
             if ((_6.1) != hls_failure::NONE) {
@@ -1398,7 +1398,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
           } else {
             let v_Xls_clause_2_Cell_1 = (Tag::DATA_CELL, data);
             let _0 = (Phase::COLLECTING, v_Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L391);
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_C77683BA_L357);
             if (bool:false) {
               (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
@@ -1425,7 +1425,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
               (_5, _1.1)
             } else {
               let _1 = (Phase::REPORTING, v_Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
-              let _2 = (_1.0, _1.1, _1.2, _1.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L476);
+              let _2 = (_1.0, _1.1, _1.2, _1.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_C77683BA_L438);
               (_2, hls_failure::NONE)
             };
             if ((_6.1) != hls_failure::NONE) {
@@ -1436,7 +1436,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
           } else {
             let v_Xls_clause_2_Cell_1 = (Tag::DATA_CELL, data);
             let _0 = (Phase::REPORTING, v_Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L479);
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_C77683BA_L441);
             if (bool:false) {
               (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
@@ -1458,7 +1458,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
               (_3, _1.1)
             } else {
               let _1 = (Phase::REPLYING, v_Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
-              let _2 = (_1.0, _1.1, _1.2, _1.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L577);
+              let _2 = (_1.0, _1.1, _1.2, _1.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_C77683BA_L533);
               (_2, hls_failure::NONE)
             };
             if ((_4.1) != hls_failure::NONE) {
@@ -1469,7 +1469,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
           } else {
             let v_Xls_clause_2_Cell_1 = (Tag::DATA_CELL, data);
             let _0 = (Phase::REPLYING, v_Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L580);
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_C77683BA_L536);
             if (bool:false) {
               (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
@@ -1492,7 +1492,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
         Phase::CONFIGURING => {
           let v_Xls_clause_1_Cell_1 = (Tag::DATA_CELL, data);
           let _0 = (Phase::CONFIGURING, v_Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
-          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L278);
+          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_C77683BA_L247);
           if (bool:false) {
             (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
           } else {
@@ -1526,7 +1526,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
           } else {
             let v_Xls_clause_2_Cell_1 = (Tag::DATA_CELL, data);
             let _0 = (Phase::COLLECTING, v_Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L307);
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_C77683BA_L276);
             if (bool:false) {
               (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
@@ -1561,7 +1561,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
           } else {
             let v_Xls_clause_2_Cell_1 = (Tag::DATA_CELL, data);
             let _0 = (Phase::REPORTING, v_Xls_clause_2_Cell_1, Directive::FAIL, bool:0, );
-            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L431);
+            let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_C77683BA_L396);
             if (bool:false) {
               (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
             } else {
@@ -1572,7 +1572,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
         Phase::REPLYING => {
           let v_Xls_clause_1_Cell_1 = (Tag::DATA_CELL, data);
           let _0 = (Phase::REPLYING, v_Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
-          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L551);
+          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_C77683BA_L507);
           if (bool:false) {
             (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
           } else {
@@ -1588,7 +1588,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
         Phase::CONFIGURING => {
           let v_Xls_clause_1_Cell_1 = (Tag::DATA_CELL, data);
           let _0 = (Phase::CONFIGURING, v_Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
-          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L280);
+          let _1 = (_0.0, _0.1, _0.2, _0.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_C77683BA_L249);
           if (bool:false) {
             (phase, data, Directive::FAIL, u1:0, hls_failure::NONE)
           } else {
@@ -1612,7 +1612,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
             (_6, hls_failure::NONE)
           } else {
             let _1 = (Phase::COLLECTING, v_Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
-            let _2 = (_1.0, _1.1, _1.2, _1.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L318);
+            let _2 = (_1.0, _1.1, _1.2, _1.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_C77683BA_L287);
             (_2, hls_failure::NONE)
           };
           if ((_7.1) != hls_failure::NONE) {
@@ -1638,7 +1638,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
             (_6, hls_failure::NONE)
           } else {
             let _1 = (Phase::REPORTING, v_Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
-            let _2 = (_1.0, _1.1, _1.2, _1.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L442);
+            let _2 = (_1.0, _1.1, _1.2, _1.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_C77683BA_L407);
             (_2, hls_failure::NONE)
           };
           if ((_7.1) != hls_failure::NONE) {
@@ -1664,7 +1664,7 @@ fn dispatch(frame: axis::Frame, phase: Phase, data: Datacell) -> (Phase, Datacel
             (_6, hls_failure::NONE)
           } else {
             let _1 = (Phase::REPLYING, v_Xls_clause_1_Cell_1, Directive::FAIL, bool:0, );
-            let _2 = (_1.0, _1.1, _1.2, _1.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_BF321B43_L562);
+            let _2 = (_1.0, _1.1, _1.2, _1.3, XLS_FAILURE_SITE_EXPLICIT_FAIL_C77683BA_L518);
             (_2, hls_failure::NONE)
           };
           if ((_7.1) != hls_failure::NONE) {

@@ -1,0 +1,653 @@
+{
+  "schema": 1,
+  "date": "2026-09-26",
+  "base_commit": "2c0b51898d48b9247e504471d41baf268bbf274c",
+  "scope": "Periodic phase-flip repetition workload; full physical-noise actors; control/measurement interfaces retained; board transport/debug/I/O excluded.",
+  "sample": "One deterministic 33-round trajectory per N; mean interval from whole-line completion of rounds 8 through 32. One unrenamed mapping per variant; no placement or frequency claim.",
+  "hypothesis": "A bit-30 tie selector preserves valid two-edge choices, removes four DSPs, and preserves event traces and cycle counts.",
+  "runner_sha256": "c3216ced5eb2fa4a655597ad75fcfe57685d6b62169042bfc87999fbdc992a91",
+  "variants": {
+    "n2": {
+      "cells": 2,
+      "physical_qubits": 4,
+      "actors": 6,
+      "simulations": [
+        {
+          "stalled": false,
+          "events": 85,
+          "cycles_per_step": 93.25
+        },
+        {
+          "stalled": true,
+          "events": 85,
+          "cycles_per_step": 93.5
+        }
+      ],
+      "build": {
+        "artifacts": {
+          "repetition.ir": "974c63fa9ed0eff5b406527785c94e78b8aaaddc87402bc5b31bb346cfc31bff",
+          "repetition.opt.ir": "5400140b19cd6d82a97a49f767ebaac550c9b3e162b252e364bd15833bdf2deb",
+          "repetition.v": "63210b240ebe19fe611754d514ddf99de5662974f64c61bab9ead258ea0cf95e"
+        },
+        "assets": {
+          "hls_1r1w_ram.v": "13e12a7561df37e150c3e727c43f9e5234b74bb9741fc969185c12948b2583e8",
+          "phi_repetition_top.v": "4a4bc3a226a67bc707713c7ad9c8f50f229348ba363e6f5c1bb49325341cddc2"
+        },
+        "line_cells": 2,
+        "options": {
+          "codegen": [
+            "--pipeline_stages=2",
+            "--delay_model=unit",
+            "--flop_inputs=false",
+            "--flop_outputs=true",
+            "--use_system_verilog=false",
+            "--reset=reset",
+            "--fifo_module=",
+            "--worst_case_throughput=1",
+            "--ram_configurations=scheduler_0_state:1R1W:_scheduler_0_ram_read_req_out:_scheduler_0_ram_read_resp_in:_scheduler_0_ram_write_req_out:_scheduler_0_ram_write_resp_in,scheduler_0_mailbox:1R1W:_scheduler_0_mailbox_read_req_out:_scheduler_0_mailbox_read_resp_in:_scheduler_0_mailbox_write_req_out:_scheduler_0_mailbox_write_resp_in,scheduler_1_state:1R1W:_scheduler_1_ram_read_req_out:_scheduler_1_ram_read_resp_in:_scheduler_1_ram_write_req_out:_scheduler_1_ram_write_resp_in,scheduler_1_mailbox:1R1W:_scheduler_1_mailbox_read_req_out:_scheduler_1_mailbox_read_resp_in:_scheduler_1_mailbox_write_req_out:_scheduler_1_mailbox_write_resp_in,scheduler_2_state:1R1W:_scheduler_2_ram_read_req_out:_scheduler_2_ram_read_resp_in:_scheduler_2_ram_write_req_out:_scheduler_2_ram_write_resp_in,scheduler_2_mailbox:1R1W:_scheduler_2_mailbox_read_req_out:_scheduler_2_mailbox_read_resp_in:_scheduler_2_mailbox_write_req_out:_scheduler_2_mailbox_write_resp_in"
+          ],
+          "top": "Top"
+        },
+        "recipe": 1,
+        "rtl": {
+          "hls_1r1w_ram.v": "13e12a7561df37e150c3e727c43f9e5234b74bb9741fc969185c12948b2583e8",
+          "phi_repetition_top.v": "4a4bc3a226a67bc707713c7ad9c8f50f229348ba363e6f5c1bb49325341cddc2",
+          "repetition.v": "63210b240ebe19fe611754d514ddf99de5662974f64c61bab9ead258ea0cf95e"
+        },
+        "schema": 1,
+        "sources": {
+          "arbitration.x": "5bfd061e68339cbf9788a40d9881b38bda2691a7f095500f806aba5ce8b2a79f",
+          "axis.x": "882c944ca4faa43c164225f230b3530e3b318f496ad6fc57c42619cb7e3a4d93",
+          "bram.x": "fea8277109e4847e45bb388eaae6236abf35a3f75f3558de1ed8b53f08fcd6bb",
+          "direct_mailbox_observation.x": "74b51d253146d257ddd354dea39da7c5adf90acee770ab086c9c9c24ae041b91",
+          "effect_window.x": "a43b66b52a73dd812cda83f1ef216aaa3c48550672c1a6d00663b5cdaab81586",
+          "frame_queue.x": "8e2d1d3daf12ba3cb739d8e577603409f73f490a12194367073a4b2ee0256359",
+          "frame_transport.x": "941fe8dd53cc9638c6cec48c99e06f9a4a7fc5471c3dc1877763415ac8226932",
+          "hls_bits.x": "ffcf2588f8d7ad58857f353b4e1480f286c2e718041868da6af99d7dbacf995b",
+          "hls_fabric_router.x": "03607387d441240b92841b7ecbd41803a7234b9d89e1beaddda414bb9b006f3b",
+          "hls_failure.x": "f69235cb3d7bc49b09c65961f13e87003ebde5eb41d55b9bccf1427d620909c8",
+          "hls_fixed.x": "f8506dde6299d8b080012d78605d1a4a0b5d51647da8da106388351ce6a0aea9",
+          "hls_float.x": "1882c965143004e7dd70cac139cf1ee41d17199f0877e374a280cebfb6204c26",
+          "hls_integer.x": "9c219da378cd0f2346f216060b213fa6249c1917d1e69a0086ed1f6cce364c00",
+          "hls_lists.x": "dbee03cead923041238b3e09760421ea5be815c78ba737e0366251cbc6e31065",
+          "hls_patterns.x": "ae1d294c976cc1360ced8b1850f45f4ec43932b078b4339b5ec543ae9a5ced7c",
+          "hls_reply.x": "8b238d80ebd67046b0b8cd946eb7d6edc68074c13a05a00770f26f4437e5f7b1",
+          "hls_serial.x": "02ab9208f1e1d0e9a1b968d81db039be42a90d8e503ca783813b70cbfb7a0ff0",
+          "hls_server.x": "9ea16959a9fc504c3f26f67d1e308e01014573c2220b57f290add8591b4c743c",
+          "hls_spatial_router.x": "3cca4008525b6831a825db8af3286df5b3d28f06bb6c505f75e06fb0fc42b6f5",
+          "hls_vec.x": "c66c888c606ce7bc3e7b1c526cd1216e571f23fc6712f719df14dc6f5d82e5e6",
+          "mailbox.x": "4e79a78b2996de6ecf4b0cecf25c84705a743ac6dfc430c0c29d13302c9b61f8",
+          "phenom_line_data_cell.x": "2569255abac1be43b5e68cd43f76f8f748b28191f44743bcb560854299e2ed4e",
+          "phenom_line_syndrome_cell.x": "df769771947bed01c8da437853188171fb05c0087c3cb9c8f70827b490a9751e",
+          "phi_field.x": "d6ed59cab9c79271cc5680ad802fbf8f6bac8c72988d8c1d6b980e133bb7d750",
+          "phi_line_cell.x": "73c23cbebd4a1afd0a6b88a6fc7d5f69ba7e738760d1e45f08a4c92d1b12b8a6",
+          "phi_repetition_topology.x": "29181008bd93ce30cbd79b5505fa00138d7a4cb090546c60b468be2ad362ff52",
+          "scheduler.x": "18aeeae94e6e3c0b63e69521c13073a0e335d2e227b6935fb78f80550fe3e802",
+          "scheduler_observation.x": "7c01db596893e73678cb6eb220430127d4d2235ed09eebf530ca0efb778d8263"
+        },
+        "stages": {
+          "codegen": "acac6e77350d3c4a8d6d2fab56d378b5d7b2f494babc6931e49cc376949a8306",
+          "ir": "c33cef70f6f59c60e8774f72cc960cf0f3cab807f5a911dac88900f9cf7a3408",
+          "opt": "c5cb45eb62fb4fae2219b1c629c2a567af243c787456b2e1717bfa3211c33f5e"
+        },
+        "stdlib": {
+          "xls/dslx/stdlib/abs_diff.x": "9006b878c3762aeea72bc42be9a012cd0c050a78364a1c09ea4f547e06059eae",
+          "xls/dslx/stdlib/acm_random.x": "47093ca764f983b34adaeb0f694b2a3b711815eb8beeba656d3a39ed157f7ac7",
+          "xls/dslx/stdlib/apfloat.x": "5bbc79dd7842baa26ae467f5a9240ab98a5f5776b4749eb4e73dd1171b8bae8d",
+          "xls/dslx/stdlib/bfloat16.x": "c810ed761142c429a68f0b80559b92c6cbfe087ccd11bead091151d2ff49ee37",
+          "xls/dslx/stdlib/fixed_point.x": "20aede1704d2cdbe515de083d05cb44c8d279aac5fcf5f52d7dc768193d1c631",
+          "xls/dslx/stdlib/float32.x": "2dbc3bd4c5045fb1b8765b293457d6cca1ba338ca1bd5763b2957d11b0a7d84a",
+          "xls/dslx/stdlib/float64.x": "186e40914bdcd0be7c478e6c85204cfa9858b660a8a1dcfffab20e3e4d1ba071",
+          "xls/dslx/stdlib/float_instances.x": "4c89968e94e045c51c354b8f18507f727b0b85b8dcd01b0af69db25314f314cd",
+          "xls/dslx/stdlib/hfloat16.x": "767b0b70354aa15437f689898a0dd168eba47161e999382adcbdc150b6df4243",
+          "xls/dslx/stdlib/lza.x": "6717f61514829d52e9ead876d42e5dc33cd0c48069506137bb2a1dee98b066ac",
+          "xls/dslx/stdlib/round.x": "ac1093df45b238fb0cf867010a9887856d6cf380d17cb5b61c69a47af77c89a0",
+          "xls/dslx/stdlib/std.x": "888583e31552728f6f594c9bb454173b5d8a2d55df2acdee0bd4e2e15d7f1ffa",
+          "xls/dslx/stdlib/tests/float32_downcast_test.x": "20e81a55ba42a7849b2ac274811e4bb457a8b2eb501f4b304b543925e80fe0ab",
+          "xls/dslx/stdlib/tests/float32_upcast_test.x": "dbff7cea87d189c915623e1d4d4274049e7a5779d7b03060e91201073da27b54",
+          "xls/dslx/stdlib/tests/round_tests.x": "5f9b66ad008155f4829db2424f34cc125363f80a789d4057c1433d56fa05632b",
+          "xls/dslx/stdlib/tests/umul_instances.x": "06f7b95e669477fc30e86f9e1d32637b09cfe1fa8f9cb8ea4b351645c1b1bc91"
+        },
+        "tools": {
+          "codegen_main": "49340600bd30077165a8e2c8e6aa3f3faa66faf9adc92ae050ace138d2c7b23a",
+          "ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+          "opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c"
+        }
+      },
+      "event_witnesses": {
+        "stalled-0": "5ecba6c0e634d6cf7b16161eded4081ced97986cc9fc71838aed8169f2a84d0a",
+        "stalled-1": "5ecba6c0e634d6cf7b16161eded4081ced97986cc9fc71838aed8169f2a84d0a"
+      }
+    },
+    "n3": {
+      "cells": 3,
+      "physical_qubits": 6,
+      "actors": 9,
+      "simulations": [
+        {
+          "stalled": false,
+          "events": 121,
+          "cycles_per_step": 123.416667
+        },
+        {
+          "stalled": true,
+          "events": 121,
+          "cycles_per_step": 123.875
+        }
+      ],
+      "build": {
+        "artifacts": {
+          "repetition.ir": "57145b35a1d5221923ee7eaec159fb26e6faa7fac6c36ecbab15302b6a4ba80a",
+          "repetition.opt.ir": "01fa3c40d1f333ff46f348719ab27926d4eba83ad0e16eb1563b823f083fe7f1",
+          "repetition.v": "3bf68b658e2de937c9d2a25806f8aa5d65e4b6274e5d917b879edac29d6e7f73"
+        },
+        "assets": {
+          "hls_1r1w_ram.v": "13e12a7561df37e150c3e727c43f9e5234b74bb9741fc969185c12948b2583e8",
+          "phi_repetition_top.v": "ba01e45a79d9f4876abcda106c247b4de1b28804701480fe3704eebd9fced1e2"
+        },
+        "line_cells": 3,
+        "options": {
+          "codegen": [
+            "--pipeline_stages=2",
+            "--delay_model=unit",
+            "--flop_inputs=false",
+            "--flop_outputs=true",
+            "--use_system_verilog=false",
+            "--reset=reset",
+            "--fifo_module=",
+            "--worst_case_throughput=1",
+            "--ram_configurations=scheduler_0_state:1R1W:_scheduler_0_ram_read_req_out:_scheduler_0_ram_read_resp_in:_scheduler_0_ram_write_req_out:_scheduler_0_ram_write_resp_in,scheduler_0_mailbox:1R1W:_scheduler_0_mailbox_read_req_out:_scheduler_0_mailbox_read_resp_in:_scheduler_0_mailbox_write_req_out:_scheduler_0_mailbox_write_resp_in,scheduler_1_state:1R1W:_scheduler_1_ram_read_req_out:_scheduler_1_ram_read_resp_in:_scheduler_1_ram_write_req_out:_scheduler_1_ram_write_resp_in,scheduler_1_mailbox:1R1W:_scheduler_1_mailbox_read_req_out:_scheduler_1_mailbox_read_resp_in:_scheduler_1_mailbox_write_req_out:_scheduler_1_mailbox_write_resp_in,scheduler_2_state:1R1W:_scheduler_2_ram_read_req_out:_scheduler_2_ram_read_resp_in:_scheduler_2_ram_write_req_out:_scheduler_2_ram_write_resp_in,scheduler_2_mailbox:1R1W:_scheduler_2_mailbox_read_req_out:_scheduler_2_mailbox_read_resp_in:_scheduler_2_mailbox_write_req_out:_scheduler_2_mailbox_write_resp_in"
+          ],
+          "top": "Top"
+        },
+        "recipe": 1,
+        "rtl": {
+          "hls_1r1w_ram.v": "13e12a7561df37e150c3e727c43f9e5234b74bb9741fc969185c12948b2583e8",
+          "phi_repetition_top.v": "ba01e45a79d9f4876abcda106c247b4de1b28804701480fe3704eebd9fced1e2",
+          "repetition.v": "3bf68b658e2de937c9d2a25806f8aa5d65e4b6274e5d917b879edac29d6e7f73"
+        },
+        "schema": 1,
+        "sources": {
+          "arbitration.x": "5bfd061e68339cbf9788a40d9881b38bda2691a7f095500f806aba5ce8b2a79f",
+          "axis.x": "882c944ca4faa43c164225f230b3530e3b318f496ad6fc57c42619cb7e3a4d93",
+          "bram.x": "fea8277109e4847e45bb388eaae6236abf35a3f75f3558de1ed8b53f08fcd6bb",
+          "direct_mailbox_observation.x": "74b51d253146d257ddd354dea39da7c5adf90acee770ab086c9c9c24ae041b91",
+          "effect_window.x": "a43b66b52a73dd812cda83f1ef216aaa3c48550672c1a6d00663b5cdaab81586",
+          "frame_queue.x": "8e2d1d3daf12ba3cb739d8e577603409f73f490a12194367073a4b2ee0256359",
+          "frame_transport.x": "941fe8dd53cc9638c6cec48c99e06f9a4a7fc5471c3dc1877763415ac8226932",
+          "hls_bits.x": "ffcf2588f8d7ad58857f353b4e1480f286c2e718041868da6af99d7dbacf995b",
+          "hls_fabric_router.x": "03607387d441240b92841b7ecbd41803a7234b9d89e1beaddda414bb9b006f3b",
+          "hls_failure.x": "f69235cb3d7bc49b09c65961f13e87003ebde5eb41d55b9bccf1427d620909c8",
+          "hls_fixed.x": "f8506dde6299d8b080012d78605d1a4a0b5d51647da8da106388351ce6a0aea9",
+          "hls_float.x": "1882c965143004e7dd70cac139cf1ee41d17199f0877e374a280cebfb6204c26",
+          "hls_integer.x": "9c219da378cd0f2346f216060b213fa6249c1917d1e69a0086ed1f6cce364c00",
+          "hls_lists.x": "dbee03cead923041238b3e09760421ea5be815c78ba737e0366251cbc6e31065",
+          "hls_patterns.x": "ae1d294c976cc1360ced8b1850f45f4ec43932b078b4339b5ec543ae9a5ced7c",
+          "hls_reply.x": "8b238d80ebd67046b0b8cd946eb7d6edc68074c13a05a00770f26f4437e5f7b1",
+          "hls_serial.x": "02ab9208f1e1d0e9a1b968d81db039be42a90d8e503ca783813b70cbfb7a0ff0",
+          "hls_server.x": "9ea16959a9fc504c3f26f67d1e308e01014573c2220b57f290add8591b4c743c",
+          "hls_spatial_router.x": "3cca4008525b6831a825db8af3286df5b3d28f06bb6c505f75e06fb0fc42b6f5",
+          "hls_vec.x": "c66c888c606ce7bc3e7b1c526cd1216e571f23fc6712f719df14dc6f5d82e5e6",
+          "mailbox.x": "4e79a78b2996de6ecf4b0cecf25c84705a743ac6dfc430c0c29d13302c9b61f8",
+          "phenom_line_data_cell.x": "2569255abac1be43b5e68cd43f76f8f748b28191f44743bcb560854299e2ed4e",
+          "phenom_line_syndrome_cell.x": "df769771947bed01c8da437853188171fb05c0087c3cb9c8f70827b490a9751e",
+          "phi_field.x": "d6ed59cab9c79271cc5680ad802fbf8f6bac8c72988d8c1d6b980e133bb7d750",
+          "phi_line_cell.x": "73c23cbebd4a1afd0a6b88a6fc7d5f69ba7e738760d1e45f08a4c92d1b12b8a6",
+          "phi_repetition_topology.x": "46fddc0fc9ab95fb696e16b05df6fda4cd453d64dc1c659eb05c1f43878bf31b",
+          "scheduler.x": "18aeeae94e6e3c0b63e69521c13073a0e335d2e227b6935fb78f80550fe3e802",
+          "scheduler_observation.x": "7c01db596893e73678cb6eb220430127d4d2235ed09eebf530ca0efb778d8263"
+        },
+        "stages": {
+          "codegen": "9c3ddd03fc3b5cf245fccf32905d8dc8cd798ecdbaecc014744dece44d685b10",
+          "ir": "91f80e3eb885fd09f4d6886b6f4f6ac5d917842e61d94b3a9c51a0646592b3a0",
+          "opt": "980af938c70dd0f6375a90bf829f0e61b0bf3f5a38e53c3e7aa4bc7923565026"
+        },
+        "stdlib": {
+          "xls/dslx/stdlib/abs_diff.x": "9006b878c3762aeea72bc42be9a012cd0c050a78364a1c09ea4f547e06059eae",
+          "xls/dslx/stdlib/acm_random.x": "47093ca764f983b34adaeb0f694b2a3b711815eb8beeba656d3a39ed157f7ac7",
+          "xls/dslx/stdlib/apfloat.x": "5bbc79dd7842baa26ae467f5a9240ab98a5f5776b4749eb4e73dd1171b8bae8d",
+          "xls/dslx/stdlib/bfloat16.x": "c810ed761142c429a68f0b80559b92c6cbfe087ccd11bead091151d2ff49ee37",
+          "xls/dslx/stdlib/fixed_point.x": "20aede1704d2cdbe515de083d05cb44c8d279aac5fcf5f52d7dc768193d1c631",
+          "xls/dslx/stdlib/float32.x": "2dbc3bd4c5045fb1b8765b293457d6cca1ba338ca1bd5763b2957d11b0a7d84a",
+          "xls/dslx/stdlib/float64.x": "186e40914bdcd0be7c478e6c85204cfa9858b660a8a1dcfffab20e3e4d1ba071",
+          "xls/dslx/stdlib/float_instances.x": "4c89968e94e045c51c354b8f18507f727b0b85b8dcd01b0af69db25314f314cd",
+          "xls/dslx/stdlib/hfloat16.x": "767b0b70354aa15437f689898a0dd168eba47161e999382adcbdc150b6df4243",
+          "xls/dslx/stdlib/lza.x": "6717f61514829d52e9ead876d42e5dc33cd0c48069506137bb2a1dee98b066ac",
+          "xls/dslx/stdlib/round.x": "ac1093df45b238fb0cf867010a9887856d6cf380d17cb5b61c69a47af77c89a0",
+          "xls/dslx/stdlib/std.x": "888583e31552728f6f594c9bb454173b5d8a2d55df2acdee0bd4e2e15d7f1ffa",
+          "xls/dslx/stdlib/tests/float32_downcast_test.x": "20e81a55ba42a7849b2ac274811e4bb457a8b2eb501f4b304b543925e80fe0ab",
+          "xls/dslx/stdlib/tests/float32_upcast_test.x": "dbff7cea87d189c915623e1d4d4274049e7a5779d7b03060e91201073da27b54",
+          "xls/dslx/stdlib/tests/round_tests.x": "5f9b66ad008155f4829db2424f34cc125363f80a789d4057c1433d56fa05632b",
+          "xls/dslx/stdlib/tests/umul_instances.x": "06f7b95e669477fc30e86f9e1d32637b09cfe1fa8f9cb8ea4b351645c1b1bc91"
+        },
+        "tools": {
+          "codegen_main": "49340600bd30077165a8e2c8e6aa3f3faa66faf9adc92ae050ace138d2c7b23a",
+          "ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+          "opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c"
+        }
+      },
+      "event_witnesses": {
+        "stalled-0": "410f98ef365756c75443c81bddf14987b5ccaea365a20999de8e303f1edd71e8",
+        "stalled-1": "410f98ef365756c75443c81bddf14987b5ccaea365a20999de8e303f1edd71e8"
+      },
+      "mapping": {
+        "LUT": 24468,
+        "LUT_logic": 24468,
+        "LUT_RAM": 0,
+        "FF": 16390,
+        "RAMB18": 37,
+        "RAMB36": 6,
+        "DSP": 0,
+        "CARRY4": 426,
+        "inputs": {
+          "rtl/hls_1r1w_ram.v": "13e12a7561df37e150c3e727c43f9e5234b74bb9741fc969185c12948b2583e8",
+          "rtl/phi_repetition_top.v": "ba01e45a79d9f4876abcda106c247b4de1b28804701480fe3704eebd9fced1e2",
+          "rtl/repetition.v": "3bf68b658e2de937c9d2a25806f8aa5d65e4b6274e5d917b879edac29d6e7f73",
+          "yosys-package/BUILD-INFO.json": "b509fbcf8adf9e4f8359d8c89ed179bacb3aa7c9557d830ba80936b907c3db85",
+          "yosys-package/bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+          "yosys-package/libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+          "yosys-package/libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d"
+        },
+        "outputs": {
+          "map.log": "7e9d7905ca257e1a6fb3a36899d80b35780bd640f77acf6ae4c7864868d4d82e",
+          "stat.json": "9f692b70cf2d33a4fe8ba7ea3c8afaf61addd1b404c0f61f27b7033a21a6a642"
+        },
+        "recipe": "synth_xilinx -flatten -abc9 -family xc7 -noiopad -noclkbuf -top phi_repetition_top"
+      },
+      "general_selector_reference": {
+        "mapping": {
+          "LUT": 24154,
+          "LUT_logic": 24154,
+          "LUT_RAM": 0,
+          "FF": 16401,
+          "RAMB18": 37,
+          "RAMB36": 6,
+          "DSP": 4,
+          "CARRY4": 428,
+          "inputs": {
+            "rtl/repetition.v": "505039add73a6485e666ef6687acfeccf8a8bab7cb5ee11ba9d9aaf258851dd8",
+            "rtl/phi_repetition_top.v": "ba01e45a79d9f4876abcda106c247b4de1b28804701480fe3704eebd9fced1e2",
+            "rtl/hls_1r1w_ram.v": "13e12a7561df37e150c3e727c43f9e5234b74bb9741fc969185c12948b2583e8",
+            "yosys-package/bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+            "yosys-package/BUILD-INFO.json": "b509fbcf8adf9e4f8359d8c89ed179bacb3aa7c9557d830ba80936b907c3db85",
+            "yosys-package/libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+            "yosys-package/libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d"
+          },
+          "outputs": {
+            "stat.json": "197c80c141198e646c99fe6c6274d382e737bb7a944ae55c9f7899a08db01c9d",
+            "map.log": "4872d7095d5e9860d9b4da6666529bfe23c8a78a32ec1f1b5d6c35ffdddd1535"
+          },
+          "recipe": "synth_xilinx -flatten -abc9 -family xc7 -noiopad -noclkbuf -top phi_repetition_top"
+        },
+        "simulations": [
+          {
+            "stalled": false,
+            "events": 121,
+            "cycles_per_step": 123.416667
+          },
+          {
+            "stalled": true,
+            "events": 121,
+            "cycles_per_step": 123.875
+          }
+        ],
+        "build": {
+          "artifacts": {
+            "repetition.ir": "8b40ba209f696e3a5dd160a7df4e8418271f4976af391ec03d1a946dcff130f3",
+            "repetition.opt.ir": "1128e24b299db3e0c3cbf69ccba3e96387b0eead7e027071eda67dbe00eed85a",
+            "repetition.v": "505039add73a6485e666ef6687acfeccf8a8bab7cb5ee11ba9d9aaf258851dd8"
+          },
+          "assets": {
+            "hls_1r1w_ram.v": "13e12a7561df37e150c3e727c43f9e5234b74bb9741fc969185c12948b2583e8",
+            "phi_repetition_top.v": "ba01e45a79d9f4876abcda106c247b4de1b28804701480fe3704eebd9fced1e2"
+          },
+          "line_cells": 3,
+          "options": {
+            "codegen": [
+              "--pipeline_stages=2",
+              "--delay_model=unit",
+              "--flop_inputs=false",
+              "--flop_outputs=true",
+              "--use_system_verilog=false",
+              "--reset=reset",
+              "--fifo_module=",
+              "--worst_case_throughput=1",
+              "--ram_configurations=scheduler_0_state:1R1W:_scheduler_0_ram_read_req_out:_scheduler_0_ram_read_resp_in:_scheduler_0_ram_write_req_out:_scheduler_0_ram_write_resp_in,scheduler_0_mailbox:1R1W:_scheduler_0_mailbox_read_req_out:_scheduler_0_mailbox_read_resp_in:_scheduler_0_mailbox_write_req_out:_scheduler_0_mailbox_write_resp_in,scheduler_1_state:1R1W:_scheduler_1_ram_read_req_out:_scheduler_1_ram_read_resp_in:_scheduler_1_ram_write_req_out:_scheduler_1_ram_write_resp_in,scheduler_1_mailbox:1R1W:_scheduler_1_mailbox_read_req_out:_scheduler_1_mailbox_read_resp_in:_scheduler_1_mailbox_write_req_out:_scheduler_1_mailbox_write_resp_in,scheduler_2_state:1R1W:_scheduler_2_ram_read_req_out:_scheduler_2_ram_read_resp_in:_scheduler_2_ram_write_req_out:_scheduler_2_ram_write_resp_in,scheduler_2_mailbox:1R1W:_scheduler_2_mailbox_read_req_out:_scheduler_2_mailbox_read_resp_in:_scheduler_2_mailbox_write_req_out:_scheduler_2_mailbox_write_resp_in"
+            ],
+            "top": "Top"
+          },
+          "recipe": 1,
+          "rtl": {
+            "hls_1r1w_ram.v": "13e12a7561df37e150c3e727c43f9e5234b74bb9741fc969185c12948b2583e8",
+            "phi_repetition_top.v": "ba01e45a79d9f4876abcda106c247b4de1b28804701480fe3704eebd9fced1e2",
+            "repetition.v": "505039add73a6485e666ef6687acfeccf8a8bab7cb5ee11ba9d9aaf258851dd8"
+          },
+          "schema": 1,
+          "sources": {
+            "arbitration.x": "5bfd061e68339cbf9788a40d9881b38bda2691a7f095500f806aba5ce8b2a79f",
+            "axis.x": "882c944ca4faa43c164225f230b3530e3b318f496ad6fc57c42619cb7e3a4d93",
+            "bram.x": "fea8277109e4847e45bb388eaae6236abf35a3f75f3558de1ed8b53f08fcd6bb",
+            "direct_mailbox_observation.x": "74b51d253146d257ddd354dea39da7c5adf90acee770ab086c9c9c24ae041b91",
+            "effect_window.x": "a43b66b52a73dd812cda83f1ef216aaa3c48550672c1a6d00663b5cdaab81586",
+            "frame_queue.x": "8e2d1d3daf12ba3cb739d8e577603409f73f490a12194367073a4b2ee0256359",
+            "frame_transport.x": "941fe8dd53cc9638c6cec48c99e06f9a4a7fc5471c3dc1877763415ac8226932",
+            "hls_bits.x": "ffcf2588f8d7ad58857f353b4e1480f286c2e718041868da6af99d7dbacf995b",
+            "hls_fabric_router.x": "03607387d441240b92841b7ecbd41803a7234b9d89e1beaddda414bb9b006f3b",
+            "hls_failure.x": "f69235cb3d7bc49b09c65961f13e87003ebde5eb41d55b9bccf1427d620909c8",
+            "hls_fixed.x": "f8506dde6299d8b080012d78605d1a4a0b5d51647da8da106388351ce6a0aea9",
+            "hls_float.x": "1882c965143004e7dd70cac139cf1ee41d17199f0877e374a280cebfb6204c26",
+            "hls_integer.x": "9c219da378cd0f2346f216060b213fa6249c1917d1e69a0086ed1f6cce364c00",
+            "hls_lists.x": "dbee03cead923041238b3e09760421ea5be815c78ba737e0366251cbc6e31065",
+            "hls_patterns.x": "ae1d294c976cc1360ced8b1850f45f4ec43932b078b4339b5ec543ae9a5ced7c",
+            "hls_reply.x": "8b238d80ebd67046b0b8cd946eb7d6edc68074c13a05a00770f26f4437e5f7b1",
+            "hls_serial.x": "02ab9208f1e1d0e9a1b968d81db039be42a90d8e503ca783813b70cbfb7a0ff0",
+            "hls_server.x": "9ea16959a9fc504c3f26f67d1e308e01014573c2220b57f290add8591b4c743c",
+            "hls_spatial_router.x": "3cca4008525b6831a825db8af3286df5b3d28f06bb6c505f75e06fb0fc42b6f5",
+            "hls_vec.x": "c66c888c606ce7bc3e7b1c526cd1216e571f23fc6712f719df14dc6f5d82e5e6",
+            "mailbox.x": "4e79a78b2996de6ecf4b0cecf25c84705a743ac6dfc430c0c29d13302c9b61f8",
+            "phenom_line_data_cell.x": "2569255abac1be43b5e68cd43f76f8f748b28191f44743bcb560854299e2ed4e",
+            "phenom_line_syndrome_cell.x": "df769771947bed01c8da437853188171fb05c0087c3cb9c8f70827b490a9751e",
+            "phi_field.x": "d6ed59cab9c79271cc5680ad802fbf8f6bac8c72988d8c1d6b980e133bb7d750",
+            "phi_line_cell.x": "d4fd36ffd6eee3a7d9b387ae2a634a59c91512d59a03207275ce8c560aaacde1",
+            "phi_repetition_topology.x": "46fddc0fc9ab95fb696e16b05df6fda4cd453d64dc1c659eb05c1f43878bf31b",
+            "scheduler.x": "18aeeae94e6e3c0b63e69521c13073a0e335d2e227b6935fb78f80550fe3e802",
+            "scheduler_observation.x": "7c01db596893e73678cb6eb220430127d4d2235ed09eebf530ca0efb778d8263"
+          },
+          "stages": {
+            "codegen": "14bd12868cde9af85f1fd15bd0079c828961edf9128dd53a7da0fdc4cd902493",
+            "ir": "c02756c3bc1e150d16601d335f97d7f7d320b742d2cbbcabd22588408193b551",
+            "opt": "790108192d244eb7f760bb209bfbf822a0f1502048327403e05d3ba9dddb8abe"
+          },
+          "stdlib": {
+            "xls/dslx/stdlib/abs_diff.x": "9006b878c3762aeea72bc42be9a012cd0c050a78364a1c09ea4f547e06059eae",
+            "xls/dslx/stdlib/acm_random.x": "47093ca764f983b34adaeb0f694b2a3b711815eb8beeba656d3a39ed157f7ac7",
+            "xls/dslx/stdlib/apfloat.x": "5bbc79dd7842baa26ae467f5a9240ab98a5f5776b4749eb4e73dd1171b8bae8d",
+            "xls/dslx/stdlib/bfloat16.x": "c810ed761142c429a68f0b80559b92c6cbfe087ccd11bead091151d2ff49ee37",
+            "xls/dslx/stdlib/fixed_point.x": "20aede1704d2cdbe515de083d05cb44c8d279aac5fcf5f52d7dc768193d1c631",
+            "xls/dslx/stdlib/float32.x": "2dbc3bd4c5045fb1b8765b293457d6cca1ba338ca1bd5763b2957d11b0a7d84a",
+            "xls/dslx/stdlib/float64.x": "186e40914bdcd0be7c478e6c85204cfa9858b660a8a1dcfffab20e3e4d1ba071",
+            "xls/dslx/stdlib/float_instances.x": "4c89968e94e045c51c354b8f18507f727b0b85b8dcd01b0af69db25314f314cd",
+            "xls/dslx/stdlib/hfloat16.x": "767b0b70354aa15437f689898a0dd168eba47161e999382adcbdc150b6df4243",
+            "xls/dslx/stdlib/lza.x": "6717f61514829d52e9ead876d42e5dc33cd0c48069506137bb2a1dee98b066ac",
+            "xls/dslx/stdlib/round.x": "ac1093df45b238fb0cf867010a9887856d6cf380d17cb5b61c69a47af77c89a0",
+            "xls/dslx/stdlib/std.x": "888583e31552728f6f594c9bb454173b5d8a2d55df2acdee0bd4e2e15d7f1ffa",
+            "xls/dslx/stdlib/tests/float32_downcast_test.x": "20e81a55ba42a7849b2ac274811e4bb457a8b2eb501f4b304b543925e80fe0ab",
+            "xls/dslx/stdlib/tests/float32_upcast_test.x": "dbff7cea87d189c915623e1d4d4274049e7a5779d7b03060e91201073da27b54",
+            "xls/dslx/stdlib/tests/round_tests.x": "5f9b66ad008155f4829db2424f34cc125363f80a789d4057c1433d56fa05632b",
+            "xls/dslx/stdlib/tests/umul_instances.x": "06f7b95e669477fc30e86f9e1d32637b09cfe1fa8f9cb8ea4b351645c1b1bc91"
+          },
+          "tools": {
+            "codegen_main": "49340600bd30077165a8e2c8e6aa3f3faa66faf9adc92ae050ace138d2c7b23a",
+            "ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+            "opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c"
+          }
+        }
+      }
+    },
+    "n8": {
+      "cells": 8,
+      "physical_qubits": 16,
+      "actors": 24,
+      "simulations": [
+        {
+          "stalled": false,
+          "events": 333,
+          "cycles_per_step": 250.208333
+        },
+        {
+          "stalled": true,
+          "events": 333,
+          "cycles_per_step": 253.458333
+        }
+      ],
+      "build": {
+        "artifacts": {
+          "repetition.ir": "6dfb883684b9456d241479884876211b63abc67286c59e67f119367470f275e9",
+          "repetition.opt.ir": "c66fca6fc50d440ecfc53b014da96e1356009a58a0247178faf4c810350ee143",
+          "repetition.v": "cca27a1305bde1f3a9a2f400935e7c26d231faa4c2f26c760687e5500f526552"
+        },
+        "assets": {
+          "hls_1r1w_ram.v": "13e12a7561df37e150c3e727c43f9e5234b74bb9741fc969185c12948b2583e8",
+          "phi_repetition_top.v": "2f22747f63cd254f8c8d4c5c71059c4920cb6f81c8a36f74cdf8c105eadc4dd5"
+        },
+        "line_cells": 8,
+        "options": {
+          "codegen": [
+            "--pipeline_stages=2",
+            "--delay_model=unit",
+            "--flop_inputs=false",
+            "--flop_outputs=true",
+            "--use_system_verilog=false",
+            "--reset=reset",
+            "--fifo_module=",
+            "--worst_case_throughput=1",
+            "--ram_configurations=scheduler_0_state:1R1W:_scheduler_0_ram_read_req_out:_scheduler_0_ram_read_resp_in:_scheduler_0_ram_write_req_out:_scheduler_0_ram_write_resp_in,scheduler_0_mailbox:1R1W:_scheduler_0_mailbox_read_req_out:_scheduler_0_mailbox_read_resp_in:_scheduler_0_mailbox_write_req_out:_scheduler_0_mailbox_write_resp_in,scheduler_1_state:1R1W:_scheduler_1_ram_read_req_out:_scheduler_1_ram_read_resp_in:_scheduler_1_ram_write_req_out:_scheduler_1_ram_write_resp_in,scheduler_1_mailbox:1R1W:_scheduler_1_mailbox_read_req_out:_scheduler_1_mailbox_read_resp_in:_scheduler_1_mailbox_write_req_out:_scheduler_1_mailbox_write_resp_in,scheduler_2_state:1R1W:_scheduler_2_ram_read_req_out:_scheduler_2_ram_read_resp_in:_scheduler_2_ram_write_req_out:_scheduler_2_ram_write_resp_in,scheduler_2_mailbox:1R1W:_scheduler_2_mailbox_read_req_out:_scheduler_2_mailbox_read_resp_in:_scheduler_2_mailbox_write_req_out:_scheduler_2_mailbox_write_resp_in"
+          ],
+          "top": "Top"
+        },
+        "recipe": 1,
+        "rtl": {
+          "hls_1r1w_ram.v": "13e12a7561df37e150c3e727c43f9e5234b74bb9741fc969185c12948b2583e8",
+          "phi_repetition_top.v": "2f22747f63cd254f8c8d4c5c71059c4920cb6f81c8a36f74cdf8c105eadc4dd5",
+          "repetition.v": "cca27a1305bde1f3a9a2f400935e7c26d231faa4c2f26c760687e5500f526552"
+        },
+        "schema": 1,
+        "sources": {
+          "arbitration.x": "5bfd061e68339cbf9788a40d9881b38bda2691a7f095500f806aba5ce8b2a79f",
+          "axis.x": "882c944ca4faa43c164225f230b3530e3b318f496ad6fc57c42619cb7e3a4d93",
+          "bram.x": "fea8277109e4847e45bb388eaae6236abf35a3f75f3558de1ed8b53f08fcd6bb",
+          "direct_mailbox_observation.x": "74b51d253146d257ddd354dea39da7c5adf90acee770ab086c9c9c24ae041b91",
+          "effect_window.x": "a43b66b52a73dd812cda83f1ef216aaa3c48550672c1a6d00663b5cdaab81586",
+          "frame_queue.x": "8e2d1d3daf12ba3cb739d8e577603409f73f490a12194367073a4b2ee0256359",
+          "frame_transport.x": "941fe8dd53cc9638c6cec48c99e06f9a4a7fc5471c3dc1877763415ac8226932",
+          "hls_bits.x": "ffcf2588f8d7ad58857f353b4e1480f286c2e718041868da6af99d7dbacf995b",
+          "hls_fabric_router.x": "03607387d441240b92841b7ecbd41803a7234b9d89e1beaddda414bb9b006f3b",
+          "hls_failure.x": "f69235cb3d7bc49b09c65961f13e87003ebde5eb41d55b9bccf1427d620909c8",
+          "hls_fixed.x": "f8506dde6299d8b080012d78605d1a4a0b5d51647da8da106388351ce6a0aea9",
+          "hls_float.x": "1882c965143004e7dd70cac139cf1ee41d17199f0877e374a280cebfb6204c26",
+          "hls_integer.x": "9c219da378cd0f2346f216060b213fa6249c1917d1e69a0086ed1f6cce364c00",
+          "hls_lists.x": "dbee03cead923041238b3e09760421ea5be815c78ba737e0366251cbc6e31065",
+          "hls_patterns.x": "ae1d294c976cc1360ced8b1850f45f4ec43932b078b4339b5ec543ae9a5ced7c",
+          "hls_reply.x": "8b238d80ebd67046b0b8cd946eb7d6edc68074c13a05a00770f26f4437e5f7b1",
+          "hls_serial.x": "02ab9208f1e1d0e9a1b968d81db039be42a90d8e503ca783813b70cbfb7a0ff0",
+          "hls_server.x": "9ea16959a9fc504c3f26f67d1e308e01014573c2220b57f290add8591b4c743c",
+          "hls_spatial_router.x": "3cca4008525b6831a825db8af3286df5b3d28f06bb6c505f75e06fb0fc42b6f5",
+          "hls_vec.x": "c66c888c606ce7bc3e7b1c526cd1216e571f23fc6712f719df14dc6f5d82e5e6",
+          "mailbox.x": "4e79a78b2996de6ecf4b0cecf25c84705a743ac6dfc430c0c29d13302c9b61f8",
+          "phenom_line_data_cell.x": "2569255abac1be43b5e68cd43f76f8f748b28191f44743bcb560854299e2ed4e",
+          "phenom_line_syndrome_cell.x": "df769771947bed01c8da437853188171fb05c0087c3cb9c8f70827b490a9751e",
+          "phi_field.x": "d6ed59cab9c79271cc5680ad802fbf8f6bac8c72988d8c1d6b980e133bb7d750",
+          "phi_line_cell.x": "73c23cbebd4a1afd0a6b88a6fc7d5f69ba7e738760d1e45f08a4c92d1b12b8a6",
+          "phi_repetition_topology.x": "6aa5b2fe931e6fd60b373aa9037b559f83f9703d57b56088b865bfa87767609f",
+          "scheduler.x": "18aeeae94e6e3c0b63e69521c13073a0e335d2e227b6935fb78f80550fe3e802",
+          "scheduler_observation.x": "7c01db596893e73678cb6eb220430127d4d2235ed09eebf530ca0efb778d8263"
+        },
+        "stages": {
+          "codegen": "4fc54424851fd2aeaa9d0e5c335eddb62f9df0283fdb172a4d7cbea0a75e9d01",
+          "ir": "d9462a3fe3166f852cdd8d390c2bf0cab2053e348bcc39a18f0197d6c12297cf",
+          "opt": "5384885730ef6c5b4f88fc71b465e9f83eeb51966826e28af58930c8bd7218d9"
+        },
+        "stdlib": {
+          "xls/dslx/stdlib/abs_diff.x": "9006b878c3762aeea72bc42be9a012cd0c050a78364a1c09ea4f547e06059eae",
+          "xls/dslx/stdlib/acm_random.x": "47093ca764f983b34adaeb0f694b2a3b711815eb8beeba656d3a39ed157f7ac7",
+          "xls/dslx/stdlib/apfloat.x": "5bbc79dd7842baa26ae467f5a9240ab98a5f5776b4749eb4e73dd1171b8bae8d",
+          "xls/dslx/stdlib/bfloat16.x": "c810ed761142c429a68f0b80559b92c6cbfe087ccd11bead091151d2ff49ee37",
+          "xls/dslx/stdlib/fixed_point.x": "20aede1704d2cdbe515de083d05cb44c8d279aac5fcf5f52d7dc768193d1c631",
+          "xls/dslx/stdlib/float32.x": "2dbc3bd4c5045fb1b8765b293457d6cca1ba338ca1bd5763b2957d11b0a7d84a",
+          "xls/dslx/stdlib/float64.x": "186e40914bdcd0be7c478e6c85204cfa9858b660a8a1dcfffab20e3e4d1ba071",
+          "xls/dslx/stdlib/float_instances.x": "4c89968e94e045c51c354b8f18507f727b0b85b8dcd01b0af69db25314f314cd",
+          "xls/dslx/stdlib/hfloat16.x": "767b0b70354aa15437f689898a0dd168eba47161e999382adcbdc150b6df4243",
+          "xls/dslx/stdlib/lza.x": "6717f61514829d52e9ead876d42e5dc33cd0c48069506137bb2a1dee98b066ac",
+          "xls/dslx/stdlib/round.x": "ac1093df45b238fb0cf867010a9887856d6cf380d17cb5b61c69a47af77c89a0",
+          "xls/dslx/stdlib/std.x": "888583e31552728f6f594c9bb454173b5d8a2d55df2acdee0bd4e2e15d7f1ffa",
+          "xls/dslx/stdlib/tests/float32_downcast_test.x": "20e81a55ba42a7849b2ac274811e4bb457a8b2eb501f4b304b543925e80fe0ab",
+          "xls/dslx/stdlib/tests/float32_upcast_test.x": "dbff7cea87d189c915623e1d4d4274049e7a5779d7b03060e91201073da27b54",
+          "xls/dslx/stdlib/tests/round_tests.x": "5f9b66ad008155f4829db2424f34cc125363f80a789d4057c1433d56fa05632b",
+          "xls/dslx/stdlib/tests/umul_instances.x": "06f7b95e669477fc30e86f9e1d32637b09cfe1fa8f9cb8ea4b351645c1b1bc91"
+        },
+        "tools": {
+          "codegen_main": "49340600bd30077165a8e2c8e6aa3f3faa66faf9adc92ae050ace138d2c7b23a",
+          "ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+          "opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c"
+        }
+      },
+      "event_witnesses": {
+        "stalled-0": "02a28e69791e70be8448954ef4e26c1c9ed2b7c87effdce0ccd3520268be97d2",
+        "stalled-1": "02a28e69791e70be8448954ef4e26c1c9ed2b7c87effdce0ccd3520268be97d2"
+      },
+      "mapping": {
+        "LUT": 34396,
+        "LUT_logic": 34396,
+        "LUT_RAM": 0,
+        "FF": 20229,
+        "RAMB18": 37,
+        "RAMB36": 6,
+        "DSP": 0,
+        "CARRY4": 465,
+        "inputs": {
+          "rtl/hls_1r1w_ram.v": "13e12a7561df37e150c3e727c43f9e5234b74bb9741fc969185c12948b2583e8",
+          "rtl/phi_repetition_top.v": "2f22747f63cd254f8c8d4c5c71059c4920cb6f81c8a36f74cdf8c105eadc4dd5",
+          "rtl/repetition.v": "cca27a1305bde1f3a9a2f400935e7c26d231faa4c2f26c760687e5500f526552",
+          "yosys-package/BUILD-INFO.json": "b509fbcf8adf9e4f8359d8c89ed179bacb3aa7c9557d830ba80936b907c3db85",
+          "yosys-package/bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+          "yosys-package/libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+          "yosys-package/libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d"
+        },
+        "outputs": {
+          "map.log": "5359df45e008bc396f3931cf01c61bc055a645287440c039f7e1662f3dceb301",
+          "stat.json": "4c0bbab7c2e75c6a47373f13adcedd9c6b6136ecd874d1ad4488823bfd6fa52a"
+        },
+        "recipe": "synth_xilinx -flatten -abc9 -family xc7 -noiopad -noclkbuf -top phi_repetition_top"
+      },
+      "general_selector_reference": {
+        "mapping": {
+          "LUT": 34522,
+          "LUT_logic": 34522,
+          "LUT_RAM": 0,
+          "FF": 20240,
+          "RAMB18": 37,
+          "RAMB36": 6,
+          "DSP": 4,
+          "CARRY4": 473,
+          "inputs": {
+            "rtl/repetition.v": "e17defd6e3fb26022c1ddb6806c75dd545e46c627ff3bc22397489930cecaed3",
+            "rtl/phi_repetition_top.v": "2f22747f63cd254f8c8d4c5c71059c4920cb6f81c8a36f74cdf8c105eadc4dd5",
+            "rtl/hls_1r1w_ram.v": "13e12a7561df37e150c3e727c43f9e5234b74bb9741fc969185c12948b2583e8",
+            "yosys-package/bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+            "yosys-package/BUILD-INFO.json": "b509fbcf8adf9e4f8359d8c89ed179bacb3aa7c9557d830ba80936b907c3db85",
+            "yosys-package/libexec/yosys": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+            "yosys-package/libexec/yosys-abc": "cf9809bd3bf66c1c081a9a8ed6ca48c3a1ae729050df6b7860759e8270f31e9d"
+          },
+          "outputs": {
+            "stat.json": "c99b344ffb181c183ec70dd79ed53fff42766a5d2c6446fd0c13044c8d0c3211",
+            "map.log": "38bd4c1c2ced2672c3a719ba8e99d58da477d49049def36f77f7f37ba1aa7588"
+          },
+          "recipe": "synth_xilinx -flatten -abc9 -family xc7 -noiopad -noclkbuf -top phi_repetition_top"
+        },
+        "simulations": [
+          {
+            "stalled": false,
+            "events": 333,
+            "cycles_per_step": 250.208333
+          },
+          {
+            "stalled": true,
+            "events": 333,
+            "cycles_per_step": 253.458333
+          }
+        ],
+        "build": {
+          "artifacts": {
+            "repetition.ir": "c02de8f5c3842f19a56bf643e1dd2eb137c8c544a65cf66298f8598247fdff36",
+            "repetition.opt.ir": "0603c29457789d47242f07d8e536a61b3c49ada9c3c1f5f4a70dc8f6c3625b52",
+            "repetition.v": "e17defd6e3fb26022c1ddb6806c75dd545e46c627ff3bc22397489930cecaed3"
+          },
+          "assets": {
+            "hls_1r1w_ram.v": "13e12a7561df37e150c3e727c43f9e5234b74bb9741fc969185c12948b2583e8",
+            "phi_repetition_top.v": "2f22747f63cd254f8c8d4c5c71059c4920cb6f81c8a36f74cdf8c105eadc4dd5"
+          },
+          "line_cells": 8,
+          "options": {
+            "codegen": [
+              "--pipeline_stages=2",
+              "--delay_model=unit",
+              "--flop_inputs=false",
+              "--flop_outputs=true",
+              "--use_system_verilog=false",
+              "--reset=reset",
+              "--fifo_module=",
+              "--worst_case_throughput=1",
+              "--ram_configurations=scheduler_0_state:1R1W:_scheduler_0_ram_read_req_out:_scheduler_0_ram_read_resp_in:_scheduler_0_ram_write_req_out:_scheduler_0_ram_write_resp_in,scheduler_0_mailbox:1R1W:_scheduler_0_mailbox_read_req_out:_scheduler_0_mailbox_read_resp_in:_scheduler_0_mailbox_write_req_out:_scheduler_0_mailbox_write_resp_in,scheduler_1_state:1R1W:_scheduler_1_ram_read_req_out:_scheduler_1_ram_read_resp_in:_scheduler_1_ram_write_req_out:_scheduler_1_ram_write_resp_in,scheduler_1_mailbox:1R1W:_scheduler_1_mailbox_read_req_out:_scheduler_1_mailbox_read_resp_in:_scheduler_1_mailbox_write_req_out:_scheduler_1_mailbox_write_resp_in,scheduler_2_state:1R1W:_scheduler_2_ram_read_req_out:_scheduler_2_ram_read_resp_in:_scheduler_2_ram_write_req_out:_scheduler_2_ram_write_resp_in,scheduler_2_mailbox:1R1W:_scheduler_2_mailbox_read_req_out:_scheduler_2_mailbox_read_resp_in:_scheduler_2_mailbox_write_req_out:_scheduler_2_mailbox_write_resp_in"
+            ],
+            "top": "Top"
+          },
+          "recipe": 1,
+          "rtl": {
+            "hls_1r1w_ram.v": "13e12a7561df37e150c3e727c43f9e5234b74bb9741fc969185c12948b2583e8",
+            "phi_repetition_top.v": "2f22747f63cd254f8c8d4c5c71059c4920cb6f81c8a36f74cdf8c105eadc4dd5",
+            "repetition.v": "e17defd6e3fb26022c1ddb6806c75dd545e46c627ff3bc22397489930cecaed3"
+          },
+          "schema": 1,
+          "sources": {
+            "arbitration.x": "5bfd061e68339cbf9788a40d9881b38bda2691a7f095500f806aba5ce8b2a79f",
+            "axis.x": "882c944ca4faa43c164225f230b3530e3b318f496ad6fc57c42619cb7e3a4d93",
+            "bram.x": "fea8277109e4847e45bb388eaae6236abf35a3f75f3558de1ed8b53f08fcd6bb",
+            "direct_mailbox_observation.x": "74b51d253146d257ddd354dea39da7c5adf90acee770ab086c9c9c24ae041b91",
+            "effect_window.x": "a43b66b52a73dd812cda83f1ef216aaa3c48550672c1a6d00663b5cdaab81586",
+            "frame_queue.x": "8e2d1d3daf12ba3cb739d8e577603409f73f490a12194367073a4b2ee0256359",
+            "frame_transport.x": "941fe8dd53cc9638c6cec48c99e06f9a4a7fc5471c3dc1877763415ac8226932",
+            "hls_bits.x": "ffcf2588f8d7ad58857f353b4e1480f286c2e718041868da6af99d7dbacf995b",
+            "hls_fabric_router.x": "03607387d441240b92841b7ecbd41803a7234b9d89e1beaddda414bb9b006f3b",
+            "hls_failure.x": "f69235cb3d7bc49b09c65961f13e87003ebde5eb41d55b9bccf1427d620909c8",
+            "hls_fixed.x": "f8506dde6299d8b080012d78605d1a4a0b5d51647da8da106388351ce6a0aea9",
+            "hls_float.x": "1882c965143004e7dd70cac139cf1ee41d17199f0877e374a280cebfb6204c26",
+            "hls_integer.x": "9c219da378cd0f2346f216060b213fa6249c1917d1e69a0086ed1f6cce364c00",
+            "hls_lists.x": "dbee03cead923041238b3e09760421ea5be815c78ba737e0366251cbc6e31065",
+            "hls_patterns.x": "ae1d294c976cc1360ced8b1850f45f4ec43932b078b4339b5ec543ae9a5ced7c",
+            "hls_reply.x": "8b238d80ebd67046b0b8cd946eb7d6edc68074c13a05a00770f26f4437e5f7b1",
+            "hls_serial.x": "02ab9208f1e1d0e9a1b968d81db039be42a90d8e503ca783813b70cbfb7a0ff0",
+            "hls_server.x": "9ea16959a9fc504c3f26f67d1e308e01014573c2220b57f290add8591b4c743c",
+            "hls_spatial_router.x": "3cca4008525b6831a825db8af3286df5b3d28f06bb6c505f75e06fb0fc42b6f5",
+            "hls_vec.x": "c66c888c606ce7bc3e7b1c526cd1216e571f23fc6712f719df14dc6f5d82e5e6",
+            "mailbox.x": "4e79a78b2996de6ecf4b0cecf25c84705a743ac6dfc430c0c29d13302c9b61f8",
+            "phenom_line_data_cell.x": "2569255abac1be43b5e68cd43f76f8f748b28191f44743bcb560854299e2ed4e",
+            "phenom_line_syndrome_cell.x": "df769771947bed01c8da437853188171fb05c0087c3cb9c8f70827b490a9751e",
+            "phi_field.x": "d6ed59cab9c79271cc5680ad802fbf8f6bac8c72988d8c1d6b980e133bb7d750",
+            "phi_line_cell.x": "d4fd36ffd6eee3a7d9b387ae2a634a59c91512d59a03207275ce8c560aaacde1",
+            "phi_repetition_topology.x": "6aa5b2fe931e6fd60b373aa9037b559f83f9703d57b56088b865bfa87767609f",
+            "scheduler.x": "18aeeae94e6e3c0b63e69521c13073a0e335d2e227b6935fb78f80550fe3e802",
+            "scheduler_observation.x": "7c01db596893e73678cb6eb220430127d4d2235ed09eebf530ca0efb778d8263"
+          },
+          "stages": {
+            "codegen": "b0e9e3100d7a53601982ad748239f23a52e3caacfe250a6e35185ceb29a6cc3f",
+            "ir": "d12d7af050ba167fa93010e3b2c740d28ef24e9cc7e1b529d84633e3711218f9",
+            "opt": "8abc794d6d73c78164e6907acd8a3991d67cf5839ce188665a886b42cdf2cae2"
+          },
+          "stdlib": {
+            "xls/dslx/stdlib/abs_diff.x": "9006b878c3762aeea72bc42be9a012cd0c050a78364a1c09ea4f547e06059eae",
+            "xls/dslx/stdlib/acm_random.x": "47093ca764f983b34adaeb0f694b2a3b711815eb8beeba656d3a39ed157f7ac7",
+            "xls/dslx/stdlib/apfloat.x": "5bbc79dd7842baa26ae467f5a9240ab98a5f5776b4749eb4e73dd1171b8bae8d",
+            "xls/dslx/stdlib/bfloat16.x": "c810ed761142c429a68f0b80559b92c6cbfe087ccd11bead091151d2ff49ee37",
+            "xls/dslx/stdlib/fixed_point.x": "20aede1704d2cdbe515de083d05cb44c8d279aac5fcf5f52d7dc768193d1c631",
+            "xls/dslx/stdlib/float32.x": "2dbc3bd4c5045fb1b8765b293457d6cca1ba338ca1bd5763b2957d11b0a7d84a",
+            "xls/dslx/stdlib/float64.x": "186e40914bdcd0be7c478e6c85204cfa9858b660a8a1dcfffab20e3e4d1ba071",
+            "xls/dslx/stdlib/float_instances.x": "4c89968e94e045c51c354b8f18507f727b0b85b8dcd01b0af69db25314f314cd",
+            "xls/dslx/stdlib/hfloat16.x": "767b0b70354aa15437f689898a0dd168eba47161e999382adcbdc150b6df4243",
+            "xls/dslx/stdlib/lza.x": "6717f61514829d52e9ead876d42e5dc33cd0c48069506137bb2a1dee98b066ac",
+            "xls/dslx/stdlib/round.x": "ac1093df45b238fb0cf867010a9887856d6cf380d17cb5b61c69a47af77c89a0",
+            "xls/dslx/stdlib/std.x": "888583e31552728f6f594c9bb454173b5d8a2d55df2acdee0bd4e2e15d7f1ffa",
+            "xls/dslx/stdlib/tests/float32_downcast_test.x": "20e81a55ba42a7849b2ac274811e4bb457a8b2eb501f4b304b543925e80fe0ab",
+            "xls/dslx/stdlib/tests/float32_upcast_test.x": "dbff7cea87d189c915623e1d4d4274049e7a5779d7b03060e91201073da27b54",
+            "xls/dslx/stdlib/tests/round_tests.x": "5f9b66ad008155f4829db2424f34cc125363f80a789d4057c1433d56fa05632b",
+            "xls/dslx/stdlib/tests/umul_instances.x": "06f7b95e669477fc30e86f9e1d32637b09cfe1fa8f9cb8ea4b351645c1b1bc91"
+          },
+          "tools": {
+            "codegen_main": "49340600bd30077165a8e2c8e6aa3f3faa66faf9adc92ae050ace138d2c7b23a",
+            "ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+            "opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c"
+          }
+        }
+      }
+    }
+  }
+}

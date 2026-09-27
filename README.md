@@ -64,6 +64,8 @@ See the
 [generated phi/noise topology](src/examples/phi_decoder/phi_phenom_topology.md) for its
 structure, checks, and current limitations.
 
+A [periodic repetition-code example](docs/repetition-code.md) specializes the same actors to a single line of data qubits and weight-two X checks, with no orthogonal traffic. It includes a complete physical-noise BEAM/RTL witness and an optional XC7 resource measurement.
+
 The remote host and paths can be overridden with `ERL_HLS_REMOTE_HOST`,
 `ERL_HLS_REMOTE_ROOT`, and `ERL_HLS_REMOTE_XLS`.
 
