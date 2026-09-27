@@ -55,6 +55,12 @@ Use matched sources/tools/constraints for each comparison. Start with one seed; 
 
 ## Exact rounded division
 
+`staged_reciprocal.py --stage FRESH --xls XLS --yosys YOSYS` compares the existing signed-37 divide-by-twelve with explicit product/recombination/quotient register boundaries. It compiles separate DSLX stage functions, checks both generated and mapped RTL against independent integer rounding under stalls/reset, and retains resource counts and the longest serial DSP chain. Both wrappers have three enabled cycles of latency and II=1; the reference only delays its whole combinational result. This is a cut-placement control, not a comparison against an optimally scheduled three-stage executor. `-nosrl` matches the complete-core flow.
+
+The candidate keeps its cuts in fabric using `xilinx_dsp.multonly`; the reference keeps ordinary DSP mapping. `--pack-candidate-registers` diagnoses register absorption instead, but still requires mapped simulation to pass. The retained failure reproduces without the arithmetic recombination, so it must be resolved before promoting the packed candidate.
+
+After a successful screen, `staged_reciprocal_native.py --source SCREEN --stage FRESH --yosys YOSYS --nextpnr NEXTPNR --chipdb CHIPDB [--seed 1]` routes both variants through the existing coverage-checked physical workflow at a 5 ns target. It rejects registered DSPs and preserves identical launch/capture boundaries. The `vendor/` corpus also works with `timing_model/batch.py CORPUS timing_model/measure.tcl --period 5 --placement Default`. The isolated divider omits numerator preparation, saturation, actor state, queues and publication; its latency/resource counts must not be presented as whole-application step performance.
+
 For signed width W and a positive non-power-of-two divisor D, choose K = W + ceil(log2 D) and M = ceil(2^K/D). Then `floor((n*M + 2^(K-1))/2^K)` rounds n/D to nearest with ties away from zero.
 
 The positive reciprocal error times any representable n has magnitude strictly below 1/(2D). A non-tie is at least that far from a half integer, so its rounding cannot change. Positive ties round upward; negative ties move just below the half integer and round downward. Power-of-two divisors have zero reciprocal error and use the separate widened signed-bias path. The DSLX product is wide enough to avoid overflow.
