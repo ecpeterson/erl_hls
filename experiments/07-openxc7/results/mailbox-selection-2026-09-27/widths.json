@@ -1,0 +1,268 @@
+{
+  "inputs": {
+    "/Users/ecpeterson/Documents/code/erl_xls/_build/timing-report-repo/experiments/07-openxc7/timing_chains/mailbox_widths.py": "9c45474f391d2a886eee0920c21fb728b23f7303d9436b492ec3855a9f3cb107",
+    "/Users/ecpeterson/Documents/code/erl_xls/_build/timing-report-repo/priv/xls/lib/mailbox.x": "ecb7ef1505afe7fcceb7c5ae09583d4d6cfe4192c66bad3176cc9145e5334c1a",
+    "/Users/ecpeterson/Documents/code/erl_xls/_build/timing-report-repo/test_data/mailbox_refinement.x": "384015c958607ae5f5a5abf61c68ac8fbeaad9247e83ab5c55cddc8d17c0eff9",
+    "/Users/ecpeterson/Documents/code/erl_xls/experiments/07-openxc7/.apio/packages/oss-cad-suite/bin/yosys": "d814ee056e365e9dd72639658d2b49ed2b6640d083079b1ad8901ea48fe43877",
+    "/Users/ecpeterson/Documents/code/erl_hls_worktrees/timing-control-simplification/_build/timing-application/xls/ir_converter_main": "4220e1f9117b1ea9fa3d698d1ba821f8bc522942acb4d5fce4458c3b6d84b10e",
+    "/Users/ecpeterson/Documents/code/erl_hls_worktrees/timing-control-simplification/_build/timing-application/xls/opt_main": "5be09f07e76d43668a04b9afbad5edef119cd9d8d0175cc7000dcb74572b6d5c",
+    "/Users/ecpeterson/Documents/code/erl_hls_worktrees/timing-control-simplification/_build/timing-application/xls/codegen_main": "49340600bd30077165a8e2c8e6aa3f3faa66faf9adc92ae050ace138d2c7b23a"
+  },
+  "results": [
+    {
+      "actors": 2,
+      "depth": 5,
+      "variant": "sequential",
+      "cells": {
+        "CARRY4": 7,
+        "LUT2": 7,
+        "LUT3": 41,
+        "LUT4": 33,
+        "LUT5": 34,
+        "LUT6": 55,
+        "MUXF7": 2,
+        "MUXF8": 1
+      },
+      "luts": 170,
+      "artifacts": {
+        "selector.ir": "446dc7e4384e1945aafbf53e3c75a069b21f8a3123de251beb396fa432c87d17",
+        "map.ys": "bc2a3a993c7c0fcb9d77d4f1a48cb91ecb06a6e490cb18d88ba2ca31d1c87f9a",
+        "selector.ir.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "selector.v.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "selector.opt.ir.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "commands.json": "6beb3ad83318e5b24f434d6c980433b4459e3a2ea1f81b74778144f6f7e3d1aa",
+        "map.log": "ac4e3da0141132939cfab63b587c357204bb3a98aacbe08d8270a8e7655f8b56",
+        "selector.v": "53bb8b3cb31e4c73b27504e9b84b7e2c53172803dbe6d6bc5a9e6df2e0706913",
+        "selector.x": "c06c7ce54897d08463b54da29b60848570e97d1d2960917ebff4a1f962ccc0ce",
+        "stat.json": "8a44d72c024f9db4bb9fda023ef35746549449c25091e1d826ce407b73025914",
+        "selector.opt.ir": "289bcb7bc8be9ad27a1bb79b47b9589d876b74b0f32625d0e6410fb03f33c694"
+      }
+    },
+    {
+      "actors": 2,
+      "depth": 5,
+      "variant": "parallel",
+      "cells": {
+        "CARRY4": 5,
+        "LUT2": 12,
+        "LUT3": 5,
+        "LUT4": 29,
+        "LUT5": 49,
+        "LUT6": 42,
+        "MUXF7": 2
+      },
+      "luts": 137,
+      "artifacts": {
+        "selector.ir": "d1b6d5a6fdd282cca8fa298bb7d8e9fc8364a090de6ce6394dca74412b07a787",
+        "map.ys": "bc2a3a993c7c0fcb9d77d4f1a48cb91ecb06a6e490cb18d88ba2ca31d1c87f9a",
+        "selector.ir.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "selector.v.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "selector.opt.ir.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "commands.json": "5d7f3b20cdfab8114462cb0b282dc68b2e0e2d01f43781609e6800b2133d59f0",
+        "map.log": "e7f78c18f93401d96cb577d64f37cb42d46efc73a8a08c563a810f6d23d18c16",
+        "selector.v": "73f62f60b05e0013de94f338c823647eaedd31bce73d5cab0dba2ea9e88532c5",
+        "selector.x": "1cf5e8cef2c6b21af72c50231f2269d71dad5a13f46f0e04e86f9aef89a980aa",
+        "stat.json": "b7a781eb898fe8d7a4ef70f55773cef4f15683416248530c6b914705b5ba0afb",
+        "selector.opt.ir": "c54f21c90ee99c70354a8dc73b52320b5d7910e66cffb8f96e9057e69a49562f"
+      }
+    },
+    {
+      "actors": 2,
+      "depth": 5,
+      "variant": "parallel-positions",
+      "cells": {
+        "CARRY4": 7,
+        "LUT2": 7,
+        "LUT3": 36,
+        "LUT4": 35,
+        "LUT5": 16,
+        "LUT6": 49,
+        "MUXF7": 2,
+        "MUXF8": 1
+      },
+      "luts": 143,
+      "artifacts": {
+        "selector.ir": "dfb4fbed857c3f6dadc7c43d431238166ecc0a34bfec9091528cd00fc55f528e",
+        "map.ys": "bc2a3a993c7c0fcb9d77d4f1a48cb91ecb06a6e490cb18d88ba2ca31d1c87f9a",
+        "selector.ir.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "selector.v.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "selector.opt.ir.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "commands.json": "503956d59c3a9c1b5f24af4ca1d31637b061ad19800d7e175a19a52f3df23861",
+        "map.log": "ffa90ca1a62bf1cd284abd1f3a454c8e33a2b8747d6ff07bfb92c74827c631d8",
+        "selector.v": "4fa221a44879a15f77fe5e3f5f4fea8a69c1fe13758603146854c93a25a67824",
+        "selector.x": "e56f1ebb6eecc554017cd97dfc06c90929bd82800ac7d6b99ee6636b175c829d",
+        "stat.json": "881d975719d8828b936bb40d727ed9ef23e168892c3b73598ce008f2ff3a0db6",
+        "selector.opt.ir": "9de02d833213c6774a74bda96ee7e1615767ad615731949e61076734a34d25fa"
+      }
+    },
+    {
+      "actors": 8,
+      "depth": 5,
+      "variant": "sequential",
+      "cells": {
+        "CARRY4": 20,
+        "LUT2": 19,
+        "LUT3": 154,
+        "LUT4": 29,
+        "LUT5": 88,
+        "LUT6": 130,
+        "MUXF7": 8
+      },
+      "luts": 420,
+      "artifacts": {
+        "selector.ir": "f4e221e4a819fc43dd12e9580efa4c685f4cd6e19516ae982741a68154efdfca",
+        "map.ys": "bc2a3a993c7c0fcb9d77d4f1a48cb91ecb06a6e490cb18d88ba2ca31d1c87f9a",
+        "selector.ir.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "selector.v.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "selector.opt.ir.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "commands.json": "15472407f834687825a4e281158d57e0ea09caa4cb81c220ec06222b86517cc2",
+        "map.log": "98d44ecf5d76d9def791f0bb0a77280c30702f5cec219c0727cb14b0bfac2cf8",
+        "selector.v": "114522402fd00c80858a04f3c1af7e75bec0b6c10163469eb1004400e451d15c",
+        "selector.x": "c59fb6d39ea3c6ba12b7910a1b4337547406468d0fef417d1e8d6fb6f1cf751f",
+        "stat.json": "e75e31630e1fd01297954208f901a069664462c5b7603924763236861cbecf9a",
+        "selector.opt.ir": "133d179ce1b557e183d9fba1123683ceb337fd951f2f7919a80adbb3a9c3968b"
+      }
+    },
+    {
+      "actors": 8,
+      "depth": 5,
+      "variant": "parallel",
+      "cells": {
+        "CARRY4": 30,
+        "LUT2": 119,
+        "LUT3": 73,
+        "LUT4": 124,
+        "LUT5": 191,
+        "LUT6": 165,
+        "MUXF7": 9,
+        "MUXF8": 4
+      },
+      "luts": 672,
+      "artifacts": {
+        "selector.ir": "24800f3192edc2d2171a687cf428eff37ed63a9926701afdcb4e68e901736951",
+        "map.ys": "bc2a3a993c7c0fcb9d77d4f1a48cb91ecb06a6e490cb18d88ba2ca31d1c87f9a",
+        "selector.ir.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "selector.v.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "selector.opt.ir.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "commands.json": "654d48cace1eddb8fc55f5f9925cf6ac4495dd1a36d6f767a0ad984c2926aa0e",
+        "map.log": "9c7583b4717618866eeb67a4fb3e9e695a62c39c3daf04bd94edc4de8f279dd4",
+        "selector.v": "fc35c2527a34227ffb09c2620cbb9cabb88178f74901c52f777bae3bc37ad705",
+        "selector.x": "29f450e4769c14f27768b1de3ada8fb88623faa6d5a6d22e15245fb1da189694",
+        "stat.json": "649ceafd4ae3b677327cb233eb57c83f35d47210e8ec716c7a3299f6c5dc2680",
+        "selector.opt.ir": "bae37c2b18662c9e5560eae50027bd26d4ff625d4a82094f3d93597aa98baf5f"
+      }
+    },
+    {
+      "actors": 8,
+      "depth": 5,
+      "variant": "parallel-positions",
+      "cells": {
+        "CARRY4": 19,
+        "LUT2": 21,
+        "LUT3": 160,
+        "LUT4": 28,
+        "LUT5": 80,
+        "LUT6": 132
+      },
+      "luts": 421,
+      "artifacts": {
+        "selector.ir": "c3bcf50a13b8fb032be902b869d83f971152960c4d9ac8f31e0fd8621e319ca8",
+        "map.ys": "bc2a3a993c7c0fcb9d77d4f1a48cb91ecb06a6e490cb18d88ba2ca31d1c87f9a",
+        "selector.ir.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "selector.v.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "selector.opt.ir.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "commands.json": "33f16f1d73b4b26dc60bed93aafc1e20fba5679c3c62d4b76419135935cca818",
+        "map.log": "6ca5cbf602fb090ffa97dbcaf9397adc3fe608e00a6f2aa7bfa3188812d117e7",
+        "selector.v": "035762f484d44eb701f1a367dd6ed4bbd957063b0074834e7d48eab9b8e315ac",
+        "selector.x": "ef9ba52067d85826903011366c4acbdc4a45f88143e6f20f163552c3403c8882",
+        "stat.json": "4fab337d9132e011725b40be5143e53ad350991bd98327e3a010611f8f0b7852",
+        "selector.opt.ir": "edb3ec55a60edc95007d795405fce8b274074e9db56593b066cdd31d6accb0e2"
+      }
+    },
+    {
+      "actors": 16,
+      "depth": 5,
+      "variant": "sequential",
+      "cells": {
+        "CARRY4": 22,
+        "LUT2": 34,
+        "LUT3": 273,
+        "LUT4": 63,
+        "LUT5": 151,
+        "LUT6": 246
+      },
+      "luts": 767,
+      "artifacts": {
+        "selector.ir": "e8dae89f27ad35b794c4dece7fda4e9a470f4d75204be208703bb6403fbfe3b4",
+        "map.ys": "bc2a3a993c7c0fcb9d77d4f1a48cb91ecb06a6e490cb18d88ba2ca31d1c87f9a",
+        "selector.ir.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "selector.v.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "selector.opt.ir.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "commands.json": "bbccbaca0c0177e72f71433d7cd78d460f4ae82ca7f3a6cdff9b8761f34547f0",
+        "map.log": "e260ecab5b933d86f18ce3519bf2b49c9ca835b5f330df1114946a240935557f",
+        "selector.v": "eb64abeacb3574c4c8a034eb2f885ebdca5c80ba5e8f7738c8cf7b3af8691d74",
+        "selector.x": "4366f364ee391775b8f8cc115ee48562405d11d6ad4242d9f93b8d8f94aecdbc",
+        "stat.json": "8218916754a338c7b6f089925327819343eaf9cea3ec984cada5660fed53207d",
+        "selector.opt.ir": "14239b97ec3d2de0f3a69125852e0bc5741074d5205796060076a93c37f47d9b"
+      }
+    },
+    {
+      "actors": 16,
+      "depth": 5,
+      "variant": "parallel",
+      "cells": {
+        "CARRY4": 59,
+        "LUT1": 4,
+        "LUT2": 333,
+        "LUT3": 140,
+        "LUT4": 193,
+        "LUT5": 324,
+        "LUT6": 321,
+        "MUXF7": 28,
+        "MUXF8": 13
+      },
+      "luts": 1315,
+      "artifacts": {
+        "selector.ir": "604762a903a205bdecea64a95fa2da1e05bfd4cc28791e5a039a5879a2e30704",
+        "map.ys": "bc2a3a993c7c0fcb9d77d4f1a48cb91ecb06a6e490cb18d88ba2ca31d1c87f9a",
+        "selector.ir.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "selector.v.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "selector.opt.ir.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "commands.json": "acfe7addc7e19f233ffe6a704505743fa5d7ea32f83e69d846bbea4aac516bfb",
+        "map.log": "ff3bd0a17cd395fb2c1b3a8232e2c2e990daa67ff40293d81a61b41d83f0e2e0",
+        "selector.v": "dd4567e9d427028a0d1229428d2271b8db29c2356fa7d281dcad78c26767dc5e",
+        "selector.x": "25abc88d32e5e56ed43507cbb8b0edde55a8ec79665f67c719b86aa5b00b093b",
+        "stat.json": "df7c150ed7feacba98fc6997050824be6fac0780be407905f5ddfe950035604b",
+        "selector.opt.ir": "e1499fe9b4d5a40836eaee188ace352a514aad41144801664ec612868b36bc5b"
+      }
+    },
+    {
+      "actors": 16,
+      "depth": 5,
+      "variant": "parallel-positions",
+      "cells": {
+        "CARRY4": 21,
+        "LUT2": 28,
+        "LUT3": 277,
+        "LUT4": 66,
+        "LUT5": 159,
+        "LUT6": 240
+      },
+      "luts": 770,
+      "artifacts": {
+        "selector.ir": "91c9868a0586bc7eddb5e91b93af70d4ede5f999e3b593a15dc072dd84cd5b81",
+        "map.ys": "bc2a3a993c7c0fcb9d77d4f1a48cb91ecb06a6e490cb18d88ba2ca31d1c87f9a",
+        "selector.ir.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "selector.v.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "selector.opt.ir.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "commands.json": "a26a6e276b9b20ac214cfc8a987a0430dc49b1689780c9781f4dd9afce4f5f84",
+        "map.log": "75362f511b99fa0e4326a3291c6e13130937f1c578986c399f5f4537b7e0d8df",
+        "selector.v": "ba18dd5420ad4b0acfdcb4cdfd0d2f1aa6c4598b7e200067daf6a1f0fd5385f4",
+        "selector.x": "2c8e32b831e210bb17a66747d97e212ba25d78b9abffdcdae23233233f3c1aad",
+        "stat.json": "f8f6c7953b885cb04459e5a1730c3c7a6c4be085cece64d2bb441f63150870eb",
+        "selector.opt.ir": "40a210d8c012345378267114a94d8e74d6c3496dd12e56c8e54d7a268e58597e"
+      }
+    }
+  ],
+  "scope": "isolated combinational area, not whole-core cost or timing"
+}

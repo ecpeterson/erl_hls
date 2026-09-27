@@ -38,6 +38,7 @@ jobs:
           python3 experiments/07-openxc7/timing_model/test_model.py
           python3 experiments/07-openxc7/timing_model/test_selection_shapes.py
           python3 -m unittest discover -s experiments/07-openxc7/timing_chains -p test_path_report.py
+          python3 -m unittest discover -s experiments/07-openxc7/timing_chains -p test_control_cones.py
 
       - name: Check Zynq package mapping and resource smoke
         run: python3 experiments/07-openxc7/test_zynq7030.py
@@ -249,6 +250,7 @@ jobs:
         run: |
           bash tools/test_reduction_dslx.sh "$RUNNER_TEMP/xls"
           python3 tools/test_shared_completion.py "$RUNNER_TEMP/xls"
+          python3 tools/test_mailbox_formal.py "$RUNNER_TEMP/xls"
 
       - name: Run specialized phi RTL regressions
         run: |
@@ -361,6 +363,7 @@ jobs:
             _build/reduction-debug/**
             _build/aggregate-debug/**
             _build/reduction-semantics/**
+            _build/mailbox-formal/**
             _build/helpers/**
             _build/control_failures/**
             _build/typed-float/**
