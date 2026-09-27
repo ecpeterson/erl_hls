@@ -92,6 +92,12 @@ fn malformed_reduction_aggregates_fail_closed_test() {
     ReductionOutcome::MISMATCH);
 }
 
+// Exercise acceptance plus completion without performing the next phase entry.
+fn aggregate_test_dispatch(machine: SharedMachine,
+    request: ReductionAggregateRequest, slot: u32) -> SharedDispatch {
+  shared_machine_complete(shared_machine_accept_aggregate(machine, request, slot))
+}
+
 #[test]
 fn shared_machine_aggregate_validation_test() {
   let aggregate = reduction_aggregate_batch<u32:2>([
@@ -108,7 +114,7 @@ fn shared_machine_aggregate_validation_test() {
     ..zero!<SharedMachine>()
   };
 
-  let accepted = shared_machine_aggregate(machine, request, u32:0);
+  let accepted = aggregate_test_dispatch(machine, request, u32:0);
   assert_eq(accepted.dispatched, u1:1);
   assert_eq(accepted.directive, Directive::CONSUME);
   assert_eq(hls_failure::failed(accepted.machine.failure), u1:0);
@@ -122,7 +128,7 @@ fn shared_machine_aggregate_validation_test() {
     aggregate_test_member(u32:7, u32:2, u32:3),
     aggregate_test_member(u32:7, u32:7, u32:5),
   ]);
-  let wrong_site = shared_machine_aggregate(
+  let wrong_site = aggregate_test_dispatch(
     machine,
     ReductionAggregateRequest {
       slot: u32:0,
@@ -136,7 +142,7 @@ fn shared_machine_aggregate_validation_test() {
     aggregate_test_count(u32:8, u32:11),
     aggregate_test_count(u32:8, u32:13),
   ]);
-  let wrong_key = shared_machine_aggregate(
+  let wrong_key = aggregate_test_dispatch(
     machine,
     ReductionAggregateRequest {
       slot: u32:0,
@@ -146,12 +152,12 @@ fn shared_machine_aggregate_validation_test() {
   assert_eq(wrong_key.directive, Directive::FAIL);
   assert_eq(hls_failure::failed(wrong_key.machine.failure), u1:1);
 
-  let enter_pending = shared_machine_aggregate(
+  let enter_pending = aggregate_test_dispatch(
     SharedMachine { enter_pending: u1:1, ..machine }, request, u32:0);
   assert_eq(enter_pending.directive, Directive::FAIL);
   assert_eq(hls_failure::failed(enter_pending.machine.failure), u1:1);
 
-  let stale = shared_machine_aggregate(accepted.machine, request, u32:0);
+  let stale = aggregate_test_dispatch(accepted.machine, request, u32:0);
   assert_eq(stale.directive, Directive::FAIL);
   assert_eq(hls_failure::failed(stale.machine.failure), u1:1);
 }

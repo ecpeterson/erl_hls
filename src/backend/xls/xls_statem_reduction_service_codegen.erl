@@ -301,6 +301,7 @@ direct_receive_gate(_Reductions) ->
 %%% SharedService actor execution
 %%%
 
+-doc "Emits completion and aggregate acceptance helpers for shared actors.".
 -spec shared_machine_support(reductions(), service_mode()) -> iodata().
 shared_machine_support(none, _Mode) ->
     [];
@@ -353,35 +354,34 @@ shared_machine_support(_Reductions, Mode) ->
       }
     }
 
-    """, shared_machine_aggregate(Mode)].
+    """, shared_machine_accept_aggregate(Mode)].
 
-shared_machine_aggregate(ordinary) ->
+%% Select completion inputs before the callback, so internal and aggregate
+%% requests share one arithmetic datapath. Rejection preserves data/reduction
+%% state and records a failure.
+-spec shared_machine_accept_aggregate(service_mode()) -> iodata().
+shared_machine_accept_aggregate(ordinary) ->
     [];
-shared_machine_aggregate(aggregate_only) ->
+shared_machine_accept_aggregate(aggregate_only) ->
     """
-    fn shared_machine_aggregate(
+    fn shared_machine_accept_aggregate(
         machine: SharedMachine,
         request: ReductionAggregateRequest,
-        slot: u32) -> SharedDispatch {
+        slot: u32) -> SharedMachine {
       let applied = reduction_apply_complete_aggregate(
         machine.reduction, request.aggregate);
       let accepted = !hls_failure::failed(machine.failure) && !machine.enter_pending &&
         request.slot == slot &&
         applied.outcome == ReductionOutcome::COMPLETE;
       if accepted {
-        shared_machine_complete(SharedMachine {
+        SharedMachine {
           reduction: applied.state,
           ..machine
-        })
+        }
       } else {
-        SharedDispatch {
-          machine: SharedMachine {
-            failure: hls_failure::first(machine.failure, hls_failure::REDUCTION_PROTOCOL),
-            ..machine
-          },
-          dispatched: u1:1,
-          directive: Directive::FAIL,
-          ..zero!<SharedDispatch>()
+        SharedMachine {
+          failure: hls_failure::first(machine.failure, hls_failure::REDUCTION_PROTOCOL),
+          ..machine
         }
       }
     }
@@ -514,6 +514,7 @@ shared_entry_reduction_field(_Reductions) ->
         "        else { entered_reduction },\n"
     ].
 
+-doc "Emits shared dispatch, prioritizing internal completion over aggregates and mail.".
 -spec shared_executor_dispatch(reductions(), service_mode()) -> iodata().
 shared_executor_dispatch(none, _Mode) ->
     [
@@ -531,11 +532,12 @@ shared_executor_dispatch(_Reductions, ordinary) ->
     ];
 shared_executor_dispatch(_Reductions, aggregate_only) ->
     [
-        "  let dispatched = if request.internal {\n",
-        "    shared_machine_complete(machine)\n",
-        "  } else if request.aggregate_valid {\n",
-        "    shared_machine_aggregate(\n",
+        "  let completion_machine = if request.internal { machine } else {\n",
+        "    shared_machine_accept_aggregate(\n",
         "      machine, request.aggregate_request, request.slot)\n",
+        "  };\n",
+        "  let dispatched = if request.internal || request.aggregate_valid {\n",
+        "    shared_machine_complete(completion_machine)\n",
         "  } else {\n",
         "    shared_machine_dispatch(\n",
         "      machine, request.frame, request.received)\n",
