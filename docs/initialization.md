@@ -2,7 +2,7 @@
 
 Hardware translation accepts one unguarded `init([])` clause. `hls_gs` returns its state record; `hls_statem` returns `{ok, Phase, Data}`, where `Phase` belongs to `-hls_phases` and `Data` is the declared data record. Prefix bindings and supported pure expressions, including `case`/`if`, can compute the values or select the complete result. Complete state-machine results may be named and aliased under the [callback result binding rules](local-helpers.md#callback-result-bindings). Argument-dependent initialization, multiple initializer clauses, guards, arbitrary Erlang calls, and other result shapes are outside this translated subset.
 
-XLS evaluates the initializer at compile time. The generated module retains both the computed value and the selected failure predicate, then applies a module-level `const_assert!` before either value can become live state. A selected match, `case_clause`, or `if_clause` failure rejects DSLX type checking and IR conversion, including when only a shared service or an unrelated function is selected as the compilation top. A failure in an unselected branch does not reject initialization. The generated assertion is preceded by the source `init/1` line number; the file preamble identifies its Erlang source.
+XLS evaluates the initializer at compile time. The generated module retains both the computed value and the selected failure predicate, then applies a module-level `const_assert!` before either value can become live state. A selected match, `case_clause`, or `if_clause` failure rejects DSLX type checking and IR conversion, including when an unrelated function is selected as the compilation top. A failure in an unselected branch does not reject initialization. The generated assertion is preceded by the source `init/1` line number; the file preamble identifies its Erlang source.
 
 Initialization uses the same expression lowering and [numeric contract](numeric-contract.md) as callbacks. Compile-time checking does not establish equivalence for arbitrary Erlang arithmetic or exceptions: intermediate widths, overflow, rounding, and supported operator domains still apply. Use type-directed constructors and explicit conversions where a value's width matters.
 
@@ -20,35 +20,16 @@ init([]) ->
 
 ## Cold start and startup messages
 
-A direct service starts from the checked state. A shared scheduler first writes the checked phase/data and empty scheduler state into every actor RAM slot; it does not rely on RAM power-up contents. State-machine initial entry receives `OldPhase = Phase`, and its data update precedes dispatch of ordinary inputs, including topology startup messages.
+Each dedicated service starts from the checked state. State-machine initial entry receives `OldPhase = Phase`, and its data update precedes dispatch of ordinary inputs, including topology startup messages.
 
-Startup messages supply per-instance configuration after this common initializer. A topology target with startup messages must have an initial phase entry that emits no effects. Interface inference follows result aliases and recognizes the initial phase when every structural alternative names the same phase; it does not evaluate branch conditions to choose between different phases. Shared schedulers buffer their configured startup prefix before normal scheduling; those frames still pass through the actor's ordinary callbacks after initial entry. The initializer must therefore produce a usable initial phase and data independently of startup traffic.
+Startup messages supply per-instance configuration after this common initializer. A topology target with startup messages must have an initial phase entry that emits no effects. Interface inference follows result aliases and recognizes the initial phase when every structural alternative names the same phase; it does not evaluate branch conditions to choose between different phases. Startup frames pass through ordinary callbacks after initial entry. The initializer must therefore produce a usable initial phase and data independently of startup traffic.
 
 The CPU adapters invoke the source `init/1` with the argument passed to `start_link`. CPU-only use can retain argument forms outside the hardware subset. A hardware-backed `hls_gs` proxy requires `[]` and rejects any other argument before registering its fabric route. Starting a proxy attaches to the existing hardware state; it does not run a remote initializer or reset the device. A return route is retired when its proxy exits, so attaching a successor requires a new, clean fabric session; see [host transaction ownership](host-transactions.md).
 
-## Shared RAM ordering
-
-The production 1R1W RAM returns the old row when a read and write address the same row on one clock. Queue metadata becoming eligible is therefore insufficient to authorize a read of a newly admitted message or retired actor state.
-
-Each shared scheduler carries an XLS token beside its metadata in proc state. Initialization and startup return the token from their RAM write; normal scheduling returns the join of its state and mailbox write tokens. The following activation starts RAM reads from that token. This explicit dependency orders writes before subsequent reads even when XLS places metadata updates earlier in its pipeline.
-
-Tokens have no payload bits; this is a scheduling constraint, with no additional request queue or RAM port. At II=1, XLS must place the write-to-next-read recurrence within one initiation interval, so consecutive activations can still issue on consecutive clocks. RAM responses and actor execution remain pipelined. In-flight actor exclusion and mailbox admission rules prevent a conflicting same-row read and write within one activation. The physical schedule can affect area and timing, which must be measured for the chosen pipeline depth.
-
-`tools/test_actor_debug.sh XLS_ROOT STAGE mailbox` exercises postponement, backpressure, and recovery at two, three, and four XLS stages through scoped `hls_debug:info` queries. It saves all actor snapshots before checking expectations, including when a check fails.
-
 ## Reset
 
-Hardware reset starts a new execution: direct actor state is restored, scheduler metadata is cleared, shared actor RAM is repopulated, and topology startup producers restart. The physical state and mailbox RAM arrays need not be cleared; initialization and empty-mailbox metadata keep stale contents from becoming live state. The checked initializer is a constant, so reset repeats its value rather than executing host code.
+Hardware reset starts a new execution: actor state and mailbox metadata return to their initial values, and topology startup producers restart. The checked initializer is a constant, so reset repeats its value rather than executing host code.
 
 Reset must cover the actor's surrounding topology and transport control. An interrupted frame, pending reply, or debug query cannot be continued across that boundary. Establish a new host session after an interrupted transaction; see the [transport reset contract](debug-protocol.md). Resetting one actor independently of peers and in-flight traffic is not a supported recovery protocol.
 
-Run `bash tools/test_initialization.sh XLS_ROOT [STAGE]` for the regression. It compares public BEAM replies with DSLX/JIT values and generated RTL at two schedules per fixture: one/two stages for direct services, two/three for shared RAM-backed services. The RTL tests cover nonzero state, zero defaults, a nonfirst initial phase, silent initial-entry updates, per-instance topology startup, mutations, output stalls, reset during RAM initialization, and reset after a reply becomes pending. The shared fixture uses production RAMs without a reset input. Negative fixtures require a supported failing initializer to be rejected by both BEAM and XLS.
-
-CI also blocks the shared fixture's output and queries FIFO depths through the production debug endpoint. It checks that wait inspection reaches the external sink and observes recovery after release, while instrumentation preserves application outputs cycle by cycle:
-
-```sh
-python3 tools/test_topology_debug_integration.py \
-  --top init_shared_wrapper --stage _build/initialization/debug \
-  _build/initialization/init_shared_2.v \
-  _build/initialization/init_shared_wrapper.v priv/rtl/hls_1r1w_ram.v
-```
+Run `bash tools/test_initialization.sh XLS_ROOT [STAGE]` for BEAM/DSLX/JIT and RTL comparisons covering nonzero state, a nonfirst phase, silent initial entry, per-instance startup, output stalls and reset. Negative fixtures require selected initializer failures to be rejected by both BEAM and XLS.

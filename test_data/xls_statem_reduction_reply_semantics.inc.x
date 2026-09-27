@@ -22,5 +22,4 @@ fn reduction_preserves_retained_call_test() {
   assert_eq(replied.egress.frame.payload as u32, u32:33);
   assert_eq(replied.machine.failure, hls_failure::NONE);
   assert_eq(hls_reply::first(replied.machine.replies.slots, true).0, false);
-  assert_eq(machine_from_bits(bits_from_machine(shared_machine(replied.machine))), shared_machine(replied.machine));
 }

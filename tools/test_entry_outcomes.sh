@@ -15,7 +15,7 @@ ERL_HLS_ENTRY_STAGE="$stage" erl -noshell \
     -pa "$project_root/_build/test/lib/erl_hls/test" \
     -eval 'Stage = os:getenv("ERL_HLS_ENTRY_STAGE"), ok = xls_entry_outcome_dslx:write(Stage), ok = xls_entry_branch_dslx:write(Stage), halt().'
 
-for fixture in xls_entry_outcome xls_entry_branch xls_entry_reduction xls_entry_reduction_aggregate; do
+for fixture in xls_entry_outcome xls_entry_branch xls_entry_reduction ; do
     "$xls_root/interpreter_main" --compare=jit --warnings_as_errors=false \
         --dslx_path="$project_root/priv/xls/lib" \
         --dslx_stdlib_path="$xls_root/xls/dslx/stdlib" \

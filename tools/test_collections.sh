@@ -19,7 +19,7 @@ options=(--warnings_as_errors=false --dslx_path="$project_root/priv/xls/lib"
 "$xls_root/opt_main" "$stage/constant.ir" > "$stage/constant.opt.ir"
 "$xls_root/codegen_main" --generator=combinational --module_name=constant_probe \
     --use_system_verilog=false "$stage/constant.opt.ir" > "$stage/constant.v"
-yosys=${ERL_HLS_YOSYS:-$(command -v yosys || echo "$project_root/experiments/07-openxc7/.apio/packages/oss-cad-suite/bin/yosys")}
+yosys=${ERL_HLS_YOSYS:-$(command -v yosys || echo yosys)}
 "$yosys" -Q -T -p "read_verilog -sv \"$stage/constant.v\"; hierarchy -top constant_probe; proc; opt; check -assert; select -assert-none t:*" > "$stage/constant.log"
 echo "PASS: constant collection accesses and checks optimize to wiring"
 for width in 8 32 64; do

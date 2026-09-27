@@ -1,32 +1,8 @@
-# Mixed actor topologies
+# Actor topologies
 
-A topology describes actors, their message routes, and their startup messages. A physical profile chooses which actors have dedicated circuitry and which share an executor. Changing placement preserves actor identities, message contents, and per-sender ordering; it can change latency, throughput, buffering, and the arrival order of messages from different senders.
+A topology describes actors, messages and routes. An exact actor is one named instance; a family is a rectangular set of instances. Families reduce repetition in declarations without changing actor semantics.
 
-## Actors and placement
-
-An exact actor is one named instance, such as `collector`. A family names a rectangular collection of instances, such as `{workers, X, Y}`. Families make repeated declarations and routes convenient; they do not imply shared execution.
-
-Every actor has its own logical state and bounded mailbox. Its placement determines their implementation:
-
-| Placement | Callback logic | State and mailbox | When it can advance |
-| --- | --- | --- | --- |
-| Direct | Dedicated to this actor (`Service`) | Registers | Independently, when its work and transport permit |
-| Shared group | One executor for the group's actors (`SharedService`) | Separate per-actor rows in RAM | When the group's scheduler selects it |
-
-Ungrouped actors are direct. A direct singleton has no shared executor and does not wait for a group scheduling grant. It can process a message or advance an entry action as soon as its own dependencies permit, but pipeline latency, ordered effects, and output backpressure still apply. Register storage does not imply one-cycle execution.
-
-For an application with a `source`, a `collector`, and a `[2, 2]` worker family, this `scheduler_groups` profile fragment shares all four workers while leaving the two exact actors direct:
-
-```erlang
-#{scheduler_groups =>
-    #{worker_group => #{members => [{family, workers}],
-                        state_storage => block_ram,
-                        mailbox_storage => block_ram}}}
-```
-
-The resulting layout is two independent register-backed actors plus one shared worker executor and its RAMs. An empty or omitted `scheduler_groups` instead gives all six actors dedicated implementations.
-
-A group may also contain `{actor, Id}`, including an exact actor alongside a family. Every member must use the same callback module. To divide a family between two executors, use `{family, workers, {interleaved, 0, 2}}` in one group and `{family, workers, {interleaved, 1, 2}}` in the other. These select alternating members in row-major order; together, the groups must cover the complete family. Physical slot numbers are assigned by the placement plan and are not application addresses.
+Each instance compiles to a dedicated actor with register-backed state and a bounded mailbox. It runs when its own input, state and output dependencies permit. Dedicated execution does not imply one-cycle execution: XLS pipeline latency and output backpressure still apply.
 
 ## Routes and delivery
 
@@ -66,7 +42,7 @@ The delivery contract is:
 
 ## External commands
 
-A rectangle-addressed ingress is one application input. A command selects a target and an inclusive rectangle within that ingress's coordinate space, carrying an ordinary `axis::Frame` as its payload. Target names describe recipient sets and the schemas they accept; they do not name scheduler groups. The same command stream works across placements.
+A rectangle-addressed ingress is one application input. A command selects a target and an inclusive rectangle within that ingress's coordinate space, carrying an ordinary `axis::Frame` as its payload. Target names describe recipient sets and the schemas they accept; they are independent of generated channel names.
 
 For example, this fragment gives a worker family four points and an exact actor one point:
 
@@ -90,48 +66,12 @@ At runtime, a command reaches each recipient whose point lies within its rectang
 
 An ingress is another ordered message source. Commands to the same recipient retain input order even through different targets. They compete with actor-originated messages at that recipient's existing admission boundary, after its declared startup messages. Mailbox bounds, backpressure, and the distinction between transport acceptance and callback execution apply unchanged. One slow recipient can hold up later commands; multicast acceptance is not atomic, and accepting a command at the application port does not acknowledge that every recipient has executed it.
 
-## Routing and arbitration in the current implementation
+## Hardware generation and observation
 
-Messages travel through per-source routers and destination lanes. Independent paths can transfer concurrently; arbitration occurs where senders share a destination or another resource. This describes the current connectivity and contention points, rather than an area or latency comparison with a shared-bus design. Each direct actor and each shared group has an output router. The external ingress also has a router, with one destination lane per addressed actor; targets sharing a recipient share that lane. A lane connects a physical source (one direct actor or one group) to a logical recipient. Aliased output ports share that lane, retaining their order. A message for a shared actor carries its destination slot to the group's admission logic; actors sharing a source group use that group's router.
+Pass the normalized topology and a physical profile to `xls_topology_dslx:to_xls/2`. The profile selects the module name, channel depth and optional `direct_actor_debug`. Compile each actor with the options returned by `artifact_requirements/2`, then compile the topology's `Top` proc.
 
-For the example above, the source router has four worker lanes. They can feed four direct actors or four mailboxes behind one shared executor. With shared workers, the group's router has one result lane to the direct collector; with direct workers, four result lanes meet at the collector's ingress. This is where placement changes the physical layout without changing the logical routes.
+Messages follow source routers to recipient lanes. Independent lanes may transfer concurrently; senders targeting the same recipient arbitrate. Each actor's effects retain callback order, including aliased output ports. Queue depth controls buffering, not the application's deadlock behavior.
 
-Arbitration occurs where resources are shared:
+Enable `direct_actor_debug` consistently in the profile and actor artifacts, then generate `xls_actor_debug:projection/3`. A wrapper forwards the observation ports described by `xls_actor_observation`. Bind the verified query session with `hls_debug_catalog:hardware/4`; logical actor identities are unchanged by RTL generation. See [topology queries](topology-debug.md).
 
-| Resource | Selection |
-| --- | --- |
-| Direct actor's ingress | Reserves a mailbox place, then polls incoming lanes in rotation |
-| Shared group's admission | Selects among pending producer requests whose destination mailbox has space |
-| Shared executor | Selects an eligible actor, excluding actors already in flight |
-| External output | Merges its producer lanes in rotation |
-
-These choices preserve each sender's ordering while letting unrelated senders compete. A stalled output can eventually fill a group's result and routing buffers and stall its other members too; sharing trades independent execution capacity for smaller replicated logic.
-
-Shared routers also use an **effect-window arbiter**. Its grant permits one early return of a batch-completion credit, so a router can retain a lookahead batch while its current batch drains. It does not grant every message send or serialize all actor execution. Credit returns have dedicated inputs so they do not queue behind application requests awaiting mailbox space.
-
-The physical profile chooses the scope of this extra capacity with `effect_window_partition`:
-
-- `global` (the default) shares one retained lookahead grant across all shared groups.
-- `weak_components` gives each disconnected component of the actor routing graph its own grant. Direct actors connect paths but never request a grant. A component containing only direct actors has no arbiter.
-
-For example, `group A → direct collector → direct source → group B` keeps A and B in one domain, even without a return path. Two copies of that graph with no actor routes between them may borrow independently. Groups sharing an executor are already one physical vertex, even when their logical actors do not communicate. Generated domain comments list scheduler indices; each router's request, grant, and release ports use its position *within that domain*.
-
-This partition is conservative: directions, currently idle routes, and callback-level conditions do not establish independence. Every declared actor route can propagate backpressure, and direct fan-in/fan-out connects all incident groups. External input and output ports terminate the analysis; it does not infer feedback implemented by a host outside the topology. Neither policy proves application deadlock freedom or progress when an external sink stays blocked.
-
-Separate domains permit more simultaneous lookahead reservations and replace one arbiter with several smaller ones. Router payload holding slots and mailbox capacities stay the same. Area and throughput depend on the workload and mapping; partitioning does not promise an improvement. Compact family deployments use the same ownership planner and arbiter wiring, and also connect groups sharing a bounded source-fragment reduction plane.
-
-The instance backend supports two-dimensional families, rectangle ingress, RAM-backed shared groups, and direct or queued routes. Source-fragment reduction placement is rejected for exact-only and mixed deployments. Ordinary actor-owned reductions remain available.
-
-Exact-only and mixed graphs use the same placement and routing backend. Regular graphs containing only families retain a compact array representation when wholly direct or wholly shared. Repeated node and routing definitions follow family rules rather than explicitly listing every member; startup and slot tables can still grow with population. This is a source-size benefit, not a claim of faster hardware. Both representations use the same actor implementations and shared-router credit protocol.
-
-## Inspection and validation
-
-Enable `direct_actor_debug` for direct actors and `mailbox_debug` for shared groups in the physical profile. Get actor compilation options from `xls_topology_dslx:artifact_requirements/2`, generate `xls_scheduler_debug:projection/4` from those artifacts, and bind a single `hls_debug_catalog:hardware/4`. The catalog retains logical actor identities across placements. Both placements expose phase, failure, and mailbox counts through the same actor target. Direct actors include outstanding admission reservations; shared actors additionally expose scheduler work flags. Direct phase and mailbox counts share one publication, while shared actor-state writes and scheduler metadata have separate publication boundaries. See [topology debugging](topology-debug.md).
-
-`bash tools/test_mixed_topology.sh XLS_ROOT` compares a closed feedback workload with its CPU reference in four placements: all direct, one worker group, two interleaved groups, and a group combining family and exact workers. At pipeline depths two and three, it checks aliased message ordering, all 32 round reports, startup, and final completion. It blocks the output, diagnoses the stall through public debug queries, then requires recovery after release. Structural checks reject combinational cycles and verify that passive debug instrumentation preserves every output cycle.
-
-Pass `ingress_direct ingress_one ingress_two ingress_coalesced` after `XLS_ROOT STAGE` to run the external-command variant. It drives commands from reset release, alternates broadcasts and point selections, and interleaves invalid commands with valid work. Bursts of harmless messages must backpressure the command input. Each placement must deliver the same 320 work items, 640 results, and 32 reports as the closed CPU workload. The host releases the next round on an application acknowledgment; completion and debug inspection use public ports rather than simulator access to actor internals.
-
-Pass `components_global components_weak` to run two disconnected copies of the closed feedback graph. Each copy has two interleaved worker groups connected through direct source and collector actors. The test holds one report output, checks through `hls_debug:info` that the other copy finishes, then releases the held output. Both outputs must match all 32 CPU reports independently; the second also receives periodic backpressure. Passive handshake probes require every grant port to be exercised, one retained owner per domain, complete release, and a peak of two simultaneous owners with partitioning. This exercises domain-local grant indices, cyclic traffic, and recovery at pipeline depths two and three.
-
-After generating those builds, `python3 tools/measure_mixed_windows.py _build/mixed-topology` resets both graphs while their outputs are blocked, then compares both complete transcripts under fixed periodic backpressure and reports cycle counts. Add `--area --yosys "$YOSYS"` for two matched naming seeds of full-fixture XC7 synthesis, including actor/mailbox and topology query hardware. The [measurement report](../experiments/07-openxc7/results/mixed-effect-windows-2026-09-18.md) records the scope and limitations.
+`tools/test_mixed_topology.sh XLS_ROOT` compares closed and externally commanded actor networks with their CPU results while stalling outputs and querying queues through the debug transport.

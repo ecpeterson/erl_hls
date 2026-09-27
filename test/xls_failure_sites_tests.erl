@@ -116,15 +116,6 @@ artifact_declarations_must_agree_with_codebook_test() ->
         erl_anno:set_file("absent.erl", erl_anno:new(1))),
     ?assertError({unknown_failure_sites, [_]}, xls_failure_sites:allocate(Origins, Unknown)).
 
-specializations_use_their_own_artifact_codebook_test() ->
-    File = "src/examples/phi_decoder/phi_halo_cell.erl",
-    {ok, Forms} = xls_parse:parse_file(File),
-    {_, Origins} = xls_failure_sites:prepare(Forms),
-    lists:foreach(fun(Mode) ->
-        Text = xls_parse:to_xls(File, #{shared_service => Mode}),
-        ?assertMatch([_ | _], xls_failure_sites:from_artifact(Origins, Text))
-    end, [ordinary, aggregate_only]).
-
 captures(Source, Pattern, Options) ->
     case re:run(Source, Pattern, [global, {capture, [1], binary} | Options]) of
         {match, Matches} -> [Name || [Name] <- Matches];

@@ -121,13 +121,15 @@ interface_inference_does_not_lower_reducer_expressions_test() ->
         end
     ).
 
+%% Checks list contribution retains message provenance.
+-spec list_contribution_retains_message_provenance_test() -> 'ok'.
 list_contribution_retains_message_provenance_test() ->
     Path = "test_data/hls_list_reduction_fixture.erl",
     #{reduction := #{sites := [Site]}} = analyze(Path),
     [Contribution] = maps:get(contributions, Site),
     ?assert(maps:get(source_transportable, Contribution)),
     ?assert(maps:get(source_capture_total, Contribution)),
-    ?assert(is_binary(iolist_to_binary(lower(Path, #{shared_service => ordinary})))).
+    ?assert(is_binary(iolist_to_binary(lower(Path, #{})))).
 
 list_contribution_rejects_actor_data_test() ->
     with_mutated_fixture("test_data/hls_list_reduction_fixture.erl",
@@ -153,6 +155,8 @@ list_projection_does_not_invent_a_u32_type_test() ->
             ?assertException(error, {invalid_hls_statem_reduction_u32, 'Key', _}, analyze(Path))
         end).
 
+%% Checks actor data dependent applicability is reported not globally rejected.
+-spec actor_data_dependent_applicability_is_reported_not_globally_rejected_test() -> 'ok'.
 actor_data_dependent_applicability_is_reported_not_globally_rejected_test() ->
     with_mutated_fixture(
         <<"counting(cast, #count_value{key = Key, value = Value}, Cell)\n">>,
@@ -170,15 +174,12 @@ actor_data_dependent_applicability_is_reported_not_globally_rejected_test() ->
             ?assertEqual(false,
                 maps:get(source_transportable, PublicCount)),
             ?assert(is_binary(iolist_to_binary(
-                lower(Path, #{shared_service => ordinary})))),
-            ?assertError(
-                {aggregate_only_nontransportable_contributions,
-                    [#{phase := counting, schema := count_value}]},
-                lower(Path, #{shared_service => aggregate_only})
-            )
+                lower(Path, #{}))))
         end
     ).
 
+%% Checks actor data dependent guard is not source transportable.
+-spec actor_data_dependent_guard_is_not_source_transportable_test() -> 'ok'.
 actor_data_dependent_guard_is_not_source_transportable_test() ->
     with_mutated_fixture(
         <<"        when Value > 0 ->">>,
@@ -187,15 +188,12 @@ actor_data_dependent_guard_is_not_source_transportable_test() ->
             #{reduction := #{sites := [Count | _]}} = analyze(Path),
             [Contribution] = maps:get(contributions, Count),
             ?assertEqual(false,
-                maps:get(source_transportable, Contribution)),
-            ?assertError(
-                {aggregate_only_nontransportable_contributions,
-                    [#{phase := counting, schema := count_value}]},
-                lower(Path, #{shared_service => aggregate_only})
-            )
+                maps:get(source_transportable, Contribution))
         end
     ).
 
+%% Checks guarded contribution fallback is not total source capture.
+-spec guarded_contribution_fallback_is_not_total_source_capture_test() -> 'ok'.
 guarded_contribution_fallback_is_not_total_source_capture_test() ->
     #{reduction := #{sites := [Count | _]}, cast_groups := Ordinary} =
         analyze(?FIXTURE),
@@ -210,15 +208,12 @@ guarded_contribution_fallback_is_not_total_source_capture_test() ->
     ?assertEqual(
         iolist_to_binary(xls_statem_lower:lower(?FIXTURE, Forms, Phases)),
         iolist_to_binary(xls_statem_lower:lower(
-            ?FIXTURE, Forms, Phases, #{shared_service => ordinary}
+            ?FIXTURE, Forms, Phases, #{}
         ))
-    ),
-    %% The generic aggregate helper may still represent the guard miss as an
-    %% invalid contribution.  Only whole-schema source capture is forbidden.
-    ?assert(is_binary(iolist_to_binary(
-        lower(?FIXTURE, #{shared_service => aggregate_only})
-    ))).
+    ).
 
+%% Checks refutable contribution pattern is not total source capture.
+-spec refutable_contribution_pattern_is_not_total_source_capture_test() -> 'ok'.
 refutable_contribution_pattern_is_not_total_source_capture_test() ->
     with_mutated_fixture(
         <<"#count_value{key = Key, value = Value}, Cell)\n"
@@ -234,7 +229,7 @@ refutable_contribution_pattern_is_not_total_source_capture_test() ->
                 maps:get(source_capture_total, Contribution)),
             ?assertMatch([{{count_value, counting}, [_]}], Ordinary),
             ?assert(is_binary(iolist_to_binary(
-                lower(Path, #{shared_service => ordinary})
+                lower(Path, #{})
             )))
         end
     ).

@@ -89,15 +89,6 @@ included_types_reach_gs_emission_test() ->
     ?assertNotEqual(nomatch, binary:match(Generated, <<"phi_field::Scalar[2]">>)),
     ?assertNotEqual(nomatch, binary:match(Generated, <<"phi_field::relax_bulk(">>)).
 
-both_statem_artifacts_import_companions_test() ->
-    lists:foreach(fun(Mode) ->
-        Generated = iolist_to_binary(xls_parse:to_xls(
-            "src/examples/phi_decoder/phi_halo_cell.erl",
-            #{shared_service => Mode})),
-        ?assertEqual(1, length(binary:matches(Generated, <<"import phi_field;">>))),
-        ?assertNotEqual(nomatch, binary:match(Generated, <<"phi_field::relax(">>))
-    end, [ordinary, aggregate_only]).
-
 form(Source) ->
     {ok, Tokens, _} = erl_scan:string(Source),
     {ok, Form} = erl_parse:parse_form(Tokens),

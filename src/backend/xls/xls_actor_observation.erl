@@ -33,8 +33,9 @@ layout(Reduction) ->
 
 %% Names come from the same normalized actor/family ordering as topology
 %% emission. XLS lowers a channel array [height][width] to __x_y port suffixes.
-bindings(Plan = #{actors := Actors, families := Families}, Specs) ->
-    Placements = hls_scheduler_plan:placements(hls_scheduler_plan:normalize(Plan, Specs)),
+-doc "Lists observation ports for actors not assigned to another execution backend.".
+-spec bindings(map(),term()) -> [map()].
+bindings(#{actors := Actors, families := Families}, Excluded) ->
     Logical = [{{actor, Id}, Module, ["_", scalar_name(I)]} ||
         {I, #{id := Id, module := Module}} <- lists:enumerate(0, Actors)] ++
         [{{family, Id, [X, Y]}, Module, ["_", family_name(I), "__",
@@ -42,7 +43,7 @@ bindings(Plan = #{actors := Actors, families := Families}, Specs) ->
             {I, #{id := Id, module := Module, shape := [Width, Height]}} <-
                 lists:enumerate(0, Families),
             X <- lists:seq(0, Width - 1), Y <- lists:seq(0, Height - 1)],
-    Direct = [Entry || Entry = {Id, _, _} <- Logical, not maps:is_key(Id, Placements)],
+    Direct = [Entry || Entry = {Id, _, _} <- Logical, not maps:is_key(Id, Excluded)],
     Interfaces = hls_actor_interface:from_modules([Module || {_, Module, _} <- Direct]),
     [begin
         Interface = maps:get(Module, Interfaces),

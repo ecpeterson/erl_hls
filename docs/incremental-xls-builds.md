@@ -44,21 +44,6 @@ Failed attempts retain the captured inputs, commands, stderr, partial output, an
 
 One writer owns each output. A competing build of that output fails promptly; independent output directories can share a cache and publish concurrently. Identical concurrent cache misses may both compile before converging on a checked entry. XLS can assign different internal node IDs on repeated runs; the first complete cached result wins, and subsequent stages consume those exact bytes. A losing concurrent compiler result is marked `adopted` in the run report, with its execution cost still recorded. `--cache` selects an explicit shared cache; otherwise it is `.xls-cache` beside the output. Cache entries can be removed when no builds are active without removing published releases. Releases remain available for pinned consumers and measurement provenance; there is no automatic garbage collection.
 
-## Decoder profile
-
-The decoder helper publishes its generated RTL, RAM implementation, wrapper, source snapshot, and profile metadata together:
-
-```sh
-inputs="$PWD/_build/d3-profile"
-ERL_HLS_PHI_PROFILE_SHARDS=3 bash tools/prepare_xls_sim.sh "$inputs"
-bash tools/compile_phi_decoder_profile.sh "$inputs" "$ERL_HLS_XLS_ROOT"
-compiled=$(cd "$inputs/compiled" && pwd -P)
-python3 experiments/07-openxc7/phi_timing.py "$compiled" \
-    --stage "$PWD/_build/d3-simulation" --phase simulate
-```
-
-The helper's optional positional arguments remain `TIMEOUT SHARDS PIPELINE_STAGES II`, with defaults `2h 3 2 1`. Profile simulation and actor-debug commands pin the published directory before consuming RTL. `run_phi_decoder_profile.sh` includes the latest build's cache/execution report in its metrics. Physical comparisons consume the pinned release and retain the usual profile/RTL hash checks. See the [D3 probe budget](../experiments/07-openxc7/phi-timing.md#choose-the-probe-budget) before launching synthesis or routing.
-
 ## Regression checks
 
 ```sh
@@ -66,6 +51,4 @@ python3 tools/test_compile_xls.py
 python3 tools/test_compile_xls.py --xls-root "$ERL_HLS_XLS_ROOT"
 ```
 
-Fault-injected compilers exercise cold/warm reuse, relocation/output naming, import/stdlib/tool changes, codegen settings, asset/metadata changes, damaged cache entries and releases, failed-stage retry, timeout/cancellation, input snapshots, concurrent publishers (including nondeterministic compiler output), and the copied decoder helper. With `--xls-root`, a real `regsvc` compilation must produce byte-identical Verilog to the direct commands, compile with Icarus, reuse all stages on repeat, and rerun only codegen after a pipeline-setting change. CI runs both forms of coverage through the second command.
-
-The [D3 compilation measurement](../experiments/08-phi-scheduler/incremental-build-2026-09-14.md) records one cold build and three cached repeats, unchanged RTL, and both maintained profile checks.
+Fault-injected compilers exercise cold/warm reuse, relocation/output naming, import/stdlib/tool changes, codegen settings, asset/metadata changes, damaged cache entries and releases, failed-stage retry, timeout/cancellation, input snapshots, concurrent publishers (including nondeterministic compiler output). With `--xls-root`, a real `regsvc` compilation must produce byte-identical Verilog to the direct commands, compile with Icarus, reuse all stages on repeat, and rerun only codegen after a pipeline-setting change. CI runs both forms of coverage through the second command.

@@ -1,6 +1,8 @@
 -module(xls_names_tests).
 -include_lib("eunit/include/eunit.hrl").
 
+%% Checks record collisions.
+-spec record_collisions_test_() -> [{non_neg_integer(), fun(() -> ok)}].
 record_collisions_test_() ->
     [?_assertMatch({xls_name_collision, module, Symbol, _, _},
         reason(fun() -> xls_names:actor(forms(Names), hls_statem) end))
@@ -10,7 +12,7 @@ record_collisions_test_() ->
             {[a_b, a_B], "ab_from_bits"},
             {[bits], "bits_from_bits"},
             {[tag], "Tag"},
-            {['SharedMachine'], "SharedMachine"},
+            {['ActorState'], "ActorState"},
             {['ActorObservation'], "ActorObservation"},
             {['N'], "N"}
         ]].
@@ -51,6 +53,8 @@ packing_checks_wire_identity_without_dslx_restrictions_test() ->
         ?assertEqual(foobar, names:unpack_tag(4))
     after code:purge(names), code:delete(names) end.
 
+%% Checks reserved spelling.
+-spec reserved_spelling_test() -> 'ok'.
 reserved_spelling_test() ->
     ?assertMatch({xls_name_collision, tag, "NONE", _, _}, reason(fun() ->
         xls_names:actor(forms(['None']), hls_statem)
@@ -59,8 +63,8 @@ reserved_spelling_test() ->
         ?assertError({reserved_hls_statem_phase, Name},
             xls_names:actor(replace(forms([value]), hls_phases, [Name]), hls_statem))
     end || Name <- [consume, postpone, fail, true, false, repeat_phase, reduce, terminate]],
-    ?assertMatch({xls_name_collision, module, "INITIAL_MACHINE", _, _}, reason(fun() ->
-        xls_names:actor(forms(['_INITIAL_MACHINE']), hls_statem)
+    ?assertMatch({xls_name_collision, module, "INITIAL_ACTOR_STATE", _, _}, reason(fun() ->
+        xls_names:actor(forms(['_INITIAL_ACTOR_STATE']), hls_statem)
     end)).
 
 identifiers_test_() ->
@@ -142,6 +146,8 @@ translation_and_interface_validate_before_callbacks_test() ->
         xls_parse:to_xls_gs("names.erl", Forms)
     end)).
 
+%% Checks runtime declarations remain reserved.
+-spec runtime_declarations_remain_reserved_test() -> [['ok']].
 runtime_declarations_remain_reserved_test() ->
     %% Audit the actual emitted surfaces so adding a runtime type/constant
     %% cannot silently reopen a record-name collision. This is a test of the
@@ -163,8 +169,8 @@ runtime_declarations_remain_reserved_test() ->
         end || [Name] <- Matches, not lists:member(Name, RecordTypes)]
     end || {Path, Kind, Options} <- [
         {"src/examples/regsvc/regsvc.erl", hls_gs, #{}},
-        {"src/examples/phi_decoder/phenom_data_cell.erl", hls_statem, #{mailbox_debug => true}},
-        {"src/examples/phi_decoder/phi_halo_cell.erl", hls_statem, #{shared_service => aggregate_only}}
+        {"src/examples/phi_decoder/phenom_data_cell.erl", hls_statem, #{direct_actor_debug => true}},
+        {"src/examples/phi_decoder/phi_halo_cell.erl", hls_statem, #{direct_actor_debug => true}}
     ]].
 
 forms(Tags) ->

@@ -43,18 +43,16 @@ for schedule in 1:1 2:1 3:2; do
 done
 
 cp priv/xls/fabric/*.x "$stage/"
-source tools/phi_scheduler_rams.sh
-for fixture in direct shared; do
+for fixture in direct family; do
     rams=(--pipeline-stages 2)
-    [[ "$fixture" != shared ]] || rams+=(--ram-configurations "$(phi_scheduler_ram_configurations 1)")
     prefix="$stage/dense_$fixture"
     python3 tools/compile_xls.py "$prefix.x" "$xls_root" --output "$prefix-build" \
         --top Top --name "dense_$fixture" \
         "${rams[@]}"
     bash tools/check_rtl_structure.sh "dense_${fixture}_wrapper" "$prefix-check" \
-        "$prefix-build/dense_$fixture.v" "${prefix}_wrapper.v" priv/rtl/hls_1r1w_ram.v
+        "$prefix-build/dense_$fixture.v" "${prefix}_wrapper.v"
     iverilog -g2012 -I "$stage" -DDENSE_TOP="dense_${fixture}_wrapper" \
         -s logical_topology_tb -o "$prefix.vvp" test/rtl/logical_topology_tb.sv \
-        "$prefix-build/dense_$fixture.v" "${prefix}_wrapper.v" priv/rtl/hls_1r1w_ram.v
+        "$prefix-build/dense_$fixture.v" "${prefix}_wrapper.v"
     vvp "$prefix.vvp"
 done

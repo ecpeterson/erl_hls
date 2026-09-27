@@ -74,19 +74,3 @@ One reduction may be active per actor. Sites share one private accumulator-recor
 The open must lead a supported literal action list, with a literal population tuple and complete literal identity record. Contribution directives must directly finish a leading clause group for the message/phase, retain phase/data, and build a complete accumulator record from message fields. These are current translation limits, not CPU protocol requirements.
 
 Entry evaluation is transactional: a selected expression failure suppresses both the open and every cast. Reopening an active reduction also fails without committing entry data or effects. See [entry outcomes](entry-outcomes.md), including conditional opens.
-
-## Source-fragment placement analysis
-
-`hls_reduction_plan:normalize/3` accepts `#{Family => source_fragments}` to select offloading; omission keeps actor-local reduction. The topology must prove:
-
-- A fully scheduled two-dimensional family and one unambiguous, actor-state-independent contribution schema per site, with an irrefutable head.
-- An unconditional, population-sized entry prefix of direct wrapped translations into that family; the translation multiset is inverse-closed, including aliases.
-- No other uses of captured ports, no overtaking uncaptured self-route, and no ordinary route, ingress or startup contribution into the selected family.
-
-Fixed-vector patterns can use [source-derived shape evidence](source-context.md#logical-type-shapes), rechecked against emitted DSLX dimensions. The plan still records semantic assumptions: actors must traverse coherent name/key/site windows, and aggregates must commute with unrelated ordinary mail. Structural analysis does not prove these properties.
-
-## Source-fragment hardware realization
-
-Use the selected profile and the matching `aggregate_only` artifacts from `xls_topology_dslx:artifact_requirements/2`. Groups sharing a compiled module cannot mix ordinary and aggregate-only instances. Public messages and CPU behavior are unchanged; aggregates use private delivery and consume no ordinary mailbox credit.
-
-The offload remains bounded and backpressured. It delivers only after the destination has opened its window, preserves later ordinary effects, and fails closed on malformed aggregates. Partial offloaded progress is not visible in the recipient's snapshot. Storage, arbitration and qualification details belong in the [maintainer reference](../yap/actor-reductions.md).

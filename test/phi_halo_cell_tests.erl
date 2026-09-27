@@ -584,6 +584,8 @@ invalid_anyon_word_stops_cell_in_flipping_test() ->
         stop_collectors(Ref, Collectors)
     end.
 
+%% Checks generated dslx matches checked in artifact.
+-spec generated_dslx_matches_checked_in_artifact_test() -> 'ok'.
 generated_dslx_matches_checked_in_artifact_test() ->
     {ok, Expected} = file:read_file(
         "src/examples/phi_decoder/phi_halo_cell.erl.x"
@@ -591,7 +593,7 @@ generated_dslx_matches_checked_in_artifact_test() ->
     Generated = iolist_to_binary(
         xls_parse:to_xls(
             "src/examples/phi_decoder/phi_halo_cell.erl",
-            #{shared_service => aggregate_only}
+            #{}
         )
     ),
     ?assertEqual(Expected, Generated),

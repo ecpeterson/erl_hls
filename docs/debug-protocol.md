@@ -50,7 +50,7 @@ Each version 2 event contains three little-endian 32-bit words:
 
 Kinds 1 and 2 denote an accepted application input or output **inner frame header**. Observation flag bit 0 records header `TLAST`, bit 1 records the presence of a route, and bit 2 records an observation gap before this direction's retained header. These are monitor flags, not the application's header flags. A retained header does not prove that the remaining frame was valid, delivered, or handled by an actor.
 
-`hls_debug_monitor` defaults to `ROUTED=0` for endpoint-local streams whose first beat is the application header, such as regsvc after its router. `ROUTED=1` consumes an outer route word before recognizing the inner header, as on the phi-memory host gateway. This mode applies to both observed directions and must match the physical attachment. Routes identify physical endpoints, not necessarily individual actors inside a shared topology.
+`hls_debug_monitor` defaults to `ROUTED=0` for endpoint-local streams whose first beat is the application header, such as regsvc after its router. `ROUTED=1` consumes an outer route word before recognizing the inner header, at a whole-application routed boundary. This mode applies to both observed directions and must match the physical attachment. Routes identify physical endpoints, not necessarily individual actors inside a topology.
 
 The framing status word packs RX phase in bits 1–0, TX phase in bits 3–2, RX pending-gap in bit 4, and TX pending-gap in bit 5. All higher bits are zero. Each phase is `0=boundary`, `1=header` (route already consumed), `2=payload`, or `3=unsynchronized`. Pending-gap means that no retained header from that direction has yet reported the most recent observation loss; it is independent of whether framing has recovered.
 
@@ -90,7 +90,7 @@ The Icarus VPI bridge exposes the application and debug streams as independent n
 
 The generated-RTL regression starts this client alongside `hls_gs`, runs the same application scenario as the CPU reference test, and queries the resulting counter and trace snapshots from Erlang. The deterministic SystemVerilog test separately checks the stronger availability case in which application output is held under backpressure while both supported debug queries complete. It also verifies that the reserved `0x02` request returns error code 1, along with exact two-event ordering and trace-bank overlap. The bridged EUnit scenario checks odd trace counts, a full 64-event bank, overflow accounting, and drain-on-read behavior.
 
-[Scoped debug targets](debug-targets.md) combine process-style current-state inspection with explicitly selected boundary counter/trace operations. Shared-topology actors expose placement and related boundaries; an actor-level counter or trace request is rejected instead of returning shared traffic under that actor's name. The phi-memory bridged regression exercises the scoped monitor interface around a generated shared-scheduler topology.
+[Scoped debug targets](debug-targets.md) combine process-style current-state inspection with explicitly selected boundary counter/trace operations. Actor bindings expose placement and related boundaries; actor-level counter or trace requests are rejected rather than returning a boundary's traffic under an actor's name.
 
 The raw `hls_debug:query/4` API sends a word-aligned management payload and returns the reply payload, correlating both the transaction identifier and reply tag. [Topology queries](topology-debug.md) use this API on their own routed endpoint.
 

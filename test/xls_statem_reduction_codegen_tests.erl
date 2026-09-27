@@ -8,12 +8,6 @@ none_is_zero_cost_test() ->
     ?assertEqual(0, xls_statem_reduction_codegen:private_width(none)),
     ?assertEqual([], xls_statem_reduction_codegen:tag_member(none, 17)).
 
-aggregate_only_requires_reductions_test() ->
-    ?assertError(aggregate_only_requires_reductions,
-        xls_statem_reduction_codegen:declarations(none, aggregate_only)),
-    ?assertError(aggregate_only_requires_reductions,
-        xls_statem_reduction_codegen:functions(none, aggregate_only)).
-
 site_nested_ir_renders_local_reduction_test() ->
     Spec = spec(),
     Text = iolist_to_binary([
@@ -44,58 +38,6 @@ site_nested_ir_renders_local_reduction_test() ->
         Text,
         <<"struct ReductionContribution {\n  mode:">>
     )).
-
-aggregate_only_renders_transport_and_complete_apply_test() ->
-    Spec = spec(),
-    Ordinary = iolist_to_binary([
-        xls_statem_reduction_codegen:declarations(Spec),
-        xls_statem_reduction_codegen:functions(Spec)
-    ]),
-    AggregateOnly = iolist_to_binary([
-        xls_statem_reduction_codegen:declarations(Spec, aggregate_only),
-        xls_statem_reduction_codegen:functions(Spec, aggregate_only)
-    ]),
-    ?assertEqual(nomatch,
-        binary:match(Ordinary, <<"ReductionAggregate">>)),
-    assert_contains(AggregateOnly, "pub struct ReductionAggregate {"),
-    assert_contains(AggregateOnly,
-        "pub struct ReductionAggregateRequest {\n"
-        "  slot: u32,\n"
-        "  aggregate: ReductionAggregate,"),
-    assert_contains(AggregateOnly,
-        "fn reduction_transport_contribution(\n"
-        "    frame: axis::Frame) -> ReductionContribution"),
-    assert_contains(AggregateOnly,
-        "pub fn reduction_aggregate_batch<COUNT: u32>("),
-    assert_contains(AggregateOnly,
-        "fn reduction_apply_complete_aggregate("),
-    assert_contains(AggregateOnly,
-        "state.remaining == population"),
-    assert_contains(AggregateOnly,
-        "aggregate.count == population"),
-    assert_contains(AggregateOnly,
-        "reduction_aggregate_expected_members(state.site)"),
-    assert_contains(AggregateOnly,
-        "accumulator: aggregate.accumulator"),
-    [_, AfterFastApply] = binary:split(AggregateOnly,
-        <<"fn reduction_apply_complete_aggregate(">>),
-    [FastApply, _] = binary:split(AfterFastApply,
-        <<"fn reduction_apply(\n">>),
-    ?assertEqual(nomatch, binary:match(FastApply, <<"reduction_reduce(">>)).
-
-aggregate_only_rejects_ambiguous_transport_tags_test() ->
-    Spec0 = spec(),
-    [First, Second0] = maps:get(sites, Spec0),
-    [FirstContribution] = maps:get(contributions, First),
-    [SecondContribution0] = maps:get(contributions, Second0),
-    Second = Second0#{contributions => [SecondContribution0#{
-        tag => maps:get(tag, FirstContribution)
-    }]},
-    Spec = Spec0#{sites => [First, Second]},
-    ?assertError(
-        {aggregate_only_ambiguous_contribution_schemas, [count_value]},
-        xls_statem_reduction_codegen:functions(Spec, aggregate_only)
-    ).
 
 spec() ->
     Data = type_ref(cell, "Cell"),

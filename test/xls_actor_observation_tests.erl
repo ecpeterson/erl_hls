@@ -2,6 +2,8 @@
 -include_lib("eunit/include/eunit.hrl").
 -export([write/1]).
 
+%% Checks diagnostic outputs are explicit.
+-spec diagnostic_outputs_are_explicit_test() -> 'ok'.
 diagnostic_outputs_are_explicit_test() ->
     Source = "test/hls_dense_statem_fixture.erl",
     Plain = iolist_to_binary(xls_parse:to_xls(Source)),
@@ -13,10 +15,10 @@ diagnostic_outputs_are_explicit_test() ->
         Production = iolist_to_binary(xls_topology_dslx:emit(Plan, Profile)),
         ?assertEqual(Production, iolist_to_binary(xls_topology_dslx:emit(Plan,
             Profile#{direct_actor_debug => false}))),
-        ?assertEqual(#{hls_dense_statem_fixture => #{shared_service => ordinary}},
+        ?assertEqual(#{hls_dense_statem_fixture => #{direct_actor_debug => false}},
             xls_topology_dslx:artifact_requirements(Plan, Profile)),
         ?assertEqual(#{hls_dense_statem_fixture =>
-            #{shared_service => ordinary, direct_actor_debug => true}},
+            #{direct_actor_debug => true}},
             xls_topology_dslx:artifact_requirements(Plan, Profile#{direct_actor_debug => true})),
         ?assertError({direct_actor_debug, yes},
             xls_topology_dslx:emit(Plan, Profile#{direct_actor_debug => yes}))
@@ -34,24 +36,16 @@ observation_boundary_name_collisions_test() ->
     end, [{scalar, actor_0_debug, <<"actor_0_debug_out">>},
         {rectangle, family_0_debug, <<"family_0_debug_out">>}]).
 
+%% Checks rectangular binding order.
+-spec rectangular_binding_order_test() -> 'ok'.
 rectangular_binding_order_test() ->
     Bindings = xls_actor_observation:bindings(plan(rectangle), #{}),
     ?assertEqual([{{family, cell, [X, Y]}, iolist_to_binary(
         ["_family_0_debug_out__", integer_to_list(X), "_", integer_to_list(Y)])} ||
         X <- lists:seq(0, 1), Y <- lists:seq(0, 2)],
         [{Id, Port} || #{id := Id, port := Port, width := 49} <- Bindings]),
-    Specs = #{cells => #{members => [{family, cell}],
-        state_storage => block_ram, mailbox_storage => block_ram}},
+    Specs = maps:from_keys([Id || #{id := Id} <- Bindings], true),
     ?assertEqual([], xls_actor_observation:bindings(plan(rectangle), Specs)).
-
-partially_scheduled_ingress_retains_direct_observation_test() ->
-    {Plan, Specs} = hls_actor_debug_dslx:fixture(mailbox),
-    Partial = maps:with([producer], Specs),
-    Text = iolist_to_binary(xls_topology_dslx:emit(Plan, (profile(rectangle))#{
-        scheduler_groups => Partial, direct_actor_debug => true})),
-    ?assertNotEqual(nomatch, binary:match(Text, <<"spawn IngressRouter0">>)),
-    ?assertNotEqual(nomatch, binary:match(Text, <<"family_0_debug_out">>)),
-    ?assertEqual(nomatch, binary:match(Text, <<"family_1_debug_out">>)).
 
 %% Native compiler smoke fixtures: a standalone actor, scalar topology, and
 %% genuinely two-dimensional rectangular family exercise each output path.

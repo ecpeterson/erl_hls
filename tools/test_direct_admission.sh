@@ -47,5 +47,5 @@ for kind in service d1 d2; do
 done
 python3 tools/test_direct_admission_formal.py --stage "$stage/formal" "$stage"/service-p*.v
 python3 tools/test_topology_debug_integration.py \
-    --yosys "${ERL_HLS_YOSYS:-$(command -v yosys || echo "$project_root/experiments/07-openxc7/.apio/packages/oss-cad-suite/bin/yosys")}" \
+    --yosys "${ERL_HLS_YOSYS:-$(command -v yosys || echo yosys)}" \
     --top __ordered_egress_topology__Top_0_next --stage "$stage/debug" "$stage/d1-p2-ii1.v"

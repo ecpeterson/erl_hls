@@ -1,38 +1,24 @@
-%%%% xls_statem_reduction_codegen
-%%%%
-%%%% Renders actor-local DSLX reduction support from the closed IR produced by
-%%%% xls_statem_reduction_lower.  Transport and scheduler placement are
-%%%% deliberately outside this module.
-
 -module(xls_statem_reduction_codegen).
 -moduledoc false.
-
--export([
-    declarations/1,
-    declarations/2,
-    functions/1,
-    functions/2,
-    private_width/1,
-    tag_member/2
-]).
-
+-export([declarations/1, functions/1, private_width/1, tag_member/2, site_contributions/1]).
 -type spec() :: none | xls_statem_reduction_ir:reduction().
 
+
+-doc "Defines private reduction storage around the declared accumulator type.".
 -spec declarations(spec()) -> iolist().
 declarations(Spec) ->
-    declarations(Spec, ordinary).
+    declarations_value(Spec).
 
--spec declarations(spec(), ordinary | aggregate_only) -> iolist().
-declarations(none, ordinary) ->
+%% Emits reduction types only when the actor has a reduction site.
+-spec declarations_value(spec()) -> iolist().
+declarations_value(none) ->
     [];
-declarations(none, aggregate_only) ->
-    error(aggregate_only_requires_reductions);
-declarations(Spec = #{
+declarations_value(Spec = #{
     data := #{dslx_type := DataType},
     accumulator := #{dslx_type := AccumulatorType},
     sites := Sites,
     reducers := Reducers
-}, Mode) when Mode =:= ordinary; Mode =:= aggregate_only ->
+}) ->
     Layout = xls_statem_reduction_ir:layout(Spec),
     SiteBits = maps:get(site_bits, Layout),
     RemainingBits = maps:get(remaining_bits, Layout),
@@ -82,8 +68,6 @@ declarations(Spec = #{
         "  member: u32,\n",
         "  value: ", AccumulatorType, ",\n",
         "}\n\n",
-        aggregate_declarations(Mode, SiteBits, RemainingBits, MemberBits,
-            AccumulatorType),
         "enum ReductionOutcome : u3 {\n",
         "  NOT_CANDIDATE = u3:0,\n",
         "  MISMATCH = u3:1,\n",
@@ -107,46 +91,24 @@ declarations(Spec = #{
         "}\n\n"
     ].
 
+-doc "Renders opening, contribution and completion semantics for actor-owned reductions.".
 -spec functions(spec()) -> iolist().
 functions(Spec) ->
-    functions(Spec, ordinary).
+    functions_value(Spec).
 
--spec functions(spec(), ordinary | aggregate_only) -> iolist().
-functions(none, ordinary) ->
+%% Omits reduction operations for actors without a reduction site.
+-spec functions_value(spec()) -> iolist().
+functions_value(none) ->
     [];
-functions(none, aggregate_only) ->
-    error(aggregate_only_requires_reductions);
-functions(Spec, Mode) when Mode =:= ordinary; Mode =:= aggregate_only ->
+functions_value(Spec) ->
     [
         codec_functions(Spec),
         site_functions(Spec),
         open_functions(Spec),
         contribution_functions(Spec),
         reducer_function(Spec),
-        aggregate_functions(Mode, Spec),
         apply_function(),
         completion_function(Spec)
-    ].
-
-aggregate_declarations(ordinary, _SiteBits, _RemainingBits, _MemberBits,
-        _AccumulatorType) ->
-    [];
-aggregate_declarations(aggregate_only, SiteBits, RemainingBits, MemberBits,
-        AccumulatorType) ->
-    [
-        "pub struct ReductionAggregate {\n",
-        "  valid: u1,\n",
-        "  failure: hls_failure::Code,\n",
-        "  site: uN[", integer_to_list(SiteBits), "],\n",
-        "  key: u32,\n",
-        "  count: uN[", integer_to_list(RemainingBits), "],\n",
-        "  seen: bits[", integer_to_list(MemberBits), "],\n",
-        "  accumulator: ", AccumulatorType, ",\n",
-        "}\n\n",
-        "pub struct ReductionAggregateRequest {\n",
-        "  slot: u32,\n",
-        "  aggregate: ReductionAggregate,\n",
-        "}\n\n"
     ].
 
 -spec private_width(spec()) -> non_neg_integer().
@@ -352,197 +314,6 @@ reducer_arm(#{name := Name, body := Body, result := Result}) ->
         "    },\n"
     ].
 
-aggregate_functions(ordinary, _Spec) ->
-    [];
-aggregate_functions(aggregate_only, Spec = #{sites := Sites}) ->
-    Contributions = site_contributions(Sites),
-    ok = require_aggregate_contributions(Contributions),
-    SiteBits = xls_statem_reduction_ir:site_width(Spec),
-    [
-        "fn reduction_transport_contribution(\n",
-        "    frame: axis::Frame) -> ReductionContribution {\n",
-        "  match frame.header.op as Tag {\n",
-        [transport_contribution_arm(Contribution)
-            || Contribution <- Contributions],
-        "    _ => zero!<ReductionContribution>(),\n",
-        "  }\n",
-        "}\n\n",
-        aggregate_expected_members_function(Spec),
-        aggregate_push_function(SiteBits),
-        "pub fn reduction_aggregate_batch<COUNT: u32>(\n",
-        "    frames: axis::Frame[COUNT]) -> ReductionAggregate {\n",
-        "  unroll_for! (index, aggregate):\n",
-        "      (u32, ReductionAggregate) in u32:0..COUNT {\n",
-        "    reduction_aggregate_push(aggregate, frames[index])\n",
-        "  }(zero!<ReductionAggregate>())\n",
-        "}\n\n",
-        aggregate_apply_function(SiteBits)
-    ].
-
-transport_contribution_arm({Site, #{
-    tag := Tag,
-    source_transportable := true,
-    transport := #{body := Body, result := Result}
-}}) ->
-    [
-        "    Tag::", xls_names:enum_member(Tag), " => {\n",
-        "      let message = ", xls_names:record_codec(Tag),
-        "_from_bits(frame.payload);\n",
-        "      let built = {\n",
-        xls_parse_io:indent(Body, 8),
-        "        ", Result, "\n",
-        "      };\n",
-        "      ReductionContribution {\n",
-        "        valid: built.0,\n",
-        "        site: ReductionSite::", site_label(Site), ",\n",
-        "        key: built.1,\n",
-        "        member: built.2,\n",
-        "        value: built.3,\n",
-        "      }\n",
-        "    },\n"
-    ].
-
-aggregate_expected_members_function(Spec = #{sites := Sites}) ->
-    MemberBits = xls_statem_reduction_ir:member_width(Spec),
-    [
-        "fn reduction_aggregate_expected_members(\n",
-        "    site: ReductionSite) -> ReductionMembers {\n",
-        "  match site {\n",
-        [aggregate_expected_members_arm(Site, MemberBits)
-            || Site <- Sites],
-        "  }\n",
-        "}\n\n"
-    ].
-
-aggregate_expected_members_arm(Site = #{
-    population := #{mode := members, size := Size}
-}, MemberBits) ->
-    [
-        "    ReductionSite::", site_label(Site), " => uN[",
-        integer_to_list(MemberBits), "]:",
-        integer_to_list((1 bsl Size) - 1), " as ReductionMembers,\n"
-    ];
-aggregate_expected_members_arm(Site, _MemberBits) ->
-    [
-        "    ReductionSite::", site_label(Site),
-        " => zero!<ReductionMembers>(),\n"
-    ].
-
-aggregate_push_function(SiteBits) ->
-    [
-        "fn reduction_aggregate_push(\n",
-        "    aggregate: ReductionAggregate, frame: axis::Frame)\n",
-        "    -> ReductionAggregate {\n",
-        "  let contribution = reduction_transport_contribution(frame);\n",
-        "  let first = !aggregate.valid;\n",
-        "  let member_mode = reduction_site_mode(contribution.site) ==\n",
-        "    ReductionMode::MEMBERS;\n",
-        "  let member_bit = reduction_member_bit(\n",
-        "    contribution.site, contribution.member);\n",
-        "  let same_window = first ||\n",
-        "    (aggregate.site == contribution.site as uN[",
-        integer_to_list(SiteBits), "] &&\n",
-        "     aggregate.key == contribution.key);\n",
-        "  let within_population = aggregate.count <\n",
-        "    reduction_site_population(contribution.site);\n",
-        "  let unexpected = member_mode &&\n",
-        "    member_bit == zero!<ReductionMembers>();\n",
-        "  let duplicate = member_mode && !first &&\n",
-        "    (aggregate.seen & member_bit) != zero!<ReductionMembers>();\n",
-        "  let accepted = contribution.valid &&\n",
-        "    same_window && within_population && !unexpected && !duplicate;\n",
-        "  // A failed fold still drains its population. Its first failure\n",
-        "  // absorbs later values without evaluating the reducer again.\n",
-        "  let (accumulator, reduced_failure) =\n",
-        "    if accepted && !first && !hls_failure::failed(aggregate.failure) {\n",
-        "      reduction_reduce(reduction_site_name(contribution.site),\n",
-        "        aggregate.accumulator, contribution.value)\n",
-        "    } else { (contribution.value, hls_failure::NONE) };\n",
-        "  let failure = hls_failure::first(aggregate.failure,\n",
-        "    if accepted { reduced_failure } else { hls_failure::REDUCTION_PROTOCOL });\n",
-        "  ReductionAggregate {\n",
-        "    valid: u1:1,\n",
-        "    failure,\n",
-        "    site: if first { contribution.site as uN[",
-        integer_to_list(SiteBits), "] } else { aggregate.site },\n",
-        "    key: if first { contribution.key } else { aggregate.key },\n",
-        "    count: if accepted {\n",
-        "      aggregate.count + ReductionRemaining:1\n",
-        "    } else { aggregate.count },\n",
-        "    seen: if accepted && member_mode {\n",
-        "      aggregate.seen | member_bit\n",
-        "    } else { aggregate.seen },\n",
-        "    accumulator: if accepted && !hls_failure::failed(failure) {\n",
-        "      accumulator\n",
-        "    } else { aggregate.accumulator },\n",
-        "  }\n",
-        "}\n\n"
-    ].
-
-aggregate_apply_function(SiteBits) ->
-    [
-        "fn reduction_apply_complete_aggregate(\n",
-        "    state: ReductionState, aggregate: ReductionAggregate)\n",
-        "    -> ReductionApply {\n",
-        "  if !aggregate.valid {\n",
-        "    ReductionApply {\n",
-        "      state, outcome: ReductionOutcome::NOT_CANDIDATE }\n",
-        "  } else if state.status != ReductionStatus::OPEN ||\n",
-        "      state.site as uN[", integer_to_list(SiteBits),
-        "] != aggregate.site ||\n",
-        "      state.key != aggregate.key {\n",
-        "    ReductionApply { state, outcome: ReductionOutcome::MISMATCH }\n",
-        "  } else {\n",
-        "    let population = reduction_site_population(state.site);\n",
-        "    let fresh = state.remaining == population &&\n",
-        "      state.seen == zero!<ReductionMembers>();\n",
-        "    let full = aggregate.count == population;\n",
-        "    let member_mode = reduction_site_mode(state.site) ==\n",
-        "      ReductionMode::MEMBERS;\n",
-        "    let members_ok = aggregate.seen ==\n",
-        "      reduction_aggregate_expected_members(state.site);\n",
-        "    if !fresh || !full {\n",
-        "      ReductionApply { state, outcome: ReductionOutcome::MISMATCH }\n",
-        "    } else if !members_ok {\n",
-        "      ReductionApply { state,\n",
-        "        outcome: ReductionOutcome::UNEXPECTED_MEMBER }\n",
-        "    } else {\n",
-        "      let next_state = ReductionState {\n",
-        "        status: ReductionStatus::COMPLETE,\n",
-        "        remaining: ReductionRemaining:0,\n",
-        "        seen: if member_mode { aggregate.seen }\n",
-        "          else { state.seen },\n",
-        "        accumulator: aggregate.accumulator,\n",
-        "        failure: aggregate.failure,\n",
-        "        ..state\n",
-        "      };\n",
-        "      ReductionApply {\n",
-        "        state: next_state, outcome: ReductionOutcome::COMPLETE }\n",
-        "    }\n",
-        "  }\n",
-        "}\n\n"
-    ].
-
-require_aggregate_contributions(Contributions) ->
-    Nontransportable = [
-        #{phase => maps:get(phase, Site),
-          schema => maps:get(tag, Contribution)}
-        || {Site, Contribution} <- Contributions,
-           maps:get(source_transportable, Contribution) =/= true
-    ],
-    case Nontransportable of
-        [] -> ok;
-        _ -> error({aggregate_only_nontransportable_contributions,
-            Nontransportable})
-    end,
-    Tags = [maps:get(tag, Contribution)
-        || {_Site, Contribution} <- Contributions],
-    case duplicate_values(Tags) of
-        [] -> ok;
-        Duplicates -> error({aggregate_only_ambiguous_contribution_schemas,
-            Duplicates})
-    end.
-
 apply_function() ->
     [
         "fn reduction_apply(\n",
@@ -659,6 +430,8 @@ completion_arm(Site = #{
         "      },\n"
     ].
 
+-doc "Flattens the checked contribution clauses from all reduction sites.".
+-spec site_contributions([map()]) -> [{map(), map()}].
 site_contributions(Sites) ->
     lists:append([
         [{Site, Contribution}
@@ -687,17 +460,6 @@ member_site_arms(Site = #{
     ];
 member_site_arms(_Site, _MemberBits) ->
     [].
-
-duplicate_values(Values) ->
-    duplicate_values(Values, #{}, #{}).
-
-duplicate_values([], _Seen, Duplicates) ->
-    lists:sort(maps:keys(Duplicates));
-duplicate_values([Value | Rest], Seen, Duplicates) ->
-    case maps:is_key(Value, Seen) of
-        true -> duplicate_values(Rest, Seen, Duplicates#{Value => true});
-        false -> duplicate_values(Rest, Seen#{Value => true}, Duplicates)
-    end.
 
 mode_value(count) -> "ReductionMode::COUNT";
 mode_value(members) -> "ReductionMode::MEMBERS".

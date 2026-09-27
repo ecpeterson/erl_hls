@@ -16,14 +16,6 @@ ERL_HLS_PHENOM_SYNDROME_X="$stage/phenom_syndrome_cell.x" \
 ERL_HLS_PHI_PHENOM_TOPOLOGY_X="$stage/phi_phenom_topology.x" \
 ERL_HLS_PHI_TORUS_TOPOLOGY_X="$stage/phi_torus_topology.x" \
 ERL_HLS_PHI_NOISE_TOPOLOGY_X="$stage/phi_noise_topology.x" \
-ERL_HLS_PHI_NOISE_TOPOLOGY_SMOKE_X="$stage/phi_noise_topology_smoke.x" \
-ERL_HLS_PHI_NOISE_TOPOLOGY_SMOKE_RAMS="$stage/phi_noise_topology_smoke_rams.vh" \
-ERL_HLS_PHI_SYNDROME_REPLAY_X="$stage/phi_syndrome_replay_cell.x" \
-ERL_HLS_PHI_DECODER_PROFILE_X="$stage/phi_decoder_profile_topology.x" \
-ERL_HLS_PHI_DECODER_PROFILE_CONFIG="$stage/phi_decoder_profile.json" \
-ERL_HLS_PHI_DECODER_PROFILE_TOP_V="$stage/phi_decoder_profile_top.v" \
-ERL_HLS_PHI_MEMORY_GATEWAY_X="$stage/phi_memory_gateway.x" \
-ERL_HLS_PHI_MEMORY_DEBUG_TOP_V="$stage/phi_memory_debug_top.v" \
 ERL_HLS_ORDERED_EGRESS_ACTOR_X="$stage/ordered_egress_actor.x" \
 ERL_HLS_ORDERED_EGRESS_TOPOLOGY_X="$stage/ordered_egress_topology.x" \
 ERL_HLS_CASE_FIXTURE_X="$stage/xls_case_fixture.x" \
@@ -50,162 +42,10 @@ erl \
         ),
         PhiPhenomTopology = phi_phenom_topology_dslx:to_dslx(),
         PhiTorusTopology = phi_torus_topology_dslx:to_dslx(),
-        #{
-            distance := DemoDistance,
-            noise_rate := DemoNoiseRate
-        } = phi_memory_demo:fixture(),
-        PhiNoiseDistance = case os:getenv("ERL_HLS_PHI_DISTANCE") of
-            false -> DemoDistance;
-            DistanceText -> list_to_integer(DistanceText)
-        end,
-        PhiNoiseRate = case os:getenv("ERL_HLS_PHI_NOISE_RATE") of
-            false -> DemoNoiseRate;
-            RateText -> list_to_integer(RateText)
-        end,
-        SchedulerProfile = case os:getenv("ERL_HLS_PHI_SHARDS") of
-            false -> 2;
-            ShardText -> {phi_shards, list_to_integer(ShardText)}
-        end,
-        PhiNoisePlan = hls_topology:normalize(
-            phi_noise_topology:topology(PhiNoiseDistance, PhiNoiseRate)
-        ),
-        PhiNoisePhysical = phi_noise_topology_dslx:profile(
-            SchedulerProfile
-        ),
-        %% The routine D1 closeout fixture disables random injection so empty
-        %% decoder planes let the ERTS witness terminate deterministically.
-        PhiNoiseSmokePlan = hls_topology:normalize(
-            phi_noise_topology:topology(1, 0)
-        ),
-        PhiNoiseSmokePhysical = phi_noise_topology_dslx:profile(),
-        PhiNoiseSmokeScheduler = hls_scheduler_plan:normalize(
-            PhiNoiseSmokePlan, maps:get(scheduler_groups, PhiNoiseSmokePhysical)
-        ),
-        %% Both schedulers in each family must agree with the fixture layout.
-        [#{state_width := DataWidth}, #{state_width := DataWidth},
-         #{state_width := PhiWidth}, #{state_width := PhiWidth},
-         #{state_width := SyndromeWidth}, #{state_width := SyndromeWidth}] =
-            xls_scheduler_ram_v:bindings(PhiNoiseSmokeScheduler),
-        ok = file:write_file(os:getenv("ERL_HLS_PHI_NOISE_TOPOLOGY_SMOKE_RAMS"),
-            ["// Generated from the D1 scheduler plan.\n",
-             [io_lib:format("localparam integer ~s_STATE_WIDTH = ~B;~n", [Name, Width])
-             || {Name, Width} <- [{"DATA", DataWidth}, {"PHI", PhiWidth},
-                                 {"SYNDROME", SyndromeWidth}]]]),
-        ProfileShardCount = case os:getenv("ERL_HLS_PHI_PROFILE_SHARDS") of
-            false -> 3;
-            ProfileShardText -> list_to_integer(ProfileShardText)
-        end,
-        ProfileEffectWindowPartition = case os:getenv(
-            "ERL_HLS_PHI_PROFILE_EFFECT_WINDOWS"
-        ) of
-            false -> global;
-            "global" -> global;
-            "weak_components" -> weak_components;
-            PartitionText -> error({effect_window_partition, PartitionText})
-        end,
-        ProfileDimension = fun(Name) ->
-            case os:getenv(Name) of false -> 3; Text -> list_to_integer(Text) end
-        end,
-        ProfilePlanes = case os:getenv("ERL_HLS_PHI_PROFILE_PLANES") of
-            false -> [x, z];
-            "xz" -> [x, z];
-            "x" -> [x];
-            "z" -> [z];
-            PlaneText -> error({invalid_profile_planes, PlaneText})
-        end,
-        ProfileConfig = phi_decoder_profile:normalize(#{
-            shape => [ProfileDimension("ERL_HLS_PHI_PROFILE_WIDTH"),
-                      ProfileDimension("ERL_HLS_PHI_PROFILE_HEIGHT")],
-            planes => ProfilePlanes, shards => ProfileShardCount
-        }),
-        ok = file:write_file(os:getenv("ERL_HLS_PHI_DECODER_PROFILE_CONFIG"),
-            json:encode(phi_decoder_profile:manifest(ProfileConfig))),
-        ProfilePlan = hls_topology:normalize(
-            phi_decoder_profile_topology:topology(ProfileConfig)
-        ),
-        ProfilePhysical =
-            (phi_decoder_profile_topology_dslx:profile(
-                ProfileConfig
-            ))#{
-                effect_window_partition => ProfileEffectWindowPartition
-            },
-        ArtifactRequirementMaps = [
-            xls_topology_dslx:artifact_requirements(
-                ProfilePlan,
-                ProfilePhysical
-            ),
-            xls_topology_dslx:artifact_requirements(
-                PhiNoisePlan,
-                PhiNoisePhysical
-            ),
-            xls_topology_dslx:artifact_requirements(
-                PhiNoiseSmokePlan,
-                PhiNoiseSmokePhysical
-            )
-        ],
-        SharedServiceFor = fun(Module) ->
-            Modes = lists:usort([
-                Mode
-                || Requirements <- ArtifactRequirementMaps,
-                   #{shared_service := Mode} <- [
-                       maps:get(Module, Requirements, none)
-                   ]
-            ]),
-            case Modes of
-                [] -> ordinary;
-                [Mode] -> Mode;
-                _ -> error({mixed_staged_actor_artifacts, Module, Modes})
-            end
-        end,
-        PhiHalo = xls_parse:to_xls(
-            "src/examples/phi_decoder/phi_halo_cell.erl",
-            #{shared_service => SharedServiceFor(phi_halo_cell)}
-        ),
-        PhenomData = xls_parse:to_xls(
-            "src/examples/phi_decoder/phenom_data_cell.erl",
-            #{shared_service => SharedServiceFor(phenom_data_cell)}
-        ),
-        PhenomSyndrome = xls_parse:to_xls(
-            "src/examples/phi_decoder/phenom_syndrome_cell.erl",
-            #{shared_service => SharedServiceFor(phenom_syndrome_cell)}
-        ),
-        PhiSyndromeReplay = xls_parse:to_xls(
-            "src/examples/phi_decoder/phi_syndrome_replay_cell.erl",
-            #{shared_service => SharedServiceFor(phi_syndrome_replay_cell)}
-        ),
-        PhiNoiseTopology = xls_topology_dslx:emit(
-            PhiNoisePlan,
-            PhiNoisePhysical
-        ),
-        PhiNoiseTopologySmoke = xls_topology_dslx:emit(
-            PhiNoiseSmokePlan,
-            PhiNoiseSmokePhysical
-        ),
-        PhiDecoderProfile = xls_topology_dslx:emit(
-            ProfilePlan,
-            ProfilePhysical
-        ),
-        PhiDecoderProfileTop = phi_decoder_profile_top_v:to_verilog(
-            ProfileConfig
-        ),
-        PhiBridgeDistance = case os:getenv(
-            "ERL_HLS_PHI_BRIDGE_DISTANCE"
-        ) of
-            false -> 1;
-            "demo" -> DemoDistance;
-            Text -> list_to_integer(Text)
-        end,
-        GatewayProfile = case PhiBridgeDistance of
-            3 -> SchedulerProfile;
-            1 -> 2
-        end,
-        PhiMemoryGateway = case PhiBridgeDistance of
-            3 -> phi_memory_gateway_dslx:to_dslx(3, GatewayProfile);
-            1 -> phi_memory_gateway_dslx:to_dslx(1)
-        end,
-        PhiMemoryDebugTop = phi_memory_debug_top_v:to_verilog(
-            GatewayProfile
-        ),
+        PhiNoiseTopology = phi_noise_topology_dslx:to_dslx(),
+        PhiHalo = xls_parse:to_xls("src/examples/phi_decoder/phi_halo_cell.erl"),
+        PhenomData = xls_parse:to_xls("src/examples/phi_decoder/phenom_data_cell.erl"),
+        PhenomSyndrome = xls_parse:to_xls("src/examples/phi_decoder/phenom_syndrome_cell.erl"),
         OrderedEgressActor = xls_parse:to_xls(
             "test/ordered_egress_actor.erl"
         ),
@@ -219,10 +59,6 @@ erl \
         ok = file:write_file(
             os:getenv("ERL_HLS_PHENOM_SYNDROME_X"),
             PhenomSyndrome
-        ),
-        ok = file:write_file(
-            os:getenv("ERL_HLS_PHI_SYNDROME_REPLAY_X"),
-            PhiSyndromeReplay
         ),
         ok = file:write_file(
             os:getenv("ERL_HLS_CASE_FIXTURE_X"),
@@ -247,26 +83,6 @@ erl \
         ok = file:write_file(
             os:getenv("ERL_HLS_PHI_NOISE_TOPOLOGY_X"),
             PhiNoiseTopology
-        ),
-        ok = file:write_file(
-            os:getenv("ERL_HLS_PHI_NOISE_TOPOLOGY_SMOKE_X"),
-            PhiNoiseTopologySmoke
-        ),
-        ok = file:write_file(
-            os:getenv("ERL_HLS_PHI_DECODER_PROFILE_X"),
-            PhiDecoderProfile
-        ),
-        ok = file:write_file(
-            os:getenv("ERL_HLS_PHI_DECODER_PROFILE_TOP_V"),
-            PhiDecoderProfileTop
-        ),
-        ok = file:write_file(
-            os:getenv("ERL_HLS_PHI_MEMORY_GATEWAY_X"),
-            PhiMemoryGateway
-        ),
-        ok = file:write_file(
-            os:getenv("ERL_HLS_PHI_MEMORY_DEBUG_TOP_V"),
-            PhiMemoryDebugTop
         ),
         ok = file:write_file(
             os:getenv("ERL_HLS_ORDERED_EGRESS_ACTOR_X"),
@@ -322,14 +138,6 @@ cp "$project_root/test/rtl/phi_phenom_topology_tb.sv" \
     "$stage/phi_phenom_topology_tb.sv"
 cp "$project_root/test/rtl/phi_torus_topology_tb.sv" \
     "$stage/phi_torus_topology_tb.sv"
-cp "$project_root/test/rtl/phi_noise_topology_smoke_tb.sv" \
-    "$stage/phi_noise_topology_smoke_tb.sv"
-cp "$project_root/test/rtl/phi_noise_topology_tb.sv" \
-    "$stage/phi_noise_topology_tb.sv"
-cp "$project_root/test/rtl/phi_decoder_profile_tb.sv" \
-    "$stage/phi_decoder_profile_tb.sv"
-cp "$project_root/test/rtl/phi_memory_bridge_tb.sv" \
-    "$stage/phi_memory_bridge_tb.sv"
 cp "$project_root/test/rtl/hls_fabric_host_tx_tb.sv" \
     "$stage/hls_fabric_host_tx_tb.sv"
 cp "$project_root/test/rtl/ordered_egress_topology_tb.sv" \
@@ -337,8 +145,6 @@ cp "$project_root/test/rtl/ordered_egress_topology_tb.sv" \
 cp "$project_root/test/rtl/xls_sim_bridge.c" "$stage/xls_sim_bridge.c"
 cp "$project_root/test/rtl/xls_sim_axis.h" "$stage/xls_sim_axis.h"
 cp "$project_root/test/rtl/debug/hls_debug_server_tb.sv" "$stage/hls_debug_server_tb.sv"
-cp "$project_root/tools/phi_scheduler_rams.sh" \
-    "$stage/phi_scheduler_rams.sh"
 
 # `erlc -P` writes source listings after includes, macros, and parse transforms
 # have been expanded. This lets an older remote OTP compile its own compatible
@@ -385,11 +191,7 @@ erlc -pa "$project_root/_build/test/lib/erl_hls/ebin" \
 cp "$stage/test_src/regsvc_cpu_tests.P" \
     "$stage/test_src/regsvc_cpu_tests.erl"
 
-erlc -pa "$project_root/_build/test/lib/erl_hls/ebin" \
-    -P -o "$stage/test_src" "$project_root/test/phi_memory_bridge_tests.erl"
-cp "$stage/test_src/phi_memory_bridge_tests.P" \
-    "$stage/test_src/phi_memory_bridge_tests.erl"
 
-for helper in compile_xls.py compile_phi_decoder_profile.py compile_phi_decoder_profile.sh; do
+for helper in compile_xls.py; do
     cp "$project_root/tools/$helper" "$stage/$helper"
 done

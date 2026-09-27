@@ -67,7 +67,7 @@ prepending or moving one can renumber them. Every entry must be a unique atom.
 Hardware declarations also require unambiguous generated names and bounded
 enum encodings; see `docs/actor-names.md` for spelling and reserved names.
 """.
--export([actor_interface/1, actor_interface/2, to_xls/1, to_xls/2]).
+-export([actor_artifact/2, actor_interface/1, actor_interface/2, to_xls/1, to_xls/2]).
 %% Internal API shared by the actor-specific lowerers while this module is
 %% split into smaller compiler passes.
 -export([
@@ -113,50 +113,45 @@ enum encodings; see `docs/actor-names.md` for spelling and reserved names.
 -define(debug(X), begin io:format("~w@~w: ~p~n", [?FUNCTION_NAME, ?LINE, X]), X end).
 -define(MAX_PUBLIC_TAGS, 253).  % u8 minus none, error, and actor data
 
--spec to_xls(string()) -> iolist().
--doc "Transpiles a supported Erlang actor module to a corresponding XLS module.".
-to_xls(Filename) ->
-    to_xls(Filename, #{shared_service => ordinary}).
+-doc "Transpiles an Erlang actor into a dedicated XLS service.".
+-spec to_xls(file:filename()) -> iolist().
+to_xls(Filename) -> to_xls(Filename, #{}).
 
--spec to_xls(string(), #{shared_service => ordinary | aggregate_only,
-    mailbox_debug => boolean(), direct_actor_debug => boolean(),
-    source_options => [hls_source:option()] | hls_source:context()}) ->
-    iolist().
--doc "Transpiles an actor with preprocessing options and a shared-service artifact mode.".
+-doc "Transpiles an actor with preprocessing and optional direct-actor observations.".
+-spec to_xls(file:filename(), #{source_options => [hls_source:option()] | hls_source:context(),
+    direct_actor_debug => boolean()}) -> iolist().
 to_xls(Filename, Options0) ->
     Options = validate_xls_options(Options0),
-    Mode = maps:get(shared_service, Options),
-    MailboxDebug = maps:get(mailbox_debug, Options),
-    ActorDebug = maps:get(direct_actor_debug, Options),
     {ok, Forms} = parse_file(Filename, maps:get(source_options, Options)),
     case find_optional_attribute(Forms, hls_phases) of
-        none when MailboxDebug -> error(mailbox_debug_requires_hls_statem);
-        none when ActorDebug -> error(direct_actor_debug_requires_hls_statem);
-        none when Mode =:= ordinary -> to_xls_gs(Filename, Forms);
-        none -> error({unsupported_hls_gs_shared_service, Mode});
-        {ok, PhaseNames} ->
-            to_xls_statem(Filename, Forms, PhaseNames,
-                maps:with([shared_service, mailbox_debug, direct_actor_debug], Options))
+        none ->
+            case maps:get(direct_actor_debug, Options) of
+                true -> error(direct_actor_debug_requires_hls_statem);
+                false -> to_xls_gs(Filename, Forms)
+            end;
+        {ok, Phases} -> to_xls_statem(Filename, Forms, Phases,
+            maps:with([direct_actor_debug], Options))
     end.
 
+-doc "Returns validated state-machine callback semantics for a backend, using explicit source context.".
+-spec actor_artifact(file:filename(), [hls_source:option()] | hls_source:context()) -> xls_actor_codegen:spec().
+actor_artifact(Filename, SourceOptions) ->
+    {ok, Forms} = parse_file(Filename, SourceOptions),
+    case find_optional_attribute(Forms, hls_phases) of
+        {ok, Phases} -> xls_statem_lower:artifact(Filename, Forms, Phases);
+        none -> error({unsupported_actor_artifact, Filename, hls_gs})
+    end.
+
+%% Reject physical execution options at the dedicated-service boundary.
+-doc "Validates source and dedicated-actor options; rejects unknown physical settings.".
+-spec validate_xls_options(map()) -> map().
 validate_xls_options(Options) when is_map(Options) ->
-    Keys = lists:sort(maps:keys(Options)),
-    case Keys -- [shared_service, source_options, mailbox_debug, direct_actor_debug] of
-        [] ->
-            case maps:get(shared_service, Options, ordinary) of
-                Mode when Mode =:= ordinary; Mode =:= aggregate_only ->
-                    #{shared_service => Mode,
-                        mailbox_debug => xls_scheduler_observation:enabled(Options),
-                        direct_actor_debug => xls_actor_observation:enabled(Options),
-                        source_options => maps:get(source_options, Options, [])};
-                Mode ->
-                    error({invalid_xls_shared_service, Mode})
-            end;
-        _ ->
-            error({invalid_xls_options, Keys})
+    case maps:keys(Options) -- [source_options, direct_actor_debug] of
+        [] -> #{direct_actor_debug => xls_actor_observation:enabled(Options),
+            source_options => maps:get(source_options, Options, [])};
+        Keys -> error({invalid_xls_options, Keys})
     end;
-validate_xls_options(Options) ->
-    error({invalid_xls_options, Options}).
+validate_xls_options(Options) -> error({invalid_xls_options, Options}).
 
 -spec actor_interface(file:filename()) -> map().
 -doc "Returns the include-expanded interface inferred for one hls_statem file.".

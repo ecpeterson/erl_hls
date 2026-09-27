@@ -1,2 +1,0 @@
-PASS inputs=161533 checked=161506 stalls=11597 resets=19 cycles=184021
-/Users/ecpeterson/Documents/code/erl_xls/_build/timing-report-repo/_build/staged-reciprocal-fabric/testbench.sv:34: $finish called at 1840226 (1s)

@@ -5,7 +5,6 @@ script_root=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 stage=$(cd "$1" && pwd)
 xls_root=$(cd "$2" && pwd)
 stdlib="$xls_root/xls/dslx/stdlib"
-. "$stage/phi_scheduler_rams.sh"
 
 cd "$stage"
 
@@ -36,14 +35,9 @@ for test_module in \
     hls_numeric_test.x \
     xls_short_circuit_test.x \
     arbitration.x \
-    scheduler.x \
-    scheduler_observation.x \
     direct_mailbox_observation.x \
     bram.x \
-    effect_window.x \
     frame_transport.x \
-    frame_queue.x \
-    mailbox.x \
     hls_debug_framing.x \
     hls_debug_trace.x \
     hls_debug_observer.x \
@@ -214,64 +208,6 @@ vvp phi_torus_topology.vvp
     --top=Top \
     phi_noise_topology.x > phi_noise_topology.ir
 
-# This distance-one graph exercises all six family types, per-instance
-# startup, and the syndrome-to-phi result paths through generated RTL.
-"$xls_root/ir_converter_main" \
-    --warnings_as_errors=false \
-    --dslx_path=. \
-    --dslx_stdlib_path="$stdlib" \
-    --top=Top \
-    phi_noise_topology_smoke.x > phi_noise_topology_smoke.ir
-
-"$xls_root/opt_main" \
-    phi_noise_topology_smoke.ir > phi_noise_topology_smoke.opt.ir
-
-"$xls_root/codegen_main" \
-    --pipeline_stages=2 \
-    --worst_case_throughput=2 \
-    --delay_model=unit \
-    --flop_inputs=false \
-    --flop_outputs=true \
-    --use_system_verilog=false \
-    --reset=reset \
-    --fifo_module= \
-    --ram_configurations="$(phi_scheduler_ram_configurations)" \
-    phi_noise_topology_smoke.opt.ir > phi_noise_topology_smoke.v
-
-iverilog \
-    -g2012 \
-    -s phi_noise_topology_smoke_tb \
-    -o phi_noise_topology_smoke.vvp \
-    phi_noise_topology_smoke_tb.sv \
-    hls_1r1w_ram.v \
-    phi_noise_topology_smoke.v
-
-vvp phi_noise_topology_smoke.vvp
-
-# Wrap the same zero-noise D1 graph in its routed host gateway. This is the
-# routine end-to-end ERTS fixture; the checked gateway source imports D3.
-"$xls_root/ir_converter_main" \
-    --warnings_as_errors=false \
-    --dslx_path=. \
-    --dslx_stdlib_path="$stdlib" \
-    --top=Top \
-    phi_memory_gateway.x > phi_memory_gateway.ir
-
-"$xls_root/opt_main" \
-    phi_memory_gateway.ir > phi_memory_gateway.opt.ir
-
-"$xls_root/codegen_main" \
-    --pipeline_stages=2 \
-    --worst_case_throughput=2 \
-    --delay_model=unit \
-    --flop_inputs=false \
-    --flop_outputs=true \
-    --use_system_verilog=false \
-    --reset=reset \
-    --fifo_module= \
-    --ram_configurations="$(phi_scheduler_ram_configurations)" \
-    phi_memory_gateway.opt.ir > phi_memory_gateway.v
-
 iverilog \
     -g2012 \
     -s phi_halo_cell_tb \
@@ -410,23 +346,6 @@ iverilog-vpi xls_sim_bridge.c
 
 iverilog \
     -g2012 \
-    -s phi_memory_bridge_tb \
-    -o phi_memory_bridge.vvp \
-    phi_memory_bridge_tb.sv \
-    phi_memory_debug_top.v \
-    hls_1r1w_ram.v \
-    phi_memory_gateway.v \
-    hls_fabric_host_tx.v \
-    hls_fabric_ingress.v \
-    hls_fabric_egress.v \
-    hls_debug_monitor.v \
-    hls_debug_tap.v \
-    hls_trace_store.v \
-    hls_debug_observer.v \
-    hls_debug_server.v
-
-iverilog \
-    -g2012 \
     -s regsvc_bridge_tb \
     -o regsvc_bridge.vvp \
     regsvc_bridge_tb.sv \
@@ -536,66 +455,3 @@ ERL_HLS_SIM_DIR="$sim_dir" erl \
     -eval 'case eunit:test(regsvc_cpu_tests, [verbose]) of ok -> halt(0); error -> halt(1) end.'
 
 stop_sim "$sim_dir/vvp.log"
-
-phi_sim_dir="$stage/phi_sim"
-mkdir -p "$phi_sim_dir"
-rm -f \
-    "$phi_sim_dir/app_tx" \
-    "$phi_sim_dir/app_rx" \
-    "$phi_sim_dir/debug_tx" \
-    "$phi_sim_dir/debug_rx" \
-    "$phi_sim_dir/vvp.log"
-
-ERL_HLS_SIM_DIR="$phi_sim_dir" \
-ERL_HLS_SIM_TOP=phi_memory_bridge_tb \
-    vvp -M "$stage" -m xls_sim_bridge phi_memory_bridge.vvp \
-    >"$phi_sim_dir/vvp.log" 2>&1 &
-sim_pid=$!
-
-phi_startup_deadline=$((SECONDS + 120))
-while ((SECONDS < phi_startup_deadline)); do
-    if [[ \
-        -p "$phi_sim_dir/app_tx" && \
-        -p "$phi_sim_dir/app_rx" && \
-        -p "$phi_sim_dir/debug_tx" && \
-        -p "$phi_sim_dir/debug_rx" \
-    ]]; then
-        break
-    fi
-    if ! kill -0 "$sim_pid" 2>/dev/null; then
-        cat "$phi_sim_dir/vvp.log"
-        exit 1
-    fi
-    sleep 0.1
-done
-
-if [[ \
-    ! -p "$phi_sim_dir/app_tx" || \
-    ! -p "$phi_sim_dir/app_rx" || \
-    ! -p "$phi_sim_dir/debug_tx" || \
-    ! -p "$phi_sim_dir/debug_rx" \
-]]; then
-    cat "$phi_sim_dir/vvp.log"
-    echo "Timed out waiting for phi simulator transport FIFOs" >&2
-    exit 1
-fi
-
-erlc -pa "$beam_dir" -o "$beam_dir" \
-    "$stage/erl_src/hls_pauli.erl" \
-    "$stage/erl_src/phenom_data_cell.erl" \
-    "$stage/erl_src/phenom_syndrome_cell.erl" \
-    "$stage/erl_src/phi_halo_cell.erl" \
-    "$stage/erl_src/phi_memory_boundary.erl" \
-    "$stage/erl_src/phi_memory_experiment.erl" \
-    "$stage/erl_src/phi_memory_runner.erl" \
-    "$stage/erl_src/phi_memory_wire.erl" \
-    "$stage/erl_src/phi_noise_topology.erl"
-erlc -pa "$beam_dir" -o "$beam_dir" \
-    "$stage/test_src/phi_memory_bridge_tests.erl"
-
-ERL_HLS_PHI_SIM_DIR="$phi_sim_dir" erl \
-    -noshell \
-    -pa "$beam_dir" \
-    -eval 'case eunit:test(phi_memory_bridge_tests, [verbose]) of ok -> halt(0); error -> halt(1) end.'
-
-stop_sim "$phi_sim_dir/vvp.log"

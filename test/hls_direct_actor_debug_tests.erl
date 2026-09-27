@@ -1,14 +1,16 @@
 -module(hls_direct_actor_debug_tests).
 -include_lib("eunit/include/eunit.hrl").
 
+%% Checks projection and catalog.
+-spec projection_and_catalog_test() -> 'ok'.
 projection_and_catalog_test() ->
-    {Plan, Specs} = hls_actor_debug_dslx:fixture(direct_reduction),
+    {Plan, Specs} = hls_direct_debug_fixture:fixture(direct_reduction),
     Options = #{direct_actor_debug => true},
-    Artifacts = hls_actor_debug_dslx:artifacts(direct_reduction, Options),
+    Artifacts = hls_direct_debug_fixture:artifacts(direct_reduction, Options),
     Projection = #{<<"banks">> := [], <<"direct">> := Direct} =
-        xls_scheduler_debug:projection(Plan, Specs, Artifacts, Options),
+        xls_actor_debug:projection(Plan, Artifacts, Options),
     ?assertEqual(5, length(Direct)),
-    ?assertEqual(ok, xls_scheduler_debug:validate(Plan, Specs, Projection)),
+    ?assertEqual(ok, xls_actor_debug:validate(Plan, Projection)),
     Resources = [resource(B) || B <- Direct],
     Manifest = #{<<"actor_projection">> => Projection, <<"resources">> => Resources,
         <<"fingerprint">> => <<"direct-fixture">>},
@@ -26,13 +28,13 @@ projection_and_catalog_test() ->
     end, hls_debug_catalog:actors(Catalog)),
     [First | Rest] = Direct,
     lists:foreach(fun(Bad) ->
-        ?assertError(actor_projection_mismatch, xls_scheduler_debug:validate(Plan, Specs,
+        ?assertError(actor_projection_mismatch, xls_actor_debug:validate(Plan,
             Projection#{<<"direct">> := [Bad | Rest]}))
     end, [First#{<<"port">> := <<"unrelated_output">>},
         First#{<<"phases">> := [<<"wrong_phase">>]},
         First#{<<"index">> := 9}, First#{<<"width">> := 25},
         First#{<<"actors">> := maps:get(<<"actors">>, lists:last(Direct))}]),
-    ?assertError(actor_projection_mismatch, xls_scheduler_debug:validate(Plan, Specs,
+    ?assertError(actor_projection_mismatch, xls_actor_debug:validate(Plan,
         Projection#{<<"direct">> := Rest})),
     [R | Rs] = Resources,
     lists:foreach(fun(BadResource) ->

@@ -31,7 +31,7 @@ Channel bits 0/1 mean valid/ready. FIFO values contain stored occupancy. Actor f
 | 55 | Mailbox initialized |
 | 56 onward | Optional reduction metadata |
 
-For direct actors, bit 48 is reserved admission and 49–54 are zero. For shared actors, bits 48–52 are in-flight, mail candidate, entry candidate, egress waiter and shared egress busy; bits 53–54 encode scheduler phase. Slot zero occupies the low 24 bits of a shared scheduler's mailbox publication. Absent mailbox observations leave 32–55 zero.
+For dedicated actors, bit 48 is reserved admission and 49–54 are zero. Other execution backends define their own mailbox metadata interpretation and provide an explicit local decoder. Absent mailbox observations leave 32–55 zero.
 
 Projection schema 4 supplies source and observation offsets for reduction status (2 bits), site (1–8), key (32), remaining (1–8) and pending failure (16), packed consecutively from bit 56. Unused bits are zero. Populations, site names, phase codebooks and failure source maps come from the manifest; unknown codes are rejected.
 

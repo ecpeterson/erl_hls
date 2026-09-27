@@ -17,7 +17,7 @@ path. The check compares interface facts, not complete callback behavior or an
 artifact hash. See `docs/source-context.md` for compilation inputs and limits.
 
 `from_modules/1` resolves each distinct module once into a caller-owned map.
-Planning passes use this map across instances, families, or scheduler groups;
+Planning passes use this map across instances and families;
 no interface cache survives the pass. A later pass rereads current sources.
 
 The summary records only facts already required by the current lowerer:
@@ -36,14 +36,10 @@ The summary also carries candidate failure origins and the callback-state layout
 Failure codes are allocated separately from the generated actor artifact. Its packed width is derived
 when queried, after custom `hls_type` modules are available; computing it while
 the actor's parse transform runs would make compilation depend on incidental
-source order. This is the state which a shared scheduler may place in generated
-memory. Bounded actor-local reduction state is reported separately, then
-colocated in the same scheduler RAM row without becoming a callback-record
-field. Mailbox slots, phase, postponement, admission, and pending effects
-remain scheduler state and are deliberately not folded into that record.
+source order. Callback data and bounded actor-local reduction state are described separately from mailbox and execution metadata.
 
-This is internal compiler data for the phi topology experiment, not a stable
-application behavior or a general Erlang protocol description.
+This summary is internal compiler data, not a stable application protocol.
+
 """.
 
 -export([

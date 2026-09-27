@@ -1,6 +1,8 @@
 -module(hls_mixed_topology_dslx).
 -export([fixture/1, write/2, cpu/0, cpu/1]).
 
+-doc "Builds the selected test topology and its matching execution profile.".
+-spec fixture('direct' | {'ingress','direct' | {'ingress','direct' | {term(),term()}}}) -> {term(),map()}.
 fixture({ingress, Placement}) ->
     {Plan, Specs} = fixture(Placement),
     #{actors := Actors, routes := Routes, startup := Startup} = Plan,
@@ -21,31 +23,8 @@ fixture({ingress, Placement}) ->
         route_relations => [{{workers, Port}, [{actor, collector}]} || Port <- [result_a, result_b]],
         startup => [{Id, Messages} || #{target := Id, messages := Messages} <- Startup, Id =/= source]},
     {hls_topology:normalize(Spec), Specs};
-fixture({components, _Policy}) ->
-    Left = definition(source, collector, extra, workers, reports),
-    Right = definition(source_peer, collector_peer, extra_peer, workers_peer, reports_peer),
-    Joined = maps:map(fun
-        (version, Version) -> Version;
-        (K, V) when K =:= actors; K =:= families -> maps:merge(V, maps:get(K, Right));
-        (K, V) -> V ++ maps:get(K, Right)
-    end, Left),
-    %% Interleave the group indices between components to exercise local grant
-    %% positions, which must not be confused with global scheduler indices.
-    {hls_topology:normalize(Joined),
-        #{even => group([{family, workers, {interleaved, 0, 2}}]),
-          even_peer => group([{family, workers_peer, {interleaved, 0, 2}}]),
-          odd => group([{family, workers, {interleaved, 1, 2}}]),
-          odd_peer => group([{family, workers_peer, {interleaved, 1, 2}}])}};
-fixture(Placement) ->
-    Plan = hls_topology:normalize(definition(source, collector, extra, workers, reports)),
-    Specs = case Placement of
-        direct -> #{};
-        one -> #{workers => group([{family, workers}])};
-        two -> #{even => group([{family, workers, {interleaved, 0, 2}}]),
-            odd => group([{family, workers, {interleaved, 1, 2}}])};
-        coalesced -> #{workers => group([{actor, extra}, {family, workers}])}
-    end,
-    {Plan, Specs}.
+fixture(direct) ->
+    {hls_topology:normalize(definition(source, collector, extra, workers, reports)), #{}}.
 
 definition(Source, Collector, Extra, Family, Reports) ->
     Members = [{{Family, X, Y}, 2 * X + Y} || X <- [0, 1], Y <- [0, 1]] ++ [{Extra, 4}],
@@ -62,14 +41,14 @@ definition(Source, Collector, Extra, Family, Reports) ->
         route_relations => [{{Family, Port}, [{actor, Collector}]} || Port <- [result_a, result_b]],
         startup => [{Source, [{kick, 0}]}] ++ [{Id, [{configure, I}]} || {Id, I} <- Members]}.
 
-group(Members) -> #{members => Members, state_storage => block_ram, mailbox_storage => block_ram}.
 
+-doc "Writes generated DSLX and the matching oracle or wrapper files into the test stage.".
+-spec write('direct' | {'ingress','direct' | {'ingress','direct' | {term(),term()}}},atom() | binary() | [atom() | [any()] | char()]) -> 'ok' | {'error',atom()}.
 write(Placement, Stage) ->
-    {Plan, Specs} = fixture(Placement),
-    Options = #{direct_actor_debug => true, mailbox_debug => map_size(Specs) > 0},
+    {Plan, _} = fixture(Placement),
+    Options = #{direct_actor_debug => true},
     Profile = maps:merge(#{name => mixed_topology, channel_depth => 1,
-        actor_egress_depth => 0, scheduler_groups => Specs,
-        effect_window_partition => window_policy(Placement)}, Options),
+        actor_egress_depth => 0}, Options),
     Requirements = xls_topology_dslx:artifact_requirements(Plan, Profile),
     Artifacts = maps:map(fun(Module, Requirement) ->
         xls_parse:to_xls(filename:join("test", atom_to_list(Module) ++ ".erl"), Requirement)
@@ -79,23 +58,17 @@ write(Placement, Stage) ->
     end, Artifacts),
     ok = file:write_file(filename:join(Stage, "mixed_topology.x"), xls_topology_dslx:emit(Plan, Profile)),
     ok = file:write_file(filename:join(Stage, "actors.json"),
-        json:encode(xls_scheduler_debug:projection(Plan, Specs, Artifacts, Options))),
-    Scheduler = hls_scheduler_plan:normalize(Plan, Specs),
-    Bindings = xls_scheduler_ram_v:bindings(Scheduler),
-    Direct = xls_actor_observation:bindings(Plan, Specs),
-    {MailboxWires, MailboxPorts} = case map_size(Specs) of
-        0 -> {[], []};
-        _ -> {xls_scheduler_observation:wires(Scheduler), xls_scheduler_observation:ports(Scheduler)}
-    end,
+        json:encode(xls_actor_debug:projection(Plan, Artifacts, Options))),
+    Direct = xls_actor_observation:bindings(Plan, #{}),
     Wrapper = ["module mixed_topology_wrapper(input wire clk, reset,\n",
         input_ports(Placement),
         "  output wire [127:0] _reports_out, output wire _reports_out_vld, input wire _reports_out_rdy);\n",
-        xls_scheduler_ram_v:wires(Bindings), MailboxWires, xls_actor_observation:wires(Direct),
+        xls_actor_observation:wires(Direct),
         "mixed_topology dut(.clk(clk), .reset(reset), ._reports_out(_reports_out),\n",
         " ._reports_out_vld(_reports_out_vld), ._reports_out_rdy(_reports_out_rdy)",
         input_connections(Placement),
-        xls_scheduler_ram_v:application_ports(Bindings), MailboxPorts, xls_actor_observation:ports(Direct), ");\n",
-        xls_scheduler_ram_v:instances(Bindings, "clk"), "endmodule\n"],
+        xls_actor_observation:ports(Direct), ");\n",
+        "endmodule\n"],
     ok = file:write_file(filename:join(Stage, "mixed_topology_wrapper.v"), Wrapper),
     %% Each disconnected copy has the same transcript as the closed CPU graph;
     %% RTL checks both ports independently and stalls only the first copy.
@@ -105,9 +78,6 @@ write(Placement, Stage) ->
     Expected = Reports,
     ok = file:write_file(filename:join(Stage, "cpu.term"), io_lib:format("~p.~n", [Reports])),
     file:write_file(filename:join(Stage, "expected.hex"), [frame_hex(R) || R <- Reports]).
-
-window_policy({components, Policy}) -> Policy;
-window_policy(_) -> global.
 
 frame_hex(Report) ->
     Payload = hls_codec:align(hls_mixed_collector:pack(Report), 32),

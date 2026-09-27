@@ -59,6 +59,8 @@ unsupported_wait(Target) ->
     {Metadata, _, _} = describe(Target),
     {error, {unsupported_operation, maps:get(scope, Metadata), inspect_waits}}.
 
+%% Reports target identity, supported observations and their sampling scope.
+-spec describe(pid() | {'hls_statem',term()} | {'actor',term(),'none' | {'hls_statem',term()} | {'actor_snapshot',map(),non_neg_integer()}} | {'boundary',term(),term()} | {'resource',map(),non_neg_integer()}) -> {term(),[atom()],'none' | {'beam',pid()} | {'statem',term()} | {'actor_snapshot',map(),non_neg_integer()} | {'resource',map(),non_neg_integer()}}.
 describe(Pid) when is_pid(Pid) ->
     {#{scope => #{kind => beam_process, pid => Pid}},
         [message_queue_len, status, reductions, memory], {beam, Pid}};
@@ -76,7 +78,7 @@ describe({resource, Session = #{resources := Resources, manifest := Manifest}, I
     Fields = case Kind of
         <<"fifo">> -> [occupancy, free_slots];
         <<"channel">> -> [valid, ready];
-        <<"actor">> -> resource_actor_fields(Resource)
+        <<"actor">> -> resource_actor_fields(Session, Resource)
     end,
     Metadata = #{scope => #{kind => topology_resource,
         fingerprint => maps:get(<<"fingerprint">>, Manifest), id => Id},
@@ -92,19 +94,18 @@ statem_fields() ->
     [message_queue_len, mailbox_capacity, free_slots, reserved, postponed,
         phase, lifecycle, reduction, beam_message_queue_len].
 
-actor_fields() -> [initialized, phase, enter_pending, failed, failure, reduction].
+%% A trusted session decoder declares its supported items; wire metadata cannot select code.
+-spec resource_actor_fields(map(), map()) -> [atom()].
+resource_actor_fields(Session, Resource) ->
+    Observer = maps:get(actor_observer, Session, hls_topology_debug),
+    Observer:actor_fields(Resource).
 
-resource_actor_fields(#{<<"mailbox_kind">> := <<"direct">>}) ->
-    actor_fields() ++ [mailbox_initialized, message_queue_len, postponed, reserved, free_slots];
-resource_actor_fields(#{<<"mailbox_kind">> := <<"shared">>}) ->
-    actor_fields() ++ [mailbox_initialized, message_queue_len, postponed, reserved, free_slots,
-        in_flight, mail_candidate, entry_candidate, waiting_for_egress, egress_busy, scheduler_phase];
-resource_actor_fields(_) -> actor_fields().
-
+%% Selects the explicitly configured local observation decoder for an actor target.
+-spec actor_provider('none' | {'hls_statem',term()} | {'actor_snapshot',map(),non_neg_integer()}) -> {[atom()],'none' | {'statem',term()} | {'actor_snapshot',map(),non_neg_integer()}}.
 actor_provider(none) -> {[], none};
 actor_provider({hls_statem, Pid}) -> {statem_fields(), {statem, Pid}};
-actor_provider({actor_snapshot, #{resources := Resources}, Id} = Provider) ->
-    {[cycle | resource_actor_fields(element(Id+1, Resources))], Provider}.
+actor_provider({actor_snapshot, #{resources := Resources} = Session, Id} = Provider) ->
+    {[cycle | resource_actor_fields(Session, element(Id+1, Resources))], Provider}.
 
 observe(_Provider, [], _Timeout) -> {ok, #{}};
 observe({actor_snapshot, Session, Id}, Fields, Timeout) ->

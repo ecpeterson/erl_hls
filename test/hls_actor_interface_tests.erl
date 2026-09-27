@@ -222,6 +222,8 @@ unsupported_interface_inference_does_not_narrow_cpu_compilation_test() ->
         hls_actor_interface:from_module(Module)
     ).
 
+%% Checks reduction interface survives parse transform.
+-spec reduction_interface_survives_parse_transform_test() -> 'ok'.
 reduction_interface_survives_parse_transform_test() ->
     Module = hls_statem_reduction_lower_fixture,
     Path = "test_data/hls_statem_reduction_lower_fixture.erl",
@@ -233,24 +235,7 @@ reduction_interface_survives_parse_transform_test() ->
         Interface = hls_actor_interface:from_module(Module),
         ?assertEqual(xls_parse:actor_interface(Path), Interface),
         ?assertEqual(96,
-            hls_actor_interface:reduction_storage_width(Interface)),
-        Topology = #{actors => [#{
-            id => reducer,
-            module => Module,
-            mailbox_capacity => 4
-        }], families => []},
-        #{groups := [Group]} = hls_scheduler_plan:normalize(
-            Topology,
-            #{reducer => #{
-                members => [{actor, reducer}],
-                state_storage => block_ram,
-                mailbox_storage => block_ram
-            }}
-        ),
-        ?assertEqual(96, maps:get(reduction_storage_width, Group)),
-        [Binding] = xls_scheduler_ram_v:bindings(#{groups => [Group]}),
-        ?assertEqual(201, maps:get(state_width, Binding)),
-        ?assertEqual(128, maps:get(mailbox_width, Binding))
+            hls_actor_interface:reduction_storage_width(Interface))
     after
         true = code:delete(Module),
         _ = code:purge(Module)

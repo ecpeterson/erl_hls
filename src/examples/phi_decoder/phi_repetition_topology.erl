@@ -58,17 +58,11 @@ topology(N, Threshold) when is_integer(N), N >= 2, N =< 16#ffff,
           || X <- lists:seq(0, N-1)]};
 topology(_N, _Threshold) -> error(badarg).
 
--doc "Shares each actor family through one RAM-backed scheduler and a source-fragment reduction plane.".
+-doc "Returns dedicated actor placement for a periodic repetition-code line.".
 -spec profile(pos_integer()) -> xls_topology_dslx:profile().
 profile(N) ->
     _ = topology(N),
-    #{name => phi_repetition_topology, channel_depth => 1,
-      actor_egress_depth => burst,
-      reduction_placements => #{phi => source_fragments},
-      scheduler_groups => maps:from_list([{Family,
-          #{members => [{family, Family}], state_storage => block_ram,
-            mailbox_storage => block_ram}}
-          || Family <- [data, syndrome, phi]])}.
+    #{name => phi_repetition_topology, channel_depth => 1, actor_egress_depth => burst}.
 
 -doc "Returns the data coordinate and Z update for one decoder move.".
 -spec correction_update(#phi_correction{}, pos_integer()) ->

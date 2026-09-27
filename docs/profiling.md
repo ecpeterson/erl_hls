@@ -25,8 +25,6 @@ Open the JSON in [Perfetto](https://ui.perfetto.dev). Its supported [Chrome trac
 
 `--target` computes the longest sum of work durations and declared delays among recorded paths ending at that event. It reports accounted time, elapsed time and the difference as **unassigned time**. This is a critical path only for a complete timing model: missing resource dependencies, unmeasured waits and incomplete captures can change the answer. It is not a prediction of speedup after changing the hardware. Equal-score paths use a deterministic ID tie break.
 
-The source-fragment fixture's existing `phi_profile_timeline.py` accepts `--profile`, `--perfetto` and `--period-ns`. Its original SVG retains its causal-neighborhood highlighting. Its events are instants, so they do not alone establish a duration-weighted critical path. Repeated dependencies from aliased neighbors are retained as an edge's `multiplicity`.
-
 Run `python3 tools/test_hls_profile.py` for format/graph tests. To check a real export with the official [Trace Processor](https://perfetto.dev/docs/analysis/trace-processor):
 
 ```sh
