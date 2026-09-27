@@ -100,7 +100,7 @@ fn check_small<D: u32>() {
   for (raw, _): (u32, ()) in u32:0..u32:256 {
     let n = raw as s8;
     assert_eq(round_ratio<D>(n), reference_round<D>(n));
-    assert_eq(round_ratio_chunked<D, u32:3, u32:2>(n), reference_round<D>(n));
+    assert_eq(round_ratio_chunked<D, u32:24, u32:17>(n), reference_round<D>(n));
   }(())
 }
 
