@@ -51,7 +51,7 @@ A supported exception in `reduce/3` becomes an absorbing failure: retain the fir
 
 BEAM re-raises the saved class, reason and stack. Hardware latches the source-located failure on completion; until then it is visible as a pending reduction failure, while the actor itself remains nonterminal. Duplicate/unexpected members remain protocol errors, and unrelated callbacks can still fail while a window drains.
 
-“First” follows the chosen fold order. Source-fragment placement can change that order and omit combining the first value with the identity. Absorbing failure prevents a detected error from becoming success; it does not make a partial combiner a valid monoid.
+“First” follows the chosen fold order. Absorbing failure prevents a detected error from becoming success; it does not make a partial combiner a valid monoid.
 
 `hls_statem:info/1` reports idle/open status, name, key, population and accepted/remaining counts. Hardware exposes committed [reduction observations](topology-debug.md#reduction-observations) through `hls_debug`; neither interface reveals the accumulator.
 

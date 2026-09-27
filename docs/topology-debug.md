@@ -62,7 +62,7 @@ Set `direct_actor_debug => true` in the topology profile, pass `artifact_require
 
 Snapshots describe the committed state **entering** an actor step and can lag through its output pipeline. A stalled next-state computation is not published. Phase, failure, reduction and mailbox fields share one publication. Initial state can become visible before the initial entry executes. Constant observation readiness is mandatory: a backpressured observation consumer could stall the actor.
 
-[Mixed topologies](mixed-topologies.md) use the same catalog for RAM-backed and direct providers. Placement preserves logical identity but requires the new build's projection and manifest. No provider retains callback data, accumulator values, member bitmaps or message history.
+Snapshots preserve logical actor identity and require the current build's projection and manifest. They retain no callback data, accumulator values, member bitmaps or message history.
 
 ## Direct-actor mailbox observations
 
@@ -80,8 +80,6 @@ Thus `message_queue_len + reserved + free_slots = mailbox_capacity`. Free zero d
 `hls_debug:info(Actor, reduction)` returns `undefined` before initialization, `idle`, or a map containing status, opening phase/name/key, population, received/remaining counts and pending failure. It identifies neither the missing fixed members nor the accumulator.
 
 A failed fold drains its remaining valid contributions before releasing terminal actor failure. A complete failed window can remain visible after the actor stops. Queries do not consume, cancel or release it. See [reduction semantics](actor-reductions.md).
-
-With source-fragment placement, the recipient sees a complete aggregate at once. Its remaining count stays at the full population and pending failure stays `none` until delivery; partial work or failure elsewhere is invisible here. A healthy recipient therefore does not establish healthy contributors.
 
 ## Shared counter/trace and query transport
 

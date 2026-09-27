@@ -252,11 +252,6 @@ jobs:
             _build/topology-debug-queries/**/recovered.json
             _build/sim_bridge/**/*.log
             _build/sim_bridge/**/*.sv
-            _build/effect_window/*.ir
-            _build/effect_window/*.v
-            _build/effect_window/*.ys
-            _build/effect_window/*.log
-            _build/effect_window/*.console
             _build/deferred-replies/**
             _build/service_contracts/*.log
             _build/service_contracts/*.json
