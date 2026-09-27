@@ -4,6 +4,7 @@
 The output is a symlink to a complete immutable release. Resolve it once before
 reading several artifacts. Failed attempts leave the previous release in place.
 """
+from collections.abc import Callable, Sequence
 import argparse
 from contextlib import contextmanager
 import fcntl
@@ -174,13 +175,20 @@ def stage(label, tool, arguments, inputs, work, output, cache, timeout):
     return {"key": entry.name, "reused": False, "adopted": adopted, "execution_time": metrics, "directory": entry}
 
 
-def build(source, xls_root, output, *, name=None, top="Top", pipeline_stages=1,
-          initiation_interval=None, ram_configurations=None, assets=(), metadata=None,
-          timeout=7200, cache=None):
+def build(source: Path | str, xls_root: Path | str, output: Path | str, *,
+          name: str | None = None, top: str = "Top", pipeline_stages: int = 1,
+          initiation_interval: int | None = None,
+          ram_configurations: str | Callable[[Path], str] | None = None,
+          assets: Sequence[Path | str] = (), metadata: dict | Callable[[Path], dict] | None = None,
+          timeout: float = 7200, cache: Path | str | None = None,
+          delay_model: str = "unit", delay_table: Path | str | None = None) -> Path:
+    """Publish checked artifacts; snapshot custom delay data and key its codegen cache."""
     source, xls_root = Path(source).resolve(), Path(xls_root).resolve()
     # Resolve the parent, not the published symlink itself.
     output = Path(output).absolute()
     output = output.parent.resolve() / output.name
+    if (delay_model == "xc7_7030") != (delay_table is not None):
+        raise ValueError("xc7_7030 requires a delay table; other models do not accept one")
     name = name or source.stem
     if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name):
         raise ValueError("output name must be an identifier")
@@ -216,13 +224,19 @@ def build(source, xls_root, output, *, name=None, top="Top", pipeline_stages=1,
             asset_files = {Path(p).name: Path(p) for p in assets}
             if len(asset_files) != len(assets) or any(n in sources for n in asset_files):
                 raise ValueError("duplicate asset names")
+            if delay_table is not None:
+                if "xc7_delay_table.tsv" in asset_files or "xc7_delay_table.tsv" in sources:
+                    raise ValueError("reserved delay table asset name")
+                asset_files["xc7_delay_table.tsv"] = Path(delay_table).resolve()
             asset_hashes = snapshot_files(asset_files, attempt / "assets")
             tool_hashes = {tool: sha(path) for tool, path in tools.items()}
             extra = metadata(attempt) if callable(metadata) else (metadata or {})
             convert = ["--warnings_as_errors=false", "--dslx_path=.", "--dslx_stdlib_path=_stdlib",
                        f"--top={top}", source.name]
-            codegen = [f"--pipeline_stages={pipeline_stages}", "--delay_model=unit", "--flop_inputs=false",
+            codegen = [f"--pipeline_stages={pipeline_stages}", f"--delay_model={delay_model}", "--flop_inputs=false",
                        "--flop_outputs=true", "--use_system_verilog=false", "--reset=reset", "--fifo_module="]
+            if delay_table is not None:
+                codegen.append("--xc7_delay_table=assets/xc7_delay_table.tsv")
             if initiation_interval is not None:
                 codegen.append(f"--worst_case_throughput={initiation_interval}")
             if callable(ram_configurations):
@@ -239,6 +253,8 @@ def build(source, xls_root, output, *, name=None, top="Top", pipeline_stages=1,
             inputs = {"sources": source_hashes, "stdlib": stdlib_hashes}
             for label, tool, arguments, artifact in specifications:
                 run_report["active_stage"] = label
+                if label == "codegen" and delay_table is not None:
+                    inputs = {**inputs, "assets/xc7_delay_table.tsv": asset_hashes["xc7_delay_table.tsv"]}
                 result = stage(label, tools[tool], arguments, inputs, attempt, artifact, cache, timeout)
                 runs[label] = {"key": result["key"], "reused": result["reused"],
                                "execution_time": result["execution_time"], "adopted": result["adopted"],
@@ -320,6 +336,8 @@ def main():
     parser.add_argument("--pipeline-stages", type=int, default=1)
     parser.add_argument("--initiation-interval", type=int)
     parser.add_argument("--ram-configurations")
+    parser.add_argument("--delay-model", default="unit")
+    parser.add_argument("--delay-table", type=Path)
     parser.add_argument("--asset", type=Path, action="append", default=[])
     parser.add_argument("--timeout", type=duration, default=7200)
     parser.add_argument("--cache", type=Path)

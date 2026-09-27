@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Run bounded, independent Vivado measurements and retain per-probe failures."""
 import argparse
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import json
 import hashlib
 import os
@@ -11,10 +11,10 @@ import subprocess
 import time
 
 
-def measure(root: Path, script: Path, name: str) -> dict[str, str | float]:
+def measure(root: Path, script: Path, name: str, timeout: int = 180) -> dict[str, str | float]:
     """Route one mapped circuit; a failed case remains a failed measurement."""
     inputs = [root / name / 'mapped.edf', root / name / 'mapped.json', script,
-              script.with_name('connectivity.py')]
+              script.with_name('connectivity.py'), script.with_name('circuit_audit.tcl')]
     fingerprint = [hashlib.sha256(path.read_bytes()).hexdigest() for path in inputs]
     output = root / name / 'vivado'
     if output.exists():
@@ -34,7 +34,7 @@ def measure(root: Path, script: Path, name: str) -> dict[str, str | float]:
              '-tclargs', str(root / name / 'mapped.edf'), str(output)], cwd=output,
             stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
         try:
-            code = process.wait(timeout=180)
+            code = process.wait(timeout=timeout)
             complete = ('CHARACTERIZATION_COMPLETE' in (output / 'console.log').read_text()
                         and (output / 'path-properties.rpt').is_file())
             status = 'complete' if code == 0 and complete else f'failed (exit {code})'
@@ -51,6 +51,7 @@ def main() -> None:
     parser.add_argument('corpus', type=lambda p: Path(p).resolve())
     parser.add_argument('script', type=lambda p: Path(p).resolve())
     parser.add_argument('--jobs', type=int, default=2)
+    parser.add_argument('--timeout', type=int, default=180)
     parser.add_argument('--names', nargs='+')
     parser.add_argument('--status', default='status.json')
     args = parser.parse_args()
@@ -62,15 +63,15 @@ def main() -> None:
         names = [name for name in names if name in args.names]
     if Path(args.status).name != args.status:
         parser.error('status must be a filename')
-    if len(names) != len(set(names)) or not 1 <= args.jobs <= 4:
-        parser.error('distinct probes and 1..4 workers required')
+    if len(names) != len(set(names)) or not 1 <= args.jobs <= 8 or args.timeout <= 0:
+        parser.error('distinct probes, 1..8 workers and a positive timeout required')
     results = []
     with ThreadPoolExecutor(max_workers=args.jobs) as pool:
-        futures = [pool.submit(measure, args.corpus, args.script, name) for name in names]
-        for future in futures:
+        futures = [pool.submit(measure, args.corpus, args.script, name, args.timeout) for name in names]
+        for future in as_completed(futures):
             row = future.result()
             results.append(row)
-            (args.corpus / args.status).write_text(json.dumps(results, indent=2) + '\n')
+            (args.corpus / args.status).write_text(json.dumps(sorted(results, key=lambda result: result['name']), indent=2) + '\n')
             print(row, flush=True)
     if any(row['status'] != 'complete' for row in results):
         raise SystemExit('one or more measurements failed')

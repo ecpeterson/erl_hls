@@ -1,5 +1,6 @@
 // Bounded XLS delay estimates for a measured native XC7 mapping.
 #include <algorithm>
+#include <charconv>
 #include <cmath>
 #include <cstdint>
 #include <fstream>
@@ -23,6 +24,7 @@ namespace xls {
 namespace {
 // Delays exclude the launch flip-flop's clock-to-Q and capture setup time.
 struct Sample { int64_t width; int64_t cell; int64_t routed; };
+// Calibration rows are grouped by operation family and fan-in.
 using Table = std::map<std::pair<std::string, int64_t>, std::vector<Sample>>;
 
 // Read and validate one calibration table; malformed input never becomes a zero delay.
@@ -66,75 +68,165 @@ bool IsWiring(Op op) {
   }
 }
 
-// Interpolate a monotone envelope inside measured widths; reject extrapolation.
+// Interpolate measured widths after taking a monotone envelope; never extrapolate.
+absl::StatusOr<int64_t> WidthDelay(const std::vector<Sample>& samples,
+                                  int64_t width, bool routed) {
+  if (width > samples.back().width)
+    return absl::UnimplementedError("XC7 width exceeds calibration");
+  int64_t previous_width = 0, previous_delay = 0;
+  for (const Sample& sample : samples) {
+    int64_t delay = std::max(previous_delay, routed ? sample.routed : sample.cell);
+    if (width <= sample.width) {
+      if (previous_width == 0) return delay;
+      return static_cast<int64_t>(std::ceil(previous_delay + double(delay - previous_delay) *
+          (width - previous_width) / (sample.width - previous_width)));
+    }
+    previous_width = sample.width; previous_delay = delay;
+  }
+  return absl::InternalError("unreachable XC7 width interval");
+}
+
+// Fan-in interpolation is checked against held-out non-power-of-two circuits.
+absl::StatusOr<int64_t> ShapeDelay(const Table& table, const std::string& op,
+                                  int64_t width, int64_t count, bool routed) {
+  int64_t previous_count = 0, previous_delay = 0;
+  bool found = false;
+  for (const auto& [key, samples] : table) {
+    if (key.first != op) continue;
+    found = true;
+    auto value = WidthDelay(samples, width, routed);
+    if (!value.ok()) return value.status();
+    int64_t delay = std::max(previous_delay, *value);
+    if (count <= key.second) {
+      if (previous_count == 0) return delay;
+      return static_cast<int64_t>(std::ceil(previous_delay + double(delay - previous_delay) *
+          (count - previous_count) / (key.second - previous_count)));
+    }
+    previous_count = key.second; previous_delay = delay;
+  }
+  return absl::UnimplementedError(found ? "XC7 fan-in exceeds calibration" :
+                                          "XC7 model has no calibration for " + op);
+}
+
+// Wider sampled indices retain the overflow/default decoder; record this approximation.
+std::string IndexFamily(const Table& table, const std::string& prefix, int64_t bits) {
+  int64_t selected = INT64_MAX;
+  for (const auto& [key, samples] : table) {
+    if (key.first.rfind(prefix, 0) != 0) continue;
+    std::string suffix = key.first.substr(prefix.size());
+    if (suffix.empty() || suffix.find_first_not_of("0123456789") != std::string::npos) continue;
+    int64_t candidate;
+    const auto parsed = std::from_chars(suffix.data(), suffix.data() + suffix.size(), candidate);
+    if (parsed.ec != std::errc{} || parsed.ptr != suffix.data() + suffix.size()) continue;
+    if (candidate >= bits) selected = std::min(selected, candidate);
+  }
+  return prefix + std::to_string(selected == INT64_MAX ? bits : selected);
+}
+
+// Return a measured-shape estimate or an error; unsupported shapes have no fallback.
 class Xc7DelayEstimator final : public DelayEstimator {
  public:
-  // Register an explicitly selected model; it never replaces a default.
+  // Register an explicitly selected model without replacing existing defaults.
   Xc7DelayEstimator() : DelayEstimator("xc7_7030") {}
-  // Return a measured-shape estimate or an error; unknown shapes have no fallback.
+
+  // Costs describe proc-local operations, not stitched FIFO ready/valid paths.
   absl::StatusOr<int64_t> GetOperationDelayInPs(Node* node) const override {
     if (IsWiring(node->op())) return 0;
+    // Proc I/O is a scheduling boundary, as in the standard technology estimators.
+    // Its generated valid/data gating and FIFO/RAM adapters need mapped STA.
+    if (node->op() == Op::kSend || node->op() == Op::kReceive) return 0;
+    if (node->GetType()->GetFlatBitCount() == 0) return 0;
     static const auto table = LoadTable();
     if (!table.ok()) return table.status();
     std::string op(OpToString(node->op()));
-    int64_t width = node->GetType()->GetFlatBitCount();
-    int64_t count = 2;
+    int64_t width = node->GetType()->GetFlatBitCount(), count = 2;
+    bool aggregate = false;
     switch (node->op()) {
       case Op::kEq: case Op::kNe: case Op::kULt: case Op::kULe: case Op::kUGt:
       case Op::kUGe: case Op::kSLt: case Op::kSLe: case Op::kSGt: case Op::kSGe:
       case Op::kAndReduce: case Op::kOrReduce: case Op::kXorReduce:
         width = node->operand(0)->GetType()->GetFlatBitCount(); break;
       case Op::kSel: {
-        count = node->As<Select>()->cases().size();
-        // Wider selectors add default-arm decoding absent from the measured muxes.
-        const int64_t selector_width = node->As<Select>()->selector()->BitCountOrDie();
-        if ((count != 2 && count != 4 && count != 8) ||
-            selector_width != (count == 2 ? 1 : count == 4 ? 2 : 3))
-          return absl::UnimplementedError("XC7 select shape exceeds calibration: " + node->ToString());
+        auto* select = node->As<Select>();
+        count = select->cases().size();
+        int64_t bits = select->selector()->BitCountOrDie();
+        // A full binary selector needs no default-arm decoding.
+        if (bits >= 63 || count != (int64_t{1} << bits))
+          op = IndexFamily(*table, "sel_d", bits);
         break;
       }
       case Op::kOneHotSel: count = node->As<OneHotSelect>()->cases().size(); break;
       case Op::kPrioritySel: count = node->As<PrioritySelect>()->cases().size(); break;
-      case Op::kAnd: case Op::kOr: case Op::kXor: count = node->operand_count(); break;
+      case Op::kAnd: case Op::kOr: case Op::kXor: case Op::kNand: case Op::kNor:
+        count = node->operand_count(); break;
+      case Op::kOneHot:
+        op = node->As<OneHot>()->priority() == LsbOrMsb::kLsb ? "one_hot_lsb" : "one_hot_msb";
+        width = node->operand(0)->BitCountOrDie(); break;
+      case Op::kShll: case Op::kShrl: case Op::kShra:
+        if (node->operand(1)->Is<Literal>()) return 0;
+        if (node->operand(1)->BitCountOrDie() != width)
+          op = IndexFamily(*table, op + "_s", node->operand(1)->BitCountOrDie());
+        aggregate = true; break;
+      case Op::kArrayIndex: case Op::kArrayUpdate: {
+        auto indices = node->op() == Op::kArrayIndex ? node->As<ArrayIndex>()->indices() :
+                                                      node->As<ArrayUpdate>()->indices();
+        bool constant = std::all_of(indices.begin(), indices.end(), [](Node* n) { return n->Is<Literal>(); });
+        if (constant) return 0;  // Fixed slicing/reassembly, including known out-of-range cases.
+        if (indices.size() > 1) {
+          // Constant dimensions select fixed wires. Dynamic dimensions compose mux
+          // layers; summing their measured costs is checked on nested-array probes.
+          if (node->op() == Op::kArrayUpdate)
+            return absl::UnimplementedError("XC7 multidimensional dynamic update: " + node->ToString());
+          std::vector<int64_t> sizes;
+          Type* type = node->operand(0)->GetType();
+          for (auto* index : indices) {
+            auto* array = type->AsArrayOrDie();
+            sizes.push_back(array->size()); type = array->element_type();
+          }
+          int64_t selected_width = type->GetFlatBitCount(), delay = 0;
+          for (int64_t i = indices.size() - 1; i >= 0; --i) {
+            if (indices[i]->Is<Literal>()) continue;
+            int64_t bits = indices[i]->BitCountOrDie();
+            int64_t cases = bits < 63 ? std::min(sizes[i], int64_t{1} << bits) : sizes[i];
+            auto part = ShapeDelay(*table, IndexFamily(*table, "array_index_s", bits),
+                                  selected_width, cases, absl::GetFlag(FLAGS_xc7_routed_delays));
+            if (!part.ok()) return part.status();
+            delay += *part; selected_width *= cases;
+          }
+          return delay;
+        }
+        auto* type = node->operand(0)->GetType()->AsArrayOrDie();
+        int64_t bits = indices.front()->BitCountOrDie();
+        count = bits < 63 ? std::min(type->size(), int64_t{1} << bits) : type->size();
+        width = type->element_type()->GetFlatBitCount();
+        op = IndexFamily(*table, node->op() == Op::kArrayIndex ? "array_index_s" : "array_update_s", bits);
+        aggregate = true; break;
+      }
       default: break;
     }
-    // A measured constant multiply is valid only for its exact operand/result shape.
+    // Constant multiplies qualify only at their exact measured operand/result shape.
     if (node->op() == Op::kSMul && node->operand(1)->Is<Literal>()) {
       auto bits = node->operand(1)->As<Literal>()->value().bits();
       auto value = bits.ToUint64();
       if (value.ok()) {
-        const std::string key = "smul_const_" +
-            std::to_string(node->operand(0)->GetType()->GetFlatBitCount()) + "_" +
-            std::to_string(bits.bit_count()) + "_" + std::to_string(width) + "_" +
-            std::to_string(*value);
+        std::string key = "smul_const_" + std::to_string(node->operand(0)->GetType()->GetFlatBitCount()) +
+            "_" + std::to_string(bits.bit_count()) + "_" + std::to_string(width) + "_" + std::to_string(*value);
         if (table->find({key, count}) != table->end()) op = key;
       }
     }
-    auto it = table->find({op, count});
-    if (it == table->end()) return absl::UnimplementedError("XC7 model has no calibration for " + node->ToString());
-    for (Node* operand : node->operands())
-      if (operand->GetType()->GetFlatBitCount() > std::max<int64_t>(width, count))
-        return absl::UnimplementedError("XC7 operand exceeds calibrated shape: " + node->ToString());
-    const auto& samples = it->second;
-    if (width > samples.back().width)
-      return absl::UnimplementedError("XC7 width exceeds calibration: " + node->ToString());
-    const bool routed = absl::GetFlag(FLAGS_xc7_routed_delays);
-    int64_t previous_width = 0, previous_delay = 0;
-    for (const Sample& sample : samples) {
-      const int64_t delay = std::max(previous_delay, routed ? sample.routed : sample.cell);
-      if (width <= sample.width) {
-        if (previous_width == 0) return delay;
-        return static_cast<int64_t>(std::ceil(previous_delay +
-            double(delay - previous_delay) * (width - previous_width) / (sample.width - previous_width)));
+    // Selectors and array indices are separate measured dimensions, not payload widths.
+    if (!aggregate) {
+      for (int64_t i = 0; i < node->operand_count(); ++i) {
+        if (i == 0 && (node->Is<Select>() || node->Is<OneHotSelect>() || node->Is<PrioritySelect>())) continue;
+        if (node->operand(i)->GetType()->GetFlatBitCount() > std::max<int64_t>(width, count))
+          return absl::UnimplementedError("XC7 operand exceeds calibrated shape: " + node->ToString());
       }
-      previous_width = sample.width;
-      previous_delay = delay;
     }
-    return absl::InternalError("unreachable XC7 width interval");
+    return ShapeDelay(*table, op, width, count, absl::GetFlag(FLAGS_xc7_routed_delays));
   }
 };
 
-// Explicit selection is required; existing default model selection is unchanged.
+// Only explicit model selection enables the experimental table.
 const bool registered = [] {
   return GetDelayEstimatorManagerSingleton().RegisterDelayEstimator(
       std::make_unique<Xc7DelayEstimator>(), DelayEstimatorPrecedence::kLow).ok();

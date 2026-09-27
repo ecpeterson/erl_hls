@@ -103,3 +103,15 @@ cmake --build "$NEXTPNR_BUILD" --target nextpnr-xilinx -j2
 The installer is idempotent and rejects an unexpected command-driver layout. It adds an opt-in report after the selected flow stages; normal runs are unchanged. Saved-placement paths use estimated interconnect, can differ from routed paths, and must remain labeled **unrouted estimates**. Use them to locate candidate boundaries, then verify the chosen change by routing. Fingerprint this binary separately and never replace a binary while a measurement using it is active.
 
 Render the retained arithmetic/control comparison with Matplotlib: `python3 experiments/07-openxc7/timing_chains/plot.py experiments/07-openxc7/results/timing-chains-2026-09-24`.
+
+## Materialized XLS FIFOs
+
+`fifo_experiment.py` replaces selected FIFO module definitions in retained application RTL. It requires identical port names/directions/widths and verifies that every non-FIFO module remains byte-identical. This isolates FIFO implementation changes from incidental codegen naming differences. Its manifest is an explicit derived experiment, never a compiler-cache entry.
+
+Supply `--reference COMPILED_DIRECTORY --generated CANDIDATE_RTL --compiler CANDIDATE_CODEGEN --patch SOURCE_PATCH --stage FRESH_DIRECTORY`. Optional `--depth 1 --payload-bits 424` restrict replacement. The comparison checks both planes for 12,000 cycles, long output stalls and reset, requiring cycle-exact valid outputs and payloads. The resulting directory can be mapped with `phi_timing.py`.
+
+`fifo_probe.py` measures one matching FIFO between preserved stimulus/capture registers: supply `--rtl RTL --yosys BIN --nextpnr BIN --chipdb BIN --stage FRESH_DIRECTORY`, optionally `--width`, `--depth` and `--seed`. Counts include the harness. It checks register timing coverage and rejects unexpected hard primitives. These isolated native paths do not establish whole-application timing; use the complete-core comparison before claiming a step-rate improvement.
+
+`prove_fifo.py --baseline RTL --candidate RTL --yosys BIN --stage FRESH_DIRECTORY` exhaustively checks the selected 424-bit, depth-one FIFO over twelve symbolic cycles. The first cycle resets it; later data, readiness, validity and resets are unrestricted. Both handshakes and every valid payload must match. This bounded check complements the independent XLS FIFO interpreter tests; it is not an unbounded equivalence proof.
+
+Apply one of the [recorded FIFO patches](../results/fifo-storage-2026-09-26.md) to a separate checkout of XLS `20bf86d9c9e90f9df380a0280a5973ce0c33a59a`, then build `//xls/tools:codegen_main` and test `//xls/codegen:maybe_materialize_fifos_pass_test`. For calibrated schedules, install the XC7 estimator first using the [timing-model instructions](../docs/timing-model.md). Freeze each binary before building another variant. Reuse the baseline optimized IR and recorded codegen flags, then pass that generated RTL to `fifo_experiment.py`; do not replace non-FIFO application logic. The report retains compiler, patch, baseline, netlist and testbench hashes.

@@ -3,12 +3,13 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
-from analyze import estimate, summarize
+from analyze import checked_path, estimate, summarize, shape_estimate, index_family, composed_estimate, operation_estimate, measured_row
 from connectivity import check, check_parameters, parameter_value, unused_dsp_pins
 from characterize import operation
 from batch import measure
 import hashlib
 from sdf import extract
+from application import schedule_summary
 
 
 class ModelTests(unittest.TestCase):
@@ -28,6 +29,34 @@ class ModelTests(unittest.TestCase):
             (root / 'linked').write_text(good.replace('CI\tn3', 'CI\tn0'))
             with self.assertRaisesRegex(ValueError, 'pin graph'):
                 check(root / 'mapped', root / 'linked')
+
+    def test_prepared_circuit_identity(self) -> None:
+        """An internally consistent route cannot substitute a different prepared circuit."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root/'probe').mkdir()
+            (root/'probe/mapped.json').write_text('{}')
+            row = {'name': 'probe', 'files': {'mapped.json': 'wrong'}}
+            with self.assertRaisesRegex(ValueError, 'prepared manifest'):
+                measured_row((root, row))
+
+    def test_postroute_audit_is_required(self) -> None:
+        """Import integrity alone cannot qualify a measurement changed by placement."""
+        data = {'modules': {'probe_top': {'ports': {}, 'cells': {
+            'inv': {'type': 'INV', 'parameters': {}, 'connections': {'I': [1], 'O': [2]}}}}}}
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            report = root/'vivado'
+            report.mkdir()
+            (root/'mapped.json').write_text(json.dumps(data))
+            (report/'connectivity.tsv').write_text('inv\tLUT1\tI0\tn1\ninv\tLUT1\tO\tn2\n')
+            (report/'parameters.tsv').write_text("inv\tINIT\t2'h1\n")
+            with self.assertRaises(FileNotFoundError):
+                checked_path(root)
+            (report/'routed-connectivity.tsv').write_text(
+                (report/'connectivity.tsv').read_text()+'clone\tLUT1\tO\tn2\n')
+            with self.assertRaisesRegex(ValueError, 'primitive population'):
+                checked_path(root)
 
     def test_parameter_changes(self) -> None:
         """LUT truth tables and DSP registers are part of the imported circuit."""
@@ -102,7 +131,7 @@ class ModelTests(unittest.TestCase):
             output = probe / 'vivado'
             output.mkdir(parents=True)
             inputs = [probe / 'mapped.edf', probe / 'mapped.json',
-                      root / 'measure.tcl', root / 'connectivity.py']
+                      root / 'measure.tcl', root / 'connectivity.py', root / 'circuit_audit.tcl']
             for path in inputs:
                 path.write_text('evidence')
             (output / 'inputs.json').write_text(json.dumps([
@@ -123,6 +152,78 @@ class ModelTests(unittest.TestCase):
         self.assertEqual(estimate(samples, 24, 'cell_ps'), 200)
         with self.assertRaisesRegex(ValueError, 'support'):
             estimate(samples, 33, 'cell_ps')
+
+    def test_width_and_fanin_bounds(self) -> None:
+        """Interpolate both dimensions and reject an unsupported width or fan-in."""
+        training = {('mux', 2): [{'width': 8, 'routed_ps': 100}, {'width': 32, 'routed_ps': 300}],
+                    ('mux', 8): [{'width': 8, 'routed_ps': 200}, {'width': 32, 'routed_ps': 500}]}
+        self.assertEqual(shape_estimate(training, 'mux', 20, 5, 'routed_ps'), 275)
+        for width, count in [(33, 2), (8, 9)]:
+            with self.assertRaisesRegex(ValueError, 'support'):
+                shape_estimate(training, 'mux', width, count, 'routed_ps')
+
+    def test_index_rounding_and_nested_reads(self) -> None:
+        """Nested reads sum dynamic mux layers; constant dimensions add no delay."""
+        training = {('array_index_s8', 8): [{'width': 128, 'routed_ps': 500}],
+                    ('array_index_s32', 8): [{'width': 128, 'routed_ps': 700}]}
+        self.assertEqual(index_family(training, 'array_index_s', 12), 'array_index_s32')
+        with self.assertRaisesRegex(ValueError, 'support'):
+            index_family(training, 'array_index_s', 33)
+        row = {'op': 'array_index_s12', 'width': 24, 'count': 3}
+        self.assertEqual(operation_estimate(training, row, 'routed_ps'), 700)
+        row = {'op': 'array2_s32_s8_n4_n5', 'width': 8}
+        self.assertEqual(composed_estimate(training, row, 'routed_ps'), 1200)
+        row['op'] = 'array2_s32_c0_n4_n5'
+        self.assertEqual(composed_estimate(training, row, 'routed_ps'), 700)
+        row['op'] = 'array2_c0_s8_n4_n5'
+        self.assertEqual(composed_estimate(training, row, 'routed_ps'), 500)
+        row.update(op='array2_s32_s8_n4_n5', width=32)
+        with self.assertRaisesRegex(ValueError, 'support'):
+            composed_estimate(training, row, 'routed_ps')
+
+    def test_matching_shift_width(self) -> None:
+        """Use the ordinary shift family when data and amount widths match XLS's rule."""
+        training = {('shll', 2): [{'width': 32, 'routed_ps': 100}],
+                    ('shll_s32', 2): [{'width': 32, 'routed_ps': 200}]}
+        self.assertEqual(operation_estimate(training,
+            {'op': 'shll_s24', 'width': 24, 'count': 2}, 'routed_ps'), 100)
+        self.assertEqual(operation_estimate(training,
+            {'op': 'shll_s24', 'width': 16, 'count': 2}, 'routed_ps'), 200)
+
+    def test_package_schedule_summary(self) -> None:
+        """Keep per-proc bounds distinct from the largest timed stage path."""
+        schedule = '''schedules {
+  key: "worker"
+  value {
+    function: "worker"
+    stages {
+      timed_nodes { path_delay_ps: 1200 }
+      timed_nodes { path_delay_ps: 2200 }
+    }
+    min_clock_period_ps: 2100
+    target_clock_period_ps: 2500
+    length: 2
+  }
+}
+schedules {
+  key: "router"
+  value {
+    function: "router"
+    stages { timed_nodes { path_delay_ps: 500 } }
+    length: 2
+  }
+}
+'''
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory)/'schedule.textproto'
+            path.write_text(schedule)
+            rows = schedule_summary(path)
+            self.assertEqual(rows[0], {'function': 'worker', 'min_clock_period_ps': 2100,
+                'target_clock_period_ps': 2500, 'length': 2, 'max_stage_path_ps': 2200})
+            self.assertEqual(rows[1], {'function': 'router', 'length': 2, 'max_stage_path_ps': 500})
+            path.write_text('')
+            with self.assertRaisesRegex(ValueError, 'no scheduled'):
+                schedule_summary(path)
 
     def test_sdf_clock_arcs(self) -> None:
         """Preserve negative holds, bus indices and the picosecond unit."""

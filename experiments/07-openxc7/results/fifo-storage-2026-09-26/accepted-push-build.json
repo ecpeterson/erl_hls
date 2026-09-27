@@ -1,0 +1,7 @@
+{
+  "compiler_sha256": "62cb3dabebddac2a8ea3611b50d4d54e3451d23b2fb1d197e6f6b7b7c2d75e0d",
+  "patch_sha256": "993a35dbbd00efaac75c8a717b6b7f9441bfe00591e6eaf7967c5e5252aa3295",
+  "test_log_sha256": "3bbb5180e663492a32ed39e7d9892c5a96ebcc222bf60890d40f61e4173c99fa",
+  "tests_passed": 215,
+  "source_revision": "20bf86d9c9e90f9df380a0280a5973ce0c33a59a"
+}

@@ -21,6 +21,16 @@ cc_library(
 '''
 
 
+AUDIT_RULE = '\n'.join([
+    '', 'cc_binary(', '    name = "xc7_audit_main",',
+    '    srcs = ["audit_main.cc"],', '    deps = [',
+    '        ":model_xc7_7030",',
+    '        "//xls/common:init_xls",',
+    '        "//xls/estimators/delay_model:delay_estimator",',
+    '        "//xls/ir",', '        "//xls/ir:ir_parser",',
+    '    ],', ')', ''])
+
+
 def install(root: Path) -> None:
     """Add one named estimator without changing the default or existing models."""
     directory = root / 'xls/estimators/delay_model/models'
@@ -32,7 +42,11 @@ def install(root: Path) -> None:
             raise ValueError('unexpected XLS model registry')
         source = source.replace(marker, marker + '        ":model_xc7_7030",\n')
         build.write_text(source + RULE)
-    shutil.copyfile(Path(__file__).with_name('xc7_delay_estimator.cc'), directory / 'xc7_delay_estimator.cc')
+    if 'name = "xc7_audit_main"' not in build.read_text():
+        with build.open('a') as stream:
+            stream.write(AUDIT_RULE)
+    for name in ('xc7_delay_estimator.cc', 'audit_main.cc'):
+        shutil.copyfile(Path(__file__).with_name(name), directory / name)
 
 
 def main() -> None:

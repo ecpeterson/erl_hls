@@ -1,0 +1,111 @@
+diff --git a/xls/codegen/maybe_materialize_fifos_pass.cc b/xls/codegen/maybe_materialize_fifos_pass.cc
+index 5d0ccb001..71dc515a1 100644
+--- a/xls/codegen/maybe_materialize_fifos_pass.cc
++++ b/xls/codegen/maybe_materialize_fifos_pass.cc
+@@ -97,6 +97,51 @@ absl::StatusOr<Block*> MaterializeDelayLine(
+   return block;
+ }
+ 
++// A one-entry FIFO needs one occupancy bit and one payload register. Keep the
++// same bypass and registered-push handshakes as the general ring buffer.
++absl::StatusOr<Block*> MaterializeDepthOneFifo(
++    BlockBuilder& bb, FifoInstantiation* inst, BValue reset_port,
++    BValue push_valid, BValue pop_ready) {
++  const FifoConfig& config = inst->fifo_config();
++  XLS_RET_CHECK_EQ(config.depth(), 1);
++  XLS_RET_CHECK(!config.register_pop_outputs());
++  XLS_ASSIGN_OR_RETURN(
++      Register * slots_reg,
++      bb.block()->AddRegisterWithZeroResetValue("slots", push_valid.GetType()));
++  BValue slots = bb.RegisterRead(slots_reg);
++  BValue full = bb.Eq(slots, bb.Literal(UBits(1, 1)), SourceInfo(),
++                     "is_full_bool");
++  BValue push_ready = config.register_push_outputs()
++                         ? bb.Not(full)
++                         : bb.Or(bb.Not(full), pop_ready);
++  BValue pop_valid = config.bypass() ? bb.Or(slots, push_valid) : slots;
++  bb.OutputPort(FifoInstantiation::kPushReadyPortName, push_ready);
++  bb.OutputPort(FifoInstantiation::kPopValidPortName, pop_valid);
++
++  BValue pushed = bb.And(push_ready, push_valid);
++  BValue popped = bb.And(pop_ready, pop_valid);
++  // Equal accepted push/pop counts preserve occupancy, including empty bypass
++  // and full replacement; otherwise the accepted push determines occupancy.
++  BValue next_slots = bb.Select(bb.Xor(pushed, popped), {slots, pushed});
++  bb.RegisterWrite(slots_reg, next_slots, /*load_enable=*/std::nullopt,
++                   reset_port);
++  if (inst->data_type()->GetFlatBitCount() > 0) {
++    BValue push_data =
++        bb.InputPort(FifoInstantiation::kPushDataPortName, inst->data_type());
++    XLS_ASSIGN_OR_RETURN(
++        Register * buf_reg,
++        bb.block()->AddRegisterWithZeroResetValue("buf", inst->data_type()));
++    BValue stored = bb.RegisterRead(buf_reg);
++    BValue pop_data = config.bypass()
++                          ? bb.Select(slots, {push_data, stored})
++                          : stored;
++    bb.OutputPort(FifoInstantiation::kPopDataPortName, pop_data);
++    // An accepted empty bypass may write unused storage; it does not occupy it.
++    bb.RegisterWrite(buf_reg, push_data, /*load_enable=*/pushed, reset_port);
++  }
++  return bb.Build();
++}
++
+ absl::StatusOr<Block*> MaterializeFifo(NameUniquer& uniquer, Package* p,
+                                        FifoInstantiation* inst,
+                                        const ResetBehavior& reset_behavior,
+@@ -136,6 +181,11 @@ absl::StatusOr<Block*> MaterializeFifo(NameUniquer& uniquer, Package* p,
+   BValue pop_ready_port =
+       bb.InputPort(FifoInstantiation::kPopReadyPortName, u1);
+ 
++  if (depth == 1) {
++    return MaterializeDepthOneFifo(bb, inst, reset_port, push_valid,
++                                  pop_ready_port);
++  }
++
+   XLS_ASSIGN_OR_RETURN(
+       Register * head_reg,
+       bb.block()->AddRegisterWithZeroResetValue("head", ptr_type));
+@@ -319,8 +369,11 @@ absl::StatusOr<Block*> MaterializeFifo(NameUniquer& uniquer, Package* p,
+     // aren't ready.
+     bb.OutputPort(FifoInstantiation::kPopDataPortName, pop_data_value);
+ 
++    // Writing an accepted empty-queue bypass only touches an unused head slot.
++    // Pointers still advance only for stored data. With registered push outputs,
++    // this removes pop_ready from the payload write enable.
+     bb.RegisterWrite(buf_reg, next_buf_value_if_push_occurs,
+-                     /*load_enable=*/did_push_occur_bool, reset_port);
++                     /*load_enable=*/pushed, reset_port);
+   }
+ 
+   return bb.Build();
+diff --git a/xls/codegen/maybe_materialize_fifos_pass_test.cc b/xls/codegen/maybe_materialize_fifos_pass_test.cc
+index 0c1f17aaa..2dfab4ed5 100644
+--- a/xls/codegen/maybe_materialize_fifos_pass_test.cc
++++ b/xls/codegen/maybe_materialize_fifos_pass_test.cc
+@@ -307,6 +307,16 @@ TEST_F(MaterializeFifosPassTest, ResetFullFifoWithDifferentResetName) {
+                 /*reset_name=*/"foobar");
+ }
+ 
++TEST_P(MaterializeFifosPassTest, BypassThenStoreAndReset) {
++  // Discarded empty bypasses must not leak into later stored traffic, including
++  // replacement while full, downstream stalls, and reset with queued data.
++  RunTestVector(GetParam(), {ResetOp{}, PushAndPop{1}, PushAndPop{2},
++                            PushAndPop{3}, NotReady{}, Push{4}, NotReady{},
++                            PushAndPop{5}, Pop{}, Pop{}, Push{6}, ResetOp{},
++                            NotReady{}, Pop{}, Push{7}, NotReady{}, Pop{},
++                            PushAndPop{8}, Push{9}, Pop{}, Pop{}});
++}
++
+ TEST_P(MaterializeFifosPassTest, BasicFifoBypass) {
+   RunTestVector(GetParam(), {
+                                 PushAndPop{1},
+@@ -329,7 +339,7 @@ TEST_P(MaterializeFifosPassTest, BasicFifoBypass) {
+ inline std::vector<FifoTestParam> GenerateMaterializeFifoTestParams() {
+   std::vector<FifoTestParam> params;
+   for (int64_t data_bit_count : {0, 32}) {
+-    for (int64_t depth : {0, 3, 5}) {
++    for (int64_t depth : {0, 1, 3, 5}) {
+       for (bool bypass : {true, false}) {
+         for (bool register_push_outputs : {true, false}) {
+           for (bool register_pop_outputs : {true, false}) {

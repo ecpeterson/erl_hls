@@ -102,6 +102,23 @@ class Builds(unittest.TestCase):
         self.assertNotEqual((old / 'counter.v').read_bytes(), (new / 'counter.v').read_bytes())
         self.assertTrue(old.is_dir())
 
+    def test_delay_table_changes_only_invalidate_codegen(self) -> None:
+        """A changed table cannot silently reuse RTL scheduled with older costs."""
+        table = self.root / 'costs.tsv'
+        table.write_text('add 8 2 100 200\n')
+        old = self.build(delay_model='xc7_7030', delay_table=table)
+        self.build(delay_model='xc7_7030', delay_table=table)
+        self.assertEqual(self.statuses(), dict(ir=True, opt=True, codegen=True))
+        table.write_text('add 8 2 200 400\n')
+        new = self.build(delay_model='xc7_7030', delay_table=table)
+        self.assertEqual(self.statuses(), dict(ir=True, opt=True, codegen=False))
+        self.assertEqual((old / 'xc7_delay_table.tsv').read_text(), 'add 8 2 100 200\n')
+        self.assertEqual((new / 'xc7_delay_table.tsv').read_text(), table.read_text())
+        manifest = json.loads((new / 'counter.build.json').read_text())
+        self.assertEqual(manifest['assets']['xc7_delay_table.tsv'], compiler.sha(table))
+        with self.assertRaisesRegex(ValueError, 'requires a delay table'):
+            self.build(delay_model='xc7_7030')
+
     def test_import_and_stdlib_edits_invalidate_conversion(self):
         self.build()
         for dependency in [self.inputs / 'helper.x', self.xls / 'xls/dslx/stdlib/std.x']:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 import argparse
 from collections import defaultdict
+from concurrent.futures import ProcessPoolExecutor
 import json
 import math
 from pathlib import Path
@@ -10,6 +11,7 @@ import re
 import statistics
 from typing import Any
 from connectivity import check
+from characterize import sha
 
 
 def properties(path: Path) -> dict[str, str]:
@@ -26,6 +28,9 @@ def checked_path(root: Path) -> tuple[dict[str, str], dict[str, int]]:
     """Require an unchanged imported circuit, full internal timing coverage and routing."""
     report = root / 'vivado'
     audit = check(root / 'mapped.json', report / 'connectivity.tsv', report / 'parameters.tsv')
+    routed_audit = check(root / 'mapped.json', report / 'routed-connectivity.tsv', report / 'routed-parameters.tsv')
+    if routed_audit != audit:
+        raise ValueError(f'{root}: logical circuit changed during placement/routing')
     if 'CHARACTERIZATION_COMPLETE' not in (report / 'console.log').read_text():
         raise ValueError(f'{root}: incomplete Vivado run')
     coverage = {name: int(count) for name, count in re.findall(
@@ -79,6 +84,57 @@ def estimate(samples: list[dict[str, Any]], width: int, field: str) -> int:
     raise ValueError(f'width {width} exceeds measured support')
 
 
+def shape_estimate(training: dict, op: str, width: int, count: int, field: str) -> int:
+    """Interpolate monotone width/fan-in samples within the measured domain."""
+    previous_count = previous_delay = 0
+    for n in sorted(n for key, n in training if key == op):
+        delay = max(previous_delay, estimate(training[op, n], width, field))
+        if count <= n:
+            if previous_count == 0:
+                return delay
+            return math.ceil(previous_delay + (delay - previous_delay) *
+                             (count - previous_count) / (n - previous_count))
+        previous_count, previous_delay = n, delay
+    raise ValueError(f'{op}: fan-in {count} exceeds measured support')
+
+
+def index_family(training: dict, prefix: str, bits: int) -> str:
+    """Choose the smallest measured index width retaining all overflow decoding."""
+    widths = {int(op[len(prefix):]) for op, _ in training if op.startswith(prefix)
+              and op[len(prefix):].isdigit() and int(op[len(prefix):]) >= bits}
+    if not widths:
+        raise ValueError(f'{prefix}: index width {bits} exceeds measured support')
+    return prefix + str(min(widths))
+
+
+def operation_estimate(training: dict, row: dict, field: str) -> int:
+    """Estimate a held-out shape, rounding only independently sampled index widths."""
+    op = row['op']
+    indexed = re.fullmatch(r'(sel_d|array_index_s|array_update_s|shll_s|shrl_s|shra_s)([0-9]+)', op)
+    if indexed:
+        if indexed[1] in ('shll_s', 'shrl_s', 'shra_s') and int(indexed[2]) == row['width']:
+            op = indexed[1][:-2]
+        else:
+            op = index_family(training, indexed[1], int(indexed[2]))
+    return shape_estimate(training, op, row['width'], row['count'], field)
+
+
+def composed_estimate(training: dict, row: dict, field: str) -> int:
+    """Estimate nested reads as measured mux layers, omitting constant dimensions."""
+    match = re.fullmatch(r'array2_(s[0-9]+|c0)_(s[0-9]+|c0)_n([0-9]+)_n([0-9]+)', row['op'])
+    if match is None:
+        raise ValueError(f'unknown composition {row["op"]}')
+    width, delay = row['width'], 0
+    for mode, size in reversed(list(zip(match.groups()[:2], map(int, match.groups()[2:])))):
+        if mode == 'c0':
+            continue
+        bits = int(mode[1:])
+        count = min(size, 2**bits)
+        delay += shape_estimate(training, index_family(training, 'array_index_s', bits), width, count, field)
+        width *= count
+    return delay
+
+
 def summarize(values: list[int]) -> dict[str, Any]:
     """Keep optimistic errors visible instead of cancelling them with pessimism."""
     if not values:
@@ -96,13 +152,26 @@ def summarize(values: list[int]) -> dict[str, Any]:
     return result
 
 
-def analyze(corpora: list[Path], output: Path) -> None:
+def measured_row(item: tuple[Path, dict]) -> dict:
+    """Check one independent circuit and retain its declared probe shape."""
+    corpus, row = item
+    root = corpus / row['name']
+    if sha(root / 'mapped.json') != row['files']['mapped.json']:
+        raise ValueError(f'{root}: mapped circuit differs from its prepared manifest')
+    return dict(row, **measurement(root))
+
+
+def analyze(corpora: list[Path], output: Path, jobs: int = 1) -> None:
     """Fit only training cases, report held-out errors, and preserve every measurement."""
     manifests = [json.loads((corpus / 'manifest.json').read_text()) for corpus in corpora]
     if len({manifest['part'] for manifest in manifests}) != 1:
         raise ValueError('cannot mix target parts')
-    rows = [dict(row, **measurement(corpus / row['name']))
-            for corpus, manifest in zip(corpora, manifests) for row in manifest['probes']]
+    items = [(corpus, row) for corpus, manifest in zip(corpora, manifests) for row in manifest['probes']]
+    if jobs == 1:
+        rows = list(map(measured_row, items))
+    else:
+        with ProcessPoolExecutor(max_workers=jobs) as pool:
+            rows = list(pool.map(measured_row, items))
     keys = [(row['op'], row['width'], row['count']) for row in rows]
     if len(keys) != len(set(keys)):
         raise ValueError('duplicate measurement shape')
@@ -112,10 +181,11 @@ def analyze(corpora: list[Path], output: Path) -> None:
             training[row['op'], row['count']].append(row)
     validation = []
     for row in rows:
-        if row['split'] == 'validation' and row['op'] != 'reverse':
-            prediction = {field: estimate(training[row['op'], row['count']], row['width'], field)
+        if row['split'] in ('validation', 'composed_validation') and row['op'] != 'reverse':
+            prediction = {field: (composed_estimate(training, row, field) if row['split'] == 'composed_validation'
+                                  else operation_estimate(training, row, field))
                           for field in ('cell_ps', 'routed_ps')}
-            validation.append({'name': row['name'], 'predicted': prediction,
+            validation.append({'name': row['name'], 'kind': row['split'], 'predicted': prediction,
                                'error': {field: prediction[field] - row[field] for field in prediction}})
     output.mkdir(parents=True, exist_ok=True)
     table = ['# xc7z030sbg485-1; native synth_xilinx -abc9; ps excluding launch FF clock-to-Q',
@@ -139,8 +209,9 @@ def main() -> None:
     parser.add_argument('corpus', type=Path)
     parser.add_argument('output', type=Path)
     parser.add_argument('--extra-corpus', type=Path, action='append', default=[])
+    parser.add_argument('--jobs', type=int, choices=range(1, 9), default=1)
     args = parser.parse_args()
-    analyze([args.corpus] + args.extra_corpus, args.output)
+    analyze([args.corpus] + args.extra_corpus, args.output, args.jobs)
 
 
 if __name__ == '__main__':
