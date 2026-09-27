@@ -39,6 +39,7 @@ jobs:
           python3 experiments/07-openxc7/timing_model/test_selection_shapes.py
           python3 -m unittest discover -s experiments/07-openxc7/timing_chains -p test_path_report.py
           python3 -m unittest discover -s experiments/07-openxc7/timing_chains -p test_control_cones.py
+          python3 -m unittest discover -s experiments/07-openxc7/timing_chains -p test_control_frontier.py
 
       - name: Check Zynq package mapping and resource smoke
         run: python3 experiments/07-openxc7/test_zynq7030.py

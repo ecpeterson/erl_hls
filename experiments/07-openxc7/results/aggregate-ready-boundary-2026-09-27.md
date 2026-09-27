@@ -38,6 +38,26 @@ These are conservative mapped primitive levels from executor-result FIFO occupan
 
 The intended cross-proc cuts succeed. The longer X scheduler cone is a real caveat: remapping the forward bypass/selection logic is not uniformly beneficial. The scheduler's retirement/eligibility/issue dependency survives. There is no evidence yet that the overall clock improves; arithmetic/RAM limits also remain. The next architectural candidate is a reserved dispatch boundary, with fresh actor/output ownership captured before execution and separate ordered retirement, rather than another cached eligibility bit.
 
+## Complete storage frontier
+
+**Correction to the initial screen:** disappearance of the named reduction-ready endpoint does not establish that a critical path leaves the limiting set. Following the same launches to actual storage pins finds 25/23-level paths to the new X/Z buffer occupancy enables. The old report omitted these newly introduced endpoints.
+
+`control_frontier.py` now follows every reachable input of supported registers and RAMs, and retains external outputs and unsupported primitives explicitly. Shared enable nets are grouped with their full sink counts; only the displayed path details are capped. These are structural maxima over the selected result-occupancy launches, not all possible design launches or timing delays.
+
+| Deepest reachable category | X before | X buffered | Z before | Z buffered |
+|---|---:|---:|---:|---:|
+| Register CE | 24 | 25 | 24 | 24 |
+| Register D | 24 | 25 | 24 | 25 |
+| RAM ADDRARDADDR | 23 | 24 | 23 | 23 |
+| RAM ADDRBWRADDR | 23 | 23 | 23 | 24 |
+| RAM ENARDEN | 23 | 24 | 22 | 22 |
+
+The deepest buffered X enable chain crosses `scheduler_2_state.rd_addr` after 13 of 25 levels; Z crosses its corresponding address after 12 of 24. This is a useful candidate midpoint. However, a 25-level Z path into `one_hot_sel_168978` updates the mailbox order array, and a 24-level mailbox write-address path does not cross that landmark. Dispatch and admission both consume freshly retired metadata. Cutting only the actor-address signal would leave these neighboring chains.
+
+The initial named-endpoint cut therefore passes its narrow connectivity check, **not** a complete control-depth or routed-timing promotion gate. The [end-to-end pipeline plan](../yap/scheduler-pipeline-plan.md) first makes metadata visible across a clock boundary before both arbiters, then registers a reserved dispatch ticket before load. It preserves one metadata authority and explicitly budgets the possible recurrence-cycle cost.
+
+The [before](aggregate-ready-boundary-2026-09-27/frontier-before.json) and [after](aggregate-ready-boundary-2026-09-27/frontier-after.json) reports retain hashes, category maxima, total reachable pin/net counts, and the deepest representative per category. DSP `CEB2`/`CEM` pins appear as uncovered boundaries one supported level from the launch; they are not silently counted as generic register endpoints. This audit neither traverses unknown DSP modes nor supplies their timing.
+
 ## Validation and reproduction
 
 - Each normal/stalled application run matches 161 BEAM-oracle events. A 12,000-cycle comparison matches per-actor outputs through long stalls and reset; it permits different transfer cycles.
