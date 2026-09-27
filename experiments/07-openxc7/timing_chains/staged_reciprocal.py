@@ -251,7 +251,8 @@ def main() -> None:
     args = parser.parse_args()
     args.stage.mkdir(parents=True, exist_ok=False)
     cells = args.yosys.parent.parent / 'share/yosys/xilinx/cells_sim.v'
-    sources = [Path(__file__), Path(__file__).with_suffix('.x'), ROOT / 'priv/xls/lib/hls_fixed.x', cells,
+    sources = [Path(__file__), Path(__file__).with_suffix('.x'), ROOT / 'priv/xls/lib/hls_fixed.x',
+               ROOT / 'priv/xls/lib/hls_multiply.x', cells,
                cells.with_name('cells_map.v'), cells.with_name('xc7_dsp_map.v'),
                ROOT / 'experiments/07-openxc7/timing_model/characterize.py']
     tools = [args.yosys, *[args.xls / n for n in ('ir_converter_main', 'opt_main', 'codegen_main')],
@@ -261,7 +262,8 @@ def main() -> None:
         root = args.stage / name
         root.mkdir()
         shutil.copyfile(Path(__file__).with_suffix('.x'), root / 'staged_reciprocal.x')
-        shutil.copyfile(ROOT / 'priv/xls/lib/hls_fixed.x', root / 'hls_fixed.x')
+        for library in ('hls_fixed.x', 'hls_multiply.x'):
+            shutil.copyfile(ROOT / 'priv/xls/lib' / library, root / library)
         for function in functions:
             for label, argv, output in (
                     ('convert', [str(args.xls / 'ir_converter_main'), '--top=' + function, '--dslx_path=.',

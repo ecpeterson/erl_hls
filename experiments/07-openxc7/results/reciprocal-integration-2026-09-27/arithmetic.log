@@ -1,0 +1,2 @@
+PASS 7378 inputs, 25 results/input
+testbench.sv:12: $finish called at 7378 (1s)

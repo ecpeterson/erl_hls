@@ -119,6 +119,10 @@ Floating-point rounding also depends on its schedule. Binary64 evaluation of `(1
 
 XLS's [floating-point add/subtract and multiply](https://google.github.io/xls/floating_point/#apfloataddsub) also flush subnormal inputs and outputs to zero and do not report exception flags. That differs from the finite subnormal encodings supported by our codecs. Selecting `float64` does not by itself eliminate this difference. Nor is evaluating every operation in binary64 and then narrowing a universal exact emulator: double rounding and operations such as fused multiply-add need their own treatment.
 
+### Fixed-point rounding in DSLX companions
+
+`hls_fixed::round_ratio<D>(n)` divides a signed raw integer by a positive constant, rounding to nearest with ties away from zero. `round_ratio_chunked<D, LEFT, RIGHT>(n)` has the same numerical contract and exposes smaller partial products to XLS scheduling. Positive limb widths select a hardware decomposition; they do not reduce precision or prescribe register placement, latency, or a faster clock. The phi-field companion uses 24/17-bit limbs for its division by twelve; its Erlang recurrence and the power-of-two division in the line example are unchanged.
+
 ### Integer comparisons
 
 `<`, `=<`, `>`, `>=`, `=:=`, and `=/=` compare mathematical integer values across widths and signedness when the source identifies both operands as integers. For example, signed `-1` is less than unsigned `255` and is unequal to it, even though both have the same eight-bit pattern. Literal comparison bounds retain their own sufficient width: `A < 256` does not narrow `256` to `A`'s type.

@@ -32,6 +32,7 @@ vvp hls_trace_store.vvp
 for test_module in \
     axis.x \
     hls_vec.x \
+    hls_multiply.x \
     hls_numeric_test.x \
     xls_short_circuit_test.x \
     arbitration.x \

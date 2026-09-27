@@ -13,7 +13,7 @@ from schedule_report import analyze
 
 
 def prepare(args: argparse.Namespace) -> None:
-    """Preserve the surrounding RTL and require identical executor ports/stage count."""
+    """Preserve surrounding RTL and ports; use the requested executor stage budget."""
     reference = args.reference
     manifest = json.loads((reference / 'phi_decoder_profile.build.json').read_text())
     rtl_path = reference / 'phi_decoder_profile.v'
@@ -38,7 +38,10 @@ def prepare(args: argparse.Namespace) -> None:
     (stage / 'executor.ir').write_text(text.split('\nproc ', 1)[0] + '\n\n' + match[0] + '\n')
     allowance = ('--additional_input_delay_ps=' + str(args.delay_ps) if args.symmetric else
                  '--additional_channel_delay_ps=' + args.channel + ':recv=' + str(args.delay_ps))
-    command = [str(args.codegen), '--top=' + args.executor, '--pipeline_stages=2',
+    stages = getattr(args, 'pipeline_stages', 2)
+    if stages < 1:
+        raise ValueError('pipeline stages must be positive')
+    command = [str(args.codegen), '--top=' + args.executor, '--pipeline_stages=' + str(stages),
                '--delay_model=xc7_7030', '--xc7_delay_table=' + str(args.table),
                '--xc7_routed_delays=' + ('false' if args.cell_only else 'true'),
                '--flop_inputs=false', '--flop_outputs=true', '--use_system_verilog=false',
@@ -72,7 +75,8 @@ def prepare(args: argparse.Namespace) -> None:
     for name in ('phi_decoder_profile_top.v', 'hls_1r1w_ram.v', 'phi_decoder_profile.json'):
         shutil.copyfile(reference / name, stage / name)
     (stage / rtl_path.name).write_text(changed)
-    result = {'schema': 1, 'additional_delay_ps': args.delay_ps, 'symmetric_allowance': args.symmetric,
+    result = {'schema': 1, 'pipeline_stages': stages,
+              'additional_delay_ps': args.delay_ps, 'symmetric_allowance': args.symmetric,
               'cell_only': args.cell_only, 'channel': args.channel, 'executor': args.executor,
               'kept_product_inputs': kept,
               'unchanged_other_modules': True, 'unchanged_ports': True,
@@ -97,6 +101,7 @@ def main() -> None:
     parser.add_argument('--executor', default='__phi_halo_cell__SharedExecutor_0_next')
     parser.add_argument('--channel', default='_request_in')
     parser.add_argument('--delay-ps', type=int, required=True)
+    parser.add_argument('--pipeline-stages', type=int, default=2)
     parser.add_argument('--symmetric', action='store_true', help='control: allowance applies at both channel directions')
     parser.add_argument('--cell-only', action='store_true', help='schedule with calibrated cell-only operation costs')
     parser.add_argument('--keep-product-inputs', action='store_true',
