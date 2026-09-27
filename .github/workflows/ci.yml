@@ -419,6 +419,9 @@ jobs:
       - name: Check smaller and rectangular decoder profiles against BEAM
         run: python3 tools/test_decoder_profiles.py "$RUNNER_TEMP/xls" --cases board-sized rectangle-z --trace
 
+      - name: Compare the periodic repetition code with BEAM and stalled RTL
+        run: python3 tools/run_repetition_profile.py _build/repetition/n3 --cells 3 --xls "$RUNNER_TEMP/xls"
+
       - name: Diagnose backpressure in the smaller profile through public debug queries
         run: |
           python3 tools/test_topology_debug_integration.py \
@@ -443,6 +446,9 @@ jobs:
         with:
           name: complete-debug-reports
           path: |
+            _build/repetition/**/*.json
+            _build/repetition/**/*.log
+            _build/repetition/**/events.txt
             _build/decoder-profiles/**/*.json
             _build/decoder-profiles/**/*.log
             _build/decoder-profiles/**/*.events

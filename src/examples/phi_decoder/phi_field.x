@@ -26,6 +26,18 @@ pub fn relax(anyon: u32, field: Field, sum0: s64, sum1: s64) -> Field {
    relax_bulk(field[u32:0], field[u32:1], sum1)]
 }
 
+// Two physical neighbors plus two auxiliary-layer neighbors, with eta=1/2.
+// Each sum contains exactly two s32 values; the complete numerators fit s36.
+pub fn relax_line(anyon: u32, field: Field, sum0: s64, sum1: s64) -> Field {
+  let phi0 = field[u32:0] as sN[36];
+  let phi1 = field[u32:1] as sN[36];
+  let center = sN[36]:4 * phi0 + sN[36]:2 * phi1 + (sum0 as sN[36]);
+  let bulk = phi0 + sN[36]:5 * phi1 + (sum1 as sN[36]);
+  [hls_fixed::saturate<u32:32>(((anyon as s64) << u32:16) +
+     (hls_fixed::round_ratio<u32:8>(center) as s64)),
+   hls_fixed::saturate<u32:32>(hls_fixed::round_ratio<u32:8>(bulk))]
+}
+
 #[test]
 fn accumulator_preserves_four_extreme_neighbors_test() {
   let maximum = s32:2147483647;
@@ -97,4 +109,18 @@ fn bulk_matches_wide_reference(
   let expected = reference_saturate(
     reference_round(numerator, s64:12, s64:6));
   relax_bulk(phi0, phi1, sum) == expected
+}
+
+// Independent widened oracle for the two-neighbor recurrence and saturation.
+#[quickcheck]
+fn line_matches_wide_reference(anyon: u1, phi0: s32, phi1: s32,
+    east0: s32, west0: s32, east1: s32, west1: s32) -> bool {
+  let sum0 = (east0 as s64) + (west0 as s64);
+  let sum1 = (east1 as s64) + (west1 as s64);
+  let expected = [
+    reference_saturate(((anyon as s64) << u32:16) + reference_round(
+      s64:4 * (phi0 as s64) + s64:2 * (phi1 as s64) + sum0, s64:8, s64:4)),
+    reference_saturate(reference_round(
+      (phi0 as s64) + s64:5 * (phi1 as s64) + sum1, s64:8, s64:4))];
+  relax_line(anyon as u32, [phi0, phi1], sum0, sum1) == expected
 }

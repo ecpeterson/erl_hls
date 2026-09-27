@@ -143,12 +143,24 @@ proxy_processes_replies_during_write_stall() ->
         after hls_debug:stop(Client) end
     end).
 
+%% The runner and its write share an absolute deadline. Either timer, or the
+%% resulting broker DOWN, can arrive first; all must terminate a blocked start.
+-spec runner_initial_write_does_not_hide_deadline_test() -> ok.
 runner_initial_write_does_not_hide_deadline_test() ->
     with_peer(filled, #{}, fun(Fabric, _Peer, _Filled) ->
         Options = #{distance => 1, first_quiet_step => 0, line_y => 0,
             measurement => z, request_id => 7},
         {ok, Runner} = phi_memory_runner:start_link(Fabric, Options, 30),
-        try ?assertEqual({error, timeout}, phi_memory_runner:await(Runner))
+        try
+            Request = gen_server:send_request(Runner, await),
+            %% response/1 bounds this wait to one second even if both deadline
+            %% paths regress; unrelated failures and an absent reply still fail.
+            ?assert(lists:member(response(Request), [
+                {reply, {error, timeout}},
+                {reply, {error, {send, {not_sent, timeout}}}},
+                {reply, {error, {send, {write_timeout, {0, 1}}}}},
+                {reply, {error, {fabric_down, {write_timeout, {0, 1}}}}}
+            ]))
         after phi_memory_runner:stop(Runner) end
     end).
 
