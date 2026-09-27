@@ -1,0 +1,9 @@
+{
+  "fmax": {
+    "decoder.aclk": {
+      "achieved": 24.36,
+      "constraint": 200.0
+    }
+  },
+  "cycles_per_step": 79.25
+}

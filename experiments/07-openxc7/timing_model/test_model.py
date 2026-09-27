@@ -2,18 +2,39 @@
 import json
 from pathlib import Path
 import tempfile
+import tarfile
 import unittest
 from analyze import checked_path, estimate, summarize, shape_estimate, index_family, composed_estimate, operation_estimate, measured_row
 from connectivity import check, check_parameters, parameter_value, unused_dsp_pins
 from characterize import operation
 from batch import measure
+from collect import collect
 import hashlib
 from sdf import extract
 from application import schedule_summary
+from test_dsp_cascades import CascadeFixtures
 
 
 class ModelTests(unittest.TestCase):
     """Reject corrupted evidence and unsupported interpolation rather than guessing."""
+
+    def test_collection_keeps_reused_inputs_portable(self) -> None:
+        """A shared input must survive archiving without its original filesystem path."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            corpus = root / 'corpus'
+            probe = corpus / 'probe'
+            (probe / 'vivado').mkdir(parents=True)
+            (root / 'input.json').write_text('mapped circuit')
+            (probe / 'mapped.json').symlink_to(root / 'input.json')
+            (probe / 'vivado/console.log').write_text('CHARACTERIZATION_COMPLETE')
+            (corpus / 'manifest.json').write_text('{"probes": [{"name": "probe"}]}')
+            archive = root / 'evidence.tar.gz'
+            collect(corpus, archive, None)
+            (root / 'input.json').unlink()
+            with tarfile.open(archive) as saved:
+                self.assertTrue(saved.getmember('probe/mapped.json').isfile())
+                self.assertEqual(saved.extractfile('probe/mapped.json').read(), b'mapped circuit')
 
     def test_carry_bit_order(self) -> None:
         """A CO[0]/CO[3] import swap must fail even with identical cell counts."""
@@ -139,6 +160,21 @@ class ModelTests(unittest.TestCase):
             (output / 'console.log').write_text('CHARACTERIZATION_COMPLETE')
             (output / 'path-properties.rpt').write_text('timed')
             self.assertEqual(measure(root, root / 'measure.tcl', 'probe')['status'], 'complete')
+            with self.assertRaisesRegex(ValueError, 'changed'):
+                measure(root, root / 'measure.tcl', 'probe', period_ns=40)
+            fingerprint = json.loads((output / 'inputs.json').read_text())
+            (output / 'inputs.json').write_text(json.dumps(fingerprint + ['period_ns=40']))
+            self.assertEqual(measure(root, root / 'measure.tcl', 'probe', period_ns=40)['status'], 'complete')
+            with self.assertRaisesRegex(ValueError, 'changed'):
+                measure(root, root / 'measure.tcl', 'probe', period_ns=40, placement='Explore')
+            (output / 'inputs.json').write_text(json.dumps(fingerprint + ['period_ns=40', 'placement=Explore']))
+            self.assertEqual(measure(root, root / 'measure.tcl', 'probe', period_ns=40, placement='Explore')['status'], 'complete')
+            with self.assertRaisesRegex(ValueError, 'placement requires'):
+                measure(root, root / 'measure.tcl', 'probe', placement='Explore')
+            for period in (0, -1, float('inf'), float('nan')):
+                with self.assertRaisesRegex(ValueError, 'finite and positive'):
+                    measure(root, root / 'measure.tcl', 'probe', period_ns=period)
+            (output / 'inputs.json').write_text(json.dumps(fingerprint))
             inputs[0].write_text('changed evidence')
             with self.assertRaisesRegex(ValueError, 'changed'):
                 measure(root, root / 'measure.tcl', 'probe')

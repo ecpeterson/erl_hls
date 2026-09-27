@@ -1,0 +1,26 @@
+{
+  "binary_sha256": "b7cf6f9c074ff9a7739ddc8de0d622111aedb59cb537fa044300fd86de3bcfe5",
+  "source_restored": true,
+  "placement_command": [
+    "/Users/ecpeterson/Documents/code/erl_xls/_build/architecture-repo/_build/vendor-followup-20260926/native-cascade/nextpnr-cascade-calibrated",
+    "--chipdb",
+    "/Users/ecpeterson/Documents/code/erl_xls/experiments/07-openxc7/build/chipdb/xc7z030sbg485.bin",
+    "--json",
+    "/Users/ecpeterson/Documents/code/erl_hls_worktrees/timing-control-simplification/_build/timing-fifo/compact-map/placed.json",
+    "--no-pack",
+    "--no-place",
+    "--no-route",
+    "--report",
+    "/Users/ecpeterson/Documents/code/erl_xls/_build/architecture-repo/_build/vendor-followup-20260926/native-cascade/placement.json",
+    "--log",
+    "/Users/ecpeterson/Documents/code/erl_xls/_build/architecture-repo/_build/vendor-followup-20260926/native-cascade/placement.log",
+    "--diagnostic-timing-paths"
+  ],
+  "fmax": {
+    "decoder.aclk": {
+      "achieved": 24.1,
+      "constraint": 25.0
+    }
+  },
+  "kind": "unchanged placement, estimated interconnect; not a completed route"
+}

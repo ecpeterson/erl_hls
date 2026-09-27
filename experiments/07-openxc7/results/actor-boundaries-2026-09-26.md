@@ -1,5 +1,7 @@
 # Actor boundaries and exact arithmetic
 
+**Vendor follow-up:** [Matched Vivado controls and expanded calibration](vendor-followup-2026-09-26.md) now cover the previous model gaps, compare the complete cores at 5/40 ns constraints, and measure DSP forwarding delays. Use those results for current timing conclusions; this report retains the earlier native experiment.
+
 **Timing-model update:** The later [DSP cascade audit](lut-arithmetic-2026-09-26.md#correcting-a-false-dsp-dependency) found impossible dependencies in our local native extension. The native periods/path attributions below are historical measurements under that model; affected architectural rankings require rechecking. Area, RTL cycle counts, XLS estimates and vendor measurements are unchanged.
 
 The tested register boundaries and two-cycle actor recurrence do not improve step time. A bit-preserving arithmetic rewrite does reduce the isolated bulk update from six DSPs to four; its application timing awaits one new calibration shape. No production default changes.

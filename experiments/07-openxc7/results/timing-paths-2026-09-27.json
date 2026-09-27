@@ -1,0 +1,940 @@
+{
+  "schema": 1,
+  "title": "Physical paths and feedback budget, 2026-09-27",
+  "runs": [
+    {
+      "name": "Shared core, DSP arithmetic",
+      "tool": "vivado",
+      "stage": "routed",
+      "constraint_ns": 5,
+      "artifacts": {
+        "paths": {
+          "path": "timing-paths-2026-09-27-inputs.tar.gz",
+          "member": "dsp/vivado/paths.rpt",
+          "sha256": "6ee15192a6eb3dd7b5049285e82ddcd17080c88a20231e77fc8c87a78d25e23c"
+        },
+        "cycle_evidence": {
+          "path": "timing-paths-2026-09-27-inputs.tar.gz",
+          "member": "cycles.json",
+          "sha256": "52c3fe8c00aab401aa4292f268db1984f498b66a998deabe0ae561d02eaf922c"
+        },
+        "block_ir": {
+          "path": "timing-paths-2026-09-27-inputs.tar.gz",
+          "member": "block.ir",
+          "sha256": "01c65c33857145e98bcfc0370453a7b95af3d24d58e42b4b7e02fce72d30ff84"
+        },
+        "scheduled_ir": {
+          "path": "timing-paths-2026-09-27-inputs.tar.gz",
+          "member": "scheduled.ir",
+          "sha256": "3b783f59b220ec301c5fe3d1f79e8e2796c0d1c58050fea3772f418b030235a3"
+        },
+        "schedule": {
+          "path": "timing-paths-2026-09-27-inputs.tar.gz",
+          "member": "schedule.textproto",
+          "sha256": "8c95f2673f6ee953560f64d99952970cc387b62fad160a7a4d33bb66dc85df76"
+        }
+      },
+      "path_sets": [
+        {
+          "name": "global",
+          "paths": 20,
+          "worst_ns": 15.846,
+          "logic_ns": 10.16,
+          "route_ns": 5.646,
+          "cell_arcs": {
+            "RAMB18E1": 1,
+            "LUT4": 4,
+            "LUT3": 2,
+            "LUT6": 1,
+            "LUT5": 1,
+            "CARRY4": 13,
+            "DSP48E1": 3,
+            "LUT2": 1
+          }
+        }
+      ],
+      "schedule": [
+        {
+          "function": "__phi_halo_cell__SharedExecutor_0_next",
+          "state_reads": 0,
+          "max_stage_delay_ps": 14886,
+          "stage_delays_ps": {
+            "0": 14868,
+            "1": 14886
+          },
+          "products": [
+            {
+              "id": 84636,
+              "name": "umul.84636",
+              "type": "bits[33]",
+              "op": "umul",
+              "arguments": "concat.82147, add.82148",
+              "locations": [
+                {
+                  "file": "phi_halo_cell.x",
+                  "line": 425,
+                  "column": 13
+                },
+                {
+                  "file": "phi_halo_cell.x",
+                  "line": 1380,
+                  "column": 41
+                },
+                {
+                  "file": "phi_halo_cell.x",
+                  "line": 3037,
+                  "column": 50
+                },
+                {
+                  "file": "phi_halo_cell.x",
+                  "line": 3079,
+                  "column": 28
+                },
+                {
+                  "file": "phi_halo_cell.x",
+                  "line": 3190,
+                  "column": 29
+                },
+                {
+                  "file": "phi_halo_cell.x",
+                  "line": 3228,
+                  "column": 53
+                }
+              ],
+              "operands": [
+                "concat.82147",
+                "add.82148"
+              ],
+              "stage": 0,
+              "node_delay_ps": 7143,
+              "path_delay_ps": 13476,
+              "input_boundaries": [
+                {
+                  "id": 84351,
+                  "name": "receive.84351",
+                  "type": "(token, (bits[32], bits[540], ((bits[8], bits[8], bits[8], bits[8]), bits[96]), bits[1], (bits[32], (bits[1], bits[16], bits[2], bits[32], bits[3], bits[4], (bits[64], bits[64]))), bits[1], bits[1], bits[8], bits[8], bits[1]))",
+                  "op": "receive",
+                  "arguments": "after_all.10227, channel=_request_in",
+                  "locations": [],
+                  "operands": [
+                    "after_all.10227"
+                  ],
+                  "stage": 0,
+                  "node_delay_ps": 0,
+                  "path_delay_ps": 0
+                }
+              ],
+              "dependent_state_updates": []
+            },
+            {
+              "id": 84635,
+              "name": "umul.84635",
+              "type": "bits[33]",
+              "op": "umul",
+              "arguments": "concat.82147, add.82165",
+              "locations": [
+                {
+                  "file": "phi_halo_cell.x",
+                  "line": 425,
+                  "column": 13
+                },
+                {
+                  "file": "phi_halo_cell.x",
+                  "line": 1380,
+                  "column": 41
+                },
+                {
+                  "file": "phi_halo_cell.x",
+                  "line": 3037,
+                  "column": 50
+                },
+                {
+                  "file": "phi_halo_cell.x",
+                  "line": 3188,
+                  "column": 28
+                },
+                {
+                  "file": "phi_halo_cell.x",
+                  "line": 3228,
+                  "column": 53
+                }
+              ],
+              "operands": [
+                "concat.82147",
+                "add.82165"
+              ],
+              "stage": 0,
+              "node_delay_ps": 7143,
+              "path_delay_ps": 9341,
+              "input_boundaries": [
+                {
+                  "id": 84351,
+                  "name": "receive.84351",
+                  "type": "(token, (bits[32], bits[540], ((bits[8], bits[8], bits[8], bits[8]), bits[96]), bits[1], (bits[32], (bits[1], bits[16], bits[2], bits[32], bits[3], bits[4], (bits[64], bits[64]))), bits[1], bits[1], bits[8], bits[8], bits[1]))",
+                  "op": "receive",
+                  "arguments": "after_all.10227, channel=_request_in",
+                  "locations": [],
+                  "operands": [
+                    "after_all.10227"
+                  ],
+                  "stage": 0,
+                  "node_delay_ps": 0,
+                  "path_delay_ps": 0
+                }
+              ],
+              "dependent_state_updates": []
+            },
+            {
+              "id": 82239,
+              "name": "smul.82239",
+              "type": "bits[76]",
+              "op": "smul",
+              "arguments": "numerator, literal.82220",
+              "locations": [
+                {
+                  "file": "hls_fixed.x",
+                  "line": 33,
+                  "column": 20
+                },
+                {
+                  "file": "phi_field.x",
+                  "line": 15,
+                  "column": 57
+                },
+                {
+                  "file": "phi_field.x",
+                  "line": 25,
+                  "column": 16
+                },
+                {
+                  "file": "phi_halo_cell.x",
+                  "line": 1315,
+                  "column": 28
+                },
+                {
+                  "file": "phi_halo_cell.x",
+                  "line": 3037,
+                  "column": 50
+                },
+                {
+                  "file": "phi_halo_cell.x",
+                  "line": 3079,
+                  "column": 28
+                },
+                {
+                  "file": "phi_halo_cell.x",
+                  "line": 3190,
+                  "column": 29
+                },
+                {
+                  "file": "phi_halo_cell.x",
+                  "line": 3228,
+                  "column": 53
+                }
+              ],
+              "operands": [
+                "numerator",
+                "literal.82220"
+              ],
+              "stage": 0,
+              "node_delay_ps": 7927,
+              "path_delay_ps": 13585,
+              "input_boundaries": [
+                {
+                  "id": 84351,
+                  "name": "receive.84351",
+                  "type": "(token, (bits[32], bits[540], ((bits[8], bits[8], bits[8], bits[8]), bits[96]), bits[1], (bits[32], (bits[1], bits[16], bits[2], bits[32], bits[3], bits[4], (bits[64], bits[64]))), bits[1], bits[1], bits[8], bits[8], bits[1]))",
+                  "op": "receive",
+                  "arguments": "after_all.10227, channel=_request_in",
+                  "locations": [],
+                  "operands": [
+                    "after_all.10227"
+                  ],
+                  "stage": 0,
+                  "node_delay_ps": 0,
+                  "path_delay_ps": 0
+                }
+              ],
+              "dependent_state_updates": []
+            },
+            {
+              "id": 82261,
+              "name": "smul.82261",
+              "type": "bits[76]",
+              "op": "smul",
+              "arguments": "numerator__2, literal.82220",
+              "locations": [
+                {
+                  "file": "hls_fixed.x",
+                  "line": 33,
+                  "column": 20
+                },
+                {
+                  "file": "phi_field.x",
+                  "line": 15,
+                  "column": 57
+                },
+                {
+                  "file": "phi_field.x",
+                  "line": 25,
+                  "column": 16
+                },
+                {
+                  "file": "phi_halo_cell.x",
+                  "line": 1315,
+                  "column": 28
+                },
+                {
+                  "file": "phi_halo_cell.x",
+                  "line": 3037,
+                  "column": 50
+                },
+                {
+                  "file": "phi_halo_cell.x",
+                  "line": 3188,
+                  "column": 28
+                },
+                {
+                  "file": "phi_halo_cell.x",
+                  "line": 3228,
+                  "column": 53
+                }
+              ],
+              "operands": [
+                "numerator__2",
+                "literal.82220"
+              ],
+              "stage": 0,
+              "node_delay_ps": 7927,
+              "path_delay_ps": 12725,
+              "input_boundaries": [
+                {
+                  "id": 84351,
+                  "name": "receive.84351",
+                  "type": "(token, (bits[32], bits[540], ((bits[8], bits[8], bits[8], bits[8]), bits[96]), bits[1], (bits[32], (bits[1], bits[16], bits[2], bits[32], bits[3], bits[4], (bits[64], bits[64]))), bits[1], bits[1], bits[8], bits[8], bits[1]))",
+                  "op": "receive",
+                  "arguments": "after_all.10227, channel=_request_in",
+                  "locations": [],
+                  "operands": [
+                    "after_all.10227"
+                  ],
+                  "stage": 0,
+                  "node_delay_ps": 0,
+                  "path_delay_ps": 0
+                }
+              ],
+              "dependent_state_updates": []
+            },
+            {
+              "id": 82295,
+              "name": "smul.82295",
+              "type": "bits[76]",
+              "op": "smul",
+              "arguments": "numerator__1, literal.82220",
+              "locations": [
+                {
+                  "file": "hls_fixed.x",
+                  "line": 33,
+                  "column": 20
+                },
+                {
+                  "file": "phi_field.x",
+                  "line": 21,
+                  "column": 53
+                },
+                {
+                  "file": "phi_field.x",
+                  "line": 26,
+                  "column": 14
+                },
+                {
+                  "file": "phi_halo_cell.x",
+                  "line": 1315,
+                  "column": 28
+                },
+                {
+                  "file": "phi_halo_cell.x",
+                  "line": 3037,
+                  "column": 50
+                },
+                {
+                  "file": "phi_halo_cell.x",
+                  "line": 3079,
+                  "column": 28
+                },
+                {
+                  "file": "phi_halo_cell.x",
+                  "line": 3190,
+                  "column": 29
+                },
+                {
+                  "file": "phi_halo_cell.x",
+                  "line": 3228,
+                  "column": 53
+                }
+              ],
+              "operands": [
+                "numerator__1",
+                "literal.82220"
+              ],
+              "stage": 0,
+              "node_delay_ps": 7927,
+              "path_delay_ps": 13693,
+              "input_boundaries": [
+                {
+                  "id": 84351,
+                  "name": "receive.84351",
+                  "type": "(token, (bits[32], bits[540], ((bits[8], bits[8], bits[8], bits[8]), bits[96]), bits[1], (bits[32], (bits[1], bits[16], bits[2], bits[32], bits[3], bits[4], (bits[64], bits[64]))), bits[1], bits[1], bits[8], bits[8], bits[1]))",
+                  "op": "receive",
+                  "arguments": "after_all.10227, channel=_request_in",
+                  "locations": [],
+                  "operands": [
+                    "after_all.10227"
+                  ],
+                  "stage": 0,
+                  "node_delay_ps": 0,
+                  "path_delay_ps": 0
+                }
+              ],
+              "dependent_state_updates": []
+            },
+            {
+              "id": 82338,
+              "name": "smul.82338",
+              "type": "bits[76]",
+              "op": "smul",
+              "arguments": "numerator__3, literal.82220",
+              "locations": [
+                {
+                  "file": "hls_fixed.x",
+                  "line": 33,
+                  "column": 20
+                },
+                {
+                  "file": "phi_field.x",
+                  "line": 21,
+                  "column": 53
+                },
+                {
+                  "file": "phi_field.x",
+                  "line": 26,
+                  "column": 14
+                },
+                {
+                  "file": "phi_halo_cell.x",
+                  "line": 1315,
+                  "column": 28
+                },
+                {
+                  "file": "phi_halo_cell.x",
+                  "line": 3037,
+                  "column": 50
+                },
+                {
+                  "file": "phi_halo_cell.x",
+                  "line": 3188,
+                  "column": 28
+                },
+                {
+                  "file": "phi_halo_cell.x",
+                  "line": 3228,
+                  "column": 53
+                }
+              ],
+              "operands": [
+                "numerator__3",
+                "literal.82220"
+              ],
+              "stage": 0,
+              "node_delay_ps": 7927,
+              "path_delay_ps": 12793,
+              "input_boundaries": [
+                {
+                  "id": 84351,
+                  "name": "receive.84351",
+                  "type": "(token, (bits[32], bits[540], ((bits[8], bits[8], bits[8], bits[8]), bits[96]), bits[1], (bits[32], (bits[1], bits[16], bits[2], bits[32], bits[3], bits[4], (bits[64], bits[64]))), bits[1], bits[1], bits[8], bits[8], bits[1]))",
+                  "op": "receive",
+                  "arguments": "after_all.10227, channel=_request_in",
+                  "locations": [],
+                  "operands": [
+                    "after_all.10227"
+                  ],
+                  "stage": 0,
+                  "node_delay_ps": 0,
+                  "path_delay_ps": 0
+                }
+              ],
+              "dependent_state_updates": []
+            }
+          ],
+          "io": [
+            {
+              "id": 84351,
+              "name": "receive.84351",
+              "type": "(token, (bits[32], bits[540], ((bits[8], bits[8], bits[8], bits[8]), bits[96]), bits[1], (bits[32], (bits[1], bits[16], bits[2], bits[32], bits[3], bits[4], (bits[64], bits[64]))), bits[1], bits[1], bits[8], bits[8], bits[1]))",
+              "op": "receive",
+              "arguments": "after_all.10227, channel=_request_in",
+              "locations": [],
+              "operands": [
+                "after_all.10227"
+              ],
+              "stage": 0,
+              "node_delay_ps": 0,
+              "path_delay_ps": 0
+            },
+            {
+              "id": 84352,
+              "name": "_done",
+              "type": "token",
+              "op": "send",
+              "arguments": "tok, tuple.82710, channel=_result_out",
+              "locations": [],
+              "operands": [
+                "tok",
+                "tuple.82710"
+              ],
+              "stage": 1,
+              "node_delay_ps": 0,
+              "path_delay_ps": 14886
+            }
+          ]
+        }
+      ],
+      "summary": {
+        "paths_reported": 20,
+        "period_ns": 15.846,
+        "families": [
+          {
+            "family": "state RAM \u2192 DSP/carry arithmetic (phi_field.x:21) \u2192 register",
+            "paths": 12,
+            "indices": [
+              0,
+              1,
+              3,
+              4,
+              5,
+              7,
+              9,
+              12,
+              14,
+              15,
+              18,
+              19
+            ],
+            "worst_ns": 15.846,
+            "best_ns": 15.698,
+            "unmodified_sample_floor_ns": 15.783,
+            "source_count": 2,
+            "destination_count": 12
+          },
+          {
+            "family": "state RAM \u2192 DSP/carry arithmetic (phi_field.x:15) \u2192 register",
+            "paths": 4,
+            "indices": [
+              2,
+              10,
+              16,
+              17
+            ],
+            "worst_ns": 15.783,
+            "best_ns": 15.706,
+            "unmodified_sample_floor_ns": 15.846,
+            "source_count": 1,
+            "destination_count": 4
+          },
+          {
+            "family": "state RAM \u2192 DSP/carry arithmetic \u2192 register",
+            "paths": 4,
+            "indices": [
+              6,
+              8,
+              11,
+              13
+            ],
+            "worst_ns": 15.755,
+            "best_ns": 15.715,
+            "unmodified_sample_floor_ns": 15.846,
+            "source_count": 2,
+            "destination_count": 4
+          }
+        ],
+        "longest_nets": [
+          {
+            "kind": "net",
+            "resource": "decoder.scheduler_3_state_rd_data[387]",
+            "delay_ns": 0.867,
+            "fanout": 2
+          },
+          {
+            "kind": "net",
+            "resource": "$flattendecoder.$techmap1127688$auto$abc9_ops.cc:1613:reintegrate$1125381.A[1]",
+            "delay_ns": 0.832,
+            "fanout": 2
+          },
+          {
+            "kind": "net",
+            "resource": "$flattendecoder.$abc$1119696$aiger1119695$34024",
+            "delay_ns": 0.821,
+            "fanout": 2
+          },
+          {
+            "kind": "net",
+            "resource": "$flattendecoder.$abc$1119696$aiger1119695$31752",
+            "delay_ns": 0.812,
+            "fanout": 2
+          },
+          {
+            "kind": "net",
+            "resource": "$flattendecoder.$techmap1126988$auto$abc9_ops.cc:1613:reintegrate$1125644.A[1]",
+            "delay_ns": 0.803,
+            "fanout": 2
+          },
+          {
+            "kind": "net",
+            "resource": "$flattendecoder.$techmap1126896$auto$abc9_ops.cc:1613:reintegrate$1125736.A[1]",
+            "delay_ns": 0.746,
+            "fanout": 2
+          },
+          {
+            "kind": "net",
+            "resource": "$flattendecoder.$techmap1133484$abc$1119696$lut$aiger1119695$86567.A[3]",
+            "delay_ns": 0.735,
+            "fanout": 81
+          },
+          {
+            "kind": "net",
+            "resource": "$flattendecoder.$techmap1133491$abc$1119696$lut$aiger1119695$88118.A[4]",
+            "delay_ns": 0.679,
+            "fanout": 2
+          },
+          {
+            "kind": "net",
+            "resource": "decoder.scheduler_2_state_rd_data[375]",
+            "delay_ns": 0.674,
+            "fanout": 2
+          },
+          {
+            "kind": "net",
+            "resource": "$flattendecoder.$abc$1119696$aiger1119695$37564",
+            "delay_ns": 0.653,
+            "fanout": 2
+          }
+        ],
+        "all_path_families_covered": false,
+        "sample_floor_note": "Untouched reported paths bound possible improvement; absent families remain unknown.",
+        "cycles_per_step": 79.25,
+        "step_ns": 1255.7955,
+        "target_1mhz_period_ns": 12.618296529968454,
+        "added_cycle_budget": [
+          {
+            "added_cycles": 1,
+            "break_even_period_ns": 15.648542056074765,
+            "target_1mhz_period_ns": 12.461059190031152
+          },
+          {
+            "added_cycles": 14,
+            "break_even_period_ns": 13.466975871313672,
+            "target_1mhz_period_ns": 10.723860589812332
+          },
+          {
+            "added_cycles": 29,
+            "break_even_period_ns": 11.600882217090069,
+            "target_1mhz_period_ns": 9.237875288683602
+          }
+        ]
+      }
+    },
+    {
+      "name": "Shared core, LUT arithmetic",
+      "tool": "vivado",
+      "stage": "routed",
+      "constraint_ns": 5,
+      "artifacts": {
+        "paths": {
+          "path": "timing-paths-2026-09-27-inputs.tar.gz",
+          "member": "lut/vivado/paths.rpt",
+          "sha256": "6a397d9fe7d72a3b4a8c2fc832dc6c50d377fd596f91a27dc015e8f4960e4d41"
+        },
+        "cycle_evidence": {
+          "path": "timing-paths-2026-09-27-inputs.tar.gz",
+          "member": "cycles.json",
+          "sha256": "52c3fe8c00aab401aa4292f268db1984f498b66a998deabe0ae561d02eaf922c"
+        }
+      },
+      "path_sets": [
+        {
+          "name": "global",
+          "paths": 20,
+          "worst_ns": 15.09,
+          "logic_ns": 6.15,
+          "route_ns": 8.64,
+          "cell_arcs": {
+            "RAMB18E1": 1,
+            "LUT4": 3,
+            "LUT3": 4,
+            "LUT2": 7,
+            "CARRY4": 17,
+            "LUT5": 1
+          }
+        }
+      ],
+      "schedule": null,
+      "summary": {
+        "paths_reported": 20,
+        "period_ns": 15.09,
+        "families": [
+          {
+            "family": "state RAM \u2192 carry arithmetic \u2192 register",
+            "paths": 20,
+            "indices": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10,
+              11,
+              12,
+              13,
+              14,
+              15,
+              16,
+              17,
+              18,
+              19
+            ],
+            "worst_ns": 15.09,
+            "best_ns": 14.614,
+            "unmodified_sample_floor_ns": null,
+            "source_count": 4,
+            "destination_count": 20
+          }
+        ],
+        "longest_nets": [
+          {
+            "kind": "net",
+            "resource": "$flattendecoder.$techmap1397195$auto$abc9_ops.cc:1613:reintegrate$1389099.A[3]",
+            "delay_ns": 0.923,
+            "fanout": 2
+          },
+          {
+            "kind": "net",
+            "resource": "$flattendecoder.$techmap1397266$abc$1383692$lut$aiger1383691$142472.A[3]",
+            "delay_ns": 0.743,
+            "fanout": 12
+          },
+          {
+            "kind": "net",
+            "resource": "$flattendecoder.$techmap1401118$abc$1383692$lut$aiger1383691$187110.A[0]",
+            "delay_ns": 0.727,
+            "fanout": 15
+          },
+          {
+            "kind": "net",
+            "resource": "decoder.scheduler_2_state_rd_data[114]",
+            "delay_ns": 0.722,
+            "fanout": 2
+          },
+          {
+            "kind": "net",
+            "resource": "$flattendecoder.$techmap1397062$abc$1383692$lut$aiger1383691$113444.A[0]",
+            "delay_ns": 0.716,
+            "fanout": 13
+          },
+          {
+            "kind": "net",
+            "resource": "decoder.scheduler_2_state_rd_data[384]",
+            "delay_ns": 0.701,
+            "fanout": 2
+          },
+          {
+            "kind": "net",
+            "resource": "$flattendecoder.$techmap1400759$abc$1383692$lut$aiger1383691$172829.A[0]",
+            "delay_ns": 0.694,
+            "fanout": 14
+          },
+          {
+            "kind": "net",
+            "resource": "$flattendecoder.$techmap1400747$auto$abc9_ops.cc:1613:reintegrate$1388393.A[5]",
+            "delay_ns": 0.675,
+            "fanout": 2
+          },
+          {
+            "kind": "net",
+            "resource": "decoder.scheduler_3_state_rd_data[118]",
+            "delay_ns": 0.657,
+            "fanout": 2
+          },
+          {
+            "kind": "net",
+            "resource": "$flattendecoder.$techmap1402001$abc$1383692$lut$aiger1383691$190963.A[1]",
+            "delay_ns": 0.653,
+            "fanout": 10
+          }
+        ],
+        "all_path_families_covered": false,
+        "sample_floor_note": "Untouched reported paths bound possible improvement; absent families remain unknown.",
+        "cycles_per_step": 79.25,
+        "step_ns": 1195.8825,
+        "target_1mhz_period_ns": 12.618296529968454,
+        "added_cycle_budget": [
+          {
+            "added_cycles": 1,
+            "break_even_period_ns": 14.901962616822429,
+            "target_1mhz_period_ns": 12.461059190031152
+          },
+          {
+            "added_cycles": 14,
+            "break_even_period_ns": 12.824477211796246,
+            "target_1mhz_period_ns": 10.723860589812332
+          },
+          {
+            "added_cycles": 29,
+            "break_even_period_ns": 11.047413394919168,
+            "target_1mhz_period_ns": 9.237875288683602
+          }
+        ]
+      }
+    },
+    {
+      "name": "Native shared-core control, seed 2",
+      "tool": "nextpnr",
+      "stage": "routed",
+      "constraint_ns": 40,
+      "artifacts": {
+        "paths": {
+          "path": "timing-paths-2026-09-27-inputs.tar.gz",
+          "member": "native.txt",
+          "sha256": "4f1212bc49c6c7a0b463d0e6624499993e21364cc4dccb3ef61e98912af4243d"
+        },
+        "cycle_evidence": {
+          "path": "timing-paths-2026-09-27-inputs.tar.gz",
+          "member": "cycles.json",
+          "sha256": "52c3fe8c00aab401aa4292f268db1984f498b66a998deabe0ae561d02eaf922c"
+        }
+      },
+      "path_sets": [
+        {
+          "name": "global",
+          "paths": 1,
+          "worst_ns": 38.8,
+          "logic_ns": 3.5,
+          "route_ns": 35.3,
+          "cell_arcs": {
+            "unspecified": 26
+          }
+        }
+      ],
+      "schedule": null,
+      "summary": {
+        "paths_reported": 1,
+        "period_ns": 38.8,
+        "families": [
+          {
+            "family": "register \u2192 service/reduction control \u2192 register",
+            "paths": 1,
+            "indices": [
+              0
+            ],
+            "worst_ns": 38.8,
+            "best_ns": 38.8,
+            "unmodified_sample_floor_ns": null,
+            "source_count": 1,
+            "destination_count": 1
+          }
+        ],
+        "longest_nets": [
+          {
+            "kind": "net",
+            "resource": "decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_decoder_profile_topology__Phi_xReductionPlane_0_next_inst.or_173296",
+            "delay_ns": 9.8,
+            "grid_displacement": 73
+          },
+          {
+            "kind": "net",
+            "resource": "$flatten\\decoder.$abc$1119696$lut$aiger1119695$92030.A[1]",
+            "delay_ns": 3.6,
+            "grid_displacement": 94
+          },
+          {
+            "kind": "net",
+            "resource": "$flatten\\decoder.$abc$1119696$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_2_0_2_2_next_inst.incoming_result[408].A[2]",
+            "delay_ns": 2.7,
+            "grid_displacement": 65
+          },
+          {
+            "kind": "net",
+            "resource": "decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_2_0_2_2_next_inst.__phi_halo_cell__SharedExecutor_0_next_inst.p0_request_internal__1",
+            "delay_ns": 2.6,
+            "grid_displacement": 54
+          },
+          {
+            "kind": "net",
+            "resource": "$flatten\\decoder.$techmap1129230$abc$1119696$lut$aiger1119695$43264.A[2]",
+            "delay_ns": 2.5,
+            "grid_displacement": 63
+          },
+          {
+            "kind": "net",
+            "resource": "decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_2_0_2_2_next_inst.p0_stage_done",
+            "delay_ns": 2.5,
+            "grid_displacement": 85
+          },
+          {
+            "kind": "net",
+            "resource": "$flatten\\decoder.$techmap1129628$abc$1119696$lut$aiger1119695$48274.A[5]",
+            "delay_ns": 2.1,
+            "grid_displacement": 68
+          },
+          {
+            "kind": "net",
+            "resource": "decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_2_0_2_2_next_inst.and_168449",
+            "delay_ns": 1.2,
+            "grid_displacement": 12
+          },
+          {
+            "kind": "net",
+            "resource": "decoder.scheduler_2_state_rd_addr[0]",
+            "delay_ns": 1.0,
+            "grid_displacement": 10
+          },
+          {
+            "kind": "net",
+            "resource": "decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_2_0_2_2_next_inst.and_167555",
+            "delay_ns": 0.9,
+            "grid_displacement": 15
+          }
+        ],
+        "all_path_families_covered": false,
+        "sample_floor_note": "Untouched reported paths bound possible improvement; absent families remain unknown.",
+        "cycles_per_step": 79.25,
+        "step_ns": 3074.8999999999996,
+        "target_1mhz_period_ns": 12.618296529968454,
+        "added_cycle_budget": [
+          {
+            "added_cycles": 1,
+            "break_even_period_ns": 38.31651090342679,
+            "target_1mhz_period_ns": 12.461059190031152
+          },
+          {
+            "added_cycles": 14,
+            "break_even_period_ns": 32.97479892761394,
+            "target_1mhz_period_ns": 10.723860589812332
+          },
+          {
+            "added_cycles": 29,
+            "break_even_period_ns": 28.405542725173206,
+            "target_1mhz_period_ns": 9.237875288683602
+          }
+        ]
+      }
+    }
+  ],
+  "manifest_sha256": "e903a537db87bf2c2f2fd6e7f4476921d487075dca335c6ab5dbf53a8b3b7fb9",
+  "includes_path_details": false
+}

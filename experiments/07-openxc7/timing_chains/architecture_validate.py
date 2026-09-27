@@ -17,8 +17,9 @@ def command(argv: list[str], stage: Path, name: str) -> None:
                        check=True, timeout=600)
 
 
-def validate(stage: Path, reference: Path) -> None:
-    """Match complete normal/stalled event sequences and independent reset prefixes."""
+def validate(stage: Path, reference: Path, cycle_exact: bool = False,
+             reference_rtl: Path | None = None) -> None:
+    """Match the BEAM oracle and reset/stall witness, optionally on every cycle."""
     spec = importlib.util.spec_from_file_location('decoder_profiles', ROOT / 'tools/test_decoder_profiles.py')
     helper = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(helper)
@@ -43,19 +44,22 @@ def validate(stage: Path, reference: Path) -> None:
                         'cycles_per_step': float(re.search(r'cycles_per_step=([0-9.]+)', log)[1]),
                         'metrics': [s for s in log.splitlines() if s.startswith('PROFILE_')]})
         (run / 'sim.vvp').unlink()
-    text = '\n'.join((reference / 'compiled' / n).read_text() for n in
+    baseline = reference_rtl or reference / 'compiled'
+    text = '\n'.join((baseline / n).read_text() for n in
                      ('phi_decoder_profile.v', 'phi_decoder_profile_top.v'))
     modules = re.findall(r'^module\s+(\w+)\s*\(', text, re.M)
     text = re.sub(r'\b(?:' + '|'.join(map(re.escape, modules)) + r')\b',
                   lambda m: 'baseline_' + m[0], text)
     (stage / 'reference.v').write_text(text)
     command(['iverilog', '-g2012', '-s', 'phi_compare_tb', '-o', 'compare.vvp',
-             '-Pphi_compare_tb.WIDTH=2', '-Pphi_compare_tb.HEIGHT=1', '-Pphi_compare_tb.CYCLE_EXACT=0',
+             '-Pphi_compare_tb.WIDTH=2', '-Pphi_compare_tb.HEIGHT=1',
+             f'-Pphi_compare_tb.CYCLE_EXACT={int(cycle_exact)}',
              str(ROOT / 'experiments/07-openxc7/phi_compare_tb.sv'), 'reference.v', *files], stage, 'compare-compile')
     command(['vvp', 'compare.vvp'], stage, 'compare')
     if 'PASS:' not in (stage / 'compare.log').read_text():
         raise AssertionError('missing reset witness')
-    (stage / 'comparison.json').write_text(json.dumps({'samples': samples,
+    (stage / 'comparison.json').write_text(json.dumps({'samples': samples, 'cycle_exact': cycle_exact,
+        'reference_rtl': str(baseline),
         'reset_stalls': (stage / 'compare.log').read_text()}, indent=2) + '\n')
     for name in ('reference.v', 'compare.vvp'):
         (stage / name).unlink()
@@ -67,8 +71,11 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('stage', type=lambda p: Path(p).resolve())
     parser.add_argument('reference', type=lambda p: Path(p).resolve())
+    parser.add_argument('--cycle-exact', action='store_true', help='also compare ready/valid/data every cycle')
+    parser.add_argument('--reference-rtl', type=lambda p: Path(p).resolve(),
+                        help='compiled baseline directory; defaults to REFERENCE/compiled')
     args = parser.parse_args()
-    validate(args.stage, args.reference)
+    validate(args.stage, args.reference, args.cycle_exact, args.reference_rtl)
 
 
 if __name__ == '__main__':

@@ -45,6 +45,7 @@ def primitive_arcs(corpora: list[Path]) -> list[dict[str, Any]]:
                     continue
                 params = cells[measured['instance']]['parameters']
                 rows.append({'probe': probe['name'], 'cell': measured['cell'],
+                             'instance': measured['instance'],
                              'mode': {k: v for k, v in params.items() if not k.startswith(('INIT', 'SRVAL'))},
                              'worst_ps': {kind: max(a['ps'] for a in measured['arcs'] if a['kind'] == kind)
                                           for kind in sorted({a['kind'] for a in measured['arcs']})},

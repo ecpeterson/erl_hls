@@ -1,0 +1,22 @@
+Info: Critical path report for clock '$abc$54543$iopadmap$clock' (posedge -> posedge):
+Info: curr total
+Info:  0.1  0.1  Source $auto$ff.cc:337:slice$1685.Q
+Info:  3.6  3.7    Net stimulus[0] budget 0.000000 ns (54,119) -> (30,121)
+Info:                Sink $abc$54543$lut$aiger54542$3181.A2
+Info:  0.2  3.9  Source $abc$54543$lut$aiger54542$3181.O5
+Info:  2.4  6.2    Net $techmap54562$abc$54543$lut$aiger54542$5887.A[2] budget 0.000000 ns (30,121) -> (57,101)
+Info:                Sink $abc$54543$lut$aiger54542$7952.A1
+Info:  0.1  6.3  Source $abc$54543$lut$aiger54542$7952.O6
+Info:  0.2  6.5    Net $techmap54869$abc$54543$lut$aiger54542$7956.A[4] budget 0.000000 ns (57,101) -> (57,101)
+Info:                Sink $abc$54543$lut$aiger54542$7956.A3
+Info:  0.1  6.6  Source $abc$54543$lut$aiger54542$7956.O6
+Info:  0.8  7.4    Net $techmap54870$abc$54543$lut$aiger54542$7961.A[4] budget 0.000000 ns (57,101) -> (57,105)
+Info:                Sink $abc$54543$lut$aiger54542$7961.A1
+Info:  0.1  7.6  Source $abc$54543$lut$aiger54542$7961.O6
+Info:  1.6  9.2    Net $techmap56095$abc$54543$lut\value[11].A[3] budget 0.000000 ns (57,105) -> (34,108)
+Info:                Sink $abc$54543$lut\value[11].A2
+Info:  0.1  9.3  Source $abc$54543$lut\value[11].O6
+Info:  0.0  9.3    Net value[11] budget -0.382000 ns (34,108) -> (34,108)
+Info:                Sink $auto$ff.cc:337:slice$4776.D
+Info:  0.1  9.4  Setup $auto$ff.cc:337:slice$4776.D
+Info: 0.8 ns logic, 8.6 ns routing

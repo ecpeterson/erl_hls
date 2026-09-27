@@ -1,0 +1,72 @@
+{
+  "endpoint_requirements_met": true,
+  "design_wide_clock_validated": false,
+  "checks": [
+    {
+      "requirement": {
+        "type": "SLICE_FFX",
+        "port": "Q",
+        "class": "register_output"
+      },
+      "matched": 22334,
+      "failed": 0,
+      "passed": true,
+      "failures": []
+    },
+    {
+      "requirement": {
+        "type": "SLICE_FFX",
+        "port": "D",
+        "class": "register_input"
+      },
+      "matched": 22334,
+      "failed": 0,
+      "passed": true,
+      "failures": []
+    },
+    {
+      "requirement": {
+        "type": "RAMB(?:18|36)E1_RAMB(?:18|36)E1",
+        "port": "DO(?:ADO|BDO)[0-9]+",
+        "class": "register_output"
+      },
+      "matched": 1920,
+      "failed": 0,
+      "passed": true,
+      "failures": []
+    },
+    {
+      "requirement": {
+        "type": "RAMB(?:18|36)E1_RAMB(?:18|36)E1",
+        "port": "(?:DIADI|DIBDI)[0-9]+",
+        "class": "register_input"
+      },
+      "matched": 1920,
+      "failed": 0,
+      "passed": true,
+      "failures": []
+    },
+    {
+      "requirement": {
+        "type": "DSP48E1_DSP48E1",
+        "port": "P[0-9]+",
+        "class": "comb_output"
+      },
+      "matched": 2688,
+      "failed": 0,
+      "passed": true,
+      "failures": []
+    },
+    {
+      "requirement": {
+        "type": "DSP48E1_DSP48E1",
+        "port": "[AB][0-9]+",
+        "class": "comb_input"
+      },
+      "matched": 2688,
+      "failed": 0,
+      "passed": true,
+      "failures": []
+    }
+  ]
+}

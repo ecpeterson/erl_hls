@@ -1,0 +1,46 @@
+[
+  {
+    "variant": "flat",
+    "runs": [
+      {
+        "seed": 1,
+        "achieved": 24.05,
+        "constraint": 200.0,
+        "period_ns": 41.58004158004158
+      },
+      {
+        "seed": 2,
+        "achieved": 24.41,
+        "constraint": 200.0,
+        "period_ns": 40.96681687832855
+      }
+    ],
+    "samples": 2,
+    "best_mhz": 24.41,
+    "mean_mhz": 24.23,
+    "variance_mhz_squared": 0.0323999999999999,
+    "worst_mhz": 24.05
+  },
+  {
+    "variant": "tree",
+    "runs": [
+      {
+        "seed": 1,
+        "achieved": 115.27,
+        "constraint": 200.0,
+        "period_ns": 8.675284115554785
+      },
+      {
+        "seed": 2,
+        "achieved": 106.27,
+        "constraint": 200.0,
+        "period_ns": 9.409993413004612
+      }
+    ],
+    "samples": 2,
+    "best_mhz": 115.27,
+    "mean_mhz": 110.77,
+    "variance_mhz_squared": 20.25,
+    "worst_mhz": 106.27
+  }
+]

@@ -18,7 +18,9 @@ def collect(corpus: Path, output: Path, operations: list[str] | None) -> None:
         if not log.is_file() or 'CHARACTERIZATION_COMPLETE' not in log.read_text():
             raise ValueError(f"incomplete measurement: {row['name']}")
     manifest['probes'] = rows
-    with tarfile.open(output, 'w:gz') as archive:
+    # Reused mapped inputs may be symlinks into another corpus. Keep the archive
+    # self-contained instead of retaining a remote machine's absolute link.
+    with tarfile.open(output, 'w:gz', dereference=True) as archive:
         content = (json.dumps(manifest, indent=2) + '\n').encode()
         info = tarfile.TarInfo('manifest.json')
         info.size = len(content)

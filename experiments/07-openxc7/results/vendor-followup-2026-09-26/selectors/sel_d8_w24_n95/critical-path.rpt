@@ -1,0 +1,114 @@
+Copyright 1986-2022 Xilinx, Inc. All Rights Reserved. Copyright 2022-2024 Advanced Micro Devices, Inc. All Rights Reserved.
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+| Tool Version : Vivado v.2024.2 (lin64) Build 5239630 Fri Nov 08 22:34:34 MST 2024
+| Date         : Sun Sep 27 00:59:45 2026
+| Host         : ip-172-31-24-238 running 64-bit Ubuntu 22.04.5 LTS
+| Command      : report_timing -delay_type max -max_paths 20 -path_type full_clock_expanded -file /home/ubuntu/timing-followup-20260926/selector-edges/sel_d8_w24_n95/vivado/paths.rpt
+| Design       : probe_top
+| Device       : 7z030-sbg485
+| Speed File   : -1  PRODUCTION 1.12 2019-11-22
+| Design State : Routed
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+Timing Report
+
+Slack (VIOLATED) :        -12.770ns  (required time - arrival time)
+  Source:                 launch_index_7/C
+                            (rising edge-triggered cell FDRE clocked by clock  {rise@0.000ns fall@2.500ns period=5.000ns})
+  Destination:            capture_15/D
+                            (rising edge-triggered cell FDRE clocked by clock  {rise@0.000ns fall@2.500ns period=5.000ns})
+  Path Group:             clock
+  Path Type:              Setup (Max at Slow Process Corner)
+  Requirement:            5.000ns  (clock rise@5.000ns - clock rise@0.000ns)
+  Data Path Delay:        17.786ns  (logic 7.024ns (39.492%)  route 10.762ns (60.508%))
+  Logic Levels:           28  (LUT4=2 LUT5=1 LUT6=1 MUXF7=1 MUXF8=23)
+  Clock Path Skew:        -0.020ns (DCD - SCD + CPR)
+    Destination Clock Delay (DCD):    1.479ns = ( 6.479 - 5.000 )
+    Source Clock Delay      (SCD):    1.584ns
+    Clock Pessimism Removal (CPR):    0.085ns
+  Clock Uncertainty:      0.035ns  ((TSJ^2 + TIJ^2)^1/2 + DJ) / 2 + PE
+    Total System Jitter     (TSJ):    0.071ns
+    Total Input Jitter      (TIJ):    0.000ns
+    Discrete Jitter          (DJ):    0.000ns
+    Phase Error              (PE):    0.000ns
+
+    Location             Delay type                Incr(ns)  Path(ns)    Netlist Resource(s)
+  -------------------------------------------------------------------    -------------------
+                         (clock clock rise edge)      0.000     0.000 r
+                                                      0.000     0.000 r  clock (IN)
+                         net (fo=2335, unset)         1.584     1.584    clock
+    SLICE_X54Y34         FDRE                                         r  launch_index_7/C
+  -------------------------------------------------------------------    -------------------
+    SLICE_X54Y34         FDRE (Prop_fdre_C_Q)         0.308     1.892 r  launch_index_7/Q
+                         net (fo=7, routed)           0.379     2.271    dut.index[7]
+    SLICE_X54Y34         LUT4 (Prop_lut4_I0_O)        0.053     2.324 f  $abc$49403$lut$aiger49402$9324/O
+                         net (fo=150, routed)         1.138     3.462    $techmap49435$abc$49403$lut$aiger49402$9403.A[0]
+    SLICE_X57Y40         LUT4 (Prop_lut4_I3_O)        0.053     3.515 f  $abc$49403$lut$aiger49402$13939/O
+                         net (fo=1, routed)           0.697     4.212    $techmap49861$abc$49403$lut$aiger49402$13952.A[3]
+    SLICE_X54Y40         LUT5 (Prop_lut5_I3_O)        0.053     4.265 r  $abc$49403$lut$aiger49402$13952/O
+                         net (fo=1, routed)           0.484     4.749    $abc$49403$lut$aiger49402$13969.A[7]
+    SLICE_X55Y43         MUXF8 (Prop_muxf8_S_O)       0.167     4.916 r  $abc$49403$lut$aiger49402$13969.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8/O
+                         net (fo=1, routed)           0.377     5.292    $abc$49403$lut$aiger49402$13978.A[6]
+    SLICE_X56Y43         MUXF7 (Prop_muxf7_S_O)       0.293     5.585 r  $abc$49403$lut$aiger49402$13978.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux7/O
+                         net (fo=1, routed)           0.347     5.933    $abc$49403$lut$aiger49402$13989.A[7]
+    SLICE_X56Y41         MUXF8 (Prop_muxf8_S_O)       0.265     6.198 r  $abc$49403$lut$aiger49402$13989.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8/O
+                         net (fo=1, routed)           0.375     6.573    $abc$49403$lut$aiger49402$13999.A[7]
+    SLICE_X55Y41         MUXF8 (Prop_muxf8_S_O)       0.267     6.840 r  $abc$49403$lut$aiger49402$13999.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8/O
+                         net (fo=1, routed)           0.396     7.235    $abc$49403$lut$aiger49402$14010.A[7]
+    SLICE_X53Y41         MUXF8 (Prop_muxf8_S_O)       0.267     7.502 r  $abc$49403$lut$aiger49402$14010.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8/O
+                         net (fo=1, routed)           0.463     7.965    $abc$49403$lut$aiger49402$14020.A[7]
+    SLICE_X53Y38         MUXF8 (Prop_muxf8_S_O)       0.267     8.232 r  $abc$49403$lut$aiger49402$14020.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8/O
+                         net (fo=1, routed)           0.244     8.476    $abc$49403$lut$aiger49402$14031.A[7]
+    SLICE_X53Y39         MUXF8 (Prop_muxf8_S_O)       0.267     8.743 r  $abc$49403$lut$aiger49402$14031.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8/O
+                         net (fo=1, routed)           0.358     9.101    $abc$49403$lut$aiger49402$14041.A[7]
+    SLICE_X53Y42         MUXF8 (Prop_muxf8_S_O)       0.267     9.368 r  $abc$49403$lut$aiger49402$14041.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8/O
+                         net (fo=1, routed)           0.247     9.615    $abc$49403$lut$aiger49402$14052.A[7]
+    SLICE_X52Y42         MUXF8 (Prop_muxf8_S_O)       0.273     9.888 r  $abc$49403$lut$aiger49402$14052.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8/O
+                         net (fo=1, routed)           0.535    10.423    $abc$49403$lut$aiger49402$14062.A[7]
+    SLICE_X47Y41         MUXF8 (Prop_muxf8_S_O)       0.270    10.693 r  $abc$49403$lut$aiger49402$14062.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8/O
+                         net (fo=1, routed)           0.247    10.941    $abc$49403$lut$aiger49402$14073.A[7]
+    SLICE_X46Y41         MUXF8 (Prop_muxf8_S_O)       0.273    11.214 r  $abc$49403$lut$aiger49402$14073.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8/O
+                         net (fo=1, routed)           0.351    11.565    $abc$49403$lut$aiger49402$14083.A[7]
+    SLICE_X48Y42         MUXF8 (Prop_muxf8_S_O)       0.276    11.841 r  $abc$49403$lut$aiger49402$14083.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8/O
+                         net (fo=1, routed)           0.396    12.237    $abc$49403$lut$aiger49402$14094.A[7]
+    SLICE_X47Y42         MUXF8 (Prop_muxf8_S_O)       0.270    12.507 r  $abc$49403$lut$aiger49402$14094.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8/O
+                         net (fo=1, routed)           0.247    12.754    $abc$49403$lut$aiger49402$14104.A[7]
+    SLICE_X46Y42         MUXF8 (Prop_muxf8_S_O)       0.273    13.027 r  $abc$49403$lut$aiger49402$14104.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8/O
+                         net (fo=1, routed)           0.388    13.415    $abc$49403$lut$aiger49402$14115.A[7]
+    SLICE_X45Y42         MUXF8 (Prop_muxf8_S_O)       0.270    13.685 r  $abc$49403$lut$aiger49402$14115.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8/O
+                         net (fo=1, routed)           0.247    13.932    $abc$49403$lut$aiger49402$14125.A[7]
+    SLICE_X44Y42         MUXF8 (Prop_muxf8_S_O)       0.267    14.199 r  $abc$49403$lut$aiger49402$14125.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8/O
+                         net (fo=1, routed)           0.350    14.549    $abc$49403$lut$aiger49402$14136.A[7]
+    SLICE_X40Y42         MUXF8 (Prop_muxf8_S_O)       0.267    14.816 r  $abc$49403$lut$aiger49402$14136.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8/O
+                         net (fo=1, routed)           0.288    15.104    $abc$49403$lut$aiger49402$14146.A[7]
+    SLICE_X40Y43         MUXF8 (Prop_muxf8_S_O)       0.267    15.371 r  $abc$49403$lut$aiger49402$14146.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8/O
+                         net (fo=1, routed)           0.360    15.731    $abc$49403$lut$aiger49402$14157.A[7]
+    SLICE_X38Y43         MUXF8 (Prop_muxf8_S_O)       0.273    16.004 r  $abc$49403$lut$aiger49402$14157.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8/O
+                         net (fo=1, routed)           0.402    16.406    $abc$49403$lut$aiger49402$14167.A[7]
+    SLICE_X36Y44         MUXF8 (Prop_muxf8_S_O)       0.276    16.682 r  $abc$49403$lut$aiger49402$14167.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8/O
+                         net (fo=1, routed)           0.351    17.033    $abc$49403$lut$aiger49402$14178.A[7]
+    SLICE_X35Y44         MUXF8 (Prop_muxf8_S_O)       0.270    17.303 r  $abc$49403$lut$aiger49402$14178.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8/O
+                         net (fo=1, routed)           0.247    17.550    $abc$49403$lut$aiger49402$14188.A[7]
+    SLICE_X34Y44         MUXF8 (Prop_muxf8_S_O)       0.273    17.823 r  $abc$49403$lut$aiger49402$14188.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8/O
+                         net (fo=1, routed)           0.360    18.183    $abc$49403$lut$aiger49402$14199.A[7]
+    SLICE_X32Y44         MUXF8 (Prop_muxf8_S_O)       0.276    18.459 r  $abc$49403$lut$aiger49402$14199.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8/O
+                         net (fo=1, routed)           0.245    18.704    $abc$49403$lut$aiger49402$14209.A[7]
+    SLICE_X33Y45         MUXF8 (Prop_muxf8_S_O)       0.270    18.974 f  $abc$49403$lut$aiger49402$14209.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8/O
+                         net (fo=1, routed)           0.243    19.217    $techmap49991$abc$49403$lutvalue[15].A[5]
+    SLICE_X34Y45         LUT6 (Prop_lut6_I5_O)        0.153    19.370 r  $abc$49403$lut\\value[15]/O
+                         net (fo=1, routed)           0.000    19.370    dut.out[15]
+    SLICE_X34Y45         FDRE                                         r  capture_15/D
+  -------------------------------------------------------------------    -------------------
+
+                         (clock clock rise edge)      5.000     5.000 r
+                                                      0.000     5.000 r  clock (IN)
+                         net (fo=2335, unset)         1.479     6.479    clock
+    SLICE_X34Y45         FDRE                                         r  capture_15/C
+                         clock pessimism              0.085     6.564
+                         clock uncertainty           -0.035     6.529
+    SLICE_X34Y45         FDRE (Setup_fdre_C_D)        0.071     6.600    capture_15
+  -------------------------------------------------------------------
+                         required time                          6.600
+                         arrival time                         -19.370
+  -------------------------------------------------------------------
+                         slack                                -12.770
