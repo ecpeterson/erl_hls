@@ -1,0 +1,2 @@
+PASS: aggregate FIFO pushes=1445 pops=1438 reset_discarded=7 bypasses=698 full_recovery=511 full_stalls=2750
+experiments/07-openxc7/timing_chains/aggregate_fifo_tb.sv:59: $finish called at 60005 (1s)

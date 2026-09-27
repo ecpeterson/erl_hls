@@ -170,3 +170,5 @@ Repeated builds print a checksum of deterministic Project X-Ray frames rather
 than the final `.bit`, whose metadata includes its build time and input path.
 
 The [reciprocal integration](results/reciprocal-integration-2026-09-27.md) carries the exact limb arithmetic into the phi executor, compares two/three-stage schedules, and checks mapped ready/valid pipelines.
+
+The [aggregate ready boundary](results/aggregate-ready-boundary-2026-09-27.md) cuts scheduler-to-reduction backpressure with an existing bypass FIFO and measures its storage, cycles and remaining control cones.

@@ -1,0 +1,5 @@
+read_verilog generated-fifos.v
+hierarchy -check -top fifo_for_depth_0_ty__bits_32____bits_1___bits_16___bits_2___bits_32___bits_3___bits_4____bits_64___bits_64_____with_bypass
+synth_xilinx -family xc7 -top fifo_for_depth_0_ty__bits_32____bits_1___bits_16___bits_2___bits_32___bits_3___bits_4____bits_64___bits_64_____with_bypass -nosrl
+write_verilog -noattr fifo-mapped.v
+write_json fifo-mapped.json

@@ -138,11 +138,13 @@ source_fragment_plane_uses_inverse_depth_two_queues_test() ->
         "::reduction_aggregate_batch<u32:2>(frames);"
     >>)).
 
+%% Aggregate delivery has one bypass slot and stays outside ordinary mail.
+-spec source_fragment_plane_wires_the_aggregate_endpoint_last_test() -> ok.
 source_fragment_plane_wires_the_aggregate_endpoint_last_test() ->
     Generated = selected(),
     ?assertNotEqual(nomatch, binary:match(Generated, <<
         "chan<hls_topology_source_fragment_fixture::"
-        "ReductionAggregateRequest, u32:0>"
+        "ReductionAggregateRequest, u32:1>"
     >>)),
     ?assertNotEqual(nomatch, binary:match(Generated, <<
         "ReductionAggregateRequest {\n"
@@ -221,6 +223,8 @@ source_fragment_plane_is_one_effect_window_hyperedge_test() ->
         "Effect-window domain 1: schedulers 2."
     >>)).
 
+%% Several planes share one buffered final endpoint without adding mux-input slots.
+-spec multiple_planes_share_one_scheduler_through_a_fair_typed_mux_test() -> ok.
 multiple_planes_share_one_scheduler_through_a_fair_typed_mux_test() ->
     Plan = hls_topology:normalize(dual_topology()),
     Profile = (profile(#{combined => group([
@@ -233,6 +237,9 @@ multiple_planes_share_one_scheduler_through_a_fair_typed_mux_test() ->
         }
     },
     Generated = iolist_to_binary(xls_topology_dslx:emit(Plan, Profile)),
+    %% Only the shared final handoff adds capacity; mux input storage is unchanged.
+    ?assertEqual(1, count(Generated, <<"ReductionAggregateRequest, u32:1>">>)),
+    ?assertEqual(1, count(Generated, <<"ReductionAggregateRequest, u32:0>[u32:2]">>)),
     ?assertEqual(1, count(Generated, <<
         "proc SchedulerAggregateArrayMux0 {"
     >>)),
