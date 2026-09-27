@@ -14,7 +14,8 @@ import time
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def run(rtl, stage):
+def run(rtl: Path, stage: Path) -> None:
+    """Check routed replies and live debug queries under output stalls."""
     stage.mkdir(parents=True, exist_ok=True)
     for name in ('app_tx', 'app_rx', 'debug_tx', 'debug_rx', 'app_held', 'release_app', 'done'):
         (stage / name).unlink(missing_ok=True)
@@ -29,8 +30,8 @@ def run(rtl, stage):
         shutil.copy(ROOT / 'test/rtl' / name, stage)
     with (stage / 'compile.log').open('w') as log:
         for top in ('regsvc_pair_tb', 'fabric_services_tb', 'regsvc_pair_harness_tb'):
-            test_sources = ([ROOT / 'experiments/07-openxc7/regsvc_pair_harness_tb.sv',
-                             ROOT / 'experiments/07-openxc7/regsvc_pair_harness.v']
+            test_sources = ([ROOT / 'test/rtl/regsvc_pair_harness_tb.sv',
+                             ROOT / 'test/rtl/regsvc_pair_harness.v']
                             if top == 'regsvc_pair_harness_tb' else [ROOT / f'test/rtl/{top}.sv'])
             subprocess.run(['iverilog', '-g2012', '-s', top, '-o', str(stage / f'{top}.vvp'),
                             *map(str, test_sources + sources)],
