@@ -1,5 +1,7 @@
 # Architecture and fusion controls on the four-phi core
 
+**Vendor follow-up:** [Matched Vivado controls and expanded calibration](vendor-followup-2026-09-26.md) now cover the previous model gaps, compare the complete cores at 5/40 ns constraints, and measure DSP forwarding delays. Use those results for current timing conclusions; this report retains the earlier native experiment.
+
 **Timing-model update:** The later [DSP cascade audit](lut-arithmetic-2026-09-26.md#correcting-a-false-dsp-dependency) found impossible dependencies in our local native extension. The native periods/path attributions below are historical measurements under that model; affected architectural rankings require rechecking. Area, RTL cycle counts, XLS estimates and vendor measurements are unchanged.
 
 Removing shared execution reduces cycle count, but does not remove the longest composed control/arithmetic paths. The measured fusions repay their latency savings in the first routed controls. No compiler default changes in this experiment.

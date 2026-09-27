@@ -1,0 +1,91 @@
+
+****** Vivado v2024.2 (64-bit)
+  **** SW Build 5239630 on Fri Nov 08 22:34:34 MST 2024
+  **** IP Build 5239520 on Sun Nov 10 16:12:51 MST 2024
+  **** SharedData Build 5239561 on Fri Nov 08 14:39:27 MST 2024
+  **** Start of session at: Sat Sep 26 23:47:19 2026
+    ** Copyright 1986-2022 Xilinx, Inc. All Rights Reserved.
+    ** Copyright 2022-2024 Advanced Micro Devices, Inc. All Rights Reserved.
+
+source /home/ubuntu/timing-followup-20260926/scripts/probe_paths.tcl
+# set checkpoint [file normalize [lindex $argv 0]]
+# set queries [file normalize [lindex $argv 1]]
+# set output [file normalize [lindex $argv 2]]
+# file mkdir $output
+# set_param general.maxThreads 2
+# open_checkpoint $checkpoint
+Command: open_checkpoint /home/ubuntu/timing-followup-20260926/mapping-controls/lut/vivado/routed.dcp
+
+Starting open_checkpoint Task
+
+Time (s): cpu = 00:00:00.03 ; elapsed = 00:00:00.04 . Memory (MB): peak = 1366.715 ; gain = 0.000 ; free physical = 17893 ; free virtual = 24837
+INFO: [Device 21-403] Loading part xc7z030sbg485-1
+Netlist sorting complete. Time (s): cpu = 00:00:00.3 ; elapsed = 00:00:00.3 . Memory (MB): peak = 1502.129 ; gain = 0.000 ; free physical = 17752 ; free virtual = 24696
+INFO: [Netlist 29-17] Analyzing 924 Unisim elements for replacement
+INFO: [Netlist 29-28] Unisim Transformation completed in 0 CPU seconds
+WARNING: [Netlist 29-43] Netlist 'probe_top' is not ideal for floorplanning, since the cellview 'probe_top' defined in file 'probe_top.edf' contains large number of primitives.  Please consider enabling hierarchy in synthesis if you want to do floorplanning.
+INFO: [Project 1-479] Netlist was created with Vivado 2024.2
+INFO: [Project 1-570] Preparing netlist for logic optimization
+Read ShapeDB Complete: Time (s): cpu = 00:00:00.03 ; elapsed = 00:00:00.04 . Memory (MB): peak = 1606.910 ; gain = 5.250 ; free physical = 17585 ; free virtual = 24529
+INFO: [Timing 38-478] Restoring timing data from binary archive.
+INFO: [Timing 38-479] Binary timing data restore complete.
+INFO: [Project 1-856] Restoring constraints from binary archive.
+INFO: [Project 1-853] Binary constraint restore complete.
+INFO: [Designutils 20-5722] Start Reading Physical Databases.
+Reading placement.
+Read Netlist Cache: Time (s): cpu = 00:00:00.07 ; elapsed = 00:00:00.07 . Memory (MB): peak = 2379.746 ; gain = 16.102 ; free physical = 16894 ; free virtual = 23839
+Reading placer database...
+Read Device Cache: Time (s): cpu = 00:00:00.01 ; elapsed = 00:00:00.01 . Memory (MB): peak = 2380.746 ; gain = 1.000 ; free physical = 16887 ; free virtual = 23831
+Read PlaceDB: Time (s): cpu = 00:00:01 ; elapsed = 00:00:01 . Memory (MB): peak = 2427.199 ; gain = 44.070 ; free physical = 16836 ; free virtual = 23780
+Read PulsedLatchDB: Time (s): cpu = 00:00:00 ; elapsed = 00:00:00 . Memory (MB): peak = 2427.199 ; gain = 0.000 ; free physical = 16836 ; free virtual = 23780
+Reading routing.
+Read RouteStorage: Time (s): cpu = 00:00:00.9 ; elapsed = 00:00:00.57 . Memory (MB): peak = 2459.551 ; gain = 32.352 ; free physical = 16811 ; free virtual = 23755
+Read Physdb Files: Time (s): cpu = 00:00:02 ; elapsed = 00:00:02 . Memory (MB): peak = 2459.551 ; gain = 95.906 ; free physical = 16811 ; free virtual = 23755
+Restored from archive | CPU: 2.400000 secs | Memory: 65.485542 MB |
+Finished XDEF File Restore: Time (s): cpu = 00:00:02 ; elapsed = 00:00:02 . Memory (MB): peak = 2459.551 ; gain = 109.781 ; free physical = 16811 ; free virtual = 23755
+Netlist sorting complete. Time (s): cpu = 00:00:00 ; elapsed = 00:00:00 . Memory (MB): peak = 2459.551 ; gain = 0.000 ; free physical = 16811 ; free virtual = 23755
+INFO: [Project 1-111] Unisim Transformation Summary:
+No Unisim elements were transformed.
+
+INFO: [Project 1-604] Checkpoint was created with Vivado v2024.2 (64-bit) build 5239630
+open_checkpoint: Time (s): cpu = 00:00:16 ; elapsed = 00:00:16 . Memory (MB): peak = 2459.551 ; gain = 1092.836 ; free physical = 16811 ; free virtual = 23755
+# set cells [get_cells -hier -filter {IS_PRIMITIVE}]
+# set lookup [dict create]
+# foreach cell $cells name [get_property NAME $cells] {
+#     dict set lookup [string map [list "\\\\" "\\"] $name] $cell
+# }
+# set stream [open $queries r]
+# set records [split [string trim [read $stream]] "\n"]
+# close $stream
+# set summary [open [file join $output status.tsv] w]
+# foreach record $records {
+#     lassign [split $record "\t"] label start_cell start_port end_cell end_port
+#     if {![regexp {^[a-z0-9_-]+$} $label]} {error "invalid query label"}
+#     if {![dict exists $lookup $start_cell] || ![dict exists $lookup $end_cell]} {
+#         puts $summary "$label\tmissing_cell"
+#         continue
+#     }
+#     set starts [get_pins -of_objects [dict get $lookup $start_cell] -filter "REF_PIN_NAME == $start_port"]
+#     set ends [get_pins -of_objects [dict get $lookup $end_cell] -filter "REF_PIN_NAME == $end_port"]
+#     if {[llength $starts] != 1 || [llength $ends] != 1} {
+#         puts $summary "$label\tmissing_pin"
+#         continue
+#     }
+#     set path [get_timing_paths -quiet -from $starts -to $ends -delay_type max -max_paths 1]
+#     if {[llength $path] != 1} {
+#         puts $summary "$label\tno_path"
+#         continue
+#     }
+#     report_timing -from $starts -to $ends -delay_type max -max_paths 1 \
+#         -path_type full_clock_expanded -file [file join $output $label-path.rpt]
+#     set stream [open [file join $output $label-properties.rpt] w]
+#     puts $stream [report_property -all -return_string $path]
+#     close $stream
+#     puts $summary "$label\tcomplete"
+# }
+INFO: [Timing 38-78] ReportTimingParams: -from_pins  -to_pins  -max_paths 1 -nworst 1 -delay_type max -sort_by slack.
+INFO: [Timing 38-78] ReportTimingParams: -from_pins  -to_pins  -max_paths 1 -nworst 1 -delay_type max -sort_by slack.
+# close $summary
+# puts "PATH_QUERIES_COMPLETE"
+PATH_QUERIES_COMPLETE
+INFO: [Common 17-206] Exiting Vivado at Sat Sep 26 23:47:45 2026...

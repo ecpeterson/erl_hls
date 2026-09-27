@@ -10,6 +10,7 @@ from batch import measure
 import hashlib
 from sdf import extract
 from application import schedule_summary
+from test_dsp_cascades import CascadeFixtures
 
 
 class ModelTests(unittest.TestCase):
@@ -139,6 +140,15 @@ class ModelTests(unittest.TestCase):
             (output / 'console.log').write_text('CHARACTERIZATION_COMPLETE')
             (output / 'path-properties.rpt').write_text('timed')
             self.assertEqual(measure(root, root / 'measure.tcl', 'probe')['status'], 'complete')
+            with self.assertRaisesRegex(ValueError, 'changed'):
+                measure(root, root / 'measure.tcl', 'probe', period_ns=40)
+            fingerprint = json.loads((output / 'inputs.json').read_text())
+            (output / 'inputs.json').write_text(json.dumps(fingerprint + ['period_ns=40']))
+            self.assertEqual(measure(root, root / 'measure.tcl', 'probe', period_ns=40)['status'], 'complete')
+            for period in (0, -1, float('inf'), float('nan')):
+                with self.assertRaisesRegex(ValueError, 'finite and positive'):
+                    measure(root, root / 'measure.tcl', 'probe', period_ns=period)
+            (output / 'inputs.json').write_text(json.dumps(fingerprint))
             inputs[0].write_text('changed evidence')
             with self.assertRaisesRegex(ValueError, 'changed'):
                 measure(root, root / 'measure.tcl', 'probe')

@@ -1,0 +1,23 @@
+{
+  "samples": [
+    {
+      "stalled": false,
+      "events": 161,
+      "cycles_per_step": 62.0,
+      "metrics": [
+        "PROFILE_RESULT warmup_step=8 target_step=32 measured_cycles=1488 cycles_per_step=62.000000 projected_steps_per_second_200mhz=3225806.451613",
+        "PROFILE_ACTIVITY total_cycles=2050 source_state_reads=0 phi_state_reads=0 source_mailbox_reads=0 phi_mailbox_reads=0 x_corrections=11 z_corrections=18"
+      ]
+    },
+    {
+      "stalled": true,
+      "events": 161,
+      "cycles_per_step": 65.958333,
+      "metrics": [
+        "PROFILE_RESULT warmup_step=8 target_step=32 measured_cycles=1583 cycles_per_step=65.958333 projected_steps_per_second_200mhz=3032217.308907",
+        "PROFILE_ACTIVITY total_cycles=2162 source_state_reads=0 phi_state_reads=0 source_mailbox_reads=0 phi_mailbox_reads=0 x_corrections=11 z_corrections=18"
+      ]
+    }
+  ],
+  "reset_stalls": "PASS: public outputs through 12000 cycles, long stalls and reset; cycle_exact=0 X=318 Z=346 matched per-actor frames\nstalled cycles: baseline X=1337 Z=1589; candidate X=1473 Z=1611\n/Users/ecpeterson/Documents/code/erl_xls/_build/architecture-repo/experiments/07-openxc7/phi_compare_tb.sv:121: $finish called at 120005000 (1ps)\n"
+}

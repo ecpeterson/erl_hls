@@ -4,6 +4,7 @@ import argparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import json
 import hashlib
+import math
 import os
 import signal
 from pathlib import Path
@@ -11,11 +12,16 @@ import subprocess
 import time
 
 
-def measure(root: Path, script: Path, name: str, timeout: int = 180) -> dict[str, str | float]:
+def measure(root: Path, script: Path, name: str, timeout: int = 180,
+            period_ns: float | None = None) -> dict[str, str | float]:
     """Route one mapped circuit; a failed case remains a failed measurement."""
     inputs = [root / name / 'mapped.edf', root / name / 'mapped.json', script,
               script.with_name('connectivity.py'), script.with_name('circuit_audit.tcl')]
     fingerprint = [hashlib.sha256(path.read_bytes()).hexdigest() for path in inputs]
+    if period_ns is not None:
+        if not math.isfinite(period_ns) or period_ns <= 0:
+            raise ValueError('period must be finite and positive')
+        fingerprint.append(f'period_ns={period_ns:.17g}')
     output = root / name / 'vivado'
     if output.exists():
         log = output / 'console.log'
@@ -31,7 +37,8 @@ def measure(root: Path, script: Path, name: str, timeout: int = 180) -> dict[str
     with (output / 'console.log').open('w') as log:
         process = subprocess.Popen(
             ['vivado', '-mode', 'batch', '-nojournal', '-nolog', '-source', str(script),
-             '-tclargs', str(root / name / 'mapped.edf'), str(output)], cwd=output,
+             '-tclargs', str(root / name / 'mapped.edf'), str(output)] +
+            ([] if period_ns is None else [f'{period_ns:.17g}']), cwd=output,
             stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
         try:
             code = process.wait(timeout=timeout)
@@ -52,6 +59,7 @@ def main() -> None:
     parser.add_argument('script', type=lambda p: Path(p).resolve())
     parser.add_argument('--jobs', type=int, default=2)
     parser.add_argument('--timeout', type=int, default=180)
+    parser.add_argument('--period', type=float, help='explicit OOC period in ns; otherwise use the Tcl default')
     parser.add_argument('--names', nargs='+')
     parser.add_argument('--status', default='status.json')
     args = parser.parse_args()
@@ -65,9 +73,11 @@ def main() -> None:
         parser.error('status must be a filename')
     if len(names) != len(set(names)) or not 1 <= args.jobs <= 8 or args.timeout <= 0:
         parser.error('distinct probes, 1..8 workers and a positive timeout required')
+    if args.period is not None and (not math.isfinite(args.period) or args.period <= 0):
+        parser.error('period must be finite and positive')
     results = []
     with ThreadPoolExecutor(max_workers=args.jobs) as pool:
-        futures = [pool.submit(measure, args.corpus, args.script, name, args.timeout) for name in names]
+        futures = [pool.submit(measure, args.corpus, args.script, name, args.timeout, args.period) for name in names]
         for future in as_completed(futures):
             row = future.result()
             results.append(row)

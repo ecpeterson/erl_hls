@@ -1,5 +1,7 @@
 # Fixed-schedule LUT arithmetic and DSP cascade timing
 
+**Vendor follow-up:** [Matched Vivado controls and expanded calibration](vendor-followup-2026-09-26.md) now cover the previous model gaps, compare the complete cores at 5/40 ns constraints, and measure DSP forwarding delays. Use those results for current timing conclusions; this report retains the earlier native experiment.
+
 Mapping all arithmetic into LUTs costs 6,514 extra LUTs (+19.6%) without a repeatable native timing gain. Keep DSP inference. The experiment also found and corrected an impossible dependency in our local coarse DSP timing extension; the old arithmetic-path attribution needs revisiting.
 
 [Reproduction](../timing_chains/README.md#arithmetic-resource-mapping-and-dsp-cascade-dependencies) · [Preregistered hypotheses](../yap/lut-arithmetic-2026-09-26.md) · [Measurements](lut-arithmetic-2026-09-26/comparison.json)

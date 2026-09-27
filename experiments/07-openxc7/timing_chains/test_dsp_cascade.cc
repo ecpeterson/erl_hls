@@ -14,6 +14,10 @@ int main()
                            (std::string(a) == "DIRECT" && input == bit));
                     assert(xc7DspCascadeArcPossible("ACIN" + std::to_string(input), output, a, b) ==
                            (std::string(a) == "CASCADE" && input == bit));
+                    assert(xc7DspCascadeDelayNS("A" + std::to_string(input), output, a, b) ==
+                           (std::string(a) == "DIRECT" && input == bit ? 0.613 : -1));
+                    assert(xc7DspCascadeDelayNS("ACIN" + std::to_string(input), output, a, b) ==
+                           (std::string(a) == "CASCADE" && input == bit ? 0.442 : -1));
                 }
                 for (const auto &port : {"B14", "BCIN7", "INMODE0", "C0", "D0", "OPMODE0"})
                     assert(!xc7DspCascadeArcPossible(port, output, a, b));
@@ -25,6 +29,10 @@ int main()
                            (std::string(b) == "DIRECT" && input == bit));
                     assert(xc7DspCascadeArcPossible("BCIN" + std::to_string(input), output, a, b) ==
                            (std::string(b) == "CASCADE" && input == bit));
+                    assert(xc7DspCascadeDelayNS("B" + std::to_string(input), output, a, b) ==
+                           (std::string(b) == "DIRECT" && input == bit ? 0.623 : -1));
+                    assert(xc7DspCascadeDelayNS("BCIN" + std::to_string(input), output, a, b) ==
+                           (std::string(b) == "CASCADE" && input == bit ? 0.415 : -1));
                 }
                 for (const auto &port : {"A14", "ACIN7", "INMODE0", "C0", "D0", "OPMODE0"})
                     assert(!xc7DspCascadeArcPossible(port, output, a, b));
@@ -36,6 +44,10 @@ int main()
     assert(xc7DspCascadeArcPossible("B7", "BCOUT7", "unknown", "unknown"));
     assert(xc7DspCascadeArcPossible("BCIN7", "BCOUT7", "unknown", "unknown"));
     assert(!xc7DspCascadeArcPossible("B14", "ACOUT7", "unknown", "unknown"));
-    for (const auto &port : {"P0", "PCOUT47", "CARRYOUT0", "MULTSIGNOUT", "PATTERNDETECT"})
+    assert(xc7DspCascadeDelayNS("A7", "ACOUT7", "unknown", "DIRECT") == -1);
+    assert(xc7DspCascadeDelayNS("BCIN7", "BCOUT7", "DIRECT", "unknown") == -1);
+    for (const auto &port : {"P0", "PCOUT47", "CARRYOUT0", "MULTSIGNOUT", "PATTERNDETECT"}) {
         assert(xc7DspCascadeArcPossible("B14", port, "DIRECT", "DIRECT"));
+        assert(xc7DspCascadeDelayNS("B14", port, "DIRECT", "DIRECT") == -1);
+    }
 }

@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Remove impossible A/B cascade arcs from the pinned combinational DSP model."""
+"""Install verified dependencies and measured xc7z030-1 DSP cascade delays."""
 import argparse
 from pathlib import Path
 import shutil
 
 
 def install(root: Path, diagnostic_switch: bool = False) -> None:
-    """Install an idempotent dependency filter without changing any delay values.
+    """Install selected-bus dependencies and four measured forwarding delays.
 
     Build a separate binary afterward. Registered DSP timing and non-cascade
     output dependencies remain outside this narrow correction.
@@ -28,6 +28,15 @@ def install(root: Path, diagnostic_switch: bool = False) -> None:
     if addition not in source:
         if 'diagnostic_dsp_legacy' not in source:
             source = source.replace(marker, addition + marker)
+    calibration = '''
+        const double cascade = xc7DspCascadeDelayNS(fromPort.str(this), toPort.str(this),
+                                                   str_or_default(cell->params, id("A_INPUT"), "DIRECT"),
+                                                   str_or_default(cell->params, id("B_INPUT"), "DIRECT"));
+        if (cascade >= 0 && !bool_or_default(settings, id("diagnostic_dsp_legacy"), false))
+            d = cascade;
+'''
+    if calibration not in source:
+        source = source.replace(marker, marker + calibration)
     if diagnostic_switch:
         source = source.replace('        if (!xc7DspCascadeArcPossible(',
             '        if (!bool_or_default(settings, id("diagnostic_dsp_legacy"), false) &&\n'
