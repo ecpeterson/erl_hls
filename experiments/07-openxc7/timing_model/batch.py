@@ -13,7 +13,8 @@ import time
 
 
 def measure(root: Path, script: Path, name: str, timeout: int = 180,
-            period_ns: float | None = None) -> dict[str, str | float]:
+            period_ns: float | None = None,
+            placement: str | None = None) -> dict[str, str | float]:
     """Route one mapped circuit; a failed case remains a failed measurement."""
     inputs = [root / name / 'mapped.edf', root / name / 'mapped.json', script,
               script.with_name('connectivity.py'), script.with_name('circuit_audit.tcl')]
@@ -22,6 +23,10 @@ def measure(root: Path, script: Path, name: str, timeout: int = 180,
         if not math.isfinite(period_ns) or period_ns <= 0:
             raise ValueError('period must be finite and positive')
         fingerprint.append(f'period_ns={period_ns:.17g}')
+    if placement is not None:
+        if period_ns is None or placement not in ('Default', 'Explore'):
+            raise ValueError('placement requires an explicit period and Default or Explore')
+        fingerprint.append(f'placement={placement}')
     output = root / name / 'vivado'
     if output.exists():
         log = output / 'console.log'
@@ -38,7 +43,8 @@ def measure(root: Path, script: Path, name: str, timeout: int = 180,
         process = subprocess.Popen(
             ['vivado', '-mode', 'batch', '-nojournal', '-nolog', '-source', str(script),
              '-tclargs', str(root / name / 'mapped.edf'), str(output)] +
-            ([] if period_ns is None else [f'{period_ns:.17g}']), cwd=output,
+            ([] if period_ns is None else [f'{period_ns:.17g}']) +
+            ([] if placement is None else [placement]), cwd=output,
             stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
         try:
             code = process.wait(timeout=timeout)
@@ -60,6 +66,8 @@ def main() -> None:
     parser.add_argument('--jobs', type=int, default=2)
     parser.add_argument('--timeout', type=int, default=180)
     parser.add_argument('--period', type=float, help='explicit OOC period in ns; otherwise use the Tcl default')
+    parser.add_argument('--placement', choices=('Default', 'Explore'),
+                        help='matched placement-strategy control; requires --period')
     parser.add_argument('--names', nargs='+')
     parser.add_argument('--status', default='status.json')
     args = parser.parse_args()
@@ -75,9 +83,11 @@ def main() -> None:
         parser.error('distinct probes, 1..8 workers and a positive timeout required')
     if args.period is not None and (not math.isfinite(args.period) or args.period <= 0):
         parser.error('period must be finite and positive')
+    if args.placement is not None and args.period is None:
+        parser.error('--placement requires --period')
     results = []
     with ThreadPoolExecutor(max_workers=args.jobs) as pool:
-        futures = [pool.submit(measure, args.corpus, args.script, name, args.timeout, args.period) for name in names]
+        futures = [pool.submit(measure, args.corpus, args.script, name, args.timeout, args.period, args.placement) for name in names]
         for future in as_completed(futures):
             row = future.result()
             results.append(row)

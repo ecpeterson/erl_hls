@@ -1,0 +1,46 @@
+[
+  {
+    "name": "reference",
+    "lut": 33171,
+    "ff": 22008,
+    "dsp": 56,
+    "ramb18": 44,
+    "ramb36": 8,
+    "cycles_per_step": 79.25,
+    "cycle_exact": null,
+    "mapped_sha256": "05c4654d7dc1eb0a72b3998edaaddd66874eaf5178834c3500d66129dc645950"
+  },
+  {
+    "name": "cell-only-zero",
+    "lut": 33343,
+    "ff": 21774,
+    "dsp": 56,
+    "ramb18": 44,
+    "ramb36": 8,
+    "cycles_per_step": 79.25,
+    "cycle_exact": true,
+    "mapped_sha256": "4fd23a57214f65ff14f795a6fd99857b7241e22f7470437b2874b0ff6096cea8"
+  },
+  {
+    "name": "retimed",
+    "lut": 33776,
+    "ff": 21652,
+    "dsp": 56,
+    "ramb18": 44,
+    "ramb36": 8,
+    "cycles_per_step": 79.25,
+    "cycle_exact": true,
+    "mapped_sha256": "d648230a5a779e185fd26ee585a343bd4e9684af7c7c91acb49af9d6006a5437"
+  },
+  {
+    "name": "retimed-fabric",
+    "lut": 34019,
+    "ff": 21948,
+    "dsp": 56,
+    "ramb18": 44,
+    "ramb36": 8,
+    "cycles_per_step": 79.25,
+    "cycle_exact": true,
+    "mapped_sha256": "bc354efd200cb4e18abf5e51b13a1d8e92e1ac15d3c13c05d9c62430d85b147f"
+  }
+]

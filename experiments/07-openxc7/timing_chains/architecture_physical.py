@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import importlib.util
 import json
+import math
 from pathlib import Path
 import subprocess
 import time
@@ -21,12 +22,15 @@ def run(args: argparse.Namespace) -> None:
         raise ValueError('use a fresh physical stage; existing measurements must be retained')
     if min(args.seed, args.place_seconds, args.route_seconds) <= 0:
         raise ValueError('seed and phase budgets must be positive')
+    if not math.isfinite(args.frequency) or args.frequency <= 0:
+        raise ValueError('frequency must be finite and positive')
+    require_combinational_dsps(json.loads((args.stage / 'mapped.json').read_text()))
     pins = Path(__file__).resolve().parents[1] / 'xc7z030sbg485.xdc'
-    (args.stage / 'timing.xdc').write_text(pins.read_text() + 'create_clock -period 40 [get_ports clock]\n')
-    evidence = {'seed': args.seed, 'frequency': 25, 'inputs': {
+    (args.stage / 'timing.xdc').write_text(pins.read_text() + f'create_clock -period {1000/args.frequency:g} [get_ports clock]\n')
+    evidence = {'seed': args.seed, 'frequency': args.frequency, 'inputs': {
         str(p): sha(p) for p in (args.nextpnr, args.chipdb,
                                 args.stage / 'mapped.json', args.stage / 'timing.xdc')}, 'phases': {}}
-    common = [str(args.nextpnr), '--chipdb', str(args.chipdb), '--seed', str(args.seed), '--freq', '25']
+    common = [str(args.nextpnr), '--chipdb', str(args.chipdb), '--seed', str(args.seed), '--freq', f'{args.frequency:g}']
     for name, command, budget in (
         ('place', common + ['--json', 'mapped.json', '--xdc', 'timing.xdc', '--no-route',
                            '--write', 'placed.json', '--log', 'place.log'], args.place_seconds),
@@ -66,12 +70,29 @@ def run(args: argparse.Namespace) -> None:
         raise RuntimeError('required timing endpoints are absent or unclassified')
 
 
+def require_combinational_dsps(mapped: dict) -> None:
+    """Reject DSP register modes missing from this experiment's native timing model."""
+    registers = ('AREG', 'BREG', 'CREG', 'DREG', 'ADREG', 'MREG', 'PREG',
+                 'ACASCREG', 'BCASCREG', 'ALUMODEREG', 'CARRYINREG',
+                 'CARRYINSELREG', 'INMODEREG', 'OPMODEREG')
+    for module in mapped['modules'].values():
+        for name, cell in module.get('cells', {}).items():
+            if cell['type'] != 'DSP48E1':
+                continue
+            params = cell['parameters']
+            for register in registers:
+                value = params[register]
+                if (int(value, 2) if isinstance(value, str) else int(value)) != 0:
+                    raise ValueError(f'native timing does not cover registered DSP: {name}/{register}')
+
+
 def main() -> None:
     """Require the calibrated native binary, exact device database and mapped input."""
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ('stage', 'nextpnr', 'chipdb'):
         parser.add_argument('--' + name, type=lambda p: Path(p).resolve(), required=True)
     parser.add_argument('--seed', type=int, default=1)
+    parser.add_argument('--frequency', type=float, default=25, help='requested MHz, also written to XDC')
     parser.add_argument('--place-seconds', type=int, default=1800)
     parser.add_argument('--route-seconds', type=int, default=2700)
     args = parser.parse_args()

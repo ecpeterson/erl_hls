@@ -1,0 +1,36 @@
+[
+  {
+    "variant": "reference",
+    "strategies": [
+      "Default",
+      "Explore"
+    ],
+    "periods_ns": [
+      15.846,
+      15.794
+    ],
+    "samples": 2,
+    "best_ns": 15.794,
+    "mean_ns": 15.82,
+    "population_variance_ns_squared": 0.0006759999999999897,
+    "worst_ns": 15.846,
+    "statistical_scope": "two deterministic placement strategies, not random seeds"
+  },
+  {
+    "variant": "cell-only-zero",
+    "strategies": [
+      "Default",
+      "Explore"
+    ],
+    "periods_ns": [
+      15.151,
+      15.237
+    ],
+    "samples": 2,
+    "best_ns": 15.151,
+    "mean_ns": 15.193999999999999,
+    "population_variance_ns_squared": 0.0018490000000000127,
+    "worst_ns": 15.237,
+    "statistical_scope": "two deterministic placement strategies, not random seeds"
+  }
+]

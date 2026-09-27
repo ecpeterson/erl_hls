@@ -21,7 +21,10 @@ def measure(stage: Path) -> None:
     if previous['exit'] != 0 or previous['output_sha256'] != sha(stage / 'phi_decoder_profile.v'):
         raise ValueError('the candidate lacks a verified successful build')
     report = stage / 'schedule.textproto'
-    command = previous['command'][:-1] + ['--output_schedule_path=' + str(report), previous['command'][-1]]
+    command = previous['command'][:-1] + [
+        '--output_schedule_path=' + str(report),
+        '--output_schedule_ir_path=' + str(stage / 'scheduled.ir'),
+        '--output_block_ir_path=' + str(stage / 'block.ir'), previous['command'][-1]]
     temporary = stage / 'schedule-replay.v'
     with temporary.open('w') as out, (stage / 'schedule-replay.log').open('w') as err:
         subprocess.run(command, cwd=stage, stdout=out, stderr=err, check=True, timeout=1200)
@@ -38,6 +41,8 @@ def measure(stage: Path) -> None:
         raise ValueError('empty schedule report')
     (stage / 'schedule-summary.json').write_text(json.dumps({
         'command': command, 'rtl_sha256': sha(temporary), 'report_sha256': sha(report),
+        'scheduled_ir_sha256': sha(stage / 'scheduled.ir'),
+        'block_ir_sha256': sha(stage / 'block.ir'),
         'delay_units': 'ps', 'schedules': sorted(rows, key=lambda r: -r['max_stage_path_ps'])}, indent=2) + '\n')
     temporary.unlink()
     print(stage.name, max(r['max_stage_path_ps'] for r in rows), 'ps', flush=True)

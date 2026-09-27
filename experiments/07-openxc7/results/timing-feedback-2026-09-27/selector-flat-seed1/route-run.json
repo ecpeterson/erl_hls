@@ -1,0 +1,68 @@
+{
+  "seed": 1,
+  "frequency": 200.0,
+  "inputs": {
+    "/Users/ecpeterson/Documents/code/erl_xls/_build/architecture-repo/_build/vendor-followup-20260926/native-cascade/nextpnr-cascade-calibrated": "b7cf6f9c074ff9a7739ddc8de0d622111aedb59cb537fa044300fd86de3bcfe5",
+    "/Users/ecpeterson/Documents/code/erl_xls/experiments/07-openxc7/build/chipdb/xc7z030sbg485.bin": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+    "/Users/ecpeterson/Documents/code/erl_xls/_build/timing-report-repo/_build/selector-tree-v2/127/flat/mapped.json": "5b84cc001193c84a41180e1e2076b24fa45230f87c0f7573728b25bab100eb08",
+    "/Users/ecpeterson/Documents/code/erl_xls/_build/timing-report-repo/_build/selector-tree-v2/127/flat/timing.xdc": "75bac8fbd93b279db3801db77e3ab34f0b795b4cf1c17f595cb917ef1557d374"
+  },
+  "phases": {
+    "place": {
+      "command": [
+        "/Users/ecpeterson/Documents/code/erl_xls/_build/architecture-repo/_build/vendor-followup-20260926/native-cascade/nextpnr-cascade-calibrated",
+        "--chipdb",
+        "/Users/ecpeterson/Documents/code/erl_xls/experiments/07-openxc7/build/chipdb/xc7z030sbg485.bin",
+        "--seed",
+        "1",
+        "--freq",
+        "200",
+        "--json",
+        "mapped.json",
+        "--xdc",
+        "timing.xdc",
+        "--no-route",
+        "--write",
+        "placed.json",
+        "--log",
+        "place.log"
+      ],
+      "seconds": 8.85333404224366,
+      "exit": 0,
+      "budget_seconds": 600
+    },
+    "route": {
+      "command": [
+        "/Users/ecpeterson/Documents/code/erl_xls/_build/architecture-repo/_build/vendor-followup-20260926/native-cascade/nextpnr-cascade-calibrated",
+        "--chipdb",
+        "/Users/ecpeterson/Documents/code/erl_xls/experiments/07-openxc7/build/chipdb/xc7z030sbg485.bin",
+        "--seed",
+        "1",
+        "--freq",
+        "200",
+        "--json",
+        "placed.json",
+        "--no-pack",
+        "--no-place",
+        "--router",
+        "router2",
+        "--timing-allow-fail",
+        "--report",
+        "timing.json",
+        "--timing-coverage",
+        "coverage.json",
+        "--log",
+        "route.log"
+      ],
+      "seconds": 16.21762245800346,
+      "exit": 0,
+      "budget_seconds": 600
+    }
+  },
+  "outputs": {
+    "timing.json": "bb49bc3f387ffe2fb079f7ad83a8a850d81f3a3234d662dcb8bc0e1e28320bf2",
+    "coverage.json": "4443c1665c69d0742a109b37d18eb159e735e20f313b702201c4aa884597218f",
+    "route.log": "25b3598b7c66b25b617f87170c814f4b5003708b420810cfb4967aee847f8f40",
+    "endpoint-audit.json": "4a118a562f201367fed45956a57018a934ae18c388d829122658b2350109e18c"
+  }
+}

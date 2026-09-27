@@ -1,0 +1,121 @@
+Info: Critical path report for clock '$abc$59546$iopadmap$clock' (posedge -> posedge):
+Info: curr total
+Info:  0.1  0.1  Source $auto$ff.cc:337:slice$1811.Q
+Info:  1.2  1.3    Net stimulus[0] budget 0.000000 ns (74,84) -> (77,93)
+Info:                Sink $abc$59546$lut$aiger59545$3192.A1
+Info:  0.2  1.5  Source $abc$59546$lut$aiger59545$3192.O5
+Info:  0.8  2.3    Net $techmap59586$abc$59546$lut$aiger59545$3234.A[0] budget 0.000000 ns (77,93) -> (77,93)
+Info:                Sink $abc$59546$lut$aiger59545$3457.A6
+Info:  0.1  2.4  Source $abc$59546$lut$aiger59545$3457.O6
+Info:  2.6  5.0    Net $techmap59737$abc$59546$lut$aiger59545$9842.A[2] budget 0.000000 ns (77,93) -> (77,81)
+Info:                Sink $abc$59546$lut$aiger59545$4677.A3
+Info:  0.1  5.1  Source $abc$59546$lut$aiger59545$4677.O6
+Info:  0.3  5.4    Net $techmap61241$abc$59546$lut$aiger59545$4695.A[2] budget 0.000000 ns (77,81) -> (77,81)
+Info:                Sink $abc$59546$lut$aiger59545$4695.A3
+Info:  0.1  5.5  Source $abc$59546$lut$aiger59545$4695.O6
+Info:  0.8  6.4    Net $abc$59546$lut$aiger59545$4706.A[6] budget -0.131000 ns (77,81) -> (77,76)
+Info:                Sink $abc$59546$lut$aiger59545$4706.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux7.S0
+Info:  0.3  6.7  Source $abc$59546$lut$aiger59545$4706.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux7.OUT
+Info:  0.8  7.5    Net $abc$59546$lut$aiger59545$4713.A[7] budget -0.131000 ns (77,76) -> (74,80)
+Info:                Sink $abc$59546$lut$aiger59545$4713.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8.S0
+Info:  0.3  7.7  Source $abc$59546$lut$aiger59545$4713.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8.OUT
+Info:  1.5  9.2    Net $abc$59546$lut$aiger59545$4720.A[7] budget -0.131000 ns (74,80) -> (74,92)
+Info:                Sink $abc$59546$lut$aiger59545$4720.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8.S0
+Info:  0.3  9.5  Source $abc$59546$lut$aiger59545$4720.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8.OUT
+Info:  0.8 10.2    Net $abc$59546$lut$aiger59545$4727.A[7] budget -0.180000 ns (74,92) -> (74,95)
+Info:                Sink $abc$59546$lut$aiger59545$4727.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8.S0
+Info:  0.3 10.5  Source $abc$59546$lut$aiger59545$4727.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8.OUT
+Info:  1.0 11.5    Net $abc$59546$lut$aiger59545$4734.A[7] budget -0.131000 ns (74,95) -> (74,100)
+Info:                Sink $abc$59546$lut$aiger59545$4734.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8.S0
+Info:  0.3 11.7  Source $abc$59546$lut$aiger59545$4734.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8.OUT
+Info:  0.8 12.6    Net $abc$59546$lut$aiger59545$4741.A[7] budget -0.131000 ns (74,100) -> (70,107)
+Info:                Sink $abc$59546$lut$aiger59545$4741.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8.S0
+Info:  0.3 12.9  Source $abc$59546$lut$aiger59545$4741.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8.OUT
+Info:  0.6 13.5    Net $abc$59546$lut$aiger59545$4748.A[7] budget -0.360000 ns (70,107) -> (70,108)
+Info:                Sink $abc$59546$lut$aiger59545$4748.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8.S0
+Info:  0.3 13.8  Source $abc$59546$lut$aiger59545$4748.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8.OUT
+Info:  0.9 14.7    Net $abc$59546$lut$aiger59545$4755.A[7] budget -0.131000 ns (70,108) -> (70,113)
+Info:                Sink $abc$59546$lut$aiger59545$4755.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8.S0
+Info:  0.3 15.0  Source $abc$59546$lut$aiger59545$4755.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8.OUT
+Info:  0.8 15.8    Net $abc$59546$lut$aiger59545$4762.A[7] budget -0.180000 ns (70,113) -> (70,116)
+Info:                Sink $abc$59546$lut$aiger59545$4762.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8.S0
+Info:  0.3 16.1  Source $abc$59546$lut$aiger59545$4762.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8.OUT
+Info:  0.9 17.0    Net $abc$59546$lut$aiger59545$4769.A[7] budget -0.131000 ns (70,116) -> (64,119)
+Info:                Sink $abc$59546$lut$aiger59545$4769.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8.S0
+Info:  0.3 17.2  Source $abc$59546$lut$aiger59545$4769.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8.OUT
+Info:  0.8 18.0    Net $abc$59546$lut$aiger59545$4776.A[7] budget -0.315000 ns (64,119) -> (63,120)
+Info:                Sink $abc$59546$lut$aiger59545$4776.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8.S0
+Info:  0.3 18.3  Source $abc$59546$lut$aiger59545$4776.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8.OUT
+Info:  0.6 18.9    Net $abc$59546$lut$aiger59545$4783.A[7] budget -0.270000 ns (63,120) -> (63,122)
+Info:                Sink $abc$59546$lut$aiger59545$4783.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8.S0
+Info:  0.3 19.2  Source $abc$59546$lut$aiger59545$4783.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8.OUT
+Info:  0.7 19.9    Net $abc$59546$lut$aiger59545$4790.A[7] budget -0.180000 ns (63,122) -> (57,122)
+Info:                Sink $abc$59546$lut$aiger59545$4790.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8.S0
+Info:  0.3 20.2  Source $abc$59546$lut$aiger59545$4790.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8.OUT
+Info:  0.9 21.0    Net $abc$59546$lut$aiger59545$4797.A[7] budget -0.135000 ns (57,122) -> (54,124)
+Info:                Sink $abc$59546$lut$aiger59545$4797.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8.S0
+Info:  0.3 21.3  Source $abc$59546$lut$aiger59545$4797.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8.OUT
+Info:  0.7 22.0    Net $abc$59546$lut$aiger59545$4804.A[7] budget -0.270000 ns (54,124) -> (54,126)
+Info:                Sink $abc$59546$lut$aiger59545$4804.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8.S0
+Info:  0.3 22.3  Source $abc$59546$lut$aiger59545$4804.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8.OUT
+Info:  0.5 22.8    Net $abc$59546$lut$aiger59545$4811.A[7] budget -0.750000 ns (54,126) -> (54,126)
+Info:                Sink $abc$59546$lut$aiger59545$4811.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8.S0
+Info:  0.3 23.0  Source $abc$59546$lut$aiger59545$4811.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8.OUT
+Info:  0.7 23.8    Net $abc$59546$lut$aiger59545$4818.A[7] budget -0.360000 ns (54,126) -> (54,125)
+Info:                Sink $abc$59546$lut$aiger59545$4818.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8.S0
+Info:  0.3 24.0  Source $abc$59546$lut$aiger59545$4818.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8.OUT
+Info:  0.7 24.7    Net $abc$59546$lut$aiger59545$4825.A[7] budget -0.360000 ns (54,125) -> (54,124)
+Info:                Sink $abc$59546$lut$aiger59545$4825.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8.S0
+Info:  0.3 25.0  Source $abc$59546$lut$aiger59545$4825.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8.OUT
+Info:  0.6 25.7    Net $abc$59546$lut$aiger59545$4832.A[7] budget -0.270000 ns (54,124) -> (54,122)
+Info:                Sink $abc$59546$lut$aiger59545$4832.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8.S0
+Info:  0.3 25.9  Source $abc$59546$lut$aiger59545$4832.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8.OUT
+Info:  0.6 26.6    Net $abc$59546$lut$aiger59545$4839.A[7] budget -0.405000 ns (54,122) -> (53,122)
+Info:                Sink $abc$59546$lut$aiger59545$4839.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8.S0
+Info:  0.3 26.8  Source $abc$59546$lut$aiger59545$4839.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8.OUT
+Info:  0.7 27.6    Net $abc$59546$lut$aiger59545$4846.A[7] budget -0.225000 ns (53,122) -> (50,121)
+Info:                Sink $abc$59546$lut$aiger59545$4846.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8.S0
+Info:  0.3 27.8  Source $abc$59546$lut$aiger59545$4846.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8.OUT
+Info:  1.0 28.8    Net $abc$59546$lut$aiger59545$4853.A[7] budget -0.130000 ns (50,121) -> (44,116)
+Info:                Sink $abc$59546$lut$aiger59545$4853.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8.S0
+Info:  0.3 29.1  Source $abc$59546$lut$aiger59545$4853.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8.OUT
+Info:  0.8 29.9    Net $abc$59546$lut$aiger59545$4860.A[7] budget -0.130000 ns (44,116) -> (43,111)
+Info:                Sink $abc$59546$lut$aiger59545$4860.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8.S0
+Info:  0.3 30.2  Source $abc$59546$lut$aiger59545$4860.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8.OUT
+Info:  0.9 31.1    Net $abc$59546$lut$aiger59545$4867.A[7] budget -0.130000 ns (43,111) -> (50,109)
+Info:                Sink $abc$59546$lut$aiger59545$4867.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8.S0
+Info:  0.3 31.4  Source $abc$59546$lut$aiger59545$4867.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8.OUT
+Info:  0.6 32.0    Net $abc$59546$lut$aiger59545$4874.A[7] budget -0.130000 ns (50,109) -> (44,108)
+Info:                Sink $abc$59546$lut$aiger59545$4874.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8.S0
+Info:  0.3 32.3  Source $abc$59546$lut$aiger59545$4874.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8.OUT
+Info:  0.7 33.0    Net $abc$59546$lut$aiger59545$4881.A[7] budget -0.314000 ns (44,108) -> (43,107)
+Info:                Sink $abc$59546$lut$aiger59545$4881.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8.S0
+Info:  0.3 33.3  Source $abc$59546$lut$aiger59545$4881.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8.OUT
+Info:  0.8 34.1    Net $abc$59546$lut$aiger59545$4888.A[7] budget -0.404000 ns (43,107) -> (44,107)
+Info:                Sink $abc$59546$lut$aiger59545$4888.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8.S0
+Info:  0.3 34.4  Source $abc$59546$lut$aiger59545$4888.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8.OUT
+Info:  0.6 35.0    Net $abc$59546$lut$aiger59545$4895.A[7] budget -0.130000 ns (44,107) -> (37,106)
+Info:                Sink $abc$59546$lut$aiger59545$4895.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8.S0
+Info:  0.3 35.3  Source $abc$59546$lut$aiger59545$4895.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8.OUT
+Info:  0.6 35.9    Net $abc$59546$lut$aiger59545$4902.A[7] budget -0.179000 ns (37,106) -> (43,106)
+Info:                Sink $abc$59546$lut$aiger59545$4902.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8.S0
+Info:  0.3 36.2  Source $abc$59546$lut$aiger59545$4902.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8.OUT
+Info:  0.6 36.8    Net $abc$59546$lut$aiger59545$4909.A[7] budget -0.134000 ns (43,106) -> (50,106)
+Info:                Sink $abc$59546$lut$aiger59545$4909.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8.S0
+Info:  0.3 37.1  Source $abc$59546$lut$aiger59545$4909.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8.OUT
+Info:  1.0 38.1    Net $abc$59546$lut$aiger59545$4916.A[7] budget -0.130000 ns (50,106) -> (53,96)
+Info:                Sink $abc$59546$lut$aiger59545$4916.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8.S0
+Info:  0.3 38.4  Source $abc$59546$lut$aiger59545$4916.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8.OUT
+Info:  0.6 39.0    Net $abc$59546$lut$aiger59545$4923.A[7] budget -0.179000 ns (53,96) -> (53,93)
+Info:                Sink $abc$59546$lut$aiger59545$4923.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8.S0
+Info:  0.3 39.3  Source $abc$59546$lut$aiger59545$4923.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8.OUT
+Info:  0.6 39.9    Net $abc$59546$lut$aiger59545$4932.A[7] budget -0.359000 ns (53,93) -> (53,94)
+Info:                Sink $abc$59546$lut$aiger59545$4932.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8.S0
+Info:  0.3 40.2  Source $abc$59546$lut$aiger59545$4932.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.mux8.OUT
+Info:  1.1 41.3    Net $techmap61248$auto$abc9_ops.cc:1613:reintegrate$59559.A[5] budget 0.000000 ns (53,94) -> (37,106)
+Info:                Sink $auto$abc9_ops.cc:1613:reintegrate$59559.A6
+Info:  0.1 41.5  Source $auto$abc9_ops.cc:1613:reintegrate$59559.O6
+Info:  0.0 41.5    Net value[3] budget -0.899000 ns (37,106) -> (37,106)
+Info:                Sink $auto$ff.cc:337:slice$4894.D
+Info:  0.1 41.6  Setup $auto$ff.cc:337:slice$4894.D
+Info: 10.1 ns logic, 31.5 ns routing

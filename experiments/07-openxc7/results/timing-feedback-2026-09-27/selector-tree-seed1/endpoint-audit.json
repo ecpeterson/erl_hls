@@ -1,0 +1,28 @@
+{
+  "endpoint_requirements_met": true,
+  "design_wide_clock_validated": false,
+  "checks": [
+    {
+      "requirement": {
+        "type": "SLICE_FFX",
+        "port": "Q",
+        "class": "register_output"
+      },
+      "matched": 3105,
+      "failed": 0,
+      "passed": true,
+      "failures": []
+    },
+    {
+      "requirement": {
+        "type": "SLICE_FFX",
+        "port": "D",
+        "class": "register_input"
+      },
+      "matched": 3105,
+      "failed": 0,
+      "passed": true,
+      "failures": []
+    }
+  ]
+}

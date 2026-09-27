@@ -2,6 +2,33 @@
 
 These local experiments compare covered register-to-register paths on the Zynq-7030 database. They do not qualify a board clock. The calibrated backend restores selected exact-part RAM boundaries; registered-DSP, SRL and internal timing constraints remain incomplete. The older pinned backend also omits RAM boundaries. See [the coverage audit](../timing_coverage/README.md) and [the measured campaign](../results/timing-chains-2026-09-24.md).
 
+## Combined timing report
+
+Use `path_report.py` after each completed physical run. It combines saved path reports, XLS stages/source locations and measured cycles per step; it does not invoke compilation or placement. The same manifest produces JSON for analysis and Markdown for review:
+
+```sh
+python3 experiments/07-openxc7/timing_chains/path_report.py MANIFEST.json \
+  --artifacts "$EVIDENCE" --output "$REPORT"
+```
+
+Use `--full-json` when individual arc/source records are needed; the default JSON retains summaries, schedules and input fingerprints. The [retained manifest](../results/timing-paths-2026-09-27-manifest.json) is an example. Its compressed inputs are committed, so `--artifacts experiments/07-openxc7/results` reproduces that report without XLS, Vivado or local build caches. Each run names its tool, completed stage, requested period and path artifact. An artifact contains a relative `path`, optional tar `member`, and `sha256`; a hash mismatch aborts. Record cycles through `cycle_evidence` and `cycle_pointer`, rather than copying a number without its witness. Optional `path_sets` maps query labels to additional artifacts; identical paths are deduplicated. Optional `netlist` adds physical aliases and per-bit sink counts; `block_ir` adds source attribution; `scheduled_ir`, `schedule` and `process_pattern` add stage/dependency evidence. `architecture_schedule.py` retains both IR forms and requires replayed RTL to be byte-identical. Source attribution deliberately leaves unmatched paths unknown.
+
+The report separates logic/interconnect, groups the available path families, and calculates the period needed to offset added cycles. The “untouched sample floor” is the worst *reported* path outside a group, assuming it is unchanged. It does not predict placement or reveal missing families. Vendor input must contain single-clock, single-cycle setup paths; truncated arcs and incompatible clock relations fail. Native text retains its 0.1 ns precision. Keep different tools, constraints and mapping policies separate.
+
+Before an experiment, record the affected family, expected structural change, allowed cycle/area cost and rejection criterion in `yap/`. First check schedules and behavior; then map, audit timing coverage and route a matched pair. Keep failed hypotheses alongside successful ones. The vendor runner retains global, RAM-source, DSP-through and FF-control samples separately; global top-N paths alone can hide a neighboring limit. Use **period × measured cycles/step** to select a candidate, and confirm promising results with another seed.
+
+## Executor input arrival
+
+`executor_arrival.py` reschedules one stateless executor while keeping its ports, two requested stages, II=1 and all surrounding RTL. Supply `--reference COMPILED --stage FRESH --codegen BIN --table TSV --delay-ps 3000`; optional `--cell-only` changes the scheduling estimator. The allowance applies only to the receive channel (`--channel`, default `_request_in`). `--symmetric` is a control for XLS's generic input-delay option, which also penalizes the opposite channel direction.
+
+Validate against the original prepared oracle with `architecture_validate.py FRESH PREPARED --cycle-exact --reference-rtl COMPILED`, then map with `phi_timing.py`. Retiming may let Yosys pack registers into DSPs. The native physical runner rejects those unsupported modes before placement; `--keep-product-inputs` preserves direct multiply-operand registers in fabric for a separate coverage-safe experiment. Retain the normally packed version for vendor evaluation: preserving registers changes the physical optimization space.
+
+## Indexed-selector lowering
+
+`selector_experiment.py --stage FRESH --codegen BIN --yosys BIN` proves and maps flat/default versus balanced binary selectors at 63/65/127 cases, 24-bit payloads and an 8-bit index. Dimensions are configurable. The SAT miter permits arbitrary payloads, indices and default values, including every out-of-range index. Counts include the preserved stimulus/capture registers. Structural depth is a conservative graph measure, not a delay prediction.
+
+Route a mapped variant with `architecture_physical.py --stage MAPPED --nextpnr BIN --chipdb BIN --frequency 200 --seed 1`; repeat promising pairs with seed 2. `--frequency` sets both the XDC and native target in MHz (default 25). For vendor robustness controls, `timing_model/batch.py` accepts `--period 5 --placement Explore` on a fresh corpus. Compare matched directives; these deterministic strategies are not random seeds. A binary selector result does not establish an improvement for priority selection or for an application lacking that selector shape.
+
 ## Arithmetic
 
 `probe.py` places a DSLX `main` between preserved fabric registers. Supply vector inputs, one vector result, and a fresh stage. `--stages 2` measures the existing two-stage schedule; omitting it measures the whole combinational function. `--no-dsp` avoids the native model's misleading DSP cascade delays. The runner fingerprints sources, the standard library, tools and outputs, checks clock-boundary coverage, and rejects changing inputs or RAM/SRL mappings.
