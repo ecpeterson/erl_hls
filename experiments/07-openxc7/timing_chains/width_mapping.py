@@ -19,6 +19,8 @@ def measure(args: argparse.Namespace, width: int) -> dict:
     stage = args.stage / str(width)
     stage.mkdir(parents=True, exist_ok=False)
     shutil.copyfile(args.library, stage / 'hls_fixed.x')
+    if (dependency := args.library.with_name('hls_multiply.x')).exists():
+        shutil.copyfile(dependency, stage / dependency.name)
     (stage / 'bulk.x').write_text(f'''import hls_fixed;
 // Four width-{width} neighbors fit in the signed {width+2}-bit sum.
 pub fn main(a: sN[{width}], b: sN[{width}], sum: sN[{width+2}]) -> sN[{width}] {{
@@ -44,7 +46,7 @@ pub fn main(a: sN[{width}], b: sN[{width}], sum: sN[{width+2}]) -> sN[{width}] {
     data = json.loads((stage / 'stat.json').read_text())
     counts = next(iter(data['modules'].values()))['num_cells_by_type']
     return {'width': width, 'counts': counts, 'commands': commands,
-            'sources': {name: sha(stage / name) for name in ('bulk.x', 'hls_fixed.x', 'arithmetic.v')}}
+            'sources': {name: sha(stage / name) for name in ('bulk.x', 'hls_fixed.x', 'hls_multiply.x', 'arithmetic.v') if (stage / name).exists()}}
 
 
 def main() -> None:

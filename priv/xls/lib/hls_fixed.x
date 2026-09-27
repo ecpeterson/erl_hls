@@ -1,6 +1,8 @@
 // Operations on raw signed fixed-point integers. Fractional scale is unchanged
 // by these operations; the caller owns the format's fractional-bit count.
+import hls_multiply;
 
+// Clamp a signed integer to the output width without changing its scale.
 pub fn saturate<OUT: u32, IN: u32>(value: sN[IN]) -> sN[OUT] {
   const_assert!(OUT > u32:0 && IN >= OUT);
   let maximum = ((uN[IN]:1 << (OUT - u32:1)) - uN[IN]:1) as sN[IN];
@@ -10,10 +12,8 @@ pub fn saturate<OUT: u32, IN: u32>(value: sN[IN]) -> sN[OUT] {
   else { value as sN[OUT] }
 }
 
-// Divide by a positive static integer, rounding to nearest with ties away from
-// zero. Includes the most negative input and divisors wider than the input.
-pub fn round_ratio<DENOMINATOR: u32, WIDTH: u32,
-    MAG: u32 = {if WIDTH > u32:32 { WIDTH + u32:1 } else { u32:33 }}>
+// Share the rounding definition between native and explicitly chunked products.
+fn round_ratio_impl<DENOMINATOR: u32, WIDTH: u32, MAG: u32, LEFT: u32, RIGHT: u32>
     (numerator: sN[WIDTH]) -> sN[WIDTH] {
   const_assert!(DENOMINATOR > u32:0 && WIDTH > u32:0 && MAG > WIDTH && MAG >= u32:33);
   if (DENOMINATOR & (DENOMINATOR - u32:1)) == u32:0 {
@@ -30,11 +30,38 @@ pub fn round_ratio<DENOMINATOR: u32, WIDTH: u32,
     // The reciprocal's positive error times any input is strictly < 1/(2*D).
     // Non-ties cannot cross a half integer; negative ties move below it.
     // Power-of-two divisors have zero reciprocal error, hence the branch above.
-    let product = (numerator as sN[PRODUCT_BITS]) * (RECIPROCAL as sN[PRODUCT_BITS]);
-    ((product + (sN[PRODUCT_BITS]:1 << (SHIFT - u32:1))) >> SHIFT) as sN[WIDTH]
+    let bias = uN[PRODUCT_BITS]:1 << (SHIFT - u32:1);
+    let biased = if LEFT > u32:0 && RIGHT > u32:0 {
+      hls_multiply::signed_unsigned_add<
+        {if LEFT > u32:0 { LEFT } else { WIDTH }},
+        {if RIGHT > u32:0 { RIGHT } else { SHIFT + u32:1 }}>
+        (numerator, RECIPROCAL, bias) as sN[PRODUCT_BITS]
+    } else {
+      (numerator as sN[PRODUCT_BITS]) * (RECIPROCAL as sN[PRODUCT_BITS]) + (bias as sN[PRODUCT_BITS])
+    };
+    (biased >> SHIFT) as sN[WIDTH]
   }
 }
 
+// Divide by a positive static integer, rounding to nearest with ties away from
+// zero. Includes the most negative input and divisors wider than the input.
+pub fn round_ratio<DENOMINATOR: u32, WIDTH: u32,
+    MAG: u32 = {if WIDTH > u32:32 { WIDTH + u32:1 } else { u32:33 }}>
+    (numerator: sN[WIDTH]) -> sN[WIDTH] {
+  round_ratio_impl<DENOMINATOR, WIDTH, MAG, u32:0, u32:0>(numerator)
+}
+
+// Same rounding as round_ratio, exposing limb products to pipeline scheduling.
+// Limb widths must be positive; they do not imply a latency or stage boundary.
+pub fn round_ratio_chunked<DENOMINATOR: u32, LEFT: u32, RIGHT: u32, WIDTH: u32,
+    MAG: u32 = {if WIDTH > u32:32 { WIDTH + u32:1 } else { u32:33 }}>
+    (numerator: sN[WIDTH]) -> sN[WIDTH] {
+  const_assert!(LEFT > u32:0 && RIGHT > u32:0);
+  round_ratio_impl<DENOMINATOR, WIDTH, MAG, LEFT, RIGHT>(numerator)
+}
+
+
+// Cover saturation endpoints, signed ties and the signed minimum.
 #[test]
 fn saturation_and_signed_rounding_test() {
   assert_eq(saturate<u32:8>(s32:128), s8:127);
@@ -48,6 +75,7 @@ fn saturation_and_signed_rounding_test() {
   assert_eq(round_ratio<u32:1000>(s8:-128), s8:0);
 }
 
+// Exhaust narrow inputs against widened signed division.
 #[test]
 fn all_small_signed_inputs_match_wide_division_test() {
   for (raw, _): (u32, ()) in u32:0..u32:256 {
@@ -72,6 +100,7 @@ fn check_small<D: u32>() {
   for (raw, _): (u32, ()) in u32:0..u32:256 {
     let n = raw as s8;
     assert_eq(round_ratio<D>(n), reference_round<D>(n));
+    assert_eq(round_ratio_chunked<D, u32:3, u32:2>(n), reference_round<D>(n));
   }(())
 }
 
@@ -118,5 +147,6 @@ fn recurrence_rounding_matches_magnitude(n: sN[37]) -> bool {
   round_ratio<u32:12>(n) == reference_round<u32:12>(n) &&
   round_ratio<u32:3>(n) == reference_round<u32:3>(n) &&
   round_ratio<u32:13>(n) == reference_round<u32:13>(n) &&
-  round_ratio<u32:4294967295>(n) == reference_round<u32:4294967295>(n)
+  round_ratio<u32:4294967295>(n) == reference_round<u32:4294967295>(n) &&
+  round_ratio_chunked<u32:12, u32:24, u32:17>(n) == reference_round<u32:12>(n)
 }

@@ -8,17 +8,25 @@ pub type Field = Scalar[2];
 // At most four scalar contributions fit in the diffusion accumulator.
 pub fn accumulate(sum: s64, value: Scalar) -> s64 { sum + (value as s64) }
 
+// Exact nearest rounding, ties away from zero. Small products expose cuts to
+// XLS scheduling; 24/17-bit limbs fit the target's signed DSP input widths.
+fn rounded_twelfth(numerator: sN[37]) -> sN[37] {
+  hls_fixed::round_ratio_chunked<u32:12, u32:24, u32:17>(numerator)
+}
+
+// Saturating center update; neighbor_sum contains at most four signed scalars.
 pub fn relax_center(anyon: u32, phi0: Scalar, phi1: Scalar, neighbor_sum: s64) -> Scalar {
   let numerator = hls_vec::dot<u32:37>([phi0, phi1], s32[2]:[6, 2]) +
     (neighbor_sum as sN[37]);
   hls_fixed::saturate<u32:32>(
-    ((anyon as s64) << u32:16) + (hls_fixed::round_ratio<u32:12>(numerator) as s64))
+    ((anyon as s64) << u32:16) + (rounded_twelfth(numerator) as s64))
 }
 
+// Saturating auxiliary-layer update with the same four-neighbor bound.
 pub fn relax_bulk(phi0: Scalar, phi1: Scalar, neighbor_sum: s64) -> Scalar {
   let numerator = hls_vec::dot<u32:37>([phi0, phi1], s32[2]:[1, 7]) +
     (neighbor_sum as sN[37]);
-  hls_fixed::saturate<u32:32>(hls_fixed::round_ratio<u32:12>(numerator))
+  hls_fixed::saturate<u32:32>(rounded_twelfth(numerator))
 }
 
 pub fn relax(anyon: u32, field: Field, sum0: s64, sum1: s64) -> Field {

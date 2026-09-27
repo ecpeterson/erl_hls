@@ -220,6 +220,8 @@ def prepare(args: argparse.Namespace) -> None:
         stage = args.stage / name
         stage.mkdir()
         shutil.copyfile(args.library, stage / 'hls_fixed.x')
+        if (dependency := args.library.with_name('hls_multiply.x')).exists():
+            shutil.copyfile(dependency, stage / dependency.name)
         kernel = 'center.x' if args.center else 'bulk.x'
         (stage / kernel).write_text(source(name == 'factored', args.center))
         run([str(args.xls / 'ir_converter_main'), '--top=main', '--dslx_path=.',
