@@ -14,7 +14,7 @@
 -spec interface([hls_source:form()], [atom(), ...]) -> interface().
 -doc "Summarizes the statically dispatched and emitted hls_statem schemas.".
 interface(Forms, PhaseNames) ->
-    {Annotated, Sites} = xls_failure_sites:prepare(Forms),
+    {Annotated, Sites} = xls_failure_sites:prepare(hls_records:resolve(Forms)),
     (interface_from_prepared(prepare_interface(Annotated, PhaseNames)))#{failure_origins => Sites}.
 
 -doc "Validates callbacks and renders a dedicated actor.".
@@ -33,11 +33,13 @@ lower(Filename, Forms, Phases, Options) ->
 
 -doc "Lowers actor semantics to a closed artifact without choosing storage or execution placement.".
 -spec artifact(file:filename(), [hls_source:form()], [atom(), ...]) -> xls_actor_codegen:spec().
-artifact(Filename, Forms0, PhaseNames) ->
+artifact(Filename, Source, PhaseNames) ->
+    Forms0 = hls_records:resolve(Source),
     Declarations = declarations(Forms0, PhaseNames),
     {SourceForms, Sites} = xls_failure_sites:prepare(Forms0),
     {Forms, Helpers} = xls_helpers:prepare(SourceForms,
         [{init, 1}, {reduce, 3} | [{Phase, 3} || Phase <- PhaseNames]]),
+    ok = xls_names:actor(Forms, hls_statem),
     MessageNames = maps:get(message_names, Declarations),
     MessageWords = maps:from_list([
         {Name, xls_parse:message_words(Forms, Name)} || Name <- MessageNames
@@ -70,13 +72,16 @@ artifact(Filename, Forms0, PhaseNames) ->
         EnumAtoms
     ),
     Reductions = maps:get(reductions, Prepared),
+    EmittedRecords = hls_records:declarations(Forms,
+        [N || {attribute, _, record, {N, _}} <- Records]),
+    ok = lists:foreach(fun xls_parse:validate_record_defaults/1, EmittedRecords),
     RecordDeclarations = xls_parse:print([
         [
             xls_parse:struct_from_record(Record), "\n",
             xls_parse:structfrombits_from_record(Record), "\n",
             xls_parse:bitsfromstruct_from_record(Record), "\n"
         ]
-        || Record <- Records
+        || Record <- EmittedRecords
     ]),
     #{
         source => Filename,
@@ -117,7 +122,7 @@ declarations(Forms, PhaseNames) ->
     ok = validate_capacity(Capacity),
 
     RecordNames = MessageNames ++ [DataName],
-    Records = [xls_parse:find_record(Forms, Name) || Name <- RecordNames],
+    Records = hls_records:declarations(Forms, RecordNames),
     ok = lists:foreach(
         fun xls_parse:validate_record_defaults/1,
         Records

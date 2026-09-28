@@ -34,8 +34,8 @@
     name :: atom(),
     args :: [arg()]
 }.
--doc "A numeric, atom or nested type parameter supplied to a type constructor.".
--type arg() :: integer() | atom() | descriptor().
+-doc "A literal, nested type, or named record field supplied to a type constructor.".
+-type arg() :: integer() | atom() | descriptor() | {atom(), descriptor()}.
 
 %%%
 %%% hls_type behavior
@@ -248,6 +248,8 @@ dslx_to_bits(Type, Value) ->
 -doc "Converts a remote type expression or literal parameter to its provider descriptor or value.".
 descriptor({remote_type, _1, [{atom, _2, Module}, {atom, _3, Name}, Args]}) ->
     {hls_type, Module, Name, [descriptor(Arg) || Arg <- Args]};
+descriptor({hls_record_type, _Line, Descriptor}) ->
+    Descriptor;
 descriptor({integer, _1, Integer}) ->
     Integer;
 descriptor({atom, _1, Atom}) ->

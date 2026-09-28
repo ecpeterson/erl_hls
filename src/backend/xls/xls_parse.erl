@@ -185,16 +185,12 @@ to_xls_gs_immediate(Filename, Forms0) ->
     {SourceForms, Sites} = xls_failure_sites:prepare(Forms0),
     {Forms, Helpers} = xls_helpers:prepare(SourceForms,
         [{init, 1}, {handle_call, 2}, {handle_cast, 2}]),
+    ok = xls_names:actor(Forms, hls_gs),
     PublicStructNames = find_tags(Forms),
     StateName = state(Forms),
-    StateRecord = find_record(Forms, StateName),
     StateStructName = xls_names:record_type(StateName),
-    ok = lists:foreach(
-        fun(Name) ->
-            validate_record_defaults(find_record(Forms, Name))
-        end,
-        [StateName | PublicStructNames]
-    ),
+    Records = hls_records:declarations(Forms, PublicStructNames ++ [StateName]),
+    ok = lists:foreach(fun validate_record_defaults/1, Records),
     _ = [message_words(Forms, Name) || Name <- PublicStructNames],
 
     Preamble = ["// ", Filename, ".x\n",
@@ -223,16 +219,10 @@ to_xls_gs_immediate(Filename, Forms0) ->
         ||  {Index, Atom} <- lists:enumerate([error, StateName | PublicStructNames])
     ],
     "}\n\n",
-    [
-        [struct_from_record(Record), "\n",
-         structfrombits_from_record(Record), "\n",
-         bitsfromstruct_from_record(Record), "\n"]
-        ||  Op <- PublicStructNames,
-            Record <- [find_record(Forms, Op)]
-    ],
-    struct_from_record(StateRecord), "\n",
-    structfrombits_from_record(StateRecord), "\n",
-    bitsfromstruct_from_record(StateRecord), "\n"],
+    [[struct_from_record(Record), "\n",
+      structfrombits_from_record(Record), "\n",
+      bitsfromstruct_from_record(Record), "\n"]
+        || Record <- Records]],
     Body = [
     xls_helpers:emit(Helpers, StateName, #{}),
     xls_gs_lower:initial_state(Forms, StateName),
@@ -514,10 +504,10 @@ statement_from_statement({record, _L, NameAtom, Fields}, State) ->
     ),
     Assignments = lists:reverse(BwdAssignments),
     SecondState = instr(IntermediateState, [
-        xls_names:record_type(NameAtom), " {\n",
+        xls_names:record_type(record_name(NameAtom)), " {\n",
         [["  ", atom_to_list(FieldAtom), ": ", Reference, ",\n"]
             || {FieldAtom, Reference} <- Assignments],
-        "  ..zero!<", xls_names:record_type(NameAtom), ">()\n",
+        "  ..zero!<", xls_names:record_type(record_name(NameAtom)), ">()\n",
         "}"
     ]),
     instr(SecondState, record_value(NameAtom, reference(SecondState), SecondState));
@@ -532,10 +522,10 @@ statement_from_statement({record, _L, ToUpdate, NameAtom, UpdateFields}, State) 
     ),
     Assignments = lists:reverse(BwdAssignments),
     SecondState = instr(IntermediateState, [
-        xls_names:record_type(NameAtom), " {\n",
+        xls_names:record_type(record_name(NameAtom)), " {\n",
             [["  ", atom_to_list(FieldAtom), ": ", Reference, ",\n"]
                 || {FieldAtom, Reference} <- Assignments],
-        "  ..(", InputState#clause_state.reference, ").1\n",
+        "  ..", record_raw(NameAtom, ["(", InputState#clause_state.reference, ")"]), "\n",
         "}"
     ]),
     instr(SecondState, record_value(NameAtom, reference(SecondState), SecondState));
@@ -560,9 +550,9 @@ statement_from_statement({call, Line, MF, Args}, State) ->
             reference(Checked, [Value, ".0"]);
         X -> instr(ArgState, X)
     end;
-statement_from_statement({record_field, _L, Object, _RecordAtom, {atom, _LL, SlotAtom}}, State) ->
+statement_from_statement({record_field, _L, Object, RecordAtom, {atom, _LL, SlotAtom}}, State) ->
     IntermediateState = statement_from_statement(Object, State),
-    instr(IntermediateState, [reference(IntermediateState), ".1.", atom_to_list(SlotAtom)]);
+    instr(IntermediateState, [record_raw(RecordAtom, reference(IntermediateState)), ".", atom_to_list(SlotAtom)]);
 statement_from_statement({match, _L, LHS, RHS}, State) ->
     RHSState = statement_from_statement(RHS, State),
     xls_pattern_lower:match(LHS, reference(RHSState), RHSState).
@@ -667,7 +657,9 @@ bind(Name, Line, Value, State) ->
     end,
     reference(Next, Value).
 
--spec record_value(atom(), ir(), clause_state()) -> iolist().
+-doc "Wraps actor data and messages in their ABI tuples, leaving internal records as values.".
+-spec record_value(atom() | {value, atom()}, ir(), clause_state()) -> iolist().
+record_value({value, _Name}, Struct, _State) -> [Struct];
 record_value(NameAtom, Struct, #clause_state{state_name = NameAtom}) ->
     ["(Tag::", xls_names:enum_member(NameAtom), ", ", Struct, ")"];
 record_value(NameAtom, Struct, _State) ->
@@ -675,6 +667,17 @@ record_value(NameAtom, Struct, _State) ->
         "(Tag::", xls_names:enum_member(NameAtom), ", ", Struct, ", ",
         "bits_from_", xls_names:record_codec(NameAtom), "(", Struct, "))"
     ].
+
+-doc "Recovers the source name after representation selection.".
+-spec record_name(atom() | {value, atom()}) -> atom().
+record_name({value, Name}) -> Name;
+record_name(Name) -> Name.
+
+-doc "Projects callback tuples and constrains internal values to their nominal struct type.".
+-spec record_raw(atom() | {value, atom()}, printable()) -> iolist().
+record_raw({value, Name}, Value) ->
+    ["({ let value: ", xls_names:record_type(Name), " = ", Value, "; value })"];
+record_raw(_Name, Value) -> [Value, ".1"].
 
 %%%
 %%% Erlang record / XLS struct munging.

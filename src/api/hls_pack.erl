@@ -4,31 +4,15 @@
 % -define(debug(X), begin io:format("~w@~w: ~p~n", [?FUNCTION_NAME, ?LINE, X]), X end).
 -define(debug(X), X).
 
-replace_anno(Anno, {integer, _OldAnno, Value}) ->
-    {integer, Anno, Value};
-replace_anno(Anno, {atom, _OldAnno, Value}) ->
-    {atom, Anno, Value};
-replace_anno(Anno, {remote_type, _OldAnno, [Module, Name, Args]}) ->
-    {remote_type, Anno, [
-        replace_anno(Anno, Module),
-        replace_anno(Anno, Name),
-        lists:map(fun(A) -> replace_anno(Anno, A) end, Args)
-    ]}.
-
-calls_from_types({remote_type, Anno, [Module, Name, Args]}) ->
-    {call,
-        Anno,
-        {remote, Anno, Module, Name},
-        lists:map(fun calls_from_types/1, Args)
-    };
-calls_from_types(X) -> X.
-
+-doc "Generates tagged record codecs and expands typed zero defaults, including acyclic internal record fields.".
+-spec parse_transform([hls_source:form()], [atom() | tuple()]) -> [hls_source:form()].
 parse_transform(Forms0, Options) ->
     Context = hls_source:from_forms(Forms0, Options),
     %% Source-reader annotations carry preprocessing facts into compile:forms
     %% too. Emit one context attribute, subject to deterministic-build rules.
-    Forms = [F || F <- Forms0, not is_source_context(F)],
-    [FileAttr, ModuleAttr | TailForms] = Forms,
+    OriginalForms = [F || F <- Forms0, not is_source_context(F)],
+    Forms = hls_records:resolve(OriginalForms),
+    [FileAttr, ModuleAttr | TailForms] = OriginalForms,
     {BodyForms, EOFForm} = {lists:droplast(TailForms), lists:last(TailForms)},
 
     ok = xls_names:wire_tags(Forms),
@@ -43,9 +27,9 @@ parse_transform(Forms0, Options) ->
         [_] -> hls_source:capture(AnalysisForms, Options)
     end,
     SerializableStructNames = [StateName | PublicStructNames],
-    RewrittenBodyForms = rewrite_record_defaults(
-        BodyForms, SerializableStructNames
-    ),
+    NestedRecords = hls_records:declarations(Forms, SerializableStructNames),
+    [xls_parse:validate_record_defaults(R) || R <- NestedRecords],
+    RewrittenBodyForms = rewrite_record_defaults(BodyForms, Forms),
     ExportAttr = {attribute, element(2, ModuleAttr), export,
         [
             {pack, 1},
@@ -63,7 +47,7 @@ parse_transform(Forms0, Options) ->
                 {bin_element, Line,
                     {call, Line, {remote, Line, {atom, Line, hls_type}, {atom, Line, pack}}, [
                         {record_field, Line, {var, Line, 'Record'}, Tag, {atom, Line, FieldAtom}},
-                        calls_from_types(replace_anno(Line, Desc))
+                        descriptor_expression(hls_type:descriptor(Desc), Line)
                     ]},
                     default,
                     [bitstring]
@@ -85,7 +69,7 @@ parse_transform(Forms0, Options) ->
                 lists:foldr(
                     fun(Call, Acc) -> {cons, Line, Call, Acc} end,
                     {nil, Line},
-                    [calls_from_types(replace_anno(Line, Desc))
+                    [descriptor_expression(hls_type:descriptor(Desc), Line)
                         ||  {attribute, _L, record, {_T, Fields}} <- [xls_parse:find_record(Forms, Tag)],
                             {typed_record_field, _record_Field, Desc} <- Fields]
             )},
@@ -160,7 +144,10 @@ service_contract_attributes(Forms, {attribute, Line, module, _}) ->
             end
     end.
 
-record_width_expression(Forms, Tag, Line) ->
+%% Sum provider widths after resolving nested records in the source context.
+-spec record_width_expression([hls_source:form()], atom(), erl_anno:location()) -> erl_parse:abstract_expr().
+record_width_expression(Forms, Tag, Location) ->
+    Line = erl_anno:new(Location),
     {attribute, _RecordLine, record, {_Tag, Fields}} =
         xls_parse:find_record(Forms, Tag),
     lists:foldl(
@@ -171,7 +158,7 @@ record_width_expression(Forms, Tag, Line) ->
                     Line,
                     {atom, Line, hls_type},
                     {atom, Line, width}},
-                [calls_from_types(replace_anno(Line, Descriptor))]
+                [descriptor_expression(hls_type:descriptor(Descriptor), Line)]
             },
             {op, Line, '+', Sum, Width}
         end,
@@ -200,39 +187,42 @@ actor_interface_attributes(Forms, ModuleAttr) ->
             []
     end.
 
-rewrite_record_defaults(Forms, SerializableStructNames) ->
-    [
-        rewrite_record_defaults_in_form(Form, SerializableStructNames)
-        || Form <- Forms
-    ].
+%% Expand typed zeros without changing the source-level record type annotations.
+-spec rewrite_record_defaults([tuple()], [hls_source:form()]) -> [tuple()].
+rewrite_record_defaults(Body, Resolved) ->
+    [rewrite_record_defaults_in_form(Form, Resolved) || Form <- Body].
 
-rewrite_record_defaults_in_form(
-    RecordForm = {attribute, Line, record, {RecordName, Fields}},
-    SerializableStructNames
-) ->
-    case lists:member(RecordName, SerializableStructNames) of
+%% Unrelated ordinary Erlang records retain their explicit defaults.
+-spec rewrite_record_defaults_in_form(tuple(), [hls_source:form()]) -> tuple().
+rewrite_record_defaults_in_form({attribute, Line, record, {Name, Fields}}, Resolved) ->
+    {attribute, _, record, {Name, Types}} = xls_parse:find_record(Resolved, Name),
+    {attribute, Line, record, {Name, [rewrite_record_field_default(Field, Type)
+        || {Field, Type} <- lists:zip(Fields, Types)]}};
+rewrite_record_defaults_in_form(Form, _Resolved) -> Form.
+
+%% A nested descriptor restores each field's record tag only on the BEAM.
+-spec rewrite_record_field_default(tuple(), tuple()) -> tuple().
+rewrite_record_field_default({typed_record_field,
+        {record_field, Line, Name, Default}, Type} = Field,
+        {typed_record_field, _, ResolvedType}) ->
+    case xls_parse:is_zero_default(Default) of
         true ->
-            ok = xls_parse:validate_record_defaults(RecordForm),
-            {attribute, Line, record, {
-                RecordName,
-                [rewrite_record_field_default(Field) || Field <- Fields]
-            }};
-        false ->
-            RecordForm
+            Expanded = {call, Line,
+                {remote, Line, {atom, Line, hls_type}, {atom, Line, zero}},
+                [descriptor_expression(hls_type:descriptor(ResolvedType), Line)]},
+            {typed_record_field, {record_field, Line, Name, Expanded}, Type};
+        false -> Field
     end;
-rewrite_record_defaults_in_form(Form, _SerializableStructNames) ->
-    Form.
+rewrite_record_field_default(Field, _Resolved) -> Field.
 
-rewrite_record_field_default({
-    typed_record_field,
-    {record_field, Line, {atom, AtomLine, FieldName}, _Default},
-    Type
-}) ->
-    ExpandedDefault = {call,
-        Line,
-        {remote, Line, {atom, Line, hls_type}, {atom, Line, zero}},
-        [calls_from_types(replace_anno(Line, Type))]
-    },
-    {typed_record_field,
-        {record_field, Line, {atom, AtomLine, FieldName}, ExpandedDefault},
-        Type}.
+%% Keep provider constructor validation on the host, including inside record fields.
+-spec descriptor_expression(hls_type:arg(), erl_anno:anno() | erl_anno:location()) -> tuple().
+descriptor_expression({hls_type, hls_record, Name, Fields}, Line) ->
+    {tuple, Line, [{atom, Line, hls_type}, {atom, Line, hls_record}, {atom, Line, Name},
+        lists:foldr(fun({Field, Type}, Tail) ->
+            {cons, Line, {tuple, Line, [{atom, Line, Field}, descriptor_expression(Type, Line)]}, Tail}
+        end, {nil, Line}, Fields)]};
+descriptor_expression({hls_type, Module, Name, Args}, Line) ->
+    {call, Line, {remote, Line, {atom, Line, Module}, {atom, Line, Name}},
+        [descriptor_expression(Arg, Line) || Arg <- Args]};
+descriptor_expression(Value, Line) -> erl_parse:abstract(Value, erl_anno:location(Line)).

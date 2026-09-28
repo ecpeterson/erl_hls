@@ -84,6 +84,8 @@ match(Pattern, Value, State) ->
     end, Bound, lists:reverse(Conditions)),
     xls_parse:reference(Checked, Value).
 
+%% Project supported patterns, checking tags only for callback record values.
+-spec compile_pattern(term(), argument(), map()) -> map().
 compile_pattern({var, _Line, '_'}, _Subject, Context) ->
     Context;
 compile_pattern({var, Line, Name}, Subject, Context) ->
@@ -91,6 +93,15 @@ compile_pattern({var, Line, Name}, Subject, Context) ->
 compile_pattern({match, _Line, Left, Right}, Subject, Context0) ->
     Context1 = compile_pattern(Left, Subject, Context0),
     compile_pattern(Right, Subject, Context1);
+compile_pattern({record, Line, {value, Name}, Fields}, Subject = #{record := _}, Context) ->
+    compile_pattern({record, Line, Name, Fields}, Subject, Context);
+compile_pattern({record, Line, {value, Name}, Fields}, #{value := Value}, Context = #{state := State}) ->
+    %% A projection or case subject has no nominal type in this lowerer. Let XLS
+    %% check it before projecting fields, even when the pattern has no fields.
+    Typed = xls_parse:instr(State, xls_parse:record_raw({value, Name}, Value)),
+    Checked = xls_parse:reference(Typed),
+    compile_pattern({record, Line, Name, Fields}, record_argument(Name, Checked, Checked),
+        Context#{state := Typed});
 compile_pattern({record, Line, Name, Fields}, Subject, Context0) ->
     case Subject of
         #{record := Name} ->

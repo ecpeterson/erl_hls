@@ -73,3 +73,28 @@ for kind in literal_conflicting_uses literal_existing_value \
     fi
     echo "PASS: XLS rejects $kind"
 done
+
+# Ordinary nested record values use the same actor lowering and wire codecs.
+erl -noshell -pa "$project_root/_build/test/lib/erl_hls/ebin" \
+    "$project_root/_build/test/lib/erl_hls/test" \
+    -eval 'ok = hls_nested_records_dslx:write(hd(init:get_plain_arguments())), halt().' \
+    -extra "$stage"
+"$xls_root/interpreter_main" --compare=jit "${options[@]}" "$stage/nested_records.x"
+"$xls_root/ir_converter_main" --top=nested_transition "${options[@]}" \
+    "$stage/nested_records.x" > "$stage/nested_records.ir"
+"$xls_root/opt_main" "$stage/nested_records.ir" > "$stage/nested_records.opt.ir"
+"$xls_root/codegen_main" --generator=combinational --module_name=nested_records \
+    --use_system_verilog=false "$stage/nested_records.opt.ir" > "$stage/nested_records.v"
+iverilog -g2012 -s nested_records_tb -o "$stage/nested_records.vvp" \
+    "$stage/nested_records_tb.sv" "$stage/nested_records.v"
+vvp "$stage/nested_records.vvp"
+for kind in nested expression_case empty_case field_access; do
+    if "$xls_root/interpreter_main" --compare=none "${options[@]}" \
+            "$stage/nested_wrong_$kind.x" > "$stage/nested_wrong_$kind.log" 2>&1; then
+        echo "XLS accepted a mismatched $kind record pattern" >&2; exit 1
+    fi
+    if ! grep -Eq 'TypeInferenceError|[Tt]ype[Mm]ismatch|[Tt]ype mismatch' "$stage/nested_wrong_$kind.log"; then
+        cat "$stage/nested_wrong_$kind.log" >&2; exit 1
+    fi
+    echo "PASS: XLS rejects mismatched $kind record patterns"
+done

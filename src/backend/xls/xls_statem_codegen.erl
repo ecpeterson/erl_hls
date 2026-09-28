@@ -281,22 +281,21 @@ service(Spec) ->
         "}\n\n"
     ].
 
+%% Each selection step is named so large mailboxes do not exhaust XLS parser nesting.
+-spec queue_expansion(1..255) -> map().
 queue_expansion(Capacity) ->
     Indexes = lists:seq(0, Capacity - 1),
     EligibleBindings = [eligible_binding(Index) || Index <- Indexes],
     FoundExpression = join_with(" || ", [
         ["eligible_", integer_to_list(Index)] || Index <- Indexes
     ]),
-    SelectedExpression = lists:foldr(
-        fun(Index, Else) ->
-            [
-                "if eligible_", integer_to_list(Index), " { u8:",
-                integer_to_list(Index), " } else { ", Else, " }"
-            ]
-        end,
-        "u8:0",
-        Indexes
-    ),
+    SelectedExpression = ["{\n",
+        "        let selected_", integer_to_list(Capacity), " = u8:0;\n",
+        [["        let selected_", integer_to_list(Index), " = if eligible_",
+            integer_to_list(Index), " { u8:", integer_to_list(Index),
+            " } else { selected_", integer_to_list(Index + 1), " };\n"]
+            || Index <- lists:reverse(Indexes)],
+        "        selected_0\n      }"],
     CompactionBindings = [
         compaction_binding(Index, Capacity) || Index <- Indexes
     ],

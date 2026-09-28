@@ -10,6 +10,7 @@ cd "$project_root"
 rebar3 as test compile
 erl -noshell -pa _build/test/lib/erl_hls/ebin _build/test/lib/erl_hls/test -eval '
     [Stage] = init:get_plain_arguments(),
+    ok = xls_large_mailbox_dslx:write(Stage),
     ok = file:write_file(filename:join(Stage,"ordered_egress_actor.x"),
         xls_parse:to_xls("test/ordered_egress_actor.erl")),
     lists:foreach(fun(Depth) ->
@@ -22,6 +23,10 @@ erl -noshell -pa _build/test/lib/erl_hls/ebin _build/test/lib/erl_hls/test -eval
 options=(--warnings_as_errors=false
     --dslx_path="$stage:$project_root/priv/xls/lib:$project_root/priv/xls/fabric"
     --dslx_stdlib_path="$xls_root/xls/dslx/stdlib")
+# Check selection beyond the old parser limit; typecheck the maximum capacity too.
+"$xls_root/interpreter_main" --compare=none "${options[@]}" "$stage/large_mailbox_64.x"
+"$xls_root/interpreter_main" --compare=none --test_filter='^$' "${options[@]}" \
+    "$stage/large_mailbox_255.x"
 for kind in service d1 d2; do
     if [[ "$kind" == service ]]; then
         source="$stage/ordered_egress_actor.x"; top=Service
