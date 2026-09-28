@@ -41,7 +41,10 @@ actor(Forms, Kind) ->
         {hls_gs, {ok, _}} -> hls_gs_deferred;
         _ -> Kind
     end,
-    ok = records(Forms, Names, SymbolKind),
+    Resolved = hls_records:resolve(Forms),
+    ValueNames = [Name || {attribute, _, record, {Name, _}} <-
+        hls_records:declarations(Resolved, Names)],
+    ok = records(Resolved, ValueNames, SymbolKind),
     tags(Forms, Names).
 
 control_names(Forms, Kind) ->

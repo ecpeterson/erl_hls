@@ -58,6 +58,20 @@ Small types do not change BEAM arithmetic: `wrap/2` normalizes at the logical wi
 
 `bash tools/test_logical_types.sh XLS_ROOT` checks dense and explicitly padded scalar/nested vectors against the XLS interpreter/JIT and generated RTL. It replays a BEAM-derived service scenario at three pipeline schedules, covering initialization, Boolean guards, wrapping, nested updates, unaligned float/fixed fields, casts, noncanonical final-word padding, transaction-ID wrap, and backpressure. Dedicated actor topologies check dense startup payloads, egress and reset against BEAM. Integer division/remainder and shift suites also cover non-byte widths and one-bit signed values.
 
+## Record values
+
+Typed fields may contain an acyclic record declared in the same include-expanded module, including inside fixed-size lists or vectors:
+
+```erlang
+-record(point, {x = hls_type:zero() :: hls_nums:u16(),
+                y = hls_type:zero() :: hls_nums:u16()}).
+-record(sample, {position = hls_type:zero() :: #point{}}).
+```
+
+Each field uses `hls_type:zero()`; the default recursively initializes nested fields. Packing checks every record tag, arity and field value, concatenating field codecs without a nested tag or extra padding. Unpacking restores the Erlang record tuples. Nested records support construction, access, updates, patterns and concrete helper arguments/results. They compile to ordinary DSLX structs. The outer actor data/message ABI and wire selector numbering are unchanged.
+
+Nested record names must be internal: an actor's data, message or reduction-accumulator record cannot also serve as a nested value. Recursive layouts and refined record type annotations such as `#point{x :: Type}` are rejected. Local type aliases remain outside the supported field-type subset. `bash tools/test_helpers.sh XLS_ROOT` checks dense nested codecs and normal actor transitions against BEAM, XLS interpretation/JIT and generated RTL, including direct-actor output backpressure.
+
 ## Checked collection access
 
 `hls_lists:nth/2`, `hls_lists:set/3`, and their `hls_vec` counterparts use one-based indices in `1..Size`. Invalid indices raise `badarg` on BEAM and produce a source-located `badarg` failure in XLS. Reads do not clamp to the last element, and updates do not silently ignore an invalid index.

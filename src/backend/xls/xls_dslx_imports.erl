@@ -25,6 +25,7 @@ uses({clause, _, Patterns, Guards, Body}) ->
     pattern_uses(Patterns) ++ uses([Guards, Body]);
 uses({match, _, Pattern, Value}) ->
     pattern_uses(Pattern) ++ uses(Value);
+uses({hls_type, Module, Name, Args}) -> [{provider, Module, Name} | uses(Args)];
 uses({remote_type, _, [{atom, _, Module}, {atom, _, Name}, Args]}) ->
     [{provider, Module, Name} | uses(Args)];
 uses({call, _, {remote, _, {atom, _, Module}, {atom, _, Name}}, Args}) ->

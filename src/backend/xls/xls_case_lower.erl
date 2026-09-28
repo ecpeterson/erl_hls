@@ -29,6 +29,8 @@ lower(Line, Condition, Clauses, State) ->
 %%% Ordered selection
 %%%
 
+%% Compare ordered alternatives against their concrete struct or tagged callback shape.
+-spec lower_ordered_case(erl_anno:location(), term(), [tuple()], xls_parse:clause_state(), atom()) -> xls_parse:clause_state().
 lower_ordered_case(Line, Condition, Clauses0, State0, FailureKind) ->
     Clauses = [normalize_clause(Clause) || Clause <- Clauses0],
     Shape = case_shape(Clauses),
@@ -39,6 +41,8 @@ lower_ordered_case(Line, Condition, Clauses0, State0, FailureKind) ->
     ok = validate_nonfinal_fallbacks(lists:droplast(Clauses), ConditionState, FailureKind),
     Subject = xls_parse:reference(ConditionState),
     Argument = case Shape of
+        {record, {value, Name}} ->
+            xls_pattern_lower:record_argument(Name, Subject, Subject);
         {record, Name} ->
             xls_pattern_lower:record_argument(
                 Name,
@@ -180,6 +184,9 @@ record_tag_condition(Pattern, Subject) ->
         ]]
     end.
 
+%% Ordinary record values need no runtime tag predicate.
+-spec top_record_name(term()) -> none | {ok, atom()}.
+top_record_name({record, _Line, {value, _Name}, _Fields}) -> none;
 top_record_name({record, _Line, Name, _Fields}) ->
     {ok, Name};
 top_record_name({match, _Line, {var, _VarLine, _Name}, Pattern}) ->
