@@ -21,6 +21,7 @@ nested_codec_test() ->
 %% Zero expansion is recursive; helper updates keep their ordinary Erlang semantics.
 -spec nested_actor_test() -> ok.
 nested_actor_test() ->
+    ?assertEqual({host_wrapper, {host_value, 0}, 0}, hls_nested_records_fixture:host_only()),
     Zero = {sample, {vector2, 0, 0}, false},
     {ok, boot, Initial} = hls_nested_records_fixture:init([]),
     ?assertEqual({cell, Zero, Zero}, Initial),
@@ -61,8 +62,19 @@ normal_lowering_test() ->
     ?assertNotEqual(nomatch, binary:match(Text, <<"pub struct Sample">>)),
     ?assertEqual(nomatch, binary:match(Text, <<"Tag::SAMPLE">>)),
     ?assertEqual(nomatch, binary:match(Text, <<"Tag::VECTOR2">>)),
+    ?assertEqual(nomatch, binary:match(Text, <<"struct Host">>)),
     Interface = xls_parse:actor_interface(File),
     ?assert(is_map(Interface)),
+    ok.
+
+%% Fixed helper signatures cannot silently reinterpret another nominal record.
+-spec mismatched_helper_record_test() -> ok.
+mismatched_helper_record_test() ->
+    Path = "_build/nested-record-tests/mismatched_helper.erl",
+    ok = filelib:ensure_dir(Path),
+    ok = file:write_file(Path, hls_nested_records_dslx:mismatch_source(helper)),
+    ?assertException(error, {xls_record_pattern_type_mismatch, _, other_sample, sample},
+        xls_parse:to_xls(Path)),
     ok.
 
 %% Parse one declaration without requiring its dependencies to compile on the BEAM.

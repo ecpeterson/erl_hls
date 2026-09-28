@@ -21,13 +21,17 @@
     {[hls_source:form()], [helper()]}.
 prepare(Forms0, Roots) ->
     Module = xls_parse:find_attribute(Forms0, module),
-    Forms = xls_comparison:prepare(localize(xls_binary_lower:prepare(hls_records:resolve(Forms0)), Module)),
-    Definitions = definitions(Forms, undefined, #{}),
-    Context = #{definitions => Definitions, roots => Roots, forms => Forms,
-        data => xls_parse:state(Forms), tags => hls_records:wire_names(Forms) -- [xls_parse:state(Forms)]},
+    WireForms = xls_comparison:prepare(localize(xls_binary_lower:prepare(hls_records:resolve(Forms0)), Module)),
+    Definitions = definitions(WireForms, undefined, #{}),
+    Context = #{definitions => Definitions, roots => Roots, forms => WireForms,
+        data => xls_parse:state(WireForms), tags => hls_records:wire_names(WireForms) -- [xls_parse:state(WireForms)]},
     Calls = lists:append([local_calls(maps:get(clauses, maps:get(Root, Definitions)))
         || Root <- Roots, maps:is_key(Root, Definitions)]),
     Helpers = reachable(Calls, Context, #{}),
+    UsedFunctions = Roots ++ maps:keys(Helpers),
+    Relevant = [Form || Form <- WireForms, reachable_form(Form, UsedFunctions)],
+    ValueRecords = hls_records:references(Relevant),
+    Forms = hls_records:resolve(WireForms, ValueRecords),
     Wire = hls_records:wire_names(Forms),
     Rewritten = [case Form of
         {function, Line, Name, Arity, Clauses} ->
@@ -41,8 +45,15 @@ prepare(Forms0, Roots) ->
     Prepared = [Helper#{clauses := hls_records:values(xls_literal_types:clauses(
             rewrite(maps:get(clauses, Helper), Helpers), maps:get(result, Helper), Forms), Wire)}
         || Key <- dependency_order(Helpers), Helper <- [maps:get(Key, Helpers)]],
-    Used = hls_records:used(Rewritten ++ [maps:get(clauses, H) || H <- Prepared]),
+    Used = lists:usort((ValueRecords -- Wire) ++
+        hls_records:used(Rewritten ++ [maps:get(clauses, H) || H <- Prepared])),
     {Rewritten ++ [{attribute, 0, hls_value_records, Used}], Prepared}.
+
+%% Host-only functions and their records do not constrain hardware layouts.
+-spec reachable_form(hls_source:form(), [{atom(), arity()}]) -> boolean().
+reachable_form({function, _, Name, Arity, _}, Keys) -> lists:member({Name, Arity}, Keys);
+reachable_form({attribute, _, spec, {Key, _}}, Keys) -> lists:member(Key, Keys);
+reachable_form(_, _) -> false.
 
 dependency_order(Helpers) ->
     {_, Reversed} = lists:foldl(fun(Key, Acc) ->

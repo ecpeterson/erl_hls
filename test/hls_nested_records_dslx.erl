@@ -1,10 +1,15 @@
 -module(hls_nested_records_dslx).
 -moduledoc false.
--export([write/1]).
+-export([write/1, mismatch_source/1]).
 
 -doc "Writes normal actor DSLX with BEAM-derived transition witnesses and a matching RTL testbench.".
 -spec write(file:filename()) -> ok.
 write(Stage) ->
+    lists:foreach(fun(Kind) ->
+        Path = filename:join(Stage, "nested_wrong_" ++ atom_to_list(Kind) ++ ".erl"),
+        ok = file:write_file(Path, mismatch_source(Kind)),
+        ok = file:write_file(filename:rootname(Path) ++ ".x", xls_parse:to_xls(Path))
+    end, [nested, expression_case, empty_case, field_access]),
     Cases = [witness({sample, {vector2, X, Y}, Valid})
         || X <- [0, 1, 15, 31], Y <- [-64, -1, 0, 63], Valid <- [false, true]],
     Actor = xls_parse:to_xls("test/hls_nested_records_fixture.erl"),
@@ -18,6 +23,29 @@ write(Stage) ->
         [io_lib:format("payload=13'd~p; #1; if(out !== 53'd~p) $fatal(1, \"nested ~p: %h\", out);\n",
             [In, Out, In]) || {In, Out} <- Cases],
         " $display(\"PASS: 32 nested-record actor RTL witnesses\"); $finish;\nend\nendmodule\n"]).
+
+-doc "Returns valid Erlang whose nominal record alternatives are outside the fixed-layout hardware subset.".
+-spec mismatch_source(helper | nested | expression_case | empty_case | field_access) -> binary().
+mismatch_source(Kind) ->
+    {ok, Original} = file:read_file("test/hls_nested_records_fixture.erl"),
+    Extra = <<"-record(other_vector, {x = hls_type:zero() :: hls_nums:uN(5), "
+        "y = hls_type:zero() :: hls_nums:sN(7)}).\n"
+        "-record(other_sample, {position = hls_type:zero() :: #vector2{}, "
+        "valid = hls_type:zero() :: hls_bool:bool()}).\n">>,
+    Source = binary:replace(Original, <<"-hls_data(cell).">>, <<"-hls_data(cell).\n", Extra/binary>>),
+    case Kind of
+        helper -> binary:replace(Source, <<"advance(Sample = #sample{valid = true">>,
+            <<"advance(Sample = #other_sample{valid = true">>);
+        nested -> binary:replace(Source, <<"Vector = #vector2{x = X}">>,
+            <<"Vector = #other_vector{x = X}">>);
+        expression_case -> binary:replace(binary:replace(Source,
+            <<"#vector2{y = 0} ->">>, <<"#other_vector{y = 0} ->">>),
+            <<"#vector2{} ->">>, <<"#other_vector{} ->">>);
+        empty_case -> binary:replace(binary:replace(Source,
+            <<"#vector2{y = 0} ->">>, <<"#other_vector{} ->">>),
+            <<"#vector2{} ->">>, <<"_ ->">>);
+        field_access -> binary:replace(Source, <<")#vector2.y">>, <<")#other_vector.y">>)
+    end.
 
 %% The expected bytes come from normal host callbacks and the generated host codec.
 -spec witness(tuple()) -> {non_neg_integer(), non_neg_integer()}.

@@ -1,15 +1,54 @@
 -module(hls_records).
 -moduledoc false.
--export([resolve/1, declarations/2, values/2, used/1, wire_names/1]).
+-export([resolve/1, resolve/2, references/1, declarations/2, values/2, used/1, wire_names/1]).
 
--doc "Resolves nested record field types from this module; rejects recursive layouts and nested wire-tag records.".
+-doc "Resolves wire layouts and explicit typed zeros, leaving unrelated host records alone.".
 -spec resolve([hls_source:form()]) -> [hls_source:form()].
-resolve(Forms) ->
+resolve(Forms) -> resolve(Forms, []).
+
+-doc "Also resolves record values referenced by the reachable hardware function graph; rejects recursive or nested wire layouts.".
+-spec resolve([hls_source:form()], [atom()]) -> [hls_source:form()].
+resolve(Forms, Extra) ->
+    Zeros = [Type || {attribute, _, record, {_, Fields}} <- Forms,
+        Field = {typed_record_field, _, Type} <- Fields, typed_zero(Field)],
+    Roots = wire_names(Forms) ++ references(Zeros) ++ Extra,
+    Names = reachable_names(Roots, Forms, #{}),
     [case Form of
-        {attribute, L, record, {Name, Fields}} ->
+        {attribute, L, record, {Name, Fields}} when is_map_key(Name, Names) ->
             {attribute, L, record, {Name, [resolve_field(F, Forms, [Name]) || F <- Fields]}};
+        {attribute, L, record, {Name, Fields}} ->
+            {attribute, L, record, {Name, [case typed_zero(F) of
+                true -> resolve_field(F, Forms, [Name]); false -> F
+            end || F <- Fields]}};
         _ -> Form
     end || Form <- Forms].
+
+%% A typed zero opts its field into HLS layout rules, even in a host-only record.
+-spec typed_zero(tuple()) -> boolean().
+typed_zero({typed_record_field, {record_field, _, _, Default}, _}) ->
+    xls_parse:is_zero_default(Default);
+typed_zero(_) -> false.
+
+%% Follow only layouts reached from hardware roots, without inspecting other record types.
+-spec reachable_names([atom()], [hls_source:form()], map()) -> map().
+reachable_names([], _Forms, Seen) -> Seen;
+reachable_names([Name | Rest], Forms, Seen) when is_map_key(Name, Seen) ->
+    reachable_names(Rest, Forms, Seen);
+reachable_names([Name | Rest], Forms, Seen) ->
+    Fields = [F || {attribute, _, record, {N, F}} <- Forms, N =:= Name],
+    reachable_names(references(Fields) ++ Rest, Forms, Seen#{Name => true}).
+
+-doc "Collects record names mentioned by source expressions, patterns and type annotations.".
+-spec references(term()) -> [atom()].
+references({record, _, Name, Fields}) when is_atom(Name) -> [Name | references(Fields)];
+references({record, _, Base, Name, Fields}) when is_atom(Name) ->
+    [Name | references([Base, Fields])];
+references({record_field, _, Base, Name, _}) when is_atom(Name) -> [Name | references(Base)];
+references({type, _, record, [{atom, _, Name} | Fields]}) -> [Name | references(Fields)];
+references({hls_record_type, _, Descriptor}) -> nested_names(Descriptor);
+references(Tuple) when is_tuple(Tuple) -> references(tuple_to_list(Tuple));
+references(List) when is_list(List) -> lists:usort(lists:append([references(X) || X <- List]));
+references(_) -> [].
 
 %% Only field types change; source expressions and their annotations remain intact.
 -spec resolve_field(tuple(), [hls_source:form()], [atom()]) -> tuple().

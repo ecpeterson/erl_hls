@@ -673,9 +673,10 @@ record_value(NameAtom, Struct, _State) ->
 record_name({value, Name}) -> Name;
 record_name(Name) -> Name.
 
--doc "Projects callback tuples while leaving ordinary internal structs unchanged.".
+-doc "Projects callback tuples and constrains internal values to their nominal struct type.".
 -spec record_raw(atom() | {value, atom()}, printable()) -> iolist().
-record_raw({value, _Name}, Value) -> ["(", Value, ")"];
+record_raw({value, Name}, Value) ->
+    ["({ let value: ", xls_names:record_type(Name), " = ", Value, "; value })"];
 record_raw(_Name, Value) -> [Value, ".1"].
 
 %%%

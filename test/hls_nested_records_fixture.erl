@@ -2,7 +2,7 @@
 -moduledoc "A small actor whose state, messages and helpers share ordinary record values.".
 -behavior(hls_statem).
 -compile({parse_transform, hls_pack}).
--export([init/1, boot/3, active/3]).
+-export([init/1, boot/3, active/3, host_only/0]).
 -hls_data(cell).
 -hls_phases([boot, active]).
 -hls_outputs([out]).
@@ -31,6 +31,17 @@
     current = hls_type:zero() :: #sample{},
     previous = hls_type:zero() :: #sample{}
 }).
+%% Host-only records may use ordinary unbounded Erlang types and explicit defaults.
+-record(host_value, {number = 0 :: integer()}).
+%% A typed zero in one field does not impose hardware layout on unrelated fields.
+-record(host_wrapper, {
+    value = #host_value{} :: #host_value{},
+    count = hls_type:zero() :: hls_nums:u8()
+}).
+
+-doc "Returns host-only auxiliary state that is not part of the hardware actor.".
+-spec host_only() -> #host_wrapper{}.
+host_only() -> #host_wrapper{}.
 
 -doc "Starts with recursively zeroed samples.".
 -spec init([]) -> {ok, boot, #cell{}}.

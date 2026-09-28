@@ -88,3 +88,13 @@ erl -noshell -pa "$project_root/_build/test/lib/erl_hls/ebin" \
 iverilog -g2012 -s nested_records_tb -o "$stage/nested_records.vvp" \
     "$stage/nested_records_tb.sv" "$stage/nested_records.v"
 vvp "$stage/nested_records.vvp"
+for kind in nested expression_case empty_case field_access; do
+    if "$xls_root/interpreter_main" --compare=none "${options[@]}" \
+            "$stage/nested_wrong_$kind.x" > "$stage/nested_wrong_$kind.log" 2>&1; then
+        echo "XLS accepted a mismatched $kind record pattern" >&2; exit 1
+    fi
+    if ! grep -Eq 'TypeInferenceError|[Tt]ype[Mm]ismatch|[Tt]ype mismatch' "$stage/nested_wrong_$kind.log"; then
+        cat "$stage/nested_wrong_$kind.log" >&2; exit 1
+    fi
+    echo "PASS: XLS rejects mismatched $kind record patterns"
+done

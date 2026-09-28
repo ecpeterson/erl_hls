@@ -41,8 +41,8 @@ lower_ordered_case(Line, Condition, Clauses0, State0, FailureKind) ->
     ok = validate_nonfinal_fallbacks(lists:droplast(Clauses), ConditionState, FailureKind),
     Subject = xls_parse:reference(ConditionState),
     Argument = case Shape of
-        {record, {value, Name}} ->
-            xls_pattern_lower:record_argument(Name, Subject, Subject);
+        {record, {value, _Name}} ->
+            xls_pattern_lower:value_argument(Subject);
         {record, Name} ->
             xls_pattern_lower:record_argument(
                 Name,

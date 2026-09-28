@@ -70,7 +70,9 @@ Typed fields may contain an acyclic record declared in the same include-expanded
 
 Each field uses `hls_type:zero()`; the default recursively initializes nested fields. Packing checks every record tag, arity and field value, concatenating field codecs without a nested tag or extra padding. Unpacking restores the Erlang record tuples. Nested records support construction, access, updates, patterns and concrete helper arguments/results. They compile to ordinary DSLX structs. The outer actor data/message ABI and wire selector numbering are unchanged.
 
-Nested record names must be internal: an actor's data, message or reduction-accumulator record cannot also serve as a nested value. Recursive layouts and refined record type annotations such as `#point{x :: Type}` are rejected. Local type aliases remain outside the supported field-type subset. `bash tools/test_helpers.sh XLS_ROOT` checks dense nested codecs and normal actor transitions against BEAM, XLS interpretation/JIT and generated RTL, including direct-actor output backpressure.
+Record types are nominal: equal field layouts do not make different record names interchangeable. Pattern matching currently requires the statically declared record name; mixed-record alternatives that could fall through on ERTS are rejected by the compiler or XLS typechecker. Host-only records outside the reachable hardware code retain ordinary Erlang types and defaults.
+
+Nested record names must be internal: an actor's data, message or reduction-accumulator record cannot also serve as a nested value. Recursive layouts and refined record type annotations such as `#point{x :: Type}` are rejected. Local type aliases remain outside the supported field-type subset. `bash tools/test_helpers.sh XLS_ROOT` checks dense nested codecs and normal actor transitions against BEAM, XLS interpretation/JIT and generated RTL, including direct-actor output backpressure and rejection of mismatched record patterns.
 
 ## Checked collection access
 
