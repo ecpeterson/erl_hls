@@ -1397,7 +1397,15 @@ fn machine_step(
       let eligible_4 = u8:4 < admitted_occupied &&
         !admitted_slots[4].postponed;
       let found = eligible_0 || eligible_1 || eligible_2 || eligible_3 || eligible_4;
-      let selected = if eligible_0 { u8:0 } else { if eligible_1 { u8:1 } else { if eligible_2 { u8:2 } else { if eligible_3 { u8:3 } else { if eligible_4 { u8:4 } else { u8:0 } } } } };
+      let selected = {
+        let selected_5 = u8:0;
+        let selected_4 = if eligible_4 { u8:4 } else { selected_5 };
+        let selected_3 = if eligible_3 { u8:3 } else { selected_4 };
+        let selected_2 = if eligible_2 { u8:2 } else { selected_3 };
+        let selected_1 = if eligible_1 { u8:1 } else { selected_2 };
+        let selected_0 = if eligible_0 { u8:0 } else { selected_1 };
+        selected_0
+      };
       let selected_frame = admitted_slots[selected as u32].frame;
       let dispatchable = found && !invalid_input;
       let (next_phase, next_data, directive, repeat_phase, dispatch_failure) =
