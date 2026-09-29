@@ -71,6 +71,8 @@ segment(Expression, Bindings, Continue, State) ->
         segment(Arm, ArmBindings, Continue, ArmState)
     end, State, nonliteral_hls_statem_actions).
 
+%% Validates an action and retains conservative provenance of its evaluated payload.
+-spec action(term(), map(), map()) -> {term(), term()}.
 action({tuple, Line, [{atom, _, open_reduction} | _]} = Open,
         _Bindings, _State) ->
     {Reduction, []} = xls_statem_reduction_lower:split_entry_actions(
@@ -86,7 +88,7 @@ action({tuple, _Line, [{atom, _, cast}, {atom, _, Port}, Message]},
     declared(entry_output, Port, Outputs),
     Tag = message_tag(Message, Bindings),
     declared(entry_message, Tag, Messages),
-    {#{port => Port, tag => Tag}, Message};
+    {#{port => Port, tag => Tag, origin => xls_entry_storage:origin(Message, Bindings)}, Message};
 action(Action, _Bindings, _State) ->
     error({bad_hls_statem_entry_action, element(2, Action), Action}).
 
@@ -210,8 +212,10 @@ binding_names({tuple, _, Patterns}, Bindings) ->
 binding_names(Pattern, _Bindings) ->
     error({unsupported_hls_statem_action_binding, Pattern}).
 
+%% Existing bindings keep their value identity; fresh patterns introduce distinct values.
+-spec bound_names(term(), map()) -> map().
 bound_names(Pattern, Bindings) ->
-    maps:merge(maps:map(fun(_Name, _Used) -> ordinary end, variables(Pattern)), Bindings).
+    maps:merge(maps:map(fun(_Name, _Used) -> {value, xls_entry_storage:identity()} end, variables(Pattern)), Bindings).
 
 contains_segment({nil, _}, _Bindings) -> true;
 contains_segment({cons, _, {tuple, _, [{atom, _, Kind} | _]}, _}, _Bindings)
@@ -240,20 +244,25 @@ contains_segment_arms(Clauses, Bindings) ->
         contains_segment({block, 0, Body}, Bindings)
     end, Clauses).
 
+%% Capture aliases before later action lists are normalized.
+-spec record_binding(term(), map()) -> map().
 record_binding({match, _, {var, _, Name}, Expression}, Bindings) ->
+    Origin = xls_entry_storage:origin(Expression, Bindings),
     case record_tag(Expression, Bindings) of
-        unknown -> Bindings#{Name => ordinary};
-        Tag -> Bindings#{Name => {record, Tag}}
+        unknown -> Bindings#{Name => {value, Origin}};
+        Tag -> Bindings#{Name => {record, Tag, Origin}}
     end;
 record_binding({match, _, Pattern, _Expression}, Bindings) ->
     bound_names(Pattern, Bindings);
 record_binding(_Expression, Bindings) -> Bindings.
 
+%% Only statically named records may become message effects.
+-spec record_tag(term(), map()) -> atom() | {value, atom()}.
 record_tag({record, _, Tag, _}, _Bindings) -> Tag;
 record_tag({record, _, _, Tag, _}, _Bindings) -> Tag;
 record_tag({var, _, Name}, Bindings) ->
     case maps:find(Name, Bindings) of
-        {ok, {record, Tag}} -> Tag;
+        {ok, {record, Tag, _Origin}} -> Tag;
         _ -> unknown
     end;
 record_tag(_Expression, _Bindings) -> unknown.

@@ -417,13 +417,13 @@ pub const EGRESS_DEPTH = u32:4;
 
 pub const ENTRY_EFFECT_CAPACITY = u32:4;
 
-pub const ENTRY_EFFECT_PAYLOAD_BITS = u32:384;
+pub const ENTRY_EFFECT_PAYLOAD_BITS = u32:96;
 
 // Sorry: this is a hand-rolled tagged union. DSLX cannot yet express
 // entry variants whose fields retain their message types.
 pub struct EntryEffects {
   layout: u8,
-  payloads: bits[384],
+  payloads: bits[96],
 }
 
 struct EntryOutcome {
@@ -482,7 +482,7 @@ fn enter(old_phase: Phase, phase: Phase, data: Datacell) -> EntryOutcome {
           failure: hls_failure::NONE,
           effects: EntryEffects {
             layout: u8:0,
-            payloads: zero!<bits[384]>(),
+            payloads: zero!<bits[96]>(),
           },
         }
       };
@@ -504,7 +504,7 @@ fn enter(old_phase: Phase, phase: Phase, data: Datacell) -> EntryOutcome {
           failure: hls_failure::NONE,
           effects: EntryEffects {
             layout: u8:1,
-            payloads: zero!<bits[384]>(),
+            payloads: zero!<bits[96]>(),
           },
         }
       };
@@ -562,32 +562,12 @@ fn enter(old_phase: Phase, phase: Phase, data: Datacell) -> EntryOutcome {
       let _17 = (v_Xls_entry_0_1, _15, _16, );
       let _18 = {
         let evaluated = _17;
-              let effect_0 = axis::pack(
-                evaluated.2.0.0 as u8, hls_bits::frame_payload(evaluated.2.0.2));
-              let effect_1 = axis::pack(
-                evaluated.2.1.0 as u8, hls_bits::frame_payload(evaluated.2.1.2));
-              let effect_2 = axis::pack(
-                evaluated.2.2.0 as u8, hls_bits::frame_payload(evaluated.2.2.2));
-              let effect_3 = axis::pack(
-                evaluated.2.3.0 as u8, hls_bits::frame_payload(evaluated.2.3.2));
         EntryOutcome {
           data: evaluated.0.1,
           failure: hls_failure::NONE,
           effects: EntryEffects {
             layout: u8:2,
-            payloads: bit_slice_update(
-                bit_slice_update(
-                bit_slice_update(
-                bit_slice_update(
-                zero!<bits[384]>(),
-                u32:0,
-                effect_0.payload[0:96]),
-                u32:96,
-                effect_1.payload[0:96]),
-                u32:192,
-                effect_2.payload[0:96]),
-                u32:288,
-                effect_3.payload[0:96]),
+            payloads: bit_slice_update(bit_slice_update(zero!<bits[96]>(), u32:0, evaluated.2.0.1.step as bits[32]), u32:32, evaluated.2.0.1.flags as bits[32]),
           },
         }
       };
@@ -618,17 +598,12 @@ fn enter(old_phase: Phase, phase: Phase, data: Datacell) -> EntryOutcome {
       let _8 = (v_Xls_entry_0_1, _6, _7, );
       let _9 = {
         let evaluated = _8;
-              let effect_0 = axis::pack(
-                evaluated.2.0.0 as u8, hls_bits::frame_payload(evaluated.2.0.2));
         EntryOutcome {
           data: evaluated.0.1,
           failure: hls_failure::NONE,
           effects: EntryEffects {
             layout: u8:3,
-            payloads: bit_slice_update(
-                zero!<bits[384]>(),
-                u32:0,
-                effect_0.payload[0:96]),
+            payloads: bit_slice_update(bit_slice_update(bit_slice_update(bit_slice_update(zero!<bits[96]>(), u32:0, evaluated.2.0.1.request_id as bits[32]), u32:32, evaluated.2.0.1.x as bits[16]), u32:48, evaluated.2.0.1.y as bits[16]), u32:64, evaluated.2.0.1.anticommutes as bits[32]),
           },
         }
       };
@@ -657,22 +632,38 @@ fn entry_effect(effects: EntryEffects, index: u8) -> Egress {
       u8:0 => Egress {
         port: OutputPort::NORTH,
         frame: axis::pack(Tag::PHENOM_DATA as u8,
-          effects.payloads[0:96]),
+          hls_bits::frame_payload(bits_from_phenomdata(Phenomdata {
+            step: effects.payloads[0:32] as u32,
+            source: hls_bits::from_stream(uN[32]:134217728) as u32,
+            flags: effects.payloads[32:64] as u32,
+          }))),
       },
       u8:1 => Egress {
         port: OutputPort::EAST,
         frame: axis::pack(Tag::PHENOM_DATA as u8,
-          effects.payloads[96:192]),
+          hls_bits::frame_payload(bits_from_phenomdata(Phenomdata {
+            step: effects.payloads[0:32] as u32,
+            source: hls_bits::from_stream(uN[32]:67108864) as u32,
+            flags: effects.payloads[32:64] as u32,
+          }))),
       },
       u8:2 => Egress {
         port: OutputPort::WEST,
         frame: axis::pack(Tag::PHENOM_DATA as u8,
-          effects.payloads[192:288]),
+          hls_bits::frame_payload(bits_from_phenomdata(Phenomdata {
+            step: effects.payloads[0:32] as u32,
+            source: hls_bits::from_stream(uN[32]:33554432) as u32,
+            flags: effects.payloads[32:64] as u32,
+          }))),
       },
       u8:3 => Egress {
         port: OutputPort::SOUTH,
         frame: axis::pack(Tag::PHENOM_DATA as u8,
-          effects.payloads[288:384]),
+          hls_bits::frame_payload(bits_from_phenomdata(Phenomdata {
+            step: effects.payloads[0:32] as u32,
+            source: hls_bits::from_stream(uN[32]:16777216) as u32,
+            flags: effects.payloads[32:64] as u32,
+          }))),
       },
       _ => zero!<Egress>(),
     },
@@ -680,7 +671,12 @@ fn entry_effect(effects: EntryEffects, index: u8) -> Egress {
       u8:0 => Egress {
         port: OutputPort::MEASUREMENT,
         frame: axis::pack(Tag::PAULI_REPLY as u8,
-          effects.payloads[0:96]),
+          hls_bits::frame_payload(bits_from_paulireply(Paulireply {
+            request_id: effects.payloads[0:32] as u32,
+            x: effects.payloads[32:48] as u16,
+            y: effects.payloads[48:64] as u16,
+            anticommutes: effects.payloads[64:96] as u32,
+          }))),
       },
       _ => zero!<Egress>(),
     },

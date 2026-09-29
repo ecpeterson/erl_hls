@@ -763,7 +763,7 @@ state_machine_entry_action_accepts_runtime_predicate_test() ->
         fun(XLS) ->
             ?assertNotEqual(
                 nomatch,
-                binary:match(XLS, <<"evaluated.2.0.0">>)
+                binary:match(XLS, <<"evaluated.2.0.1.value">>)
             ),
             ?assertNotEqual(
                 nomatch,
@@ -830,11 +830,11 @@ state_machine_entry_actions_use_one_source_ordered_egress_test() ->
         )),
         ?assertNotEqual(nomatch, binary:match(
             XLS,
-            <<"pub const ENTRY_EFFECT_PAYLOAD_BITS = u32:128;">>
+            <<"pub const ENTRY_EFFECT_PAYLOAD_BITS = u32:1;">>
         )),
         ?assertNotEqual(nomatch, binary:match(
             XLS,
-            <<"payloads: bits[128]">>
+            <<"payloads: bits[1]">>
         )),
         ?assertEqual(nomatch, binary:match(
             XLS,
@@ -842,7 +842,7 @@ state_machine_entry_actions_use_one_source_ordered_egress_test() ->
         )),
         ?assertNotEqual(nomatch, binary:match(
             XLS,
-            <<"effects.payloads[32:96]">>
+            <<"frame: axis::pack(Tag::WIDE_MESSAGE">>
         )),
         ?assertNotEqual(nomatch, binary:match(
             XLS,

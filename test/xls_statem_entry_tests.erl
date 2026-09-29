@@ -2,6 +2,8 @@
 
 -include_lib("eunit/include/eunit.hrl").
 
+%% Constant fields consume no storage; ordered batch capacity still covers its longest path.
+-spec branch_capacity_is_the_largest_selected_list_test() -> ok.
 branch_capacity_is_the_largest_selected_list_test() ->
     Interface = hls_actor_interface:from_module(xls_entry_branch_fixture),
     ?assertEqual(3, hls_actor_interface:max_entry_effects(Interface)),
@@ -9,7 +11,7 @@ branch_capacity_is_the_largest_selected_list_test() ->
     ?assertEqual([small, wide], hls_actor_interface:output_schemas(Interface, third)),
     Generated = iolist_to_binary(xls_parse:to_xls("test/xls_entry_branch_fixture.erl")),
     ?assertNotEqual(nomatch, binary:match(Generated,
-        <<"ENTRY_EFFECT_PAYLOAD_BITS = u32:160;">>)),
+        <<"ENTRY_EFFECT_PAYLOAD_BITS = u32:32;">>)),
     ?assertNotEqual(nomatch, binary:match(Generated,
         <<"ENTRY_EFFECT_CAPACITY = u32:3;">>)).
 

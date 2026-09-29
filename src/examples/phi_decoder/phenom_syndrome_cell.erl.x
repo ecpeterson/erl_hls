@@ -386,13 +386,13 @@ pub const EGRESS_DEPTH = u32:5;
 
 pub const ENTRY_EFFECT_CAPACITY = u32:5;
 
-pub const ENTRY_EFFECT_PAYLOAD_BITS = u32:352;
+pub const ENTRY_EFFECT_PAYLOAD_BITS = u32:128;
 
 // Sorry: this is a hand-rolled tagged union. DSLX cannot yet express
 // entry variants whose fields retain their message types.
 pub struct EntryEffects {
   layout: u8,
-  payloads: bits[352],
+  payloads: bits[128],
 }
 
 struct EntryOutcome {
@@ -451,7 +451,7 @@ fn enter(old_phase: Phase, phase: Phase, data: Syndrome) -> EntryOutcome {
           failure: hls_failure::NONE,
           effects: EntryEffects {
             layout: u8:0,
-            payloads: zero!<bits[352]>(),
+            payloads: zero!<bits[128]>(),
           },
         }
       };
@@ -531,37 +531,12 @@ fn enter(old_phase: Phase, phase: Phase, data: Syndrome) -> EntryOutcome {
           let _27 = (v_Xls_entry_1_1, _25, _26, );
           let _28 = {
             let evaluated = _27;
-                  let effect_0 = axis::pack(
-                    evaluated.2.0.0 as u8, hls_bits::frame_payload(evaluated.2.0.2));
-                  let effect_1 = axis::pack(
-                    evaluated.2.1.0 as u8, hls_bits::frame_payload(evaluated.2.1.2));
-                  let effect_2 = axis::pack(
-                    evaluated.2.2.0 as u8, hls_bits::frame_payload(evaluated.2.2.2));
-                  let effect_3 = axis::pack(
-                    evaluated.2.3.0 as u8, hls_bits::frame_payload(evaluated.2.3.2));
-                  let effect_4 = axis::pack(
-                    evaluated.2.4.0 as u8, hls_bits::frame_payload(evaluated.2.4.2));
             EntryOutcome {
               data: evaluated.0.1,
               failure: hls_failure::NONE,
               effects: EntryEffects {
                 layout: u8:1,
-                payloads: bit_slice_update(
-                    bit_slice_update(
-                    bit_slice_update(
-                    bit_slice_update(
-                    bit_slice_update(
-                    zero!<bits[352]>(),
-                    u32:0,
-                    effect_0.payload[0:96]),
-                    u32:96,
-                    effect_1.payload[0:64]),
-                    u32:160,
-                    effect_2.payload[0:64]),
-                    u32:224,
-                    effect_3.payload[0:64]),
-                    u32:288,
-                    effect_4.payload[0:64]),
+                payloads: bit_slice_update(bit_slice_update(bit_slice_update(bit_slice_update(bit_slice_update(zero!<bits[128]>(), u32:0, evaluated.2.0.1.step as bits[32]), u32:32, evaluated.2.0.1.flags as bits[32]), u32:64, evaluated.2.0.1.x as bits[16]), u32:80, evaluated.2.0.1.y as bits[16]), u32:96, evaluated.2.1.1.step as bits[32]),
               },
             }
           };
@@ -615,32 +590,12 @@ fn enter(old_phase: Phase, phase: Phase, data: Syndrome) -> EntryOutcome {
           let _16 = (v_Xls_entry_6_1, _14, _15, );
           let _17 = {
             let evaluated = _16;
-                  let effect_0 = axis::pack(
-                    evaluated.2.0.0 as u8, hls_bits::frame_payload(evaluated.2.0.2));
-                  let effect_1 = axis::pack(
-                    evaluated.2.1.0 as u8, hls_bits::frame_payload(evaluated.2.1.2));
-                  let effect_2 = axis::pack(
-                    evaluated.2.2.0 as u8, hls_bits::frame_payload(evaluated.2.2.2));
-                  let effect_3 = axis::pack(
-                    evaluated.2.3.0 as u8, hls_bits::frame_payload(evaluated.2.3.2));
             EntryOutcome {
               data: evaluated.0.1,
               failure: hls_failure::NONE,
               effects: EntryEffects {
                 layout: u8:2,
-                payloads: bit_slice_update(
-                    bit_slice_update(
-                    bit_slice_update(
-                    bit_slice_update(
-                    zero!<bits[352]>(),
-                    u32:0,
-                    effect_0.payload[0:64]),
-                    u32:64,
-                    effect_1.payload[0:64]),
-                    u32:128,
-                    effect_2.payload[0:64]),
-                    u32:192,
-                    effect_3.payload[0:64]),
+                payloads: bit_slice_update(zero!<bits[128]>(), u32:0, evaluated.2.0.1.step as bits[32]),
               },
             }
           };
@@ -665,7 +620,7 @@ fn enter(old_phase: Phase, phase: Phase, data: Syndrome) -> EntryOutcome {
           failure: hls_failure::NONE,
           effects: EntryEffects {
             layout: u8:3,
-            payloads: zero!<bits[352]>(),
+            payloads: zero!<bits[128]>(),
           },
         }
       };
@@ -693,27 +648,44 @@ fn entry_effect(effects: EntryEffects, index: u8) -> Egress {
       u8:0 => Egress {
         port: OutputPort::PHI,
         frame: axis::pack(Tag::PHENOM_ANYON as u8,
-          effects.payloads[0:96]),
+          hls_bits::frame_payload(bits_from_phenomanyon(Phenomanyon {
+            step: effects.payloads[0:32] as u32,
+            flags: effects.payloads[32:64] as u32,
+            x: effects.payloads[64:80] as u16,
+            y: effects.payloads[80:96] as u16,
+          }))),
       },
       u8:1 => Egress {
         port: OutputPort::NORTH,
         frame: axis::pack(Tag::PHENOM_QUERY as u8,
-          effects.payloads[96:160]),
+          hls_bits::frame_payload(bits_from_phenomquery(Phenomquery {
+            step: effects.payloads[96:128] as u32,
+            source: hls_bits::from_stream(uN[32]:134217728) as u32,
+          }))),
       },
       u8:2 => Egress {
         port: OutputPort::EAST,
         frame: axis::pack(Tag::PHENOM_QUERY as u8,
-          effects.payloads[160:224]),
+          hls_bits::frame_payload(bits_from_phenomquery(Phenomquery {
+            step: effects.payloads[96:128] as u32,
+            source: hls_bits::from_stream(uN[32]:67108864) as u32,
+          }))),
       },
       u8:3 => Egress {
         port: OutputPort::WEST,
         frame: axis::pack(Tag::PHENOM_QUERY as u8,
-          effects.payloads[224:288]),
+          hls_bits::frame_payload(bits_from_phenomquery(Phenomquery {
+            step: effects.payloads[96:128] as u32,
+            source: hls_bits::from_stream(uN[32]:33554432) as u32,
+          }))),
       },
       u8:4 => Egress {
         port: OutputPort::SOUTH,
         frame: axis::pack(Tag::PHENOM_QUERY as u8,
-          effects.payloads[288:352]),
+          hls_bits::frame_payload(bits_from_phenomquery(Phenomquery {
+            step: effects.payloads[96:128] as u32,
+            source: hls_bits::from_stream(uN[32]:16777216) as u32,
+          }))),
       },
       _ => zero!<Egress>(),
     },
@@ -721,22 +693,34 @@ fn entry_effect(effects: EntryEffects, index: u8) -> Egress {
       u8:0 => Egress {
         port: OutputPort::NORTH,
         frame: axis::pack(Tag::PHENOM_QUERY as u8,
-          effects.payloads[0:64]),
+          hls_bits::frame_payload(bits_from_phenomquery(Phenomquery {
+            step: effects.payloads[0:32] as u32,
+            source: hls_bits::from_stream(uN[32]:134217728) as u32,
+          }))),
       },
       u8:1 => Egress {
         port: OutputPort::EAST,
         frame: axis::pack(Tag::PHENOM_QUERY as u8,
-          effects.payloads[64:128]),
+          hls_bits::frame_payload(bits_from_phenomquery(Phenomquery {
+            step: effects.payloads[0:32] as u32,
+            source: hls_bits::from_stream(uN[32]:67108864) as u32,
+          }))),
       },
       u8:2 => Egress {
         port: OutputPort::WEST,
         frame: axis::pack(Tag::PHENOM_QUERY as u8,
-          effects.payloads[128:192]),
+          hls_bits::frame_payload(bits_from_phenomquery(Phenomquery {
+            step: effects.payloads[0:32] as u32,
+            source: hls_bits::from_stream(uN[32]:33554432) as u32,
+          }))),
       },
       u8:3 => Egress {
         port: OutputPort::SOUTH,
         frame: axis::pack(Tag::PHENOM_QUERY as u8,
-          effects.payloads[192:256]),
+          hls_bits::frame_payload(bits_from_phenomquery(Phenomquery {
+            step: effects.payloads[0:32] as u32,
+            source: hls_bits::from_stream(uN[32]:16777216) as u32,
+          }))),
       },
       _ => zero!<Egress>(),
     },

@@ -452,12 +452,14 @@ rewrite_init_result(Clause) ->
 %% Lowers entry alternatives into interned, statically routed effect layouts.
 -spec lower_entries([map()], map(), map()) -> [map()].
 lower_entries(Entries, Prepared, EnumAtoms) ->
-    #{data_name := DataName, message_words := MessageWords,
-        reductions := Reductions} = Prepared,
+    #{data_name := DataName, reductions := Reductions, records := Records} = Prepared,
     {Layouts, {LayoutCount, _}} = lists:mapfoldl(
         fun(#{phase := Phase, variants := Variants}, Index) ->
-            lists:mapfoldl(fun(Variant = #{actions := Actions}, {Next, Seen}) ->
-                Key = {Phase, Actions},
+            lists:mapfoldl(fun(Variant0 = #{actions := Actions0}, {Next, Seen}) ->
+                Storage = xls_entry_storage:plan(Actions0, Records),
+                Actions = [maps:without([origin], A) || A <- Actions0],
+                Variant = Variant0#{actions => Actions, storage => Storage},
+                Key = {Phase, Actions, Storage},
                 case maps:find(Key, Seen) of
                     {ok, Layout} ->
                         {Variant#{layout => Layout, phase => Phase}, {Next, Seen}};
@@ -470,22 +472,21 @@ lower_entries(Entries, Prepared, EnumAtoms) ->
         end, {0, #{}}, Entries),
     true = LayoutCount > 0,
     AllLayouts = lists:append(Layouts),
-    PayloadBits = max(case xls_statem_reply_codegen:enabled(Prepared) of true -> 128; false -> 1 end, lists:max([lists:sum([
-        maps:get(Tag, MessageWords) * 32 || #{tag := Tag} <- Actions])
-        || #{actions := Actions} <- AllLayouts])),
+    PayloadBits = max(case xls_statem_reply_codegen:enabled(Prepared) of true -> 128; false -> 1 end,
+        lists:max([xls_entry_storage:width(Storage) || #{storage := Storage} <- AllLayouts])),
     [begin
         Clause = xls_statem_entry:map_leaves(strip_dispatched_phase(Program),
             fun(Id, Value) ->
                 Variant = lists:nth(Id + 1, EntryLayouts),
                 {xls_map, 0, Value, fun(R) ->
                     xls_actor_codegen:entry_value(R, Variant,
-                        PayloadBits, MessageWords, Reductions)
+                        PayloadBits, Reductions)
                 end}
             end),
         Outcome = xls_parse:clause_outcome(Clause, enter_args(DataName),
             DataName, EnumAtoms),
         #{phase => Phase, layouts => lists:uniq([
-                maps:with([phase, layout, actions], Layout) || Layout <- EntryLayouts]),
+                maps:with([phase, layout, actions, storage], Layout) || Layout <- EntryLayouts]),
             evaluation => maps:map(fun(_Key, V) -> xls_parse:print(V) end, Outcome)}
     end || {#{phase := Phase, program := Program}, EntryLayouts} <-
         lists:zip(Entries, Layouts)].

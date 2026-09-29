@@ -1,6 +1,6 @@
 -module(xls_actor_codegen).
 -moduledoc false.
--export([emit/3, entry_value/5, input_tag_ok/3, reply_failure_binding/1]).
+-export([emit/3, entry_value/4, input_tag_ok/3, reply_failure_binding/1]).
 -export_type([spec/0]).
 -define(REDUCTION_SERVICE, xls_statem_reduction_service_codegen).
 %% One phase's checked evaluation and possible ordered effect layouts.
@@ -106,11 +106,11 @@ preamble(#{
 %% Defines the typed values exchanged by callbacks and their execution backend.
 -spec declarations(spec()) -> iodata().
 declarations(#{output_names := OutputNames, max_entry_effects := MaxEntryEffects,
-        message_words := MessageWords, entries := Entries, data_name := DataName} = Spec) ->
+        entries := Entries, data_name := DataName} = Spec) ->
     Reductions = maps:get(reductions, Spec, none),
     DataStruct = xls_names:record_type(DataName),
     EffectCapacity = max(1, MaxEntryEffects),
-    EffectPayloadBits = max(entry_effect_payload_bits(Entries, MessageWords),
+    EffectPayloadBits = max(entry_effect_payload_bits(Entries),
         case xls_statem_reply_codegen:enabled(Spec) of true -> 128; false -> 0 end),
     [
         "pub enum OutputPort : u8 {\n",
@@ -193,8 +193,7 @@ phase_declaration(Phases) ->
 
 %% Evaluates one checked phase entry and encodes its selected effect layout.
 -spec enter_function(spec()) -> iodata().
-enter_function(#{data_name := DataName, entries := Entries,
-        message_words := MessageWords} = Spec) ->
+enter_function(#{data_name := DataName, entries := Entries} = Spec) ->
     Layouts = entry_layouts(Entries),
     [
         "fn enter(old_phase: Phase, phase: Phase, data: ", xls_names:record_type(DataName),
@@ -204,7 +203,7 @@ enter_function(#{data_name := DataName, entries := Entries,
         "  }\n",
         "}\n\n",
         entry_effect_count_function(Layouts, Spec),
-        entry_effect_function(Layouts, MessageWords, Spec)
+        entry_effect_function(Layouts, Spec)
     ].
 
 %% Selects a phase entry and preserves its first evaluated failure.
@@ -223,22 +222,20 @@ entry_arm(#{phase := Phase,
 %% Each selected source leaf becomes the same typed value before control flow
 %% rejoins. The expression lowerer still owns branch-local failure predicates.
 -doc "Encodes one selected entry result and ordered effects without reevaluating payloads.".
--spec entry_value(iodata(), map(), pos_integer(), map(),
-    none | map()) -> iodata().
+-spec entry_value(iodata(), map(), pos_integer(), none | map()) -> iodata().
 entry_value(Result, #{phase := Phase, layout := Layout,
-        actions := Effects, reduction := Reduction}, PayloadBits,
-        MessageWords, Reductions) ->
+        storage := Storage, reduction := Reduction}, PayloadBits,
+        Reductions) ->
     [
         "{\n",
         "  let evaluated = ", Result, ";\n",
-        [entry_effect_binding(Index) || {Index, _} <- lists:enumerate(0, Effects)],
         "  EntryOutcome {\n",
         "    data: evaluated.0.1,\n",
         entry_reduction_field(Reductions, Reduction =/= none, Phase),
         "    failure: hls_failure::NONE,\n",
         "    effects: EntryEffects {\n",
         "      layout: u8:", integer_to_list(Layout), ",\n",
-        "      payloads: ", entry_payload_expression(Effects, PayloadBits, MessageWords), ",\n",
+        "      payloads: ", xls_entry_storage:encode(Storage, PayloadBits), ",\n",
         "    },\n",
         "  }\n",
         "}"
@@ -274,12 +271,12 @@ entry_effect_count_function(Layouts, Spec) ->
     ].
 
 %% Decodes a selected effect into its statically routed output frame.
--spec entry_effect_function([map()], map(), spec()) -> iodata().
-entry_effect_function(Layouts, MessageWords, Spec) ->
+-spec entry_effect_function([map()], spec()) -> iodata().
+entry_effect_function(Layouts, Spec) ->
     [
         "fn entry_effect(effects: EntryEffects, index: u8) -> Egress {\n",
         "  match effects.layout {\n",
-        [entry_effect_layout_arm(Layout, MessageWords) || Layout <- Layouts],
+        [entry_effect_layout_arm(Layout) || Layout <- Layouts],
         reply_layout_effect(Spec),
         "    _ => zero!<Egress>(),\n",
         "  }\n",
@@ -287,78 +284,23 @@ entry_effect_function(Layouts, MessageWords, Spec) ->
     ].
 
 %% Selects the ordered effect list represented by a layout tag.
--spec entry_effect_layout_arm(map(), #{atom() => non_neg_integer()}) -> iodata().
-entry_effect_layout_arm(#{layout := Layout, actions := []}, _MessageWords) ->
+-spec entry_effect_layout_arm(map()) -> iodata().
+entry_effect_layout_arm(#{layout := Layout, actions := []}) ->
     ["    u8:", integer_to_list(Layout), " => zero!<Egress>(),\n"];
-entry_effect_layout_arm(#{layout := Layout, actions := Effects}, MessageWords) ->
+entry_effect_layout_arm(#{layout := Layout, storage := #{effects := Effects}}) ->
     [
         "    u8:", integer_to_list(Layout), " => match index {\n",
-        [entry_effect_index_arm(Index, Effect, Offset, MessageWords)
-            || {Index, Effect, Offset} <- effect_offsets(Effects, MessageWords)],
+        [xls_entry_storage:decode(Effect, Index)
+            || {Index, Effect} <- lists:enumerate(0, Effects)],
         "      _ => zero!<Egress>(),\n",
         "    },\n"
     ].
 
-%% Recovers one output port and frame from its packed effect offset.
--spec entry_effect_index_arm(non_neg_integer(), map(), non_neg_integer(), #{atom() => non_neg_integer()}) -> iodata().
-entry_effect_index_arm(Index, Effect, Offset, MessageWords) ->
-    Tag = maps:get(tag, Effect),
-    Width = maps:get(Tag, MessageWords) * 32,
-    [
-        "      u8:", integer_to_list(Index), " => Egress {\n",
-        "        port: OutputPort::", xls_names:enum_member(maps:get(port, Effect)), ",\n",
-        "        frame: axis::pack(Tag::", xls_names:enum_member(Tag), " as u8,\n",
-        "          effects.payloads[", integer_to_list(Offset), ":",
-        integer_to_list(Offset + Width), "]),\n",
-        "      },\n"
-    ].
-
-%% TODO(XLS sum types): replace layout IDs, effect_offsets/2, and the raw-bit
-%% payload codecs with a sum of typed ordered-message tuples. Keep storage at
-%% the widest alternative (including its tag), not the sum of alternatives.
-%% Then entry_effect/2 can pattern-match typed payloads instead of slicing bits.
-%% Bounded path analysis and the topology's unconditional-prefix proof remain
-%% necessary. See Roadmap.md, "XLS complaints".
--spec entry_payload_expression([map()], pos_integer(), #{atom() => non_neg_integer()}) -> iodata().
-entry_payload_expression([], EffectPayloadBits, _MessageWords) ->
-    ["zero!<bits[", integer_to_list(EffectPayloadBits), "]>()"];
-entry_payload_expression(Effects, EffectPayloadBits, MessageWords) ->
-    lists:foldl(
-        fun({Index, Effect, Offset}, Acc) ->
-            Width = maps:get(maps:get(tag, Effect), MessageWords) * 32,
-            ["bit_slice_update(\n",
-                "          ", Acc, ",\n",
-                "          u32:", integer_to_list(Offset), ",\n",
-                "          effect_", integer_to_list(Index),
-                ".payload[0:", integer_to_list(Width), "])"]
-        end,
-        ["zero!<bits[", integer_to_list(EffectPayloadBits), "]>()"],
-        effect_offsets(Effects, MessageWords)
-    ).
-
-%% Assigns nonoverlapping payload slices in source order.
--spec effect_offsets([map()], #{atom() => non_neg_integer()}) -> [{non_neg_integer(), map(), non_neg_integer()}].
-effect_offsets(Effects, MessageWords) ->
-    {_End, Reversed} = lists:foldl(
-        fun({Index, Effect}, {Offset, Acc}) ->
-            Width = maps:get(maps:get(tag, Effect), MessageWords) * 32,
-            {Offset + Width, [{Index, Effect, Offset} | Acc]}
-        end,
-        {0, []},
-        lists:enumerate(0, Effects)
-    ),
-    lists:reverse(Reversed).
-
 %% Sizes storage for the largest alternative, with at least one bit.
--spec entry_effect_payload_bits([entry()], #{atom() => non_neg_integer()}) -> pos_integer().
-entry_effect_payload_bits(Entries, MessageWords) ->
-    max(1, lists:max([
-        lists:sum([
-            maps:get(maps:get(tag, Effect), MessageWords) * 32
-            || Effect <- maps:get(actions, Layout)
-        ])
-        || Layout <- entry_layouts(Entries)
-    ])).
+-spec entry_effect_payload_bits([entry()]) -> pos_integer().
+entry_effect_payload_bits(Entries) ->
+    max(1, lists:max([xls_entry_storage:width(Storage)
+        || #{storage := Storage} <- entry_layouts(Entries)])).
 
 %% Recognizes batches that contain at least one effect.
 -spec entry_effects_valid_function() -> iodata().
@@ -371,15 +313,6 @@ entry_effects_valid_function() ->
 
         """,
         "\n"
-    ].
-
-%% Captures one evaluated payload as a frame before packing the batch.
--spec entry_effect_binding(integer()) -> iodata().
-entry_effect_binding(Index) ->
-    Reference = ["evaluated.2.", integer_to_list(Index)],
-    [
-        "        let effect_", integer_to_list(Index), " = axis::pack(\n",
-        "          ", Reference, ".0 as u8, hls_bits::frame_payload(", Reference, ".2));\n"
     ].
 
 %% Dispatches declared input records with optional caller ownership.
