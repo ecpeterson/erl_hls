@@ -21,7 +21,7 @@ running(enter, _OldPhase, Data) ->
 
 The selected list retains Erlang source order. Returned data is evaluated before the action list; common list prefixes precede a branching tail. A failure in any selected computation invalidates the whole entry, including effects preceding that failure. Branches preserve selection semantics, not a guarantee that unselected combinational circuitry stops switching. Values and named segments computed before a branch are still eager. A segment captures its payloads when bound; aliases and later uses do not evaluate them again. Even an unused segment retains its selected failure checks.
 
-At most 256 expanded paths per entry and 256 distinct ordered port/schema layouts per actor are supported; excessive expansion is diagnosed. Each message may contain at most 96 packed bits, padded to whole 32-bit transport words. Reservation capacity follows the largest selected list.
+At most 256 expanded paths per entry and 256 distinct effect encodings per actor are supported; excessive expansion is diagnosed. Each message may contain at most 96 packed bits, padded to whole 32-bit transport words. Reservation capacity follows the largest selected list. Repeated fields captured from the same value may share internal storage; constant fields need none. This does not change evaluation, failure checks, message order or the wire format.
 
 A phase can open the same reduction site in several alternatives or leave it unopened. Its opening alternatives must agree on name, population, key expression, and identity; existing data-relative key and constant-identity restrictions apply. An unopened alternative preserves an existing reduction. An opening alternative fails if a reduction is already active.
 
@@ -41,4 +41,4 @@ This contract covers supported match, clause-selection and arithmetic/provider f
 
 ## Validation
 
-`bash tools/test_entry_outcomes.sh XLS_ROOT` compares BEAM outcomes with dedicated-actor DSLX, JIT and RTL, including branches, named segments, reductions and stalled egress.
+`bash tools/test_entry_outcomes.sh XLS_ROOT` compares BEAM outcomes with dedicated-actor DSLX, JIT and RTL, including branches, named segments, shared nested fields, reductions and stalled egress.
