@@ -82,6 +82,24 @@ typed_fixture_cpu_control_test() ->
         ?assertMatch(#{phase := done, gather := idle, reduction := idle, data := {cell, 7, 10, 4025}}, hls_statem:info(Pid))
     after hls_statem:stop(Pid), code:delete(Module), code:purge(Module) end.
 
+%% The same typed source preserves an older event and rejects a second completion event.
+-spec empty_gather_pending_continuation_cpu_test() -> ok.
+empty_gather_pending_continuation_cpu_test() ->
+    {ok, Module, Beam} = compile:file(?FIXTURE, [binary]),
+    {module, Module} = code:load_binary(Module, ?FIXTURE, Beam),
+    {ok, Pid} = hls_statem:start_link(Module, [], [{mailbox_capacity, 8}, {outputs, #{out => self()}}]),
+    try
+        hls_statem:cast(Pid, {begin_set, 0, 0}),
+        ?assertEqual({result, 0}, output()),
+        ?assertMatch(#{phase := reducing, gather := idle, reduction := #{remaining := 1}}, hls_statem:info(Pid)),
+        {ok, Bad} = hls_statem:start_link(Module, [], [{mailbox_capacity, 8}, {outputs, #{out => self()}}]),
+        unlink(Bad), Ref = monitor(process, Bad),
+        hls_statem:cast(Bad, {begin_set, 1, 0}),
+        receive {'DOWN', Ref, process, Bad, Reason} ->
+            ?assertMatch({hls_statem_continuation_already_pending, _}, Reason)
+        after 1000 -> hls_statem:stop(Bad), error(expected_continuation_conflict) end
+    after hls_statem:stop(Pid), code:delete(Module), code:purge(Module) end.
+
 %% Bound a missing output without changing the source actor's event ordering.
 -spec output() -> term().
 output() -> receive {'$gen_cast', Message} -> Message after 1000 -> error(missing_fixture_output) end.

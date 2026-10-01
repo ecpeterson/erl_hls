@@ -74,3 +74,47 @@ fn direct_collection_continuations_test() {
   assert_eq(machine.next_event, u8:0);
   assert_eq(machine.failure, hls_failure::NONE);
 }
+
+// Entry-opened empty completion preserves a scheduled event and rejects a second one.
+#[test]
+fn empty_gather_pending_continuation_test() {
+  let idle = machine_step(initial_machine(), zero!<axis::Frame>(), false, true).machine;
+  let start = axis::pack(Tag::BEGIN_SET as u8, bits_from_beginset(Beginset { key: u32:0, mask: u8:0 }));
+  let entering = machine_step(idle, start, true, true).machine;
+  assert_eq(entering.next_event, u8:1);
+  let opened = machine_step(entering, zero!<axis::Frame>(), false, true).machine;
+  assert_eq(opened.gather.progress.status, GatherStatus::COMPLETE);
+  let complete = machine_step(opened, zero!<axis::Frame>(), false, true).machine;
+  assert_eq(complete.failure, hls_failure::NONE);
+  assert_eq(complete.next_event, u8:1);
+  let entered = machine_step(complete, zero!<axis::Frame>(), false, true);
+  assert_eq(entered.egress_valid, true);
+  let continued = machine_step(entered.machine, zero!<axis::Frame>(), false, true).machine;
+  assert_eq(continued.phase, Phase::REDUCING);
+  assert_eq(continued.next_event, u8:0);
+  let collide = Machine { data: Cell { key: u32:1, ..opened.data },
+      gather: GatherState { progress: GatherProgress { key: u32:1, ..opened.gather.progress }, ..opened.gather }, ..opened };
+  let failed = machine_step(collide, zero!<axis::Frame>(), false, true).machine;
+  assert_eq(failed.failure, hls_failure::INVALID_EFFECT);
+  assert_eq(failed.phase, Phase::COLLECTING);
+  assert_eq(failed.enter_pending, false);
+  assert_eq(failed.next_event, u8:0);
+}
+
+// Scalar completion uses the same pending-event contract for externally supplied complete state.
+#[test]
+fn scalar_pending_continuation_test() {
+  let data = Cell { key: u32:0, mask: u8:0, value: u32:0 };
+  let opened = enter(Phase::COPIED, Phase::REDUCING, data).reduction;
+  let complete = Machine { phase: Phase::REDUCING, data, next_event: u8:2,
+      reduction: ReductionState { status: ReductionStatus::COMPLETE, remaining: u1:0, ..opened },
+      ..initial_machine() };
+  let resumed = machine_step(complete, zero!<axis::Frame>(), false, true).machine;
+  assert_eq(resumed.failure, hls_failure::NONE);
+  assert_eq(resumed.next_event, u8:2);
+  let collision = Machine { data: Cell { key: u32:7, ..data },
+      reduction: ReductionState { key: u32:7, ..complete.reduction }, ..complete };
+  let failed = machine_step(collision, zero!<axis::Frame>(), false, true).machine;
+  assert_eq(failed.failure, hls_failure::INVALID_EFFECT);
+  assert_eq(failed.next_event, u8:0);
+}

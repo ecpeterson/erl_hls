@@ -16,7 +16,7 @@ collecting(internal, {gather_complete, items, Key, Mask, Values}, Cell) ->
 
 Only one gather or scalar reduction may be active per actor. Opening must be the first entry action; the complete entry is validated before effects or state commit. An empty gather completes after that entry commits. Contributions retain phase and data, consume accepted messages, and postpone a mismatched name or key. Leaving or repeating a phase with an incomplete gather fails. Normal source clause order, guards and fallback callbacks still determine whether a cast returns a gather directive.
 
-Completion precedes the next mailbox selection and may consume, fail, change phase or repeat the phase. With declared continuations, it may return a fourth field `[{next_event, internal, Name}]`; successor entry runs before that event. Scalar reduction completions support the same action. Neither completion may postpone, contribute or reply. A pure helper can consume `Values` immediately, leaving only a small result in ordinary actor data.
+Completion precedes the next mailbox selection and may consume, fail, change phase or repeat the phase. With declared continuations, it may return a fourth field `[{next_event, internal, Name}]`; successor entry runs before that event. Scalar reduction completions support the same action. An empty gather completion preserves an already pending continuation when it requests none; requesting a second pending continuation fails. Neither completion may postpone, contribute or reply. A pure helper can consume `Values` immediately, leaving only a small result in ordinary actor data.
 
 ## XLS subset
 

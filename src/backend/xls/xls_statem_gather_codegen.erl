@@ -126,12 +126,17 @@ source_values(#{representation := Representation, element := #{name := Name}, po
 actor_completion(Spec) ->
     ["fn actor_gather_complete(machine: ActorState) -> ActorDispatch {\n",
      "  let c = gather_dispatch_completion(machine.gather.progress, machine.gather.values, machine.phase, machine.data);\n",
+     xls_statem_event_codegen:completion_bindings(Spec, "c.next_event"),
      "  let invalid = c.repeat_phase && (c.directive != Directive::CONSUME || c.phase != machine.phase);\n",
-     "  let effective = c.dispatched && !invalid;\n  let failure = hls_failure::completion(c.dispatched, invalid, c.failure);\n",
+     "  let effective = c.dispatched && !invalid",
+     xls_statem_event_codegen:optional(Spec, " && !hls_failure::failed(completion_event_failure)"), ";\n",
+     "  let failure = ", xls_statem_event_codegen:optional(Spec, "hls_failure::first("),
+     "hls_failure::completion(c.dispatched, invalid, c.failure)",
+     xls_statem_event_codegen:optional(Spec, ", completion_event_failure)"), ";\n",
      "  let boundary = effective && c.directive != Directive::FAIL && (c.phase != machine.phase || c.repeat_phase);\n",
      "  ActorDispatch { machine: ActorState { phase: if effective { c.phase } else { machine.phase }, entered_from: if boundary { machine.phase } else { machine.entered_from }, data: if effective { c.data } else { machine.data }, gather: GatherState { progress: c.progress, values: if c.progress.status == GatherStatus::IDLE { zero!<GatherValues>() } else { machine.gather.values } },\n",
-     xls_statem_event_codegen:optional(Spec,"    next_event: if effective && !hls_failure::failed(failure) { c.next_event } else { u8:0 },\n"),
-     "    enter_pending: boundary && !hls_failure::failed(failure), failure, ..machine }, dispatched: c.dispatched && !invalid, directive: c.directive, phase_boundary: boundary, ..zero!<ActorDispatch>() }\n}\n\n"].
+     xls_statem_event_codegen:optional(Spec,"    next_event: if effective && !hls_failure::failed(failure) { completion_event } else { u8:0 },\n"),
+     "    enter_pending: boundary && !hls_failure::failed(failure), failure, ..machine }, dispatched: effective, directive: c.directive, phase_boundary: boundary, ..zero!<ActorDispatch>() }\n}\n\n"].
 
 -doc "Adds ordinary gather storage to an actor or entry outcome.".
 -spec field(map()) -> iodata().

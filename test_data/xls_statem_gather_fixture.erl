@@ -37,6 +37,8 @@ init([]) -> {ok, idle, #cell{}}.
 -spec idle(enter, phase(), #cell{}) -> hls_statem:enter_result(#cell{});
     (cast, #begin_set{} | #piece{} | #scalar{}, #cell{}) -> hls_statem:cast_result(phase(), #cell{}).
 idle(enter, _, Cell) -> {Cell, []};
+idle(cast, #begin_set{key = Key, mask = Mask}, Cell) when Key =< 1 ->
+    {collecting, Cell#cell{key = Key, mask = Mask}, consume, [{next_event, internal, fold}]};
 idle(cast, #begin_set{key = Key, mask = Mask}, Cell) ->
     {collecting, Cell#cell{key = Key, mask = Mask}, consume};
 idle(cast, #piece{}, Cell) -> {idle, Cell, postpone};
@@ -52,6 +54,8 @@ collecting(cast, #piece{key = Key, member = Member, value = Value}, Cell = #cell
     {collecting, Cell, {gather, items, Key, Member, #element{value = Value}}};
 collecting(cast, #piece{}, Cell) -> {collecting, Cell, postpone};
 collecting(cast, #scalar{}, Cell) -> {collecting, Cell, postpone};
+collecting(internal, {gather_complete, items, 0, _Members, Values}, Cell = #cell{key = 0}) ->
+    {copied, Cell#cell{value = ordered(Values)}, consume};
 collecting(internal, {gather_complete, items, Key, _Members, Values}, Cell = #cell{key = Key}) ->
     {copied, Cell#cell{value = ordered(Values)}, consume, [{next_event, internal, fold}]}.
 
@@ -79,6 +83,8 @@ reducing(enter, _, Cell) ->
     {Cell, [{open_reduction, parity, Cell#cell.key, {count, 1}, {commutative_monoid, #parity{value = 0}}}]};
 reducing(cast, #scalar{key = Key, value = Value}, Cell) ->
     {reducing, Cell, {contribute, parity, Key, #parity{value = Value}}};
+reducing(internal, {reduction_complete, parity, 0, #parity{value = Value}}, Cell = #cell{key = 0}) ->
+    {publishing, Cell#cell{value = hls_type:as(hls_nums:u32(), Value)}, consume};
 reducing(internal, {reduction_complete, parity, Key, #parity{value = Value}}, Cell = #cell{key = Key}) ->
     {publishing, Cell#cell{value = Cell#cell.value + hls_type:as(hls_nums:u32(), Value)}, consume,
         [{next_event, internal, finish}]}.

@@ -1,6 +1,6 @@
 -module(xls_statem_event_codegen).
 -moduledoc false.
--export([optional/2, functions/1, direct_step/1]).
+-export([optional/2, functions/1, direct_step/1, completion_bindings/2]).
 
 
 -doc "Emits a fragment only for actors declaring finite internal events.".
@@ -8,6 +8,16 @@
 optional(Spec, Code) -> case maps:get(continuations, Spec, []) =/= [] orelse xls_statem_reply_codegen:enabled(Spec) of
     true -> Code; false -> []
 end.
+
+-doc "Preserves a pending continuation across collection completion and rejects a second request as an invalid effect.".
+-spec completion_bindings(map(), iodata()) -> iodata().
+completion_bindings(Spec, Requested) ->
+    optional(Spec, [
+        "    let completion_event_failure = hls_failure::check(machine.next_event != u8:0 && ",
+        Requested, " != u8:0, hls_failure::INVALID_EFFECT);\n",
+        "    let completion_event = if ", Requested, " != u8:0 { ", Requested,
+        " } else { machine.next_event };\n"
+    ]).
 
 -doc "Emits phase-sensitive internal dispatch and its checked state transition.".
 -spec functions(map()) -> iodata().
