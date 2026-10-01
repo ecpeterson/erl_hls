@@ -1,0 +1,99 @@
+-module(xls_dslx_imports_tests).
+
+-include_lib("eunit/include/eunit.hrl").
+-export([dslx_imports/0]).
+
+%% A provider whose declarations can exercise malformed metadata as well as
+%% multiple dependencies without creating an implementation for each import.
+dslx_imports() -> get(test_dslx_imports).
+
+nested_type_provider_test() ->
+    Forms = [form("-type fields() :: hls_lists:list(phi_field:scalar(), 2).")],
+    ?assertEqual([hls_bits, phi_field], xls_dslx_imports:from_forms(Forms)).
+
+nested_call_provider_test() ->
+    Forms = [form("probe() -> hls_type:zero(hls_lists:list(phi_field:scalar(), 2)).")],
+    ?assertEqual([hls_bits, phi_field], xls_dslx_imports:from_forms(Forms)).
+
+composed_providers_test() ->
+    Forms = [form("-type fields() :: hls_vec:vector(hls_fixed:signed(16, 8), 3).")],
+    ?assertEqual([hls_bits, hls_fixed], xls_dslx_imports:from_forms(Forms)).
+
+collection_operations_import_checks_test() ->
+    Forms = [form("probe(I, Values) -> hls_vec:nth(I, Values)."),
+        form("update(I, Values, V) -> hls_lists:set(I, Values, V).")],
+    ?assertEqual([hls_bits, hls_lists], xls_dslx_imports:from_forms(Forms)),
+    ?assertEqual([hls_bits, hls_lists, hls_vec], xls_dslx_imports:from_forms(Forms ++
+        [form("dot(T, A, B) -> hls_vec:dot(T, A, B).")])).
+
+bound_tail_import_test() ->
+    ?assertEqual([hls_patterns], xls_dslx_imports:from_forms([
+        form("probe([_ | Tail]) -> Tail.")])),
+    ?assertEqual([hls_patterns], xls_dslx_imports:from_forms([
+        form("probe(V) -> [_ | Tail = [X, Y]] = V, Tail.")])),
+    ?assertEqual([], xls_dslx_imports:from_forms([
+        form("probe([X, Y | _]) -> X + Y.")])).
+
+providers_without_companions_test() ->
+    Forms = [form("probe() -> hls_type:zero(hls_nums:u32()).")],
+    ?assertEqual([], xls_dslx_imports:from_forms(Forms)).
+
+integer_operator_companion_test() ->
+    Forms = [form("probe(X, Y) -> hls_nums:wrap(hls_nums:s8(), X rem Y).")],
+    ?assertEqual([hls_integer], xls_dslx_imports:from_forms(Forms ++ Forms)),
+    ?assertEqual([], xls_dslx_imports:from_forms([form("probe(X, Y) -> X div Y.")])).
+
+shift_operator_companion_test() ->
+    ?assertEqual([hls_integer], xls_dslx_imports:from_forms([
+        form("probe(X, Y) -> X bsl Y."), form("probe(X, Y) -> X bsr Y.")])),
+    ?assertEqual([hls_integer], xls_dslx_imports:from_forms([
+        form("probe(X) -> X bsl 1."), form("probe(X) -> X bsr -2.")])).
+
+float_imports_follow_actual_uses_test() ->
+    Forms = [form("-type values() :: hls_vec:vector(hls_nums:float32(), 2)."),
+        form("probe() -> hls_nums:u32().")],
+    ?assertEqual([apfloat, hls_bits], xls_dslx_imports:from_forms(Forms)),
+    ?assertEqual([apfloat, hls_float], xls_dslx_imports:from_forms([
+        form("probe() -> hls_float:literal(hls_nums:float64(), 0.1).")])).
+
+deterministic_unique_imports_test() ->
+    with_imports([zeta, axis, 'math.fixed', alpha, alpha], fun() ->
+        Forms = [form("probe() -> xls_dslx_imports_tests:probe(phi_field:scalar()).")],
+        Imports = xls_dslx_imports:from_forms(Forms ++ Forms),
+        ?assertEqual([alpha, axis, 'math.fixed', phi_field, zeta], Imports),
+        ?assertEqual(
+            <<"import axis;\nimport alpha;\nimport math.fixed;\n"
+              "import phi_field;\nimport zeta;\n">>,
+            iolist_to_binary(xls_dslx_imports:emit([axis], Imports)))
+    end).
+
+malformed_declaration_test() ->
+    Forms = [form("probe() -> xls_dslx_imports_tests:probe().")],
+    with_imports(not_a_list, fun() ->
+        ?assertError({invalid_dslx_imports, ?MODULE, not_a_list},
+            xls_dslx_imports:from_forms(Forms))
+    end),
+    lists:foreach(fun(Import) ->
+        with_imports([Import], fun() ->
+            ?assertError({invalid_dslx_import, ?MODULE, Import},
+                xls_dslx_imports:from_forms(Forms))
+        end)
+    end, ["string", 'bad-name', 'bad..path', 'bad;\nimport injected']).
+
+included_types_reach_gs_emission_test() ->
+    Source = "test_data/hls_companion_gs_fixture.erl",
+    {ok, Forms} = xls_parse:parse_file(Source),
+    ?assertEqual([hls_bits, hls_fixed, hls_vec, phi_field], xls_dslx_imports:from_forms(Forms)),
+    Generated = iolist_to_binary(xls_parse:to_xls(Source)),
+    ?assertEqual(1, length(binary:matches(Generated, <<"import phi_field;">>))),
+    ?assertNotEqual(nomatch, binary:match(Generated, <<"phi_field::Scalar[2]">>)),
+    ?assertNotEqual(nomatch, binary:match(Generated, <<"phi_field::relax_bulk(">>)).
+
+form(Source) ->
+    {ok, Tokens, _} = erl_scan:string(Source),
+    {ok, Form} = erl_parse:parse_form(Tokens),
+    Form.
+
+with_imports(Imports, Fun) ->
+    put(test_dslx_imports, Imports),
+    try Fun() after erase(test_dslx_imports) end.

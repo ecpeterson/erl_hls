@@ -1,0 +1,1036 @@
+%%%% xls_parse
+%%%%
+%%%% TODO:
+%%%%    + erl_syntax might be a little more ergonomic, have a look
+
+-module(xls_parse).
+-moduledoc """
+Transforms supported Erlang actor modules into corresponding XLS modules.
+
+## Control flow
+
+Callback bodies may use source-ordered `case` and `if` expressions. Supported
+`case` patterns include literals, variables, aliases, tuples, homogeneous
+records, fixed-size binary patterns, and fixed-array list patterns. Each clause accepts semicolon-separated alternatives from the same
+side-effect-free guard subset as a callback, including comma-separated tests
+and `andalso` or `orelse`. Integer `div` and `rem` reject a zero divisor with
+`badarith` in bodies; in guards, an arithmetic failure rejects that guard
+sequence and permits the next alternative or clause. A missing match raises a
+selected `case_clause` or `if_clause` failure; catch-all clauses are optional.
+The first selected expression failure
+is retained through nested branches and helpers. See `docs/control-flow.md`
+for failure reporting and the bounded hardware contract. Fixed-size bitstring
+construction, matching and size BIFs are described in `docs/bit-syntax.md`.
+
+A new variable bound in every `case` or `if` arm is available after the
+expression, including bindings introduced by case patterns and nested
+branches. Each exported value must have the same XLS type in every arm.
+Names used only inside an arm stay local and need not agree in type across
+arms. Reading or matching a name bound in only some arms is rejected with
+the use location and the originating join location. Matching an already-bound
+variable checks equality; it never replaces that variable's original value.
+
+Boolean `andalso` and `orelse` expressions use the same conditional lowering
+in guards and ordinary bodies. The left operand is evaluated once; only the
+selected right operand contributes its value or match failure. Left-operand
+bindings remain available afterwards, while right-operand bindings stay local
+to that branch. Both operands must have Boolean XLS types; Erlang's more
+general non-Boolean right-operand results are not supported. This preserves
+selection semantics in generated hardware, not a guarantee that combinational
+logic in an unselected branch stops switching.
+
+State-machine entries accept nested `case`/`if` choices of the complete result
+or bounded action-list segments, including literal lists, cons tails, and `++`.
+Branches may select different ports, schemas, and list lengths. The entry
+normalizer packs each selected leaf into one typed outcome before expression
+control flow rejoins; the backend commits its data, optional reduction open,
+and effects only if the complete callback succeeds. Segments may be named,
+aliased, and bound alongside ordinary values through tuple destructuring.
+They evaluate at their binding, even if omitted later. See
+`docs/entry-outcomes.md` for the bounded source subset.
+
+## Local helpers
+
+Initializers and callbacks may call local pure helpers with concrete `-spec`
+types. Only reachable helpers are translated, each as a DSLX function carrying
+its result and failure code. The definition graph must be acyclic; XLS
+inlines the calls. Helpers may have multiple patterned, guarded clauses and use the same
+expression subset as callbacks. Unmatched helper heads raise `function_clause`.
+See `docs/local-helpers.md` for types, call semantics, and structural limits.
+
+## Wire tags
+
+An actor may declare more than one `-hls_tags([...])` attribute. The compiler
+concatenates every block in include-expanded source order. That order is part
+of the wire ABI: appending a block preserves existing tag values, while
+prepending or moving one can renumber them. Every entry must be a unique atom.
+Hardware declarations also require unambiguous generated names and bounded
+enum encodings; see `docs/actor-names.md` for spelling and reserved names.
+""".
+-export([actor_artifact/2, actor_interface/1, actor_interface/2, to_xls/1, to_xls/2]).
+%% Internal API shared by the actor-specific lowerers while this module is
+%% split into smaller compiler passes.
+-export([
+    add_match_failure/3,
+    bind/4,
+    bitsfromstruct_from_record/1,
+    branch_from_clause/4,
+    branch_from_clause/6,
+    clause_outcome/4,
+    failure_expression/1,
+    failure_kind/1,
+    failure_code/1,
+    find_binding/3,
+    find_attribute/2,
+    find_optional_attribute/2,
+    find_tags/1,
+    find_function/3,
+    find_record/2,
+    message_words/2,
+    outcome_value/1,
+    print/1,
+    record_field_name/1,
+    record_width/1,
+    state/1,
+    statement_from_statement/2,
+    struct_from_record/1,
+    structfrombits_from_record/1,
+    validate_record_defaults/1
+]).
+-export([
+    reference/2,
+    reference/1,
+    instr/2,
+    instr/3,
+    anonymous_variable/1
+]).
+-export_type([ir/0, printable/0, static/0, phantom/0]).
+-export_type([clause_state/0]).
+-compile([export_all, nowarn_export_all]).  % TODO: remove export_all
+
+-include("xls_parse.hrl").
+
+-define(debug(X), begin io:format("~w@~w: ~p~n", [?FUNCTION_NAME, ?LINE, X]), X end).
+-define(MAX_PUBLIC_TAGS, 253).  % u8 minus none, error, and actor data
+
+-doc "Transpiles an Erlang actor into a dedicated XLS service.".
+-spec to_xls(file:filename()) -> iolist().
+to_xls(Filename) -> to_xls(Filename, #{}).
+
+-doc "Transpiles an actor with preprocessing and optional direct-actor observations.".
+-spec to_xls(file:filename(), #{source_options => [hls_source:option()] | hls_source:context(),
+    direct_actor_debug => boolean()}) -> iolist().
+to_xls(Filename, Options0) ->
+    Options = validate_xls_options(Options0),
+    {ok, Forms} = parse_file(Filename, maps:get(source_options, Options)),
+    case find_optional_attribute(Forms, hls_phases) of
+        none ->
+            case maps:get(direct_actor_debug, Options) of
+                true -> error(direct_actor_debug_requires_hls_statem);
+                false -> to_xls_gs(Filename, Forms)
+            end;
+        {ok, Phases} -> to_xls_statem(Filename, Forms, Phases,
+            maps:with([direct_actor_debug], Options))
+    end.
+
+-doc "Returns validated state-machine callback semantics for a backend, using explicit source context.".
+-spec actor_artifact(file:filename(), [hls_source:option()] | hls_source:context()) -> xls_actor_codegen:spec().
+actor_artifact(Filename, SourceOptions) ->
+    {ok, Forms} = parse_file(Filename, SourceOptions),
+    case find_optional_attribute(Forms, hls_phases) of
+        {ok, Phases} -> xls_statem_lower:artifact(Filename, Forms, Phases);
+        none -> error({unsupported_actor_artifact, Filename, hls_gs})
+    end.
+
+%% Reject physical execution options at the dedicated-service boundary.
+-doc "Validates source and dedicated-actor options; rejects unknown physical settings.".
+-spec validate_xls_options(map()) -> map().
+validate_xls_options(Options) when is_map(Options) ->
+    case maps:keys(Options) -- [source_options, direct_actor_debug] of
+        [] -> #{direct_actor_debug => xls_actor_observation:enabled(Options),
+            source_options => maps:get(source_options, Options, [])};
+        Keys -> error({invalid_xls_options, Keys})
+    end;
+validate_xls_options(Options) -> error({invalid_xls_options, Options}).
+
+-spec actor_interface(file:filename()) -> map().
+-doc "Returns the include-expanded interface inferred for one hls_statem file.".
+actor_interface(Filename) ->
+    actor_interface(Filename, []).
+
+-spec actor_interface(file:filename(), [hls_source:option()] |
+    hls_source:context()) -> map().
+-doc "Infers an interface using explicit preprocessing options or a captured context.".
+actor_interface(Filename, SourceOptions) ->
+    {ok, Forms} = parse_file(Filename, SourceOptions),
+    case find_optional_attribute(Forms, hls_phases) of
+        {ok, PhaseNames} ->
+            xls_statem_lower:interface(Forms, PhaseNames);
+        none ->
+            error({unsupported_hls_actor_interface, Filename, hls_gs})
+    end.
+
+-doc "Chooses the immediate or retained-call server backend from its checked contract.".
+-spec to_xls_gs(file:filename(), [hls_source:form()]) -> iolist().
+to_xls_gs(Filename, Forms0) ->
+    case hls_service_contract:call_arity(Forms0) of
+        3 -> xls_gs_deferred:emit(Filename, Forms0);
+        2 -> to_xls_gs_immediate(Filename, Forms0)
+    end.
+
+-doc "Emits the compact immediate-reply server without retained-call scheduling storage.".
+-spec to_xls_gs_immediate(file:filename(), [hls_source:form()]) -> iolist().
+to_xls_gs_immediate(Filename, Forms0) ->
+    ok = xls_names:actor(Forms0, hls_gs),
+    {SourceForms, Sites} = xls_failure_sites:prepare(Forms0),
+    {Forms, Helpers} = xls_helpers:prepare(SourceForms,
+        [{init, 1}, {handle_call, 2}, {handle_cast, 2}]),
+    ok = xls_names:actor(Forms, hls_gs),
+    PublicStructNames = find_tags(Forms),
+    StateName = state(Forms),
+    StateStructName = xls_names:record_type(StateName),
+    Records = hls_records:declarations(Forms, PublicStructNames ++ [StateName]),
+    ok = lists:foreach(fun validate_record_defaults/1, Records),
+    _ = [message_words(Forms, Name) || Name <- PublicStructNames],
+
+    Preamble = ["// ", Filename, ".x\n",
+    """
+    // This file is auto-generated by xls_parse. Manual changes will be over-
+    // written the next time it is generated. Better to modify the Erlang input.
+
+    """,
+    "\n", xls_dslx_imports:emit([axis, hls_failure, hls_bits], xls_dslx_imports:from_forms(Forms)),
+    """
+
+    const NOREPLY = u1:0;  // some standard erlang tokens
+    const REPLY = u1:1;
+    const OK = u1:0;
+    const ERROR_FUNCTION_CLAUSE = u32:1;
+    const ERROR_REQUEST_LENGTH = u32:3;
+    const ERROR_REPLY_CONTRACT = u32:15;
+
+
+    """,
+    "const MAX_PAYLOAD = u32:3;\n\n",  % TODO: don't bake this in.
+    "pub enum Tag : u8 {\n",
+    "  NONE = u8:0,\n",
+    [
+        ["  ", xls_names:enum_member(Atom), " = u8:", integer_to_list(Index), ",\n"]
+        ||  {Index, Atom} <- lists:enumerate([error, StateName | PublicStructNames])
+    ],
+    "}\n\n",
+    [[struct_from_record(Record), "\n",
+      structfrombits_from_record(Record), "\n",
+      bitsfromstruct_from_record(Record), "\n"]
+        || Record <- Records]],
+    Body = [
+    xls_helpers:emit(Helpers, StateName, #{}),
+    xls_gs_lower:initial_state(Forms, StateName),
+    """
+    proc Service {
+      req_in:   chan<axis::Frame> in;
+      resp_out: chan<axis::Frame> out;
+    """, "\n",
+    ["  config(req_in: chan<axis::Frame> in, resp_out: chan<axis::Frame> out) {\n",
+     "    (req_in, resp_out)\n",
+     "  }\n\n"],
+    "  init { initial_state() }\n\n",
+    ["  next(state: ", StateStructName, ") {\n",
+    """
+        let (tok1, frame) = recv(join(), req_in);
+    """, "\n",
+    ["    let state_record = (Tag::", xls_names:enum_member(StateName),
+     ", state);\n\n"],
+    """
+        // cognate to {reply, Reply, State}
+        let (resp, new_state) = match frame.header.op as Tag {
+
+    """],
+    xls_gs_lower:callback_arms(Forms, StateName),
+    """
+
+        };
+
+        let txid = frame.header.txid;
+        let resp2 = axis::Frame { header: axis::Header { txid, ..resp.header }, ..resp };
+        send_if(tok1, resp_out, resp2.header.op != (Tag::NONE as u8), resp2);
+        new_state.1
+      }
+    }
+
+
+    """,
+    """
+    proc Top {
+      ext_recv:  chan<axis::Beat> in;
+      ext_send:  chan<axis::Beat> out;
+    """, "\n",
+    ["  config(ext_recv: chan<axis::Beat> in, ext_send: chan<axis::Beat> out) {\n"],
+    """
+        let (req_p,  req_c ) = chan<axis::Frame, u32:1>("req");
+        let (resp_p, resp_c) = chan<axis::Frame, u32:1>("resp");
+
+        spawn axis::Rx(ext_recv, req_p);
+        spawn Service(req_c, resp_p);
+        spawn axis::Tx(resp_c, ext_send);
+
+        (ext_recv, ext_send)
+      }
+
+      init { () }
+
+      next(state: ()) { state }
+    }
+
+    """],
+
+    [print(Preamble), xls_failure_sites:emit(Sites, print(Body))].
+
+to_xls_statem(Filename, Forms, PhaseNames, Options) ->
+    xls_statem_lower:lower(Filename, Forms, PhaseNames, Options).
+
+%% We employ a limited IR with three kinds of objects:
+%%  + static objects which admit expression in terms of the XLS runtime,
+%%  + phantom objects which do not admit expression in terms of the XLS runtime,
+%%  + snippets of XLS code.
+%%
+%% "Closed" IR generally only contains static objects and snippets; phantoms
+%% appear temporarily during code generation, e.g., when "passing" the "result"
+%% of an Erlang type constructor to XLS's `zero!`.
+-type static() :: {static, integer, integer()} | {static, float, float()}.
+-type phantom() :: {phantom, type, hls_type:descriptor()}.
+-type printable() :: [printable()] | string() | static().
+-type ir() :: [ir()] | string() | phantom() | static().
+
+-spec print(printable()) -> iolist().
+print(List) when is_list(List) ->
+    lists:map(fun print/1, List);
+print(Char) when is_integer(Char) ->
+    Char;
+print({static, integer, Integer}) ->
+    integer_to_list(Integer);
+print({static, float, Value}) ->
+    error({untyped_float_literal, Value, {use, hls_float, literal, 2}}).
+%% NOTE: We deliberately fail through on (unprintable!) phantom objects.
+
+-doc """
+ 
+""".
+-type clause_state() :: #clause_state{}.
+
+-spec branch_from_clause(
+    erl_parse:abstract_clause(),
+    [atom()],
+    atom(),
+    fun((printable()) -> printable())
+) -> {printable(), string()}.
+-doc "Processes an Erlang clause from handle_*/2 into XLS.".
+branch_from_clause(Clause, ArgVals, StateName, Postprocessor) ->
+    ComputeState = lower_clause(Clause, ArgVals, StateName, #{}),
+    Failure = [
+        "let s = zero!<State>();\n",
+        "    (axis::pack(Tag::ERROR as u8, (", failure_kind(ComputeState), ") as u32), ",
+        "(Tag::STATE, s))"
+    ],
+    branch_from_state(ComputeState, Postprocessor, Failure).
+
+branch_from_clause(
+    Clause,
+    ArgVals,
+    StateName,
+    Postprocessor,
+    Failure,
+    EnumAtoms
+) ->
+    ComputeState = lower_clause(Clause, ArgVals, StateName, EnumAtoms),
+    branch_from_state(ComputeState, Postprocessor, Failure).
+
+branch_from_state(ComputeState, Postprocessor, Failure) ->
+    OutState = instr(ComputeState, [
+        "if (", failure_expression(ComputeState), ") {\n",
+        "    ", Failure, "\n",
+        "} else {\n",
+        "    ", Postprocessor(reference(ComputeState)), "\n",
+        "}"
+    ]),
+    {lists:reverse(OutState#clause_state.statements), OutState#clause_state.reference}.
+
+%% Keep the computed value and its selected failure together. Consumers may
+%% commit a compound result only when the whole callback has succeeded.
+-doc "Lowers a callback clause to statements, result and first-failure expressions.".
+-spec clause_outcome(erl_parse:abstract_clause(), [printable()], atom(), map()) ->
+    #{body := printable(), result := printable(), failed := printable(), failure := printable()}.
+clause_outcome(Clause, ArgVals, StateName, EnumAtoms) ->
+    State = lower_clause(Clause, ArgVals, StateName, EnumAtoms),
+    #{
+        body => lists:reverse(State#clause_state.statements),
+        result => reference(State),
+        failed => failure_expression(State),
+        failure => failure_code(State)
+    }.
+
+lower_clause({clause, _Line, ArgPatterns, _Guards, Body},
+        ArgVals, StateName, EnumAtoms) ->
+    InjectMatch = fun
+        F({{match, LineNo, LHS, RHS}, Arg}) ->
+            {match, LineNo, LHS, F({RHS, Arg})};
+        F({X, Arg}) ->
+            {match, element(2, X), X, Arg}
+    end,
+    BigBody = case ArgPatterns of
+        [{nil, _L}] -> Body;
+        _ -> lists:map(InjectMatch, lists:zip(ArgPatterns, ArgVals)) ++ Body
+    end,
+    lists:foldl(
+        fun(Statement, State) ->
+            statement_from_statement(Statement, State#clause_state{reference = none})
+        end,
+        #clause_state{state_name = StateName, enum_atoms = EnumAtoms},
+        xls_var_scope:annotate(BigBody)
+    ).
+
+-spec statement_from_statement(erl_parse:abstract_expr(), clause_state()) -> clause_state().
+-doc """
+Main transpiler workhorse.  Recursively converts a complex `erl_parse`
+expression into a sequence of simple emitted XLS expressions.
+""".
+%% Private normalization nodes, introduced after source analysis. Mapping a
+%% selected value into a common backend type lets case arms retain different
+%% source shapes without moving their computations across a branch boundary.
+statement_from_statement({xls_live, _Line, Live, Expression}, State) ->
+    Lowered = statement_from_statement(Expression, State#clause_state{live_bindings = Live}),
+    Lowered#clause_state{live_bindings = State#clause_state.live_bindings};
+statement_from_statement({xls_map, _Line, Expression, Render}, State) ->
+    Evaluated = statement_from_statement(Expression, State),
+    instr(Evaluated#clause_state{reference = none}, Render(reference(Evaluated)));
+%% A guard sequence has its own exception boundary. An arithmetic failure
+%% rejects this sequence; it must neither fail the actor nor prevent a later
+%% semicolon alternative from matching. Earlier body failures remain intact.
+statement_from_statement({xls_guard, _Line, Expression}, State) ->
+    Evaluated = statement_from_statement(Expression, State#clause_state{failures = []}),
+    Guard = instr(Evaluated, ["!(", failure_expression(Evaluated), ") && (",
+        reference(Evaluated), ")"]),
+    Guard#clause_state{failures = State#clause_state.failures};
+statement_from_statement({block, _Line, Expressions}, State) ->
+    lower_expression_sequence(Expressions, State);
+statement_from_statement(String, State) when is_list(String) ->
+    reference(State, String);
+statement_from_statement({atom, _L, true}, State) ->
+    reference(State, "bool:1");
+statement_from_statement({atom, _L, false}, State) ->
+    reference(State, "bool:0");
+statement_from_statement({atom, _L, Atom}, State = #clause_state{
+    enum_atoms = EnumAtoms
+}) ->
+    reference(
+        State,
+        maps:get(Atom, EnumAtoms, xls_names:enum_member(Atom))
+    );
+statement_from_statement({var, Line, Name}, State) ->
+    case find_binding(Name, Line, State) of
+        {ok, Value} -> reference(State, Value);
+        error -> error({unbound_xls_variable, Line, Name})
+    end;
+statement_from_statement({integer, _L, Integer}, State) ->
+    reference(State, {static, integer, Integer});
+%% A signature gives this literal its width without casting an existing value.
+statement_from_statement({xls_typed_integer, _L, Type, Integer}, State) ->
+    reference(State, [Type, ":", integer_to_list(Integer)]);
+statement_from_statement({char, _L, Integer}, State) ->
+    reference(State, {static, integer, Integer});
+statement_from_statement({op, _L, '+', {integer, _IntegerLine, Integer}}, State) ->
+    reference(State, {static, integer, Integer});
+statement_from_statement({float, _L, Float}, State) ->
+    reference(State, {static, float, Float});
+statement_from_statement({op, _L, '+', {float, _FloatLine, Float}}, State) ->
+    reference(State, {static, float, Float});
+statement_from_statement({op, _L, '-', {float, _FloatLine, Float}}, State) ->
+    reference(State, {static, float, -Float});
+%% Preserve signed literals for width-directed conversions such as wrap/2.
+statement_from_statement({op, _L, '-', {integer, _IntegerLine, Integer}}, State) ->
+    reference(State, {static, integer, -Integer});
+statement_from_statement({op, Line, 'andalso', Left, Right}, State) ->
+    xls_case_lower:lower(Line, Left, [
+        {clause, Line, [{atom, Line, true}], [], [Right]},
+        {clause, Line, [{atom, Line, false}], [], [{atom, Line, false}]}
+    ], State);
+statement_from_statement({op, Line, 'orelse', Left, Right}, State) ->
+    xls_case_lower:lower(Line, Left, [
+        {clause, Line, [{atom, Line, true}], [], [{atom, Line, true}]},
+        {clause, Line, [{atom, Line, false}], [], [Right]}
+    ], State);
+statement_from_statement({op, Line, Op, Left, Right}, State)
+        when Op =:= 'bsl'; Op =:= 'bsr' ->
+    {[Value, Count], Evaluated} = lower_arguments([Left, Right], State),
+    lower_shift(Op, Value, Count, Line, Evaluated);
+%% Integer facts are attached before callback/helper normalization.
+statement_from_statement({xls_integer_compare, _Line, Op, Left, Right}, State) ->
+    {References, Evaluated} = lower_arguments([Left, Right], State),
+    instr(Evaluated, xls_comparison:emit(Op, References));
+statement_from_statement(X, State) when is_tuple(X) andalso op == element(1, X) ->
+    [op, Line, Op | Args] = tuple_to_list(X),
+    {References, ArgState} = lower_arguments(Args, State),
+    Evaluated = instr(ArgState, op(Op, References)),
+    case {Op, References} of
+        {Division, [_Left, Right]} when Division =:= 'div'; Division =:= 'rem' ->
+            division_failure(Right, Line, Evaluated);
+        _ -> Evaluated
+    end;
+statement_from_statement({xls_bit_size, _, Name, Value}, State) ->
+    Evaluated = statement_from_statement(Value, State),
+    Size = ["hls_bits::length(", reference(Evaluated), ")"],
+    instr(Evaluated, case Name of
+        bit_size -> Size;
+        byte_size -> ["((", Size, " + u32:7) / u32:8)"]
+    end);
+statement_from_statement(Binary = {bin, _, _}, State) ->
+    xls_binary_lower:construct(Binary, State);
+statement_from_statement({tuple, _L, Slots}, State) ->
+    {BwdReferences, IntermediateState} = lists:foldl(
+        fun(Slot, {References, ThisState}) ->
+            NewState = statement_from_statement(Slot, ThisState#clause_state{reference = none}),
+            {[NewState#clause_state.reference | References], NewState}
+        end,
+        {[], State}, Slots
+    ),
+    instr(IntermediateState, ["(", [[Ref, ", "] || Ref <- lists:reverse(BwdReferences)], ")"]);
+statement_from_statement({record, _L, NameAtom, Fields}, State) ->
+    {BwdAssignments, IntermediateState} = lists:foldl(
+        fun({record_field, _1, {atom, _2, FieldAtom}, RHS}, {Assignments, ThisState}) ->
+            NewState = statement_from_statement(RHS, ThisState#clause_state{reference = none}),
+            {[{FieldAtom, NewState#clause_state.reference} | Assignments], NewState}
+        end,
+        {[], State}, Fields
+    ),
+    Assignments = lists:reverse(BwdAssignments),
+    SecondState = instr(IntermediateState, [
+        xls_names:record_type(record_name(NameAtom)), " {\n",
+        [["  ", atom_to_list(FieldAtom), ": ", Reference, ",\n"]
+            || {FieldAtom, Reference} <- Assignments],
+        "  ..zero!<", xls_names:record_type(record_name(NameAtom)), ">()\n",
+        "}"
+    ]),
+    instr(SecondState, record_value(NameAtom, reference(SecondState), SecondState));
+statement_from_statement({record, _L, ToUpdate, NameAtom, UpdateFields}, State) ->
+    InputState = statement_from_statement(ToUpdate, State),
+    {BwdAssignments, IntermediateState} = lists:foldl(
+        fun({record_field, _1, {atom, _2, FieldAtom}, RHS}, {Assignments, ThisState}) ->
+            NewState = statement_from_statement(RHS, ThisState#clause_state{reference = none}),
+            {[{FieldAtom, NewState#clause_state.reference} | Assignments], NewState}
+        end,
+        {[], InputState}, UpdateFields
+    ),
+    Assignments = lists:reverse(BwdAssignments),
+    SecondState = instr(IntermediateState, [
+        xls_names:record_type(record_name(NameAtom)), " {\n",
+            [["  ", atom_to_list(FieldAtom), ": ", Reference, ",\n"]
+                || {FieldAtom, Reference} <- Assignments],
+        "  ..", record_raw(NameAtom, ["(", InputState#clause_state.reference, ")"]), "\n",
+        "}"
+    ]),
+    instr(SecondState, record_value(NameAtom, reference(SecondState), SecondState));
+statement_from_statement({'if', Line, Clauses}, State) ->
+    xls_case_lower:lower_if(Line, Clauses, State);
+statement_from_statement({'case', Line, Condition, Clauses}, State) ->
+    xls_case_lower:lower(Line, Condition, Clauses, State);
+statement_from_statement({xls_helper_call, _Line, Name, Args}, State) ->
+    {References, ArgState} = lower_arguments(Args, State),
+    CallState = instr(ArgState, [Name, "(", lists:join(", ", References), ")"]),
+    outcome_value(CallState);
+statement_from_statement({call, Line, MF, Args}, State) ->
+    {remote, _1, {atom, _2, Module}, {atom, _3, FAtom}} = MF,
+    {References, ArgState} = lower_arguments(Args, State),
+    case Module:transpile(FAtom, References, ArgState) of
+        X = #clause_state{} -> X;
+        {fallible, Kind, Expression} ->
+            Evaluated = instr(ArgState, Expression),
+            Value = reference(Evaluated),
+            Checked = add_failure(["hls_failure::check(", Value, ".1, ",
+                xls_failure_sites:at(Kind, Line), ")"], Evaluated),
+            reference(Checked, [Value, ".0"]);
+        X -> instr(ArgState, X)
+    end;
+statement_from_statement({record_field, _L, Object, RecordAtom, {atom, _LL, SlotAtom}}, State) ->
+    IntermediateState = statement_from_statement(Object, State),
+    instr(IntermediateState, [record_raw(RecordAtom, reference(IntermediateState)), ".", atom_to_list(SlotAtom)]);
+statement_from_statement({match, _L, LHS, RHS}, State) ->
+    RHSState = statement_from_statement(RHS, State),
+    xls_pattern_lower:match(LHS, reference(RHSState), RHSState).
+
+lower_arguments(Args, State) ->
+    lists:mapfoldl(fun(Arg, Acc) ->
+        Next = statement_from_statement(Arg, Acc#clause_state{reference = none}),
+        {reference(Next), Next}
+    end, State, Args).
+
+%% Shift operands have independent types: the result keeps the value's width,
+%% while a signed count can reverse direction. Even literal counts use the
+%% helper: DSLX rejects a primitive constexpr shift beyond the operand width.
+lower_shift(Op, {static, integer, Value}, {static, integer, Count}, _Line, State) ->
+    reference(State, {static, integer, erlang:Op(Value, Count)});
+lower_shift(_Op, {static, integer, _}, _Count, Line, _State) ->
+    error({untyped_shift_value, Line, {use, hls_type, as, 2}});
+lower_shift(Op, Value, {static, integer, Count}, Line, State) ->
+    Direction = case {Op, Count < 0} of
+        {'bsl', false} -> 'bsl';
+        {'bsr', true} -> 'bsl';
+        _ -> 'bsr'
+    end,
+    Magnitude = abs(Count),
+    Literal = [xls_nums:index_type(Magnitude + 1), ":", integer_to_list(Magnitude)],
+    lower_shift(Direction, Value, Literal, Line, State);
+lower_shift(Op, Value, Count, _Line, State) ->
+    Left = case Op of 'bsl' -> "true"; 'bsr' -> "false" end,
+    instr(State, ["hls_integer::shift<", Left, ">(", Value, ", ", Count, ")"]).
+
+division_failure({static, integer, 0}, Line, State) ->
+    add_failure(xls_failure_sites:at(badarith, Line), State);
+division_failure({static, integer, _Nonzero}, _Line, State) -> State;
+division_failure(Divisor, Line, State) ->
+    add_failure(["hls_failure::check(", Divisor, " == 0, ",
+        xls_failure_sites:at(badarith, Line), ")"], State).
+
+%% A selected outcome contributes one explicit failure kind. Its value
+%% and any exported bindings remain separate from that bookkeeping.
+-spec outcome_value(clause_state()) -> clause_state().
+outcome_value(State) ->
+    Value = reference(State),
+    reference(add_failure([Value, ".1"], State), [Value, ".0"]).
+
+lower_expression_sequence(Expressions, State0) ->
+    lists:foldl(
+        fun(Expression, State) ->
+            statement_from_statement(
+                Expression,
+                State#clause_state{reference = none}
+            )
+        end,
+        State0,
+        Expressions
+    ).
+
+-spec failure_expression(clause_state()) -> printable().
+failure_expression(#clause_state{failures = []}) -> "bool:false";
+failure_expression(State) ->
+    ["(", failure_code(State), ") != hls_failure::NONE"].
+
+%% The list is stored in reverse evaluation order. A later failed computation
+%% cannot replace an earlier failure, even if its placeholder value is used.
+-spec failure_kind(clause_state()) -> printable().
+failure_kind(State) -> ["hls_failure::kind(", failure_code(State), ")"].
+
+-spec failure_code(clause_state()) -> printable().
+failure_code(#clause_state{failures = []}) -> "hls_failure::NONE";
+failure_code(#clause_state{failures = [Only]}) -> Only;
+failure_code(#clause_state{failures = Failures}) ->
+    %% A flat argument list avoids XLS's expression-nesting limit for callbacks
+    %% with many failure sites. The static helper retains the right fold.
+    ["hls_failure::first_all([", lists:join(", ", lists:reverse(Failures)), "])"].
+
+add_match_failure(Predicate, Line, State) ->
+    add_failure(["hls_failure::check(", Predicate, ", ",
+        xls_failure_sites:at(match_failure, Line), ")"], State).
+
+add_failure(Failure, State = #clause_state{failures = Failures}) ->
+    State#clause_state{failures = [Failure | Failures]}.
+
+%% A partially bound name stays unsafe even if a later expression attempts to
+%% bind it again. Keep the originating join for a useful source diagnostic.
+-doc "Finds a variable's current value, rejecting bindings unsafe across a branch join.".
+-spec find_binding(atom(), erl_anno:anno(), clause_state()) ->
+    {ok, printable()} | error.
+find_binding(Name, Line, #clause_state{bindings = Bindings, unsafe_bindings = Unsafe}) ->
+    case maps:find(Name, Unsafe) of
+        {ok, Origin} -> error({unsafe_xls_variable, Line, Name, Origin});
+        error -> maps:find(Name, Bindings)
+    end.
+
+-doc "Binds a fresh variable or checks equality with its existing value, recording a match failure on mismatch.".
+-spec bind(atom(), erl_anno:anno(), printable(), clause_state()) -> clause_state().
+bind(Name, Line, Value, State) ->
+    Previous = find_binding(Name, Line, State),
+    {Emitted, Named} = uniquify(State, Name),
+    Bound = instr(Named, Emitted, Value),
+    Next = case Previous of
+        {ok, Existing} -> add_match_failure([Existing, " != ", Emitted], Line, Bound);
+        error -> Bound#clause_state{bindings = (Bound#clause_state.bindings)#{Name => Emitted}}
+    end,
+    reference(Next, Value).
+
+-doc "Wraps actor data and messages in their ABI tuples, leaving internal records as values.".
+-spec record_value(atom() | {value, atom()}, ir(), clause_state()) -> iolist().
+record_value({value, _Name}, Struct, _State) -> [Struct];
+record_value(NameAtom, Struct, #clause_state{state_name = NameAtom}) ->
+    ["(Tag::", xls_names:enum_member(NameAtom), ", ", Struct, ")"];
+record_value(NameAtom, Struct, _State) ->
+    [
+        "(Tag::", xls_names:enum_member(NameAtom), ", ", Struct, ", ",
+        "bits_from_", xls_names:record_codec(NameAtom), "(", Struct, "))"
+    ].
+
+-doc "Recovers the source name after representation selection.".
+-spec record_name(atom() | {value, atom()}) -> atom().
+record_name({value, Name}) -> Name;
+record_name(Name) -> Name.
+
+-doc "Projects callback tuples and constrains internal values to their nominal struct type.".
+-spec record_raw(atom() | {value, atom()}, printable()) -> iolist().
+record_raw({value, Name}, Value) ->
+    ["({ let value: ", xls_names:record_type(Name), " = ", Value, "; value })"];
+record_raw(_Name, Value) -> [Value, ".1"].
+
+%%%
+%%% Erlang record / XLS struct munging.
+%%%
+%%% XLS does not support `(struct) as bits` and `(bits) as struct` conversions,
+%%% so we have to emit manual un/packers.
+%%% TODO: Give selected public message structs and packers a cross-module DSLX
+%%% interface so topology startup code can emit typed constructors instead of
+%%% opaque prepacked literals.
+%%%
+
+-spec struct_from_record(hls_source:record_declaration()) -> iolist().
+-doc "Translates an Erlang record definition to an XLS struct definition.".
+struct_from_record(RecordForm) ->
+    {attribute, _L, record, {NameAtom, Fields}} = RecordForm,
+    StructName = xls_names:record_type(NameAtom),
+    ["pub struct ", StructName, " {\n",
+        [io_lib:format("  ~s : ~s,~n", [
+                atom_to_list(record_field_name(Field)),
+                hls_type:print_type(hls_type:descriptor(Type))
+            ])
+            ||  {typed_record_field, Field, Type} <- Fields
+        ],
+    "}\n"].
+
+-spec structfrombits_from_record(hls_source:record_declaration()) -> iolist().
+-doc "Builds an XLS-side unpacker for the Erlang record definition.".
+structfrombits_from_record(RecordForm) ->
+    {attribute, _L, record, {NameAtom, Fields}} = RecordForm,
+    StructName = xls_names:record_type(NameAtom),
+    ["pub fn ", xls_names:record_codec(NameAtom), "_from_bits<N: u32>(raw: bits[N]) -> ", StructName, " {\n",
+    "  let stream = hls_bits::to_stream(raw);\n",
+    "  ", StructName, " {\n",
+    lists:reverse(element(1, lists:foldl(
+        fun(
+            {typed_record_field, Field, Type},
+            {Body, Offset}
+        ) ->
+            Slot = record_field_name(Field),
+            Descriptor = hls_type:descriptor(Type),
+            NextOffset = Offset + hls_type:width(Descriptor),
+            Bits = io_lib:format("hls_bits::from_stream(stream[N - u32:~w+:bits[~w]])",
+                [NextOffset, NextOffset - Offset]),
+            Line = ["    ", atom_to_list(Slot), ": ",
+                hls_type:dslx_from_bits(Descriptor, Bits), ",\n"],
+            {[Line | Body], NextOffset}
+        end,
+        {[], 0}, Fields
+    ))),
+    "  }\n",
+    "}\n"].
+
+-spec bitsfromstruct_from_record(hls_source:record_declaration()) -> iolist().
+-doc "Builds an XLS-side packer for the Erlang record definition.".
+bitsfromstruct_from_record(RecordForm = {attribute, _L, record, {NameAtom, Fields}}) ->
+    StructName = xls_names:record_type(NameAtom),
+    ["pub fn bits_from_", xls_names:record_codec(NameAtom), "(s: ", StructName,
+        ") -> bits[", integer_to_list(record_width(RecordForm)), "] {\n",
+        "  hls_bits::from_stream(",
+        [["hls_bits::to_stream(", hls_type:dslx_to_bits(hls_type:descriptor(Type),
+            ["s.", atom_to_list(record_field_name(Field))]), ") ++ "]
+            || {typed_record_field, Field, Type} <- Fields],
+        "zero!<bits[0]>())\n",
+    "}\n"].
+
+-doc "Returns the number of 32-bit words needed for a record's packed fields.".
+-spec message_words([hls_source:form()], atom()) -> 0..3.
+message_words(Forms, Name) ->
+    Width = record_width(find_record(Forms, Name)),
+    case Width =< 96 of
+        true -> (Width + 31) div 32;
+        false -> error({xls_message_too_wide, Name, Width, 96})
+    end.
+
+-spec record_width(hls_source:record_declaration()) -> non_neg_integer().
+-doc "Calculates the packed width of an Erlang record's XLS struct.".
+record_width({attribute, _L, record, {_NameAtom, Fields}}) ->
+    lists:sum([
+        hls_type:width(hls_type:descriptor(Type))
+        || {typed_record_field, _Field, Type} <- Fields
+    ]).
+
+-spec record_field_name(hls_source:record_field()) -> atom().
+-doc "Extracts a field name from record declarations with or without a default.".
+record_field_name({record_field, _L, {atom, _AtomL, Name}}) ->
+    Name;
+record_field_name({record_field, _L, {atom, _AtomL, Name}, _Default}) ->
+    Name.
+
+-spec validate_record_defaults(hls_source:record_declaration()) -> ok.
+-doc """
+Requires every field in a translated record to use the type-directed
+`hls_type:zero()` marker, keeping Erlang defaults consistent with XLS `zero!`.
+""".
+validate_record_defaults({attribute, _L, record, {RecordName, Fields}}) ->
+    lists:foreach(
+        fun({
+            typed_record_field,
+            {record_field, Line, {atom, _AtomLine, FieldName}, Default},
+            _Type
+        }) ->
+            case is_zero_default(Default) of
+                true -> ok;
+                false ->
+                    error({invalid_hls_record_default, RecordName, FieldName, Line})
+            end;
+           ({
+            typed_record_field,
+            {record_field, Line, {atom, _AtomLine, FieldName}},
+            _Type
+        }) ->
+            error({missing_hls_record_default, RecordName, FieldName, Line});
+           (Field) ->
+            error({untyped_xls_record_field, RecordName, Field})
+        end,
+        Fields
+    ),
+    ok.
+
+-spec is_zero_default(erl_parse:abstract_expr()) -> boolean().
+-doc "Recognizes the type-directed zero marker in a record declaration.".
+is_zero_default({
+    call,
+    _Line,
+    {remote, _RemoteLine, {atom, _ModuleLine, hls_type}, {atom, _NameLine, zero}},
+    []
+}) ->
+    true;
+is_zero_default(_Default) ->
+    false.
+
+%%%
+%%% clause_state utilities
+%%%
+
+-spec anonymous_variable(clause_state()) -> {clause_state(), VarName :: string()}.
+anonymous_variable(State = #clause_state{anonymous_counter = Counter}) ->
+    {State#clause_state{anonymous_counter = Counter + 1}, [$_ | integer_to_list(Counter)]}.
+
+-spec uniquify(clause_state(), atom() | string()) ->
+    {string(), clause_state()}.
+-doc "Allocates a source binding in a namespace disjoint from generated types, codecs and helpers.".
+uniquify(State, NameAtom) when is_atom(NameAtom) ->
+    Name = atom_to_list(NameAtom),
+    uniquify(State, Name);
+uniquify(State = #clause_state{named_counters = Counters}, Name) ->
+    Counter = maps:get(Name, Counters, 0) + 1,
+    NamedCounters = Counters#{Name => Counter},
+    %% Preserve the source convention for intentionally unused bindings.
+    Prefix = case Name of [$_ | _] -> "_v_"; _ -> "v_" end,
+    NewName = Prefix ++ Name ++ [$_ | integer_to_list(Counter)],
+    {NewName, State#clause_state{named_counters = NamedCounters}}.
+
+-spec reference(clause_state()) -> none | ir().
+reference(ClauseState) ->
+    ClauseState#clause_state.reference.
+
+-spec reference(clause_state(), ir()) -> clause_state().
+reference(ClauseState, Reference) ->
+    ClauseState#clause_state{reference = Reference}.
+
+-spec instr(clause_state(), ir()) -> clause_state().
+instr(#clause_state{anonymous_counter = Counter} = ClauseState, Expr) ->
+    instr(
+        ClauseState#clause_state{anonymous_counter = Counter + 1},
+        [$_ | integer_to_list(Counter)],
+        Expr
+    ).
+
+-spec instr(clause_state(), ir(), ir()) -> clause_state().
+instr(ClauseState, Place, Expr) ->
+    % TODO: we should admit structured `Place`s in reference and print them in statements
+    ClauseState#clause_state{
+        reference = Place,
+        statements = [["let ", Place, " = ", Expr, ";\n"] | ClauseState#clause_state.statements]
+    }.
+
+%%%
+%%% Dictionaries for built-in calls
+%%%
+
+-spec op(Op :: atom(), Args :: [any()]) -> iolist().
+-doc "Translates a built-in Erlang op to an XLS op.".
+op('+', [Left, Right]) -> [Left, " + ", Right];
+op('-', [Left, Right]) -> [Left, " - ", Right];
+op('*', [Left, Right]) -> [Left, " * ", Right];
+op('div', [Left, Right]) -> [Left, " / ", Right];
+op('rem', [Left, Right]) -> ["hls_integer::remainder(", Left, ", ", Right, ")"];
+op('band', [Left, Right]) -> [Left, " & ", Right];
+op('bor', [Left, Right]) -> [Left, " | ", Right];
+op('bxor', [Left, Right]) -> [Left, " ^ ", Right];
+op('bnot', [Operand]) -> ["!", Operand];
+op('not', [Operand]) -> ["!", Operand];
+op('<', [Left, Right]) -> [Left, " < ", Right];
+op('=<', [Left, Right]) -> [Left, " <= ", Right];
+op('>', [Left, Right]) -> [Left, " > ", Right];
+op('>=', [Left, Right]) -> [Left, " >= ", Right];
+op('=:=', [Left, Right]) -> [Left, " == ", Right];
+op('=/=', [Left, Right]) -> [Left, " != ", Right].
+
+%%%
+%%% Search / selection tools
+%%%
+
+-spec state([hls_source:form()]) -> atom().
+-doc "Finds the record name which carries an actor's rich data value.".
+state(Forms) ->
+    case find_optional_attribute(Forms, hls_data) of
+        {ok, DataAtom} ->
+            DataAtom;
+        none ->
+            inferred_state(Forms)
+    end.
+
+inferred_state(Forms) ->
+    InitSpec = find_spec(Forms, init, 1),
+    {attribute, _1, spec, {
+        {init, 1},
+        [{type, _2, 'fun', [
+            _3,
+            {type, _4, record, [{atom, _5, StateAtom}]}
+        ]}]
+    }} = InitSpec,
+    StateAtom.
+
+-spec find_record([hls_source:form()], atom()) -> hls_source:record_declaration().
+-doc "Find the record definition with the indicated name from the set of Forms.".
+find_record(Forms, Name) ->
+    {value, Record} = lists:search(
+        fun ({attribute, _L, record, {NameAtom, _Fields}}) -> NameAtom == Name;
+            (_) -> false
+        end, Forms
+    ),
+    Record.
+
+-spec find_function([hls_source:form()], atom(), integer()) -> [erl_parse:abstract_clause(), ...].
+-doc "Find the function definition with the indicated F/A from the set of Forms.".
+find_function(Forms, F, A) ->
+    {value, {function, _LineNo, F, A, Clauses}} = lists:search(
+        fun ({function, _LineNo, FF, AA, _Clauses}) ->
+                F == FF andalso A == AA;
+            (_) -> false
+        end,
+        Forms
+    ),
+    Clauses.
+
+-spec find_attribute([hls_source:form()], atom()) -> term().
+-doc "Returns the first named attribute's value; fails if it is absent.".
+find_attribute(Forms, Atom) ->
+    {value, {attribute, _L, _A, Value}} = lists:search(
+        fun ({attribute, _L, A, _Value}) -> A == Atom;
+            (_) -> false
+        end,
+        Forms
+    ),
+    Value.
+
+-spec find_tags([hls_source:form()]) -> [atom()].
+-doc "Collects all hls_tags attributes in include-expanded source order.".
+find_tags(Forms) ->
+    Fragments = [
+        {Line, Value}
+        || {attribute, Line, hls_tags, Value} <- Forms
+    ],
+    case Fragments of
+        [] ->
+            error({missing_hls_attribute, hls_tags});
+        _ ->
+            Tags = lists:append([
+                validate_tag_fragment(Line, Value)
+                || {Line, Value} <- Fragments
+            ]),
+            case duplicate_tags(Tags) of
+                [] -> validate_tag_count(Tags);
+                Duplicates -> error({duplicate_hls_tags, Duplicates})
+            end
+    end.
+
+validate_tag_count(Tags) when length(Tags) =< ?MAX_PUBLIC_TAGS ->
+    Tags;
+validate_tag_count(Tags) ->
+    error({too_many_hls_tags, length(Tags), ?MAX_PUBLIC_TAGS}).
+
+validate_tag_fragment(Line, Tags) when is_list(Tags) ->
+    case lists:all(fun is_atom/1, Tags) of
+        true -> Tags;
+        false -> error({invalid_hls_tags, Line, Tags})
+    end;
+validate_tag_fragment(Line, Value) ->
+    error({invalid_hls_tags, Line, Value}).
+
+duplicate_tags(Tags) ->
+    duplicate_tags(Tags, #{}, []).
+
+duplicate_tags([], _Counts, Duplicates) ->
+    lists:reverse(Duplicates);
+duplicate_tags([Tag | Rest], Counts, Duplicates) ->
+    Count = maps:get(Tag, Counts, 0),
+    NextDuplicates = case Count of
+        1 -> [Tag | Duplicates];
+        _ -> Duplicates
+    end,
+    duplicate_tags(Rest, Counts#{Tag => Count + 1}, NextDuplicates).
+
+-doc "Returns an attribute's value, or none when the attribute is absent.".
+-spec find_optional_attribute([hls_source:form()], atom()) ->
+    none | {ok, term()}.
+find_optional_attribute(Forms, Atom) ->
+    case lists:search(
+        fun
+            ({attribute, _Line, Name, _Value}) -> Name =:= Atom;
+            (_Form) -> false
+        end,
+        Forms
+    ) of
+        {value, {attribute, _Line, Atom, Value}} -> {ok, Value};
+        false -> none
+    end.
+
+-spec find_spec([hls_source:form()], atom(), integer()) -> hls_source:function_spec().
+-doc "Finds the function type declaration with the given F/A from the set of Forms.".
+find_spec(Forms, F, A) ->
+    {value, Spec} = lists:search(
+        fun ({attribute, _LineNo, spec, {{FF, AA}, _Data}}) ->
+                F == FF andalso A == AA;
+            (_) -> false
+        end,
+        Forms
+    ),
+    Spec.
+
+%%%
+%%% Other utilities
+%%%
+
+-spec parse_file(string()) -> {ok, [hls_source:form()]}.
+-doc "Helper routine for reading an entire .erl source file into memory.".
+parse_file(Filename) ->
+    parse_file(Filename, []).
+
+parse_file(Filename, Context) when is_map(Context) ->
+    {ok, hls_source:read(Filename, Context)};
+parse_file(Filename, Options) ->
+    Context = hls_source:options(Filename, Options),
+    #{includes := Includes} = Context,
+    {ok, hls_source:read(Filename,
+        Context#{includes := Includes ++ application_includes()})}.
+
+application_includes() ->
+    case code:lib_dir(erl_hls) of
+        {error, bad_name} ->
+            [filename:absname("include")];
+        Application ->
+            [filename:join(Application, "include")]
+    end.

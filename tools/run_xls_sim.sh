@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+local_stage=${1:?usage: run_xls_sim.sh STAGE}
+project_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+remote_host=${ERL_HLS_REMOTE_HOST:-192.168.64.7}
+remote_root=${ERL_HLS_REMOTE_ROOT:-/home/ecpeterson/erl_hls-build}
+remote_xls=${ERL_HLS_REMOTE_XLS:-/home/ecpeterson/xls-v0.0.0-10601-g9f360fc89-linux-x64}
+remote_stage="$remote_root/regsvc"
+
+"$project_root/tools/prepare_xls_sim.sh" "$local_stage"
+"$project_root/tools/xls_goldens.sh" check "$local_stage"
+cp "$project_root/tools/remote_xls_sim.sh" \
+    "$local_stage/remote_xls_sim.sh"
+
+ssh -o BatchMode=yes "$remote_host" mkdir -p "$remote_stage"
+rsync -a -e "ssh -o BatchMode=yes" \
+    "$local_stage"/*.x \
+    "$local_stage/compile_xls.py" \
+    "$local_stage/regsvc_core_adapter.v" \
+    "$local_stage/regsvc_debug_top.v" \
+    "$local_stage/hls_1r1w_ram.v" \
+    "$local_stage/hls_fabric_ingress.v" \
+    "$local_stage/hls_fabric_egress.v" \
+    "$local_stage/hls_debug_tap.v" \
+    "$local_stage/hls_debug_monitor.v" \
+    "$local_stage/hls_debug_tap_tb.sv" \
+    "$local_stage/hls_debug_server_tb.sv" \
+    "$local_stage/hls_trace_store.v" \
+    "$local_stage/hls_trace_store_tb.sv" \
+    "$local_stage/regsvc_fabric_fixture.sv" \
+    "$local_stage/regsvc_pair_tb.sv" \
+    "$local_stage/regsvc_bridge_tb.sv" \
+    "$local_stage/phi_halo_cell_tb.sv" \
+    "$local_stage/phenom_data_cell_tb.sv" \
+    "$local_stage/phi_phenom_topology_tb.sv" \
+    "$local_stage/phi_torus_topology_tb.sv" \
+    "$local_stage/hls_fabric_host_tx_tb.sv" \
+    "$local_stage/ordered_egress_topology_tb.sv" \
+    "$local_stage/xls_sim_bridge.c" \
+    "$local_stage/xls_sim_axis.h" \
+    "$local_stage/erl_src" \
+    "$local_stage/test_src" \
+    "$local_stage/remote_xls_sim.sh" \
+    "$remote_host:$remote_stage/"
+
+ssh -o BatchMode=yes "$remote_host" \
+    bash "$remote_stage/remote_xls_sim.sh" "$remote_stage" "$remote_xls"
+
+# Retrieve review artifacts only after the remote runner has generated and
+# simulated them successfully.
+# The topology DSLX is generated locally from its Erlang plan and physical
+# profile. Its regenerated RTL is brought back for review and synthesis;
+# behavioral regeneration, rather than a 500-KiB Verilog golden, is enforced
+# by the remote simulation above.
+rsync -a -e "ssh -o BatchMode=yes" \
+    --include=regsvc.v \
+    --include=phi_halo_cell.v \
+    --include=phenom_data_cell.v \
+    --include=phenom_syndrome_cell.v \
+    --include=phi_phenom_topology.v \
+    --include=hls_debug_observer.v \
+    --include=hls_debug_server.v \
+    --include=hls_fabric_ingress.v \
+    --include=hls_fabric_egress.v \
+    --include=hls_fabric_host_tx.v \
+    --exclude='*' \
+    "$remote_host:$remote_stage/" \
+    "$local_stage/"

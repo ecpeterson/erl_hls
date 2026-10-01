@@ -1,0 +1,6 @@
+-ifndef(SHAPE_COUNT).
+-define(SHAPE_COUNT, 2).
+-endif.
+-ifndef(WIRE_COUNT).
+-define(WIRE_COUNT, ?SHAPE_COUNT).
+-endif.

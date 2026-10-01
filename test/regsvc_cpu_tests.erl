@@ -1,0 +1,332 @@
+-module(regsvc_cpu_tests).
+
+-include_lib("eunit/include/eunit.hrl").
+
+cpu_reference_test_() ->
+    target_test_(fun regsvc:start_link/0, fun scenario_/1).
+
+guarded_cast_clause_cpu_test_() ->
+    target_test_(
+        fun regsvc:start_link/0,
+        fun guarded_cast_clause_scenario_/1
+    ).
+
+ordered_call_clause_cpu_test_() ->
+    target_test_(
+        fun regsvc:start_link/0,
+        fun ordered_call_clause_scenario_/1
+    ).
+
+bulk_bounds_do_not_wrap_test() ->
+    State = regsvc:init([]),
+    lists:foreach(fun({Start, Count}) ->
+        ?assertError(function_clause, regsvc:handle_call({bulk_get, Start, Count}, State))
+    end, [{16, 1}, {16#ffffffff, 1}, {16#fffffffe, 3}]).
+
+simulated_rtl_test_() ->
+    case os:getenv("ERL_HLS_SIM_DIR") of
+        false ->
+            [];
+        SimDir ->
+            WritePath = filename:join(SimDir, "app_tx"),
+            ReadPath = filename:join(SimDir, "app_rx"),
+            DebugWritePath = filename:join(SimDir, "debug_tx"),
+            DebugReadPath = filename:join(SimDir, "debug_rx"),
+            {setup,
+                fun() ->
+                    {ok, AppDevice} = hls_fabric:start_link(
+                        WritePath, ReadPath
+                    ),
+                    {ok, DebugDevice} = hls_fabric:start_link(
+                        DebugWritePath, DebugReadPath
+                    ),
+                    {ok, AppFabric} = hls_fabric:open_session(AppDevice),
+                    {ok, DebugFabric} = hls_fabric:open_session(DebugDevice),
+                    {ok, PidOne} = hls_gs:start_link(regsvc, [], [
+                        {fabric, AppFabric, 1}
+                    ]),
+                    {ok, PidTwo} = hls_gs:start_link(regsvc, [], [
+                        {fabric, AppFabric, 2}
+                    ]),
+                    {ok, DebugPidOne} = hls_debug:start_link(
+                        regsvc, {fabric, DebugFabric, 1}
+                    ),
+                    {ok, DebugPidTwo} = hls_debug:start_link(
+                        regsvc, {fabric, DebugFabric, 2}
+                    ),
+                    {
+                        {AppDevice, AppFabric},
+                        {DebugDevice, DebugFabric},
+                        PidOne,
+                        PidTwo,
+                        DebugPidOne,
+                        DebugPidTwo
+                    }
+                end,
+                fun({
+                    {AppDevice, AppFabric},
+                    {DebugDevice, DebugFabric},
+                    PidOne,
+                    PidTwo,
+                    DebugPidOne,
+                    DebugPidTwo
+                }) ->
+                    hls_debug:stop(DebugPidTwo),
+                    hls_debug:stop(DebugPidOne),
+                    regsvc:stop(PidTwo),
+                    regsvc:stop(PidOne),
+                    hls_fabric:stop(DebugFabric),
+                    hls_fabric:stop(AppFabric),
+                    hls_fabric:stop(DebugDevice),
+                    hls_fabric:stop(AppDevice)
+                end,
+                fun({
+                    _AppFabric,
+                    _DebugFabric,
+                    PidOne,
+                    PidTwo,
+                    DebugPidOne,
+                    DebugPidTwo
+                }) ->
+                    scenario_(PidOne) ++
+                        debug_scenario_(PidOne, DebugPidOne) ++
+                        routed_pair_scenario_(PidOne, PidTwo) ++
+                        routed_debug_scenario_(DebugPidTwo) ++
+                        rtl_error_scenario_(PidOne) ++
+                        transaction_scenario_(PidOne, DebugPidOne)
+                end}
+    end.
+
+target_test_(Start, Scenario) ->
+    {setup,
+        fun() ->
+            {ok, Pid} = Start(),
+            Pid
+        end,
+        fun(Pid) ->
+            regsvc:stop(Pid)
+        end,
+        fun(Pid) -> Scenario(Pid) end}.
+
+transaction_scenario_(Pid, DebugPid) ->
+    [{timeout, 60, ?_test(begin
+        {ok, _} = hls_debug:get_trace(DebugPid),
+        %% Cross the application ID space twice through the real frame bridge.
+        %% Asynchronous requests let one caller own many distinct reply slots;
+        %% interleaved casts must not steal any of them.
+        lists:foreach(fun(Round) ->
+            Requests = [begin
+                Value = Round * 1000 + I,
+                Request = gen_server:send_request(Pid, {ping, Value}),
+                ok = regsvc:set(Pid, 0, I, 0),
+                {Value, Request}
+            end || I <- lists:seq(1, 200)],
+            [?assertEqual({reply, {ack, Value}}, gen_server:wait_response(Request, 30000))
+                || {Value, Request} <- Requests]
+        end, lists:seq(1, 3)),
+        %% A cast rejected by RTL has an error reply, isolated on ID 255.
+        Ignored = maps:get(ignored_replies, hls_fabric:client_info(Pid)),
+        ok = regsvc:set(Pid, 16, 0, 1),
+        ?assertEqual(123, regsvc:ping(Pid, 123)),
+        ?assertMatch(#{status := up, pending := 0, available := 255},
+            hls_fabric:client_info(Pid)),
+        ?assertEqual(Ignored + 1, maps:get(ignored_replies, hls_fabric:client_info(Pid))),
+        DebugRequests = [gen_server:send_request(DebugPid, get_counters) || _ <- lists:seq(1, 32)],
+        [?assertMatch({reply, {ok, #{version := 5, observation_drops := 0}}},
+            gen_server:wait_response(Request, 30000)) || Request <- DebugRequests],
+        {ok, Trace} = hls_debug:get_trace(DebugPid),
+        ?assert(lists:any(fun(#{kind := Kind, tx_id := Tx}) ->
+            Kind =:= application_rx andalso Tx =:= 255
+        end, maps:get(events, Trace))),
+        ?assertMatch(#{status := up, pending := 0, available := 256},
+            hls_fabric:client_info(DebugPid))
+    end)}].
+
+scenario_(Pid) ->
+    [
+        ?_assertEqual(16#12345678, regsvc:ping(Pid, 16#12345678)),
+        ?_assertEqual(ok, regsvc:set(Pid, 0, 2, 16#ffffffff)),
+        ?_assertEqual(2, regsvc:get(Pid, 0)),
+        ?_assertEqual(ok, regsvc:set(Pid, 0, 1, 1)),
+        ?_assertEqual(3, regsvc:get(Pid, 0)),
+        ?_assertEqual(ok, regsvc:set(Pid, 1, 4, 16#ffffffff)),
+        ?_assertEqual([3, 4, 0], regsvc:bulk_get(Pid, 0, 3))
+    ].
+
+%% Host/VPI polling determines the bridged egress stall total, so these
+%% scenarios check transferred traffic but do not bound app_tx_stall_cycles.
+%% regsvc_pair_tb checks TX backpressure under cycle-controlled stimulus.
+debug_scenario_(Pid, DebugPid) ->
+    [
+        ?_test(begin
+            {ok, Counters} = hls_debug:get_counters(DebugPid),
+            ?assertEqual(5, maps:get(version, Counters)),
+            ?assert(maps:get(cycles, Counters) > 0),
+            ?assertEqual(21, maps:get(app_rx_beats, Counters)),
+            ?assertEqual(7, maps:get(app_rx_frames, Counters)),
+            ?assertEqual(10, maps:get(app_tx_beats, Counters)),
+            ?assertEqual(4, maps:get(app_tx_frames, Counters)),
+            ?assertEqual(0, maps:get(app_rx_stall_cycles, Counters))
+        end),
+        ?_test(begin
+            {ok, Trace} = hls_debug:get_trace(DebugPid),
+            Events = maps:get(events, Trace),
+            ?assertEqual(2, maps:get(version, Trace)),
+            ?assertEqual(3, maps:get(record_words, Trace)),
+            ?assertEqual(11, maps:get(count, Trace)),
+            ?assertEqual(11, length(Events)),
+            ?assertEqual(0, maps:get(dropped, Trace)),
+            ?assertEqual(0, maps:get(observation_drops, Trace)),
+            ?assertEqual([
+                {application_rx, 0, 5},
+                {application_tx, 0, 7},
+                {application_rx, 255, 3},
+                {application_rx, 1, 4},
+                {application_tx, 1, 8},
+                {application_rx, 255, 3},
+                {application_rx, 2, 4},
+                {application_tx, 2, 8},
+                {application_rx, 255, 3},
+                {application_rx, 3, 6},
+                {application_tx, 3, 9}
+            ], [
+                {
+                    maps:get(kind, Event),
+                    maps:get(tx_id, Event),
+                    maps:get(op, Event)
+                }
+                || Event <- Events
+            ]),
+            ?assert(lists:all(
+                fun(#{cycle := Cycle, route := Route, observation_gap := Gap}) ->
+                    Cycle > 0 andalso Route =:= none andalso Gap =:= false
+                end,
+                Events
+            )),
+            Cycles = [maps:get(cycle, Event) || Event <- Events],
+            ?assertEqual(Cycles, lists:sort(Cycles))
+        end),
+        ?_test(begin
+            {ok, Trace} = hls_debug:get_trace(DebugPid),
+            ?assertEqual(0, maps:get(count, Trace)),
+            ?assertEqual(0, maps:get(dropped, Trace)),
+            ?assertEqual(0, maps:get(observation_drops, Trace)),
+            ?assertEqual([], maps:get(events, Trace))
+        end),
+        ?_test(begin
+            lists:foreach(
+                fun(Value) ->
+                    ?assertEqual(Value, regsvc:ping(Pid, Value))
+                end,
+                lists:seq(1, 33)
+            ),
+            {ok, Trace} = hls_debug:get_trace(DebugPid),
+            Events = maps:get(events, Trace),
+            ?assertEqual(64, maps:get(count, Trace)),
+            ?assertEqual(64, length(Events)),
+            ?assertEqual(2, maps:get(dropped, Trace)),
+            ?assertEqual(0, maps:get(observation_drops, Trace)),
+            ?assertEqual(lists:flatmap(
+                fun(TxID) ->
+                    [
+                        {application_rx, TxID, 5},
+                        {application_tx, TxID, 7}
+                    ]
+                end,
+                lists:seq(4, 35)
+            ), [
+                {
+                    maps:get(kind, Event),
+                    maps:get(tx_id, Event),
+                    maps:get(op, Event)
+                }
+                || Event <- Events
+            ])
+        end),
+        ?_test(begin
+            {ok, Trace} = hls_debug:get_trace(DebugPid),
+            ?assertEqual(0, maps:get(count, Trace)),
+            ?assertEqual(0, maps:get(dropped, Trace)),
+            ?assertEqual(0, maps:get(observation_drops, Trace)),
+            ?assertEqual([], maps:get(events, Trace))
+        end)
+    ].
+
+rtl_error_scenario_(Pid) ->
+    [
+        ?_test(begin
+            ok = regsvc:set(Pid, 16, 16#ffffffff, 0),
+            ?assertEqual(3, regsvc:get(Pid, 0))
+        end),
+        ?_assertEqual([], regsvc:bulk_get(Pid, 16, 0)),
+        ?_assertEqual(
+            {error, {remote_error, function_clause}},
+            gen_server:call(Pid, {bulk_get, 16, 1})
+        ),
+        ?_assertEqual(
+            {error, {remote_error, function_clause}},
+            gen_server:call(Pid, {bulk_get, 16#ffffffff, 1})
+        ),
+        ?_assertEqual(
+            {error, {remote_error, function_clause}},
+            gen_server:call(Pid, {bulk_get, 16#fffffffe, 3})
+        ),
+        ?_assertEqual(
+            {error, {remote_error, function_clause}},
+            gen_server:call(Pid, {get, 16})
+        ),
+        ?_assertEqual(
+            {error, {invalid_request, call, ack}},
+            gen_server:call(Pid, {ack, 0})
+        ),
+        ?_assertEqual(0, regsvc:get(Pid, 0))
+    ].
+
+guarded_cast_clause_scenario_(Pid) ->
+    [
+        ?_test(begin
+            ok = regsvc:set(Pid, 16, 16#ffffffff, 0),
+            ?assertEqual(0, regsvc:get(Pid, 0))
+        end)
+    ].
+
+ordered_call_clause_scenario_(Pid) ->
+    [
+        ?_assertEqual([], regsvc:bulk_get(Pid, 16, 0))
+    ].
+
+routed_pair_scenario_(PidOne, PidTwo) ->
+    [
+        ?_assertEqual(ok, regsvc:set(PidTwo, 0, 16#22, 16#ffffffff)),
+        ?_assertEqual(16#22, regsvc:get(PidTwo, 0)),
+        ?_assertEqual(3, regsvc:get(PidOne, 0)),
+        ?_test(begin
+            Parent = self(),
+            spawn(fun() ->
+                Parent ! {endpoint_one, regsvc:ping(PidOne, 16#11111111)}
+            end),
+            spawn(fun() ->
+                Parent ! {endpoint_two, regsvc:ping(PidTwo, 16#22222222)}
+            end),
+            ?assertEqual(
+                {endpoint_one, 16#11111111},
+                receive ReplyOne = {endpoint_one, _} -> ReplyOne end
+            ),
+            ?assertEqual(
+                {endpoint_two, 16#22222222},
+                receive ReplyTwo = {endpoint_two, _} -> ReplyTwo end
+            )
+        end)
+    ].
+
+routed_debug_scenario_(DebugPid) ->
+    [
+        ?_test(begin
+            {ok, Counters} = hls_debug:get_counters(DebugPid),
+            ?assertEqual(5, maps:get(version, Counters)),
+            ?assertEqual(8, maps:get(app_rx_beats, Counters)),
+            ?assertEqual(3, maps:get(app_rx_frames, Counters)),
+            ?assertEqual(4, maps:get(app_tx_beats, Counters)),
+            ?assertEqual(2, maps:get(app_tx_frames, Counters))
+        end)
+    ].

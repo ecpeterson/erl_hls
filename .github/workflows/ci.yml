@@ -1,0 +1,427 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  XLS_VERSION: v0.0.0-10601-g9f360fc89
+  XLS_SHA256: 163c27ee1a606b77956e0e2317a5b0ce98390d65b74ab12471356ddb679a835e
+
+jobs:
+  select:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    outputs:
+      test: ${{ steps.plan.outputs.test == 'true' && steps.passed.outputs.cache-hit != 'true' }}
+      topology: ${{ steps.plan.outputs.topology == 'true' && steps.passed.outputs.cache-hit != 'true' }}
+      qualify: ${{ steps.plan.outputs.qualify == 'true' && steps.passed.outputs.cache-hit != 'true' }}
+      key: ${{ steps.plan.outputs.key }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - run: python3 tools/test_ci_plan.py
+      - id: plan
+        env:
+          CI_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          CI_SUITE: ci
+          CI_GROUPS: test,topology
+        run: python3 tools/ci_plan.py
+      - id: passed
+        if: steps.plan.outputs.reusable == 'true' && steps.plan.outputs.qualify == 'true'
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: _build/ci-passed/ci
+          key: qualified-${{ runner.os }}-${{ runner.arch }}-ci-${{ steps.plan.outputs.key }}
+          lookup-only: true
+      - name: Explain reused qualification
+        if: steps.passed.outputs.cache-hit == 'true'
+        run: echo 'These exact source, dependency, test and workflow inputs already passed; reusing that qualification.' >> "$GITHUB_STEP_SUMMARY"
+
+  test:
+    needs: select
+    if: needs.select.outputs.test == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Install Erlang and rebar3
+        uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124
+        with:
+          otp-version: "28.0.2"
+          rebar3-version: "3.24.0"
+
+      - name: Install RTL verification tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes iverilog yosys
+
+      - name: Cache XLS
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: ${{ runner.temp }}/xls
+          key: xls-${{ runner.os }}-${{ runner.arch }}-${{ env.XLS_VERSION }}-${{ env.XLS_SHA256 }}
+
+      - name: Install pinned XLS release
+        env:
+          XLS_ROOT: ${{ runner.temp }}/xls
+        run: |
+          if [[ ! -x "$XLS_ROOT/codegen_main" ]]; then
+            archive="$RUNNER_TEMP/xls.tar.gz"
+            url="https://github.com/google/xls/releases/download/$XLS_VERSION/xls-$XLS_VERSION-linux-x64.tar.gz"
+            curl --fail --location --show-error "$url" --output "$archive"
+            echo "$XLS_SHA256  $archive" | sha256sum --check
+            mkdir -p "$XLS_ROOT"
+            tar -xzf "$archive" --strip-components=1 -C "$XLS_ROOT"
+          fi
+          "$XLS_ROOT/codegen_main" --version
+
+      - name: Check build-artifact compaction safeguards
+        run: |
+          python3 tools/test_compact_build.py
+          python3 tools/test_hls_profile.py
+
+      - name: Check the DSLX golden workflow
+        run: python3 tools/test_xls_goldens.py
+
+      - name: Run Erlang tests
+        run: rebar3 eunit
+
+      - name: Prepare simulation inputs
+        run: bash tools/prepare_xls_sim.sh "$PWD/_build/xls_sim/regsvc"
+
+      - name: Check generated DSLX before RTL compilation
+        run: bash tools/xls_goldens.sh check "$PWD/_build/xls_sim/regsvc"
+
+      - name: Check differential compiler runner and shrinking
+        run: |
+          python3 tools/test_compiler_differential.py
+          python3 tools/test_compiler_differential.py --xls-root "$RUNNER_TEMP/xls"
+
+      - name: Compare generated Erlang functions with DSLX, JIT, and RTL
+        run: |
+          python3 tools/compiler_differential.py "$RUNNER_TEMP/xls" \
+            --count 16 --depth 3 --inputs 20 --rtl-batches 2 --shrink-budget 40
+
+      - name: Compare macro-configured actors with BEAM
+        run: bash tools/test_source_context.sh "$RUNNER_TEMP/xls"
+
+      - name: Fault-inject the VPI transport
+        run: python3 tools/test_sim_bridge.py
+
+      - name: Check topology query protocol and discovery
+        run: |
+          python3 tools/test_topology_debug.py
+          python3 tools/test_direct_actor_debug.py
+
+      - name: Preserve RAM attributes, write ports, and behavior through debug export
+        run: python3 tools/test_debug_memories.py
+
+      - name: Check bounded actor snapshot equivalence
+        run: python3 tools/test_actor_snapshot_formal.py
+
+      - name: Check incremental compilation, failure recovery, and regsvc RTL identity
+        run: python3 tools/test_compile_xls.py --xls-root "$RUNNER_TEMP/xls"
+
+      - name: Prove round-robin selection and grant fairness
+        run: python3 tools/test_arbitration.py "$RUNNER_TEMP/xls"
+
+      - name: Compare entry outcomes with BEAM and simulate RTL
+        run: bash tools/test_entry_outcomes.sh "$RUNNER_TEMP/xls"
+
+      - name: Compare control-flow failures with BEAM and routed RTL
+        run: bash tools/test_control_failures.sh "$RUNNER_TEMP/xls"
+
+      - name: Check service reply contracts under backpressure
+        run: bash tools/test_service_contracts.sh "$RUNNER_TEMP/xls"
+
+      - name: Check retained replies and iterative continuation drains
+        run: bash tools/test_deferred_replies.sh "$RUNNER_TEMP/xls"
+
+      - name: Check state-machine internal events and retained calls through dedicated actors and topologies
+        run: bash tools/test_statem_replies.sh "$RUNNER_TEMP/xls"
+
+      - name: Compare fixed bit syntax and diagnose packed samples through public debug APIs
+        run: bash tools/test_binary.sh "$RUNNER_TEMP/xls"
+
+      - name: Compare dense and padded codecs with BEAM and RTL
+        run: bash tools/test_logical_types.sh "$RUNNER_TEMP/xls"
+
+      - name: Compare typed floats with BEAM, JIT, and routed RTL
+        run: bash tools/test_float_arithmetic.sh "$RUNNER_TEMP/xls"
+
+      - name: Compare integer division and remainder with BEAM, JIT, and RTL
+        run: bash tools/test_integer_arithmetic.sh "$RUNNER_TEMP/xls"
+
+      - name: Compare mixed-width integers with BEAM, JIT, and RTL
+        run: bash tools/test_comparisons.sh "$RUNNER_TEMP/xls"
+
+      - name: Compare wrapping counters with BEAM, JIT, and RTL
+        run: bash tools/test_serial.sh "$RUNNER_TEMP/xls"
+
+      - name: Compare signed and mixed-width shifts with BEAM, JIT, and RTL
+        run: bash tools/test_integer_shifts.sh "$RUNNER_TEMP/xls"
+
+      - name: Compare checked collections with BEAM, JIT, and RTL
+        run: bash tools/test_collections.sh "$RUNNER_TEMP/xls"
+
+      - name: Compare bounded patterns and guarded helpers with BEAM, JIT, and RTL
+        run: bash tools/test_patterns.sh "$RUNNER_TEMP/xls"
+
+      - name: Check source type shapes and destructured reductions
+        run: bash tools/test_type_shapes.sh "$RUNNER_TEMP/xls"
+
+      - name: Check actor namespaces and mixed-case record codecs
+        run: bash tools/test_names.sh "$RUNNER_TEMP/xls"
+
+      - name: Check configurable routed streams and prove packet conservation
+        run: python3 tools/test_fabric_router.py
+
+      - name: Check application framing and admission conservation
+        run: bash tools/test_application_frames.sh "$RUNNER_TEMP/xls"
+
+      - name: Check direct actor admission, self-delivery, and credit conservation
+        run: bash tools/test_direct_admission.sh "$RUNNER_TEMP/xls"
+
+      - name: Inspect admitted receive backpressure through the debug endpoint
+        run: |
+          python3 tools/test_topology_debug_integration.py \
+            --top application_frames --stage _build/application_frames/debug \
+            _build/application_frames/DebugTop-p2-ii1.v
+
+      - name: Compare typed helpers with BEAM and inline RTL
+        run: bash tools/test_helpers.sh "$RUNNER_TEMP/xls"
+
+      - name: Check initialization and reset against BEAM
+        run: bash tools/test_initialization.sh "$RUNNER_TEMP/xls"
+
+      - name: Run generated reduction semantics
+        run: |
+          bash tools/test_reduction_dslx.sh "$RUNNER_TEMP/xls"
+
+      - name: Run generated RTL and bridged EUnit regressions
+        env:
+          XLS_ROOT: ${{ runner.temp }}/xls
+        run: bash tools/remote_xls_sim.sh "$PWD/_build/xls_sim/regsvc" "$XLS_ROOT"
+
+      - name: Exercise configurable local services and public stall diagnostics
+        run: python3 tools/test_fabric_services.py _build/xls_sim/regsvc
+
+      - name: Diagnose dropped observations through the debug endpoint
+        run: python3 tools/test_debug_trace_integration.py _build/xls_sim/regsvc
+
+      - name: Prove continuous passive sampling under arbitrary debug traffic
+        run: python3 tools/test_debug_sampling.py _build/xls_sim/regsvc
+
+      - name: Upload decoded debug observations
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          retention-days: 7
+          name: debug-observation-reports
+          path: |
+            _build/debug-memories/**/*.json
+            _build/debug-memories/**/*.log
+            _build/debug-memories/**/*.ys
+            _build/debug-sampling/**/*.log
+            _build/debug-sampling/**/*.ys
+            _build/debug-sampling/**/*.abc
+            _build/debug-sampling/**/*.aig
+            _build/debug-sampling/**/*.aim
+            _build/debug-sampling/**/*.aiw
+            _build/debug-sampling/report.json
+            _build/mixed-mailbox-debug/p2/memory-check/report.json
+            _build/mixed-mailbox-debug/p2/memory-check/*.ys
+            _build/mixed-mailbox-debug/p2/memory-check/*.log
+            _build/frame-router/**/*.log
+            _build/frame-router/**/*.vcd
+            _build/fabric-services/*.log
+            _build/fabric-services/*.term
+            _build/debug-trace-integration/*.log
+            _build/debug-trace-integration/trace_*.term
+            _build/actor-debug/**/actors-*.term
+            _build/actor-debug/**/manifest.json
+            _build/actor-debug/**/blocked.txt
+            _build/actor-debug/**/recovered.txt
+            _build/mailbox-debug/**/actors-*.term
+            _build/mailbox-debug/**/manifest.json
+            _build/mailbox-debug/**/blocked.txt
+            _build/mailbox-debug/**/recovered.txt
+            _build/reduction-debug/**/actors-*.term
+            _build/reduction-debug/**/scc.log
+            _build/aggregate-debug/**/actors-*.term
+            _build/aggregate-debug/**/scc.log
+          if-no-files-found: ignore
+
+      - name: Query an instrumented generated topology under backpressure
+        run: |
+          python3 tools/test_topology_debug_integration.py \
+            --top __ordered_egress_topology__Top_0_next \
+            --stage _build/topology-debug-queries/ordered \
+            _build/xls_sim/regsvc/ordered_egress_topology.v
+
+      - name: Upload simulation diagnostics
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          retention-days: 7
+          name: xls-simulation-diagnostics
+          path: |
+            _build/topology-debug-queries/**/*.log
+            _build/topology-debug-queries/**/manifest.json
+            _build/topology-debug-queries/**/blocked.json
+            _build/topology-debug-queries/**/recovered.json
+            _build/sim_bridge/**/*.log
+            _build/sim_bridge/**/*.sv
+            _build/deferred-replies/**
+            _build/service_contracts/*.log
+            _build/service_contracts/*.json
+            _build/service_contracts/**/*.v
+            _build/service_contracts/**/*.x
+            _build/binary/**/*.log
+            _build/binary/live/*.term
+            _build/binary/*.x
+            _build/binary/*.v
+            _build/logical-types/*.x
+            _build/logical-types/*.mem
+            _build/logical-types/**/*.v
+            _build/entry_outcomes/*.x
+            _build/entry_outcomes/*.ir
+            _build/entry_outcomes/*.v
+            _build/entry_outcomes/*.sv
+            _build/application_frames/**
+            _build/direct-admission-tests/**
+            _build/initialization/**
+            _build/actor-debug/**
+            _build/actor-snapshot-formal/**
+            _build/arbitration/**
+            _build/actor-outboxes/**
+            _build/mailbox-debug/**
+            _build/direct-mailbox-debug/**
+            _build/mixed-mailbox-debug/**
+            _build/reduction-debug/**
+            _build/aggregate-debug/**
+            _build/reduction-semantics/**
+            _build/mailbox-formal/**
+            _build/helpers/**
+            _build/control_failures/**
+            _build/typed-float/**
+            _build/integer-arithmetic/**
+            _build/integer-shifts/**
+            _build/serial/**
+            _build/comparisons/**
+            _build/collections/**
+            _build/patterns/**
+            _build/type-shapes/**
+            _build/names/**
+            _build/compiler-differential/**
+            _build/differential-self-test/**
+            _build/xls_sim/regsvc/*.ir
+            _build/xls_sim/regsvc/*.v
+            _build/xls_sim/regsvc/sim/vvp.log
+            _build/xls_sim/regsvc/phi_sim/vvp.log
+          if-no-files-found: ignore
+
+  mixed-topology:
+    needs: select
+    if: needs.select.outputs.topology == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        workload: [closed, ingress]
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Install Erlang and rebar3
+        uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124
+        with:
+          otp-version: "28.0.2"
+          rebar3-version: "3.24.0"
+
+      - name: Install RTL verification tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes iverilog yosys
+
+      - name: Cache XLS
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: ${{ runner.temp }}/xls
+          key: xls-${{ runner.os }}-${{ runner.arch }}-${{ env.XLS_VERSION }}-${{ env.XLS_SHA256 }}
+
+      - name: Install pinned XLS release
+        env:
+          XLS_ROOT: ${{ runner.temp }}/xls
+        run: |
+          if [[ ! -x "$XLS_ROOT/codegen_main" ]]; then
+            archive="$RUNNER_TEMP/xls.tar.gz"
+            url="https://github.com/google/xls/releases/download/$XLS_VERSION/xls-$XLS_VERSION-linux-x64.tar.gz"
+            curl --fail --location --show-error "$url" --output "$archive"
+            echo "$XLS_SHA256  $archive" | sha256sum --check
+            mkdir -p "$XLS_ROOT"
+            tar -xzf "$archive" --strip-components=1 -C "$XLS_ROOT"
+          fi
+          "$XLS_ROOT/codegen_main" --version
+
+      - name: Compare dedicated actor topologies with CPU and inspect stalls
+        timeout-minutes: 5
+        env:
+          WORKLOAD: ${{ matrix.workload }}
+        run: |
+          placement=direct
+          if [[ "$WORKLOAD" == ingress ]]; then placement=ingress_direct; fi
+          bash tools/test_mixed_topology.sh "$RUNNER_TEMP/xls" _build/mixed-topology "$placement"
+
+      - name: Upload mixed topology diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          retention-days: 7
+          name: mixed-topology-${{ matrix.workload }}-reports
+          path: |
+            _build/mixed-topology/**/*.log
+            _build/mixed-topology/**/*.term
+            _build/mixed-topology/**/*.hex
+            _build/mixed-topology/**/*.x
+            _build/mixed-topology/**/*.v
+            _build/mixed-topology/**/manifest.json
+            _build/mixed-topology/**/actors.json
+            _build/mixed-topology/**/commands.json
+            _build/mixed-topology/**/blocked.txt
+            _build/mixed-topology/**/recovered.txt
+            _build/mixed-windows/cycles.json
+            _build/mixed-windows/**/*.log
+          if-no-files-found: ignore
+
+  qualify:
+    needs: [select, test, mixed-topology]
+    if: ${{ !cancelled() && needs.select.outputs.qualify == 'true' && (needs.test.result == 'success' || needs.test.result == 'skipped') && (needs.mixed-topology.result == 'success' || needs.mixed-topology.result == 'skipped') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Record successful input qualification
+        run: |
+          mkdir -p _build/ci-passed
+          printf '%s\n' "$GITHUB_SHA" > _build/ci-passed/ci
+      - uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: _build/ci-passed/ci
+          key: qualified-${{ runner.os }}-${{ runner.arch }}-ci-${{ needs.select.outputs.key }}

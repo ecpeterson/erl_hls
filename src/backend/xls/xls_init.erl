@@ -1,0 +1,53 @@
+-module(xls_init).
+-moduledoc false.
+
+-export([clause/2, lower/4, emit/3]).
+-export_type([lowered/0]).
+
+-type lowered() :: #{line := non_neg_integer(), body := iodata(),
+    result := iodata(), failed := iodata()}.
+
+-doc "Returns the sole init([]) clause; rejects guards, other heads and multiple initializers.".
+-spec clause([hls_source:form()], hls_gs | hls_statem) ->
+    erl_parse:abstract_clause().
+
+%% Hardware has one compile-time initializer. Per-instance configuration is
+%% supplied separately by topology startup messages, before normal input traffic.
+clause(Forms, Behaviour) ->
+    case xls_parse:find_function(Forms, init, 1) of
+        [Clause = {clause, _Line, [{nil, _}], [], _Body}] -> Clause;
+        [{clause, Line, Patterns, Guards, _Body}] ->
+            error({unsupported_hls_init_head, Behaviour, Line, Patterns, Guards});
+        Clauses ->
+            error({unsupported_hls_init_clauses, Behaviour, length(Clauses)})
+    end.
+
+-doc "Lowers initialization to its source line, statements, postprocessed value and failure expression.".
+-spec lower(erl_parse:abstract_clause(), atom(),
+    fun((xls_parse:printable()) -> xls_parse:printable()), map()) -> lowered().
+lower(Clause = {clause, Line, _, _, _}, DataName, Postprocess, EnumAtoms) ->
+    #{body := Body, result := Result, failed := Failed} =
+        xls_parse:clause_outcome(Clause, [], DataName, EnumAtoms),
+    #{
+        line => erl_anno:line(Line),
+        body => xls_parse:print(Body),
+        result => xls_parse:print(Postprocess(Result)),
+        failed => xls_parse:print(Failed)
+    }.
+
+-doc "Emits an initializer that rejects failed matches during DSLX conversion.".
+%% Evaluate the outcome as a constant even if the caller runs after proc init().
+-spec emit(string(), string(), lowered()) -> iolist().
+emit(Name, Type, #{line := Line, body := Body, result := Result,
+        failed := Failed}) ->
+    Constant = string:uppercase(Name),
+    [
+        "fn ", Name, "_outcome() -> (bool, ", Type, ") {  // L",
+        integer_to_list(Line), "\n",
+        xls_parse_io:indent(Body, 2),
+        xls_parse_io:indent(["(", Failed, ", ", Result, ")"], 2),
+        "}\n",
+        "const ", Constant, " = ", Name, "_outcome();\n",
+        "const_assert!(!", Constant, ".0);\n\n",
+        "fn ", Name, "() -> ", Type, " { ", Constant, ".1 }\n\n"
+    ].
