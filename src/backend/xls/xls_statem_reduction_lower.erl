@@ -188,6 +188,8 @@ analyze_source(_Forms, Context) ->
 %%% Source recognition
 %%%
 
+%% Separate fixed site facts from the values evaluated when its entry executes.
+-spec parse_open(erl_parse:abstract_expr(), erl_anno:anno()) -> map().
 parse_open(
     {tuple, TupleLine, [
         {atom, _OpenLine, open_reduction},
@@ -201,16 +203,25 @@ parse_open(
     ]},
     _EntryLine
 ) ->
+    {Population, Mask} = parse_open_population(PopulationExpression),
     #{
         line => TupleLine,
         name => Name,
         key_expression => Key,
-        population => parse_population(PopulationExpression),
+        member_mask_expression => Mask,
+        population => Population,
         accumulator => Accumulator,
         identity_expression => Identity
     };
 parse_open(Action, EntryLine) ->
     error({unsupported_hls_statem_open_reduction, EntryLine, Action}).
+
+%% Keep the runtime mask in the entry program; closed interfaces contain only its bound.
+-spec parse_open_population(erl_parse:abstract_expr()) -> {map(), none | erl_parse:abstract_expr()}.
+parse_open_population({tuple, _Line, [{atom, _, members_mask}, {integer, _, Width}, Mask]})
+        when Width >= 1, Width =< 255 ->
+    {#{mode => members, size => Width, members => lists:seq(0, Width - 1), runtime_mask => true}, Mask};
+parse_open_population(Expression) -> {parse_population(Expression), none}.
 
 parse_population({tuple, _Line, [
     {atom, _CountLine, count},
@@ -274,6 +285,8 @@ require_private_accumulator(Accumulator, DataName, MessageNames) ->
         false -> ok
     end.
 
+%% Opening expressions may read actor data; the identity remains a complete constant record.
+-spec validate_open(map(), [erl_parse:abstract_form()], atom()) -> map().
 validate_open(Open = #{
     key_expression := Key,
     identity_expression := Identity,
@@ -283,6 +296,7 @@ validate_open(Open = #{
 }, Forms, DataName) ->
     Bindings = pattern_bindings(DataPattern, DataName, data, Forms),
     ok = validate_u32_expression(Key, Bindings, [data]),
+    ok = validate_member_mask(Open, Bindings),
     case expression_variables(Identity) of
         [] -> ok;
         Variables -> error({nonconstant_hls_statem_reduction_identity,
@@ -295,6 +309,29 @@ validate_open(Open = #{
         reduction_identity
     ),
     Open.
+
+%% Masks are integral literals or direct actor-data reads, so checking them cannot repeat effects.
+-spec validate_member_mask(map(), map()) -> ok.
+validate_member_mask(#{member_mask_expression := none}, _Bindings) -> ok;
+validate_member_mask(#{member_mask_expression := Mask}, Bindings) ->
+    require_variable_origins(expression_variables(Mask), Bindings, [data], reduction_member_mask),
+    case Mask of
+        {integer, _, _} -> ok;
+        {var, _, Name} ->
+            #{type := Type} = maps:get(Name, Bindings),
+            require_mask_type(Type);
+        {record_field, _, {var, _, Object}, Record, {atom, _, Field}} ->
+            #{type := {record, Record}, fields := Fields} = maps:get(Object, Bindings),
+            require_mask_type(maps:get(Field, Fields));
+        _ -> error({unsupported_hls_statem_reduction_mask, Mask})
+    end.
+
+%% A bounded bit set may use any signed or unsigned integral source width.
+-spec require_mask_type(hls_type:descriptor()) -> ok.
+require_mask_type({hls_type, hls_nums, Name, _}) when
+        Name =:= u8; Name =:= u16; Name =:= u32; Name =:= u64; Name =:= uN;
+        Name =:= s8; Name =:= s16; Name =:= s32; Name =:= s64; Name =:= sN -> ok;
+require_mask_type(Type) -> error({invalid_hls_statem_reduction_mask_type, Type}).
 
 split_contributions(Groups) ->
     lists:foldl(
@@ -419,6 +456,8 @@ contribution_shapes(Forms, Contributions) ->
     end, #{}, Contributions),
     xls_type_shape:records(Forms, Requests).
 
+%% Validate immutable contribution values and the exact data dependencies of capture.
+-spec validate_contribution(map(), map(), atom(), [erl_parse:abstract_form()], atom(), map()) -> map().
 validate_contribution(
     Contribution = #{
         phase := Phase,
@@ -463,6 +502,12 @@ validate_contribution(
             [] -> xls_pattern_totality:prove(MessagePattern, maps:get(Tag, Shapes));
             _ -> none
         end,
+        independent_lift => lists:all(fun(Variable) ->
+            case maps:get(Variable, MessageBindings, none) of
+                #{origin := message} -> true;
+                _ -> false
+            end
+        end, expression_variables(Guards)),
         source_transportable => source_transportable(
             MessagePattern, DataPattern, Guards)
     };
@@ -775,6 +820,8 @@ close_site(Open, Contributions, Completion, DataName, AccumulatorName,
         )
     }.
 
+%% Close a message schema while retaining the existing source-capture requirements.
+-spec close_contribution_group(atom(), [map()], atom(), map(), map()) -> map().
 close_contribution_group(Tag, Contributions, DataName, AccumulatorType,
         EnumAtoms) ->
     Clauses = [rewrite_contribution_clause(Contribution)
@@ -817,13 +864,21 @@ close_contribution_group(Tag, Contributions, DataName, AccumulatorType,
             Tag, Contributions, DataName, AccumulatorType, EnumAtoms);
         false -> none
     end,
+    %% This candidate omits the actor data pattern. It is not permission to
+    %% bypass that pattern: a backend must separately establish or explicitly
+    %% assert exclusive protocol ownership and validate the eventual open.
+    IndependentLift = case lists:all(fun(C) -> maps:get(independent_lift, C) end, Contributions) of
+        true -> close_transport_contribution_group(Tag, Contributions, DataName, AccumulatorType, EnumAtoms);
+        false -> none
+    end,
     %% The owning site already fixes name, phase, and population mode.
     #{
         tag => Tag,
         build => lowered(Body, Result),
         source_transportable => SourceTransportable,
         source_capture_total => SourceCaptureTotal,
-        transport => Transport
+        transport => Transport,
+        independent_lift => IndependentLift
     }.
 
 source_capture_total(#{capture_checks := Checks}) -> Checks =/= none.
@@ -1097,6 +1152,14 @@ source_transportable(MessagePattern, {var, _Line, DataVariable}, Guards)
 source_transportable(_MessagePattern, _DataPattern, _Guards) ->
     false.
 
+%% Keys and members use u32 values; an explicit conversion also permits computed expressions.
+-spec validate_u32_expression(erl_parse:abstract_expr(), map(), [atom()]) -> ok.
+validate_u32_expression({call, _, {remote, _, {atom, _, hls_type}, {atom, _, as}},
+        [{call, _, {remote, _, {atom, _, hls_nums}, {atom, _, u32}}, []},
+         Expression]}, Bindings, Origins) ->
+    %% Explicit conversion gives the lowered expression its required result type.
+    %% Normal expression lowering still rejects unsupported operations or effects.
+    require_variable_origins(expression_variables(Expression), Bindings, Origins, reduction_value);
 validate_u32_expression({integer, _Line, Value}, _Bindings, _Origins) ->
     _ = u32_literal(Value, reduction_value),
     ok;

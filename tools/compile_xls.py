@@ -181,8 +181,15 @@ def build(source: Path | str, xls_root: Path | str, output: Path | str, *,
           ram_configurations: str | Callable[[Path], str] | None = None,
           assets: Sequence[Path | str] = (), metadata: dict | Callable[[Path], dict] | None = None,
           timeout: float = 7200, cache: Path | str | None = None,
-          delay_model: str = "unit", delay_table: Path | str | None = None) -> Path:
-    """Publish checked artifacts; snapshot custom delay data and key its codegen cache."""
+          delay_model: str = "unit", delay_table: Path | str | None = None,
+          channel_delays: dict[str, int] | None = None) -> Path:
+    """Publish checked artifacts with cached conversion, optimization and code generation.
+
+    ``channel_delays`` maps channel names (optionally suffixed ``:send`` or
+    ``:recv``) to nonnegative scheduling costs in the selected delay model's
+    units. They affect scheduling, not the channel protocol or a physical
+    timing guarantee. Changing them invalidates code generation only.
+    """
     source, xls_root = Path(source).resolve(), Path(xls_root).resolve()
     # Resolve the parent, not the published symlink itself.
     output = Path(output).absolute()
@@ -192,6 +199,10 @@ def build(source: Path | str, xls_root: Path | str, output: Path | str, *,
     name = name or source.stem
     if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name):
         raise ValueError("output name must be an identifier")
+    channel_delays = channel_delays or {}
+    if any(not re.fullmatch(r"[A-Za-z_]\w*(?::(?:send|recv))?", name)
+           or type(value) is not int or value < 0 for name, value in channel_delays.items()):
+        raise ValueError("channel delays require channel[:send|recv] and a nonnegative integer")
     if pipeline_stages < 1 or (initiation_interval is not None and initiation_interval < 1):
         raise ValueError("pipeline stages and initiation interval must be positive")
     if output.is_symlink() and output.resolve().parent != output.parent / f".{output.name}-releases":
@@ -237,6 +248,9 @@ def build(source: Path | str, xls_root: Path | str, output: Path | str, *,
                        "--flop_outputs=true", "--use_system_verilog=false", "--reset=reset", "--fifo_module="]
             if delay_table is not None:
                 codegen.append("--xc7_delay_table=assets/xc7_delay_table.tsv")
+            if channel_delays:
+                codegen.append("--additional_channel_delay_ps=" + ",".join(
+                    f"{name}={value}" for name, value in sorted(channel_delays.items())))
             if initiation_interval is not None:
                 codegen.append(f"--worst_case_throughput={initiation_interval}")
             if callable(ram_configurations):

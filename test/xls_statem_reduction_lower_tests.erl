@@ -33,6 +33,8 @@ closed_ir_nests_site_owned_work_test() ->
     ?assertMatch([{{count_value, counting}, [_]}], Ordinary),
     ?assertEqual(false, contains_source_form(Reduction)).
 
+%% Static populations allocate no runtime expected-member bits.
+-spec layout_is_minimal_and_derived_test() -> ok.
 layout_is_minimal_and_derived_test() ->
     Reduction = maps:get(reduction, analyze(?FIXTURE)),
     ?assertEqual(2, xls_statem_reduction_ir:site_count(Reduction)),
@@ -51,6 +53,7 @@ layout_is_minimal_and_derived_test() ->
         member_bits => 3,
         accumulator_bits => 40,
         failure_bits => 16,
+        expected_bits => 0,
         total_bits => 96
     }, xls_statem_reduction_ir:layout(Reduction)),
     ?assertEqual(96, xls_statem_reduction_ir:storage_width(Reduction)).
@@ -168,6 +171,7 @@ actor_data_dependent_applicability_is_reported_not_globally_rejected_test() ->
             ?assertEqual(false,
                 maps:get(source_transportable, Contribution)),
             ?assertEqual(none, maps:get(transport, Contribution)),
+            ?assert(is_map(maps:get(independent_lift, Contribution))),
             Interface = xls_parse:actor_interface(Path),
             [PublicCount | _] = maps:get(sites,
                 maps:get(reductions, Interface)),
@@ -178,7 +182,7 @@ actor_data_dependent_applicability_is_reported_not_globally_rejected_test() ->
         end
     ).
 
-%% Checks actor data dependent guard is not source transportable.
+%% A data-dependent guard cannot become a message-only lift, even under an asserted protocol.
 -spec actor_data_dependent_guard_is_not_source_transportable_test() -> 'ok'.
 actor_data_dependent_guard_is_not_source_transportable_test() ->
     with_mutated_fixture(
@@ -188,7 +192,8 @@ actor_data_dependent_guard_is_not_source_transportable_test() ->
             #{reduction := #{sites := [Count | _]}} = analyze(Path),
             [Contribution] = maps:get(contributions, Count),
             ?assertEqual(false,
-                maps:get(source_transportable, Contribution))
+                maps:get(source_transportable, Contribution)),
+            ?assertEqual(none, maps:get(independent_lift, Contribution))
         end
     ).
 

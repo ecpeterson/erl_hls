@@ -123,6 +123,31 @@ class Builds(BuildFixture):
         with self.assertRaisesRegex(ValueError, 'requires a delay table'):
             self.build(delay_model='xc7_7030')
 
+    def test_channel_delays_invalidate_codegen_only(self) -> None:
+        """Scheduling budgets survive publication and cannot reuse an older RTL schedule."""
+        original = self.build()
+        delayed = self.build(channel_delays={'output:send': 6, 'input:recv': 0})
+        self.assertNotEqual(original, delayed)
+        self.assertEqual(self.statuses(), dict(ir=True, opt=True, codegen=False))
+        manifest = json.loads((delayed / 'counter.build.json').read_text())
+        self.assertIn('--additional_channel_delay_ps=input:recv=0,output:send=6',
+                      manifest['options']['codegen'])
+        self.assertEqual(self.build(channel_delays={'input:recv': 0, 'output:send': 6}), delayed)
+        self.assertEqual(self.statuses(), dict(ir=True, opt=True, codegen=True))
+        self.assertNotEqual(self.build(channel_delays={'output:send': 7}), delayed)
+        self.assertEqual(self.statuses(), dict(ir=True, opt=True, codegen=False))
+        self.assertEqual(self.build(channel_delays={}), original)
+        self.assertEqual(self.statuses(), dict(ir=True, opt=True, codegen=True))
+
+    def test_invalid_channel_delays_do_not_launch_tools(self) -> None:
+        """Reject malformed names and costs before publishing or invoking the compiler."""
+        for delays in ({'output:other': 1}, {'output=1': 2}, {'output': -1},
+                       {'output': True}, {'output': 1.5}):
+            with self.subTest(delays=delays), self.assertRaisesRegex(ValueError, 'channel delays'):
+                self.build(channel_delays=delays)
+        self.assertFalse(self.calls.exists())
+        self.assertFalse(self.output.exists())
+
     def test_import_and_stdlib_edits_invalidate_conversion(self):
         self.build()
         for dependency in [self.inputs / 'helper.x', self.xls / 'xls/dslx/stdlib/std.x']:

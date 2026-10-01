@@ -58,6 +58,7 @@ declarations_value(Spec = #{
         "  key: u32,\n",
         "  remaining: ReductionRemaining,\n",
         "  seen: ReductionMembers,\n",
+        runtime_members(Spec, "  expected: ReductionMembers,\n"),
         "  accumulator: ", AccumulatorType, ",\n",
         "  failure: hls_failure::Code,\n",
         "}\n\n",
@@ -107,7 +108,7 @@ functions_value(Spec) ->
         open_functions(Spec),
         contribution_functions(Spec),
         reducer_function(Spec),
-        apply_function(),
+        apply_function(Spec),
         completion_function(Spec)
     ].
 
@@ -126,6 +127,8 @@ tag_member(#{accumulator := #{name := Name}}, Selector)
         when Selector >= 0, Selector =< 255 ->
     ["  ", xls_names:enum_member(Name), " = u8:", integer_to_list(Selector), ",\n"].
 
+%% Encode and decode exactly the optional member-mask storage described by the IR.
+-spec codec_functions(map()) -> iodata().
 codec_functions(Spec = #{accumulator := #{name := AccumulatorName}}) ->
     Layout = xls_statem_reduction_ir:layout(Spec),
     SiteBits = maps:get(site_bits, Layout),
@@ -135,7 +138,7 @@ codec_functions(Spec = #{accumulator := #{name := AccumulatorName}}) ->
     StatusBits = maps:get(status_bits, Layout),
     #{site := #{offset := SiteStart}, key := #{offset := KeyStart},
         remaining := #{offset := RemainingStart}, seen := #{offset := MemberStart},
-        accumulator := #{offset := AccumulatorStart}, failure := #{offset := FailureStart}} =
+        expected := #{offset := ExpectedStart}, accumulator := #{offset := AccumulatorStart}, failure := #{offset := FailureStart}} =
         xls_statem_reduction_ir:packed_layout(Spec),
     AccumulatorFunction = xls_names:record_codec(AccumulatorName),
     [
@@ -152,7 +155,9 @@ codec_functions(Spec = #{accumulator := #{name := AccumulatorName}}) ->
         "    remaining: raw[", integer_to_list(RemainingStart), ":",
         integer_to_list(MemberStart), "] as ReductionRemaining,\n",
         "    seen: raw[", integer_to_list(MemberStart), ":",
-        integer_to_list(AccumulatorStart), "] as ReductionMembers,\n",
+        integer_to_list(ExpectedStart), "] as ReductionMembers,\n",
+        runtime_members(Spec, ["    expected: raw[", integer_to_list(ExpectedStart), ":",
+            integer_to_list(AccumulatorStart), "] as ReductionMembers,\n"]),
         "    accumulator: ", AccumulatorFunction, "_from_bits(raw[",
         integer_to_list(AccumulatorStart), ":",
         integer_to_list(FailureStart), "]),\n",
@@ -165,6 +170,7 @@ codec_functions(Spec = #{accumulator := #{name := AccumulatorName}}) ->
         "] {\n",
         "  state.failure ++\n",
         "    bits_from_", AccumulatorFunction, "(state.accumulator) ++\n",
+        runtime_members(Spec, ["    state.expected ++\n"]),
         "    (state.seen as bits[", integer_to_list(MemberBits), "]) ++\n",
         "    (state.remaining as bits[",
         integer_to_list(RemainingBits), "]) ++\n",
@@ -217,18 +223,29 @@ site_functions(Spec = #{sites := Sites}) ->
         "}\n\n"
     ].
 
-open_functions(#{
-    accumulator := #{dslx_type := AccumulatorType}
-}) ->
+%% Runtime membership adds an expected mask only to actors which use that form.
+-spec open_functions(map()) -> iodata().
+open_functions(Spec = #{accumulator := #{dslx_type := AccumulatorType}}) ->
     [
         "fn reduction_open_site(\n",
         "    site: ReductionSite, key: u32, identity: ", AccumulatorType,
+        runtime_members(Spec, ", expected: ReductionMembers"),
         ") -> ReductionState {\n",
+        runtime_members(Spec, [
+            "  let population = unroll_for! (index, total): (u32, ReductionRemaining) in u32:0..u32:",
+            integer_to_list(xls_statem_reduction_ir:member_width(Spec)), " {\n",
+            "    total + ((expected >> index) as u1 as ReductionRemaining)\n",
+            "  }(ReductionRemaining:0);\n"]),
         "  ReductionState {\n",
         "    status: ReductionStatus::OPEN,\n",
         "    site,\n",
         "    key,\n",
-        "    remaining: reduction_site_population(site),\n",
+        case xls_statem_reduction_ir:has_runtime_members(Spec) of
+            false -> "    remaining: reduction_site_population(site),\n";
+            true -> "    expected,\n"
+                "    remaining: if reduction_site_mode(site) == ReductionMode::MEMBERS { population }\n"
+                "      else { reduction_site_population(site) },\n"
+        end,
         "    accumulator: identity,\n",
         "    ..zero!<ReductionState>()\n",
         "  }\n",
@@ -314,7 +331,9 @@ reducer_arm(#{name := Name, body := Body, result := Result}) ->
         "    },\n"
     ].
 
-apply_function() ->
+%% Check an expected runtime mask before accepting any member contribution.
+-spec apply_function(map()) -> iodata().
+apply_function(Spec) ->
     [
         "fn reduction_apply(\n",
         "    state: ReductionState,\n",
@@ -333,7 +352,11 @@ apply_function() ->
         "    let member_mode = reduction_site_mode(state.site) ==\n",
         "      ReductionMode::MEMBERS;\n",
         "    let unexpected = member_mode &&\n",
-        "      member_bit == zero!<ReductionMembers>();\n",
+        case xls_statem_reduction_ir:has_runtime_members(Spec) of
+            false -> "      member_bit == zero!<ReductionMembers>();\n";
+            true -> "      (member_bit == zero!<ReductionMembers>() ||\n"
+                "       (state.expected & member_bit) == zero!<ReductionMembers>());\n"
+        end,
         "    let duplicate = member_mode &&\n",
         "      (state.seen & member_bit) != zero!<ReductionMembers>();\n",
         "    if unexpected {\n",
@@ -466,3 +489,8 @@ mode_value(members) -> "ReductionMode::MEMBERS".
 
 site_label(#{phase := Phase}) ->
     xls_names:enum_member(Phase).
+
+%% Static-only actors retain the original private-state fields and widths.
+-spec runtime_members(map(), iodata()) -> iodata().
+runtime_members(Spec, Text) ->
+    case xls_statem_reduction_ir:has_runtime_members(Spec) of true -> Text; false -> [] end.

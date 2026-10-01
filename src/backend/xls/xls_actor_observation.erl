@@ -15,19 +15,20 @@ imports(Options) -> optional(Options, [direct_mailbox_observation]).
 %% The observation contains no payload or accumulator bits. Its reduction
 %% metadata and mailbox counts follow the common state fields. The query shell
 %% places each projection into its protocol field and retains one coherent sample.
+-doc "Describes committed actor, mailbox and reduction fields within the fixed query reply budget.".
+-spec layout(none | map()) -> map().
 layout(none) ->
     #{width => 49, mailbox => #{offset => 25, width => 24},
         fields => #{phase => #{offset => 0, width => 8},
         enter_pending => #{offset => 8, width => 1},
         failure => #{offset => 9, width => 16}}};
 layout(Reduction) ->
-    Sizes = xls_statem_reduction_ir:layout(Reduction),
-    {Width, Fields} = lists:foldl(fun({Name, Size}, {Offset, Acc}) ->
-        Bits = maps:get(Size, Sizes),
+    Packed = xls_statem_reduction_ir:packed_layout(Reduction),
+    {Width, Fields} = lists:foldl(fun(Name, {Offset, Acc}) ->
+        Bits = maps:get(width, maps:get(Name, Packed)),
         {Offset + Bits, Acc#{Name => #{offset => 25 + Offset,
             width => Bits, observation_offset => 56 + Offset}}}
-    end, {0, #{}}, [{status, status_bits}, {site, site_bits}, {key, key_bits},
-        {remaining, remaining_bits}, {failure, failure_bits}]),
+    end, {0, #{}}, xls_statem_reduction_ir:observation_fields(Reduction)),
     (layout(none))#{width := 49 + Width, mailbox := #{offset => 25 + Width, width => 24},
         reduction => #{width => Width, fields => Fields}}.
 
@@ -77,6 +78,8 @@ validate_channels(Names) ->
     end, #{}, Names),
     ok.
 
+-doc "Emits the optional committed-state observation without accumulator payloads.".
+-spec declarations(map()) -> iodata().
 declarations(Spec) ->
     Reduction = maps:get(reductions, Spec, none),
     #{width := Width} = Layout = layout(Reduction),
@@ -84,7 +87,7 @@ declarations(Spec) ->
         #{reduction := #{fields := Fields}} ->
             [["    (machine.reduction.", atom_to_list(Name), " as bits[",
                 integer_to_list(maps:get(width, maps:get(Name, Fields))), "]) ++\n"] ||
-                Name <- [failure, remaining, key, site, status]];
+                Name <- lists:reverse(xls_statem_reduction_ir:observation_fields(Reduction))];
         _ -> []
     end,
     optional(Spec, ["pub type ActorObservation = bits[", integer_to_list(Width), "];\n\n",

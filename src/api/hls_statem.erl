@@ -100,9 +100,8 @@ are outside this restricted `gen_statem` state-functions vocabulary.
 -doc "The callback event discriminator; From is an activation-local retained-call handle.".
 -type event_type() :: enter | cast | internal | {call, hls_gs:from()}.
 -type cast_action() :: {cast, output_port(), term()}.
--type reduction_population() ::
-    {count, 1..255} |
-    {members, [term(), ...]}.
+-doc "A nonempty contributor count, explicit member set, or bounded runtime numeric-member mask.".
+-type reduction_population() :: hls_reduction:population().
 -type reduction_operator() :: {
     commutative_monoid,
     Identity :: term()

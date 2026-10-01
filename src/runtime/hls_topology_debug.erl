@@ -81,7 +81,15 @@ decode_observation(<<Id:32/little, Cycle:64/little, Value:128/little>>,
         #{<<"kind">> := <<"fifo">>, <<"capacity">> := Capacity} when Value =< Capacity ->
             {ok, Sample#{occupancy => Value, free_slots => Capacity-Value}};
         #{<<"kind">> := <<"actor">>, <<"phases">> := Phases, <<"failures">> := Failures} ->
-            case actor_observation(Sample#{value := Value band 16#ffffffff}, Phases, Failures) of
+            %% Exclusive input can precede the first callback retirement. The
+            %% context-valid bit still gates phase/failure, even if private early
+            %% progress already exists; do not decode those bits as an actor.
+            Early = maps:get(<<"early_collection">>, maps:get(<<"reduction">>, Resource, #{}), false),
+            ActorValue = case Early andalso Value band (1 bsl 25) =:= 0 of
+                true -> 0;
+                false -> Value band 16#ffffffff
+            end,
+            case actor_observation(Sample#{value := ActorValue}, Phases, Failures) of
                 {ok, Actor} ->
                     case Observer:mailbox_observation(Actor#{value := Value}, Resource) of
                         {ok, Sample0} -> reduction_observation(Sample0, Resource);
@@ -130,11 +138,16 @@ mailbox_observation(Sample = #{value := Value}, _Resource) when (Value bsr 32) b
     {ok, Sample};
 mailbox_observation(_, _) -> {error, invalid_mailbox_observation}.
 
+%% Membership is read from the same committed sample as its remaining count.
+-spec reduction_observation(map(), map()) -> {ok, map()} | {error, term()}.
+reduction_observation(Sample = #{initialized := false},
+        #{<<"reduction">> := #{<<"early_collection">> := true}}) ->
+    {ok, Sample#{reduction => undefined}};
 reduction_observation(Sample = #{initialized := false, value := Value}, _Resource)
         when Value bsr 56 =:= 0 ->
     {ok, Sample#{reduction => undefined}};
 reduction_observation(Sample = #{initialized := true, value := Value},
-        #{<<"reduction">> := #{<<"fields">> := Fields, <<"sites">> := Sites}, <<"failures">> := Failures}) ->
+        #{<<"reduction">> := #{<<"fields">> := Fields, <<"sites">> := Sites} = Reduction, <<"failures">> := Failures}) ->
     Read = fun(Name) ->
         #{<<"observation_offset">> := Offset, <<"width">> := Width} = maps:get(Name, Fields),
         (Value bsr Offset) band ((1 bsl Width)-1)
@@ -142,18 +155,23 @@ reduction_observation(Sample = #{initialized := true, value := Value},
     case Read(<<"status">>) of
         0 -> {ok, Sample#{reduction => idle}};
         Status when Status =:= 1; Status =:= 2 ->
-            Id = Read(<<"site">>),
-            Remaining = Read(<<"remaining">>),
-            Code = Read(<<"failure">>),
-            case {[S || S = #{<<"id">> := I} <- Sites, I =:= Id], failure_details(Code, Failures)} of
-                {[#{<<"phase">> := Phase, <<"name">> := Name,
-                    <<"population">> := Population = #{<<"size">> := Size}}], {ok, Failure}}
-                        when Remaining =< Size, (Status =:= 1 andalso Remaining > 0) orelse
-                            (Status =:= 2 andalso Remaining =:= 0) ->
-                    {ok, Sample#{reduction => #{status => element(Status, {open, complete}),
-                        phase => Phase, name => Name, key => Read(<<"key">>),
-                        population => population(Population), received => Size-Remaining,
-                        remaining => Remaining, failure => Failure}}};
+            Id = Read(<<"site">>), Remaining = Read(<<"remaining">>),
+            Match = [S || S = #{<<"id">> := I} <- Sites, I =:= Id],
+            case {Match, failure_details(Read(<<"failure">>), Failures)} of
+                {[#{<<"phase">> := Phase, <<"name">> := Name, <<"population">> := Population}], {ok, Failure}} ->
+                    Early = maps:get(<<"early_collection">>, Reduction, false) andalso Status =:= 1 andalso Remaining =:= 0,
+                    ProgressResult = case Early of
+                        true -> early_population(Population, Fields, Read);
+                        false -> reduction_population(Population, Fields, Read, Remaining)
+                    end,
+                    case ProgressResult of
+                        {ok, Progress} when Early orelse (Status =:= 1 andalso Remaining > 0) orelse
+                                (Status =:= 2 andalso Remaining =:= 0) ->
+                            {ok, Sample#{reduction => Progress#{status => case Early of true -> early; false -> element(Status, {open, complete}) end,
+                                phase => Phase, name => Name, key => Read(<<"key">>),
+                                remaining => case Early of true -> undefined; false -> Remaining end, failure => Failure}}};
+                        _ -> {error, invalid_reduction_observation}
+                    end;
                 _ -> {error, invalid_reduction_observation}
             end;
         _ -> {error, invalid_reduction_observation}
@@ -162,8 +180,69 @@ reduction_observation(Sample = #{initialized := true, value := Value}, _Resource
     {ok, Sample#{reduction => idle}};
 reduction_observation(_, _) -> {error, invalid_reduction_observation}.
 
-population(#{<<"mode">> := <<"count">>, <<"size">> := Size}) -> {count, Size};
-population(#{<<"mode">> := <<"members">>, <<"members">> := Members}) -> {members, Members}.
+%% Early input has a bound and identities but no selected runtime population yet.
+-spec early_population(map(), map(), fun((binary()) -> non_neg_integer())) -> {ok, map()} | error.
+early_population(#{<<"mode">> := <<"members">>, <<"size">> := Capacity} = Population, Fields, Read) ->
+    Selection = case maps:get(<<"runtime_mask">>, Population, false) of
+        true -> {members_mask, Capacity, pending};
+        false -> {members, maps:get(<<"members">>, Population)}
+    end,
+    Progress = #{population => Selection, received => undefined, missing_members => undefined},
+    case {maps:is_key(<<"expected">>, Fields), maps:is_key(<<"seen">>, Fields)} of
+        {false, false} -> {ok, Progress};
+        {true, false} -> case Read(<<"expected">>) of 0 -> {ok, Progress}; _ -> error end;
+        {true, true} ->
+            Seen = Read(<<"seen">>),
+            case Read(<<"expected">>) =:= 0 andalso Seen > 0 andalso Seen bsr Capacity =:= 0 of
+                true ->
+                    Arrived = [I || I <- lists:seq(0, Capacity-1), Seen band (1 bsl I) =/= 0],
+                    {ok, Progress#{received := length(Arrived), arrived_members => Arrived}};
+                false -> error
+            end;
+        _ -> error
+    end;
+early_population(_, _, _) -> error.
+
+%% Wide masks that cannot fit the query retain honest remaining counts, never the capacity as population.
+-spec reduction_population(map(), map(), fun((binary()) -> non_neg_integer()), non_neg_integer()) -> {ok, map()} | error.
+reduction_population(#{<<"runtime_mask">> := true, <<"size">> := Capacity}, Fields, Read, Remaining) ->
+    case maps:is_key(<<"expected">>, Fields) of
+        false when Remaining =< Capacity ->
+            {ok, #{population => {members_mask, Capacity, unavailable}, received => undefined}};
+        true ->
+            Expected = Read(<<"expected">>),
+            Members = [I || I <- lists:seq(0, Capacity - 1), Expected band (1 bsl I) =/= 0],
+            case Expected > 0 andalso Expected bsr Capacity =:= 0 andalso Remaining =< length(Members) of
+                true -> member_progress([{M, M} || M <- Members], Expected, Fields, Read, Remaining);
+                false -> error
+            end;
+        _ -> error
+    end;
+reduction_population(#{<<"mode">> := <<"count">>, <<"size">> := Size}, _Fields, _Read, Remaining)
+        when Remaining =< Size -> {ok, #{population => {count, Size}, received => Size - Remaining}};
+reduction_population(#{<<"mode">> := <<"members">>, <<"members">> := Members}, Fields, Read, Remaining)
+        when Remaining =< length(Members) ->
+    member_progress(lists:enumerate(0, Members), (1 bsl length(Members)) - 1, Fields, Read, Remaining);
+reduction_population(_, _, _, _) -> error.
+
+%% Fixed populations use declaration order; runtime populations supply numeric bit positions.
+-spec member_progress([{non_neg_integer(), term()}], non_neg_integer(), map(),
+    fun((binary()) -> non_neg_integer()), non_neg_integer()) -> {ok, map()} | error.
+member_progress(Slots, Expected, Fields, Read, Remaining) ->
+    Members = [Member || {_, Member} <- Slots],
+    Progress = #{population => {members, Members}, received => length(Members) - Remaining},
+    MaskValid = not maps:is_key(<<"expected">>, Fields) orelse Read(<<"expected">>) =:= Expected,
+    case {MaskValid, maps:is_key(<<"seen">>, Fields)} of
+        {false, _} -> error;
+        {true, false} -> {ok, Progress};
+        {true, true} ->
+            Seen = Read(<<"seen">>),
+            Arrived = [Member || {Index, Member} <- Slots, Seen band (1 bsl Index) =/= 0],
+            case Seen band Expected =:= Seen andalso length(Arrived) + Remaining =:= length(Members) of
+                true -> {ok, Progress#{arrived_members => Arrived, missing_members => Members -- Arrived}};
+                false -> error
+            end
+    end.
 
 failure_details(0, _) -> {ok, none};
 failure_details(Code, Failures) ->

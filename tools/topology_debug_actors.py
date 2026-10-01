@@ -38,12 +38,24 @@ def check_write_contract(module):
         raise ValueError("state RAM accepted-write contract mismatch")
 
 
-def reduction_bits(reduction, phases, width):
+def reduction_bits(reduction: dict, phases: list[str], width: int) -> list[int]:
     """Validate the compiler's packed projection before exposing any RAM bits."""
     selected = []
     observation_offset = 56
     sizes = {"status": (2, 2), "site": (1, 8), "key": (32, 32),
              "remaining": (1, 8), "failure": (16, 16)}
+    fields = reduction["fields"]
+    runtime = any(site["population"].get("runtime_mask", False) for site in reduction["sites"])
+    if "expected" in fields:
+        if not runtime:
+            raise ValueError("unexpected runtime membership projection")
+        sizes["expected"] = (1, 255)
+    if "seen" in fields:
+        if "expected" not in fields or fields["seen"]["width"] != fields["expected"]["width"]:
+            raise ValueError("seen members require a matching expected mask")
+        sizes["seen"] = (1, 255)
+    if set(fields) != set(sizes):
+        raise ValueError("unknown reduction observation fields")
     for name, (minimum, maximum) in sizes.items():
         field = reduction["fields"][name]
         offset, size = field["offset"], field["width"]
@@ -53,7 +65,7 @@ def reduction_bits(reduction, phases, width):
             raise ValueError(f"invalid reduction field: {name}")
         selected.extend(range(offset, offset+size))
         observation_offset += size
-    if reduction["width"] != observation_offset-56:
+    if reduction["width"] != observation_offset-56 or reduction["width"] > 72:
         raise ValueError("invalid reduction width")
     sites = reduction["sites"]
     if (not 1 <= len(sites) <= 256 or
@@ -68,11 +80,17 @@ def reduction_bits(reduction, phases, width):
                 size >= 1 << reduction["fields"]["remaining"]["width"] or
                 population["mode"] not in ("count", "members")):
             raise ValueError("invalid reduction population")
+        if population.get("runtime_mask", False) and population["mode"] != "members":
+            raise ValueError("runtime mask requires member mode")
         if population["mode"] == "members":
             members = population["members"]
             if (len(members) != size or len(set(members)) != size or
                     not all(type(m) is int and 0 <= m < 2**32 for m in members)):
                 raise ValueError("invalid reduction members")
+            if population.get("runtime_mask", False) and members != list(range(size)):
+                raise ValueError("runtime mask members must be numeric slot indices")
+            if "expected" in fields and size > fields["expected"]["width"]:
+                raise ValueError("expected mask is too narrow")
     return selected
 
 
@@ -151,10 +169,11 @@ def direct_source(bank, root, module, hierarchy, flat, clock_bit):
     return path, 1, bits(port+"_vld") + ["0"], bits(port)
 
 
-def discover(projection, root, hierarchy, flat, top, clock_bit):
+def discover(projection: dict, root: tuple, hierarchy: dict, flat: dict, top: str, clock_bit: int) -> list[dict]:
+    """Bind validated actor RAM and optional authoritative live metadata to passive taps."""
     shared, direct = projection.get("banks", []), projection.get("direct", [])
-    if projection.get("schema") != 4 or not (shared or direct):
-        raise ValueError("expected a nonempty actor projection, schema 4")
+    if projection.get("schema") not in (4, 5) or not (shared or direct):
+        raise ValueError("expected a nonempty actor projection, schema 4 or 5")
     module = hierarchy["modules"][top]
     for instance in root:
         module = hierarchy["modules"][module["cells"][instance]["type"]]
@@ -187,29 +206,43 @@ def discover(projection, root, hierarchy, flat, top, clock_bit):
             else:
                 taps += mailbox_source(mailbox["port"], slots, root, module,
                                        hierarchy, flat, clock_bit)
+        if live := bank.get("live_state"):
+            if (projection["schema"] != 5 or is_direct or "reduction" not in bank or
+                    live["width"] != 26 + bank["reduction"]["width"]):
+                raise ValueError("invalid live actor state projection")
+            taps += sampled_array_source(live["port"], live["width"] * slots,
+                                         root, module, hierarchy, flat, clock_bit, "live actor")
         banks.append(dict(bank, path=list(path), address_width=address_width, taps=taps))
     return banks
 
 
-def mailbox_source(port, slots, root, module, hierarchy, flat, clock_bit):
+def mailbox_source(port: str, slots: int, root: tuple, module: dict, hierarchy: dict, flat: dict, clock_bit: int) -> list:
+    """Bind the coherent per-slot mailbox sample to its always-ready output."""
+    return sampled_array_source(port, 24 * slots, root, module, hierarchy, flat, clock_bit, "mailbox")
+
+
+def sampled_array_source(port: str, width: int, root: tuple, module: dict,
+                         hierarchy: dict, flat: dict, clock_bit: int, label: str) -> list:
+    """Validate one always-ready, same-clock sampled array before exposing its bits."""
     matches = [(name, cell) for name, cell in module["cells"].items()
                if port in cell.get("connections", {})]
     if len(matches) != 1:
-        raise ValueError("expected one generated mailbox observation output")
+        raise ValueError(f"expected one generated {label} observation output")
     name, cell = matches[0]
     app = hierarchy["modules"][cell["type"]]
-    def observed(signal):
+    def observed(signal: str) -> list:
+        """Resolve one flattened port under the selected application instance."""
         return flat["netnames"][".".join((*root, name, signal))]["bits"]
-    for signal, direction, size in ((port, "output", 24*slots),
+    for signal, direction, size in ((port, "output", width),
             (port+"_vld", "output", 1), (port+"_rdy", "input", 1)):
         description = app["ports"][signal]
         if (description["direction"] != direction or len(description["bits"]) != size or
                 len(cell["connections"][signal]) != size or len(observed(signal)) != size):
-            raise ValueError("mailbox observation port mismatch")
+            raise ValueError(f"{label} observation port mismatch")
     if cell["connections"][port+"_rdy"] != ["1"] or observed(port+"_rdy") != ["1"]:
-        raise ValueError("mailbox observation output must always be ready")
+        raise ValueError(f"{label} observation output must always be ready")
     if observed("clk") != [clock_bit]:
-        raise ValueError("mailbox observation clock mismatch")
+        raise ValueError(f"{label} observation clock mismatch")
     return observed(port+"_vld") + observed(port)
 
 
@@ -221,7 +254,8 @@ def resources(banks, first_id):
             for i, (bank, actor) in enumerate((bank, actor) for bank in banks for actor in bank["actors"])]
 
 
-def wrapper(banks, first_id, clock, reset, active_low):
+def wrapper(banks: list[dict], first_id: int, clock: str, reset: str, active_low: bool) -> str:
+    """Render query snapshots while selecting live collector progress over historical RAM state."""
     """Select physical probes or one row per actor bank at the query address.
 
     Keeping actor rows behind an indexed read port permits memory inference;
@@ -241,6 +275,8 @@ def wrapper(banks, first_id, clock, reset, active_low):
         # Decode the full resource ID, but subtract only the low row-address
         # bits. A 32-bit subtract per bank needlessly lengthens the query path.
         row_base = resource % (1 << address_width)
+        if "live_state" in bank:
+            lines.append(f"wire [127:0] actor_ram_value_{index};\n")
         lines.append(f"wire [{address_width-1}:0] actor_address_{index} = "
                      f"probe_address[{address_width-1}:0] - {address_width}'d{row_base};\n"
                      f"wire [127:0] actor_value_{index};\n"
@@ -253,10 +289,29 @@ def wrapper(banks, first_id, clock, reset, active_low):
                      f".write_value(actor_writes[{offset+1+address_width} +: {write_width}]), "
                      f".mailbox_valid({mailbox_valid}), .mailbox_values({mailbox_values}), "
                      f".read_address(actor_address_{index}), "
-                     f".value(actor_value_{index}));\n")
+                     f".value({'actor_ram_value_' if 'live_state' in bank else 'actor_value_'}{index}));\n")
+        if "live_state" in bank:
+            live_offset = mailbox_offset + (1 + 24 * slots if "mailbox" in bank else 0)
+            lines.append(live_state_wrapper(bank, live_offset, clock, reset, active_low))
         selected.append(f"(probe_address >= 32'd{resource} && probe_address < 32'd{resource+slots} "
                         f"? actor_value_{index} : 128'b0)")
         offset += len(bank["taps"])
         resource += bank["slots"]
     lines.append("assign probe_value = " + " |\n    ".join(selected) + ";\n")
     return "".join(lines)
+
+
+def live_state_wrapper(bank: dict, offset: int, clock: str, reset: str, active_low: bool) -> str:
+    """Select the authoritative live phase/reduction sample; RAM only supplies mailbox metadata."""
+    index, slots = bank["index"], bank["slots"]
+    width = bank["live_state"]["width"]
+    reduction = bank["reduction"]["width"]
+    return (f"reg [{slots * width - 1}:0] actor_live_{index};\n"
+            f"always @(posedge \\{clock} ) begin\n"
+            f"  if ({'!' if active_low else ''}\\{reset} ) actor_live_{index} <= 0;\n"
+            f"  else if (actor_writes[{offset}]) actor_live_{index} <= actor_writes[{offset+1} +: {slots * width}];\n"
+            f"end\n"
+            f"wire [{width-1}:0] actor_live_row_{index} = actor_live_{index}[actor_address_{index}*{width} +: {width}];\n"
+            f"assign actor_value_{index} = actor_address_{index} < {slots} && actor_live_row_{index}[25] ?\n"
+            f"  {{{{({72-reduction}){{1'b0}}}}, actor_live_row_{index}[26 +: {reduction}], "
+            f"actor_ram_value_{index}[55:32], 6'b0, actor_live_row_{index}[25:0]}} : 128'b0;\n")

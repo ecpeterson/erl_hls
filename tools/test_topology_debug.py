@@ -260,6 +260,54 @@ class DiscoveryTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, message):
                 discover(bad)
 
+        # A live collector changes the authority of reduction fields. Old-schema
+        # consumers must reject it instead of silently displaying stale RAM.
+        live = bank["live_state"] = {"width": 79, "port": "_scheduler_0_collection_debug_out"}
+        port = live["port"]
+        for name, bits, direction in ((port, list(range(400, 558)), "output"),
+                (port+"_vld", [558], "output"), (port+"_rdy", ["1"], "input")):
+            connections[name] = bits
+            hierarchy["modules"]["application"]["ports"][name] = {"bits": bits, "direction": direction}
+            flat["netnames"]["shell.application."+name] = {"bits": bits}
+        with self.assertRaisesRegex(ValueError, "invalid live actor"):
+            discover()
+        projection["schema"] = 5
+        self.assertEqual(discover()[0]["taps"][-159:], [558, *range(400, 558)])
+        live["width"] = 78
+        with self.assertRaisesRegex(ValueError, "invalid live actor"):
+            discover()
+        live["width"] = 79
+        connections[port+"_rdy"] = ["0"]
+        with self.assertRaisesRegex(ValueError, "always be ready"):
+            discover()
+
+    def test_runtime_member_projection(self) -> None:
+        """Sparse-set observations carry bounded masks and reject inconsistent descriptors."""
+        reduction = {"width": 66, "sites": [{"id": 0, "phase": "active", "name": "parity",
+            "population": {"mode": "members", "size": 6, "members": list(range(6)), "runtime_mask": True}}],
+            "fields": {}}
+        source, observation = 10, 56
+        for name, size in (("status", 2), ("site", 1), ("key", 32), ("remaining", 3),
+                           ("failure", 16), ("expected", 6), ("seen", 6)):
+            reduction["fields"][name] = {"offset": source, "width": size, "observation_offset": observation}
+            source += size
+            observation += size
+        self.assertEqual(topology.actors.reduction_bits(reduction, ["active"], source), list(range(10, 76)))
+        for mutate, error in [
+            (lambda r: r["sites"][0]["population"].update(runtime_mask=False), "unexpected runtime"),
+            (lambda r: r["sites"][0]["population"].update(members=[1, 2, 3, 4, 5, 6]), "numeric slot"),
+            (lambda r: r["fields"]["seen"].update(width=5), "matching expected"),
+            (lambda r: r["fields"].update(payload={}), "unknown reduction"),
+            (lambda r: r["sites"][0]["population"].update(size=7, members=list(range(7))), "too narrow")]:
+            bad = copy.deepcopy(reduction)
+            mutate(bad)
+            with self.assertRaisesRegex(ValueError, error):
+                topology.actors.reduction_bits(bad, ["active"], source)
+        # An expected-only projection can still report the selected population and received count.
+        del reduction["fields"]["seen"]
+        reduction["width"] = 60
+        self.assertEqual(len(topology.actors.reduction_bits(reduction, ["active"], source)), 60)
+
     def test_snapshot_rtl(self):
         with tempfile.TemporaryDirectory() as stage:
             exe = str(Path(stage) / "test.vvp")
@@ -274,10 +322,15 @@ class DiscoveryTests(unittest.TestCase):
         # Distinct data at every global ID detects aliasing and bank overlap.
         banks, offset, resource = [], 0, 5
         setup = ['for(i=0;i<5;i=i+1) begin probe_values[i*64+:64]=i+100; expected[i]=i+100; end']
-        for index, slots, mailbox, reduction in ((0, 3, True, 0), (1, 9, False, 66), (2, 1, True, 53)):
+        for index, slots, mailbox, reduction, live in ((0, 3, True, 0, False), (1, 9, False, 66, False), (2, 1, True, 53, False), (3, 3, True, 66, True)):
             aw = max(1, (slots-1).bit_length())
             width = 1 + aw + 25 + reduction + (1 + 24*slots if mailbox else 0)
+            live_offset = width
+            if live:
+                width += 1 + slots * (26 + reduction)
             bank = {'index': index, 'slots': slots, 'address_width': aw, 'taps': [0]*width}
+            if live:
+                bank['live_state'] = {'width': 26 + reduction}
             if mailbox:
                 bank['mailbox'] = {}
             if reduction:
@@ -296,6 +349,17 @@ class DiscoveryTests(unittest.TestCase):
                     setup += [f'actor_writes[{offset+1+aw+25+reduction}]=1;']
                     setup += [f'actor_writes[{offset+1+aw+26+reduction+24*j}+:24]={2000+resource+j};'
                               for j in range(slots)]
+                setup += ['@(posedge clk); #1;']
+            if live:
+                setup += [f'@(negedge clk); actor_writes=0; actor_writes[{offset+live_offset}]=1;']
+                for slot in range(slots):
+                    # Deliberately disagree with the RAM snapshot; the live sample owns phase/progress.
+                    state = 3000 + resource + slot
+                    red = (1 << (reduction - 1)) + 17 + slot
+                    sample = (red << 26) + (1 << 25) + state
+                    wanted = (red << 56) + ((2000 + resource + slot) << 32) + (1 << 25) + state
+                    setup += [f"actor_writes[{offset+live_offset+1+slot*(26+reduction)}+:{26+reduction}]={26+reduction}'d{sample};",
+                              f"expected[{resource+slot}]=128'd{wanted};"]
                 setup += ['@(posedge clk); #1;']
             offset += width
             resource += slots

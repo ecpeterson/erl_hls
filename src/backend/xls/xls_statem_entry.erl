@@ -82,7 +82,8 @@ action({tuple, Line, [{atom, _, open_reduction} | _]} = Open,
         {remote, Line, {atom, Line, hls_type}, {atom, Line, as}},
         [{call, Line, {remote, Line, {atom, Line, hls_nums},
             {atom, Line, u32}}, []}, Key]},
-    {{reduction, Line, Reduction}, {tuple, Line, [TypedKey, Identity]}};
+    Values = [TypedKey, Identity] ++ member_mask_value(Reduction, Line),
+    {{reduction, Line, Reduction}, {tuple, Line, Values}};
 action({tuple, _Line, [{atom, _, cast}, {atom, _, Port}, Message]},
         Bindings, #{messages := Messages, outputs := Outputs}) ->
     declared(entry_output, Port, Outputs),
@@ -91,6 +92,20 @@ action({tuple, _Line, [{atom, _, cast}, {atom, _, Port}, Message]},
     {#{port => Port, tag => Tag, origin => xls_entry_storage:origin(Message, Bindings)}, Message};
 action(Action, _Bindings, _State) ->
     error({bad_hls_statem_entry_action, element(2, Action), Action}).
+
+%% The checked mask is part of the transactional entry value, before any cast commits.
+-spec member_mask_value(map(), erl_anno:anno() | erl_anno:location()) -> [erl_parse:abstract_expr()].
+member_mask_value(#{member_mask_expression := none}, _Line) -> [];
+member_mask_value(#{member_mask_expression := Mask, population := #{size := Width}}, Line) ->
+    Zero = {integer, Line, 0},
+    Valid = {op, Line, 'andalso', {op, Line, '>', Mask, Zero},
+        {op, Line, '=:=', {op, Line, 'bsr', Mask, {integer, Line, Width}}, Zero}},
+    %% This compiler-inserted invariant uses the generic failure code, not a fabricated source site.
+    Checked = {match, 0, {atom, 0, true}, Valid},
+    Type = {call, Line, {remote, Line, {atom, Line, hls_nums}, {atom, Line, uN}},
+        [{integer, Line, Width}]},
+    Typed = {call, Line, {remote, Line, {atom, Line, hls_type}, {atom, Line, as}}, [Type, Mask]},
+    [{block, Line, [Checked, Typed]}].
 
 append_action({{reduction, _Line, Reduction}, Value},
         #{reduction := none, actions := []} = Acc) ->
@@ -288,10 +303,13 @@ common_reduction(Variants) ->
             end
     end.
 
+%% Every entry alternative for a phase must open the same reduction expression.
+-spec reduction_key(map()) -> tuple().
 reduction_key(#{name := Name, population := Population, accumulator := Accumulator,
-        key_expression := Key, identity_expression := Identity}) ->
+        key_expression := Key, identity_expression := Identity, member_mask_expression := Mask}) ->
+    MaskKey = case Mask of none -> none; _ -> erl_parse:map_anno(fun(_) -> 0 end, Mask) end,
     {Name, Population, Accumulator, erl_parse:map_anno(fun(_) -> 0 end, Key),
-        erl_parse:map_anno(fun(_) -> 0 end, Identity)}.
+        erl_parse:map_anno(fun(_) -> 0 end, Identity), MaskKey}.
 
 %% Interface effects are a conservative union by ordered position. A shared
 %% unconditional prefix remains provable even if the tail branches; mutually

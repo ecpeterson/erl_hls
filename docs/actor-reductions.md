@@ -26,7 +26,9 @@ The name selects `reduce/3`; the key distinguishes successive instances. CPU key
 | `{count, N}` | `{contribute, Name, Key, Value}` | Exactly N contributions; equal values count separately and duplicate senders are not detected. |
 | `{members, Members}` | `{contribute, Name, Key, Member, Value}` | Exactly one contribution per unique member; unexpected or repeated members are errors. |
 
-Both populations contain 1–255 participants. Count/member forms cannot be mixed.
+`{members_mask, Width, Mask}` selects numeric members whose bits are set: `{members_mask, 6, 33}` requires exactly members `0` and `5`. `Width` is 1–255; `Mask` must be a positive integer with no bits above that width. This form uses the same member contribution and duplicate checks as an explicit list. Its expected set is captured at opening and does not change with later actor data. CPU inspection reports the corresponding explicit member list.
+
+Every population contains 1–255 participants. Count/member forms cannot be mixed.
 
 ## Fold law
 
@@ -71,6 +73,8 @@ Use disjoint overloads when a phase handles several event kinds:
 
 One reduction may be active per actor. Sites share one private accumulator-record type; each reducer has one unguarded clause and may call [typed local helpers](local-helpers.md). Keys and fixed-member identities are `hls_nums:u32()`.
 
-The open must lead a supported literal action list, with a literal population tuple and complete literal identity record. Contribution directives must directly finish a leading clause group for the message/phase, retain phase/data, and build a complete accumulator record from message fields. These are current translation limits, not CPU protocol requirements.
+The open must lead a supported literal action list, with a complete literal identity record. Counts and explicit member lists are literal; `members_mask` takes a literal width and a mask expression over actor data. Invalid masks fail the entry before any cast is published. Contribution directives must directly finish a leading clause group for the message/phase, retain phase/data, and build a complete accumulator record from message fields. These are current translation limits, not CPU protocol requirements.
 
 Entry evaluation is transactional: a selected expression failure suppresses both the open and every cast. Reopening an active reduction also fails without committing entry data or effects. See [entry outcomes](entry-outcomes.md), including conditional opens.
+
+Hardware debug providers which cannot report authoritative reduction state return `unavailable`. Providers with live state report progress even while the actor is busy. Queries include the selected member set when its mask fits the fixed reply; smaller sets also report `arrived_members` and `missing_members`. For a wider mask, `remaining` and pending failure remain available, while the population is `{members_mask, Capacity, unavailable}` and `received` is `undefined`. Capacity is never reported as the current population. Accumulators remain private.

@@ -6,7 +6,8 @@
 -moduledoc """
 Tracks one open, bounded actor-local reduction.
 
-`open/4` installs either a contribution count or a fixed expected member set.
+`open/4` installs a contribution count or an expected member set, optionally
+specified by a bounded runtime bit mask.
 `contribute/5,6` distinguish a temporarily mismatched reduction key from
 definite protocol errors, leaving postponement policy to the owning scheduler.
 Accepted values are combined by `Module:reduce(Name, Accumulator, Value)`.
@@ -46,9 +47,11 @@ the first exception with its original stack, instead of returning completion.
 }).
 
 -opaque reduction() :: #reduction{}.
+-doc "A nonempty population; members_mask selects integer member indices by set bits.".
 -type population() ::
     {count, 1..?MAX_PARTICIPANTS} |
-    {members, [term(), ...]}.
+    {members, [term(), ...]} |
+    {members_mask, 1..?MAX_PARTICIPANTS, pos_integer()}.
 -type monoid() :: {commutative_monoid, Identity :: term()}.
 -type completion_event() :: {
     reduction_complete,
@@ -150,6 +153,14 @@ info(#reduction{
         end
     }.
 
+%% Runtime masks retain the ordinary exact-member semantics and diagnostics.
+-spec normalize_population(term()) ->
+    {ok, {count, pos_integer()} | {members, [term()]}, map(), pos_integer()} | error.
+normalize_population({members_mask, Width, Mask})
+        when is_integer(Width), Width >= 1, Width =< ?MAX_PARTICIPANTS,
+             is_integer(Mask), Mask > 0, Mask bsr Width =:= 0 ->
+    Members = [Member || Member <- lists:seq(0, Width - 1), Mask band (1 bsl Member) =/= 0],
+    normalize_population({members, Members});
 normalize_population({count, Count})
         when is_integer(Count), Count >= 1, Count =< ?MAX_PARTICIPANTS ->
     {ok, {count, Count}, #{}, Count};

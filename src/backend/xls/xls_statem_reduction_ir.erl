@@ -21,7 +21,9 @@
     remaining_width/1,
     member_width/1,
     storage_width/1,
-    interface_storage_width/1
+    interface_storage_width/1,
+    has_runtime_members/1,
+    observation_fields/1
 ]).
 
 -export_type([
@@ -48,15 +50,18 @@
     dslx_type := string(),
     fields := [field()]
 }.
+-doc "A fixed population bound; runtime_mask restricts numeric member slots at each open.".
 -type population() ::
     #{mode := count, size := 1..255} |
-    #{mode := members, size := 1..255, members := [0..16#ffffffff]}.
+    #{mode := members, size := 1..255, members := [0..16#ffffffff], runtime_mask => boolean()}.
+-doc "A checked contribution; independent_lift omits the data pattern and requires a separately established or asserted exclusive protocol.".
 -type contribution() :: #{
     tag := atom(),
     build := expression(),
     source_transportable := boolean(),
     source_capture_total := boolean(),
-    transport := none | expression()
+    transport := none | expression(),
+    independent_lift => none | expression()
 }.
 -type site() :: #{
     id := non_neg_integer(),
@@ -129,10 +134,16 @@ member_width(Reduction) ->
 type_width(#{fields := Fields}) ->
     lists:sum([hls_type:width(maps:get(type, Field)) || Field <- Fields]).
 
+-doc "Reports whether opening any site selects its member set from runtime actor data.".
+-spec has_runtime_members(reduction() | map()) -> boolean().
+has_runtime_members(#{sites := Sites}) ->
+    lists:any(fun(#{population := Population}) -> maps:get(runtime_mask, Population, false) end, Sites).
+
 -spec storage_width(reduction()) -> pos_integer().
 storage_width(Reduction) ->
     maps:get(total_bits, layout(Reduction)).
 
+-doc "Returns bit widths for the private reduction state, including any runtime member mask.".
 -spec layout(reduction()) -> #{
     status_bits := 2,
     site_bits := pos_integer(),
@@ -141,6 +152,7 @@ storage_width(Reduction) ->
     member_bits := pos_integer(),
     accumulator_bits := non_neg_integer(),
     failure_bits := 16,
+    expected_bits := non_neg_integer(),
     total_bits := pos_integer()
 }.
 layout(Reduction = #{accumulator := Accumulator}) ->
@@ -150,8 +162,9 @@ layout(Reduction = #{accumulator := Accumulator}) ->
     SiteBits = site_width(Reduction),
     RemainingBits = remaining_width(Reduction),
     MemberBits = member_width(Reduction),
+    ExpectedBits = case has_runtime_members(Reduction) of true -> MemberBits; false -> 0 end,
     Total = StatusBits + SiteBits + KeyBits + RemainingBits +
-        MemberBits + AccumulatorBits + 16,
+        MemberBits + ExpectedBits + AccumulatorBits + 16,
     #{
         status_bits => StatusBits,
         site_bits => SiteBits,
@@ -160,11 +173,13 @@ layout(Reduction = #{accumulator := Accumulator}) ->
         member_bits => MemberBits,
         accumulator_bits => AccumulatorBits,
         failure_bits => 16,
+        expected_bits => ExpectedBits,
         total_bits => Total
     }.
 
 %% Low-to-high private storage, shared by the codec and committed-state probes.
 %% Public interface summaries contain the same population and type facts.
+-doc "Returns field offsets and widths in the packed private reduction state.".
 -spec packed_layout(reduction() | map()) -> map().
 packed_layout(Reduction) ->
     Sizes = layout(Reduction),
@@ -172,7 +187,7 @@ packed_layout(Reduction) ->
         Width = maps:get(Size, Sizes),
         {Offset + Width, Acc#{Name => #{offset => Offset, width => Width}}}
     end, {0, #{}}, [{status, status_bits}, {site, site_bits}, {key, key_bits},
-        {remaining, remaining_bits}, {seen, member_bits},
+        {remaining, remaining_bits}, {seen, member_bits}, {expected, expected_bits},
         {accumulator, accumulator_bits}, {failure, failure_bits}]),
     Fields.
 
@@ -254,25 +269,34 @@ validate_site(#{
     lists:foreach(fun validate_contribution/1, Contributions),
     ok.
 
-validate_population(#{mode := count, size := Size})
+%% Runtime masks select the contiguous member indices described by their fixed bound.
+-spec validate_population(population()) -> ok.
+validate_population(#{mode := count, size := Size} = Population)
         when is_integer(Size), Size >= 1, Size =< 255 ->
+    false = maps:get(runtime_mask, Population, false),
     ok;
-validate_population(#{mode := members, size := Size, members := Members})
+validate_population(#{mode := members, size := Size, members := Members} = Population)
         when is_integer(Size), Size >= 1, Size =< 255, is_list(Members),
              length(Members) =:= Size ->
-    case lists:all(fun is_u32/1, Members) andalso
+    RuntimeValid = case maps:get(runtime_mask, Population, false) of
+        false -> true; true -> Members =:= lists:seq(0, Size - 1); _ -> false
+    end,
+    case RuntimeValid andalso lists:all(fun is_u32/1, Members) andalso
             length(Members) =:= length(lists:usort(Members)) of
         true -> ok;
         false -> error({invalid_hls_statem_reduction_members, Members})
     end.
 
+%% Candidate lifts are validated independently of permission to bypass actor predicates.
+-spec validate_contribution(contribution()) -> ok.
 validate_contribution(#{
     tag := Tag,
     build := Build,
     source_transportable := true,
     source_capture_total := SourceCaptureTotal,
     transport := Transport
-}) when is_atom(Tag), is_boolean(SourceCaptureTotal) ->
+} = Contribution) when is_atom(Tag), is_boolean(SourceCaptureTotal) ->
+    ok = validate_independent_lift(Contribution),
     ok = validate_expression(contribution, Build),
     validate_expression(transport_contribution, Transport);
 validate_contribution(#{
@@ -281,8 +305,17 @@ validate_contribution(#{
     source_transportable := false,
     source_capture_total := SourceCaptureTotal,
     transport := none
-}) when is_atom(Tag), is_boolean(SourceCaptureTotal) ->
+} = Contribution) when is_atom(Tag), is_boolean(SourceCaptureTotal) ->
+    ok = validate_independent_lift(Contribution),
     validate_expression(contribution, Build).
+
+%% A candidate expression carries no authorization to erase its original selector.
+-spec validate_independent_lift(map()) -> ok.
+validate_independent_lift(Contribution) ->
+    case maps:get(independent_lift, Contribution, none) of
+        none -> ok;
+        Expression -> validate_expression(independent_lift, Expression)
+    end.
 
 validate_expression(_Context, #{body := Body, result := Result}) ->
     try
@@ -325,3 +358,19 @@ unsigned_width(MaxValue, Width) when MaxValue < (1 bsl Width) ->
     Width;
 unsigned_width(MaxValue, Width) ->
     unsigned_width(MaxValue, Width + 1).
+
+-doc "Selects progress fields that fit the 72-bit reduction portion of a debug reply; small runtime masks also expose expected and seen members.".
+-spec observation_fields(reduction() | map()) -> [atom()].
+observation_fields(Reduction) ->
+    Layout = packed_layout(Reduction),
+    Base = [status, site, key, remaining, failure],
+    Used = lists:sum([maps:get(width, maps:get(N, Layout)) || N <- Base]),
+    case has_runtime_members(Reduction) of
+        false -> Base;
+        true ->
+            Width = member_width(Reduction),
+            if Used + 2 * Width =< 72 -> Base ++ [expected, seen];
+               Used + Width =< 72 -> Base ++ [expected];
+               true -> Base
+            end
+    end.
