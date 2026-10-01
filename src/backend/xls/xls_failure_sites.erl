@@ -41,6 +41,8 @@ sites({'case', Line, Subject, Clauses}) -> [origin(case_clause, Line) | sites([S
 sites({'if', Line, Clauses}) -> [origin(if_clause, Line) | sites(Clauses)];
 sites({clause, Line, Patterns, Guards, Body}) ->
     [origin(function_clause, Line) | pattern_sites(Patterns) ++ sites([Guards, Body])];
+sites({tuple, Line, [A, B, {atom, _, consume} = C, Actions]}) ->
+    [origin(explicit_fail, Line) | sites([A, B, C, Actions])];
 sites({tuple, Line, [A, B, C]}) -> [origin(explicit_fail, Line) | sites([A, B, C])];
 sites({op, Line, Op, Left, Right}) when Op =:= 'div'; Op =:= 'rem' ->
     [origin(badarith, Line) | sites([Left, Right])];

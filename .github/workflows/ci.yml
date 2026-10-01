@@ -209,9 +209,10 @@ jobs:
       - name: Check initialization and reset against BEAM
         run: bash tools/test_initialization.sh "$RUNNER_TEMP/xls"
 
-      - name: Run generated reduction semantics
+      - name: Run generated reduction and indexed gather semantics
         run: |
           bash tools/test_reduction_dslx.sh "$RUNNER_TEMP/xls"
+          bash tools/test_statem_gathers.sh "$RUNNER_TEMP/xls"
 
       - name: Run generated RTL and bridged EUnit regressions
         env:
@@ -316,6 +317,7 @@ jobs:
             _build/reduction-debug/**
             _build/aggregate-debug/**
             _build/reduction-semantics/**
+            _build/statem-gathers/**
             _build/mailbox-formal/**
             _build/helpers/**
             _build/control_failures/**

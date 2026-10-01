@@ -2,7 +2,7 @@
 
 Compile bounded Erlang actors into hardware through XLS, and communicate with them from native Erlang through simulation or an FPGA.
 
-Actors use `hls_gs` or `hls_statem` callbacks, typed records and bounded mailboxes. The compiler preserves callback selection, failures, ordered effects, retained replies, internal events and reductions. Each hardware actor has dedicated state and execution. Topologies connect actors and rectangular families; host proxies retain ordinary Erlang message and call interfaces.
+Actors use `hls_gs` or `hls_statem` callbacks, typed records and bounded mailboxes. The compiler preserves callback selection, failures, ordered effects, retained replies, internal events, reductions and [indexed gathers](docs/indexed-gathers.md). Each hardware actor has dedicated state and execution. Topologies connect actors and rectangular families; host proxies retain ordinary Erlang message and call interfaces.
 
 Start with the [documentation guide](docs/README.md), [register-service example](src/examples/regsvc/regsvc.erl), or [phi/noise example](src/examples/phi_decoder/phi_phenom_topology.md).
 

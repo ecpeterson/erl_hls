@@ -12,7 +12,7 @@
     analyze/2,
     analyze_interface/2,
     internal_groups/2,
-    split_entry_actions/2
+    split_entry_actions/2, collection_type/2, collection_open/3, collection_contributions/6, normalize_completion/3
 ]).
 
 -spec split_entry_actions(erl_parse:abstract_expr(), erl_anno:location()) ->
@@ -79,12 +79,16 @@ analyze(Forms, #{
                 AccumulatorType,
                 EnumAtoms
             ) || Reducer <- maps:get(reducers, Source)],
-            Reduction = xls_statem_reduction_ir:new(
+            Reduction0 = xls_statem_reduction_ir:new(
                 DataType,
                 AccumulatorType,
                 Sites,
                 ClosedReducers
             ),
+            Reduction = case xls_statem_continuation:names(Forms) of
+                [] -> Reduction0;
+                Names -> Reduction0#{continuations => Names}
+            end,
             %% Assert the central boundary of this pass: source forms are
             %% consumed here, while only printable expressions escape.
             ok = assert_closed(Reduction),
@@ -115,6 +119,7 @@ analyze_interface(Forms, Context) ->
 %% Interface inference runs inside hls_pack while the source tree is still
 %% being compiled. Keep it structural: validating and describing a reduction
 %% must not execute hls_type transpilers or the DSLX expression renderer.
+-spec analyze_source([hls_source:form()], map()) -> map().
 analyze_source(Forms, #{
     phases := _Phases,
     entries := Entries,
@@ -123,7 +128,8 @@ analyze_source(Forms, #{
     message_names := MessageNames,
     data_name := DataName
 }) ->
-    Opens0 = collect_opens(Entries),
+    Opens0 = collect_opens([E || E <- Entries,
+        not is_map(maps:get(reduction, E, none)) orelse maps:get(kind, maps:get(reduction, E), reduction) =/= gather]),
     {Contributions0, OrdinaryCastGroups} = split_contributions(CastGroups),
     case Opens0 of
         [] ->
@@ -175,7 +181,7 @@ analyze_source(Forms, #{
                     accumulator_record => AccumulatorRecord,
                     opens => ValidOpens,
                     contributions => Contributions,
-                    completions => Completions,
+                    completions => [C#{continuations => xls_statem_continuation:names(Forms)} || C <- Completions],
                     reducers => Reducers
                 },
                 cast_groups => OrdinaryCastGroups
@@ -303,11 +309,11 @@ validate_open(Open = #{
             maps:get(line, Open), Variables})
     end,
     Accumulator = record_expression_name(Identity),
-    ok = validate_complete_record_expression(
-        Identity,
-        xls_parse:find_record(Forms, Accumulator),
-        reduction_identity
-    ),
+    ok = case maps:get(kind, Open, reduction) of
+        gather -> ok;
+        reduction -> validate_complete_record_expression(Identity,
+            xls_parse:find_record(Forms, Accumulator), reduction_identity)
+    end,
     Open.
 
 %% Masks are integral literals or direct actor-data reads, so checking them cannot repeat effects.
@@ -484,12 +490,14 @@ validate_contribution(
         none -> ok;
         _ -> validate_u32_expression(Member, Bindings, [message])
     end,
-    Accumulator = record_expression_name(Value),
-    ok = validate_complete_record_expression(
-        Value,
-        xls_parse:find_record(Forms, Accumulator),
-        reduction_value
-    ),
+    Representation = case maps:get(kind, Open, reduction) of
+        gather -> gather_value_representation(Value, Accumulator, Bindings);
+        reduction ->
+            Accumulator = record_expression_name(Value),
+            ok = validate_complete_record_expression(Value,
+                xls_parse:find_record(Forms, Accumulator), reduction_value),
+            tagged
+    end,
     ok = require_variable_origins(
         expression_variables(Value),
         Bindings,
@@ -497,6 +505,7 @@ validate_contribution(
         {hls_statem_reduction_value, Phase, Tag}
     ),
     Contribution#{
+        value_representation => Representation,
         site => maps:get(id, Open),
         capture_checks => case Guards of
             [] -> xls_pattern_totality:prove(MessagePattern, maps:get(Tag, Shapes));
@@ -623,6 +632,8 @@ validate_completion_clause(
         xls_callback_result:results(Clause)),
     Clause.
 
+%% Completion may consume or fail; finite action validation follows normalization.
+-spec validate_internal_result(term(), term()) -> ok.
 validate_internal_result({tuple, _Line, [
     {atom, _RepeatLine, repeat_phase},
     _Data,
@@ -635,6 +646,8 @@ validate_internal_result({tuple, _Line, [
 ]}, _ContextLine)
         when Phase =/= repeat_phase,
              (Directive =:= consume orelse Directive =:= fail) -> ok;
+validate_internal_result({tuple, L, [Phase, Data, {atom, _, consume}, _Actions]}, ContextLine) ->
+    validate_internal_result({tuple, L, [Phase, Data, {atom, L, consume}]}, ContextLine);
 validate_internal_result(Result, ContextLine) ->
     error({unsupported_hls_statem_internal_result, ContextLine, Result}).
 
@@ -845,7 +858,7 @@ close_contribution_group(Tag, Contributions, DataName, AccumulatorType,
         Clauses,
         Arguments,
         DataName,
-        fun(R) -> ["(u1:1, ", R, ".0, ", R, ".1, ", R, ".2.1)"] end,
+        fun(R) -> ["(u1:1, ", R, ".0, ", R, ".1, ", R, contribution_value_suffix(Contributions), ")"] end,
         Failure,
         fun(_Kind) -> Failure end,
         EnumAtoms
@@ -881,6 +894,11 @@ close_contribution_group(Tag, Contributions, DataName, AccumulatorType,
         independent_lift => IndependentLift
     }.
 
+%% Private value records arrive without the callback record tag wrapper.
+-spec contribution_value_suffix([map(), ...]) -> string().
+contribution_value_suffix([#{value_representation := value} | _]) -> ".2";
+contribution_value_suffix(_) -> ".2.1".
+
 source_capture_total(#{capture_checks := Checks}) -> Checks =/= none.
 
 capture_assertions(Tag, Contributions) ->
@@ -889,6 +907,8 @@ capture_assertions(Tag, Contributions) ->
         [Checks | _] -> xls_pattern_totality:assertions(xls_names:record_type(Tag), Checks)
     end.
 
+%% Message-only lifting retains source guards and checked element construction.
+-spec close_transport_contribution_group(atom(), [map()], atom(), map(), map()) -> map().
 close_transport_contribution_group(Tag, Contributions, DataName,
         AccumulatorType, EnumAtoms) ->
     Clauses = [rewrite_transport_contribution_clause(Contribution)
@@ -906,7 +926,7 @@ close_transport_contribution_group(Tag, Contributions, DataName,
         Clauses,
         Arguments,
         DataName,
-        fun(R) -> ["(u1:1, ", R, ".0, ", R, ".1, ", R, ".2.1)"] end,
+        fun(R) -> ["(u1:1, ", R, ".0, ", R, ".1, ", R, contribution_value_suffix(Contributions), ")"] end,
         Failure,
         fun(_Kind) -> Failure end,
         EnumAtoms
@@ -940,12 +960,14 @@ contribution_candidate(Key, Member0, Value) ->
         typed_u32_expression(Key), Member, Value
     ]}.
 
-close_completion(#{clauses := Clauses0}, Phase, DataName,
+%% Preserve source clause order while passing the accumulator only to the completion callback.
+-spec close_completion(map(), atom(), atom(), atom(), map()) -> map().
+close_completion(#{clauses := Clauses0} = Completion, Phase, DataName,
         AccumulatorName, EnumAtoms) ->
+    Names = maps:get(continuations, Completion, []),
     Clauses = [
         strip_dispatched_internal_phase(
-            normalize_internal_result(flatten_completion_clause(Clause),
-                Phase)
+            xls_callback_result:map(flatten_completion_clause(Clause), fun(R) -> normalize_completion(R, Phase, Names) end)
         )
         || Clause <- Clauses0
     ],
@@ -964,14 +986,15 @@ close_completion(#{clauses := Clauses0}, Phase, DataName,
             ["(Tag::", xls_names:enum_member(DataName), ", data)"]
         )
     ],
-    Failure = fun(Code) -> ["(phase, data, Directive::FAIL, u1:0, ", Code, ")"] end,
+    Failure = fun(Code) -> ["(phase, data, Directive::FAIL, u1:0, ", Code,
+        case Names of [] -> []; _ -> ", u8:0" end, ")"] end,
     [{clause, FirstLine, _, _, _} | _] = Clauses,
     {Body, Result} = xls_callback_lower:lower(
         Clauses,
         Arguments,
         DataName,
         fun(R) -> ["(", R, ".0, ", R, ".1.1, ", R, ".2, ",
-            R, ".3, ", R, ".4)"] end,
+            R, ".3, ", R, ".4", case Names of [] -> []; _ -> [", ", R, ".5"] end, ")"] end,
         Failure(xls_failure_sites:at(function_clause, FirstLine)),
         Failure,
         EnumAtoms
@@ -989,11 +1012,6 @@ flatten_completion_clause({clause, Line, [
     Data
 ], Guards, Body}) ->
     {clause, Line, [Key, Accumulator, Phase, Data], Guards, Body}.
-
-normalize_internal_result(Clause, Phase) ->
-    xls_callback_result:map(Clause, fun(Result) ->
-        normalize_internal_result_expression(Result, Phase)
-    end).
 
 normalize_internal_result_expression({tuple, Line, [
     {atom, _RepeatLine, repeat_phase}, Data, {atom, _ConsumeLine, consume}
@@ -1210,6 +1228,22 @@ require_variable_origins(Variables, Bindings, Origins, Context) ->
         end
     end, Variables).
 
+%% A typed message field may pass its complete record directly into a gather.
+-spec gather_value_representation(term(), atom(), map()) -> value | tagged.
+gather_value_representation({var, _, Variable}, Element, Bindings) ->
+    case maps:get(Variable, Bindings, missing) of
+        #{type := {hls_type, hls_record, Element, _}} -> value;
+        #{type := {record, Element}} -> tagged;
+        Binding -> error({invalid_hls_statem_gather_element, Variable, Element, Binding})
+    end;
+gather_value_representation({record, _, {value, Element}, _}, Element, _Bindings) -> value;
+gather_value_representation({record, _, Element, _}, Element, _Bindings) -> tagged;
+gather_value_representation(Expression, Element, _Bindings) ->
+    error({invalid_hls_statem_gather_element, Element, Expression}).
+
+%% Raw internal collection elements and tagged scalar accumulators share source records.
+-spec record_expression_name(term()) -> atom().
+record_expression_name({record, _Line, {value, Name}, _Fields}) -> Name;
 record_expression_name({record, _Line, Name, _Fields}) -> Name;
 record_expression_name(Expression) ->
     error({unsupported_hls_statem_reduction_record_expression, Expression}).
@@ -1338,3 +1372,29 @@ contains_source_ast(Map) when is_map(Map) ->
 contains_source_ast(List) when is_list(List) ->
     lists:any(fun contains_source_ast/1, List);
 contains_source_ast(_Term) -> false.
+
+-doc "Returns the checked record type used by a collection element or callback data.".
+-spec collection_type([hls_source:form()], atom()) -> map().
+collection_type(Forms, Name) -> type_ref(Forms, Name).
+
+-doc "Validates source-only key, mask and constant padding expressions for a collection opening.".
+-spec collection_open(map(), [hls_source:form()], atom()) -> map().
+collection_open(Open, Forms, Data) -> validate_open(Open, Forms, Data).
+
+-doc "Validates element contributions with scalar-reduction provenance rules and optionally closes their lifts.".
+-spec collection_contributions([hls_source:form()], atom(), map(), [map()], [atom()], interface | closed) -> [map()].
+collection_contributions(Forms, Data, Open = #{accumulator := Element}, Cs, Phases, Mode) ->
+    Shapes = contribution_shapes(Forms, Cs),
+    Valid = [validate_contribution(C, Open, Element, Forms, Data, Shapes) || C <- Cs],
+    case Mode of
+        interface -> Valid;
+        closed -> [close_contribution_group(Tag, Group, Data, type_ref(Forms, Element), enum_atoms(Phases)) ||
+            {Tag, Group} <- xls_callback_lower:group_by(Valid, fun(C) -> maps:get(tag, C) end)]
+    end.
+
+-doc "Normalizes a consuming or failing completion, permitting declared finite continuations but no replies.".
+-spec normalize_completion(term(), atom(), [atom()]) -> term().
+normalize_completion(Result, Phase, Names) ->
+    ok = validate_internal_result(Result, element(2, Result)),
+    xls_statem_continuation:normalize(Result, Names, false,
+        fun(R) -> normalize_internal_result_expression(R, Phase) end).

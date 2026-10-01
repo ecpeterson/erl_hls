@@ -280,6 +280,28 @@ class DiscoveryTests(unittest.TestCase):
         connections[port+"_rdy"] = ["0"]
         with self.assertRaisesRegex(ValueError, "always be ready"):
             discover()
+        connections[port+"_rdy"] = ["1"]
+
+        # Explicit live offsets cannot accidentally select historical RAM bits.
+        for field in reduction["fields"].values():
+            del field["offset"]
+            field["live_offset"] = 26 + field["observation_offset"] - 56
+        observed = discover()
+        self.assertEqual(len(observed[0]["taps"]), 27 + 49 + 159)
+        self.assertEqual(observed[0]["taps"][:27], [2, 3, *data[:8], *data[48:65]])
+        narrow = dict(bank, width=65)
+        self.assertEqual(len(topology.actors.selected_fields(narrow, set())), 25)
+        self.assertEqual(topology.actors.ram_reduction_width(bank), 0)
+        for mutate, error in [
+            (lambda b: b.pop("live_state"), "invalid live actor"),
+            (lambda b: b["reduction"]["fields"]["key"].update(offset=70), "invalid reduction field"),
+            (lambda b: b["reduction"]["fields"]["key"].update(live_offset=25), "overlapping live"),
+            (lambda b: b["reduction"]["fields"]["site"].update(live_offset=26), "overlapping live"),
+            (lambda b: b["reduction"]["fields"]["failure"].update(live_offset=100), "invalid reduction field")]:
+            bad = copy.deepcopy(bank)
+            mutate(bad)
+            with self.assertRaisesRegex(ValueError, error):
+                topology.actors.selected_fields(bad, set())
 
     def test_runtime_member_projection(self) -> None:
         """Sparse-set observations carry bounded masks and reject inconsistent descriptors."""
@@ -303,6 +325,13 @@ class DiscoveryTests(unittest.TestCase):
             mutate(bad)
             with self.assertRaisesRegex(ValueError, error):
                 topology.actors.reduction_bits(bad, ["active"], source)
+        gathered = copy.deepcopy(reduction)
+        gathered["sites"][0]["kind"] = "gather"
+        self.assertEqual(topology.actors.reduction_bits(gathered, ["active"], source), list(range(10, 76)))
+        for kind in ("unknown", 1):
+            gathered["sites"][0]["kind"] = kind
+            with self.assertRaisesRegex(ValueError, "invalid collection kind"):
+                topology.actors.reduction_bits(gathered, ["active"], source)
         # An expected-only projection can still report the selected population and received count.
         del reduction["fields"]["seen"]
         reduction["width"] = 60
@@ -322,9 +351,13 @@ class DiscoveryTests(unittest.TestCase):
         # Distinct data at every global ID detects aliasing and bank overlap.
         banks, offset, resource = [], 0, 5
         setup = ['for(i=0;i<5;i=i+1) begin probe_values[i*64+:64]=i+100; expected[i]=i+100; end']
-        for index, slots, mailbox, reduction, live in ((0, 3, True, 0, False), (1, 9, False, 66, False), (2, 1, True, 53, False), (3, 3, True, 66, True)):
+        for index, slots, mailbox, reduction, live, live_only in (
+                (0, 3, True, 0, False, False), (1, 9, False, 66, False, False),
+                (2, 1, True, 53, False, False), (3, 3, True, 66, True, False),
+                (4, 5, True, 66, True, True)):
             aw = max(1, (slots-1).bit_length())
-            width = 1 + aw + 25 + reduction + (1 + 24*slots if mailbox else 0)
+            ram_reduction = 0 if live_only else reduction
+            width = 1 + aw + 25 + ram_reduction + (1 + 24*slots if mailbox else 0)
             live_offset = width
             if live:
                 width += 1 + slots * (26 + reduction)
@@ -335,19 +368,28 @@ class DiscoveryTests(unittest.TestCase):
                 bank['mailbox'] = {}
             if reduction:
                 bank['reduction'] = {'width': reduction}
+            if live_only:
+                # Reverse storage order: query order must follow observation offsets.
+                fields, query, physical = {}, 56, 26 + reduction
+                for name, size in (("status", 2), ("site", 1), ("key", 32), ("remaining", 3),
+                                   ("failure", 16), ("expected", 6), ("seen", 6)):
+                    physical -= size
+                    fields[name] = dict(live_offset=physical, width=size, observation_offset=query)
+                    query += size
+                bank['reduction']['fields'] = fields
             banks.append(bank)
             for slot in range(slots):
                 state = 1000 + resource + slot
                 metadata = 2000 + resource + slot if mailbox else 0
                 reduction_value = ((1 << (reduction-1)) + resource + slot) if reduction else 0
                 expected = (reduction_value << 56) + (metadata << 32) + (1 << 25) + state
-                state += reduction_value << 25
+                state += reduction_value << 25 if ram_reduction else 0
                 setup += [f'@(negedge clk); actor_writes=0; actor_writes[{offset}]=1;',
-                          f"actor_writes[{offset+1}+:{aw}]={slot}; actor_writes[{offset+1+aw}+:{25+reduction}]={25+reduction}'d{state};",
+                          f"actor_writes[{offset+1}+:{aw}]={slot}; actor_writes[{offset+1+aw}+:{25+ram_reduction}]={25+ram_reduction}'d{state};",
                           f"expected[{resource+slot}]=128'd{expected};"]
                 if mailbox:
-                    setup += [f'actor_writes[{offset+1+aw+25+reduction}]=1;']
-                    setup += [f'actor_writes[{offset+1+aw+26+reduction+24*j}+:24]={2000+resource+j};'
+                    setup += [f'actor_writes[{offset+1+aw+25+ram_reduction}]=1;']
+                    setup += [f'actor_writes[{offset+1+aw+26+ram_reduction+24*j}+:24]={2000+resource+j};'
                               for j in range(slots)]
                 setup += ['@(posedge clk); #1;']
             if live:
@@ -357,6 +399,11 @@ class DiscoveryTests(unittest.TestCase):
                     state = 3000 + resource + slot
                     red = (1 << (reduction - 1)) + 17 + slot
                     sample = (red << 26) + (1 << 25) + state
+                    if live_only:
+                        sample = (1 << 25) + state
+                        for field in bank['reduction']['fields'].values():
+                            value = (red >> (field['observation_offset'] - 56)) & ((1 << field['width']) - 1)
+                            sample |= value << field['live_offset']
                     wanted = (red << 56) + ((2000 + resource + slot) << 32) + (1 << 25) + state
                     setup += [f"actor_writes[{offset+live_offset+1+slot*(26+reduction)}+:{26+reduction}]={26+reduction}'d{sample};",
                               f"expected[{resource+slot}]=128'd{wanted};"]

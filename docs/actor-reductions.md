@@ -1,10 +1,10 @@
 # Actor-owned reductions
 
-A reduction is a phase-local barrier: the receiving actor folds a bounded set of ordinary messages, then receives one private completion event. Senders address the actor normally. Partial folds change only private reduction state.
+A reduction is a phase-local barrier: the receiving actor folds a bounded set of ordinary messages, then receives one private completion event. Senders address the actor normally. Partial folds change only private reduction state. [Indexed gathers](indexed-gathers.md) preserve member positions when the consumer needs the individual values; they require no fold law.
 
 ## Opening and contributing
 
-Open at most one reduction as the first entry action; later casts can solicit contributions:
+Open at most one collection (reduction or gather) as the first entry action; later casts can solicit contributions:
 
 ```erlang
 gathering(enter, _OldPhase, Cell) ->
@@ -43,7 +43,7 @@ gathering(internal, {reduction_complete, diffusion, Key, Sum}, Cell) ->
     {relaxing, apply_sum(Cell, Key, Sum), consume}.
 ```
 
-Completion consumes no mailbox slot. Its handler may consume, fail, change phase or repeat the phase; it cannot postpone or contribute. It may enter a phase that opens the next reduction.
+Completion consumes no mailbox slot. Its handler may consume, fail, change phase or repeat the phase; it cannot postpone or contribute. It may enter a phase that opens the next collection. A completion may append one declared `next_event` action; successor entry runs before that event. Completion callbacks cannot reply.
 
 An incomplete reduction prevents leaving or repeating its phase. Other same-phase messages may consume or postpone normally; explicit failure remains legal and retains its diagnostic state. A contribution with no matching open name/key is automatically postponed. Phase change or repetition retries postponed messages in arrival order. They retain mailbox capacity, so the protocol must leave room for the message that advances the window.
 

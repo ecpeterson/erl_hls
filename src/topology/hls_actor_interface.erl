@@ -51,6 +51,7 @@ This summary is internal compiler data, not a stable application protocol.
     max_entry_effects/1,
     output_schemas/2,
     reduction_storage_width/1,
+    gather_storage_width/1,
     schema/2,
     state/1
 ]).
@@ -171,6 +172,33 @@ reduction_storage_width(Summary) ->
             error({invalid_hls_actor_reduction_interface, Reduction})
     end.
 
+-doc "Returns ordinary packed gather storage, keeping element payloads separate from scalar reductions.".
+-spec gather_storage_width(summary()) -> non_neg_integer().
+gather_storage_width(Summary) ->
+    case maps:get(gathers, Summary, none) of
+        none -> 0;
+        Gather = #{sites := [_ | _] = Sites} ->
+            ok = require_unique(gather_site, [maps:get(id, S) || S <- Sites]),
+            ok = require_unique(gather_phase, [maps:get(phase, S) || S <- Sites]),
+            ok = lists:foreach(fun validate_gather_site/1, Sites),
+            xls_statem_gather_codegen:storage_width(Gather);
+        Gather -> error({invalid_hls_actor_gather_interface, Gather})
+    end.
+
+%% Each gather owns a bounded numeric index space and an independently typed element.
+-spec validate_gather_site(map()) -> ok.
+validate_gather_site(#{id := Id, phase := Phase, name := Name, element := Element,
+        population := #{mode := members, size := Size, members := Members, runtime_mask := true},
+        contributions := [_ | _] = Contributions})
+        when is_integer(Id), Id >= 0, Id < 256, is_atom(Phase), is_atom(Name),
+             is_integer(Size), Size >= 1, Size =< 255 ->
+    true = Members =:= lists:seq(0, Size - 1),
+    true = lists:all(fun is_atom/1, Contributions),
+    validate_state(Element);
+validate_gather_site(Site) -> error({invalid_hls_actor_gather_site, Site}).
+
+%% Reject malformed stored summaries before topology planning allocates actor resources.
+-spec validate(module(), summary()) -> summary().
 validate(Module, Summary = #{
     version := 3,
     module := Module,
@@ -193,6 +221,7 @@ validate(Module, Summary = #{
     ok = validate_state(State),
     ok = xls_failure_sites:validate_origins(Origins),
     _ = reduction_storage_width(Summary),
+    _ = gather_storage_width(Summary),
     SchemaNames = [maps:get(name, Schema) || Schema <- Schemas],
     Selectors = [maps:get(selector, Schema) || Schema <- Schemas],
     ok = require_unique(interface_schema, SchemaNames),

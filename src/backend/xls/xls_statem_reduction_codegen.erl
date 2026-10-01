@@ -82,6 +82,7 @@ declarations_value(Spec = #{
         "  outcome: ReductionOutcome,\n",
         "}\n\n",
         "struct ReductionDispatch {\n",
+        "  next_event: u8,\n",
         "  reduction: ReductionState,\n",
         "  phase: Phase,\n",
         "  data: ", DataType, ",\n",
@@ -396,11 +397,13 @@ apply_function(Spec) ->
         "}\n\n"
     ].
 
+%% Dispatches only completed scalar folds and carries any declared continuation.
+-spec completion_function(map()) -> iodata().
 completion_function(#{
     data := #{dslx_type := DataType},
     accumulator := #{dslx_type := AccumulatorType},
     sites := Sites
-}) ->
+} = Spec) ->
     [
         "fn reduction_dispatch_completion(\n",
         "    state: ReductionState, phase: Phase, data: ", DataType,
@@ -417,7 +420,7 @@ completion_function(#{
         "    let accumulator: ", AccumulatorType,
         " = state.accumulator;\n",
         "    match (state.site, phase) {\n",
-        [completion_arm(Site) || Site <- Sites],
+        [completion_arm(Site#{completion_events => maps:get(continuations, Spec, []) =/= []}) || Site <- Sites],
         "      _ => ReductionDispatch {\n",
         "        reduction: zero!<ReductionState>(),\n",
         "        phase, data, directive: Directive::FAIL,\n",
@@ -430,6 +433,8 @@ completion_function(#{
         "}\n\n"
     ].
 
+%% Each source completion owns its selected failure and optional next event.
+-spec completion_arm(map()) -> iodata().
 completion_arm(Site = #{
     phase := Phase,
     completion := #{body := Body, result := Result}
@@ -443,6 +448,7 @@ completion_arm(Site = #{
         "        };\n",
         "        ReductionDispatch {\n",
         "          reduction: zero!<ReductionState>(),\n",
+        "          next_event: ", case maps:get(completion_events, Site, false) of true -> "conclusion.5"; false -> "u8:0" end, ",\n",
         "          phase: conclusion.0,\n",
         "          data: conclusion.1,\n",
         "          directive: conclusion.2,\n",

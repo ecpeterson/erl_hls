@@ -47,7 +47,7 @@ build(Plan, Options, Codebook) ->
 -spec direct_bank(non_neg_integer(), map(), hls_actor_interface:summary(), [map()]) -> map().
 direct_bank(Index, #{id := Id, module := Module, port := Port},
         #{phases := Phases} = Interface, Sites) ->
-    Reduction = maps:get(reductions, Interface, none),
+    Reduction = xls_actor_observation:collection(Interface),
     Layout = xls_actor_observation:layout(Reduction),
     Bank = #{index => Index, slots => 1, port => Port,
         width => maps:get(width, Layout), fields => maps:get(fields, Layout),
@@ -60,7 +60,7 @@ direct_bank(Index, #{id := Id, module := Module, port := Port},
     case Reduction of
         none -> Bank;
         #{sites := ReductionSites} -> Bank#{reduction => (maps:get(reduction, Layout))#{
-            sites => [maps:with([id, phase, name, population], Site) || Site <- ReductionSites]}}
+            sites => [maps:with([id, phase, name, population, kind], Site) || Site <- ReductionSites]}}
     end.
 
 -doc "Indexes artifact-local failure codes by their wire representation.".

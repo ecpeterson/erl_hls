@@ -90,9 +90,11 @@ describe({resource, Session = #{resources := Resources, manifest := Manifest}, I
     end,
     {WithCapacity, [cycle, value | Fields], {resource, Session, Id}}.
 
+%% CPU actors expose collection progress without returning private element storage.
+-spec statem_fields() -> [atom()].
 statem_fields() ->
     [message_queue_len, mailbox_capacity, free_slots, reserved, postponed,
-        phase, lifecycle, reduction, beam_message_queue_len].
+        phase, lifecycle, reduction, gather, beam_message_queue_len].
 
 %% A trusted session decoder declares its supported items; wire metadata cannot select code.
 -spec resource_actor_fields(map(), map()) -> [atom()].
@@ -107,6 +109,8 @@ actor_provider({hls_statem, Pid}) -> {statem_fields(), {statem, Pid}};
 actor_provider({actor_snapshot, #{resources := Resources} = Session, Id} = Provider) ->
     {[cycle | resource_actor_fields(Session, element(Id+1, Resources))], Provider}.
 
+%% Read one provider snapshot, keeping actor names in its validated codebook.
+-spec observe(term(), [atom()], timeout()) -> {ok, map()} | {error, term()} | undefined.
 observe(_Provider, [], _Timeout) -> {ok, #{}};
 observe({actor_snapshot, Session, Id}, Fields, Timeout) ->
     case observe({resource, Session, Id}, Fields, Timeout) of
@@ -114,7 +118,8 @@ observe({actor_snapshot, Session, Id}, Fields, Timeout) ->
             %% Catalog binding already checked the codebook against loaded actors.
             {ok, Snapshot#{phase := binary_to_existing_atom(Phase),
                 failure := actor_failure(maps:get(failure, Snapshot)),
-                reduction := actor_reduction(maps:get(reduction, Snapshot))}};
+                reduction := actor_reduction(maps:get(reduction, Snapshot)),
+                gather => actor_reduction(maps:get(gather, Snapshot, idle))}};
         Other -> Other
     end;
 observe({beam, Pid}, Fields, _Timeout) ->
@@ -137,10 +142,11 @@ observe({statem, Pid}, Fields, Timeout) ->
             _ ->
                 #{mailbox := #{committed := Count, capacity := Capacity,
                     available := Free, reserved := Reserved}, postponed := Postponed,
-                    phase := Phase, lifecycle := Lifecycle, reduction := Reduction} = hls_statem:info(Pid, Timeout),
+                    phase := Phase, lifecycle := Lifecycle, reduction := Reduction, gather := Gather} = hls_statem:info(Pid, Timeout),
                 #{message_queue_len => Count, mailbox_capacity => Capacity,
                     free_slots => Free, reserved => Reserved, postponed => Postponed,
-                    phase => Phase, lifecycle => Lifecycle, reduction => cpu_reduction(Reduction, Phase)}
+                    phase => Phase, lifecycle => Lifecycle, reduction => cpu_reduction(Reduction, Phase),
+                    gather => cpu_gather(Gather, Phase)}
         end,
         case lists:member(beam_message_queue_len, Fields) of
             false -> {ok, State};
@@ -171,3 +177,13 @@ actor_reduction(Reduction) -> Reduction.
 
 cpu_reduction(idle, _Phase) -> idle;
 cpu_reduction(Reduction, Phase) -> Reduction#{status => open, phase => Phase}.
+
+%% Indexed progress preserves captured membership while hiding every collected value.
+-spec cpu_gather(idle | map(), atom()) -> idle | map().
+cpu_gather(idle, _Phase) -> idle;
+cpu_gather(Gather = #{capacity := Capacity, expected := Expected, seen := Seen}, Phase) ->
+    Members = [I || I <- lists:seq(0, Capacity - 1), Expected band (1 bsl I) =/= 0],
+    Missing = [I || I <- Members, Seen band (1 bsl I) =:= 0],
+    Gather#{status => open, phase => Phase, failure => none,
+        population => {members, Members}, received => length(Members) - length(Missing),
+        missing_members => Missing}.
