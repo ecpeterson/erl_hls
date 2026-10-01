@@ -86,7 +86,7 @@ valid_import(_) ->
 -doc "Emits unique imports in runtime-first order; rejects ambiguous or reserved local aliases.".
 -spec emit([atom()], [atom()]) -> iolist().
 emit(Runtime, Companions) ->
-    Modules = Runtime ++ (lists:usort(Companions) -- Runtime),
+    Modules = lists:uniq(Runtime) ++ (lists:usort(Companions) -- Runtime),
     _ = lists:foldl(fun(Module, Seen) ->
         Alias = xls_names:import_alias(Module),
         case maps:find(Alias, Seen) of

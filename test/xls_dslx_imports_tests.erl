@@ -97,3 +97,11 @@ form(Source) ->
 with_imports(Imports, Fun) ->
     put(test_dslx_imports, Imports),
     try Fun() after erase(test_dslx_imports) end.
+
+%% Independent collection emitters may require the same runtime companion module.
+-spec repeated_runtime_import_test() -> ok.
+repeated_runtime_import_test() ->
+    ?assertEqual(<<"import axis;\nimport hls_integer;\n">>,
+        iolist_to_binary(xls_dslx_imports:emit([axis, hls_integer, hls_integer], [hls_integer]))),
+    ?assertError({xls_import_alias_collision, "hls_integer", hls_integer, 'other.hls_integer'},
+        xls_dslx_imports:emit([hls_integer, 'other.hls_integer'], [])).
