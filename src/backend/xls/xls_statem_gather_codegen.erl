@@ -96,12 +96,12 @@ apply_function(Sites) ->
     ["fn gather_apply(state: GatherState, input: GatherContribution) -> GatherApply {\n",
      "  let p = state.progress;\n  if !input.valid { GatherApply { state, outcome: GatherOutcome::NOT_CANDIDATE } }\n",
      "  else if p.status != GatherStatus::OPEN || p.site != input.site || p.key != input.key { GatherApply { state, outcome: GatherOutcome::MISMATCH } }\n",
-     "  else {\n    let bit = GatherMembers:1 << input.member;\n",
-     "    if bit == GatherMembers:0 || (p.expected & bit) == GatherMembers:0 { GatherApply { state, outcome: GatherOutcome::UNEXPECTED_MEMBER } }\n",
-     "    else if (p.seen & bit) != GatherMembers:0 { GatherApply { state, outcome: GatherOutcome::DUPLICATE_MEMBER } }\n",
+     "  else {\n    let member_bit = GatherMembers:1 << input.member;\n",
+     "    if member_bit == GatherMembers:0 || (p.expected & member_bit) == GatherMembers:0 { GatherApply { state, outcome: GatherOutcome::UNEXPECTED_MEMBER } }\n",
+     "    else if (p.seen & member_bit) != GatherMembers:0 { GatherApply { state, outcome: GatherOutcome::DUPLICATE_MEMBER } }\n",
      "    else {\n      let remaining = p.remaining - u8:1;\n      let values = match p.site {\n",
      [["        GatherSite::",label(S)," => bit_slice_update(state.values, input.member * u32:",n(element_width(S)),", input.value[0+:bits[",n(element_width(S)),"]]),\n"]||S<-Sites],
-     "      };\n      GatherApply { state: GatherState { progress: GatherProgress { status: if remaining == u8:0 { GatherStatus::COMPLETE } else { GatherStatus::OPEN }, remaining, seen: p.seen | bit, ..p }, values }, outcome: if remaining == u8:0 { GatherOutcome::COMPLETE } else { GatherOutcome::PENDING } }\n    }\n  }\n}\n\n"].
+     "      };\n      GatherApply { state: GatherState { progress: GatherProgress { status: if remaining == u8:0 { GatherStatus::COMPLETE } else { GatherStatus::OPEN }, remaining, seen: p.seen | member_bit, ..p }, values }, outcome: if remaining == u8:0 { GatherOutcome::COMPLETE } else { GatherOutcome::PENDING } }\n    }\n  }\n}\n\n"].
 
 %% Completion consumes ordered values without requiring those values in its output state.
 -spec completion(map()) -> iodata().
